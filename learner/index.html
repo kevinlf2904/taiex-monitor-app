@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>K線學堂</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: 交易終端機的冷調紙面。頂部頁籤切換四個區塊；課程區為「目錄側欄 + 講義」，圖表一律滿版。 */
+:root {
+  --bg: #eceff3;
+  --surface: #ffffff;
+  --surface-2: #f5f7fa;
+  --ink: #18202b;
+  --muted: #5b6676;
+  --line: #d3d9e2;
+  --accent: #2346a0;
+  --accent-soft: #e2e8f7;
+  --up: #d0343a;      /* 台股慣例：紅漲 */
+  --down: #0f8655;    /* 綠跌 */
+  --s1: #d98a0b;      /* 短均線 */
+  --s2: #7a4fd0;      /* 中均線 */
+  --s3: #0d8aa0;      /* 長均線 */
+  --band: rgba(35, 70, 160, 0.07);
+  --shade: rgba(24, 32, 43, 0.05);
+  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b; --surface: #161d27; --surface-2: #1b2430; --ink: #e5eaf1; --muted: #94a1b3;
+    --line: #2a3443; --accent: #86a2ff; --accent-soft: #1f2a44; --up: #ff5d5d; --down: #2fc487;
+    --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141b; --surface: #161d27; --surface-2: #1b2430; --ink: #e5eaf1; --muted: #94a1b3;
+  --line: #2a3443; --accent: #86a2ff; --accent-soft: #1f2a44; --up: #ff5d5d; --down: #2fc487;
+  --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.7;
+}
+[hidden] { display: none !important; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.up { color: var(--up); } .down { color: var(--down); } .muted { color: var(--muted); }
+
+/* ---------- header ---------- */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.top-inner {
+  max-width: 1180px; margin: 0 auto; padding: 10px 16px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.seal {
+  width: 34px; height: 34px; border-radius: 6px; display: grid; place-items: center;
+  background: var(--up); color: #fff; font-family: var(--font-display); font-weight: 900; font-size: 19px;
+}
+.brand h1 { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: 21px; letter-spacing: 0.04em; line-height: 1.1; }
+.brand p { margin: 0; font-size: 12px; color: var(--muted); letter-spacing: 0.05em; }
+.tabs { display: flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; overflow-x: auto; max-width: 100%; }
+.tabs button {
+  border: 0; background: transparent; padding: 5px 14px; border-radius: 999px; cursor: pointer;
+  font-size: 14px; color: var(--muted); white-space: nowrap;
+}
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); background: var(--surface);
+}
+
+main { max-width: 1180px; margin: 0 auto; padding: 22px 16px 40px; }
+h2 { font-family: var(--font-display); font-weight: 900; font-size: clamp(24px, 3.4vw, 32px); line-height: 1.25; margin: 0; text-wrap: balance; letter-spacing: 0.02em; }
+h3 { font-size: 16px; margin: 0 0 6px; }
+.eyebrow { font-size: 12px; letter-spacing: 0.12em; color: var(--accent); font-weight: 700; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.btn {
+  border: 1px solid var(--line); background: var(--surface); padding: 7px 14px; border-radius: 8px; cursor: pointer;
+  font-size: 14px; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--surface); border-color: var(--accent); font-weight: 700; }
+.btn.big { padding: 10px 22px; font-size: 16px; font-weight: 700; }
+.btn.buy { background: var(--up); border-color: var(--up); color: #fff; }
+.btn.sell { background: var(--down); border-color: var(--down); color: #fff; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---------- chart ---------- */
+.chartbox { position: relative; }
+.legend {
+  display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; min-height: 40px;
+  padding: 8px 12px; border-bottom: 1px solid var(--line); line-height: 1.6;
+}
+.legend b { font-weight: 600; color: var(--muted); margin-right: 3px; font-family: var(--font-body); }
+.legend span { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chartbox canvas { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
+
+/* ---------- learn ---------- */
+.learn { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+.lesson-list { position: sticky; top: 90px; display: flex; flex-direction: column; gap: 2px; }
+.lesson-list button {
+  text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 6px; font-size: 14px; color: var(--muted);
+}
+.lesson-list button:hover { background: var(--surface-2); color: var(--ink); }
+.lesson-list button[aria-current="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: inset 0 0 0 1px var(--line); }
+.lesson-list .n { font-family: var(--font-mono); font-size: 12px; }
+.lesson-list .done { color: var(--up); font-size: 13px; }
+.lesson { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.lesson-head { display: flex; flex-direction: column; gap: 4px; }
+.prose { max-width: 68ch; }
+.prose p { margin: 0 0 10px; }
+.prose ul { margin: 0 0 10px; padding-left: 1.3em; }
+.prose li { margin-bottom: 4px; }
+.prose strong { color: var(--ink); }
+.prose table { border-collapse: collapse; font-size: 14px; margin: 4px 0 12px; }
+.prose th, .prose td { border-bottom: 1px solid var(--line); padding: 6px 12px 6px 0; text-align: left; vertical-align: top; }
+.prose th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+.formula { font-family: var(--font-mono); font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; overflow-x: auto; white-space: pre; }
+.keys { background: var(--accent-soft); border-radius: var(--radius); padding: 14px 18px; max-width: 68ch; }
+.keys h3 { color: var(--accent); font-size: 13px; letter-spacing: .1em; }
+.keys ul { margin: 0; padding-left: 1.2em; }
+.try { display: flex; gap: 10px; align-items: baseline; font-size: 14px; color: var(--muted); padding: 0 4px; }
+.try b { color: var(--accent); white-space: nowrap; }
+.lesson-nav { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.anatomy { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+.anatomy svg { max-width: 100%; height: auto; }
+.anatomy text { font-size: 12px; fill: var(--muted); font-family: var(--font-body); }
+.anatomy .lbl-strong { fill: var(--ink); font-weight: 700; }
+.anatomy .guide { stroke: var(--line); stroke-dasharray: 3 3; }
+
+/* ---------- lab ---------- */
+.lab { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.lab-side { display: flex; flex-direction: column; gap: 14px; }
+.ctrl { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ctrl h3 { font-size: 12.5px; letter-spacing: .1em; color: var(--muted); margin: 0; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.row label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
+.swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+input[type="number"] { width: 62px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-family: var(--font-mono); font-size: 13px; }
+select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-size: 14px; max-width: 100%; }
+.readout { display: flex; flex-direction: column; gap: 6px; }
+.ro { display: grid; grid-template-columns: 58px 1fr auto; gap: 8px; align-items: baseline; font-size: 13.5px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+.ro:last-child { border-bottom: 0; }
+.ro .k { color: var(--muted); font-size: 12.5px; }
+.pill { font-size: 11.5px; padding: 0 8px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+.pill.bull { background: color-mix(in srgb, var(--up) 15%, transparent); color: var(--up); }
+.pill.bear { background: color-mix(in srgb, var(--down) 15%, transparent); color: var(--down); }
+.pill.flat { background: var(--surface-2); color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 1px; background: var(--line); border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+.stat { background: var(--surface); padding: 10px 12px; }
+.stat .k { font-size: 12px; color: var(--muted); }
+.stat .v { font-family: var(--font-mono); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+.trades { border-collapse: collapse; width: 100%; font-size: 13px; }
+.trades th, .trades td { padding: 5px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.trades th { color: var(--muted); font-weight: 500; font-size: 12px; }
+.trades td:first-child, .trades th:first-child { text-align: left; }
+.note { font-size: 12.5px; color: var(--muted); }
+.bt { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+/* ---------- challenge ---------- */
+.chal-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: end; margin-bottom: 14px; }
+.score { display: flex; gap: 18px; }
+.score div { text-align: right; }
+.score .k { font-size: 12px; color: var(--muted); }
+.score .v { font-family: var(--font-mono); font-size: 22px; font-weight: 600; }
+.chal-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
+.verdict { padding: 14px 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.verdict .big { font-family: var(--font-display); font-size: 22px; font-weight: 900; }
+.grid-ro { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 24px; }
+
+/* ---------- quiz ---------- */
+.quiz { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.qcard { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+.qmeta { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.qbar { height: 4px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.qbar i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.qtext { font-size: 19px; font-weight: 700; line-height: 1.5; }
+.opts { display: flex; flex-direction: column; gap: 8px; }
+.opts button {
+  text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 14px; cursor: pointer;
+  display: grid; grid-template-columns: 24px 1fr; gap: 8px; font-size: 15px;
+}
+.opts button:hover:not(:disabled) { border-color: var(--accent); }
+.opts button .l { font-family: var(--font-mono); color: var(--muted); }
+.opts button.right { border-color: var(--down); background: color-mix(in srgb, var(--down) 10%, var(--surface)); }
+.opts button.wrong { border-color: var(--up); background: color-mix(in srgb, var(--up) 10%, var(--surface)); }
+.opts button:disabled { cursor: default; color: var(--ink); }
+.explain { background: var(--surface-2); border-radius: 8px; padding: 12px 14px; font-size: 14.5px; }
+
+footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.5px; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .learn { grid-template-columns: minmax(0, 1fr); }
+  .lesson-list { position: static; flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .lesson-list button { grid-template-columns: auto auto auto; white-space: nowrap; }
+  .lab { grid-template-columns: minmax(0, 1fr); }
+  .top { position: static; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="seal" aria-hidden="true">K</div>
+      <div><h1>K線學堂</h1><p>台股技術分析互動練習</p></div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="主要區塊">
+      <button role="tab" data-tab="learn" id="tab-btn-learn">課程</button>
+      <button role="tab" data-tab="lab" id="tab-btn-lab">圖表實驗室</button>
+      <button role="tab" data-tab="challenge" id="tab-btn-challenge">判讀挑戰</button>
+      <button role="tab" data-tab="quiz" id="tab-btn-quiz">觀念測驗</button>
+    </nav>
+    <span class="chip" id="progChip">已完成 0 / 9 課</span>
+  </div>
+</header>
+
+<main>
+  <!-- 課程 -->
+  <section id="view-learn" class="learn" role="tabpanel">
+    <nav class="lesson-list" id="lessonList" aria-label="課程目錄"></nav>
+    <article class="lesson" id="lesson">
+      <div class="lesson-head">
+        <div class="eyebrow" id="lessonEyebrow"></div>
+        <h2 id="lessonTitle"></h2>
+      </div>
+      <div class="prose" id="lessonBody"></div>
+      <div class="panel chartbox" id="lessonChart"></div>
+      <div class="try" id="lessonTry"></div>
+      <div class="keys" id="lessonKeys"></div>
+      <div class="lesson-nav">
+        <button class="btn" id="lessonPrev">← 上一課</button>
+        <button class="btn primary" id="lessonNext">完成本課，下一課 →</button>
+      </div>
+    </article>
+  </section>
+
+  <!-- 實驗室 -->
+  <section id="view-lab" role="tabpanel" hidden>
+    <div class="chal-head">
+      <div><div class="eyebrow">LAB</div><h2>圖表實驗室</h2></div>
+      <p class="note" style="max-width: 46ch; margin: 0">自由開關指標、調整參數，再挑一個策略看看它在這段走勢的回測成績。游標移到任一根K棒，右側會顯示那天的指標判讀。</p>
+    </div>
+    <div class="lab">
+      <div style="display:flex; flex-direction:column; gap:18px; min-width:0">
+        <div class="panel chartbox" id="labChart"></div>
+        <div class="panel bt" id="btPanel"></div>
+      </div>
+      <div class="lab-side">
+        <div class="panel ctrl">
+          <h3>走勢</h3>
+          <div class="row">
+            <button class="btn primary" id="labNew">產生新走勢</button>
+            <label>長度 <select id="labLen"><option value="120">120 天</option><option value="180" selected>180 天</option><option value="250">250 天</option></select></label>
+          </div>
+          <div class="note num" id="labSeed"></div>
+        </div>
+        <div class="panel ctrl">
+          <h3>主圖疊加</h3>
+          <div class="row"><label><input type="checkbox" id="maA" checked><span class="swatch" style="background:var(--s1)"></span>MA</label><input type="number" id="maAn" value="5" min="2" max="120"></div>
+          <div class="row"><label><input type="checkbox" id="maB" checked><span class="swatch" style="background:var(--s2)"></span>MA</label><input type="number" id="maBn" value="20" min="2" max="120"></div>
+          <div class="row"><label><input type="checkbox" id="maC"><span class="swatch" style="background:var(--s3)"></span>MA</label><input type="number" id="maCn" value="60" min="2" max="240"></div>
+          <div class="row"><label><input type="checkbox" id="boll">布林通道 (20, 2)</label></div>
+          <div class="row"><label><input type="checkbox" id="sr">支撐 / 壓力線</label></div>
+          <h3>副圖</h3>
+          <div class="row"><select id="labSub"><option value="">無</option><option value="rsi">RSI (14)</option><option value="kd" selected>KD (9,3,3)</option><option value="macd">MACD (12,26,9)</option></select></div>
+        </div>
+        <div class="panel ctrl">
+          <h3>判讀 <span class="note" id="roDate"></span></h3>
+          <div class="readout" id="labReadout"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 判讀挑戰 -->
+  <section id="view-challenge" role="tabpanel" hidden>
+    <div class="chal-head">
+      <div>
+        <div class="eyebrow">CHALLENGE</div>
+        <h2>接下來 10 天，會漲還是會跌？</h2>
+        <p class="note" style="margin:6px 0 0; max-width: 60ch">先讀圖再作答。走勢是模擬的，帶有隨機性，猜錯很正常；重點是作答後對照指標，檢討自己看到了什麼、漏看了什麼。</p>
+      </div>
+      <div class="score">
+        <div><div class="k">答對</div><div class="v" id="scRight">0 / 0</div></div>
+        <div><div class="k">連勝</div><div class="v" id="scStreak">0</div></div>
+        <div><div class="k">最佳連勝</div><div class="v" id="scBest">0</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="chartbox" id="chalChart"></div>
+      <div class="chal-bar">
+        <label class="row" style="gap:6px"><input type="checkbox" id="chMA" checked>均線</label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="chBoll">布林</label>
+        <select id="chSub" aria-label="副圖"><option value="">無副圖</option><option value="rsi">RSI</option><option value="kd" selected>KD</option><option value="macd">MACD</option></select>
+        <span style="flex:1"></span>
+        <button class="btn" id="chHint">看指標判讀</button>
+        <button class="btn big buy" id="chUp">看漲 ▲</button>
+        <button class="btn big sell" id="chDown">看跌 ▼</button>
+      </div>
+      <div class="verdict" id="chHintBox" hidden></div>
+      <div class="verdict" id="chResult" hidden></div>
+    </div>
+  </section>
+
+  <!-- 測驗 -->
+  <section id="view-quiz" role="tabpanel" hidden>
+    <div class="quiz" id="quiz"></div>
+  </section>
+</main>
+<footer>本工具的價格與成交量皆為程式模擬，僅供學習技術分析之用，不代表任何個股，也不構成投資建議。</footer>
+
+<script>
+"use strict";
+/* ================= 工具 ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("kline:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("kline:" + k, JSON.stringify(v)); } catch {} },
+};
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// 台股升降單位（檔位）
+function tickOf(p) { return p < 10 ? 0.01 : p < 50 ? 0.05 : p < 100 ? 0.1 : p < 500 ? 0.5 : p < 1000 ? 1 : 5; }
+function roundTick(p) { const t = tickOf(p); return +(Math.round(p / t) * t).toFixed(2); }
+function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
+function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
+function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+/* ================= 模擬走勢 =================
+   以「趨勢段落」切換漂移率（多頭 / 空頭 / 盤整），加上波動叢聚，
+   每日漲跌限制 ±10%，價格貼齊台股升降單位，成交量以「張」計。 */
+function genSeries(seed, n) {
+  const r = mulberry32(seed);
+  const gauss = () => { let u = 0, v = 0; while (!u) u = r(); while (!v) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  let p = [28, 72, 145, 320, 610][Math.floor(r() * 5)] * (0.85 + r() * 0.3);
+  let mu = 0, left = 0, sig = 0.016;
+  const baseV = p < 100 ? 18000 : p < 500 ? 5200 : 2100;
+  const out = []; const d = new Date(Date.UTC(2025, 0, 2));
+  for (let i = 0; i < n; i++) {
+    if (left <= 0) {
+      const k = r();
+      mu = (k < 0.38 ? 0.0032 : k < 0.76 ? -0.003 : 0.0002) * (0.6 + r() * 0.9);
+      left = 12 + Math.floor(r() * 35);
+    }
+    left--;
+    sig = Math.min(0.032, Math.max(0.009, sig * 0.9 + 0.1 * 0.016 + (r() - 0.5) * 0.005));
+    const prev = p;
+    const ret = Math.max(-0.095, Math.min(0.095, mu + sig * gauss()));
+    const hiLim = prev * 1.1, loLim = prev * 0.9;
+    const o = roundTick(Math.min(hiLim, Math.max(loLim, prev * (1 + sig * 0.35 * gauss()))));
+    const c = roundTick(prev * Math.exp(ret));
+    const h = roundTick(Math.min(hiLim, Math.max(o, c) * (1 + Math.abs(gauss()) * sig * 0.45)));
+    const l = roundTick(Math.max(loLim, Math.min(o, c) * (1 - Math.abs(gauss()) * sig * 0.45)));
+    const v = Math.max(50, Math.round(baseV * (0.55 + Math.abs(ret) / sig * 0.5) * Math.exp(gauss() * 0.3) * (mu > 0.001 && ret > 0 ? 1.3 : 1)));
+    out.push({ d: d.toISOString().slice(0, 10), o, h: Math.max(h, o, c), l: Math.min(l, o, c), c, v });
+    p = c;
+    do { d.setUTCDate(d.getUTCDate() + 1); } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  }
+  return out;
+}
+
+/* ================= 指標 ================= */
+function sma(a, n) { const o = Array(a.length).fill(null); let s = 0; for (let i = 0; i < a.length; i++) { s += a[i]; if (i >= n) s -= a[i - n]; if (i >= n - 1) o[i] = s / n; } return o; }
+function ema(a, n) { const o = Array(a.length).fill(null); const k = 2 / (n + 1); let e = null; for (let i = 0; i < a.length; i++) { if (a[i] == null) continue; e = e == null ? a[i] : a[i] * k + e * (1 - k); o[i] = e; } return o; }
+function rsiCalc(c, n = 14) {
+  const o = Array(c.length).fill(null); let g = 0, l = 0;
+  for (let i = 1; i < c.length; i++) {
+    const ch = c[i] - c[i - 1], up = Math.max(ch, 0), dn = Math.max(-ch, 0);
+    if (i <= n) { g += up; l += dn; if (i === n) { g /= n; l /= n; o[i] = l === 0 ? 100 : 100 - 100 / (1 + g / l); } }
+    else { g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n; o[i] = l === 0 ? 100 : 100 - 100 / (1 + g / l); }
+  }
+  return o;
+}
+function kdCalc(D, n = 9) {
+  const K = Array(D.length).fill(null), Dd = Array(D.length).fill(null); let k = 50, d = 50;
+  for (let i = n - 1; i < D.length; i++) {
+    let hh = -Infinity, ll = Infinity;
+    for (let j = i - n + 1; j <= i; j++) { hh = Math.max(hh, D[j].h); ll = Math.min(ll, D[j].l); }
+    const rsv = hh === ll ? 50 : (D[i].c - ll) / (hh - ll) * 100;
+    k = k * 2 / 3 + rsv / 3; d = d * 2 / 3 + k / 3; K[i] = k; Dd[i] = d;
+  }
+  return { K, D: Dd };
+}
+function macdCalc(c) {
+  const e12 = ema(c, 12), e26 = ema(c, 26);
+  const dif = c.map((_, i) => i < 25 ? null : e12[i] - e26[i]);
+  const sig = ema(dif, 9).map((v, i) => i < 33 ? null : v);
+  const osc = dif.map((v, i) => sig[i] == null ? null : v - sig[i]);
+  return { dif, sig, osc };
+}
+function bollCalc(c, n = 20, k = 2) {
+  const mid = sma(c, n), up = [], lo = [], bw = [];
+  for (let i = 0; i < c.length; i++) {
+    if (mid[i] == null) { up.push(null); lo.push(null); bw.push(null); continue; }
+    let s = 0; for (let j = i - n + 1; j <= i; j++) s += (c[j] - mid[i]) ** 2;
+    const sd = Math.sqrt(s / n); up.push(mid[i] + k * sd); lo.push(mid[i] - k * sd); bw.push(2 * k * sd / mid[i]);
+  }
+  return { mid, up, lo, bw };
+}
+function indicators(D) {
+  const c = D.map(x => x.c), cache = {};
+  return {
+    c,
+    ma: n => cache[n] || (cache[n] = sma(c, n)),
+    vma: sma(D.map(x => x.v), 20),
+    rsi: rsiCalc(c), kd: kdCalc(D), macd: macdCalc(c), boll: bollCalc(c),
+  };
+}
+
+/* ================= 訊號 ================= */
+const crossUp = (a, b, i) => a[i - 1] != null && b[i - 1] != null && a[i] != null && b[i] != null && a[i - 1] <= b[i - 1] && a[i] > b[i];
+const crossDn = (a, b, i) => a[i - 1] != null && b[i - 1] != null && a[i] != null && b[i] != null && a[i - 1] >= b[i - 1] && a[i] < b[i];
+const Signals = {
+  ma(D, I, s = 5, l = 20) { const a = I.ma(s), b = I.ma(l), m = []; for (let i = 1; i < D.length; i++) { if (crossUp(a, b, i)) m.push({ i, side: "buy", label: "黃金交叉" }); else if (crossDn(a, b, i)) m.push({ i, side: "sell", label: "死亡交叉" }); } return m; },
+  rsi(D, I) { const r = I.rsi, m = []; for (let i = 1; i < D.length; i++) { if (r[i - 1] == null) continue; if (r[i - 1] < 30 && r[i] >= 30) m.push({ i, side: "buy", label: "脫離超賣" }); else if (r[i - 1] > 70 && r[i] <= 70) m.push({ i, side: "sell", label: "跌離超買" }); } return m; },
+  kd(D, I) { const { K, D: d } = I.kd, m = []; for (let i = 1; i < D.length; i++) { if (crossUp(K, d, i) && d[i] < 20) m.push({ i, side: "buy", label: "低檔金叉" }); else if (crossDn(K, d, i) && d[i] > 80) m.push({ i, side: "sell", label: "高檔死叉" }); } return m; },
+  macd(D, I) { const { dif, sig } = I.macd, m = []; for (let i = 1; i < D.length; i++) { if (crossUp(dif, sig, i)) m.push({ i, side: "buy", label: "DIF上穿" }); else if (crossDn(dif, sig, i)) m.push({ i, side: "sell", label: "DIF下穿" }); } return m; },
+  boll(D, I) { const { up, lo } = I.boll, m = []; for (let i = 1; i < D.length; i++) { if (lo[i] == null || lo[i - 1] == null) continue; if (D[i].c < lo[i] && D[i - 1].c >= lo[i - 1]) m.push({ i, side: "buy", label: "跌破下軌" }); else if (D[i].c > up[i] && D[i - 1].c <= up[i - 1]) m.push({ i, side: "sell", label: "突破上軌" }); } return m; },
+  vol(D, I) { const m = []; for (let i = 20; i < D.length; i++) if (D[i].v > 2 * I.vma[i - 1]) m.push({ i, side: D[i].c >= D[i].o ? "buy" : "sell", label: "爆量", note: true }); return m; },
+  candle(D) {
+    const m = [];
+    for (let i = 5; i < D.length; i++) {
+      const x = D[i], p = D[i - 1], body = Math.abs(x.c - x.o), rng = x.h - x.l;
+      if (rng <= 0) continue;
+      const upper = x.h - Math.max(x.o, x.c), lower = Math.min(x.o, x.c) - x.l;
+      const fell = x.c < D[i - 5].c * 0.97, rose = x.c > D[i - 5].c * 1.03;
+      if (fell && lower >= 2 * body && upper <= rng * 0.15 && body > 0) m.push({ i, side: "buy", label: "錘子線" });
+      else if (rose && upper >= 2 * body && lower <= rng * 0.15 && body > 0) m.push({ i, side: "sell", label: "流星線" });
+      else if (fell && p.c < p.o && x.c > x.o && x.o <= p.c && x.c >= p.o) m.push({ i, side: "buy", label: "多頭吞噬" });
+      else if (rose && p.c > p.o && x.c < x.o && x.o >= p.c && x.c <= p.o) m.push({ i, side: "sell", label: "空頭吞噬" });
+      else if (body <= rng * 0.08 && rng / x.c > 0.02 && (fell || rose)) m.push({ i, side: fell ? "buy" : "sell", label: "十字線", note: true });
+    }
+    return m;
+  },
+};
+
+// 轉折點（左右各 w 根都比它低 / 高）→ 支撐壓力
+function pivots(D, w = 5, upto = D.length) {
+  const hi = [], lo = [];
+  for (let i = w; i < upto - w; i++) {
+    let isH = true, isL = true;
+    for (let j = i - w; j <= i + w; j++) { if (j === i) continue; if (D[j].h >= D[i].h) isH = false; if (D[j].l <= D[i].l) isL = false; }
+    if (isH) hi.push(i); if (isL) lo.push(i);
+  }
+  return { hi, lo };
+}
+function srLevels(D, upto = D.length) {
+  const { hi, lo } = pivots(D, 5, upto), p = D[upto - 1].c, lines = [], used = [];
+  const add = (price, kind, i) => { if (used.some(u => Math.abs(u - price) / price < 0.02)) return; used.push(price); lines.push({ price, kind, i }); };
+  hi.map(i => ({ i, v: D[i].h })).filter(x => x.v > p).sort((a, b) => a.v - b.v).slice(0, 2).forEach(x => add(x.v, "壓力", x.i));
+  lo.map(i => ({ i, v: D[i].l })).filter(x => x.v < p).sort((a, b) => b.v - a.v).slice(0, 2).forEach(x => add(x.v, "支撐", x.i));
+  return lines;
+}
+
+/* ================= 回測 =================
+   訊號出現後「隔日開盤價」成交；只做多、全額進出。
+   成本：買賣各 0.1425% 手續費，賣出另付 0.3% 證交稅。 */
+const FEE = 0.001425, TAX = 0.003;
+function backtest(D, sigs) {
+  const at = {}; sigs.forEach(s => { if (!s.note) at[s.i] = s.side; });
+  let cash = 1, shares = 0, pos = null, pending = null, peak = 1, mdd = 0;
+  const trades = [];
+  for (let i = 0; i < D.length; i++) {
+    if (pending === "buy" && !pos) { shares = cash * (1 - FEE) / D[i].o; pos = { i, px: D[i].o, cash }; cash = 0; }
+    else if (pending === "sell" && pos) { cash = shares * D[i].o * (1 - FEE - TAX); trades.push({ ...pos, xi: i, xpx: D[i].o, ret: cash / pos.cash - 1 }); pos = null; shares = 0; }
+    pending = null;
+    const eq = pos ? shares * D[i].c : cash;
+    peak = Math.max(peak, eq); mdd = Math.max(mdd, 1 - eq / peak);
+    if (at[i]) pending = at[i];
+  }
+  const last = D.length - 1;
+  if (pos) { cash = shares * D[last].c * (1 - FEE - TAX); trades.push({ ...pos, xi: last, xpx: D[last].c, ret: cash / pos.cash - 1, open: true }); }
+  const wins = trades.filter(t => t.ret > 0).length;
+  const bh = (1 - FEE) * D[last].c / D[0].o * (1 - FEE - TAX) - 1;
+  return { trades, total: cash - 1, bh, mdd, win: trades.length ? wins / trades.length : null };
+}
+
+/* ================= 判讀 ================= */
+function readout(D, I, i) {
+  const out = [], c = D[i].c;
+  const m5 = I.ma(5)[i], m20 = I.ma(20)[i], m60 = I.ma(60)[i];
+  if (m5 != null && m20 != null) {
+    let t, b;
+    if (m60 != null && m5 > m20 && m20 > m60) { t = "多頭排列 5>20>60"; b = 1; }
+    else if (m60 != null && m5 < m20 && m20 < m60) { t = "空頭排列 5<20<60"; b = -1; }
+    else { t = m5 > m20 ? "短均在月線之上" : "短均在月線之下"; b = m5 > m20 ? 1 : -1; if (m60 == null) t += "（季線未成形）"; }
+    out.push({ k: "均線", t, b });
+    const bias = (c - m20) / m20;
+    out.push({ k: "月線", t: `${c >= m20 ? "站上" : "跌破"}月線，乖離 ${fmtPct(bias, 1)}`, b: Math.abs(bias) > 0.08 ? 0 : (c >= m20 ? 1 : -1), x: Math.abs(bias) > 0.08 ? "乖離過大，留意拉回或反彈" : "" });
+  }
+  const r = I.rsi[i];
+  if (r != null) out.push({ k: "RSI", t: `${fmtN(r)} ${r >= 70 ? "超買區" : r <= 30 ? "超賣區" : r >= 50 ? "偏強" : "偏弱"}`, b: r >= 70 ? 0 : r <= 30 ? 0 : r >= 50 ? 1 : -1, x: r >= 70 ? "強勢但過熱，可能鈍化也可能回檔" : r <= 30 ? "弱勢但跌深，可能鈍化也可能反彈" : "" });
+  const K = I.kd.K[i], Dd = I.kd.D[i];
+  if (K != null) out.push({ k: "KD", t: `K ${fmtN(K)} / D ${fmtN(Dd)}，${K > Dd ? "K在D上" : "K在D下"}${K >= 80 ? "，高檔" : K <= 20 ? "，低檔" : ""}`, b: K > Dd ? 1 : -1 });
+  const { dif, sig, osc } = I.macd;
+  if (sig[i] != null) {
+    const grow = osc[i - 1] != null && osc[i] > osc[i - 1];
+    out.push({ k: "MACD", t: `DIF 在訊號線${dif[i] > sig[i] ? "上" : "下"}，柱體${osc[i] >= 0 ? "正" : "負"}且${grow ? "增加" : "減少"}`, b: dif[i] > sig[i] ? 1 : -1, x: dif[i] > 0 ? "DIF 在零軸上（中期偏多）" : "DIF 在零軸下（中期偏空）" });
+  }
+  const { up, lo, bw } = I.boll;
+  if (up[i] != null) {
+    const pb = (c - lo[i]) / (up[i] - lo[i]);
+    const win = bw.slice(Math.max(0, i - 60), i + 1).filter(x => x != null);
+    const squeeze = bw[i] <= Math.min(...win) * 1.1;
+    out.push({ k: "布林", t: pb > 1 ? "收盤在上軌之外" : pb < 0 ? "收盤在下軌之外" : `位於通道 ${Math.round(pb * 100)}% 位置`, b: pb > 0.5 ? 1 : -1, x: squeeze ? "帶寬接近 60 日最窄，波動可能放大" : "" });
+  }
+  if (I.vma[i - 1] != null) {
+    const ratio = D[i].v / I.vma[i - 1], upDay = c >= D[i - 1].c;
+    out.push({ k: "量能", t: `今日量為 20 日均量 ${ratio.toFixed(1)} 倍，${upDay ? "價漲" : "價跌"}${ratio > 1.2 ? "量增" : ratio < 0.8 ? "量縮" : "量平"}`, b: ratio > 1.2 ? (upDay ? 1 : -1) : 0 });
+  }
+  return out;
+}
+function renderReadout(el, items, wide) {
+  el.innerHTML = items.map(x => `<div class="ro"><span class="k">${x.k}</span><span>${x.t}${x.x ? `<br><span class="note">${x.x}</span>` : ""}</span><span class="pill ${x.b > 0 ? "bull" : x.b < 0 ? "bear" : "flat"}">${x.b > 0 ? "偏多" : x.b < 0 ? "偏空" : "中性"}</span></div>`).join("");
+  if (wide) el.classList.add("grid-ro");
+}
+
+/* ================= 圖表 ================= */
+class Chart {
+  constructor(host, { onHover } = {}) {
+    this.host = host; this.onHover = onHover;
+    this.legend = document.createElement("div"); this.legend.className = "legend";
+    this.canvas = document.createElement("canvas"); this.ctx = this.canvas.getContext("2d");
+    this.canvas.setAttribute("role", "img");
+    host.append(this.legend, this.canvas);
+    this.hover = null;
+    const move = e => { const i = this.indexAt(e.offsetX); if (i !== this.hover) { this.hover = i; this.draw(); } };
+    this.canvas.addEventListener("pointermove", move);
+    this.canvas.addEventListener("pointerdown", move);
+    this.canvas.addEventListener("pointerleave", () => { this.hover = null; this.draw(); });
+    new ResizeObserver(() => this.draw()).observe(host);
+  }
+  set(D, opts = {}) { this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.hover = null; this.draw(); return this; }
+  get visible() { return this.o.visible ?? this.D.length; }
+  indexAt(x) { if (!this.geo) return null; const { L, bw } = this.geo; const i = Math.floor((x - L) / bw); return Math.max(0, Math.min(this.visible - 1, i)); }
+  draw() {
+    if (!this.D) return;
+    const { D, I, o } = this, ctx = this.ctx, dpr = window.devicePixelRatio || 1;
+    const W = this.host.clientWidth; if (!W) return;
+    const narrow = W < 560;
+    const mainH = narrow ? 230 : 300, volH = narrow ? 52 : 66, subH = o.sub ? (narrow ? 92 : 112) : 0, gap = 10, axisH = 20;
+    const H = mainH + gap + volH + (subH ? gap + subH : 0) + axisH + 8;
+    this.canvas.width = W * dpr; this.canvas.height = H * dpr; this.canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface") };
+    const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R, bw = pw / n;
+    this.geo = { L, bw };
+    const X = i => L + bw * (i + 0.5);
+    const top0 = 8, volTop = top0 + mainH + gap, subTop = volTop + volH + gap;
+    const mas = (o.ma || []).map((n, k) => ({ n, a: I.ma(n), c: [col.s1, col.s2, col.s3][k % 3] }));
+
+    // 價格範圍
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < vis; i++) {
+      lo = Math.min(lo, D[i].l); hi = Math.max(hi, D[i].h);
+      if (o.boll && I.boll.up[i] != null) { lo = Math.min(lo, I.boll.lo[i]); hi = Math.max(hi, I.boll.up[i]); }
+    }
+    const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+    const Y = p => top0 + (hi - p) / (hi - lo) * mainH;
+
+    ctx.font = `11px ${cssVar("--font-mono")}`; ctx.textBaseline = "middle";
+    // 未揭曉區
+    if (vis < n || o.cutoff != null) {
+      const cx = L + bw * (o.cutoff ?? vis);
+      ctx.fillStyle = col.shade; ctx.fillRect(cx, top0, L + pw - cx, H - top0 - axisH - 8);
+      ctx.strokeStyle = col.muted; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(cx, top0); ctx.lineTo(cx, H - axisH - 8); ctx.stroke(); ctx.setLineDash([]);
+      if (vis < n) { ctx.fillStyle = col.muted; ctx.textAlign = "center"; ctx.font = `13px ${cssVar("--font-body")}`; ctx.fillText("？", (cx + L + pw) / 2, top0 + mainH / 2); ctx.font = `11px ${cssVar("--font-mono")}`; }
+    }
+    // 格線 + 價格座標
+    const step = niceStep((hi - lo) / 5);
+    ctx.textAlign = "left";
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+      const y = Y(v); ctx.strokeStyle = col.line; ctx.lineWidth = 1; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.moveTo(L, Math.round(y) + 0.5); ctx.lineTo(L + pw, Math.round(y) + 0.5); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.fillStyle = col.muted; ctx.fillText(fmtP(v), L + pw + 6, y);
+    }
+    // 布林
+    if (o.boll) {
+      const { up, lo: lw, mid } = I.boll;
+      ctx.fillStyle = col.band; ctx.beginPath(); let started = false;
+      for (let i = 0; i < vis; i++) if (up[i] != null) { started ? ctx.lineTo(X(i), Y(up[i])) : ctx.moveTo(X(i), Y(up[i])); started = true; }
+      for (let i = vis - 1; i >= 0; i--) if (lw[i] != null) ctx.lineTo(X(i), Y(lw[i]));
+      ctx.fill();
+      this.line(up, vis, X, Y, col.accent, 1, 0.7); this.line(lw, vis, X, Y, col.accent, 1, 0.7); this.line(mid, vis, X, Y, col.accent, 1, 0.45, [3, 3]);
+    }
+    // 支撐壓力
+    (o.hlines || []).forEach(h => {
+      const y = Y(h.price); const c = h.kind === "壓力" ? col.down : col.up;
+      ctx.strokeStyle = c; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(X(h.i ?? 0), y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = c; ctx.textAlign = "right"; ctx.font = `11px ${cssVar("--font-body")}`; ctx.fillText(`${h.kind} ${fmtP(h.price)}`, L + pw - 4, y - 8); ctx.font = `11px ${cssVar("--font-mono")}`;
+    });
+    // K 棒
+    const cw = Math.max(1, Math.min(14, bw * 0.66));
+    for (let i = 0; i < vis; i++) {
+      const k = D[i], x = X(i), upc = k.c > k.o ? col.up : k.c < k.o ? col.down : col.ink;
+      ctx.strokeStyle = upc; ctx.fillStyle = upc; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, Y(k.h)); ctx.lineTo(Math.round(x) + 0.5, Y(k.l)); ctx.stroke();
+      const y1 = Y(Math.max(k.o, k.c)), y2 = Y(Math.min(k.o, k.c));
+      ctx.fillRect(Math.round(x - cw / 2), y1, Math.max(1, Math.round(cw)), Math.max(1, y2 - y1));
+    }
+    // 均線
+    mas.forEach(m => this.line(m.a, vis, X, Y, m.c, 1.6));
+    // 標記
+    const showLabels = o.labels !== false && bw >= 2.5;
+    (o.markers || []).filter(m => m.i < vis).forEach(m => {
+      const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
+      const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
+      ctx.fillStyle = c; ctx.beginPath();
+      if (buy) { ctx.moveTo(x, y); ctx.lineTo(x - s, y + s * 1.5); ctx.lineTo(x + s, y + s * 1.5); }
+      else { ctx.moveTo(x, y); ctx.lineTo(x - s, y - s * 1.5); ctx.lineTo(x + s, y - s * 1.5); }
+      ctx.closePath(); ctx.fill();
+      if (showLabels && m.label) { ctx.font = `600 10.5px ${cssVar("--font-body")}`; ctx.textAlign = "center"; ctx.fillText(m.label, Math.min(Math.max(x, L + 24), L + pw - 24), buy ? y + s * 1.5 + 9 : y - s * 1.5 - 8); ctx.font = `11px ${cssVar("--font-mono")}`; }
+    });
+
+    // 成交量
+    let vmax = 0; for (let i = 0; i < vis; i++) vmax = Math.max(vmax, D[i].v);
+    ctx.globalAlpha = 0.6;
+    for (let i = 0; i < vis; i++) { const k = D[i]; ctx.fillStyle = k.c >= k.o ? col.up : col.down; const h = k.v / vmax * (volH - 4); ctx.fillRect(Math.round(X(i) - cw / 2), volTop + volH - h, Math.max(1, Math.round(cw)), h); }
+    ctx.globalAlpha = 1;
+    this.line(I.vma, vis, X, v => volTop + volH - v / vmax * (volH - 4), col.muted, 1);
+    ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`; ctx.fillText("量（張）", L + pw + 6, volTop + 6); ctx.font = `11px ${cssVar("--font-mono")}`;
+    ctx.strokeStyle = col.line; ctx.beginPath(); ctx.moveTo(L, volTop - gap / 2); ctx.lineTo(L + pw, volTop - gap / 2); ctx.stroke();
+
+    // 副圖
+    if (o.sub) {
+      ctx.strokeStyle = col.line; ctx.beginPath(); ctx.moveTo(L, subTop - gap / 2); ctx.lineTo(L + pw, subTop - gap / 2); ctx.stroke();
+      const lvl = (v, sy) => { const y = sy(v); ctx.strokeStyle = col.line; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.fillText(String(v), L + pw + 6, y); };
+      if (o.sub === "rsi" || o.sub === "kd") {
+        const sy = v => subTop + (100 - v) / 100 * subH;
+        const [a, b] = o.sub === "rsi" ? [70, 30] : [80, 20];
+        ctx.fillStyle = col.band; ctx.fillRect(L, sy(100), pw, sy(a) - sy(100)); ctx.fillRect(L, sy(b), pw, sy(0) - sy(b));
+        lvl(a, sy); lvl(b, sy);
+        if (o.sub === "rsi") this.line(I.rsi, vis, X, sy, col.s2, 1.5);
+        else { this.line(I.kd.K, vis, X, sy, col.s1, 1.5); this.line(I.kd.D, vis, X, sy, col.s3, 1.5); }
+      } else if (o.sub === "macd") {
+        const { dif, sig, osc } = I.macd; let m = 0;
+        for (let i = 0; i < vis; i++) if (dif[i] != null) m = Math.max(m, Math.abs(dif[i]), Math.abs(sig[i] ?? 0), Math.abs(osc[i] ?? 0));
+        m = m || 1; const sy = v => subTop + subH / 2 - v / m * (subH / 2 - 4);
+        lvl(0, sy);
+        ctx.globalAlpha = 0.55;
+        for (let i = 0; i < vis; i++) if (osc[i] != null) { ctx.fillStyle = osc[i] >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(osc[i]); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.abs(y1 - y0)); }
+        ctx.globalAlpha = 1;
+        this.line(dif, vis, X, sy, col.s1, 1.5); this.line(sig, vis, X, sy, col.s3, 1.5);
+      }
+      ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`;
+      ctx.fillText({ rsi: "RSI 14", kd: "KD 9", macd: "MACD" }[o.sub], L + 4, subTop + 8); ctx.font = `11px ${cssVar("--font-mono")}`;
+    }
+
+    // 日期軸
+    const axY = H - axisH / 2 - 4, every = Math.max(1, Math.ceil(64 / bw));
+    ctx.fillStyle = col.muted; ctx.textAlign = "center";
+    for (let i = 0; i < n; i += every) { if (i >= vis && !o.cutoff) continue; ctx.fillText(D[i].d.slice(5).replace("-", "/"), Math.min(Math.max(X(i), L + 18), L + pw - 18), axY); }
+
+    // 十字線
+    const hi_ = this.hover;
+    if (hi_ != null) {
+      ctx.strokeStyle = col.muted; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.moveTo(Math.round(X(hi_)) + 0.5, top0); ctx.lineTo(Math.round(X(hi_)) + 0.5, H - axisH - 6); ctx.stroke();
+      const y = Y(D[hi_].c); ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+      ctx.fillStyle = col.ink; ctx.fillRect(L + pw + 2, y - 9, R - 4, 18); ctx.fillStyle = col.surface; ctx.textAlign = "left"; ctx.fillText(fmtP(D[hi_].c), L + pw + 6, y);
+    }
+    this.canvas.setAttribute("aria-label", `K線圖，共 ${vis} 個交易日，最後收盤 ${fmtP(D[vis - 1].c)}`);
+    this.renderLegend(hi_ ?? vis - 1, mas);
+    if (this.onHover) this.onHover(hi_ ?? vis - 1);
+  }
+  line(a, vis, X, Y, color, w, alpha = 1, dash) {
+    const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = w; ctx.globalAlpha = alpha; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); let s = false;
+    for (let i = 0; i < vis; i++) { if (a[i] == null) { s = false; continue; } s ? ctx.lineTo(X(i), Y(a[i])) : ctx.moveTo(X(i), Y(a[i])); s = true; }
+    ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]);
+  }
+  renderLegend(i, mas) {
+    const { D, I, o } = this, k = D[i], prev = D[i - 1], ch = prev ? (k.c - prev.c) / prev.c : 0, cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
+    const parts = [
+      `<span><b>${k.d.replace(/-/g, "/")}</b></span>`,
+      `<span><b>開</b>${fmtP(k.o)}</span>`, `<span><b>高</b>${fmtP(k.h)}</span>`, `<span><b>低</b>${fmtP(k.l)}</span>`,
+      `<span class="${cls}"><b>收</b>${fmtP(k.c)} ${prev ? fmtPct(ch) : ""}</span>`,
+      `<span><b>量</b>${k.v.toLocaleString()}</span>`,
+    ];
+    mas.forEach(m => parts.push(`<span style="color:${m.c}"><b style="color:inherit">MA${m.n}</b>${fmtP(m.a[i])}</span>`));
+    if (o.boll) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
+    if (o.sub === "rsi") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">RSI</b>${fmtN(I.rsi[i])}</span>`);
+    if (o.sub === "kd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">K</b>${fmtN(I.kd.K[i])}</span><span style="color:var(--s3)"><b style="color:inherit">D</b>${fmtN(I.kd.D[i])}</span>`);
+    if (o.sub === "macd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">DIF</b>${fmtN(I.macd.dif[i], 2)}</span><span style="color:var(--s3)"><b style="color:inherit">MACD</b>${fmtN(I.macd.sig[i], 2)}</span><span><b>OSC</b>${fmtN(I.macd.osc[i], 2)}</span>`);
+    const mk = (o.markers || []).filter(m => m.i === i).map(m => m.label);
+    if (mk.length) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">訊號</b>${mk.join("、")}</span>`);
+    this.legend.innerHTML = parts.join("");
+  }
+}
+function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+
+/* ================= 課程內容 ================= */
+const anatomySVG = `
+<div class="anatomy">
+<svg width="300" height="190" viewBox="0 0 300 190" aria-label="紅K與綠K的結構">
+  <line x1="70" y1="20" x2="70" y2="170" stroke="var(--up)" stroke-width="2"/>
+  <rect x="52" y="55" width="36" height="80" fill="var(--up)"/>
+  <line x1="200" y1="28" x2="200" y2="166" stroke="var(--down)" stroke-width="2"/>
+  <rect x="182" y="48" width="36" height="72" fill="var(--down)"/>
+  <line class="guide" x1="76" y1="20" x2="120" y2="20"/><text x="96" y="16" text-anchor="middle">最高</text>
+  <line class="guide" x1="92" y1="55" x2="120" y2="55"/><text x="104" y="51" text-anchor="middle" class="lbl-strong">收盤</text>
+  <line class="guide" x1="92" y1="135" x2="120" y2="135"/><text x="104" y="131" text-anchor="middle" class="lbl-strong">開盤</text>
+  <line class="guide" x1="76" y1="170" x2="120" y2="170"/><text x="96" y="166" text-anchor="middle">最低</text>
+  <text x="70" y="186" text-anchor="middle" class="lbl-strong">紅K・收漲</text>
+  <line class="guide" x1="222" y1="48" x2="262" y2="48"/><text x="250" y="44" text-anchor="middle" class="lbl-strong">開盤</text>
+  <line class="guide" x1="222" y1="120" x2="262" y2="120"/><text x="250" y="116" text-anchor="middle" class="lbl-strong">收盤</text>
+  <text x="250" y="80" text-anchor="middle">上影線↑</text><text x="250" y="150" text-anchor="middle">下影線↓</text>
+  <text x="200" y="186" text-anchor="middle" class="lbl-strong">綠K・收跌</text>
+</svg>
+</div>`;
+
+const LESSONS = [
+  {
+    title: "K線：一根蠟燭記錄一天的戰況", tag: "價格", seed: 11, n: 110,
+    body: `<p>一根 K 棒記錄一段時間（日 K 就是一天）的四個價格：<strong>開盤、最高、最低、收盤</strong>。實體是開盤到收盤的區間，兩端細線是影線。</p>${anatomySVG}
+<p>台股的慣例是<strong>紅漲綠跌</strong>：收盤高於開盤畫紅K，低於開盤畫綠K，和美股相反。</p>
+<ul>
+<li><strong>長紅 / 長黑</strong>：實體很長、影線很短，代表多方或空方整天掌控局面。</li>
+<li><strong>上影線</strong>：盤中曾漲上去又被賣壓壓回；<strong>下影線</strong>則是曾跌下去又被買盤撐起。</li>
+<li><strong>十字線</strong>：開盤 ≈ 收盤，多空拉鋸、方向未定，出現在一段漲跌之後要留意轉折。</li>
+<li><strong>錘子線</strong>：下跌後出現、下影線至少是實體兩倍，表示低檔有人承接。上漲後出現的反向型態叫<strong>流星線</strong>。</li>
+<li><strong>吞噬</strong>：今天的實體完全包住昨天相反顏色的實體，是常見的反轉訊號。</li>
+</ul>`,
+    chart: { ma: [], markers: (D) => Signals.candle(D) },
+    try: "把游標移到圖上的標記，對照上方的開高低收，看看型態長什麼樣子。",
+    keys: ["實體看多空勝負，影線看盤中的拉鋸。", "單一 K 棒的意義要放在前面的走勢裡看：同樣的錘子線，出現在高檔與低檔意義不同。", "型態是提醒，不是保證；最好等隔天走勢確認。"],
+  },
+  {
+    title: "移動平均線：把雜訊抹平，看出方向", tag: "趨勢", seed: 24, n: 180,
+    body: `<p>移動平均線（MA）是最近 N 天收盤價的平均，每天往前滾動一格。</p>
+<div class="formula">MA20(今天) = 最近 20 個交易日收盤價加總 ÷ 20</div>
+<p>台股常用 <strong>5 日（週線）</strong>、<strong>20 日（月線）</strong>、<strong>60 日（季線）</strong>。月線也常被看作「近一個月買進者的平均成本」。</p>
+<ul>
+<li><strong>方向</strong>：均線往上彎，代表平均成本在墊高，趨勢偏多。</li>
+<li><strong>排列</strong>：MA5 &gt; MA20 &gt; MA60 叫<strong>多頭排列</strong>，反之叫空頭排列；三線糾結代表盤整。</li>
+<li><strong>交叉</strong>：短均線由下往上穿過長均線叫<strong>黃金交叉</strong>，由上往下叫<strong>死亡交叉</strong>。</li>
+<li><strong>乖離</strong>：股價離均線太遠時，常會有拉回或反彈把距離拉近。</li>
+</ul>`,
+    chart: { ma: [5, 20, 60], markers: (D, I) => Signals.ma(D, I, 5, 20) },
+    try: "找一段多頭排列的期間，觀察股價拉回時是否常在月線（紫線）附近止跌。",
+    keys: ["均線是落後指標：它告訴你已經發生的趨勢，不是預測未來。", "盤整時均線反覆交叉，訊號容易來回被巴（假訊號）。", "週期越短越靈敏、但雜訊越多；越長越穩、但反應越慢。"],
+  },
+  {
+    title: "成交量：價格的力道從哪裡來", tag: "量能", seed: 37, n: 150,
+    body: `<p>成交量是當天成交的股數，台股以<strong>張</strong>計（1 張 = 1,000 股）。量代表參與的人數與資金，是判斷走勢「有沒有力」的依據。</p>
+<table><thead><tr><th>情境</th><th>常見解讀</th></tr></thead><tbody>
+<tr><td class="up">價漲量增</td><td>買盤積極追價，上漲較健康</td></tr>
+<tr><td class="up">價漲量縮</td><td>追價意願不足，漲勢可能後繼無力</td></tr>
+<tr><td class="down">價跌量增</td><td>賣壓沉重，有人急著出場</td></tr>
+<tr><td class="down">價跌量縮</td><td>賣壓減輕，下跌動能降溫</td></tr>
+<tr><td>爆量</td><td>超過均量兩倍以上，常出現在突破或轉折處</td></tr>
+</tbody></table>`,
+    chart: { ma: [20], markers: (D, I) => Signals.vol(D, I) },
+    try: "量的柱狀圖上有一條灰線，是 20 日均量。標記處是當日量超過均量兩倍的「爆量」日，看看之後價格怎麼走。",
+    keys: ["量先價行：量能變化常比價格更早透露轉折。", "突破壓力時有量，比較可信；無量突破容易失敗。", "高檔爆量長黑、低檔爆量長紅，都值得特別留意。"],
+  },
+  {
+    title: "支撐與壓力：市場記得的價格", tag: "價格", seed: 52, n: 160, sr: true,
+    body: `<p>股價跌到某個價位就止跌，那裡是<strong>支撐</strong>；漲到某個價位就漲不上去，那裡是<strong>壓力</strong>。常見的支撐壓力來自：</p>
+<ul>
+<li><strong>前波高點與低點</strong>：在那裡套牢或錯過的人，會在價格回來時採取行動。</li>
+<li><strong>均線</strong>：月線、季線常扮演動態的支撐壓力。</li>
+<li><strong>整數關卡與大量成交區</strong>：例如 100 元、500 元，或是曾經爆量換手的價位。</li>
+</ul>
+<p>最重要的觀念是<strong>角色互換</strong>：壓力被有效突破之後，常會變成下次拉回的支撐；支撐跌破之後，反彈到那裡常變成壓力。</p>`,
+    chart: { ma: [20], markers: (D) => { const { hi, lo } = pivots(D, 5); return [...hi.map(i => ({ i, side: "sell", label: "波段高", note: true })), ...lo.map(i => ({ i, side: "buy", label: "波段低", note: true }))]; } },
+    try: "虛線是依最近的波段高低點自動畫出的支撐（紅）與壓力（綠）。回頭找找看，股價過去在這些價位附近是否有反應。",
+    keys: ["支撐壓力是一個區間，不是精確到一檔的價格。", "被測試越多次、伴隨成交量越大的價位越有意義。", "「有效突破」通常要收盤站穩，最好配合量增。"],
+  },
+  {
+    title: "RSI：漲跌力道的溫度計", tag: "動能", seed: 68, n: 180, sub: "rsi",
+    body: `<p>RSI（相對強弱指標）比較一段期間內「上漲幅度」與「下跌幅度」的力量，數值落在 0 到 100 之間。常用 14 日。</p>
+<div class="formula">RS  = 平均漲幅 ÷ 平均跌幅（14 日，Wilder 平滑）
+RSI = 100 − 100 ÷ (1 + RS)</div>
+<ul>
+<li><strong>70 以上</strong>為超買區：短線漲多、過熱。</li>
+<li><strong>30 以下</strong>為超賣區：短線跌深。</li>
+<li><strong>50</strong> 是多空分界：RSI 在 50 以上代表上漲力道佔優。</li>
+<li><strong>背離</strong>：價格創新高但 RSI 沒有跟著創新高（頂背離），代表漲勢力道在衰退。</li>
+</ul>`,
+    chart: { ma: [20], sub: "rsi", markers: (D, I) => Signals.rsi(D, I) },
+    try: "標記處是 RSI 由超賣區回升到 30 以上、或由超買區跌回 70 以下的時點。看看這些訊號之後的走勢，有哪些成功、哪些失敗。",
+    keys: ["超買不等於要跌：強勢股的 RSI 可以長時間停在 70 以上，這叫指標鈍化。", "在趨勢盤，RSI 適合找「順勢回檔的買點」；在盤整盤，比較適合高出低進。", "背離是警訊，不是賣出指令，最好等價格本身轉弱再確認。"],
+  },
+  {
+    title: "KD 指標：收盤價在區間裡的位置", tag: "動能", seed: 81, n: 160, sub: "kd",
+    body: `<p>KD（隨機指標）是台股最多人看的指標之一。它衡量今天的收盤價，落在最近 9 天最高與最低價區間的哪個位置。</p>
+<div class="formula">RSV = (今日收盤 − 9日最低) ÷ (9日最高 − 9日最低) × 100
+K   = 前日K × 2/3 + RSV × 1/3
+D   = 前日D × 2/3 + K × 1/3</div>
+<ul>
+<li>K 比 D 靈敏。<strong>K 由下往上穿過 D</strong> 是黃金交叉，反之是死亡交叉。</li>
+<li><strong>80 以上</strong>為高檔、<strong>20 以下</strong>為低檔。在低檔出現的黃金交叉，意義比在中間區域大。</li>
+<li>K 值連續三天在 80 以上叫<strong>高檔鈍化</strong>，常代表強勢，而不是馬上要跌。</li>
+</ul>`,
+    chart: { ma: [20], sub: "kd", markers: (D, I) => Signals.kd(D, I) },
+    try: "標記只顯示「D 值低於 20 的黃金交叉」與「D 值高於 80 的死亡交叉」。對比一下沒被標記的普通交叉，哪一種比較常有後續行情？",
+    keys: ["KD 反應快，適合短線；在大趨勢中容易過早出現反向訊號。", "高檔鈍化時不要急著放空，低檔鈍化時不要急著接刀。", "與均線方向搭配使用：順著均線方向的 KD 交叉較可靠。"],
+  },
+  {
+    title: "MACD：兩條均線的距離與動能", tag: "趨勢", seed: 93, n: 200, sub: "macd",
+    body: `<p>MACD 衡量快、慢兩條指數移動平均（EMA）之間的距離。距離擴大代表趨勢加速，縮小代表動能減弱。台股看盤軟體的命名如下：</p>
+<div class="formula">DIF  = EMA12 − EMA26        （快線）
+MACD = DIF 的 9 日 EMA         （訊號線、慢線）
+OSC  = DIF − MACD              （柱狀體）</div>
+<ul>
+<li><strong>DIF 上穿 MACD</strong>、柱狀體由負翻正：動能轉強。</li>
+<li><strong>零軸</strong>：DIF 在零軸之上，代表短期均線在長期均線之上，屬中期多頭。</li>
+<li><strong>柱狀體縮短</strong>：趨勢仍在，但力道變弱，常是交叉之前的預警。</li>
+</ul>`,
+    chart: { ma: [12, 26], sub: "macd", markers: (D, I) => Signals.macd(D, I) },
+    try: "注意零軸之上的黃金交叉（多頭中的再起漲）和零軸之下的黃金交叉（空頭中的反彈）有什麼不同。",
+    keys: ["MACD 比 KD 慢、比較穩，適合判斷波段方向。", "盤整期 DIF 與 MACD 會黏在零軸附近反覆交叉，訊號價值低。", "柱狀體的變化比交叉更早，可以用來提前察覺動能轉變。"],
+  },
+  {
+    title: "布林通道：用統計畫出價格的活動範圍", tag: "波動", seed: 105, n: 180, boll: true,
+    body: `<p>布林通道以 20 日均線為中軌，上下各加減 2 個標準差。依常態分布的概念，大部分收盤價會落在通道之內。</p>
+<div class="formula">中軌 = MA20
+上軌 = MA20 + 2 × 標準差(20)
+下軌 = MA20 − 2 × 標準差(20)</div>
+<ul>
+<li><strong>通道寬度</strong>反映波動：越窄代表市場越安靜。</li>
+<li><strong>收斂（Squeeze）</strong>：通道明顯收窄後，常接著出現大行情，但方向要等突破才知道。</li>
+<li>盤整時，觸碰上軌偏賣、觸碰下軌偏買；<strong>趨勢中</strong>則可能沿著上軌或下軌一路走。</li>
+</ul>`,
+    chart: { ma: [], boll: true, markers: (D, I) => Signals.boll(D, I) },
+    try: "找出通道最窄的區段，看看之後價格往哪個方向噴出。再看看沿著上軌一路漲的時候，「觸上軌就賣」會錯過多少。",
+    keys: ["碰到上軌不等於超買；要先判斷是盤整還是趨勢。", "收斂之後的突破方向，可以搭配成交量確認。", "中軌（月線）常是趨勢中的拉回支撐。"],
+  },
+  {
+    title: "訊號不是保證：成本、停損與紀律", tag: "風險", seed: 117, n: 220,
+    body: `<p>每個指標都會出錯，技術分析真正的價值在於<strong>提高勝算、控制虧損</strong>。實際交易還要算上成本：</p>
+<table><thead><tr><th>項目</th><th>費率</th><th>說明</th></tr></thead><tbody>
+<tr><td>券商手續費</td><td class="num">0.1425%</td><td>買進、賣出各收一次（實際常有折扣）</td></tr>
+<tr><td>證券交易稅</td><td class="num">0.3%</td><td>賣出時收取（一般股票；當沖減半）</td></tr>
+</tbody></table>
+<p>一買一賣大約要 0.585% 的成本，頻繁進出的策略常被成本吃掉大部分獲利。</p>
+<ul>
+<li><strong>停損</strong>：進場前就決定錯了要在哪裡出場，例如跌破進場那根 K 棒的低點或月線。</li>
+<li><strong>部位控制</strong>：單筆虧損控制在總資金的 1–2%，連續看錯也不會傷筋動骨。</li>
+<li><strong>多重確認</strong>：趨勢（均線）＋動能（KD、MACD）＋量能，比只看單一指標可靠。</li>
+<li><strong>回測檢討</strong>：用過去資料測試規則，並記得過去不代表未來。</li>
+</ul>`,
+    chart: { ma: [5, 20], markers: (D, I) => Signals.ma(D, I, 5, 20) },
+    try: "到「圖表實驗室」選一個策略做回測，比較它和「買進持有」的報酬，再換幾段不同的走勢重測。",
+    keys: ["沒有任何指標能長期穩定預測價格。", "先想好「錯了怎麼辦」，再想「對了賺多少」。", "把規則寫下來並遵守，比找到完美指標更重要。"],
+  },
+];
+
+/* ================= 課程頁 ================= */
+const done = new Set(store.get("done", []));
+let lessonIdx = Math.min(store.get("lesson", 0), LESSONS.length - 1);
+const lessonChart = new Chart($("#lessonChart"));
+function updateProgress() { $("#progChip").textContent = `已完成 ${done.size} / ${LESSONS.length} 課`; }
+function renderLessonList() {
+  $("#lessonList").innerHTML = LESSONS.map((l, i) => `<button data-i="${i}" aria-current="${i === lessonIdx}"><span class="n">${String(i + 1).padStart(2, "0")}</span><span>${l.title.split("：")[0]}</span><span class="done">${done.has(i) ? "●" : ""}</span></button>`).join("");
+}
+function showLesson(i) {
+  lessonIdx = i; store.set("lesson", i);
+  const L = LESSONS[i];
+  $("#lessonEyebrow").textContent = `第 ${i + 1} 課 · ${L.tag}`;
+  $("#lessonTitle").textContent = L.title;
+  $("#lessonBody").innerHTML = L.body;
+  $("#lessonTry").innerHTML = `<b>試試看</b><span>${L.try}</span>`;
+  $("#lessonKeys").innerHTML = `<h3>重點整理</h3><ul>${L.keys.map(k => `<li>${k}</li>`).join("")}</ul>`;
+  const D = genSeries(L.seed, L.n), I = indicators(D);
+  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, sub: L.chart.sub, markers: L.chart.markers(D, I), hlines: L.sr ? srLevels(D) : [] });
+  $("#lessonPrev").disabled = i === 0;
+  $("#lessonNext").textContent = i === LESSONS.length - 1 ? "完成課程，去做測驗 →" : "完成本課，下一課 →";
+  renderLessonList();
+}
+$("#lessonList").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { showLesson(+b.dataset.i); window.scrollTo({ top: 0 }); } });
+$("#lessonPrev").addEventListener("click", () => { showLesson(lessonIdx - 1); window.scrollTo({ top: 0 }); });
+$("#lessonNext").addEventListener("click", () => {
+  done.add(lessonIdx); store.set("done", [...done]); updateProgress();
+  if (lessonIdx < LESSONS.length - 1) { showLesson(lessonIdx + 1); window.scrollTo({ top: 0 }); } else { renderLessonList(); switchTab("quiz"); }
+});
+
+/* ================= 實驗室 ================= */
+const STRATS = {
+  "": { name: "不顯示訊號" },
+  ma: { name: "均線交叉（短 / 中）", fn: (D, I) => Signals.ma(D, I, +$("#maAn").value || 5, +$("#maBn").value || 20) },
+  rsi: { name: "RSI 30 / 70", fn: Signals.rsi },
+  kd: { name: "KD 低檔金叉 / 高檔死叉", fn: Signals.kd },
+  macd: { name: "MACD 交叉", fn: Signals.macd },
+  boll: { name: "布林：破下軌買、破上軌賣", fn: Signals.boll },
+  candle: { name: "K線型態（錘子、吞噬…）", fn: Signals.candle },
+};
+let lab = { seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma") };
+const labChart = new Chart($("#labChart"), { onHover: i => { if (!lab.D) return; $("#roDate").textContent = lab.D[i].d.replace(/-/g, "/"); renderReadout($("#labReadout"), readout(lab.D, lab.I, i)); } });
+function labData() { lab.D = genSeries(lab.seed, +$("#labLen").value); lab.I = indicators(lab.D); $("#labSeed").textContent = `走勢編號 #${lab.seed}`; }
+function labDraw() {
+  const ma = [["maA", "maAn"], ["maB", "maBn"], ["maC", "maCn"]].filter(([c]) => $("#" + c).checked).map(([, n]) => Math.max(2, Math.min(240, +$("#" + n).value || 5)));
+  const S = STRATS[lab.strat], sigs = S.fn ? S.fn(lab.D, lab.I) : [];
+  labChart.set(lab.D, { I: lab.I, ma, boll: $("#boll").checked, sub: $("#labSub").value, markers: sigs, hlines: $("#sr").checked ? srLevels(lab.D) : [] });
+  renderBT(sigs);
+}
+function renderBT(sigs) {
+  const opts = Object.entries(STRATS).map(([k, v]) => `<option value="${k}" ${k === lab.strat ? "selected" : ""}>${v.name}</option>`).join("");
+  let html = `<div class="row" style="justify-content:space-between"><div><div class="eyebrow">BACKTEST</div><h3 style="margin:0">策略回測</h3></div><select id="stratSel" aria-label="策略">${opts}</select></div>`;
+  const S = STRATS[lab.strat];
+  if (!S.fn) { html += `<p class="note" style="margin:0">選一個策略，圖上會標出買賣訊號，這裡會顯示用這些訊號進出的結果。</p>`; }
+  else {
+    const r = backtest(lab.D, sigs), cls = x => x > 0 ? "up" : x < 0 ? "down" : "";
+    html += `<div class="stats">
+      <div class="stat"><div class="k">策略報酬</div><div class="v ${cls(r.total)}">${fmtPct(r.total, 1)}</div></div>
+      <div class="stat"><div class="k">買進持有</div><div class="v ${cls(r.bh)}">${fmtPct(r.bh, 1)}</div></div>
+      <div class="stat"><div class="k">交易次數</div><div class="v">${r.trades.length}</div></div>
+      <div class="stat"><div class="k">勝率</div><div class="v">${r.win == null ? "—" : Math.round(r.win * 100) + "%"}</div></div>
+      <div class="stat"><div class="k">最大回撤</div><div class="v down">${r.mdd ? "−" + (r.mdd * 100).toFixed(1) + "%" : "0%"}</div></div>
+    </div>`;
+    if (r.trades.length) html += `<div class="tablewrap"><table class="trades"><thead><tr><th>#</th><th>買進日</th><th>買價</th><th>賣出日</th><th>賣價</th><th>持有天數</th><th>報酬（含成本）</th></tr></thead><tbody>${r.trades.map((t, k) => `<tr><td>${k + 1}</td><td class="num">${lab.D[t.i].d.slice(5).replace("-", "/")}</td><td class="num">${fmtP(t.px)}</td><td class="num">${lab.D[t.xi].d.slice(5).replace("-", "/")}${t.open ? "＊" : ""}</td><td class="num">${fmtP(t.xpx)}</td><td class="num">${t.xi - t.i}</td><td class="num ${cls(t.ret)}">${fmtPct(t.ret)}</td></tr>`).join("")}</tbody></table></div>`;
+    else html += `<p class="note" style="margin:0">這段走勢沒有觸發任何進場訊號。換一段走勢或換一個策略試試。</p>`;
+    html += `<p class="note" style="margin:0">規則：訊號出現的隔天以開盤價成交，只做多、全額進出；買賣各計 0.1425% 手續費，賣出另計 0.3% 證交稅。${r.trades.some(t => t.open) ? "＊為期末仍持有，以最後收盤價計算。" : ""}</p>`;
+  }
+  $("#btPanel").innerHTML = html;
+  $("#stratSel").addEventListener("change", e => { lab.strat = e.target.value; store.set("labStrat", lab.strat); labDraw(); });
+}
+$("#labNew").addEventListener("click", () => { lab.seed = Math.floor(Math.random() * 1e6); store.set("labSeed", lab.seed); labData(); labDraw(); });
+$("#labLen").addEventListener("change", () => { labData(); labDraw(); });
+["maA", "maB", "maC", "boll", "sr", "labSub", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
+
+/* ================= 判讀挑戰 ================= */
+const HORIZON = 10, SHOW = 120;
+let ch = { right: 0, total: 0, streak: 0, best: store.get("best", 0), answered: false };
+const chalChart = new Chart($("#chalChart"));
+function chalNew() {
+  ch.seed = Math.floor(Math.random() * 1e6); ch.D = genSeries(ch.seed, SHOW + HORIZON); ch.I = indicators(ch.D); ch.answered = false;
+  $("#chHintBox").hidden = true; $("#chResult").hidden = true; $("#chUp").disabled = $("#chDown").disabled = false; $("#chHint").disabled = false;
+  chalDraw();
+}
+function chalDraw() {
+  chalChart.set(ch.D, { I: ch.I, ma: $("#chMA").checked ? [5, 20, 60] : [], boll: $("#chBoll").checked, sub: $("#chSub").value, visible: ch.answered ? ch.D.length : SHOW, cutoff: SHOW });
+}
+function chalScore() { $("#scRight").textContent = `${ch.right} / ${ch.total}`; $("#scStreak").textContent = ch.streak; $("#scBest").textContent = ch.best; }
+function chalAnswer(guess) {
+  if (ch.answered) return;
+  ch.answered = true;
+  const p0 = ch.D[SHOW - 1].c, p1 = ch.D[SHOW + HORIZON - 1].c, chg = (p1 - p0) / p0, actual = chg >= 0 ? 1 : -1, ok = guess === actual;
+  ch.total++; if (ok) { ch.right++; ch.streak++; ch.best = Math.max(ch.best, ch.streak); store.set("best", ch.best); } else ch.streak = 0;
+  chalScore(); chalDraw();
+  $("#chUp").disabled = $("#chDown").disabled = true; $("#chHint").disabled = true;
+  const items = readout(ch.D, ch.I, SHOW - 1), bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length;
+  const lean = bull > bear ? 1 : bear > bull ? -1 : 0;
+  const leanTxt = lean === 0 ? "指標多空各半，這種時候本來就難判斷，觀望也是一種選擇。" : `指標整體${lean > 0 ? "偏多" : "偏空"}（${bull} 項偏多、${bear} 項偏空），${lean === actual ? "這次和實際走勢一致。" : "但實際走勢相反，這就是指標失靈的時候；想想有沒有哪個細節其實在提醒你。"}`;
+  $("#chResult").hidden = false; $("#chHintBox").hidden = true;
+  $("#chResult").innerHTML = `<div class="big ${ok ? "up" : "down"}">${ok ? "答對了" : "這次猜錯"}</div>
+    <div>10 天後收盤 <span class="num">${fmtP(p1)}</span>，相較作答時的 <span class="num">${fmtP(p0)}</span>，<span class="num ${chg >= 0 ? "up" : "down"}">${fmtPct(chg)}</span>。</div>
+    <div class="note">${leanTxt}</div>
+    <h3 style="margin-top:4px">作答當天的指標</h3><div id="chRo"></div>
+    <div><button class="btn primary" id="chNext">下一題 →</button></div>`;
+  renderReadout($("#chRo"), items, true);
+  $("#chNext").addEventListener("click", chalNew);
+}
+$("#chUp").addEventListener("click", () => chalAnswer(1));
+$("#chDown").addEventListener("click", () => chalAnswer(-1));
+$("#chHint").addEventListener("click", () => {
+  const box = $("#chHintBox"); box.hidden = !box.hidden;
+  if (!box.hidden) { box.innerHTML = `<h3>目前的指標狀態</h3><div id="chHintRo"></div><p class="note" style="margin:0">先自己讀圖再看提示，練習效果比較好。</p>`; renderReadout($("#chHintRo"), readout(ch.D, ch.I, SHOW - 1), true); }
+});
+["chMA", "chBoll", "chSub"].forEach(id => $("#" + id).addEventListener("change", chalDraw));
+
+/* ================= 觀念測驗 ================= */
+const QUESTIONS = [
+  { q: "在台股看盤軟體中，收盤價高於開盤價的 K 棒通常是什麼顏色？", o: ["紅色", "綠色", "黑色", "藍色"], a: 0, e: "台股是「紅漲綠跌」，和美股的「綠漲紅跌」剛好相反。" },
+  { q: "連續下跌後出現一根「下影線很長、實體很小」的 K 棒，通常怎麼解讀？", o: ["賣壓更重，會加速下跌", "盤中低檔有買盤承接，可能止跌", "成交量一定很小", "代表主力出貨"], a: 1, e: "這是錘子線：盤中曾大跌，但收盤被買盤拉回，顯示低檔有人承接。仍需隔天走勢確認。" },
+  { q: "MA5 由下往上穿越 MA20，稱為？", o: ["死亡交叉", "多頭排列", "黃金交叉", "背離"], a: 2, e: "短期均線上穿長期均線叫黃金交叉；反之是死亡交叉。" },
+  { q: "MA5 > MA20 > MA60，而且三條線都往上，這種情況稱為？", o: ["空頭排列", "均線糾結", "多頭排列", "乖離過大"], a: 2, e: "短、中、長期均線由上而下依序排列並向上，代表各週期的平均成本都在墊高。" },
+  { q: "RSI 數值為 82，以下敘述何者最恰當？", o: ["一定馬上會跌", "處於超買區，短線過熱，但強勢股可能鈍化續漲", "處於超賣區，可以買進", "RSI 無法超過 80"], a: 1, e: "RSI 70 以上是超買區。超買代表過熱，不代表立刻反轉，強勢時可以停在高檔很久。" },
+  { q: "KD 指標中的 RSV，衡量的是什麼？", o: ["成交量相對均量的倍數", "今日收盤價在近 9 日最高最低區間中的位置", "股價與月線的距離", "上漲天數占比"], a: 1, e: "RSV =（今日收盤 − 9日最低）÷（9日最高 − 9日最低）× 100，K、D 再由 RSV 平滑而來。" },
+  { q: "MACD 的柱狀體（OSC）由負翻正，代表？", o: ["DIF 向上穿越 MACD 訊號線", "股價跌破月線", "成交量萎縮", "DIF 跌破零軸"], a: 0, e: "OSC = DIF − MACD，由負翻正就是 DIF 上穿訊號線，動能轉強。" },
+  { q: "布林通道的寬度明顯收窄到近期最窄，通常預示？", o: ["一定會往上突破", "一定會往下跌破", "波動即將放大，但方向要等突破才知道", "股票即將下市"], a: 2, e: "通道收斂代表波動降到低點，之後常出現較大行情，但方向無法事先確定。" },
+  { q: "「價漲量增」通常被解讀為？", o: ["追價意願不足", "買盤積極，漲勢較健康", "賣壓沉重", "主力出貨"], a: 1, e: "上漲時成交量放大，代表有更多資金願意在更高價格買進。" },
+  { q: "原本的壓力價位被帶量有效突破後，之後常會？", o: ["轉變為支撐", "永遠不會再碰到", "變成更強的壓力", "失去任何意義"], a: 0, e: "這是支撐壓力的「角色互換」：突破後，原本的壓力常成為拉回時的支撐。" },
+  { q: "指標「鈍化」是指？", o: ["指標計算錯誤", "指標長時間停在超買或超賣區，價格卻持續同方向走", "成交量為零", "均線呈水平"], a: 1, e: "例如 K 值連續多天在 80 以上而股價繼續漲，就是高檔鈍化，此時用「超買就賣」會出錯。" },
+  { q: "股價創新高，但 RSI 沒有跟著創新高，這稱為？", o: ["黃金交叉", "頂背離", "底背離", "多頭排列"], a: 1, e: "價格創高、指標沒創高是頂背離，代表上漲力道在減弱，是轉弱的警訊。" },
+  { q: "在台股賣出一般股票時，需繳交的證券交易稅稅率是？", o: ["0.1425%", "0.3%", "1%", "免稅"], a: 1, e: "一般股票賣出課 0.3% 證交稅（當沖減半）；0.1425% 是券商手續費上限，買賣都要付。" },
+  { q: "關於技術指標，下列敘述何者最正確？", o: ["找到對的指標就能穩定獲利", "指標越多越準", "指標是提高勝算的工具，仍需搭配停損與資金控管", "只要回測賺錢，未來一定賺錢"], a: 2, e: "沒有指標能保證獲利。技術分析的價值在於有規則地進出、控制虧損。" },
+];
+let quiz = null;
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function quizStart() { quiz = { order: shuffle(QUESTIONS.map((_, i) => i)), k: 0, score: 0, picked: null }; quizRender(); }
+function quizRender() {
+  const el = $("#quiz"), N = quiz.order.length;
+  if (quiz.k >= N) {
+    const best = Math.max(store.get("quizBest", 0), quiz.score); store.set("quizBest", best);
+    const pct = quiz.score / N;
+    el.innerHTML = `<div class="panel qcard"><div class="eyebrow">RESULT</div><h2>${quiz.score} / ${N}</h2>
+      <p style="margin:0">${pct >= 0.85 ? "觀念很扎實，可以到判讀挑戰實戰看看。" : pct >= 0.6 ? "基礎不錯。答錯的題目回到對應課程複習一下。" : "建議先把課程從頭走一遍，再回來挑戰。"}</p>
+      <p class="note" style="margin:0">歷史最佳：${best} / ${N}</p>
+      <div class="row"><button class="btn primary" id="qAgain">再測一次</button><button class="btn" id="qLearn">回到課程</button></div></div>`;
+    $("#qAgain").addEventListener("click", quizStart); $("#qLearn").addEventListener("click", () => switchTab("learn"));
+    return;
+  }
+  const Q = QUESTIONS[quiz.order[quiz.k]], ans = quiz.picked != null;
+  el.innerHTML = `<div class="panel qcard">
+    <div class="qmeta"><span>第 ${quiz.k + 1} / ${N} 題</span><span>得分 <span class="num">${quiz.score}</span></span></div>
+    <div class="qbar"><i style="width:${quiz.k / N * 100}%"></i></div>
+    <div class="qtext">${Q.q}</div>
+    <div class="opts">${Q.o.map((t, i) => `<button data-i="${i}" ${ans ? "disabled" : ""} class="${ans && i === Q.a ? "right" : ans && i === quiz.picked ? "wrong" : ""}"><span class="l">${"ABCD"[i]}</span><span>${t}</span></button>`).join("")}</div>
+    ${ans ? `<div class="explain"><strong class="${quiz.picked === Q.a ? "down" : "up"}">${quiz.picked === Q.a ? "正確。" : "答錯了。"}</strong>${Q.e}</div><div><button class="btn primary" id="qNext">${quiz.k === N - 1 ? "看結果" : "下一題 →"}</button></div>` : ""}
+  </div>`;
+  el.querySelectorAll(".opts button").forEach(b => b.addEventListener("click", () => { quiz.picked = +b.dataset.i; if (quiz.picked === Q.a) quiz.score++; quizRender(); }));
+  if (ans) $("#qNext").addEventListener("click", () => { quiz.k++; quiz.picked = null; quizRender(); });
+}
+
+/* ================= 頁籤 ================= */
+const TABS = ["learn", "lab", "challenge", "quiz"];
+const inited = {};
+function switchTab(t) {
+  if (!TABS.includes(t)) t = "learn";
+  TABS.forEach(x => { $("#view-" + x).hidden = x !== t; $("#tab-btn-" + x).setAttribute("aria-selected", x === t); });
+  store.set("tab", t);
+  if (!inited[t]) {
+    inited[t] = true;
+    if (t === "lab") { labData(); labDraw(); }
+    if (t === "challenge") { chalScore(); chalNew(); }
+    if (t === "quiz") quizStart();
+  }
+  window.scrollTo({ top: 0 });
+}
+$(".tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) { switchTab(b.dataset.tab); try { history.replaceState(null, "", "#" + b.dataset.tab); } catch {} } });
+
+// 主題切換時重畫圖表
+const redrawAll = () => [lessonChart, labChart, chalChart].forEach(c => c.draw());
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redrawAll); } catch {}
+new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+if (document.fonts) document.fonts.ready.then(redrawAll);
+
+updateProgress();
+showLesson(lessonIdx);
+switchTab(location.hash.slice(1) || store.get("tab", "learn"));
+</script>
+</body>
+</html>
