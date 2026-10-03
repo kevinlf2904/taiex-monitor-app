@@ -79,6 +79,20 @@ button, select, input { font: inherit; color: inherit; }
   border: 0; background: transparent; padding: 5px 14px; border-radius: 999px; cursor: pointer;
   font-size: 14px; color: var(--muted); white-space: nowrap;
 }
+.tabs svg { display: none; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 640px) {
+  /* 手機：主選單移到畫面底部，像一般 App */
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; border-radius: 0; border: 0; border-top: 1px solid var(--line); padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); justify-content: space-around; max-width: none; overflow: visible; }
+  .tabs button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px; font-size: 11px; flex: 1; border-radius: 10px; }
+  .tabs svg { display: block; }
+  .tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .top { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg); } /* 有 backdrop-filter 的祖先會讓底部選單的 fixed 定位失效 */
+  .top-inner { padding: 8px 16px; }
+  .seg { max-width: 100%; overflow-x: auto; }
+  .seg button { white-space: nowrap; padding: 6px 10px; font-size: 13px; }
+  .brand p { display: none; }
+}
 .tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px;
@@ -332,11 +346,11 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <div><h1>K線學堂</h1><p>台股技術分析互動練習</p></div>
     </div>
     <nav class="tabs" role="tablist" aria-label="主要區塊">
-      <button role="tab" data-tab="learn" id="tab-btn-learn">課程</button>
-      <button role="tab" data-tab="lab" id="tab-btn-lab">圖表實驗室</button>
-      <button role="tab" data-tab="challenge" id="tab-btn-challenge">判讀挑戰</button>
-      <button role="tab" data-tab="shot" id="tab-btn-shot">截圖判讀</button>
-      <button role="tab" data-tab="quiz" id="tab-btn-quiz">觀念測驗</button>
+      <button role="tab" data-tab="learn" id="tab-btn-learn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7a3 3 0 0 1 3 3v11a2 2 0 0 0-2-2H4zM20 5h-4a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h4z"/></svg><span>課程</span></button>
+      <button role="tab" data-tab="lab" id="tab-btn-lab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 8h-2v6h2M17 4v16M17 6h2v8h-2M12 4v16M12 10h-2v5h2"/></svg><span>圖表實驗室</span></button>
+      <button role="tab" data-tab="challenge" id="tab-btn-challenge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9M15 6h5v5"/></svg><span>判讀挑戰</span></button>
+      <button role="tab" data-tab="shot" id="tab-btn-shot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 15l3-4 2 2 3-4"/></svg><span>截圖判讀</span></button>
+      <button role="tab" data-tab="quiz" id="tab-btn-quiz"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 .9-1 1.6V15M12 18.5v.5"/><circle cx="12" cy="12" r="9"/></svg><span>觀念測驗</span></button>
     </nav>
     <span class="chip" id="progChip">已完成 0 / 19 課</span>
   </div>
@@ -468,7 +482,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <div class="panel shot-src">
         <div class="shot-src-head">
           <div><div class="eyebrow">步驟 2</div><h3 style="margin:0">辨識結果</h3><span class="note" id="shotInfo"></span></div>
-          <div class="row"><label class="row" style="gap:6px; font-size:13.5px"><input type="checkbox" id="shotSmcOverlay" checked>標示聰明錢</label><button class="btn" id="shotEnlarge" aria-pressed="false">放大截圖</button></div>
+          <div class="row"><label class="row" style="gap:6px; font-size:13.5px"><input type="checkbox" id="shotSmcOverlay" checked>標示聰明錢</label><button class="btn" id="shotFull" aria-pressed="false">完整截圖</button><button class="btn" id="shotEnlarge" aria-pressed="false">放大</button></div>
         </div>
         <div class="shot-stage"><canvas id="shotCanvas" aria-label="截圖與偵測到的 K 棒"></canvas><div class="shot-pop panel" id="shotPop" hidden></div></div>
         <div class="row note" style="padding: 0 14px 12px">
@@ -1109,7 +1123,7 @@ class Chart {
     for (let i = va; i < Math.min(vis, vb + 1); i++) {
       lo = Math.min(lo, D[i].l); hi = Math.max(hi, D[i].h);
       if (o.boll && I.boll.up[i] != null) { lo = Math.min(lo, I.boll.lo[i]); hi = Math.max(hi, I.boll.up[i]); }
-      if (F && i >= F.from) { lo = Math.min(lo, F.p10[i - F.from]); hi = Math.max(hi, F.p90[i - F.from]); }
+      if (F && i >= F.from) { lo = Math.min(lo, F.p25[i - F.from]); hi = Math.max(hi, F.p75[i - F.from]); } // 外圈機率帶超出就裁掉，真實 K 棒才不會被壓扁
     }
     const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
     const Y = p => top0 + (hi - p) / (hi - lo) * mainH;
@@ -2037,6 +2051,62 @@ function verticalRuns(cls, W, H) {
       均線、文字通常是別的顏色，或是細線，不會被選中；之後只認和 K 棒色相近的像素。
    2. 再去掉只有 1–2 像素高的水平筆畫（均線、格線），剩下的就是實體與影線。
    3. 依「欄」切出每一根 K 棒；空心 K 棒（只有外框）會把左右邊框合併回同一根。 */
+/* 去掉和 K 棒同色、但不是 K 棒的東西（看盤軟體常見）：
+   - 文字：圖上標示的最高 / 最低價、報價數字。字元高度一致、底線對齊、一個接一個排列；
+     K 棒則一定有一欄從頂到底連續（影線穿過實體），文字多半沒有。
+   - SAR 等指標的小圓點：很小、接近正方形、塗滿。
+   - 買賣訊號的三角形：寬度逐列線性變化，沒有實體那種「寬度不變」的一段。 */
+function removeNonCandles(cm, W, H) {
+  const lab = new Int32Array(W * H).fill(-1), comps = [], stack = [];
+  for (let s = 0; s < W * H; s++) {
+    if (!cm[s] || lab[s] >= 0) continue;
+    const id = comps.length, c = cm[s]; let x0 = W, x1 = -1, y0 = H, y1 = -1, n = 0; const pix = [];
+    lab[s] = id; stack.push(s);
+    while (stack.length) {
+      const i = stack.pop(), x = i % W, y = (i / W) | 0; pix.push(i); n++;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const j = ny * W + nx; if (cm[j] === c && lab[j] < 0) { lab[j] = id; stack.push(j); }
+      }
+    }
+    comps.push({ c, x0, x1, y0, y1, w: x1 - x0 + 1, h: y1 - y0 + 1, n, pix });
+  }
+  const kill = new Set();
+  // 有沒有一欄從頂到底都連續
+  const fullCol = k => { const q = comps[k]; for (let x = q.x0; x <= q.x1; x++) { let ok = true; for (let y = q.y0; y <= q.y1 && ok; y++) if (!cm[y * W + x] || lab[y * W + x] !== k) ok = false; if (ok) return true; } return false; };
+  // 圓點的大小以「典型 K 棒寬度」為準：有影線的 K 棒高度明顯大於寬度
+  const tallW = comps.filter(q => q.h >= q.w * 2 && q.h >= 8).map(q => q.w).sort((a, b) => a - b);
+  const candleW = tallW.length ? tallW[tallW.length >> 1] : 6, dotMax = Math.max(2.5, candleW * 0.6);
+  comps.forEach((q, k) => {
+    if (q.w <= dotMax && q.h <= dotMax && Math.abs(q.w - q.h) <= 2 && q.n >= q.w * q.h * 0.55 && q.w >= 2) kill.add(k);
+    if (q.h >= 8 && q.w >= 8) { // 三角形
+      const ws = []; for (let y = q.y0; y <= q.y1; y++) { let a = -1, b = -1; for (let x = q.x0; x <= q.x1; x++) if (lab[y * W + x] === k) { if (a < 0) a = x; b = x; } ws.push(a < 0 ? 0 : b - a + 1); }
+      let flat = 0; for (let i = 1; i < ws.length; i++) if (Math.abs(ws[i] - ws[i - 1]) <= 1) flat++;
+      if (flat / ws.length < 0.35 && Math.max(...ws) >= 3 * Math.max(1, Math.min(...ws))) kill.add(k);
+    }
+  });
+  // 文字列：同色、底線對齊、高度相近、一個接一個
+  const glyph = comps.map((q, k) => ({ q, k })).filter(({ q }) => q.h >= 6 && q.h <= H * 0.08 && q.w <= q.h * 1.4).sort((a, b) => a.q.x0 - b.q.x0);
+  const parent = glyph.map((_, i) => i), find = i => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  for (let i = 0; i < glyph.length; i++) for (let j = i + 1; j < glyph.length; j++) {
+    const a = glyph[i].q, b = glyph[j].q, h = Math.max(a.h, b.h);
+    if (b.x0 - a.x1 > h * 1.1) break;
+    if (a.c === b.c && Math.abs(a.y1 - b.y1) <= Math.max(2, h * 0.15) && Math.abs(a.h - b.h) <= Math.max(2, h * 0.25)) parent[find(j)] = find(i);
+  }
+  const groups = new Map(); glyph.forEach((g, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(g.k); });
+  groups.forEach(ks => {
+    if (ks.length < 3) return;
+    const full = ks.filter(fullCol).length;
+    if (full > ks.length * 0.5) return; // 多數有貫穿的一欄：比較像一排 K 棒
+    ks.forEach(k => kill.add(k));
+    // 小數點、逗號這類小元件也一起清掉
+    const gx0 = Math.min(...ks.map(k => comps[k].x0)), gx1 = Math.max(...ks.map(k => comps[k].x1)), gy0 = Math.min(...ks.map(k => comps[k].y0)), gy1 = Math.max(...ks.map(k => comps[k].y1));
+    comps.forEach((q, k) => { if (q.x0 >= gx0 - 4 && q.x1 <= gx1 + 4 && q.y0 >= gy0 - 2 && q.y1 <= gy1 + 2 && q.h < (gy1 - gy0) * 0.6) kill.add(k); });
+  });
+  kill.forEach(k => comps[k].pix.forEach(i => { cm[i] = 0; }));
+  return kill.size;
+}
 function extractCandles(img, crop, conv) {
   const { px, W, H, rx, ry, scale } = readRegion(img, crop), N = W * H;
   const hue = new Uint8Array(N);
@@ -2062,8 +2132,16 @@ function extractCandles(img, crop, conv) {
   }
   // cm：顏色符合 K 棒色；sm：再排除扁平筆畫（垂直長度 < 3）
   const cm = new Uint8Array(N), TOL = 72 * 72;
-  // 嚴格比對 K 棒色；壓縮或縮放過的圖，細影線顏色會偏掉，同色相、垂直夠長的像素用較寬的容許值
-  for (let i = 0; i < N; i++) { const c = hue[i]; if (c && refs[c]) { const d = dist2(px, i * 4, refs[c]); if (d < TOL || (vrHue[i] >= 3 && d < 115 * 115)) cm[i] = c; } }
+  // 嚴格比對 K 棒色；壓縮或縮放過的圖，細影線顏色會偏掉：較寬容許值的像素，只有在同一欄連到嚴格像素時才算
+  const loose = new Uint8Array(N);
+  for (let i = 0; i < N; i++) { const c = hue[i]; if (c && refs[c]) { const d = dist2(px, i * 4, refs[c]); if (d < TOL) cm[i] = c; else if (d < 115 * 115) loose[i] = c; } }
+  for (let x = 0; x < W; x++) for (let y = 0; y < H;) {
+    const c = cm[y * W + x] || loose[y * W + x]; if (!c) { y++; continue; }
+    let e = y, strict = false; while (e < H && (cm[e * W + x] === c || loose[e * W + x] === c)) { if (cm[e * W + x]) strict = true; e++; }
+    if (strict) for (let k = y; k < e; k++) cm[k * W + x] = c;
+    y = e;
+  }
+  removeNonCandles(cm, W, H);
   const vr = verticalRuns(cm, W, H), sm = new Uint8Array(N);
   for (let i = 0; i < N; i++) if (cm[i] && vr[i] >= 3) sm[i] = cm[i];
   const rowCnt = new Uint32Array(H);
@@ -2081,14 +2159,25 @@ function extractCandles(img, crop, conv) {
       const mode = m => Math.max(0, ...m.values());
       return cols > 10 && (mode(bots) > cols * 0.6 || mode(tops) + mode(bots) > cols * 0.75);
     };
-    // 先把「不是柱狀區」的相鄰區塊合併（大跳空、空心 K 棒都可能把價格區切成好幾塊），再挑最高的一塊
-    const tagged = bands.map(b => ({ b, bars: b[1] - b[0] >= 8 && isBars(b) }));
-    const big = [];
-    tagged.filter(t => t.b[1] - t.b[0] >= H * 0.04).forEach(t => { const last = big[big.length - 1]; if (!t.bars && last && !last.bars && t.b[0] - last.b[1] <= H * 0.25) last.b = [last.b[0], t.b[1]]; else big.push({ ...t, b: [...t.b] }); });
-    const priceBands = big.filter(t => !t.bars && t.b[1] - t.b[0] >= H * 0.05).map(t => t.b);
-    big.length = 0; big.push(...priceBands);
-    const pool = big.length ? big : bands;
-    if (pool.length) [y0, y1] = pool.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
+    // 先挑最高的非柱狀區塊當價格區，再把「上下相鄰、但橫向位置不重疊」的區塊併進來：
+    // 大跳空會把同一張圖的前段、後段切成上下兩塊（左右錯開）；報價、表格、圖例的文字則和圖表橫向重疊，不會被併入
+    const xr = ([a, b]) => { let x0 = W, x1 = -1; for (let y = a; y <= b; y++) for (let x = 0; x < W; x++) if (sm[y * W + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; } return [x0, x1]; };
+    const tagged = bands.map(b => ({ b, bars: b[1] - b[0] >= 8 && isBars(b), x: xr(b) }));
+    const cands = tagged.filter(t => !t.bars && t.b[1] - t.b[0] >= H * 0.05);
+    const pool = cands.length ? cands : tagged;
+    if (pool.length) {
+      const P = pool.reduce((a, b) => (b.b[1] - b.b[0] > a.b[1] - a.b[0] ? b : a)), at = tagged.indexOf(P);
+      let top = P.b[0], bot = P.b[1], px0 = P.x[0], px1 = P.x[1];
+      const tryMerge = t => {
+        if (t.bars || t.b[1] - t.b[0] < H * 0.04) return false;
+        const gapY = t.b[0] > bot ? t.b[0] - bot : top - t.b[1], ov = Math.min(px1, t.x[1]) - Math.max(px0, t.x[0]), gapX = Math.max(t.x[0] - px1, px0 - t.x[1]);
+        if (gapY > H * 0.15 || ov > 0.3 * Math.min(px1 - px0, t.x[1] - t.x[0]) || gapX > W * 0.03) return false;
+        top = Math.min(top, t.b[0]); bot = Math.max(bot, t.b[1]); px0 = Math.min(px0, t.x[0]); px1 = Math.max(px1, t.x[1]); return true;
+      };
+      for (let k = at - 1; k >= 0 && tryMerge(tagged[k]); k--);
+      for (let k = at + 1; k < tagged.length && tryMerge(tagged[k]); k++);
+      [y0, y1] = [top, bot];
+    }
   }
   const col = new Uint32Array(W);
   for (let y = y0; y <= y1; y++) for (let x = 0; x < W; x++) if (sm[y * W + x]) col[x]++;
@@ -2213,7 +2302,7 @@ function paneRects(img, band) {
   const gap = Math.max(4, Math.round(H * 0.02)), bands = []; let s = -1, last = -1;
   for (let y = 0; y < H; y++) if (ink[y] >= 2) { if (s < 0 || y - last > gap) { if (s >= 0) bands.push([s, last]); s = y; } last = y; }
   if (s >= 0) bands.push([s, last]);
-  return bands.filter(([a, b]) => b - a >= 18).map(([a, b]) => ({ x: rect.x, y: rect.y + a / scale - 1, w: rect.w, h: (b - a + 3) / scale }));
+  return bands.filter(([a, b]) => b - a >= Math.max(18, img.naturalHeight * scale * 0.03)).map(([a, b]) => ({ x: rect.x, y: rect.y + a / scale - 1, w: rect.w, h: (b - a + 3) / scale }));
 }
 const lum = c => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
 function bgColor(px, N) { const m = new Map(); let best = 0, key = 0; for (let i = 0; i < N; i += 3) { const k = qKey(px, i * 4), v = (m.get(k) || 0) + 1; m.set(k, v); if (v > best) { best = v; key = k; } } return [(key >> 8) * 16 + 8, ((key >> 4) & 15) * 16 + 8, (key & 15) * 16 + 8]; }
@@ -2269,7 +2358,7 @@ function extractPane(img, rect, candles, pitch, conv) {
     fillGaps(v);
     let tv = 0; for (let i = 1; i < n; i++) if (v[i] != null && v[i - 1] != null) tv += Math.abs(v[i] - v[i - 1]);
     return { rgb: gp.rgb, y: v, cover: got / n, tv };
-  }).filter(l => l.cover >= 0.6).sort((a, b) => b.tv - a.tv).slice(0, 3);
+  }).filter(l => l.cover >= 0.6 && Math.max(...l.y) - Math.min(...l.y) >= 3).sort((a, b) => b.tv - a.tv).slice(0, 3); // 水平的零軸、格線不算指標線
   const type = isVol ? "vol" : hasBars ? "macd" : lines.length >= 2 ? "kd" : lines.length === 1 ? "rsi" : null;
   return { rect, type, lines, bars, zero, H, isVol, conv };
 }
@@ -2346,6 +2435,18 @@ function candlesToSeries(cs, hi, lo, map = priceMap(cs, hi, lo)) {
   const P = map.P;
   return cs.map((c, k) => ({ d: `第 ${k + 1} 根`, o: P(c.up ? c.bb : c.bt), c: P(c.up ? c.bt : c.bb), h: P(c.top), l: P(c.bot), v: 0 }));
 }
+// 價格區附近的水平格線（灰色細線，橫跨大半寬度）：校正價格時讓點擊吸附到格線上
+function gridlines(img, band) {
+  const pad = band.h * 0.15, rect = { x: band.x, y: Math.max(0, band.y - pad), w: band.w, h: Math.min(img.naturalHeight - Math.max(0, band.y - pad), band.h + pad * 2) };
+  const { px, W, H, ry, scale } = readRegion(img, rect), bg = bgColor(px, W * H), rows = [];
+  for (let y = 0; y < H; y++) {
+    let c = 0;
+    for (let x = 0; x < W; x++) { const i = (y * W + x) * 4, r = px[i], g = px[i + 1], b = px[i + 2]; if (Math.max(r, g, b) - Math.min(r, g, b) < 28 && Math.abs(r - bg[0]) + Math.abs(g - bg[1]) + Math.abs(b - bg[2]) > 30) c++; }
+    if (c > W * 0.45) rows.push(y);
+  }
+  const lines = []; rows.forEach(y => { const last = lines[lines.length - 1]; if (last && y - last.b <= 1) last.b = y; else lines.push({ a: y, b: y }); });
+  return lines.map(l => ((l.a + l.b) / 2 + ry) / scale);
+}
 // 交易日：從最後一根往前推，跳過週末
 function tradingDates(last, n) {
   const d = new Date(last + "T00:00:00Z"), out = [];
@@ -2364,12 +2465,22 @@ function probeCandle(img, x, band, conv, refs) {
 }
 const candleKey = c => Math.round((c.x0 + c.x1) / 2);
 
+function shotView() {
+  const img = shot.img, full = { y0: 0, y1: img.naturalHeight };
+  if (shot.fullView || !shot.res || !shot.res.candles.length) return full;
+  const b = shot.res.band, bottom = Math.max(b.y + b.h, ...shot.panes.map(p => p.rect.y + p.rect.h)), pad = img.naturalHeight * 0.03;
+  const y0 = Math.max(0, b.y - pad * 1.5), y1 = Math.min(img.naturalHeight, bottom + pad);
+  return y1 - y0 < img.naturalHeight * 0.85 ? { y0, y1 } : full;
+}
 function drawShot() {
   const cv = $("#shotCanvas"), img = shot.img;
   if (!img) return;
-  const W = cv.clientWidth || cv.parentElement.clientWidth, k = W / img.naturalWidth, H = Math.round(img.naturalHeight * k), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth || cv.parentElement.clientWidth, k = W / img.naturalWidth, dpr = window.devicePixelRatio || 1;
+  // 手機截圖很長：預設只顯示圖表區（價格區到最後一個副圖），可切換成完整截圖
+  const v = shotView(), H = Math.round((v.y1 - v.y0) * k);
   cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + "px";
-  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.drawImage(img, 0, 0, W, H);
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.translate(0, -v.y0 * k); ctx.drawImage(img, 0, 0, W, img.naturalHeight * k);
+  shot.oy = v.y0;
   const accent = cssVar("--accent");
   if (shot.res) {
     const b = shot.res.band;
@@ -2387,6 +2498,7 @@ function drawShot() {
       const tw = ctx.measureText(label).width; ctx.fillStyle = s2; ctx.fillRect(r.x * k, r.y * k, tw + 10, 18); ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.fillText(label, r.x * k + 5, r.y * k + 9); ctx.textBaseline = "alphabetic";
     });
   }
+  if (shot.mode === "cal") (shot.grid || []).forEach(y => { ctx.strokeStyle = cssVar("--s1"); ctx.globalAlpha = 0.55; ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, y * k); ctx.lineTo(W, y * k); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; });
   shot.calPts.forEach((c, n) => {
     const y = c.y * k; ctx.strokeStyle = cssVar("--s1"); ctx.lineWidth = 1.5; ctx.setLineDash([8, 4]); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); ctx.setLineDash([]);
     const t = `校正 ${n + 1}：${c.p}`; ctx.font = `700 12px ${cssVar("--font-body")}`; const tw = ctx.measureText(t).width; ctx.fillStyle = cssVar("--s1"); ctx.fillRect(4, y - 20, tw + 10, 18); ctx.fillStyle = "#fff"; ctx.fillText(t, 9, y - 7);
@@ -2515,6 +2627,7 @@ function shotRun() {
   }).filter(p => p.type || p.cfg.type || shot.subCrop);
   drawShot();
   const hi = parseFloat($("#shotHi").value), lo = parseFloat($("#shotLo").value);
+  shot.grid = gridlines(shot.img, shot.res.band);
   shot.pmap = priceMap(cs, hi, lo, shot.calPts);
   const cal = shot.pmap.cal;
   shot.D = candlesToSeries(cs, hi, lo, shot.pmap);
@@ -2680,7 +2793,7 @@ function makeSampleShot() {
 
 // 截圖上拖曳框選
 (() => {
-  const cv = $("#shotCanvas"), pt = e => ({ x: e.offsetX / (shot.k || 1), y: e.offsetY / (shot.k || 1) });
+  const cv = $("#shotCanvas"), pt = e => ({ x: e.offsetX / (shot.k || 1), y: e.offsetY / (shot.k || 1) + (shot.oy || 0) });
   cv.addEventListener("pointerdown", e => {
     if (!shot.img) return;
     const p = pt(e);
@@ -2709,13 +2822,13 @@ $("#shotReset").addEventListener("click", () => { shot.crop = null; shot.subCrop
 const MODE_HINT = {
   price: "偵測不準時，在圖上拖曳框出只有 K 棒的價格區。",
   sub: "在圖上拖曳框出一個副圖（KD、RSI、MACD 或成交量），包含上下邊界。",
-  cal: "點截圖右側價格刻度的兩個高度（例如 600 和 550 的格線），輸入它們的價格。",
+  cal: "點兩條價格格線（虛線標示的位置會自動吸附），輸入它們代表的價格，例如最上面的 49500 和最下面的 38500。",
   edit: "點一根偵測錯的 K 棒可以刪除或改顏色；點漏掉的位置可以補上一根。",
 };
 const setMode = m => {
   shot.mode = m; document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
   $("#modeHint").textContent = MODE_HINT[m] + (m === "cal" ? `（已設定 ${shot.calPts.length}/2）` : ""); hidePop();
-  $("#shotCanvas").style.cursor = m === "edit" ? "pointer" : "crosshair";
+  $("#shotCanvas").style.cursor = m === "edit" ? "pointer" : "crosshair"; drawShot();
 };
 document.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
 // 截圖上的小視窗：輸入校正價格、修正 K 棒
@@ -2726,8 +2839,11 @@ function showPop(cx, cy, html, bind) {
   pop.style.left = Math.max(4, Math.min(stage.clientWidth - w - 4, cx + 10)) + "px"; pop.style.top = Math.max(4, Math.min(stage.clientHeight - h - 4, cy + 10)) + "px";
   bind(pop);
 }
-function shotClick(p, cx, cy) {
+function shotClick(p0, cx, cy) {
+  let p = p0;
   if (shot.mode === "cal") {
+    const snap = (shot.grid || []).reduce((best, y) => (Math.abs(y - p.y) < Math.abs(best - p.y) ? y : best), Infinity);
+    if (Math.abs(snap - p.y) <= 10 / (shot.k || 1) + 3) p = { ...p, y: snap };
     showPop(cx, cy, `<strong>這個高度的價格是？</strong><input type="number" step="any" id="calVal" placeholder="例如 600" aria-label="價格"><div class="row"><button class="btn primary" data-ok>確定</button><button class="btn" data-x>取消</button></div><span class="note">已設定 ${shot.calPts.length}/2 個刻度</span>`, pop => {
       const inp = pop.querySelector("#calVal"); inp.focus();
       const ok = () => { const v = parseFloat(inp.value); if (!Number.isFinite(v)) { inp.focus(); return; } shot.calPts = [...shot.calPts, { y: p.y, p: v }].slice(-2); hidePop(); setMode("cal"); shotRun(); };
@@ -2763,7 +2879,8 @@ const shotBar = indicatorBar($("#shotIbar"), "shot", [], ["ma5", "ma20", "smc", 
 ["simOn", "simDays", "simMode"].forEach(id => $("#" + id).addEventListener("change", shotDrawChart));
 $("#simRerun").addEventListener("click", () => { simSeed++; $("#simOn").checked = true; shotDrawChart(); });
 $("#shotSmcOverlay").addEventListener("change", drawShot);
-$("#shotEnlarge").addEventListener("click", e => { const on = $("#shotGrid").classList.toggle("wide"); e.target.setAttribute("aria-pressed", on); e.target.textContent = on ? "縮小截圖" : "放大截圖"; drawShot(); });
+$("#shotEnlarge").addEventListener("click", e => { const on = $("#shotGrid").classList.toggle("wide"); e.target.setAttribute("aria-pressed", on); e.target.textContent = on ? "縮小" : "放大"; drawShot(); });
+$("#shotFull").addEventListener("click", e => { shot.fullView = !shot.fullView; e.target.setAttribute("aria-pressed", shot.fullView); e.target.textContent = shot.fullView ? "只看圖表區" : "完整截圖"; drawShot(); });
 $(".rtabs").addEventListener("click", e => {
   const b = e.target.closest("[data-rt]"); if (!b) return;
   document.querySelectorAll(".rtabs [data-rt]").forEach(x => x.setAttribute("aria-selected", x === b));
