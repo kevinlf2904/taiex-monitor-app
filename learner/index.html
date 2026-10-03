@@ -156,6 +156,22 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .pname { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14.5px; }
 .pdesc { color: var(--muted); }
 .pcount { font-size: 12px; color: var(--accent); font-weight: 500; }
+.lesson-list { max-height: calc(100vh - 110px); overflow-y: auto; }
+.lgroup { font-size: 11.5px; letter-spacing: .1em; color: var(--muted); font-weight: 700; padding: 10px 10px 2px; white-space: nowrap; }
+.ob { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.ob-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.ob-book { border-collapse: collapse; width: 100%; font-size: 14px; }
+.ob-book th { font-size: 12px; color: var(--muted); font-weight: 500; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.ob-book td { padding: 4px 6px; text-align: center; border-bottom: 1px dashed var(--line); font-variant-numeric: tabular-nums; }
+.ob-book td:nth-child(2) { border-right: 1px solid var(--line); }
+.ob-side { display: flex; flex-direction: column; gap: 8px; font-size: 14px; min-width: 0; }
+.ob-last b { font-size: 22px; }
+.ob-bar { height: 10px; border-radius: 6px; background: color-mix(in srgb, var(--down) 70%, transparent); overflow: hidden; }
+.ob-bar i { display: block; height: 100%; background: var(--up); transition: width .3s; }
+.ob-note { min-height: 2.8em; background: var(--surface-2); border-radius: 8px; padding: 6px 10px; }
+.ob-tape { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.ob-tape li { display: grid; grid-template-columns: 70px 1fr 1fr auto; gap: 8px; align-items: center; }
+@media (max-width: 640px) { .ob-grid { grid-template-columns: minmax(0, 1fr); } }
 .chart-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: -8px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; background: var(--surface); padding: 6px 14px; cursor: pointer; font-size: 14px; color: var(--muted); }
@@ -255,7 +271,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
 
 @media (max-width: 900px) {
   .learn { grid-template-columns: minmax(0, 1fr); }
-  .lesson-list { position: static; flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .lesson-list { position: static; flex-direction: row; overflow-x: auto; padding-bottom: 4px; max-height: none; align-items: center; }
   .lesson-list button { grid-template-columns: auto auto auto; white-space: nowrap; }
   .lab { grid-template-columns: minmax(0, 1fr); }
   .top { position: static; }
@@ -277,7 +293,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <button role="tab" data-tab="shot" id="tab-btn-shot">截圖判讀</button>
       <button role="tab" data-tab="quiz" id="tab-btn-quiz">觀念測驗</button>
     </nav>
-    <span class="chip" id="progChip">已完成 0 / 13 課</span>
+    <span class="chip" id="progChip">已完成 0 / 19 課</span>
   </div>
 </header>
 
@@ -292,6 +308,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       </div>
       <div class="prose" id="lessonBody"></div>
       <div class="gallery" id="lessonGallery" hidden></div>
+      <div id="lessonWidget" hidden></div>
       <div class="prose" id="lessonAfter" hidden></div>
       <div class="chart-tools" id="lessonTools"></div>
       <div class="panel chartbox" id="lessonChart"></div>
@@ -331,8 +348,10 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
           <div class="row"><label><input type="checkbox" id="maC"><span class="swatch" style="background:var(--s3)"></span>MA</label><input type="number" id="maCn" value="60" min="2" max="240"></div>
           <div class="row"><label><input type="checkbox" id="boll">布林通道 (20, 2)</label></div>
           <div class="row"><label><input type="checkbox" id="sr">支撐 / 壓力線</label></div>
+          <div class="row"><label><input type="checkbox" id="zz">轉折點與結構（道氏 / HH、HL）</label></div>
+          <div class="row"><label><input type="checkbox" id="smcz">聰明錢區塊（訂單塊 / 缺口）</label></div>
           <h3>副圖</h3>
-          <div class="row"><select id="labSub"><option value="">無</option><option value="rsi">RSI (14)</option><option value="kd" selected>KD (9,3,3)</option><option value="macd">MACD (12,26,9)</option></select></div>
+          <div class="row"><select id="labSub"><option value="">無</option><option value="rsi">RSI (14)</option><option value="kd" selected>KD (9,3,3)</option><option value="macd">MACD (12,26,9)</option><option value="wr">威廉 %R (14)</option><option value="inout">外盤比</option></select></div>
         </div>
         <div class="panel ctrl">
           <h3>判讀 <span class="note" id="roDate"></span></h3>
@@ -463,7 +482,8 @@ function cssVar(n) { return getComputedStyle(document.documentElement).getProper
    以「趨勢段落」切換漂移率（多頭 / 空頭 / 盤整），加上波動叢聚，
    每日漲跌限制 ±10%，價格貼齊台股升降單位，成交量以「張」計。 */
 function genSeries(seed, n) {
-  const r = mulberry32(seed);
+  const r = mulberry32(seed), r2 = mulberry32(seed ^ 0x5bd1e995);
+  const g2 = () => { let u = 0, v = 0; while (!u) u = r2(); while (!v) v = r2(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
   const gauss = () => { let u = 0, v = 0; while (!u) u = r(); while (!v) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
   let p = [28, 72, 145, 320, 610][Math.floor(r() * 5)] * (0.85 + r() * 0.3);
   let mu = 0, left = 0, sig = 0.016;
@@ -487,7 +507,9 @@ function genSeries(seed, n) {
     const h = roundTick(Math.min(hiLim, Math.max(o, c) * (1 + Math.abs(gauss()) * sig * 0.45)));
     const l = roundTick(Math.max(loLim, Math.min(o, c) * (1 - Math.abs(gauss()) * sig * 0.45)));
     const v = Math.max(50, Math.round(baseV * (0.55 + Math.abs(ret) / sig * 0.5) * Math.exp(gauss() * 0.3) * (mu > 0.001 && ret > 0 ? 1.3 : 1)));
-    out.push({ d: d.toISOString().slice(0, 10), o, h: Math.max(h, o, c), l: Math.min(l, o, c), c, v });
+    // 外盤（買方主動）比例：上漲日偏高、下跌日偏低，再加上雜訊
+    const ov = Math.round(v * Math.min(0.85, Math.max(0.15, 0.5 + (ret / sig) * 0.09 + g2() * 0.07)));
+    out.push({ d: d.toISOString().slice(0, 10), o, h: Math.max(h, o, c), l: Math.min(l, o, c), c, v, ov, iv: v - ov });
     p = c;
     do { d.setUTCDate(d.getUTCDate() + 1); } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
   }
@@ -532,13 +554,20 @@ function bollCalc(c, n = 20, k = 2) {
   }
   return { mid, up, lo, bw };
 }
+// 威廉指標 %R：收盤距離 n 日最高價的位置，0 到 −100
+function wrCalc(D, n = 14) {
+  const o = Array(D.length).fill(null);
+  for (let i = n - 1; i < D.length; i++) { let hh = -Infinity, ll = Infinity; for (let j = i - n + 1; j <= i; j++) { hh = Math.max(hh, D[j].h); ll = Math.min(ll, D[j].l); } o[i] = hh === ll ? -50 : (hh - D[i].c) / (hh - ll) * -100; }
+  return o;
+}
 function indicators(D) {
   const c = D.map(x => x.c), cache = {};
   return {
     c,
     ma: n => cache[n] || (cache[n] = sma(c, n)),
     vma: sma(D.map(x => x.v), 20),
-    rsi: rsiCalc(c), kd: kdCalc(D), macd: macdCalc(c), boll: bollCalc(c),
+    rsi: rsiCalc(c), kd: kdCalc(D), macd: macdCalc(c), boll: bollCalc(c), wr: wrCalc(D),
+    ...(() => { if (D[0].ov == null) return { io: null, io5: null }; const io = D.map(x => x.v ? x.ov / x.v * 100 : 50); return { io, io5: sma(io, 5) }; })(),
   };
 }
 
@@ -561,6 +590,23 @@ const Signals = {
       m.push({ i, pat: id, label: P.name, side: P.side === "note" ? (fellAt(D, i) ? "buy" : "sell") : P.side, note: P.side === "note" });
     }
     return m;
+  },
+  wr(D, I) { const r = I.wr, m = []; for (let i = 1; i < D.length; i++) { if (r[i - 1] == null) continue; if (r[i - 1] < -80 && r[i] >= -80) m.push({ i, side: "buy", label: "脫離超賣" }); else if (r[i - 1] > -20 && r[i] <= -20) m.push({ i, side: "sell", label: "跌離超買" }); } return m; },
+  // 結構突破：dow 風格叫「延續 / 反轉」，smc 風格叫 BOS / CHoCH；附一條從被突破的轉折點畫到突破日的水平線
+  structure(D, I, style = "smc", only) {
+    return marketStructure(D).events.filter(e => !only || e.kind === only).map(e => ({ i: e.i, side: e.dir > 0 ? "buy" : "sell", label: style === "dow" ? (e.kind === "CHoCH" ? "反轉" : "延續") : e.kind,
+      shapes: [{ pts: [[e.from, e.level], [e.i, e.level]], color: e.dir > 0 ? "up" : "down", dash: [4, 3], width: 1.3 }] }));
+  },
+  sweep(D) { return marketStructure(D).sweeps.map(s => ({ i: s.i, side: s.dir > 0 ? "buy" : "sell", label: "掃流動性", note: true })); },
+  chartPat(D, I, only) {
+    return chartPatterns(D).filter(f => !only || only.includes(f.id)).map(f => {
+      const P = CHART_PATTERNS[f.id], col = f.side === "buy" ? "up" : "down", lines = f.neck ? [f.neck] : f.lines;
+      return { i: f.k, pat: f.id, side: f.side, label: `${P.name}${f.side === "buy" ? "突破" : "跌破"}`, shapes: [
+        { pts: [...f.pts.map(t => [t.i, t.p]), [f.k, D[f.k].c]], color: "accent", width: 1.6 },
+        ...lines.map(([a, b]) => ({ pts: [[a.i, a.p], [f.k + 3, lineAt(a, b, f.k + 3)]], color: "muted", dash: [5, 4], width: 1.2 })),
+        { pts: [[f.k, f.target], [f.k + 15, f.target]], color: col, dash: [2, 3], width: 1.4, label: `目標 ${fmtP(f.target)}` },
+      ] };
+    });
   },
   // 背離：比較相鄰兩個轉折點的價格與指標；轉折點要右側 w 根才確認，所以標記畫在確認那天
   div(D, I, ind = "rsi", mode = "regular", upto = D.length) { return divergences(D, I, ind, mode, upto); },
@@ -666,6 +712,125 @@ function pivots(D, w = 5, upto = D.length) {
   }
   return { hi, lo };
 }
+/* ---------- 市場結構（道氏理論 / 聰明錢） ----------
+   轉折點要等右側 w 根 K 棒才確認，所以結構事件只用到「當時已經確認」的轉折點。 */
+function zigzag(D, w = 3, upto = D.length) {
+  const { hi, lo } = pivots(D, w, upto), all = [...hi.map(i => ({ i, p: D[i].h, type: "H" })), ...lo.map(i => ({ i, p: D[i].l, type: "L" }))].sort((a, b) => a.i - b.i), z = [];
+  for (const s of all) {
+    const last = z[z.length - 1];
+    if (last && last.type === s.type) { if (s.type === "H" ? s.p > last.p : s.p < last.p) z[z.length - 1] = s; continue; }
+    z.push(s);
+  }
+  z.forEach((s, k) => { const prev = z.slice(0, k).reverse().find(t => t.type === s.type); s.label = prev ? (s.type === "H" ? (s.p > prev.p ? "HH" : "LH") : (s.p > prev.p ? "HL" : "LL")) : s.type; s.conf = s.i + w; });
+  return z;
+}
+function marketStructure(D, w = 3, upto = D.length) {
+  const swings = zigzag(D, w, upto), events = [], sweeps = [], trend = Array(upto).fill(0);
+  let lastH = null, lastL = null, t = 0, si = 0;
+  for (let k = 0; k < upto; k++) {
+    while (si < swings.length && swings[si].conf <= k) { const s = swings[si++]; if (s.type === "H") lastH = { ...s }; else lastL = { ...s }; }
+    const x = D[k];
+    if (lastH && !lastH.done && x.c > lastH.p) { events.push({ i: k, dir: 1, kind: t === -1 ? "CHoCH" : "BOS", level: lastH.p, from: lastH.i }); lastH.done = true; t = 1; }
+    else if (lastH && !lastH.done && !lastH.swept && x.h > lastH.p && x.c < lastH.p) { sweeps.push({ i: k, dir: -1, level: lastH.p, from: lastH.i }); lastH.swept = true; }
+    if (lastL && !lastL.done && x.c < lastL.p) { events.push({ i: k, dir: -1, kind: t === 1 ? "CHoCH" : "BOS", level: lastL.p, from: lastL.i }); lastL.done = true; t = -1; }
+    else if (lastL && !lastL.done && !lastL.swept && x.l < lastL.p && x.c > lastL.p) { sweeps.push({ i: k, dir: 1, level: lastL.p, from: lastL.i }); lastL.swept = true; }
+    trend[k] = t;
+  }
+  return { swings, events, sweeps, trend, w };
+}
+// 訂單塊（突破前最後一根反向 K 棒）與公平價值缺口（三根 K 棒之間的空白）
+function smcZones(D, ms, upto = D.length) {
+  const zones = [];
+  let avg = 0; for (let k = 0; k < upto; k++) avg += D[k].h - D[k].l; avg /= upto;
+  ms.events.forEach(e => {
+    const sw = ms.swings.filter(s => s.type === (e.dir > 0 ? "L" : "H") && s.i < e.i).pop(); if (!sw) return;
+    let ob = -1; for (let k = e.i - 1; k >= sw.i; k--) if (e.dir > 0 ? D[k].c < D[k].o : D[k].c > D[k].o) { ob = k; break; }
+    if (ob < 0) ob = sw.i;
+    const top = D[ob].h, bot = D[ob].l; let end = upto - 1, hit = false;
+    for (let m = e.i + 1; m < upto; m++) if (e.dir > 0 ? D[m].l <= top : D[m].h >= bot) { end = m; hit = true; break; }
+    zones.push({ kind: "OB", dir: e.dir, i1: ob, i2: end, top, bot, hit, at: e.i });
+  });
+  for (let i = 2; i < upto; i++) {
+    const up = D[i].l - D[i - 2].h, dn = D[i - 2].l - D[i].h;
+    if (Math.max(up, dn) < avg * 0.5) continue;
+    const dir = up > 0 ? 1 : -1, top = dir > 0 ? D[i].l : D[i - 2].l, bot = dir > 0 ? D[i - 2].h : D[i].h;
+    let end = upto - 1, hit = false;
+    for (let m = i + 1; m < upto; m++) if (dir > 0 ? D[m].l <= top : D[m].h >= bot) { end = m; hit = true; break; }
+    zones.push({ kind: "FVG", dir, i1: i - 2, i2: end, top, bot, hit, at: i });
+  }
+  return zones;
+}
+
+/* ---------- 型態學（頭肩、雙重頂底、三角形、箱型） ----------
+   用轉折點連成的折線比對形狀；頸線被收盤突破才算完成，標記畫在突破那天。 */
+const CHART_PATTERNS = {
+  hsTop: { name: "頭肩頂", side: "sell", pts: [[0, 30], [14, 62], [28, 45], [44, 84], [60, 46], [76, 62], [88, 45], [100, 22]], lines: [[[28, 45], [60, 46]]], desc: "左肩、頭、右肩三個高點，頭最高。跌破兩個低點連成的頸線，代表多頭結束。" },
+  hsBottom: { name: "頭肩底", side: "buy", pts: [[0, 70], [14, 38], [28, 55], [44, 16], [60, 54], [76, 38], [88, 55], [100, 78]], lines: [[[28, 55], [60, 54]]], desc: "頭肩頂的鏡像，出現在下跌之後。突破頸線且帶量，是常見的底部反轉。" },
+  dTop: { name: "M 頭", side: "sell", pts: [[0, 28], [22, 80], [44, 52], [66, 79], [86, 50], [100, 26]], lines: [[[44, 52], [100, 52]]], desc: "兩個差不多高的高點，中間的低點就是頸線。又叫雙重頂。" },
+  dBottom: { name: "W 底", side: "buy", pts: [[0, 72], [22, 20], [44, 48], [66, 21], [86, 50], [100, 74]], lines: [[[44, 48], [100, 48]]], desc: "兩個差不多低的低點，中間的高點是頸線。又叫雙重底。" },
+  ascTri: { name: "上升三角", side: "buy", pts: [[0, 30], [16, 74], [30, 44], [48, 74], [64, 58], [80, 74], [100, 94]], lines: [[[16, 74], [80, 74]], [[30, 44], [64, 58]]], desc: "高點齊平、低點墊高。水平壓力被測試多次，向上突破的機率較高。" },
+  descTri: { name: "下降三角", side: "sell", pts: [[0, 70], [16, 26], [30, 56], [48, 26], [64, 42], [80, 26], [100, 6]], lines: [[[16, 26], [80, 26]], [[30, 56], [64, 42]]], desc: "低點齊平、高點降低。水平支撐被測試多次，向下跌破的機率較高。" },
+  symTri: { name: "對稱三角", side: "both", pts: [[0, 50], [12, 86], [28, 24], [46, 72], [62, 38], [76, 60], [88, 47], [100, 80]], lines: [[[12, 86], [76, 60]], [[28, 24], [62, 38]]], desc: "高點降低、低點墊高，價格越來越收斂。方向要等突破才知道。" },
+  box: { name: "箱型整理", side: "both", pts: [[0, 40], [14, 74], [30, 44], [46, 75], [62, 45], [78, 74], [100, 94]], lines: [[[14, 74], [78, 74]], [[30, 44], [62, 45]]], desc: "高點、低點都差不多，在一個區間來回。突破上緣或跌破下緣才有方向。" },
+};
+const lineAt = (a, b, k) => a.p + (b.p - a.p) * (k - a.i) / (b.i - a.i || 1);
+function chartPatterns(D, upto = D.length, w = 4) {
+  const z = zigzag(D, w, upto), found = [], near = (a, b, t) => Math.abs(a - b) / Math.max(a, b) < t;
+  // 從 start 之後找第一根收盤突破 f(k) 的 K 棒
+  const brk = (start, f, up) => { for (let k = start; k < Math.min(upto, start + 30); k++) { const v = f(k); if (up ? D[k].c > v : D[k].c < v) return k; } return null; };
+  const pre = (s, up) => { const j = Math.max(0, s.i - 20); return up ? D[j].c < s.p * 0.97 : D[j].c > s.p * 1.03; }; // 型態前要有一段趨勢
+  for (let j = 0; j < z.length; j++) {
+    const s = z.slice(Math.max(0, j - 4), j + 1), last = s[s.length - 1], start = last.conf;
+    if (s.length === 5) {
+      const [a, b, c, d, e] = s;
+      if (a.type === "H" && c.p > a.p * 1.02 && c.p > e.p * 1.02 && near(a.p, e.p, 0.05) && pre(a, true)) {
+        const k = brk(start, x => lineAt(b, d, x), false); if (k != null) found.push({ id: "hsTop", pts: s, neck: [b, d], k, target: lineAt(b, d, k) - (c.p - lineAt(b, d, c.i)) });
+      }
+      if (a.type === "L" && c.p < a.p * 0.98 && c.p < e.p * 0.98 && near(a.p, e.p, 0.05) && pre(a, false)) {
+        const k = brk(start, x => lineAt(b, d, x), true); if (k != null) found.push({ id: "hsBottom", pts: s, neck: [b, d], k, target: lineAt(b, d, k) + (lineAt(b, d, c.i) - c.p) });
+      }
+    }
+    if (s.length >= 3) {
+      const [a, b, c] = s.slice(-3);
+      if (a.type === "H" && near(a.p, c.p, 0.03) && (a.p - b.p) / a.p > 0.04 && c.i - a.i >= 8 && pre(a, true)) {
+        const k = brk(start, () => b.p, false); if (k != null) found.push({ id: "dTop", pts: [a, b, c], neck: [b, { i: c.i, p: b.p }], k, target: b.p - (Math.max(a.p, c.p) - b.p) });
+      }
+      if (a.type === "L" && near(a.p, c.p, 0.03) && (b.p - a.p) / b.p > 0.04 && c.i - a.i >= 8 && pre(a, false)) {
+        const k = brk(start, () => b.p, true); if (k != null) found.push({ id: "dBottom", pts: [a, b, c], neck: [b, { i: c.i, p: b.p }], k, target: b.p + (b.p - Math.min(a.p, c.p)) });
+      }
+    }
+    if (s.length >= 4) {
+      const q = s.slice(-4), H = q.filter(t => t.type === "H"), Lw = q.filter(t => t.type === "L");
+      if (H.length === 2 && Lw.length === 2 && q[3].i - q[0].i >= 10) {
+        const [h1, h2] = H, [l1, l2] = Lw, hFlat = near(h1.p, h2.p, 0.015), lFlat = near(l1.p, l2.p, 0.015), hDn = h2.p < h1.p * 0.985, lUp = l2.p > l1.p * 1.015, height = (Math.max(h1.p, h2.p) - Math.min(l1.p, l2.p)) / h1.p;
+        let id = null;
+        if (hFlat && lUp) id = "ascTri"; else if (hDn && lFlat) id = "descTri"; else if (hDn && lUp) id = "symTri"; else if (hFlat && lFlat && height > 0.04) id = "box";
+        if (id) {
+          const up = x => lineAt(h1, h2, x), dn = x => lineAt(l1, l2, x);
+          let k = null, dir = 0;
+          for (let x = start; x < Math.min(upto, start + 25); x++) { if (D[x].c > up(x)) { k = x; dir = 1; break; } if (D[x].c < dn(x)) { k = x; dir = -1; break; } }
+          if (k != null) found.push({ id, pts: q, lines: [[h1, h2], [l1, l2]], k, dir, target: dir > 0 ? up(k) + (h1.p - l1.p) : dn(k) - (h1.p - l1.p) });
+        }
+      }
+    }
+  }
+  // 重疊的只留一個（頭肩 > 雙重頂底 > 三角 > 箱型）
+  const rank = { hsTop: 0, hsBottom: 0, dTop: 1, dBottom: 1, ascTri: 2, descTri: 2, symTri: 2, box: 3 }, kept = [];
+  found.sort((a, b) => rank[a.id] - rank[b.id] || a.k - b.k).forEach(f => {
+    const s0 = f.pts[0].i, s1 = f.k;
+    if (kept.some(g => Math.min(s1, g.k) - Math.max(s0, g.pts[0].i) > 0.5 * Math.min(s1 - s0, g.k - g.pts[0].i))) return;
+    f.side = CHART_PATTERNS[f.id].side === "both" ? (f.dir > 0 ? "buy" : "sell") : CHART_PATTERNS[f.id].side;
+    kept.push(f);
+  });
+  return kept.sort((a, b) => a.k - b.k);
+}
+function chartPatternSVG(id) {
+  const P = CHART_PATTERNS[id], W = 132, H = 84, pad = 8, X = x => pad + x / 100 * (W - 2 * pad), Y = p => pad + (100 - p) / 100 * (H - 2 * pad);
+  const c = P.side === "buy" ? "var(--up)" : P.side === "sell" ? "var(--down)" : "var(--accent)";
+  const ext = ([[x1, y1], [x2, y2]]) => { const x3 = 100, y3 = y1 + (y2 - y1) * (x3 - x1) / (x2 - x1); return `<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x3)}" y2="${Y(y3)}" stroke="var(--muted)" stroke-dasharray="3 3" stroke-width="1.2"/>`; };
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">${P.lines.map(ext).join("")}<polyline points="${P.pts.map(([x, p]) => `${X(x)},${Y(p)}`).join(" ")}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+}
+
 function srLevels(D, upto = D.length) {
   const { hi, lo } = pivots(D, 5, upto), p = D[upto - 1].c, lines = [], used = [];
   const add = (price, kind, i) => { if (used.some(u => Math.abs(u - price) / price < 0.02)) return; used.push(price); lines.push({ price, kind, i }); };
@@ -726,6 +891,13 @@ function readout(D, I, i) {
     const squeeze = bw[i] <= Math.min(...win) * 1.1;
     out.push({ k: "布林", t: pb > 1 ? "收盤在上軌之外" : pb < 0 ? "收盤在下軌之外" : `位於通道 ${Math.round(pb * 100)}% 位置`, b: pb > 0.5 ? 1 : -1, x: squeeze ? "帶寬接近 60 日最窄，波動可能放大" : "" });
   }
+  const wr = I.wr && I.wr[i];
+  if (wr != null) out.push({ k: "威廉", t: `%R ${fmtN(wr)}${wr >= -20 ? "，超買區" : wr <= -80 ? "，超賣區" : ""}`, b: wr >= -20 || wr <= -80 ? 0 : wr > -50 ? 1 : -1, x: wr >= -20 ? "收盤接近近期高點，強勢時會鈍化" : wr <= -80 ? "收盤接近近期低點，弱勢時會鈍化" : "" });
+  if (I.io && I.io[i] != null) { const a5 = I.io5[i] ?? I.io[i]; out.push({ k: "內外盤", t: `外盤比 ${Math.round(I.io[i])}%，5 日平均 ${Math.round(a5)}%`, b: a5 > 55 ? 1 : a5 < 45 ? -1 : 0, x: "外盤比高代表買方較主動，但可能有人對敲" }); }
+  const ms = marketStructure(D, 3, i + 1), ev = ms.events[ms.events.length - 1];
+  if (ev) out.push({ k: "結構", t: `${ev.dir > 0 ? "上升" : "下降"}結構（${i - ev.i ? i - ev.i + " 根前" : "今天"}${ev.dir > 0 ? "向上" : "向下"} ${ev.kind}）`, b: ev.dir, x: ev.kind === "CHoCH" ? "CHoCH：可能的趨勢反轉，等回測確認" : "BOS：順著原趨勢的結構突破" });
+  const cp = chartPatterns(D, i + 1).filter(f => f.k >= i - 10).pop();
+  if (cp) out.push({ k: "型態", t: `${CHART_PATTERNS[cp.id].name}${cp.side === "buy" ? "向上突破" : "向下跌破"}（${i - cp.k ? i - cp.k + " 根前" : "今天"}）`, b: cp.side === "buy" ? 1 : -1, x: `測量目標約 ${fmtP(cp.target)}` });
   for (let k = i; k >= Math.max(5, i - 2); k--) {
     const id = detectPattern(D, k);
     if (!id) continue;
@@ -821,6 +993,16 @@ class Chart {
       ctx.strokeStyle = c; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(X(h.i ?? 0), y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = c; ctx.textAlign = "right"; ctx.font = `11px ${cssVar("--font-body")}`; ctx.fillText(`${h.kind} ${fmtP(h.price)}`, L + pw - 4, y - 8); ctx.font = `11px ${cssVar("--font-mono")}`;
     });
+    // 區塊（訂單塊、公平價值缺口）：畫在 K 棒後面，只畫到目前可見的範圍
+    const cmap = { up: col.up, down: col.down, accent: col.accent, muted: col.muted, s2: col.s2, ink: col.ink };
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
+    (o.zones || []).filter(z => z.at == null || z.at < vis).forEach(z => {
+      const x1 = X(z.i1) - bw / 2, x2 = X(Math.min(z.i2, vis - 1)) + bw / 2, y1 = Y(z.top), y2 = Y(z.bot), c = z.dir > 0 ? col.up : col.down;
+      ctx.fillStyle = c; ctx.globalAlpha = z.kind === "FVG" ? 0.08 : 0.16; ctx.fillRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = c; ctx.lineWidth = 1; ctx.setLineDash(z.kind === "FVG" ? [3, 3] : []); ctx.strokeRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.setLineDash([]); ctx.globalAlpha = 1;
+      if (x2 - x1 > 22) { ctx.fillStyle = c; ctx.textAlign = "left"; ctx.font = `600 10px ${cssVar("--font-body")}`; ctx.fillText(z.kind, x1 + 3, Math.max(y1, Math.min(y2, y1 + 7))); ctx.font = `11px ${cssVar("--font-mono")}`; }
+    });
+    ctx.restore();
     // K 棒
     const cw = Math.max(1, Math.min(14, bw * 0.66));
     for (let i = 0; i < vis; i++) {
@@ -832,6 +1014,20 @@ class Chart {
     }
     // 均線
     mas.forEach(m => this.line(m.a, vis, X, Y, m.c, 1.6));
+    // 折線、頸線、目標價、結構線（可來自設定或附在標記上；只畫到可見範圍）
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
+    [...(o.shapes || []), ...(o.markers || []).filter(m => m.i < vis).flatMap(m => m.shapes || [])].forEach(sh => {
+      if (sh.pts[0][0] >= vis) return;
+      const pts = sh.pts.map(([i, p]) => [vis < n ? Math.min(i, vis - 1) : i, p]);
+      const c = cmap[sh.color] || col.accent;
+      ctx.strokeStyle = c; ctx.lineWidth = sh.width || 1.5; ctx.setLineDash(sh.dash || []); ctx.beginPath();
+      pts.forEach(([i, p], k) => { const x = X(Math.min(i, n - 1)) + (i > n - 1 ? (i - n + 1) * bw : 0); k ? ctx.lineTo(x, Y(p)) : ctx.moveTo(x, Y(p)); }); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = c; ctx.font = `600 10.5px ${cssVar("--font-body")}`;
+      if (sh.label) { const [i, p] = pts[pts.length - 1]; ctx.textAlign = "right"; ctx.fillText(sh.label, Math.min(X(Math.min(i, vis - 1)), L + pw - 2), Y(p) - 6); }
+      (sh.tags || []).filter(t => t.i < vis).forEach(t => { ctx.textAlign = "center"; ctx.fillText(t.text, X(t.i), Y(t.p) + (t.below ? 13 : -7)); });
+      ctx.font = `11px ${cssVar("--font-mono")}`;
+    });
+    ctx.restore();
     // 背離連線：價格圖上連兩個轉折點，副圖顯示同一指標時也連起來
     const divs = (o.markers || []).filter(m => m.div && m.i < vis);
     const divLine = (x1, y1, x2, y2, c) => { ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); [[x1, y1], [x2, y2]].forEach(([a, b]) => { ctx.beginPath(); ctx.arc(a, b, 3, 0, Math.PI * 2); ctx.fill(); }); };
@@ -877,6 +1073,18 @@ class Chart {
         lvl(a, sy); lvl(b, sy);
         if (o.sub === "rsi") this.line(I.rsi, vis, X, sy, col.s2, 1.5);
         else { this.line(I.kd.K, vis, X, sy, col.s1, 1.5); this.line(I.kd.D, vis, X, sy, col.s3, 1.5); }
+      } else if (o.sub === "wr") {
+        const sy = v => subTop + (-v) / 100 * subH;
+        ctx.fillStyle = col.band; ctx.fillRect(L, sy(0), pw, sy(-20) - sy(0)); ctx.fillRect(L, sy(-80), pw, sy(-100) - sy(-80));
+        lvl(-20, sy); lvl(-80, sy);
+        this.line(I.wr, vis, X, sy, col.s2, 1.5); this.subY = sy;
+      } else if (o.sub === "inout" && I.io) {
+        let m = 5; for (let i = 0; i < vis; i++) m = Math.max(m, Math.abs(I.io[i] - 50));
+        const sy = v => subTop + subH / 2 - (v - 50) / m * (subH / 2 - 4);
+        ctx.globalAlpha = 0.55;
+        for (let i = 0; i < vis; i++) { const v = I.io[i]; ctx.fillStyle = v >= 50 ? col.up : col.down; const y0 = sy(50), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }
+        ctx.globalAlpha = 1; lvl(50, sy);
+        this.line(I.io5, vis, X, sy, col.s1, 1.5); this.subY = sy;
       } else if (o.sub === "custom") {
         // 截圖讀出的副圖：值域依資料自動決定
         const C = o.custom, vals = [...C.lines.flat(), ...(C.bars || [])].filter(v => v != null);
@@ -900,7 +1108,7 @@ class Chart {
       const subY = o.sub === "custom" ? this.subY : o.sub === "macd" ? (() => { const { dif, sig, osc } = I.macd; let m = 0; for (let i = 0; i < vis; i++) if (dif[i] != null) m = Math.max(m, Math.abs(dif[i]), Math.abs(sig[i] ?? 0), Math.abs(osc[i] ?? 0)); m = m || 1; return v => subTop + subH / 2 - v / m * (subH / 2 - 4); })() : v => subTop + (100 - v) / 100 * subH;
       divs.filter(m => m.div.ind === (o.sub === "custom" ? "pane" : o.sub)).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
       ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`;
-      ctx.fillText(o.sub === "custom" ? o.custom.title : { rsi: "RSI 14", kd: "KD 9", macd: "MACD" }[o.sub], L + 4, subTop + 8); ctx.font = `11px ${cssVar("--font-mono")}`;
+      ctx.fillText(o.sub === "custom" ? o.custom.title : { rsi: "RSI 14", kd: "KD 9", macd: "MACD", wr: "威廉 %R 14", inout: "外盤比（%）" }[o.sub] || "", L + 4, subTop + 8); ctx.font = `11px ${cssVar("--font-mono")}`;
     }
 
     // 日期軸
@@ -935,6 +1143,8 @@ class Chart {
     if (!o.noVol) parts.push(`<span><b>量</b>${o.volLabel ? Math.round(k.v) : k.v.toLocaleString()}</span>`);
     mas.forEach(m => parts.push(`<span style="color:${m.c}"><b style="color:inherit">MA${m.n}</b>${fmtP(m.a[i])}</span>`));
     if (o.boll) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
+    if (o.sub === "wr") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">%R</b>${fmtN(I.wr[i])}</span>`);
+    if (o.sub === "inout" && I.io) parts.push(`<span><b>外盤</b>${D[i].ov.toLocaleString()}</span><span><b>內盤</b>${D[i].iv.toLocaleString()}</span><span style="color:var(--s1)"><b style="color:inherit">外盤比</b>${fmtN(I.io[i])}%（5日 ${fmtN(I.io5[i])}%）</span>`);
     if (o.sub === "rsi") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">RSI</b>${fmtN(I.rsi[i])}</span>`);
     if (o.sub === "kd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">K</b>${fmtN(I.kd.K[i])}</span><span style="color:var(--s3)"><b style="color:inherit">D</b>${fmtN(I.kd.D[i])}</span>`);
     if (o.sub === "macd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">DIF</b>${fmtN(I.macd.dif[i], 2)}</span><span style="color:var(--s3)"><b style="color:inherit">MACD</b>${fmtN(I.macd.sig[i], 2)}</span><span><b>OSC</b>${fmtN(I.macd.osc[i], 2)}</span>`);
@@ -966,6 +1176,82 @@ const anatomySVG = `
 </svg>
 </div>`;
 
+/* ---------- 新課程用的圖形與小工具 ---------- */
+const dowPhaseSVG = `
+<div class="anatomy">
+<svg width="420" height="170" viewBox="0 0 420 170" aria-label="主要趨勢的三個階段">
+  <rect x="10" y="10" width="120" height="120" fill="var(--band)"/><rect x="130" y="10" width="150" height="120" fill="none"/><rect x="280" y="10" width="130" height="120" fill="var(--band)"/>
+  <polyline points="10,118 30,110 50,120 70,108 90,118 110,104 130,108 150,94 165,100 185,80 200,86 220,64 235,70 255,46 270,52 280,42 300,32 315,44 330,30 345,42 360,34 380,50 395,60 410,92" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>
+  <text x="70" y="150" text-anchor="middle" class="lbl-strong">吸籌</text><text x="70" y="165" text-anchor="middle">少數人低檔承接</text>
+  <text x="205" y="150" text-anchor="middle" class="lbl-strong">大眾參與</text><text x="205" y="165" text-anchor="middle">趨勢明朗、量增價漲</text>
+  <text x="345" y="150" text-anchor="middle" class="lbl-strong">出貨</text><text x="345" y="165" text-anchor="middle">高檔換手、量大不漲</text>
+</svg>
+</div>`;
+// 轉折點折線＋HH / HL / LH / LL 標籤
+function zigzagShape(D, tags = true) {
+  const z = zigzag(D, 3);
+  return { pts: z.map(s => [s.i, s.p]), color: "s2", width: 1.4, tags: tags ? z.map(s => ({ i: s.i, p: s.p, text: s.label, below: s.type === "L" })) : [] };
+}
+// 聰明錢區塊：訂單塊、公平價值缺口與 50% 均衡線
+function smcExtra(D) {
+  const ms = marketStructure(D), z = ms.swings, n = D.length;
+  const zones = smcZones(D, ms).filter(x => x.kind === "OB" || !x.hit || x.i2 - x.i1 < 25);
+  const lastH = [...z].reverse().find(s => s.type === "H"), lastL = [...z].reverse().find(s => s.type === "L");
+  const shapes = lastH && lastL ? [{ pts: [[Math.min(lastH.i, lastL.i), (lastH.p + lastL.p) / 2], [n - 1, (lastH.p + lastL.p) / 2]], color: "muted", dash: [6, 4], width: 1.2, label: "均衡 50%" }] : [];
+  return { zones, shapes };
+}
+
+// 模擬五檔報價：每筆成交依吃掉委賣或委買，記為外盤或內盤
+function mountOrderBook(host) {
+  const ref = 120, up = p => roundTick(p + tickOf(p)), dn = p => roundTick(p - tickOf(p - 1e-6)); // 升降單位依價位而定
+  let st, timer = null, scen = "mix";
+  const reset = () => { st = { bid: ref, bids: Array.from({ length: 5 }, () => 20 + Math.floor(Math.random() * 120)), asks: Array.from({ length: 5 }, () => 20 + Math.floor(Math.random() * 120)), out: 0, inn: 0, last: 99.5, tape: [], note: "按「開始」讓模擬成交跑起來。" }; };
+  const q = () => 1 + Math.floor(-Math.log(Math.random()) * 12);
+  const step = () => {
+    const pb = { bull: 0.68, mix: 0.5, bear: 0.32 }[scen], buy = Math.random() < pb, n = q();
+    let price;
+    if (buy) { price = up(st.bid); st.asks[0] -= n; st.out += n; if (st.asks[0] <= 0) { st.bid = up(st.bid); st.asks.shift(); st.asks.push(20 + Math.floor(Math.random() * 120)); st.bids.unshift(5 + Math.floor(Math.random() * 40)); st.bids.pop(); } }
+    else { price = st.bid; st.bids[0] -= n; st.inn += n; if (st.bids[0] <= 0) { st.bid = dn(st.bid); st.bids.shift(); st.bids.push(20 + Math.floor(Math.random() * 120)); st.asks.unshift(5 + Math.floor(Math.random() * 40)); st.asks.pop(); } }
+    // 新委託補進來
+    const k = Math.floor(Math.random() * 5); if (Math.random() < 0.5) st.bids[k] += q(); else st.asks[k] += q();
+    st.last = price;
+    price = roundTick(price);
+    st.tape.unshift({ price, n, buy, t: new Date().toTimeString().slice(0, 8) }); st.tape.length = Math.min(st.tape.length, 8);
+    st.note = `${n} 張以${buy ? "委賣價" : "委買價"} ${fmtP(price)} 成交 → 記為<b class="${buy ? "up" : "down"}">${buy ? "外盤" : "內盤"}</b>（${buy ? "買方主動" : "賣方主動"}）`;
+    render();
+  };
+  const cls = p => (p > ref ? "up" : p < ref ? "down" : "");
+  const render = () => {
+    const tot = st.out + st.inn, ratio = tot ? st.out / tot * 100 : 50;
+    const bp = [st.bid], ap = [up(st.bid)]; for (let k = 1; k < 5; k++) { bp.push(dn(bp[k - 1])); ap.push(up(ap[k - 1])); }
+    const rows = Array.from({ length: 5 }, (_, k) => `<tr><td class="num">${st.bids[k]}</td><td class="num ${cls(bp[k])}">${fmtP(bp[k])}</td><td class="num ${cls(ap[k])}">${fmtP(ap[k])}</td><td class="num">${st.asks[k]}</td></tr>`).join("");
+    host.querySelector(".ob-book tbody").innerHTML = rows;
+    host.querySelector(".ob-last").innerHTML = `<span class="note">成交價</span> <b class="num ${cls(st.last)}">${fmtP(st.last)}</b> <span class="note num">${st.last === ref ? "平盤" : fmtPct((st.last - ref) / ref)}</span>`;
+    host.querySelector(".ob-meter").innerHTML = `<div class="ob-bar"><i style="width:${ratio}%"></i></div><div class="row" style="justify-content:space-between"><span class="up">外盤 <b class="num">${st.out}</b> 張</span><span class="num">外盤比 ${ratio.toFixed(0)}%</span><span class="down">內盤 <b class="num">${st.inn}</b> 張</span></div>`;
+    host.querySelector(".ob-note").innerHTML = st.note;
+    host.querySelector(".ob-tape").innerHTML = st.tape.map(t => `<li><span class="note num">${t.t}</span><span class="num ${cls(t.price)}">${fmtP(t.price)}</span><span class="num">${t.n} 張</span><span class="pill ${t.buy ? "bull" : "bear"}">${t.buy ? "外" : "內"}</span></li>`).join("");
+    host.querySelector("[data-run]").textContent = timer ? "暫停" : "開始";
+    host.querySelectorAll("[data-sc]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sc === scen));
+  };
+  host.innerHTML = `<div class="ob panel">
+    <div class="row" style="justify-content:space-between"><div class="seg" role="group" aria-label="情境"><button data-sc="bull">買盤積極</button><button data-sc="mix">多空拉鋸</button><button data-sc="bear">賣壓沉重</button></div>
+    <div class="row"><button class="btn primary" data-run>開始</button><button class="btn" data-step>走一筆</button><button class="btn" data-reset>重設</button></div></div>
+    <div class="ob-grid">
+      <div><table class="ob-book"><thead><tr><th>委買量</th><th>委買價</th><th>委賣價</th><th>委賣量</th></tr></thead><tbody></tbody></table>
+      <p class="note" style="margin:6px 0 0">昨收 ${fmtP(ref)}。台股的升降單位依價位而定：50–100 元每檔 0.1 元，100–500 元每檔 0.5 元。</p></div>
+      <div class="ob-side"><div class="ob-last"></div><div class="ob-meter"></div><div class="ob-note"></div><ul class="ob-tape" aria-label="最近成交"></ul></div>
+    </div></div>`;
+  host.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.sc) scen = b.dataset.sc;
+    if (b.hasAttribute("data-run")) { if (timer) { clearInterval(timer); timer = null; } else timer = setInterval(step, 650); }
+    if (b.hasAttribute("data-step")) step();
+    if (b.hasAttribute("data-reset")) { reset(); }
+    render();
+  });
+  reset(); render();
+  return () => { clearInterval(timer); timer = null; };
+}
 const LESSONS = [
   {
     id: "kline", title: "K線：一根蠟燭記錄一天的戰況", tag: "價格", seed: 11, n: 110,
@@ -1153,6 +1439,119 @@ OSC  = DIF − MACD              （柱狀體）</div>
     keys: ["一般背離找可能的反轉，隱藏背離找順勢的回檔買點或反彈賣點。", "先判斷大趨勢，再決定要看哪一種背離。", "任何背離都要設好停損，因為背離失敗時價格往往走得又快又遠。"],
   },
   {
+    id: "chart-patterns", title: "型態學：頭肩、雙重頂底與三角收斂", tag: "型態學", seed: 5125, n: 260,
+    gallery: ["hsTop", "hsBottom", "dTop", "dBottom", "ascTri", "descTri", "symTri", "box"], galleryKind: "chart",
+    body: `<p>K 線型態看的是幾天內的多空換手；<strong>型態學</strong>則是把幾週到幾個月的走勢當成一張圖，找出市場反覆出現的形狀。型態由轉折高低點組成，最重要的一條線叫<strong>頸線</strong>：收盤跌破（或突破）頸線，型態才算完成。</p>
+<p>點選卡片，圖上只標出那種型態，並畫出轉折點（實線）、頸線或趨勢線（虛線）與測量目標。</p>`,
+    after: `<p><strong>測量幅度</strong>：型態完成後的最小目標，通常是把型態的高度從突破點再量一次。</p>
+<div class="formula">M 頭目標 ≈ 頸線 −（高點 − 頸線）
+W 底目標 ≈ 頸線 +（頸線 − 低點）</div>
+<table><thead><tr><th>型態</th><th>性質</th><th>判讀重點</th></tr></thead><tbody>
+<tr><td>頭肩頂 / 頭肩底</td><td>反轉</td><td>右肩量縮、突破頸線時放量最可信</td></tr>
+<tr><td>M 頭 / W 底</td><td>反轉</td><td>兩個高（低）點相差不大；W 底右腳量增較佳</td></tr>
+<tr><td>上升 / 下降三角</td><td>多為持續</td><td>水平的那一邊被測試多次，最後常被突破</td></tr>
+<tr><td>對稱三角</td><td>持續或反轉</td><td>越接近尖端波動越小，突破方向才是答案</td></tr>
+<tr><td>箱型</td><td>整理</td><td>上緣壓力、下緣支撐，突破後常走出約一個箱高</td></tr>
+<tr><td>旗形 / 楔形</td><td>持續</td><td>急漲急跌後的短暫整理（本工具不自動偵測）</td></tr>
+</tbody></table>
+<p>最常見的失敗是<strong>假突破</strong>：突破後很快又回到型態裡。很多人會等價格回測頸線不破再進場。</p>`,
+    chart: { ma: [20] },
+    try: "點「M 頭」或「頭肩頂」，看跌破頸線之後價格有沒有走到虛線標示的目標；再按「換一段走勢」比較成功與失敗的例子。",
+    keys: ["型態要「完成」才算數：還沒跌破頸線的 M 頭只是兩個高點。", "量能是型態的確認：底部突破要有量，頭部常見右邊量縮。", "目標價只是參考距離，不保證會到，也可能一下就超過。"],
+  },
+  {
+    id: "dow", title: "道氏理論：趨勢的定義與確認", tag: "趨勢", seed: 6200, n: 220,
+    body: `<p>道氏理論是技術分析的源頭，整理自《華爾街日報》創辦人查爾斯．道（Charles Dow）的評論。它最大的貢獻，是給「趨勢」一個明確的定義：</p>
+<ul>
+<li><strong>上升趨勢</strong>：高點一個比一個高（HH），低點也一個比一個高（HL）。</li>
+<li><strong>下降趨勢</strong>：高點越來越低（LH），低點也越來越低（LL）。</li>
+<li><strong>趨勢會一直持續</strong>，直到出現明確的反轉訊號，例如上升趨勢中跌破前一個較高的低點。</li>
+</ul>
+${dowPhaseSVG}
+<table><thead><tr><th>趨勢層級</th><th>時間</th><th>比喻</th></tr></thead><tbody>
+<tr><td>主要趨勢</td><td>一年以上</td><td>潮汐：決定大方向</td></tr>
+<tr><td>次級趨勢</td><td>數週到數月</td><td>波浪：主要趨勢中的回檔或反彈，常回吐前一段的 1/3 到 2/3</td></tr>
+<tr><td>日常波動</td><td>幾天</td><td>漣漪：雜訊多，也最容易被操縱</td></tr>
+</tbody></table>
+<p>道氏理論的六個原則：</p>
+<ul>
+<li>平均指數反映一切已知的資訊。</li>
+<li>市場有主要、次級、日常三種趨勢。</li>
+<li>主要趨勢有三個階段：吸籌、大眾參與、出貨（見上圖）。</li>
+<li>指數必須互相確認。原本是工業指數與運輸指數；台股常拿加權指數對照櫃買指數，或電子類股對照金融類股。</li>
+<li>成交量必須確認趨勢：上漲時量增、回檔時量縮，上升趨勢才健康。</li>
+<li>趨勢持續，直到明確的反轉訊號出現。</li>
+</ul>`,
+    after: `<p>圖上的折線連接每個轉折點，標出 HH、HL、LH、LL。三角形是趨勢狀態的改變：<strong>延續</strong>是順著原方向突破前一個轉折點，<strong>反轉</strong>是第一次往反方向突破。</p>`,
+    chart: { ma: [], markers: (D, I) => Signals.structure(D, I, "dow"), extra: D => ({ shapes: [zigzagShape(D)] }) },
+    try: "沿著折線讀 HH、HL 的順序，找出上升趨勢轉為下降的那一刻；再對照成交量，上漲段是否量增、回檔是否量縮。",
+    keys: ["先判斷主要趨勢方向，再決定要不要交易次級趨勢的回檔或反彈。", "道氏理論的反轉訊號一定比較慢，它犧牲頭尾，換取比較少的錯誤。", "轉折點的選法會影響結果；看主要趨勢時，週線比日線更合適。"],
+  },
+  {
+    id: "inout", title: "內外盤：誰比較急著成交", tag: "量能", seed: 6607, n: 160, widget: "orderbook",
+    body: `<p>每一筆成交都有一方是「主動」的。看盤軟體的<strong>五檔報價</strong>中，左邊是委買（買方掛單等待），右邊是委賣（賣方掛單等待）。</p>
+<ul>
+<li><strong>外盤</strong>：買方等不及，直接用<strong>委賣價</strong>買進。代表買方主動、積極。</li>
+<li><strong>內盤</strong>：賣方等不及，直接用<strong>委買價</strong>賣出。代表賣方主動、積極。</li>
+<li><strong>外盤比</strong> = 外盤量 ÷（內盤量＋外盤量）。超過 50%，表示主動買進的量比較多。</li>
+</ul>
+<p>下面是模擬的五檔報價。按「開始」，看每一筆成交怎麼被歸類成內盤或外盤。</p>`,
+    after: `<p>台股從 2020 年 3 月起全面改為<strong>逐筆交易</strong>：委託一進來就立即撮合，每筆成交依它吃掉的是委賣還是委買，分別記為外盤或內盤。</p>
+<p>下方日線圖的副圖是每天的外盤比：紅柱代表外盤多於 50%，橘線是 5 日平均。</p>
+<p>使用時要小心：</p>
+<ul>
+<li><strong>外盤大不一定會漲</strong>：有心人可以先在委賣掛單，再自己用外盤買進，製造買氣（對敲）。</li>
+<li>出貨時常在委買掛大單吸引跟單，自己再慢慢往下賣。</li>
+<li>內外盤只反映「誰比較急」，要配合價格位置與成交量一起看。</li>
+</ul>`,
+    chart: { ma: [5, 20], sub: "inout" },
+    try: "切換「買盤積極」與「賣壓沉重」兩種情境，觀察外盤比與成交價怎麼變；再看日線副圖，外盤比偏高的日子價格是否也偏強。",
+    keys: ["外盤是買方主動、內盤是賣方主動，和當天漲跌是兩回事。", "連續幾天外盤比偏高且價漲量增，買盤比較健康。", "價格漲不上去、外盤比卻很高，要提防有人在上面出貨。"],
+  },
+  {
+    id: "wr", title: "威廉指標：收盤離最高點有多遠", tag: "動能", seed: 7564, n: 180,
+    body: `<p>威廉指標（Williams %R）由 Larry Williams 提出，衡量今天的收盤價距離最近 14 天的<strong>最高價</strong>有多遠。它和 KD 的 RSV 是同一個概念，只是把尺倒過來量。</p>
+<div class="formula">%R = (14 日最高價 − 今日收盤) ÷ (14 日最高價 − 14 日最低價) × (−100)</div>
+<ul>
+<li>數值在 0 到 −100 之間。<strong>−20 以上</strong>是超買區，收盤接近近期最高；<strong>−80 以下</strong>是超賣區。</li>
+<li>沒有經過平滑，反應比 KD 快，適合抓短線轉折，雜訊也比較多。</li>
+<li>由超賣區往上穿越 −80、由超買區往下跌破 −20，是常見的進出訊號。</li>
+</ul>
+<p><strong>台股看盤軟體要注意</strong>：不少台灣軟體把威廉指標畫成 0 到 100、不加負號，這時<strong>80 以上反而是超賣</strong>、20 以下是超買，和 KD 剛好相反。看軟體前先確認刻度方向。</p>`,
+    chart: { ma: [20], sub: "wr", markers: (D, I) => Signals.wr(D, I) },
+    try: "到「圖表實驗室」把副圖切到 KD 再切回威廉指標，比較同一段走勢裡誰先發出訊號、誰的假訊號比較多。",
+    keys: ["%R 的數值等於 RSV − 100，所以它比 KD 敏感。", "強勢股會長時間停在超買區，這是強勢的證明，不是賣出訊號。", "適合搭配趨勢判斷，只做順著均線方向的超買超賣訊號。"],
+  },
+  {
+    id: "smc-structure", title: "聰明錢概念（一）：市場結構與流動性", tag: "聰明錢", seed: 8400, n: 200,
+    body: `<p><strong>聰明錢概念</strong>（Smart Money Concepts，SMC）近年在外匯與加密貨幣圈流行，源自 ICT（Inner Circle Trader）的教學。核心想法是：機構（聰明錢）需要大量的對手單才能進出，所以價格常先被推到散戶停損單聚集的地方，再走出真正的方向。</p>
+<table><thead><tr><th>名詞</th><th>意思</th></tr></thead><tbody>
+<tr><td>BOS（結構突破）</td><td>順著原趨勢，收盤突破前一個轉折高點（或低點），代表趨勢延續</td></tr>
+<tr><td>CHoCH（特性轉變）</td><td>逆著原趨勢的第一次結構突破，例如下降趨勢中第一次收盤站上前高，代表可能反轉</td></tr>
+<tr><td>流動性</td><td>前高之上、前低之下聚集的停損單與突破單；兩個幾乎等高的高點（EQH）上方特別多</td></tr>
+<tr><td>流動性掃蕩</td><td>盤中刺穿前高（或前低）觸發停損，收盤卻又回到裡面，留下長影線</td></tr>
+</tbody></table>`,
+    after: `<p>圖上的水平虛線，從被突破的轉折點畫到突破的那一天。仔細看會發現，BOS 和 CHoCH 就是道氏理論的趨勢延續與反轉，SMC 換了名字，並更強調「突破時誰被洗出場」。藍色標記是流動性掃蕩。</p>`,
+    chart: { ma: [], markers: (D, I) => [...Signals.structure(D, I, "smc"), ...Signals.sweep(D)], extra: D => ({ shapes: [zigzagShape(D, false)] }) },
+    try: "找出每一次 CHoCH，看看它之前是否先出現過「掃流動性」的長影線；再觀察 CHoCH 之後趨勢是不是真的反轉了。",
+    keys: ["收盤突破才算結構突破；只有影線刺穿、收盤回來的是流動性掃蕩。", "CHoCH 只是「可能」反轉，常見做法是等它之後的回檔，在訂單塊或缺口附近找進場點。", "SMC 的名詞很多，底層仍是轉折點、支撐壓力與假突破的觀念。"],
+  },
+  {
+    id: "smc-zones", title: "聰明錢概念（二）：訂單塊與公平價值缺口", tag: "聰明錢", seed: 9083, n: 180,
+    body: `<p>結構突破之後，SMC 交易者會等價格<strong>回到</strong>某些區域再進場。最常用的是這兩種：</p>
+<ul>
+<li><strong>訂單塊（Order Block，OB）</strong>：一段強力上漲（造成結構突破）之前的<strong>最後一根綠K</strong>；下跌前則是最後一根紅K。SMC 認為那是機構建立部位的地方，價格回到這裡常有反應。</li>
+<li><strong>公平價值缺口（Fair Value Gap，FVG）</strong>：連續三根 K 棒中，第一根的高點和第三根的低點沒有重疊，中間那根急漲留下一段空白。代表當時買賣嚴重失衡，價格之後常回來補。</li>
+<li><strong>溢價區與折價區</strong>：把最近一段波段的高低點切一半，上半部是溢價區（找賣點），下半部是折價區（找買點）。</li>
+</ul>
+<div class="formula">多方 FVG：第 3 根最低價 > 第 1 根最高價 → 缺口 = [第 1 根最高價, 第 3 根最低價]</div>`,
+    after: `<p>圖上實線框是訂單塊，虛線框是公平價值缺口，都延伸到價格第一次回到區域內為止。水平虛線是最近一段波段的 50% 均衡線。</p>
+<p>FVG 和第 3 課的跳空缺口很像，但它不需要開盤跳空：只要三根 K 棒的影線之間留下空白就算。</p>`,
+    chart: { ma: [], markers: (D, I) => Signals.structure(D, I, "smc"), extra: D => smcExtra(D) },
+    try: "觀察每個紅色實線框（多方訂單塊）被回測時，價格有沒有止跌；再數數有多少公平價值缺口在之後被回補。",
+    keys: ["訂單塊和缺口是「可能有反應」的區域，不是保證反轉的價位。", "第一次回測最有效，反覆被回測的區域會逐漸失效。", "順著結構方向使用：上升結構只看多方的訂單塊與缺口，並在折價區找買點。"],
+  },
+  {
     id: "risk", title: "訊號不是保證：成本、停損與紀律", tag: "風險", seed: 117, n: 220,
     body: `<p>每個指標都會出錯，技術分析真正的價值在於<strong>提高勝算、控制虧損</strong>。實際交易還要算上成本：</p>
 <table><thead><tr><th>項目</th><th>費率</th><th>說明</th></tr></thead><tbody>
@@ -1172,6 +1571,15 @@ OSC  = DIF − MACD              （柱狀體）</div>
   },
 ];
 
+// 課程順序與分組
+const LESSON_GROUPS = [
+  ["基礎", ["kline"]], ["K 線與型態學", ["patterns-rev", "patterns-cont", "chart-patterns"]], ["趨勢與量價", ["dow", "ma", "vol", "inout", "sr"]],
+  ["技術指標", ["rsi", "kd", "wr", "macd", "boll"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-zones"]], ["風險管理", ["risk"]],
+];
+const ORDER = LESSON_GROUPS.flatMap(g => g[1]);
+LESSONS.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
+LESSONS.forEach(l => { l.group = LESSON_GROUPS.find(g => g[1].includes(l.id))[0]; });
+
 /* ================= 課程頁 ================= */
 const OLD_IDS = ["kline", "ma", "vol", "sr", "rsi", "kd", "macd", "boll", "risk"]; // 舊版以順序記錄進度
 const done = new Set(store.get("doneIds", null) || store.get("done", []).map(i => OLD_IDS[i]).filter(Boolean));
@@ -1181,32 +1589,35 @@ let lessonView = { seedOff: 0, variant: 0, pat: null, D: null, I: null };
 const lessonChart = new Chart($("#lessonChart"));
 function updateProgress() { $("#progChip").textContent = `已完成 ${done.size} / ${LESSONS.length} 課`; }
 function renderLessonList() {
-  $("#lessonList").innerHTML = LESSONS.map((l, i) => `<button data-i="${i}" aria-current="${i === lessonIdx}"><span class="n">${String(i + 1).padStart(2, "0")}</span><span>${l.title.split("：")[0]}</span><span class="done">${done.has(l.id) ? "●" : ""}</span></button>`).join("");
+  $("#lessonList").innerHTML = LESSONS.map((l, i) => `${i === 0 || LESSONS[i - 1].group !== l.group ? `<div class="lgroup">${l.group}</div>` : ""}<button data-i="${i}" aria-current="${i === lessonIdx}"><span class="n">${String(i + 1).padStart(2, "0")}</span><span>${l.title.split("：")[0]}</span><span class="done">${done.has(l.id) ? "●" : ""}</span></button>`).join("");
 }
 function lessonMarkers(L, D, I, v) {
-  if (L.gallery) return Signals.candle(D, I, L.gallery);
+  if (L.gallery) return L.galleryKind === "chart" ? Signals.chartPat(D, I, L.gallery) : Signals.candle(D, I, L.gallery);
   if (L.variants) return Signals.div(D, I, v.sub, L.hidden ? "hidden" : "regular");
-  return L.chart.markers(D, I);
+  return L.chart.markers ? L.chart.markers(D, I) : [];
 }
 function drawLesson() {
   const L = LESSONS[lessonIdx], v = L.variants ? L.variants[lessonView.variant] : {}, { D, I } = lessonView;
   const all = lessonMarkers(L, D, I, v), markers = lessonView.pat ? all.filter(m => m.pat === lessonView.pat) : all;
-  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, sub: v.sub || L.chart.sub, markers, hlines: L.sr ? srLevels(D) : [] });
+  const ex = L.chart.extra ? L.chart.extra(D, I) : {};
+  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, sub: v.sub || L.chart.sub, markers, hlines: L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
   const g = $("#lessonGallery");
   g.hidden = !L.gallery;
   if (L.gallery) g.innerHTML = L.gallery.map(id => {
-    const P = PATTERNS[id], cnt = all.filter(m => m.pat === id).length;
-    return `<button class="pcard" data-pat="${id}" aria-pressed="${lessonView.pat === id}">${patternSVG(id)}<span class="pname">${P.name}<span class="pill ${P.side === "buy" ? "bull" : P.side === "sell" ? "bear" : "flat"}">${P.side === "buy" ? "偏多" : P.side === "sell" ? "偏空" : "轉折"}</span></span><span class="pdesc">${P.desc}</span><span class="pcount">${cnt ? `圖中出現 ${cnt} 次` : "這段走勢沒有出現"}</span></button>`;
+    const chart = L.galleryKind === "chart", P = (chart ? CHART_PATTERNS : PATTERNS)[id], cnt = all.filter(m => m.pat === id).length;
+    return `<button class="pcard" data-pat="${id}" aria-pressed="${lessonView.pat === id}">${chart ? chartPatternSVG(id) : patternSVG(id)}<span class="pname">${P.name}<span class="pill ${P.side === "buy" ? "bull" : P.side === "sell" ? "bear" : "flat"}">${P.side === "buy" ? "偏多" : P.side === "sell" ? "偏空" : P.side === "both" ? "看突破" : "轉折"}</span></span><span class="pdesc">${P.desc}</span><span class="pcount">${cnt ? `圖中出現 ${cnt} 次` : "這段走勢沒有出現"}</span></button>`;
   }).join("");
   const seg = L.variants ? `<div class="seg" role="group" aria-label="背離指標">${L.variants.map((x, k) => `<button data-variant="${k}" aria-pressed="${k === lessonView.variant}">${x.label}</button>`).join("")}</div>` : "";
-  const what = lessonView.pat ? `「${PATTERNS[lessonView.pat].name}」` : L.variants ? `${v.label} 背離` : "";
+  const what = lessonView.pat ? `「${(L.galleryKind === "chart" ? CHART_PATTERNS : PATTERNS)[lessonView.pat].name}」` : L.variants ? `${v.label} 背離` : "";
   $("#lessonTools").innerHTML = `${seg}<span class="note">${what ? `${what}：圖中找到 ${markers.length} 次` : ""}</span><span style="flex:1"></span>${lessonView.pat ? `<button class="btn" data-clear>顯示全部型態</button>` : ""}<button class="btn" data-reseed>換一段走勢</button>`;
 }
 function loadLessonData() {
   const L = LESSONS[lessonIdx];
   lessonView.D = genSeries(L.seed + lessonView.seedOff * 7919, L.n); lessonView.I = indicators(lessonView.D);
 }
+let widgetTeardown = null;
 function showLesson(i) {
+  if (widgetTeardown) { widgetTeardown(); widgetTeardown = null; }
   lessonIdx = i; store.set("lessonId", LESSONS[i].id);
   lessonView = { seedOff: 0, variant: 0, pat: null };
   const L = LESSONS[i];
@@ -1216,6 +1627,8 @@ function showLesson(i) {
   $("#lessonAfter").innerHTML = L.after || ""; $("#lessonAfter").hidden = !L.after;
   $("#lessonTry").innerHTML = `<b>試試看</b><span>${L.try}</span>`;
   $("#lessonKeys").innerHTML = `<h3>重點整理</h3><ul>${L.keys.map(k => `<li>${k}</li>`).join("")}</ul>`;
+  $("#lessonWidget").hidden = !L.widget;
+  if (L.widget === "orderbook") widgetTeardown = mountOrderBook($("#lessonWidget"));
   loadLessonData(); drawLesson();
   $("#lessonPrev").disabled = i === 0;
   $("#lessonNext").textContent = i === LESSONS.length - 1 ? "完成課程，去做測驗 →" : "完成本課，下一課 →";
@@ -1247,6 +1660,10 @@ const STRATS = {
   candle: { name: "K線型態（錘子、吞噬、晨星…）", fn: (D, I) => Signals.candle(D, I) },
   divRsi: { name: "RSI 背離（一般背離）", fn: (D, I) => Signals.div(D, I, "rsi") },
   divMacd: { name: "MACD 背離（一般背離）", fn: (D, I) => Signals.div(D, I, "macd") },
+  wr: { name: "威廉 %R −80 / −20", fn: Signals.wr },
+  chartPat: { name: "型態學突破（頭肩、M 頭、W 底、三角…）", fn: (D, I) => Signals.chartPat(D, I) },
+  choch: { name: "聰明錢：CHoCH 結構轉變", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") },
+  bos: { name: "道氏：所有結構突破（BOS + CHoCH）", fn: (D, I) => Signals.structure(D, I, "dow") },
 };
 let lab = { seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma") };
 const labChart = new Chart($("#labChart"), { onHover: i => { if (!lab.D) return; $("#roDate").textContent = lab.D[i].d.replace(/-/g, "/"); renderReadout($("#labReadout"), readout(lab.D, lab.I, i)); } });
@@ -1254,7 +1671,9 @@ function labData() { lab.D = genSeries(lab.seed, +$("#labLen").value); lab.I = i
 function labDraw() {
   const ma = [["maA", "maAn"], ["maB", "maBn"], ["maC", "maCn"]].filter(([c]) => $("#" + c).checked).map(([, n]) => Math.max(2, Math.min(240, +$("#" + n).value || 5)));
   const S = STRATS[lab.strat], sigs = S.fn ? S.fn(lab.D, lab.I) : [];
-  labChart.set(lab.D, { I: lab.I, ma, boll: $("#boll").checked, sub: $("#labSub").value, markers: sigs, hlines: $("#sr").checked ? srLevels(lab.D) : [] });
+  const ex = $("#smcz").checked ? smcExtra(lab.D) : { shapes: [], zones: [] };
+  if ($("#zz").checked) ex.shapes.push(zigzagShape(lab.D));
+  labChart.set(lab.D, { I: lab.I, ma, boll: $("#boll").checked, sub: $("#labSub").value, markers: sigs, hlines: $("#sr").checked ? srLevels(lab.D) : [], shapes: ex.shapes, zones: ex.zones });
   renderBT(sigs);
 }
 function renderBT(sigs) {
@@ -1280,7 +1699,7 @@ function renderBT(sigs) {
 }
 $("#labNew").addEventListener("click", () => { lab.seed = Math.floor(Math.random() * 1e6); store.set("labSeed", lab.seed); labData(); labDraw(); });
 $("#labLen").addEventListener("change", () => { labData(); labDraw(); });
-["maA", "maB", "maC", "boll", "sr", "labSub", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
+["maA", "maB", "maC", "boll", "sr", "zz", "smcz", "labSub", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
 
 /* ================= 判讀挑戰 ================= */
 const HORIZON = 10, SHOW = 120;
@@ -1344,6 +1763,17 @@ const QUESTIONS = [
   { q: "價格創了新低，但 RSI 的低點比前一次高，這稱為？", o: ["頂背離", "底背離", "隱藏頂背離", "多頭排列"], a: 1, e: "價格低點更低、指標低點更高是底背離，代表下跌動能在減弱，是可能止跌的警訊。" },
   { q: "上升趨勢中，價格的回檔低點墊高，RSI 的低點卻更低，這通常解讀為？", o: ["趨勢即將反轉向下", "隱藏底背離，偏向上升趨勢延續", "頂背離", "指標失效"], a: 1, e: "這是隱藏底背離：指標顯示回檔時的賣壓看似很重，價格卻守住更高的低點，常是順勢回檔的結束。" },
   { q: "為什麼背離通常要在第二個轉折點之後幾天才能確認？", o: ["因為指標計算比較慢", "因為要等右側的 K 棒，才能確定那一點真的是轉折高點或低點", "因為交易所延遲公布資料", "因為需要等成交量放大"], a: 1, e: "轉折點的定義需要它右邊的 K 棒都沒有超過它。這幾天的等待是無法避免的，所以背離永遠是事後才看得出來。" },
+  { q: "依道氏理論，上升趨勢的定義是？", o: ["收盤價在月線之上", "高點與低點都一個比一個高", "連續三天收紅", "成交量持續放大"], a: 1, e: "道氏理論用轉折點定義趨勢：高點越來越高（HH）、低點也越來越高（HL）就是上升趨勢，直到出現明確的反轉訊號。" },
+  { q: "道氏理論中，「指數必須互相確認」在台股常被怎麼應用？", o: ["只看加權指數就好", "拿加權指數對照櫃買指數或不同類股指數，看是否同步創高或破底", "比較美元與台幣", "比較開盤與收盤價"], a: 1, e: "原本是工業指數與運輸指數互相確認。兩個相關的指數同時創高（或破底），趨勢才算被確認。" },
+  { q: "「外盤」成交代表什麼？", o: ["外資買進", "買方主動以委賣價成交", "賣方主動以委買價成交", "盤後交易"], a: 1, e: "外盤是買方等不及、直接用委賣價買進；內盤是賣方主動用委買價賣出。和外資無關。" },
+  { q: "某天外盤比高達 70%，但股價收在當天最低附近，比較合理的解讀是？", o: ["明天一定大漲", "外盤大代表一定有人在買，不用擔心", "要提防有人用對敲製造買氣、實際在出貨", "內外盤和股價完全無關"], a: 2, e: "外盤比高只表示主動買的量多。價格卻漲不上去，可能是上方有大量賣單，甚至是刻意對敲，要配合價格與量能判斷。" },
+  { q: "威廉指標 %R 為 −10，代表？", o: ["收盤接近 14 日最低價，超賣", "收盤接近 14 日最高價，超買區", "指標失效", "成交量放大"], a: 1, e: "%R 衡量收盤離 14 日最高價多遠。−20 以上代表收盤接近近期高點，是超買區；−80 以下是超賣區。" },
+  { q: "某台股看盤軟體把威廉指標畫成 0～100、沒有負號，數值 85 代表？", o: ["超買", "超賣", "中性", "黃金交叉"], a: 1, e: "這種畫法是把 %R 的負號拿掉，數值越大代表收盤離高點越遠，所以 80 以上是超賣，和 KD 剛好相反。" },
+  { q: "M 頭型態什麼時候才算「完成」？", o: ["出現第二個高點時", "收盤跌破兩個高點中間的低點（頸線）時", "成交量放大時", "KD 死亡交叉時"], a: 1, e: "沒有跌破頸線的 M 頭只是兩個高點。收盤跌破頸線，型態才完成；最小目標約是頸線往下再量一次高點到頸線的距離。" },
+  { q: "對稱三角收斂型態，應該如何判斷方向？", o: ["一定往上突破", "一定往下跌破", "等價格收盤突破上方或下方的趨勢線", "看第一個高點的顏色"], a: 2, e: "對稱三角是多空力量逐漸收斂，事前無法確定方向，要等收盤突破上緣或跌破下緣。" },
+  { q: "在聰明錢概念（SMC）中，CHoCH 指的是？", o: ["順著趨勢的結構突破", "逆著原趨勢的第一次結構突破，代表可能反轉", "成交量爆增", "均線糾結"], a: 1, e: "CHoCH（Change of Character）是趨勢性格改變：例如下降趨勢中第一次收盤突破前一個高點。順勢的突破則叫 BOS。" },
+  { q: "盤中價格刺穿前高、收盤卻跌回前高之下，SMC 稱這種情況為？", o: ["結構突破（BOS）", "流動性掃蕩", "公平價值缺口", "多頭排列"], a: 1, e: "前高之上聚集停損與突破買單。價格刺穿後又收回，代表那些單被「掃」掉，常是假突破。" },
+  { q: "多方的公平價值缺口（FVG）是怎麼形成的？", o: ["開盤價高於前一天收盤", "連續三根 K 棒中，第三根的最低價高於第一根的最高價", "成交量是前一天的兩倍", "收盤價創 20 日新高"], a: 1, e: "中間那根急漲，讓第一根高點和第三根低點之間留下沒有重疊的空白。SMC 認為價格常會回來填補這段失衡。" },
   { q: "關於技術指標，下列敘述何者最正確？", o: ["找到對的指標就能穩定獲利", "指標越多越準", "指標是提高勝算的工具，仍需搭配停損與資金控管", "只要回測賺錢，未來一定賺錢"], a: 2, e: "沒有指標能保證獲利。技術分析的價值在於有規則地進出、控制虧損。" },
 ];
 let quiz = null;
@@ -1724,7 +2154,7 @@ function drawShot() {
 }
 const normRect = d => ({ x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0) });
 
-const LESSON_OF = { 均線: "ma", 月線: "ma", RSI: "rsi", KD: "kd", MACD: "macd", 布林: "boll", K線: "patterns-rev", 背離: "div" };
+const LESSON_OF = { 均線: "ma", 月線: "ma", RSI: "rsi", KD: "kd", MACD: "macd", 布林: "boll", K線: "patterns-rev", 背離: "div", 威廉: "wr", 內外盤: "inout", 結構: "dow", 型態: "chart-patterns" };
 function shotSummary(D, I, cal) {
   const n = D.length, i = n - 1, items = readout(D, I, i);
   const bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length;
