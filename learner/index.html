@@ -145,6 +145,23 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .anatomy .lbl-strong { fill: var(--ink); font-weight: 700; }
 .anatomy .guide { stroke: var(--line); stroke-dasharray: 3 3; }
 
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.pcard {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; line-height: 1.55;
+}
+.pcard:hover { border-color: var(--accent); }
+.pcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.pcard svg { align-self: center; max-width: 100%; height: auto; }
+.pname { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14.5px; }
+.pdesc { color: var(--muted); }
+.pcount { font-size: 12px; color: var(--accent); font-weight: 500; }
+.chart-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: -8px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 6px 14px; cursor: pointer; font-size: 14px; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 700; }
+
 /* ---------- lab ---------- */
 .lab { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
 .lab-side { display: flex; flex-direction: column; gap: 14px; }
@@ -255,7 +272,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <button role="tab" data-tab="shot" id="tab-btn-shot">截圖判讀</button>
       <button role="tab" data-tab="quiz" id="tab-btn-quiz">觀念測驗</button>
     </nav>
-    <span class="chip" id="progChip">已完成 0 / 9 課</span>
+    <span class="chip" id="progChip">已完成 0 / 13 課</span>
   </div>
 </header>
 
@@ -269,6 +286,9 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
         <h2 id="lessonTitle"></h2>
       </div>
       <div class="prose" id="lessonBody"></div>
+      <div class="gallery" id="lessonGallery" hidden></div>
+      <div class="prose" id="lessonAfter" hidden></div>
+      <div class="chart-tools" id="lessonTools"></div>
       <div class="panel chartbox" id="lessonChart"></div>
       <div class="try" id="lessonTry"></div>
       <div class="keys" id="lessonKeys"></div>
@@ -446,8 +466,10 @@ function genSeries(seed, n) {
     const prev = p;
     const ret = Math.max(-0.095, Math.min(0.095, mu + sig * gauss()));
     const hiLim = prev * 1.1, loLim = prev * 0.9;
-    const o = roundTick(Math.min(hiLim, Math.max(loLim, prev * (1 + sig * 0.35 * gauss()))));
-    const c = roundTick(prev * Math.exp(ret));
+    // 偶爾跳空開盤（約 4% 的交易日），方向多半順著當時的趨勢
+    const gap = r() < 0.04 ? (0.015 + r() * 0.03) * (mu >= 0 ? 1 : -1) * (r() < 0.75 ? 1 : -1) : 0;
+    const o = roundTick(Math.min(hiLim, Math.max(loLim, prev * (1 + gap + sig * 0.35 * gauss()))));
+    const c = roundTick(Math.min(hiLim, Math.max(loLim, (gap ? o : prev) * Math.exp(ret))));
     const h = roundTick(Math.min(hiLim, Math.max(o, c) * (1 + Math.abs(gauss()) * sig * 0.45)));
     const l = roundTick(Math.max(loLim, Math.min(o, c) * (1 - Math.abs(gauss()) * sig * 0.45)));
     const v = Math.max(50, Math.round(baseV * (0.55 + Math.abs(ret) / sig * 0.5) * Math.exp(gauss() * 0.3) * (mu > 0.001 && ret > 0 ? 1.3 : 1)));
@@ -516,22 +538,105 @@ const Signals = {
   macd(D, I) { const { dif, sig } = I.macd, m = []; for (let i = 1; i < D.length; i++) { if (crossUp(dif, sig, i)) m.push({ i, side: "buy", label: "DIF上穿" }); else if (crossDn(dif, sig, i)) m.push({ i, side: "sell", label: "DIF下穿" }); } return m; },
   boll(D, I) { const { up, lo } = I.boll, m = []; for (let i = 1; i < D.length; i++) { if (lo[i] == null || lo[i - 1] == null) continue; if (D[i].c < lo[i] && D[i - 1].c >= lo[i - 1]) m.push({ i, side: "buy", label: "跌破下軌" }); else if (D[i].c > up[i] && D[i - 1].c <= up[i - 1]) m.push({ i, side: "sell", label: "突破上軌" }); } return m; },
   vol(D, I) { const m = []; for (let i = 20; i < D.length; i++) if (D[i].v > 2 * I.vma[i - 1]) m.push({ i, side: D[i].c >= D[i].o ? "buy" : "sell", label: "爆量", note: true }); return m; },
-  candle(D) {
+  candle(D, I, only) {
     const m = [];
     for (let i = 5; i < D.length; i++) {
-      const x = D[i], p = D[i - 1], body = Math.abs(x.c - x.o), rng = x.h - x.l;
-      if (rng <= 0) continue;
-      const upper = x.h - Math.max(x.o, x.c), lower = Math.min(x.o, x.c) - x.l;
-      const fell = x.c < D[i - 5].c * 0.97, rose = x.c > D[i - 5].c * 1.03;
-      if (fell && lower >= 2 * body && upper <= rng * 0.15 && body > 0) m.push({ i, side: "buy", label: "錘子線" });
-      else if (rose && upper >= 2 * body && lower <= rng * 0.15 && body > 0) m.push({ i, side: "sell", label: "流星線" });
-      else if (fell && p.c < p.o && x.c > x.o && x.o <= p.c && x.c >= p.o) m.push({ i, side: "buy", label: "多頭吞噬" });
-      else if (rose && p.c > p.o && x.c < x.o && x.o >= p.c && x.c <= p.o) m.push({ i, side: "sell", label: "空頭吞噬" });
-      else if (body <= rng * 0.08 && rng / x.c > 0.02 && (fell || rose)) m.push({ i, side: fell ? "buy" : "sell", label: "十字線", note: true });
+      const id = detectPattern(D, i);
+      if (!id || (only && !only.includes(id))) continue;
+      const P = PATTERNS[id];
+      m.push({ i, pat: id, label: P.name, side: P.side === "note" ? (fellAt(D, i) ? "buy" : "sell") : P.side, note: P.side === "note" });
     }
     return m;
   },
+  // 背離：比較相鄰兩個轉折點的價格與指標；轉折點要右側 w 根才確認，所以標記畫在確認那天
+  div(D, I, ind = "rsi", mode = "regular", upto = D.length) { return divergences(D, I, ind, mode, upto); },
 };
+
+/* ---------- K 線型態 ----------
+   bars 是型態示意圖用的 [開, 高, 低, 收]，前面幾根是型態出現前的走勢（畫成淡色），最後 n 根是型態本身。 */
+const CTX_DN = [[78, 80, 68, 70], [70, 72, 60, 61], [61, 63, 50, 52]], CTX_UP = [[22, 30, 20, 28], [28, 39, 27, 37], [37, 48, 36, 46]];
+const PATTERNS = {
+  hammer: { name: "錘子線", side: "buy", n: 1, bars: [...CTX_DN, [50, 52, 36, 51.5]], desc: "下跌後出現，下影線至少是實體兩倍：盤中殺低後被買盤拉回。" },
+  hanging: { name: "吊人線", side: "sell", n: 1, bars: [...CTX_UP, [47, 49, 34, 48.5]], desc: "和錘子線同形，但出現在漲勢末端：盤中已有人大量賣出。" },
+  invHammer: { name: "倒狀錘子", side: "buy", n: 1, bars: [...CTX_DN, [50, 63, 49.5, 51.5]], desc: "下跌後出現長上影線：買方開始試探，需要隔天收高確認。" },
+  shooting: { name: "流星線", side: "sell", n: 1, bars: [...CTX_UP, [47, 61, 46.5, 46]], desc: "上漲後出現長上影線：衝高後被賣壓打回，漲勢可能到頂。" },
+  doji: { name: "十字線", side: "note", n: 1, bars: [...CTX_DN, [51, 57, 45, 51]], desc: "開盤約等於收盤，多空拉鋸。出現在一段趨勢之後代表動能停頓。" },
+  bullEngulf: { name: "多頭吞噬", side: "buy", n: 2, bars: [...CTX_DN, [51, 52, 46, 47], [45, 55, 44, 54]], desc: "下跌後一根紅K的實體完全包住前一根綠K：買方一舉扭轉局面。" },
+  bearEngulf: { name: "空頭吞噬", side: "sell", n: 2, bars: [...CTX_UP, [46, 50, 45, 49], [51, 52, 42, 43]], desc: "上漲後一根綠K的實體完全包住前一根紅K：賣方全面反攻。" },
+  bullHarami: { name: "多頭母子", side: "buy", n: 2, bars: [...CTX_DN, [60, 61, 44, 46], [48, 52, 47, 51]], desc: "長綠K之後出現一根小K，實體藏在前一根裡面：跌勢暫停。" },
+  bearHarami: { name: "空頭母子", side: "sell", n: 2, bars: [...CTX_UP, [40, 57, 39, 55], [52, 53, 48, 49]], desc: "長紅K之後出現一根小K，實體藏在前一根裡面：漲勢暫停。" },
+  piercing: { name: "貫穿線", side: "buy", n: 2, bars: [...CTX_DN, [60, 61, 48, 49], [46, 57, 45, 56]], desc: "長綠K後開低走高，收盤穿過前一根實體的一半以上。" },
+  darkCloud: { name: "烏雲罩頂", side: "sell", n: 2, bars: [...CTX_UP, [40, 53, 39, 52], [55, 56, 44, 45]], desc: "長紅K後開高走低，收盤跌進前一根實體的一半以下。" },
+  morningStar: { name: "晨星", side: "buy", n: 3, bars: [...CTX_DN, [60, 61, 47, 48], [45, 47, 42, 44], [46, 57, 45, 56]], desc: "長綠K、小實體星線、長紅K：三天完成由空轉多的換手。" },
+  eveningStar: { name: "夜星", side: "sell", n: 3, bars: [...CTX_UP, [40, 53, 39, 52], [55, 58, 54, 56], [54, 55, 42, 43]], desc: "長紅K、小實體星線、長綠K：三天完成由多轉空的換手。" },
+  soldiers: { name: "紅三兵", side: "buy", n: 3, bars: [[30, 33, 28, 31], [31, 32, 27, 29], [29, 31, 27, 30], [30, 37, 29, 36], [35, 43, 34, 42], [41, 49, 40, 48]], desc: "連續三根實體飽滿的紅K，每根都在前一根實體內開盤、收得更高。" },
+  crows: { name: "黑三兵", side: "sell", n: 3, bars: [[70, 72, 68, 69], [69, 72, 68, 71], [71, 72, 69, 70], [70, 71, 63, 64], [65, 66, 57, 58], [59, 60, 51, 52]], desc: "連續三根實體飽滿的綠K，一路收低，賣壓持續湧出。" },
+  gapUp: { name: "向上跳空", side: "buy", n: 1, bars: [[30, 34, 29, 33], [33, 37, 32, 36], [36, 40, 35, 39], [44, 50, 43, 49]], desc: "今天最低價高於昨天最高價，中間留下缺口：買盤急切。" },
+  gapDown: { name: "向下跳空", side: "sell", n: 1, bars: [[70, 71, 66, 67], [67, 68, 63, 64], [64, 65, 60, 61], [56, 57, 48, 49]], desc: "今天最高價低於昨天最低價，中間留下缺口：賣壓沉重。" },
+};
+const fellAt = (D, k) => k >= 5 && D[k].c < D[k - 5].c * 0.97;
+const roseAt = (D, k) => k >= 5 && D[k].c > D[k - 5].c * 1.03;
+function barInfo(x) { const body = Math.abs(x.c - x.o); return { ...x, body, rng: x.h - x.l, up: x.c > x.o, dn: x.c < x.o, upper: x.h - Math.max(x.o, x.c), lower: Math.min(x.o, x.c) - x.l, mid: (x.o + x.c) / 2, top: Math.max(x.o, x.c), bot: Math.min(x.o, x.c) }; }
+// 只用第 i 根以前的資料判斷；同一天符合多種型態時，取 K 棒數最多的
+function detectPattern(D, i) {
+  if (i < 5) return null;
+  let avg = 0; for (let k = i - 10; k < i; k++) avg += Math.abs(D[Math.max(0, k)].c - D[Math.max(0, k)].o); avg /= 10;
+  const x = barInfo(D[i]), p = barInfo(D[i - 1]), q = barInfo(D[i - 2]);
+  const fell1 = fellAt(D, i - 1), rose1 = roseAt(D, i - 1);
+  if (fellAt(D, i - 2) && q.dn && q.body > avg && p.body < q.body * 0.4 && p.top <= q.c + q.body * 0.15 && x.up && x.c > q.mid) return "morningStar";
+  if (roseAt(D, i - 2) && q.up && q.body > avg && p.body < q.body * 0.4 && p.bot >= q.c - q.body * 0.15 && x.dn && x.c < q.mid) return "eveningStar";
+  const three = [q, p, x];
+  if (i >= 8 && !roseAt(D, i - 3) && three.every(b => b.up && b.body > avg * 0.6 && b.upper < b.body * 0.5) && q.c < p.c && p.c < x.c && p.o >= q.o && p.o <= q.c && x.o >= p.o && x.o <= p.c) return "soldiers";
+  if (i >= 8 && !fellAt(D, i - 3) && three.every(b => b.dn && b.body > avg * 0.6 && b.lower < b.body * 0.5) && q.c > p.c && p.c > x.c && p.o <= q.o && p.o >= q.c && x.o <= p.o && x.o >= p.c) return "crows";
+  if (fell1 && p.dn && x.up && x.o <= p.c && x.c >= p.o && x.body > p.body) return "bullEngulf";
+  if (rose1 && p.up && x.dn && x.o >= p.c && x.c <= p.o && x.body > p.body) return "bearEngulf";
+  if (fell1 && p.dn && p.body > avg && x.up && x.o < p.c && x.c > p.mid && x.c < p.o) return "piercing";
+  if (rose1 && p.up && p.body > avg && x.dn && x.o > p.c && x.c < p.mid && x.c > p.o) return "darkCloud";
+  if (fell1 && p.dn && p.body > avg * 1.2 && x.body < p.body * 0.5 && x.top <= p.o && x.bot >= p.c) return "bullHarami";
+  if (rose1 && p.up && p.body > avg * 1.2 && x.body < p.body * 0.5 && x.top <= p.c && x.bot >= p.o) return "bearHarami";
+  if (x.l > p.h * 1.001) return "gapUp";
+  if (x.h < p.l * 0.999) return "gapDown";
+  if (x.rng <= 0) return null;
+  const fell = fellAt(D, i), rose = roseAt(D, i);
+  if (x.body > 0 && x.lower >= 2 * x.body && x.upper <= x.rng * 0.15) return fell ? "hammer" : rose ? "hanging" : null;
+  if (x.body > 0 && x.upper >= 2 * x.body && x.lower <= x.rng * 0.15) return fell ? "invHammer" : rose ? "shooting" : null;
+  if (x.body <= x.rng * 0.08 && x.rng / x.c > 0.02 && (fell || rose)) return "doji";
+  return null;
+}
+function patternSVG(id) {
+  const P = PATTERNS[id], bars = P.bars, n = bars.length, W = 132, H = 84, pad = 6;
+  const hi = Math.max(...bars.map(b => b[1])), lo = Math.min(...bars.map(b => b[2]));
+  const Y = v => pad + (hi - v) / (hi - lo) * (H - pad * 2), step = (W - pad * 2) / n, bw = Math.min(14, step * 0.55);
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">${bars.map(([o, h, l, c], k) => {
+    const x = pad + step * (k + 0.5), color = c > o ? "var(--up)" : c < o ? "var(--down)" : "var(--ink)", op = k < n - P.n ? 0.3 : 1;
+    return `<g opacity="${op}"><line x1="${x}" x2="${x}" y1="${Y(h)}" y2="${Y(l)}" stroke="${color}" stroke-width="1.5"/><rect x="${x - bw / 2}" y="${Y(Math.max(o, c))}" width="${bw}" height="${Math.max(1.5, Y(Math.min(o, c)) - Y(Math.max(o, c)))}" fill="${color}"/></g>`;
+  }).join("")}</svg>`;
+}
+
+/* ---------- 背離 ----------
+   一般背離：價格創新高（低）、指標沒有 → 動能衰退，留意反轉。
+   隱藏背離：價格沒創新高（低）、指標卻創了 → 趨勢中的回檔，偏向延續。 */
+const DIV_IND = { rsi: "RSI", macd: "MACD", kd: "KD" };
+function divergences(D, I, ind = "rsi", mode = "regular", upto = D.length, w = 3) {
+  const S = ind === "rsi" ? I.rsi : ind === "macd" ? I.macd.dif : I.kd.K;
+  const { hi, lo } = pivots(D, w, upto), out = [];
+  const zone = (v, bear) => ind === "macd" ? (bear ? v > 0 : v < 0) : (bear ? v >= 55 : v <= 45);
+  const push = (a, b, bear, hidden, pa, pb) => {
+    const i = b + w; if (i >= upto) return;
+    out.push({ i, side: bear ? "sell" : "buy", label: (hidden ? "隱藏" : "") + (bear ? "頂背離" : "底背離"), hidden,
+      div: { ind, i1: a, i2: b, p1: pa, p2: pb, v1: S[a], v2: S[b] } });
+  };
+  const pairs = (list, f) => { for (let k = 1; k < list.length; k++) { const a = list[k - 1], b = list[k]; if (b - a < 5 || b - a > 45 || S[a] == null || S[b] == null) continue; f(a, b); } };
+  pairs(hi, (a, b) => {
+    if (mode !== "hidden" && D[b].h > D[a].h && S[b] < S[a] && zone(S[a], true)) push(a, b, true, false, D[a].h, D[b].h);
+    if (mode !== "regular" && D[b].h < D[a].h && S[b] > S[a]) push(a, b, true, true, D[a].h, D[b].h);
+  });
+  pairs(lo, (a, b) => {
+    if (mode !== "hidden" && D[b].l < D[a].l && S[b] > S[a] && zone(S[a], false)) push(a, b, false, false, D[a].l, D[b].l);
+    if (mode !== "regular" && D[b].l > D[a].l && S[b] < S[a]) push(a, b, false, true, D[a].l, D[b].l);
+  });
+  return out.sort((x, y) => x.i - y.i);
+}
 
 // 轉折點（左右各 w 根都比它低 / 高）→ 支撐壓力
 function pivots(D, w = 5, upto = D.length) {
@@ -603,6 +708,15 @@ function readout(D, I, i) {
     const squeeze = bw[i] <= Math.min(...win) * 1.1;
     out.push({ k: "布林", t: pb > 1 ? "收盤在上軌之外" : pb < 0 ? "收盤在下軌之外" : `位於通道 ${Math.round(pb * 100)}% 位置`, b: pb > 0.5 ? 1 : -1, x: squeeze ? "帶寬接近 60 日最窄，波動可能放大" : "" });
   }
+  for (let k = i; k >= Math.max(5, i - 2); k--) {
+    const id = detectPattern(D, k);
+    if (!id) continue;
+    const P = PATTERNS[id], ago = i - k;
+    out.push({ k: "K線", t: `${ago ? ago + " 根前" : "今天"}出現${P.name}`, b: P.side === "buy" ? 1 : P.side === "sell" ? -1 : 0, x: "型態要等隔天走勢確認" });
+    break;
+  }
+  const dv = ["rsi", "macd"].flatMap(ind => divergences(D, I, ind, "all", i + 1)).filter(m => m.i >= i - 8).sort((a, b) => b.i - a.i)[0];
+  if (dv) out.push({ k: "背離", t: `${DIV_IND[dv.div.ind]} ${dv.label}（${i - dv.i ? i - dv.i + " 根前" : "今天"}確認）`, b: dv.side === "buy" ? 1 : -1, x: dv.hidden ? "隱藏背離偏向原趨勢延續" : "動能衰退的警訊，要等價格確認" });
   if (I.vma[i - 1] && D[i].v) {
     const ratio = D[i].v / I.vma[i - 1], upDay = c >= D[i - 1].c;
     out.push({ k: "量能", t: `今日量為 20 日均量 ${ratio.toFixed(1)} 倍，${upDay ? "價漲" : "價跌"}${ratio > 1.2 ? "量增" : ratio < 0.8 ? "量縮" : "量平"}`, b: ratio > 1.2 ? (upDay ? 1 : -1) : 0 });
@@ -700,8 +814,13 @@ class Chart {
     }
     // 均線
     mas.forEach(m => this.line(m.a, vis, X, Y, m.c, 1.6));
+    // 背離連線：價格圖上連兩個轉折點，副圖顯示同一指標時也連起來
+    const divs = (o.markers || []).filter(m => m.div && m.i < vis);
+    const divLine = (x1, y1, x2, y2, c) => { ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); [[x1, y1], [x2, y2]].forEach(([a, b]) => { ctx.beginPath(); ctx.arc(a, b, 3, 0, Math.PI * 2); ctx.fill(); }); };
+    divs.forEach(m => divLine(X(m.div.i1), Y(m.div.p1), X(m.div.i2), Y(m.div.p2), m.side === "buy" ? col.up : col.down));
     // 標記
     const showLabels = o.labels !== false && bw >= 2.5;
+    const placed = [];
     (o.markers || []).filter(m => m.i < vis).forEach(m => {
       const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
       const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
@@ -709,7 +828,13 @@ class Chart {
       if (buy) { ctx.moveTo(x, y); ctx.lineTo(x - s, y + s * 1.5); ctx.lineTo(x + s, y + s * 1.5); }
       else { ctx.moveTo(x, y); ctx.lineTo(x - s, y - s * 1.5); ctx.lineTo(x + s, y - s * 1.5); }
       ctx.closePath(); ctx.fill();
-      if (showLabels && m.label) { ctx.font = `600 10.5px ${cssVar("--font-body")}`; ctx.textAlign = "center"; ctx.fillText(m.label, Math.min(Math.max(x, L + 24), L + pw - 24), buy ? y + s * 1.5 + 9 : y - s * 1.5 - 8); ctx.font = `11px ${cssVar("--font-mono")}`; }
+      if (showLabels && m.label) {
+        // 標籤互相重疊時只畫第一個（三角形照畫）
+        ctx.font = `600 10.5px ${cssVar("--font-body")}`; ctx.textAlign = "center";
+        const tx = Math.min(Math.max(x, L + 24), L + pw - 24), ty = buy ? y + s * 1.5 + 9 : y - s * 1.5 - 8, tw = ctx.measureText(m.label).width;
+        if (!placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 13)) { ctx.fillText(m.label, tx, ty); placed.push({ x: tx, y: ty, w: tw }); }
+        ctx.font = `11px ${cssVar("--font-mono")}`;
+      }
     });
 
     // 成交量
@@ -744,6 +869,8 @@ class Chart {
         ctx.globalAlpha = 1;
         this.line(dif, vis, X, sy, col.s1, 1.5); this.line(sig, vis, X, sy, col.s3, 1.5);
       }
+      const subY = o.sub === "macd" ? (() => { const { dif, sig, osc } = I.macd; let m = 0; for (let i = 0; i < vis; i++) if (dif[i] != null) m = Math.max(m, Math.abs(dif[i]), Math.abs(sig[i] ?? 0), Math.abs(osc[i] ?? 0)); m = m || 1; return v => subTop + subH / 2 - v / m * (subH / 2 - 4); })() : v => subTop + (100 - v) / 100 * subH;
+      divs.filter(m => m.div.ind === o.sub).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
       ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`;
       ctx.fillText({ rsi: "RSI 14", kd: "KD 9", macd: "MACD" }[o.sub], L + 4, subTop + 8); ctx.font = `11px ${cssVar("--font-mono")}`;
     }
@@ -812,22 +939,51 @@ const anatomySVG = `
 
 const LESSONS = [
   {
-    title: "K線：一根蠟燭記錄一天的戰況", tag: "價格", seed: 11, n: 110,
+    id: "kline", title: "K線：一根蠟燭記錄一天的戰況", tag: "價格", seed: 11, n: 110,
     body: `<p>一根 K 棒記錄一段時間（日 K 就是一天）的四個價格：<strong>開盤、最高、最低、收盤</strong>。實體是開盤到收盤的區間，兩端細線是影線。</p>${anatomySVG}
 <p>台股的慣例是<strong>紅漲綠跌</strong>：收盤高於開盤畫紅K，低於開盤畫綠K，和美股相反。</p>
 <ul>
 <li><strong>長紅 / 長黑</strong>：實體很長、影線很短，代表多方或空方整天掌控局面。</li>
 <li><strong>上影線</strong>：盤中曾漲上去又被賣壓壓回；<strong>下影線</strong>則是曾跌下去又被買盤撐起。</li>
 <li><strong>十字線</strong>：開盤 ≈ 收盤，多空拉鋸、方向未定，出現在一段漲跌之後要留意轉折。</li>
-<li><strong>錘子線</strong>：下跌後出現、下影線至少是實體兩倍，表示低檔有人承接。上漲後出現的反向型態叫<strong>流星線</strong>。</li>
-<li><strong>吞噬</strong>：今天的實體完全包住昨天相反顏色的實體，是常見的反轉訊號。</li>
-</ul>`,
+</ul>
+<p>把幾根 K 棒放在一起看，就成了「型態」。接下來兩課會介紹常見的反轉型態、持續型態與跳空缺口。</p>`,
     chart: { ma: [], markers: (D) => Signals.candle(D) },
     try: "把游標移到圖上的標記，對照上方的開高低收，看看型態長什麼樣子。",
     keys: ["實體看多空勝負，影線看盤中的拉鋸。", "單一 K 棒的意義要放在前面的走勢裡看：同樣的錘子線，出現在高檔與低檔意義不同。", "型態是提醒，不是保證；最好等隔天走勢確認。"],
   },
   {
-    title: "移動平均線：把雜訊抹平，看出方向", tag: "趨勢", seed: 24, n: 180,
+    id: "patterns-rev", title: "反轉型態：多空換手的瞬間", tag: "型態", seed: 1106, n: 160,
+    gallery: ["hammer", "hanging", "invHammer", "shooting", "doji", "bullEngulf", "bearEngulf", "bullHarami", "bearHarami", "piercing", "darkCloud", "morningStar", "eveningStar"],
+    body: `<p>單根 K 棒只反映一天的力量。把兩三根放在一起看，才看得出多空換手的過程。反轉型態要出現在<strong>一段明顯的漲勢或跌勢之後</strong>才有意義；在盤整區間中間出現，多半只是雜訊。</p>
+<p>下面每張卡片的淡色 K 棒是型態出現前的走勢，深色才是型態本身。點一下卡片，圖上就只標出那一種型態。</p>`,
+    after: `<p>判讀時注意三件事：</p>
+<ul>
+<li><strong>位置</strong>：底部型態要出現在跌深之後、靠近支撐；頂部型態要在漲多之後、靠近壓力。</li>
+<li><strong>確認</strong>：隔天的走勢延續型態方向（例如晨星之後再收一根紅K），可信度才高。</li>
+<li><strong>量能</strong>：反轉當天放量，代表換手積極。</li>
+</ul>`,
+    chart: { ma: [5, 20] },
+    try: "點選上方的型態卡片，只看那一種；再按「換一段走勢」多看幾個例子，數數看有幾次之後真的反轉。",
+    keys: ["同一個形狀，位置不同意義就不同：錘子線和吊人線長得一模一樣。", "兩根、三根的組合通常比單根可靠，因為它記錄了更完整的換手過程。", "型態失敗本身也是訊息：晨星之後又跌破最低點，往往會再跌一段。"],
+  },
+  {
+    id: "patterns-cont", title: "持續型態與跳空缺口：趨勢還有力氣嗎", tag: "型態", seed: 2010, n: 200,
+    gallery: ["soldiers", "crows", "gapUp", "gapDown"],
+    body: `<p>並不是每個型態都代表轉折。有些型態告訴你：<strong>原本的趨勢還很有力</strong>。</p>`,
+    after: `<p><strong>跳空缺口</strong>是今天和昨天的價格區間完全沒有重疊，留下一段沒有成交的空白。之後價格回到這段空白，叫做<strong>回補</strong>。台股老手常說「缺口不補，行情不止」。</p>
+<table><thead><tr><th>缺口種類</th><th>出現位置</th><th>特徵</th></tr></thead><tbody>
+<tr><td>普通缺口</td><td>盤整區間內</td><td>量不大，通常幾天內就回補，意義不大</td></tr>
+<tr><td>突破缺口</td><td>突破壓力或整理型態時</td><td>伴隨大量，不容易回補，常成為之後的支撐</td></tr>
+<tr><td>逃逸缺口</td><td>趨勢走到一半</td><td>又叫中繼缺口，代表趨勢加速</td></tr>
+<tr><td>竭盡缺口</td><td>趨勢末端</td><td>常爆量，但很快被回補，趨勢可能結束</td></tr>
+</tbody></table>`,
+    chart: { ma: [20] },
+    try: "點「向上跳空」，找找看哪些缺口在之後幾天被回補、哪些一直沒補；對照當時的位置判斷它比較像哪一種缺口。",
+    keys: ["紅三兵要看每根的上影線：上影線越來越長，代表追價力道變弱。", "向上缺口的下緣是支撐，被回補代表多方的急切已經消失。", "缺口種類要搭配位置和成交量判斷，事後才看得最清楚。"],
+  },
+  {
+    id: "ma", title: "移動平均線：把雜訊抹平，看出方向", tag: "趨勢", seed: 24, n: 180,
     body: `<p>移動平均線（MA）是最近 N 天收盤價的平均，每天往前滾動一格。</p>
 <div class="formula">MA20(今天) = 最近 20 個交易日收盤價加總 ÷ 20</div>
 <p>台股常用 <strong>5 日（週線）</strong>、<strong>20 日（月線）</strong>、<strong>60 日（季線）</strong>。月線也常被看作「近一個月買進者的平均成本」。</p>
@@ -842,7 +998,7 @@ const LESSONS = [
     keys: ["均線是落後指標：它告訴你已經發生的趨勢，不是預測未來。", "盤整時均線反覆交叉，訊號容易來回被巴（假訊號）。", "週期越短越靈敏、但雜訊越多；越長越穩、但反應越慢。"],
   },
   {
-    title: "成交量：價格的力道從哪裡來", tag: "量能", seed: 37, n: 150,
+    id: "vol", title: "成交量：價格的力道從哪裡來", tag: "量能", seed: 37, n: 150,
     body: `<p>成交量是當天成交的股數，台股以<strong>張</strong>計（1 張 = 1,000 股）。量代表參與的人數與資金，是判斷走勢「有沒有力」的依據。</p>
 <table><thead><tr><th>情境</th><th>常見解讀</th></tr></thead><tbody>
 <tr><td class="up">價漲量增</td><td>買盤積極追價，上漲較健康</td></tr>
@@ -856,7 +1012,7 @@ const LESSONS = [
     keys: ["量先價行：量能變化常比價格更早透露轉折。", "突破壓力時有量，比較可信；無量突破容易失敗。", "高檔爆量長黑、低檔爆量長紅，都值得特別留意。"],
   },
   {
-    title: "支撐與壓力：市場記得的價格", tag: "價格", seed: 52, n: 160, sr: true,
+    id: "sr", title: "支撐與壓力：市場記得的價格", tag: "價格", seed: 52, n: 160, sr: true,
     body: `<p>股價跌到某個價位就止跌，那裡是<strong>支撐</strong>；漲到某個價位就漲不上去，那裡是<strong>壓力</strong>。常見的支撐壓力來自：</p>
 <ul>
 <li><strong>前波高點與低點</strong>：在那裡套牢或錯過的人，會在價格回來時採取行動。</li>
@@ -869,7 +1025,7 @@ const LESSONS = [
     keys: ["支撐壓力是一個區間，不是精確到一檔的價格。", "被測試越多次、伴隨成交量越大的價位越有意義。", "「有效突破」通常要收盤站穩，最好配合量增。"],
   },
   {
-    title: "RSI：漲跌力道的溫度計", tag: "動能", seed: 68, n: 180, sub: "rsi",
+    id: "rsi", title: "RSI：漲跌力道的溫度計", tag: "動能", seed: 68, n: 180, sub: "rsi",
     body: `<p>RSI（相對強弱指標）比較一段期間內「上漲幅度」與「下跌幅度」的力量，數值落在 0 到 100 之間。常用 14 日。</p>
 <div class="formula">RS  = 平均漲幅 ÷ 平均跌幅（14 日，Wilder 平滑）
 RSI = 100 − 100 ÷ (1 + RS)</div>
@@ -884,7 +1040,7 @@ RSI = 100 − 100 ÷ (1 + RS)</div>
     keys: ["超買不等於要跌：強勢股的 RSI 可以長時間停在 70 以上，這叫指標鈍化。", "在趨勢盤，RSI 適合找「順勢回檔的買點」；在盤整盤，比較適合高出低進。", "背離是警訊，不是賣出指令，最好等價格本身轉弱再確認。"],
   },
   {
-    title: "KD 指標：收盤價在區間裡的位置", tag: "動能", seed: 81, n: 160, sub: "kd",
+    id: "kd", title: "KD 指標：收盤價在區間裡的位置", tag: "動能", seed: 81, n: 160, sub: "kd",
     body: `<p>KD（隨機指標）是台股最多人看的指標之一。它衡量今天的收盤價，落在最近 9 天最高與最低價區間的哪個位置。</p>
 <div class="formula">RSV = (今日收盤 − 9日最低) ÷ (9日最高 − 9日最低) × 100
 K   = 前日K × 2/3 + RSV × 1/3
@@ -899,7 +1055,7 @@ D   = 前日D × 2/3 + K × 1/3</div>
     keys: ["KD 反應快，適合短線；在大趨勢中容易過早出現反向訊號。", "高檔鈍化時不要急著放空，低檔鈍化時不要急著接刀。", "與均線方向搭配使用：順著均線方向的 KD 交叉較可靠。"],
   },
   {
-    title: "MACD：兩條均線的距離與動能", tag: "趨勢", seed: 93, n: 200, sub: "macd",
+    id: "macd", title: "MACD：兩條均線的距離與動能", tag: "趨勢", seed: 93, n: 200, sub: "macd",
     body: `<p>MACD 衡量快、慢兩條指數移動平均（EMA）之間的距離。距離擴大代表趨勢加速，縮小代表動能減弱。台股看盤軟體的命名如下：</p>
 <div class="formula">DIF  = EMA12 − EMA26        （快線）
 MACD = DIF 的 9 日 EMA         （訊號線、慢線）
@@ -914,7 +1070,7 @@ OSC  = DIF − MACD              （柱狀體）</div>
     keys: ["MACD 比 KD 慢、比較穩，適合判斷波段方向。", "盤整期 DIF 與 MACD 會黏在零軸附近反覆交叉，訊號價值低。", "柱狀體的變化比交叉更早，可以用來提前察覺動能轉變。"],
   },
   {
-    title: "布林通道：用統計畫出價格的活動範圍", tag: "波動", seed: 105, n: 180, boll: true,
+    id: "boll", title: "布林通道：用統計畫出價格的活動範圍", tag: "波動", seed: 105, n: 180, boll: true,
     body: `<p>布林通道以 20 日均線為中軌，上下各加減 2 個標準差。依常態分布的概念，大部分收盤價會落在通道之內。</p>
 <div class="formula">中軌 = MA20
 上軌 = MA20 + 2 × 標準差(20)
@@ -929,7 +1085,46 @@ OSC  = DIF − MACD              （柱狀體）</div>
     keys: ["碰到上軌不等於超買；要先判斷是盤整還是趨勢。", "收斂之後的突破方向，可以搭配成交量確認。", "中軌（月線）常是趨勢中的拉回支撐。"],
   },
   {
-    title: "訊號不是保證：成本、停損與紀律", tag: "風險", seed: 117, n: 220,
+    id: "div", title: "背離：價格和指標說不同的話", tag: "動能", seed: 3186, n: 200,
+    variants: [{ label: "RSI", sub: "rsi" }, { label: "MACD", sub: "macd" }, { label: "KD", sub: "kd" }],
+    body: `<p>背離是指價格和指標的走勢不一致。價格創新高，指標卻沒有跟著創新高，代表「漲是漲了，但力道變小了」。</p>
+<table><thead><tr><th>類型</th><th>價格</th><th>指標</th><th>意義</th></tr></thead><tbody>
+<tr><td class="down">頂背離</td><td>高點更高</td><td>高點更低</td><td>上漲動能衰退，留意轉弱</td></tr>
+<tr><td class="up">底背離</td><td>低點更低</td><td>低點更高</td><td>下跌動能衰退，留意止跌</td></tr>
+</tbody></table>
+<p>找背離的步驟：</p>
+<ul>
+<li>找出最近兩個轉折高點（或兩個轉折低點）。</li>
+<li>比較兩個點的價格高低。</li>
+<li>比較同一天的指標數值。方向相反就是背離。</li>
+<li>等價格確認，例如跌破上升趨勢線，或出現反轉 K 線型態。</li>
+</ul>
+<p>圖上的轉折點是「左右各 3 根 K 棒都比它低（或高）」的點，所以第二個轉折點出現後，<strong>還要再等 3 根 K 棒才能確認</strong>。三角形標記畫在確認那天，不是轉折點當天。實際交易也一樣：背離總是事後幾天才看得出來。</p>`,
+    chart: { ma: [20] },
+    try: "切換 RSI、MACD、KD，比較同一段走勢裡哪個指標抓到的背離比較多，以及背離之後價格是否真的轉向。",
+    keys: ["背離可能連續出現兩三次，價格才真正轉向，這叫多重背離。", "強勢趨勢中的背離很常失敗，不要一看到就反向操作。", "背離是警訊不是訊號，要搭配 K 線型態、支撐壓力確認。"],
+  },
+  {
+    id: "div-hidden", title: "隱藏背離與背離的陷阱", tag: "動能", seed: 4256, n: 200, hidden: true,
+    variants: [{ label: "RSI", sub: "rsi" }, { label: "MACD", sub: "macd" }],
+    body: `<p>隱藏背離和一般背離的方向相反，它暗示的是<strong>趨勢延續</strong>，常用來找順勢的進場點。</p>
+<table><thead><tr><th>類型</th><th>價格</th><th>指標</th><th>意義</th></tr></thead><tbody>
+<tr><td class="up">隱藏底背離</td><td>低點墊高</td><td>低點更低</td><td>上升趨勢中的拉回接近結束，可能續漲</td></tr>
+<tr><td class="down">隱藏頂背離</td><td>高點降低</td><td>高點更高</td><td>下降趨勢中的反彈接近結束，可能續跌</td></tr>
+</tbody></table>
+<p>使用背離時常見的陷阱：</p>
+<ul>
+<li><strong>轉折點的選擇很主觀</strong>：換個轉折點寬度、換個指標參數，結果就不一樣。</li>
+<li><strong>背離不告訴你時間</strong>：價格可能在背離後又漲了好一段才回頭。</li>
+<li><strong>盤整時背離特別多</strong>：上下震盪的走勢會不斷製造假背離。</li>
+<li><strong>先看大趨勢</strong>：月線向上時只看隱藏底背離與一般底背離，比較不容易逆勢。</li>
+</ul>`,
+    chart: { ma: [20] },
+    try: "觀察標記出現時，月線（MA20）是往哪個方向走。順著月線方向的隱藏背離，之後的表現是否比較好？",
+    keys: ["一般背離找可能的反轉，隱藏背離找順勢的回檔買點或反彈賣點。", "先判斷大趨勢，再決定要看哪一種背離。", "任何背離都要設好停損，因為背離失敗時價格往往走得又快又遠。"],
+  },
+  {
+    id: "risk", title: "訊號不是保證：成本、停損與紀律", tag: "風險", seed: 117, n: 220,
     body: `<p>每個指標都會出錯，技術分析真正的價值在於<strong>提高勝算、控制虧損</strong>。實際交易還要算上成本：</p>
 <table><thead><tr><th>項目</th><th>費率</th><th>說明</th></tr></thead><tbody>
 <tr><td>券商手續費</td><td class="num">0.1425%</td><td>買進、賣出各收一次（實際常有折扣）</td></tr>
@@ -949,31 +1144,66 @@ OSC  = DIF − MACD              （柱狀體）</div>
 ];
 
 /* ================= 課程頁 ================= */
-const done = new Set(store.get("done", []));
-let lessonIdx = Math.min(store.get("lesson", 0), LESSONS.length - 1);
+const OLD_IDS = ["kline", "ma", "vol", "sr", "rsi", "kd", "macd", "boll", "risk"]; // 舊版以順序記錄進度
+const done = new Set(store.get("doneIds", null) || store.get("done", []).map(i => OLD_IDS[i]).filter(Boolean));
+const lessonIndex = id => LESSONS.findIndex(l => l.id === id);
+let lessonIdx = Math.max(0, lessonIndex(store.get("lessonId", "kline")));
+let lessonView = { seedOff: 0, variant: 0, pat: null, D: null, I: null };
 const lessonChart = new Chart($("#lessonChart"));
 function updateProgress() { $("#progChip").textContent = `已完成 ${done.size} / ${LESSONS.length} 課`; }
 function renderLessonList() {
-  $("#lessonList").innerHTML = LESSONS.map((l, i) => `<button data-i="${i}" aria-current="${i === lessonIdx}"><span class="n">${String(i + 1).padStart(2, "0")}</span><span>${l.title.split("：")[0]}</span><span class="done">${done.has(i) ? "●" : ""}</span></button>`).join("");
+  $("#lessonList").innerHTML = LESSONS.map((l, i) => `<button data-i="${i}" aria-current="${i === lessonIdx}"><span class="n">${String(i + 1).padStart(2, "0")}</span><span>${l.title.split("：")[0]}</span><span class="done">${done.has(l.id) ? "●" : ""}</span></button>`).join("");
+}
+function lessonMarkers(L, D, I, v) {
+  if (L.gallery) return Signals.candle(D, I, L.gallery);
+  if (L.variants) return Signals.div(D, I, v.sub, L.hidden ? "hidden" : "regular");
+  return L.chart.markers(D, I);
+}
+function drawLesson() {
+  const L = LESSONS[lessonIdx], v = L.variants ? L.variants[lessonView.variant] : {}, { D, I } = lessonView;
+  const all = lessonMarkers(L, D, I, v), markers = lessonView.pat ? all.filter(m => m.pat === lessonView.pat) : all;
+  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, sub: v.sub || L.chart.sub, markers, hlines: L.sr ? srLevels(D) : [] });
+  const g = $("#lessonGallery");
+  g.hidden = !L.gallery;
+  if (L.gallery) g.innerHTML = L.gallery.map(id => {
+    const P = PATTERNS[id], cnt = all.filter(m => m.pat === id).length;
+    return `<button class="pcard" data-pat="${id}" aria-pressed="${lessonView.pat === id}">${patternSVG(id)}<span class="pname">${P.name}<span class="pill ${P.side === "buy" ? "bull" : P.side === "sell" ? "bear" : "flat"}">${P.side === "buy" ? "偏多" : P.side === "sell" ? "偏空" : "轉折"}</span></span><span class="pdesc">${P.desc}</span><span class="pcount">${cnt ? `圖中出現 ${cnt} 次` : "這段走勢沒有出現"}</span></button>`;
+  }).join("");
+  const seg = L.variants ? `<div class="seg" role="group" aria-label="背離指標">${L.variants.map((x, k) => `<button data-variant="${k}" aria-pressed="${k === lessonView.variant}">${x.label}</button>`).join("")}</div>` : "";
+  const what = lessonView.pat ? `「${PATTERNS[lessonView.pat].name}」` : L.variants ? `${v.label} 背離` : "";
+  $("#lessonTools").innerHTML = `${seg}<span class="note">${what ? `${what}：圖中找到 ${markers.length} 次` : ""}</span><span style="flex:1"></span>${lessonView.pat ? `<button class="btn" data-clear>顯示全部型態</button>` : ""}<button class="btn" data-reseed>換一段走勢</button>`;
+}
+function loadLessonData() {
+  const L = LESSONS[lessonIdx];
+  lessonView.D = genSeries(L.seed + lessonView.seedOff * 7919, L.n); lessonView.I = indicators(lessonView.D);
 }
 function showLesson(i) {
-  lessonIdx = i; store.set("lesson", i);
+  lessonIdx = i; store.set("lessonId", LESSONS[i].id);
+  lessonView = { seedOff: 0, variant: 0, pat: null };
   const L = LESSONS[i];
   $("#lessonEyebrow").textContent = `第 ${i + 1} 課 · ${L.tag}`;
   $("#lessonTitle").textContent = L.title;
   $("#lessonBody").innerHTML = L.body;
+  $("#lessonAfter").innerHTML = L.after || ""; $("#lessonAfter").hidden = !L.after;
   $("#lessonTry").innerHTML = `<b>試試看</b><span>${L.try}</span>`;
   $("#lessonKeys").innerHTML = `<h3>重點整理</h3><ul>${L.keys.map(k => `<li>${k}</li>`).join("")}</ul>`;
-  const D = genSeries(L.seed, L.n), I = indicators(D);
-  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, sub: L.chart.sub, markers: L.chart.markers(D, I), hlines: L.sr ? srLevels(D) : [] });
+  loadLessonData(); drawLesson();
   $("#lessonPrev").disabled = i === 0;
   $("#lessonNext").textContent = i === LESSONS.length - 1 ? "完成課程，去做測驗 →" : "完成本課，下一課 →";
   renderLessonList();
 }
+$("#lessonGallery").addEventListener("click", e => { const b = e.target.closest("[data-pat]"); if (!b) return; lessonView.pat = lessonView.pat === b.dataset.pat ? null : b.dataset.pat; drawLesson(); });
+$("#lessonTools").addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.variant != null) lessonView.variant = +t.dataset.variant;
+  else if (t.hasAttribute("data-clear")) lessonView.pat = null;
+  else if (t.hasAttribute("data-reseed")) { lessonView.seedOff++; loadLessonData(); }
+  drawLesson();
+});
 $("#lessonList").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { showLesson(+b.dataset.i); window.scrollTo({ top: 0 }); } });
 $("#lessonPrev").addEventListener("click", () => { showLesson(lessonIdx - 1); window.scrollTo({ top: 0 }); });
 $("#lessonNext").addEventListener("click", () => {
-  done.add(lessonIdx); store.set("done", [...done]); updateProgress();
+  done.add(LESSONS[lessonIdx].id); store.set("doneIds", [...done]); updateProgress();
   if (lessonIdx < LESSONS.length - 1) { showLesson(lessonIdx + 1); window.scrollTo({ top: 0 }); } else { renderLessonList(); switchTab("quiz"); }
 });
 
@@ -985,7 +1215,9 @@ const STRATS = {
   kd: { name: "KD 低檔金叉 / 高檔死叉", fn: Signals.kd },
   macd: { name: "MACD 交叉", fn: Signals.macd },
   boll: { name: "布林：破下軌買、破上軌賣", fn: Signals.boll },
-  candle: { name: "K線型態（錘子、吞噬…）", fn: Signals.candle },
+  candle: { name: "K線型態（錘子、吞噬、晨星…）", fn: (D, I) => Signals.candle(D, I) },
+  divRsi: { name: "RSI 背離（一般背離）", fn: (D, I) => Signals.div(D, I, "rsi") },
+  divMacd: { name: "MACD 背離（一般背離）", fn: (D, I) => Signals.div(D, I, "macd") },
 };
 let lab = { seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma") };
 const labChart = new Chart($("#labChart"), { onHover: i => { if (!lab.D) return; $("#roDate").textContent = lab.D[i].d.replace(/-/g, "/"); renderReadout($("#labReadout"), readout(lab.D, lab.I, i)); } });
@@ -1076,11 +1308,18 @@ const QUESTIONS = [
   { q: "指標「鈍化」是指？", o: ["指標計算錯誤", "指標長時間停在超買或超賣區，價格卻持續同方向走", "成交量為零", "均線呈水平"], a: 1, e: "例如 K 值連續多天在 80 以上而股價繼續漲，就是高檔鈍化，此時用「超買就賣」會出錯。" },
   { q: "股價創新高，但 RSI 沒有跟著創新高，這稱為？", o: ["黃金交叉", "頂背離", "底背離", "多頭排列"], a: 1, e: "價格創高、指標沒創高是頂背離，代表上漲力道在減弱，是轉弱的警訊。" },
   { q: "在台股賣出一般股票時，需繳交的證券交易稅稅率是？", o: ["0.1425%", "0.3%", "1%", "免稅"], a: 1, e: "一般股票賣出課 0.3% 證交稅（當沖減半）；0.1425% 是券商手續費上限，買賣都要付。" },
+  { q: "「晨星」型態由幾根 K 棒組成？通常出現在什麼位置？", o: ["一根，出現在高檔", "兩根，出現在盤整中", "三根，出現在一段下跌之後", "五根，出現在任何位置"], a: 2, e: "晨星是長綠K、小實體星線、長紅K三根組成，出現在下跌之後，代表由空轉多的換手。對應的頂部型態叫夜星。" },
+  { q: "錘子線和吊人線的形狀幾乎一樣，兩者差在哪裡？", o: ["顏色不同", "出現的位置：錘子線在下跌後，吊人線在上漲後", "成交量不同", "沒有差別"], a: 1, e: "兩者都是小實體加長下影線。出現在跌勢末端叫錘子線（偏多），出現在漲勢末端叫吊人線（偏空）。位置決定意義。" },
+  { q: "上漲一段後，出現一根開高走低、收盤跌進前一根紅K實體一半以下的綠K，這叫？", o: ["貫穿線", "烏雲罩頂", "多頭母子", "紅三兵"], a: 1, e: "烏雲罩頂是頂部反轉型態；它的相反型態是出現在下跌後的貫穿線。" },
+  { q: "向上跳空缺口在幾天後被價格跌回並完全填滿，通常代表？", o: ["多方急切的力道已經消失", "漲勢一定會加速", "成交量會放大", "缺口沒有任何意義"], a: 0, e: "向上缺口代表買盤急切。缺口被回補，表示那股急切已經不見了，缺口下緣原本的支撐也失效。" },
+  { q: "價格創了新低，但 RSI 的低點比前一次高，這稱為？", o: ["頂背離", "底背離", "隱藏頂背離", "多頭排列"], a: 1, e: "價格低點更低、指標低點更高是底背離，代表下跌動能在減弱，是可能止跌的警訊。" },
+  { q: "上升趨勢中，價格的回檔低點墊高，RSI 的低點卻更低，這通常解讀為？", o: ["趨勢即將反轉向下", "隱藏底背離，偏向上升趨勢延續", "頂背離", "指標失效"], a: 1, e: "這是隱藏底背離：指標顯示回檔時的賣壓看似很重，價格卻守住更高的低點，常是順勢回檔的結束。" },
+  { q: "為什麼背離通常要在第二個轉折點之後幾天才能確認？", o: ["因為指標計算比較慢", "因為要等右側的 K 棒，才能確定那一點真的是轉折高點或低點", "因為交易所延遲公布資料", "因為需要等成交量放大"], a: 1, e: "轉折點的定義需要它右邊的 K 棒都沒有超過它。這幾天的等待是無法避免的，所以背離永遠是事後才看得出來。" },
   { q: "關於技術指標，下列敘述何者最正確？", o: ["找到對的指標就能穩定獲利", "指標越多越準", "指標是提高勝算的工具，仍需搭配停損與資金控管", "只要回測賺錢，未來一定賺錢"], a: 2, e: "沒有指標能保證獲利。技術分析的價值在於有規則地進出、控制虧損。" },
 ];
 let quiz = null;
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-function quizStart() { quiz = { order: shuffle(QUESTIONS.map((_, i) => i)), k: 0, score: 0, picked: null }; quizRender(); }
+function quizStart() { quiz = { order: shuffle(QUESTIONS.map((_, i) => i)).slice(0, 12), k: 0, score: 0, picked: null }; quizRender(); }
 function quizRender() {
   const el = $("#quiz"), N = quiz.order.length;
   if (quiz.k >= N) {
@@ -1227,7 +1466,7 @@ function drawShot() {
 }
 const normRect = d => ({ x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0) });
 
-const LESSON_OF = { 均線: 1, 月線: 1, RSI: 4, KD: 5, MACD: 6, 布林: 7 };
+const LESSON_OF = { 均線: "ma", 月線: "ma", RSI: "rsi", KD: "kd", MACD: "macd", 布林: "boll", K線: "patterns-rev", 背離: "div" };
 function shotSummary(D, I, cal) {
   const n = D.length, i = n - 1, items = readout(D, I, i);
   const bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length;
@@ -1242,18 +1481,18 @@ function shotSummary(D, I, cal) {
   const sr = srLevels(D);
   const lean = bull - bear >= 2 ? 1 : bear - bull >= 2 ? -1 : 0;
   const lines = [`<li><strong>趨勢</strong>：${trend}</li>`];
-  items.forEach(x => lines.push(`<li><strong>${x.k}</strong>：${x.t}${x.x ? `（${x.x}）` : ""}</li>`));
+  items.filter(x => x.k !== "K線").forEach(x => lines.push(`<li><strong>${x.k}</strong>：${x.t}${x.x ? `（${x.x}）` : ""}</li>`));
   lines.push(`<li><strong>近期 K 線型態</strong>：${pats.length ? pats.map(p => `${p.label}（倒數第 ${n - p.i} 根）`).join("、") : "最近 10 根沒有明顯的反轉型態"}</li>`);
   if (sr.length) lines.push(`<li><strong>支撐 / 壓力</strong>：${sr.map(s => `${s.kind} ${cal ? fmtP(s.price) : "約在圖中第 " + (s.i + 1) + " 根的" + (s.kind === "壓力" ? "高點" : "低點")}`).join("、")}</li>`);
   const review = [...new Set(items.map(x => LESSON_OF[x.k]).filter(x => x != null))];
-  if (pats.length) review.unshift(0);
-  if (sr.length) review.push(3);
+  if (pats.length) review.unshift("patterns-rev");
+  if (sr.length) review.push("sr");
   const leanTxt = lean > 0 ? "整體偏多" : lean < 0 ? "整體偏空" : "多空分歧";
   shot.ctx = `偵測到 ${n} 根 K 棒${cal ? "（已依使用者輸入校正價格）" : "（未校正價格，數值為相對值）"}。${leanTxt}：${bull} 項偏多、${bear} 項偏空。\n` + lines.map(l => l.replace(/<[^>]+>/g, "")).join("\n");
   return `<div class="lean ${lean > 0 ? "up" : lean < 0 ? "down" : ""}">${leanTxt}</div>
     <p>找到 ${n} 根 K 棒，以最後一根為基準：${bull} 項指標偏多、${bear} 項偏空。${lean === 0 ? "訊號互相矛盾時，通常代表方向還不明確。" : ""}</p>
     <ul>${lines.join("")}</ul>
-    <p class="note">複習相關課程：${[...new Set(review)].map(k => `<button class="linkbtn" data-lesson="${k}">${LESSONS[k].title.split("：")[0]}</button>`).join("、")}</p>
+    <p class="note">複習相關課程：${[...new Set(review)].map(id => `<button class="linkbtn" data-lesson="${lessonIndex(id)}">${LESSONS[lessonIndex(id)].title.split("：")[0]}</button>`).join("、")}</p>
     <p class="note">${cal ? "" : "沒有輸入價格校正，所以只顯示相對位置；填上圖中最高與最低價，就會換算成實際價位。"}截圖辨識可能有誤差，成交量也無法從圖中讀出，請對照截圖上的偵測框，確認每根 K 棒都有抓到。這是學習用的讀圖練習，不構成投資建議。</p>`;
 }
 
