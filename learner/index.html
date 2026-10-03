@@ -205,6 +205,30 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; ba
 .opts button:disabled { cursor: default; color: var(--ink); }
 .explain { background: var(--surface-2); border-radius: 8px; padding: 12px 14px; font-size: 14.5px; }
 
+/* ---------- screenshot ---------- */
+.shot-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 14px; margin-bottom: 14px; }
+.drop { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 18px; border-style: dashed; border-width: 2px; cursor: pointer; text-align: center; }
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shot-opts { justify-content: center; }
+.shot-opts input[type="number"] { width: 84px; }
+.shot-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.shot-src { overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
+.shot-src-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; padding: 12px 14px 0; }
+#shotCanvas { display: block; width: 100%; touch-action: none; cursor: crosshair; background: var(--surface-2); }
+.shot-summary { display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; }
+.shot-summary p { margin: 0; }
+.shot-summary .lean { font-family: var(--font-display); font-size: 22px; font-weight: 900; }
+.shot-summary ul { margin: 0; padding-left: 1.2em; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; font-size: inherit; }
+.ai { margin-top: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.ai-out { max-width: 75ch; font-size: 15px; }
+.ai-out h4 { margin: 14px 0 4px; font-size: 15px; color: var(--accent); }
+.ai-out p { margin: 0 0 8px; }
+.ai-out ul { margin: 0 0 8px; padding-left: 1.2em; }
+@media (max-width: 900px) { .shot-top, .shot-grid { grid-template-columns: minmax(0, 1fr); } }
+
 footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.5px; color: var(--muted); }
 
 @media (max-width: 900px) {
@@ -228,6 +252,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <button role="tab" data-tab="learn" id="tab-btn-learn">課程</button>
       <button role="tab" data-tab="lab" id="tab-btn-lab">圖表實驗室</button>
       <button role="tab" data-tab="challenge" id="tab-btn-challenge">判讀挑戰</button>
+      <button role="tab" data-tab="shot" id="tab-btn-shot">截圖判讀</button>
       <button role="tab" data-tab="quiz" id="tab-btn-quiz">觀念測驗</button>
     </nav>
     <span class="chip" id="progChip">已完成 0 / 9 課</span>
@@ -319,6 +344,60 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       </div>
       <div class="verdict" id="chHintBox" hidden></div>
       <div class="verdict" id="chResult" hidden></div>
+    </div>
+  </section>
+
+  <!-- 截圖判讀 -->
+  <section id="view-shot" role="tabpanel" hidden>
+    <div class="chal-head">
+      <div>
+        <div class="eyebrow">SCREENSHOT</div>
+        <h2>上傳 K 線截圖，一起讀圖</h2>
+        <p class="note" style="margin:6px 0 0; max-width: 62ch">把看盤軟體的 K 線圖截下來丟進來。程式會在你的瀏覽器裡找出每一根 K 棒、重算均線與 KD、RSI、MACD，再告訴你這張圖在講什麼。圖片不會上傳，除非你按下「請 Claude 解讀」。</p>
+      </div>
+    </div>
+    <div class="shot-top">
+      <label class="drop panel" id="shotDrop" for="shotFile">
+        <input type="file" id="shotFile" accept="image/png,image/jpeg,image/webp,image/gif">
+        <strong>選擇截圖</strong><span class="note">或拖曳到這裡、直接貼上（Ctrl / ⌘ + V）</span>
+      </label>
+      <div class="panel ctrl shot-opts">
+        <div class="row">
+          <label>顏色慣例 <select id="shotConv"><option value="tw">台股：紅漲綠跌</option><option value="us">美股：綠漲紅跌</option></select></label>
+          <button class="btn" id="shotSample">載入範例截圖</button>
+        </div>
+        <div class="row note">價格校正（選填）：圖中最高點 <input type="number" id="shotHi" step="any" placeholder="例 612"> 最低點 <input type="number" id="shotLo" step="any" placeholder="例 548"></div>
+      </div>
+    </div>
+    <div class="shot-grid">
+      <div class="panel shot-src">
+        <div class="shot-src-head"><h3 style="margin:0">辨識結果</h3><span class="note" id="shotInfo"></span></div>
+        <canvas id="shotCanvas" aria-label="截圖與偵測到的 K 棒"></canvas>
+        <div class="row note" style="padding: 0 14px 12px">在圖上拖曳可以框選 K 線區域重新辨識。<button class="btn" id="shotReset" hidden>改回自動偵測</button></div>
+      </div>
+      <div class="panel ctrl">
+        <h3>這張圖在講什麼</h3>
+        <div id="shotSummary" class="shot-summary"></div>
+      </div>
+    </div>
+    <div class="panel" id="shotRebuild" style="margin-top:18px">
+      <div class="chal-bar" style="border-top:0; border-bottom:1px solid var(--line)">
+        <strong style="font-size:14px">重建的 K 線</strong>
+        <label class="row" style="gap:6px"><input type="checkbox" id="shMA" checked>均線 5 / 20</label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="shBoll">布林</label>
+        <select id="shSub" aria-label="副圖"><option value="">無副圖</option><option value="rsi">RSI</option><option value="kd" selected>KD</option><option value="macd">MACD</option></select>
+        <span class="note">游標移到 K 棒上可看當天判讀</span>
+      </div>
+      <div class="chartbox" id="shotChart"></div>
+      <div class="verdict"><h3 style="margin:0">游標所在 K 棒的指標</h3><div id="shotRo"></div></div>
+    </div>
+    <div class="panel ai" id="aiPanel">
+      <div class="row" style="justify-content:space-between">
+        <div><div class="eyebrow">AI</div><h3 style="margin:0">請 Claude 看圖解說</h3></div>
+        <div class="row"><button class="btn primary" id="aiAsk">請 Claude 解讀</button><button class="btn" id="aiStop" hidden>停止</button></div>
+      </div>
+      <p class="note" style="margin:0" id="aiNote">Claude 會直接看你的截圖，連圖上的文字、指標設定一起解讀，並用教學的方式說明。這會把截圖送出。</p>
+      <div class="ai-out" id="aiOut" hidden></div>
     </div>
   </section>
 
@@ -524,7 +603,7 @@ function readout(D, I, i) {
     const squeeze = bw[i] <= Math.min(...win) * 1.1;
     out.push({ k: "布林", t: pb > 1 ? "收盤在上軌之外" : pb < 0 ? "收盤在下軌之外" : `位於通道 ${Math.round(pb * 100)}% 位置`, b: pb > 0.5 ? 1 : -1, x: squeeze ? "帶寬接近 60 日最窄，波動可能放大" : "" });
   }
-  if (I.vma[i - 1] != null) {
+  if (I.vma[i - 1] && D[i].v) {
     const ratio = D[i].v / I.vma[i - 1], upDay = c >= D[i - 1].c;
     out.push({ k: "量能", t: `今日量為 20 日均量 ${ratio.toFixed(1)} 倍，${upDay ? "價漲" : "價跌"}${ratio > 1.2 ? "量增" : ratio < 0.8 ? "量縮" : "量平"}`, b: ratio > 1.2 ? (upDay ? 1 : -1) : 0 });
   }
@@ -558,7 +637,7 @@ class Chart {
     const { D, I, o } = this, ctx = this.ctx, dpr = window.devicePixelRatio || 1;
     const W = this.host.clientWidth; if (!W) return;
     const narrow = W < 560;
-    const mainH = narrow ? 230 : 300, volH = narrow ? 52 : 66, subH = o.sub ? (narrow ? 92 : 112) : 0, gap = 10, axisH = 20;
+    const mainH = narrow ? 230 : 300, volH = o.noVol ? 0 : narrow ? 52 : 66, subH = o.sub ? (narrow ? 92 : 112) : 0, gap = 10, axisH = 20;
     const H = mainH + gap + volH + (subH ? gap + subH : 0) + axisH + 8;
     this.canvas.width = W * dpr; this.canvas.height = H * dpr; this.canvas.style.height = H + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
@@ -566,7 +645,8 @@ class Chart {
     const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R, bw = pw / n;
     this.geo = { L, bw };
     const X = i => L + bw * (i + 0.5);
-    const top0 = 8, volTop = top0 + mainH + gap, subTop = volTop + volH + gap;
+    const top0 = 8, volTop = top0 + mainH + gap, subTop = o.noVol ? volTop : volTop + volH + gap;
+    const fmtD = o.fmtD || (s => s.slice(5).replace("-", "/"));
     const mas = (o.ma || []).map((n, k) => ({ n, a: I.ma(n), c: [col.s1, col.s2, col.s3][k % 3] }));
 
     // 價格範圍
@@ -633,6 +713,7 @@ class Chart {
     });
 
     // 成交量
+    if (!o.noVol) {
     let vmax = 0; for (let i = 0; i < vis; i++) vmax = Math.max(vmax, D[i].v);
     ctx.globalAlpha = 0.6;
     for (let i = 0; i < vis; i++) { const k = D[i]; ctx.fillStyle = k.c >= k.o ? col.up : col.down; const h = k.v / vmax * (volH - 4); ctx.fillRect(Math.round(X(i) - cw / 2), volTop + volH - h, Math.max(1, Math.round(cw)), h); }
@@ -640,6 +721,7 @@ class Chart {
     this.line(I.vma, vis, X, v => volTop + volH - v / vmax * (volH - 4), col.muted, 1);
     ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`; ctx.fillText("量（張）", L + pw + 6, volTop + 6); ctx.font = `11px ${cssVar("--font-mono")}`;
     ctx.strokeStyle = col.line; ctx.beginPath(); ctx.moveTo(L, volTop - gap / 2); ctx.lineTo(L + pw, volTop - gap / 2); ctx.stroke();
+    }
 
     // 副圖
     if (o.sub) {
@@ -669,7 +751,7 @@ class Chart {
     // 日期軸
     const axY = H - axisH / 2 - 4, every = Math.max(1, Math.ceil(64 / bw));
     ctx.fillStyle = col.muted; ctx.textAlign = "center";
-    for (let i = 0; i < n; i += every) { if (i >= vis && !o.cutoff) continue; ctx.fillText(D[i].d.slice(5).replace("-", "/"), Math.min(Math.max(X(i), L + 18), L + pw - 18), axY); }
+    for (let i = 0; i < n; i += every) { if (i >= vis && !o.cutoff) continue; ctx.fillText(fmtD(D[i].d), Math.min(Math.max(X(i), L + 18), L + pw - 18), axY); }
 
     // 十字線
     const hi_ = this.hover;
@@ -694,8 +776,8 @@ class Chart {
       `<span><b>${k.d.replace(/-/g, "/")}</b></span>`,
       `<span><b>開</b>${fmtP(k.o)}</span>`, `<span><b>高</b>${fmtP(k.h)}</span>`, `<span><b>低</b>${fmtP(k.l)}</span>`,
       `<span class="${cls}"><b>收</b>${fmtP(k.c)} ${prev ? fmtPct(ch) : ""}</span>`,
-      `<span><b>量</b>${k.v.toLocaleString()}</span>`,
-    ];
+      ];
+    if (!o.noVol) parts.push(`<span><b>量</b>${k.v.toLocaleString()}</span>`);
     mas.forEach(m => parts.push(`<span style="color:${m.c}"><b style="color:inherit">MA${m.n}</b>${fmtP(m.a[i])}</span>`));
     if (o.boll) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
     if (o.sub === "rsi") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">RSI</b>${fmtN(I.rsi[i])}</span>`);
@@ -1023,8 +1105,333 @@ function quizRender() {
   if (ans) $("#qNext").addEventListener("click", () => { quiz.k++; quiz.picked = null; quizRender(); });
 }
 
+/* ================= 截圖判讀 =================
+   在瀏覽器內辨識截圖中的 K 棒：依顏色找出紅 / 綠像素，
+   以「欄」切出每一根 K 棒，再從實體與影線的上下緣還原開高低收。
+   RSI、KD、MACD、均線交叉都只和價格的相對變化有關，所以就算沒有價格刻度，判讀結果也成立。 */
+const shot = { img: null, file: null, url: null, crop: null, res: null, D: null, I: null, drag: null, ctx: "" };
+const shotChart = new Chart($("#shotChart"), { onHover: i => { if (shot.D) renderReadout($("#shotRo"), readout(shot.D, shot.I, i), true); } });
+
+// 0 = 其他、1 = 紅、2 = 綠
+function hueClass(r, g, b) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (d < 45 || mx < 70) return 0;
+  let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h *= 60; if (h < 0) h += 360;
+  if (h <= 22 || h >= 335) return 1;
+  if (h >= 85 && h <= 175) return 2;
+  return 0;
+}
+function extractCandles(img, crop, conv) {
+  const scale = Math.min(1, 2000 / img.naturalWidth);
+  const W0 = Math.round(img.naturalWidth * scale), H0 = Math.round(img.naturalHeight * scale);
+  const cv = document.createElement("canvas"); cv.width = W0; cv.height = H0;
+  const cx = cv.getContext("2d", { willReadFrequently: true }); cx.drawImage(img, 0, 0, W0, H0);
+  const rx = crop ? Math.max(0, Math.round(crop.x * scale)) : 0, ry = crop ? Math.max(0, Math.round(crop.y * scale)) : 0;
+  const W = crop ? Math.min(W0 - rx, Math.round(crop.w * scale)) : W0, H = crop ? Math.min(H0 - ry, Math.round(crop.h * scale)) : H0;
+  const px = cx.getImageData(rx, ry, W, H).data, m = new Uint8Array(W * H), upCode = conv === "us" ? 2 : 1;
+  for (let i = 0; i < W * H; i++) { const k = hueClass(px[i * 4], px[i * 4 + 1], px[i * 4 + 2]); m[i] = k === 0 ? 0 : k === upCode ? 1 : 2; }
+  // 去掉橫向的價格線、格線（同一列有色像素超過四成）
+  const rowCnt = new Uint32Array(H);
+  for (let y = 0; y < H; y++) { let c = 0; for (let x = 0; x < W; x++) if (m[y * W + x]) c++; if (c > W * 0.45) { m.fill(0, y * W, y * W + W); c = 0; } rowCnt[y] = c; }
+  // 自動找價格區：上下以空白列分隔成數個區塊，取最高的一塊（通常成交量區比較矮）
+  let y0 = 0, y1 = H - 1;
+  if (!crop) {
+    const gap = Math.max(4, Math.round(H * 0.012)), bands = []; let s = -1, last = -1;
+    for (let y = 0; y < H; y++) if (rowCnt[y]) { if (s < 0 || y - last > gap) { if (s >= 0) bands.push([s, last]); s = y; } last = y; }
+    if (s >= 0) bands.push([s, last]);
+    if (bands.length) [y0, y1] = bands.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
+  }
+  const col = new Uint32Array(W);
+  for (let y = y0; y <= y1; y++) for (let x = 0; x < W; x++) if (m[y * W + x]) col[x]++;
+  let runs = [];
+  for (let x = 0; x < W; x++) if (col[x]) { const a = x; let t = 0; while (x < W && col[x]) t += col[x++]; if (t >= 3) runs.push([a, x - 1]); }
+  // 密集的圖上相鄰 K 棒會黏在一起：用「K 棒間距」把黏住的區塊切開。
+  // 相鄰中心距離的低分位數就是間距（黏在一起的區塊只會讓距離變大）。
+  const diffs = runs.slice(1).map((r, j) => (r[0] + r[1]) / 2 - (runs[j][0] + runs[j][1]) / 2).sort((a, b) => a - b);
+  const pitch = diffs[Math.floor(diffs.length * 0.2)] || 0;
+  if (pitch >= 2) {
+    const singles = runs.map(r => r[1] - r[0] + 1).filter(w => w <= pitch).sort((a, b) => a - b);
+    const gapW = Math.max(0, pitch - (singles[singles.length >> 1] || pitch));
+    runs = runs.flatMap(([a, b]) => {
+      const w = b - a + 1, k = Math.max(1, Math.round((w + gapW) / pitch));
+      if (k === 1) return [[a, b]];
+      const step = (w + gapW) / k;
+      return Array.from({ length: k }, (_, j) => [a + Math.round(j * step), Math.min(b, a + Math.round(j * step + step - gapW) - 1)]);
+    });
+  }
+  const candles = [], cand = [];
+  for (const [a, b] of runs) {
+    // 一根 K 棒在垂直方向是連續的（容許均線穿過造成的小缺口），切成數段後先取像素最多的一段
+    const rc = new Uint32Array(y1 - y0 + 1);
+    for (let y = y0; y <= y1; y++) for (let x = a; x <= b; x++) if (m[y * W + x]) rc[y - y0]++;
+    const segs = [], bridge = Math.max(4, Math.round((y1 - y0) * 0.012));
+    for (let y = y0; y <= y1; y++) {
+      if (!rc[y - y0]) continue;
+      let e = y, sum = 0, miss = 0;
+      for (let z = y; z <= y1 && miss <= bridge; z++) { if (rc[z - y0]) { e = z; sum += rc[z - y0]; miss = 0; } else miss++; }
+      segs.push({ a: y, b: e, sum });
+      y = e;
+    }
+    if (segs.length) cand.push({ a, b, segs, pick: segs.reduce((p, q) => (q.sum > p.sum ? q : p)) });
+  }
+  // 上下方的文字或標記：若某根選到的段落離左右兩根很遠，而另一段比較近，就改選那段
+  const mid = s => (s.a + s.b) / 2;
+  const picks = cand.map(c => c.pick);
+  cand.forEach((c, i) => {
+    if (c.segs.length < 2 || i === 0 || i === cand.length - 1) return;
+    const target = (mid(picks[i - 1]) + mid(picks[i + 1])) / 2, big = Math.max(...c.segs.map(t => t.sum));
+    const alt = c.segs.filter(t => t.sum >= big * 0.25).reduce((p, q) => (Math.abs(mid(q) - target) < Math.abs(mid(p) - target) ? q : p));
+    if (Math.abs(mid(alt) - target) < Math.abs(mid(c.pick) - target) * 0.5) c.pick = alt;
+  });
+  for (const { a, b, pick } of cand) {
+    const cw = b - a + 1, segA = pick.a, segB = pick.b; let top = -1, bot = -1, bt = -1, bb = -1, ups = 0, dns = 0, best = 0, bestY = -1;
+    for (let y = segA; y <= segB && segA >= 0; y++) {
+      let c = 0;
+      for (let x = a; x <= b; x++) { const v = m[y * W + x]; if (v) { c++; v === 1 ? ups++ : dns++; } }
+      if (!c) continue;
+      if (top < 0) top = y; bot = y;
+      if (c > best) { best = c; bestY = y; }
+      const edges = cw >= 4 && (m[y * W + a] || m[y * W + a + 1]) && (m[y * W + b] || m[y * W + b - 1]);
+      if (cw <= 2 || c >= Math.max(2, Math.ceil(cw * 0.6)) || edges) { if (bt < 0) bt = y; bb = y; }
+    }
+    if (top < 0) continue;
+    if (bt < 0) bt = bb = bestY;
+    const f = v => (v + ry) / scale;
+    candles.push({ x0: (a + rx) / scale, x1: (b + 1 + rx) / scale, top: f(top), bot: f(bot + 1), bt: f(bt), bb: f(bb + 1), up: ups >= dns });
+  }
+  return { candles, band: { x: rx / scale, y: (ry + y0) / scale, w: W / scale, h: (y1 - y0 + 1) / scale } };
+}
+function candlesToSeries(cs, hi, lo) {
+  const yTop = Math.min(...cs.map(c => c.top)), yBot = Math.max(...cs.map(c => c.bot)), span = yBot - yTop || 1;
+  const cal = hi > lo && lo > 0;
+  const P = y => cal ? lo + (yBot - y) / span * (hi - lo) : 100 + (yBot - y) / span * 40;
+  return cs.map((c, k) => ({ d: `第 ${k + 1} 根`, o: P(c.up ? c.bb : c.bt), c: P(c.up ? c.bt : c.bb), h: P(c.top), l: P(c.bot), v: 0 }));
+}
+
+function drawShot() {
+  const cv = $("#shotCanvas"), img = shot.img;
+  if (!img) return;
+  const W = cv.clientWidth || cv.parentElement.clientWidth, k = W / img.naturalWidth, H = Math.round(img.naturalHeight * k), dpr = window.devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + "px";
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.drawImage(img, 0, 0, W, H);
+  const accent = cssVar("--accent");
+  if (shot.res) {
+    const b = shot.res.band;
+    ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.strokeRect(b.x * k, b.y * k, b.w * k, b.h * k); ctx.setLineDash([]);
+    ctx.lineWidth = 1.5; ctx.strokeStyle = accent;
+    shot.res.candles.forEach(c => ctx.strokeRect(c.x0 * k - 1, c.top * k - 1, (c.x1 - c.x0) * k + 2, (c.bot - c.top) * k + 2));
+  }
+  if (shot.drag) { const d = shot.drag; ctx.fillStyle = cssVar("--band"); ctx.strokeStyle = accent; ctx.lineWidth = 2; const r = normRect(d); ctx.fillRect(r.x * k, r.y * k, r.w * k, r.h * k); ctx.strokeRect(r.x * k, r.y * k, r.w * k, r.h * k); }
+  shot.k = k;
+}
+const normRect = d => ({ x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0) });
+
+const LESSON_OF = { 均線: 1, 月線: 1, RSI: 4, KD: 5, MACD: 6, 布林: 7 };
+function shotSummary(D, I, cal) {
+  const n = D.length, i = n - 1, items = readout(D, I, i);
+  const bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length;
+  const lb = Math.min(20, n - 1), win = D.slice(n - 1 - lb);
+  const wHi = Math.max(...win.map(x => x.h)), wLo = Math.min(...win.map(x => x.l)), pos = (D[i].c - wLo) / (wHi - wLo || 1);
+  const chg = (D[i].c - D[i - lb].c) / D[i - lb].c;
+  const rising = D[i].c > D[i - lb].c;
+  let trend = `最近 ${lb} 根 K 棒${Math.abs(chg) < 0.03 && cal ? "大致橫盤" : rising ? "整體往上" : "整體往下"}`;
+  if (cal) trend += `（${fmtPct(chg, 1)}）`;
+  trend += `，最後一根收在這段區間的 ${Math.round(pos * 100)}% 位置。`;
+  const pats = Signals.candle(D, I).filter(m => m.i >= n - 10);
+  const sr = srLevels(D);
+  const lean = bull - bear >= 2 ? 1 : bear - bull >= 2 ? -1 : 0;
+  const lines = [`<li><strong>趨勢</strong>：${trend}</li>`];
+  items.forEach(x => lines.push(`<li><strong>${x.k}</strong>：${x.t}${x.x ? `（${x.x}）` : ""}</li>`));
+  lines.push(`<li><strong>近期 K 線型態</strong>：${pats.length ? pats.map(p => `${p.label}（倒數第 ${n - p.i} 根）`).join("、") : "最近 10 根沒有明顯的反轉型態"}</li>`);
+  if (sr.length) lines.push(`<li><strong>支撐 / 壓力</strong>：${sr.map(s => `${s.kind} ${cal ? fmtP(s.price) : "約在圖中第 " + (s.i + 1) + " 根的" + (s.kind === "壓力" ? "高點" : "低點")}`).join("、")}</li>`);
+  const review = [...new Set(items.map(x => LESSON_OF[x.k]).filter(x => x != null))];
+  if (pats.length) review.unshift(0);
+  if (sr.length) review.push(3);
+  const leanTxt = lean > 0 ? "整體偏多" : lean < 0 ? "整體偏空" : "多空分歧";
+  shot.ctx = `偵測到 ${n} 根 K 棒${cal ? "（已依使用者輸入校正價格）" : "（未校正價格，數值為相對值）"}。${leanTxt}：${bull} 項偏多、${bear} 項偏空。\n` + lines.map(l => l.replace(/<[^>]+>/g, "")).join("\n");
+  return `<div class="lean ${lean > 0 ? "up" : lean < 0 ? "down" : ""}">${leanTxt}</div>
+    <p>找到 ${n} 根 K 棒，以最後一根為基準：${bull} 項指標偏多、${bear} 項偏空。${lean === 0 ? "訊號互相矛盾時，通常代表方向還不明確。" : ""}</p>
+    <ul>${lines.join("")}</ul>
+    <p class="note">複習相關課程：${[...new Set(review)].map(k => `<button class="linkbtn" data-lesson="${k}">${LESSONS[k].title.split("：")[0]}</button>`).join("、")}</p>
+    <p class="note">${cal ? "" : "沒有輸入價格校正，所以只顯示相對位置；填上圖中最高與最低價，就會換算成實際價位。"}截圖辨識可能有誤差，成交量也無法從圖中讀出，請對照截圖上的偵測框，確認每根 K 棒都有抓到。這是學習用的讀圖練習，不構成投資建議。</p>`;
+}
+
+function shotRun() {
+  if (!shot.img) return;
+  shot.res = extractCandles(shot.img, shot.crop, $("#shotConv").value);
+  $("#shotReset").hidden = !shot.crop;
+  const cs = shot.res.candles;
+  $("#shotInfo").textContent = `找到 ${cs.length} 根 K 棒`;
+  drawShot();
+  if (cs.length < 12) {
+    shot.D = null; $("#shotRebuild").hidden = true;
+    $("#shotSummary").innerHTML = `<p><strong>只找到 ${cs.length} 根 K 棒，不夠判讀。</strong></p><ul><li>在左圖上拖曳，框出只有 K 線的價格區域。</li><li>確認「顏色慣例」設定正確。</li><li>換一張 K 棒較多（建議 30 根以上）、沒有被游標或對話框遮住的截圖。</li></ul>`;
+    return;
+  }
+  const hi = parseFloat($("#shotHi").value), lo = parseFloat($("#shotLo").value), cal = hi > lo && lo > 0;
+  shot.D = candlesToSeries(cs, hi, lo); shot.I = indicators(shot.D);
+  $("#shotRebuild").hidden = false;
+  shotDrawChart();
+  $("#shotSummary").innerHTML = shotSummary(shot.D, shot.I, cal);
+}
+function shotDrawChart() {
+  if (!shot.D) return;
+  shotChart.set(shot.D, { I: shot.I, ma: $("#shMA").checked ? [5, 20] : [], boll: $("#shBoll").checked, sub: $("#shSub").value, noVol: true, fmtD: d => d.replace(/\D/g, ""), markers: Signals.candle(shot.D, shot.I) });
+}
+function shotLoad(blob, hiLo) {
+  if (!blob || !/^image\//.test(blob.type)) { $("#shotInfo").textContent = "請選擇 PNG、JPG、WebP 或 GIF 圖片"; return; }
+  const url = URL.createObjectURL(blob), img = new Image();
+  img.onload = () => {
+    if (shot.url) URL.revokeObjectURL(shot.url);
+    Object.assign(shot, { url, img, file: blob, crop: null });
+    $("#shotHi").value = hiLo ? hiLo.hi : ""; $("#shotLo").value = hiLo ? hiLo.lo : "";
+    $("#aiOut").hidden = true; aiUpdate();
+    shotRun();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); $("#shotInfo").textContent = "這個檔案無法讀取，請換一張圖片"; };
+  img.src = url;
+}
+// 範例截圖：模仿看盤軟體的白底日線圖（含均線、成交量、價格刻度）
+function makeSampleShot() {
+  const D = genSeries(4021, 150).slice(50), W = 960, H = 560, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d"), L = 12, R = 880, T = 44, B = 400, VT = 425, VB = 530, n = D.length, bw = (R - L) / n;
+  const I = indicators(genSeries(4021, 150)), ma5 = I.ma(5).slice(50), ma20 = I.ma(20).slice(50);
+  const hi = Math.max(...D.map(x => x.h)), lo = Math.min(...D.map(x => x.l)), pad = (hi - lo) * 0.06;
+  const Y = p => T + (hi + pad - p) / (hi - lo + 2 * pad) * (B - T), X = i => L + bw * (i + 0.5);
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#222"; ctx.font = "bold 15px sans-serif"; ctx.fillText("範例股（模擬）  日線", 12, 24);
+  ctx.font = "12px sans-serif"; ctx.fillStyle = "#c08000"; ctx.fillText("MA5", 190, 24); ctx.fillStyle = "#7a52c7"; ctx.fillText("MA20", 230, 24);
+  const step = niceStep((hi - lo) / 5);
+  ctx.font = "11px monospace";
+  for (let v = Math.ceil(lo / step) * step; v <= hi + pad; v += step) { const y = Math.round(Y(v)) + 0.5; ctx.strokeStyle = "#ececec"; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(R, y); ctx.stroke(); ctx.fillStyle = "#666"; ctx.fillText(fmtP(v), R + 8, y + 4); }
+  const vmax = Math.max(...D.map(x => x.v)), cw = Math.max(2, Math.round(bw * 0.68));
+  D.forEach((k, i) => {
+    const c = k.c >= k.o ? "#e0302f" : "#129a50", x = Math.round(X(i));
+    ctx.fillStyle = c; ctx.fillRect(x, Y(k.h), 1, Y(k.l) - Y(k.h));
+    const y1 = Y(Math.max(k.o, k.c)); ctx.fillRect(x - (cw >> 1), y1, cw, Math.max(1, Y(Math.min(k.o, k.c)) - y1));
+    const vh = k.v / vmax * (VB - VT); ctx.fillRect(x - (cw >> 1), VB - vh, cw, vh);
+  });
+  [[ma5, "#e0a400"], [ma20, "#7a52c7"]].forEach(([a, c]) => { ctx.strokeStyle = c; ctx.lineWidth = 1.4; ctx.beginPath(); let s = false; a.forEach((v, i) => { if (v == null) return; s ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v)); s = true; }); ctx.stroke(); });
+  ctx.fillStyle = "#666"; for (let i = 0; i < n; i += 20) ctx.fillText(D[i].d.slice(5).replace("-", "/"), X(i) - 14, H - 12);
+  ctx.fillText("成交量", R + 8, VT + 10);
+  return new Promise(res => cv.toBlob(b => res({ blob: b, hi: fmtP(hi), lo: fmtP(lo) }), "image/png"));
+}
+
+// 截圖上拖曳框選
+(() => {
+  const cv = $("#shotCanvas"), pt = e => ({ x: e.offsetX / (shot.k || 1), y: e.offsetY / (shot.k || 1) });
+  cv.addEventListener("pointerdown", e => { if (!shot.img) return; cv.setPointerCapture(e.pointerId); const p = pt(e); shot.drag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y }; });
+  cv.addEventListener("pointermove", e => { if (!shot.drag) return; const p = pt(e); shot.drag.x1 = p.x; shot.drag.y1 = p.y; drawShot(); });
+  cv.addEventListener("pointerup", () => {
+    if (!shot.drag) return; const r = normRect(shot.drag); shot.drag = null;
+    if (r.w > 20 && r.h > 20) { shot.crop = r; shotRun(); } else drawShot();
+  });
+  new ResizeObserver(() => drawShot()).observe(cv.parentElement);
+})();
+$("#shotFile").addEventListener("change", e => { shotLoad(e.target.files[0]); e.target.value = ""; });
+const drop = $("#shotDrop");
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); shotLoad(e.dataTransfer.files[0]); });
+document.addEventListener("paste", e => {
+  if ($("#view-shot").hidden) return;
+  const f = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith("image/"));
+  if (f) { e.preventDefault(); shotLoad(f); }
+});
+$("#shotSample").addEventListener("click", async () => { const s = await makeSampleShot(); shotLoad(s.blob, s); });
+$("#shotReset").addEventListener("click", () => { shot.crop = null; shotRun(); });
+["shotConv", "shotHi", "shotLo"].forEach(id => $("#" + id).addEventListener("change", shotRun));
+["shMA", "shBoll", "shSub"].forEach(id => $("#" + id).addEventListener("change", shotDrawChart));
+$("#shotSummary").addEventListener("click", e => { const b = e.target.closest("[data-lesson]"); if (b) { switchTab("learn"); showLesson(+b.dataset.lesson); } });
+
+/* ---------- 請 Claude 解讀 ----------
+   在 Claude 裡開啟時用頁面的 sample 能力（以檢視者自己的帳號）；
+   部署在網站上時呼叫 /api/chart-read（伺服器端需設定 ANTHROPIC_API_KEY）。 */
+const AI_PROMPT = `你是一位耐心的台股技術分析老師。使用者上傳了一張看盤軟體的 K 線截圖，想學習怎麼讀圖。請用繁體中文、以教學口吻解說。
+
+請依序使用以下標題（每個標題獨立一行，以「## 」開頭），每段 2–5 句或條列：
+## 這張圖是什麼
+（商品、週期、時間範圍、圖上有哪些指標；看不出來就說看不出來）
+## 趨勢
+## K 線與型態
+## 指標
+（只談圖上真的有顯示的指標，說明數值或位置代表什麼）
+## 支撐與壓力
+（看得到價格刻度時，給出大約價位）
+## 學習重點
+（從這張圖可以練習的 2–3 個觀念）
+## 提醒
+
+規則：只描述圖上看得到的東西，不要捏造數字；不要給買進或賣出建議，也不要預測價格；在「提醒」說明技術分析的限制。`;
+let aiMode = null, aiSample = null, aiCtl = null, aiChecked = false;
+(async () => {
+  if (window.claude?.use) {
+    try { const s = await window.claude.use("sample"); const lim = s ? await s.limits().catch(() => null) : null; if (lim?.images) { aiSample = s; aiMode = "sample"; } } catch {}
+  } else if (/^https?:$/.test(location.protocol)) aiMode = "api";
+  aiChecked = true; aiUpdate();
+})();
+function aiUpdate() {
+  const ask = $("#aiAsk");
+  if (!aiChecked) { ask.disabled = true; ask.textContent = "檢查中…"; return; }
+  ask.textContent = "請 Claude 解讀";
+  ask.disabled = !aiMode || !shot.file;
+  if (!aiMode) $("#aiNote").textContent = "這個環境無法呼叫 Claude。把網站部署到 Vercel 並設定 ANTHROPIC_API_KEY，或在 Claude 裡開啟這個頁面，就能使用這個功能。上面的程式判讀不受影響。";
+}
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+function renderAI(md) {
+  const out = $("#aiOut"); let html = "", inList = false;
+  const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  for (const raw of md.split("\n")) {
+    const line = raw.trim(), li = /^[-*•]\s+/.test(line);
+    if (inList && !li) { html += "</ul>"; inList = false; }
+    if (!line) continue;
+    if (/^#{1,4}\s/.test(line)) html += `<h4>${inline(line.replace(/^#+\s*/, ""))}</h4>`;
+    else if (li) { if (!inList) { html += "<ul>"; inList = true; } html += `<li>${inline(line.replace(/^[-*•]\s+/, ""))}</li>`; }
+    else html += `<p>${inline(line)}</p>`;
+  }
+  if (inList) html += "</ul>";
+  out.innerHTML = html; out.hidden = false;
+}
+function toJpegBase64(img) {
+  const k = Math.min(1, 1568 / Math.max(img.naturalWidth, img.naturalHeight)), cv = document.createElement("canvas");
+  cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+  const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  return cv.toDataURL("image/jpeg", 0.9).split(",")[1];
+}
+const AI_ERR = {
+  cancelled: "已停止。", not_granted: "沒有允許這個頁面使用 Claude，所以無法解讀。", sampling_disabled: "這個帳號目前無法使用 Claude 解讀。",
+  rate_limited: "使用太頻繁或已達用量上限，請稍後再試。", image_rejected: "這張圖片無法送出，請換一張 PNG 或 JPG。",
+  refused: "Claude 無法解讀這張圖片。", session_expired: "請重新登入 Claude 後再試。", images_unavailable: "這個環境無法傳送圖片。",
+};
+$("#aiStop").addEventListener("click", () => aiCtl?.abort());
+$("#aiAsk").addEventListener("click", async () => {
+  if (!shot.file || !aiMode) return;
+  const out = $("#aiOut"), ask = $("#aiAsk"), stop = $("#aiStop");
+  out.hidden = false; out.textContent = "Claude 正在看圖…通常需要 10 到 60 秒。";
+  ask.disabled = true; stop.hidden = false; aiCtl = new AbortController();
+  const ctxText = shot.D ? `\n\n參考資料：程式在瀏覽器中自動辨識的結果如下，可能有誤，請以圖片為準。\n${shot.ctx}` : "";
+  try {
+    if (aiMode === "sample") {
+      const { text, truncated } = await aiSample(AI_PROMPT + ctxText, { images: shot.file, signal: aiCtl.signal, onText: ({ text }) => renderAI(text) });
+      renderAI(text + (truncated ? "\n\n（回答過長被截斷）" : ""));
+    } else {
+      const r = await fetch("/api/chart-read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: toJpegBase64(shot.img), mediaType: "image/jpeg", context: shot.ctx }), signal: aiCtl.signal });
+      const j = await r.json().catch(() => ({ ok: false, error: `伺服器回應 ${r.status}，找不到解讀服務。` }));
+      if (!j.ok) throw { message: j.error };
+      renderAI(j.text);
+    }
+  } catch (e) {
+    const code = e?.name === "AbortError" ? "cancelled" : e?.code;
+    const msg = AI_ERR[code] || e?.message || "解讀失敗，請稍後再試。";
+    if (e?.text && code !== "refused") { renderAI(e.text); out.insertAdjacentHTML("beforeend", `<p class="note">${esc(msg)}</p>`); }
+    else out.textContent = msg;
+    if (["not_granted", "sampling_disabled", "images_unavailable"].includes(code)) { aiMode = null; }
+  } finally { stop.hidden = true; aiUpdate(); }
+});
+
 /* ================= 頁籤 ================= */
-const TABS = ["learn", "lab", "challenge", "quiz"];
+const TABS = ["learn", "lab", "challenge", "shot", "quiz"];
 const inited = {};
 function switchTab(t) {
   if (!TABS.includes(t)) t = "learn";
@@ -1035,13 +1442,14 @@ function switchTab(t) {
     if (t === "lab") { labData(); labDraw(); }
     if (t === "challenge") { chalScore(); chalNew(); }
     if (t === "quiz") quizStart();
+    if (t === "shot") makeSampleShot().then(s => { if (!shot.img) shotLoad(s.blob, s); });
   }
   window.scrollTo({ top: 0 });
 }
 $(".tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) { switchTab(b.dataset.tab); try { history.replaceState(null, "", "#" + b.dataset.tab); } catch {} } });
 
 // 主題切換時重畫圖表
-const redrawAll = () => [lessonChart, labChart, chalChart].forEach(c => c.draw());
+const redrawAll = () => { [lessonChart, labChart, chalChart, shotChart].forEach(c => c.draw()); drawShot(); };
 try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redrawAll); } catch {}
 new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 if (document.fonts) document.fonts.ready.then(redrawAll);
