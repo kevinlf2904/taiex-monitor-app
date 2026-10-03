@@ -109,6 +109,12 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 }
 .legend b { font-weight: 600; color: var(--muted); margin-right: 3px; font-family: var(--font-body); }
 .legend span { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.zoombar { position: absolute; top: 6px; right: 8px; display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); z-index: 1; }
+.zoombar button { border: 0; background: transparent; padding: 3px 10px; font-size: 13px; cursor: pointer; color: var(--muted); min-width: 30px; }
+.zoombar button + button { border-left: 1px solid var(--line); }
+.zoombar button:hover { color: var(--ink); background: var(--surface-2); }
+.zoombar:not(.zoomed) [data-z="reset"] { opacity: .45; }
+.legend { padding-right: 150px; }
 .chartbox canvas { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
 
 /* ---------- learn ---------- */
@@ -172,7 +178,13 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .ob-tape { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 .ob-tape li { display: grid; grid-template-columns: 70px 1fr 1fr auto; gap: 8px; align-items: center; }
 @media (max-width: 640px) { .ob-grid { grid-template-columns: minmax(0, 1fr); } }
-.chart-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: -8px; }
+.lesson-chart { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 80px; }
+.chart-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lgroup span { font-family: var(--font-mono); font-weight: 500; margin-left: 6px; color: var(--accent); }
+.prog-bar { width: 56px; height: 4px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: inline-block; }
+.prog-bar i { display: block; height: 100%; background: var(--accent); }
+.btn:active { transform: translateY(1px); }
+@media (min-width: 901px) { .lab-side { position: sticky; top: 80px; } }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; background: var(--surface); padding: 6px 14px; cursor: pointer; font-size: 14px; color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line); }
@@ -260,7 +272,17 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; ba
 .pane-card ul { margin: 0; padding-left: 1.2em; }
 .pane-card input[type="number"] { width: 64px; }
 .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin: 0 3px 0 8px; border: 1px solid var(--line); }
-.ai { margin-top: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.ai { display: flex; flex-direction: column; gap: 12px; }
+.results { display: flex; flex-direction: column; min-width: 0; }
+.rtabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); padding: 6px 8px 0; overflow-x: auto; }
+.rtabs button { border: 0; background: transparent; padding: 8px 12px; font-size: 14px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.rtabs button[aria-selected="true"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--accent); }
+.rtabs .cnt { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+.rpanel { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.plan { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; }
+.plan p { margin: 4px 0 0; }
+.shot-grid.wide { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 901px) { .shot-grid:not(.wide) .results { position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto; } }
 .ai-out { max-width: 75ch; font-size: 15px; }
 .ai-out h4 { margin: 14px 0 4px; font-size: 15px; color: var(--accent); }
 .ai-out p { margin: 0 0 8px; }
@@ -307,12 +329,14 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
         <h2 id="lessonTitle"></h2>
       </div>
       <div class="prose" id="lessonBody"></div>
-      <div class="gallery" id="lessonGallery" hidden></div>
       <div id="lessonWidget" hidden></div>
+      <div class="lesson-chart">
+        <div class="chart-tools" id="lessonTools"></div>
+        <div class="panel chartbox" id="lessonChart"></div>
+        <div class="try" id="lessonTry"></div>
+      </div>
+      <div class="gallery" id="lessonGallery" hidden></div>
       <div class="prose" id="lessonAfter" hidden></div>
-      <div class="chart-tools" id="lessonTools"></div>
-      <div class="panel chartbox" id="lessonChart"></div>
-      <div class="try" id="lessonTry"></div>
       <div class="keys" id="lessonKeys"></div>
       <div class="lesson-nav">
         <button class="btn" id="lessonPrev">← 上一課</button>
@@ -413,9 +437,12 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
         <div class="row note">價格校正（選填）：圖中最高點 <input type="number" id="shotHi" step="any" placeholder="例 612"> 最低點 <input type="number" id="shotLo" step="any" placeholder="例 548"></div>
       </div>
     </div>
-    <div class="shot-grid">
+    <div class="shot-grid" id="shotGrid">
       <div class="panel shot-src">
-        <div class="shot-src-head"><h3 style="margin:0">辨識結果</h3><span class="note" id="shotInfo"></span></div>
+        <div class="shot-src-head">
+          <div><h3 style="margin:0">辨識結果</h3><span class="note" id="shotInfo"></span></div>
+          <div class="row"><label class="row" style="gap:6px; font-size:13.5px"><input type="checkbox" id="shotSmcOverlay" checked>標示聰明錢</label><button class="btn" id="shotEnlarge" aria-pressed="false">放大截圖</button></div>
+        </div>
         <canvas id="shotCanvas" aria-label="截圖與偵測到的 K 棒"></canvas>
         <div class="row note" style="padding: 0 14px 12px">
           <div class="seg" role="group" aria-label="框選模式"><button id="modePrice" aria-pressed="true">框選 K 線區</button><button id="modeSub" aria-pressed="false">框選副圖</button></div>
@@ -423,34 +450,34 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
           <button class="btn" id="shotReset" hidden>改回自動偵測</button>
         </div>
       </div>
-      <div class="panel ctrl">
-        <h3>這張圖在講什麼</h3>
-        <div id="shotSummary" class="shot-summary"></div>
+      <div class="panel results">
+        <div class="rtabs" role="tablist" aria-label="判讀結果">
+          <button role="tab" data-rt="sum" aria-selected="true">總覽</button><button role="tab" data-rt="smc" aria-selected="false">聰明錢</button><button role="tab" data-rt="pane" aria-selected="false">副圖 <span class="cnt" id="paneCount"></span></button><button role="tab" data-rt="ai" aria-selected="false">Claude 解讀</button>
+        </div>
+        <div class="rpanel" data-rp="sum" role="tabpanel"><div id="shotSummary" class="shot-summary"></div></div>
+        <div class="rpanel" data-rp="smc" role="tabpanel" hidden><div id="smcSummary" class="shot-summary"></div></div>
+        <div class="rpanel" data-rp="pane" role="tabpanel" hidden>
+          <p class="note" style="margin:0">看盤軟體是用完整歷史算指標的，所以直接讀副圖比用截圖裡的 K 棒重算更準。類型判斷錯了可以手動改。想判斷 KD、RSI 的高低檔，先用「框選副圖」讓框的上下緣對齊兩條已知刻度（例如 100 與 0），再填入框頂、框底的數值。</p>
+          <div id="paneList" class="pane-list"></div>
+        </div>
+        <div class="rpanel ai" data-rp="ai" role="tabpanel" hidden>
+          <div class="row" style="justify-content:space-between"><h3 style="margin:0">請 Claude 看圖解說</h3><div class="row"><button class="btn primary" id="aiAsk">請 Claude 解讀</button><button class="btn" id="aiStop" hidden>停止</button></div></div>
+          <p class="note" style="margin:0" id="aiNote">Claude 會直接看你的截圖，連圖上的文字、指標設定一起解讀，並用教學的方式說明。這會把截圖送出。</p>
+          <div class="ai-out" id="aiOut" hidden></div>
+        </div>
       </div>
-    </div>
-    <div class="panel ctrl" id="paneBox" style="margin-top:18px">
-      <h3>副圖判讀：直接讀截圖上的指標線</h3>
-      <p class="note" style="margin:0">看盤軟體是用完整歷史算指標的，所以直接讀副圖比用截圖裡的 K 棒重算更準。類型判斷錯了可以手動改。想判斷 KD、RSI 的高低檔，先用「框選副圖」讓框的上下緣對齊兩條已知刻度（例如 100 與 0），再填入框頂、框底的數值。</p>
-      <div id="paneList" class="pane-list"></div>
     </div>
     <div class="panel" id="shotRebuild" style="margin-top:18px">
       <div class="chal-bar" style="border-top:0; border-bottom:1px solid var(--line)">
         <strong style="font-size:14px">重建的 K 線</strong>
         <label class="row" style="gap:6px"><input type="checkbox" id="shMA" checked>均線 5 / 20</label>
         <label class="row" style="gap:6px"><input type="checkbox" id="shBoll">布林</label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="shSmc" checked>聰明錢</label>
         <select id="shSub" aria-label="副圖"><option value="">無副圖</option><option value="rsi">RSI</option><option value="kd" selected>KD</option><option value="macd">MACD</option></select>
         <span class="note">游標移到 K 棒上可看當天判讀</span>
       </div>
       <div class="chartbox" id="shotChart"></div>
       <div class="verdict"><h3 style="margin:0">游標所在 K 棒的指標</h3><div id="shotRo"></div></div>
-    </div>
-    <div class="panel ai" id="aiPanel">
-      <div class="row" style="justify-content:space-between">
-        <div><div class="eyebrow">AI</div><h3 style="margin:0">請 Claude 看圖解說</h3></div>
-        <div class="row"><button class="btn primary" id="aiAsk">請 Claude 解讀</button><button class="btn" id="aiStop" hidden>停止</button></div>
-      </div>
-      <p class="note" style="margin:0" id="aiNote">Claude 會直接看你的截圖，連圖上的文字、指標設定一起解讀，並用教學的方式說明。這會把截圖送出。</p>
-      <div class="ai-out" id="aiOut" hidden></div>
     </div>
   </section>
 
@@ -925,17 +952,47 @@ class Chart {
     this.legend = document.createElement("div"); this.legend.className = "legend";
     this.canvas = document.createElement("canvas"); this.ctx = this.canvas.getContext("2d");
     this.canvas.setAttribute("role", "img");
-    host.append(this.legend, this.canvas);
-    this.hover = null;
-    const move = e => { const i = this.indexAt(e.offsetX); if (i !== this.hover) { this.hover = i; this.draw(); } };
-    this.canvas.addEventListener("pointermove", move);
-    this.canvas.addEventListener("pointerdown", move);
-    this.canvas.addEventListener("pointerleave", () => { this.hover = null; this.draw(); });
+    // 縮放工具列：按鈕、Ctrl / ⌘ + 滾輪或雙指縮放，拖曳平移，雙擊還原
+    this.bar = document.createElement("div"); this.bar.className = "zoombar";
+    this.bar.innerHTML = `<button type="button" data-z="out" aria-label="縮小">−</button><button type="button" data-z="in" aria-label="放大">＋</button><button type="button" data-z="reset" aria-label="顯示全部">全部</button>`;
+    host.append(this.legend, this.bar, this.canvas);
+    this.hover = null; this.view = null; this.ptrs = new Map();
+    this.bar.addEventListener("click", e => { const z = e.target.closest("[data-z]")?.dataset.z; if (z === "in") this.zoom(0.6); else if (z === "out") this.zoom(1 / 0.6); else if (z === "reset") { this.view = null; this.draw(); } });
+    const cv = this.canvas;
+    cv.addEventListener("pointerdown", e => {
+      this.ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      if (this.ptrs.size === 1) this.drag = { x: e.offsetX, a: this.range.a, moved: false };
+      if (this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()]; this.pinch = { d: Math.abs(p.x - q.x) || 1, w: this.range.b - this.range.a + 1, mid: this.indexAt((p.x + q.x) / 2, true) }; this.drag = null; }
+      this.hoverAt(e.offsetX);
+    });
+    cv.addEventListener("pointermove", e => {
+      if (this.ptrs.has(e.pointerId)) this.ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      if (this.pinch && this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()], d = Math.abs(p.x - q.x) || 1; this.setWidth(this.pinch.w * this.pinch.d / d, this.pinch.mid); return; }
+      if (this.drag && this.ptrs.size === 1 && this.geo) {
+        const dx = e.offsetX - this.drag.x;
+        if (Math.abs(dx) > 4 && this.view) { this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {} const { a, b } = this.range; this.view = this.clampView(this.drag.a - Math.round(dx / this.geo.bw), b - a + 1); this.draw(); return; }
+      }
+      this.hoverAt(e.offsetX);
+    });
+    const up = e => { this.ptrs.delete(e.pointerId); if (this.ptrs.size < 2) this.pinch = null; if (!this.ptrs.size) this.drag = null; };
+    cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+    cv.addEventListener("pointerleave", e => { up(e); this.hover = null; this.draw(); });
+    cv.addEventListener("dblclick", () => { this.view = null; this.draw(); });
+    cv.addEventListener("wheel", e => {
+      if (!this.D) return;
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.zoom(Math.exp(e.deltaY * 0.004), this.indexAt(e.offsetX, true)); }
+      else if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && this.view && this.geo) { e.preventDefault(); const { a, b } = this.range; this.view = this.clampView(a + Math.round(e.deltaX / this.geo.bw), b - a + 1); this.draw(); }
+    }, { passive: false });
     new ResizeObserver(() => this.draw()).observe(host);
   }
-  set(D, opts = {}) { this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.hover = null; this.draw(); return this; }
+  set(D, opts = {}) { if (D !== this.D) this.view = null; this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.hover = null; this.draw(); return this; }
   get visible() { return this.o.visible ?? this.D.length; }
-  indexAt(x) { if (!this.geo) return null; const { L, bw } = this.geo; const i = Math.floor((x - L) / bw); return Math.max(0, Math.min(this.visible - 1, i)); }
+  get range() { return this.view || { a: 0, b: this.D.length - 1 }; }
+  clampView(a, w) { const N = this.D.length; w = Math.round(Math.max(Math.min(15, N), Math.min(N, w))); a = Math.max(0, Math.min(N - w, Math.round(a))); return w >= N ? null : { a, b: a + w - 1 }; }
+  setWidth(w, anchor) { const { a, b } = this.range, ow = b - a + 1; anchor = anchor ?? (a + b) / 2; const t = (anchor - a) / ow; this.view = this.clampView(anchor - t * w, w); this.draw(); }
+  zoom(f, anchor) { if (!this.D) return; const { a, b } = this.range; this.setWidth((b - a + 1) * f, anchor); }
+  hoverAt(x) { const i = this.indexAt(x); if (i !== this.hover) { this.hover = i; this.draw(); } }
+  indexAt(x, raw) { if (!this.geo) return null; const { L, bw, a } = this.geo; const i = a + Math.floor((x - L) / bw); return raw ? i : Math.max(a, Math.min(Math.min(this.visible - 1, this.range.b), i)); }
   draw() {
     if (!this.D) return;
     const { D, I, o } = this, ctx = this.ctx, dpr = window.devicePixelRatio || 1;
@@ -946,16 +1003,18 @@ class Chart {
     this.canvas.width = W * dpr; this.canvas.height = H * dpr; this.canvas.style.height = H + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
     const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface") };
-    const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R, bw = pw / n;
-    this.geo = { L, bw };
-    const X = i => L + bw * (i + 0.5);
+    const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R;
+    const { a: va, b: vb } = this.range, bw = pw / (vb - va + 1), inV = i => i >= va - 1 && i <= vb + 1;
+    this.geo = { L, bw, a: va, pw, H };
+    const X = i => L + bw * (i - va + 0.5);
+    this.bar.classList.toggle("zoomed", !!this.view);
     const top0 = 8, volTop = top0 + mainH + gap, subTop = o.noVol ? volTop : volTop + volH + gap;
     const fmtD = o.fmtD || (s => s.slice(5).replace("-", "/"));
     const mas = (o.ma || []).map((n, k) => ({ n, a: I.ma(n), c: [col.s1, col.s2, col.s3][k % 3] }));
 
     // 價格範圍
     let lo = Infinity, hi = -Infinity;
-    for (let i = 0; i < vis; i++) {
+    for (let i = va; i < Math.min(vis, vb + 1); i++) {
       lo = Math.min(lo, D[i].l); hi = Math.max(hi, D[i].h);
       if (o.boll && I.boll.up[i] != null) { lo = Math.min(lo, I.boll.lo[i]); hi = Math.max(hi, I.boll.up[i]); }
     }
@@ -965,7 +1024,7 @@ class Chart {
     ctx.font = `11px ${cssVar("--font-mono")}`; ctx.textBaseline = "middle";
     // 未揭曉區
     if (vis < n || o.cutoff != null) {
-      const cx = L + bw * (o.cutoff ?? vis);
+      const cx = Math.max(L, X((o.cutoff ?? vis) - 0.5));
       ctx.fillStyle = col.shade; ctx.fillRect(cx, top0, L + pw - cx, H - top0 - axisH - 8);
       ctx.strokeStyle = col.muted; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(cx, top0); ctx.lineTo(cx, H - axisH - 8); ctx.stroke(); ctx.setLineDash([]);
       if (vis < n) { ctx.fillStyle = col.muted; ctx.textAlign = "center"; ctx.font = `13px ${cssVar("--font-body")}`; ctx.fillText("？", (cx + L + pw) / 2, top0 + mainH / 2); ctx.font = `11px ${cssVar("--font-mono")}`; }
@@ -981,16 +1040,17 @@ class Chart {
     // 布林
     if (o.boll) {
       const { up, lo: lw, mid } = I.boll;
+      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
       ctx.fillStyle = col.band; ctx.beginPath(); let started = false;
       for (let i = 0; i < vis; i++) if (up[i] != null) { started ? ctx.lineTo(X(i), Y(up[i])) : ctx.moveTo(X(i), Y(up[i])); started = true; }
       for (let i = vis - 1; i >= 0; i--) if (lw[i] != null) ctx.lineTo(X(i), Y(lw[i]));
-      ctx.fill();
+      ctx.fill(); ctx.restore();
       this.line(up, vis, X, Y, col.accent, 1, 0.7); this.line(lw, vis, X, Y, col.accent, 1, 0.7); this.line(mid, vis, X, Y, col.accent, 1, 0.45, [3, 3]);
     }
     // 支撐壓力
     (o.hlines || []).forEach(h => {
       const y = Y(h.price); const c = h.kind === "壓力" ? col.down : col.up;
-      ctx.strokeStyle = c; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(X(h.i ?? 0), y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = c; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(Math.max(L, X(h.i ?? 0)), y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = c; ctx.textAlign = "right"; ctx.font = `11px ${cssVar("--font-body")}`; ctx.fillText(`${h.kind} ${fmtP(h.price)}`, L + pw - 4, y - 8); ctx.font = `11px ${cssVar("--font-mono")}`;
     });
     // 區塊（訂單塊、公平價值缺口）：畫在 K 棒後面，只畫到目前可見的範圍
@@ -1005,7 +1065,7 @@ class Chart {
     ctx.restore();
     // K 棒
     const cw = Math.max(1, Math.min(14, bw * 0.66));
-    for (let i = 0; i < vis; i++) {
+    for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) {
       const k = D[i], x = X(i), upc = k.c > k.o ? col.up : k.c < k.o ? col.down : col.ink;
       ctx.strokeStyle = upc; ctx.fillStyle = upc; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, Y(k.h)); ctx.lineTo(Math.round(x) + 0.5, Y(k.l)); ctx.stroke();
@@ -1031,11 +1091,13 @@ class Chart {
     // 背離連線：價格圖上連兩個轉折點，副圖顯示同一指標時也連起來
     const divs = (o.markers || []).filter(m => m.div && m.i < vis);
     const divLine = (x1, y1, x2, y2, c) => { ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); [[x1, y1], [x2, y2]].forEach(([a, b]) => { ctx.beginPath(); ctx.arc(a, b, 3, 0, Math.PI * 2); ctx.fill(); }); };
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
     divs.forEach(m => divLine(X(m.div.i1), Y(m.div.p1), X(m.div.i2), Y(m.div.p2), m.side === "buy" ? col.up : col.down));
+    ctx.restore();
     // 標記
     const showLabels = o.labels !== false && bw >= 2.5;
     const placed = [];
-    (o.markers || []).filter(m => m.i < vis).forEach(m => {
+    (o.markers || []).filter(m => m.i < vis && m.i >= va && m.i <= vb).forEach(m => {
       const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
       const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
       ctx.fillStyle = c; ctx.beginPath();
@@ -1053,9 +1115,9 @@ class Chart {
 
     // 成交量
     if (!o.noVol) {
-    let vmax = 0; for (let i = 0; i < vis; i++) vmax = Math.max(vmax, D[i].v);
+    let vmax = 1; for (let i = va; i < Math.min(vis, vb + 1); i++) vmax = Math.max(vmax, D[i].v);
     ctx.globalAlpha = 0.6;
-    for (let i = 0; i < vis; i++) { const k = D[i]; ctx.fillStyle = k.c >= k.o ? col.up : col.down; const h = k.v / vmax * (volH - 4); ctx.fillRect(Math.round(X(i) - cw / 2), volTop + volH - h, Math.max(1, Math.round(cw)), h); }
+    for (let i = va; i < Math.min(vis, vb + 1); i++) { const k = D[i]; ctx.fillStyle = k.c >= k.o ? col.up : col.down; const h = Math.min(volH - 2, k.v / vmax * (volH - 4)); ctx.fillRect(Math.round(X(i) - cw / 2), volTop + volH - h, Math.max(1, Math.round(cw)), h); }
     ctx.globalAlpha = 1;
     this.line(I.vma, vis, X, v => volTop + volH - v / vmax * (volH - 4), col.muted, 1);
     ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`; ctx.fillText(o.volLabel || "量（張）", L + pw + 6, volTop + 6); ctx.font = `11px ${cssVar("--font-mono")}`;
@@ -1082,7 +1144,7 @@ class Chart {
         let m = 5; for (let i = 0; i < vis; i++) m = Math.max(m, Math.abs(I.io[i] - 50));
         const sy = v => subTop + subH / 2 - (v - 50) / m * (subH / 2 - 4);
         ctx.globalAlpha = 0.55;
-        for (let i = 0; i < vis; i++) { const v = I.io[i]; ctx.fillStyle = v >= 50 ? col.up : col.down; const y0 = sy(50), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }
+        for (let i = va; i < Math.min(vis, vb + 1); i++) { const v = I.io[i]; ctx.fillStyle = v >= 50 ? col.up : col.down; const y0 = sy(50), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }
         ctx.globalAlpha = 1; lvl(50, sy);
         this.line(I.io5, vis, X, sy, col.s1, 1.5); this.subY = sy;
       } else if (o.sub === "custom") {
@@ -1092,7 +1154,7 @@ class Chart {
         if (hi === lo) { hi += 1; lo -= 1; }
         const sy = v => subTop + 4 + (hi - v) / (hi - lo) * (subH - 8);
         (C.levels || []).forEach(v => lvl(v, sy));
-        if (C.bars) { ctx.globalAlpha = 0.55; C.bars.forEach((v, i) => { if (i >= vis || !v) return; ctx.fillStyle = v >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }); ctx.globalAlpha = 1; if (C.zeroLine) lvl(0, sy); }
+        if (C.bars) { ctx.globalAlpha = 0.55; C.bars.forEach((v, i) => { if (i >= vis || !v || !inV(i)) return; ctx.fillStyle = v >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }); ctx.globalAlpha = 1; if (C.zeroLine) lvl(0, sy); }
         C.lines.forEach((a, k) => this.line(a, vis, X, sy, [col.s1, col.s3, col.s2][k % 3], 1.5));
         this.subY = sy;
       } else if (o.sub === "macd") {
@@ -1101,12 +1163,14 @@ class Chart {
         m = m || 1; const sy = v => subTop + subH / 2 - v / m * (subH / 2 - 4);
         lvl(0, sy);
         ctx.globalAlpha = 0.55;
-        for (let i = 0; i < vis; i++) if (osc[i] != null) { ctx.fillStyle = osc[i] >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(osc[i]); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.abs(y1 - y0)); }
+        for (let i = va; i < Math.min(vis, vb + 1); i++) if (osc[i] != null) { ctx.fillStyle = osc[i] >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(osc[i]); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.abs(y1 - y0)); }
         ctx.globalAlpha = 1;
         this.line(dif, vis, X, sy, col.s1, 1.5); this.line(sig, vis, X, sy, col.s3, 1.5);
       }
       const subY = o.sub === "custom" ? this.subY : o.sub === "macd" ? (() => { const { dif, sig, osc } = I.macd; let m = 0; for (let i = 0; i < vis; i++) if (dif[i] != null) m = Math.max(m, Math.abs(dif[i]), Math.abs(sig[i] ?? 0), Math.abs(osc[i] ?? 0)); m = m || 1; return v => subTop + subH / 2 - v / m * (subH / 2 - 4); })() : v => subTop + (100 - v) / 100 * subH;
+      ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pw, subH); ctx.clip();
       divs.filter(m => m.div.ind === (o.sub === "custom" ? "pane" : o.sub)).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
+      ctx.restore();
       ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`;
       ctx.fillText(o.sub === "custom" ? o.custom.title : { rsi: "RSI 14", kd: "KD 9", macd: "MACD", wr: "威廉 %R 14", inout: "外盤比（%）" }[o.sub] || "", L + 4, subTop + 8); ctx.font = `11px ${cssVar("--font-mono")}`;
     }
@@ -1114,7 +1178,7 @@ class Chart {
     // 日期軸
     const axY = H - axisH / 2 - 4, every = Math.max(1, Math.ceil(64 / bw));
     ctx.fillStyle = col.muted; ctx.textAlign = "center";
-    for (let i = 0; i < n; i += every) { if (i >= vis && !o.cutoff) continue; ctx.fillText(fmtD(D[i].d), Math.min(Math.max(X(i), L + 18), L + pw - 18), axY); }
+    for (let i = Math.ceil(va / every) * every; i <= vb; i += every) { if (i >= vis && !o.cutoff) continue; ctx.fillText(fmtD(D[i].d), Math.min(Math.max(X(i), L + 18), L + pw - 18), axY); }
 
     // 十字線
     const hi_ = this.hover;
@@ -1128,10 +1192,11 @@ class Chart {
     if (this.onHover) this.onHover(hi_ ?? vis - 1);
   }
   line(a, vis, X, Y, color, w, alpha = 1, dash) {
-    const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = w; ctx.globalAlpha = alpha; if (dash) ctx.setLineDash(dash);
+    const ctx = this.ctx, g = this.geo; ctx.save(); ctx.beginPath(); ctx.rect(g.L, 0, g.pw, g.H); ctx.clip();
+    ctx.strokeStyle = color; ctx.lineWidth = w; ctx.globalAlpha = alpha; if (dash) ctx.setLineDash(dash);
     ctx.beginPath(); let s = false;
     for (let i = 0; i < vis; i++) { if (a[i] == null) { s = false; continue; } s ? ctx.lineTo(X(i), Y(a[i])) : ctx.moveTo(X(i), Y(a[i])); s = true; }
-    ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]);
+    ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]); ctx.restore();
   }
   renderLegend(i, mas) {
     const { D, I, o } = this, k = D[i], prev = D[i - 1], ch = prev ? (k.c - prev.c) / prev.c : 0, cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
@@ -1279,7 +1344,7 @@ const LESSONS = [
 <li><strong>量能</strong>：反轉當天放量，代表換手積極。</li>
 </ul>`,
     chart: { ma: [5, 20] },
-    try: "點選上方的型態卡片，只看那一種；再按「換一段走勢」多看幾個例子，數數看有幾次之後真的反轉。",
+    try: "點選圖下方的型態卡片，只看那一種；再按「換一段走勢」多看幾個例子，數數看有幾次之後真的反轉。",
     keys: ["同一個形狀，位置不同意義就不同：錘子線和吊人線長得一模一樣。", "兩根、三根的組合通常比單根可靠，因為它記錄了更完整的換手過程。", "型態失敗本身也是訊息：晨星之後又跌破最低點，往往會再跌一段。"],
   },
   {
@@ -1587,9 +1652,9 @@ const lessonIndex = id => LESSONS.findIndex(l => l.id === id);
 let lessonIdx = Math.max(0, lessonIndex(store.get("lessonId", "kline")));
 let lessonView = { seedOff: 0, variant: 0, pat: null, D: null, I: null };
 const lessonChart = new Chart($("#lessonChart"));
-function updateProgress() { $("#progChip").textContent = `已完成 ${done.size} / ${LESSONS.length} 課`; }
+function updateProgress() { $("#progChip").innerHTML = `<span class="prog-bar" aria-hidden="true"><i style="width:${done.size / LESSONS.length * 100}%"></i></span>已完成 ${done.size} / ${LESSONS.length} 課`; }
 function renderLessonList() {
-  $("#lessonList").innerHTML = LESSONS.map((l, i) => `${i === 0 || LESSONS[i - 1].group !== l.group ? `<div class="lgroup">${l.group}</div>` : ""}<button data-i="${i}" aria-current="${i === lessonIdx}"><span class="n">${String(i + 1).padStart(2, "0")}</span><span>${l.title.split("：")[0]}</span><span class="done">${done.has(l.id) ? "●" : ""}</span></button>`).join("");
+  $("#lessonList").innerHTML = LESSONS.map((l, i) => `${i === 0 || LESSONS[i - 1].group !== l.group ? (g => `<div class="lgroup">${l.group}<span>${g.filter(x => done.has(x.id)).length}/${g.length}</span></div>`)(LESSONS.filter(x => x.group === l.group)) : ""}<button data-i="${i}" aria-current="${i === lessonIdx}"><span class="n">${String(i + 1).padStart(2, "0")}</span><span>${l.title.split("：")[0]}</span><span class="done">${done.has(l.id) ? "●" : ""}</span></button>`).join("");
 }
 function lessonMarkers(L, D, I, v) {
   if (L.gallery) return L.galleryKind === "chart" ? Signals.chartPat(D, I, L.gallery) : Signals.candle(D, I, L.gallery);
@@ -1621,7 +1686,7 @@ function showLesson(i) {
   lessonIdx = i; store.set("lessonId", LESSONS[i].id);
   lessonView = { seedOff: 0, variant: 0, pat: null };
   const L = LESSONS[i];
-  $("#lessonEyebrow").textContent = `第 ${i + 1} 課 · ${L.tag}`;
+  $("#lessonEyebrow").textContent = `第 ${i + 1} 課 · ${L.group}`;
   $("#lessonTitle").textContent = L.title;
   $("#lessonBody").innerHTML = L.body;
   $("#lessonAfter").innerHTML = L.after || ""; $("#lessonAfter").hidden = !L.after;
@@ -1631,10 +1696,14 @@ function showLesson(i) {
   if (L.widget === "orderbook") widgetTeardown = mountOrderBook($("#lessonWidget"));
   loadLessonData(); drawLesson();
   $("#lessonPrev").disabled = i === 0;
-  $("#lessonNext").textContent = i === LESSONS.length - 1 ? "完成課程，去做測驗 →" : "完成本課，下一課 →";
+  $("#lessonNext").textContent = i === LESSONS.length - 1 ? "完成課程，去做測驗 →" : `完成本課，下一課：${LESSONS[i + 1].title.split("：")[0]} →`;
   renderLessonList();
 }
-$("#lessonGallery").addEventListener("click", e => { const b = e.target.closest("[data-pat]"); if (!b) return; lessonView.pat = lessonView.pat === b.dataset.pat ? null : b.dataset.pat; drawLesson(); });
+$("#lessonGallery").addEventListener("click", e => {
+  const b = e.target.closest("[data-pat]"); if (!b) return;
+  lessonView.pat = lessonView.pat === b.dataset.pat ? null : b.dataset.pat; drawLesson();
+  const box = $(".lesson-chart").getBoundingClientRect(); if (box.top < 60 || box.bottom > innerHeight) $(".lesson-chart").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+});
 $("#lessonTools").addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
   if (t.dataset.variant != null) lessonView.variant = +t.dataset.variant;
@@ -2141,6 +2210,7 @@ function drawShot() {
     ctx.lineWidth = 1.5; ctx.strokeStyle = accent;
     shot.res.candles.forEach(c => { ctx.setLineDash(c.guess ? [2, 2] : []); ctx.strokeRect(c.x0 * k - 1, c.top * k - 1, (c.x1 - c.x0) * k + 2, (c.bot - c.top) * k + 2); });
     ctx.setLineDash([]);
+    if ($("#shotSmcOverlay").checked && shot.D) drawShotSmc(ctx, k);
     const s2 = cssVar("--s2");
     shot.panes.forEach((p, n) => {
       const r = p.rect, t = p.cfg.type || p.type;
@@ -2177,7 +2247,7 @@ function shotSummary(D, I, cal) {
   if (sr.length) review.push("sr");
   const leanTxt = lean > 0 ? "整體偏多" : lean < 0 ? "整體偏空" : "多空分歧";
   const paneTxt = (shot.panes || []).map((p, k) => `副圖 ${k + 1}（${PANE_TYPES[p.cfg.type || p.type] || "未辨識"}，直接讀自截圖）：${shot.readings[k].out.join(" ")}`).join("\n");
-  shot.ctx = `偵測到 ${n} 根 K 棒${cal ? "（已依使用者輸入校正價格）" : "（未校正價格，數值為相對值）"}。${leanTxt}：${bull} 項偏多、${bear} 項偏空。\n` + lines.map(l => l.replace(/<[^>]+>/g, "")).join("\n") + (paneTxt ? "\n" + paneTxt : "");
+  shot.ctx = `偵測到 ${n} 根 K 棒${cal ? "（已依使用者輸入校正價格）" : "（未校正價格，數值為相對值）"}。${leanTxt}：${bull} 項偏多、${bear} 項偏空。\n` + lines.map(l => l.replace(/<[^>]+>/g, "")).join("\n") + (paneTxt ? "\n" + paneTxt : "") + (shot.smc ? "\n聰明錢（SMC）判讀：\n" + shot.smc.text : "");
   return `<div class="lean ${lean > 0 ? "up" : lean < 0 ? "down" : ""}">${leanTxt}</div>
     <p>找到 ${n} 根 K 棒，以最後一根為基準：${bull} 項指標偏多、${bear} 項偏空。${lean === 0 ? "訊號互相矛盾時，通常代表方向還不明確。" : ""}</p>
     <ul>${lines.join("")}</ul>
@@ -2186,6 +2256,66 @@ function shotSummary(D, I, cal) {
     <p class="note">${cal ? "" : "沒有輸入價格校正，所以只顯示相對位置；填上圖中最高與最低價，就會換算成實際價位。"}${shot.hasVol ? "" : "截圖中沒有找到成交量區，所以沒有量能判讀。"}截圖辨識可能有誤差，請對照截圖上的偵測框，確認每根 K 棒都有抓到。這是學習用的讀圖練習，不構成投資建議。</p>`;
 }
 
+/* ---------- 截圖的聰明錢判讀 ----------
+   用重建的 K 棒找出結構、流動性掃蕩、尚未被回測的訂單塊與缺口，以及溢價 / 折價區。
+   價格沒有校正時只講相對位置（距離目前價格幾 %）。 */
+function shotSmc(D, cal) {
+  const n = D.length, c = D[n - 1].c, ms = marketStructure(D), zones = smcZones(D, ms);
+  const ev = ms.events[ms.events.length - 1], sw = ms.sweeps.filter(s => s.i >= n - 15).pop();
+  const ago = i => (n - 1 - i ? ` ${n - 1 - i} 根前` : "最後一根");
+  const px = p => (cal ? fmtP(p) : `目前價 ${fmtPct(p / c - 1, 1)}`);
+  const range = z => (cal ? `${fmtP(z.bot)}–${fmtP(z.top)}` : `目前價 ${fmtPct(z.bot / c - 1, 1)} ～ ${fmtPct(z.top / c - 1, 1)}`);
+  const open = zones.filter(z => !z.hit);
+  const below = kind => open.filter(z => z.kind === kind && z.dir > 0 && z.top <= c).sort((a, b) => b.top - a.top)[0];
+  const above = kind => open.filter(z => z.kind === kind && z.dir < 0 && z.bot >= c).sort((a, b) => a.bot - b.bot)[0];
+  const sH = ms.swings.filter(s => s.type === "H"), sL = ms.swings.filter(s => s.type === "L");
+  const H = sH[sH.length - 1], L = sL[sL.length - 1], pos = H && L && H.p > L.p ? (c - L.p) / (H.p - L.p) : null;
+  const trend = ev ? ev.dir : 0, items = [];
+  items.push(["結構", ev ? `${trend > 0 ? "上升" : "下降"}結構。最近一次是${ago(ev.i)}的${trend > 0 ? "向上" : "向下"} <b>${ev.kind}</b>${ev.kind === "CHoCH" ? "（特性轉變，可能反轉）" : "（順勢延續）"}，突破價 ${px(ev.level)}。` : "轉折點還不夠，看不出結構方向。"]);
+  items.push(["流動性", sw ? `${ago(sw.i).trim()}${sw.dir > 0 ? "跌破前低後又收回，掃掉了下方的停損單" : "突破前高後又收回，掃掉了上方的停損單"}。` : "最近 15 根沒有明顯的流動性掃蕩。"]);
+  const eq = (list, name) => { const [a, b] = list.slice(-2); return a && b && Math.abs(a.p - b.p) / a.p < 0.006 ? `最近兩個${name}幾乎一樣（${px((a.p + b.p) / 2)}），外側聚集大量停損單，容易被掃。` : ""; };
+  const eqTxt = eq(sH, "高點") || eq(sL, "低點"); if (eqTxt) items.push(["等高 / 等低點", eqTxt]);
+  if (pos != null) items.push(["溢價 / 折價", `目前在最近波段的 ${Math.round(Math.max(0, Math.min(1, pos)) * 100)}% 位置，屬於<b>${pos > 0.5 ? "溢價區" : "折價區"}</b>（50% 均衡價 ${px((H.p + L.p) / 2)}）。`]);
+  const ob1 = below("OB"), f1 = below("FVG"), ob2 = above("OB"), f2 = above("FVG");
+  items.push(["下方多方區塊", [ob1 && `訂單塊 ${range(ob1)}`, f1 && `缺口 ${range(f1)}`].filter(Boolean).join("；") || "下方沒有尚未回測的多方訂單塊或缺口。"]);
+  items.push(["上方空方區塊", [ob2 && `訂單塊 ${range(ob2)}`, f2 && `缺口 ${range(f2)}`].filter(Boolean).join("；") || "上方沒有尚未回測的空方訂單塊或缺口。"]);
+  let plan;
+  if (!trend) plan = "結構不明確。依 SMC 的邏輯，這種時候通常先觀望，等一次明確的 BOS 或 CHoCH。";
+  else if (trend > 0) plan = pos != null && pos > 0.5
+    ? `上升結構，但價格在溢價區。依 SMC 的邏輯，常見做法是不追高，等價格回到折價區${ob1 ? `或下方訂單塊（${range(ob1)}）` : ""}再觀察是否止跌。`
+    : `上升結構，價格在折價區。依 SMC 的邏輯，常見做法是在${ob1 ? `訂單塊 ${range(ob1)}` : f1 ? `缺口 ${range(f1)}` : "前一個轉折低點"}附近等止跌訊號，停損放在區塊下緣之外。`;
+  else plan = pos != null && pos < 0.5
+    ? `下降結構，但價格在折價區。依 SMC 的邏輯，常見做法是不追空，等價格反彈到溢價區${ob2 ? `或上方訂單塊（${range(ob2)}）` : ""}再觀察是否受壓。`
+    : `下降結構，價格在溢價區。依 SMC 的邏輯，常見做法是在${ob2 ? `訂單塊 ${range(ob2)}` : f2 ? `缺口 ${range(f2)}` : "前一個轉折高點"}附近等轉弱訊號，停損放在區塊上緣之外。`;
+  const html = `<div class="lean ${trend > 0 ? "up" : trend < 0 ? "down" : ""}">${trend > 0 ? "上升結構" : trend < 0 ? "下降結構" : "結構不明"}</div>
+    <ul>${items.map(([k, v]) => `<li><strong>${k}</strong>：${v}</li>`).join("")}</ul>
+    <div class="plan"><strong>SMC 情境推演（教學示範）</strong><p>${plan}</p></div>
+    <p class="note">${cal ? "" : "沒有輸入價格校正，價位以「距離目前價幾 %」表示。"}區塊與結構都是由截圖重建的 K 棒推算，可能有誤差；這是學習用的推演，不構成投資建議。<button class="linkbtn" data-lesson="${lessonIndex("smc-structure")}">複習聰明錢概念</button></p>`;
+  const text = items.map(([k, v]) => `${k}：${v.replace(/<[^>]+>/g, "")}`).join("\n") + "\n情境推演：" + plan;
+  return { html, text, ms };
+}
+// 把重建價格換回截圖上的像素位置，畫出聰明錢區塊與結構線
+function drawShotSmc(ctx, k) {
+  const cs = shot.res.candles, m = shot.pmap, D = shot.D, n = D.length;
+  if (!m || !D) return;
+  const y = p => (m.cal ? m.yBot - (p - m.lo) / (m.hi - m.lo) * m.span : m.yBot - (p - 100) / 40 * m.span) * k;
+  const xL = i => cs[Math.max(0, Math.min(n - 1, i))].x0 * k, xR = i => cs[Math.max(0, Math.min(n - 1, i))].x1 * k, xc = i => (xL(i) + xR(i)) / 2;
+  const up = cssVar("--up"), dn = cssVar("--down");
+  const ex = smcExtra(D);
+  ex.zones.forEach(z => {
+    const c = z.dir > 0 ? up : dn, x1 = xL(z.i1), x2 = xR(z.i2), y1 = y(z.top), y2 = y(z.bot);
+    ctx.fillStyle = c; ctx.globalAlpha = z.kind === "FVG" ? 0.12 : 0.22; ctx.fillRect(x1, y1, x2 - x1, Math.max(2, y2 - y1));
+    ctx.globalAlpha = 0.9; ctx.strokeStyle = c; ctx.lineWidth = 1.2; ctx.setLineDash(z.kind === "FVG" ? [3, 3] : []); ctx.strokeRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  });
+  ctx.font = `700 11px ${cssVar("--font-body")}`; ctx.textAlign = "center";
+  marketStructure(D).events.forEach(e => {
+    const c = e.dir > 0 ? up : dn, yy = y(e.level);
+    ctx.strokeStyle = c; ctx.lineWidth = 1.4; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(xc(e.from), yy); ctx.lineTo(xc(e.i), yy); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = c; ctx.fillText(e.kind, (xc(e.from) + xc(e.i)) / 2, yy + (e.dir > 0 ? -4 : 12));
+  });
+  ex.shapes.forEach(sh => { const [[i1, p], [i2]] = sh.pts; ctx.strokeStyle = cssVar("--accent"); ctx.lineWidth = 1.2; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(xc(i1), y(p)); ctx.lineTo(xR(i2), y(p)); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = cssVar("--accent"); ctx.textAlign = "right"; ctx.fillText("50%", xR(i2) - 2, y(p) - 4); });
+  ctx.textAlign = "left";
+}
 function shotRun() {
   if (!shot.img) return;
   const conv = $("#shotConv").value;
@@ -2194,7 +2324,8 @@ function shotRun() {
   const cs = shot.res.candles, guessed = cs.filter(c => c.guess).length;
   $("#shotInfo").textContent = `找到 ${cs.length} 根 K 棒${guessed ? `（其中 ${guessed} 根被遮住，以虛線估計）` : ""}`;
   if (cs.length < 12) {
-    shot.D = null; shot.panes = []; drawShot(); $("#shotRebuild").hidden = true; $("#paneBox").hidden = true;
+    shot.D = null; shot.panes = []; drawShot(); $("#shotRebuild").hidden = true; $("#paneCount").textContent = "";
+    $("#smcSummary").innerHTML = `<p class="note">K 棒太少，無法判斷結構。</p>`;
     $("#shotSummary").innerHTML = `<p><strong>只找到 ${cs.length} 根 K 棒，不夠判讀。</strong></p><ul><li>在左圖上拖曳，框出只有 K 線的價格區域。</li><li>確認「顏色慣例」設定正確。</li><li>換一張 K 棒較多（建議 30 根以上）、沒有被游標或對話框遮住的截圖。</li></ul>`;
     return;
   }
@@ -2206,6 +2337,7 @@ function shotRun() {
   drawShot();
   const hi = parseFloat($("#shotHi").value), lo = parseFloat($("#shotLo").value), cal = hi > lo && lo > 0;
   shot.D = candlesToSeries(cs, hi, lo);
+  { const yTop = Math.min(...cs.map(c => c.top)), yBot = Math.max(...cs.map(c => c.bot)); shot.pmap = { yTop, yBot, span: yBot - yTop || 1, cal, hi, lo }; }
   // 截圖有成交量區時，用柱子高度當作相對成交量
   const vol = shot.panes.find(p => (p.cfg.type || p.type) === "vol");
   shot.hasVol = !!vol;
@@ -2222,11 +2354,14 @@ function shotRefresh(cal = parseFloat($("#shotHi").value) > parseFloat($("#shotL
   sel.innerHTML = opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
   sel.value = opts.some(o => o[0] === prev) && prev !== "kd" ? prev : (opts.find(o => o[0].startsWith("pane:")) || ["kd"])[0];
   renderPanes();
+  shot.smc = shotSmc(shot.D, cal);
+  $("#smcSummary").innerHTML = shot.smc.html;
   shotDrawChart();
   $("#shotSummary").innerHTML = shotSummary(shot.D, shot.I, cal);
+  drawShot();
 }
 function renderPanes() {
-  $("#paneBox").hidden = !shot.panes.length && !shot.subCrop;
+  $("#paneCount").textContent = shot.panes.length ? `(${shot.panes.length})` : "";
   $("#paneList").innerHTML = shot.panes.length ? shot.panes.map((p, n) => {
     const t = p.cfg.type || p.type, names = PANE_NAMES[t] || [];
     const sw = t === "vol" ? "" : p.lines.map((l, k) => `<span class="sw" style="background:rgb(${l.rgb.join(",")})"></span>${names[k] || "線" + (k + 1)}`).join("");
@@ -2240,14 +2375,15 @@ function renderPanes() {
 function shotDrawChart() {
   if (!shot.D) return;
   const v = $("#shSub").value, pane = v.startsWith("pane:") ? shot.panes[+v.slice(5)] : null;
-  const markers = [...Signals.candle(shot.D, shot.I), ...(pane ? shot.readings[+v.slice(5)].markers : [])];
+  const smcOn = $("#shSmc").checked, ex = smcOn ? smcExtra(shot.D) : {};
+  const markers = [...(smcOn ? [...Signals.structure(shot.D, shot.I, "smc"), ...Signals.sweep(shot.D)] : Signals.candle(shot.D, shot.I)), ...(pane ? shot.readings[+v.slice(5)].markers : [])];
   let custom = null;
   if (pane) {
     const t = pane.cfg.type || pane.type, S = paneSeries(pane, t, pane.cfg.hi, pane.cfg.lo), osc = t === "kd" || t === "rsi";
     custom = { title: `截圖 ${PANE_TYPES[t] || "副圖"}`, lines: S.lines, names: PANE_NAMES[t] || ["線1", "線2", "線3"], bars: t === "macd" ? S.bars : null, zeroLine: t === "macd",
       levels: osc && S.cal ? (t === "kd" ? [80, 20] : [70, 30]) : [], range: osc ? (S.cal ? [pane.cfg.lo, pane.cfg.hi] : [0, 100]) : null };
   }
-  shotChart.set(shot.D, { I: shot.I, ma: $("#shMA").checked ? [5, 20] : [], boll: $("#shBoll").checked, sub: pane ? "custom" : v, custom, noVol: !shot.hasVol, volLabel: "量（相對）", fmtD: d => d.replace(/\D/g, ""), markers });
+  shotChart.set(shot.D, { I: shot.I, ma: $("#shMA").checked ? [5, 20] : [], boll: $("#shBoll").checked, sub: pane ? "custom" : v, custom, noVol: !shot.hasVol, volLabel: "量（相對）", fmtD: d => d.replace(/\D/g, ""), markers, zones: ex.zones, shapes: ex.shapes });
 }
 function shotLoad(blob, hiLo) {
   if (!blob || !/^image\//.test(blob.type)) { $("#shotInfo").textContent = "請選擇 PNG、JPG、WebP 或 GIF 圖片"; return; }
@@ -2352,7 +2488,15 @@ $("#paneList").addEventListener("change", e => {
   drawShot(); shotRefresh();
 });
 ["shotConv", "shotHi", "shotLo"].forEach(id => $("#" + id).addEventListener("change", shotRun));
-["shMA", "shBoll", "shSub"].forEach(id => $("#" + id).addEventListener("change", shotDrawChart));
+["shMA", "shBoll", "shSub", "shSmc"].forEach(id => $("#" + id).addEventListener("change", shotDrawChart));
+$("#shotSmcOverlay").addEventListener("change", drawShot);
+$("#shotEnlarge").addEventListener("click", e => { const on = $("#shotGrid").classList.toggle("wide"); e.target.setAttribute("aria-pressed", on); e.target.textContent = on ? "縮小截圖" : "放大截圖"; drawShot(); });
+$(".rtabs").addEventListener("click", e => {
+  const b = e.target.closest("[data-rt]"); if (!b) return;
+  document.querySelectorAll(".rtabs [data-rt]").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll(".rpanel").forEach(p => { p.hidden = p.dataset.rp !== b.dataset.rt; });
+});
+$("#smcSummary").addEventListener("click", e => { const b = e.target.closest("[data-lesson]"); if (b) { switchTab("learn"); showLesson(+b.dataset.lesson); } });
 $("#shotSummary").addEventListener("click", e => { const b = e.target.closest("[data-lesson]"); if (b) { switchTab("learn"); showLesson(+b.dataset.lesson); } });
 
 /* ---------- 請 Claude 解讀 ----------
