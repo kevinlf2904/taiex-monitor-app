@@ -178,6 +178,21 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .ob-tape { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 .ob-tape li { display: grid; grid-template-columns: 70px 1fr 1fr auto; gap: 8px; align-items: center; }
 @media (max-width: 640px) { .ob-grid { grid-template-columns: minmax(0, 1fr); } }
+.ibar { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.ibar.compact { padding: 0; border: 0; }
+.ibar-g { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ibar-t { font-size: 12px; color: var(--muted); letter-spacing: .06em; margin-right: 2px; }
+.ichip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 3px 11px; font-size: 13px; cursor: pointer; }
+.ichip i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.ichip:hover { border-color: var(--accent); color: var(--ink); }
+.ichip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600; }
+.workspace { margin-top: 18px; }
+.ws-head { display: flex; justify-content: space-between; align-items: end; gap: 10px; flex-wrap: wrap; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+.sim-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; background: var(--surface-2); }
+.switch { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; cursor: pointer; }
+.sim-stats { padding: 12px 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.stat .v.sm { font-size: 15px; }
+details.verdict summary { cursor: pointer; list-style-position: outside; }
 .lesson-chart { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 80px; }
 .chart-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .lgroup span { font-family: var(--font-mono); font-weight: 500; margin-left: 6px; color: var(--accent); }
@@ -281,6 +296,14 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; ba
 .rpanel { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .plan { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; }
 .plan p { margin: 4px 0 0; }
+.shot-stage { position: relative; }
+.steps { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; padding: 0; counter-reset: s; }
+.steps a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); text-decoration: none; font-size: 14px; }
+.steps a:hover { border-color: var(--accent); }
+.steps b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--surface); font-size: 12px; }
+#shotGrid, #shotRebuild, #shotDrop { scroll-margin-top: 80px; }
+.shot-pop { position: absolute; z-index: 3; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; box-shadow: 0 6px 24px rgba(0,0,0,.18); min-width: 200px; max-width: 260px; }
+.shot-pop input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-family: var(--font-mono); }
 .shot-grid.wide { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 901px) { .shot-grid:not(.wide) .results { position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto; } }
 .ai-out { max-width: 75ch; font-size: 15px; }
@@ -375,7 +398,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
           <div class="row"><label><input type="checkbox" id="zz">轉折點與結構（道氏 / HH、HL）</label></div>
           <div class="row"><label><input type="checkbox" id="smcz">聰明錢區塊（訂單塊 / 缺口）</label></div>
           <h3>副圖</h3>
-          <div class="row"><select id="labSub"><option value="">無</option><option value="rsi">RSI (14)</option><option value="kd" selected>KD (9,3,3)</option><option value="macd">MACD (12,26,9)</option><option value="wr">威廉 %R (14)</option><option value="inout">外盤比</option></select></div>
+          <div class="ibar compact" id="labIbar"></div>
         </div>
         <div class="panel ctrl">
           <h3>判讀 <span class="note" id="roDate"></span></h3>
@@ -402,9 +425,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <div class="panel">
       <div class="chartbox" id="chalChart"></div>
       <div class="chal-bar">
-        <label class="row" style="gap:6px"><input type="checkbox" id="chMA" checked>均線</label>
-        <label class="row" style="gap:6px"><input type="checkbox" id="chBoll">布林</label>
-        <select id="chSub" aria-label="副圖"><option value="">無副圖</option><option value="rsi">RSI</option><option value="kd" selected>KD</option><option value="macd">MACD</option></select>
+        <div class="ibar" id="chIbar"></div>
         <span style="flex:1"></span>
         <button class="btn" id="chHint">看指標判讀</button>
         <button class="btn big buy" id="chUp">看漲 ▲</button>
@@ -424,6 +445,11 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
         <p class="note" style="margin:6px 0 0; max-width: 62ch">把看盤軟體的 K 線圖截下來丟進來。程式會在你的瀏覽器裡找出每一根 K 棒（圖上有均線也沒關係），讀出下方副圖的 KD、RSI、MACD 與成交量，再告訴你這張圖在講什麼。圖片不會上傳，除非你按下「請 Claude 解讀」。</p>
       </div>
     </div>
+    <ol class="steps" aria-label="使用步驟">
+      <li><a href="#" data-step="shotDrop"><b>1</b>上傳截圖</a></li>
+      <li><a href="#" data-step="shotGrid"><b>2</b>確認辨識、看判讀</a></li>
+      <li><a href="#" data-step="shotRebuild"><b>3</b>重建 K 線、模擬未來</a></li>
+    </ol>
     <div class="shot-top">
       <label class="drop panel" id="shotDrop" for="shotFile">
         <input type="file" id="shotFile" accept="image/png,image/jpeg,image/webp,image/gif">
@@ -434,20 +460,21 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
           <label>顏色慣例 <select id="shotConv"><option value="tw">台股：紅漲綠跌</option><option value="us">美股：綠漲紅跌</option></select></label>
           <button class="btn" id="shotSample">載入範例截圖</button>
         </div>
-        <div class="row note">價格校正（選填）：圖中最高點 <input type="number" id="shotHi" step="any" placeholder="例 612"> 最低點 <input type="number" id="shotLo" step="any" placeholder="例 548"></div>
+        <div class="row note">價格校正（選填）：用下方「校正價格」在截圖上點兩條刻度最準；或輸入圖中最高點 <input type="number" id="shotHi" step="any" placeholder="例 612" aria-label="圖中最高點"> 最低點 <input type="number" id="shotLo" step="any" placeholder="例 548" aria-label="圖中最低點"></div>
+        <div class="row note"><label class="row" style="gap:6px">最後一根 K 棒的日期 <input type="date" id="shotDate"></label><span>（選填，填了會依交易日往前推算日期）</span></div>
       </div>
     </div>
     <div class="shot-grid" id="shotGrid">
       <div class="panel shot-src">
         <div class="shot-src-head">
-          <div><h3 style="margin:0">辨識結果</h3><span class="note" id="shotInfo"></span></div>
+          <div><div class="eyebrow">步驟 2</div><h3 style="margin:0">辨識結果</h3><span class="note" id="shotInfo"></span></div>
           <div class="row"><label class="row" style="gap:6px; font-size:13.5px"><input type="checkbox" id="shotSmcOverlay" checked>標示聰明錢</label><button class="btn" id="shotEnlarge" aria-pressed="false">放大截圖</button></div>
         </div>
-        <canvas id="shotCanvas" aria-label="截圖與偵測到的 K 棒"></canvas>
+        <div class="shot-stage"><canvas id="shotCanvas" aria-label="截圖與偵測到的 K 棒"></canvas><div class="shot-pop panel" id="shotPop" hidden></div></div>
         <div class="row note" style="padding: 0 14px 12px">
-          <div class="seg" role="group" aria-label="框選模式"><button id="modePrice" aria-pressed="true">框選 K 線區</button><button id="modeSub" aria-pressed="false">框選副圖</button></div>
+          <div class="seg" role="group" aria-label="截圖操作模式"><button id="modePrice" data-mode="price" aria-pressed="true">框選 K 線區</button><button id="modeSub" data-mode="sub" aria-pressed="false">框選副圖</button><button data-mode="cal" aria-pressed="false">校正價格</button><button data-mode="edit" aria-pressed="false">修正 K 棒</button></div>
           <span id="modeHint">偵測不準時，在圖上拖曳框出只有 K 棒的價格區。</span>
-          <button class="btn" id="shotReset" hidden>改回自動偵測</button>
+          <button class="btn" id="shotReset" hidden>重設框選與校正</button><button class="btn" id="shotClearEdits" hidden></button>
         </div>
       </div>
       <div class="panel results">
@@ -467,17 +494,21 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
         </div>
       </div>
     </div>
-    <div class="panel" id="shotRebuild" style="margin-top:18px">
-      <div class="chal-bar" style="border-top:0; border-bottom:1px solid var(--line)">
-        <strong style="font-size:14px">重建的 K 線</strong>
-        <label class="row" style="gap:6px"><input type="checkbox" id="shMA" checked>均線 5 / 20</label>
-        <label class="row" style="gap:6px"><input type="checkbox" id="shBoll">布林</label>
-        <label class="row" style="gap:6px"><input type="checkbox" id="shSmc" checked>聰明錢</label>
-        <select id="shSub" aria-label="副圖"><option value="">無副圖</option><option value="rsi">RSI</option><option value="kd" selected>KD</option><option value="macd">MACD</option></select>
-        <span class="note">游標移到 K 棒上可看當天判讀</span>
+    <div class="panel workspace" id="shotRebuild">
+      <div class="ws-head">
+        <div><div class="eyebrow">步驟 3</div><h3 style="margin:0">重建的 K 線與未來走勢模擬</h3></div>
+        <span class="note">游標移到 K 棒上看當天判讀；按右上角 ＋ − 或 Ctrl＋滾輪縮放，拖曳平移</span>
+      </div>
+      <div class="ibar" id="shotIbar"></div>
+      <div class="sim-bar">
+        <label class="switch"><input type="checkbox" id="simOn" checked><span>未來走勢模擬</span></label>
+        <label>模擬 <select id="simDays" aria-label="模擬天數"><option value="10">10 根</option><option value="20" selected>20 根</option><option value="40">40 根</option><option value="60">60 根</option></select></label>
+        <label>情境 <select id="simMode" aria-label="模擬情境"><option value="trend">延續近期趨勢</option><option value="flat">沒有方向（純隨機）</option><option value="tech">依技術指標偏向</option><option value="smc">依聰明錢結構</option></select></label>
+        <button class="btn" id="simRerun">重新模擬</button>
       </div>
       <div class="chartbox" id="shotChart"></div>
-      <div class="verdict"><h3 style="margin:0">游標所在 K 棒的指標</h3><div id="shotRo"></div></div>
+      <div class="sim-stats" id="simStats" hidden></div>
+      <details class="verdict" open><summary><h3 style="margin:0; display:inline">游標所在 K 棒的指標</h3></summary><div id="shotRo"></div></details>
     </div>
   </section>
 
@@ -946,6 +977,63 @@ function renderReadout(el, items, wide) {
 }
 
 /* ================= 圖表 ================= */
+/* ---------- 技術指標開關 ----------
+   一排可切換的小籤，分成「主圖」「副圖」兩組；狀態記在瀏覽器裡，下次打開還在。 */
+function indicatorBar(host, key, groups, defaults, onChange) {
+  let state = new Set(store.get("ind:" + key, defaults));
+  const render = () => {
+    host.innerHTML = groups.map(g => `<div class="ibar-g" role="group" aria-label="${g.title}"><span class="ibar-t">${g.title}</span>${g.items.map(it =>
+      `<button type="button" class="ichip" data-id="${it.id}" aria-pressed="${state.has(it.id)}">${it.color ? `<i style="background:var(${it.color})"></i>` : ""}${it.label}</button>`).join("")}</div>`).join("");
+  };
+  host.addEventListener("click", e => {
+    const b = e.target.closest("[data-id]"); if (!b) return;
+    const id = b.dataset.id; state.has(id) ? state.delete(id) : state.add(id);
+    store.set("ind:" + key, [...state]); render(); onChange(state);
+  });
+  render();
+  return { has: id => state.has(id), get state() { return state; }, set(id, on) { on ? state.add(id) : state.delete(id); render(); }, setGroups(g) { groups = g; render(); } };
+}
+const MAIN_ITEMS = [{ id: "ma5", label: "MA5", color: "--s1" }, { id: "ma10", label: "MA10", color: "--accent" }, { id: "ma20", label: "MA20", color: "--s2" }, { id: "ma60", label: "MA60", color: "--s3" }, { id: "boll", label: "布林" }];
+const SUB_ITEMS = [{ id: "vol", label: "成交量" }, { id: "kd", label: "KD" }, { id: "rsi", label: "RSI" }, { id: "macd", label: "MACD" }, { id: "wr", label: "威廉" }];
+const maFrom = bar => [5, 10, 20, 60].filter(p => bar.has("ma" + p));
+const subsFrom = (bar, ids = ["kd", "rsi", "macd", "wr", "inout"]) => ids.filter(id => bar.has(id));
+
+/* ---------- 未來走勢模擬（蒙地卡羅） ----------
+   從截圖重建的 K 棒取出每日漲跌幅，隨機抽樣接成很多條未來路徑：
+   不是預測，而是在「近期波動不變」的假設下，價格可能落在哪裡的機率分布。 */
+function simulateFuture(D, { days = 20, mode = "trend", paths = 800, seed = 1, bias = 0 } = {}) {
+  const n = D.length, r = mulberry32(seed), avg = a => a.reduce((x, y) => x + y, 0) / (a.length || 1);
+  const rets = []; for (let i = Math.max(1, n - 120); i < n; i++) rets.push(Math.log(D[i].c / D[i - 1].c));
+  const mean = avg(rets), sd = Math.sqrt(avg(rets.map(x => (x - mean) ** 2))) || 0.01, resid = rets.map(x => x - mean);
+  const recent = D.slice(-60), ranges = recent.map(x => (x.h - x.l) / x.c), gaps = recent.slice(1).map((x, k) => (x.o - recent[k].c) / recent[k].c);
+  let drift = 0;
+  // 趨勢只延續一半、且有上限：避免把近期漲跌直接外推成大行情
+  if (mode === "trend") drift = Math.max(-0.2 * sd, Math.min(0.2 * sd, avg(rets.slice(-20)) * 0.5));
+  else if (mode === "tech" || mode === "smc") drift = bias * 0.12 * sd;
+  const avgV = avg(D.slice(-20).map(x => x.v)); // 模擬區沿用近期均量，均量線才不會掉下去
+  const last = D[n - 1].c, all = Array.from({ length: paths }, () => new Float64Array(days)), mx = new Float64Array(paths), mn = new Float64Array(paths);
+  const avgRange = avg(ranges);
+  for (let p = 0; p < paths; p++) {
+    let c = last, hi = -Infinity, lo = Infinity;
+    for (let t = 0; t < days; t++) { c *= Math.exp(drift + resid[Math.floor(r() * resid.length)]); all[p][t] = c; hi = Math.max(hi, c * (1 + avgRange / 2)); lo = Math.min(lo, c * (1 - avgRange / 2)); }
+    mx[p] = hi; mn[p] = lo;
+  }
+  const q = (arr, f) => arr[Math.min(arr.length - 1, Math.floor(f * arr.length))];
+  const bands = { p10: [], p25: [], p50: [], p75: [], p90: [] };
+  for (let t = 0; t < days; t++) { const col = Array.from(all, a => a[t]).sort((a, b) => a - b); bands.p10.push(q(col, 0.1)); bands.p25.push(q(col, 0.25)); bands.p50.push(q(col, 0.5)); bands.p75.push(q(col, 0.75)); bands.p90.push(q(col, 0.9)); }
+  // 示範路徑：挑終點最接近中位數的那一條，畫成 K 棒
+  const med = bands.p50[days - 1]; let best = 0; for (let p = 1; p < paths; p++) if (Math.abs(all[p][days - 1] - med) < Math.abs(all[best][days - 1] - med)) best = p;
+  let prev = last;
+  const bars = Array.from(all[best], (c, t) => {
+    const o = prev * (1 + gaps[Math.floor(r() * gaps.length)] * 0.6), rg = ranges[Math.floor(r() * ranges.length)] * c;
+    const h = Math.max(o, c) + rg * r() * 0.5, l = Math.min(o, c) - rg * r() * 0.5; prev = c;
+    return { d: `模擬 ${t + 1}`, o, h, l, c, v: avgV, sim: true };
+  });
+  const ends = Array.from(all, a => a[days - 1]).sort((a, b) => a - b);
+  return { bars, bands, sd, drift, last, paths,
+    stats: { p10: q(ends, 0.1), p50: q(ends, 0.5), p90: q(ends, 0.9), up: ends.filter(x => x > last).length / paths },
+    touch: (price, above) => Array.from(above ? mx : mn).filter(v => (above ? v >= price : v <= price)).length / paths };
+}
 class Chart {
   constructor(host, { onHover } = {}) {
     this.host = host; this.onHover = onHover;
@@ -998,8 +1086,10 @@ class Chart {
     const { D, I, o } = this, ctx = this.ctx, dpr = window.devicePixelRatio || 1;
     const W = this.host.clientWidth; if (!W) return;
     const narrow = W < 560;
-    const mainH = narrow ? 230 : 300, volH = o.noVol ? 0 : narrow ? 52 : 66, subH = o.sub ? (narrow ? 92 : 112) : 0, gap = 10, axisH = 20;
-    const H = mainH + gap + volH + (subH ? gap + subH : 0) + axisH + 8;
+    // 副圖可以疊好幾個：o.subs = ["kd", "macd", { custom }]；舊的 o.sub 也支援
+    const subs = (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean);
+    const mainH = narrow ? 230 : 300, volH = o.noVol ? 0 : narrow ? 52 : 66, subH = subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112), gap = 10, axisH = 20;
+    const H = mainH + gap + volH + subs.length * (gap + subH) + axisH + 8;
     this.canvas.width = W * dpr; this.canvas.height = H * dpr; this.canvas.style.height = H + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
     const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface") };
@@ -1008,15 +1098,18 @@ class Chart {
     this.geo = { L, bw, a: va, pw, H };
     const X = i => L + bw * (i - va + 0.5);
     this.bar.classList.toggle("zoomed", !!this.view);
-    const top0 = 8, volTop = top0 + mainH + gap, subTop = o.noVol ? volTop : volTop + volH + gap;
+    const top0 = 8, volTop = top0 + mainH + gap, subTop0 = o.noVol ? volTop : volTop + volH + gap;
     const fmtD = o.fmtD || (s => s.slice(5).replace("-", "/"));
-    const mas = (o.ma || []).map((n, k) => ({ n, a: I.ma(n), c: [col.s1, col.s2, col.s3][k % 3] }));
+    const MA_COL = { 5: col.s1, 10: col.accent, 20: col.s2, 60: col.s3 };
+    const mas = (o.ma || []).map((n, k) => ({ n, a: I.ma(n), c: MA_COL[n] || [col.s1, col.s2, col.s3][k % 3] }));
+    const F = o.future; // { from, p10, p25, p50, p75, p90 }：模擬區的機率帶
 
     // 價格範圍
     let lo = Infinity, hi = -Infinity;
     for (let i = va; i < Math.min(vis, vb + 1); i++) {
       lo = Math.min(lo, D[i].l); hi = Math.max(hi, D[i].h);
       if (o.boll && I.boll.up[i] != null) { lo = Math.min(lo, I.boll.lo[i]); hi = Math.max(hi, I.boll.up[i]); }
+      if (F && i >= F.from) { lo = Math.min(lo, F.p10[i - F.from]); hi = Math.max(hi, F.p90[i - F.from]); }
     }
     const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
     const Y = p => top0 + (hi - p) / (hi - lo) * mainH;
@@ -1063,15 +1156,28 @@ class Chart {
       if (x2 - x1 > 22) { ctx.fillStyle = c; ctx.textAlign = "left"; ctx.font = `600 10px ${cssVar("--font-body")}`; ctx.fillText(z.kind, x1 + 3, Math.max(y1, Math.min(y2, y1 + 7))); ctx.font = `11px ${cssVar("--font-mono")}`; }
     });
     ctx.restore();
+    // 模擬區：底色、機率帶（10–90%、25–75%）、中位數
+    if (F) {
+      const fx = Math.max(L, X(F.from - 0.5));
+      ctx.fillStyle = col.shade; ctx.fillRect(fx, top0, L + pw - fx, mainH);
+      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
+      const band = (a, b, alpha) => { ctx.fillStyle = col.accent; ctx.globalAlpha = alpha; ctx.beginPath(); ctx.moveTo(X(F.from - 1), Y(D[F.from - 1].c)); a.forEach((v, t) => ctx.lineTo(X(F.from + t), Y(v))); for (let t = b.length - 1; t >= 0; t--) ctx.lineTo(X(F.from + t), Y(b[t])); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; };
+      band(F.p90, F.p10, 0.1); band(F.p75, F.p25, 0.16);
+      ctx.strokeStyle = col.accent; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(X(F.from - 1), Y(D[F.from - 1].c)); F.p50.forEach((v, t) => ctx.lineTo(X(F.from + t), Y(v))); ctx.stroke(); ctx.setLineDash([]);
+      ctx.restore();
+      ctx.fillStyle = col.accent; ctx.textAlign = "left"; ctx.font = `700 11px ${cssVar("--font-body")}`; if (fx < L + pw - 40) ctx.fillText("模擬", fx + 6, top0 + 10); ctx.font = `11px ${cssVar("--font-mono")}`;
+    }
     // K 棒
     const cw = Math.max(1, Math.min(14, bw * 0.66));
     for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) {
       const k = D[i], x = X(i), upc = k.c > k.o ? col.up : k.c < k.o ? col.down : col.ink;
+      ctx.globalAlpha = k.sim ? 0.5 : 1;
       ctx.strokeStyle = upc; ctx.fillStyle = upc; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, Y(k.h)); ctx.lineTo(Math.round(x) + 0.5, Y(k.l)); ctx.stroke();
       const y1 = Y(Math.max(k.o, k.c)), y2 = Y(Math.min(k.o, k.c));
       ctx.fillRect(Math.round(x - cw / 2), y1, Math.max(1, Math.round(cw)), Math.max(1, y2 - y1));
     }
+    ctx.globalAlpha = 1;
     // 均線
     mas.forEach(m => this.line(m.a, vis, X, Y, m.c, 1.6));
     // 折線、頸線、目標價、結構線（可來自設定或附在標記上；只畫到可見範圍）
@@ -1117,39 +1223,40 @@ class Chart {
     if (!o.noVol) {
     let vmax = 1; for (let i = va; i < Math.min(vis, vb + 1); i++) vmax = Math.max(vmax, D[i].v);
     ctx.globalAlpha = 0.6;
-    for (let i = va; i < Math.min(vis, vb + 1); i++) { const k = D[i]; ctx.fillStyle = k.c >= k.o ? col.up : col.down; const h = Math.min(volH - 2, k.v / vmax * (volH - 4)); ctx.fillRect(Math.round(X(i) - cw / 2), volTop + volH - h, Math.max(1, Math.round(cw)), h); }
+    for (let i = va; i < Math.min(vis, vb + 1); i++) { const k = D[i]; if (k.sim) continue; ctx.fillStyle = k.c >= k.o ? col.up : col.down; const h = Math.min(volH - 2, k.v / vmax * (volH - 4)); ctx.fillRect(Math.round(X(i) - cw / 2), volTop + volH - h, Math.max(1, Math.round(cw)), h); }
     ctx.globalAlpha = 1;
     this.line(I.vma, vis, X, v => volTop + volH - v / vmax * (volH - 4), col.muted, 1);
     ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`; ctx.fillText(o.volLabel || "量（張）", L + pw + 6, volTop + 6); ctx.font = `11px ${cssVar("--font-mono")}`;
     ctx.strokeStyle = col.line; ctx.beginPath(); ctx.moveTo(L, volTop - gap / 2); ctx.lineTo(L + pw, volTop - gap / 2); ctx.stroke();
     }
 
-    // 副圖
-    if (o.sub) {
+    // 副圖（可多個，由上往下排）
+    subs.forEach((S, si) => {
+      const sub = typeof S === "string" ? S : "custom", C0 = typeof S === "string" ? null : S.custom, subTop = subTop0 + si * (subH + gap);
       ctx.strokeStyle = col.line; ctx.beginPath(); ctx.moveTo(L, subTop - gap / 2); ctx.lineTo(L + pw, subTop - gap / 2); ctx.stroke();
       const lvl = (v, sy) => { const y = sy(v); ctx.strokeStyle = col.line; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.fillText(String(v), L + pw + 6, y); };
-      if (o.sub === "rsi" || o.sub === "kd") {
+      if (sub === "rsi" || sub === "kd") {
         const sy = v => subTop + (100 - v) / 100 * subH;
-        const [a, b] = o.sub === "rsi" ? [70, 30] : [80, 20];
+        const [a, b] = sub === "rsi" ? [70, 30] : [80, 20];
         ctx.fillStyle = col.band; ctx.fillRect(L, sy(100), pw, sy(a) - sy(100)); ctx.fillRect(L, sy(b), pw, sy(0) - sy(b));
         lvl(a, sy); lvl(b, sy);
-        if (o.sub === "rsi") this.line(I.rsi, vis, X, sy, col.s2, 1.5);
+        if (sub === "rsi") this.line(I.rsi, vis, X, sy, col.s2, 1.5);
         else { this.line(I.kd.K, vis, X, sy, col.s1, 1.5); this.line(I.kd.D, vis, X, sy, col.s3, 1.5); }
-      } else if (o.sub === "wr") {
+      } else if (sub === "wr") {
         const sy = v => subTop + (-v) / 100 * subH;
         ctx.fillStyle = col.band; ctx.fillRect(L, sy(0), pw, sy(-20) - sy(0)); ctx.fillRect(L, sy(-80), pw, sy(-100) - sy(-80));
         lvl(-20, sy); lvl(-80, sy);
         this.line(I.wr, vis, X, sy, col.s2, 1.5); this.subY = sy;
-      } else if (o.sub === "inout" && I.io) {
+      } else if (sub === "inout" && I.io) {
         let m = 5; for (let i = 0; i < vis; i++) m = Math.max(m, Math.abs(I.io[i] - 50));
         const sy = v => subTop + subH / 2 - (v - 50) / m * (subH / 2 - 4);
         ctx.globalAlpha = 0.55;
         for (let i = va; i < Math.min(vis, vb + 1); i++) { const v = I.io[i]; ctx.fillStyle = v >= 50 ? col.up : col.down; const y0 = sy(50), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }
         ctx.globalAlpha = 1; lvl(50, sy);
         this.line(I.io5, vis, X, sy, col.s1, 1.5); this.subY = sy;
-      } else if (o.sub === "custom") {
+      } else if (sub === "custom") {
         // 截圖讀出的副圖：值域依資料自動決定
-        const C = o.custom, vals = [...C.lines.flat(), ...(C.bars || [])].filter(v => v != null);
+        const C = C0, vals = [...C.lines.flat(), ...(C.bars || [])].filter(v => v != null);
         let lo = C.range ? C.range[0] : Math.min(...vals, C.bars ? 0 : Infinity), hi = C.range ? C.range[1] : Math.max(...vals, C.bars ? 0 : -Infinity);
         if (hi === lo) { hi += 1; lo -= 1; }
         const sy = v => subTop + 4 + (hi - v) / (hi - lo) * (subH - 8);
@@ -1157,7 +1264,7 @@ class Chart {
         if (C.bars) { ctx.globalAlpha = 0.55; C.bars.forEach((v, i) => { if (i >= vis || !v || !inV(i)) return; ctx.fillStyle = v >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }); ctx.globalAlpha = 1; if (C.zeroLine) lvl(0, sy); }
         C.lines.forEach((a, k) => this.line(a, vis, X, sy, [col.s1, col.s3, col.s2][k % 3], 1.5));
         this.subY = sy;
-      } else if (o.sub === "macd") {
+      } else if (sub === "macd") {
         const { dif, sig, osc } = I.macd; let m = 0;
         for (let i = 0; i < vis; i++) if (dif[i] != null) m = Math.max(m, Math.abs(dif[i]), Math.abs(sig[i] ?? 0), Math.abs(osc[i] ?? 0));
         m = m || 1; const sy = v => subTop + subH / 2 - v / m * (subH / 2 - 4);
@@ -1167,13 +1274,13 @@ class Chart {
         ctx.globalAlpha = 1;
         this.line(dif, vis, X, sy, col.s1, 1.5); this.line(sig, vis, X, sy, col.s3, 1.5);
       }
-      const subY = o.sub === "custom" ? this.subY : o.sub === "macd" ? (() => { const { dif, sig, osc } = I.macd; let m = 0; for (let i = 0; i < vis; i++) if (dif[i] != null) m = Math.max(m, Math.abs(dif[i]), Math.abs(sig[i] ?? 0), Math.abs(osc[i] ?? 0)); m = m || 1; return v => subTop + subH / 2 - v / m * (subH / 2 - 4); })() : v => subTop + (100 - v) / 100 * subH;
+      const subY = sub === "custom" ? this.subY : sub === "macd" ? (() => { const { dif, sig, osc } = I.macd; let m = 0; for (let i = 0; i < vis; i++) if (dif[i] != null) m = Math.max(m, Math.abs(dif[i]), Math.abs(sig[i] ?? 0), Math.abs(osc[i] ?? 0)); m = m || 1; return v => subTop + subH / 2 - v / m * (subH / 2 - 4); })() : v => subTop + (100 - v) / 100 * subH;
       ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pw, subH); ctx.clip();
-      divs.filter(m => m.div.ind === (o.sub === "custom" ? "pane" : o.sub)).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
+      divs.filter(m => m.div.ind === (sub === "custom" ? "pane" : sub)).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
       ctx.restore();
       ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`;
-      ctx.fillText(o.sub === "custom" ? o.custom.title : { rsi: "RSI 14", kd: "KD 9", macd: "MACD", wr: "威廉 %R 14", inout: "外盤比（%）" }[o.sub] || "", L + 4, subTop + 8); ctx.font = `11px ${cssVar("--font-mono")}`;
-    }
+      ctx.fillText(sub === "custom" ? C0.title : { rsi: "RSI 14", kd: "KD 9", macd: "MACD", wr: "威廉 %R 14", inout: "外盤比（%）" }[sub] || "", L + 4, subTop + 8); ctx.font = `11px ${cssVar("--font-mono")}`;
+    });
 
     // 日期軸
     const axY = H - axisH / 2 - 4, every = Math.max(1, Math.ceil(64 / bw));
@@ -1201,19 +1308,22 @@ class Chart {
   renderLegend(i, mas) {
     const { D, I, o } = this, k = D[i], prev = D[i - 1], ch = prev ? (k.c - prev.c) / prev.c : 0, cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
     const parts = [
-      `<span><b>${k.d.replace(/-/g, "/")}</b></span>`,
+      `<span><b>${k.sim ? `${k.d}（模擬，不是真實走勢）` : k.d.replace(/-/g, "/")}</b></span>`,
       `<span><b>開</b>${fmtP(k.o)}</span>`, `<span><b>高</b>${fmtP(k.h)}</span>`, `<span><b>低</b>${fmtP(k.l)}</span>`,
       `<span class="${cls}"><b>收</b>${fmtP(k.c)} ${prev ? fmtPct(ch) : ""}</span>`,
       ];
     if (!o.noVol) parts.push(`<span><b>量</b>${o.volLabel ? Math.round(k.v) : k.v.toLocaleString()}</span>`);
     mas.forEach(m => parts.push(`<span style="color:${m.c}"><b style="color:inherit">MA${m.n}</b>${fmtP(m.a[i])}</span>`));
     if (o.boll) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
-    if (o.sub === "wr") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">%R</b>${fmtN(I.wr[i])}</span>`);
-    if (o.sub === "inout" && I.io) parts.push(`<span><b>外盤</b>${D[i].ov.toLocaleString()}</span><span><b>內盤</b>${D[i].iv.toLocaleString()}</span><span style="color:var(--s1)"><b style="color:inherit">外盤比</b>${fmtN(I.io[i])}%（5日 ${fmtN(I.io5[i])}%）</span>`);
-    if (o.sub === "rsi") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">RSI</b>${fmtN(I.rsi[i])}</span>`);
-    if (o.sub === "kd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">K</b>${fmtN(I.kd.K[i])}</span><span style="color:var(--s3)"><b style="color:inherit">D</b>${fmtN(I.kd.D[i])}</span>`);
-    if (o.sub === "macd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">DIF</b>${fmtN(I.macd.dif[i], 2)}</span><span style="color:var(--s3)"><b style="color:inherit">MACD</b>${fmtN(I.macd.sig[i], 2)}</span><span><b>OSC</b>${fmtN(I.macd.osc[i], 2)}</span>`);
-    if (o.sub === "custom") o.custom.lines.forEach((a, n) => parts.push(`<span style="color:var(${["--s1", "--s3", "--s2"][n % 3]})"><b style="color:inherit">${o.custom.names[n]}</b>${fmtN(a[i])}</span>`));
+    (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean).forEach(S => {
+      const sub = typeof S === "string" ? S : "custom", C0 = typeof S === "string" ? null : S.custom;
+      if (sub === "wr") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">%R</b>${fmtN(I.wr[i])}</span>`);
+      if (sub === "inout" && I.io) parts.push(`<span><b>外盤</b>${D[i].ov.toLocaleString()}</span><span><b>內盤</b>${D[i].iv.toLocaleString()}</span><span style="color:var(--s1)"><b style="color:inherit">外盤比</b>${fmtN(I.io[i])}%（5日 ${fmtN(I.io5[i])}%）</span>`);
+      if (sub === "rsi") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">RSI</b>${fmtN(I.rsi[i])}</span>`);
+      if (sub === "kd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">K</b>${fmtN(I.kd.K[i])}</span><span style="color:var(--s3)"><b style="color:inherit">D</b>${fmtN(I.kd.D[i])}</span>`);
+      if (sub === "macd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">DIF</b>${fmtN(I.macd.dif[i], 2)}</span><span style="color:var(--s3)"><b style="color:inherit">MACD</b>${fmtN(I.macd.sig[i], 2)}</span><span><b>OSC</b>${fmtN(I.macd.osc[i], 2)}</span>`);
+      if (sub === "custom") C0.lines.forEach((a, n) => parts.push(`<span style="color:var(${["--s1", "--s3", "--s2"][n % 3]})"><b style="color:inherit">${C0.names[n]}</b>${fmtN(a[i])}</span>`));
+    });
     const mk = (o.markers || []).filter(m => m.i === i).map(m => m.label);
     if (mk.length) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">訊號</b>${mk.join("、")}</span>`);
     this.legend.innerHTML = parts.join("");
@@ -1742,7 +1852,7 @@ function labDraw() {
   const S = STRATS[lab.strat], sigs = S.fn ? S.fn(lab.D, lab.I) : [];
   const ex = $("#smcz").checked ? smcExtra(lab.D) : { shapes: [], zones: [] };
   if ($("#zz").checked) ex.shapes.push(zigzagShape(lab.D));
-  labChart.set(lab.D, { I: lab.I, ma, boll: $("#boll").checked, sub: $("#labSub").value, markers: sigs, hlines: $("#sr").checked ? srLevels(lab.D) : [], shapes: ex.shapes, zones: ex.zones });
+  labChart.set(lab.D, { I: lab.I, ma, boll: $("#boll").checked, subs: subsFrom(labBar), noVol: !labBar.has("vol"), markers: sigs, hlines: $("#sr").checked ? srLevels(lab.D) : [], shapes: ex.shapes, zones: ex.zones });
   renderBT(sigs);
 }
 function renderBT(sigs) {
@@ -1768,7 +1878,8 @@ function renderBT(sigs) {
 }
 $("#labNew").addEventListener("click", () => { lab.seed = Math.floor(Math.random() * 1e6); store.set("labSeed", lab.seed); labData(); labDraw(); });
 $("#labLen").addEventListener("change", () => { labData(); labDraw(); });
-["maA", "maB", "maC", "boll", "sr", "zz", "smcz", "labSub", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
+["maA", "maB", "maC", "boll", "sr", "zz", "smcz", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
+const labBar = indicatorBar($("#labIbar"), "lab", [{ title: "副圖（可多選）", items: [...SUB_ITEMS, { id: "inout", label: "外盤比" }] }], ["vol", "kd"], () => labDraw());
 
 /* ================= 判讀挑戰 ================= */
 const HORIZON = 10, SHOW = 120;
@@ -1780,7 +1891,7 @@ function chalNew() {
   chalDraw();
 }
 function chalDraw() {
-  chalChart.set(ch.D, { I: ch.I, ma: $("#chMA").checked ? [5, 20, 60] : [], boll: $("#chBoll").checked, sub: $("#chSub").value, visible: ch.answered ? ch.D.length : SHOW, cutoff: SHOW });
+  chalChart.set(ch.D, { I: ch.I, ma: maFrom(chBar), boll: chBar.has("boll"), subs: subsFrom(chBar), noVol: !chBar.has("vol"), visible: ch.answered ? ch.D.length : SHOW, cutoff: SHOW });
 }
 function chalScore() { $("#scRight").textContent = `${ch.right} / ${ch.total}`; $("#scStreak").textContent = ch.streak; $("#scBest").textContent = ch.best; }
 function chalAnswer(guess) {
@@ -1808,7 +1919,7 @@ $("#chHint").addEventListener("click", () => {
   const box = $("#chHintBox"); box.hidden = !box.hidden;
   if (!box.hidden) { box.innerHTML = `<h3>目前的指標狀態</h3><div id="chHintRo"></div><p class="note" style="margin:0">先自己讀圖再看提示，練習效果比較好。</p>`; renderReadout($("#chHintRo"), readout(ch.D, ch.I, SHOW - 1), true); }
 });
-["chMA", "chBoll", "chSub"].forEach(id => $("#" + id).addEventListener("change", chalDraw));
+const chBar = indicatorBar($("#chIbar"), "chal", [{ title: "主圖", items: MAIN_ITEMS }, { title: "副圖", items: SUB_ITEMS }], ["ma5", "ma20", "ma60", "vol", "kd"], () => chalDraw());
 
 /* ================= 觀念測驗 ================= */
 const QUESTIONS = [
@@ -1876,8 +1987,13 @@ function quizRender() {
    在瀏覽器內辨識截圖中的 K 棒：依顏色找出紅 / 綠像素，
    以「欄」切出每一根 K 棒，再從實體與影線的上下緣還原開高低收。
    RSI、KD、MACD、均線交叉都只和價格的相對變化有關，所以就算沒有價格刻度，判讀結果也成立。 */
-const shot = { img: null, file: null, url: null, crop: null, subCrop: null, mode: "price", res: null, panes: [], paneCfg: {}, D: null, I: null, drag: null, ctx: "", hasVol: false };
-const shotChart = new Chart($("#shotChart"), { onHover: i => { if (shot.D) renderReadout($("#shotRo"), readout(shot.D, shot.I, i), true); } });
+const shot = { calPts: [], edits: { del: new Set(), flip: new Map(), add: [] }, img: null, file: null, url: null, crop: null, subCrop: null, mode: "price", res: null, panes: [], paneCfg: {}, D: null, I: null, drag: null, ctx: "", hasVol: false };
+const shotChart = new Chart($("#shotChart"), { onHover: i => {
+  if (!shot.D) return;
+  if (i >= shot.D.length && shotChart.hover == null) i = shot.D.length - 1;
+  if (i >= shot.D.length) { $("#shotRo").innerHTML = `<p class="note" style="margin:0">這是模擬出來的第 ${i - shot.D.length + 1} 根 K 棒，只是許多可能路徑中的一條，不是真實或預測的走勢。</p>`; return; }
+  renderReadout($("#shotRo"), readout(shot.D, shot.I, i), true);
+} });
 
 // 0 = 其他、1 = 紅、2 = 綠
 function hueClass(r, g, b) {
@@ -1929,22 +2045,25 @@ function extractCandles(img, crop, conv) {
   const refs = [null, null, null];
   for (const c of [1, 2]) {
     const bins = new Map();
-    const scan = needWidth => {
+    // 先找「飽和、有寬度、有高度」的像素（實體），找不到再逐步放寬；避免選到反鋸齒或 JPEG 壓縮產生的淡色
+    const scan = (needWidth, minSat) => {
       for (let i = 0; i < N; i++) {
         if (hue[i] !== c || vrHue[i] < 4) continue;
-        const x = i % W;
+        const x = i % W, q = i * 4;
+        if (Math.max(px[q], px[q + 1], px[q + 2]) - Math.min(px[q], px[q + 1], px[q + 2]) < minSat) continue;
         if (needWidth && !((x > 0 && hue[i - 1] === c) && (x < W - 1 && hue[i + 1] === c))) continue;
         const k = qKey(px, i * 4); let b = bins.get(k); if (!b) bins.set(k, b = { n: 0, r: 0, g: 0, b: 0 });
         b.n++; b.r += px[i * 4]; b.g += px[i * 4 + 1]; b.b += px[i * 4 + 2];
       }
     };
-    scan(true); if (!bins.size) scan(false);
+    scan(true, 90); if (!bins.size) scan(false, 90); if (!bins.size) scan(false, 0);
     let best = null; for (const b of bins.values()) if (!best || b.n > best.n) best = b;
     if (best && best.n >= 12) refs[c] = [best.r / best.n, best.g / best.n, best.b / best.n];
   }
   // cm：顏色符合 K 棒色；sm：再排除扁平筆畫（垂直長度 < 3）
-  const cm = new Uint8Array(N), TOL = 60 * 60;
-  for (let i = 0; i < N; i++) { const c = hue[i]; if (c && refs[c] && dist2(px, i * 4, refs[c]) < TOL) cm[i] = c; }
+  const cm = new Uint8Array(N), TOL = 72 * 72;
+  // 嚴格比對 K 棒色；壓縮或縮放過的圖，細影線顏色會偏掉，同色相、垂直夠長的像素用較寬的容許值
+  for (let i = 0; i < N; i++) { const c = hue[i]; if (c && refs[c]) { const d = dist2(px, i * 4, refs[c]); if (d < TOL || (vrHue[i] >= 3 && d < 115 * 115)) cm[i] = c; } }
   const vr = verticalRuns(cm, W, H), sm = new Uint8Array(N);
   for (let i = 0; i < N; i++) if (cm[i] && vr[i] >= 3) sm[i] = cm[i];
   const rowCnt = new Uint32Array(H);
@@ -1962,8 +2081,12 @@ function extractCandles(img, crop, conv) {
       const mode = m => Math.max(0, ...m.values());
       return cols > 10 && (mode(bots) > cols * 0.6 || mode(tops) + mode(bots) > cols * 0.75);
     };
-    const big = bands.filter(b => b[1] - b[0] >= H * 0.05 && !isBars(b));
-    for (let k = big.length - 1; k > 0; k--) if (big[k][0] - big[k - 1][1] <= H * 0.15) { big[k - 1] = [big[k - 1][0], big[k][1]]; big.splice(k, 1); }
+    // 先把「不是柱狀區」的相鄰區塊合併（大跳空、空心 K 棒都可能把價格區切成好幾塊），再挑最高的一塊
+    const tagged = bands.map(b => ({ b, bars: b[1] - b[0] >= 8 && isBars(b) }));
+    const big = [];
+    tagged.filter(t => t.b[1] - t.b[0] >= H * 0.04).forEach(t => { const last = big[big.length - 1]; if (!t.bars && last && !last.bars && t.b[0] - last.b[1] <= H * 0.25) last.b = [last.b[0], t.b[1]]; else big.push({ ...t, b: [...t.b] }); });
+    const priceBands = big.filter(t => !t.bars && t.b[1] - t.b[0] >= H * 0.05).map(t => t.b);
+    big.length = 0; big.push(...priceBands);
     const pool = big.length ? big : bands;
     if (pool.length) [y0, y1] = pool.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
   }
@@ -1971,6 +2094,18 @@ function extractCandles(img, crop, conv) {
   for (let y = y0; y <= y1; y++) for (let x = 0; x < W; x++) if (sm[y * W + x]) col[x]++;
   let runs = [];
   for (let x = 0; x < W; x++) if (col[x]) { const a = x; let t = 0; while (x < W && col[x]) t += col[x++]; if (t >= 3) runs.push([a, x - 1]); }
+  // 最新價標籤這類「又寬又矮、幾乎塗滿」的色塊不是 K 棒
+  {
+    const ws = runs.map(r => r[1] - r[0] + 1).sort((a, b) => a - b), medW = ws[ws.length >> 1] || 1;
+    runs = runs.filter(([a, b]) => {
+      const w = b - a + 1; if (w < Math.max(12, medW * 3)) return true;
+      let t = -1, e = -1, fill = 0;
+      for (let y = y0; y <= y1; y++) { let c = 0; for (let x = a; x <= b; x++) if (cm[y * W + x]) c++; if (c >= w * 0.6) { if (t < 0) t = y; e = y; } }
+      if (t < 0) return true;
+      for (let y = t; y <= e; y++) for (let x = a; x <= b; x++) if (cm[y * W + x]) fill++;
+      return !(e - t + 1 <= (y1 - y0) * 0.1 && fill >= w * (e - t + 1) * 0.55 && w > (e - t + 1) * 1.5);
+    });
+  }
   // 空心 K 棒：細的左框、影線、右框若在同一列被 K 棒色的水平框線連起來，就是同一根
   const spans = (a, b) => { for (let y = y0; y <= y1; y++) { let ok = true; for (let x = a; x <= b && ok; x++) if (!cm[y * W + x]) ok = false; if (ok) return true; } return false; };
   const merged = [];
@@ -1982,7 +2117,9 @@ function extractCandles(img, crop, conv) {
   runs = merged;
   // 密集的圖上相鄰 K 棒會黏在一起：用「K 棒間距」把黏住的區塊切開（相鄰中心距離的低分位數就是間距）
   const diffs = runs.slice(1).map((r, j) => (r[0] + r[1]) / 2 - (runs[j][0] + runs[j][1]) / 2).sort((a, b) => a - b);
-  const pitch = diffs[Math.floor(diffs.length * 0.2)] || 0;
+  // 相鄰中心距離的低分位數只是粗估；再取「單一步」距離的平均，得到不是整數像素的真正間距
+  const p20 = diffs[Math.floor(diffs.length * 0.2)] || 0, steps = diffs.filter(d => d >= p20 * 0.6 && d <= p20 * 1.6);
+  const pitch = steps.length ? steps.reduce((a, b) => a + b, 0) / steps.length : p20;
   if (pitch >= 2) {
     const singles = runs.map(r => r[1] - r[0] + 1).filter(w => w <= pitch).sort((a, b) => a - b);
     const gapW = Math.max(0, pitch - (singles[singles.length >> 1] || pitch));
@@ -2032,18 +2169,26 @@ function extractCandles(img, crop, conv) {
     if (bt < 0) bt = bb = bestY;
     // 影線可能因反鋸齒變淡：沿中央欄位用同色相往上下延伸
     const h = n[1] >= n[2] ? 1 : 2, m0 = (a + b) >> 1, cA = Math.max(a, m0 - 1), cB = Math.min(b, m0 + 1);
-    const hit = y => { for (let x = cA; x <= cB; x++) if (hue[y * W + x] === h) return true; return false; };
+    const ref = refs[h], reddish = h === 1;
+    const hit = y => { for (let x = cA; x <= cB; x++) { const i = y * W + x; if (hue[i] === h) return true; const q = i * 4, r = px[q], g = px[q + 1], b = px[q + 2]; if (reddish ? r - Math.max(g, b) > 28 : g - Math.max(r, b) > 22) return true; if (ref && dist2(px, q, ref) < 95 * 95 && Math.max(r, g, b) - Math.min(r, g, b) > 30) return true; } return false; };
     for (let y = top - 1, miss = 0; y >= y0 && miss <= 1; y--) { if (hit(y)) { top = y; miss = 0; } else miss++; }
     for (let y = bot + 1, miss = 0; y <= y1 && miss <= 1; y++) { if (hit(y)) { bot = y; miss = 0; } else miss++; }
     const f = v => (v + ry) / scale;
     candles.push({ x0: (a + rx) / scale, x1: (b + 1 + rx) / scale, top: f(top), bot: f(bot + 1), bt: f(bt), bb: f(bb + 1), up: h === upHue });
   }
+  // 圖表以外的紅綠色元素（側邊的標籤、按鈕）會和 K 棒隔一大段：只保留最大的一群連續 K 棒
+  if (pitch >= 2 && candles.length > 10) {
+    const P = pitch / scale, groups = [[candles[0]]];
+    for (let k = 1; k < candles.length; k++) { const prev = candles[k - 1], cur = candles[k]; if (((cur.x0 + cur.x1) - (prev.x0 + prev.x1)) / 2 > P * 12) groups.push([]); groups[groups.length - 1].push(cur); }
+    const main = groups.reduce((a, b) => (b.length > a.length ? b : a));
+    candles.length = 0; candles.push(...main);
+  }
   // 漏掉的 K 棒（被均線蓋住、極小的十字線）：間距明顯變大時補一根，避免後面的指標錯位
   if (pitch >= 2 && candles.length > 10) {
     const P = pitch / scale, filled = [candles[0]];
     for (let k = 1; k < candles.length; k++) {
-      const prev = filled[filled.length - 1], cur = candles[k], gapN = Math.round(((cur.x0 + cur.x1) - (prev.x0 + prev.x1)) / 2 / P) - 1;
-      for (let j = 1; j <= Math.min(gapN, 3); j++) {
+      const prev = filled[filled.length - 1], cur = candles[k], ratio = ((cur.x0 + cur.x1) - (prev.x0 + prev.x1)) / 2 / P, gapN = ratio >= 1.5 ? Math.max(1, Math.round(ratio) - 1) : 0;
+      for (let j = 1; j <= (gapN <= 4 ? gapN : 0); j++) {
         const t = j / (gapN + 1), x0 = prev.x0 + (cur.x0 - prev.x0) * t, x1 = prev.x1 + (cur.x1 - prev.x1) * t;
         const yc = prev.up ? prev.bt : prev.bb, ycn = cur.up ? cur.bb : cur.bt, y = yc + (ycn - yc) * t;
         filled.push({ x0, x1, top: y - 1, bot: y + 1, bt: y, bb: y + 0.5, up: true, guess: true });
@@ -2190,12 +2335,34 @@ function paneReading(D, p) {
   return { out, markers };
 }
 
-function candlesToSeries(cs, hi, lo) {
+// 像素高度 ↔ 價格：兩點校正（最準）＞ 輸入最高最低價 ＞ 相對值（100～140）
+function priceMap(cs, hi, lo, pts) {
   const yTop = Math.min(...cs.map(c => c.top)), yBot = Math.max(...cs.map(c => c.bot)), span = yBot - yTop || 1;
-  const cal = hi > lo && lo > 0;
-  const P = y => cal ? lo + (yBot - y) / span * (hi - lo) : 100 + (yBot - y) / span * 40;
+  if (pts && pts.length === 2 && pts[0].y !== pts[1].y) { const [a, b] = pts, k = (b.p - a.p) / (b.y - a.y); return { cal: true, P: y => a.p + (y - a.y) * k, Y: p => a.y + (p - a.p) / k }; }
+  if (hi > lo && lo > 0) return { cal: true, P: y => lo + (yBot - y) / span * (hi - lo), Y: p => yBot - (p - lo) / (hi - lo) * span };
+  return { cal: false, P: y => 100 + (yBot - y) / span * 40, Y: p => yBot - (p - 100) / 40 * span };
+}
+function candlesToSeries(cs, hi, lo, map = priceMap(cs, hi, lo)) {
+  const P = map.P;
   return cs.map((c, k) => ({ d: `第 ${k + 1} 根`, o: P(c.up ? c.bb : c.bt), c: P(c.up ? c.bt : c.bb), h: P(c.top), l: P(c.bot), v: 0 }));
 }
+// 交易日：從最後一根往前推，跳過週末
+function tradingDates(last, n) {
+  const d = new Date(last + "T00:00:00Z"), out = [];
+  while (out.length < n) { if (d.getUTCDay() % 6) out.unshift(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() - 1); }
+  return out;
+}
+// 在指定 x 附近找一根 K 棒（使用者手動補上漏掉的 K 棒時）
+function probeCandle(img, x, band, conv, refs) {
+  const rect = { x: x - 2, y: band.y, w: 5, h: band.h }, { px, W, H, ry, scale } = readRegion(img, rect);
+  let top = -1, bot = -1, bt = -1, bb = -1; const n = [0, 0, 0];
+  for (let y = 0; y < H; y++) { let c = 0; for (let xx = 0; xx < W; xx++) { const h = hueClass(px[(y * W + xx) * 4], px[(y * W + xx) * 4 + 1], px[(y * W + xx) * 4 + 2]); if (h) { c++; n[h]++; } } if (c) { if (top < 0) top = y; bot = y; } if (c >= 3) { if (bt < 0) bt = y; bb = y; } }
+  if (top < 0) return null;
+  if (bt < 0) { bt = top; bb = bot; }
+  const f = v => (v + ry) / scale, h = n[1] >= n[2] ? 1 : 2;
+  return { x0: x - 1.5, x1: x + 1.5, top: f(top), bot: f(bot + 1), bt: f(bt), bb: f(bb + 1), up: h === (conv === "us" ? 2 : 1), added: true };
+}
+const candleKey = c => Math.round((c.x0 + c.x1) / 2);
 
 function drawShot() {
   const cv = $("#shotCanvas"), img = shot.img;
@@ -2211,6 +2378,7 @@ function drawShot() {
     shot.res.candles.forEach(c => { ctx.setLineDash(c.guess ? [2, 2] : []); ctx.strokeRect(c.x0 * k - 1, c.top * k - 1, (c.x1 - c.x0) * k + 2, (c.bot - c.top) * k + 2); });
     ctx.setLineDash([]);
     if ($("#shotSmcOverlay").checked && shot.D) drawShotSmc(ctx, k);
+    shot.res.candles.forEach(c => { if (!c.edited && !c.added) return; ctx.strokeStyle = cssVar("--s1"); ctx.lineWidth = 2; ctx.strokeRect(c.x0 * k - 2, c.top * k - 2, (c.x1 - c.x0) * k + 4, (c.bot - c.top) * k + 4); });
     const s2 = cssVar("--s2");
     shot.panes.forEach((p, n) => {
       const r = p.rect, t = p.cfg.type || p.type;
@@ -2219,6 +2387,10 @@ function drawShot() {
       const tw = ctx.measureText(label).width; ctx.fillStyle = s2; ctx.fillRect(r.x * k, r.y * k, tw + 10, 18); ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.fillText(label, r.x * k + 5, r.y * k + 9); ctx.textBaseline = "alphabetic";
     });
   }
+  shot.calPts.forEach((c, n) => {
+    const y = c.y * k; ctx.strokeStyle = cssVar("--s1"); ctx.lineWidth = 1.5; ctx.setLineDash([8, 4]); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); ctx.setLineDash([]);
+    const t = `校正 ${n + 1}：${c.p}`; ctx.font = `700 12px ${cssVar("--font-body")}`; const tw = ctx.measureText(t).width; ctx.fillStyle = cssVar("--s1"); ctx.fillRect(4, y - 20, tw + 10, 18); ctx.fillStyle = "#fff"; ctx.fillText(t, 9, y - 7);
+  });
   if (shot.drag) { const d = shot.drag; ctx.fillStyle = cssVar("--band"); ctx.strokeStyle = shot.mode === "sub" ? cssVar("--s2") : accent; ctx.lineWidth = 2; const r = normRect(d); ctx.fillRect(r.x * k, r.y * k, r.w * k, r.h * k); ctx.strokeRect(r.x * k, r.y * k, r.w * k, r.h * k); }
   shot.k = k;
 }
@@ -2296,9 +2468,10 @@ function shotSmc(D, cal) {
 }
 // 把重建價格換回截圖上的像素位置，畫出聰明錢區塊與結構線
 function drawShotSmc(ctx, k) {
-  const cs = shot.res.candles, m = shot.pmap, D = shot.D, n = D.length;
-  if (!m || !D) return;
-  const y = p => (m.cal ? m.yBot - (p - m.lo) / (m.hi - m.lo) * m.span : m.yBot - (p - 100) / 40 * m.span) * k;
+  const cs = shot.res.candles, m = shot.pmap, D = shot.D;
+  if (!m || !D || D.length !== cs.length) return; // 重新辨識途中，K 棒數量還沒同步
+  const n = D.length;
+  const y = p => m.Y(p) * k;
   const xL = i => cs[Math.max(0, Math.min(n - 1, i))].x0 * k, xR = i => cs[Math.max(0, Math.min(n - 1, i))].x1 * k, xc = i => (xL(i) + xR(i)) / 2;
   const up = cssVar("--up"), dn = cssVar("--down");
   const ex = smcExtra(D);
@@ -2320,9 +2493,15 @@ function shotRun() {
   if (!shot.img) return;
   const conv = $("#shotConv").value;
   shot.res = extractCandles(shot.img, shot.crop, conv);
-  $("#shotReset").hidden = !shot.crop && !shot.subCrop;
+  // 套用使用者的修正：刪除、改顏色、補上漏掉的 K 棒
+  { const E = shot.edits, P = shot.res.pitch || 4;
+    let list = shot.res.candles.filter(c => !E.del.has(candleKey(c))).map(c => E.flip.has(candleKey(c)) ? { ...c, up: E.flip.get(candleKey(c)), edited: true } : c);
+    E.add.forEach(x => { if (list.some(c => Math.abs((c.x0 + c.x1) / 2 - x) < P * 0.5)) return; const c = probeCandle(shot.img, x, shot.res.band, conv, shot.res.refs); if (c) list.push(c); });
+    shot.res.candles = list.sort((a, b) => a.x0 - b.x0);
+    const nEd = E.del.size + E.flip.size + E.add.length; $("#shotClearEdits").hidden = !nEd; $("#shotClearEdits").textContent = `清除 ${nEd} 筆修正`; }
+  $("#shotReset").hidden = !shot.crop && !shot.subCrop && !shot.calPts.length;
   const cs = shot.res.candles, guessed = cs.filter(c => c.guess).length;
-  $("#shotInfo").textContent = `找到 ${cs.length} 根 K 棒${guessed ? `（其中 ${guessed} 根被遮住，以虛線估計）` : ""}`;
+  $("#shotInfo").innerHTML = `找到 ${cs.length} 根 K 棒${guessed ? `，其中 ${guessed} 根被遮住、以虛線估計。可用「修正 K 棒」調整` : ""}`;
   if (cs.length < 12) {
     shot.D = null; shot.panes = []; drawShot(); $("#shotRebuild").hidden = true; $("#paneCount").textContent = "";
     $("#smcSummary").innerHTML = `<p class="note">K 棒太少，無法判斷結構。</p>`;
@@ -2335,9 +2514,11 @@ function shotRun() {
     return { ...extractPane(shot.img, r, cs, shot.res.pitch, conv), cfg: shot.paneCfg[key] || (shot.paneCfg[key] = {}) };
   }).filter(p => p.type || p.cfg.type || shot.subCrop);
   drawShot();
-  const hi = parseFloat($("#shotHi").value), lo = parseFloat($("#shotLo").value), cal = hi > lo && lo > 0;
-  shot.D = candlesToSeries(cs, hi, lo);
-  { const yTop = Math.min(...cs.map(c => c.top)), yBot = Math.max(...cs.map(c => c.bot)); shot.pmap = { yTop, yBot, span: yBot - yTop || 1, cal, hi, lo }; }
+  const hi = parseFloat($("#shotHi").value), lo = parseFloat($("#shotLo").value);
+  shot.pmap = priceMap(cs, hi, lo, shot.calPts);
+  const cal = shot.pmap.cal;
+  shot.D = candlesToSeries(cs, hi, lo, shot.pmap);
+  if ($("#shotDate").value) tradingDates($("#shotDate").value, shot.D.length).forEach((d, i) => { shot.D[i].d = d; });
   // 截圖有成交量區時，用柱子高度當作相對成交量
   const vol = shot.panes.find(p => (p.cfg.type || p.type) === "vol");
   shot.hasVol = !!vol;
@@ -2347,12 +2528,11 @@ function shotRun() {
   shotRefresh(cal);
 }
 // 副圖設定改變時只需重算判讀，不用重新辨識
-function shotRefresh(cal = parseFloat($("#shotHi").value) > parseFloat($("#shotLo").value)) {
-  const sel = $("#shSub"), prev = sel.value;
+function shotRefresh(cal = shot.pmap ? shot.pmap.cal : false) {
   shot.readings = shot.panes.map(p => paneReading(shot.D, p));
-  const opts = [["", "無副圖"], ...shot.panes.map((p, n) => [(p.cfg.type || p.type) === "vol" ? null : "pane:" + n, `截圖副圖 ${n + 1}（${PANE_TYPES[p.cfg.type || p.type] || "未辨識"}）`]).filter(o => o[0]), ["rsi", "重算 RSI"], ["kd", "重算 KD"], ["macd", "重算 MACD"]];
-  sel.innerHTML = opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
-  sel.value = opts.some(o => o[0] === prev) && prev !== "kd" ? prev : (opts.find(o => o[0].startsWith("pane:")) || ["kd"])[0];
+  // 預設顯示第一個截圖副圖（沒有的話用重算的 KD）
+  if (shotBar.has("pane:auto")) { shotBar.set("pane:auto", false); const k = shot.panes.findIndex(p => (p.cfg.type || p.type) !== "vol"); shotBar.set(k >= 0 ? "pane:" + k : "kd", true); }
+  shotBar.setGroups(shotGroups());
   renderPanes();
   shot.smc = shotSmc(shot.D, cal);
   $("#smcSummary").innerHTML = shot.smc.html;
@@ -2372,25 +2552,67 @@ function renderPanes() {
       <ul>${shot.readings[n].out.map(x => `<li>${x}</li>`).join("")}</ul></div>`;
   }).join("") : `<p class="note" style="margin:0">框選的區域沒有讀到指標線或柱子。請框住整個副圖（含上下邊界），或換一個區域。</p>`;
 }
+function shotGroups() {
+  return [
+    { title: "主圖", items: [...MAIN_ITEMS, { id: "sr", label: "支撐壓力" }, { id: "smc", label: "聰明錢" }, { id: "zz", label: "轉折結構" }, { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }] },
+    { title: "副圖", items: [...(shot.hasVol ? [{ id: "vol", label: "成交量" }] : []), ...shot.panes.map((p, k) => ({ p, k, t: p.cfg.type || p.type })).filter(x => x.t !== "vol").map(x => ({ id: "pane:" + x.k, label: `截圖 ${PANE_TYPES[x.t] || "副圖"}` })),
+      { id: "kd", label: "重算 KD" }, { id: "rsi", label: "重算 RSI" }, { id: "macd", label: "重算 MACD" }, { id: "wr", label: "重算威廉" }] },
+  ];
+}
+function paneCustom(pane) {
+  const t = pane.cfg.type || pane.type, S = paneSeries(pane, t, pane.cfg.hi, pane.cfg.lo), osc = t === "kd" || t === "rsi";
+  return { title: `截圖 ${PANE_TYPES[t] || "副圖"}`, lines: S.lines, names: PANE_NAMES[t] || ["線1", "線2", "線3"], bars: t === "macd" ? S.bars : null, zeroLine: t === "macd",
+    levels: osc && S.cal ? (t === "kd" ? [80, 20] : [70, 30]) : [], range: osc ? (S.cal ? [pane.cfg.lo, pane.cfg.hi] : [0, 100]) : null };
+}
+let simSeed = 1;
+const SIM_MODES = { trend: "延續近期趨勢", flat: "沒有方向（純隨機）", tech: "依技術指標偏向", smc: "依聰明錢結構" };
 function shotDrawChart() {
   if (!shot.D) return;
-  const v = $("#shSub").value, pane = v.startsWith("pane:") ? shot.panes[+v.slice(5)] : null;
-  const smcOn = $("#shSmc").checked, ex = smcOn ? smcExtra(shot.D) : {};
-  const markers = [...(smcOn ? [...Signals.structure(shot.D, shot.I, "smc"), ...Signals.sweep(shot.D)] : Signals.candle(shot.D, shot.I)), ...(pane ? shot.readings[+v.slice(5)].markers : [])];
-  let custom = null;
-  if (pane) {
-    const t = pane.cfg.type || pane.type, S = paneSeries(pane, t, pane.cfg.hi, pane.cfg.lo), osc = t === "kd" || t === "rsi";
-    custom = { title: `截圖 ${PANE_TYPES[t] || "副圖"}`, lines: S.lines, names: PANE_NAMES[t] || ["線1", "線2", "線3"], bars: t === "macd" ? S.bars : null, zeroLine: t === "macd",
-      levels: osc && S.cal ? (t === "kd" ? [80, 20] : [70, 30]) : [], range: osc ? (S.cal ? [pane.cfg.lo, pane.cfg.hi] : [0, 100]) : null };
+  const B = shotBar, D = shot.D, n = D.length;
+  const paneSel = shot.panes.map((p, k) => (B.has("pane:" + k) && (p.cfg.type || p.type) !== "vol" ? k : -1)).filter(k => k >= 0);
+  const subs = [...paneSel.map(k => ({ custom: paneCustom(shot.panes[k]) })), ...subsFrom(B, ["kd", "rsi", "macd", "wr"])];
+  const markers = [...(B.has("smc") ? [...Signals.structure(D, shot.I, "smc"), ...Signals.sweep(D)] : []), ...(B.has("candle") ? Signals.candle(D, shot.I) : []), ...(B.has("cpat") ? Signals.chartPat(D, shot.I) : []), ...paneSel.flatMap(k => shot.readings[k].markers)];
+  const ex = B.has("smc") ? smcExtra(D) : { zones: [], shapes: [] };
+  if (B.has("zz")) ex.shapes.push(zigzagShape(D));
+  // 未來走勢模擬
+  let D2 = D, I2 = shot.I, future = null;
+  $("#simStats").hidden = !$("#simOn").checked;
+  if ($("#simOn").checked && n >= 20) {
+    const mode = $("#simMode").value, days = +$("#simDays").value;
+    let bias = 0;
+    if (mode === "tech") { const it = readout(D, shot.I, n - 1); bias = (it.filter(x => x.b > 0).length - it.filter(x => x.b < 0).length) / (it.length || 1); }
+    if (mode === "smc") { const ev = marketStructure(D).events.pop(); bias = ev ? ev.dir * 0.6 : 0; }
+    const sim = simulateFuture(D, { days, mode, seed: simSeed, bias });
+    D2 = D.concat(sim.bars); I2 = indicators(D2);
+    future = { from: n, ...sim.bands };
+    renderSimStats(sim, mode, days, bias);
   }
-  shotChart.set(shot.D, { I: shot.I, ma: $("#shMA").checked ? [5, 20] : [], boll: $("#shBoll").checked, sub: pane ? "custom" : v, custom, noVol: !shot.hasVol, volLabel: "量（相對）", fmtD: d => d.replace(/\D/g, ""), markers, zones: ex.zones, shapes: ex.shapes });
+  shotChart.set(D2, { I: I2, ma: maFrom(B), boll: B.has("boll"), subs, noVol: !(shot.hasVol && B.has("vol")), volLabel: "量（相對）", future,
+    fmtD: d => (d.startsWith("模擬") ? "+" + d.slice(3) : /^\d{4}-/.test(d) ? d.slice(5).replace("-", "/") : d.replace(/\D/g, "")),
+    markers, zones: ex.zones, shapes: ex.shapes, hlines: B.has("sr") ? srLevels(D) : [] });
+}
+function renderSimStats(sim, mode, days, bias) {
+  const cal = shot.pmap && shot.pmap.cal, c = sim.last, D = shot.D;
+  const px = p => (cal ? fmtP(p) : "") + `（${fmtPct(p / c - 1, 1)}）`;
+  const zones = smcZones(D, marketStructure(D)).filter(z => !z.hit);
+  const above = zones.filter(z => z.dir < 0 && z.bot > c).sort((a, b) => a.bot - b.bot)[0], below = zones.filter(z => z.dir > 0 && z.top < c).sort((a, b) => b.top - a.top)[0];
+  const tiles = [
+    ["中位數", px(sim.stats.p50)], ["80% 的路徑落在", `${cal ? fmtP(sim.stats.p10) : fmtPct(sim.stats.p10 / c - 1, 1)} ～ ${cal ? fmtP(sim.stats.p90) : fmtPct(sim.stats.p90 / c - 1, 1)}`],
+    ["收在現價之上", Math.round(sim.stats.up * 100) + "%"],
+    ...(above ? [["碰到上方空方區塊", Math.round(sim.touch(above.bot, true) * 100) + "%"]] : []),
+    ...(below ? [["跌到下方多方區塊", Math.round(sim.touch(below.top, false) * 100) + "%"]] : []),
+  ];
+  $("#simStats").innerHTML = `<div class="row" style="justify-content:space-between"><strong>未來 ${days} 根 K 棒的模擬結果</strong><span class="note">${sim.paths} 條隨機路徑・${SIM_MODES[mode]}${mode === "tech" || mode === "smc" ? `（偏向 ${bias > 0 ? "+" : ""}${bias.toFixed(2)}）` : ""}・每日波動約 ${(sim.sd * 100).toFixed(1)}%</span></div>
+    <div class="stats">${tiles.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v sm">${v}</div></div>`).join("")}</div>
+    <p class="note" style="margin:0">怎麼讀：深色帶是一半路徑落在的範圍，淺色帶是 80% 路徑的範圍，虛線是中位數，半透明 K 棒是其中一條代表性路徑。這是用截圖裡近期的漲跌幅隨機抽樣接出來的，假設波動不變；它描述的是「可能性的範圍」，不是預測，也不構成投資建議。</p>`;
 }
 function shotLoad(blob, hiLo) {
   if (!blob || !/^image\//.test(blob.type)) { $("#shotInfo").textContent = "請選擇 PNG、JPG、WebP 或 GIF 圖片"; return; }
   const url = URL.createObjectURL(blob), img = new Image();
   img.onload = () => {
     if (shot.url) URL.revokeObjectURL(shot.url);
-    Object.assign(shot, { url, img, file: blob, crop: null, subCrop: null, paneCfg: {} });
+    Object.assign(shot, { url, img, file: blob, crop: null, subCrop: null, paneCfg: {}, calPts: [], edits: { del: new Set(), flip: new Map(), add: [] } });
+    $("#shotDate").value = ""; hidePop();
     $("#shotHi").value = hiLo ? hiLo.hi : ""; $("#shotLo").value = hiLo ? hiLo.lo : "";
     $("#aiOut").hidden = true; aiUpdate();
     shotRun();
@@ -2400,7 +2622,7 @@ function shotLoad(blob, hiLo) {
 }
 // 模仿看盤軟體的截圖：價格區含多條均線、成交量區與副圖指標（範例截圖與自動測試共用）
 function drawBrokerShot({ seed = 4021, n = 100, W = 960, H = 660, theme = "light", hollowUp = false, up = "#e0302f", down = "#129a50",
-  ma = [[5, "#e0a400"], [10, "#2f7de1"], [20, "#9b59b6"], [60, "#2e9e4f"]], sub = "kd", wick = 1 } = {}) {
+  ma = [[5, "#e0a400"], [10, "#2f7de1"], [20, "#9b59b6"], [60, "#2e9e4f"]], sub = "kd", wick = 1, priceTag = false, crosshair = false, quote = false, outline = false } = {}) {
   const off = 80, full = genSeries(seed, n + off), D = full.slice(off), I = indicators(full);
   const dark = theme === "dark", bg = dark ? "#0d1117" : "#ffffff", grid = dark ? "#262d38" : "#ececec", text = dark ? "#c9d1d9" : "#555555";
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
@@ -2423,13 +2645,17 @@ function drawBrokerShot({ seed = 4021, n = 100, W = 960, H = 660, theme = "light
     if (isUp && hollowUp) {
       ctx.fillRect(wx, Math.round(Y(k.h)), wick, y1 - Math.round(Y(k.h))); ctx.fillRect(wx, y2, wick, Math.round(Y(k.l)) - y2 + 1);
       ctx.lineWidth = 1; ctx.strokeRect(x - (cw >> 1) + 0.5, y1 + 0.5, cw - 1, Math.max(1, y2 - y1 - 1));
-    } else { ctx.fillRect(wx, Math.round(Y(k.h)), wick, Math.round(Y(k.l)) - Math.round(Y(k.h)) + 1); ctx.fillRect(x - (cw >> 1), y1, cw, y2 - y1); }
+    } else { ctx.fillRect(wx, Math.round(Y(k.h)), wick, Math.round(Y(k.l)) - Math.round(Y(k.h)) + 1); ctx.fillRect(x - (cw >> 1), y1, cw, y2 - y1); if (outline && cw >= 4) { ctx.strokeStyle = isUp ? "#a01818" : "#0b6633"; ctx.lineWidth = 1; ctx.strokeRect(x - (cw >> 1) + 0.5, y1 + 0.5, cw - 1, Math.max(1, y2 - y1 - 1)); } }
     const vh = Math.round(k.v / vmax * (VB - VT)); ctx.fillRect(x - (cw >> 1), VB - vh, cw, vh);
   });
   mas.forEach(m => { ctx.strokeStyle = m.c; ctx.lineWidth = 1.5; ctx.beginPath(); let st = false; m.v.forEach((v, i) => { if (v == null) return; st ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v)); st = true; }); ctx.stroke(); });
+  // 看盤軟體常見的干擾：最新價標籤、十字游標、紅綠報價文字
+  if (priceTag) { const last = D[n - 1], c = last.c >= last.o ? up : down, y = Math.round(Y(last.c)); ctx.strokeStyle = c; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(L, y + 0.5); ctx.lineTo(R, y + 0.5); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = c; ctx.fillRect(R + 2, y - 9, 66, 18); ctx.fillStyle = "#fff"; ctx.font = "bold 12px monospace"; ctx.fillText(fmtP(last.c), R + 8, y + 4); }
+  if (crosshair) { const cx = X(Math.floor(n * 0.6)) + 0.5, cy = Math.round((T + B) / 2) + 0.5; ctx.strokeStyle = dark ? "#8b949e" : "#888"; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(cx, T); ctx.lineTo(cx, H - 20); ctx.moveTo(L, cy); ctx.lineTo(R, cy); ctx.stroke(); ctx.setLineDash([]); }
+  if (quote) { const last = D[n - 1], prev = D[n - 2], ch = last.c - prev.c; ctx.font = "bold 13px sans-serif"; ctx.fillStyle = ch >= 0 ? up : down; ctx.fillText(`${fmtP(last.c)}  ${ch >= 0 ? "▲" : "▼"}${Math.abs(ch).toFixed(2)} (${fmtPct(ch / prev.c)})`, W - 260, 22); }
   [B + 8, VB + 9].forEach(y => { ctx.strokeStyle = grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); ctx.stroke(); });
   ctx.fillStyle = text; ctx.font = "11px sans-serif"; ctx.fillText("成交量", R + 8, VT + 10);
-  const truth = { D, hi, lo };
+  const truth = { D, hi: Math.max(...D.map(x => x.h)), lo: Math.min(...D.map(x => x.l)) }; // K 棒本身的最高、最低（不含均線）
   const line = (vals, sy, c) => { ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.beginPath(); let st = false; vals.forEach((v, i) => { if (v == null) return; st ? ctx.lineTo(X(i), sy(v)) : ctx.moveTo(X(i), sy(v)); st = true; }); ctx.stroke(); };
   const c1 = dark ? "#ffd400" : "#ff8c00", c2 = dark ? "#29b6f6" : "#1e6fd9";
   if (sub === "kd" || sub === "rsi") {
@@ -2455,7 +2681,12 @@ function makeSampleShot() {
 // 截圖上拖曳框選
 (() => {
   const cv = $("#shotCanvas"), pt = e => ({ x: e.offsetX / (shot.k || 1), y: e.offsetY / (shot.k || 1) });
-  cv.addEventListener("pointerdown", e => { if (!shot.img) return; cv.setPointerCapture(e.pointerId); const p = pt(e); shot.drag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y }; });
+  cv.addEventListener("pointerdown", e => {
+    if (!shot.img) return;
+    const p = pt(e);
+    if (shot.mode === "cal" || shot.mode === "edit") { shotClick(p, e.offsetX, e.offsetY); return; }
+    cv.setPointerCapture(e.pointerId); shot.drag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y }; hidePop();
+  });
   cv.addEventListener("pointermove", e => { if (!shot.drag) return; const p = pt(e); shot.drag.x1 = p.x; shot.drag.y1 = p.y; drawShot(); });
   cv.addEventListener("pointerup", () => {
     if (!shot.drag) return; const r = normRect(shot.drag); shot.drag = null;
@@ -2474,21 +2705,63 @@ document.addEventListener("paste", e => {
   if (f) { e.preventDefault(); shotLoad(f); }
 });
 $("#shotSample").addEventListener("click", async () => { const s = await makeSampleShot(); shotLoad(s.blob, s); });
-$("#shotReset").addEventListener("click", () => { shot.crop = null; shot.subCrop = null; shotRun(); });
-const setMode = m => {
-  shot.mode = m; $("#modePrice").setAttribute("aria-pressed", m === "price"); $("#modeSub").setAttribute("aria-pressed", m === "sub");
-  $("#modeHint").textContent = m === "sub" ? "在圖上拖曳框出一個副圖（KD、RSI、MACD 或成交量），包含上下邊界。" : "偵測不準時，在圖上拖曳框出只有 K 棒的價格區。";
+$("#shotReset").addEventListener("click", () => { shot.crop = null; shot.subCrop = null; shot.calPts = []; shotRun(); });
+const MODE_HINT = {
+  price: "偵測不準時，在圖上拖曳框出只有 K 棒的價格區。",
+  sub: "在圖上拖曳框出一個副圖（KD、RSI、MACD 或成交量），包含上下邊界。",
+  cal: "點截圖右側價格刻度的兩個高度（例如 600 和 550 的格線），輸入它們的價格。",
+  edit: "點一根偵測錯的 K 棒可以刪除或改顏色；點漏掉的位置可以補上一根。",
 };
-$("#modePrice").addEventListener("click", () => setMode("price"));
-$("#modeSub").addEventListener("click", () => setMode("sub"));
+const setMode = m => {
+  shot.mode = m; document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  $("#modeHint").textContent = MODE_HINT[m] + (m === "cal" ? `（已設定 ${shot.calPts.length}/2）` : ""); hidePop();
+  $("#shotCanvas").style.cursor = m === "edit" ? "pointer" : "crosshair";
+};
+document.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+// 截圖上的小視窗：輸入校正價格、修正 K 棒
+function hidePop() { const p = $("#shotPop"); if (p) { p.hidden = true; p.innerHTML = ""; } }
+function showPop(cx, cy, html, bind) {
+  const pop = $("#shotPop"), stage = $(".shot-stage"); pop.innerHTML = html; pop.hidden = false;
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  pop.style.left = Math.max(4, Math.min(stage.clientWidth - w - 4, cx + 10)) + "px"; pop.style.top = Math.max(4, Math.min(stage.clientHeight - h - 4, cy + 10)) + "px";
+  bind(pop);
+}
+function shotClick(p, cx, cy) {
+  if (shot.mode === "cal") {
+    showPop(cx, cy, `<strong>這個高度的價格是？</strong><input type="number" step="any" id="calVal" placeholder="例如 600" aria-label="價格"><div class="row"><button class="btn primary" data-ok>確定</button><button class="btn" data-x>取消</button></div><span class="note">已設定 ${shot.calPts.length}/2 個刻度</span>`, pop => {
+      const inp = pop.querySelector("#calVal"); inp.focus();
+      const ok = () => { const v = parseFloat(inp.value); if (!Number.isFinite(v)) { inp.focus(); return; } shot.calPts = [...shot.calPts, { y: p.y, p: v }].slice(-2); hidePop(); setMode("cal"); shotRun(); };
+      pop.querySelector("[data-ok]").onclick = ok; inp.onkeydown = e => { if (e.key === "Enter") ok(); if (e.key === "Escape") hidePop(); }; pop.querySelector("[data-x]").onclick = hidePop;
+    });
+    return;
+  }
+  const c = shot.res && shot.res.candles.find(c => p.x >= c.x0 - 1.5 && p.x <= c.x1 + 1.5);
+  if (c) {
+    const key = candleKey(c), idx = shot.res.candles.indexOf(c) + 1;
+    showPop(cx, cy, `<strong>第 ${idx} 根 K 棒</strong><div class="row"><button class="btn" data-del>刪除</button><button class="btn" data-flip>改成${c.up ? "跌（下跌 K）" : "漲（上漲 K）"}</button></div><button class="btn" data-x>取消</button>`, pop => {
+      pop.querySelector("[data-del]").onclick = () => { if (c.added) shot.edits.add = shot.edits.add.filter(x => Math.abs(x - key) > 2); else shot.edits.del.add(key); hidePop(); shotRun(); };
+      pop.querySelector("[data-flip]").onclick = () => { shot.edits.flip.set(key, !c.up); hidePop(); shotRun(); };
+      pop.querySelector("[data-x]").onclick = hidePop;
+    });
+  } else {
+    showPop(cx, cy, `<strong>這裡漏掉一根 K 棒？</strong><div class="row"><button class="btn primary" data-add>在這裡補一根</button><button class="btn" data-x>取消</button></div>`, pop => {
+      pop.querySelector("[data-add]").onclick = () => { shot.edits.add.push(Math.round(p.x)); hidePop(); shotRun(); };
+      pop.querySelector("[data-x]").onclick = hidePop;
+    });
+  }
+}
+document.querySelectorAll("[data-step]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); $("#" + a.dataset.step).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); }));
+$("#shotClearEdits").addEventListener("click", () => { shot.edits = { del: new Set(), flip: new Map(), add: [] }; shotRun(); });
 $("#paneList").addEventListener("change", e => {
   const t = e.target, n = +(t.dataset.paneType ?? t.dataset.paneHi ?? t.dataset.paneLo), p = shot.panes[n]; if (!p) return;
   if (t.dataset.paneType != null) { p.cfg.type = t.value || undefined; if ((p.type === "vol") !== (p.cfg.type === "vol") || p.cfg.type === "vol") return shotRun(); }
   else { const v = parseFloat(t.value); p.cfg[t.dataset.paneHi != null ? "hi" : "lo"] = Number.isFinite(v) ? v : undefined; }
   drawShot(); shotRefresh();
 });
-["shotConv", "shotHi", "shotLo"].forEach(id => $("#" + id).addEventListener("change", shotRun));
-["shMA", "shBoll", "shSub", "shSmc"].forEach(id => $("#" + id).addEventListener("change", shotDrawChart));
+["shotConv", "shotHi", "shotLo", "shotDate"].forEach(id => $("#" + id).addEventListener("change", shotRun));
+const shotBar = indicatorBar($("#shotIbar"), "shot", [], ["ma5", "ma20", "smc", "vol", "pane:auto"], shotDrawChart);
+["simOn", "simDays", "simMode"].forEach(id => $("#" + id).addEventListener("change", shotDrawChart));
+$("#simRerun").addEventListener("click", () => { simSeed++; $("#simOn").checked = true; shotDrawChart(); });
 $("#shotSmcOverlay").addEventListener("change", drawShot);
 $("#shotEnlarge").addEventListener("click", e => { const on = $("#shotGrid").classList.toggle("wide"); e.target.setAttribute("aria-pressed", on); e.target.textContent = on ? "縮小截圖" : "放大截圖"; drawShot(); });
 $(".rtabs").addEventListener("click", e => {
