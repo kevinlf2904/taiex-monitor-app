@@ -57,6 +57,9 @@
 
 截圖判讀頁的「請 Claude 解讀」會把截圖交給 Claude 看圖解說：
 
-- 部署在 Vercel 時呼叫 `api/chart-read.js`（看圖解說、讀出圖上數字）與 `api/chat.js`（問問題對話框），需在專案環境變數設定 `ANTHROPIC_API_KEY`。提示詞固定在伺服器端，前端只能送圖片與辨識摘要。這個端點沒有登入或流量限制，公開網址上任何人都能用你的金鑰呼叫，必要時請自行加上限制。
+- 「問問題」對話框呼叫 `api/chat.js`，在 Vercel 的環境變數設定其中一個即可：
+  - `GEMINI_API_KEY`：用 Google Gemini 回答，到 Google AI Studio（aistudio.google.com）免費申請；免費方案有每分鐘、每天的次數上限，對話內容可能被 Google 用來改進產品。兩個金鑰都設時優先用它。可用 `GEMINI_MODEL` 指定模型（預設 `gemini-flash-latest`，找不到時改用 `gemini-2.5-flash`）。
+  - `ANTHROPIC_API_KEY`：用 Claude 回答，依用量付費。
+- 「請 Claude 解讀」與「讓 Claude 讀出數字」呼叫 `api/chart-read.js`，需要 `ANTHROPIC_API_KEY`。提示詞固定在伺服器端，前端只能送圖片與辨識摘要。這個端點沒有登入或流量限制，公開網址上任何人都能用你的金鑰呼叫，必要時請自行加上限制。
 - 在 Claude 裡開啟這個頁面（Artifact）時，改用檢視者自己的 Claude 帳號。
 - 直接用 `file://` 開啟時無法使用，其他功能不受影響。

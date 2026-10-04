@@ -3747,7 +3747,7 @@ function chatRender() {
 function chatUpdate() {
   const off = aiChecked && !aiMode;
   $("#chatInput").disabled = off || chat.busy; $("#chatSend").disabled = off || chat.busy; $("#chatSend").hidden = chat.busy; $("#chatStop").hidden = !chat.busy;
-  if (off) $("#chatLog").innerHTML = `<div class="chat-empty"><strong>這個環境無法呼叫 Claude</strong><span>在 Claude 裡開啟這個頁面，或部署到 Vercel 並設定 ANTHROPIC_API_KEY，就能使用對話。</span></div>`;
+  if (off) $("#chatLog").innerHTML = `<div class="chat-empty"><strong>這個環境無法呼叫 Claude</strong><span>部署到 Vercel 並設定 GEMINI_API_KEY（Google 免費額度）或 ANTHROPIC_API_KEY，或在 Claude 裡開啟這個頁面，就能使用對話。</span></div>`;
 }
 async function chatAsk(q) {
   q = q.trim(); if (!q || chat.busy || !aiMode) return;

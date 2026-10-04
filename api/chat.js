@@ -1,5 +1,8 @@
 // 「問問題」對話框：給 learner/ 右下角的對話框使用（部署在網站上時；在 Claude 裡開啟則改用頁面的 sample 能力）。
-// 需要在 Vercel 專案設定環境變數 ANTHROPIC_API_KEY。
+// 在 Vercel 專案設定其中一個環境變數：
+//   GEMINI_API_KEY    → 用 Google Gemini 回答（有免費額度，到 Google AI Studio 申請）；兩個都設時優先用它
+//   ANTHROPIC_API_KEY → 用 Claude 回答（依用量付費）
+//   GEMINI_MODEL      → 選填，指定 Gemini 模型（預設 gemini-flash-latest，找不到時改用 gemini-2.5-flash）
 // 系統提示固定在伺服器端；前端只送對話內容與「目前畫面」的摘要，長度都有上限。
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -13,9 +16,43 @@ const SYSTEM = `你是「K線學堂」裡的技術分析助教，對象是想學
 - 不提供個股買賣建議、目標價或明牌，也不保證任何結果；被問到時說明技術分析的限制，並把問題轉成「該怎麼判讀」。
 - 不知道或畫面上沒有的資訊就直說，不要捏造數字。`;
 
+// Gemini REST API：角色是 user / model，系統提示放在 systemInstruction
+export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL) {
+  const models = model ? [model] : ["gemini-flash-latest", "gemini-2.5-flash"];
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: system }] },
+    contents: turns.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+    generationConfig: { maxOutputTokens: 4096, temperature: 0.6 },
+  });
+  let last = null;
+  for (const m of models) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
+      method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body, signal: AbortSignal.timeout(50000),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 404) { last = { status: 404, j }; continue; } // 模型名稱不存在（舊模型下架），換下一個
+    if (!r.ok) return { ok: false, status: r.status, message: j?.error?.message || "" };
+    const c = j.candidates?.[0];
+    if (!c) return { ok: false, blocked: true, message: j.promptFeedback?.blockReason || "" };
+    const text = (c.content?.parts || []).map((p) => p.text || "").join("").trim();
+    if (!text) return { ok: false, blocked: c.finishReason === "SAFETY" || c.finishReason === "PROHIBITED_CONTENT", message: c.finishReason || "" };
+    return { ok: true, text, truncated: c.finishReason === "MAX_TOKENS", model: m };
+  }
+  return { ok: false, status: last?.status || 404, message: last?.j?.error?.message || "找不到可用的 Gemini 模型" };
+}
+function geminiError(r) {
+  if (r.blocked) return "這個問題無法回答，換個方式問問看。";
+  if (r.status === 429) return "Gemini 免費額度暫時用完或問得太頻繁，請等一下再試（免費方案有每分鐘、每天的次數上限）。";
+  if (r.status === 400 && /api key/i.test(r.message)) return "GEMINI_API_KEY 無效，請檢查 Vercel 的環境變數。";
+  if (r.status === 403) return "GEMINI_API_KEY 沒有權限，請確認金鑰是在 Google AI Studio 建立的。";
+  if (r.status === 404) return "找不到可用的 Gemini 模型，請在 Vercel 設定 GEMINI_MODEL（例如 gemini-2.5-flash）。";
+  return `Gemini 服務暫時無法使用（${r.status ?? "連線錯誤"}）`;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "只接受 POST" });
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(200).json({ ok: false, error: "伺服器尚未設定 ANTHROPIC_API_KEY，無法使用對話功能。" });
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey && !process.env.ANTHROPIC_API_KEY) return res.status(200).json({ ok: false, error: "伺服器尚未設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY），無法使用對話功能。" });
 
   const { messages, context } = req.body || {};
   if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ ok: false, error: "沒有訊息" });
@@ -23,6 +60,13 @@ export default async function handler(req, res) {
   while (turns.length && turns[0].role !== "user") turns.shift();
   if (!turns.length || turns[turns.length - 1].role !== "user") return res.status(400).json({ ok: false, error: "最後一則必須是使用者的問題" });
   const ctx = typeof context === "string" && context ? `\n\n目前畫面（由頁面自動產生，可能有誤）：\n${context.slice(0, 6000)}` : "";
+
+  if (geminiKey) {
+    try {
+      const r = await askGemini(SYSTEM + ctx, turns, geminiKey);
+      return res.status(200).json(r.ok ? { ok: true, text: r.text, truncated: r.truncated } : { ok: false, error: geminiError(r) });
+    } catch { return res.status(200).json({ ok: false, error: "連不到 Gemini 服務，請稍後再試。" }); }
+  }
 
   const client = new Anthropic();
   try {
