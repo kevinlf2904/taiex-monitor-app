@@ -350,6 +350,20 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; ba
 .note { font-size: 12.5px; color: var(--muted); }
 footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; white-space: nowrap; }
 .bt { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.bt-set { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+.bt-set label { display: inline-flex; align-items: center; gap: 6px; }
+.bt-set input[type="number"] { width: 130px; font-size: 14px; padding: 5px 8px; }
+.bt .chk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.bt .chk input { width: 16px; height: 16px; accent-color: var(--accent); }
+.stat .s { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.stat .s.up { color: var(--up); } .stat .s.down { color: var(--down); }
+.qmark { border: 1px solid var(--line); background: var(--surface-3); color: var(--muted); border-radius: 50%; width: 17px; height: 17px; font-size: 11px; line-height: 1; padding: 0; cursor: pointer; vertical-align: 1px; }
+.bt-bh { margin: 0; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+.bt-list, .bt-help { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--surface-2); font-size: 14px; }
+.bt-list summary, .bt-help summary { cursor: pointer; font-weight: 600; }
+.bt-list ul { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.bt-list li .chk { gap: 8px; flex-wrap: wrap; }
+.bt-help ul { margin: 8px 0 4px; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; line-height: 1.65; }
 
 /* ---------- challenge ---------- */
 .chal-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: end; margin-bottom: 14px; }
@@ -744,7 +758,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-9</span></footer>
+<footer>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-10</span></footer>
 
 <script>
 "use strict";
@@ -1139,23 +1153,32 @@ function srLevels(D, upto = D.length) {
    訊號出現後「隔日開盤價」成交；只做多、全額進出。
    成本：買賣各 0.1425% 手續費，賣出另付 0.3% 證交稅。 */
 const FEE = 0.001425, TAX = 0.003;
-function backtest(D, sigs) {
-  const at = {}; sigs.forEach(s => { if (!s.note) at[s.i] = s.side; });
-  let cash = 1, shares = 0, pos = null, pending = null, peak = 1, mdd = 0;
+// 回測：訊號出現的隔天以開盤價成交，只做多。
+// opt.capital 初始資金（元）；opt.lot 每次買進的最小單位（1 = 零股、1000 = 整張）；opt.useBuy / opt.useSell 是否依買進／賣出訊號交易；
+// opt.skip 要略過的訊號（key = 索引＋方向）。手續費 0.1425%（最低 20 元），賣出另計 0.3% 證交稅。
+const btKey = s => `${s.i}${s.side}`;
+function backtest(D, sigs, opt = {}) {
+  const cap = opt.capital || 1e6, lot = opt.lot || 1, useBuy = opt.useBuy !== false, useSell = opt.useSell !== false, skip = opt.skip || new Set();
+  const fee = amt => Math.max(20, Math.round(amt * FEE)), tax = amt => Math.round(amt * TAX);
+  // 用手上的現金能買幾股（扣掉手續費後取整數單位）
+  const canBuy = (money, px) => { let n = Math.floor(money / (px * (1 + FEE)) / lot) * lot; while (n > 0 && n * px + fee(n * px) > money) n -= lot; return n; };
+  const at = {}; sigs.forEach(s => { if (s.note || skip.has(btKey(s))) return; if ((s.side === "buy" && useBuy) || (s.side === "sell" && useSell)) at[s.i] = s.side; });
+  let cash = cap, sh = 0, pos = null, pending = !useBuy && useSell ? "buy" : null, peak = cap, mdd = 0, costs = 0, missed = 0;
   const trades = [];
+  const sell = (i, px, open) => { const amt = sh * px, c = fee(amt) + tax(amt); costs += c; cash += amt - c; trades.push({ ...pos, xi: i, xpx: px, sh, pnl: amt - c - pos.cost, ret: (amt - c) / pos.cost - 1, open }); pos = null; sh = 0; };
   for (let i = 0; i < D.length; i++) {
-    if (pending === "buy" && !pos) { shares = cash * (1 - FEE) / D[i].o; pos = { i, px: D[i].o, cash }; cash = 0; }
-    else if (pending === "sell" && pos) { cash = shares * D[i].o * (1 - FEE - TAX); trades.push({ ...pos, xi: i, xpx: D[i].o, ret: cash / pos.cash - 1 }); pos = null; shares = 0; }
+    if (pending === "buy" && !pos) { const n = canBuy(cash, D[i].o); if (n > 0) { const amt = n * D[i].o, c = fee(amt); costs += c; cash -= amt + c; sh = n; pos = { i, px: D[i].o, cost: amt + c, start: i === 0 && !useBuy }; } else missed++; }
+    else if (pending === "sell" && pos) sell(i, D[i].o, false);
     pending = null;
-    const eq = pos ? shares * D[i].c : cash;
-    peak = Math.max(peak, eq); mdd = Math.max(mdd, 1 - eq / peak);
+    const eq = cash + sh * D[i].c; peak = Math.max(peak, eq); mdd = Math.max(mdd, 1 - eq / peak);
     if (at[i]) pending = at[i];
   }
   const last = D.length - 1;
-  if (pos) { cash = shares * D[last].c * (1 - FEE - TAX); trades.push({ ...pos, xi: last, xpx: D[last].c, ret: cash / pos.cash - 1, open: true }); }
-  const wins = trades.filter(t => t.ret > 0).length;
-  const bh = (1 - FEE) * D[last].c / D[0].o * (1 - FEE - TAX) - 1;
-  return { trades, total: cash - 1, bh, mdd, win: trades.length ? wins / trades.length : null };
+  if (pos) sell(last, D[last].c, true);
+  const wins = trades.filter(t => t.pnl > 0).length;
+  // 買進持有：同一筆資金，第一天開盤買進、最後一天收盤賣出（和策略用同樣的成本與交易單位）
+  const bn = canBuy(cap, D[0].o), bAmt = bn * D[0].o, sAmt = bn * D[last].c, bhEnd = cap - bAmt - fee(bAmt) * (bn > 0) + (bn > 0 ? sAmt - fee(sAmt) - tax(sAmt) : 0);
+  return { trades, cap, end: cash, total: cash / cap - 1, pnl: cash - cap, bh: bhEnd / cap - 1, bhEnd, bhShares: bn, mdd, costs, win: trades.length ? wins / trades.length : null, missed, tooSmall: canBuy(cap, Math.min(...D.map(d => d.o))) === 0 };
 }
 
 /* ================= 判讀 ================= */
@@ -1560,6 +1583,7 @@ class Chart {
     (o.markers || []).filter(m => m.i < vis && m.i >= va && m.i <= vb).forEach(m => {
       const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
       const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
+      ctx.globalAlpha = m.dim ? 0.3 : 1; // 回測中被略過的訊號畫淡一點
       ctx.fillStyle = c; ctx.beginPath();
       if (buy) { ctx.moveTo(x, y); ctx.lineTo(x - s, y + s * 1.5); ctx.lineTo(x + s, y + s * 1.5); }
       else { ctx.moveTo(x, y); ctx.lineTo(x - s, y - s * 1.5); ctx.lineTo(x + s, y - s * 1.5); }
@@ -1571,6 +1595,7 @@ class Chart {
         if (!placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 13)) { ctx.fillText(m.label, tx, ty); placed.push({ x: tx, y: ty, w: tw }); }
         ctx.font = `11px ${cssVar("--font-mono")}`;
       }
+      ctx.globalAlpha = 1;
     });
     // 同一天同方向的副圖訊號疊在一起：圈畫一次，標籤合併（例如「KD金叉・MACD金叉」）
     const sigAt = new Map(); sigs.filter(g => g.i >= va && g.i <= vb).forEach(g => { const k = g.i + g.side; sigAt.has(k) ? sigAt.get(k).push(g) : sigAt.set(k, [g]); });
@@ -3509,13 +3534,14 @@ const STRATS = {
   choch: { name: "聰明錢：CHoCH 結構轉變", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") },
   bos: { name: "道氏：所有結構突破（BOS + CHoCH）", fn: (D, I) => Signals.structure(D, I, "dow") },
 };
-let lab = { src: "sim", seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma") };
+let lab = { src: "sim", seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma"), skip: new Set(), listOpen: false,
+  capital: Math.max(10000, +store.get("btCap", 1000000) || 1000000), lot: store.get("btLot", 1) === 1000 ? 1000 : 1, useBuy: store.get("btBuy", true) !== false, useSell: store.get("btSell", true) !== false };
 const labChart = new Chart($("#labChart"), { onHover: i => { if (!lab.D) return; $("#roDate").textContent = lab.D[i].d.replace(/-/g, "/"); renderReadout($("#labReadout"), readout(lab.D, lab.I, i)); } });
 const labUsesReal = () => lab.src === "real" && !!REAL.cur;
 function labData() {
   if (labUsesReal()) { lab.D = REAL.cur.data.map(x => ({ ...x, v: x.v || 0 })); $("#labSeed").textContent = `${realName(REAL.cur)}・${lab.D.length} 個交易日・${REAL.cur.source}`; }
   else { lab.D = genSeries(lab.seed, +$("#labLen").value); $("#labSeed").textContent = lab.src === "real" ? "還沒載入真實個股，先顯示模擬走勢" : `走勢編號 #${lab.seed}`; }
-  lab.I = indicators(lab.D);
+  lab.I = indicators(lab.D); lab.skip = new Set();
 }
 function setLabSrc(src) {
   lab.src = src; document.querySelectorAll("[data-labsrc]").forEach(b => b.setAttribute("aria-pressed", b.dataset.labsrc === src));
@@ -3537,30 +3563,79 @@ function labDraw() {
   const ex = $("#smcz").checked ? smcExtra(lab.D) : { shapes: [], zones: [] };
   if ($("#zz").checked) ex.shapes.push(zigzagShape(lab.D));
   const fibOn = $("#fibz").checked; if (fibOn && fibShape(lab.D)) ex.shapes.push(fibShape(lab.D));
-  labChart.set(lab.D, { I: lab.I, ma, boll: $("#boll").checked, subs: subsFrom(labBar), noVol: !labBar.has("vol"), markers: sigs, hlines: [...($("#sr").checked ? srLevels(lab.D) : []), ...(fibOn ? fibLines(lab.D) : [])], shapes: ex.shapes, zones: ex.zones });
+  const off = s => lab.skip.has(btKey(s)) || (s.side === "buy" ? !lab.useBuy : s.side === "sell" ? !lab.useSell : false);
+  labChart.set(lab.D, { I: lab.I, ma, boll: $("#boll").checked, subs: subsFrom(labBar), noVol: !labBar.has("vol"), markers: sigs.map(s => (off(s) ? { ...s, dim: true, label: s.label ? s.label + "（略過）" : s.label } : s)), hlines: [...($("#sr").checked ? srLevels(lab.D) : []), ...(fibOn ? fibLines(lab.D) : [])], shapes: ex.shapes, zones: ex.zones });
   renderBT(sigs);
 }
+const fmtMoney = v => `${v < 0 ? "−" : ""}${Math.round(Math.abs(v)).toLocaleString()} 元`;
 function renderBT(sigs) {
   const opts = Object.entries(STRATS).map(([k, v]) => `<option value="${k}" ${k === lab.strat ? "selected" : ""}>${v.name}</option>`).join("");
   let html = `<div class="row" style="justify-content:space-between"><div><div class="eyebrow">BACKTEST</div><h3 style="margin:0">策略回測</h3></div><select id="stratSel" aria-label="策略">${opts}</select></div>`;
   const S = STRATS[lab.strat];
+  // 回測設定：資金、交易單位、要不要照買進／賣出訊號做
+  html += `<div class="bt-set">
+    <label class="bt-cap">初始資金 <input type="number" id="btCap" min="10000" step="10000" value="${lab.capital}" inputmode="numeric" aria-label="初始資金（元）"> 元</label>
+    <label>單位 <select id="btLot" aria-label="交易單位"><option value="1" ${lab.lot === 1 ? "selected" : ""}>零股（1 股）</option><option value="1000" ${lab.lot === 1000 ? "selected" : ""}>整張（1000 股）</option></select></label>
+    <label class="chk"><input type="checkbox" id="btBuy" ${lab.useBuy ? "checked" : ""}> 依<span class="up">買進訊號</span>買進</label>
+    <label class="chk"><input type="checkbox" id="btSell" ${lab.useSell ? "checked" : ""}> 依<span class="down">賣出訊號</span>賣出</label>
+  </div>`;
   if (!S.fn) { html += `<p class="note" style="margin:0">選一個策略，圖上會標出買賣訊號，這裡會顯示用這些訊號進出的結果。</p>`; }
   else {
-    const r = backtest(lab.D, sigs), cls = x => x > 0 ? "up" : x < 0 ? "down" : "";
+    const r = backtest(lab.D, sigs, { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip }), cls = x => x > 0 ? "up" : x < 0 ? "down" : "";
+    const nBuy = sigs.filter(x => x.side === "buy" && !x.note).length, nSell = sigs.filter(x => x.side === "sell" && !x.note).length;
+    const mode = lab.useBuy && lab.useSell ? "" : lab.useBuy ? "只依買進訊號進場，之後一直持有到期末。" : lab.useSell ? "第一天開盤先全額買進，依賣出訊號出場後不再買回。" : "買進、賣出都沒勾，不會有任何交易。";
     html += `<div class="stats">
-      <div class="stat"><div class="k">策略報酬</div><div class="v ${cls(r.total)}">${fmtPct(r.total, 1)}</div></div>
-      <div class="stat"><div class="k">買進持有</div><div class="v ${cls(r.bh)}">${fmtPct(r.bh, 1)}</div></div>
-      <div class="stat"><div class="k">交易次數</div><div class="v">${r.trades.length}</div></div>
-      <div class="stat"><div class="k">勝率</div><div class="v">${r.win == null ? "—" : Math.round(r.win * 100) + "%"}</div></div>
-      <div class="stat"><div class="k">最大回撤</div><div class="v down">${r.mdd ? "−" + (r.mdd * 100).toFixed(1) + "%" : "0%"}</div></div>
-    </div>`;
-    if (r.trades.length) html += `<div class="tablewrap"><table class="trades"><thead><tr><th>#</th><th>買進日</th><th>買價</th><th>賣出日</th><th>賣價</th><th>持有天數</th><th>報酬（含成本）</th></tr></thead><tbody>${r.trades.map((t, k) => `<tr><td>${k + 1}</td><td class="num">${lab.D[t.i].d.slice(5).replace("-", "/")}</td><td class="num">${fmtP(t.px)}</td><td class="num">${lab.D[t.xi].d.slice(5).replace("-", "/")}${t.open ? "＊" : ""}</td><td class="num">${fmtP(t.xpx)}</td><td class="num">${t.xi - t.i}</td><td class="num ${cls(t.ret)}">${fmtPct(t.ret)}</td></tr>`).join("")}</tbody></table></div>`;
-    else html += `<p class="note" style="margin:0">這段走勢沒有觸發任何進場訊號。換一段走勢或換一個策略試試。</p>`;
-    html += `<p class="note" style="margin:0">規則：訊號出現的隔天以開盤價成交，只做多、全額進出；買賣各計 0.1425% 手續費，賣出另計 0.3% 證交稅。${r.trades.some(t => t.open) ? "＊為期末仍持有，以最後收盤價計算。" : ""}</p>`;
+      <div class="stat"><div class="k">策略報酬</div><div class="v ${cls(r.total)}">${fmtPct(r.total, 1)}</div><div class="s ${cls(r.pnl)}">${r.pnl >= 0 ? "+" : ""}${fmtMoney(r.pnl)}</div></div>
+      <div class="stat"><div class="k">期末資金</div><div class="v">${Math.round(r.end).toLocaleString()}</div><div class="s">初始 ${Math.round(r.cap).toLocaleString()}</div></div>
+      <div class="stat"><div class="k">買進持有 <button type="button" class="qmark" data-why="bh" aria-label="買進持有是什麼">?</button></div><div class="v ${cls(r.bh)}">${fmtPct(r.bh, 1)}</div><div class="s ${cls(r.bhEnd - r.cap)}">${r.bhEnd - r.cap >= 0 ? "+" : ""}${fmtMoney(r.bhEnd - r.cap)}</div></div>
+      <div class="stat"><div class="k">交易次數</div><div class="v">${r.trades.length}</div><div class="s">勝率 ${r.win == null ? "—" : Math.round(r.win * 100) + "%"}</div></div>
+      <div class="stat"><div class="k">最大回撤</div><div class="v down">${r.mdd ? "−" + (r.mdd * 100).toFixed(1) + "%" : "0%"}</div><div class="s">成本 ${fmtMoney(r.costs)}</div></div>
+    </div>
+    <p class="note bt-bh" id="btWhy" hidden>「買進持有」是比較基準：同一筆資金在這段走勢的第一天開盤全部買進、最後一天收盤賣出，不看任何訊號。它只和走勢本身有關，所以<strong>換策略時不會變</strong>；按「產生新走勢」、改長度、換股票，或改資金與交易單位才會變。這段走勢從 ${fmtP(lab.D[0].o)} 到 ${fmtP(lab.D[lab.D.length - 1].c)}。</p>`;
+    if (mode) html += `<p class="note" style="margin:0">${mode}</p>`;
+    if (r.tooSmall || r.missed) html += `<p class="note" style="margin:0;color:var(--down)">${r.tooSmall ? "資金不足以買進一個單位" : `有 ${r.missed} 次買進訊號因資金不足買不起一個單位而沒有成交`}（股價 × ${lab.lot.toLocaleString()} 股），可以提高資金或改用零股。</p>`;
+    if (r.trades.length) html += `<div class="tablewrap"><table class="trades"><thead><tr><th>#</th><th>買進日</th><th>買價</th><th>股數</th><th>賣出日</th><th>賣價</th><th>天數</th><th>損益</th><th>報酬</th></tr></thead><tbody>${r.trades.map((t, k) => `<tr><td>${k + 1}</td><td class="num">${lab.D[t.i].d.slice(5).replace("-", "/")}${t.start ? "†" : ""}</td><td class="num">${fmtP(t.px)}</td><td class="num">${t.sh.toLocaleString()}</td><td class="num">${lab.D[t.xi].d.slice(5).replace("-", "/")}${t.open ? "＊" : ""}</td><td class="num">${fmtP(t.xpx)}</td><td class="num">${t.xi - t.i}</td><td class="num ${cls(t.pnl)}">${t.pnl >= 0 ? "+" : ""}${Math.round(t.pnl).toLocaleString()}</td><td class="num ${cls(t.ret)}">${fmtPct(t.ret)}</td></tr>`).join("")}</tbody></table></div>`;
+    else html += `<p class="note" style="margin:0">${lab.useBuy || lab.useSell ? "這段走勢沒有觸發任何交易。換一段走勢、換策略，或在下方訊號清單多勾幾個試試。" : ""}</p>`;
+    // 訊號清單：可以一個一個勾選要不要照做
+    const list = sigs.filter(x => !x.note);
+    if (list.length) html += `<details class="bt-list"${lab.listOpen ? " open" : ""}><summary>訊號清單（${nBuy} 個買進、${nSell} 個賣出）— 勾選要不要照做 <span class="note">已略過 ${list.filter(x => lab.skip.has(btKey(x))).length} 個</span></summary>
+      <div class="row" style="gap:6px;margin:8px 0"><button type="button" class="btn sm" data-bt-all="1">全部勾選</button><button type="button" class="btn sm" data-bt-all="0">全部取消</button></div>
+      <ul>${list.map(x => { const k = btKey(x), off = lab.skip.has(k) || (x.side === "buy" ? !lab.useBuy : !lab.useSell); return `<li><label class="chk"><input type="checkbox" data-bt-sig="${k}" ${lab.skip.has(k) ? "" : "checked"} ${(x.side === "buy" ? lab.useBuy : lab.useSell) ? "" : "disabled"}><span class="num">${lab.D[x.i].d.slice(5).replace("-", "/")}</span><span class="pill ${x.side === "buy" ? "bull" : "bear"}">${x.side === "buy" ? "買進" : "賣出"}</span><span class="${off ? "note" : ""}">${x.label || ""}</span><span class="num note">收 ${fmtP(lab.D[x.i].c)}</span></label></li>`; }).join("")}</ul></details>`;
+    html += `<details class="bt-help"><summary>回測說明：這些數字怎麼算、怎麼看？</summary>
+      <ul>
+        <li><strong>成交方式</strong>：訊號出現在某天收盤後，<strong>隔天以開盤價</strong>成交（當天收盤才知道訊號，不能用當天價格買）。只做多，不放空。</li>
+        <li><strong>資金</strong>：每次買進都用手上全部現金，依「交易單位」取整數股數；買不起一個單位就不會成交。賣出後的錢再用於下一筆。</li>
+        <li><strong>成本</strong>：買賣各收 0.1425% 手續費（每筆最低 20 元），賣出另收 0.3% 證交稅。交易越頻繁，成本吃掉越多報酬。</li>
+        <li><strong>策略報酬</strong>：期末資金 ÷ 初始資金 − 1。期末還持有的部位，以最後一天收盤價賣出計算（表中標 ＊）。</li>
+        <li><strong>買進持有</strong>：比較基準，第一天開盤全買、最後一天收盤賣出。換策略不會變，因為它只和這段走勢有關；策略要贏過它才算有價值。上漲的走勢中，大多數策略會輸給買進持有，因為進出之間會錯過一段漲幅。</li>
+        <li><strong>勝率</strong>：賺錢（扣成本後）的交易筆數占比。勝率高不代表賺錢，要同時看每筆賺多少、賠多少。</li>
+        <li><strong>最大回撤</strong>：資金從最高點往下跌最多的幅度，代表你中途要忍受的最大帳面虧損。</li>
+        <li><strong>勾選</strong>：取消「依賣出訊號賣出」會買進後一直抱到期末；取消「依買進訊號買進」則第一天先買進（表中標 †），只用賣出訊號找出場點。訊號清單可以一個一個取消，比較「只做低檔訊號」或「略過某次假訊號」的差別。</li>
+        <li><strong>注意</strong>：回測只代表這一段過去的走勢；模擬走勢是隨機產生的，真實個股也不保證未來重演。多換幾段走勢、幾檔股票測試，結果穩定的規則才比較可信。</li>
+      </ul></details>`;
+    html += `<p class="note" style="margin:0">規則：隔天開盤價成交、只做多、全額進出；手續費 0.1425%（最低 20 元），賣出另計 0.3% 證交稅。${r.trades.some(t => t.open) ? "＊期末仍持有，以最後收盤價計算。" : ""}${r.trades.some(t => t.start) ? "†第一天開盤買進。" : ""}</p>`;
   }
   $("#btPanel").innerHTML = html;
-  $("#stratSel").addEventListener("change", e => { lab.strat = e.target.value; store.set("labStrat", lab.strat); labDraw(); });
+  $("#stratSel").addEventListener("change", e => { lab.strat = e.target.value; store.set("labStrat", lab.strat); lab.skip = new Set(); labDraw(); });
 }
+// 回測面板的設定與勾選（面板每次重畫，所以用事件委派）
+$("#btPanel").addEventListener("change", e => {
+  const t = e.target;
+  if (t.id === "btCap") { lab.capital = Math.max(10000, Math.min(1e10, Math.round(+t.value || 1e6))); store.set("btCap", lab.capital); }
+  else if (t.id === "btLot") { lab.lot = +t.value === 1000 ? 1000 : 1; store.set("btLot", lab.lot); }
+  else if (t.id === "btBuy") { lab.useBuy = t.checked; store.set("btBuy", lab.useBuy); }
+  else if (t.id === "btSell") { lab.useSell = t.checked; store.set("btSell", lab.useSell); }
+  else if (t.dataset.btSig) { t.checked ? lab.skip.delete(t.dataset.btSig) : lab.skip.add(t.dataset.btSig); lab.listOpen = true; }
+  else return;
+  labDraw();
+});
+$("#btPanel").addEventListener("click", e => {
+  const b = e.target.closest("[data-bt-all],[data-why]"); if (!b) return;
+  if (b.dataset.why) { $("#btWhy").hidden = !$("#btWhy").hidden; return; }
+  const S = STRATS[lab.strat], sigs = S.fn ? S.fn(lab.D, lab.I) : [];
+  lab.skip = b.dataset.btAll === "1" ? new Set() : new Set(sigs.filter(x => !x.note).map(btKey)); lab.listOpen = true; labDraw();
+});
+$("#btPanel").addEventListener("toggle", e => { if (e.target.classList?.contains("bt-list")) lab.listOpen = e.target.open; }, true);
 $("#labNew").addEventListener("click", () => { lab.seed = Math.floor(Math.random() * 1e6); store.set("labSeed", lab.seed); labData(); labDraw(); });
 $("#labLen").addEventListener("change", () => { labData(); labDraw(); });
 ["maA", "maB", "maC", "boll", "sr", "zz", "smcz", "fibz", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
