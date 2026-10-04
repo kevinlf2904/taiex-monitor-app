@@ -12,12 +12,14 @@
 <style>
 /* Layout: 交易終端機的冷調紙面。頂部頁籤切換四個區塊；課程區為「目錄側欄 + 講義」，圖表一律滿版。 */
 :root {
-  --bg: #eceff3;
-  --surface: #ffffff;
-  --surface-2: #f5f7fa;
+  /* 分層灰階：底色 → 第一層框（面板）→ 第二層（面板裡的卡片、按鈕、數據格）→ 第三層（輸入框、選中項） */
+  --bg: #dcdfe4;
+  --surface: #f4f5f7;
+  --surface-2: #e7e9ed;
+  --surface-3: #ffffff;
   --ink: #18202b;
   --muted: #5b6676;
-  --line: #d3d9e2;
+  --line: #c8ced7;
   --accent: #2346a0;
   --accent-soft: #e2e8f7;
   --up: #d0343a;      /* 台股慣例：紅漲 */
@@ -34,15 +36,15 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #000000; --surface: #0b0d10; --surface-2: #15181d; --ink: #e8ecf1; --muted: #9aa4b2;
-    --line: #262b33; --accent: #86a2ff; --accent-soft: #1a2238; --up: #ff4d57; --down: #22c47e;
+    --bg: #000000; --surface: #141517; --surface-2: #1f2124; --surface-3: #2b2e33; --ink: #e8ecf1; --muted: #9aa4b2;
+    --line: #353a41; --accent: #86a2ff; --accent-soft: #1c2440; --up: #ff4d57; --down: #22c47e;
     --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #000000; --surface: #0b0d10; --surface-2: #15181d; --ink: #e8ecf1; --muted: #9aa4b2;
-  --line: #262b33; --accent: #86a2ff; --accent-soft: #1a2238; --up: #ff4d57; --down: #22c47e;
+  --bg: #000000; --surface: #141517; --surface-2: #1f2124; --surface-3: #2b2e33; --ink: #e8ecf1; --muted: #9aa4b2;
+  --line: #353a41; --accent: #86a2ff; --accent-soft: #1c2440; --up: #ff4d57; --down: #22c47e;
   --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
   color-scheme: dark;
 }
@@ -108,7 +110,7 @@ button, select, input { font: inherit; color: inherit; }
   .chat-fab span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .chat-fab svg { width: 24px; height: 24px; }
 }
-.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.tabs button[aria-selected="true"] { background: var(--surface-3); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px;
   border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); background: var(--surface);
@@ -120,7 +122,7 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .eyebrow { font-size: 12px; letter-spacing: 0.12em; color: var(--accent); font-weight: 700; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
 .btn {
-  border: 1px solid var(--line); background: var(--surface); padding: 7px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); padding: 7px 14px; border-radius: 8px; cursor: pointer;
   font-size: 14px; display: inline-flex; align-items: center; gap: 6px;
 }
 .btn:hover { border-color: var(--accent); }
@@ -138,10 +140,10 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 }
 .legend b { font-weight: 600; color: var(--muted); margin-right: 3px; font-family: var(--font-body); }
 .legend span { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.zoombar { position: absolute; top: 6px; right: 8px; display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); z-index: 1; }
+.zoombar { position: absolute; top: 6px; right: 8px; display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); z-index: 1; }
 .zoombar button { border: 0; background: transparent; padding: 3px 10px; font-size: 13px; cursor: pointer; color: var(--muted); min-width: 30px; }
 .zoombar button + button { border-left: 1px solid var(--line); }
-.zoombar button:hover { color: var(--ink); background: var(--surface-2); }
+.zoombar button:hover { color: var(--ink); background: var(--surface-3); }
 .zoombar:not(.zoomed) [data-z="reset"] { opacity: .45; }
 .zoombar .zsep { width: 1px; background: var(--line); }
 .zoombar [aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); font-weight: 700; }
@@ -154,7 +156,7 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .scalepop .prow strong { margin-right: auto; }
 .scalepop .pval { font-family: var(--font-mono); color: var(--accent); min-width: 36px; text-align: right; }
 .scalepop .pseg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.scalepop .pseg button { border: 0; background: var(--surface); color: var(--ink); padding: 5px 11px; cursor: pointer; font-size: 13px; font-variant-numeric: tabular-nums; }
+.scalepop .pseg button { border: 0; background: var(--surface-2); color: var(--ink); padding: 5px 11px; cursor: pointer; font-size: 13px; font-variant-numeric: tabular-nums; }
 .scalepop .pseg button + button { border-left: 1px solid var(--line); }
 .scalepop .pseg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 700; }
 .scalepop .pchk { cursor: pointer; font-size: 13px; color: var(--ink); flex-wrap: nowrap; align-items: flex-start; }
@@ -204,7 +206,7 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
 .pcard {
   display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; cursor: pointer;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; line-height: 1.55;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; line-height: 1.55;
 }
 .pcard:hover { border-color: var(--accent); }
 .pcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
@@ -232,7 +234,7 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .ibar.compact { padding: 0; border: 0; }
 .ibar-g { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ibar-t { font-size: 12px; color: var(--muted); letter-spacing: .06em; margin-right: 2px; }
-.ichip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 3px 11px; font-size: 13px; cursor: pointer; }
+.ichip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 3px 11px; font-size: 13px; cursor: pointer; }
 .ichip i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
 .ichip:hover { border-color: var(--accent); color: var(--ink); }
 .ichip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600; }
@@ -249,16 +251,18 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 details.verdict summary { cursor: pointer; list-style-position: outside; }
 .lesson-chart { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 80px; }
 .chart-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.chart-tools .lcode { flex: 0 1 120px; font-size: 14px; padding: 5px 9px; }
+.chart-tools .seg button { padding: 5px 12px; }
 .lgroup span { font-family: var(--font-mono); font-weight: 500; margin-left: 6px; color: var(--accent); }
 .prog-bar { width: 56px; height: 4px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: inline-block; }
 .prog-bar i { display: block; height: 100%; background: var(--accent); }
 .btn:active { transform: translateY(1px); }
 @media (min-width: 901px) { .lab-side { position: sticky; top: 80px; } }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { border: 0; background: var(--surface); padding: 6px 14px; cursor: pointer; font-size: 14px; color: var(--muted); }
+.seg button { border: 0; background: var(--surface-2); padding: 6px 14px; cursor: pointer; font-size: 14px; color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line); }
 .lab-src { width: 100%; } .lab-src button { flex: 1; }
-.code-in { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--ink); font-family: var(--font-mono); font-size: 15px; }
+.code-in { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-3); color: var(--ink); font-family: var(--font-mono); font-size: 15px; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 700; }
 
 /* ---------- 問問題對話框 ---------- */
@@ -284,10 +288,10 @@ details.verdict summary { cursor: pointer; list-style-position: outside; }
 .msg.wait { color: var(--muted); }
 .chat-empty { color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
 .chat-sugg { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 8px; }
-.chat-sugg button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 11px; font-size: 13px; cursor: pointer; color: var(--ink); text-align: left; }
+.chat-sugg button { border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 4px 11px; font-size: 13px; cursor: pointer; color: var(--ink); text-align: left; }
 .chat-sugg button:hover { border-color: var(--accent); }
 .chat-form { display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); align-items: end; }
-.chat-form textarea { flex: 1; resize: none; max-height: 120px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); font: inherit; font-size: 15px; line-height: 1.4; }
+.chat-form textarea { flex: 1; resize: none; max-height: 120px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-3); color: var(--ink); font: inherit; font-size: 15px; line-height: 1.4; }
 .chat-form textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; }
 @media (max-width: 640px) {
   .chat-fab { right: 14px; bottom: calc(74px + env(safe-area-inset-bottom, 0px)); padding: 10px 14px; font-size: 14px; }
@@ -303,8 +307,8 @@ details.verdict summary { cursor: pointer; list-style-position: outside; }
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .row label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
 .swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
-input[type="number"] { width: 62px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-family: var(--font-mono); font-size: 13px; }
-select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-size: 14px; max-width: 100%; }
+input[type="number"] { width: 62px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-3); color: var(--ink); font-family: var(--font-mono); font-size: 13px; }
+select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-3); color: var(--ink); font-size: 14px; max-width: 100%; }
 .readout { display: flex; flex-direction: column; gap: 6px; }
 .ro { display: grid; grid-template-columns: 58px 1fr auto; gap: 8px; align-items: baseline; font-size: 13.5px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
 .ro:last-child { border-bottom: 0; }
@@ -314,7 +318,7 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; ba
 .pill.bear { background: color-mix(in srgb, var(--down) 15%, transparent); color: var(--down); }
 .pill.flat { background: var(--surface-2); color: var(--muted); }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 1px; background: var(--line); border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
-.stat { background: var(--surface); padding: 10px 12px; }
+.stat { background: var(--surface-2); padding: 10px 12px; }
 .stat .k { font-size: 12px; color: var(--muted); }
 .stat .v { font-family: var(--font-mono); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .tablewrap { overflow-x: auto; }
@@ -332,7 +336,11 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .score div { text-align: right; }
 .score .k { font-size: 12px; color: var(--muted); }
 .score .v { font-family: var(--font-mono); font-size: 22px; font-weight: 600; }
-.chal-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
+.chal-src { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.chal-src form { flex: 1; min-width: 220px; max-width: 360px; gap: 6px; flex-wrap: nowrap; }
+.chal-src .code-in { font-size: 14px; }
+.chal-reveal { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; padding: 10px 14px; background: var(--surface-2); border-radius: 8px; font-size: 14px; }
+.chal-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--surface-2); border-radius: 0 0 var(--radius) var(--radius); }
 .verdict { padding: 14px 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .verdict .big { font-family: var(--font-display); font-size: 22px; font-weight: 900; }
 .grid-ro { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 24px; }
@@ -346,7 +354,7 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .qtext { font-size: 19px; font-weight: 700; line-height: 1.5; }
 .opts { display: flex; flex-direction: column; gap: 8px; }
 .opts button {
-  text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 14px; cursor: pointer;
+  text-align: left; border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 10px 14px; cursor: pointer;
   display: grid; grid-template-columns: 24px 1fr; gap: 8px; font-size: 15px;
 }
 .opts button:hover:not(:disabled) { border-color: var(--accent); }
@@ -374,7 +382,7 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .nums-grid.ohlc { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .nums label { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: var(--muted); }
 .nums label.wide { grid-column: 1 / -1; }
-.nums input[type="number"], .nums input[type="text"], .nums input[type="date"] { width: 100%; min-width: 0; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-family: var(--font-mono); font-size: 13.5px; color: var(--ink); }
+.nums input[type="number"], .nums input[type="text"], .nums input[type="date"] { width: 100%; min-width: 0; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-3); font-family: var(--font-mono); font-size: 13.5px; color: var(--ink); }
 .nums input[type="text"] { font-family: var(--font-body); }
 .nums-row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
 .nums-row label { flex-direction: row; align-items: center; gap: 6px; }
@@ -427,7 +435,7 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .real-top { padding: 16px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
 .real-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
 .real-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--muted); }
-.real-form input { width: 220px; max-width: 100%; padding: 9px 12px; font-size: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--ink); font-family: var(--font-mono); }
+.real-form input { width: 220px; max-width: 100%; padding: 9px 12px; font-size: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-3); color: var(--ink); font-family: var(--font-mono); }
 .real-form select { padding: 9px 10px; font-size: 15px; }
 .real-form .btn { padding: 9px 18px; }
 .real-code { flex: 1 1 200px; } .real-code input { width: 100%; }
@@ -441,7 +449,7 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .steps b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--surface); font-size: 12px; }
 #shotGrid, #shotRebuild, #shotDrop { scroll-margin-top: 80px; }
 .shot-pop { position: absolute; z-index: 3; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; box-shadow: 0 6px 24px rgba(0,0,0,.18); min-width: 200px; max-width: 260px; }
-.shot-pop input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-family: var(--font-mono); }
+.shot-pop input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-3); color: var(--ink); font-family: var(--font-mono); }
 .shot-grid.wide { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 901px) { .shot-grid:not(.wide) .results { position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto; } }
 .ai-out { max-width: 75ch; font-size: 15px; }
@@ -493,6 +501,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <div id="lessonWidget" hidden></div>
       <div class="lesson-chart">
         <div class="chart-tools" id="lessonTools"></div>
+        <datalist id="stockPool"></datalist>
         <div class="panel chartbox" id="lessonChart"></div>
         <div class="try" id="lessonTry"></div>
       </div>
@@ -555,7 +564,11 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <div>
         <div class="eyebrow">CHALLENGE</div>
         <h2>接下來 10 天，會漲還是會跌？</h2>
-        <p class="note" style="margin:6px 0 0; max-width: 60ch">先讀圖再作答。走勢是模擬的，帶有隨機性，猜錯很正常；重點是作答後對照指標，檢討自己看到了什麼、漏看了什麼。</p>
+        <p class="note" id="chNote" style="margin:6px 0 0; max-width: 60ch">先讀圖再作答。走勢是模擬的，帶有隨機性，猜錯很正常；重點是作答後對照指標，檢討自己看到了什麼、漏看了什麼。</p>
+        <div class="chal-src">
+          <div class="seg" role="group" aria-label="題目來源"><button data-chsrc="sim" aria-pressed="true">模擬走勢</button><button data-chsrc="real" aria-pressed="false">真實歷史</button></div>
+          <form class="row" id="chRealForm" hidden><input id="chCode" class="code-in" placeholder="代號（空白＝隨機熱門股）" autocomplete="off" aria-label="指定股票代號，空白則隨機"><button class="btn">出題</button></form>
+        </div>
       </div>
       <div class="score">
         <div><div class="k">答對</div><div class="v" id="scRight">0 / 0</div></div>
@@ -703,7 +716,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer>課程與練習的價格為程式模擬；個股判讀的真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-7</span></footer>
+<footer>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-8</span></footer>
 
 <script>
 "use strict";
@@ -1235,6 +1248,24 @@ function simulateFuture(D, { days = 20, mode = "trend", paths = 800, seed = 1, b
     stats: { p10: q(ends, 0.1), p50: q(ends, 0.5), p90: q(ends, 0.9), up: ends.filter(x => x > last).length / paths },
     touch: (price, above) => Array.from(above ? mx : mn).filter(v => (above ? v >= price : v <= price)).length / paths };
 }
+// 副圖指標發出的訊號：{ i, si（第幾個副圖）, side, label, v（副圖上的位置） }
+function subSignals(D, I, subs, vis) {
+  const out = [], n = Math.min(vis, D.length);
+  const cross = (a, b, si, up, dn) => { for (let i = 1; i < n; i++) { if ([a[i], b[i], a[i - 1], b[i - 1]].some(v => v == null) || D[i].sim) continue;
+    if (a[i - 1] <= b[i - 1] && a[i] > b[i]) out.push({ i, si, side: "buy", label: up, v: a[i] });
+    else if (a[i - 1] >= b[i - 1] && a[i] < b[i]) out.push({ i, si, side: "sell", label: dn, v: a[i] }); } };
+  const exit = (a, lo, hi, si, name) => { for (let i = 1; i < n; i++) { if (a[i] == null || a[i - 1] == null || D[i].sim) continue;
+    if (a[i - 1] < lo && a[i] >= lo) out.push({ i, si, side: "buy", label: name + "脫離超賣", v: a[i] });
+    else if (a[i - 1] > hi && a[i] <= hi) out.push({ i, si, side: "sell", label: name + "脫離超買", v: a[i] }); } };
+  subs.forEach((S, si) => {
+    if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉");
+    else if (S === "macd") cross(I.macd.dif, I.macd.sig, si, "MACD金叉", "MACD死叉");
+    else if (S === "rsi") exit(I.rsi, 30, 70, si, "RSI");
+    else if (S === "wr") exit(I.wr, -80, -20, si, "威廉");
+    else if (S && S.custom && S.custom.lines.length >= 2 && S.custom.signals !== false) { const [a, b] = S.custom.names || []; cross(S.custom.lines[0], S.custom.lines[1], si, a && b ? `${a}上穿${b}` : "副圖金叉", a && b ? `${a}下穿${b}` : "副圖死叉"); }
+  });
+  return out.sort((a, b) => a.i - b.i);
+}
 class Chart {
   constructor(host, { onHover } = {}) {
     this.host = host; this.onHover = onHover;
@@ -1315,9 +1346,9 @@ class Chart {
     new ResizeObserver(() => this.draw()).observe(host);
   }
   static all = [];
-  static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit" };
+  static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit", sig: "chartSubSig" };
   static prefs = { h: [1, 1.5, 2, 2.5].includes(+store.get("chartH", 1)) ? +store.get("chartH", 1) : 1, log: !!store.get("chartLog", false),
-    sh: [1, 1.5, 2].includes(+store.get("chartSubH", 1)) ? +store.get("chartSubH", 1) : 1, fit: !!store.get("chartSubFit", false) };
+    sh: [1, 1.5, 2].includes(+store.get("chartSubH", 1)) ? +store.get("chartSubH", 1) : 1, fit: !!store.get("chartSubFit", false), sig: store.get("chartSubSig", true) !== false };
   // 高度、對數座標、副圖貼合是全站共用的偏好：改了以後所有圖表一起重畫
   static setPref(k, v) { Chart.prefs[k] = v; store.set(Chart.PREF_KEYS[k], v); Chart.all.forEach(c => { c.syncBar(); c.draw(); if (!c.pop.hidden) c.renderPop(); }); }
   paneZoom(key) { return this.pz[key] || { z: 1, off: 0 }; }
@@ -1338,6 +1369,7 @@ class Chart {
       <div class="prow"><strong>副圖（量、指標）</strong><span class="pval">${szTxt}</span><div class="pseg"><button type="button" data-p="sout" aria-label="副圖壓縮">↕−</button><button type="button" data-p="sin" aria-label="副圖拉長">↕＋</button></div></div>
       <div class="prow"><span>高度</span>${seg("sh", [1, 1.5, 2], P.sh)}</div>
       <label class="prow pchk"><input type="checkbox" data-pref="fit" ${P.fit ? "checked" : ""}><span>副圖自動貼合資料（KD、RSI 等固定刻度的指標也放大到填滿）</span></label>
+      <label class="prow pchk"><input type="checkbox" data-pref="sig" ${P.sig ? "checked" : ""}><span>副圖訊號標到主圖（KD、MACD 交叉，RSI、威廉離開超買超賣區）</span></label>
       <div class="prow"><button type="button" class="btn sm" data-p="reset">全部還原</button></div>
       <p class="note">電腦：Shift＋滾輪縮放游標所在的圖，或上下拖曳右側刻度；放大後可上下拖曳平移。雙擊圖表還原。</p>`;
   }
@@ -1484,6 +1516,8 @@ class Chart {
     // 標記
     const showLabels = o.labels !== false && bw >= 2.5;
     const placed = [];
+    // 副圖訊號：在副圖上交叉或離開超買超賣區的那一天，主圖K線也標出來（空心圈，和實心三角的課程／策略訊號區分）
+    const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis) : [];
     (o.markers || []).filter(m => m.i < vis && m.i >= va && m.i <= vb).forEach(m => {
       const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
       const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
@@ -1498,6 +1532,22 @@ class Chart {
         if (!placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 13)) { ctx.fillText(m.label, tx, ty); placed.push({ x: tx, y: ty, w: tw }); }
         ctx.font = `11px ${cssVar("--font-mono")}`;
       }
+    });
+    // 同一天同方向的副圖訊號疊在一起：圈畫一次，標籤合併（例如「KD金叉・MACD金叉」）
+    const sigAt = new Map(); sigs.filter(g => g.i >= va && g.i <= vb).forEach(g => { const k = g.i + g.side; sigAt.has(k) ? sigAt.get(k).push(g) : sigAt.set(k, [g]); });
+    const marked = new Set((o.markers || []).map(m => m.i + m.side));
+    sigAt.forEach(gs => {
+      if (marked.has(gs[0].i + gs[0].side)) return; // 同一天已有同方向的課程／策略標記（通常就是同一個訊號），不重複畫
+      const g = gs[0], k = D[g.i], x = X(g.i), buy = g.side === "buy", c = buy ? col.up : col.down, off = 8;
+      const y = Math.max(top0 + 6, Math.min(top0 + mainH - 6, buy ? Y(k.l) + off : Y(k.h) - off));
+      ctx.strokeStyle = c; ctx.lineWidth = 1.6; ctx.fillStyle = col.surface; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      if (o.labels === false) return; // 手機上 K 棒很密也照樣標字（重疊的會自動略過）
+      const t = gs.map(q => q.label).join("・"); ctx.font = `600 10px ${cssVar("--font-body")}`; ctx.textAlign = "center";
+      let tw = ctx.measureText(t).width, tx = Math.min(Math.max(x, L + tw / 2 + 2), L + pw - tw / 2 - 2), ty = buy ? y + 13 : y - 12;
+      // 貼近圖的上下緣放不下時，改標在圈的旁邊
+      if (ty > top0 + mainH - 5 || ty < top0 + 7) { ty = y; tx = x + 7 + tw / 2 > L + pw - 2 ? x - 7 - tw / 2 : x + 7 + tw / 2; }
+      if (!placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 12)) { ctx.fillStyle = c; ctx.fillText(t, tx, ty); placed.push({ x: tx, y: ty, w: tw }); }
+      ctx.font = `11px ${cssVar("--font-mono")}`;
     });
 
     ctx.restore();
@@ -1582,6 +1632,12 @@ class Chart {
       const subY = this.subY || (v => subTop + (100 - v) / 100 * subH);
       ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pw, subH); ctx.clip();
       divs.filter(m => m.div.ind === (sub === "custom" ? "pane" : sub)).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
+      // 副圖上發出訊號的位置：實心點＋一條淡淡的虛線往上指到主圖
+      sigs.filter(g => g.si === si && g.i >= va && g.i <= vb).forEach(g => {
+        const x = X(g.i), y = subY(g.v), c = g.side === "buy" ? col.up : col.down;
+        ctx.strokeStyle = c; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, subTop); ctx.lineTo(Math.round(x) + 0.5, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+        ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill();
+      });
       ctx.restore();
       ctx.restore(); // 副圖裁切結束
       ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`;
@@ -1624,6 +1680,7 @@ class Chart {
       ];
     if (!o.noVol) parts.push(`<span><b>量</b>${o.volLabel ? Math.round(k.v) : k.v.toLocaleString()}</span>`);
     mas.forEach(m => parts.push(`<span style="color:${m.c}"><b style="color:inherit">MA${m.n}</b>${fmtP(m.a[i])}</span>`));
+    (this.sigs || []).filter(g => g.i === i).forEach(g => parts.push(`<span class="${g.side === "buy" ? "up" : "down"}"><b style="color:inherit">${g.side === "buy" ? "○ 偏多" : "○ 偏空"}</b>${g.label}</span>`));
     if (o.boll) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
     (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean).forEach(S => {
       const sub = typeof S === "string" ? S : "custom", C0 = typeof S === "string" ? null : S.custom;
@@ -2486,11 +2543,26 @@ function drawLesson() {
   }).join("");
   const seg = L.variants ? `<div class="seg" role="group" aria-label="背離指標">${L.variants.map((x, k) => `<button data-variant="${k}" aria-pressed="${k === lessonView.variant}">${x.label}</button>`).join("")}</div>` : "";
   const what = lessonView.pat ? `「${(L.galleryKind === "chart" ? CHART_PATTERNS : PATTERNS)[lessonView.pat].name}」` : L.variants ? `${v.label} 背離` : "";
-  $("#lessonTools").innerHTML = `${seg}<span class="note">${what ? `${what}：圖中找到 ${markers.length} 次` : ""}</span><span style="flex:1"></span>${lessonView.pat ? `<button class="btn" data-clear>顯示全部型態</button>` : ""}<button class="btn" data-reseed>換一段走勢</button>`;
+  // 範例圖的資料來源：模擬走勢或真實個股（真實時「換一段走勢」是從過去一年隨機截一段）
+  const R = lessonView.real, simData = L.id.startsWith("chips-") || L.id.startsWith("fund-");
+  const srcSeg = `<div class="seg" role="group" aria-label="範例圖資料"><button data-lsrc="sim" aria-pressed="${lessonSrc === "sim"}">模擬</button><button data-lsrc="real" aria-pressed="${lessonSrc === "real"}">真實個股</button></div>`;
+  const codeIn = lessonSrc === "real" ? `<input class="code-in lcode" id="lessonCode" list="stockPool" value="${lessonCode === "TAIEX" ? "加權" : lessonCode}" placeholder="代號" aria-label="範例圖的股票代號" autocomplete="off">` : "";
+  const srcNote = lessonSrc !== "real" ? "" : lessonView.loading ? "正在載入真實資料…" : lessonView.err ? `${lessonView.err}　先顯示模擬走勢。` : R ? `${R.name}・${R.from.replace(/-/g, "/")} – ${R.to.replace(/-/g, "/")}${simData ? "（K 線是真實的，籌碼與財報數字是依股價產生的示意）" : ""}` : "";
+  $("#lessonTools").innerHTML = `${srcSeg}${codeIn}${seg}<span class="note">${[srcNote, what ? `${what}：圖中找到 ${markers.length} 次` : ""].filter(Boolean).join("　")}</span><span style="flex:1"></span>${lessonView.pat ? `<button class="btn" data-clear>顯示全部型態</button>` : ""}<button class="btn" data-reseed>換一段走勢</button>`;
 }
+let lessonSrc = store.get("lessonSrc", "sim") === "real" ? "real" : "sim", lessonCode = store.get("lessonCode", "2330");
 function loadLessonData() {
-  const L = LESSONS[lessonIdx];
-  lessonView.D = genSeries(L.seed + lessonView.seedOff * 7919, L.n); lessonView.I = indicators(lessonView.D);
+  const L = LESSONS[lessonIdx], V = lessonView;
+  if (lessonSrc !== "real" || !V.D) { V.D = genSeries(L.seed + V.seedOff * 7919, L.n); V.I = indicators(V.D); V.real = null; }
+  if (lessonSrc !== "real") return;
+  const tok = (V.tok = (V.tok || 0) + 1), first = !V.real; V.loading = true; V.err = null;
+  fetchReal(lessonCode === "TAIEX" ? "加權" : lessonCode, 12).then(j => {
+    if (V.tok !== tok || lessonView !== V) return;
+    const n = Math.min(L.n, j.data.length), max = j.data.length - n, a = first && !V.seedOff ? max : Math.floor(Math.random() * (max + 1));
+    V.D = j.data.slice(a, a + n).map(x => ({ ...x, v: x.v || 0 })); V.I = indicators(V.D); V.pat = null;
+    V.real = { name: realName(j), from: V.D[0].d, to: V.D[n - 1].d };
+  }).catch(err => { if (V.tok === tok) { V.err = err?.message || "載入失敗"; V.real = null; V.D = genSeries(L.seed + V.seedOff * 7919, L.n); V.I = indicators(V.D); } })
+    .finally(() => { if (V.tok === tok && lessonView === V) { V.loading = false; drawLesson(); } });
 }
 let widgetTeardown = null;
 function showLesson(i) {
@@ -2518,10 +2590,16 @@ $("#lessonGallery").addEventListener("click", e => {
 });
 $("#lessonTools").addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
-  if (t.dataset.variant != null) lessonView.variant = +t.dataset.variant;
+  if (t.dataset.lsrc) { if (t.dataset.lsrc === lessonSrc) return; lessonSrc = t.dataset.lsrc; store.set("lessonSrc", lessonSrc); lessonView.real = null; lessonView.err = null; lessonView.D = null; loadLessonData(); }
+  else if (t.dataset.variant != null) lessonView.variant = +t.dataset.variant;
   else if (t.hasAttribute("data-clear")) lessonView.pat = null;
   else if (t.hasAttribute("data-reseed")) { lessonView.seedOff++; loadLessonData(); }
   drawLesson();
+});
+$("#lessonTools").addEventListener("change", e => {
+  if (e.target.id !== "lessonCode") return; const v = e.target.value.trim(); if (!v) return;
+  lessonCode = /^(加權|大盤|加權指數|TAIEX)$/i.test(v) ? "TAIEX" : v.toUpperCase(); store.set("lessonCode", lessonCode);
+  lessonView.real = null; lessonView.seedOff = 0; loadLessonData(); drawLesson();
 });
 $("#lessonList").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { showLesson(+b.dataset.i); window.scrollTo({ top: 0 }); } });
 $("#lessonPrev").addEventListener("click", () => { showLesson(lessonIdx - 1); window.scrollTo({ top: 0 }); });
@@ -2607,13 +2685,50 @@ const labBar = indicatorBar($("#labIbar"), "lab", [{ title: "副圖（可多選�
 const HORIZON = 10, SHOW = 120;
 let ch = { right: 0, total: 0, streak: 0, best: store.get("best", 0), answered: false };
 const chalChart = new Chart($("#chalChart"));
-function chalNew() {
-  ch.seed = Math.floor(Math.random() * 1e6); ch.D = genSeries(ch.seed, SHOW + HORIZON); ch.I = indicators(ch.D); ch.answered = false;
+// 真實歷史題庫：熱門上市櫃股票＋加權指數；作答前隱藏名稱與日期，只顯示「第幾天」
+const CHAL_POOL = [["2330", "台積電"], ["2317", "鴻海"], ["2454", "聯發科"], ["2308", "台達電"], ["2382", "廣達"], ["2412", "中華電"], ["2881", "富邦金"], ["2882", "國泰金"], ["2891", "中信金"], ["2886", "兆豐金"],
+  ["2303", "聯電"], ["3711", "日月光投控"], ["2603", "長榮"], ["2609", "陽明"], ["2002", "中鋼"], ["1301", "台塑"], ["1216", "統一"], ["3008", "大立光"], ["2357", "華碩"], ["3231", "緯創"],
+  ["2379", "瑞昱"], ["3034", "聯詠"], ["2345", "智邦"], ["3037", "欣興"], ["2376", "技嘉"], ["6669", "緯穎"], ["2912", "統一超"], ["0050", "元大台灣50"], ["6488", "環球晶"], ["8299", "群聯"], ["TAIEX", "加權指數"]];
+ch.src = store.get("chalSrc", "sim") === "real" ? "real" : "sim";
+$("#stockPool").innerHTML = CHAL_POOL.map(([c, n]) => `<option value="${c === "TAIEX" ? "加權" : c}">${n}</option>`).join("");
+const chalMasked = D => D.map((x, i) => ({ ...x, d: `第 ${i + 1} 天` }));
+async function chalNew() {
+  ch.answered = false; ch.meta = null;
   $("#chHintBox").hidden = true; $("#chResult").hidden = true; $("#chUp").disabled = $("#chDown").disabled = false; $("#chHint").disabled = false;
+  if (ch.src === "real") {
+    const want = $("#chCode").value.trim(), pick = want ? [want, ""] : CHAL_POOL[Math.floor(Math.random() * CHAL_POOL.length)], tok = (ch.tok = (ch.tok || 0) + 1);
+    $("#chUp").disabled = $("#chDown").disabled = true; $("#chNote").textContent = "正在抓取真實歷史資料…";
+    try {
+      const j = await fetchReal(pick[0] === "TAIEX" ? "加權" : pick[0], 12); if (tok !== ch.tok) return;
+      const rows = j.data, len = SHOW + HORIZON;
+      if (rows.length < len) throw { message: `${realName(j)} 只有 ${rows.length} 個交易日，不夠出題（需要 ${len} 天），換一檔試試。` };
+      const a = Math.floor(Math.random() * (rows.length - len + 1));
+      ch.D = rows.slice(a, a + len).map(x => ({ ...x, v: x.v || 0 })); ch.Dm = chalMasked(ch.D); ch.I = indicators(ch.D);
+      ch.meta = { name: realName(j), source: j.source, from: ch.D[0].d, ask: ch.D[SHOW - 1].d, to: ch.D[len - 1].d };
+      $("#chUp").disabled = $("#chDown").disabled = false;
+      $("#chNote").textContent = "真實歷史題：從熱門股過去一年的日K中隨機截一段，作答前不顯示股名和日期。看完答案再對照當時的指標。";
+    } catch (err) {
+      if (tok !== ch.tok) return;
+      $("#chNote").textContent = `${err?.message || "載入失敗"}　先改用模擬走勢出題。`;
+      $("#chUp").disabled = $("#chDown").disabled = false; chalSim();
+    }
+  } else chalSim();
   chalDraw();
 }
+function chalSim() { ch.seed = Math.floor(Math.random() * 1e6); ch.D = genSeries(ch.seed, SHOW + HORIZON); ch.Dm = null; ch.I = indicators(ch.D); ch.meta = null; }
+function setChalSrc(src) {
+  ch.src = src; store.set("chalSrc", src);
+  document.querySelectorAll("[data-chsrc]").forEach(b => b.setAttribute("aria-pressed", b.dataset.chsrc === src));
+  $("#chRealForm").hidden = src !== "real";
+  if (src === "sim") $("#chNote").textContent = "先讀圖再作答。走勢是模擬的，帶有隨機性，猜錯很正常；重點是作答後對照指標，檢討自己看到了什麼、漏看了什麼。";
+  chalNew();
+}
+document.querySelectorAll("[data-chsrc]").forEach(b => b.addEventListener("click", () => setChalSrc(b.dataset.chsrc)));
+$("#chRealForm").addEventListener("submit", e => { e.preventDefault(); chalNew(); });
+document.querySelectorAll("[data-chsrc]").forEach(b => b.setAttribute("aria-pressed", b.dataset.chsrc === ch.src)); $("#chRealForm").hidden = ch.src !== "real";
 function chalDraw() {
-  chalChart.set(ch.D, { I: ch.I, ma: maFrom(chBar), boll: chBar.has("boll"), subs: subsFrom(chBar), noVol: !chBar.has("vol"), visible: ch.answered ? ch.D.length : SHOW, cutoff: SHOW });
+  const D = ch.Dm && !ch.answered ? ch.Dm : ch.D;
+  chalChart.set(D, { I: ch.I, ma: maFrom(chBar), boll: chBar.has("boll"), subs: subsFrom(chBar), noVol: !chBar.has("vol"), visible: ch.answered ? D.length : SHOW, cutoff: SHOW, ...(D === ch.Dm ? { fmtD: s => s.replace(/\s/g, "") } : {}) });
 }
 function chalScore() { $("#scRight").textContent = `${ch.right} / ${ch.total}`; $("#scStreak").textContent = ch.streak; $("#scBest").textContent = ch.best; }
 function chalAnswer(guess) {
@@ -2629,6 +2744,7 @@ function chalAnswer(guess) {
   $("#chResult").hidden = false; $("#chHintBox").hidden = true;
   $("#chResult").innerHTML = `<div class="big ${ok ? "up" : "down"}">${ok ? "答對了" : "這次猜錯"}</div>
     <div>10 天後收盤 <span class="num">${fmtP(p1)}</span>，相較作答時的 <span class="num">${fmtP(p0)}</span>，<span class="num ${chg >= 0 ? "up" : "down"}">${fmtPct(chg)}</span>。</div>
+    ${ch.meta ? `<div class="chal-reveal"><strong>${ch.meta.name}</strong><span>作答日 <span class="num">${ch.meta.ask.replace(/-/g, "/")}</span></span><span>整段 <span class="num">${ch.meta.from.replace(/-/g, "/")} – ${ch.meta.to.replace(/-/g, "/")}</span></span><span class="note">資料：${ch.meta.source}</span></div>` : ""}
     <div class="note">${leanTxt}</div>
     <h3 style="margin-top:4px">作答當天的指標</h3><div id="chRo"></div>
     <div><button class="btn primary" id="chNext">下一題 →</button></div>`;
