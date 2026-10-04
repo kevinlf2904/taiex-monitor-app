@@ -202,6 +202,7 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .ichip:hover { border-color: var(--accent); color: var(--ink); }
 .ichip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600; }
 .workspace { margin-top: 18px; }
+.workspace.first { margin: 0 0 18px; }
 .ws-head { display: flex; justify-content: space-between; align-items: end; gap: 10px; flex-wrap: wrap; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
 .sim-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; background: var(--surface-2); }
 .switch { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; cursor: pointer; }
@@ -221,7 +222,40 @@ details.verdict summary { cursor: pointer; list-style-position: outside; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; background: var(--surface); padding: 6px 14px; cursor: pointer; font-size: 14px; color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line); }
+.lab-src { width: 100%; } .lab-src button { flex: 1; }
+.code-in { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--ink); font-family: var(--font-mono); font-size: 15px; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 700; }
+
+/* ---------- 問問題對話框 ---------- */
+.chat-fab { position: fixed; right: 20px; bottom: 20px; z-index: 30; display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border: 0; border-radius: 999px; background: var(--accent); color: var(--surface); font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.chat-fab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.chat-fab[aria-expanded="true"] { display: none; }
+.chat-panel { position: fixed; right: 20px; bottom: 20px; z-index: 31; width: min(420px, calc(100vw - 32px)); height: min(620px, calc(100vh - 100px)); display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,.22); overflow: hidden; }
+.chat-panel[hidden] { display: none; }
+.chat-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.chat-head > div:first-child { display: flex; flex-direction: column; }
+.btn.sm { padding: 4px 10px; font-size: 13px; }
+.icon-btn { border: 0; background: none; font-size: 18px; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; color: var(--muted); }
+.icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+.chat-log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; }
+.msg { max-width: 88%; padding: 9px 12px; border-radius: 12px; font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.msg p { margin: 0 0 6px; } .msg p:last-child { margin: 0; } .msg ul, .msg ol { margin: 0 0 6px; padding-left: 1.2em; } .msg h4 { margin: 6px 0 4px; font-size: 14.5px; } .msg code { font-family: var(--font-mono); font-size: 13px; background: var(--surface); padding: 0 4px; border-radius: 4px; }
+.msg.user { align-self: flex-end; background: var(--accent); color: var(--surface); border-bottom-right-radius: 4px; }
+.msg.bot { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
+.msg.bot.err { color: var(--up); }
+.msg.wait { color: var(--muted); }
+.chat-empty { color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+.chat-sugg { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 8px; }
+.chat-sugg button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 11px; font-size: 13px; cursor: pointer; color: var(--ink); text-align: left; }
+.chat-sugg button:hover { border-color: var(--accent); }
+.chat-form { display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); align-items: end; }
+.chat-form textarea { flex: 1; resize: none; max-height: 120px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); font: inherit; font-size: 15px; line-height: 1.4; }
+.chat-form textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+@media (max-width: 640px) {
+  .chat-fab { right: 14px; bottom: calc(74px + env(safe-area-inset-bottom, 0px)); padding: 10px 14px; font-size: 14px; }
+  .chat-panel { right: 0; left: 0; bottom: 0; top: 0; width: auto; height: auto; border-radius: 0; border: 0; z-index: 40; }
+}
+@media print { .chat-fab, .chat-panel { display: none !important; } }
 
 /* ---------- lab ---------- */
 .lab { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
@@ -316,6 +350,9 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; ba
 .nums-strip { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .nums-strip .head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .nums-strip .head strong { font-size: 16px; }
+.real-quote { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; font-variant-numeric: tabular-nums; }
+.real-quote .big { font-family: var(--font-mono); font-size: 26px; font-weight: 700; }
+.real-quote .up { color: var(--up); } .real-quote .down { color: var(--down); }
 .ohlc-cmp { display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)); max-width: 620px; gap: 2px 12px; font-size: 13px; font-variant-numeric: tabular-nums; align-items: baseline; }
 .ohlc-cmp .h { color: var(--muted); font-size: 12px; }
 .ohlc-cmp .v { font-family: var(--font-mono); font-weight: 600; }
@@ -345,6 +382,19 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; ba
 .plan { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; }
 .plan p { margin: 4px 0 0; }
 .shot-stage { position: relative; }
+.src-seg { margin: 0 0 12px; }
+.src-seg button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 14.5px; }
+.src-seg svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.real-top { padding: 16px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.real-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.real-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--muted); }
+.real-form input { width: 220px; max-width: 100%; padding: 9px 12px; font-size: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--ink); font-family: var(--font-mono); }
+.real-form select { padding: 9px 10px; font-size: 15px; }
+.real-form .btn { padding: 9px 18px; }
+.real-code { flex: 1 1 200px; } .real-code input { width: 100%; }
+.real-status.err { color: var(--up); }
+.real-status.ok { color: var(--ink); }
+.shot-grid.solo { grid-template-columns: minmax(0, 1fr); }
 .steps { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; padding: 0; counter-reset: s; }
 .steps a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); text-decoration: none; font-size: 14px; }
 .steps a:hover { border-color: var(--accent); }
@@ -383,7 +433,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <button role="tab" data-tab="learn" id="tab-btn-learn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7a3 3 0 0 1 3 3v11a2 2 0 0 0-2-2H4zM20 5h-4a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h4z"/></svg><span>課程</span></button>
       <button role="tab" data-tab="lab" id="tab-btn-lab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 8h-2v6h2M17 4v16M17 6h2v8h-2M12 4v16M12 10h-2v5h2"/></svg><span>圖表實驗室</span></button>
       <button role="tab" data-tab="challenge" id="tab-btn-challenge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9M15 6h5v5"/></svg><span>判讀挑戰</span></button>
-      <button role="tab" data-tab="shot" id="tab-btn-shot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 15l3-4 2 2 3-4"/></svg><span>截圖判讀</span></button>
+      <button role="tab" data-tab="shot" id="tab-btn-shot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 15l3-4 2 2 3-4"/></svg><span>個股判讀</span></button>
       <button role="tab" data-tab="quiz" id="tab-btn-quiz"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 .9-1 1.6V15M12 18.5v.5"/><circle cx="12" cy="12" r="9"/></svg><span>觀念測驗</span></button>
     </nav>
     <span class="chip" id="progChip">已完成 0 / 19 課</span>
@@ -430,7 +480,9 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <div class="lab-side">
         <div class="panel ctrl">
           <h3>走勢</h3>
-          <div class="row">
+          <div class="seg lab-src" role="group" aria-label="實驗室資料"><button data-labsrc="sim" aria-pressed="true">模擬走勢</button><button data-labsrc="real" aria-pressed="false">真實個股</button></div>
+          <form class="row" id="labRealForm" hidden><input id="labCode" class="code-in" placeholder="代號，例 2330、加權" autocomplete="off" aria-label="股票代號"><button class="btn primary">載入</button></form>
+          <div class="row" id="labSimRow">
             <button class="btn primary" id="labNew">產生新走勢</button>
             <label>長度 <select id="labLen"><option value="120">120 天</option><option value="180" selected>180 天</option><option value="250">250 天</option></select></label>
           </div>
@@ -489,17 +541,28 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
   <section id="view-shot" role="tabpanel" hidden>
     <div class="chal-head">
       <div>
-        <div class="eyebrow">SCREENSHOT</div>
-        <h2>上傳 K 線截圖，一起讀圖</h2>
-        <p class="note" style="margin:6px 0 0; max-width: 62ch">把看盤軟體的 K 線圖截下來丟進來。程式會在你的瀏覽器裡找出每一根 K 棒（圖上有均線也沒關係），讀出下方副圖的 KD、RSI、MACD 與成交量，再告訴你這張圖在講什麼。圖片不會上傳，除非你按下「請 Claude 解讀」。</p>
+        <div class="eyebrow">READ A CHART</div>
+        <h2>個股判讀：截圖或股票代號</h2>
+        <p class="note" style="margin:6px 0 0; max-width: 62ch">丟一張看盤軟體的 K 線截圖，程式會在你的瀏覽器裡找出每一根 K 棒、讀出副圖；或直接輸入股票代號，載入證交所、櫃買中心的真實日 K。接著看判讀、聰明錢結構，並模擬未來走勢。</p>
       </div>
     </div>
+    <div class="src-seg seg" role="group" aria-label="資料來源"><button data-src="img" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15l3-4 3 3 2-2 3 3"/></svg>上傳截圖</button><button data-src="real" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15V9M12 15V7M16 15v-4"/></svg>輸入股票代號</button></div>
     <ol class="steps" aria-label="使用步驟">
-      <li><a href="#" data-step="shotDrop"><b>1</b>上傳截圖</a></li>
-      <li><a href="#" data-step="shotGrid"><b>2</b>確認辨識、看判讀</a></li>
-      <li><a href="#" data-step="shotRebuild"><b>3</b>重建 K 線、模擬未來</a></li>
+      <li><a href="#" data-step="shotDrop" id="step1"><b>1</b>上傳截圖</a></li>
+      <li><a href="#" data-step="shotGrid" id="step2"><b>2</b>確認辨識、看判讀</a></li>
+      <li><a href="#" data-step="shotRebuild" id="step3"><b>3</b>重建 K 線、模擬未來</a></li>
     </ol>
-    <div class="shot-top">
+    <div class="panel real-top" id="realTop" hidden>
+      <form class="real-form" id="realForm">
+        <label class="real-code">股票代號<input id="realCode" placeholder="例 2330、0050、加權" autocomplete="off" inputmode="search" enterkeyhint="go"></label>
+        <label>期間<select id="realMonths"><option value="3">3 個月</option><option value="6" selected>6 個月</option><option value="12">1 年</option><option value="24">2 年</option></select></label>
+        <button class="btn primary" id="realLoad">載入真實 K 線</button>
+      </form>
+      <div class="row real-quick" id="realQuick"><span class="note">常用：</span><button class="ichip" data-code="加權">加權指數</button><button class="ichip" data-code="2330">2330 台積電</button><button class="ichip" data-code="2317">2317 鴻海</button><button class="ichip" data-code="2454">2454 聯發科</button><button class="ichip" data-code="0050">0050</button></div>
+      <div class="row note"><label class="btn" for="realCsv">匯入 CSV</label><input type="file" id="realCsv" accept=".csv,text/csv,text/plain" multiple hidden><span>沒有網路資料服務時：到證交所「個股日成交資訊」下載 CSV（可一次選多個月），或匯入 Yahoo 財經、看盤軟體匯出的日 K。</span></div>
+      <p class="note real-status" id="realNote">資料來源：證交所、櫃買中心（每天收盤後更新），找不到時改用 Yahoo Finance。</p>
+    </div>
+    <div class="shot-top" id="shotTop">
       <label class="drop panel" id="shotDrop" for="shotFile">
         <input type="file" id="shotFile" accept="image/png,image/jpeg,image/webp,image/gif">
         <img id="shotThumb" alt="" hidden>
@@ -562,7 +625,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     </div>
     <div class="panel workspace" id="shotRebuild">
       <div class="ws-head">
-        <div><div class="eyebrow">步驟 3</div><h3 style="margin:0">重建的 K 線與未來走勢模擬</h3></div>
+        <div><div class="eyebrow" id="wsStep">步驟 3</div><h3 style="margin:0" id="wsTitle">重建的 K 線與未來走勢模擬</h3></div>
         <span class="note">游標移到 K 棒上看當天判讀；按右上角 ＋ − 或 Ctrl＋滾輪縮放，拖曳平移</span>
       </div>
       <div class="cal-tip" id="calTip" hidden><span>目前價格是<strong>相對值</strong>（100 起算）。填上圖上標示的最高、最低數字，重建的 K 線與模擬就會顯示實際價位。</span><button class="btn" id="calTipGo">前往填寫</button></div>
@@ -585,6 +648,19 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <div class="quiz" id="quiz"></div>
   </section>
 </main>
+<button class="chat-fab" id="chatFab" aria-expanded="false" aria-controls="chatPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M8 10h8M8 13h5"/></svg><span>問問題</span></button>
+<section class="chat-panel panel" id="chatPanel" role="dialog" aria-label="問助教" hidden>
+  <header class="chat-head">
+    <div><strong>問助教</strong><span class="note" id="chatCtxNote">會參考你目前看的畫面</span></div>
+    <div class="row"><button class="btn sm" id="chatClear" type="button">清除對話</button><button class="icon-btn" id="chatClose" type="button" aria-label="關閉對話框">✕</button></div>
+  </header>
+  <div class="chat-log" id="chatLog" aria-live="polite"></div>
+  <div class="chat-sugg" id="chatSugg"></div>
+  <form class="chat-form" id="chatForm">
+    <textarea id="chatInput" rows="1" placeholder="輸入問題，例如：KD 鈍化是什麼意思？" aria-label="你的問題" enterkeyhint="send"></textarea>
+    <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
+  </form>
+</section>
 <footer>本工具的價格與成交量皆為程式模擬，僅供學習技術分析之用，不代表任何個股，也不構成投資建議。</footer>
 
 <script>
@@ -2161,9 +2237,28 @@ const STRATS = {
   choch: { name: "聰明錢：CHoCH 結構轉變", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") },
   bos: { name: "道氏：所有結構突破（BOS + CHoCH）", fn: (D, I) => Signals.structure(D, I, "dow") },
 };
-let lab = { seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma") };
+let lab = { src: "sim", seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma") };
 const labChart = new Chart($("#labChart"), { onHover: i => { if (!lab.D) return; $("#roDate").textContent = lab.D[i].d.replace(/-/g, "/"); renderReadout($("#labReadout"), readout(lab.D, lab.I, i)); } });
-function labData() { lab.D = genSeries(lab.seed, +$("#labLen").value); lab.I = indicators(lab.D); $("#labSeed").textContent = `走勢編號 #${lab.seed}`; }
+const labUsesReal = () => lab.src === "real" && !!REAL.cur;
+function labData() {
+  if (labUsesReal()) { lab.D = REAL.cur.data.map(x => ({ ...x, v: x.v || 0 })); $("#labSeed").textContent = `${realName(REAL.cur)}・${lab.D.length} 個交易日・${REAL.cur.source}`; }
+  else { lab.D = genSeries(lab.seed, +$("#labLen").value); $("#labSeed").textContent = lab.src === "real" ? "還沒載入真實個股，先顯示模擬走勢" : `走勢編號 #${lab.seed}`; }
+  lab.I = indicators(lab.D);
+}
+function setLabSrc(src) {
+  lab.src = src; document.querySelectorAll("[data-labsrc]").forEach(b => b.setAttribute("aria-pressed", b.dataset.labsrc === src));
+  $("#labRealForm").hidden = src !== "real"; $("#labSimRow").hidden = src === "real";
+  if (src === "real" && REAL.cur) $("#labCode").value = REAL.cur.code === "TAIEX" ? "加權" : REAL.cur.code;
+  labData(); labDraw();
+}
+document.querySelectorAll("[data-labsrc]").forEach(b => b.addEventListener("click", () => setLabSrc(b.dataset.labsrc)));
+$("#labRealForm").addEventListener("submit", async e => {
+  e.preventDefault(); const code = $("#labCode").value.trim(); if (!code) return;
+  const btn = e.target.querySelector("button"); btn.disabled = true; $("#labSeed").textContent = `正在載入 ${code}…`;
+  try { const j = await fetchReal(code, 12); REAL.cur = j; labData(); labDraw(); }
+  catch (err) { $("#labSeed").textContent = err?.message || "載入失敗"; }
+  finally { btn.disabled = false; }
+});
 function labDraw() {
   const ma = [["maA", "maAn"], ["maB", "maBn"], ["maC", "maCn"]].filter(([c]) => $("#" + c).checked).map(([, n]) => Math.max(2, Math.min(240, +$("#" + n).value || 5)));
   const S = STRATS[lab.strat], sigs = S.fn ? S.fn(lab.D, lab.I) : [];
@@ -2310,7 +2405,7 @@ function quizRender() {
    在瀏覽器內辨識截圖中的 K 棒：依顏色找出紅 / 綠像素，
    以「欄」切出每一根 K 棒，再從實體與影線的上下緣還原開高低收。
    RSI、KD、MACD、均線交叉都只和價格的相對變化有關，所以就算沒有價格刻度，判讀結果也成立。 */
-const shot = { calPts: [], edits: { del: new Set(), flip: new Map(), add: [] }, img: null, file: null, url: null, crop: null, subCrop: null, mode: "price", res: null, panes: [], paneCfg: {}, D: null, I: null, drag: null, ctx: "", hasVol: false };
+const shot = { src: "img", calPts: [], edits: { del: new Set(), flip: new Map(), add: [] }, img: null, file: null, url: null, crop: null, subCrop: null, mode: "price", res: null, panes: [], paneCfg: {}, D: null, I: null, drag: null, ctx: "", hasVol: false };
 const shotChart = new Chart($("#shotChart"), { onHover: i => {
   if (!shot.D) return;
   if (i >= shot.D.length && shotChart.hover == null) i = shot.D.length - 1;
@@ -2918,13 +3013,14 @@ function shotSummary(D, I, cal) {
   if (sr.length) review.push("sr");
   const leanTxt = lean > 0 ? "整體偏多" : lean < 0 ? "整體偏空" : "多空分歧";
   const paneTxt = (shot.panes || []).map((p, k) => `副圖 ${k + 1}（${PANE_TYPES[p.cfg.type || p.type] || "未辨識"}，直接讀自截圖）：${shot.readings[k].out.join(" ")}`).join("\n");
-  shot.ctx = `偵測到 ${n} 根 K 棒${cal ? "（已依使用者輸入校正價格）" : "（未校正價格，數值為相對值）"}。${leanTxt}：${bull} 項偏多、${bear} 項偏空。\n` + lines.map(l => l.replace(/<[^>]+>/g, "")).join("\n") + (paneTxt ? "\n" + paneTxt : "") + (shot.smc ? "\n聰明錢（SMC）判讀：\n" + shot.smc.text : "");
+  const isReal = shot.src === "real" && REAL.cur;
+  shot.ctx = `${isReal ? `${realName(REAL.cur)} 的真實日 K，共 ${n} 個交易日（${REAL.cur.source}），最後一天 ${D[i].d} 收盤 ${fmtX(D[i].c)}` : `偵測到 ${n} 根 K 棒${cal ? "（已依使用者輸入校正價格）" : "（未校正價格，數值為相對值）"}`}。${leanTxt}：${bull} 項偏多、${bear} 項偏空。\n` + lines.map(l => l.replace(/<[^>]+>/g, "")).join("\n") + (paneTxt ? "\n" + paneTxt : "") + (shot.smc ? "\n聰明錢（SMC）判讀：\n" + shot.smc.text : "");
   return `<div class="lean ${lean > 0 ? "up" : lean < 0 ? "down" : ""}">${leanTxt}</div>
-    <p>找到 ${n} 根 K 棒，以最後一根為基準：${bull} 項指標偏多、${bear} 項偏空。${lean === 0 ? "訊號互相矛盾時，通常代表方向還不明確。" : ""}</p>
+    <p>${isReal ? `${esc(realName(REAL.cur))} 共 ${n} 個交易日，以最後一天（${D[i].d.replace(/-/g, "/")}）為基準` : `找到 ${n} 根 K 棒，以最後一根為基準`}：${bull} 項指標偏多、${bear} 項偏空。${lean === 0 ? "訊號互相矛盾時，通常代表方向還不明確。" : ""}</p>
     <ul>${lines.join("")}</ul>
     ${shot.panes.length ? `<p class="note">上面的 RSI、KD、MACD 是用截圖裡的 K 棒重算的，最左邊幾十根會因為缺少更早的歷史而不準；截圖下方的副圖判讀是直接讀指標線，以那邊為準。</p>` : ""}
     <p class="note">複習相關課程：${[...new Set(review)].map(id => `<button class="linkbtn" data-lesson="${lessonIndex(id)}">${LESSONS[lessonIndex(id)].title.split("：")[0]}</button>`).join("、")}</p>
-    <p class="note">${cal ? "" : "沒有輸入價格校正，所以只顯示相對位置；填上圖中最高與最低價，就會換算成實際價位。"}${shot.hasVol ? "" : "截圖中沒有找到成交量區，所以沒有量能判讀。"}截圖辨識可能有誤差，請對照截圖上的偵測框，確認每根 K 棒都有抓到。這是學習用的讀圖練習，不構成投資建議。</p>`;
+    ${isReal ? `<p class="note">資料是 ${REAL.cur.source} 的收盤後日 K。這是學習用的讀圖練習，不構成投資建議。</p>` : ""}<p class="note"${isReal ? " hidden" : ""}>${cal ? "" : "沒有輸入價格校正，所以只顯示相對位置；填上圖中最高與最低價，就會換算成實際價位。"}${shot.hasVol ? "" : "截圖中沒有找到成交量區，所以沒有量能判讀。"}截圖辨識可能有誤差，請對照截圖上的偵測框，確認每根 K 棒都有抓到。這是學習用的讀圖練習，不構成投資建議。</p>`;
 }
 
 /* ---------- 截圖的聰明錢判讀 ----------
@@ -2989,6 +3085,7 @@ function drawShotSmc(ctx, k) {
   ctx.textAlign = "left";
 }
 function shotRun() {
+  if (shot.src === "real") return realRun();
   if (!shot.img) return;
   const conv = $("#shotConv").value;
   shot.res = extractCandles(shot.img, shot.crop, conv);
@@ -3041,6 +3138,105 @@ function shotRun() {
   $("#shotRebuild").hidden = false;
   shotRefresh(cal);
 }
+/* ---------- 真實日 K：輸入股票代號或匯入 CSV ----------
+   部署在網站上時呼叫 /api/kline（伺服器端代抓證交所、櫃買中心、Yahoo）；
+   沒有資料服務的環境（例如在 Claude 裡開啟）可以匯入證交所下載的 CSV。 */
+const REAL = { cur: null, cache: new Map() };
+async function fetchReal(code, months) {
+  const key = `${code}|${months}`; if (REAL.cache.has(key)) return REAL.cache.get(key);
+  if (!/^https?:$/.test(location.protocol)) throw { message: "直接開啟檔案時無法連線資料服務。部署到網站（Vercel）後就能用；現在可以先用「匯入 CSV」。" };
+  let r; try { r = await fetch(`/api/kline?code=${encodeURIComponent(code)}&months=${months}`); } catch { throw { message: "連不到資料服務。這個環境可能不允許連外，可以改用「匯入 CSV」。" }; }
+  const j = await r.json().catch(() => null);
+  if (!j) throw { message: r.status === 404 ? "這個環境沒有資料服務（/api/kline）。部署到 Vercel 後就能用；現在可以先用「匯入 CSV」。" : `資料服務回應 ${r.status}，請稍後再試。` };
+  if (!j.ok) throw { message: j.error };
+  REAL.cache.set(key, j); return j;
+}
+// CSV：證交所 STOCK_DAY（Big5、民國日期、成交股數）、Yahoo（Date,Open,High,Low,Close,Adj Close,Volume）或其他有開高低收欄位的檔案
+function splitCsv(line) { const out = []; let cur = "", q = false; for (let i = 0; i < line.length; i++) { const ch = line[i]; if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; } else if (ch === '"') q = true; else if (ch === ",") { out.push(cur); cur = ""; } else cur += ch; } out.push(cur); return out.map(x => x.trim()); }
+function parseKlineCsv(text) {
+  const lines = text.replace(/^﻿/, "").replace(/\r/g, "").split("\n").filter(l => l.trim()).map(splitCsv);
+  const hi = lines.findIndex(r => r.some(c => /開盤|^open$/i.test(c)) && r.some(c => /收盤|^close$/i.test(c)));
+  if (hi < 0) return null;
+  const f = lines[hi].map(c => c.replace(/\s/g, "").toLowerCase()), at = (...re) => f.findIndex(c => re.some(x => x.test(c)));
+  const iD = at(/日期/, /^date/), iO = at(/開盤/, /^open/), iH = at(/最高/, /^high/), iL = at(/最低/, /^low/), iC = at(/收盤/, /^close$/), iV = at(/成交股數/, /成交張數/, /成交量/, /^volume/);
+  const shares = iV >= 0 && /成交股數|^volume/.test(f[iV]), num = v => { const n = parseFloat(String(v ?? "").replace(/[,\s+]/g, "")); return Number.isFinite(n) ? n : null; };
+  const title = lines.slice(0, hi).flat().join(" "), name = (title.match(/\d{4,6}[A-Z]?\s+([^\s"]+)/) || [])[1] || "", code = (title.match(/(\d{4,6}[A-Z]?)\s/) || [])[1] || "";
+  const rows = lines.slice(hi + 1).map(r => {
+    const m = String(r[iD] || "").match(/^(\d{2,4})[/-](\d{1,2})[/-](\d{1,2})/); if (!m) return null;
+    const y = +m[1] < 1911 ? +m[1] + 1911 : +m[1], d = `${y}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+    const o = num(r[iO]), h = num(r[iH]), l = num(r[iL]), c = num(r[iC]), v = iV >= 0 ? num(r[iV]) : 0;
+    return o && h && l && c ? { d, o, h, l, c, v: v == null ? 0 : shares ? Math.round(v / 1000) : v } : null;
+  }).filter(Boolean);
+  return rows.length ? { name, code, rows } : null;
+}
+async function readCsvFiles(files) {
+  const all = [], meta = { name: "", code: "" };
+  for (const f of files) {
+    const buf = await f.arrayBuffer(); let text;
+    try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { text = new TextDecoder("big5").decode(buf); } // 證交所的 CSV 是 Big5
+    const p = parseKlineCsv(text); if (!p) continue;
+    meta.name = meta.name || p.name; meta.code = meta.code || p.code; all.push(...p.rows);
+  }
+  const seen = new Set(), data = all.filter(x => !seen.has(x.d) && seen.add(x.d)).sort((a, b) => a.d.localeCompare(b.d));
+  return data.length ? { ok: true, code: meta.code || "CSV", name: meta.name || files[0].name.replace(/\.csv$/i, ""), market: "", source: "匯入的 CSV", unit: "張", data } : null;
+}
+function realName(R) { return R.code === "TAIEX" ? "加權指數" : `${R.name || ""} ${R.code}`.trim(); }
+function realRun() {
+  const R = REAL.cur; if (!R) return;
+  shot.res = null; shot.panes = []; shot.readings = []; shot.rowRead = null; shot.numsExtra = [];
+  shot.D = R.data.map(x => ({ d: x.d, o: x.o, h: x.h, l: x.l, c: x.c, v: x.v || 0 }));
+  const last = shot.D[shot.D.length - 1];
+  shot.hasVol = shot.D.some(d => d.v > 0); shot.pmap = { cal: true }; shot.rowIdx = shot.D.length - 1;
+  shot.nums = { name: realName(R), hi: null, lo: null, date: last.d, off: 1, o: last.o, h: last.h, l: last.l, c: last.c, hasRow: false };
+  shot.I = indicators(shot.D);
+  $("#shotGrid").hidden = false; $("#shotRebuild").hidden = false;
+  shotRefresh(true);
+}
+async function loadRealCode(code, months) {
+  const note = $("#realNote"), btn = $("#realLoad"); code = code.trim(); if (!code) { $("#realCode").focus(); return; }
+  note.className = "note real-status"; note.textContent = `正在載入 ${code} 最近 ${months >= 12 ? months / 12 + " 年" : months + " 個月"} 的日 K…`; btn.disabled = true;
+  try {
+    const j = await fetchReal(code, months);
+    if (j.data.length < 20) throw { message: `${realName(j)} 只有 ${j.data.length} 個交易日的資料，太少了，換長一點的期間試試。` };
+    REAL.cur = j; setSrc("real"); realRun();
+    note.className = "note real-status ok"; note.textContent = `已載入 ${realName(j)}：${j.data.length} 個交易日（${j.data[0].d} ～ ${j.data[j.data.length - 1].d}），資料來源 ${j.source}。`;
+    if (labUsesReal()) { labData(); labDraw(); }
+  } catch (e) { note.className = "note real-status err"; note.textContent = e?.message || "載入失敗，請稍後再試。"; }
+  finally { btn.disabled = false; }
+}
+$("#realForm").addEventListener("submit", e => { e.preventDefault(); loadRealCode($("#realCode").value, +$("#realMonths").value); });
+$("#realQuick").addEventListener("click", e => { const b = e.target.closest("[data-code]"); if (!b) return; $("#realCode").value = b.dataset.code; loadRealCode(b.dataset.code, +$("#realMonths").value); });
+$("#realCsv").addEventListener("change", async e => {
+  const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
+  const note = $("#realNote"), R = await readCsvFiles(files).catch(() => null);
+  if (!R || R.data.length < 20) { note.className = "note real-status err"; note.textContent = R ? `只讀到 ${R.data.length} 個交易日，太少了。證交所的 CSV 一個檔案是一個月，請一次選多個月份。` : "讀不出這個 CSV。需要有日期、開盤、最高、最低、收盤欄位。"; return; }
+  REAL.cur = R; setSrc("real"); realRun();
+  note.className = "note real-status ok"; note.textContent = `已匯入 ${realName(R)}：${R.data.length} 個交易日（${R.data[0].d} ～ ${R.data[R.data.length - 1].d}）。`;
+});
+// 資料來源切換：截圖 / 股票代號
+function setSrc(src) {
+  shot.src = src; const real = src === "real";
+  document.querySelectorAll("[data-src]").forEach(b => b.setAttribute("aria-pressed", b.dataset.src === src));
+  $("#shotTop").hidden = real; $("#realTop").hidden = !real;
+  $(".shot-src").hidden = real; $("#shotGrid").classList.toggle("solo", real);
+  document.querySelectorAll('.rtabs [data-rt="pane"], .rtabs [data-rt="ai"]').forEach(b => { b.hidden = real; });
+  if (real && ["pane", "ai"].includes(document.querySelector('.rtabs [aria-selected="true"]')?.dataset.rt)) document.querySelector('.rtabs [data-rt="sum"]').click();
+  $("#step1").lastChild.textContent = real ? "輸入股票代號" : "上傳截圖"; $("#step1").dataset.step = real ? "realTop" : "shotDrop";
+  $("#step2").lastChild.textContent = real ? "K 線與未來模擬" : "確認辨識、看判讀"; $("#step2").dataset.step = real ? "shotRebuild" : "shotGrid";
+  $("#step3").lastChild.textContent = real ? "看判讀與聰明錢" : "重建 K 線、模擬未來"; $("#step3").dataset.step = real ? "shotGrid" : "shotRebuild";
+  $("#wsStep").textContent = real ? "步驟 2" : "步驟 3";
+  $("#calTip").hidden = true;
+  $("#wsTitle").textContent = real ? "K 線與未來走勢模擬" : "重建的 K 線與未來走勢模擬";
+  // 真實數據沒有「辨識」這一步：圖表放到判讀前面
+  const ws = $("#shotRebuild"), grid = $("#shotGrid");
+  if (real) grid.before(ws); else grid.after(ws);
+  ws.classList.toggle("first", real);
+  const has = real ? !!REAL.cur : !!shot.img;
+  $("#shotGrid").hidden = !has; $("#shotRebuild").hidden = !has;
+  if (has) shotRun(); else if (real) setTimeout(() => $("#realCode").focus({ preventScroll: true }), 50);
+}
+document.querySelectorAll("[data-src]").forEach(b => b.addEventListener("click", () => setSrc(b.dataset.src)));
+
 /* ---------- 圖上的實際數字 ----------
    看盤軟體會印出資料列（開高低收）、最高最低價標籤、均線數值；這些是精確值，比從像素換算的準。
    使用者手動填，或讓 Claude 讀出來；用來校正價格、取代那根 K 棒的讀值，並顯示在重建圖與模擬裡。 */
@@ -3058,6 +3254,15 @@ function renderNums() {
   $("#numsChips").hidden = !extra.length;
   $("#numsChips").innerHTML = extra.length ? `<span class="note">Claude 讀到的其他數字：</span>` + extra.map(x => `<span class="nchip">${esc(x.label)}<b>${esc(String(x.value))}</b></span>`).join("") : "";
   const el = $("#numsStrip"), D = shot.D;
+  if (shot.src === "real" && REAL.cur && D) {
+    const R = REAL.cur, l = D[D.length - 1], p = D[D.length - 2], ch = p ? l.c / p.c - 1 : 0, cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
+    el.hidden = false;
+    el.innerHTML = `<div class="head"><strong>${esc(realName(R))}</strong><span class="note">${[R.market, R.source, l.d.replace(/-/g, "/") + " 收盤"].filter(Boolean).join("・")}</span></div>
+      <div class="real-quote"><span class="big ${cls}">${fmtX(l.c)}</span><span class="${cls}">${ch >= 0 ? "▲" : "▼"} ${fmtX(Math.abs(l.c - (p ? p.c : l.c)))}（${fmtPct(ch)}）</span>
+      <span class="nchip">開<b>${fmtX(l.o)}</b></span><span class="nchip">高<b>${fmtX(l.h)}</b></span><span class="nchip">低<b>${fmtX(l.l)}</b></span>${l.v ? `<span class="nchip">量<b>${l.v.toLocaleString()} ${R.unit || ""}</b></span>` : ""}
+      <span class="nchip">區間最高<b>${fmtX(Math.max(...D.map(x => x.h)))}</b></span><span class="nchip">區間最低<b>${fmtX(Math.min(...D.map(x => x.l)))}</b></span></div>`;
+    return;
+  }
   const any = D && (N.name || N.hasRow || N.hi || N.lo || N.date || extra.length);
   el.hidden = !any; if (!any) return;
   const d = D[shot.rowIdx], r = shot.rowRead, which = N.off === 1 ? "最後一根" : `倒數第 ${N.off} 根`, cal = shot.pmap.cal;
@@ -3101,7 +3306,7 @@ function shotGroups() {
   return [
     { title: "主圖", items: [...MAIN_ITEMS, { id: "sr", label: "支撐壓力" }, { id: "fib", label: "斐波那契" }, { id: "smc", label: "聰明錢" }, { id: "zz", label: "轉折結構" }, { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }] },
     { title: "副圖", items: [...(shot.hasVol ? [{ id: "vol", label: "成交量" }] : []), ...shot.panes.map((p, k) => ({ p, k, t: p.cfg.type || p.type })).filter(x => x.t !== "vol").map(x => ({ id: "pane:" + x.k, label: `截圖 ${PANE_TYPES[x.t] || "副圖"}` })),
-      { id: "kd", label: "重算 KD" }, { id: "rsi", label: "重算 RSI" }, { id: "macd", label: "重算 MACD" }, { id: "wr", label: "重算威廉" }] },
+      ...[["kd", "KD"], ["rsi", "RSI"], ["macd", "MACD"], ["wr", "威廉"]].map(([id, l]) => ({ id, label: shot.src === "real" ? l : "重算 " + l }))] },
   ];
 }
 function paneCustom(pane) {
@@ -3133,14 +3338,14 @@ function shotDrawChart() {
     future = { from: n, ...sim.bands };
     renderSimStats(sim, mode, days, bias);
   }
-  shotChart.set(D2, { I: I2, ma: maFrom(B), boll: B.has("boll"), subs, noVol: !(shot.hasVol && B.has("vol")), volLabel: "量（相對）", future,
+  shotChart.set(D2, { I: I2, ma: maFrom(B), boll: B.has("boll"), subs, noVol: !(shot.hasVol && B.has("vol")), volLabel: shot.src === "real" ? `量（${REAL.cur?.unit || "張"}）` : "量（相對）", future,
     fmtD: d => (d.startsWith("模擬") ? "+" + d.slice(3) : /^\d{4}-/.test(d) ? d.slice(5).replace("-", "/") : d.replace(/\D/g, "")),
     markers, zones: ex.zones, shapes: ex.shapes, hlines: shotHlines(D) });
 }
 // 支撐壓力之外，再畫上圖上標示的最高、最低與資料列收盤（實際數字）
 function shotHlines(D) {
   const out = [...(shotBar.has("sr") ? srLevels(D) : []), ...(shotBar.has("fib") ? fibLines(D) : [])], N = shot.nums;
-  if (!N || !shot.pmap?.cal) return out;
+  if (!N || !shot.pmap?.cal || shot.src === "real") return out;
   const at = f => D.reduce((b, x, i) => (f(x) > f(D[b]) ? i : b), 0);
   if (N.hi) out.push({ price: N.hi, kind: "圖上最高", label: "圖上最高 " + fmtX(N.hi), i: at(x => x.h), color: "muted" });
   if (N.lo) out.push({ price: N.lo, kind: "圖上最低", label: "圖上最低 " + fmtX(N.lo), i: at(x => -x.l), color: "muted" });
@@ -3154,7 +3359,7 @@ function renderSimStats(sim, mode, days, bias) {
   const above = zones.filter(z => z.dir < 0 && z.bot > c).sort((a, b) => a.bot - b.bot)[0], below = zones.filter(z => z.dir > 0 && z.top < c).sort((a, b) => b.top - a.top)[0];
   const N = shot.nums || {}, realLast = N.c && N.off === 1;
   const tiles = [
-    ["起點" + (realLast ? "（圖上收盤）" : cal ? "（讀值）" : ""), cal ? (realLast ? fmtX(c) : fmtP(c)) : "100%"],
+    ["起點" + (shot.src === "real" ? "（實際收盤）" : realLast ? "（圖上收盤）" : cal ? "（讀值）" : ""), cal ? (realLast ? fmtX(c) : fmtP(c)) : "100%"],
     ["中位數", px(sim.stats.p50)], ["80% 的路徑落在", `${cal ? fmtP(sim.stats.p10) : fmtPct(sim.stats.p10 / c - 1, 1)} ～ ${cal ? fmtP(sim.stats.p90) : fmtPct(sim.stats.p90 / c - 1, 1)}`],
     ["收在現價之上", Math.round(sim.stats.up * 100) + "%"],
     ...(above ? [["碰到上方空方區塊", Math.round(sim.touch(above.bot, true) * 100) + "%"]] : []),
@@ -3172,7 +3377,7 @@ function renderSimStats(sim, mode, days, bias) {
   else if (mode === "tech") { const it = sim.why.items || [], b = it.filter(x => x.b > 0).map(x => x.k), r = it.filter(x => x.b < 0).map(x => x.k); driftWhy = `最後一根的指標：偏多 ${b.length} 項（${b.join("、") || "無"}）、偏空 ${r.length} 項（${r.join("、") || "無"}），換算偏向 ${bias.toFixed(2)}，每天加上 ${pct(sim.drift, 3)}（累計約 ${pct(dd, 1)}）。`; }
   else { const ev = sim.why.ev; driftWhy = ev ? `最近一次結構事件是 ${n0 - 1 - ev.i} 根前的${ev.dir > 0 ? "向上" : "向下"} ${ev.kind}，所以偏向 ${bias > 0 ? "+" : ""}${bias.toFixed(1)}，每天加上 ${pct(sim.drift, 3)}（累計約 ${pct(dd, 1)}）。` : "找不到結構事件，所以不加方向。"; }
   const why = `<details class="sim-why" open><summary><strong>這個模擬參考了什麼？為什麼長這樣？</strong></summary><ol>
-    <li><strong>資料來源</strong>：只用這張截圖重建出來的最近 ${f.n} 根 K 棒${realLast ? "，起點是你填的圖上收盤 " + fmtX(c) : ""}。沒有用到新聞、財報、籌碼或大盤。</li>
+    <li><strong>資料來源</strong>：${shot.src === "real" ? `只用 ${esc(realName(REAL.cur))} 最近 ${f.n} 個交易日的真實日 K（${REAL.cur.source}），起點是最後一天的收盤 ${fmtX(c)}` : `只用這張截圖重建出來的最近 ${f.n} 根 K 棒${realLast ? "，起點是你填的圖上收盤 " + fmtX(c) : ""}`}。沒有用到新聞、財報、籌碼或大盤。</li>
     <li><strong>每天怎麼走</strong>：每條路徑的每一天，都從這 ${f.n} 根的真實日漲跌幅裡隨機抽一個（漲的日子佔 ${Math.round(f.upShare * 100)}%，最大單日 ${pct(f.maxUp, 1)}、最大跌幅 ${pct(f.maxDn, 1)}），所以大漲大跌出現的頻率和這檔股票過去一樣。重複 ${sim.paths} 次，得到 ${sim.paths} 條可能的路徑。</li>
     <li><strong>方向（${SIM_MODES[mode]}）</strong>：${driftWhy}整體${dirTxt}，這就是中位數${sim.stats.p50 >= c ? "高於" : "低於"}現價的原因。</li>
     <li><strong>範圍為什麼這麼寬</strong>：每日波動約 ${(sim.sd * 100).toFixed(1)}%，波動會隨時間累積（大約乘上天數的平方根），${days} 根後的一個標準差約 ±${(spread * 100).toFixed(1)}%。所以越往右，機率帶越寬。</li>
@@ -3190,7 +3395,7 @@ function shotLoad(blob, hiLo) {
   img.onload = () => {
     if (shot.url) URL.revokeObjectURL(shot.url);
     Object.assign(shot, { url, img, file: blob, crop: null, subCrop: null, paneCfg: {}, calPts: [], edits: { del: new Set(), flip: new Map(), add: [] } });
-    hidePop(); clearNums(hiLo);
+    hidePop(); clearNums(hiLo); if (shot.src === "real") setSrc("img");
     const th = $("#shotThumb"); th.src = url; th.hidden = false; $("#dropTitle").textContent = "換一張截圖"; $(".shot-top").classList.add("loaded");
     $("#aiOut").hidden = true; aiUpdate();
     shotRun();
@@ -3424,6 +3629,7 @@ async function aiReadNums() {
 }
 $("#numsAi").addEventListener("click", () => { if (shot.file && aiMode) aiReadNums(); });
 function aiUpdate() {
+  if (typeof chatUpdate === "function" && !$("#chatPanel").hidden) { chatRender(); chatUpdate(); }
   const nb = $("#numsAi"); nb.hidden = !aiMode; if (!nb.textContent.includes("中")) nb.disabled = !shot.file;
   const ask = $("#aiAsk");
   if (!aiChecked) { ask.disabled = true; ask.textContent = "檢查中…"; return; }
@@ -3432,20 +3638,21 @@ function aiUpdate() {
   if (!aiMode) $("#aiNote").textContent = "這個環境無法呼叫 Claude。把網站部署到 Vercel 並設定 ANTHROPIC_API_KEY，或在 Claude 裡開啟這個頁面，就能使用這個功能。上面的程式判讀不受影響。";
 }
 function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
-function renderAI(md) {
-  const out = $("#aiOut"); let html = "", inList = false;
-  const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+// 簡單的 Markdown（標題、粗體、行內程式碼、項目與編號清單）→ HTML，內容一律先跳脫
+function mdToHtml(md) {
+  let html = "", list = null;
+  const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>");
+  const close = () => { if (list) { html += `</${list}>`; list = null; } };
   for (const raw of md.split("\n")) {
-    const line = raw.trim(), li = /^[-*•]\s+/.test(line);
-    if (inList && !li) { html += "</ul>"; inList = false; }
-    if (!line) continue;
-    if (/^#{1,4}\s/.test(line)) html += `<h4>${inline(line.replace(/^#+\s*/, ""))}</h4>`;
-    else if (li) { if (!inList) { html += "<ul>"; inList = true; } html += `<li>${inline(line.replace(/^[-*•]\s+/, ""))}</li>`; }
-    else html += `<p>${inline(line)}</p>`;
+    const line = raw.trim(), ul = /^[-*•]\s+/.test(line), ol = /^\d+[.)、]\s*/.test(line);
+    if (!line) { close(); continue; }
+    if (/^#{1,4}\s/.test(line)) { close(); html += `<h4>${inline(line.replace(/^#+\s*/, ""))}</h4>`; }
+    else if (ul || ol) { const t = ul ? "ul" : "ol"; if (list !== t) { close(); html += `<${t}>`; list = t; } html += `<li>${inline(line.replace(ul ? /^[-*•]\s+/ : /^\d+[.)、]\s*/, ""))}</li>`; }
+    else { close(); html += `<p>${inline(line)}</p>`; }
   }
-  if (inList) html += "</ul>";
-  out.innerHTML = html; out.hidden = false;
+  close(); return html;
 }
+function renderAI(md) { const out = $("#aiOut"); out.innerHTML = mdToHtml(md); out.hidden = false; }
 function toJpegBase64(img, max = 1568) {
   const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)), cv = document.createElement("canvas");
   cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
@@ -3483,6 +3690,105 @@ $("#aiAsk").addEventListener("click", async () => {
   } finally { stop.hidden = true; aiUpdate(); }
 });
 
+/* ---------- 問問題對話框 ----------
+   右下角的助教：每次提問都附上「目前畫面」的摘要（課程內容、指標讀數、個股判讀、模擬結果），
+   在 Claude 裡開啟時用 sample 能力，部署在網站上時呼叫 /api/chat。 */
+const CHAT_SYS = `你是「K線學堂」裡的技術分析助教，對象是想學台股技術分析的初學者。請用繁體中文、口語但精確地回答。
+- 優先回答問題；用得到時引用「目前畫面」的數據，並說明你看的是哪個數字。
+- 解釋觀念時舉具體例子；可以建議到學堂的哪一課或哪個功能練習（課程、圖表實驗室、判讀挑戰、個股判讀、觀念測驗）。
+- 回答控制在 300 字以內，必要時用條列，不要用表格。
+- 不提供個股買賣建議、目標價或明牌，也不保證結果；被問到時說明技術分析的限制，並把問題轉成「該怎麼判讀」。
+- 不知道或畫面上沒有的資訊就直說，不要捏造數字。`;
+const TAB_NAMES = { learn: "課程", lab: "圖表實驗室", challenge: "判讀挑戰", shot: "個股判讀", quiz: "觀念測驗" };
+const chat = { msgs: (() => { try { return JSON.parse(sessionStorage.getItem("chatMsgs") || "[]"); } catch { return []; } })(), busy: false, ctl: null };
+const curTab = () => TABS.find(t => !$("#view-" + t).hidden) || "learn";
+const strip = el => (el ? el.innerText.replace(/\n{2,}/g, "\n").trim() : "");
+const lastReadout = (D, I) => D && I ? readout(D, I, D.length - 1).map(x => `${x.k}：${x.t}${x.x ? `（${x.x}）` : ""}`).join("\n") : "";
+function chatContext() {
+  const t = curTab(), out = [`使用者目前在「${TAB_NAMES[t]}」頁籤。`];
+  if (t === "learn") {
+    const L = LESSONS[lessonIdx];
+    out.push(`正在看第 ${lessonIdx + 1} 課「${L.title}」（${L.group}）。`, `課文摘要：${strip($("#lessonBody")).slice(0, 1800)}`, `重點：${L.keys.join("；")}`);
+    if (lessonView.D) out.push(`課程圖（模擬走勢）最後一根的指標判讀：\n${lastReadout(lessonView.D, lessonView.I)}`);
+  } else if (t === "lab" && lab.D) {
+    out.push(`資料：${labUsesReal() ? realName(REAL.cur) + " 的真實日 K" : "模擬走勢"}，共 ${lab.D.length} 根。`, `最後一根的指標判讀：\n${lastReadout(lab.D, lab.I)}`, `回測面板：${strip($("#btPanel")).slice(0, 900)}`);
+  } else if (t === "challenge") {
+    out.push("使用者正在做判讀挑戰（看圖猜之後漲跌）。不要直接說出答案，請引導他從趨勢、均線、指標、量能去判斷。", `畫面：${strip($("#view-challenge")).slice(0, 900)}`);
+  } else if (t === "shot") {
+    if (shot.D) {
+      out.push(shot.ctx.slice(0, 2600));
+      if (shot.smc?.text) out.push(`聰明錢判讀：${shot.smc.text.slice(0, 800)}`);
+      if (!$("#simStats").hidden) out.push(`未來走勢模擬：${strip($("#simStats")).slice(0, 1600)}`);
+    } else out.push("還沒有載入截圖或股票。");
+  } else if (t === "quiz" && quiz) {
+    const Q = quiz.k < quiz.order.length ? QUESTIONS[quiz.order[quiz.k]] : null;
+    if (Q) out.push(`目前的題目：${Q.q}`, `選項：${Q.o.map((o, k) => `${"ABCD"[k]}. ${o}`).join("　")}`, quiz.picked == null ? "使用者還沒作答：不要直接說出答案，先幫他釐清觀念、引導他自己判斷。" : `使用者已作答，正確答案是 ${"ABCD"[Q.a]}。解說：${Q.e}`);
+  }
+  return out.join("\n");
+}
+function chatSuggestions() {
+  const t = curTab();
+  if (t === "learn") { const n = LESSONS[lessonIdx].title.split("：")[0]; return [`用一句話說明「${n}」的重點`, "可以舉一個實際例子嗎？", "初學者最常犯的錯是什麼？"]; }
+  if (t === "lab") return ["這個策略的回測結果該怎麼看？", "為什麼勝率高還是可能虧錢？", "現在這張圖的指標在說什麼？"];
+  if (t === "challenge") return ["判讀時應該先看哪些東西？", "均線和 KD 意見相反時聽誰的？"];
+  if (t === "shot") return shot.D ? ["這張圖現在偏多還是偏空？為什麼？", "聰明錢的判讀怎麼看？", "模擬的範圍為什麼這麼寬？"] : ["截圖要怎麼拍才辨識得準？", "可以查哪些股票的真實數據？"];
+  return ["幫我釐清這題的觀念", "這個觀念在哪一課？"];
+}
+function chatRender() {
+  const log = $("#chatLog");
+  log.innerHTML = chat.msgs.length ? chat.msgs.map(m => `<div class="msg ${m.role === "user" ? "user" : "bot"}${m.err ? " err" : ""}">${m.role === "user" ? `<p>${esc(m.content)}</p>` : mdToHtml(m.content)}</div>`).join("")
+    : `<div class="chat-empty"><strong>有什麼想問的嗎？</strong><span>助教會參考你現在看的畫面回答：課程內容、指標讀數、截圖或個股的判讀、模擬結果都可以問。</span></div>`;
+  if (chat.busy) log.insertAdjacentHTML("beforeend", `<div class="msg bot wait" id="chatPending">思考中…</div>`);
+  $("#chatSugg").innerHTML = chat.busy || !aiMode ? "" : chatSuggestions().map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join("");
+  $("#chatCtxNote").textContent = `會參考你目前看的「${TAB_NAMES[curTab()]}」畫面`;
+  log.scrollTop = log.scrollHeight;
+  try { sessionStorage.setItem("chatMsgs", JSON.stringify(chat.msgs.filter(m => !m.err).slice(-20))); } catch {}
+}
+function chatUpdate() {
+  const off = aiChecked && !aiMode;
+  $("#chatInput").disabled = off || chat.busy; $("#chatSend").disabled = off || chat.busy; $("#chatSend").hidden = chat.busy; $("#chatStop").hidden = !chat.busy;
+  if (off) $("#chatLog").innerHTML = `<div class="chat-empty"><strong>這個環境無法呼叫 Claude</strong><span>在 Claude 裡開啟這個頁面，或部署到 Vercel 並設定 ANTHROPIC_API_KEY，就能使用對話。</span></div>`;
+}
+async function chatAsk(q) {
+  q = q.trim(); if (!q || chat.busy || !aiMode) return;
+  chat.msgs = chat.msgs.filter(m => !m.err); chat.msgs.push({ role: "user", content: q }); chat.busy = true; chat.ctl = new AbortController();
+  $("#chatInput").value = ""; chatAutosize(); chatRender(); chatUpdate();
+  const ctx = chatContext(), hist = chat.msgs.slice(-12);
+  try {
+    let text;
+    if (aiMode === "sample") {
+      const turns = hist.map((m, k) => ({ role: m.role, content: k === hist.length - 1 ? `${CHAT_SYS}\n\n目前畫面（頁面自動產生，可能有誤）：\n${ctx}\n\n使用者的問題：${m.content}` : m.content }));
+      while (turns.length && turns[0].role !== "user") turns.shift();
+      const r = await aiSample(turns, { signal: chat.ctl.signal, cache: false, onText: ({ text }) => { const el = $("#chatPending"); if (el) { el.classList.remove("wait"); el.innerHTML = mdToHtml(text); $("#chatLog").scrollTop = $("#chatLog").scrollHeight; } } });
+      text = r.text + (r.truncated ? "\n\n（回答過長被截斷）" : "");
+    } else {
+      const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: hist, context: ctx }), signal: chat.ctl.signal });
+      const j = await r.json().catch(() => ({ ok: false, error: `伺服器回應 ${r.status}，找不到對話服務。` }));
+      if (!j.ok) throw { message: j.error }; text = j.text;
+    }
+    chat.msgs.push({ role: "assistant", content: text });
+  } catch (e) {
+    const code = e?.name === "AbortError" ? "cancelled" : e?.code;
+    if (e?.text && code !== "refused") chat.msgs.push({ role: "assistant", content: e.text });
+    chat.msgs.push({ role: "assistant", content: AI_ERR[code] || e?.message || "回答失敗，請稍後再試。", err: true });
+    if (["not_granted", "sampling_disabled"].includes(code)) aiMode = null;
+  } finally { chat.busy = false; chat.ctl = null; chatRender(); chatUpdate(); }
+}
+function chatAutosize() { const t = $("#chatInput"); t.style.height = "auto"; t.style.height = Math.min(120, t.scrollHeight) + "px"; }
+function chatOpen(open) {
+  $("#chatPanel").hidden = !open; $("#chatFab").setAttribute("aria-expanded", open);
+  if (open) { chatRender(); chatUpdate(); if (matchMedia("(min-width: 641px)").matches) $("#chatInput").focus(); } else $("#chatFab").focus();
+}
+$("#chatFab").addEventListener("click", () => chatOpen(true));
+$("#chatClose").addEventListener("click", () => chatOpen(false));
+$("#chatClear").addEventListener("click", () => { chat.ctl?.abort(); chat.msgs = []; chatRender(); chatUpdate(); });
+$("#chatStop").addEventListener("click", () => chat.ctl?.abort());
+$("#chatForm").addEventListener("submit", e => { e.preventDefault(); chatAsk($("#chatInput").value); });
+$("#chatInput").addEventListener("input", chatAutosize);
+$("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatAsk($("#chatInput").value); } });
+$("#chatSugg").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (b) chatAsk(b.dataset.q); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#chatPanel").hidden) chatOpen(false); });
+
 /* ================= 頁籤 ================= */
 const TABS = ["learn", "lab", "challenge", "shot", "quiz"];
 const inited = {};
@@ -3490,6 +3796,7 @@ function switchTab(t) {
   if (!TABS.includes(t)) t = "learn";
   TABS.forEach(x => { $("#view-" + x).hidden = x !== t; $("#tab-btn-" + x).setAttribute("aria-selected", x === t); });
   store.set("tab", t);
+  if (!$("#chatPanel").hidden) chatRender();
   if (!inited[t]) {
     inited[t] = true;
     if (t === "lab") { labData(); labDraw(); }
