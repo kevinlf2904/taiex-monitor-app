@@ -128,6 +128,10 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .zoombar button + button { border-left: 1px solid var(--line); }
 .zoombar button:hover { color: var(--ink); background: var(--surface-2); }
 .zoombar:not(.zoomed) [data-z="reset"] { opacity: .45; }
+.zoombar .zsep { width: 1px; background: var(--line); }
+.zoombar [aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.zoombar [data-z="tall"] { min-width: 52px; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .zoombar { position: static; display: flex; width: fit-content; margin: 6px 8px 0 auto; } .zoombar button { padding: 4px 8px; min-width: 28px; font-size: 12.5px; } .zoombar [data-z="tall"] { min-width: 46px; } }
 .legend { padding-right: 150px; }
 .chartbox canvas { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
 
@@ -666,7 +670,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer>課程與練習的價格為程式模擬；個股判讀的真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-5</span></footer>
+<footer>課程與練習的價格為程式模擬；個股判讀的真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-6</span></footer>
 
 <script>
 "use strict";
@@ -1206,14 +1210,23 @@ class Chart {
     this.canvas.setAttribute("role", "img");
     // 縮放工具列：按鈕、Ctrl / ⌘ + 滾輪或雙指縮放，拖曳平移，雙擊還原
     this.bar = document.createElement("div"); this.bar.className = "zoombar";
-    this.bar.innerHTML = `<button type="button" data-z="out" aria-label="縮小">−</button><button type="button" data-z="in" aria-label="放大">＋</button><button type="button" data-z="reset" aria-label="顯示全部">全部</button>`;
+    // 第二組：縱向（價格軸）放大縮小、圖表高度、對數座標，讓小波動也看得清楚
+    this.bar.innerHTML = `<button type="button" data-z="out" aria-label="時間軸縮小" title="時間軸縮小（看更多 K 棒）">−</button><button type="button" data-z="in" aria-label="時間軸放大" title="時間軸放大（看更少 K 棒）">＋</button><button type="button" data-z="reset" aria-label="顯示全部並還原比例">全部</button><span class="zsep" aria-hidden="true"></span><button type="button" data-z="yin" aria-label="價格軸拉長" title="價格軸拉長：波動看起來更大（也可 Shift＋滾輪，或上下拖曳右側價格軸）">↕＋</button><button type="button" data-z="yout" aria-label="價格軸壓縮" title="價格軸壓縮">↕−</button><button type="button" data-z="tall" aria-label="圖表高度" title="切換圖表高度">高 1×</button><button type="button" data-z="log" aria-pressed="false" title="對數座標：同樣的漲跌幅（%）畫出來一樣高">對數</button>`;
     host.append(this.legend, this.bar, this.canvas);
-    this.hover = null; this.view = null; this.ptrs = new Map();
-    this.bar.addEventListener("click", e => { const z = e.target.closest("[data-z]")?.dataset.z; if (z === "in") this.zoom(0.6); else if (z === "out") this.zoom(1 / 0.6); else if (z === "reset") { this.view = null; this.draw(); } });
+    this.hover = null; this.view = null; this.ptrs = new Map(); this.yz = 1; this.yoff = 0;
+    Chart.all.push(this); this.syncBar();
+    this.bar.addEventListener("click", e => {
+      const z = e.target.closest("[data-z]")?.dataset.z;
+      if (z === "in") this.zoom(0.6); else if (z === "out") this.zoom(1 / 0.6);
+      else if (z === "reset") { this.view = null; this.yz = 1; this.yoff = 0; this.draw(); }
+      else if (z === "yin") this.yZoom(1.5); else if (z === "yout") this.yZoom(1 / 1.5);
+      else if (z === "tall") { const H = [1, 1.5, 2, 2.5]; Chart.setPref("h", H[(H.indexOf(Chart.prefs.h) + 1) % H.length]); }
+      else if (z === "log") Chart.setPref("log", !Chart.prefs.log);
+    });
     const cv = this.canvas;
     cv.addEventListener("pointerdown", e => {
       this.ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
-      if (this.ptrs.size === 1) this.drag = { x: e.offsetX, a: this.range.a, moved: false };
+      if (this.ptrs.size === 1) this.drag = { x: e.offsetX, y: e.offsetY, a: this.range.a, yz: this.yz, yoff: this.yoff, axis: !!this.geo && e.offsetX > this.geo.L + this.geo.pw && e.offsetY < this.geo.top0 + this.geo.mainH, moved: false };
       if (this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()]; this.pinch = { d: Math.abs(p.x - q.x) || 1, w: this.range.b - this.range.a + 1, mid: this.indexAt((p.x + q.x) / 2, true) }; this.drag = null; }
       this.hoverAt(e.offsetX);
     });
@@ -1221,23 +1234,43 @@ class Chart {
       if (this.ptrs.has(e.pointerId)) this.ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
       if (this.pinch && this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()], d = Math.abs(p.x - q.x) || 1; this.setWidth(this.pinch.w * this.pinch.d / d, this.pinch.mid); return; }
       if (this.drag && this.ptrs.size === 1 && this.geo) {
-        const dx = e.offsetX - this.drag.x;
-        if (Math.abs(dx) > 4 && this.view) { this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {} const { a, b } = this.range; this.view = this.clampView(this.drag.a - Math.round(dx / this.geo.bw), b - a + 1); this.draw(); return; }
+        const dx = e.offsetX - this.drag.x, dy = e.offsetY - this.drag.y, G = this.geo;
+        // 右側價格軸上下拖曳：拉長或壓縮價格軸
+        if (this.drag.axis) { if (Math.abs(dy) > 2) { try { cv.setPointerCapture(e.pointerId); } catch {} this.yz = Math.max(0.5, Math.min(12, this.drag.yz * Math.exp(dy / 120))); this.draw(); } return; }
+        const panX = Math.abs(dx) > 4 && this.view, panY = this.yz > 1 && Math.abs(dy) > 4 && this.drag.y < G.top0 + G.mainH;
+        if (panX || panY) {
+          this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {}
+          if (panX) { const { a, b } = this.range; this.view = this.clampView(this.drag.a - Math.round(dx / G.bw), b - a + 1); }
+          if (panY) this.yoff = Math.max(-0.6, Math.min(0.6, this.drag.yoff + dy / G.mainH / this.yz));
+          this.draw(); return;
+        }
       }
       this.hoverAt(e.offsetX);
     });
     const up = e => { this.ptrs.delete(e.pointerId); if (this.ptrs.size < 2) this.pinch = null; if (!this.ptrs.size) this.drag = null; };
     cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
     cv.addEventListener("pointerleave", e => { up(e); this.hover = null; this.draw(); });
-    cv.addEventListener("dblclick", () => { this.view = null; this.draw(); });
+    cv.addEventListener("dblclick", () => { this.view = null; this.yz = 1; this.yoff = 0; this.draw(); });
     cv.addEventListener("wheel", e => {
       if (!this.D) return;
       if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.zoom(Math.exp(e.deltaY * 0.004), this.indexAt(e.offsetX, true)); }
+      else if (e.shiftKey) { e.preventDefault(); this.yZoom(Math.exp(-(e.deltaY || e.deltaX) * 0.003)); }
       else if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && this.view && this.geo) { e.preventDefault(); const { a, b } = this.range; this.view = this.clampView(a + Math.round(e.deltaX / this.geo.bw), b - a + 1); this.draw(); }
     }, { passive: false });
     new ResizeObserver(() => this.draw()).observe(host);
   }
-  set(D, opts = {}) { if (D !== this.D) this.view = null; this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.hover = null; this.draw(); return this; }
+  static all = [];
+  static prefs = { h: [1, 1.5, 2, 2.5].includes(+store.get("chartH", 1)) ? +store.get("chartH", 1) : 1, log: !!store.get("chartLog", false) };
+  // 高度、對數座標是全站共用的偏好：改了以後所有圖表一起重畫
+  static setPref(k, v) { Chart.prefs[k] = v; store.set(k === "h" ? "chartH" : "chartLog", v); Chart.all.forEach(c => { c.syncBar(); c.draw(); }); }
+  syncBar() {
+    const t = this.bar.querySelector('[data-z="tall"]'), g = this.bar.querySelector('[data-z="log"]');
+    t.textContent = `高 ${Chart.prefs.h}×`; t.setAttribute("aria-label", `圖表高度 ${Chart.prefs.h} 倍`);
+    g.setAttribute("aria-pressed", Chart.prefs.log);
+    this.bar.querySelector('[data-z="yin"]').setAttribute("aria-pressed", this.yz > 1.01);
+  }
+  yZoom(f) { this.yz = Math.max(0.5, Math.min(12, this.yz * f)); if (this.yz <= 1) this.yoff = 0; this.draw(); }
+  set(D, opts = {}) { if (D !== this.D) { this.view = null; this.yz = 1; this.yoff = 0; } this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.hover = null; this.draw(); return this; }
   get visible() { return this.o.visible ?? this.D.length; }
   get range() { return this.view || { a: 0, b: this.D.length - 1 }; }
   clampView(a, w) { const N = this.D.length; w = Math.round(Math.max(Math.min(15, N), Math.min(N, w))); a = Math.max(0, Math.min(N - w, Math.round(a))); return w >= N ? null : { a, b: a + w - 1 }; }
@@ -1252,14 +1285,15 @@ class Chart {
     const narrow = W < 560;
     // 副圖可以疊好幾個：o.subs = ["kd", "macd", { custom }]；舊的 o.sub 也支援
     const subs = (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean);
-    const mainH = narrow ? 230 : 300, volH = o.noVol ? 0 : narrow ? 52 : 66, subH = subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112), gap = 10, axisH = 20;
+    const mainH = Math.round((narrow ? 230 : 300) * Chart.prefs.h), volH = o.noVol ? 0 : narrow ? 52 : 66, subH = subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112), gap = 10, axisH = 20;
     const H = mainH + gap + volH + subs.length * (gap + subH) + axisH + 8;
     this.canvas.width = W * dpr; this.canvas.height = H * dpr; this.canvas.style.height = H + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
     const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface") };
     const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R;
     const { a: va, b: vb } = this.range, bw = pw / (vb - va + 1), inV = i => i >= va - 1 && i <= vb + 1;
-    this.geo = { L, bw, a: va, pw, H };
+    this.geo = { L, bw, a: va, pw, H, top0: 8, mainH };
+    this.syncBar();
     const X = i => L + bw * (i - va + 0.5);
     this.bar.classList.toggle("zoomed", !!this.view);
     const top0 = 8, volTop = top0 + mainH + gap, subTop0 = o.noVol ? volTop : volTop + volH + gap;
@@ -1275,8 +1309,12 @@ class Chart {
       if (o.boll && I.boll.up[i] != null) { lo = Math.min(lo, I.boll.lo[i]); hi = Math.max(hi, I.boll.up[i]); }
       if (F && i >= F.from) { lo = Math.min(lo, F.p25[i - F.from]); hi = Math.max(hi, F.p75[i - F.from]); } // 外圈機率帶超出就裁掉，真實 K 棒才不會被壓扁
     }
-    const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
-    const Y = p => top0 + (hi - p) / (hi - lo) * mainH;
+    // 對數座標：用 log(價格) 決定高度；縱向放大：以中間為準把價格範圍縮小，可上下平移（yoff）
+    const logS = Chart.prefs.log && lo > 0, tf = logS ? Math.log : v => v, itf = logS ? Math.exp : v => v;
+    let tlo = tf(lo), thi = tf(hi); const tpad = (thi - tlo) * 0.08 || Math.abs(thi) * 0.01 || 1; tlo -= tpad; thi += tpad;
+    if (this.yz !== 1 || this.yoff) { const sp = thi - tlo, mid = (tlo + thi) / 2 + this.yoff * sp; tlo = mid - sp / this.yz / 2; thi = mid + sp / this.yz / 2; }
+    lo = itf(tlo); hi = itf(thi);
+    const Y = p => top0 + (thi - tf(p)) / (thi - tlo) * mainH;
 
     ctx.font = `11px ${cssVar("--font-mono")}`; ctx.textBaseline = "middle";
     // 未揭曉區
@@ -1331,7 +1369,8 @@ class Chart {
       ctx.restore();
       ctx.fillStyle = col.accent; ctx.textAlign = "left"; ctx.font = `700 11px ${cssVar("--font-body")}`; if (fx < L + pw - 40) ctx.fillText("模擬", fx + 6, top0 + 10); ctx.font = `11px ${cssVar("--font-mono")}`;
     }
-    // K 棒
+    // K 棒以下到標記為止都裁在價格區內（縱向放大時才不會畫到成交量區）
+    ctx.save(); ctx.beginPath(); ctx.rect(0, top0, L + pw + 1, mainH); ctx.clip();
     const cw = Math.max(1, Math.min(14, bw * 0.66));
     for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) {
       const k = D[i], x = X(i), upc = k.c > k.o ? col.up : k.c < k.o ? col.down : col.ink;
@@ -1383,6 +1422,8 @@ class Chart {
       }
     });
 
+    ctx.restore();
+    if (logS || this.yz !== 1) { ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `10px ${cssVar("--font-body")}`; ctx.fillText([logS ? "對數座標" : "", this.yz !== 1 ? `價格軸 ${+this.yz.toFixed(1)}×` : ""].filter(Boolean).join("・"), L + 4, top0 + mainH - 8); ctx.font = `11px ${cssVar("--font-mono")}`; }
     // 成交量
     if (!o.noVol) {
     let vmax = 1; for (let i = va; i < Math.min(vis, vb + 1); i++) vmax = Math.max(vmax, D[i].v);
