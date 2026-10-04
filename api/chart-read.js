@@ -23,22 +23,33 @@ const PROMPT = `你是一位耐心的台股技術分析老師。使用者上傳�
 
 規則：只描述圖上看得到的東西，不要捏造數字；不要給買進或賣出建議，也不要預測價格；在「提醒」說明技術分析的限制。`;
 
+// 「讓 Claude 讀出數字」：只讀圖上印出的數字，回傳 JSON（前端解析後填進欄位）
+const NUMS_PROMPT = `這是一張看盤軟體的 K 線截圖。請只讀出圖上「印出來的數字」，看不到或不確定就填 null，絕對不要估計或用刻度推算。
+只回傳一個 JSON 物件，不要任何其他文字：
+{"name": 商品名稱（含代號）,
+ "date": 上方資料列的日期，格式 YYYY-MM-DD；看不到年份就填 "MM-DD",
+ "rowFromRight": 資料列對應的是從右邊數來第幾根 K 棒（最後一根 = 1）。圖上有十字游標或選取線時數到游標那根；資料列日期在 X 軸日期標籤可以對照時用它推算；看不出來就填 null,
+ "open": 資料列的開盤價, "high": 資料列的最高價, "low": 資料列的最低價, "close": 資料列的收盤價,
+ "chartHigh": 價格區內標示最高價的數字標籤（通常在最高那根 K 棒旁邊）, "chartLow": 價格區內標示最低價的數字標籤,
+ "indicators": [{"label": 名稱（例如 "MA5"、"布林上"、"SAR"、"K"、"DIF"、"成交量"）, "value": 數字}]（圖例上印出的數值，最多 12 個）}`;
+
 const MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "只接受 POST" });
   if (!process.env.ANTHROPIC_API_KEY) return res.status(200).json({ ok: false, error: "伺服器尚未設定 ANTHROPIC_API_KEY，無法使用 Claude 解讀。" });
 
-  const { image, mediaType, context } = req.body || {};
+  const { image, mediaType, context, task } = req.body || {};
+  const numbers = task === "numbers";
   if (typeof image !== "string" || !image || image.length > 5_500_000) return res.status(400).json({ ok: false, error: "圖片缺少或太大" });
   if (!MEDIA_TYPES.includes(mediaType)) return res.status(400).json({ ok: false, error: "不支援的圖片格式" });
-  const ctx = typeof context === "string" && context ? `\n\n參考資料：程式在瀏覽器中自動辨識的結果如下，可能有誤，請以圖片為準。\n${context.slice(0, 3000)}` : "";
+  const ctx = numbers ? "" : typeof context === "string" && context ? `\n\n參考資料：程式在瀏覽器中自動辨識的結果如下，可能有誤，請以圖片為準。\n${context.slice(0, 3000)}` : "";
 
   const client = new Anthropic();
   try {
     const msg = await client.beta.messages.create({
       model: "claude-opus-5-5",
-      max_tokens: 16000,
+      max_tokens: numbers ? 4000 : 16000,
       output_config: { effort: "medium" },
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
@@ -46,7 +57,7 @@ export default async function handler(req, res) {
         role: "user",
         content: [
           { type: "image", source: { type: "base64", media_type: mediaType, data: image } },
-          { type: "text", text: PROMPT + ctx },
+          { type: "text", text: (numbers ? NUMS_PROMPT : PROMPT) + ctx },
         ],
       }],
     });
