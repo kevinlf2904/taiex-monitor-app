@@ -243,6 +243,7 @@ details.verdict summary { cursor: pointer; list-style-position: outside; }
 .msg.user { align-self: flex-end; background: var(--accent); color: var(--surface); border-bottom-right-radius: 4px; }
 .msg.bot { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
 .msg.bot.err { color: var(--up); }
+.msg-by { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
 .msg.wait { color: var(--muted); }
 .chat-empty { color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
 .chat-sugg { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 8px; }
@@ -396,6 +397,7 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .real-status.err { color: var(--up); }
 .real-status.ok { color: var(--ink); }
 .shot-grid.solo { grid-template-columns: minmax(0, 1fr); }
+.trades td.up { color: var(--up); } .trades td.down { color: var(--down); }
 .steps { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; padding: 0; counter-reset: s; }
 .steps a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); text-decoration: none; font-size: 14px; }
 .steps a:hover { border-color: var(--accent); }
@@ -609,7 +611,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       </div>
       <div class="panel results">
         <div class="rtabs" role="tablist" aria-label="判讀結果">
-          <button role="tab" data-rt="sum" aria-selected="true">總覽</button><button role="tab" data-rt="smc" aria-selected="false">聰明錢</button><button role="tab" data-rt="pane" aria-selected="false">副圖 <span class="cnt" id="paneCount"></span></button><button role="tab" data-rt="ai" aria-selected="false">Claude 解讀</button>
+          <button role="tab" data-rt="sum" aria-selected="true">總覽</button><button role="tab" data-rt="smc" aria-selected="false">聰明錢</button><button role="tab" data-rt="pane" aria-selected="false">副圖 <span class="cnt" id="paneCount"></span></button><button role="tab" data-rt="ai" aria-selected="false">Claude 解讀</button><button role="tab" data-rt="chips" aria-selected="false" hidden>籌碼</button><button role="tab" data-rt="fund" aria-selected="false" hidden>基本面</button>
         </div>
         <div class="rpanel" data-rp="sum" role="tabpanel"><div id="shotSummary" class="shot-summary"></div></div>
         <div class="rpanel" data-rp="smc" role="tabpanel" hidden><div id="smcSummary" class="shot-summary"></div></div>
@@ -617,6 +619,8 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
           <p class="note" style="margin:0">看盤軟體是用完整歷史算指標的，所以直接讀副圖比用截圖裡的 K 棒重算更準。類型判斷錯了可以手動改。想判斷 KD、RSI 的高低檔，先用「框選副圖」讓框的上下緣對齊兩條已知刻度（例如 100 與 0），再填入框頂、框底的數值。</p>
           <div id="paneList" class="pane-list"></div>
         </div>
+        <div class="rpanel" data-rp="chips" role="tabpanel" hidden><div id="chipsPanel" class="shot-summary"></div></div>
+        <div class="rpanel" data-rp="fund" role="tabpanel" hidden><div id="fundPanel" class="shot-summary"></div></div>
         <div class="rpanel ai" data-rp="ai" role="tabpanel" hidden>
           <div class="row" style="justify-content:space-between"><h3 style="margin:0">請 Claude 看圖解說</h3><div class="row"><button class="btn primary" id="aiAsk">請 Claude 解讀</button><button class="btn" id="aiStop" hidden>停止</button></div></div>
           <p class="note" style="margin:0" id="aiNote">Claude 會直接看你的截圖，連圖上的文字、指標設定一起解讀，並用教學的方式說明。這會把截圖送出。</p>
@@ -662,7 +666,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer>課程與練習的價格為程式模擬；個股判讀的真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-3</span></footer>
+<footer>課程與練習的價格為程式模擬；個股判讀的真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-5</span></footer>
 
 <script>
 "use strict";
@@ -1423,6 +1427,13 @@ class Chart {
         (C.levels || []).forEach(v => lvl(v, sy));
         if (C.bars) { ctx.globalAlpha = 0.55; C.bars.forEach((v, i) => { if (i >= vis || !v || !inV(i)) return; ctx.fillStyle = v >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }); ctx.globalAlpha = 1; if (C.zeroLine) lvl(0, sy); }
         C.lines.forEach((a, k) => this.line(a, vis, X, sy, [col.s1, col.s3, col.s2][k % 3], 1.5));
+        // 第二組線（例如累計買超、融資餘額）用自己的刻度，數值標在右側
+        if (C.lines2) {
+          const v2 = C.lines2.flat().filter(v => v != null); let lo2 = Math.min(...v2), hi2 = Math.max(...v2); if (hi2 === lo2) { hi2 += 1; lo2 -= 1; }
+          const sy2 = v => subTop + 4 + (hi2 - v) / (hi2 - lo2) * (subH - 8);
+          C.lines2.forEach((a, k) => this.line(a, vis, X, sy2, [col.s2, col.accent][k % 2], 1.5));
+          ctx.fillStyle = col.muted; ctx.textAlign = "left"; const f2 = C.fmt || fmtN; ctx.fillText(f2(hi2), L + pw + 4, subTop + 10); ctx.fillText(f2(lo2), L + pw + 4, subTop + subH - 2);
+        }
         this.subY = sy;
       } else if (sub === "macd") {
         const { dif, sig, osc } = I.macd; let m = 0;
@@ -1482,7 +1493,12 @@ class Chart {
       if (sub === "rsi") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">RSI</b>${fmtN(I.rsi[i])}</span>`);
       if (sub === "kd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">K</b>${fmtN(I.kd.K[i])}</span><span style="color:var(--s3)"><b style="color:inherit">D</b>${fmtN(I.kd.D[i])}</span>`);
       if (sub === "macd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">DIF</b>${fmtN(I.macd.dif[i], 2)}</span><span style="color:var(--s3)"><b style="color:inherit">MACD</b>${fmtN(I.macd.sig[i], 2)}</span><span><b>OSC</b>${fmtN(I.macd.osc[i], 2)}</span>`);
-      if (sub === "custom") C0.lines.forEach((a, n) => parts.push(`<span style="color:var(${["--s1", "--s3", "--s2"][n % 3]})"><b style="color:inherit">${C0.names[n]}</b>${fmtN(a[i])}</span>`));
+      if (sub === "custom") {
+        const f = C0.fmt || fmtN;
+        if (C0.bars && C0.barName) parts.push(`<span><b>${C0.barName}</b>${f(C0.bars[i])}</span>`);
+        C0.lines.forEach((a, n) => parts.push(`<span style="color:var(${["--s1", "--s3", "--s2"][n % 3]})"><b style="color:inherit">${C0.names[n]}</b>${f(a[i])}</span>`));
+        (C0.lines2 || []).forEach((a, n) => parts.push(`<span style="color:var(${["--s2", "--accent"][n % 2]})"><b style="color:inherit">${C0.names2[n]}</b>${f(a[i])}</span>`));
+      }
     });
     const mk = (o.markers || []).filter(m => m.i === i).map(m => m.label);
     if (mk.length) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">訊號</b>${mk.join("、")}</span>`);
@@ -1651,6 +1667,62 @@ function premiumDiscount(D) {
       { kind: "OTE", dir: f.up ? 1 : -1, color: "accent", alpha: 0.14, i1: f.b.i, i2: n - 1, top: Math.max(o1, o2), bot: Math.min(o1, o2) }],
     shapes: [{ pts: [[i1, eq], [n - 1, eq]], color: "muted", dash: [6, 4], width: 1.2, label: "均衡 50%" }, fibShape(D)],
   };
+}
+
+/* ---------- 籌碼面與基本面（模擬資料，給課程用） ----------
+   外資的買賣超略為「領先」價格（看中長線、資訊較多），投信的買超有延續性，自營商多半跟著當天漲跌（避險）；
+   融資是散戶追價：前幾天漲越多，融資增加越多。基本面：近四季 EPS 跟著股價的長期趨勢走，但比價格平滑。 */
+function genChips(D, seed = 1) {
+  const r = mulberry32(seed * 7 + 11), g = () => { let u = 0, v = 0; while (!u) u = r(); while (!v) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const n = D.length, ret = D.map((d, i) => (i ? d.c / D[i - 1].c - 1 : 0)), avgV = D.reduce((a, d) => a + d.v, 0) / n;
+  const sum = (a, b) => { let t = 0; for (let k = a; k <= b; k++) t += ret[k] || 0; return t; };
+  let mBal = avgV * 3, sBal = avgV * 0.12, tState = 0;
+  return D.map((d, i) => {
+    tState = 0.85 * tState + 0.15 * (sum(i + 1, i + 10) / 0.05 + 0.6 * g());
+    const foreign = avgV * (0.16 * sum(i + 1, i + 5) / 0.03 + 0.07 * ret[i] / 0.02 + 0.09 * g());
+    const trust = avgV * 0.05 * (tState + 0.25 * g());
+    const dealer = avgV * (0.035 * ret[i] / 0.02 + 0.025 * g());
+    mBal = Math.max(avgV * 0.6, mBal + avgV * (0.11 * sum(i - 4, i) / 0.03 + 0.035 * g()));
+    sBal = Math.max(0, sBal + avgV * (0.012 * sum(i - 4, i) / 0.03 + 0.008 * g()));
+    return { d: d.d, foreign: Math.round(foreign), trust: Math.round(trust), dealer: Math.round(dealer), marginBal: Math.round(mBal), shortBal: Math.round(sBal) };
+  });
+}
+function genFund(D, seed = 1) {
+  const r = mulberry32(seed * 13 + 5), n = D.length, ema = []; let e = D[0].c;
+  D.forEach((d, i) => { e = i ? e + (d.c - e) * (2 / 151) : d.c; ema.push(e); });
+  const base = 14 + r() * 4, ph = r() * 6;
+  let eps = null; const epsTtm = [], yoy = [];
+  for (let i = 0; i < n; i++) {
+    if (i % 63 === 0 || eps == null) eps = +(ema[i] / base * (1 + 0.05 * Math.sin(i / 55 + ph))).toFixed(2); // 每季公布一次
+    epsTtm.push(eps);
+    const j = Math.max(0, i - 63);
+    yoy.push(i % 21 === 0 || i === 0 ? +(((ema[i] / ema[j]) - 1) * 260 + (r() - 0.5) * 8).toFixed(1) : yoy[i - 1]);
+  }
+  return { eps: epsTtm, pe: D.map((d, i) => +(d.c / epsTtm[i]).toFixed(1)), yoy };
+}
+const fmtLots = v => (v == null ? "—" : Math.round(v).toLocaleString());
+// 副圖：三大法人（柱：合計買賣超；線：外資累計）
+function instSub(rows) {
+  let cum = 0;
+  return { title: "三大法人買賣超（張）　柱：三大合計　線：外資累計（右軸）", bars: rows.map(r => (r ? r.foreign + r.trust + r.dealer : null)), barName: "三大合計", lines: [], names: [],
+    lines2: [rows.map(r => (r ? (cum += r.foreign) : null))], names2: ["外資累計"], zeroLine: true, fmt: fmtLots };
+}
+// 副圖：融資（柱：每日增減；線：融資餘額）
+function marginSub(rows) {
+  return { title: "融資（張）　柱：每日增減　線：融資餘額（右軸）", bars: rows.map((r, i) => (r && rows[i - 1] ? r.marginBal - rows[i - 1].marginBal : null)), barName: "融資增減", lines: [], names: [],
+    lines2: [rows.map(r => (r ? r.marginBal : null))], names2: ["融資餘額"], zeroLine: true, fmt: fmtLots };
+}
+// 投信連續買超 5 天以上：標在第 5 天
+function trustStreakMarkers(rows) {
+  const out = []; let run = 0;
+  rows.forEach((r, i) => { run = r && r.trust > 0 ? run + 1 : 0; if (run === 5) out.push({ i, side: "buy", label: "投信連買 5 天" }); });
+  return out;
+}
+// 本益比河流圖：股價 = EPS × 倍數
+// 倍數取這檔股票自己本益比的 10%、30%、50%、70%、90% 分位，河流才會包住股價（實務上也是和自己的歷史比）
+function riverMults(pe) { const s = pe.filter(v => v > 0).sort((a, b) => a - b); return [0.1, 0.3, 0.5, 0.7, 0.9].map(q => Math.round(s[Math.floor(q * (s.length - 1))] * 2) / 2); }
+function riverShapes(D, eps, mults) {
+  return mults.map((m, k) => ({ pts: D.map((_, i) => [i, eps[i] * m]), color: ["up", "s2", "muted", "s2", "down"][k], dash: [4, 3], width: 1.1, label: `${m} 倍` }));
 }
 
 // 模擬五檔報價：每筆成交依吃掉委賣或委買，記為外盤或內盤
@@ -2121,6 +2193,103 @@ ${smcPdSVG}
     keys: ["在折價區找買點、在溢價區找賣點，不在中間追價。", "OTE（61.8%～78.6%）＋訂單塊或 FVG 的重疊處，是 SMC 最重視的進場區。", "SMC 的名詞很多，底層仍是結構、支撐壓力、假突破與風險控管。"],
   },
   {
+    id: "chips-inst", title: "籌碼面（一）：三大法人怎麼看", tag: "籌碼", seed: 7311, n: 200,
+    body: `<p><strong>籌碼面</strong>看的是「誰在買、誰在賣」。股價由買賣力量決定，如果能知道大資金的動向，就多了一個判斷依據。台股每天收盤後，證交所會公布每檔股票<strong>三大法人</strong>的買賣超。</p>
+<table><thead><tr><th>法人</th><th>是誰</th><th>特性</th></tr></thead><tbody>
+<tr><td>外資</td><td>外國的基金、銀行、避險基金</td><td>資金最大，偏好權值股（台積電、聯發科…）；看中長線，也受匯率與國際股市影響。連續大買或大賣常帶動大盤方向。</td></tr>
+<tr><td>投信</td><td>國內的基金公司（共同基金、ETF）</td><td>資金比外資小，偏好中小型成長股；一旦開始買常會連續買好幾天，季底前常見「作帳」拉抬持股。</td></tr>
+<tr><td>自營商</td><td>證券公司自己的部位</td><td>分「自行買賣」與「避險」（發行權證後的避險買賣），進出快、偏短線，參考性最低。</td></tr>
+</tbody></table>
+<div class="formula">買賣超 = 買進張數 − 賣出張數（正數是買超、負數是賣超；1 張 = 1000 股）</div>
+<h3>常用的看法</h3>
+<ul>
+<li><strong>連續買超天數</strong>：比單日買超更重要。單日大買可能只是換手，連續 5 天以上代表有計畫地布局。</li>
+<li><strong>累計買超</strong>：把每天的買賣超加起來，看最近 20 天是在加碼還是減碼。</li>
+<li><strong>和股價對照</strong>：法人買、股價漲是正常；法人大賣但股價不跌，代表有人在接；法人大買但股價漲不動，要提防賣壓。</li>
+<li><strong>投信認養</strong>：中小型股出現投信連續買超，常是波段行情的開始；反過來，投信開始連續賣超，常是波段的結束。</li>
+</ul>
+<h3>限制</h3>
+<ul>
+<li>資料是<strong>收盤後</strong>才公布，看到時已經是「昨天」的事。</li>
+<li>外資裡面也有借道外資帳戶的國內資金（俗稱假外資），不一定是長線資金。</li>
+<li>買超不等於會漲：法人也會看錯、也會停損。</li>
+</ul>`,
+    after: `<p>下方副圖是這段模擬走勢的三大法人買賣超：柱子是三大合計（紅買綠賣），線是外資累計買超（右軸）。在這組模擬資料裡，外資的動向略為領先股價，投信的買超有延續性，自營商只是跟著當天漲跌。三角形標出投信連續買超第 5 天。</p>`,
+    chart: { ma: [20], subs: D => [{ custom: instSub(genChips(D, Math.round(D[0].c * 100))) }], markers: D => trustStreakMarkers(genChips(D, Math.round(D[0].c * 100))) },
+    try: "找出外資累計線由下往上轉折的位置，看看股價是不是在附近止跌；再看「投信連買」出現後，股價接下來 10 根 K 棒的表現。",
+    keys: ["外資看大方向與權值股，投信看中小型股的波段，自營商參考性最低。", "連續買超天數與累計買超，比單日數字有意義。", "籌碼是落後資料，要和價格位置、成交量一起看。"],
+  },
+  {
+    id: "chips-margin", title: "籌碼面（二）：融資融券與散戶指標", tag: "籌碼", seed: 7420, n: 200,
+    body: `<p><strong>融資</strong>是向券商借錢買股票（看多），<strong>融券</strong>是向券商借股票來賣（看空）。使用的人以散戶為主，所以融資融券常被當成「散戶指標」。</p>
+<table><thead><tr><th>名詞</th><th>意思</th></tr></thead><tbody>
+<tr><td>融資餘額</td><td>目前還沒還的融資張數。增加代表散戶借錢買進變多</td></tr>
+<tr><td>融資使用率</td><td>融資餘額 ÷ 融資限額。越高代表散戶越擁擠，籌碼越凌亂</td></tr>
+<tr><td>融券餘額</td><td>目前還沒回補的融券張數</td></tr>
+<tr><td>券資比</td><td>融券餘額 ÷ 融資餘額。偏高時空方回補（買回）的力量可能推升股價，稱為「軋空」</td></tr>
+<tr><td>維持率與斷頭</td><td>融資的擔保維持率低於 130% 會被追繳，補不出錢就被強制賣出（斷頭），常造成急跌</td></tr>
+</tbody></table>
+<h3>價格和融資一起看</h3>
+<table><thead><tr><th></th><th>融資增加</th><th>融資減少</th></tr></thead><tbody>
+<tr><td><strong>股價上漲</strong></td><td>散戶追價，籌碼變凌亂，漲勢容易後繼無力</td><td>籌碼沉澱、由法人或大戶接手，漲勢比較健康</td></tr>
+<tr><td><strong>股價下跌</strong></td><td>散戶逢低攤平「接刀」，下跌常還沒結束</td><td>融資退場、斷頭賣壓釋放，可能接近落底</td></tr>
+</tbody></table>
+<p>經驗法則是「散戶站在對面」：融資大增常出現在相對高點，融資大減、甚至斷頭潮常出現在相對低點。但這只是傾向，不是定律。</p>`,
+    after: `<p>下方副圖：柱子是融資每日增減，線是融資餘額（右軸）。這組模擬資料讓散戶「追價」：漲了幾天之後融資才增加，所以融資餘額的高點常常落在股價高點之後。</p>`,
+    chart: { ma: [20], subs: D => [{ custom: marginSub(genChips(D, Math.round(D[0].c * 100))) }] },
+    try: "找出融資餘額創新高的時候，股價是在波段的哪個位置；再找股價大跌、融資同時大減的地方，看看之後是否止跌。",
+    keys: ["融資是散戶借錢買、融券是借股票賣，常被當作散戶指標。", "價漲資減比價漲資增健康；價跌資增代表還有人在接刀。", "券資比高的股票，上漲時可能因空方回補而加速（軋空）。"],
+  },
+  {
+    id: "fund-rev", title: "基本面（一）：營收、三率與 EPS", tag: "基本面", seed: 7512, n: 220,
+    body: `<p>技術分析看「價格怎麼走」，<strong>基本面</strong>看「公司賺不賺錢」。長期來說，股價最終會跟著獲利走。台股最常用的基本面數字有三個層次：</p>
+<table><thead><tr><th>數字</th><th>多久公布一次</th><th>看什麼</th></tr></thead><tbody>
+<tr><td>月營收</td><td>每月 10 日前公布上個月</td><td>最即時。看<strong>年增率</strong>（和去年同月比），避開季節性；月增率容易受工作天數、淡旺季影響</td></tr>
+<tr><td>三率（毛利率、營益率、淨利率）</td><td>每季財報</td><td>賺錢的品質。毛利率上升代表產品更有競爭力或漲價成功</td></tr>
+<tr><td>EPS（每股盈餘）</td><td>每季財報</td><td>每一股替股東賺多少錢，是計算本益比的基礎</td></tr>
+</tbody></table>
+<div class="formula">營收年增率 =（本月營收 ÷ 去年同月營收 − 1）× 100%
+毛利率 = 營業毛利 ÷ 營業收入；營益率 = 營業利益 ÷ 營業收入；淨利率 = 稅後淨利 ÷ 營業收入
+EPS = 稅後淨利 ÷ 流通在外股數</div>
+<p>例：某公司本季營收 100 億、營業毛利 45 億、營業利益 30 億、稅後淨利 24 億、股數 10 億股 → 毛利率 45%、營益率 30%、淨利率 24%、EPS 2.4 元。</p>
+<h3>財報公布時間</h3>
+<ul><li>第一季：5 月 15 日前　・第二季：8 月 14 日前　・第三季：11 月 14 日前　・全年：隔年 3 月 31 日前</li></ul>
+<h3>怎麼用</h3>
+<ul>
+<li><strong>連續幾個月營收年增</strong>，而且年增率越來越高，是成長加速的訊號；股價常提前反應。</li>
+<li><strong>三率三升</strong>（毛利率、營益率、淨利率同時比上季與去年同期提升）是市場最愛的組合。</li>
+<li>看<strong>近四季 EPS 合計</strong>，避免單季的一次性收入或損失干擾。</li>
+</ul>`,
+    after: `<p>下方副圖（模擬）：柱子是每月公布的營收年增率（%），線是近四季 EPS 合計（右軸，每季更新一次）。可以看到營收年增率由負轉正、持續擴大的期間，股價也多半處在上升趨勢。</p>`,
+    chart: { ma: [20, 60], subs: D => { const F = genFund(D, Math.round(D[0].c * 10)); return [{ custom: { title: "營收年增率（%）　線：近四季 EPS（右軸）", bars: F.yoy, barName: "營收年增率", lines: [], names: [], lines2: [F.eps], names2: ["近四季 EPS"], zeroLine: true, fmt: v => (v == null ? "—" : v.toFixed(1)) } }]; } },
+    try: "找出營收年增率由負轉正的那個月，對照當時股價在 60 日線的上方還是下方；再看 EPS 上升的那幾季，股價的表現如何。",
+    keys: ["月營收最即時，要看年增率而不是月增率。", "三率看賺錢的品質，EPS 看每一股賺多少。", "股價常提前反應基本面的變化，等財報公布時可能已經漲過了。"],
+  },
+  {
+    id: "fund-val", title: "基本面（二）：本益比、淨值比與殖利率", tag: "基本面", seed: 7633, n: 240,
+    body: `<p>公司賺錢不代表股票便宜。<strong>估值</strong>回答的是：用現在的價格買，划不划算？</p>
+<table><thead><tr><th>指標</th><th>公式</th><th>適合</th></tr></thead><tbody>
+<tr><td>本益比 PE</td><td>股價 ÷ 近四季 EPS</td><td>獲利穩定的公司。代表「用幾年的獲利回本」</td></tr>
+<tr><td>股價淨值比 PB</td><td>股價 ÷ 每股淨值</td><td>金融股、景氣循環股（獲利波動大，本益比失真）</td></tr>
+<tr><td>殖利率</td><td>現金股利 ÷ 股價</td><td>存股、高股息族群</td></tr>
+</tbody></table>
+<p>例：股價 300 元、近四季 EPS 20 元 → 本益比 15 倍；每年配 10 元現金股利 → 殖利率 3.3%。</p>
+<h3>本益比河流圖</h3>
+<p>把「近四季 EPS × 不同倍數」畫成幾條線，例如 10、13、16、19、22 倍，股價在河流裡的位置就是它現在的評價高低：靠近下緣代表相對便宜，靠近上緣代表相對昂貴。要和<strong>這檔股票自己的歷史</strong>比，不同產業的合理本益比差很多。</p>
+<h3>陷阱</h3>
+<ul>
+<li><strong>景氣循環股</strong>（航運、鋼鐵、面板、記憶體）：獲利最好、本益比最低的時候，往往是股價高點；本益比很高（甚至虧損）的時候反而是低點。這類股票改看股價淨值比。</li>
+<li><strong>成長股</strong>的本益比本來就高，可以參考 PEG = 本益比 ÷ 獲利成長率（%），小於 1 被認為相對便宜。</li>
+<li>本益比用的是<strong>過去</strong>的 EPS，市場交易的是<strong>未來</strong>的 EPS。</li>
+</ul>
+<h3>三個面向一起用</h3>
+<p>常見的做法是：<strong>基本面</strong>選股（公司好、價格合理）→ <strong>籌碼面</strong>確認有資金進駐 → <strong>技術面</strong>找進場時機與停損點。三者同時成立的機會不多，但勝算較高。</p>`,
+    after: `<p>主圖的五條虛線是本益比河流（模擬資料）：近四季 EPS 乘上這檔股票自己本益比的 10%、30%、50%、70%、90% 分位數。股價貼近最下面那條時，評價在自己的歷史裡相對便宜；貼近最上面那條則相對昂貴。副圖是本益比本身，每季公布新 EPS 時會跳一下。</p>`,
+    chart: { ma: [], extra: D => { const F = genFund(D, Math.round(D[0].c * 10)); return { shapes: riverShapes(D, F.eps, riverMults(F.pe)) }; }, subs: D => { const F = genFund(D, Math.round(D[0].c * 10)), m = riverMults(F.pe); return [{ custom: { title: "本益比（倍）　虛線：最低 10%、中位數、最高 10% 的位置", lines: [F.pe], names: ["本益比"], levels: [m[0], m[2], m[4]] } }]; } },
+    try: "看股價碰到河流最下面那條的時候，之後是不是反彈；再換幾段走勢，看看本益比的高點是否常常就是股價的高點。",
+    keys: ["本益比看幾年回本，要和自己的歷史比，不同產業差很多。", "景氣循環股看股價淨值比，本益比最低時常是股價高點。", "基本面選股、籌碼面確認、技術面找時機。"],
+  },
+  {
     id: "risk", title: "訊號不是保證：成本、停損與紀律", tag: "風險", seed: 117, n: 220,
     body: `<p>每個指標都會出錯，技術分析真正的價值在於<strong>提高勝算、控制虧損</strong>。實際交易還要算上成本：</p>
 <table><thead><tr><th>項目</th><th>費率</th><th>說明</th></tr></thead><tbody>
@@ -2143,7 +2312,7 @@ ${smcPdSVG}
 // 課程順序與分組
 const LESSON_GROUPS = [
   ["基礎", ["kline"]], ["K 線與型態學", ["patterns-rev", "patterns-cont", "chart-patterns"]], ["趨勢與量價", ["dow", "ma", "vol", "inout", "sr", "fib"]],
-  ["技術指標", ["rsi", "kd", "wr", "macd", "boll"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["風險管理", ["risk"]],
+  ["技術指標", ["rsi", "kd", "wr", "macd", "boll"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["籌碼面與基本面", ["chips-inst", "chips-margin", "fund-rev", "fund-val"]], ["風險管理", ["risk"]],
 ];
 const ORDER = LESSON_GROUPS.flatMap(g => g[1]);
 LESSONS.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
@@ -2169,7 +2338,7 @@ function drawLesson() {
   const L = LESSONS[lessonIdx], v = L.variants ? L.variants[lessonView.variant] : {}, { D, I } = lessonView;
   const all = lessonMarkers(L, D, I, v), markers = lessonView.pat ? all.filter(m => m.pat === lessonView.pat) : all;
   const ex = L.chart.extra ? L.chart.extra(D, I) : {};
-  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, sub: v.sub || L.chart.sub, markers, hlines: L.chart.hlines ? L.chart.hlines(D) : L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
+  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, ...(L.chart.subs ? { subs: L.chart.subs(D, I) } : { sub: v.sub || L.chart.sub }), markers, hlines: L.chart.hlines ? L.chart.hlines(D) : L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
   const g = $("#lessonGallery");
   g.hidden = !L.gallery;
   if (L.gallery) g.innerHTML = L.gallery.map(id => {
@@ -2372,6 +2541,12 @@ const QUESTIONS = [
   { q: "SMC 的「多方訂單塊」指的是？", o: ["急漲並造成結構突破之前的最後一根下跌 K 棒", "成交量最大的那根紅 K", "收盤創新高的那一天", "均線黃金交叉的位置"], a: 0, e: "訂單塊被視為聰明錢建倉的位置：急漲（造成 BOS）之前的最後一根反向 K 棒。回測時在這裡找買點，停損放在下緣之外。" },
   { q: "在 SMC 中，「買方流動性（BSL）」通常聚集在哪裡？", o: ["前低的下方", "前高、等高點的上方", "均線附近", "開盤價附近"], a: 1, e: "前高之上有空單的停損買單與追突破的買單，所以叫買方流動性；兩個幾乎等高的高點（EQH）上方特別集中。" },
   { q: "依 SMC 的溢價 / 折價概念，上升結構中比較理想的買點在哪？", o: ["波段 50% 以上的溢價區", "波段 50% 以下的折價區，最好在 61.8%～78.6% 的 OTE", "創新高的當天", "任何位置都一樣"], a: 1, e: "在便宜的地方買：回檔到折價區，尤其是 OTE（回撤 61.8%～78.6%），再配合訂單塊或 FVG 找進場點。" },
+  { q: "台股的三大法人是哪三個？", o: ["外資、投信、自營商", "外資、券商、散戶", "投信、壽險、銀行", "央行、國安基金、外資"], a: 0, e: "三大法人是外資、投信（國內基金公司）、自營商（證券公司自己的部位）。證交所每天收盤後公布它們對每檔股票的買賣超。" },
+  { q: "哪一種法人買超「常會連續好幾天」，在中小型股特別受到注意？", o: ["自營商", "投信", "外資自營商", "融券戶"], a: 1, e: "投信資金比外資小、偏好中小型成長股，一旦開始買常會連續布局；投信連續買超的中小型股常被視為波段行情的開始。" },
+  { q: "股價上漲、融資餘額卻持續減少，通常怎麼解讀？", o: ["散戶追價，籌碼凌亂", "籌碼沉澱、由法人或大戶接手，漲勢較健康", "即將被斷頭", "融券軋空結束"], a: 1, e: "融資是散戶借錢買。價漲資減代表散戶在賣、有其他人接手，籌碼比較安定；價漲資增則是散戶追價，籌碼容易凌亂。" },
+  { q: "某股股價 300 元，近四季 EPS 合計 20 元，本益比是多少？", o: ["6 倍", "15 倍", "20 倍", "280 倍"], a: 1, e: "本益比 = 股價 ÷ 近四季 EPS = 300 ÷ 20 = 15 倍，意思是用目前的獲利要 15 年回本。" },
+  { q: "看月營收時，為什麼通常看「年增率」而不是「月增率」？", o: ["年增率數字比較大", "避開淡旺季、工作天數等季節性影響", "月增率不會公布", "年增率是財報的一部分"], a: 1, e: "和上個月比會受到春節、淡旺季、工作天數影響；和去年同月比較能看出真正的成長或衰退。" },
+  { q: "航運、鋼鐵這類景氣循環股，本益比「最低」的時候常常是？", o: ["最好的買點", "股價的相對高點", "獲利最差的時候", "除權息的時候"], a: 1, e: "景氣最好時獲利最高，本益比看起來最低，但之後獲利會下滑；所以景氣循環股常是本益比低時在高點。這類股票較常改看股價淨值比。" },
   { q: "多方的公平價值缺口（FVG）是怎麼形成的？", o: ["開盤價高於前一天收盤", "連續三根 K 棒中，第三根的最低價高於第一根的最高價", "成交量是前一天的兩倍", "收盤價創 20 日新高"], a: 1, e: "中間那根急漲，讓第一根高點和第三根低點之間留下沒有重疊的空白。SMC 認為價格常會回來填補這段失衡。" },
   { q: "關於技術指標，下列敘述何者最正確？", o: ["找到對的指標就能穩定獲利", "指標越多越準", "指標是提高勝算的工具，仍需搭配停損與資金控管", "只要回測賺錢，未來一定賺錢"], a: 2, e: "沒有指標能保證獲利。技術分析的價值在於有規則地進出、控制虧損。" },
 ];
@@ -2991,7 +3166,7 @@ function drawShot() {
 }
 const normRect = d => ({ x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0) });
 
-const LESSON_OF = { 均線: "ma", 月線: "ma", RSI: "rsi", KD: "kd", MACD: "macd", 布林: "boll", K線: "patterns-rev", 背離: "div", 威廉: "wr", 內外盤: "inout", 結構: "dow", 型態: "chart-patterns" };
+const LESSON_OF = { 法人: "chips-inst", 融資: "chips-margin", 營收: "fund-rev", 本益比: "fund-val", 均線: "ma", 月線: "ma", RSI: "rsi", KD: "kd", MACD: "macd", 布林: "boll", K線: "patterns-rev", 背離: "div", 威廉: "wr", 內外盤: "inout", 結構: "dow", 型態: "chart-patterns" };
 function shotSummary(D, I, cal) {
   const n = D.length, i = n - 1, items = readout(D, I, i);
   const bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length;
@@ -3192,6 +3367,7 @@ function realRun() {
   shot.I = indicators(shot.D);
   $("#shotGrid").hidden = false; $("#shotRebuild").hidden = false;
   shotRefresh(true);
+  loadStockInfo(R);
 }
 async function loadRealCode(code, months) {
   const note = $("#realNote"), btn = $("#realLoad"); code = code.trim(); if (!code) { $("#realCode").focus(); return; }
@@ -3214,6 +3390,94 @@ $("#realCsv").addEventListener("change", async e => {
   REAL.cur = R; setSrc("real"); realRun();
   note.className = "note real-status ok"; note.textContent = `已匯入 ${realName(R)}：${R.data.length} 個交易日（${R.data[0].d} ～ ${R.data[R.data.length - 1].d}）。`;
 });
+/* ---------- 真實個股的籌碼面與基本面（/api/stockinfo） ---------- */
+const INFO = { cache: new Map(), cur: null };
+async function loadStockInfo(R) {
+  INFO.cur = null; const code = R.code;
+  const msg = t => { $("#chipsPanel").innerHTML = $("#fundPanel").innerHTML = `<p class="note">${t}</p>`; };
+  if (!/^\d{4,6}[A-Z]?$/.test(code)) { msg(code === "TAIEX" ? "加權指數沒有個股的籌碼與財報資料，請輸入個股代號。" : "匯入的 CSV 沒有股票代號，無法查詢籌碼與財報。"); return; }
+  if (!/^https?:$/.test(location.protocol)) { msg("籌碼與財報資料需要部署到網站後才能查詢（/api/stockinfo）。課程裡有用模擬資料的「籌碼面」「基本面」教學。"); return; }
+  msg(`正在載入 ${esc(realName(R))} 的籌碼與財報資料…`);
+  try {
+    let j = INFO.cache.get(code);
+    if (!j) {
+      const r = await fetch(`/api/stockinfo?code=${encodeURIComponent(code)}`);
+      j = await r.json().catch(() => null);
+      if (!j) throw { message: r.status === 404 ? "這個環境沒有籌碼與財報服務（/api/stockinfo），部署到 Vercel 後就能用。" : `資料服務回應 ${r.status}` };
+      if (!j.ok) throw { message: j.error };
+      INFO.cache.set(code, j);
+    }
+    if (REAL.cur !== R) return; // 使用者已經換了別檔
+    INFO.cur = j; renderChips(); renderFund();
+    shotBar.setGroups(shotGroups()); shotDrawChart();
+  } catch (e) { msg(esc(e?.message || "籌碼與財報資料載入失敗，請稍後再試。")); }
+}
+// 依 K 線的日期對齊
+const alignByDate = (D, rows) => { const m = new Map(rows.map(r => [r.d, r])); return D.map(d => m.get(d.d) || null); };
+const signed = v => (v == null ? "—" : `${v > 0 ? "+" : ""}${Math.round(v).toLocaleString()}`);
+const clsOf = v => (v > 0 ? "up" : v < 0 ? "down" : "");
+function streak(rows, k) { const last = rows[rows.length - 1]?.[k]; if (!last) return 0; let n = 0; for (let i = rows.length - 1; i >= 0 && Math.sign(rows[i][k]) === Math.sign(last); i--) n++; return n * Math.sign(last); }
+function chipsSummary(j, D) {
+  const out = [], inst = j.inst, mg = j.margin;
+  if (inst.length) {
+    const sum = (k, n) => inst.slice(-n).reduce((a, r) => a + r[k], 0);
+    [["foreign", "外資"], ["trust", "投信"], ["dealer", "自營商"]].forEach(([k, t]) => {
+      const st = streak(inst, k);
+      out.push({ k: t, t: `最近一天 ${signed(inst.at(-1)[k])} 張；5 日 ${signed(sum(k, 5))}、20 日 ${signed(sum(k, 20))} 張${st ? `；連續${st > 0 ? "買超" : "賣超"} ${Math.abs(st)} 天` : ""}`, v: sum(k, 20) });
+    });
+  }
+  if (mg.length >= 21) {
+    const a = mg.at(-21).marginBal, b = mg.at(-1).marginBal, chg = a ? b / a - 1 : 0;
+    const pc = D.length > 20 ? D.at(-1).c / D.at(-21).c - 1 : 0;
+    const quad = pc >= 0 ? (chg >= 0 ? "價漲資增：散戶追價，籌碼偏凌亂，漲勢容易後繼無力" : "價漲資減：籌碼沉澱、由法人或大戶接手，較健康") : (chg >= 0 ? "價跌資增：散戶逢低攤平，下跌可能還沒結束" : "價跌資減：融資退場、賣壓釋放，可能接近落底");
+    out.push({ k: "融資", t: `融資餘額 ${fmtLots(b)} 張，20 日 ${fmtPct(chg, 1)}；股價 20 日 ${fmtPct(pc, 1)} → ${quad}`, v: 0 });
+    const last = mg.at(-1);
+    if (last.marginBal) out.push({ k: "融券", t: `融券餘額 ${fmtLots(last.shortBal)} 張，券資比 ${(last.shortBal / last.marginBal * 100).toFixed(1)}%${last.shortBal / last.marginBal > 0.3 ? "（偏高，上漲時可能出現軋空）" : ""}${last.marginLimit ? `；融資使用率 ${(last.marginBal / last.marginLimit * 100).toFixed(1)}%` : ""}`, v: 0 });
+  }
+  return out;
+}
+function renderChips() {
+  const j = INFO.cur, D = shot.D; if (!j) return;
+  const items = chipsSummary(j, D);
+  if (!items.length) { $("#chipsPanel").innerHTML = `<p class="note">${esc(realName(REAL.cur))} 沒有三大法人或融資融券資料（ETF、興櫃或剛上市的股票可能沒有）。</p>`; return; }
+  const mg = new Map(j.margin.map((r, i) => [r.d, { bal: r.marginBal, chg: i ? r.marginBal - j.margin[i - 1].marginBal : null }]));
+  const rows = j.inst.slice(-10).reverse();
+  $("#chipsPanel").innerHTML = `<ul>${items.map(x => `<li><strong>${x.k}</strong>：${x.t}</li>`).join("")}</ul>
+    ${rows.length ? `<div class="tablewrap"><table class="trades chip-table"><thead><tr><th>日期</th><th>外資</th><th>投信</th><th>自營商</th><th>合計</th><th>融資增減</th></tr></thead><tbody>${rows.map(r => { const t = r.foreign + r.trust + r.dealer, m = mg.get(r.d); return `<tr><td>${r.d.slice(5).replace("-", "/")}</td>${[r.foreign, r.trust, r.dealer, t, m?.chg].map(v => `<td class="${clsOf(v)}">${signed(v)}</td>`).join("")}</tr>`; }).join("")}</tbody></table></div>` : ""}
+    <p class="note">單位：張。資料是每天收盤後公布的籌碼統計（${esc(j.source)}）。可在下方圖表開啟「法人買賣超」「融資」副圖對照股價。<button class="linkbtn" data-lesson="${lessonIndex("chips-inst")}">複習：三大法人</button>、<button class="linkbtn" data-lesson="${lessonIndex("chips-margin")}">融資融券</button></p>`;
+}
+function fundSummary(j, D) {
+  const out = [];
+  const per = j.per.filter(r => r.pe != null && r.pe > 0);
+  if (j.per.length) {
+    const last = j.per.at(-1), pes = per.map(r => r.pe).sort((a, b) => a - b);
+    const rank = last.pe > 0 && pes.length > 20 ? pes.filter(v => v <= last.pe).length / pes.length : null;
+    out.push({ k: "估值", t: `本益比 ${last.pe > 0 ? last.pe.toFixed(1) + " 倍" : "—（近四季虧損）"}${rank != null ? `，在近 ${Math.round(per.length / 245 * 10) / 10} 年的 ${Math.round(rank * 100)}% 位置（區間 ${pes[0].toFixed(1)}～${pes.at(-1).toFixed(1)} 倍）${rank < 0.2 ? "，相對便宜" : rank > 0.8 ? "，相對昂貴" : ""}` : ""}；股價淨值比 ${last.pb != null ? last.pb.toFixed(2) + " 倍" : "—"}；殖利率 ${last.dy != null ? last.dy.toFixed(2) + "%" : "—"}` });
+  }
+  if (j.revenue.length) {
+    const rv = j.revenue, last = rv.at(-1); let up = 0; for (let i = rv.length - 1; i >= 0 && rv[i].yoy > 0; i--) up++;
+    const acc = rv.length >= 3 && rv.at(-1).yoy > rv.at(-2).yoy && rv.at(-2).yoy > rv.at(-3).yoy;
+    out.push({ k: "營收", t: `${last.ym.replace("-", " 年 ")} 月營收 ${(last.rev / 1e8).toFixed(1)} 億，年增 ${last.yoy != null ? last.yoy + "%" : "—"}、月增 ${last.mom != null ? last.mom + "%" : "—"}${up >= 2 ? `；已連續 ${up} 個月年增` : ""}${acc ? "，而且年增率連續擴大（成長加速）" : ""}` });
+  }
+  if (j.fin.length) {
+    const f = j.fin, ttm = f.slice(-4).reduce((a, x) => a + x.eps, 0), prev = f.length >= 8 ? f.slice(-8, -4).reduce((a, x) => a + x.eps, 0) : null, l = f.at(-1);
+    out.push({ k: "獲利", t: `${l.q} EPS ${l.eps.toFixed(2)} 元；近四季合計 ${ttm.toFixed(2)} 元${prev ? `（前四季 ${prev.toFixed(2)} 元，${fmtPct(ttm / prev - 1, 1)}）` : ""}${l.gross != null ? `；毛利率 ${l.gross}%、營益率 ${l.op ?? "—"}%、淨利率 ${l.net ?? "—"}%` : ""}` });
+    if (f.length >= 2 && l.gross != null && f.at(-2).gross != null) { const p2 = f.at(-2), three = l.gross > p2.gross && l.op > p2.op && l.net > p2.net; if (three) out.push({ k: "三率", t: "毛利率、營益率、淨利率都比上一季高（三率三升）" }); }
+  }
+  return out;
+}
+function renderFund() {
+  const j = INFO.cur; if (!j) return;
+  const items = fundSummary(j, shot.D);
+  if (!items.length) { $("#fundPanel").innerHTML = `<p class="note">${esc(realName(REAL.cur))} 沒有營收或財報資料（ETF 沒有 EPS 與營收；剛上市的股票資料可能還不夠）。</p>`; return; }
+  const rv = j.revenue.slice(-6).reverse(), fq = j.fin.slice(-8).reverse();
+  $("#fundPanel").innerHTML = `<ul>${items.map(x => `<li><strong>${x.k}</strong>：${x.t}</li>`).join("")}</ul>
+    ${rv.length ? `<div class="tablewrap"><table class="trades"><thead><tr><th>月份</th><th>營收（億）</th><th>年增</th><th>月增</th></tr></thead><tbody>${rv.map(r => `<tr><td>${r.ym.replace("-", "/")}</td><td>${(r.rev / 1e8).toFixed(1)}</td><td class="${clsOf(r.yoy)}">${r.yoy != null ? r.yoy + "%" : "—"}</td><td class="${clsOf(r.mom)}">${r.mom != null ? r.mom + "%" : "—"}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    ${fq.length ? `<div class="tablewrap"><table class="trades"><thead><tr><th>季度</th><th>EPS</th><th>毛利率</th><th>營益率</th><th>淨利率</th></tr></thead><tbody>${fq.map(r => `<tr><td>${r.q}</td><td>${r.eps.toFixed(2)}</td><td>${r.gross ?? "—"}%</td><td>${r.op ?? "—"}%</td><td>${r.net ?? "—"}%</td></tr>`).join("")}</tbody></table></div>` : ""}
+    <p class="note">本益比用近四季 EPS 計算；資料來源 ${esc(j.perSource || j.source)}。<button class="linkbtn" data-lesson="${lessonIndex("fund-rev")}">複習：營收與 EPS</button>、<button class="linkbtn" data-lesson="${lessonIndex("fund-val")}">本益比與殖利率</button>。這是學習用的整理，不構成投資建議。</p>`;
+}
+["#chipsPanel", "#fundPanel"].forEach(id => $(id).addEventListener("click", e => { const b = e.target.closest("[data-lesson]"); if (b) { switchTab("learn"); showLesson(+b.dataset.lesson); } }));
+
 // 資料來源切換：截圖 / 股票代號
 function setSrc(src) {
   shot.src = src; const real = src === "real";
@@ -3221,7 +3485,9 @@ function setSrc(src) {
   $("#shotTop").hidden = real; $("#realTop").hidden = !real;
   $(".shot-src").hidden = real; $("#shotGrid").classList.toggle("solo", real);
   document.querySelectorAll('.rtabs [data-rt="pane"], .rtabs [data-rt="ai"]').forEach(b => { b.hidden = real; });
-  if (real && ["pane", "ai"].includes(document.querySelector('.rtabs [aria-selected="true"]')?.dataset.rt)) document.querySelector('.rtabs [data-rt="sum"]').click();
+  document.querySelectorAll('.rtabs [data-rt="chips"], .rtabs [data-rt="fund"]').forEach(b => { b.hidden = !real; });
+  const selRt = document.querySelector('.rtabs [aria-selected="true"]')?.dataset.rt;
+  if ((real && ["pane", "ai"].includes(selRt)) || (!real && ["chips", "fund"].includes(selRt))) document.querySelector('.rtabs [data-rt="sum"]').click();
   $("#step1").lastChild.textContent = real ? "輸入股票代號" : "上傳截圖"; $("#step1").dataset.step = real ? "realTop" : "shotDrop";
   $("#step2").lastChild.textContent = real ? "K 線與未來模擬" : "確認辨識、看判讀"; $("#step2").dataset.step = real ? "shotRebuild" : "shotGrid";
   $("#step3").lastChild.textContent = real ? "看判讀與聰明錢" : "重建 K 線、模擬未來"; $("#step3").dataset.step = real ? "shotGrid" : "shotRebuild";
@@ -3306,7 +3572,7 @@ function renderPanes() {
 function shotGroups() {
   return [
     { title: "主圖", items: [...MAIN_ITEMS, { id: "sr", label: "支撐壓力" }, { id: "fib", label: "斐波那契" }, { id: "smc", label: "聰明錢" }, { id: "zz", label: "轉折結構" }, { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }] },
-    { title: "副圖", items: [...(shot.hasVol ? [{ id: "vol", label: "成交量" }] : []), ...shot.panes.map((p, k) => ({ p, k, t: p.cfg.type || p.type })).filter(x => x.t !== "vol").map(x => ({ id: "pane:" + x.k, label: `截圖 ${PANE_TYPES[x.t] || "副圖"}` })),
+    { title: "副圖", items: [...(shot.hasVol ? [{ id: "vol", label: "成交量" }] : []), ...(shot.src === "real" && INFO.cur?.inst.length ? [{ id: "inst", label: "法人買賣超" }] : []), ...(shot.src === "real" && INFO.cur?.margin.length ? [{ id: "margin", label: "融資" }] : []), ...shot.panes.map((p, k) => ({ p, k, t: p.cfg.type || p.type })).filter(x => x.t !== "vol").map(x => ({ id: "pane:" + x.k, label: `截圖 ${PANE_TYPES[x.t] || "副圖"}` })),
       ...[["kd", "KD"], ["rsi", "RSI"], ["macd", "MACD"], ["wr", "威廉"]].map(([id, l]) => ({ id, label: shot.src === "real" ? l : "重算 " + l }))] },
   ];
 }
@@ -3321,7 +3587,8 @@ function shotDrawChart() {
   if (!shot.D) return;
   const B = shotBar, D = shot.D, n = D.length;
   const paneSel = shot.panes.map((p, k) => (B.has("pane:" + k) && (p.cfg.type || p.type) !== "vol" ? k : -1)).filter(k => k >= 0);
-  const subs = [...paneSel.map(k => ({ custom: paneCustom(shot.panes[k]) })), ...subsFrom(B, ["kd", "rsi", "macd", "wr"])];
+  const chipSubs = shot.src === "real" && INFO.cur ? [...(B.has("inst") && INFO.cur.inst.length ? [{ custom: instSub(alignByDate(D, INFO.cur.inst)) }] : []), ...(B.has("margin") && INFO.cur.margin.length ? [{ custom: marginSub(alignByDate(D, INFO.cur.margin)) }] : [])] : [];
+  const subs = [...paneSel.map(k => ({ custom: paneCustom(shot.panes[k]) })), ...chipSubs, ...subsFrom(B, ["kd", "rsi", "macd", "wr"])];
   const markers = [...(B.has("smc") ? [...Signals.structure(D, shot.I, "smc"), ...Signals.sweep(D)] : []), ...(B.has("candle") ? Signals.candle(D, shot.I) : []), ...(B.has("cpat") ? Signals.chartPat(D, shot.I) : []), ...paneSel.flatMap(k => shot.readings[k].markers)];
   const ex = B.has("smc") ? smcExtra(D) : { zones: [], shapes: [] };
   if (B.has("zz")) ex.shapes.push(zigzagShape(D));
@@ -3701,7 +3968,8 @@ const CHAT_SYS = `你是「K線學堂」裡的技術分析助教，對象是想�
 - 不提供個股買賣建議、目標價或明牌，也不保證結果；被問到時說明技術分析的限制，並把問題轉成「該怎麼判讀」。
 - 不知道或畫面上沒有的資訊就直說，不要捏造數字。`;
 const TAB_NAMES = { learn: "課程", lab: "圖表實驗室", challenge: "判讀挑戰", shot: "個股判讀", quiz: "觀念測驗" };
-const chat = { msgs: (() => { try { return JSON.parse(sessionStorage.getItem("chatMsgs") || "[]"); } catch { return []; } })(), busy: false, ctl: null };
+const PROVIDER_NAMES = { gemini: "Gemini（Google）", claude: "Claude" };
+const chat = { provider: undefined, msgs: (() => { try { return JSON.parse(sessionStorage.getItem("chatMsgs") || "[]"); } catch { return []; } })(), busy: false, ctl: null };
 const curTab = () => TABS.find(t => !$("#view-" + t).hidden) || "learn";
 const strip = el => (el ? el.innerText.replace(/\n{2,}/g, "\n").trim() : "");
 const lastReadout = (D, I) => D && I ? readout(D, I, D.length - 1).map(x => `${x.k}：${x.t}${x.x ? `（${x.x}）` : ""}`).join("\n") : "";
@@ -3719,6 +3987,7 @@ function chatContext() {
     if (shot.D) {
       out.push(shot.ctx.slice(0, 2600));
       if (shot.smc?.text) out.push(`聰明錢判讀：${shot.smc.text.slice(0, 800)}`);
+      if (shot.src === "real" && INFO.cur) { const c = chipsSummary(INFO.cur, shot.D), f = fundSummary(INFO.cur, shot.D); if (c.length) out.push(`籌碼面：${c.map(x => `${x.k}：${x.t}`).join("；")}`); if (f.length) out.push(`基本面：${f.map(x => `${x.k}：${x.t}`).join("；")}`); }
       if (!$("#simStats").hidden) out.push(`未來走勢模擬：${strip($("#simStats")).slice(0, 1600)}`);
     } else out.push("還沒有載入截圖或股票。");
   } else if (t === "quiz" && quiz) {
@@ -3735,13 +4004,27 @@ function chatSuggestions() {
   if (t === "shot") return shot.D ? ["這張圖現在偏多還是偏空？為什麼？", "聰明錢的判讀怎麼看？", "模擬的範圍為什麼這麼寬？"] : ["截圖要怎麼拍才辨識得準？", "可以查哪些股票的真實數據？"];
   return ["幫我釐清這題的觀念", "這個觀念在哪一課？"];
 }
+// 對話框標題下方顯示由誰回答：網站版問伺服器（GET /api/chat，不花額度），Claude 裡開啟則是檢視者自己的 Claude
+function chatWho() {
+  if (aiMode === "sample") return "由 Claude（你的帳號）回答";
+  if (aiMode !== "api") return "尚未連接 AI";
+  const p = chat.provider;
+  return p === undefined ? "檢查連線中…" : p ? `由 ${PROVIDER_NAMES[p.provider] || p.provider} 回答${p.model ? `（${p.model}）` : ""}` : "伺服器還沒設定 AI 金鑰";
+}
+async function chatCheckProvider() {
+  if (aiMode !== "api" || chat.provider !== undefined) return;
+  try { const j = await (await fetch("/api/chat")).json(); chat.provider = j.provider ? { provider: j.provider, model: j.model } : null; }
+  catch { chat.provider = null; }
+  if (!$("#chatPanel").hidden) chatRender();
+}
+const msgBy = m => m.by ? `<div class="msg-by">— ${esc(PROVIDER_NAMES[m.by.provider] || m.by.provider)}${m.by.model ? `・${esc(m.by.model)}` : ""}</div>` : "";
 function chatRender() {
   const log = $("#chatLog");
-  log.innerHTML = chat.msgs.length ? chat.msgs.map(m => `<div class="msg ${m.role === "user" ? "user" : "bot"}${m.err ? " err" : ""}">${m.role === "user" ? `<p>${esc(m.content)}</p>` : mdToHtml(m.content)}</div>`).join("")
+  log.innerHTML = chat.msgs.length ? chat.msgs.map(m => `<div class="msg ${m.role === "user" ? "user" : "bot"}${m.err ? " err" : ""}">${m.role === "user" ? `<p>${esc(m.content)}</p>` : mdToHtml(m.content) + msgBy(m)}</div>`).join("")
     : `<div class="chat-empty"><strong>有什麼想問的嗎？</strong><span>助教會參考你現在看的畫面回答：課程內容、指標讀數、截圖或個股的判讀、模擬結果都可以問。</span></div>`;
   if (chat.busy) log.insertAdjacentHTML("beforeend", `<div class="msg bot wait" id="chatPending">思考中…</div>`);
   $("#chatSugg").innerHTML = chat.busy || !aiMode ? "" : chatSuggestions().map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join("");
-  $("#chatCtxNote").textContent = `會參考你目前看的「${TAB_NAMES[curTab()]}」畫面`;
+  $("#chatCtxNote").textContent = `${chatWho()}・會參考你目前看的「${TAB_NAMES[curTab()]}」畫面`;
   log.scrollTop = log.scrollHeight;
   try { sessionStorage.setItem("chatMsgs", JSON.stringify(chat.msgs.filter(m => !m.err).slice(-20))); } catch {}
 }
@@ -3754,20 +4037,21 @@ async function chatAsk(q) {
   q = q.trim(); if (!q || chat.busy || !aiMode) return;
   chat.msgs = chat.msgs.filter(m => !m.err); chat.msgs.push({ role: "user", content: q }); chat.busy = true; chat.ctl = new AbortController();
   $("#chatInput").value = ""; chatAutosize(); chatRender(); chatUpdate();
-  const ctx = chatContext(), hist = chat.msgs.slice(-12);
+  const ctx = chatContext(), hist = chat.msgs.slice(-12).map(({ role, content }) => ({ role, content }));
   try {
-    let text;
+    let text, by = null;
     if (aiMode === "sample") {
       const turns = hist.map((m, k) => ({ role: m.role, content: k === hist.length - 1 ? `${CHAT_SYS}\n\n目前畫面（頁面自動產生，可能有誤）：\n${ctx}\n\n使用者的問題：${m.content}` : m.content }));
       while (turns.length && turns[0].role !== "user") turns.shift();
       const r = await aiSample(turns, { signal: chat.ctl.signal, cache: false, onText: ({ text }) => { const el = $("#chatPending"); if (el) { el.classList.remove("wait"); el.innerHTML = mdToHtml(text); $("#chatLog").scrollTop = $("#chatLog").scrollHeight; } } });
-      text = r.text + (r.truncated ? "\n\n（回答過長被截斷）" : "");
+      text = r.text + (r.truncated ? "\n\n（回答過長被截斷）" : ""); by = { provider: "claude", model: "你的 Claude 帳號" };
     } else {
       const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: hist, context: ctx }), signal: chat.ctl.signal });
       const j = await r.json().catch(() => ({ ok: false, error: `伺服器回應 ${r.status}，找不到對話服務。` }));
       if (!j.ok) throw { message: j.error }; text = j.text;
+      if (j.provider) { by = { provider: j.provider, model: j.model }; chat.provider = by; }
     }
-    chat.msgs.push({ role: "assistant", content: text });
+    chat.msgs.push({ role: "assistant", content: text, by });
   } catch (e) {
     const code = e?.name === "AbortError" ? "cancelled" : e?.code;
     if (e?.text && code !== "refused") chat.msgs.push({ role: "assistant", content: e.text });
@@ -3778,7 +4062,7 @@ async function chatAsk(q) {
 function chatAutosize() { const t = $("#chatInput"); t.style.height = "auto"; t.style.height = Math.min(120, t.scrollHeight) + "px"; }
 function chatOpen(open) {
   $("#chatPanel").hidden = !open; $("#chatFab").setAttribute("aria-expanded", open);
-  if (open) { chatRender(); chatUpdate(); if (matchMedia("(min-width: 641px)").matches) $("#chatInput").focus(); } else $("#chatFab").focus();
+  if (open) { chatRender(); chatUpdate(); chatCheckProvider(); if (matchMedia("(min-width: 641px)").matches) $("#chatInput").focus(); } else $("#chatFab").focus();
 }
 $("#chatFab").addEventListener("click", () => chatOpen(true));
 $("#chatClose").addEventListener("click", () => chatOpen(false));
