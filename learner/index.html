@@ -243,6 +243,7 @@ details.verdict summary { cursor: pointer; list-style-position: outside; }
 .msg.user { align-self: flex-end; background: var(--accent); color: var(--surface); border-bottom-right-radius: 4px; }
 .msg.bot { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
 .msg.bot.err { color: var(--up); }
+.msg-by { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
 .msg.wait { color: var(--muted); }
 .chat-empty { color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
 .chat-sugg { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 8px; }
@@ -662,7 +663,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer>課程與練習的價格為程式模擬；個股判讀的真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-3</span></footer>
+<footer>課程與練習的價格為程式模擬；個股判讀的真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-4</span></footer>
 
 <script>
 "use strict";
@@ -3701,7 +3702,8 @@ const CHAT_SYS = `你是「K線學堂」裡的技術分析助教，對象是想�
 - 不提供個股買賣建議、目標價或明牌，也不保證結果；被問到時說明技術分析的限制，並把問題轉成「該怎麼判讀」。
 - 不知道或畫面上沒有的資訊就直說，不要捏造數字。`;
 const TAB_NAMES = { learn: "課程", lab: "圖表實驗室", challenge: "判讀挑戰", shot: "個股判讀", quiz: "觀念測驗" };
-const chat = { msgs: (() => { try { return JSON.parse(sessionStorage.getItem("chatMsgs") || "[]"); } catch { return []; } })(), busy: false, ctl: null };
+const PROVIDER_NAMES = { gemini: "Gemini（Google）", claude: "Claude" };
+const chat = { provider: undefined, msgs: (() => { try { return JSON.parse(sessionStorage.getItem("chatMsgs") || "[]"); } catch { return []; } })(), busy: false, ctl: null };
 const curTab = () => TABS.find(t => !$("#view-" + t).hidden) || "learn";
 const strip = el => (el ? el.innerText.replace(/\n{2,}/g, "\n").trim() : "");
 const lastReadout = (D, I) => D && I ? readout(D, I, D.length - 1).map(x => `${x.k}：${x.t}${x.x ? `（${x.x}）` : ""}`).join("\n") : "";
@@ -3735,13 +3737,27 @@ function chatSuggestions() {
   if (t === "shot") return shot.D ? ["這張圖現在偏多還是偏空？為什麼？", "聰明錢的判讀怎麼看？", "模擬的範圍為什麼這麼寬？"] : ["截圖要怎麼拍才辨識得準？", "可以查哪些股票的真實數據？"];
   return ["幫我釐清這題的觀念", "這個觀念在哪一課？"];
 }
+// 對話框標題下方顯示由誰回答：網站版問伺服器（GET /api/chat，不花額度），Claude 裡開啟則是檢視者自己的 Claude
+function chatWho() {
+  if (aiMode === "sample") return "由 Claude（你的帳號）回答";
+  if (aiMode !== "api") return "尚未連接 AI";
+  const p = chat.provider;
+  return p === undefined ? "檢查連線中…" : p ? `由 ${PROVIDER_NAMES[p.provider] || p.provider} 回答${p.model ? `（${p.model}）` : ""}` : "伺服器還沒設定 AI 金鑰";
+}
+async function chatCheckProvider() {
+  if (aiMode !== "api" || chat.provider !== undefined) return;
+  try { const j = await (await fetch("/api/chat")).json(); chat.provider = j.provider ? { provider: j.provider, model: j.model } : null; }
+  catch { chat.provider = null; }
+  if (!$("#chatPanel").hidden) chatRender();
+}
+const msgBy = m => m.by ? `<div class="msg-by">— ${esc(PROVIDER_NAMES[m.by.provider] || m.by.provider)}${m.by.model ? `・${esc(m.by.model)}` : ""}</div>` : "";
 function chatRender() {
   const log = $("#chatLog");
-  log.innerHTML = chat.msgs.length ? chat.msgs.map(m => `<div class="msg ${m.role === "user" ? "user" : "bot"}${m.err ? " err" : ""}">${m.role === "user" ? `<p>${esc(m.content)}</p>` : mdToHtml(m.content)}</div>`).join("")
+  log.innerHTML = chat.msgs.length ? chat.msgs.map(m => `<div class="msg ${m.role === "user" ? "user" : "bot"}${m.err ? " err" : ""}">${m.role === "user" ? `<p>${esc(m.content)}</p>` : mdToHtml(m.content) + msgBy(m)}</div>`).join("")
     : `<div class="chat-empty"><strong>有什麼想問的嗎？</strong><span>助教會參考你現在看的畫面回答：課程內容、指標讀數、截圖或個股的判讀、模擬結果都可以問。</span></div>`;
   if (chat.busy) log.insertAdjacentHTML("beforeend", `<div class="msg bot wait" id="chatPending">思考中…</div>`);
   $("#chatSugg").innerHTML = chat.busy || !aiMode ? "" : chatSuggestions().map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join("");
-  $("#chatCtxNote").textContent = `會參考你目前看的「${TAB_NAMES[curTab()]}」畫面`;
+  $("#chatCtxNote").textContent = `${chatWho()}・會參考你目前看的「${TAB_NAMES[curTab()]}」畫面`;
   log.scrollTop = log.scrollHeight;
   try { sessionStorage.setItem("chatMsgs", JSON.stringify(chat.msgs.filter(m => !m.err).slice(-20))); } catch {}
 }
@@ -3754,20 +3770,21 @@ async function chatAsk(q) {
   q = q.trim(); if (!q || chat.busy || !aiMode) return;
   chat.msgs = chat.msgs.filter(m => !m.err); chat.msgs.push({ role: "user", content: q }); chat.busy = true; chat.ctl = new AbortController();
   $("#chatInput").value = ""; chatAutosize(); chatRender(); chatUpdate();
-  const ctx = chatContext(), hist = chat.msgs.slice(-12);
+  const ctx = chatContext(), hist = chat.msgs.slice(-12).map(({ role, content }) => ({ role, content }));
   try {
-    let text;
+    let text, by = null;
     if (aiMode === "sample") {
       const turns = hist.map((m, k) => ({ role: m.role, content: k === hist.length - 1 ? `${CHAT_SYS}\n\n目前畫面（頁面自動產生，可能有誤）：\n${ctx}\n\n使用者的問題：${m.content}` : m.content }));
       while (turns.length && turns[0].role !== "user") turns.shift();
       const r = await aiSample(turns, { signal: chat.ctl.signal, cache: false, onText: ({ text }) => { const el = $("#chatPending"); if (el) { el.classList.remove("wait"); el.innerHTML = mdToHtml(text); $("#chatLog").scrollTop = $("#chatLog").scrollHeight; } } });
-      text = r.text + (r.truncated ? "\n\n（回答過長被截斷）" : "");
+      text = r.text + (r.truncated ? "\n\n（回答過長被截斷）" : ""); by = { provider: "claude", model: "你的 Claude 帳號" };
     } else {
       const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: hist, context: ctx }), signal: chat.ctl.signal });
       const j = await r.json().catch(() => ({ ok: false, error: `伺服器回應 ${r.status}，找不到對話服務。` }));
       if (!j.ok) throw { message: j.error }; text = j.text;
+      if (j.provider) { by = { provider: j.provider, model: j.model }; chat.provider = by; }
     }
-    chat.msgs.push({ role: "assistant", content: text });
+    chat.msgs.push({ role: "assistant", content: text, by });
   } catch (e) {
     const code = e?.name === "AbortError" ? "cancelled" : e?.code;
     if (e?.text && code !== "refused") chat.msgs.push({ role: "assistant", content: e.text });
@@ -3778,7 +3795,7 @@ async function chatAsk(q) {
 function chatAutosize() { const t = $("#chatInput"); t.style.height = "auto"; t.style.height = Math.min(120, t.scrollHeight) + "px"; }
 function chatOpen(open) {
   $("#chatPanel").hidden = !open; $("#chatFab").setAttribute("aria-expanded", open);
-  if (open) { chatRender(); chatUpdate(); if (matchMedia("(min-width: 641px)").matches) $("#chatInput").focus(); } else $("#chatFab").focus();
+  if (open) { chatRender(); chatUpdate(); chatCheckProvider(); if (matchMedia("(min-width: 641px)").matches) $("#chatInput").focus(); } else $("#chatFab").focus();
 }
 $("#chatFab").addEventListener("click", () => chatOpen(true));
 $("#chatClose").addEventListener("click", () => chatOpen(false));

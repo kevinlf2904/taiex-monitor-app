@@ -16,9 +16,10 @@ const SYSTEM = `你是「K線學堂」裡的技術分析助教，對象是想學
 - 不提供個股買賣建議、目標價或明牌，也不保證任何結果；被問到時說明技術分析的限制，並把問題轉成「該怎麼判讀」。
 - 不知道或畫面上沒有的資訊就直說，不要捏造數字。`;
 
+const GEMINI_DEFAULT = "gemini-flash-latest";
 // Gemini REST API：角色是 user / model，系統提示放在 systemInstruction
 export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL) {
-  const models = model ? [model] : ["gemini-flash-latest", "gemini-2.5-flash"];
+  const models = model ? [model] : [GEMINI_DEFAULT, "gemini-2.5-flash"];
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: turns.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
@@ -50,8 +51,13 @@ function geminiError(r) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "只接受 POST" });
   const geminiKey = process.env.GEMINI_API_KEY;
+  // GET：只回報目前接的是哪個 AI（不呼叫模型、不花額度），給對話框顯示用
+  if (req.method === "GET") {
+    const provider = geminiKey ? "gemini" : process.env.ANTHROPIC_API_KEY ? "claude" : null;
+    return res.status(200).json({ ok: true, provider, model: provider === "gemini" ? process.env.GEMINI_MODEL || GEMINI_DEFAULT : provider === "claude" ? "claude-opus-5-5" : null });
+  }
+  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "只接受 GET 或 POST" });
   if (!geminiKey && !process.env.ANTHROPIC_API_KEY) return res.status(200).json({ ok: false, error: "伺服器尚未設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY），無法使用對話功能。" });
 
   const { messages, context } = req.body || {};
@@ -64,7 +70,7 @@ export default async function handler(req, res) {
   if (geminiKey) {
     try {
       const r = await askGemini(SYSTEM + ctx, turns, geminiKey);
-      return res.status(200).json(r.ok ? { ok: true, text: r.text, truncated: r.truncated } : { ok: false, error: geminiError(r) });
+      return res.status(200).json(r.ok ? { ok: true, text: r.text, truncated: r.truncated, provider: "gemini", model: r.model } : { ok: false, error: geminiError(r), provider: "gemini" });
     } catch { return res.status(200).json({ ok: false, error: "連不到 Gemini 服務，請稍後再試。" }); }
   }
 
@@ -82,7 +88,7 @@ export default async function handler(req, res) {
     if (msg.stop_reason === "refusal") return res.status(200).json({ ok: false, error: "這個問題無法回答，換個方式問問看。" });
     const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
     if (!text) return res.status(200).json({ ok: false, error: "沒有收到回答，請再試一次。" });
-    return res.status(200).json({ ok: true, text, truncated: msg.stop_reason === "max_tokens" });
+    return res.status(200).json({ ok: true, text, truncated: msg.stop_reason === "max_tokens", provider: "claude", model: msg.model });
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) return res.status(200).json({ ok: false, error: "ANTHROPIC_API_KEY 無效，請檢查伺服器設定。" });
     if (err instanceof Anthropic.RateLimitError) return res.status(200).json({ ok: false, error: "使用太頻繁，請稍後再試。" });
