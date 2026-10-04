@@ -6,7 +6,8 @@
 // GET /api/kline?code=2382&months=6
 // 回傳 { ok, code, name, market, source, unit, data: [{ d: "2026-09-01", o, h, l, c, v }] }，v 的單位見 unit。
 
-const UA = { "User-Agent": "Mozilla/5.0 (K線學堂 learner)", Accept: "application/json" };
+// HTTP 標頭只能用 ASCII（中文會讓 fetch 直接丟出 ByteString 錯誤）
+const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const INDEX_CODES = new Set(["TAIEX", "TWII", "^TWII", "加權", "加權指數", "大盤", "0000", "IX0001"]);
 
 export const toNum = (v) => {
