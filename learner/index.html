@@ -147,6 +147,10 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .zoombar:not(.zoomed) [data-z="reset"] { opacity: .45; }
 .zoombar .zsep { width: 1px; background: var(--line); }
 .zoombar [aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.zoombar [data-z="sig"][aria-pressed="false"] { text-decoration: line-through; opacity: .7; }
+.scalepop .pkinds { gap: 6px; }
+.scalepop .pkinds[aria-disabled="true"] { opacity: .45; }
+.scalepop .ichip { font-size: 12.5px; padding: 3px 10px; }
 .zoombar [data-z="scale"].on { color: var(--accent); font-weight: 700; }
 .zoombar [data-z="scale"][aria-expanded="true"] { background: var(--accent-soft); color: var(--ink); }
 .scalepop { position: absolute; top: 40px; right: 8px; z-index: 3; width: min(340px, calc(100% - 16px)); padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; box-shadow: 0 10px 30px rgba(0,0,0,.28); font-size: 13.5px; }
@@ -165,7 +169,7 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .scalepop .prow + .prow:has(strong) { border-top: 1px solid var(--line); padding-top: 9px; }
 .scalepop .note { margin: 0; font-size: 11.5px; }
 @media (max-width: 640px) { .zoombar { position: static; display: flex; width: fit-content; margin: 6px 8px 0 auto; } .zoombar button { padding: 4px 8px; min-width: 28px; font-size: 12.5px; } .scalepop { position: static; width: auto; margin: 6px 8px 0; box-shadow: none; } }
-.legend { padding-right: 150px; }
+@media (min-width: 641px) { .legend { padding-right: 330px; } }
 .chartbox canvas { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
 
 /* ---------- learn ---------- */
@@ -191,6 +195,23 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .prose th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
 .prose h3 { font-size: 15.5px; margin: 16px 0 6px; color: var(--ink); }
 .formula { font-family: var(--font-mono); font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; overflow-x: auto; white-space: pre; }
+.lesson-toc { display: flex; gap: 6px; flex-wrap: wrap; margin-top: -8px; }
+.lesson-toc a { font-size: 12.5px; color: var(--muted); text-decoration: none; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 3px 11px; }
+.lesson-toc a:hover { color: var(--ink); border-color: var(--accent); }
+.deep { padding: 0; overflow: hidden; scroll-margin-top: 80px; }
+.deep-head { display: flex; justify-content: space-between; align-items: end; gap: 8px; flex-wrap: wrap; padding: 14px 18px 10px; }
+.deep-head h3 { margin: 2px 0 0; font-family: var(--font-display); font-size: 19px; }
+.deep-tabs { display: flex; gap: 4px; overflow-x: auto; padding: 0 14px 10px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.deep-tabs button { flex: none; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 5px 13px; font-size: 13.5px; cursor: pointer; }
+.deep-tabs button b { font-family: var(--font-mono); font-weight: 600; margin-right: 5px; color: var(--accent); }
+.deep-tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 700; }
+.deep-tabs button[aria-selected="true"] b { color: inherit; }
+.deep-body { padding: 16px 18px 6px; max-width: none; font-size: 15px; line-height: 1.75; }
+.deep-body > :first-child { margin-top: 0; }
+.deep-body ol { margin: 0 0 10px; padding-left: 1.4em; } .deep-body ol li { margin-bottom: 6px; }
+.deep-body .formula { white-space: pre-wrap; }
+.deep-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px 14px; }
+.deep-foot .btn:disabled { opacity: .4; cursor: default; }
 .keys { background: var(--accent-soft); border-radius: var(--radius); padding: 14px 18px; max-width: 68ch; }
 .keys h3 { color: var(--accent); font-size: 13px; letter-spacing: .1em; }
 .keys ul { margin: 0; padding-left: 1.2em; }
@@ -497,6 +518,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
         <div class="eyebrow" id="lessonEyebrow"></div>
         <h2 id="lessonTitle"></h2>
       </div>
+      <nav class="lesson-toc" id="lessonToc" aria-label="本課段落"></nav>
       <div class="prose" id="lessonBody"></div>
       <div id="lessonWidget" hidden></div>
       <div class="lesson-chart">
@@ -507,6 +529,12 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       </div>
       <div class="gallery" id="lessonGallery" hidden></div>
       <div class="prose" id="lessonAfter" hidden></div>
+      <section class="panel deep" id="lessonDeep" aria-labelledby="deepTitle" hidden>
+        <div class="deep-head"><div><div class="eyebrow">DEEP DIVE</div><h3 id="deepTitle">深入學習</h3></div><span class="note">分成五個部分，可以一頁一頁看</span></div>
+        <div class="deep-tabs" role="tablist" id="deepTabs"></div>
+        <div class="prose deep-body" id="deepBody" role="tabpanel"></div>
+        <div class="deep-foot"><button class="btn" id="deepPrev">← 上一部分</button><span class="note" id="deepPos"></span><button class="btn" id="deepNext">下一部分 →</button></div>
+      </section>
       <div class="keys" id="lessonKeys"></div>
       <div class="lesson-nav">
         <button class="btn" id="lessonPrev">← 上一課</button>
@@ -716,7 +744,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-8</span></footer>
+<footer>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-9</span></footer>
 
 <script>
 "use strict";
@@ -1249,17 +1277,19 @@ function simulateFuture(D, { days = 20, mode = "trend", paths = 800, seed = 1, b
     touch: (price, above) => Array.from(above ? mx : mn).filter(v => (above ? v >= price : v <= price)).length / paths };
 }
 // 副圖指標發出的訊號：{ i, si（第幾個副圖）, side, label, v（副圖上的位置） }
-function subSignals(D, I, subs, vis) {
+// strong：KD 只留低檔（D < 30）的金叉、高檔（D > 70）的死叉；MACD 只留零軸上方的金叉、零軸下方的死叉（順勢的交叉）
+function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
   const out = [], n = Math.min(vis, D.length);
-  const cross = (a, b, si, up, dn) => { for (let i = 1; i < n; i++) { if ([a[i], b[i], a[i - 1], b[i - 1]].some(v => v == null) || D[i].sim) continue;
-    if (a[i - 1] <= b[i - 1] && a[i] > b[i]) out.push({ i, si, side: "buy", label: up, v: a[i] });
-    else if (a[i - 1] >= b[i - 1] && a[i] < b[i]) out.push({ i, si, side: "sell", label: dn, v: a[i] }); } };
+  const cross = (a, b, si, up, dn, keep = () => true) => { for (let i = 1; i < n; i++) { if ([a[i], b[i], a[i - 1], b[i - 1]].some(v => v == null) || D[i].sim) continue;
+    if (a[i - 1] <= b[i - 1] && a[i] > b[i] && keep("buy", b[i])) out.push({ i, si, side: "buy", label: up, v: a[i] });
+    else if (a[i - 1] >= b[i - 1] && a[i] < b[i] && keep("sell", b[i])) out.push({ i, si, side: "sell", label: dn, v: a[i] }); } };
   const exit = (a, lo, hi, si, name) => { for (let i = 1; i < n; i++) { if (a[i] == null || a[i - 1] == null || D[i].sim) continue;
     if (a[i - 1] < lo && a[i] >= lo) out.push({ i, si, side: "buy", label: name + "脫離超賣", v: a[i] });
     else if (a[i - 1] > hi && a[i] <= hi) out.push({ i, si, side: "sell", label: name + "脫離超買", v: a[i] }); } };
   subs.forEach((S, si) => {
-    if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉");
-    else if (S === "macd") cross(I.macd.dif, I.macd.sig, si, "MACD金叉", "MACD死叉");
+    if (kinds[typeof S === "string" ? S : "custom"] === false) return;
+    if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉", strong ? (side, d) => (side === "buy" ? d < 30 : d > 70) : undefined);
+    else if (S === "macd") cross(I.macd.dif, I.macd.sig, si, "MACD金叉", "MACD死叉", strong ? (side, m) => (side === "buy" ? m > 0 : m < 0) : undefined);
     else if (S === "rsi") exit(I.rsi, 30, 70, si, "RSI");
     else if (S === "wr") exit(I.wr, -80, -20, si, "威廉");
     else if (S && S.custom && S.custom.lines.length >= 2 && S.custom.signals !== false) { const [a, b] = S.custom.names || []; cross(S.custom.lines[0], S.custom.lines[1], si, a && b ? `${a}上穿${b}` : "副圖金叉", a && b ? `${a}下穿${b}` : "副圖死叉"); }
@@ -1275,7 +1305,7 @@ class Chart {
     // 縮放工具列：按鈕、Ctrl / ⌘ + 滾輪或雙指縮放，拖曳平移，雙擊還原
     this.bar = document.createElement("div"); this.bar.className = "zoombar";
     // 第二組：縱向（價格軸）放大縮小、圖表高度、對數座標，讓小波動也看得清楚
-    this.bar.innerHTML = `<button type="button" data-z="out" aria-label="時間軸縮小" title="時間軸縮小（看更多 K 棒）">−</button><button type="button" data-z="in" aria-label="時間軸放大" title="時間軸放大（看更少 K 棒）">＋</button><button type="button" data-z="reset" aria-label="顯示全部並還原比例">全部</button><span class="zsep" aria-hidden="true"></span><button type="button" data-z="yin" aria-label="價格軸拉長" title="價格軸拉長：波動看起來更大（也可 Shift＋滾輪，或上下拖曳右側價格軸）">↕＋</button><button type="button" data-z="yout" aria-label="價格軸壓縮" title="價格軸壓縮">↕−</button><button type="button" data-z="scale" aria-expanded="false" title="主圖與副圖的比例、高度、對數座標">比例 ▾</button>`;
+    this.bar.innerHTML = `<button type="button" data-z="out" aria-label="時間軸縮小" title="時間軸縮小（看更多 K 棒）">−</button><button type="button" data-z="in" aria-label="時間軸放大" title="時間軸放大（看更少 K 棒）">＋</button><button type="button" data-z="reset" aria-label="顯示全部並還原比例">全部</button><span class="zsep" aria-hidden="true"></span><button type="button" data-z="yin" aria-label="價格軸拉長" title="價格軸拉長：波動看起來更大（也可 Shift＋滾輪，或上下拖曳右側價格軸）">↕＋</button><button type="button" data-z="yout" aria-label="價格軸壓縮" title="價格軸壓縮">↕−</button><button type="button" data-z="sig" aria-pressed="true" title="主副圖對應：副圖指標發出訊號時，在主圖 K 線上標出位置（再按一次關閉）">對應</button><button type="button" data-z="scale" aria-expanded="false" title="主圖與副圖的比例、高度、對數座標、主副圖對應">設定 ▾</button>`;
     // 比例面板：主圖、副圖各自的縮放與高度（觸控裝置也能用按鈕操作）
     this.pop = document.createElement("div"); this.pop.className = "scalepop panel"; this.pop.hidden = true;
     host.append(this.legend, this.bar, this.pop, this.canvas);
@@ -1286,6 +1316,7 @@ class Chart {
       if (z === "in") this.zoom(0.6); else if (z === "out") this.zoom(1 / 0.6);
       else if (z === "reset") { this.resetScale(); }
       else if (z === "scale") { this.togglePop(); }
+      else if (z === "sig") { Chart.setPref("sig", !Chart.prefs.sig); }
       else if (z === "yin") this.yZoom(1.5); else if (z === "yout") this.yZoom(1 / 1.5);
     });
     this.pop.addEventListener("click", e => {
@@ -1295,6 +1326,7 @@ class Chart {
       else if (d.p === "sin") this.subZoomAll(1.5); else if (d.p === "sout") this.subZoomAll(1 / 1.5);
       else if (d.p === "reset") this.resetScale();
       else if (d.h) Chart.setPref("h", +d.h); else if (d.sh) Chart.setPref("sh", +d.sh);
+      else if (d.sk) Chart.setPref("sigKinds", { ...Chart.prefs.sigKinds, [d.sk]: !Chart.prefs.sigKinds[d.sk] });
       this.renderPop();
     });
     this.pop.addEventListener("change", e => { const t = e.target; if (t.dataset.pref) Chart.setPref(t.dataset.pref, t.checked); });
@@ -1346,9 +1378,12 @@ class Chart {
     new ResizeObserver(() => this.draw()).observe(host);
   }
   static all = [];
-  static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit", sig: "chartSubSig" };
+  static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit", sig: "chartSubSig", sigKinds: "chartSigKinds", sigStrong: "chartSigStrong" };
   static prefs = { h: [1, 1.5, 2, 2.5].includes(+store.get("chartH", 1)) ? +store.get("chartH", 1) : 1, log: !!store.get("chartLog", false),
-    sh: [1, 1.5, 2].includes(+store.get("chartSubH", 1)) ? +store.get("chartSubH", 1) : 1, fit: !!store.get("chartSubFit", false), sig: store.get("chartSubSig", true) !== false };
+    sh: [1, 1.5, 2].includes(+store.get("chartSubH", 1)) ? +store.get("chartSubH", 1) : 1, fit: !!store.get("chartSubFit", false), sig: store.get("chartSubSig", true) !== false,
+    sigStrong: store.get("chartSigStrong", true) !== false,
+    sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, ...(store.get("chartSigKinds", null) || {}) } };
+  static SIG_KINDS = [["kd", "KD 交叉"], ["macd", "MACD 交叉"], ["rsi", "RSI 30／70"], ["wr", "威廉 −80／−20"], ["custom", "截圖副圖交叉"]];
   // 高度、對數座標、副圖貼合是全站共用的偏好：改了以後所有圖表一起重畫
   static setPref(k, v) { Chart.prefs[k] = v; store.set(Chart.PREF_KEYS[k], v); Chart.all.forEach(c => { c.syncBar(); c.draw(); if (!c.pop.hidden) c.renderPop(); }); }
   paneZoom(key) { return this.pz[key] || { z: 1, off: 0 }; }
@@ -1369,12 +1404,16 @@ class Chart {
       <div class="prow"><strong>副圖（量、指標）</strong><span class="pval">${szTxt}</span><div class="pseg"><button type="button" data-p="sout" aria-label="副圖壓縮">↕−</button><button type="button" data-p="sin" aria-label="副圖拉長">↕＋</button></div></div>
       <div class="prow"><span>高度</span>${seg("sh", [1, 1.5, 2], P.sh)}</div>
       <label class="prow pchk"><input type="checkbox" data-pref="fit" ${P.fit ? "checked" : ""}><span>副圖自動貼合資料（KD、RSI 等固定刻度的指標也放大到填滿）</span></label>
-      <label class="prow pchk"><input type="checkbox" data-pref="sig" ${P.sig ? "checked" : ""}><span>副圖訊號標到主圖（KD、MACD 交叉，RSI、威廉離開超買超賣區）</span></label>
+      <div class="prow"><strong>主副圖對應</strong></div>
+      <label class="prow pchk"><input type="checkbox" data-pref="sig" ${P.sig ? "checked" : ""}><span>副圖發出訊號時，在主圖 K 線上標出位置（空心圈＋名稱），副圖同一點以虛線對齊</span></label>
+      <div class="prow pkinds" ${P.sig ? "" : "aria-disabled=\"true\""}>${Chart.SIG_KINDS.map(([k, t]) => `<button type="button" class="ichip" data-sk="${k}" aria-pressed="${P.sig && P.sigKinds[k]}" ${P.sig ? "" : "disabled"}>${t}</button>`).join("")}</div>
+      <label class="prow pchk"><input type="checkbox" data-pref="sigStrong" ${P.sigStrong ? "checked" : ""} ${P.sig ? "" : "disabled"}><span>只標重點交叉：KD 低檔（D&lt;30）金叉、高檔（D&gt;70）死叉；MACD 零軸上金叉、零軸下死叉。取消勾選則標出全部交叉</span></label>
       <div class="prow"><button type="button" class="btn sm" data-p="reset">全部還原</button></div>
       <p class="note">電腦：Shift＋滾輪縮放游標所在的圖，或上下拖曳右側刻度；放大後可上下拖曳平移。雙擊圖表還原。</p>`;
   }
   syncBar() {
     this.bar.querySelector('[data-z="yin"]').setAttribute("aria-pressed", this.yz > 1.01);
+    this.bar.querySelector('[data-z="sig"]').setAttribute("aria-pressed", Chart.prefs.sig);
     const scaled = Chart.prefs.h !== 1 || Chart.prefs.log || Chart.prefs.sh !== 1 || Chart.prefs.fit || Object.values(this.pz).some(x => x.z !== 1 || x.off);
     this.bar.querySelector('[data-z="scale"]').classList.toggle("on", scaled);
   }
@@ -1517,7 +1556,7 @@ class Chart {
     const showLabels = o.labels !== false && bw >= 2.5;
     const placed = [];
     // 副圖訊號：在副圖上交叉或離開超買超賣區的那一天，主圖K線也標出來（空心圈，和實心三角的課程／策略訊號區分）
-    const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis) : [];
+    const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis, Chart.prefs.sigKinds, Chart.prefs.sigStrong) : [];
     (o.markers || []).filter(m => m.i < vis && m.i >= va && m.i <= vb).forEach(m => {
       const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
       const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
@@ -2505,6 +2544,830 @@ EPS = 稅後淨利 ÷ 流通在外股數</div>
   },
 ];
 
+// 深入學習：每課分成原理拆解、實戰判讀步驟、參數與變化、常見陷阱、情境範例五個分頁（依 <h4> 切開）
+const LESSON_DEEP = {
+  kline: `<h4>原理拆解</h4>
+<p>一根 K 棒是一整天買賣雙方拉鋸的「結果摘要」。開盤價反映前一晚累積的消息與情緒，收盤價則是最後願意留在場上的人共同決定的價格，所以<strong>收盤價最重要</strong>：它代表當天「誰贏了」。</p>
+<p>上下影線記錄的是「去過、但沒守住」的價格。長上影線代表盤中有人把價格推高，卻被賣壓打回；長下影線代表盤中殺低時有人進場承接。實體越長，代表一方從頭壓制到尾；實體越短，代表雙方勢均力敵。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>先看<strong>顏色與實體長度</strong>：紅 K 實體很長是買方強勢，綠 K 實體很長是賣方強勢。</li>
+<li>再看<strong>影線</strong>：影線比實體長很多時，要問「被打回來的力量來自哪裡」。</li>
+<li>拿它和<strong>前幾根 K 棒比較</strong>：同樣一根長紅，出現在連跌之後（可能止跌）和出現在連漲之後（可能追高）意義不同。</li>
+<li>配合<strong>成交量</strong>：大量的長紅比量縮的長紅可信。</li>
+<li>最後看<strong>位置</strong>：是在支撐、壓力、均線附近，還是在沒有參考價的半空中。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li><strong>日 K</strong>：最常用，一根代表一天。適合波段觀察。</li>
+<li><strong>週 K、月 K</strong>：一根代表一週、一個月，雜訊少，用來看大方向。週 K 的長下影線常比日 K 的更有份量。</li>
+<li><strong>分 K（5 分、60 分）</strong>：當沖、短線用，雜訊多，初學者容易看得太細而失去方向。</li>
+<li>台股有<strong>±10% 漲跌幅限制</strong>：漲停鎖死時 K 棒可能只是一條橫線（一字線），代表買單排隊買不到，不是「沒有波動」。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>只看一根就下結論</strong>：單根 K 棒的訊號很弱，一定要放回前後文。</li>
+<li><strong>忽略跳空</strong>：今天開盤和昨天收盤之間的缺口，本身就是重要資訊。</li>
+<li><strong>把顏色看反</strong>：台股紅漲綠跌，美股相反；看國外資料時要注意。</li>
+<li><strong>除權息造成的假缺口</strong>：除權息當天價格下調，不是真的下跌，看長期圖要用還原權值的資料。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票連跌 6 天，從 120 元跌到 98 元。第 7 天開盤 97 元，盤中一度殺到 92 元，收盤拉回 99 元，成交量是 5 日均量的 1.8 倍。</p>
+<div class="formula">實體 = 99 − 97 = 2 元（小紅 K）
+下影線 = 97 − 92 = 5 元
+下影線 ÷ 實體 = 2.5 倍</div>
+<p>解讀：下影線很長、而且帶量，代表 92～97 元之間有人積極承接，是「可能止跌」的跡象。但這只是第一個線索，要等隔天<strong>不跌破 92 元</strong>、最好收在 99 元以上，才算得到確認。如果隔天直接跌破 92 元，這根下影線的承接力道就失效了。</p>`,
+
+  "patterns-rev": `<h4>原理拆解</h4>
+<p>反轉型態記錄的是「一方力竭、另一方接手」的過程。以錘子線為例：連跌之後，賣方在盤中把價格殺到新低，但收盤前買方把價格拉回，代表在低檔<strong>賣壓已經賣不動了</strong>。吞噬型態則更強烈：第二天的實體把前一天整個包住，代表情緒一天之內完全翻轉。</p>
+<p>型態本身不會「讓」價格反轉，它只是把多空雙方的力量變化畫出來。所以位置比形狀重要：同樣的形狀出現在趨勢末端才有意義。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>先確認<strong>前面有明確趨勢</strong>：至少一段連續上漲或下跌，沒有趨勢就沒有「反轉」可言。</li>
+<li>辨認型態：錘子、倒錘、吞噬、晨星／夜星、母子、貫穿／烏雲罩頂。</li>
+<li>看<strong>位置</strong>：是否剛好落在支撐、壓力、前低前高或均線附近。</li>
+<li>看<strong>量</strong>：反轉 K 棒帶量，可信度較高。</li>
+<li>等<strong>確認 K 棒</strong>：隔天收盤延續反轉方向（例如錘子之後收紅並站上錘子高點）。</li>
+<li>設定<strong>失效點</strong>：多方型態的最低點被跌破，就代表判讀錯了。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li><strong>錘子線</strong>的常見定義：下影線至少是實體的 2 倍，上影線很短。</li>
+<li><strong>吞噬</strong>：只看實體包覆即可，影線不一定要包住；包得越多越強。</li>
+<li><strong>晨星</strong>：中間那根星線若與前後跳空，訊號更強。</li>
+<li>週 K 上的反轉型態，可靠度通常高於日 K。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>在盤整區找反轉</strong>：橫向整理中到處都是錘子和吞噬，幾乎沒有意義。</li>
+<li><strong>不等確認就進場</strong>：沒有確認 K 棒的型態，失敗率高很多。</li>
+<li><strong>忽略大趨勢</strong>：長期下跌中的日 K 錘子，常常只換來一兩天反彈。</li>
+<li><strong>吊人線和錘子線搞混</strong>：形狀一樣，位置相反，意義也相反。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票從 80 元一路漲到 105 元。第一天收一根長紅：開 101、收 105。第二天開高到 106，卻一路殺到 100.5 收盤，成交量放大。</p>
+<div class="formula">第一天實體：101 → 105
+第二天實體：106 → 100.5
+第二天實體完全包住第一天 → 空頭吞噬</div>
+<p>解讀：在漲了 30% 後出現帶量的空頭吞噬，代表追高買盤被套、賣方接手。確認方式是接下來兩三天收盤<strong>無法站回 106</strong>。若隔天就收上 106 元，吞噬型態失效，代表賣壓只是一日行情。</p>`,
+
+  "patterns-cont": `<h4>原理拆解</h4>
+<p>趨勢不會一路直線前進，中途一定會「喘口氣」。持續型態描述的就是這種休息：上升三法是長紅之後幾根小黑 K 在長紅範圍內整理，代表獲利了結的賣壓不大，多方還控制著局面；第五天再一根長紅突破，表示休息結束。</p>
+<p>跳空缺口則代表「急」：買方（或賣方）急到不願意在昨天的價格成交。缺口沒被回補，代表那股急迫還在；被回補，代表急迫已經消失。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>確認<strong>原本的趨勢方向</strong>（例如均線向上）。</li>
+<li>觀察整理期間的<strong>量是否萎縮</strong>：健康的休息通常量縮。</li>
+<li>標出整理區的<strong>上下緣</strong>。</li>
+<li>等<strong>帶量突破</strong>整理區、方向與原趨勢一致。</li>
+<li>遇到缺口時，先判斷它的種類（下面三種），再決定要不要把缺口當支撐壓力。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li><strong>突破缺口</strong>：出現在整理區突破時，常不回補，最有參考價值。</li>
+<li><strong>中繼（逃逸）缺口</strong>：出現在趨勢中段，可用來估算剩餘的行情長度。</li>
+<li><strong>竭盡缺口</strong>：出現在趨勢末端、常伴隨爆量，之後很快被回補。</li>
+<li>缺口的下緣（向上缺口）或上緣（向下缺口）常被視為支撐或壓力。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>「缺口一定會補」</strong>：不一定。強勢的突破缺口可能幾個月都不補。</li>
+<li><strong>整理期量沒縮</strong>：整理時量反而放大，可能是出貨而不是休息。</li>
+<li><strong>把除權息當缺口</strong>：除權息的價格調整不是市場造成的缺口。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票在 50～54 元盤整一個月，某天開盤直接跳到 55.5 元、收 57 元，前一天最高價是 54 元，成交量是均量的 2.5 倍。</p>
+<div class="formula">缺口區間：54 ～ 55.5 元
+型態：突破整理區＋帶量 → 突破缺口</div>
+<p>解讀：之後拉回時，54～55.5 元這段缺口是第一個觀察的支撐。若拉回時量縮、且收盤守在 54 元以上，代表突破有效；若收盤跌回 54 元以下，缺口被完全回補，突破很可能失敗，要回頭當作盤整處理。</p>`,
+
+  "chart-patterns": `<h4>原理拆解</h4>
+<p>型態學把許多根 K 棒的高低點連起來看，描述的是一段時間內「籌碼換手」的過程。以頭肩頂為例：頭部之後的右肩比頭低，代表買方已經推不到新高；頸線是多方最後的防線，一旦收盤跌破，代表在頸線之上買進的人全部被套，他們之後的停損與解套賣壓會讓頸線變成壓力。</p>
+<p>三角收斂則是波動越來越小，多空都在等消息，最後的突破往往帶出一段行情。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>先找出<strong>明顯的轉折高低點</strong>（左右各有幾根 K 棒比它低或高）。</li>
+<li>把高點連成一條線、低點連成一條線，看是哪一種型態。</li>
+<li>標出<strong>頸線或突破線</strong>。型態在突破之前都只是「可能」。</li>
+<li>等<strong>收盤突破</strong>，並看是否帶量（向上突破尤其需要量）。</li>
+<li>用<strong>型態高度</strong>估算最小目標價，並設定型態失效點。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li><strong>頭肩頂／底</strong>：最經典，目標價 = 頸線 ± 頭到頸線的距離。</li>
+<li><strong>M 頭、W 底</strong>：兩個高（低）點差距在 3% 以內較標準。</li>
+<li><strong>三角收斂</strong>：上升三角偏多、下降三角偏空、對稱三角方向未定；通常在三角形 2/3 到 3/4 處突破較可靠。</li>
+<li>型態越大（耗時越久），突破後的行情通常越大。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>提前預測</strong>：右肩還沒完成就假設是頭肩頂，常常被軋。</li>
+<li><strong>盤中跌破就當確認</strong>：要看收盤，最好再觀察一兩天。</li>
+<li><strong>忽略假突破</strong>：突破後很快回到型態內，是很強的反向訊號。</li>
+<li><strong>每張圖都硬套型態</strong>：不明顯的型態就不要用。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票走出 W 底：第一個低點 40 元，反彈到 46 元，第二個低點 40.6 元，接著漲回 46 元附近。</p>
+<div class="formula">頸線 = 46 元
+型態高度 = 46 − 40 = 6 元
+最小目標 = 46 + 6 = 52 元
+失效點：收盤跌破 40.6 元</div>
+<p>解讀：等收盤帶量站上 46 元才算 W 底完成。突破後常見「回測頸線」：拉回到 46 元附近守住，是比較安全的觀察點。若突破後又收回 45 元以下，屬於假突破，要提高警覺。</p>`,
+
+  dow: `<h4>原理拆解</h4>
+<p>道氏理論的核心是：<strong>趨勢會延續，直到出現明確的反轉證據</strong>。上升趨勢中，每次回檔的低點都比前一次高，代表買方願意在越來越高的價格進場；一旦回檔低點被跌破，代表這群買方的防線失守。</p>
+<p>它把趨勢分成三層：主要趨勢（數月到數年）、次級趨勢（數週到數月的回檔或反彈）、日常波動（雜訊）。初學者最容易被日常波動騙，把一兩天的下跌當成趨勢反轉。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>在圖上標出<strong>最近四到六個轉折高低點</strong>。</li>
+<li>判斷高點與低點是一個比一個高（HH、HL）還是一個比一個低（LH、LL）。</li>
+<li>上升趨勢中，最後一個 HL 就是<strong>趨勢的防線</strong>。</li>
+<li>價格收盤跌破這個 HL，再反彈也過不了前高（形成 LH），才算趨勢轉弱。</li>
+<li>用成交量確認：主要趨勢方向上的波段應該量增，逆勢的波段量縮。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>轉折點的判定：常用「左右各 3～5 根 K 棒」都沒有更高（低）點。數字越大，抓到的轉折越少、越重要。</li>
+<li>主要趨勢用<strong>週 K</strong> 判斷，次級趨勢用<strong>日 K</strong>。</li>
+<li>指數互相確認：台股可拿加權指數與櫃買指數、電子與金融類股互相對照。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>太早宣布反轉</strong>：跌破一個小低點不等於主要趨勢改變。</li>
+<li><strong>轉折點標太密</strong>：把雜訊當轉折，會得到矛盾的結論。</li>
+<li><strong>忽略時間尺度</strong>：日 K 的下降趨勢可能只是週 K 上升趨勢中的回檔。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票的轉折點依序是：低 60、高 72、低 66、高 78、低 70。</p>
+<div class="formula">高點：72 → 78（越來越高）
+低點：60 → 66 → 70（越來越高）
+→ 上升趨勢，防線 = 70 元</div>
+<p>解讀：只要收盤守在 70 元之上，就維持上升趨勢的判讀。若收盤跌破 70 元，之後反彈又過不了 78 元，形成「低點更低、高點更低」，才確認趨勢轉為下降。在那之前，回檔都先視為次級修正。</p>`,
+
+  ma: `<h4>原理拆解</h4>
+<p>移動平均線是過去 N 天收盤價的平均，可以想成「最近 N 天進場者的平均成本」。股價在月線（20 日線）之上，代表最近一個月買進的人平均是賺錢的，心情穩定、不急著賣；跌破月線，代表這群人開始虧損，容易出現停損賣壓。這就是均線會變成支撐或壓力的原因。</p>
+<p>均線是落後指標：它一定比價格晚反應，換來的是過濾雜訊。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>先看<strong>長均線方向</strong>（季線、年線）決定大方向。</li>
+<li>看<strong>排列</strong>：短均 &gt; 中均 &gt; 長均且向上，是多頭排列。</li>
+<li>看<strong>股價與月線的距離（乖離）</strong>：離太遠容易拉回。</li>
+<li>多頭時，拉回到月線或季線附近止跌，是觀察買點的位置。</li>
+<li>短均與長均的<strong>交叉</strong>只當參考，最好配合趨勢方向。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>台股常用：<strong>5 日（週線）、10 日（雙週線）、20 日（月線）、60 日（季線）、120 日（半年線）、240 日（年線）</strong>。</li>
+<li><strong>SMA</strong>（簡單平均）每天權重一樣；<strong>EMA</strong>（指數平均）較重視近期，反應比較快。</li>
+<li>短線看 5、10、20 日；波段看 20、60 日；長線看 120、240 日。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>盤整時交叉頻繁</strong>：均線糾結時黃金交叉、死亡交叉一直出現，照做會被反覆打臉。</li>
+<li><strong>以為均線一定撐得住</strong>：均線是心理價位，不是保證。</li>
+<li><strong>參數最佳化</strong>：硬找「過去最準」的天數，未來通常不再準。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票收盤 63 元，月線 58 元，季線 55 元，兩條線都向上。</p>
+<div class="formula">月線乖離 = (63 − 58) ÷ 58 ≈ +8.6%</div>
+<p>解讀：多頭排列、趨勢向上，但乖離已達 8.6%，追價風險較高。較合理的觀察點是拉回到月線 58 元附近、量縮止跌時。若收盤跌破季線 55 元且季線開始走平，多頭結構就被破壞了。</p>`,
+
+  vol: `<h4>原理拆解</h4>
+<p>成交量是「有多少人願意在這個價格成交」。價格是結果，量是力道：上漲時量增，代表越來越多人願意用更高的價格買；上漲時量縮，代表追價的人變少，漲勢容易後繼無力。</p>
+<p>量也代表換手：大量出現在高檔，可能是早期買進的人把籌碼交給後來的人（出貨）；大量出現在低檔且收紅，可能是有人大舉承接。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>拿今天的量和<strong>5 日、20 日均量</strong>比較，判斷是放量還是量縮。</li>
+<li>對照價格：價漲量增（健康）、價漲量縮（力道減弱）、價跌量增（賣壓重）、價跌量縮（賣壓減輕）。</li>
+<li>注意<strong>爆量</strong>（均量 2～3 倍以上）出現的位置：高檔或低檔意義不同。</li>
+<li>突破重要壓力時，確認是否帶量。</li>
+<li>留意<strong>量先價行</strong>：量先溫和放大，價格才開始動。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>台股成交量單位是<strong>張</strong>（1 張 = 1000 股）；大盤則常看<strong>成交金額（億元）</strong>。</li>
+<li>均量常用 5 日、20 日。</li>
+<li>週量可以過濾單日的異常爆量（例如除權息、指數調整日）。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>只看量不看價</strong>：大量本身沒有方向，要配合 K 棒。</li>
+<li><strong>特殊日的量</strong>：MSCI 調整、除權息、ETF 換股常造成一次性大量。</li>
+<li><strong>冷門股的量</strong>：成交量太小的股票，少數人就能做出假量。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票漲了一個月，從 30 元到 42 元。最近一天開高走低收 41 元，成交量 9,000 張，而 20 日均量是 3,000 張。</p>
+<div class="formula">量比 = 9000 ÷ 3000 = 3 倍（爆量）
+K 棒：開高走低（長上影線）</div>
+<p>解讀：高檔爆量加長上影線，是典型的「出貨警訊」。若之後幾天量縮、價格守在這根 K 棒低點之上，可能只是換手；若收盤跌破這天的低點，警訊就成立。</p>`,
+
+  inout: `<h4>原理拆解</h4>
+<p>每一筆成交都有買方和賣方，差別在於誰比較急。<strong>外盤</strong>是買方直接吃賣方掛的委賣價（主動買），<strong>內盤</strong>是賣方直接打買方掛的委買價（主動賣）。外盤多，代表急著買的人多；內盤多，代表急著賣的人多。</p>
+<p>它反映的是「急迫性」，不是「誰買得多」：每一張成交，買和賣的張數一定一樣。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>看<strong>外盤比</strong> = 外盤 ÷（外盤＋內盤）。</li>
+<li>連續多天外盤比 &gt; 55%，代表買方持續積極。</li>
+<li>一定要<strong>對照價格</strong>：外盤多、價格漲，一致；外盤多、價格不漲，要懷疑。</li>
+<li>配合五檔掛單：觀察大單是掛著不動（防守）還是主動成交（攻擊）。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>單日外盤比雜訊大，看 <strong>5 日平均</strong>較穩定。</li>
+<li>盤中即時的內外盤比，適合當沖；日線的內外盤比，適合短波段。</li>
+<li>漲停鎖死時幾乎都是外盤（買不到的人一直掛），參考價值低。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>對敲（自買自賣）</strong>：可以刻意做出外盤假象。</li>
+<li><strong>把外盤當外資</strong>：兩者完全無關。</li>
+<li><strong>只看比率不看量</strong>：成交量很小時，比率意義不大。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票今天外盤 6,500 張、內盤 3,500 張，但收盤下跌 1.5%，收在當天低點附近。</p>
+<div class="formula">外盤比 = 6500 ÷ (6500 + 3500) = 65%
+價格：收跌、收最低 → 價量不一致</div>
+<p>解讀：買方很急，價格卻漲不上去，代表上方有大量賣單一直被吃也吃不完，可能是大戶趁買氣出貨。若隔天再出現高外盤比但價格仍下跌，警訊更強；若隔天放量突破今天高點，則只是短暫的賣壓被消化。</p>`,
+
+  sr: `<h4>原理拆解</h4>
+<p>支撐壓力的本質是<strong>記憶與後悔</strong>。某價位曾經大量成交，代表很多人的成本在那裡。價格從上方跌回這個價位時，原本在這裡買、沒賺到的人「後悔沒加碼」，會再買；價格從下方漲回來時，之前在這裡被套的人「終於解套」，會想賣。這就是支撐與壓力。</p>
+<p>壓力被突破後會變成支撐（角色互換），因為現在在那個價位買進的人是賺錢的，拉回時他們會願意加碼。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>找出<strong>多次被測試</strong>的高點或低點（碰到兩三次以上）。</li>
+<li>標出<strong>大量成交的價格區</strong>：大量區通常是強支撐或強壓力。</li>
+<li>加上<strong>整數關卡</strong>（100、500、1000 元）與前高前低。</li>
+<li>把支撐壓力當成「區間」而不是一條線，通常有 1～2% 的寬度。</li>
+<li>觀察價格在區間的反應：有效跌破要看收盤，最好連續兩天。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>短線看最近 20～60 日的高低點；長線看週 K 的前高前低。</li>
+<li>均線、趨勢線、斐波那契回撤位、跳空缺口，都是「動態」或「計算出來」的支撐壓力。</li>
+<li>測試次數越多，突破後的行情越大，但被測試太多次也可能越來越弱。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>畫太多條線</strong>：每個小高點都畫，等於沒畫。</li>
+<li><strong>把線當精確價格</strong>：支撐常被「刺穿一下再收回」。</li>
+<li><strong>只看盤中</strong>：盤中跌破收盤收回，通常不算跌破。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票過去三個月三次跌到 85 元附近都反彈，最近一次在 84.5 元止跌。現在價格 92 元，前高 98 元。</p>
+<div class="formula">支撐區：84.5 ～ 86 元
+壓力區：97 ～ 98 元
+現價到支撐 ≈ −7.6%，到壓力 ≈ +6.5%</div>
+<p>解讀：位置在區間中間，上下空間差不多，不是好的進場位置。比較好的觀察點是靠近支撐區時止跌、或帶量突破 98 元之後回測不破。若收盤連兩天跌破 84.5 元，支撐失效，之前的支撐區會變成之後的壓力。</p>`,
+
+  fib: `<h4>原理拆解</h4>
+<p>斐波那契回撤用一段明確的波段（低點到高點）當尺，量出回檔可能停下的位置。它有效的原因一半是比例本身，一半是<strong>自我實現</strong>：很多交易者都看 38.2%、50%、61.8%，於是在這些價位附近掛單，價格就容易在那裡出現反應。</p>
+<p>淺回檔（23.6%～38.2%）代表趨勢很強，買方等不及深跌；深回檔（61.8%～78.6%）代表賣壓較重，但只要守住，原趨勢仍在。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>選一段<strong>清楚的波段</strong>：從明顯的轉折低點拉到轉折高點（下跌則反過來）。</li>
+<li>畫出 23.6%、38.2%、50%、61.8%、78.6% 回撤位。</li>
+<li>找<strong>和其他工具重疊</strong>的價位：例如 61.8% 剛好碰到月線或前高，可靠度提高。</li>
+<li>價格到達回撤位時，看 K 棒是否出現止跌型態、量是否縮。</li>
+<li>用延伸位（127.2%、161.8%）估算突破前高後的目標。</li>
+<li>失效點：收盤跌破 78.6%，通常代表整段漲勢被否定。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li><strong>回撤</strong>用來找拉回的支撐；<strong>延伸</strong>用來估算下一段的目標。</li>
+<li>聰明錢概念的 <strong>OTE</strong> 就是 61.8%～78.6% 這個區間。</li>
+<li>波段選在週 K 上，畫出來的回撤位更有份量。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>波段起點亂選</strong>：不同的起點會得到完全不同的價位，要選大家都看得到的轉折。</li>
+<li><strong>每個價位都當支撐</strong>：五條線之間幾乎涵蓋整段回檔，事後總會「剛好碰到一條」。</li>
+<li><strong>單獨使用</strong>：沒有其他工具重疊的回撤位，參考價值很低。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票從 50 元漲到 70 元，現在拉回中。</p>
+<div class="formula">波段 = 70 − 50 = 20 元
+38.2% 回撤 = 70 − 20×0.382 ≈ 62.4
+50%  回撤 = 70 − 20×0.5   = 60.0
+61.8% 回撤 = 70 − 20×0.618 ≈ 57.6
+161.8% 延伸 = 50 + 20×1.618 ≈ 82.4</div>
+<p>解讀：如果月線剛好在 60 元附近，60 元是重疊價位，值得觀察。若在 57.6～60 元出現帶量紅 K 止跌，可視為回檔結束的跡象；若收盤跌破 78.6% 回撤（約 54.3 元），這段漲勢的結構就被破壞了。</p>`,
+
+  rsi: `<h4>原理拆解</h4>
+<p>RSI 比較的是「最近一段時間上漲的力道」和「下跌的力道」誰比較大。RSI = 70 代表最近的漲幅總和遠大於跌幅總和，買方非常強勢；RSI = 30 代表賣方強勢。它測量的是<strong>動能</strong>，不是價格高低：股價創新高但 RSI 沒有創新高，代表漲是漲了，力道卻在變弱。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>先判斷<strong>大趨勢</strong>：多頭中 RSI 常在 40～80 之間；空頭中常在 20～60 之間。</li>
+<li>多頭時，RSI 回到 40～50 附近止跌，常是拉回買點的位置。</li>
+<li>RSI <strong>從 30 以下回升穿過 30</strong>，比單純「低於 30」更有參考價值。</li>
+<li>觀察<strong>背離</strong>：價格新高、RSI 沒新高（頂背離）。</li>
+<li>RSI 突破 50 中線，可視為動能由弱轉強的參考。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li><strong>RSI 14</strong>：最標準的設定，訊號較穩。</li>
+<li><strong>RSI 6 / 5</strong>：台股看盤軟體常見，反應快、訊號多，適合短線但雜訊也多。</li>
+<li>短週期可以把超買超賣調寬到 80 / 20，減少假訊號。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>超買就賣</strong>：強勢股的 RSI 可以在 70 以上停留好幾週（鈍化）。</li>
+<li><strong>超賣就買</strong>：空頭中 RSI 低於 30 後可能繼續跌。</li>
+<li><strong>背離太早進場</strong>：背離可以連續出現好幾次，價格才真的反轉。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票在多頭中（季線向上），14 天內上漲的日子漲幅總和 28 元、下跌的日子跌幅總和 7 元。</p>
+<div class="formula">平均漲幅 = 28 ÷ 14 = 2.0
+平均跌幅 = 7 ÷ 14 = 0.5
+RS = 2.0 ÷ 0.5 = 4
+RSI = 100 − 100 ÷ (1 + 4) = 80</div>
+<p>解讀：RSI 80 表示短線過熱，但在多頭中這是「強」而不是「該賣」。更實用的做法是等它拉回到 50 附近、價格守住月線時再觀察。若 RSI 跌破 40 且價格跌破月線，才表示多頭動能明顯轉弱。</p>`,
+
+  kd: `<h4>原理拆解</h4>
+<p>KD 的核心是 RSV：今天的收盤價，在最近 9 天最高與最低之間的位置。收在最高價附近，RSV 接近 100；收在最低價附近，RSV 接近 0。K 和 D 是把 RSV 平滑兩次的結果，所以 K 比 D 敏感。</p>
+<p>它反映的是「收盤時誰占上風」：上漲趨勢中收盤常在區間上緣，K 值就會一直很高。這也是 KD 容易<strong>鈍化</strong>的原因。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>先看<strong>均線方向</strong>：月線向上時，只看 KD 的黃金交叉；月線向下時，只看死亡交叉。</li>
+<li>黃金交叉的位置：<strong>D 值在 20 以下</strong>交叉，意義較大。</li>
+<li>K 值連續 3 天 &gt; 80 是高檔鈍化，代表強勢，不急著放空。</li>
+<li>鈍化結束（K 跌回 80 以下）才是比較明確的轉弱訊號。</li>
+<li>搭配背離：價格新低、KD 低點墊高，是底部的線索。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>台股標準：<strong>KD（9, 3, 3）</strong>，9 是 RSV 的天數，3 是平滑參數。</li>
+<li>週 KD 用來看中期方向；日 KD 找進出時機。週 KD 低檔黃金交叉，常是波段起點的參考。</li>
+<li>天數拉長（例如 14）會讓訊號變少、變穩。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>每個交叉都做</strong>：在 50 附近的交叉非常頻繁，幾乎沒有參考價值。</li>
+<li><strong>逆勢使用</strong>：空頭中 KD 黃金交叉常只帶來一兩天反彈。</li>
+<li><strong>鈍化時做反向</strong>：高檔鈍化放空、低檔鈍化接刀，是最常見的虧損原因。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票最近 9 天最高 60 元、最低 50 元，今天收 58 元；昨天 K = 40、D = 35。</p>
+<div class="formula">RSV = (58 − 50) ÷ (60 − 50) × 100 = 80
+K = 40 × 2/3 + 80 × 1/3 ≈ 53.3
+D = 35 × 2/3 + 53.3 × 1/3 ≈ 41.1</div>
+<p>解讀：K 從 40 升到 53，高於 D，維持多方。但交叉位置在中間區域，不是低檔交叉，訊號力道普通。若月線也向上，可以視為順勢的動能延續；若隔天收盤跌回 52 元以下讓 K 再跌破 D，這次交叉就失效。</p>`,
+
+  wr: `<h4>原理拆解</h4>
+<p>威廉指標 %R 衡量今天收盤價離最近 14 天<strong>最高價</strong>有多遠。收在最高價時 %R = 0，收在最低價時 %R = −100。它和 KD 的 RSV 幾乎是同一件事，只是方向倒過來、而且沒有平滑，所以反應更快、更敏感。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>確認你的看盤軟體是 <strong>−100～0</strong> 還是 <strong>0～100（去掉負號）</strong>的畫法，兩者的超買超賣方向相反。</li>
+<li>−20 以上是超買區，−80 以下是超賣區（−100～0 畫法）。</li>
+<li>重點不是「進入」區域，而是<strong>離開</strong>：從 −80 以下回升穿過 −80，才是偏多訊號。</li>
+<li>配合趨勢：多頭中只用「離開超賣」找買點。</li>
+<li>%R 在 −50 上下來回，代表沒有方向。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>標準天數是 <strong>14 日</strong>；短線可用 9 日或 10 日。</li>
+<li>因為沒有平滑，常會搭配 KD 或 RSI 一起看，減少雜訊。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>方向看反</strong>：0～100 畫法中 80 以上是超「賣」。</li>
+<li><strong>過度交易</strong>：反應太快，訊號非常多。</li>
+<li><strong>強勢鈍化</strong>：多頭時 %R 可以長時間停在 −20 以上。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票最近 14 天最高 120 元、最低 100 元，今天收 103 元；前一天收 101 元。</p>
+<div class="formula">今天 %R = (120 − 103) ÷ (120 − 100) × −100 = −85
+昨天 %R = (120 − 101) ÷ 20 × −100 = −95</div>
+<p>解讀：仍在 −80 以下的超賣區，還沒有「離開」，所以不算訊號。若隔天收 105 元以上，%R 回到 −75，才算離開超賣區。若同時季線向上，這個訊號比較值得注意；若季線向下，就只當成短線反彈的參考。</p>`,
+
+  macd: `<h4>原理拆解</h4>
+<p>MACD 的 DIF 是快線 EMA12 減慢線 EMA26：短期平均成本比長期高，代表最近的買方比較積極。MACD 線（訊號線）是 DIF 的 9 日平均，柱狀體 OSC = DIF − MACD，代表「動能的變化」。</p>
+<p>柱狀體開始縮短，表示動能在減弱，常比交叉更早出現。零軸則代表多空分界：DIF 在零軸之上，短期均線在長期均線之上。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>先看 <strong>DIF 在零軸上方還是下方</strong>，判斷多空大環境。</li>
+<li>零軸之上的黃金交叉（多頭中的再起漲）比零軸之下的可靠。</li>
+<li>觀察<strong>柱狀體由長變短</strong>，提早察覺動能減弱。</li>
+<li>DIF 由負轉正（穿越零軸），可視為中期趨勢轉多的確認。</li>
+<li>留意<strong>背離</strong>：價格新高、柱狀體高點越來越低。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>標準設定 <strong>（12, 26, 9）</strong>，各家看盤軟體一致。</li>
+<li>短線有人用（6, 13, 5）加快反應，但假訊號增加。</li>
+<li>週 MACD 適合判斷中長期趨勢，日 MACD 找時機。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>盤整時交叉頻繁</strong>：DIF 和 MACD 在零軸附近糾結時，交叉幾乎沒有意義。</li>
+<li><strong>反應慢</strong>：它由均線算出來，交叉時價格常已走了一段。</li>
+<li><strong>只看交叉忽略零軸</strong>：零軸下的金叉常常只是反彈。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票在多頭中拉回，DIF 從 3.2 降到 1.1，MACD 線降到 1.3，柱狀體 −0.2；隔天 DIF 回升到 1.5，MACD 線 1.34。</p>
+<div class="formula">隔天 OSC = 1.5 − 1.34 = +0.16
+DIF &gt; 0 且由下穿上 MACD → 零軸上方金叉</div>
+<p>解讀：零軸上方的黃金交叉，代表拉回整理結束、多頭再起動的可能性較高。若之後 DIF 跌破零軸，代表短期均線跌破長期均線，這個判讀就失效。</p>`,
+
+  boll: `<h4>原理拆解</h4>
+<p>布林通道以 20 日均線為中軌，上下各加減 2 倍標準差。標準差衡量價格「平常會晃多遠」：在常態分布的假設下，約 95% 的收盤價會落在上下軌之間。所以觸碰上下軌代表價格走到了「平常不太會到的地方」。</p>
+<p>通道寬度本身就是資訊：收窄代表波動降到低點，市場在蓄力；擴張代表行情發動。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>先看<strong>通道方向</strong>：中軌向上是多頭，向下是空頭，走平是盤整。</li>
+<li>盤整時：靠近下軌偏多、靠近上軌偏空（區間操作）。</li>
+<li>趨勢中：價格沿著上軌走（「騎上軌」）是強勢，不要逆勢放空。</li>
+<li>觀察<strong>通道收窄</strong>：寬度創近期新低時，準備迎接大波動。</li>
+<li>收窄後的<strong>第一根帶量突破</strong>，常決定接下來的方向。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>標準設定 <strong>20 日、2 倍標準差</strong>。</li>
+<li>%b = (收盤 − 下軌) ÷ (上軌 − 下軌)：大於 1 代表突破上軌。</li>
+<li>帶寬 = (上軌 − 下軌) ÷ 中軌，用來量化收窄程度。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>碰上軌就賣</strong>：在強勢趨勢中會一直賣在起漲點。</li>
+<li><strong>以為 95% 是真的機率</strong>：股價不是常態分布，極端行情比想像中常見。</li>
+<li><strong>收窄後猜方向</strong>：收窄只告訴你要動了，不告訴你往哪動。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票 20 日均價 100 元，標準差 2.5 元；過去半年帶寬平均約 15%。</p>
+<div class="formula">上軌 = 100 + 2×2.5 = 105
+下軌 = 100 − 2×2.5 = 95
+帶寬 = (105 − 95) ÷ 100 = 10%</div>
+<p>解讀：帶寬 10% 明顯低於平常的 15%，屬於收窄。接下來若出現帶量長紅收在 105 元之上，可能是向上發動；若帶量長黑收在 95 元之下，則是向下發動。突破後又很快回到通道內，屬於假突破。</p>`,
+
+  div: `<h4>原理拆解</h4>
+<p>背離是「價格和動能說不同的話」。價格創新高，代表有人用更高的價格買；但 RSI 或 MACD 沒創新高，代表這次上漲的速度和力道比上次小。就像車子還在往上坡開，油門卻越踩越輕，總有一天會停下來。</p>
+<p>背離是<strong>警訊</strong>而不是反轉訊號：它告訴你趨勢在變弱，但沒有告訴你什麼時候結束。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>找出價格的<strong>兩個轉折高點</strong>（頂背離）或兩個轉折低點（底背離）。</li>
+<li>在同一時間點，比較指標的高點或低點。</li>
+<li>價格高點更高、指標高點更低 → 頂背離；價格低點更低、指標低點更高 → 底背離。</li>
+<li>等<strong>價格本身確認</strong>：頂背離後跌破上升趨勢線或前一個低點。</li>
+<li>多個指標同時背離（RSI＋MACD），可信度較高。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>常用的背離指標：RSI、MACD 柱狀體、KD。</li>
+<li>兩個轉折點的距離通常 5～60 根 K 棒；太近是雜訊，太遠關聯性變弱。</li>
+<li>週 K 的背離比日 K 的份量重得多。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>背離後還可以再背離</strong>：強勢趨勢中可能連續出現兩三次頂背離才反轉。</li>
+<li><strong>轉折點要等確認</strong>：第二個高點右邊需要幾根 K 棒才能確定，所以背離永遠是事後才看到。</li>
+<li><strong>只看背離不看價格</strong>：沒有價格結構的確認，就進場放空或抄底。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票第一個高點 88 元時 RSI 76；三週後創新高 92 元，RSI 只有 68。兩個高點之間的低點是 82 元。</p>
+<div class="formula">價格高點：88 → 92（更高）
+RSI 高點：76 → 68（更低）
+→ 頂背離，確認線 = 82 元</div>
+<p>解讀：背離只是警訊。若收盤跌破 82 元，價格結構也轉弱，警訊才得到確認。若價格繼續創高、RSI 也跟著創高，背離就被化解了。</p>`,
+
+  "div-hidden": `<h4>原理拆解</h4>
+<p>隱藏背離是<strong>順勢</strong>的訊號。上升趨勢中回檔，價格的低點比前一個低點高（結構仍是多頭），但指標的低點卻比前一次更低。意思是：這次回檔時賣壓「看起來」很重、指標跌得很深，價格卻守住了更高的低點，代表下方買盤強，回檔可能已經結束。</p>
+<p>一般背離找反轉，隱藏背離找趨勢延續。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>先確認<strong>大趨勢</strong>：上升趨勢才找隱藏底背離，下降趨勢才找隱藏頂背離。</li>
+<li>標出回檔的兩個低點，確認價格低點墊高（HL）。</li>
+<li>比較指標：指標低點更低 → 隱藏底背離。</li>
+<li>等價格<strong>重新轉強</strong>（例如收盤站回短均線、出現止跌 K 棒）。</li>
+<li>失效點設在第二個低點下方。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>RSI 和 MACD 柱狀體最常用。</li>
+<li>配合斐波那契回撤：隱藏底背離剛好出現在 50%～61.8% 回撤位，更有參考價值。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>趨勢判斷錯</strong>：在已經轉弱的趨勢中找隱藏背離，常變成接刀。</li>
+<li><strong>背離失敗</strong>：一般背離的「失敗」常變成趨勢延續，反之亦然，所以一定要有失效點。</li>
+<li><strong>過度解讀小波動</strong>：轉折點太小的背離沒有意義。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票上升趨勢中，第一次回檔低點 45 元時 RSI 38；第二次回檔低點 48 元時 RSI 33，季線持續向上。</p>
+<div class="formula">價格低點：45 → 48（更高）
+RSI 低點：38 → 33（更低）
+→ 隱藏底背離，失效點 = 48 元</div>
+<p>解讀：價格守住更高的低點，指標卻顯示賣壓很重，偏向回檔結束、上升趨勢延續。若之後收盤跌破 48 元，高點低點墊高的結構被破壞，訊號失效。</p>`,
+
+  risk: `<h4>原理拆解</h4>
+<p>技術分析能提高的只是「勝率」或「賺賠比」的一點點優勢，不可能每次都對。決定長期結果的，是<strong>錯的時候賠多少、對的時候賺多少</strong>。只要每次虧損都被控制在小範圍，即使勝率只有 40%，賺賠比 2:1 仍然可以長期打平以上。</p>
+<p>虧損是不對稱的：賠 50% 需要賺 100% 才能回本。所以先保住本金，比追求報酬更重要。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>進場前先決定<strong>停損價</strong>：依圖形設在失效點之外（例如支撐下方、型態低點下方）。</li>
+<li>決定<strong>單筆最大虧損</strong>：通常是總資金的 1%～2%。</li>
+<li>用兩者算出<strong>部位大小</strong>（下面有公式）。</li>
+<li>估算<strong>目標價</strong>，確認賺賠比至少 1.5～2 倍再進場。</li>
+<li>把<strong>交易成本</strong>算進去：手續費與證交稅會吃掉短線的利潤。</li>
+<li>每筆交易記錄理由與結果，定期檢討。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>手續費：買賣各 <strong>0.1425%</strong>（券商常有折扣）。</li>
+<li>證交稅：一般股票賣出 <strong>0.3%</strong>，當沖 0.15%，ETF 0.1%。</li>
+<li>一買一賣的總成本約 0.585%（無折扣時）。</li>
+<li>停損方式：價格停損（跌破某價）、百分比停損、時間停損（幾天沒表現就出場）。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>不設停損</strong>：小虧變大虧，最後被迫長期套牢。</li>
+<li><strong>停損設太近</strong>：放在正常波動範圍內，很容易被洗掉。</li>
+<li><strong>攤平虧損部位</strong>：在錯誤的判斷上加碼。</li>
+<li><strong>回測過度最佳化</strong>：把參數調到過去最好看，未來不一定有效。</li>
+</ul>
+<h4>情境範例</h4>
+<p>總資金 50 萬元，單筆最多虧 1%。某檔股票進場價 100 元，停損設在支撐下方 94 元，目標價 112 元。</p>
+<div class="formula">可承受虧損 = 500,000 × 1% = 5,000 元
+每股風險 = 100 − 94 = 6 元
+可買股數 = 5,000 ÷ 6 ≈ 833 股
+→ 買 833 股零股；買滿 1 張會虧 6,000 元，
+  超過 1% 上限
+賺賠比 = (112 − 100) ÷ 6 = 2 倍
+一買一賣成本 ≈ 83,300 × 0.585% ≈ 487 元</div>
+<p>解讀：賺賠比 2 倍，符合條件；部位依停損距離計算，而不是「看好就買多一點」。若觸及 94 元就依計畫出場，虧損約 5,000 元加上成本，不會傷到整體資金。</p>`,
+
+  "smc-structure": `<h4>原理拆解</h4>
+<p>聰明錢概念（SMC）把市場結構看成一連串的高低點。<strong>BOS</strong>（結構突破）是順勢的突破：上升趨勢中收盤突破前高，代表趨勢延續。<strong>CHoCH</strong>（性格改變）是逆勢的第一次突破：上升趨勢中第一次收盤跌破前一個回檔低點，代表多方第一次守不住。</p>
+<p>它和道氏理論很像，差別在於 SMC 更強調「是誰」造成突破：大資金需要流動性才能進出，所以結構突破的位置，常是大資金留下的足跡。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>選定時間尺度（例如日 K），標出<strong>有效的轉折高低點</strong>。</li>
+<li>判斷目前結構：HH/HL（多）或 LH/LL（空）。</li>
+<li>多頭中，<strong>收盤</strong>突破前高 → BOS，趨勢延續。</li>
+<li>多頭中，收盤跌破最後一個 HL → CHoCH，可能轉空。</li>
+<li>CHoCH 之後，等價格反彈到下跌起點附近（訂單塊、FVG）再觀察，而不是在跌破當下追空。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>轉折點長度：左右各 3～5 根 K 棒，越長越重要。</li>
+<li><strong>大結構與小結構</strong>：週 K 的結構決定方向，日 K 的 CHoCH 找進場時機。</li>
+<li>收盤突破較嚴格，影線突破較寬鬆；收盤突破可減少假訊號。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>影線突破當成 BOS</strong>：只刺穿不收盤，常是流動性掃蕩而非突破。</li>
+<li><strong>小時間尺度的 CHoCH 當大反轉</strong>：小結構反轉可能只是大趨勢的回檔。</li>
+<li><strong>轉折點標錯</strong>：標太密會讓 BOS、CHoCH 到處都是。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票轉折依序：低 100、高 118、低 108、高 125、低 115。之後價格下跌，收盤 113 元。</p>
+<div class="formula">結構：HH 118→125、HL 108→115（多頭）
+最後一個 HL = 115
+收盤 113 &lt; 115 → CHoCH（偏空）</div>
+<p>解讀：多頭第一次守不住回檔低點，性格可能轉變。接下來觀察反彈能否站回 125 元：若反彈到 120 元附近就失敗、做出更低的高點，空方結構成形；若收盤重新站上 125 元，CHoCH 失效，多頭恢復。</p>`,
+
+  "smc-liquidity": `<h4>原理拆解</h4>
+<p>流動性指的是「可以成交的大量掛單」。前高之上聚集著空方的停損買單和突破追價的買單（買方流動性 BSL）；前低之下聚集著多方的停損賣單（賣方流動性 SSL）。大資金要買進大量股票時，需要有人大量賣給它，最方便的就是跌破前低、觸發一堆停損賣單。</p>
+<p>所以「刺穿前低又收回」常常不是跌破，而是<strong>掃蕩</strong>：停損單被吃掉之後，賣壓反而清空了。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>標出明顯的<strong>前高、前低</strong>，以及幾乎等高的高點（EQH）或等低的低點（EQL）。</li>
+<li>觀察價格是否<strong>刺穿後收回</strong>：盤中破前低，收盤卻回到前低之上。</li>
+<li>掃蕩的 K 棒常有長影線、量放大。</li>
+<li>掃蕩後等結構轉變確認（例如小時間尺度的 CHoCH）。</li>
+<li>停損放在掃蕩 K 棒的極端價之外。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>等高、等低的容忍範圍：差距在 0.3%～0.5% 以內常視為等高等低。</li>
+<li>重要性：週線的前高前低 &gt; 日線；被測試多次的價位聚集更多停損單。</li>
+<li>內部流動性（區間內的小高低點）與外部流動性（區間外的大高低點）。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>真跌破誤以為掃蕩</strong>：收盤沒收回、隔天繼續跌，就是真的跌破。</li>
+<li><strong>太早接</strong>：在刺穿的當下就買，沒等收盤確認。</li>
+<li><strong>把每個影線都當掃蕩</strong>：沒有明顯前低的地方，談不上流動性。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票兩個月內兩次跌到 72.0 元與 72.2 元附近反彈（等低）。今天盤中跌到 70.5 元，收盤 73.0 元，量是均量 1.7 倍。</p>
+<div class="formula">等低區 ≈ 72.0 ～ 72.2
+盤中最低 70.5（刺穿）
+收盤 73.0（收回）→ SSL 掃蕩
+失效點：收盤跌破 70.5</div>
+<p>解讀：等低下方的停損單被掃掉，收盤收回且帶量，偏向「假跌破」。若之後幾天守在 72 元之上並突破最近的小高點，掃蕩判讀得到確認；若收盤跌破 70.5 元，就是真的跌破。</p>`,
+
+  "smc-zones": `<h4>原理拆解</h4>
+<p>訂單塊（Order Block）是急漲（造成 BOS）之前的<strong>最後一根反向 K 棒</strong>。SMC 的觀點是：大資金一次買不完，會在這根 K 棒附近分批建倉，然後推動價格急漲。當價格之後回到這個區域，大資金還沒成交完的買單（或想守住成本的部位）會再次出現，形成支撐。</p>
+<p>它本質上是一種更精確的「支撐壓力區」：用 K 棒的範圍代替一條線。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>找到一段<strong>急漲並造成 BOS</strong> 的走勢。</li>
+<li>往回找急漲前<strong>最後一根綠 K</strong>，它的高低點就是多方訂單塊。</li>
+<li>確認急漲時是否留下 FVG：有 FVG 的訂單塊較強。</li>
+<li>等價格<strong>第一次回測</strong>訂單塊，觀察是否止跌。</li>
+<li>停損放在訂單塊下緣之外；收盤跌破下緣代表失效。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>有人用整根 K 棒（含影線），有人只用實體，實體版本範圍較小、較精確。</li>
+<li>第一次回測最有效；被測試越多次越弱。</li>
+<li>位於折價區（波段 50% 以下）的多方訂單塊較理想。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>沒有 BOS 的「訂單塊」</strong>：沒有結構突破，就只是普通的一根 K 棒。</li>
+<li><strong>訂單塊太多</strong>：每段小漲都標，圖上全是方塊。</li>
+<li><strong>忽略大趨勢</strong>：空頭中的多方訂單塊容易被直接跌破。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票在 58～60 元整理，最後一根綠 K 是開 60.0、高 60.3、低 58.4、收 58.8，之後三天急漲到 66 元並突破前高 63 元。</p>
+<div class="formula">多方訂單塊 = 58.4 ～ 60.3
+BOS：收盤突破前高 63
+失效點：收盤跌破 58.4</div>
+<p>解讀：之後拉回到 60 元附近、量縮止跌，就是訂單塊被測試的位置。若出現止跌紅 K，偏向多方守住；若收盤跌破 58.4 元，這個訂單塊失效，原本的突破可能變成假突破。</p>`,
+
+  "smc-fvg": `<h4>原理拆解</h4>
+<p>公平價值缺口（FVG）是三根 K 棒中，第一根的高點和第三根的低點之間<strong>沒有重疊</strong>的空白。中間那根急漲，代表那段價格幾乎只有買方在成交、賣方來不及跟上，交易是「失衡」的。SMC 認為價格之後常會回來「補」這段失衡，讓雙方都有機會在那裡成交。</p>
+<p>它和跳空缺口類似，但不需要開盤跳空，用三根 K 棒就能找到。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>找三根連續 K 棒，第三根低點 &gt; 第一根高點 → 多方 FVG。</li>
+<li>FVG 區間 = 第一根高點 ～ 第三根低點。</li>
+<li>優先觀察<strong>造成 BOS 的那一段</strong>急漲留下的 FVG。</li>
+<li>價格回到 FVG 時，看是否止跌；常見只填一半（50% 位置）就反彈。</li>
+<li>收盤跌穿整個 FVG，代表失衡被完全填補、支撐失效。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>可以設最小寬度（例如 &gt; 0.3% 股價），過濾太小的缺口。</li>
+<li>FVG 的 50% 位置（Consequent Encroachment）常被當作關鍵價。</li>
+<li>反向 FVG（被跌穿後反過來變成壓力）也是常用的概念。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>每個 FVG 都會被補</strong>：強勢行情中很多 FVG 長時間不回補。</li>
+<li><strong>太小的 FVG</strong>：雜訊般的小缺口沒有意義。</li>
+<li><strong>逆勢使用</strong>：下跌趨勢中的多方 FVG 很容易被直接跌穿。</li>
+</ul>
+<h4>情境範例</h4>
+<p>連續三根 K 棒：第一根高點 41.0 元，第二根長紅從 41.2 漲到 44.5 元，第三根低點 43.0 元。</p>
+<div class="formula">FVG = 41.0 ～ 43.0（寬 2 元）
+50% 位置 = 42.0
+失效點：收盤跌破 41.0</div>
+<p>解讀：之後拉回進入 41～43 元時，觀察 42 元附近是否止跌。若在 FVG 內出現止跌 K 棒且量縮，偏向回檔結束；若收盤跌破 41 元，失衡被完全回補，這個區域不再是支撐。</p>`,
+
+  "smc-pd": `<h4>原理拆解</h4>
+<p>溢價／折價的概念是「在便宜的地方買、在貴的地方賣」。把一段波段的高低點切成兩半：50% 以上是<strong>溢價區</strong>（相對貴），50% 以下是<strong>折價區</strong>（相對便宜）。大資金在上升結構中傾向於回檔到折價區時買進，因為賺賠比比較好。</p>
+<p><strong>OTE</strong>（最佳進場區）是回撤 61.8%～78.6% 的位置，結合了斐波那契與折價的概念。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>確認<strong>結構方向</strong>（BOS 向上才找多方機會）。</li>
+<li>取最近一段造成 BOS 的波段，算出 50% 和 OTE 區。</li>
+<li>在折價區內找<strong>訂單塊或 FVG</strong>，越多工具重疊越好。</li>
+<li>價格進入該區時，等止跌確認（例如小時間尺度 CHoCH 轉多）。</li>
+<li>停損放在波段起點下方；目標先看前高（買方流動性）。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>50%（均衡點）：溢價與折價的分界。</li>
+<li>OTE：61.8%～78.6%，有人用 70.5% 當中心。</li>
+<li>波段的選擇會改變區間，以「造成最近一次 BOS 的波段」最常用。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>只看位置不看結構</strong>：結構已經轉空時，折價區還會更便宜。</li>
+<li><strong>等太完美</strong>：強勢行情可能只回檔到 38.2% 就走了，沒進場也沒關係。</li>
+<li><strong>停損放太近</strong>：放在 OTE 內，正常波動就會被洗掉。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票從 200 元漲到 260 元，造成 BOS，現在拉回中。250～255 元有一個未回補的 FVG，215～220 元有多方訂單塊。</p>
+<div class="formula">波段 = 60 元，均衡點 = 230
+OTE 61.8% = 260 − 60×0.618 ≈ 222.9
+OTE 78.6% = 260 − 60×0.786 ≈ 212.8
+OTE 區 ≈ 212.8 ～ 222.9（和訂單塊重疊）</div>
+<p>解讀：250 元附近的 FVG 位於溢價區，不是理想買點；215～220 元同時是折價區、OTE 和訂單塊，是重疊度最高的觀察區。若收盤跌破波段起點 200 元，整個多頭結構失效。</p>`,
+
+  "chips-inst": `<h4>原理拆解</h4>
+<p>三大法人的資金規模大，買賣會持續好幾天甚至好幾週，所以他們的買賣超比單日價格更能看出「中期資金流向」。外資看全球資產配置，常大量進出權值股；投信（國內基金）資金較小、偏好中小型成長股，且有季底作帳的習慣；自營商較短線，還包含權證避險，參考價值最低。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>看<strong>連續性</strong>：連續買超 5 天以上，比單日大買更有意義。</li>
+<li>看<strong>買超占成交量的比例</strong>：法人買超占當日成交量 10% 以上才算顯著。</li>
+<li>看<strong>累計買超與股價的關係</strong>：法人累計買、股價卻不漲，要注意有人在賣給法人。</li>
+<li>大型權值股看外資；中小型股看投信。</li>
+<li>搭配價格結構：法人買超加上突破壓力，比單看籌碼可靠。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>證交所每天收盤後公布個股三大法人買賣超（單位：張）。</li>
+<li><strong>外資持股比例</strong>變化比單日買賣超更能看出長期趨勢。</li>
+<li>投信持股占股本比例高（例如 &gt; 10%）時，後續賣壓（結帳）也要注意。</li>
+<li>季底（3、6、9、12 月）前後，投信作帳與結帳行為較明顯。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>單日大買就追</strong>：可能只是指數調整、ETF 換股造成的一次性買盤。</li>
+<li><strong>外資一定對</strong>：外資也會停損、也會因匯率或全球資金調度賣股。</li>
+<li><strong>自營商買賣當訊號</strong>：大多是權證避險，跟看好看壞關係不大。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔中型股股本 10 億元（10 萬張），投信連續 8 天買超，合計 3,000 張；同期日均成交 4,000 張，股價從 80 元漲到 88 元。</p>
+<div class="formula">投信買超占股本 = 3000 ÷ 100000 = 3%
+投信日均買超 ≈ 375 張，占成交量 ≈ 9%</div>
+<p>解讀：投信持續布局、股價同步上漲，籌碼面與價格一致。之後要觀察投信是否轉為連續賣超；若投信開始連賣、股價跌破這段上漲的起漲區（約 80 元），代表布局行情可能結束。</p>`,
+
+  "chips-margin": `<h4>原理拆解</h4>
+<p>融資是散戶向券商借錢買股票，融券是借股票來賣。融資餘額增加代表散戶看好並加槓桿；但散戶的持股比較不穩定，跌的時候容易恐慌賣出，甚至被追繳斷頭。所以「價漲資減」被視為籌碼安定（散戶在賣、法人或大戶接手），「價漲資增」則代表散戶追價、籌碼凌亂。</p>
+<p>融券增加代表有人看空；但融券最後必須買回，如果股價上漲，空方被迫回補，反而推升股價（軋空）。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>比較<strong>股價方向</strong>與<strong>融資餘額方向</strong>。</li>
+<li>計算<strong>融資使用率</strong>：越高代表散戶槓桿越重。</li>
+<li>觀察<strong>券資比</strong>：融券 ÷ 融資，偏高時有軋空的可能。</li>
+<li>大跌時融資大減，代表斷頭賣壓釋放，常接近短期低點。</li>
+<li>留意除權息前的<strong>融券強制回補</strong>日期。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>融資使用率 = 融資餘額 ÷ 融資限額；超過 50% 偏高。</li>
+<li>融資維持率低於 130% 會被追繳，跌破後可能斷頭。</li>
+<li>券資比超過 30% 常被視為有軋空條件。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>只看融資不看股價</strong>：資增不一定壞，要看是在什麼位置增加。</li>
+<li><strong>券資比高就以為會軋空</strong>：基本面差的股票，空方可能是對的。</li>
+<li><strong>忽略可融資的條件</strong>：部分股票不能融資融券，數字自然很低。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票一個月內從 50 元漲到 60 元，融資餘額從 12,000 張增加到 18,000 張，融資限額 25,000 張，融券 900 張。</p>
+<div class="formula">融資增加 = 6000 張（+50%）
+融資使用率 = 18000 ÷ 25000 = 72%
+券資比 = 900 ÷ 18000 = 5%</div>
+<p>解讀：價漲資增、使用率偏高，表示散戶大量用融資追價，籌碼凌亂。若股價開始回檔，融資戶的停損與追繳賣壓可能放大跌幅。反過來，若接下來股價續漲而融資開始下降，代表籌碼逐漸轉到較穩定的人手中。</p>`,
+
+  "fund-rev": `<h4>原理拆解</h4>
+<p>台股上市櫃公司每月 10 日前要公布上個月的營收，是最即時的基本面資料。營收是獲利的源頭：營收成長，搭配毛利率穩定，獲利通常就會成長。三率（毛利率、營業利益率、稅後淨利率）則告訴你每 100 元營收能留下多少錢。</p>
+<p>股價反映的是<strong>對未來的預期</strong>，所以「營收創新高」不一定會漲，重點是「比市場預期好還是差」以及成長是否加速。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>看<strong>月營收年增率</strong>（和去年同月比），避開季節性。</li>
+<li>看<strong>累計營收年增率</strong>：比單月穩定，能看出全年趨勢。</li>
+<li>看成長是否<strong>加速</strong>：年增率從 10% → 20% → 30%，比一直維持 30% 更有爆發力。</li>
+<li>每季財報出來後，看<strong>毛利率</strong>是否同步提升（代表產品更好賣或成本下降）。</li>
+<li>把營收與股價對照：營收連續成長、股價卻不漲，可能是預期早已反映。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>單月年增率雜訊大（工作天數、出貨時間點），可看<strong>近 3 個月平均</strong>。</li>
+<li>EPS 用<strong>近四季合計</strong>計算本益比。</li>
+<li>不同產業的毛利率差異很大：半導體 IC 設計可能 50%，代工組裝可能只有個位數。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>只看月增率</strong>：受季節影響，2 月常因春節大減。</li>
+<li><strong>營收成長但毛利下降</strong>：可能是殺價搶單，獲利不一定跟著成長。</li>
+<li><strong>業外收益</strong>：單季 EPS 暴增可能來自處分資產，不可持續。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票今年 1～6 月營收合計 60 億元，去年同期 48 億元；6 月單月 12 億元，去年 6 月 9 億元。最近一季毛利率從 28% 升到 31%。</p>
+<div class="formula">累計年增率 = 60 ÷ 48 − 1 = 25%
+6 月年增率 = 12 ÷ 9 − 1 ≈ 33%
+毛利率 +3 個百分點</div>
+<p>解讀：成長加速（單月 33% 高於累計 25%），而且毛利率同步提升，代表不是靠殺價衝量，基本面在轉強。若下個月年增率明顯掉回 10% 以下，或下一季毛利率回落，成長加速的判讀就要修正。</p>`,
+
+  "fund-val": `<h4>原理拆解</h4>
+<p>本益比（PE）= 股價 ÷ 每股盈餘，意思是「用目前的獲利，要幾年賺回股價」。市場願意給高本益比，是因為預期未來獲利會成長；給低本益比，可能是成長性差，也可能是被低估。<strong>本益比河流圖</strong>把歷史上不同本益比倍數畫成價格帶，讓你看出目前股價在歷史評價中的位置。</p>
+<p>股價淨值比（PB）適合獲利起伏大的產業（例如景氣循環股、金融股），殖利率則適合穩定配息的公司。</p>
+<h4>實戰判讀步驟</h4>
+<ol>
+<li>用<strong>近四季 EPS</strong> 算出目前本益比。</li>
+<li>找出這檔股票過去 3～5 年的<strong>本益比區間</strong>（最低、中位數、最高）。</li>
+<li>看目前位置：接近歷史低檔還是高檔。</li>
+<li>確認<strong>獲利趨勢</strong>：EPS 下滑時，低本益比可能是陷阱。</li>
+<li>同產業互相比較，而不是拿不同產業的本益比比較。</li>
+</ol>
+<h4>參數與變化</h4>
+<ul>
+<li>成長股：本益比較高，可看 PEG（本益比 ÷ 成長率）。</li>
+<li>景氣循環股（航運、鋼鐵、面板）：看<strong>股價淨值比</strong>較合適。</li>
+<li>金融股、電信股：常看<strong>殖利率</strong>與淨值比。</li>
+<li>預估本益比用「未來四季 EPS」，反映市場預期，但數字不確定。</li>
+</ul>
+<h4>常見陷阱</h4>
+<ul>
+<li><strong>低本益比一定便宜</strong>：景氣循環股常在本益比最低時處於股價高點。</li>
+<li><strong>用單季 EPS × 4</strong>：季節性產業會嚴重失真。</li>
+<li><strong>高殖利率陷阱</strong>：殖利率高可能是股價大跌造成，且明年未必能維持配息。</li>
+</ul>
+<h4>情境範例</h4>
+<p>某檔股票股價 300 元，近四季 EPS 合計 20 元；過去 5 年本益比區間 12～22 倍，中位數 16 倍；每股淨值 75 元。</p>
+<div class="formula">本益比 = 300 ÷ 20 = 15 倍（略低於中位數）
+股價淨值比 = 300 ÷ 75 = 4 倍
+16 倍對應價格 = 20 × 16 = 320 元
+12 倍對應價格 = 20 × 12 = 240 元</div>
+<p>解讀：目前評價接近歷史中間偏低，不算貴也不算特別便宜。若未來 EPS 成長到 24 元，同樣 15 倍就是 360 元；若 EPS 下滑到 15 元，同樣的股價本益比會升到 20 倍，看起來就變貴了。評價一定要和獲利方向一起看。</p>`,
+};
+
 // 課程順序與分組
 const LESSON_GROUPS = [
   ["基礎", ["kline"]], ["K 線與型態學", ["patterns-rev", "patterns-cont", "chart-patterns"]], ["趨勢與量價", ["dow", "ma", "vol", "inout", "sr", "fib"]],
@@ -2564,6 +3427,27 @@ function loadLessonData() {
   }).catch(err => { if (V.tok === tok) { V.err = err?.message || "載入失敗"; V.real = null; V.D = genSeries(L.seed + V.seedOff * 7919, L.n); V.I = indicators(V.D); } })
     .finally(() => { if (V.tok === tok && lessonView === V) { V.loading = false; drawLesson(); } });
 }
+// 深入學習：每課的 LESSON_DEEP 依 <h4> 切成幾個分頁（原理、步驟、參數、陷阱、範例）
+let deepState = { parts: [], k: 0 };
+function renderDeep(L) {
+  const html = LESSON_DEEP[L.id] || "", parts = [];
+  html.split(/<h4>/).slice(1).forEach(seg => { const [t, ...rest] = seg.split("</h4>"); parts.push({ t: t.trim(), html: rest.join("</h4>") }); });
+  deepState = { parts, k: 0 };
+  $("#lessonDeep").hidden = !parts.length;
+  $("#lessonToc").innerHTML = [["lessonBody", "觀念"], ["lessonChart", "範例圖"], ...(parts.length ? [["lessonDeep", "深入學習"]] : []), ["lessonKeys", "重點整理"]].map(([id, t]) => `<a href="#${id}" data-to="${id}">${t}</a>`).join("");
+  if (parts.length) deepShow(0);
+}
+function deepShow(k) {
+  const P = deepState.parts; deepState.k = k = Math.max(0, Math.min(P.length - 1, k));
+  $("#deepTabs").innerHTML = P.map((p, i) => `<button role="tab" data-dk="${i}" aria-selected="${i === k}"><b>${i + 1}</b>${p.t}</button>`).join("");
+  $("#deepBody").innerHTML = P[k].html; $("#deepPos").textContent = `${k + 1} / ${P.length}`;
+  $("#deepPrev").disabled = k === 0; $("#deepNext").disabled = k === P.length - 1;
+  $("#deepTabs").querySelector('[aria-selected="true"]').scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+$("#deepTabs").addEventListener("click", e => { const b = e.target.closest("[data-dk]"); if (b) deepShow(+b.dataset.dk); });
+const deepJump = d => { deepShow(deepState.k + d); const r = $("#lessonDeep").getBoundingClientRect(); if (r.top < 0) $("#lessonDeep").scrollIntoView({ block: "start" }); };
+$("#deepPrev").addEventListener("click", () => deepJump(-1)); $("#deepNext").addEventListener("click", () => deepJump(1));
+$("#lessonToc").addEventListener("click", e => { const a = e.target.closest("[data-to]"); if (!a) return; e.preventDefault(); const el = $("#" + a.dataset.to); (el.closest(".lesson-chart") || el).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); });
 let widgetTeardown = null;
 function showLesson(i) {
   if (widgetTeardown) { widgetTeardown(); widgetTeardown = null; }
@@ -2576,6 +3460,7 @@ function showLesson(i) {
   $("#lessonAfter").innerHTML = L.after || ""; $("#lessonAfter").hidden = !L.after;
   $("#lessonTry").innerHTML = `<b>試試看</b><span>${L.try}</span>`;
   $("#lessonKeys").innerHTML = `<h3>重點整理</h3><ul>${L.keys.map(k => `<li>${k}</li>`).join("")}</ul>`;
+  renderDeep(L);
   $("#lessonWidget").hidden = !L.widget;
   if (L.widget === "orderbook") widgetTeardown = mountOrderBook($("#lessonWidget"));
   loadLessonData(); drawLesson();
