@@ -152,6 +152,7 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .prose table { border-collapse: collapse; font-size: 14px; margin: 4px 0 12px; }
 .prose th, .prose td { border-bottom: 1px solid var(--line); padding: 6px 12px 6px 0; text-align: left; vertical-align: top; }
 .prose th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+.prose h3 { font-size: 15.5px; margin: 16px 0 6px; color: var(--ink); }
 .formula { font-family: var(--font-mono); font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; overflow-x: auto; white-space: pre; }
 .keys { background: var(--accent-soft); border-radius: var(--radius); padding: 14px 18px; max-width: 68ch; }
 .keys h3 { color: var(--accent); font-size: 13px; letter-spacing: .1em; }
@@ -204,6 +205,9 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .ws-head { display: flex; justify-content: space-between; align-items: end; gap: 10px; flex-wrap: wrap; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
 .sim-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; background: var(--surface-2); }
 .switch { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; cursor: pointer; }
+.sim-why { background: var(--surface-2); border-radius: 8px; padding: 10px 14px; font-size: 14px; }
+.sim-why summary { cursor: pointer; }
+.sim-why ol { margin: 8px 0 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
 .sim-stats { padding: 12px 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .stat .v.sm { font-size: 15px; }
 details.verdict summary { cursor: pointer; list-style-position: outside; }
@@ -441,6 +445,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
           <div class="row"><label><input type="checkbox" id="sr">支撐 / 壓力線</label></div>
           <div class="row"><label><input type="checkbox" id="zz">轉折點與結構（道氏 / HH、HL）</label></div>
           <div class="row"><label><input type="checkbox" id="smcz">聰明錢區塊（訂單塊 / 缺口）</label></div>
+          <div class="row"><label><input type="checkbox" id="fibz">斐波那契回撤 / 延伸</label></div>
           <h3>副圖</h3>
           <div class="ibar compact" id="labIbar"></div>
         </div>
@@ -719,6 +724,17 @@ const Signals = {
       shapes: [{ pts: [[e.from, e.level], [e.i, e.level]], color: e.dir > 0 ? "up" : "down", dash: [4, 3], width: 1.3 }] }));
   },
   sweep(D) { return marketStructure(D).sweeps.map(s => ({ i: s.i, side: s.dir > 0 ? "buy" : "sell", label: "掃流動性", note: true })); },
+  // 波段之後第一次回到 50%～78.6% 黃金區、並收出順勢 K 棒
+  fib(D) {
+    const f = fibLevels(D); if (!f) return [];
+    const a = f.ret[3].price, b = f.ret[5].price, lo = Math.min(a, b), hi = Math.max(a, b);
+    for (let i = f.b.i + 1; i < D.length; i++) {
+      const d = D[i], inZone = f.up ? d.l <= hi && d.l >= lo - (hi - lo) * 0.5 : d.h >= lo && d.h <= hi + (hi - lo) * 0.5;
+      if (inZone && (f.up ? d.c > d.o : d.c < d.o)) return [{ i, side: f.up ? "buy" : "sell", label: "回測黃金區" }];
+      if (f.up ? d.c < f.a.p : d.c > f.a.p) break; // 跌破波段起點，這組回撤就失效了
+    }
+    return [];
+  },
   chartPat(D, I, only) {
     return chartPatterns(D).filter(f => !only || only.includes(f.id)).map(f => {
       const P = CHART_PATTERNS[f.id], col = f.side === "buy" ? "up" : "down", lines = f.neck ? [f.neck] : f.lines;
@@ -1095,7 +1111,9 @@ function simulateFuture(D, { days = 20, mode = "trend", paths = 800, seed = 1, b
     return { d: `模擬 ${t + 1}`, o, h, l, c, v: avgV, sim: true };
   });
   const ends = Array.from(all, a => a[days - 1]).sort((a, b) => a - b);
-  return { bars, bands, sd, drift, last, paths,
+  const r20 = rets.slice(-20), info = { n: rets.length, mean20: avg(r20), upShare: rets.filter(x => x > 0).length / (rets.length || 1), maxUp: Math.max(...rets), maxDn: Math.min(...rets),
+    gapAbs: avg(gaps.map(Math.abs)), upW: avg(ups.map(x => Math.max(0, x))), dnW: avg(dns.map(x => Math.max(0, x))), best };
+  return { bars, bands, sd, drift, last, paths, info,
     stats: { p10: q(ends, 0.1), p50: q(ends, 0.5), p90: q(ends, 0.9), up: ends.filter(x => x > last).length / paths },
     touch: (price, above) => Array.from(above ? mx : mn).filter(v => (above ? v >= price : v <= price)).length / paths };
 }
@@ -1207,16 +1225,16 @@ class Chart {
     }
     // 支撐壓力
     (o.hlines || []).forEach(h => {
-      const y = Y(h.price); const c = h.color ? col[h.color] || h.color : h.kind === "壓力" ? col.down : col.up;
+      const y = Y(h.price); if (y < top0 - 1 || y > top0 + mainH + 1) return; const c = h.color ? col[h.color] || h.color : h.kind === "壓力" ? col.down : col.up;
       ctx.strokeStyle = c; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(Math.max(L, X(h.i ?? 0)), y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = c; ctx.textAlign = "right"; ctx.font = `11px ${cssVar("--font-body")}`; ctx.fillText(h.label || `${h.kind} ${fmtP(h.price)}`, L + pw - 4, y - 8); ctx.font = `11px ${cssVar("--font-mono")}`;
+      const t = h.label || `${h.kind} ${fmtP(h.price)}`; ctx.textAlign = "right"; ctx.font = `11px ${cssVar("--font-body")}`; const tw = ctx.measureText(t).width; ctx.fillStyle = col.surface; ctx.globalAlpha = 0.85; ctx.fillRect(L + pw - 6 - tw, y - 19, tw + 4, 14); ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, L + pw - 4, y - 8); ctx.font = `11px ${cssVar("--font-mono")}`;
     });
     // 區塊（訂單塊、公平價值缺口）：畫在 K 棒後面，只畫到目前可見的範圍
     const cmap = { up: col.up, down: col.down, accent: col.accent, muted: col.muted, s2: col.s2, ink: col.ink };
     ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
     (o.zones || []).filter(z => z.at == null || z.at < vis).forEach(z => {
-      const x1 = X(z.i1) - bw / 2, x2 = X(Math.min(z.i2, vis - 1)) + bw / 2, y1 = Y(z.top), y2 = Y(z.bot), c = z.dir > 0 ? col.up : col.down;
-      ctx.fillStyle = c; ctx.globalAlpha = z.kind === "FVG" ? 0.08 : 0.16; ctx.fillRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.globalAlpha = 0.7;
+      const x1 = X(z.i1) - bw / 2, x2 = X(Math.min(z.i2, vis - 1)) + bw / 2, y1 = Y(z.top), y2 = Y(z.bot), c = z.color ? cmap[z.color] : z.dir > 0 ? col.up : col.down;
+      ctx.fillStyle = c; ctx.globalAlpha = z.alpha ?? (z.kind === "FVG" ? 0.08 : 0.16); ctx.fillRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.globalAlpha = z.alpha != null ? Math.min(0.7, z.alpha * 4) : 0.7;
       ctx.strokeStyle = c; ctx.lineWidth = 1; ctx.setLineDash(z.kind === "FVG" ? [3, 3] : []); ctx.strokeRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.setLineDash([]); ctx.globalAlpha = 1;
       if (x2 - x1 > 22) { ctx.fillStyle = c; ctx.textAlign = "left"; ctx.font = `600 10px ${cssVar("--font-body")}`; ctx.fillText(z.kind, x1 + 3, Math.max(y1, Math.min(y2, y1 + 7))); ctx.font = `11px ${cssVar("--font-mono")}`; }
     });
@@ -1427,6 +1445,67 @@ const dowPhaseSVG = `
   <text x="345" y="150" text-anchor="middle" class="lbl-strong">出貨</text><text x="345" y="165" text-anchor="middle">高檔換手、量大不漲</text>
 </svg>
 </div>`;
+// 教學圖用的小 K 棒：[開, 高, 低, 收] 都是 SVG 的 y（越小價格越高）
+const svgK = (list, x0, step, w = 12) => list.map(([o, h, l, c], k) => {
+  const x = x0 + k * step, up = c < o, col = up ? "var(--up)" : "var(--down)";
+  return `<line x1="${x}" y1="${h}" x2="${x}" y2="${l}" stroke="${col}" stroke-width="1.5"/><rect x="${x - w / 2}" y="${Math.min(o, c)}" width="${w}" height="${Math.max(1.5, Math.abs(c - o))}" fill="${col}"/>`;
+}).join("");
+const fibSVG = (() => {
+  const yA = 190, yB = 80, R = r => yB + (yA - yB) * r, E = r => yA - (yA - yB) * r;
+  const lv = [[0, "0%（波段高點）"], [0.236, "23.6%"], [0.382, "38.2%"], [0.5, "50%"], [0.618, "61.8% 黃金比例"], [0.786, "78.6%"], [1, "100%（波段起點）"]];
+  return `<div class="anatomy"><svg width="460" height="215" viewBox="0 0 460 215" aria-label="斐波那契回撤與延伸示意圖">
+  <rect x="20" y="${R(0.5)}" width="330" height="${R(0.618) - R(0.5)}" fill="var(--accent-soft)"/>
+  ${lv.map(([r, t]) => `<line x1="20" y1="${R(r)}" x2="350" y2="${R(r)}" class="guide"/><text x="356" y="${R(r) + 4}"${r === 0.618 ? ' class="lbl-strong"' : ""}>${t}</text>`).join("")}
+  ${[[1.272, "延伸 127.2%"], [1.618, "延伸 161.8%"]].map(([r, t]) => `<line x1="200" y1="${E(r)}" x2="350" y2="${E(r)}" class="guide"/><text x="356" y="${E(r) + 4}">${t}</text>`).join("")}
+  <polyline points="30,${yA} 70,140 95,155 150,${yB} 185,118 222,${R(0.618)} 260,95 285,112 335,${E(1.618)}" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
+  <circle cx="30" cy="${yA}" r="4" fill="var(--accent)"/><circle cx="150" cy="${yB}" r="4" fill="var(--accent)"/><circle cx="222" cy="${R(0.618)}" r="4" fill="var(--up)"/>
+  <text x="34" y="${yA + 16}" class="lbl-strong">A 起點</text><text x="118" y="${yB - 8}" class="lbl-strong">B 高點</text><text x="200" y="${R(0.618) + 22}">回檔到黃金區止跌</text>
+  <text x="250" y="${E(1.618) + 4}" text-anchor="end">目標：延伸位</text>
+</svg></div>`;
+})();
+const smcStructSVG = `<div class="anatomy"><svg width="460" height="190" viewBox="0 0 460 190" aria-label="BOS 與 CHoCH 示意圖">
+  <polyline points="20,160 70,110 100,140 150,80 185,115 230,60 270,100 300,75 350,140 380,118 430,165" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
+  <line x1="70" y1="110" x2="138" y2="110" stroke="var(--up)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="104" y="104" text-anchor="middle" fill="var(--up)" class="lbl-strong">BOS</text>
+  <line x1="150" y1="80" x2="217" y2="80" stroke="var(--up)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="183" y="74" text-anchor="middle" fill="var(--up)" class="lbl-strong">BOS</text>
+  <line x1="185" y1="115" x2="336" y2="115" stroke="var(--down)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="262" y="130" text-anchor="middle" fill="var(--down)" class="lbl-strong">CHoCH</text>
+  <text x="70" y="102" text-anchor="middle">H</text><text x="100" y="155" text-anchor="middle">HL</text><text x="150" y="72" text-anchor="middle">HH</text><text x="185" y="108" text-anchor="middle">HL</text><text x="230" y="52" text-anchor="middle">HH</text><text x="300" y="67" text-anchor="middle">LH</text><text x="350" y="155" text-anchor="middle">LL</text><text x="380" y="110" text-anchor="middle">LH</text>
+  <text x="20" y="20">上升結構：每次收盤突破前高＝BOS（延續）</text><text x="20" y="36">最後跌破「造成最後一次 BOS 的那個低點」＝CHoCH（性格改變）</text>
+</svg></div>`;
+const smcLiqSVG = `<div class="anatomy"><svg width="460" height="185" viewBox="0 0 460 185" aria-label="流動性與掃蕩示意圖">
+  <rect x="80" y="38" width="220" height="22" fill="var(--accent-soft)"/><text x="190" y="33" text-anchor="middle">等高點上方：空單的停損＋追突破的買單（BSL 買方流動性）</text>
+  <line x1="70" y1="60" x2="300" y2="60" stroke="var(--down)" stroke-dasharray="2 3" stroke-width="1.5"/>
+  <polyline points="20,130 80,60 125,100 180,60 220,98 250,75" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
+  ${svgK([[66, 40, 84, 78]], 262, 0, 14)}
+  <polyline points="262,78 300,95 330,85 380,140 430,160" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
+  <text x="276" y="50">刺破收回＝掃蕩</text>
+  <line x1="200" y1="150" x2="440" y2="150" stroke="var(--up)" stroke-dasharray="2 3" stroke-width="1.5"/><text x="440" y="176" text-anchor="end">下一個目標：前低下方的賣方流動性（SSL）</text>
+  <text x="80" y="52" text-anchor="middle" class="lbl-strong">H</text><text x="180" y="52" text-anchor="middle" class="lbl-strong">H</text>
+</svg></div>`;
+const smcObSVG = `<div class="anatomy"><svg width="440" height="195" viewBox="0 0 440 195" aria-label="訂單塊示意圖">
+  <rect x="80" y="115" width="250" height="17" fill="var(--up)" opacity=".16"/><rect x="80" y="115" width="250" height="17" fill="none" stroke="var(--up)"/>
+  <line x1="40" y1="105" x2="155" y2="105" stroke="var(--up)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="100" y="99" text-anchor="middle" fill="var(--up)" class="lbl-strong">BOS</text>
+  ${svgK([[120, 105, 125, 110], [110, 106, 122, 118], [118, 115, 132, 128], [128, 92, 130, 95], [95, 66, 98, 70], [70, 58, 75, 62], [62, 60, 84, 80], [80, 78, 104, 100], [100, 96, 120, 112], [112, 88, 118, 90], [90, 66, 94, 70], [70, 46, 74, 50]], 40, 28)}
+  <text x="264" y="146" text-anchor="middle" fill="var(--accent)">↑ 第一次回測</text>
+  <text x="40" y="168" class="lbl-strong">多方訂單塊（方框）：急漲前最後一根下跌 K</text><text x="40" y="184">回測時在這裡找買點，停損放在方框下緣之下</text>
+</svg></div>`;
+const smcFvgSVG = `<div class="anatomy"><svg width="420" height="190" viewBox="0 0 420 190" aria-label="公平價值缺口示意圖">
+  <rect x="40" y="70" width="230" height="30" fill="var(--up)" opacity=".12"/><rect x="40" y="70" width="230" height="30" fill="none" stroke="var(--up)" stroke-dasharray="3 3"/>
+  <line x1="40" y1="85" x2="270" y2="85" stroke="var(--muted)" stroke-dasharray="6 4"/><text x="276" y="89">CE（缺口 50%）</text>
+  <text x="276" y="74">第 3 根低點</text><text x="276" y="104">第 1 根高點</text>
+  ${svgK([[120, 100, 126, 105], [104, 46, 108, 50], [52, 34, 70, 40], [42, 38, 64, 60], [60, 58, 88, 80], [80, 52, 84, 55], [55, 26, 58, 30]], 50, 32)}
+  <text x="50" y="145" text-anchor="middle">1</text><text x="82" y="145" text-anchor="middle">2</text><text x="114" y="145" text-anchor="middle">3</text>
+  <text x="20" y="168">第 2 根急漲，第 1 根高點和第 3 根低點之間留下空白 → 多方 FVG</text><text x="20" y="184">之後價格回來填到 CE 附近、收出紅 K，就是常見的進場點</text>
+</svg></div>`;
+const smcPdSVG = `<div class="anatomy"><svg width="500" height="200" viewBox="0 0 500 200" aria-label="溢價折價與 OTE 示意圖">
+  <rect x="20" y="30" width="300" height="70" fill="var(--down)" opacity=".08"/><rect x="20" y="100" width="300" height="70" fill="var(--up)" opacity=".08"/>
+  <rect x="150" y="${30 + 140 * 0.618}" width="170" height="${140 * (0.786 - 0.618)}" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <line x1="20" y1="100" x2="320" y2="100" stroke="var(--muted)" stroke-dasharray="6 4"/>
+  <polyline points="30,170 80,120 100,135 140,30 185,80 215,${30 + 140 * 0.7} 260,60 300,20" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
+  <text x="326" y="56" class="lbl-strong">溢價區</text><text x="326" y="72">貴：找賣點</text><text x="326" y="104">均衡 50%</text>
+  <text x="326" y="${30 + 140 * 0.7 + 4}" class="lbl-strong" fill="var(--accent)">OTE 61.8%～78.6%</text>
+  <text x="326" y="158" class="lbl-strong">折價區</text><text x="326" y="174">便宜：找買點</text>
+  <text x="30" y="188">波段低點</text><text x="140" y="22" text-anchor="middle">波段高點</text>
+</svg></div>`;
 // 轉折點折線＋HH / HL / LH / LL 標籤
 function zigzagShape(D, tags = true) {
   const z = zigzag(D, 3);
@@ -1439,6 +1518,62 @@ function smcExtra(D) {
   const lastH = [...z].reverse().find(s => s.type === "H"), lastL = [...z].reverse().find(s => s.type === "L");
   const shapes = lastH && lastL ? [{ pts: [[Math.min(lastH.i, lastL.i), (lastH.p + lastL.p) / 2], [n - 1, (lastH.p + lastL.p) / 2]], color: "muted", dash: [6, 4], width: 1.2, label: "均衡 50%" }] : [];
   return { zones, shapes };
+}
+
+// 等高點 / 等低點（EQH / EQL）：兩個相鄰的轉折高點幾乎一樣高，上方堆滿停損單，是 SMC 眼中的流動性池
+function eqLevels(D, upto = D.length) {
+  let avg = 0; for (let k = 0; k < upto; k++) avg += D[k].h - D[k].l; avg /= upto;
+  const z = zigzag(D, 3, upto), out = [];
+  for (const type of ["H", "L"]) {
+    const sw = z.filter(s => s.type === type);
+    for (let k = 1; k < sw.length; k++) {
+      const a = sw[k - 1], b = sw[k];
+      if (Math.abs(a.p - b.p) > avg * 0.35 || b.i - a.i > 40) continue;
+      const lvl = type === "H" ? Math.max(a.p, b.p) : Math.min(a.p, b.p);
+      let end = upto - 1; for (let m = b.i + 1; m < upto; m++) if (type === "H" ? D[m].h > lvl : D[m].l < lvl) { end = m; break; }
+      out.push({ type, i1: a.i, i2: b.i, end, price: lvl, taken: end < upto - 1 });
+    }
+  }
+  return out;
+}
+function eqShapes(D) {
+  return eqLevels(D).map(e => ({ pts: [[e.i1, e.price], [e.end, e.price]], color: e.type === "H" ? "down" : "up", dash: [2, 3], width: 1.4, label: e.type === "H" ? "EQH 買方流動性" : "EQL 賣方流動性" }));
+}
+
+/* ---------- 斐波那契回撤與延伸 ----------
+   取最近一段明顯的波段（較大的轉折視窗），從起點量到終點：
+   回撤 23.6%～78.6% 是回檔可能停下來的位置，延伸 127.2%、161.8% 是突破後常見的目標。 */
+const FIB_RET = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1], FIB_EXT = [1.272, 1.618];
+function fibSwing(D, upto = D.length) {
+  const z = zigzag(D, 5, upto); if (z.length < 2) return null;
+  const legs = []; for (let k = Math.max(0, z.length - 6); k < z.length - 1; k++) legs.push({ a: z[k], b: z[k + 1], amp: Math.abs(z[k + 1].p - z[k].p) });
+  const big = Math.max(...legs.map(l => l.amp));
+  // 最近一段夠大就用最近的；太小（只是回檔裡的小波）就退回前面那段大波段
+  const leg = [...legs].reverse().find(l => l.amp >= big * 0.6);
+  return { a: leg.a, b: leg.b, up: leg.b.p > leg.a.p };
+}
+function fibLevels(D, upto = D.length) {
+  const s = fibSwing(D, upto); if (!s) return null;
+  const rng = s.b.p - s.a.p;
+  return { ...s, ret: FIB_RET.map(r => ({ r, price: s.b.p - rng * r })), ext: FIB_EXT.map(r => ({ r, price: s.a.p + rng * r })) };
+}
+const fibPct = r => `${+(r * 100).toFixed(1)}%`;
+function fibLines(D, ext = true) {
+  const f = fibLevels(D); if (!f) return [];
+  return [...f.ret.map(l => ({ price: l.price, label: `${fibPct(l.r)}  ${fmtP(l.price)}`, i: Math.min(f.a.i, f.b.i), color: l.r === 0.618 || l.r === 0.5 ? "accent" : "muted" })),
+    ...(ext ? f.ext.map(l => ({ price: l.price, label: `延伸 ${fibPct(l.r)}  ${fmtP(l.price)}`, i: f.b.i, color: "s2" })) : [])];
+}
+function fibShape(D) { const f = fibLevels(D); return f ? { pts: [[f.a.i, f.a.p], [f.b.i, f.b.p]], color: "accent", dash: [4, 3], width: 1.6 } : null; }
+// 溢價 / 折價區與最佳進場區（OTE，回撤 61.8%～78.6%）
+function premiumDiscount(D) {
+  const f = fibLevels(D); if (!f) return { zones: [], shapes: [] };
+  const n = D.length, eq = (f.a.p + f.b.p) / 2, hi = Math.max(f.a.p, f.b.p), lo = Math.min(f.a.p, f.b.p), i1 = Math.min(f.a.i, f.b.i);
+  const o1 = f.ret[4].price, o2 = f.ret[5].price;
+  return {
+    zones: [{ kind: "溢價區", dir: -1, i1, i2: n - 1, top: hi, bot: eq, alpha: 0.05 }, { kind: "折價區", dir: 1, i1, i2: n - 1, top: eq, bot: lo, alpha: 0.05 },
+      { kind: "OTE", dir: f.up ? 1 : -1, color: "accent", alpha: 0.14, i1: f.b.i, i2: n - 1, top: Math.max(o1, o2), bot: Math.min(o1, o2) }],
+    shapes: [{ pts: [[i1, eq], [n - 1, eq]], color: "muted", dash: [6, 4], width: 1.2, label: "均衡 50%" }, fibShape(D)],
+  };
 }
 
 // 模擬五檔報價：每筆成交依吃掉委賣或委買，記為外盤或內盤
@@ -1763,33 +1898,150 @@ ${dowPhaseSVG}
     keys: ["%R 的數值等於 RSV − 100，所以它比 KD 敏感。", "強勢股會長時間停在超買區，這是強勢的證明，不是賣出訊號。", "適合搭配趨勢判斷，只做順著均線方向的超買超賣訊號。"],
   },
   {
-    id: "smc-structure", title: "聰明錢概念（一）：市場結構與流動性", tag: "聰明錢", seed: 8400, n: 200,
-    body: `<p><strong>聰明錢概念</strong>（Smart Money Concepts，SMC）近年在外匯與加密貨幣圈流行，源自 ICT（Inner Circle Trader）的教學。核心想法是：機構（聰明錢）需要大量的對手單才能進出，所以價格常先被推到散戶停損單聚集的地方，再走出真正的方向。</p>
-<table><thead><tr><th>名詞</th><th>意思</th></tr></thead><tbody>
-<tr><td>BOS（結構突破）</td><td>順著原趨勢，收盤突破前一個轉折高點（或低點），代表趨勢延續</td></tr>
-<tr><td>CHoCH（特性轉變）</td><td>逆著原趨勢的第一次結構突破，例如下降趨勢中第一次收盤站上前高，代表可能反轉</td></tr>
-<tr><td>流動性</td><td>前高之上、前低之下聚集的停損單與突破單；兩個幾乎等高的高點（EQH）上方特別多</td></tr>
-<tr><td>流動性掃蕩</td><td>盤中刺穿前高（或前低）觸發停損，收盤卻又回到裡面，留下長影線</td></tr>
-</tbody></table>`,
-    after: `<p>圖上的水平虛線，從被突破的轉折點畫到突破的那一天。仔細看會發現，BOS 和 CHoCH 就是道氏理論的趨勢延續與反轉，SMC 換了名字，並更強調「突破時誰被洗出場」。藍色標記是流動性掃蕩。</p>`,
-    chart: { ma: [], markers: (D, I) => [...Signals.structure(D, I, "smc"), ...Signals.sweep(D)], extra: D => ({ shapes: [zigzagShape(D, false)] }) },
-    try: "找出每一次 CHoCH，看看它之前是否先出現過「掃流動性」的長影線；再觀察 CHoCH 之後趨勢是不是真的反轉了。",
-    keys: ["收盤突破才算結構突破；只有影線刺穿、收盤回來的是流動性掃蕩。", "CHoCH 只是「可能」反轉，常見做法是等它之後的回檔，在訂單塊或缺口附近找進場點。", "SMC 的名詞很多，底層仍是轉折點、支撐壓力與假突破的觀念。"],
+    id: "fib", title: "斐波那契：回撤與延伸", tag: "趨勢", seed: 5116, n: 200,
+    body: `<p>斐波那契數列是 1、1、2、3、5、8、13、21、34、55…，每一項都是前兩項相加。相鄰兩項的比值會逼近 <strong>0.618</strong>（黃金比例），隔一項逼近 0.382，隔兩項逼近 0.236。交易者把這些比例拿來量「回檔會回到哪裡」、「突破後會走到哪裡」。</p>
+${fibSVG}
+<table><thead><tr><th>比例</th><th>來源</th><th>常見解讀</th></tr></thead><tbody>
+<tr><td class="num">23.6%</td><td>隔兩項的比值</td><td>強勢回檔：趨勢很強時只回這麼淺</td></tr>
+<tr><td class="num">38.2%</td><td>隔一項的比值</td><td>健康回檔，常見的第一個支撐</td></tr>
+<tr><td class="num">50%</td><td>不是斐波那契數，來自道氏理論的「回吐一半」</td><td>多空均衡點</td></tr>
+<tr><td class="num">61.8%</td><td>相鄰兩項的比值（黃金比例）</td><td>最受重視的回撤位，守住代表原趨勢還在</td></tr>
+<tr><td class="num">78.6%</td><td>0.618 的平方根</td><td>最後防線，跌破就容易回到起點</td></tr>
+<tr><td class="num">127.2%、161.8%</td><td>延伸比例</td><td>突破波段高點後的目標價</td></tr>
+</tbody></table>
+<p><strong>怎麼畫</strong>：上升趨勢從波段<strong>低點拉到高點</strong>，下降趨勢從<strong>高點拉到低點</strong>。回撤位畫在這兩點之間，延伸位畫在高點之外。</p>
+<div class="formula">上升波段 A（低）→ B（高）
+回撤 r 的價位 = B −（B − A）× r
+延伸 x 的價位 = A +（B − A）× x</div>
+<p>例：從 100 漲到 150，61.8% 回撤位 = 150 − 50 × 0.618 ≈ 119.1；161.8% 延伸位 = 100 + 50 × 1.618 ≈ 180.9。</p>`,
+    after: `<p>程式自動挑了最近一段明顯的波段（虛線），畫出回撤與延伸位；藍色是 50% 與 61.8%。三角形標出波段之後第一次回到 50%～78.6% 黃金區、並收出順勢 K 棒的位置。</p>
+<p>斐波那契最好用來找<strong>共振</strong>：61.8% 剛好碰到月線、前一個高點或訂單塊，比單獨一條線可靠得多。</p>`,
+    chart: { ma: [20], markers: D => Signals.fib(D), extra: D => ({ shapes: [fibShape(D)].filter(Boolean) }), hlines: D => fibLines(D) },
+    try: "按「換一段走勢」幾次，看回檔最常停在哪一條線；再對照 MA20，找出回撤位和均線靠在一起的地方。",
+    keys: ["波段要選明顯的高低點，選錯起點整組線就沒有意義。", "回撤位是「可能有反應」的區域，要看 K 棒在那裡有沒有止跌（長下影、吞噬）。", "跌破 78.6% 或收盤回到起點之下，這組回撤就失效，該重新畫。"],
   },
   {
-    id: "smc-zones", title: "聰明錢概念（二）：訂單塊與公平價值缺口", tag: "聰明錢", seed: 9083, n: 180,
-    body: `<p>結構突破之後，SMC 交易者會等價格<strong>回到</strong>某些區域再進場。最常用的是這兩種：</p>
+    id: "smc-structure", title: "聰明錢概念（一）：市場結構 BOS 與 CHoCH", tag: "聰明錢", seed: 8400, n: 200,
+    body: `<p><strong>聰明錢概念</strong>（Smart Money Concepts，SMC）源自外匯圈 ICT（Inner Circle Trader）的教學，近年在加密貨幣與股票圈流行。它的核心假設是：法人、主力（聰明錢）部位太大，需要大量對手單才能進出，所以價格常先跑到散戶停損單聚集的地方，再走出真正的方向。</p>
+<p>SMC 的第一步一定是讀<strong>市場結構</strong>，也就是判斷現在誰在主導。</p>
+${smcStructSVG}
+<h3>1. 先找轉折點（Swing）</h3>
 <ul>
-<li><strong>訂單塊（Order Block，OB）</strong>：一段強力上漲（造成結構突破）之前的<strong>最後一根綠K</strong>；下跌前則是最後一根紅K。SMC 認為那是機構建立部位的地方，價格回到這裡常有反應。</li>
-<li><strong>公平價值缺口（Fair Value Gap，FVG）</strong>：連續三根 K 棒中，第一根的高點和第三根的低點沒有重疊，中間那根急漲留下一段空白。代表當時買賣嚴重失衡，價格之後常回來補。</li>
-<li><strong>溢價區與折價區</strong>：把最近一段波段的高低點切一半，上半部是溢價區（找賣點），下半部是折價區（找買點）。</li>
+<li><strong>轉折高點</strong>：一根 K 棒的最高價比左右各 N 根都高（本課 N = 3）；轉折低點反之。</li>
+<li>要等右邊 N 根走完才算確認，所以轉折點永遠是「事後」才知道。</li>
+<li>相鄰兩個高點比較出 HH（更高的高）或 LH（更低的高），低點比較出 HL 或 LL。</li>
 </ul>
-<div class="formula">多方 FVG：第 3 根最低價 > 第 1 根最高價 → 缺口 = [第 1 根最高價, 第 3 根最低價]</div>`,
-    after: `<p>圖上實線框是訂單塊，虛線框是公平價值缺口，都延伸到價格第一次回到區域內為止。水平虛線是最近一段波段的 50% 均衡線。</p>
+<h3>2. 結構突破的兩種</h3>
+<table><thead><tr><th></th><th>BOS（Break of Structure）</th><th>CHoCH（Change of Character）</th></tr></thead><tbody>
+<tr><td>方向</td><td>順著原趨勢</td><td>逆著原趨勢的<strong>第一次</strong>突破</td></tr>
+<tr><td>上升結構中</td><td>收盤站上前一個轉折高點</td><td>收盤跌破「造成最後一次 BOS 的那個低點」</td></tr>
+<tr><td>下降結構中</td><td>收盤跌破前一個轉折低點</td><td>收盤站上最後一個較低的高點</td></tr>
+<tr><td>意義</td><td>趨勢延續，可以順勢找回檔進場</td><td>趨勢可能反轉，先停止順勢操作</td></tr>
+</tbody></table>
+<h3>3. 細節：怎樣才算突破</h3>
+<ul>
+<li><strong>用收盤價確認</strong>。只有影線刺穿、收盤又回來，不算結構突破，那是下一課的「流動性掃蕩」。</li>
+<li><strong>外部結構與內部結構</strong>：大波段的高低點是外部結構，大波段裡的小起伏是內部結構。內部結構常常一下 CHoCH 一下 BOS，看大方向要以外部結構為準。</li>
+<li><strong>多時間框架</strong>：常見做法是用週線或日線定方向（外部結構），再到較小的週期（例如 60 分線）等 CHoCH 進場。</li>
+</ul>`,
+    after: `<p>圖上的水平虛線從被突破的轉折點畫到突破那一天，文字標出是 BOS 還是 CHoCH。仔細對照會發現，BOS、CHoCH 就是道氏理論的趨勢延續與反轉；SMC 換了名字，並更強調「突破時誰被洗出場」。</p>`,
+    chart: { ma: [], markers: (D, I) => Signals.structure(D, I, "smc"), extra: D => ({ shapes: [zigzagShape(D)] }) },
+    try: "沿著折線找出每一個 CHoCH，往前看它跌破（或站上）的是哪一個轉折點；再看 CHoCH 之後，是不是很快又出現同方向的 BOS 確認新趨勢。",
+    keys: ["先讀結構再找進場點：上升結構只做多、下降結構只做空。", "收盤突破才算 BOS / CHoCH；影線刺穿收回是掃蕩，不是突破。", "CHoCH 只代表「性格改變」，等到新方向的第一次 BOS 才算確認。"],
+  },
+  {
+    id: "smc-liquidity", title: "聰明錢概念（二）：流動性與掃蕩", tag: "聰明錢", seed: 8812, n: 200,
+    body: `<p>在 SMC 裡，<strong>流動性</strong>指的是「一定會被觸發的掛單」：停損單、突破單。聰明錢要買進大量股票，就需要有人在那個價位賣給他，而散戶的停損賣單正好提供了這些對手單。</p>
+${smcLiqSVG}
+<table><thead><tr><th>名詞</th><th>位置</th><th>裡面有什麼</th></tr></thead><tbody>
+<tr><td>BSL 買方流動性</td><td>前高、等高點（EQH）的上方</td><td>空單的停損（買回）、追突破的買單</td></tr>
+<tr><td>SSL 賣方流動性</td><td>前低、等低點（EQL）的下方</td><td>多單的停損（賣出）、追跌破的賣單</td></tr>
+<tr><td>EQH / EQL</td><td>兩個幾乎一樣高（低）的轉折點</td><td>大家都把停損放在同一個地方，流動性特別集中</td></tr>
+<tr><td>誘導（Inducement）</td><td>真正進場區之前的小轉折</td><td>引誘太早進場的人，掃掉他們後才到真正的區域</td></tr>
+</tbody></table>
+<h3>掃蕩（Sweep）和真突破怎麼分</h3>
+<ul>
+<li><strong>掃蕩</strong>：盤中刺穿前高（前低），收盤卻回到裡面，留下長影線。停損被觸發，價格卻沒有延續，代表那些單被大戶「接走」了。</li>
+<li><strong>真突破</strong>：收盤站穩在外面，隔幾天回測也守住，而且常伴隨放量。</li>
+<li>一次掃蕩之後緊接著反方向的 CHoCH，是 SMC 最經典的反轉組合：先掃 SSL、再站上前高，代表空方的停損與賣壓已被吸收。</li>
+</ul>
+<h3>流動性也是目標</h3>
+<p>價格常常從一個流動性池走向另一個。掃完下方的 SSL 往上走時，上方還沒被碰過的前高、EQH 就是自然的目標價。</p>`,
+    after: `<p>圖上的點狀線是程式找到的等高點（EQH，綠）與等低點（EQL，紅），畫到它第一次被突破為止；標記是「掃流動性」：影線刺穿轉折點、收盤又回來的那一天。</p>`,
+    chart: { ma: [], markers: (D, I) => [...Signals.sweep(D), ...Signals.structure(D, I, "smc").filter(m => m.label.includes("CHoCH"))], extra: D => ({ shapes: [zigzagShape(D, false), ...eqShapes(D)] }) },
+    try: "找出每個「掃流動性」標記，看它之後幾根內有沒有出現反方向的 CHoCH；再看等高點、等低點被突破時，價格是延續還是馬上收回。",
+    keys: ["停損單聚集的地方就是流動性：前高之上、前低之下、等高等低點最多。", "影線刺穿、收盤收回＝掃蕩；收盤站穩、回測守住＝真突破。", "自己的停損別剛好放在明顯的前低下方一點點，那正是最容易被掃的位置。"],
+  },
+  {
+    id: "smc-zones", title: "聰明錢概念（三）：訂單塊", tag: "聰明錢", seed: 9083, n: 180,
+    body: `<p>確認結構之後，SMC 不追價，而是等價格<strong>回到</strong>聰明錢建倉的區域再進場。最常用的區域是<strong>訂單塊</strong>（Order Block，OB）。</p>
+${smcObSVG}
+<h3>定義</h3>
+<ul>
+<li><strong>多方訂單塊</strong>：一段急漲（並造成 BOS）之前的<strong>最後一根下跌 K 棒</strong>。</li>
+<li><strong>空方訂單塊</strong>：一段急跌（並造成 BOS）之前的<strong>最後一根上漲 K 棒</strong>。</li>
+<li>區域範圍通常取那根 K 棒的最高到最低；想要更精準的人只取實體（開到收），停損較小但較容易被刺穿。</li>
+</ul>
+<h3>有效訂單塊的條件</h3>
+<table><thead><tr><th>條件</th><th>為什麼</th></tr></thead><tbody>
+<tr><td>之後的走勢造成結構突破（BOS / CHoCH）</td><td>代表這裡的買盤真的有力量改變結構</td></tr>
+<tr><td>離開時很急（大 K 棒、常留下 FVG）</td><td>急漲代表當時買單遠多於賣單，還有沒成交完的單留在這裡</td></tr>
+<tr><td>還沒被回測過（unmitigated）</td><td>第一次回測最有效；被碰過幾次，裡面的單就消耗掉了</td></tr>
+<tr><td>位在折價區（多方）或溢價區（空方）</td><td>在便宜的地方買、在貴的地方賣（見第五課）</td></tr>
+</tbody></table>
+<h3>回測時怎麼用</h3>
+<ul>
+<li><strong>進場</strong>：價格回到訂單塊內、並出現止跌訊號（長下影、吞噬、或小週期的 CHoCH）。</li>
+<li><strong>停損</strong>：放在訂單塊另一側之外（多方訂單塊的下緣之下）。</li>
+<li><strong>失效</strong>：收盤直接穿過整個訂單塊，它就失效了；原本的多方訂單塊常反過來變成壓力，稱為<strong>突破塊</strong>（Breaker Block）。</li>
+</ul>`,
+    after: `<p>圖上的實線框是訂單塊（紅色多方、綠色空方），從那根 K 棒延伸到價格第一次回到框內為止。對照結構突破的標記，可以看到每個訂單塊後面都跟著一次 BOS 或 CHoCH。</p>`,
+    chart: { ma: [], markers: (D, I) => Signals.structure(D, I, "smc"), extra: D => ({ zones: smcZones(D, marketStructure(D)).filter(z => z.kind === "OB") }) },
+    try: "看每個訂單塊被第一次回測時，價格有沒有在框裡止跌；再找一個被收盤直接穿過的訂單塊，觀察它之後有沒有變成反方向的壓力或支撐。",
+    keys: ["訂單塊＝造成結構突破的那段急漲（急跌）之前，最後一根反向 K 棒。", "第一次回測最有效，停損放在訂單塊外側。", "順著結構使用：上升結構只用多方訂單塊。"],
+  },
+  {
+    id: "smc-fvg", title: "聰明錢概念（四）：公平價值缺口", tag: "聰明錢", seed: 9311, n: 180,
+    body: `<p><strong>公平價值缺口</strong>（Fair Value Gap，FVG，也叫失衡區 Imbalance）是一段急漲或急跌時留下的「只有一方在成交」的價格區間。SMC 認為市場會傾向回來把這段失衡填平，再繼續原方向。</p>
+${smcFvgSVG}
+<div class="formula">多方 FVG：第 3 根最低價 > 第 1 根最高價 → 缺口 = [第 1 根最高價, 第 3 根最低價]
+空方 FVG：第 3 根最高價 < 第 1 根最低價 → 缺口 = [第 3 根最高價, 第 1 根最低價]</div>
+<h3>使用細節</h3>
+<ul>
+<li><strong>CE（Consequent Encroachment）</strong>：缺口的 50% 位置。很多人等價格回到 CE 附近才進場，停損放在缺口另一端外側。</li>
+<li><strong>大小要有意義</strong>：太小的缺口只是雜訊。本課程只標出寬度超過平均 K 棒振幅一半的缺口。</li>
+<li><strong>和訂單塊一起看</strong>：急漲離開訂單塊時常同時留下 FVG，兩者重疊的區域最受重視。</li>
+<li><strong>反向 FVG（Inversion FVG）</strong>：收盤完全穿過缺口後，原本的多方缺口反過來變成壓力。</li>
+</ul>
 <p>FVG 和第 3 課的跳空缺口很像，但它不需要開盤跳空：只要三根 K 棒的影線之間留下空白就算。</p>`,
-    chart: { ma: [], markers: (D, I) => Signals.structure(D, I, "smc"), extra: D => smcExtra(D) },
-    try: "觀察每個紅色實線框（多方訂單塊）被回測時，價格有沒有止跌；再數數有多少公平價值缺口在之後被回補。",
-    keys: ["訂單塊和缺口是「可能有反應」的區域，不是保證反轉的價位。", "第一次回測最有效，反覆被回測的區域會逐漸失效。", "順著結構方向使用：上升結構只看多方的訂單塊與缺口，並在折價區找買點。"],
+    after: `<p>圖上的虛線框是公平價值缺口，延伸到價格第一次回到缺口內為止。數數看有多少缺口在之後被回補，以及回補時價格是否在缺口裡止住。</p>`,
+    chart: { ma: [], markers: (D, I) => Signals.structure(D, I, "smc"), extra: D => ({ zones: smcZones(D, marketStructure(D)).filter(z => z.kind === "FVG" && (!z.hit || z.i2 - z.i1 < 30)) }) },
+    try: "找出一個被回補的多方缺口，看價格是填到缺口上緣就反彈、填到 CE（一半）、還是整個穿過去；穿過去的那個後來有沒有變成壓力？",
+    keys: ["FVG 是三根 K 棒中，第一根和第三根影線之間沒有重疊的空白。", "回到缺口內（尤其是 50% 的 CE）是常見的順勢進場位置。", "收盤穿過整個缺口，就把它當成失效或反向使用。"],
+  },
+  {
+    id: "smc-pd", title: "聰明錢概念（五）：溢價折價、OTE 與完整流程", tag: "聰明錢", seed: 8650, n: 200,
+    body: `<p>同樣是多方訂單塊，位置不同勝率也不同。SMC 用最近一段波段的高低點，把價格分成貴和便宜兩半：</p>
+${smcPdSVG}
+<ul>
+<li><strong>溢價區</strong>（Premium）：波段 50% 以上，價格偏貴，適合找賣點。</li>
+<li><strong>折價區</strong>（Discount）：波段 50% 以下，價格偏便宜，適合找買點。</li>
+<li><strong>OTE 最佳進場區</strong>（Optimal Trade Entry）：回撤 61.8%～78.6%，就是上一課的斐波那契黃金區，再往下深一點。</li>
+</ul>
+<h3>SMC 的完整交易流程（以做多為例）</h3>
+<table><thead><tr><th>步驟</th><th>要看什麼</th></tr></thead><tbody>
+<tr><td>1. 定方向</td><td>大週期（日線、週線）的外部結構是上升結構</td></tr>
+<tr><td>2. 等掃蕩</td><td>回檔時掃掉前低下方的賣方流動性（SSL）</td></tr>
+<tr><td>3. 等確認</td><td>小週期出現向上的 CHoCH，之後再有 BOS</td></tr>
+<tr><td>4. 找區域</td><td>造成這次突破的多方訂單塊或 FVG，而且位在折價區、最好在 OTE 內</td></tr>
+<tr><td>5. 進場與停損</td><td>回測區域時進場，停損放在掃蕩的低點之下</td></tr>
+<tr><td>6. 目標</td><td>上方還沒被碰過的前高、EQH（買方流動性）</td></tr>
+</tbody></table>
+<p>每一步都只是提高勝算的條件，不是保證。條件越多同時成立，交易機會越少，但品質越高。</p>`,
+    after: `<p>圖上的淡色背景是最近一段波段：上半部是溢價區、下半部是折價區，中間虛線是均衡 50%；藍色框是 OTE（回撤 61.8%～78.6%）。看看價格回到 OTE 時，有沒有搭配訂單塊或結構突破一起出現。</p>`,
+    chart: { ma: [], markers: (D, I) => [...Signals.structure(D, I, "smc"), ...Signals.sweep(D)], extra: D => { const pd = premiumDiscount(D); return { zones: [...pd.zones, ...smcZones(D, marketStructure(D)).filter(z => z.kind === "OB" && !z.hit)], shapes: pd.shapes.filter(Boolean) }; } },
+    try: "照著上面六個步驟，在圖上找一次符合「掃蕩 → CHoCH → 回到折價區的訂單塊」的機會；換幾段走勢，看這種組合多久才出現一次。",
+    keys: ["在折價區找買點、在溢價區找賣點，不在中間追價。", "OTE（61.8%～78.6%）＋訂單塊或 FVG 的重疊處，是 SMC 最重視的進場區。", "SMC 的名詞很多，底層仍是結構、支撐壓力、假突破與風險控管。"],
   },
   {
     id: "risk", title: "訊號不是保證：成本、停損與紀律", tag: "風險", seed: 117, n: 220,
@@ -1813,8 +2065,8 @@ ${dowPhaseSVG}
 
 // 課程順序與分組
 const LESSON_GROUPS = [
-  ["基礎", ["kline"]], ["K 線與型態學", ["patterns-rev", "patterns-cont", "chart-patterns"]], ["趨勢與量價", ["dow", "ma", "vol", "inout", "sr"]],
-  ["技術指標", ["rsi", "kd", "wr", "macd", "boll"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-zones"]], ["風險管理", ["risk"]],
+  ["基礎", ["kline"]], ["K 線與型態學", ["patterns-rev", "patterns-cont", "chart-patterns"]], ["趨勢與量價", ["dow", "ma", "vol", "inout", "sr", "fib"]],
+  ["技術指標", ["rsi", "kd", "wr", "macd", "boll"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["風險管理", ["risk"]],
 ];
 const ORDER = LESSON_GROUPS.flatMap(g => g[1]);
 LESSONS.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
@@ -1840,7 +2092,7 @@ function drawLesson() {
   const L = LESSONS[lessonIdx], v = L.variants ? L.variants[lessonView.variant] : {}, { D, I } = lessonView;
   const all = lessonMarkers(L, D, I, v), markers = lessonView.pat ? all.filter(m => m.pat === lessonView.pat) : all;
   const ex = L.chart.extra ? L.chart.extra(D, I) : {};
-  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, sub: v.sub || L.chart.sub, markers, hlines: L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
+  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, sub: v.sub || L.chart.sub, markers, hlines: L.chart.hlines ? L.chart.hlines(D) : L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
   const g = $("#lessonGallery");
   g.hidden = !L.gallery;
   if (L.gallery) g.innerHTML = L.gallery.map(id => {
@@ -1917,7 +2169,8 @@ function labDraw() {
   const S = STRATS[lab.strat], sigs = S.fn ? S.fn(lab.D, lab.I) : [];
   const ex = $("#smcz").checked ? smcExtra(lab.D) : { shapes: [], zones: [] };
   if ($("#zz").checked) ex.shapes.push(zigzagShape(lab.D));
-  labChart.set(lab.D, { I: lab.I, ma, boll: $("#boll").checked, subs: subsFrom(labBar), noVol: !labBar.has("vol"), markers: sigs, hlines: $("#sr").checked ? srLevels(lab.D) : [], shapes: ex.shapes, zones: ex.zones });
+  const fibOn = $("#fibz").checked; if (fibOn && fibShape(lab.D)) ex.shapes.push(fibShape(lab.D));
+  labChart.set(lab.D, { I: lab.I, ma, boll: $("#boll").checked, subs: subsFrom(labBar), noVol: !labBar.has("vol"), markers: sigs, hlines: [...($("#sr").checked ? srLevels(lab.D) : []), ...(fibOn ? fibLines(lab.D) : [])], shapes: ex.shapes, zones: ex.zones });
   renderBT(sigs);
 }
 function renderBT(sigs) {
@@ -1943,7 +2196,7 @@ function renderBT(sigs) {
 }
 $("#labNew").addEventListener("click", () => { lab.seed = Math.floor(Math.random() * 1e6); store.set("labSeed", lab.seed); labData(); labDraw(); });
 $("#labLen").addEventListener("change", () => { labData(); labDraw(); });
-["maA", "maB", "maC", "boll", "sr", "zz", "smcz", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
+["maA", "maB", "maC", "boll", "sr", "zz", "smcz", "fibz", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
 const labBar = indicatorBar($("#labIbar"), "lab", [{ title: "副圖（可多選）", items: [...SUB_ITEMS, { id: "inout", label: "外盤比" }] }], ["vol", "kd"], () => labDraw());
 
 /* ================= 判讀挑戰 ================= */
@@ -2018,6 +2271,11 @@ const QUESTIONS = [
   { q: "對稱三角收斂型態，應該如何判斷方向？", o: ["一定往上突破", "一定往下跌破", "等價格收盤突破上方或下方的趨勢線", "看第一個高點的顏色"], a: 2, e: "對稱三角是多空力量逐漸收斂，事前無法確定方向，要等收盤突破上緣或跌破下緣。" },
   { q: "在聰明錢概念（SMC）中，CHoCH 指的是？", o: ["順著趨勢的結構突破", "逆著原趨勢的第一次結構突破，代表可能反轉", "成交量爆增", "均線糾結"], a: 1, e: "CHoCH（Change of Character）是趨勢性格改變：例如下降趨勢中第一次收盤突破前一個高點。順勢的突破則叫 BOS。" },
   { q: "盤中價格刺穿前高、收盤卻跌回前高之下，SMC 稱這種情況為？", o: ["結構突破（BOS）", "流動性掃蕩", "公平價值缺口", "多頭排列"], a: 1, e: "前高之上聚集停損與突破買單。價格刺穿後又收回，代表那些單被「掃」掉，常是假突破。" },
+  { q: "股價從 100 漲到 150 後回檔，61.8% 斐波那契回撤位大約在哪裡？", o: ["約 119", "約 131", "約 125", "約 138"], a: 0, e: "回撤位 = 高點 −（高點 − 低點）× 0.618 = 150 − 50 × 0.618 ≈ 119.1。50% 回撤是 125，38.2% 約 130.9。" },
+  { q: "斐波那契的 50% 回撤位，來源是什麼？", o: ["斐波那契數列相鄰兩項的比值", "道氏理論「次級趨勢常回吐一半」的觀念，本身不是斐波那契比例", "0.618 的平方根", "布林通道的中線"], a: 1, e: "23.6%、38.2%、61.8% 來自數列比值，78.6% 是 0.618 的平方根；50% 則是道氏理論的回吐一半，因為很常用而被放進同一組線。" },
+  { q: "SMC 的「多方訂單塊」指的是？", o: ["急漲並造成結構突破之前的最後一根下跌 K 棒", "成交量最大的那根紅 K", "收盤創新高的那一天", "均線黃金交叉的位置"], a: 0, e: "訂單塊被視為聰明錢建倉的位置：急漲（造成 BOS）之前的最後一根反向 K 棒。回測時在這裡找買點，停損放在下緣之外。" },
+  { q: "在 SMC 中，「買方流動性（BSL）」通常聚集在哪裡？", o: ["前低的下方", "前高、等高點的上方", "均線附近", "開盤價附近"], a: 1, e: "前高之上有空單的停損買單與追突破的買單，所以叫買方流動性；兩個幾乎等高的高點（EQH）上方特別集中。" },
+  { q: "依 SMC 的溢價 / 折價概念，上升結構中比較理想的買點在哪？", o: ["波段 50% 以上的溢價區", "波段 50% 以下的折價區，最好在 61.8%～78.6% 的 OTE", "創新高的當天", "任何位置都一樣"], a: 1, e: "在便宜的地方買：回檔到折價區，尤其是 OTE（回撤 61.8%～78.6%），再配合訂單塊或 FVG 找進場點。" },
   { q: "多方的公平價值缺口（FVG）是怎麼形成的？", o: ["開盤價高於前一天收盤", "連續三根 K 棒中，第三根的最低價高於第一根的最高價", "成交量是前一天的兩倍", "收盤價創 20 日新高"], a: 1, e: "中間那根急漲，讓第一根高點和第三根低點之間留下沒有重疊的空白。SMC 認為價格常會回來填補這段失衡。" },
   { q: "關於技術指標，下列敘述何者最正確？", o: ["找到對的指標就能穩定獲利", "指標越多越準", "指標是提高勝算的工具，仍需搭配停損與資金控管", "只要回測賺錢，未來一定賺錢"], a: 2, e: "沒有指標能保證獲利。技術分析的價值在於有規則地進出、控制虧損。" },
 ];
@@ -2296,6 +2554,31 @@ function extractCandles(img, crop, conv) {
     }
     if (segs.length) cand.push({ a, b, segs, pick: segs.reduce((p, q) => (q.sum > p.sum ? q : p)) });
   }
+  // 最左、最右的 K 棒若是極端價（例如整段的最高點），可能和其他 K 棒隔著一大段空白，被切在價格區外：
+  // 沿著 K 棒間距往外，在價格區上下延伸的範圍內再找；要求是孤立的一小塊（不是更寬物件的一部分）
+  if (pitch >= 2 && cand.length > 10 && !crop) {
+    const cwMed = median(cand.map(c => c.b - c.a + 1)), ext = Math.round((y1 - y0) * 0.35), ya = Math.max(0, y0 - ext), yb = Math.min(H - 1, y1 + ext);
+    const cnt = (xa, xb, ra, rb) => { let n = 0; for (let y = ra; y <= rb; y++) for (let x = Math.max(0, xa); x <= Math.min(W - 1, xb); x++) if (sm[y * W + x]) n++; return n; };
+    const probe = cx => {
+      const half = Math.max(1, Math.round(pitch * 0.45)), xa = Math.round(cx) - half, xb = Math.round(cx) + half;
+      if (xa < 0 || xb >= W) return null;
+      const rc = []; for (let y = ya; y <= yb; y++) rc.push(cnt(xa, xb, y, y));
+      const bridge = Math.max(4, Math.round((y1 - y0) * 0.012)), segs = [];
+      for (let y = ya; y <= yb; y++) {
+        if (!rc[y - ya]) continue; let e = y, sum = 0, miss = 0;
+        for (let z = y; z <= yb && miss <= bridge; z++) { if (rc[z - ya]) { e = z; sum += rc[z - ya]; miss = 0; } else miss++; }
+        segs.push({ a: y, b: e, sum }); y = e;
+      }
+      const pick = segs.reduce((p, q) => (!p || q.sum > p.sum ? q : p), null);
+      if (!pick || pick.sum < Math.max(6, cwMed * 2) || pick.b - pick.a < 2) return null;
+      let a = W, b = -1; for (let x = xa; x <= xb; x++) if (cnt(x, x, pick.a, pick.b)) { if (x < a) a = x; b = Math.max(b, x); }
+      if (b - a + 1 > cwMed * 1.8) return null;
+      const side = cnt(a - cwMed, a - 1, pick.a, pick.b) + cnt(b + 1, b + cwMed, pick.a, pick.b);
+      return side > pick.sum * 0.3 ? null : { a, b, segs: [pick], pick };
+    };
+    for (let k = 0; k < 3; k++) { const c = probe((cand[0].a + cand[0].b) / 2 - pitch); if (!c) break; cand.unshift(c); }
+    for (let k = 0; k < 3; k++) { const l = cand[cand.length - 1], c = probe((l.a + l.b) / 2 + pitch); if (!c) break; cand.push(c); }
+  }
   // 上下方的文字或標記：若某根選到的段落離左右兩根很遠，而另一段比較近，就改選那段
   const mid = s => (s.a + s.b) / 2, picks = cand.map(c => c.pick);
   cand.forEach((c, i) => {
@@ -2304,6 +2587,20 @@ function extractCandles(img, crop, conv) {
     const alt = c.segs.filter(t => t.sum >= big * 0.25).reduce((p, q) => (Math.abs(mid(q) - target) < Math.abs(mid(p) - target) ? q : p));
     if (Math.abs(mid(alt) - target) < Math.abs(mid(c.pick) - target) * 0.5) c.pick = alt;
   });
+  // 均線穿過 K 棒時會把它切成上下兩段（上段常是上影線＋實體上緣）：中間被「有顏色的線」蓋住的幾列，視為同一根接起來
+  const bgc = bgColor(px, N), darkBg = lum(bgc) < 90, maxOcc = Math.max(8, Math.round((y1 - y0) * 0.04));
+  const occRow = (y, m) => { for (let x = Math.max(0, m - 1); x <= Math.min(W - 1, m + 1); x++) { const q = (y * W + x) * 4, mx = Math.max(px[q], px[q + 1], px[q + 2]), d = mx - Math.min(px[q], px[q + 1], px[q + 2]); if (d > 60 || (darkBg && mx > 170)) return true; } return false; };
+  const bridged = (ya, yb, m) => { if (yb - ya + 1 > maxOcc) return false; for (let y = ya; y <= yb; y++) if (!occRow(y, m)) return false; return true; };
+  for (const c of cand) {
+    const m = (c.a + c.b) >> 1; let p = { ...c.pick }, grew = true;
+    while (grew) {
+      grew = false;
+      const up = c.segs.filter(t => t.b < p.a).sort((x, y) => y.b - x.b)[0], dn = c.segs.filter(t => t.a > p.b).sort((x, y) => x.a - y.a)[0];
+      if (up && bridged(up.b + 1, p.a - 1, m)) { p = { a: up.a, b: p.b, sum: p.sum + up.sum }; grew = true; }
+      if (dn && bridged(p.b + 1, dn.a - 1, m)) { p = { a: p.a, b: dn.b, sum: p.sum + dn.sum }; grew = true; }
+    }
+    c.pick = p;
+  }
   const upHue = conv === "us" ? 2 : 1, candles = [];
   for (const { a, b, pick } of cand) {
     const cw = b - a + 1; let top = -1, bot = -1, bt = -1, bb = -1, best = 0, bestY = -1; const n = [0, 0, 0];
@@ -2322,8 +2619,9 @@ function extractCandles(img, crop, conv) {
     const h = n[1] >= n[2] ? 1 : 2, m0 = (a + b) >> 1, cA = Math.max(a, m0 - 1), cB = Math.min(b, m0 + 1);
     const ref = refs[h], reddish = h === 1;
     const hit = y => { for (let x = cA; x <= cB; x++) { const i = y * W + x; if (hue[i] === h) return true; const q = i * 4, r = px[q], g = px[q + 1], b = px[q + 2]; if (reddish ? r - Math.max(g, b) > 28 : g - Math.max(r, b) > 22) return true; if (ref && dist2(px, q, ref) < 95 * 95 && Math.max(r, g, b) - Math.min(r, g, b) > 30) return true; } return false; };
-    for (let y = top - 1, miss = 0; y >= y0 && miss <= 1; y--) { if (hit(y)) { top = y; miss = 0; } else miss++; }
-    for (let y = bot + 1, miss = 0; y <= y1 && miss <= 1; y++) { if (hit(y)) { bot = y; miss = 0; } else miss++; }
+    // 穿過均線（有顏色的列）繼續找，最多 maxOcc 列；只有真的再碰到 K 棒色才算數
+    for (let y = top - 1, miss = 0, occ = 0; y >= 0 && miss <= 1; y--) { if (hit(y)) { top = y; miss = 0; occ = 0; } else if (occ < maxOcc && occRow(y, m0)) occ++; else miss++; }
+    for (let y = bot + 1, miss = 0, occ = 0; y < H && miss <= 1; y++) { if (hit(y)) { bot = y; miss = 0; occ = 0; } else if (occ < maxOcc && occRow(y, m0)) occ++; else miss++; }
     const f = v => (v + ry) / scale;
     candles.push({ x0: (a + rx) / scale, x1: (b + 1 + rx) / scale, top: f(top), bot: f(bot + 1), bt: f(bt), bb: f(bb + 1), up: h === upHue });
   }
@@ -2334,6 +2632,26 @@ function extractCandles(img, crop, conv) {
     const main = groups.reduce((a, b) => (b.length > a.length ? b : a));
     candles.length = 0; candles.push(...main);
   }
+  // 平盤的十字線：有些看盤軟體畫成白色（淺色主題是深灰），不是紅綠色。補洞前先在該位置找找看
+  const neutralCandle = cx => {
+    const xc = Math.round(cx * scale - rx), half = Math.max(1, Math.round(pitch * 0.35)), ext = Math.round((y1 - y0) * 0.2);
+    const isN = i => { const q = i * 4, mx = Math.max(px[q], px[q + 1], px[q + 2]), d = mx - Math.min(px[q], px[q + 1], px[q + 2]); return darkBg ? mx > 170 && d < 40 : mx < 90 && d < 30; };
+    let best = null, s0 = -1, last = -1, wide = [];
+    for (let y = Math.max(0, y0 - ext); y <= Math.min(H - 1, y1 + ext); y++) {
+      let c = 0; for (let x = Math.max(0, xc - half); x <= Math.min(W - 1, xc + half); x++) if (isN(y * W + x)) c++;
+      if (c) { if (s0 < 0 || y - last > 2) s0 = y; last = y; if (c >= Math.max(3, (2 * half + 1) * 0.6)) wide.push(y); if (!best || last - s0 > best.b - best.a) best = { a: s0, b: last }; }
+    }
+    if (!best || best.b - best.a < 3 || best.b - best.a > (y1 - y0) * 0.5) return null;
+    // 十字線的樣子：中間一條細直線，加上 1～3 列的橫線；橫線不能再往外延伸（那是格線）
+    const body = wide.filter(y => y >= best.a && y <= best.b), mid = (best.a + best.b) / 2, f = v => (v + ry) / scale;
+    if (!body.length || body.length > 3) return null;
+    const outN = y => [xc - half - 3, xc - half - 2, xc + half + 2, xc + half + 3].filter(x => x >= 0 && x < W && isN(y * W + x)).length;
+    if (body.some(y => outN(y) >= 2)) return null;
+    let thin = 0; for (let y = best.a; y <= best.b; y++) { let c = 0; for (let x = xc - half; x <= xc + half; x++) if (x >= 0 && x < W && isN(y * W + x)) c++; if (c >= 1 && c <= Math.max(3, (2 * half + 1) * 0.35)) thin++; }
+    if (thin < (best.b - best.a + 1) * 0.6) return null;
+    const bt = body.length ? body[0] : mid, bb = body.length ? body[body.length - 1] + 1 : mid + 0.5;
+    return { top: f(best.a), bot: f(best.b + 1), bt: f(bt), bb: f(bb) };
+  };
   // 漏掉的 K 棒（被均線蓋住、極小的十字線）：間距明顯變大時補一根，避免後面的指標錯位
   if (pitch >= 2 && candles.length > 10) {
     const P = pitch / scale, filled = [candles[0]];
@@ -2341,6 +2659,8 @@ function extractCandles(img, crop, conv) {
       const prev = filled[filled.length - 1], cur = candles[k], ratio = ((cur.x0 + cur.x1) - (prev.x0 + prev.x1)) / 2 / P, gapN = ratio >= 1.5 ? Math.max(1, Math.round(ratio) - 1) : 0;
       for (let j = 1; j <= (gapN <= 4 ? gapN : 0); j++) {
         const t = j / (gapN + 1), x0 = prev.x0 + (cur.x0 - prev.x0) * t, x1 = prev.x1 + (cur.x1 - prev.x1) * t;
+        const nk = neutralCandle((x0 + x1) / 2), span = Math.max(prev.bot, cur.bot) - Math.min(prev.top, cur.top);
+        if (nk && nk.top >= Math.min(prev.top, cur.top) - span && nk.bot <= Math.max(prev.bot, cur.bot) + span) { filled.push({ x0, x1, ...nk, up: true, flat: true }); continue; }
         const yc = prev.up ? prev.bt : prev.bb, ycn = cur.up ? cur.bb : cur.bt, y = yc + (ycn - yc) * t;
         filled.push({ x0, x1, top: y - 1, bot: y + 1, bt: y, bb: y + 0.5, up: true, guess: true });
       }
@@ -2495,7 +2815,7 @@ function priceMap(cs, hi, lo, pts) {
 }
 function candlesToSeries(cs, hi, lo, map = priceMap(cs, hi, lo)) {
   const P = map.P;
-  return cs.map((c, k) => ({ d: `第 ${k + 1} 根`, o: P(c.up ? c.bb : c.bt), c: P(c.up ? c.bt : c.bb), h: P(c.top), l: P(c.bot), v: 0 }));
+  return cs.map((c, k) => { const m = P((c.bt + c.bb) / 2); return { d: `第 ${k + 1} 根`, o: c.flat ? m : P(c.up ? c.bb : c.bt), c: c.flat ? m : P(c.up ? c.bt : c.bb), h: P(c.top), l: P(c.bot), v: 0 }; });
 }
 // 價格區附近的水平格線（灰色細線，橫跨大半寬度）：校正價格時讓點擊吸附到格線上
 function gridlines(img, band) {
@@ -2779,7 +3099,7 @@ function renderPanes() {
 }
 function shotGroups() {
   return [
-    { title: "主圖", items: [...MAIN_ITEMS, { id: "sr", label: "支撐壓力" }, { id: "smc", label: "聰明錢" }, { id: "zz", label: "轉折結構" }, { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }] },
+    { title: "主圖", items: [...MAIN_ITEMS, { id: "sr", label: "支撐壓力" }, { id: "fib", label: "斐波那契" }, { id: "smc", label: "聰明錢" }, { id: "zz", label: "轉折結構" }, { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }] },
     { title: "副圖", items: [...(shot.hasVol ? [{ id: "vol", label: "成交量" }] : []), ...shot.panes.map((p, k) => ({ p, k, t: p.cfg.type || p.type })).filter(x => x.t !== "vol").map(x => ({ id: "pane:" + x.k, label: `截圖 ${PANE_TYPES[x.t] || "副圖"}` })),
       { id: "kd", label: "重算 KD" }, { id: "rsi", label: "重算 RSI" }, { id: "macd", label: "重算 MACD" }, { id: "wr", label: "重算威廉" }] },
   ];
@@ -2799,15 +3119,16 @@ function shotDrawChart() {
   const markers = [...(B.has("smc") ? [...Signals.structure(D, shot.I, "smc"), ...Signals.sweep(D)] : []), ...(B.has("candle") ? Signals.candle(D, shot.I) : []), ...(B.has("cpat") ? Signals.chartPat(D, shot.I) : []), ...paneSel.flatMap(k => shot.readings[k].markers)];
   const ex = B.has("smc") ? smcExtra(D) : { zones: [], shapes: [] };
   if (B.has("zz")) ex.shapes.push(zigzagShape(D));
+  if (B.has("fib") && fibShape(D)) ex.shapes.push(fibShape(D));
   // 未來走勢模擬
   let D2 = D, I2 = shot.I, future = null;
   $("#simStats").hidden = !$("#simOn").checked;
   if ($("#simOn").checked && n >= 20) {
     const mode = $("#simMode").value, days = +$("#simDays").value;
-    let bias = 0;
-    if (mode === "tech") { const it = readout(D, shot.I, n - 1); bias = (it.filter(x => x.b > 0).length - it.filter(x => x.b < 0).length) / (it.length || 1); }
-    if (mode === "smc") { const ev = marketStructure(D).events.pop(); bias = ev ? ev.dir * 0.6 : 0; }
-    const sim = simulateFuture(D, { days, mode, seed: simSeed, bias });
+    let bias = 0, why = {};
+    if (mode === "tech") { const it = readout(D, shot.I, n - 1); bias = (it.filter(x => x.b > 0).length - it.filter(x => x.b < 0).length) / (it.length || 1); why.items = it; }
+    if (mode === "smc") { const ev = marketStructure(D).events.pop(); bias = ev ? ev.dir * 0.6 : 0; why.ev = ev; }
+    const sim = simulateFuture(D, { days, mode, seed: simSeed, bias }); sim.why = why;
     D2 = D.concat(sim.bars); I2 = indicators(D2);
     future = { from: n, ...sim.bands };
     renderSimStats(sim, mode, days, bias);
@@ -2818,7 +3139,7 @@ function shotDrawChart() {
 }
 // 支撐壓力之外，再畫上圖上標示的最高、最低與資料列收盤（實際數字）
 function shotHlines(D) {
-  const out = shotBar.has("sr") ? srLevels(D) : [], N = shot.nums;
+  const out = [...(shotBar.has("sr") ? srLevels(D) : []), ...(shotBar.has("fib") ? fibLines(D) : [])], N = shot.nums;
   if (!N || !shot.pmap?.cal) return out;
   const at = f => D.reduce((b, x, i) => (f(x) > f(D[b]) ? i : b), 0);
   if (N.hi) out.push({ price: N.hi, kind: "圖上最高", label: "圖上最高 " + fmtX(N.hi), i: at(x => x.h), color: "muted" });
@@ -2827,7 +3148,7 @@ function shotHlines(D) {
   return out;
 }
 function renderSimStats(sim, mode, days, bias) {
-  const cal = shot.pmap && shot.pmap.cal, c = sim.last, D = shot.D;
+  const cal = shot.pmap && shot.pmap.cal, c = sim.last, D = shot.D, n0 = D.length;
   const px = p => (cal ? fmtP(p) : "") + `（${fmtPct(p / c - 1, 1)}）`;
   const zones = smcZones(D, marketStructure(D)).filter(z => !z.hit);
   const above = zones.filter(z => z.dir < 0 && z.bot > c).sort((a, b) => a.bot - b.bot)[0], below = zones.filter(z => z.dir > 0 && z.top < c).sort((a, b) => b.top - a.top)[0];
@@ -2838,12 +3159,30 @@ function renderSimStats(sim, mode, days, bias) {
     ["收在現價之上", Math.round(sim.stats.up * 100) + "%"],
     ...(above ? [["碰到上方空方區塊", Math.round(sim.touch(above.bot, true) * 100) + "%"]] : []),
     ...(below ? [["跌到下方多方區塊", Math.round(sim.touch(below.top, false) * 100) + "%"]] : []),
+    ...((fl => fl && (fl.up ? fl.ret[4].price < c : fl.ret[4].price > c) ? [[`回到斐波那契 61.8%（${cal ? fmtP(fl.ret[4].price) : fmtPct(fl.ret[4].price / c - 1, 1)}）`, Math.round(sim.touch(fl.ret[4].price, !fl.up) * 100) + "%"]] : [])(fibLevels(D))),
     ...(cal && N.hi > c ? [[`再創圖上最高 ${fmtX(N.hi)}`, Math.round(sim.touch(N.hi, true) * 100) + "%"]] : []),
     ...(cal && N.lo && N.lo < c ? [[`跌破圖上最低 ${fmtX(N.lo)}`, Math.round(sim.touch(N.lo, false) * 100) + "%"]] : []),
   ];
+  // 依據說明：參考了哪些資料、為什麼中位數往上或往下、為什麼範圍這麼寬
+  const f = sim.info, pct = (x, d = 2) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(d)}%`, dd = sim.drift * days, spread = sim.sd * Math.sqrt(days);
+  const dirTxt = Math.abs(dd) < 0.002 ? "幾乎不偏多也不偏空" : (Math.abs(dd) < 0.03 ? "略微" : "明顯") + (dd > 0 ? "偏多" : "偏空");
+  let driftWhy;
+  if (mode === "trend") driftWhy = `最近 20 根平均每天 ${pct(f.mean20)}。只延續一半，而且上限是每日波動的 0.2 倍，所以每天加上 ${pct(sim.drift, 3)}（${days} 根累計約 ${pct(dd, 1)}）。`;
+  else if (mode === "flat") driftWhy = "不加任何方向，只保留過去的漲跌幅度，看純隨機時會走多遠。";
+  else if (mode === "tech") { const it = sim.why.items || [], b = it.filter(x => x.b > 0).map(x => x.k), r = it.filter(x => x.b < 0).map(x => x.k); driftWhy = `最後一根的指標：偏多 ${b.length} 項（${b.join("、") || "無"}）、偏空 ${r.length} 項（${r.join("、") || "無"}），換算偏向 ${bias.toFixed(2)}，每天加上 ${pct(sim.drift, 3)}（累計約 ${pct(dd, 1)}）。`; }
+  else { const ev = sim.why.ev; driftWhy = ev ? `最近一次結構事件是 ${n0 - 1 - ev.i} 根前的${ev.dir > 0 ? "向上" : "向下"} ${ev.kind}，所以偏向 ${bias > 0 ? "+" : ""}${bias.toFixed(1)}，每天加上 ${pct(sim.drift, 3)}（累計約 ${pct(dd, 1)}）。` : "找不到結構事件，所以不加方向。"; }
+  const why = `<details class="sim-why" open><summary><strong>這個模擬參考了什麼？為什麼長這樣？</strong></summary><ol>
+    <li><strong>資料來源</strong>：只用這張截圖重建出來的最近 ${f.n} 根 K 棒${realLast ? "，起點是你填的圖上收盤 " + fmtX(c) : ""}。沒有用到新聞、財報、籌碼或大盤。</li>
+    <li><strong>每天怎麼走</strong>：每條路徑的每一天，都從這 ${f.n} 根的真實日漲跌幅裡隨機抽一個（漲的日子佔 ${Math.round(f.upShare * 100)}%，最大單日 ${pct(f.maxUp, 1)}、最大跌幅 ${pct(f.maxDn, 1)}），所以大漲大跌出現的頻率和這檔股票過去一樣。重複 ${sim.paths} 次，得到 ${sim.paths} 條可能的路徑。</li>
+    <li><strong>方向（${SIM_MODES[mode]}）</strong>：${driftWhy}整體${dirTxt}，這就是中位數${sim.stats.p50 >= c ? "高於" : "低於"}現價的原因。</li>
+    <li><strong>範圍為什麼這麼寬</strong>：每日波動約 ${(sim.sd * 100).toFixed(1)}%，波動會隨時間累積（大約乘上天數的平方根），${days} 根後的一個標準差約 ±${(spread * 100).toFixed(1)}%。所以越往右，機率帶越寬。</li>
+    <li><strong>畫出來的那條 K 線</strong>：挑 ${sim.paths} 條裡終點最接近中位數的一條。開盤價從過去的跳空幅度抽樣（平均 ${(f.gapAbs * 100).toFixed(2)}%），上下引線從過去 K 棒的上影線（平均 ${(f.upW * 100).toFixed(2)}%）、下影線（平均 ${(f.dnW * 100).toFixed(2)}%）抽樣。它只是「典型的一條」，真實走勢通常不會這麼剛好。</li>
+    ${tiles.length > 4 ? `<li><strong>機率怎麼算</strong>：數一數 ${sim.paths} 條路徑裡，有多少條在 ${days} 根內碰到那個價位（含上下引線的估計）。</li>` : ""}
+  </ol></details>`;
   $("#simStats").innerHTML = `<div class="row" style="justify-content:space-between"><strong>未來 ${days} 根 K 棒的模擬結果</strong><span class="note">${sim.paths} 條隨機路徑・${SIM_MODES[mode]}${mode === "tech" || mode === "smc" ? `（偏向 ${bias > 0 ? "+" : ""}${bias.toFixed(2)}）` : ""}・每日波動約 ${(sim.sd * 100).toFixed(1)}%</span></div>
     <div class="stats">${tiles.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v sm">${v}</div></div>`).join("")}</div>
-    <p class="note" style="margin:0">怎麼讀：深色帶是一半路徑落在的範圍，淺色帶是 80% 路徑的範圍，虛線是中位數，半透明 K 棒是其中一條代表性路徑。這是用截圖裡近期的漲跌幅隨機抽樣接出來的，假設波動不變；它描述的是「可能性的範圍」，不是預測，也不構成投資建議。</p>`;
+    <p class="note" style="margin:0">怎麼讀：深色帶是一半路徑落在的範圍，淺色帶是 80% 路徑的範圍，虛線是中位數，半透明 K 棒是其中一條代表性路徑。</p>${why}
+    <p class="note" style="margin:0">限制：模擬假設未來的波動和漲跌分布跟過去一樣，不知道任何還沒發生的消息。它描述的是「可能性的範圍」，不是預測，也不構成投資建議。</p>`;
 }
 function shotLoad(blob, hiLo) {
   if (!blob || !/^image\//.test(blob.type)) { $("#shotInfo").textContent = "請選擇 PNG、JPG、WebP 或 GIF 圖片"; return; }
