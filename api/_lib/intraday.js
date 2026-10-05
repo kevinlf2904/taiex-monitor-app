@@ -120,7 +120,7 @@ export default async function handler(req, res) {
     } catch (e) { return res.status(200).json({ ok: false, error: `拿不到 ${code} 的分 K（${e.message}）` }); }
     return res.status(200).json({ ok: false, error: `拿不到 ${code} 的分 K` });
   }
-  const key = process.env.FUGLE_API_KEY, errors = [];
+  const key = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
   for (const [name, run] of [...(key ? [["富果", () => fromFugle(code, key)]] : []), ["Yahoo", () => fromYahoo(code)]]) {
     try {
       const p = await run();

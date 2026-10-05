@@ -81,7 +81,7 @@ async function fromTaifex(near) {
 }
 
 export default async function handler(req, res) {
-  const nm = nearMonth(), sess = sessionOf(), withBars = String(req.query?.bars ?? "1") !== "0", key = process.env.FUGLE_API_KEY, errors = [];
+  const nm = nearMonth(), sess = sessionOf(), withBars = String(req.query?.bars ?? "1") !== "0", key = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
   let r = null;
   if (key) { try { r = await fromFugle(nm.code, key, withBars); } catch (e) { errors.push(`富果：${e.message}`); } }
   if (!r) { try { r = await fromTaifex(nm.code); } catch (e) { errors.push(`期交所：${e.message}`); } }
@@ -90,5 +90,5 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", `s-maxage=${sess === "closed" ? 60 : 5}, stale-while-revalidate=30`);
   return res.status(200).json({ ok: true, code: "TXF", name: `台指期 ${nm.month} 月`, symbol: nm.code, settle: nm.settle, session: sess, source: r.source,
     quote: cur ? { ...cur, name: `台指期近${cur.session === "night" ? "（夜盤）" : "（日盤）"}` } : null, day: r.day, night: r.night,
-    bars: r.bars.map(({ at, ...b }) => b), note: r.bars.length ? null : key ? "富果沒有提供分 K" : "設定富果 API 金鑰（FUGLE_API_KEY）才有台指期分時與分 K" });
+    bars: r.bars.map(({ at, ...b }) => b), note: r.bars.length ? null : key ? "富果沒有提供分 K" : "伺服器讀不到富果 API 金鑰（FUGLE_API_KEY），所以只有報價、沒有分時與分 K；請到「更多 → 資料來源狀態」檢查" });
 }

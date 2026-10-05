@@ -84,8 +84,8 @@ async function fetchTrades(code, key) {
 export default async function handler(req, res) {
   const code = String(req.query?.code || "").trim().toUpperCase();
   if (!/^\d{4,6}[A-Z]?$/.test(code)) return res.status(400).json({ ok: false, error: "請給台股代號，例如 ?code=2330" });
-  const key = process.env.FUGLE_API_KEY;
-  if (!key) return res.status(200).json({ ok: false, needKey: true, error: "大戶散戶與逐筆明細需要富果 API 金鑰（在 Vercel 設定 FUGLE_API_KEY）。" });
+  const key = (process.env.FUGLE_API_KEY || "").trim();
+  if (!key) return res.status(200).json({ ok: false, needKey: true, error: "伺服器讀不到富果 API 金鑰（FUGLE_API_KEY），所以沒有大戶散戶與逐筆明細。如果已經在 Vercel 設定，請確認有勾選 Production，並重新部署一次；可以在「更多 → 資料來源狀態」檢查。" });
   try {
     const [tr, vo] = await Promise.allSettled([fetchTrades(code, key), getJSON(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/volumes/${encodeURIComponent(code)}`, key)]);
     if (tr.status !== "fulfilled") throw tr.reason;
