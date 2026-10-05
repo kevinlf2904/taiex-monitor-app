@@ -37,11 +37,21 @@ export function quoteFromMeta(sym, meta, nowSec) {
     time: t ? localHM(t, off) + ":" + new Date((t + off) * 1000).toISOString().slice(17, 19) : null, date: t ? new Date((t + off) * 1000).toISOString().slice(0, 10) : null,
     bids: [], asks: [], estimated: false, us: true, session: sessionOf(meta, nowSec) };
 }
+// 盤前、盤後：用含延長時段的 5 分 K，最後一根在正規時段之外時就是盤前或盤後價（和正規收盤比）
+export function extFrom(r, q) {
+  const p = r?.meta?.currentTradingPeriod, ts = r?.timestamp, c = r?.indicators?.quote?.[0]?.close;
+  if (!p?.regular || !Array.isArray(ts) || !ts.length || !c || q.price == null) return null;
+  let k = ts.length - 1; while (k >= 0 && c[k] == null) k--; if (k < 0) return null;
+  const t = ts[k], label = t >= p.regular.end ? "盤後" : t < p.regular.start ? "盤前" : null; if (!label) return null;
+  const price = +c[k].toFixed(2), off = r.meta.gmtoffset ?? 0;
+  return { label, price, chg: +(price - q.price).toFixed(2), chgPct: +((price / q.price - 1) * 100).toFixed(2), time: localHM(t, off) };
+}
 export async function yahooQuote(sym) {
-  const j = await getJSON(chartURL(sym, "range=1d&interval=1d"));
+  const j = await getJSON(chartURL(sym, "range=1d&interval=5m&includePrePost=true"));
   const r = j?.chart?.result?.[0]; if (!r?.meta) throw new Error("沒有資料");
-  const q = quoteFromMeta(sym, r.meta), o = r.indicators?.quote?.[0];
-  if (o?.open?.length) q.open = num(o.open[o.open.length - 1]);
+  const q = quoteFromMeta(sym, r.meta), o = r.indicators?.quote?.[0], ts = r.timestamp || [], reg = r.meta.currentTradingPeriod?.regular;
+  if (o?.open?.length) { let k = reg && ts.length ? ts.findIndex(t => t >= reg.start && t < reg.end) : -1; if (k < 0) k = o.open.length - 1; if (o.open[k] != null) q.open = num(+(+o.open[k]).toFixed(2)); }
+  const ext = extFrom(r, q); if (ext) q.ext = ext;
   return q;
 }
 // 分 K：tf 分鐘；period 給秒（epoch），沒給就是最近一天。回傳交易所當地時間的日期與時間

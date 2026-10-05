@@ -306,6 +306,30 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .kset > summary { list-style: none; cursor: pointer; display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600; }
 .kset > summary::-webkit-details-marker { display: none; } .kset > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; } .kset[open] > summary::before { transform: rotate(90deg); }
 .kset > summary .note { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.d-ext { display: flex; gap: 8px; align-items: baseline; font: 13px var(--font-mono); margin-top: 2px; flex-wrap: wrap; } .d-ext .up { color: var(--up); } .d-ext .down { color: var(--down); } .d-ext b { font-size: 15px; }
+.d-kv small { font-size: 11px; }
+.ixcards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } .ixcards.three .ixcard b { font-size: 16px; } .ixcards.three .ixcard small { font-size: 11px; }
+.rogrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 4px 16px 10px; }
+.rohead { grid-column: 1 / -1; font-size: 14px; display: flex; gap: 6px; align-items: baseline; } .rohead b { font: 700 18px var(--font-mono); } .rohead .up { color: var(--up); } .rohead .down { color: var(--down); }
+.rocard { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 13px; }
+.rocard b { font-weight: 600; white-space: nowrap; } .rocard span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rocard.bull { background: color-mix(in srgb, var(--up) 14%, var(--surface-2)); } .rocard.bull span { color: var(--up); } .rocard.bear { background: color-mix(in srgb, var(--down) 14%, var(--surface-2)); } .rocard.bear span { color: var(--down); }
+.ro-more > summary { cursor: pointer; padding: 4px 16px 10px; font-size: 13px; color: var(--muted); }
+.cost { display: flex; gap: 16px; align-items: center; padding: 12px; flex-wrap: wrap; } .cost canvas { display: block; }
+.cost-kv { flex: 1; min-width: 160px; display: grid; gap: 8px; } .cost-kv div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; } .cost-kv b { font: 600 14px var(--font-mono); } .cost-kv .up { color: var(--up); font-size: 20px; }
+.cost-kv i { display: inline-block; width: 10px; height: 2px; margin-right: 6px; vertical-align: middle; }
+.blsvg { width: 100%; height: auto; max-height: 240px; display: block; margin: 4px 0 10px; } .blsvg text { font: 11px var(--font-mono); fill: var(--muted); } .blsvg text.v { fill: var(--ink); font-size: 11px; }
+.fh { margin: 14px 16px 4px; font-size: 15px; display: flex; gap: 8px; align-items: baseline; } .fh .note { font-weight: 400; font-size: 12px; }
+#fundTbl .blsvg, #fundTbl .pe { margin-left: 12px; margin-right: 12px; width: calc(100% - 24px); }
+.pe-kv { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; } .pe-kv span { display: block; font-size: 12px; color: var(--muted); } .pe-kv b { font: 700 20px var(--font-mono); } .pe-kv .up { color: var(--up); } .pe-kv .down { color: var(--down); }
+.pe .blsvg { height: 140px; width: 100%; margin: 6px 0 0; }
+.money { padding: 10px 12px 4px; border-top: 1px solid var(--line); margin-top: 8px; } .money h4 { margin: 0 0 6px; font-size: 14px; }
+.mtop { display: flex; align-items: center; gap: 16px; } .donut.sm { width: 104px; height: 104px; } .donut.sm span { display: flex; flex-direction: column; align-items: center; font-size: 11px; } .donut.sm b { font: 700 13px var(--font-mono); } .donut.sm .up { color: var(--up); } .donut.sm .down { color: var(--down); }
+.mtot { display: grid; gap: 4px; font-size: 13px; } .mtot b { font-family: var(--font-mono); } .mtot .up { color: var(--up); } .mtot .down { color: var(--down); }
+.mbars { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 5px; font: 12px var(--font-mono); }
+.mbars li { display: grid; grid-template-columns: 62px minmax(0, 1fr) 42px minmax(0, 1fr) 62px; gap: 6px; align-items: center; } .mbars em { font-style: normal; text-align: center; font-family: var(--font-body); }
+.mbars i { height: 8px; display: flex; } .mbars i.in { justify-content: flex-end; } .mbars u { display: block; height: 100%; border-radius: 2px; } .mbars i.in u { background: var(--up); } .mbars i.out u { background: var(--down); }
+.mbars .up { color: var(--up); text-align: right; } .mbars .down { color: var(--down); }
 </style>
 </head>
 <body>
@@ -340,6 +364,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     <div class="panel d-head" id="secQuote">
       <div class="d-title"><button class="btn sm back" id="backBtn" type="button">← 清單</button><h1 id="dName">—</h1><span class="cd" id="dCode"></span><span class="note" id="dMarket"></span></div>
       <div class="d-px"><b id="dPx">—</b><span id="dChg"></span><span class="note" id="dTime"></span></div>
+      <div class="d-ext" id="dExt" hidden></div>
       <div class="d-tags" id="dTags"></div>
       <div class="d-kv" id="dKv"></div>
       <div class="d-hold" id="dHold" hidden></div>
@@ -390,7 +415,12 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     <div class="panel sec" id="secAna" data-pane="tech">
       <div class="ph"><h2>技術判讀</h2><span class="note" id="anaNote"></span></div>
       <div class="score" id="anaScore"></div>
-      <div id="anaRo" style="padding:4px 16px 12px"></div>
+      <div class="rogrid" id="anaGrid"></div>
+      <details class="ro-more"><summary>每一項的判讀說明</summary><div id="anaRo" style="padding:4px 16px 12px"></div></details>
+    </div>
+    <div class="panel sec" id="secCost" data-pane="tech">
+      <div class="ph"><h2>籌碼分佈</h2><span class="note" id="costNote"></span></div>
+      <div class="cost" id="costBox"></div>
     </div>
 
     <!-- 籌碼 -->
@@ -409,7 +439,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-20</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-21</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -468,17 +498,18 @@ const curList = () => W.groups[W.gi].list;
 const allWatched = () => [...new Set(W.groups.flatMap(g => g.list))];
 const saveGroups = () => { store.set("watch:groups", W.groups); store.set("watch:gi", W.gi); store.set("watch:names", W.names); };
 const isTW = c => /^\d{4,6}[A-Z]?$/.test(c);
-const isIdx = c => c === "T00" || c === "O00";
+const isIdx = c => c === "T00" || c === "O00" || c === "TXF";
+const isFut = c => c === "TXF";
 const isUS = c => /^\^?[A-Z][A-Z0-9]{0,5}([.-][A-Z]{1,2})?$/.test(c) && !isIdx(c);
 const okCode = c => isTW(c) || isIdx(c) || isUS(c);
 const cls = v => (v > 0 ? "up" : v < 0 ? "down" : "");
 const arrow = v => (v > 0 ? "▲" : v < 0 ? "▼" : "");
 const fmtVol = v => (v == null ? "—" : v >= 1e8 ? (v / 1e8).toFixed(2) + " 億" : v >= 1e4 ? (v / 1e4).toFixed(1) + " 萬" : Math.round(v).toLocaleString());
-const volUnit = c => (isUS(c) ? "股" : isIdx(c) ? "" : "張");
+const volUnit = c => (isUS(c) ? "股" : isFut(c) ? "口" : isIdx(c) ? "" : "張");
 const fmtPx = (v, c) => (v == null ? "—" : isUS(c) ? (+v).toFixed(2) : fmtP(v));
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const isMobile = () => matchMedia("(max-width: 900px)").matches;
-const nameOf = c => (isIdx(c) ? { T00: "加權指數", O00: "櫃買指數" }[c] : W.quotes.get(c)?.name || W.names[c] || c);
+const nameOf = c => (isIdx(c) ? { T00: "加權指數", O00: "櫃買指數", TXF: "台指期近月" }[c] : W.quotes.get(c)?.name || W.names[c] || c);
 function mktSession(now = new Date()) {
   const t = new Date(now.getTime() + 8 * 3600e3), day = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();
   if (day === 0 || day === 6) return "closed";
@@ -501,14 +532,22 @@ function visibleCodes() {
   const H = W.lt === "hold" ? Object.keys(W.hold).filter(c => mktOf(c) === W.holdMkt) : [];
   return [...new Set(["T00", "O00", ...H, ...L, ...Object.keys(W.alerts)])].slice(0, 40);
 }
+// 台指期近月（近全）：清單、頂部與大盤分頁用；15 秒最多問一次
+async function pollFut(force = false) {
+  if (W.off || (!force && Date.now() - (W.futAt || 0) < 15000)) return;
+  W.futAt = Date.now();
+  try { const r = await fetch("/api/futures?bars=0"), j = r.ok ? await r.json() : null; if (j?.ok && j.quote) { W.quotes.set("TXF", { ...j.quote, code: "TXF", name: "台指期近月", symbol: j.symbol, settle: j.settle, day: j.day, night: j.night, fsession: j.session }); } } catch {}
+}
 async function pollList() {
-  const j = await getJ(`/api/quote?codes=${visibleCodes().join(",")}&src=mis`);
+  pollFut().then(() => renderTop()).catch(() => {});
+  const j = await getJ(`/api/quote?codes=${visibleCodes().filter(c => !isFut(c)).join(",")}&src=mis`);
   W.session = j.session; if (j.today) W.today = j.today;
   j.quotes.forEach(q => { const old = W.quotes.get(q.code); if (old && old.price != null && q.price != null && old.price !== q.price) W.prevPx.set(q.code, old.price); W.quotes.set(q.code, q); if (q.name && !isIdx(q.code)) W.names[q.code] = q.name; });
   store.set("watch:names", W.names);
 }
 async function pollDetail() {
   if (!W.sel) return;
+  if (isFut(W.sel)) { await pollFut(true); if (isFut(W.sel)) W.detailQ = W.quotes.get("TXF") || null; return; }
   const c = W.sel, j = await getJ(`/api/quote?codes=${c}`), q = j.quotes.find(x => x.code === c);
   if (q && W.sel === c) { W.detailQ = q; W.detailSrc = j.source; if (q.name && !isIdx(c)) W.names[c] = q.name; mergeDaily(q); }
 }
@@ -536,7 +575,7 @@ async function loadHot(market, type) {
 
 /* ---------- 頂部指數（點一下看加權／櫃買） ---------- */
 function ixHtml() {
-  return ["T00", "O00"].map(c => { const q = W.quotes.get(c); if (!q) return ""; return `<button class="ixc" data-sel="${c}" type="button"><span>${c === "T00" ? "加權" : "櫃買"}</span><b class="${cls(q.chg)}">${q.price != null ? q.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><span class="num ${cls(q.chg)}">${arrow(q.chg)}${q.chgPct != null ? Math.abs(q.chgPct).toFixed(2) + "%" : ""}</span></button>`; }).join("");
+  return ["T00", "O00", "TXF"].map(c => { const q = W.quotes.get(c); if (!q) return ""; return `<button class="ixc" data-sel="${c}" type="button"><span>${{ T00: "加權", O00: "櫃買", TXF: q.session === "night" ? "台指夜" : "台指期" }[c]}</span><b class="${cls(q.chg)}">${q.price != null ? q.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><span class="num ${cls(q.chg)}">${arrow(q.chg)}${q.chgPct != null ? Math.abs(q.chgPct).toFixed(2) + "%" : ""}</span></button>`; }).join("");
 }
 function renderTop() {
   $("#ix").innerHTML = ixHtml();
@@ -919,7 +958,8 @@ async function loadMkt(force = false) {
 const spark = (a, up) => { if (!a?.length) return ""; const mn = Math.min(...a), mx = Math.max(...a), w = 90, h = 30; return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--${up ? "up" : "down"})" stroke-width="1.4" points="${a.map((v, i) => `${(i / Math.max(1, a.length - 1) * w).toFixed(1)},${(h - 2 - (mx > mn ? (v - mn) / (mx - mn) : 0.5) * (h - 4)).toFixed(1)}`).join(" ")}"/></svg>`; };
 function renderMkt() {
   const J = W.mkt, q = c => W.quotes.get(c), card = (c, nm) => { const x = q(c); return `<button class="ixcard" data-sel="${c}"><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price != null ? x.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><small class="${cls(x?.chg)}">${x?.chg != null ? `${arrow(x.chg)}${Math.abs(x.chg).toFixed(2)}（${Math.abs(x.chgPct).toFixed(2)}%）` : ""}</small></button>`; };
-  let h = `<div class="ixcards">${card("T00", "加權指數")}${card("O00", "櫃買指數")}</div>`;
+  const fq = q("TXF");
+  let h = `<div class="ixcards three">${card("T00", "加權指數")}${card("O00", "櫃買指數")}${card("TXF", fq?.session === "night" ? "台指期（夜盤）" : "台指期近月")}</div>`;
   if (!J) { $("#lx").innerHTML = h + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有大盤資料。" : "載入中…"}</p>`; return; }
   if (J.err) { $("#lx").innerHTML = h + `<p class="note err" style="padding:12px">⚠ ${esc(J.err)}</p>`; return; }
   const sec = (t, body, extra = "") => `<section class="mk"><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3>${body}</section>`;
@@ -956,7 +996,9 @@ function select(code, how = "push") {
   $("#learnLink").href = `./?code=${code === "T00" ? "加權" : code}#shot`;
   const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fund"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
   if (!tw && (W.dtab === "chips" || W.dtab === "fund")) W.dtab = "trend";
-  $("#learnLink").hidden = isUS(code);
+  $("#learnLink").hidden = isUS(code) || isFut(code);
+  const fut = isFut(code); document.querySelectorAll('#kSeg [data-k="D"], #kSeg [data-k="W"], #kSeg [data-k="M"]').forEach(b => (b.hidden = fut)); $("#tsSeg").hidden = $("#cdpBtn").hidden = fut;
+  if (fut && "DWM".includes(W.k)) W.k = "5";
   renderList(); renderDetailHead(); renderFlow(); setDtab(W.dtab, false); drawTs();
   if (changed) { loadDaily(); loadIntra(true); if (tw) loadInfo(); pollDetail().then(() => { renderDetailHead(); if (W.ftab === "book") renderBook(); }).catch(() => {}); }
   if (isMobile() && how !== "none") { if (EMBED) post({ type: "watch-top", y: 0 }); else document.body.scrollIntoView({ block: "start" }); }
@@ -971,13 +1013,18 @@ function renderDetailHead() {
   $("#dPx").textContent = fmtPx(q?.price, c); $("#dPx").className = cls(q?.chg);
   $("#dChg").textContent = q?.chg != null ? `${arrow(q.chg)}${fmtPx(Math.abs(q.chg), c)}（${q.chgPct > 0 ? "+" : ""}${q.chgPct}%）` : ""; $("#dChg").className = cls(q?.chg);
   const sess = us ? { open: "盤中", pre: "盤前", closed: "收盤" }[q?.session?.state] || "" : "";
-  $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today && !us ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${us ? `（美東${sess ? "・" + sess : ""}）` : ""}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}・${us ? "Yahoo（可能延遲）" : W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err || "";
+  $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today && !us ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${us ? `（美東${sess ? "・" + sess : ""}）` : ""}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}・${us ? "Yahoo（可能延遲）" : isFut(c) ? (q.session === "night" ? "夜盤" : "日盤") : W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err || "";
   const lim = q?.prev && isTW(c) ? [Math.round(q.prev * 1.1 * 100) / 100, Math.round(q.prev * 0.9 * 100) / 100] : null;
-  $("#dKv").innerHTML = [["開盤", q?.open], ["最高", q?.high], ["最低", q?.low], ["昨收", q?.prev]].map(([k, v]) => `<div><span>${k}</span><b class="${v != null && q?.prev ? cls(v - q.prev) : ""}">${fmtPx(v, c)}</b></div>`).join("")
+  $("#dKv").innerHTML = [["開盤", q?.open], ["最高", q?.high], ["最低", q?.low], [isFut(c) ? "參考價" : "昨收", q?.prev]].map(([k, v]) => `<div><span>${k}</span><b class="${v != null && q?.prev ? cls(v - q.prev) : ""}">${fmtPx(v, c)}</b></div>`).join("")
     + `<div><span>成交量</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " " + volUnit(c) : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "")
     + (volRatio(c, q) != null ? `<div><span>5日均量比</span><b class="${volRatio(c, q) >= 1.5 ? "up" : ""}">${volRatio(c, q).toFixed(2)} 倍</b></div>` : "")
     + (lim ? `<div><span>漲停</span><b class="up">${fmtP(lim[0])}</b></div><div><span>跌停</span><b class="down">${fmtP(lim[1])}</b></div>` : "");
   $("#dTags").innerHTML = tagsHtml(c, q, lim);
+  if (isFut(c) && q) {
+    $("#dKv").innerHTML += [["日盤", q.day], ["夜盤", q.night]].filter(([, x]) => x?.price != null).map(([k, x]) => `<div><span>${k}${x.time ? " " + x.time.slice(0, 5) : ""}</span><b class="${cls(x.chg)}">${fmtP(x.price)}<small> ${x.chg > 0 ? "+" : ""}${x.chg ?? ""}</small></b></div>`).join("") + (q.settle ? `<div><span>結算日</span><b>${q.settle.slice(5).replace("-", "/")}</b></div>` : "");
+    $("#dTags").innerHTML = `<span class="ind">期交所・${esc(q.symbol || "近月")}</span><span class="tag ${q.session === "night" ? "hot" : ""}">${q.fsession === "closed" ? "收盤" : q.session === "night" ? "夜盤交易中" : "日盤交易中"}</span>`;
+  }
+  $("#dExt").hidden = !q?.ext; if (q?.ext) { const x = q.ext; $("#dExt").innerHTML = `<span>${x.label}</span><b class="${cls(x.chg)}">${fmtPx(x.price, c)}</b><span class="${cls(x.chg)}">${x.chg > 0 ? "+" : ""}${x.chg}（${x.chgPct > 0 ? "+" : ""}${x.chgPct}%）</span><span class="note">${x.time}（美東）</span>`; }
   const fav = W.groups.some(g => g.list.includes(c)); $("#favBtn").textContent = fav ? "★ 已在自選" : "☆ 加入自選"; $("#favBtn").hidden = isIdx(c); $("#holdBtn").hidden = isIdx(c);
   const a = W.alerts[c] || {};
   if (document.activeElement !== $("#alUp")) $("#alUp").value = a.up ?? ""; if (document.activeElement !== $("#alDn")) $("#alDn").value = a.dn ?? "";
@@ -1014,7 +1061,7 @@ $("#hSave").addEventListener("click", () => { const sh = Math.round(+$("#hSh").v
 $("#hClear").addEventListener("click", () => { delete W.hold[W.sel]; store.set("watch:hold", W.hold); $("#hNote").textContent = "已清除"; renderDetailHead(); renderList(); });
 function renderBook() {
   const c = W.sel, q = W.detailQ || W.quotes.get(c), B = q?.bids || [], A = q?.asks || [];
-  if (!B.length && !A.length) { $("#book").innerHTML = `<p class="note" style="margin:0;padding:12px">${W.off ? "需要部署到網站才有五檔。" : isIdx(c) ? "指數沒有五檔。" : isUS(c) ? "美股沒有提供五檔。" : "目前沒有五檔資料（收盤後或試撮前）。"}</p>`; $("#bookNote").textContent = ""; return; }
+  if (!B.length && !A.length) { $("#book").innerHTML = `<p class="note" style="margin:0;padding:12px">${W.off ? "需要部署到網站才有五檔。" : isFut(c) ? "台指期沒有提供五檔。" : isIdx(c) ? "指數沒有五檔。" : isUS(c) ? "美股沒有提供五檔。" : "目前沒有五檔資料（收盤後或試撮前）。"}</p>`; $("#bookNote").textContent = ""; return; }
   const mx = Math.max(1, ...B.map(x => x.v || 0), ...A.map(x => x.v || 0)), sb = B.reduce((s, x) => s + (x.v || 0), 0), sa = A.reduce((s, x) => s + (x.v || 0), 0);
   const rows = [...A.slice().reverse().map(x => `<tr><td></td><td class="down">${fmtP(x.p)}</td><td style="position:relative">${(x.v || 0).toLocaleString()}<span class="bk-bar" style="right:0;width:${x.v / mx * 100}%;background:var(--down)"></span></td></tr>`),
     ...B.map(x => `<tr><td style="position:relative">${(x.v || 0).toLocaleString()}<span class="bk-bar" style="left:0;width:${x.v / mx * 100}%;background:var(--up)"></span></td><td class="up">${fmtP(x.p)}</td><td></td></tr>`)];
@@ -1039,8 +1086,18 @@ $("#dTabs").addEventListener("click", e => { const b = e.target.closest("[data-t
 const TS = { hover: null, geo: null };
 const toMin = t => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
 // 分時資料：當日，或連同前幾天（三日、五日；前幾天用 Yahoo 1 分 K）
+// 台指期近全：依序排夜盤（15:00–05:00，840 分鐘）與日盤（08:45–13:45，300 分鐘），中間的休市時間不畫
+function futData(j) {
+  const blocks = []; let g0 = 0;
+  for (const b of j.bars) { const L = blocks[blocks.length - 1]; if (!L || L.s !== b.s || (b.s === "day" && L.d !== b.d)) { if (L) g0 += L.len; blocks.push({ s: b.s, d: b.d, g0, len: b.s === "night" ? 840 : 300, pts: [] }); } blocks[blocks.length - 1].pts.push(b); }
+  let sv = 0, spv = 0, last = null;
+  const pts = blocks.flatMap(B => { sv = 0; spv = 0; return B.pts.map(b => { let m = toMin(b.t) - (B.s === "night" ? 900 : 525); if (m < 0) m += 1440; sv += b.v; spv += b.c * b.v; return (last = { d: b.d, m, g: B.g0 + Math.min(m, B.len), t: b.t, c: b.c, v: b.v, a: sv ? spv / sv : null, s: B.s }); }); });
+  const total = blocks.reduce((s, B) => s + B.len, 0) || 1;
+  return { fut: true, blocks, days: [{ d: j.date, pts }], pts, day: j.date, prev: j.prev ?? pts[0].c, isIdx: false, o: 0, cl: total, us: false, cdp: null };
+}
 function tsData() {
   const j = W.intra; if (!j || !j.bars?.length) return null;
+  if (j.fut) return futData(j);
   const day = j.bars[j.bars.length - 1].d || j.date, o = toMin(j.session?.open || "09:00"), cl = toMin(j.session?.close || "13:30");
   const hist = W.tsDays > 1 && W.tsHist?.code === W.sel ? W.tsHist.bars.filter(b => b.d < day) : [];
   const all = [...hist, ...j.bars.filter(b => !b.d || b.d === day).map(b => ({ ...b, d: day }))];
@@ -1081,7 +1138,8 @@ function drawTs() {
   if (days.length > 1) { ctx.strokeStyle = col("--muted"); ctx.globalAlpha = 0.7; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(L, Y(prev)); ctx.lineTo(L + pw, Y(prev)); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
   const vline = x => { ctx.strokeStyle = col("--line"); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, top); ctx.lineTo(Math.round(x) + 0.5, top + mainH + (volH ? volH + 8 : 0)); ctx.stroke(); ctx.globalAlpha = 1; };
   ctx.fillStyle = col("--muted");
-  if (days.length === 1) { const marks = []; for (let m = Math.ceil(o / 60) * 60; m < cl; m += 60) marks.push(m); [o, ...marks.filter(m => m - o > 20 && cl - m > 40), cl].forEach(m => { const x = X(m - o); vline(x); ctx.fillStyle = col("--muted"); ctx.textAlign = m === o ? "left" : m === cl ? "right" : "center"; ctx.fillText(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`, x, H - axH / 2 - 2); }); }
+  if (d.fut) d.blocks.forEach(B => { if (B.g0) vline(X(B.g0)); ctx.fillStyle = col("--muted"); ctx.textAlign = "left"; ctx.fillText(`${B.s === "night" ? "夜" : "日"} ${B.s === "night" ? "15:00" : "8:45"}`, X(B.g0) + 2, H - axH / 2 - 2); });
+  else if (days.length === 1) { const marks = []; for (let m = Math.ceil(o / 60) * 60; m < cl; m += 60) marks.push(m); [o, ...marks.filter(m => m - o > 20 && cl - m > 40), cl].forEach(m => { const x = X(m - o); vline(x); ctx.fillStyle = col("--muted"); ctx.textAlign = m === o ? "left" : m === cl ? "right" : "center"; ctx.fillText(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`, x, H - axH / 2 - 2); }); }
   else days.forEach((x, k) => { if (k) vline(X(k * span)); ctx.fillStyle = col("--muted"); ctx.textAlign = "center"; ctx.fillText(x.d.slice(5).replace("-", "/"), X((k + 0.5) * span), H - axH / 2 - 2); });
   // CDP 線
   if (cdp) cdp.forEach(([k, v, c]) => { const y = Y(v); if (y < top || y > top + mainH) return; ctx.strokeStyle = col("--" + c); ctx.globalAlpha = 0.85; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.fillStyle = col("--" + c); ctx.textAlign = "left"; ctx.fillText(`${k} ${fp(v)}`, L + 4, y - 7); });
@@ -1104,7 +1162,8 @@ function drawTs() {
   if (hv) { ctx.strokeStyle = col("--muted"); ctx.globalAlpha = 0.8; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(X(hv.g), top); ctx.lineTo(X(hv.g), H - axH - 6); ctx.moveTo(L, Y(hv.c)); ctx.lineTo(L + pw, Y(hv.c)); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
   TS.geo = { L, pw, total };
   const ch = P.c / prev - 1;
-  $("#tsLeg").innerHTML = `<span><b>${days.length > 1 ? P.d.slice(5).replace("-", "/") + " " : ""}${P.t}</b></span><span class="${cls(ch)}"><b>價</b>${fp(P.c)}（${ch >= 0 ? "+" : ""}${(ch * 100).toFixed(2)}%）</span>${P.a != null && !d.isIdx ? `<span style="color:var(--s1)"><b style="color:inherit">均價</b>${fp(P.a)}</span>` : ""}${d.isIdx ? "" : `<span><b>量</b>${fmtVol(P.v)} ${d.us ? "千股" : "張"}</span>`}<span><b>昨收</b>${fp(prev)}</span>`;
+  $("#tsLeg").innerHTML = `<span><b>${d.fut ? (P.s === "night" ? "夜盤 " : "日盤 ") : ""}${days.length > 1 ? P.d.slice(5).replace("-", "/") + " " : ""}${P.t}</b></span><span class="${cls(ch)}"><b>價</b>${fp(P.c)}（${ch >= 0 ? "+" : ""}${(ch * 100).toFixed(2)}%）</span>${P.a != null && !d.isIdx ? `<span style="color:var(--s1)"><b style="color:inherit">均價</b>${fp(P.a)}</span>` : ""}${d.isIdx ? "" : `<span><b>量</b>${fmtVol(P.v)} ${d.us ? "千股" : d.fut ? "口" : "張"}</span>`}<span><b>昨收</b>${fp(prev)}</span>`;
+  if (d.fut) { $("#tsNote").textContent = `近全（夜盤＋日盤）・${W.quotes.get("TXF")?.symbol || ""}・${W.intra.source || ""}`; return; }
   const wantDays = W.tsDays > 1 && days.length < W.tsDays ? (W.tsHist?.code === W.sel ? (W.tsHist.err ? `・前幾天載入失敗：${W.tsHist.err}` : "") : "・載入前幾天中…") : "";
   $("#tsNote").textContent = `${W.intra.date && W.intra.date !== W.today && !d.us ? "最近交易日 " + W.intra.date.replace(/-/g, "/") + "・" : ""}${d.us ? "美東時間・" : ""}${W.intra.source || ""}${wantDays}${W.cdp && !cdp ? "・CDP 需要日 K 資料" : ""}`;
 }
@@ -1157,11 +1216,25 @@ function renderFlow() {
     W.flowSer = ser; const share = bv + sv ? bv / (bv + sv) : 0, lead = share >= 0.6 ? "大戶控盤" : share <= 0.4 ? "散戶為主" : "大散均衡";
     box.innerHTML = `<div class="flowhead"><div class="seg" role="group" aria-label="大戶門檻">${[[1, "≥100萬"], [2, "≥300萬"], [3, "≥1000萬"]].map(([v, t]) => `<button data-bk="${v}" aria-pressed="${k === v}">${t}</button>`).join("")}</div>
       <div class="bs"><span class="lead">${lead}</span>大 ${Math.round(bv).toLocaleString()}<span class="bsbar"><i style="width:${share * 100}%"></i><i style="flex:1"></i></span>${Math.round(sv).toLocaleString()} 散</div>
-      <div class="flowsum"><span>大戶累積${cb >= 0 ? "買超" : "賣超"} <b class="${cls(cb)}">${Math.abs(Math.round(cb)).toLocaleString()}</b> 張</span><span>散戶累積${cs >= 0 ? "買超" : "賣超"} <b class="${cls(cs)}">${Math.abs(Math.round(cs)).toLocaleString()}</b> 張</span></div></div><canvas id="flowCv" role="img" aria-label="大戶散戶累積買賣超"></canvas>`;
+      <div class="flowsum"><span>大戶累積${cb >= 0 ? "買超" : "賣超"} <b class="${cls(cb)}">${Math.abs(Math.round(cb)).toLocaleString()}</b> 張</span><span>散戶累積${cs >= 0 ? "買超" : "賣超"} <b class="${cls(cs)}">${Math.abs(Math.round(cs)).toLocaleString()}</b> 張</span></div></div><canvas id="flowCv" role="img" aria-label="大戶散戶累積買賣超"></canvas>${moneyHtml(F.money)}`;
     note.textContent = `單筆成交金額${["", "≥100 萬", "≥300 萬", "≥1000 萬"][k]}元算大戶，其餘算散戶（依成交金額估，不是真正的帳戶身分）；買賣方向用成交價對委買賣價判斷。${F.complete ? "" : `資料從 ${F.from} 開始（當天成交太多，只抓最近的部分）。`}・${F.source}`;
     drawFlow();
   }
   postHeight();
+}
+// 資金分佈：主動買（流入）與主動賣（流出）的成交金額，依單筆金額分特大／大／中／小單
+const money = v => (Math.abs(v) >= 1e8 ? (v / 1e8).toFixed(2) + " 億" : Math.round(v / 1e4).toLocaleString() + " 萬");
+function moneyHtml(M) {
+  if (!M) return "";
+  const names = ["小單", "中單", "大單", "特大單"], tb = M.b.reduce((s, x) => s + x, 0), ts = M.s.reduce((s, x) => s + x, 0), tot = tb + ts; if (!tot) return "";
+  const shades = [0.45, 0.62, 0.8, 1], seg = []; let acc = 0;
+  [3, 2, 1, 0].forEach(k => { seg.push(`color-mix(in srgb, var(--up) ${shades[k] * 100}%, transparent) ${acc / tot * 360}deg ${(acc += M.b[k]) / tot * 360}deg`); });
+  [0, 1, 2, 3].forEach(k => { seg.push(`color-mix(in srgb, var(--down) ${shades[k] * 100}%, transparent) ${acc / tot * 360}deg ${(acc += M.s[k]) / tot * 360}deg`); });
+  const mx = Math.max(...M.b, ...M.s, 1), net = tb - ts;
+  return `<div class="money"><h4>資金分佈</h4><div class="mtop"><div class="donut sm" style="background:conic-gradient(${seg.join(",")})"><span>淨${net >= 0 ? "流入" : "流出"}<b class="${cls(net)}">${money(Math.abs(net))}</b></span></div>
+    <div class="mtot"><span>流入 <b class="up">${money(tb)}</b></span><span>流出 <b class="down">${money(ts)}</b></span></div></div>
+    <ul class="mbars">${[3, 2, 1, 0].map(k => `<li><span class="up">${money(M.b[k])}</span><i class="in"><u style="width:${M.b[k] / mx * 100}%"></u></i><em>${names[k]}</em><i class="out"><u style="width:${M.s[k] / mx * 100}%"></u></i><span class="down">${money(M.s[k])}</span></li>`).join("")}</ul>
+    <p class="note" style="margin:4px 0 0">特大單：單筆 ≥1000 萬；大單：300～1000 萬；中單：100～300 萬；小單：&lt;100 萬（金額＝成交張數×價格）</p></div>`;
 }
 function drawFlow() {
   const cv = $("#flowCv"); if (!cv) return; const ser = W.flowSer || [], Wd = cv.parentElement.clientWidth; if (!Wd) return;
@@ -1269,6 +1342,7 @@ $("#kSeg").addEventListener("click", e => { const b = e.target.closest("[data-k]
 const olderState = () => (minuteK() ? (W.mk[W.k] ||= {}) : W.daily || {});
 async function loadDaily() {
   const c = W.sel; if (!c || W.off) { drawK(true); return; }
+  if (isFut(c)) { W.daily = { code: c, data: [], err: "台指期目前只提供分 K（1／5／15／60 分）", end: true }; return; }
   W.daily = { code: c, data: [] }; drawK(true);
   try {
     const j = await getJ(`/api/kline?code=${c === "T00" ? "加權" : c === "O00" ? "櫃買" : c}&months=6`);
@@ -1281,6 +1355,7 @@ async function loadDaily() {
 // 往前載入：日週月 K 問 /api/kline?before=；分 K 問 /api/intraday?before=（假日沒有資料時會自動再往前）
 async function loadOlder() {
   const c = W.sel, st = olderState(); if (!c || st.end || W.busyOlder || W.off) return;
+  if (isFut(c)) { st.end = true; return; } // 台指期的分 K 只有最近一個日盤＋夜盤
   W.busyOlder = true; drawK();
   try {
     if (!minuteK()) {
@@ -1315,11 +1390,17 @@ function mergeDaily(q, redraw = true) {
 }
 async function loadIntra(force = false) {
   const c = W.sel; if (!c || W.off) { drawTs(); return; }
-  const us = isUS(c), open = us ? W.detailQ?.session?.state === "open" : mktSession() === "open";
+  const us = isUS(c), open = isFut(c) ? W.quotes.get("TXF")?.fsession !== "closed" : us ? W.detailQ?.session?.state === "open" : mktSession() === "open";
   const age = Date.now() - W.intraAt; if (!force && W.intra && W.intra.code === c && (open ? age < 30000 : age < 600000)) return;
   W.intraAt = Date.now();
   try {
-    const j = await getJ(`/api/intraday?code=${c}&tf=1`);
+    let j;
+    if (isFut(c)) {
+      const f = await getJ("/api/futures");
+      if (f.quote) { W.quotes.set("TXF", { ...f.quote, code: "TXF", name: "台指期近月", symbol: f.symbol, settle: f.settle, day: f.day, night: f.night, fsession: f.session }); W.futAt = Date.now(); if (W.sel === c) W.detailQ = W.quotes.get("TXF"); }
+      if (!f.bars?.length) throw new Error(f.note || "還沒有台指期分 K");
+      j = { fut: true, bars: f.bars, date: f.bars[f.bars.length - 1].d, prev: f.quote?.prev, source: f.source, session: { open: "00:00", close: "23:59" }, fsession: f.session };
+    } else j = await getJ(`/api/intraday?code=${c}&tf=1`);
     if (W.sel !== c) return;
     const fresh = !W.intra || W.intra.code !== c; W.intra = { ...j, code: c }; W.intraErr = null;
     drawTs(); loadTsHist(); if (minuteK() && W.dtab === "tech") drawK(fresh);
@@ -1336,7 +1417,59 @@ function renderAna() {
   const kn = { 1: "1 分 K", 5: "5 分 K", 15: "15 分 K", 60: "60 分 K", D: "日 K", W: "週 K", M: "月 K" }[W.k];
   $("#anaScore").innerHTML = `<b class="${lab[1] === "bull" ? "up" : lab[1] === "bear" ? "down" : ""}">${lab[0]}</b><span class="note">${bull} 項偏多、${bear} 項偏空、${items.length - bull - bear} 項中性</span><span class="meter" title="多空分數"><i style="left:calc(${(sc + 1) / 2 * 100}% - 2px)"></i></span>`;
   renderReadout($("#anaRo"), items, true);
+  $("#anaGrid").innerHTML = `<div class="rohead"><b class="up">${bull}</b> 看好 <b class="down">${bear}</b> 看淡 <span class="note">${items.length - bull - bear} 中性</span></div>` + items.map(x => `<div class="rocard ${x.b > 0 ? "bull" : x.b < 0 ? "bear" : ""}"><b>${esc(x.k)}</b><span>${esc(String(x.t).split(/[，,；;（(]/)[0])}</span></div>`).join("");
+  renderCost();
   $("#anaNote").textContent = `${kn}・最後一根 ${fmtKD(D[D.length - 1].d)}；只是指標的機械判讀，不是買賣建議`;
+}
+
+/* ---------- 籌碼分佈：用最近 120 天日 K 的成交量估算各價位的持有成本（越早的權重越低） ---------- */
+function costDist(D, n = 120, bins = 50) {
+  const L = D.slice(-n); if (L.length < 20) return null;
+  const lo = Math.min(...L.map(x => x.l)), hi = Math.max(...L.map(x => x.h)); if (!(hi > lo)) return null;
+  const step = (hi - lo) / bins, w = Array(bins).fill(0), mids = w.map((_, k) => lo + (k + 0.5) * step);
+  L.forEach((x, i) => {
+    const wt = (x.v || 1) * Math.pow(0.97, L.length - 1 - i), a = Math.max(0, Math.floor((x.l - lo) / step)), b = Math.min(bins - 1, Math.floor((x.h - lo) / step)), tp = (x.h + x.l + x.c) / 3, half = (x.h - x.l) / 2 || step;
+    const fs = []; for (let k = a; k <= b; k++) fs.push(1 / (1 + Math.abs(mids[k] - tp) / half)); const tot = fs.reduce((s, f) => s + f, 0) || 1;
+    fs.forEach((f, j) => (w[a + j] += wt * f / tot));
+  });
+  const px = D[D.length - 1].c, total = w.reduce((s, x) => s + x, 0) || 1;
+  let sup = -1, pre = -1; w.forEach((x, k) => { if (mids[k] <= px) { if (sup < 0 || x > w[sup]) sup = k; } else if (pre < 0 || x > w[pre]) pre = k; });
+  return { w, mids, step, px, profit: w.reduce((s, x, k) => s + (mids[k] <= px ? x : 0), 0) / total, avg: w.reduce((s, x, k) => s + x * mids[k], 0) / total, sup: sup >= 0 ? mids[sup] : null, pre: pre >= 0 ? mids[pre] : null };
+}
+function renderCost() {
+  const D = W.daily?.code === W.sel ? W.daily.data : null, C = D?.length ? costDist(D) : null, box = $("#costBox");
+  $("#secCost").hidden = W.dtab !== "tech" || !C; if (!C) return;
+  const c = W.sel, fp = v => (v == null ? "—" : fmtPx(v, c)), mx = Math.max(...C.w);
+  box.innerHTML = `<canvas id="costCv" role="img" aria-label="籌碼分佈"></canvas><div class="cost-kv"><div><span>獲利比例</span><b class="up">${(C.profit * 100).toFixed(1)}%</b></div><div><span><i style="background:var(--down)"></i>壓力位</span><b>${fp(C.pre)}</b></div><div><span><i style="background:var(--s1)"></i>平均成本</span><b>${fp(C.avg)}</b></div><div><span><i style="background:var(--s3)"></i>支撐位</span><b>${fp(C.sup)}</b></div></div>`;
+  $("#costNote").textContent = `${D[D.length - 1].d.replace(/-/g, "/")}・用近 ${Math.min(120, D.length)} 天的價量估算，不是真實持股成本`;
+  const cv = $("#costCv"), Wd = cv.parentElement.clientWidth >= 520 ? Math.round(cv.parentElement.clientWidth * 0.55) : cv.parentElement.clientWidth - 24, H = 200, dpr = devicePixelRatio || 1;
+  cv.width = Wd * dpr; cv.height = H * dpr; cv.style.width = Wd + "px"; cv.style.height = H + "px";
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); const col = k => cssVar(k), n = C.w.length, bh = H / n, Y = v => H - (v - (C.mids[0] - C.step / 2)) / (C.step * n) * H;
+  C.w.forEach((x, k) => { ctx.fillStyle = C.mids[k] <= C.px ? col("--up") : col("--muted"); ctx.globalAlpha = C.mids[k] <= C.px ? 0.75 : 0.45; ctx.fillRect(0, H - (k + 1) * bh + 0.5, x / mx * Wd, Math.max(1, bh - 1)); });
+  ctx.globalAlpha = 1; ctx.lineWidth = 1.4;
+  [[C.pre, "--down"], [C.avg, "--s1"], [C.sup, "--s3"], [C.px, "--accent"]].forEach(([v, k]) => { if (v == null) return; ctx.strokeStyle = col(k); ctx.setLineDash(k === "--accent" ? [4, 3] : []); ctx.beginPath(); ctx.moveTo(0, Y(v)); ctx.lineTo(Wd, Y(v)); ctx.stroke(); });
+  ctx.setLineDash([]);
+}
+
+/* ---------- 小圖：柱狀＋折線（營收、EPS）、本益比區間 ---------- */
+function barLineSvg(items, { bar = "var(--accent)", line = "var(--s1)", fmtV = v => v, fmtY = v => v + "%" } = {}) {
+  if (!items.length) return "";
+  const Wv = 600, Hv = 170, P = 26, bw = Math.min(70, (Wv - P * 2) / items.length), x0 = (Wv - bw * items.length) / 2, vs = items.map(x => x.v), mx = Math.max(0, ...vs), mn = Math.min(0, ...vs), ys = items.map(x => x.y).filter(v => v != null), yx = Math.max(...ys, 1), yn = Math.min(...ys, 0);
+  const Yv = v => P + (mx - v) / ((mx - mn) || 1) * (Hv - P * 2), Yy = v => P + (yx - v) / ((yx - yn) || 1) * (Hv - P * 2);
+  const bars = items.map((x, i) => `<rect x="${(x0 + i * bw + bw * 0.2).toFixed(1)}" y="${Math.min(Yv(x.v), Yv(0)).toFixed(1)}" width="${(bw * 0.6).toFixed(1)}" height="${Math.abs(Yv(x.v) - Yv(0)).toFixed(1)}" fill="${x.v < 0 ? "var(--down)" : bar}" rx="2"/>`).join("");
+  const pl = items.map((x, i) => (x.y == null ? null : `${(x0 + i * bw + bw / 2).toFixed(1)},${Yy(x.y).toFixed(1)}`)).filter(Boolean).join(" ");
+  const labs = items.map((x, i) => (items.length <= 8 || i % 2 === items.length % 2 ? `<text x="${(x0 + i * bw + bw / 2).toFixed(1)}" y="${Hv - 6}" text-anchor="middle">${esc(x.label)}</text>` : "")).join("");
+  const vals = items.map((x, i) => (items.length <= 8 ? `<text x="${(x0 + i * bw + bw / 2).toFixed(1)}" y="${(Math.min(Yv(x.v), Yv(0)) - 4).toFixed(1)}" text-anchor="middle" class="v">${fmtV(x.v)}</text>` : "")).join("");
+  return `<svg class="blsvg" viewBox="0 0 ${Wv} ${Hv}" role="img">${bars}${pl ? `<polyline points="${pl}" fill="none" stroke="${line}" stroke-width="2"/>${items.map((x, i) => (x.y == null ? "" : `<circle cx="${(x0 + i * bw + bw / 2).toFixed(1)}" cy="${Yy(x.y).toFixed(1)}" r="3" fill="${line}"/>`)).join("")}` : ""}${vals}${labs}</svg>`;
+}
+function peBand(per) {
+  const L = per.filter(x => x.pe > 0); if (L.length < 30) return "";
+  const cur = L[L.length - 1].pe, sorted = L.map(x => x.pe).sort((a, b) => a - b), q = p => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))], pct = Math.round(sorted.filter(v => v <= cur).length / sorted.length * 100), avg = sorted.reduce((s, v) => s + v, 0) / sorted.length;
+  const Wv = 600, Hv = 150, P = 8, mx = Math.max(...sorted) * 1.05, mn = Math.min(...sorted) * 0.95, X = i => P + i / (L.length - 1) * (Wv - P * 2), Y = v => P + (mx - v) / (mx - mn) * (Hv - P * 2);
+  const pts = L.map((x, i) => `${X(i).toFixed(1)},${Y(x.pe).toFixed(1)}`).join(" ");
+  return `<div class="pe"><div class="pe-kv"><div><span>本益比</span><b>${cur}</b></div><div><span>近 ${Math.round(L.length / 245) || 1} 年的水平</span><b class="${pct <= 30 ? "up" : pct >= 70 ? "down" : ""}">${pct}%</b></div><div><span>歷史平均</span><b>${avg.toFixed(1)}</b></div></div>
+    <svg class="blsvg" viewBox="0 0 ${Wv} ${Hv}" preserveAspectRatio="none" role="img" aria-label="本益比走勢"><rect x="${P}" y="${Y(q(0.8)).toFixed(1)}" width="${Wv - P * 2}" height="${(Y(q(0.2)) - Y(q(0.8))).toFixed(1)}" fill="var(--accent-soft)"/><line x1="${P}" x2="${Wv - P}" y1="${Y(avg).toFixed(1)}" y2="${Y(avg).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="4 4"/><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.6"/></svg>
+    <p class="note" style="margin:4px 0 0">水平＝目前本益比在近幾年裡的百分位（越低代表相對便宜）；色帶是 20%～80% 的合理區間，虛線是平均。${L[0].d.replace(/-/g, "/")} 起</p></div>`;
 }
 
 /* ---------- 籌碼與基本面（台股：/api/stockinfo） ---------- */
@@ -1365,7 +1498,10 @@ function renderInfo() {
     $("#fundSum").innerHTML = items.length ? items.map(x => `<li><strong>${x.k}</strong>：${x.t}</li>`).join("") : `<li class="note">沒有財報資料（ETF 沒有營收與 EPS）。</li>`;
     $("#fundNote").textContent = j.source || "";
     const rev = (j.revenue || []).slice(-12).reverse(), fin = (j.fin || []).slice(-8).reverse(), per = j.per?.[j.per.length - 1];
-    $("#fundTbl").innerHTML = (per ? `<div class="d-kv" style="margin:0 16px 12px"><div><span>本益比</span><b>${per.pe ?? "—"}</b></div><div><span>股價淨值比</span><b>${per.pb ?? "—"}</b></div><div><span>殖利率</span><b>${per.dy != null ? per.dy + "%" : "—"}</b></div><div><span>日期</span><b>${per.d.replace(/-/g, "/")}</b></div></div>` : "")
+    const finAll = j.fin || [], eps = finAll.slice(-8).map(r => { const [y, qq] = String(r.q).split("Q"), ly = finAll.find(x => x.q === `${+y - 1}Q${qq}`); return { label: String(r.q).slice(2), v: r.eps, y: ly && ly.eps ? +((r.eps / Math.abs(ly.eps) - 1) * 100).toFixed(1) : null }; });
+    const revs = (j.revenue || []).slice(-12).map(r => ({ label: r.ym.slice(5) + "月", v: +(r.rev / 1e8).toFixed(1), y: r.yoy }));
+    const band = j.per?.length ? peBand(j.per) : "", charts = (band ? `<h3 class="fh">公司估值</h3>${band}` : "") + (eps.length ? `<h3 class="fh">每季 EPS<span class="note">柱＝EPS（元）、線＝年增率</span></h3>${barLineSvg(eps, { fmtV: v => v })}` : "") + (revs.length ? `<h3 class="fh">月營收<span class="note">柱＝營收（億）、線＝年增率</span></h3>${barLineSvg(revs, { bar: "var(--s3)", fmtV: v => Math.round(v) })}` : "");
+    $("#fundTbl").innerHTML = charts + (per ? `<div class="d-kv" style="margin:0 16px 12px"><div><span>本益比</span><b>${per.pe ?? "—"}</b></div><div><span>股價淨值比</span><b>${per.pb ?? "—"}</b></div><div><span>殖利率</span><b>${per.dy != null ? per.dy + "%" : "—"}</b></div><div><span>日期</span><b>${per.d.replace(/-/g, "/")}</b></div></div>` : "")
       + (rev.length ? `<table class="tbl"><thead><tr><th>月營收</th><th>營收（億）</th><th>年增</th><th>月增</th></tr></thead><tbody>${rev.map(r => `<tr><td>${r.ym.replace("-", "/")}</td><td>${(r.rev / 1e8).toFixed(2)}</td><td class="${clsOf(r.yoy)}">${r.yoy != null ? (r.yoy > 0 ? "+" : "") + r.yoy + "%" : "—"}</td><td class="${clsOf(r.mom)}">${r.mom != null ? (r.mom > 0 ? "+" : "") + r.mom + "%" : "—"}</td></tr>`).join("")}</tbody></table>` : "")
       + (fin.length ? `<table class="tbl" style="margin-top:12px"><thead><tr><th>季度</th><th>EPS</th><th>毛利率</th><th>營益率</th><th>淨利率</th></tr></thead><tbody>${fin.map(r => `<tr><td>${r.q}</td><td class="${clsOf(r.eps)}">${r.eps}</td><td>${r.gross ?? "—"}%</td><td>${r.op ?? "—"}%</td><td>${r.net ?? "—"}%</td></tr>`).join("")}</tbody></table>` : "");
   }

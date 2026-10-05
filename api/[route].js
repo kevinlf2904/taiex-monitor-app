@@ -7,6 +7,7 @@ const ROUTES = {
   "chart-read": () => import("./_lib/chart-read.js"),
   chat: () => import("./_lib/chat.js"),
   flow: () => import("./_lib/flow.js"),
+  futures: () => import("./_lib/futures.js"),
   hot: () => import("./_lib/hot.js"),
   import: () => import("./_lib/import.js"),
   intraday: () => import("./_lib/intraday.js"),
