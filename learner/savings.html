@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>存股與槓桿模擬器</title>
+<!-- 存股與槓桿模擬器：可以單獨開啟，也嵌在 K線學堂的「存股模擬」分頁（?embed=1）。
+     主題跟著 K線學堂（localStorage 的 kline:theme，或父頁面用 postMessage 通知）。 -->
+<script>
+(() => {
+  const q = new URLSearchParams(location.search), d = document.documentElement;
+  if (q.has("embed")) d.dataset.embed = "1";
+  try { const t = q.get("theme") || JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); if (t === "dark" || t === "light") d.dataset.theme = t; } catch { d.dataset.theme = "dark"; }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky control console left (every number is typed or slid there); one continuous readout right */
+:root{
+  --bg:#f3f4f1; --panel:#fbfbf9; --ink:#1d2321; --muted:#5f6a66; --line:#d6dad5;
+  --accent:#2f5d62; --accent-soft:#dfe9e8;
+  --ok:#2e7d5b; --warn:#b07414; --bad:#b3332b; --bad-soft:#f6e1de; --warn-soft:#f5ead6; --ok-soft:#dcefe5;
+  --sA:#2f5d62; --sB:#b07414; --sB0:#6f8f93; --sB1:#c9a35a; --sC:#8a3c8f;
+  --lum:40%;
+  --f-display:"Noto Serif TC","Songti TC",serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141917; --panel:#1b211f; --ink:#e6ebe8; --muted:#9aa6a1; --line:#2e3734;
+  --accent:#7fb3b8; --accent-soft:#22312f;
+  --ok:#5cc196; --warn:#e3a94a; --bad:#f07b70; --bad-soft:#3a2321; --warn-soft:#382d1b; --ok-soft:#1d3229;
+  --sA:#7fb3b8; --sB:#e3a94a; --sB0:#5d8589; --sB1:#9c8150; --sC:#d08ad4; --lum:66%; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141917; --panel:#1b211f; --ink:#e6ebe8; --muted:#9aa6a1; --line:#2e3734;
+  --accent:#7fb3b8; --accent-soft:#22312f;
+  --ok:#5cc196; --warn:#e3a94a; --bad:#f07b70; --bad-soft:#3a2321; --warn-soft:#382d1b; --ok-soft:#1d3229;
+  --sA:#7fb3b8; --sB:#e3a94a; --sB0:#5d8589; --sB1:#9c8150; --sC:#d08ad4; --lum:66%; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1320px;margin:0 auto;padding:24px 16px 48px}
+header h1{font-family:var(--f-display);font-size:clamp(24px,4vw,32px);margin:0 0 6px;text-wrap:balance}
+header p{margin:0;color:var(--muted);max-width:72ch}
+.layout{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:24px;margin-top:20px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+.console{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);max-height:calc(100vh - 24px);overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px 16px 16px;scrollbar-width:thin}
+@media (max-width:900px){.console{position:static;max-height:none}}
+.console details{border-top:1px solid var(--line)}
+.console details:first-of-type{border-top:0}
+.console summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding-block:12px;font-size:14px;font-weight:500}
+.console summary::-webkit-details-marker{display:none}
+.console summary::after{content:"＋";color:var(--muted);font-weight:400}
+.console details[open] summary::after{content:"－"}
+.console summary small{font-weight:400;color:var(--muted);font-size:11.5px;margin-left:auto}
+.gbody{display:grid;gap:14px;padding-bottom:16px}
+.field{display:grid;gap:4px}
+.field .top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.field label,.lbl{font-size:13.5px}
+.numwrap{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+input.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:13px;color:var(--accent);font-weight:500;width:84px;text-align:right;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+input.num:focus{border-color:var(--accent)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input[type=range]:disabled,input.num:disabled{opacity:.4}
+select{font:inherit;font-size:14px;width:100%;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.hint{font-size:12px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:inherit;font-size:12.5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+.chip:focus-visible,input:focus-visible,button:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.toggle{display:flex;gap:8px;align-items:center;font-size:13.5px}
+.alist{display:grid;gap:6px}
+.ahead,.arow{display:grid;grid-template-columns:minmax(0,1fr) 54px 54px 22px;gap:6px;align-items:center}
+.ahead{font-size:11.5px;color:var(--muted)}
+.ahead span:nth-child(2),.ahead span:nth-child(3){text-align:right}
+.arow input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);min-width:0;width:100%}
+.arow input[type=number]{font-family:var(--f-num);text-align:right;color:var(--accent)}
+.mhead,.mrow{display:grid;grid-template-columns:minmax(0,1fr) 84px 26px;gap:6px;align-items:center}
+.mhead{font-size:11.5px;color:var(--muted)} .mhead span:nth-child(2){text-align:right}
+.mrow input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);min-width:0;width:100%}
+.mrow input[type=number]{font-family:var(--f-num);text-align:right;color:var(--accent)}
+.mrow .del,.arow .del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:14px;padding:0}
+.arow .del:hover,.mrow .del:hover{color:var(--bad)}
+.ms-when{display:block;font-size:11.5px;color:var(--muted)}
+.tbl td.na{color:var(--muted);font-family:var(--f-body)}
+.arow .del:disabled{opacity:.3;cursor:default}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-size:12.5px;padding:5px 10px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer}
+.btn.ghost{border-color:var(--line);color:var(--muted)}
+.btn[disabled]{border-color:var(--line);color:var(--muted);cursor:default}
+main{display:grid;gap:22px;min-width:0}
+.sec{display:grid;gap:12px;min-width:0}
+.sec-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+.h2{font-family:var(--f-display);font-size:20px;margin:0}
+.lead{font-size:13px;color:var(--muted);max-width:76ch;margin:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+@media (max-width:420px){.two{grid-template-columns:1fr}}
+.verdict{border-radius:10px;padding:14px 16px;display:grid;gap:4px;border:1px solid var(--line)}
+.verdict[data-s="ok"]{background:var(--ok-soft)} .verdict[data-s="warn"]{background:var(--warn-soft)} .verdict[data-s="bad"]{background:var(--bad-soft)}
+.pill{justify-self:start;font-size:12px;font-weight:700;letter-spacing:.06em;padding:2px 10px;border-radius:999px;color:var(--panel)}
+.verdict[data-s="ok"] .pill{background:var(--ok)} .verdict[data-s="warn"] .pill{background:var(--warn)} .verdict[data-s="bad"] .pill{background:var(--bad)}
+.verdict h3{margin:0;font-size:16px;text-wrap:balance}
+.verdict p{margin:0;color:var(--muted);font-size:13px}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.kv div{background:var(--panel);padding:8px 10px;display:grid}
+.kv span{font-size:11.5px;color:var(--muted)} .kv b{font-family:var(--f-num);font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}
+.neg{color:var(--bad)!important} .pos{color:var(--ok)!important}
+.chart{position:relative}
+.chart h4{margin:0 0 6px;font-size:14px;font-weight:500}
+.chart svg{width:100%;height:auto;display:block;touch-action:pan-y;cursor:crosshair}
+.chart text{font-family:var(--f-num);font-size:10px;fill:var(--muted)}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 8px 20px -10px rgba(0,0,0,.35);min-width:160px;z-index:3}
+.tip .t{font-weight:500;margin-bottom:4px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.tip .x{font:inherit;font-size:14px;line-height:1;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:2px 4px}
+.tip .x:hover{color:var(--ink)}
+.tip .r{display:flex;justify-content:space-between;gap:12px;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.tip .r span:first-child{font-family:var(--f-body);color:var(--muted);display:flex;align-items:center;gap:6px}
+.tip i{display:inline-block;width:8px;height:8px;border-radius:2px}
+.notes{font-size:12.5px;color:var(--muted);display:grid;gap:4px;max-width:80ch}
+.notes p{margin:0}
+.tablewrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px;min-width:640px}
+.tbl th{font-size:12px;font-weight:500;color:var(--muted);text-align:right;padding:8px;border-bottom:1px solid var(--line);letter-spacing:.04em;white-space:nowrap}
+.tbl th.l,.tbl td.l{text-align:left}
+.tbl td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tbl td.txt{font-family:var(--f-body);text-align:left;white-space:normal}
+.tbl tr[data-sel="1"] td{background:var(--accent-soft)}
+.tbl tr.best td:nth-child(3){font-weight:700}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;margin-right:4px;font-family:var(--f-body)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)} .tag.warn{background:var(--warn-soft);color:var(--warn)} .tag.bad{background:var(--bad-soft);color:var(--bad)}
+.legend{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend button{font:inherit;font-size:12px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:3px 10px;cursor:pointer}
+.legend button[aria-pressed="false"]{opacity:.45;text-decoration:line-through}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.split{display:flex;height:10px;border-radius:999px;overflow:hidden;background:var(--line)}
+.split span{display:block;height:100%}
+
+.tip.sticky{pointer-events:auto}
+#alist{max-height:320px;overflow-y:auto;padding-right:2px}
+.yrctl{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px 14px;align-items:center;padding:10px 14px}
+@media (max-width:560px){.yrctl{grid-template-columns:1fr auto}.yrctl input[type=range]{grid-column:1/-1;grid-row:2}}
+.bk{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:10px;align-content:start}
+.bk .nm{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.bk .nm b{font-family:var(--f-num);font-weight:500;font-size:18px;color:var(--ink)}
+.stack{display:flex;height:14px;border-radius:4px;overflow:hidden;background:color-mix(in srgb,var(--line) 50%,transparent)}
+.stack span{height:100%;min-width:0}
+.stack.debt span{background:repeating-linear-gradient(135deg,var(--bad) 0 3px,transparent 3px 6px)}
+.prows{display:grid;gap:5px}
+.prow{display:grid;grid-template-columns:10px minmax(0,1fr) auto 44px;gap:8px;align-items:center;font-size:12.5px}
+.prow i{width:10px;height:10px;border-radius:2px;display:block}
+.prow b{font-family:var(--f-num);font-weight:500;font-variant-numeric:tabular-nums;text-align:right}
+.prow em{font-style:normal;font-family:var(--f-num);font-size:11.5px;color:var(--muted);text-align:right}
+.prow.debt{color:var(--bad)} .prow.debt i{background:repeating-linear-gradient(135deg,var(--bad) 0 2px,transparent 2px 4px)}
+.prow.tot{border-top:1px solid var(--line);padding-top:6px;font-weight:500}
+.bk .meta{font-size:11.5px;color:var(--muted)}
+.real-list{display:grid;gap:4px;font-size:12px}
+.real-list .rr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:5px 8px;border-radius:6px;background:var(--bg)}
+.real-list .rr b{font-family:var(--f-num);font-weight:500;color:var(--accent);text-align:right}
+.real-list .rr span{color:var(--muted);grid-column:1/-1;font-size:11.5px}
+.real-list .rr.err b{color:var(--bad)}
+.rtag{display:inline-block;font-size:10.5px;padding:0 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent);margin-left:6px;font-family:var(--f-body);vertical-align:1px}
+.notes-d summary{cursor:pointer;font-size:13px;color:var(--accent);padding-block:4px}
+.notes-d .notes{margin-top:6px}
+.tip:not(.sticky) .x{display:none}
+.chart svg:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.console-h{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 0 6px;position:sticky;top:-4px;background:var(--panel);z-index:2;border-bottom:1px solid var(--line);margin-bottom:2px}
+.console-h b{font-size:13px;letter-spacing:.08em;color:var(--muted);font-weight:500}
+.linkbtn{font:inherit;font-size:12px;border:0;background:transparent;color:var(--accent);cursor:pointer;padding:2px 4px}
+.console summary small{max-width:60%;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--f-num);font-size:11px}
+.jump{position:sticky;top:env(safe-area-inset-top,0px);z-index:4;display:flex;gap:4px;overflow-x:auto;padding:8px 0;background:var(--bg);border-bottom:1px solid var(--line);scrollbar-width:none}
+.jump a{font-size:12.5px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:999px;white-space:nowrap}
+.jump a:hover,.jump a:focus-visible{color:var(--ink);background:var(--panel)}
+.sec,.two{scroll-margin-top:56px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.kpis{grid-template-columns:1fr}}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:6px;align-content:start}
+.kpi.lead-best{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.kpi .nm{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;justify-content:space-between}
+.kpi .big{font-family:var(--f-num);font-size:clamp(22px,2.6vw,28px);font-weight:500;font-variant-numeric:tabular-nums;line-height:1.1}
+.kpi .sub{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12.5px}
+.kpi .sub span{color:var(--muted)} .kpi .sub b{font-family:var(--f-num);font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
+.badge{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--accent);color:var(--panel)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>
+/* 和 K線學堂一致的分層灰階：底色 → 面板 → 輸入框 */
+:root{--bg:#dcdfe4;--panel:#f4f5f7;--ink:#18202b;--muted:#5b6676;--line:#c8ced7;--accent:#2346a0;--accent-soft:#e2e8f7;--field:#ffffff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000000;--panel:#141517;--ink:#e8ecf1;--muted:#9aa4b2;--line:#353a41;--accent:#86a2ff;--accent-soft:#1c2440;--field:#2b2e33}}
+:root[data-theme="dark"]{--bg:#000000;--panel:#141517;--ink:#e8ecf1;--muted:#9aa4b2;--line:#353a41;--accent:#86a2ff;--accent-soft:#1c2440;--field:#2b2e33}
+body{margin:0}
+input.num,select,.arow input,.mrow input{background:var(--field)}
+/* 嵌在 K線學堂裡：不留外框邊距、標題縮小、控制台不黏住（iframe 會依內容自動長高） */
+:root[data-embed="1"] .wrap{padding:0 0 24px;max-width:none}
+:root[data-embed="1"] header h1{display:none}
+:root[data-embed="1"] .console{position:static;max-height:none}
+:root[data-embed="1"] .jump{top:0}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>存股與槓桿模擬器</h1>
+    <p>左邊設定，右邊看結果。用同樣的本金和每月投入，比較 <b style="color:var(--sA)">A 定期定額</b>、<b style="color:var(--sB)">B 核心衛星</b>、<b style="color:var(--sC)">C 借錢槓桿</b>。所有數字都能自訂，設定會記在這個瀏覽器裡。</p>
+  </header>
+
+  <div class="layout">
+    <form class="console" id="console" onsubmit="return false" aria-label="控制台">
+      <div class="console-h"><b>控制台</b><span><button type="button" class="linkbtn" id="openall">全部展開</button><button type="button" class="linkbtn" id="closeall">全部收合</button></span></div>
+      <details open>
+        <summary>共用設定<small id="sum-g"></small></summary>
+        <div class="gbody">
+          <div class="field"><label for="g-asset" class="lbl">主要標的（做法 A 與 C）</label><select id="g-asset"></select></div>
+          <div class="field"><div class="top"><label for="g-init">起始本金</label></div><input type="range" id="g-init" min="0" max="5000000" step="10000" value="1200000" data-scale="10000" data-unit="萬"></div>
+          <div class="field"><div class="top"><label for="g-mon">每月投入</label></div><input type="range" id="g-mon" min="0" max="200000" step="1000" value="50000" data-scale="10000" data-unit="萬"></div>
+          <div class="field"><div class="top"><label for="g-grow">每年調高投入</label></div><input type="range" id="g-grow" min="0" max="15" step="0.5" value="0" data-unit="%"></div>
+          <div class="field"><div class="top"><label for="g-yrs">年數</label></div><input type="range" id="g-yrs" min="1" max="50" step="1" value="20" data-unit="年"></div>
+          <div class="field"><div class="top"><label for="g-goal">目標金額</label></div><input type="range" id="g-goal" min="0" max="100000000" step="500000" value="12000000" data-scale="10000" data-unit="萬"></div>
+          <div class="field"><span class="lbl">情境</span>
+            <div class="chips" role="group" aria-label="情境" id="scenchips">
+              <button type="button" class="chip" data-scen="normal">每年照年化</button>
+              <button type="button" class="chip" data-scen="crash">開局崩盤</button>
+            </div>
+            <span class="hint">開局崩盤：第一年每個標的跌它自己的「崩盤 %」，之後照年化。</span></div>
+        </div>
+      </details>
+
+      <details open>
+        <summary>標的與年化率<small id="sum-a"></small></summary>
+        <div class="gbody">
+          <div class="alist">
+            <div class="ahead"><span>名稱</span><span>年化 %</span><span>崩盤 %</span><span></span></div>
+            <div id="alist" class="alist"></div>
+          </div>
+          <div class="btnrow"><button type="button" class="btn" id="a-add">＋ 新增標的</button><button type="button" class="btn ghost" id="a-all">全部設同一年化…</button></div>
+          <div class="field" id="a-all-f" hidden><div class="top"><label for="a-all-v">全部年化設為</label><span class="numwrap"><input type="number" class="num" id="a-all-v" value="8" step="0.5"> %</span></div>
+            <div class="btnrow"><button type="button" class="btn" id="a-all-go">套用</button></div></div>
+          <span class="hint">「崩盤 %」用在開局崩盤情境和壓力測試：第一年跌多少。</span>
+        </div>
+      </details>
+
+      <details open id="real-d">
+        <summary>真實年化率<small id="sum-real"></small></summary>
+        <div class="gbody">
+          <span class="hint">用真實歷史股價（含配息再投入）算出每個標的的年化報酬，填進上面的「年化 %」。標的名稱要以台股代號開頭（例如 0050 元大台灣50），或是英文代號（VOO、SPY），或 S&amp;P 500、道瓊、那斯達克100、費半（以對應的 ETF 估算）。</span>
+          <div class="field"><span class="lbl">期間</span>
+            <div class="chips" role="group" aria-label="真實年化率的期間" id="realchips">
+              <button type="button" class="chip" data-ry="3">近 3 年</button><button type="button" class="chip" data-ry="5">近 5 年</button><button type="button" class="chip" data-ry="10">近 10 年</button><button type="button" class="chip" data-ry="max">上市以來</button>
+            </div><span class="hint">資料不夠長時改用上市以來的全部資料並標示實際年數；不到 3 年的不套用。</span></div>
+          <label class="toggle"><input type="checkbox" id="real-crash" checked> 「崩盤 %」也改成同期間的歷史最大跌幅</label>
+          <div class="btnrow"><button type="button" class="btn" id="real-all">全部標的抓真實年化</button><button type="button" class="btn ghost" id="real-main">只抓主要標的</button><button type="button" class="btn ghost" id="real-clear" title="清除標示，數字保留">清除標示</button></div>
+          <div id="real-list" class="real-list" aria-live="polite"></div>
+        </div>
+      </details>
+
+      <details open>
+        <summary>存錢里程碑<small id="sum-m"></small></summary>
+        <div class="gbody">
+          <div class="alist">
+            <div class="mhead"><span>里程碑名稱</span><span>金額（萬）</span><span></span></div>
+            <div id="mlist" class="alist"></div>
+          </div>
+          <div class="btnrow"><button type="button" class="btn" id="m-add">＋ 新增里程碑</button></div>
+          <span class="hint">時間會一直算到達成為止（最多 80 年），不受上面「年數」限制。</span>
+        </div>
+      </details>
+
+      <details open>
+        <summary>核心衛星（B）<small id="sum-cs"></small></summary>
+        <div class="gbody">
+          <div class="field"><label for="cs-core" class="lbl">核心</label><select id="cs-core"></select></div>
+          <div class="field"><label for="cs-sat" class="lbl">衛星</label><select id="cs-sat"></select></div>
+          <div class="field"><div class="top"><label for="cs-w">衛星比例</label></div><input type="range" id="cs-w" min="0" max="100" step="1" value="20" data-unit="%">
+            <div class="split" aria-hidden="true"><span id="cs-bar-c" style="background:var(--sB0)"></span><span id="cs-bar-s" style="background:var(--sB1)"></span></div></div>
+          <div class="chips" role="group" aria-label="再平衡" id="rebchips">
+            <button type="button" class="chip" data-reb="year">每年拉回比例</button>
+            <button type="button" class="chip" data-reb="none">不再平衡</button>
+          </div>
+        </div>
+      </details>
+
+      <details open>
+        <summary>借款結構（C）<small id="sum-l"></small></summary>
+        <div class="gbody">
+          <div class="field"><div class="top"><label for="credit">信貸金額</label></div><input type="range" id="credit" min="0" max="5000000" step="10000" value="1000000" data-scale="10000" data-unit="萬"></div>
+          <div class="field"><div class="top"><label for="crate">信貸利率</label></div><input type="range" id="crate" min="0" max="15" step="0.1" value="3" data-unit="%"></div>
+          <div class="field"><div class="top"><label for="cyears">信貸年限</label></div><input type="range" id="cyears" min="1" max="10" step="1" value="7" data-unit="年"></div>
+          <div class="field"><div class="top"><label for="ltv1">第一層質押成數</label></div><input type="range" id="ltv1" min="0" max="80" step="1" value="40" data-unit="%"></div>
+          <div class="field"><label for="p1-asset" class="lbl">第一層借款買入</label><select id="p1-asset"></select><span class="hint">買到的部位也拿去質押（第二層的擔保品）</span></div>
+          <label class="toggle"><input type="checkbox" id="l2on" checked> 開啟第二層質押</label>
+          <div class="field" id="ltv2-f"><div class="top"><label for="ltv2">第二層成數</label></div><input type="range" id="ltv2" min="0" max="80" step="1" value="40" data-unit="%"></div>
+          <div class="field" id="p2-f"><label for="p2-asset" class="lbl">第二層借款買入</label><select id="p2-asset"></select></div>
+          <div class="field" id="levx-f"><div class="top"><label for="levx">第二層標的槓桿倍數</label></div><input type="range" id="levx" min="1" max="3" step="0.1" value="2" data-unit="倍"></div>
+          <div class="field" id="levfee-f"><div class="top"><label for="levfee">第二層標的年費用</label></div><input type="range" id="levfee" min="0" max="5" step="0.1" value="1" data-unit="%"><span class="hint">倍數 1 = 原型 ETF；2 = 正 2 槓桿 ETF</span></div>
+          <label class="toggle" id="p2coll-f"><input type="checkbox" id="p2coll"> 第二層買入的部位也算擔保品</label>
+          <div class="field"><div class="top"><label for="prate">質押利率</label></div><input type="range" id="prate" min="0" max="10" step="0.1" value="2.8" data-unit="%"></div>
+          <div class="field"><div class="top"><label for="call">追繳線</label></div><input type="range" id="call" min="100" max="200" step="1" value="130" data-unit="%"></div>
+          <div class="field"><div class="top"><label for="restore">追繳後須補回</label></div><input type="range" id="restore" min="100" max="250" step="1" value="166" data-unit="%"></div>
+          <div class="field"><div class="top"><label for="cash">應急現金</label></div><input type="range" id="cash" min="0" max="3000000" step="10000" value="300000" data-scale="10000" data-unit="萬"></div>
+        </div>
+      </details>
+
+      <div class="btnrow" style="padding-top:12px;border-top:1px solid var(--line)"><button type="button" class="btn ghost" id="reset">全部恢復預設</button></div>
+    </form>
+
+    <main>
+      <nav class="jump" aria-label="跳到區塊"><a href="#sec-sum">總覽</a><a href="#sec-pos">部位明細</a><a href="#sec-chart">淨值走勢</a><a href="#sec-ms">里程碑</a><a href="#sec-risk">壓力測試與配置</a><a href="#sec-etf">標的比較</a></nav>
+      <section class="sec" id="sec-sum">
+        <div class="kpis" id="kpis"></div>
+      </section>
+      <section class="sec" id="sec-pos">
+        <div class="sec-h"><h2 class="h2">部位明細</h2><p class="lead">每種做法的錢分別放在哪裡。在下方「淨值走勢」移動查價線，這裡會跟著切到那一年。槓桿版的淨值扣回了起始的應急現金，才能和 A、B 公平比較。</p></div>
+        <div class="yrctl panel">
+          <label for="bk-yr" class="lbl">看第幾年底</label>
+          <input type="range" id="bk-yr" min="0" max="20" step="1" value="20">
+          <span class="numwrap"><input type="number" class="num" id="bk-yr-n" min="0" step="1" value="20" style="width:64px"> 年</span>
+          <button type="button" class="linkbtn" id="bk-end">回到期末</button>
+        </div>
+        <div class="kpis" id="bk" style="align-items:start"></div>
+      </section>
+      <section class="sec">
+        <div class="sec-h"><h2 class="h2">策略對照</h2><p class="lead" id="ledger-lead"></p></div>
+        <div class="tablewrap"><table class="tbl">
+          <thead><tr><th class="l">做法</th><th>總投入</th><th>期末淨值</th><th>獲利</th><th>年化（IRR）</th><th title="途中淨值低於累計投入最多的時候">最大帳面虧損</th><th>達到目標</th><th class="l">途中發生</th></tr></thead>
+          <tbody id="ledger"></tbody>
+        </table></div>
+        <p class="hint" style="margin:0">年化（IRR）是你這筆錢實際的報酬率，扣掉借款成本、把每月投入的時間點算進去。不借錢的做法在「每年照年化」時，IRR 會等於你填的年化；槓桿版會高於或低於它，取決於借款利率和有沒有被追繳。</p>
+      </section>
+
+      <section class="sec" id="sec-chart">
+        <div class="chart panel" id="w-master">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h4 style="margin:0">淨值走勢總覽</h4><label class="toggle" style="font-size:12.5px"><input type="checkbox" id="logscale"> 對數刻度</label></div>
+          <svg id="c-master" viewBox="0 0 760 300" role="img" aria-label="三種做法的淨值走勢"></svg>
+          <div class="legend" id="masterlegend"></div>
+        </div>
+      </section>
+
+      <section class="sec" id="sec-ms">
+        <div class="sec-h"><h2 class="h2">存錢里程碑</h2><p class="lead" id="ms-lead"></p></div>
+        <div class="tablewrap"><table class="tbl" style="min-width:720px">
+          <thead id="ms-head"></thead><tbody id="ms-body"></tbody>
+        </table></div>
+        <div class="chart panel" id="w-ms"><h4>里程碑時間軸</h4><svg id="c-ms" viewBox="0 0 760 200" role="img" aria-label="里程碑時間軸"></svg>
+          <div class="legend" id="ms-legend"></div></div>
+      </section>
+
+      <section class="two" id="sec-risk">
+        <div class="panel" style="display:grid;gap:12px">
+          <div class="sec-h"><h2 class="h2">槓桿壓力測試</h2></div>
+          <p class="lead" id="st-lead"></p>
+          <div class="verdict" id="verdict" data-s="ok"><span class="pill" id="pill"></span><h3 id="vh"></h3><p id="vp"></p></div>
+          <div class="kv">
+            <div><span>起始維持率</span><b id="s-start"></b></div>
+            <div><span>跌多少開始追繳</span><b id="s-trig"></b></div>
+            <div><span>崩盤時維持率</span><b id="s-ratio"></b></div>
+            <div><span>追繳需補現金</span><b id="s-need"></b></div>
+            <div><span>崩盤時淨值</span><b id="s-nw"></b></div>
+            <div><span>每月固定支出</span><b id="s-mo"></b></div>
+          </div>
+          <div class="chart" id="w-c1"><h4>維持率 vs. 跌幅</h4><svg id="c1" viewBox="0 0 380 210" role="img" aria-label="維持率曲線"></svg></div>
+          <div class="chart" id="w-c2"><h4>淨值 vs. 跌幅</h4><svg id="c2" viewBox="0 0 380 210" role="img" aria-label="淨值曲線"></svg></div>
+        </div>
+        <div class="panel" style="display:grid;gap:12px;align-content:start">
+          <div class="sec-h"><h2 class="h2">核心衛星比例</h2></div>
+          <p class="lead" id="cs-lead"></p>
+          <div class="tablewrap"><table class="tbl" style="min-width:420px"><thead><tr><th class="l">衛星比例</th><th>期末淨值</th><th>年化</th><th>最大帳面虧損</th></tr></thead><tbody id="cs-scan"></tbody></table></div>
+          <div class="chart" id="w-scan"><h4>期末淨值（依衛星比例）</h4><svg id="c-scan" viewBox="0 0 380 200" role="img" aria-label="比例掃描"></svg></div>
+        </div>
+      </section>
+
+      <section class="sec" id="sec-etf">
+        <div class="sec-h"><h2 class="h2">標的比較</h2><p class="lead">用你填的年化與崩盤 %，加上共用的本金、每月投入和年數，算出每個標的的結果。勾選的標的會畫到下圖；按「設為主要」可以切換做法 A 和 C 用的標的。</p></div>
+        <div class="tablewrap"><table class="tbl">
+          <thead><tr><th class="l">比較</th><th class="l">標的</th><th>年化</th><th>崩盤</th><th id="th-norm">每年照年化</th><th id="th-crash">開局崩盤</th><th>差距</th><th></th></tr></thead>
+          <tbody id="etfbody"></tbody>
+        </table></div>
+        <div class="chart panel" id="w-cmp"><h4 id="cmp-h">標的比較</h4><svg id="c-cmp" viewBox="0 0 760 260" role="img" aria-label="標的比較"></svg><div class="legend" id="cmplegend"></div></div>
+      </section>
+
+      <details class="notes-d"><summary>說明與假設</summary><div class="notes">
+        <p>・頁面沒有內建任何歷史報酬。所有標的一開始都是年化 8%、崩盤 −40% 的預設值，請依你自己的判斷修改，或用「真實年化率」抓歷史資料（Yahoo Finance 月線還原收盤價，含配息再投入；台股抓不到時改用 FinMind 還原股價）。歷史年化只代表過去，不保證未來；最大跌幅用月收盤計算，會比盤中最低點的跌幅小一些；美股與指數是美元計價，沒有計入匯率。每年報酬固定，所以除了開局崩盤以外不會出現虧損；真實市場的波動會比這裡大。「最大帳面虧損」是途中淨值低於累計投入最多的時候。</p>
+        <p>・三種做法用同一組起始本金、每月投入和年數。槓桿版的每月投入要先繳信貸與質押利息，剩下才買入；不夠繳時從應急現金扣。期末淨值已扣掉未還借款，也扣回起始的應急現金，所以可以直接比較。</p>
+        <p>・質押結構：信貸與自有資金買主要標的（擔保品）；第一層借款買你選的標的，也拿去質押；第二層借款再買你選的標的，可設定槓桿倍數，預設不算擔保品。第二層每月報酬 = 倍數 × 標的月報酬 − 年費用 ÷ 12，壓力測試以 (1 − 跌幅)^倍數 估算。追繳規則請以你的合約為準。本工具用來理解報酬與風險結構，不是投資建議。</p>
+      </div></details>
+    </main>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const wan=v=>{if(!isFinite(v))return "—";const s=v<0?"−":"";v=Math.abs(v);return s+(v>=1e8?(v/1e8).toLocaleString("zh-TW",{maximumFractionDigits:2})+" 億":v>=1e4?(v/1e4).toLocaleString("zh-TW",{maximumFractionDigits:1})+" 萬":Math.round(v).toLocaleString("zh-TW")+" 元")};
+const pct=v=>isFinite(v)?Math.round(v*100)+"%":"—";
+const pct1=v=>isFinite(v)?(v>=0?"+":"")+(v*100).toFixed(1)+"%":"—";
+const moneyTick=t=>Math.abs(t)>=1e8?(t/1e8).toFixed(t%1e8?1:0)+"億":Math.round(t/1e4).toLocaleString("zh-TW")+"萬";
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const HUES=[190,25,265,130,45,215,330,0,160,290,80,240,350,105,15,60,300,175];
+
+/* ---------- assets (all user-defined) ---------- */
+const DEFAULT_ASSETS=["0050 元大台灣50","006208 富邦台50","009816 凱基台灣TOP50","0056 元大高股息","00878 國泰永續高股息","00919 群益台灣精選高息","00929 復華台灣科技優息","00713 元大台灣高息低波","00940 元大台灣價值高息","00891 中信關鍵半導體","00918 大華優利高填息30","S&P 500","道瓊","那斯達克100","費半"]
+  .map((n,i)=>({id:"a"+(i+1),name:n,r:8,crash:40}));
+let ASSETS=[],seq=100,MILES=[];
+const DEFAULT_MILES=[["第一個 100 萬",100],["300 萬",300],["500 萬",500],["千萬",1000],["財富自由目標",1200],["2000 萬",2000],["3000 萬",3000]].map(([n,v])=>({name:n,amt:v}));
+const G={scen:"normal",reb:"year",cmp:new Set(),hide:new Set(["B0","B1"]),main:"a3",core:"a3",sat:"a15",p1:"main",p2:"main"};
+const STORE="stock-lev-sim-v2";
+const colorOf=a=>`hsl(${HUES[Math.max(0,ASSETS.indexOf(a))%HUES.length]} 58% var(--lum))`;
+const byId=id=>ASSETS.find(a=>a.id===id)||ASSETS[0];
+const short=a=>esc(a.name.split(" ")[0]||a.name);
+
+/* ---------- range + number pairs ---------- */
+const RANGES=[...document.querySelectorAll("#console input[type=range]")];
+const DEFAULTS={};RANGES.forEach(r=>DEFAULTS[r.id]=+r.value);
+RANGES.forEach(r=>{
+  const sc=+(r.dataset.scale||1),top=r.parentElement.querySelector(".top");
+  const w=document.createElement("span");w.className="numwrap";
+  const n=document.createElement("input");n.type="number";n.className="num";n.id=r.id+"-n";n.step=+(r.step/sc).toFixed(4);n.min=0;n.value=+(r.value/sc).toFixed(4);
+  n.setAttribute("aria-label",(top.querySelector("label")||{}).textContent+"（輸入數字）");
+  w.appendChild(n);w.append(" "+(r.dataset.unit||""));top.appendChild(w);
+  r.addEventListener("input",()=>{n.value=+(r.value/sc).toFixed(4)});
+  n.addEventListener("input",()=>{if(n.value!=="")r.value=Math.min(+r.max,Math.max(+r.min,n.value*sc))});
+});
+const val=id=>{const r=$(id),sc=+(r.dataset.scale||1),n=$(id+"-n");const v=n&&n.value!==""?+n.value*sc:+r.value;return Math.max(0,v)};
+function setVal(id,v){const r=$(id),sc=+(r.dataset.scale||1);r.value=Math.min(+r.max,Math.max(+r.min,v));$(id+"-n").value=+(v/sc).toFixed(4)}
+
+/* ---------- asset list editor ---------- */
+function buildAssetList(){
+  $("alist").innerHTML=ASSETS.map(a=>`<div class="arow" data-id="${a.id}">
+    <input type="text" value="${esc(a.name)}" data-f="name" aria-label="標的名稱">
+    <input type="number" value="${a.r}" step="0.5" data-f="r" aria-label="${esc(a.name)} 年化報酬 %">
+    <input type="number" value="${a.crash}" step="1" min="0" max="100" data-f="crash" aria-label="${esc(a.name)} 崩盤跌幅 %">
+    <button type="button" class="del" aria-label="刪除 ${esc(a.name)}" ${ASSETS.length<=1?"disabled":""}>✕</button></div>`).join("");
+  $("alist").querySelectorAll(".arow").forEach(row=>{
+    const a=byId(row.dataset.id);
+    row.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",()=>{
+      const f=inp.dataset.f;if(f==="name")a.name=inp.value||"未命名";else if(inp.value!=="")a[f]=f==="crash"?Math.min(100,Math.max(0,+inp.value)):+inp.value;if(f!=="crash"){delete a.src;delete a.err}
+    }));
+    row.querySelector(".del").addEventListener("click",()=>{ASSETS=ASSETS.filter(x=>x!==a);G.cmp.delete(a.id);["main","core","sat"].forEach(k=>{if(G[k]===a.id)G[k]=ASSETS[0].id});buildAssetList();fillSelects();renderAll()});
+  });
+}
+function fillSelects(){[["p1-asset","p1"],["p2-asset","p2"]].forEach(([id,k])=>{const s=$(id);if(G[k]!=="main"&&!ASSETS.some(a=>a.id===G[k]))G[k]="main";s.innerHTML=`<option value="main">跟主要標的</option>`+ASSETS.map(a=>`<option value="${a.id}">${esc(a.name)}（${a.r}%）</option>`).join("");s.value=G[k]});[["g-asset","main"],["cs-core","core"],["cs-sat","sat"]].forEach(([id,k])=>{const s=$(id);if(!ASSETS.some(a=>a.id===G[k]))G[k]=ASSETS[0].id;s.innerHTML=ASSETS.map(a=>`<option value="${a.id}">${esc(a.name)}（${a.r}%）</option>`).join("");s.value=G[k]})}
+$("a-add").addEventListener("click",()=>{ASSETS.push({id:"a"+(++seq),name:"自訂標的",r:8,crash:40});buildAssetList();fillSelects();renderAll();const rows=$("alist").querySelectorAll(".arow input[data-f=name]");rows[rows.length-1].select()});
+$("a-all").addEventListener("click",()=>{$("a-all-f").hidden=!$("a-all-f").hidden});
+$("a-all-go").addEventListener("click",()=>{const v=+$("a-all-v").value;ASSETS.forEach(a=>a.r=v);buildAssetList();fillSelects();renderAll()});
+[["g-asset","main"],["cs-core","core"],["cs-sat","sat"],["p1-asset","p1"],["p2-asset","p2"]].forEach(([id,k])=>$(id).addEventListener("change",()=>{G[k]=$(id).value}));
+
+/* ---------- milestone editor ---------- */
+function buildMiles(){
+  $("mlist").innerHTML=MILES.map((m,i)=>`<div class="mrow" data-i="${i}"><input type="text" value="${esc(m.name)}" data-f="name" aria-label="里程碑名稱"><input type="number" value="${m.amt}" step="10" min="0" data-f="amt" aria-label="${esc(m.name)} 金額（萬）"><button type="button" class="del" aria-label="刪除 ${esc(m.name)}">✕</button></div>`).join("");
+  $("mlist").querySelectorAll(".mrow").forEach(row=>{const m=MILES[+row.dataset.i];
+    row.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",()=>{if(inp.dataset.f==="name")m.name=inp.value||"里程碑";else if(inp.value!=="")m.amt=Math.max(0,+inp.value)}));
+    row.querySelector(".del").addEventListener("click",()=>{MILES.splice(MILES.indexOf(m),1);buildMiles();renderAll()})});
+}
+$("m-add").addEventListener("click",()=>{const last=MILES.length?Math.max(...MILES.map(m=>m.amt)):0;MILES.push({name:"新里程碑",amt:last?last*2:100});buildMiles();renderAll();const r=$("mlist").querySelectorAll(".mrow input[data-f=name]");r[r.length-1].select()});
+
+/* ---------- persistence (per-viewer convenience) ---------- */
+function save(){try{const o={assets:ASSETS,miles:MILES,seq,G:{...G,cmp:[...G.cmp],hide:[...G.hide]},vals:{},l2on:$("l2on").checked,p2coll:$("p2coll").checked,log:$("logscale").checked};RANGES.forEach(r=>o.vals[r.id]=val(r.id));localStorage.setItem(STORE,JSON.stringify(o))}catch(e){}}
+function defaults(){ASSETS=DEFAULT_ASSETS.map(a=>({...a}));MILES=DEFAULT_MILES.map(m=>({...m}));seq=100;Object.assign(G,{scen:"normal",reb:"year",cmp:new Set(["a1","a4","a12","a15"]),hide:new Set(["B0","B1"]),main:"a3",core:"a3",sat:"a15",p1:"main",p2:"main"})}
+function load(){
+  let o=null;try{o=JSON.parse(localStorage.getItem(STORE)||"null")}catch(e){}
+  if(o&&Array.isArray(o.assets)&&o.assets.length){ASSETS=o.assets;MILES=Array.isArray(o.miles)?o.miles:DEFAULT_MILES.map(m=>({...m}));seq=o.seq||100;Object.assign(G,o.G||{});G.cmp=new Set((o.G&&o.G.cmp)||[]);G.hide=new Set((o.G&&o.G.hide)||["B0","B1"]);
+    Object.entries(o.vals||{}).forEach(([k,v])=>{if($(k))setVal(k,v)});$("l2on").checked=o.l2on!==false;$("p2coll").checked=!!o.p2coll;$("logscale").checked=!!o.log}
+  else defaults();
+}
+$("reset").addEventListener("click",()=>{try{localStorage.removeItem(STORE)}catch(e){}defaults();RANGES.forEach(r=>setVal(r.id,DEFAULTS[r.id]));$("l2on").checked=true;$("p2coll").checked=false;$("logscale").checked=false;buildMiles();buildAssetList();fillSelects();renderAll()});
+
+/* ---------- read ---------- */
+const ids=["credit","crate","cyears","ltv1","ltv2","levx","levfee","prate","call","restore","cash"];
+function read(){
+  const p={init:val("g-init"),mon:val("g-mon"),grow:val("g-grow")/100,yrs:Math.min(80,Math.max(1,Math.round(val("g-yrs")))),goal:val("g-goal"),w:Math.min(100,val("cs-w"))/100,l2on:$("l2on").checked};
+  ids.forEach(k=>p[k]=val(k));p.cyears=Math.max(1,Math.round(p.cyears));p.own=p.init;
+  p.main=byId(G.main);p.core=byId(G.core);p.sat=byId(G.sat);p.t1=G.p1==="main"?p.main:byId(G.p1);p.t2=G.p2==="main"?p.main:byId(G.p2);p.p2coll=$("p2coll").checked;return p;
+}
+const pathOf=(a,p,scen=G.scen)=>Array.from({length:p.yrs},(_,i)=>scen==="crash"&&i===0?-a.crash/100:a.r/100);
+function niceTicks(lo,hi,n){if(hi-lo<1e-9)hi=lo+1;const st0=(hi-lo)/n,mag=Math.pow(10,Math.floor(Math.log10(st0))),st=[1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=st0),a=Math.floor(lo/st)*st,b=Math.ceil(hi/st)*st,t=[];for(let v=a;v<=b+1e-9;v+=st)t.push(+v.toFixed(6));return {t,a,b}}
+const monthly=a=>Math.pow(1+Math.max(a,-0.9999),1/12)-1;
+function irr(init,flows,final){
+  const n=flows.length,f=r=>{let v=init*Math.pow(1+r,n);flows.forEach((c,i)=>v+=c*Math.pow(1+r,n-i));return v-final};
+  if(init+flows.reduce((a,b)=>a+b,0)<=0)return NaN;
+  let lo=-0.5,hi=0.3;if(f(lo)>0||f(hi)<0){if(final<=0)return -1;return NaN}
+  for(let k=0;k<80;k++){const m=(lo+hi)/2;f(m)>0?hi=m:lo=m}return Math.pow(1+(lo+hi)/2,12)-1;
+}
+
+/* ---------- strategies ---------- */
+function stratDca(p,ann){const mv=[];
+  let v=p.init,mon=p.mon,wl=0,wla=0,hit=null,tot=p.init;const flows=[],pts=[[0,v]],inv=[[0,p.init]],sn=[{v}];
+  ann.forEach((a,y)=>{const m=monthly(a);for(let k=0;k<12;k++){v+=mon;tot+=mon;flows.push(mon);v*=1+m;if(tot>0&&(v-tot)/tot<wl){wl=(v-tot)/tot;wla=v-tot}mv.push(v);if(hit===null&&p.goal>0&&v>=p.goal)hit=y*12+k+1}
+    pts.push([y+1,v]);sn.push({v});inv.push([y+1,tot]);mon*=1+p.grow});
+  return {v,tot,pts,inv,wl,wla,hit,irr:irr(p.init,flows,v),mv,sn,K0:p.cash,ev:[]};
+}
+function stratCs(p,pc,ps,w){const mv=[];
+  let C=p.init*(1-w),S=p.init*w,mon=p.mon,wl=0,wla=0,hit=null,tot=p.init;const flows=[],pts=[[0,p.init]],sn=[{C,S}];
+  pc.forEach((rc,y)=>{const mc=monthly(rc),msat=monthly(ps[y]);
+    for(let k=0;k<12;k++){C+=mon*(1-w);S+=mon*w;tot+=mon;flows.push(mon);C*=1+mc;S*=1+msat;const v=C+S;if(tot>0&&(v-tot)/tot<wl){wl=(v-tot)/tot;wla=v-tot}mv.push(v);if(hit===null&&p.goal>0&&v>=p.goal)hit=y*12+k+1}
+    if(G.reb==="year"){const v=C+S;C=v*(1-w);S=v*w}
+    pts.push([y+1,C+S]);sn.push({C,S});mon*=1+p.grow});
+  const v=C+S;return {v,tot,pts,wl,wla,hit,irr:irr(p.init,flows,v),mv,sn,K0:p.cash,satShare:v>0?S/v:0,ev:[]};
+}
+function stratLev(p,ann){const mv=[];
+  const a1=pathOf(p.t1,p),a2=pathOf(p.t2,p);
+  const core=p.own+p.credit,L1=core*p.ltv1/100,L2=p.l2on?L1*p.ltv2/100:0;
+  let S=core,Y=L1,X=L2,P=L1+L2,C=p.credit,K=p.cash,mon=p.mon,tot=p.init;const K0=p.cash;
+  const rc=p.crate/100/12,n=p.cyears*12,cpay=C>0?(rc>0?C*rc/(1-Math.pow(1+rc,-n)):C/n):0,call=p.call/100,restore=Math.max(p.restore,p.call)/100;
+  const coll=()=>S+Y+(p.p2coll?X:0);
+  const nw=()=>S+Y+X+K-P-C-K0;const ev=[],flows=[],pts=[[0,nw()]],sn=[{S,Y,X,K,C,P}];let wl=0,wla=0,hit=null,neg=false,i=0;
+  ann.forEach((a,y)=>{const m=monthly(a),m1=monthly(a1[y]),m2=monthly(a2[y]);for(let k=0;k<12;k++,i++){
+    S*=1+m;Y*=1+m1;X=Math.max(0,X*(1+p.levx*m2-p.levfee/100/12));
+    if(P>0&&coll()/P<call){const need=P-coll()/restore;
+      if(K>=need){K-=need;P-=need;ev.push({i,t:"call",a:need})}
+      else{const cv=coll(),rep=Math.min(cv,P),f=cv>0?rep/cv:0;S*=1-f;Y*=1-f;if(p.p2coll)X*=1-f;P-=rep;if(P>0){C+=P;P=0}ev.push({i,t:"liq"})}}
+    let svc=P*p.prate/100/12;if(C>0){if(i<n){const it=C*rc,pr=Math.min(C,cpay-it);C=Math.max(0,C-pr);svc+=cpay}else{svc+=C;C=0}}
+    const inv=mon-svc;if(inv>=0)S+=inv;else K+=inv;tot+=mon;flows.push(mon);
+    const v=nw();if(tot>0&&(v-tot)/tot<wl){wl=(v-tot)/tot;wla=v-tot}if(v<0)neg=true;mv.push(v);if(hit===null&&p.goal>0&&v>=p.goal)hit=i+1}
+    pts.push([y+1,nw()]);sn.push({S,Y,X,K,C,P});mon*=1+p.grow});
+  const v=nw();return {v,tot,pts,wl,wla,neg,hit,irr:irr(p.init,flows,v),mv,sn,K0:p.cash,ev};
+}
+
+
+/* ---------- chart engine with dismissible crosshair ---------- */
+const CH={},BOUND=[];
+function hideTip(svg){svg._sticky=false;svg._down=false;const xh=svg.querySelector(".xh");if(xh)xh.innerHTML="";const t=svg.parentElement.querySelector(".tip");if(t)t.hidden=true;if(CH[svg.id])CH[svg.id].lastX=null}
+/* mouse: follows the pointer, hides on leave. touch/pen: press and drag to slide; stays after lifting until ✕, Esc or tapping elsewhere. keyboard: focus the chart, ← → to step */
+function bindHover(svg,id){if(svg._bound)return;svg._bound=true;BOUND.push(svg);svg.tabIndex=0;
+  const show=e=>hover(id,e);
+  svg.addEventListener("pointerdown",e=>{BOUND.forEach(o=>{if(o!==svg)hideTip(o)});if(e.pointerType!=="mouse"){svg._down=true;svg._sticky=true}show(e)});
+  svg.addEventListener("pointermove",e=>{if(e.pointerType==="mouse"||svg._down)show(e)});
+  ["pointerup","pointercancel"].forEach(t=>svg.addEventListener(t,()=>{svg._down=false}));
+  svg.addEventListener("pointerleave",e=>{if(e.pointerType==="mouse"&&!svg._sticky)hideTip(svg)});
+  svg.addEventListener("keydown",e=>{const c=CH[id];if(!c)return;const st=c.cfg.xstep||1;
+    if(e.key==="ArrowRight"||e.key==="ArrowLeft"){e.preventDefault();svg._sticky=true;const x=c.lastX==null?c.xmin:c.lastX+(e.key==="ArrowRight"?st:-st);c.lastX=Math.max(c.xmin,Math.min(c.xmax,x));showAt(id,c.lastX)}});
+  svg.addEventListener("blur",()=>{if(svg._sticky&&!svg._down)hideTip(svg)});
+}
+document.addEventListener("pointerdown",e=>{if(!e.target.closest(".chart"))BOUND.forEach(hideTip)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")BOUND.forEach(hideTip)});
+document.addEventListener("click",e=>{const b=e.target.closest(".tip .x");if(b)hideTip(b.closest(".chart").querySelector("svg"))});
+function draw(id,cfg){
+  const svg=$(id),vb=svg.viewBox.baseVal,W=vb.width,H=vb.height,ml=cfg.ml||58,mr=14,mt=12,mb=26;
+  const vis=cfg.series.filter(s=>!s.hidden),ys0=vis.flatMap(s=>s.pts.map(p=>p[1])).concat(cfg.extraY||[]);
+  let tk,ys;
+  if(cfg.log){const pos=ys0.filter(v=>v>0),lo=Math.max(1e4,Math.min(...pos,1e12)),hi=Math.max(...pos,lo*10);const a=Math.floor(Math.log10(lo)),b=Math.ceil(Math.log10(hi)),t=[];for(let e=a;e<=b;e++){t.push(Math.pow(10,e));if(e<b&&b-a<=4)t.push(3*Math.pow(10,e))}
+    tk={t,a:Math.pow(10,a),b:Math.pow(10,b)};ys=v=>mt+(1-(Math.log10(Math.max(tk.a,Math.min(tk.b,v)))-a)/(b-a))*(H-mt-mb)}
+  else{tk=cfg.yr?niceTicks(cfg.yr[0],cfg.yr[1],4):niceTicks(Math.min(0,...ys0),Math.max(...ys0,1),5);ys=v=>mt+(1-(Math.max(tk.a,Math.min(tk.b,v))-tk.a)/(tk.b-tk.a))*(H-mt-mb)}
+  const xmin=cfg.xmin||0,xmax=cfg.xmax,xs=v=>ml+((v-xmin)/(xmax-xmin||1))*(W-ml-mr);
+  let g="";
+  tk.t.forEach(t=>{g+=`<line x1="${ml}" x2="${W-mr}" y1="${ys(t)}" y2="${ys(t)}" stroke="var(--line)"/><text x="${ml-6}" y="${ys(t)+3}" text-anchor="end">${cfg.yfmt(t)}</text>`});
+  (cfg.xticks||[]).forEach(t=>{g+=`<text x="${xs(t)}" y="${H-7}" text-anchor="middle">${cfg.xtick(t)}</text>`});
+  if(cfg.ref)g+=`<line x1="${ml}" x2="${W-mr}" y1="${ys(cfg.ref.y)}" y2="${ys(cfg.ref.y)}" stroke="var(--bad)" stroke-dasharray="4 3"/><text x="${W-mr}" y="${ys(cfg.ref.y)-4}" text-anchor="end" style="fill:var(--bad)">${cfg.ref.label}</text>`;
+  vis.forEach(s=>{
+    g+=`<path d="${s.pts.map((p,i)=>(i?"L":"M")+xs(p[0]).toFixed(1)+" "+ys(p[1]).toFixed(1)).join(" ")}" style="fill:none;stroke:${s.color};stroke-width:${s.width||2};${s.dash?"stroke-dasharray:"+s.dash:""}"/>`;
+    if(s.end){const e=s.pts[s.pts.length-1];g+=`<circle cx="${xs(e[0])}" cy="${ys(e[1])}" r="3.5" style="fill:${s.color}"/>`}
+    (s.events||[]).forEach(e=>{const t=(e.i+1)/12,y0=Math.floor(t),f=t-y0,a=s.pts[Math.min(y0,s.pts.length-1)][1],b=s.pts[Math.min(y0+1,s.pts.length-1)][1];
+      g+=`<circle cx="${xs(t)}" cy="${ys(a+(b-a)*f)}" r="${e.t==="liq"?5:3.5}" style="fill:${e.t==="liq"?"var(--bad)":"var(--warn)"};stroke:var(--panel);stroke-width:1.5"/>`})});
+  if(cfg.cur)g+=`<line x1="${xs(cfg.cur[0])}" x2="${xs(cfg.cur[0])}" y1="${mt}" y2="${H-mb}" stroke="var(--ink)" stroke-opacity=".25"/><circle cx="${xs(cfg.cur[0])}" cy="${ys(cfg.cur[1])}" r="4.5" style="fill:var(--accent);stroke:var(--panel);stroke-width:2"/>`;
+  g+=`<g class="xh"></g>`;svg.innerHTML=g;
+  const prev=CH[id];CH[id]={cfg,xs,ys,W,H,ml,mr,mt,mb,vis,xmin,xmax,lastX:prev?prev.lastX:null};
+  bindHover(svg,id);
+  if(svg._sticky&&CH[id].lastX!=null)showAt(id,CH[id].lastX);
+}
+function hover(id,e){const c=CH[id],svg=$(id),r=svg.getBoundingClientRect(),vx=(e.clientX-r.left)/r.width*c.W;
+  let xv=c.xmin+(vx-c.ml)/(c.W-c.ml-c.mr)*(c.xmax-c.xmin);xv=Math.max(c.xmin,Math.min(c.xmax,xv));const st=c.cfg.xstep||1;xv=Math.round(xv/st)*st;c.lastX=xv;showAt(id,xv)}
+function showAt(id,xv){
+  const c=CH[id],svg=$(id),wrap=svg.parentElement;if(!c.vis.length)return;
+  let tip=wrap.querySelector(".tip");if(!tip){tip=document.createElement("div");tip.className="tip";wrap.appendChild(tip)}
+  const x=c.xs(xv);let g=`<line x1="${x}" x2="${x}" y1="${c.mt}" y2="${c.H-c.mb}" stroke="var(--ink)" stroke-opacity=".55" stroke-dasharray="3 3"/>`;const rows=[];
+  c.vis.forEach(s=>{let best=null;s.pts.forEach(p=>{if(best===null||Math.abs(p[0]-xv)<Math.abs(best[0]-xv))best=p});if(!best)return;
+    g+=`<circle cx="${c.xs(best[0])}" cy="${c.ys(best[1])}" r="4" style="fill:${s.color};stroke:var(--panel);stroke-width:2"/>`;rows.push({name:s.name,color:s.color,v:best[1]})});
+  svg.querySelector(".xh").innerHTML=g;rows.sort((a,b)=>b.v-a.v);
+  tip.innerHTML=`<div class="t"><span>${c.cfg.xlabel(xv)}</span><button type="button" class="x" aria-label="關閉">✕</button></div>`+rows.map(r=>`<div class="r"><span><i style="background:${r.color}"></i>${r.name}</span><span>${c.cfg.yval(r.v)}</span></div>`).join("")+(c.cfg.tipExtra?c.cfg.tipExtra(xv):"");
+  tip.hidden=false;tip.classList.toggle("sticky",!!svg._sticky);if(c.cfg.onX)c.cfg.onX(xv);
+  const sr=svg.getBoundingClientRect(),wr=wrap.getBoundingClientRect(),px=sr.left-wr.left+x/c.W*sr.width;let left=px+14;if(left+tip.offsetWidth>wr.width-4)left=px-14-tip.offsetWidth;
+  tip.style.left=Math.max(4,left)+"px";tip.style.top=(sr.top-wr.top+8)+"px";
+}
+const yearTicks=y=>{const st=y<=10?1:y<=20?5:y<=40?10:20,o=[];for(let i=0;i<=y;i+=st)o.push(i);return o};
+
+/* ---------- render: console bits ---------- */
+function renderConsole(p){
+  $("sum-a").textContent=`${ASSETS.length} 檔・主要 ${p.main.name.split(" ")[0]} ${p.main.r}%`;
+  $("sum-g").textContent=`${wan(p.init)}＋每月 ${wan(p.mon)}・${p.yrs} 年`;
+  $("sum-m").textContent=`${MILES.length} 個`;
+  $("sum-cs").textContent=`${p.core.name.split(" ")[0]} ${Math.round((1-p.w)*100)}／${p.sat.name.split(" ")[0]} ${Math.round(p.w*100)}`;
+  $("sum-l").textContent=`信貸 ${wan(p.credit)}・成數 ${Math.round(p.ltv1)}%${p.l2on?"＋"+Math.round(p.ltv2)+"%":""}`;
+  [["#scenchips","scen"],["#rebchips","reb"]].forEach(([s,k])=>document.querySelectorAll(s+" .chip").forEach(c=>c.setAttribute("aria-pressed",c.dataset[k]===G[k]?"true":"false")));
+  $("cs-bar-c").style.width=(1-p.w)*100+"%";$("cs-bar-s").style.width=p.w*100+"%";
+  ["ltv2","levx","levfee"].forEach(k=>{$(k+"-f").style.opacity=p.l2on?1:.45;$(k).disabled=!p.l2on;$(k+"-n").disabled=!p.l2on});
+  $("p2-f").style.opacity=$("p2coll-f").style.opacity=p.l2on?1:.45;$("p2-asset").disabled=$("p2coll").disabled=!p.l2on;
+  ["g-asset","cs-core","cs-sat","p1-asset","p2-asset"].forEach(id=>{const off=id.startsWith("p")?1:0;[...$(id).options].forEach((o,i)=>{const a=ASSETS[i-off];if(a)o.textContent=`${a.name}（${a.r}%）`})});
+}
+
+/* ---------- ledger + master + core/sat scan ---------- */
+function evText(s){let o="";if(s.neg)o+='<span class="tag bad">淨值曾轉負</span>';
+  if(!s.ev.length)return o||'<span class="tag ok">沒被追繳</span>';
+  const liq=s.ev.find(e=>e.t==="liq"),calls=s.ev.filter(e=>e.t==="call");
+  if(calls.length)o+=`<span class="tag warn">追繳 ${calls.length} 次</span>補 ${wan(calls.reduce((a,e)=>a+e.a,0))} `;
+  if(liq)o+=`<span class="tag bad">斷頭</span>第 ${Math.floor(liq.i/12)+1} 年`;return o}
+const hitText=h=>h?`第 ${Math.floor((h-1)/12)+1} 年 ${(h-1)%12+1} 月`:"未達成";
+const ddText=r=>r.wl<-0.0005?`${wan(r.wla)}（${pct1(r.wl)}）`:"沒有虧損";
+function renderMain(p){
+  const a=p.main,c=p.core,s=p.sat,ann=pathOf(a,p),pc=pathOf(c,p),ps=pathOf(s,p);
+  const A=stratDca(p,ann),B=stratCs(p,pc,ps,p.w),B0=stratCs(p,pc,ps,0),B1=stratCs(p,pc,ps,1),Cv=stratLev(p,ann);
+  const S=[
+    {key:"A",name:`A 定期定額・${short(a)}`,res:A,color:"var(--sA)",width:2.4},
+    {key:"B",name:`B 核心衛星・${short(c)} ${Math.round((1-p.w)*100)} / ${short(s)} ${Math.round(p.w*100)}`,res:B,color:"var(--sB)",width:2.4},
+    {key:"B0",name:`全核心・${short(c)}`,res:B0,color:"var(--sB0)",width:1.6,dash:"6 3"},
+    {key:"B1",name:`全衛星・${short(s)}`,res:B1,color:"var(--sB1)",width:1.6,dash:"6 3"},
+    {key:"C",name:`C 槓桿・${short(a)}`,res:Cv,color:"var(--sC)",width:2.4}];
+  $("ledger-lead").innerHTML=`起始 ${wan(p.init)}、每月 ${wan(p.mon)}${p.grow?`（每年 +${(p.grow*100).toFixed(1)}%）`:""}、${p.yrs} 年；${short(a)} 年化 ${a.r}%${G.scen==="crash"?`，第一年 −${a.crash}%`:""}。`;
+  const mains=S.filter(x=>!["B0","B1"].includes(x.key)),bestV=Math.max(...mains.map(x=>x.res.v));
+  $("kpis").innerHTML=mains.map(x=>{const r=x.res,best=r.v===bestV&&mains.filter(y=>y.res.v===bestV).length<3;
+    const note=x.key==="C"?(r.ev.some(e=>e.t==="liq")?'<span class="tag bad">會斷頭</span>':r.ev.length?'<span class="tag warn">會被追繳</span>':'<span class="tag ok">沒被追繳</span>'):'<span class="tag ok">不借錢</span>';
+    return `<div class="kpi${best?" lead-best":""}"><div class="nm"><span><span class="swatch" style="background:${x.color}"></span>${x.name}</span>${best?'<span class="badge">最高</span>':""}</div>
+    <div class="big ${r.v<0?"neg":""}">${wan(r.v)}</div>
+    <div class="sub"><span>${p.yrs} 年後・投入</span><b>${wan(r.tot)}</b><span>年化（IRR）</span><b>${pct1(r.irr)}</b><span>達到目標 ${wan(p.goal)}</span><b>${hitText(r.hit)}</b><span>最大帳面虧損</span><b class="${r.wl<-0.0005?"neg":""}">${r.wl<-0.0005?pct1(r.wl):"沒有"}</b></div>
+    <div>${note}</div></div>`}).join("");
+  $("ledger").innerHTML=S.map(x=>{const r=x.res,gain=r.v-r.tot,main=!["B0","B1"].includes(x.key);
+    return `<tr class="${main&&r.v===bestV?"best":""}" ${main?"":'style="color:var(--muted)"'}><td class="l" style="font-family:var(--f-body)"><span class="swatch" style="background:${x.color}"></span>${x.name}</td>
+    <td>${wan(r.tot)}</td><td class="${r.v<0?"neg":""}">${wan(r.v)}</td><td class="${gain<0?"neg":"pos"}">${gain>=0?"+":""}${wan(gain)}</td>
+    <td>${pct1(r.irr)}</td><td class="${r.wl<-0.0005?"neg":""}">${ddText(r)}</td><td>${hitText(r.hit)}</td><td class="txt">${x.key==="C"?evText(r):x.key==="B"&&G.reb==="none"?`期末衛星佔 ${Math.round(r.satShare*100)}%`:'<span class="tag ok">不借錢</span>'}</td></tr>`}).join("");
+  const series=[{name:"累計投入",pts:A.inv,color:"var(--muted)",width:1.3,dash:"4 3"},...S.map(x=>({name:x.name.split("・")[0],pts:x.res.pts,color:x.color,width:x.width,dash:x.dash,end:1,hidden:G.hide.has(x.key),events:x.key==="C"?x.res.ev:null}))];
+  const ymax=Math.max(...series.filter(q=>!q.hidden).flatMap(q=>q.pts.map(v=>v[1])));
+  LAST={p,A,B,Cv};BKY=Math.min(BKY==null?p.yrs:BKY,p.yrs);$("bk-yr").max=p.yrs;renderBreakdown();
+  draw("c-master",{series,onX:t=>{BKY=t;renderBreakdown()},log:$("logscale").checked,xmax:p.yrs,xticks:yearTicks(p.yrs),xtick:t=>t===0?"開始":"第"+t+"年",yfmt:moneyTick,yval:wan,xlabel:t=>t===0?"開始":`第 ${t} 年底`,
+    ref:p.goal>0&&p.goal<=ymax*1.05?{y:p.goal,label:"目標 "+wan(p.goal)}:null});
+  $("masterlegend").innerHTML=S.map(x=>`<button type="button" data-k="${x.key}" aria-pressed="${!G.hide.has(x.key)}"><i style="background:${x.color}"></i>${x.name}</button>`).join("")+`<span><i style="background:var(--muted)"></i>累計投入</span><span><i style="background:var(--warn);width:8px;height:8px;border-radius:50%"></i>追繳</span><span><i style="background:var(--bad);width:8px;height:8px;border-radius:50%"></i>斷頭</span>`;
+  $("masterlegend").querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{const k=b.dataset.k;G.hide.has(k)?G.hide.delete(k):G.hide.add(k);renderMain(read());save()}));
+
+  $("cs-lead").innerHTML=`核心 ${short(c)}（年化 ${c.r}%）+ 衛星 ${short(s)}（年化 ${s.r}%），${G.reb==="year"?"每年再平衡":"不再平衡"}${G.scen==="crash"?`，第一年各跌 ${c.crash}% / ${s.crash}%`:""}。`;
+  const scan=[0,10,20,30,40,50,60,70,80,90,100].map(w=>({w,r:stratCs(p,pc,ps,w/100)})),cw=Math.round(p.w*100);
+  $("cs-scan").innerHTML=[...new Set([0,10,20,30,50,70,100,cw])].sort((x,y)=>x-y).map(w=>{const r=stratCs(p,pc,ps,w/100);return `<tr data-sel="${cw===w?1:0}"><td class="l" style="font-family:var(--f-body)">${w===0?"0%（全核心）":w===100?"100%（全衛星）":w+"%"}</td><td>${wan(r.v)}</td><td>${pct1(r.irr)}</td><td class="${r.wl<-0.0005?"neg":""}">${ddText(r)}</td></tr>`}).join("");
+  draw("c-scan",{ml:52,series:[{name:"期末淨值",pts:scan.map(o=>[o.w,o.r.v]),color:"var(--sB)",width:2.2}],xmin:0,xmax:100,xstep:10,xticks:[0,20,40,60,80,100],xtick:t=>t+"%",yfmt:moneyTick,yval:wan,
+    xlabel:t=>`衛星 ${t}%`,cur:[cw,B.v],extraY:[0],tipExtra:t=>{const o=scan.find(q=>q.w===t);return o?`<div class="r"><span>年化</span><span>${pct1(o.r.irr)}</span></div><div class="r"><span>最大帳面虧損</span><span>${ddText(o.r)}</span></div>`:""}});
+}
+
+/* ---------- position breakdown ---------- */
+let LAST=null,BKY=null;
+function renderBreakdown(){
+  if(!LAST)return;const {p,A,B,Cv}=LAST,y=Math.max(0,Math.min(p.yrs,BKY==null?p.yrs:BKY));
+  $("bk-yr").value=y;$("bk-yr-n").value=y;
+  const a=A.sn[y],b=B.sn[y],c=Cv.sn[y],t1same=p.t1===p.main;
+  const cards=[
+    {name:"A 定期定額",color:"var(--sA)",assets:[{n:short(p.main),v:a.v,c:"var(--sA)"}],debts:[]},
+    {name:"B 核心衛星",color:"var(--sB)",assets:[{n:"核心 "+short(p.core),v:b.C,c:"var(--sB0)"},{n:"衛星 "+short(p.sat),v:b.S,c:"var(--sB1)"}],debts:[]},
+    {name:"C 槓桿",color:"var(--sC)",assets:[{n:"主要標的 "+short(p.main),v:c.S,c:"var(--sC)"},{n:"第一層 "+(t1same?"加碼 ":"")+short(p.t1),v:c.Y,c:"hsl(290 30% calc(var(--lum) + 18%))"},
+      ...(p.l2on?[{n:"第二層 "+short(p.t2)+(p.levx!==1?` ×${p.levx}`:""),v:c.X,c:"hsl(330 55% var(--lum))"}]:[]),{n:"應急現金",v:Math.max(0,c.K),c:"var(--muted)"}],
+      debts:[{n:"信貸餘額",v:c.C},{n:"質押借款",v:c.P},{n:"扣回起始應急現金",v:Cv.K0}]}];
+  const tots=cards.map(k=>k.assets.reduce((s,x)=>s+x.v,0)),maxT=Math.max(...tots,1);
+  $("bk").innerHTML=cards.map((k,i)=>{const T=tots[i],D=k.debts.reduce((s,x)=>s+x.v,0),N=T-D;
+    const bar=`<div class="stack" style="width:${(T/maxT*100).toFixed(1)}%" aria-hidden="true">${k.assets.map(x=>`<span style="width:${T>0?(x.v/T*100).toFixed(2):0}%;background:${x.c}" title="${x.n} ${wan(x.v)}"></span>`).join("")}</div>`+(D>0?`<div class="stack debt" style="width:${(D/maxT*100).toFixed(1)}%" aria-hidden="true"><span style="width:100%"></span></div>`:"");
+    const rows=k.assets.map(x=>`<div class="prow"><i style="background:${x.c}"></i><span>${x.n}</span><b>${wan(x.v)}</b><em>${T>0?Math.round(x.v/T*100):0}%</em></div>`).join("")
+      +(k.debts.length?`<div class="prow tot"><i></i><span>資產合計</span><b>${wan(T)}</b><em></em></div>`+k.debts.filter(x=>x.v>0.5).map(x=>`<div class="prow debt"><i></i><span>${x.n}${x.note?`<span class="meta">（${x.note}）</span>`:""}</span><b>−${wan(x.v)}</b><em>${T>0?Math.round(x.v/T*100):0}%</em></div>`).join(""):"")
+      +`<div class="prow tot"><i></i><span>淨值</span><b class="${N<0?"neg":""}">${wan(N)}</b><em></em></div>`;
+    const lev=k.debts.length&&N>0?`<div class="meta">資產 ÷ 淨值 ＝ ${(T/N).toFixed(2)} 倍${c.P>0?`・維持率 ${pct((c.S+c.Y+(p.p2coll?c.X:0))/c.P)}`:""}</div>`:"";
+    return `<div class="bk"><div class="nm"><span><span class="swatch" style="background:${k.color}"></span>${k.name}・第 ${y} 年底</span><b class="${N<0?"neg":""}">${wan(N)}</b></div>${bar}<div class="prows">${rows}</div>${lev}</div>`}).join("");
+}
+$("bk-yr").addEventListener("input",()=>{BKY=+$("bk-yr").value;renderBreakdown()});
+$("bk-yr-n").addEventListener("input",()=>{if($("bk-yr-n").value!==""){BKY=Math.round(+$("bk-yr-n").value);renderBreakdown()}});
+$("bk-end").addEventListener("click",()=>{BKY=LAST?LAST.p.yrs:null;renderBreakdown()});
+
+/* ---------- milestones ---------- */
+function monthsTo(r,amt,init){if(init>=amt)return 0;const i=r.mv.findIndex(v=>v>=amt);return i<0?null:i+1}
+const durTxt=m=>m===0?"一開始就達成":m==null?"80 年內未達成":`${Math.floor(m/12)?Math.floor(m/12)+" 年 ":""}${m%12?m%12+" 個月":""}`.trim();
+function dateTxt(m){if(m==null)return "";const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+m);return `${d.getFullYear()} 年 ${d.getMonth()+1} 月`}
+function renderMilestones(p){
+  const q={...p,yrs:80},a=p.main,c=p.core,s=p.sat;
+  const R=[{key:"A",name:`A 定期定額`,color:"var(--sA)",r:stratDca(q,pathOf(a,q))},
+           {key:"B",name:`B 核心衛星`,color:"var(--sB)",r:stratCs(q,pathOf(c,q),pathOf(s,q),p.w)},
+           {key:"C",name:`C 槓桿`,color:"var(--sC)",r:stratLev(q,pathOf(a,q))}];
+  const list=MILES.map((m,i)=>({...m,i})).sort((x,y)=>x.amt-y.amt);
+  $("ms-lead").textContent=`起算點是下個月，用目前的設定（每月 ${wan(p.mon)}${p.grow?`、每年加碼 ${(p.grow*100).toFixed(1)}%`:""}${G.scen==="crash"?"、開局崩盤":""}）一直算到達成為止。`;
+  $("ms-head").innerHTML=`<tr><th class="l">里程碑</th><th>金額</th>${R.map(x=>`<th><span class="swatch" style="background:${x.color}"></span>${x.name}</th>`).join("")}<th>A 跟上一個里程碑差</th></tr>`;
+  let prevA=0;
+  $("ms-body").innerHTML=list.length?list.map(m=>{const amt=m.amt*1e4,ts=R.map(x=>monthsTo(x.r,amt,p.init)),best=Math.min(...ts.filter(t=>t!=null));
+    const gap=ts[0]!=null?ts[0]-prevA:null;if(ts[0]!=null)prevA=ts[0];
+    return `<tr><td class="l" style="font-family:var(--f-body)">${esc(m.name)}</td><td>${wan(amt)}</td>${ts.map(t=>t==null?`<td class="na">80 年內未達成</td>`:`<td${t===best&&ts.filter(x=>x===best).length<3?' style="font-weight:700"':""}>${durTxt(t)}<span class="ms-when">${t?dateTxt(t):""}</span></td>`).join("")}<td>${gap==null?"—":gap===0?"—":"+"+durTxt(gap)}</td></tr>`}).join(""):`<tr><td colspan="6" class="na">在控制台新增里程碑</td></tr>`;
+  // timeline
+  const svg=$("c-ms"),W=760,rowH=46,ml=96,mr=20,mt=24,H=mt+rowH*R.length+28;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const all=R.flatMap(x=>list.map(m=>monthsTo(x.r,m.amt*1e4,p.init)).filter(t=>t!=null));
+  const ymax=Math.max(5,Math.ceil(Math.max(...all,12)/12/5)*5),xs=m=>ml+(m/12/ymax)*(W-ml-mr);
+  let g="";const st=ymax<=10?1:ymax<=30?5:10;
+  for(let y=0;y<=ymax;y+=st)g+=`<line x1="${xs(y*12)}" x2="${xs(y*12)}" y1="${mt-8}" y2="${H-24}" stroke="var(--line)"/><text x="${xs(y*12)}" y="${H-8}" text-anchor="middle">${y===0?"現在":"第"+y+"年"}</text>`;
+  R.forEach((x,ri)=>{const cy=mt+ri*rowH+rowH/2;g+=`<text x="${ml-10}" y="${cy+4}" text-anchor="end" style="font-family:var(--f-body);font-size:12px;fill:var(--ink)">${x.name}</text><line x1="${ml}" x2="${W-mr}" y1="${cy}" y2="${cy}" style="stroke:${x.color};stroke-opacity:.35;stroke-width:2"/>`;
+    list.forEach((m,k)=>{const t=monthsTo(x.r,m.amt*1e4,p.init);if(t==null)return;const cx=xs(t),up=k%2===0;
+      g+=`<circle cx="${cx}" cy="${cy}" r="5" style="fill:${x.color};stroke:var(--panel);stroke-width:1.5"><title>${esc(m.name)}：${durTxt(t)}${t?"（"+dateTxt(t)+"）":""}</title></circle><text x="${cx}" y="${up?cy-10:cy+18}" text-anchor="middle">${moneyTick(m.amt*1e4)}</text>`})});
+  svg.innerHTML=g;
+  $("ms-legend").innerHTML=`<span>圓點上的數字是里程碑金額；滑鼠停在圓點上可以看到名稱和日期。</span>`;
+}
+
+/* ---------- stress (uses main asset's crash %) ---------- */
+function model(p,d){
+  const mc=p.main.crash||1,d1=Math.min(1,d*(p.t1.crash/mc)),d2=Math.min(1,d*(p.t2.crash/mc));
+  const core=p.own+p.credit,L1=core*p.ltv1/100,L2=p.l2on?L1*p.ltv2/100:0,loans=L1+L2;
+  const X=L2*Math.pow(Math.max(0,1-d2),p.levx),coll0=core+L1+(p.p2coll?L2:0),coll=core*(1-d)+L1*(1-d1)+(p.p2coll?X:0);
+  const start=loans>0?coll0/loans:Infinity,call=p.call/100,restore=Math.max(p.restore,p.call)/100;
+  let trig=1;if(loans>0){for(let t=0;t<=100;t++){const q=t/100,dd1=Math.min(1,q*(p.t1.crash/mc)),dd2=Math.min(1,q*(p.t2.crash/mc)),cv=core*(1-q)+L1*(1-dd1)+(p.p2coll?L2*Math.pow(1-dd2,p.levx):0);if(cv/loans<call){trig=q;break}}}
+  const ratio=loans>0?coll/loans:Infinity,need=ratio<call?Math.max(0,loans-coll/restore):0,debt=p.credit+loans,nw=core*(1-d)+L1*(1-d1)+X-debt;
+  const r=p.crate/100/12,n=p.cyears*12,cpay=p.credit>0?(r>0?p.credit*r/(1-Math.pow(1+r,-n)):p.credit/n):0;
+  return {loans,start,trig,ratio,need,nw,mo:cpay+loans*p.prate/100/12};
+}
+
+function renderStress(p){
+  const dd=p.main.crash,m=model(p,dd/100);
+  $("st-lead").innerHTML=`擔保品：${esc(p.main.name)}${p.t1!==p.main?` + 第一層買入的 ${esc(p.t1.name)}`:""}${p.p2coll&&p.l2on?` + 第二層的 ${esc(p.t2.name)}`:""}。圖的橫軸是 ${short(p.main)} 的跌幅，其他標的依各自「崩盤 %」等比例跌；${short(p.main)} 的崩盤跌幅 ${dd}%。`;
+  $("s-start").textContent=pct(m.start);$("s-trig").textContent=m.loans>0?(m.trig>=1?"不會":"−"+pct(m.trig)):"無質押";
+  $("s-ratio").textContent=pct(m.ratio);$("s-need").textContent=m.need>0?wan(m.need):"不需要";$("s-need").className=m.need>0?"neg":"";
+  $("s-nw").textContent=wan(m.nw);$("s-nw").className=m.nw<0?"neg":"";$("s-mo").textContent=wan(m.mo);
+  const called=m.need>0,covered=m.need<=p.cash;let s,pill,h,t;
+  if(called&&!covered){s="bad";pill="斷頭風險";h=`跌 ${dd}% 要補 ${wan(m.need)}，應急現金不夠`;t=`缺口約 ${wan(m.need-p.cash)}。崩盤時淨值 ${wan(m.nw)}，原本自有 ${wan(p.own)}。`}
+  else if(called){s="warn";pill="追繳";h=`跌 ${dd}% 會被追繳 ${wan(m.need)}，現金補得起`;t=`補完剩 ${wan(p.cash-m.need)}，每月還要繳 ${wan(m.mo)}。`}
+  else if(m.nw<0){s="warn";pill="淨值為負";h=`不會被追繳，但淨值變成 ${wan(m.nw)}`;t=`全部賣掉也還不清債，每月固定支出 ${wan(m.mo)}。`}
+  else{s="ok";pill="撐得住";h=`跌 ${dd}% 時維持率 ${pct(m.ratio)}，不會被追繳`;t=`崩盤時淨值 ${wan(m.nw)}。${m.loans>0&&m.trig<1?`跌超過 ${pct(m.trig)} 才會追繳。`:""}`}
+  $("verdict").dataset.s=s;$("pill").textContent=pill;$("vh").textContent=h;$("vp").textContent=t;
+  const p1=[],p2=[];for(let i=0;i<=80;i++){const q=model(p,i/100);p1.push([i,Math.min(q.ratio*100,1000)]);p2.push([i,q.nw])}
+  const dx={xmin:0,xmax:80,xticks:[0,20,40,60,80],xtick:t=>"−"+t+"%",xlabel:t=>`跌 ${t}%`,ml:48};
+  if(m.loans>0){const top=Math.min(500,Math.max(200,Math.ceil(m.start*100/50)*50));
+    draw("c1",{...dx,series:[{name:"維持率",pts:p1,color:"var(--accent)"}],yr:[0,top],yfmt:v=>v+"%",yval:v=>Math.round(v)+"%",ref:{y:p.call,label:"追繳線 "+p.call+"%"},cur:[Math.min(80,dd),Math.min(m.ratio*100,top)],
+      tipExtra:t=>{const q=model(p,t/100);return `<div class="r"><span>需補現金</span><span>${q.need>0?wan(q.need):"—"}</span></div>`}})}
+  else{const svg=$("c1");hideTip(svg);svg.innerHTML=`<text x="190" y="105" text-anchor="middle">沒有質押借款</text><g class="xh"></g>`;if(CH.c1)CH.c1.vis=[]}
+  draw("c2",{...dx,series:[{name:"淨值",pts:p2,color:"var(--accent)"}],yfmt:moneyTick,yval:wan,ref:{y:0,label:"淨值 0"},cur:[Math.min(80,dd),m.nw],extraY:[p.own]});
+}
+
+/* ---------- asset comparison ---------- */
+function renderEtf(p){
+  $("th-norm").textContent=`每年照年化・${p.yrs} 年`;$("th-crash").textContent=`開局崩盤・${p.yrs} 年`;
+  $("etfbody").innerHTML=ASSETS.map(a=>{const n=stratDca(p,pathOf(a,p,"normal")),c=stratDca(p,pathOf(a,p,"crash")),d=c.v-n.v;
+    return `<tr data-sel="${a.id===G.main?1:0}"><td class="l"><input type="checkbox" data-cmp="${a.id}" ${G.cmp.has(a.id)?"checked":""} aria-label="比較 ${esc(a.name)}"></td>
+    <td class="l" style="font-family:var(--f-body)"><span class="swatch" style="background:${colorOf(a)}"></span>${esc(a.name)}${a.src?`<span class="rtag" title="${esc(realDesc(a))}">真實 ${a.src.years} 年</span>`:""}</td><td>${a.r}%</td><td class="neg">−${a.crash}%</td>
+    <td>${wan(n.v)}</td><td>${wan(c.v)}</td><td class="${d<0?"neg":""}">${wan(d)}</td>
+    <td><button type="button" class="btn" data-main="${a.id}" ${a.id===G.main?"disabled":""}>${a.id===G.main?"主要標的":"設為主要"}</button></td></tr>`}).join("");
+  $("etfbody").querySelectorAll("[data-main]").forEach(b=>b.addEventListener("click",()=>{G.main=b.dataset.main;$("g-asset").value=G.main;renderAll()}));
+  $("etfbody").querySelectorAll("[data-cmp]").forEach(b=>b.addEventListener("change",()=>{b.checked?G.cmp.add(b.dataset.cmp):G.cmp.delete(b.dataset.cmp);cmpChart(read());save()}));
+  cmpChart(p);
+}
+function cmpChart(p){
+  const sel=ASSETS.filter(a=>G.cmp.has(a.id));
+  $("cmp-h").textContent=`標的比較・${G.scen==="crash"?"開局崩盤":"每年照年化"}・${p.yrs} 年`;
+  if(!sel.length){const svg=$("c-cmp");hideTip(svg);svg.innerHTML=`<text x="380" y="130" text-anchor="middle">在表格勾選要比較的標的</text><g class="xh"></g>`;if(CH["c-cmp"])CH["c-cmp"].vis=[];$("cmplegend").innerHTML="";return}
+  const ser=sel.map(a=>({a,s:stratDca(p,pathOf(a,p))}));
+  draw("c-cmp",{series:[{name:"累計投入",pts:ser[0].s.inv,color:"var(--muted)",width:1.3,dash:"4 3"},...ser.map(o=>({name:short(o.a),pts:o.s.pts,color:colorOf(o.a),width:2.2,end:1}))],
+    xmax:p.yrs,xticks:yearTicks(p.yrs),xtick:t=>t===0?"開始":"第"+t+"年",yfmt:moneyTick,yval:wan,xlabel:t=>t===0?"開始":`第 ${t} 年底`});
+  $("cmplegend").innerHTML=ser.slice().sort((x,y)=>y.s.v-x.s.v).map(o=>`<span><i style="background:${colorOf(o.a)}"></i>${short(o.a)}（${o.a.r}%）${wan(o.s.v)}</span>`).join("");
+}
+
+/* ---------- 真實年化率（/api/annual，部署在網站上才有） ---------- */
+const realYrsLbl=y=>y==="max"?"上市以來":`近 ${y} 年`;
+function realDesc(a){const s=a.src;if(!s)return "";return `${s.from.replace("-","/")}～${s.to.replace("-","/")}・${s.years} 年${s.short?"（資料不足 "+s.want+" 年）":""}・${s.adjusted?"含息":"未含息"}・${s.source}${s.label?"・"+s.label:""}`}
+function renderReal(){
+  document.querySelectorAll("#realchips .chip").forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.ry===String(G.ry||"10"))));
+  const done=ASSETS.filter(a=>a.src);$("sum-real").textContent=done.length?`${done.length} 檔已套用・${realYrsLbl(G.ry||"10")}`:"";
+  const rows=ASSETS.filter(a=>a.src||a.err||a.busy).map(a=>a.busy?`<div class="rr"><div>${esc(a.name)}</div><b>抓取中…</b></div>`:a.err?`<div class="rr err"><div>${esc(a.name)}</div><b>${a.err.startsWith("上市只有")?"未套用":"失敗"}</b><span>${esc(a.err)}</span></div>`:`<div class="rr"><div>${esc(a.name)}</div><b>年化 ${a.r}%・最大跌 ${a.src.mdd}%</b><span>${esc(realDesc(a))}</span></div>`);
+  $("real-list").innerHTML=rows.join("")||`<span class="hint">還沒有抓取。按上面的按鈕開始。</span>`;
+}
+async function fetchAnnual(a){
+  if(!/^https?:$/.test(location.protocol))throw new Error("直接開啟檔案時無法連線資料服務，部署到網站後才能用。");
+  let r;try{r=await fetch("/api/annual?code="+encodeURIComponent(a.name))}catch{throw new Error("連不到資料服務。")}
+  const j=await r.json().catch(()=>null);
+  if(!j)throw new Error(r.status===404?"這個環境沒有資料服務（/api/annual），部署到 Vercel 網站後才能用。":`資料服務回應 ${r.status}`);
+  if(!j.ok)throw new Error(j.error||"抓取失敗");return j;
+}
+async function realFetch(list){
+  const want=G.ry||"10",crash=$("real-crash").checked;
+  list.forEach(a=>{a.busy=true;a.err=null});renderReal();
+  const q=[...list];await Promise.all([0,1,2].map(async()=>{while(q.length){const a=q.shift();
+    try{const j=await fetchAnnual(a),P=j.periods||{},s=P[want]||P.max;if(!s)throw new Error("歷史資料太短，算不出年化。");
+      // 上市不到 3 年的標的，短期漲跌換算成年化會嚴重失真（例如一年漲 30% 被當成每年 30%），不自動套用
+      if(s.years<3)throw new Error(`上市只有 ${s.years} 年（${s.from.replace("-","/")} 起），換算年化會失真，沒有套用。可以參考同類型、歷史較長的標的（例如 0050）手動填。`);
+      a.r=+s.cagr.toFixed(1);if(crash)a.crash=Math.round(s.mdd);
+      a.src={...s,want,short:!P[want]&&want!=="max",adjusted:j.adjusted,source:j.source,label:j.label||"",symbol:j.symbol};}
+    catch(e){a.err=e.message||"抓取失敗"}finally{a.busy=false;renderReal()}}}));
+  buildAssetList();fillSelects();renderAll();
+}
+document.querySelectorAll("#realchips .chip").forEach(c=>c.addEventListener("click",()=>{G.ry=c.dataset.ry;renderReal();save()}));
+$("real-all").addEventListener("click",()=>realFetch(ASSETS));
+$("real-main").addEventListener("click",()=>realFetch([byId(G.main)]));
+$("real-clear").addEventListener("click",()=>{ASSETS.forEach(a=>{delete a.src;delete a.err});renderReal();renderAll()});
+
+/* ---------- wiring ---------- */
+function renderAll(){const p=read();renderConsole(p);renderMain(p);renderMilestones(p);renderStress(p);renderEtf(p);renderReal();save()}
+$("console").addEventListener("input",renderAll);
+$("console").addEventListener("change",renderAll);
+$("logscale").addEventListener("change",()=>{renderMain(read());save()});
+document.querySelectorAll("#scenchips .chip").forEach(c=>c.addEventListener("click",()=>{G.scen=c.dataset.scen;renderAll()}));
+document.querySelectorAll("#rebchips .chip").forEach(c=>c.addEventListener("click",()=>{G.reb=c.dataset.reb;renderAll()}));
+$("openall").addEventListener("click",()=>document.querySelectorAll("#console details").forEach(d=>d.open=true));
+$("closeall").addEventListener("click",()=>document.querySelectorAll("#console details").forEach(d=>d.open=false));
+if(window.matchMedia&&matchMedia("(max-width:900px)").matches)document.querySelectorAll("#console details").forEach((d,i)=>{if(i>0)d.open=false});
+load();ASSETS.forEach(a=>{delete a.busy});buildMiles();buildAssetList();fillSelects();renderAll();
+</script>
+<script>
+/* 嵌入模式：把頁面高度告訴 K線學堂，讓外框跟著長高；接收主題切換 */
+(() => {
+  if (document.documentElement.dataset.embed !== "1" || parent === window) return;
+  let last = 0;
+  const wrap = document.querySelector(".wrap"), send = () => { const h = Math.ceil(wrap.getBoundingClientRect().bottom + scrollY); if (h !== last) { last = h; parent.postMessage({ type: "savings-height", h }, "*"); } };
+  new ResizeObserver(send).observe(wrap); addEventListener("load", send); send();
+  addEventListener("message", e => { if (e.source === parent && e.data && e.data.type === "kline-theme" && (e.data.theme === "dark" || e.data.theme === "light")) { document.documentElement.dataset.theme = e.data.theme; renderAll(); } });
+})();
+</script>
+</body>
+</html>
