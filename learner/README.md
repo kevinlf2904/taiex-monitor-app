@@ -64,6 +64,10 @@
 
 `GET /api/quote?codes=2330,t00`（t00 加權指數、o00 櫃買指數，最多 10 檔）。預設用證交所 MIS（免費、約 5 秒一筆快照，含五檔）；在 Vercel 設定 `FUGLE_API_KEY` 時改用富果行情 API，失敗再退回 MIS。伺服器端 4 秒快取。頁面頂部顯示加權指數；個股判讀載入真實個股時顯示即時列與五檔，並用即時價格更新今天的 K 棒（保留縮放）。盤中每 10 秒、收盤後每 5 分鐘更新，頁面在背景時暫停。三種接法（MIS、富果、永豐 Shioaji）的設定方式見 [`docs/realtime-setup.md`](../docs/realtime-setup.md)。
 
+### 盤中分 K（`api/intraday.js`）
+
+`GET /api/intraday?code=2330&tf=5`（tf：1、5、15、30、60 分鐘；t00 為加權指數）。有 `FUGLE_API_KEY` 時用富果的 1 分 K，否則用 Yahoo Finance 1 分 K（可能延遲），在伺服器端合成需要的週期，附昨收價。個股判讀載入真實個股時，上方的「盤中分 K」面板顯示當天分 K（均線、成交量、KD、昨收線），盤中每 30 秒更新；週期與展開狀態會記住。
+
 ### 真實年化報酬（`api/annual.js`）
 
 `GET /api/annual?code=0050`（也接受「0050 元大台灣50」這種標的名稱、英文代號如 VOO，以及 S&P 500、道瓊、那斯達克100、費半，後者以 SPY、DIA、QQQ、SOXX 估算）。從 Yahoo Finance 月線的還原收盤價（含配息再投入）算近 1、3、5、10 年與上市以來的年化報酬（CAGR）與期間最大跌幅；台股在 Yahoo 抓不到時改用 FinMind 還原股價（`FINMIND_TOKEN` 選填）。結果快取一天。

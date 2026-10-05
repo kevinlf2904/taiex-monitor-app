@@ -487,6 +487,13 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 @media (max-width: 480px) { .mkt-chip .mk-n { display: none; } }
 @media (max-width: 440px) { .top-tools:has(.mkt-chip:not([hidden])) #progChip { display: none; } }
 .top-tools .chip { white-space: nowrap; }
+.intra { margin-bottom: 14px; overflow: hidden; }
+.intra > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 12px 14px; }
+.intra > summary::-webkit-details-marker { display: none; }
+.intra > summary::before { content: "▸"; color: var(--muted); } .intra[open] > summary::before { content: "▾"; }
+.intra-t { font-weight: 700; }
+.intra-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 14px 10px; border-bottom: 1px solid var(--line); }
+.intra-bar .seg button { padding: 5px 11px; font-size: 13px; }
 .live-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 14px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; }
 .live-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; align-self: center; }
@@ -684,6 +691,11 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
         <div class="row live-ctl"><button type="button" class="btn sm" id="livePause">暫停即時</button><details class="live-book"><summary>五檔</summary><div id="liveBook"></div></details></div>
       </div>
     </div>
+    <details class="panel intra" id="intraPanel" hidden>
+      <summary><span class="intra-t">盤中分 K</span><span class="note" id="intraMeta"></span></summary>
+      <div class="intra-bar"><div class="seg" role="group" aria-label="分 K 週期" id="intraTf"><button data-tf="1">1 分</button><button data-tf="5">5 分</button><button data-tf="15">15 分</button><button data-tf="30">30 分</button><button data-tf="60">60 分</button></div><span class="note" id="intraNote"></span></div>
+      <div class="chartbox" id="intraChart"></div>
+    </details>
     <div class="shot-top" id="shotTop">
       <label class="drop panel" id="shotDrop" for="shotFile">
         <input type="file" id="shotFile" accept="image/png,image/jpeg,image/webp,image/gif">
@@ -794,7 +806,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-13</span></footer>
+<footer>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-14</span></footer>
 
 <script>
 "use strict";
@@ -4619,7 +4631,7 @@ function realRun(live = false) {
   shot.I = indicators(shot.D);
   $("#shotGrid").hidden = false; $("#shotRebuild").hidden = false;
   shotRefresh(true);
-  if (!live) { loadStockInfo(R); liveKick(); }
+  if (!live) { loadStockInfo(R); liveKick(); INTRA.data = null; intraLoad(true); }
 }
 async function loadRealCode(code, months) {
   const note = $("#realNote"), btn = $("#realLoad"); code = code.trim(); if (!code) { $("#realCode").focus(); return; }
@@ -4665,7 +4677,7 @@ async function liveTick() {
     const q = code && j.quotes.find(x => x.code === code);
     if (q) applyLive(q, j);
   } catch (e) { LIVE.err = e.message; }
-  finally { LIVE.busy = false; renderLiveBar(); }
+  finally { LIVE.busy = false; renderLiveBar(); if (!LIVE.paused) intraLoad(); }
 }
 function liveSchedule() {
   clearTimeout(LIVE.timer); if (LIVE.off) return;
@@ -4705,6 +4717,38 @@ function renderLiveBar() {
   const B = q?.bids || [], A = q?.asks || [];
   $("#liveBook").innerHTML = B.length || A.length ? `<table class="book"><tr><th>買量</th><th>買價</th><th>賣價</th><th>賣量</th></tr>${Array.from({ length: Math.max(B.length, A.length) }, (_, k) => `<tr><td>${B[k]?.v?.toLocaleString() ?? ""}</td><td class="up">${B[k] ? fmtP(B[k].p) : ""}</td><td class="down">${A[k] ? fmtP(A[k].p) : ""}</td><td>${A[k]?.v?.toLocaleString() ?? ""}</td></tr>`).join("")}</table>` : `<p class="note" style="margin:0">${code === "T00" ? "指數沒有五檔報價。" : "目前沒有五檔資料（收盤後或試撮前）。"}</p>`;
 }
+/* ---------- 盤中分 K（/api/intraday：富果 1 分 K，沒有金鑰時用 Yahoo） ---------- */
+const INTRA = { tf: [1, 5, 15, 30, 60].includes(+store.get("intraTf", 5)) ? +store.get("intraTf", 5) : 5, at: 0, code: null, busy: false, off: !/^https?:$/.test(location.protocol), data: null };
+const intraChart = new Chart($("#intraChart"));
+$("#intraPanel").open = store.get("intraOpen", true) !== false;
+async function intraLoad(force = false) {
+  const code = liveCode(), P = $("#intraPanel");
+  P.hidden = INTRA.off || !code; if (P.hidden || !P.open || INTRA.busy) return;
+  const sess = mktSession(), age = Date.now() - INTRA.at;
+  if (!force && INTRA.code === code && INTRA.data && (sess === "closed" ? age < 600000 : age < 30000)) return; // 盤中 30 秒、收盤後 10 分鐘才重抓
+  INTRA.busy = true; $("#intraNote").textContent = "載入中…";
+  try {
+    const r = await fetch(`/api/intraday?code=${code}&tf=${INTRA.tf}`), j = await r.json().catch(() => null);
+    if (!j) { if (r.status === 404) { INTRA.off = true; P.hidden = true; } throw new Error(`分 K 服務回應 ${r.status}`); }
+    if (!j.ok) throw new Error(j.error);
+    if (liveCode() !== code) return;
+    INTRA.data = j; INTRA.code = code; INTRA.at = Date.now(); intraDraw();
+  } catch (e) { $("#intraNote").textContent = e.message || "載入失敗"; }
+  finally { INTRA.busy = false; }
+}
+function intraDraw() {
+  const j = INTRA.data; if (!j || !j.bars.length) { $("#intraNote").textContent = "今天還沒有分 K 資料（開盤後才有）。"; return; }
+  const D = j.bars.map(b => ({ d: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v })), last = D[D.length - 1], isIdx = j.code === "T00";
+  const today = LIVE.last?.today, chg = j.prev ? (last.c / j.prev - 1) * 100 : null;
+  $("#intraMeta").textContent = `${j.name || ""} ${isIdx ? "" : j.code}・${j.date && j.date !== today ? "最近交易日 " + j.date.replace(/-/g, "/") : "今天"}・${D.length} 根・最新 ${fmtP(last.c)}${chg != null ? `（${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%）` : ""}`;
+  $("#intraNote").textContent = `來源：${j.source}${mktSession() === "open" ? "・盤中每 30 秒更新" : ""}`;
+  document.querySelectorAll("#intraTf [data-tf]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.tf === INTRA.tf));
+  Chart.keepView = intraChart.D && intraChart.D.length && intraChart.D[0].d === D[0].d && INTRA.code === j.code && intraChart.o?.tf === INTRA.tf;
+  try { intraChart.set(D, { ma: [5, 20], subs: ["kd"], noVol: isIdx, volLabel: "量（張）", fmtD: s => s, tf: INTRA.tf, hlines: j.prev ? [{ price: j.prev, label: `昨收 ${fmtP(j.prev)}`, color: "muted" }] : [] }); }
+  finally { Chart.keepView = false; }
+}
+$("#intraTf").addEventListener("click", e => { const b = e.target.closest("[data-tf]"); if (!b) return; INTRA.tf = +b.dataset.tf; store.set("intraTf", INTRA.tf); intraLoad(true); });
+$("#intraPanel").addEventListener("toggle", () => { store.set("intraOpen", $("#intraPanel").open); if ($("#intraPanel").open) intraLoad(true); });
 $("#livePause").addEventListener("click", () => { LIVE.paused = !LIVE.paused; store.set("livePaused", LIVE.paused); renderLiveBar(); if (!LIVE.paused) liveKick(); });
 
 /* ---------- 真實個股的籌碼面與基本面（/api/stockinfo） ---------- */
