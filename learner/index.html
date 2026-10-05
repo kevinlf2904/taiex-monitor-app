@@ -749,7 +749,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-22</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-23</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -1112,7 +1112,35 @@ OSC  = DIF − MACD              （柱狀體）</div>
 </ul>`,
     chart: { ma: [12, 26], sub: "macd", markers: (D, I) => Signals.macd(D, I) },
     try: "注意零軸之上的黃金交叉（多頭中的再起漲）和零軸之下的黃金交叉（空頭中的反彈）有什麼不同。",
-    keys: ["MACD 比 KD 慢、比較穩，適合判斷波段方向。", "盤整期 DIF 與 MACD 會黏在零軸附近反覆交叉，訊號價值低。", "柱狀體的變化比交叉更早，可以用來提前察覺動能轉變。"],
+    keys: ["MACD 比 KD 慢、比較穩，適合判斷波段方向。", "盤整期 DIF 與 MACD 會黏在零軸附近反覆交叉，訊號價值低。", "柱狀體的變化比交叉更早，可以用來提前察覺動能轉變。", "不同看盤軟體的 MACD 數值可能差一點（EMA 起算方式不同，有的用 (高+低+2×收)/4 計算），看方向和交叉就好，不必追究小數。"],
+  },
+  {
+    id: "vwap", title: "VWAP：市場的平均持有成本線", tag: "均價", seed: 131, n: 160,
+    body: `<p>VWAP（Volume Weighted Average Price，成交量加權平均價）是「每一筆成交價，依成交量加權平均」的結果。和一般均線只看收盤價不同，VWAP 把成交量多的價位看得比較重，比較接近市場參與者的<strong>平均成本</strong>。</p>
+<div class="formula">典型價 = (最高 + 最低 + 收盤) ÷ 3
+VWAP = Σ(典型價 × 成交量) ÷ Σ成交量</div>
+<ul>
+<li><strong>分 K（當日）</strong>：從開盤累計到現在，每天重新計算，就是看盤軟體分時圖上的「均價線」。法人常用它衡量今天買得好不好：買在 VWAP 之下＝比市場平均便宜。</li>
+<li><strong>日 K</strong>：這裡用最近 20 根滾動計算（20 期 VWAP），可以想成「近一個月的量價平均成本」。</li>
+<li>價格在 VWAP 之上，代表近期買進的人平均是賺錢的，多方佔優；跌破 VWAP，近期買進的人平均套牢，上方容易有解套賣壓。</li>
+</ul>`,
+    chart: { ma: [20], vwap: true, markers: (D, I) => Signals.vwap(D, I) },
+    try: "把 VWAP 和 MA20 比一比：成交量突然放大的那幾天，VWAP 會被拉向那幾天的價格，MA20 卻不會。看看站上、跌破 VWAP 之後的走勢。",
+    keys: ["VWAP 是量價加權的平均成本，成交量越大的價位權重越大。", "當日 VWAP 每天重算；跨日用的是滾動 VWAP。", "價格在 VWAP 之上偏多、之下偏空；盤整時會反覆穿越，訊號價值低。"],
+  },
+  {
+    id: "vprofile", title: "籌碼分佈（Volume Profile）：哪個價位最多人買", tag: "量價", seed: 137, n: 180,
+    body: `<p>籌碼分佈把一段期間的成交量「分到各個價位」，畫成橫向的長條。長條越長，代表在那個價位成交的量越多、持有成本在那裡的人越多。</p>
+<ul>
+<li><strong>獲利比例</strong>：成本在目前價格以下的籌碼佔多少。接近 100% 代表幾乎所有人都賺錢，獲利了結的賣壓可能變大；很低代表多數人套牢。</li>
+<li><strong>支撐位</strong>：目前價格以下、籌碼最密集的價位。很多人成本在這裡，跌到這裡常有人護盤或加碼。</li>
+<li><strong>壓力位</strong>：目前價格以上、籌碼最密集的價位。套牢的人多，漲上去容易遇到解套賣壓。</li>
+<li><strong>平均成本</strong>：所有籌碼的加權平均價。<strong>70%／90% 籌碼區間</strong>：以平均成本為中心，涵蓋 70%／90% 籌碼的價格範圍；區間越窄代表籌碼越集中。</li>
+</ul>
+<p class="note">這裡的籌碼分佈是用日 K 的價量「估算」的（越早的交易權重越低），不是集保或券商的真實持股成本。</p>`,
+    chart: { ma: [], vp: true },
+    try: "在下面的 K 線圖右側看半透明的籌碼長條：價格跌回長條最長的地方時，是不是常常止跌？漲到上方長條密集區時，是不是常常拉回？",
+    keys: ["長條越長＝在那個價位成交越多、持有成本越集中。", "下方密集區常是支撐、上方密集區常是壓力。", "獲利比例很高時，要留意獲利了結的賣壓。"],
   },
   {
     id: "boll", title: "布林通道：用統計畫出價格的活動範圍", tag: "波動", seed: 105, n: 180, boll: true,
@@ -1199,7 +1227,7 @@ W 底目標 ≈ 頸線 +（頸線 − 低點）</div>
 </ul>
 ${dowPhaseSVG}
 <table><thead><tr><th>趨勢層級</th><th>時間</th><th>比喻</th></tr></thead><tbody>
-<tr><td>主要趨勢</td><td>一年以上</td><td>潮汐：決定大方向</td></tr>
+<tr><td>主要趨勢</td><td>一年以上（常持續數年）</td><td>潮汐：決定大方向</td></tr>
 <tr><td>次級趨勢</td><td>數週到數月</td><td>波浪：主要趨勢中的回檔或反彈，常回吐前一段的 1/3 到 2/3</td></tr>
 <tr><td>日常波動</td><td>幾天</td><td>漣漪：雜訊多，也最容易被操縱</td></tr>
 </tbody></table>
@@ -1208,7 +1236,7 @@ ${dowPhaseSVG}
 <li>平均指數反映一切已知的資訊。</li>
 <li>市場有主要、次級、日常三種趨勢。</li>
 <li>主要趨勢有三個階段：吸籌、大眾參與、出貨（見上圖）。</li>
-<li>指數必須互相確認。原本是工業指數與運輸指數；台股常拿加權指數對照櫃買指數，或電子類股對照金融類股。</li>
+<li>指數必須互相確認。原本是工業指數與運輸指數；台股最常拿加權指數對照櫃買指數（大型權值股 vs. 中小型股）；兩者同步創高或創低，趨勢才比較可信。</li>
 <li>成交量必須確認趨勢：上漲時量增、回檔時量縮，上升趨勢才健康。</li>
 <li>趨勢持續，直到明確的反轉訊號出現。</li>
 </ul>`,
@@ -1250,7 +1278,7 @@ ${dowPhaseSVG}
 <p><strong>台股看盤軟體要注意</strong>：不少台灣軟體把威廉指標畫成 0 到 100、不加負號，這時<strong>80 以上反而是超賣</strong>、20 以下是超買，和 KD 剛好相反。看軟體前先確認刻度方向。</p>`,
     chart: { ma: [20], sub: "wr", markers: (D, I) => Signals.wr(D, I) },
     try: "到「圖表實驗室」把副圖切到 KD 再切回威廉指標，比較同一段走勢裡誰先發出訊號、誰的假訊號比較多。",
-    keys: ["%R 的數值等於 RSV − 100，所以它比 KD 敏感。", "強勢股會長時間停在超買區，這是強勢的證明，不是賣出訊號。", "適合搭配趨勢判斷，只做順著均線方向的超買超賣訊號。"],
+    keys: ["%R 和 RSV 是同一個概念（在相同天數下 %R = RSV − 100）；%R 沒有經過平滑，所以比 KD 敏感。", "強勢股會長時間停在超買區，這是強勢的證明，不是賣出訊號。", "適合搭配趨勢判斷，只做順著均線方向的超買超賣訊號。"],
   },
   {
     id: "fib", title: "斐波那契：回撤與延伸", tag: "趨勢", seed: 5116, n: 200,
@@ -1381,7 +1409,7 @@ ${smcPdSVG}
 <ul>
 <li><strong>溢價區</strong>（Premium）：波段 50% 以上，價格偏貴，適合找賣點。</li>
 <li><strong>折價區</strong>（Discount）：波段 50% 以下，價格偏便宜，適合找買點。</li>
-<li><strong>OTE 最佳進場區</strong>（Optimal Trade Entry）：回撤 61.8%～78.6%，就是上一課的斐波那契黃金區，再往下深一點。</li>
+<li><strong>OTE 最佳進場區</strong>（Optimal Trade Entry）：回撤 61.8%～78.6%，也就是斐波那契黃金區（50%～78.6%）中比較深的那一段。</li>
 </ul>
 <h3>SMC 的完整交易流程（以做多為例）</h3>
 <table><thead><tr><th>步驟</th><th>要看什麼</th></tr></thead><tbody>
@@ -1456,7 +1484,7 @@ ${smcPdSVG}
 </tbody></table>
 <div class="formula">營收年增率 =（本月營收 ÷ 去年同月營收 − 1）× 100%
 毛利率 = 營業毛利 ÷ 營業收入；營益率 = 營業利益 ÷ 營業收入；淨利率 = 稅後淨利 ÷ 營業收入
-EPS = 稅後淨利 ÷ 流通在外股數</div>
+EPS = 歸屬母公司業主的稅後淨利 ÷ 加權平均流通在外股數</div>
 <p>例：某公司本季營收 100 億、營業毛利 45 億、營業利益 30 億、稅後淨利 24 億、股數 10 億股 → 毛利率 45%、營益率 30%、淨利率 24%、EPS 2.4 元。</p>
 <h3>財報公布時間</h3>
 <ul><li>第一季：5 月 15 日前　・第二季：8 月 14 日前　・第三季：11 月 14 日前　・全年：隔年 3 月 31 日前</li></ul>
@@ -1647,7 +1675,7 @@ const LESSON_DEEP = {
 
   dow: `<h4>原理拆解</h4>
 <p>道氏理論的核心是：<strong>趨勢會延續，直到出現明確的反轉證據</strong>。上升趨勢中，每次回檔的低點都比前一次高，代表買方願意在越來越高的價格進場；一旦回檔低點被跌破，代表這群買方的防線失守。</p>
-<p>它把趨勢分成三層：主要趨勢（數月到數年）、次級趨勢（數週到數月的回檔或反彈）、日常波動（雜訊）。初學者最容易被日常波動騙，把一兩天的下跌當成趨勢反轉。</p>
+<p>它把趨勢分成三層：主要趨勢（一年以上，常持續數年）、次級趨勢（數週到數月的回檔或反彈）、日常波動（雜訊）。初學者最容易被日常波動騙，把一兩天的下跌當成趨勢反轉。</p>
 <h4>實戰判讀步驟</h4>
 <ol>
 <li>在圖上標出<strong>最近四到六個轉折高低點</strong>。</li>
@@ -1660,7 +1688,7 @@ const LESSON_DEEP = {
 <ul>
 <li>轉折點的判定：常用「左右各 3～5 根 K 棒」都沒有更高（低）點。數字越大，抓到的轉折越少、越重要。</li>
 <li>主要趨勢用<strong>週 K</strong> 判斷，次級趨勢用<strong>日 K</strong>。</li>
-<li>指數互相確認：台股可拿加權指數與櫃買指數、電子與金融類股互相對照。</li>
+<li>指數互相確認：台股可拿加權指數與櫃買指數互相對照。</li>
 </ul>
 <h4>常見陷阱</h4>
 <ul>
@@ -1983,7 +2011,7 @@ DIF &gt; 0 且由下穿上 MACD → 零軸上方金叉</div>
 <h4>參數與變化</h4>
 <ul>
 <li>常用的背離指標：RSI、MACD 柱狀體、KD。</li>
-<li>兩個轉折點的距離通常 5～60 根 K 棒；太近是雜訊，太遠關聯性變弱。</li>
+<li>兩個轉折點的距離通常 5～45 根 K 棒（本站偵測背離時用的範圍）；太近是雜訊，太遠關聯性變弱。</li>
 <li>週 K 的背離比日 K 的份量重得多。</li>
 </ul>
 <h4>常見陷阱</h4>
@@ -2341,8 +2369,8 @@ OTE 區 ≈ 212.8 ～ 222.9（和訂單塊重疊）</div>
 
 // 課程順序與分組
 const LESSON_GROUPS = [
-  ["基礎", ["kline"]], ["K 線與型態學", ["patterns-rev", "patterns-cont", "chart-patterns"]], ["趨勢與量價", ["dow", "ma", "vol", "inout", "sr", "fib"]],
-  ["技術指標", ["rsi", "kd", "wr", "macd", "boll"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["籌碼面與基本面", ["chips-inst", "chips-margin", "fund-rev", "fund-val"]], ["風險管理", ["risk"]],
+  ["基礎", ["kline"]], ["K 線與型態學", ["patterns-rev", "patterns-cont", "chart-patterns"]], ["趨勢與量價", ["dow", "ma", "vol", "inout", "vprofile", "sr", "fib"]],
+  ["技術指標", ["rsi", "kd", "wr", "macd", "boll", "vwap"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["籌碼面與基本面", ["chips-inst", "chips-margin", "fund-rev", "fund-val"]], ["風險管理", ["risk"]],
 ];
 const ORDER = LESSON_GROUPS.flatMap(g => g[1]);
 LESSONS.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
@@ -2368,7 +2396,7 @@ function drawLesson() {
   const L = LESSONS[lessonIdx], v = L.variants ? L.variants[lessonView.variant] : {}, { D, I } = lessonView;
   const all = lessonMarkers(L, D, I, v), markers = lessonView.pat ? all.filter(m => m.pat === lessonView.pat) : all;
   const ex = L.chart.extra ? L.chart.extra(D, I) : {};
-  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, ...(L.chart.subs ? { subs: L.chart.subs(D, I) } : { sub: v.sub || L.chart.sub }), markers, hlines: L.chart.hlines ? L.chart.hlines(D) : L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
+  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, vwap: L.chart.vwap, vp: L.chart.vp, ...(L.chart.subs ? { subs: L.chart.subs(D, I) } : { sub: v.sub || L.chart.sub }), markers, hlines: L.chart.hlines ? L.chart.hlines(D) : L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
   const g = $("#lessonGallery");
   g.hidden = !L.gallery;
   if (L.gallery) g.innerHTML = L.gallery.map(id => {
@@ -2471,7 +2499,8 @@ const STRATS = {
   rsi: { name: "RSI 30 / 70", fn: Signals.rsi },
   kd: { name: "KD 低檔金叉 / 高檔死叉", fn: Signals.kd },
   macd: { name: "MACD 交叉", fn: Signals.macd },
-  boll: { name: "布林：破下軌買、破上軌賣", fn: Signals.boll },
+  boll: { name: "布林：破下軌買、破上軌賣（只適合盤整）", fn: Signals.boll },
+  vwap: { name: "VWAP：站上買、跌破賣", fn: Signals.vwap },
   candle: { name: "K線型態（錘子、吞噬、晨星…）", fn: (D, I) => Signals.candle(D, I) },
   divRsi: { name: "RSI 背離（一般背離）", fn: (D, I) => Signals.div(D, I, "rsi") },
   divMacd: { name: "MACD 背離（一般背離）", fn: (D, I) => Signals.div(D, I, "macd") },
@@ -2527,9 +2556,12 @@ function renderBT(sigs) {
   </div>`;
   if (!S.fn) { html += `<p class="note" style="margin:0">選一個策略，圖上會標出買賣訊號，這裡會顯示用這些訊號進出的結果。</p>`; }
   else {
-    const r = backtest(lab.D, sigs, { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip }), cls = x => x > 0 ? "up" : x < 0 ? "down" : "";
+    const lc = labUsesReal() ? REAL.cur?.code : null, etf = /^00/.test(lc || ""), idx = lc === "TAIEX";
+    const r = backtest(lab.D, sigs, { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip, tax: etf ? 0.001 : undefined }), cls = x => x > 0 ? "up" : x < 0 ? "down" : "";
     const nBuy = sigs.filter(x => x.side === "buy" && !x.note).length, nSell = sigs.filter(x => x.side === "sell" && !x.note).length;
     const mode = lab.useBuy && lab.useSell ? "" : lab.useBuy ? "只依買進訊號進場，之後一直持有到期末。" : lab.useSell ? "第一天開盤先全額買進，依賣出訊號出場後不再買回。" : "買進、賣出都沒勾，不會有任何交易。";
+    if (idx) html += `<p class="note" style="margin:0 0 8px">⚠ 加權指數本身不能買賣，這裡的回測只是看訊號在指數上的效果；實際可以用 0050 等 ETF 或台指期操作。</p>`;
+    if (labUsesReal()) html += `<p class="note" style="margin:0 0 8px">${etf ? "ETF 的證交稅以 0.1% 計算。" : ""}真實股價沒有還原除權息：除息日的下跌會被算成虧損，配息也沒有加回，長期回測（尤其是買進持有）會略為低估。</p>`;
     html += `<div class="stats">
       <div class="stat"><div class="k">策略報酬</div><div class="v ${cls(r.total)}">${fmtPct(r.total, 1)}</div><div class="s ${cls(r.pnl)}">${r.pnl >= 0 ? "+" : ""}${fmtMoney(r.pnl)}</div></div>
       <div class="stat"><div class="k">期末資金</div><div class="v">${Math.round(r.end).toLocaleString()}</div><div class="s">初始 ${Math.round(r.cap).toLocaleString()}</div></div>
@@ -2634,7 +2666,7 @@ $("#chRealForm").addEventListener("submit", e => { e.preventDefault(); chalNew()
 document.querySelectorAll("[data-chsrc]").forEach(b => b.setAttribute("aria-pressed", b.dataset.chsrc === ch.src)); $("#chRealForm").hidden = ch.src !== "real";
 function chalDraw() {
   const D = ch.Dm && !ch.answered ? ch.Dm : ch.D;
-  chalChart.set(D, { I: ch.I, ma: maFrom(chBar), boll: chBar.has("boll"), subs: subsFrom(chBar), noVol: !chBar.has("vol"), visible: ch.answered ? D.length : SHOW, cutoff: SHOW, ...(D === ch.Dm ? { fmtD: s => s.replace(/\s/g, "") } : {}) });
+  chalChart.set(D, { I: ch.I, ...mainOpts(chBar), subs: subsFrom(chBar), noVol: !chBar.has("vol"), visible: ch.answered ? D.length : SHOW, cutoff: SHOW, ...(D === ch.Dm ? { fmtD: s => s.replace(/\s/g, "") } : {}) });
 }
 function chalScore() { $("#scRight").textContent = `${ch.right} / ${ch.total}`; $("#scStreak").textContent = ch.streak; $("#scBest").textContent = ch.best; }
 function chalAnswer(guess) {
@@ -3822,7 +3854,7 @@ function shotDrawChart() {
     future = { from: n, ...sim.bands };
     renderSimStats(sim, mode, days, bias);
   }
-  shotChart.set(D2, { I: I2, ma: maFrom(B), boll: B.has("boll"), subs, noVol: !(shot.hasVol && B.has("vol")), volLabel: shot.src === "real" ? `量（${REAL.cur?.unit || "張"}）` : "量（相對）", future,
+  shotChart.set(D2, { I: I2, ...mainOpts(B), subs, noVol: !(shot.hasVol && B.has("vol")), volLabel: shot.src === "real" ? `量（${REAL.cur?.unit || "張"}）` : "量（相對）", future,
     fmtD: d => (d.startsWith("模擬") ? "+" + d.slice(3) : /^\d{4}-/.test(d) ? d.slice(5).replace("-", "/") : d.replace(/\D/g, "")),
     markers, zones: ex.zones, shapes: ex.shapes, hlines: shotHlines(D) });
 }

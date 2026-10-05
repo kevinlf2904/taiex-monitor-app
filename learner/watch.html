@@ -317,7 +317,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .ro-more > summary { cursor: pointer; padding: 4px 16px 10px; font-size: 13px; color: var(--muted); }
 .cost { display: flex; gap: 16px; align-items: center; padding: 12px; flex-wrap: wrap; } .cost canvas { display: block; }
 .cost-kv { flex: 1; min-width: 160px; display: grid; gap: 8px; } .cost-kv div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; } .cost-kv b { font: 600 14px var(--font-mono); } .cost-kv .up { color: var(--up); font-size: 20px; }
-.cost-kv i { display: inline-block; width: 10px; height: 2px; margin-right: 6px; vertical-align: middle; }
+.cost-kv i { display: inline-block; width: 10px; height: 2px; margin-right: 6px; vertical-align: middle; } .cost-kv .sep { border-top: 1px solid var(--line); padding-top: 8px; } .cost-kv b.muted { color: var(--muted); }
 .blsvg { width: 100%; height: auto; max-height: 240px; display: block; margin: 4px 0 10px; } .blsvg text { font: 11px var(--font-mono); fill: var(--muted); } .blsvg text.v { fill: var(--ink); font-size: 11px; }
 .fh { margin: 14px 16px 4px; font-size: 15px; display: flex; gap: 8px; align-items: baseline; } .fh .note { font-weight: 400; font-size: 12px; }
 #fundTbl .blsvg, #fundTbl .pe { margin-left: 12px; margin-right: 12px; width: calc(100% - 24px); }
@@ -450,7 +450,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-22</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-23</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1325,7 +1325,7 @@ const OVERLAYS = [{ id: "sr", label: "支撐壓力" }, { id: "fib", label: "斐�
 const dBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "疊加", items: OVERLAYS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); });
 const STRATS = {
   "": { name: "不顯示" }, ma: { name: "均線交叉（5／20）", fn: (D, I) => Signals.ma(D, I, 5, 20) }, kd: { name: "KD 低檔金叉／高檔死叉", fn: Signals.kd }, macd: { name: "MACD 交叉", fn: Signals.macd },
-  rsi: { name: "RSI 30／70", fn: Signals.rsi }, boll: { name: "布林通道", fn: Signals.boll }, candle: { name: "K 線型態", fn: (D, I) => Signals.candle(D, I) }, div: { name: "RSI／MACD 背離", fn: (D, I) => [...Signals.div(D, I, "rsi"), ...Signals.div(D, I, "macd")] },
+  rsi: { name: "RSI 30／70", fn: Signals.rsi }, boll: { name: "布林通道", fn: Signals.boll }, vwap: { name: "VWAP 站上／跌破", fn: Signals.vwap }, candle: { name: "K 線型態", fn: (D, I) => Signals.candle(D, I) }, div: { name: "RSI／MACD 背離", fn: (D, I) => [...Signals.div(D, I, "rsi"), ...Signals.div(D, I, "macd")] },
   pat: { name: "型態學突破", fn: (D, I) => Signals.chartPat(D, I) }, choch: { name: "聰明錢 CHoCH", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") }, bos: { name: "道氏結構突破", fn: (D, I) => Signals.structure(D, I, "dow") },
 };
 $("#stratSel").innerHTML = Object.entries(STRATS).map(([k, v]) => `<option value="${k}" ${k === W.strat ? "selected" : ""}>${v.name}</option>`).join("");
@@ -1383,7 +1383,7 @@ function drawK(fresh = false, shift = 0) {
   const I = indicators(D), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D);
   const old = kChart.view;
   Chart.keepView = !fresh;
-  try { kChart.set(D, { I, ma: maFrom(dBar), boll: dBar.has("boll"), subs: [...subsFrom(dBar), ...chipSubs(D)], noVol: !dBar.has("vol") || !D.some(x => x.v), volLabel: `量（${isUS(W.sel) ? "千股" : "張"}）`, fmtD: fmtKD, markers: sigs, shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
+  try { kChart.set(D, { I, ...mainOpts(dBar), subs: [...subsFrom(dBar), ...chipSubs(D)], noVol: !dBar.has("vol") || !D.some(x => x.v), volLabel: `量（${isUS(W.sel) ? "千股" : "張"}）`, fmtD: fmtKD, markers: sigs, shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
   finally { Chart.keepView = false; }
   const want = W.k === "M" ? (isMobile() ? 36 : 48) : isMobile() ? 60 : 100, N = D.length, w = Math.min(N, want);
   if (fresh || (shift && !old)) kChart.view = N > w ? kChart.clampView(N - w, w) : null;
@@ -1393,7 +1393,7 @@ function drawK(fresh = false, shift = 0) {
   if (N < want + 10 && !olderState().end && !W.busyOlder && (minute ? W.intra : W.daily?.data?.length)) setTimeout(loadOlder, 0);
   const st = olderState(), first = minute ? D[0].d.split(" ")[0] : W.daily?.data?.[0]?.d;
   $("#kNote").textContent = `${first ? first.replace(/-/g, "/") + " 起・" : ""}共 ${N} 根${st.end ? (minute ? "（已到資料來源的最早）" : "（已到最早）") : W.busyOlder ? "・載入更早資料中…" : ""}・${minute ? W.intra?.source || "" : W.daily?.source || ""}`;
-  if (S?.fn) { let txt = `${sigs.length} 個訊號`; try { const r = backtest(D, sigs, { capital: 1e6, lot: 1 }); if (r.trades.length) txt += `・照做回測 ${r.total >= 0 ? "+" : ""}${(r.total * 100).toFixed(1)}%（買進持有 ${r.bh >= 0 ? "+" : ""}${(r.bh * 100).toFixed(1)}%），${r.trades.length} 筆、勝率 ${Math.round(r.win * 100)}%`; } catch {} $("#stratNote").textContent = txt + "（只看這段資料，含手續費與證交稅）"; }
+  if (S?.fn) { let txt = `${sigs.length} 個訊號`; try { const r = backtest(D, sigs, { capital: 1e6, lot: 1, tax: /^00/.test(W.sel) ? 0.001 : undefined }); if (r.trades.length) txt += `・照做回測 ${r.total >= 0 ? "+" : ""}${(r.total * 100).toFixed(1)}%（買進持有 ${r.bh >= 0 ? "+" : ""}${(r.bh * 100).toFixed(1)}%），${r.trades.length} 筆、勝率 ${Math.round(r.win * 100)}%`; } catch {} $("#stratNote").textContent = txt + "（只看這段資料，含手續費與證交稅）"; }
   else $("#stratNote").textContent = "選一個策略，買賣訊號會標在 K 線上，並顯示照做的回測結果";
   ksetSummary();
 }
@@ -1482,32 +1482,20 @@ function renderAna() {
 }
 
 /* ---------- 籌碼分佈：用最近 120 天日 K 的成交量估算各價位的持有成本（越早的權重越低） ---------- */
-function costDist(D, n = 120, bins = 50) {
-  const L = D.slice(-n); if (L.length < 20) return null;
-  const lo = Math.min(...L.map(x => x.l)), hi = Math.max(...L.map(x => x.h)); if (!(hi > lo)) return null;
-  const step = (hi - lo) / bins, w = Array(bins).fill(0), mids = w.map((_, k) => lo + (k + 0.5) * step);
-  L.forEach((x, i) => {
-    const wt = (x.v || 1) * Math.pow(0.97, L.length - 1 - i), a = Math.max(0, Math.floor((x.l - lo) / step)), b = Math.min(bins - 1, Math.floor((x.h - lo) / step)), tp = (x.h + x.l + x.c) / 3, half = (x.h - x.l) / 2 || step;
-    const fs = []; for (let k = a; k <= b; k++) fs.push(1 / (1 + Math.abs(mids[k] - tp) / half)); const tot = fs.reduce((s, f) => s + f, 0) || 1;
-    fs.forEach((f, j) => (w[a + j] += wt * f / tot));
-  });
-  const px = D[D.length - 1].c, total = w.reduce((s, x) => s + x, 0) || 1;
-  let sup = -1, pre = -1; w.forEach((x, k) => { if (mids[k] <= px) { if (sup < 0 || x > w[sup]) sup = k; } else if (pre < 0 || x > w[pre]) pre = k; });
-  return { w, mids, step, px, profit: w.reduce((s, x, k) => s + (mids[k] <= px ? x : 0), 0) / total, avg: w.reduce((s, x, k) => s + x * mids[k], 0) / total, sup: sup >= 0 ? mids[sup] : null, pre: pre >= 0 ? mids[pre] : null };
-}
 function renderCost() {
   const D = W.daily?.code === W.sel ? W.daily.data : null, C = D?.length ? costDist(D) : null, box = $("#costBox");
   $("#secCost").hidden = W.dtab !== "tech" || !C; if (!C) return;
   const c = W.sel, fp = v => (v == null ? "—" : fmtPx(v, c)), mx = Math.max(...C.w);
-  box.innerHTML = `<canvas id="costCv" role="img" aria-label="籌碼分佈"></canvas><div class="cost-kv"><div><span>獲利比例</span><b class="up">${(C.profit * 100).toFixed(1)}%</b></div><div><span><i style="background:var(--down)"></i>壓力位</span><b>${fp(C.pre)}</b></div><div><span><i style="background:var(--s1)"></i>平均成本</span><b>${fp(C.avg)}</b></div><div><span><i style="background:var(--s3)"></i>支撐位</span><b>${fp(C.sup)}</b></div></div>`;
-  $("#costNote").textContent = `${D[D.length - 1].d.replace(/-/g, "/")}・用近 ${Math.min(120, D.length)} 天的價量估算，不是真實持股成本`;
-  const cv = $("#costCv"), Wd = cv.parentElement.clientWidth >= 520 ? Math.round(cv.parentElement.clientWidth * 0.55) : cv.parentElement.clientWidth - 24, H = 200, dpr = devicePixelRatio || 1;
+  box.innerHTML = `<canvas id="costCv" role="img" aria-label="籌碼分佈"></canvas><div class="cost-kv"><div><span>獲利比例</span><b class="up">${(C.profit * 100).toFixed(2)}%</b></div><div><span><i style="background:#f0883e"></i>壓力位</span><b>${fp(C.pre)}</b></div><div><span><i style="background:#8b8f98"></i>平均成本</span><b>${fp(C.avg)}</b></div><div><span><i style="background:#3b82f6"></i>支撐位</span><b>${fp(C.sup)}</b></div>
+    <div class="sep"><span>區間重合度</span><b>${(C.overlap * 100).toFixed(1)}%</b></div><div><span>90% 籌碼區間</span><b>${fp(C.r90[0])} ～ ${fp(C.r90[1])}</b></div><div><span>70% 籌碼區間</span><b class="muted">${fp(C.r70[0])} ～ ${fp(C.r70[1])}</b></div></div>`;
+  $("#costNote").textContent = `${C.d.replace(/-/g, "/")}・用近 ${Math.min(120, D.length)} 天的價量估算，不是真實持股成本；在 K 線的「主圖」開「籌碼分佈」可以疊在 K 線上`;
+  const cv = $("#costCv"), Wd = cv.parentElement.clientWidth >= 520 ? Math.round(cv.parentElement.clientWidth * 0.55) : cv.parentElement.clientWidth - 24, H = 220, dpr = devicePixelRatio || 1;
   cv.width = Wd * dpr; cv.height = H * dpr; cv.style.width = Wd + "px"; cv.style.height = H + "px";
-  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); const col = k => cssVar(k), n = C.w.length, bh = H / n, Y = v => H - (v - (C.mids[0] - C.step / 2)) / (C.step * n) * H;
-  C.w.forEach((x, k) => { ctx.fillStyle = C.mids[k] <= C.px ? col("--up") : col("--muted"); ctx.globalAlpha = C.mids[k] <= C.px ? 0.75 : 0.45; ctx.fillRect(0, H - (k + 1) * bh + 0.5, x / mx * Wd, Math.max(1, bh - 1)); });
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); const col = k => cssVar(k), n = C.w.length, bh = H / n, Y = v => H - (v - C.lo) / (C.hi - C.lo) * H;
+  ctx.fillStyle = col("--ink"); ctx.globalAlpha = 0.06; ctx.fillRect(0, Y(C.r90[1]), Wd, Y(C.r90[0]) - Y(C.r90[1])); ctx.globalAlpha = 0.06; ctx.fillRect(0, Y(C.r70[1]), Wd, Y(C.r70[0]) - Y(C.r70[1]));
+  C.w.forEach((x, k) => { const prof = C.mids[k] <= C.px; ctx.fillStyle = prof ? col("--up") : col("--down"); ctx.globalAlpha = prof ? 0.8 : 0.7; ctx.fillRect(0, H - (k + 1) * bh + 0.5, x / mx * Wd * 0.92, Math.max(1, bh - 0.8)); });
   ctx.globalAlpha = 1; ctx.lineWidth = 1.4;
-  [[C.pre, "--down"], [C.avg, "--s1"], [C.sup, "--s3"], [C.px, "--accent"]].forEach(([v, k]) => { if (v == null) return; ctx.strokeStyle = col(k); ctx.setLineDash(k === "--accent" ? [4, 3] : []); ctx.beginPath(); ctx.moveTo(0, Y(v)); ctx.lineTo(Wd, Y(v)); ctx.stroke(); });
-  ctx.setLineDash([]);
+  [[C.pre, "#f0883e"], [C.avg, "#8b8f98"], [C.sup, "#3b82f6"]].forEach(([v, k]) => { if (v == null) return; ctx.strokeStyle = k; ctx.beginPath(); ctx.moveTo(0, Y(v)); ctx.lineTo(Wd, Y(v)); ctx.stroke(); });
 }
 
 /* ---------- 小圖：柱狀＋折線（營收、EPS）、本益比區間 ---------- */
