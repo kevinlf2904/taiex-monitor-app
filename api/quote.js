@@ -1,5 +1,6 @@
 // 盤中即時報價：給 learner/ 的頂部加權指數、個股判讀的「即時」更新使用。
 // GET /api/quote?codes=2330,0050,t00     （t00 = 加權指數、o00 = 櫃買指數；最多 10 檔）
+// GET /api/quote?codes=...&src=mis        只用 MIS 批次查詢（最多 30 檔，給看盤的自選股清單用，不消耗富果額度）
 // 預設來源：證交所「基本市況報導」MIS（免費、不用申請，約 5 秒一筆快照；這是給證交所網頁用的介面，沒有正式保證）。
 // 在 Vercel 設定 FUGLE_API_KEY（富果行情 API 金鑰）時，改用富果，失敗再退回 MIS。
 // 回傳 { ok, source, session: "pre"|"open"|"closed", time, quotes: [{ code, name, market, price, prev, open, high, low, vol, chg, chgPct, time, date, bids:[{p,v}], asks:[{p,v}], estimated }] }
@@ -21,9 +22,9 @@ export function session(now = new Date()) {
   return "closed";
 }
 export const todayTaipei = (now = new Date()) => new Date(now.getTime() + 8 * 3600e3).toISOString().slice(0, 10);
-export function normCodes(raw) {
+export function normCodes(raw, max = 10) {
   return [...new Set(String(raw || "").split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean).map(s => ALIAS[s] || s))]
-    .filter(s => INDEX[s] || /^\d{4,6}[A-Z]?$/.test(s)).slice(0, 10);
+    .filter(s => INDEX[s] || /^\d{4,6}[A-Z]?$/.test(s)).slice(0, max);
 }
 const levels = (p, v) => { const ps = String(p || "").split("_"), vs = String(v || "").split("_"); return ps.map((x, k) => ({ p: num(x), v: num(vs[k]) })).filter(x => x.p != null && x.p > 0).slice(0, 5); };
 // MIS 的一筆：z 最近成交價（"-" 代表這個快照沒有成交）、y 昨收、o/h/l 開高低、v 累計量（張）、a/f 委賣價量、b/g 委買價量、d 日期、t 時間
@@ -77,12 +78,12 @@ async function fromFugle(codes, key) {
 }
 
 export default async function handler(req, res) {
-  const codes = normCodes(req.query?.codes ?? req.query?.code);
+  const misOnly = req.query?.src === "mis", codes = normCodes(req.query?.codes ?? req.query?.code, misOnly ? 30 : 10);
   if (!codes.length) return res.status(400).json({ ok: false, error: "請給股票代號，例如 ?codes=2330,t00（t00 是加權指數）。" });
-  const key = codes.join(","), hit = cache.get(key), sess = session();
+  const key = (misOnly ? "mis:" : "") + codes.join(","), hit = cache.get(key), sess = session();
   if (hit && Date.now() - hit.at < 4000) { res.setHeader("Cache-Control", "s-maxage=4"); return res.status(200).json(hit.body); }
   const fugleKey = process.env.FUGLE_API_KEY, errors = [];
-  for (const [source, run] of [...(fugleKey ? [["富果", () => fromFugle(codes, fugleKey)]] : []), ["證交所 MIS", () => fromMis(codes)]]) {
+  for (const [source, run] of [...(fugleKey && !misOnly ? [["富果", () => fromFugle(codes, fugleKey)]] : []), ["證交所 MIS", () => fromMis(codes)]]) {
     try {
       const quotes = await run();
       if (quotes.length) {
