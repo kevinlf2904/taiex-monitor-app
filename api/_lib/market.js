@@ -7,6 +7,8 @@
 //   inst     三大法人買賣超金額（證交所 BFI82U，上市）
 //   indices  電子、金融等類股指數（證交所 MI_INDEX）
 //   us       美股四大指數（道瓊、那斯達克、S&P 500、費城半導體）與當日走勢（Yahoo Finance）
+//   breadthBy、sectorsBy  上市、上櫃分開的漲跌家數與產業漲跌
+//   world    國際指數，依地區分組（美國、日本、韓國、香港、中國、歐洲）
 
 import { parseTwseAll, parseTpexAll } from "./hot.js";
 import { getJSON, num, companies } from "./_tw.js";
@@ -64,16 +66,25 @@ async function instLatest() {
   return null;
 }
 const US_IDX = [["^DJI", "道瓊工業"], ["^IXIC", "那斯達克"], ["^GSPC", "S&P 500"], ["^SOX", "費城半導體"]];
+// 國際指數：依地區分組（Yahoo Finance，收盤或盤中延遲報價）
+export const WORLD_IDX = [["us", "美國", [["^IXIC", "那斯達克"], ["^SOX", "費城半導體"], ["^NDX", "NASDAQ-100"], ["^DJI", "道瓊工業"], ["^GSPC", "S&P 500"], ["^VIX", "VIX 恐慌指數"]]],
+  ["jp", "日本", [["^N225", "日經 225"]]], ["kr", "韓國", [["^KS11", "韓國綜合"]]], ["hk", "香港", [["^HSI", "恆生指數"]]],
+  ["cn", "中國", [["000001.SS", "上證指數"], ["399001.SZ", "深證成指"]]], ["eu", "歐洲", [["^GDAXI", "德國 DAX"], ["^FTSE", "英國富時 100"], ["^STOXX50E", "歐洲 STOXX 50"]]]];
+async function idxQuote([s, name]) { const p = await yahooBars(s, 5, { isIdx: true }); const q = quoteFromMeta(s, p.meta); return { code: s, name, price: q.price, chg: q.chg, chgPct: q.chgPct, date: q.date, prev: q.prev, spark: p.bars.map(b => b.c) }; }
 async function usIndices() {
-  const r = await Promise.allSettled(US_IDX.map(async ([s, name]) => { const p = await yahooBars(s, 5, { isIdx: true }); const q = quoteFromMeta(s, p.meta); return { code: s, name, price: q.price, chg: q.chg, chgPct: q.chgPct, date: q.date, prev: q.prev, spark: p.bars.map(b => b.c) }; }));
+  const r = await Promise.allSettled(US_IDX.map(idxQuote));
   return r.filter(x => x.status === "fulfilled").map(x => x.value);
+}
+async function worldIndices() {
+  const flat = WORLD_IDX.flatMap(([region, , list]) => list.map(x => ({ region, x }))), r = await Promise.allSettled(flat.map(f => idxQuote(f.x)));
+  return WORLD_IDX.map(([id, name]) => ({ id, name, rows: flat.map((f, k) => (f.region === id && r[k].status === "fulfilled" ? r[k].value : null)).filter(Boolean) })).filter(g => g.rows.length);
 }
 
 export default async function handler(req, res) {
-  const [a, b, info, mi, inst, us] = await Promise.allSettled([
+  const [a, b, info, mi, inst, us, world] = await Promise.allSettled([
     getJSON("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL").then(parseTwseAll),
     getJSON("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes").then(parseTpexAll),
-    companies(), getJSON("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX").then(parseMiIndex), instLatest(), usIndices(),
+    companies(), getJSON("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX").then(parseMiIndex), instLatest(), usIndices(), worldIndices(),
   ]);
   const twse = a.value || [], tpex = b.value || [], all = [...twse, ...tpex], I = info.value || new Map(), M = mi.value || [];
   if (!all.length && !(us.value || []).length) return res.status(200).json({ ok: false, error: `拿不到大盤資料（${[a.reason?.message, b.reason?.message].filter(Boolean).join("；") || "沒有資料"}）` });
@@ -84,6 +95,10 @@ export default async function handler(req, res) {
   return res.status(200).json({ ok: true, date: all.find(x => x.date)?.date || null, source: "證交所、櫃買中心 OpenAPI；美股 Yahoo Finance",
     breadth: stocks.length ? breadth(stocks) : null,
     sectors: I.size ? sectors(stocks, I) : null,
+    // 上市、上櫃分開看（看盤頁可以切換）
+    breadthBy: { twse: breadth(twse.filter(r => /^\d{4}$/.test(r.code))), tpex: breadth(tpex.filter(r => /^\d{4}$/.test(r.code))) },
+    sectorsBy: I.size ? { twse: sectors(twse.filter(r => /^\d{4}$/.test(r.code)), I), tpex: sectors(tpex.filter(r => /^\d{4}$/.test(r.code)), I) } : null,
+    world: world.value || [],
     contrib: I.size && taiex ? contributions(twse, I, taiex.close - (taiex.chg || 0)) : null,
     inst: inst.value || null, indices: pickIdx, us: us.value || [] });
 }
