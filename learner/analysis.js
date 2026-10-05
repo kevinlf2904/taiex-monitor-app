@@ -427,6 +427,34 @@ function smcExtra(D) {
   return { zones, shapes };
 }
 
+// 可疊在 K 線上的分析（看盤、截圖練習共用），每一項都對應一堂課；聰明錢拆成五項可以分開看
+const OVERLAY_ITEMS = [{ id: "sr", label: "支撐壓力" }, { id: "fib", label: "斐波那契" }, { id: "zz", label: "道氏結構" },
+  { id: "smcS", label: "BOS／CHoCH" }, { id: "smcL", label: "流動性" }, { id: "smcOB", label: "訂單塊" }, { id: "smcFVG", label: "FVG" }, { id: "smcPD", label: "溢價折價" },
+  { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }, { id: "div", label: "背離" }, { id: "volx", label: "爆量" }];
+// 舊版的「聰明錢」一顆按鈕 → 拆開後的四項（在建立指標列之前把存好的選擇換掉）
+function overlayMigrate(key) {
+  const v = store.get("ind:" + key, null); if (!Array.isArray(v) || !v.includes("smc")) return;
+  store.set("ind:" + key, [...new Set(v.flatMap(id => (id === "smc" ? ["smcS", "smcL", "smcOB", "smcFVG"] : [id])))]);
+}
+function overlayBuild(D, I, has, opt = {}) {
+  const ex = { markers: [], shapes: [], zones: [], hlines: [] }; if (D.length < 30) return ex;
+  const on = has;
+  const safe = f => { try { f(); } catch {} };
+  if (on("sr") && !opt.noLines) safe(() => ex.hlines.push(...srLevels(D)));
+  if (on("fib")) safe(() => { if (!opt.noLines) ex.hlines.push(...fibLines(D)); const f = fibShape(D); if (f) ex.shapes.push(f); });
+  if (on("zz")) safe(() => { ex.shapes.push(zigzagShape(D)); ex.markers.push(...Signals.structure(D, I, "dow")); });
+  if (on("smcS")) safe(() => { if (!on("zz")) ex.shapes.push(zigzagShape(D, false)); ex.markers.push(...Signals.structure(D, I, "smc")); });
+  if (on("smcL")) safe(() => { ex.shapes.push(...eqShapes(D)); ex.markers.push(...Signals.sweep(D)); });
+  if (on("smcOB") || on("smcFVG")) safe(() => { const ms = marketStructure(D);
+    ex.zones.push(...smcZones(D, ms).filter(x => (x.kind === "OB" && on("smcOB")) || (x.kind === "FVG" && on("smcFVG") && (!x.hit || x.i2 - x.i1 < 25)))); });
+  if (on("smcPD")) safe(() => { const p = premiumDiscount(D); ex.zones.push(...p.zones); ex.shapes.push(...p.shapes.filter(Boolean).filter(s => !(on("fib") && s.color === "accent"))); });
+  if (on("candle")) safe(() => ex.markers.push(...Signals.candle(D, I)));
+  if (on("cpat")) safe(() => ex.markers.push(...Signals.chartPat(D, I)));
+  if (on("div")) safe(() => ex.markers.push(...Signals.div(D, I, "rsi"), ...Signals.div(D, I, "macd")));
+  if (on("volx")) safe(() => ex.markers.push(...Signals.vol(D, I)));
+  return ex;
+}
+
 // 等高點 / 等低點（EQH / EQL）：兩個相鄰的轉折高點幾乎一樣高，上方堆滿停損單，是 SMC 眼中的流動性池
 function eqLevels(D, upto = D.length) {
   let avg = 0; for (let k = 0; k < upto; k++) avg += D[k].h - D[k].l; avg /= upto;
@@ -497,6 +525,21 @@ function marginSub(rows) {
     lines2: [rows.map(r => (r ? r.marginBal : null))], names2: ["融資餘額"], zeroLine: true, fmt: fmtLots };
 }
 
+// 副圖：賣空（柱：每日融券賣出＋借券賣出；線：融券＋借券賣出餘額）
+function shortSub(rows) {
+  const t = (a, b) => (a == null && b == null ? null : (a || 0) + (b || 0));
+  return { title: "賣空（張）　柱：融券＋借券賣出　線：賣空餘額（右軸）", bars: rows.map(r => (r ? t(r.mSell, r.sSell) : null)), barName: "賣空量", lines: [], names: [], barColor: "down",
+    lines2: [rows.map(r => (r ? t(r.mBal, r.sBal) : null))], names2: ["賣空餘額"], fmt: fmtLots };
+}
+// 賣空摘要：最新一天的賣空量、佔成交量、餘額、5 日變化與回補天數（餘額 ÷ 20 日均量）
+function shortStats(D, rows) {
+  const S = (rows || []).filter(r => r.mBal != null || r.sBal != null); if (!S.length) return null;
+  const last = S[S.length - 1], tot = r => (r.mBal || 0) + (r.sBal || 0), sell = (last.mSell || 0) + (last.sSell || 0);
+  const bar = D?.find(x => x.d === last.d), i = D ? D.findIndex(x => x.d === last.d) : -1;
+  const v20 = i >= 0 ? D.slice(Math.max(0, i - 19), i + 1).reduce((a, x) => a + (x.v || 0), 0) / Math.min(20, i + 1) : 0;
+  const p5 = S[S.length - 6];
+  return { d: last.d, sell, ratio: bar?.v ? sell / bar.v : null, mBal: last.mBal, sBal: last.sBal, bal: tot(last), chg5: p5 ? tot(last) - tot(p5) : null, days: v20 ? tot(last) / v20 : null };
+}
 const alignByDate = (D, rows) => { const m = new Map(rows.map(r => [r.d, r])); return D.map(d => m.get(d.d) || null); };
 const signed = v => (v == null ? "—" : `${v > 0 ? "+" : ""}${Math.round(v).toLocaleString()}`);
 const clsOf = v => (v > 0 ? "up" : v < 0 ? "down" : "");

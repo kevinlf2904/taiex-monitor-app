@@ -42,6 +42,12 @@ export function parseMargin(rows) {
   return rows.map((r) => ({ d: r.date, marginBal: toNum(r.MarginPurchaseTodayBalance), shortBal: toNum(r.ShortSaleTodayBalance), marginLimit: toNum(r.MarginPurchaseLimit) }))
     .filter((r) => r.d && r.marginBal != null).sort((a, b) => a.d.localeCompare(b.d));
 }
+// 賣空：融券賣出＋借券賣出（TaiwanDailyShortSaleBalances，整理自證交所 TWT93U，單位：股 → 張）
+export function parseShort(rows) {
+  const lot = (v) => { const n = toNum(v); return n == null ? null : Math.round(n / 1000); };
+  return rows.map((r) => ({ d: r.date, mSell: lot(r.MarginShortSalesShortSales), mBal: lot(r.MarginShortSalesCurrentDayBalance), sSell: lot(r.SBLShortSalesShortSales), sBal: lot(r.SBLShortSalesCurrentDayBalance) }))
+    .filter((r) => r.d && (r.mBal != null || r.sBal != null)).sort((a, b) => a.d.localeCompare(b.d));
+}
 export function parsePer(rows) {
   return rows.map((r) => ({ d: r.date, pe: toNum(r.PER), pb: toNum(r.PBR), dy: toNum(r.dividend_yield) })).filter((r) => r.d).sort((a, b) => a.d.localeCompare(b.d));
 }
@@ -89,10 +95,11 @@ export function parseFin(rows) {
 export default async function handler(req, res) {
   const code = String(req.query?.code || "").trim().toUpperCase();
   if (!/^\d{4,6}[A-Z]?$/.test(code)) return res.status(400).json({ ok: false, error: "請輸入 4 到 6 碼的股票代號；加權指數沒有個股的籌碼與財報資料。" });
-  const out = { ok: true, code, source: "FinMind（整理自證交所、櫃買中心、公開資訊觀測站）", inst: [], margin: [], per: [], revenue: [], fin: [], errors: [] };
+  const out = { ok: true, code, source: "FinMind（整理自證交所、櫃買中心、公開資訊觀測站）", inst: [], margin: [], short: [], per: [], revenue: [], fin: [], errors: [] };
   const jobs = [
     ["inst", () => finmind("TaiwanStockInstitutionalInvestorsBuySell", code, daysAgo(120)).then(parseInst)],
     ["margin", () => finmind("TaiwanStockMarginPurchaseShortSale", code, daysAgo(120)).then(parseMargin)],
+    ["short", () => finmind("TaiwanDailyShortSaleBalances", code, daysAgo(120)).then(parseShort)],
     ["per", () => finmind("TaiwanStockPER", code, daysAgo(365 * 3)).then(parsePer)],
     ["revenue", () => finmind("TaiwanStockMonthRevenue", code, daysAgo(365 * 2 + 60)).then(parseRevenue)],
     ["fin", () => finmind("TaiwanStockFinancialStatements", code, daysAgo(365 * 3)).then(parseFin)],

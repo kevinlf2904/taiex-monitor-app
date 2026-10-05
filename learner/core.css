@@ -88,3 +88,4 @@ button, select, input { font: inherit; color: inherit; }
 @media (max-width: 640px) { .zoombar { position: static; display: flex; width: fit-content; margin: 6px 8px 0 auto; } .zoombar button { padding: 4px 8px; min-width: 28px; font-size: 12.5px; } .scalepop { position: static; width: auto; margin: 6px 8px 0; box-shadow: none; } }
 @media (min-width: 641px) { .legend { padding-right: 330px; } }
 .chartbox canvas { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
+.scalepop .pseg.kts { flex-wrap: wrap; } .scalepop .pseg.kts button { padding: 5px 8px; font-size: 12.5px; }
