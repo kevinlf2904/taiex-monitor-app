@@ -8,6 +8,7 @@
 // 回傳 { ok, code, name, market, source, unit, data: [{ d: "2026-09-01", o, h, l, c, v }] }，v 的單位見 unit。
 
 // HTTP 標頭只能用 ASCII（中文會讓 fetch 直接丟出 ByteString 錯誤）
+import { isUS, usName } from "./_yahoo.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const INDEX_CODES = new Set(["TAIEX", "TWII", "^TWII", "加權", "加權指數", "大盤", "0000", "IX0001"]);
 
@@ -110,19 +111,21 @@ async function fromTwseIndex(months, anchor) {
 async function fromYahoo(sym, months, anchor) {
   const span = anchor ? `period1=${Math.floor(anchor.getTime() / 1000) - months * 31 * 86400}&period2=${Math.floor(anchor.getTime() / 1000)}` : `range=${months <= 3 ? "3mo" : months <= 6 ? "6mo" : months <= 12 ? "1y" : "2y"}`;
   const p = parseYahoo(await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?${span}&interval=1d`));
-  return p && p.rows.length ? { name: p.name, rows: p.rows, market: sym.endsWith(".TWO") ? "上櫃" : sym.startsWith("^") ? "指數" : "上市", source: "Yahoo Finance", unit: sym.startsWith("^") ? "千股" : "張" } : null;
+  const us = isUS(sym) && sym !== "^TWII";
+  return p && p.rows.length ? { name: us ? usName(sym, p.name) : p.name, rows: p.rows, market: us ? "美股" : sym.endsWith(".TWO") ? "上櫃" : sym.startsWith("^") ? "指數" : "上市", source: "Yahoo Finance", unit: us || sym.startsWith("^") ? "千股" : "張" } : null;
 }
 
 export default async function handler(req, res) {
   const raw = String(req.query?.code || "").trim().toUpperCase();
   const months = Math.max(1, Math.min(24, parseInt(req.query?.months, 10) || 6));
   const isIndex = INDEX_CODES.has(raw) || INDEX_CODES.has(String(req.query?.code || "").trim());
-  if (!isIndex && !/^\d{4,6}[A-Z]?$/.test(raw)) return res.status(400).json({ ok: false, error: "請輸入 4 到 6 碼的股票代號（例如 2330、0050、00891），或輸入「加權」看大盤。" });
+  const us = !isIndex && isUS(raw);
+  if (!isIndex && !us && !/^\d{4,6}[A-Z]?$/.test(raw)) return res.status(400).json({ ok: false, error: "請輸入 4 到 6 碼的股票代號（例如 2330、0050、00891），或輸入「加權」看大盤。" });
 
   // before：只要這一天以前的資料（不含當天）
   const before = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query?.before || "")) ? String(req.query.before) : null;
   const anchor = before ? new Date(new Date(before + "T00:00:00Z").getTime() - 86400e3) : null;
-  const tries = isIndex
+  const tries = us ? [() => fromYahoo(raw, months, anchor)] : isIndex
     ? (before ? [() => fromYahoo("^TWII", months, anchor), () => fromTwseIndex(months, anchor)] : [() => fromTwseIndex(months), () => fromYahoo("^TWII", months)])
     : before
       ? [() => fromYahoo(`${raw}.TW`, months, anchor), () => fromYahoo(`${raw}.TWO`, months, anchor), () => fromTwse(raw, months, anchor), () => fromTpex(raw, months, anchor)]
@@ -135,7 +138,7 @@ export default async function handler(req, res) {
         const seen = new Set(), data = r.rows.filter((x) => !seen.has(x.d) && seen.add(x.d) && (!before || x.d < before)).sort((a, b) => a.d.localeCompare(b.d));
         if (before && !data.length) continue;
         res.setHeader("Cache-Control", before ? "s-maxage=86400, stale-while-revalidate=604800" : "s-maxage=1800, stale-while-revalidate=86400");
-        return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : raw, name: r.name, market: r.market, source: r.source, unit: r.unit, data });
+        return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : raw, us, name: r.name, market: r.market, source: r.source, unit: r.unit, data });
       }
     } catch (e) { errors.push(e.message); }
   }

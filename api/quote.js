@@ -1,11 +1,13 @@
 // 盤中即時報價：給 learner/ 的頂部加權指數、個股判讀的「即時」更新使用。
 // GET /api/quote?codes=2330,0050,t00     （t00 = 加權指數、o00 = 櫃買指數；最多 10 檔）
 // GET /api/quote?codes=...&src=mis        只用 MIS 批次查詢（最多 30 檔，給看盤的自選股清單用，不消耗富果額度）
+// 美股（英文代號，例如 AAPL、^GSPC）一律用 Yahoo Finance，每檔另外標 us: true 與自己的交易時段 session。
 // 預設來源：證交所「基本市況報導」MIS（免費、不用申請，約 5 秒一筆快照；這是給證交所網頁用的介面，沒有正式保證）。
 // 在 Vercel 設定 FUGLE_API_KEY（富果行情 API 金鑰）時，改用富果，失敗再退回 MIS。
 // 回傳 { ok, source, session: "pre"|"open"|"closed", time, quotes: [{ code, name, market, price, prev, open, high, low, vol, chg, chgPct, time, date, bids:[{p,v}], asks:[{p,v}], estimated }] }
 // 張數單位：張；指數沒有成交量（vol 為 null）。
 
+import { isUS, yahooQuote } from "./_yahoo.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json", "Accept-Language": "zh-TW" };
 const INDEX = { T00: { mis: "tse_t00.tw", fugle: "IX0001", name: "加權指數" }, O00: { mis: "otc_o00.tw", fugle: "IX0043", name: "櫃買指數" } };
 const ALIAS = { TAIEX: "T00", "加權": "T00", "加權指數": "T00", "大盤": "T00", TWII: "T00", "櫃買": "O00", "櫃買指數": "O00", TPEX: "O00" };
@@ -24,7 +26,7 @@ export function session(now = new Date()) {
 export const todayTaipei = (now = new Date()) => new Date(now.getTime() + 8 * 3600e3).toISOString().slice(0, 10);
 export function normCodes(raw, max = 10) {
   return [...new Set(String(raw || "").split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean).map(s => ALIAS[s] || s))]
-    .filter(s => INDEX[s] || /^\d{4,6}[A-Z]?$/.test(s)).slice(0, max);
+    .filter(s => INDEX[s] || /^\d{4,6}[A-Z]?$/.test(s) || isUS(s)).slice(0, max);
 }
 const levels = (p, v) => { const ps = String(p || "").split("_"), vs = String(v || "").split("_"); return ps.map((x, k) => ({ p: num(x), v: num(vs[k]) })).filter(x => x.p != null && x.p > 0).slice(0, 5); };
 // MIS 的一筆：z 最近成交價（"-" 代表這個快照沒有成交）、y 昨收、o/h/l 開高低、v 累計量（張）、a/f 委賣價量、b/g 委買價量、d 日期、t 時間
@@ -78,16 +80,30 @@ async function fromFugle(codes, key) {
 }
 
 export default async function handler(req, res) {
-  const misOnly = req.query?.src === "mis", codes = normCodes(req.query?.codes ?? req.query?.code, misOnly ? 30 : 10);
-  if (!codes.length) return res.status(400).json({ ok: false, error: "請給股票代號，例如 ?codes=2330,t00（t00 是加權指數）。" });
-  const key = (misOnly ? "mis:" : "") + codes.join(","), hit = cache.get(key), sess = session();
+  const misOnly = req.query?.src === "mis", all = normCodes(req.query?.codes ?? req.query?.code, misOnly ? 40 : 10);
+  if (!all.length) return res.status(400).json({ ok: false, error: "請給股票代號，例如 ?codes=2330,t00（t00 是加權指數）。" });
+  const us = all.filter(isUS), codes = all.filter(c => !isUS(c));
+  // 只有美股：直接問 Yahoo
+  const usQuotes = () => Promise.allSettled(us.map(yahooQuote)).then(r => r.filter(x => x.status === "fulfilled").map(x => x.value));
+  if (!codes.length) {
+    const hitU = cache.get("us:" + us.join(","));
+    if (hitU && Date.now() - hitU.at < 15000) return res.status(200).json(hitU.body);
+    const quotes = await usQuotes();
+    if (!quotes.length) return res.status(200).json({ ok: false, session: session(), error: "暫時拿不到美股報價（Yahoo Finance），稍後再試。" });
+    const body = { ok: true, source: "Yahoo Finance", session: session(), today: todayTaipei(), time: new Date().toISOString(), quotes, missing: us.filter(c => !quotes.some(q => q.code === c)) };
+    cache.set("us:" + us.join(","), { at: Date.now(), body }); res.setHeader("Cache-Control", "s-maxage=15, stale-while-revalidate=60");
+    return res.status(200).json(body);
+  }
+  const usP = us.length ? usQuotes() : Promise.resolve([]);
+  const key = (misOnly ? "mis:" : "") + all.join(","), hit = cache.get(key), sess = session();
   if (hit && Date.now() - hit.at < 4000) { res.setHeader("Cache-Control", "s-maxage=4"); return res.status(200).json(hit.body); }
   const fugleKey = process.env.FUGLE_API_KEY, errors = [];
   for (const [source, run] of [...(fugleKey && !misOnly ? [["富果", () => fromFugle(codes, fugleKey)]] : []), ["證交所 MIS", () => fromMis(codes)]]) {
     try {
       const quotes = await run();
       if (quotes.length) {
-        const body = { ok: true, source, session: sess, today: todayTaipei(), time: new Date().toISOString(), quotes, missing: codes.filter(c => !quotes.some(q => q.code === c)) };
+        const uq = await usP; quotes.push(...uq);
+        const body = { ok: true, source, session: sess, today: todayTaipei(), time: new Date().toISOString(), quotes, missing: all.filter(c => !quotes.some(q => q.code === c)) };
         cache.set(key, { at: Date.now(), body });
         // 盤中只快取幾秒；收盤後快取久一點
         res.setHeader("Cache-Control", sess === "closed" ? "s-maxage=120, stale-while-revalidate=600" : "s-maxage=4, stale-while-revalidate=10");

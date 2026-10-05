@@ -114,6 +114,8 @@ function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
   });
   return out.sort((a, b) => a.i - b.i);
 }
+// 要捲動的頁面：嵌在 K線學堂分頁（同網域 iframe、外框依內容長高）時捲動外層頁面
+function pageScroller() { try { let w = window; while (w.parent !== w && w.parent.document) w = w.parent; return w; } catch { return window; } }
 class Chart {
   constructor(host, { onHover, onRange } = {}) {
     this.host = host; this.onHover = onHover; this.onRange = onRange;
@@ -169,7 +171,7 @@ class Chart {
           const wantsChartY = this.drag.axis || this.drag.subAxis || (this.yz > 1 && this.drag.y < G.top0 + G.mainH) || (this.drag.pz && this.drag.pz.z > 1);
           if (this.drag.dir === "v" && !wantsChartY) {
             const now = performance.now(), step = this.drag.lastCy == null ? e.clientY - this.drag.cy : e.clientY - this.drag.lastCy;
-            window.scrollBy(0, -step); this.drag.vy = step / Math.max(1, now - (this.drag.lt || now - 16)); this.drag.lastCy = e.clientY; this.drag.lt = now; this.drag.moved = true; return;
+            pageScroller().scrollBy(0, -step); this.drag.vy = step / Math.max(1, now - (this.drag.lt || now - 16)); this.drag.lastCy = e.clientY; this.drag.lt = now; this.drag.moved = true; return;
           }
         }
         // 右側價格軸上下拖曳：拉長或壓縮價格軸
@@ -191,7 +193,7 @@ class Chart {
     });
     const up = e => {
       // 代替頁面捲動時，放開手指後讓頁面再滑一小段（慣性），手感接近一般捲動
-      const d = this.drag; if (d && d.dir === "v" && Math.abs(d.vy) > 0.2 && e.type === "pointerup") { let v = d.vy * 16; const glide = () => { if (Math.abs(v) < 0.5) return; window.scrollBy(0, -v); v *= 0.94; requestAnimationFrame(glide); }; requestAnimationFrame(glide); }
+      const d = this.drag; if (d && d.dir === "v" && Math.abs(d.vy) > 0.2 && e.type === "pointerup") { let v = d.vy * 16; const glide = () => { if (Math.abs(v) < 0.5) return; pageScroller().scrollBy(0, -v); v *= 0.94; requestAnimationFrame(glide); }; requestAnimationFrame(glide); }
       this.ptrs.delete(e.pointerId); if (this.ptrs.size < 2) this.pinch = null; if (!this.ptrs.size) this.drag = null;
     };
     cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
@@ -371,7 +373,7 @@ class Chart {
     // 折線、頸線、目標價、結構線（可來自設定或附在標記上；只畫到可見範圍）
     ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
     [...(o.shapes || []), ...(o.markers || []).filter(m => m.i < vis).flatMap(m => m.shapes || [])].forEach(sh => {
-      if (sh.pts[0][0] >= vis) return;
+      if (!sh.pts?.length || sh.pts[0][0] >= vis) return;
       const pts = sh.pts.map(([i, p]) => [vis < n ? Math.min(i, vis - 1) : i, p]);
       const c = cmap[sh.color] || col.accent;
       ctx.strokeStyle = c; ctx.lineWidth = sh.width || 1.5; ctx.setLineDash(sh.dash || []); ctx.beginPath();
