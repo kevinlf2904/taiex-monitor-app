@@ -157,12 +157,17 @@ class Chart {
         const pane = this.paneAt(e.offsetY), onAxis = !!this.geo && e.offsetX > this.geo.L + this.geo.pw;
         this.drag = { x: e.offsetX, y: e.offsetY, cx: e.clientX, cy: e.clientY, t: performance.now(), vy: 0, touch: e.pointerType !== "mouse", dir: null, a: this.range.a, yz: this.yz, yoff: this.yoff, pane, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, axis: onAxis && pane?.key === "main", subAxis: onAxis && pane && pane.key !== "main", moved: false };
       }
-      if (this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()]; this.pinch = { d: Math.abs(p.x - q.x) || 1, w: this.range.b - this.range.a + 1, mid: this.indexAt((p.x + q.x) / 2, true) }; this.drag = null; }
+      if (this.ptrs.size === 2 && this.D) { const [p, q] = [...this.ptrs.values()], { a, b } = this.range; this.pinch = { d: Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), a, w: b - a + 1, mid: this.indexAt((p.x + q.x) / 2, true), mx: (p.x + q.x) / 2 }; this.drag = null; try { cv.setPointerCapture(e.pointerId); } catch {} }
       this.hoverAt(e.offsetX);
     });
     cv.addEventListener("pointermove", e => {
       if (this.ptrs.has(e.pointerId)) this.ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
-      if (this.pinch && this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()], d = Math.abs(p.x - q.x) || 1; this.setWidth(this.pinch.w * this.pinch.d / d, this.pinch.mid); return; }
+      if (this.pinch && this.ptrs.size === 2) {
+        // 雙指縮放：用兩指的實際距離（斜著捏也穩定），以一開始兩指中間那根 K 棒為中心，兩指一起移動時順便平移；每個畫面最多重畫一次
+        const P = this.pinch, [p, q] = [...this.ptrs.values()], d = Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), G = this.geo;
+        const w = P.w * P.d / d, shift = G ? ((p.x + q.x) / 2 - P.mx) / (G.pw / w) : 0;
+        this.view = this.clampView(P.mid - (P.mid - P.a) * w / P.w - shift, w); this.req(); return;
+      }
       if (this.drag && this.ptrs.size === 1 && this.geo) {
         const dx = e.offsetX - this.drag.x, dy = e.offsetY - this.drag.y, G = this.geo;
         // 圖表鎖定（放大後）時，頁面不會自己捲動：手勢一開始偏上下、又不是在拉價格軸或平移價格，就由這裡代替頁面捲動
@@ -175,18 +180,18 @@ class Chart {
           }
         }
         // 右側價格軸上下拖曳：拉長或壓縮價格軸
-        if (this.drag.axis) { if (Math.abs(dy) > 2) { try { cv.setPointerCapture(e.pointerId); } catch {} this.yz = Math.max(0.5, Math.min(12, this.drag.yz * Math.exp(dy / 120))); this.draw(); } return; }
+        if (this.drag.axis) { if (Math.abs(dy) > 2) { try { cv.setPointerCapture(e.pointerId); } catch {} this.yz = Math.max(0.5, Math.min(12, this.drag.yz * Math.exp(dy / 120))); this.req(); } return; }
         // 副圖右側刻度上下拖曳：只縮放這一個副圖
-        if (this.drag.subAxis) { if (Math.abs(dy) > 2) { try { cv.setPointerCapture(e.pointerId); } catch {} this.pz[this.drag.pane.key] = { z: Math.max(0.5, Math.min(12, this.drag.pz.z * Math.exp(dy / 80))), off: this.drag.pz.off }; this.draw(); } return; }
+        if (this.drag.subAxis) { if (Math.abs(dy) > 2) { try { cv.setPointerCapture(e.pointerId); } catch {} this.pz[this.drag.pane.key] = { z: Math.max(0.5, Math.min(12, this.drag.pz.z * Math.exp(dy / 80))), off: this.drag.pz.off }; this.req(); } return; }
         // 副圖放大後，在副圖上下拖曳可以平移
         const sp = this.drag.pane && this.drag.pane.key !== "main" && this.drag.pz && this.drag.pz.z > 1 && Math.abs(dy) > 4 ? this.drag.pane : null;
-        if (sp && Math.abs(dy) > Math.abs(dx)) { this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {} this.pz[sp.key] = { z: this.drag.pz.z, off: Math.max(-1, Math.min(1, this.drag.pz.off + dy / sp.h)) }; this.draw(); return; }
+        if (sp && Math.abs(dy) > Math.abs(dx)) { this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {} this.pz[sp.key] = { z: this.drag.pz.z, off: Math.max(-1, Math.min(1, this.drag.pz.off + dy / sp.h)) }; this.req(); return; }
         const panX = Math.abs(dx) > 4 && this.view, panY = this.yz > 1 && Math.abs(dy) > 4 && this.drag.y < G.top0 + G.mainH;
         if (panX || panY) {
           this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {}
-          if (panX) { const { a, b } = this.range; this.view = this.clampView(this.drag.a - Math.round(dx / G.bw), b - a + 1); }
+          if (panX) { const { a, b } = this.range; this.drag.bw ||= G.bw; this.view = this.clampView(this.drag.a - dx / this.drag.bw, b - a + 1); }
           if (panY) this.yoff = Math.max(-0.6, Math.min(0.6, this.drag.yoff + dy / G.mainH / this.yz));
-          this.draw(); return;
+          this.req(); return;
         }
       }
       this.hoverAt(e.offsetX);
@@ -194,7 +199,9 @@ class Chart {
     const up = e => {
       // 代替頁面捲動時，放開手指後讓頁面再滑一小段（慣性），手感接近一般捲動
       const d = this.drag; if (d && d.dir === "v" && Math.abs(d.vy) > 0.2 && e.type === "pointerup") { let v = d.vy * 16; const glide = () => { if (Math.abs(v) < 0.5) return; pageScroller().scrollBy(0, -v); v *= 0.94; requestAnimationFrame(glide); }; requestAnimationFrame(glide); }
+      const wasPinch = !!this.pinch;
       this.ptrs.delete(e.pointerId); if (this.ptrs.size < 2) this.pinch = null; if (!this.ptrs.size) this.drag = null;
+      if (wasPinch && this.ptrs.size === 1) { const [r] = [...this.ptrs.values()]; this.drag = { x: r.x, y: r.y, cx: r.x, cy: r.y, t: performance.now(), vy: 0, touch: true, dir: "h", a: this.range.a, yz: this.yz, yoff: this.yoff, pane: null, pz: null, moved: true }; }
     };
     cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
     cv.addEventListener("pointerleave", e => { up(e); this.hover = null; this.draw(); });
@@ -262,7 +269,9 @@ class Chart {
   clampView(a, w) { const N = this.D.length; w = Math.round(Math.max(Math.min(15, N), Math.min(N, w))); a = Math.max(0, Math.min(N - w, Math.round(a))); return w >= N ? null : { a, b: a + w - 1 }; }
   setWidth(w, anchor) { const { a, b } = this.range, ow = b - a + 1; anchor = anchor ?? (a + b) / 2; const t = (anchor - a) / ow; this.view = this.clampView(anchor - t * w, w); this.draw(); }
   zoom(f, anchor) { if (!this.D) return; const { a, b } = this.range; this.setWidth((b - a + 1) * f, anchor); }
-  hoverAt(x) { const i = this.indexAt(x); if (i !== this.hover) { this.hover = i; this.draw(); } }
+  hoverAt(x) { const i = this.indexAt(x); if (i !== this.hover) { this.hover = i; this.req(); } }
+  // 手勢中的重畫合併到下一個畫面（每個畫面最多畫一次），拖曳、縮放比較順
+  req() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; this.draw(); }); }
   indexAt(x, raw) { if (!this.geo) return null; const { L, bw, a } = this.geo; const i = a + Math.floor((x - L) / bw); return raw ? i : Math.max(a, Math.min(Math.min(this.visible - 1, this.range.b), i)); }
   draw() {
     if (!this.D) return;
