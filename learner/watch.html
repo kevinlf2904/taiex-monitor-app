@@ -303,6 +303,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .slist .nm { display: flex; flex-direction: column; font-size: 14px; min-width: 0; } .slist small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slist b { font: 600 14px var(--font-mono); text-align: right; display: flex; flex-direction: column; } .slist b small { color: inherit; } .slist .up { color: var(--up); } .slist .down { color: var(--down); } .slist .rk { color: var(--s1); font: 600 12px var(--font-mono); width: 18px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cmp-f { display: flex; gap: 6px; } .cmp-f input { width: 9em; }
+.cmpchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 99px; border: 1.5px solid currentColor; font-size: 12.5px; font-weight: 600; margin-right: 4px; }
+.cmpchip button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0 4px; min-width: 24px; min-height: 24px; }
 .kset > summary { list-style: none; cursor: pointer; display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600; }
 .kset > summary::-webkit-details-marker { display: none; } .kset > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; } .kset[open] > summary::before { transform: rotate(90deg); }
 .kset > summary .note { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -429,11 +432,12 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
       <details class="kset" id="kset"><summary><span>指標・疊加・策略</span><span class="note" id="ksetSum"></span></summary>
         <div class="ibar" id="dIbar"></div>
         <div class="strat"><label>策略訊號 <select class="sel" id="stratSel"></select></label><span class="note" id="stratNote"></span></div>
+        <div class="strat cmp"><span>比較走勢</span><span id="cmpChips"></span><form id="cmpForm" class="cmp-f"><input class="sel" id="cmpIn" placeholder="代號或名稱" aria-label="加入比較的股票" autocomplete="off"><button class="btn sm">加入</button></form><button type="button" class="btn sm" data-cq="T00">＋加權</button><button type="button" class="btn sm" data-cq="O00">＋櫃買</button><span class="note" id="cmpNote">日／週／月 K 才能比較，以畫面最左邊那根為起點換算漲跌幅</span></div>
       </details>
       <div class="chartbox" id="kChart"></div>
     </div>
     <div class="panel sec" id="secAna" data-pane="tech">
-      <div class="ph"><h2>技術判讀</h2><span class="note" id="anaNote"></span></div>
+      <div class="ph"><h2>技術判讀</h2><div class="seg" role="group" aria-label="判讀週期" id="roSeg"><button data-ro="">同 K 線</button><button data-ro="D">日</button><button data-ro="60">60分</button><button data-ro="1">1分</button></div><span class="note" id="anaNote"></span></div>
       <div class="score" id="anaScore"></div>
       <div class="rogrid" id="anaGrid"></div>
       <details class="ro-more"><summary>每一項的判讀說明</summary><div id="anaRo" style="padding:4px 16px 12px"></div></details>
@@ -449,6 +453,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
       <ul class="sumlist" id="chipsSum"></ul>
       <div class="chartbox" id="chipsChart"></div>
       <div class="tablewrap" id="chipsTbl"></div>
+      <div id="shortBox" hidden></div>
     </div>
 
     <!-- 基本面 -->
@@ -463,7 +468,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-24</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-25</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -515,6 +520,8 @@ const W = {
   tsDays: [1, 3, 5].includes(+store.get("watch:tsd", 1)) ? +store.get("watch:tsd", 1) : 1, cdp: !!store.get("watch:cdp", false), ftab: store.get("watch:ftab", "book"), bigK: [1, 2, 3].includes(+store.get("watch:bigk", 2)) ? +store.get("watch:bigk", 2) : 2, tsHist: null, flow: null, flowAt: 0,
   holdView: store.get("watch:hv", "pnl"), pref: store.get("watch:pref", "all"), kc: new Map(), scr: null, scan: {},
   holdMkt: store.get("watch:hm", "tw"), holdSort: "mv", holdDir: 1, mkt: null,
+  roK: ["", "D", "60", "1"].includes(String(store.get("watch:rok", ""))) ? String(store.get("watch:rok", "")) : "",
+  cmp: (store.get("watch:cmp", []) || []).filter(c => typeof c === "string").slice(0, 3), cmpData: {},
   daily: null, intra: null, intraAt: 0, mk: {}, info: null, hot: {}, timer: null, busy: false, stocks: null, lastOk: 0,
 };
 if (W.gi >= W.groups.length) W.gi = 0;
@@ -1334,8 +1341,8 @@ new ResizeObserver(() => { if (W.ftab === "flow" && !$("#fBox").hidden) drawFlow
 
 /* ---------- K 線：每一種週期往左拉到底都會自動載入更早的資料 ---------- */
 const kChart = new Chart($("#kChart"), { onRange: r => { if (r.a <= 3 && kChart.view && !W.busyOlder) loadOlder(); } });
-const OVERLAYS = [{ id: "sr", label: "支撐壓力" }, { id: "fib", label: "斐波那契" }, { id: "smc", label: "聰明錢" }, { id: "zz", label: "轉折結構" }];
-const dBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "疊加", items: OVERLAYS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); });
+overlayMigrate("watch2");
+const dBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "疊加", items: OVERLAY_ITEMS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); });
 const STRATS = {
   "": { name: "不顯示" }, ma: { name: "均線交叉（5／20）", fn: (D, I) => Signals.ma(D, I, 5, 20) }, kd: { name: "KD 低檔金叉／高檔死叉", fn: Signals.kd }, macd: { name: "MACD 交叉", fn: Signals.macd },
   rsi: { name: "RSI 30／70", fn: Signals.rsi }, boll: { name: "布林通道", fn: Signals.boll }, vwap: { name: "VWAP 站上／跌破", fn: Signals.vwap }, candle: { name: "K 線型態", fn: (D, I) => Signals.candle(D, I) }, div: { name: "RSI／MACD 背離", fn: (D, I) => [...Signals.div(D, I, "rsi"), ...Signals.div(D, I, "macd")] },
@@ -1361,11 +1368,11 @@ function minuteSeries(tf) {
   const firstToday = today[0]?.dd;
   return [...(M.older || []).filter(b => !firstToday || b.d < firstToday).map(b => ({ d: `${b.d} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v })), ...today.map(b => ({ d: `${b.dd} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }))];
 }
-function kSeries() {
-  if (W.k === "D") return W.daily?.data || null;
-  if (W.k === "W") return W.daily ? agg(W.daily.data, weekKey) : null;
-  if (W.k === "M") return W.daily ? agg(W.daily.data, d => d.slice(0, 7)) : null;
-  const s = minuteSeries(+W.k); return s.length ? s : null;
+function kSeries(k = W.k) {
+  if (k === "D") return W.daily?.data || null;
+  if (k === "W") return W.daily ? agg(W.daily.data, weekKey) : null;
+  if (k === "M") return W.daily ? agg(W.daily.data, d => d.slice(0, 7)) : null;
+  const s = minuteSeries(+k); return s.length ? s : null;
 }
 // 日期軸：分 K 在每天第一根標日期，其他標時間
 function fmtKD(s) {
@@ -1373,30 +1380,60 @@ function fmtKD(s) {
   if (s.includes(" ")) { const [d, t] = s.split(" "); return t === (W.intra?.session?.open || "09:00") ? d.slice(5).replace("-", "/") : t; }
   return /^\d{4}-/.test(s) ? s.slice(5).replace("-", "/") : s;
 }
-function overlays(D) {
-  const ex = { shapes: [], zones: [], hlines: [] }; if (D.length < 30) return ex;
-  try {
-    if (dBar.has("sr")) ex.hlines.push(...srLevels(D));
-    if (dBar.has("fib")) { ex.hlines.push(...fibLines(D)); const f = fibShape(D); if (f) ex.shapes.push(f); }
-    if (dBar.has("smc")) { const s = smcExtra(D); ex.shapes.push(...s.shapes); ex.zones.push(...s.zones); }
-    if (dBar.has("zz")) ex.shapes.push(zigzagShape(D));
-  } catch {}
-  return ex;
-}
+// 疊加的標記只畫在圖上，不算進策略回測
+const overlays = (D, I) => overlayBuild(D, I, id => dBar.has(id));
 function chipSubs(D) {
   const j = W.info; if (!j || W.k !== "D") return [];
   return [...(dBar.has("inst") && j.inst?.length ? [{ custom: instSub(alignByDate(D, j.inst)) }] : []), ...(dBar.has("margin") && j.margin?.length ? [{ custom: marginSub(alignByDate(D, j.margin)) }] : [])];
 }
+/* ---------- 比較走勢：最多 3 檔，以畫面最左邊那根為 0% ---------- */
+const CMP_COLORS = ["#0ea5e9", "#a855f7", "#f59e0b"];
+const apiK = c => (c === "T00" ? "加權" : c === "O00" ? "櫃買" : c);
+function compareOpt() {
+  if (minuteK() || !W.cmp.length) return [];
+  return W.cmp.map((c, k) => ({ c, k, R: W.cmpData[c] })).filter(x => x.c !== W.sel && x.R?.pts?.length).map(x => ({ name: nameOf(x.c), color: CMP_COLORS[x.k % 3], pts: x.R.pts }));
+}
+function renderCmp() {
+  $("#cmpChips").innerHTML = W.cmp.map((c, k) => `<span class="cmpchip" style="color:${CMP_COLORS[k % 3]}">${esc(nameOf(c))}${W.cmpData[c]?.err ? "（讀取失敗）" : W.cmpData[c] && !W.cmpData[c].pts ? "…" : ""}<button type="button" data-cx="${k}" aria-label="移除 ${esc(nameOf(c))}">×</button></span>`).join("");
+  document.querySelectorAll("[data-cq]").forEach(b => { b.hidden = W.cmp.includes(b.dataset.cq) || W.cmp.length >= 3; });
+}
+// 需要的起始日：主圖目前最早那根；比較股的資料不夠早就重抓
+async function loadCmp() {
+  renderCmp(); if (W.off || minuteK()) return;
+  const first = W.daily?.data?.[0]?.d; if (!first) return;
+  const months = Math.min(120, Math.max(6, Math.ceil((Date.now() - Date.parse(first)) / (30.4 * 864e5)) + 1));
+  await Promise.all(W.cmp.map(async c => {
+    const R = W.cmpData[c]; if (R && (R.busy || R.err || (R.pts && R.want <= first))) return;
+    W.cmpData[c] = { ...(R || {}), busy: true }; renderCmp();
+    try { const j = await getJ(`/api/kline?code=${encodeURIComponent(apiK(c))}&months=${months}`);
+      const pts = (j.data || []).filter(x => x.c != null).map(x => [x.d, x.c]);
+      if (j.name && !isIdx(c)) W.names[c] = j.name;
+      W.cmpData[c] = { pts, want: months >= 120 ? "" : first }; // 上市比較晚的股票本來就沒有更早的資料，不再重抓
+    } catch (e) { W.cmpData[c] = { err: e.message }; }
+  }));
+  renderCmp(); drawK();
+}
+function addCmp(q) {
+  q = String(q || "").trim(); if (!q) return;
+  const c = okCode(q.toUpperCase()) ? q.toUpperCase() : /^(加權|大盤|台股)/.test(q) ? "T00" : /^櫃買/.test(q) ? "O00" : findCode(q);
+  if (!c || isFut(c)) { $("#cmpNote").textContent = `找不到「${q}」，請輸入股票代號（例如 2330、0050、AAPL）`; return; }
+  if (W.cmp.includes(c)) return; if (W.cmp.length >= 3) { $("#cmpNote").textContent = "最多比較 3 檔，先移除一檔"; return; }
+  W.cmp.push(c); store.set("watch:cmp", W.cmp); $("#cmpIn").value = ""; loadCmp();
+}
+$("#cmpForm").addEventListener("submit", e => { e.preventDefault(); addCmp($("#cmpIn").value); });
+$(".cmp").addEventListener("click", e => { const q = e.target.closest("[data-cq]"), x = e.target.closest("[data-cx]");
+  if (q) addCmp(q.dataset.cq); else if (x) { W.cmp.splice(+x.dataset.cx, 1); store.set("watch:cmp", W.cmp); renderCmp(); drawK(); } });
+renderCmp();
 function drawK(fresh = false, shift = 0) {
   document.querySelectorAll("#kSeg [data-k]").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === W.k));
   if (W.dtab !== "tech") return;
   const D = kSeries(), minute = minuteK();
   if (!D || !D.length) { $("#kNote").textContent = minute ? (W.intraErr || (W.off ? "需要部署到網站" : "載入中…")) : W.daily?.err || (W.off ? "需要部署到網站" : "載入中…"); return; }
   const key = W.sel + ":" + W.k + ":" + (minute ? "m" : "d"); if (W.kKey !== key) { fresh = true; W.kKey = key; } // 第一次在技術分頁畫這檔／這個週期時，先顯示最近一段
-  const I = indicators(D), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D);
+  const I = indicators(D), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D, I);
   const old = kChart.view;
   Chart.keepView = !fresh;
-  try { kChart.set(D, { I, ...mainOpts(dBar), subs: [...subsFrom(dBar), ...chipSubs(D)], noVol: !dBar.has("vol") || !D.some(x => x.v), volLabel: `量（${isUS(W.sel) ? "千股" : "張"}）`, fmtD: fmtKD, markers: sigs, shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
+  try { kChart.set(D, { I, ...mainOpts(dBar), subs: [...subsFrom(dBar), ...chipSubs(D)], noVol: !dBar.has("vol") || !D.some(x => x.v), volLabel: `量（${isUS(W.sel) ? "千股" : "張"}）`, fmtD: fmtKD, markers: [...sigs, ...ex.markers], compare: compareOpt(), shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
   finally { Chart.keepView = false; }
   const want = W.k === "M" ? (isMobile() ? 36 : 48) : isMobile() ? 60 : 100, N = D.length, w = Math.min(N, want);
   if (fresh || (shift && !old)) kChart.view = N > w ? kChart.clampView(N - w, w) : null;
@@ -1410,7 +1447,7 @@ function drawK(fresh = false, shift = 0) {
   else $("#stratNote").textContent = "選一個策略，買賣訊號會標在 K 線上，並顯示照做的回測結果";
   ksetSummary();
 }
-$("#kSeg").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (!b) return; W.k = b.dataset.k; store.set("watch:k", W.k); kChart.view = null; drawK(true); renderAna(); });
+$("#kSeg").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (!b) return; W.k = b.dataset.k; store.set("watch:k", W.k); kChart.view = null; drawK(true); renderAna(); if (W.cmp.length) loadCmp(); });
 const olderState = () => (minuteK() ? (W.mk[W.k] ||= {}) : W.daily || {});
 async function loadDaily() {
   const c = W.sel; if (!c || W.off) { drawK(true); return; }
@@ -1421,7 +1458,7 @@ async function loadDaily() {
     if (W.sel !== c) return;
     W.daily = { code: c, data: j.data.map(x => ({ ...x, v: x.v || 0 })), source: j.source, end: false };
     if (W.detailQ) mergeDaily(W.detailQ, false);
-    if (!minuteK()) drawK(true); renderAna(); if (W.dtab === "chips") renderInfo(); renderDetailHead(); drawTs();
+    if (!minuteK()) drawK(true); renderAna(); if (W.dtab === "chips") renderInfo(); renderDetailHead(); drawTs(); if (W.cmp.length) loadCmp();
   } catch (e) { if (W.sel === c) { W.daily = { code: c, data: [], err: e.message, end: true }; if (!minuteK()) drawK(true); } }
 }
 // 往前載入：日週月 K 問 /api/kline?before=；分 K 問 /api/intraday?before=（假日沒有資料時會自動再往前）
@@ -1436,20 +1473,26 @@ async function loadOlder() {
       if (W.sel !== c || W.daily !== R) return;
       const older = (j.data || []).filter(x => x.d < before).map(x => ({ ...x, v: x.v || 0 }));
       if (!older.length) { R.end = true; return; }
-      const n0 = kSeries().length; R.data = [...older, ...R.data]; drawK(false, kSeries().length - n0);
+      const n0 = kSeries().length; R.data = [...older, ...R.data]; drawK(false, kSeries().length - n0); if (W.cmp.length) loadCmp();
     } else {
-      const tf = +W.k, M = (W.mk[tf] ||= {}), cur = minuteSeries(tf); if (!cur.length) return;
-      let before = M.next || cur[0].d.split(" ")[0], got = [];
-      for (let k = 0; k < 4 && !got.length; k++) {
-        const j = await getJ(`/api/intraday?code=${c}&tf=${tf}&before=${before}`);
-        if (W.sel !== c) return;
-        got = j.bars || []; M.next = j.next; before = j.next;
-        if (j.end && !got.length) { M.end = true; break; } if (j.end) M.end = true;
-      }
-      if (got.length) { const n0 = cur.length; M.older = [...got, ...(M.older || [])]; if (+W.k === tf) drawK(false, minuteSeries(tf).length - n0); }
+      const tf = +W.k, n0 = minuteSeries(tf).length;
+      if (await olderMinute(c, tf) && +W.k === tf) drawK(false, minuteSeries(tf).length - n0);
     }
   } catch (e) { st.end = true; $("#kNote").textContent = `載入更早資料失敗：${e.message}`; }
   finally { W.busyOlder = false; if (W.sel === c) drawK(); }
+}
+// 分 K 往前多載入一段；回傳有沒有拿到新的 K 棒
+async function olderMinute(c, tf) {
+  const M = (W.mk[tf] ||= {}), cur = minuteSeries(tf); if (!cur.length || M.end) return false;
+  let before = M.next || cur[0].d.split(" ")[0], got = [];
+  for (let k = 0; k < 4 && !got.length; k++) {
+    const j = await getJ(`/api/intraday?code=${c}&tf=${tf}&before=${before}`);
+    if (W.sel !== c) return false;
+    got = j.bars || []; M.next = j.next; before = j.next;
+    if (j.end && !got.length) { M.end = true; break; } if (j.end) M.end = true;
+  }
+  if (got.length) M.older = [...got, ...(M.older || [])];
+  return got.length > 0;
 }
 function mergeDaily(q, redraw = true) {
   const R = W.daily; if (!R || !R.data?.length || q.code !== W.sel || q.price == null || !q.date) return;
@@ -1475,18 +1518,25 @@ async function loadIntra(force = false) {
     } else j = await getJ(`/api/intraday?code=${c}&tf=1`);
     if (W.sel !== c) return;
     const fresh = !W.intra || W.intra.code !== c; W.intra = { ...j, code: c }; W.intraErr = null;
-    drawTs(); loadTsHist(); if (minuteK() && W.dtab === "tech") drawK(fresh);
+    drawTs(); loadTsHist(); if (minuteK() && W.dtab === "tech") drawK(fresh); if (W.roK && W.roK !== "D") renderAna();
   } catch (e) { if (W.sel === c) { W.intraErr = e.message; drawTs(); if (minuteK()) drawK(); } }
 }
 
 /* ---------- 技術判讀：用 K線學堂的判讀規則，看目前週期最後一根 ---------- */
+// 判讀的週期：跟著 K 線，或固定看日 K／60 分／1 分
+const roK = () => W.roK || W.k;
 function renderAna() {
   if (W.dtab !== "tech") return;
-  const D = kSeries();
-  if (!D || D.length < 30) { $("#anaScore").innerHTML = `<span class="note">${D ? "資料太少（至少要 30 根）" : "載入中…"}</span>`; $("#anaRo").innerHTML = ""; return; }
+  document.querySelectorAll("#roSeg [data-ro]").forEach(b => b.setAttribute("aria-pressed", b.dataset.ro === W.roK));
+  const k = roK(), D = isFut(W.sel) && "DWM".includes(k) ? null : kSeries(k);
+  if (D && D.length < 30 && !"DWM".includes(k) && !W.mk[+k]?.end && !W.mk[+k]?.busy && !W.off) { // 60 分 K 今天只有幾根：自動往前載入
+    const c = W.sel, M = (W.mk[+k] ||= {}); M.busy = true;
+    olderMinute(c, +k).catch(() => { M.end = true; }).finally(() => { M.busy = false; if (W.sel === c) renderAna(); });
+  }
+  if (!D || D.length < 30) { $("#anaScore").innerHTML = `<span class="note">${isFut(W.sel) && "DWM".includes(k) ? "台指期只有分 K，請改看 60 分或 1 分" : D ? (W.mk[+k]?.busy ? "載入更早的分 K…" : "資料太少（至少要 30 根）") : "載入中…"}</span>`; $("#anaRo").innerHTML = ""; $("#anaGrid").innerHTML = ""; return; }
   const I = indicators(D), items = readout(D, I, D.length - 1), bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length, sc = items.length ? (bull - bear) / items.length : 0;
   const lab = sc > 0.35 ? ["偏多", "bull"] : sc > 0.1 ? ["略偏多", "bull"] : sc < -0.35 ? ["偏空", "bear"] : sc < -0.1 ? ["略偏空", "bear"] : ["中性", "flat"];
-  const kn = { 1: "1 分 K", 5: "5 分 K", 15: "15 分 K", 60: "60 分 K", D: "日 K", W: "週 K", M: "月 K" }[W.k];
+  const kn = { 1: "1 分 K", 5: "5 分 K", 15: "15 分 K", 60: "60 分 K", D: "日 K", W: "週 K", M: "月 K" }[k];
   $("#anaScore").innerHTML = `<b class="${lab[1] === "bull" ? "up" : lab[1] === "bear" ? "down" : ""}">${lab[0]}</b><span class="note">${bull} 項偏多、${bear} 項偏空、${items.length - bull - bear} 項中性</span><span class="meter" title="多空分數"><i style="left:calc(${(sc + 1) / 2 * 100}% - 2px)"></i></span>`;
   renderReadout($("#anaRo"), items, true);
   $("#anaGrid").innerHTML = `<div class="rohead"><b class="up">${bull}</b> 看好 <b class="down">${bear}</b> 看淡 <span class="note">${items.length - bull - bear} 中性</span></div>` + items.map(x => `<div class="rocard ${x.b > 0 ? "bull" : x.b < 0 ? "bear" : ""}"><b>${esc(x.k)}</b><span>${esc(String(x.t).split(/[，,；;（(]/)[0])}</span></div>`).join("");
@@ -1494,6 +1544,7 @@ function renderAna() {
   $("#anaNote").textContent = `${kn}・最後一根 ${fmtKD(D[D.length - 1].d)}；只是指標的機械判讀，不是買賣建議`;
 }
 
+$("#roSeg").addEventListener("click", e => { const b = e.target.closest("[data-ro]"); if (!b) return; W.roK = b.dataset.ro; store.set("watch:rok", W.roK); renderAna(); });
 /* ---------- 籌碼分佈：用最近 120 天日 K 的成交量估算各價位的持有成本（越早的權重越低） ---------- */
 function renderCost() {
   const D = W.daily?.code === W.sel ? W.daily.data : null, C = D?.length ? costDist(D) : null, box = $("#costBox");
@@ -1543,14 +1594,20 @@ async function loadInfo() {
 function renderInfo() {
   const j = W.info, D = W.daily?.data;
   if (W.dtab === "chips") {
-    if (!j || j.err || !D?.length) { $("#chipsSum").innerHTML = `<li class="note">${j?.err ? esc(j.err) : W.off ? "需要部署到網站" : "載入中…"}</li>`; $("#chipsTbl").innerHTML = ""; chipsChart.host.hidden = true; return; }
+    if (!j || j.err || !D?.length) { $("#chipsSum").innerHTML = `<li class="note">${j?.err ? esc(j.err) : W.off ? "需要部署到網站" : "載入中…"}</li>`; $("#chipsTbl").innerHTML = ""; chipsChart.host.hidden = true; $("#shortBox").hidden = true; return; }
     const items = chipsSummary(j, D);
     $("#chipsSum").innerHTML = items.length ? items.map(x => `<li><strong>${x.k}</strong>：${x.t}</li>`).join("") : `<li class="note">沒有籌碼資料。</li>`;
     $("#chipsNote").textContent = `單位：張・${j.source || ""}`;
-    const DD = D.slice(-90), subs = [...(j.inst?.length ? [{ custom: instSub(alignByDate(DD, j.inst)) }] : []), ...(j.margin?.length ? [{ custom: marginSub(alignByDate(DD, j.margin)) }] : [])];
+    const DD = D.slice(-90), subs = [...(j.inst?.length ? [{ custom: instSub(alignByDate(DD, j.inst)) }] : []), ...(j.margin?.length ? [{ custom: marginSub(alignByDate(DD, j.margin)) }] : []), ...(j.short?.length ? [{ custom: shortSub(alignByDate(DD, j.short)) }] : [])];
     chipsChart.host.hidden = !subs.length; if (subs.length) chipsChart.set(DD, { ma: [20], subs, volLabel: "量（張）" });
     const mg = new Map((j.margin || []).map((r, i, a) => [r.d, { bal: r.marginBal, chg: i ? r.marginBal - a[i - 1].marginBal : null, short: r.shortBal }]));
     const rows = (j.inst || []).slice(-15).reverse();
+    const ss = shortStats(D, j.short), lots = v => (v == null ? "—" : Math.round(v).toLocaleString());
+    $("#shortBox").hidden = !ss;
+    if (ss) $("#shortBox").innerHTML = `<div class="ph"><h2>賣空</h2><span class="note">融券賣出＋借券賣出・${ss.d.slice(5).replace("-", "/")}</span></div>
+      <div class="d-kv" style="margin:0 16px 8px"><div><span>賣空量</span><b>${lots(ss.sell)}</b></div><div><span>佔成交量</span><b>${ss.ratio == null ? "—" : (ss.ratio * 100).toFixed(1) + "%"}</b></div><div><span>賣空餘額</span><b>${lots(ss.bal)}</b></div>
+      <div><span>融券餘額</span><b>${lots(ss.mBal)}</b></div><div><span>借券賣出餘額</span><b>${lots(ss.sBal)}</b></div><div><span>5 日變化</span><b class="${clsOf(ss.chg5 == null ? null : -ss.chg5)}">${signed(ss.chg5)}</b></div><div><span>回補天數</span><b>${ss.days == null ? "—" : ss.days.toFixed(1) + " 天"}</b></div></div>
+      <p class="note" style="margin:0 16px 12px">賣空餘額增加代表看空或避險的人變多；餘額很高時一旦上漲被迫回補，可能出現軋空。借券賣出多半是法人避險或套利，不一定是看空。回補天數＝賣空餘額 ÷ 近 20 日平均成交量。</p>`;
     $("#chipsTbl").innerHTML = rows.length ? `<table class="tbl"><thead><tr><th>日期</th><th>外資</th><th>投信</th><th>自營商</th><th>合計</th><th>融資增減</th><th>融資餘額</th><th>融券餘額</th></tr></thead><tbody>${rows.map(r => { const m = mg.get(r.d) || {}, t = r.foreign + r.trust + r.dealer; return `<tr><td>${r.d.slice(5).replace("-", "/")}</td>${[r.foreign, r.trust, r.dealer, t].map(v => `<td class="${clsOf(v)}">${signed(v)}</td>`).join("")}<td class="${clsOf(m.chg)}">${signed(m.chg)}</td><td>${m.bal != null ? Math.round(m.bal).toLocaleString() : "—"}</td><td>${m.short != null ? Math.round(m.short).toLocaleString() : "—"}</td></tr>`; }).join("")}</tbody></table>` : "";
   } else if (W.dtab === "fund") {
     if (!j || j.err || !D?.length) { $("#fundSum").innerHTML = `<li class="note">${j?.err ? esc(j.err) : W.off ? "需要部署到網站" : "載入中…"}</li>`; $("#fundTbl").innerHTML = ""; return; }

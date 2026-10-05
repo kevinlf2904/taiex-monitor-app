@@ -749,7 +749,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-24</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-25</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -3819,7 +3819,7 @@ function renderPanes() {
 }
 function shotGroups() {
   return [
-    { title: "主圖", items: [...MAIN_ITEMS, { id: "sr", label: "支撐壓力" }, { id: "fib", label: "斐波那契" }, { id: "smc", label: "聰明錢" }, { id: "zz", label: "轉折結構" }, { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }] },
+    { title: "主圖", items: MAIN_ITEMS }, { title: "疊加", items: OVERLAY_ITEMS },
     { title: "副圖", items: [...(shot.hasVol ? [{ id: "vol", label: "成交量" }] : []), ...(shot.src === "real" && INFO.cur?.inst.length ? [{ id: "inst", label: "法人買賣超" }] : []), ...(shot.src === "real" && INFO.cur?.margin.length ? [{ id: "margin", label: "融資" }] : []), ...shot.panes.map((p, k) => ({ p, k, t: p.cfg.type || p.type })).filter(x => x.t !== "vol").map(x => ({ id: "pane:" + x.k, label: `截圖 ${PANE_TYPES[x.t] || "副圖"}` })),
       ...[["kd", "KD"], ["rsi", "RSI"], ["macd", "MACD"], ["wr", "威廉"]].map(([id, l]) => ({ id, label: shot.src === "real" ? l : "重算 " + l }))] },
   ];
@@ -3837,10 +3837,8 @@ function shotDrawChart() {
   const paneSel = shot.panes.map((p, k) => (B.has("pane:" + k) && (p.cfg.type || p.type) !== "vol" ? k : -1)).filter(k => k >= 0);
   const chipSubs = shot.src === "real" && INFO.cur ? [...(B.has("inst") && INFO.cur.inst.length ? [{ custom: instSub(alignByDate(D, INFO.cur.inst)) }] : []), ...(B.has("margin") && INFO.cur.margin.length ? [{ custom: marginSub(alignByDate(D, INFO.cur.margin)) }] : [])] : [];
   const subs = [...paneSel.map(k => ({ custom: paneCustom(shot.panes[k]) })), ...chipSubs, ...subsFrom(B, ["kd", "rsi", "macd", "wr"])];
-  const markers = [...(B.has("smc") ? [...Signals.structure(D, shot.I, "smc"), ...Signals.sweep(D)] : []), ...(B.has("candle") ? Signals.candle(D, shot.I) : []), ...(B.has("cpat") ? Signals.chartPat(D, shot.I) : []), ...paneSel.flatMap(k => shot.readings[k].markers)];
-  const ex = B.has("smc") ? smcExtra(D) : { zones: [], shapes: [] };
-  if (B.has("zz")) ex.shapes.push(zigzagShape(D));
-  if (B.has("fib") && fibShape(D)) ex.shapes.push(fibShape(D));
+  // 支撐壓力、斐波那契的水平線由 shotHlines 畫（會和截圖讀到的價位合併）
+  const ex = overlayBuild(D, shot.I, id => B.has(id), { noLines: true }), markers = [...ex.markers, ...paneSel.flatMap(k => shot.readings[k].markers)];
   // 未來走勢模擬
   let D2 = D, I2 = shot.I, future = null;
   $("#simStats").hidden = !$("#simOn").checked;
@@ -4064,7 +4062,8 @@ $("#paneList").addEventListener("change", e => {
 function clearNums(hiLo) { NUM_IDS.forEach(id => { $("#" + id).value = id === "numOff" ? 1 : ""; }); if (hiLo) { $("#shotHi").value = hiLo.hi; $("#shotLo").value = hiLo.lo; } shot.numsExtra = []; $("#numsNote").classList.remove("err"); }
 $("#calTipGo").addEventListener("click", () => { $(".nums").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }); setTimeout(() => $(aiMode ? "#numsAi" : "#shotHi").focus({ preventScroll: true }), 400); });
 $("#numsClear").addEventListener("click", () => { clearNums(); shotRun(); renderNums(); });
-const shotBar = indicatorBar($("#shotIbar"), "shot", [], ["ma5", "ma20", "smc", "vol", "pane:auto"], shotDrawChart);
+overlayMigrate("shot");
+const shotBar = indicatorBar($("#shotIbar"), "shot", [], ["ma5", "ma20", "smcS", "smcOB", "vol", "pane:auto"], shotDrawChart);
 ["simOn", "simDays", "simMode"].forEach(id => $("#" + id).addEventListener("change", shotDrawChart));
 $("#simRerun").addEventListener("click", () => { simSeed++; $("#simOn").checked = true; shotDrawChart(); });
 $("#shotSmcOverlay").addEventListener("change", drawShot);
