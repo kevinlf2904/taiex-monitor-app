@@ -18,8 +18,11 @@ const SYSTEM = `你是「K線學堂」裡的技術分析助教，對象是想學
 
 const GEMINI_DEFAULT = "gemini-flash-latest";
 // Gemini REST API：角色是 user / model，系統提示放在 systemInstruction
-export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL) {
-  const models = model ? [model] : [GEMINI_DEFAULT, "gemini-2.5-flash"];
+// 503（模型過載）、500、429（太忙）時：同一個模型等一下重試一次，再換下一個備用模型
+export const GEMINI_FALLBACKS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-lite-latest"];
+const retryable = s => s === 503 || s === 500 || s === 502 || s === 504 || s === 429;
+export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL, { wait = ms => new Promise(r => setTimeout(r, ms)), deadline = Date.now() + 50000 } = {}) {
+  const models = [...new Set([model || GEMINI_DEFAULT, GEMINI_DEFAULT, ...GEMINI_FALLBACKS])];
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: turns.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
@@ -27,19 +30,26 @@ export async function askGemini(system, turns, key, model = process.env.GEMINI_M
   });
   let last = null;
   for (const m of models) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
-      method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body, signal: AbortSignal.timeout(50000),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (r.status === 404) { last = { status: 404, j }; continue; } // 模型名稱不存在（舊模型下架），換下一個
-    if (!r.ok) return { ok: false, status: r.status, message: j?.error?.message || "" };
-    const c = j.candidates?.[0];
-    if (!c) return { ok: false, blocked: true, message: j.promptFeedback?.blockReason || "" };
-    const text = (c.content?.parts || []).map((p) => p.text || "").join("").trim();
-    if (!text) return { ok: false, blocked: c.finishReason === "SAFETY" || c.finishReason === "PROHIBITED_CONTENT", message: c.finishReason || "" };
-    return { ok: true, text, truncated: c.finishReason === "MAX_TOKENS", model: m };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const left = deadline - Date.now(); if (left < 3000) return { ok: false, status: last?.status || 504, message: last?.message || "逾時" };
+      let r, j;
+      try {
+        r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
+          method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body, signal: AbortSignal.timeout(Math.min(30000, left)),
+        });
+        j = await r.json().catch(() => ({}));
+      } catch (e) { last = { status: 504, message: e.message }; break; } // 逾時或連線錯誤：直接換下一個模型
+      if (r.status === 404) { last = { status: 404, message: j?.error?.message || "" }; break; } // 模型名稱不存在（舊模型下架），換下一個
+      if (retryable(r.status)) { last = { status: r.status, message: j?.error?.message || "" }; if (attempt === 0 && r.status !== 429) await wait(1200); else break; continue; }
+      if (!r.ok) return { ok: false, status: r.status, message: j?.error?.message || "" };
+      const c = j.candidates?.[0];
+      if (!c) return { ok: false, blocked: true, message: j.promptFeedback?.blockReason || "" };
+      const text = (c.content?.parts || []).map((p) => p.text || "").join("").trim();
+      if (!text) return { ok: false, blocked: c.finishReason === "SAFETY" || c.finishReason === "PROHIBITED_CONTENT", message: c.finishReason || "" };
+      return { ok: true, text, truncated: c.finishReason === "MAX_TOKENS", model: m };
+    }
   }
-  return { ok: false, status: last?.status || 404, message: last?.j?.error?.message || "找不到可用的 Gemini 模型" };
+  return { ok: false, status: last?.status || 404, message: last?.message || "找不到可用的 Gemini 模型" };
 }
 function geminiError(r) {
   if (r.blocked) return "這個問題無法回答，換個方式問問看。";
@@ -47,6 +57,8 @@ function geminiError(r) {
   if (r.status === 400 && /api key/i.test(r.message)) return "GEMINI_API_KEY 無效，請檢查 Vercel 的環境變數。";
   if (r.status === 403) return "GEMINI_API_KEY 沒有權限，請確認金鑰是在 Google AI Studio 建立的。";
   if (r.status === 404) return "找不到可用的 Gemini 模型，請在 Vercel 設定 GEMINI_MODEL（例如 gemini-2.5-flash）。";
+  if (r.status === 503 || r.status === 500 || r.status === 502) return `Gemini 目前太忙（${r.status}，Google 那邊的模型暫時過載），已經自動重試並換過備用模型都不行，請過一兩分鐘再問一次。`;
+  if (r.status === 504) return "Gemini 回應逾時，請再試一次。";
   return `Gemini 服務暫時無法使用（${r.status ?? "連線錯誤"}）`;
 }
 
@@ -70,10 +82,13 @@ export default async function handler(req, res) {
   if (geminiKey) {
     try {
       const r = await askGemini(SYSTEM + ctx, turns, geminiKey);
+      if (!r.ok && !r.blocked && retryable(r.status) && process.env.ANTHROPIC_API_KEY) return askClaude(); // 有設 Claude 金鑰時，Gemini 忙線就改問 Claude
       return res.status(200).json(r.ok ? { ok: true, text: r.text, truncated: r.truncated, provider: "gemini", model: r.model } : { ok: false, error: geminiError(r), provider: "gemini" });
     } catch { return res.status(200).json({ ok: false, error: "連不到 Gemini 服務，請稍後再試。" }); }
   }
 
+  return askClaude();
+  async function askClaude() {
   const client = new Anthropic();
   try {
     const msg = await client.beta.messages.create({
@@ -95,4 +110,5 @@ export default async function handler(req, res) {
     if (err instanceof Anthropic.APIError) return res.status(200).json({ ok: false, error: `Claude 服務暫時無法使用（${err.status ?? "連線錯誤"}）` });
     return res.status(200).json({ ok: false, error: "回答失敗，請稍後再試。" });
   }
+}
 }
