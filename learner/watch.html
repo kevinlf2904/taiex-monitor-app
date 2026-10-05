@@ -310,6 +310,27 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .pill { font-style: normal; color: #fff; border-radius: 999px; padding: 2px 8px; font: 600 12px var(--font-body); white-space: nowrap; }
 .adr { padding: 10px 12px; } .adr > b { font-size: 13px; display: block; text-align: center; margin-bottom: 4px; } .adr > div { display: flex; align-items: center; gap: 8px; font: 600 14px var(--font-mono); }
 .adr .up { color: var(--up); } .adr .down { color: var(--down); } .adrbar { flex: 1; height: 6px; border-radius: 3px; background: var(--down); overflow: hidden; } .adrbar i { display: block; height: 100%; background: var(--up); }
+.ithemes { display: flex; flex-direction: column; gap: 10px; margin: 10px 12px; }
+.itheme { border: 1px solid color-mix(in srgb, var(--ic) 55%, var(--line)); border-radius: 14px; padding: 12px 14px; background: linear-gradient(160deg, color-mix(in srgb, var(--ic) 14%, var(--surface)), var(--surface-2)); }
+.ith { display: flex; align-items: center; gap: 8px; } .iic { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: var(--ic); border: 1px solid color-mix(in srgb, var(--ic) 50%, transparent); background: color-mix(in srgb, var(--ic) 12%, transparent); flex: none; }
+.itag { font: 600 11px var(--font-mono); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; } .iavg { font: 700 13px var(--font-mono); margin-left: auto; } .iavg.up { color: var(--up); } .iavg.down { color: var(--down); }
+.ifav { border: 1px solid var(--line); background: none; color: var(--ic, var(--accent)); border-radius: 99px; width: 32px; height: 32px; cursor: pointer; font-size: 16px; flex: none; } .icnt { background: var(--ic); color: #fff; border-radius: 99px; padding: 3px 10px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.itheme h3 { margin: 10px 0 4px; font-size: 17px; } .itheme h3 span { color: var(--muted); margin: 0 4px; font-weight: 400; }
+.itheme p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.igo { margin-top: 8px; border: 0; background: none; color: var(--ink); font: 600 13.5px var(--font-body); padding: 4px 0; cursor: pointer; }
+.ihead { display: flex; align-items: center; gap: 10px; margin: 10px 12px 0; } .ihead h2 { margin: 0; font-size: 18px; } .ihead small { color: var(--muted); font-size: 12px; } .ihead > div { flex: 1; min-width: 0; }
+.idesc { margin: 8px 14px; font-size: 14px; line-height: 1.7; } .iflow, .iseg { margin: 8px 12px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--surface-2); } .iflow h4, .iseg h4 { margin: 2px 0 8px; font-size: 14px; }
+.flowsvg { width: 100%; height: auto; display: block; } .fstep { font: 600 12.5px/1.25 var(--font-body); color: var(--ink); height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; } .fstep.mini { font-size: 10.5px; font-weight: 500; }
+.inq { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 4px; border-top: 1px solid var(--line); }
+.ichips { display: flex; flex-wrap: wrap; gap: 6px; }
+.inetwrap { overflow-x: auto; margin: 8px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); -webkit-overflow-scrolling: touch; }
+.inet { position: relative; } .inet svg { position: absolute; inset: 0; pointer-events: none; } .ilayer { position: absolute; left: 10px; font-size: 12.5px; font-weight: 700; color: var(--muted); letter-spacing: .1em; }
+.inode { position: absolute; border: 1px solid var(--line); border-left: 4px solid var(--ic); border-radius: 10px; background: var(--surface); color: var(--ink); text-align: left; padding: 6px 10px; cursor: pointer; display: flex; flex-direction: column; justify-content: center; gap: 2px; transition: opacity .15s; }
+.inode b { font-size: 13px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } .inode small { font: 11px var(--font-mono); color: var(--muted); } .inode.on { border-color: var(--ic); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ic) 40%, transparent); }
+.ifocus { margin: 0 12px 12px; border: 1px solid var(--ic); border-radius: 12px; padding: 10px 12px; background: color-mix(in srgb, var(--ic) 8%, var(--surface-2)); } .ifocus small { margin-left: 8px; color: var(--muted); } .ifocus p { margin: 6px 0; font-size: 13.5px; line-height: 1.6; }
+.igal { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin: 8px 12px; }
+.igcard { border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); padding: 10px; cursor: pointer; color: var(--ink); display: flex; flex-direction: column; gap: 8px; text-align: left; font: inherit; }
+.igcard b { font-size: 14.5px; display: flex; justify-content: space-between; gap: 6px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 8px; } .igcard b small { font: 11px var(--font-mono); color: var(--muted); }
 .scrseg { margin: 8px 12px 0; display: flex; } .scrseg button { flex: 1; }
 .gtiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin: 8px 12px; }
 .gtile { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 78px; font: inherit; text-align: center; }
@@ -398,7 +419,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
       <div class="l-ix" id="ix2"></div>
-      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button></div>
+      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="ind">產業</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
         <form id="addForm" autocomplete="off"><input class="code" id="addCode" placeholder="代號或名稱，例 2330、台積、NVDA" inputmode="search" enterkeyhint="go" aria-label="搜尋股票（代號或名稱，美股用英文代號）" aria-autocomplete="list" aria-controls="sugg"><button class="btn primary" type="submit">加入</button></form>
@@ -506,7 +527,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-27</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-28</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -543,6 +564,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
+<script src="industry.js"></script>
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
@@ -562,6 +584,7 @@ const W = {
   scrG: store.get("watch:scrg", "smart"), scrOpen: null, cscan: null, news: null,
   mkM: store.get("watch:mkM", "twse") === "tpex" ? "tpex" : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
   mkHot: ["value", "gain", "surge", "volume"].includes(store.get("watch:mkHot", "value")) ? store.get("watch:mkHot", "value") : "value", worldR: store.get("watch:worldR", "us"), calWk: 0, cal: null, futx: null,
+  indS: { view: "themes", mk: "tw", sub: "chain", net: "ai-dc", ...(store.get("watch:inds", null) || {}), open: null, focus: null }, indQ: {},
   cmp: (store.get("watch:cmp", []) || []).filter(c => typeof c === "string").slice(0, 3), cmpData: {},
   daily: null, intra: null, intraAt: 0, mk: {}, info: null, hot: {}, timer: null, busy: false, stocks: null, lastOk: 0,
 };
@@ -751,7 +774,7 @@ function rowHtml(c, q, { rank, metric, star } = {}) {
 function renderList() {
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === W.lt));
   const watch = W.lt === "watch";
-  $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", "mkt", "screen"].includes(W.lt); $("#wl").hidden = W.lt === "mkt" || W.lt === "screen";
+  $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", "mkt", "screen", "ind"].includes(W.lt); $("#wl").hidden = ["mkt", "screen", "ind"].includes(W.lt);
   $("#groups").innerHTML = W.groups.map((g, i) => `<button data-g="${i}" aria-pressed="${i === W.gi}">${esc(g.name)} <span class="note">${g.list.length}</span></button>`).join("") + `<button data-g="new" title="新增群組">＋ 群組</button>`;
   const n = $("#wlNote"); n.className = "note w-note"; let note = "";
   if (watch) {
@@ -770,6 +793,9 @@ function renderList() {
   } else if (W.lt === "screen") {
     $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? `${W.scr.date.replace(/-/g, "/")} 收盤後資料` : "選股"}・僅供參考，不是買賣建議</span><button class="btn sm" data-gx="scrRefresh">↻ 更新</button>`;
     renderScreen(); note = W.scr?.source ? `資料：${W.scr.source}。「K線」「技術」兩類是在瀏覽器裡掃描自選、庫存、台股熱門與今天熱門清單的日 K；「題材」是常見代表股的參考名單。` : "";
+  } else if (W.lt === "ind") {
+    $("#lTools").innerHTML = `<span class="note">產業地圖・代表公司參考名單（整理於 ${INDUSTRY_MAP.updated}），不是推薦</span>`;
+    renderInd(); note = "台股、美股有即時報價；日股、韓股只列名稱。題材的平均漲跌是成員今天漲跌幅的簡單平均。";
   } else if (W.lt === "mkt") {
     $("#lTools").innerHTML = `<span class="note">${W.mkt?.date ? `個股統計：${W.mkt.date.replace(/-/g, "/")} 收盤後` : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
     renderMkt(); note = W.mkt?.source ? `資料：${W.mkt.source}。加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計（貢獻點數為估算）。` : "";
@@ -1133,6 +1159,107 @@ function renderNews() {
   $("#newsBox").innerHTML = N?.err ? `<li class="note err" style="padding:10px 0">⚠ ${esc(N.err)}</li>` : N?.items?.length ? N.items.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.title)}</b><small>${esc(x.source || "")}${x.source ? "・" : ""}${ago(x.at)}</small></a></li>`).join("") : `<li class="note" style="padding:10px 0">沒有找到新聞</li>`;
   postHeight();
 }
+
+/* ---------- 產業地圖：題材總覽、產業網絡、手繪圖庫（流程圖）、題材內頁 ---------- */
+const IND = INDUSTRY_MAP, INDT = new Map(IND.themes.map(t => [t.id, t])), MK_NAME = { tw: "台", us: "美", jp: "日", kr: "韓" }, MK_TAG = { tw: "TW", us: "US", jp: "JP", kr: "KR" };
+const IND_COL = { "IC 設計": "#f59e0b", "半導體製造": "#6366f1", "半導體材料": "#8b5cf6", "半導體設備": "#8b5cf6", PCB: "#f97316", 記憶體: "#818cf8", 電子零組件: "#64748b", "AI 伺服器": "#38bdf8", 散熱: "#22d3ee", 電源: "#eab308", 網通: "#0ea5e9", 能源: "#84cc16", 機器人: "#14b8a6", 汽車: "#ef4444", 雲端: "#a78bfa", 資料中心: "#2dd4bf" };
+const indCol = t => IND_COL[t.cat] || "#94a3b8";
+const IND_ICON = { chip: "M7 7h10v10H7zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4", code: "M8 7l-5 5 5 5M16 7l5 5-5 5", home: "M3 11l9-7 9 7v9h-6v-6H9v6H3z", layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17l9 5 9-5",
+  wave: "M4 12a8 8 0 0 1 16 0M7 12a5 5 0 0 1 10 0M12 12h.01", server: "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01", bolt: "M13 2L4 14h7l-1 8 9-12h-7z", fan: "M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0M12 10c0-4 4-6 6-4M14 12c4 0 6 4 4 6M12 14c0 4-4 6-6 4M10 12c-4 0-6-4-4-6",
+  link: "M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1", memory: "M3 8h18v8H3zM7 8v8M11 8v8M15 8v8M5 16v3M19 16v3", factory: "M3 21V10l6 4V10l6 4V6l6 4v11z", globe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18",
+  battery: "M3 8h15v8H3zM18 11h3v2h-3M6 11v2M9 11v2", wind: "M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8", robot: "M8 8h8v8H8zM12 4v4M10 11h.01M14 11h.01M6 12H4M20 12h-2M10 16v4M14 16v4", sat: "M4 20l4-4M13 7l4 4M9 11l4-4 4 4-4 4zM6 14a4 4 0 0 0 4 4", car: "M5 16h14l-1-5-3-3H9l-3 3zM7 19a1 1 0 1 0 0-2M17 19a1 1 0 1 0 0-2" };
+const indIcon = (t, sz = 22) => `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${IND_ICON[t.icon] || IND_ICON.chip}"/></svg>`;
+const indCodes = t => t.segs.flatMap(g => g.c.map(x => x[0]));
+const indQuotable = c => isTW(c) || isUS(c);
+// 題材今天的平均漲跌（只算抓得到報價的成員）
+function indAvg(t) { const v = indCodes(t).filter(indQuotable).map(c => W.quotes.get(c)?.chgPct).filter(x => x != null); return v.length ? { pct: v.reduce((a, b) => a + b, 0) / v.length, n: v.length } : null; }
+// 報價：一次最多 40 檔，分批；同一批 60 秒內不重抓
+async function loadIndQuotes(codes) {
+  const need = [...new Set(codes.filter(indQuotable))]; if (W.off || !need.length) return;
+  const key = need.join(","); if (W.indQ?.[key] && Date.now() - W.indQ[key] < 60000) return; (W.indQ ||= {})[key] = Date.now();
+  for (let i = 0; i < need.length; i += 40) {
+    try { const j = await getJ(`/api/quote?codes=${need.slice(i, i + 40).join(",")}&src=mis`); j.quotes.forEach(q => { W.quotes.set(q.code, q); if (q.name && !isIdx(q.code)) W.names[q.code] = q.name; }); } catch {}
+  }
+  if (W.lt === "ind") renderInd();
+}
+const indFav = () => new Set(store.get("watch:indfav", []) || []);
+// 流程圖（手繪圖庫）：把步驟排成一格一格的方塊，用箭頭串起來；cols 決定一列放幾格
+function flowSvg(t, { cols = 3, w = 330, mini = false } = {}) {
+  const steps = t.flow, n = steps.length, c = Math.min(cols, n), rows = Math.ceil(n / c), bw = (w - (c - 1) * 22) / c, bh = mini ? 34 : 46, gy = mini ? 16 : 24, H = rows * bh + (rows - 1) * gy + 4, col = indCol(t);
+  const pos = k => { const r = Math.floor(k / c), i = r % 2 ? c - 1 - (k % c) : k % c; return { x: i * (bw + 22), y: 2 + r * (bh + gy), r }; }; // 蛇形排列：第二列從右往左
+  let g = "";
+  steps.forEach((st, k) => { const p = pos(k); g += `<rect x="${p.x}" y="${p.y}" width="${bw}" height="${bh}" rx="7" fill="var(--surface)" stroke="${k === 0 || k === n - 1 ? col : "var(--line)"}" stroke-width="${k === 0 || k === n - 1 ? 1.6 : 1}"/>`
+    + `<foreignObject x="${p.x + 3}" y="${p.y + 2}" width="${bw - 6}" height="${bh - 4}"><div xmlns="http://www.w3.org/1999/xhtml" class="fstep${mini ? " mini" : ""}">${esc(st)}</div></foreignObject>`;
+    if (k < n - 1) { const q = pos(k + 1); const a = q.r === p.r ? (q.x > p.x ? [p.x + bw, p.y + bh / 2, q.x, q.y + bh / 2] : [p.x, p.y + bh / 2, q.x + bw, q.y + bh / 2]) : [p.x + bw / 2, p.y + bh, q.x + bw / 2, q.y];
+      g += `<line x1="${a[0]}" y1="${a[1]}" x2="${a[2]}" y2="${a[3]}" stroke="${col}" stroke-width="1.6" marker-end="url(#ar-${t.id})"/>`; } });
+  return `<svg class="flowsvg" viewBox="-2 0 ${w + 4} ${H}" role="img" aria-label="${esc(t.name)} 流程：${esc(steps.join(" → "))}"><defs><marker id="ar-${t.id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="${col}"/></marker></defs>${g}</svg>`;
+}
+function indCard(t, fav) {
+  const a = indAvg(t), n = indCodes(t).length, col = indCol(t);
+  return `<article class="itheme" style="--ic:${col}"><div class="ith"><span class="iic">${indIcon(t)}</span><span class="itag">${MK_TAG[t.mk]}</span>
+    <span class="iavg ${a ? cls(a.pct) : ""}" title="${a ? `${a.n} 檔的平均漲跌` : "沒有即時報價"}">${a ? `${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%` : "—"}</span>
+    <button class="ifav" data-ifav="${t.id}" aria-pressed="${fav.has(t.id)}" aria-label="收藏 ${esc(t.name)}">${fav.has(t.id) ? "♥" : "♡"}</button><span class="icnt">${n} 家公司</span></div>
+    <h3>${esc(t.cat)}<span>｜</span>${esc(t.name)}</h3><p>${esc(t.desc)}</p><button class="igo" data-iopen="${t.id}">探索產業地圖 →</button></article>`;
+}
+// 產業網絡：每一層一列，節點固定寬度，連線用 SVG 曲線；點節點只加亮它的上下游
+function indNetwork(net, focus) {
+  const NW = 160, NH = 58, GX = 22, RH = 118, top = 30, cols = Math.max(...net.layers.map(([, L]) => L.length)), W0 = cols * (NW + GX) + 10, H0 = net.layers.length * RH + 6, at = {};
+  net.layers.forEach(([, L], r) => L.forEach((id, i) => { at[id] = { x: 6 + i * (NW + GX), y: top + r * RH } }));
+  const near = new Set(focus ? [focus, ...net.links.filter(l => l.includes(focus)).flat()] : []);
+  const edges = net.links.map(([a, b]) => { const A = at[a], B = at[b], ta = INDT.get(a), tb = INDT.get(b), on = focus && (a === focus || b === focus), dim = focus && !on;
+    let d; if (A.y === B.y) d = `M${A.x + NW} ${A.y + NH / 2} L${B.x} ${B.y + NH / 2}`; else { const x1 = A.x + NW / 2, y1 = A.y + NH, x2 = B.x + NW / 2, y2 = B.y; d = `M${x1} ${y1} C${x1} ${y1 + 40} ${x2} ${y2 - 40} ${x2} ${y2}`; }
+    return `<path d="${d}" fill="none" stroke="${on ? indCol(ta) : "var(--muted)"}" stroke-width="${on ? 2.2 : 1.2}" opacity="${dim ? 0.12 : on ? 0.95 : 0.45}" ${ta.mk !== tb.mk ? 'stroke-dasharray="5 4"' : ""}/>`; }).join("");
+  const nodes = Object.entries(at).map(([id, p]) => { const t = INDT.get(id), dim = focus && !near.has(id);
+    return `<button class="inode${id === focus ? " on" : ""}" style="left:${p.x}px;top:${p.y}px;width:${NW}px;height:${NH}px;--ic:${indCol(t)};opacity:${dim ? 0.3 : 1}" data-ifocus="${id}"><b>${esc(t.name)}</b><small>${MK_TAG[t.mk]}・${indCodes(t).length} 家</small></button>`; }).join("");
+  const labels = net.layers.map(([nm], r) => `<div class="ilayer" style="top:${top + r * RH - 24}px">${esc(nm)}</div>`).join("");
+  return `<div class="inet" style="width:${W0}px;height:${H0 + top}px">${labels}<svg width="${W0}" height="${H0 + top}" aria-hidden="true">${edges}</svg>${nodes}</div>`;
+}
+function renderInd() {
+  const S = W.indS, fav = indFav(); let h = "";
+  const T = S.open && INDT.get(S.open);
+  if (T) { // 題材內頁
+    const a = indAvg(T), nets = IND.networks.filter(n => n.layers.some(([, L]) => L.includes(T.id))), rel = [...new Set(nets.flatMap(n => n.links.filter(l => l.includes(T.id)).flat()))].filter(x => x !== T.id);
+    h += `<div class="ihead" style="--ic:${indCol(T)}"><button class="btn sm" data-iopen="">‹ 返回</button><span class="iic">${indIcon(T)}</span><div><small>${esc(T.cat)}・${MK_TAG[T.mk]}</small><h2>${esc(T.name)}</h2></div>
+      <button class="ifav" data-ifav="${T.id}" aria-pressed="${fav.has(T.id)}" aria-label="收藏">${fav.has(T.id) ? "♥" : "♡"}</button></div>
+      <p class="idesc">${esc(T.desc)}</p>${a ? `<p class="note gnote">今天平均 <b class="${cls(a.pct)}">${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%</b>（${a.n} 檔有報價）</p>` : ""}
+      <section class="iflow"><h4>一張圖看懂</h4>${flowSvg(T, { cols: isMobile() ? 2 : 3, w: isMobile() ? 330 : 560 })}</section>`
+      + T.segs.map(g => `<section class="iseg"><h4>${esc(g.n)}</h4><ul class="slist">${g.c.map(([c, nm, role]) => { const q = W.quotes.get(c), ok = indQuotable(c);
+        return `<li>${ok ? `<button data-sel="${c}">` : `<div class="inq">`}<span class="nm">${esc(nm)}<small>${c}・${esc(role)}</small></span><b class="${cls(q?.chg)}">${ok ? fmtP(q?.price) : "—"}<small>${q?.chgPct != null ? (q.chgPct > 0 ? "+" : "") + q.chgPct.toFixed(2) + "%" : ok ? "" : MK_NAME[T.mk] + "股"}</small></b>${ok ? "</button>" : "</div>"}</li>`; }).join("")}</ul></section>`).join("")
+      + (rel.length ? `<section class="iseg"><h4>上下游相關題材</h4><div class="ichips">${rel.map(id => { const r = INDT.get(id); return `<button class="ichip" data-iopen="${id}">${MK_TAG[r.mk]}・${esc(r.name)}</button>`; }).join("")}</div></section>` : "")
+      + `<p class="note gnote">名單是常被提到的代表公司，不是完整名單；角色是簡化說明，實際營收比重請看財報。</p>`;
+    $("#lx").innerHTML = h; loadIndQuotes(indCodes(T)); return;
+  }
+  h += `<div class="seg scrseg" role="group" aria-label="產業地圖">${[["themes", "題材總覽"], ["network", "產業網絡"], ["gallery", "手繪圖庫"], ["fav", "收藏"]].map(([k, t]) => `<button data-iview="${k}" aria-pressed="${S.view === k}">${t}${k === "fav" && fav.size ? ` ${fav.size}` : ""}</button>`).join("")}</div>`;
+  if (S.view === "network") {
+    const net = IND.networks.find(n => n.id === S.net) || IND.networks[0], F = S.focus && INDT.get(S.focus);
+    h += `<p class="note gnote">一張圖看整條產業怎麼連動：點一個題材會加亮它的上下游，虛線是跨市場的關係；左右滑動看完整網絡。</p><div class="ichips" style="margin:0 12px">${IND.networks.map(n => `<button class="ichip" data-inet="${n.id}" aria-pressed="${n.id === net.id}">${esc(n.name)}</button>`).join("")}</div>
+      <div class="inetwrap">${indNetwork(net, S.focus)}</div>`
+      + (F ? `<div class="ifocus" style="--ic:${indCol(F)}"><b>${esc(F.name)}</b><small>${MK_TAG[F.mk]}・${esc(F.cat)}</small><p>${esc(F.desc)}</p><p class="note">上游：${net.links.filter(l => l[1] === F.id).map(l => INDT.get(l[0]).name).join("、") || "—"}；下游：${net.links.filter(l => l[0] === F.id).map(l => INDT.get(l[1]).name).join("、") || "—"}</p><button class="btn sm primary" data-iopen="${F.id}">看這段的公司 →</button></div>` : "");
+  } else if (S.view === "gallery") {
+    h += `<p class="note gnote">一張圖看懂這個產業怎麼運作，點進去看每一段是誰在做。</p><div class="igal">${IND.themes.map(t => `<button class="igcard" data-iopen="${t.id}" style="--ic:${indCol(t)}">${flowSvg(t, { cols: 2, w: 200, mini: true })}<b>${esc(t.name)}<small>${MK_TAG[t.mk]}</small></b></button>`).join("")}</div>`;
+  } else {
+    const fv = S.view === "fav";
+    if (!fv) h += `<div class="seg scrseg" role="group" aria-label="市場">${Object.entries(MK_NAME).map(([k, t]) => `<button data-imk="${k}" aria-pressed="${S.mk === k}">${t}</button>`).join("")}</div>
+      <div class="seg scrseg" role="group" aria-label="類型"><button data-isub="chain" aria-pressed="${S.sub === "chain"}">產業鏈</button><button data-isub="etf" aria-pressed="${S.sub === "etf"}">ETF</button></div>`;
+    if (!fv && S.sub === "etf") { const E = IND.etfs[S.mk] || [];
+      h += E.length ? `<ul class="slist" style="margin:8px 12px">${E.map(([c, nm, d], i) => { const q = W.quotes.get(c); return `<li><button data-sel="${c}"><span class="rk">${i + 1}</span><span class="nm">${esc(nm)}<small>${c}・${esc(d)}</small></span><b class="${cls(q?.chg)}">${fmtP(q?.price)}<small>${q?.chgPct != null ? (q.chgPct > 0 ? "+" : "") + q.chgPct.toFixed(2) + "%" : ""}</small></b></button></li>`; }).join("")}</ul>` : `<p class="note gnote">${MK_NAME[S.mk]}股的 ETF 暫時沒有即時報價來源。</p>`;
+      loadIndQuotes(E.map(x => x[0]));
+    } else {
+      const L = IND.themes.filter(t => (fv ? fav.has(t.id) : t.mk === S.mk));
+      h += L.length ? `<div class="ithemes">${L.map(t => indCard(t, fav)).join("")}</div>` : `<p class="note gnote">${fv ? "還沒有收藏的題材，按題材卡片上的 ♡ 收藏。" : "這個市場還沒有題材。"}</p>`;
+      loadIndQuotes(L.flatMap(indCodes));
+    }
+  }
+  $("#lx").innerHTML = h;
+  if (S.view === "network" && S.focus) { const el = document.querySelector(`.inode[data-ifocus="${S.focus}"]`), wr = document.querySelector(".inetwrap"); if (el && wr) wr.scrollLeft = Math.max(0, el.offsetLeft - wr.clientWidth / 2 + el.offsetWidth / 2); }
+}
+$("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const S = W.indS, b = e.target.closest("[data-iview],[data-imk],[data-isub],[data-iopen],[data-ifav],[data-inet],[data-ifocus]"); if (!b) return;
+  const d = b.dataset;
+  if (d.iview) S.view = d.iview; else if (d.imk) S.mk = d.imk; else if (d.isub) S.sub = d.isub; else if (d.inet) { S.net = d.inet; S.focus = null; }
+  else if (d.ifocus) S.focus = S.focus === d.ifocus ? null : d.ifocus;
+  else if (d.iopen != null) { S.open = d.iopen || null; window.scrollTo({ top: 0 }); }
+  else if (d.ifav) { const f = indFav(); f.has(d.ifav) ? f.delete(d.ifav) : f.add(d.ifav); store.set("watch:indfav", [...f]); }
+  store.set("watch:inds", { view: S.view, mk: S.mk, sub: S.sub, net: S.net }); renderInd(); });
 
 /* ---------- 資料來源狀態：伺服器讀得到哪些金鑰（只顯示有沒有，不顯示內容） ---------- */
 async function showStatus() {
