@@ -115,8 +115,8 @@ function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
   return out.sort((a, b) => a.i - b.i);
 }
 class Chart {
-  constructor(host, { onHover } = {}) {
-    this.host = host; this.onHover = onHover;
+  constructor(host, { onHover, onRange } = {}) {
+    this.host = host; this.onHover = onHover; this.onRange = onRange;
     this.legend = document.createElement("div"); this.legend.className = "legend";
     this.canvas = document.createElement("canvas"); this.ctx = this.canvas.getContext("2d");
     this.canvas.setAttribute("role", "img");
@@ -153,7 +153,7 @@ class Chart {
       this.ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
       if (this.ptrs.size === 1) {
         const pane = this.paneAt(e.offsetY), onAxis = !!this.geo && e.offsetX > this.geo.L + this.geo.pw;
-        this.drag = { x: e.offsetX, y: e.offsetY, a: this.range.a, yz: this.yz, yoff: this.yoff, pane, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, axis: onAxis && pane?.key === "main", subAxis: onAxis && pane && pane.key !== "main", moved: false };
+        this.drag = { x: e.offsetX, y: e.offsetY, cx: e.clientX, cy: e.clientY, t: performance.now(), vy: 0, touch: e.pointerType !== "mouse", dir: null, a: this.range.a, yz: this.yz, yoff: this.yoff, pane, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, axis: onAxis && pane?.key === "main", subAxis: onAxis && pane && pane.key !== "main", moved: false };
       }
       if (this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()]; this.pinch = { d: Math.abs(p.x - q.x) || 1, w: this.range.b - this.range.a + 1, mid: this.indexAt((p.x + q.x) / 2, true) }; this.drag = null; }
       this.hoverAt(e.offsetX);
@@ -163,6 +163,15 @@ class Chart {
       if (this.pinch && this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()], d = Math.abs(p.x - q.x) || 1; this.setWidth(this.pinch.w * this.pinch.d / d, this.pinch.mid); return; }
       if (this.drag && this.ptrs.size === 1 && this.geo) {
         const dx = e.offsetX - this.drag.x, dy = e.offsetY - this.drag.y, G = this.geo;
+        // 圖表鎖定（放大後）時，頁面不會自己捲動：手勢一開始偏上下、又不是在拉價格軸或平移價格，就由這裡代替頁面捲動
+        if (this.drag.touch && this.locked) {
+          if (!this.drag.dir && Math.hypot(e.clientX - this.drag.cx, e.clientY - this.drag.cy) > 6) this.drag.dir = Math.abs(e.clientY - this.drag.cy) > Math.abs(e.clientX - this.drag.cx) * 1.2 ? "v" : "h";
+          const wantsChartY = this.drag.axis || this.drag.subAxis || (this.yz > 1 && this.drag.y < G.top0 + G.mainH) || (this.drag.pz && this.drag.pz.z > 1);
+          if (this.drag.dir === "v" && !wantsChartY) {
+            const now = performance.now(), step = this.drag.lastCy == null ? e.clientY - this.drag.cy : e.clientY - this.drag.lastCy;
+            window.scrollBy(0, -step); this.drag.vy = step / Math.max(1, now - (this.drag.lt || now - 16)); this.drag.lastCy = e.clientY; this.drag.lt = now; this.drag.moved = true; return;
+          }
+        }
         // 右側價格軸上下拖曳：拉長或壓縮價格軸
         if (this.drag.axis) { if (Math.abs(dy) > 2) { try { cv.setPointerCapture(e.pointerId); } catch {} this.yz = Math.max(0.5, Math.min(12, this.drag.yz * Math.exp(dy / 120))); this.draw(); } return; }
         // 副圖右側刻度上下拖曳：只縮放這一個副圖
@@ -180,7 +189,11 @@ class Chart {
       }
       this.hoverAt(e.offsetX);
     });
-    const up = e => { this.ptrs.delete(e.pointerId); if (this.ptrs.size < 2) this.pinch = null; if (!this.ptrs.size) this.drag = null; };
+    const up = e => {
+      // 代替頁面捲動時，放開手指後讓頁面再滑一小段（慣性），手感接近一般捲動
+      const d = this.drag; if (d && d.dir === "v" && Math.abs(d.vy) > 0.2 && e.type === "pointerup") { let v = d.vy * 16; const glide = () => { if (Math.abs(v) < 0.5) return; window.scrollBy(0, -v); v *= 0.94; requestAnimationFrame(glide); }; requestAnimationFrame(glide); }
+      this.ptrs.delete(e.pointerId); if (this.ptrs.size < 2) this.pinch = null; if (!this.ptrs.size) this.drag = null;
+    };
     cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
     cv.addEventListener("pointerleave", e => { up(e); this.hover = null; this.draw(); });
     cv.addEventListener("dblclick", () => this.resetScale());
@@ -208,6 +221,8 @@ class Chart {
   paneZoom(key) { return this.pz[key] || { z: 1, off: 0 }; }
   paneAt(y) { return (this.panes || []).find(p => y >= p.top - 5 && y <= p.top + p.h + 5) || null; }
   subZoomAll(f) { (this.panes || []).filter(p => p.key !== "main").forEach(p => { const z = this.paneZoom(p.key); this.pz[p.key] = { z: Math.max(0.5, Math.min(12, z.z * f)), off: z.off }; }); this.draw(); }
+  // 放大或平移過的圖會「鎖定」：所有手勢都交給圖表（touch-action: none），避免拖曳圖表時整個頁面跟著捲動
+  get locked() { return !!this.view || this.yz !== 1 || !!this.yoff || Object.values(this.pz).some(x => x.z !== 1 || x.off); }
   resetScale() { this.view = null; this.yz = 1; this.yoff = 0; this.pz = {}; this.draw(); if (!this.pop.hidden) this.renderPop(); }
   togglePop(open = this.pop.hidden) {
     Chart.all.forEach(c => { if (c !== this && !c.pop.hidden) c.togglePop(false); });
@@ -231,6 +246,8 @@ class Chart {
       <p class="note">電腦：Shift＋滾輪縮放游標所在的圖，或上下拖曳右側刻度；放大後可上下拖曳平移。雙擊圖表還原。</p>`;
   }
   syncBar() {
+    this.canvas.style.touchAction = this.locked ? "none" : "pan-y";
+    this.host.classList.toggle("chart-locked", this.locked);
     this.bar.querySelector('[data-z="yin"]').setAttribute("aria-pressed", this.yz > 1.01);
     this.bar.querySelector('[data-z="sig"]').setAttribute("aria-pressed", Chart.prefs.sig);
     const scaled = Chart.prefs.h !== 1 || Chart.prefs.log || Chart.prefs.sh !== 1 || Chart.prefs.fit || Object.values(this.pz).some(x => x.z !== 1 || x.off);
@@ -523,6 +540,7 @@ class Chart {
     this.canvas.setAttribute("aria-label", `K線圖，共 ${vis} 個交易日，最後收盤 ${fmtP(D[vis - 1].c)}`);
     this.renderLegend(hi_ ?? vis - 1, mas);
     if (this.onHover) this.onHover(hi_ ?? vis - 1);
+    if (this.onRange) this.onRange(this.range, this);
   }
   line(a, vis, X, Y, color, w, alpha = 1, dash) {
     const ctx = this.ctx, g = this.geo; ctx.save(); ctx.beginPath(); ctx.rect(g.L, 0, g.pw, g.H); ctx.clip();

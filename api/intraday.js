@@ -1,7 +1,7 @@
 // 盤中分 K：給 learner/ 個股判讀的「盤中分 K」使用。
 // GET /api/intraday?code=2330&tf=5    tf = 1、5、15、30、60（分鐘）；code 可以是 t00（加權指數）
 // 有設定 FUGLE_API_KEY 時用富果 intraday/candles（1 分 K），否則改用 Yahoo Finance 1 分 K（可能有延遲）。
-// 一律先抓 1 分 K，再在伺服器端合成需要的週期。回傳 { ok, source, date, tf, prev, bars: [{ t: "09:05", o, h, l, c, v }] }，v 單位：張（指數為 0）。
+// 一律先抓 1 分 K，再在伺服器端合成需要的週期。回傳 { ok, source, date, tf, prev, bars: [{ t: "09:05", o, h, l, c, v, a? }] }（a 是富果提供的當日均價），v 單位：張（指數為 0）。
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const INDEX = { T00: { fugle: "IX0001", yahoo: "^TWII", name: "加權指數" } };
@@ -26,13 +26,13 @@ export function aggregate(bars, tf) {
   for (const b of bars) {
     const [h, m] = b.t.split(":").map(Number), mins = h * 60 + m, slot = Math.floor((mins - 540) / tf) * tf + 540;
     const t = `${String(Math.floor(slot / 60)).padStart(2, "0")}:${String(slot % 60).padStart(2, "0")}`, last = out[out.length - 1];
-    if (last && last.t === t) { last.h = Math.max(last.h, b.h); last.l = Math.min(last.l, b.l); last.c = b.c; last.v += b.v; }
+    if (last && last.t === t) { last.h = Math.max(last.h, b.h); last.l = Math.min(last.l, b.l); last.c = b.c; last.v += b.v; if (b.a != null) last.a = b.a; }
     else out.push({ ...b, t });
   }
   return out;
 }
 export function parseFugleCandles(j) {
-  const bars = (j?.data || []).map(x => ({ t: hhmm(x.date), o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close), v: num(x.volume) || 0 }))
+  const bars = (j?.data || []).map(x => ({ t: hhmm(x.date), o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close), v: num(x.volume) || 0, ...(num(x.average) ? { a: num(x.average) } : {}) }))
     .filter(b => b.o && b.h && b.l && b.c).sort((a, b) => a.t.localeCompare(b.t));
   return { date: j?.date || null, bars };
 }
