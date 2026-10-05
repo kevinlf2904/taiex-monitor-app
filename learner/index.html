@@ -9,56 +9,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="core.css">
 <style>
-/* Layout: 交易終端機的冷調紙面。頂部頁籤切換四個區塊；課程區為「目錄側欄 + 講義」，圖表一律滿版。 */
-:root {
-  /* 分層灰階：底色 → 第一層框（面板）→ 第二層（面板裡的卡片、按鈕、數據格）→ 第三層（輸入框、選中項） */
-  --bg: #dcdfe4;
-  --surface: #f4f5f7;
-  --surface-2: #e7e9ed;
-  --surface-3: #ffffff;
-  --ink: #18202b;
-  --muted: #5b6676;
-  --line: #c8ced7;
-  --accent: #2346a0;
-  --accent-soft: #e2e8f7;
-  --up: #d0343a;      /* 台股慣例：紅漲 */
-  --down: #0f8655;    /* 綠跌 */
-  --s1: #d98a0b;      /* 短均線 */
-  --s2: #7a4fd0;      /* 中均線 */
-  --s3: #0d8aa0;      /* 長均線 */
-  --band: rgba(35, 70, 160, 0.07);
-  --shade: rgba(24, 32, 43, 0.05);
-  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
-  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --radius: 10px;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #000000; --surface: #141517; --surface-2: #1f2124; --surface-3: #2b2e33; --ink: #e8ecf1; --muted: #9aa4b2;
-    --line: #353a41; --accent: #86a2ff; --accent-soft: #1c2440; --up: #ff4d57; --down: #22c47e;
-    --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #000000; --surface: #141517; --surface-2: #1f2124; --surface-3: #2b2e33; --ink: #e8ecf1; --muted: #9aa4b2;
-  --line: #353a41; --accent: #86a2ff; --accent-soft: #1c2440; --up: #ff4d57; --down: #22c47e;
-  --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
-  color-scheme: dark;
-}
-* { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0; background: var(--bg); color: var(--ink);
-  font-family: var(--font-body); font-size: 15px; line-height: 1.7;
-}
-[hidden] { display: none !important; }
-button, select, input { font: inherit; color: inherit; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.up { color: var(--up); } .down { color: var(--down); } .muted { color: var(--muted); }
+/* 主題色、基本樣式與 K 線圖的樣式在 core.css（和看盤頁共用）。
+   Layout: 交易終端機的冷調紙面。頂部頁籤切換四個區塊；課程區為「目錄側欄 + 講義」，圖表一律滿版。 */
 
 /* ---------- header ---------- */
 .top {
@@ -132,45 +86,6 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .btn.sell { background: var(--down); border-color: var(--down); color: #fff; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 
-/* ---------- chart ---------- */
-.chartbox { position: relative; }
-.legend {
-  display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; min-height: 40px;
-  padding: 8px 12px; border-bottom: 1px solid var(--line); line-height: 1.6;
-}
-.legend b { font-weight: 600; color: var(--muted); margin-right: 3px; font-family: var(--font-body); }
-.legend span { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.zoombar { position: absolute; top: 6px; right: 8px; display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); z-index: 1; }
-.zoombar button { border: 0; background: transparent; padding: 3px 10px; font-size: 13px; cursor: pointer; color: var(--muted); min-width: 30px; }
-.zoombar button + button { border-left: 1px solid var(--line); }
-.zoombar button:hover { color: var(--ink); background: var(--surface-3); }
-.zoombar:not(.zoomed) [data-z="reset"] { opacity: .45; }
-.zoombar .zsep { width: 1px; background: var(--line); }
-.zoombar [aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); font-weight: 700; }
-.zoombar [data-z="sig"][aria-pressed="false"] { text-decoration: line-through; opacity: .7; }
-.scalepop .pkinds { gap: 6px; }
-.scalepop .pkinds[aria-disabled="true"] { opacity: .45; }
-.scalepop .ichip { font-size: 12.5px; padding: 3px 10px; }
-.zoombar [data-z="scale"].on { color: var(--accent); font-weight: 700; }
-.zoombar [data-z="scale"][aria-expanded="true"] { background: var(--accent-soft); color: var(--ink); }
-.scalepop { position: absolute; top: 40px; right: 8px; z-index: 3; width: min(340px, calc(100% - 16px)); padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; box-shadow: 0 10px 30px rgba(0,0,0,.28); font-size: 13.5px; }
-.scalepop[hidden] { display: none; }
-.scalepop .prow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.scalepop .prow > span:first-child { color: var(--muted); min-width: 34px; padding-left: 2px; }
-.scalepop .prow strong { margin-right: auto; }
-.scalepop .pval { font-family: var(--font-mono); color: var(--accent); min-width: 36px; text-align: right; }
-.scalepop .pseg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.scalepop .pseg button { border: 0; background: var(--surface-2); color: var(--ink); padding: 5px 11px; cursor: pointer; font-size: 13px; font-variant-numeric: tabular-nums; }
-.scalepop .pseg button + button { border-left: 1px solid var(--line); }
-.scalepop .pseg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 700; }
-.scalepop .pchk { cursor: pointer; font-size: 13px; color: var(--ink); flex-wrap: nowrap; align-items: flex-start; }
-.scalepop .pchk input { flex: none; margin-top: 2px; }
-.scalepop .pchk input { width: 16px; height: 16px; accent-color: var(--accent); }
-.scalepop .prow + .prow:has(strong) { border-top: 1px solid var(--line); padding-top: 9px; }
-.scalepop .note { margin: 0; font-size: 11.5px; }
-@media (max-width: 640px) { .zoombar { position: static; display: flex; width: fit-content; margin: 6px 8px 0 auto; } .zoombar button { padding: 4px 8px; min-width: 28px; font-size: 12.5px; } .scalepop { position: static; width: auto; margin: 6px 8px 0; box-shadow: none; } }
-@media (min-width: 641px) { .legend { padding-right: 330px; } }
-.chartbox canvas { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
 
 /* ---------- learn ---------- */
 .learn { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
@@ -478,6 +393,8 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .real-form .btn { padding: 9px 18px; }
 .real-code { flex: 1 1 200px; } .real-code input { width: 100%; }
 .real-status.err { color: var(--up); }
+.watch-link { text-decoration: none; }
+@media (max-width: 440px) { .watch-link { display: none; } }
 .mkt-chip { cursor: pointer; font-family: var(--font-mono); gap: 6px; white-space: nowrap; }
 .mkt-chip .up { color: var(--up); } .mkt-chip .down { color: var(--down); }
 .mkt-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; }
@@ -487,6 +404,13 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 @media (max-width: 480px) { .mkt-chip .mk-n { display: none; } }
 @media (max-width: 440px) { .top-tools:has(.mkt-chip:not([hidden])) #progChip { display: none; } }
 .top-tools .chip { white-space: nowrap; }
+.intra { margin-bottom: 14px; overflow: hidden; }
+.intra > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 12px 14px; }
+.intra > summary::-webkit-details-marker { display: none; }
+.intra > summary::before { content: "▸"; color: var(--muted); } .intra[open] > summary::before { content: "▾"; }
+.intra-t { font-weight: 700; }
+.intra-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 14px 10px; border-bottom: 1px solid var(--line); }
+.intra-bar .seg button { padding: 5px 11px; font-size: 13px; }
 .live-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 14px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; }
 .live-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; align-self: center; }
@@ -542,7 +466,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <button role="tab" data-tab="savings" id="tab-btn-savings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16v-4M10 16V9M14 16v-6M18 16V6"/></svg><span>存股模擬</span></button>
       <button role="tab" data-tab="quiz" id="tab-btn-quiz"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 .9-1 1.6V15M12 18.5v.5"/><circle cx="12" cy="12" r="9"/></svg><span>觀念測驗</span></button>
     </nav>
-    <div class="top-tools"><button class="chip mkt-chip" id="mktChip" type="button" hidden title="加權指數（證交所即時報價），點一下載入加權指數的 K 線"></button><span class="chip" id="progChip">已完成 0 / 19 課</span><button class="theme-btn" id="themeBtn" type="button" aria-label="切換深色 / 淺色"><svg viewBox="0 0 24 24" aria-hidden="true" class="ic-moon"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true" class="ic-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+    <div class="top-tools"><button class="chip mkt-chip" id="mktChip" type="button" hidden title="加權指數（證交所即時報價），點一下載入加權指數的 K 線"></button><a class="theme-btn watch-link" href="watch.html" aria-label="K線看盤（自選股即時報價）" title="K線看盤"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6"/></svg></a><span class="chip" id="progChip">已完成 0 / 19 課</span><button class="theme-btn" id="themeBtn" type="button" aria-label="切換深色 / 淺色"><svg viewBox="0 0 24 24" aria-hidden="true" class="ic-moon"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true" class="ic-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
   </div>
 </header>
 
@@ -681,9 +605,14 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <p class="note real-status" id="realNote">資料來源：證交所、櫃買中心（日 K 每天收盤後更新），找不到時改用 Yahoo Finance；盤中會用證交所即時報價更新今天這根 K 棒。</p>
       <div class="live-bar" id="liveBar" hidden>
         <div class="live-main"><span class="live-dot" id="liveDot" aria-hidden="true"></span><strong id="liveName"></strong><span class="live-px num" id="livePx"></span><span class="num" id="liveChg"></span><span class="note" id="liveMeta"></span></div>
-        <div class="row live-ctl"><button type="button" class="btn sm" id="livePause">暫停即時</button><details class="live-book"><summary>五檔</summary><div id="liveBook"></div></details></div>
+        <div class="row live-ctl"><button type="button" class="btn sm" id="livePause">暫停即時</button><a class="btn sm" id="liveWatch" href="watch.html">在看盤中開啟 ↗</a><details class="live-book"><summary>五檔</summary><div id="liveBook"></div></details></div>
       </div>
     </div>
+    <details class="panel intra" id="intraPanel" hidden>
+      <summary><span class="intra-t">盤中分 K</span><span class="note" id="intraMeta"></span></summary>
+      <div class="intra-bar"><div class="seg" role="group" aria-label="分 K 週期" id="intraTf"><button data-tf="1">1 分</button><button data-tf="5">5 分</button><button data-tf="15">15 分</button><button data-tf="30">30 分</button><button data-tf="60">60 分</button></div><span class="note" id="intraNote"></span></div>
+      <div class="chartbox" id="intraChart"></div>
+    </details>
     <div class="shot-top" id="shotTop">
       <label class="drop panel" id="shotDrop" for="shotFile">
         <input type="file" id="shotFile" accept="image/png,image/jpeg,image/webp,image/gif">
@@ -794,24 +723,12 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-13</span></footer>
+<footer><a href="watch.html">K線看盤</a>（自選股即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-15</span></footer>
 
+<script src="core.js"></script>
 <script>
 "use strict";
-/* ================= 工具 ================= */
-const $ = (s, r = document) => r.querySelector(s);
-const store = {
-  get(k, d) { try { const v = localStorage.getItem("kline:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem("kline:" + k, JSON.stringify(v)); } catch {} },
-};
-function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-// 台股升降單位（檔位）
-function tickOf(p) { return p < 10 ? 0.01 : p < 50 ? 0.05 : p < 100 ? 0.1 : p < 500 ? 0.5 : p < 1000 ? 1 : 5; }
-function roundTick(p) { const t = tickOf(p); return +(Math.round(p / t) * t).toFixed(2); }
-function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
-function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
-function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
-function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+/* 工具函式、技術指標、指標開關、副圖訊號與 K 線圖（Chart）在 core.js（和看盤頁共用） */
 
 /* ================= 模擬走勢 =================
    以「趨勢段落」切換漂移率（多頭 / 空頭 / 盤整），加上波動叢聚，
@@ -849,61 +766,6 @@ function genSeries(seed, n) {
     do { d.setUTCDate(d.getUTCDate() + 1); } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
   }
   return out;
-}
-
-/* ================= 指標 ================= */
-function sma(a, n) { const o = Array(a.length).fill(null); let s = 0; for (let i = 0; i < a.length; i++) { s += a[i]; if (i >= n) s -= a[i - n]; if (i >= n - 1) o[i] = s / n; } return o; }
-function ema(a, n) { const o = Array(a.length).fill(null); const k = 2 / (n + 1); let e = null; for (let i = 0; i < a.length; i++) { if (a[i] == null) continue; e = e == null ? a[i] : a[i] * k + e * (1 - k); o[i] = e; } return o; }
-function rsiCalc(c, n = 14) {
-  const o = Array(c.length).fill(null); let g = 0, l = 0;
-  for (let i = 1; i < c.length; i++) {
-    const ch = c[i] - c[i - 1], up = Math.max(ch, 0), dn = Math.max(-ch, 0);
-    if (i <= n) { g += up; l += dn; if (i === n) { g /= n; l /= n; o[i] = l === 0 ? 100 : 100 - 100 / (1 + g / l); } }
-    else { g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n; o[i] = l === 0 ? 100 : 100 - 100 / (1 + g / l); }
-  }
-  return o;
-}
-function kdCalc(D, n = 9) {
-  const K = Array(D.length).fill(null), Dd = Array(D.length).fill(null); let k = 50, d = 50;
-  for (let i = n - 1; i < D.length; i++) {
-    let hh = -Infinity, ll = Infinity;
-    for (let j = i - n + 1; j <= i; j++) { hh = Math.max(hh, D[j].h); ll = Math.min(ll, D[j].l); }
-    const rsv = hh === ll ? 50 : (D[i].c - ll) / (hh - ll) * 100;
-    k = k * 2 / 3 + rsv / 3; d = d * 2 / 3 + k / 3; K[i] = k; Dd[i] = d;
-  }
-  return { K, D: Dd };
-}
-function macdCalc(c) {
-  const e12 = ema(c, 12), e26 = ema(c, 26);
-  const dif = c.map((_, i) => i < 25 ? null : e12[i] - e26[i]);
-  const sig = ema(dif, 9).map((v, i) => i < 33 ? null : v);
-  const osc = dif.map((v, i) => sig[i] == null ? null : v - sig[i]);
-  return { dif, sig, osc };
-}
-function bollCalc(c, n = 20, k = 2) {
-  const mid = sma(c, n), up = [], lo = [], bw = [];
-  for (let i = 0; i < c.length; i++) {
-    if (mid[i] == null) { up.push(null); lo.push(null); bw.push(null); continue; }
-    let s = 0; for (let j = i - n + 1; j <= i; j++) s += (c[j] - mid[i]) ** 2;
-    const sd = Math.sqrt(s / n); up.push(mid[i] + k * sd); lo.push(mid[i] - k * sd); bw.push(2 * k * sd / mid[i]);
-  }
-  return { mid, up, lo, bw };
-}
-// 威廉指標 %R：收盤距離 n 日最高價的位置，0 到 −100
-function wrCalc(D, n = 14) {
-  const o = Array(D.length).fill(null);
-  for (let i = n - 1; i < D.length; i++) { let hh = -Infinity, ll = Infinity; for (let j = i - n + 1; j <= i; j++) { hh = Math.max(hh, D[j].h); ll = Math.min(ll, D[j].l); } o[i] = hh === ll ? -50 : (hh - D[i].c) / (hh - ll) * -100; }
-  return o;
-}
-function indicators(D) {
-  const c = D.map(x => x.c), cache = {};
-  return {
-    c,
-    ma: n => cache[n] || (cache[n] = sma(c, n)),
-    vma: sma(D.map(x => x.v), 20),
-    rsi: rsiCalc(c), kd: kdCalc(D), macd: macdCalc(c), boll: bollCalc(c), wr: wrCalc(D),
-    ...(() => { if (D[0].ov == null) return { io: null, io5: null }; const io = D.map(x => x.v ? x.ov / x.v * 100 : 50); return { io, io5: sma(io, 5) }; })(),
-  };
 }
 
 /* ================= 訊號 ================= */
@@ -1273,27 +1135,6 @@ function renderReadout(el, items, wide) {
   if (wide) el.classList.add("grid-ro");
 }
 
-/* ================= 圖表 ================= */
-/* ---------- 技術指標開關 ----------
-   一排可切換的小籤，分成「主圖」「副圖」兩組；狀態記在瀏覽器裡，下次打開還在。 */
-function indicatorBar(host, key, groups, defaults, onChange) {
-  let state = new Set(store.get("ind:" + key, defaults));
-  const render = () => {
-    host.innerHTML = groups.map(g => `<div class="ibar-g" role="group" aria-label="${g.title}"><span class="ibar-t">${g.title}</span>${g.items.map(it =>
-      `<button type="button" class="ichip" data-id="${it.id}" aria-pressed="${state.has(it.id)}">${it.color ? `<i style="background:var(${it.color})"></i>` : ""}${it.label}</button>`).join("")}</div>`).join("");
-  };
-  host.addEventListener("click", e => {
-    const b = e.target.closest("[data-id]"); if (!b) return;
-    const id = b.dataset.id; state.has(id) ? state.delete(id) : state.add(id);
-    store.set("ind:" + key, [...state]); render(); onChange(state);
-  });
-  render();
-  return { has: id => state.has(id), get state() { return state; }, set(id, on) { on ? state.add(id) : state.delete(id); render(); }, setGroups(g) { groups = g; render(); } };
-}
-const MAIN_ITEMS = [{ id: "ma5", label: "MA5", color: "--s1" }, { id: "ma10", label: "MA10", color: "--accent" }, { id: "ma20", label: "MA20", color: "--s2" }, { id: "ma60", label: "MA60", color: "--s3" }, { id: "boll", label: "布林" }];
-const SUB_ITEMS = [{ id: "vol", label: "成交量" }, { id: "kd", label: "KD" }, { id: "rsi", label: "RSI" }, { id: "macd", label: "MACD" }, { id: "wr", label: "威廉" }];
-const maFrom = bar => [5, 10, 20, 60].filter(p => bar.has("ma" + p));
-const subsFrom = (bar, ids = ["kd", "rsi", "macd", "wr", "inout"]) => ids.filter(id => bar.has(id));
 
 /* ---------- 未來走勢模擬（蒙地卡羅） ----------
    從截圖重建的 K 棒取出每日漲跌幅，隨機抽樣接成很多條未來路徑：
@@ -1335,474 +1176,6 @@ function simulateFuture(D, { days = 20, mode = "trend", paths = 800, seed = 1, b
     stats: { p10: q(ends, 0.1), p50: q(ends, 0.5), p90: q(ends, 0.9), up: ends.filter(x => x > last).length / paths },
     touch: (price, above) => Array.from(above ? mx : mn).filter(v => (above ? v >= price : v <= price)).length / paths };
 }
-// 副圖指標發出的訊號：{ i, si（第幾個副圖）, side, label, v（副圖上的位置） }
-// strong：KD 只留低檔（D < 30）的金叉、高檔（D > 70）的死叉；MACD 只留零軸上方的金叉、零軸下方的死叉（順勢的交叉）
-function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
-  const out = [], n = Math.min(vis, D.length);
-  const cross = (a, b, si, up, dn, keep = () => true) => { for (let i = 1; i < n; i++) { if ([a[i], b[i], a[i - 1], b[i - 1]].some(v => v == null) || D[i].sim) continue;
-    if (a[i - 1] <= b[i - 1] && a[i] > b[i] && keep("buy", b[i])) out.push({ i, si, side: "buy", label: up, v: a[i] });
-    else if (a[i - 1] >= b[i - 1] && a[i] < b[i] && keep("sell", b[i])) out.push({ i, si, side: "sell", label: dn, v: a[i] }); } };
-  const exit = (a, lo, hi, si, name) => { for (let i = 1; i < n; i++) { if (a[i] == null || a[i - 1] == null || D[i].sim) continue;
-    if (a[i - 1] < lo && a[i] >= lo) out.push({ i, si, side: "buy", label: name + "脫離超賣", v: a[i] });
-    else if (a[i - 1] > hi && a[i] <= hi) out.push({ i, si, side: "sell", label: name + "脫離超買", v: a[i] }); } };
-  subs.forEach((S, si) => {
-    if (kinds[typeof S === "string" ? S : "custom"] === false) return;
-    if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉", strong ? (side, d) => (side === "buy" ? d < 30 : d > 70) : undefined);
-    else if (S === "macd") cross(I.macd.dif, I.macd.sig, si, "MACD金叉", "MACD死叉", strong ? (side, m) => (side === "buy" ? m > 0 : m < 0) : undefined);
-    else if (S === "rsi") exit(I.rsi, 30, 70, si, "RSI");
-    else if (S === "wr") exit(I.wr, -80, -20, si, "威廉");
-    else if (S && S.custom && S.custom.lines.length >= 2 && S.custom.signals !== false) { const [a, b] = S.custom.names || []; cross(S.custom.lines[0], S.custom.lines[1], si, a && b ? `${a}上穿${b}` : "副圖金叉", a && b ? `${a}下穿${b}` : "副圖死叉"); }
-  });
-  return out.sort((a, b) => a.i - b.i);
-}
-class Chart {
-  constructor(host, { onHover } = {}) {
-    this.host = host; this.onHover = onHover;
-    this.legend = document.createElement("div"); this.legend.className = "legend";
-    this.canvas = document.createElement("canvas"); this.ctx = this.canvas.getContext("2d");
-    this.canvas.setAttribute("role", "img");
-    // 縮放工具列：按鈕、Ctrl / ⌘ + 滾輪或雙指縮放，拖曳平移，雙擊還原
-    this.bar = document.createElement("div"); this.bar.className = "zoombar";
-    // 第二組：縱向（價格軸）放大縮小、圖表高度、對數座標，讓小波動也看得清楚
-    this.bar.innerHTML = `<button type="button" data-z="out" aria-label="時間軸縮小" title="時間軸縮小（看更多 K 棒）">−</button><button type="button" data-z="in" aria-label="時間軸放大" title="時間軸放大（看更少 K 棒）">＋</button><button type="button" data-z="reset" aria-label="顯示全部並還原比例">全部</button><span class="zsep" aria-hidden="true"></span><button type="button" data-z="yin" aria-label="價格軸拉長" title="價格軸拉長：波動看起來更大（也可 Shift＋滾輪，或上下拖曳右側價格軸）">↕＋</button><button type="button" data-z="yout" aria-label="價格軸壓縮" title="價格軸壓縮">↕−</button><button type="button" data-z="sig" aria-pressed="true" title="主副圖對應：副圖指標發出訊號時，在主圖 K 線上標出位置（再按一次關閉）">對應</button><button type="button" data-z="scale" aria-expanded="false" title="主圖與副圖的比例、高度、對數座標、主副圖對應">設定 ▾</button>`;
-    // 比例面板：主圖、副圖各自的縮放與高度（觸控裝置也能用按鈕操作）
-    this.pop = document.createElement("div"); this.pop.className = "scalepop panel"; this.pop.hidden = true;
-    host.append(this.legend, this.bar, this.pop, this.canvas);
-    this.hover = null; this.view = null; this.ptrs = new Map(); this.yz = 1; this.yoff = 0; this.pz = {};
-    Chart.all.push(this); this.syncBar();
-    this.bar.addEventListener("click", e => {
-      const z = e.target.closest("[data-z]")?.dataset.z;
-      if (z === "in") this.zoom(0.6); else if (z === "out") this.zoom(1 / 0.6);
-      else if (z === "reset") { this.resetScale(); }
-      else if (z === "scale") { this.togglePop(); }
-      else if (z === "sig") { Chart.setPref("sig", !Chart.prefs.sig); }
-      else if (z === "yin") this.yZoom(1.5); else if (z === "yout") this.yZoom(1 / 1.5);
-    });
-    this.pop.addEventListener("click", e => {
-      const b = e.target.closest("button"); if (!b) return;
-      const d = b.dataset;
-      if (d.p === "yin") this.yZoom(1.5); else if (d.p === "yout") this.yZoom(1 / 1.5);
-      else if (d.p === "sin") this.subZoomAll(1.5); else if (d.p === "sout") this.subZoomAll(1 / 1.5);
-      else if (d.p === "reset") this.resetScale();
-      else if (d.h) Chart.setPref("h", +d.h); else if (d.sh) Chart.setPref("sh", +d.sh);
-      else if (d.sk) Chart.setPref("sigKinds", { ...Chart.prefs.sigKinds, [d.sk]: !Chart.prefs.sigKinds[d.sk] });
-      this.renderPop();
-    });
-    this.pop.addEventListener("change", e => { const t = e.target; if (t.dataset.pref) Chart.setPref(t.dataset.pref, t.checked); });
-    const cv = this.canvas;
-    cv.addEventListener("pointerdown", e => {
-      this.ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
-      if (this.ptrs.size === 1) {
-        const pane = this.paneAt(e.offsetY), onAxis = !!this.geo && e.offsetX > this.geo.L + this.geo.pw;
-        this.drag = { x: e.offsetX, y: e.offsetY, a: this.range.a, yz: this.yz, yoff: this.yoff, pane, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, axis: onAxis && pane?.key === "main", subAxis: onAxis && pane && pane.key !== "main", moved: false };
-      }
-      if (this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()]; this.pinch = { d: Math.abs(p.x - q.x) || 1, w: this.range.b - this.range.a + 1, mid: this.indexAt((p.x + q.x) / 2, true) }; this.drag = null; }
-      this.hoverAt(e.offsetX);
-    });
-    cv.addEventListener("pointermove", e => {
-      if (this.ptrs.has(e.pointerId)) this.ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
-      if (this.pinch && this.ptrs.size === 2) { const [p, q] = [...this.ptrs.values()], d = Math.abs(p.x - q.x) || 1; this.setWidth(this.pinch.w * this.pinch.d / d, this.pinch.mid); return; }
-      if (this.drag && this.ptrs.size === 1 && this.geo) {
-        const dx = e.offsetX - this.drag.x, dy = e.offsetY - this.drag.y, G = this.geo;
-        // 右側價格軸上下拖曳：拉長或壓縮價格軸
-        if (this.drag.axis) { if (Math.abs(dy) > 2) { try { cv.setPointerCapture(e.pointerId); } catch {} this.yz = Math.max(0.5, Math.min(12, this.drag.yz * Math.exp(dy / 120))); this.draw(); } return; }
-        // 副圖右側刻度上下拖曳：只縮放這一個副圖
-        if (this.drag.subAxis) { if (Math.abs(dy) > 2) { try { cv.setPointerCapture(e.pointerId); } catch {} this.pz[this.drag.pane.key] = { z: Math.max(0.5, Math.min(12, this.drag.pz.z * Math.exp(dy / 80))), off: this.drag.pz.off }; this.draw(); } return; }
-        // 副圖放大後，在副圖上下拖曳可以平移
-        const sp = this.drag.pane && this.drag.pane.key !== "main" && this.drag.pz && this.drag.pz.z > 1 && Math.abs(dy) > 4 ? this.drag.pane : null;
-        if (sp && Math.abs(dy) > Math.abs(dx)) { this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {} this.pz[sp.key] = { z: this.drag.pz.z, off: Math.max(-1, Math.min(1, this.drag.pz.off + dy / sp.h)) }; this.draw(); return; }
-        const panX = Math.abs(dx) > 4 && this.view, panY = this.yz > 1 && Math.abs(dy) > 4 && this.drag.y < G.top0 + G.mainH;
-        if (panX || panY) {
-          this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {}
-          if (panX) { const { a, b } = this.range; this.view = this.clampView(this.drag.a - Math.round(dx / G.bw), b - a + 1); }
-          if (panY) this.yoff = Math.max(-0.6, Math.min(0.6, this.drag.yoff + dy / G.mainH / this.yz));
-          this.draw(); return;
-        }
-      }
-      this.hoverAt(e.offsetX);
-    });
-    const up = e => { this.ptrs.delete(e.pointerId); if (this.ptrs.size < 2) this.pinch = null; if (!this.ptrs.size) this.drag = null; };
-    cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
-    cv.addEventListener("pointerleave", e => { up(e); this.hover = null; this.draw(); });
-    cv.addEventListener("dblclick", () => this.resetScale());
-    cv.addEventListener("wheel", e => {
-      if (!this.D) return;
-      if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.zoom(Math.exp(e.deltaY * 0.004), this.indexAt(e.offsetX, true)); }
-      else if (e.shiftKey) {
-        e.preventDefault(); const f = Math.exp(-(e.deltaY || e.deltaX) * 0.003), pane = this.paneAt(e.offsetY);
-        if (pane && pane.key !== "main") { const z = this.paneZoom(pane.key); this.pz[pane.key] = { z: Math.max(0.5, Math.min(12, z.z * f)), off: z.off }; this.draw(); } else this.yZoom(f);
-      }
-      else if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && this.view && this.geo) { e.preventDefault(); const { a, b } = this.range; this.view = this.clampView(a + Math.round(e.deltaX / this.geo.bw), b - a + 1); this.draw(); }
-    }, { passive: false });
-    new ResizeObserver(() => this.draw()).observe(host);
-  }
-  static all = [];
-  static keepView = false; // 即時報價更新最後一根 K 棒時，保留使用者的縮放與平移
-  static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit", sig: "chartSubSig", sigKinds: "chartSigKinds", sigStrong: "chartSigStrong" };
-  static prefs = { h: [1, 1.5, 2, 2.5].includes(+store.get("chartH", 1)) ? +store.get("chartH", 1) : 1, log: !!store.get("chartLog", false),
-    sh: [1, 1.5, 2].includes(+store.get("chartSubH", 1)) ? +store.get("chartSubH", 1) : 1, fit: !!store.get("chartSubFit", false), sig: store.get("chartSubSig", true) !== false,
-    sigStrong: store.get("chartSigStrong", true) !== false,
-    sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, ...(store.get("chartSigKinds", null) || {}) } };
-  static SIG_KINDS = [["kd", "KD 交叉"], ["macd", "MACD 交叉"], ["rsi", "RSI 30／70"], ["wr", "威廉 −80／−20"], ["custom", "截圖副圖交叉"]];
-  // 高度、對數座標、副圖貼合是全站共用的偏好：改了以後所有圖表一起重畫
-  static setPref(k, v) { Chart.prefs[k] = v; store.set(Chart.PREF_KEYS[k], v); Chart.all.forEach(c => { c.syncBar(); c.draw(); if (!c.pop.hidden) c.renderPop(); }); }
-  paneZoom(key) { return this.pz[key] || { z: 1, off: 0 }; }
-  paneAt(y) { return (this.panes || []).find(p => y >= p.top - 5 && y <= p.top + p.h + 5) || null; }
-  subZoomAll(f) { (this.panes || []).filter(p => p.key !== "main").forEach(p => { const z = this.paneZoom(p.key); this.pz[p.key] = { z: Math.max(0.5, Math.min(12, z.z * f)), off: z.off }; }); this.draw(); }
-  resetScale() { this.view = null; this.yz = 1; this.yoff = 0; this.pz = {}; this.draw(); if (!this.pop.hidden) this.renderPop(); }
-  togglePop(open = this.pop.hidden) {
-    Chart.all.forEach(c => { if (c !== this && !c.pop.hidden) c.togglePop(false); });
-    this.pop.hidden = !open; this.bar.querySelector('[data-z="scale"]').setAttribute("aria-expanded", open);
-    if (open) { this.renderPop(); Chart.closer ||= document.addEventListener("pointerdown", ev => Chart.all.forEach(c => { if (!c.pop.hidden && !c.pop.contains(ev.target) && !c.bar.contains(ev.target)) c.togglePop(false); })) || true; }
-  }
-  renderPop() {
-    const P = Chart.prefs, seg = (k, vals, cur) => `<div class="pseg">${vals.map(v => `<button type="button" data-${k}="${v}" aria-pressed="${cur === v}">${v}×</button>`).join("")}</div>`;
-    const sz = Object.values(this.pz).map(x => x.z), szTxt = sz.length ? `${+Math.max(...sz).toFixed(1)}×` : "1×";
-    this.pop.innerHTML = `<div class="prow"><strong>主圖（價格）</strong><span class="pval">${+this.yz.toFixed(1)}×</span><div class="pseg"><button type="button" data-p="yout" aria-label="價格軸壓縮">↕−</button><button type="button" data-p="yin" aria-label="價格軸拉長">↕＋</button></div></div>
-      <div class="prow"><span>高度</span>${seg("h", [1, 1.5, 2, 2.5], P.h)}</div>
-      <label class="prow pchk"><input type="checkbox" data-pref="log" ${P.log ? "checked" : ""}><span>對數座標（同樣的漲跌幅一樣高）</span></label>
-      <div class="prow"><strong>副圖（量、指標）</strong><span class="pval">${szTxt}</span><div class="pseg"><button type="button" data-p="sout" aria-label="副圖壓縮">↕−</button><button type="button" data-p="sin" aria-label="副圖拉長">↕＋</button></div></div>
-      <div class="prow"><span>高度</span>${seg("sh", [1, 1.5, 2], P.sh)}</div>
-      <label class="prow pchk"><input type="checkbox" data-pref="fit" ${P.fit ? "checked" : ""}><span>副圖自動貼合資料（KD、RSI 等固定刻度的指標也放大到填滿）</span></label>
-      <div class="prow"><strong>主副圖對應</strong></div>
-      <label class="prow pchk"><input type="checkbox" data-pref="sig" ${P.sig ? "checked" : ""}><span>副圖發出訊號時，在主圖 K 線上標出位置（空心圈＋名稱），副圖同一點以虛線對齊</span></label>
-      <div class="prow pkinds" ${P.sig ? "" : "aria-disabled=\"true\""}>${Chart.SIG_KINDS.map(([k, t]) => `<button type="button" class="ichip" data-sk="${k}" aria-pressed="${P.sig && P.sigKinds[k]}" ${P.sig ? "" : "disabled"}>${t}</button>`).join("")}</div>
-      <label class="prow pchk"><input type="checkbox" data-pref="sigStrong" ${P.sigStrong ? "checked" : ""} ${P.sig ? "" : "disabled"}><span>只標重點交叉：KD 低檔（D&lt;30）金叉、高檔（D&gt;70）死叉；MACD 零軸上金叉、零軸下死叉。取消勾選則標出全部交叉</span></label>
-      <div class="prow"><button type="button" class="btn sm" data-p="reset">全部還原</button></div>
-      <p class="note">電腦：Shift＋滾輪縮放游標所在的圖，或上下拖曳右側刻度；放大後可上下拖曳平移。雙擊圖表還原。</p>`;
-  }
-  syncBar() {
-    this.bar.querySelector('[data-z="yin"]').setAttribute("aria-pressed", this.yz > 1.01);
-    this.bar.querySelector('[data-z="sig"]').setAttribute("aria-pressed", Chart.prefs.sig);
-    const scaled = Chart.prefs.h !== 1 || Chart.prefs.log || Chart.prefs.sh !== 1 || Chart.prefs.fit || Object.values(this.pz).some(x => x.z !== 1 || x.off);
-    this.bar.querySelector('[data-z="scale"]').classList.toggle("on", scaled);
-  }
-  yZoom(f) { this.yz = Math.max(0.5, Math.min(12, this.yz * f)); if (this.yz <= 1) this.yoff = 0; this.draw(); }
-  set(D, opts = {}) { if (D !== this.D && !Chart.keepView) { this.view = null; this.yz = 1; this.yoff = 0; this.pz = {}; } this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.hover = null; this.draw(); return this; }
-  get visible() { return this.o.visible ?? this.D.length; }
-  get range() { return this.view || { a: 0, b: this.D.length - 1 }; }
-  clampView(a, w) { const N = this.D.length; w = Math.round(Math.max(Math.min(15, N), Math.min(N, w))); a = Math.max(0, Math.min(N - w, Math.round(a))); return w >= N ? null : { a, b: a + w - 1 }; }
-  setWidth(w, anchor) { const { a, b } = this.range, ow = b - a + 1; anchor = anchor ?? (a + b) / 2; const t = (anchor - a) / ow; this.view = this.clampView(anchor - t * w, w); this.draw(); }
-  zoom(f, anchor) { if (!this.D) return; const { a, b } = this.range; this.setWidth((b - a + 1) * f, anchor); }
-  hoverAt(x) { const i = this.indexAt(x); if (i !== this.hover) { this.hover = i; this.draw(); } }
-  indexAt(x, raw) { if (!this.geo) return null; const { L, bw, a } = this.geo; const i = a + Math.floor((x - L) / bw); return raw ? i : Math.max(a, Math.min(Math.min(this.visible - 1, this.range.b), i)); }
-  draw() {
-    if (!this.D) return;
-    const { D, I, o } = this, ctx = this.ctx, dpr = window.devicePixelRatio || 1;
-    const W = this.host.clientWidth; if (!W) return;
-    const narrow = W < 560;
-    // 副圖可以疊好幾個：o.subs = ["kd", "macd", { custom }]；舊的 o.sub 也支援
-    const subs = (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean);
-    const mainH = Math.round((narrow ? 230 : 300) * Chart.prefs.h), volH = o.noVol ? 0 : Math.round((narrow ? 52 : 66) * Chart.prefs.sh), subH = Math.round((subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112)) * Chart.prefs.sh), gap = 10, axisH = 20;
-    const H = mainH + gap + volH + subs.length * (gap + subH) + axisH + 8;
-    this.canvas.width = W * dpr; this.canvas.height = H * dpr; this.canvas.style.height = H + "px";
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-    const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface") };
-    const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R;
-    const { a: va, b: vb } = this.range, bw = pw / (vb - va + 1), inV = i => i >= va - 1 && i <= vb + 1;
-    this.geo = { L, bw, a: va, pw, H, top0: 8, mainH };
-    { const vt = 8 + mainH + gap, st = o.noVol ? vt : vt + volH + gap; this.panes = [{ key: "main", top: 8, h: mainH }, ...(o.noVol ? [] : [{ key: "vol", top: vt, h: volH }]), ...subs.map((_, k) => ({ key: "s" + k, top: st + k * (subH + gap), h: subH }))]; }
-    this.syncBar();
-    const X = i => L + bw * (i - va + 0.5);
-    this.bar.classList.toggle("zoomed", !!this.view);
-    const top0 = 8, volTop = top0 + mainH + gap, subTop0 = o.noVol ? volTop : volTop + volH + gap;
-    const fmtD = o.fmtD || (s => s.slice(5).replace("-", "/"));
-    const MA_COL = { 5: col.s1, 10: col.accent, 20: col.s2, 60: col.s3 };
-    const mas = (o.ma || []).map((n, k) => ({ n, a: I.ma(n), c: MA_COL[n] || [col.s1, col.s2, col.s3][k % 3] }));
-    const F = o.future; // { from, p10, p25, p50, p75, p90 }：模擬區的機率帶
-
-    // 價格範圍
-    let lo = Infinity, hi = -Infinity;
-    for (let i = va; i < Math.min(vis, vb + 1); i++) {
-      lo = Math.min(lo, D[i].l); hi = Math.max(hi, D[i].h);
-      if (o.boll && I.boll.up[i] != null) { lo = Math.min(lo, I.boll.lo[i]); hi = Math.max(hi, I.boll.up[i]); }
-      if (F && i >= F.from) { lo = Math.min(lo, F.p25[i - F.from]); hi = Math.max(hi, F.p75[i - F.from]); } // 外圈機率帶超出就裁掉，真實 K 棒才不會被壓扁
-    }
-    // 對數座標：用 log(價格) 決定高度；縱向放大：以中間為準把價格範圍縮小，可上下平移（yoff）
-    const logS = Chart.prefs.log && lo > 0, tf = logS ? Math.log : v => v, itf = logS ? Math.exp : v => v;
-    let tlo = tf(lo), thi = tf(hi); const tpad = (thi - tlo) * 0.08 || Math.abs(thi) * 0.01 || 1; tlo -= tpad; thi += tpad;
-    if (this.yz !== 1 || this.yoff) { const sp = thi - tlo, mid = (tlo + thi) / 2 + this.yoff * sp; tlo = mid - sp / this.yz / 2; thi = mid + sp / this.yz / 2; }
-    lo = itf(tlo); hi = itf(thi);
-    const Y = p => top0 + (thi - tf(p)) / (thi - tlo) * mainH;
-
-    ctx.font = `11px ${cssVar("--font-mono")}`; ctx.textBaseline = "middle";
-    // 未揭曉區
-    if (vis < n || o.cutoff != null) {
-      const cx = Math.max(L, X((o.cutoff ?? vis) - 0.5));
-      ctx.fillStyle = col.shade; ctx.fillRect(cx, top0, L + pw - cx, H - top0 - axisH - 8);
-      ctx.strokeStyle = col.muted; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(cx, top0); ctx.lineTo(cx, H - axisH - 8); ctx.stroke(); ctx.setLineDash([]);
-      if (vis < n) { ctx.fillStyle = col.muted; ctx.textAlign = "center"; ctx.font = `13px ${cssVar("--font-body")}`; ctx.fillText("？", (cx + L + pw) / 2, top0 + mainH / 2); ctx.font = `11px ${cssVar("--font-mono")}`; }
-    }
-    // 格線 + 價格座標
-    const step = niceStep((hi - lo) / 5);
-    ctx.textAlign = "left";
-    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
-      const y = Y(v); ctx.strokeStyle = col.line; ctx.lineWidth = 1; ctx.globalAlpha = 0.6;
-      ctx.beginPath(); ctx.moveTo(L, Math.round(y) + 0.5); ctx.lineTo(L + pw, Math.round(y) + 0.5); ctx.stroke(); ctx.globalAlpha = 1;
-      ctx.fillStyle = col.muted; ctx.fillText(fmtP(v), L + pw + 6, y);
-    }
-    // 布林
-    if (o.boll) {
-      const { up, lo: lw, mid } = I.boll;
-      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
-      ctx.fillStyle = col.band; ctx.beginPath(); let started = false;
-      for (let i = 0; i < vis; i++) if (up[i] != null) { started ? ctx.lineTo(X(i), Y(up[i])) : ctx.moveTo(X(i), Y(up[i])); started = true; }
-      for (let i = vis - 1; i >= 0; i--) if (lw[i] != null) ctx.lineTo(X(i), Y(lw[i]));
-      ctx.fill(); ctx.restore();
-      this.line(up, vis, X, Y, col.accent, 1, 0.7); this.line(lw, vis, X, Y, col.accent, 1, 0.7); this.line(mid, vis, X, Y, col.accent, 1, 0.45, [3, 3]);
-    }
-    // 支撐壓力
-    (o.hlines || []).forEach(h => {
-      const y = Y(h.price); if (y < top0 - 1 || y > top0 + mainH + 1) return; const c = h.color ? col[h.color] || h.color : h.kind === "壓力" ? col.down : col.up;
-      ctx.strokeStyle = c; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(Math.max(L, X(h.i ?? 0)), y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]);
-      const t = h.label || `${h.kind} ${fmtP(h.price)}`; ctx.textAlign = "right"; ctx.font = `11px ${cssVar("--font-body")}`; const tw = ctx.measureText(t).width; ctx.fillStyle = col.surface; ctx.globalAlpha = 0.85; ctx.fillRect(L + pw - 6 - tw, y - 19, tw + 4, 14); ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, L + pw - 4, y - 8); ctx.font = `11px ${cssVar("--font-mono")}`;
-    });
-    // 區塊（訂單塊、公平價值缺口）：畫在 K 棒後面，只畫到目前可見的範圍
-    const cmap = { up: col.up, down: col.down, accent: col.accent, muted: col.muted, s2: col.s2, ink: col.ink };
-    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
-    (o.zones || []).filter(z => z.at == null || z.at < vis).forEach(z => {
-      const x1 = X(z.i1) - bw / 2, x2 = X(Math.min(z.i2, vis - 1)) + bw / 2, y1 = Y(z.top), y2 = Y(z.bot), c = z.color ? cmap[z.color] : z.dir > 0 ? col.up : col.down;
-      ctx.fillStyle = c; ctx.globalAlpha = z.alpha ?? (z.kind === "FVG" ? 0.08 : 0.16); ctx.fillRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.globalAlpha = z.alpha != null ? Math.min(0.7, z.alpha * 4) : 0.7;
-      ctx.strokeStyle = c; ctx.lineWidth = 1; ctx.setLineDash(z.kind === "FVG" ? [3, 3] : []); ctx.strokeRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.setLineDash([]); ctx.globalAlpha = 1;
-      if (x2 - x1 > 22) { ctx.fillStyle = c; ctx.textAlign = "left"; ctx.font = `600 10px ${cssVar("--font-body")}`; ctx.fillText(z.kind, x1 + 3, Math.max(y1, Math.min(y2, y1 + 7))); ctx.font = `11px ${cssVar("--font-mono")}`; }
-    });
-    ctx.restore();
-    // 模擬區：底色、機率帶（10–90%、25–75%）、中位數
-    if (F) {
-      const fx = Math.max(L, X(F.from - 0.5));
-      ctx.fillStyle = col.shade; ctx.fillRect(fx, top0, L + pw - fx, mainH);
-      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
-      const band = (a, b, alpha) => { ctx.fillStyle = col.accent; ctx.globalAlpha = alpha; ctx.beginPath(); ctx.moveTo(X(F.from - 1), Y(D[F.from - 1].c)); a.forEach((v, t) => ctx.lineTo(X(F.from + t), Y(v))); for (let t = b.length - 1; t >= 0; t--) ctx.lineTo(X(F.from + t), Y(b[t])); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; };
-      band(F.p90, F.p10, 0.1); band(F.p75, F.p25, 0.16);
-      ctx.strokeStyle = col.accent; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(X(F.from - 1), Y(D[F.from - 1].c)); F.p50.forEach((v, t) => ctx.lineTo(X(F.from + t), Y(v))); ctx.stroke(); ctx.setLineDash([]);
-      ctx.restore();
-      ctx.fillStyle = col.accent; ctx.textAlign = "left"; ctx.font = `700 11px ${cssVar("--font-body")}`; if (fx < L + pw - 40) ctx.fillText("模擬", fx + 6, top0 + 10); ctx.font = `11px ${cssVar("--font-mono")}`;
-    }
-    // K 棒以下到標記為止都裁在價格區內（縱向放大時才不會畫到成交量區）
-    ctx.save(); ctx.beginPath(); ctx.rect(0, top0, L + pw + 1, mainH); ctx.clip();
-    const cw = Math.max(1, Math.min(14, bw * 0.66));
-    for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) {
-      const k = D[i], x = X(i), upc = k.c > k.o ? col.up : k.c < k.o ? col.down : col.ink;
-      ctx.globalAlpha = k.sim ? 0.5 : 1;
-      ctx.strokeStyle = upc; ctx.fillStyle = upc; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, Y(k.h)); ctx.lineTo(Math.round(x) + 0.5, Y(k.l)); ctx.stroke();
-      const y1 = Y(Math.max(k.o, k.c)), y2 = Y(Math.min(k.o, k.c));
-      ctx.fillRect(Math.round(x - cw / 2), y1, Math.max(1, Math.round(cw)), Math.max(1, y2 - y1));
-    }
-    ctx.globalAlpha = 1;
-    // 均線
-    mas.forEach(m => this.line(m.a, vis, X, Y, m.c, 1.6));
-    // 折線、頸線、目標價、結構線（可來自設定或附在標記上；只畫到可見範圍）
-    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
-    [...(o.shapes || []), ...(o.markers || []).filter(m => m.i < vis).flatMap(m => m.shapes || [])].forEach(sh => {
-      if (sh.pts[0][0] >= vis) return;
-      const pts = sh.pts.map(([i, p]) => [vis < n ? Math.min(i, vis - 1) : i, p]);
-      const c = cmap[sh.color] || col.accent;
-      ctx.strokeStyle = c; ctx.lineWidth = sh.width || 1.5; ctx.setLineDash(sh.dash || []); ctx.beginPath();
-      pts.forEach(([i, p], k) => { const x = X(Math.min(i, n - 1)) + (i > n - 1 ? (i - n + 1) * bw : 0); k ? ctx.lineTo(x, Y(p)) : ctx.moveTo(x, Y(p)); }); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = c; ctx.font = `600 10.5px ${cssVar("--font-body")}`;
-      if (sh.label) { const [i, p] = pts[pts.length - 1]; ctx.textAlign = "right"; ctx.fillText(sh.label, Math.min(X(Math.min(i, vis - 1)), L + pw - 2), Y(p) - 6); }
-      (sh.tags || []).filter(t => t.i < vis).forEach(t => { ctx.textAlign = "center"; ctx.fillText(t.text, X(t.i), Y(t.p) + (t.below ? 13 : -7)); });
-      ctx.font = `11px ${cssVar("--font-mono")}`;
-    });
-    ctx.restore();
-    // 背離連線：價格圖上連兩個轉折點，副圖顯示同一指標時也連起來
-    const divs = (o.markers || []).filter(m => m.div && m.i < vis);
-    const divLine = (x1, y1, x2, y2, c) => { ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); [[x1, y1], [x2, y2]].forEach(([a, b]) => { ctx.beginPath(); ctx.arc(a, b, 3, 0, Math.PI * 2); ctx.fill(); }); };
-    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
-    divs.forEach(m => divLine(X(m.div.i1), Y(m.div.p1), X(m.div.i2), Y(m.div.p2), m.side === "buy" ? col.up : col.down));
-    ctx.restore();
-    // 標記
-    const showLabels = o.labels !== false && bw >= 2.5;
-    const placed = [];
-    // 副圖訊號：在副圖上交叉或離開超買超賣區的那一天，主圖K線也標出來（空心圈，和實心三角的課程／策略訊號區分）
-    const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis, Chart.prefs.sigKinds, Chart.prefs.sigStrong) : [];
-    (o.markers || []).filter(m => m.i < vis && m.i >= va && m.i <= vb).forEach(m => {
-      const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
-      const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
-      ctx.globalAlpha = m.dim ? 0.3 : 1; // 回測中被略過的訊號畫淡一點
-      ctx.fillStyle = c; ctx.beginPath();
-      if (buy) { ctx.moveTo(x, y); ctx.lineTo(x - s, y + s * 1.5); ctx.lineTo(x + s, y + s * 1.5); }
-      else { ctx.moveTo(x, y); ctx.lineTo(x - s, y - s * 1.5); ctx.lineTo(x + s, y - s * 1.5); }
-      ctx.closePath(); ctx.fill();
-      if (showLabels && m.label) {
-        // 標籤互相重疊時只畫第一個（三角形照畫）
-        ctx.font = `600 10.5px ${cssVar("--font-body")}`; ctx.textAlign = "center";
-        const tx = Math.min(Math.max(x, L + 24), L + pw - 24), ty = buy ? y + s * 1.5 + 9 : y - s * 1.5 - 8, tw = ctx.measureText(m.label).width;
-        if (!placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 13)) { ctx.fillText(m.label, tx, ty); placed.push({ x: tx, y: ty, w: tw }); }
-        ctx.font = `11px ${cssVar("--font-mono")}`;
-      }
-      ctx.globalAlpha = 1;
-    });
-    // 同一天同方向的副圖訊號疊在一起：圈畫一次，標籤合併（例如「KD金叉・MACD金叉」）
-    const sigAt = new Map(); sigs.filter(g => g.i >= va && g.i <= vb).forEach(g => { const k = g.i + g.side; sigAt.has(k) ? sigAt.get(k).push(g) : sigAt.set(k, [g]); });
-    const marked = new Set((o.markers || []).map(m => m.i + m.side));
-    sigAt.forEach(gs => {
-      if (marked.has(gs[0].i + gs[0].side)) return; // 同一天已有同方向的課程／策略標記（通常就是同一個訊號），不重複畫
-      const g = gs[0], k = D[g.i], x = X(g.i), buy = g.side === "buy", c = buy ? col.up : col.down, off = 8;
-      const y = Math.max(top0 + 6, Math.min(top0 + mainH - 6, buy ? Y(k.l) + off : Y(k.h) - off));
-      ctx.strokeStyle = c; ctx.lineWidth = 1.6; ctx.fillStyle = col.surface; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      if (o.labels === false) return; // 手機上 K 棒很密也照樣標字（重疊的會自動略過）
-      const t = gs.map(q => q.label).join("・"); ctx.font = `600 10px ${cssVar("--font-body")}`; ctx.textAlign = "center";
-      let tw = ctx.measureText(t).width, tx = Math.min(Math.max(x, L + tw / 2 + 2), L + pw - tw / 2 - 2), ty = buy ? y + 13 : y - 12;
-      // 貼近圖的上下緣放不下時，改標在圈的旁邊
-      if (ty > top0 + mainH - 5 || ty < top0 + 7) { ty = y; tx = x + 7 + tw / 2 > L + pw - 2 ? x - 7 - tw / 2 : x + 7 + tw / 2; }
-      if (!placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 12)) { ctx.fillStyle = c; ctx.fillText(t, tx, ty); placed.push({ x: tx, y: ty, w: tw }); }
-      ctx.font = `11px ${cssVar("--font-mono")}`;
-    });
-
-    ctx.restore();
-    if (logS || this.yz !== 1) { ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `10px ${cssVar("--font-body")}`; ctx.fillText([logS ? "對數座標" : "", this.yz !== 1 ? `價格軸 ${+this.yz.toFixed(1)}×` : ""].filter(Boolean).join("・"), L + 4, top0 + mainH - 8); ctx.font = `11px ${cssVar("--font-mono")}`; }
-    // 成交量
-    if (!o.noVol) {
-    let vmax = 1; for (let i = va; i < Math.min(vis, vb + 1); i++) vmax = Math.max(vmax, D[i].v);
-    { const vzz = this.paneZoom("vol"); vmax /= vzz.z; } // 成交量放大：從底部往上拉長
-    ctx.save(); ctx.beginPath(); ctx.rect(0, volTop, W, volH); ctx.clip();
-    ctx.globalAlpha = 0.6;
-    for (let i = va; i < Math.min(vis, vb + 1); i++) { const k = D[i]; if (k.sim) continue; ctx.fillStyle = k.c >= k.o ? col.up : col.down; const h = k.v / vmax * (volH - 4); ctx.fillRect(Math.round(X(i) - cw / 2), volTop + volH - h, Math.max(1, Math.round(cw)), h); }
-    ctx.globalAlpha = 1;
-    this.line(I.vma, vis, X, v => volTop + volH - v / vmax * (volH - 4), col.muted, 1);
-    ctx.restore();
-    ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`; ctx.fillText(o.volLabel || "量（張）", L + pw + 6, volTop + 6); ctx.font = `11px ${cssVar("--font-mono")}`;
-    ctx.strokeStyle = col.line; ctx.beginPath(); ctx.moveTo(L, volTop - gap / 2); ctx.lineTo(L + pw, volTop - gap / 2); ctx.stroke();
-    }
-
-    // 副圖（可多個，由上往下排）
-    subs.forEach((S, si) => {
-      const sub = typeof S === "string" ? S : "custom", C0 = typeof S === "string" ? null : S.custom, subTop = subTop0 + si * (subH + gap);
-      ctx.strokeStyle = col.line; ctx.beginPath(); ctx.moveTo(L, subTop - gap / 2); ctx.lineTo(L + pw, subTop - gap / 2); ctx.stroke();
-      // 副圖縮放：手動倍數（pz）＋「自動貼合資料」；以可見資料的中心為準，所以 KD 停在高檔時也不會被放大到畫面外
-      const pzz = this.paneZoom("s" + si);
-      const Z = (sy0, series) => {
-        let a = Infinity, b = -Infinity;
-        series.forEach(arr => { if (!arr) return; for (let i = Math.max(0, va); i < Math.min(vis, vb + 1, arr.length); i++) { const v = arr[i]; if (v == null) continue; const y = sy0(v); if (y < a) a = y; if (y > b) b = y; } });
-        if (!isFinite(a)) return sy0;
-        let z = pzz.z; if (Chart.prefs.fit) z *= Math.max(1, Math.min(8, (subH - 14) / Math.max(4, b - a)));
-        if (z === 1 && !pzz.off) return sy0;
-        const c = (a + b) / 2, mid = subTop + subH / 2 + pzz.off * subH;
-        return v => mid + (sy0(v) - c) * z;
-      };
-      ctx.save(); ctx.beginPath(); ctx.rect(0, subTop, W, subH); ctx.clip();
-      const lvl = (v, sy) => { const y = sy(v); if (y < subTop - 2 || y > subTop + subH + 2) return; ctx.strokeStyle = col.line; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.fillText(String(v), L + pw + 6, y); };
-      if (sub === "rsi" || sub === "kd") {
-        const sy = Z(v => subTop + (100 - v) / 100 * subH, sub === "rsi" ? [I.rsi] : [I.kd.K, I.kd.D]); this.subY = sy;
-        const [a, b] = sub === "rsi" ? [70, 30] : [80, 20];
-        ctx.fillStyle = col.band; ctx.fillRect(L, sy(100), pw, sy(a) - sy(100)); ctx.fillRect(L, sy(b), pw, sy(0) - sy(b));
-        lvl(a, sy); lvl(b, sy);
-        if (sub === "rsi") this.line(I.rsi, vis, X, sy, col.s2, 1.5);
-        else { this.line(I.kd.K, vis, X, sy, col.s1, 1.5); this.line(I.kd.D, vis, X, sy, col.s3, 1.5); }
-      } else if (sub === "wr") {
-        const sy = Z(v => subTop + (-v) / 100 * subH, [I.wr]);
-        ctx.fillStyle = col.band; ctx.fillRect(L, sy(0), pw, sy(-20) - sy(0)); ctx.fillRect(L, sy(-80), pw, sy(-100) - sy(-80));
-        lvl(-20, sy); lvl(-80, sy);
-        this.line(I.wr, vis, X, sy, col.s2, 1.5); this.subY = sy;
-      } else if (sub === "inout" && I.io) {
-        let m = 5; for (let i = 0; i < vis; i++) m = Math.max(m, Math.abs(I.io[i] - 50));
-        const sy = Z(v => subTop + subH / 2 - (v - 50) / m * (subH / 2 - 4), [I.io, I.io5]);
-        ctx.globalAlpha = 0.55;
-        for (let i = va; i < Math.min(vis, vb + 1); i++) { const v = I.io[i]; ctx.fillStyle = v >= 50 ? col.up : col.down; const y0 = sy(50), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }
-        ctx.globalAlpha = 1; lvl(50, sy);
-        this.line(I.io5, vis, X, sy, col.s1, 1.5); this.subY = sy;
-      } else if (sub === "custom") {
-        // 截圖讀出的副圖：值域依資料自動決定
-        const C = C0, vals = [...C.lines.flat(), ...(C.bars || [])].filter(v => v != null);
-        let lo = C.range ? C.range[0] : Math.min(...vals, C.bars ? 0 : Infinity), hi = C.range ? C.range[1] : Math.max(...vals, C.bars ? 0 : -Infinity);
-        if (hi === lo) { hi += 1; lo -= 1; }
-        const sy = Z(v => subTop + 4 + (hi - v) / (hi - lo) * (subH - 8), [...C.lines, ...(C.bars ? [C.bars] : [])]);
-        (C.levels || []).forEach(v => lvl(v, sy));
-        if (C.bars) { ctx.globalAlpha = 0.55; C.bars.forEach((v, i) => { if (i >= vis || !v || !inV(i)) return; ctx.fillStyle = v >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }); ctx.globalAlpha = 1; if (C.zeroLine) lvl(0, sy); }
-        C.lines.forEach((a, k) => this.line(a, vis, X, sy, [col.s1, col.s3, col.s2][k % 3], 1.5));
-        // 第二組線（例如累計買超、融資餘額）用自己的刻度，數值標在右側
-        if (C.lines2) {
-          const v2 = C.lines2.flat().filter(v => v != null); let lo2 = Math.min(...v2), hi2 = Math.max(...v2); if (hi2 === lo2) { hi2 += 1; lo2 -= 1; }
-          const sy2 = Z(v => subTop + 4 + (hi2 - v) / (hi2 - lo2) * (subH - 8), C.lines2);
-          C.lines2.forEach((a, k) => this.line(a, vis, X, sy2, [col.s2, col.accent][k % 2], 1.5));
-          ctx.fillStyle = col.muted; ctx.textAlign = "left"; const f2 = C.fmt || fmtN; ctx.fillText(f2(hi2), L + pw + 4, subTop + 10); ctx.fillText(f2(lo2), L + pw + 4, subTop + subH - 2);
-        }
-        this.subY = sy;
-      } else if (sub === "macd") {
-        const { dif, sig, osc } = I.macd; let m = 0;
-        for (let i = 0; i < vis; i++) if (dif[i] != null) m = Math.max(m, Math.abs(dif[i]), Math.abs(sig[i] ?? 0), Math.abs(osc[i] ?? 0));
-        m = m || 1; const sy = Z(v => subTop + subH / 2 - v / m * (subH / 2 - 4), [dif, sig, osc]); this.subY = sy;
-        lvl(0, sy);
-        ctx.globalAlpha = 0.55;
-        for (let i = va; i < Math.min(vis, vb + 1); i++) if (osc[i] != null) { ctx.fillStyle = osc[i] >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(osc[i]); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.abs(y1 - y0)); }
-        ctx.globalAlpha = 1;
-        this.line(dif, vis, X, sy, col.s1, 1.5); this.line(sig, vis, X, sy, col.s3, 1.5);
-      }
-      const subY = this.subY || (v => subTop + (100 - v) / 100 * subH);
-      ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pw, subH); ctx.clip();
-      divs.filter(m => m.div.ind === (sub === "custom" ? "pane" : sub)).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
-      // 副圖上發出訊號的位置：實心點＋一條淡淡的虛線往上指到主圖
-      sigs.filter(g => g.si === si && g.i >= va && g.i <= vb).forEach(g => {
-        const x = X(g.i), y = subY(g.v), c = g.side === "buy" ? col.up : col.down;
-        ctx.strokeStyle = c; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, subTop); ctx.lineTo(Math.round(x) + 0.5, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
-        ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill();
-      });
-      ctx.restore();
-      ctx.restore(); // 副圖裁切結束
-      ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`;
-      const ttl = sub === "custom" ? C0.title : { rsi: "RSI 14", kd: "KD 9", macd: "MACD", wr: "威廉 %R 14", inout: "外盤比（%）" }[sub] || "";
-      ctx.fillText(ttl, L + 4, subTop + 8);
-      // 縮放狀態標在標題旁邊，不壓到線
-      if (pzz.z !== 1 || Chart.prefs.fit) { const tx = L + 4 + ctx.measureText(ttl).width + 10; ctx.fillStyle = col.accent; ctx.font = `10px ${cssVar("--font-body")}`; ctx.fillText(Chart.prefs.fit ? "貼合資料" + (pzz.z !== 1 ? `・${+pzz.z.toFixed(1)}×` : "") : `放大 ${+pzz.z.toFixed(1)}×`, tx, subTop + 8); }
-      ctx.font = `11px ${cssVar("--font-mono")}`;
-    });
-
-    // 日期軸
-    const axY = H - axisH / 2 - 4, every = Math.max(1, Math.ceil(64 / bw));
-    ctx.fillStyle = col.muted; ctx.textAlign = "center";
-    for (let i = Math.ceil(va / every) * every; i <= vb; i += every) { if (i >= vis && !o.cutoff) continue; ctx.fillText(fmtD(D[i].d), Math.min(Math.max(X(i), L + 18), L + pw - 18), axY); }
-
-    // 十字線
-    const hi_ = this.hover;
-    if (hi_ != null) {
-      ctx.strokeStyle = col.muted; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.moveTo(Math.round(X(hi_)) + 0.5, top0); ctx.lineTo(Math.round(X(hi_)) + 0.5, H - axisH - 6); ctx.stroke();
-      const y = Y(D[hi_].c); ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
-      ctx.fillStyle = col.ink; ctx.fillRect(L + pw + 2, y - 9, R - 4, 18); ctx.fillStyle = col.surface; ctx.textAlign = "left"; ctx.fillText(fmtP(D[hi_].c), L + pw + 6, y);
-    }
-    this.canvas.setAttribute("aria-label", `K線圖，共 ${vis} 個交易日，最後收盤 ${fmtP(D[vis - 1].c)}`);
-    this.renderLegend(hi_ ?? vis - 1, mas);
-    if (this.onHover) this.onHover(hi_ ?? vis - 1);
-  }
-  line(a, vis, X, Y, color, w, alpha = 1, dash) {
-    const ctx = this.ctx, g = this.geo; ctx.save(); ctx.beginPath(); ctx.rect(g.L, 0, g.pw, g.H); ctx.clip();
-    ctx.strokeStyle = color; ctx.lineWidth = w; ctx.globalAlpha = alpha; if (dash) ctx.setLineDash(dash);
-    ctx.beginPath(); let s = false;
-    for (let i = 0; i < vis; i++) { if (a[i] == null) { s = false; continue; } s ? ctx.lineTo(X(i), Y(a[i])) : ctx.moveTo(X(i), Y(a[i])); s = true; }
-    ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]); ctx.restore();
-  }
-  renderLegend(i, mas) {
-    const { D, I, o } = this, k = D[i], prev = D[i - 1], ch = prev ? (k.c - prev.c) / prev.c : 0, cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
-    const parts = [
-      `<span><b>${k.sim ? `${k.d}（模擬，不是真實走勢）` : k.d.replace(/-/g, "/")}</b></span>`,
-      `<span><b>開</b>${fmtP(k.o)}</span>`, `<span><b>高</b>${fmtP(k.h)}</span>`, `<span><b>低</b>${fmtP(k.l)}</span>`,
-      `<span class="${cls}"><b>收</b>${fmtP(k.c)} ${prev ? fmtPct(ch) : ""}</span>`,
-      ];
-    if (!o.noVol) parts.push(`<span><b>量</b>${o.volLabel ? Math.round(k.v) : k.v.toLocaleString()}</span>`);
-    mas.forEach(m => parts.push(`<span style="color:${m.c}"><b style="color:inherit">MA${m.n}</b>${fmtP(m.a[i])}</span>`));
-    (this.sigs || []).filter(g => g.i === i).forEach(g => parts.push(`<span class="${g.side === "buy" ? "up" : "down"}"><b style="color:inherit">${g.side === "buy" ? "○ 偏多" : "○ 偏空"}</b>${g.label}</span>`));
-    if (o.boll) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
-    (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean).forEach(S => {
-      const sub = typeof S === "string" ? S : "custom", C0 = typeof S === "string" ? null : S.custom;
-      if (sub === "wr") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">%R</b>${fmtN(I.wr[i])}</span>`);
-      if (sub === "inout" && I.io) parts.push(`<span><b>外盤</b>${D[i].ov.toLocaleString()}</span><span><b>內盤</b>${D[i].iv.toLocaleString()}</span><span style="color:var(--s1)"><b style="color:inherit">外盤比</b>${fmtN(I.io[i])}%（5日 ${fmtN(I.io5[i])}%）</span>`);
-      if (sub === "rsi") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">RSI</b>${fmtN(I.rsi[i])}</span>`);
-      if (sub === "kd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">K</b>${fmtN(I.kd.K[i])}</span><span style="color:var(--s3)"><b style="color:inherit">D</b>${fmtN(I.kd.D[i])}</span>`);
-      if (sub === "macd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">DIF</b>${fmtN(I.macd.dif[i], 2)}</span><span style="color:var(--s3)"><b style="color:inherit">MACD</b>${fmtN(I.macd.sig[i], 2)}</span><span><b>OSC</b>${fmtN(I.macd.osc[i], 2)}</span>`);
-      if (sub === "custom") {
-        const f = C0.fmt || fmtN;
-        if (C0.bars && C0.barName) parts.push(`<span><b>${C0.barName}</b>${f(C0.bars[i])}</span>`);
-        C0.lines.forEach((a, n) => parts.push(`<span style="color:var(${["--s1", "--s3", "--s2"][n % 3]})"><b style="color:inherit">${C0.names[n]}</b>${f(a[i])}</span>`));
-        (C0.lines2 || []).forEach((a, n) => parts.push(`<span style="color:var(${["--s2", "--accent"][n % 2]})"><b style="color:inherit">${C0.names2[n]}</b>${f(a[i])}</span>`));
-      }
-    });
-    const mk = (o.markers || []).filter(m => m.i === i).map(m => m.label);
-    if (mk.length) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">訊號</b>${mk.join("、")}</span>`);
-    this.legend.innerHTML = parts.join("");
-  }
-}
-function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
 
 /* ================= 課程內容 ================= */
 const anatomySVG = `
@@ -4619,7 +3992,7 @@ function realRun(live = false) {
   shot.I = indicators(shot.D);
   $("#shotGrid").hidden = false; $("#shotRebuild").hidden = false;
   shotRefresh(true);
-  if (!live) { loadStockInfo(R); liveKick(); }
+  if (!live) { loadStockInfo(R); liveKick(); INTRA.data = null; intraLoad(true); }
 }
 async function loadRealCode(code, months) {
   const note = $("#realNote"), btn = $("#realLoad"); code = code.trim(); if (!code) { $("#realCode").focus(); return; }
@@ -4665,7 +4038,7 @@ async function liveTick() {
     const q = code && j.quotes.find(x => x.code === code);
     if (q) applyLive(q, j);
   } catch (e) { LIVE.err = e.message; }
-  finally { LIVE.busy = false; renderLiveBar(); }
+  finally { LIVE.busy = false; renderLiveBar(); if (!LIVE.paused) intraLoad(); }
 }
 function liveSchedule() {
   clearTimeout(LIVE.timer); if (LIVE.off) return;
@@ -4702,9 +4075,42 @@ function renderLiveBar() {
   const st = LIVE.paused ? "已暫停" : LIVE.err ? LIVE.err : sess === "pre" ? "試撮中（09:00 開盤）" : sess === "open" && q?.date === j?.today ? "盤中即時・每 10 秒更新" : "收盤（下個交易日 09:00 開始即時更新）";
   $("#liveMeta").textContent = [q?.vol != null ? `量 ${q.vol.toLocaleString()} 張` : "", q?.time ? `${q.time}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}` : "", st, j?.source ? `來源：${j.source}` : ""].filter(Boolean).join("・");
   $("#livePause").textContent = LIVE.paused ? "恢復即時" : "暫停即時";
+  $("#liveWatch").href = "watch.html" + (code !== "T00" ? "#" + code : "");
   const B = q?.bids || [], A = q?.asks || [];
   $("#liveBook").innerHTML = B.length || A.length ? `<table class="book"><tr><th>買量</th><th>買價</th><th>賣價</th><th>賣量</th></tr>${Array.from({ length: Math.max(B.length, A.length) }, (_, k) => `<tr><td>${B[k]?.v?.toLocaleString() ?? ""}</td><td class="up">${B[k] ? fmtP(B[k].p) : ""}</td><td class="down">${A[k] ? fmtP(A[k].p) : ""}</td><td>${A[k]?.v?.toLocaleString() ?? ""}</td></tr>`).join("")}</table>` : `<p class="note" style="margin:0">${code === "T00" ? "指數沒有五檔報價。" : "目前沒有五檔資料（收盤後或試撮前）。"}</p>`;
 }
+/* ---------- 盤中分 K（/api/intraday：富果 1 分 K，沒有金鑰時用 Yahoo） ---------- */
+const INTRA = { tf: [1, 5, 15, 30, 60].includes(+store.get("intraTf", 5)) ? +store.get("intraTf", 5) : 5, at: 0, code: null, busy: false, off: !/^https?:$/.test(location.protocol), data: null };
+const intraChart = new Chart($("#intraChart"));
+$("#intraPanel").open = store.get("intraOpen", true) !== false;
+async function intraLoad(force = false) {
+  const code = liveCode(), P = $("#intraPanel");
+  P.hidden = INTRA.off || !code; if (P.hidden || !P.open || INTRA.busy) return;
+  const sess = mktSession(), age = Date.now() - INTRA.at;
+  if (!force && INTRA.code === code && INTRA.data && (sess === "closed" ? age < 600000 : age < 30000)) return; // 盤中 30 秒、收盤後 10 分鐘才重抓
+  INTRA.busy = true; $("#intraNote").textContent = "載入中…";
+  try {
+    const r = await fetch(`/api/intraday?code=${code}&tf=${INTRA.tf}`), j = await r.json().catch(() => null);
+    if (!j) { if (r.status === 404) { INTRA.off = true; P.hidden = true; } throw new Error(`分 K 服務回應 ${r.status}`); }
+    if (!j.ok) throw new Error(j.error);
+    if (liveCode() !== code) return;
+    INTRA.data = j; INTRA.code = code; INTRA.at = Date.now(); intraDraw();
+  } catch (e) { $("#intraNote").textContent = e.message || "載入失敗"; }
+  finally { INTRA.busy = false; }
+}
+function intraDraw() {
+  const j = INTRA.data; if (!j || !j.bars.length) { $("#intraNote").textContent = "今天還沒有分 K 資料（開盤後才有）。"; return; }
+  const D = j.bars.map(b => ({ d: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v })), last = D[D.length - 1], isIdx = j.code === "T00";
+  const today = LIVE.last?.today, chg = j.prev ? (last.c / j.prev - 1) * 100 : null;
+  $("#intraMeta").textContent = `${j.name || ""} ${isIdx ? "" : j.code}・${j.date && j.date !== today ? "最近交易日 " + j.date.replace(/-/g, "/") : "今天"}・${D.length} 根・最新 ${fmtP(last.c)}${chg != null ? `（${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%）` : ""}`;
+  $("#intraNote").textContent = `來源：${j.source}${mktSession() === "open" ? "・盤中每 30 秒更新" : ""}`;
+  document.querySelectorAll("#intraTf [data-tf]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.tf === INTRA.tf));
+  Chart.keepView = intraChart.D && intraChart.D.length && intraChart.D[0].d === D[0].d && INTRA.code === j.code && intraChart.o?.tf === INTRA.tf;
+  try { intraChart.set(D, { ma: [5, 20], subs: ["kd"], noVol: isIdx, volLabel: "量（張）", fmtD: s => s, tf: INTRA.tf, hlines: j.prev ? [{ price: j.prev, label: `昨收 ${fmtP(j.prev)}`, color: "muted" }] : [] }); }
+  finally { Chart.keepView = false; }
+}
+$("#intraTf").addEventListener("click", e => { const b = e.target.closest("[data-tf]"); if (!b) return; INTRA.tf = +b.dataset.tf; store.set("intraTf", INTRA.tf); intraLoad(true); });
+$("#intraPanel").addEventListener("toggle", () => { store.set("intraOpen", $("#intraPanel").open); if ($("#intraPanel").open) intraLoad(true); });
 $("#livePause").addEventListener("click", () => { LIVE.paused = !LIVE.paused; store.set("livePaused", LIVE.paused); renderLiveBar(); if (!LIVE.paused) liveKick(); });
 
 /* ---------- 真實個股的籌碼面與基本面（/api/stockinfo） ---------- */
@@ -5411,7 +4817,7 @@ function switchTab(t) {
     if (t === "challenge") { chalScore(); chalNew(); }
     if (t === "quiz") quizStart();
     if (t === "savings") $("#savingsFrame").src = "savings.html?embed=1&theme=" + (document.documentElement.dataset.theme || "dark");
-    if (t === "shot") makeSampleShot().then(s => { if (!shot.img) shotLoad(s.blob, s); });
+    if (t === "shot") makeSampleShot().then(s => { if (!shot.img && !REAL.cur) shotLoad(s.blob, s); }); // 已經載入真實個股（例如從看盤頁帶過來）就不蓋掉
   }
   window.scrollTo({ top: 0 });
 }
@@ -5428,6 +4834,8 @@ if (document.fonts) document.fonts.ready.then(redrawAll);
 updateProgress();
 showLesson(lessonIdx);
 liveKick(); // 頂部加權指數
+// 從看盤頁帶過來：?code=2330#shot → 直接在個股判讀載入真實 K 線
+{ const qc = new URLSearchParams(location.search).get("code"); if (qc && /^(\d{4,6}[A-Z]?|加權)$/i.test(qc)) setTimeout(() => { switchTab("shot"); $("#realCode").value = qc; loadRealCode(qc, +$("#realMonths").value); }, 0); }
 switchTab(location.hash.slice(1) || store.get("tab", "learn"));
 </script>
 </body>

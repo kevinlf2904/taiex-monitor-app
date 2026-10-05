@@ -1,4 +1,7 @@
 {
   "regions": ["hnd1"],
-  "redirects": [{ "source": "/", "destination": "/learner/", "permanent": false }]
+  "redirects": [
+    { "source": "/", "destination": "/learner/", "permanent": false },
+    { "source": "/watch", "destination": "/learner/watch.html", "permanent": false }
+  ]
 }
