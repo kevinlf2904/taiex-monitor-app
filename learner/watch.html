@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>K線看盤</title>
-<meta name="description" content="自選股即時報價、盤中分 K、日 K 技術指標與五檔，和 K線學堂共用資料與圖表。">
+<meta name="description" content="自選股即時報價、當日分時、K 線（分／日／週／月，可一直往前拉）、五檔與價格提醒，和 K線學堂共用資料與圖表。">
 <meta name="theme-color" content="#000000">
 <link rel="manifest" href="watch.webmanifest">
 <link rel="apple-touch-icon" href="watch-icon-180.png">
@@ -19,107 +19,153 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="core.css">
 <style>
-/* 看盤：左邊自選股清單、右邊個股（手機上清單和個股輪流顯示）。主題色與 K 線圖樣式在 core.css。 */
-body { padding-bottom: env(safe-area-inset-bottom, 0px); line-height: 1.5; }
+/* 看盤：左邊自選股、右邊個股（手機上兩者輪流顯示，底部是快捷選單）。主題色與 K 線圖樣式在 core.css。 */
+body { line-height: 1.5; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
 .note { font-size: 12.5px; color: var(--muted); }
 .btn { border: 1px solid var(--line); background: var(--surface-2); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; }
 .btn:hover { border-color: var(--accent); }
 .btn.primary { background: var(--accent); color: var(--surface); border-color: var(--accent); font-weight: 700; }
 .btn.sm { padding: 4px 10px; font-size: 13px; }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { border: 0; background: var(--surface-2); padding: 5px 11px; cursor: pointer; font-size: 13px; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg button { flex: none; border: 0; background: var(--surface-2); padding: 5px 11px; cursor: pointer; font-size: 13px; color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 700; }
+.seg .gap { border-left: 2px solid var(--line); }
 .ibar { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .ibar-g { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ibar-t { font-size: 12px; color: var(--muted); letter-spacing: .06em; margin-right: 2px; }
 .ichip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 3px 11px; font-size: 13px; cursor: pointer; }
 .ichip i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
 .ichip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600; }
-input.code { padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-3); color: var(--ink); font-family: var(--font-mono); font-size: 16px; min-width: 0; }
-input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-3); color: var(--ink); font-family: var(--font-mono); font-size: 15px; width: 120px; }
+input.code { padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-3); color: var(--ink); font-size: 16px; min-width: 0; }
+input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-3); color: var(--ink); font-family: var(--font-mono); font-size: 16px; width: 120px; }
 
-.w-top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
-.brand { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 900; font-size: 19px; color: var(--ink); text-decoration: none; }
+/* 頂部 */
+.w-top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 8px 12px; padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 900; font-size: 19px; color: var(--ink); text-decoration: none; flex: none; }
 .brand b { width: 28px; height: 28px; border-radius: 7px; background: var(--up); color: #fff; display: grid; place-items: center; font-size: 15px; }
-.ix { display: flex; gap: 8px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.ixc { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 13px; }
-.ixc b { font-family: var(--font-mono); font-size: 14px; }
-.ixc .num { font-size: 12.5px; }
-.tools { display: flex; align-items: center; gap: 8px; }
+.ix { display: flex; gap: 6px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.ixc { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 12.5px; flex: none; }
+.ixc b { font-family: var(--font-mono); font-size: 13.5px; }
+.tools { display: flex; align-items: center; gap: 8px; flex: none; }
 .stat { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
 .dot.on { background: var(--up); box-shadow: 0 0 0 3px color-mix(in srgb, var(--up) 25%, transparent); animation: pulse 2s ease-in-out infinite; }
+.dot.err { background: var(--s1); }
 @keyframes pulse { 50% { box-shadow: 0 0 0 6px transparent; } }
 @media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }
-.icon-btn { width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.icon-btn { width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0; text-decoration: none; }
 .icon-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-:root[data-theme="dark"] .ic-moon, :root:not([data-theme="dark"]) .ic-sun { display: none; }
 
-.w-main { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; align-items: start; }
-.w-list { position: sticky; top: 76px; max-height: calc(100vh - 92px); display: flex; flex-direction: column; overflow: hidden; }
-.w-list form { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); }
-.w-list form input { flex: 1; }
+/* 版面 */
+.w-main { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; padding: 16px; max-width: 1440px; margin: 0 auto; align-items: start; }
+.w-list { position: sticky; top: 68px; max-height: calc(100vh - 84px); display: flex; flex-direction: column; overflow: hidden; }
+.search { position: relative; padding: 12px; border-bottom: 1px solid var(--line); }
+.search form { display: flex; gap: 8px; }
+.search input { flex: 1; }
+.sugg { position: absolute; left: 12px; right: 12px; top: calc(100% - 6px); z-index: 15; list-style: none; margin: 0; padding: 4px; max-height: 320px; overflow-y: auto; box-shadow: 0 12px 30px rgba(0,0,0,.35); }
+.sugg button { display: flex; width: 100%; gap: 10px; align-items: baseline; border: 0; background: transparent; color: var(--ink); padding: 8px 10px; border-radius: 6px; cursor: pointer; text-align: left; font-size: 14.5px; }
+.sugg button:hover, .sugg button[aria-selected="true"] { background: var(--surface-2); }
+.sugg .cd { font-family: var(--font-mono); color: var(--muted); font-size: 13px; min-width: 52px; }
+.sugg .mk { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+.sugg .has { font-size: 11.5px; color: var(--accent); }
 .w-sort { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
-.wl { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+.wl { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; overscroll-behavior: contain; }
 .wl li { border-bottom: 1px solid var(--line); }
-.row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 12px; align-items: center; padding: 10px 12px; cursor: pointer; width: 100%; border: 0; background: transparent; color: inherit; text-align: left; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 12px; align-items: center; padding: 10px 12px; cursor: pointer; width: 100%; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; }
 .row:hover { background: var(--surface-2); }
 .row[aria-current="true"] { background: var(--accent-soft); }
 .row .nm { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .cd { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-left: 6px; font-weight: 400; }
 .row .px { font-family: var(--font-mono); font-size: 16px; font-weight: 600; text-align: right; }
-.row .pc { font-family: var(--font-mono); font-size: 13px; min-width: 68px; text-align: center; padding: 2px 6px; border-radius: 6px; font-weight: 600; }
+.row .pc { font-family: var(--font-mono); font-size: 13px; min-width: 70px; text-align: center; padding: 2px 6px; border-radius: 6px; font-weight: 600; }
 .row .pc.up { background: color-mix(in srgb, var(--up) 16%, transparent); } .row .pc.down { background: color-mix(in srgb, var(--down) 16%, transparent); }
 .row .sub { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 11.5px; color: var(--muted); }
 .rng { position: relative; height: 4px; border-radius: 4px; background: var(--surface-3); }
 .rng i { position: absolute; top: -3px; width: 2px; height: 10px; background: var(--ink); border-radius: 1px; }
 .rng u { position: absolute; top: -2px; width: 1px; height: 8px; background: var(--muted); }
+.flash-up { animation: fu 1s; } .flash-down { animation: fd 1s; }
+@keyframes fu { from { background: color-mix(in srgb, var(--up) 30%, transparent); } } @keyframes fd { from { background: color-mix(in srgb, var(--down) 30%, transparent); } }
 .edit-ctl { display: flex; gap: 4px; }
-.edit-ctl button { border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 6px; width: 30px; height: 28px; cursor: pointer; }
-.alert-tag { color: var(--accent); margin-left: 4px; }
+.edit-ctl button { border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 6px; width: 34px; height: 30px; cursor: pointer; }
+.edit-ctl button:disabled { opacity: .35; }
+.alert-tag { color: var(--accent); margin-left: 4px; font-size: 12px; }
 .empty { padding: 24px 16px; text-align: center; }
+.w-note { margin: 0; padding: 8px 12px; }
+.w-note.err { color: var(--s1); }
 
 .w-detail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.d-head { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.d-head { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; scroll-margin-top: 70px; }
 .d-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.d-title h1 { margin: 0; font-family: var(--font-display); font-size: 24px; }
+.d-title h1 { margin: 0; font-family: var(--font-display); font-size: 24px; line-height: 1.2; }
 .d-title .cd { font-family: var(--font-mono); color: var(--muted); }
 .d-px { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .d-px b { font-family: var(--font-mono); font-size: 34px; line-height: 1.1; }
 .d-px span { font-family: var(--font-mono); font-size: 16px; font-weight: 600; }
-.d-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.d-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .d-kv div { background: var(--surface-2); padding: 6px 10px; }
 .d-kv span { display: block; font-size: 11.5px; color: var(--muted); }
 .d-kv b { font-family: var(--font-mono); font-weight: 600; font-size: 14px; }
 .d-act { display: flex; gap: 8px; flex-wrap: wrap; }
+.qnav { display: flex; gap: 6px; flex-wrap: wrap; }
+.qnav button { border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 3px 12px; font-size: 13px; cursor: pointer; }
+.qnav button:hover { color: var(--ink); border-color: var(--accent); }
 .back { display: none; }
+.sec { scroll-margin-top: 70px; overflow: hidden; }
 .d-alert { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
-.d-alert .row2 { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.row2 { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
 .d-grid { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 14px; align-items: start; }
 .ph { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .ph h2 { margin: 0; font-size: 15px; }
+.ph-r { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.k-status { padding: 6px 14px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.chart-locked + .k-hint, .k-hint { display: none; }
 .book { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .book th { font-family: var(--font-body); font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 10px; text-align: right; }
 .book td { padding: 5px 10px; text-align: right; position: relative; }
-.book td.bar { padding: 0; width: 0; }
 .bk-bar { position: absolute; top: 3px; bottom: 3px; opacity: .18; border-radius: 3px; }
 .book-sum { padding: 8px 12px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
-#toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 50; background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.3); max-width: calc(100vw - 32px); }
-.foot { padding: 0 16px 24px; max-width: 1400px; margin: 0 auto; }
+.book-ratio { display: flex; height: 6px; margin: 6px 12px 10px; border-radius: 3px; overflow: hidden; }
+
+/* 分時 */
+.ts { position: relative; }
+.ts canvas { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
+.ts-leg { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 8px 12px; font-size: 12px; min-height: 36px; border-bottom: 1px solid var(--line); }
+.ts-leg span { font-family: var(--font-mono); white-space: nowrap; }
+.ts-leg b { font-family: var(--font-body); font-weight: 600; color: var(--muted); margin-right: 3px; }
+
+/* 快捷選單：手機在底部，桌機在個股標題下 */
+.qbar { display: none; }
+.sheet-bg { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.45); }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-height: 80vh; overflow-y: auto; padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px)); border-radius: 16px 16px 0 0; border-bottom: 0; }
+@media (min-width: 901px) { .sheet { left: auto; right: 24px; bottom: 24px; width: 380px; border-radius: 14px; border-bottom: 1px solid var(--line); } }
+.sheet h3 { margin: 10px 0 6px; font-size: 13px; color: var(--muted); letter-spacing: .06em; }
+.sheet .grab { width: 40px; height: 4px; border-radius: 4px; background: var(--line); margin: 4px auto 8px; }
+.menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.menu a, .menu button { display: flex; align-items: center; gap: 8px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); text-decoration: none; font-size: 14.5px; cursor: pointer; text-align: left; }
+.menu a:hover, .menu button:hover { border-color: var(--accent); }
+.alist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.alist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); font-size: 14px; }
+#toast { position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 50; background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.3); max-width: calc(100vw - 32px); }
+.foot { padding: 0 16px 24px; max-width: 1440px; margin: 0 auto; }
 
 @media (max-width: 900px) {
-  .w-main { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  body { padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px)); }
+  .w-main { grid-template-columns: minmax(0, 1fr); padding: 10px; }
   .w-list { position: static; max-height: none; }
   .w-main.show-detail .w-list { display: none; }
   .w-main:not(.show-detail) .w-detail { display: none; }
   .back { display: inline-flex; }
   .d-grid { grid-template-columns: minmax(0, 1fr); }
   .stat .st-t { display: none; }
+  .qnav { display: none; }
+  .qbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: 1px solid var(--line); justify-content: space-around; }
+  .qbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: transparent; color: var(--muted); font-size: 11px; padding: 6px 0; cursor: pointer; border-radius: 10px; }
+  .qbar button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .qbar button[aria-current="true"] { color: var(--accent); font-weight: 700; }
 }
-@media (max-width: 480px) { .brand span { display: none; } .w-top { gap: 8px; padding-left: 12px; padding-right: 12px; } .d-px b { font-size: 28px; } }
+@media (max-width: 480px) { .brand span { display: none; } .w-top { padding-left: 10px; padding-right: 10px; } .d-px b { font-size: 28px; } .ixc { padding: 3px 8px; gap: 4px; } }
 </style>
 </head>
 <body>
@@ -128,125 +174,199 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
   <div class="ix" id="ix" aria-label="大盤指數"></div>
   <div class="tools">
     <span class="stat" id="stat"><i class="dot" id="dot"></i><span class="st-t" id="statText">連線中…</span></span>
-    <a class="icon-btn" href="./" aria-label="回 K線學堂" title="回 K線學堂"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7a3 3 0 0 1 3 3v11a2 2 0 0 0-2-2H4zM20 5h-4a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h4z"/></svg></a>
-    <button class="icon-btn" id="themeBtn" type="button" aria-label="切換深色 / 淺色"><svg viewBox="0 0 24 24" aria-hidden="true" class="ic-moon"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true" class="ic-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+    <button class="icon-btn" id="menuBtn" type="button" aria-label="快捷選單" title="快捷選單"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></button>
   </div>
 </header>
 
 <main class="w-main" id="main">
-  <section class="w-list panel" aria-label="自選股">
-    <form id="addForm"><input class="code" id="addCode" placeholder="輸入代號加入，例 2330" autocomplete="off" inputmode="search" enterkeyhint="go" aria-label="股票代號"><button class="btn primary">加入</button></form>
+  <section class="w-list panel" aria-label="自選股" id="listPane">
+    <div class="search">
+      <form id="addForm" autocomplete="off"><input class="code" id="addCode" placeholder="代號或名稱，例 2330、台積" inputmode="search" enterkeyhint="go" aria-label="搜尋股票（代號或名稱）" aria-autocomplete="list" aria-controls="sugg"><button class="btn primary" type="submit">加入</button></form>
+      <ul class="sugg panel" id="sugg" role="listbox" hidden></ul>
+    </div>
     <div class="w-sort">
       <div class="seg" role="group" aria-label="排序" id="sortSeg"><button data-sort="custom">自訂</button><button data-sort="chg">漲跌幅</button><button data-sort="vol">成交量</button></div>
       <button class="btn sm" id="editBtn" type="button">編輯</button>
     </div>
     <ul class="wl" id="wl"></ul>
-    <p class="note" id="wlNote" style="margin:0;padding:8px 12px"></p>
+    <p class="note w-note" id="wlNote"></p>
   </section>
 
   <section class="w-detail" id="detail" aria-live="polite">
-    <div class="panel d-head">
+    <div class="panel d-head" id="secQuote">
       <div class="d-title"><button class="btn sm back" id="backBtn" type="button">← 自選股</button><h1 id="dName">—</h1><span class="cd" id="dCode"></span><span class="note" id="dMarket"></span></div>
       <div class="d-px"><b id="dPx">—</b><span id="dChg"></span><span class="note" id="dTime"></span></div>
       <div class="d-kv" id="dKv"></div>
       <div class="d-act">
+        <button class="btn sm" id="favBtn" type="button">＋ 加入自選</button>
         <button class="btn sm" id="alertBtn" type="button">🔔 價格提醒</button>
         <a class="btn sm" id="learnLink" href="./">到 K線學堂判讀 ↗</a>
-        <button class="btn sm" id="favBtn" type="button">加入自選</button>
       </div>
+      <div class="qnav" role="navigation" aria-label="跳到"><button data-go="secTs">分時</button><button data-go="secK">K 線</button><button data-go="secBook">五檔</button></div>
     </div>
     <div class="panel d-alert" id="alertBox" hidden>
       <strong>價格提醒</strong>
       <div class="row2"><label>漲到 ≥ <input type="number" step="any" id="alUp" inputmode="decimal"></label><label>跌到 ≤ <input type="number" step="any" id="alDn" inputmode="decimal"></label></div>
       <div class="row2"><button class="btn primary sm" id="alSave" type="button">儲存提醒</button><button class="btn sm" id="alClear" type="button">清除</button><span class="note" id="alNote"></span></div>
-      <p class="note" style="margin:0">提醒只在這個頁面開著時會觸發（盤中每 10 秒檢查一次），觸發後會跳出通知並自動關閉，要再提醒請重新儲存。iPhone 要先把這個頁面「加入主畫面」，從主畫面打開才收得到系統通知。</p>
+      <p class="note" style="margin:0">提醒只在這個頁面開著時會觸發（盤中每 10 秒檢查一次），觸發後會跳出通知並自動關閉。iPhone 要先「加入主畫面」，從主畫面打開才收得到系統通知。</p>
     </div>
     <div class="d-grid">
-      <div class="panel">
-        <div class="ph"><h2>盤中分 K</h2><div class="seg" role="group" aria-label="分 K 週期" id="tfSeg"><button data-tf="1">1分</button><button data-tf="5">5分</button><button data-tf="15">15分</button><button data-tf="60">60分</button></div><span class="note" id="intraNote"></span></div>
-        <div class="chartbox" id="intraChart"></div>
+      <div class="panel sec" id="secTs">
+        <div class="ph"><h2>當日分時</h2><span class="note" id="tsNote"></span></div>
+        <div class="ts" id="tsBox"><div class="ts-leg" id="tsLeg"></div><canvas id="tsCanvas" role="img" aria-label="當日分時走勢"></canvas></div>
       </div>
-      <div class="panel">
+      <div class="panel sec" id="secBook">
         <div class="ph"><h2>五檔</h2><span class="note" id="bookNote"></span></div>
         <div id="book"></div>
       </div>
     </div>
-    <div class="panel">
-      <div class="ph"><h2>日 K</h2><div class="seg" role="group" aria-label="日 K 期間" id="monSeg"><button data-m="3">3月</button><button data-m="6">6月</button><button data-m="12">1年</button><button data-m="24">2年</button></div><span class="note" id="dailyNote"></span></div>
+    <div class="panel sec" id="secK">
+      <div class="ph"><h2>K 線</h2>
+        <div class="ph-r"><div class="seg" role="group" aria-label="K 線週期" id="kSeg"><button data-k="1">1分</button><button data-k="5">5分</button><button data-k="15">15分</button><button data-k="60">60分</button><button data-k="D" class="gap">日</button><button data-k="W">週</button><button data-k="M">月</button></div></div>
+      </div>
+      <div class="k-status"><span id="kNote"></span><span id="kTip">左右拖曳看更早的 K 線，兩指縮放；放大後圖表會鎖定，拖曳不會帶動頁面，按「全部」解鎖</span></div>
       <div class="ibar" id="dIbar"></div>
-      <div class="chartbox" id="dailyChart"></div>
+      <div class="chartbox" id="kChart"></div>
     </div>
   </section>
 </main>
-<p class="note foot">報價：證交所 MIS 即時快照（約 5 秒一筆）；設定富果 API 金鑰時，個股與分 K 改用富果。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。手機可用瀏覽器的「加入主畫面」，當成 App 使用。</p>
+<p class="note foot">報價：證交所 MIS 即時快照（約 5 秒一筆）；設定富果 API 金鑰時，個股與分 K 改用富果。日 K 來自證交所、櫃買中心或 Yahoo Finance。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-16</span></p>
+
+<!-- 手機底部快捷選單 -->
+<nav class="qbar" id="qbar" aria-label="快捷選單">
+  <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>自選</button>
+  <button data-q="secTs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 3 4-7 5 5"/><path d="M3 21h18" opacity=".5"/></svg>分時</button>
+  <button data-q="secK"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 8h-2v6h2M17 4v16M17 6h2v8h-2M12 4v16M12 10h-2v5h2"/></svg>K 線</button>
+  <button data-q="secBook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h7M4 10h5M4 14h8M13 18h7M15 14h5M12 10h8"/></svg>五檔</button>
+  <button data-q="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>更多</button>
+</nav>
+<!-- 更多：快捷選單 -->
+<div class="sheet-bg" id="sheetBg" hidden></div>
+<div class="sheet panel" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="grab" aria-hidden="true"></div>
+  <h3 id="sheetTitle">快捷選單</h3>
+  <div class="menu" id="menuMain">
+    <button data-m="refresh">↻ 立即更新報價</button>
+    <button data-m="alerts">🔔 我的價格提醒</button>
+    <button data-m="theme">◐ 切換深色／淺色</button>
+    <button data-m="install">📲 加入主畫面</button>
+    <a href="./" id="mLearn">📘 K線學堂</a>
+    <a href="./#shot" id="mShot">🔍 個股判讀</a>
+    <a href="savings.html">💰 存股模擬</a>
+    <button data-m="reset">↺ 恢復預設自選股</button>
+  </div>
+  <div id="sheetExtra"></div>
+  <div style="margin-top:12px"><button class="btn" data-m="close" type="button" style="width:100%;justify-content:center">關閉</button></div>
+</div>
 <div id="toast" role="status" hidden></div>
 
 <script src="core.js"></script>
 <script>
 "use strict";
-/* ---------- 狀態（記在瀏覽器；和 K線學堂同一個網域時共用主題設定） ---------- */
+/* ---------- 狀態（記在瀏覽器；和 K線學堂同網域時共用主題） ---------- */
+const DEFAULT_LIST = ["2330", "2317", "2454", "0050", "2603", "2881"];
 const W = {
-  list: store.get("watch:list", ["2330", "2317", "2454", "0050", "2603", "2881"]),
-  names: store.get("watch:names", {}),
-  sort: store.get("watch:sort", "custom"),
-  alerts: store.get("watch:alerts", {}),
-  tf: [1, 5, 15, 60].includes(+store.get("watch:tf", 5)) ? +store.get("watch:tf", 5) : 5,
-  months: [3, 6, 12, 24].includes(+store.get("watch:months", 6)) ? +store.get("watch:months", 6) : 6,
-  editing: false, sel: null, quotes: new Map(), detailQ: null, session: null, today: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), err: null, off: !/^https?:$/.test(location.protocol),
-  daily: null, intra: null, intraAt: 0, timer: null, busy: false,
+  list: store.get("watch:list", DEFAULT_LIST), names: store.get("watch:names", {}), sort: store.get("watch:sort", "custom"), alerts: store.get("watch:alerts", {}),
+  k: ["1", "5", "15", "60", "D", "W", "M"].includes(String(store.get("watch:k", "D"))) ? String(store.get("watch:k", "D")) : "D",
+  editing: false, sel: null, last: store.get("watch:last", null), quotes: new Map(), prevPx: new Map(), detailQ: null, detailSrc: "", session: null,
+  today: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), err: null, off: !/^https?:$/.test(location.protocol),
+  daily: null, intra: null, intraAt: 0, timer: null, busy: false, stocks: null, lastOk: 0,
 };
 const saveList = () => { store.set("watch:list", W.list); store.set("watch:names", W.names); };
 const okCode = c => /^\d{4,6}[A-Z]?$/.test(c);
 const cls = v => (v > 0 ? "up" : v < 0 ? "down" : "");
 const arrow = v => (v > 0 ? "▲" : v < 0 ? "▼" : "");
-const fmtVol = v => (v == null ? "—" : v >= 1e4 ? (v / 1e4).toFixed(1) + " 萬" : v.toLocaleString());
+const fmtVol = v => (v == null ? "—" : v >= 1e4 ? (v / 1e4).toFixed(1) + " 萬" : Math.round(v).toLocaleString());
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const isMobile = () => matchMedia("(max-width: 900px)").matches;
 function mktSession(now = new Date()) {
   const t = new Date(now.getTime() + 8 * 3600e3), day = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();
   if (day === 0 || day === 6) return "closed";
   return m >= 510 && m < 540 ? "pre" : m >= 540 && m <= 815 ? "open" : "closed";
 }
-function toast(t) { const el = $("#toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 5000); }
+function toast(t, ms = 4000) { const el = $("#toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), ms); }
 
 /* ---------- 資料 ---------- */
 async function getJ(url) {
-  const r = await fetch(url), j = await r.json().catch(() => null);
+  let r; try { r = await fetch(url); } catch { throw new Error("連不到伺服器（網路中斷？）"); }
+  const j = await r.json().catch(() => null);
   if (!j) { if (r.status === 404) W.off = true; throw new Error(r.status === 404 ? "這個環境沒有報價服務，部署到網站後才能用" : `服務回應 ${r.status}`); }
   if (!j.ok) throw new Error(j.error || "拿不到資料");
   return j;
 }
 // 自選股與指數：一次批次查（只用 MIS，不消耗富果額度）
 async function pollList() {
-  const codes = ["T00", "O00", ...W.list];
-  const j = await getJ(`/api/quote?codes=${codes.join(",")}&src=mis`);
-  W.session = j.session; W.today = j.today;
-  j.quotes.forEach(q => { W.quotes.set(q.code, q); if (q.name && okCode(q.code)) W.names[q.code] = q.name; });
+  const j = await getJ(`/api/quote?codes=${["T00", "O00", ...W.list].join(",")}&src=mis`);
+  W.session = j.session; if (j.today) W.today = j.today;
+  j.quotes.forEach(q => { const old = W.quotes.get(q.code); if (old && old.price != null && q.price != null && old.price !== q.price) W.prevPx.set(q.code, old.price); W.quotes.set(q.code, q); if (q.name && okCode(q.code)) W.names[q.code] = q.name; });
   saveList();
 }
-// 正在看的那一檔：用預設來源（有富果金鑰時是富果）
+// 正在看的那一檔：預設來源（有富果金鑰時是富果）
 async function pollDetail() {
   if (!W.sel) return;
-  const j = await getJ(`/api/quote?codes=${W.sel}`), q = j.quotes.find(x => x.code === W.sel);
-  if (q) { W.detailQ = q; W.detailSrc = j.source; if (q.name) W.names[q.code] = q.name; mergeDaily(q); }
+  const c = W.sel, j = await getJ(`/api/quote?codes=${c}`), q = j.quotes.find(x => x.code === c);
+  if (q && W.sel === c) { W.detailQ = q; W.detailSrc = j.source; if (q.name) W.names[c] = q.name; mergeDaily(q); }
 }
 async function tick() {
   if (W.off || W.busy || document.visibilityState === "hidden") return;
   W.busy = true;
-  try { await Promise.all([pollList(), pollDetail()]); W.err = null; checkAlerts(); }
-  catch (e) { W.err = e.message; }
-  finally { W.busy = false; renderAll(); loadIntra(); }
+  const res = await Promise.allSettled([pollList(), pollDetail()]);
+  const bad = res.find(r => r.status === "rejected");
+  W.err = bad ? bad.reason?.message || "更新失敗" : null; if (!bad) W.lastOk = Date.now();
+  W.busy = false; checkAlerts(); renderAll(); loadIntra();
 }
 function schedule() { clearTimeout(W.timer); if (W.off) return; W.timer = setTimeout(async () => { await tick(); schedule(); }, mktSession() === "closed" ? 300000 : 10000); }
 const kick = () => tick().then(schedule);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") kick(); });
+addEventListener("online", kick);
 
-/* ---------- 頂部：指數與連線狀態 ---------- */
+/* ---------- 頂部 ---------- */
 function renderTop() {
-  $("#ix").innerHTML = ["T00", "O00"].map(c => { const q = W.quotes.get(c); if (!q) return ""; return `<span class="ixc">${c === "T00" ? "加權" : "櫃買"}<b>${q.price != null ? q.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><span class="num ${cls(q.chg)}">${arrow(q.chg)}${q.chg != null ? Math.abs(q.chg).toFixed(2) : ""} ${q.chgPct != null ? "(" + (q.chgPct > 0 ? "+" : "") + q.chgPct + "%)" : ""}</span></span>`; }).join("");
+  $("#ix").innerHTML = ["T00", "O00"].map(c => { const q = W.quotes.get(c); if (!q) return ""; return `<span class="ixc"><span class="ixn">${c === "T00" ? "加權" : "櫃買"}</span><b class="${cls(q.chg)}">${q.price != null ? q.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><span class="num ${cls(q.chg)}">${arrow(q.chg)}${q.chgPct != null ? Math.abs(q.chgPct).toFixed(2) + "%" : ""}</span></span>`; }).join("");
   const on = !W.off && !W.err && W.session && W.session !== "closed";
-  $("#dot").className = "dot" + (on ? " on" : "");
+  $("#dot").className = "dot" + (on ? " on" : W.err ? " err" : "");
   $("#statText").textContent = W.off ? "離線（需部署）" : W.err ? "連線異常" : W.session === "pre" ? "試撮中" : W.session === "open" ? "盤中即時" : W.session ? "收盤" : "連線中…";
   $("#stat").title = W.err || "";
+}
+
+/* ---------- 搜尋：代號或名稱 ---------- */
+async function loadStocks() {
+  if (W.stocks || W.off) return W.stocks;
+  const c = store.get("watch:stocks", null);
+  if (c && c.at > Date.now() - 86400e3 && Array.isArray(c.list)) return (W.stocks = c.list);
+  try { const j = await getJ("/api/stocks"); W.stocks = j.list; store.set("watch:stocks", { at: Date.now(), list: j.list }); } catch { W.stocks = c?.list || null; }
+  return W.stocks;
+}
+function suggest(q) {
+  q = q.trim(); const box = $("#sugg");
+  if (!q) { box.hidden = true; return []; }
+  const Q = q.toUpperCase(), L = W.stocks || Object.entries(W.names).map(([c, n]) => [c, n, ""]);
+  const hits = L.filter(([c, n]) => c.startsWith(Q) || n.includes(q)).sort((a, b) => (a[0].startsWith(Q) ? 0 : 1) - (b[0].startsWith(Q) ? 0 : 1) || a[0].length - b[0].length || a[0].localeCompare(b[0])).slice(0, 8);
+  if (okCode(Q) && !hits.some(h => h[0] === Q)) hits.unshift([Q, W.names[Q] || "（代號）", ""]);
+  box.innerHTML = hits.map(([c, n, m], i) => `<li><button type="button" role="option" data-pick="${c}" aria-selected="${i === 0}"><span class="cd">${c}</span><span>${esc(n)}</span>${W.list.includes(c) ? '<span class="has">已在自選</span>' : ""}<span class="mk">${m}</span></button></li>`).join("") || `<li class="note" style="padding:8px 10px">找不到「${esc(q)}」${W.stocks ? "" : "（名稱清單還沒載入，可以直接輸入代號）"}</li>`;
+  box.hidden = false; return hits;
+}
+$("#addCode").addEventListener("focus", () => loadStocks().then(() => suggest($("#addCode").value)));
+$("#addCode").addEventListener("input", e => suggest(e.target.value));
+$("#addCode").addEventListener("keydown", e => {
+  const items = [...document.querySelectorAll("#sugg [data-pick]")]; if (!items.length || $("#sugg").hidden) return;
+  const k = items.findIndex(b => b.getAttribute("aria-selected") === "true");
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); const n = (k + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length; items.forEach((b, i) => b.setAttribute("aria-selected", i === n)); }
+  else if (e.key === "Escape") $("#sugg").hidden = true;
+});
+document.addEventListener("pointerdown", e => { if (!e.target.closest(".search")) $("#sugg").hidden = true; });
+$("#sugg").addEventListener("click", e => { const b = e.target.closest("[data-pick]"); if (b) pick(b.dataset.pick); });
+$("#addForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const sel = document.querySelector('#sugg:not([hidden]) [aria-selected="true"]'), raw = $("#addCode").value.trim().toUpperCase();
+  const c = sel ? sel.dataset.pick : okCode(raw) ? raw : null;
+  if (!c) { toast("找不到這檔，請輸入代號（例如 2330）或從清單點選"); return; }
+  pick(c);
+});
+function pick(c) {
+  if (!W.list.includes(c)) { if (W.list.length >= 30) { toast("自選股最多 30 檔，先移除幾檔"); return; } W.list.push(c); saveList(); toast(`已加入自選：${W.names[c] || c}`, 2000); }
+  const n = W.stocks?.find(s => s[0] === c); if (n) W.names[c] = n[1];
+  $("#addCode").value = ""; $("#sugg").hidden = true; $("#addCode").blur(); select(c); kick();
 }
 
 /* ---------- 自選股清單 ---------- */
@@ -257,21 +377,25 @@ function sorted() {
   return L;
 }
 function renderList() {
-  document.querySelectorAll("#sortSeg [data-sort]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sort === W.sort));
+  document.querySelectorAll("#sortSeg [data-sort]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sort === W.sort && !W.editing));
   $("#editBtn").textContent = W.editing ? "完成" : "編輯";
   const L = W.editing ? W.list.map(c => ({ c, q: W.quotes.get(c) })) : sorted();
   $("#wl").innerHTML = L.length ? L.map(({ c, q }, k) => {
     const nm = esc(q?.name || W.names[c] || c), al = W.alerts[c] && (W.alerts[c].up || W.alerts[c].dn);
-    if (W.editing) return `<li><div class="row" style="cursor:default"><span class="nm">${nm}<span class="cd">${c}</span></span><span class="edit-ctl"><button data-mv="${k}" data-d="-1" aria-label="上移 ${nm}" ${k ? "" : "disabled"}>↑</button><button data-mv="${k}" data-d="1" aria-label="下移 ${nm}" ${k < L.length - 1 ? "" : "disabled"}>↓</button><button data-rm="${c}" aria-label="移除 ${nm}">✕</button></span></div></li>`;
-    const lo = q?.low, hi = q?.high, rng = lo != null && hi != null && hi > lo, pos = v => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
+    if (W.editing) return `<li><div class="row" style="cursor:default"><span class="nm">${nm}<span class="cd">${c}</span></span><span></span><span class="edit-ctl"><button data-mv="${k}" data-d="-1" aria-label="上移 ${nm}" ${k ? "" : "disabled"}>↑</button><button data-mv="${k}" data-d="1" aria-label="下移 ${nm}" ${k < L.length - 1 ? "" : "disabled"}>↓</button><button data-rm="${c}" aria-label="移除 ${nm}">✕</button></span></div></li>`;
+    const lo = q?.low, hi = q?.high, rng = lo != null && hi != null && hi > lo, pos = v => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100)), was = W.prevPx.get(c);
+    const flash = was != null && q?.price != null && was !== q.price ? (q.price > was ? "flash-up" : "flash-down") : "";
     return `<li><button class="row" data-sel="${c}" aria-current="${c === W.sel}">
       <span class="nm">${nm}<span class="cd">${c}</span>${al ? '<span class="alert-tag" title="已設定價格提醒">🔔</span>' : ""}</span>
-      <span class="px ${cls(q?.chg)}">${q?.price != null ? fmtP(q.price) : "—"}</span>
+      <span class="px ${cls(q?.chg)} ${flash}">${q?.price != null ? fmtP(q.price) : "—"}</span>
       <span class="pc ${cls(q?.chg)}">${q?.chgPct != null ? (q.chgPct > 0 ? "+" : "") + q.chgPct.toFixed(2) + "%" : "—"}</span>
-      <span class="sub"><span class="rng" title="今日最低 ${lo ?? "—"} ～ 最高 ${hi ?? "—"}">${rng ? `${q.prev ? `<u style="left:${pos(q.prev)}%"></u>` : ""}<i style="left:calc(${pos(q.price)}% - 1px)"></i>` : ""}</span><span>量 ${fmtVol(q?.vol)}</span></span>
+      <span class="sub"><span class="rng" title="今日最低 ${lo ?? "—"} ～ 最高 ${hi ?? "—"}">${rng && q.price != null ? `${q.prev ? `<u style="left:${pos(q.prev)}%"></u>` : ""}<i style="left:calc(${pos(q.price)}% - 1px)"></i>` : ""}</span><span>量 ${fmtVol(q?.vol)}</span></span>
     </button></li>`;
-  }).join("") : `<li class="empty note">還沒有自選股。在上面輸入代號加入。</li>`;
-  $("#wlNote").textContent = `${W.list.length} / 30 檔・${W.off ? "需要部署到網站才有報價" : "盤中每 10 秒更新"}`;
+  }).join("") : `<li class="empty note">還沒有自選股。在上面輸入代號或名稱加入。</li>`;
+  W.prevPx.clear();
+  const n = $("#wlNote"), ago = W.lastOk ? Math.round((Date.now() - W.lastOk) / 1000) : null;
+  n.className = "note w-note" + (W.err ? " err" : "");
+  n.textContent = W.off ? "這個環境沒有報價服務；部署到網站（Vercel）後才會有即時資料。" : W.err ? `⚠ ${W.err}${ago != null ? `（上次成功更新是 ${ago} 秒前）` : ""}` : `${W.list.length} / 30 檔・${mktSession() === "closed" ? "收盤後每 5 分鐘確認一次" : "盤中每 10 秒更新"}`;
 }
 $("#wl").addEventListener("click", e => {
   const s = e.target.closest("[data-sel]"), mv = e.target.closest("[data-mv]"), rm = e.target.closest("[data-rm]");
@@ -279,29 +403,30 @@ $("#wl").addEventListener("click", e => {
   else if (mv) { const k = +mv.dataset.mv, d = +mv.dataset.d; [W.list[k], W.list[k + d]] = [W.list[k + d], W.list[k]]; saveList(); renderList(); }
   else if (rm) { W.list = W.list.filter(c => c !== rm.dataset.rm); saveList(); renderList(); renderDetailHead(); }
 });
-$("#addForm").addEventListener("submit", e => {
-  e.preventDefault(); const c = $("#addCode").value.trim().toUpperCase();
-  if (!okCode(c)) { toast("請輸入 4 到 6 碼的股票代號，例如 2330、0050、00878"); return; }
-  if (!W.list.includes(c)) { if (W.list.length >= 30) { toast("自選股最多 30 檔"); return; } W.list.push(c); saveList(); }
-  $("#addCode").value = ""; select(c); kick();
-});
-$("#sortSeg").addEventListener("click", e => { const b = e.target.closest("[data-sort]"); if (!b) return; W.sort = b.dataset.sort; store.set("watch:sort", W.sort); renderList(); });
+$("#sortSeg").addEventListener("click", e => { const b = e.target.closest("[data-sort]"); if (!b) return; W.sort = b.dataset.sort; W.editing = false; store.set("watch:sort", W.sort); renderList(); });
 $("#editBtn").addEventListener("click", () => { W.editing = !W.editing; renderList(); });
 
 /* ---------- 個股 ---------- */
-const intraChart = new Chart($("#intraChart"));
-const dailyChart = new Chart($("#dailyChart"));
-const dBar = indicatorBar($("#dIbar"), "watch", [{ title: "主圖", items: MAIN_ITEMS }, { title: "副圖", items: SUB_ITEMS }], ["ma5", "ma20", "ma60", "vol", "kd"], () => drawDaily());
-function select(code, push = true) {
-  if (!okCode(code)) return;
-  W.sel = code; W.detailQ = W.quotes.get(code) || null; W.daily = null; W.intra = null; W.intraAt = 0;
-  if (push) try { history.replaceState(null, "", "#" + code); } catch {}
-  $("#main").classList.add("show-detail");
-  renderList(); renderDetailHead(); renderBook(); loadDaily(); loadIntra(true); pollDetail().then(renderDetailHead).catch(() => {});
-  $("#learnLink").href = `./?code=${code}#shot`;
-  if (matchMedia("(max-width: 900px)").matches) window.scrollTo({ top: 0 });
+function showList(push = true) {
+  $("#main").classList.remove("show-detail"); setQ("list");
+  if (push && location.hash) try { history.pushState(null, "", location.pathname + location.search); } catch {}
 }
-$("#backBtn").addEventListener("click", () => { $("#main").classList.remove("show-detail"); try { history.replaceState(null, "", location.pathname); } catch {} });
+function select(code, how = "push") {
+  if (!okCode(code)) return;
+  const changed = code !== W.sel;
+  W.sel = code; store.set("watch:last", code);
+  if (changed) { W.detailQ = W.quotes.get(code) || null; W.daily = null; W.intra = null; W.intraAt = 0; kChart.view = null; }
+  // 手機上用 pushState，返回手勢會回到清單；桌機只換網址
+  try { if (how === "push" && location.hash !== "#" + code) (isMobile() ? history.pushState : history.replaceState).call(history, null, "", "#" + code); } catch {}
+  $("#main").classList.add("show-detail");
+  $("#learnLink").href = `./?code=${code}#shot`; $("#mShot").href = `./?code=${code}#shot`;
+  renderList(); renderDetailHead(); renderBook(); drawTs();
+  if (changed) { loadDaily(); loadIntra(true); pollDetail().then(() => { renderDetailHead(); renderBook(); }).catch(() => {}); }
+  if (isMobile() && how !== "none") window.scrollTo({ top: 0 });
+  setQ("secQuote");
+}
+addEventListener("popstate", () => { const h = location.hash.slice(1).toUpperCase(); if (okCode(h)) select(h, "none"); else showList(false); });
+$("#backBtn").addEventListener("click", () => { if (history.state === null && location.hash && isMobile()) history.back(); else showList(); });
 function renderDetailHead() {
   const c = W.sel; if (!c) return;
   const q = W.detailQ || W.quotes.get(c), nm = q?.name || W.names[c] || c;
@@ -309,93 +434,187 @@ function renderDetailHead() {
   $("#dName").textContent = nm; $("#dCode").textContent = c; $("#dMarket").textContent = q?.market || "";
   $("#dPx").textContent = q?.price != null ? fmtP(q.price) : "—"; $("#dPx").className = cls(q?.chg);
   $("#dChg").textContent = q?.chg != null ? `${arrow(q.chg)}${fmtP(Math.abs(q.chg))}（${q.chgPct > 0 ? "+" : ""}${q.chgPct}%）` : ""; $("#dChg").className = cls(q?.chg);
-  $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}・${W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : "";
-  const kv = [["開盤", q?.open], ["最高", q?.high], ["最低", q?.low], ["昨收", q?.prev]].map(([k, v]) => `<div><span>${k}</span><b class="${v != null && q?.prev ? cls(v - q.prev) : ""}">${v != null ? fmtP(v) : "—"}</b></div>`).join("")
-    + `<div><span>成交量</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " 張" : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "");
-  $("#dKv").innerHTML = kv;
-  const fav = W.list.includes(c); $("#favBtn").textContent = fav ? "移出自選" : "加入自選";
-  const a = W.alerts[c] || {}; $("#alUp").value = a.up ?? ""; $("#alDn").value = a.dn ?? "";
-  $("#alertBtn").textContent = a.up || a.dn ? `🔔 提醒：${[a.up ? "≥" + a.up : "", a.dn ? "≤" + a.dn : ""].filter(Boolean).join("、")}` : "🔔 價格提醒";
-  renderBook();
+  $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}・${W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err ? W.err : "";
+  const lim = q?.prev ? [Math.round(q.prev * 1.1 * 100) / 100, Math.round(q.prev * 0.9 * 100) / 100] : null;
+  $("#dKv").innerHTML = [["開盤", q?.open], ["最高", q?.high], ["最低", q?.low], ["昨收", q?.prev]].map(([k, v]) => `<div><span>${k}</span><b class="${v != null && q?.prev ? cls(v - q.prev) : ""}">${v != null ? fmtP(v) : "—"}</b></div>`).join("")
+    + `<div><span>成交量</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " 張" : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "")
+    + (lim && okCode(c) ? `<div><span>漲停／跌停</span><b><span class="up" style="display:inline;font-size:inherit;color:var(--up)">${fmtP(lim[0])}</span>／<span style="display:inline;font-size:inherit;color:var(--down)">${fmtP(lim[1])}</span></b></div>` : "");
+  const fav = W.list.includes(c); $("#favBtn").textContent = fav ? "✓ 已在自選（移除）" : "＋ 加入自選";
+  const a = W.alerts[c] || {};
+  if (document.activeElement !== $("#alUp")) $("#alUp").value = a.up ?? ""; if (document.activeElement !== $("#alDn")) $("#alDn").value = a.dn ?? "";
+  $("#alertBtn").textContent = a.up || a.dn ? `🔔 ${[a.up ? "≥" + a.up : "", a.dn ? "≤" + a.dn : ""].filter(Boolean).join("、")}` : "🔔 價格提醒";
 }
-$("#favBtn").addEventListener("click", () => { const c = W.sel; if (!c) return; if (W.list.includes(c)) W.list = W.list.filter(x => x !== c); else if (W.list.length < 30) W.list.push(c); saveList(); renderList(); renderDetailHead(); });
+$("#favBtn").addEventListener("click", () => { const c = W.sel; if (!c) return; if (W.list.includes(c)) { W.list = W.list.filter(x => x !== c); toast("已移出自選", 1500); } else if (W.list.length < 30) { W.list.push(c); toast("已加入自選", 1500); } saveList(); renderList(); renderDetailHead(); kick(); });
 function renderBook() {
   const q = W.detailQ || W.quotes.get(W.sel), B = q?.bids || [], A = q?.asks || [];
-  if (!B.length && !A.length) { $("#book").innerHTML = `<p class="note" style="margin:0;padding:12px">${W.off ? "需要部署到網站才有五檔。" : "目前沒有五檔資料（收盤後或試撮前）。"}</p>`; $("#bookNote").textContent = ""; return; }
-  const mx = Math.max(1, ...B.map(x => x.v || 0), ...A.map(x => x.v || 0)), sb = B.reduce((s, x) => s + (x.v || 0), 0), sa = A.reduce((s, x) => s + (x.v || 0), 0);
-  const rows = [...A.slice().reverse().map(x => `<tr><td></td><td class="down">${fmtP(x.p)}</td><td style="position:relative">${(x.v || 0).toLocaleString()}<span class="bk-bar" style="right:0;width:${x.v / mx * 100}%;background:var(--down)"></span></td></tr>`),
-    ...B.map(x => `<tr><td style="position:relative">${(x.v || 0).toLocaleString()}<span class="bk-bar" style="left:0;width:${x.v / mx * 100}%;background:var(--up)"></span></td><td class="up">${fmtP(x.p)}</td><td></td></tr>`)];
-  $("#book").innerHTML = `<table class="book"><thead><tr><th>委買量</th><th>價格</th><th>委賣量</th></tr></thead><tbody>${rows.join("")}</tbody></table><div class="book-sum">五檔委買 ${sb.toLocaleString()} 張・委賣 ${sa.toLocaleString()} 張（買賣比 ${sa ? (sb / sa).toFixed(2) : "—"}）</div>`;
+  if (!B.length && !A.length) { $("#book").innerHTML = `<p class="note" style="margin:0;padding:12px">${W.off ? "需要部署到網站才有五檔。" : W.sel === "T00" ? "指數沒有五檔。" : "目前沒有五檔資料（收盤後或試撮前）。"}</p>`; $("#bookNote").textContent = ""; return; }
+  const mx = Math.max(1, ...B.map(x => x.v || 0), ...A.map(x => x.v || 0)), sb = B.reduce((s, x) => s + (x.v || 0), 0), sa = A.reduce((s, x) => s + (x.v || 0), 0), last = q?.price;
+  const rows = [...A.slice().reverse().map(x => `<tr${x.p === last ? ' style="outline:1px solid var(--line)"' : ""}><td></td><td class="down">${fmtP(x.p)}</td><td style="position:relative">${(x.v || 0).toLocaleString()}<span class="bk-bar" style="right:0;width:${x.v / mx * 100}%;background:var(--down)"></span></td></tr>`),
+    ...B.map(x => `<tr${x.p === last ? ' style="outline:1px solid var(--line)"' : ""}><td style="position:relative">${(x.v || 0).toLocaleString()}<span class="bk-bar" style="left:0;width:${x.v / mx * 100}%;background:var(--up)"></span></td><td class="up">${fmtP(x.p)}</td><td></td></tr>`)];
+  $("#book").innerHTML = `<table class="book"><thead><tr><th>委買量</th><th>價格</th><th>委賣量</th></tr></thead><tbody>${rows.join("")}</tbody></table>
+    <div class="book-sum">五檔委買 ${sb.toLocaleString()} 張・委賣 ${sa.toLocaleString()} 張</div><div class="book-ratio" title="委買 ${Math.round(sb / (sb + sa || 1) * 100)}%"><span style="width:${sb / (sb + sa || 1) * 100}%;background:var(--up)"></span><span style="flex:1;background:var(--down)"></span></div>`;
   $("#bookNote").textContent = q?.time || "";
 }
 
-// 日 K：/api/kline，盤中用即時報價更新今天這根
+/* ---------- 當日分時：橫軸固定 09:00–13:30，價格以昨收為中心上下對稱，右邊是漲跌幅 ---------- */
+const TS = { hover: null, geo: null };
+function tsData() {
+  const j = W.intra; if (!j || !j.bars?.length) return null;
+  let sv = 0, spv = 0;
+  const pts = j.bars.map(b => { const [h, m] = b.t.split(":").map(Number); sv += b.v; spv += b.c * b.v; return { m: h * 60 + m, t: b.t, c: b.c, v: b.v, a: b.a ?? (sv ? spv / sv : null) }; });
+  return { pts, prev: j.prev ?? W.detailQ?.prev ?? pts[0].c, date: j.date, isIdx: !pts.some(p => p.v) };
+}
+function drawTs() {
+  const cv = $("#tsCanvas"), host = $("#tsBox"), Wd = host.clientWidth; if (!Wd) return;
+  const d = tsData(), dpr = devicePixelRatio || 1, narrow = Wd < 560, mainH = narrow ? 190 : 240, volH = d?.isIdx ? 0 : narrow ? 54 : 70, axH = 18, H = mainH + (volH ? volH + 8 : 0) + axH + 8;
+  cv.width = Wd * dpr; cv.height = H * dpr; cv.style.height = H + "px";
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, Wd, H);
+  const col = k => cssVar(k), L = narrow ? 50 : 60, R = narrow ? 44 : 54, pw = Wd - L - R, top = 8, X = m => L + (m - 540) / 270 * pw;
+  ctx.font = `11px ${col("--font-mono")}`; ctx.textBaseline = "middle";
+  if (!d) { ctx.fillStyle = col("--muted"); ctx.textAlign = "center"; ctx.font = `13px ${col("--font-body")}`; ctx.fillText(W.off ? "需要部署到網站才有分時資料" : W.intraErr || "今天還沒有分時資料（開盤後才有）", Wd / 2, H / 2); $("#tsLeg").innerHTML = ""; TS.geo = null; return; }
+  const { pts, prev } = d;
+  let dev = Math.max(prev * 0.005, ...pts.map(p => Math.abs(p.c - prev)), ...pts.filter(p => p.a).map(p => Math.abs(p.a - prev))) * 1.12;
+  const hi = prev + dev, lo = prev - dev, Y = v => top + (hi - v) / (hi - lo) * mainH;
+  // 格線與兩側刻度（左：價格、右：漲跌幅）
+  for (let k = -2; k <= 2; k++) {
+    const v = prev + dev / 1.12 * k / 2, y = Y(v);
+    ctx.strokeStyle = col("--line"); ctx.globalAlpha = k ? 0.6 : 1; ctx.setLineDash(k ? [] : [4, 3]); ctx.beginPath(); ctx.moveTo(L, Math.round(y) + 0.5); ctx.lineTo(L + pw, Math.round(y) + 0.5); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.fillStyle = k > 0 ? col("--up") : k < 0 ? col("--down") : col("--muted");
+    ctx.textAlign = "right"; ctx.fillText(fmtP(v), L - 6, y); ctx.textAlign = "left"; ctx.fillText(`${k > 0 ? "+" : ""}${((v / prev - 1) * 100).toFixed(2)}%`, L + pw + 6, y);
+  }
+  [540, 600, 660, 720, 780, 810].forEach(m => { const x = X(m); ctx.strokeStyle = col("--line"); ctx.globalAlpha = 0.4; ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, top); ctx.lineTo(Math.round(x) + 0.5, top + mainH + (volH ? volH + 8 : 0)); ctx.stroke(); ctx.globalAlpha = 1; ctx.fillStyle = col("--muted"); ctx.textAlign = m === 540 ? "left" : m === 810 ? "right" : "center"; ctx.fillText(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`, x, H - axH / 2 - 2); });
+  // 價格線與底色
+  const last = pts[pts.length - 1], up = last.c >= prev, lc = up ? col("--up") : col("--down");
+  ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, mainH); ctx.clip();
+  ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(X(p.m), Y(p.c)) : ctx.moveTo(X(p.m), Y(p.c)))); ctx.lineTo(X(last.m), Y(prev)); ctx.lineTo(X(pts[0].m), Y(prev)); ctx.closePath();
+  ctx.fillStyle = lc; ctx.globalAlpha = 0.12; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = col("--accent"); ctx.lineWidth = 1.6; ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(X(p.m), Y(p.c)) : ctx.moveTo(X(p.m), Y(p.c)))); ctx.stroke();
+  if (pts.some(p => p.a != null && !d.isIdx)) { ctx.strokeStyle = col("--s1"); ctx.lineWidth = 1.2; ctx.beginPath(); let s = false; pts.forEach(p => { if (p.a == null) return; s ? ctx.lineTo(X(p.m), Y(p.a)) : ctx.moveTo(X(p.m), Y(p.a)); s = true; }); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = col("--accent"); ctx.beginPath(); ctx.arc(X(last.m), Y(last.c), 3, 0, Math.PI * 2); ctx.fill();
+  // 成交量
+  if (volH) {
+    const vt = top + mainH + 8, vmax = Math.max(1, ...pts.map(p => p.v)), bw = Math.max(1, pw / 270 * 0.7);
+    pts.forEach((p, i) => { const h = p.v / vmax * (volH - 2); ctx.fillStyle = i && p.c < pts[i - 1].c ? col("--down") : col("--up"); ctx.globalAlpha = 0.6; ctx.fillRect(X(p.m) - bw / 2, vt + volH - h, bw, h); });
+    ctx.globalAlpha = 1; ctx.fillStyle = col("--muted"); ctx.textAlign = "left"; ctx.fillText(fmtVol(vmax), L + pw + 6, vt + 6);
+  }
+  // 十字線
+  const hv = TS.hover != null ? pts.reduce((b, p) => (Math.abs(p.m - TS.hover) < Math.abs(b.m - TS.hover) ? p : b), pts[0]) : null, P = hv || last;
+  if (hv) { ctx.strokeStyle = col("--muted"); ctx.globalAlpha = 0.8; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(X(hv.m), top); ctx.lineTo(X(hv.m), H - axH - 6); ctx.moveTo(L, Y(hv.c)); ctx.lineTo(L + pw, Y(hv.c)); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
+  TS.geo = { L, pw };
+  const ch = P.c / prev - 1;
+  $("#tsLeg").innerHTML = `<span><b>${P.t}</b></span><span class="${cls(ch)}"><b>價</b>${fmtP(P.c)}（${ch >= 0 ? "+" : ""}${(ch * 100).toFixed(2)}%）</span>${P.a != null && !d.isIdx ? `<span style="color:var(--s1)"><b style="color:inherit">均價</b>${fmtP(P.a)}</span>` : ""}${d.isIdx ? "" : `<span><b>量</b>${fmtVol(P.v)} 張</span>`}<span><b>昨收</b>${fmtP(prev)}</span>`;
+}
+{ const cv = $("#tsCanvas"), at = e => { if (!TS.geo) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left; TS.hover = Math.max(540, Math.min(810, 540 + (x - TS.geo.L) / TS.geo.pw * 270)); drawTs(); };
+  cv.addEventListener("pointerdown", at); cv.addEventListener("pointermove", e => { if (e.pointerType === "mouse" || e.buttons) at(e); });
+  cv.addEventListener("pointerleave", () => { TS.hover = null; drawTs(); }); cv.addEventListener("pointerup", e => { if (e.pointerType !== "mouse") setTimeout(() => { TS.hover = null; drawTs(); }, 1500); });
+  new ResizeObserver(() => drawTs()).observe($("#tsBox")); }
+
+/* ---------- K 線：分 K（當天）／日週月 K（往左拉到底會自動載入更早的資料） ---------- */
+const kChart = new Chart($("#kChart"), { onRange: r => { if ("DWM".includes(W.k) && r.a <= 3 && W.daily && !W.daily.end && !W.daily.loading && kChart.view) loadOlder(); } });
+const dBar = indicatorBar($("#dIbar"), "watch", [{ title: "主圖", items: MAIN_ITEMS }, { title: "副圖", items: SUB_ITEMS }], ["ma5", "ma20", "ma60", "vol", "kd"], () => drawK());
+// 日 K 合成週 K、月 K
+function agg(D, key) {
+  const out = [];
+  for (const x of D) { const k = key(x.d), L = out[out.length - 1]; if (L && L.k === k) { L.h = Math.max(L.h, x.h); L.l = Math.min(L.l, x.l); L.c = x.c; L.v += x.v; L.d = x.d; } else out.push({ k, d: x.d, o: x.o, h: x.h, l: x.l, c: x.c, v: x.v }); }
+  return out;
+}
+const weekKey = d => { const t = new Date(d + "T00:00:00Z"), day = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - day); return t.toISOString().slice(0, 10); };
+function kSeries() {
+  if (W.k === "D") return W.daily?.data || null;
+  if (W.k === "W") return W.daily ? agg(W.daily.data, weekKey) : null;
+  if (W.k === "M") return W.daily ? agg(W.daily.data, d => d.slice(0, 7)) : null;
+  if (!W.intra?.bars?.length) return null;
+  const tf = +W.k, out = [];
+  for (const b of W.intra.bars) { const [h, m] = b.t.split(":").map(Number), sl = Math.floor((h * 60 + m - 540) / tf) * tf + 540, t = `${String(Math.floor(sl / 60)).padStart(2, "0")}:${String(sl % 60).padStart(2, "0")}`, L = out[out.length - 1];
+    if (L && L.d === t) { L.h = Math.max(L.h, b.h); L.l = Math.min(L.l, b.l); L.c = b.c; L.v += b.v; } else out.push({ d: t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }); }
+  return out;
+}
+const fmtKD = s => (W.k === "M" ? s.slice(0, 7).replace("-", "/") : /^\d{4}-/.test(s) ? s.slice(5).replace("-", "/") : s);
+// fresh：換股票或週期時從最右邊開始，只顯示最近一段（左邊留著可以往前拉）
+function drawK(fresh = false, shift = 0) {
+  document.querySelectorAll("#kSeg [data-k]").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === W.k));
+  const D = kSeries(), minute = !"DWM".includes(W.k);
+  if (!D || !D.length) { $("#kNote").textContent = minute ? (W.intraErr || (W.off ? "需要部署到網站" : "今天還沒有分 K（開盤後才有）")) : W.daily?.err || (W.off ? "需要部署到網站" : "載入中…"); return; }
+  const old = kChart.view;
+  Chart.keepView = !fresh;
+  try { kChart.set(D, { ma: maFrom(dBar), boll: dBar.has("boll"), subs: subsFrom(dBar), noVol: !dBar.has("vol") || !D.some(x => x.v), volLabel: "量（張）", fmtD: fmtKD }); }
+  finally { Chart.keepView = false; }
+  const want = W.k === "M" ? (isMobile() ? 36 : 48) : isMobile() ? 60 : 100, N = D.length, w = Math.min(N, want);
+  if (fresh || (shift && !old)) kChart.view = N > w ? kChart.clampView(N - w, w) : null;
+  else if (shift && old) kChart.view = kChart.clampView(old.a + shift, old.b - old.a + 1);
+  kChart.draw();
+  // 週 K、月 K 一開始根數太少、還不能往左拉時，先自動多載入幾年
+  if (!minute && W.daily && !W.daily.end && !W.daily.loading && N < want + 10 && W.daily.data.length) setTimeout(loadOlder, 0);
+  const R = W.daily, span = !minute && R ? `${R.data[0].d.replace(/-/g, "/")} 起・共 ${N} 根${R.end ? "（已到最早）" : R.loading ? "・載入更早資料中…" : ""}` : `${N} 根`;
+  $("#kNote").textContent = minute ? `${W.intra?.date && W.intra.date !== W.today ? "最近交易日 " + W.intra.date.replace(/-/g, "/") + "・" : "當天・"}${N} 根・${W.intra?.source || ""}` : `${span}・${R?.source || ""}`;
+}
+$("#kSeg").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (!b) return; W.k = b.dataset.k; store.set("watch:k", W.k); kChart.view = null; drawK(true); });
 async function loadDaily() {
-  const c = W.sel; if (!c || W.off) { $("#dailyNote").textContent = W.off ? "需要部署到網站" : ""; return; }
-  document.querySelectorAll("#monSeg [data-m]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.m === W.months));
-  $("#dailyNote").textContent = "載入中…";
+  const c = W.sel; if (!c || W.off) { drawK(true); return; }
+  W.daily = { code: c, data: [], loading: true }; drawK(true);
   try {
-    const r = await fetch(`/api/kline?code=${c}&months=${W.months}`), j = await r.json().catch(() => null);
-    if (!j) throw new Error(r.status === 404 ? "這個環境沒有日 K 服務" : `日 K 服務回應 ${r.status}`); if (!j.ok) throw new Error(j.error);
+    const j = await getJ(`/api/kline?code=${c}&months=6`);
     if (W.sel !== c) return;
-    W.daily = { ...j, data: j.data.map(x => ({ ...x, v: x.v || 0 })) }; if (W.detailQ) mergeDaily(W.detailQ, false);
-    $("#dailyNote").textContent = `${j.data.length} 個交易日・${j.source}`; drawDaily(true);
-  } catch (e) { $("#dailyNote").textContent = e.message; }
+    W.daily = { code: c, data: j.data.map(x => ({ ...x, v: x.v || 0 })), source: j.source, end: false, loading: false };
+    if (W.detailQ) mergeDaily(W.detailQ, false);
+    if ("DWM".includes(W.k)) drawK(true);
+  } catch (e) { if (W.sel === c) { W.daily = { code: c, data: [], err: e.message, loading: false }; if ("DWM".includes(W.k)) drawK(true); } }
+}
+// 往前載入一年
+async function loadOlder() {
+  const R = W.daily, c = W.sel; if (!R || !R.data.length || R.loading || R.end) return;
+  R.loading = true; drawK();
+  try {
+    const before = R.data[0].d, j = await getJ(`/api/kline?code=${c}&months=${W.k === "D" ? 12 : 24}&before=${before}`);
+    if (W.sel !== c || W.daily !== R) return;
+    const older = (j.data || []).filter(x => x.d < before).map(x => ({ ...x, v: x.v || 0 }));
+    if (!older.length) { R.end = true; R.loading = false; drawK(); return; }
+    const n0 = kSeries().length; R.data = [...older, ...R.data];
+    drawK(false, kSeries().length - n0); R.loading = false; drawK(); // 先把畫面移回原位，再解除「載入中」，避免同一次拖曳重複載入
+  } catch (e) { R.loading = false; R.end = true; $("#kNote").textContent = `載入更早資料失敗：${e.message}`; }
 }
 function mergeDaily(q, redraw = true) {
-  const R = W.daily; if (!R || q.code !== W.sel || q.price == null || q.open == null || !q.date) return;
+  const R = W.daily; if (!R || !R.data.length || q.code !== W.sel || q.price == null || q.open == null || !q.date) return;
   const D = R.data, last = D[D.length - 1]; if (q.date < last.d) return;
   const bar = { d: q.date, o: q.open, h: Math.max(q.high ?? q.price, q.price), l: Math.min(q.low ?? q.price, q.price), c: q.price, v: q.vol ?? (last.d === q.date ? last.v : 0) };
   if (last.d === q.date) D[D.length - 1] = { ...last, ...bar }; else D.push(bar);
-  if (redraw) drawDaily();
+  if (redraw && "DWM".includes(W.k)) drawK();
 }
-function drawDaily(fresh = false) {
-  const R = W.daily; if (!R) return;
-  Chart.keepView = !fresh;
-  try { dailyChart.set(R.data, { ma: maFrom(dBar), boll: dBar.has("boll"), subs: subsFrom(dBar), noVol: !dBar.has("vol"), volLabel: "量（張）" }); }
-  finally { Chart.keepView = false; }
-}
-$("#monSeg").addEventListener("click", e => { const b = e.target.closest("[data-m]"); if (!b) return; W.months = +b.dataset.m; store.set("watch:months", W.months); loadDaily(); });
-
-// 盤中分 K：/api/intraday（盤中每 30 秒）
+// 盤中分 K（1 分），分時和分 K 共用；盤中每 30 秒更新
 async function loadIntra(force = false) {
-  const c = W.sel; if (!c || W.off) { $("#intraNote").textContent = W.off ? "需要部署到網站" : ""; return; }
-  document.querySelectorAll("#tfSeg [data-tf]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.tf === W.tf));
-  const age = Date.now() - W.intraAt; if (!force && W.intra && (mktSession() === "closed" ? age < 600000 : age < 30000)) return;
+  const c = W.sel; if (!c || W.off) { drawTs(); return; }
+  const age = Date.now() - W.intraAt; if (!force && W.intra && W.intra.code === c && (mktSession() === "closed" ? age < 600000 : age < 30000)) return;
   W.intraAt = Date.now();
   try {
-    const r = await fetch(`/api/intraday?code=${c}&tf=${W.tf}`), j = await r.json().catch(() => null);
-    if (!j) throw new Error(r.status === 404 ? "這個環境沒有分 K 服務" : `分 K 服務回應 ${r.status}`); if (!j.ok) throw new Error(j.error);
+    const j = await getJ(`/api/intraday?code=${c}&tf=1`);
     if (W.sel !== c) return;
-    const same = W.intra && W.intra.tf === j.tf && W.intra.code === j.code; W.intra = j;
-    if (!j.bars.length) { $("#intraNote").textContent = "今天還沒有分 K（開盤後才有）"; return; }
-    $("#intraNote").textContent = `${j.date && j.date !== W.today ? "最近交易日 " + j.date.replace(/-/g, "/") + "・" : ""}${j.source}`;
-    Chart.keepView = !!same;
-    try { intraChart.set(j.bars.map(b => ({ d: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v })), { ma: [5, 20], subs: ["kd"], noVol: !j.bars.some(b => b.v), volLabel: "量（張）", fmtD: s => s, hlines: j.prev ? [{ price: j.prev, label: `昨收 ${fmtP(j.prev)}`, color: "muted" }] : [] }); }
-    finally { Chart.keepView = false; }
-  } catch (e) { $("#intraNote").textContent = e.message; }
+    const fresh = !W.intra || W.intra.code !== c; W.intra = j; W.intraErr = null;
+    drawTs(); if (!"DWM".includes(W.k)) drawK(fresh);
+  } catch (e) { if (W.sel === c) { W.intraErr = e.message; drawTs(); if (!"DWM".includes(W.k)) drawK(); } }
 }
-$("#tfSeg").addEventListener("click", e => { const b = e.target.closest("[data-tf]"); if (!b) return; W.tf = +b.dataset.tf; store.set("watch:tf", W.tf); loadIntra(true); });
 
 /* ---------- 價格提醒 ---------- */
-$("#alertBtn").addEventListener("click", () => { $("#alertBox").hidden = !$("#alertBox").hidden; });
+$("#alertBtn").addEventListener("click", () => { $("#alertBox").hidden = !$("#alertBox").hidden; if (!$("#alertBox").hidden) $("#alUp").focus(); });
 $("#alSave").addEventListener("click", async () => {
-  const c = W.sel, up = parseFloat($("#alUp").value), dn = parseFloat($("#alDn").value);
+  const c = W.sel, up = parseFloat($("#alUp").value), dn = parseFloat($("#alDn").value), px = (W.detailQ || W.quotes.get(c))?.price;
   if (!(up > 0) && !(dn > 0)) { $("#alNote").textContent = "請至少填一個價格"; return; }
-  W.alerts[c] = { up: up > 0 ? up : null, dn: dn > 0 ? dn : null }; store.set("watch:alerts", W.alerts);
+  if (px && up > 0 && up <= px) { $("#alNote").textContent = `「漲到」要高於現價 ${fmtP(px)}`; return; }
+  if (px && dn > 0 && dn >= px) { $("#alNote").textContent = `「跌到」要低於現價 ${fmtP(px)}`; return; }
+  W.alerts[c] = { up: up > 0 ? up : null, dn: dn > 0 ? dn : null, name: W.names[c] || c }; store.set("watch:alerts", W.alerts);
   let perm = "unsupported"; try { if ("Notification" in window) perm = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission; } catch {}
-  $("#alNote").textContent = perm === "granted" ? "已儲存，觸發時會跳出系統通知" : "已儲存；這個瀏覽器沒有開通知權限，觸發時只會在頁面上提示";
-  renderDetailHead(); renderList(); checkAlerts();
+  $("#alNote").textContent = perm === "granted" ? "已儲存，觸發時會跳出系統通知" : "已儲存；沒有通知權限，觸發時只會在頁面上提示";
+  renderDetailHead(); renderList();
 });
 $("#alClear").addEventListener("click", () => { delete W.alerts[W.sel]; store.set("watch:alerts", W.alerts); $("#alNote").textContent = "已清除"; renderDetailHead(); renderList(); });
 function notify(title, body) {
-  toast(`${title}：${body}`); try { navigator.vibrate?.([120, 60, 120]); } catch {}
-  try { if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, tag: title }); } catch {}
+  toast(`${title}：${body}`, 8000); try { navigator.vibrate?.([120, 60, 120]); } catch {}
+  try { if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, tag: title, icon: "watch-icon-192.png" }); } catch {}
 }
 function checkAlerts() {
   let changed = false;
   Object.entries(W.alerts).forEach(([c, a]) => {
-    const q = c === W.sel && W.detailQ ? W.detailQ : W.quotes.get(c); if (!q || q.price == null || q.estimated) return;
+    const q = c === W.sel && W.detailQ ? W.detailQ : W.quotes.get(c); if (!q || q.price == null || q.estimated || (q.date && q.date !== W.today)) return;
     const nm = q.name || W.names[c] || c;
     if (a.up && q.price >= a.up) { notify(`${nm} ${c} 漲到 ${fmtP(q.price)}`, `已達提醒價 ≥ ${a.up}`); a.up = null; changed = true; }
     if (a.dn && q.price <= a.dn) { notify(`${nm} ${c} 跌到 ${fmtP(q.price)}`, `已達提醒價 ≤ ${a.dn}`); a.dn = null; changed = true; }
@@ -404,17 +623,46 @@ function checkAlerts() {
   if (changed) { store.set("watch:alerts", W.alerts); renderDetailHead(); }
 }
 
-/* ---------- 其他 ---------- */
-$("#themeBtn").addEventListener("click", () => { const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = t; store.set("theme", t); $('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#000000" : "#dcdfe4"); Chart.all.forEach(c => c.draw()); });
-function renderAll() { renderTop(); renderList(); if (W.sel) { renderDetailHead(); } }
+/* ---------- 快捷選單 ---------- */
+function setQ(k) { document.querySelectorAll("#qbar [data-q]").forEach(b => b.setAttribute("aria-current", b.dataset.q === k)); }
+function go(id) {
+  if (!W.sel) { const c = (W.last && okCode(W.last) && W.last) || W.list[0]; if (!c) { toast("先加入一檔自選股"); return; } select(c); }
+  if ($("#main").classList.contains("show-detail") === false) select(W.sel);
+  requestAnimationFrame(() => $("#" + id).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
+  setQ(id);
+}
+$("#qbar").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (!b) return; const q = b.dataset.q; if (q === "list") { showList(); window.scrollTo({ top: 0 }); } else if (q === "menu") openSheet(); else go(q); });
+document.querySelector(".qnav").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if (b) go(b.dataset.go); });
+function openSheet(extra = "") { $("#sheetExtra").innerHTML = extra; $("#sheet").hidden = $("#sheetBg").hidden = false; $("#sheet").querySelector("button,a").focus(); }
+function closeSheet() { $("#sheet").hidden = $("#sheetBg").hidden = true; }
+$("#menuBtn").addEventListener("click", () => openSheet());
+$("#sheetBg").addEventListener("click", closeSheet);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+function alertsHtml() {
+  const E = Object.entries(W.alerts);
+  return `<h3>我的價格提醒</h3>${E.length ? `<ul class="alist">${E.map(([c, a]) => `<li><span><b>${esc(W.names[c] || a.name || c)}</b> <span class="note">${c}</span>　${[a.up ? "≥ " + a.up : "", a.dn ? "≤ " + a.dn : ""].filter(Boolean).join("、")}</span><span><button class="btn sm" data-m="open:${c}">看</button> <button class="btn sm" data-m="del:${c}">刪除</button></span></li>`).join("")}</ul>` : `<p class="note">還沒有設定提醒。進到個股頁按「🔔 價格提醒」。</p>`}`;
+}
+$("#sheet").addEventListener("click", e => {
+  const b = e.target.closest("[data-m]"); if (!b) { if (e.target.closest("a")) closeSheet(); return; }
+  const m = b.dataset.m;
+  if (m === "close") closeSheet();
+  else if (m === "refresh") { closeSheet(); W.intraAt = 0; kick(); loadIntra(true); toast("已更新", 1200); }
+  else if (m === "theme") { const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = t; store.set("theme", t); $('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#000000" : "#dcdfe4"); Chart.all.forEach(c => c.draw()); drawTs(); }
+  else if (m === "alerts") $("#sheetExtra").innerHTML = alertsHtml();
+  else if (m === "install") $("#sheetExtra").innerHTML = `<h3>加入主畫面</h3><p class="note" style="font-size:14px;line-height:1.7">iPhone／iPad：用 Safari 打開這一頁，按下方的分享按鈕 →「加入主畫面」。<br>Android：Chrome 右上角選單 →「加到主畫面」或「安裝應用程式」。<br>之後從主畫面的「K線看盤」圖示打開，會全螢幕顯示，價格提醒也能跳系統通知。</p>`;
+  else if (m === "reset") { if (confirm("恢復成預設的 6 檔自選股？")) { W.list = [...DEFAULT_LIST]; saveList(); renderList(); kick(); closeSheet(); } }
+  else if (m.startsWith("open:")) { closeSheet(); select(m.slice(5)); }
+  else if (m.startsWith("del:")) { delete W.alerts[m.slice(4)]; store.set("watch:alerts", W.alerts); $("#sheetExtra").innerHTML = alertsHtml(); renderList(); renderDetailHead(); }
+});
 
-// 起始：網址 #2330 直接開那一檔；桌機預設開清單第一檔
+/* ---------- 起始 ---------- */
+function renderAll() { renderTop(); renderList(); if (W.sel) { renderDetailHead(); renderBook(); } }
 const h0 = location.hash.slice(1).toUpperCase();
-if (okCode(h0)) select(h0, false);
-else if (W.list.length && matchMedia("(min-width: 901px)").matches) select(W.list[0], false);
+if (okCode(h0)) select(h0, "none");
+else if (!isMobile()) { const c = W.last && okCode(W.last) ? W.last : W.list[0]; if (c) select(c, "none"); }
+else setQ("list");
 renderAll();
-if (W.off) { $("#wlNote").textContent = "這個環境沒有報價服務；部署到網站（Vercel）後才會有即時資料。"; renderTop(); }
-else kick();
+if (!W.off) { kick(); loadStocks(); }
 </script>
 </body>
 </html>
