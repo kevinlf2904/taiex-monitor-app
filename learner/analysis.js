@@ -34,7 +34,7 @@ const Signals = {
   fib(D) {
     const f = fibLevels(D); if (!f) return [];
     const a = f.ret[3].price, b = f.ret[5].price, lo = Math.min(a, b), hi = Math.max(a, b);
-    for (let i = f.b.i + 1; i < D.length; i++) {
+    for (let i = f.b.i + 5; i < D.length; i++) { // 波段終點要右側 5 根才確認
       const d = D[i], inZone = f.up ? d.l <= hi && d.l >= lo - (hi - lo) * 0.5 : d.h >= lo && d.h <= hi + (hi - lo) * 0.5;
       if (inZone && (f.up ? d.c > d.o : d.c < d.o)) return [{ i, side: f.up ? "buy" : "sell", label: "回測黃金區" }];
       if (f.up ? d.c < f.a.p : d.c > f.a.p) break; // 跌破波段起點，這組回撤就失效了
@@ -51,6 +51,8 @@ const Signals = {
       ] };
     });
   },
+  // 型態學突破（逐日重算、只保留當天就看得到的突破）：給策略回測用，避免之後的資料把當時的訊號改掉
+  chartPatLive(D, I, only) { const out = []; for (let k = 30; k < D.length; k++) out.push(...Signals.chartPat(D.slice(0, k + 1), I, only).filter(m => m.i === k)); return out; },
   // 背離：比較相鄰兩個轉折點的價格與指標；轉折點要右側 w 根才確認，所以標記畫在確認那天
   div(D, I, ind = "rsi", mode = "regular", upto = D.length) { return divergences(D, I, ind, mode, upto); },
 };
@@ -169,9 +171,12 @@ function zigzag(D, w = 3, upto = D.length) {
 }
 function marketStructure(D, w = 3, upto = D.length) {
   const swings = zigzag(D, w, upto), events = [], sweeps = [], trend = Array(upto).fill(0);
-  let lastH = null, lastL = null, t = 0, si = 0;
+  // 事件只能用「當天已確認」的轉折點：依確認時間逐一加入，同方向的轉折點只有更極端時才取代（和 zigzag 合併規則相同，
+  // 但不會因為之後出現更高的高點，就回頭抹掉當時已經確認過的轉折點）
+  const { hi, lo } = pivots(D, w, upto), raw = [...hi.map(i => ({ i, p: D[i].h, type: "H", conf: i + w })), ...lo.map(i => ({ i, p: D[i].l, type: "L", conf: i + w }))].sort((a, b) => a.i - b.i);
+  let lastH = null, lastL = null, t = 0, si = 0, prev = null;
   for (let k = 0; k < upto; k++) {
-    while (si < swings.length && swings[si].conf <= k) { const s = swings[si++]; if (s.type === "H") lastH = { ...s }; else lastL = { ...s }; }
+    while (si < raw.length && raw[si].conf <= k) { const s = raw[si++]; if (prev && prev.type === s.type && !(s.type === "H" ? s.p > prev.p : s.p < prev.p)) continue; prev = s; if (s.type === "H") lastH = { ...s }; else lastL = { ...s }; }
     const x = D[k];
     if (lastH && !lastH.done && x.c > lastH.p) { events.push({ i: k, dir: 1, kind: t === -1 ? "CHoCH" : "BOS", level: lastH.p, from: lastH.i }); lastH.done = true; t = 1; }
     else if (lastH && !lastH.done && !lastH.swept && x.h > lastH.p && x.c < lastH.p) { sweeps.push({ i: k, dir: -1, level: lastH.p, from: lastH.i }); lastH.swept = true; }
@@ -290,6 +295,8 @@ const FEE = 0.001425, TAX = 0.003;
 // opt.capital 初始資金（元）；opt.lot 每次買進的最小單位（1 = 零股、1000 = 整張）；opt.useBuy / opt.useSell 是否依買進／賣出訊號交易；
 // opt.skip 要略過的訊號（key = 索引＋方向）。手續費 0.1425%（最低 20 元），賣出另計 0.3% 證交稅。
 const btKey = s => `${s.i}${s.side}`;
+// 證交稅率：股票 0.3%（預設）、ETF 0.1%、債券 ETF（00xxxB）停徵到 2026 年底
+const taxOf = c => (/^00\d+B$/.test(c || "") ? 0 : /^00/.test(c || "") ? 0.001 : undefined);
 function backtest(D, sigs, opt = {}) {
   const cap = opt.capital || 1e6, lot = opt.lot || 1, useBuy = opt.useBuy !== false, useSell = opt.useSell !== false, skip = opt.skip || new Set();
   const TX = opt.tax ?? TAX, fee = amt => Math.max(20, Math.floor(amt * FEE)), tax = amt => Math.floor(amt * TX); // 手續費與證交稅都是無條件捨去；ETF 證交稅 0.1%
@@ -333,8 +340,8 @@ function readout(D, I, i) {
   if (K != null) out.push({ k: "KD", t: `K ${fmtN(K)} / D ${fmtN(Dd)}，${K > Dd ? "K在D上" : "K在D下"}${K >= 80 ? "，高檔" : K <= 20 ? "，低檔" : ""}`, b: K > Dd ? 1 : -1 });
   const { dif, sig, osc } = I.macd;
   if (sig[i] != null) {
-    const grow = osc[i - 1] != null && osc[i] > osc[i - 1];
-    out.push({ k: "MACD", t: `DIF 在訊號線${dif[i] > sig[i] ? "上" : "下"}，柱體${osc[i] >= 0 ? "正" : "負"}且${grow ? "增加" : "減少"}`, b: dif[i] > sig[i] ? 1 : -1, x: dif[i] > 0 ? "DIF 在零軸上（中期偏多）" : "DIF 在零軸下（中期偏空）" });
+    const grow = osc[i - 1] != null && Math.abs(osc[i]) > Math.abs(osc[i - 1]);
+    out.push({ k: "MACD", t: `DIF 在訊號線${dif[i] > sig[i] ? "上" : "下"}，柱體${osc[i] >= 0 ? "正" : "負"}且${grow ? "放大" : "縮小"}`, b: dif[i] > sig[i] ? 1 : -1, x: dif[i] > 0 ? "DIF 在零軸上（中期偏多）" : "DIF 在零軸下（中期偏空）" });
   }
   const { up, lo, bw } = I.boll;
   if (up[i] != null) {
@@ -583,5 +590,85 @@ function fundSummary(j, D) {
     if (f.length >= 2 && l.gross != null && f.at(-2).gross != null) { const p2 = f.at(-2), three = l.gross > p2.gross && l.op > p2.op && l.net > p2.net, [y, qq] = String(l.q).split("Q"), ly = f.find(x => x.q === `${+y - 1}Q${qq}`), yoy = ly && ly.gross != null && l.gross > ly.gross && l.op > ly.op && l.net > ly.net;
       if (three) out.push({ k: "三率", t: yoy ? "毛利率、營益率、淨利率都比上一季與去年同期高（三率三升）" : "毛利率、營益率、淨利率都比上一季高（季增三升；三率三升還要比去年同期高）" }); }
   }
+  return out;
+}
+
+/* ---------- K 線組合選股：只看最後一根（今天）是否剛完成這個組合 ----------
+   名稱沿用台股常見的叫法，但各家定義不一，這裡把條件寫死在 desc，畫面上照實顯示。 */
+const KPAT = (() => {
+  const red = (D, i) => D[i].c > D[i].o, black = (D, i) => D[i].c < D[i].o, chg = (D, i) => D[i].c / D[i - 1].c - 1, body = (D, i) => Math.abs(D[i].c - D[i].o) / D[i - 1].c;
+  const hi = (D, a, b) => Math.max(...D.slice(a, b + 1).map(x => x.h)), lo = (D, a, b) => Math.min(...D.slice(a, b + 1).map(x => x.l)), avgV = (D, a, b) => D.slice(a, b + 1).reduce((s, x) => s + (x.v || 0), 0) / (b - a + 1);
+  const pc = v => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+  const cannon = (D, n, up) => body(D, n - 2) >= 0.01 && body(D, n) >= 0.01 && (up ? red(D, n - 2) && black(D, n - 1) && red(D, n) && D[n - 1].c >= Math.min(D[n - 2].o, D[n - 2].c) && D[n].c > D[n - 2].c
+    : black(D, n - 2) && red(D, n - 1) && black(D, n) && D[n - 1].c <= Math.max(D[n - 2].o, D[n - 2].c) && D[n].c < D[n - 2].c);
+  const box = (D, n, k) => (hi(D, n - k, n - 1) - lo(D, n - k, n - 1)) / D[n - 1].c;
+  const vee = (D, n, up) => { // 先跌（漲）≥ 7%，再收復一半以上；轉折點在最近 2～4 根
+    for (let m = n - 4; m <= n - 2; m++) { if (m < 6) continue;
+      const ext = up ? Math.max(...D.slice(m - 6, m).map(x => x.c)) : Math.min(...D.slice(m - 6, m).map(x => x.c)), mv = D[m].c / ext - 1;
+      const isExt = D.slice(m - 2, n + 1).every(x => (up ? x.c >= D[m].c : x.c <= D[m].c));
+      if (isExt && (up ? mv <= -0.07 : mv >= 0.07) && Math.abs(D[n].c - D[m].c) >= Math.abs(ext - D[m].c) * 0.5 && (up ? red(D, n) && D[n].c > D[n - 1].c : black(D, n) && D[n].c < D[n - 1].c)) return `${up ? "跌" : "漲"} ${pc(mv)} 後收復 ${Math.round(Math.abs(D[n].c - D[m].c) / Math.abs(ext - D[m].c) * 100)}%`;
+    } return null; };
+  const L = [
+    ["boom", "bull", "噴薄而出", "前 10 天盤整（高低差 < 10%），今天漲 ≥ 4%、收盤突破盤整高點，量 ≥ 前 10 天均量 2 倍",
+      (D, n) => box(D, n, 10) < 0.1 && chg(D, n) >= 0.04 && D[n].c > hi(D, n - 10, n - 1) && D[n].v >= 2 * avgV(D, n - 10, n - 1) ? `漲 ${pc(chg(D, n))}・量 ${(D[n].v / avgV(D, n - 10, n - 1)).toFixed(1)} 倍` : null],
+    ["sky", "bull", "直上青雲", "連續 5 根紅 K、收盤一天比一天高，5 天合計漲 ≥ 8%",
+      (D, n) => [0, 1, 2, 3, 4].every(k => red(D, n - k) && D[n - k].c > D[n - k - 1].c) && D[n].c / D[n - 5].c - 1 >= 0.08 ? `5 天 ${pc(D[n].c / D[n - 5].c - 1)}` : null],
+    ["vrev", "bull", "V 型反轉", "最近 6 天內跌 ≥ 7% 打出低點，之後收復跌幅一半以上，今天收紅",
+      (D, n) => vee(D, n, true)],
+    ["cannon2", "bull", "疊疊多方炮", "紅黑紅黑紅：連續兩組多方炮，收盤一組比一組高",
+      (D, n) => cannon(D, n, true) && cannon(D, n - 2, true) && D[n].c > D[n - 2].c && D[n - 2].c > D[n - 4].c ? `5 天 ${pc(D[n].c / D[n - 5].c - 1)}` : null],
+    ["cannon", "bull", "多方炮", "兩紅夾一黑：兩根紅 K 實體都 ≥ 1%，中間的黑 K 沒跌破前一根紅 K 的實體，今天紅 K 收在前一根紅 K 之上",
+      (D, n) => cannon(D, n, true) ? `今天 ${pc(chg(D, n))}` : null],
+    ["sesame", "bull", "芝麻開花", "前 4 根都是小 K（實體 < 1.5%）、高低差 < 5%，今天長紅 ≥ 3% 突破這段高點",
+      (D, n) => [1, 2, 3, 4].every(k => body(D, n - k) < 0.015) && box(D, n, 4) < 0.05 && red(D, n) && chg(D, n) >= 0.03 && D[n].c > hi(D, n - 4, n - 1) ? `今天 ${pc(chg(D, n))}` : null],
+    ["engulf", "bull", "一手遮天", "前 5 天下跌 ≥ 3% 後，今天一根紅 K 的實體包住前 3 根 K 棒的實體",
+      (D, n) => D[n - 1].c / D[n - 6].c - 1 <= -0.03 && red(D, n) && D[n].o <= Math.min(...[1, 2, 3].map(k => Math.min(D[n - k].o, D[n - k].c))) && D[n].c >= Math.max(...[1, 2, 3].map(k => Math.max(D[n - k].o, D[n - k].c))) ? `今天 ${pc(chg(D, n))}` : null],
+    ["sword", "bull", "彈劍長嘯", "多頭（收盤在 20 日均線上）中先出現一根小 K 休息，今天長紅 ≥ 3% 並創 20 日收盤新高",
+      (D, n) => { const m20 = D.slice(n - 20, n).reduce((s, x) => s + x.c, 0) / 20; return D[n - 1].c > m20 && body(D, n - 1) < 0.01 && red(D, n) && chg(D, n) >= 0.03 && D[n].c >= Math.max(...D.slice(n - 20, n).map(x => x.c)) ? `今天 ${pc(chg(D, n))}・創 20 日新高` : null; }],
+    ["bcannon", "bear", "空方炮", "兩黑夾一紅：兩根黑 K 實體都 ≥ 1%，中間的紅 K 沒漲過前一根黑 K 的實體，今天黑 K 收在前一根黑 K 之下",
+      (D, n) => cannon(D, n, false) ? `今天 ${pc(chg(D, n))}` : null],
+    ["drop", "bear", "直下深淵", "連續 5 根黑 K、收盤一天比一天低，5 天合計跌 ≥ 8%",
+      (D, n) => [0, 1, 2, 3, 4].every(k => black(D, n - k) && D[n - k].c < D[n - k - 1].c) && D[n].c / D[n - 5].c - 1 <= -0.08 ? `5 天 ${pc(D[n].c / D[n - 5].c - 1)}` : null],
+    ["avrev", "bear", "倒 V 反轉", "最近 6 天內漲 ≥ 7% 做出高點，之後回吐漲幅一半以上，今天收黑",
+      (D, n) => vee(D, n, false)],
+    ["topblack", "bear", "高檔長黑", "昨天收盤在 20 日高點附近（3% 內），今天跌 ≥ 4%、量 ≥ 前 10 天均量 1.5 倍",
+      (D, n) => D[n - 1].c >= hi(D, n - 20, n - 1) * 0.97 && chg(D, n) <= -0.04 && D[n].v >= 1.5 * avgV(D, n - 10, n - 1) ? `跌 ${pc(chg(D, n))}` : null],
+    ["breakdown", "bear", "跌破盤整", "前 10 天盤整（高低差 < 10%），今天跌 ≥ 3%、收盤跌破盤整低點",
+      (D, n) => box(D, n, 10) < 0.1 && chg(D, n) <= -0.03 && D[n].c < lo(D, n - 10, n - 1) ? `跌 ${pc(chg(D, n))}` : null],
+  ];
+  return L.map(([id, side, name, desc, fn]) => ({ id, side, name, desc, hit(D) { const n = D?.length - 1; if (!(n >= 25)) return null; try { return fn(D, n); } catch { return null; } } }));
+})();
+
+/* ---------- 走勢分析：模擬之前先把目前的技術面講清楚（用了哪些分析、各自偏多或偏空、在模擬裡扮演什麼角色） ----------
+   use：dir＝決定模擬方向、range＝決定波動範圍、prob＝用來算碰到價位的機率、ref＝只供參考（模擬沒有用） */
+function trendAnalysis(D, I, mode = "trend") {
+  const n = D.length - 1, c = D[n].c, out = [], pc = v => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+  const add = (k, t, b, use) => out.push({ k, t, b, use });
+  const m20 = I.ma(20), m60 = I.ma(60);
+  if (m20[n] != null) {
+    const s20 = m20[n - 5] ? m20[n] / m20[n - 5] - 1 : 0;
+    add("均線趨勢", `收盤${c >= m20[n] ? "在" : "跌破"}月線（${fmtP(m20[n])}）${m60[n] != null ? `、${c >= m60[n] ? "在" : "跌破"}季線（${fmtP(m60[n])}）` : ""}；月線 5 天${s20 >= 0 ? "上彎" : "下彎"} ${pc(s20)}`,
+      (c >= m20[n] ? 1 : -1) + (s20 > 0 ? 1 : -1) > 0 ? 1 : (c >= m20[n] ? 1 : -1) + (s20 > 0 ? 1 : -1) < 0 ? -1 : 0, mode === "tech" ? "dir" : "ref");
+  }
+  if (n >= 20) { const r20 = c / D[n - 20].c - 1; add("近 20 根漲跌", `${pc(r20)}，平均每天 ${pc(r20 / 20)}`, r20 > 0.02 ? 1 : r20 < -0.02 ? -1 : 0, mode === "trend" ? "dir" : "ref"); }
+  try {
+    const z = zigzag(D, 3).slice(-4), H = z.filter(s => s.type === "H"), L = z.filter(s => s.type === "L");
+    if (H.length >= 2 && L.length >= 2) { const hh = H[1].p > H[0].p, hl = L[1].p > L[0].p;
+      add("道氏結構", hh && hl ? "高點、低點都墊高（HH＋HL），上升結構" : !hh && !hl ? "高點、低點都降低（LH＋LL），下降結構" : `高點${hh ? "墊高" : "降低"}、低點${hl ? "墊高" : "降低"}，結構不明確（盤整或轉折中）`, hh && hl ? 1 : !hh && !hl ? -1 : 0, "ref"); }
+    const ms = marketStructure(D), ev = ms.events[ms.events.length - 1];
+    if (ev) add("聰明錢結構", `${n - ev.i} 根前${ev.dir > 0 ? "向上" : "向下"} ${ev.kind}（${ev.kind === "CHoCH" ? "趨勢轉變" : "趨勢延續"}），突破價 ${fmtP(ev.level)}`, ev.dir, mode === "smc" ? "dir" : "ref");
+    const zs = smcZones(D, ms).filter(x => !x.hit), up = zs.filter(x => x.dir < 0 && x.bot > c).sort((a, b) => a.bot - b.bot)[0], dn = zs.filter(x => x.dir > 0 && x.top < c).sort((a, b) => b.top - a.top)[0];
+    if (up || dn) add("訂單塊／FVG", `${up ? `上方空方區 ${fmtP(up.bot)}～${fmtP(up.top)}（${pc(up.bot / c - 1)}）` : "上方沒有未回補的空方區"}；${dn ? `下方多方區 ${fmtP(dn.bot)}～${fmtP(dn.top)}（${pc(dn.top / c - 1)}）` : "下方沒有未回補的多方區"}`, 0, "prob");
+  } catch {}
+  try { const S = srLevels(D), r = S.filter(x => x.kind === "壓力").sort((a, b) => a.price - b.price)[0], s = S.filter(x => x.kind === "支撐").sort((a, b) => b.price - a.price)[0];
+    if (r || s) add("支撐壓力", `${r ? `壓力 ${fmtP(r.price)}（${pc(r.price / c - 1)}）` : "上方沒有明顯壓力"}；${s ? `支撐 ${fmtP(s.price)}（${pc(s.price / c - 1)}）` : "下方沒有明顯支撐"}`, 0, "ref"); } catch {}
+  try { const f = fibLevels(D); if (f) { const r = Math.abs(f.b.p - c) / Math.abs(f.b.p - f.a.p);
+    add("斐波那契", `最近一段${f.up ? "上漲" : "下跌"}波段已回撤 ${(r * 100).toFixed(0)}%；61.8% 在 ${fmtP(f.ret[4].price)}`, f.up ? (r < 0.5 ? 1 : 0) : (r < 0.5 ? -1 : 0), "prob"); } } catch {}
+  if (I.rsi[n] != null) add("RSI", `${I.rsi[n].toFixed(0)}（${I.rsi[n] > 70 ? "超買，短線容易拉回" : I.rsi[n] < 30 ? "超賣，短線容易反彈" : I.rsi[n] >= 50 ? "多方較強" : "空方較強"}）`, I.rsi[n] > 70 ? -1 : I.rsi[n] < 30 ? 1 : I.rsi[n] >= 50 ? 1 : -1, mode === "tech" ? "dir" : "ref");
+  if (I.kd.K[n] != null) add("KD", `K ${I.kd.K[n].toFixed(0)}／D ${I.kd.D[n].toFixed(0)}，K ${I.kd.K[n] >= I.kd.D[n] ? "在 D 之上" : "在 D 之下"}`, I.kd.K[n] >= I.kd.D[n] ? 1 : -1, mode === "tech" ? "dir" : "ref");
+  if (I.macd.osc[n] != null) add("MACD", `柱狀體${I.macd.osc[n] >= 0 ? "為正（紅）" : "為負（綠）"}且${Math.abs(I.macd.osc[n]) >= Math.abs(I.macd.osc[n - 1] ?? 0) ? "放大" : "縮小"}`, I.macd.osc[n] >= 0 ? 1 : -1, mode === "tech" ? "dir" : "ref");
+  if (D.some(x => x.v)) { const v20 = D.slice(Math.max(0, n - 20), n).reduce((s, x) => s + (x.v || 0), 0) / Math.min(20, n); if (v20) add("量能", `最後一根量是 20 日均量的 ${(D[n].v / v20).toFixed(1)} 倍${D[n].v > 1.5 * v20 ? "（放量）" : D[n].v < 0.6 * v20 ? "（量縮）" : ""}`, 0, "ref"); }
+  const rets = D.slice(-121).map((x, k, a) => (k ? Math.log(x.c / a[k - 1].c) : null)).filter(v => v != null), mu = rets.reduce((s, v) => s + v, 0) / (rets.length || 1), sd = Math.sqrt(rets.reduce((s, v) => s + (v - mu) ** 2, 0) / (rets.length || 1));
+  add("波動度", `近 ${rets.length} 根每日漲跌的標準差約 ${(sd * 100).toFixed(1)}%，決定模擬機率帶的寬度`, 0, "range");
   return out;
 }

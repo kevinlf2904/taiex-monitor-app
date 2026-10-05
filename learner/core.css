@@ -89,3 +89,10 @@ button, select, input { font: inherit; color: inherit; }
 @media (min-width: 641px) { .legend { padding-right: 330px; } }
 .chartbox canvas { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
 .scalepop .pseg.kts { flex-wrap: wrap; } .scalepop .pseg.kts button { padding: 5px 8px; font-size: 12.5px; }
+
+/* 副圖右上角的訊號開關 */
+.sigui { position: absolute; inset: 0; pointer-events: none; }
+.sigrow { position: absolute; display: flex; gap: 4px; pointer-events: auto; }
+.sigrow button { font: 600 11px var(--font-body); padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; line-height: 1.5; opacity: .9; }
+.sigrow button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.sigrow button:disabled { opacity: .4; cursor: default; }

@@ -200,6 +200,7 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .ws-head { display: flex; justify-content: space-between; align-items: end; gap: 10px; flex-wrap: wrap; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
 .sim-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; background: var(--surface-2); }
 .switch { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; cursor: pointer; }
+.ta-tbl td:nth-child(2) { white-space: normal; min-width: 12em; } .ta-use { font-weight: 600; white-space: nowrap; }
 .sim-why { background: var(--surface-2); border-radius: 8px; padding: 10px 14px; font-size: 14px; }
 .sim-why summary { cursor: pointer; }
 .sim-why ol { margin: 8px 0 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
@@ -749,10 +750,11 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-25</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.05-26</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
+<script src="lessons-more.js"></script>
 <script>
 "use strict";
 /* 工具函式、技術指標、指標開關、副圖訊號與 K 線圖（Chart）在 core.js；訊號、型態、背離、結構、回測、判讀、斐波那契、籌碼摘要在 analysis.js（都和看盤頁共用） */
@@ -850,7 +852,7 @@ const smcStructSVG = `<div class="anatomy"><svg width="460" height="190" viewBox
   <line x1="150" y1="80" x2="217" y2="80" stroke="var(--up)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="183" y="74" text-anchor="middle" fill="var(--up)" class="lbl-strong">BOS</text>
   <line x1="185" y1="115" x2="336" y2="115" stroke="var(--down)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="262" y="130" text-anchor="middle" fill="var(--down)" class="lbl-strong">CHoCH</text>
   <text x="70" y="102" text-anchor="middle">H</text><text x="100" y="155" text-anchor="middle">HL</text><text x="150" y="72" text-anchor="middle">HH</text><text x="185" y="108" text-anchor="middle">HL</text><text x="230" y="52" text-anchor="middle">HH</text><text x="300" y="67" text-anchor="middle">LH</text><text x="350" y="155" text-anchor="middle">LL</text><text x="380" y="110" text-anchor="middle">LH</text>
-  <text x="20" y="20">上升結構：每次收盤突破前高＝BOS（延續）</text><text x="20" y="36">最後跌破「造成最後一次 BOS 的那個低點」＝CHoCH（性格改變）</text>
+  <text x="20" y="20">上升結構：每次收盤突破前高＝BOS（延續）</text><text x="20" y="36">跌破最近一個轉折低點＝CHoCH（性格改變）</text>
 </svg></div>`;
 const smcLiqSVG = `<div class="anatomy"><svg width="460" height="185" viewBox="0 0 460 185" aria-label="流動性與掃蕩示意圖">
   <rect x="80" y="38" width="220" height="22" fill="var(--accent-soft)"/><text x="190" y="33" text-anchor="middle">等高點上方：空單的停損＋追突破的買單（BSL 買方流動性）</text>
@@ -1109,7 +1111,8 @@ OSC  = DIF − MACD              （柱狀體）</div>
 <li><strong>DIF 上穿 MACD</strong>、柱狀體由負翻正：動能轉強。</li>
 <li><strong>零軸</strong>：DIF 在零軸之上，代表短期均線在長期均線之上，屬中期多頭。</li>
 <li><strong>柱狀體縮短</strong>：趨勢仍在，但力道變弱，常是交叉之前的預警。</li>
-</ul>`,
+</ul>
+<p class="note">圖上的 MA12／MA26 是簡單均線，只是幫你看快慢兩條線的相對位置；DIF 本身用的是 EMA，數值會略有不同。</p>`,
     chart: { ma: [12, 26], sub: "macd", markers: (D, I) => Signals.macd(D, I) },
     try: "注意零軸之上的黃金交叉（多頭中的再起漲）和零軸之下的黃金交叉（空頭中的反彈）有什麼不同。",
     keys: ["MACD 比 KD 慢、比較穩，適合判斷波段方向。", "盤整期 DIF 與 MACD 會黏在零軸附近反覆交叉，訊號價值低。", "柱狀體的變化比交叉更早，可以用來提前察覺動能轉變。", "不同看盤軟體的 MACD 數值可能差一點（EMA 起算方式不同，有的用 (高+低+2×收)/4 計算），看方向和交叉就好，不必追究小數。"],
@@ -1317,7 +1320,7 @@ ${smcStructSVG}
 <h3>2. 結構突破的兩種</h3>
 <table><thead><tr><th></th><th>BOS（Break of Structure）</th><th>CHoCH（Change of Character）</th></tr></thead><tbody>
 <tr><td>方向</td><td>順著原趨勢</td><td>逆著原趨勢的<strong>第一次</strong>突破</td></tr>
-<tr><td>上升結構中</td><td>收盤站上前一個轉折高點</td><td>收盤跌破「造成最後一次 BOS 的那個低點」</td></tr>
+<tr><td>上升結構中</td><td>收盤站上前一個轉折高點</td><td>收盤跌破最近一個已確認的轉折低點（嚴格定義是「造成最後一次 BOS 的那個低點」，本工具採較敏感的做法）</td></tr>
 <tr><td>下降結構中</td><td>收盤跌破前一個轉折低點</td><td>收盤站上最後一個較低的高點</td></tr>
 <tr><td>意義</td><td>趨勢延續，可以順勢找回檔進場</td><td>趨勢可能反轉，先停止順勢操作</td></tr>
 </tbody></table>
@@ -1909,7 +1912,7 @@ RSI = 100 − 100 ÷ (1 + 4) = 80</div>
 <div class="formula">RSV = (58 − 50) ÷ (60 − 50) × 100 = 80
 K = 40 × 2/3 + 80 × 1/3 ≈ 53.3
 D = 35 × 2/3 + 53.3 × 1/3 ≈ 41.1</div>
-<p>解讀：K 從 40 升到 53，高於 D，維持多方。但交叉位置在中間區域，不是低檔交叉，訊號力道普通。若月線也向上，可以視為順勢的動能延續；若隔天收盤跌回 52 元以下讓 K 再跌破 D，這次交叉就失效。</p>`,
+<p>解讀：K 從 40 升到 53，高於 D，維持多方。但交叉位置在中間區域，不是低檔交叉，訊號力道普通。若月線也向上，可以視為順勢的動能延續；若隔天收盤跌到 51.5 元以下（9 日高低不變）讓 K 再跌破 D，這次交叉就失效。</p>`,
 
   wr: `<h4>原理拆解</h4>
 <p>威廉指標 %R 衡量今天收盤價離最近 14 天<strong>最高價</strong>有多遠。收在最高價時 %R = 0，收在最低價時 %R = −100。它和 KD 的 RSV 幾乎是同一件事，只是方向倒過來、而且沒有平滑，所以反應更快、更敏感。</p>
@@ -1939,7 +1942,7 @@ D = 35 × 2/3 + 53.3 × 1/3 ≈ 41.1</div>
 <p>解讀：仍在 −80 以下的超賣區，還沒有「離開」，所以不算訊號。若隔天收 105 元以上，%R 回到 −75，才算離開超賣區。若同時季線向上，這個訊號比較值得注意；若季線向下，就只當成短線反彈的參考。</p>`,
 
   macd: `<h4>原理拆解</h4>
-<p>MACD 的 DIF 是快線 EMA12 減慢線 EMA26：短期平均成本比長期高，代表最近的買方比較積極。MACD 線（訊號線）是 DIF 的 9 日平均，柱狀體 OSC = DIF − MACD，代表「動能的變化」。</p>
+<p>MACD 的 DIF 是快線 EMA12 減慢線 EMA26：短期平均成本比長期高，代表最近的買方比較積極。MACD 線（訊號線）是 DIF 的 9 日 EMA，柱狀體 OSC = DIF − MACD，代表「動能的變化」。</p>
 <p>柱狀體開始縮短，表示動能在減弱，常比交叉更早出現。零軸則代表多空分界：DIF 在零軸之上，短期均線在長期均線之上。</p>
 <h4>實戰判讀步驟</h4>
 <ol>
@@ -1951,7 +1954,7 @@ D = 35 × 2/3 + 53.3 × 1/3 ≈ 41.1</div>
 </ol>
 <h4>參數與變化</h4>
 <ul>
-<li>標準設定 <strong>（12, 26, 9）</strong>，各家看盤軟體一致。</li>
+<li>標準設定 <strong>（12, 26, 9）</strong>，各家看盤軟體的參數多半一致，但價格來源與起算方式可能不同，數值會有小差異。</li>
 <li>短線有人用（6, 13, 5）加快反應，但假訊號增加。</li>
 <li>週 MACD 適合判斷中長期趨勢，日 MACD 找時機。</li>
 </ul>
@@ -2429,7 +2432,8 @@ function loadLessonData() {
 // 深入學習：每課的 LESSON_DEEP 依 <h4> 切成幾個分頁（原理、步驟、參數、陷阱、範例）
 let deepState = { parts: [], k: 0 };
 function renderDeep(L) {
-  const html = LESSON_DEEP[L.id] || "", parts = [];
+  // 課後補充（lessons-more.js）接在原本的深入學習後面，一樣依 <h4> 分頁
+  const html = (LESSON_DEEP[L.id] || "") + ((typeof LESSON_MORE !== "undefined" && LESSON_MORE[L.id]) || ""), parts = [];
   html.split(/<h4>/).slice(1).forEach(seg => { const [t, ...rest] = seg.split("</h4>"); parts.push({ t: t.trim(), html: rest.join("</h4>") }); });
   deepState = { parts, k: 0 };
   $("#lessonDeep").hidden = !parts.length;
@@ -2505,7 +2509,7 @@ const STRATS = {
   divRsi: { name: "RSI 背離（一般背離）", fn: (D, I) => Signals.div(D, I, "rsi") },
   divMacd: { name: "MACD 背離（一般背離）", fn: (D, I) => Signals.div(D, I, "macd") },
   wr: { name: "威廉 %R −80 / −20", fn: Signals.wr },
-  chartPat: { name: "型態學突破（頭肩、M 頭、W 底、三角…）", fn: (D, I) => Signals.chartPat(D, I) },
+  chartPat: { name: "型態學突破（頭肩、M 頭、W 底、三角…）", fn: (D, I) => Signals.chartPatLive(D, I) },
   choch: { name: "聰明錢：CHoCH 結構轉變", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") },
   bos: { name: "道氏：所有結構突破（BOS + CHoCH）", fn: (D, I) => Signals.structure(D, I, "dow") },
 };
@@ -2556,12 +2560,12 @@ function renderBT(sigs) {
   </div>`;
   if (!S.fn) { html += `<p class="note" style="margin:0">選一個策略，圖上會標出買賣訊號，這裡會顯示用這些訊號進出的結果。</p>`; }
   else {
-    const lc = labUsesReal() ? REAL.cur?.code : null, etf = /^00/.test(lc || ""), idx = lc === "TAIEX";
-    const r = backtest(lab.D, sigs, { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip, tax: etf ? 0.001 : undefined }), cls = x => x > 0 ? "up" : x < 0 ? "down" : "";
+    const lc = labUsesReal() ? REAL.cur?.code : null, etf = /^00/.test(lc || ""), bond = /^00\d+B$/.test(lc || ""), idx = lc === "TAIEX";
+    const r = backtest(lab.D, sigs, { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip, tax: taxOf(lc) }), cls = x => x > 0 ? "up" : x < 0 ? "down" : "";
     const nBuy = sigs.filter(x => x.side === "buy" && !x.note).length, nSell = sigs.filter(x => x.side === "sell" && !x.note).length;
     const mode = lab.useBuy && lab.useSell ? "" : lab.useBuy ? "只依買進訊號進場，之後一直持有到期末。" : lab.useSell ? "第一天開盤先全額買進，依賣出訊號出場後不再買回。" : "買進、賣出都沒勾，不會有任何交易。";
     if (idx) html += `<p class="note" style="margin:0 0 8px">⚠ 加權指數本身不能買賣，這裡的回測只是看訊號在指數上的效果；實際可以用 0050 等 ETF 或台指期操作。</p>`;
-    if (labUsesReal()) html += `<p class="note" style="margin:0 0 8px">${etf ? "ETF 的證交稅以 0.1% 計算。" : ""}真實股價沒有還原除權息：除息日的下跌會被算成虧損，配息也沒有加回，長期回測（尤其是買進持有）會略為低估。</p>`;
+    if (labUsesReal()) html += `<p class="note" style="margin:0 0 8px">${bond ? "債券 ETF 的證交稅停徵到 2026 年底，以 0 計算。" : etf ? "ETF 的證交稅以 0.1% 計算。" : ""}真實股價沒有還原除權息：除息日的下跌會被算成虧損，配息也沒有加回，長期回測（尤其是買進持有）會略為低估。</p>`;
     html += `<div class="stats">
       <div class="stat"><div class="k">策略報酬</div><div class="v ${cls(r.total)}">${fmtPct(r.total, 1)}</div><div class="s ${cls(r.pnl)}">${r.pnl >= 0 ? "+" : ""}${fmtMoney(r.pnl)}</div></div>
       <div class="stat"><div class="k">期末資金</div><div class="v">${Math.round(r.end).toLocaleString()}</div><div class="s">初始 ${Math.round(r.cap).toLocaleString()}</div></div>
@@ -3898,9 +3902,16 @@ function renderSimStats(sim, mode, days, bias) {
     <li><strong>畫出來的那條 K 線</strong>：挑 ${sim.paths} 條裡終點最接近中位數的一條。開盤價從過去的跳空幅度抽樣（平均 ${(f.gapAbs * 100).toFixed(2)}%），上下引線從過去 K 棒的上影線（平均 ${(f.upW * 100).toFixed(2)}%）、下影線（平均 ${(f.dnW * 100).toFixed(2)}%）抽樣。它只是「典型的一條」，真實走勢通常不會這麼剛好。</li>
     ${tiles.length > 4 ? `<li><strong>機率怎麼算</strong>：數一數 ${sim.paths} 條路徑裡，有多少條在 ${days} 根內碰到那個價位（含上下引線的估計）。</li>` : ""}
   </ol></details>`;
+  // 走勢分析：模擬之前的技術面判讀，標出每一項在這次模擬裡的角色
+  const TA = trendAnalysis(D, shot.I, mode), USE = { dir: ["決定方向", "accent"], range: ["決定範圍", "s2"], prob: ["算機率", "s3"], ref: ["僅供參考", "muted"] };
+  const tb = TA.filter(x => x.b > 0).length, tr = TA.filter(x => x.b < 0).length, agree = (tb - tr) * (dd || 0);
+  const ta = `<details class="sim-why" open><summary><strong>目前走勢分析：用了哪些技術分析？</strong></summary>
+    <p class="note" style="margin:6px 0">${tb} 項偏多、${tr} 項偏空、${TA.length - tb - tr} 項中性。${Math.abs(dd) < 0.002 ? "這次模擬幾乎沒有加方向，" : `這次模擬整體${dd > 0 ? "偏多" : "偏空"}，`}${agree > 0 ? "和多數技術面判讀一致。" : agree < 0 ? "和多數技術面判讀相反，代表你選的情境只看了其中一部分訊號，請一起參考。" : "技術面判讀多空接近。"}</p>
+    <div style="overflow-x:auto"><table class="tbl ta-tbl"><thead><tr><th>分析</th><th>目前狀態</th><th>傾向</th><th>在模擬裡</th></tr></thead><tbody>${TA.map(x => `<tr><td>${x.k}</td><td>${esc(x.t)}</td><td class="${x.b > 0 ? "up" : x.b < 0 ? "down" : ""}">${x.b > 0 ? "偏多" : x.b < 0 ? "偏空" : "中性"}</td><td><span class="ta-use" style="color:var(--${USE[x.use][1]})">${USE[x.use][0]}</span></td></tr>`).join("")}</tbody></table></div>
+    <p class="note" style="margin:6px 0 0">「決定方向」的項目會改變每天加上的偏移（中位數往上或往下）；「決定範圍」影響機率帶寬度；「算機率」的價位用來統計碰到的比例；「僅供參考」的項目沒有放進這次模擬，可以換情境（例如「依技術指標偏向」或「依聰明錢結構」）讓它們影響方向。</p></details>`;
   $("#simStats").innerHTML = `<div class="row" style="justify-content:space-between"><strong>未來 ${days} 根 K 棒的模擬結果</strong><span class="note">${sim.paths} 條隨機路徑・${SIM_MODES[mode]}${mode === "tech" || mode === "smc" ? `（偏向 ${bias > 0 ? "+" : ""}${bias.toFixed(2)}）` : ""}・每日波動約 ${(sim.sd * 100).toFixed(1)}%</span></div>
     <div class="stats">${tiles.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v sm">${v}</div></div>`).join("")}</div>
-    <p class="note" style="margin:0">怎麼讀：深色帶是一半路徑落在的範圍，淺色帶是 80% 路徑的範圍，虛線是中位數，半透明 K 棒是其中一條代表性路徑。</p>${why}
+    <p class="note" style="margin:0">怎麼讀：深色帶是一半路徑落在的範圍，淺色帶是 80% 路徑的範圍，虛線是中位數，半透明 K 棒是其中一條代表性路徑。</p>${ta}${why}
     <p class="note" style="margin:0">限制：模擬假設未來的波動和漲跌分布跟過去一樣，不知道任何還沒發生的消息。它描述的是「可能性的範圍」，不是預測，也不構成投資建議。</p>`;
 }
 function shotLoad(blob, hiLo) {
