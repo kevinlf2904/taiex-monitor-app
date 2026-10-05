@@ -38,6 +38,12 @@ export function summarize(trades) {
   }
   return [...byMin.values()].sort((a, b) => a.t.localeCompare(b.t));
 }
+// 資金分佈：各級主動買、主動賣的成交金額（元）
+export function moneyByBucket(trades) {
+  const b = [0, 0, 0, 0], s = [0, 0, 0, 0];
+  for (const t of trades) { if (!t.side || !t.size) continue; const v = t.size * t.price * 1000; (t.side > 0 ? b : s)[bucketOf(v)] += v; }
+  return { b: b.map(Math.round), s: s.map(Math.round) };
+}
 export function parseTrades(j) {
   return (j?.data || []).map(x => ({ t: hms(x.time ?? x.at ?? x.date), price: num(x.price), size: num(x.size) ?? 0, bid: num(x.bid), ask: num(x.ask), serial: x.serial ?? null, raw: x.time }))
     .filter(x => x.t && x.price != null);
@@ -88,6 +94,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, code, date: tr.value.date, source: "富果逐筆成交", unit: "張", buckets: BUCKETS,
       complete: tr.value.complete, from: T[0]?.t || null, count: T.length,
       trades: T.slice(-80).reverse().map(({ t, price, size, side }) => ({ t, p: price, v: size, s: side })),
-      minutes: summarize(T), vbp: vo.status === "fulfilled" ? parseVolumes(vo.value) : null });
+      minutes: summarize(T), money: moneyByBucket(T), vbp: vo.status === "fulfilled" ? parseVolumes(vo.value) : null });
   } catch (e) { return res.status(200).json({ ok: false, error: `拿不到 ${code} 的逐筆成交（${e.message}）` }); }
 }
