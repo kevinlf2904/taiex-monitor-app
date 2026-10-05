@@ -132,12 +132,15 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .d-px { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .d-px b { font-family: var(--font-mono); font-size: 34px; line-height: 1.1; }
 .d-px span { font-family: var(--font-mono); font-size: 16px; font-weight: 600; }
-.d-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.d-kv div { background: var(--surface-2); padding: 6px 10px; }
+.d-kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+@media (min-width: 901px) { .d-kv { grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); } .d-kv div { padding: 6px 8px; } .d-kv b { font-size: 13.5px; } }
+.d-kv span, .d-kv b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-kv div { background: var(--surface-2); padding: 6px 10px; box-shadow: 0 0 0 .5px var(--line); }
 .d-kv span { display: block; font-size: 11.5px; color: var(--muted); }
 .d-kv b { font-family: var(--font-mono); font-weight: 600; font-size: 14px; }
 .d-hold { font-family: var(--font-mono); font-size: 13.5px; padding: 6px 10px; border-radius: 8px; background: var(--surface-2); }
 .d-act { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 480px) { .d-act { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 6px; } .d-act .btn { flex: none; padding: 5px 9px; } }
 .back { display: none; }
 .dtabs { position: sticky; top: 60px; z-index: 5; }
 :root[data-embed="1"] .dtabs { position: static; }
@@ -300,6 +303,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .slist .nm { display: flex; flex-direction: column; font-size: 14px; min-width: 0; } .slist small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slist b { font: 600 14px var(--font-mono); text-align: right; display: flex; flex-direction: column; } .slist b small { color: inherit; } .slist .up { color: var(--up); } .slist .down { color: var(--down); } .slist .rk { color: var(--s1); font: 600 12px var(--font-mono); width: 18px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.kset > summary { list-style: none; cursor: pointer; display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+.kset > summary::-webkit-details-marker { display: none; } .kset > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; } .kset[open] > summary::before { transform: rotate(90deg); }
+.kset > summary .note { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 </style>
 </head>
 <body>
@@ -341,7 +347,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
         <button class="btn sm" id="favBtn" type="button">☆ 加入自選</button>
         <button class="btn sm" id="holdBtn" type="button">💼 持股</button>
         <button class="btn sm" id="alertBtn" type="button">🔔 提醒</button>
-        <a class="btn sm" id="learnLink" href="./">🔍 到 K線學堂判讀</a>
+        <a class="btn sm" id="learnLink" href="./" title="到 K線學堂的個股判讀看這一檔">🔍 判讀</a>
       </div>
     </div>
     <div class="panel box" id="holdBox" hidden>
@@ -375,8 +381,10 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     <div class="panel sec" id="secK" data-pane="tech">
       <div class="ph"><h2>K 線</h2><div class="seg" role="group" aria-label="K 線週期" id="kSeg"><button data-k="1">1分</button><button data-k="5">5分</button><button data-k="15">15分</button><button data-k="60">60分</button><button data-k="D" class="gap">日</button><button data-k="W">週</button><button data-k="M">月</button></div></div>
       <div class="k-status"><span id="kNote"></span><span>往左拖曳會自動載入更早的資料；兩指縮放；放大後圖表鎖定，按「全部」解鎖</span></div>
-      <div class="ibar" id="dIbar"></div>
-      <div class="strat"><label>策略訊號 <select class="sel" id="stratSel"></select></label><span class="note" id="stratNote"></span></div>
+      <details class="kset" id="kset"><summary><span>指標・疊加・策略</span><span class="note" id="ksetSum"></span></summary>
+        <div class="ibar" id="dIbar"></div>
+        <div class="strat"><label>策略訊號 <select class="sel" id="stratSel"></select></label><span class="note" id="stratNote"></span></div>
+      </details>
       <div class="chartbox" id="kChart"></div>
     </div>
     <div class="panel sec" id="secAna" data-pane="tech">
@@ -401,7 +409,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-19</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-20</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -709,7 +717,7 @@ function holdRows(m) {
 const sgn = (v, d = 0) => (v == null ? "—" : `${v > 0 ? "+" : ""}${d ? v.toFixed(d) : Math.round(v).toLocaleString()}`);
 function renderHold() {
   const m = W.holdMkt, R = holdRows(m), us = m === "us", money = v => (v == null ? "—" : (us ? "US$" : "") + (us ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : Math.round(v).toLocaleString()));
-  if (!R.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">還沒有${us ? "美股" : "台股"}持股。進到個股頁按「💼 持股」填股數與平均成本。</p>`; $("#wl").innerHTML = ""; return; }
+  if (!R.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">還沒有${us ? "美股" : "台股"}持股。按上面的「📷 截圖匯入」上傳券商 App 的庫存截圖，或「✍️ 文字匯入」貼上代號、股數與成本；也可以在個股頁按「💼 持股」一檔一檔加。</p>`; $("#wl").innerHTML = ""; return; }
   const ok = R.filter(r => r.mv != null);
   if (!ok.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有報價。" : "等待報價…"}</p>`; }
   const mv = ok.reduce((s, r) => s + r.mv, 0), cost = ok.reduce((s, r) => s + r.cost, 0), pnl = mv - cost, day = ok.reduce((s, r) => s + (r.day || 0), 0);
@@ -967,7 +975,7 @@ function renderDetailHead() {
   const lim = q?.prev && isTW(c) ? [Math.round(q.prev * 1.1 * 100) / 100, Math.round(q.prev * 0.9 * 100) / 100] : null;
   $("#dKv").innerHTML = [["開盤", q?.open], ["最高", q?.high], ["最低", q?.low], ["昨收", q?.prev]].map(([k, v]) => `<div><span>${k}</span><b class="${v != null && q?.prev ? cls(v - q.prev) : ""}">${fmtPx(v, c)}</b></div>`).join("")
     + `<div><span>成交量</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " " + volUnit(c) : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "")
-    + (volRatio(c, q) != null ? `<div><span>量 / 5日均量</span><b class="${volRatio(c, q) >= 1.5 ? "up" : ""}">${volRatio(c, q).toFixed(2)} 倍</b></div>` : "")
+    + (volRatio(c, q) != null ? `<div><span>5日均量比</span><b class="${volRatio(c, q) >= 1.5 ? "up" : ""}">${volRatio(c, q).toFixed(2)} 倍</b></div>` : "")
     + (lim ? `<div><span>漲停</span><b class="up">${fmtP(lim[0])}</b></div><div><span>跌停</span><b class="down">${fmtP(lim[1])}</b></div>` : "");
   $("#dTags").innerHTML = tagsHtml(c, q, lim);
   const fav = W.groups.some(g => g.list.includes(c)); $("#favBtn").textContent = fav ? "★ 已在自選" : "☆ 加入自選"; $("#favBtn").hidden = isIdx(c); $("#holdBtn").hidden = isIdx(c);
@@ -1073,7 +1081,7 @@ function drawTs() {
   if (days.length > 1) { ctx.strokeStyle = col("--muted"); ctx.globalAlpha = 0.7; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(L, Y(prev)); ctx.lineTo(L + pw, Y(prev)); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
   const vline = x => { ctx.strokeStyle = col("--line"); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, top); ctx.lineTo(Math.round(x) + 0.5, top + mainH + (volH ? volH + 8 : 0)); ctx.stroke(); ctx.globalAlpha = 1; };
   ctx.fillStyle = col("--muted");
-  if (days.length === 1) { const marks = []; for (let m = Math.ceil(o / 60) * 60; m < cl; m += 60) marks.push(m); [o, ...marks.filter(m => m - o > 20 && cl - m > 20), cl].forEach(m => { const x = X(m - o); vline(x); ctx.fillStyle = col("--muted"); ctx.textAlign = m === o ? "left" : m === cl ? "right" : "center"; ctx.fillText(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`, x, H - axH / 2 - 2); }); }
+  if (days.length === 1) { const marks = []; for (let m = Math.ceil(o / 60) * 60; m < cl; m += 60) marks.push(m); [o, ...marks.filter(m => m - o > 20 && cl - m > 40), cl].forEach(m => { const x = X(m - o); vline(x); ctx.fillStyle = col("--muted"); ctx.textAlign = m === o ? "left" : m === cl ? "right" : "center"; ctx.fillText(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`, x, H - axH / 2 - 2); }); }
   else days.forEach((x, k) => { if (k) vline(X(k * span)); ctx.fillStyle = col("--muted"); ctx.textAlign = "center"; ctx.fillText(x.d.slice(5).replace("-", "/"), X((k + 0.5) * span), H - axH / 2 - 2); });
   // CDP 線
   if (cdp) cdp.forEach(([k, v, c]) => { const y = Y(v); if (y < top || y > top + mainH) return; ctx.strokeStyle = col("--" + c); ctx.globalAlpha = 0.85; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.fillStyle = col("--" + c); ctx.textAlign = "left"; ctx.fillText(`${k} ${fp(v)}`, L + 4, y - 7); });
@@ -1189,6 +1197,8 @@ const STRATS = {
   pat: { name: "型態學突破", fn: (D, I) => Signals.chartPat(D, I) }, choch: { name: "聰明錢 CHoCH", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") }, bos: { name: "道氏結構突破", fn: (D, I) => Signals.structure(D, I, "dow") },
 };
 $("#stratSel").innerHTML = Object.entries(STRATS).map(([k, v]) => `<option value="${k}" ${k === W.strat ? "selected" : ""}>${v.name}</option>`).join("");
+{ const k = $("#kset"), v = store.get("watch:kset", null); k.open = v == null ? !isMobile() : v; k.addEventListener("toggle", () => { store.set("watch:kset", k.open); postHeight(); }); }
+function ksetSummary() { const on = [...$("#dIbar").querySelectorAll('[aria-pressed="true"]')].map(b => b.textContent.trim()); $("#ksetSum").textContent = [on.join("、"), W.strat ? "策略：" + STRATS[W.strat].name : ""].filter(Boolean).join("・"); }
 $("#stratSel").addEventListener("change", e => { W.strat = e.target.value; store.set("watch:strat", W.strat); drawK(); });
 const minuteK = () => !"DWM".includes(W.k);
 function agg(D, key) {
@@ -1253,6 +1263,7 @@ function drawK(fresh = false, shift = 0) {
   $("#kNote").textContent = `${first ? first.replace(/-/g, "/") + " 起・" : ""}共 ${N} 根${st.end ? (minute ? "（已到資料來源的最早）" : "（已到最早）") : W.busyOlder ? "・載入更早資料中…" : ""}・${minute ? W.intra?.source || "" : W.daily?.source || ""}`;
   if (S?.fn) { let txt = `${sigs.length} 個訊號`; try { const r = backtest(D, sigs, { capital: 1e6, lot: 1 }); if (r.trades.length) txt += `・照做回測 ${r.total >= 0 ? "+" : ""}${(r.total * 100).toFixed(1)}%（買進持有 ${r.bh >= 0 ? "+" : ""}${(r.bh * 100).toFixed(1)}%），${r.trades.length} 筆、勝率 ${Math.round(r.win * 100)}%`; } catch {} $("#stratNote").textContent = txt + "（只看這段資料，含手續費與證交稅）"; }
   else $("#stratNote").textContent = "選一個策略，買賣訊號會標在 K 線上，並顯示照做的回測結果";
+  ksetSummary();
 }
 $("#kSeg").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (!b) return; W.k = b.dataset.k; store.set("watch:k", W.k); kChart.view = null; drawK(true); renderAna(); });
 const olderState = () => (minuteK() ? (W.mk[W.k] ||= {}) : W.daily || {});
