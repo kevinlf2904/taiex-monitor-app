@@ -293,6 +293,19 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .pill { font-style: normal; color: #fff; border-radius: 999px; padding: 2px 8px; font: 600 12px var(--font-body); white-space: nowrap; }
 .adr { padding: 10px 12px; } .adr > b { font-size: 13px; display: block; text-align: center; margin-bottom: 4px; } .adr > div { display: flex; align-items: center; gap: 8px; font: 600 14px var(--font-mono); }
 .adr .up { color: var(--up); } .adr .down { color: var(--down); } .adrbar { flex: 1; height: 6px; border-radius: 3px; background: var(--down); overflow: hidden; } .adrbar i { display: block; height: 100%; background: var(--up); }
+.scrseg { margin: 8px 12px 0; display: flex; } .scrseg button { flex: 1; }
+.gtiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin: 8px 12px; }
+.gtile { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 78px; font: inherit; text-align: center; }
+.gtile span { flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px 6px; font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+.gtile b { background: var(--accent); color: #fff; font: 700 16px var(--font-mono); padding: 4px 0; } .gtile.bear b { background: var(--down); } .gtile.bull b { background: var(--up); } .gtile.zero b { background: var(--line); color: var(--muted); }
+.gsub { margin: 10px 14px 0; font-size: 13px; font-weight: 700; color: var(--muted); } .gnote { margin: 6px 14px; }
+.gback { display: flex; align-items: baseline; gap: 8px; margin: 8px 12px; } .gback b { font-size: 15px; } .gback .note { flex: 1; min-width: 0; }
+.taglist { list-style: none; margin: 0; padding: 0 14px 12px; } .taglist li { display: flex; gap: 8px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.taglist li > span:nth-child(2) { flex: none; white-space: nowrap; } .taglist small { min-width: 0; }
+.dtabs button { flex: 1 0 auto; white-space: nowrap; padding-inline: 8px; }
+.taglist .tk { flex: none; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 12px; color: var(--muted); } .taglist .bull { color: var(--up); } .taglist .bear { color: var(--down); } .taglist small { color: var(--muted); margin-left: auto; text-align: right; }
+.newslist { list-style: none; margin: 0; padding: 0 14px 12px; } .newslist li { border-bottom: 1px solid var(--line); } .newslist a { display: block; padding: 10px 0; color: var(--ink); text-decoration: none; } .newslist a:hover b { text-decoration: underline; }
+.newslist b { display: block; font-size: 15px; font-weight: 600; line-height: 1.45; } .newslist small { color: var(--muted); font-size: 12px; }
 .scard { margin: 8px 12px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--surface-2); }
 .scard .sh { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; } .scard .sh b { color: var(--s1); font-size: 15px; } .scard .sh .note { font-size: 11.5px; flex: 1; min-width: 0; } .scard .sh .btn { flex: none; }
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
@@ -409,7 +422,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
       <div class="row2"><button class="btn primary sm" id="alSave" type="button">儲存提醒</button><button class="btn sm" id="alClear" type="button">清除</button><span class="note" id="alNote"></span></div>
       <p class="note" style="margin:0">頁面開著時每 10 秒檢查一次，觸發後跳出通知並自動關閉。iPhone 要先「加入主畫面」，從主畫面打開才收得到系統通知。</p>
     </div>
-    <div class="seg full dtabs" role="tablist" aria-label="個股內容" id="dTabs"><button data-t="trend">走勢</button><button data-t="tech">技術</button><button data-t="chips">籌碼</button><button data-t="fund">基本面</button><button data-t="co">公司</button></div>
+    <div class="seg full dtabs" role="tablist" aria-label="個股內容" id="dTabs"><button data-t="trend">走勢</button><button data-t="tech">技術</button><button data-t="chips">籌碼</button><button data-t="fund">基本面</button><button data-t="co">公司</button><button data-t="tags">指標</button><button data-t="news">新聞</button></div>
 
     <!-- 走勢：分時＋五檔 -->
     <div class="d-grid" data-pane="trend">
@@ -456,6 +469,14 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
       <div id="shortBox" hidden></div>
     </div>
 
+    <div class="panel sec" id="secTags" data-pane="tags">
+      <div class="ph"><h2 id="tagsTitle">符合的指標</h2><span class="note" id="tagsNote"></span></div>
+      <div id="tagsBox"></div>
+    </div>
+    <div class="panel sec" id="secNews" data-pane="news">
+      <div class="ph"><h2>新聞</h2><span class="note" id="newsNote"></span></div>
+      <ul class="newslist" id="newsBox"></ul>
+    </div>
     <!-- 基本面 -->
     <div class="panel sec" id="secCo" data-pane="co">
       <div class="ph"><h2>公司</h2><span class="note" id="coNote"></span></div>
@@ -468,7 +489,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-25</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-26</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -518,9 +539,10 @@ const W = {
   editing: false, sel: null, last: store.get("watch:last", null), quotes: new Map(), prevPx: new Map(), detailQ: null, detailSrc: "", session: null,
   today: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), err: null, off: !/^https?:$/.test(location.protocol),
   tsDays: [1, 3, 5].includes(+store.get("watch:tsd", 1)) ? +store.get("watch:tsd", 1) : 1, cdp: !!store.get("watch:cdp", false), ftab: store.get("watch:ftab", "book"), bigK: [1, 2, 3].includes(+store.get("watch:bigk", 2)) ? +store.get("watch:bigk", 2) : 2, tsHist: null, flow: null, flowAt: 0,
-  holdView: store.get("watch:hv", "pnl"), pref: store.get("watch:pref", "all"), kc: new Map(), scr: null, scan: {},
+  holdView: store.get("watch:hv", "pnl"), pref: store.get("watch:pref", "all"), kc: new Map(), scr: null,
   holdMkt: store.get("watch:hm", "tw"), holdSort: "mv", holdDir: 1, mkt: null,
   roK: ["", "D", "60", "1"].includes(String(store.get("watch:rok", ""))) ? String(store.get("watch:rok", "")) : "",
+  scrG: store.get("watch:scrg", "hot"), scrOpen: null, cscan: null, news: null,
   cmp: (store.get("watch:cmp", []) || []).filter(c => typeof c === "string").slice(0, 3), cmpData: {},
   daily: null, intra: null, intraAt: 0, mk: {}, info: null, hot: {}, timer: null, busy: false, stocks: null, lastOk: 0,
 };
@@ -728,7 +750,7 @@ function renderList() {
     if (W.holdView === "ana") renderHoldAna(); else renderHold(); note = "損益未扣手續費與證交稅；持股只記在這個瀏覽器。在個股頁按「💼 持股」新增或修改。";
   } else if (W.lt === "screen") {
     $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? `${W.scr.date.replace(/-/g, "/")} 收盤後資料` : "選股"}・僅供參考，不是買賣建議</span><button class="btn sm" data-gx="scrRefresh">↻ 更新</button>`;
-    renderScreen(); note = W.scr?.source ? `資料：${W.scr.source}。技術選股掃描的是你的自選、庫存與台股熱門前 30 檔，用最近半年日 K 計算。` : "";
+    renderScreen(); note = W.scr?.source ? `資料：${W.scr.source}。「K線」「技術」兩類是在瀏覽器裡掃描自選、庫存、台股熱門與今天熱門清單的日 K；「題材」是常見代表股的參考名單。` : "";
   } else if (W.lt === "mkt") {
     $("#lTools").innerHTML = `<span class="note">${W.mkt?.date ? `個股統計：${W.mkt.date.replace(/-/g, "/")} 收盤後` : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
     renderMkt(); note = W.mkt?.source ? `資料：${W.mkt.source}。加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計（貢獻點數為估算）。` : "";
@@ -987,31 +1009,101 @@ function scanHit(k, D) {
   if (k === "mom") { const r20 = D[n].c / D[n - 20].c - 1, hh = Math.max(...D.slice(-20).map(x => x.h)); return r20 >= 0.1 && D[n].c >= hh * 0.97 ? `20 日 +${(r20 * 100).toFixed(1)}%` : null; }
   return null;
 }
-async function runScan(k) {
-  const uni = [...new Set([...W.groups.flatMap(g => g.list), ...Object.keys(W.hold), ...(W.hot.tw?.rows || []).slice(0, 30).map(r => r.code)])].filter(isTW).slice(0, 60);
-  const S = (W.scan[k] = { done: 0, total: uni.length, hits: [], running: true }); renderList();
-  let i = 0; const worker = async () => { while (i < uni.length) { const c = uni[i++]; const D = await klineOf(c); const why = scanHit(k, D); if (why) S.hits.push({ code: c, why }); S.done++; if (W.lt === "screen") renderList(); } };
+// 客戶端掃描：K 線組合（analysis.js 的 KPAT）與技術條件，抓一次日 K 就把所有條件都算完
+const CSCANS = [...KPAT.map(k => ({ id: "k:" + k.id, group: "kline", side: k.side, title: k.name, desc: k.desc, hit: D => k.hit(D) })),
+  ...SCANS.map(([k, t, d]) => ({ id: "s:" + k, group: "tech", title: t, desc: d, hit: D => scanHit(k, D) }))];
+const SCR_GROUPS = [["hot", "熱門"], ["kline", "K線"], ["tech", "技術"], ["fund", "基本"], ["theme", "題材"], ["chips", "籌碼"]];
+if (!SCR_GROUPS.some(g => g[0] === W.scrG)) W.scrG = "hot";
+function scanUniverse() {
+  const fromScr = (W.scr?.lists || []).filter(L => scrGroup(L) === "hot").flatMap(L => L.rows.slice(0, 15).map(r => r.code));
+  return [...new Set([...W.groups.flatMap(g => g.list), ...Object.keys(W.hold), ...(W.hot.tw?.rows || []).slice(0, 60).map(r => r.code), ...fromScr])].filter(c => isTW(c) && !isIdx(c)).slice(0, 120);
+}
+async function runCScan() {
+  if (W.cscan?.running || W.off) return;
+  const uni = scanUniverse(), S = (W.cscan = { done: 0, total: uni.length, hits: {}, running: true, at: Date.now() }); renderList();
+  let i = 0, last = 0;
+  const worker = async () => { while (i < uni.length) { const c = uni[i++], D = await klineOf(c);
+    for (const sc of CSCANS) { const why = D ? sc.hit(D) : null; if (why) (S.hits[sc.id] ||= []).push({ code: c, why }); }
+    S.done++; if (W.lt === "screen" && Date.now() - last > 400) { last = Date.now(); renderList(); } } };
   await Promise.all([worker(), worker(), worker(), worker()]); S.running = false; if (W.lt === "screen") renderList();
 }
-function renderScreen() {
-  const J = W.scr; let h = "";
-  if (J?.ratio) { const t = J.ratio.up + J.ratio.down || 1, u = Math.round(J.ratio.up / t * 100); h += `<div class="adr"><b>漲跌家數比</b><div><span class="up">${u}%</span><span class="adrbar"><i style="width:${u}%"></i></span><span class="down">${100 - u}%</span></div></div>`; }
-  if (!J) h += `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有選股資料。" : "載入中…"}</p>`;
-  else if (J.err) h += `<p class="note err" style="padding:12px">⚠ ${esc(J.err)}</p>`;
-  else h += J.lists.map(L => { const open = W.scrOpen === L.id, R = open ? L.rows : L.rows.slice(0, 3);
-    return `<section class="scard"><div class="sh"><b>${L.title}</b><span class="note">${L.desc}</span><button class="btn sm" data-so="${L.id}">${open ? "收合" : `全部 ${L.rows.length} ›`}</button></div>
-      ${open ? `<ul class="slist">${R.map((r, i) => `<li><button data-sel="${r.code}"><span class="rk">${i + 1}</span><span class="nm">${esc(r.name)}<small>${r.code}・${esc(r.note || "")}</small></span><b class="${cls(r.chgPct)}">${fmtP(r.price)}<small>${r.chgPct > 0 ? "+" : ""}${r.chgPct}%</small></b></button></li>`).join("")}</ul>`
-        : `<div class="tiles">${R.map(r => `<button class="tile ${r.chgPct > 0 ? "up" : r.chgPct < 0 ? "down" : ""}" data-sel="${r.code}"><span>${esc(r.name)}</span><b>${fmtP(r.price)}</b><small>${r.chgPct > 0 ? "▲" : r.chgPct < 0 ? "▼" : ""}${Math.abs(r.chgPct)}%</small></button>`).join("")}</div>`}</section>`; }).join("");
-  h += `<section class="scard"><div class="sh"><b>技術選股</b><span class="note">掃描自選、庫存與台股熱門</span></div><div class="chips">${SCANS.map(([k, t]) => `<button class="ichip" data-scan="${k}" aria-pressed="${W.scanK === k}">${t}</button>`).join("")}</div>`;
-  if (W.scanK) { const S = W.scan[W.scanK], info = SCANS.find(x => x[0] === W.scanK);
-    h += `<p class="note" style="margin:6px 0">${info[2]}${S ? `・${S.running ? `掃描中 ${S.done}/${S.total}…` : `掃描 ${S.total} 檔，符合 ${S.hits.length} 檔`}` : ""}</p>`;
-    if (S?.hits.length) h += `<ul class="slist">${S.hits.map(x => { const q = W.quotes.get(x.code); return `<li><button data-sel="${x.code}"><span class="nm">${esc(nameOf(x.code))}<small>${x.code}・${esc(x.why)}</small></span><b class="${cls(q?.chg)}">${fmtP(q?.price)}<small>${q?.chgPct != null ? (q.chgPct > 0 ? "+" : "") + q.chgPct + "%" : ""}</small></b></button></li>`; }).join("")}</ul>`; }
-  h += `</section>`;
-  $("#lx").innerHTML = h;
+const scrRow = (r, i) => `<li><button data-sel="${r.code}"><span class="rk">${i + 1}</span><span class="nm">${esc(r.name || nameOf(r.code))}<small>${r.code}${r.note || r.why ? "・" + esc(r.note || r.why) : ""}</small></span><b class="${cls(r.chgPct)}">${fmtP(r.price)}<small>${r.chgPct != null ? (r.chgPct > 0 ? "+" : "") + r.chgPct + "%" : ""}</small></b></button></li>`;
+// 沒有 group 的舊格式清單依 id 歸類
+const scrGroup = L => L.group || { chips: "chips", trust3: "chips", yield: "fund", lowpe: "fund" }[L.id] || "hot";
+// 某一組的所有清單（伺服器的或客戶端掃描的），統一成 { id, title, desc, side, rows }
+function scrLists(g) {
+  if (g === "kline" || g === "tech") return CSCANS.filter(x => x.group === g).map(x => ({ ...x, rows: (W.cscan?.hits[x.id] || []).map(h => { const q = W.quotes.get(h.code); return { code: h.code, name: nameOf(h.code), price: q?.price, chgPct: q?.chgPct, why: h.why }; }) }));
+  return (W.scr?.lists || []).filter(L => scrGroup(L) === g);
 }
-$("#lx").addEventListener("click", e => { const so = e.target.closest("[data-so]"), sc = e.target.closest("[data-scan]");
-  if (so) { W.scrOpen = W.scrOpen === so.dataset.so ? null : so.dataset.so; renderList(); }
-  else if (sc) { W.scanK = sc.dataset.scan; if (!W.scan[W.scanK] || (!W.scan[W.scanK].running && Date.now() - (W.scan[W.scanK].at || 0) > 600000)) { runScan(W.scanK).then(() => (W.scan[W.scanK].at = Date.now())); } renderList(); } });
+function renderScreen() {
+  const J = W.scr, g = W.scrG; let h = "";
+  if (J?.ratio) { const t = J.ratio.up + J.ratio.down || 1, u = Math.round(J.ratio.up / t * 100); h += `<div class="adr"><b>漲跌家數比</b><div><span class="up">${u}%</span><span class="adrbar"><i style="width:${u}%"></i></span><span class="down">${100 - u}%</span></div></div>`; }
+  h += `<div class="seg scrseg" role="group" aria-label="選股分類">${SCR_GROUPS.map(([k, t]) => `<button data-sg="${k}" aria-pressed="${k === g}">${t}</button>`).join("")}</div>`;
+  const client = g === "kline" || g === "tech", S = W.cscan;
+  if (!client && !J) h += `<p class="note gnote">${W.off ? "需要部署到網站才有選股資料。" : "載入中…"}</p>`;
+  else if (!client && J.err) h += `<p class="note err gnote">⚠ ${esc(J.err)}</p>`;
+  else {
+    const Ls = scrLists(g), open = Ls.find(L => L.id === W.scrOpen);
+    if (client) h += `<p class="note gnote">${S ? (S.running ? `掃描中 ${S.done}/${S.total}…` : `已掃描 ${S.total} 檔（自選、庫存、台股熱門與今天的熱門清單），用最近半年日 K、看最後一根`) : "準備掃描…"} <button class="linkbtn" data-gx="rescan">重新掃描</button></p>`;
+    if (g === "theme") h += `<p class="note gnote">題材是常被提到的代表股，不是完整名單，也不是推薦；點進去看當天漲跌。</p>`;
+    if (open) h += `<div class="gback"><button class="btn sm" data-so="">‹ 返回</button><b>${esc(open.title)}</b><span class="note">${esc(open.desc || "")}</span></div>`
+      + (open.rows.length ? `<ul class="slist" style="margin:0 12px">${open.rows.map(scrRow).join("")}</ul>` : `<p class="note gnote">${client && S?.running ? "掃描中…" : "目前沒有符合的股票"}</p>`);
+    else {
+      const tiles = L => `<div class="gtiles">${L.map(x => `<button class="gtile ${x.rows.length ? x.side || "" : "zero"}" data-so="${esc(x.id)}" title="${esc(x.desc || "")}"><span>${esc(x.title)}</span><b>${client && !S?.at ? "…" : x.rows.length}</b></button>`).join("")}</div>`;
+      if (g === "kline") h += `<p class="gsub up">看多</p>${tiles(Ls.filter(x => x.side === "bull"))}<p class="gsub down">看空</p>${tiles(Ls.filter(x => x.side === "bear"))}`;
+      else h += Ls.length ? tiles(Ls) : `<p class="note gnote">沒有資料</p>`;
+    }
+  }
+  $("#lx").innerHTML = h;
+  if (client && !W.cscan && W.lt === "screen") setTimeout(runCScan, 0);
+}
+$("#lx").addEventListener("click", e => { const so = e.target.closest("[data-so]"), sg = e.target.closest("[data-sg]"), gx = e.target.closest('[data-gx="rescan"]');
+  if (sg) { W.scrG = sg.dataset.sg; W.scrOpen = null; store.set("watch:scrg", W.scrG); renderList(); }
+  else if (so) { W.scrOpen = so.dataset.so || null; renderList(); }
+  else if (gx) { W.cscan = null; W.kc.clear(); runCScan(); } });
+
+/* ---------- 個股「指標」：這檔今天符合哪些選股條件（選股清單＋K 線組合＋技術條件＋籌碼） ---------- */
+async function renderTags() {
+  if (W.dtab !== "tags") return;
+  const c = W.sel, box = $("#tagsBox"); if (!c) return;
+  if (isTW(c) && !isIdx(c) && !W.scr && !W.off) loadScreen().then(() => { if (W.sel === c) renderTags(); });
+  const D = W.daily?.code === c && W.daily.data?.length ? W.daily.data : await klineOf(c); if (W.sel !== c || W.dtab !== "tags") return;
+  const out = [], grpName = Object.fromEntries(SCR_GROUPS);
+  for (const L of W.scr?.lists || []) { const r = L.rows.find(x => x.code === c); if (r) out.push({ k: grpName[scrGroup(L)] || "選股", t: L.title, n: r.note, side: /跌|虧損|年減/.test(L.title) ? "bear" : ["hot", "chips"].includes(scrGroup(L)) ? "bull" : "" }); }
+  if (D?.length >= 30) {
+    for (const sc of CSCANS) { const why = sc.hit(D); if (why) out.push({ k: grpName[sc.group], t: sc.title, n: why, side: sc.side || "bull" }); }
+    const I = indicators(D), n = D.length - 1, m = p => I.ma(p)[n], px = D[n].c;
+    const add = (ok, t, side) => ok && out.push({ k: "技術", t, side });
+    add(m(20) && px > m(20), "股價在月線（20 日均線）之上", "bull"); add(m(20) && px < m(20), "股價在月線之下", "bear");
+    add(m(60) && px > m(60), "股價在季線（60 日均線）之上", "bull"); add(m(60) && px < m(60), "股價在季線之下", "bear");
+    add(m(5) > m(20) && m(20) > m(60), "均線多頭排列（5 > 20 > 60）", "bull"); add(m(5) < m(20) && m(20) < m(60), "均線空頭排列（5 < 20 < 60）", "bear");
+    const hh = Math.max(...D.slice(-60).map(x => x.h)), ll = Math.min(...D.slice(-60).map(x => x.l));
+    add(D[n].h >= hh, "創 60 日新高", "bull"); add(D[n].l <= ll, "創 60 日新低", "bear");
+    add(I.rsi[n] > 70, `RSI 超買（${I.rsi[n].toFixed(0)}）`, "bear"); add(I.rsi[n] < 30, `RSI 超賣（${I.rsi[n].toFixed(0)}）`, "bull");
+    for (const ln of (W.info?.code === c ? chipsSummary(W.info, D) : [])) out.push({ k: "籌碼", t: ln.k, n: String(ln.t).replace(/<[^>]+>/g, "").slice(0, 40), side: "" });
+  }
+  $("#tagsTitle").textContent = `符合 ${out.length} 項指標`;
+  $("#tagsNote").textContent = D ? `${D[D.length - 1].d.replace(/-/g, "/")} 收盤後・僅供參考` : "";
+  box.innerHTML = out.length ? `<ul class="taglist">${out.map(x => `<li><span class="tk">${x.k}</span><span class="${x.side}">${esc(x.t)}</span>${x.n ? `<small>${esc(x.n)}</small>` : ""}</li>`).join("")}</ul>` : `<p class="note gnote">${D ? "目前沒有符合的條件" : "載入中…"}</p>`;
+  postHeight();
+}
+
+/* ---------- 個股新聞（Google 新聞 RSS） ---------- */
+async function loadNews() {
+  const c = W.sel, box = $("#newsBox"); if (!c) return;
+  if (W.news?.code === c) return renderNews();
+  if (W.off) { box.innerHTML = `<li class="note">需要部署到網站才有新聞</li>`; return; }
+  box.innerHTML = `<li class="note" style="padding:10px 0">載入中…</li>`; W.news = { code: c, loading: true };
+  try { const j = await getJ(`/api/news?code=${encodeURIComponent(c === "T00" ? "" : c)}&q=${encodeURIComponent(c === "T00" ? "台股 加權指數" : c === "O00" ? "櫃買指數" : c === "TXF" ? "台指期" : nameOf(c))}`); if (W.sel !== c) return; W.news = { code: c, ...j }; }
+  catch (e) { if (W.sel !== c) return; W.news = { code: c, err: e.message }; }
+  renderNews();
+}
+function renderNews() {
+  const N = W.news, ago = t => { if (!t) return ""; const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${Math.max(1, m)} 分鐘前` : m < 1440 ? `${Math.round(m / 60)} 小時前` : new Date(t + 8 * 3600e3).toISOString().slice(5, 10).replace("-", "/"); };
+  $("#newsNote").textContent = N?.source ? `來源：${N.source}，點標題開原文` : "";
+  $("#newsBox").innerHTML = N?.err ? `<li class="note err" style="padding:10px 0">⚠ ${esc(N.err)}</li>` : N?.items?.length ? N.items.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.title)}</b><small>${esc(x.source || "")}${x.source ? "・" : ""}${ago(x.at)}</small></a></li>`).join("") : `<li class="note" style="padding:10px 0">沒有找到新聞</li>`;
+  postHeight();
+}
 
 /* ---------- 資料來源狀態：伺服器讀得到哪些金鑰（只顯示有沒有，不顯示內容） ---------- */
 async function showStatus() {
@@ -1069,7 +1161,7 @@ function select(code, how = "push") {
   code = String(code).toUpperCase(); if (!okCode(code)) return;
   const changed = code !== W.sel;
   W.sel = code; store.set("watch:last", code);
-  if (changed) { W.detailQ = W.quotes.get(code) || null; W.daily = null; W.intra = null; W.intraAt = 0; W.mk = {}; W.info = null; W.tsHist = null; W.flow = null; W.flowAt = 0; kChart.view = null; $("#holdBox").hidden = $("#alertBox").hidden = true; }
+  if (changed) { W.detailQ = W.quotes.get(code) || null; W.daily = null; W.intra = null; W.intraAt = 0; W.mk = {}; W.info = null; W.tsHist = null; W.flow = null; W.news = null; W.flowAt = 0; kChart.view = null; $("#holdBox").hidden = $("#alertBox").hidden = true; }
   try { if (how === "push" && location.hash !== "#" + code) (isMobile() ? history.pushState : history.replaceState).call(history, null, "", location.search + "#" + code); } catch {}
   $("#main").classList.add("show-detail");
   $("#learnLink").href = `./?code=${code === "T00" ? "加權" : code}#shot`;
@@ -1155,7 +1247,7 @@ function setDtab(t, scroll = true) {
   document.querySelectorAll("#dTabs [data-t]").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === t));
   document.querySelectorAll("[data-pane]").forEach(p => (p.hidden = p.dataset.pane !== t));
   setQ(t);
-  if (t === "trend") { drawTs(); loadFlow(); } else if (t === "tech") { drawK(); renderAna(); } else if (t === "co") loadCo(); else renderInfo();
+  if (t === "trend") { drawTs(); loadFlow(); } else if (t === "tech") { drawK(); renderAna(); } else if (t === "co") loadCo(); else if (t === "tags") renderTags(); else if (t === "news") loadNews(); else renderInfo();
   if (scroll) $("#dTabs").scrollIntoView({ block: "start", behavior: "auto" });
   postHeight();
 }
@@ -1346,7 +1438,7 @@ const dBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN
 const STRATS = {
   "": { name: "不顯示" }, ma: { name: "均線交叉（5／20）", fn: (D, I) => Signals.ma(D, I, 5, 20) }, kd: { name: "KD 低檔金叉／高檔死叉", fn: Signals.kd }, macd: { name: "MACD 交叉", fn: Signals.macd },
   rsi: { name: "RSI 30／70", fn: Signals.rsi }, boll: { name: "布林通道", fn: Signals.boll }, vwap: { name: "VWAP 站上／跌破", fn: Signals.vwap }, candle: { name: "K 線型態", fn: (D, I) => Signals.candle(D, I) }, div: { name: "RSI／MACD 背離", fn: (D, I) => [...Signals.div(D, I, "rsi"), ...Signals.div(D, I, "macd")] },
-  pat: { name: "型態學突破", fn: (D, I) => Signals.chartPat(D, I) }, choch: { name: "聰明錢 CHoCH", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") }, bos: { name: "道氏結構突破", fn: (D, I) => Signals.structure(D, I, "dow") },
+  pat: { name: "型態學突破", fn: (D, I) => Signals.chartPatLive(D, I) }, choch: { name: "聰明錢 CHoCH", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") }, bos: { name: "道氏結構突破", fn: (D, I) => Signals.structure(D, I, "dow") },
 };
 $("#stratSel").innerHTML = Object.entries(STRATS).map(([k, v]) => `<option value="${k}" ${k === W.strat ? "selected" : ""}>${v.name}</option>`).join("");
 { const k = $("#kset"), v = store.get("watch:kset", null); k.open = v == null ? !isMobile() : v; k.addEventListener("toggle", () => { store.set("watch:kset", k.open); postHeight(); }); }
@@ -1443,7 +1535,7 @@ function drawK(fresh = false, shift = 0) {
   if (N < want + 10 && !olderState().end && !W.busyOlder && (minute ? W.intra : W.daily?.data?.length)) setTimeout(loadOlder, 0);
   const st = olderState(), first = minute ? D[0].d.split(" ")[0] : W.daily?.data?.[0]?.d;
   $("#kNote").textContent = `${first ? first.replace(/-/g, "/") + " 起・" : ""}共 ${N} 根${st.end ? (minute ? "（已到資料來源的最早）" : "（已到最早）") : W.busyOlder ? "・載入更早資料中…" : ""}・${minute ? W.intra?.source || "" : W.daily?.source || ""}`;
-  if (S?.fn) { let txt = `${sigs.length} 個訊號`; try { const r = backtest(D, sigs, { capital: 1e6, lot: 1, tax: /^00/.test(W.sel) ? 0.001 : undefined }); if (r.trades.length) txt += `・照做回測 ${r.total >= 0 ? "+" : ""}${(r.total * 100).toFixed(1)}%（買進持有 ${r.bh >= 0 ? "+" : ""}${(r.bh * 100).toFixed(1)}%），${r.trades.length} 筆、勝率 ${Math.round(r.win * 100)}%`; } catch {} $("#stratNote").textContent = txt + "（只看這段資料，含手續費與證交稅）"; }
+  if (S?.fn) { let txt = `${sigs.length} 個訊號`; try { const r = backtest(D, sigs, { capital: 1e6, lot: 1, tax: taxOf(W.sel) }); if (r.trades.length) txt += `・照做回測 ${r.total >= 0 ? "+" : ""}${(r.total * 100).toFixed(1)}%（買進持有 ${r.bh >= 0 ? "+" : ""}${(r.bh * 100).toFixed(1)}%），${r.trades.length} 筆、勝率 ${Math.round(r.win * 100)}%`; } catch {} $("#stratNote").textContent = txt + "（只看這段資料，含手續費與證交稅）"; }
   else $("#stratNote").textContent = "選一個策略，買賣訊號會標在 K 線上，並顯示照做的回測結果";
   ksetSummary();
 }

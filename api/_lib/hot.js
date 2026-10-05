@@ -20,11 +20,11 @@ function row(code, name, market, close, chg, volShares, value) {
   return { code, name, market, price: close, chg, chgPct: prev ? +((chg / prev) * 100).toFixed(2) : null, vol: volShares != null ? Math.round(volShares / 1000) : null, value: value != null ? +(value / 1e8).toFixed(2) : null };
 }
 export function parseTwseAll(rows) {
-  return (Array.isArray(rows) ? rows : []).map(r => ({ ...row(String(r.Code).trim(), String(r.Name).trim(), "上市", num(r.ClosingPrice), num(r.Change), num(r.TradeVolume), num(r.TradeValue)), date: rocDate(r.Date) }))
+  return (Array.isArray(rows) ? rows : []).map(r => ({ ...row(String(r.Code).trim(), String(r.Name).trim(), "上市", num(r.ClosingPrice), num(r.Change), num(r.TradeVolume), num(r.TradeValue)), o: num(r.OpeningPrice), h: num(r.HighestPrice), l: num(r.LowestPrice), date: rocDate(r.Date) }))
     .filter(x => isStockOrEtf(x.code) && x.price > 0);
 }
 export function parseTpexAll(rows) {
-  return (Array.isArray(rows) ? rows : []).map(r => ({ ...row(String(pick(r, "SecuritiesCompanyCode", "Code") || "").trim(), String(pick(r, "CompanyName", "Name") || "").trim(), "上櫃", num(pick(r, "Close", "ClosingPrice")), num(pick(r, "Change")), num(pick(r, "TradingShares", "TradeVolume")), num(pick(r, "TransactionAmount", "TradeValue"))), date: rocDate(r.Date) }))
+  return (Array.isArray(rows) ? rows : []).map(r => ({ ...row(String(pick(r, "SecuritiesCompanyCode", "Code") || "").trim(), String(pick(r, "CompanyName", "Name") || "").trim(), "上櫃", num(pick(r, "Close", "ClosingPrice")), num(pick(r, "Change")), num(pick(r, "TradingShares", "TradeVolume")), num(pick(r, "TransactionAmount", "TradeValue"))), o: num(pick(r, "Open", "OpeningPrice")), h: num(pick(r, "High", "HighestPrice")), l: num(pick(r, "Low", "LowestPrice")), date: rocDate(r.Date) }))
     .filter(x => isStockOrEtf(x.code) && x.price > 0);
 }
 // 證交所 T86：三大法人買賣超（股 → 張）

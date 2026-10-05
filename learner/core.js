@@ -23,8 +23,8 @@ function rsiCalc(c, n = 14) {
   const o = Array(c.length).fill(null); let g = 0, l = 0;
   for (let i = 1; i < c.length; i++) {
     const ch = c[i] - c[i - 1], up = Math.max(ch, 0), dn = Math.max(-ch, 0);
-    if (i <= n) { g += up; l += dn; if (i === n) { g /= n; l /= n; o[i] = l === 0 ? 100 : 100 - 100 / (1 + g / l); } }
-    else { g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n; o[i] = l === 0 ? 100 : 100 - 100 / (1 + g / l); }
+    if (i <= n) { g += up; l += dn; if (i === n) { g /= n; l /= n; o[i] = l === 0 ? (g === 0 ? 50 : 100) : 100 - 100 / (1 + g / l); } }
+    else { g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n; o[i] = l === 0 ? (g === 0 ? 50 : 100) : 100 - 100 / (1 + g / l); }
   }
   return o;
 }
@@ -95,7 +95,7 @@ function indicators(D) {
     vma: sma(D.map(x => x.v), 20),
     rsi: rsiCalc(c), kd: kdCalc(D), macd: macdCalc(c), boll: bollCalc(c), wr: wrCalc(D),
     get vwap() { return cache.vwap || (cache.vwap = vwapCalc(D)); },
-    ...(() => { if (D[0].ov == null) return { io: null, io5: null }; const io = D.map(x => x.v ? x.ov / x.v * 100 : 50); return { io, io5: sma(io, 5) }; })(),
+    ...(() => { if (D[0].ov == null) return { io: null, io5: null }; const io = D.map(x => { const t = x.iv != null ? x.ov + x.iv : x.v; return t ? x.ov / t * 100 : 50; }); /* 外盤比＝外盤 ÷（外盤＋內盤），無法歸類的量不算進分母 */ return { io, io5: sma(io, 5) }; })(),
   };
 }
 
@@ -294,7 +294,7 @@ class Chart {
       <div class="prow"><strong>K 線樣式</strong></div>
       <div class="prow"><div class="pseg kts">${[["candle", "實心K"], ["hollow", "空心K"], ["ohlc", "美國線"], ["line", "收盤線"], ["area", "面積圖"]].map(([k, t]) => `<button type="button" data-kt="${k}" aria-pressed="${P.kt === k}">${t}</button>`).join("")}</div></div>
       <div class="prow"><span>訊號標記</span><div class="pseg"><button type="button" data-mk="full" aria-pressed="${P.mk !== "icon"}">符號＋文字</button><button type="button" data-mk="icon" aria-pressed="${P.mk === "icon"}">只有符號</button></div></div>
-      <p class="note" style="margin:0">策略與課程的訊號是 K 棒旁的三角形，文字會自動避開 K 棒；副圖指標的訊號（金叉、死叉等）是主圖上下緣的小圓點，點一下那根 K 棒就會顯示名稱。點一下圖表可以固定十字線，再點一次取消。</p>
+      <p class="note" style="margin:0">策略與課程的訊號是 K 棒旁的三角形，文字會自動避開 K 棒；副圖指標的訊號（金叉、死叉等）是 K 棒下方（偏多）或上方（偏空）的半透明圓圈，用虛線連到副圖上的訊號點，點一下那根 K 棒就會加深並顯示名稱；每個副圖右上角可以直接開關。點一下圖表可以固定十字線，再點一次取消。</p>
       <div class="prow"><button type="button" class="btn sm" data-p="reset">全部還原</button></div>
       <p class="note">電腦：Shift＋滾輪縮放游標所在的圖，或上下拖曳右側刻度；放大後可上下拖曳平移。雙擊圖表還原。</p>`;
   }
@@ -528,15 +528,18 @@ class Chart {
     // 同一天同方向的副圖訊號疊在一起：圈畫一次，標籤合併（例如「KD金叉・MACD金叉」）
     const sigAt = new Map(); sigs.filter(g => g.i >= va && g.i <= vb).forEach(g => { const k = g.i + g.side; sigAt.has(k) ? sigAt.get(k).push(g) : sigAt.set(k, [g]); });
     const marked = new Set((o.markers || []).map(m => m.i + m.side));
-    // 副圖訊號：不畫在 K 棒旁邊，改成主圖上下緣的小圓點（偏多在下緣、偏空在上緣），名稱在十字線停到那一天時從圖例看
+    // 副圖訊號：在那根 K 棒下方（偏多）或上方（偏空）畫半透明圓圈，再用虛線連到副圖上的訊號點；名稱在十字線停到那一天時顯示
+    this.sigLinks = [];
     sigAt.forEach(gs => {
       if (marked.has(gs[0].i + gs[0].side)) return; // 同一天已有同方向的課程／策略標記（通常就是同一個訊號），不重複畫
-      const g = gs[0], x = X(g.i), buy = g.side === "buy", c = buy ? col.up : col.down, r = Math.max(2.2, Math.min(3.5, bw * 0.35));
-      const y = buy ? top0 + mainH - 5 - (gs.length > 1 ? 0 : 0) : top0 + 5;
-      ctx.fillStyle = c; ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-      if (gs.length > 1) { ctx.strokeStyle = c; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI * 2); ctx.stroke(); }
+      const g = gs[0], k = D[g.i], x = X(g.i), buy = g.side === "buy", c = buy ? col.up : col.down, r = Math.max(3, Math.min(5, bw * 0.45));
+      const y = Math.max(top0 + r + 2, Math.min(top0 + mainH - r - 2, buy ? Y(k.l) + r + 5 : Y(k.h) - r - 5)), on = this.hover === g.i;
+      ctx.fillStyle = c; ctx.globalAlpha = on ? 0.4 : 0.16; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = c; ctx.lineWidth = 1.4; ctx.globalAlpha = on ? 1 : 0.6; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+      if (gs.length > 1) { ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r + 2.5, 0, Math.PI * 2); ctx.stroke(); }
       ctx.globalAlpha = 1;
-      if (this.hover === g.i && Chart.prefs.mk !== "icon") { const t = gs.map(q => q.label).join("・"); ctx.font = `600 10px ${cssVar("--font-body")}`; const tw = ctx.measureText(t).width, tx = Math.min(Math.max(x, L + tw / 2 + 2), L + pw - tw / 2 - 2); label(t, tx, buy ? y - 10 : y + 11, c, 10); ctx.font = `11px ${cssVar("--font-mono")}`; }
+      this.sigLinks.push({ i: g.i, side: g.side, x, y: buy ? y + r : y - r, c, on });
+      if (on && Chart.prefs.mk !== "icon") { const t = gs.map(q => q.label).join("・"); ctx.font = `600 10px ${cssVar("--font-body")}`; const tw = ctx.measureText(t).width, tx = Math.min(Math.max(x, L + tw / 2 + 2), L + pw - tw / 2 - 2); label(t, tx, buy ? y + r + 12 : y - r - 6, c, 10); ctx.font = `11px ${cssVar("--font-mono")}`; }
     });
 
     ctx.restore();
@@ -621,11 +624,11 @@ class Chart {
       const subY = this.subY || (v => subTop + (100 - v) / 100 * subH);
       ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pw, subH); ctx.clip();
       divs.filter(m => m.div.ind === (sub === "custom" ? "pane" : sub)).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
-      // 副圖上發出訊號的位置：實心點＋一條淡淡的虛線往上指到主圖
+      // 副圖上發出訊號的位置：半透明實心點；記下位置，等所有區塊畫完再用虛線連到主圖的圓圈
       sigs.filter(g => g.si === si && g.i >= va && g.i <= vb).forEach(g => {
-        const x = X(g.i), y = subY(g.v), c = g.side === "buy" ? col.up : col.down;
-        ctx.strokeStyle = c; ctx.globalAlpha = 0.35; ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, subTop); ctx.lineTo(Math.round(x) + 0.5, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
-        ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill();
+        const x = X(g.i), y = subY(g.v), c = g.side === "buy" ? col.up : col.down, on = this.hover === g.i;
+        ctx.fillStyle = c; ctx.globalAlpha = on ? 0.95 : 0.55; ctx.beginPath(); ctx.arc(x, y, on ? 4 : 3.2, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+        const ln = (this.sigLinks || []).find(q => q.i === g.i && q.side === g.side); if (ln && ln.y2 == null) ln.y2 = y;
       });
       ctx.restore();
       ctx.restore(); // 副圖裁切結束
@@ -642,6 +645,12 @@ class Chart {
     ctx.fillStyle = col.muted; ctx.textAlign = "center";
     for (let i = Math.ceil(va / every) * every; i <= vb; i += every) { if (i >= vis && !o.cutoff) continue; ctx.fillText(fmtD(D[i].d), Math.min(Math.max(X(i), L + 18), L + pw - 18), axY); }
 
+    // 主圖圓圈 ↔ 副圖訊號點：半透明虛線（游標停在那一天時加深）
+    (this.sigLinks || []).filter(q => q.y2 != null).forEach(q => {
+      ctx.strokeStyle = q.c; ctx.lineWidth = 1; ctx.globalAlpha = q.on ? 0.75 : 0.22; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(Math.round(q.x) + 0.5, q.y); ctx.lineTo(Math.round(q.x) + 0.5, q.y2); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    });
+    this.renderSigUi(subs, subTop0, subH, gap, L + pw);
     // 十字線
     const hi_ = this.hover != null && this.hover < vis ? this.hover : null;
     if (hi_ != null) {
@@ -656,6 +665,22 @@ class Chart {
     this.renderLegend(hi_ ?? vis - 1, mas);
     if (this.onHover) this.onHover(hi_ ?? vis - 1);
     if (this.onRange) this.onRange(this.range, this);
+  }
+  // 每個副圖右上角的訊號開關（HTML 按鈕疊在畫布上，不用打開設定選單）
+  renderSigUi(subs, subTop0, subH, gap, right) {
+    if (!this.sigUi) {
+      this.sigUi = document.createElement("div"); this.sigUi.className = "sigui"; this.host.append(this.sigUi);
+      this.sigUi.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const P = Chart.prefs;
+        if (b.dataset.sk) { const on = P.sig && P.sigKinds[b.dataset.sk] !== false; if (!P.sig) Chart.setPref("sig", true); Chart.setPref("sigKinds", { ...P.sigKinds, [b.dataset.sk]: !on }); }
+        else if (b.dataset.st) Chart.setPref("sigStrong", !P.sigStrong); });
+    }
+    if (this.o.subSignals === false) { this.sigUi.innerHTML = ""; return; }
+    const P = Chart.prefs, cv = this.canvas, rx = this.host.clientWidth - (cv.offsetLeft + right) + 2;
+    this.sigUi.innerHTML = subs.map((S, si) => {
+      const kind = typeof S === "string" ? S : "custom"; if (!["kd", "macd", "rsi", "wr"].includes(kind) && !(S?.custom?.lines?.length >= 2 && S.custom.signals !== false)) return "";
+      const on = P.sig && P.sigKinds[kind] !== false, top = cv.offsetTop + subTop0 + si * (subH + gap) + 2;
+      return `<div class="sigrow" style="top:${top}px;right:${rx}px"><button type="button" data-sk="${kind}" aria-pressed="${on}" title="在主圖標出這個副圖的訊號">${kind === "rsi" || kind === "wr" ? "超買超賣" : "金叉死叉"}</button>${kind === "kd" || kind === "macd" ? `<button type="button" data-st="1" aria-pressed="${P.sigStrong}" ${on ? "" : "disabled"} title="KD 只標低檔金叉、高檔死叉；MACD 只標零軸上金叉、零軸下死叉">只看重點</button>` : ""}</div>`;
+    }).join("");
   }
   line(a, vis, X, Y, color, w, alpha = 1, dash) {
     const ctx = this.ctx, g = this.geo; ctx.save(); ctx.beginPath(); ctx.rect(g.L, 0, g.pw, g.H); ctx.clip();
