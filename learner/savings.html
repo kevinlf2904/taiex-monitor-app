@@ -158,6 +158,12 @@ main{display:grid;gap:22px;min-width:0}
 .prow.debt{color:var(--bad)} .prow.debt i{background:repeating-linear-gradient(135deg,var(--bad) 0 2px,transparent 2px 4px)}
 .prow.tot{border-top:1px solid var(--line);padding-top:6px;font-weight:500}
 .bk .meta{font-size:11.5px;color:var(--muted)}
+.real-list{display:grid;gap:4px;font-size:12px}
+.real-list .rr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:5px 8px;border-radius:6px;background:var(--bg)}
+.real-list .rr b{font-family:var(--f-num);font-weight:500;color:var(--accent);text-align:right}
+.real-list .rr span{color:var(--muted);grid-column:1/-1;font-size:11.5px}
+.real-list .rr.err b{color:var(--bad)}
+.rtag{display:inline-block;font-size:10.5px;padding:0 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent);margin-left:6px;font-family:var(--f-body);vertical-align:1px}
 .notes-d summary{cursor:pointer;font-size:13px;color:var(--accent);padding-block:4px}
 .notes-d .notes{margin-top:6px}
 .tip:not(.sticky) .x{display:none}
@@ -235,6 +241,20 @@ input.num,select,.arow input,.mrow input{background:var(--field)}
           <div class="field" id="a-all-f" hidden><div class="top"><label for="a-all-v">全部年化設為</label><span class="numwrap"><input type="number" class="num" id="a-all-v" value="8" step="0.5"> %</span></div>
             <div class="btnrow"><button type="button" class="btn" id="a-all-go">套用</button></div></div>
           <span class="hint">「崩盤 %」用在開局崩盤情境和壓力測試：第一年跌多少。</span>
+        </div>
+      </details>
+
+      <details open id="real-d">
+        <summary>真實年化率<small id="sum-real"></small></summary>
+        <div class="gbody">
+          <span class="hint">用真實歷史股價（含配息再投入）算出每個標的的年化報酬，填進上面的「年化 %」。標的名稱要以台股代號開頭（例如 0050 元大台灣50），或是英文代號（VOO、SPY），或 S&amp;P 500、道瓊、那斯達克100、費半（以對應的 ETF 估算）。</span>
+          <div class="field"><span class="lbl">期間</span>
+            <div class="chips" role="group" aria-label="真實年化率的期間" id="realchips">
+              <button type="button" class="chip" data-ry="3">近 3 年</button><button type="button" class="chip" data-ry="5">近 5 年</button><button type="button" class="chip" data-ry="10">近 10 年</button><button type="button" class="chip" data-ry="max">上市以來</button>
+            </div><span class="hint">資料不夠長時改用上市以來的全部資料並標示實際年數；不到 3 年的不套用。</span></div>
+          <label class="toggle"><input type="checkbox" id="real-crash" checked> 「崩盤 %」也改成同期間的歷史最大跌幅</label>
+          <div class="btnrow"><button type="button" class="btn" id="real-all">全部標的抓真實年化</button><button type="button" class="btn ghost" id="real-main">只抓主要標的</button><button type="button" class="btn ghost" id="real-clear" title="清除標示，數字保留">清除標示</button></div>
+          <div id="real-list" class="real-list" aria-live="polite"></div>
         </div>
       </details>
 
@@ -363,7 +383,7 @@ input.num,select,.arow input,.mrow input{background:var(--field)}
       </section>
 
       <details class="notes-d"><summary>說明與假設</summary><div class="notes">
-        <p>・頁面沒有內建任何歷史報酬。所有標的一開始都是年化 8%、崩盤 −40% 的預設值，請依你自己的判斷修改。每年報酬固定，所以除了開局崩盤以外不會出現虧損；真實市場的波動會比這裡大。「最大帳面虧損」是途中淨值低於累計投入最多的時候。</p>
+        <p>・頁面沒有內建任何歷史報酬。所有標的一開始都是年化 8%、崩盤 −40% 的預設值，請依你自己的判斷修改，或用「真實年化率」抓歷史資料（Yahoo Finance 月線還原收盤價，含配息再投入；台股抓不到時改用 FinMind 還原股價）。歷史年化只代表過去，不保證未來；最大跌幅用月收盤計算，會比盤中最低點的跌幅小一些；美股與指數是美元計價，沒有計入匯率。每年報酬固定，所以除了開局崩盤以外不會出現虧損；真實市場的波動會比這裡大。「最大帳面虧損」是途中淨值低於累計投入最多的時候。</p>
         <p>・三種做法用同一組起始本金、每月投入和年數。槓桿版的每月投入要先繳信貸與質押利息，剩下才買入；不夠繳時從應急現金扣。期末淨值已扣掉未還借款，也扣回起始的應急現金，所以可以直接比較。</p>
         <p>・質押結構：信貸與自有資金買主要標的（擔保品）；第一層借款買你選的標的，也拿去質押；第二層借款再買你選的標的，可設定槓桿倍數，預設不算擔保品。第二層每月報酬 = 倍數 × 標的月報酬 − 年費用 ÷ 12，壓力測試以 (1 − 跌幅)^倍數 估算。追繳規則請以你的合約為準。本工具用來理解報酬與風險結構，不是投資建議。</p>
       </div></details>
@@ -416,7 +436,7 @@ function buildAssetList(){
   $("alist").querySelectorAll(".arow").forEach(row=>{
     const a=byId(row.dataset.id);
     row.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",()=>{
-      const f=inp.dataset.f;if(f==="name")a.name=inp.value||"未命名";else if(inp.value!=="")a[f]=f==="crash"?Math.min(100,Math.max(0,+inp.value)):+inp.value;
+      const f=inp.dataset.f;if(f==="name")a.name=inp.value||"未命名";else if(inp.value!=="")a[f]=f==="crash"?Math.min(100,Math.max(0,+inp.value)):+inp.value;if(f!=="crash"){delete a.src;delete a.err}
     }));
     row.querySelector(".del").addEventListener("click",()=>{ASSETS=ASSETS.filter(x=>x!==a);G.cmp.delete(a.id);["main","core","sat"].forEach(k=>{if(G[k]===a.id)G[k]=ASSETS[0].id});buildAssetList();fillSelects();renderAll()});
   });
@@ -705,7 +725,7 @@ function renderEtf(p){
   $("th-norm").textContent=`每年照年化・${p.yrs} 年`;$("th-crash").textContent=`開局崩盤・${p.yrs} 年`;
   $("etfbody").innerHTML=ASSETS.map(a=>{const n=stratDca(p,pathOf(a,p,"normal")),c=stratDca(p,pathOf(a,p,"crash")),d=c.v-n.v;
     return `<tr data-sel="${a.id===G.main?1:0}"><td class="l"><input type="checkbox" data-cmp="${a.id}" ${G.cmp.has(a.id)?"checked":""} aria-label="比較 ${esc(a.name)}"></td>
-    <td class="l" style="font-family:var(--f-body)"><span class="swatch" style="background:${colorOf(a)}"></span>${esc(a.name)}</td><td>${a.r}%</td><td class="neg">−${a.crash}%</td>
+    <td class="l" style="font-family:var(--f-body)"><span class="swatch" style="background:${colorOf(a)}"></span>${esc(a.name)}${a.src?`<span class="rtag" title="${esc(realDesc(a))}">真實 ${a.src.years} 年</span>`:""}</td><td>${a.r}%</td><td class="neg">−${a.crash}%</td>
     <td>${wan(n.v)}</td><td>${wan(c.v)}</td><td class="${d<0?"neg":""}">${wan(d)}</td>
     <td><button type="button" class="btn" data-main="${a.id}" ${a.id===G.main?"disabled":""}>${a.id===G.main?"主要標的":"設為主要"}</button></td></tr>`}).join("");
   $("etfbody").querySelectorAll("[data-main]").forEach(b=>b.addEventListener("click",()=>{G.main=b.dataset.main;$("g-asset").value=G.main;renderAll()}));
@@ -722,8 +742,41 @@ function cmpChart(p){
   $("cmplegend").innerHTML=ser.slice().sort((x,y)=>y.s.v-x.s.v).map(o=>`<span><i style="background:${colorOf(o.a)}"></i>${short(o.a)}（${o.a.r}%）${wan(o.s.v)}</span>`).join("");
 }
 
+/* ---------- 真實年化率（/api/annual，部署在網站上才有） ---------- */
+const realYrsLbl=y=>y==="max"?"上市以來":`近 ${y} 年`;
+function realDesc(a){const s=a.src;if(!s)return "";return `${s.from.replace("-","/")}～${s.to.replace("-","/")}・${s.years} 年${s.short?"（資料不足 "+s.want+" 年）":""}・${s.adjusted?"含息":"未含息"}・${s.source}${s.label?"・"+s.label:""}`}
+function renderReal(){
+  document.querySelectorAll("#realchips .chip").forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.ry===String(G.ry||"10"))));
+  const done=ASSETS.filter(a=>a.src);$("sum-real").textContent=done.length?`${done.length} 檔已套用・${realYrsLbl(G.ry||"10")}`:"";
+  const rows=ASSETS.filter(a=>a.src||a.err||a.busy).map(a=>a.busy?`<div class="rr"><div>${esc(a.name)}</div><b>抓取中…</b></div>`:a.err?`<div class="rr err"><div>${esc(a.name)}</div><b>${a.err.startsWith("上市只有")?"未套用":"失敗"}</b><span>${esc(a.err)}</span></div>`:`<div class="rr"><div>${esc(a.name)}</div><b>年化 ${a.r}%・最大跌 ${a.src.mdd}%</b><span>${esc(realDesc(a))}</span></div>`);
+  $("real-list").innerHTML=rows.join("")||`<span class="hint">還沒有抓取。按上面的按鈕開始。</span>`;
+}
+async function fetchAnnual(a){
+  if(!/^https?:$/.test(location.protocol))throw new Error("直接開啟檔案時無法連線資料服務，部署到網站後才能用。");
+  let r;try{r=await fetch("/api/annual?code="+encodeURIComponent(a.name))}catch{throw new Error("連不到資料服務。")}
+  const j=await r.json().catch(()=>null);
+  if(!j)throw new Error(r.status===404?"這個環境沒有資料服務（/api/annual），部署到 Vercel 網站後才能用。":`資料服務回應 ${r.status}`);
+  if(!j.ok)throw new Error(j.error||"抓取失敗");return j;
+}
+async function realFetch(list){
+  const want=G.ry||"10",crash=$("real-crash").checked;
+  list.forEach(a=>{a.busy=true;a.err=null});renderReal();
+  const q=[...list];await Promise.all([0,1,2].map(async()=>{while(q.length){const a=q.shift();
+    try{const j=await fetchAnnual(a),P=j.periods||{},s=P[want]||P.max;if(!s)throw new Error("歷史資料太短，算不出年化。");
+      // 上市不到 3 年的標的，短期漲跌換算成年化會嚴重失真（例如一年漲 30% 被當成每年 30%），不自動套用
+      if(s.years<3)throw new Error(`上市只有 ${s.years} 年（${s.from.replace("-","/")} 起），換算年化會失真，沒有套用。可以參考同類型、歷史較長的標的（例如 0050）手動填。`);
+      a.r=+s.cagr.toFixed(1);if(crash)a.crash=Math.round(s.mdd);
+      a.src={...s,want,short:!P[want]&&want!=="max",adjusted:j.adjusted,source:j.source,label:j.label||"",symbol:j.symbol};}
+    catch(e){a.err=e.message||"抓取失敗"}finally{a.busy=false;renderReal()}}}));
+  buildAssetList();fillSelects();renderAll();
+}
+document.querySelectorAll("#realchips .chip").forEach(c=>c.addEventListener("click",()=>{G.ry=c.dataset.ry;renderReal();save()}));
+$("real-all").addEventListener("click",()=>realFetch(ASSETS));
+$("real-main").addEventListener("click",()=>realFetch([byId(G.main)]));
+$("real-clear").addEventListener("click",()=>{ASSETS.forEach(a=>{delete a.src;delete a.err});renderReal();renderAll()});
+
 /* ---------- wiring ---------- */
-function renderAll(){const p=read();renderConsole(p);renderMain(p);renderMilestones(p);renderStress(p);renderEtf(p);save()}
+function renderAll(){const p=read();renderConsole(p);renderMain(p);renderMilestones(p);renderStress(p);renderEtf(p);renderReal();save()}
 $("console").addEventListener("input",renderAll);
 $("console").addEventListener("change",renderAll);
 $("logscale").addEventListener("change",()=>{renderMain(read());save()});
@@ -732,7 +785,7 @@ document.querySelectorAll("#rebchips .chip").forEach(c=>c.addEventListener("clic
 $("openall").addEventListener("click",()=>document.querySelectorAll("#console details").forEach(d=>d.open=true));
 $("closeall").addEventListener("click",()=>document.querySelectorAll("#console details").forEach(d=>d.open=false));
 if(window.matchMedia&&matchMedia("(max-width:900px)").matches)document.querySelectorAll("#console details").forEach((d,i)=>{if(i>0)d.open=false});
-load();buildMiles();buildAssetList();fillSelects();renderAll();
+load();ASSETS.forEach(a=>{delete a.busy});buildMiles();buildAssetList();fillSelects();renderAll();
 </script>
 <script>
 /* 嵌入模式：把頁面高度告訴 K線學堂，讓外框跟著長高；接收主題切換 */
