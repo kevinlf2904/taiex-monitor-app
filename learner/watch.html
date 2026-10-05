@@ -340,6 +340,15 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .hgrid input { width: 100%; box-sizing: border-box; font: 15px var(--font-mono); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 6px; min-height: 36px; }
 .hgrid input:focus { outline: 2px solid var(--accent); outline-offset: -1px; } .hgrid td small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hgrid tr.bad input { border-color: color-mix(in srgb, var(--down) 70%, transparent); } .hg-del { border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 8px 4px; }
+.cosec { padding: 10px 14px 12px; border-top: 1px solid var(--line); } .cosec:first-child { border-top: 0; } .cosec h3 { margin: 0 0 8px; font-size: 15px; display: flex; gap: 8px; align-items: baseline; } .cosec h3 .note { font-weight: 400; font-size: 12px; }
+.codl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13.5px; } .codl dt { color: var(--muted); } .codl dd { margin: 0; overflow-wrap: anywhere; } .codl a { color: var(--accent); }
+.cokv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .cokv.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } @media (min-width: 700px) { .cokv { grid-template-columns: repeat(4, minmax(0, 1fr)); } .cokv.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cokv > div { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; } .cokv span { font-size: 12px; color: var(--muted); } .cokv b { font: 700 16px var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .cokv small { font: 12px var(--font-mono); color: var(--muted); } .cokv small.up { color: var(--up); } .cokv small.down { color: var(--down); }
+.cochips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; } .cochips button { border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 8px; padding: 4px 10px; font-size: 13px; cursor: pointer; } .cochips button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); font-weight: 600; }
+.cochart { width: 100%; height: auto; max-height: 220px; display: block; }
+.cotbl-wrap { overflow-x: auto; } .cotbl { width: 100%; border-collapse: collapse; font: 12px var(--font-mono); } .cotbl th { color: var(--muted); font-weight: 500; padding: 4px 4px; text-align: center; white-space: nowrap; } .cotbl td { padding: 3px 4px; text-align: center; white-space: nowrap; } .cotbl td:first-child { width: 14px; } .cotbl td i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; } .cotbl .up { color: var(--up); } .cotbl .down { color: var(--down); }
+.cleg { margin: 6px 0 0; font-size: 12px; color: var(--muted); } .cleg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+.cobar { margin: 0 0 8px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -397,7 +406,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
       <div class="row2"><button class="btn primary sm" id="alSave" type="button">儲存提醒</button><button class="btn sm" id="alClear" type="button">清除</button><span class="note" id="alNote"></span></div>
       <p class="note" style="margin:0">頁面開著時每 10 秒檢查一次，觸發後跳出通知並自動關閉。iPhone 要先「加入主畫面」，從主畫面打開才收得到系統通知。</p>
     </div>
-    <div class="seg full dtabs" role="tablist" aria-label="個股內容" id="dTabs"><button data-t="trend">走勢</button><button data-t="tech">技術</button><button data-t="chips">籌碼</button><button data-t="fund">基本面</button></div>
+    <div class="seg full dtabs" role="tablist" aria-label="個股內容" id="dTabs"><button data-t="trend">走勢</button><button data-t="tech">技術</button><button data-t="chips">籌碼</button><button data-t="fund">基本面</button><button data-t="co">公司</button></div>
 
     <!-- 走勢：分時＋五檔 -->
     <div class="d-grid" data-pane="trend">
@@ -443,6 +452,10 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
 
     <!-- 基本面 -->
+    <div class="panel sec" id="secCo" data-pane="co">
+      <div class="ph"><h2>公司</h2><span class="note" id="coNote"></span></div>
+      <div id="coBox"></div>
+    </div>
     <div class="panel sec" id="secFund" data-pane="fund">
       <div class="ph"><h2>基本面</h2><span class="note" id="fundNote"></span></div>
       <ul class="sumlist" id="fundSum"></ul>
@@ -450,7 +463,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-23</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-24</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1053,8 +1066,8 @@ function select(code, how = "push") {
   try { if (how === "push" && location.hash !== "#" + code) (isMobile() ? history.pushState : history.replaceState).call(history, null, "", location.search + "#" + code); } catch {}
   $("#main").classList.add("show-detail");
   $("#learnLink").href = `./?code=${code === "T00" ? "加權" : code}#shot`;
-  const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fund"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
-  if (!tw && (W.dtab === "chips" || W.dtab === "fund")) W.dtab = "trend";
+  const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fund"], #dTabs [data-t="co"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
+  if (!tw && (W.dtab === "chips" || W.dtab === "fund" || W.dtab === "co")) W.dtab = "trend";
   $("#learnLink").hidden = isUS(code) || isFut(code);
   const fut = isFut(code); document.querySelectorAll('#kSeg [data-k="D"], #kSeg [data-k="W"], #kSeg [data-k="M"]').forEach(b => (b.hidden = fut)); $("#tsSeg").hidden = $("#cdpBtn").hidden = fut;
   if (fut && "DWM".includes(W.k)) W.k = "5";
@@ -1130,12 +1143,12 @@ function renderBook() {
 }
 // 個股分頁：走勢／技術／籌碼／基本面
 function setDtab(t, scroll = true) {
-  if ((t === "chips" || t === "fund") && !isTW(W.sel)) t = "trend";
+  if ((t === "chips" || t === "fund" || t === "co") && !isTW(W.sel)) t = "trend";
   W.dtab = t; store.set("watch:dtab", t);
   document.querySelectorAll("#dTabs [data-t]").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === t));
   document.querySelectorAll("[data-pane]").forEach(p => (p.hidden = p.dataset.pane !== t));
   setQ(t);
-  if (t === "trend") { drawTs(); loadFlow(); } else if (t === "tech") { drawK(); renderAna(); } else renderInfo();
+  if (t === "trend") { drawTs(); loadFlow(); } else if (t === "tech") { drawK(); renderAna(); } else if (t === "co") loadCo(); else renderInfo();
   if (scroll) $("#dTabs").scrollIntoView({ block: "start", behavior: "auto" });
   postHeight();
 }
@@ -1554,6 +1567,82 @@ function renderInfo() {
   }
   postHeight();
 }
+
+
+/* ---------- 公司：概況、利潤表、資產負債表、現金流量表、財務指標、股利、股權分散（台股：/api/company） ---------- */
+W.co = null; W.coView = store.get("watch:cov", { fin: "inc", inc: "rev", cash: "ocf", ratio: "eps" });
+async function loadCo() {
+  const c = W.sel; if (!isTW(c)) return;
+  if (W.co?.code === c) return renderCo();
+  W.co = { code: c, loading: true }; renderCo();
+  try { const j = await getJ(`/api/company?code=${c}`); if (W.sel === c) W.co = { ...j, code: c }; } catch (e) { if (W.sel === c) W.co = { code: c, err: e.message }; }
+  if (W.sel === c) renderCo();
+}
+const yi = v => (v == null ? "—" : Math.abs(v) >= 1e8 ? (v / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 }) + " 億" : Math.abs(v) >= 1e4 ? (v / 1e4).toLocaleString(undefined, { maximumFractionDigits: 0 }) + " 萬" : v.toLocaleString());
+const yiC = v => (v == null ? "—" : (v / 1e8).toLocaleString(undefined, { maximumFractionDigits: Math.abs(v) >= 1e10 ? 0 : 1 })); // 表格裡的「億元」不帶單位，節省寬度
+const pctS = v => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`);
+// 和去年同一季比
+const yoyOf = (arr, i, k) => { const x = arr[i], [y, q] = x.q.split("Q"), ly = arr.find(r => r.q === `${+y - 1}Q${q}`); return ly && ly[k] && x[k] != null ? +((x[k] / Math.abs(ly[k]) - 1) * 100).toFixed(2) : null; };
+// 富途式的圖：柱狀（數值）＋折線（年增率或比率），下面列出每一期的數字
+function coChart(rows, { bars, line, lineName, fmtB = yiC, fmtL = pctS, colors = ["var(--accent)", "var(--s3)"] }) {
+  const R = rows.slice(-6); if (!R.length) return `<p class="note" style="padding:8px 12px">沒有資料</p>`;
+  const Wv = 600, Hv = 180, P = 22, n = R.length, cw = (Wv - P * 2) / n, nb = bars.length, bw = Math.min(26, cw / (nb + 1.5));
+  const vals = R.flatMap(r => bars.map(b => r[b] ?? 0)), mx = Math.max(0, ...vals), mn = Math.min(0, ...vals), Yb = v => P + (mx - v) / ((mx - mn) || 1) * (Hv - P * 2);
+  const lv = line ? R.map(r => r[line]).filter(v => v != null) : [], lx = Math.max(...lv, 0), ln = Math.min(...lv, 0), Yl = v => P + 6 + (lx - v) / ((lx - ln) || 1) * (Hv - P * 2 - 12);
+  let svg = `<line x1="${P}" x2="${Wv - P}" y1="${Yb(0)}" y2="${Yb(0)}" stroke="var(--line)"/>`;
+  R.forEach((r, i) => bars.forEach((b, k) => { const v = r[b]; if (v == null) return; const x = P + i * cw + cw / 2 - (nb * bw) / 2 + k * bw; svg += `<rect x="${x.toFixed(1)}" y="${Math.min(Yb(v), Yb(0)).toFixed(1)}" width="${(bw - 3).toFixed(1)}" height="${Math.max(1, Math.abs(Yb(v) - Yb(0))).toFixed(1)}" fill="${v < 0 ? "var(--down)" : colors[k]}" rx="2"/>`; }));
+  if (lv.length > 1 || (lv.length && n === 1)) { const pts = R.map((r, i) => (r[line] == null ? null : `${(P + i * cw + cw / 2).toFixed(1)},${Yl(r[line]).toFixed(1)}`)).filter(Boolean); svg += `<polyline points="${pts.join(" ")}" fill="none" stroke="#f0883e" stroke-width="2"/>` + pts.map(p => { const [x, y] = p.split(","); return `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--surface)" stroke="#f0883e" stroke-width="1.6"/>`; }).join(""); }
+  const head = `<tr><th></th>${R.map(r => `<th>${esc(r.label || r.q)}</th>`).join("")}</tr>`;
+  const rowsH = bars.map((b, k) => `<tr><td><i style="background:${colors[k]}"></i></td>${R.map(r => `<td style="color:${colors[k]}">${fmtB(r[b])}</td>`).join("")}</tr>`).join("") + (line ? `<tr><td><i style="background:#f0883e"></i></td>${R.map(r => `<td class="${cls(r[line])}">${fmtL(r[line])}</td>`).join("")}</tr>` : "");
+  return `<svg class="cochart" viewBox="0 0 ${Wv} ${Hv}" role="img">${svg}</svg><div class="cotbl-wrap"><table class="cotbl">${head}${rowsH}</table></div>`;
+}
+const chipsBar = (key, opts, cur) => `<div class="cochips">${opts.map(([k, t]) => `<button data-co="${key}:${k}" aria-pressed="${cur === k}">${t}</button>`).join("")}</div>`;
+function renderCo() {
+  const J = W.co, box = $("#coBox"), V = W.coView;
+  if (!J || J.loading) { box.innerHTML = `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有公司資料。" : "載入中…"}</p>`; postHeight(); return; }
+  if (J.err) { box.innerHTML = `<p class="note err" style="padding:12px">⚠ ${esc(J.err)}</p>`; postHeight(); return; }
+  const inc = J.income || [], bal = J.balance || [], cash = J.cash || [], q = W.detailQ || W.quotes.get(J.code), px = q?.price;
+  inc.forEach((x, i) => { x.revY = yoyOf(inc, i, "rev"); x.opY = yoyOf(inc, i, "op"); x.niY = yoyOf(inc, i, "ni"); x.nipY = yoyOf(inc, i, "nip"); x.epsY = yoyOf(inc, i, "eps"); x.gm = x.rev ? +(x.gp / x.rev * 100).toFixed(2) : null; x.om = x.rev && x.op != null ? +(x.op / x.rev * 100).toFixed(2) : null; x.nm = x.rev && x.ni != null ? +(x.ni / x.rev * 100).toFixed(2) : null; });
+  bal.forEach(x => { x.debt = x.assets ? +(x.liab / x.assets * 100).toFixed(2) : null; x.cr = x.cl ? +(x.ca / x.cl * 100).toFixed(2) : null; x.er = x.assets ? +(x.equity / x.assets * 100).toFixed(2) : null; });
+  cash.forEach((x, i) => { x.ocfY = yoyOf(cash, i, "ocf"); x.icfY = yoyOf(cash, i, "icf"); x.finY = yoyOf(cash, i, "fin"); x.fcfY = yoyOf(cash, i, "fcf"); });
+  // ROE／ROA：近四季淨利 ÷ 平均權益／資產
+  const ttm = (i, k) => (i >= 3 ? inc.slice(i - 3, i + 1).reduce((s, r) => s + (r[k] ?? NaN), 0) : null);
+  const ratios = inc.map((x, i) => { const b = bal.find(r => r.q === x.q), b0 = bal.find(r => r.q === inc[i - 4]?.q), ni = ttm(i, "nip") ?? ttm(i, "ni"), niAll = ttm(i, "ni"), f = cash.find(r => r.q === x.q);
+    const eq = b && b0 ? ((b.parentEq ?? b.equity) + (b0.parentEq ?? b0.equity)) / 2 : b?.parentEq ?? b?.equity, as = b && b0 ? (b.assets + b0.assets) / 2 : b?.assets;
+    return { q: x.q, eps: x.eps, epsY: x.epsY, roe: ni && eq ? +(ni / eq * 100).toFixed(2) : null, roa: niAll && as ? +(niAll / as * 100).toFixed(2) : null, gm: x.gm, nm: x.nm, cr: b?.cr ?? null, er: b?.er ?? null, fcf: f?.fcf ?? null, fcfY: f?.fcfY ?? null }; });
+  let h = "";
+  // 概況
+  const P = J.profile;
+  if (P) h += `<section class="cosec"><h3>概況</h3><dl class="codl">${[["公司名稱", P.name], ["董事長", P.chairman], ["總經理", P.ceo], ["發言人", P.spokesman], ["成立日期", P.founded?.replace(/-/g, "/")], [J.code.length === 4 && W.stocks?.find(x => x[0] === J.code)?.[2] === "上櫃" ? "上櫃日期" : "上市日期", P.listed?.replace(/-/g, "/")], ["實收資本額", P.capital ? yi(P.capital) + "元" : null], ["產業", W.stocks?.find(x => x[0] === J.code)?.[3]], ["地址", P.address]].filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}${P.web ? `<dt>網址</dt><dd><a href="${/^https?:/.test(P.web) ? esc(P.web) : "https://" + esc(P.web)}" target="_blank" rel="noopener">${esc(P.web)}</a></dd>` : ""}</dl></section>`;
+  // 最新一季
+  const L = inc.at(-1);
+  if (L) h += `<section class="cosec"><h3>${L.q.replace("Q", " 年 Q")} 單季報</h3><div class="cokv">${[["營收", yi(L.rev), L.revY], ["營業利益", yi(L.op), L.opY], ["稅後淨利", yi(L.nip ?? L.ni), L.nipY ?? L.niY], ["EPS", L.eps != null ? L.eps.toFixed(2) + " 元" : "—", L.epsY]].map(([k, v, y]) => `<div><span>${k}</span><b>${v}</b><small class="${cls(y)}">年增 ${pctS(y)}</small></div>`).join("")}</div></section>`;
+  // 財務報表
+  h += `<section class="cosec"><h3>財務報表 <span class="note">單季</span></h3>${chipsBar("fin", [["inc", "利潤表"], ["bal", "資產負債表"], ["cash", "現金流量表"], ["ratio", "財務指標"]], V.fin)}`;
+  if (V.fin === "inc") { const k = V.inc, map = { rev: ["營收", "revY"], op: ["營業利益", "opY"], ni: ["淨利", "niY"], nip: ["歸屬母公司淨利", "nipY"] }; h += chipsBar("inc", Object.entries(map).map(([a, [t]]) => [a, t]), k) + coChart(inc, { bars: [k], line: map[k][1] }) + `<p class="cleg"><i style="background:var(--accent)"></i>${map[k][0]}（億元）　<i style="background:#f0883e"></i>年增率</p>`; }
+  else if (V.fin === "bal") h += coChart(bal, { bars: ["assets", "liab"], line: "debt", fmtL: v => (v == null ? "—" : v.toFixed(2) + "%") }) + `<p class="cleg"><i style="background:var(--accent)"></i>總資產（億元）　<i style="background:var(--s3)"></i>總負債（億元）　<i style="background:#f0883e"></i>負債比率</p>`;
+  else if (V.fin === "cash") { const k = V.cash, map = { ocf: ["營業活動現金流", "ocfY"], icf: ["投資活動現金流", "icfY"], fin: ["籌資活動現金流", "finY"], fcf: ["自由現金流", "fcfY"] }; h += chipsBar("cash", Object.entries(map).map(([a, [t]]) => [a, t]), k) + coChart(cash, { bars: [k], line: map[k][1] }) + `<p class="cleg"><i style="background:var(--accent)"></i>${map[k][0]}（億元）　<i style="background:#f0883e"></i>年增率${k === "fcf" ? "　（自由現金流＝營業現金流－資本支出）" : ""}</p>`; }
+  else { const k = V.ratio, map = { eps: ["每股盈餘（元）", "epsY", v => (v == null ? "—" : v.toFixed(2)), "年增率"], fcf: ["自由現金流（億元）", "fcfY", yiC, "年增率"], roe: ["股東權益報酬率 ROE（近四季）", null], roa: ["資產報酬率 ROA（近四季）", null], gm: ["毛利率", null], nm: ["淨利率", null], cr: ["流動比率", null], er: ["股東權益比率", null] };
+    const m = map[k], pf = v => (v == null ? "—" : v.toFixed(2) + "%");
+    h += chipsBar("ratio", Object.entries(map).map(([a, [t]]) => [a, t.replace(/（.*）/, "")]), k) + coChart(ratios, { bars: [k], line: m[1], fmtB: m[2] || pf }) + `<p class="cleg"><i style="background:var(--accent)"></i>${m[0]}${m[1] ? `　<i style="background:#f0883e"></i>${m[3]}` : ""}</p>`; }
+  h += `</section>`;
+  // 股利
+  const D = J.dividend || [];
+  if (D.length) { const last = D.at(-1), epsY = y => { const r = inc.filter(x => x.q.startsWith(y + "Q")); return r.length === 4 ? r.reduce((s, x) => s + x.eps, 0) : null; }, payout = epsY(last.y) ? last.cash / epsY(last.y) * 100 : null;
+    const rows = D.slice(-6).map(x => ({ q: String(x.y), label: `${x.y}`, cash: x.cash, stock: x.stock || null, yld: px ? +(x.cash / px * 100).toFixed(2) : null }));
+    h += `<section class="cosec"><h3>分紅派息</h3>${last.ex ? `<p class="cobar">最近除息：${last.ex.replace(/-/g, "/")}・${last.y} 年度現金股利 ${last.cash} 元${last.stock ? `、股票股利 ${last.stock} 元` : ""}${last.pay ? `・發放日 ${last.pay.replace(/-/g, "/")}` : ""}</p>` : ""}
+      <div class="cokv three"><div><span>現金殖利率</span><b>${px ? (last.cash / px * 100).toFixed(2) + "%" : "—"}</b><small>以現價計</small></div><div><span>盈餘配發率</span><b>${payout ? payout.toFixed(1) + "%" : "—"}</b><small>${last.y} 年度</small></div><div><span>配息頻率</span><b>${last.n >= 4 ? "每季" : last.n >= 2 ? "每半年" : "每年"}</b><small>${last.n || 1} 次／年</small></div></div>
+      ${coChart(rows, { bars: ["cash", ...(rows.some(r => r.stock) ? ["stock"] : [])], line: "yld", fmtB: v => (v == null ? "—" : (+v).toFixed(2)), fmtL: v => (v == null ? "—" : v.toFixed(2) + "%") })}<p class="cleg"><i style="background:var(--accent)"></i>現金股利（元）${rows.some(r => r.stock) ? `　<i style="background:var(--s3)"></i>股票股利（元）` : ""}　<i style="background:#f0883e"></i>以現價計算的殖利率</p></section>`; }
+  // 股權分散
+  const Hd = J.holders || [];
+  if (Hd.length) { const a = Hd.at(-1), b = Hd[Math.max(0, Hd.length - 5)], vs = Hd.map(x => x.b1000), mx = Math.max(...vs), mn = Math.min(...vs), Wv = 600, Hv = 120, X = i => 10 + i / Math.max(1, Hd.length - 1) * (Wv - 20), Y = v => 10 + (mx - v) / ((mx - mn) || 1) * (Hv - 20);
+    h += `<section class="cosec"><h3>股權分散 <span class="note">集保，每週</span></h3><div class="cokv three"><div><span>千張大戶持股</span><b>${a.b1000.toFixed(2)}%</b><small class="${cls(a.b1000 - b.b1000)}">近 4 週 ${a.b1000 - b.b1000 >= 0 ? "+" : ""}${(a.b1000 - b.b1000).toFixed(2)}%</small></div><div><span>400 張以上</span><b>${a.b400.toFixed(2)}%</b><small class="${cls(a.b400 - b.b400)}">近 4 週 ${a.b400 - b.b400 >= 0 ? "+" : ""}${(a.b400 - b.b400).toFixed(2)}%</small></div><div><span>千張大戶人數</span><b>${a.people1000.toLocaleString()}</b><small>${a.d.replace(/-/g, "/")}</small></div></div>
+      <svg class="cochart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="千張大戶持股比例"><polyline points="${Hd.map((x, i) => `${X(i).toFixed(1)},${Y(x.b1000).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><p class="cleg"><i style="background:var(--accent)"></i>千張大戶持股比例（${Hd[0].d.slice(5).replace("-", "/")}～${a.d.slice(5).replace("-", "/")}）</p></section>`; }
+  box.innerHTML = h || `<p class="note" style="padding:12px">沒有公司資料。</p>`;
+  $("#coNote").textContent = `${J.source || ""}${J.errors?.length ? `・部分資料暫時拿不到（${J.errors.length} 項）` : ""}`;
+  postHeight();
+}
+$("#coBox").addEventListener("click", e => { const b = e.target.closest("[data-co]"); if (!b) return; const [k, v] = b.dataset.co.split(":"); W.coView = { ...W.coView, [k]: v }; store.set("watch:cov", W.coView); renderCo(); });
 
 /* ---------- 價格提醒 ---------- */
 $("#alertBtn").addEventListener("click", () => { $("#alertBox").hidden = !$("#alertBox").hidden; $("#holdBox").hidden = true; if (!$("#alertBox").hidden) $("#alUp").focus(); });

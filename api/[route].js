@@ -6,6 +6,7 @@ const ROUTES = {
   annual: () => import("./_lib/annual.js"),
   "chart-read": () => import("./_lib/chart-read.js"),
   chat: () => import("./_lib/chat.js"),
+  company: () => import("./_lib/company.js"),
   flow: () => import("./_lib/flow.js"),
   futures: () => import("./_lib/futures.js"),
   hot: () => import("./_lib/hot.js"),
