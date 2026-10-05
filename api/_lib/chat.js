@@ -63,7 +63,7 @@ function geminiError(r) {
 }
 
 export default async function handler(req, res) {
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = (process.env.GEMINI_API_KEY || "").trim();
   // GET：只回報目前接的是哪個 AI（不呼叫模型、不花額度），給對話框顯示用
   if (req.method === "GET") {
     const provider = geminiKey ? "gemini" : process.env.ANTHROPIC_API_KEY ? "claude" : null;

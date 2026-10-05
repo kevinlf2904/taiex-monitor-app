@@ -97,7 +97,7 @@ export default async function handler(req, res) {
   const usP = us.length ? usQuotes() : Promise.resolve([]);
   const key = (misOnly ? "mis:" : "") + all.join(","), hit = cache.get(key), sess = session();
   if (hit && Date.now() - hit.at < 4000) { res.setHeader("Cache-Control", "s-maxage=4"); return res.status(200).json(hit.body); }
-  const fugleKey = process.env.FUGLE_API_KEY, errors = [];
+  const fugleKey = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
   for (const [source, run] of [...(fugleKey && !misOnly ? [["富果", () => fromFugle(codes, fugleKey)]] : []), ["證交所 MIS", () => fromMis(codes)]]) {
     try {
       const quotes = await run();

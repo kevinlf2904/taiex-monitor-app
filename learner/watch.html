@@ -330,6 +330,16 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mbars li { display: grid; grid-template-columns: 62px minmax(0, 1fr) 42px minmax(0, 1fr) 62px; gap: 6px; align-items: center; } .mbars em { font-style: normal; text-align: center; font-family: var(--font-body); }
 .mbars i { height: 8px; display: flex; } .mbars i.in { justify-content: flex-end; } .mbars u { display: block; height: 100%; border-radius: 2px; } .mbars i.in u { background: var(--up); } .mbars i.out u { background: var(--down); }
 .mbars .up { color: var(--up); text-align: right; } .mbars .down { color: var(--down); }
+.st-link { margin: 0; padding: 4px 12px 10px; } .linkbtn { border: 0; background: none; color: var(--accent); font-size: 12.5px; cursor: pointer; padding: 0; text-decoration: underline; }
+.stlist { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; } .stlist li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 13.5px; }
+.stlist li span { font-family: var(--font-mono); font-size: 12.5px; } .stlist li small { color: var(--muted); font-size: 12px; } .stlist li.bad { box-shadow: inset 3px 0 #e0566b; } .stlist li.ok { box-shadow: inset 3px 0 #3cc6a8; } .stlist li.warn { box-shadow: inset 3px 0 var(--s1); }
+.howto { font-size: 13.5px; line-height: 1.7; background: var(--surface-2); border-radius: 8px; padding: 8px 12px; } .howto ol { margin: 4px 0 0; padding-left: 20px; } .howto code { font-size: 12.5px; }
+.hg-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.hgrid { width: 100%; border-collapse: collapse; font-size: 13px; } .hgrid th { position: sticky; top: 0; background: var(--surface-2); color: var(--muted); font-weight: 500; text-align: left; padding: 6px 6px; font-size: 12px; z-index: 1; } .hgrid th small { display: block; font-size: 10.5px; }
+.hgrid td { padding: 5px 4px; border-top: 1px solid var(--line); vertical-align: top; } .hgrid td:first-child { width: 40%; } .hgrid td:last-child { width: 32px; text-align: center; }
+.hgrid input { width: 100%; box-sizing: border-box; font: 15px var(--font-mono); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 6px; min-height: 36px; }
+.hgrid input:focus { outline: 2px solid var(--accent); outline-offset: -1px; } .hgrid td small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hgrid tr.bad input { border-color: color-mix(in srgb, var(--down) 70%, transparent); } .hg-del { border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 8px 4px; }
 </style>
 </head>
 <body>
@@ -358,6 +368,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     <ul class="wl" id="wl"></ul>
     <div class="port" id="port" hidden></div>
     <p class="note w-note" id="wlNote"></p>
+    <p class="st-link"><button class="linkbtn" data-st type="button">🔌 資料來源狀態（金鑰有沒有生效）</button></p>
   </section>
 
   <section class="w-detail" id="detail" aria-live="polite">
@@ -439,7 +450,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-21</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.05-22</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -516,7 +527,14 @@ function mktSession(now = new Date()) {
   return m >= 510 && m < 540 ? "pre" : m >= 540 && m <= 815 ? "open" : "closed";
 }
 const anyOpen = () => mktSession() !== "closed" || [...W.quotes.values()].some(q => q.us && q.session?.state === "open");
-function toast(t, ms = 4000) { const el = $("#toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), ms); }
+// 嵌在 K線學堂裡時，iframe 和整頁一樣高：position: fixed 會跑到很下面看不到，所以改放在使用者目前看得到的位置
+function viewBox() { try { const f = window.frameElement, r = f.getBoundingClientRect(), H = parent.innerHeight; return { top: Math.max(0, -r.top), h: Math.min(H, r.bottom) - Math.max(0, r.top) }; } catch { return { top: scrollY, h: innerHeight }; } }
+function place(el, where = "bottom") {
+  if (!EMBED) return; const v = viewBox(); el.style.position = "absolute";
+  if (where === "toast") { el.style.top = v.top + Math.max(80, v.h - 110) + "px"; el.style.bottom = "auto"; }
+  else { el.style.top = v.top + 12 + "px"; el.style.bottom = "auto"; el.style.maxHeight = Math.max(320, v.h - 24) + "px"; }
+}
+function toast(t, ms = 4000) { const el = $("#toast"); el.textContent = t; el.hidden = false; place(el, "toast"); clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), ms); }
 
 /* ---------- 資料 ---------- */
 async function getJ(url) {
@@ -686,7 +704,7 @@ function renderList() {
     note = `${curList().length} 檔・${anyOpen() ? "盤中每 10 秒更新" : "收盤後每 5 分鐘確認一次"}`;
   } else if (W.lt === "hold") {
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
-      <div class="imp-btns"><button class="btn sm" data-imp="shot">📷 截圖匯入</button><button class="btn sm" data-imp="text">✍️ 文字匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
+      <div class="imp-btns"><button class="btn sm primary" data-imp="edit">✏️ 編輯庫存</button><button class="btn sm" data-imp="shot">📷 截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
     if (W.holdView === "ana") renderHoldAna(); else renderHold(); note = "損益未扣手續費與證交稅；持股只記在這個瀏覽器。在個股頁按「💼 持股」新增或修改。";
   } else if (W.lt === "screen") {
     $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? `${W.scr.date.replace(/-/g, "/")} 收盤後資料` : "選股"}・僅供參考，不是買賣建議</span><button class="btn sm" data-gx="scrRefresh">↻ 更新</button>`;
@@ -730,7 +748,7 @@ $("#listPane").addEventListener("click", e => {
   else if (gx && gx.dataset.gx === "mktRefresh") loadMkt(true);
   else if (gx && gx.dataset.gx === "scrRefresh") loadScreen(true);
   else if (t.closest("[data-hv]")) { W.holdView = t.closest("[data-hv]").dataset.hv; store.set("watch:hv", W.holdView); renderList(); }
-  else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a === "shot") $("#impFile").click(); else if (a === "text") openImport("text"); else exportHold(); }
+  else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a === "shot") $("#impFile").click(); else if (a === "edit") openHoldEdit(); else if (a === "text") openImport("text"); else exportHold(); }
   else if (gx) { const a = gx.dataset.gx; if (a === "edit") W.editing = true; else if (a === "done") W.editing = false; else if (a === "rename") { const nm = prompt("群組名稱", W.groups[W.gi].name); if (nm) W.groups[W.gi].name = nm.slice(0, 12); } else if (a === "delete" && W.groups.length > 1 && confirm(`刪除群組「${W.groups[W.gi].name}」？`)) { W.groups.splice(W.gi, 1); W.gi = 0; W.editing = false; } saveGroups(); renderList(); }
   else if (so) { W.sort = so.dataset.sort; store.set("watch:sort", W.sort); renderList(); }
   else if (us) { W.usType = us.dataset.us; store.set("watch:us", W.usType); if (!W.hot["us:" + W.usType]) loadHot("us"); renderList(); }
@@ -756,7 +774,7 @@ function holdRows(m) {
 const sgn = (v, d = 0) => (v == null ? "—" : `${v > 0 ? "+" : ""}${d ? v.toFixed(d) : Math.round(v).toLocaleString()}`);
 function renderHold() {
   const m = W.holdMkt, R = holdRows(m), us = m === "us", money = v => (v == null ? "—" : (us ? "US$" : "") + (us ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : Math.round(v).toLocaleString()));
-  if (!R.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">還沒有${us ? "美股" : "台股"}持股。按上面的「📷 截圖匯入」上傳券商 App 的庫存截圖，或「✍️ 文字匯入」貼上代號、股數與成本；也可以在個股頁按「💼 持股」一檔一檔加。</p>`; $("#wl").innerHTML = ""; return; }
+  if (!R.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">還沒有${us ? "美股" : "台股"}持股。按上面的「✏️ 編輯庫存」一格一格填代號、股數與成本，或用「📷 截圖匯入」上傳券商 App 的庫存截圖。</p>`; $("#wl").innerHTML = ""; return; }
   const ok = R.filter(r => r.mv != null);
   if (!ok.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有報價。" : "等待報價…"}</p>`; }
   const mv = ok.reduce((s, r) => s + r.mv, 0), cost = ok.reduce((s, r) => s + r.cost, 0), pnl = mv - cost, day = ok.reduce((s, r) => s + (r.day || 0), 0);
@@ -798,29 +816,54 @@ function deriveRow(r) {
 function openImport(kind, rows) {
   if (rows) imp.rows = rows;
   const body = $("#impBody");
-  if (kind === "text") body.innerHTML = `<p class="note">每行一檔：<b>代號或名稱、股數、平均成本</b>，用空白或逗號分開；股數可以寫「2張」。例如：<br><code>2330 1000 650</code>　<code>健策,10,3908</code>　<code>0050 3張 150</code></p><textarea id="impText" rows="7" class="imp-ta" placeholder="2330 1000 650"></textarea><div class="row2"><button class="btn primary sm" id="impParse" type="button">下一步</button><button class="btn sm" data-ic="close" type="button">取消</button></div>`;
+  if (kind === "text") body.innerHTML = `<p class="note">每行一檔：<b>代號或名稱、股數、平均成本</b>，用空白或逗號分開；股數可以寫「2張」。例如：<br><code>2330 1000 650</code>　<code>健策,10,3908</code>　<code>0050 3張 150</code></p><textarea id="impText" rows="7" class="imp-ta" placeholder="2330 1000 650"></textarea><div class="row2"><button class="btn primary sm" id="impParse" type="button">放進表格</button><button class="btn sm" data-ic="close" type="button">取消</button></div>`;
   else if (kind === "busy") body.innerHTML = `<p class="note">${rows}</p>`;
   else if (kind === "err") body.innerHTML = `<p class="note err">⚠ ${esc(rows)}</p><div class="row2"><button class="btn sm" data-imp2="text" type="button">改用文字匯入</button><button class="btn sm" data-ic="close" type="button">關閉</button></div>`;
   else {
-    const R = imp.rows;
-    body.innerHTML = `<p class="note">確認每一檔的代號、股數與平均成本（可以直接修改）。推算值可能和券商略有差異（券商的損益通常已扣預估手續費與稅）。</p>
-      <div class="imp-list">${R.map((r, i) => `<div class="imp-row ${r.code && r.sh && r.cost ? "" : "bad"}"><label class="imp-chk"><input type="checkbox" data-ii="${i}" data-k="on" ${r.on ? "checked" : ""}><b>${esc(r.name || "—")}</b></label>
-        <input class="code" data-ii="${i}" data-k="code" value="${esc(r.code || "")}" placeholder="代號" aria-label="代號">
-        <label>股數<input type="number" inputmode="numeric" data-ii="${i}" data-k="sh" value="${r.sh ?? ""}"></label><label>成本<input type="number" step="any" inputmode="decimal" data-ii="${i}" data-k="cost" value="${r.cost ?? ""}"></label><small>${esc(r.how || "")}</small></div>`).join("")}</div>
-      <div class="seg" role="group" aria-label="匯入方式" style="margin:8px 0">${[["merge", "合併（同代號覆蓋）"], ["replace", "取代全部庫存"]].map(([k, t]) => `<button data-im="${k}" aria-pressed="${imp.mode === k}">${t}</button>`).join("")}</div>
-      <div class="row2"><button class="btn primary sm" id="impSave" type="button">匯入 ${R.filter(r => r.on).length} 檔</button><button class="btn sm" data-imp2="shot" type="button">＋ 再加截圖</button><button class="btn sm" data-ic="close" type="button">取消</button></div>`;
+    const R = imp.rows, edit = kind === "edit" || imp.edit; imp.edit = edit;
+    $("#impTitle").textContent = edit ? "編輯庫存" : "匯入庫存";
+    body.innerHTML = `<p class="note">${edit ? "直接修改每一格；按 ✕ 刪除一檔，按「＋ 新增一列」加一檔。代號可以輸入名稱（例如「台積電」），離開格子後會自動換成代號。" : "確認每一檔的代號、股數與平均成本（可以直接修改）。推算值可能和券商略有差異（券商的損益通常已扣預估手續費與稅）。"}</p>
+      <div class="hg-wrap"><table class="hgrid"><thead><tr><th>代號／名稱</th><th>股數<small>1 張＝1000 股</small></th><th>平均成本</th><th></th></tr></thead><tbody>${R.map((r, i) => gridRow(r, i)).join("")}</tbody></table></div>
+      <div class="row2" style="margin:8px 0"><button class="btn sm" data-gadd type="button">＋ 新增一列</button>${edit ? "" : `<button class="btn sm" data-imp2="shot" type="button">＋ 再加截圖</button>`}<button class="btn sm" data-imp2="text" type="button">貼上文字</button></div>
+      ${edit ? "" : `<div class="seg" role="group" aria-label="匯入方式" style="margin:0 0 8px">${[["merge", "合併（同代號覆蓋）"], ["replace", "取代全部庫存"]].map(([k, t]) => `<button data-im="${k}" aria-pressed="${imp.mode === k}">${t}</button>`).join("")}</div>`}
+      <div class="row2"><button class="btn primary sm" id="impSave" type="button">${edit ? "儲存" : `匯入 ${R.filter(r => r.code || r.sh).length} 檔`}</button><button class="btn sm" data-ic="close" type="button">取消</button></div>`;
   }
-  $("#impSheet").hidden = $("#impBg").hidden = false;
+  if ($("#impSheet").hidden) { $("#impSheet").hidden = $("#impBg").hidden = false; place($("#impSheet")); }
 }
-const closeImport = () => { $("#impSheet").hidden = $("#impBg").hidden = true; };
+const closeImport = () => { $("#impSheet").hidden = $("#impBg").hidden = true; imp.edit = false; };
+const rowOk = r => okCode(r.code || "") && !isIdx(r.code) && r.sh > 0 && r.cost > 0;
+function gridRow(r, i) {
+  return `<tr class="${rowOk(r) || (!r.code && !r.sh && !r.cost) ? "" : "bad"}" data-row="${i}"><td><input class="code" data-ii="${i}" data-k="code" value="${esc(r.code || r.name || "")}" placeholder="2330 或 台積電" autocomplete="off" aria-label="代號或名稱"><small>${esc(r.code && okCode(r.code) ? nameOf(r.code) : r.how || "")}</small></td>
+    <td><input type="number" inputmode="numeric" min="0" step="1" data-ii="${i}" data-k="sh" value="${r.sh ?? ""}" placeholder="1000" aria-label="股數"></td>
+    <td><input type="number" inputmode="decimal" min="0" step="any" data-ii="${i}" data-k="cost" value="${r.cost ?? ""}" placeholder="650" aria-label="平均成本"></td>
+    <td><button class="hg-del" data-gdel="${i}" type="button" aria-label="刪除這一列">✕</button></td></tr>`;
+}
+function openHoldEdit() {
+  loadStocks();
+  const rows = Object.entries(W.hold).filter(([, h]) => h.sh && h.cost).map(([c, h]) => ({ code: c, name: nameOf(c), sh: h.sh, cost: h.cost, on: true }));
+  imp.mode = "replace"; imp.edit = true; openImport("edit", [...rows, { code: "", sh: null, cost: null, on: true }]);
+}
 $("#impBg").addEventListener("click", closeImport);
-$("#impSheet").addEventListener("input", e => { const t = e.target, i = t.dataset.ii; if (i == null) return; const r = imp.rows[+i], k = t.dataset.k; if (k === "on") r.on = t.checked; else if (k === "code") r.code = t.value.trim().toUpperCase(); else r[k] = t.value === "" ? null : +t.value; t.closest(".imp-row").classList.toggle("bad", !(okCode(r.code || "") && r.sh > 0 && r.cost > 0)); $("#impSave").textContent = `匯入 ${imp.rows.filter(x => x.on).length} 檔`; });
+$("#impSheet").addEventListener("input", e => {
+  const t = e.target, i = t.dataset.ii; if (i == null) return; const r = imp.rows[+i], k = t.dataset.k;
+  if (k === "code") { const v = t.value.trim().toUpperCase(); r.code = okCode(v) ? v : ""; r.name = t.value.trim(); } else r[k] = t.value === "" ? null : +t.value;
+  t.closest("tr").classList.toggle("bad", !rowOk(r) && !!(r.code || r.name || r.sh || r.cost));
+});
+// 代號格離開時：輸入的是名稱就換成代號
+$("#impSheet").addEventListener("change", e => {
+  const t = e.target; if (t.dataset.k !== "code") return; const r = imp.rows[+t.dataset.ii], v = t.value.trim();
+  const c = okCode(v.toUpperCase()) ? v.toUpperCase() : findCode(v); r.code = c || ""; r.name = c ? nameOf(c) : v;
+  if (c) { t.value = c; t.nextElementSibling.textContent = W.names[c] || W.stocks?.find(x => x[0] === c)?.[1] || nameOf(c); } else if (v) t.nextElementSibling.textContent = "找不到這個名稱，請輸入代號";
+  t.closest("tr").classList.toggle("bad", !rowOk(r));
+});
 $("#impSheet").addEventListener("click", e => {
   const t = e.target;
   if (t.closest("[data-ic]")) closeImport();
-  else if (t.closest("[data-im]")) { imp.mode = t.closest("[data-im]").dataset.im; openImport("review"); }
+  else if (t.closest("[data-gadd]")) { imp.rows.push({ code: "", sh: null, cost: null, on: true }); openImport(imp.edit ? "edit" : "review"); const ins = $("#impBody").querySelectorAll("input.code"); ins[ins.length - 1]?.focus(); }
+  else if (t.closest("[data-gdel]")) { imp.rows.splice(+t.closest("[data-gdel]").dataset.gdel, 1); openImport(imp.edit ? "edit" : "review"); }
+  else if (t.closest("[data-im]")) { imp.mode = t.closest("[data-im]").dataset.im; openImport(imp.edit ? "edit" : "review"); }
   else if (t.closest("[data-imp2]")) { const k = t.closest("[data-imp2]").dataset.imp2; if (k === "shot") $("#impFile").click(); else openImport("text"); }
-  else if (t.id === "impParse") { const rows = parseHoldText($("#impText").value); if (!rows.length) { toast("沒有讀到資料，格式例如：2330 1000 650"); return; } imp.mode = "merge"; openImport("review", rows); }
+  else if (t.id === "impParse") { const rows = parseHoldText($("#impText").value); if (!rows.length) { toast("沒有讀到資料，格式例如：2330 1000 650"); return; } if (imp.edit) { const cur = imp.rows.filter(r => r.code || r.sh); rows.forEach(n => { const k = cur.findIndex(r => n.code && r.code === n.code); if (k >= 0) cur[k] = n; else cur.push(n); }); openImport("edit", cur); } else { imp.mode = "merge"; openImport("review", rows); } }
   else if (t.id === "impSave") saveImport();
 });
 function parseHoldText(txt) {
@@ -833,13 +876,14 @@ function parseHoldText(txt) {
   }).filter(Boolean);
 }
 function saveImport() {
-  const ok = imp.rows.filter(r => r.on && okCode(r.code || "") && r.sh > 0 && r.cost > 0), bad = imp.rows.filter(r => r.on).length - ok.length;
-  if (!ok.length) { toast("沒有可以匯入的資料：每一檔都要有代號、股數與成本"); return; }
+  const used = imp.rows.filter(r => r.on !== false && (r.code || r.name || r.sh || r.cost)), ok = used.filter(rowOk), bad = used.length - ok.length;
+  if (bad) { toast(`有 ${bad} 列資料不完整（每一列都要有代號、股數與成本），請修正或按 ✕ 刪除`, 4000); return; }
+  if (!ok.length && !imp.edit) { toast("沒有可以匯入的資料"); return; }
   if (imp.mode === "replace") W.hold = {};
   ok.forEach(r => { W.hold[r.code] = { sh: r.sh, cost: r.cost }; if (r.name) W.names[r.code] = r.name; if (!W.groups.some(g => g.list.includes(r.code))) addTo(r.code); });
-  store.set("watch:hold", W.hold); saveGroups(); closeImport();
-  toast(`已匯入 ${ok.length} 檔${bad ? `，${bad} 檔資料不完整沒有匯入` : ""}`, 3000);
-  W.holdMkt = ok.some(r => mktOf(r.code) === W.holdMkt) ? W.holdMkt : mktOf(ok[0].code); setLt("hold"); kick();
+  const wasEdit = imp.edit; store.set("watch:hold", W.hold); saveGroups(); closeImport();
+  toast(wasEdit ? `已儲存庫存（${ok.length} 檔）` : `已匯入 ${ok.length} 檔`, 3000);
+  if (ok.length) W.holdMkt = ok.some(r => mktOf(r.code) === W.holdMkt) ? W.holdMkt : mktOf(ok[0].code); setLt("hold"); kick();
 }
 // 截圖：先在手機上縮小（最長邊 1600px、JPEG），再交給 /api/import
 const shrink = file => new Promise((res, rej) => { const img = new Image(), url = URL.createObjectURL(file); img.onload = () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c.toDataURL("image/jpeg", 0.85)); }; img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("讀不到圖片")); }; img.src = url; });
@@ -855,7 +899,7 @@ $("#impFile").addEventListener("change", async e => {
     if (!j.ok) throw new Error(j.error || "讀圖失敗");
     const rows = j.rows.map(deriveRow), merged = [...keep];
     rows.forEach(x => { const i = merged.findIndex(y => (x.code && y.code === x.code) || (!x.code && y.name === x.name)); if (i >= 0) merged[i] = { ...merged[i], ...Object.fromEntries(Object.entries(x).filter(([, v]) => v != null && v !== "")) }; else merged.push(x); });
-    imp.mode = Object.keys(W.hold).length ? imp.mode : "merge"; openImport("review", merged);
+    imp.mode = Object.keys(W.hold).length ? imp.mode : "merge"; imp.edit = false; openImport("review", merged);
   } catch (err) { openImport("err", err.message); }
 });
 function exportHold() {
@@ -887,7 +931,7 @@ function classify(c, D) {
 }
 function renderHoldAna() {
   const m = W.holdMkt, R = holdRows(m);
-  if (!R.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">還沒有${m === "us" ? "美股" : "台股"}持股。可以用上面的「截圖匯入」或「文字匯入」。</p>`; $("#wl").innerHTML = ""; return; }
+  if (!R.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">還沒有${m === "us" ? "美股" : "台股"}持股。按上面的「✏️ 編輯庫存」一格一格填，或用「📷 截圖匯入」。</p>`; $("#wl").innerHTML = ""; return; }
   R.forEach(r => { if (!W.kc.has(r.c) && !isEtf(r.c) && !W.off) klineOf(r.c).then(() => { if (W.lt === "hold" && W.holdView === "ana") renderList(); }); });
   const A = R.map(r => { const kp = W.kc.get(r.c), D = kp && kp.done ? kp.val : null; return { ...r, a: isEtf(r.c) ? classify(r.c) : D ? classify(r.c, D) : null }; });
   R.forEach(r => { const kp = W.kc.get(r.c); if (kp && !kp.done && !kp.hooked) { kp.hooked = true; kp.then(v => { kp.done = true; kp.val = v; if (W.lt === "hold" && W.holdView === "ana") renderList(); }); } });
@@ -948,6 +992,21 @@ function renderScreen() {
 $("#lx").addEventListener("click", e => { const so = e.target.closest("[data-so]"), sc = e.target.closest("[data-scan]");
   if (so) { W.scrOpen = W.scrOpen === so.dataset.so ? null : so.dataset.so; renderList(); }
   else if (sc) { W.scanK = sc.dataset.scan; if (!W.scan[W.scanK] || (!W.scan[W.scanK].running && Date.now() - (W.scan[W.scanK].at || 0) > 600000)) { runScan(W.scanK).then(() => (W.scan[W.scanK].at = Date.now())); } renderList(); } });
+
+/* ---------- 資料來源狀態：伺服器讀得到哪些金鑰（只顯示有沒有，不顯示內容） ---------- */
+async function showStatus() {
+  openSheet(`<h3>資料來源狀態</h3><p class="note">檢查中…</p>`, false);
+  let j; try { const r = await fetch("/api/status"); j = r.ok ? await r.json() : null; if (!j) throw new Error(r.status === 404 ? "這個環境沒有資料服務（要部署到 Vercel 才有）" : `服務回應 ${r.status}`); }
+  catch (e) { $("#sheetExtra").innerHTML = `<h3>資料來源狀態</h3><p class="note err">⚠ ${esc(e.message)}</p>`; return; }
+  const row = (name, key, use, opt) => { const on = j.set[key], extra = key === "FUGLE_API_KEY" && on && j.fugle ? (j.fugle.ok ? "・連線正常" : `・${esc(j.fugle.hint || "連線失敗")}`) : "";
+    return `<li class="${on ? (key === "FUGLE_API_KEY" && j.fugle && !j.fugle.ok ? "warn" : "ok") : opt ? "" : "bad"}"><b>${on ? "✅" : opt ? "➖" : "❌"} ${name}</b><span>${key}：${on ? "已讀到" + extra : opt ? "沒有設定（選用）" : "伺服器讀不到"}</span><small>${use}</small></li>`; };
+  const missing = !j.set.FUGLE_API_KEY || !j.set.GEMINI_API_KEY;
+  $("#sheetExtra").innerHTML = `<h3>資料來源狀態</h3><ul class="stlist">${row("富果行情", "FUGLE_API_KEY", "盤中個股報價、分 K、逐筆明細、大戶散戶、資金分佈、台指期分時", false)}${row("Gemini", "GEMINI_API_KEY", "問助教、截圖讀圖、庫存截圖匯入", false)}${row("FinMind", "FINMIND_TOKEN", "籌碼與基本面（沒有也能用，有的話次數上限比較高）", true)}${row("Claude", "ANTHROPIC_API_KEY", "Gemini 忙線時的備援", true)}</ul>
+    ${j.similar?.length ? `<p class="note err">⚠ 找到名稱相近但不完全一樣的變數：${j.similar.map(esc).join("、")}。名稱必須完全一樣（全大寫、底線）。</p>` : ""}
+    ${missing ? `<div class="howto"><b>讀不到金鑰時這樣修：</b><ol><li>Vercel → 專案 kline-school → Settings → Environment Variables。</li><li>確認名稱完全是 <code>FUGLE_API_KEY</code>（或 <code>GEMINI_API_KEY</code>），Environments 要勾 <b>Production</b>（也可以一起勾 Preview）。</li><li>環境變數只對「之後的部署」生效：到 Deployments → 最新一筆 → ⋯ → <b>Redeploy</b>。</li><li>部署完成後回來按一次這個檢查。</li></ol></div>` : `<p class="note">金鑰都讀到了。如果功能還是不正常，可能是對方服務暫時忙碌或超過免費方案的次數上限。</p>`}
+    <p class="note">目前環境：${esc(j.vercelEnv || "未知")}（Production＝正式網址）</p>`;
+}
+document.addEventListener("click", e => { if (e.target.closest("[data-st]")) { e.preventDefault(); showStatus(); } });
 
 /* ---------- 大盤：指數、美股、法人、漲跌分佈、貢獻點數、產業 ---------- */
 async function loadMkt(force = false) {
@@ -1209,7 +1268,7 @@ function renderFlow() {
     note.textContent = split ? `今天每個價位的成交量（張）・紅色是外盤成交、綠色是內盤成交・${F.source}` : `今天每個價位的成交量（用每分鐘收盤價估算${noFlow && noFlow !== "載入中…" ? `；${noFlow}` : ""}）`;
     const el = box.querySelector("li.cur"); if (el) el.parentElement.parentElement.scrollTop = Math.max(0, el.offsetTop - 150);
   } else {
-    if (!F?.ok) { box.innerHTML = `<p class="note" style="padding:12px">${esc(noFlow || "沒有資料")}</p>`; note.textContent = ""; postHeight(); return; }
+    if (!F?.ok) { box.innerHTML = `<p class="note" style="padding:12px">${esc(noFlow || "沒有資料")}</p>${F?.needKey ? `<p style="padding:0 12px 12px;margin:0"><button class="btn sm" data-st type="button">🔌 檢查資料來源狀態</button></p>` : ""}`; note.textContent = ""; postHeight(); return; }
     const k = W.bigK, sum = (a, from, to) => a.slice(from, to).reduce((s, x) => s + x, 0);
     let cb = 0, cs = 0, bv = 0, sv = 0;
     const ser = F.minutes.map(r => { cb += sum(r.b, k, 4) - sum(r.s, k, 4); cs += sum(r.b, 0, k) - sum(r.s, 0, k); bv += sum(r.b, k, 4) + sum(r.s, k, 4); sv += sum(r.b, 0, k) + sum(r.s, 0, k); return { m: toMin(r.t), b: cb, s: cs }; });
@@ -1545,7 +1604,7 @@ function goTab(t) {
   setDtab(t);
 }
 $("#qbar").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (!b) return; const q = b.dataset.q; if (q === "list") { showList(); window.scrollTo({ top: 0 }); } else if (q === "menu") openSheet(); else goTab(q); });
-function openSheet(extra = "") { $("#sheetExtra").innerHTML = extra; $("#sheet").hidden = $("#sheetBg").hidden = false; $("#sheet").querySelector("button,a").focus(); }
+function openSheet(extra = "", menu = true) { $("#sheet .menu").hidden = $("#sheetTitle").hidden = !menu; $("#sheetExtra").innerHTML = extra; $("#sheet").hidden = $("#sheetBg").hidden = false; place($("#sheet")); $("#sheet").querySelector("button,a").focus(); }
 function closeSheet() { $("#sheet").hidden = $("#sheetBg").hidden = true; }
 $("#menuBtn").addEventListener("click", () => openSheet());
 $("#sheetBg").addEventListener("click", closeSheet);

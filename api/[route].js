@@ -16,6 +16,7 @@ const ROUTES = {
   quote: () => import("./_lib/quote.js"),
   screen: () => import("./_lib/screen.js"),
   stockinfo: () => import("./_lib/stockinfo.js"),
+  status: () => import("./_lib/status.js"),
   stocks: () => import("./_lib/stocks.js"),
 };
 export const ROUTE_NAMES = Object.keys(ROUTES);

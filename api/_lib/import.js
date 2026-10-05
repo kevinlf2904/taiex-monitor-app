@@ -72,7 +72,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "只接受 POST" });
   const imgs = parseImages(req.body?.images);
   if (!imgs.length) return res.status(400).json({ ok: false, error: "請上傳庫存畫面的截圖（JPG／PNG）" });
-  const gk = process.env.GEMINI_API_KEY, ck = process.env.ANTHROPIC_API_KEY;
+  const gk = (process.env.GEMINI_API_KEY || "").trim(), ck = process.env.ANTHROPIC_API_KEY;
   if (!gk && !ck) return res.status(200).json({ ok: false, error: "截圖匯入需要 AI 讀圖：請在 Vercel 設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY）。也可以改用「文字匯入」。" });
   try {
     let r = gk ? await viaGemini(imgs, gk) : null;
