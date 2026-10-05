@@ -9,6 +9,8 @@ const Signals = {
   rsi(D, I) { const r = I.rsi, m = []; for (let i = 1; i < D.length; i++) { if (r[i - 1] == null) continue; if (r[i - 1] < 30 && r[i] >= 30) m.push({ i, side: "buy", label: "脫離超賣" }); else if (r[i - 1] > 70 && r[i] <= 70) m.push({ i, side: "sell", label: "跌離超買" }); } return m; },
   kd(D, I) { const { K, D: d } = I.kd, m = []; for (let i = 1; i < D.length; i++) { if (crossUp(K, d, i) && d[i] < 20) m.push({ i, side: "buy", label: "低檔金叉" }); else if (crossDn(K, d, i) && d[i] > 80) m.push({ i, side: "sell", label: "高檔死叉" }); } return m; },
   macd(D, I) { const { dif, sig } = I.macd, m = []; for (let i = 1; i < D.length; i++) { if (crossUp(dif, sig, i)) m.push({ i, side: "buy", label: "DIF上穿" }); else if (crossDn(dif, sig, i)) m.push({ i, side: "sell", label: "DIF下穿" }); } return m; },
+  // VWAP：收盤由下往上站上 VWAP、由上往下跌破 VWAP（只取 VWAP 本身向上／向下的那一側，減少盤整時的來回訊號）
+  vwap(D, I) { const v = I.vwap, m = []; for (let i = 2; i < D.length; i++) { if (v[i] == null || v[i - 1] == null || v[i - 2] == null) continue; if (D[i].c > v[i] && D[i - 1].c <= v[i - 1] && v[i] >= v[i - 2]) m.push({ i, side: "buy", label: "站上VWAP" }); else if (D[i].c < v[i] && D[i - 1].c >= v[i - 1] && v[i] <= v[i - 2]) m.push({ i, side: "sell", label: "跌破VWAP" }); } return m; },
   boll(D, I) { const { up, lo } = I.boll, m = []; for (let i = 1; i < D.length; i++) { if (lo[i] == null || lo[i - 1] == null) continue; if (D[i].c < lo[i] && D[i - 1].c >= lo[i - 1]) m.push({ i, side: "buy", label: "跌破下軌" }); else if (D[i].c > up[i] && D[i - 1].c <= up[i - 1]) m.push({ i, side: "sell", label: "突破上軌" }); } return m; },
   vol(D, I) { const m = []; for (let i = 20; i < D.length; i++) if (D[i].v > 2 * I.vma[i - 1]) m.push({ i, side: D[i].c >= D[i].o ? "buy" : "sell", label: "爆量", note: true }); return m; },
   candle(D, I, only) {
@@ -290,7 +292,7 @@ const FEE = 0.001425, TAX = 0.003;
 const btKey = s => `${s.i}${s.side}`;
 function backtest(D, sigs, opt = {}) {
   const cap = opt.capital || 1e6, lot = opt.lot || 1, useBuy = opt.useBuy !== false, useSell = opt.useSell !== false, skip = opt.skip || new Set();
-  const fee = amt => Math.max(20, Math.round(amt * FEE)), tax = amt => Math.round(amt * TAX);
+  const TX = opt.tax ?? TAX, fee = amt => Math.max(20, Math.floor(amt * FEE)), tax = amt => Math.floor(amt * TX); // 手續費與證交稅都是無條件捨去；ETF 證交稅 0.1%
   // 用手上的現金能買幾股（扣掉手續費後取整數單位）
   const canBuy = (money, px) => { let n = Math.floor(money / (px * (1 + FEE)) / lot) * lot; while (n > 0 && n * px + fee(n * px) > money) n -= lot; return n; };
   const at = {}; sigs.forEach(s => { if (s.note || skip.has(btKey(s))) return; if ((s.side === "buy" && useBuy) || (s.side === "sell" && useSell)) at[s.i] = s.side; });
@@ -535,7 +537,8 @@ function fundSummary(j, D) {
   if (j.fin.length) {
     const f = j.fin, ttm = f.slice(-4).reduce((a, x) => a + x.eps, 0), prev = f.length >= 8 ? f.slice(-8, -4).reduce((a, x) => a + x.eps, 0) : null, l = f.at(-1);
     out.push({ k: "獲利", t: `${l.q} EPS ${l.eps.toFixed(2)} 元；近四季合計 ${ttm.toFixed(2)} 元${prev ? `（前四季 ${prev.toFixed(2)} 元，${fmtPct(ttm / prev - 1, 1)}）` : ""}${l.gross != null ? `；毛利率 ${l.gross}%、營益率 ${l.op ?? "—"}%、淨利率 ${l.net ?? "—"}%` : ""}` });
-    if (f.length >= 2 && l.gross != null && f.at(-2).gross != null) { const p2 = f.at(-2), three = l.gross > p2.gross && l.op > p2.op && l.net > p2.net; if (three) out.push({ k: "三率", t: "毛利率、營益率、淨利率都比上一季高（三率三升）" }); }
+    if (f.length >= 2 && l.gross != null && f.at(-2).gross != null) { const p2 = f.at(-2), three = l.gross > p2.gross && l.op > p2.op && l.net > p2.net, [y, qq] = String(l.q).split("Q"), ly = f.find(x => x.q === `${+y - 1}Q${qq}`), yoy = ly && ly.gross != null && l.gross > ly.gross && l.op > ly.op && l.net > ly.net;
+      if (three) out.push({ k: "三率", t: yoy ? "毛利率、營益率、淨利率都比上一季與去年同期高（三率三升）" : "毛利率、營益率、淨利率都比上一季高（季增三升；三率三升還要比去年同期高）" }); }
   }
   return out;
 }

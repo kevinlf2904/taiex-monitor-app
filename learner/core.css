@@ -15,6 +15,7 @@
   --s1: #d98a0b;      /* 短均線 */
   --s2: #7a4fd0;      /* 中均線 */
   --s3: #0d8aa0;      /* 長均線 */
+  --vwap: #db2777;    /* VWAP */
   --band: rgba(35, 70, 160, 0.07);
   --shade: rgba(24, 32, 43, 0.05);
   --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
@@ -26,14 +27,14 @@
   :root:not([data-theme="light"]) {
     --bg: #000000; --surface: #141517; --surface-2: #1f2124; --surface-3: #2b2e33; --ink: #e8ecf1; --muted: #9aa4b2;
     --line: #353a41; --accent: #86a2ff; --accent-soft: #1c2440; --up: #ff4d57; --down: #22c47e;
-    --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
+    --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --vwap: #f472b6; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #000000; --surface: #141517; --surface-2: #1f2124; --surface-3: #2b2e33; --ink: #e8ecf1; --muted: #9aa4b2;
   --line: #353a41; --accent: #86a2ff; --accent-soft: #1c2440; --up: #ff4d57; --down: #22c47e;
-  --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
+  --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --vwap: #f472b6; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }

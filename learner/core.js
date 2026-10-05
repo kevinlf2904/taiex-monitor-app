@@ -60,6 +60,33 @@ function wrCalc(D, n = 14) {
   for (let i = n - 1; i < D.length; i++) { let hh = -Infinity, ll = Infinity; for (let j = i - n + 1; j <= i; j++) { hh = Math.max(hh, D[j].h); ll = Math.min(ll, D[j].l); } o[i] = hh === ll ? -50 : (hh - D[i].c) / (hh - ll) * -100; }
   return o;
 }
+// VWAP（成交量加權平均價）：典型價 (高+低+收)/3 依成交量加權。
+// 分 K（日期欄有時間）每天開盤重新累計，就是當日均價線；日／週／月 K 用最近 20 根滾動計算（20 期 VWAP）。
+function vwapCalc(D, n = 20) {
+  const o = Array(D.length).fill(null), intraday = D.length && /\s\d{1,2}:\d{2}/.test(D[0].d);
+  if (intraday) { let day = null, pv = 0, v = 0; D.forEach((x, i) => { const d = x.d.split(" ")[0]; if (d !== day) { day = d; pv = 0; v = 0; } const tp = (x.h + x.l + x.c) / 3, w = x.v || 0; pv += tp * w; v += w; o[i] = v ? pv / v : tp; }); return o; }
+  for (let i = n - 1; i < D.length; i++) { let pv = 0, v = 0; for (let j = i - n + 1; j <= i; j++) { const w = D[j].v || 0; pv += (D[j].h + D[j].l + D[j].c) / 3 * w; v += w; } o[i] = v ? pv / v : null; }
+  return o;
+}
+// 籌碼分佈（成本分佈／Volume Profile）：把 [a, b] 每根 K 棒的成交量依典型價附近分到各價位，越早的權重越低（每天衰減 3%）。
+// 回傳各價位的量、目前價、獲利比例、平均成本、支撐（目前價以下量最多的價位）、壓力（以上量最多的價位）、70%／90% 籌碼區間。
+function costDist(D, b = D.length - 1, n = 120, bins = 60, decay = 0.97) {
+  const a = Math.max(0, b - n + 1), L = D.slice(a, b + 1); if (L.length < 10) return null;
+  const lo = Math.min(...L.map(x => x.l)), hi = Math.max(...L.map(x => x.h)); if (!(hi > lo)) return null;
+  const step = (hi - lo) / bins, w = Array(bins).fill(0), mids = w.map((_, k) => lo + (k + 0.5) * step);
+  L.forEach((x, i) => {
+    const wt = (x.v || 1) * Math.pow(decay, L.length - 1 - i), ka = Math.max(0, Math.floor((x.l - lo) / step)), kb = Math.min(bins - 1, Math.floor((x.h - lo) / step)), tp = (x.h + x.l + x.c) / 3, half = (x.h - x.l) / 2 || step;
+    const fs = []; for (let k = ka; k <= kb; k++) fs.push(1 / (1 + Math.abs(mids[k] - tp) / half)); const tot = fs.reduce((s, f) => s + f, 0) || 1;
+    fs.forEach((f, j) => (w[ka + j] += wt * f / tot));
+  });
+  const px = D[b].c, total = w.reduce((s, x) => s + x, 0) || 1;
+  let sup = -1, pre = -1; w.forEach((x, k) => { if (mids[k] <= px) { if (sup < 0 || x > w[sup]) sup = k; } else if (pre < 0 || x > w[pre]) pre = k; });
+  // 以平均成本為中心向兩側擴張，直到涵蓋 p 的籌碼
+  const avg = w.reduce((s, x, k) => s + x * mids[k], 0) / total;
+  const range = p => { let i = Math.max(0, Math.min(bins - 1, Math.floor((avg - lo) / step))), j = i, acc = w[i]; while (acc / total < p && (i > 0 || j < bins - 1)) { if (j >= bins - 1 || (i > 0 && w[i - 1] >= w[j + 1])) acc += w[--i]; else acc += w[++j]; } return [mids[i] - step / 2, mids[j] + step / 2]; };
+  const r90 = range(0.9), r70 = range(0.7);
+  return { w, mids, step, lo, hi, px, d: D[b].d, profit: w.reduce((s, x, k) => s + (mids[k] <= px ? x : 0), 0) / total, avg, sup: sup >= 0 ? mids[sup] : null, pre: pre >= 0 ? mids[pre] : null, r90, r70, overlap: (r70[1] - r70[0]) / ((r90[1] - r90[0]) || 1) };
+}
 function indicators(D) {
   const c = D.map(x => x.c), cache = {};
   return {
@@ -67,6 +94,7 @@ function indicators(D) {
     ma: n => cache[n] || (cache[n] = sma(c, n)),
     vma: sma(D.map(x => x.v), 20),
     rsi: rsiCalc(c), kd: kdCalc(D), macd: macdCalc(c), boll: bollCalc(c), wr: wrCalc(D),
+    get vwap() { return cache.vwap || (cache.vwap = vwapCalc(D)); },
     ...(() => { if (D[0].ov == null) return { io: null, io5: null }; const io = D.map(x => x.v ? x.ov / x.v * 100 : 50); return { io, io5: sma(io, 5) }; })(),
   };
 }
@@ -89,13 +117,15 @@ function indicatorBar(host, key, groups, defaults, onChange) {
   render();
   return { has: id => state.has(id), get state() { return state; }, set(id, on) { on ? state.add(id) : state.delete(id); render(); }, setGroups(g) { groups = g; render(); } };
 }
-const MAIN_ITEMS = [{ id: "ma5", label: "MA5", color: "--s1" }, { id: "ma10", label: "MA10", color: "--accent" }, { id: "ma20", label: "MA20", color: "--s2" }, { id: "ma60", label: "MA60", color: "--s3" }, { id: "boll", label: "布林" }];
+const MAIN_ITEMS = [{ id: "ma5", label: "MA5", color: "--s1" }, { id: "ma10", label: "MA10", color: "--accent" }, { id: "ma20", label: "MA20", color: "--s2" }, { id: "ma60", label: "MA60", color: "--s3" }, { id: "boll", label: "布林" }, { id: "vwap", label: "VWAP", color: "--vwap" }, { id: "vp", label: "籌碼分佈" }];
+// 主圖選項：均線、布林、VWAP、籌碼分佈（Volume Profile）
+const mainOpts = bar => ({ ma: maFrom(bar), boll: bar.has("boll"), vwap: bar.has("vwap"), vp: bar.has("vp") });
 const SUB_ITEMS = [{ id: "vol", label: "成交量" }, { id: "kd", label: "KD" }, { id: "rsi", label: "RSI" }, { id: "macd", label: "MACD" }, { id: "wr", label: "威廉" }];
 const maFrom = bar => [5, 10, 20, 60].filter(p => bar.has("ma" + p));
 const subsFrom = (bar, ids = ["kd", "rsi", "macd", "wr", "inout"]) => ids.filter(id => bar.has(id));
 
 // 副圖指標發出的訊號：{ i, si（第幾個副圖）, side, label, v（副圖上的位置） }
-// strong：KD 只留低檔（D < 30）的金叉、高檔（D > 70）的死叉；MACD 只留零軸上方的金叉、零軸下方的死叉（順勢的交叉）
+// strong：KD 只留低檔（D < 20）的金叉、高檔（D > 80）的死叉（和 KD 課程、策略用的門檻一致）；MACD 只留零軸上方的金叉、零軸下方的死叉（順勢的交叉）
 function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
   const out = [], n = Math.min(vis, D.length);
   const cross = (a, b, si, up, dn, keep = () => true) => { for (let i = 1; i < n; i++) { if ([a[i], b[i], a[i - 1], b[i - 1]].some(v => v == null) || D[i].sim) continue;
@@ -106,7 +136,7 @@ function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
     else if (a[i - 1] > hi && a[i] <= hi) out.push({ i, si, side: "sell", label: name + "脫離超買", v: a[i] }); } };
   subs.forEach((S, si) => {
     if (kinds[typeof S === "string" ? S : "custom"] === false) return;
-    if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉", strong ? (side, d) => (side === "buy" ? d < 30 : d > 70) : undefined);
+    if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉", strong ? (side, d) => (side === "buy" ? d < 20 : d > 80) : undefined);
     else if (S === "macd") cross(I.macd.dif, I.macd.sig, si, "MACD金叉", "MACD死叉", strong ? (side, m) => (side === "buy" ? m > 0 : m < 0) : undefined);
     else if (S === "rsi") exit(I.rsi, 30, 70, si, "RSI");
     else if (S === "wr") exit(I.wr, -80, -20, si, "威廉");
@@ -145,6 +175,7 @@ class Chart {
       if (d.p === "yin") this.yZoom(1.5); else if (d.p === "yout") this.yZoom(1 / 1.5);
       else if (d.p === "sin") this.subZoomAll(1.5); else if (d.p === "sout") this.subZoomAll(1 / 1.5);
       else if (d.p === "reset") this.resetScale();
+      else if (d.mk) Chart.setPref("mk", d.mk);
       else if (d.h) Chart.setPref("h", +d.h); else if (d.sh) Chart.setPref("sh", +d.sh);
       else if (d.sk) Chart.setPref("sigKinds", { ...Chart.prefs.sigKinds, [d.sk]: !Chart.prefs.sigKinds[d.sk] });
       this.renderPop();
@@ -219,10 +250,10 @@ class Chart {
   }
   static all = [];
   static keepView = false; // 即時報價更新最後一根 K 棒時，保留使用者的縮放與平移
-  static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit", sig: "chartSubSig", sigKinds: "chartSigKinds", sigStrong: "chartSigStrong" };
+  static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit", sig: "chartSubSig", sigKinds: "chartSigKinds", sigStrong: "chartSigStrong", mk: "chartMk" };
   static prefs = { h: [1, 1.5, 2, 2.5].includes(+store.get("chartH", 1)) ? +store.get("chartH", 1) : 1, log: !!store.get("chartLog", false),
     sh: [1, 1.5, 2].includes(+store.get("chartSubH", 1)) ? +store.get("chartSubH", 1) : 1, fit: !!store.get("chartSubFit", false), sig: store.get("chartSubSig", true) !== false,
-    sigStrong: store.get("chartSigStrong", true) !== false,
+    sigStrong: store.get("chartSigStrong", true) !== false, mk: store.get("chartMk", "full") === "icon" ? "icon" : "full",
     sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, ...(store.get("chartSigKinds", null) || {}) } };
   static SIG_KINDS = [["kd", "KD 交叉"], ["macd", "MACD 交叉"], ["rsi", "RSI 30／70"], ["wr", "威廉 −80／−20"], ["custom", "截圖副圖交叉"]];
   // 高度、對數座標、副圖貼合是全站共用的偏好：改了以後所有圖表一起重畫
@@ -250,7 +281,9 @@ class Chart {
       <div class="prow"><strong>主副圖對應</strong></div>
       <label class="prow pchk"><input type="checkbox" data-pref="sig" ${P.sig ? "checked" : ""}><span>副圖發出訊號時，在主圖 K 線上標出位置（空心圈＋名稱），副圖同一點以虛線對齊</span></label>
       <div class="prow pkinds" ${P.sig ? "" : "aria-disabled=\"true\""}>${Chart.SIG_KINDS.map(([k, t]) => `<button type="button" class="ichip" data-sk="${k}" aria-pressed="${P.sig && P.sigKinds[k]}" ${P.sig ? "" : "disabled"}>${t}</button>`).join("")}</div>
-      <label class="prow pchk"><input type="checkbox" data-pref="sigStrong" ${P.sigStrong ? "checked" : ""} ${P.sig ? "" : "disabled"}><span>只標重點交叉：KD 低檔（D&lt;30）金叉、高檔（D&gt;70）死叉；MACD 零軸上金叉、零軸下死叉。取消勾選則標出全部交叉</span></label>
+      <label class="prow pchk"><input type="checkbox" data-pref="sigStrong" ${P.sigStrong ? "checked" : ""} ${P.sig ? "" : "disabled"}><span>只標重點交叉：KD 低檔（D&lt;20）金叉、高檔（D&gt;80）死叉；MACD 零軸上金叉、零軸下死叉。取消勾選則標出全部交叉</span></label>
+      <div class="prow"><span>訊號標記</span><div class="pseg"><button type="button" data-mk="full" aria-pressed="${P.mk !== "icon"}">符號＋文字</button><button type="button" data-mk="icon" aria-pressed="${P.mk === "icon"}">只有符號</button></div></div>
+      <p class="note" style="margin:0">文字會自動避開 K 棒，放不下就不顯示；滑到那根 K 棒時，上方圖例會列出訊號名稱。</p>
       <div class="prow"><button type="button" class="btn sm" data-p="reset">全部還原</button></div>
       <p class="note">電腦：Shift＋滾輪縮放游標所在的圖，或上下拖曳右側刻度；放大後可上下拖曳平移。雙擊圖表還原。</p>`;
   }
@@ -284,7 +317,7 @@ class Chart {
     const H = mainH + gap + volH + subs.length * (gap + subH) + axisH + 8;
     this.canvas.width = W * dpr; this.canvas.height = H * dpr; this.canvas.style.height = H + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-    const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface") };
+    const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface"), vwap: cssVar("--vwap") || "#f472b6" };
     const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R;
     const { a: va, b: vb } = this.range, bw = pw / (vb - va + 1), inV = i => i >= va - 1 && i <= vb + 1;
     this.geo = { L, bw, a: va, pw, H, top0: 8, mainH };
@@ -303,6 +336,7 @@ class Chart {
     for (let i = va; i < Math.min(vis, vb + 1); i++) {
       lo = Math.min(lo, D[i].l); hi = Math.max(hi, D[i].h);
       if (o.boll && I.boll.up[i] != null) { lo = Math.min(lo, I.boll.lo[i]); hi = Math.max(hi, I.boll.up[i]); }
+      if (o.vwap && I.vwap[i] != null) { lo = Math.min(lo, I.vwap[i]); hi = Math.max(hi, I.vwap[i]); }
       if (F && i >= F.from) { lo = Math.min(lo, F.p25[i - F.from]); hi = Math.max(hi, F.p75[i - F.from]); } // 外圈機率帶超出就裁掉，真實 K 棒才不會被壓扁
     }
     // 對數座標：用 log(價格) 決定高度；縱向放大：以中間為準把價格範圍縮小，可上下平移（yoff）
@@ -327,6 +361,24 @@ class Chart {
       const y = Y(v); ctx.strokeStyle = col.line; ctx.lineWidth = 1; ctx.globalAlpha = 0.6;
       ctx.beginPath(); ctx.moveTo(L, Math.round(y) + 0.5); ctx.lineTo(L + pw, Math.round(y) + 0.5); ctx.stroke(); ctx.globalAlpha = 1;
       ctx.fillStyle = col.muted; ctx.fillText(fmtP(v), L + pw + 6, y);
+    }
+    // 籌碼分佈（Volume Profile）：疊在主圖右側、半透明；用畫面最右邊那根 K 棒往前 120 根計算，平移時跟著更新
+    const VP = this.vpData = o.vp ? costDist(D, Math.min(vis, vb + 1) - 1, o.vpN || 120, 70) : null;
+    if (VP) {
+      const mx = Math.max(...VP.w), maxW = pw * (narrow ? 0.34 : 0.26), bh = Math.max(1, Math.abs(Y(VP.mids[0]) - Y(VP.mids[0] + VP.step)));
+      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
+      // 70% 籌碼區間的底色
+      const y70a = Y(VP.r70[1]), y70b = Y(VP.r70[0]); ctx.fillStyle = col.ink; ctx.globalAlpha = 0.045; ctx.fillRect(L + pw - maxW, y70a, maxW, y70b - y70a);
+      VP.w.forEach((x, k) => { const y = Y(VP.mids[k] + VP.step / 2), wd = x / mx * maxW; ctx.fillStyle = VP.mids[k] <= VP.px ? col.up : col.down; ctx.globalAlpha = VP.mids[k] <= VP.px ? 0.26 : 0.2; ctx.fillRect(L + pw - wd, y, wd, Math.max(1, bh - 0.6)); });
+      ctx.globalAlpha = 1;
+      const tag = (v, c, t) => { if (v == null) return; const y = Y(v); if (y < top0 || y > top0 + mainH) return; ctx.strokeStyle = c; ctx.lineWidth = 1.2; ctx.setLineDash(t === "均" ? [5, 3] : []); ctx.beginPath(); ctx.moveTo(L + pw - maxW - 8, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); };
+      tag(VP.pre, "#f0883e", "壓"); tag(VP.avg, col.muted, "均"); tag(VP.sup, "#4e9af1", "撐");
+      ctx.restore();
+      // 右側價格軸上的標籤（和富途一樣：橘＝壓力、灰＝平均成本、藍＝支撐）
+      ctx.font = `600 10.5px ${cssVar("--font-mono")}`; ctx.textAlign = "left";
+      const used = [];
+      [[VP.pre, "#f0883e"], [VP.avg, "#8b8f98"], [VP.sup, "#3b82f6"]].forEach(([v, c]) => { if (v == null) return; let y = Y(v); if (y < top0 + 6 || y > top0 + mainH - 6) return; while (used.some(u => Math.abs(u - y) < 14)) y += 14; used.push(y); const t = fmtP(v), tw = ctx.measureText(t).width + 8; ctx.fillStyle = c; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(L + pw + 2, y - 8, tw, 16, 3) : ctx.rect(L + pw + 2, y - 8, tw, 16); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillText(t, L + pw + 6, y); });
+      ctx.font = `11px ${cssVar("--font-mono")}`;
     }
     // 布林
     if (o.boll) {
@@ -379,6 +431,7 @@ class Chart {
     ctx.globalAlpha = 1;
     // 均線
     mas.forEach(m => this.line(m.a, vis, X, Y, m.c, 1.6));
+    if (o.vwap) this.line(I.vwap, vis, X, Y, col.vwap, 1.8);
     // 折線、頸線、目標價、結構線（可來自設定或附在標記上；只畫到可見範圍）
     ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
     [...(o.shapes || []), ...(o.markers || []).filter(m => m.i < vis).flatMap(m => m.shapes || [])].forEach(sh => {
@@ -400,23 +453,31 @@ class Chart {
     divs.forEach(m => divLine(X(m.div.i1), Y(m.div.p1), X(m.div.i2), Y(m.div.p2), m.side === "buy" ? col.up : col.down));
     ctx.restore();
     // 標記
-    const showLabels = o.labels !== false && bw >= 2.5;
+    const showLabels = o.labels !== false && bw >= 2.5 && Chart.prefs.mk !== "icon";
     const placed = [];
+    // 文字標籤不能壓到 K 棒：找出標籤橫跨的那幾根 K 棒，買進訊號往下推到它們的最低點以下、賣出訊號往上推到最高點以上；推出主圖範圍就不畫字（滑到那根 K 棒時圖例會顯示）
+    const clearY = (tx, tw, ty, down) => {
+      const i0 = Math.max(va, Math.floor((tx - tw / 2 - L) / bw + va - 0.5)), i1 = Math.min(Math.min(vis, vb + 1) - 1, Math.ceil((tx + tw / 2 - L) / bw + va - 0.5));
+      let ext = down ? -Infinity : Infinity; for (let i = i0; i <= i1; i++) { const k = D[i]; if (!k) continue; ext = down ? Math.max(ext, Y(k.l)) : Math.min(ext, Y(k.h)); }
+      const y = down ? Math.max(ty, ext + 9) : Math.min(ty, ext - 8);
+      return y > top0 + mainH - 5 || y < top0 + 6 ? null : y;
+    };
+    const label = (t, tx, ty, c, size) => { ctx.font = `600 ${size}px ${cssVar("--font-body")}`; ctx.textAlign = "center"; ctx.lineJoin = "round"; ctx.lineWidth = 3; ctx.strokeStyle = col.surface; ctx.globalAlpha = 0.85; ctx.strokeText(t, tx, ty); ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, tx, ty); };
     // 副圖訊號：在副圖上交叉或離開超買超賣區的那一天，主圖K線也標出來（空心圈，和實心三角的課程／策略訊號區分）
     const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis, Chart.prefs.sigKinds, Chart.prefs.sigStrong) : [];
     (o.markers || []).filter(m => m.i < vis && m.i >= va && m.i <= vb).forEach(m => {
       const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
       const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
       ctx.globalAlpha = m.dim ? 0.3 : 1; // 回測中被略過的訊號畫淡一點
-      ctx.fillStyle = c; ctx.beginPath();
+      ctx.globalAlpha = (m.dim ? 0.3 : 1) * 0.9; ctx.fillStyle = c; ctx.beginPath();
       if (buy) { ctx.moveTo(x, y); ctx.lineTo(x - s, y + s * 1.5); ctx.lineTo(x + s, y + s * 1.5); }
       else { ctx.moveTo(x, y); ctx.lineTo(x - s, y - s * 1.5); ctx.lineTo(x + s, y - s * 1.5); }
-      ctx.closePath(); ctx.fill();
+      ctx.closePath(); ctx.fill(); ctx.globalAlpha = m.dim ? 0.3 : 1;
       if (showLabels && m.label) {
-        // 標籤互相重疊時只畫第一個（三角形照畫）
-        ctx.font = `600 10.5px ${cssVar("--font-body")}`; ctx.textAlign = "center";
-        const tx = Math.min(Math.max(x, L + 24), L + pw - 24), ty = buy ? y + s * 1.5 + 9 : y - s * 1.5 - 8, tw = ctx.measureText(m.label).width;
-        if (!placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 13)) { ctx.fillText(m.label, tx, ty); placed.push({ x: tx, y: ty, w: tw }); }
+        // 標籤互相重疊或會壓到 K 棒時改位置；放不下就不畫字（三角形照畫）
+        ctx.font = `600 10.5px ${cssVar("--font-body")}`; const tw = ctx.measureText(m.label).width;
+        const tx = Math.min(Math.max(x, L + tw / 2 + 2), L + pw - tw / 2 - 2), ty = clearY(tx, tw, buy ? y + s * 1.5 + 9 : y - s * 1.5 - 8, buy);
+        if (ty != null && !placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 13)) { label(m.label, tx, ty, c, 10.5); placed.push({ x: tx, y: ty, w: tw }); }
         ctx.font = `11px ${cssVar("--font-mono")}`;
       }
       ctx.globalAlpha = 1;
@@ -428,13 +489,11 @@ class Chart {
       if (marked.has(gs[0].i + gs[0].side)) return; // 同一天已有同方向的課程／策略標記（通常就是同一個訊號），不重複畫
       const g = gs[0], k = D[g.i], x = X(g.i), buy = g.side === "buy", c = buy ? col.up : col.down, off = 8;
       const y = Math.max(top0 + 6, Math.min(top0 + mainH - 6, buy ? Y(k.l) + off : Y(k.h) - off));
-      ctx.strokeStyle = c; ctx.lineWidth = 1.6; ctx.fillStyle = col.surface; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      if (o.labels === false) return; // 手機上 K 棒很密也照樣標字（重疊的會自動略過）
-      const t = gs.map(q => q.label).join("・"); ctx.font = `600 10px ${cssVar("--font-body")}`; ctx.textAlign = "center";
-      let tw = ctx.measureText(t).width, tx = Math.min(Math.max(x, L + tw / 2 + 2), L + pw - tw / 2 - 2), ty = buy ? y + 13 : y - 12;
-      // 貼近圖的上下緣放不下時，改標在圈的旁邊
-      if (ty > top0 + mainH - 5 || ty < top0 + 7) { ty = y; tx = x + 7 + tw / 2 > L + pw - 2 ? x - 7 - tw / 2 : x + 7 + tw / 2; }
-      if (!placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 12)) { ctx.fillStyle = c; ctx.fillText(t, tx, ty); placed.push({ x: tx, y: ty, w: tw }); }
+      const r = Math.max(2.5, Math.min(4, bw * 0.4)); ctx.strokeStyle = c; ctx.lineWidth = 1.4; ctx.fillStyle = col.surface; ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+      if (o.labels === false || Chart.prefs.mk === "icon") return;
+      const t = gs.map(q => q.label).join("・"); ctx.font = `600 10px ${cssVar("--font-body")}`;
+      const tw = ctx.measureText(t).width, tx = Math.min(Math.max(x, L + tw / 2 + 2), L + pw - tw / 2 - 2), ty = clearY(tx, tw, buy ? y + 12 : y - 11, buy);
+      if (ty != null && !placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 12)) { label(t, tx, ty, c, 10); placed.push({ x: tx, y: ty, w: tw }); }
       ctx.font = `11px ${cssVar("--font-mono")}`;
     });
 
@@ -570,6 +629,8 @@ class Chart {
     if (!o.noVol) parts.push(`<span><b>量</b>${o.volLabel ? Math.round(k.v) : k.v.toLocaleString()}</span>`);
     mas.forEach(m => parts.push(`<span style="color:${m.c}"><b style="color:inherit">MA${m.n}</b>${fmtP(m.a[i])}</span>`));
     (this.sigs || []).filter(g => g.i === i).forEach(g => parts.push(`<span class="${g.side === "buy" ? "up" : "down"}"><b style="color:inherit">${g.side === "buy" ? "○ 偏多" : "○ 偏空"}</b>${g.label}</span>`));
+    if (o.vwap) parts.push(`<span style="color:var(--vwap)"><b style="color:inherit">VWAP</b>${fmtP(I.vwap[i])}</span>`);
+    if (o.vp && this.vpData) { const V = this.vpData; parts.push(`<span><b>籌碼</b>獲利 ${(V.profit * 100).toFixed(1)}%</span><span style="color:#f0883e"><b style="color:inherit">壓力</b>${fmtP(V.pre)}</span><span style="color:var(--muted)"><b style="color:inherit">均成本</b>${fmtP(V.avg)}</span><span style="color:#3b82f6"><b style="color:inherit">支撐</b>${fmtP(V.sup)}</span>`); }
     if (o.boll) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
     (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean).forEach(S => {
       const sub = typeof S === "string" ? S : "custom", C0 = typeof S === "string" ? null : S.custom;
