@@ -351,7 +351,10 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .inode { position: absolute; border: 1px solid var(--line); border-left: 4px solid var(--ic); border-radius: 10px; background: var(--surface); color: var(--ink); text-align: left; padding: 6px 10px; cursor: pointer; display: flex; flex-direction: column; justify-content: center; gap: 2px; transition: opacity .15s; }
 .inode b { font-size: 13px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } .inode small { font: 11px var(--font-mono); color: var(--muted); } .inode.on { border-color: var(--ic); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ic) 40%, transparent); }
 .ifocus { margin: 0 12px 12px; border: 1px solid var(--ic); border-radius: 12px; padding: 10px 12px; background: color-mix(in srgb, var(--ic) 8%, var(--surface-2)); } .ifocus small { margin-left: 8px; color: var(--muted); } .ifocus p { margin: 6px 0; font-size: 13.5px; line-height: 1.6; }
-.igal { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin: 8px 12px; }
+.figsvg { width: 100%; height: auto; display: block; font-family: var(--font-body); } .figsvg text { font-family: var(--font-body); } .figalt { margin: 4px 0 0; }
+.ihow details { border-top: 1px solid var(--line); } .ihow summary { cursor: pointer; padding: 8px 0; font-weight: 700; font-size: 14px; } .ihow p { margin: 0 0 10px; font-size: 14px; line-height: 1.75; }
+.gcats { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; } .gcats .ichip { flex: none; }
+.igal { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; margin: 8px 12px; }
 .igcard { border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); padding: 10px; cursor: pointer; color: var(--ink); display: flex; flex-direction: column; gap: 8px; text-align: left; font: inherit; }
 .igcard b { font-size: 14.5px; display: flex; justify-content: space-between; gap: 6px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 8px; } .igcard b small { font: 11px var(--font-mono); color: var(--muted); }
 .scrseg { margin: 8px 12px 0; display: flex; }
@@ -553,7 +556,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.06-29</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.06-30</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -591,6 +594,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 <script src="core.js"></script>
 <script src="analysis.js"></script>
 <script src="industry.js"></script>
+<script src="diagrams.js"></script>
+<script src="industry-figs.js"></script>
 <script src="flows.js"></script>
 <script>
 "use strict";
@@ -1363,8 +1368,11 @@ $("#lx").addEventListener("input", e => { if (W.lt === "money" && e.target.match
 $("#lx").addEventListener("change", e => { if (W.lt === "money" && e.target.matches("[data-mrs]")) { W.mf.rp.set = e.target.value; renderMoney(); } });
 
 /* ---------- 產業地圖：題材總覽、產業網絡、手繪圖庫（流程圖）、題材內頁 ---------- */
+// 圖解包（diagrams.js、industry-figs.js）裡的新題材併進產業地圖；圖解與原理說明用 indFig() 取
+if (typeof INDUSTRY_PACK !== "undefined") for (const t of INDUSTRY_PACK) if (!INDUSTRY_MAP.themes.some(x => x.id === t.id)) INDUSTRY_MAP.themes.push(t);
+const indFig = t => (t.fig ? { fig: t.fig, how: t.how } : typeof INDUSTRY_FIGS !== "undefined" ? INDUSTRY_FIGS[t.id] || null : null);
 const IND = INDUSTRY_MAP, INDT = new Map(IND.themes.map(t => [t.id, t])), MK_NAME = { tw: "台", us: "美", jp: "日", kr: "韓" }, MK_TAG = { tw: "TW", us: "US", jp: "JP", kr: "KR" };
-const IND_COL = { "IC 設計": "#f59e0b", "半導體製造": "#6366f1", "半導體材料": "#8b5cf6", "半導體設備": "#8b5cf6", PCB: "#f97316", 記憶體: "#818cf8", 電子零組件: "#64748b", "AI 伺服器": "#38bdf8", 散熱: "#22d3ee", 電源: "#eab308", 網通: "#0ea5e9", 能源: "#84cc16", 機器人: "#14b8a6", 汽車: "#ef4444", 雲端: "#a78bfa", 資料中心: "#2dd4bf" };
+const IND_COL = { "IC 設計": "#f59e0b", "半導體製造": "#6366f1", "半導體材料": "#8b5cf6", "半導體設備": "#8b5cf6", PCB: "#f97316", 記憶體: "#818cf8", 電子零組件: "#64748b", "AI 伺服器": "#38bdf8", 散熱: "#22d3ee", 電源: "#eab308", 網通: "#0ea5e9", 能源: "#84cc16", 機器人: "#14b8a6", 汽車: "#ef4444", 雲端: "#a78bfa", 資料中心: "#2dd4bf", 光電: "#f472b6", 電子代工: "#60a5fa", 通路: "#94a3b8", 環保: "#4ade80", 工業: "#fb923c", 醫療: "#f87171", 航運: "#38bdf8", 原物料: "#d97706", 營建: "#a8a29e", 金融: "#facc15", 國防: "#65a30d", 消費電子: "#818cf8", 量子運算: "#c084fc", 軟體: "#22d3ee", 資安: "#34d399", 網路平台: "#f472b6", 房地產: "#a8a29e" };
 const indCol = t => IND_COL[t.cat] || "#94a3b8";
 const IND_ICON = { chip: "M7 7h10v10H7zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4", code: "M8 7l-5 5 5 5M16 7l5 5-5 5", home: "M3 11l9-7 9 7v9h-6v-6H9v6H3z", layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17l9 5 9-5",
   wave: "M4 12a8 8 0 0 1 16 0M7 12a5 5 0 0 1 10 0M12 12h.01", server: "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01", bolt: "M13 2L4 14h7l-1 8 9-12h-7z", fan: "M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0M12 10c0-4 4-6 6-4M14 12c4 0 6 4 4 6M12 14c0 4-4 6-6 4M10 12c-4 0-6-4-4-6",
@@ -1445,8 +1453,9 @@ function renderInd() {
     h += `<div class="ihead" style="--ic:${indCol(T)}"><button class="btn sm" data-iopen="">‹ 返回</button><span class="iic">${indIcon(T)}</span><div><small>${esc(T.cat)}・${MK_TAG[T.mk]}</small><h2>${esc(T.name)}</h2></div>
       <button class="ifav" data-ifav="${T.id}" aria-pressed="${fav.has(T.id)}" aria-label="收藏">${fav.has(T.id) ? "♥" : "♡"}</button></div>
       <p class="idesc">${esc(T.desc)}</p>${a ? `<p class="note gnote">今天平均 <b class="${cls(a.pct)}">${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%</b>（${a.n} 檔有報價）</p>` : ""}
-      ${indAiBox(T)}
-      <section class="iflow"><h4>一張圖看懂</h4>${flowSvg(T, { cols: isMobile() ? 2 : 3, w: isMobile() ? 330 : 560 })}</section>`
+      ${(F => F ? `<section class="iflow ifig"><h4>原理圖解</h4>${figSvg(F.fig, { id: "d-" + T.id })}${F.fig.alt ? `<p class="note figalt">${esc(F.fig.alt)}</p>` : ""}</section>
+        <section class="iseg ihow"><h4>原理說明</h4>${F.how.map(([k, v], i) => `<details ${i < 2 ? "open" : ""}><summary>${esc(k)}</summary><p>${esc(v)}</p></details>`).join("")}</section>` : "")(indFig(T))}
+      <section class="iflow"><h4>流程</h4>${flowSvg(T, { cols: isMobile() ? 2 : 3, w: isMobile() ? 330 : 560 })}</section>${indAiBox(T)}`
       + T.segs.map(g => `<section class="iseg"><h4>${esc(g.n)}</h4><ul class="slist">${g.c.map(([c, nm, role]) => { const q = W.quotes.get(c), ok = indQuotable(c);
         return `<li>${ok ? `<button data-sel="${c}">` : `<div class="inq">`}<span class="nm">${esc(nm)}<small>${c}・${esc(role)}</small></span><b class="${cls(q?.chg)}">${ok ? fmtP(q?.price) : "—"}<small>${q?.chgPct != null ? (q.chgPct > 0 ? "+" : "") + q.chgPct.toFixed(2) + "%" : ok ? "" : MK_NAME[T.mk] + "股"}</small></b>${ok ? "</button>" : "</div>"}</li>`; }).join("")}</ul></section>`).join("")
       + (rel.length ? `<section class="iseg"><h4>上下游相關題材</h4><div class="ichips">${rel.map(id => { const r = INDT.get(id); return `<button class="ichip" data-iopen="${id}">${MK_TAG[r.mk]}・${esc(r.name)}</button>`; }).join("")}</div></section>` : "")
@@ -1460,7 +1469,11 @@ function renderInd() {
       <div class="inetwrap">${indNetwork(net, S.focus)}</div>`
       + (F ? `<div class="ifocus" style="--ic:${indCol(F)}"><b>${esc(F.name)}</b><small>${MK_TAG[F.mk]}・${esc(F.cat)}</small><p>${esc(F.desc)}</p><p class="note">上游：${net.links.filter(l => l[1] === F.id).map(l => INDT.get(l[0]).name).join("、") || "—"}；下游：${net.links.filter(l => l[0] === F.id).map(l => INDT.get(l[1]).name).join("、") || "—"}</p><button class="btn sm primary" data-iopen="${F.id}">看這段的公司 →</button></div>` : "");
   } else if (S.view === "gallery") {
-    h += `<p class="note gnote">一張圖看懂這個產業怎麼運作，點進去看每一段是誰在做。</p><div class="igal">${IND.themes.map(t => `<button class="igcard" data-iopen="${t.id}" style="--ic:${indCol(t)}">${flowSvg(t, { cols: 2, w: 200, mini: true })}<b>${esc(t.name)}<small>${MK_TAG[t.mk]}</small></b></button>`).join("")}</div>`;
+    const cats = [...new Set(IND.themes.map(t => t.cat))], G = IND.themes.filter(t => (!S.gcat || t.cat === S.gcat) && (!S.gmk || t.mk === S.gmk));
+    h += `<p class="note gnote">一張圖看懂這個產業怎麼運作，點進去看原理說明與每一段是誰在做。共 ${G.length} 張圖解。</p>
+      <div class="ichips" style="margin:0 12px 6px"><button class="ichip" data-igmk="" aria-pressed="${!S.gmk}">全部市場</button>${Object.entries(MK_NAME).map(([k, t]) => `<button class="ichip" data-igmk="${k}" aria-pressed="${S.gmk === k}">${t}</button>`).join("")}</div>
+      <div class="ichips gcats" style="margin:0 12px"><button class="ichip" data-igcat="" aria-pressed="${!S.gcat}">全部</button>${cats.map(c => `<button class="ichip" data-igcat="${esc(c)}" aria-pressed="${S.gcat === c}">${esc(c)}</button>`).join("")}</div>
+      <div class="igal">${G.map(t => { const F = indFig(t); return `<button class="igcard" data-iopen="${t.id}" style="--ic:${indCol(t)}">${F ? figSvg(F.fig, { id: "g-" + t.id, mini: true }) : flowSvg(t, { cols: 2, w: 200, mini: true })}<b>${esc(t.name)}<small>${MK_TAG[t.mk]}</small></b></button>`; }).join("")}</div>`;
   } else {
     const fv = S.view === "fav";
     if (!fv) h += `<div class="seg scrseg" role="group" aria-label="市場">${Object.entries(MK_NAME).map(([k, t]) => `<button data-imk="${k}" aria-pressed="${S.mk === k}">${t}</button>`).join("")}</div>
@@ -1478,7 +1491,8 @@ function renderInd() {
   if (S.view === "network" && S.focus) { const el = document.querySelector(`.inode[data-ifocus="${S.focus}"]`), wr = document.querySelector(".inetwrap"); if (el && wr) wr.scrollLeft = Math.max(0, el.offsetLeft - wr.clientWidth / 2 + el.offsetWidth / 2); }
 }
 $("#lx").addEventListener("click", e => { if (W.lt === "ind" && e.target.closest("[data-iai]")) indAsk(e.target.closest("[data-iai]").dataset.iai); });
-$("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const S = W.indS, b = e.target.closest("[data-iview],[data-imk],[data-isub],[data-iopen],[data-ifav],[data-inet],[data-ifocus]"); if (!b) return;
+$("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const S = W.indS, gf = e.target.closest("[data-igcat],[data-igmk]"); if (gf) { if (gf.dataset.igcat != null) S.gcat = gf.dataset.igcat || null; else S.gmk = gf.dataset.igmk || null; return renderInd(); }
+  const b = e.target.closest("[data-iview],[data-imk],[data-isub],[data-iopen],[data-ifav],[data-inet],[data-ifocus]"); if (!b) return;
   const d = b.dataset;
   if (d.iview) S.view = d.iview; else if (d.imk) S.mk = d.imk; else if (d.isub) S.sub = d.isub; else if (d.inet) { S.net = d.inet; S.focus = null; }
   else if (d.ifocus) S.focus = S.focus === d.ifocus ? null : d.ifocus;
