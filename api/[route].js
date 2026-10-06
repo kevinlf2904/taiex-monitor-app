@@ -8,6 +8,7 @@ const ROUTES = {
   "chart-read": () => import("./_lib/chart-read.js"),
   chat: () => import("./_lib/chat.js"),
   company: () => import("./_lib/company.js"),
+  daily: () => import("./_lib/daily.js"),
   flow: () => import("./_lib/flow.js"),
   futures: () => import("./_lib/futures.js"),
   hot: () => import("./_lib/hot.js"),
@@ -21,6 +22,7 @@ const ROUTES = {
   stockinfo: () => import("./_lib/stockinfo.js"),
   status: () => import("./_lib/status.js"),
   stocks: () => import("./_lib/stocks.js"),
+  warn: () => import("./_lib/warn.js"),
 };
 export const ROUTE_NAMES = Object.keys(ROUTES);
 // 問 AI（對話、讀圖）可能要幾十秒；其他服務幾秒內就回應
