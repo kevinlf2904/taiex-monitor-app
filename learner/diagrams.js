@@ -35,7 +35,7 @@ function figSvg(fig, { id = "f" + Math.random().toString(36).slice(2, 7), mini =
   if (!fig?.items) return "";
   const W = fig.w || 360, H = fig.h || 230, C = k => FIG_C[k] || FIG_C.gray, e = s => String(s ?? "").replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
   const T = (x, y, s, label, { c = "var(--ink)", a = "middle", b = false, o = 1 } = {}) => (label == null || label === "" ? "" : `<text x="${x}" y="${y}" font-size="${s}" fill="${c}" text-anchor="${a}" ${b ? 'font-weight="700"' : ""} opacity="${o}">${e(label)}</text>`);
-  const lab = (it, x, y) => T(x, y, it.s || 9, it.label, { c: "var(--muted)" });
+  const lab = (it, x, y) => T(x, y, it.ls || 8.5, it.label, { c: "var(--muted)" }); // 圖元下方的說明字（ls 可指定字級；不要用 s，icon 的 s 是圖示大小）
   const P = pts => pts.map(p => p.join(",")).join(" ");
   let defs = "", body = "";
   const mk = c => { const k = `${id}-a-${c}`; if (!defs.includes(k)) defs += `<marker id="${k}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="${C(c)}"/></marker>`; return k; };
