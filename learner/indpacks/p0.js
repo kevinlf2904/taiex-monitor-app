@@ -82,6 +82,7 @@ Object.assign(INDUSTRY_FIGS, {
       { t: "text", x: 200, y: 14, s: 9, label: "剖面圖（由上往下）", muted: true },
       { t: "path", d: "M60 28h230l8 10H52z", c: "gray", fill: 0.3 }, { t: "text", x: 175, y: 36, s: 8, label: "散熱上蓋", muted: true },
       { t: "chip", x: 130, y: 52, w: 90, h: 36, label: "GPU（邏輯晶片）", c: "purple" },
+      { t: "badge", x: 222, y: 50, n: 6, c: "purple" },
       { t: "stack", x: 66, y: 50, w: 46, h: 40, n: 8, c: "blue" }, { t: "stack", x: 238, y: 50, w: 46, h: 40, n: 8, c: "blue" },
       { t: "badge", x: 64, y: 46, n: 3, c: "blue" },
       { t: "path", d: "M136 92v6M150 92v6M164 92v6M178 92v6M192 92v6M206 92v6M72 92v6M84 92v6M96 92v6M108 92v6M244 92v6M256 92v6M268 92v6M280 92v6", c: "yellow", w: 2 },
