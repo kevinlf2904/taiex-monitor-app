@@ -1,0 +1,53 @@
+/* 產業原理圖解資料（由 learner/indpacks/*.js 合併）：INDUSTRY_FIGS 補既有題材、INDUSTRY_PACK 新增題材；繪圖在 diagrams.js */
+/* 範例：液冷散熱、AI 先進封裝 */
+Object.assign(INDUSTRY_FIGS, {
+  "tw-liquid": {
+    fig: { w: 360, h: 230, alt: "液冷散熱：冷板貼在 GPU 上，冷卻液經分配器 CDU 送到冷卻塔", items: [
+      { t: "group", x: 8, y: 14, w: 196, h: 172, label: "AI 機櫃內", c: "blue" },
+      { t: "chip", x: 24, y: 70, w: 46, h: 34, label: "GPU", c: "purple" },
+      { t: "box", x: 22, y: 56, w: 50, h: 10, c: "cyan", fill: true },
+      { t: "text", x: 47, y: 50, s: 8, label: "水冷板", muted: true },
+      { t: "box", x: 112, y: 64, w: 70, h: 44, label: "CDU", sub: "分配冷卻液", c: "cyan" },
+      { t: "arrow", pts: [[72, 60], [96, 60], [96, 74], [112, 74]], c: "red", label: "熱水", lx: 92, ly: 54 },
+      { t: "arrow", pts: [[112, 98], [96, 98], [96, 112], [72, 112], [60, 106]], c: "blue", label: "冷水", lx: 88, ly: 124 },
+      { t: "rack", x: 30, y: 128, w: 60, h: 48, n: 4, c: "gray" },
+      { t: "text", x: 150, y: 150, s: 8, label: "快接頭、管路、分歧管", muted: true },
+      { t: "arrow", pts: [[182, 78], [250, 78]], c: "red" },
+      { t: "box", x: 252, y: 58, w: 52, h: 40, label: "冰水主機", c: "cyan" },
+      { t: "arrow", pts: [[304, 70], [322, 70], [322, 52]], c: "red" },
+      { t: "cyl", x: 306, y: 18, w: 34, h: 32, label: "冷卻塔", c: "cyan" },
+      { t: "arrow", pts: [[278, 98], [278, 126], [182, 126], [182, 108]], c: "blue", dash: true },
+      { t: "legend", x: 16, y: 214, items: [["red", "帶走熱的水"], ["blue", "降溫後回來的水"]] },
+    ] },
+    how: [
+      ["在做什麼", "GPU 一顆功耗超過 1000 瓦，風扇吹不動，改成用液體直接把熱帶走。"],
+      ["怎麼運作", "金屬水冷板貼在晶片上，冷卻液流過吸熱；機櫃裡的冷卻液分配器（CDU）把熱水送出去、冷水送回來；機房外的冰水主機與冷卻塔再把熱排到大氣。"],
+      ["關鍵零件", "水冷板、快接頭（漏水就停機）、分歧管、CDU、泵浦與熱交換器；越高功率的機櫃，液冷佔散熱成本越高。"],
+      ["景氣看什麼", "GPU 平台換代（功耗越高越需要液冷）、雲端業者資本支出、液冷機櫃出貨比例。"],
+      ["台灣角色", "台廠做水冷板、CDU、快接頭與整櫃整合，直接供貨給伺服器代工廠。"],
+    ] },
+  "tw-cowos": {
+    fig: { w: 360, h: 230, alt: "CoWoS：GPU 與 HBM 並排放在中介層，中介層再放到 ABF 載板", items: [
+      { t: "box", x: 70, y: 22, w: 150, h: 18, label: "散熱上蓋", c: "gray", fill: true },
+      { t: "chip", x: 110, y: 56, w: 70, h: 34, label: "GPU", c: "purple" },
+      { t: "stack", x: 64, y: 54, w: 34, h: 38, n: 6, c: "blue" },
+      { t: "stack", x: 192, y: 54, w: 34, h: 38, n: 6, c: "blue" },
+      { t: "text", x: 81, y: 50, s: 8, label: "HBM", muted: true },
+      { t: "text", x: 209, y: 50, s: 8, label: "HBM", muted: true },
+      { t: "box", x: 54, y: 100, w: 182, h: 20, label: "中介層（CoWoS）", c: "pink", fill: true },
+      { t: "box", x: 34, y: 128, w: 222, h: 22, label: "ABF 封裝載板", c: "yellow", fill: true },
+      { t: "line", pts: [[40, 158], [250, 158]], c: "green", w: 3 },
+      { t: "text", x: 145, y: 172, s: 8, label: "焊到伺服器主機板", muted: true },
+      { t: "arrow", pts: [[270, 110], [244, 110]], c: "pink" }, { t: "text", x: 300, y: 106, s: 8.5, label: "上萬條細線", b: true },
+      { t: "text", x: 300, y: 118, s: 8, label: "讓 GPU 和 HBM", muted: true }, { t: "text", x: 300, y: 129, s: 8, label: "近距離高速溝通", muted: true },
+      { t: "arrow", pts: [[270, 72], [230, 72]], c: "blue" }, { t: "text", x: 300, y: 70, s: 8.5, label: "記憶體堆疊", b: true }, { t: "text", x: 300, y: 82, s: 8, label: "8～12 層 DRAM", muted: true },
+      { t: "text", x: 180, y: 206, s: 9, label: "先進封裝產能決定 AI 晶片能出貨多少", b: true },
+    ] },
+    how: [
+      ["在做什麼", "把 GPU 晶片和好幾顆 HBM 記憶體並排放在同一片「中介層」上，變成一顆大封裝，讓它們之間用超短的距離高速傳資料。"],
+      ["怎麼運作", "晶圓廠先做出 GPU 與中介層（矽片上刻出上萬條細線路），把晶片黏上中介層（CoW），再把整片接到 ABF 載板（oS），最後蓋上散熱蓋、測試。"],
+      ["關鍵名詞", "中介層：晶片之間的「轉接高速公路」。HBM：把 DRAM 疊起來的高頻寬記憶體。ABF 載板：連接晶片和主機板的多層板。"],
+      ["景氣看什麼", "CoWoS 產能（每月幾萬片）、AI 晶片訂單、設備交期；產能不夠時，下游 AI 伺服器出貨會被卡住。"],
+      ["台灣角色", "台積電是主要產能，封測廠承接部分製程，台灣設備商供應濕製程、點膠、檢測與黏晶設備。"],
+    ] },
+});
