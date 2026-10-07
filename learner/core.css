@@ -1,43 +1,44 @@
 /* K線學堂共用樣式：主題色（淺色／深色的分層灰階）、基本樣式、K 線圖。learner/index.html 與 learner/watch.html 共用。 */
 :root {
-  /* 分層灰階：底色 → 第一層框（面板）→ 第二層（面板裡的卡片、按鈕、數據格）→ 第三層（輸入框、選中項） */
-  /* 參考富途牛牛：淺色是白底卡片＋淡灰底，主色橘色；深色是深藍黑底 */
-  --bg: #f2f3f6;
-  --surface: #ffffff;
-  --surface-2: #f5f6f8;
+  /* 黑白灰分層：底色 → 面板 → 面板裡的卡片／按鈕 → 輸入框、選中項；主色是深灰（淺色）／淺灰（深色），只有漲跌用紅綠 */
+  --bg: #e9e9e9;
+  --surface: #fafafa;
+  --surface-2: #f0f0f0;
   --surface-3: #ffffff;
-  --ink: #14181f;
-  --muted: #6b7380;
-  --line: #e5e7ec;
-  --accent: #ff6a00;
-  --accent-soft: #fff1e6;
+  --ink: #111111;
+  --muted: #666666;
+  --line: #d4d4d4;
+  --accent: #1c1c1c;
+  --accent-soft: rgba(0, 0, 0, 0.06);
   --up: #e8343e;      /* 台股慣例：紅漲 */
   --down: #0e9f63;    /* 綠跌 */
   --s1: #d98a0b;      /* 短均線 */
   --s2: #7a4fd0;      /* 中均線 */
   --s3: #0d8aa0;      /* 長均線 */
-  --ma10: #2f6fe0;    /* 10 日均線（主色改成橘色後另外給藍色，才不會和 5 日線混在一起） */
+  --ma10: #2f6fe0;    /* 10 日均線用藍色（主色是灰，不拿來畫均線） */
   --vwap: #db2777;    /* VWAP */
-  --band: rgba(255, 106, 0, 0.07);
+  --band: rgba(0, 0, 0, 0.05);
   --shade: rgba(24, 32, 43, 0.05);
-  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
-  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  /* 宋體：Windows 有 SimSun／新細明體，Mac 有宋體-繁，iPad、手機沒有內建時用網路字型 Noto Serif TC，看起來一樣是宋體 */
+  --font-song: "SimSun", "宋体", "Songti TC", "STSong", "PMingLiU", "新細明體", "Noto Serif TC", serif;
+  --font-display: var(--font-song);
+  --font-body: var(--font-song);
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --font-num: "Inter", "SF Pro Display", "Roboto", "Noto Sans TC", system-ui, sans-serif; /* 行情數字：等寬數字（tabular-nums）的無襯線字，像券商 App */
-  --radius: 10px;
+  --font-num: var(--font-song); /* 行情數字也用宋體，搭配 tabular-nums 讓數字對齊 */
+  --radius: 4px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0b0e14; --surface: #141821; --surface-2: #1b202b; --surface-3: #242a36; --ink: #eef1f6; --muted: #8b93a3;
-    --line: #252b36; --accent: #ff7a1a; --accent-soft: rgba(255, 122, 26, 0.14); --up: #f2444d; --down: #19b97a;
-    --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --ma10: #5b9bff; --vwap: #f472b6; --band: rgba(255, 122, 26, 0.08); --shade: rgba(229, 234, 241, 0.05);
+    --bg: #090909; --surface: #151515; --surface-2: #1e1e1e; --surface-3: #282828; --ink: #f0f0f0; --muted: #969696;
+    --line: #2c2c2c; --accent: #e4e4e4; --accent-soft: rgba(255, 255, 255, 0.08); --up: #f2444d; --down: #19b97a;
+    --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --ma10: #5b9bff; --vwap: #f472b6; --band: rgba(255, 255, 255, 0.06); --shade: rgba(229, 234, 241, 0.05);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0b0e14; --surface: #141821; --surface-2: #1b202b; --surface-3: #242a36; --ink: #eef1f6; --muted: #8b93a3;
-  --line: #252b36; --accent: #ff7a1a; --accent-soft: rgba(255, 122, 26, 0.14); --up: #f2444d; --down: #19b97a;
-  --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --ma10: #5b9bff; --vwap: #f472b6; --band: rgba(255, 122, 26, 0.08); --shade: rgba(229, 234, 241, 0.05);
+  --bg: #090909; --surface: #151515; --surface-2: #1e1e1e; --surface-3: #282828; --ink: #f0f0f0; --muted: #969696;
+  --line: #2c2c2c; --accent: #e4e4e4; --accent-soft: rgba(255, 255, 255, 0.08); --up: #f2444d; --down: #19b97a;
+  --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --ma10: #5b9bff; --vwap: #f472b6; --band: rgba(255, 255, 255, 0.06); --shade: rgba(229, 234, 241, 0.05);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -49,7 +50,7 @@ body {
 [hidden] { display: none !important; }
 button, select, input { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .up { color: var(--up); } .down { color: var(--down); } .muted { color: var(--muted); }
 
 /* ---------- chart ---------- */
@@ -59,8 +60,8 @@ button, select, input { font: inherit; color: inherit; }
   padding: 8px 12px; border-bottom: 1px solid var(--line); line-height: 1.6;
 }
 .legend b { font-weight: 600; color: var(--muted); margin-right: 3px; font-family: var(--font-body); }
-.legend span { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.zoombar { position: absolute; top: 6px; right: 8px; display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); z-index: 1; }
+.legend span { font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.zoombar { position: absolute; top: 6px; right: 8px; display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: var(--surface-2); z-index: 1; }
 .zoombar button { border: 0; background: transparent; padding: 3px 10px; font-size: 13px; cursor: pointer; color: var(--muted); min-width: 30px; }
 .zoombar button + button { border-left: 1px solid var(--line); }
 .zoombar button:hover { color: var(--ink); background: var(--surface-3); }
@@ -78,8 +79,8 @@ button, select, input { font: inherit; color: inherit; }
 .scalepop .prow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .scalepop .prow > span:first-child { color: var(--muted); min-width: 34px; padding-left: 2px; }
 .scalepop .prow strong { margin-right: auto; }
-.scalepop .pval { font-family: var(--font-mono); color: var(--accent); min-width: 36px; text-align: right; }
-.scalepop .pseg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.scalepop .pval { font-family: var(--font-num); color: var(--accent); min-width: 36px; text-align: right; }
+.scalepop .pseg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
 .scalepop .pseg button { border: 0; background: var(--surface-2); color: var(--ink); padding: 5px 11px; cursor: pointer; font-size: 13px; font-variant-numeric: tabular-nums; }
 .scalepop .pseg button + button { border-left: 1px solid var(--line); }
 .scalepop .pseg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 700; }
@@ -98,6 +99,14 @@ button, select, input { font: inherit; color: inherit; }
 .sigbar { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 2px 8px 6px; }
 .sigbar .sg { display: inline-flex; align-items: center; gap: 4px; }
 .sigbar em { font: 700 10.5px var(--font-body); font-style: normal; color: var(--muted); letter-spacing: .02em; }
-.sigbar button { font: 600 11px var(--font-body); padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; line-height: 1.5; opacity: .9; }
+.sigbar button { font: 600 11px var(--font-body); padding: 1px 7px; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; line-height: 1.5; opacity: .9; }
 .sigbar button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 .sigbar button:disabled { opacity: .4; cursor: default; }
+
+/* 黑白灰分層漸層（index、watch 共用）：面板上亮下暗、按鈕像淺浮雕、選中的是深色實心 */
+:root { --grad-panel: linear-gradient(180deg, color-mix(in srgb, var(--surface-3) 65%, var(--surface)) 0%, var(--surface) 42%, color-mix(in srgb, var(--surface) 82%, var(--bg)) 100%);
+  --grad-btn: linear-gradient(180deg, var(--surface-3), var(--surface-2)); --grad-strong: linear-gradient(180deg, color-mix(in srgb, var(--ink) 82%, var(--bg)), var(--ink)); }
+body { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.zoombar { background: var(--grad-btn); }
+.scalepop .pseg button[aria-pressed="true"] { background: var(--grad-strong); color: var(--surface); }
+.sigbar button[aria-pressed="true"] { color: var(--surface); background: var(--grad-strong); border-color: var(--ink); }
