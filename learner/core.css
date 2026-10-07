@@ -29,15 +29,15 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #090909; --surface: #151515; --surface-2: #1e1e1e; --surface-3: #282828; --ink: #f0f0f0; --muted: #969696;
-    --line: #2c2c2c; --accent: #e4e4e4; --accent-soft: rgba(255, 255, 255, 0.08); --up: #f2444d; --down: #19b97a;
+    --bg: #000000; --surface: #0c0c0c; --surface-2: #161616; --surface-3: #212121; --ink: #f2f2f2; --muted: #8e8e8e;
+    --line: #262626; --accent: #e4e4e4; --accent-soft: rgba(255, 255, 255, 0.08); --up: #f2444d; --down: #19b97a;
     --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --ma10: #5b9bff; --vwap: #f472b6; --band: rgba(255, 255, 255, 0.06); --shade: rgba(229, 234, 241, 0.05);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #090909; --surface: #151515; --surface-2: #1e1e1e; --surface-3: #282828; --ink: #f0f0f0; --muted: #969696;
-  --line: #2c2c2c; --accent: #e4e4e4; --accent-soft: rgba(255, 255, 255, 0.08); --up: #f2444d; --down: #19b97a;
+  --bg: #000000; --surface: #0c0c0c; --surface-2: #161616; --surface-3: #212121; --ink: #f2f2f2; --muted: #8e8e8e;
+  --line: #262626; --accent: #e4e4e4; --accent-soft: rgba(255, 255, 255, 0.08); --up: #f2444d; --down: #19b97a;
   --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --ma10: #5b9bff; --vwap: #f472b6; --band: rgba(255, 255, 255, 0.06); --shade: rgba(229, 234, 241, 0.05);
   color-scheme: dark;
 }
@@ -103,10 +103,14 @@ button, select, input { font: inherit; color: inherit; }
 .sigbar button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 .sigbar button:disabled { opacity: .4; cursor: default; }
 
-/* 黑白灰分層漸層（index、watch 共用）：面板上亮下暗、按鈕像淺浮雕、選中的是深色實心 */
+/* 黑白灰分層漸層（index、watch 共用）：面板上亮下暗、按鈕像淺浮雕、選中的是深色實心。
+   深色主題：底是純黑（深黑），面板是黑，往上漸層到灰（#1c1c1c → #0c0c0c），按鈕 #2a2a2a → #151515 */
 :root { --grad-panel: linear-gradient(180deg, color-mix(in srgb, var(--surface-3) 65%, var(--surface)) 0%, var(--surface) 42%, color-mix(in srgb, var(--surface) 82%, var(--bg)) 100%);
   --grad-btn: linear-gradient(180deg, var(--surface-3), var(--surface-2)); --grad-strong: linear-gradient(180deg, color-mix(in srgb, var(--ink) 82%, var(--bg)), var(--ink)); }
 body { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .zoombar { background: var(--grad-btn); }
 .scalepop .pseg button[aria-pressed="true"] { background: var(--grad-strong); color: var(--surface); }
 .sigbar button[aria-pressed="true"] { color: var(--surface); background: var(--grad-strong); border-color: var(--ink); }
+
+:root[data-theme="dark"] { --grad-panel: linear-gradient(180deg, #1c1c1c 0%, #101010 38%, #0a0a0a 100%); --grad-btn: linear-gradient(180deg, #2a2a2a, #151515); --grad-strong: linear-gradient(180deg, #f5f5f5, #bdbdbd); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --grad-panel: linear-gradient(180deg, #1c1c1c 0%, #101010 38%, #0a0a0a 100%); --grad-btn: linear-gradient(180deg, #2a2a2a, #151515); --grad-strong: linear-gradient(180deg, #f5f5f5, #bdbdbd); } }

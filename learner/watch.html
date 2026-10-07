@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>K線看盤</title>
 <meta name="description" content="自選股（多群組）、台股與美股熱門、排行、當日分時、K 線（分／日／週／月都能往前拉）、技術分析、籌碼、基本面、五檔、持股損益與價格提醒。">
-<meta name="theme-color" content="#0b0e14">
+<meta name="theme-color" content="#000000">
 <link rel="manifest" href="watch.webmanifest">
 <link rel="apple-touch-icon" href="watch-icon-180.png">
 <link rel="icon" href="watch-icon-192.png">
@@ -456,7 +456,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .cobar { margin: 0 0 8px; padding: 8px 10px; background: var(--surface-2); border-radius: 4px; font-size: 13px; }
 
 /* ===================== 介面設計：宋體、小圓角（2～4px）、黑白灰分層漸層；只有漲跌用紅綠 ===================== */
-body { font-family: var(--font-body); background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 60%, var(--surface)) 0, var(--bg) 360px) fixed var(--bg); }
+body { font-family: var(--font-body); background: linear-gradient(180deg, #141414 0, #050505 280px, var(--bg) 520px) fixed var(--bg); }
+:root[data-theme="light"] body { background: linear-gradient(180deg, #fafafa 0, var(--bg) 360px) fixed var(--bg); }
 .panel { border-color: var(--line); background: var(--grad-panel); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 7%, transparent), 0 2px 8px rgba(0, 0, 0, .06); }
 .w-top { background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--surface) 86%, transparent)); border-bottom: 1px solid var(--line); }
 .brand { font-weight: 900; letter-spacing: .1em; }
@@ -2687,7 +2688,7 @@ $("#sheet").addEventListener("click", e => {
   else if (m.startsWith("open:")) { closeSheet(); select(m.slice(5)); }
   else if (m.startsWith("del:")) { delete W.alerts[m.slice(4)]; store.set("watch:alerts", W.alerts); $("#sheetExtra").innerHTML = alertsHtml(); renderList(); renderDetailHead(); }
 });
-function applyTheme(t) { document.documentElement.dataset.theme = t; $('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#0b0e14" : "#f2f3f6"); Chart.all.forEach(c => c.draw()); drawTs(); }
+function applyTheme(t) { document.documentElement.dataset.theme = t; $('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#000000" : "#e9e9e9"); Chart.all.forEach(c => c.draw()); drawTs(); }
 
 /* ---------- 嵌在 K線學堂（?embed=1）：回報高度、接收主題與「看這一檔」、把「判讀」交給外層 ---------- */
 function post(msg) { if (EMBED && parent !== window) parent.postMessage(msg, "*"); }
