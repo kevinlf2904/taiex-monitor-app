@@ -198,6 +198,9 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .workspace { margin-top: 18px; }
 .workspace.first { margin: 0 0 18px; }
 .ws-head { display: flex; justify-content: space-between; align-items: end; gap: 10px; flex-wrap: wrap; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+.per-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; width: 100%; }
+.per-bar[hidden] { display: none; }
+.per-bar .seg button { padding: 4px 10px; }
 .sim-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; background: var(--surface-2); }
 .switch { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; cursor: pointer; }
 .ta-tbl td:nth-child(2) { white-space: normal; min-width: 12em; } .ta-use { font-weight: 600; white-space: nowrap; }
@@ -713,6 +716,8 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <div class="nums-strip" id="numsStrip" hidden></div>
       <div class="ibar" id="shotIbar"></div>
       <div class="sim-bar">
+        <div class="per-bar" id="perBar" hidden><div class="seg" id="kPer" role="group" aria-label="K 線週期"><button data-per="m">分K</button><button data-per="D">日K</button><button data-per="W">週K</button><button data-per="M">月K</button></div>
+          <select id="kMin" aria-label="分 K 週期"><option value="1">1 分</option><option value="5">5 分</option><option value="15">15 分</option><option value="30">30 分</option><option value="60">60 分</option></select><span class="note" id="perNote"></span></div>
         <label class="switch"><input type="checkbox" id="simOn" checked><span>未來走勢模擬</span></label>
         <label>模擬 <select id="simDays" aria-label="模擬天數"><option value="10">10 根</option><option value="20" selected>20 根</option><option value="40">40 根</option><option value="60">60 根</option></select></label>
         <label>情境 <select id="simMode" aria-label="模擬情境"><option value="trend">延續近期趨勢</option><option value="flat">沒有方向（純隨機）</option><option value="tech">依技術指標偏向</option><option value="smc">依聰明錢結構</option></select></label>
@@ -3560,16 +3565,73 @@ async function readCsvFiles(files) {
   return data.length ? { ok: true, code: meta.code || "CSV", name: meta.name || files[0].name.replace(/\.csv$/i, ""), market: "", source: "匯入的 CSV", unit: "張", data } : null;
 }
 function realName(R) { return R.code === "TAIEX" ? "加權指數" : `${R.name || ""} ${R.code}`.trim(); }
+/* ---------- K 線週期：分K（今天＋前幾天的分 K）、日K、週K、月K ----------
+   週 K、月 K 由日 K 合成，會自動多載入幾年的日 K（週 K 2 年、月 K 約 4 年）；分 K 問 /api/intraday（盤中每 30 秒更新今天的部分）。 */
+REAL.per = ["m", "D", "W", "M"].includes(store.get("kPer", "D")) ? store.get("kPer", "D") : "D"; REAL.minTf = [1, 5, 15, 30, 60].includes(+store.get("kMin", 5)) ? +store.get("kMin", 5) : 5;
+REAL.long = new Map(); REAL.mins = new Map(); REAL.perBusy = false;
+const PER_NAME = { m: "分 K", D: "日 K", W: "週 K", M: "月 K" };
+const perName = () => (REAL.per === "m" ? `${REAL.minTf} 分 K` : PER_NAME[REAL.per]);
+const perOn = () => shot.src === "real" && REAL.per !== "D" && !!REAL.cur && (REAL.per !== "m" || !!liveCode());
+function weekKey(d) { const t = Date.parse(d + "T00:00:00Z"), w = new Date(t).getUTCDay(); return new Date(t - ((w + 6) % 7) * 864e5).toISOString().slice(0, 10); }
+function aggPer(D, per) {
+  const out = []; let k0 = null;
+  for (const x of D) { const k = per === "W" ? weekKey(x.d) : x.d.slice(0, 7), L = out[out.length - 1];
+    if (L && k === k0) { L.h = Math.max(L.h, x.h); L.l = Math.min(L.l, x.l); L.c = x.c; L.v += x.v || 0; L.d = x.d; } else { out.push({ d: x.d, o: x.o, h: x.h, l: x.l, c: x.c, v: x.v || 0 }); k0 = k; } }
+  return out; // 日期標示該週（月）最後一個交易日
+}
+function perData(R) {
+  const per = shot.src === "real" ? REAL.per : "D", note = $("#perNote"); note.textContent = "";
+  if (per === "D") return R.data;
+  if (per === "m") {
+    const code = liveCode(); if (!code) { note.textContent = "匯入的 CSV 沒有分 K，先顯示日 K。"; return R.data; }
+    const m = REAL.mins.get(`${code}|${REAL.minTf}`);
+    if (!m || Date.now() - m.at > (mktSession() === "closed" ? 600000 : 30000)) perLoad();
+    if (!m || m.bars.length < 20) { note.textContent = m ? `${perName()} 只有 ${m.bars.length} 根，太少了，先顯示日 K。` : `正在載入 ${perName()}…`; return R.data; }
+    note.textContent = `${m.source}・${m.bars[0].d.slice(5, 10).replace("-", "/")} ～ 今天`; return m.bars;
+  }
+  const L = R.code && REAL.long.get(`${R.code}|${per}`), first = R.data[0]?.d, all = L ? [...L.filter(x => x.d < first), ...R.data] : R.data;
+  if (!L && R.code) perLoad();
+  const out = aggPer(all, per);
+  if (!L && R.code) note.textContent = "正在載入更長的日 K…";
+  else if (out.length < 20) note.textContent = `${PER_NAME[per]} 只有 ${out.length} 根（${R.code ? "資料來源只到這裡" : "匯入的 CSV 期間太短"}）。`;
+  return out.length >= 20 ? out : R.data.length && out.length >= 8 ? out : R.data;
+}
+async function perLoad() {
+  const R = REAL.cur; if (REAL.perBusy || !R || LIVE.off) return; REAL.perBusy = true;
+  const per = REAL.per, tf = REAL.minTf, code = liveCode(), get = async u => { const r = await fetch(u), j = await r.json().catch(() => null); if (!j || !j.ok) throw new Error(j?.error || `HTTP ${r.status}`); return j; };
+  try {
+    if (per === "m" && code) {
+      const key = `${code}|${tf}`, old = REAL.mins.get(key), t = await get(`/api/intraday?code=${code}&tf=${tf}`).catch(() => null);
+      const day = t?.bars?.[t.bars.length - 1]?.d || t?.date || new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+      const h = old?.hist || (await get(`/api/intraday?code=${code}&tf=${tf}&before=${day}`).catch(() => ({ bars: [] }))).bars;
+      const bars = [...h, ...(t?.bars || [])].map(b => ({ d: `${b.d || day} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v || 0 }));
+      REAL.mins.set(key, { at: Date.now(), hist: h, bars, source: t?.source || "Yahoo Finance" });
+    } else if (per === "W" || per === "M") {
+      const c0 = R.code, a = per === "M" && REAL.long.get(`${c0}|W`) ? { data: REAL.long.get(`${c0}|W`) } : await fetchReal(c0, 24).catch(() => null); let rows = a?.data || [];
+      if (per === "M" && rows.length) { const b = await get(`/api/kline?code=${encodeURIComponent(c0)}&months=24&before=${rows[0].d}`).catch(() => null); rows = [...(b?.data || []), ...rows]; }
+      REAL.long.set(`${c0}|${per}`, rows);
+    }
+  } finally { REAL.perBusy = false; }
+  if (REAL.cur === R && REAL.per === per && shot.src === "real") { Chart.keepView = per === "m" && REAL.mins.get(`${code}|${tf}`)?.shown; try { realRun(true); } finally { Chart.keepView = false; } if (per === "m" && code) REAL.mins.get(`${code}|${tf}`).shown = true; }
+}
+function perUi() {
+  $("#perBar").hidden = shot.src !== "real";
+  document.querySelectorAll("#kPer [data-per]").forEach(b => b.setAttribute("aria-pressed", b.dataset.per === REAL.per));
+  $("#kMin").hidden = REAL.per !== "m"; $("#kMin").value = REAL.minTf;
+  document.querySelector('#kPer [data-per="m"]').disabled = !!REAL.cur && !liveCode() && shot.src === "real";
+}
+$("#kPer").addEventListener("click", e => { const b = e.target.closest("[data-per]"); if (!b || b.disabled) return; REAL.per = b.dataset.per; store.set("kPer", REAL.per); perUi(); if (REAL.cur) realRun(true); });
+$("#kMin").addEventListener("change", e => { REAL.minTf = +e.target.value; store.set("kMin", REAL.minTf); if (REAL.cur) realRun(true); });
 function realRun(live = false) {
   const R = REAL.cur; if (!R) return;
   shot.res = null; shot.panes = []; shot.readings = []; shot.rowRead = null; shot.numsExtra = [];
-  shot.D = R.data.map(x => ({ d: x.d, o: x.o, h: x.h, l: x.l, c: x.c, v: x.v || 0 }));
+  shot.D = perData(R).map(x => ({ d: x.d, o: x.o, h: x.h, l: x.l, c: x.c, v: x.v || 0 }));
   const last = shot.D[shot.D.length - 1];
   shot.hasVol = shot.D.some(d => d.v > 0); shot.pmap = { cal: true }; shot.rowIdx = shot.D.length - 1;
   shot.nums = { name: realName(R), hi: null, lo: null, date: last.d, off: 1, o: last.o, h: last.h, l: last.l, c: last.c, hasRow: false };
   shot.I = indicators(shot.D);
   $("#shotGrid").hidden = false; $("#shotRebuild").hidden = false;
-  shotRefresh(true);
+  perUi(); shotRefresh(true);
   if (!live) { loadStockInfo(R); liveKick(); INTRA.data = null; intraLoad(true); }
 }
 async function loadRealCode(code, months) {
@@ -3776,7 +3838,7 @@ function setSrc(src) {
   $("#step2").lastChild.textContent = real ? "K 線與未來模擬" : "確認辨識、看判讀"; $("#step2").dataset.step = real ? "shotRebuild" : "shotGrid";
   $("#step3").lastChild.textContent = real ? "看判讀與聰明錢" : "重建 K 線、模擬未來"; $("#step3").dataset.step = real ? "shotGrid" : "shotRebuild";
   $("#wsStep").textContent = real ? "步驟 2" : "步驟 3";
-  $("#calTip").hidden = true;
+  $("#calTip").hidden = true; perUi();
   $("#wsTitle").textContent = real ? "K 線與未來走勢模擬" : "重建的 K 線與未來走勢模擬";
   // 真實數據沒有「辨識」這一步：圖表放到判讀前面
   const ws = $("#shotRebuild"), grid = $("#shotGrid");
@@ -3871,7 +3933,7 @@ function shotDrawChart() {
   if (!shot.D) return;
   const B = shotBar, D = shot.D, n = D.length;
   const paneSel = shot.panes.map((p, k) => (B.has("pane:" + k) && (p.cfg.type || p.type) !== "vol" ? k : -1)).filter(k => k >= 0);
-  const chipSubs = shot.src === "real" && INFO.cur ? [...(B.has("inst") && INFO.cur.inst.length ? [{ custom: instSub(alignByDate(D, INFO.cur.inst)) }] : []), ...(B.has("margin") && INFO.cur.margin.length ? [{ custom: marginSub(alignByDate(D, INFO.cur.margin)) }] : [])] : [];
+  const chipSubs = shot.src === "real" && INFO.cur && !perOn() ? [...(B.has("inst") && INFO.cur.inst.length ? [{ custom: instSub(alignByDate(D, INFO.cur.inst)) }] : []), ...(B.has("margin") && INFO.cur.margin.length ? [{ custom: marginSub(alignByDate(D, INFO.cur.margin)) }] : [])] : [];
   const subs = [...paneSel.map(k => ({ custom: paneCustom(shot.panes[k]) })), ...chipSubs, ...subsFrom(B, ["kd", "rsi", "macd", "wr"])];
   // 支撐壓力、斐波那契的水平線由 shotHlines 畫（會和截圖讀到的價位合併）
   const ex = overlayBuild(D, shot.I, id => B.has(id), { noLines: true }), markers = [...ex.markers, ...paneSel.flatMap(k => shot.readings[k].markers)];
@@ -3889,7 +3951,7 @@ function shotDrawChart() {
     renderSimStats(sim, mode, days, bias);
   }
   shotChart.set(D2, { I: I2, ...mainOpts(B), subs, noVol: !(shot.hasVol && B.has("vol")), volLabel: shot.src === "real" ? `量（${REAL.cur?.unit || "張"}）` : "量（相對）", future,
-    fmtD: d => (d.startsWith("模擬") ? "+" + d.slice(3) : /^\d{4}-/.test(d) ? d.slice(5).replace("-", "/") : d.replace(/\D/g, "")),
+    fmtD: d => (d.startsWith("模擬") ? "+" + d.slice(3) : /^\d{4}-\d\d-\d\d \d/.test(d) ? d.slice(11) : perOn() && REAL.per === "M" ? d.slice(0, 7).replace("-", "/") : /^\d{4}-/.test(d) ? d.slice(5).replace("-", "/") : d.replace(/\D/g, "")),
     markers, zones: ex.zones, shapes: ex.shapes, hlines: shotHlines(D) });
 }
 // 支撐壓力之外，再畫上圖上標示的最高、最低與資料列收盤（實際數字）
@@ -3927,7 +3989,7 @@ function renderSimStats(sim, mode, days, bias) {
   else if (mode === "tech") { const it = sim.why.items || [], b = it.filter(x => x.b > 0).map(x => x.k), r = it.filter(x => x.b < 0).map(x => x.k); driftWhy = `最後一根的指標：偏多 ${b.length} 項（${b.join("、") || "無"}）、偏空 ${r.length} 項（${r.join("、") || "無"}），換算偏向 ${bias.toFixed(2)}，每天加上 ${pct(sim.drift, 3)}（累計約 ${pct(dd, 1)}）。`; }
   else { const ev = sim.why.ev; driftWhy = ev ? `最近一次結構事件是 ${n0 - 1 - ev.i} 根前的${ev.dir > 0 ? "向上" : "向下"} ${ev.kind}，所以偏向 ${bias > 0 ? "+" : ""}${bias.toFixed(1)}，每天加上 ${pct(sim.drift, 3)}（累計約 ${pct(dd, 1)}）。` : "找不到結構事件，所以不加方向。"; }
   const why = `<details class="sim-why" open><summary><strong>這個模擬參考了什麼？為什麼長這樣？</strong></summary><ol>
-    <li><strong>資料來源</strong>：${shot.src === "real" ? `只用 ${esc(realName(REAL.cur))} 最近 ${f.n} 個交易日的真實日 K（${REAL.cur.source}），起點是最後一天的收盤 ${fmtX(c)}` : `只用這張截圖重建出來的最近 ${f.n} 根 K 棒${realLast ? "，起點是你填的圖上收盤 " + fmtX(c) : ""}`}。沒有用到新聞、財報、籌碼或大盤。</li>
+    <li><strong>資料來源</strong>：${shot.src === "real" ? `只用 ${esc(realName(REAL.cur))} 最近 ${f.n} 根真實${perOn() ? perName() : "日 K"}（${perOn() && REAL.per === "m" ? REAL.mins.get(`${liveCode()}|${REAL.minTf}`)?.source || "" : REAL.cur.source}），起點是最後一${perOn() && REAL.per === "m" ? "根" : "天"}的收盤 ${fmtX(c)}` : `只用這張截圖重建出來的最近 ${f.n} 根 K 棒${realLast ? "，起點是你填的圖上收盤 " + fmtX(c) : ""}`}。沒有用到新聞、財報、籌碼或大盤。</li>
     <li><strong>每天怎麼走</strong>：每條路徑的每一天，都從這 ${f.n} 根的真實日漲跌幅裡隨機抽一個（漲的日子佔 ${Math.round(f.upShare * 100)}%，最大單日 ${pct(f.maxUp, 1)}、最大跌幅 ${pct(f.maxDn, 1)}），所以大漲大跌出現的頻率和這檔股票過去一樣。重複 ${sim.paths} 次，得到 ${sim.paths} 條可能的路徑。</li>
     <li><strong>方向（${SIM_MODES[mode]}）</strong>：${driftWhy}整體${dirTxt}，這就是中位數${sim.stats.p50 >= c ? "高於" : "低於"}現價的原因。</li>
     <li><strong>範圍為什麼這麼寬</strong>：每日波動約 ${(sim.sd * 100).toFixed(1)}%，波動會隨時間累積（大約乘上天數的平方根），${days} 根後的一個標準差約 ±${(spread * 100).toFixed(1)}%。所以越往右，機率帶越寬。</li>
