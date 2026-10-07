@@ -326,6 +326,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .msum { font-size: 14px; line-height: 1.75; margin: 0 0 10px; } .mshare { width: 100%; } .mshares { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; } .mshares button { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); padding: 10px 0; font: 600 13px var(--font-body); cursor: pointer; }
 .qcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 12px; } .qcard { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--muted); cursor: pointer; padding: 8px 2px; display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: .65; font: inherit; }
 .qcard[aria-pressed="true"] { opacity: 1; border-color: var(--qc); } .qcard span { color: var(--qc); font-weight: 700; font-size: 13.5px; } .qcard b { font: 700 24px var(--font-mono); color: var(--qc); } .qcard small { font-size: 11px; }
+.livetag { display: inline-flex; align-items: center; gap: 5px; color: var(--up, #e8603c); font-weight: 700; } .livetag i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: livepulse 1.6s ease-in-out infinite; }
+@keyframes livepulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } } @media (prefers-reduced-motion: reduce) { .livetag i { animation: none; } }
 .bwrap { margin: 6px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); } .bubble { width: 100%; height: auto; display: block; } .bax { stroke: var(--line); stroke-width: 1; } .bq { font: 600 11px var(--font-body); fill: var(--muted); }
 .bnode { cursor: pointer; } .bnode circle { transition: fill .6s, fill-opacity .2s; } .bnode.on circle { stroke-width: 3; fill-opacity: .8; } .bnode:focus circle, .bnode:hover circle { fill-opacity: .75; } .bax-t { font: 10px var(--font-body); fill: var(--muted); } .blab { pointer-events: none; } .blab text { paint-order: stroke; stroke: var(--surface-2); stroke-width: 3px; stroke-linejoin: round; }
 .bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bn { font: 700 10.5px var(--font-body); fill: var(--ink); text-anchor: middle; pointer-events: none; } .bv { font: 10px var(--font-mono); fill: var(--ink); opacity: .8; text-anchor: middle; pointer-events: none; }
@@ -569,7 +571,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.07-31</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.07-32</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -707,9 +709,28 @@ async function tick() {
   if (W.lt === "us" && (!W.hot["us:" + W.usType] || Date.now() - W.hot["us:" + W.usType].at > 60000)) jobs.push(loadHot("us"));
   const res = await Promise.allSettled(jobs), bad = res.find(r => r.status === "rejected");
   W.err = bad ? bad.reason?.message || "更新失敗" : null; if (!bad) W.lastOk = Date.now();
-  W.busy = false; checkAlerts(); renderAll(); loadIntra(); if (W.dtab === "trend") loadFlow();
+  W.busy = false; checkAlerts(); W.ticking = true; renderAll(); W.ticking = false; loadIntra(); if (W.dtab === "trend") loadFlow(); liveRefresh();
 }
-function schedule() { clearTimeout(W.timer); if (W.off) return; W.timer = setTimeout(async () => { await tick(); schedule(); }, anyOpen() ? 10000 : 300000); }
+// 即時更新：盤中依目前分頁自動重抓（大盤、排行 30 秒，選股 60 秒，產業報價 15 秒）；收盤後資金分頁每 10 分鐘看看今天的法人資料出來了沒
+function liveRefresh() {
+  if (W.off) return; const open = W.session === "open" || W.session === "pre", age = o => (o?.at ? Date.now() - o.at : Infinity), t = new Date(Date.now() + 8 * 3600e3), hm = t.getUTCHours() * 60 + t.getUTCMinutes();
+  if (W.lt === "mkt" && open && age(W.mkt) > 30000 && !W.mktLoading) loadMktLive();
+  else if (W.lt === "tw" && open && age(W.hot.tw) > 30000) loadHot("tw");
+  else if (W.lt === "rank" && open && !["foreign", "trust"].includes(W.rankType) && age(W.hot["rank:" + W.rankType]) > 30000) loadHot("tw-rank");
+  else if (W.lt === "screen" && open && age(W.scr) > 60000 && !W.scrLoading) loadScreen(true);
+  else if (W.lt === "money") { const F = W.mf, today = t.toISOString().slice(0, 10), last = F.days[F.days.length - 1]?.date;
+    if (!F.loading && t.getUTCDay() % 6 && hm >= 15 * 60 && last && last < today && Date.now() - (F.chk || 0) > 600000) { F.chk = Date.now(); F.tried.delete(today); loadMoney(F.days.length + 1, true); } }
+}
+// 大盤盤中只重抓個股統計與期貨（行事曆、處置股不用每 30 秒抓）
+async function loadMktLive() {
+  W.mktLoading = true; const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
+  try { const [m, ex, fx] = await Promise.all([getJ("/api/market"), fut("EXF"), fut("FXF")]); W.mkt = { ...m, at: Date.now() }; W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; }
+  catch (e) { if (W.mkt) W.mkt.at = Date.now(); } finally { W.mktLoading = false; }
+  if (W.lt === "mkt") { W.ticking = true; renderList(); W.ticking = false; }
+}
+// 「盤中即時・更新於 10:31:05」或「10/06 收盤後」
+const liveTag = (J, closed) => (J?.live ? `<span class="livetag"><i></i>盤中即時・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}</span>` : J?.date ? `${J.date.slice(5).replace("-", "/")} ${closed}` : "");
+function schedule() { clearTimeout(W.timer); if (W.off) return; W.timer = setTimeout(async () => { await tick(); schedule(); }, anyOpen() ? 5000 : 300000); }
 const kick = () => tick().then(schedule);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") kick(); });
 addEventListener("online", kick);
@@ -818,7 +839,15 @@ function rowHtml(c, q, { rank, metric, star } = {}) {
     ${hp ? `<span class="hold ${cls(hp.pnl)}">持股 ${W.hold[c].sh.toLocaleString()} 股・損益 ${hp.pnl >= 0 ? "+" : ""}${Math.round(hp.pnl).toLocaleString()}（${hp.pct >= 0 ? "+" : ""}${hp.pct.toFixed(2)}%）</span>` : ""}
   </button>${star ? `<button class="star" data-star="${c}" aria-pressed="${inAny}" aria-label="${inAny ? "已在自選" : "加入自選"} ${nm}">${inAny ? "★" : "☆"}</button>` : ""}</li>`;
 }
+// 自動更新重畫清單時：保留展開中的 <details>；使用者正在操作 #lx 裡的輸入框、下拉選單時先不重畫
 function renderList() {
+  const lx = $("#lx"), ae = document.activeElement;
+  if (W.ticking && lx.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
+  const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details")].map(d => [sum(d), d.open]));
+  renderList0();
+  if (opened.size) for (const d of lx.querySelectorAll("details")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
+}
+function renderList0() {
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === W.lt));
   const watch = W.lt === "watch";
   $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", "mkt", "screen", "ind", "money"].includes(W.lt); $("#wl").hidden = ["mkt", "screen", "ind", "money"].includes(W.lt);
@@ -832,13 +861,13 @@ function renderList() {
     const editRow = (c, k) => `<li><div class="row" style="cursor:default"><span class="nm">${esc(nameOf(c))}<span class="cd">${c}</span></span><span></span><span class="edit-ctl"><button data-mv="${k}" data-d="-1" aria-label="上移" ${k ? "" : "disabled"}>↑</button><button data-mv="${k}" data-d="1" aria-label="下移" ${k < L.length - 1 ? "" : "disabled"}>↓</button><button data-rm="${c}" aria-label="移除 ${esc(nameOf(c))}">✕</button></span></div></li>`;
     $("#wl").innerHTML = L.length ? L.map(({ h, c, q }, k) => (h ? `<li class="sec-h">${h}</li>` : W.editing ? editRow(c, k) : rowHtml(c, q))).join("")
       : `<li class="empty note">這個群組還沒有股票。在上面輸入代號或名稱加入，或從「台股熱門」「美股熱門」「排行」按 ☆ 加入（台股、美股會自動放進各自的群組）。</li>`;
-    note = `${curList().length} 檔・${anyOpen() ? "盤中每 10 秒更新" : "收盤後每 5 分鐘確認一次"}`;
+    note = `${curList().length} 檔・${anyOpen() ? "盤中每 5 秒自動更新" : "收盤後每 5 分鐘確認一次"}`;
   } else if (W.lt === "hold") {
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
       <div class="imp-btns"><button class="btn sm primary" data-imp="edit">✏️ 編輯庫存</button><button class="btn sm" data-imp="shot">📷 截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
     if (W.holdView === "ana") renderHoldAna(); else renderHold(); note = "損益未扣手續費與證交稅；持股只記在這個瀏覽器。在個股頁按「💼 持股」新增或修改。";
   } else if (W.lt === "screen") {
-    $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? `${W.scr.date.replace(/-/g, "/")} 收盤後資料` : "選股"}・僅供參考，不是買賣建議</span><button class="btn sm" data-gx="scrRefresh">↻ 更新</button>`;
+    $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? liveTag(W.scr, "收盤後資料") : "選股"}・僅供參考，不是買賣建議</span><button class="btn sm" data-gx="scrRefresh">↻ 更新</button>`;
     renderScreen(); note = W.scr?.source ? `資料：${W.scr.source}。「K線」「技術」兩類是在瀏覽器裡掃描自選、庫存、台股熱門與今天熱門清單的日 K；「題材」是常見代表股的參考名單。` : "";
   } else if (W.lt === "money") {
     const D = W.mf.days, last = D[D.length - 1], tq = W.quotes.get("T00");
@@ -848,11 +877,11 @@ function renderList() {
     $("#lTools").innerHTML = `<span class="note">產業地圖・代表公司參考名單（整理於 ${INDUSTRY_MAP.updated}），不是推薦</span>`;
     renderInd(); note = "台股、美股有即時報價；日股、韓股只列名稱。題材的平均漲跌是成員今天漲跌幅的簡單平均。";
   } else if (W.lt === "mkt") {
-    $("#lTools").innerHTML = `<span class="note">${W.mkt?.date ? `個股統計：${W.mkt.date.replace(/-/g, "/")} 收盤後` : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
-    renderMkt(); note = W.mkt?.source ? `資料：${W.mkt.source}。加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計（貢獻點數為估算）。` : "";
+    $("#lTools").innerHTML = `<span class="note">${W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
+    renderMkt(); note = W.mkt?.source ? `資料：${W.mkt.source}。${W.mkt.live ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布" : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計"}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : "";
   } else if (W.lt === "tw") {
     const H = W.hot.tw;
-    $("#lTools").innerHTML = `<span class="note">依${H?.date ? " " + H.date.replace(/-/g, "/") + " " : "最近交易日"}成交值排序，價格即時更新</span>`;
+    $("#lTools").innerHTML = `<span class="note">${H?.live ? `${liveTag(H)}・依成交值排序` : `依${H?.date ? " " + H.date.replace(/-/g, "/") + " " : "最近交易日"}成交值排序，價格即時更新`}</span>`;
     $("#wl").innerHTML = H?.rows?.length ? H.rows.map((r, i) => rowHtml(r.code, W.quotes.get(r.code) || r, { rank: i + 1, metric: `成交值 ${r.value != null ? r.value.toFixed(1) + " 億" : "—"}`, star: true })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有熱門股。" : "載入中…"}</li>`;
     note = H?.source ? `資料：${H.source}` : "";
   } else if (W.lt === "us") {
@@ -865,7 +894,7 @@ function renderList() {
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="排行" id="rankSeg">${RANKS.map(([k, t]) => `<button data-rank="${k}" aria-pressed="${W.rankType === k}">${t}</button>`).join("")}</div>`;
     $("#wl").innerHTML = H?.rows?.length ? H.rows.map((r, i) => rowHtml(r.code, chipRank ? { name: r.name, ...(W.quotes.get(r.code) || {}) } : { ...r, ...(W.quotes.get(r.code) || {}) }, { rank: i + 1, star: true,
       metric: chipRank ? `${W.rankType === "foreign" ? "外資" : "投信"}買超 ${r[W.rankType].toLocaleString()} 張` : W.rankType === "value" ? `成交值 ${r.value?.toFixed(1)} 億` : W.rankType === "volume" ? `成交量 ${fmtVol(r.vol)} 張` : `收盤 ${fmtP(r.price)}・${r.chgPct > 0 ? "+" : ""}${r.chgPct}%` })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有排行。" : "載入中…"}</li>`;
-    note = H ? `${H.date ? H.date.replace(/-/g, "/") + " 收盤後統計" : ""}${H.source ? "・" + H.source : ""}；右邊的價格是即時價` : "";
+    note = H ? `${H.live ? "盤中即時排行（每 30 秒自動更新）" : H.date ? H.date.replace(/-/g, "/") + " 收盤後統計" : ""}${H.source ? "・" + H.source : ""}；右邊的價格是即時價` : "";
   }
   W.prevPx.clear();
   const ago = W.lastOk ? Math.round((Date.now() - W.lastOk) / 1000) : null;
@@ -1478,7 +1507,7 @@ function indAvg(t) { const v = indCodes(t).filter(indQuotable).map(c => W.quotes
 // 報價：一次最多 40 檔，分批；同一批 60 秒內不重抓
 async function loadIndQuotes(codes) {
   const need = [...new Set(codes.filter(indQuotable))]; if (W.off || !need.length) return;
-  const key = need.join(","); if (W.indQ?.[key] && Date.now() - W.indQ[key] < 60000) return; (W.indQ ||= {})[key] = Date.now();
+  const key = need.join(","); if (W.indQ?.[key] && Date.now() - W.indQ[key] < (W.session === "open" ? 15000 : 60000)) return; (W.indQ ||= {})[key] = Date.now();
   for (let i = 0; i < need.length; i += 40) {
     try { const j = await getJ(`/api/quote?codes=${need.slice(i, i + 40).join(",")}&src=mis`); j.quotes.forEach(q => { W.quotes.set(q.code, q); if (q.name && !isIdx(q.code)) W.names[q.code] = q.name; }); } catch {}
   }

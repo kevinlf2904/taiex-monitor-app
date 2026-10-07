@@ -123,6 +123,6 @@ export default async function handler(req, res) {
   }
   const any = out.inst.length || out.margin.length || out.per.length || out.revenue.length || out.fin.length;
   if (!any) return res.status(200).json({ ok: false, error: `找不到 ${code} 的籌碼與財報資料。可能是資料來源暫時無法連線或已達每小時次數上限（可在 Vercel 設定 FINMIND_TOKEN 提高上限）。（${out.errors[0] || "沒有資料"}）` });
-  res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=86400");
+  res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=3600");
   return res.status(200).json(out);
 }

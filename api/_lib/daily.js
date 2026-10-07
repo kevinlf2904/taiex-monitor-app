@@ -74,10 +74,10 @@ export default async function handler(req, res) {
   if (!quotes.size || !inst.size) {
     // 證交所連不上時不要被當成假日快取起來
     if (q.status === "rejected" || i.status === "rejected") return res.status(200).json({ ok: false, error: `證交所資料暫時拿不到（${(q.reason || i.reason)?.message}）` });
-    res.setHeader("Cache-Control", past ? "s-maxage=2592000" : "s-maxage=1800");
+    res.setHeader("Cache-Control", past ? "s-maxage=2592000" : "s-maxage=600");
     return res.status(200).json({ ok: true, date: iso, empty: true });
   }
   const tp = o.status === "fulfilled" ? o.value : [];
-  res.setHeader("Cache-Control", past ? "s-maxage=2592000, stale-while-revalidate=86400" : "s-maxage=1800, stale-while-revalidate=3600");
+  res.setHeader("Cache-Control", past ? "s-maxage=2592000, stale-while-revalidate=86400" : "s-maxage=600, stale-while-revalidate=1200");
   return res.status(200).json({ ok: true, date: iso, rows: [...mergeDay(quotes, inst), ...tp], tpex: tp.length > 0, source: tp.length ? "證交所、櫃買中心" : "證交所（上櫃暫時拿不到）" });
 }
