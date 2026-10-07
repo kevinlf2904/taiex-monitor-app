@@ -91,8 +91,10 @@ button, select, input { font: inherit; color: inherit; }
 .scalepop .pseg.kts { flex-wrap: wrap; } .scalepop .pseg.kts button { padding: 5px 8px; font-size: 12.5px; }
 
 /* 副圖右上角的訊號開關 */
-.sigui { position: absolute; inset: 0; pointer-events: none; }
-.sigrow { position: absolute; display: flex; gap: 4px; pointer-events: auto; }
-.sigrow button { font: 600 11px var(--font-body); padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; line-height: 1.5; opacity: .9; }
-.sigrow button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
-.sigrow button:disabled { opacity: .4; cursor: default; }
+/* 副圖訊號開關：圖表上方一列，不擋住副圖 */
+.sigbar { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 2px 8px 6px; }
+.sigbar .sg { display: inline-flex; align-items: center; gap: 4px; }
+.sigbar em { font: 700 10.5px var(--font-body); font-style: normal; color: var(--muted); letter-spacing: .02em; }
+.sigbar button { font: 600 11px var(--font-body); padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; line-height: 1.5; opacity: .9; }
+.sigbar button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.sigbar button:disabled { opacity: .4; cursor: default; }

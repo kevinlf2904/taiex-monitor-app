@@ -127,7 +127,7 @@ const subsFrom = (bar, ids = ["kd", "rsi", "macd", "wr", "inout"]) => ids.filter
 // 副圖指標發出的訊號：{ i, si（第幾個副圖）, side, label, v（副圖上的位置） }
 // strong：KD 只留低檔（D < 20）的金叉、高檔（D > 80）的死叉（和 KD 課程、策略用的門檻一致）；MACD 只留零軸上方的金叉、零軸下方的死叉（順勢的交叉）
 function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
-  const out = [], n = Math.min(vis, D.length);
+  const out = [], n = Math.min(vis, D.length), st = k => (typeof strong === "object" ? !!strong?.[k] : !!strong); // strong 可以是 { kd, macd } 各自設定
   const cross = (a, b, si, up, dn, keep = () => true) => { for (let i = 1; i < n; i++) { if ([a[i], b[i], a[i - 1], b[i - 1]].some(v => v == null) || D[i].sim) continue;
     if (a[i - 1] <= b[i - 1] && a[i] > b[i] && keep("buy", b[i])) out.push({ i, si, side: "buy", label: up, v: a[i] });
     else if (a[i - 1] >= b[i - 1] && a[i] < b[i] && keep("sell", b[i])) out.push({ i, si, side: "sell", label: dn, v: a[i] }); } };
@@ -136,8 +136,8 @@ function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
     else if (a[i - 1] > hi && a[i] <= hi) out.push({ i, si, side: "sell", label: name + "脫離超買", v: a[i] }); } };
   subs.forEach((S, si) => {
     if (kinds[typeof S === "string" ? S : "custom"] === false) return;
-    if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉", strong ? (side, d) => (side === "buy" ? d < 20 : d > 80) : undefined);
-    else if (S === "macd") cross(I.macd.dif, I.macd.sig, si, "MACD金叉", "MACD死叉", strong ? (side, m) => (side === "buy" ? m > 0 : m < 0) : undefined);
+    if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉", st("kd") ? (side, d) => (side === "buy" ? d < 20 : d > 80) : undefined);
+    else if (S === "macd") cross(I.macd.dif, I.macd.sig, si, "MACD金叉", "MACD死叉", st("macd") ? (side, m) => (side === "buy" ? m > 0 : m < 0) : undefined);
     else if (S === "rsi") exit(I.rsi, 30, 70, si, "RSI");
     else if (S === "wr") exit(I.wr, -80, -20, si, "威廉");
     else if (S && S.custom && S.custom.lines.length >= 2 && S.custom.signals !== false) { const [a, b] = S.custom.names || []; cross(S.custom.lines[0], S.custom.lines[1], si, a && b ? `${a}上穿${b}` : "副圖金叉", a && b ? `${a}下穿${b}` : "副圖死叉"); }
@@ -181,15 +181,16 @@ class Chart {
       else if (d.sk) Chart.setPref("sigKinds", { ...Chart.prefs.sigKinds, [d.sk]: !Chart.prefs.sigKinds[d.sk] });
       this.renderPop();
     });
-    this.pop.addEventListener("change", e => { const t = e.target; if (t.dataset.pref) Chart.setPref(t.dataset.pref, t.checked); });
+    this.pop.addEventListener("change", e => { const t = e.target; if (t.dataset.pref) Chart.setPref(t.dataset.pref, t.checked); else if (t.dataset.strongall) Chart.setPref("sigStrongK", { ...Chart.prefs.sigStrongK, kd: t.checked, macd: t.checked }); });
     const cv = this.canvas;
     cv.addEventListener("pointerdown", e => {
       this.ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
       if (this.ptrs.size === 1) {
         const pane = this.paneAt(e.offsetY), onAxis = !!this.geo && e.offsetX > this.geo.L + this.geo.pw;
-        this.drag = { x: e.offsetX, y: e.offsetY, cx: e.clientX, cy: e.clientY, t: performance.now(), vy: 0, touch: e.pointerType !== "mouse", dir: null, a: this.range.a, yz: this.yz, yoff: this.yoff, pane, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, axis: onAxis && pane?.key === "main", subAxis: onAxis && pane && pane.key !== "main", moved: false };
+        if (this.glide) { cancelAnimationFrame(this.glide); this.glide = 0; }
+        this.drag = { x: e.offsetX, y: e.offsetY, cx: e.clientX, cy: e.clientY, t: performance.now(), vy: 0, touch: e.pointerType !== "mouse", dir: null, a: this.vw.fa, yz: this.yz, yoff: this.yoff, pane, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, axis: onAxis && pane?.key === "main", subAxis: onAxis && pane && pane.key !== "main", moved: false };
       }
-      if (this.ptrs.size === 2 && this.D) { this.tapOk = false; const [p, q] = [...this.ptrs.values()], { a, b } = this.range; this.pinch = { d: Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), a, w: b - a + 1, mid: this.indexAt((p.x + q.x) / 2, true), mx: (p.x + q.x) / 2 }; this.drag = null; try { cv.setPointerCapture(e.pointerId); } catch {} }
+      if (this.ptrs.size === 2 && this.D) { this.tapOk = false; const [p, q] = [...this.ptrs.values()], { a, b } = this.range; this.smoothY = true; this.pinch = { d: Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), a: this.vw.fa, w: this.vw.w, mid: this.indexAt((p.x + q.x) / 2, true), mx: (p.x + q.x) / 2 }; this.drag = null; try { cv.setPointerCapture(e.pointerId); } catch {} }
       if (this.ptrs.size === 1) this.tapOk = true;
       if (e.pointerType === "mouse" && !this.pinned) this.hoverAt(e.offsetX);
     });
@@ -222,7 +223,8 @@ class Chart {
         const panX = Math.abs(dx) > 4 && this.view, panY = this.yz > 1 && Math.abs(dy) > 4 && this.drag.y < G.top0 + G.mainH;
         if (panX || panY) {
           this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {}
-          if (panX) { const { a, b } = this.range; this.drag.bw ||= G.bw; this.view = this.clampView(this.drag.a - dx / this.drag.bw, b - a + 1); }
+          if (panX) { this.drag.bw ||= G.bw; this.smoothY = true; const now = performance.now(), fa0 = this.vw.fa; this.view = this.clampView(this.drag.a - dx / this.drag.bw, this.vw.w);
+            const dt = now - (this.drag.vt || now - 16); this.drag.vx = 0.7 * (this.drag.vx || 0) + 0.3 * ((this.vw.fa - fa0) / Math.max(1, dt)); this.drag.vt = now; this.drag.panned = true; }
           if (panY) this.yoff = Math.max(-0.6, Math.min(0.6, this.drag.yoff + dy / G.mainH / this.yz));
           this.req(); return;
         }
@@ -235,13 +237,18 @@ class Chart {
       // 代替頁面捲動時，放開手指後讓頁面再滑一小段（慣性），手感接近一般捲動
       const d = this.drag; if (d && d.dir === "v" && Math.abs(d.vy) > 0.2 && e.type === "pointerup") { let v = d.vy * 16; const glide = () => { if (Math.abs(v) < 0.5) return; pageScroller().scrollBy(0, -v); v *= 0.94; requestAnimationFrame(glide); }; requestAnimationFrame(glide); }
       const wasPinch = !!this.pinch;
+      // 橫向拖曳放開後的慣性：依最後的速度繼續滑，每個畫面減速
+      if (d && d.panned && e.type === "pointerup" && Math.abs(d.vx || 0) > 0.002 && performance.now() - (d.vt || 0) < 80 && this.view) {
+        let v = d.vx * 16, last = performance.now(); const go = now => { const dt = Math.min(40, now - last) / 16; last = now; v *= Math.pow(0.93, dt); const nv = this.clampView(this.vw.fa + v * dt, this.vw.w);
+          if (!nv || Math.abs(v) < 0.01 || nv.fa === this.vw.fa) { this.glide = 0; this.smoothY = true; this.req(); return; } this.view = nv; this.draw(); this.glide = requestAnimationFrame(go); };
+        this.smoothY = true; this.glide = requestAnimationFrame(go); }
       // 點一下（沒有拖曳）：固定十字線；固定時再點同一根 K 棒就取消
       if (e.type === "pointerup" && this.tapOk && this.drag && !this.drag.moved && this.D && this.ptrs.size === 1 && !this.drag.axis && !this.drag.subAxis) {
         const i = this.indexAt(e.offsetX); if (this.pinned && i === this.hover) { this.pinned = false; if (e.pointerType !== "mouse") this.hover = null; } else { this.pinned = true; this.hover = i; } this.req();
       }
       this.tapOk = false;
       this.ptrs.delete(e.pointerId); if (this.ptrs.size < 2) this.pinch = null; if (!this.ptrs.size) this.drag = null;
-      if (wasPinch && this.ptrs.size === 1) { const [r] = [...this.ptrs.values()]; this.drag = { x: r.x, y: r.y, cx: r.x, cy: r.y, t: performance.now(), vy: 0, touch: true, dir: "h", a: this.range.a, yz: this.yz, yoff: this.yoff, pane: null, pz: null, moved: true }; }
+      if (wasPinch && this.ptrs.size === 1) { const [r] = [...this.ptrs.values()]; this.drag = { x: r.x, y: r.y, cx: r.x, cy: r.y, t: performance.now(), vy: 0, touch: true, dir: "h", a: this.vw.fa, yz: this.yz, yoff: this.yoff, pane: null, pz: null, moved: true }; }
     };
     cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
     cv.addEventListener("pointerleave", e => { up(e); if (!this.pinned) { this.hover = null; this.draw(); } });
@@ -253,17 +260,21 @@ class Chart {
         e.preventDefault(); const f = Math.exp(-(e.deltaY || e.deltaX) * 0.003), pane = this.paneAt(e.offsetY);
         if (pane && pane.key !== "main") { const z = this.paneZoom(pane.key); this.pz[pane.key] = { z: Math.max(0.5, Math.min(12, z.z * f)), off: z.off }; this.draw(); } else this.yZoom(f);
       }
-      else if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && this.view && this.geo) { e.preventDefault(); const { a, b } = this.range; this.view = this.clampView(a + Math.round(e.deltaX / this.geo.bw), b - a + 1); this.draw(); }
+      else if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && this.view && this.geo) { e.preventDefault(); const { a, b } = this.range; this.smoothY = true; this.view = this.clampView(this.vw.fa + e.deltaX / this.geo.bw, this.vw.w); this.draw(); }
     }, { passive: false });
     new ResizeObserver(() => this.draw()).observe(host);
   }
   static all = [];
   static keepView = false; // 即時報價更新最後一根 K 棒時，保留使用者的縮放與平移
-  static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit", sig: "chartSubSig", sigKinds: "chartSigKinds", sigStrong: "chartSigStrong", mk: "chartMk", kt: "chartKt" };
+  static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit", sig: "chartSubSig", sigKinds: "chartSigKinds", sigStrong: "chartSigStrong", sigStrongK: "chartSigStrongK", mk: "chartMk", kt: "chartKt" };
   static prefs = { h: [1, 1.5, 2, 2.5].includes(+store.get("chartH", 1)) ? +store.get("chartH", 1) : 1, log: !!store.get("chartLog", false),
     sh: [1, 1.5, 2].includes(+store.get("chartSubH", 1)) ? +store.get("chartSubH", 1) : 1, fit: !!store.get("chartSubFit", false), sig: store.get("chartSubSig", true) !== false,
     sigStrong: store.get("chartSigStrong", true) !== false, mk: store.get("chartMk", "full") === "icon" ? "icon" : "full", kt: ["candle", "hollow", "ohlc", "line", "area"].includes(store.get("chartKt", "candle")) ? store.get("chartKt", "candle") : "candle",
-    sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, ...(store.get("chartSigKinds", null) || {}) } };
+    sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, ...(store.get("chartSigKinds", null) || {}) },
+    // 「只看重點」每個副圖各自開關（舊版是全部共用一個 sigStrong）
+    sigStrongK: { kd: store.get("chartSigStrong", true) !== false, macd: store.get("chartSigStrong", true) !== false, ...(store.get("chartSigStrongK", null) || {}) } };
+  // 某個副圖要不要標訊號：「金叉死叉」或「只看重點」任一個開著就標；「只看重點」開著時只標重點交叉
+  static sigShow(k) { const P = Chart.prefs; return P.sig && (P.sigKinds[k] !== false || !!P.sigStrongK[k]); }
   static SIG_KINDS = [["kd", "KD 交叉"], ["macd", "MACD 交叉"], ["rsi", "RSI 30／70"], ["wr", "威廉 −80／−20"], ["custom", "截圖副圖交叉"]];
   // 高度、對數座標、副圖貼合是全站共用的偏好：改了以後所有圖表一起重畫
   static setPref(k, v) { Chart.prefs[k] = v; store.set(Chart.PREF_KEYS[k], v); Chart.all.forEach(c => { c.syncBar(); c.draw(); if (!c.pop.hidden) c.renderPop(); }); }
@@ -290,7 +301,7 @@ class Chart {
       <div class="prow"><strong>主副圖對應</strong></div>
       <label class="prow pchk"><input type="checkbox" data-pref="sig" ${P.sig ? "checked" : ""}><span>副圖發出訊號時，在主圖 K 線上標出位置（空心圈＋名稱），副圖同一點以虛線對齊</span></label>
       <div class="prow pkinds" ${P.sig ? "" : "aria-disabled=\"true\""}>${Chart.SIG_KINDS.map(([k, t]) => `<button type="button" class="ichip" data-sk="${k}" aria-pressed="${P.sig && P.sigKinds[k]}" ${P.sig ? "" : "disabled"}>${t}</button>`).join("")}</div>
-      <label class="prow pchk"><input type="checkbox" data-pref="sigStrong" ${P.sigStrong ? "checked" : ""} ${P.sig ? "" : "disabled"}><span>只標重點交叉：KD 低檔（D&lt;20）金叉、高檔（D&gt;80）死叉；MACD 零軸上金叉、零軸下死叉。取消勾選則標出全部交叉</span></label>
+      <label class="prow pchk"><input type="checkbox" data-strongall="1" ${P.sigStrongK.kd && P.sigStrongK.macd ? "checked" : ""} ${P.sig ? "" : "disabled"}><span>只標重點交叉：KD 低檔（D&lt;20）金叉、高檔（D&gt;80）死叉；MACD 零軸上金叉、零軸下死叉。取消勾選則標出全部交叉</span></label>
       <div class="prow"><strong>K 線樣式</strong></div>
       <div class="prow"><div class="pseg kts">${[["candle", "實心K"], ["hollow", "空心K"], ["ohlc", "美國線"], ["line", "收盤線"], ["area", "面積圖"]].map(([k, t]) => `<button type="button" data-kt="${k}" aria-pressed="${P.kt === k}">${t}</button>`).join("")}</div></div>
       <div class="prow"><span>訊號標記</span><div class="pseg"><button type="button" data-mk="full" aria-pressed="${P.mk !== "icon"}">符號＋文字</button><button type="button" data-mk="icon" aria-pressed="${P.mk === "icon"}">只有符號</button></div></div>
@@ -307,16 +318,18 @@ class Chart {
     this.bar.querySelector('[data-z="scale"]').classList.toggle("on", scaled);
   }
   yZoom(f) { this.yz = Math.max(0.5, Math.min(12, this.yz * f)); if (this.yz <= 1) this.yoff = 0; this.draw(); }
-  set(D, opts = {}) { if (D !== this.D && !Chart.keepView) { this.view = null; this.yz = 1; this.yoff = 0; this.pz = {}; } if (!Chart.keepView || this.hover == null || this.hover >= D.length) { this.hover = null; this.pinned = false; } this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.draw(); return this; }
+  set(D, opts = {}) { if (D !== this.D && !Chart.keepView) { this.ysm = null; this.view = null; this.yz = 1; this.yoff = 0; this.pz = {}; } if (!Chart.keepView || this.hover == null || this.hover >= D.length) { this.hover = null; this.pinned = false; } this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.draw(); return this; }
   get visible() { return this.o.visible ?? this.D.length; }
   get range() { return this.view || { a: 0, b: this.D.length - 1 }; }
-  clampView(a, w) { const N = this.D.length; w = Math.round(Math.max(Math.min(15, N), Math.min(N, w))); a = Math.max(0, Math.min(N - w, Math.round(a))); return w >= N ? null : { a, b: a + w - 1 }; }
-  setWidth(w, anchor) { const { a, b } = this.range, ow = b - a + 1; anchor = anchor ?? (a + b) / 2; const t = (anchor - a) / ow; this.view = this.clampView(anchor - t * w, w); this.draw(); }
-  zoom(f, anchor) { if (!this.D) return; const { a, b } = this.range; this.setWidth((b - a + 1) * f, anchor); }
+  // 可見範圍：fa 是小數的起點（拖曳時一個像素一個像素地跟手，不會一次跳一根 K 棒），a、b 是整數索引（給計算用）
+  clampView(a, w) { const N = this.D.length; w = Math.round(Math.max(Math.min(15, N), Math.min(N, w))); if (w >= N) return null; a = Math.max(0, Math.min(N - w, a)); return { a: Math.floor(a), b: Math.floor(a) + w - 1, fa: a, w }; }
+  get vw() { const r = this.range; return { fa: r.fa ?? r.a, w: r.w ?? r.b - r.a + 1 }; }
+  setWidth(w, anchor) { const { fa, w: ow } = this.vw; anchor = anchor ?? fa + ow / 2; const t = (anchor - fa) / ow; this.view = this.clampView(anchor - t * w, w); this.draw(); }
+  zoom(f, anchor) { if (!this.D) return; this.setWidth(this.vw.w * f, anchor); }
   hoverAt(x) { const i = this.indexAt(x); if (i !== this.hover) { this.hover = i; this.req(); } }
   // 手勢中的重畫合併到下一個畫面（每個畫面最多畫一次），拖曳、縮放比較順
   req() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; this.draw(); }); }
-  indexAt(x, raw) { if (!this.geo) return null; const { L, bw, a } = this.geo; const i = a + Math.floor((x - L) / bw); return raw ? i : Math.max(a, Math.min(Math.min(this.visible - 1, this.range.b), i)); }
+  indexAt(x, raw) { if (!this.geo) return null; const { L, bw, fa, a } = this.geo; const i = Math.floor(fa + (x - L) / bw); return raw ? i : Math.max(a, Math.min(Math.min(this.visible - 1, this.range.b), i)); }
   draw() {
     if (!this.D) return;
     const { D, I, o } = this, ctx = this.ctx, dpr = window.devicePixelRatio || 1;
@@ -326,15 +339,15 @@ class Chart {
     const subs = (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean);
     const mainH = Math.round((narrow ? 230 : 300) * Chart.prefs.h), volH = o.noVol ? 0 : Math.round((narrow ? 52 : 66) * Chart.prefs.sh), subH = Math.round((subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112)) * Chart.prefs.sh), gap = 10, axisH = 20;
     const H = mainH + gap + volH + subs.length * (gap + subH) + axisH + 8;
-    this.canvas.width = W * dpr; this.canvas.height = H * dpr; this.canvas.style.height = H + "px";
+    if (this.canvas.width !== Math.round(W * dpr) || this.canvas.height !== Math.round(H * dpr)) { this.canvas.width = Math.round(W * dpr); this.canvas.height = Math.round(H * dpr); this.canvas.style.height = H + "px"; } // 尺寸沒變就不重設（重設畫布很慢，拖曳時會閃）
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
     const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface"), vwap: cssVar("--vwap") || "#f472b6" };
     const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R;
-    const { a: va, b: vb } = this.range, bw = pw / (vb - va + 1), inV = i => i >= va - 1 && i <= vb + 1;
-    this.geo = { L, bw, a: va, pw, H, top0: 8, mainH };
+    const { a: va, b: vb } = this.range, { fa, w: vwid } = this.vw, bw = pw / vwid, inV = i => i >= va - 1 && i <= vb + 1;
+    this.geo = { L, bw, a: va, fa, pw, H, top0: 8, mainH };
     { const vt = 8 + mainH + gap, st = o.noVol ? vt : vt + volH + gap; this.panes = [{ key: "main", top: 8, h: mainH }, ...(o.noVol ? [] : [{ key: "vol", top: vt, h: volH }]), ...subs.map((_, k) => ({ key: "s" + k, top: st + k * (subH + gap), h: subH }))]; }
     this.syncBar();
-    const X = i => L + bw * (i - va + 0.5);
+    const X = i => L + bw * (i - fa + 0.5);
     this.bar.classList.toggle("zoomed", !!this.view);
     const top0 = 8, volTop = top0 + mainH + gap, subTop0 = o.noVol ? volTop : volTop + volH + gap;
     const fmtD = o.fmtD || (s => s.slice(5).replace("-", "/"));
@@ -360,6 +373,10 @@ class Chart {
     const logS = Chart.prefs.log && lo > 0, tf = logS ? Math.log : v => v, itf = logS ? Math.exp : v => v;
     let tlo = tf(lo), thi = tf(hi); const tpad = (thi - tlo) * 0.08 || Math.abs(thi) * 0.01 || 1; tlo -= tpad; thi += tpad;
     if (this.yz !== 1 || this.yoff) { const sp = thi - tlo, mid = (tlo + thi) / 2 + this.yoff * sp; tlo = mid - sp / this.yz / 2; thi = mid + sp / this.yz / 2; }
+    // 拖曳、縮放時價格軸不要一下跳到新範圍：每個畫面往目標靠近 30%，靠近了才停（看起來是平順地伸縮，不會上下抖）
+    if (this.ysm && this.smoothY) { const k = 0.3, nlo = this.ysm.lo + (tlo - this.ysm.lo) * k, nhi = this.ysm.hi + (thi - this.ysm.hi) * k;
+      if (Math.abs(nlo - tlo) + Math.abs(nhi - thi) > (thi - tlo) * 0.002) { tlo = nlo; thi = nhi; this.needY = true; } else this.smoothY = this.ptrs.size > 0 || !!this.glide; }
+    this.ysm = { lo: tlo, hi: thi };
     lo = itf(tlo); hi = itf(thi);
     const Y = p => top0 + (thi - tf(p)) / (thi - tlo) * mainH;
 
@@ -507,7 +524,7 @@ class Chart {
     };
     const label = (t, tx, ty, c, size) => { ctx.font = `600 ${size}px ${cssVar("--font-body")}`; ctx.textAlign = "center"; ctx.lineJoin = "round"; ctx.lineWidth = 3; ctx.strokeStyle = col.surface; ctx.globalAlpha = 0.85; ctx.strokeText(t, tx, ty); ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, tx, ty); };
     // 副圖訊號：在副圖上交叉或離開超買超賣區的那一天，主圖K線也標出來（空心圈，和實心三角的課程／策略訊號區分）
-    const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis, Chart.prefs.sigKinds, Chart.prefs.sigStrong) : [];
+    const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis, Object.fromEntries(["kd", "macd", "rsi", "wr", "custom"].map(k => [k, Chart.sigShow(k)])), Chart.prefs.sigStrongK) : [];
     (o.markers || []).filter(m => m.i < vis && m.i >= va && m.i <= vb).forEach(m => {
       const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
       const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
@@ -650,7 +667,7 @@ class Chart {
       ctx.strokeStyle = q.c; ctx.lineWidth = 1; ctx.globalAlpha = q.on ? 0.75 : 0.22; ctx.setLineDash([3, 3]);
       ctx.beginPath(); ctx.moveTo(Math.round(q.x) + 0.5, q.y); ctx.lineTo(Math.round(q.x) + 0.5, q.y2); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
     });
-    this.renderSigUi(subs, subTop0, subH, gap, L + pw);
+    this.renderSigUi(subs);
     // 十字線
     const hi_ = this.hover != null && this.hover < vis ? this.hover : null;
     if (hi_ != null) {
@@ -665,22 +682,26 @@ class Chart {
     this.renderLegend(hi_ ?? vis - 1, mas);
     if (this.onHover) this.onHover(hi_ ?? vis - 1);
     if (this.onRange) this.onRange(this.range, this);
+    if (fa !== va) ctx.clearRect(0, top0, L - 0.5, H - axisH - 8 - top0); // 小數起點時最左邊那根 K 棒只露出一部分：把超出左邊界的部分擦掉
+    if (this.needY) { this.needY = false; this.req(); }
   }
-  // 每個副圖右上角的訊號開關（HTML 按鈕疊在畫布上，不用打開設定選單）
-  renderSigUi(subs, subTop0, subH, gap, right) {
+  // 副圖訊號開關：放在圖表上方的一列（不再疊在副圖上擋住線），每個副圖的「金叉死叉」「只看重點」各自獨立開關
+  renderSigUi(subs) {
     if (!this.sigUi) {
-      this.sigUi = document.createElement("div"); this.sigUi.className = "sigui"; this.host.append(this.sigUi);
-      this.sigUi.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const P = Chart.prefs;
-        if (b.dataset.sk) { const on = P.sig && P.sigKinds[b.dataset.sk] !== false; if (!P.sig) Chart.setPref("sig", true); Chart.setPref("sigKinds", { ...P.sigKinds, [b.dataset.sk]: !on }); }
-        else if (b.dataset.st) Chart.setPref("sigStrong", !P.sigStrong); });
+      this.sigUi = document.createElement("div"); this.sigUi.className = "sigbar"; this.host.insertBefore(this.sigUi, this.canvas);
+      this.sigUi.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; e.stopPropagation(); const P = Chart.prefs, k = b.dataset.sk || b.dataset.strongk;
+        if (!P.sig) Chart.setPref("sig", true);
+        if (b.dataset.sk) Chart.setPref("sigKinds", { ...P.sigKinds, [k]: P.sigKinds[k] === false });
+        else if (b.dataset.strongk) Chart.setPref("sigStrongK", { ...P.sigStrongK, [k]: !P.sigStrongK[k] }); });
     }
-    if (this.o.subSignals === false) { this.sigUi.innerHTML = ""; return; }
-    const P = Chart.prefs, cv = this.canvas, rx = this.host.clientWidth - (cv.offsetLeft + right) + 2;
-    this.sigUi.innerHTML = subs.map((S, si) => {
+    if (this.o.subSignals === false) { this.sigUi.innerHTML = ""; this.sigUi.hidden = true; return; }
+    const P = Chart.prefs, NM = { kd: "KD", macd: "MACD", rsi: "RSI", wr: "威廉", custom: "副圖" };
+    const html = subs.map(S => {
       const kind = typeof S === "string" ? S : "custom"; if (!["kd", "macd", "rsi", "wr"].includes(kind) && !(S?.custom?.lines?.length >= 2 && S.custom.signals !== false)) return "";
-      const on = P.sig && P.sigKinds[kind] !== false, top = cv.offsetTop + subTop0 + si * (subH + gap) + 2;
-      return `<div class="sigrow" style="top:${top}px;right:${rx}px"><button type="button" data-sk="${kind}" aria-pressed="${on}" title="在主圖標出這個副圖的訊號">${kind === "rsi" || kind === "wr" ? "超買超賣" : "金叉死叉"}</button>${kind === "kd" || kind === "macd" ? `<button type="button" data-st="1" aria-pressed="${P.sigStrong}" ${on ? "" : "disabled"} title="KD 只標低檔金叉、高檔死叉；MACD 只標零軸上金叉、零軸下死叉">只看重點</button>` : ""}</div>`;
+      const on = P.sig && P.sigKinds[kind] !== false, st = P.sig && !!P.sigStrongK[kind];
+      return `<span class="sg"><em>${NM[kind]}</em><button type="button" data-sk="${kind}" aria-pressed="${on}" title="在主圖標出這個副圖的全部訊號">${kind === "rsi" || kind === "wr" ? "超買超賣" : "金叉死叉"}</button>${kind === "kd" || kind === "macd" ? `<button type="button" data-strongk="${kind}" aria-pressed="${st}" title="${kind === "kd" ? "KD 只標低檔（D<20）金叉、高檔（D>80）死叉" : "MACD 只標零軸上金叉、零軸下死叉"}">只看重點</button>` : ""}</span>`;
     }).join("");
+    this.sigUi.hidden = !html; if (this.sigUi.innerHTML !== html) this.sigUi.innerHTML = html;
   }
   line(a, vis, X, Y, color, w, alpha = 1, dash) {
     const ctx = this.ctx, g = this.geo; ctx.save(); ctx.beginPath(); ctx.rect(g.L, 0, g.pw, g.H); ctx.clip();

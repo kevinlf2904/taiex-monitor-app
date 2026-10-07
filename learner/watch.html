@@ -2230,7 +2230,7 @@ function drawK(fresh = false, shift = 0) {
   finally { Chart.keepView = false; }
   const want = W.k === "M" ? (isMobile() ? 36 : 48) : isMobile() ? 60 : 100, N = D.length, w = Math.min(N, want);
   if (fresh || (shift && !old)) kChart.view = N > w ? kChart.clampView(N - w, w) : null;
-  else if (shift && old) kChart.view = kChart.clampView(old.a + shift, old.b - old.a + 1);
+  else if (shift && old) kChart.view = kChart.clampView((old.fa ?? old.a) + shift, old.w ?? old.b - old.a + 1);
   kChart.draw();
   // 一開始根數太少、還不能往左拉時，先自動多載入一些
   if (N < want + 10 && !olderState().end && !W.busyOlder && (minute ? W.intra : W.daily?.data?.length)) setTimeout(loadOlder, 0);
