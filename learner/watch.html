@@ -327,7 +327,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .qcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 12px; } .qcard { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--muted); cursor: pointer; padding: 8px 2px; display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: .65; font: inherit; }
 .qcard[aria-pressed="true"] { opacity: 1; border-color: var(--qc); } .qcard span { color: var(--qc); font-weight: 700; font-size: 13.5px; } .qcard b { font: 700 24px var(--font-mono); color: var(--qc); } .qcard small { font-size: 11px; }
 .bwrap { margin: 6px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); } .bubble { width: 100%; height: auto; display: block; } .bax { stroke: var(--line); stroke-width: 1; } .bq { font: 600 11px var(--font-body); fill: var(--muted); }
-.bnode { cursor: pointer; transition: transform .7s ease; } .bnode circle { transition: r .7s ease, fill .7s; } .bnode.on circle { stroke-width: 3; fill-opacity: .8; } .bnode:focus circle, .bnode:hover circle { fill-opacity: .75; } .bax-t { font: 10px var(--font-body); fill: var(--muted); } .blab { transition: transform .7s ease; pointer-events: none; } .blab text { paint-order: stroke; stroke: var(--surface-2); stroke-width: 3px; stroke-linejoin: round; }
+.bnode { cursor: pointer; } .bnode circle { transition: fill .6s, fill-opacity .2s; } .bnode.on circle { stroke-width: 3; fill-opacity: .8; } .bnode:focus circle, .bnode:hover circle { fill-opacity: .75; } .bax-t { font: 10px var(--font-body); fill: var(--muted); } .blab { pointer-events: none; } .blab text { paint-order: stroke; stroke: var(--surface-2); stroke-width: 3px; stroke-linejoin: round; }
 .bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bn { font: 700 10.5px var(--font-body); fill: var(--ink); text-anchor: middle; pointer-events: none; } .bv { font: 10px var(--font-mono); fill: var(--ink); opacity: .8; text-anchor: middle; pointer-events: none; }
 .mlist { list-style: none; margin: 0; padding: 0; } .mlist button { width: 100%; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); padding: 9px 2px; cursor: pointer; text-align: left; font: inherit; }
 .mlist .nm { display: flex; flex-direction: column; font-size: 14.5px; min-width: 0; } .mlist .nm small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mlist b { font-size: 13.5px; text-align: right; min-width: 4.2em; }
@@ -1302,8 +1302,8 @@ function bubbleLayout(pts, { w = 360, h = 360, scale } = {}) {
 }
 // 標籤畫在最上層（不會被別的泡泡蓋住），跟著泡泡一起移動
 const bubbleLabIn = n => `<g class="bl" transform="translate(${n.lab.dx.toFixed(1)},${n.lab.dy.toFixed(1)})"><text y="-1" class="bn">${esc(n.lab.nm)}</text><text y="10" class="bv">${flowFmt(n.p.net5)}</text></g>`;
-const bubbleLab = n => (n.lab ? `<g class="blab" data-lb="${esc(n.p.id)}" style="transform:translate(${n.x.toFixed(1)}px,${n.y.toFixed(1)}px)">${bubbleLabIn(n)}</g>` : "");
-const bubbleNode = (n, sel) => `<g class="bnode${n.p.id === sel ? " on" : ""}" data-mbs="${esc(n.p.id)}" style="transform:translate(${n.x.toFixed(1)}px,${n.y.toFixed(1)}px)"><circle r="${n.r.toFixed(1)}" fill="${FLOW_Q[n.p.q][2]}" fill-opacity=".5" stroke="${FLOW_Q[n.p.q][2]}"/><title>${esc(n.p.name)} ${flowFmt(n.p.net5)}</title></g>`;
+const bubbleLab = n => (n.lab ? `<g class="blab" data-lb="${esc(n.p.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">${bubbleLabIn(n)}</g>` : "");
+const bubbleNode = (n, sel) => `<g class="bnode${n.p.id === sel ? " on" : ""}" data-mbs="${esc(n.p.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})"><circle r="${n.r.toFixed(1)}" fill="${FLOW_Q[n.p.q][2]}" fill-opacity=".5" stroke="${FLOW_Q[n.p.q][2]}"/><title>${esc(n.p.name)} ${flowFmt(n.p.net5)}</title></g>`;
 function bubbleSvg(pts, { w = 360, h = 360, id = "mfb", scale, sel } = {}) {
   const B = bubbleLayout(pts, { w, h, scale }), lab = (t, x, y, a, c) => `<text x="${x}" y="${y}" text-anchor="${a}" class="bq" style="fill:${c}">${t}</text>`, { top, bot, cx, cy } = B;
   return `<svg id="${id}" class="bubble" viewBox="0 0 ${w} ${h}" role="img" aria-label="板塊資金四象限泡泡圖">
@@ -1313,20 +1313,32 @@ function bubbleSvg(pts, { w = 360, h = 360, id = "mfb", scale, sel } = {}) {
     <text x="${w - 10}" y="${cy - 4}" text-anchor="end" class="bax-t">淨流入 →</text><text x="${cx + 4}" y="${top + 10}" class="bax-t">加速 ↑</text>
     <g class="bnodes">${B.N.map(n => bubbleNode(n, sel)).join("")}</g><g class="blabs">${B.N.map(bubbleLab).join("")}</g></svg>`;
 }
-// 回放時只更新泡泡的位置與大小（才有移動動畫，拖拉日期也不會中斷）
-function bubblePatch(svg, pts, { scale, sel } = {}) {
-  const g = svg.querySelector(".bnodes"), [, , w, h] = svg.getAttribute("viewBox").split(" ").map(Number), B = bubbleLayout(pts, { w, h, scale }), keep = new Set();
-  const old = new Map([...g.querySelectorAll(".bnode")].map(el => [el.dataset.mbs, el]));
-  for (const n of B.N) { keep.add(n.p.id); let el = old.get(n.p.id);
-    if (!el) { g.insertAdjacentHTML("beforeend", bubbleNode(n, sel)); continue; }
-    el.style.transform = `translate(${n.x.toFixed(1)}px,${n.y.toFixed(1)}px)`; const c = el.querySelector("circle"); c.setAttribute("r", n.r.toFixed(1)); c.setAttribute("fill", FLOW_Q[n.p.q][2]); c.setAttribute("stroke", FLOW_Q[n.p.q][2]);
-    el.classList.toggle("on", n.p.id === sel); el.querySelector("title").textContent = `${n.p.name} ${flowFmt(n.p.net5)}`; }
-  for (const [id, el] of old) if (!keep.has(id)) el.remove();
-  B.N.forEach(n => g.appendChild(g.querySelector(`.bnode[data-mbs="${CSS.escape(n.p.id)}"]`))); // 大的先畫，小的在上面
-  const lg = svg.querySelector(".blabs"), ol = new Map([...lg.querySelectorAll(".blab")].map(el => [el.dataset.lb, el])), lk = new Set();
-  for (const n of B.N) { if (!n.lab) continue; lk.add(n.p.id); const el = ol.get(n.p.id); if (!el) { lg.insertAdjacentHTML("beforeend", bubbleLab(n)); continue; }
-    el.style.transform = `translate(${n.x.toFixed(1)}px,${n.y.toFixed(1)}px)`; el.innerHTML = bubbleLabIn(n); }
-  for (const [id, el] of ol) if (!lk.has(id)) el.remove();
+// 回放換日期：用 requestAnimationFrame 逐格補間（位置、大小、標籤位置），不搬動 DOM 順序，所以不會中斷或跳格。
+// 新出現的泡泡從 0 長大、消失的縮到 0 再移除；標籤淡入淡出。動畫時間跟播放速度走（dur 毫秒）；播放中用等速（linear），單步切換用緩入緩出。
+const easeIO = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+function bubblePatch(svg, pts, { scale, sel, dur = 650, linear = false } = {}) {
+  const g = svg.querySelector(".bnodes"), lg = svg.querySelector(".blabs"), [, , w, h] = svg.getAttribute("viewBox").split(" ").map(Number), B = bubbleLayout(pts, { w, h, scale });
+  const S = (svg.__bs ||= new Map()); // id → { el, lab, x, y, r, lx, ly, lo（標籤透明度） }
+  const read = el => { const m = /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(el.getAttribute("transform") || "") || [0, 0, 0]; return { x: +m[1], y: +m[2] }; };
+  for (const el of g.querySelectorAll(".bnode")) if (!S.has(el.dataset.mbs)) { const p = read(el); S.set(el.dataset.mbs, { el, x: p.x, y: p.y, r: +el.querySelector("circle").getAttribute("r"), lo: 0 }); }
+  for (const el of lg.querySelectorAll(".blab")) { const s = S.get(el.dataset.lb); if (s && !s.lab) { s.lab = el; const b = el.querySelector(".bl"), m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(b?.getAttribute("transform") || ""); s.lx = m ? +m[1] : 0; s.ly = m ? +m[2] : 0; s.lo = 1; } }
+  const want = new Map(B.N.map(n => [n.p.id, n])), tw = [];
+  for (const n of B.N) { let s = S.get(n.p.id);
+    if (!s) { g.insertAdjacentHTML("beforeend", bubbleNode({ ...n, r: 0 }, sel)); s = { el: g.lastElementChild, x: n.x, y: n.y, r: 0, lo: 0 }; S.set(n.p.id, s); }
+    const c = s.el.querySelector("circle"); c.setAttribute("fill", FLOW_Q[n.p.q][2]); c.setAttribute("stroke", FLOW_Q[n.p.q][2]); s.el.classList.toggle("on", n.p.id === sel); s.el.querySelector("title").textContent = `${n.p.name} ${flowFmt(n.p.net5)}`;
+    if (n.lab) { if (!s.lab) { lg.insertAdjacentHTML("beforeend", bubbleLab(n)); s.lab = lg.lastElementChild; s.lab.style.opacity = 0; s.lx = n.lab.dx; s.ly = n.lab.dy; s.lo = 0; }
+      const b = s.lab.querySelector(".bl"); b.querySelector(".bn").textContent = n.lab.nm; b.querySelector(".bv").textContent = flowFmt(n.p.net5); }
+    tw.push({ s, f: { x: s.x, y: s.y, r: s.r, lx: s.lx ?? 0, ly: s.ly ?? 0, lo: s.lo ?? 0 }, t: { x: n.x, y: n.y, r: n.r, lx: n.lab ? n.lab.dx : s.lx ?? 0, ly: n.lab ? n.lab.dy : s.ly ?? 0, lo: n.lab ? 1 : 0 } }); }
+  for (const [id, s] of S) if (!want.has(id)) tw.push({ s, gone: id, f: { x: s.x, y: s.y, r: s.r, lx: s.lx ?? 0, ly: s.ly ?? 0, lo: s.lo ?? 0 }, t: { x: s.x, y: s.y, r: 0, lx: s.lx ?? 0, ly: s.ly ?? 0, lo: 0 } });
+  cancelAnimationFrame(svg.__raf); const t0 = performance.now(), D = Math.max(1, dur);
+  const draw = (k, last) => { for (const { s, f, t, gone } of tw) { const L = (a, b) => a + (b - a) * k;
+      s.x = L(f.x, t.x); s.y = L(f.y, t.y); s.r = Math.max(0, L(f.r, t.r)); s.lx = L(f.lx, t.lx); s.ly = L(f.ly, t.ly); s.lo = L(f.lo, t.lo);
+      s.el.setAttribute("transform", `translate(${s.x.toFixed(1)},${s.y.toFixed(1)})`); s.el.querySelector("circle").setAttribute("r", s.r.toFixed(2));
+      if (s.lab) { s.lab.setAttribute("transform", `translate(${s.x.toFixed(1)},${s.y.toFixed(1)})`); s.lab.querySelector(".bl").setAttribute("transform", `translate(${s.lx.toFixed(1)},${s.ly.toFixed(1)})`); s.lab.style.opacity = s.lo.toFixed(2);
+        if (last && s.lo < 0.01) { s.lab.remove(); s.lab = null; } }
+      if (last && gone) { s.el.remove(); s.lab?.remove(); S.delete(gone); } } };
+  const step = now => { const k = Math.min(1, (now - t0) / D); draw(linear ? k : easeIO(k), k >= 1); if (k < 1) svg.__raf = requestAnimationFrame(step); };
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches || document.visibilityState === "hidden") draw(1, true); else svg.__raf = requestAnimationFrame(step);
 }
 // 點泡泡：下面顯示這個板塊的數字，再按按鈕進題材內頁
 function bubbleInfo(x) {
@@ -1429,7 +1441,7 @@ function mfReplayBits(M, t, pool, P) { const bmax = P.slice().sort((a, b) => b.n
 function mfReplayDraw() { const F = W.mf, M = mfModel(), svg = document.getElementById("mfb"), rg = document.querySelector(".mrp-range");
   if (!M || F.view !== "replay" || !svg || !rg || +rg.max !== M.T - 1) return renderMoney();
   const t0 = Math.min(9, M.T - 1), t = F.rp.t == null ? M.T - 1 : Math.max(t0, Math.min(M.T - 1, F.rp.t)), { P, pool } = mfReplayPool(M, t), R = mfReplayBits(M, t, pool, P);
-  bubblePatch(svg, pool, { scale: (F.rp.sc ||= mfReplayScale(M, t0)), sel: F.bsel }); document.querySelector(".mrp-sum").innerHTML = R.sum; document.querySelector(".mrp-date").textContent = R.date;
+  bubblePatch(svg, pool, { scale: (F.rp.sc ||= mfReplayScale(M, t0)), sel: F.bsel, dur: F.rp.playing ? 900 / F.rp.speed : 450, linear: F.rp.playing }); // 播放時等速、剛好接到下一天，看起來是連續移動 document.querySelector(".mrp-sum").innerHTML = R.sum; document.querySelector(".mrp-date").textContent = R.date;
   if (document.activeElement !== rg) rg.value = t; const pb = document.querySelector('[data-mrp="play"]'); if (pb) pb.textContent = F.rp.playing ? "❚❚ 暫停" : "▶ 播放";
   const sp = document.querySelector('[data-mrp="speed"]'); if (sp) sp.textContent = `${F.rp.speed}x`; const bi = document.querySelector(".binfo, .binfo-empty"); if (bi) bi.outerHTML = bubbleInfo(P.find(x => x.id === F.bsel)); }
 function mfStep(d) { const F = W.mf, M = mfModel(); if (!M) return; const t0 = Math.min(9, M.T - 1), t = (F.rp.t ?? M.T - 1) + d; F.rp.t = t > M.T - 1 ? t0 : Math.max(t0, t); mfReplayDraw(); }
@@ -1446,7 +1458,7 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F 
 $("#lx").addEventListener("input", e => { if (W.lt === "money" && e.target.matches(".mrp-range")) { mfPlay(false); W.mf.rp.t = +e.target.value; mfReplayDraw(); } });
 $("#lx").addEventListener("change", e => { if (W.lt === "money" && e.target.matches("[data-mrs]")) { W.mf.rp.set = e.target.value; W.mf.rp.sc = null; renderMoney(); } });
 
-/* ---------- 產業地圖：題材總覽、產業網絡、手繪圖庫（流程圖）、題材內頁 ---------- */
+/* ---------- 產業地圖：題材總覽、產業網絡、產業圖解（流程圖）、題材內頁 ---------- */
 // 圖解包（diagrams.js、industry-figs.js）裡的新題材併進產業地圖；圖解與原理說明用 indFig() 取
 if (typeof INDUSTRY_PACK !== "undefined") for (const t of INDUSTRY_PACK) if (!INDUSTRY_MAP.themes.some(x => x.id === t.id)) INDUSTRY_MAP.themes.push(t);
 const indFig = t => (t.fig ? t : typeof INDUSTRY_FIGS !== "undefined" ? INDUSTRY_FIGS[t.id] || null : null);
@@ -1473,7 +1485,7 @@ async function loadIndQuotes(codes) {
   if (W.lt === "ind") renderInd();
 }
 const indFav = () => new Set(store.get("watch:indfav", []) || []);
-// 流程圖（手繪圖庫）：把步驟排成一格一格的方塊，用箭頭串起來；cols 決定一列放幾格
+// 流程圖（產業圖解）：把步驟排成一格一格的方塊，用箭頭串起來；cols 決定一列放幾格
 function flowSvg(t, { cols = 3, w = 330, mini = false } = {}) {
   const steps = t.flow, n = steps.length, c = Math.min(cols, n), rows = Math.ceil(n / c), bw = (w - (c - 1) * 22) / c, bh = mini ? 34 : 46, gy = mini ? 16 : 24, H = rows * bh + (rows - 1) * gy + 4, col = indCol(t);
   const pos = k => { const r = Math.floor(k / c), i = r % 2 ? c - 1 - (k % c) : k % c; return { x: i * (bw + 22), y: 2 + r * (bh + gy), r }; }; // 蛇形排列：第二列從右往左
@@ -1582,7 +1594,7 @@ function renderInd() {
       + `<p class="note gnote">名單是常被提到的代表公司，不是完整名單；角色是簡化說明，實際營收比重請看財報。</p>`;
     $("#lx").innerHTML = h; loadIndQuotes(indCodes(T)); return;
   }
-  h += `<div class="seg scrseg" role="group" aria-label="產業地圖">${[["themes", "題材總覽"], ["network", "產業網絡"], ["gallery", "手繪圖庫"], ["fav", "收藏"]].map(([k, t]) => `<button data-iview="${k}" aria-pressed="${S.view === k}">${t}${k === "fav" && fav.size ? ` ${fav.size}` : ""}</button>`).join("")}</div>`;
+  h += `<div class="seg scrseg" role="group" aria-label="產業地圖">${[["themes", "題材總覽"], ["network", "產業網絡"], ["gallery", "產業圖解"], ["fav", "收藏"]].map(([k, t]) => `<button data-iview="${k}" aria-pressed="${S.view === k}">${t}${k === "fav" && fav.size ? ` ${fav.size}` : ""}</button>`).join("")}</div>`;
   if (S.view === "network") {
     const net = IND.networks.find(n => n.id === S.net) || IND.networks[0], F = S.focus && INDT.get(S.focus);
     h += `<p class="note gnote">一張圖看整條產業怎麼連動：點一個題材會加亮它的上下游，虛線是跨市場的關係；左右滑動看完整網絡。</p><div class="ichips" style="margin:0 12px">${IND.networks.map(n => `<button class="ichip" data-inet="${n.id}" aria-pressed="${n.id === net.id}">${esc(n.name)}</button>`).join("")}</div>
