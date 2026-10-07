@@ -798,7 +798,7 @@ async function tick() {
   if (W.lt === "us" && (!W.hot["us:" + W.usType] || Date.now() - W.hot["us:" + W.usType].at > 60000)) jobs.push(loadHot("us"));
   const res = await Promise.allSettled(jobs), bad = res.find(r => r.status === "rejected");
   W.err = bad ? bad.reason?.message || "更新失敗" : null; if (!bad) W.lastOk = Date.now();
-  W.busy = false; checkAlerts(); W.ticking = true; renderAll(); W.ticking = false; loadIntra(); if (W.dtab === "trend") loadFlow(); liveRefresh();
+  W.busy = false; checkAlerts(); W.ticking = true; try { renderAll(); } catch (e) { console.error("tick", e); } finally { W.ticking = false; } loadIntra(); if (W.dtab === "trend") loadFlow(); liveRefresh();
 }
 // 即時更新：盤中依目前分頁自動重抓（大盤、排行 30 秒，選股 60 秒，產業報價 15 秒）；收盤後資金分頁每 10 分鐘看看今天的法人資料出來了沒
 function liveRefresh() {
@@ -816,7 +816,7 @@ async function loadMktLive() {
   W.mktLoading = true; const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
   try { const [m, ex, fx] = await Promise.all([getJ("/api/market"), fut("EXF"), fut("FXF")]); W.mkt = { ...m, at: Date.now() }; W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; }
   catch (e) { if (W.mkt) W.mkt.at = Date.now(); } finally { W.mktLoading = false; }
-  if (W.lt === "mkt") { W.ticking = true; renderList(); W.ticking = false; }
+  if (W.lt === "mkt") { W.ticking = true; try { renderList(); } finally { W.ticking = false; } }
 }
 // 「盤中即時・更新於 10:31:05」或「10/06 收盤後」
 const liveTag = (J, closed) => (J?.live ? `<span class="livetag"><i></i>盤中即時・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}</span>` : J?.date ? `${J.date.slice(5).replace("-", "/")} ${closed}` : "");
@@ -824,7 +824,9 @@ const liveTag = (J, closed) => (J?.live ? `<span class="livetag"><i></i>盤中�
 async function fastTick() {
   if (W.off || W.busy || W.fbusy || document.visibilityState === "hidden") return;
   W.fbusy = true; try { const r = await Promise.allSettled([pollList(), pollDetail()]); if (!r.some(x => x.status === "rejected")) { W.lastOk = Date.now(); W.err = null; } } finally { W.fbusy = false; }
-  checkAlerts(); W.ticking = true; renderTop(); if (["watch", "hold", "tw", "us", "rank"].includes(W.lt) && Date.now() - (W.lastPtr || 0) > 900) renderList(); // 剛按下去時先不重畫清單，避免點擊被吃掉 if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } W.ticking = false;
+  checkAlerts(); W.ticking = true; // try／finally：重畫出錯也一定要把 ticking 關掉；剛按下去（900ms 內）先不重畫清單，避免點擊被吃掉
+  try { renderTop(); if (["watch", "hold", "tw", "us", "rank"].includes(W.lt) && Date.now() - (W.lastPtr || 0) > 900) renderList(); if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } }
+  catch (e) { console.error("fastTick", e); } finally { W.ticking = false; }
 }
 function schedule() { clearTimeout(W.timer); if (W.off) return; const open = anyOpen();
   W.timer = setTimeout(async () => { W.tn = (W.tn || 0) + 1; if (open && W.tn % 5) await fastTick(); else await tick(); schedule(); }, open ? 1000 : 300000); }
