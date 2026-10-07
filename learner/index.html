@@ -430,6 +430,7 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .intra-t { font-weight: 700; }
 .intra-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 14px 10px; border-bottom: 1px solid var(--line); }
 .intra-bar .seg button { padding: 5px 11px; font-size: 13px; }
+.ts-box { padding: 6px 4px 4px; } .ts-box canvas { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; } #intraRead { font-size: 12.5px; } #intraRead b { font-weight: 600; }
 .live-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 14px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; }
 .live-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; align-self: center; }
@@ -636,9 +637,9 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       </div>
     </div>
     <details class="panel intra" id="intraPanel" hidden>
-      <summary><span class="intra-t">盤中分 K</span><span class="note" id="intraMeta"></span></summary>
-      <div class="intra-bar"><div class="seg" role="group" aria-label="分 K 週期" id="intraTf"><button data-tf="1">1 分</button><button data-tf="5">5 分</button><button data-tf="15">15 分</button><button data-tf="30">30 分</button><button data-tf="60">60 分</button></div><span class="note" id="intraNote"></span></div>
-      <div class="chartbox" id="intraChart"></div>
+      <summary><span class="intra-t">盤中分時</span><span class="note" id="intraMeta"></span></summary>
+      <div class="intra-bar"><span class="note" id="intraRead">按住或移動到圖上看每分鐘的價格、均價與量</span><span class="note" id="intraNote"></span></div>
+      <div class="ts-box" id="intraChart"><canvas id="intraCv" aria-label="盤中分時走勢圖"></canvas></div>
     </details>
     <div class="shot-top" id="shotTop">
       <label class="drop panel" id="shotDrop" for="shotFile">
@@ -3656,37 +3657,63 @@ function renderLiveBar() {
   const B = q?.bids || [], A = q?.asks || [];
   $("#liveBook").innerHTML = B.length || A.length ? `<table class="book"><tr><th>買量</th><th>買價</th><th>賣價</th><th>賣量</th></tr>${Array.from({ length: Math.max(B.length, A.length) }, (_, k) => `<tr><td>${B[k]?.v?.toLocaleString() ?? ""}</td><td class="up">${B[k] ? fmtP(B[k].p) : ""}</td><td class="down">${A[k] ? fmtP(A[k].p) : ""}</td><td>${A[k]?.v?.toLocaleString() ?? ""}</td></tr>`).join("")}</table>` : `<p class="note" style="margin:0">${code === "T00" ? "指數沒有五檔報價。" : "目前沒有五檔資料（收盤後或試撮前）。"}</p>`;
 }
-/* ---------- 盤中分 K（/api/intraday：富果 1 分 K，沒有金鑰時用 Yahoo） ---------- */
-const INTRA = { tf: [1, 5, 15, 30, 60].includes(+store.get("intraTf", 5)) ? +store.get("intraTf", 5) : 5, at: 0, code: null, busy: false, off: !/^https?:$/.test(location.protocol), data: null };
-const intraChart = new Chart($("#intraChart"));
+/* ---------- 盤中分時（/api/intraday 1 分 K：富果，沒有金鑰時用 Yahoo）：價格線＋均價線＋量，以昨收為中心，時間軸固定 09:00–13:30 ---------- */
+const INTRA = { at: 0, code: null, busy: false, off: !/^https?:$/.test(location.protocol), data: null, hover: null };
 $("#intraPanel").open = store.get("intraOpen", true) !== false;
 async function intraLoad(force = false) {
   const code = liveCode(), P = $("#intraPanel");
   P.hidden = INTRA.off || !code; if (P.hidden || !P.open || INTRA.busy) return;
   const sess = mktSession(), age = Date.now() - INTRA.at;
-  if (!force && INTRA.code === code && INTRA.data && (sess === "closed" ? age < 600000 : age < 30000)) return; // 盤中 30 秒、收盤後 10 分鐘才重抓
+  if (!force && INTRA.code === code && INTRA.data && (sess === "closed" ? age < 600000 : age < 30000)) return;
   INTRA.busy = true; $("#intraNote").textContent = "載入中…";
   try {
-    const r = await fetch(`/api/intraday?code=${code}&tf=${INTRA.tf}`), j = await r.json().catch(() => null);
-    if (!j) { if (r.status === 404) { INTRA.off = true; P.hidden = true; } throw new Error(`分 K 服務回應 ${r.status}`); }
+    const r = await fetch(`/api/intraday?code=${code}&tf=1`), j = await r.json().catch(() => null);
+    if (!j) { if (r.status === 404) { INTRA.off = true; P.hidden = true; } throw new Error(`分時服務回應 ${r.status}`); }
     if (!j.ok) throw new Error(j.error);
     if (liveCode() !== code) return;
     INTRA.data = j; INTRA.code = code; INTRA.at = Date.now(); intraDraw();
   } catch (e) { $("#intraNote").textContent = e.message || "載入失敗"; }
   finally { INTRA.busy = false; }
 }
+const tMin = t => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
 function intraDraw() {
-  const j = INTRA.data; if (!j || !j.bars.length) { $("#intraNote").textContent = "今天還沒有分 K 資料（開盤後才有）。"; return; }
-  const D = j.bars.map(b => ({ d: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v })), last = D[D.length - 1], isIdx = j.code === "T00";
-  const today = LIVE.last?.today, chg = j.prev ? (last.c / j.prev - 1) * 100 : null;
-  $("#intraMeta").textContent = `${j.name || ""} ${isIdx ? "" : j.code}・${j.date && j.date !== today ? "最近交易日 " + j.date.replace(/-/g, "/") : "今天"}・${D.length} 根・最新 ${fmtP(last.c)}${chg != null ? `（${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%）` : ""}`;
+  const j = INTRA.data, cv = $("#intraCv"); if (!cv) return;
+  if (!j || !j.bars.length) { $("#intraNote").textContent = "今天還沒有分時資料（開盤後才有）。"; return; }
+  const day = j.bars[j.bars.length - 1].d, B = j.bars.filter(b => !b.d || b.d === day), isIdx = j.code === "T00", o = tMin(j.session?.open || "09:00"), cl = tMin(j.session?.close || "13:30"), N = cl - o;
+  let sv = 0, spv = 0; const P = B.map(b => { sv += b.v || 0; spv += b.c * (b.v || 0); return { m: tMin(b.t) - o, t: b.t, c: b.c, v: b.v || 0, avg: sv ? spv / sv : b.c }; }).filter(p => p.m >= 0 && p.m <= N);
+  if (!P.length) return;
+  const prev = j.prev ?? P[0].c, last = P[P.length - 1], today = LIVE.last?.today, chg = (last.c / prev - 1) * 100;
+  $("#intraMeta").textContent = `${j.name || ""} ${isIdx ? "" : j.code}・${j.date && j.date !== today ? "最近交易日 " + j.date.replace(/-/g, "/") : "今天"}・最新 ${fmtP(last.c)}（${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%）`;
   $("#intraNote").textContent = `來源：${j.source}${mktSession() === "open" ? "・盤中每 30 秒更新" : ""}`;
-  document.querySelectorAll("#intraTf [data-tf]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.tf === INTRA.tf));
-  Chart.keepView = intraChart.D && intraChart.D.length && intraChart.D[0].d === D[0].d && INTRA.code === j.code && intraChart.o?.tf === INTRA.tf;
-  try { intraChart.set(D, { ma: [5, 20], subs: ["kd"], noVol: isIdx, volLabel: "量（張）", fmtD: s => s, tf: INTRA.tf, hlines: j.prev ? [{ price: j.prev, label: `昨收 ${fmtP(j.prev)}`, color: "muted" }] : [] }); }
-  finally { Chart.keepView = false; }
+  const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim(), dpr = devicePixelRatio || 1, W = cv.parentElement.clientWidth || 600, H = W < 560 ? 250 : 300;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.height = H + "px"; }
+  const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+  const L = 8, R = W < 560 ? 46 : 56, top = 8, ph = Math.round(H * 0.66), vt = top + ph + 8, vh = H - vt - 20, pw = W - L - R, X = m => L + (m / N) * pw;
+  const dev = Math.max(...P.map(p => Math.abs(p.c - prev)), ...P.map(p => Math.abs(p.avg - prev)), prev * 0.003), Y = v => top + ph / 2 - ((v - prev) / dev) * (ph / 2 - 6);
+  const ink = css("--ink"), muted = css("--muted"), line = css("--line"), up = css("--up"), down = css("--down"), font = css("--font-num") || "serif";
+  c.font = `10.5px ${font}`; c.textBaseline = "middle";
+  // 格線：昨收（虛線）與上下兩條；右邊是漲跌幅
+  [-1, -0.5, 0, 0.5, 1].forEach(k => { const v = prev + k * dev, y = Y(v); c.strokeStyle = line; c.globalAlpha = k ? 0.6 : 1; c.setLineDash(k ? [] : [4, 4]); c.beginPath(); c.moveTo(L, y); c.lineTo(L + pw, y); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+    c.fillStyle = k > 0 ? up : k < 0 ? down : muted; c.textAlign = "left"; c.fillText(`${k > 0 ? "+" : ""}${((v / prev - 1) * 100).toFixed(2)}%`, L + pw + 4, y); });
+  // 時間軸
+  c.fillStyle = muted; c.textAlign = "center"; for (let h = Math.ceil(o / 60) * 60; h <= cl; h += 60) { const x = X(h - o); c.strokeStyle = line; c.globalAlpha = 0.4; c.beginPath(); c.moveTo(x, top); c.lineTo(x, vt + vh); c.stroke(); c.globalAlpha = 1; c.textAlign = h === o ? "left" : x > L + pw - 20 ? "right" : "center"; c.fillText(`${h / 60}:00`, x, H - 8); }
+  // 價格面積＋線、均價線
+  const col = last.c >= prev ? up : down; c.beginPath(); P.forEach((p, i) => (i ? c.lineTo(X(p.m), Y(p.c)) : c.moveTo(X(p.m), Y(p.c)))); c.lineTo(X(last.m), Y(prev)); c.lineTo(X(P[0].m), Y(prev)); c.closePath(); c.fillStyle = col; c.globalAlpha = 0.12; c.fill(); c.globalAlpha = 1;
+  c.beginPath(); P.forEach((p, i) => (i ? c.lineTo(X(p.m), Y(p.c)) : c.moveTo(X(p.m), Y(p.c)))); c.strokeStyle = ink; c.lineWidth = 1.5; c.stroke();
+  if (!isIdx) { c.beginPath(); P.forEach((p, i) => (i ? c.lineTo(X(p.m), Y(p.avg)) : c.moveTo(X(p.m), Y(p.avg)))); c.strokeStyle = css("--s1"); c.lineWidth = 1.2; c.stroke(); }
+  c.beginPath(); c.arc(X(last.m), Y(last.c), 3, 0, 7); c.fillStyle = col; c.fill();
+  // 量：紅（比前一分鐘高）綠（低）
+  const vm = Math.max(1, ...P.map(p => p.v)); P.forEach((p, i) => { const h = (p.v / vm) * vh, x = X(p.m); c.fillStyle = i && p.c < P[i - 1].c ? down : up; c.globalAlpha = 0.75; c.fillRect(x - Math.max(0.6, pw / N / 2.4), vt + vh - h, Math.max(1.2, pw / N / 1.2), h); }); c.globalAlpha = 1;
+  // 十字線
+  const hv = INTRA.hover != null ? P.reduce((a, p) => (Math.abs(p.m - INTRA.hover) < Math.abs(a.m - INTRA.hover) ? p : a), P[0]) : null;
+  if (hv) { const x = X(hv.m); c.strokeStyle = muted; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(x, top); c.lineTo(x, vt + vh); c.stroke(); c.setLineDash([]); c.beginPath(); c.arc(x, Y(hv.c), 3.5, 0, 7); c.fillStyle = ink; c.fill(); }
+  const show = hv || last, pc = (show.c / prev - 1) * 100;
+  $("#intraRead").innerHTML = `${show.t}　價 <b class="${pc >= 0 ? "up" : "down"}">${fmtP(show.c)}（${pc >= 0 ? "+" : ""}${pc.toFixed(2)}%）</b>${isIdx ? "" : `　均價 ${fmtP(show.avg)}　量 ${show.v.toLocaleString()} 張`}　昨收 ${fmtP(prev)}`;
+  INTRA.geo = { L, pw, N };
 }
-$("#intraTf").addEventListener("click", e => { const b = e.target.closest("[data-tf]"); if (!b) return; INTRA.tf = +b.dataset.tf; store.set("intraTf", INTRA.tf); intraLoad(true); });
+{ const cv = $("#intraCv"), at = e => { const g = INTRA.geo; if (!g) return; const r = cv.getBoundingClientRect(); INTRA.hover = Math.max(0, Math.min(g.N, ((e.clientX - r.left - g.L) / g.pw) * g.N)); intraDraw(); };
+  cv.addEventListener("pointermove", at); cv.addEventListener("pointerdown", at); cv.addEventListener("pointerleave", () => { INTRA.hover = null; intraDraw(); });
+  new ResizeObserver(() => { if (INTRA.data) intraDraw(); }).observe($("#intraChart")); }
 $("#intraPanel").addEventListener("toggle", () => { store.set("intraOpen", $("#intraPanel").open); if ($("#intraPanel").open) intraLoad(true); });
 $("#livePause").addEventListener("click", () => { LIVE.paused = !LIVE.paused; store.set("livePaused", LIVE.paused); renderLiveBar(); if (!LIVE.paused) liveKick(); });
 
@@ -4392,7 +4419,7 @@ addEventListener("message", e => {
 document.addEventListener("click", e => { const a = e.target.closest('a[href^="watch.html"]'); if (!a || e.metaKey || e.ctrlKey || e.shiftKey || a.target === "_blank") return; e.preventDefault(); openWatch(decodeURIComponent((a.getAttribute("href").split("#")[1] || "")).toUpperCase()); });
 
 // 深色（黑底）／淺色切換：預設黑底，記在瀏覽器
-$("#themeBtn").addEventListener("click", () => { const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = t; store.set("theme", t); $("#savingsFrame").contentWindow?.postMessage({ type: "kline-theme", theme: t }, "*"); $("#watchFrame").contentWindow?.postMessage({ type: "kline-theme", theme: t }, "*"); $('meta[name="theme-color"]')?.setAttribute("content", t === "dark" ? "#000000" : "#f3f5f8"); });
+$("#themeBtn").addEventListener("click", () => { const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = t; store.set("theme", t); $("#savingsFrame").contentWindow?.postMessage({ type: "kline-theme", theme: t }, "*"); $("#watchFrame").contentWindow?.postMessage({ type: "kline-theme", theme: t }, "*"); $('meta[name="theme-color"]')?.setAttribute("content", t === "dark" ? "#000000" : "#e9e9e9"); if (INTRA.data) intraDraw(); });
 // 主題切換時重畫圖表
 const redrawAll = () => { [lessonChart, labChart, chalChart, shotChart].forEach(c => c.draw()); drawShot(); };
 try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redrawAll); } catch {}
