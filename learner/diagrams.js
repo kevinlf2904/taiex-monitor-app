@@ -49,7 +49,7 @@ const FIG_ICONS = {
 function figSvg(fig, { id = "f" + Math.random().toString(36).slice(2, 7), mini = false } = {}) {
   if (!fig?.items) return "";
   const W = fig.w || 360, H = fig.h || 230, C = k => FIG_C[k] || FIG_C.gray, e = s => String(s ?? "").replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
-  const T = (x, y, s, label, { c = "var(--ink)", a = "middle", b = false, o = 1 } = {}) => (label == null || label === "" ? "" : `<text x="${x}" y="${y}" font-size="${s}" fill="${c}" text-anchor="${a}" ${b ? 'font-weight="700"' : ""} opacity="${o}">${e(label)}</text>`);
+  const T = (x, y, s, label, { c = "var(--ink)", a = "middle", b = false, o = 1 } = {}) => (label == null || label === "" ? "" : `<text x="${x}" y="${y}" font-size="${s}" fill="${c}" text-anchor="${a}" ${b ? 'font-weight="500"' : ""} opacity="${o}">${e(label)}</text>`);
   const lab = (it, x, y) => T(x, y, it.ls || 8.5, it.label, { c: "var(--muted)" }); // 圖元下方的說明字（ls 可指定字級；不要用 s，icon 的 s 是圖示大小）
   const P = pts => pts.map(p => p.join(",")).join(" ");
   let defs = "", body = "";
@@ -72,7 +72,7 @@ function figSvg(fig, { id = "f" + Math.random().toString(36).slice(2, 7), mini =
     else if (it.t === "icon") { const s = it.s || 24; body += `<g transform="translate(${it.x} ${it.y}) scale(${s / 24})"><path d="${FIG_ICONS[it.k] || FIG_ICONS.gear}" fill="${c}" fill-opacity=".15" stroke="${c}" stroke-width="${1.6 * 24 / s > 2.4 ? 2.4 : 1.6 * 24 / s}" stroke-linejoin="round" stroke-linecap="round"/></g>${lab(it, it.x + s / 2, it.y + s + 10)}`; }
     else if (it.t === "group") body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="8" fill="none" stroke="${c}" stroke-opacity=".7" stroke-dasharray="4 3"/>${T(it.x + 6, it.y + 11, 8.5, it.label, { c: "var(--muted)", a: "start", b: true })}`;
     // ---- 細節圖元 ----
-    else if (it.t === "badge") body += `<circle cx="${it.x}" cy="${it.y}" r="${(it.r || 7) + 2.2}" fill="${c}" fill-opacity=".22"/><circle cx="${it.x}" cy="${it.y}" r="${it.r || 7}" fill="${c}" stroke="#fff" stroke-opacity=".85" stroke-width="1"/><text x="${it.x}" y="${it.y + 3.2}" font-size="${it.s || 8.5}" font-weight="700" fill="#fff" text-anchor="middle">${e(it.n)}</text>`;
+    else if (it.t === "badge") body += `<circle cx="${it.x}" cy="${it.y}" r="${(it.r || 7) + 2.2}" fill="${c}" fill-opacity=".22"/><circle cx="${it.x}" cy="${it.y}" r="${it.r || 7}" fill="${c}" stroke="#fff" stroke-opacity=".85" stroke-width="1"/><text x="${it.x}" y="${it.y + 3.2}" font-size="${it.s || 8.5}" font-weight="500" fill="#fff" text-anchor="middle">${e(it.n)}</text>`;
     else if (it.t === "path") body += `<path d="${it.d}" fill="${it.fill ? c : "none"}" fill-opacity="${it.fill || 0}" stroke="${it.stroke === false ? "none" : c}" stroke-width="${it.w || 1.4}" ${it.dash ? 'stroke-dasharray="4 3"' : ""} stroke-linejoin="round" stroke-linecap="round"/>`;
     else if (it.t === "rect") body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${it.r ?? 2}" fill="${c}" fill-opacity="${it.fill ?? 0.3}" stroke="${it.stroke === false ? "none" : c}" stroke-width="${it.sw || 1}" ${it.dash ? 'stroke-dasharray="3 2"' : ""}/>`;
     else if (it.t === "circle") body += `<circle cx="${it.x}" cy="${it.y}" r="${it.r}" fill="${c}" fill-opacity="${it.fill ?? 0.25}" stroke="${it.stroke === false ? "none" : c}" stroke-width="${it.sw || 1.2}"/>${lab(it, it.x, it.y + it.r + 10)}`;

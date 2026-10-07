@@ -15,7 +15,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;500;600&display=swap">
 <style>
 /* Layout: sticky control console left (every number is typed or slid there); one continuous readout right */
 :root{
@@ -100,7 +100,7 @@ main{display:grid;gap:22px;min-width:0}
 @media (max-width:420px){.two{grid-template-columns:1fr}}
 .verdict{border-radius:4px;padding:14px 16px;display:grid;gap:4px;border:1px solid var(--line)}
 .verdict[data-s="ok"]{background:var(--ok-soft)} .verdict[data-s="warn"]{background:var(--warn-soft)} .verdict[data-s="bad"]{background:var(--bad-soft)}
-.pill{justify-self:start;font-size:12px;font-weight:700;letter-spacing:.06em;padding:2px 10px;border-radius:3px;color:var(--panel)}
+.pill{justify-self:start;font-size:12px;font-weight:500;letter-spacing:.06em;padding:2px 10px;border-radius:3px;color:var(--panel)}
 .verdict[data-s="ok"] .pill{background:var(--ok)} .verdict[data-s="warn"] .pill{background:var(--warn)} .verdict[data-s="bad"] .pill{background:var(--bad)}
 .verdict h3{margin:0;font-size:16px;text-wrap:balance}
 .verdict p{margin:0;color:var(--muted);font-size:13px}
@@ -128,7 +128,7 @@ main{display:grid;gap:22px;min-width:0}
 .tbl td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
 .tbl td.txt{font-family:var(--f-body);text-align:left;white-space:normal}
 .tbl tr[data-sel="1"] td{background:var(--accent-soft)}
-.tbl tr.best td:nth-child(3){font-weight:700}
+.tbl tr.best td:nth-child(3){font-weight:500}
 .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:3px;margin-right:4px;font-family:var(--f-body)}
 .tag.ok{background:var(--ok-soft);color:var(--ok)} .tag.warn{background:var(--warn-soft);color:var(--warn)} .tag.bad{background:var(--bad-soft);color:var(--bad)}
 .legend{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--muted);margin-top:8px}
@@ -184,7 +184,7 @@ main{display:grid;gap:22px;min-width:0}
 .kpi .big{font-family:var(--f-num);font-size:clamp(22px,2.6vw,28px);font-weight:500;font-variant-numeric:tabular-nums;line-height:1.1}
 .kpi .sub{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12.5px}
 .kpi .sub span{color:var(--muted)} .kpi .sub b{font-family:var(--f-num);font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
-.badge{font-size:11px;font-weight:700;padding:1px 8px;border-radius:3px;background:var(--accent);color:var(--panel)}
+.badge{font-size:11px;font-weight:500;padding:1px 8px;border-radius:3px;background:var(--accent);color:var(--panel)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
 /* 和看盤、學堂一致：宋體、小圓角、黑白灰漸層 */
@@ -196,7 +196,8 @@ body{font-variant-numeric:tabular-nums;letter-spacing:.02em}
 :root{--bg:#e9e9e9;--panel:#fafafa;--ink:#111111;--muted:#666666;--line:#d4d4d4;--accent:#1c1c1c;--accent-soft:rgba(0,0,0,.06);--field:#ffffff}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000000;--panel:#0c0c0c;--ink:#f2f2f2;--muted:#8e8e8e;--line:#262626;--accent:#e4e4e4;--accent-soft:rgba(255,255,255,.08);--field:#212121}}
 :root[data-theme="dark"]{--bg:#000000;--panel:#0c0c0c;--ink:#f2f2f2;--muted:#8e8e8e;--line:#262626;--accent:#e4e4e4;--accent-soft:rgba(255,255,255,.08);--field:#212121}
-body{margin:0}
+body{margin:0;font-weight:300}
+h1,h2,h3,h4,h5,h6,b,strong,th,legend,dt{font-weight:500}
 input.num,select,.arow input,.mrow input{background:var(--field)}
 /* 嵌在 K線學堂裡：不留外框邊距、標題縮小、控制台不黏住（iframe 會依內容自動長高） */
 :root[data-embed="1"] .wrap{padding:0 0 24px;max-width:none}
@@ -677,7 +678,7 @@ function renderMilestones(p){
   let prevA=0;
   $("ms-body").innerHTML=list.length?list.map(m=>{const amt=m.amt*1e4,ts=R.map(x=>monthsTo(x.r,amt,p.init)),best=Math.min(...ts.filter(t=>t!=null));
     const gap=ts[0]!=null?ts[0]-prevA:null;if(ts[0]!=null)prevA=ts[0];
-    return `<tr><td class="l" style="font-family:var(--f-body)">${esc(m.name)}</td><td>${wan(amt)}</td>${ts.map(t=>t==null?`<td class="na">80 年內未達成</td>`:`<td${t===best&&ts.filter(x=>x===best).length<3?' style="font-weight:700"':""}>${durTxt(t)}<span class="ms-when">${t?dateTxt(t):""}</span></td>`).join("")}<td>${gap==null?"—":gap===0?"—":"+"+durTxt(gap)}</td></tr>`}).join(""):`<tr><td colspan="6" class="na">在控制台新增里程碑</td></tr>`;
+    return `<tr><td class="l" style="font-family:var(--f-body)">${esc(m.name)}</td><td>${wan(amt)}</td>${ts.map(t=>t==null?`<td class="na">80 年內未達成</td>`:`<td${t===best&&ts.filter(x=>x===best).length<3?' style="font-weight:500"':""}>${durTxt(t)}<span class="ms-when">${t?dateTxt(t):""}</span></td>`).join("")}<td>${gap==null?"—":gap===0?"—":"+"+durTxt(gap)}</td></tr>`}).join(""):`<tr><td colspan="6" class="na">在控制台新增里程碑</td></tr>`;
   // timeline
   const svg=$("c-ms"),W=760,rowH=46,ml=96,mr=20,mt=24,H=mt+rowH*R.length+28;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
   const all=R.flatMap(x=>list.map(m=>monthsTo(x.r,m.amt*1e4,p.init)).filter(t=>t!=null));
