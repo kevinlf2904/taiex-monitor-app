@@ -327,7 +327,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .qcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 12px; } .qcard { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--muted); cursor: pointer; padding: 8px 2px; display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: .65; font: inherit; }
 .qcard[aria-pressed="true"] { opacity: 1; border-color: var(--qc); } .qcard span { color: var(--qc); font-weight: 700; font-size: 13.5px; } .qcard b { font: 700 24px var(--font-mono); color: var(--qc); } .qcard small { font-size: 11px; }
 .bwrap { margin: 6px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); } .bubble { width: 100%; height: auto; display: block; } .bax { stroke: var(--line); stroke-width: 1; } .bq { font: 600 11px var(--font-body); fill: var(--muted); }
-.bnode { cursor: pointer; transition: transform .7s ease; } .bnode circle { transition: r .7s ease; } .bn { font: 700 10.5px var(--font-body); fill: var(--ink); text-anchor: middle; pointer-events: none; } .bv { font: 10px var(--font-mono); fill: var(--ink); opacity: .8; text-anchor: middle; pointer-events: none; }
+.bnode { cursor: pointer; transition: transform .7s ease; } .bnode circle { transition: r .7s ease, fill .7s; } .bnode.on circle { stroke-width: 3; fill-opacity: .8; } .bnode:focus circle, .bnode:hover circle { fill-opacity: .75; } .bax-t { font: 10px var(--font-body); fill: var(--muted); } .blab { transition: transform .7s ease; pointer-events: none; } .blab text { paint-order: stroke; stroke: var(--surface-2); stroke-width: 3px; stroke-linejoin: round; }
+.bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bn { font: 700 10.5px var(--font-body); fill: var(--ink); text-anchor: middle; pointer-events: none; } .bv { font: 10px var(--font-mono); fill: var(--ink); opacity: .8; text-anchor: middle; pointer-events: none; }
 .mlist { list-style: none; margin: 0; padding: 0; } .mlist button { width: 100%; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); padding: 9px 2px; cursor: pointer; text-align: left; font: inherit; }
 .mlist .nm { display: flex; flex-direction: column; font-size: 14.5px; min-width: 0; } .mlist .nm small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mlist b { font-size: 13.5px; text-align: right; min-width: 4.2em; }
 .mlist .rk { color: var(--muted); font: 12px var(--font-mono); min-width: 1.4em; text-align: right; } .mrk { margin: 8px 12px 0; } .mdesc { margin: 8px 12px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 6px; font-size: 13px; color: var(--muted); }
@@ -842,7 +843,7 @@ function renderList() {
   } else if (W.lt === "money") {
     const D = W.mf.days, last = D[D.length - 1], tq = W.quotes.get("T00");
     $("#lTools").innerHTML = `<span class="note">${tq?.chgPct != null ? `<b class="${cls(tq.chg)}">大盤 ${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct.toFixed(2)}%</b>・` : ""}${last ? `資料日期 ${last.date.replace(/-/g, "/")}` : "板塊資金"}</span><button class="btn sm" data-gx="mfRefresh">↻ 更新</button>`;
-    renderMoney(); note = "金額＝三大法人買賣超張數 × 收盤價（估算，億元）；板塊是產業地圖的題材加上產業別，一檔股票可能同時算進好幾個板塊。只呈現公開資料的統計，不是投資建議。";
+    W.mf.view === "replay" ? mfReplayDraw() : renderMoney(); note = "金額＝三大法人買賣超張數 × 收盤價（估算，億元）；板塊是產業地圖的題材加上產業別，一檔股票可能同時算進好幾個板塊。只呈現公開資料的統計，不是投資建議。";
   } else if (W.lt === "ind") {
     $("#lTools").innerHTML = `<span class="note">產業地圖・代表公司參考名單（整理於 ${INDUSTRY_MAP.updated}），不是推薦</span>`;
     renderInd(); note = "台股、美股有即時報價；日股、韓股只列名稱。題材的平均漲跌是成員今天漲跌幅的簡單平均。";
@@ -1262,7 +1263,10 @@ async function loadMoney(need = 10, force = false) {
     const iso = d.toISOString().slice(0, 10); if (F.tried.has(iso) || F.days.some(x => x.date === iso)) continue;
     try { const j = await getJ(`/api/daily?date=${iso.replace(/-/g, "")}`); F.tried.add(iso); miss = 0; if (!j.empty && j.rows?.length) { F.days.push({ date: j.date, rows: j.rows, tpex: j.tpex }); F.days.sort((a, b) => a.date.localeCompare(b.date)); F.model = null; F.src = j.source; } }
     catch (e) { miss++; F.err = e.message; }
-    F.prog = `${F.days.length}/${need}`; if (W.lt === "money" || (W.lt === "screen" && W.scrG === "score")) renderList();
+    F.prog = `${F.days.length}/${need}`;
+    // 回放畫面已經畫好時只更新進度文字，等全部載完再重畫，避免拖拉日期或播放被打斷
+    if (W.lt === "money" && F.view === "replay" && document.getElementById("mfb")) { const el = document.querySelector(".mrp-load"); if (el) el.textContent = `正在載入更早的資料（${F.prog}）…`; }
+    else if (W.lt === "money" || (W.lt === "screen" && W.scrG === "score")) renderList();
   }
   F.loading = false; if (W.lt === "money" || W.lt === "screen") { mfModel(); renderList(); }
 }
@@ -1271,14 +1275,65 @@ const qDot = q => `<i class="qdot" style="background:${FLOW_Q[q][2]}"></i>`;
 const yiB = v => `<b class="${cls(v)}">${flowFmt(v)}</b>`;
 const pctB = v => `<b class="${cls(v)}">${v >= 0 ? "+" : ""}${v.toFixed(1)}%</b>`;
 function secOpen(id) { if (INDT.has(id)) { W.indS.open = id; setLt("ind"); } else toast("這是產業別板塊，沒有題材內頁"); }
-// 泡泡圖：x＝近 5 日淨流入、y＝加速度、半徑＝金額規模、顏色＝象限
-function bubbleSvg(pts, { w = 360, h = 340, id = "mfb" } = {}) {
-  const mx = Math.max(1, ...pts.map(p => Math.abs(p.net5))), my = Math.max(1, ...pts.map(p => Math.abs(p.accel))), sq = (v, m) => Math.sign(v) * Math.sqrt(Math.abs(v) / m), X = v => w / 2 + sq(v, mx) * (w / 2 - 34), Y = v => h / 2 - sq(v, my) * (h / 2 - 34), R = v => 6 + 18 * Math.sqrt(Math.abs(v) / mx);
-  const big = new Set(pts.slice().sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 10).map(p => p.id)); // 只標前 10 大，其他點了才看得到名稱
-  const lab = (t, x, y, a) => `<text x="${x}" y="${y}" text-anchor="${a}" class="bq">${t}</text>`;
-  return `<svg id="${id}" class="bubble" viewBox="0 0 ${w} ${h}" role="img" aria-label="板塊資金四象限泡泡圖"><line x1="${w / 2}" y1="8" x2="${w / 2}" y2="${h - 8}" class="bax"/><line x1="8" y1="${h / 2}" x2="${w - 8}" y2="${h / 2}" class="bax"/>
-    ${lab("流出但放緩（觀望）", 10, 18, "start")}${lab("法人加速流入（漲潮）", w - 10, 18, "end")}${lab("加速流出（退潮）", 10, h - 8, "start")}${lab("流入但放緩（輪動）", w - 10, h - 8, "end")}
-    ${pts.slice().sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).map(p => `<g class="bnode" data-fsec="${esc(p.id)}" style="transform:translate(${X(p.net5).toFixed(1)}px,${Y(p.accel).toFixed(1)}px)"><circle r="${R(p.net5).toFixed(1)}" fill="${FLOW_Q[p.q][2]}" fill-opacity=".55" stroke="${FLOW_Q[p.q][2]}"/><title>${esc(p.name)} ${flowFmt(p.net5)}</title>${big.has(p.id) ? `<text y="-1" class="bn">${esc(p.name.length > 6 ? p.name.slice(0, 6) + "…" : p.name)}</text><text y="11" class="bv">${flowFmt(p.net5)}</text>` : ""}</g>`).join("")}</svg>`;
+// 泡泡圖：x＝近 5 日淨流入、y＝加速度（都用平方根縮放）、半徑＝近 5 日淨流入規模、顏色＝象限。
+// 重疊的泡泡會稍微推開（不會被推到別的象限），名稱標籤會避開彼此和其他泡泡，放不下就不標（點泡泡看詳細）。
+function bubbleLayout(pts, { w = 360, h = 360, scale } = {}) {
+  const top = 30, bot = h - 30, L = 8, Rt = w - 8, cx = w / 2, cy = (top + bot) / 2;
+  const mx = scale?.mx || Math.max(1, ...pts.map(p => Math.abs(p.net5))), my = scale?.my || Math.max(1, ...pts.map(p => Math.abs(p.accel)));
+  const sq = (v, m) => Math.sign(v) * Math.min(1, Math.sqrt(Math.abs(v) / m));
+  const N = pts.slice().sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).map(p => { const r = 5 + 16 * Math.min(1, Math.sqrt(Math.abs(p.net5) / mx)); return { p, r, x: cx + sq(p.net5, mx) * (cx - L - r), y: cy - sq(p.accel, my) * (cy - top - r) }; });
+  const clamp = n => { const sx = n.p.net5 >= 0 ? 1 : -1, sy = n.p.accel >= 0 ? -1 : 1; // 保持在自己的象限
+    n.x = sx > 0 ? Math.min(Rt - n.r, Math.max(cx + 2, n.x)) : Math.max(L + n.r, Math.min(cx - 2, n.x)); n.y = sy < 0 ? Math.max(top + n.r, Math.min(cy - 2, n.y)) : Math.min(bot - n.r, Math.max(cy + 2, n.y)); };
+  N.forEach(clamp);
+  for (let it = 0; it < 60; it++) { let moved = false;
+    for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) { const a = N[i], b = N[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01, o = a.r + b.r + 1 - d;
+      if (o > 0) { const ux = dx / d, uy = dy / d, k = o / 2; a.x -= ux * k; a.y -= uy * k; b.x += ux * k; b.y += uy * k; clamp(a); clamp(b); moved = true; } }
+    if (!moved) break; }
+  // 標籤：前 12 大依序找位置（泡泡裡、上、下、右、左），和已放的標籤或別的泡泡重疊就換位置
+  const boxes = [], hit = (r1, r2) => r1.x < r2.x + r2.w && r2.x < r1.x + r1.w && r1.y < r2.y + r2.h && r2.y < r1.y + r1.h;
+  const circHit = (r, n) => { const qx = Math.max(r.x, Math.min(n.x, r.x + r.w)), qy = Math.max(r.y, Math.min(n.y, r.y + r.h)); return Math.hypot(qx - n.x, qy - n.y) < n.r - 1; };
+  N.forEach((n, i) => { if (i >= 12) return; const nm = n.p.name.length > 6 ? n.p.name.slice(0, 6) + "…" : n.p.name, bw = Math.max(nm.length * 10.5, flowFmt(n.p.net5).length * 6.2) + 4, bh = 24;
+    const cand = [[0, 0, n.r >= 13], [0, -n.r - bh / 2 - 1, true], [0, n.r + bh / 2 + 1, true], [n.r + bw / 2 + 2, 0, true], [-n.r - bw / 2 - 2, 0, true]];
+    for (const [dx, dy, ok] of cand) { if (!ok) continue; const r = { x: n.x + dx - bw / 2, y: n.y + dy - bh / 2, w: bw, h: bh };
+      if (r.x < 2 || r.x + r.w > w - 2 || r.y < top - 4 || r.y + r.h > bot + 4) continue;
+      if (boxes.some(b => hit(b, r)) || (dx || dy ? N.some(m => m !== n && circHit(r, m)) : false)) continue; // 放在泡泡裡的標籤有描邊，可以壓到旁邊的泡泡
+      boxes.push(r); n.lab = { dx, dy, nm }; break; } });
+  return { N, w, h, top, bot, cx, cy, mx, my };
+}
+// 標籤畫在最上層（不會被別的泡泡蓋住），跟著泡泡一起移動
+const bubbleLabIn = n => `<g class="bl" transform="translate(${n.lab.dx.toFixed(1)},${n.lab.dy.toFixed(1)})"><text y="-1" class="bn">${esc(n.lab.nm)}</text><text y="10" class="bv">${flowFmt(n.p.net5)}</text></g>`;
+const bubbleLab = n => (n.lab ? `<g class="blab" data-lb="${esc(n.p.id)}" style="transform:translate(${n.x.toFixed(1)}px,${n.y.toFixed(1)}px)">${bubbleLabIn(n)}</g>` : "");
+const bubbleNode = (n, sel) => `<g class="bnode${n.p.id === sel ? " on" : ""}" data-mbs="${esc(n.p.id)}" style="transform:translate(${n.x.toFixed(1)}px,${n.y.toFixed(1)}px)"><circle r="${n.r.toFixed(1)}" fill="${FLOW_Q[n.p.q][2]}" fill-opacity=".5" stroke="${FLOW_Q[n.p.q][2]}"/><title>${esc(n.p.name)} ${flowFmt(n.p.net5)}</title></g>`;
+function bubbleSvg(pts, { w = 360, h = 360, id = "mfb", scale, sel } = {}) {
+  const B = bubbleLayout(pts, { w, h, scale }), lab = (t, x, y, a, c) => `<text x="${x}" y="${y}" text-anchor="${a}" class="bq" style="fill:${c}">${t}</text>`, { top, bot, cx, cy } = B;
+  return `<svg id="${id}" class="bubble" viewBox="0 0 ${w} ${h}" role="img" aria-label="板塊資金四象限泡泡圖">
+    <rect x="${cx}" y="${top}" width="${w - 8 - cx}" height="${cy - top}" fill="${FLOW_Q.up[2]}" opacity=".05"/><rect x="8" y="${cy}" width="${cx - 8}" height="${bot - cy}" fill="${FLOW_Q.down[2]}" opacity=".05"/>
+    <line x1="${cx}" y1="${top}" x2="${cx}" y2="${bot}" class="bax"/><line x1="8" y1="${cy}" x2="${w - 8}" y2="${cy}" class="bax"/>
+    ${lab("↖ 觀望：流出但放緩", 8, 18, "start", FLOW_Q.watch[2])}${lab("漲潮：加速流入 ↗", w - 8, 18, "end", FLOW_Q.up[2])}${lab("↙ 退潮：加速流出", 8, h - 10, "start", FLOW_Q.down[2])}${lab("輪動：流入但放緩 ↘", w - 8, h - 10, "end", FLOW_Q.rot[2])}
+    <text x="${w - 10}" y="${cy - 4}" text-anchor="end" class="bax-t">淨流入 →</text><text x="${cx + 4}" y="${top + 10}" class="bax-t">加速 ↑</text>
+    <g class="bnodes">${B.N.map(n => bubbleNode(n, sel)).join("")}</g><g class="blabs">${B.N.map(bubbleLab).join("")}</g></svg>`;
+}
+// 回放時只更新泡泡的位置與大小（才有移動動畫，拖拉日期也不會中斷）
+function bubblePatch(svg, pts, { scale, sel } = {}) {
+  const g = svg.querySelector(".bnodes"), [, , w, h] = svg.getAttribute("viewBox").split(" ").map(Number), B = bubbleLayout(pts, { w, h, scale }), keep = new Set();
+  const old = new Map([...g.querySelectorAll(".bnode")].map(el => [el.dataset.mbs, el]));
+  for (const n of B.N) { keep.add(n.p.id); let el = old.get(n.p.id);
+    if (!el) { g.insertAdjacentHTML("beforeend", bubbleNode(n, sel)); continue; }
+    el.style.transform = `translate(${n.x.toFixed(1)}px,${n.y.toFixed(1)}px)`; const c = el.querySelector("circle"); c.setAttribute("r", n.r.toFixed(1)); c.setAttribute("fill", FLOW_Q[n.p.q][2]); c.setAttribute("stroke", FLOW_Q[n.p.q][2]);
+    el.classList.toggle("on", n.p.id === sel); el.querySelector("title").textContent = `${n.p.name} ${flowFmt(n.p.net5)}`; }
+  for (const [id, el] of old) if (!keep.has(id)) el.remove();
+  B.N.forEach(n => g.appendChild(g.querySelector(`.bnode[data-mbs="${CSS.escape(n.p.id)}"]`))); // 大的先畫，小的在上面
+  const lg = svg.querySelector(".blabs"), ol = new Map([...lg.querySelectorAll(".blab")].map(el => [el.dataset.lb, el])), lk = new Set();
+  for (const n of B.N) { if (!n.lab) continue; lk.add(n.p.id); const el = ol.get(n.p.id); if (!el) { lg.insertAdjacentHTML("beforeend", bubbleLab(n)); continue; }
+    el.style.transform = `translate(${n.x.toFixed(1)}px,${n.y.toFixed(1)}px)`; el.innerHTML = bubbleLabIn(n); }
+  for (const [id, el] of ol) if (!lk.has(id)) el.remove();
+}
+// 點泡泡：下面顯示這個板塊的數字，再按按鈕進題材內頁
+function bubbleInfo(x) {
+  if (!x) return `<p class="note gnote binfo-empty">點一下泡泡，看這個板塊的法人資金細節。</p>`;
+  return `<section class="mcard binfo" style="--qc:${FLOW_Q[x.q][2]}"><h3>${qDot(x.q)}${esc(x.name)} <span class="note">${x.kind}・${x.n} 檔・${FLOW_Q[x.q][0]}（${FLOW_Q[x.q][1]}）</span></h3>
+    <div class="bgrid"><span>近 5 日淨流入</span>${yiB(x.net5)}<span>前 5 日</span>${yiB(x.prev5)}<span>加速度</span>${yiB(x.accel)}<span>近 5 日漲跌</span>${pctB(x.pct5)}<span>外資 5 日</span>${yiB(x.f5)}<span>投信 5 日</span>${yiB(x.tr5)}<span>買超家數</span><b>${x.buy5}／${x.n}</b><span>買最多</span><b>${esc(x.top || "—")}</b></div>
+    ${INDT.has(x.id) ? `<button class="btn sm primary" data-fsec="${esc(x.id)}">看題材內頁 ›</button>` : `<p class="note">這是證交所產業別板塊，沒有題材內頁。</p>`}</section>`;
 }
 function mfCanvas(M, mood, sum) {
   const A = flowAt(M), last = M.dates[M.T - 1], cv = document.createElement("canvas"), W0 = 1080, H0 = 1350; cv.width = W0; cv.height = H0;
@@ -1322,18 +1377,17 @@ function renderMoney() {
   } else if (F.view === "bubble") {
     const cnt = Object.fromEntries(Object.keys(FLOW_Q).map(k => [k, A.filter(x => x.q === k).length])), L = A.filter(x => x.q === F.q).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5));
     h += more + `<div class="qcards">${Object.entries(FLOW_Q).map(([k, [t, d, c]]) => `<button class="qcard" data-mq="${k}" aria-pressed="${F.q === k}" style="--qc:${c}"><span>${t}</span><b>${cnt[k]}</b><small>${d}</small></button>`).join("")}</div>`
-      + `<div class="bwrap">${bubbleSvg(A.filter(x => Math.abs(x.net5) > 0).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30))}</div><p class="note gnote">只畫近 5 日金額最大的 30 個板塊，標出前 10 大；座標用平方根縮放，避免擠在一起。點泡泡看題材內頁。</p>`
+      + `<div class="bwrap">${bubbleSvg(A.filter(x => Math.abs(x.net5) > 0).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30), { sel: F.bsel })}</div>${bubbleInfo(A.find(x => x.id === F.bsel))}<p class="note gnote">只畫近 5 日金額最大的 30 個板塊；泡泡越大代表近 5 日淨流入（或流出）越多，座標用平方根縮放、重疊的會稍微推開，所以位置是大約的。</p>`
       + `<button class="btn sm" data-mv="replay" style="margin:0 12px">▶ 資金輪動回放</button>`
       + `<section class="mcard"><h3>${qDot(F.q)}${FLOW_Q[F.q][0]} <span class="note">${L.length} 個板塊・依近 5 日資金規模</span></h3><ol class="mlist">${L.map((x, i) => `<li><button data-fsec="${esc(x.id)}"><span class="rk">${i + 1}</span><span class="nm">${esc(x.name)}<small>${x.kind}・${x.n} 檔</small></span>${pctB(x.pct5)}${yiB(x.net5)}</button></li>`).join("")}</ol></section>`;
   } else if (F.view === "replay") {
-    const t0 = Math.min(9, T - 1), t = F.rp.t == null ? T - 1 : Math.max(t0, Math.min(T - 1, F.rp.t)), P = flowAt(M, t);
-    const pool = F.rp.set === "all" ? P : (() => { const ids = new Set(flowAt(M).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30).map(x => x.id)); return P.filter(x => ids.has(x.id)); })();
-    const bmax = P.slice().sort((a, b) => b.net5 - a.net5)[0], smin = P.slice().sort((a, b) => a.net5 - b.net5)[0], dt = new Date(M.dates[t] + "T00:00:00Z");
+    const t0 = Math.min(9, T - 1), t = F.rp.t == null ? T - 1 : Math.max(t0, Math.min(T - 1, F.rp.t)), { P, pool } = mfReplayPool(M, t); F.rp.sc = null;
+    const R = mfReplayBits(M, t, pool, P);
     h += `<div class="gback"><button class="btn sm" data-mv="bubble">‹ 返回</button><b>板塊資金輪動回放</b><select class="sel" data-mrs aria-label="選板塊"><option value="hot" ${F.rp.set === "hot" ? "selected" : ""}>熱門 30</option><option value="all" ${F.rp.set === "all" ? "selected" : ""}>全部板塊</option></select></div>`
-      + (T < 12 ? `<p class="note gnote">${F.loading ? `正在載入更早的資料（${F.prog || ""}）…` : "資料不足 12 個交易日"}</p>` : "")
-      + `<div class="bwrap">${bubbleSvg(pool)}</div><p class="mrp-sum">近 5 日買最多 <b class="up">${esc(bmax?.name || "—")} ${bmax ? flowFmt(bmax.net5) : ""}</b><br>近 5 日賣最多 <b class="down">${esc(smin?.name || "—")} ${smin ? flowFmt(smin.net5) : ""}</b></p>
-      <p class="mrp-date">${M.dates[t].slice(5).replace("-", "/")} 週${"日一二三四五六"[dt.getUTCDay()]}</p><input type="range" class="mrp-range" min="${t0}" max="${T - 1}" value="${t}" aria-label="日期">
-      <div class="mrp-ctl"><button class="btn sm" data-mrp="prev">‹</button><button class="btn sm primary" data-mrp="play">${F.rp.playing ? "❚❚ 暫停" : "▶ 播放"}</button><button class="btn sm" data-mrp="next">›</button><button class="btn sm" data-mrp="speed">${F.rp.speed}x</button></div>`;
+      + (T < 12 || F.loading ? `<p class="note gnote mrp-load">${F.loading ? `正在載入更早的資料（${F.prog || ""}）…` : "資料不足 12 個交易日"}</p>` : "")
+      + `<div class="bwrap">${bubbleSvg(pool, { scale: mfReplayScale(M, t0), sel: F.bsel })}</div><p class="mrp-sum">${R.sum}</p>
+      <p class="mrp-date">${R.date}</p><input type="range" class="mrp-range" min="${t0}" max="${T - 1}" value="${t}" aria-label="日期">
+      <div class="mrp-ctl"><button class="btn sm" data-mrp="prev">‹</button><button class="btn sm primary" data-mrp="play">${F.rp.playing ? "❚❚ 暫停" : "▶ 播放"}</button><button class="btn sm" data-mrp="next">›</button><button class="btn sm" data-mrp="speed">${F.rp.speed}x</button></div>${bubbleInfo(P.find(x => x.id === F.bsel))}`;
     if (T < 30 && !F.loading) setTimeout(() => loadMoney(30), 0);
   } else { // 排行
     const RK = [["inst", "法人動向"], ["quiet", "買多漲少"], ["contra", "逆勢買超"], ["odd", "個股異常"], ["fx", "外資投信"]];
@@ -1366,9 +1420,22 @@ function renderMoney() {
   }
   $("#lx").innerHTML = h;
 }
-function mfStep(d) { const F = W.mf, M = mfModel(); if (!M) return; const t0 = Math.min(9, M.T - 1), t = (F.rp.t ?? M.T - 1) + d; F.rp.t = t > M.T - 1 ? t0 : Math.max(t0, t); renderMoney(); }
-function mfPlay(on) { const F = W.mf; clearInterval(F.rp.timer); F.rp.playing = on; if (on) F.rp.timer = setInterval(() => { if (W.lt !== "money" || F.view !== "replay") return mfPlay(false); mfStep(1); }, 900 / F.rp.speed); renderMoney(); }
-$("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F = W.mf, b = e.target.closest("[data-mv],[data-mq],[data-mrk],[data-mset],[data-mrp],[data-mshare],[data-fsec]"); if (!b) return; const d = b.dataset;
+// 回放：整段期間用同一個比例尺，泡泡位置在不同天之間才能比較
+function mfReplayScale(M, t0) { let mx = 1, my = 1; for (let t = t0; t < M.T; t++) for (const x of flowAt(M, t)) { mx = Math.max(mx, Math.abs(x.net5)); my = Math.max(my, Math.abs(x.accel)); } return { mx, my }; }
+function mfReplayPool(M, t) { const F = W.mf, P = flowAt(M, t); if (F.rp.set === "all") return { P, pool: P }; const ids = new Set(flowAt(M).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30).map(x => x.id)); return { P, pool: P.filter(x => ids.has(x.id)) }; }
+function mfReplayBits(M, t, pool, P) { const bmax = P.slice().sort((a, b) => b.net5 - a.net5)[0], smin = P.slice().sort((a, b) => a.net5 - b.net5)[0], dt = new Date(M.dates[t] + "T00:00:00Z");
+  return { sum: `近 5 日買最多 <b class="up">${esc(bmax?.name || "—")} ${bmax ? flowFmt(bmax.net5) : ""}</b><br>近 5 日賣最多 <b class="down">${esc(smin?.name || "—")} ${smin ? flowFmt(smin.net5) : ""}</b>`, date: `${M.dates[t].slice(5).replace("-", "/")} 週${"日一二三四五六"[dt.getUTCDay()]}` }; }
+// 回放換日期：畫面已經在回放就只更新泡泡與文字，不重畫整頁
+function mfReplayDraw() { const F = W.mf, M = mfModel(), svg = document.getElementById("mfb"), rg = document.querySelector(".mrp-range");
+  if (!M || F.view !== "replay" || !svg || !rg || +rg.max !== M.T - 1) return renderMoney();
+  const t0 = Math.min(9, M.T - 1), t = F.rp.t == null ? M.T - 1 : Math.max(t0, Math.min(M.T - 1, F.rp.t)), { P, pool } = mfReplayPool(M, t), R = mfReplayBits(M, t, pool, P);
+  bubblePatch(svg, pool, { scale: (F.rp.sc ||= mfReplayScale(M, t0)), sel: F.bsel }); document.querySelector(".mrp-sum").innerHTML = R.sum; document.querySelector(".mrp-date").textContent = R.date;
+  if (document.activeElement !== rg) rg.value = t; const pb = document.querySelector('[data-mrp="play"]'); if (pb) pb.textContent = F.rp.playing ? "❚❚ 暫停" : "▶ 播放";
+  const sp = document.querySelector('[data-mrp="speed"]'); if (sp) sp.textContent = `${F.rp.speed}x`; const bi = document.querySelector(".binfo, .binfo-empty"); if (bi) bi.outerHTML = bubbleInfo(P.find(x => x.id === F.bsel)); }
+function mfStep(d) { const F = W.mf, M = mfModel(); if (!M) return; const t0 = Math.min(9, M.T - 1), t = (F.rp.t ?? M.T - 1) + d; F.rp.t = t > M.T - 1 ? t0 : Math.max(t0, t); mfReplayDraw(); }
+function mfPlay(on) { const F = W.mf; clearInterval(F.rp.timer); F.rp.playing = on; if (on) F.rp.timer = setInterval(() => { if (W.lt !== "money" || F.view !== "replay") return mfPlay(false); mfStep(1); }, 900 / F.rp.speed); mfReplayDraw(); }
+$("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F = W.mf, b = e.target.closest("[data-mv],[data-mq],[data-mrk],[data-mset],[data-mrp],[data-mshare],[data-fsec],[data-mbs]"); if (!b) return; const d = b.dataset;
+  if (d.mbs) { F.bsel = F.bsel === d.mbs ? null : d.mbs; return F.view === "replay" ? mfReplayDraw() : renderMoney(); }
   if (d.fsec) return secOpen(d.fsec);
   if (d.mshare) return mfShare(d.mshare);
   if (d.mv) { F.view = d.mv; if (d.mv !== "replay") { mfPlay(false); store.set("watch:mfv", d.mv); } if (d.mv === "replay") F.rp.t = null; }
@@ -1376,8 +1443,8 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F 
   else if (d.mrp === "prev") { mfPlay(false); return mfStep(-1); } else if (d.mrp === "next") { mfPlay(false); return mfStep(1); }
   else if (d.mrp === "play") return mfPlay(!F.rp.playing); else if (d.mrp === "speed") { F.rp.speed = F.rp.speed >= 4 ? 1 : F.rp.speed * 2; if (F.rp.playing) return mfPlay(true); }
   renderMoney(); });
-$("#lx").addEventListener("input", e => { if (W.lt === "money" && e.target.matches(".mrp-range")) { mfPlay(false); W.mf.rp.t = +e.target.value; renderMoney(); } });
-$("#lx").addEventListener("change", e => { if (W.lt === "money" && e.target.matches("[data-mrs]")) { W.mf.rp.set = e.target.value; renderMoney(); } });
+$("#lx").addEventListener("input", e => { if (W.lt === "money" && e.target.matches(".mrp-range")) { mfPlay(false); W.mf.rp.t = +e.target.value; mfReplayDraw(); } });
+$("#lx").addEventListener("change", e => { if (W.lt === "money" && e.target.matches("[data-mrs]")) { W.mf.rp.set = e.target.value; W.mf.rp.sc = null; renderMoney(); } });
 
 /* ---------- 產業地圖：題材總覽、產業網絡、手繪圖庫（流程圖）、題材內頁 ---------- */
 // 圖解包（diagrams.js、industry-figs.js）裡的新題材併進產業地圖；圖解與原理說明用 indFig() 取
