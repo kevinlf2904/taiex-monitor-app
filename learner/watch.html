@@ -658,7 +658,7 @@ function mktSession(now = new Date()) {
   if (day === 0 || day === 6) return "closed";
   return m >= 510 && m < 540 ? "pre" : m >= 540 && m <= 815 ? "open" : "closed";
 }
-const anyOpen = () => mktSession() !== "closed" || [...W.quotes.values()].some(q => q.us && q.session?.state === "open");
+const anyOpen = () => mktSession() !== "closed" || [...W.quotes.values()].some(q => q.us && q.session?.state === "open") || (W.sel && isFut(W.sel) && W.quotes.get("TXF")?.fsession && W.quotes.get("TXF").fsession !== "closed");
 // 嵌在 K線學堂裡時，iframe 和整頁一樣高：position: fixed 會跑到很下面看不到，所以改放在使用者目前看得到的位置
 function viewBox() { try { const f = window.frameElement, r = f.getBoundingClientRect(), H = parent.innerHeight; return { top: Math.max(0, -r.top), h: Math.min(H, r.bottom) - Math.max(0, r.top) }; } catch { return { top: scrollY, h: innerHeight }; } }
 function place(el, where = "bottom") {
@@ -683,11 +683,27 @@ function visibleCodes() {
   const H = W.lt === "hold" ? Object.keys(W.hold).filter(c => mktOf(c) === W.holdMkt) : [];
   return [...new Set(["T00", "O00", ...H, ...L, ...Object.keys(W.alerts)])].slice(0, 40);
 }
-// 台指期近月（近全）：清單、頂部與大盤分頁用；15 秒最多問一次
+// 台指期近月（近全）：清單、頂部與大盤分頁用；交易中 2 秒、收盤 15 秒最多問一次
+// 台指期分時備案：伺服器拿不到分 K 時（例如夜盤），用這個瀏覽器輪詢到的報價自己組 1 分 K；同一盤的報價存在 localStorage 累積
+const futSessDate = s => { const t = new Date(Date.now() + 8 * 3600e3); if (s === "night" && t.getUTCHours() < 15) t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); };
+const futKey = q => `watch:ft:${q.symbol || "TXF"}:${q.session}:${futSessDate(q.session)}`;
+function futRecord(q) {
+  if (!q?.price || !q.session || q.fsession !== q.session) return; // 只記正在交易的那一盤
+  const k = futKey(q), L = store.get(k, []) || [], now = Date.now(), last = L[L.length - 1];
+  if (last && now - last[0] < 900) return;
+  L.push([now, q.price, q.vol ?? null]); if (L.length > 4000) L.splice(0, L.length - 4000); store.set(k, L);
+}
+function futLocalBars(q) {
+  if (!q?.session) return []; const L = store.get(futKey(q), []) || [], out = []; let prevV = null;
+  for (const [ms, p, v] of L) { const t = new Date(ms + 8 * 3600e3), d = t.toISOString().slice(0, 10), hm = t.toISOString().slice(11, 16), b = out[out.length - 1];
+    if (b && b.t === hm && b.d === d) { b.h = Math.max(b.h, p); b.l = Math.min(b.l, p); b.c = p; if (v != null) b.cv = v; }
+    else { if (b && b.cv != null) prevV = b.cv; out.push({ d, t: hm, o: p, h: p, l: p, c: p, s: q.session, cv: v, pv: prevV }); } }
+  return out.map(({ cv, pv, ...b }) => ({ ...b, v: cv != null && pv != null ? Math.max(0, cv - pv) : 0 }));
+}
 async function pollFut(force = false) {
-  if (W.off || (!force && Date.now() - (W.futAt || 0) < 15000)) return;
+  if (W.off || (!force && Date.now() - (W.futAt || 0) < (W.quotes.get("TXF")?.fsession && W.quotes.get("TXF").fsession !== "closed" ? 2000 : 15000))) return;
   W.futAt = Date.now();
-  try { const r = await fetch("/api/futures?bars=0"), j = r.ok ? await r.json() : null; if (j?.ok && j.quote) { W.quotes.set("TXF", { ...j.quote, code: "TXF", name: "台指期近月", symbol: j.symbol, settle: j.settle, day: j.day, night: j.night, fsession: j.session }); } } catch {}
+  try { const r = await fetch("/api/futures?bars=0"), j = r.ok ? await r.json() : null; if (j?.ok && j.quote) { W.quotes.set("TXF", { ...j.quote, code: "TXF", name: "台指期近月", symbol: j.symbol, settle: j.settle, day: j.day, night: j.night, fsession: j.session }); futRecord(W.quotes.get("TXF")); } } catch {}
 }
 async function pollList() {
   pollFut().then(() => renderTop()).catch(() => {});
@@ -730,7 +746,14 @@ async function loadMktLive() {
 }
 // 「盤中即時・更新於 10:31:05」或「10/06 收盤後」
 const liveTag = (J, closed) => (J?.live ? `<span class="livetag"><i></i>盤中即時・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}</span>` : J?.date ? `${J.date.slice(5).replace("-", "/")} ${closed}` : "");
-function schedule() { clearTimeout(W.timer); if (W.off) return; W.timer = setTimeout(async () => { await tick(); schedule(); }, anyOpen() ? 5000 : 300000); }
+// 每秒只更新報價（自選、庫存、熱門清單與個股頁），每 5 秒做一次完整更新（分時、逐筆、各分頁資料）
+async function fastTick() {
+  if (W.off || W.busy || W.fbusy || document.visibilityState === "hidden") return;
+  W.fbusy = true; try { const r = await Promise.allSettled([pollList(), pollDetail()]); if (!r.some(x => x.status === "rejected")) { W.lastOk = Date.now(); W.err = null; } } finally { W.fbusy = false; }
+  checkAlerts(); W.ticking = true; renderTop(); if (["watch", "hold", "tw", "us", "rank"].includes(W.lt)) renderList(); if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } W.ticking = false;
+}
+function schedule() { clearTimeout(W.timer); if (W.off) return; const open = anyOpen();
+  W.timer = setTimeout(async () => { W.tn = (W.tn || 0) + 1; if (open && W.tn % 5) await fastTick(); else await tick(); schedule(); }, open ? 1000 : 300000); }
 const kick = () => tick().then(schedule);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") kick(); });
 addEventListener("online", kick);
@@ -861,7 +884,7 @@ function renderList0() {
     const editRow = (c, k) => `<li><div class="row" style="cursor:default"><span class="nm">${esc(nameOf(c))}<span class="cd">${c}</span></span><span></span><span class="edit-ctl"><button data-mv="${k}" data-d="-1" aria-label="上移" ${k ? "" : "disabled"}>↑</button><button data-mv="${k}" data-d="1" aria-label="下移" ${k < L.length - 1 ? "" : "disabled"}>↓</button><button data-rm="${c}" aria-label="移除 ${esc(nameOf(c))}">✕</button></span></div></li>`;
     $("#wl").innerHTML = L.length ? L.map(({ h, c, q }, k) => (h ? `<li class="sec-h">${h}</li>` : W.editing ? editRow(c, k) : rowHtml(c, q))).join("")
       : `<li class="empty note">這個群組還沒有股票。在上面輸入代號或名稱加入，或從「台股熱門」「美股熱門」「排行」按 ☆ 加入（台股、美股會自動放進各自的群組）。</li>`;
-    note = `${curList().length} 檔・${anyOpen() ? "盤中每 5 秒自動更新" : "收盤後每 5 分鐘確認一次"}`;
+    note = `${curList().length} 檔・${anyOpen() ? "盤中每秒自動更新" : "收盤後每 5 分鐘確認一次"}`;
   } else if (W.lt === "hold") {
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
       <div class="imp-btns"><button class="btn sm primary" data-imp="edit">✏️ 編輯庫存</button><button class="btn sm" data-imp="shot">📷 截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
@@ -871,7 +894,7 @@ function renderList0() {
     renderScreen(); note = W.scr?.source ? `資料：${W.scr.source}。「K線」「技術」兩類是在瀏覽器裡掃描自選、庫存、台股熱門與今天熱門清單的日 K；「題材」是常見代表股的參考名單。` : "";
   } else if (W.lt === "money") {
     const D = W.mf.days, last = D[D.length - 1], tq = W.quotes.get("T00");
-    $("#lTools").innerHTML = `<span class="note">${tq?.chgPct != null ? `<b class="${cls(tq.chg)}">大盤 ${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct.toFixed(2)}%</b>・` : ""}${last ? `資料日期 ${last.date.replace(/-/g, "/")}` : "板塊資金"}</span><button class="btn sm" data-gx="mfRefresh">↻ 更新</button>`;
+    $("#lTools").innerHTML = `<span class="note">${tq?.chgPct != null ? `<b class="${cls(tq.chg)}">大盤 ${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct.toFixed(2)}%</b>・` : ""}${last ? `法人資料 ${last.date.replace(/-/g, "/")}${(() => { const t = new Date(Date.now() + 8 * 3600e3); return t.getUTCDay() % 6 && last.date < t.toISOString().slice(0, 10) ? "（今天的約 15:00～16:30 公布，會自動補上）" : ""; })()}` : "板塊資金"}</span><button class="btn sm" data-gx="mfRefresh">↻ 更新</button>`;
     W.mf.view === "replay" ? mfReplayDraw() : renderMoney(); note = "金額＝三大法人買賣超張數 × 收盤價（估算，億元）；板塊是產業地圖的題材加上產業別，一檔股票可能同時算進好幾個板塊。只呈現公開資料的統計，不是投資建議。";
   } else if (W.lt === "ind") {
     $("#lTools").innerHTML = `<span class="note">產業地圖・代表公司參考名單（整理於 ${INDUSTRY_MAP.updated}），不是推薦</span>`;
@@ -2232,8 +2255,9 @@ async function loadIntra(force = false) {
     if (isFut(c)) {
       const f = await getJ("/api/futures");
       if (f.quote) { W.quotes.set("TXF", { ...f.quote, code: "TXF", name: "台指期近月", symbol: f.symbol, settle: f.settle, day: f.day, night: f.night, fsession: f.session }); W.futAt = Date.now(); if (W.sel === c) W.detailQ = W.quotes.get("TXF"); }
-      if (!f.bars?.length) throw new Error(f.note || "還沒有台指期分 K");
-      j = { fut: true, bars: f.bars, date: f.bars[f.bars.length - 1].d, prev: f.quote?.prev, source: f.source, session: { open: "00:00", close: "23:59" }, fsession: f.session };
+      const tq = W.quotes.get("TXF"); futRecord(tq); const loc = f.bars?.length ? null : futLocalBars(tq), bars = f.bars?.length ? f.bars : loc;
+      if (bars.length < 2) throw new Error(`${f.note || "還沒有台指期分 K"}（開著這頁約 1 分鐘後就會出現）`);
+      j = { fut: true, bars, date: bars[bars.length - 1].d, prev: f.quote?.prev, source: loc ? "這個瀏覽器記錄的即時報價（開著頁面時才有）" : f.source, session: { open: "00:00", close: "23:59" }, fsession: f.session };
     } else j = await getJ(`/api/intraday?code=${c}&tf=1`);
     if (W.sel !== c) return;
     const fresh = !W.intra || W.intra.code !== c; W.intra = { ...j, code: c }; W.intraErr = null;

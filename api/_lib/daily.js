@@ -42,15 +42,24 @@ export function mergeDay(quotes, inst) {
   return rows;
 }
 const roc = d => `${+d.slice(0, 4) - 1911}/${d.slice(4, 6)}/${d.slice(6)}`, slash = d => `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6)}`;
+const tries = async urls => { for (const u of urls) { try { const j = await getJSON(u, 12000); if (pickTable(j, /代號/)) return j; } catch {} } return null; };
+// 舊版櫃買 JSON 是 { aaData: [[...]] } 沒有欄位名稱：代號、名稱、收盤、漲跌、開、高、低、均價、成交股數
+const fixTpex = j => (j && !j.fields && !j.tables && Array.isArray(j.aaData) ? { fields: ["代號", "名稱", "收盤", "漲跌", "開盤", "最高", "最低", "均價", "成交股數"], data: j.aaData } : j);
+const tpexQuoteUrls = d => [`https://www.tpex.org.tw/www/zh-tw/afterTrading/otc?date=${slash(d)}&type=EW&response=json`, `https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&d=${roc(d)}&se=EW&o=json`];
+// 當天收盤行情（上市 MI_INDEX＋上櫃）：給 _live.js 收盤後用，回 Map(code → { name, p, pct, v, market })
+export async function closeToday(d) {
+  const [t, o] = await Promise.allSettled([getJSON(`https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${d}&type=ALLBUT0999&response=json`, 15000), tries(tpexQuoteUrls(d))]);
+  const out = new Map();
+  for (const [c, q] of t.status === "fulfilled" ? parseQuotes(t.value) : []) out.set(c, { ...q, market: "上市" });
+  for (const [c, q] of o.status === "fulfilled" && o.value ? parseQuotes(fixTpex(o.value)) : []) if (!out.has(c)) out.set(c, { ...q, market: "上櫃" });
+  return out;
+}
 async function tpexDay(d) {
-  const tries = async urls => { for (const u of urls) { try { const j = await getJSON(u, 12000); if (pickTable(j, /代號/)) return j; } catch {} } return null; };
   const [qj, ij] = await Promise.all([
-    tries([`https://www.tpex.org.tw/www/zh-tw/afterTrading/otc?date=${slash(d)}&type=EW&response=json`, `https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&d=${roc(d)}&se=EW&o=json`]),
+    tries(tpexQuoteUrls(d)),
     tries([`https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade?type=Daily&sect=EW&date=${slash(d)}&response=json`, `https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&t=D&se=EW&d=${roc(d)}&o=json`]),
   ]);
-  // 舊版櫃買 JSON 是 { aaData: [[...]] } 沒有欄位名稱：代號、名稱、收盤、漲跌、開、高、低、均價、成交股數
-  const fix = j => (j && !j.fields && !j.tables && Array.isArray(j.aaData) ? { fields: ["代號", "名稱", "收盤", "漲跌", "開盤", "最高", "最低", "均價", "成交股數"], data: j.aaData } : j);
-  return qj ? mergeDay(parseQuotes(fix(qj)), parseInst(ij)) : [];
+  return qj ? mergeDay(parseQuotes(fixTpex(qj)), parseInst(ij)) : [];
 }
 
 export default async function handler(req, res) {
