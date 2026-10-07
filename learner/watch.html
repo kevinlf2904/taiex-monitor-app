@@ -210,6 +210,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 }
 @media (max-width: 480px) { .brand span { display: none; } .w-top { padding-left: 10px; padding-right: 10px; } .d-px b { font-size: 28px; } .ixc { padding: 3px 8px; gap: 4px; } }
 /* 清單分頁可以左右滑 */
+.etfseg { flex-wrap: wrap; max-width: 100%; } .etfseg button { white-space: nowrap; flex: 0 0 auto; }
+.wl .etf-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 400; letter-spacing: 0; line-height: 1.5; } .wl .etf-h .seg { flex: none; }
 .ltabs { overflow-x: auto; scrollbar-width: none; } .ltabs button { flex: 1 0 auto; padding: 6px 10px; white-space: nowrap; }
 .wl .sec-h { padding: 6px 12px; font-size: 12px; color: var(--muted); background: var(--surface-2); font-weight: 600; letter-spacing: .04em; }
 /* 庫存 */
@@ -535,7 +537,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
       <div class="l-ix" id="ix2"></div>
-      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button></div>
+      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
         <form id="addForm" autocomplete="off"><input class="code" id="addCode" placeholder="代號或名稱，例 2330、台積、NVDA" inputmode="search" enterkeyhint="go" aria-label="搜尋股票（代號或名稱，美股用英文代號）" aria-autocomplete="list" aria-controls="sugg"><button class="btn primary" type="submit">加入</button></form>
@@ -692,7 +694,7 @@ const DEFAULT_GROUPS = [{ name: "自選", list: ["2330", "2317", "2454", "0050",
 const W = {
   groups: store.get("watch:groups", null) || [{ name: "自選", list: store.get("watch:list", DEFAULT_GROUPS[0].list) }, DEFAULT_GROUPS[1]],
   gi: +store.get("watch:gi", 0) || 0, names: store.get("watch:names", {}), sort: store.get("watch:sort", "custom"), alerts: store.get("watch:alerts", {}), hold: store.get("watch:hold", {}),
-  lt: store.get("watch:lt", "watch"), rankType: store.get("watch:rank", "gain"), usType: store.get("watch:us", "active"), dtab: store.get("watch:dtab", "trend"),
+  lt: store.get("watch:lt", "watch"), etfCat: store.get("watch:etf", "cap"), etfSort: store.get("watch:etfs", ""), rankType: store.get("watch:rank", "gain"), usType: store.get("watch:us", "active"), dtab: store.get("watch:dtab", "trend"),
   k: ["1", "5", "15", "60", "D", "W", "M"].includes(String(store.get("watch:k", "D"))) ? String(store.get("watch:k", "D")) : "D", strat: store.get("watch:strat", ""),
   editing: false, sel: null, last: store.get("watch:last", null), quotes: new Map(), prevPx: new Map(), detailQ: null, detailSrc: "", session: null,
   today: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), err: null, off: !/^https?:$/.test(location.protocol),
@@ -753,8 +755,8 @@ async function getJ(url, optional = false) {
 // 清單上看得到的代號（自選群組或台股熱門）＋指數：一次批次查（台股只用 MIS，不消耗富果額度；美股問 Yahoo）
 function visibleCodes() {
   const L = W.lt === "watch" ? curList() : W.lt === "tw" ? (W.hot.tw?.rows || []).map(r => r.code) : W.lt === "rank" ? (W.hot["rank:" + W.rankType]?.rows || []).slice(0, 30).map(r => r.code) : [];
-  const H = W.lt === "hold" ? Object.keys(W.hold).filter(c => mktOf(c) === W.holdMkt) : [];
-  return [...new Set(["T00", "O00", ...H, ...L, ...Object.keys(W.alerts)])].slice(0, 40);
+  const H = W.lt === "hold" ? Object.keys(W.hold).filter(c => mktOf(c) === W.holdMkt) : [], E = W.lt === "etf" ? etfVisible() : [];
+  return [...new Set(["T00", "O00", ...H, ...E, ...L, ...Object.keys(W.alerts)])].slice(0, 40);
 }
 // 台指期近月（近全）：清單、頂部與大盤分頁用；交易中 2 秒、收盤 15 秒最多問一次
 // 台指期分時備案：伺服器拿不到分 K 時（例如夜盤），用這個瀏覽器輪詢到的報價自己組 1 分 K；同一盤的報價存在 localStorage 累積
@@ -825,7 +827,7 @@ async function fastTick() {
   if (W.off || W.busy || W.fbusy || document.visibilityState === "hidden") return;
   W.fbusy = true; try { const r = await Promise.allSettled([pollList(), pollDetail()]); if (!r.some(x => x.status === "rejected")) { W.lastOk = Date.now(); W.err = null; } } finally { W.fbusy = false; }
   checkAlerts(); W.ticking = true; // try／finally：重畫出錯也一定要把 ticking 關掉；剛按下去（900ms 內）先不重畫清單，避免點擊被吃掉
-  try { renderTop(); if (["watch", "hold", "tw", "us", "rank"].includes(W.lt) && Date.now() - (W.lastPtr || 0) > 900) renderList(); if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } }
+  try { renderTop(); if (["watch", "hold", "tw", "us", "rank", "etf"].includes(W.lt) && Date.now() - (W.lastPtr || 0) > 900) renderList(); if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } }
   catch (e) { console.error("fastTick", e); } finally { W.ticking = false; }
 }
 function schedule() { clearTimeout(W.timer); if (W.off) return; const open = anyOpen();
@@ -912,6 +914,31 @@ function pick(c) {
   select(c); kick();
 }
 
+/* ---------- ETF 專區：常見的台股、美股 ETF 依類型分組，報價即時更新（美股每 15 秒） ---------- */
+const ETF_CATS = [
+  ["cap", "市值型", "追蹤大型權值股，跟著大盤走，費用低，適合長期定期定額。", [["0050", "元大台灣50"], ["006208", "富邦台50"], ["00922", "國泰台灣領袖50"], ["00923", "群益台ESG低碳50"], ["00850", "元大臺灣ESG永續"], ["00692", "富邦公司治理"], ["0051", "元大中型100"]]],
+  ["div", "高股息", "挑殖利率較高的股票，定期配息；要看填息能力與成分股換股規則，不是只看殖利率。", [["0056", "元大高股息"], ["00878", "國泰永續高股息"], ["00919", "群益台灣精選高息"], ["00929", "復華台灣科技優息"], ["00713", "元大台灣高息低波"], ["00915", "凱基優選高股息30"], ["00918", "大華優利高填息30"], ["00934", "中信成長高股息"], ["00939", "統一台灣高息動能"], ["00940", "元大台灣價值高息"]]],
+  ["tech", "科技半導體", "集中在半導體、電子等產業，漲跌幅通常比大盤大。", [["0052", "富邦科技"], ["00881", "國泰台灣5G+"], ["00891", "中信關鍵半導體"], ["00892", "富邦台灣半導體"], ["00927", "群益半導體收益"], ["00830", "國泰費城半導體"]]],
+  ["bond", "債券", "買美國公債或公司債，波動比股票小；利率下降時長天期債券價格上漲。", [["00679B", "元大美債20年"], ["00687B", "國泰20年美債"], ["00937B", "群益ESG投等債20+"], ["00720B", "元大投資級公司債"], ["00751B", "元大AAA至A公司債"], ["00772B", "中信高評級公司債"]]],
+  ["world", "海外市場", "在台股買得到的海外指數 ETF，用新台幣交易，價格也受匯率影響。", [["00646", "元大S&P500"], ["00662", "富邦NASDAQ"], ["00757", "統一FANG+"], ["00830", "國泰費城半導體"], ["006205", "富邦上証"], ["00885", "富邦越南"]]],
+  ["lev", "槓桿反向", "每天追蹤指數的 2 倍或反向 1 倍，適合短線；長期持有會因每日重設而偏離指數。", [["00631L", "元大台灣50正2"], ["00663L", "國泰臺灣加權正2"], ["00675L", "富邦臺灣加權正2"], ["00632R", "元大台灣50反1"], ["00676R", "富邦臺灣加權反1"]]],
+  ["us", "美股 ETF", "美國掛牌的 ETF（美元計價、報價可能延遲 15 分鐘）。", [["VOO", "Vanguard S&P 500"], ["SPY", "SPDR S&P 500"], ["IVV", "iShares S&P 500"], ["VTI", "Vanguard 美國全市場"], ["VT", "Vanguard 全世界股票"], ["QQQ", "Invesco 那斯達克100"], ["DIA", "SPDR 道瓊工業"], ["IWM", "iShares 羅素2000"], ["SOXX", "iShares 半導體"], ["SMH", "VanEck 半導體"], ["XLK", "SPDR 科技類股"], ["SCHD", "Schwab 美國高股息"], ["VYM", "Vanguard 高股息"], ["VEA", "Vanguard 已開發市場"], ["VWO", "Vanguard 新興市場"], ["BND", "Vanguard 美國總體債券"], ["TLT", "iShares 20年以上美債"], ["IEF", "iShares 7-10年美債"], ["GLD", "SPDR 黃金"], ["ARKK", "ARK 創新"]]],
+];
+const etfCat = () => ETF_CATS.find(x => x[0] === W.etfCat) || ETF_CATS[0];
+ETF_CATS.forEach(([, , , L]) => L.forEach(([c, n]) => { if (!W.names[c]) W.names[c] = n; }));
+function etfVisible() { // 美股 ETF 的報價每 15 秒問一次就好（Yahoo，本來就可能延遲），台股 ETF 每秒
+  const L = etfCat()[3].map(x => x[0]); if (!L.some(isUS)) return L;
+  if (Date.now() - (W.etfUsAt || 0) < 15000) return []; W.etfUsAt = Date.now(); return L;
+}
+function renderEtf() {
+  const [k, , desc, L] = etfCat(), us = k === "us";
+  $("#lTools").innerHTML = `<div class="seg etfseg" role="group" aria-label="ETF 類型" id="etfSeg">${ETF_CATS.map(([id, t]) => `<button data-etf="${id}" aria-pressed="${W.etfCat === id}">${t}</button>`).join("")}</div>`;
+  const rows = L.map(([c, n]) => ({ c, n, q: W.quotes.get(c) }));
+  if (W.etfSort === "chg") rows.sort((a, b) => (b.q?.chgPct ?? -1e9) - (a.q?.chgPct ?? -1e9));
+  $("#wl").innerHTML = `<li class="sec-h etf-h"><span>${esc(desc)}</span><span class="seg sm" role="group" aria-label="排序">${[["", "預設"], ["chg", "漲跌幅"]].map(([v, t]) => `<button data-etfs="${v}" aria-pressed="${(W.etfSort || "") === v}">${t}</button>`).join("")}</span></li>`
+    + rows.map(({ c, q }) => rowHtml(c, q, { star: true, metric: q?.vol != null ? undefined : us ? "美元計價" : "等待報價…" })).join("");
+  return `ETF 是一籃子股票或債券，買一張就分散到很多標的。名單是常見、成交量較大的 ETF，方便比較，不是推薦。${us ? "美股報價來自 Yahoo Finance，可能延遲 15 分鐘。" : "台股 ETF 盤中每秒更新。"}`;
+}
 /* ---------- 清單：自選群組／台股熱門／美股熱門／排行 ---------- */
 const RANKS = [["gain", "漲幅"], ["loss", "跌幅"], ["volume", "成交量"], ["value", "成交值"], ["foreign", "外資買超"], ["trust", "投信買超"]];
 function setLt(lt) {
@@ -985,6 +1012,8 @@ function renderList0() {
   } else if (W.lt === "mkt") {
     $("#lTools").innerHTML = `<span class="note">${W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
     renderMkt(); note = W.mkt?.source ? `資料：${W.mkt.source}。${W.mkt.live ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布" : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計"}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : "";
+  } else if (W.lt === "etf") {
+    note = renderEtf();
   } else if (W.lt === "tw") {
     const H = W.hot.tw;
     $("#lTools").innerHTML = `<span class="note">${H?.live ? `${liveTag(H)}・依成交值排序` : `依${H?.date ? " " + H.date.replace(/-/g, "/") + " " : "最近交易日"}成交值排序，價格即時更新`}</span>`;
@@ -1025,6 +1054,8 @@ $("#listPane").addEventListener("click", e => {
   else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a === "shot") $("#impFile").click(); else if (a === "edit") openHoldEdit(); else if (a === "text") openImport("text"); else exportHold(); }
   else if (gx) { const a = gx.dataset.gx; if (a === "edit") W.editing = true; else if (a === "done") W.editing = false; else if (a === "rename") { const nm = prompt("群組名稱", W.groups[W.gi].name); if (nm) W.groups[W.gi].name = nm.slice(0, 12); } else if (a === "delete" && W.groups.length > 1 && confirm(`刪除群組「${W.groups[W.gi].name}」？`)) { W.groups.splice(W.gi, 1); W.gi = 0; W.editing = false; } saveGroups(); renderList(); }
   else if (so) { W.sort = so.dataset.sort; store.set("watch:sort", W.sort); renderList(); }
+  else if (t.closest("[data-etf]")) { W.etfCat = t.closest("[data-etf]").dataset.etf; store.set("watch:etf", W.etfCat); W.etfUsAt = 0; renderList(); pollList().then(renderList).catch(() => {}); }
+  else if (t.closest("[data-etfs]")) { W.etfSort = t.closest("[data-etfs]").dataset.etfs; store.set("watch:etfs", W.etfSort); renderList(); }
   else if (us) { W.usType = us.dataset.us; store.set("watch:us", W.usType); if (!W.hot["us:" + W.usType]) loadHot("us"); renderList(); }
   else if (rk) { W.rankType = rk.dataset.rank; store.set("watch:rank", W.rankType); if (!W.hot["rank:" + W.rankType]) loadHot("rank"); renderList(); }
 });
@@ -1187,7 +1218,7 @@ function exportHold() {
 /* ---------- 持股分析：每一檔的屬性（短線價差／波段價值／長期存股）與速配度 ---------- */
 const ATTRS = { short: ["短線價差", "#e0566b"], swing: ["波段價值", "#f0a43a"], long: ["長期存股", "#4e9af1"] };
 const PREFS = [["all", "三種都會用"], ["short", "短線價差"], ["swing", "波段操作"], ["long", "長期存股"]];
-const isEtf = c => /^00\d{2,4}[A-Z]?$/.test(c) || ["SPY", "QQQ", "VOO", "VTI", "SOXX", "TQQQ", "SOXL", "DIA", "IWM"].includes(c);
+const isEtf = c => /^00\d{2,4}[A-Z]?$/.test(c) || ["SPY", "QQQ", "VOO", "VTI", "SOXX", "TQQQ", "SOXL", "DIA", "IWM", "IVV", "VT", "SMH", "XLK", "SCHD", "VYM", "VEA", "VWO", "BND", "TLT", "IEF", "GLD", "ARKK"].includes(c);
 async function klineOf(c) {
   if (W.kc.has(c)) return W.kc.get(c);
   const p = getJ(`/api/kline?code=${c}&months=6`).then(j => j.data).catch(() => null); W.kc.set(c, p); return p;
