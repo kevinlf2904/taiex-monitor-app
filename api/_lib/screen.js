@@ -10,7 +10,8 @@
 // 熱門：漲停、開盤漲停、漲停打開、急漲、強勢（收最高）、大幅震盪、開低走高、買氣強大、股價轉強（站上月均價）、跌停、急跌
 // 指標：月營收年增／年減、月營收雙增、累計營收年增、毛利率、營益率、累計 EPS、虧損、股價淨值比 < 1（t187ap05、t187ap14、t187ap17，上市＋上櫃）
 
-import { parseTwseAll, parseTpexAll, parseT86 } from "./hot.js";
+import { parseT86 } from "./hot.js";
+import { marketRows, liveCache } from "./_live.js";
 import { getJSON, num } from "./_tw.js";
 import { CONCEPTS } from "./_concepts.js";
 
@@ -120,8 +121,7 @@ export const parseBw = rows => (Array.isArray(rows) ? rows : []).map(r => ({ cod
 export default async function handler(req, res) {
   const both = async (l, o, parse) => { const r = await Promise.allSettled([getJSON(l, 15000), getJSON(o, 15000)]); return r.flatMap(x => (x.status === "fulfilled" ? parse(x.value) : [])); };
   const [a, b, t, avg, bw, rev, eps, mg] = await Promise.allSettled([
-    getJSON("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL").then(parseTwseAll),
-    getJSON("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes").then(parseTpexAll),
+    marketRows(), null,
     t86Days(3),
     getJSON("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL").then(parseAvg),
     getJSON("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL").then(parseBw),
@@ -129,11 +129,11 @@ export default async function handler(req, res) {
     both("https://openapi.twse.com.tw/v1/opendata/t187ap14_L", "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap14_O", parseEps),
     both("https://openapi.twse.com.tw/v1/opendata/t187ap17_L", "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap17_O", parseMargins),
   ]);
-  const quotes = [...(a.value || []), ...(b.value || [])];
-  if (!quotes.length) return res.status(200).json({ ok: false, error: `拿不到選股資料（${[a.reason?.message, b.reason?.message].filter(Boolean).join("；") || "沒有資料"}）` });
+  const L = a.value, quotes = L?.rows || [];
+  if (!quotes.length) return res.status(200).json({ ok: false, error: `拿不到選股資料（${a.reason?.message || "沒有資料"}）` });
   const st = quotes.filter(q => /^\d{4}$/.test(q.code));
-  res.setHeader("Cache-Control", "s-maxage=900, stale-while-revalidate=3600");
-  return res.status(200).json({ ok: true, date: quotes.find(q => q.date)?.date || null, source: "證交所、櫃買中心 OpenAPI",
+  res.setHeader("Cache-Control", liveCache(L.live, 30));
+  return res.status(200).json({ ok: true, date: L.date || quotes.find(q => q.date)?.date || null, live: L.live, time: L.time, source: L.live ? `${L.source}；法人、財報為最近公布` : "證交所、櫃買中心 OpenAPI",
     ratio: { up: st.filter(q => q.chgPct > 0).length, down: st.filter(q => q.chgPct < 0).length, flat: st.filter(q => q.chgPct === 0).length },
     lists: [...hotLists(quotes, avg.value || []), ...buildLists({ quotes, t86: t.value || [], avg: avg.value || [], bw: bw.value || [] }),
       ...fundLists(quotes, { rev: rev.value || [], eps: eps.value || [], mg: mg.value || [], bw: bw.value || [] }), ...themeLists(quotes)] });

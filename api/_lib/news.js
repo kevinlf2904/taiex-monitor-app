@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     const r = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(term)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`, { headers: UA, signal: AbortSignal.timeout(9000) });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const items = parseRss(await r.text());
-    res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=1800");
+    res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
     return res.status(200).json({ ok: true, q: term, source: "Google 新聞", items });
   } catch (e) { return res.status(200).json({ ok: false, error: `拿不到新聞（${e.message}）` }); }
 }

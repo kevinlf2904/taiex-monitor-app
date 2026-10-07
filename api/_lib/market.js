@@ -1,6 +1,7 @@
 // 大盤總覽：給 learner/watch.html 的「大盤」分頁使用。
 // GET /api/market
-// 台股部分是「最近一個交易日」收盤後的統計（證交所、櫃買中心 OpenAPI），盤中的加權、櫃買即時指數由看盤頁另外用 /api/quote 更新：
+// 台股個股統計來自 _live.js：盤中用富果行情快照（即時，回 live: true、time），沒有金鑰時用證交所、櫃買中心 OpenAPI（前一個交易日收盤）；
+// 盤中的加權、櫃買即時指數由看盤頁另外用 /api/quote 更新；盤中快取 20 秒：
 //   breadth  個股漲跌分佈（上市櫃普通股與 ETF；漲停跌停以 ±9.5% 估）
 //   sectors  產業漲跌（以前一日市值加權的平均漲跌幅）與成交金額比重
 //   contrib  加權指數貢獻點數排行（用發行股數與漲跌估算，只算上市普通股）
@@ -10,7 +11,7 @@
 //   breadthBy、sectorsBy  上市、上櫃分開的漲跌家數與產業漲跌
 //   world    國際指數，依地區分組（美國、日本、韓國、香港、中國、歐洲）
 
-import { parseTwseAll, parseTpexAll } from "./hot.js";
+import { marketRows, liveCache } from "./_live.js";
 import { getJSON, num, companies } from "./_tw.js";
 import { yahooBars, quoteFromMeta } from "./_yahoo.js";
 
@@ -82,17 +83,16 @@ async function worldIndices() {
 
 export default async function handler(req, res) {
   const [a, b, info, mi, inst, us, world] = await Promise.allSettled([
-    getJSON("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL").then(parseTwseAll),
-    getJSON("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes").then(parseTpexAll),
+    marketRows(), null,
     companies(), getJSON("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX").then(parseMiIndex), instLatest(), usIndices(), worldIndices(),
   ]);
-  const twse = a.value || [], tpex = b.value || [], all = [...twse, ...tpex], I = info.value || new Map(), M = mi.value || [];
-  if (!all.length && !(us.value || []).length) return res.status(200).json({ ok: false, error: `拿不到大盤資料（${[a.reason?.message, b.reason?.message].filter(Boolean).join("；") || "沒有資料"}）` });
+  const L = a.value, all = L?.rows || [], twse = all.filter(r => r.market === "上市"), tpex = all.filter(r => r.market === "上櫃"), I = info.value || new Map(), M = mi.value || [];
+  if (!all.length && !(us.value || []).length) return res.status(200).json({ ok: false, error: `拿不到大盤資料（${a.reason?.message || "沒有資料"}）` });
   const taiex = M.find(x => /^發行量加權股價指數$/.test(x.name));
   const pickIdx = ["電子類指數", "半導體類指數", "金融保險類指數", "航運類指數", "臺灣50指數", "櫃買指數"].map(n => M.find(x => x.name === n)).filter(Boolean);
   const stocks = all.filter(r => /^\d{4}$/.test(r.code));
-  res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=1800");
-  return res.status(200).json({ ok: true, date: all.find(x => x.date)?.date || null, source: "證交所、櫃買中心 OpenAPI；美股 Yahoo Finance",
+  res.setHeader("Cache-Control", liveCache(L?.live, 20));
+  return res.status(200).json({ ok: true, date: L?.date || all.find(x => x.date)?.date || null, live: !!L?.live, time: L?.time || null, note: L?.note || null, source: `${L?.source || "證交所、櫃買中心 OpenAPI"}；美股 Yahoo Finance`,
     breadth: stocks.length ? breadth(stocks) : null,
     sectors: I.size ? sectors(stocks, I) : null,
     // 上市、上櫃分開看（看盤頁可以切換）

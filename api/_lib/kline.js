@@ -9,6 +9,7 @@
 
 // HTTP 標頭只能用 ASCII（中文會讓 fetch 直接丟出 ByteString 錯誤）
 import { isUS, usName } from "./_yahoo.js";
+import { session } from "./quote.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const INDEX_CODES = new Set(["TAIEX", "TWII", "^TWII", "加權", "加權指數", "大盤", "0000", "IX0001"]);
 
@@ -137,7 +138,7 @@ export default async function handler(req, res) {
       if (r && r.rows.length >= (before ? 1 : 5)) {
         const seen = new Set(), data = r.rows.filter((x) => !seen.has(x.d) && seen.add(x.d) && (!before || x.d < before)).sort((a, b) => a.d.localeCompare(b.d));
         if (before && !data.length) continue;
-        res.setHeader("Cache-Control", before ? "s-maxage=86400, stale-while-revalidate=604800" : "s-maxage=1800, stale-while-revalidate=86400");
+        res.setHeader("Cache-Control", before ? "s-maxage=86400, stale-while-revalidate=604800" : session() === "closed" ? "s-maxage=1800, stale-while-revalidate=3600" : "s-maxage=60, stale-while-revalidate=120");
         return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : raw, us, name: r.name, market: r.market, source: r.source, unit: r.unit, data });
       }
     } catch (e) { errors.push(e.message); }

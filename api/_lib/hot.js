@@ -1,9 +1,10 @@
 // 熱門股與排行：給 learner/watch.html 的「台股熱門」「美股熱門」「排行」使用。
 // GET /api/hot?market=tw&type=value      成交值排行（value）、成交量（volume）、漲幅（gain）、跌幅（loss）、外資買超（foreign）、投信買超（trust）
 // GET /api/hot?market=us&type=active     美股最活躍（active）、漲幅（gain）、跌幅（loss）
-// 台股是「最近一個交易日」收盤後的統計（證交所、櫃買中心 OpenAPI；法人買賣超是證交所 T86，只有上市）；盤中的即時價格由看盤頁另外用 /api/quote 更新。
+// 台股成交值／量、漲跌幅排行用 _live.js（盤中是富果行情快照，沒有金鑰時是前一個交易日收盤）；法人買賣超是證交所 T86（收盤後公布，只有上市）。
 
 import { usHot } from "./_yahoo.js";
+import { marketRows, liveCache } from "./_live.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const num = v => { if (v == null) return null; const n = parseFloat(String(v).replace(/[,\s+]/g, "")); return Number.isFinite(n) ? n : null; };
 const pick = (r, ...keys) => { for (const k of keys) if (r[k] != null && r[k] !== "") return r[k]; return null; };
@@ -55,21 +56,19 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, market, type, source: h.source, rows: h.rows.slice(0, 30) });
     }
     if (!TW_TYPES[type]) return res.status(400).json({ ok: false, error: `type 要是 ${Object.keys(TW_TYPES).join("、")} 其中之一` });
-    let rows, date, source;
+    let rows, date, source, live = false, time = null;
     if (type === "foreign" || type === "trust") {
       const t = await t86Latest(); if (!t) throw new Error("證交所三大法人資料暫時拿不到");
       rows = t.rows.sort((a, b) => b[type] - a[type]).slice(0, 30); date = t.date; source = "證交所 三大法人買賣超（上市）";
     } else {
-      const [a, b] = await Promise.allSettled([getJSON("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL").then(parseTwseAll), getJSON("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes").then(parseTpexAll)]);
-      const all = [...(a.value || []), ...(b.value || [])];
-      if (!all.length) throw new Error([a.reason?.message, b.reason?.message].filter(Boolean).join("；") || "沒有資料");
-      date = all.find(x => x.date)?.date || null; source = "證交所、櫃買中心 OpenAPI";
+      const L = await marketRows(), all = L.rows.slice(); live = L.live;
+      date = L.date || all.find(x => x.date)?.date || null; source = L.source; time = L.time;
       const liquid = all.filter(x => (x.vol || 0) >= 500); // 漲跌幅排行排除成交太少的
       rows = type === "value" ? all.sort((x, y) => (y.value || 0) - (x.value || 0)) : type === "volume" ? all.sort((x, y) => (y.vol || 0) - (x.vol || 0))
         : type === "gain" ? liquid.sort((x, y) => (y.chgPct ?? -1e9) - (x.chgPct ?? -1e9)) : liquid.sort((x, y) => (x.chgPct ?? 1e9) - (y.chgPct ?? 1e9));
       rows = rows.slice(0, 30).map(({ date: _, ...x }) => x);
     }
-    res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=3600");
-    return res.status(200).json({ ok: true, market, type, label: TW_TYPES[type], date, source, rows });
+    res.setHeader("Cache-Control", type === "foreign" || type === "trust" ? "s-maxage=600, stale-while-revalidate=1800" : liveCache(live, 20));
+    return res.status(200).json({ ok: true, market, type, label: TW_TYPES[type], date, live, time, source, rows });
   } catch (e) { return res.status(200).json({ ok: false, error: `拿不到${market === "us" ? "美股熱門" : TW_TYPES[type] || ""}資料（${e.message}）` }); }
 }

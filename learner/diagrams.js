@@ -22,6 +22,11 @@
      wave   { t:"wave", x, y, w, n, a, c }                          交流電波形
      fan    { t:"fan", x, y, r, c, label }                          風扇
      pcb    { t:"pcb", x, y, w, h, label }                          綠色電路板（含走線）
+     callout{ t:"callout", x, y, tx, ty, label, c, a, ink }         註解：(x,y) 圓點拉線到 (tx,ty) 寫說明
+     dim    { t:"dim", x1, y1, x2, y2, label, c }                   尺寸標註（兩端短線）
+     hatch  { t:"hatch", x, y, w, h, c, gap, label }                斜線剖面（金屬、絕緣、地層）
+     grad   { t:"grad", x, y, w, h, c, c2, dir, o, stroke }         漸層色塊（冷→熱、低→高），dir:"h" 橫向
+     dots   { t:"dots", x, y, w, h, n, sz, c }                      粒子（離子、分子、封包）
    c 是顏色名稱：blue cyan green orange red purple yellow pink gray。
    圖的大小可以自訂（建議 { w: 400, h: 280 }）。 */
 const FIG_C = { blue: "#4f8cff", cyan: "#22b8cf", green: "#2bb673", orange: "#f08c2e", red: "#ef4d5a", purple: "#8b6cf6", yellow: "#e6b729", pink: "#e2589b", gray: "#8a94a3" };
@@ -48,12 +53,15 @@ function figSvg(fig, { id = "f" + Math.random().toString(36).slice(2, 7), mini =
   const lab = (it, x, y) => T(x, y, it.ls || 8.5, it.label, { c: "var(--muted)" }); // 圖元下方的說明字（ls 可指定字級；不要用 s，icon 的 s 是圖示大小）
   const P = pts => pts.map(p => p.join(",")).join(" ");
   let defs = "", body = "";
+  // 漸層：方塊、晶片用上亮下暗的漸層，看起來比較有立體感（strong 給 fill:true 的方塊）
+  const gr = (k, strong) => { const g = `${id}-g${strong ? "s" : ""}-${k}`; if (!defs.includes(`id="${g}"`)) defs += `<linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C(k)}" stop-opacity="${strong ? 0.38 : 0.2}"/><stop offset="1" stop-color="${C(k)}" stop-opacity="${strong ? 0.12 : 0.03}"/></linearGradient>`; return `url(#${g})`; };
+  const hl = (x, y, w, r = 6) => (w > 2 * r + 4 ? `<path d="M${x + r} ${y + 1.3}H${x + w - r}" stroke="#fff" stroke-opacity=".22" stroke-width="1" stroke-linecap="round"/>` : ""); // 上緣反光
   const mk = c => { const k = `${id}-a-${c}`; if (!defs.includes(k)) defs += `<marker id="${k}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="${C(c)}"/></marker>`; return k; };
   for (const it of fig.items) {
     const c = C(it.c), fillA = it.fill ? 0.22 : 0.08;
-    if (it.t === "box") body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${it.r ?? 6}" fill="${c}" fill-opacity="${fillA}" stroke="${c}" stroke-width="1.4"/>${T(it.x + it.w / 2, it.y + it.h / 2 + (it.sub ? -1 : 3.5), it.s || 10, it.label, { b: true })}${T(it.x + it.w / 2, it.y + it.h / 2 + 11, 8, it.sub, { c: "var(--muted)" })}`;
+    if (it.t === "box") body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${it.r ?? 6}" fill="${gr(it.c || "gray", it.fill)}" stroke="${c}" stroke-width="1.4"/>${hl(it.x, it.y, it.w, it.r ?? 6)}${T(it.x + it.w / 2, it.y + it.h / 2 + (it.sub ? -1 : 3.5), it.s || 10, it.label, { b: true })}${T(it.x + it.w / 2, it.y + it.h / 2 + 11, 8, it.sub, { c: "var(--muted)" })}`;
     else if (it.t === "chip") { let pins = ""; const n = Math.max(3, Math.round(it.w / 9)); for (let k = 1; k < n; k++) { const px = it.x + (it.w * k) / n, py = it.y + (it.h * k) / n; pins += `M${px} ${it.y - 4}V${it.y}M${px} ${it.y + it.h}V${it.y + it.h + 4}M${it.x - 4} ${py}H${it.x}M${it.x + it.w} ${py}H${it.x + it.w + 4}`; }
-      body += `<path d="${pins}" stroke="${c}" stroke-width="1.2"/><rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="3" fill="${c}" fill-opacity=".25" stroke="${c}" stroke-width="1.4"/>${T(it.x + it.w / 2, it.y + it.h / 2 + 3.5, it.s || 9, it.label, { b: true })}`; }
+      body += `<path d="${pins}" stroke="${c}" stroke-width="1.2"/><rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="3" fill="${gr(it.c || "gray", true)}" stroke="${c}" stroke-width="1.4"/>${it.w > 24 && it.h > 16 ? `<rect x="${it.x + 4}" y="${it.y + 4}" width="${it.w - 8}" height="${it.h - 8}" rx="1.5" fill="none" stroke="${c}" stroke-opacity=".45" stroke-width=".7"/>` : ""}${hl(it.x, it.y, it.w, 3)}${T(it.x + it.w / 2, it.y + it.h / 2 + 3.5, it.s || 9, it.label, { b: true })}`; }
     else if (it.t === "wafer") { let g = ""; for (let k = -2; k <= 2; k++) { const d = (it.r * k) / 3, hw = Math.sqrt(Math.max(0, it.r * it.r - d * d)) * 0.92; g += `M${it.x - hw} ${it.y + d}H${it.x + hw}M${it.x + d} ${it.y - hw}V${it.y + hw}`; }
       body += `<circle cx="${it.x}" cy="${it.y}" r="${it.r}" fill="${c}" fill-opacity=".18" stroke="${c}" stroke-width="1.4"/><path d="${g}" stroke="${c}" stroke-opacity=".55" stroke-width=".8"/>${lab(it, it.x, it.y + it.r + 11)}`; }
     else if (it.t === "cyl") { const ry = Math.min(6, it.h / 5); body += `<path d="M${it.x} ${it.y + ry}V${it.y + it.h - ry}A${it.w / 2} ${ry} 0 0 0 ${it.x + it.w} ${it.y + it.h - ry}V${it.y + ry}" fill="${c}" fill-opacity=".18" stroke="${c}" stroke-width="1.4"/><ellipse cx="${it.x + it.w / 2}" cy="${it.y + ry}" rx="${it.w / 2}" ry="${ry}" fill="${c}" fill-opacity=".35" stroke="${c}" stroke-width="1.4"/>${lab(it, it.x + it.w / 2, it.y + it.h + 11)}`; }
@@ -64,7 +72,7 @@ function figSvg(fig, { id = "f" + Math.random().toString(36).slice(2, 7), mini =
     else if (it.t === "icon") { const s = it.s || 24; body += `<g transform="translate(${it.x} ${it.y}) scale(${s / 24})"><path d="${FIG_ICONS[it.k] || FIG_ICONS.gear}" fill="${c}" fill-opacity=".15" stroke="${c}" stroke-width="${1.6 * 24 / s > 2.4 ? 2.4 : 1.6 * 24 / s}" stroke-linejoin="round" stroke-linecap="round"/></g>${lab(it, it.x + s / 2, it.y + s + 10)}`; }
     else if (it.t === "group") body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="8" fill="none" stroke="${c}" stroke-opacity=".7" stroke-dasharray="4 3"/>${T(it.x + 6, it.y + 11, 8.5, it.label, { c: "var(--muted)", a: "start", b: true })}`;
     // ---- 細節圖元 ----
-    else if (it.t === "badge") body += `<circle cx="${it.x}" cy="${it.y}" r="${it.r || 7}" fill="${c}"/><text x="${it.x}" y="${it.y + 3.2}" font-size="${it.s || 8.5}" font-weight="700" fill="#fff" text-anchor="middle">${e(it.n)}</text>`;
+    else if (it.t === "badge") body += `<circle cx="${it.x}" cy="${it.y}" r="${(it.r || 7) + 2.2}" fill="${c}" fill-opacity=".22"/><circle cx="${it.x}" cy="${it.y}" r="${it.r || 7}" fill="${c}" stroke="#fff" stroke-opacity=".85" stroke-width="1"/><text x="${it.x}" y="${it.y + 3.2}" font-size="${it.s || 8.5}" font-weight="700" fill="#fff" text-anchor="middle">${e(it.n)}</text>`;
     else if (it.t === "path") body += `<path d="${it.d}" fill="${it.fill ? c : "none"}" fill-opacity="${it.fill || 0}" stroke="${it.stroke === false ? "none" : c}" stroke-width="${it.w || 1.4}" ${it.dash ? 'stroke-dasharray="4 3"' : ""} stroke-linejoin="round" stroke-linecap="round"/>`;
     else if (it.t === "rect") body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${it.r ?? 2}" fill="${c}" fill-opacity="${it.fill ?? 0.3}" stroke="${it.stroke === false ? "none" : c}" stroke-width="${it.sw || 1}" ${it.dash ? 'stroke-dasharray="3 2"' : ""}/>`;
     else if (it.t === "circle") body += `<circle cx="${it.x}" cy="${it.y}" r="${it.r}" fill="${c}" fill-opacity="${it.fill ?? 0.25}" stroke="${it.stroke === false ? "none" : c}" stroke-width="${it.sw || 1.2}"/>${lab(it, it.x, it.y + it.r + 10)}`;
@@ -74,9 +82,27 @@ function figSvg(fig, { id = "f" + Math.random().toString(36).slice(2, 7), mini =
       body += `<circle cx="${it.x}" cy="${it.y}" r="${r}" fill="${c}" fill-opacity=".1" stroke="${c}" stroke-width="1.2"/><path d="${d}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round"/><circle cx="${it.x}" cy="${it.y}" r="${r * 0.18}" fill="${c}"/>${lab(it, it.x, it.y + r + 10)}`; }
     else if (it.t === "pcb") { let tr = ""; const n = Math.max(2, Math.round(it.h / 10)); for (let k = 1; k < n; k++) { const y = it.y + (it.h * k) / n; tr += `M${it.x + 6} ${y}h${it.w * 0.3}l6 -4h${it.w * 0.25}`; }
       body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="3" fill="${FIG_C.green}" fill-opacity=".22" stroke="${FIG_C.green}" stroke-width="1.3"/><path d="${tr}" fill="none" stroke="${FIG_C.yellow}" stroke-opacity=".7" stroke-width=".9"/>${it.label ? T(it.x + it.w / 2, it.y + it.h - 5, 8, it.label, { c: "var(--muted)" }) : ""}`; }
+    // 註解：圓點＋折線拉到旁邊寫說明（tx,ty 是文字位置，a 對齊）
+    else if (it.t === "callout") { const a = it.a || (it.tx >= it.x ? "start" : "end"), ex = it.tx + (a === "start" ? -3 : a === "end" ? 3 : 0);
+      body += `<circle cx="${it.x}" cy="${it.y}" r="1.8" fill="${c}"/><polyline points="${it.x},${it.y} ${ex},${it.ty - 3} " fill="none" stroke="${c}" stroke-width=".8" stroke-opacity=".8"/>${T(it.tx, it.ty, it.s || 7.5, it.label, { c: it.ink ? "var(--ink)" : "var(--muted)", a })}`; }
+    // 尺寸標註：兩端有短線的雙向線，中間寫數值或名稱
+    else if (it.t === "dim") { const dx = it.x2 - it.x1, dy = it.y2 - it.y1, L = Math.hypot(dx, dy) || 1, nx = (-dy / L) * 3, ny = (dx / L) * 3;
+      body += `<path d="M${it.x1} ${it.y1}L${it.x2} ${it.y2}M${it.x1 - nx} ${it.y1 - ny}L${it.x1 + nx} ${it.y1 + ny}M${it.x2 - nx} ${it.y2 - ny}L${it.x2 + nx} ${it.y2 + ny}" stroke="${c}" stroke-width=".8"/>${T((it.x1 + it.x2) / 2 + (it.lx || 0), (it.y1 + it.y2) / 2 + (it.ly ?? -3), it.s || 7, it.label, { c: "var(--muted)" })}`; }
+    // 斜線剖面（金屬、絕緣層、土壤…）
+    else if (it.t === "hatch") { const k = `${id}-h-${it.c || "gray"}-${it.gap || 4}`; if (!defs.includes(`id="${k}"`)) defs += `<pattern id="${k}" width="${it.gap || 4}" height="${it.gap || 4}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="${it.gap || 4}" stroke="${c}" stroke-width=".8" stroke-opacity=".7"/></pattern>`;
+      body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${it.r ?? 1}" fill="url(#${k})" stroke="${it.stroke === false ? "none" : c}" stroke-width=".9"/>${lab(it, it.x + it.w / 2, it.y + it.h + 10)}`; }
+    // 漸層色塊（液體、溫度、能量高低）：c 到 c2，dir:"h" 橫向
+    else if (it.t === "grad") { const k = `${id}-gg-${it.c}-${it.c2 || it.c}-${it.dir || "v"}`; if (!defs.includes(`id="${k}"`)) defs += `<linearGradient id="${k}" x1="0" y1="0" x2="${it.dir === "h" ? 1 : 0}" y2="${it.dir === "h" ? 0 : 1}"><stop offset="0" stop-color="${c}" stop-opacity="${it.o ?? 0.55}"/><stop offset="1" stop-color="${C(it.c2 || it.c)}" stop-opacity="${it.o ?? 0.55}"/></linearGradient>`;
+      body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${it.r ?? 2}" fill="url(#${k})" ${it.stroke ? `stroke="${c}" stroke-width=".9"` : ""}/>${lab(it, it.x + it.w / 2, it.y + it.h + 10)}`; }
+    // 粒子（離子、分子、資料封包）：在方框內排成格子，sz 是粒子大小
+    else if (it.t === "dots") { const n = it.n || 12, cols = Math.max(1, Math.round(Math.sqrt((n * it.w) / Math.max(1, it.h)))), rows = Math.ceil(n / cols); let d = "";
+      for (let k = 0; k < n; k++) { const cx = it.x + ((k % cols) + 0.5) * (it.w / cols) + ((Math.floor(k / cols) % 2) * it.w) / cols / 4, cy = it.y + (Math.floor(k / cols) + 0.5) * (it.h / rows); d += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${it.sz || 1.6}"/>`; }
+      body += `<g fill="${c}" fill-opacity="${it.fill ?? 0.8}">${d}</g>`; }
     else if (it.t === "legend") { let x = it.x; for (const [k, t, d] of it.items) { body += `<line x1="${x}" y1="${it.y - 3}" x2="${x + 14}" y2="${it.y - 3}" stroke="${C(k)}" stroke-width="2" ${d ? 'stroke-dasharray="3 2"' : ""}/>${T(x + 18, it.y, 8, t, { c: "var(--muted)", a: "start" })}`; x += 26 + String(t).length * 8; } }
   }
-  return `<svg class="figsvg${mini ? " mini" : ""}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${e(fig.alt || "產業原理圖")}"><defs>${defs}</defs>${body}</svg>`;
+  // 大圖底下鋪一層淡淡的點陣格線（像工程圖紙），縮圖不畫
+  const bg = mini ? "" : `<pattern id="${id}-bg" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".55" fill="var(--muted)" fill-opacity=".28"/></pattern>`;
+  return `<svg class="figsvg${mini ? " mini" : ""}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${e(fig.alt || "產業原理圖")}"><defs>${bg}${defs}</defs>${mini ? "" : `<rect width="${W}" height="${H}" fill="url(#${id}-bg)"/>`}${body}</svg>`;
 }
 // 每個題材的圖解與說明：INDUSTRY_FIGS[題材 id] = { fig, how: [[小標, 內文], ...], trends: [...], chain: [...] }；
 // 新題材放在 INDUSTRY_PACK（格式同 INDUSTRY_MAP.themes，另外帶 fig、how、trends、chain）。
