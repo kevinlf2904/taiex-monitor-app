@@ -643,7 +643,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-34</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-35</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -763,7 +763,7 @@ const futKey = q => `watch:ft:${q.symbol || "TXF"}:${q.session}:${futSessDate(q.
 function futRecord(q) {
   if (!q?.price || !q.session || q.fsession !== q.session) return; // 只記正在交易的那一盤
   const k = futKey(q), L = store.get(k, []) || [], now = Date.now(), last = L[L.length - 1];
-  if (last && now - last[0] < 900) return;
+  if (last && now - last[0] < 5000) return; // 5 秒記一筆就夠組 1 分 K，也不會每秒寫一次 localStorage（iPad 會卡）
   L.push([now, q.price, q.vol ?? null]); if (L.length > 4000) L.splice(0, L.length - 4000); store.set(k, L);
 }
 function futLocalBars(q) {
@@ -824,12 +824,13 @@ const liveTag = (J, closed) => (J?.live ? `<span class="livetag"><i></i>盤中�
 async function fastTick() {
   if (W.off || W.busy || W.fbusy || document.visibilityState === "hidden") return;
   W.fbusy = true; try { const r = await Promise.allSettled([pollList(), pollDetail()]); if (!r.some(x => x.status === "rejected")) { W.lastOk = Date.now(); W.err = null; } } finally { W.fbusy = false; }
-  checkAlerts(); W.ticking = true; renderTop(); if (["watch", "hold", "tw", "us", "rank"].includes(W.lt)) renderList(); if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } W.ticking = false;
+  checkAlerts(); W.ticking = true; renderTop(); if (["watch", "hold", "tw", "us", "rank"].includes(W.lt) && Date.now() - (W.lastPtr || 0) > 900) renderList(); // 剛按下去時先不重畫清單，避免點擊被吃掉 if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } W.ticking = false;
 }
 function schedule() { clearTimeout(W.timer); if (W.off) return; const open = anyOpen();
   W.timer = setTimeout(async () => { W.tn = (W.tn || 0) + 1; if (open && W.tn % 5) await fastTick(); else await tick(); schedule(); }, open ? 1000 : 300000); }
 const kick = () => tick().then(schedule);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") kick(); });
+document.addEventListener("pointerdown", () => { W.lastPtr = Date.now(); }, true);
 addEventListener("online", kick);
 async function loadHot(market, type) {
   const key = market === "us" ? "us:" + W.usType : market === "tw" ? "tw" : "rank:" + W.rankType;
@@ -941,6 +942,7 @@ function rowHtml(c, q, { rank, metric, star } = {}) {
 function renderList() {
   const lx = $("#lx"), ae = document.activeElement;
   if (W.ticking && lx.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
+  if (W.ticking && Date.now() - (W.lastPtr || 0) < 900) return; // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
   const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details")].map(d => [sum(d), d.open]));
   renderList0();
   if (opened.size) for (const d of lx.querySelectorAll("details")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
