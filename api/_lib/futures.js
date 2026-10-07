@@ -47,7 +47,7 @@ export function parseTaifexList(j, near, session, cid = "TXF") {
   const r = L.find(x => String(x.SymbolID || "").startsWith(near)) || L.find(x => new RegExp(`^${cid}[A-L]\\d`).test(String(x.SymbolID || "")) && num(x.CTotalVolume) > 0) || null;
   if (!r) return null;
   const price = num(r.CLastPrice), prev = num(r.CRefPrice), dt = String(r.CDate || ""), tm = String(r.CTime || "").padStart(6, "0");
-  return { code: cid, symbol: String(r.SymbolID || "").replace(/-.*/, ""), name: r.DispCName || FUT_NAMES[cid], session, price, prev, open: num(r.COpenPrice), high: num(r.CHighPrice), low: num(r.CLowPrice), vol: num(r.CTotalVolume),
+  return { code: cid, symbol: String(r.SymbolID || "").replace(/-.*/, ""), sid: String(r.SymbolID || ""), name: r.DispCName || FUT_NAMES[cid], session, price, prev, open: num(r.COpenPrice), high: num(r.CHighPrice), low: num(r.CLowPrice), vol: num(r.CTotalVolume),
     chg: price != null && prev ? +(price - prev).toFixed(2) : num(r.CDiff), chgPct: price != null && prev ? +((price / prev - 1) * 100).toFixed(2) : num(r.CDiffRate),
     time: /^\d{6}$/.test(tm) ? `${tm.slice(0, 2)}:${tm.slice(2, 4)}:${tm.slice(4, 6)}` : null, date: /^\d{8}$/.test(dt) ? `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6)}` : null };
 }
@@ -73,13 +73,33 @@ async function fromFugle(sym, key, withBars) {
   const bars = withBars ? [...(cn?.status === "fulfilled" ? parseFugleCandles(cn.value, "night") : []), ...(cd?.status === "fulfilled" ? parseFugleCandles(cd.value, "day") : [])].sort((a, b) => a.at - b.at) : [];
   return { day, night, bars, source: "富果期貨行情" };
 }
-async function fromTaifex(near, cid = "TXF") {
+// 期交所行情網站的 1 分 K（getChartData1M，SymbolID 例如 TXFJ6-F 日盤、TXFJ6-M 夜盤）。官方沒有文件，欄位名稱用關鍵字找，抓不到就算了
+export function parseTaifexChart(j, session, date) {
+  const arr = (() => { const st = [j?.RtData, j]; for (const o of st) { if (Array.isArray(o)) return o; if (o && typeof o === "object") for (const v of Object.values(o)) if (Array.isArray(v) && v.length && typeof v[0] === "object") return v; } return []; })();
+  const k = (o, re) => Object.keys(o).find(x => re.test(x));
+  return arr.map(x => { const kt = k(x, /time/i), kc = k(x, /close|last|price/i); if (!kt || !kc) return null;
+    const t = String(x[kt]).replace(/\D/g, "").padStart(6, "0").slice(0, 4), hh = +t.slice(0, 2), mm = +t.slice(2, 4); if (!(hh < 24 && mm < 60)) return null;
+    const c = num(x[kc]), o = num(x[k(x, /open/i)]) ?? c, h = num(x[k(x, /high/i)]) ?? c, l = num(x[k(x, /low/i)]) ?? c, v = num(x[k(x, /vol|qty/i)]) || 0;
+    const d = session === "night" && hh < 15 ? iso(new Date(Date.parse(date + "T00:00:00Z") + 864e5)) : date;
+    const at = Date.parse(`${d}T${t.slice(0, 2)}:${t.slice(2, 4)}:00+08:00`);
+    return c != null ? { at, d, t: `${t.slice(0, 2)}:${t.slice(2, 4)}`, o, h, l, c, v, s: session } : null; }).filter(Boolean).sort((a, b) => a.at - b.at);
+}
+async function taifexBars(q, session) {
+  if (!q?.sid) return [];
+  const j = await getJSON("https://mis.taifex.com.tw/futures/api/getChartData1M", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ SymbolID: q.sid }) });
+  // 夜盤的交易日：15:00 以後開始那一天
+  const t = tpe(), start = session === "night" && t.getUTCHours() < 15 ? iso(new Date(t.getTime() - 864e5)) : iso(t);
+  return parseTaifexChart(j, session, session === "night" ? start : q.date || iso(t));
+}
+async function fromTaifex(near, cid = "TXF", withBars = false) {
   const body = mt => JSON.stringify({ MarketType: mt, SymbolType: "F", KindID: "1", CID: cid, ExpireMonth: "", RowSize: "全部", PageNo: "", SortColumn: "", AscDesc: "A" });
   const post = mt => getJSON("https://mis.taifex.com.tw/futures/api/getQuoteList", { method: "POST", headers: { "Content-Type": "application/json" }, body: body(mt) });
   const [d, n] = await Promise.allSettled([post("0"), post("1")]);
   const day = d.status === "fulfilled" ? parseTaifexList(d.value, near, "day", cid) : null, night = n.status === "fulfilled" ? parseTaifexList(n.value, near, "night", cid) : null;
   if (!day && !night) throw new Error(d.reason?.message || "沒有報價");
-  return { day, night, bars: [], source: "期交所行情網站" };
+  let bars = [];
+  if (withBars) { const r = await Promise.allSettled([taifexBars(night, "night"), taifexBars(day, "day")]); bars = r.flatMap(x => (x.status === "fulfilled" ? x.value : [])).sort((a, b) => a.at - b.at); }
+  return { day, night, bars, source: "期交所行情網站" };
 }
 
 export default async function handler(req, res) {
@@ -87,11 +107,11 @@ export default async function handler(req, res) {
   const nm = nearMonth(Date.now(), cid), sess = sessionOf(), withBars = String(req.query?.bars ?? "1") !== "0", key = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
   let r = null;
   if (key) { try { r = await fromFugle(nm.code, key, withBars); } catch (e) { errors.push(`富果：${e.message}`); } }
-  if (!r) { try { r = await fromTaifex(nm.code, cid); } catch (e) { errors.push(`期交所：${e.message}`); } }
+  if (!r || (withBars && !r.bars.length)) { try { const t = await fromTaifex(nm.code, cid, withBars); r = r ? { ...r, bars: t.bars.length ? t.bars : r.bars } : t; } catch (e) { errors.push(`期交所：${e.message}`); } }
   if (!r) return res.status(200).json({ ok: false, error: `拿不到${fname}報價（${errors.join("；")}）` });
   const cur = pickCurrent(r.day, r.night, sess);
-  res.setHeader("Cache-Control", `s-maxage=${sess === "closed" ? 60 : 5}, stale-while-revalidate=30`);
+  res.setHeader("Cache-Control", `s-maxage=${sess === "closed" ? 60 : withBars ? 5 : 1}, stale-while-revalidate=${sess === "closed" ? 30 : 2}`);
   return res.status(200).json({ ok: true, code: cid, name: `${fname} ${nm.month} 月`, symbol: nm.code, settle: nm.settle, session: sess, source: r.source,
     quote: cur ? { ...cur, code: cid, name: `${fname}近${cur.session === "night" ? "（夜盤）" : "（日盤）"}` } : null, day: r.day, night: r.night,
-    bars: r.bars.map(({ at, ...b }) => b), note: r.bars.length ? null : key ? "富果沒有提供分 K" : "伺服器讀不到富果 API 金鑰（FUGLE_API_KEY），所以只有報價、沒有分時與分 K；請到「更多 → 資料來源狀態」檢查" });
+    bars: r.bars.map(({ at, ...b }) => b), note: r.bars.length ? null : key ? "富果與期交所都沒有提供這一盤的分 K，改用這個瀏覽器開著時記錄的報價畫分時" : "伺服器讀不到富果 API 金鑰（FUGLE_API_KEY），期交所也沒有提供分 K；改用這個瀏覽器開著時記錄的報價畫分時" });
 }

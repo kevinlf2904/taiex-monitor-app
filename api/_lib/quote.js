@@ -53,7 +53,7 @@ async function getJSON(url, headers = {}) {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
-async function misFetch(chs) {
+export async function misFetch(chs) {
   const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${chs.join("|")}&json=1&delay=0&_=${Date.now()}`;
   let j = null;
   try { j = await getJSON(url, misCookie ? { Cookie: misCookie } : {}); } catch {}
@@ -96,7 +96,7 @@ export default async function handler(req, res) {
   }
   const usP = us.length ? usQuotes() : Promise.resolve([]);
   const key = (misOnly ? "mis:" : "") + all.join(","), hit = cache.get(key), sess = session();
-  if (hit && Date.now() - hit.at < 4000) { res.setHeader("Cache-Control", "s-maxage=4"); return res.status(200).json(hit.body); }
+  if (hit && Date.now() - hit.at < (sess === "closed" ? 30000 : 900)) { res.setHeader("Cache-Control", sess === "closed" ? "s-maxage=30" : "s-maxage=1"); return res.status(200).json(hit.body); }
   const fugleKey = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
   for (const [source, run] of [...(fugleKey && !misOnly ? [["富果", () => fromFugle(codes, fugleKey)]] : []), ["證交所 MIS", () => fromMis(codes)]]) {
     try {
@@ -106,7 +106,7 @@ export default async function handler(req, res) {
         const body = { ok: true, source, session: sess, today: todayTaipei(), time: new Date().toISOString(), quotes, missing: all.filter(c => !quotes.some(q => q.code === c)) };
         cache.set(key, { at: Date.now(), body });
         // 盤中只快取幾秒；收盤後快取久一點
-        res.setHeader("Cache-Control", sess === "closed" ? "s-maxage=120, stale-while-revalidate=600" : "s-maxage=4, stale-while-revalidate=10");
+        res.setHeader("Cache-Control", sess === "closed" ? "s-maxage=120, stale-while-revalidate=600" : "s-maxage=1, stale-while-revalidate=2"); // 盤中每秒更新
         return res.status(200).json(body);
       }
       errors.push(`${source}: 沒有資料`);
