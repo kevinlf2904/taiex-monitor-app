@@ -13,7 +13,17 @@
      icon   { t:"icon", x, y, s, k, c, label }                      圖示（k 見 FIG_ICONS），x,y 是左上角、s 邊長
      group  { t:"group", x, y, w, h, label, c }                     虛線框住一區，左上角標題
      legend { t:"legend", x, y, items: [[c, "說明", dash?], ...] }  圖例（橫排）
-   c 是顏色名稱：blue cyan green orange red purple yellow pink gray。 */
+   細節圖元：
+     badge  { t:"badge", x, y, n, c }                              編號圓點（對應價值鏈的第 n 段），x,y 是圓心
+     path   { t:"path", d, c, fill, w, dash }                       任意 SVG 路徑；fill 是填色透明度 0～1
+     rect   { t:"rect", x, y, w, h, c, fill, r, dash, stroke }      無文字的方塊（零件細節、線路、銅條）
+     circle { t:"circle", x, y, r, c, fill, label }                 圓
+     coil   { t:"coil", x, y, w, h, n, c, label }                   線圈（電感、變壓器）
+     wave   { t:"wave", x, y, w, n, a, c }                          交流電波形
+     fan    { t:"fan", x, y, r, c, label }                          風扇
+     pcb    { t:"pcb", x, y, w, h, label }                          綠色電路板（含走線）
+   c 是顏色名稱：blue cyan green orange red purple yellow pink gray。
+   圖的大小可以自訂（建議 { w: 400, h: 280 }）。 */
 const FIG_C = { blue: "#4f8cff", cyan: "#22b8cf", green: "#2bb673", orange: "#f08c2e", red: "#ef4d5a", purple: "#8b6cf6", yellow: "#e6b729", pink: "#e2589b", gray: "#8a94a3" };
 const FIG_ICONS = {
   car: "M3 15h18l-1.5-5-3-3h-7l-3 3zM7 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M17 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3",
@@ -53,10 +63,24 @@ function figSvg(fig, { id = "f" + Math.random().toString(36).slice(2, 7), mini =
     else if (it.t === "text") body += T(it.x, it.y, it.s || 9, it.label, { c: it.c ? c : it.muted ? "var(--muted)" : "var(--ink)", a: it.a || "middle", b: it.b });
     else if (it.t === "icon") { const s = it.s || 24; body += `<g transform="translate(${it.x} ${it.y}) scale(${s / 24})"><path d="${FIG_ICONS[it.k] || FIG_ICONS.gear}" fill="${c}" fill-opacity=".15" stroke="${c}" stroke-width="${1.6 * 24 / s > 2.4 ? 2.4 : 1.6 * 24 / s}" stroke-linejoin="round" stroke-linecap="round"/></g>${lab(it, it.x + s / 2, it.y + s + 10)}`; }
     else if (it.t === "group") body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="8" fill="none" stroke="${c}" stroke-opacity=".7" stroke-dasharray="4 3"/>${T(it.x + 6, it.y + 11, 8.5, it.label, { c: "var(--muted)", a: "start", b: true })}`;
+    // ---- 細節圖元 ----
+    else if (it.t === "badge") body += `<circle cx="${it.x}" cy="${it.y}" r="${it.r || 7}" fill="${c}"/><text x="${it.x}" y="${it.y + 3.2}" font-size="${it.s || 8.5}" font-weight="700" fill="#fff" text-anchor="middle">${e(it.n)}</text>`;
+    else if (it.t === "path") body += `<path d="${it.d}" fill="${it.fill ? c : "none"}" fill-opacity="${it.fill || 0}" stroke="${it.stroke === false ? "none" : c}" stroke-width="${it.w || 1.4}" ${it.dash ? 'stroke-dasharray="4 3"' : ""} stroke-linejoin="round" stroke-linecap="round"/>`;
+    else if (it.t === "rect") body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${it.r ?? 2}" fill="${c}" fill-opacity="${it.fill ?? 0.3}" stroke="${it.stroke === false ? "none" : c}" stroke-width="${it.sw || 1}" ${it.dash ? 'stroke-dasharray="3 2"' : ""}/>`;
+    else if (it.t === "circle") body += `<circle cx="${it.x}" cy="${it.y}" r="${it.r}" fill="${c}" fill-opacity="${it.fill ?? 0.25}" stroke="${it.stroke === false ? "none" : c}" stroke-width="${it.sw || 1.2}"/>${lab(it, it.x, it.y + it.r + 10)}`;
+    else if (it.t === "coil") { const n = it.n || 5, dx = it.w / n; let d = `M${it.x} ${it.y + it.h / 2}`; for (let k = 0; k < n; k++) d += ` a${dx / 2} ${it.h / 2} 0 1 1 ${dx} 0`; body += `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.6"/>${lab(it, it.x + it.w / 2, it.y + it.h + 10)}`; }
+    else if (it.t === "wave") { const n = it.n || 2, dx = it.w / n, a = it.a || 4; let d = `M${it.x} ${it.y}`; for (let k = 0; k < n; k++) d += ` q${dx / 4} ${-a * 2} ${dx / 2} 0 t${dx / 2} 0`; body += `<path d="${d}" fill="none" stroke="${c}" stroke-width="${it.sw || 1.8}" stroke-linecap="round"/>`; }
+    else if (it.t === "fan") { const r = it.r || 10; let d = ""; for (let k = 0; k < 4; k++) { const a = (k * Math.PI) / 2, x1 = it.x + Math.cos(a) * r * 0.85, y1 = it.y + Math.sin(a) * r * 0.85, x2 = it.x + Math.cos(a + 0.9) * r * 0.5, y2 = it.y + Math.sin(a + 0.9) * r * 0.5; d += `M${it.x} ${it.y}Q${x2} ${y2} ${x1} ${y1}`; }
+      body += `<circle cx="${it.x}" cy="${it.y}" r="${r}" fill="${c}" fill-opacity=".1" stroke="${c}" stroke-width="1.2"/><path d="${d}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round"/><circle cx="${it.x}" cy="${it.y}" r="${r * 0.18}" fill="${c}"/>${lab(it, it.x, it.y + r + 10)}`; }
+    else if (it.t === "pcb") { let tr = ""; const n = Math.max(2, Math.round(it.h / 10)); for (let k = 1; k < n; k++) { const y = it.y + (it.h * k) / n; tr += `M${it.x + 6} ${y}h${it.w * 0.3}l6 -4h${it.w * 0.25}`; }
+      body += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="3" fill="${FIG_C.green}" fill-opacity=".22" stroke="${FIG_C.green}" stroke-width="1.3"/><path d="${tr}" fill="none" stroke="${FIG_C.yellow}" stroke-opacity=".7" stroke-width=".9"/>${it.label ? T(it.x + it.w / 2, it.y + it.h - 5, 8, it.label, { c: "var(--muted)" }) : ""}`; }
     else if (it.t === "legend") { let x = it.x; for (const [k, t, d] of it.items) { body += `<line x1="${x}" y1="${it.y - 3}" x2="${x + 14}" y2="${it.y - 3}" stroke="${C(k)}" stroke-width="2" ${d ? 'stroke-dasharray="3 2"' : ""}/>${T(x + 18, it.y, 8, t, { c: "var(--muted)", a: "start" })}`; x += 26 + String(t).length * 8; } }
   }
   return `<svg class="figsvg${mini ? " mini" : ""}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${e(fig.alt || "產業原理圖")}"><defs>${defs}</defs>${body}</svg>`;
 }
-// 每個題材的圖解與原理說明：INDUSTRY_FIGS[題材 id] = { fig, how: [[小標, 內文], ...] }；新題材放在 INDUSTRY_PACK（格式同 INDUSTRY_MAP.themes，另外帶 fig、how）
+// 每個題材的圖解與說明：INDUSTRY_FIGS[題材 id] = { fig, how: [[小標, 內文], ...], trends: [...], chain: [...] }；
+// 新題材放在 INDUSTRY_PACK（格式同 INDUSTRY_MAP.themes，另外帶 fig、how、trends、chain）。
+// chain：產業價值鏈 [{ tier: "上游"|"中游"|"下游", title, items: [{ name, desc, c: [[代號, 公司, 角色], ...] }] }]，
+//   items 依序編號 1、2、3…（跨 tier 連續），圖上的 badge n 對應這個編號。
 const INDUSTRY_FIGS = {};
 const INDUSTRY_PACK = [];
