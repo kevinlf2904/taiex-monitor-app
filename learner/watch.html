@@ -569,7 +569,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.06-30</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.07-31</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1544,7 +1544,7 @@ function indChain(T) {
 function indPeers(T) {
   const F = indFig(T); if (F?.peers) return F.peers.map(id => INDT.get(id)).filter(Boolean);
   const bg = s => { const t = s.replace(/[（(].*?[）)]|\s/g, ""), o = new Set(); for (let i = 0; i < t.length - 1; i++) o.add(t.slice(i, i + 2)); return o; }, me = bg(T.name);
-  return IND.themes.filter(t => t.mk !== T.mk && t.cat === T.cat).map(t => ({ t, sc: [...bg(t.name)].filter(x => me.has(x)).length })).sort((a, b) => b.sc - a.sc).slice(0, 6).map(x => x.t);
+  return IND.themes.filter(t => t.mk !== T.mk && t.cat === T.cat).map(t => ({ t, sc: [...bg(t.name)].filter(x => me.has(x)).length })).filter(x => x.sc > 0).sort((a, b) => b.sc - a.sc).slice(0, 6).map(x => x.t); // 名稱要有共同的詞才算同主題，避免硬配
 }
 function indGlobal(T) {
   const L = IND.networks.flatMap(n => n.links), uniq = a => [...new Set(a)].filter(id => id !== T.id && INDT.has(id)).map(id => INDT.get(id));
@@ -1554,7 +1554,7 @@ function indGlobal(T) {
   return `<section class="iseg iglobal"><h4>全球產業鏈位置</h4>
     <div class="igme" style="--ic:${indCol(T)}"><small>本題材</small><b>${esc(T.name)}</b><span>${MK_NAME[T.mk]}股・${esc(T.cat)}</span></div>
     ${peers.length ? `<div class="igpeer"><h5>其他市場同主題</h5><div class="ichips">${peers.map(chip).join("")}</div></div>` : ""}
-    <div class="iglflow">${col("上游供應", up, "up")}<span class="iglarr" aria-hidden="true">→</span><div class="iglmid">${esc(T.name)}</div><span class="iglarr" aria-hidden="true">→</span>${col("下游應用", dn, "dn")}</div></section>`;
+    ${up.length || dn.length ? `<div class="iglflow">${col("上游供應", up, "up")}<span class="iglarr" aria-hidden="true">→</span><div class="iglmid">${esc(T.name)}</div><span class="iglarr" aria-hidden="true">→</span>${col("下游應用", dn, "dn")}</div>` : `<p class="note">這個題材還沒放進產業網絡，上下游請看上面的產業價值鏈結構。</p>`}</section>`;
 }
 // 點圖放大：全螢幕看圖，可放大縮小、左右上下滑動
 function indZoom(id) {
