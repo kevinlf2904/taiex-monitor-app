@@ -332,6 +332,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .futinfo h3 { margin: 0 0 4px; } .futinfo .d-kv { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 8px 0; } .futinfo .d-kv div { padding: 6px 8px; display: flex; flex-direction: column; } .futinfo .d-kv span { font-size: 12px; color: var(--muted); }
 .mkfold > summary { list-style: none; cursor: pointer; } .mkfold > summary::-webkit-details-marker { display: none; }
 .mkfold > summary h3::after { content: "展開 ▾"; margin-left: auto; font: 500 12px var(--font-body); color: var(--muted); } .mkfold[open] > summary h3::after { content: "收合 ▴"; } .mkfold:not([open]) > summary h3 { margin-bottom: 0; }
+.mkreg { padding: 8px 12px 0; } .mkreg .mkseg button { font-size: 14px; padding: 6px 14px; }
+.ixcards.us .ixcard .spark { width: 100%; height: 22px; margin-top: 2px; }
 .bwrap { margin: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); } .bubble { width: 100%; height: auto; display: block; } .bax { stroke: var(--line); stroke-width: 1; } .bq { font: 600 10px var(--font-body); fill: var(--muted); }
 .bnode { cursor: pointer; } .bnode circle { stroke: none; fill-opacity: var(--bop, .45); transition: fill-opacity .2s; } .bnode.on circle { fill-opacity: min(1, calc(var(--bop, .45) + .35)); } .bnode:focus circle, .bnode:hover circle { fill-opacity: min(1, calc(var(--bop, .45) + .2)); }
 .bopr { display: flex; align-items: center; gap: 8px; margin: 2px 12px 0; font-size: 12px; color: var(--muted); } .bopr input { flex: 1; max-width: 220px; accent-color: var(--ink); } .bopr b { font: 600 12px var(--font-num); color: var(--ink); min-width: 3em; } .bax-t { font: 10px var(--font-body); fill: var(--muted); } .blab { pointer-events: none; } .blab text { paint-order: stroke; stroke: var(--surface-2); stroke-width: 3px; stroke-linejoin: round; }
@@ -698,6 +700,7 @@ const W = {
   holdMkt: store.get("watch:hm", "tw"), holdSort: "mv", holdDir: 1, mkt: null,
   roK: ["", "D", "60", "1"].includes(String(store.get("watch:rok", ""))) ? String(store.get("watch:rok", "")) : "",
   scrG: store.get("watch:scrg", "smart"), scrOpen: null, cscan: null, news: null,
+  mkReg: store.get("watch:mkReg", "tw") === "us" ? "us" : "tw", usHot: ["active", "gain", "loss"].includes(store.get("watch:usHot", "active")) ? store.get("watch:usHot", "active") : "active",
   mkM: store.get("watch:mkM", "twse") === "tpex" ? "tpex" : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
   mkHot: ["value", "gain", "surge", "volume"].includes(store.get("watch:mkHot", "value")) ? store.get("watch:mkHot", "value") : "value", worldR: store.get("watch:worldR", "us"), calWk: 0, calK: ["all", "conf", "ex"].includes(store.get("watch:calK", "all")) ? store.get("watch:calK", "all") : "all", calDay: null, warn: null, warnOpen: "punish", cal: null, futx: null,
   mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), q: "up", rk: "inst", side: "buy", win: "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), rp: { t: null, playing: false, speed: 1, set: "hot" } },
@@ -799,7 +802,8 @@ async function tick() {
 // 即時更新：盤中依目前分頁自動重抓（大盤、排行 30 秒，選股 60 秒，產業報價 15 秒）；收盤後資金分頁每 10 分鐘看看今天的法人資料出來了沒
 function liveRefresh() {
   if (W.off) return; const open = W.session === "open" || W.session === "pre", age = o => (o?.at ? Date.now() - o.at : Infinity), t = new Date(Date.now() + 8 * 3600e3), hm = t.getUTCHours() * 60 + t.getUTCMinutes();
-  if (W.lt === "mkt" && open && age(W.mkt) > 30000 && !W.mktLoading) loadMktLive();
+  if (W.lt === "mkt" && W.mkReg === "us") { if (age(W.usm) > (W.usm?.session === "open" ? 30000 : 300000)) loadUsMkt(true); }
+  else if (W.lt === "mkt" && open && age(W.mkt) > 30000 && !W.mktLoading) loadMktLive();
   else if (W.lt === "tw" && open && age(W.hot.tw) > 30000) loadHot("tw");
   else if (W.lt === "rank" && open && !["foreign", "trust"].includes(W.rankType) && age(W.hot["rank:" + W.rankType]) > 30000) loadHot("tw-rank");
   else if (W.lt === "screen" && open && age(W.scr) > 60000 && !W.scrLoading) loadScreen(true);
@@ -974,7 +978,7 @@ function renderList0() {
     $("#lTools").innerHTML = `<span class="note">產業地圖・代表公司參考名單（整理於 ${INDUSTRY_MAP.updated}），不是推薦</span>`;
     renderInd(); note = "台股、美股有即時報價；日股、韓股只列名稱。題材的平均漲跌是成員今天漲跌幅的簡單平均。";
   } else if (W.lt === "mkt") {
-    $("#lTools").innerHTML = `<span class="note">${W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
+    $("#lTools").innerHTML = `<span class="note">${W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
     renderMkt(); note = W.mkt?.source ? `資料：${W.mkt.source}。${W.mkt.live ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布" : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計"}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : "";
   } else if (W.lt === "tw") {
     const H = W.hot.tw;
@@ -1009,7 +1013,7 @@ $("#listPane").addEventListener("click", e => {
   else if (g) { if (g.dataset.g === "new") { const name = prompt("新群組名稱", `群組 ${W.groups.length + 1}`); if (name) { W.groups.push({ name: name.slice(0, 12), list: [] }); W.gi = W.groups.length - 1; saveGroups(); renderList(); } } else { W.gi = +g.dataset.g; W.editing = false; saveGroups(); renderList(); kick(); } }
   else if (t.closest("[data-hs]")) { const k = t.closest("[data-hs]").dataset.hs; W.holdDir = W.holdSort === k ? -W.holdDir : 1; W.holdSort = k; renderList(); }
   else if (t.closest("[data-hm]")) { W.holdMkt = t.closest("[data-hm]").dataset.hm; store.set("watch:hm", W.holdMkt); renderList(); pollList().then(renderList).catch(() => {}); }
-  else if (gx && gx.dataset.gx === "mktRefresh") loadMkt(true);
+  else if (gx && gx.dataset.gx === "mktRefresh") { if (W.mkReg === "us") loadUsMkt(true); else loadMkt(true); }
   else if (gx && gx.dataset.gx === "scrRefresh") loadScreen(true);
   else if (gx && gx.dataset.gx === "mfRefresh") { W.mf.days = W.mf.days.filter(d => d.date < W.today); W.mf.tried = new Set(); loadMoney(10, true); }
   else if (t.closest("[data-hv]")) { W.holdView = t.closest("[data-hv]").dataset.hv; store.set("watch:hv", W.holdView); renderList(); }
@@ -1858,11 +1862,37 @@ const mkSeg = (key, val, opts) => `<span class="mkseg">${opts.map(([k, t]) => `<
 const pctTxt = (chg, pct) => (chg != null ? `${arrow(chg)}${Math.abs(chg).toLocaleString(undefined, { maximumFractionDigits: 2 })}（${Math.abs(pct ?? 0).toFixed(2)}%）` : "");
 // 除權息：以台北時間的週一為一週開始
 const weekRange = k => { const t = new Date(Date.now() + 8 * 3600e3), d = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - d + k * 7); const a = t.toISOString().slice(0, 10); t.setUTCDate(t.getUTCDate() + 6); return [a, t.toISOString().slice(0, 10)]; };
+// 美股大盤：主要指數、期貨與宏觀、類股 ETF、權值股、美股熱門（Yahoo Finance，可能延遲 15 分鐘）
+async function loadUsMkt(force = false) {
+  if (W.off || W.usmLoading || (!force && W.usm && Date.now() - W.usm.at < 30000)) return;
+  W.usmLoading = true; try { W.usm = { ...(await getJ("/api/usmarket", true)), at: Date.now() }; } catch (e) { W.usm = { err: e.message, at: Date.now() }; } finally { W.usmLoading = false; }
+  if (!W.hot["us:" + (W.usHot || "active")]) { W.usType = W.usHot || "active"; loadHot("us"); }
+  if (W.lt === "mkt" && W.mkReg === "us") renderList();
+}
+function renderUsMkt(top) {
+  const J = W.usm, sec = (t, body, extra = "", seg = "") => `<section class="mk"><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</section>`;
+  if (!J) { $("#lx").innerHTML = top + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有美股資料。" : "載入美股大盤…"}</p>`; loadUsMkt(); return; }
+  if (J.err || !J.ok) { $("#lx").innerHTML = top + `<p class="note err" style="padding:12px">⚠ ${esc(J.err || J.error || "暫時拿不到美股資料")}</p>`; return; }
+  const sel = x => (okCode(String(x.code).toUpperCase()) ? `data-sel="${esc(String(x.code).toUpperCase())}"` : "");
+  const card = x => `<button class="ixcard" ${sel(x)}><span>${esc(x.name)}</span><b class="${cls(x.chg)}">${x.price?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? "—"}</b><small class="${cls(x.chg)}">${pctTxt(x.chg, x.chgPct)}</small>${spark(x.spark, (x.chg ?? 0) >= 0)}</button>`;
+  const ST = { open: "盤中", pre: "盤前", closed: "已收盤" }[J.session] || "";
+  let h = top + `<p class="note gnote">美股${ST}・${J.date ? J.date.replace(/-/g, "/") : ""}（美東時間）・${esc(J.source || "")}</p>`;
+  h += `<div class="ixcards three us">${J.indices.map(card).join("")}</div>`;
+  if (J.macro?.length) h += sec("期貨與宏觀", `<ul class="mrows us">${J.macro.map(x => `<li ${sel(x) ? sel(x) + ' role="button" tabindex="0"' : ""}><span>${esc(x.name)}</span><b class="${cls(x.chg)}">${x.price?.toLocaleString(undefined, { maximumFractionDigits: x.code === "^TNX" ? 3 : 2 }) ?? "—"}${x.code === "^TNX" ? "%" : ""}</b><span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chgPct ?? 0).toFixed(2)}%</span>${spark(x.spark, (x.chg ?? 0) >= 0)}</li>`).join("")}</ul>`, "期貨與加密貨幣不能開 K 線");
+  if (J.sectors?.length) { const mx = Math.max(0.3, ...J.sectors.map(x => Math.abs(x.chgPct || 0)));
+    h += sec("類股表現", `<ul class="bars">${J.sectors.map(x => `<li ${sel(x)} role="button" tabindex="0"><span>${esc(x.name)} <small class="note">${x.code}</small></span><div><i class="${cls(x.chgPct)}" style="width:${Math.abs(x.chgPct || 0) / mx * 100}%"></i></div><b class="${cls(x.chgPct)}">${sgn(x.chgPct ?? 0, 2)}%</b></li>`).join("")}</ul>`, "SPDR 類股 ETF"); }
+  if (J.megas?.length) h += sec("權值股", `<div class="mtiles">${J.megas.map(mtile).join("")}</div>`);
+  const t = W.usHot || "active", H = W.hot["us:" + t];
+  h += sec("美股熱門", H?.rows?.length ? `<div class="mtiles">${H.rows.slice(0, 9).map(mtile).join("")}</div>` : `<p class="note">${H?.err ? "⚠ " + esc(H.err) : "載入中…"}</p>`, "", mkSeg("usHot", t, [["active", "最活躍"], ["gain", "漲幅"], ["loss", "跌幅"]]));
+  $("#lx").innerHTML = h;
+}
 function renderMkt() {
+  const top = `<div class="mkreg">${mkSeg("mkReg", W.mkReg || "tw", [["tw", "台股大盤"], ["us", "美股大盤"]])}</div>`;
+  if (W.mkReg === "us") return renderUsMkt(top);
   const J = W.mkt, q = c => W.quotes.get(c), card = (c, nm) => { const x = q(c); return `<button class="ixcard" data-sel="${c}"><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price != null ? x.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><small class="${cls(x?.chg)}">${pctTxt(x?.chg, x?.chgPct)}</small></button>`; };
   const scard = (nm, x, sub, attr = "") => `<button class="ixcard" ${attr}><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price ?? x?.close ?? "—"}</b><small class="${cls(x?.chg)}">${x ? pctTxt(x.chg, x.chgPct) : sub || ""}</small></button>`;
   const fq = q("TXF"), F = W.futx || {}, t50 = J?.indices?.find(x => /臺灣50|台灣50/.test(x.name));
-  let h = `<div class="ixcards three">${card("T00", "加權指數")}${card("O00", "櫃買指數")}${card("TXF", fq?.session === "night" ? "台指近（夜盤）" : "台指近")}
+  let h = top + `<div class="ixcards three">${card("T00", "加權指數")}${card("O00", "櫃買指數")}${card("TXF", fq?.session === "night" ? "台指近（夜盤）" : "台指近")}
     ${scard(F.EXF?.session === "night" ? "電指近（夜盤）" : "電指近", F.EXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="EXF"')}${scard(F.FXF?.session === "night" ? "金指近（夜盤）" : "金指近", F.FXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="FXF"')}${scard("臺灣 50", t50 ? { price: t50.close.toLocaleString(), chg: t50.chg, chgPct: t50.chgPct } : null, "收盤", 'data-sel="0050" title="看元大台灣50（0050）"')}</div>`;
   if (!J) { $("#lx").innerHTML = h + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有大盤資料。" : "載入中…"}</p>`; return; }
   if (J.err) { $("#lx").innerHTML = h + `<p class="note err" style="padding:12px">⚠ ${esc(J.err)}</p>`; return; }
@@ -1940,6 +1970,8 @@ $("#lx").addEventListener("click", e => { const b = e.target.closest("[data-mk]"
   if (k === "goSec") { mktSector(v); return; }
   if (k === "futInfo") { futInfo(v); return; }
   if (k === "fold") return; // 收合由 <details> 自己處理
+  if (k === "mkReg") { W.mkReg = v; store.set("watch:mkReg", v); if (v === "us") loadUsMkt(); renderList(); return; }
+  if (k === "usHot") { W.usHot = v; store.set("watch:usHot", v); W.usType = v; if (!W.hot["us:" + v]) loadHot("us"); renderList(); return; }
   if (k === "theme") { W.scrG = "theme"; W.scrOpen = v; store.set("watch:scrg", "theme"); setLt("screen"); return; }
   if (k === "calDay") { W.calDay = W.calDay === v ? null : v; renderList(); return; }
   if (k === "calWk") W.calDay = null;
