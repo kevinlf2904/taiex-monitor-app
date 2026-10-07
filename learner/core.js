@@ -117,7 +117,7 @@ function indicatorBar(host, key, groups, defaults, onChange) {
   render();
   return { has: id => state.has(id), get state() { return state; }, set(id, on) { on ? state.add(id) : state.delete(id); render(); }, setGroups(g) { groups = g; render(); } };
 }
-const MAIN_ITEMS = [{ id: "ma5", label: "MA5", color: "--s1" }, { id: "ma10", label: "MA10", color: "--accent" }, { id: "ma20", label: "MA20", color: "--s2" }, { id: "ma60", label: "MA60", color: "--s3" }, { id: "boll", label: "布林" }, { id: "vwap", label: "VWAP", color: "--vwap" }, { id: "vp", label: "籌碼分佈" }];
+const MAIN_ITEMS = [{ id: "ma5", label: "MA5", color: "--s1" }, { id: "ma10", label: "MA10", color: "--ma10" }, { id: "ma20", label: "MA20", color: "--s2" }, { id: "ma60", label: "MA60", color: "--s3" }, { id: "boll", label: "布林" }, { id: "vwap", label: "VWAP", color: "--vwap" }, { id: "vp", label: "籌碼分佈" }];
 // 主圖選項：均線、布林、VWAP、籌碼分佈（Volume Profile）
 const mainOpts = bar => ({ ma: maFrom(bar), boll: bar.has("boll"), vwap: bar.has("vwap"), vp: bar.has("vp") });
 const SUB_ITEMS = [{ id: "vol", label: "成交量" }, { id: "kd", label: "KD" }, { id: "rsi", label: "RSI" }, { id: "macd", label: "MACD" }, { id: "wr", label: "威廉" }];
@@ -351,7 +351,7 @@ class Chart {
     this.bar.classList.toggle("zoomed", !!this.view);
     const top0 = 8, volTop = top0 + mainH + gap, subTop0 = o.noVol ? volTop : volTop + volH + gap;
     const fmtD = o.fmtD || (s => s.slice(5).replace("-", "/"));
-    const MA_COL = { 5: col.s1, 10: col.accent, 20: col.s2, 60: col.s3 };
+    const MA_COL = { 5: col.s1, 10: cssVar("--ma10") || col.accent, 20: col.s2, 60: col.s3 };
     const mas = (o.ma || []).map((n, k) => ({ n, a: I.ma(n), c: MA_COL[n] || [col.s1, col.s2, col.s3][k % 3] }));
     const F = o.future; // { from, p10, p25, p50, p75, p90 }：模擬區的機率帶
 

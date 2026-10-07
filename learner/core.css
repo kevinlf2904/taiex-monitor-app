@@ -1,40 +1,43 @@
 /* K線學堂共用樣式：主題色（淺色／深色的分層灰階）、基本樣式、K 線圖。learner/index.html 與 learner/watch.html 共用。 */
 :root {
   /* 分層灰階：底色 → 第一層框（面板）→ 第二層（面板裡的卡片、按鈕、數據格）→ 第三層（輸入框、選中項） */
-  --bg: #dcdfe4;
-  --surface: #f4f5f7;
-  --surface-2: #e7e9ed;
+  /* 參考富途牛牛：淺色是白底卡片＋淡灰底，主色橘色；深色是深藍黑底 */
+  --bg: #f2f3f6;
+  --surface: #ffffff;
+  --surface-2: #f5f6f8;
   --surface-3: #ffffff;
-  --ink: #18202b;
-  --muted: #5b6676;
-  --line: #c8ced7;
-  --accent: #2346a0;
-  --accent-soft: #e2e8f7;
-  --up: #d0343a;      /* 台股慣例：紅漲 */
-  --down: #0f8655;    /* 綠跌 */
+  --ink: #14181f;
+  --muted: #6b7380;
+  --line: #e5e7ec;
+  --accent: #ff6a00;
+  --accent-soft: #fff1e6;
+  --up: #e8343e;      /* 台股慣例：紅漲 */
+  --down: #0e9f63;    /* 綠跌 */
   --s1: #d98a0b;      /* 短均線 */
   --s2: #7a4fd0;      /* 中均線 */
   --s3: #0d8aa0;      /* 長均線 */
+  --ma10: #2f6fe0;    /* 10 日均線（主色改成橘色後另外給藍色，才不會和 5 日線混在一起） */
   --vwap: #db2777;    /* VWAP */
-  --band: rgba(35, 70, 160, 0.07);
+  --band: rgba(255, 106, 0, 0.07);
   --shade: rgba(24, 32, 43, 0.05);
   --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
   --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-num: "Inter", "SF Pro Display", "Roboto", "Noto Sans TC", system-ui, sans-serif; /* 行情數字：等寬數字（tabular-nums）的無襯線字，像券商 App */
   --radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #000000; --surface: #141517; --surface-2: #1f2124; --surface-3: #2b2e33; --ink: #e8ecf1; --muted: #9aa4b2;
-    --line: #353a41; --accent: #86a2ff; --accent-soft: #1c2440; --up: #ff4d57; --down: #22c47e;
-    --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --vwap: #f472b6; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
+    --bg: #0b0e14; --surface: #141821; --surface-2: #1b202b; --surface-3: #242a36; --ink: #eef1f6; --muted: #8b93a3;
+    --line: #252b36; --accent: #ff7a1a; --accent-soft: rgba(255, 122, 26, 0.14); --up: #f2444d; --down: #19b97a;
+    --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --ma10: #5b9bff; --vwap: #f472b6; --band: rgba(255, 122, 26, 0.08); --shade: rgba(229, 234, 241, 0.05);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #000000; --surface: #141517; --surface-2: #1f2124; --surface-3: #2b2e33; --ink: #e8ecf1; --muted: #9aa4b2;
-  --line: #353a41; --accent: #86a2ff; --accent-soft: #1c2440; --up: #ff4d57; --down: #22c47e;
-  --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --vwap: #f472b6; --band: rgba(134, 162, 255, 0.09); --shade: rgba(229, 234, 241, 0.05);
+  --bg: #0b0e14; --surface: #141821; --surface-2: #1b202b; --surface-3: #242a36; --ink: #eef1f6; --muted: #8b93a3;
+  --line: #252b36; --accent: #ff7a1a; --accent-soft: rgba(255, 122, 26, 0.14); --up: #f2444d; --down: #19b97a;
+  --s1: #f2a93b; --s2: #ab8cff; --s3: #3cc6d8; --ma10: #5b9bff; --vwap: #f472b6; --band: rgba(255, 122, 26, 0.08); --shade: rgba(229, 234, 241, 0.05);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
