@@ -19,11 +19,11 @@
   if (q.has("embed")) d.dataset.embed = "1";
   try { d.dataset.theme = q.get("theme") || JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); } catch { d.dataset.theme = "dark"; }
   try { if ((q.get("font") || JSON.parse(localStorage.getItem("kline:font") || '"sans"')) === "song") d.dataset.font = "song"; } catch {}
-  try { const st = q.get("style") || JSON.parse(localStorage.getItem("kline:style") || '"minimal"'); if (st && st !== "minimal") d.dataset.style = st; } catch {} })();
+  try { const ls = localStorage; let st = q.get("style") || JSON.parse(ls.getItem("kline:style") || '"layout"'); if (!q.get("style") && ls.getItem("kline:styleV") !== "2") { st = "layout"; ls.setItem("kline:style", '"layout"'); ls.setItem("kline:styleV", "2"); } if (st && st !== "minimal") d.dataset.style = st; } catch {} })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&family=Noto+Serif+TC:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="core.css">
 <style>
 /* 看盤：左邊清單（自選群組／台股熱門／美股熱門／排行）、右邊個股（走勢／技術／籌碼／基本面）。
@@ -674,7 +674,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-48</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-49</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
