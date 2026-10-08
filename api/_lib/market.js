@@ -107,6 +107,7 @@ export default async function handler(req, res) {
     sectors: I.size ? sectors(stocks, I) : null,
     // 上市、上櫃分開看（看盤頁可以切換）
     breadthBy: { twse: breadth(twse), tpex: breadth(tpex) },
+    totalsBy: Object.fromEntries([["twse", twse], ["tpex", tpex], ["all", all]].map(([k, R]) => [k, { value: +R.reduce((t, r) => t + (r.value || 0), 0).toFixed(1), vol: R.reduce((t, r) => t + (r.vol || 0), 0) }])),
     sectorsBy: I.size ? { twse: sectors(twse.filter(r => /^\d{4}$/.test(r.code)), I), tpex: sectors(tpex.filter(r => /^\d{4}$/.test(r.code)), I) } : null,
     world: world.value || [],
     contrib: I.size && taiex ? contributions(twse, I, taiex.close - (taiex.chg || 0)) : null,
