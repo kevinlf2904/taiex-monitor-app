@@ -56,7 +56,7 @@ export function parseRss(xml, n = 30) {
 }
 
 // ---------- AI 整理 ----------
-const PROMPT = (m, mode) => `你是財經 Podcast 的整理編輯。${mode === "audio" ? "請聽附上的這一集完整音檔" : "這一集只有節目說明文字（沒有逐字稿），請只根據說明文字"}，用繁體中文整理成 JSON（只輸出 JSON，不要其他文字）：
+export const PROMPT = (m, mode) => `你是財經 Podcast 的整理編輯。${mode === "audio" ? "請聽附上的這一集完整音檔" : "這一集只有節目說明文字（沒有逐字稿），請只根據說明文字"}，用繁體中文整理成 JSON（只輸出 JSON，不要其他文字）：
 {
   "tldr": "一句話摘要，60 字以內，講這集最重要的判斷",
   "points": ["重點 4～7 條，每條 40～90 字，具體寫出主持人的論點與理由"],
@@ -92,7 +92,7 @@ export function parseSum(text) {
   };
 }
 
-async function geminiJSON(parts, key, deadline) {
+export async function geminiJSON(parts, key, deadline) {
   const models = [...new Set([process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-latest", ...GEMINI_FALLBACKS])];
   const body = JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.3, maxOutputTokens: 8192 } });
   let last = null;
@@ -116,25 +116,29 @@ async function claudeJSON(prompt) {
 }
 
 // ---------- 音檔上傳到 Gemini Files（可續傳上傳的兩步驟：start → upload, finalize） ----------
-async function uploadAudio(url, name, key) {
-  const r = await fetch(url, { headers: UA, redirect: "follow", signal: AbortSignal.timeout(30000) });
+export async function uploadAudio(url, name, key, { dlMs = 30000, upMs = 40000 } = {}) {
+  const r = await fetch(url, { headers: UA, redirect: "follow", signal: AbortSignal.timeout(dlMs) });
   if (!r.ok) throw new Error(`下載音檔失敗（HTTP ${r.status}）`);
   const len = +r.headers.get("content-length") || 0; if (len > MAX_AUDIO) throw new Error(`音檔太大（${Math.round(len / 1048576)}MB），改用節目說明整理。`);
   const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > MAX_AUDIO) throw new Error("音檔太大，改用節目說明整理。");
   let mime = (r.headers.get("content-type") || "").split(";")[0].trim(); if (!/^audio\//.test(mime)) mime = /\.m4a(\?|$)/i.test(url) ? "audio/mp4" : "audio/mpeg";
   const st = await fetch(`${GEMINI}/upload/v1beta/files`, { method: "POST", headers: { "x-goog-api-key": key, "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start", "X-Goog-Upload-Header-Content-Length": String(buf.length), "X-Goog-Upload-Header-Content-Type": mime, "Content-Type": "application/json" }, body: JSON.stringify({ file: { display_name: String(name || "podcast").slice(0, 100) } }), signal: AbortSignal.timeout(15000) });
   const up = st.headers.get("x-goog-upload-url"); if (!st.ok || !up) throw new Error(`上傳到 Gemini 失敗（HTTP ${st.status}）`);
-  const fin = await fetch(up, { method: "POST", headers: { "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize" }, body: buf, signal: AbortSignal.timeout(40000) });
+  const fin = await fetch(up, { method: "POST", headers: { "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize" }, body: buf, signal: AbortSignal.timeout(upMs) });
   const j = await fin.json().catch(() => ({})); if (!fin.ok || !j.file?.uri) throw new Error(`上傳到 Gemini 失敗（HTTP ${fin.status}）`);
   return { file: j.file.name, uri: j.file.uri, mime, state: j.file.state || "PROCESSING", mb: +(buf.length / 1048576).toFixed(1) };
 }
 
-async function itunes(q) {
+export async function itunes(q) {
   const u = `https://itunes.apple.com/search?media=podcast&entity=podcast&country=TW&limit=12&term=${encodeURIComponent(q)}`;
   const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(10000) }); if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const j = await r.json();
   return (j.results || []).filter(x => x.feedUrl).map(x => ({ id: String(x.collectionId), name: x.collectionName, author: x.artistName, art: x.artworkUrl600 || x.artworkUrl100 || "", feed: x.feedUrl, n: x.trackCount || null, genre: x.primaryGenreName || "" }));
 }
+
+// 給排程整理（scripts/podcast-sync.mjs）用：查上傳的音檔處理好了沒、刪掉
+export async function fileState(name, key) { const r = await fetch(`${GEMINI}/v1beta/${name}`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(10000) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`HTTP ${r.status}`); return j.state; }
+export const fileDelete = (name, key) => fetch(`${GEMINI}/v1beta/${name}`, { method: "DELETE", headers: { "x-goog-api-key": key } }).catch(() => {});
 
 export default async function handler(req, res) {
   const q = req.query || {}, gem = (process.env.GEMINI_API_KEY || "").trim(), claude = !!process.env.ANTHROPIC_API_KEY;

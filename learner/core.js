@@ -744,3 +744,65 @@ class Chart {
   }
 }
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+
+/* ---------- 自動更新到新版本 ----------
+   每 5 分鐘（以及切回這個分頁時）看一下 version.json；網站部署了新版本時：
+   畫面在背景、或 1 分鐘沒操作就直接重新載入；正在操作、輸入或播音檔時，先在下方顯示「有新版本」，點一下或切回來時再更新。
+   嵌在學堂裡的看盤頁（iframe）交給外層處理。 */
+(function autoUpdate() {
+  if (window.top !== window || !/^https?:$/.test(location.protocol)) return;
+  const cur = (document.body.textContent.match(/版本 (\d{4}\.\d{2}\.\d{2}-\d+)/) || [])[1]; if (!cur) return;
+  let last = Date.now(), next = null;
+  const newer = (a, b) => { const x = String(a).split(/[.-]/).map(Number), y = String(b).split(/[.-]/).map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+  ["pointerdown", "keydown", "wheel", "touchstart"].forEach(t => addEventListener(t, () => { last = Date.now(); }, { passive: true, capture: true }));
+  const docs = () => [document, ...[...document.querySelectorAll("iframe")].map(f => { try { return f.contentDocument; } catch { return null; } }).filter(Boolean)];
+  const busy = () => docs().some(d => [...d.querySelectorAll("audio,video")].some(a => !a.paused) || /^(INPUT|TEXTAREA|SELECT)$/.test(d.activeElement?.tagName || ""));
+  const go = () => { try { sessionStorage.setItem("kline:updatedFrom", cur); } catch {} location.reload(); };
+  const banner = v => { if (document.getElementById("updBar")) return; const b = document.createElement("button"); b.id = "updBar"; b.type = "button";
+    b.textContent = `有新版本（${v}），點一下更新`; b.style.cssText = "position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9999;padding:8px 16px;border-radius:99px;border:1px solid var(--line);background:var(--ink);color:var(--surface);font:inherit;font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:pointer";
+    b.onclick = go; document.body.appendChild(b); };
+  const decide = () => { if (!next) return; if (document.visibilityState === "hidden" || (Date.now() - last > 60000 && !busy())) go(); else banner(next); };
+  const check = async () => {
+    try { const r = await fetch("version.json", { cache: "no-store" }); if (!r.ok) return; const j = await r.json(); if (j?.v && newer(j.v, cur)) { next = j.v; decide(); } } catch {}
+  };
+  setTimeout(check, 15000); setInterval(check, 5 * 60e3); setInterval(decide, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); else decide(); });
+})();
+
+/* ---------- 版面風格（html[data-style]，樣式在 minimal.css；設定記在 kline:style） ---------- */
+const KL_STYLES = [
+  ["minimal", "簡約", "灰階磁磚、赭黃重點（預設）", { l: ["#ebebe9", "#e0e0de", "#c39b2f", "#3a3a3a", 14], d: ["#171717", "#222221", "#c9a23a", "#e2e2e0", 14] }],
+  ["pro", "專業看盤", "深藍黑底、藍色重點，資訊密集", { l: ["#f2f4f7", "#fbfcfd", "#2a6fdb", "#1c2430", 6], d: ["#0b0e14", "#121821", "#3d8bff", "#e6ebf2", 6] }],
+  ["blue", "清爽藍白", "白色卡片、海軍藍，明亮乾淨", { l: ["#eaf0f6", "#f8fafd", "#1f5fc4", "#142339", 16], d: ["#0e1626", "#152038", "#4f8df0", "#e5ecf7", 16] }],
+  ["paper", "宋體紙本", "黑白灰、宋體、小圓角", { l: ["#e3e3e1", "#f4f4f2", "#2b2b2b", "#151515", 3], d: ["#000000", "#0c0c0c", "#4a4a4a", "#e8e8e8", 3] }],
+  ["chalk", "黑板", "綠色黑板、粉筆字（配合 logo）", { l: ["#19281f", "#213529", "#f3d46a", "#eef2e9", 14], d: ["#19281f", "#213529", "#f3d46a", "#eef2e9", 14] }],
+];
+const klStyle = () => document.documentElement.dataset.style || "minimal";
+function applyStyle(id, save = true) {
+  if (!KL_STYLES.some(s => s[0] === id)) id = "minimal";
+  if (id === "minimal") delete document.documentElement.dataset.style; else document.documentElement.dataset.style = id;
+  if (save) store.set("style", id);
+  dispatchEvent(new CustomEvent("klinestyle", { detail: id }));
+}
+// 風格選擇視窗：每個風格一張小預覽；setTheme 由各頁提供（切換深色／淺色）
+function openStylePicker(setTheme) {
+  document.querySelector(".stylepick")?.remove();
+  const ov = document.createElement("div"); ov.className = "stylepick"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "版面風格");
+  const draw = () => {
+    const dark = document.documentElement.dataset.theme === "dark", cur = klStyle();
+    const prev = ([bg, sf, acc, ink, r]) => `<i style="background:${bg}"><u style="left:8px;top:8px;right:8px;height:34px;background:${sf};border-radius:${r}px;border:1px solid ${ink}22"></u><u style="left:15px;top:15px;width:30px;height:11px;border-radius:99px;background:${acc}"></u><u style="left:52px;top:17px;width:54px;height:6px;border-radius:3px;background:${ink};opacity:.55"></u><u style="left:15px;top:30px;width:80px;height:4px;border-radius:2px;background:${ink};opacity:.25"></u>`
+      + [[14, 18, "#e0605a"], [30, 12, "#4fae7d"], [46, 22, "#e0605a"], [62, 9, "#4fae7d"], [78, 26, "#e0605a"]].map(([x, h, c]) => `<u style="left:${x}px;bottom:8px;width:10px;height:${h}px;background:${c};border-radius:2px"></u>`).join("")
+      + `<u style="right:12px;bottom:10px;width:46px;height:22px;border-radius:${Math.min(r, 11)}px;background:${sf};border:1px solid ${acc}"></u></i>`;
+    ov.innerHTML = `<div><h3>版面風格<button class="btn sm" data-sp="x" type="button">完成</button></h3><p class="note" style="margin:0">點一下就套用，學堂、看盤一起換；選擇會記在這台裝置。</p>
+      <div class="sp-row" style="margin-top:10px"><span class="note">主題</span><div class="seg" role="group">${[["light", "淺色"], ["dark", "深色"]].map(([t, n]) => `<button type="button" data-spt="${t}" aria-pressed="${(t === "dark") === dark}">${n}</button>`).join("")}</div>${cur === "chalk" ? '<span class="note">（黑板風格固定是深色）</span>' : ""}</div>
+      <div class="sp-grid">${KL_STYLES.map(([id, name, desc, pv]) => `<button type="button" class="sp" data-sps="${id}" aria-pressed="${cur === id}">${prev(dark ? pv.d : pv.l)}<b>${name}</b><small>${desc}</small></button>`).join("")}</div></div>`;
+  };
+  draw();
+  ov.addEventListener("click", e => {
+    const s = e.target.closest("[data-sps]"), t = e.target.closest("[data-spt]");
+    if (s) { applyStyle(s.dataset.sps); draw(); } else if (t) { setTheme?.(t.dataset.spt); draw(); }
+    else if (e.target === ov || e.target.closest('[data-sp="x"]')) ov.remove();
+  });
+  addEventListener("keydown", function k(e) { if (e.key === "Escape") { ov.remove(); removeEventListener("keydown", k); } });
+  document.body.appendChild(ov);
+}

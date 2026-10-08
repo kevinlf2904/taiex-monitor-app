@@ -1,10 +1,10 @@
 /* K線學堂共用樣式：主題色（淺色／深色的分層灰階）、基本樣式、K 線圖。learner/index.html 與 learner/watch.html 共用。 */
 :root {
   /* 黑白灰分層：底色 → 面板 → 面板裡的卡片／按鈕 → 輸入框、選中項；主色是深灰（淺色）／淺灰（深色），只有漲跌用紅綠 */
-  --bg: #e9e9e9;
-  --surface: #fafafa;
-  --surface-2: #f0f0f0;
-  --surface-3: #ffffff;
+  --bg: #e3e3e1;
+  --surface: #f4f4f2;
+  --surface-2: #ebebe9;
+  --surface-3: #f9f9f7;
   --ink: #111111;
   --muted: #666666;
   --line: #d4d4d4;
@@ -26,6 +26,7 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-num: var(--font-song); /* 行情數字也用宋體，搭配 tabular-nums 讓數字對齊 */
   --radius: 4px;
+  --on-strong: var(--surface); --strong-line: var(--ink); --up-pill: var(--up); --down-pill: var(--down);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -85,7 +86,7 @@ button, select, input { font: inherit; color: inherit; }
 .scalepop .pseg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
 .scalepop .pseg button { border: 0; background: var(--surface-2); color: var(--ink); padding: 5px 11px; cursor: pointer; font-size: 13px; font-variant-numeric: tabular-nums; }
 .scalepop .pseg button + button { border-left: 1px solid var(--line); }
-.scalepop .pseg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 500; }
+.scalepop .pseg button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); font-weight: 500; }
 .scalepop .pchk { cursor: pointer; font-size: 13px; color: var(--ink); flex-wrap: nowrap; align-items: flex-start; }
 .scalepop .pchk input { flex: none; margin-top: 2px; }
 .scalepop .pchk input { width: 16px; height: 16px; accent-color: var(--accent); }
@@ -111,8 +112,12 @@ button, select, input { font: inherit; color: inherit; }
   --grad-btn: linear-gradient(180deg, var(--surface-3), var(--surface-2)); --grad-strong: linear-gradient(180deg, color-mix(in srgb, var(--ink) 82%, var(--bg)), var(--ink)); }
 body { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .zoombar { background: var(--grad-btn); }
-.scalepop .pseg button[aria-pressed="true"] { background: var(--grad-strong); color: var(--surface); }
-.sigbar button[aria-pressed="true"] { color: var(--surface); background: var(--grad-strong); border-color: var(--ink); }
+.scalepop .pseg button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); }
+.sigbar button[aria-pressed="true"] { color: var(--on-strong); background: var(--grad-strong); border-color: var(--strong-line); }
 
 :root[data-theme="dark"] { --grad-panel: linear-gradient(180deg, #1c1c1c 0%, #101010 38%, #0a0a0a 100%); --grad-btn: linear-gradient(180deg, #2a2a2a, #151515); --grad-strong: linear-gradient(180deg, #f5f5f5, #bdbdbd); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --grad-panel: linear-gradient(180deg, #1c1c1c 0%, #101010 38%, #0a0a0a 100%); --grad-btn: linear-gradient(180deg, #2a2a2a, #151515); --grad-strong: linear-gradient(180deg, #f5f5f5, #bdbdbd); } }
+
+/* 降低刺眼：深色主題裡選中的按鈕、主要按鈕改成中灰底＋淺字（不再是整塊白色），漲跌色塊改成較深的紅綠；淺色主題的白改成米白 */
+:root[data-theme="dark"] { --ink: #e8e8e8; --accent: #d6d6d6; --grad-strong: linear-gradient(180deg, #4a4a4a, #363636); --on-strong: #f2f2f2; --strong-line: #5e5e5e; --up-pill: #c2383f; --down-pill: #138a5c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ink: #e8e8e8; --accent: #d6d6d6; --grad-strong: linear-gradient(180deg, #4a4a4a, #363636); --on-strong: #f2f2f2; --strong-line: #5e5e5e; --up-pill: #c2383f; --down-pill: #138a5c; } }

@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>K線看盤</title>
 <meta name="description" content="自選股（多群組）、台股與美股熱門、排行、當日分時、K 線（分／日／週／月都能往前拉）、技術分析、籌碼、基本面、五檔、持股損益與價格提醒。">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#171717">
 <link rel="manifest" href="watch.webmanifest">
 <link rel="apple-touch-icon" href="watch-icon-180.png">
-<link rel="icon" href="watch-icon-192.png">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="alternate icon" href="watch-icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="K線看盤">
@@ -16,11 +17,13 @@
 <script>
 (() => { const d = document.documentElement, q = new URLSearchParams(location.search);
   if (q.has("embed")) d.dataset.embed = "1";
-  try { d.dataset.theme = q.get("theme") || JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); } catch { d.dataset.theme = "dark"; } })();
+  try { d.dataset.theme = q.get("theme") || JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); } catch { d.dataset.theme = "dark"; }
+  try { if ((q.get("font") || JSON.parse(localStorage.getItem("kline:font") || '"sans"')) === "song") d.dataset.font = "song"; } catch {}
+  try { const st = q.get("style") || JSON.parse(localStorage.getItem("kline:style") || '"minimal"'); if (st && st !== "minimal") d.dataset.style = st; } catch {} })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&family=Noto+Serif+TC:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="core.css">
 <style>
 /* 看盤：左邊清單（自選群組／台股熱門／美股熱門／排行）、右邊個股（走勢／技術／籌碼／基本面）。
@@ -30,12 +33,12 @@ body { line-height: 1.5; }
 .note { font-size: 12.5px; color: var(--muted); }
 .btn { border: 1px solid var(--line); background: var(--surface-2); padding: 7px 14px; border-radius: 4px; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; }
 .btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent); color: var(--surface); border-color: var(--accent); font-weight: 500; }
+.btn.primary { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); font-weight: 500; }
 .btn.sm { padding: 4px 10px; font-size: 13px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .seg button { flex: none; border: 0; background: var(--surface-2); padding: 5px 11px; cursor: pointer; font-size: 13px; color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line); }
-.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 500; }
+.seg button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); font-weight: 500; }
 .seg .gap { border-left: 2px solid var(--line); }
 .seg.full { display: flex; width: 100%; } .seg.full button { flex: 1; }
 .ibar { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
@@ -196,7 +199,10 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
   body { padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px)); }
   :root[data-embed="1"] body { padding-bottom: 0; }
   .w-main { grid-template-columns: minmax(0, 1fr); padding: 10px; }
-  .w-list { position: static; max-height: none; }
+  .w-list { position: static; max-height: none; overflow: visible; }
+  /* 手機：分頁列黏在上面，捲到哪都能切換分頁（l-head 用 display: contents，分頁列才能在整個清單範圍內黏住） */
+  .l-head { display: contents; } .l-head > * { margin: 8px 12px 0; } .l-head > :last-child { margin-bottom: 10px; }
+  .ltabs { position: sticky; top: var(--topH, 52px); z-index: 15; margin: 0; padding: 8px 12px 0; background: var(--surface); border-bottom: 1px solid var(--line); }
   .w-main.show-detail .w-list { display: none; }
   .w-main:not(.show-detail) .w-detail { display: none; }
   .back { display: inline-flex; }
@@ -242,6 +248,11 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mkbox b { font: 500 18px var(--font-num); text-align: right; padding: 4px 10px; border-radius: 4px; } .mkbox b.fill.up { background: var(--up); color: #fff; } .mkbox b.fill.down { background: var(--down); color: #fff; }
 .mkbox b.line.up { border: 1.5px solid var(--up); color: var(--up); } .mkbox b.line.down { border: 1.5px solid var(--down); color: var(--down); }
 .mkmore { margin-top: 8px; } .mkmore summary { cursor: pointer; color: var(--muted); font-size: 13px; } .mksub { margin: 10px 0 4px; font-size: 13px; }
+.tmap { position: relative; height: 300px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.tmap button { position: absolute; border: 1px solid var(--bg); color: var(--ink); font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px; overflow: hidden; text-align: center; line-height: 1.25; }
+.tmap button b { font-weight: 500; font-size: 13px; white-space: nowrap; } .tmap button span { font-size: 12px; font-family: var(--font-num); } .tmap button small { font-size: 11px; opacity: .8; }
+.tmap button:hover { outline: 2px solid var(--ink); outline-offset: -2px; z-index: 1; }
+@media (max-width: 640px) { .tmap { height: 240px; } .tmap button b { font-size: 11.5px; } }
 .vbars { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; align-items: end; height: 120px; }
 .vbars button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0; } .vbars div, .vbars button { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; height: 100%; } .vbars i { width: 70%; border-radius: 0; } .vbars i.up { background: var(--up); } .vbars i.down { background: var(--down); }
 .vbars small { font: 500 12px var(--font-num); } .vbars small.up { color: var(--up); } .vbars small.down { color: var(--down); } .vbars span { font-size: 12px; white-space: nowrap; }
@@ -295,7 +306,15 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .bs { display: flex; align-items: center; gap: 6px; font: 12.5px var(--font-num); } .bs .bsbar { flex: 1; display: flex; height: 8px; border-radius: 4px; overflow: hidden; } .bs .bsbar i:first-child { background: var(--s1); } .bs .bsbar i:last-child { background: var(--muted); }
 .lead { display: inline-block; padding: 1px 8px; border-radius: 4px; background: var(--s1); color: #000; font-size: 12px; font-weight: 500; margin-right: 6px; }
 .flowsum { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0 4px; font-size: 12.5px; } .flowsum b { font-family: var(--font-num); } .flowsum .up { color: var(--up); } .flowsum .down { color: var(--down); }
-#flowCv { display: block; width: 100%; }
+#flowCv { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
+.dnav { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; } .dnav .btn { min-width: 32px; padding: 2px 8px; font-size: 16px; line-height: 1.2; } .dnav .note { font-size: 12px; min-width: 38px; text-align: center; font-family: var(--font-num); }
+.ltabs.fl { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22px); mask-image: linear-gradient(90deg, transparent 0, #000 22px); }
+.ltabs.fr { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+.ltabs.fl.fr { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 22px, #000 calc(100% - 28px), transparent); }
+#toTop { position: fixed; right: 14px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--grad-btn); color: var(--ink); font-size: 18px; box-shadow: 0 4px 14px rgba(0,0,0,.3); cursor: pointer; }
+@media (min-width: 901px) { #toTop { bottom: 24px; } }
+.flowread { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; min-height: 26px; padding: 4px 12px; font-size: 13px; font-family: var(--font-num); }
+.flowread small { margin-left: 4px; font-size: 11.5px; } .flowread .linkbtn { margin-left: auto; }
 .imp-btns { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; }
 #hvSeg { margin-left: auto; }
 .sheet.imp { z-index: 43; } #impBg { z-index: 42; }
@@ -459,11 +478,11 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 
 /* ===================== 介面設計：宋體、小圓角（2～4px）、黑白灰分層漸層；只有漲跌用紅綠 ===================== */
 body { font-family: var(--font-body); background: linear-gradient(180deg, #141414 0, #050505 280px, var(--bg) 520px) fixed var(--bg); }
-:root[data-theme="light"] body { background: linear-gradient(180deg, #fafafa 0, var(--bg) 360px) fixed var(--bg); }
+:root[data-theme="light"] body { background: linear-gradient(180deg, var(--surface) 0, var(--bg) 360px) fixed var(--bg); }
 .panel { border-color: var(--line); background: var(--grad-panel); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 7%, transparent), 0 2px 8px rgba(0, 0, 0, .06); }
 .w-top { background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--surface) 86%, transparent)); border-bottom: 1px solid var(--line); }
 .brand { font-weight: 500; letter-spacing: .1em; }
-.brand b { background: var(--grad-strong); color: var(--surface); box-shadow: none; }
+.brand b { background: var(--grad-strong); color: var(--on-strong); box-shadow: none; }
 .ixc { border: 1px solid var(--line); background: var(--grad-btn); font-weight: 500; }
 .ixc b { font-weight: 500; }
 /* 分段：底線式分頁，選中的有深色短底線 */
@@ -476,9 +495,9 @@ body { font-family: var(--font-body); background: linear-gradient(180deg, #14141
 .seg .gap { border-left: 1px solid var(--line); }
 .btn { border: 1px solid var(--line); background: var(--grad-btn); font-weight: 500; letter-spacing: .04em; }
 .btn:hover { border-color: var(--muted); }
-.btn.primary { background: var(--grad-strong); color: var(--surface); border-color: var(--ink); box-shadow: none; }
+.btn.primary { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); box-shadow: none; }
 .ichip, .groups button { border: 1px solid var(--line); background: var(--grad-btn); font-weight: 500; }
-.ichip[aria-pressed="true"], .groups button[aria-pressed="true"] { background: var(--grad-strong); color: var(--surface); border-color: var(--ink); font-weight: 500; }
+.ichip[aria-pressed="true"], .groups button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); font-weight: 500; }
 input.code, select.sel, input[type="number"] { border: 1px solid var(--line); background: var(--surface-3); }
 input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 /* 清單列 */
@@ -488,8 +507,8 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 .row[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--ink); }
 .row .nm { font-size: 15.5px; font-weight: 500; letter-spacing: .04em; }
 .row .px { font-size: 17px; font-weight: 500; }
-.row .pc { min-width: 76px; padding: 4px 8px; font-size: 13.5px; font-weight: 500; color: #fff; background: var(--muted); }
-.row .pc.up { background: linear-gradient(180deg, color-mix(in srgb, var(--up) 85%, #fff), var(--up)); color: #fff; } .row .pc.down { background: linear-gradient(180deg, color-mix(in srgb, var(--down) 85%, #fff), var(--down)); color: #fff; }
+.row .pc { min-width: 76px; padding: 4px 8px; font-size: 13.5px; font-weight: 500; color: var(--ink); background: var(--surface-3); }
+.row .pc.up { background: var(--up-pill); color: #fff; } .row .pc.down { background: var(--down-pill); color: #fff; }
 /* 個股頁 */
 .d-title h1 { font-weight: 500; font-size: 23px; letter-spacing: .08em; }
 .d-px b { font-size: 38px; font-weight: 500; }
@@ -521,10 +540,11 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 @keyframes fadeIn { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .w-main.wide.show-detail .w-detail, .dbg { animation: none; } }
 </style>
+<link rel="stylesheet" href="minimal.css">
 </head>
 <body>
 <header class="w-top">
-  <a class="brand" href="./" aria-label="K線學堂首頁"><b>K</b><span>K線看盤</span></a>
+  <a class="brand" href="./" aria-label="K線學堂首頁"><img class="logo" src="logo.svg" alt="" width="34" height="34"><span>K線看盤</span></a>
   <div class="ix" id="ix" aria-label="大盤指數"></div>
   <div class="tools">
     <span class="stat" id="stat"><i class="dot" id="dot"></i><span class="st-t" id="statText">連線中…</span></span>
@@ -540,7 +560,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
       <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="pod">名人</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
-        <form id="addForm" autocomplete="off"><input class="code" id="addCode" placeholder="代號或名稱，例 2330、台積、NVDA" inputmode="search" enterkeyhint="go" aria-label="搜尋股票（代號或名稱，美股用英文代號）" aria-autocomplete="list" aria-controls="sugg"><button class="btn primary" type="submit">加入</button></form>
+        <form id="addForm" autocomplete="off"><input class="code" id="addCode" placeholder="代號或名稱：2330、台積、NVDA" inputmode="search" enterkeyhint="go" aria-label="搜尋股票（代號或名稱，美股用英文代號）" aria-autocomplete="list" aria-controls="sugg"><button class="btn primary" type="submit">加入</button></form>
         <ul class="sugg panel" id="sugg" role="listbox" hidden></ul>
       </div>
       <div class="l-tools" id="lTools"></div>
@@ -554,7 +574,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 
   <section class="w-detail" id="detail" aria-live="polite">
     <div class="panel d-head" id="secQuote">
-      <div class="d-title"><button class="btn sm back" id="backBtn" type="button">← 清單</button><h1 id="dName">—</h1><span class="cd" id="dCode"></span><span class="note" id="dMarket"></span></div>
+      <div class="d-title"><button class="btn sm back" id="backBtn" type="button">← 清單</button><h1 id="dName">—</h1><span class="cd" id="dCode"></span><span class="note" id="dMarket"></span><span class="dnav" id="dNav" hidden><button class="btn sm" data-dnav="-1" type="button" aria-label="上一檔">‹</button><span class="note" id="dNavPos"></span><button class="btn sm" data-dnav="1" type="button" aria-label="下一檔">›</button></span></div>
       <div class="d-px"><b id="dPx">—</b><span id="dChg"></span><span class="note" id="dTime"></span></div>
       <div class="d-ext" id="dExt" hidden></div>
       <div class="d-tags" id="dTags"></div>
@@ -645,7 +665,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-37</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-41</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -664,6 +684,8 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     <button data-m="port">💼 持股總覽</button>
     <button data-m="fund">📊 基本面</button>
     <button data-m="theme">◐ 深色／淺色</button>
+    <button data-m="style">🎨 版面風格</button>
+    <button data-m="font">Aa 字體：黑體／宋體</button>
     <button data-m="install">📲 加入主畫面</button>
     <a href="./" id="mLearn">📘 K線學堂</a>
     <a href="savings.html">💰 存股模擬</a>
@@ -704,7 +726,7 @@ const W = {
   holdMkt: store.get("watch:hm", "tw"), holdSort: "mv", holdDir: 1, mkt: null,
   roK: ["", "D", "60", "1"].includes(String(store.get("watch:rok", ""))) ? String(store.get("watch:rok", "")) : "",
   scrG: store.get("watch:scrg", "smart"), scrOpen: null, cscan: null, news: null,
-  mkReg: store.get("watch:mkReg", "tw") === "us" ? "us" : "tw", usHot: ["active", "gain", "loss"].includes(store.get("watch:usHot", "active")) ? store.get("watch:usHot", "active") : "active",
+  mkReg: ["us", "gl"].includes(store.get("watch:mkReg", "tw")) ? store.get("watch:mkReg", "tw") : "tw", usHot: ["active", "gain", "loss"].includes(store.get("watch:usHot", "active")) ? store.get("watch:usHot", "active") : "active",
   mkM: store.get("watch:mkM", "twse") === "tpex" ? "tpex" : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
   mkHot: ["value", "gain", "surge", "volume"].includes(store.get("watch:mkHot", "value")) ? store.get("watch:mkHot", "value") : "value", worldR: store.get("watch:worldR", "us"), calWk: 0, calK: ["all", "conf", "ex"].includes(store.get("watch:calK", "all")) ? store.get("watch:calK", "all") : "all", calDay: null, warn: null, warnOpen: "punish", cal: null, futx: null,
   mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), q: "up", rk: "inst", side: "buy", win: "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), rp: { t: null, playing: false, speed: 1, set: "hot" } },
@@ -807,10 +829,12 @@ async function tick() {
 function liveRefresh() {
   if (W.off) return; const open = W.session === "open" || W.session === "pre", age = o => (o?.at ? Date.now() - o.at : Infinity), t = new Date(Date.now() + 8 * 3600e3), hm = t.getUTCHours() * 60 + t.getUTCMinutes();
   if (W.lt === "mkt" && W.mkReg === "us") { if (age(W.usm) > (W.usm?.session === "open" ? 30000 : 300000)) loadUsMkt(true); }
+  else if (W.lt === "mkt" && W.mkReg === "gl") { if (age(W.gl) > 60000) loadGlobal(true); }
   else if (W.lt === "mkt" && open && age(W.mkt) > 30000 && !W.mktLoading) loadMktLive();
   else if (W.lt === "tw" && open && age(W.hot.tw) > 30000) loadHot("tw");
   else if (W.lt === "rank" && open && !["foreign", "trust"].includes(W.rankType) && age(W.hot["rank:" + W.rankType]) > 30000) loadHot("tw-rank");
   else if (W.lt === "screen" && open && age(W.scr) > 60000 && !W.scrLoading) loadScreen(true);
+  else if (W.lt === "etf" && W.etfCat === "rank" && open && age(W.etfRank) > 30000) loadEtfRank(true);
   else if (W.lt === "money") { const F = W.mf, today = t.toISOString().slice(0, 10), last = F.days[F.days.length - 1]?.date;
     if (!F.loading && t.getUTCDay() % 6 && hm >= 15 * 60 && last && last < today && Date.now() - (F.chk || 0) > 600000) { F.chk = Date.now(); F.tried.delete(today); loadMoney(F.days.length + 1, true); } }
 }
@@ -917,23 +941,42 @@ function pick(c) {
 
 /* ---------- ETF 專區：常見的台股、美股 ETF 依類型分組，報價即時更新（美股每 15 秒） ---------- */
 const ETF_CATS = [
-  ["cap", "市值型", "追蹤大型權值股，跟著大盤走，費用低，適合長期定期定額。", [["0050", "元大台灣50"], ["006208", "富邦台50"], ["00922", "國泰台灣領袖50"], ["00923", "群益台ESG低碳50"], ["00850", "元大臺灣ESG永續"], ["00692", "富邦公司治理"], ["0051", "元大中型100"]]],
+  ["cap", "市值型", "追蹤大型權值股，跟著大盤走，費用低，適合長期定期定額。", [["0050", "元大台灣50"], ["006208", "富邦台50"], ["009816", "凱基台灣TOP50"], ["00922", "國泰台灣領袖50"], ["00923", "群益台ESG低碳50"], ["00850", "元大臺灣ESG永續"], ["00692", "富邦公司治理"], ["0051", "元大中型100"]]],
+  ["active", "主動式", "由經理人主動選股（代號 A 結尾），不完全照指數，績效看經理人；費用通常比指數型高。", [["00981A", "主動統一台股增長"], ["00403A", "主動統一升級50"], ["00406A", "主動中信台灣收益"]]],
   ["div", "高股息", "挑殖利率較高的股票，定期配息；要看填息能力與成分股換股規則，不是只看殖利率。", [["0056", "元大高股息"], ["00878", "國泰永續高股息"], ["00919", "群益台灣精選高息"], ["00929", "復華台灣科技優息"], ["00713", "元大台灣高息低波"], ["00915", "凱基優選高股息30"], ["00918", "大華優利高填息30"], ["00934", "中信成長高股息"], ["00939", "統一台灣高息動能"], ["00940", "元大台灣價值高息"]]],
-  ["tech", "科技半導體", "集中在半導體、電子等產業，漲跌幅通常比大盤大。", [["0052", "富邦科技"], ["00881", "國泰台灣5G+"], ["00891", "中信關鍵半導體"], ["00892", "富邦台灣半導體"], ["00927", "群益半導體收益"], ["00830", "國泰費城半導體"]]],
+  ["tech", "科技半導體", "集中在半導體、電子等產業，漲跌幅通常比大盤大。", [["0052", "富邦科技"], ["00881", "國泰台灣5G+"], ["00891", "中信關鍵半導體"], ["00892", "富邦台灣半導體"], ["00927", "群益半導體收益"], ["00830", "國泰費城半導體"], ["009828", "中信台日韓PCB"]]],
   ["bond", "債券", "買美國公債或公司債，波動比股票小；利率下降時長天期債券價格上漲。", [["00679B", "元大美債20年"], ["00687B", "國泰20年美債"], ["00937B", "群益ESG投等債20+"], ["00720B", "元大投資級公司債"], ["00751B", "元大AAA至A公司債"], ["00772B", "中信高評級公司債"]]],
   ["world", "海外市場", "在台股買得到的海外指數 ETF，用新台幣交易，價格也受匯率影響。", [["00646", "元大S&P500"], ["00662", "富邦NASDAQ"], ["00757", "統一FANG+"], ["00830", "國泰費城半導體"], ["006205", "富邦上証"], ["00885", "富邦越南"]]],
-  ["lev", "槓桿反向", "每天追蹤指數的 2 倍或反向 1 倍，適合短線；長期持有會因每日重設而偏離指數。", [["00631L", "元大台灣50正2"], ["00663L", "國泰臺灣加權正2"], ["00675L", "富邦臺灣加權正2"], ["00632R", "元大台灣50反1"], ["00676R", "富邦臺灣加權反1"]]],
+  ["lev", "槓桿反向", "每天追蹤指數的 2 倍或反向 1 倍，適合短線；長期持有會因每日重設而偏離指數。", [["00631L", "元大台灣50正2"], ["00663L", "國泰臺灣加權正2"], ["00675L", "富邦臺灣加權正2"], ["00685L", "群益臺灣加權正2"], ["00632R", "元大台灣50反1"], ["00676R", "富邦臺灣加權反1"]]],
   ["us", "美股 ETF", "美國掛牌的 ETF（美元計價、報價可能延遲 15 分鐘）。", [["VOO", "Vanguard S&P 500"], ["SPY", "SPDR S&P 500"], ["IVV", "iShares S&P 500"], ["VTI", "Vanguard 美國全市場"], ["VT", "Vanguard 全世界股票"], ["QQQ", "Invesco 那斯達克100"], ["DIA", "SPDR 道瓊工業"], ["IWM", "iShares 羅素2000"], ["SOXX", "iShares 半導體"], ["SMH", "VanEck 半導體"], ["XLK", "SPDR 科技類股"], ["SCHD", "Schwab 美國高股息"], ["VYM", "Vanguard 高股息"], ["VEA", "Vanguard 已開發市場"], ["VWO", "Vanguard 新興市場"], ["BND", "Vanguard 美國總體債券"], ["TLT", "iShares 20年以上美債"], ["IEF", "iShares 7-10年美債"], ["GLD", "SPDR 黃金"], ["ARKK", "ARK 創新"]]],
 ];
-const etfCat = () => ETF_CATS.find(x => x[0] === W.etfCat) || ETF_CATS[0];
+const etfCat = () => (W.etfCat === "rank" ? ["rank", "排行", "", []] : ETF_CATS.find(x => x[0] === W.etfCat) || ETF_CATS[0]);
+// ETF 排行：全部台股 ETF（/api/hot?type=etf），依成交量、成交值、漲跌幅排序
+const ETF_RANKS = [["vol", "成交量"], ["value", "成交值"], ["gain", "漲幅"], ["loss", "跌幅"]];
+async function loadEtfRank(force = false) {
+  if (W.off || W.etfRankLoading || (!force && W.etfRank && Date.now() - W.etfRank.at < 30000)) return;
+  W.etfRankLoading = true; try { W.etfRank = { ...(await getJ("/api/hot?market=tw&type=etf", true)), at: Date.now() }; } catch (e) { W.etfRank = { err: e.message, at: Date.now() }; } finally { W.etfRankLoading = false; }
+  if (W.lt === "etf" && W.etfCat === "rank") renderList();
+}
+function etfRankRows() {
+  const R = (W.etfRank?.rows || []).map(r => ({ ...r, ...(W.quotes.get(r.code) || {}), code: r.code, name: r.name })), k = W.etfRk || "vol", liq = R.filter(r => (r.vol || 0) >= 200);
+  return k === "value" ? R.sort((a, b) => (b.value || 0) - (a.value || 0)) : k === "gain" ? liq.sort((a, b) => (b.chgPct ?? -1e9) - (a.chgPct ?? -1e9)) : k === "loss" ? liq.sort((a, b) => (a.chgPct ?? 1e9) - (b.chgPct ?? 1e9)) : R.sort((a, b) => (b.vol || 0) - (a.vol || 0));
+}
 ETF_CATS.forEach(([, , , L]) => L.forEach(([c, n]) => { if (!W.names[c]) W.names[c] = n; }));
 function etfVisible() { // 美股 ETF 的報價每 15 秒問一次就好（Yahoo，本來就可能延遲），台股 ETF 每秒
+  if (W.etfCat === "rank") return etfRankRows().slice(0, 30).map(r => r.code);
   const L = etfCat()[3].map(x => x[0]); if (!L.some(isUS)) return L;
   if (Date.now() - (W.etfUsAt || 0) < 15000) return []; W.etfUsAt = Date.now(); return L;
 }
 function renderEtf() {
   const [k, , desc, L] = etfCat(), us = k === "us";
-  $("#lTools").innerHTML = `<div class="seg etfseg" role="group" aria-label="ETF 類型" id="etfSeg">${ETF_CATS.map(([id, t]) => `<button data-etf="${id}" aria-pressed="${W.etfCat === id}">${t}</button>`).join("")}</div>`;
+  $("#lTools").innerHTML = `<div class="seg etfseg" role="group" aria-label="ETF 類型" id="etfSeg">${[["rank", "排行"], ...ETF_CATS].map(([id, t]) => `<button data-etf="${id}" aria-pressed="${etfCat()[0] === id}">${t}</button>`).join("")}</div>`;
+  if (k === "rank") {
+    const H = W.etfRank, R = etfRankRows(); if (!H) loadEtfRank();
+    $("#wl").innerHTML = `<li class="sec-h etf-h"><span>全部台股 ETF ${H?.live ? "・盤中即時" : H?.date ? "・" + H.date.slice(5).replace("-", "/") : ""}</span><span class="seg sm" role="group" aria-label="排序">${ETF_RANKS.map(([v, t]) => `<button data-etfrk="${v}" aria-pressed="${(W.etfRk || "vol") === v}">${t}</button>`).join("")}</span></li>`
+      + (R.length ? R.slice(0, 60).map((r, i) => rowHtml(r.code, r, { rank: i + 1, star: true, metric: (W.etfRk || "vol") === "value" ? `成交值 ${r.value != null ? r.value.toFixed(1) + " 億" : "—"}` : undefined })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有 ETF 排行。" : "載入中…"}</li>`);
+    return `ETF 排行依今天的成交量、成交值或漲跌幅排序（漲跌幅只列成交 200 張以上）。資料：${esc(H?.source || "證交所、櫃買中心")}。`;
+  }
   const rows = L.map(([c, n]) => ({ c, n, q: W.quotes.get(c) }));
   if (W.etfSort === "chg") rows.sort((a, b) => (b.q?.chgPct ?? -1e9) - (a.q?.chgPct ?? -1e9));
   $("#wl").innerHTML = `<li class="sec-h etf-h"><span>${esc(desc)}</span><span class="seg sm" role="group" aria-label="排序">${[["", "預設"], ["chg", "漲跌幅"]].map(([v, t]) => `<button data-etfs="${v}" aria-pressed="${(W.etfSort || "") === v}">${t}</button>`).join("")}</span></li>`
@@ -942,11 +985,24 @@ function renderEtf() {
 }
 /* ---------- 清單：自選群組／台股熱門／美股熱門／排行 ---------- */
 const RANKS = [["gain", "漲幅"], ["loss", "跌幅"], ["volume", "成交量"], ["value", "成交值"], ["foreign", "外資買超"], ["trust", "投信買超"]];
+// 清單分頁列：兩邊還有分頁時淡出提示可以滑；選中的分頁自動捲進畫面
+function ltabsUi(center = false) {
+  const t = $("#lTabs"), a = t.querySelector('[aria-pressed="true"]');
+  if (a && center) { const tr = t.getBoundingClientRect(), ar = a.getBoundingClientRect(); if (ar.left < tr.left + 20 || ar.right > tr.right - 24) t.scrollTo({ left: t.scrollLeft + ar.left - tr.left - (tr.width - ar.width) / 2, behavior: "smooth" }); }
+  const top = document.querySelector(".w-top"), th = top && getComputedStyle(top).position === "sticky" ? top.offsetHeight : 0, r = document.documentElement.style;
+  r.setProperty("--topH", th + "px"); r.setProperty("--stickH", th + (getComputedStyle(t).position === "sticky" ? t.offsetHeight : 0) + "px");
+  t.classList.toggle("fl", t.scrollLeft > 4); t.classList.toggle("fr", t.scrollLeft + t.clientWidth < t.scrollWidth - 4);
+}
+$("#lTabs").addEventListener("scroll", () => ltabsUi(), { passive: true }); addEventListener("resize", () => ltabsUi());
+// 每個分頁記住捲到哪裡，切回來時回到原位
+W.scrollMem = {};
 function setLt(lt) {
+  W.scrollMem[W.lt] = scrollY;
   W.lt = lt; store.set("watch:lt", lt); W.editing = false;
   if (wideMode()) $("#main").classList.remove("show-detail"); // 換到全寬分頁時先把個股抽屜關起來
   if (lt === "mkt") loadMkt(); if (lt === "money") loadMoney(10); if (lt === "screen") { loadScreen(); if (!W.hot.tw) loadHot("tw"); } if (lt === "tw" && !W.hot.tw) loadHot("tw"); if (lt === "us" && !W.hot["us:" + W.usType]) loadHot("us"); if (lt === "rank" && !W.hot["rank:" + W.rankType]) loadHot("rank");
   renderList(); if (lt !== "us") pollList().then(renderList).catch(() => {});
+  ltabsUi(true); const y = W.scrollMem[lt] || 0; requestAnimationFrame(() => { if (!$("#main").classList.contains("show-detail") || wideMode()) scrollTo({ top: Math.min(y, document.documentElement.scrollHeight) }); });
 }
 $("#lTabs").addEventListener("click", e => { const b = e.target.closest("[data-l]"); if (b) setLt(b.dataset.l); });
 function sortedWatch(list = curList()) {
@@ -1012,8 +1068,8 @@ function renderList0() {
     $("#lTools").innerHTML = `<span class="note">產業地圖・代表公司參考名單（整理於 ${INDUSTRY_MAP.updated}），不是推薦</span>`;
     renderInd(); note = "台股、美股有即時報價；日股、韓股只列名稱。題材的平均漲跌是成員今天漲跌幅的簡單平均。";
   } else if (W.lt === "mkt") {
-    $("#lTools").innerHTML = `<span class="note">${W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
-    renderMkt(); note = W.mkt?.source ? `資料：${W.mkt.source}。${W.mkt.live ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布" : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計"}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : "";
+    $("#lTools").innerHTML = `<span class="note">${W.mkReg === "gl" ? `原物料・外匯・利率${W.gl?.at ? `・更新於 ${new Date(W.gl.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
+    renderMkt(); note = W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${W.mkt.live ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布" : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計"}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : "";
   } else if (W.lt === "etf") {
     note = renderEtf();
   } else if (W.lt === "pod") {
@@ -1051,7 +1107,7 @@ $("#listPane").addEventListener("click", e => {
   else if (g) { if (g.dataset.g === "new") { const name = prompt("新群組名稱", `群組 ${W.groups.length + 1}`); if (name) { W.groups.push({ name: name.slice(0, 12), list: [] }); W.gi = W.groups.length - 1; saveGroups(); renderList(); } } else { W.gi = +g.dataset.g; W.editing = false; saveGroups(); renderList(); kick(); } }
   else if (t.closest("[data-hs]")) { const k = t.closest("[data-hs]").dataset.hs; W.holdDir = W.holdSort === k ? -W.holdDir : 1; W.holdSort = k; renderList(); }
   else if (t.closest("[data-hm]")) { W.holdMkt = t.closest("[data-hm]").dataset.hm; store.set("watch:hm", W.holdMkt); renderList(); pollList().then(renderList).catch(() => {}); }
-  else if (gx && gx.dataset.gx === "mktRefresh") { if (W.mkReg === "us") loadUsMkt(true); else loadMkt(true); }
+  else if (gx && gx.dataset.gx === "mktRefresh") { if (W.mkReg === "us") loadUsMkt(true); else if (W.mkReg === "gl") loadGlobal(true); else loadMkt(true); }
   else if (gx && gx.dataset.gx === "scrRefresh") loadScreen(true);
   else if (gx && gx.dataset.gx === "mfRefresh") { W.mf.days = W.mf.days.filter(d => d.date < W.today); W.mf.tried = new Set(); loadMoney(10, true); }
   else if (t.closest("[data-hv]")) { W.holdView = t.closest("[data-hv]").dataset.hv; store.set("watch:hv", W.holdView); renderList(); }
@@ -1059,6 +1115,7 @@ $("#listPane").addEventListener("click", e => {
   else if (gx) { const a = gx.dataset.gx; if (a === "edit") W.editing = true; else if (a === "done") W.editing = false; else if (a === "rename") { const nm = prompt("群組名稱", W.groups[W.gi].name); if (nm) W.groups[W.gi].name = nm.slice(0, 12); } else if (a === "delete" && W.groups.length > 1 && confirm(`刪除群組「${W.groups[W.gi].name}」？`)) { W.groups.splice(W.gi, 1); W.gi = 0; W.editing = false; } saveGroups(); renderList(); }
   else if (so) { W.sort = so.dataset.sort; store.set("watch:sort", W.sort); renderList(); }
   else if (t.closest("[data-etf]")) { W.etfCat = t.closest("[data-etf]").dataset.etf; store.set("watch:etf", W.etfCat); W.etfUsAt = 0; renderList(); pollList().then(renderList).catch(() => {}); }
+  else if (t.closest("[data-etfrk]")) { W.etfRk = t.closest("[data-etfrk]").dataset.etfrk; renderList(); }
   else if (t.closest("[data-etfs]")) { W.etfSort = t.closest("[data-etfs]").dataset.etfs; store.set("watch:etfs", W.etfSort); renderList(); }
   else if (us) { W.usType = us.dataset.us; store.set("watch:us", W.usType); if (!W.hot["us:" + W.usType]) loadHot("us"); renderList(); }
   else if (rk) { W.rankType = rk.dataset.rank; store.set("watch:rank", W.rankType); if (!W.hot["rank:" + W.rankType]) loadHot("rank"); renderList(); }
@@ -1926,9 +1983,40 @@ function renderUsMkt(top) {
   h += sec("美股熱門", H?.rows?.length ? `<div class="mtiles">${H.rows.slice(0, 9).map(mtile).join("")}</div>` : `<p class="note">${H?.err ? "⚠ " + esc(H.err) : "載入中…"}</p>`, "", mkSeg("usHot", t, [["active", "最活躍"], ["gain", "漲幅"], ["loss", "跌幅"]]));
   $("#lx").innerHTML = h;
 }
+// 方塊樹狀圖（squarified）：values 依大小排好，回傳每塊在 W×H 裡的位置（這裡用百分比）
+function treemap(values, W, H) {
+  const total = values.reduce((a, b) => a + b, 0) || 1, out = []; let x = 0, y = 0, w = W, h = H, i = 0;
+  const area = values.map(v => (v / total) * W * H), worst = (row, side) => { const s = row.reduce((a, b) => a + b, 0), mx = Math.max(...row), mn = Math.min(...row); return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn)); };
+  while (i < area.length) {
+    const side = Math.min(w, h), row = [area[i]]; let j = i + 1;
+    while (j < area.length && worst([...row, area[j]], side) <= worst(row, side)) row.push(area[j++]);
+    const s = row.reduce((a, b) => a + b, 0);
+    if (w >= h) { const cw = s / h; let cy = y; for (const a of row) { const ch = a / cw; out.push({ x: +x.toFixed(2), y: +cy.toFixed(2), w: +cw.toFixed(2), h: +ch.toFixed(2) }); cy += ch; } x += cw; w -= cw; }
+    else { const ch = s / w; let cx = x; for (const a of row) { const cw = a / ch; out.push({ x: +cx.toFixed(2), y: +y.toFixed(2), w: +cw.toFixed(2), h: +ch.toFixed(2) }); cx += cw; } y += ch; h -= ch; }
+    i = j;
+  }
+  return out;
+}
+// 國際：原物料、外匯、利率、航運、加密貨幣（/api/global）
+async function loadGlobal(force = false) {
+  if (W.off || W.glLoading || (!force && W.gl && Date.now() - W.gl.at < 60000)) return;
+  W.glLoading = true; try { W.gl = { ...(await getJ("/api/global", true)), at: Date.now() }; } catch (e) { W.gl = { err: e.message, at: Date.now() }; } finally { W.glLoading = false; }
+  if (W.lt === "mkt" && W.mkReg === "gl") renderList();
+}
+function renderGlobal(top) {
+  const J = W.gl;
+  if (!J) { $("#lx").innerHTML = top + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有國際行情。" : "載入國際行情…"}</p>`; loadGlobal(); return; }
+  if (J.err || !J.ok) { $("#lx").innerHTML = top + `<p class="note err" style="padding:12px">⚠ ${esc(J.err || J.error || "暫時拿不到國際行情")}</p>`; return; }
+  const dp = (g, v) => (v == null ? "—" : v.toLocaleString(undefined, { maximumFractionDigits: g === "fx" ? (v < 10 ? 4 : v < 200 ? 3 : 2) : g === "rate" ? 3 : v < 10 ? 3 : 2 }));
+  let h = top + `<p class="note gnote">${esc(J.source || "")}・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}</p>`;
+  for (const g of J.groups) h += `<section class="mk"><h3>${esc(g.name)}${g.note ? `<span class="note">${esc(g.note)}</span>` : ""}</h3><ul class="mrows us">${g.rows.map(x => { const sel = okCode(String(x.code)) ? `data-sel="${esc(x.code)}" role="button" tabindex="0"` : "";
+    return `<li ${sel}><span>${esc(x.name)} <small class="note">${esc(x.code)}</small></span><b class="${cls(x.chg)}">${dp(g.id, x.price)}</b><span class="${cls(x.chg)}">${x.chgPct == null ? "—" : `${arrow(x.chg)}${Math.abs(x.chgPct).toFixed(2)}%`}</span>${x.spark ? spark(x.spark, (x.chg ?? 0) >= 0) : "<i></i>"}</li>`; }).join("")}</ul></section>`;
+  $("#lx").innerHTML = h;
+}
 function renderMkt() {
-  const top = `<div class="mkreg">${mkSeg("mkReg", W.mkReg || "tw", [["tw", "台股大盤"], ["us", "美股大盤"]])}</div>`;
+  const top = `<div class="mkreg">${mkSeg("mkReg", W.mkReg || "tw", [["tw", "台股大盤"], ["us", "美股大盤"], ["gl", "原物料外匯"]])}</div>`;
   if (W.mkReg === "us") return renderUsMkt(top);
+  if (W.mkReg === "gl") return renderGlobal(top);
   const J = W.mkt, q = c => W.quotes.get(c), card = (c, nm) => { const x = q(c); return `<button class="ixcard" data-sel="${c}"><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price != null ? x.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><small class="${cls(x?.chg)}">${pctTxt(x?.chg, x?.chgPct)}</small></button>`; };
   const scard = (nm, x, sub, attr = "") => `<button class="ixcard" ${attr}><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price ?? x?.close ?? "—"}</b><small class="${cls(x?.chg)}">${x ? pctTxt(x.chg, x.chgPct) : sub || ""}</small></button>`;
   const fq = q("TXF"), F = W.futx || {}, t50 = J?.indices?.find(x => /臺灣50|台灣50/.test(x.name));
@@ -1953,6 +2041,10 @@ function renderMkt() {
     h += sec("產業概況", `<div class="vbars">${top.map(x => `<button data-mk="goSec" data-v="${esc(x.name)}"><small class="${cls(x.pct)}">${sgn(x.pct, 2)}%</small><i class="${cls(x.pct)}" style="height:${Math.max(4, Math.abs(x.pct || 0) / mx * 70).toFixed(0)}px"></i><span>${pre}${esc(secShort(x.name))}</span></button>`).join("")}</div>
       <details class="mkmore"><summary>全部產業與成交比重</summary><ul class="bars">${S.map(x => `<li data-mk="goSec" data-v="${esc(x.name)}" role="button" tabindex="0"><span>${esc(x.name)}</span><div><i class="${cls(x.pct)}" style="width:${Math.abs(x.pct || 0) / allMx * 100}%"></i></div><b class="${cls(x.pct)}">${sgn(x.pct, 2)}%</b></li>`).join("")}</ul>
       <h4 class="mksub">成交金額比重</h4><ul class="bars">${V.map(x => `<li data-mk="goSec" data-v="${esc(x.name)}" role="button" tabindex="0"><span>${esc(x.name)}</span><div><i class="amt" style="width:${(x.share || 0) / vm * 100}%"></i></div><b>${(x.share || 0).toFixed(1)}%</b></li>`).join("")}</ul></details>`, "依市值加權", J.sectorsBy ? mkSeg("secM", W.secM, MKT2) : ""); }
+  // 產業熱力圖：面積＝成交金額、顏色＝漲跌幅（紅漲綠跌，越深越多）
+  if (S?.length) { const T = S.filter(x => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 18);
+    if (T.length > 2) h += sec("產業熱力圖", `<div class="tmap">${treemap(T.map(x => x.value), 100, 100).map((r, i) => { const x = T[i], k = Math.min(1, Math.abs(x.pct || 0) / 5), big = r.w * r.h > 90;
+      return `<button data-mk="goSec" data-v="${esc(x.name)}" style="left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%;background:color-mix(in srgb, var(--${(x.pct || 0) >= 0 ? "up" : "down"}) ${Math.round(18 + k * 70)}%, var(--surface-2))" title="${esc(x.name)} ${sgn(x.pct, 2)}%・${x.value.toFixed(0)} 億"><b>${esc(secShort(x.name))}</b>${r.w > 9 && r.h > 9 ? `<span>${sgn(x.pct, 2)}%</span>${big ? `<small>${x.value.toFixed(0)}億</small>` : ""}` : ""}</button>`; }).join("")}</div>`, `面積＝成交金額・${W.secM === "tpex" ? "上櫃" : "上市"}`); }
   // 熱門台股：最多人看（成交值）、大盤強勢（漲幅）、急拉股（選股）、量大股
   { const t = W.mkHot, rows = t === "surge" ? (W.scr?.lists || []).find(L => L.id === "surge")?.rows || [] : W.hot["rank:" + t]?.rows || [], err = t === "surge" ? W.scr?.err : W.hot["rank:" + t]?.err;
     h += sec("熱門台股", rows.length ? `<div class="mtiles">${rows.slice(0, 6).map(mtile).join("")}</div>` : `<p class="note">${err ? "⚠ " + esc(err) : "載入中…"}</p>`, `<button class="linkbtn" data-mk="goRank">更多 ›</button>`, mkSeg("mkHot", t, MK_HOT)); }
@@ -2010,7 +2102,7 @@ $("#lx").addEventListener("click", e => { const b = e.target.closest("[data-mk]"
   if (k === "goSec") { mktSector(v); return; }
   if (k === "futInfo") { futInfo(v); return; }
   if (k === "fold") return; // 收合由 <details> 自己處理
-  if (k === "mkReg") { W.mkReg = v; store.set("watch:mkReg", v); if (v === "us") loadUsMkt(); renderList(); return; }
+  if (k === "mkReg") { W.mkReg = v; store.set("watch:mkReg", v); if (v === "us") loadUsMkt(); if (v === "gl") loadGlobal(); renderList(); return; }
   if (k === "usHot") { W.usHot = v; store.set("watch:usHot", v); W.usType = v; if (!W.hot["us:" + v]) loadHot("us"); renderList(); return; }
   if (k === "theme") { W.scrG = "theme"; W.scrOpen = v; store.set("watch:scrg", "theme"); setLt("screen"); return; }
   if (k === "calDay") { W.calDay = W.calDay === v ? null : v; renderList(); return; }
@@ -2019,6 +2111,10 @@ $("#lx").addEventListener("click", e => { const b = e.target.closest("[data-mk]"
   if (k === "mkHot" && v !== "surge" && !W.hot["rank:" + v]) loadMkHot(); renderList(); });
 $("#lx").addEventListener("click", e => { const s = e.target.closest("[data-sel]"); if (s) select(s.dataset.sel); });
 podInit();
+setTimeout(() => ltabsUi(true), 300);
+// 回到頂端：長頁面捲下去後出現
+{ const b = document.createElement("button"); b.id = "toTop"; b.type = "button"; b.textContent = "↑"; b.setAttribute("aria-label", "回到頂端"); b.hidden = true; document.body.appendChild(b);
+  b.addEventListener("click", () => scrollTo({ top: 0, behavior: "smooth" })); addEventListener("scroll", () => { b.hidden = scrollY < 1400; }, { passive: true }); }
 $("#lx").addEventListener("toggle", e => { const d = e.target; if (d.matches?.("details[data-fold]")) store.set("watch:fold:" + d.dataset.fold, d.open); }, true);
 
 /* ---------- 個股 ---------- */
@@ -2028,10 +2124,11 @@ function showList(push = true) {
 }
 function select(code, how = "push") {
   code = String(code).toUpperCase(); if (!okCode(code)) return;
+  if (how !== "replace") { const L = navList(); W.navList = L.includes(code) ? L : null; }
   const changed = code !== W.sel;
   W.sel = code; store.set("watch:last", code);
   if (changed) { W.detailQ = W.quotes.get(code) || null; W.daily = null; W.intra = null; W.intraAt = 0; W.mk = {}; W.info = null; W.tsHist = null; W.flow = null; W.news = null; W.flowAt = 0; kChart.view = null; $("#holdBox").hidden = $("#alertBox").hidden = true; }
-  try { if (how === "push" && location.hash !== "#" + code) (isMobile() ? history.pushState : history.replaceState).call(history, null, "", location.search + "#" + code); } catch {}
+  try { if ((how === "push" || how === "replace") && location.hash !== "#" + code) (how === "push" && isMobile() ? history.pushState : history.replaceState).call(history, null, "", location.search + "#" + code); } catch {}
   $("#main").classList.add("show-detail"); syncLayout();
   $("#learnLink").href = `./?code=${code === "T00" ? "加權" : code}#shot`;
   const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fund"], #dTabs [data-t="co"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
@@ -2047,13 +2144,17 @@ addEventListener("popstate", () => { const h = location.hash.slice(1).toUpperCas
 $("#dbg").addEventListener("click", () => showList());
 document.addEventListener("keydown", e => { if (e.key === "Escape" && wideMode() && $("#main").classList.contains("show-detail") && $("#sheet").hidden && !document.querySelector(".izoom")) showList(); });
 $("#backBtn").addEventListener("click", () => { if (isMobile() && location.hash && history.length > 1 && !EMBED) history.back(); else showList(); });
+// 上一檔／下一檔：依點進來時那個清單的順序（自選、熱門、排行、ETF、選股…），手機也可以左右滑
+function navList() { return [...new Set([...document.querySelectorAll("#wl [data-sel], #lx [data-sel]")].map(b => b.dataset.sel).filter(okCode))]; }
+function dNavGo(d) { const L = W.navList || [], i = L.indexOf(W.sel); if (i < 0 || !L.length) return; const c = L[(i + d + L.length) % L.length]; select(c, "replace"); }
+function renderDNav() { const L = W.navList || [], i = L.indexOf(W.sel), on = i >= 0 && L.length > 1; $("#dNav").hidden = !on; if (on) $("#dNavPos").textContent = `${i + 1}/${L.length}`; }
 function renderDetailHead() {
-  const c = W.sel; if (!c) return;
+  const c = W.sel; if (!c) return; renderDNav();
   const q = W.detailQ || W.quotes.get(c), nm = q?.name || nameOf(c), us = isUS(c);
   if (!EMBED) document.title = `${nm} ${q?.price != null ? fmtPx(q.price, c) : ""}｜K線看盤`;
   $("#dName").textContent = nm; $("#dCode").textContent = c === "T00" ? "TAIEX" : c === "O00" ? "TPEx" : c; $("#dMarket").textContent = us ? `${q?.market || "美股"}・${q?.currency || "USD"}` : q?.market || "";
   $("#dPx").textContent = fmtPx(q?.price, c); $("#dPx").className = cls(q?.chg);
-  $("#dChg").textContent = q?.chg != null ? `${arrow(q.chg)}${fmtPx(Math.abs(q.chg), c)}（${q.chgPct > 0 ? "+" : ""}${q.chgPct}%）` : ""; $("#dChg").className = cls(q?.chg);
+  $("#dChg").textContent = q?.chg != null ? `${arrow(q.chg)}${fmtPx(Math.abs(q.chg), c)}（${q.chgPct > 0 ? "+" : ""}${q.chgPct != null ? (+q.chgPct).toFixed(2) : "—"}%）` : ""; $("#dChg").className = cls(q?.chg);
   const sess = us ? { open: "盤中", pre: "盤前", closed: "收盤" }[q?.session?.state] || "" : "";
   $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today && !us ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${us ? `（美東${sess ? "・" + sess : ""}）` : ""}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}・${us ? "Yahoo（可能延遲）" : isFut(c) ? (q.session === "night" ? "夜盤" : "日盤") : W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err || "";
   const lim = q?.prev && isTW(c) ? [Math.round(q.prev * 1.1 * 100) / 100, Math.round(q.prev * 0.9 * 100) / 100] : null;
@@ -2258,7 +2359,7 @@ function renderFlow() {
     W.flowSer = ser; const share = bv + sv ? bv / (bv + sv) : 0, lead = share >= 0.6 ? "大戶控盤" : share <= 0.4 ? "散戶為主" : "大散均衡";
     box.innerHTML = `<div class="flowhead"><div class="seg" role="group" aria-label="大戶門檻">${[[1, "≥100萬"], [2, "≥300萬"], [3, "≥1000萬"]].map(([v, t]) => `<button data-bk="${v}" aria-pressed="${k === v}">${t}</button>`).join("")}</div>
       <div class="bs"><span class="lead">${lead}</span>大 ${Math.round(bv).toLocaleString()}<span class="bsbar"><i style="width:${share * 100}%"></i><i style="flex:1"></i></span>${Math.round(sv).toLocaleString()} 散</div>
-      <div class="flowsum"><span>大戶累積${cb >= 0 ? "買超" : "賣超"} <b class="${cls(cb)}">${Math.abs(Math.round(cb)).toLocaleString()}</b> 張</span><span>散戶累積${cs >= 0 ? "買超" : "賣超"} <b class="${cls(cs)}">${Math.abs(Math.round(cs)).toLocaleString()}</b> 張</span></div></div><canvas id="flowCv" role="img" aria-label="大戶散戶累積買賣超"></canvas>${moneyHtml(F.money)}`;
+      <div class="flowsum"><span>大戶累積${cb >= 0 ? "買超" : "賣超"} <b class="${cls(cb)}">${Math.abs(Math.round(cb)).toLocaleString()}</b> 張</span><span>散戶累積${cs >= 0 ? "買超" : "賣超"} <b class="${cls(cs)}">${Math.abs(Math.round(cs)).toLocaleString()}</b> 張</span></div></div><div class="flowread" id="flowRead"></div><canvas id="flowCv" role="img" aria-label="大戶散戶累積買賣超"></canvas>${moneyHtml(F.money)}`;
     note.textContent = `單筆成交金額${["", "≥100 萬", "≥300 萬", "≥1000 萬"][k]}元算大戶，其餘算散戶（依成交金額估，不是真正的帳戶身分）；買賣方向用成交價對委買賣價判斷。${F.complete ? "" : `資料從 ${F.from} 開始（當天成交太多，只抓最近的部分）。`}・${F.source}`;
     drawFlow();
   }
@@ -2294,8 +2395,41 @@ function drawFlow() {
   });
   ctx.fillStyle = col("--muted"); ctx.textAlign = "center";
   for (let m = Math.ceil(o / 60) * 60; m <= cl; m += 60) ctx.fillText(String(m / 60), X(m), H - axH / 2);
+  W.flowGeo = { L, pw, o, cl };
+  // 查價線：按住或滑鼠移到圖上，畫出那一分鐘的直線，兩個圖各標出當時的累積值
+  const p = flowPoint();
+  if (p) {
+    const x = X(p.m), ink = col("--ink");
+    ctx.strokeStyle = ink; ctx.globalAlpha = 0.55; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, ph * 2 + gap); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    [["b", 0], ["s", ph + gap]].forEach(([key, y0]) => {
+      const vals = ser.map(q => q[key]), mx = Math.max(1, ...vals.map(Math.abs)), y = y0 + 4 + (mx - p[key]) / (2 * mx) * (ph - 8), lab = (p[key] > 0 ? "+" : "") + Math.round(p[key]).toLocaleString();
+      ctx.strokeStyle = ink; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(L, y + 0.5); ctx.lineTo(L + pw, y + 0.5); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.fillStyle = p[key] >= 0 ? col("--up") : col("--down"); ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 7); ctx.fill();
+      const tw = ctx.measureText(lab).width + 8; ctx.fillStyle = col("--surface-3"); ctx.fillRect(L - tw - 2, y - 8, tw, 16); ctx.fillStyle = ink; ctx.textAlign = "right"; ctx.fillText(lab, L - 6, y);
+    });
+    const tl = `${String(Math.floor(p.m / 60)).padStart(2, "0")}:${String(p.m % 60).padStart(2, "0")}`, tw = ctx.measureText(tl).width + 10, tx = Math.min(Math.max(x - tw / 2, L), L + pw - tw);
+    ctx.fillStyle = col("--surface-3"); ctx.fillRect(tx, H - axH - 1, tw, axH); ctx.fillStyle = ink; ctx.textAlign = "center"; ctx.fillText(tl, tx + tw / 2, H - axH / 2);
+  }
+  flowReadout(p);
 }
-$("#fBox").addEventListener("click", e => { const b = e.target.closest("[data-bk]"); if (b) { W.bigK = +b.dataset.bk; store.set("watch:bigk", W.bigK); renderFlow(); } });
+// 查價線對到的那一分鐘（最接近的一筆）
+function flowPoint() { const ser = W.flowSer || [], m = W.flowHov; if (m == null || !ser.length) return null; return ser.reduce((b, x) => (Math.abs(x.m - m) < Math.abs(b.m - m) ? x : b), ser[0]); }
+function flowReadout(p = flowPoint()) {
+  const el = $("#flowRead"); if (!el) return;
+  if (!p) { el.innerHTML = `<span class="note">按住或移到圖上，看每分鐘的價格與大戶、散戶累積買賣超</span>`; return; }
+  const c = W.sel, prev = (W.detailQ || W.quotes.get(c))?.prev, B = todayBars(), bar = B.reduce((b, x) => (Math.abs(toMin(x.t) - p.m) < Math.abs(toMin(b.t) - p.m) && toMin(x.t) <= p.m ? x : b), B[0]);
+  const px = bar?.c, pct = px != null && prev ? (px / prev - 1) * 100 : null, n = v => `${v > 0 ? "+" : ""}${Math.round(v).toLocaleString()}`;
+  el.innerHTML = `<b>${String(Math.floor(p.m / 60)).padStart(2, "0")}:${String(p.m % 60).padStart(2, "0")}</b>${px != null ? `<span>價 <b class="${cls(pct)}">${fmtPx(px, c)}</b>${pct != null ? `<small class="${cls(pct)}">${pct > 0 ? "+" : ""}${pct.toFixed(2)}%</small>` : ""}</span>` : ""}<span>大戶 <b class="${cls(p.b)}">${n(p.b)}</b> 張</span><span>散戶 <b class="${cls(p.s)}">${n(p.s)}</b> 張</span><button class="linkbtn" data-flowx type="button" aria-label="關閉查價線">✕</button>`;
+}
+function flowPtr(e) {
+  const cv = e.target.closest?.("#flowCv"), G = W.flowGeo; if (!cv || !G) return;
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left; if (x < G.L - 4) return;
+  W.flowHov = Math.round(G.o + Math.min(1, Math.max(0, (x - G.L) / G.pw)) * (G.cl - G.o)); drawFlow();
+}
+$("#fBox").addEventListener("pointermove", e => { if (e.pointerType === "mouse" || e.buttons || e.pressure) flowPtr(e); });
+$("#fBox").addEventListener("pointerdown", flowPtr);
+$("#fBox").addEventListener("pointerleave", e => { if (e.pointerType === "mouse" && W.flowHov != null) { W.flowHov = null; drawFlow(); } });
+$("#fBox").addEventListener("click", e => { if (e.target.closest("[data-flowx]")) { W.flowHov = null; drawFlow(); return; } const b = e.target.closest("[data-bk]"); if (b) { W.bigK = +b.dataset.bk; store.set("watch:bigk", W.bigK); renderFlow(); } });
 new ResizeObserver(() => { if (W.ftab === "flow" && !$("#fBox").hidden) drawFlow(); }).observe($("#fBox"));
 { const cv = $("#tsCanvas"), at = e => { if (!TS.geo) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left; TS.hover = Math.max(0, Math.min(TS.geo.total, (x - TS.geo.L) / TS.geo.pw * TS.geo.total)); drawTs(); };
   cv.addEventListener("pointerdown", at); cv.addEventListener("pointermove", e => { if (e.pointerType === "mouse" || e.buttons) at(e); });
@@ -2707,6 +2841,12 @@ function closeSheet() { $("#sheet").hidden = $("#sheetBg").hidden = true; }
 $("#menuBtn").addEventListener("click", () => openSheet());
 $("#sheetBg").addEventListener("click", closeSheet);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+// 上一檔／下一檔：按鈕、鍵盤 ←／→（沒有在輸入時）、在報價區左右滑
+$("#secQuote").addEventListener("click", e => { const b = e.target.closest("[data-dnav]"); if (b) dNavGo(+b.dataset.dnav); });
+document.addEventListener("keydown", e => { if (!W.sel || !$("#main").classList.contains("show-detail") && isMobile() || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "") || e.metaKey || e.ctrlKey || e.altKey || !$("#sheet").hidden) return; if (e.key === "ArrowLeft" || e.key === "ArrowRight") { if ($("#dNav").hidden) return; e.preventDefault(); dNavGo(e.key === "ArrowLeft" ? -1 : 1); } });
+{ let sx = null, sy = 0; const q = $("#secQuote");
+  q.addEventListener("touchstart", e => { if (e.touches.length === 1) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; } }, { passive: true });
+  q.addEventListener("touchend", e => { if (sx == null) return; const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy; sx = null; if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 2 && !$("#dNav").hidden) dNavGo(dx < 0 ? 1 : -1); }, { passive: true }); }
 function alertsHtml() {
   const E = Object.entries(W.alerts);
   return `<h3>價格提醒清單</h3>${E.length ? `<ul class="alist">${E.map(([c, a]) => `<li><span><b>${esc(nameOf(c) || a.name)}</b> <span class="note">${c}</span>　${[a.up ? "≥ " + a.up : "", a.dn ? "≤ " + a.dn : ""].filter(Boolean).join("、")}</span><span><button class="btn sm" data-m="open:${c}">看</button> <button class="btn sm" data-m="del:${c}">刪除</button></span></li>`).join("")}</ul>` : `<p class="note">還沒有設定提醒。進到個股頁按「🔔 提醒」。</p>`}`;
@@ -2720,6 +2860,8 @@ $("#sheet").addEventListener("click", e => {
   const m = b.dataset.m;
   if (m === "close") closeSheet();
   else if (m === "refresh") { closeSheet(); W.intraAt = 0; W.hot = {}; if (W.lt !== "watch") loadHot(W.lt === "rank" ? "rank" : W.lt); kick(); loadIntra(true); toast("已更新", 1200); }
+  else if (m === "style") { closeSheet(); openStylePicker(t => { applyTheme(t); store.set("theme", t); post({ type: "watch-theme", theme: t }); }); }
+  else if (m === "font") { const f = document.documentElement.dataset.font === "song" ? "sans" : "song"; applyFont(f); store.set("font", f); toast(f === "song" ? "已改成宋體" : "已改成黑體", 1200); }
   else if (m === "theme") { const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; applyTheme(t); store.set("theme", t); }
   else if (m === "alerts") $("#sheetExtra").innerHTML = alertsHtml();
   else if (m === "port") { closeSheet(); showList(); setLt("hold"); }
@@ -2728,7 +2870,9 @@ $("#sheet").addEventListener("click", e => {
   else if (m.startsWith("open:")) { closeSheet(); select(m.slice(5)); }
   else if (m.startsWith("del:")) { delete W.alerts[m.slice(4)]; store.set("watch:alerts", W.alerts); $("#sheetExtra").innerHTML = alertsHtml(); renderList(); renderDetailHead(); }
 });
-function applyTheme(t) { document.documentElement.dataset.theme = t; $('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#000000" : "#e9e9e9"); Chart.all.forEach(c => c.draw()); drawTs(); }
+addEventListener("klinestyle", e => { Chart.all.forEach(c => c.draw()); drawTs(); if (W.lt === "money" || W.lt === "mkt") renderList(); post({ type: "kline-style", style: e.detail }); });
+function applyFont(f) { if (f === "song") document.documentElement.dataset.font = "song"; else delete document.documentElement.dataset.font; Chart.all.forEach(c => c.draw()); drawTs(); }
+function applyTheme(t) { document.documentElement.dataset.theme = t; $('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#171717" : "#ebebe9"); Chart.all.forEach(c => c.draw()); drawTs(); }
 
 /* ---------- 嵌在 K線學堂（?embed=1）：回報高度、接收主題與「看這一檔」、把「判讀」交給外層 ---------- */
 function post(msg) { if (EMBED && parent !== window) parent.postMessage(msg, "*"); }
@@ -2739,6 +2883,8 @@ if (EMBED) {
   addEventListener("message", e => {
     if (e.source !== parent || !e.data) return;
     if (e.data.type === "kline-theme") applyTheme(e.data.theme);
+    else if (e.data.type === "kline-font") applyFont(e.data.font);
+    else if (e.data.type === "kline-style" && e.data.style !== klStyle()) applyStyle(e.data.style);
     else if (e.data.type === "watch-select" && e.data.code) select(String(e.data.code).toUpperCase() === "加權" ? "T00" : e.data.code, "none");
   });
   $("#learnLink").addEventListener("click", e => { e.preventDefault(); post({ type: "open-shot", code: W.sel === "T00" ? "加權" : W.sel }); });

@@ -11,6 +11,7 @@ const ROUTES = {
   daily: () => import("./_lib/daily.js"),
   flow: () => import("./_lib/flow.js"),
   futures: () => import("./_lib/futures.js"),
+  global: () => import("./_lib/global.js"),
   hot: () => import("./_lib/hot.js"),
   import: () => import("./_lib/import.js"),
   intraday: () => import("./_lib/intraday.js"),
