@@ -28,11 +28,16 @@ export function parseFugleSnapshot(j, market) {
 }
 
 // MIS 一次查很多檔（每批 100 檔、同時 4 批），盤中與收盤後當天都有當天的價（收盤後 z 就是收盤價）
-async function misAll(base) {
+// 某一批失敗時拆成兩半再試一次（之前失敗會整批 100 檔默默不見，漲跌家數、產業漲跌就會少算）
+export async function misAll(base, fetcher = misFetch) {
   const list = base.filter(r => isStockOrEtf(r.code)), out = [], B = 100;
   const batches = []; for (let i = 0; i < list.length; i += B) batches.push(list.slice(i, i + B));
-  let k = 0; const worker = async () => { while (k < batches.length) { const bt = batches[k++];
-    try { const rows = await misFetch(bt.map(r => `${r.market === "上櫃" ? "otc" : "tse"}_${r.code.toLowerCase()}.tw`)); out.push(...rows.map(parseMis)); } catch {} } };
+  const ch = r => `${r.market === "上櫃" ? "otc" : "tse"}_${r.code.toLowerCase()}.tw`;
+  const one = async (bt, depth = 0) => {
+    try { out.push(...(await fetcher(bt.map(ch))).map(parseMis)); }
+    catch { if (depth < 2 && bt.length > 1) { const h = Math.ceil(bt.length / 2); await one(bt.slice(0, h), depth + 1); await one(bt.slice(h), depth + 1); } }
+  };
+  let k = 0; const worker = async () => { while (k < batches.length) await one(batches[k++]); };
   await Promise.all([worker(), worker(), worker(), worker()]);
   const by = new Map(base.map(r => [r.code, r]));
   return out.filter(q => q.code && q.price != null && q.prev).map(q => { const o = by.get(q.code) || {};
@@ -60,7 +65,7 @@ export async function marketRows() {
   // 2. 今天已經有新資料（盤中或收盤後）：MIS 一次查全部
   const tp = new Date(Date.now() + 8 * 3600e3), started = tp.getUTCDay() % 6 !== 0 && tp.getUTCHours() * 60 + tp.getUTCMinutes() >= 9 * 60; // 平日 9 點以後才會有今天的資料
   if (prev.length && prevDate !== today && started) {
-    try { const rows = await misAll(prev); if (rows.length > 500 && rows.some(r => r.date === today)) return done({ rows: rows.filter(r => r.date === today), live: sess !== "closed", date: today, time: null, source: sess !== "closed" ? "證交所 MIS 即時行情（上市、上櫃）" : "證交所 MIS（今天收盤）", note: null }); notes.push("MIS 還沒有今天的資料"); }
+    try { const rows = await misAll(prev); if (rows.length > 500 && rows.some(r => r.date === today)) return done({ rows: rows.filter(r => r.date === today), coverage: { got: rows.filter(r => r.date === today).length, want: prev.filter(r => isStockOrEtf(r.code)).length }, live: sess !== "closed", date: today, time: null, source: sess !== "closed" ? "證交所 MIS 即時行情（上市、上櫃）" : "證交所 MIS（今天收盤）", note: null }); notes.push("MIS 還沒有今天的資料"); }
     catch (e) { notes.push(`MIS 拿不到（${e.message}）`); }
     // 3. 收盤後：證交所、櫃買當天收盤行情
     if (sess === "closed") {
