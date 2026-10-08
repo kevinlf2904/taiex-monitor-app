@@ -204,6 +204,20 @@ input.num,select,.arow input,.mrow input{background:var(--field)}
 :root[data-embed="1"] header h1{display:none}
 :root[data-embed="1"] .console{position:static;max-height:none}
 :root[data-embed="1"] .jump{top:0}
+/* 和 K線學堂「版心留白」一致：近黑／米白底、金色重點；無框設計——面板、卡片、按鈕都不加框，只靠留白分隔 */
+:root{--bg:#f5f4f0;--panel:#f5f4f0;--ink:#161616;--muted:#77746d;--line:#e4e1da;--accent:#9b7b2f;--accent-soft:rgba(155,123,47,.1);--field:transparent}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e0e0e;--panel:#0e0e0e;--ink:#ececea;--muted:#8e8e8b;--line:#242424;--accent:#cfae62;--accent-soft:rgba(207,174,98,.12);--field:transparent}}
+:root[data-theme="dark"]{--bg:#0e0e0e;--panel:#0e0e0e;--ink:#ececea;--muted:#8e8e8b;--line:#242424;--accent:#cfae62;--accent-soft:rgba(207,174,98,.12);--field:transparent}
+.console,.panel,.bk,.kpi,.verdict,.kv{border-color:transparent;box-shadow:none}
+.kv{background:transparent;gap:0}
+.console details{border-top-color:var(--line)}
+.console-h{border-bottom-color:transparent}
+input.num,select,.arow input,.mrow input{border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;border-bottom-color:var(--accent)}
+.chip,.btn,.legend button{border-color:transparent;background:transparent}
+.chip[aria-pressed="true"]{background:transparent;border-color:transparent;color:var(--ink);box-shadow:inset 0 -1.5px 0 var(--accent);font-weight:500}
+.btn{color:var(--accent);box-shadow:inset 0 -1px 0 var(--accent)}
+.badge,.pill{color:var(--bg)}
 </style>
 
 </head>

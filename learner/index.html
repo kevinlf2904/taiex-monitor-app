@@ -765,7 +765,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.08-52</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.08-53</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -3765,8 +3765,8 @@ function intraDraw() {
   c.fillStyle = muted; c.textAlign = "center"; for (let h = Math.ceil(o / 60) * 60; h <= cl; h += 60) { const x = X(h - o); c.strokeStyle = line; c.globalAlpha = 0.4; c.beginPath(); c.moveTo(x, top); c.lineTo(x, vt + vh); c.stroke(); c.globalAlpha = 1; c.textAlign = h === o ? "left" : x > L + pw - 20 ? "right" : "center"; c.fillText(`${h / 60}:00`, x, H - 8); }
   // 價格面積＋線、均價線
   const col = last.c >= prev ? up : down; c.beginPath(); P.forEach((p, i) => (i ? c.lineTo(X(p.m), Y(p.c)) : c.moveTo(X(p.m), Y(p.c)))); c.lineTo(X(last.m), Y(prev)); c.lineTo(X(P[0].m), Y(prev)); c.closePath(); c.fillStyle = col; c.globalAlpha = 0.12; c.fill(); c.globalAlpha = 1;
-  c.beginPath(); P.forEach((p, i) => (i ? c.lineTo(X(p.m), Y(p.c)) : c.moveTo(X(p.m), Y(p.c)))); c.strokeStyle = ink; c.lineWidth = 1.5; c.stroke();
-  if (!isIdx) { c.beginPath(); P.forEach((p, i) => (i ? c.lineTo(X(p.m), Y(p.avg)) : c.moveTo(X(p.m), Y(p.avg)))); c.strokeStyle = css("--s1"); c.lineWidth = 1.2; c.stroke(); }
+  c.beginPath(); P.forEach((p, i) => (i ? c.lineTo(X(p.m), Y(p.c)) : c.moveTo(X(p.m), Y(p.c)))); c.strokeStyle = ink; c.globalAlpha = 0.55; c.lineWidth = 1; c.stroke(); c.globalAlpha = 1; // 分時走線：透明灰、細
+  if (!isIdx) { c.beginPath(); P.forEach((p, i) => (i ? c.lineTo(X(p.m), Y(p.avg)) : c.moveTo(X(p.m), Y(p.avg)))); c.strokeStyle = css("--s1"); c.globalAlpha = 0.7; c.lineWidth = 0.8; c.stroke(); c.globalAlpha = 1; }
   c.beginPath(); c.arc(X(last.m), Y(last.c), 3, 0, 7); c.fillStyle = col; c.fill();
   // 量：紅（比前一分鐘高）綠（低）
   const vm = Math.max(1, ...P.map(p => p.v)); P.forEach((p, i) => { const h = (p.v / vm) * vh, x = X(p.m); c.fillStyle = i && p.c < P[i - 1].c ? down : up; c.globalAlpha = 0.75; c.fillRect(x - Math.max(0.6, pw / N / 2.4), vt + vh - h, Math.max(1.2, pw / N / 1.2), h); }); c.globalAlpha = 1;
@@ -4054,7 +4054,7 @@ function drawBrokerShot({ seed = 4021, n = 100, W = 960, H = 660, theme = "light
     } else { ctx.fillRect(wx, Math.round(Y(k.h)), wick, Math.round(Y(k.l)) - Math.round(Y(k.h)) + 1); ctx.fillRect(x - (cw >> 1), y1, cw, y2 - y1); if (outline && cw >= 4) { ctx.strokeStyle = isUp ? "#a01818" : "#0b6633"; ctx.lineWidth = 1; ctx.strokeRect(x - (cw >> 1) + 0.5, y1 + 0.5, cw - 1, Math.max(1, y2 - y1 - 1)); } }
     const vh = Math.round(k.v / vmax * (VB - VT)); ctx.fillRect(x - (cw >> 1), VB - vh, cw, vh);
   });
-  mas.forEach(m => { ctx.strokeStyle = m.c; ctx.lineWidth = 1.5; ctx.beginPath(); let st = false; m.v.forEach((v, i) => { if (v == null) return; st ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v)); st = true; }); ctx.stroke(); });
+  mas.forEach(m => { ctx.strokeStyle = m.c; ctx.lineWidth = 0.9; ctx.beginPath(); let st = false; m.v.forEach((v, i) => { if (v == null) return; st ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v)); st = true; }); ctx.stroke(); });
   // 看盤軟體常見的干擾：最新價標籤、十字游標、紅綠報價文字
   if (priceTag) { const last = D[n - 1], c = last.c >= last.o ? up : down, y = Math.round(Y(last.c)); ctx.strokeStyle = c; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(L, y + 0.5); ctx.lineTo(R, y + 0.5); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = c; ctx.fillRect(R + 2, y - 9, 66, 18); ctx.fillStyle = "#fff"; ctx.font = "500 12px monospace"; ctx.fillText(fmtP(last.c), R + 8, y + 4); }
   if (crosshair) { const cx = X(Math.floor(n * 0.6)) + 0.5, cy = Math.round((T + B) / 2) + 0.5; ctx.strokeStyle = dark ? "#8b949e" : "#888"; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(cx, T); ctx.lineTo(cx, H - 20); ctx.moveTo(L, cy); ctx.lineTo(R, cy); ctx.stroke(); ctx.setLineDash([]); }
@@ -4062,7 +4062,7 @@ function drawBrokerShot({ seed = 4021, n = 100, W = 960, H = 660, theme = "light
   [B + 8, VB + 9].forEach(y => { ctx.strokeStyle = grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); ctx.stroke(); });
   ctx.fillStyle = text; ctx.font = "11px sans-serif"; ctx.fillText("成交量", R + 8, VT + 10);
   const truth = { D, hi: Math.max(...D.map(x => x.h)), lo: Math.min(...D.map(x => x.l)) }; // K 棒本身的最高、最低（不含均線）
-  const line = (vals, sy, c) => { ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.beginPath(); let st = false; vals.forEach((v, i) => { if (v == null) return; st ? ctx.lineTo(X(i), sy(v)) : ctx.moveTo(X(i), sy(v)); st = true; }); ctx.stroke(); };
+  const line = (vals, sy, c) => { ctx.strokeStyle = c; ctx.lineWidth = 0.9; ctx.beginPath(); let st = false; vals.forEach((v, i) => { if (v == null) return; st ? ctx.lineTo(X(i), sy(v)) : ctx.moveTo(X(i), sy(v)); st = true; }); ctx.stroke(); };
   const c1 = dark ? "#ffd400" : "#ff8c00", c2 = dark ? "#29b6f6" : "#1e6fd9";
   if (sub === "kd" || sub === "rsi") {
     const sy = v => ST + (100 - v) / 100 * (SB - ST);

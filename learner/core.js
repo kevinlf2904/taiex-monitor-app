@@ -190,9 +190,10 @@ class Chart {
         if (this.glide) { cancelAnimationFrame(this.glide); this.glide = 0; }
         this.drag = { x: e.offsetX, y: e.offsetY, cx: e.clientX, cy: e.clientY, t: performance.now(), vy: 0, touch: e.pointerType !== "mouse", dir: null, a: this.vw.fa, yz: this.yz, yoff: this.yoff, pane, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, axis: onAxis && pane?.key === "main" && e.pointerType === "mouse", subAxis: onAxis && pane && pane.key !== "main" && e.pointerType === "mouse", moved: false }; // 觸控：在價格軸上滑動不再拉伸價格軸（以前上下滑頁面時很容易誤觸，K 棒被拉得很長）
       }
-      if (this.ptrs.size === 2 && this.D) { this.tapOk = false; const [p, q] = [...this.ptrs.values()], { a, b } = this.range; this.smoothY = true; const ax = Math.abs(p.x - q.x), ay = Math.abs(p.y - q.y), vert = ay > ax * 1.5, pane = this.paneAt((p.y + q.y) / 2);
-        // 兩指上下張開＝拉長或壓縮（在主圖上是價格軸，在副圖上只縮放那個副圖）；其他方向＝左右縮放時間軸
-        this.pinch = { mode: !vert ? "x" : pane && pane.key !== "main" ? "p" : "y", key: pane?.key, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, d: Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), dy: Math.max(30, ay), yz: this.yz, a: this.vw.fa, w: this.vw.w, mid: this.posAt((p.x + q.x) / 2), mx: (p.x + q.x) / 2 }; this.drag = null; try { cv.setPointerCapture(e.pointerId); } catch {} }
+      if (this.ptrs.size === 2 && this.D) { this.tapOk = false; const [p, q] = [...this.ptrs.values()], { a, b } = this.range; this.smoothY = true; const ax = Math.abs(p.x - q.x), ay = Math.abs(p.y - q.y), pane = this.paneAt((p.y + q.y) / 2);
+        // 兩指上下張開＝拉長或壓縮（在主圖上是價格軸，在副圖上只縮放那個副圖）；左右張開＝縮放時間軸。
+        // 方向看「兩指一開始怎麼移動」（不是手指放的角度）：移動超過 8px 才決定，之後整個手勢都是同一種
+        this.pinch = { mode: null, ax, ay, pane, my: (p.y + q.y) / 2, key: pane?.key, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, d: Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), dy: Math.max(30, ay), yz: this.yz, a: this.vw.fa, w: this.vw.w, mid: this.posAt((p.x + q.x) / 2), mx: (p.x + q.x) / 2 }; this.drag = null; try { cv.setPointerCapture(e.pointerId); } catch {} }
       if (this.ptrs.size === 1) this.tapOk = true;
       if (e.pointerType === "mouse" && !this.pinned) this.hoverAt(e.offsetX);
     });
@@ -201,8 +202,16 @@ class Chart {
       if (this.pinch && this.ptrs.size === 2) {
         // 雙指縮放：用兩指的實際距離（斜著捏也穩定），以一開始兩指中間那根 K 棒為中心，兩指一起移動時順便平移；每個畫面最多重畫一次
         const P = this.pinch, [p, q] = [...this.ptrs.values()], d = Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), G = this.geo;
+        if (!P.mode) {
+          const dax = Math.abs(Math.abs(p.x - q.x) - P.ax), day = Math.abs(Math.abs(p.y - q.y) - P.ay); if (Math.max(dax, day) < 8) return;
+          P.mode = day > dax * 1.2 ? (P.pane && P.pane.key !== "main" ? "p" : "y") : "x";
+          if (P.mode === "y" && this.ysm && G) { // 價格軸拉長時，兩指中間那個價位固定在手指下
+            const f = Math.max(0, Math.min(1, (P.my - G.top0) / G.mainH)); P.f = f; P.pm = this.ysm.hi - f * (this.ysm.hi - this.ysm.lo); }
+        }
         if (P.mode === "p") { this.pz[P.key] = { z: Math.max(0.5, Math.min(12, P.pz.z * Math.max(30, Math.abs(p.y - q.y)) / P.dy)), off: P.pz.off }; this.req(); return; }
-        if (P.mode === "y") { this.yz = Math.max(0.5, Math.min(12, P.yz * Math.max(30, Math.abs(p.y - q.y)) / P.dy)); if (this.yz <= 1) this.yoff = 0; this.req(); return; }
+        if (P.mode === "y") { this.yz = Math.max(0.5, Math.min(12, P.yz * Math.max(30, Math.abs(p.y - q.y)) / P.dy)); this.smoothY = false;
+          const B = this.ybase; if (this.yz > 1 && B && P.pm != null) { const sp = B.hi - B.lo, half = sp / this.yz / 2, mid = P.pm + P.f * 2 * half - half; this.yfree = true; this.yoff = Math.max(-0.6, Math.min(0.6, (mid - (B.lo + B.hi) / 2) / sp)); }
+          else if (this.yz <= 1) this.yoff = 0; this.req(); return; }
         const w = P.w * P.d / d, shift = G ? ((p.x + q.x) / 2 - P.mx) / (G.pw / w) : 0;
         this.view = this.clampView(P.mid - (P.mid - P.a) * w / P.w - shift, w); this.req(); return;
       }
@@ -274,6 +283,7 @@ class Chart {
     new ResizeObserver(() => this.draw()).observe(host);
   }
   static all = [];
+  static LW = 0.6; // 所有指標線的粗細倍數（越小越細，比較好看清楚 K 棒）
   static keepView = false; // 即時報價更新最後一根 K 棒時，保留使用者的縮放與平移
   static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit", sig: "chartSubSig", sigKinds: "chartSigKinds", sigStrong: "chartSigStrong", sigStrongK: "chartSigStrongK", mk: "chartMk", kt: "chartKt" };
   static prefs = { h: [1, 1.5, 2, 2.5].includes(+store.get("chartH", 1)) ? +store.get("chartH", 1) : 1, log: !!store.get("chartLog", false),
@@ -385,6 +395,7 @@ class Chart {
     let tlo = tf(lo), thi = tf(hi); const tpad = (thi - tlo) * 0.08 || Math.abs(thi) * 0.01 || 1; tlo -= tpad; thi += tpad;
     // 價格軸拉長（yz > 1）時：預設「跟著最右邊那根 K 棒」——以它的高低點為中心，拖曳左右平移時也一直跟著，K 棒不會跑出畫面；
     // 使用者手動上下平移過（yfree）就改用 yoff，回到 1× 或換資料時恢復跟隨
+    this.ybase = { lo: tlo, hi: thi }; // 拉長前的價格範圍（雙指拉長時算錨點用）
     if (this.yz <= 1 && this.yfree) { this.yfree = false; this.yoff = 0; }
     if (this.yz !== 1 || this.yoff) {
       const sp = thi - tlo, half = sp / this.yz / 2; let mid = (tlo + thi) / 2 + this.yoff * sp;
@@ -425,7 +436,7 @@ class Chart {
       const y70a = Y(VP.r70[1]), y70b = Y(VP.r70[0]); ctx.fillStyle = col.ink; ctx.globalAlpha = 0.045; ctx.fillRect(L + pw - maxW, y70a, maxW, y70b - y70a);
       VP.w.forEach((x, k) => { const y = Y(VP.mids[k] + VP.step / 2), wd = x / mx * maxW; ctx.fillStyle = VP.mids[k] <= VP.px ? col.up : col.down; ctx.globalAlpha = VP.mids[k] <= VP.px ? 0.26 : 0.2; ctx.fillRect(L + pw - wd, y, wd, Math.max(1, bh - 0.6)); });
       ctx.globalAlpha = 1;
-      const tag = (v, c, t) => { if (v == null) return; const y = Y(v); if (y < top0 || y > top0 + mainH) return; ctx.strokeStyle = c; ctx.lineWidth = 1.2; ctx.setLineDash(t === "均" ? [5, 3] : []); ctx.beginPath(); ctx.moveTo(L + pw - maxW - 8, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); };
+      const tag = (v, c, t) => { if (v == null) return; const y = Y(v); if (y < top0 || y > top0 + mainH) return; ctx.strokeStyle = c; ctx.lineWidth = 0.8; ctx.setLineDash(t === "均" ? [5, 3] : []); ctx.beginPath(); ctx.moveTo(L + pw - maxW - 8, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); };
       tag(VP.pre, "#f0883e", "壓"); tag(VP.avg, col.muted, "均"); tag(VP.sup, "#4e9af1", "撐");
       ctx.restore();
       // 右側價格軸上的標籤（和富途一樣：橘＝壓力、灰＝平均成本、藍＝支撐）
@@ -447,7 +458,7 @@ class Chart {
     // 支撐壓力
     (o.hlines || []).forEach(h => {
       const y = Y(h.price); if (y < top0 - 1 || y > top0 + mainH + 1) return; const c = h.color ? col[h.color] || h.color : h.kind === "壓力" ? col.down : col.up;
-      ctx.strokeStyle = c; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(Math.max(L, X(h.i ?? 0)), y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = c; ctx.setLineDash([6, 4]); ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(Math.max(L, X(h.i ?? 0)), y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]);
       const t = h.label || `${h.kind} ${fmtP(h.price)}`; ctx.textAlign = "right"; ctx.font = `11px ${cssVar("--font-body")}`; const tw = ctx.measureText(t).width; ctx.fillStyle = col.surface; ctx.globalAlpha = 0.85; ctx.fillRect(L + pw - 6 - tw, y - 19, tw + 4, 14); ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, L + pw - 4, y - 8); ctx.font = `11px ${cssVar("--font-num")}`;
     });
     // 區塊（訂單塊、公平價值缺口）：畫在 K 棒後面，只畫到目前可見的範圍
@@ -467,7 +478,7 @@ class Chart {
       ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
       const band = (a, b, alpha) => { ctx.fillStyle = col.accent; ctx.globalAlpha = alpha; ctx.beginPath(); ctx.moveTo(X(F.from - 1), Y(D[F.from - 1].c)); a.forEach((v, t) => ctx.lineTo(X(F.from + t), Y(v))); for (let t = b.length - 1; t >= 0; t--) ctx.lineTo(X(F.from + t), Y(b[t])); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; };
       band(F.p90, F.p10, 0.1); band(F.p75, F.p25, 0.16);
-      ctx.strokeStyle = col.accent; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(X(F.from - 1), Y(D[F.from - 1].c)); F.p50.forEach((v, t) => ctx.lineTo(X(F.from + t), Y(v))); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = col.accent; ctx.lineWidth = 1; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(X(F.from - 1), Y(D[F.from - 1].c)); F.p50.forEach((v, t) => ctx.lineTo(X(F.from + t), Y(v))); ctx.stroke(); ctx.setLineDash([]);
       ctx.restore();
       ctx.fillStyle = col.accent; ctx.textAlign = "left"; ctx.font = `500 11px ${cssVar("--font-body")}`; if (fx < L + pw - 40) ctx.fillText("模擬", fx + 6, top0 + 10); ctx.font = `11px ${cssVar("--font-num")}`;
     }
@@ -478,7 +489,7 @@ class Chart {
       // 收盤線／面積圖：只連收盤價
       const lc = D[i1 - 1] && D[i0] && D[i1 - 1].c >= D[i0].c ? col.up : col.down;
       if (KT === "area") { ctx.fillStyle = col.accent; ctx.globalAlpha = 0.14; ctx.beginPath(); for (let i = i0; i < i1; i++) i === i0 ? ctx.moveTo(X(i), Y(D[i].c)) : ctx.lineTo(X(i), Y(D[i].c)); ctx.lineTo(X(i1 - 1), top0 + mainH); ctx.lineTo(X(i0), top0 + mainH); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; }
-      ctx.strokeStyle = KT === "area" ? col.accent : lc; ctx.lineWidth = 1.6; ctx.beginPath(); for (let i = i0; i < i1; i++) i === i0 ? ctx.moveTo(X(i), Y(D[i].c)) : ctx.lineTo(X(i), Y(D[i].c)); ctx.stroke();
+      ctx.strokeStyle = KT === "area" ? col.accent : lc; ctx.lineWidth = 1.1; ctx.beginPath(); for (let i = i0; i < i1; i++) i === i0 ? ctx.moveTo(X(i), Y(D[i].c)) : ctx.lineTo(X(i), Y(D[i].c)); ctx.stroke();
     } else for (let i = i0; i < i1; i++) {
       const k = D[i], x = X(i), rising = k.c > k.o, upc = rising ? col.up : k.c < k.o ? col.down : col.ink;
       ctx.globalAlpha = k.sim ? 0.5 : 1;
@@ -503,7 +514,7 @@ class Chart {
     ctx.globalAlpha = 1;
     this.cmpNow = [];
     cmpS.forEach(cp => {
-      ctx.strokeStyle = cp.color; ctx.lineWidth = 1.6; ctx.beginPath(); let st = false;
+      ctx.strokeStyle = cp.color; ctx.lineWidth = 1; ctx.beginPath(); let st = false;
       for (let i = i0; i < i1; i++) { const v = cp.at(D[i].d); if (v == null) continue; const y = Y(v * cp.k); st ? ctx.lineTo(X(i), y) : ctx.moveTo(X(i), y); st = true; }
       ctx.stroke();
       const v = cp.at(D[Math.min(this.hover ?? i1 - 1, i1 - 1)].d); this.cmpNow.push({ name: cp.name, color: cp.color, pct: v ? (v * cp.k / D[i0].c - 1) * 100 : null });
@@ -518,7 +529,7 @@ class Chart {
       if (!sh.pts?.length || sh.pts[0][0] >= vis) return;
       const pts = sh.pts.map(([i, p]) => [vis < n ? Math.min(i, vis - 1) : i, p]);
       const c = cmap[sh.color] || col.accent;
-      ctx.strokeStyle = c; ctx.lineWidth = sh.width || 1.5; ctx.setLineDash(sh.dash || []); ctx.beginPath();
+      ctx.strokeStyle = c; ctx.lineWidth = (sh.width || 1.5) * 0.7; ctx.setLineDash(sh.dash || []); ctx.beginPath();
       pts.forEach(([i, p], k) => { const x = X(Math.min(i, n - 1)) + (i > n - 1 ? (i - n + 1) * bw : 0); k ? ctx.lineTo(x, Y(p)) : ctx.moveTo(x, Y(p)); }); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = c; ctx.font = `500 10.5px ${cssVar("--font-body")}`;
       if (sh.label) { const [i, p] = pts[pts.length - 1]; ctx.textAlign = "right"; ctx.fillText(sh.label, Math.min(X(Math.min(i, vis - 1)), L + pw - 2), Y(p) - 6); }
@@ -528,7 +539,7 @@ class Chart {
     ctx.restore();
     // 背離連線：價格圖上連兩個轉折點，副圖顯示同一指標時也連起來
     const divs = (o.markers || []).filter(m => m.div && m.i < vis);
-    const divLine = (x1, y1, x2, y2, c) => { ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); [[x1, y1], [x2, y2]].forEach(([a, b]) => { ctx.beginPath(); ctx.arc(a, b, 3, 0, Math.PI * 2); ctx.fill(); }); };
+    const divLine = (x1, y1, x2, y2, c) => { ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); [[x1, y1], [x2, y2]].forEach(([a, b]) => { ctx.beginPath(); ctx.arc(a, b, 3, 0, Math.PI * 2); ctx.fill(); }); };
     ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
     divs.forEach(m => divLine(X(m.div.i1), Y(m.div.p1), X(m.div.i2), Y(m.div.p2), m.side === "buy" ? col.up : col.down));
     ctx.restore();
@@ -725,7 +736,7 @@ class Chart {
   }
   line(a, vis, X, Y, color, w, alpha = 1, dash) {
     const ctx = this.ctx, g = this.geo; ctx.save(); ctx.beginPath(); ctx.rect(g.L, 0, g.pw, g.H); ctx.clip();
-    ctx.strokeStyle = color; ctx.lineWidth = w; ctx.globalAlpha = alpha; if (dash) ctx.setLineDash(dash);
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(0.7, w * Chart.LW); ctx.globalAlpha = alpha; if (dash) ctx.setLineDash(dash);
     ctx.beginPath(); let s = false;
     for (let i = 0; i < vis; i++) { if (a[i] == null) { s = false; continue; } s ? ctx.lineTo(X(i), Y(a[i])) : ctx.moveTo(X(i), Y(a[i])); s = true; }
     ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]); ctx.restore();

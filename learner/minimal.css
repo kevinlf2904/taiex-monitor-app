@@ -268,27 +268,31 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
 :root[data-style="layout"] main:not(.w-main) h3 { font-size: 15.5px; font-weight: 500; }
 :root[data-style="layout"] .lesson p, :root[data-style="layout"] .lesson li { font-weight: 300; }
 
-/* 版心留白：元件不要框——區塊、卡片、按鈕、膠囊都沒有底色和框線，只剩文字；選中用金色細底線 */
-:root[data-style="layout"] :is(.panel, .card, .sxcard, .mcard, .qcard, .icitem, .itrc, .igchip, .igme, .mchip, .ixcard, .iseg, .iflow, .bwrap, .itheme, .gtile, .cokv > div, .pod .pcard, .pod .pcall, .pod .pfr, .d-kv, .d-kv > div, .mtiles > *, .mkbox > *) { background: transparent; border-color: transparent; box-shadow: none; }
-:root[data-style="layout"] .d-kv { gap: 0; }
-:root[data-style="layout"] :is(.btn, .btn.sm, .ichip, .groups button, .ixc, .cochips button, .mkseg button, .sxnav button, .sxco, .chip, .theme-btn, .icon-btn, .tabs, .tabs button, #lessonToc a, #lessonToc button, .afchips button, .pod .pbadge) { background: transparent; border-color: transparent; box-shadow: none; }
-:root[data-style="layout"] :is(.ichip, .groups button, .cochips button, .mkseg button, .sxnav button, .tabs button, #lessonToc a, #lessonToc button, .afchips button)[aria-pressed="true"],
-:root[data-style="layout"] .tabs button[aria-selected="true"], :root[data-style="layout"] #lessonToc [aria-current] { background: transparent; color: var(--ink); border-color: transparent; box-shadow: inset 0 -1.5px 0 var(--gold); font-weight: 500; }
-:root[data-style="layout"] .btn.primary { background: transparent; color: var(--accent); border-color: transparent; box-shadow: inset 0 -1.5px 0 var(--gold); }
-:root[data-style="layout"] .btn:hover, :root[data-style="layout"] .chip:hover, :root[data-style="layout"] .theme-btn:hover { color: var(--ink); border-color: transparent; }
+/* 無框設計（全部風格）：元件不要框——區塊、卡片、按鈕、膠囊都沒有底色和框線，只剩文字；選中用金色細底線 */
+:root :is(.panel, .card, .sxcard, .mcard, .qcard, .icitem, .itrc, .igchip, .igme, .mchip, .ixcard, .iseg, .iflow, .bwrap, .itheme, .gtile, .cokv > div, .pod .pcard, .pod .pcall, .pod .pfr, .d-kv, .d-kv > div, .mtiles > *, .mkbox > *) { background: transparent; border-color: transparent; box-shadow: none; }
+:root .d-kv { gap: 0; }
+:root :is(.btn, .btn.sm, .ichip, .groups button, .ixc, .cochips button, .mkseg button, .sxnav button, .sxco, .chip, .theme-btn, .icon-btn, .tabs, .tabs button, #lessonToc a, #lessonToc button, .afchips button, .pod .pbadge) { background: transparent; border-color: transparent; box-shadow: none; }
+:root :is(.ichip, .groups button, .cochips button, .mkseg button, .sxnav button, .tabs button, #lessonToc a, #lessonToc button, .afchips button)[aria-pressed="true"],
+:root .tabs button[aria-selected="true"], :root #lessonToc [aria-current] { background: transparent; color: var(--ink); border-color: transparent; box-shadow: inset 0 -1.5px 0 var(--gold); font-weight: 500; }
+:root .btn.primary { background: transparent; color: var(--accent); border-color: transparent; box-shadow: inset 0 -1.5px 0 var(--gold); }
+:root .btn:hover, :root .chip:hover, :root .theme-btn:hover { color: var(--ink); border-color: transparent; }
 /* 輸入框：只留一條底線 */
-:root[data-style="layout"] :is(input.code, select.sel, input[type="number"], input[type="text"], input[type="search"], select, textarea) { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
-:root[data-style="layout"] :is(input.code, select.sel, input, select, textarea):focus { box-shadow: none; border-bottom-color: var(--gold); }
+:root :is(input.code, select.sel, input[type="number"], input[type="text"], input[type="search"], select, textarea) { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+:root :is(input.code, select.sel, input, select, textarea):focus { box-shadow: none; border-bottom-color: var(--gold); }
 /* 漲跌幅：不用色塊，直接用紅綠字 */
-:root[data-style="layout"] .row .pc, :root[data-style="layout"] .row .pc.up, :root[data-style="layout"] .row .pc.down { background: transparent; }
-:root[data-style="layout"] .row .pc.up { color: var(--up); } :root[data-style="layout"] .row .pc.down { color: var(--down); } :root[data-style="layout"] .row .pc { color: var(--muted); }
+:root .row .pc, :root .row .pc.up, :root .row .pc.down { background: transparent; }
+:root .row .pc.up { color: var(--up); } :root .row .pc.down { color: var(--down); } :root .row .pc { color: var(--muted); }
 /* 分隔：區塊之間只用留白；頂列、分頁列、底部列沒有線 */
-:root[data-style="layout"] .w-top, :root[data-style="layout"] .top, :root[data-style="layout"] .qbar { box-shadow: none; }
-:root[data-style="layout"] .mk + .mk { box-shadow: none; }
-@media (max-width: 760px) { :root[data-style="layout"] :is(.tabs, #_ #_) { background: color-mix(in srgb, var(--bg) 94%, transparent); border-top-color: transparent; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); } }
-:root[data-style="layout"] :is(.lesson-list button, .tab-menu button)[aria-current="true"] { background: transparent; box-shadow: inset 2px 0 0 var(--gold); color: var(--ink); }
+:root .w-top, :root .top, :root .qbar { box-shadow: none; }
+:root .mk + .mk { box-shadow: none; }
+@media (max-width: 760px) { :root :is(.tabs, #_ #_) { background: color-mix(in srgb, var(--bg) 94%, transparent); border-top-color: transparent; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); } }
+:root :is(.lesson-list button, .tab-menu button)[aria-current="true"] { background: transparent; box-shadow: inset 2px 0 0 var(--gold); color: var(--ink); }
 /* 浮動按鈕仍然要看得到：淡淡的底，沒有框 */
-:root[data-style="layout"] :is(#toTop, .chat-fab) { background: color-mix(in srgb, var(--ink) 14%, var(--bg)); color: var(--ink); border: 0; }
+:root :is(#toTop, .chat-fab) { background: color-mix(in srgb, var(--ink) 14%, var(--bg)); color: var(--ink); border: 0; }
+
+/* 線條都細一點（全部風格）：圖表、課程示意圖、走勢小圖的折線 */
+svg polyline:not([stroke-width=".8"]) { stroke-width: 1.2px; }
+svg circle[stroke-width] { stroke-width: 1.2px; }
 
 /* ---------- 風格選擇視窗 ---------- */
 .stylepick { position: fixed; inset: 0; z-index: 9998; display: grid; place-items: center; background: rgba(0, 0, 0, .45); padding: 16px; }
