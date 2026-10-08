@@ -4,14 +4,14 @@
 //    - 有 GEMINI_API_KEY（GitHub Actions secret）：直接上傳音檔給 Gemini 聽完整集（沒有時間限制）
 //    - 沒有：改呼叫已部署網站的 /api/podcast（SITE_URL，用 Vercel 上的金鑰；整集太長時改讀節目說明）
 // 3. 寫進 learner/data/podcast/index.json，網頁打開就直接讀，不用等 AI。
-// 選項（環境變數）：MAX_PER_RUN（每次最多整理幾集，預設 10）、BACKFILL（每個節目往前補幾集，預設 20）、DRY=1（不呼叫 AI）
+// 選項（環境變數）：MAX_PER_RUN（每次最多整理幾集，預設 15）、BACKFILL（每個節目往前補幾集，預設 30）、DRY=1（不呼叫 AI）
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { parseRss, parseSum, PROMPT, uploadAudio, geminiJSON, fileState, fileDelete, itunes } from "../api/_lib/podcast.js";
 
 const DIR = fileURLToPath(new URL("../learner/data/podcast/", import.meta.url));
 const KEY = (process.env.GEMINI_API_KEY || "").trim(), SITE = (process.env.SITE_URL || "https://kline-school.vercel.app").replace(/\/$/, "");
-const MAX = +process.env.MAX_PER_RUN || 10, BACK = +process.env.BACKFILL || 20, DRY = process.env.DRY === "1", KEEP = 60;
+const MAX = +process.env.MAX_PER_RUN || 15, BACK = +process.env.BACKFILL || 30, DRY = process.env.DRY === "1", KEEP = 60;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // 和 learner/podcast.js 的 podHash 一樣（單集的 key）
 export const podHash = s => { let h = 5381; for (const ch of String(s)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0; return h.toString(36); };
@@ -76,7 +76,9 @@ export async function main() {
   // 2. 待整理：每個節目最新的先、再往前補到 BACKFILL 集（一年內）；新的優先排在前面
   const yearAgo = new Date(Date.now() - 365 * 864e5).toISOString(), todo = [];
   for (const s of shows) s.eps.filter(e => e.date >= yearAgo).slice(0, BACK).forEach((e, rank) => { const key = podHash(s.feed + "|" + e.guid); if (!idx.eps[key] && (idx.fails[key]?.n || 0) < 3) todo.push({ s, e, key, rank }); });
-  todo.sort((a, b) => a.rank - b.rank || b.e.date.localeCompare(a.e.date));
+  // 排序：每個節目最新那集優先（今日摘要），接著先補「上架超過 3 天」的舊集——它們的觀點馬上能結算，名人排行才不會一直樣本不足
+  const settleD = new Date(Date.now() - 3 * 864e5).toISOString(), pri = x => (x.rank === 0 ? 0 : x.e.date <= settleD ? 1 : 2);
+  todo.sort((a, b) => pri(a) - pri(b) || a.rank - b.rank || b.e.date.localeCompare(a.e.date));
   log(`待整理 ${todo.length} 集，這次最多 ${MAX} 集`, KEY ? "（Gemini 直接聽音檔）" : `（用網站 ${SITE}）`);
   let done = 0;
   for (const { s, e, key } of todo.slice(0, DRY ? 0 : MAX)) {

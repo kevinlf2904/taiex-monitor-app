@@ -102,8 +102,56 @@ async function fromTaifex(near, cid = "TXF", withBars = false) {
   return { day, night, bars, source: "期交所行情網站" };
 }
 
+// ---------- 近全日 K（像券商 App 的「台指近全」日／週／月 K）----------
+// 每個交易日 D 的近全 K 棒＝前一晚 15:00 開始的夜盤（期交所把它算在 D）＋ D 的日盤：開＝夜盤開盤、收＝日盤收盤、高低取兩盤、量相加。
+// 每天都用「當天的近月合約」（到期月份最小的單月合約；週選、價差組合不算）。
+// rows：[{ date, contract, session: "day"|"night", o, h, l, c, v }]
+export function nearFullDaily(rows) {
+  const byDate = new Map();
+  for (const r of rows) { if (!/^\d{6}$/.test(r.contract) || !(r.c > 0)) continue; (byDate.get(r.date) || byDate.set(r.date, []).get(r.date)).push(r); }
+  const out = [];
+  for (const [d, L] of [...byDate].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const near = L.filter(r => r.session === "day").map(r => r.contract).sort()[0] || L.map(r => r.contract).sort()[0];
+    const day = L.find(r => r.contract === near && r.session === "day"), night = L.find(r => r.contract === near && r.session === "night" && r.v > 0);
+    const xs = [night, day].filter(Boolean); if (!xs.length) continue;
+    out.push({ d, o: (night || day).o, h: Math.max(...xs.map(x => x.h)), l: Math.min(...xs.map(x => x.l)), c: (day || night).c, v: xs.reduce((s, x) => s + (x.v || 0), 0), contract: near });
+  }
+  return out;
+}
+// FinMind TaiwanFuturesDaily（trading_session：position＝一般、after_market＝盤後）
+export const fromFinmindRows = rows => (rows || []).map(r => ({ date: r.date, contract: String(r.contract_date || "").trim(), session: r.trading_session === "after_market" ? "night" : "day", o: num(r.open), h: num(r.max), l: num(r.min), c: num(r.close), v: num(r.volume) || 0 }));
+// 期交所 futDataDown CSV（交易日期,契約,到期月份(週別),開盤價,最高價,最低價,收盤價,…,成交量,…,交易時段）
+export const fromTaifexCsv = rows => (rows || []).map(r => { const k = re => Object.keys(r).find(x => re.test(x)); return { date: String(r[k(/交易日期/)] || "").replace(/\//g, "-"), contract: String(r[k(/到期月份/)] || "").trim(), session: /盤後/.test(r[k(/交易時段/)] || "") ? "night" : "day", o: num(r[k(/開盤價/)]), h: num(r[k(/最高價/)]), l: num(r[k(/最低價/)]), c: num(r[k(/收盤價/)]), v: num(r[k(/^成交量/)]) || 0 }; });
+const FM_ID = { TXF: "TX", EXF: "TE", FXF: "TF" };
+async function dailyHistory(cid, months) {
+  const start = iso(new Date(Date.now() - months * 31 * 864e5)), errors = [];
+  try {
+    const token = (process.env.FINMIND_TOKEN || "").trim();
+    const r = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanFuturesDaily&data_id=${FM_ID[cid]}&start_date=${start}`, { headers: { ...UA, ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(15000) });
+    const j = await r.json(); const d = nearFullDaily(fromFinmindRows(j?.data)); if (d.length > 20) return { data: d, source: "FinMind（期交所每日行情）" };
+    errors.push(`FinMind：${j?.msg || "沒有資料"}`);
+  } catch (e) { errors.push(`FinMind：${e.message}`); }
+  try { // 期交所：一次查一個月，最近 6 個月
+    const { csvRows } = await import("./mktstats.js"), t = tpe(), rows = [];
+    await Promise.all(Array.from({ length: Math.min(6, months) }, async (_, k) => {
+      const e = new Date(t.getTime() - k * 30 * 864e5), b = new Date(e.getTime() - 30 * 864e5), f = d => iso(d).replace(/-/g, "/");
+      const r = await fetch("https://www.taifex.com.tw/cht/3/futDataDown", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0" }, body: `down_type=1&commodity_id=${FM_ID[cid]}&queryStartDate=${encodeURIComponent(f(b))}&queryEndDate=${encodeURIComponent(f(e))}`, signal: AbortSignal.timeout(15000) });
+      if (r.ok) rows.push(...fromTaifexCsv(csvRows(new TextDecoder("big5").decode(await r.arrayBuffer())))); }));
+    const seen = new Set(), d = nearFullDaily(rows.filter(r => { const k = r.date + r.contract + r.session; return !seen.has(k) && seen.add(k); }));
+    if (d.length > 5) return { data: d, source: "期交所每日行情" };
+    errors.push("期交所：沒有資料");
+  } catch (e) { errors.push(`期交所：${e.message}`); }
+  throw new Error(errors.join("；"));
+}
+
 export default async function handler(req, res) {
   const cid = Object.hasOwn(FUT_NAMES, String(req.query?.cid || "").toUpperCase()) ? String(req.query.cid).toUpperCase() : "TXF", fname = FUT_NAMES[cid];
+  if (String(req.query?.daily || "") === "1") { // 近全日 K
+    try { const months = Math.max(3, Math.min(36, +req.query?.months || 24)), r = await dailyHistory(cid, months);
+      res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=7200");
+      return res.status(200).json({ ok: true, code: cid, name: `${fname}近全`, source: r.source, data: r.data.map(({ contract, ...x }) => x) }); }
+    catch (e) { return res.status(200).json({ ok: false, error: `拿不到${fname}日 K（${e.message}）` }); }
+  }
   const nm = nearMonth(Date.now(), cid), sess = sessionOf(), withBars = String(req.query?.bars ?? "1") !== "0", key = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
   let r = null;
   if (key) { try { r = await fromFugle(nm.code, key, withBars); } catch (e) { errors.push(`富果：${e.message}`); } }
