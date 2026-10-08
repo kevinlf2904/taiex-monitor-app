@@ -665,7 +665,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-41</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-42</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -778,7 +778,7 @@ async function getJ(url, optional = false) {
 // 清單上看得到的代號（自選群組或台股熱門）＋指數：一次批次查（台股只用 MIS，不消耗富果額度；美股問 Yahoo）
 function visibleCodes() {
   const L = W.lt === "watch" ? curList() : W.lt === "tw" ? (W.hot.tw?.rows || []).map(r => r.code) : W.lt === "rank" ? (W.hot["rank:" + W.rankType]?.rows || []).slice(0, 30).map(r => r.code) : [];
-  const H = W.lt === "hold" ? Object.keys(W.hold).filter(c => mktOf(c) === W.holdMkt) : [], E = W.lt === "etf" ? etfVisible() : [];
+  const H = W.lt === "hold" ? Object.keys(W.hold).filter(c => mktOf(c) === W.holdMkt) : W.lt === "mkt" ? ["0050"] : [], E = W.lt === "etf" ? etfVisible() : [];
   return [...new Set(["T00", "O00", ...H, ...E, ...L, ...Object.keys(W.alerts)])].slice(0, 40);
 }
 // 台指期近月（近全）：清單、頂部與大盤分頁用；交易中 2 秒、收盤 15 秒最多問一次
@@ -2021,7 +2021,7 @@ function renderMkt() {
   const scard = (nm, x, sub, attr = "") => `<button class="ixcard" ${attr}><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price ?? x?.close ?? "—"}</b><small class="${cls(x?.chg)}">${x ? pctTxt(x.chg, x.chgPct) : sub || ""}</small></button>`;
   const fq = q("TXF"), F = W.futx || {}, t50 = J?.indices?.find(x => /臺灣50|台灣50/.test(x.name));
   let h = top + `<div class="ixcards three">${card("T00", "加權指數")}${card("O00", "櫃買指數")}${card("TXF", fq?.session === "night" ? "台指近（夜盤）" : "台指近")}
-    ${scard(F.EXF?.session === "night" ? "電指近（夜盤）" : "電指近", F.EXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="EXF"')}${scard(F.FXF?.session === "night" ? "金指近（夜盤）" : "金指近", F.FXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="FXF"')}${scard("臺灣 50", t50 ? { price: t50.close.toLocaleString(), chg: t50.chg, chgPct: t50.chgPct } : null, "收盤", 'data-sel="0050" title="看元大台灣50（0050）"')}</div>`;
+    ${scard(F.EXF?.session === "night" ? "電指近（夜盤）" : "電指近", F.EXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="EXF"')}${scard(F.FXF?.session === "night" ? "金指近（夜盤）" : "金指近", F.FXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="FXF"')}${(q("0050")?.price != null ? card("0050", "0050 台灣50") : scard("臺灣 50", t50 ? { price: t50.close.toLocaleString(), chg: t50.chg, chgPct: t50.chgPct } : null, t50?.date ? t50.date.slice(5).replace("-", "/") + " 收盤" : "收盤", 'data-sel="0050" title="看元大台灣50（0050）"'))}</div>`;
   if (!J) { $("#lx").innerHTML = h + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有大盤資料。" : "載入中…"}</p>`; return; }
   if (J.err) { $("#lx").innerHTML = h + `<p class="note err" style="padding:12px">⚠ ${esc(J.err)}</p>`; return; }
   const sec = (t, body, extra = "", seg = "") => `<section class="mk"><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</section>`;
@@ -2033,14 +2033,14 @@ function renderMkt() {
   if (B) { const mx = Math.max(1, ...B.buckets.map(x => x.n)), tot = B.up + B.down + B.flat || 1;
     h += sec("市場概況", `<div class="mkbox"><button data-mk="goList" data-v="limit"><span>漲停家數</span><b class="fill up">${B.limUp}</b></button><button data-mk="goList" data-v="limitDown"><span>跌停家數</span><b class="fill down">${B.limDn}</b></button><button data-mk="goRankT" data-v="gain"><span>上漲家數</span><b class="line up">${B.up}</b></button><button data-mk="goRankT" data-v="loss"><span>下跌家數</span><b class="line down">${B.down}</b></button></div>
       <div class="ratio"><span class="up" style="width:${B.up / tot * 100}%"></span><span class="flat" style="width:${B.flat / tot * 100}%"></span><span class="down" style="width:${B.down / tot * 100}%"></span></div>
-      <details class="mkmore"><summary>漲跌幅分佈</summary><div class="hist">${B.buckets.map((x, i) => `<div><small>${x.n}</small><i class="${i < 5 ? "up" : i > 5 ? "down" : "flat"}" style="height:${(x.n / mx * 70).toFixed(0)}px"></i><span data-s="${x.label.replace(/%/g, "")}">${x.label}</span></div>`).join("")}</div></details>`, `平盤 ${B.flat}・普通股`, J.breadthBy ? mkSeg("mkM", W.mkM, MKT2) : ""); }
+      <details class="mkmore"><summary>漲跌幅分佈</summary><div class="hist">${B.buckets.map((x, i) => `<div><small>${x.n}</small><i class="${i < 5 ? "up" : i > 5 ? "down" : "flat"}" style="height:${(x.n / mx * 70).toFixed(0)}px"></i><span data-s="${x.label.replace(/%/g, "")}">${x.label}</span></div>`).join("")}</div></details>`, `平盤 ${B.flat}・股票＋ETF${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, MKT2) : ""); }
   // 產業概況：漲最多、跌最多各 3 個（直條），其餘收在「更多」
   const S = J.sectorsBy?.[W.secM] || J.sectors;
   if (S?.length) { const top = [...S.slice(0, 3), ...S.slice(-3).filter(x => !S.slice(0, 3).includes(x))], mx = Math.max(0.5, ...top.map(x => Math.abs(x.pct || 0))), pre = W.secM === "tpex" ? "櫃" : "市";
     const V = S.slice().sort((a, b) => b.value - a.value).slice(0, 8), vm = Math.max(1, ...V.map(x => x.share || 0)), allMx = Math.max(0.5, ...S.map(x => Math.abs(x.pct || 0)));
     h += sec("產業概況", `<div class="vbars">${top.map(x => `<button data-mk="goSec" data-v="${esc(x.name)}"><small class="${cls(x.pct)}">${sgn(x.pct, 2)}%</small><i class="${cls(x.pct)}" style="height:${Math.max(4, Math.abs(x.pct || 0) / mx * 70).toFixed(0)}px"></i><span>${pre}${esc(secShort(x.name))}</span></button>`).join("")}</div>
       <details class="mkmore"><summary>全部產業與成交比重</summary><ul class="bars">${S.map(x => `<li data-mk="goSec" data-v="${esc(x.name)}" role="button" tabindex="0"><span>${esc(x.name)}</span><div><i class="${cls(x.pct)}" style="width:${Math.abs(x.pct || 0) / allMx * 100}%"></i></div><b class="${cls(x.pct)}">${sgn(x.pct, 2)}%</b></li>`).join("")}</ul>
-      <h4 class="mksub">成交金額比重</h4><ul class="bars">${V.map(x => `<li data-mk="goSec" data-v="${esc(x.name)}" role="button" tabindex="0"><span>${esc(x.name)}</span><div><i class="amt" style="width:${(x.share || 0) / vm * 100}%"></i></div><b>${(x.share || 0).toFixed(1)}%</b></li>`).join("")}</ul></details>`, "依市值加權", J.sectorsBy ? mkSeg("secM", W.secM, MKT2) : ""); }
+      <h4 class="mksub">成交金額比重</h4><ul class="bars">${V.map(x => `<li data-mk="goSec" data-v="${esc(x.name)}" role="button" tabindex="0"><span>${esc(x.name)}</span><div><i class="amt" style="width:${(x.share || 0) / vm * 100}%"></i></div><b>${(x.share || 0).toFixed(1)}%</b></li>`).join("")}</ul></details>`, "市值加權・自行計算", J.sectorsBy ? mkSeg("secM", W.secM, MKT2) : ""); }
   // 產業熱力圖：面積＝成交金額、顏色＝漲跌幅（紅漲綠跌，越深越多）
   if (S?.length) { const T = S.filter(x => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 18);
     if (T.length > 2) h += sec("產業熱力圖", `<div class="tmap">${treemap(T.map(x => x.value), 100, 100).map((r, i) => { const x = T[i], k = Math.min(1, Math.abs(x.pct || 0) / 5), big = r.w * r.h > 90;
@@ -2051,7 +2051,7 @@ function renderMkt() {
   if (J.inst) h += sec("三大法人買賣超（上市）", `<ul class="mrows">${[["外資", J.inst.foreign, "foreign"], ["投信", J.inst.trust, "trust"], ["自營商", J.inst.dealer, "money"], ["合計", J.inst.total, "money"]].map(([k, v, go]) => `<li data-mk="goInst" data-v="${go}" role="button" tabindex="0"><span>${k}</span><b class="${cls(v)}">${sgn(v, 2)} 億</b><span></span></li>`).join("")}</ul>`, J.inst.date ? J.inst.date.slice(5).replace("-", "/") : "");
   const C = J.contrib;
   if (C) h += sec("加權指數貢獻點數", `<div class="contrib"><div><h4 class="up">正貢獻</h4>${C.pos.slice(0, 6).map(x => `<button data-sel="${x.code}"><span>${esc(x.name)}<small>${x.code}</small></span><b class="up">+${x.pts.toFixed(2)}</b></button>`).join("")}</div><div><h4 class="down">負貢獻</h4>${C.neg.slice(0, 6).map(x => `<button data-sel="${x.code}"><span>${esc(x.name)}<small>${x.code}</small></span><b class="down">${x.pts.toFixed(2)}</b></button>`).join("")}</div></div>`, "估算");
-  if (J.indices?.length) h += sec("類股指數", `<ul class="mrows">${J.indices.map(x => `<li data-mk="goSec" data-v="${esc(x.name.replace(/類指數$/, "").replace(/類$/, ""))}" role="button" tabindex="0"><span>${esc(x.name.replace(/類指數$/, ""))}</span><b>${x.close.toLocaleString()}</b><span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chg ?? 0).toFixed(2)}（${Math.abs(x.chgPct ?? 0).toFixed(2)}%）</span></li>`).join("")}</ul>`, "收盤");
+  if (J.indices?.length) h += sec("類股指數", `<ul class="mrows">${J.indices.map(x => `<li data-mk="goSec" data-v="${esc(x.name.replace(/類指數$/, "").replace(/類$/, ""))}" role="button" tabindex="0"><span>${esc(x.name.replace(/類指數$/, ""))}</span><b>${x.close.toLocaleString()}</b><span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chg ?? 0).toFixed(2)}（${Math.abs(x.chgPct ?? 0).toFixed(2)}%）</span></li>`).join("")}</ul>`, J.indices[0]?.date && J.indices[0].date !== (W.today || J.date) ? `${J.indices[0].date.slice(5).replace("-", "/")} 收盤（證交所盤後公布）` : "收盤");
   // 國際指數：依地區切換
   const WG = J.world?.length ? J.world : J.us?.length ? [{ id: "us", name: "美國", rows: J.us }] : [];
   if (WG.length) { const g = WG.find(x => x.id === W.worldR) || WG[0];

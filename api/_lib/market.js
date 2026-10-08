@@ -2,7 +2,7 @@
 // GET /api/market
 // 台股個股統計來自 _live.js：盤中用富果行情快照（即時，回 live: true、time），沒有金鑰時用證交所、櫃買中心 OpenAPI（前一個交易日收盤）；
 // 盤中的加權、櫃買即時指數由看盤頁另外用 /api/quote 更新；盤中快取 20 秒：
-//   breadth  個股漲跌分佈（上市櫃普通股與 ETF；漲停跌停以 ±9.5% 估）
+//   breadth  漲跌家數（上市櫃股票＋ETF，和券商的「整體市場」口徑一樣）；漲停跌停用實際的漲跌停價判斷（依升降單位）
 //   sectors  產業漲跌（以前一日市值加權的平均漲跌幅）與成交金額比重
 //   contrib  加權指數貢獻點數排行（用發行股數與漲跌估算，只算上市普通股）
 //   inst     三大法人買賣超金額（證交所 BFI82U，上市）
@@ -16,13 +16,21 @@ import { getJSON, num, companies } from "./_tw.js";
 import { yahooBars, quoteFromMeta } from "./_yahoo.js";
 
 const BUCKETS = [[">5%", 5, Infinity], ["3~5%", 3, 5], ["2~3%", 2, 3], ["1~2%", 1, 2], ["0~1%", 0, 1], ["0%", 0, 0], ["0~-1%", -1, 0], ["-1~-2%", -2, -1], ["-2~-3%", -3, -2], ["-3~-5%", -5, -3], ["<-5%", -Infinity, -5]];
+// 升降單位（股票、ETF 不同）與漲跌停價：昨收 ×1.1（×0.9）再依升降單位往內取
+export const tick = (p, etf) => (etf ? (p < 50 ? 0.01 : 0.05) : p < 10 ? 0.01 : p < 50 ? 0.05 : p < 100 ? 0.1 : p < 500 ? 0.5 : p < 1000 ? 1 : 5);
+export function limits(prev, etf) {
+  const up0 = prev * 1.1, dn0 = prev * 0.9, tu = tick(up0, etf), td = tick(dn0, etf);
+  return { up: +(Math.floor(up0 / tu + 1e-9) * tu).toFixed(2), dn: +(Math.ceil(dn0 / td - 1e-9) * td).toFixed(2) };
+}
 export function breadth(rows) {
   const counts = BUCKETS.map(([label]) => ({ label, n: 0 }));
   let up = 0, down = 0, flat = 0, limUp = 0, limDn = 0;
   for (const r of rows) {
     const p = r.chgPct; if (p == null) continue;
     if (p > 0) up++; else if (p < 0) down++; else flat++;
-    if (p >= 9.5) limUp++; if (p <= -9.5) limDn++;
+    const prev = r.price != null && r.chg != null ? r.price - r.chg : null;
+    if (prev > 0 && !/[LRK]$/.test(r.code)) { const L = limits(prev, /^00/.test(r.code)); if (r.price >= L.up - 1e-6) limUp++; if (r.price <= L.dn + 1e-6) limDn++; } // 槓桿／反向 ETF 沒有漲跌停
+    else if (prev == null) { if (p >= 9.5) limUp++; if (p <= -9.5) limDn++; }
     const k = p === 0 ? 5 : p > 0 ? BUCKETS.findIndex(([, lo, hi], i) => i < 5 && p > lo && p <= hi) : BUCKETS.findIndex(([, lo, hi], i) => i > 5 && p >= lo && p < hi);
     if (k >= 0) counts[k].n++;
   }
@@ -45,10 +53,12 @@ export function contributions(twse, info, taiexPrev) {
   const out = L.map(r => ({ code: r.code, name: r.name, chgPct: r.chgPct, pts: +((r.chg * r.sh) / S * taiexPrev).toFixed(2) })).sort((a, b) => b.pts - a.pts);
   return { pos: out.filter(x => x.pts > 0).slice(0, 10), neg: out.filter(x => x.pts < 0).slice(-10).reverse() };
 }
+// OpenAPI 的類股指數是「最近一個交易日收盤」，日期是民國年（1141007）
+const rocDate = v => { const s = String(v ?? "").replace(/\D/g, ""); return s.length === 7 ? `${+s.slice(0, 3) + 1911}-${s.slice(3, 5)}-${s.slice(5)}` : s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}` : null; };
 export function parseMiIndex(rows) {
   return (Array.isArray(rows) ? rows : []).map(r => {
     const sign = String(r["漲跌"] ?? "").includes("-") ? -1 : 1, pts = num(r["漲跌點數"]), close = num(r["收盤指數"]);
-    return { name: String(r["指數"] ?? "").trim(), close, chg: pts != null ? sign * Math.abs(pts) : null, chgPct: num(r["漲跌百分比"]) != null ? sign * Math.abs(num(r["漲跌百分比"])) : null };
+    return { name: String(r["指數"] ?? "").trim(), date: rocDate(r["日期"]), close, chg: pts != null ? sign * Math.abs(pts) : null, chgPct: num(r["漲跌百分比"]) != null ? sign * Math.abs(num(r["漲跌百分比"])) : null };
   }).filter(x => x.name && x.close != null);
 }
 // BFI82U：單位名稱、買進金額、賣出金額、買賣差額（元）→ 億元
@@ -93,10 +103,10 @@ export default async function handler(req, res) {
   const stocks = all.filter(r => /^\d{4}$/.test(r.code));
   res.setHeader("Cache-Control", liveCache(L?.live, 20));
   return res.status(200).json({ ok: true, date: L?.date || all.find(x => x.date)?.date || null, live: !!L?.live, time: L?.time || null, note: L?.note || null, source: `${L?.source || "證交所、櫃買中心 OpenAPI"}；美股 Yahoo Finance`,
-    breadth: stocks.length ? breadth(stocks) : null,
+    breadth: all.length ? breadth(all) : null, coverage: L?.coverage || null,
     sectors: I.size ? sectors(stocks, I) : null,
     // 上市、上櫃分開看（看盤頁可以切換）
-    breadthBy: { twse: breadth(twse.filter(r => /^\d{4}$/.test(r.code))), tpex: breadth(tpex.filter(r => /^\d{4}$/.test(r.code))) },
+    breadthBy: { twse: breadth(twse), tpex: breadth(tpex) },
     sectorsBy: I.size ? { twse: sectors(twse.filter(r => /^\d{4}$/.test(r.code)), I), tpex: sectors(tpex.filter(r => /^\d{4}$/.test(r.code)), I) } : null,
     world: world.value || [],
     contrib: I.size && taiex ? contributions(twse, I, taiex.close - (taiex.chg || 0)) : null,
