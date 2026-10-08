@@ -5,7 +5,7 @@
    免費資料源沒有的（券商目標價、基金持股明細、前十大股東）會清楚標示「估算」或告訴你去哪裡查，不會編數字。
    用到 watch.html 的 W、esc、cls、select、setDtab、loadInfo、loadCo、loadNews、barLineSvg、peBand、IND、indCodes、indChainData，
    analysis.js 的 signed、clsOf，core.js 的 indicators、$、store。 */
-const SX_ITEMS = [["ls", "多空"], ["guru", "達人觀點"], ["daily", "籌碼日報"], ["check", "健檢"], ["attr", "屬性"], ["target", "法人目標"], ["inst", "法人主力"], ["news", "新聞"], ["chain", "產業鏈"], ["mb", "資券大戶"],
+const SX_ITEMS = [["ls", "多空"], ["guru", "達人觀點"], ["daily", "籌碼日報"], ["check", "健檢"], ["attr", "屬性"], ["target", "法人目標"], ["inst", "法人主力"], ["branch", "分點主力"], ["news", "新聞"], ["chain", "產業鏈"], ["mb", "資券大戶"],
   ["dist", "籌碼分佈"], ["rev", "營收"], ["profit", "獲利"], ["fin", "財報"], ["fund", "基金持股"], ["div", "除權息"], ["cal", "行事曆"], ["holders", "股東名單"], ["info", "個股資訊"]];
 // W 在 watch.html 後面的 script 才定義，所以選到哪一頁在第一次用到時再讀
 const sxCur = () => (W.sx ||= SX_ITEMS.some(x => x[0] === store.get("watch:sx", "ls")) ? store.get("watch:sx", "ls") : "ls");
@@ -28,7 +28,17 @@ function sxOpen() {
 function sxNeed(what) {
   const c = W.sel;
   if (what === "news" && W.news?.code !== c) loadNews();
+  if (what === "branch" && W.br?.code !== c) sxLoadBr();
   if (what === "guru" && typeof podLoadSrv === "function" && !POD.srv && !POD.srvLoading) { POD.srvLoading = true; podLoadSrv().then(() => { POD.srvLoading = false; podLoadPx(); if (W.dtab === "info") sxRender(); }); }
+}
+// 券商分點（/api/broker，要 FinMind 贊助會員）
+async function sxLoadBr() {
+  const c = W.sel; if (W.off) return;
+  W.br = { code: c, loading: true };
+  // 不用 getJ：ok:false 時還要讀 needSponsor
+  try { const r = await fetch(`/api/broker?code=${c}`), j = await r.json().catch(() => null); if (W.sel !== c) return; W.br = j ? { ...j, code: c } : { code: c, err: r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}` }; }
+  catch { if (W.sel === c) W.br = { code: c, err: "連不到伺服器（網路中斷？）" }; }
+  if (W.sel === c && W.dtab === "info") sxRender();
 }
 function sxRender() {
   const box = $("#sxBox"); if (!box || W.dtab !== "info") return; sxCur();
@@ -58,6 +68,40 @@ function sxSignals() {
   if (I?.margin?.length > 5) { const M = I.margin, d = M.at(-1).marginBal - M.at(-6).marginBal, p = c - D[Math.max(0, n - 5)].c; add("融資", d > 0 && p < 0 ? -1 : d < 0 && p > 0 ? 1 : 0, `融資 5 日 ${signed(d)} 張${d > 0 && p < 0 ? "，股價跌融資增（籌碼凌亂）" : d < 0 && p > 0 ? "，股價漲融資減（籌碼安定）" : ""}`); }
   const score = Math.round((out.reduce((s, x) => s + x.v, 0) / (out.length || 1)) * 100);
   return { out, score, label: score >= 40 ? "偏多" : score >= 15 ? "略偏多" : score <= -40 ? "偏空" : score <= -15 ? "略偏空" : "盤整" };
+}
+// 分點主力：柱＝每日前 15 大買賣超合計（張，左軸），線＝5 日、20 日集中度（%，右軸）
+function sxBrChart(D) {
+  if (D.length < 2) return "";
+  const Wv = 400, Hv = 190, L = 44, R = 32, T = 10, B = 22, n = D.length, cw = (Wv - L - R) / n;
+  const nv = D.map(x => x.net), mx = Math.max(0, ...nv), mn = Math.min(0, ...nv), Yb = v => T + (mx - v) / ((mx - mn) || 1) * (Hv - T - B);
+  const lv = D.flatMap(x => [x.c5, x.c20]).filter(v => v != null), lx = Math.max(0, ...lv), ln = Math.min(0, ...lv), Yl = v => T + (lx - v) / ((lx - ln) || 1) * (Hv - T - B);
+  let g = `<line x1="${L}" x2="${Wv - R}" y1="${Yb(0).toFixed(1)}" y2="${Yb(0).toFixed(1)}" stroke="var(--line)"/>`;
+  g += [mx, mn].filter(v => v).map(v => `<text x="${L - 4}" y="${Yb(v).toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="11" fill="var(--muted)">${sxN(v)}</text>`).join("");
+  g += [lx, ln].filter(v => v).map(v => `<text x="${Wv - R + 4}" y="${Yl(v).toFixed(1)}" dominant-baseline="middle" font-size="11" fill="var(--muted)">${v.toFixed(0)}%</text>`).join("");
+  g += D.map((x, i) => `<rect x="${(L + i * cw + cw * 0.15).toFixed(1)}" y="${Math.min(Yb(x.net), Yb(0)).toFixed(1)}" width="${(cw * 0.7).toFixed(1)}" height="${Math.max(1, Math.abs(Yb(x.net) - Yb(0))).toFixed(1)}" fill="${x.net >= 0 ? "var(--up)" : "var(--down)"}" opacity=".75"/>`).join("");
+  for (const [k, col] of [["c5", "#4a86e8"], ["c20", "#f0883e"]]) { const pts = D.map((x, i) => (x[k] == null ? null : `${(L + i * cw + cw / 2).toFixed(1)},${Yl(x[k]).toFixed(1)}`)).filter(Boolean); if (pts.length > 1) g += `<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.6"/>`; }
+  g += [0, n >> 1, n - 1].map(i => `<text x="${(L + i * cw + cw / 2).toFixed(1)}" y="${Hv - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">${sxMd(D[i].d)}</text>`).join("");
+  return `<svg class="sxbrchart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="分點買賣超與集中度">${g}</svg>
+    <div class="sxlegend"><span><i style="background:var(--up)"></i><i style="background:var(--down)"></i>買賣超（張）</span><span><i style="background:#4a86e8"></i>5 日集中</span><span><i style="background:#f0883e"></i>20 日集中</span></div>`;
+}
+// 大戶：千張以上持股比例的面積圖
+function sxAreaChart(P) {
+  if (P.length < 2) return "";
+  const Wv = 400, Hv = 160, L = 38, R = 18, T = 10, B = 22, n = P.length, vs = P.map(x => x.v), mx = Math.max(...vs), mn = Math.min(...vs), pad = (mx - mn) * 0.15 || 0.05;
+  const X = i => L + i * (Wv - L - R) / (n - 1), Y = v => T + (mx + pad - v) / (mx - mn + pad * 2) * (Hv - T - B);
+  const line = P.map((x, i) => `${X(i).toFixed(1)},${Y(x.v).toFixed(1)}`).join(" ");
+  return `<svg class="sxbrchart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="千張大戶持股變化">
+    ${[mx, mn].map(v => `<line x1="${L}" x2="${Wv - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)" stroke-dasharray="3 4"/><text x="${L - 4}" y="${Y(v).toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="11" fill="var(--muted)">${v.toFixed(2)}</text>`).join("")}
+    <polygon points="${X(0).toFixed(1)},${Hv - B} ${line} ${X(n - 1).toFixed(1)},${Hv - B}" fill="var(--accent-soft)"/><polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+    ${[0, n >> 1, n - 1].map(i => `<text x="${X(i).toFixed(1)}" y="${Hv - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${P[i].label}</text>`).join("")}</svg>`;
+}
+// 大戶持股分布：每週千張以上（大戶）與 50 張以下（散戶）
+function sxBig(C) {
+  const H = (C.holders || []).filter(x => x.b1000 != null).slice(-12); if (H.length < 2) return "";
+  const arrow = (v, p, inv) => (p == null || v === p ? "" : `<span class="${(v > p) !== !!inv ? "up" : "down"}">${v > p ? "▲" : "▼"}</span>`);
+  return `${sxH("千張以上大戶持股（%）", "每週集保")}${sxAreaChart(H.map(x => ({ label: sxMd(x.d), v: x.b1000 })))}
+    <div class="cotbl-wrap"><table class="tbl"><thead><tr><th>日期</th><th>大戶持股</th><th>散戶持股</th><th>千張人數</th></tr></thead><tbody>${H.map((x, i) => [x, H[i - 1]]).reverse().map(([x, p]) => `<tr><td>${sxMd(x.d)}</td><td>${arrow(x.b1000, p?.b1000)}${x.b1000.toFixed(2)}</td><td>${x.r50 != null ? arrow(x.r50, p?.r50) + x.r50.toFixed(2) : "—"}</td><td>${sxN(x.people1000)}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">大戶＝持股 1,000 張以上，散戶＝50 張以下。董監事（內部人）持股要到公開資訊觀測站查。</p>`;
 }
 const SX = {
   ls() {
@@ -159,6 +203,30 @@ const SX = {
         ${tiers.map(g => { const mine = g.items.some(it => it.c.some(x => x[0] === W.sel));
           return `<div class="sxtier ${mine ? "me" : ""}"><span class="tt">${esc(g.tier)}${g.title ? "・" + esc(g.title) : ""}</span>${g.items.map(it => `<div class="ti"><small>${esc(it.name)}</small>${it.c.slice(0, 6).map(x => `<button class="sxco ${x[0] === W.sel ? "me" : ""}" ${okCode(String(x[0]).toUpperCase()) ? `data-sel="${esc(x[0])}"` : "disabled"}>${esc(x[1] || x[0])}</button>`).join("")}</div>`).join("")}</div>`; }).join("")}</div>`; }).join("")}`;
   },
+  branch() {
+    const B = W.br;
+    if (!B || B.code !== W.sel || B.loading) return sxLoad();
+    if (B.needSponsor || B.err || !B.ok) {
+      return `${sxH("分點主力", "券商分點進出")}<div class="sxcard"><p>${esc(B.error || B.err || "暫時沒有分點資料")}</p>
+        ${B.needSponsor ? `<p class="note">券商分點（哪一家券商、哪一個分點買賣多少）在證交所要輸入驗證碼才能查，免費 API 拿不到。要在這裡看到「主力動向、買賣方 Top15、籌碼集中度、家數差」，需要：</p>
+        <ol class="note"><li>到 FinMind 官網升級為<b>贊助會員</b>（付費）。</li><li>把金鑰設定在 Vercel 的環境變數 <code>FINMIND_TOKEN</code>（已經設定過就不用改名字，升級後同一把金鑰就有權限）。</li><li>重新部署後，這一頁就會自動出現。</li></ol>` : ""}</div>
+        <p class="note">沒有分點資料前，可以先看「法人主力」（三大法人＋千張大戶）和「籌碼分佈」。</p>`;
+    }
+    const n = +W.brRange || 1, T = B.tops?.[n] || B.tops?.[1]; if (!T) return `<p class="note">沒有分點資料。</p>`;
+    const side = W.brSide === "sell" ? "sell" : "buy", L = T[side] || [], mx = Math.max(1, ...L.map(x => Math.abs(x.net)));
+    const lab = T.conc == null ? "—" : T.conc >= 20 ? "大買" : T.conc >= 5 ? "買超" : T.conc <= -20 ? "大賣" : T.conc <= -5 ? "賣超" : "中性";
+    const sh = sxC()?.profile?.shares, D = B.days || [];
+    const chips = (k, cur, opts) => `<div class="cochips">${opts.map(([v, t]) => `<button data-${k}="${v}" aria-pressed="${String(cur) === String(v)}">${t}</button>`).join("")}</div>`;
+    return `${sxH("分點主力", `${T.from === T.to ? sxMd(T.to) : sxMd(T.from) + "～" + sxMd(T.to)}・前 15 大分點`)}
+      ${chips("brr", n, [[1, "近 1 日"], [5, "近 5 日"], [20, "近 20 日"]])}
+      <div class="sxbrtop"><div class="sxbrlab"><small>主力動向</small><b class="${cls(T.conc)}">${lab}</b></div>
+        ${sxKv([["籌碼集中", signed(T.net) + " 張", cls(T.net)], ["籌碼集中 %", sxPct(T.conc), cls(T.conc)], ["成交量", sxN(T.vol) + " 張"], sh && ["佔股本比重", sxPct(T.net * 1000 / sh * 100, 3), cls(T.net)], sh && ["區間週轉率", (T.vol * 1000 / sh * 100).toFixed(2) + "%"]])}</div>
+      ${chips("brs", side, [["buy", "買方 Top15"], ["sell", "賣方 Top15"]])}
+      <ul class="sxbrlist">${L.map(x => `<li><span>${esc(x.name)}</span><i class="${side === "buy" ? "up" : "down"}" style="width:${Math.abs(x.net) / mx * 100}%"></i><b>${sxN(Math.abs(x.net))} 張</b><small>${x.avg != null ? x.avg.toFixed(2) : "—"}</small></li>`).join("") || `<li class="note">沒有${side === "buy" ? "買超" : "賣超"}分點</li>`}</ul>
+      ${sxH("主力買賣超與集中度", `近 ${D.length} 個交易日`)}${sxBrChart(D)}
+      <div class="cotbl-wrap"><table class="tbl"><thead><tr><th>日期</th><th>買賣超</th><th>家數差</th><th>5 日集中</th><th>20 日集中</th></tr></thead><tbody>${D.slice(-20).reverse().map(x => `<tr><td>${sxMd(x.d)}</td><td class="${cls(x.net)}">${signed(x.net)}</td><td class="${cls(x.diff)}">${x.diff > 0 ? "+" : ""}${x.diff}</td><td class="${cls(x.c5)}">${x.c5 == null ? "—" : x.c5.toFixed(2)}</td><td class="${cls(x.c20)}">${x.c20 == null ? "—" : x.c20.toFixed(2)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note">籌碼集中＝前 15 大買超分點合計－前 15 大賣超分點合計，集中 %＝它 ÷ 成交量。家數差＝買超家數－賣超家數：主力集中買進、很多小分點賣出時是負的（籌碼集中）；正的代表買的分點多、籌碼分散。均價是該分點的買進（或賣出）均價。資料：${esc(B.source || "")}。</p>`;
+  },
   mb() {
     const I = sxI(), C = sxC(); if (!I) return sxLoad(W.info?.err);
     const M = I.margin || [], m = M.at(-1), S = I.short || [], s = S.at(-1), H = C?.holders || [];
@@ -175,7 +243,7 @@ const SX = {
     const small = T.levels.filter(x => x.lo < 50001).reduce((s, x) => s + x.pct, 0), big = T.levels.filter(x => x.lo >= 400001).reduce((s, x) => s + x.pct, 0);
     return `${sxH("籌碼分佈（股權分散）", sxMd(T.d) + " 集保")}${sxKv([["散戶 ≤50 張", small.toFixed(1) + "%"], ["大戶 ≥400 張", big.toFixed(1) + "%"], ["總股東人數", sxN(T.levels.reduce((s, x) => s + (x.people || 0), 0))]])}
       <ul class="sxdist">${T.levels.map(x => `<li><span>${lots(x.lo)} 以上</span><i style="width:${(x.pct || 0) / mx * 100}%"></i><b>${(x.pct || 0).toFixed(2)}%</b><small class="note">${sxN(x.people)} 人</small></li>`).join("")}</ul>
-      <p class="note">每一級距是持股數的下限。大戶比例上升、散戶人數減少，通常代表籌碼往少數人集中。價格的籌碼分佈（每個價位的成交量）在「走勢 → 分價量」。</p>`;
+      <p class="note">每一級距是持股數的下限。大戶比例上升、散戶人數減少，通常代表籌碼往少數人集中。價格的籌碼分佈（每個價位的成交量）在「走勢 → 分價量」。</p>${sxBig(C)}`;
   },
   rev() {
     const I = sxI(); if (!I) return sxLoad(W.info?.err);
@@ -246,13 +314,22 @@ const SX = {
   },
 };
 function sxInit() {
+  W.brRange = store.get("watch:brr", 1); W.brSide = "buy";
   $("#sxNav").addEventListener("click", e => { const b = e.target.closest("[data-sx]"); if (!b) return; W.sx = b.dataset.sx; store.set("watch:sx", W.sx); sxRender.scrolled = false; sxRender(); });
   $("#sxBox").addEventListener("click", e => {
     const s = e.target.closest("[data-sel]"); if (s) { select(s.dataset.sel); return; }
     const g = e.target.closest("[data-sxgo]"); if (g) { if (g.dataset.sxgo === "co") setDtab("co"); else if (g.dataset.sxgo === "pod") { showList(); setLt("pod"); } return; }
-    const t = e.target.closest("[data-sxind]"); if (t) { W.indS.open = t.dataset.sxind; showList(); setLt("ind"); }
+    const t = e.target.closest("[data-sxind]"); if (t) { W.indS.open = t.dataset.sxind; showList(); setLt("ind"); return; }
+    const r = e.target.closest("[data-brr]"); if (r) { W.brRange = +r.dataset.brr; store.set("watch:brr", W.brRange); sxRender(); return; }
+    const sd = e.target.closest("[data-brs]"); if (sd) { W.brSide = sd.dataset.brs; sxRender(); }
   });
   const css = document.createElement("style"); css.textContent = `
+.sxbrtop { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center; } .sxbrlab { text-align: center; } .sxbrlab small { display: block; color: var(--muted); } .sxbrlab b { font-size: 40px; font-weight: 500; }
+@media (max-width: 420px) { .sxbrtop { grid-template-columns: 1fr; } }
+.sxbrlist { list-style: none; margin: 6px 0 12px; padding: 0; } .sxbrlist li { display: grid; grid-template-columns: minmax(0, 7em) 1fr auto 4.6em; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.sxbrlist li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .sxbrlist li i { height: 14px; border-radius: 3px; min-width: 2px; } .sxbrlist li i.up { background: var(--up); } .sxbrlist li i.down { background: var(--down); }
+.sxbrlist li b { font-weight: 500; font-family: var(--font-num); } .sxbrlist li small { text-align: right; color: var(--muted); font-family: var(--font-num); }
+.sxbrchart { width: 100%; height: auto; display: block; } .sxlegend { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font-size: 12px; color: var(--muted); margin: 4px 0 10px; } .sxlegend i { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 3px; }
 .sxnav { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .sxnav button { flex: none; border: 1px solid var(--line); background: var(--surface-3); color: var(--muted); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13.5px; cursor: pointer; white-space: nowrap; }
 .sxnav button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); }
