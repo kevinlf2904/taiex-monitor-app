@@ -537,7 +537,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
       <div class="l-ix" id="ix2"></div>
-      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button></div>
+      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="pod">名人</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
         <form id="addForm" autocomplete="off"><input class="code" id="addCode" placeholder="代號或名稱，例 2330、台積、NVDA" inputmode="search" enterkeyhint="go" aria-label="搜尋股票（代號或名稱，美股用英文代號）" aria-autocomplete="list" aria-controls="sugg"><button class="btn primary" type="submit">加入</button></form>
@@ -645,7 +645,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-36</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-37</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -686,6 +686,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="diagrams.js"></script>
 <script src="industry-figs.js"></script>
 <script src="flows.js"></script>
+<script src="podcast.js"></script>
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
@@ -971,19 +972,20 @@ function rowHtml(c, q, { rank, metric, star } = {}) {
 function renderList() {
   const lx = $("#lx"), ae = document.activeElement;
   if (W.ticking && lx.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
-  if (W.ticking && Date.now() - (W.lastPtr || 0) < 900) return; // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
+  if (W.ticking && Date.now() - (W.lastPtr || 0) < 900) return;
+  if (W.ticking && W.lt === "pod") return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
   const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details")].map(d => [sum(d), d.open]));
   renderList0();
   if (opened.size) for (const d of lx.querySelectorAll("details")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
 }
 // 平板橫向、電腦：大盤、選股、資金、產業這些內容多的分頁用全寬；點個股時，個股頁從右邊滑出（抽屜），不會把內容擠成一條
-const WIDE_TABS = ["mkt", "screen", "ind", "money"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
+const WIDE_TABS = ["mkt", "screen", "ind", "money", "pod"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
 function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); }
 function renderList0() {
   syncLayout();
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === W.lt));
   const watch = W.lt === "watch";
-  $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", "mkt", "screen", "ind", "money"].includes(W.lt); $("#wl").hidden = ["mkt", "screen", "ind", "money"].includes(W.lt);
+  $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", "mkt", "screen", "ind", "money", "pod"].includes(W.lt); $("#wl").hidden = ["mkt", "screen", "ind", "money", "pod"].includes(W.lt);
   $("#groups").innerHTML = W.groups.map((g, i) => `<button data-g="${i}" aria-pressed="${i === W.gi}">${esc(g.name)} <span class="note">${g.list.length}</span></button>`).join("") + `<button data-g="new" title="新增群組">＋ 群組</button>`;
   const n = $("#wlNote"); n.className = "note w-note"; let note = "";
   if (watch) {
@@ -1014,6 +1016,8 @@ function renderList0() {
     renderMkt(); note = W.mkt?.source ? `資料：${W.mkt.source}。${W.mkt.live ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布" : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計"}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : "";
   } else if (W.lt === "etf") {
     note = renderEtf();
+  } else if (W.lt === "pod") {
+    note = renderPod();
   } else if (W.lt === "tw") {
     const H = W.hot.tw;
     $("#lTools").innerHTML = `<span class="note">${H?.live ? `${liveTag(H)}・依成交值排序` : `依${H?.date ? " " + H.date.replace(/-/g, "/") + " " : "最近交易日"}成交值排序，價格即時更新`}</span>`;
@@ -2014,6 +2018,7 @@ $("#lx").addEventListener("click", e => { const b = e.target.closest("[data-mk]"
   W[k] = k === "calWk" ? +v : v; store.set("watch:" + k, W[k]);
   if (k === "mkHot" && v !== "surge" && !W.hot["rank:" + v]) loadMkHot(); renderList(); });
 $("#lx").addEventListener("click", e => { const s = e.target.closest("[data-sel]"); if (s) select(s.dataset.sel); });
+podInit();
 $("#lx").addEventListener("toggle", e => { const d = e.target; if (d.matches?.("details[data-fold]")) store.set("watch:fold:" + d.dataset.fold, d.open); }, true);
 
 /* ---------- 個股 ---------- */
