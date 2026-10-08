@@ -248,6 +248,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mkbox b { font: 500 18px var(--font-num); text-align: right; padding: 4px 10px; border-radius: 4px; } .mkbox b.fill.up { background: var(--up); color: #fff; } .mkbox b.fill.down { background: var(--down); color: #fff; }
 .mkbox b.line.up { border: 1.5px solid var(--up); color: var(--up); } .mkbox b.line.down { border: 1.5px solid var(--down); color: var(--down); }
 .mkmore { margin-top: 8px; } .mkmore summary { cursor: pointer; color: var(--muted); font-size: 13px; } .mksub { margin: 10px 0 4px; font-size: 13px; }
+.mkhl { display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; } .mkhl span { color: var(--muted); font-size: 13.5px; } .mkhl b { font-size: 18px; font-weight: 500; font-family: var(--font-num); }
+.mkst { width: 100%; border-collapse: collapse; font-size: 13.5px; font-family: var(--font-num); } .mkst th { color: var(--muted); font-weight: 400; font-size: 12px; text-align: right; padding: 4px 6px; } .mkst td { text-align: right; padding: 6px; border-top: 1px solid var(--line); } .mkst td:first-child, .mkst th:first-child { text-align: left; font-family: var(--font-body); color: var(--ink); } .mkst b { font-weight: 500; }
 .secgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin: 8px 0 4px; }
 .secgrid button { border: 1px solid var(--line); border-radius: var(--radius-sm, 8px); background: var(--surface-3); color: var(--ink); font: inherit; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; }
 .secgrid button.up { background: color-mix(in srgb, var(--up) calc(var(--k) * 30%), var(--surface-3)); } .secgrid button.down { background: color-mix(in srgb, var(--down) calc(var(--k) * 30%), var(--surface-3)); }
@@ -669,7 +671,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-43</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-44</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -834,7 +836,7 @@ function liveRefresh() {
   if (W.off) return; const open = W.session === "open" || W.session === "pre", age = o => (o?.at ? Date.now() - o.at : Infinity), t = new Date(Date.now() + 8 * 3600e3), hm = t.getUTCHours() * 60 + t.getUTCMinutes();
   if (W.lt === "mkt" && W.mkReg === "us") { if (age(W.usm) > (W.usm?.session === "open" ? 30000 : 300000)) loadUsMkt(true); }
   else if (W.lt === "mkt" && W.mkReg === "gl") { if (age(W.gl) > 60000) loadGlobal(true); }
-  else if (W.lt === "mkt" && open && age(W.mkt) > 30000 && !W.mktLoading) loadMktLive();
+  else if (W.lt === "mkt" && open && age(W.mkt) > 30000 && !W.mktLoading) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
   else if (W.lt === "tw" && open && age(W.hot.tw) > 30000) loadHot("tw");
   else if (W.lt === "rank" && open && !["foreign", "trust"].includes(W.rankType) && age(W.hot["rank:" + W.rankType]) > 30000) loadHot("tw-rank");
   else if (W.lt === "screen" && open && age(W.scr) > 60000 && !W.scrLoading) loadScreen(true);
@@ -1939,9 +1941,37 @@ async function loadWarn(force = false) {
   try { W.warn = { ...(await getJ("/api/warn", true)), at: Date.now() }; } catch (e) { W.warn = { err: e.message, at: Date.now() }; }
   return W.warn;
 }
+// 委買委賣、融資融券、期貨法人與散戶未平倉（/api/mktstats）
+async function loadMktStats(force = false) {
+  if (W.off || W.mksLoading || (!force && W.mks && Date.now() - W.mks.at < 60000)) return;
+  W.mksLoading = true; try { W.mks = { ...(await getJ("/api/mktstats", true)), at: Date.now() }; } catch (e) { W.mks = { err: e.message, at: Date.now() }; } finally { W.mksLoading = false; }
+  if (W.lt === "mkt" && W.mkReg === "tw") { W.ticking = true; try { renderList(); } finally { W.ticking = false; } }
+}
+function mktStatsHtml(sec) {
+  const S = W.mks; if (!S) return ""; if (S.err || !S.ok) return sec("委買委賣・融資融券・期貨籌碼", `<p class="note">⚠ ${esc(S.err || S.error || "暫時拿不到")}</p>`);
+  const n = v => (v == null ? "—" : Math.round(v).toLocaleString()), wan = v => (v == null ? "—" : v >= 1e4 ? (v / 1e4).toFixed(v >= 1e6 ? 0 : 1) + " 萬" : Math.round(v).toLocaleString()), sg = (v, u = "", d = 0) => (v == null ? "—" : `<b class="${cls(v)}">${v > 0 ? "+" : ""}${d ? v.toFixed(d) : Math.round(v).toLocaleString()}${u}</b>`), md = d => (d ? d.slice(5).replace("-", "/") : "");
+  let h = "";
+  const O = S.orders;
+  if (O) { const avB = O.bidCnt ? O.bidVol / O.bidCnt : null, avS = O.askCnt ? O.askVol / O.askCnt : null;
+    h += sec("委買委賣", `<table class="mkst"><thead><tr><th></th><th>張數</th><th>筆數</th><th>均張</th></tr></thead><tbody>
+      <tr><td>總委買</td><td class="up">${wan(O.bidVol)}</td><td class="up">${wan(O.bidCnt)}</td><td>${avB != null ? avB.toFixed(2) : "—"}</td></tr>
+      <tr><td>總委賣</td><td class="down">${wan(O.askVol)}</td><td class="down">${wan(O.askCnt)}</td><td>${avS != null ? avS.toFixed(2) : "—"}</td></tr>
+      <tr><td>成交</td><td>${wan(O.dealVol)}</td><td>${wan(O.dealCnt)}</td><td>${O.dealCnt ? (O.dealVol / O.dealCnt).toFixed(2) : "—"}</td></tr></tbody></table>
+      <p class="note">委買÷委賣（張）${O.askVol ? (O.bidVol / O.askVol).toFixed(2) : "—"}・成交 ${O.dealAmt != null ? O.dealAmt.toLocaleString() + " 億" : "—"}。委買張數明顯多於委賣，代表掛單偏向買方（但大量掛單可能撤單，只是參考）。</p>`, `上市・${md(O.date)} ${(O.time || "").slice(0, 5)}`); }
+  const M = S.margin;
+  if (M) h += sec("融資融券", `<ul class="mrows"><li><span>融資餘額</span><b>${M.finBal.toLocaleString()} 億</b><span>${sg(M.finChg, " 億", 2)}</span></li><li><span>融券餘額</span><b>${n(M.shortBal)} 張</b><span>${sg(M.shortChg, " 張")}</span></li></ul>
+    <p class="note">融資增加＝散戶借錢買股變多；融券增加＝放空變多。指數跌、融資卻大增，常被視為籌碼變亂。</p>`, `上市・${md(M.date)}`);
+  const F = S.futures;
+  if (F) h += sec("期貨淨未平倉", `<table class="mkst"><thead><tr><th></th><th>台指期</th><th>增減</th><th>小台</th><th>增減</th></tr></thead><tbody>
+    ${F.rows.map(r => `<tr><td>${r.who}</td><td>${sg(r.tx)}</td><td>${sg(r.txChg)}</td><td>${sg(r.mtx)}</td><td>${sg(r.mtxChg)}</td></tr>`).join("")}
+    <tr><td>散戶</td><td></td><td></td><td>${sg(F.retail.mtx)}</td><td>${sg(F.retail.mtxChg)}</td></tr></tbody></table>
+    <p class="note">淨未平倉＝多單減空單，正數偏多、負數偏空。散戶用「三大法人小台淨未平倉的相反數」估算；散戶大幅偏多常被當作反指標。</p>`, `口・${md(F.date)}`);
+  return h;
+}
 async function loadMkt(force = false) {
   if (W.off || (!force && W.mkt && Date.now() - W.mkt.at < 300000)) return renderList();
   const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
+  loadMktStats(force);
   const [m, cal, ex, fx, wn] = await Promise.allSettled([getJ("/api/market"), W.cal && !force ? Promise.resolve(W.cal) : getJ("/api/calendar", true), fut("EXF"), fut("FXF"), loadWarn(force)]);
   W.mkt = m.status === "fulfilled" ? { ...m.value, at: Date.now() } : { err: m.reason?.message, at: Date.now() };
   W.cal = cal.status === "fulfilled" ? cal.value : { err: cal.reason?.message };
@@ -2035,7 +2065,7 @@ function renderMkt() {
   // 市場概況：漲跌停、漲跌家數（上市／上櫃切換）
   const B = (W.mkM === "all" ? J.breadth : J.breadthBy?.[W.mkM]) || J.breadth, TT = J.totalsBy?.[W.mkM];
   if (B) { const mx = Math.max(1, ...B.buckets.map(x => x.n)), tot = B.up + B.down + B.flat || 1;
-    h += sec("市場概況", `<div class="mkbox"><button data-mk="goList" data-v="limit"><span>漲停家數</span><b class="fill up">${B.limUp}</b></button><button data-mk="goList" data-v="limitDown"><span>跌停家數</span><b class="fill down">${B.limDn}</b></button><button data-mk="goRankT" data-v="gain"><span>上漲家數</span><b class="line up">${B.up}</b></button><button data-mk="goRankT" data-v="loss"><span>下跌家數</span><b class="line down">${B.down}</b></button></div>
+    h += sec("市場概況", `<div class="mkbox"><button data-mk="goList" data-v="limit"><span>漲停家數</span><b class="fill up">${B.limUp}</b></button><button data-mk="goList" data-v="limitDown"><span>跌停家數</span><b class="fill down">${B.limDn}</b></button><button data-mk="goRankT" data-v="gain"><span>上漲家數</span><b class="line up">${B.up}</b></button><button data-mk="goRankT" data-v="loss"><span>下跌家數</span><b class="line down">${B.down}</b></button>${(HL => HL ? `<div class="mkhl"><span>股價月新高</span><b class="up">${HL.hi}</b></div><div class="mkhl"><span>股價月新低</span><b class="down">${HL.lo}</b></div>` : "")(J.newHL?.[W.mkM])}</div>
       <div class="ratio"><span class="up" style="width:${B.up / tot * 100}%"></span><span class="flat" style="width:${B.flat / tot * 100}%"></span><span class="down" style="width:${B.down / tot * 100}%"></span></div>
       <details class="mkmore"><summary>漲跌幅分佈</summary><div class="hist">${B.buckets.map((x, i) => `<div><small>${x.n}</small><i class="${i < 5 ? "up" : i > 5 ? "down" : "flat"}" style="height:${(x.n / mx * 70).toFixed(0)}px"></i><span data-s="${x.label.replace(/%/g, "")}">${x.label}</span></div>`).join("")}</div></details>`, `平盤 ${B.flat}・股票＋ETF${TT?.value ? `・成交 ${Math.round(TT.value).toLocaleString()} 億` : ""}${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, [...MKT2, ["all", "全部"]]) : ""); }
   // 產業概況：漲最多、跌最多各 3 個（直條），其餘收在「更多」
@@ -2052,6 +2082,7 @@ function renderMkt() {
   // 熱門台股：最多人看（成交值）、大盤強勢（漲幅）、急拉股（選股）、量大股
   { const t = W.mkHot, rows = t === "surge" ? (W.scr?.lists || []).find(L => L.id === "surge")?.rows || [] : W.hot["rank:" + t]?.rows || [], err = t === "surge" ? W.scr?.err : W.hot["rank:" + t]?.err;
     h += sec("熱門台股", rows.length ? `<div class="mtiles">${rows.slice(0, 6).map(mtile).join("")}</div>` : `<p class="note">${err ? "⚠ " + esc(err) : "載入中…"}</p>`, `<button class="linkbtn" data-mk="goRank">更多 ›</button>`, mkSeg("mkHot", t, MK_HOT)); }
+  h += mktStatsHtml(sec);
   if (J.inst) h += sec("三大法人買賣超（上市）", `<ul class="mrows">${[["外資", J.inst.foreign, "foreign"], ["投信", J.inst.trust, "trust"], ["自營商", J.inst.dealer, "money"], ["合計", J.inst.total, "money"]].map(([k, v, go]) => `<li data-mk="goInst" data-v="${go}" role="button" tabindex="0"><span>${k}</span><b class="${cls(v)}">${sgn(v, 2)} 億</b><span></span></li>`).join("")}</ul>`, J.inst.date ? J.inst.date.slice(5).replace("-", "/") : "");
   const C = J.contrib;
   if (C) h += sec("加權指數貢獻點數", `<div class="contrib"><div><h4 class="up">正貢獻</h4>${C.pos.slice(0, 6).map(x => `<button data-sel="${x.code}"><span>${esc(x.name)}<small>${x.code}</small></span><b class="up">+${x.pts.toFixed(2)}</b></button>`).join("")}</div><div><h4 class="down">負貢獻</h4>${C.neg.slice(0, 6).map(x => `<button data-sel="${x.code}"><span>${esc(x.name)}<small>${x.code}</small></span><b class="down">${x.pts.toFixed(2)}</b></button>`).join("")}</div></div>`, "估算");
