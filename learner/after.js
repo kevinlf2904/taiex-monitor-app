@@ -81,7 +81,7 @@ function afterInit() {
     if (b) { const k = b.dataset.af;
       if (k === "go:mkt") { setLt("mkt"); return; }
       if (k === "go:etfann") { W.etfCat = "ann"; store.set("watch:etf", "ann"); setLt("etf"); return; }
-      W.afView = k; store.set("watch:af", k); renderList(); scrollTo({ top: 0 }); return; }
+      W.afView = k; store.set("watch:af", k); renderList(); goY(0); return; }
     const t = e.target.closest("[data-aft]"); if (t) { const [r, id] = t.dataset.aft.split(":"); (W.afTab ||= {})[r] = id; renderList(); }
   });
   const css = document.createElement("style"); css.textContent = `

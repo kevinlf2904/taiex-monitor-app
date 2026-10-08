@@ -345,7 +345,7 @@ function podGo(view, extra = {}) {
   POD.hist.push({ view: POD.view, feed: POD.feed, key: POD.key }); if (POD.hist.length > 30) POD.hist.shift();
   Object.assign(POD, { view, ...extra }); if (view === "show") podFeed(POD.feed).then(podRender).catch(() => {});
   if (view === "ep" && !podSums()[POD.key] && POD.cfg?.notes && !POD.job?.busy && !POD.fail?.[POD.key]) { const it = podEp(POD.key); if (it) podSum(POD.key, POD.cfg.audio && it.e.audio ? "audio" : "notes").then(() => setTimeout(podAutoQueue, 1500)); } // 打開還沒整理的單集：馬上自動整理
-  podRender(); $("#lx").scrollTop = 0; try { window.scrollTo({ top: 0 }); } catch {}
+  podRender(); $("#lx").scrollTop = 0; goY(0); navPush();
 }
 function podInit() {
   const lx = $("#lx"), top = $("#lTools");
