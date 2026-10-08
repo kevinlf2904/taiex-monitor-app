@@ -4,6 +4,7 @@
 
 const ROUTES = {
   annual: () => import("./_lib/annual.js"),
+  broker: () => import("./_lib/broker.js"),
   calendar: () => import("./_lib/calendar.js"),
   "chart-read": () => import("./_lib/chart-read.js"),
   chat: () => import("./_lib/chat.js"),

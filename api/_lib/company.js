@@ -5,7 +5,7 @@
 //   balance  資產負債（季底）：總資產、總負債、權益、流動資產、流動負債
 //   cash     單季現金流：營業、投資、籌資、資本支出、自由現金流（財報上是當年累計，這裡換算成單季）
 //   dividend 每年股利：現金股利、股票股利、除息日
-//   holders  股權分散：每週千張大戶（≥1000 張）與 400 張以上持股比例
+//   holders  股權分散：每週千張大戶（≥1000 張）、400 張以上、50 張以下（散戶，r50）持股比例
 //   dist     最新一週完整的股權分散（每一級距的人數與持股比例）
 //   foreign  外資持股比例（每日）
 //   profile  董事長、總經理、成立／上市日期、資本額、產業、網址、地址
@@ -91,11 +91,11 @@ export function parseHolders(rows) {
   for (const r of rows) {
     const lv = String(r.HoldingSharesLevel || ""), p = num(r.percent); if (!r.date || p == null || /total|合計|差異/i.test(lv)) continue;
     const lo = /more than/i.test(lv) ? lowerOf(lv) + 1 : lowerOf(lv); if (lo == null) continue;
-    const x = by.get(r.date) || { d: r.date, b400: 0, b1000: 0, people1000: 0 };
-    if (lo >= 400001) x.b400 += p; if (lo >= 1000001) { x.b1000 += p; x.people1000 += num(r.people) || 0; }
+    const x = by.get(r.date) || { d: r.date, b400: 0, b1000: 0, people1000: 0, r50: 0 };
+    if (lo >= 400001) x.b400 += p; if (lo >= 1000001) { x.b1000 += p; x.people1000 += num(r.people) || 0; } if (lo <= 40001) x.r50 += p;
     by.set(r.date, x);
   }
-  return [...by.values()].sort((a, b) => a.d.localeCompare(b.d)).map(x => ({ ...x, b400: +x.b400.toFixed(2), b1000: +x.b1000.toFixed(2) }));
+  return [...by.values()].sort((a, b) => a.d.localeCompare(b.d)).map(x => ({ ...x, b400: +x.b400.toFixed(2), b1000: +x.b1000.toFixed(2), r50: +x.r50.toFixed(2) }));
 }
 // 最新一週完整的股權分散：每一級距的人數、持股比例（給「籌碼分佈」）
 export function parseDist(rows) {
