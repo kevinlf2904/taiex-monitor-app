@@ -681,7 +681,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-56</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-57</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2771,6 +2771,7 @@ function drawK(fresh = false, shift = 0) {
   const D = kSeries(), minute = minuteK();
   if (!D || !D.length) { $("#kNote").textContent = minute ? (W.intraErr || (W.off ? "需要部署到網站" : "載入中…")) : W.daily?.err || (W.off ? "需要部署到網站" : "載入中…"); return; }
   const key = W.sel + ":" + W.k + ":" + (minute ? "m" : "d"); if (W.kKey !== key) { fresh = true; W.kKey = key; } // 第一次在技術分頁畫這檔／這個週期時，先顯示最近一段
+  if ((W.sel === "T00" || W.sel === "O00") && W.k === "D") breadthAttach(D);
   const I = indicators(D), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D, I);
   let bt = null; if (S?.fn) try { const units = W.btOpt.size === "units" && !isFut(W.sel), cap = units ? Math.max(1e6, W.btOpt.units * 1000 * Math.max(...D.map(x => x.h)) * 1.01) : 1e6; // 固定張數：資金自動放大到買得起
     bt = backtest(D, sigs, { capital: cap, lot: units ? 1000 : 1, tax: taxOf(W.sel), ...btOptions() }); } catch {}
@@ -2794,6 +2795,14 @@ function drawK(fresh = false, shift = 0) {
     else if (r?.tooSmall) txt += "・資金不夠買一張，可改成固定張數或零股"; $("#stratNote").textContent = txt; }
   else $("#stratNote").textContent = "選一個策略，買賣訊號會標在 K 線上，並顯示照做的回測結果";
   ksetSummary();
+}
+// 捲到 K 線圖（K線學堂「在 K 線圖打開」用）；嵌入時捲外層頁面
+function goKChart() { store.set("watch:goK", 0); requestAnimationFrame(() => requestAnimationFrame(() => { const el = $("#kset"); if (el) goY(Math.round(el.getBoundingClientRect().top + scrollY - 8)); })); }
+// 大盤漲跌家數（ADR、OBOS、ADL 用）：learner/data/market/breadth.json 每天收盤後由 GitHub Actions 更新；加權用上市、櫃買用上櫃
+function breadthAttach(D) {
+  const B = W.breadth;
+  if (!B) { if (!W.breadthBusy) { W.breadthBusy = true; fetch(`data/market/breadth.json?t=${Math.floor(Date.now() / 36e5)}`).then(r => (r.ok ? r.json() : null)).catch(() => null).then(j => { W.breadth = { m: new Map((j?.rows || []).map(r => [r[0], r])) }; if (W.dtab === "tech") drawK(); }); } return; }
+  const k = W.sel === "O00" ? 3 : 1; for (const x of D) { const r = B.m.get(String(x.d).slice(0, 10)); if (r) { x.adv = r[k]; x.dec = r[k + 1]; } }
 }
 $("#kSeg").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (!b) return; W.k = b.dataset.k; store.set("watch:k", W.k); kChart.view = null; drawK(true); renderAna(); if (W.cmp.length) loadCmp(); });
 const olderState = () => (minuteK() ? (W.mk[W.k] ||= {}) : W.daily || {});
@@ -3150,6 +3159,9 @@ if (EMBED) {
     if (e.data.type === "kline-theme") applyTheme(e.data.theme);
     else if (e.data.type === "kline-font") applyFont(e.data.font);
     else if (e.data.type === "kline-style" && e.data.style !== klStyle()) applyStyle(e.data.style);
+    else if (e.data.type === "watch-ind" && Array.isArray(e.data.ids)) { // K線學堂「在 K 線圖打開」：打開這一課的指標，副圖訊號對應到 K 線
+      const c = String(e.data.code || "").toUpperCase(); if (okCode(c) && c !== W.sel) select(c, "replace");
+      e.data.ids.forEach(id => dBar.set(id, true)); Chart.setPref("sig", true); setDtab("tech"); drawK(); renderAna(); ksetSummary(); goKChart(); }
     else if (e.data.type === "watch-select" && e.data.code) select(String(e.data.code).toUpperCase() === "加權" ? "T00" : e.data.code, "replace");
   });
   $("#learnLink").addEventListener("click", e => { e.preventDefault(); post({ type: "open-shot", code: W.sel === "T00" ? "加權" : W.sel }); });
@@ -3166,6 +3178,7 @@ setLt(W.lt);
 if (wideMode() && !okCode(h0)) showList(false); // 一打開就在全寬分頁：不自動跳出個股抽屜
 renderAll();
 { const st = history.state; try { history.replaceState({ nav: navSnap(), d: st?.d || 0, y: st?.y || 0 }, "", location.href); } catch {} NAV.ready = true; NAV.y = curY(); navBackUi(); }
+if (Date.now() - (+store.get("watch:goK", 0) || 0) < 15000 && W.sel) { setDtab("tech", false); setTimeout(goKChart, 400); } // 從K線學堂「在 K 線圖打開」第一次打開看盤
 if (!W.off) { kick(); loadStocks(); }
 </script>
 </body>

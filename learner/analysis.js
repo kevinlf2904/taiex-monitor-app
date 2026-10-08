@@ -41,18 +41,19 @@ const Signals = {
     }
     return [];
   },
-  chartPat(D, I, only) {
-    return chartPatterns(D).filter(f => !only || only.includes(f.id)).map(f => {
+  chartPat(D, I, only, recent = 0) {
+    return chartPatterns(D, D.length, 4, only, recent).map(f => {
       const P = CHART_PATTERNS[f.id], col = f.side === "buy" ? "up" : "down", lines = f.neck ? [f.neck] : f.lines;
       return { i: f.k, pat: f.id, side: f.side, label: `${P.name}${f.side === "buy" ? "突破" : "跌破"}`, shapes: [
         { pts: [...f.pts.map(t => [t.i, t.p]), [f.k, D[f.k].c]], color: "accent", width: 1.6 },
-        ...lines.map(([a, b]) => ({ pts: [[a.i, a.p], [f.k + 3, lineAt(a, b, f.k + 3)]], color: "muted", dash: [5, 4], width: 1.2 })),
+        ...lines.map(([a, b]) => ({ pts: [[a.i, a.p], f.seg ? [b.i, b.p] : [f.k + 3, lineAt(a, b, f.k + 3)]], color: "muted", dash: [5, 4], width: 1.2 })),
         { pts: [[f.k, f.target], [f.k + 15, f.target]], color: col, dash: [2, 3], width: 1.4, label: `目標 ${fmtP(f.target)}` },
       ] };
     });
   },
+  gaps(D, I, only) { return gapKinds(D).filter(g => !only || only.includes(g.kind)).map(g => ({ i: g.i, side: g.side, label: g.label, pat: g.kind, shapes: g.shapes })); },
   // 型態學突破（逐日重算、只保留當天就看得到的突破）：給策略回測用，避免之後的資料把當時的訊號改掉
-  chartPatLive(D, I, only) { const out = []; for (let k = 30; k < D.length; k++) out.push(...Signals.chartPat(D.slice(0, k + 1), I, only).filter(m => m.i === k)); return out; },
+  chartPatLive(D, I, only) { const out = []; for (let k = 30; k < D.length; k++) out.push(...Signals.chartPat(D.slice(0, k + 1), I, only, 25).filter(m => m.i === k)); return out; },
   // 背離：比較相鄰兩個轉折點的價格與指標；轉折點要右側 w 根才確認，所以標記畫在確認那天
   div(D, I, ind = "rsi", mode = "regular", upto = D.length) { return divergences(D, I, ind, mode, upto); },
 };
@@ -219,10 +220,21 @@ const CHART_PATTERNS = {
   ascTri: { name: "上升三角", side: "buy", pts: [[0, 30], [16, 74], [30, 44], [48, 74], [64, 58], [80, 74], [100, 94]], lines: [[[16, 74], [80, 74]], [[30, 44], [64, 58]]], desc: "高點齊平、低點墊高。水平壓力被測試多次，向上突破的機率較高。" },
   descTri: { name: "下降三角", side: "sell", pts: [[0, 70], [16, 26], [30, 56], [48, 26], [64, 42], [80, 26], [100, 6]], lines: [[[16, 26], [80, 26]], [[30, 56], [64, 42]]], desc: "低點齊平、高點降低。水平支撐被測試多次，向下跌破的機率較高。" },
   symTri: { name: "對稱三角", side: "both", pts: [[0, 50], [12, 86], [28, 24], [46, 72], [62, 38], [76, 60], [88, 47], [100, 80]], lines: [[[12, 86], [76, 60]], [[28, 24], [62, 38]]], desc: "高點降低、低點墊高，價格越來越收斂。方向要等突破才知道。" },
+  roundTop: { name: "圓形頂", side: "sell", pts: [[0, 30], [14, 56], [30, 72], [50, 78], [70, 72], [86, 56], [100, 30]], lines: [[[0, 52], [86, 52]]], desc: "漲勢慢慢變緩、走平再慢慢轉跌，像倒扣的碗。跌破碗緣（起漲時的價位）確認。" },
+  roundBottom: { name: "圓形底", side: "buy", pts: [[0, 70], [14, 44], [30, 28], [50, 22], [70, 28], [86, 44], [100, 70]], lines: [[[0, 48], [86, 48]]], desc: "跌勢慢慢變緩、打底再慢慢回升，像一個大碗（大碗公理論）。站上碗緣確認，打底越久越可靠。" },
+  diamond: { name: "菱形", side: "both", pts: [[0, 40], [12, 58], [22, 42], [36, 74], [48, 26], [62, 66], [74, 40], [86, 52], [100, 20]], lines: [[[12, 58], [36, 74]], [[36, 74], [86, 52]], [[22, 42], [48, 26]], [[48, 26], [74, 40]]], desc: "先擴張（高點越來越高、低點越來越低）再收斂，像一顆菱形。多出現在頭部，是最難辨認的型態之一。" },
+  islandTop: { name: "島型頂", side: "sell", pts: [[0, 30], [24, 52], [34, 72], [50, 78], [66, 72], [76, 48], [100, 28]], lines: [[[24, 58], [34, 58]], [[66, 60], [76, 60]]], desc: "先跳空上漲、在高處盤幾天，再跳空下跌，左右兩個缺口把這幾根 K 棒孤立成一座島，是急轉直下的反轉。" },
+  islandBottom: { name: "島型底", side: "buy", pts: [[0, 70], [24, 48], [34, 28], [50, 22], [66, 28], [76, 52], [100, 72]], lines: [[[24, 42], [34, 42]], [[66, 40], [76, 40]]], desc: "先跳空下跌、在低處盤幾天，再跳空上漲，低檔被孤立成一座島，是一百八十度的急速反轉。" },
+  risingWedge: { name: "上升楔形", side: "sell", pts: [[0, 20], [16, 52], [28, 40], [46, 66], [60, 58], [76, 76], [86, 70], [100, 40]], lines: [[[16, 52], [76, 76]], [[28, 40], [86, 70]]], desc: "高點、低點都墊高，但低點墊得比較快，兩條線往上收斂。漲勢越來越吃力，常以跌破下緣結束。" },
+  fallingWedge: { name: "下降楔形", side: "buy", pts: [[0, 80], [16, 48], [28, 60], [46, 34], [60, 42], [76, 24], [86, 30], [100, 60]], lines: [[[16, 48], [76, 24]], [[28, 60], [86, 30]]], desc: "高點、低點都降低，但高點降得比較快，兩條線往下收斂。跌勢越來越無力，常以突破上緣結束。" },
+  bullFlag: { name: "上升旗形", side: "buy", pts: [[0, 16], [30, 70], [40, 60], [48, 66], [58, 56], [66, 62], [76, 54], [100, 92]], lines: [[[30, 70], [66, 62]], [[40, 60], [76, 54]]], desc: "急漲一段（旗竿）後，小幅往下的平行整理（旗面），再沿原方向突破。量在旗面縮、突破時放大。" },
+  bearFlag: { name: "下降旗形", side: "sell", pts: [[0, 84], [30, 30], [40, 40], [48, 34], [58, 44], [66, 38], [76, 46], [100, 8]], lines: [[[30, 30], [66, 38]], [[40, 40], [76, 46]]], desc: "急跌一段後小幅反彈的平行整理，再沿原方向跌破。反彈量縮、跌破時量增。" },
   box: { name: "箱型整理", side: "both", pts: [[0, 40], [14, 74], [30, 44], [46, 75], [62, 45], [78, 74], [100, 94]], lines: [[[14, 74], [78, 74]], [[30, 44], [62, 45]]], desc: "高點、低點都差不多，在一個區間來回。突破上緣或跌破下緣才有方向。" },
 };
 const lineAt = (a, b, k) => a.p + (b.p - a.p) * (k - a.i) / (b.i - a.i || 1);
-function chartPatterns(D, upto = D.length, w = 4) {
+// only：只找這幾種（先篩再去掉重疊，課程只看某幾種型態時不會被其他型態擠掉）
+// recent：只找最近 recent 根內完成的（逐日重算時用，省時間）
+function chartPatterns(D, upto = D.length, w = 4, only = null, recent = 0) {
   const z = zigzag(D, w, upto), found = [], near = (a, b, t) => Math.abs(a - b) / Math.max(a, b) < t;
   // 從 start 之後找第一根收盤突破 f(k) 的 K 棒
   const brk = (start, f, up) => { for (let k = start; k < Math.min(upto, start + 30); k++) { const v = f(k); if (up ? D[k].c > v : D[k].c < v) return k; } return null; };
@@ -252,18 +264,21 @@ function chartPatterns(D, upto = D.length, w = 4) {
       if (H.length === 2 && Lw.length === 2 && q[3].i - q[0].i >= 10) {
         const [h1, h2] = H, [l1, l2] = Lw, hFlat = near(h1.p, h2.p, 0.015), lFlat = near(l1.p, l2.p, 0.015), hDn = h2.p < h1.p * 0.985, lUp = l2.p > l1.p * 1.015, height = (Math.max(h1.p, h2.p) - Math.min(l1.p, l2.p)) / h1.p;
         let id = null;
+        const sh = (h2.p - h1.p) / (h2.i - h1.i || 1), sl = (l2.p - l1.p) / (l2.i - l1.i || 1), hUp = h2.p > h1.p * 1.015, lDn = l2.p < l1.p * 0.985;
         if (hFlat && lUp) id = "ascTri"; else if (hDn && lFlat) id = "descTri"; else if (hDn && lUp) id = "symTri"; else if (hFlat && lFlat && height > 0.04) id = "box";
+        else if (hUp && lUp && sl > sh * 1.15) id = "risingWedge"; else if (hDn && lDn && sh < sl * 1.15) id = "fallingWedge"; // 楔形：同方向但收斂
         if (id) {
           const up = x => lineAt(h1, h2, x), dn = x => lineAt(l1, l2, x);
           let k = null, dir = 0;
           for (let x = start; x < Math.min(upto, start + 25); x++) { if (D[x].c > up(x)) { k = x; dir = 1; break; } if (D[x].c < dn(x)) { k = x; dir = -1; break; } }
-          if (k != null) found.push({ id, pts: q, lines: [[h1, h2], [l1, l2]], k, dir, target: dir > 0 ? up(k) + (h1.p - l1.p) : dn(k) - (h1.p - l1.p) });
+          if (k != null && !(id === "risingWedge" && dir > 0) && !(id === "fallingWedge" && dir < 0)) found.push({ id, pts: q, lines: [[h1, h2], [l1, l2]], k, dir, target: dir > 0 ? up(k) + (h1.p - l1.p) : dn(k) - (h1.p - l1.p) });
         }
       }
     }
   }
-  // 重疊的只留一個（頭肩 > 雙重頂底 > 三角 > 箱型）
-  const rank = { hsTop: 0, hsBottom: 0, dTop: 1, dBottom: 1, ascTri: 2, descTri: 2, symTri: 2, box: 3 }, kept = [];
+  found.push(...extraPatterns(D, upto, z, recent)); if (only) found.splice(0, found.length, ...found.filter(f => only.includes(f.id)));
+  // 重疊的只留一個（島型、頭肩 > 雙重頂底、菱形 > 圓形、三角、楔形 > 旗形、箱型）
+  const rank = { islandTop: 0, islandBottom: 0, hsTop: 0, hsBottom: 0, dTop: 1, dBottom: 1, diamond: 1, roundTop: 2, roundBottom: 2, ascTri: 2, descTri: 2, symTri: 2, risingWedge: 2, fallingWedge: 2, bullFlag: 3, bearFlag: 3, box: 3 }, kept = [];
   found.sort((a, b) => rank[a.id] - rank[b.id] || a.k - b.k).forEach(f => {
     const s0 = f.pts[0].i, s1 = f.k;
     if (kept.some(g => Math.min(s1, g.k) - Math.max(s0, g.pts[0].i) > 0.5 * Math.min(s1 - s0, g.k - g.pts[0].i))) return;
@@ -272,8 +287,92 @@ function chartPatterns(D, upto = D.length, w = 4) {
   });
   return kept.sort((a, b) => a.k - b.k);
 }
-function chartPatternSVG(id) {
-  const P = CHART_PATTERNS[id], W = 132, H = 84, pad = 8, X = x => pad + x / 100 * (W - 2 * pad), Y = p => pad + (100 - p) / 100 * (H - 2 * pad);
+// 圓形頂底、菱形、島型反轉、旗形（三角、楔形在上面的四點比對裡）
+function extraPatterns(D, upto, z, recent = 0) {
+  const out = [], c = D.map(x => x.c), from = recent ? Math.max(0, upto - recent) : 0;
+  // 島型反轉：跳空 → 在缺口外盤 1～15 根 → 反方向跳空，中間那幾根被兩個缺口孤立
+  for (let i = Math.max(1, from); i < upto - 1; i++) {
+    const up = D[i].l > D[i - 1].h, dn = D[i].h < D[i - 1].l; if (!up && !dn) continue;
+    let ext = up ? Infinity : -Infinity;
+    for (let j = i; j < Math.min(upto - 1, i + 15); j++) {
+      ext = up ? Math.min(ext, D[j].l) : Math.max(ext, D[j].h);
+      const n = D[j + 1], g1 = up ? D[i - 1].h : D[i - 1].l;
+      if (up ? ext <= g1 : ext >= g1) break; // 左邊缺口被回補就不是島了
+      if (up ? n.h < ext : n.l > ext) {
+        const top = up, mid = j - Math.floor((j - i) / 2), hi = Math.max(...D.slice(i, j + 1).map(x => x.h)), lo = Math.min(...D.slice(i, j + 1).map(x => x.l));
+        out.push({ id: top ? "islandTop" : "islandBottom", pts: [{ i: i - 1, p: D[i - 1].c }, { i, p: top ? lo : hi }, { i: mid, p: top ? hi : lo }, { i: j, p: top ? lo : hi }],
+          lines: [[{ i: i - 1, p: g1 }, { i: j + 1, p: g1 }], [{ i: j, p: ext }, { i: j + 1, p: ext }]], seg: true, k: j + 1, target: top ? n.c - (hi - lo) : n.c + (hi - lo) });
+        break;
+      }
+    }
+  }
+  // 圓形頂底：一段 30～60 根的收盤用二次曲線擬合，彎得夠圓（R² ≥ 0.8）、轉折在中段、深度 ≥ 6%；之後收盤越過碗緣才算完成
+  for (const w of [36, 48, 60]) for (let e = Math.max(w, from); e <= upto - 3; e += 3) {
+    const a = e - w; let sx = 0, sx2 = 0, sx3 = 0, sx4 = 0, sy = 0, sxy = 0, sx2y = 0;
+    for (let t = 0; t < w; t++) { const y = c[a + t], t2 = t * t; sx += t; sx2 += t2; sx3 += t2 * t; sx4 += t2 * t2; sy += y; sxy += t * y; sx2y += t2 * y; }
+    const M = [[sx4, sx3, sx2], [sx3, sx2, sx], [sx2, sx, w]], v = [sx2y, sxy, sy], det = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    const d0 = det(M); if (!d0) continue; const col = k => det(M.map((r, x) => r.map((q, y) => (y === k ? v[x] : q)))) / d0, A = col(0), B = col(1), C = col(2);
+    const xv = -B / (2 * A); if (!(xv > w * 0.3 && xv < w * 0.7)) continue;
+    const f = t => A * t * t + B * t + C, mean = sy / w; let ssr = 0, sst = 0; for (let t = 0; t < w; t++) { ssr += (c[a + t] - f(t)) ** 2; sst += (c[a + t] - mean) ** 2; }
+    if (!sst || 1 - ssr / sst < 0.85) continue;
+    const bottom = A > 0, vtx = f(xv), rim = bottom ? Math.max(...D.slice(a, a + 6).map(x => x.h)) : Math.min(...D.slice(a, a + 6).map(x => x.l));
+    if (Math.abs(rim - vtx) / rim < 0.08) continue;
+    let k = null; for (let x = e; x < Math.min(upto, e + 20); x++) if (bottom ? c[x] > rim : c[x] < rim) { k = x; break; }
+    if (k == null) continue;
+    const pts = [0, 0.2, 0.4, 0.5, 0.6, 0.8, 1].map(r => { const t = Math.round(r * (w - 1)); return { i: a + t, p: f(t) }; });
+    out.push({ id: bottom ? "roundBottom" : "roundTop", pts, lines: [[{ i: a, p: rim }, { i: k, p: rim }]], seg: true, k, target: bottom ? rim + (rim - vtx) : rim - (vtx - rim) });
+  }
+  // 菱形：六個轉折，前半擴張（高點更高、低點更低）、後半收斂（高點更低、低點更高）；收盤突破後半的上緣或跌破下緣
+  for (let j = 5; j < z.length; j++) {
+    const s = z.slice(j - 5, j + 1), H = s.filter(t => t.type === "H"), L = s.filter(t => t.type === "L"); if (H.length !== 3 || L.length !== 3) continue;
+    const [h1, h2, h3] = H, [l1, l2, l3] = L;
+    if (!(h2.p > h1.p && l2.p < l1.p && h3.p < h2.p && l3.p > l2.p) || (h2.p - l2.p) / h2.p < 0.06) continue;
+    const upL = x => lineAt(h2, h3, x), dnL = x => lineAt(l2, l3, x), st = s[5].conf ?? s[5].i + 1; let k = null, dir = 0;
+    for (let x = st; x < Math.min(upto, st + 20); x++) { if (c[x] > upL(x)) { k = x; dir = 1; break; } if (c[x] < dnL(x)) { k = x; dir = -1; break; } }
+    if (k != null) out.push({ id: "diamond", pts: s, lines: [[h1, h2], [h2, h3], [l1, l2], [l2, l3]], seg: true, k, dir, target: dir > 0 ? upL(k) + (h2.p - l2.p) : dnL(k) - (h2.p - l2.p) });
+  }
+  // 旗形：10 根內急漲（跌）≥ 8% 的旗竿，接著 5～20 根小幅反向的整理（回檔不超過旗竿一半），再沿旗竿方向突破整理區
+  for (let i = Math.max(10, from); i < upto - 6; i++) {
+    for (const dir of [1, -1]) {
+      const base = dir > 0 ? Math.min(...c.slice(i - 10, i)) : Math.max(...c.slice(i - 10, i)), pole = (c[i] - base) * dir;
+      if (pole / base < 0.1 || (dir > 0 ? c[i] < Math.max(...c.slice(i - 10, i + 1)) : c[i] > Math.min(...c.slice(i - 10, i + 1)))) continue;
+      let hi = -Infinity, lo = Infinity, k = null, ok = true;
+      for (let x = i + 1; x < Math.min(upto, i + 22); x++) {
+        const n = x - i;
+        if (n >= 5 && (dir > 0 ? c[x] > hi : c[x] < lo)) { k = x; break; }
+        hi = Math.max(hi, D[x].h); lo = Math.min(lo, D[x].l);
+        if (dir > 0 ? lo < c[i] - pole * 0.45 || hi > D[i].h * 1.01 : hi > c[i] + pole * 0.45 || lo < D[i].l * 0.99) { ok = false; break; }
+      }
+      if (!ok || k == null) continue;
+      const a = { i: i + 1, p: dir > 0 ? D[i].h : D[i].l };
+      out.push({ id: dir > 0 ? "bullFlag" : "bearFlag", pts: [{ i: i - 10, p: base }, { i, p: c[i] }, { i: k - 1, p: c[k - 1] }], lines: [[{ i, p: dir > 0 ? hi : lo }, { i: k, p: dir > 0 ? hi : lo }]], seg: true, k, target: c[k] + pole * dir });
+      i = k; break;
+    }
+  }
+  return out.filter(f => f.k < upto);
+}
+// 缺口三種：突破缺口（離開整理區、帶量）、逃逸缺口（趨勢中段、又叫中繼／測量缺口）、竭盡缺口（漲跌一大段之後、很快被回補）
+function gapKinds(D, upto = D.length) {
+  const out = [], vma = sma(D.map(x => x.v || 0), 20);
+  for (let i = 21; i < upto; i++) {
+    const p = D[i - 1], x = D[i], up = x.l > p.h, dn = x.h < p.l; if (!up && !dn) continue;
+    const win = D.slice(i - 20, i), hi = Math.max(...win.map(y => y.h)), lo = Math.min(...win.map(y => y.l)), range = (hi - lo) / lo;
+    const run = (p.c - D[i - 20].c) / D[i - 20].c * (up ? 1 : -1); // 缺口之前 20 天順方向走了多少
+    let filled = null; for (let k = i + 1; k < Math.min(upto, i + 6); k++) if (up ? D[k].l <= p.h : D[k].h >= p.l) { filled = k; break; }
+    const vol = vma[i] ? x.v / vma[i] : 1;
+    let kind;
+    if (range < 0.12 && run < 0.06 && (up ? x.c > hi : x.c < lo)) kind = "突破缺口";
+    else if (run >= 0.15 && filled != null) kind = "竭盡缺口";
+    else if (run >= 0.05 && filled == null) kind = "逃逸缺口";
+    else continue;
+    const side = kind === "竭盡缺口" ? (up ? "sell" : "buy") : up ? "buy" : "sell";
+    out.push({ i: kind === "竭盡缺口" ? filled : i, gi: i, kind, side, label: kind + (kind === "竭盡缺口" ? "（已回補）" : vol >= 1.5 ? "・帶量" : ""), up,
+      shapes: [{ pts: [[i - 1, up ? p.h : p.l], [Math.min(upto - 1, i + 8), up ? p.h : p.l]], color: up ? "up" : "down", dash: [3, 3], width: 1.2 }, { pts: [[i - 1, up ? x.l : x.h], [Math.min(upto - 1, i + 8), up ? x.l : x.h]], color: up ? "up" : "down", dash: [3, 3], width: 1.2 }] });
+  }
+  return out;
+}
+function chartPatternSVG(id, defs = CHART_PATTERNS) {
+  const P = defs[id], W = 132, H = 84, pad = 8, X = x => pad + x / 100 * (W - 2 * pad), Y = p => pad + (100 - p) / 100 * (H - 2 * pad);
   const c = P.side === "buy" ? "var(--up)" : P.side === "sell" ? "var(--down)" : "var(--accent)";
   const ext = ([[x1, y1], [x2, y2]]) => { const x3 = 100, y3 = y1 + (y2 - y1) * (x3 - x1) / (x2 - x1); return `<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x3)}" y2="${Y(y3)}" stroke="var(--muted)" stroke-dasharray="3 3" stroke-width="1.2"/>`; };
   return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">${P.lines.map(ext).join("")}<polyline points="${P.pts.map(([x, p]) => `${X(x)},${Y(p)}`).join(" ")}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round"/></svg>`;
@@ -439,6 +538,117 @@ function zigzagShape(D, tags = true) {
   const z = zigzag(D, 3);
   return { pts: z.map(s => [s.i, s.p]), color: "s2", width: 1.4, tags: tags ? z.map(s => ({ i: s.i, p: s.p, text: s.label, below: s.type === "L" })) : [] };
 }
+/* ---------- 趨勢理論（華山論劍課程表的高級班） ---------- */
+// 三種趨勢：同一段走勢用大、中、小三種轉折視窗各連一條折線——主要趨勢（大波段）、修正趨勢（主要趨勢裡的回檔反彈）、小趨勢（幾天的波動）
+function trend3Shapes(D) {
+  const z = w => zigzag(D, w).map(s => [s.i, s.p]);
+  return [{ pts: z(2), color: "muted", width: 0.9, label: "小趨勢" }, { pts: z(5), color: "s2", width: 1.4, label: "修正趨勢" }, { pts: z(12), color: "accent", width: 2.2, label: "主要趨勢" }];
+}
+// 主要趨勢方向：大視窗折線最後兩個高點、低點的高低
+function primaryTrend(D, upto = D.length) {
+  const z = zigzag(D, 12, upto), H = z.filter(s => s.type === "H").slice(-2), L = z.filter(s => s.type === "L").slice(-2);
+  if (H.length < 2 || L.length < 2) return 0; return H[1].p > H[0].p && L[1].p > L[0].p ? 1 : H[1].p < H[0].p && L[1].p < L[0].p ? -1 : 0;
+}
+// 趨勢線：上升趨勢線連最近兩個墊高的轉折低點，下降趨勢線連最近兩個降低的轉折高點，往右延伸；收盤跌破（突破）就標出來
+function trendLines(D, upto = D.length) {
+  const z = zigzag(D, 5, upto), out = [], H = z.filter(s => s.type === "H"), L = z.filter(s => s.type === "L");
+  const pick = (S, up) => { for (let k = S.length - 1; k >= 1; k--) for (let j = k - 1; j >= Math.max(0, k - 3); j--) { const a = S[j], b = S[k]; if (up ? b.p <= a.p : b.p >= a.p) continue;
+    // 兩點之間不能有 K 棒收在線的另一邊
+    let ok = true; for (let x = a.i + 1; x < b.i; x++) if (up ? D[x].c < lineAt(a, b, x) : D[x].c > lineAt(a, b, x)) { ok = false; break; } if (ok) return [a, b]; } return null; };
+  for (const up of [true, false]) {
+    const ab = pick(up ? L : H, up); if (!ab) continue; const [a, b] = ab; let brk = null;
+    for (let x = b.conf ?? b.i + 1; x < upto; x++) if (up ? D[x].c < lineAt(a, b, x) * 0.995 : D[x].c > lineAt(a, b, x) * 1.005) { brk = x; break; }
+    const end = brk != null ? Math.min(upto - 1, brk + 3) : upto - 1;
+    out.push({ up, a, b, brk, shape: { pts: [[a.i, a.p], [end, lineAt(a, b, end)]], color: up ? "up" : "down", width: 1.6, label: up ? "上升趨勢線" : "下降趨勢線" } });
+  }
+  return out;
+}
+// 扇形理論：從波段起點畫第一條趨勢線，跌破後改連下一個回檔低點畫第二條（比較平），再跌破畫第三條；第三條也跌破，趨勢反轉
+function fanLines(D, upto = D.length) {
+  const n = upto, mid = Math.floor(n * 0.75); let lo = 0, hi = 0;
+  for (let i = 0; i < mid; i++) { if (D[i].l < D[lo].l) lo = i; if (D[i].h > D[hi].h) hi = i; }
+  // 起點：前四分之三裡的最低點（之後漲比較多）或最高點（之後跌比較多）
+  const up = (D[n - 1].c - D[lo].l) / D[lo].l >= (D[hi].h - D[n - 1].c) / D[hi].h, o = up ? { i: lo, p: D[lo].l } : { i: hi, p: D[hi].h };
+  const z = zigzag(D, 3, upto).filter(s => s.i > o.i + 2 && s.type === (up ? "L" : "H")), lines = [];
+  let cur = z[0]; if (!cur) return { up, o, lines };
+  while (cur && lines.length < 3) {
+    if (up ? cur.p <= o.p : cur.p >= o.p) break;
+    let brk = null; for (let x = (cur.conf ?? cur.i + 1); x < upto; x++) if (up ? D[x].c < lineAt(o, cur, x) : D[x].c > lineAt(o, cur, x)) { brk = x; break; }
+    lines.push({ a: o, b: cur, brk });
+    if (brk == null) break;
+    cur = z.find(s => s.i > brk && (up ? s.p > o.p : s.p < o.p));
+  }
+  return { up, o, lines };
+}
+function fanShapes(F, n) {
+  return F.lines.map((L, k) => { const end = Math.min(n - 1, L.brk != null ? L.brk + 4 : n - 1); return { pts: [[L.a.i, L.a.p], [end, lineAt(L.a, L.b, end)]], color: ["accent", "s2", "down"][k], width: 1.5, ...(k ? { dash: [6, 4] } : {}), label: `扇形第 ${k + 1} 線` }; });
+}
+function fanSignals(D) {
+  const F = fanLines(D);
+  return F.lines.map((L, k) => ({ L, k })).filter(x => x.L.brk != null).map(({ L, k }) => ({ i: L.brk, side: F.up ? "sell" : "buy", note: k < 2, label: `${F.up ? "跌破" : "突破"}扇形第 ${k + 1} 線${k === 2 ? "：趨勢反轉" : ""}` }));
+}
+
+// 波浪理論：從明顯的低點（或高點）開始，用轉折點數出 1～5 波推動與 A、B、C 修正，並檢查三條鐵律：
+// 第 2 波不跌破第 1 波起點、第 3 波不是 1、3、5 裡最短的、第 4 波不跌進第 1 波的價格區
+function elliottWaves(D, upto = D.length) {
+  let best = null;
+  for (const w of [3, 4, 5, 6, 8]) {
+    const z = zigzag(D, w, upto);
+    for (let s = 0; s + 5 < z.length; s++) {
+      const p = z.slice(s, s + 9), up = p[0].type === "L", sg = up ? 1 : -1, v = k => p[k].p * sg;
+      const len = k => Math.abs(p[k + 1].p - p[k].p);
+      if (!(v(2) > v(0) && v(3) > v(1) && v(4) > v(1) && v(5) > v(3))) continue; // 2 不破起點、3 創新高、4 不進第 1 波、5 再創新高
+      if (len(2) < Math.min(len(0), len(4))) continue; // 第 3 波不是最短
+      const score = p.length * 10 + (len(2) >= Math.max(len(0), len(4)) ? 5 : 0) + p[5].i / upto;
+      if (!best || score > best.score) best = { up, pts: p, w, score };
+    }
+  }
+  return best;
+}
+const WAVE_TXT = ["0", "1", "2", "3", "4", "5", "A", "B", "C"];
+function waveShape(D) {
+  const E = elliottWaves(D); if (!E) return null;
+  return { pts: E.pts.map(s => [s.i, s.p]), color: "accent", width: 1.6, tags: E.pts.map((s, k) => ({ i: s.i, p: s.p, text: k ? WAVE_TXT[k] : "起", below: s.type === "L" })) };
+}
+function waveSignals(D) {
+  const E = elliottWaves(D); if (!E) return []; const P = E.pts, o = [], buy = E.up ? "buy" : "sell", sell = E.up ? "sell" : "buy";
+  if (P[2]) o.push({ i: P[2].conf ?? P[2].i, side: buy, label: "第 2 波結束：第 3 波起點" });
+  if (P[4]) o.push({ i: P[4].conf ?? P[4].i, side: buy, label: "第 4 波結束：第 5 波起點", note: true });
+  if (P[5]) o.push({ i: P[5].conf ?? P[5].i, side: sell, label: "第 5 波結束：留意修正" });
+  return o.filter(m => m.i < D.length);
+}
+// 逆時鐘曲線：橫軸 24 日均量、縱軸 24 日均價，連起來看量價關係；依兩者 5 天的變化分成八個階段
+const CCW_PHASES = [["陽轉", "量增價平", "buy"], ["買進", "量增價漲", "buy"], ["加碼", "量平價漲", "buy"], ["警戒", "量縮價漲", "sell"], ["陰轉", "量縮價平", "sell"], ["賣出", "量縮價跌", "sell"], ["觀望", "量平價跌", "sell"], ["止跌", "量增價跌", "buy"]];
+function ccwSeries(D, n = 24, look = 5) {
+  const pm = sma(D.map(x => x.c), n), vm = sma(D.map(x => x.v || 0), n), out = [];
+  for (let i = 0; i < D.length; i++) {
+    if (pm[i] == null || pm[i - look] == null || !vm[i - look]) { out.push(null); continue; }
+    const dp = (pm[i] - pm[i - look]) / pm[i - look], dv = (vm[i] - vm[i - look]) / vm[i - look], P = Math.abs(dp) < 0.004 ? 0 : Math.sign(dp), V = Math.abs(dv) < 0.03 ? 0 : Math.sign(dv);
+    const ph = V > 0 && P === 0 ? 0 : V > 0 && P > 0 ? 1 : V === 0 && P > 0 ? 2 : V < 0 && P > 0 ? 3 : V < 0 && P === 0 ? 4 : V < 0 && P < 0 ? 5 : V === 0 && P < 0 ? 6 : V > 0 && P < 0 ? 7 : null;
+    out.push({ i, p: pm[i], v: vm[i], ph });
+  }
+  return out;
+}
+// K 線上標出逆時鐘曲線進入「買進」「賣出」「陽轉」「陰轉」的那天（同一階段至少維持兩天）
+function ccwSignals(D) {
+  const S = ccwSeries(D), o = []; let last = null;
+  for (let i = 1; i < S.length; i++) { const a = S[i], b = S[i - 1]; if (!a || !b || a.ph == null || a.ph !== b.ph || a.ph === last) continue; last = a.ph;
+    if ([0, 1, 4, 5].includes(a.ph)) { const [t, d, side] = CCW_PHASES[a.ph]; o.push({ i, side, label: `${t}（${d}）`, note: a.ph === 0 || a.ph === 4 }); } }
+  return o;
+}
+function ccwSVG(D, W = 340, H = 240) {
+  const S = ccwSeries(D).filter(Boolean).slice(-90); if (S.length < 5) return `<p class="note">資料不夠畫逆時鐘曲線（要 30 根以上）。</p>`;
+  const pad = 34, xs = S.map(s => s.v), ys = S.map(s => s.p), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const X = v => pad + (v - x0) / (x1 - x0 || 1) * (W - pad - 10), Y = p => H - pad + 6 - (p - y0) / (y1 - y0 || 1) * (H - pad - 16);
+  const pts = S.map(s => `${X(s.v).toFixed(1)},${Y(s.p).toFixed(1)}`).join(" "), last = S[S.length - 1], ph = CCW_PHASES[last.ph] || ["—", "—", ""];
+  const dots = S.filter((_, k) => k % 10 === 0 || k === S.length - 1).map(s => `<circle cx="${X(s.v)}" cy="${Y(s.p)}" r="2.4" fill="var(--muted)"/>`).join("");
+  return `<figure class="ccw"><svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" role="img" aria-label="逆時鐘曲線">
+    <line x1="${pad}" y1="${H - pad + 6}" x2="${W - 8}" y2="${H - pad + 6}" stroke="var(--line)"/><line x1="${pad}" y1="8" x2="${pad}" y2="${H - pad + 6}" stroke="var(--line)"/>
+    <text x="${W - 8}" y="${H - 8}" text-anchor="end" font-size="11" fill="var(--muted)">24 日均量 →</text><text x="${pad - 4}" y="14" text-anchor="end" font-size="11" fill="var(--muted)" transform="rotate(-90 ${pad - 20} 14)">24 日均價 →</text>
+    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linejoin="round"/>${dots}
+    <circle cx="${X(S[0].v)}" cy="${Y(S[0].p)}" r="4" fill="none" stroke="var(--muted)"/><circle cx="${X(last.v)}" cy="${Y(last.p)}" r="5" fill="var(${ph[2] === "buy" ? "--up" : "--down"})"/>
+  </svg><figcaption class="note">空心圈是起點、實心圈是最後一天（近 90 天）。最後一天在「${ph[0]}」階段（${ph[1]}）。</figcaption></figure>`;
+}
 // 聰明錢區塊：訂單塊、公平價值缺口與 50% 均衡線
 function smcExtra(D) {
   const ms = marketStructure(D), z = ms.swings, n = D.length;
@@ -451,7 +661,8 @@ function smcExtra(D) {
 // 可疊在 K 線上的分析（看盤、截圖練習共用），每一項都對應一堂課；聰明錢拆成五項可以分開看
 const OVERLAY_ITEMS = [{ id: "sr", label: "支撐壓力" }, { id: "fib", label: "斐波那契" }, { id: "zz", label: "道氏結構" },
   { id: "smcS", label: "BOS／CHoCH" }, { id: "smcL", label: "流動性" }, { id: "smcOB", label: "訂單塊" }, { id: "smcFVG", label: "FVG" }, { id: "smcPD", label: "溢價折價" },
-  { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }, { id: "div", label: "背離" }, { id: "volx", label: "爆量" }];
+  { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }, { id: "gap", label: "缺口種類" }, { id: "div", label: "背離" }, { id: "volx", label: "爆量" },
+  { id: "trend3", label: "三種趨勢" }, { id: "tl", label: "趨勢線" }, { id: "fan", label: "扇形" }, { id: "wave", label: "波浪" }, { id: "ccw", label: "逆時鐘" }];
 // 舊版的「聰明錢」一顆按鈕 → 拆開後的四項（在建立指標列之前把存好的選擇換掉）
 function overlayMigrate(key) {
   const v = store.get("ind:" + key, null); if (!Array.isArray(v) || !v.includes("smc")) return;
@@ -473,6 +684,12 @@ function overlayBuild(D, I, has, opt = {}) {
   if (on("cpat")) safe(() => ex.markers.push(...Signals.chartPat(D, I)));
   if (on("div")) safe(() => ex.markers.push(...Signals.div(D, I, "rsi"), ...Signals.div(D, I, "macd")));
   if (on("volx")) safe(() => ex.markers.push(...Signals.vol(D, I)));
+  if (on("gap")) safe(() => ex.markers.push(...Signals.gaps(D, I)));
+  if (on("trend3")) safe(() => ex.shapes.push(...trend3Shapes(D)));
+  if (on("tl")) safe(() => trendLines(D).forEach(t => { ex.shapes.push(t.shape); if (t.brk != null) ex.markers.push({ i: t.brk, side: t.up ? "sell" : "buy", label: t.up ? "跌破上升趨勢線" : "突破下降趨勢線" }); }));
+  if (on("fan")) safe(() => { ex.shapes.push(...fanShapes(fanLines(D), D.length)); ex.markers.push(...fanSignals(D)); });
+  if (on("wave")) safe(() => { const w = waveShape(D); if (w) ex.shapes.push(w); ex.markers.push(...waveSignals(D)); });
+  if (on("ccw")) safe(() => ex.markers.push(...ccwSignals(D)));
   return ex;
 }
 
@@ -718,7 +935,26 @@ const STRAT_DEFS = {
   vwap: { name: "VWAP 站上／跌破", desc: "收盤站上 VWAP 買進、跌破賣出", params: [], fn: (D, I) => Signals.vwap(D, I) },
   candle: { name: "K 線型態", desc: "錘子、吞噬、晨星等反轉型態", params: [], fn: (D, I) => Signals.candle(D, I) },
   div: { name: "RSI／MACD 背離", desc: "價格創新低但指標沒有（底背離）買進；反之賣出", params: [], fn: (D, I) => [...Signals.div(D, I, "rsi"), ...Signals.div(D, I, "macd")] },
-  pat: { name: "型態學突破", desc: "頭肩、M 頭、W 底、三角形突破", params: [], fn: (D, I) => Signals.chartPatLive(D, I) },
+  mtm: { name: "MTM 動量", desc: "MTM 由負轉正（上穿零軸）買進、由正轉負賣出；也可以改用 MTM 和它的均線交叉",
+    params: [["n", "週期", 3, 40, 1, 10], ["m", "均線（0＝看零軸）", 0, 30, 1, 0], ["hold", "確認天數", 1, 5, 1, 3]],
+    fn: (D, I, p) => { const { mtm, ma } = mtmCalc(I.c, p.n, Math.max(1, p.m)), ref = p.m ? ma : mtm.map(v => (v == null ? null : 0)); return crossHold(mtm, ref, Math.max(1, p.hold), p.m ? "MTM上穿均線" : "MTM轉正", p.m ? "MTM跌破均線" : "MTM轉負"); } },
+  dmi: { name: "DMI 趨向", desc: "+DI 上穿 −DI 買進、下穿賣出，ADX 要高於門檻（有趨勢）才算",
+    params: [["n", "週期", 5, 40, 1, 14], ["adx", "ADX 門檻", 0, 50, 1, 20]],
+    fn: (D, I, p) => { const { pdi, mdi, adx } = dmiCalc(D, p.n); return crossSigs(pdi, mdi, "+DI上穿", "+DI下穿", (s, i) => (adx[i] ?? 0) >= p.adx); } },
+  psy: { name: "PSY 心理線", desc: "PSY 由低檔回升買進、由高檔跌回賣出（人氣過冷買、過熱賣）",
+    params: [["n", "週期", 5, 30, 1, 12], ["lo", "低檔", 5, 45, 1, 25], ["hi", "高檔", 55, 95, 1, 75]],
+    fn: (D, I, p) => lvlSigs(psyCalc(I.c, p.n), p.lo, p.hi, "PSY") },
+  arbr: { name: "AR 人氣", desc: "AR 由低檔回升買進、由高檔跌回賣出",
+    params: [["n", "週期", 10, 52, 1, 26], ["lo", "低檔", 30, 100, 1, 60], ["hi", "高檔", 100, 250, 1, 150]],
+    fn: (D, I, p) => lvlSigs(arbrCalc(D, p.n).ar, p.lo, p.hi, "AR") },
+  obv: { name: "OBV 能量潮", desc: "OBV 上穿自己的均線買進（量能轉強）、跌破賣出",
+    params: [["m", "均線", 5, 60, 1, 20], ["hold", "確認天數", 1, 5, 1, 3]],
+    fn: (D, I, p) => { const o = obvCalc(D); return crossHold(o, smaN(o, p.m), p.hold, "OBV站上均線", "OBV跌破均線"); } },
+  vr: { name: "VR 成交量比率", desc: "VR 由低檔（量能冷清）回升買進、由高檔（過熱）跌回賣出",
+    params: [["n", "週期", 10, 52, 1, 26], ["lo", "低檔", 30, 100, 1, 70], ["hi", "高檔", 150, 600, 10, 450]],
+    fn: (D, I, p) => lvlSigs(vrCalc(D, p.n), p.lo, p.hi, "VR") },
+  ccw: { name: "逆時鐘曲線", desc: "量價進入「陽轉、買進」階段買進，進入「陰轉、賣出」階段賣出", params: [], fn: D => ccwSignals(D) },
+  pat: { name: "型態學突破", desc: "頭肩、M 頭、W 底、三角、楔形、旗形、圓形、菱形、島型反轉", params: [], fn: (D, I) => Signals.chartPatLive(D, I) },
   choch: { name: "聰明錢 CHoCH", desc: "市場結構轉變", params: [], fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") },
   bos: { name: "道氏結構突破", desc: "突破前高、跌破前低", params: [], fn: (D, I) => Signals.structure(D, I, "dow") },
 };
