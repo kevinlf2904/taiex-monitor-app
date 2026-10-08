@@ -100,6 +100,89 @@ function indicators(D) {
 }
 
 
+/* ---------- 更多副圖指標（華山論劍課程表的中級班：指標學） ----------
+   每個指標都算成一個「自訂副圖」（{ custom: { title, lines, names, levels… } }），K 線圖照一般副圖畫；
+   sigs 是這個指標自己的買賣訊號（例如 PSY 脫離 25／75），會和 KD、MACD 一樣標回主圖（「對應」功能）。
+   大盤寬度指標（ADR、OBOS、ADL）要每天的上漲、下跌家數（D[i].adv、D[i].dec），只有加權／櫃買指數才有。 */
+const nz = v => (v == null || !isFinite(v) ? null : v);
+// MTM 動量：今天收盤減 n 天前收盤；MA 是 MTM 的 m 日平均
+function mtmCalc(c, n = 10, m = 10) { const v = c.map((x, i) => (i >= n ? x - c[i - n] : null)); return { mtm: v, ma: smaN(v, m) }; }
+// 有空值的平均（前面還沒有值的部分跳過）
+function smaN(a, n) { const o = Array(a.length).fill(null); let s = 0, k = 0, q = []; for (let i = 0; i < a.length; i++) { const v = a[i]; if (v == null) continue; q.push(v); s += v; if (q.length > n) s -= q.shift(); if (q.length === n) o[i] = s / n; } return o; }
+// DMI 趨向指標（Wilder，14 日）：+DI、−DI 比較上漲與下跌的力道，ADX 看趨勢強不強（不分方向）
+function dmiCalc(D, n = 14) {
+  const N = D.length, pdi = Array(N).fill(null), mdi = Array(N).fill(null), adx = Array(N).fill(null);
+  let tr = 0, pd = 0, md = 0, dxs = [], ax = null;
+  for (let i = 1; i < N; i++) {
+    const a = D[i], b = D[i - 1], up = a.h - b.h, dn = b.l - a.l, p = up > dn && up > 0 ? up : 0, m = dn > up && dn > 0 ? dn : 0, t = Math.max(a.h - a.l, Math.abs(a.h - b.c), Math.abs(a.l - b.c));
+    if (i <= n) { tr += t; pd += p; md += m; } else { tr = tr - tr / n + t; pd = pd - pd / n + p; md = md - md / n + m; }
+    if (i < n || !tr) continue;
+    pdi[i] = (100 * pd) / tr; mdi[i] = (100 * md) / tr;
+    const dx = pdi[i] + mdi[i] ? (100 * Math.abs(pdi[i] - mdi[i])) / (pdi[i] + mdi[i]) : 0;
+    if (ax == null) { dxs.push(dx); if (dxs.length === n) ax = dxs.reduce((x, y) => x + y, 0) / n; } else ax = (ax * (n - 1) + dx) / n;
+    if (ax != null) adx[i] = ax;
+  }
+  return { pdi, mdi, adx };
+}
+// PSY 心理線：最近 n 天裡收漲的天數比例（%）
+function psyCalc(c, n = 12) { return c.map((_, i) => { if (i < n) return null; let u = 0; for (let k = i - n + 1; k <= i; k++) if (c[k] > c[k - 1]) u++; return (u / n) * 100; }); }
+// AR 人氣指標：n 日（最高−開盤）合計 ÷（開盤−最低）合計 × 100；BR 買賣意願：n 日（最高−昨收）合計 ÷（昨收−最低）合計 × 100（負的算 0）
+function arbrCalc(D, n = 26) {
+  const N = D.length, ar = Array(N).fill(null), br = Array(N).fill(null);
+  for (let i = n; i < N; i++) { let a = 0, b = 0, c = 0, d = 0; for (let k = i - n + 1; k <= i; k++) { const x = D[k], pc = D[k - 1].c; a += x.h - x.o; b += x.o - x.l; c += Math.max(0, x.h - pc); d += Math.max(0, pc - x.l); } ar[i] = b ? (a / b) * 100 : null; br[i] = d ? (c / d) * 100 : null; }
+  return { ar, br };
+}
+// OBV 能量潮：收漲加上當天成交量、收跌減掉，累計起來
+function obvCalc(D) { let s = 0; return D.map((x, i) => (i ? (s += x.c > D[i - 1].c ? x.v || 0 : x.c < D[i - 1].c ? -(x.v || 0) : 0) : (s = 0))); }
+// VR 成交量比率：n 日內（上漲日的量＋平盤日量的一半）÷（下跌日的量＋平盤日量的一半）× 100
+function vrCalc(D, n = 26) {
+  return D.map((_, i) => { if (i < n) return null; let u = 0, d = 0, f = 0; for (let k = i - n + 1; k <= i; k++) { const v = D[k].v || 0; if (D[k].c > D[k - 1].c) u += v; else if (D[k].c < D[k - 1].c) d += v; else f += v; } return d + f / 2 ? ((u + f / 2) / (d + f / 2)) * 100 : null; });
+}
+// 大盤寬度：ADR 漲跌比（n 日上漲家數合計 ÷ 下跌家數合計）、OBOS 超買超賣（n 日（上漲−下跌）家數合計）、ADL 騰落線（每天上漲−下跌家數一路累計）
+function breadthCalc(D, n = 10) {
+  const N = D.length, adr = Array(N).fill(null), obos = Array(N).fill(null), adl = Array(N).fill(null); let cum = 0, any = false;
+  for (let i = 0; i < N; i++) {
+    const x = D[i]; if (x.adv == null || x.dec == null) { cum = null; continue; } any = true; cum = (cum ?? 0) + x.adv - x.dec; adl[i] = cum;
+    let a = 0, d = 0, ok = i >= n - 1; for (let k = i - n + 1; ok && k <= i; k++) { if (D[k].adv == null) { ok = false; break; } a += D[k].adv; d += D[k].dec; }
+    if (ok) { adr[i] = d ? a / d : null; obos[i] = a - d; }
+  }
+  return any ? { adr, obos, adl } : null;
+}
+// TAPI 每一點指數的成交值：大盤成交值（億元）÷ 加權指數
+function tapiCalc(D) { return D.map(x => (x.v && x.c ? x.v / x.c : null)); }
+// 一條線穿越門檻（脫離超買超賣）、兩條線交叉 → 訊號
+function lvlSigs(a, lo, hi, name, n = a.length) { const o = []; for (let i = 1; i < n; i++) { if (a[i] == null || a[i - 1] == null) continue; if (lo != null && a[i - 1] < lo && a[i] >= lo) o.push({ i, side: "buy", label: `${name}回升 ${lo}`, v: a[i] }); else if (hi != null && a[i - 1] > hi && a[i] <= hi) o.push({ i, side: "sell", label: `${name}跌破 ${hi}`, v: a[i] }); } return o; }
+function crossSigs(a, b, up, dn, keep = () => true) { const o = []; for (let i = 1; i < a.length; i++) { if ([a[i], b[i], a[i - 1], b[i - 1]].some(v => v == null)) continue; if (a[i - 1] <= b[i - 1] && a[i] > b[i] && keep("buy", i)) o.push({ i, side: "buy", label: up, v: a[i] }); else if (a[i - 1] >= b[i - 1] && a[i] < b[i] && keep("sell", i)) o.push({ i, side: "sell", label: dn, v: a[i] }); } return o; }
+// 交叉要維持 hold 天才算（在確認那天標出來，不偷看之後的資料），減少來回穿越的雜訊
+function crossHold(a, b, hold, up, dn) {
+  const o = []; let st = 0, run = 0, cur = 0;
+  for (let i = 0; i < a.length; i++) { if (a[i] == null || b[i] == null) continue; const sg = Math.sign(a[i] - b[i]) || cur; run = sg === cur ? run + 1 : 1; cur = sg;
+    if (!st) { if (run >= hold) st = sg; continue; }
+    if (run === hold && sg !== st) { st = sg; o.push({ i, side: sg > 0 ? "buy" : "sell", label: sg > 0 ? up : dn, v: a[i] }); } }
+  return o;
+}
+const fmtBig = v => (v == null ? "—" : Math.abs(v) >= 1e8 ? (v / 1e8).toFixed(2) + "億" : Math.abs(v) >= 1e4 ? (v / 1e4).toFixed(1) + "萬" : fmtN(v));
+// id → { label（指標列上的名字）, kind（訊號種類）, make(D, I) → custom 副圖 }
+const SUBX = {
+  mtm: { label: "MTM", kind: "mtm", make: (D, I) => { const { mtm, ma } = mtmCalc(I.c); return { title: "MTM 10・MA 10", lines: [mtm, ma], names: ["MTM", "MA"], levels: [0], sigs: crossHold(mtm, mtm.map(v => (v == null ? null : 0)), 3, "MTM轉正", "MTM轉負") }; } },
+  dmi: { label: "DMI", kind: "dmi", make: (D, I) => { const { pdi, mdi, adx } = dmiCalc(D); return { title: "DMI 14", lines: [pdi, mdi, adx], names: ["+DI", "−DI", "ADX"], levels: [20, 40], sigs: crossSigs(pdi, mdi, "+DI上穿−DI", "+DI跌破−DI", (s, i) => (adx[i] ?? 0) >= 20) }; } },
+  psy: { label: "PSY", kind: "psy", make: (D, I) => { const p = psyCalc(I.c); return { title: "PSY 12・MA 6", lines: [p, smaN(p, 6)], names: ["PSY", "MA"], levels: [25, 75], range: [0, 100], sigs: lvlSigs(p, 25, 75, "PSY") }; } },
+  arbr: { label: "AR／BR", kind: "arbr", make: D => { const { ar, br } = arbrCalc(D); return { title: "AR・BR 26", lines: [ar, br], names: ["AR", "BR"], levels: [50, 100, 150], sigs: lvlSigs(ar, 60, 150, "AR") }; } },
+  obv: { label: "OBV", kind: "obv", make: D => { const o = obvCalc(D), m = smaN(o, 20); return { title: "OBV・MA 20", lines: [o, m], names: ["OBV", "MA20"], fmt: fmtBig, sigs: crossHold(o, m, 3, "OBV站上均線", "OBV跌破均線") }; } },
+  vr: { label: "VR", kind: "vr", make: D => { const v = vrCalc(D); return { title: "VR 26", lines: [v, smaN(v, 6)], names: ["VR", "MA"], levels: [70, 150, 450], sigs: lvlSigs(v, 70, 450, "VR") }; } },
+  adr: { label: "ADR", kind: "adr", breadth: true, make: D => { const B = breadthCalc(D); if (!B) return null; return { title: "ADR 漲跌比 10", lines: [B.adr, smaN(B.adr, 6)], names: ["ADR", "MA"], levels: [0.5, 1, 1.5], sigs: lvlSigs(B.adr, 0.5, 1.5, "ADR") }; } },
+  obos: { label: "OBOS", kind: "obos", breadth: true, make: D => { const B = breadthCalc(D); if (!B) return null; return { title: "OBOS 超買超賣 10", lines: [B.obos, smaN(B.obos, 6)], names: ["OBOS", "MA"], levels: [0], sigs: crossHold(B.obos, B.obos.map(v => (v == null ? null : 0)), 5, "OBOS轉正", "OBOS轉負") }; } },
+  adl: { label: "ADL", kind: "adl", breadth: true, make: D => { const B = breadthCalc(D); if (!B) return null; const m = smaN(B.adl, 10); return { title: "ADL 騰落線・MA 10", lines: [B.adl, m], names: ["ADL", "MA10"], sigs: crossHold(B.adl, m, 5, "ADL站上均線", "ADL跌破均線") }; } },
+  tapi: { label: "TAPI", kind: "tapi", index: true, make: D => { const t = tapiCalc(D), m = smaN(t, 10); return { title: "TAPI 每點成交值（億元）・MA 10", lines: [t, m], names: ["TAPI", "MA10"], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: [] }; } },
+};
+// 字串副圖 → 自訂副圖（同一組資料只算一次）；做不出來（例如個股沒有漲跌家數）時給一個只有標題的空副圖
+function subxMake(id, D, I) {
+  const X = SUBX[id]; if (!X) return null; const memo = (I && (I._subx ||= {})) || {}; if (memo[id] !== undefined) return memo[id];
+  let C = null; try { C = X.make(D, I || indicators(D)); } catch {}
+  return (memo[id] = { id, custom: C ? { ...C, kind: X.kind } : { title: `${X.label}：${X.breadth ? "只有加權、櫃買指數有（要每天的漲跌家數）" : "資料不夠"}`, lines: [], names: [], range: [0, 1], kind: X.kind, sigs: [] } });
+}
+const SUBX_ITEMS = Object.entries(SUBX).map(([id, x]) => ({ id, label: x.label }));
+
 /* ================= 圖表 ================= */
 /* ---------- 技術指標開關 ----------
    一排可切換的小籤，分成「主圖」「副圖」兩組；狀態記在瀏覽器裡，下次打開還在。 */
@@ -120,9 +203,9 @@ function indicatorBar(host, key, groups, defaults, onChange) {
 const MAIN_ITEMS = [{ id: "ma5", label: "MA5", color: "--s1" }, { id: "ma10", label: "MA10", color: "--ma10" }, { id: "ma20", label: "MA20", color: "--s2" }, { id: "ma60", label: "MA60", color: "--s3" }, { id: "boll", label: "布林" }, { id: "vwap", label: "VWAP", color: "--vwap" }, { id: "vp", label: "籌碼分佈" }];
 // 主圖選項：均線、布林、VWAP、籌碼分佈（Volume Profile）
 const mainOpts = bar => ({ ma: maFrom(bar), boll: bar.has("boll"), vwap: bar.has("vwap"), vp: bar.has("vp") });
-const SUB_ITEMS = [{ id: "vol", label: "成交量" }, { id: "kd", label: "KD" }, { id: "rsi", label: "RSI" }, { id: "macd", label: "MACD" }, { id: "wr", label: "威廉" }];
+const SUB_ITEMS = [{ id: "vol", label: "成交量" }, { id: "kd", label: "KD" }, { id: "rsi", label: "RSI" }, { id: "macd", label: "MACD" }, { id: "wr", label: "威廉" }, ...SUBX_ITEMS];
 const maFrom = bar => [5, 10, 20, 60].filter(p => bar.has("ma" + p));
-const subsFrom = (bar, ids = ["kd", "rsi", "macd", "wr", "inout"]) => ids.filter(id => bar.has(id));
+const subsFrom = (bar, ids = ["kd", "rsi", "macd", "wr", "inout", ...Object.keys(SUBX)]) => ids.filter(id => bar.has(id));
 
 // 副圖指標發出的訊號：{ i, si（第幾個副圖）, side, label, v（副圖上的位置） }
 // strong：KD 只留低檔（D < 20）的金叉、高檔（D > 80）的死叉（和 KD 課程、策略用的門檻一致）；MACD 只留零軸上方的金叉、零軸下方的死叉（順勢的交叉）
@@ -135,7 +218,8 @@ function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
     if (a[i - 1] < lo && a[i] >= lo) out.push({ i, si, side: "buy", label: name + "脫離超賣", v: a[i] });
     else if (a[i - 1] > hi && a[i] <= hi) out.push({ i, si, side: "sell", label: name + "脫離超買", v: a[i] }); } };
   subs.forEach((S, si) => {
-    if (kinds[typeof S === "string" ? S : "custom"] === false) return;
+    if (kinds[typeof S === "string" ? S : S?.custom?.kind || "custom"] === false) return;
+    if (S && S.custom && S.custom.sigs) { S.custom.sigs.forEach(g => { if (g.i < n && !D[g.i]?.sim) out.push({ ...g, si }); }); return; }
     if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉", st("kd") ? (side, d) => (side === "buy" ? d < 20 : d > 80) : undefined);
     else if (S === "macd") cross(I.macd.dif, I.macd.sig, si, "MACD金叉", "MACD死叉", st("macd") ? (side, m) => (side === "buy" ? m > 0 : m < 0) : undefined);
     else if (S === "rsi") exit(I.rsi, 30, 70, si, "RSI");
@@ -289,12 +373,12 @@ class Chart {
   static prefs = { h: [1, 1.5, 2, 2.5].includes(+store.get("chartH", 1)) ? +store.get("chartH", 1) : 1, log: !!store.get("chartLog", false),
     sh: [1, 1.5, 2].includes(+store.get("chartSubH", 1)) ? +store.get("chartSubH", 1) : 1, fit: !!store.get("chartSubFit", false), sig: store.get("chartSubSig", true) !== false,
     sigStrong: store.get("chartSigStrong", true) !== false, mk: store.get("chartMk", "full") === "icon" ? "icon" : "full", kt: ["candle", "hollow", "ohlc", "line", "area"].includes(store.get("chartKt", "candle")) ? store.get("chartKt", "candle") : "candle",
-    sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, ...(store.get("chartSigKinds", null) || {}) },
+    sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, mtm: true, dmi: true, psy: true, arbr: true, obv: true, vr: true, adr: true, obos: true, adl: true, ...(store.get("chartSigKinds", null) || {}) },
     // 「只看重點」每個副圖各自開關（舊版是全部共用一個 sigStrong）
     sigStrongK: { kd: store.get("chartSigStrong", true) !== false, macd: store.get("chartSigStrong", true) !== false, ...(store.get("chartSigStrongK", null) || {}) } };
   // 某個副圖要不要標訊號：「金叉死叉」或「只看重點」任一個開著就標；「只看重點」開著時只標重點交叉
   static sigShow(k) { const P = Chart.prefs; return P.sig && (P.sigKinds[k] !== false || !!P.sigStrongK[k]); }
-  static SIG_KINDS = [["kd", "KD 交叉"], ["macd", "MACD 交叉"], ["rsi", "RSI 30／70"], ["wr", "威廉 −80／−20"], ["custom", "截圖副圖交叉"]];
+  static SIG_KINDS = [["kd", "KD 交叉"], ["macd", "MACD 交叉"], ["rsi", "RSI 30／70"], ["wr", "威廉 −80／−20"], ["mtm", "MTM 零軸"], ["dmi", "DMI 交叉"], ["psy", "PSY 25／75"], ["arbr", "AR 60／150"], ["obv", "OBV 均線"], ["vr", "VR 70／450"], ["adr", "ADR 0.5／1.5"], ["obos", "OBOS 零軸"], ["adl", "ADL 均線"], ["custom", "截圖副圖交叉"]];
   // 高度、對數座標、副圖貼合是全站共用的偏好：改了以後所有圖表一起重畫
   static setPref(k, v) { Chart.prefs[k] = v; store.set(Chart.PREF_KEYS[k], v); Chart.all.forEach(c => { c.syncBar(); c.draw(); if (!c.pop.hidden) c.renderPop(); }); }
   paneZoom(key) { return this.pz[key] || { z: 1, off: 0 }; }
@@ -357,7 +441,7 @@ class Chart {
     const W = this.host.clientWidth; if (!W) return;
     const narrow = W < 560;
     // 副圖可以疊好幾個：o.subs = ["kd", "macd", { custom }]；舊的 o.sub 也支援
-    const subs = (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean);
+    const subs = this.subsN = (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean).map(S => (typeof S === "string" && SUBX[S] ? subxMake(S, D, I) : S)).filter(Boolean);
     const mainH = Math.round((narrow ? 230 : 300) * Chart.prefs.h), volH = o.noVol ? 0 : Math.round((narrow ? 52 : 66) * Chart.prefs.sh), subH = Math.round((subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112)) * Chart.prefs.sh), gap = 10, axisH = 20;
     const H = mainH + gap + volH + subs.length * (gap + subH) + axisH + 8;
     if (this.canvas.width !== Math.round(W * dpr) || this.canvas.height !== Math.round(H * dpr)) { this.canvas.width = Math.round(W * dpr); this.canvas.height = Math.round(H * dpr); this.canvas.style.height = H + "px"; } // 尺寸沒變就不重設（重設畫布很慢，拖曳時會閃）
@@ -555,7 +639,7 @@ class Chart {
     };
     const label = (t, tx, ty, c, size) => { ctx.font = `500 ${size}px ${cssVar("--font-body")}`; ctx.textAlign = "center"; ctx.lineJoin = "round"; ctx.lineWidth = 3; ctx.strokeStyle = col.surface; ctx.globalAlpha = 0.85; ctx.strokeText(t, tx, ty); ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, tx, ty); };
     // 副圖訊號：在副圖上交叉或離開超買超賣區的那一天，主圖K線也標出來（空心圈，和實心三角的課程／策略訊號區分）
-    const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis, Object.fromEntries(["kd", "macd", "rsi", "wr", "custom"].map(k => [k, Chart.sigShow(k)])), Chart.prefs.sigStrongK) : [];
+    const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis, Object.fromEntries(Chart.SIG_KINDS.map(([k]) => [k, Chart.sigShow(k)])), Chart.prefs.sigStrongK) : [];
     (o.markers || []).filter(m => m.i < vis && m.i >= va && m.i <= vb).forEach(m => {
       const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
       const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
@@ -754,7 +838,7 @@ class Chart {
     if (o.vwap) parts.push(`<span style="color:var(--vwap)"><b style="color:inherit">VWAP</b>${fmtP(I.vwap[i])}</span>`);
     if (o.vp && this.vpData) { const V = this.vpData; parts.push(`<span><b>籌碼</b>獲利 ${(V.profit * 100).toFixed(1)}%</span><span style="color:#f0883e"><b style="color:inherit">壓力</b>${fmtP(V.pre)}</span><span style="color:var(--muted)"><b style="color:inherit">均成本</b>${fmtP(V.avg)}</span><span style="color:#3b82f6"><b style="color:inherit">支撐</b>${fmtP(V.sup)}</span>`); }
     if (o.boll) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
-    (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean).forEach(S => {
+    (this.subsN || []).forEach(S => {
       const sub = typeof S === "string" ? S : "custom", C0 = typeof S === "string" ? null : S.custom;
       if (sub === "wr") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">%R</b>${fmtN(I.wr[i])}</span>`);
       if (sub === "inout" && I.io) parts.push(`<span><b>外盤</b>${D[i].ov.toLocaleString()}</span><span><b>內盤</b>${D[i].iv.toLocaleString()}</span><span style="color:var(--s1)"><b style="color:inherit">外盤比</b>${fmtN(I.io[i])}%（5日 ${fmtN(I.io5[i])}%）</span>`);
