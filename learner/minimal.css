@@ -103,3 +103,51 @@ input.code:focus, select.sel:focus, input:focus-visible, select:focus-visible { 
 .groups button[aria-pressed="true"] .note, .ichip[aria-pressed="true"] .note { color: inherit; opacity: .7; }
 .mkbox > *, .mkbox button { border-radius: var(--radius-sm); }
 .pod .part { border-color: var(--line); }
+
+/* ---------- Logo：黑板上畫著 K 線 ---------- */
+img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object-fit: contain; flex: none; }
+.seal.logo { width: 40px; height: 40px; background: none; padding: 0; }
+
+/* ===================== 版面風格（設定 →「🎨 版面風格」，html[data-style]） =====================
+   minimal 簡約（預設，上面那一套）／pro 專業看盤／blue 清爽藍白／paper 宋體紙本／chalk 黑板 */
+/* 專業看盤：深藍黑底、藍色重點、圓角小、資訊密 */
+:root[data-style="pro"] { --bg: #f2f4f7; --surface: #fbfcfd; --surface-2: #eef1f5; --surface-3: #ffffff; --ink: #1c2430; --muted: #6b778a; --line: #d6dce4;
+  --accent: #1f63d6; --accent-soft: rgba(42, 111, 219, .12); --gold: #2a6fdb; --grad-strong: #2a6fdb; --on-strong: #fff; --strong-line: #2a6fdb; --s1: #2a6fdb;
+  --up: #e5413a; --down: #12a36b; --up-pill: #e5413a; --down-pill: #12a36b; --radius: 8px; --radius-md: 6px; --radius-sm: 6px; }
+:root[data-style="pro"][data-theme="dark"] { --bg: #0b0e14; --surface: #121821; --surface-2: #19212d; --surface-3: #1e2734; --ink: #e6ebf2; --muted: #8592a6; --line: #253041;
+  --accent: #5b9dff; --accent-soft: rgba(61, 139, 255, .16); --gold: #3d8bff; --grad-strong: #3d8bff; --on-strong: #fff; --strong-line: #3d8bff; --s1: #3d8bff;
+  --up: #ff5a52; --down: #1fc283; --up-pill: #d9443d; --down-pill: #14a06b; }
+/* 清爽藍白：白卡片、海軍藍重點、大圓角 */
+:root[data-style="blue"] { --bg: #eaf0f6; --surface: #f8fafd; --surface-2: #e9eff6; --surface-3: #ffffff; --ink: #142339; --muted: #66768d; --line: #cdd8e5;
+  --accent: #1b55b5; --accent-soft: rgba(31, 95, 196, .12); --gold: #1f5fc4; --grad-strong: #1f5fc4; --on-strong: #fff; --strong-line: #1f5fc4; --s1: #1f5fc4;
+  --up: #d8433c; --down: #1b9160; --up-pill: #d8433c; --down-pill: #1b9160; --radius: 18px; --radius-md: 14px; --radius-sm: 12px; }
+:root[data-style="blue"][data-theme="dark"] { --bg: #0e1626; --surface: #152038; --surface-2: #1b2945; --surface-3: #20304f; --ink: #e5ecf7; --muted: #90a1bd; --line: #2a3b5d;
+  --accent: #6ea2f5; --accent-soft: rgba(79, 141, 240, .16); --gold: #4f8df0; --grad-strong: #4f8df0; --on-strong: #fff; --strong-line: #4f8df0; --s1: #4f8df0;
+  --up: #ef6159; --down: #3fbf86; --up-pill: #c8463f; --down-pill: #23966a; }
+/* 宋體紙本：黑白灰、宋體、小圓角（之前的版本） */
+:root[data-style="paper"] { --bg: #e3e3e1; --surface: #f4f4f2; --surface-2: #ebebe9; --surface-3: #f9f9f7; --ink: #151515; --muted: #666; --line: #cfcfcd;
+  --accent: #1c1c1c; --accent-soft: rgba(0, 0, 0, .06); --gold: #1c1c1c; --grad-strong: #2b2b2b; --on-strong: #f2f2f2; --strong-line: #2b2b2b; --s1: #d98a0b;
+  --up: #e8343e; --down: #0e9f63; --up-pill: #e8343e; --down-pill: #0e9f63; --radius: 4px; --radius-md: 4px; --radius-sm: 3px;
+  --font-body: var(--font-song); --font-display: var(--font-song); --font-num: var(--font-song); }
+:root[data-style="paper"][data-theme="dark"] { --bg: #000; --surface: #0c0c0c; --surface-2: #161616; --surface-3: #212121; --ink: #e8e8e8; --muted: #8e8e8e; --line: #262626;
+  --accent: #d6d6d6; --accent-soft: rgba(255, 255, 255, .08); --gold: #d6d6d6; --grad-strong: #3e3e3e; --on-strong: #f2f2f2; --strong-line: #5e5e5e; --s1: #f2a93b;
+  --up: #f2444d; --down: #19b97a; --up-pill: #c2383f; --down-pill: #138a5c; }
+/* 黑板：綠色黑板、粉筆白字、黃色粉筆重點（配合 logo；深色、淺色都是黑板） */
+:root[data-style="chalk"], :root[data-style="chalk"][data-theme="dark"], :root[data-style="chalk"][data-theme="light"] {
+  --bg: #19281f; --surface: #213529; --surface-2: #273f31; --surface-3: #2c4637; --ink: #eef2e9; --muted: #a8b9ac; --line: #3e5a49;
+  --accent: #f3d46a; --accent-soft: rgba(243, 212, 106, .14); --gold: #f3d46a; --grad-strong: #f3d46a; --on-strong: #1c2b22; --strong-line: #f3d46a; --s1: #f3d46a; --ma10: #9cc4f2;
+  --up: #f4938a; --down: #9fdcb0; --up-pill: #c9675f; --down-pill: #4e9a6d; --band: rgba(255, 255, 255, .05); --shade: rgba(255, 255, 255, .04);
+  --radius: 16px; --radius-md: 12px; --radius-sm: 10px; color-scheme: dark; }
+:root[data-style="chalk"] body { background: radial-gradient(120% 80% at 50% 0%, #22382b 0, var(--bg) 70%) fixed var(--bg); }
+
+/* ---------- 風格選擇視窗 ---------- */
+.stylepick { position: fixed; inset: 0; z-index: 9998; display: grid; place-items: center; background: rgba(0, 0, 0, .45); padding: 16px; }
+.stylepick > div { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.stylepick h3 { margin: 0 0 4px; font-size: 18px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
+.stylepick .sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+.stylepick button.sp { display: flex; flex-direction: column; gap: 6px; padding: 8px; text-align: left; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-2); color: var(--ink); cursor: pointer; font: inherit; }
+.stylepick button.sp[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
+.stylepick .sp b { font-weight: 500; font-size: 14.5px; } .stylepick .sp small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.stylepick .sp i { display: block; height: 74px; border-radius: 8px; position: relative; overflow: hidden; }
+.stylepick .sp i u { position: absolute; display: block; }
+.stylepick .sp-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

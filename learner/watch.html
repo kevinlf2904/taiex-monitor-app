@@ -8,7 +8,8 @@
 <meta name="theme-color" content="#171717">
 <link rel="manifest" href="watch.webmanifest">
 <link rel="apple-touch-icon" href="watch-icon-180.png">
-<link rel="icon" href="watch-icon-192.png">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="alternate icon" href="watch-icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="K線看盤">
@@ -17,7 +18,8 @@
 (() => { const d = document.documentElement, q = new URLSearchParams(location.search);
   if (q.has("embed")) d.dataset.embed = "1";
   try { d.dataset.theme = q.get("theme") || JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); } catch { d.dataset.theme = "dark"; }
-  try { if ((q.get("font") || JSON.parse(localStorage.getItem("kline:font") || '"sans"')) === "song") d.dataset.font = "song"; } catch {} })();
+  try { if ((q.get("font") || JSON.parse(localStorage.getItem("kline:font") || '"sans"')) === "song") d.dataset.font = "song"; } catch {}
+  try { const st = q.get("style") || JSON.parse(localStorage.getItem("kline:style") || '"minimal"'); if (st && st !== "minimal") d.dataset.style = st; } catch {} })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -542,7 +544,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 </head>
 <body>
 <header class="w-top">
-  <a class="brand" href="./" aria-label="K線學堂首頁"><b>K</b><span>K線看盤</span></a>
+  <a class="brand" href="./" aria-label="K線學堂首頁"><img class="logo" src="logo.svg" alt="" width="34" height="34"><span>K線看盤</span></a>
   <div class="ix" id="ix" aria-label="大盤指數"></div>
   <div class="tools">
     <span class="stat" id="stat"><i class="dot" id="dot"></i><span class="st-t" id="statText">連線中…</span></span>
@@ -663,7 +665,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-40</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-41</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -682,6 +684,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     <button data-m="port">💼 持股總覽</button>
     <button data-m="fund">📊 基本面</button>
     <button data-m="theme">◐ 深色／淺色</button>
+    <button data-m="style">🎨 版面風格</button>
     <button data-m="font">Aa 字體：黑體／宋體</button>
     <button data-m="install">📲 加入主畫面</button>
     <a href="./" id="mLearn">📘 K線學堂</a>
@@ -2857,6 +2860,7 @@ $("#sheet").addEventListener("click", e => {
   const m = b.dataset.m;
   if (m === "close") closeSheet();
   else if (m === "refresh") { closeSheet(); W.intraAt = 0; W.hot = {}; if (W.lt !== "watch") loadHot(W.lt === "rank" ? "rank" : W.lt); kick(); loadIntra(true); toast("已更新", 1200); }
+  else if (m === "style") { closeSheet(); openStylePicker(t => { applyTheme(t); store.set("theme", t); post({ type: "watch-theme", theme: t }); }); }
   else if (m === "font") { const f = document.documentElement.dataset.font === "song" ? "sans" : "song"; applyFont(f); store.set("font", f); toast(f === "song" ? "已改成宋體" : "已改成黑體", 1200); }
   else if (m === "theme") { const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; applyTheme(t); store.set("theme", t); }
   else if (m === "alerts") $("#sheetExtra").innerHTML = alertsHtml();
@@ -2866,6 +2870,7 @@ $("#sheet").addEventListener("click", e => {
   else if (m.startsWith("open:")) { closeSheet(); select(m.slice(5)); }
   else if (m.startsWith("del:")) { delete W.alerts[m.slice(4)]; store.set("watch:alerts", W.alerts); $("#sheetExtra").innerHTML = alertsHtml(); renderList(); renderDetailHead(); }
 });
+addEventListener("klinestyle", e => { Chart.all.forEach(c => c.draw()); drawTs(); if (W.lt === "money" || W.lt === "mkt") renderList(); post({ type: "kline-style", style: e.detail }); });
 function applyFont(f) { if (f === "song") document.documentElement.dataset.font = "song"; else delete document.documentElement.dataset.font; Chart.all.forEach(c => c.draw()); drawTs(); }
 function applyTheme(t) { document.documentElement.dataset.theme = t; $('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#171717" : "#ebebe9"); Chart.all.forEach(c => c.draw()); drawTs(); }
 
@@ -2879,6 +2884,7 @@ if (EMBED) {
     if (e.source !== parent || !e.data) return;
     if (e.data.type === "kline-theme") applyTheme(e.data.theme);
     else if (e.data.type === "kline-font") applyFont(e.data.font);
+    else if (e.data.type === "kline-style" && e.data.style !== klStyle()) applyStyle(e.data.style);
     else if (e.data.type === "watch-select" && e.data.code) select(String(e.data.code).toUpperCase() === "加權" ? "T00" : e.data.code, "none");
   });
   $("#learnLink").addEventListener("click", e => { e.preventDefault(); post({ type: "open-shot", code: W.sel === "T00" ? "加權" : W.sel }); });
