@@ -30,12 +30,12 @@ body { line-height: 1.5; }
 .note { font-size: 12.5px; color: var(--muted); }
 .btn { border: 1px solid var(--line); background: var(--surface-2); padding: 7px 14px; border-radius: 4px; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; }
 .btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent); color: var(--surface); border-color: var(--accent); font-weight: 500; }
+.btn.primary { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); font-weight: 500; }
 .btn.sm { padding: 4px 10px; font-size: 13px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .seg button { flex: none; border: 0; background: var(--surface-2); padding: 5px 11px; cursor: pointer; font-size: 13px; color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line); }
-.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 500; }
+.seg button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); font-weight: 500; }
 .seg .gap { border-left: 2px solid var(--line); }
 .seg.full { display: flex; width: 100%; } .seg.full button { flex: 1; }
 .ibar { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
@@ -300,7 +300,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .bs { display: flex; align-items: center; gap: 6px; font: 12.5px var(--font-num); } .bs .bsbar { flex: 1; display: flex; height: 8px; border-radius: 4px; overflow: hidden; } .bs .bsbar i:first-child { background: var(--s1); } .bs .bsbar i:last-child { background: var(--muted); }
 .lead { display: inline-block; padding: 1px 8px; border-radius: 4px; background: var(--s1); color: #000; font-size: 12px; font-weight: 500; margin-right: 6px; }
 .flowsum { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0 4px; font-size: 12.5px; } .flowsum b { font-family: var(--font-num); } .flowsum .up { color: var(--up); } .flowsum .down { color: var(--down); }
-#flowCv { display: block; width: 100%; }
+#flowCv { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
+.flowread { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; min-height: 26px; padding: 4px 2px; font-size: 13px; font-family: var(--font-num); }
+.flowread small { margin-left: 4px; font-size: 11.5px; } .flowread .linkbtn { margin-left: auto; }
 .imp-btns { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; }
 #hvSeg { margin-left: auto; }
 .sheet.imp { z-index: 43; } #impBg { z-index: 42; }
@@ -464,11 +466,11 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 
 /* ===================== 介面設計：宋體、小圓角（2～4px）、黑白灰分層漸層；只有漲跌用紅綠 ===================== */
 body { font-family: var(--font-body); background: linear-gradient(180deg, #141414 0, #050505 280px, var(--bg) 520px) fixed var(--bg); }
-:root[data-theme="light"] body { background: linear-gradient(180deg, #fafafa 0, var(--bg) 360px) fixed var(--bg); }
+:root[data-theme="light"] body { background: linear-gradient(180deg, var(--surface) 0, var(--bg) 360px) fixed var(--bg); }
 .panel { border-color: var(--line); background: var(--grad-panel); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 7%, transparent), 0 2px 8px rgba(0, 0, 0, .06); }
 .w-top { background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--surface) 86%, transparent)); border-bottom: 1px solid var(--line); }
 .brand { font-weight: 500; letter-spacing: .1em; }
-.brand b { background: var(--grad-strong); color: var(--surface); box-shadow: none; }
+.brand b { background: var(--grad-strong); color: var(--on-strong); box-shadow: none; }
 .ixc { border: 1px solid var(--line); background: var(--grad-btn); font-weight: 500; }
 .ixc b { font-weight: 500; }
 /* 分段：底線式分頁，選中的有深色短底線 */
@@ -481,9 +483,9 @@ body { font-family: var(--font-body); background: linear-gradient(180deg, #14141
 .seg .gap { border-left: 1px solid var(--line); }
 .btn { border: 1px solid var(--line); background: var(--grad-btn); font-weight: 500; letter-spacing: .04em; }
 .btn:hover { border-color: var(--muted); }
-.btn.primary { background: var(--grad-strong); color: var(--surface); border-color: var(--ink); box-shadow: none; }
+.btn.primary { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); box-shadow: none; }
 .ichip, .groups button { border: 1px solid var(--line); background: var(--grad-btn); font-weight: 500; }
-.ichip[aria-pressed="true"], .groups button[aria-pressed="true"] { background: var(--grad-strong); color: var(--surface); border-color: var(--ink); font-weight: 500; }
+.ichip[aria-pressed="true"], .groups button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); font-weight: 500; }
 input.code, select.sel, input[type="number"] { border: 1px solid var(--line); background: var(--surface-3); }
 input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 /* 清單列 */
@@ -493,8 +495,8 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 .row[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--ink); }
 .row .nm { font-size: 15.5px; font-weight: 500; letter-spacing: .04em; }
 .row .px { font-size: 17px; font-weight: 500; }
-.row .pc { min-width: 76px; padding: 4px 8px; font-size: 13.5px; font-weight: 500; color: #fff; background: var(--muted); }
-.row .pc.up { background: linear-gradient(180deg, color-mix(in srgb, var(--up) 85%, #fff), var(--up)); color: #fff; } .row .pc.down { background: linear-gradient(180deg, color-mix(in srgb, var(--down) 85%, #fff), var(--down)); color: #fff; }
+.row .pc { min-width: 76px; padding: 4px 8px; font-size: 13.5px; font-weight: 500; color: var(--ink); background: var(--surface-3); }
+.row .pc.up { background: var(--up-pill); color: #fff; } .row .pc.down { background: var(--down-pill); color: #fff; }
 /* 個股頁 */
 .d-title h1 { font-weight: 500; font-size: 23px; letter-spacing: .08em; }
 .d-px b { font-size: 38px; font-weight: 500; }
@@ -2320,7 +2322,7 @@ function renderFlow() {
     W.flowSer = ser; const share = bv + sv ? bv / (bv + sv) : 0, lead = share >= 0.6 ? "大戶控盤" : share <= 0.4 ? "散戶為主" : "大散均衡";
     box.innerHTML = `<div class="flowhead"><div class="seg" role="group" aria-label="大戶門檻">${[[1, "≥100萬"], [2, "≥300萬"], [3, "≥1000萬"]].map(([v, t]) => `<button data-bk="${v}" aria-pressed="${k === v}">${t}</button>`).join("")}</div>
       <div class="bs"><span class="lead">${lead}</span>大 ${Math.round(bv).toLocaleString()}<span class="bsbar"><i style="width:${share * 100}%"></i><i style="flex:1"></i></span>${Math.round(sv).toLocaleString()} 散</div>
-      <div class="flowsum"><span>大戶累積${cb >= 0 ? "買超" : "賣超"} <b class="${cls(cb)}">${Math.abs(Math.round(cb)).toLocaleString()}</b> 張</span><span>散戶累積${cs >= 0 ? "買超" : "賣超"} <b class="${cls(cs)}">${Math.abs(Math.round(cs)).toLocaleString()}</b> 張</span></div></div><canvas id="flowCv" role="img" aria-label="大戶散戶累積買賣超"></canvas>${moneyHtml(F.money)}`;
+      <div class="flowsum"><span>大戶累積${cb >= 0 ? "買超" : "賣超"} <b class="${cls(cb)}">${Math.abs(Math.round(cb)).toLocaleString()}</b> 張</span><span>散戶累積${cs >= 0 ? "買超" : "賣超"} <b class="${cls(cs)}">${Math.abs(Math.round(cs)).toLocaleString()}</b> 張</span></div></div><div class="flowread" id="flowRead"></div><canvas id="flowCv" role="img" aria-label="大戶散戶累積買賣超"></canvas>${moneyHtml(F.money)}`;
     note.textContent = `單筆成交金額${["", "≥100 萬", "≥300 萬", "≥1000 萬"][k]}元算大戶，其餘算散戶（依成交金額估，不是真正的帳戶身分）；買賣方向用成交價對委買賣價判斷。${F.complete ? "" : `資料從 ${F.from} 開始（當天成交太多，只抓最近的部分）。`}・${F.source}`;
     drawFlow();
   }
@@ -2356,8 +2358,41 @@ function drawFlow() {
   });
   ctx.fillStyle = col("--muted"); ctx.textAlign = "center";
   for (let m = Math.ceil(o / 60) * 60; m <= cl; m += 60) ctx.fillText(String(m / 60), X(m), H - axH / 2);
+  W.flowGeo = { L, pw, o, cl };
+  // 查價線：按住或滑鼠移到圖上，畫出那一分鐘的直線，兩個圖各標出當時的累積值
+  const p = flowPoint();
+  if (p) {
+    const x = X(p.m), ink = col("--ink");
+    ctx.strokeStyle = ink; ctx.globalAlpha = 0.55; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, ph * 2 + gap); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    [["b", 0], ["s", ph + gap]].forEach(([key, y0]) => {
+      const vals = ser.map(q => q[key]), mx = Math.max(1, ...vals.map(Math.abs)), y = y0 + 4 + (mx - p[key]) / (2 * mx) * (ph - 8), lab = (p[key] > 0 ? "+" : "") + Math.round(p[key]).toLocaleString();
+      ctx.strokeStyle = ink; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(L, y + 0.5); ctx.lineTo(L + pw, y + 0.5); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.fillStyle = p[key] >= 0 ? col("--up") : col("--down"); ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 7); ctx.fill();
+      const tw = ctx.measureText(lab).width + 8; ctx.fillStyle = col("--surface-3"); ctx.fillRect(L - tw - 2, y - 8, tw, 16); ctx.fillStyle = ink; ctx.textAlign = "right"; ctx.fillText(lab, L - 6, y);
+    });
+    const tl = `${String(Math.floor(p.m / 60)).padStart(2, "0")}:${String(p.m % 60).padStart(2, "0")}`, tw = ctx.measureText(tl).width + 10, tx = Math.min(Math.max(x - tw / 2, L), L + pw - tw);
+    ctx.fillStyle = col("--surface-3"); ctx.fillRect(tx, H - axH - 1, tw, axH); ctx.fillStyle = ink; ctx.textAlign = "center"; ctx.fillText(tl, tx + tw / 2, H - axH / 2);
+  }
+  flowReadout(p);
 }
-$("#fBox").addEventListener("click", e => { const b = e.target.closest("[data-bk]"); if (b) { W.bigK = +b.dataset.bk; store.set("watch:bigk", W.bigK); renderFlow(); } });
+// 查價線對到的那一分鐘（最接近的一筆）
+function flowPoint() { const ser = W.flowSer || [], m = W.flowHov; if (m == null || !ser.length) return null; return ser.reduce((b, x) => (Math.abs(x.m - m) < Math.abs(b.m - m) ? x : b), ser[0]); }
+function flowReadout(p = flowPoint()) {
+  const el = $("#flowRead"); if (!el) return;
+  if (!p) { el.innerHTML = `<span class="note">按住或移到圖上，看每分鐘的價格與大戶、散戶累積買賣超</span>`; return; }
+  const c = W.sel, prev = (W.detailQ || W.quotes.get(c))?.prev, B = todayBars(), bar = B.reduce((b, x) => (Math.abs(toMin(x.t) - p.m) < Math.abs(toMin(b.t) - p.m) && toMin(x.t) <= p.m ? x : b), B[0]);
+  const px = bar?.c, pct = px != null && prev ? (px / prev - 1) * 100 : null, n = v => `${v > 0 ? "+" : ""}${Math.round(v).toLocaleString()}`;
+  el.innerHTML = `<b>${String(Math.floor(p.m / 60)).padStart(2, "0")}:${String(p.m % 60).padStart(2, "0")}</b>${px != null ? `<span>價 <b class="${cls(pct)}">${fmtPx(px, c)}</b>${pct != null ? `<small class="${cls(pct)}">${pct > 0 ? "+" : ""}${pct.toFixed(2)}%</small>` : ""}</span>` : ""}<span>大戶 <b class="${cls(p.b)}">${n(p.b)}</b> 張</span><span>散戶 <b class="${cls(p.s)}">${n(p.s)}</b> 張</span><button class="linkbtn" data-flowx type="button" aria-label="關閉查價線">✕</button>`;
+}
+function flowPtr(e) {
+  const cv = e.target.closest?.("#flowCv"), G = W.flowGeo; if (!cv || !G) return;
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left; if (x < G.L - 4) return;
+  W.flowHov = Math.round(G.o + Math.min(1, Math.max(0, (x - G.L) / G.pw)) * (G.cl - G.o)); drawFlow();
+}
+$("#fBox").addEventListener("pointermove", e => { if (e.pointerType === "mouse" || e.buttons || e.pressure) flowPtr(e); });
+$("#fBox").addEventListener("pointerdown", flowPtr);
+$("#fBox").addEventListener("pointerleave", e => { if (e.pointerType === "mouse" && W.flowHov != null) { W.flowHov = null; drawFlow(); } });
+$("#fBox").addEventListener("click", e => { if (e.target.closest("[data-flowx]")) { W.flowHov = null; drawFlow(); return; } const b = e.target.closest("[data-bk]"); if (b) { W.bigK = +b.dataset.bk; store.set("watch:bigk", W.bigK); renderFlow(); } });
 new ResizeObserver(() => { if (W.ftab === "flow" && !$("#fBox").hidden) drawFlow(); }).observe($("#fBox"));
 { const cv = $("#tsCanvas"), at = e => { if (!TS.geo) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left; TS.hover = Math.max(0, Math.min(TS.geo.total, (x - TS.geo.L) / TS.geo.pw * TS.geo.total)); drawTs(); };
   cv.addEventListener("pointerdown", at); cv.addEventListener("pointermove", e => { if (e.pointerType === "mouse" || e.buttons) at(e); });

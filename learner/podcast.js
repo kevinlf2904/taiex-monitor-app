@@ -401,7 +401,7 @@ function podInit() {
 .pod .pmeta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13.5px; }
 .pod .ptl { margin: 0 0 4px; color: var(--muted); line-height: 1.65; } .pod .ptopic span { color: var(--up); }
 .pod .pbadge { font-size: 12px; padding: 1px 9px; border-radius: 99px; background: var(--surface-3); border: 1px solid var(--line); white-space: nowrap; }
-.pod .pbadge.gold { background: #f7e7b4; color: #6b4e00; border-color: #e9cf7a; } .pod .pbadge.low { opacity: .75; }
+.pod .pbadge.gold { background: color-mix(in srgb, #d9b04a 20%, var(--surface)); color: color-mix(in srgb, #c99a2e 75%, var(--ink)); border-color: color-mix(in srgb, #d9b04a 45%, transparent); } .pod .pbadge.low { opacity: .75; }
 .pod .paudio { width: 100%; margin: 8px 0; }
 .pod .pkey { border-left: 3px solid var(--up); padding: 4px 0 4px 14px; margin: 14px 0; } .pod .pkh { color: var(--up); font-size: 13px; margin-bottom: 4px; }
 .pod .pkey ul { margin: 0; padding-left: 20px; } .pod .pkey li { margin: 6px 0; line-height: 1.75; } .pod .pkey li::marker { color: var(--up); }

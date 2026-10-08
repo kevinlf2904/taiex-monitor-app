@@ -98,7 +98,7 @@ h3 { font-size: 16px; margin: 0 0 6px; }
   font-size: 14px; display: inline-flex; align-items: center; gap: 6px;
 }
 .btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent); color: var(--surface); border-color: var(--accent); font-weight: 500; }
+.btn.primary { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); font-weight: 500; }
 .btn.big { padding: 10px 22px; font-size: 16px; font-weight: 500; }
 .btn.buy { background: var(--up); border-color: var(--up); color: #fff; }
 .btn.sell { background: var(--down); border-color: var(--down); color: #fff; }
@@ -224,10 +224,10 @@ details.verdict summary { cursor: pointer; list-style-position: outside; }
 .seg button + button { border-left: 1px solid var(--line); }
 .lab-src { width: 100%; } .lab-src button { flex: 1; }
 .code-in { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-3); color: var(--ink); font-family: var(--font-mono); font-size: 15px; }
-.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); font-weight: 500; }
+.seg button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); font-weight: 500; }
 
 /* ---------- 問問題對話框 ---------- */
-.chat-fab { position: fixed; right: 20px; bottom: 20px; z-index: 30; display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border: 0; border-radius: 3px; background: var(--accent); color: var(--surface); font-size: 15px; font-weight: 500; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.chat-fab { position: fixed; right: 20px; bottom: 20px; z-index: 30; display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border: 0; border-radius: 3px; background: var(--grad-strong); color: var(--on-strong); font-size: 15px; font-weight: 500; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
 .chat-fab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .chat-fab[aria-expanded="true"] { display: none; }
 .chat-fab { opacity: .94; } .chat-fab:hover { opacity: 1; }
@@ -242,7 +242,7 @@ details.verdict summary { cursor: pointer; list-style-position: outside; }
 .chat-log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; }
 .msg { max-width: 88%; padding: 9px 12px; border-radius: 4px; font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
 .msg p { margin: 0 0 6px; } .msg p:last-child { margin: 0; } .msg ul, .msg ol { margin: 0 0 6px; padding-left: 1.2em; } .msg h4 { margin: 6px 0 4px; font-size: 14.5px; } .msg code { font-family: var(--font-mono); font-size: 13px; background: var(--surface); padding: 0 4px; border-radius: 4px; }
-.msg.user { align-self: flex-end; background: var(--accent); color: var(--surface); border-bottom-right-radius: 4px; }
+.msg.user { align-self: flex-end; background: var(--grad-strong); color: var(--on-strong); border-bottom-right-radius: 4px; }
 .msg.bot { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
 .msg.bot.err { color: var(--up); }
 .msg-by { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
@@ -450,7 +450,7 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .steps { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; padding: 0; counter-reset: s; }
 .steps a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink); text-decoration: none; font-size: 14px; }
 .steps a:hover { border-color: var(--accent); }
-.steps b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--surface); font-size: 12px; }
+.steps b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--grad-strong); color: var(--on-strong); font-size: 12px; }
 #shotGrid, #shotRebuild, #shotDrop { scroll-margin-top: 80px; }
 .shot-pop { position: absolute; z-index: 3; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; box-shadow: 0 6px 24px rgba(0,0,0,.18); min-width: 200px; max-width: 260px; }
 .shot-pop input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-3); color: var(--ink); font-family: var(--font-mono); }
@@ -476,7 +476,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
 /* 黑白灰分層漸層與宋體（和看盤頁一致） */
 .panel, .card { background: var(--grad-panel); }
 .btn { background: var(--grad-btn); }
-.btn.primary { background: var(--grad-strong); color: var(--surface); border-color: var(--ink); }
+.btn.primary { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); }
 </style>
 </head>
 <body>
