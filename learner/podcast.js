@@ -5,7 +5,7 @@
    - 股價：/api/kline（日 K）。進場價＝節目上架後下一個交易日的開盤價；檢查點 7／30／60／90／180／365 天。
    這裡用到 watch.html 的 W、getJ、select、loadStocks、nameOf、okCode、esc、cls 與 core.js 的 $、store。 */
 const POD_SEED = [["股癌", "股癌"], ["兆華與股惑仔", "股惑仔"], ["游庭皓的財經皓角", "皓角"], ["理財達人秀", "理財達人秀"], ["Money&Love 投資頻道", "Money"], ["金唬男", "金唬男"]];
-const POD_CK = [7, 30, 60, 90, 180, 365];
+const POD_CK = [1, 3, 7, 30, 60, 90, 180, 365]; // 檢查點（上架後幾天）：加上 1、3 天，最近的觀點也能很快結算
 const POD = { view: "home", feed: null, key: null, hist: [], rank: "expert", sim: { m: 3, mode: "follow", hold: 30 }, cfg: null, feeds: new Map(), px: new Map(), pxBusy: false, job: null, q: "", found: null, qErr: null, busy: 0, booted: false, sid: 0, err: null };
 // 整理結果有兩個來源：排程整理好的（learner/data/podcast/index.json，打開就有）＋這個瀏覽器自己整理或手動新增的（localStorage）
 const podLocal = () => (POD.local ||= store.get("pod:sums", {}) || {});
@@ -144,7 +144,7 @@ function podStats(calls) {
   const mean = podAvg(v), acc = (100 * all.filter(x => x > 0).length) / all.length, win = (100 * v.filter(x => x > 0).length) / v.length;
   const exS = 50 + 50 * Math.tanh(mean / 0.08), cons = 100 * (1 - Math.min(1, podSd(v) / 0.25));
   const fr = ns => { const xs = settled.flatMap(x => x.p.cks.filter(k => k.settled && ns.includes(k.n)).map(k => k.ex)); return xs.length ? { avg: podAvg(xs), n: xs.length } : null; };
-  return { n: calls.length, settled: v.length, loading, mean, acc, win, exS, cons, score: 0.4 * acc + 0.4 * exS + 0.2 * cons, few: v.length < 5, frames: { s: fr([7, 30]), m: fr([60, 90]), l: fr([180, 365]) } };
+  return { n: calls.length, settled: v.length, loading, mean, acc, win, exS, cons, score: 0.4 * acc + 0.4 * exS + 0.2 * cons, few: v.length < 5, frames: { s: fr([1, 3, 7, 30]), m: fr([60, 90]), l: fr([180, 365]) } };
 }
 // 跟單：每個觀點上架後隔天進場、持有 hold 天，每天的超額報酬取所有持有中部位的平均，累加起來
 function podSim(calls, { m, mode, hold }) {
@@ -204,7 +204,7 @@ function podSpark(pts, w = 300, h = 56) {
     <line x1="0" x2="${w}" y1="${y0}" y2="${y0}" class="pbase"/><path d="${d}" clip-path="url(#${id}a)" class="pl up"/><path d="${d}" clip-path="url(#${id}b)" class="pl down"/></svg>`;
 }
 const podCkBar = p => `<div class="pcks">${p.cks.map((k, i) => `<span style="flex:${k.n - (i ? POD_CK[i - 1] : 0)}" class="${k.settled ? (k.ex > 0 ? "win" : "lose") : "open"}" title="${k.n} 天：${k.settled ? podPct(k.ex) : "未到期"}"></span>`).join("")}</div>
-  <div class="pckl">${p.cks.map((k, i) => `<span style="flex:${k.n - (i ? POD_CK[i - 1] : 0)}">${k.n === 7 ? "" : k.n + "d"}</span>`).join("")}</div>`;
+  <div class="pckl">${p.cks.map((k, i) => `<span style="flex:${k.n - (i ? POD_CK[i - 1] : 0)}">${k.n <= 7 ? "" : k.n + "d"}</span>`).join("")}</div>`;
 function podBadge(feed) {
   const st = podStats(podCalls(feed)); if (!st.settled) return "";
   return `<span class="pbadge ${st.win >= 60 ? "gold" : st.win >= 40 ? "" : "low"}" title="已結算的觀點裡跑贏大盤的比例（${st.settled} 筆）">🏆 跑贏 ${Math.round(st.win)}%</span>`;
@@ -283,7 +283,7 @@ function podShowView() {
     <div class="phead">${podArt(s, "part big")}<div><div class="note">往績評分</div><h2 class="ph1">${esc(s.name)}</h2><div class="note">${esc(s.author)}</div></div></div>
     <div class="pcard">
       ${podBadge(POD.feed)}
-      ${st.settled ? `<div class="pscore"><b>${st.few ? "—" : st.score.toFixed(1)}</b><span class="note">/ 100 ${info("總分＝準確率 40%＋超額回報 40%＋一致性 20%。至少要 5 筆已結算的觀點才給分。")}</span></div>${st.few ? `<p class="note">樣本不足：已結算 ${st.settled} 筆（至少要 5 筆才給分）。多整理幾集就會有分數。</p>` : ""}`
+      ${st.settled ? `<div class="pscore"><b>${st.score.toFixed(1)}</b><span class="note">/ 100 ${info("總分＝準確率 40%＋超額回報 40%＋一致性 20%。已結算的觀點少於 5 筆時標示「樣本少」，分數僅供參考。")}</span></div>${st.few ? `<p class="note">樣本少：目前只有 ${st.settled} 筆已結算，分數僅供參考；每天會自動整理更多集。</p>` : ""}`
         : `<p class="note">${calls.length ? (st.loading ? "載入股價中…" : "觀點都還沒到 7 天，還不能結算。") : "還沒有觀點紀錄。整理幾集之後，就會用真實股價追蹤主持人看多／看空的表現。"}</p>`}
       ${big.pts.length > 2 ? podSpark(big.pts, 300, 46) + `<p class="note">跟單累計超額報酬走勢（每個觀點持有 30 天）</p>` : ""}
       ${st.settled ? `<div class="pmet"><span>準確率 ${info("所有已結算檢查點（7／30／60／90／180／365 天）裡，方向對、而且跑贏大盤的比例。")}</span><b>${st.acc.toFixed(1)}</b></div>
@@ -309,11 +309,11 @@ function podShowView() {
 }
 function podRankView() {
   const shows = [...new Set([...podFollows().map(s => s.feed), ...Object.values(podSums()).map(s => s.feed)])].map(feed => ({ s: podShowOf(feed), st: podStats(podCalls(feed)) }));
-  const ok = shows.filter(x => x.st.settled && !x.st.few), few = shows.filter(x => !(x.st.settled && !x.st.few));
+  const ok = shows.filter(x => x.st.settled), few = shows.filter(x => !x.st.settled);
   ok.sort((a, b) => (POD.rank === "expert" ? b.st.score - a.st.score : a.st.score - b.st.score));
-  const row = (x, i) => `<tr data-pshow="${esc(x.s.feed)}" role="button"><td class="${i < 3 && x.st.settled && !x.st.few ? "ptop3" : ""}">${x.st.settled && !x.st.few ? i + 1 : ""}</td><td>${podArt(x.s, "part sm")}</td><td>${esc(x.s.name)}</td><td class="num">${x.st.settled && !x.st.few ? x.st.score.toFixed(1) : `<span class="note">${x.st.settled ? `樣本不足（${x.st.settled}）` : x.st.n ? "未結算" : "—"}</span>`}</td></tr>`;
+  const row = (x, i) => `<tr data-pshow="${esc(x.s.feed)}" role="button"><td class="${i < 3 && x.st.settled && !x.st.few ? "ptop3" : ""}">${x.st.settled ? i + 1 : ""}</td><td>${podArt(x.s, "part sm")}</td><td>${esc(x.s.name)}</td><td class="num">${x.st.settled ? `${x.st.score.toFixed(1)}${x.st.few ? `<br><span class="note">樣本少（${x.st.settled}）</span>` : ""}` : `<span class="note">${x.st.settled ? "" : x.st.n ? "未結算" : "—"}</span>`}</td></tr>`;
   return `<div class="ptop"><h2 class="ph2" style="margin:0">${POD.rank === "expert" ? "專家排行榜" : "反指標排行榜"}</h2><div class="seg" role="group">${[["expert", "專家排行榜"], ["contra", "反指標排行榜"]].map(([k, t]) => `<button data-prk="${k}" aria-pressed="${POD.rank === k}">${t}</button>`).join("")}</div></div>
-    <p class="note">${POD.rank === "expert" ? "依往績評分排名" : "分數最低的排前面：反著做反而可能跑贏"}。只計算你在這個瀏覽器整理過的單集；每個節目至少 5 筆已結算觀點才排名。</p>
+    <p class="note">${POD.rank === "expert" ? "依往績評分排名" : "分數最低的排前面：反著做反而可能跑贏"}。用自動整理（和你在這個瀏覽器整理）的單集計算；觀點上架 1 天後開始結算，已結算少於 5 筆的標示「樣本少」，排名僅供參考。</p>
     <table class="prank"><thead><tr><th>#</th><th></th><th>節目</th><th>分數</th></tr></thead><tbody>${[...ok, ...few].map(row).join("") || `<tr><td colspan="4" class="note">還沒有資料。</td></tr>`}</tbody></table>`;
 }
 function podFollowView() {

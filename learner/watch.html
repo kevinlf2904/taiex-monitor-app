@@ -674,7 +674,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-53</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-54</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -728,7 +728,7 @@ const DEFAULT_GROUPS = [{ name: "自選", list: ["2330", "2317", "2454", "0050",
 const W = {
   groups: store.get("watch:groups", null) || [{ name: "自選", list: store.get("watch:list", DEFAULT_GROUPS[0].list) }, DEFAULT_GROUPS[1]],
   gi: +store.get("watch:gi", 0) || 0, names: store.get("watch:names", {}), sort: store.get("watch:sort", "custom"), alerts: store.get("watch:alerts", {}), hold: store.get("watch:hold", {}),
-  lt: store.get("watch:lt", "watch"), etfCat: store.get("watch:etf", "cap"), etfPer: String(store.get("watch:etfper", "5")), etfAnnMk: store.get("watch:etfannmk", "tw"), futTs: store.get("watch:futts", "cur"), etfSort: store.get("watch:etfs", ""), rankType: store.get("watch:rank", "gain"), usType: store.get("watch:us", "active"), dtab: store.get("watch:dtab", "trend"),
+  lt: store.get("watch:lt", "watch"), etfCat: store.get("watch:etf", "cap"), etfPer: String(store.get("watch:etfper", "5")), etfAnnMk: store.get("watch:etfannmk", "tw"), futTs: store.get("watch:futts2", "all"), etfSort: store.get("watch:etfs", ""), rankType: store.get("watch:rank", "gain"), usType: store.get("watch:us", "active"), dtab: store.get("watch:dtab", "trend"),
   k: ["1", "5", "15", "60", "D", "W", "M"].includes(String(store.get("watch:k", "D"))) ? String(store.get("watch:k", "D")) : "D", strat: store.get("watch:strat", ""),
   editing: false, sel: null, last: store.get("watch:last", null), quotes: new Map(), prevPx: new Map(), detailQ: null, detailSrc: "", session: null,
   today: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), err: null, off: !/^https?:$/.test(location.protocol),
@@ -2216,8 +2216,7 @@ function select(code, how = "push") {
   const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fund"], #dTabs [data-t="co"], #dTabs [data-t="info"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
   if (!tw && (W.dtab === "chips" || W.dtab === "fund" || W.dtab === "co" || W.dtab === "info")) W.dtab = "trend";
   $("#learnLink").hidden = isUS(code) || isFut(code);
-  const fut = isFut(code); document.querySelectorAll('#kSeg [data-k="D"], #kSeg [data-k="W"], #kSeg [data-k="M"]').forEach(b => (b.hidden = fut)); $("#cdpBtn").hidden = fut; tsSegFill(fut);
-  if (fut && "DWM".includes(W.k)) W.k = "5";
+  const fut = isFut(code); document.querySelectorAll('#kSeg [data-k="D"], #kSeg [data-k="W"], #kSeg [data-k="M"]').forEach(b => (b.hidden = false)); $("#cdpBtn").hidden = fut; tsSegFill(fut);
   renderList(); renderDetailHead(); renderFlow(); setDtab(W.dtab, false); drawTs();
   if (changed) { loadDaily(); loadIntra(true); if (tw) loadInfo(); pollDetail().then(() => { renderDetailHead(); if (W.ftab === "book") renderBook(); }).catch(() => {}); }
   if (isMobile() && how !== "none") { if (EMBED) post({ type: "watch-top", y: 0 }); else document.body.scrollIntoView({ block: "start" }); }
@@ -2313,14 +2312,25 @@ const toMin = t => { const [h, m] = String(t).split(":").map(Number); return h *
 // 分時資料：當日，或連同前幾天（三日、五日；前幾天用 Yahoo 1 分 K）
 // 台指期近全：依序排夜盤（15:00–05:00，840 分鐘）與日盤（08:45–13:45，300 分鐘），中間的休市時間不畫
 // 台指期：W.futTs＝"cur" 只看目前這一盤（預設，日盤不會被 14 小時的夜盤擠成一小段）、"all" 近全（夜盤＋日盤接在一起）
+// 期交所的交易日：夜盤（15:00–隔天 05:00）算在下一個交易日。取最後一個夜盤，加上接在它後面的日盤；沒有夜盤就只有日盤。
+// 在 15:00→13:45 的時間軸上：夜盤從 0 分開始、日盤從 1065 分（08:45）開始，中間 05:00–08:45 留白（和券商 App 一樣）
+const nextWd = d => { const t = new Date(d + "T00:00:00Z"); do t.setUTCDate(t.getUTCDate() + 1); while (t.getUTCDay() % 6 === 0); return t.toISOString().slice(0, 10); };
+function futTradeDay(blocks) {
+  let iN = -1; blocks.forEach((B, i) => { if (B.s === "night") iN = i; });
+  const N = iN >= 0 ? blocks[iN] : null, D = (N ? blocks.slice(iN + 1) : blocks.slice(-1)).find(B => B.s === "day") || null;
+  const out = [...(N ? [{ ...N, g0: 0, len: 840 }] : []), ...(D ? [{ ...D, g0: 1065, len: 300 }] : [])];
+  out.tday = D ? D.d : N ? nextWd(N.d) : null; return out;
+}
 function futData(j) {
   let blocks = []; let g0 = 0;
   for (const b of j.bars) { const L = blocks[blocks.length - 1]; if (!L || L.s !== b.s || (b.s === "day" && L.d !== b.d)) { if (L) g0 += L.len; blocks.push({ s: b.s, d: b.d, g0, len: b.s === "night" ? 840 : 300, pts: [] }); } blocks[blocks.length - 1].pts.push(b); }
-  if (W.futTs !== "all" && blocks.length > 1) blocks = [{ ...blocks[blocks.length - 1], g0: 0 }];
+  if (W.futTs === "cur") { if (blocks.length > 1) blocks = [{ ...blocks[blocks.length - 1], g0: 0 }]; }
+  else blocks = futTradeDay(blocks); // 近全：同一個交易日（前一晚 15:00 起的夜盤＋隔天日盤），時間軸 15:00→13:45
   let sv = 0, spv = 0, last = null;
   const pts = blocks.flatMap(B => { sv = 0; spv = 0; return B.pts.map(b => { let m = toMin(b.t) - (B.s === "night" ? 900 : 525); if (m < 0) m += 1440; sv += b.v; spv += b.c * b.v; return (last = { blk: B, d: b.d, m, g: B.g0 + Math.min(m, B.len), t: b.t, c: b.c, v: b.v, a: sv ? spv / sv : null, s: B.s }); }); });
-  const total = blocks.reduce((s, B) => s + B.len, 0) || 1;
-  return { fut: true, blocks, days: [{ d: j.date, pts }], pts, day: j.date, prev: j.prev ?? pts[0].c, isIdx: false, o: 0, cl: total, us: false, cdp: null };
+  const total = W.futTs === "cur" ? blocks.reduce((s, B) => s + B.len, 0) || 1 : 1365;
+  const ref = W.futTs !== "cur" && blocks[0]?.s === "night" ? j.nprev ?? j.prev : j.prev; // 近全的參考價：這個交易日的參考價（夜盤的參考價）
+  return { fut: true, full: W.futTs !== "cur", tday: blocks.tday, blocks, days: [{ d: j.date, pts }], pts, day: j.date, prev: ref ?? pts[0].c, isIdx: false, o: 0, cl: total, us: false, cdp: null };
 }
 function tsData() {
   const j = W.intra; if (!j || !j.bars?.length) return null;
@@ -2341,7 +2351,7 @@ function cdpLevels(day) {
   return [["AH", cdp + r, "up"], ["NH", 2 * cdp - y.l, "up"], ["CDP", cdp, "s1"], ["NL", 2 * cdp - y.h, "down"], ["AL", cdp - r, "down"]];
 }
 function drawTs() {
-  document.querySelectorAll("#tsSeg [data-ts]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.ts === W.tsDays)); document.querySelectorAll("#tsSeg [data-fts]").forEach(b => b.setAttribute("aria-pressed", b.dataset.fts === (W.futTs === "all" ? "all" : "cur"))); $("#cdpBtn").setAttribute("aria-pressed", W.cdp);
+  document.querySelectorAll("#tsSeg [data-ts]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.ts === W.tsDays)); document.querySelectorAll("#tsSeg [data-fts]").forEach(b => b.setAttribute("aria-pressed", b.dataset.fts === (W.futTs === "cur" ? "cur" : "all"))); $("#cdpBtn").setAttribute("aria-pressed", W.cdp);
   const cv = $("#tsCanvas"), host = $("#tsBox"), Wd = host.clientWidth; if (!Wd) return;
   const d = tsData(), dpr = devicePixelRatio || 1, narrow = Wd < 560, mainH = narrow ? 200 : 250, volH = !d || d.isIdx ? 0 : narrow ? 54 : 70, axH = 18, H = mainH + (volH ? volH + 8 : 0) + axH + 8;
   cv.width = Wd * dpr; cv.height = H * dpr; cv.style.height = H + "px";
@@ -2365,7 +2375,8 @@ function drawTs() {
   if (days.length > 1) { ctx.strokeStyle = col("--muted"); ctx.globalAlpha = 0.7; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(L, Y(prev)); ctx.lineTo(L + pw, Y(prev)); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
   const vline = x => { ctx.strokeStyle = col("--line"); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, top); ctx.lineTo(Math.round(x) + 0.5, top + mainH + (volH ? volH + 8 : 0)); ctx.stroke(); ctx.globalAlpha = 1; };
   ctx.fillStyle = col("--muted");
-  if (d.fut) d.blocks.forEach(B => { if (B.g0) vline(X(B.g0)); ctx.fillStyle = col("--muted"); ctx.textAlign = "left"; ctx.fillText(`${B.s === "night" ? "夜" : "日"} ${B.s === "night" ? "15:00" : "8:45"}`, X(B.g0) + 2, H - axH / 2 - 2); });
+  if (d.fut && d.full) [0, 180, 360, 540, 720, 900, 1080, 1260].forEach((m, k) => { if (k) vline(X(m)); ctx.fillStyle = col("--muted"); ctx.textAlign = k ? "center" : "left"; ctx.fillText(`${String((15 + m / 60) % 24).padStart(2, "0")}:00`, X(m) + (k ? 0 : 2), H - axH / 2 - 2); });
+  else if (d.fut) d.blocks.forEach(B => { if (B.g0) vline(X(B.g0)); ctx.fillStyle = col("--muted"); ctx.textAlign = "left"; ctx.fillText(`${B.s === "night" ? "夜" : "日"} ${B.s === "night" ? "15:00" : "8:45"}`, X(B.g0) + 2, H - axH / 2 - 2); });
   else if (days.length === 1) { const marks = []; for (let m = Math.ceil(o / 60) * 60; m < cl; m += 60) marks.push(m); [o, ...marks.filter(m => m - o > 20 && cl - m > 40), cl].forEach(m => { const x = X(m - o); vline(x); ctx.fillStyle = col("--muted"); ctx.textAlign = m === o ? "left" : m === cl ? "right" : "center"; ctx.fillText(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`, x, H - axH / 2 - 2); }); }
   else days.forEach((x, k) => { if (k) vline(X(k * span)); ctx.fillStyle = col("--muted"); ctx.textAlign = "center"; ctx.fillText(x.d.slice(5).replace("-", "/"), X((k + 0.5) * span), H - axH / 2 - 2); });
   // CDP 線
@@ -2380,6 +2391,10 @@ function drawTs() {
     if (!d.isIdx) { ctx.strokeStyle = col("--s1"); ctx.globalAlpha = 0.7; ctx.lineWidth = 0.8; ctx.beginPath(); let st = false; P.forEach(p => { if (p.a == null) return; st ? ctx.lineTo(X(p.g), Y(p.a)) : ctx.moveTo(X(p.g), Y(p.a)); st = true; }); ctx.stroke(); }
   });
   ctx.restore();
+  if (d.fut && pts.length > 2) { // 最高、最低價標在線上（像券商 App）
+    const hp = pts.reduce((a, b) => (b.c > a.c ? b : a)), lp = pts.reduce((a, b) => (b.c < a.c ? b : a)); ctx.font = `10.5px ${col("--font-num")}`;
+    [[hp, -9, hp.c >= prev ? "--up" : "--down"], [lp, 11, lp.c >= prev ? "--up" : "--down"]].forEach(([p, dy, c]) => { const x = X(p.g); ctx.fillStyle = col(c); ctx.textAlign = x < L + 40 ? "left" : x > L + pw - 40 ? "right" : "center"; ctx.fillText(fp(p.c), x, Math.max(top + 6, Math.min(top + mainH - 6, Y(p.c) + dy))); });
+    ctx.font = `11px ${col("--font-num")}`; }
   ctx.globalAlpha = 1; ctx.fillStyle = col("--muted"); ctx.beginPath(); ctx.arc(X(last.g), Y(last.c), 2.5, 0, Math.PI * 2); ctx.fill();
   if (volH) {
     const vt = top + mainH + 8, vmax = Math.max(1, ...pts.map(p => p.v)), bw = Math.max(1, pw / total * 0.7);
@@ -2391,7 +2406,8 @@ function drawTs() {
   TS.geo = { L, pw, total };
   const ch = P.c / prev - 1;
   $("#tsLeg").innerHTML = `<span><b>${d.fut ? (P.s === "night" ? "夜盤 " : "日盤 ") : ""}${days.length > 1 ? P.d.slice(5).replace("-", "/") + " " : ""}${P.t}</b></span><span class="${cls(ch)}"><b>價</b>${fp(P.c)}（${ch >= 0 ? "+" : ""}${(ch * 100).toFixed(2)}%）</span>${P.a != null && !d.isIdx ? `<span style="color:var(--s1)"><b style="color:inherit">均價</b>${fp(P.a)}</span>` : ""}${d.isIdx ? "" : `<span><b>量</b>${fmtVol(P.v)} ${d.us ? "千股" : d.fut ? "口" : "張"}</span>`}<span><b>${d.fut ? "參考價" : "昨收"}</b>${fp(prev)}</span>`;
-  if (d.fut) { $("#tsNote").textContent = `${W.futTs === "all" ? "近全（夜盤＋日盤）" : d.blocks[0]?.s === "night" ? "本盤：夜盤 15:00–05:00" : "本盤：日盤 08:45–13:45"}・${W.quotes.get("TXF")?.symbol || ""}・${W.intra.source || ""}`; return; }
+  if (d.fut) { const fo = pts[0].c, fh = Math.max(...pts.map(p => p.c)), fl = Math.min(...pts.map(p => p.c)), fv = pts.reduce((s, p) => s + (p.v || 0), 0);
+    $("#tsNote").textContent = `${d.full ? `近全 ${d.tday ? d.tday.slice(5).replace("-", "/") + " " : ""}（前一晚夜盤＋日盤）・開 ${fp(fo)} 高 ${fp(fh)} 低 ${fp(fl)} 總量 ${fv.toLocaleString()} 口` : d.blocks[0]?.s === "night" ? "本盤：夜盤 15:00–05:00" : "本盤：日盤 08:45–13:45"}・${W.quotes.get("TXF")?.symbol || ""}・${W.intra.source || ""}`; return; }
   const wantDays = W.tsDays > 1 && days.length < W.tsDays ? (W.tsHist?.code === W.sel ? (W.tsHist.err ? `・前幾天載入失敗：${W.tsHist.err}` : "") : "・載入前幾天中…") : "";
   $("#tsNote").textContent = `${W.intra.date && W.intra.date !== W.today && !d.us ? "最近交易日 " + W.intra.date.replace(/-/g, "/") + "・" : ""}${d.us ? "美東時間・" : ""}${W.intra.source || ""}${wantDays}${W.cdp && !cdp ? "・CDP 需要日 K 資料" : ""}`;
 }
@@ -2407,8 +2423,8 @@ async function loadTsHist() {
 }
 // 分時上方的切換：股票是當日／三日／五日；台指期是本盤／近全
 function tsSegFill(fut) { const el = $("#tsSeg"); if (el.dataset.fut === String(fut)) return; el.dataset.fut = String(fut);
-  el.innerHTML = fut ? `<button data-fts="cur">本盤</button><button data-fts="all">近全</button>` : `<button data-ts="1">當日</button><button data-ts="3">三日</button><button data-ts="5">五日</button>`; }
-$("#tsSeg").addEventListener("click", e => { const f = e.target.closest("[data-fts]"); if (f) { W.futTs = f.dataset.fts; store.set("watch:futts", W.futTs); TS.hover = null; drawTs(); return; } });
+  el.innerHTML = fut ? `<button data-fts="all">近全</button><button data-fts="cur">本盤</button>` : `<button data-ts="1">當日</button><button data-ts="3">三日</button><button data-ts="5">五日</button>`; }
+$("#tsSeg").addEventListener("click", e => { const f = e.target.closest("[data-fts]"); if (f) { W.futTs = f.dataset.fts; store.set("watch:futts2", W.futTs); TS.hover = null; drawTs(); return; } });
 $("#tsSeg").addEventListener("click", e => { const b = e.target.closest("[data-ts]"); if (!b) return; W.tsDays = +b.dataset.ts; store.set("watch:tsd", W.tsDays); TS.hover = null; drawTs(); loadTsHist(); });
 $("#cdpBtn").addEventListener("click", () => { W.cdp = !W.cdp; store.set("watch:cdp", W.cdp); drawTs(); });
 
@@ -2620,7 +2636,7 @@ function drawK(fresh = false, shift = 0) {
   const I = indicators(D), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D, I);
   const old = kChart.view;
   Chart.keepView = !fresh;
-  try { kChart.set(D, { I, ...mainOpts(dBar), subs: [...subsFrom(dBar), ...chipSubs(D)], noVol: !dBar.has("vol") || !D.some(x => x.v), volLabel: `量（${isUS(W.sel) ? "千股" : "張"}）`, fmtD: fmtKD, markers: [...sigs, ...ex.markers], compare: compareOpt(), shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
+  try { kChart.set(D, { I, ...mainOpts(dBar), subs: [...subsFrom(dBar), ...chipSubs(D)], noVol: !dBar.has("vol") || !D.some(x => x.v), volLabel: `量（${isUS(W.sel) ? "千股" : isFut(W.sel) ? "口" : "張"}）`, fmtD: fmtKD, markers: [...sigs, ...ex.markers], compare: compareOpt(), shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
   finally { Chart.keepView = false; }
   const want = W.k === "M" ? (isMobile() ? 36 : 48) : isMobile() ? 60 : 100, N = D.length, w = Math.min(N, want);
   if (fresh || (shift && !old)) kChart.view = N > w ? kChart.clampView(N - w, w) : null;
@@ -2638,7 +2654,11 @@ $("#kSeg").addEventListener("click", e => { const b = e.target.closest("[data-k]
 const olderState = () => (minuteK() ? (W.mk[W.k] ||= {}) : W.daily || {});
 async function loadDaily() {
   const c = W.sel; if (!c || W.off) { drawK(true); return; }
-  if (isFut(c)) { W.daily = { code: c, data: [], err: "台指期目前只提供分 K（1／5／15／60 分）", end: true }; return; }
+  if (isFut(c)) { // 台指近全日 K：/api/futures?daily=1（每天＝前一晚夜盤＋日盤），最後一根用即時分時補上
+    W.daily = { code: c, data: [] }; drawK(true);
+    try { const j = await getJ("/api/futures?daily=1"); if (W.sel !== c) return; W.daily = { code: c, data: j.data || [], source: j.source, end: true }; futMergeDaily(false); }
+    catch (e) { if (W.sel === c) W.daily = { code: c, data: [], err: e.message, end: true }; }
+    if (W.sel === c) { if (!minuteK()) drawK(true); renderAna(); } return; }
   W.daily = { code: c, data: [] }; drawK(true);
   try {
     const j = await getJ(`/api/kline?code=${c === "T00" ? "加權" : c === "O00" ? "櫃買" : c}&months=6`);
@@ -2681,7 +2701,17 @@ async function olderMinute(c, tf) {
   if (got.length) M.older = [...got, ...(M.older || [])];
   return got.length > 0;
 }
+// 台指近全：用這個交易日的分時（夜盤＋日盤）算出今天這根日 K
+function futMergeDaily(redraw = true) {
+  const R = W.daily; if (!isFut(W.sel) || !R?.data?.length || !W.intra?.fut) return;
+  const blocks = []; for (const b of W.intra.bars) { const L = blocks[blocks.length - 1]; if (!L || L.s !== b.s || (b.s === "day" && L.d !== b.d)) blocks.push({ s: b.s, d: b.d, pts: [] }); blocks[blocks.length - 1].pts.push(b); }
+  const T = futTradeDay(blocks), bars = T.flatMap(B => B.pts); if (!T.tday || !bars.length) return;
+  const bar = { d: T.tday, o: bars[0].o, h: Math.max(...bars.map(b => b.h)), l: Math.min(...bars.map(b => b.l)), c: bars[bars.length - 1].c, v: bars.reduce((s, b) => s + (b.v || 0), 0) };
+  const D = R.data, last = D[D.length - 1]; if (bar.d < last.d) return; if (last.d === bar.d) D[D.length - 1] = bar; else D.push(bar);
+  if (redraw && !minuteK() && W.dtab === "tech") drawK();
+}
 function mergeDaily(q, redraw = true) {
+  if (isFut(q.code)) return futMergeDaily(redraw);
   const R = W.daily; if (!R || !R.data?.length || q.code !== W.sel || q.price == null || !q.date) return;
   const D = R.data, last = D[D.length - 1]; if (q.date < last.d) return;
   const open = q.open ?? (last.d === q.date ? last.o : null); if (open == null) return;
@@ -2702,10 +2732,10 @@ async function loadIntra(force = false) {
       if (f.quote) { W.quotes.set("TXF", { ...f.quote, code: "TXF", name: "台指期近月", symbol: f.symbol, settle: f.settle, day: f.day, night: f.night, fsession: f.session }); W.futAt = Date.now(); if (W.sel === c) W.detailQ = W.quotes.get("TXF"); }
       const tq = W.quotes.get("TXF"); futRecord(tq); const loc = f.bars?.length ? null : futLocalBars(tq), bars = f.bars?.length ? f.bars : loc;
       if (bars.length < 2) throw new Error(`${f.note || "還沒有台指期分 K"}（開著這頁約 1 分鐘後就會出現）`);
-      j = { fut: true, bars, date: bars[bars.length - 1].d, prev: f.quote?.prev, source: loc ? "這個瀏覽器記錄的即時報價（開著頁面時才有）" : f.source, session: { open: "00:00", close: "23:59" }, fsession: f.session };
+      j = { fut: true, bars, date: bars[bars.length - 1].d, prev: f.quote?.prev, nprev: f.night?.prev ?? f.quote?.prev, source: loc ? "這個瀏覽器記錄的即時報價（開著頁面時才有）" : f.source, session: { open: "00:00", close: "23:59" }, fsession: f.session };
     } else j = await getJ(`/api/intraday?code=${c}&tf=1`);
     if (W.sel !== c) return;
-    const fresh = !W.intra || W.intra.code !== c; W.intra = { ...j, code: c }; W.intraErr = null;
+    const fresh = !W.intra || W.intra.code !== c; W.intra = { ...j, code: c }; W.intraErr = null; if (isFut(c)) futMergeDaily();
     drawTs(); loadTsHist(); if (minuteK() && W.dtab === "tech") drawK(fresh); if (W.roK && W.roK !== "D") renderAna();
   } catch (e) { if (W.sel === c) { W.intraErr = e.message; drawTs(); if (minuteK()) drawK(); } }
 }
@@ -2716,12 +2746,12 @@ const roK = () => W.roK || W.k;
 function renderAna() {
   if (W.dtab !== "tech") return;
   document.querySelectorAll("#roSeg [data-ro]").forEach(b => b.setAttribute("aria-pressed", b.dataset.ro === W.roK));
-  const k = roK(), D = isFut(W.sel) && "DWM".includes(k) ? null : kSeries(k);
+  const k = roK(), D = kSeries(k);
   if (D && D.length < 30 && !"DWM".includes(k) && !W.mk[+k]?.end && !W.mk[+k]?.busy && !W.off) { // 60 分 K 今天只有幾根：自動往前載入
     const c = W.sel, M = (W.mk[+k] ||= {}); M.busy = true;
     olderMinute(c, +k).catch(() => { M.end = true; }).finally(() => { M.busy = false; if (W.sel === c) renderAna(); });
   }
-  if (!D || D.length < 30) { $("#anaScore").innerHTML = `<span class="note">${isFut(W.sel) && "DWM".includes(k) ? "台指期只有分 K，請改看 60 分或 1 分" : D ? (W.mk[+k]?.busy ? "載入更早的分 K…" : "資料太少（至少要 30 根）") : "載入中…"}</span>`; $("#anaRo").innerHTML = ""; $("#anaGrid").innerHTML = ""; return; }
+  if (!D || D.length < 30) { $("#anaScore").innerHTML = `<span class="note">${D ? (W.mk[+k]?.busy ? "載入更早的分 K…" : "資料太少（至少要 30 根）") : "載入中…"}</span>`; $("#anaRo").innerHTML = ""; $("#anaGrid").innerHTML = ""; return; }
   const I = indicators(D), items = readout(D, I, D.length - 1), bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length, sc = items.length ? (bull - bear) / items.length : 0;
   const lab = sc > 0.35 ? ["偏多", "bull"] : sc > 0.1 ? ["略偏多", "bull"] : sc < -0.35 ? ["偏空", "bear"] : sc < -0.1 ? ["略偏空", "bear"] : ["中性", "flat"];
   const kn = { 1: "1 分 K", 5: "5 分 K", 15: "15 分 K", 60: "60 分 K", D: "日 K", W: "週 K", M: "月 K" }[k];
