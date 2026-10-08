@@ -765,7 +765,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.08-44</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.08-45</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -4455,7 +4455,7 @@ function switchTab(t) {
     if (t === "challenge") { chalScore(); chalNew(); }
     if (t === "quiz") quizStart();
     if (t === "watch") $("#watchFrame").src = "watch.html?embed=1&theme=" + (document.documentElement.dataset.theme || "dark") + (WATCH_PENDING ? "#" + WATCH_PENDING : "");
-    if (t === "savings") $("#savingsFrame").src = "savings.html?embed=1&theme=" + (document.documentElement.dataset.theme || "dark");
+    if (t === "savings") $("#savingsFrame").src = "savings.html?embed=1&theme=" + (document.documentElement.dataset.theme || "dark") + (SAV_PENDING ? "&" + SAV_PENDING : "");
     if (t === "shot") makeSampleShot().then(s => { if (!shot.img && !REAL.cur) shotLoad(s.blob, s); }); // 已經載入真實個股（例如從看盤頁帶過來）就不蓋掉
   }
   window.scrollTo({ top: 0 });
@@ -4486,6 +4486,10 @@ document.addEventListener("click", e => { const a = e.target.closest('a[href^="w
 
 // 深色（黑底）／淺色切換：預設黑底，記在瀏覽器
 $("#styleBtn").addEventListener("click", () => openStylePicker(t => { if (document.documentElement.dataset.theme !== t) $("#themeBtn").click(); }));
+// 看盤 ETF「年化排行」按「存股試算」：切到存股模擬，帶入這一檔
+var SAV_PENDING = ""; // var：switchTab 在頁面一開始就會用到
+addEventListener("message", e => { if (e.data?.type !== "open-savings" || e.source !== $("#watchFrame")?.contentWindow) return; const q = String(e.data.q || "").slice(0, 200);
+  if (!/^add=/.test(q)) return; SAV_PENDING = q; const f = $("#savingsFrame"); if (f.src) f.src = "savings.html?embed=1&theme=" + (document.documentElement.dataset.theme || "dark") + "&" + q; switchTab("savings"); SAV_PENDING = ""; });
 addEventListener("klinestyle", e => { ["#watchFrame", "#savingsFrame"].forEach(id => { try { $(id)?.contentWindow?.postMessage({ type: "kline-style", style: e.detail }, "*"); } catch {} }); redrawAll(); });
 addEventListener("message", e => { if (e.data?.type === "kline-style" && e.data.style !== klStyle()) applyStyle(e.data.style); else if (e.data?.type === "watch-theme" && document.documentElement.dataset.theme !== e.data.theme) $("#themeBtn").click(); });
 $("#fontBtn").addEventListener("click", () => { const f = document.documentElement.dataset.font === "song" ? "sans" : "song"; if (f === "song") document.documentElement.dataset.font = "song"; else delete document.documentElement.dataset.font; store.set("font", f);

@@ -790,7 +790,19 @@ document.querySelectorAll("#rebchips .chip").forEach(c=>c.addEventListener("clic
 $("openall").addEventListener("click",()=>document.querySelectorAll("#console details").forEach(d=>d.open=true));
 $("closeall").addEventListener("click",()=>document.querySelectorAll("#console details").forEach(d=>d.open=false));
 if(window.matchMedia&&matchMedia("(max-width:900px)").matches)document.querySelectorAll("#console details").forEach((d,i)=>{if(i>0)d.open=false});
-load();ASSETS.forEach(a=>{delete a.busy});buildMiles();buildAssetList();fillSelects();renderAll();
+load();ASSETS.forEach(a=>{delete a.busy});
+// 從看盤 ETF「年化排行」帶過來：?add=0050 元大台灣50&r=12.3&crash=33 → 新增（或更新）這個標的、設為主要標的、勾選比較
+function addFromQuery(q){const name=(q.get("add")||"").trim().slice(0,40);if(!name)return null;const code=name.split(/\s+/)[0].toUpperCase(),r=parseFloat(q.get("r")),cr=parseFloat(q.get("crash"));
+  let a=ASSETS.find(x=>String(x.name).split(/\s+/)[0].toUpperCase()===code);
+  if(!a){a={id:"a"+(++seq),name,r:8,crash:40};ASSETS.push(a)}
+  if(Number.isFinite(r))a.r=Math.round(r*10)/10;if(Number.isFinite(cr))a.crash=Math.max(0,Math.min(95,Math.round(cr)));
+  G.main=a.id;G.cmp.add(a.id);return a}
+const _added=addFromQuery(new URLSearchParams(location.search));
+buildMiles();buildAssetList();fillSelects();renderAll();
+if(_added){try{$("g-asset").value=G.main}catch(e){}save();try{history.replaceState(null,"",location.pathname+(document.documentElement.dataset.embed==="1"?"?embed=1":""))}catch(e){}
+  const n=document.createElement("div");n.className="addnote";n.textContent=`已把「${_added.name}」設為主要標的：年化 ${_added.r}%、崩盤 −${_added.crash}%（真實歷史數據，可以再自己調整）。`;
+  n.style.cssText="margin:10px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2,var(--panel));font-size:14px";
+  const t=document.getElementById("sec-sum");if(t)t.parentNode.insertBefore(n,t)}
 </script>
 <script>
 /* 嵌入模式：把頁面高度告訴 K線學堂，讓外框跟著長高；接收主題切換 */
