@@ -1,0 +1,33 @@
+# 盤後資料：每個交易日收盤後整理全市場排行與大盤法人、資券歷史（learner/data/market/after.json）
+name: market-after
+on:
+  schedule:
+    - cron: "40 9 * * 1-5"   # 台北 17:40（法人、融資券、外資持股都公布後）
+    - cron: "30 13 * * 1-5"  # 台北 21:30（櫃買、營收較晚時補抓）
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: market-after
+  cancel-in-progress: false
+jobs:
+  after:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      # 排隊等前一次跑完時，checkout 的是排隊當下的舊版本；先拉到最新的 main，避免和前一次存的資料衝突
+      - run: git pull -q origin main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/market-after.mjs
+      - name: commit
+        run: |
+          git config user.name "market-after"
+          git config user.email "market-after@users.noreply.github.com"
+          git add learner/data/market
+          if git diff --cached --quiet; then echo "沒有新資料"; exit 0; fi
+          git commit -m "盤後：更新排行與大盤法人、資券歷史"
+          for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin HEAD:main && exit 0; git rebase --abort 2>/dev/null; sleep 5; done
+          exit 1
