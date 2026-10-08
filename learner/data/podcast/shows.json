@@ -1,0 +1,15 @@
+{
+  "_說明": "名人 Podcast 的節目清單。排程（.github/workflows/podcast-sync.yml）每 2 小時依這份清單到 Apple Podcasts 目錄找節目、讀 RSS、用 AI 整理新單集，結果寫進 index.json。q 是搜尋字、must 是節目名稱必須包含的字；知道 RSS 網址時可以直接填 feed。",
+  "shows": [
+    { "q": "股癌 Gooaye", "must": "股癌" },
+    { "q": "兆華與股惑仔", "must": "股惑仔" },
+    { "q": "游庭皓的財經皓角", "must": "皓角" },
+    { "q": "理財達人秀", "must": "理財達人秀" },
+    { "q": "Money&Love 投資頻道", "must": "Money" },
+    { "q": "金唬男", "must": "金唬男" },
+    { "q": "謝晨彥", "must": "謝晨彥" },
+    { "q": "CMoney 理財寶", "must": "CMoney" },
+    { "q": "財經M平方", "must": "M平方" },
+    { "q": "Motley Fool Hidden Gems", "must": "Hidden Gems" }
+  ]
+}

@@ -7,9 +7,22 @@
 const POD_SEED = [["股癌", "股癌"], ["兆華與股惑仔", "股惑仔"], ["游庭皓的財經皓角", "皓角"], ["理財達人秀", "理財達人秀"], ["Money&Love 投資頻道", "Money"], ["金唬男", "金唬男"]];
 const POD_CK = [7, 30, 60, 90, 180, 365];
 const POD = { view: "home", feed: null, key: null, hist: [], rank: "expert", sim: { m: 3, mode: "follow", hold: 30 }, cfg: null, feeds: new Map(), px: new Map(), pxBusy: false, job: null, q: "", found: null, qErr: null, busy: 0, booted: false, sid: 0, err: null };
-const podSums = () => (POD.sums ||= store.get("pod:sums", {}) || {});
-const podSave = () => { try { store.set("pod:sums", podSums()); } catch { POD.err = "瀏覽器的儲存空間滿了，舊的整理結果可能存不下。"; } };
-const podFollows = () => store.get("pod:follows", null) || [];
+// 整理結果有兩個來源：排程整理好的（learner/data/podcast/index.json，打開就有）＋這個瀏覽器自己整理或手動新增的（localStorage）
+const podLocal = () => (POD.local ||= store.get("pod:sums", {}) || {});
+const podSave = () => { POD.merged = null; try { store.set("pod:sums", podLocal()); } catch { POD.err = "瀏覽器的儲存空間滿了，舊的整理結果可能存不下。"; } };
+function podSums() {
+  if (POD.merged) return POD.merged;
+  const L = podLocal(), S = POD.srv?.eps || {}, hide = new Set(store.get("pod:hide", []) || []), out = {};
+  for (const [k, v] of Object.entries(S)) out[k] = { ...v, srv: true, calls: (v.calls || []).map(c => ({ ...c, id: c.id || "s" + podHash(k + "|" + (c.code || c.name) + "|" + c.dir) })) };
+  for (const [k, v] of Object.entries(L)) {
+    const sv = out[k], manual = (v.calls || []).filter(c => c.manual);
+    out[k] = !sv ? v : v.mode !== "manual" && v.at > sv.at ? v : { ...sv, calls: [...sv.calls, ...manual] };
+  }
+  for (const v of Object.values(out)) v.calls = (v.calls || []).filter(c => !hide.has(c.id));
+  return (POD.merged = out);
+}
+const podSrvShows = () => (POD.srv?.shows || []).map(({ id, name, author, art, feed }) => ({ id, name, author, art, feed }));
+const podFollows = () => store.get("pod:follows", null) || (POD.srv?.shows?.length ? podSrvShows() : POD.seed || []);
 const podHash = s => { let h = 5381; for (const ch of String(s)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0; return h.toString(36); };
 const podKey = (feed, guid) => podHash(feed + "|" + guid);
 const twDate = iso => new Date(Date.parse(iso) + 8 * 3600e3).toISOString().slice(0, 10);
@@ -32,14 +45,37 @@ function podRender() { if (W.lt === "pod") renderList(); }
 
 /* ---------- 資料：節目、單集、股價 ---------- */
 async function podBoot() {
-  if (POD.booted || W.off) return; POD.booted = true;
-  getJ("/api/podcast?act=cfg", true).then(j => { POD.cfg = j; podRender(); }).catch(() => { POD.cfg = { audio: false, notes: false }; });
-  if (!store.get("pod:follows", null)) { // 第一次：從 Apple Podcasts 找預設的幾個節目
+  if (POD.booted) return; POD.booted = true;
+  const cfg = getJ("/api/podcast?act=cfg", true).then(j => { POD.cfg = j; }).catch(() => { POD.cfg = { audio: false, notes: false }; });
+  await podLoadSrv(); podRender();
+  if (!store.get("pod:follows", null) && !POD.srv?.shows?.length && !W.off) { // 排程還沒整理過任何節目：從 Apple Podcasts 找預設的幾個節目
     POD.busy++; podRender(); const out = [];
     await Promise.all(POD_SEED.map(async ([q, must]) => { try { const j = await getJ(`/api/podcast?q=${encodeURIComponent(q)}`, true); const s = j.shows.find(x => x.name.includes(must)); if (s) out.push({ ...s, seed: POD_SEED.findIndex(x => x[0] === q) }); } catch {} }));
-    out.sort((a, b) => a.seed - b.seed); store.set("pod:follows", out.map(({ seed, ...s }) => s)); POD.busy--;
+    out.sort((a, b) => a.seed - b.seed); POD.seed = out.map(({ seed, ...s }) => s); POD.busy--;
   }
-  await podLoadFeeds(); podLoadPx();
+  podLoadPx(); if (!W.off) await podLoadFeeds(); podLoadPx(); await cfg; podAutoQueue();
+}
+// 排程整理好的資料（GitHub Actions 每 2 小時更新 learner/data/podcast/index.json）
+async function podLoadSrv() {
+  try {
+    const r = await fetch("data/podcast/index.json", { cache: "no-cache" }); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json(); if (!j || typeof j.eps !== "object") throw new Error("格式不對");
+    const fix = Object.values(j.eps).flatMap(v => (v.calls || []).filter(c => !c.code && c.name)); // 代號沒對上的用股票清單補
+    if (fix.length) { const R = await podResolve(fix); fix.forEach((c, i) => { if (R[i].code) { c.code = R[i].code; c.name = c.name || R[i].name; } }); }
+    for (const [feed, eps] of Object.entries(j.latest || {})) if (!POD.feeds.has(feed)) podIndex(feed, { eps });
+    for (const [k, v] of Object.entries(j.eps)) if (!POD.idx?.has(k)) (POD.idx ||= new Map()).set(k, { e: { guid: v.guid, title: v.title, date: v.date, audio: v.audio, link: v.link, dur: v.dur, desc: "" }, feed: v.feed });
+    POD.srv = j; POD.srvAt = Date.now(); POD.merged = null; POD.perf = new Map();
+  } catch (e) { POD.srvErr = e.message; }
+}
+// 自動整理：排程還沒處理到的新單集（或你自己加的節目）在背景整理，不用按按鈕
+function podAutoQueue() {
+  if (!POD.cfg?.notes || POD.job?.busy || W.off || document.visibilityState === "hidden") return;
+  const srvFeeds = new Set((POD.srv?.shows || []).map(s => s.feed)), upd = POD.srv?.updated || "", stale = !upd || Date.now() - Date.parse(upd) > 6 * 3600e3, S = podSums(); POD.fail ||= {};
+  const c = podFollows().flatMap(s => podShowEps(s.feed).slice(0, srvFeeds.has(s.feed) ? 2 : 3).map(e => ({ e, s, key: podKey(s.feed, e.guid), srv: srvFeeds.has(s.feed) })))
+    .filter(x => !S[x.key] && !POD.fail[x.key] && (!x.srv || stale || x.e.date > addDays(upd.slice(0, 10), -3))).sort((a, b) => b.e.date.localeCompare(a.e.date))[0];
+  if (!c) return;
+  POD.auto = c.key;
+  podSum(c.key, POD.cfg.audio && c.e.audio ? "audio" : "notes").then(() => { if (POD.job?.err && POD.job.key === c.key) { POD.fail[c.key] = POD.job.err; POD.job = null; } POD.auto = null; podRender(); setTimeout(podAutoQueue, 1500); });
 }
 async function podLoadFeeds(force = false) {
   const F = podFollows(); POD.busy++; podRender();
@@ -54,11 +90,17 @@ async function podFeed(feed, force = false) {
   POD.feeds.set(feed, v); podIndex(feed, v); try { store.set("pod:feed:" + podHash(feed), v); } catch {}
   return v;
 }
-function podShowOf(feed) { const f = podFollows().find(s => s.feed === feed), v = POD.feeds.get(feed); return { feed, name: f?.name || v?.show?.name || Object.values(podSums()).find(s => s.feed === feed)?.show || "節目", art: f?.art || v?.show?.art || "", author: f?.author || v?.show?.author || "" }; }
+function podShowOf(feed) { const f = podFollows().find(s => s.feed === feed) || (POD.srv?.shows || []).find(s => s.feed === feed), v = POD.feeds.get(feed); return { feed, name: f?.name || v?.show?.name || Object.values(podSums()).find(s => s.feed === feed)?.show || "節目", art: f?.art || v?.show?.art || "", author: f?.author || v?.show?.author || "" }; }
 function podIndex(feed, v) { (POD.idx ||= new Map()); for (const e of v.eps) POD.idx.set(podKey(feed, e.guid), { e, feed }); }
 function podEp(key) {
   const it = POD.idx?.get(key); if (it) return { e: it.e, s: podShowOf(it.feed) };
   const m = podSums()[key]; return m ? { e: { guid: m.guid, title: m.title, date: m.date, desc: "", audio: m.audio || "" }, s: podShowOf(m.feed) } : null;
+}
+// 一個節目的單集：RSS（或排程存的最新單集）＋已整理過的，依日期新到舊
+function podShowEps(feed) {
+  const base = POD.feeds.get(feed)?.eps || POD.srv?.latest?.[feed] || [], seen = new Set(base.map(e => e.guid)), out = [...base];
+  for (const v of Object.values(podSums())) if (v.feed === feed && !seen.has(v.guid)) { seen.add(v.guid); out.push({ guid: v.guid, title: v.title, date: v.date, audio: v.audio || "", link: v.link || "", dur: v.dur || null, desc: "" }); }
+  return out.sort((a, b) => b.date.localeCompare(a.date));
 }
 // 全部的觀點（只有整理過、而且代號確定的）
 function podCalls(feed) {
@@ -143,7 +185,7 @@ async function podSum(key, mode) {
       body = { ...body, uri: up.uri, mime: up.mime, file: up.file, desc: "" };
     }
     const j = await podPost(body), calls = await podResolve(j.calls), old = podSums()[key];
-    podSums()[key] = { tldr: j.tldr, points: j.points, sections: j.sections, topics: j.topics, calls: [...calls, ...(old?.calls || []).filter(c => c.manual)], mode: j.mode, model: j.model, at: Date.now(), feed: it.s.feed, guid: e.guid, title: e.title, date: e.date, show: s.name, audio: e.audio };
+    podLocal()[key] = { tldr: j.tldr, points: j.points, sections: j.sections, topics: j.topics, calls: [...calls, ...(old?.calls || []).filter(c => c.manual)], mode: j.mode, model: j.model, at: Date.now(), feed: it.s.feed, guid: e.guid, title: e.title, date: e.date, show: s.name, audio: e.audio };
     podSave(); POD.job = null; POD.perf = new Map(); podLoadPx();
   } catch (err) { POD.job = { key, err: err.message || "整理失敗", mode }; }
   podRender();
@@ -193,19 +235,25 @@ function podSumBtns(key, e) {
     <p class="note">「聽完整集」最完整（一集約 30～60 秒，會用到 Gemini 額度）；節目說明通常只有大綱，整理出來比較少。</p>`;
 }
 
+// 還沒整理好的單集顯示什麼：自動整理中／排隊中／排程會處理
+function podWaitText(feed) {
+  if (POD.cfg && !POD.cfg.notes && !(POD.srv?.shows || []).some(s => s.feed === feed)) return "伺服器沒有設定 AI 金鑰，無法自動整理";
+  return (POD.srv?.shows || []).some(s => s.feed === feed) ? `AI 自動整理中（每 2 小時一批${POD.srv?.pending ? `，還有 ${POD.srv.pending} 集排隊` : ""}）` : "排隊中，稍後自動整理";
+}
 function podHome() {
   const F = podFollows(), S = podSums();
   if (!F.length) return POD.busy ? podEmpty("正在找節目…") : podEmpty(`還沒有追蹤節目。到「追蹤清單」搜尋節目名稱加入。`);
-  const eps = F.flatMap(s => (POD.feeds.get(s.feed)?.eps || []).slice(0, 12).map(e => ({ e, s, key: podKey(s.feed, e.guid) }))).sort((a, b) => b.e.date.localeCompare(a.e.date)).slice(0, 40);
+  const eps = F.flatMap(s => podShowEps(s.feed).slice(0, 12).map(e => ({ e, s, key: podKey(s.feed, e.guid) }))).sort((a, b) => b.e.date.localeCompare(a.e.date)).slice(0, 40);
   const av = `<div class="pavs">${F.map(s => `<button class="pav" data-pshow="${esc(s.feed)}">${podArt(s)}<span>${esc(s.name)}</span></button>`).join("")}</div>`;
   const cards = eps.map(({ e, s, key }) => { const m = S[key], chars = m ? (m.points.join("") + m.sections.map(x => x.body).join("")).length : 0;
     return `<article class="pep" data-pep="${key}" role="button" tabindex="0">${podArt(s)}<div class="pepb">
       <div class="pmeta"><b>${esc(s.name)}</b><span class="note">・${podRel(e.date)}</span>${podBadge(s.feed)}</div>
       <h4>${esc(e.title)}</h4>
       ${m ? `<p class="ptl">${esc(m.tldr)}</p>${m.topics?.length ? `<p class="note ptopic">• 你可能感興趣的議題：<span>${esc(m.topics[0])}</span></p>` : ""}<p class="note">閱讀約 ${Math.max(1, Math.round(chars / 350))} 分鐘・${m.calls.filter(c => c.code).length} 個觀點</p>`
-        : `<p class="note ptl">${esc((e.desc || "").replace(/\s+/g, " ").slice(0, 70))}${(e.desc || "").length > 70 ? "…" : ""}</p>${podJobHtml(key) || `<p class="note">還沒整理重點・點進去用 AI 整理</p>`}`}
+        : `<p class="note ptl">${esc((e.desc || "").replace(/\s+/g, " ").slice(0, 70))}${(e.desc || "").length > 70 ? "…" : ""}</p>${podJobHtml(key) || `<p class="note">${podWaitText(s.feed)}</p>`}`}
     </div></article>`; }).join("");
-  return `<h2 class="ph2">今日摘要</h2>${av}${cards || podEmpty(POD.busy ? "載入單集中…" : "這些節目最近沒有新單集。")}`;
+  const upd = POD.srv?.updated ? `<p class="note">重點與觀點每 2 小時自動整理・最近更新 ${new Date(Date.parse(POD.srv.updated) + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/")}${POD.job?.busy ? "・正在整理新單集…" : ""}</p>` : POD.job?.busy ? `<p class="note">正在自動整理新單集…</p>` : "";
+  return `<h2 class="ph2">今日摘要</h2>${upd}${av}${cards || podEmpty(POD.busy ? "載入單集中…" : "這些節目最近沒有新單集。")}`;
 }
 function podEpView() {
   const key = POD.key, it = podEp(key); if (!it) return podEmpty("找不到這一集。");
@@ -219,7 +267,7 @@ function podEpView() {
     ${m ? `<div class="pkey"><div class="pkh">重點</div><ul>${m.points.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>
       ${m.sections.map(x => `<h3 class="psec">${esc(x.title)}</h3><p class="pbody">${esc(x.body)}</p>`).join("")}
       ${m.topics?.length ? `<p class="note ptopic">• 你可能感興趣的議題：${m.topics.map(t => `<span>${esc(t)}</span>`).join("、")}</p>` : ""}`
-      : `${podJobHtml(key)}${podSumBtns(key, e)}${e.desc ? `<details class="pnotes"><summary>節目說明</summary><p class="pbody">${esc(e.desc)}</p></details>` : ""}`}
+      : `${podJobHtml(key) || `<div class="pjob"><span class="pspin"></span>${podWaitText(s.feed)}</div>`}<details class="pnotes"><summary>不想等？現在就用 AI 整理這集</summary>${podSumBtns(key, e)}</details>${e.desc ? `<details class="pnotes"><summary>節目說明</summary><p class="pbody">${esc(e.desc)}</p></details>` : ""}`}
     <h2 class="ph2">觀點紀錄</h2>
     ${calls.length ? calls.map(c => podCallCard(c, false)).join("") : podEmpty(m ? "這集沒有整理到明確看多或看空的個股。" : "整理重點後，主持人明確看多／看空的個股會出現在這裡。")}
     ${unres.length ? `<p class="note">代號沒對上的：${unres.map(c => esc(c.name)).join("、")}（可以在下面用代號手動新增）</p>` : ""}
@@ -228,7 +276,7 @@ function podEpView() {
       <button class="linkbtn" data-psum="${m.mode}" data-k="${key}">重新整理</button>${m.mode !== "audio" && POD.cfg?.audio && e.audio ? `<button class="linkbtn" data-psum="audio" data-k="${key}">改用 AI 聽完整集</button>` : ""}</p>${podJobHtml(key)}` : ""}`;
 }
 function podShowView() {
-  const s = podShowOf(POD.feed), calls = podCalls(POD.feed).sort((a, b) => b.date.localeCompare(a.date)), st = podStats(calls), v = POD.feeds.get(POD.feed), S = podSums(), sim = podSim(calls, POD.sim), big = podSim(calls, { m: 24, mode: "follow", hold: 30 });
+  const s = podShowOf(POD.feed), calls = podCalls(POD.feed).sort((a, b) => b.date.localeCompare(a.date)), st = podStats(calls), v = POD.feeds.get(POD.feed), SE = podShowEps(POD.feed), srvShow = (POD.srv?.shows || []).some(x => x.feed === POD.feed), S = podSums(), sim = podSim(calls, POD.sim), big = podSim(calls, { m: 24, mode: "follow", hold: 30 });
   const info = t => `<span class="pinfo" title="${esc(t)}">ⓘ</span>`, seg = (k, opts) => `<div class="seg" role="group">${opts.map(([val, t]) => `<button data-psim="${k}" data-v="${val}" aria-pressed="${String(POD.sim[k]) === String(val)}">${t}</button>`).join("")}</div>`;
   const frame = (t, d, f) => `<div class="pfr"><div class="note">${t}</div><div class="note">${d}</div>${f ? `<b class="${cls(f.avg)}">${podPct(f.avg)}</b><span class="note">${f.n} 個檢查點平均，與大盤相比</span>${f.avg > 0 ? '<span class="pwin">跑贏大盤</span>' : ""}` : `<b class="muted">—</b><span class="note">還沒有結算</span>`}</div>`;
   return `<div class="ptop"><button class="linkbtn pback" data-pback>‹ 返回</button>${podFollows().some(f => f.feed === POD.feed) ? "" : `<button class="btn sm" data-pfol="${esc(POD.feed)}">＋ 追蹤</button>`}</div>
@@ -256,8 +304,8 @@ function podShowView() {
     </div>
     <h2 class="ph2">觀點紀錄</h2>
     ${calls.length ? calls.map(c => podCallCard(c)).join("") : podEmpty("還沒有觀點紀錄。")}
-    <h2 class="ph2">單集 ${v ? `<span class="pbatch">${POD.cfg?.notes ? `<button class="btn sm" data-pbatch="notes" ${POD.job?.busy ? "disabled" : ""}>整理最近 5 集（節目說明）</button>${POD.cfg?.audio ? `<button class="btn sm" data-pbatch="audio" ${POD.job?.busy ? "disabled" : ""}>整理最近 3 集（聽完整集）</button>` : ""}` : ""}</span>` : ""}</h2>
-    ${v ? `<ul class="peps">${v.eps.map(e => { const key = podKey(POD.feed, e.guid); return `<li data-pep="${key}" role="button" tabindex="0"><span>${esc(e.title)}</span><span class="note">${twDate(e.date).slice(5).replace("-", "/")}${S[key] ? "・✓ 已整理" : ""}</span></li>`; }).join("")}</ul>${POD.job?.busy ? podJobHtml(POD.job.key) : ""}` : podEmpty(POD.busy ? "載入中…" : "沒有單集資料。")}`;
+    <h2 class="ph2">單集 ${v && !srvShow ? `<span class="pbatch">${POD.cfg?.notes ? `<button class="btn sm" data-pbatch="notes" ${POD.job?.busy ? "disabled" : ""}>整理最近 5 集（節目說明）</button>${POD.cfg?.audio ? `<button class="btn sm" data-pbatch="audio" ${POD.job?.busy ? "disabled" : ""}>整理最近 3 集（聽完整集）</button>` : ""}` : ""}</span>` : ""}</h2>
+    ${SE.length ? `<ul class="peps">${SE.slice(0, 60).map(e => { const key = podKey(POD.feed, e.guid); return `<li data-pep="${key}" role="button" tabindex="0"><span>${esc(e.title)}</span><span class="note">${twDate(e.date).slice(5).replace("-", "/")}${S[key] ? "・✓ 已整理" : ""}</span></li>`; }).join("")}</ul>${POD.job?.busy ? podJobHtml(POD.job.key) : ""}` : podEmpty(POD.busy ? "載入中…" : "沒有單集資料。")}`;
 }
 function podRankView() {
   const shows = [...new Set([...podFollows().map(s => s.feed), ...Object.values(podSums()).map(s => s.feed)])].map(feed => ({ s: podShowOf(feed), st: podStats(podCalls(feed)) }));
@@ -287,23 +335,32 @@ function renderPod() {
   $("#lx").innerHTML = `<div class="pod">${POD.err ? `<p class="note">⚠ ${esc(POD.err)}</p>` : ""}${body}</div>`;
   return "名人 Podcast：AI 整理重點、追蹤主持人看多／看空的真實表現（相對大盤）。只是回顧統計，不是投資建議。";
 }
+// 自動更新：名人分頁開著時每 10 分鐘重抓排程資料、RSS 與股價，並把新單集排進自動整理
+async function podRefresh(force = false) {
+  if (POD.refreshing) return; POD.refreshing = true;
+  try { await podLoadSrv(); podRender(); if (!W.off) await podLoadFeeds(force); if (force) { POD.px.clear(); POD.perf = new Map(); } podLoadPx(); podAutoQueue(); } finally { POD.refreshing = false; }
+}
 function podGo(view, extra = {}) {
   POD.hist.push({ view: POD.view, feed: POD.feed, key: POD.key }); if (POD.hist.length > 30) POD.hist.shift();
   Object.assign(POD, { view, ...extra }); if (view === "show") podFeed(POD.feed).then(podRender).catch(() => {});
+  if (view === "ep" && !podSums()[POD.key] && POD.cfg?.notes && !POD.job?.busy && !POD.fail?.[POD.key]) { const it = podEp(POD.key); if (it) podSum(POD.key, POD.cfg.audio && it.e.audio ? "audio" : "notes").then(() => setTimeout(podAutoQueue, 1500)); } // 打開還沒整理的單集：馬上自動整理
   podRender(); $("#lx").scrollTop = 0; try { window.scrollTo({ top: 0 }); } catch {}
 }
 function podInit() {
   const lx = $("#lx"), top = $("#lTools");
+  setInterval(() => { if (W.lt === "pod" && POD.booted && document.visibilityState === "visible") podRefresh(); }, 10 * 60e3);
+  document.addEventListener("visibilitychange", () => { if (W.lt === "pod" && POD.booted && document.visibilityState === "visible" && Date.now() - (POD.srvAt || 0) > 10 * 60e3) podRefresh(); });
   top.addEventListener("click", e => {
     if (W.lt !== "pod") return; const b = e.target.closest("[data-pv]");
     if (b) { POD.hist = []; POD.view = b.dataset.pv; podRender(); }
-    else if (e.target.closest("[data-prefresh]")) { podLoadFeeds(true); POD.px.clear(); POD.perf = new Map(); podLoadPx(); }
+    else if (e.target.closest("[data-prefresh]")) { POD.fail = {}; podRefresh(true); }
   });
   lx.addEventListener("click", e => {
     if (W.lt !== "pod" || e.target.closest("[data-sel]") || e.target.closest("audio,a,input,select,form button")) return; const t = e.target, g = s => t.closest(s);
     if (g("[data-pback]")) { const h = POD.hist.pop() || { view: "home" }; Object.assign(POD, h); podRender(); }
     else if (g("[data-psum]")) { const b = g("[data-psum]"); podSum(b.dataset.k, b.dataset.psum); }
-    else if (g("[data-pdel]")) { const [key, id] = g("[data-pdel]").dataset.pdel.split("|"), s = podSums()[key]; if (s && confirm("刪除這筆觀點？")) { s.calls = s.calls.filter(c => c.id !== id); podSave(); POD.perf = new Map(); podRender(); } }
+    else if (g("[data-pdel]")) { const [key, id] = g("[data-pdel]").dataset.pdel.split("|"), L = podLocal()[key]; if (!confirm("刪除這筆觀點？")) return;
+      if (L?.calls?.some(c => c.id === id)) L.calls = L.calls.filter(c => c.id !== id); else store.set("pod:hide", [...(store.get("pod:hide", []) || []), id]); podSave(); podRender(); }
     else if (g("[data-pfol]")) { const feed = g("[data-pfol]").dataset.pfol, s = POD.found?.find(x => x.feed === feed) || { ...podShowOf(feed), feed }; store.set("pod:follows", [...podFollows().filter(f => f.feed !== feed), { id: s.id || podHash(feed), name: s.name, author: s.author, art: s.art, feed }]); podFeed(feed).then(podRender).catch(() => {}); podRender(); }
     else if (g("[data-punf]")) { const feed = g("[data-punf]").dataset.punf; store.set("pod:follows", podFollows().filter(f => f.feed !== feed)); podRender(); }
     else if (g("[data-prk]")) { POD.rank = g("[data-prk]").dataset.prk; podRender(); }
@@ -322,7 +379,7 @@ function podInit() {
       try { const v = await podFeed(url, true); store.set("pod:follows", [...podFollows().filter(x => x.feed !== url), { id: podHash(url), name: v.show.name || url, author: v.show.author, art: v.show.art, feed: url }]); POD.qErr = null; } catch (err) { POD.qErr = err.message; } podRender(); }
     else if (f.matches("[data-padd]")) {
       const key = f.dataset.padd, code = f.code.value.trim().toUpperCase(), it = podEp(key); if (!okCode(code) || !it) { f.code.focus(); return; }
-      const S = podSums(); S[key] ||= { tldr: "", points: [], sections: [], topics: [], calls: [], mode: "manual", at: Date.now(), feed: it.s.feed, guid: it.e.guid, title: it.e.title, date: it.e.date, show: it.s.name, audio: it.e.audio };
+      const S = podLocal(); S[key] ||= { tldr: "", points: [], sections: [], topics: [], calls: [], mode: "manual", at: Date.now(), feed: it.s.feed, guid: it.e.guid, title: it.e.title, date: it.e.date, show: it.s.name, audio: it.e.audio };
       S[key].calls.push({ id: Math.random().toString(36).slice(2, 9), code, name: nameOf(code), dir: f.dir.value === "bear" ? "bear" : "bull", quote: f.quote.value.trim().slice(0, 120), manual: true });
       podSave(); POD.perf = new Map(); podRender(); podLoadPx();
     }

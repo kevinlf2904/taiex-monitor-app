@@ -1,0 +1,37 @@
+# 名人 Podcast：每 2 小時自動整理新單集（重點、觀點），結果寫進 learner/data/podcast/index.json 並推回 main，
+# Vercel 會自動重新部署，網頁打開就有整理好的內容。
+# 建議在 GitHub → Settings → Secrets and variables → Actions 新增 GEMINI_API_KEY（和 Vercel 上的同一把即可），
+# 這樣 AI 可以直接聽完整集；沒設時改用已部署網站的 /api/podcast（SITE_URL）。
+name: podcast-sync
+on:
+  schedule:
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: podcast-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev --ignore-scripts
+      - run: node scripts/podcast-sync.mjs
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://kline-school.vercel.app' }}
+      - name: commit
+        run: |
+          git config user.name "podcast-sync"
+          git config user.email "podcast-sync@users.noreply.github.com"
+          git add learner/data/podcast
+          if git diff --cached --quiet; then echo "沒有新資料"; exit 0; fi
+          git commit -m "名人 Podcast：自動整理新單集"
+          for i in 1 2 3; do git pull --rebase -q origin main && git push -q origin HEAD:main && exit 0; sleep 5; done
+          exit 1
