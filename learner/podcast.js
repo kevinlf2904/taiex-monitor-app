@@ -242,7 +242,7 @@ function podWaitText(feed) {
 }
 function podHome() {
   const F = podFollows(), S = podSums();
-  if (!F.length) return POD.busy ? podEmpty("正在找節目…") : podEmpty(`還沒有追蹤節目。到「追蹤清單」搜尋節目名稱加入。`);
+  if (!F.length) return POD.busy ? podEmpty("正在找節目…") : podEmpty(`還沒有追蹤節目。<button class="btn sm" data-pv="follow">搜尋節目加入</button>`);
   const eps = F.flatMap(s => podShowEps(s.feed).slice(0, 12).map(e => ({ e, s, key: podKey(s.feed, e.guid) }))).sort((a, b) => b.e.date.localeCompare(a.e.date)).slice(0, 40);
   const av = `<div class="pavs">${F.map(s => `<button class="pav" data-pshow="${esc(s.feed)}">${podArt(s)}<span>${esc(s.name)}</span></button>`).join("")}</div>`;
   const cards = eps.map(({ e, s, key }) => { const m = S[key], chars = m ? (m.points.join("") + m.sections.map(x => x.body).join("")).length : 0;
@@ -259,7 +259,7 @@ function podEpView() {
   const key = POD.key, it = podEp(key); if (!it) return podEmpty("找不到這一集。");
   const { e, s } = it, m = podSums()[key], chars = m ? (m.points.join("") + m.sections.map(x => x.body).join("")).length : 0, calls = podCalls().filter(c => c.key === key);
   const unres = (m?.calls || []).filter(c => !c.code);
-  return `<div class="ptop"><button class="linkbtn pback" data-pback>‹ 返回</button>${e.audio ? `<a class="btn sm" href="${esc(e.audio)}" target="_blank" rel="noopener">🎧 收聽</a>` : e.link ? `<a class="btn sm" href="${esc(e.link)}" target="_blank" rel="noopener">開啟原始頁面</a>` : ""}</div>
+  return `<div class="ptop sticky"><button class="linkbtn pback" data-pback>‹ 返回</button>${e.audio ? `<a class="btn sm" href="${esc(e.audio)}" target="_blank" rel="noopener">🎧 收聽</a>` : e.link ? `<a class="btn sm" href="${esc(e.link)}" target="_blank" rel="noopener">開啟原始頁面</a>` : ""}</div>
     <h2 class="ph1">${esc(e.title)}</h2>
     <div class="pmeta"><button class="linkbtn pshowlink" data-pshow="${esc(s.feed)}">${esc(s.name)}</button>${podBadge(s.feed)}</div>
     <p class="note">${twDate(e.date).replace(/-/g, "/")}${e.dur ? `・${Math.round(e.dur / 60)} 分鐘` : ""}${m ? `・閱讀約 ${Math.max(1, Math.round(chars / 350))} 分鐘` : ""}</p>
@@ -279,7 +279,7 @@ function podShowView() {
   const s = podShowOf(POD.feed), calls = podCalls(POD.feed).sort((a, b) => b.date.localeCompare(a.date)), st = podStats(calls), v = POD.feeds.get(POD.feed), SE = podShowEps(POD.feed), srvShow = (POD.srv?.shows || []).some(x => x.feed === POD.feed), S = podSums(), sim = podSim(calls, POD.sim), big = podSim(calls, { m: 24, mode: "follow", hold: 30 });
   const info = t => `<span class="pinfo" title="${esc(t)}">ⓘ</span>`, seg = (k, opts) => `<div class="seg" role="group">${opts.map(([val, t]) => `<button data-psim="${k}" data-v="${val}" aria-pressed="${String(POD.sim[k]) === String(val)}">${t}</button>`).join("")}</div>`;
   const frame = (t, d, f) => `<div class="pfr"><div class="note">${t}</div><div class="note">${d}</div>${f ? `<b class="${cls(f.avg)}">${podPct(f.avg)}</b><span class="note">${f.n} 個檢查點平均，與大盤相比</span>${f.avg > 0 ? '<span class="pwin">跑贏大盤</span>' : ""}` : `<b class="muted">—</b><span class="note">還沒有結算</span>`}</div>`;
-  return `<div class="ptop"><button class="linkbtn pback" data-pback>‹ 返回</button>${podFollows().some(f => f.feed === POD.feed) ? "" : `<button class="btn sm" data-pfol="${esc(POD.feed)}">＋ 追蹤</button>`}</div>
+  return `<div class="ptop sticky"><button class="linkbtn pback" data-pback>‹ 返回</button>${podFollows().some(f => f.feed === POD.feed) ? "" : `<button class="btn sm" data-pfol="${esc(POD.feed)}">＋ 追蹤</button>`}</div>
     <div class="phead">${podArt(s, "part big")}<div><div class="note">往績評分</div><h2 class="ph1">${esc(s.name)}</h2><div class="note">${esc(s.author)}</div></div></div>
     <div class="pcard">
       ${podBadge(POD.feed)}
@@ -357,7 +357,8 @@ function podInit() {
   });
   lx.addEventListener("click", e => {
     if (W.lt !== "pod" || e.target.closest("[data-sel]") || e.target.closest("audio,a,input,select,form button")) return; const t = e.target, g = s => t.closest(s);
-    if (g("[data-pback]")) { const h = POD.hist.pop() || { view: "home" }; Object.assign(POD, h); podRender(); }
+    if (g("[data-pv]")) { POD.hist = []; POD.view = g("[data-pv]").dataset.pv; podRender(); }
+    else if (g("[data-pback]")) { const h = POD.hist.pop() || { view: "home" }; Object.assign(POD, h); podRender(); }
     else if (g("[data-psum]")) { const b = g("[data-psum]"); podSum(b.dataset.k, b.dataset.psum); }
     else if (g("[data-pdel]")) { const [key, id] = g("[data-pdel]").dataset.pdel.split("|"), L = podLocal()[key]; if (!confirm("刪除這筆觀點？")) return;
       if (L?.calls?.some(c => c.id === id)) L.calls = L.calls.filter(c => c.id !== id); else store.set("pod:hide", [...(store.get("pod:hide", []) || []), id]); podSave(); podRender(); }
@@ -389,6 +390,8 @@ function podInit() {
 .pod .ph1 { font-size: 22px; margin: 6px 0 4px; line-height: 1.35; font-weight: 500; } .pod .ph2 { font-size: 18px; margin: 22px 0 10px; font-weight: 500; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .pod .ptop { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
 .pod .pback { font-size: 15px; }
+.pod .ptop.sticky { position: sticky; top: var(--stickH, 58px); z-index: 3; margin: 0 -14px; padding: 6px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.pod .pempty .btn { margin-left: 8px; }
 .pod .part { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; flex: none; background: var(--surface-3); border: 1px solid var(--line); }
 .pod .part.big { width: 72px; height: 72px; border-radius: 6px; } .pod .part.sm { width: 36px; height: 36px; }
 .pod .pnoart { display: inline-grid; place-items: center; font-size: 13px; color: var(--muted); }

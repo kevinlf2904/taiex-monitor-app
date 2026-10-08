@@ -196,7 +196,10 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
   body { padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px)); }
   :root[data-embed="1"] body { padding-bottom: 0; }
   .w-main { grid-template-columns: minmax(0, 1fr); padding: 10px; }
-  .w-list { position: static; max-height: none; }
+  .w-list { position: static; max-height: none; overflow: visible; }
+  /* 手機：分頁列黏在上面，捲到哪都能切換分頁（l-head 用 display: contents，分頁列才能在整個清單範圍內黏住） */
+  .l-head { display: contents; } .l-head > * { margin: 8px 12px 0; } .l-head > :last-child { margin-bottom: 10px; }
+  .ltabs { position: sticky; top: var(--topH, 52px); z-index: 15; margin: 0; padding: 8px 12px 0; background: var(--surface); border-bottom: 1px solid var(--line); }
   .w-main.show-detail .w-list { display: none; }
   .w-main:not(.show-detail) .w-detail { display: none; }
   .back { display: inline-flex; }
@@ -301,7 +304,13 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .lead { display: inline-block; padding: 1px 8px; border-radius: 4px; background: var(--s1); color: #000; font-size: 12px; font-weight: 500; margin-right: 6px; }
 .flowsum { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0 4px; font-size: 12.5px; } .flowsum b { font-family: var(--font-num); } .flowsum .up { color: var(--up); } .flowsum .down { color: var(--down); }
 #flowCv { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; }
-.flowread { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; min-height: 26px; padding: 4px 2px; font-size: 13px; font-family: var(--font-num); }
+.dnav { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; } .dnav .btn { min-width: 32px; padding: 2px 8px; font-size: 16px; line-height: 1.2; } .dnav .note { font-size: 12px; min-width: 38px; text-align: center; font-family: var(--font-num); }
+.ltabs.fl { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22px); mask-image: linear-gradient(90deg, transparent 0, #000 22px); }
+.ltabs.fr { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+.ltabs.fl.fr { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 22px, #000 calc(100% - 28px), transparent); }
+#toTop { position: fixed; right: 14px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--grad-btn); color: var(--ink); font-size: 18px; box-shadow: 0 4px 14px rgba(0,0,0,.3); cursor: pointer; }
+@media (min-width: 901px) { #toTop { bottom: 24px; } }
+.flowread { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; min-height: 26px; padding: 4px 12px; font-size: 13px; font-family: var(--font-num); }
 .flowread small { margin-left: 4px; font-size: 11.5px; } .flowread .linkbtn { margin-left: auto; }
 .imp-btns { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; }
 #hvSeg { margin-left: auto; }
@@ -547,7 +556,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
       <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="pod">名人</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
-        <form id="addForm" autocomplete="off"><input class="code" id="addCode" placeholder="代號或名稱，例 2330、台積、NVDA" inputmode="search" enterkeyhint="go" aria-label="搜尋股票（代號或名稱，美股用英文代號）" aria-autocomplete="list" aria-controls="sugg"><button class="btn primary" type="submit">加入</button></form>
+        <form id="addForm" autocomplete="off"><input class="code" id="addCode" placeholder="代號或名稱：2330、台積、NVDA" inputmode="search" enterkeyhint="go" aria-label="搜尋股票（代號或名稱，美股用英文代號）" aria-autocomplete="list" aria-controls="sugg"><button class="btn primary" type="submit">加入</button></form>
         <ul class="sugg panel" id="sugg" role="listbox" hidden></ul>
       </div>
       <div class="l-tools" id="lTools"></div>
@@ -561,7 +570,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 
   <section class="w-detail" id="detail" aria-live="polite">
     <div class="panel d-head" id="secQuote">
-      <div class="d-title"><button class="btn sm back" id="backBtn" type="button">← 清單</button><h1 id="dName">—</h1><span class="cd" id="dCode"></span><span class="note" id="dMarket"></span></div>
+      <div class="d-title"><button class="btn sm back" id="backBtn" type="button">← 清單</button><h1 id="dName">—</h1><span class="cd" id="dCode"></span><span class="note" id="dMarket"></span><span class="dnav" id="dNav" hidden><button class="btn sm" data-dnav="-1" type="button" aria-label="上一檔">‹</button><span class="note" id="dNavPos"></span><button class="btn sm" data-dnav="1" type="button" aria-label="下一檔">›</button></span></div>
       <div class="d-px"><b id="dPx">—</b><span id="dChg"></span><span class="note" id="dTime"></span></div>
       <div class="d-ext" id="dExt" hidden></div>
       <div class="d-tags" id="dTags"></div>
@@ -652,7 +661,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-38</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-39</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -970,11 +979,24 @@ function renderEtf() {
 }
 /* ---------- 清單：自選群組／台股熱門／美股熱門／排行 ---------- */
 const RANKS = [["gain", "漲幅"], ["loss", "跌幅"], ["volume", "成交量"], ["value", "成交值"], ["foreign", "外資買超"], ["trust", "投信買超"]];
+// 清單分頁列：兩邊還有分頁時淡出提示可以滑；選中的分頁自動捲進畫面
+function ltabsUi(center = false) {
+  const t = $("#lTabs"), a = t.querySelector('[aria-pressed="true"]');
+  if (a && center) { const tr = t.getBoundingClientRect(), ar = a.getBoundingClientRect(); if (ar.left < tr.left + 20 || ar.right > tr.right - 24) t.scrollTo({ left: t.scrollLeft + ar.left - tr.left - (tr.width - ar.width) / 2, behavior: "smooth" }); }
+  const top = document.querySelector(".w-top"), th = top && getComputedStyle(top).position === "sticky" ? top.offsetHeight : 0, r = document.documentElement.style;
+  r.setProperty("--topH", th + "px"); r.setProperty("--stickH", th + (getComputedStyle(t).position === "sticky" ? t.offsetHeight : 0) + "px");
+  t.classList.toggle("fl", t.scrollLeft > 4); t.classList.toggle("fr", t.scrollLeft + t.clientWidth < t.scrollWidth - 4);
+}
+$("#lTabs").addEventListener("scroll", () => ltabsUi(), { passive: true }); addEventListener("resize", () => ltabsUi());
+// 每個分頁記住捲到哪裡，切回來時回到原位
+W.scrollMem = {};
 function setLt(lt) {
+  W.scrollMem[W.lt] = scrollY;
   W.lt = lt; store.set("watch:lt", lt); W.editing = false;
   if (wideMode()) $("#main").classList.remove("show-detail"); // 換到全寬分頁時先把個股抽屜關起來
   if (lt === "mkt") loadMkt(); if (lt === "money") loadMoney(10); if (lt === "screen") { loadScreen(); if (!W.hot.tw) loadHot("tw"); } if (lt === "tw" && !W.hot.tw) loadHot("tw"); if (lt === "us" && !W.hot["us:" + W.usType]) loadHot("us"); if (lt === "rank" && !W.hot["rank:" + W.rankType]) loadHot("rank");
   renderList(); if (lt !== "us") pollList().then(renderList).catch(() => {});
+  ltabsUi(true); const y = W.scrollMem[lt] || 0; requestAnimationFrame(() => { if (!$("#main").classList.contains("show-detail") || wideMode()) scrollTo({ top: Math.min(y, document.documentElement.scrollHeight) }); });
 }
 $("#lTabs").addEventListener("click", e => { const b = e.target.closest("[data-l]"); if (b) setLt(b.dataset.l); });
 function sortedWatch(list = curList()) {
@@ -2083,6 +2105,10 @@ $("#lx").addEventListener("click", e => { const b = e.target.closest("[data-mk]"
   if (k === "mkHot" && v !== "surge" && !W.hot["rank:" + v]) loadMkHot(); renderList(); });
 $("#lx").addEventListener("click", e => { const s = e.target.closest("[data-sel]"); if (s) select(s.dataset.sel); });
 podInit();
+setTimeout(() => ltabsUi(true), 300);
+// 回到頂端：長頁面捲下去後出現
+{ const b = document.createElement("button"); b.id = "toTop"; b.type = "button"; b.textContent = "↑"; b.setAttribute("aria-label", "回到頂端"); b.hidden = true; document.body.appendChild(b);
+  b.addEventListener("click", () => scrollTo({ top: 0, behavior: "smooth" })); addEventListener("scroll", () => { b.hidden = scrollY < 1400; }, { passive: true }); }
 $("#lx").addEventListener("toggle", e => { const d = e.target; if (d.matches?.("details[data-fold]")) store.set("watch:fold:" + d.dataset.fold, d.open); }, true);
 
 /* ---------- 個股 ---------- */
@@ -2092,10 +2118,11 @@ function showList(push = true) {
 }
 function select(code, how = "push") {
   code = String(code).toUpperCase(); if (!okCode(code)) return;
+  if (how !== "replace") { const L = navList(); W.navList = L.includes(code) ? L : null; }
   const changed = code !== W.sel;
   W.sel = code; store.set("watch:last", code);
   if (changed) { W.detailQ = W.quotes.get(code) || null; W.daily = null; W.intra = null; W.intraAt = 0; W.mk = {}; W.info = null; W.tsHist = null; W.flow = null; W.news = null; W.flowAt = 0; kChart.view = null; $("#holdBox").hidden = $("#alertBox").hidden = true; }
-  try { if (how === "push" && location.hash !== "#" + code) (isMobile() ? history.pushState : history.replaceState).call(history, null, "", location.search + "#" + code); } catch {}
+  try { if ((how === "push" || how === "replace") && location.hash !== "#" + code) (how === "push" && isMobile() ? history.pushState : history.replaceState).call(history, null, "", location.search + "#" + code); } catch {}
   $("#main").classList.add("show-detail"); syncLayout();
   $("#learnLink").href = `./?code=${code === "T00" ? "加權" : code}#shot`;
   const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fund"], #dTabs [data-t="co"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
@@ -2111,13 +2138,17 @@ addEventListener("popstate", () => { const h = location.hash.slice(1).toUpperCas
 $("#dbg").addEventListener("click", () => showList());
 document.addEventListener("keydown", e => { if (e.key === "Escape" && wideMode() && $("#main").classList.contains("show-detail") && $("#sheet").hidden && !document.querySelector(".izoom")) showList(); });
 $("#backBtn").addEventListener("click", () => { if (isMobile() && location.hash && history.length > 1 && !EMBED) history.back(); else showList(); });
+// 上一檔／下一檔：依點進來時那個清單的順序（自選、熱門、排行、ETF、選股…），手機也可以左右滑
+function navList() { return [...new Set([...document.querySelectorAll("#wl [data-sel], #lx [data-sel]")].map(b => b.dataset.sel).filter(okCode))]; }
+function dNavGo(d) { const L = W.navList || [], i = L.indexOf(W.sel); if (i < 0 || !L.length) return; const c = L[(i + d + L.length) % L.length]; select(c, "replace"); }
+function renderDNav() { const L = W.navList || [], i = L.indexOf(W.sel), on = i >= 0 && L.length > 1; $("#dNav").hidden = !on; if (on) $("#dNavPos").textContent = `${i + 1}/${L.length}`; }
 function renderDetailHead() {
-  const c = W.sel; if (!c) return;
+  const c = W.sel; if (!c) return; renderDNav();
   const q = W.detailQ || W.quotes.get(c), nm = q?.name || nameOf(c), us = isUS(c);
   if (!EMBED) document.title = `${nm} ${q?.price != null ? fmtPx(q.price, c) : ""}｜K線看盤`;
   $("#dName").textContent = nm; $("#dCode").textContent = c === "T00" ? "TAIEX" : c === "O00" ? "TPEx" : c; $("#dMarket").textContent = us ? `${q?.market || "美股"}・${q?.currency || "USD"}` : q?.market || "";
   $("#dPx").textContent = fmtPx(q?.price, c); $("#dPx").className = cls(q?.chg);
-  $("#dChg").textContent = q?.chg != null ? `${arrow(q.chg)}${fmtPx(Math.abs(q.chg), c)}（${q.chgPct > 0 ? "+" : ""}${q.chgPct}%）` : ""; $("#dChg").className = cls(q?.chg);
+  $("#dChg").textContent = q?.chg != null ? `${arrow(q.chg)}${fmtPx(Math.abs(q.chg), c)}（${q.chgPct > 0 ? "+" : ""}${q.chgPct != null ? (+q.chgPct).toFixed(2) : "—"}%）` : ""; $("#dChg").className = cls(q?.chg);
   const sess = us ? { open: "盤中", pre: "盤前", closed: "收盤" }[q?.session?.state] || "" : "";
   $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today && !us ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${us ? `（美東${sess ? "・" + sess : ""}）` : ""}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}・${us ? "Yahoo（可能延遲）" : isFut(c) ? (q.session === "night" ? "夜盤" : "日盤") : W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err || "";
   const lim = q?.prev && isTW(c) ? [Math.round(q.prev * 1.1 * 100) / 100, Math.round(q.prev * 0.9 * 100) / 100] : null;
@@ -2804,6 +2835,12 @@ function closeSheet() { $("#sheet").hidden = $("#sheetBg").hidden = true; }
 $("#menuBtn").addEventListener("click", () => openSheet());
 $("#sheetBg").addEventListener("click", closeSheet);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+// 上一檔／下一檔：按鈕、鍵盤 ←／→（沒有在輸入時）、在報價區左右滑
+$("#secQuote").addEventListener("click", e => { const b = e.target.closest("[data-dnav]"); if (b) dNavGo(+b.dataset.dnav); });
+document.addEventListener("keydown", e => { if (!W.sel || !$("#main").classList.contains("show-detail") && isMobile() || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "") || e.metaKey || e.ctrlKey || e.altKey || !$("#sheet").hidden) return; if (e.key === "ArrowLeft" || e.key === "ArrowRight") { if ($("#dNav").hidden) return; e.preventDefault(); dNavGo(e.key === "ArrowLeft" ? -1 : 1); } });
+{ let sx = null, sy = 0; const q = $("#secQuote");
+  q.addEventListener("touchstart", e => { if (e.touches.length === 1) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; } }, { passive: true });
+  q.addEventListener("touchend", e => { if (sx == null) return; const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy; sx = null; if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 2 && !$("#dNav").hidden) dNavGo(dx < 0 ? 1 : -1); }, { passive: true }); }
 function alertsHtml() {
   const E = Object.entries(W.alerts);
   return `<h3>價格提醒清單</h3>${E.length ? `<ul class="alist">${E.map(([c, a]) => `<li><span><b>${esc(nameOf(c) || a.name)}</b> <span class="note">${c}</span>　${[a.up ? "≥ " + a.up : "", a.dn ? "≤ " + a.dn : ""].filter(Boolean).join("、")}</span><span><button class="btn sm" data-m="open:${c}">看</button> <button class="btn sm" data-m="del:${c}">刪除</button></span></li>`).join("")}</ul>` : `<p class="note">還沒有設定提醒。進到個股頁按「🔔 提醒」。</p>`}`;
