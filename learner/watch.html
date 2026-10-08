@@ -217,6 +217,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 @media (max-width: 480px) { .brand span { display: none; } .w-top { padding-left: 10px; padding-right: 10px; } .d-px b { font-size: 28px; } .ixc { padding: 3px 8px; gap: 4px; } }
 /* 清單分頁可以左右滑 */
 .etfseg { flex-wrap: wrap; max-width: 100%; } .etfseg button { white-space: nowrap; flex: 0 0 auto; }
+.wl .annrow { display: flex; align-items: center; gap: 6px; padding-right: 10px; } .wl .annrow .row { flex: 1; min-width: 0; } .wl .annrow .pc { background: none; color: var(--muted); font-size: 12px; }
+.annsav { white-space: nowrap; flex: none; }
 .wl .etf-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 400; letter-spacing: 0; line-height: 1.5; } .wl .etf-h .seg { flex: none; }
 .ltabs { overflow-x: auto; scrollbar-width: none; } .ltabs button { flex: 1 0 auto; padding: 6px 10px; white-space: nowrap; }
 .wl .sec-h { padding: 6px 12px; font-size: 12px; color: var(--muted); background: var(--surface-2); font-weight: 500; letter-spacing: .04em; }
@@ -671,7 +673,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-44</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-45</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -723,7 +725,7 @@ const DEFAULT_GROUPS = [{ name: "自選", list: ["2330", "2317", "2454", "0050",
 const W = {
   groups: store.get("watch:groups", null) || [{ name: "自選", list: store.get("watch:list", DEFAULT_GROUPS[0].list) }, DEFAULT_GROUPS[1]],
   gi: +store.get("watch:gi", 0) || 0, names: store.get("watch:names", {}), sort: store.get("watch:sort", "custom"), alerts: store.get("watch:alerts", {}), hold: store.get("watch:hold", {}),
-  lt: store.get("watch:lt", "watch"), etfCat: store.get("watch:etf", "cap"), etfSort: store.get("watch:etfs", ""), rankType: store.get("watch:rank", "gain"), usType: store.get("watch:us", "active"), dtab: store.get("watch:dtab", "trend"),
+  lt: store.get("watch:lt", "watch"), etfCat: store.get("watch:etf", "cap"), etfPer: String(store.get("watch:etfper", "5")), etfSort: store.get("watch:etfs", ""), rankType: store.get("watch:rank", "gain"), usType: store.get("watch:us", "active"), dtab: store.get("watch:dtab", "trend"),
   k: ["1", "5", "15", "60", "D", "W", "M"].includes(String(store.get("watch:k", "D"))) ? String(store.get("watch:k", "D")) : "D", strat: store.get("watch:strat", ""),
   editing: false, sel: null, last: store.get("watch:last", null), quotes: new Map(), prevPx: new Map(), detailQ: null, detailSrc: "", session: null,
   today: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), err: null, off: !/^https?:$/.test(location.protocol),
@@ -956,7 +958,38 @@ const ETF_CATS = [
   ["lev", "槓桿反向", "每天追蹤指數的 2 倍或反向 1 倍，適合短線；長期持有會因每日重設而偏離指數。", [["00631L", "元大台灣50正2"], ["00663L", "國泰臺灣加權正2"], ["00675L", "富邦臺灣加權正2"], ["00685L", "群益臺灣加權正2"], ["00632R", "元大台灣50反1"], ["00676R", "富邦臺灣加權反1"]]],
   ["us", "美股 ETF", "美國掛牌的 ETF（美元計價、報價可能延遲 15 分鐘）。", [["VOO", "Vanguard S&P 500"], ["SPY", "SPDR S&P 500"], ["IVV", "iShares S&P 500"], ["VTI", "Vanguard 美國全市場"], ["VT", "Vanguard 全世界股票"], ["QQQ", "Invesco 那斯達克100"], ["DIA", "SPDR 道瓊工業"], ["IWM", "iShares 羅素2000"], ["SOXX", "iShares 半導體"], ["SMH", "VanEck 半導體"], ["XLK", "SPDR 科技類股"], ["SCHD", "Schwab 美國高股息"], ["VYM", "Vanguard 高股息"], ["VEA", "Vanguard 已開發市場"], ["VWO", "Vanguard 新興市場"], ["BND", "Vanguard 美國總體債券"], ["TLT", "iShares 20年以上美債"], ["IEF", "iShares 7-10年美債"], ["GLD", "SPDR 黃金"], ["ARKK", "ARK 創新"]]],
 ];
-const etfCat = () => (W.etfCat === "rank" ? ["rank", "排行", "", []] : ETF_CATS.find(x => x[0] === W.etfCat) || ETF_CATS[0]);
+const etfCat = () => (W.etfCat === "rank" ? ["rank", "排行", "", []] : W.etfCat === "ann" ? ["ann", "年化排行", "", []] : ETF_CATS.find(x => x[0] === W.etfCat) || ETF_CATS[0]);
+// ETF 年化報酬排行：先讀排程算好的 data/etf-annual.json（每週更新），缺的再向 /api/annual 即時補（結果在這台裝置記一天）
+const ETF_PER = [["1", "1 年"], ["3", "3 年"], ["5", "5 年"], ["10", "10 年"], ["max", "上市以來"]];
+async function loadEtfAnnual() {
+  if (W.etfAnn) return; W.etfAnn = { rows: new Map(), busy: true };
+  try { const r = await fetch("data/etf-annual.json", { cache: "no-cache" }); const j = await r.json(); (j.rows || []).forEach(x => W.etfAnn.rows.set(x.code, x)); W.etfAnn.updated = j.updated; } catch {}
+  const memo = store.get("watch:etfann", {}) || {}, day = Date.now() - 864e5;
+  Object.entries(memo).forEach(([c, x]) => { if (x.at > day && !W.etfAnn.rows.has(c)) W.etfAnn.rows.set(c, x); });
+  const need = ETF_CATS.flatMap(([, cat, , L]) => L.map(([c, n]) => [c, n, cat])).filter(([c], i, a) => !W.etfAnn.rows.has(c) && a.findIndex(x => x[0] === c) === i);
+  W.etfAnn.need = need.length; if (W.lt === "etf") renderList();
+  let k = 0; const worker = async () => { while (k < need.length && !W.off) { const [c, n, cat] = need[k++];
+    try { const j = await getJ(`/api/annual?code=${encodeURIComponent(c)}`, true); const x = { code: c, name: n, cat, first: j.first, last: j.last, p: Object.fromEntries(Object.entries(j.periods || {}).map(([p, v]) => [p, { cagr: v.cagr, mdd: v.mdd, years: v.years }])), at: Date.now() };
+      W.etfAnn.rows.set(c, x); memo[c] = x; } catch {}
+    W.etfAnn.need--; if (W.lt === "etf" && W.etfCat === "ann") renderList(); } };
+  await Promise.all([worker(), worker(), worker()]); W.etfAnn.busy = false; try { store.set("watch:etfann", memo); } catch {} if (W.lt === "etf") renderList();
+}
+// 帶這一檔的真實年化與最大跌幅到存股模擬器
+function openSavings(code, name, r, mdd) {
+  const q = `add=${encodeURIComponent(code + " " + name)}${r != null ? `&r=${r}` : ""}${mdd != null ? `&crash=${Math.round(mdd)}` : ""}`;
+  if (EMBED && parent !== window) post({ type: "open-savings", q }); else location.href = `savings.html?${q}`;
+}
+function renderEtfAnnual() {
+  loadEtfAnnual(); const A = W.etfAnn, per = W.etfPer || "5";
+  const R = [...(A?.rows.values() || [])].map(x => ({ ...x, s: x.p?.[per] })).filter(x => x.s).sort((a, b) => b.s.cagr - a.s.cagr);
+  const pct = v => `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
+  $("#wl").innerHTML = `<li class="sec-h etf-h"><span>年化報酬（含息）${A?.need ? `・載入中 ${A.need} 檔…` : ""}</span><span class="seg sm" role="group" aria-label="期間">${ETF_PER.map(([v, t]) => `<button data-etfper="${v}" aria-pressed="${per === v}">${t}</button>`).join("")}</span></li>`
+    + (R.length ? R.map((x, i) => `<li class="annrow"><button class="row" data-sel="${x.code}"><span class="nm"><span class="rk">${i + 1}</span>${esc(x.name)}<span class="cd">${x.code}</span></span>
+        <span class="px ${cls(x.s.cagr)}">${pct(x.s.cagr)}</span><span class="pc">跌 ${x.s.mdd}%</span><span class="sub"><span class="note">${esc(x.cat || "")}・${x.s.years} 年・最大跌幅 −${x.s.mdd}%</span></span></button>
+        <button class="btn sm annsav" data-sav="${x.code}" data-n="${esc(x.name)}" data-r="${x.s.cagr}" data-m="${x.s.mdd}" type="button">存股試算 ›</button></li>`).join("")
+      : `<li class="empty note">${W.off ? "需要部署到網站才有年化報酬。" : A?.need ? "載入中…" : `這個期間沒有資料（上市不到 ${per === "max" ? "半" : per} 年的 ETF 不會列出）。`}</li>`);
+  return `年化報酬用月線「還原收盤價」（配息再投入）計算，最大跌幅用月收盤（會比日線小一些）。過去績效不代表未來。按「存股試算」會把這一檔和它的年化、最大跌幅帶到存股模擬器。`;
+}
 // ETF 排行：全部台股 ETF（/api/hot?type=etf），依成交量、成交值、漲跌幅排序
 const ETF_RANKS = [["vol", "成交量"], ["value", "成交值"], ["gain", "漲幅"], ["loss", "跌幅"]];
 async function loadEtfRank(force = false) {
@@ -971,12 +1004,14 @@ function etfRankRows() {
 ETF_CATS.forEach(([, , , L]) => L.forEach(([c, n]) => { if (!W.names[c]) W.names[c] = n; }));
 function etfVisible() { // 美股 ETF 的報價每 15 秒問一次就好（Yahoo，本來就可能延遲），台股 ETF 每秒
   if (W.etfCat === "rank") return etfRankRows().slice(0, 30).map(r => r.code);
+  if (W.etfCat === "ann") return [];
   const L = etfCat()[3].map(x => x[0]); if (!L.some(isUS)) return L;
   if (Date.now() - (W.etfUsAt || 0) < 15000) return []; W.etfUsAt = Date.now(); return L;
 }
 function renderEtf() {
   const [k, , desc, L] = etfCat(), us = k === "us";
-  $("#lTools").innerHTML = `<div class="seg etfseg" role="group" aria-label="ETF 類型" id="etfSeg">${[["rank", "排行"], ...ETF_CATS].map(([id, t]) => `<button data-etf="${id}" aria-pressed="${etfCat()[0] === id}">${t}</button>`).join("")}</div>`;
+  $("#lTools").innerHTML = `<div class="seg etfseg" role="group" aria-label="ETF 類型" id="etfSeg">${[["rank", "排行"], ["ann", "年化排行"], ...ETF_CATS].map(([id, t]) => `<button data-etf="${id}" aria-pressed="${etfCat()[0] === id}">${t}</button>`).join("")}</div>`;
+  if (k === "ann") return renderEtfAnnual();
   if (k === "rank") {
     const H = W.etfRank, R = etfRankRows(); if (!H) loadEtfRank();
     $("#wl").innerHTML = `<li class="sec-h etf-h"><span>全部台股 ETF ${H?.live ? "・盤中即時" : H?.date ? "・" + H.date.slice(5).replace("-", "/") : ""}</span><span class="seg sm" role="group" aria-label="排序">${ETF_RANKS.map(([v, t]) => `<button data-etfrk="${v}" aria-pressed="${(W.etfRk || "vol") === v}">${t}</button>`).join("")}</span></li>`
@@ -1121,6 +1156,8 @@ $("#listPane").addEventListener("click", e => {
   else if (gx) { const a = gx.dataset.gx; if (a === "edit") W.editing = true; else if (a === "done") W.editing = false; else if (a === "rename") { const nm = prompt("群組名稱", W.groups[W.gi].name); if (nm) W.groups[W.gi].name = nm.slice(0, 12); } else if (a === "delete" && W.groups.length > 1 && confirm(`刪除群組「${W.groups[W.gi].name}」？`)) { W.groups.splice(W.gi, 1); W.gi = 0; W.editing = false; } saveGroups(); renderList(); }
   else if (so) { W.sort = so.dataset.sort; store.set("watch:sort", W.sort); renderList(); }
   else if (t.closest("[data-etf]")) { W.etfCat = t.closest("[data-etf]").dataset.etf; store.set("watch:etf", W.etfCat); W.etfUsAt = 0; renderList(); pollList().then(renderList).catch(() => {}); }
+  else if (t.closest("[data-etfper]")) { W.etfPer = t.closest("[data-etfper]").dataset.etfper; store.set("watch:etfper", W.etfPer); renderList(); }
+  else if (t.closest("[data-sav]")) { const b = t.closest("[data-sav]"); openSavings(b.dataset.sav, b.dataset.n, +b.dataset.r, +b.dataset.m); }
   else if (t.closest("[data-etfrk]")) { W.etfRk = t.closest("[data-etfrk]").dataset.etfrk; renderList(); }
   else if (t.closest("[data-etfs]")) { W.etfSort = t.closest("[data-etfs]").dataset.etfs; store.set("watch:etfs", W.etfSort); renderList(); }
   else if (us) { W.usType = us.dataset.us; store.set("watch:us", W.usType); if (!W.hot["us:" + W.usType]) loadHot("us"); renderList(); }

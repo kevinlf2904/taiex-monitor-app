@@ -1,0 +1,32 @@
+# ETF 年化報酬排行：每週一收盤後，用 Yahoo 月線還原收盤（含息）重算 ETF 專區每一檔的 1／3／5／10 年年化與最大跌幅（learner/data/etf-annual.json）
+name: etf-annual
+on:
+  schedule:
+    - cron: "30 7 * * 1"   # 每週一台北 15:30
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: etf-annual
+  cancel-in-progress: false
+jobs:
+  annual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # 排隊等前一次跑完時，checkout 的是排隊當下的舊版本；先拉到最新的 main，避免和前一次存的資料衝突
+      - run: git pull -q origin main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/etf-annual.mjs
+      - name: commit
+        run: |
+          git config user.name "etf-annual"
+          git config user.email "etf-annual@users.noreply.github.com"
+          git add learner/data/etf-annual.json
+          if git diff --cached --quiet; then echo "沒有新資料"; exit 0; fi
+          git commit -m "ETF：更新年化報酬排行"
+          for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin HEAD:main && exit 0; git rebase --abort 2>/dev/null; sleep 5; done
+          exit 1

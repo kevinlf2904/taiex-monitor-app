@@ -159,7 +159,7 @@ class Chart {
     // 比例面板：主圖、副圖各自的縮放與高度（觸控裝置也能用按鈕操作）
     this.pop = document.createElement("div"); this.pop.className = "scalepop panel"; this.pop.hidden = true;
     host.append(this.legend, this.bar, this.pop, this.canvas);
-    this.hover = null; this.view = null; this.ptrs = new Map(); this.yz = 1; this.yoff = 0; this.pz = {};
+    this.hover = null; this.view = null; this.ptrs = new Map(); this.yz = 1; this.yoff = 0; this.yfree = false; this.pz = {};
     Chart.all.push(this); this.syncBar();
     this.bar.addEventListener("click", e => {
       const z = e.target.closest("[data-z]")?.dataset.z;
@@ -220,12 +220,13 @@ class Chart {
         // 副圖放大後，在副圖上下拖曳可以平移
         const sp = this.drag.pane && this.drag.pane.key !== "main" && this.drag.pz && this.drag.pz.z > 1 && Math.abs(dy) > 4 ? this.drag.pane : null;
         if (sp && Math.abs(dy) > Math.abs(dx)) { this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {} this.pz[sp.key] = { z: this.drag.pz.z, off: Math.max(-1, Math.min(1, this.drag.pz.off + dy / sp.h)) }; this.req(); return; }
-        const panX = Math.abs(dx) > 4 && this.view, panY = !this.drag.touch && this.yz > 1 && Math.abs(dy) > 4 && this.drag.y < G.top0 + G.mainH;
+        const panX = Math.abs(dx) > 4 && this.view && !(this.drag.touch && this.drag.dir === "v" && this.yz > 1), panY = this.yz > 1 && Math.abs(dy) > 4 && this.drag.y < G.top0 + G.mainH && (!this.drag.touch || this.drag.dir === "v");
         if (panX || panY) {
           this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {}
           if (panX) { this.drag.bw ||= G.bw; this.smoothY = true; const now = performance.now(), fa0 = this.vw.fa; this.view = this.clampView(this.drag.a - dx / this.drag.bw, this.vw.w);
             const dt = now - (this.drag.vt || now - 16); this.drag.vx = 0.7 * (this.drag.vx || 0) + 0.3 * ((this.vw.fa - fa0) / Math.max(1, dt)); this.drag.vt = now; this.drag.panned = true; }
-          if (panY) this.yoff = Math.max(-0.6, Math.min(0.6, this.drag.yoff + dy / G.mainH / this.yz));
+          if (panY) { if (!this.yfree && this.ymid) { this.drag.yoff = this.yoff = this.ymid.off || 0; this.yfree = true; this.drag.y = e.offsetY; } // 從「跟隨」的位置接手
+            this.yoff = Math.max(-0.6, Math.min(0.6, this.drag.yoff + (e.offsetY - this.drag.y) / G.mainH / this.yz)); }
           this.req(); return;
         }
       }
@@ -283,7 +284,7 @@ class Chart {
   subZoomAll(f) { (this.panes || []).filter(p => p.key !== "main").forEach(p => { const z = this.paneZoom(p.key); this.pz[p.key] = { z: Math.max(0.5, Math.min(12, z.z * f)), off: z.off }; }); this.draw(); }
   // 放大或平移過的圖會「鎖定」：所有手勢都交給圖表（touch-action: none），避免拖曳圖表時整個頁面跟著捲動
   get locked() { return !!this.view || this.yz !== 1 || !!this.yoff || Object.values(this.pz).some(x => x.z !== 1 || x.off); }
-  resetScale() { this.view = null; this.yz = 1; this.yoff = 0; this.pz = {}; this.draw(); if (!this.pop.hidden) this.renderPop(); }
+  resetScale() { this.view = null; this.yz = 1; this.yoff = 0; this.yfree = false; this.pz = {}; this.draw(); if (!this.pop.hidden) this.renderPop(); }
   togglePop(open = this.pop.hidden) {
     Chart.all.forEach(c => { if (c !== this && !c.pop.hidden) c.togglePop(false); });
     this.pop.hidden = !open; this.bar.querySelector('[data-z="scale"]').setAttribute("aria-expanded", open);
@@ -318,7 +319,7 @@ class Chart {
     this.bar.querySelector('[data-z="scale"]').classList.toggle("on", scaled);
   }
   yZoom(f) { this.yz = Math.max(0.5, Math.min(12, this.yz * f)); if (this.yz <= 1) this.yoff = 0; this.draw(); }
-  set(D, opts = {}) { if (D !== this.D && !Chart.keepView) { this.ysm = null; this.view = null; this.yz = 1; this.yoff = 0; this.pz = {}; } if (!Chart.keepView || this.hover == null || this.hover >= D.length) { this.hover = null; this.pinned = false; } this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.draw(); return this; }
+  set(D, opts = {}) { if (D !== this.D && !Chart.keepView) { this.ysm = null; this.view = null; this.yz = 1; this.yoff = 0; this.yfree = false; this.pz = {}; } if (!Chart.keepView || this.hover == null || this.hover >= D.length) { this.hover = null; this.pinned = false; } this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.draw(); return this; }
   get visible() { return this.o.visible ?? this.D.length; }
   get range() { return this.view || { a: 0, b: this.D.length - 1 }; }
   // 可見範圍：fa 是小數的起點（拖曳時一個像素一個像素地跟手，不會一次跳一根 K 棒），a、b 是整數索引（給計算用）
@@ -372,7 +373,16 @@ class Chart {
     // 對數座標：用 log(價格) 決定高度；縱向放大：以中間為準把價格範圍縮小，可上下平移（yoff）
     const logS = Chart.prefs.log && lo > 0, tf = logS ? Math.log : v => v, itf = logS ? Math.exp : v => v;
     let tlo = tf(lo), thi = tf(hi); const tpad = (thi - tlo) * 0.08 || Math.abs(thi) * 0.01 || 1; tlo -= tpad; thi += tpad;
-    if (this.yz !== 1 || this.yoff) { const sp = thi - tlo, mid = (tlo + thi) / 2 + this.yoff * sp; tlo = mid - sp / this.yz / 2; thi = mid + sp / this.yz / 2; }
+    // 價格軸拉長（yz > 1）時：預設「跟著最右邊那根 K 棒」——以它的高低點為中心，拖曳左右平移時也一直跟著，K 棒不會跑出畫面；
+    // 使用者手動上下平移過（yfree）就改用 yoff，回到 1× 或換資料時恢復跟隨
+    if (this.yz <= 1 && this.yfree) { this.yfree = false; this.yoff = 0; }
+    if (this.yz !== 1 || this.yoff) {
+      const sp = thi - tlo, half = sp / this.yz / 2; let mid = (tlo + thi) / 2 + this.yoff * sp;
+      if (this.yz > 1 && !this.yfree) { const li = Math.max(va, Math.min(vis - 1, vb)), k = D[li]; if (k) { const c = (tf(k.h) + tf(k.l)) / 2; mid = Math.min(thi - half, Math.max(tlo + half, c)); } }
+      if (this.yz > 1) this.ymid = { off: (mid - (tlo + thi) / 2) / sp }; // 手動平移時從目前位置接著拖
+      tlo = mid - half; thi = mid + half;
+
+    }
     // 拖曳、縮放時價格軸不要一下跳到新範圍：每個畫面往目標靠近 30%，靠近了才停（看起來是平順地伸縮，不會上下抖）
     if (this.ysm && this.smoothY) { const k = 0.3, nlo = this.ysm.lo + (tlo - this.ysm.lo) * k, nhi = this.ysm.hi + (thi - this.ysm.hi) * k;
       if (Math.abs(nlo - tlo) + Math.abs(nhi - thi) > (thi - tlo) * 0.002) { tlo = nlo; thi = nhi; this.needY = true; } else this.smoothY = this.ptrs.size > 0 || !!this.glide; }
