@@ -46,6 +46,8 @@ try { const ls = localStorage; let st = JSON.parse(ls.getItem("kline:style") || 
 }
 .brand h1 { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 21px; letter-spacing: 0.04em; line-height: 1.1; }
 .brand p { margin: 0; font-size: 12px; color: var(--muted); letter-spacing: 0.05em; }
+#navBackFab { position: fixed; left: 14px; bottom: 24px; z-index: 30; height: 38px; padding: 0 16px; border-radius: 999px; border: 0; background: color-mix(in srgb, var(--ink) 14%, var(--bg)); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+@media (max-width: 640px) { #navBackFab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } }
 .tabs { display: flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px; padding: 3px; overflow-x: auto; max-width: 100%; }
 .tabs button {
   border: 0; background: transparent; padding: 5px 14px; border-radius: 3px; cursor: pointer;
@@ -765,7 +767,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.08-55</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.08-56</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -3696,7 +3698,7 @@ function renderMktChip(q, j) {
   c.innerHTML = `<i class="${on ? "on" : ""}"></i><span class="mk-n">加權</span><b>${q.price != null ? q.price.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}</b><span class="${cls}">${q.chg > 0 ? "▲" : q.chg < 0 ? "▼" : ""}${q.chgPct != null ? Math.abs(q.chgPct).toFixed(2) + "%" : ""}</span>`;
   c.setAttribute("aria-label", `加權指數 ${q.price ?? "—"}，${q.chg >= 0 ? "上漲" : "下跌"} ${Math.abs(q.chg ?? 0)} 點（${q.chgPct ?? 0}%），${on ? "盤中即時" : "收盤"}${q.time ? "，" + q.time : ""}`);
 }
-$("#mktChip").addEventListener("click", () => { switchTab("shot"); try { history.replaceState(null, "", "#shot"); } catch {} $("#realCode").value = "加權"; loadRealCode("加權", +$("#realMonths").value); });
+$("#mktChip").addEventListener("click", () => { goTab("shot"); $("#realCode").value = "加權"; loadRealCode("加權", +$("#realMonths").value); });
 // 把即時報價併進日 K：今天已經有 K 棒就更新，沒有就新增一根（試撮階段還沒有開盤價，只顯示不併入）
 function applyLive(q, j) {
   const R = REAL.cur; if (!R || q.price == null || !q.date || q.open == null) return;
@@ -4172,9 +4174,11 @@ function clearNums(hiLo) { NUM_IDS.forEach(id => { $("#" + id).value = id === "n
 $("#calTipGo").addEventListener("click", () => { $(".nums").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }); setTimeout(() => $(aiMode ? "#numsAi" : "#shotHi").focus({ preventScroll: true }), 400); });
 $("#numsClear").addEventListener("click", () => { clearNums(); shotRun(); renderNums(); });
 overlayMigrate("shot");
-const shotBar = indicatorBar($("#shotIbar"), "shot", [], ["ma5", "ma20", "smcS", "smcOB", "vol", "pane:auto"], shotDrawChart);
-["simOn", "simDays", "simMode"].forEach(id => $("#" + id).addEventListener("change", shotDrawChart));
-$("#simRerun").addEventListener("click", () => { simSeed++; $("#simOn").checked = true; shotDrawChart(); });
+// 換指標、換模擬天數或方式、重新模擬：保留目前的縮放與平移（以前會跳回「全部」）
+function shotRedraw() { const v = shotChart.view; Chart.keepView = true; try { shotDrawChart(); } finally { Chart.keepView = false; } if (v && shotChart.D) { shotChart.view = shotChart.clampView(v.fa ?? v.a, v.w ?? v.b - v.a + 1); shotChart.draw(); } }
+const shotBar = indicatorBar($("#shotIbar"), "shot", [], ["ma5", "ma20", "smcS", "smcOB", "vol", "pane:auto"], () => shotRedraw());
+["simOn", "simDays", "simMode"].forEach(id => $("#" + id).addEventListener("change", shotRedraw));
+$("#simRerun").addEventListener("click", () => { simSeed++; $("#simOn").checked = true; shotRedraw(); });
 $("#shotSmcOverlay").addEventListener("change", drawShot);
 $("#shotEnlarge").addEventListener("click", e => { const on = $("#shotGrid").classList.toggle("wide"); e.target.setAttribute("aria-pressed", on); e.target.textContent = on ? "縮小" : "放大"; drawShot(); });
 $("#shotFull").addEventListener("click", e => { shot.fullView = !shot.fullView; e.target.setAttribute("aria-pressed", shot.fullView); e.target.textContent = shot.fullView ? "只看圖表區" : "完整截圖"; drawShot(); });
@@ -4460,7 +4464,23 @@ function switchTab(t) {
   }
   window.scrollTo({ top: 0 });
 }
-const goTab = t => { switchTab(t); try { history.replaceState(null, "", location.pathname + "#" + t); } catch {} };
+// 上一頁：換分頁也進瀏覽器的上一頁紀錄（例如從看盤按「判讀」再返回，會回到原本那一檔、原本的位置）。
+// 看盤裡的畫面（個股、題材、盤後…）由 watch.html 自己記；這裡只記分頁與外層頁面的捲動位置。
+const PNAV = { y: 0, yt: 0, wd: 0, ready: false };
+function pnavFlush() { clearTimeout(PNAV.yt); PNAV.yt = 0; const st = history.state; if (st?.tab && st.y !== PNAV.y) try { history.replaceState({ ...st, y: PNAV.y }, "", location.href); } catch {} }
+function pnavBackUi() {
+  const on = (history.state?.d || 0) > 0 || (store.get("tab") === "watch" && PNAV.wd > 0);
+  let b = $("#navBackFab"); if (!b && on) { b = document.createElement("button"); b.id = "navBackFab"; b.type = "button"; b.textContent = "‹ 返回"; b.setAttribute("aria-label", "回上一頁"); b.addEventListener("click", () => history.back()); document.body.appendChild(b); }
+  if (b) b.hidden = !on;
+}
+const goTab = t => {
+  const same = history.state?.tab === t; if (!same && PNAV.ready) pnavFlush(); switchTab(t);
+  try { if (same || !PNAV.ready) history.replaceState({ ...history.state, tab: t, d: history.state?.d || 0 }, "", location.pathname + "#" + t); else history.pushState({ tab: t, d: (history.state?.d || 0) + 1, y: 0 }, "", location.pathname + "#" + t); } catch {}
+  pnavBackUi();
+};
+addEventListener("scroll", () => { PNAV.y = Math.round(scrollY); clearTimeout(PNAV.yt); PNAV.yt = setTimeout(pnavFlush, 250); }, { passive: true });
+addEventListener("popstate", e => { const st = e.state; if (!st?.tab) return; switchTab(st.tab); const y = st.y || 0;
+  requestAnimationFrame(() => scrollTo({ top: y })); if (y > 0) [250, 700].forEach(t => setTimeout(() => { if (scrollY < y - 4) scrollTo({ top: y }); }, t)); pnavBackUi(); });
 $(".tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) goTab(b.dataset.tab); });
 // 手機底部選單：練習類（實驗室、挑戰、測驗）收在「練習」裡
 function closeTabMenu() { $("#tabMenu").hidden = true; $("#tab-btn-more").setAttribute("aria-expanded", "false"); }
@@ -4478,8 +4498,9 @@ function openWatch(code) {
 }
 addEventListener("message", e => {
   const f = $("#watchFrame"); if (!f || e.source !== f.contentWindow || !e.data) return;
-  if (e.data.type === "watch-height") f.style.height = Math.max(240, Math.min(30000, +e.data.h || 0)) + "px";
+  if (e.data.type === "watch-height") { if (f.offsetParent) f.style.height = Math.max(240, Math.min(30000, +e.data.h || 0)) + "px"; } // 分頁藏起來時回報的高度不算（切回來才不會先縮成一小截、捲不回原位）
   else if (e.data.type === "watch-top") { const hd = $(".top"), stick = hd && /sticky|fixed/.test(getComputedStyle(hd).position), y = f.getBoundingClientRect().top + scrollY - (stick ? hd.offsetHeight : 8) + (+e.data.y || 0); if (Math.abs(y - scrollY) > 4) scrollTo({ top: Math.max(0, y) }); }
+  else if (e.data.type === "watch-nav") { PNAV.wd = +e.data.d || 0; pnavBackUi(); }
   else if (e.data.type === "open-shot" && e.data.code) { goTab("shot"); $("#realCode").value = e.data.code; loadRealCode(e.data.code, +$("#realMonths").value); }
 });
 document.addEventListener("click", e => { const a = e.target.closest('a[href^="watch.html"]'); if (!a || e.metaKey || e.ctrlKey || e.shiftKey || a.target === "_blank") return; e.preventDefault(); openWatch(decodeURIComponent((a.getAttribute("href").split("#")[1] || "")).toUpperCase()); });
@@ -4489,7 +4510,7 @@ $("#styleBtn").addEventListener("click", () => openStylePicker(t => { if (docume
 // 看盤 ETF「年化排行」按「存股試算」：切到存股模擬，帶入這一檔
 var SAV_PENDING = ""; // var：switchTab 在頁面一開始就會用到
 addEventListener("message", e => { if (e.data?.type !== "open-savings" || e.source !== $("#watchFrame")?.contentWindow) return; const q = String(e.data.q || "").slice(0, 200);
-  if (!/^add=/.test(q)) return; SAV_PENDING = q; const f = $("#savingsFrame"); if (f.src) f.src = "savings.html?embed=1&theme=" + (document.documentElement.dataset.theme || "dark") + "&" + q; switchTab("savings"); SAV_PENDING = ""; });
+  if (!/^add=/.test(q)) return; SAV_PENDING = q; const f = $("#savingsFrame"); if (f.src) f.src = "savings.html?embed=1&theme=" + (document.documentElement.dataset.theme || "dark") + "&" + q; goTab("savings"); SAV_PENDING = ""; });
 addEventListener("klinestyle", e => { ["#watchFrame", "#savingsFrame"].forEach(id => { try { $(id)?.contentWindow?.postMessage({ type: "kline-style", style: e.detail }, "*"); } catch {} }); redrawAll(); });
 addEventListener("message", e => { if (e.data?.type === "kline-style" && e.data.style !== klStyle()) applyStyle(e.data.style); else if (e.data?.type === "watch-theme" && document.documentElement.dataset.theme !== e.data.theme) $("#themeBtn").click(); });
 $("#fontBtn").addEventListener("click", () => { const f = document.documentElement.dataset.font === "song" ? "sans" : "song"; if (f === "song") document.documentElement.dataset.font = "song"; else delete document.documentElement.dataset.font; store.set("font", f);
@@ -4507,6 +4528,7 @@ liveKick(); // 頂部加權指數
 // 從看盤頁帶過來：?code=2330#shot → 直接在個股判讀載入真實 K 線
 { const qc = new URLSearchParams(location.search).get("code"); if (qc && /^(\d{4,6}[A-Z]?|加權)$/i.test(qc)) setTimeout(() => { switchTab("shot"); $("#realCode").value = qc; loadRealCode(qc, +$("#realMonths").value); }, 0); }
 switchTab(location.hash.slice(1) || store.get("tab", "learn"));
+{ const st = history.state; try { history.replaceState({ tab: store.get("tab"), d: st?.d || 0, y: st?.y || 0 }, "", location.href); } catch {} PNAV.ready = true; PNAV.y = Math.round(scrollY); pnavBackUi(); }
 </script>
 </body>
 </html>

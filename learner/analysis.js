@@ -300,21 +300,35 @@ const taxOf = c => (/^00\d+B$/.test(c || "") ? 0 : /^00/.test(c || "") ? 0.001 :
 function backtest(D, sigs, opt = {}) {
   const cap = opt.capital || 1e6, lot = opt.lot || 1, useBuy = opt.useBuy !== false, useSell = opt.useSell !== false, skip = opt.skip || new Set();
   const TX = opt.tax ?? TAX, fee = amt => Math.max(20, Math.floor(amt * FEE)), tax = amt => Math.floor(amt * TX); // 手續費與證交稅都是無條件捨去；ETF 證交稅 0.1%
+  // 買賣方式（預設和以前一樣）：fill "open"＝訊號隔天開盤成交、"close"＝訊號當根收盤成交；
+  // stop 停損、take 停利、trail 移動停利（小數，例 0.08＝8%），hold 最多持有幾根 K 棒；size "all" 全部資金、"half" 一半、"units" 每次固定 units × lot 股
+  const fillClose = opt.fill === "close", stop = +opt.stop || 0, take = +opt.take || 0, trail = +opt.trail || 0, hold = +opt.hold || 0, size = opt.size || "all", units = Math.max(1, +opt.units || 1);
   // 用手上的現金能買幾股（扣掉手續費後取整數單位）
   const canBuy = (money, px) => { let n = Math.floor(money / (px * (1 + FEE)) / lot) * lot; while (n > 0 && n * px + fee(n * px) > money) n -= lot; return n; };
   const at = {}; sigs.forEach(s => { if (s.note || skip.has(btKey(s))) return; if ((s.side === "buy" && useBuy) || (s.side === "sell" && useSell)) at[s.i] = s.side; });
   let cash = cap, sh = 0, pos = null, pending = !useBuy && useSell ? "buy" : null, peak = cap, mdd = 0, costs = 0, missed = 0;
   const trades = [];
-  const sell = (i, px, open) => { const amt = sh * px, c = fee(amt) + tax(amt); costs += c; cash += amt - c; trades.push({ ...pos, xi: i, xpx: px, sh, pnl: amt - c - pos.cost, ret: (amt - c) / pos.cost - 1, open }); pos = null; sh = 0; };
+  const sell = (i, px, open, why = "訊號") => { const amt = sh * px, c = fee(amt) + tax(amt); costs += c; cash += amt - c; trades.push({ ...pos, xi: i, xpx: px, sh, pnl: amt - c - pos.cost, ret: (amt - c) / pos.cost - 1, open, why }); pos = null; sh = 0; };
+  const buy = (i, px) => { const budget = size === "half" ? cash / 2 : cash; let n = canBuy(budget, px); if (size === "units") n = Math.min(n, units * lot);
+    if (n > 0) { const amt = n * px, c = fee(amt); costs += c; cash -= amt + c; sh = n; pos = { i, px, cost: amt + c, start: i === 0 && !useBuy, hi: px }; } else missed++; };
   for (let i = 0; i < D.length; i++) {
-    if (pending === "buy" && !pos) { const n = canBuy(cash, D[i].o); if (n > 0) { const amt = n * D[i].o, c = fee(amt); costs += c; cash -= amt + c; sh = n; pos = { i, px: D[i].o, cost: amt + c, start: i === 0 && !useBuy }; } else missed++; }
+    if (pending === "buy" && !pos) buy(i, D[i].o);
     else if (pending === "sell" && pos) sell(i, D[i].o, false);
     pending = null;
+    // 出場條件（進場那根之後才檢查）：停損、停利、移動停利用盤中高低價判斷，跳空就用開盤價；持有到期用收盤價
+    if (pos && i > pos.i) {
+      const b = D[i], sp = stop ? pos.px * (1 - stop) : null, tp = take ? pos.px * (1 + take) : null, tr = trail ? pos.hi * (1 - trail) : null;
+      if (sp != null && b.l <= sp) sell(i, Math.min(b.o, sp), false, "停損");
+      else if (tr != null && b.l <= tr) sell(i, Math.min(b.o, tr), false, pos.hi > pos.px ? "移動停利" : "停損");
+      else if (tp != null && b.h >= tp) sell(i, Math.max(b.o, tp), false, "停利");
+      else if (hold && i - pos.i >= hold) sell(i, b.c, false, "到期");
+      if (pos) pos.hi = Math.max(pos.hi, b.h);
+    }
+    if (at[i]) { if (fillClose) { if (at[i] === "buy" && !pos) buy(i, D[i].c); else if (at[i] === "sell" && pos) sell(i, D[i].c, false); } else pending = at[i]; }
     const eq = cash + sh * D[i].c; peak = Math.max(peak, eq); mdd = Math.max(mdd, 1 - eq / peak);
-    if (at[i]) pending = at[i];
   }
   const last = D.length - 1;
-  if (pos) sell(last, D[last].c, true);
+  if (pos) sell(last, D[last].c, true, "期末");
   const wins = trades.filter(t => t.pnl > 0).length;
   // 買進持有：同一筆資金，第一天開盤買進、最後一天收盤賣出（和策略用同樣的成本與交易單位）
   const bn = canBuy(cap, D[0].o), bAmt = bn * D[0].o, sAmt = bn * D[last].c, bhEnd = cap - bAmt - fee(bAmt) * (bn > 0) + (bn > 0 ? sAmt - fee(sAmt) - tax(sAmt) : 0);
@@ -672,3 +686,42 @@ function trendAnalysis(D, I, mode = "trend") {
   add("波動度", `近 ${rets.length} 根每日漲跌的標準差約 ${(sd * 100).toFixed(1)}%，決定模擬機率帶的寬度`, 0, "range");
   return out;
 }
+
+/* ================= 可調參數的策略（看盤「策略訊號」用） =================
+   每個策略有參數（名稱、範圍、預設值），fn(D, I, p) 回傳訊號 [{ i, side, label }]。改參數會重新計算指標，不影響原本的 Signals。 */
+const crossAt = (a, b, i) => (crossUp(a, b, i) ? 1 : crossDn(a, b, i) ? -1 : 0);
+const STRAT_DEFS = {
+  ma: { name: "均線交叉", desc: "短均線由下往上穿過長均線買進（黃金交叉），由上往下跌破賣出（死亡交叉）",
+    params: [["s", "短均線", 2, 60, 1, 5], ["l", "長均線", 5, 240, 1, 20]],
+    fn: (D, I, p) => { const a = I.ma(Math.min(p.s, p.l - 1)), b = I.ma(p.l), m = []; for (let i = 1; i < D.length; i++) { const x = crossAt(a, b, i); if (x) m.push({ i, side: x > 0 ? "buy" : "sell", label: x > 0 ? "黃金交叉" : "死亡交叉" }); } return m; } },
+  rsi: { name: "RSI 超買超賣", desc: "RSI 由超賣區往上回升買進、由超買區往下跌回賣出",
+    params: [["n", "週期", 2, 50, 1, 14], ["lo", "超賣線", 5, 50, 1, 30], ["hi", "超買線", 50, 95, 1, 70]],
+    fn: (D, I, p) => { const r = rsiCalc(I.c, p.n), m = []; for (let i = 1; i < D.length; i++) { if (r[i - 1] == null) continue; if (r[i - 1] < p.lo && r[i] >= p.lo) m.push({ i, side: "buy", label: "脫離超賣" }); else if (r[i - 1] > p.hi && r[i] <= p.hi) m.push({ i, side: "sell", label: "跌離超買" }); } return m; } },
+  kd: { name: "KD 交叉", desc: "K 線上穿 D 線買進、下穿賣出；可限制只在低檔金叉、高檔死叉",
+    params: [["n", "週期", 3, 30, 1, 9], ["lo", "低檔（金叉要低於）", 5, 100, 1, 20], ["hi", "高檔（死叉要高於）", 0, 95, 1, 80]],
+    fn: (D, I, p) => { const { K, D: d } = kdCalc(D, p.n), m = []; for (let i = 1; i < D.length; i++) { if (crossUp(K, d, i) && d[i] < p.lo) m.push({ i, side: "buy", label: "金叉" }); else if (crossDn(K, d, i) && d[i] > p.hi) m.push({ i, side: "sell", label: "死叉" }); } return m; } },
+  macd: { name: "MACD 交叉", desc: "DIF 上穿訊號線買進、下穿賣出；可設定只做零軸上方的金叉",
+    params: [["f", "快線 EMA", 3, 30, 1, 12], ["sl", "慢線 EMA", 10, 60, 1, 26], ["sg", "訊號線", 3, 20, 1, 9], ["zero", "金叉要在零軸上（1＝是）", 0, 1, 1, 0]],
+    fn: (D, I, p) => { const c = I.c, ef = ema(c, p.f), es = ema(c, Math.max(p.sl, p.f + 1)), w = Math.max(p.sl, p.f + 1), dif = c.map((_, i) => (i < w - 1 ? null : ef[i] - es[i])), sig = ema(dif, p.sg).map((v, i) => (i < w + p.sg - 2 ? null : v)), m = [];
+      for (let i = 1; i < D.length; i++) { const x = crossAt(dif, sig, i); if (x > 0 && (!p.zero || dif[i] > 0)) m.push({ i, side: "buy", label: "DIF上穿" }); else if (x < 0) m.push({ i, side: "sell", label: "DIF下穿" }); } return m; } },
+  boll: { name: "布林通道", desc: "收盤跌破下軌買進、突破上軌賣出（適合盤整）；也可以改成順勢：突破上軌買、跌破中軌賣",
+    params: [["n", "均線週期", 5, 60, 1, 20], ["k", "標準差倍數", 1, 3, 0.1, 2], ["trend", "順勢模式（1＝是）", 0, 1, 1, 0]],
+    fn: (D, I, p) => { const { up, mid, lo } = bollCalc(I.c, p.n, p.k), m = []; for (let i = 1; i < D.length; i++) { if (lo[i] == null || lo[i - 1] == null) continue; const c0 = D[i - 1].c, c1 = D[i].c;
+      if (p.trend) { if (c1 > up[i] && c0 <= up[i - 1]) m.push({ i, side: "buy", label: "突破上軌" }); else if (c1 < mid[i] && c0 >= mid[i - 1]) m.push({ i, side: "sell", label: "跌破中軌" }); }
+      else { if (c1 < lo[i] && c0 >= lo[i - 1]) m.push({ i, side: "buy", label: "跌破下軌" }); else if (c1 > up[i] && c0 <= up[i - 1]) m.push({ i, side: "sell", label: "突破上軌" }); } } return m; } },
+  wr: { name: "威廉 %R", desc: "由超賣區回升買進、由超買區跌回賣出",
+    params: [["n", "週期", 5, 50, 1, 14], ["lo", "超賣線", -95, -50, 1, -80], ["hi", "超買線", -50, -5, 1, -20]],
+    fn: (D, I, p) => { const r = wrCalc(D, p.n), m = []; for (let i = 1; i < D.length; i++) { if (r[i - 1] == null) continue; if (r[i - 1] < p.lo && r[i] >= p.lo) m.push({ i, side: "buy", label: "脫離超賣" }); else if (r[i - 1] > p.hi && r[i] <= p.hi) m.push({ i, side: "sell", label: "跌離超買" }); } return m; } },
+  brk: { name: "區間突破（海龜）", desc: "收盤創 N 日新高買進、跌破 M 日新低賣出（順勢）",
+    params: [["n", "突破天數", 5, 120, 1, 20], ["x", "出場天數", 3, 60, 1, 10]],
+    fn: (D, I, p) => { const m = []; for (let i = p.n; i < D.length; i++) { const hi = Math.max(...D.slice(i - p.n, i).map(x => x.h)), lo = Math.min(...D.slice(Math.max(0, i - p.x), i).map(x => x.l)); if (D[i].c > hi) m.push({ i, side: "buy", label: `${p.n}日新高` }); else if (D[i].c < lo) m.push({ i, side: "sell", label: `${p.x}日新低` }); } return m; } },
+  vwap: { name: "VWAP 站上／跌破", desc: "收盤站上 VWAP 買進、跌破賣出", params: [], fn: (D, I) => Signals.vwap(D, I) },
+  candle: { name: "K 線型態", desc: "錘子、吞噬、晨星等反轉型態", params: [], fn: (D, I) => Signals.candle(D, I) },
+  div: { name: "RSI／MACD 背離", desc: "價格創新低但指標沒有（底背離）買進；反之賣出", params: [], fn: (D, I) => [...Signals.div(D, I, "rsi"), ...Signals.div(D, I, "macd")] },
+  pat: { name: "型態學突破", desc: "頭肩、M 頭、W 底、三角形突破", params: [], fn: (D, I) => Signals.chartPatLive(D, I) },
+  choch: { name: "聰明錢 CHoCH", desc: "市場結構轉變", params: [], fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") },
+  bos: { name: "道氏結構突破", desc: "突破前高、跌破前低", params: [], fn: (D, I) => Signals.structure(D, I, "dow") },
+};
+// 參數：存下來的值套上範圍限制；沒有存的用預設值
+function stratParams(id, saved = {}) { const S = STRAT_DEFS[id]; if (!S) return {}; return Object.fromEntries(S.params.map(([k, , mn, mx, , def]) => { const v = saved[k] == null ? def : +saved[k]; return [k, Number.isFinite(v) ? Math.max(mn, Math.min(mx, v)) : def]; })); }
+function stratRun(id, D, I, saved) { const S = STRAT_DEFS[id]; return S ? S.fn(D, I, stratParams(id, saved)) : []; }
