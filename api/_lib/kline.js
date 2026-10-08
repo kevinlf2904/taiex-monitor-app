@@ -127,8 +127,9 @@ export default async function handler(req, res) {
   const before = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query?.before || "")) ? String(req.query.before) : null;
   const anchor = before ? new Date(new Date(before + "T00:00:00Z").getTime() - 86400e3) : null;
   const tries = us ? [() => fromYahoo(raw, months, anchor)] : isIndex
-    ? (before ? [() => fromYahoo("^TWII", months, anchor), () => fromTwseIndex(months, anchor)] : [() => fromTwseIndex(months), () => fromYahoo("^TWII", months)])
-    : before
+    ? (before || months > 6 ? [() => fromYahoo("^TWII", months, anchor), () => fromTwseIndex(months, anchor)] : [() => fromTwseIndex(months), () => fromYahoo("^TWII", months)])
+    // 超過半年（名人觀點的 24 個月）：證交所要一個月一個月抓（24 次、上櫃股還要再試 24 次），很容易逾時；先問 Yahoo，一次就拿到
+    : before || months > 6
       ? [() => fromYahoo(`${raw}.TW`, months, anchor), () => fromYahoo(`${raw}.TWO`, months, anchor), () => fromTwse(raw, months, anchor), () => fromTpex(raw, months, anchor)]
       : [() => fromTwse(raw, months), () => fromTpex(raw, months), () => fromYahoo(`${raw}.TW`, months), () => fromYahoo(`${raw}.TWO`, months)];
   const errors = [];

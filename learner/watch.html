@@ -219,7 +219,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .etfseg { flex-wrap: wrap; max-width: 100%; } .etfseg button { white-space: nowrap; flex: 0 0 auto; }
 .wl .annrow { display: flex; align-items: center; gap: 6px; padding-right: 10px; } .wl .annrow .row { flex: 1; min-width: 0; } .wl .annrow .pc { background: none; color: var(--muted); font-size: 12px; }
 .annsav { white-space: nowrap; flex: none; }
-.wl .etf-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 400; letter-spacing: 0; line-height: 1.5; } .wl .etf-h .seg { flex: none; }
+.wl .etf-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-weight: 400; letter-spacing: 0; line-height: 1.5; } .wl .etf-h .seg { flex: none; }
 .ltabs { overflow-x: auto; scrollbar-width: none; } .ltabs button { flex: 1 0 auto; padding: 6px 10px; white-space: nowrap; }
 .wl .sec-h { padding: 6px 12px; font-size: 12px; color: var(--muted); background: var(--surface-2); font-weight: 500; letter-spacing: .04em; }
 /* 庫存 */
@@ -674,7 +674,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-52</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-53</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -728,7 +728,7 @@ const DEFAULT_GROUPS = [{ name: "自選", list: ["2330", "2317", "2454", "0050",
 const W = {
   groups: store.get("watch:groups", null) || [{ name: "自選", list: store.get("watch:list", DEFAULT_GROUPS[0].list) }, DEFAULT_GROUPS[1]],
   gi: +store.get("watch:gi", 0) || 0, names: store.get("watch:names", {}), sort: store.get("watch:sort", "custom"), alerts: store.get("watch:alerts", {}), hold: store.get("watch:hold", {}),
-  lt: store.get("watch:lt", "watch"), etfCat: store.get("watch:etf", "cap"), etfPer: String(store.get("watch:etfper", "5")), etfSort: store.get("watch:etfs", ""), rankType: store.get("watch:rank", "gain"), usType: store.get("watch:us", "active"), dtab: store.get("watch:dtab", "trend"),
+  lt: store.get("watch:lt", "watch"), etfCat: store.get("watch:etf", "cap"), etfPer: String(store.get("watch:etfper", "5")), etfAnnMk: store.get("watch:etfannmk", "tw"), futTs: store.get("watch:futts", "cur"), etfSort: store.get("watch:etfs", ""), rankType: store.get("watch:rank", "gain"), usType: store.get("watch:us", "active"), dtab: store.get("watch:dtab", "trend"),
   k: ["1", "5", "15", "60", "D", "W", "M"].includes(String(store.get("watch:k", "D"))) ? String(store.get("watch:k", "D")) : "D", strat: store.get("watch:strat", ""),
   editing: false, sel: null, last: store.get("watch:last", null), quotes: new Map(), prevPx: new Map(), detailQ: null, detailSrc: "", session: null,
   today: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), err: null, off: !/^https?:$/.test(location.protocol),
@@ -983,10 +983,11 @@ function openSavings(code, name, r, mdd) {
   if (EMBED && parent !== window) post({ type: "open-savings", q }); else location.href = `savings.html?${q}`;
 }
 function renderEtfAnnual() {
-  loadEtfAnnual(); const A = W.etfAnn, per = W.etfPer || "5";
-  const R = [...(A?.rows.values() || [])].map(x => ({ ...x, s: x.p?.[per] })).filter(x => x.s).sort((a, b) => b.s.cagr - a.s.cagr);
+  loadEtfAnnual(); const A = W.etfAnn, per = W.etfPer || "5", mk = W.etfAnnMk === "us" ? "us" : "tw";
+  // 台股、美股分開排（幣別、稅制、配息方式不同，放在一起比較不公平）
+  const R = [...(A?.rows.values() || [])].filter(x => (mk === "us") === isUS(x.code)).map(x => ({ ...x, s: x.p?.[per] })).filter(x => x.s).sort((a, b) => b.s.cagr - a.s.cagr);
   const pct = v => `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
-  $("#wl").innerHTML = `<li class="sec-h etf-h"><span>年化報酬（含息）${A?.need ? `・載入中 ${A.need} 檔…` : ""}</span><span class="seg sm" role="group" aria-label="期間">${ETF_PER.map(([v, t]) => `<button data-etfper="${v}" aria-pressed="${per === v}">${t}</button>`).join("")}</span></li>`
+  $("#wl").innerHTML = `<li class="sec-h etf-h"><span>年化報酬（含息）${A?.need ? `・載入中 ${A.need} 檔…` : ""}</span><span class="seg sm" role="group" aria-label="市場">${[["tw", "台股"], ["us", "美股"]].map(([v, t]) => `<button data-etfannmk="${v}" aria-pressed="${mk === v}">${t}</button>`).join("")}</span><span class="seg sm" role="group" aria-label="期間">${ETF_PER.map(([v, t]) => `<button data-etfper="${v}" aria-pressed="${per === v}">${t}</button>`).join("")}</span></li>`
     + (R.length ? R.map((x, i) => `<li class="annrow"><button class="row" data-sel="${x.code}"><span class="nm"><span class="rk">${i + 1}</span>${esc(x.name)}<span class="cd">${x.code}</span></span>
         <span class="px ${cls(x.s.cagr)}">${pct(x.s.cagr)}</span><span class="pc">跌 ${x.s.mdd}%</span><span class="sub"><span class="note">${esc(x.cat || "")}・${x.s.years} 年・最大跌幅 −${x.s.mdd}%</span></span></button>
         <button class="btn sm annsav" data-sav="${x.code}" data-n="${esc(x.name)}" data-r="${x.s.cagr}" data-m="${x.s.mdd}" type="button">存股試算 ›</button></li>`).join("")
@@ -1161,6 +1162,7 @@ $("#listPane").addEventListener("click", e => {
   else if (gx) { const a = gx.dataset.gx; if (a === "edit") W.editing = true; else if (a === "done") W.editing = false; else if (a === "rename") { const nm = prompt("群組名稱", W.groups[W.gi].name); if (nm) W.groups[W.gi].name = nm.slice(0, 12); } else if (a === "delete" && W.groups.length > 1 && confirm(`刪除群組「${W.groups[W.gi].name}」？`)) { W.groups.splice(W.gi, 1); W.gi = 0; W.editing = false; } saveGroups(); renderList(); }
   else if (so) { W.sort = so.dataset.sort; store.set("watch:sort", W.sort); renderList(); }
   else if (t.closest("[data-etf]")) { W.etfCat = t.closest("[data-etf]").dataset.etf; store.set("watch:etf", W.etfCat); W.etfUsAt = 0; renderList(); pollList().then(renderList).catch(() => {}); }
+  else if (t.closest("[data-etfannmk]")) { W.etfAnnMk = t.closest("[data-etfannmk]").dataset.etfannmk; store.set("watch:etfannmk", W.etfAnnMk); renderList(); }
   else if (t.closest("[data-etfper]")) { W.etfPer = t.closest("[data-etfper]").dataset.etfper; store.set("watch:etfper", W.etfPer); renderList(); }
   else if (t.closest("[data-sav]")) { const b = t.closest("[data-sav]"); openSavings(b.dataset.sav, b.dataset.n, +b.dataset.r, +b.dataset.m); }
   else if (t.closest("[data-etfrk]")) { W.etfRk = t.closest("[data-etfrk]").dataset.etfrk; renderList(); }
@@ -2214,7 +2216,7 @@ function select(code, how = "push") {
   const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fund"], #dTabs [data-t="co"], #dTabs [data-t="info"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
   if (!tw && (W.dtab === "chips" || W.dtab === "fund" || W.dtab === "co" || W.dtab === "info")) W.dtab = "trend";
   $("#learnLink").hidden = isUS(code) || isFut(code);
-  const fut = isFut(code); document.querySelectorAll('#kSeg [data-k="D"], #kSeg [data-k="W"], #kSeg [data-k="M"]').forEach(b => (b.hidden = fut)); $("#tsSeg").hidden = $("#cdpBtn").hidden = fut;
+  const fut = isFut(code); document.querySelectorAll('#kSeg [data-k="D"], #kSeg [data-k="W"], #kSeg [data-k="M"]').forEach(b => (b.hidden = fut)); $("#cdpBtn").hidden = fut; tsSegFill(fut);
   if (fut && "DWM".includes(W.k)) W.k = "5";
   renderList(); renderDetailHead(); renderFlow(); setDtab(W.dtab, false); drawTs();
   if (changed) { loadDaily(); loadIntra(true); if (tw) loadInfo(); pollDetail().then(() => { renderDetailHead(); if (W.ftab === "book") renderBook(); }).catch(() => {}); }
@@ -2310,11 +2312,13 @@ const TS = { hover: null, geo: null };
 const toMin = t => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
 // 分時資料：當日，或連同前幾天（三日、五日；前幾天用 Yahoo 1 分 K）
 // 台指期近全：依序排夜盤（15:00–05:00，840 分鐘）與日盤（08:45–13:45，300 分鐘），中間的休市時間不畫
+// 台指期：W.futTs＝"cur" 只看目前這一盤（預設，日盤不會被 14 小時的夜盤擠成一小段）、"all" 近全（夜盤＋日盤接在一起）
 function futData(j) {
-  const blocks = []; let g0 = 0;
+  let blocks = []; let g0 = 0;
   for (const b of j.bars) { const L = blocks[blocks.length - 1]; if (!L || L.s !== b.s || (b.s === "day" && L.d !== b.d)) { if (L) g0 += L.len; blocks.push({ s: b.s, d: b.d, g0, len: b.s === "night" ? 840 : 300, pts: [] }); } blocks[blocks.length - 1].pts.push(b); }
+  if (W.futTs !== "all" && blocks.length > 1) blocks = [{ ...blocks[blocks.length - 1], g0: 0 }];
   let sv = 0, spv = 0, last = null;
-  const pts = blocks.flatMap(B => { sv = 0; spv = 0; return B.pts.map(b => { let m = toMin(b.t) - (B.s === "night" ? 900 : 525); if (m < 0) m += 1440; sv += b.v; spv += b.c * b.v; return (last = { d: b.d, m, g: B.g0 + Math.min(m, B.len), t: b.t, c: b.c, v: b.v, a: sv ? spv / sv : null, s: B.s }); }); });
+  const pts = blocks.flatMap(B => { sv = 0; spv = 0; return B.pts.map(b => { let m = toMin(b.t) - (B.s === "night" ? 900 : 525); if (m < 0) m += 1440; sv += b.v; spv += b.c * b.v; return (last = { blk: B, d: b.d, m, g: B.g0 + Math.min(m, B.len), t: b.t, c: b.c, v: b.v, a: sv ? spv / sv : null, s: B.s }); }); });
   const total = blocks.reduce((s, B) => s + B.len, 0) || 1;
   return { fut: true, blocks, days: [{ d: j.date, pts }], pts, day: j.date, prev: j.prev ?? pts[0].c, isIdx: false, o: 0, cl: total, us: false, cdp: null };
 }
@@ -2337,7 +2341,7 @@ function cdpLevels(day) {
   return [["AH", cdp + r, "up"], ["NH", 2 * cdp - y.l, "up"], ["CDP", cdp, "s1"], ["NL", 2 * cdp - y.h, "down"], ["AL", cdp - r, "down"]];
 }
 function drawTs() {
-  document.querySelectorAll("#tsSeg [data-ts]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.ts === W.tsDays)); $("#cdpBtn").setAttribute("aria-pressed", W.cdp);
+  document.querySelectorAll("#tsSeg [data-ts]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.ts === W.tsDays)); document.querySelectorAll("#tsSeg [data-fts]").forEach(b => b.setAttribute("aria-pressed", b.dataset.fts === (W.futTs === "all" ? "all" : "cur"))); $("#cdpBtn").setAttribute("aria-pressed", W.cdp);
   const cv = $("#tsCanvas"), host = $("#tsBox"), Wd = host.clientWidth; if (!Wd) return;
   const d = tsData(), dpr = devicePixelRatio || 1, narrow = Wd < 560, mainH = narrow ? 200 : 250, volH = !d || d.isIdx ? 0 : narrow ? 54 : 70, axH = 18, H = mainH + (volH ? volH + 8 : 0) + axH + 8;
   cv.width = Wd * dpr; cv.height = H * dpr; cv.style.height = H + "px";
@@ -2368,14 +2372,15 @@ function drawTs() {
   if (cdp) cdp.forEach(([k, v, c]) => { const y = Y(v); if (y < top || y > top + mainH) return; ctx.strokeStyle = col("--" + c); ctx.globalAlpha = 0.85; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.fillStyle = col("--" + c); ctx.textAlign = "left"; ctx.fillText(`${k} ${fp(v)}`, L + 4, y - 7); });
   const last = pts[pts.length - 1], lc = last.c >= prev ? col("--up") : col("--down");
   ctx.save(); ctx.beginPath(); ctx.rect(L, top, pw, mainH); ctx.clip();
-  days.forEach(x => {
+  // 台指期近全：夜盤、日盤各畫一段，不要用一條斜線把兩盤接起來
+  (d.fut ? d.blocks.map(B => ({ pts: pts.filter(p => p.blk === B) })).filter(x => x.pts.length) : days).forEach(x => {
     const P = x.pts; ctx.beginPath(); P.forEach((p, i) => (i ? ctx.lineTo(X(p.g), Y(p.c)) : ctx.moveTo(X(p.g), Y(p.c)))); ctx.lineTo(X(P[P.length - 1].g), Y(prev)); ctx.lineTo(X(P[0].g), Y(prev)); ctx.closePath();
     ctx.fillStyle = lc; ctx.globalAlpha = 0.12; ctx.fill(); ctx.globalAlpha = 1;
-    ctx.strokeStyle = col("--accent"); ctx.lineWidth = 1.6; ctx.beginPath(); P.forEach((p, i) => (i ? ctx.lineTo(X(p.g), Y(p.c)) : ctx.moveTo(X(p.g), Y(p.c)))); ctx.stroke();
-    if (!d.isIdx) { ctx.strokeStyle = col("--s1"); ctx.lineWidth = 1.2; ctx.beginPath(); let st = false; P.forEach(p => { if (p.a == null) return; st ? ctx.lineTo(X(p.g), Y(p.a)) : ctx.moveTo(X(p.g), Y(p.a)); st = true; }); ctx.stroke(); }
+    ctx.strokeStyle = col("--ink"); ctx.globalAlpha = 0.55; ctx.lineWidth = 1; ctx.beginPath(); P.forEach((p, i) => (i ? ctx.lineTo(X(p.g), Y(p.c)) : ctx.moveTo(X(p.g), Y(p.c)))); ctx.stroke(); ctx.globalAlpha = 1; // 分時走線：透明灰、細
+    if (!d.isIdx) { ctx.strokeStyle = col("--s1"); ctx.globalAlpha = 0.7; ctx.lineWidth = 0.8; ctx.beginPath(); let st = false; P.forEach(p => { if (p.a == null) return; st ? ctx.lineTo(X(p.g), Y(p.a)) : ctx.moveTo(X(p.g), Y(p.a)); st = true; }); ctx.stroke(); }
   });
   ctx.restore();
-  ctx.fillStyle = col("--accent"); ctx.beginPath(); ctx.arc(X(last.g), Y(last.c), 3, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1; ctx.fillStyle = col("--muted"); ctx.beginPath(); ctx.arc(X(last.g), Y(last.c), 2.5, 0, Math.PI * 2); ctx.fill();
   if (volH) {
     const vt = top + mainH + 8, vmax = Math.max(1, ...pts.map(p => p.v)), bw = Math.max(1, pw / total * 0.7);
     pts.forEach((p, i) => { const h = p.v / vmax * (volH - 2); ctx.fillStyle = i && p.c < pts[i - 1].c ? col("--down") : col("--up"); ctx.globalAlpha = 0.6; ctx.fillRect(X(p.g) - bw / 2, vt + volH - h, bw, h); });
@@ -2385,8 +2390,8 @@ function drawTs() {
   if (hv) { ctx.strokeStyle = col("--muted"); ctx.globalAlpha = 0.8; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(X(hv.g), top); ctx.lineTo(X(hv.g), H - axH - 6); ctx.moveTo(L, Y(hv.c)); ctx.lineTo(L + pw, Y(hv.c)); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
   TS.geo = { L, pw, total };
   const ch = P.c / prev - 1;
-  $("#tsLeg").innerHTML = `<span><b>${d.fut ? (P.s === "night" ? "夜盤 " : "日盤 ") : ""}${days.length > 1 ? P.d.slice(5).replace("-", "/") + " " : ""}${P.t}</b></span><span class="${cls(ch)}"><b>價</b>${fp(P.c)}（${ch >= 0 ? "+" : ""}${(ch * 100).toFixed(2)}%）</span>${P.a != null && !d.isIdx ? `<span style="color:var(--s1)"><b style="color:inherit">均價</b>${fp(P.a)}</span>` : ""}${d.isIdx ? "" : `<span><b>量</b>${fmtVol(P.v)} ${d.us ? "千股" : d.fut ? "口" : "張"}</span>`}<span><b>昨收</b>${fp(prev)}</span>`;
-  if (d.fut) { $("#tsNote").textContent = `近全（夜盤＋日盤）・${W.quotes.get("TXF")?.symbol || ""}・${W.intra.source || ""}`; return; }
+  $("#tsLeg").innerHTML = `<span><b>${d.fut ? (P.s === "night" ? "夜盤 " : "日盤 ") : ""}${days.length > 1 ? P.d.slice(5).replace("-", "/") + " " : ""}${P.t}</b></span><span class="${cls(ch)}"><b>價</b>${fp(P.c)}（${ch >= 0 ? "+" : ""}${(ch * 100).toFixed(2)}%）</span>${P.a != null && !d.isIdx ? `<span style="color:var(--s1)"><b style="color:inherit">均價</b>${fp(P.a)}</span>` : ""}${d.isIdx ? "" : `<span><b>量</b>${fmtVol(P.v)} ${d.us ? "千股" : d.fut ? "口" : "張"}</span>`}<span><b>${d.fut ? "參考價" : "昨收"}</b>${fp(prev)}</span>`;
+  if (d.fut) { $("#tsNote").textContent = `${W.futTs === "all" ? "近全（夜盤＋日盤）" : d.blocks[0]?.s === "night" ? "本盤：夜盤 15:00–05:00" : "本盤：日盤 08:45–13:45"}・${W.quotes.get("TXF")?.symbol || ""}・${W.intra.source || ""}`; return; }
   const wantDays = W.tsDays > 1 && days.length < W.tsDays ? (W.tsHist?.code === W.sel ? (W.tsHist.err ? `・前幾天載入失敗：${W.tsHist.err}` : "") : "・載入前幾天中…") : "";
   $("#tsNote").textContent = `${W.intra.date && W.intra.date !== W.today && !d.us ? "最近交易日 " + W.intra.date.replace(/-/g, "/") + "・" : ""}${d.us ? "美東時間・" : ""}${W.intra.source || ""}${wantDays}${W.cdp && !cdp ? "・CDP 需要日 K 資料" : ""}`;
 }
@@ -2400,6 +2405,10 @@ async function loadTsHist() {
   } catch (e) { if (W.sel === c) W.tsHist = { code: c, bars: [], err: e.message }; }
   if (W.sel === c) drawTs();
 }
+// 分時上方的切換：股票是當日／三日／五日；台指期是本盤／近全
+function tsSegFill(fut) { const el = $("#tsSeg"); if (el.dataset.fut === String(fut)) return; el.dataset.fut = String(fut);
+  el.innerHTML = fut ? `<button data-fts="cur">本盤</button><button data-fts="all">近全</button>` : `<button data-ts="1">當日</button><button data-ts="3">三日</button><button data-ts="5">五日</button>`; }
+$("#tsSeg").addEventListener("click", e => { const f = e.target.closest("[data-fts]"); if (f) { W.futTs = f.dataset.fts; store.set("watch:futts", W.futTs); TS.hover = null; drawTs(); return; } });
 $("#tsSeg").addEventListener("click", e => { const b = e.target.closest("[data-ts]"); if (!b) return; W.tsDays = +b.dataset.ts; store.set("watch:tsd", W.tsDays); TS.hover = null; drawTs(); loadTsHist(); });
 $("#cdpBtn").addEventListener("click", () => { W.cdp = !W.cdp; store.set("watch:cdp", W.cdp); drawTs(); });
 
@@ -2537,10 +2546,11 @@ function agg(D, key) {
 }
 const weekKey = d => { const t = new Date(d + "T00:00:00Z"), day = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - day); return t.toISOString().slice(0, 10); };
 // 分 K：更早幾天（W.mk[tf].older，伺服器直接給該週期）＋今天（由 1 分 K 合成）
+// 台指期：日盤從 08:45、夜盤從 15:00 起算，60 分 K 才不會切出 08:00 的半根
 function minuteSeries(tf) {
   const M = W.mk[tf] || {}, today = [];
   const o = toMin(W.intra?.session?.open || "09:00");
-  for (const b of W.intra?.bars || []) { const sl = Math.floor((toMin(b.t) - o) / tf) * tf + o, t = `${String(Math.floor(sl / 60)).padStart(2, "0")}:${String(sl % 60).padStart(2, "0")}`, d = b.d || W.intra.date, L = today[today.length - 1];
+  for (const b of W.intra?.bars || []) { const o2 = b.s === "night" ? 900 : b.s === "day" ? 525 : o, rel = (toMin(b.t) - o2 + 1440) % 1440, sl = (Math.floor(rel / tf) * tf + o2) % 1440, t = `${String(Math.floor(sl / 60)).padStart(2, "0")}:${String(sl % 60).padStart(2, "0")}`, d = b.d || W.intra.date, L = today[today.length - 1];
     if (L && L.t === t && L.dd === d) { L.h = Math.max(L.h, b.h); L.l = Math.min(L.l, b.l); L.c = b.c; L.v += b.v; } else today.push({ dd: d, t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }); }
   const firstToday = today[0]?.dd;
   return [...(M.older || []).filter(b => !firstToday || b.d < firstToday).map(b => ({ d: `${b.d} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v })), ...today.map(b => ({ d: `${b.dd} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }))];

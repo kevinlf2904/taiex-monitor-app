@@ -109,7 +109,7 @@ function podCalls(feed) {
 async function podLoadPx() {
   if (POD.pxBusy || W.off) return; const calls = podCalls(); if (!calls.length) return;
   const need = [...new Set([...calls.map(c => c.code), ...(calls.some(c => /^\d/.test(c.code)) ? ["0050"] : []), ...(calls.some(c => !/^\d/.test(c.code)) ? ["SPY"] : [])])]
-    .filter(c => { const p = POD.px.get(c); return !p || (Date.now() - p.at > 30 * 60e3 && !p.err); });
+    .filter(c => { const p = POD.px.get(c); return !p || Date.now() - p.at > (p.err ? 3 * 60e3 : 30 * 60e3); }); // 失敗的 3 分鐘後重試（以前失敗一次就永遠不再抓）
   if (!need.length) return; POD.pxBusy = true;
   let k = 0, last = 0; const worker = async () => { while (k < need.length) { const c = need[k++];
     try { const j = await getJ(`/api/kline?code=${encodeURIComponent(c)}&months=24`, true); POD.px.set(c, { at: Date.now(), data: j.data }); } catch (e) { POD.px.set(c, { at: Date.now(), data: null, err: e.message }); }
@@ -329,6 +329,7 @@ function podFollowView() {
 }
 function renderPod() {
   podBoot();
+  if (POD.booted && !POD.pxBusy) setTimeout(podLoadPx, 0); // 有缺的股價（或之前失敗的）就補抓
   const tab = ["ep", "show"].includes(POD.view) ? POD.hist.find(h => !["ep", "show"].includes(h.view))?.view || "home" : POD.view;
   $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="名人" id="podSeg">${[["home", "今日摘要"], ["rank", "走勢"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
   const body = POD.view === "ep" ? podEpView() : POD.view === "show" ? podShowView() : POD.view === "rank" ? podRankView() : POD.view === "follow" ? podFollowView() : podHome();
