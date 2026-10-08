@@ -190,7 +190,9 @@ class Chart {
         if (this.glide) { cancelAnimationFrame(this.glide); this.glide = 0; }
         this.drag = { x: e.offsetX, y: e.offsetY, cx: e.clientX, cy: e.clientY, t: performance.now(), vy: 0, touch: e.pointerType !== "mouse", dir: null, a: this.vw.fa, yz: this.yz, yoff: this.yoff, pane, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, axis: onAxis && pane?.key === "main" && e.pointerType === "mouse", subAxis: onAxis && pane && pane.key !== "main" && e.pointerType === "mouse", moved: false }; // 觸控：在價格軸上滑動不再拉伸價格軸（以前上下滑頁面時很容易誤觸，K 棒被拉得很長）
       }
-      if (this.ptrs.size === 2 && this.D) { this.tapOk = false; const [p, q] = [...this.ptrs.values()], { a, b } = this.range; this.smoothY = true; this.pinch = { d: Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), a: this.vw.fa, w: this.vw.w, mid: this.indexAt((p.x + q.x) / 2, true), mx: (p.x + q.x) / 2 }; this.drag = null; try { cv.setPointerCapture(e.pointerId); } catch {} }
+      if (this.ptrs.size === 2 && this.D) { this.tapOk = false; const [p, q] = [...this.ptrs.values()], { a, b } = this.range; this.smoothY = true; const ax = Math.abs(p.x - q.x), ay = Math.abs(p.y - q.y), vert = ay > ax * 1.5, pane = this.paneAt((p.y + q.y) / 2);
+        // 兩指上下張開＝拉長或壓縮（在主圖上是價格軸，在副圖上只縮放那個副圖）；其他方向＝左右縮放時間軸
+        this.pinch = { mode: !vert ? "x" : pane && pane.key !== "main" ? "p" : "y", key: pane?.key, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, d: Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), dy: Math.max(30, ay), yz: this.yz, a: this.vw.fa, w: this.vw.w, mid: this.posAt((p.x + q.x) / 2), mx: (p.x + q.x) / 2 }; this.drag = null; try { cv.setPointerCapture(e.pointerId); } catch {} }
       if (this.ptrs.size === 1) this.tapOk = true;
       if (e.pointerType === "mouse" && !this.pinned) this.hoverAt(e.offsetX);
     });
@@ -199,6 +201,8 @@ class Chart {
       if (this.pinch && this.ptrs.size === 2) {
         // 雙指縮放：用兩指的實際距離（斜著捏也穩定），以一開始兩指中間那根 K 棒為中心，兩指一起移動時順便平移；每個畫面最多重畫一次
         const P = this.pinch, [p, q] = [...this.ptrs.values()], d = Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), G = this.geo;
+        if (P.mode === "p") { this.pz[P.key] = { z: Math.max(0.5, Math.min(12, P.pz.z * Math.max(30, Math.abs(p.y - q.y)) / P.dy)), off: P.pz.off }; this.req(); return; }
+        if (P.mode === "y") { this.yz = Math.max(0.5, Math.min(12, P.yz * Math.max(30, Math.abs(p.y - q.y)) / P.dy)); if (this.yz <= 1) this.yoff = 0; this.req(); return; }
         const w = P.w * P.d / d, shift = G ? ((p.x + q.x) / 2 - P.mx) / (G.pw / w) : 0;
         this.view = this.clampView(P.mid - (P.mid - P.a) * w / P.w - shift, w); this.req(); return;
       }
@@ -245,6 +249,10 @@ class Chart {
         this.smoothY = true; this.glide = requestAnimationFrame(go); }
       // 點一下（沒有拖曳）：固定十字線；固定時再點同一根 K 棒就取消
       if (e.type === "pointerup" && this.tapOk && this.drag && !this.drag.moved && this.D && this.ptrs.size === 1 && !this.drag.axis && !this.drag.subAxis) {
+        // 手指點兩下（300ms 內、位置相近）＝恢復原本的縮放（iPhone／iPad 上沒有 dblclick）
+        const now = performance.now(), dbl = e.pointerType !== "mouse" && this.lastTap && now - this.lastTap.t < 320 && Math.abs(e.offsetX - this.lastTap.x) < 30 && Math.abs(e.offsetY - this.lastTap.y) < 30;
+        this.lastTap = dbl ? null : { t: now, x: e.offsetX, y: e.offsetY };
+        if (dbl) { this.pinned = false; this.hover = null; this.resetScale(); this.tapOk = false; this.ptrs.delete(e.pointerId); if (!this.ptrs.size) this.drag = null; return; }
         const i = this.indexAt(e.offsetX); if (this.pinned && i === this.hover) { this.pinned = false; if (e.pointerType !== "mouse") this.hover = null; } else { this.pinned = true; this.hover = i; } this.req();
       }
       this.tapOk = false;
@@ -256,7 +264,7 @@ class Chart {
     cv.addEventListener("dblclick", () => this.resetScale());
     cv.addEventListener("wheel", e => {
       if (!this.D) return;
-      if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.zoom(Math.exp(e.deltaY * 0.004), this.indexAt(e.offsetX, true)); }
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.zoom(Math.exp(e.deltaY * 0.004), this.posAt(e.offsetX)); }
       else if (e.shiftKey) {
         e.preventDefault(); const f = Math.exp(-(e.deltaY || e.deltaX) * 0.003), pane = this.paneAt(e.offsetY);
         if (pane && pane.key !== "main") { const z = this.paneZoom(pane.key); this.pz[pane.key] = { z: Math.max(0.5, Math.min(12, z.z * f)), off: z.off }; this.draw(); } else this.yZoom(f);
@@ -323,13 +331,15 @@ class Chart {
   get visible() { return this.o.visible ?? this.D.length; }
   get range() { return this.view || { a: 0, b: this.D.length - 1 }; }
   // 可見範圍：fa 是小數的起點（拖曳時一個像素一個像素地跟手，不會一次跳一根 K 棒），a、b 是整數索引（給計算用）
-  clampView(a, w) { const N = this.D.length; w = Math.round(Math.max(Math.min(15, N), Math.min(N, w))); if (w >= N) return null; a = Math.max(0, Math.min(N - w, a)); return { a: Math.floor(a), b: Math.floor(a) + w - 1, fa: a, w }; }
+  // 寬度也可以是小數：雙指縮放時 K 棒寬度連續變化，不會一格一格跳
+  clampView(a, w) { const N = this.D.length; w = Math.max(Math.min(15, N), Math.min(N, w)); if (w >= N - 1e-6) return null; a = Math.max(0, Math.min(N - w, a)); return { a: Math.floor(a), b: Math.min(N - 1, Math.ceil(a + w) - 1), fa: a, w }; }
   get vw() { const r = this.range; return { fa: r.fa ?? r.a, w: r.w ?? r.b - r.a + 1 }; }
   setWidth(w, anchor) { const { fa, w: ow } = this.vw; anchor = anchor ?? fa + ow / 2; const t = (anchor - fa) / ow; this.view = this.clampView(anchor - t * w, w); this.draw(); }
   zoom(f, anchor) { if (!this.D) return; this.setWidth(this.vw.w * f, anchor); }
   hoverAt(x) { const i = this.indexAt(x); if (i !== this.hover) { this.hover = i; this.req(); } }
   // 手勢中的重畫合併到下一個畫面（每個畫面最多畫一次），拖曳、縮放比較順
   req() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; this.draw(); }); }
+  posAt(x) { if (!this.geo) return null; const { L, bw, fa } = this.geo; return fa + (x - L) / bw; } // 畫面 x 對應的「小數」K 棒位置（縮放的錨點）
   indexAt(x, raw) { if (!this.geo) return null; const { L, bw, fa, a } = this.geo; const i = Math.floor(fa + (x - L) / bw); return raw ? i : Math.max(a, Math.min(Math.min(this.visible - 1, this.range.b), i)); }
   draw() {
     if (!this.D) return;
