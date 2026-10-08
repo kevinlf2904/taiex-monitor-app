@@ -13,6 +13,7 @@ const ROUTES = {
   futures: () => import("./_lib/futures.js"),
   global: () => import("./_lib/global.js"),
   hot: () => import("./_lib/hot.js"),
+  mktstats: () => import("./_lib/mktstats.js"),
   import: () => import("./_lib/import.js"),
   intraday: () => import("./_lib/intraday.js"),
   kline: () => import("./_lib/kline.js"),

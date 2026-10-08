@@ -91,9 +91,31 @@ async function worldIndices() {
   return WORLD_IDX.map(([id, name]) => ({ id, name, rows: flat.map((f, k) => (f.region === id && r[k].status === "fulfilled" ? r[k].value : null)).filter(Boolean) })).filter(g => g.rows.length);
 }
 
+// 股價月新高／月新低：和「不含今天的前 20 個交易日」最高／最低收盤比（資料：learner/data/market/hilo.json，每天收盤後由排程更新）
+export function newHiLo(rows, H, today) {
+  if (!H?.days?.length || !H.closes) return null;
+  const idx = H.days.map((d, i) => [d, i]).filter(([d]) => d < String(today || "").replace(/-/g, "")).slice(0, 20).map(([, i]) => i);
+  if (idx.length < 15) return null;
+  const by = { twse: { hi: 0, lo: 0 }, tpex: { hi: 0, lo: 0 } };
+  for (const r of rows) {
+    const a = H.closes[r.code]; if (!a || r.price == null) continue;
+    const xs = idx.map(i => a[i]).filter(v => v != null); if (xs.length < 15) continue;
+    const k = r.market === "上櫃" ? "tpex" : "twse";
+    if (r.price > Math.max(...xs)) by[k].hi++; else if (r.price < Math.min(...xs)) by[k].lo++;
+  }
+  return { ...by, all: { hi: by.twse.hi + by.tpex.hi, lo: by.twse.lo + by.tpex.lo }, days: idx.length };
+}
+let hiloMemo = null;
+async function hilo(host) {
+  if (hiloMemo && Date.now() - hiloMemo.at < 600000) return hiloMemo.v;
+  const base = process.env.SITE_URL || (host ? `https://${host}` : null); if (!base) return null;
+  const v = await getJSON(`${base.replace(/\/$/, "")}/learner/data/market/hilo.json`).catch(() => null);
+  hiloMemo = { at: Date.now(), v }; return v;
+}
+
 export default async function handler(req, res) {
   const [a, b, info, mi, inst, us, world] = await Promise.allSettled([
-    marketRows(), null,
+    marketRows(), hilo(req.headers?.host),
     companies(), getJSON("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX").then(parseMiIndex), instLatest(), usIndices(), worldIndices(),
   ]);
   const L = a.value, all = L?.rows || [], twse = all.filter(r => r.market === "上市"), tpex = all.filter(r => r.market === "上櫃"), I = info.value || new Map(), M = mi.value || [];
@@ -103,7 +125,7 @@ export default async function handler(req, res) {
   const stocks = all.filter(r => /^\d{4}$/.test(r.code));
   res.setHeader("Cache-Control", liveCache(L?.live, 20));
   return res.status(200).json({ ok: true, date: L?.date || all.find(x => x.date)?.date || null, live: !!L?.live, time: L?.time || null, note: L?.note || null, source: `${L?.source || "證交所、櫃買中心 OpenAPI"}；美股 Yahoo Finance`,
-    breadth: all.length ? breadth(all) : null, coverage: L?.coverage || null,
+    breadth: all.length ? breadth(all) : null, coverage: L?.coverage || null, newHL: newHiLo(all, b.value, L?.date || all.find(x => x.date)?.date),
     sectors: I.size ? sectors(stocks, I) : null,
     // 上市、上櫃分開看（看盤頁可以切換）
     breadthBy: { twse: breadth(twse), tpex: breadth(tpex) },
