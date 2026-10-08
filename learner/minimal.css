@@ -1,0 +1,105 @@
+/* 簡約風格（K線學堂、看盤共用，最後載入）：
+   - 灰階為底、只有一個強調色（赭黃 ochre）用來標出「選中、重點」，其餘都是灰
+   - 平面：不用漸層、不用陰影；細的 1px 邊框；大圓角的面板（像一格一格的磁磚）
+   - 細黑體（Noto Sans TC 300／400／500）；設定裡可以改回宋體（html[data-font="song"]）
+   - 漲跌仍然用紅綠，但降低飽和度 */
+:root {
+  --bg: #ebebe9; --surface: #e0e0de; --surface-2: #d7d7d5; --surface-3: #efefed;
+  --ink: #3a3a3a; --muted: #7c7c7a; --line: #b6b6b4;
+  --accent: #9a7414; --accent-soft: rgba(184, 144, 31, 0.14); --gold: #b8901f; --gold-hi: #e3c158;
+  --up: #c64a43; --down: #3a8a5f; --up-pill: #c75a52; --down-pill: #4a9169;
+  --s1: #b8901f; --ma10: #5e7fb8; --band: rgba(0, 0, 0, 0.045); --shade: rgba(0, 0, 0, 0.035);
+  --grad-panel: var(--surface); --grad-btn: var(--surface-3); --grad-strong: #c39b2f; --on-strong: #1e1804; --strong-line: #a8821f;
+  --radius: 16px; --radius-md: 12px; --radius-sm: 10px;
+  --font-sans: "Noto Sans TC", "PingFang TC", "Heiti TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-body: var(--font-sans); --font-display: var(--font-sans); --font-num: var(--font-sans);
+}
+:root[data-theme="dark"] {
+  --bg: #171717; --surface: #222221; --surface-2: #2a2a29; --surface-3: #2f2f2e;
+  --ink: #e2e2e0; --muted: #9a9a97; --line: #3b3b3a;
+  --accent: #d3ae48; --accent-soft: rgba(211, 174, 72, 0.15); --gold: #c9a23a; --gold-hi: #e8c862;
+  --up: #e0605a; --down: #4fae7d; --up-pill: #a8443e; --down-pill: #2f7d55;
+  --s1: #d3ae48; --band: rgba(255, 255, 255, 0.05); --shade: rgba(255, 255, 255, 0.035);
+  --grad-strong: #c9a23a; --on-strong: #1e1804; --strong-line: #c9a23a;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #171717; --surface: #222221; --surface-2: #2a2a29; --surface-3: #2f2f2e;
+  --ink: #e2e2e0; --muted: #9a9a97; --line: #3b3b3a;
+  --accent: #d3ae48; --accent-soft: rgba(211, 174, 72, 0.15); --gold: #c9a23a; --gold-hi: #e8c862;
+  --up: #e0605a; --down: #4fae7d; --up-pill: #a8443e; --down-pill: #2f7d55;
+  --s1: #d3ae48; --band: rgba(255, 255, 255, 0.05); --shade: rgba(255, 255, 255, 0.035);
+  --grad-strong: #c9a23a; --on-strong: #1e1804; --strong-line: #c9a23a;
+} }
+/* 想要宋體：在設定切換 */
+:root[data-font="song"] { --font-body: var(--font-song); --font-display: var(--font-song); --font-num: var(--font-song); }
+
+/* ---------- 基本 ---------- */
+body, :root[data-theme="light"] body { background: var(--bg); letter-spacing: .01em; }
+.w-top { background: color-mix(in srgb, var(--bg) 92%, transparent); border-bottom: 1px solid var(--line); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.panel, .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: none; }
+.brand b { background: var(--grad-strong); color: var(--on-strong); border-radius: 8px; }
+.brand { letter-spacing: .06em; }
+.note { color: var(--muted); }
+
+/* ---------- 按鈕、輸入 ---------- */
+.btn { background: var(--surface-3); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: none; font-weight: 400; letter-spacing: .02em; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); font-weight: 500; }
+.btn.sm { border-radius: 8px; }
+input.code, select.sel, input[type="number"], input[type="text"], input[type="search"], select, textarea { border-radius: var(--radius-sm); }
+input.code, select.sel, input[type="number"] { background: var(--surface-3); border: 1px solid var(--line); }
+input.code:focus, select.sel:focus, input:focus-visible, select:focus-visible { border-color: var(--gold); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+:focus-visible { outline-color: var(--gold); }
+
+/* ---------- 分頁、分段：選中的是赭黃短底線 ---------- */
+.seg button[aria-pressed="true"]::after { background: var(--gold); height: 2px; border-radius: 2px; }
+.seg button[aria-pressed="true"] { color: var(--ink); }
+.tabs { border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); }
+.tabs button { border-radius: 999px; }
+.tabs button[aria-selected="true"] { background: var(--surface-3); color: var(--ink); box-shadow: inset 0 0 0 1px var(--gold); }
+.scalepop .pseg button[aria-pressed="true"], .sigbar button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); }
+
+/* 小膠囊（群組、篩選、指數）：圓的；選中的填赭黃 */
+.ichip, .groups button, .ixc, .cochips button, .mkseg button, .pod .pbadge, .pcard .pbadge { border-radius: 999px; }
+.ichip, .groups button, .ixc { background: var(--surface-3); border: 1px solid var(--line); box-shadow: none; }
+.ichip[aria-pressed="true"], .groups button[aria-pressed="true"], .cochips button[aria-pressed="true"], .mkseg button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); }
+
+/* ---------- 清單 ---------- */
+.row:hover { background: var(--surface-2); }
+.row[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--gold); }
+.row .nm, .row .px { font-weight: 400; }
+.row .pc { border-radius: 8px; font-weight: 400; background: var(--surface-2); color: var(--ink); }
+.row .pc.up { background: var(--up-pill); color: #fff; } .row .pc.down { background: var(--down-pill); color: #fff; }
+.wl li { border-bottom-color: color-mix(in srgb, var(--line) 70%, transparent); }
+
+/* ---------- 卡片、區塊：一格一格的灰磁磚 ---------- */
+.mk, section.mk, details.mk { border-radius: var(--radius-md); }
+.ixcard, .mcard, .iseg, .iflow, .bwrap, .itheme, .qcard, .icitem, .itrc, .igchip, .igme, .mchip, .d-kv, .cokv > div, .cobar, .mtiles > *, .gtile, .mkbox > *, .contrib > div, .tmap { border-radius: var(--radius-md); box-shadow: none; background-image: none; }
+.mcard, .iseg, .iflow, .bwrap, .itheme { background: var(--surface); }
+.qcard, .icitem, .itrc, .igchip, .igme, .mchip, .d-kv, .ixcard { background: var(--surface-3); }
+.tmap button { border-radius: 6px; border-color: var(--surface); }
+.d-title h1 { font-weight: 400; letter-spacing: .04em; }
+.d-px b { font-weight: 300; }
+.qbar { background: color-mix(in srgb, var(--surface) 94%, transparent); }
+
+/* ---------- 浮動元件 ---------- */
+#toTop, #updBar { box-shadow: none; }
+#toTop { background: var(--surface-3); }
+.sheet, .shot-pop, .chat-panel, .scalepop { border-radius: var(--radius); }
+.chat-fab { border-radius: 999px; background: var(--grad-strong); color: var(--on-strong); }
+.msg.user { background: var(--grad-strong); color: var(--on-strong); border-radius: 14px 14px 4px 14px; }
+.steps b { background: var(--grad-strong); color: var(--on-strong); }
+
+/* ---------- 名人 ---------- */
+.pod .pcard, .pod .pcall, .pod .pfr { border-radius: var(--radius-md); background: var(--surface); }
+.pod .pbadge.gold { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+.pod .pkey { border-left-color: var(--gold); } .pod .pkh { color: var(--accent); } .pod .pkey li::marker { color: var(--gold); } .pod .ptopic span { color: var(--accent); }
+.pod .pq { border-radius: 10px; }
+
+/* ---------- 其他細節 ---------- */
+.seal { background: var(--grad-strong); color: var(--on-strong); border-radius: 10px; }
+.mk h3::before { background: var(--gold) !important; border-radius: 2px; }
+#lessonToc a, #lessonToc button, .icon-btn, .theme-btn, .chip { border-radius: 999px; }
+.groups button[aria-pressed="true"] .note, .ichip[aria-pressed="true"] .note { color: inherit; opacity: .7; }
+.mkbox > *, .mkbox button { border-radius: var(--radius-sm); }
+.pod .part { border-color: var(--line); }
