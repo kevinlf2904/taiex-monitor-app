@@ -606,7 +606,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
       <div class="row2"><button class="btn primary sm" id="alSave" type="button">儲存提醒</button><button class="btn sm" id="alClear" type="button">清除</button><span class="note" id="alNote"></span></div>
       <p class="note" style="margin:0">頁面開著時每 10 秒檢查一次，觸發後跳出通知並自動關閉。iPhone 要先「加入主畫面」，從主畫面打開才收得到系統通知。</p>
     </div>
-    <div class="seg full dtabs" role="tablist" aria-label="個股內容" id="dTabs"><button data-t="trend">走勢</button><button data-t="tech">技術</button><button data-t="chips">籌碼</button><button data-t="fund">基本面</button><button data-t="co">公司</button><button data-t="tags">指標</button><button data-t="news">新聞</button></div>
+    <div class="seg full dtabs" role="tablist" aria-label="個股內容" id="dTabs"><button data-t="trend">走勢</button><button data-t="tech">技術</button><button data-t="chips">籌碼</button><button data-t="fund">基本面</button><button data-t="co">公司</button><button data-t="info">資訊</button><button data-t="tags">指標</button><button data-t="news">新聞</button></div>
 
     <!-- 走勢：分時＋五檔 -->
     <div class="d-grid" data-pane="trend">
@@ -657,6 +657,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
       <div class="ph"><h2 id="tagsTitle">符合的指標</h2><span class="note" id="tagsNote"></span></div>
       <div id="tagsBox"></div>
     </div>
+    <div class="panel sec" id="secInfo" data-pane="info" hidden><div class="sxnav" id="sxNav" role="tablist" aria-label="個股資訊"></div><div id="sxBox"></div></div>
     <div class="panel sec" id="secNews" data-pane="news">
       <div class="ph"><h2>新聞</h2><span class="note" id="newsNote"></span></div>
       <ul class="newslist" id="newsBox"></ul>
@@ -673,7 +674,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-45</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-46</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -717,6 +718,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="industry-figs.js"></script>
 <script src="flows.js"></script>
 <script src="podcast.js"></script>
+<script src="stockx.js"></script>
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
@@ -1517,6 +1519,7 @@ function renderNews() {
   const N = W.news, ago = t => { if (!t) return ""; const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${Math.max(1, m)} 分鐘前` : m < 1440 ? `${Math.round(m / 60)} 小時前` : new Date(t + 8 * 3600e3).toISOString().slice(5, 10).replace("-", "/"); };
   $("#newsNote").textContent = N?.source ? `來源：${N.source}，點標題開原文` : "";
   $("#newsBox").innerHTML = N?.err ? `<li class="note err" style="padding:10px 0">⚠ ${esc(N.err)}</li>` : N?.items?.length ? N.items.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.title)}</b><small>${esc(x.source || "")}${x.source ? "・" : ""}${ago(x.at)}</small></a></li>`).join("") : `<li class="note" style="padding:10px 0">沒有找到新聞</li>`;
+  if (W.dtab === "info") sxRender();
   postHeight();
 }
 
@@ -2183,6 +2186,7 @@ $("#lx").addEventListener("click", e => { const b = e.target.closest("[data-mk]"
   if (k === "mkHot" && v !== "surge" && !W.hot["rank:" + v]) loadMkHot(); renderList(); });
 $("#lx").addEventListener("click", e => { const s = e.target.closest("[data-sel]"); if (s) select(s.dataset.sel); });
 podInit();
+sxInit();
 setTimeout(() => ltabsUi(true), 300);
 // 回到頂端：長頁面捲下去後出現
 { const b = document.createElement("button"); b.id = "toTop"; b.type = "button"; b.textContent = "↑"; b.setAttribute("aria-label", "回到頂端"); b.hidden = true; document.body.appendChild(b);
@@ -2203,8 +2207,8 @@ function select(code, how = "push") {
   try { if ((how === "push" || how === "replace") && location.hash !== "#" + code) (how === "push" && isMobile() ? history.pushState : history.replaceState).call(history, null, "", location.search + "#" + code); } catch {}
   $("#main").classList.add("show-detail"); syncLayout();
   $("#learnLink").href = `./?code=${code === "T00" ? "加權" : code}#shot`;
-  const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fund"], #dTabs [data-t="co"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
-  if (!tw && (W.dtab === "chips" || W.dtab === "fund" || W.dtab === "co")) W.dtab = "trend";
+  const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fund"], #dTabs [data-t="co"], #dTabs [data-t="info"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
+  if (!tw && (W.dtab === "chips" || W.dtab === "fund" || W.dtab === "co" || W.dtab === "info")) W.dtab = "trend";
   $("#learnLink").hidden = isUS(code) || isFut(code);
   const fut = isFut(code); document.querySelectorAll('#kSeg [data-k="D"], #kSeg [data-k="W"], #kSeg [data-k="M"]').forEach(b => (b.hidden = fut)); $("#tsSeg").hidden = $("#cdpBtn").hidden = fut;
   if (fut && "DWM".includes(W.k)) W.k = "5";
@@ -2286,12 +2290,12 @@ function renderBook() {
 }
 // 個股分頁：走勢／技術／籌碼／基本面
 function setDtab(t, scroll = true) {
-  if ((t === "chips" || t === "fund" || t === "co") && !isTW(W.sel)) t = "trend";
+  if ((t === "chips" || t === "fund" || t === "co" || t === "info") && !isTW(W.sel)) t = "trend";
   W.dtab = t; store.set("watch:dtab", t);
   document.querySelectorAll("#dTabs [data-t]").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === t));
   document.querySelectorAll("[data-pane]").forEach(p => (p.hidden = p.dataset.pane !== t));
   setQ(t);
-  if (t === "trend") { drawTs(); loadFlow(); } else if (t === "tech") { drawK(); renderAna(); } else if (t === "co") loadCo(); else if (t === "tags") renderTags(); else if (t === "news") loadNews(); else renderInfo();
+  if (t === "trend") { drawTs(); loadFlow(); } else if (t === "tech") { drawK(); renderAna(); } else if (t === "co") loadCo(); else if (t === "tags") renderTags(); else if (t === "news") loadNews(); else if (t === "info") sxOpen(); else renderInfo();
   if (scroll) $("#dTabs").scrollIntoView({ block: "start", behavior: "auto" });
   postHeight();
 }
@@ -2627,7 +2631,7 @@ async function loadDaily() {
     if (W.sel !== c) return;
     W.daily = { code: c, data: j.data.map(x => ({ ...x, v: x.v || 0 })), source: j.source, end: false };
     if (W.detailQ) mergeDaily(W.detailQ, false);
-    if (!minuteK()) drawK(true); renderAna(); if (W.dtab === "chips") renderInfo(); renderDetailHead(); drawTs(); if (W.cmp.length) loadCmp();
+    if (!minuteK()) drawK(true); renderAna(); if (W.dtab === "chips" || W.dtab === "info") renderInfo(); renderDetailHead(); drawTs(); if (W.cmp.length) loadCmp();
   } catch (e) { if (W.sel === c) { W.daily = { code: c, data: [], err: e.message, end: true }; if (!minuteK()) drawK(true); } }
 }
 // 往前載入：日週月 K 問 /api/kline?before=；分 K 問 /api/intraday?before=（假日沒有資料時會自動再往前）
@@ -2757,8 +2761,8 @@ function peBand(per) {
 const chipsChart = new Chart($("#chipsChart"));
 async function loadInfo() {
   const c = W.sel; W.info = null; renderInfo();
-  try { const j = await getJ(`/api/stockinfo?code=${c}`); if (W.sel !== c) return; W.info = j; }
-  catch (e) { if (W.sel === c) W.info = { err: e.message }; }
+  try { const j = await getJ(`/api/stockinfo?code=${c}`); if (W.sel !== c) return; W.info = { ...j, code: c }; }
+  catch (e) { if (W.sel === c) W.info = { code: c, err: e.message }; }
   if (W.sel === c) { renderInfo(); renderDetailHead(); if (W.dtab === "tech" && (dBar.has("inst") || dBar.has("margin"))) drawK(); }
 }
 function renderInfo() {
@@ -2791,7 +2795,7 @@ function renderInfo() {
     $("#fundTbl").innerHTML = charts + (per ? `<div class="d-kv" style="margin:0 16px 12px"><div><span>本益比</span><b>${per.pe ?? "—"}</b></div><div><span>股價淨值比</span><b>${per.pb ?? "—"}</b></div><div><span>殖利率</span><b>${per.dy != null ? per.dy + "%" : "—"}</b></div><div><span>日期</span><b>${per.d.replace(/-/g, "/")}</b></div></div>` : "")
       + (rev.length ? `<table class="tbl"><thead><tr><th>月營收</th><th>營收（億）</th><th>年增</th><th>月增</th></tr></thead><tbody>${rev.map(r => `<tr><td>${r.ym.replace("-", "/")}</td><td>${(r.rev / 1e8).toFixed(2)}</td><td class="${clsOf(r.yoy)}">${r.yoy != null ? (r.yoy > 0 ? "+" : "") + r.yoy + "%" : "—"}</td><td class="${clsOf(r.mom)}">${r.mom != null ? (r.mom > 0 ? "+" : "") + r.mom + "%" : "—"}</td></tr>`).join("")}</tbody></table>` : "")
       + (fin.length ? `<table class="tbl" style="margin-top:12px"><thead><tr><th>季度</th><th>EPS</th><th>毛利率</th><th>營益率</th><th>淨利率</th></tr></thead><tbody>${fin.map(r => `<tr><td>${r.q}</td><td class="${clsOf(r.eps)}">${r.eps}</td><td>${r.gross ?? "—"}%</td><td>${r.op ?? "—"}%</td><td>${r.net ?? "—"}%</td></tr>`).join("")}</tbody></table>` : "");
-  }
+  } else if (W.dtab === "info") sxRender();
   postHeight();
 }
 
@@ -2803,7 +2807,7 @@ async function loadCo() {
   if (W.co?.code === c) return renderCo();
   W.co = { code: c, loading: true }; renderCo();
   try { const j = await getJ(`/api/company?code=${c}`); if (W.sel === c) W.co = { ...j, code: c }; } catch (e) { if (W.sel === c) W.co = { code: c, err: e.message }; }
-  if (W.sel === c) renderCo();
+  if (W.sel === c) { renderCo(); if (W.dtab === "info") sxRender(); }
 }
 const yi = v => (v == null ? "—" : Math.abs(v) >= 1e8 ? (v / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 }) + " 億" : Math.abs(v) >= 1e4 ? (v / 1e4).toLocaleString(undefined, { maximumFractionDigits: 0 }) + " 萬" : v.toLocaleString());
 const yiC = v => (v == null ? "—" : (v / 1e8).toLocaleString(undefined, { maximumFractionDigits: Math.abs(v) >= 1e10 ? 0 : 1 })); // 表格裡的「億元」不帶單位，節省寬度
