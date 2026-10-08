@@ -1,0 +1,627 @@
+{
+"updated": "2026-10-08",
+"note": "各產業近期重點新聞（整理摘要，以原文為準）",
+"items": [
+{
+"date": "2026-10-08",
+"themes": [
+"kr-memory",
+"tw-hbm"
+],
+"title": "三星Q3營業利益初估107.4兆韓元創紀錄",
+"summary": "Q3營業利益年增約783%，首度突破100兆韓元，營益率約55%，主因是記憶體漲價。但營收約195兆韓元低於預期，股價小跌，顯示利多已大致反映在股價上。",
+"source": "CNBC",
+"url": "https://www.cnbc.com/2026/10/08/samsung-q3-earnings.html"
+},
+{
+"date": "2026-10-08",
+"themes": [
+"tw-foundry",
+"tw-cowos"
+],
+"title": "台積電9月營收5,118億元，Q3超出財測上緣",
+"summary": "9月營收月減0.6%、年增54.7%。Q3營收1.49兆元，季增17.6%，創單季新高，表現優於財測上緣。下一個焦點是10/15左右的法說會。",
+"source": "經濟日報",
+"url": "https://money.udn.com/money/story/5607/9802747"
+},
+{
+"date": "2026-10-08",
+"themes": [
+"us-gpu",
+"jp-semi",
+"tw-foundry"
+],
+"title": "三星、台積電財報亮眼，股價卻沒有起色",
+"summary": "東京威力科創、Advantest、Ibiden等AI供應鏈股價下跌，市場開始擔心借貸成本上升會壓縮AI資本支出能撐多久，短期情緒偏向謹慎。",
+"source": "The Japan Times",
+"url": "https://www.japantimes.co.jp/business/2026/10/08/samsung-tsmc-investors/"
+},
+{
+"date": "2026-10-08",
+"themes": [
+"tw-odm",
+"us-server"
+],
+"title": "電子五哥9月營收合計破1.1兆元",
+"summary": "緯創9月營收3,808億元、年增87%，居五哥之首；廣達3,253億元、年增77%。廣達表示新世代平台Q4小量出貨，明年Q1放量。",
+"source": "中時新聞網",
+"url": "https://www.chinatimes.com/realtimenews/20261008003913-260410"
+},
+{
+"date": "2026-10-08",
+"themes": [
+"tw-pcb",
+"tw-substrate"
+],
+"title": "臻鼎9月營收263.6億元創新高",
+"summary": "月增27.5%、年增36%。伺服器、光模組與IC載板三大高階應用的營收年增超過3倍，公司看Q4為全年高點。",
+"source": "鉅亨網",
+"url": "https://news.cnyes.com/news/id/6624927"
+},
+{
+"date": "2026-10-08",
+"themes": [
+"tw-liquid",
+"tw-aircool"
+],
+"title": "散熱族群Q3營收攻頂",
+"summary": "奇鋐、雙鴻、健策、富世達等Q3營收普遍創單季新高。Vera Rubin平台全面採用液冷，法人看好Q4動能延續。",
+"source": "工商時報",
+"url": "https://www.ctee.com.tw/news/20261008700315-439901"
+},
+{
+"date": "2026-10-08",
+"themes": [
+"tw-wafer"
+],
+"title": "環球晶9月營收回升，矽晶圓報價走揚",
+"summary": "9月營收51.3億元，月增7.7%。義大利廠9/14局部復工；市場傳出6、8、12吋矽晶圓全面調漲約一成以上，是疫情後首見。",
+"source": "中時新聞網",
+"url": "https://www.chinatimes.com/realtimenews/20261008001659-260410"
+},
+{
+"date": "2026-10-08",
+"themes": [
+"tw-probecard",
+"tw-test"
+],
+"title": "旺矽9月營收20.5億元、年增82%",
+"summary": "AI/HPC晶片測試需求強勁，探針卡訂單能見度到2027年。京元電9月營收40.7億元、年增24.5%。",
+"source": "科技新報",
+"url": "https://finance.technews.tw/2026/10/08/mpi-6223-202609-financial-report"
+},
+{
+"date": "2026-10-08",
+"themes": [
+"us-robotaxi"
+],
+"title": "Waymo首度舉債50億美元擴張Robotaxi",
+"summary": "Waymo向Blackstone、PIMCO等貸款50億美元，準備進軍倫敦、東京，目標年底每週100萬趟付費載客，自駕商業化與Tesla的差距持續拉大。",
+"source": "TechCrunch",
+"url": "https://techcrunch.com/2026/10/08/waymo-locks-in-5b-loan-from-blackstone-pimco-to-fuel-robotaxi-expansion/"
+},
+{
+"date": "2026-10-08",
+"themes": [
+"tw-petchem",
+"us-oilgas"
+],
+"title": "油價百美元高檔震盪，塑化行情走堅",
+"summary": "布蘭特原油在百美元附近震盪，撐住遠東石化報價，PTA、PS每噸回升20多美元，對塑化股報價與利差有利。",
+"source": "工商時報",
+"url": "https://www.ctee.com.tw/news/20261008701124-430503"
+},
+{
+"date": "2026-10-08",
+"themes": [
+"tw-construct"
+],
+"title": "住展風向球黃藍燈，建商趁928大推案但買氣冷",
+"summary": "央行鬆綁後建商加快推案，9月北台灣供給增加，但成交仍在低檔，營建股第四季去化仍是考驗。",
+"source": "壹蘋新聞網",
+"url": "https://news.nextapple.com/property/20261008/FB7DDC3CE215AB33E08C00ADFB91AD96"
+},
+{
+"date": "2026-10-07",
+"themes": [
+"tw-liquid"
+],
+"title": "奇鋐9月營收210億元，Q3創新高",
+"summary": "9月營收月增7.9%、年增45%；Q3營收590.9億元，季增20%。Vera Rubin與ASIC液冷訂單推升下半年營收。",
+"source": "科技新報",
+"url": "https://finance.technews.tw/2026/10/07/avc-3017-202609-financial-report"
+},
+{
+"date": "2026-10-07",
+"themes": [
+"tw-switch"
+],
+"title": "智邦9月營收404億元，1.6T交換器量產",
+"summary": "9月營收年增66%，連兩個月超過400億元。800G交換器仍是主力，1.6T已量產。8月起DRAM與PCB改採寄售模式，營收成長受限但毛利率較好。",
+"source": "科技新報",
+"url": "https://technews.tw/2026/10/07/accton-technology-2026-09-revenue/"
+},
+{
+"date": "2026-10-07",
+"themes": [
+"tw-psu",
+"tw-hvdc",
+"tw-bbu"
+],
+"title": "外資看好800VDC電源升級",
+"summary": "外資估台達電在資料中心電源市占約六成；800VDC電源櫃最快2026年Q4末導入，2027年底至2028年才廣泛採用。",
+"source": "科技新報",
+"url": "https://technews.tw/2026/10/07/ai-power-supplies-800-vdc-upgrade-foreign-investors-bullish-delta-liteon-target-prices-nt315/"
+},
+{
+"date": "2026-10-07",
+"themes": [
+"tw-petchem"
+],
+"title": "台塑四寶重返多頭焦點",
+"summary": "中東斷鏈推升化工報價，南亞電子材料與轉投資帶動獲利；法人看好台塑化柴油利差維持高檔。",
+"source": "旺得富理財網",
+"url": "https://wantrich.chinatimes.com/news/20261007900277-420101"
+},
+{
+"date": "2026-10-07",
+"themes": [
+"us-nuclear"
+],
+"title": "德州核能新創申請併網",
+"summary": "新創核能業者向德州電網申請併網，加上TVA拿到建造許可，美國先進核能從審照走向實際併網規劃。",
+"source": "Washington Times",
+"url": "https://washingtontimes.com/news/2026/oct/7/nuclear-startup-texas-applies-connection-power-grid"
+},
+{
+"date": "2026-10-07",
+"themes": [
+"us-space"
+],
+"title": "Rocket Lab簽20發合約，但股價仍疲",
+"summary": "Rocket Lab和日本Synspective簽下2028–2031年共20次發射，AST SpaceMobile也加深與電信商合作，但兩檔股價都離年內高點很遠；Neutron首飛可能延到2027。",
+"source": "24/7 Wall St.",
+"url": "https://247wallst.com/investing/2026/10/07/3-space-stocks-worth-owning-this-october/"
+},
+{
+"date": "2026-10-06",
+"themes": [
+"tw-foundry",
+"tw-cowos"
+],
+"title": "台積電加速2奈米擴產並押重CoWoS-L",
+"summary": "報導指2奈米月產能目標20萬片、A16進入風險試產，CoWoS-L是未來兩年的主力封裝平台。瓶頸在HBM、矽中介層與測試等中段環節。",
+"source": "MoneyDJ",
+"url": "https://www.moneydj.com/kmdj/news/newsviewer.aspx?a=0d7303ec-211b-4062-8e28-9923578a4384"
+},
+{
+"date": "2026-10-06",
+"themes": [
+"tw-asic"
+],
+"title": "創意9月營收71.5億元創新高，股價翻黑",
+"summary": "9月營收年增98%、Q3季增35%，美系CSP的AI ASIC放量。同日聯發科跌逾4%，世芯-KY逆勢漲逾6%。",
+"source": "工商時報",
+"url": "https://www.ctee.com.tw/news/20261006700956-430201"
+},
+{
+"date": "2026-10-06",
+"themes": [
+"tw-ccl"
+],
+"title": "CCL三雄9月營收創高",
+"summary": "台光電9月營收215億元、年增169%，M9等高階CCL出貨增加；聯茂股價連七漲創新高。高階CCL進入供不應求的漲價循環。",
+"source": "經濟日報",
+"url": "https://udn.com/news/story/7252/9798029"
+},
+{
+"date": "2026-10-06",
+"themes": [
+"tw-probecard",
+"tw-test"
+],
+"title": "穎崴前九月營收破百億元，提前達標",
+"summary": "Q3營收45.6億元，季增29%。AI/HPC測試座出貨創高，比原訂2027年提前達成百億營收目標。",
+"source": "經濟日報",
+"url": "https://udn.com/news/story/7252/9798452"
+},
+{
+"date": "2026-10-06",
+"themes": [
+"us-oilgas",
+"tw-shipping",
+"tw-petchem"
+],
+"title": "EIA：9月布蘭特均價114美元",
+"summary": "中東油管與油輪遇襲，9月布蘭特均價比8月高23美元；EIA預期油價維持高檔，之後才逐步回落。",
+"source": "美國能源資訊署EIA",
+"url": "https://www.eia.gov/outlooks/steo/report/global_oil.php"
+},
+{
+"date": "2026-10-06",
+"themes": [
+"us-saas",
+"us-security"
+],
+"title": "美國軟體股創年內新高，AI顛覆疑慮消退",
+"summary": "標普軟體指數Q3創2020年以來最大季漲幅；資安龍頭今年漲幅超過一倍，AI代理安全成為新題材。",
+"source": "American Bazaar",
+"url": "https://americanbazaaronline.com/2026/10/06/us-software-stocks-hit-2026-highs-as-ai-disruption-fears-fade-489493/"
+},
+{
+"date": "2026-10-06",
+"themes": [
+"us-drone",
+"tw-defense2"
+],
+"title": "五角大廈選定4款雷射反無人機系統",
+"summary": "美軍基地反無人機計畫選出4款定向能武器，反無人機成為國防預算新重點。",
+"source": "Military Times",
+"url": "https://www.militarytimes.com/industry/techwatch/2026/10/06/pentagon-names-4-directed-energy-weapons-for-counter-drone-program-at-us-bases/"
+},
+{
+"date": "2026-10-05",
+"themes": [
+"tw-interconnect"
+],
+"title": "貿聯9月營收93億元，Interplex Datacom開始併表",
+"summary": "9月營收年增39%，Q3連續第七季創新高。9/23起合併Interplex資料通訊部門，補強AI伺服器的Busbar產品線。",
+"source": "中央社",
+"url": "https://www.cna.com.tw/news/afe/202610050207.aspx"
+},
+{
+"date": "2026-10-05",
+"themes": [
+"tw-odm"
+],
+"title": "鴻海9月營收1.158兆元，台灣首家單月破兆",
+"summary": "9月營收年增38%；Q3營收3.03兆元，年增47%。雲端網路產品受AI拉貨帶動，公司看Q4 AI業務續成長。",
+"source": "經濟日報",
+"url": "https://money.udn.com/money/story/5710/9795876"
+},
+{
+"date": "2026-10-05",
+"themes": [
+"tw-hvdc",
+"tw-psu"
+],
+"title": "800VDC成為AI電源主流，台達電、光寶將參加OCP展",
+"summary": "10/12–15的OCP全球峰會聚焦800VDC、Power Rack與BBU，台達電、光寶將展示機櫃電源與液冷方案。",
+"source": "科技新報",
+"url": "https://technews.tw/2026/10/05/800-vdc-mainstream-ai-power-delta-liteon-ocp-2026/"
+},
+{
+"date": "2026-10-03",
+"themes": [
+"tw-substrate"
+],
+"title": "ABF載板缺口擴大，載板三雄股價創新高",
+"summary": "T-glass短缺，交期拉長到30週以上，ABF供需缺口持續擴大，欣興、南電、景碩股價創新高。",
+"source": "自由財經",
+"url": "https://stock.ltn.com.tw/article/raw1mzbmzuyf"
+},
+{
+"date": "2026-10-01",
+"themes": [
+"us-crypto"
+],
+"title": "比特幣在8.3萬美元附近盤整，花旗上調目標",
+"summary": "花旗把12個月比特幣目標價上調到11.3萬美元，前提是現貨ETF持續流入；Q3現貨ETF淨流入63億美元。",
+"source": "Yahoo Finance",
+"url": "https://finance.yahoo.com/personal-finance/investing/article/bitcoin-and-ethereum-prices-today-thursday-october-1-2026-not-much-price-movement-this-morning-but-citigroup-says-that-will-change-113313201.html"
+},
+{
+"date": "2026-10-01",
+"themes": [
+"tw-airline"
+],
+"title": "10/7起燃油附加費再漲，創今年新高",
+"summary": "國際線短程調到37.5美元、長程97.5美元，是今年第4次上調；航空燃油大漲，航空公司仍要自行吸收部分成本，壓縮毛利。",
+"source": "鏡週刊",
+"url": "https://www.mirrormedia.mg/story/20261001-179fin-190706"
+},
+{
+"date": "2026-09-30",
+"themes": [
+"us-memory",
+"tw-hbm"
+],
+"title": "美光FQ4營收542億美元，2027年HBM大多已售出",
+"summary": "FQ1財測營收615億美元。2027年HBM位元供給大部分已簽約且價格大漲，並與輝達合作首款客製化HBM4E。",
+"source": "CNBC",
+"url": "https://www.cnbc.com/2026/09/30/micron-mu-q4-earnings-report-2026.html"
+},
+{
+"date": "2026-09-30",
+"themes": [
+"kr-memory",
+"us-memory",
+"tw-pc"
+],
+"title": "TrendForce：Q4 DRAM合約價漲10–15%、NAND漲15–20%",
+"summary": "AI伺服器需求支撐漲勢，但漲幅較前幾季收斂；企業級SSD是唯一漲幅擴大的品類。筆電整機成本上升，對消費端形成壓力。",
+"source": "經濟日報",
+"url": "https://money.udn.com/money/story/5612/9785887"
+},
+{
+"date": "2026-09-30",
+"themes": [
+"tw-pharma"
+],
+"title": "授權＋藥證效應，生技股進入收成期",
+"summary": "藥華藥Ropeg的ET適應症獲FDA核准，漢達HND-039取得美國藥證；多家公司陸續進入取證與授權期。",
+"source": "工商時報",
+"url": "https://www.ctee.com.tw/news/20260930700191-439901"
+},
+{
+"date": "2026-09-29",
+"themes": [
+"us-nuclear"
+],
+"title": "NRC核發美國首座商用SMR建造許可",
+"summary": "TVA在Clinch River採用GE Vernova BWRX-300（300MW），審查比原定時程提前完成，SMR商業化跨出關鍵一步。",
+"source": "美國核管會NRC",
+"url": "https://www.nrc.gov/about-nrc/news-releases/2026/26-079"
+},
+{
+"date": "2026-09-29",
+"themes": [
+"us-glp1"
+],
+"title": "禮來口服GLP-1間接比較勝過口服司美格魯肽",
+"summary": "EASD年會資料顯示，禮來口服藥在減重與A1C改善上優於口服semaglutide（間接比較）；口服減重藥是禮來和諾和下一個主戰場。",
+"source": "Eli Lilly",
+"url": "https://investor.lilly.com/news-releases/news-release-details/lillys-foundayo-orforglipron-172-mg-showed-greater-weight-loss"
+},
+{
+"date": "2026-09-29",
+"themes": [
+"tw-insurance",
+"tw-bank"
+],
+"title": "壽險業前8月獲利3394億，創同期新高",
+"summary": "台股大漲帶動壽險財務收益，壽險業淨值達4.4兆元新高，但獲利高度依賴股市。",
+"source": "中央社",
+"url": "https://www.cna.com.tw/news/afe/202609290314.aspx"
+},
+{
+"date": "2026-09-26",
+"themes": [
+"tw-wind"
+],
+"title": "離岸風電3-3期截止，強制國產化退場",
+"summary": "3-3期分配容量3.6GW，只有2個風場送件，年底前完成選商；國產化要求取消，對國內水下基礎、塔架廠是利空。",
+"source": "中央社",
+"url": "https://www.cna.com.tw/news/afe/202609260023.aspx"
+},
+{
+"date": "2026-09-24",
+"themes": [
+"tw-grid"
+],
+"title": "核三再運轉計畫獲核安會審查通過",
+"summary": "台電仍須完成約18–24個月的自主安全檢查與換照，最快約2028年重啟，對中長期供電與重電需求有影響。",
+"source": "聯合新聞網",
+"url": "https://udn.com/news/story/7314/9776367"
+},
+{
+"date": "2026-09-23",
+"themes": [
+"tw-solar"
+],
+"title": "聯合再生、中美晶設美國1GW模組廠",
+"summary": "採「台灣電池、美國組裝模組」模式，明年量產，瞄準美國非紅供應鏈需求（日期依摘要推估）。",
+"source": "鉅亨網",
+"url": "https://news.cnyes.com/news/id/6614195"
+},
+{
+"date": "2026-09-23",
+"themes": [
+"us-quantum"
+],
+"title": "IonQ宣布即時量子糾錯解碼突破",
+"summary": "IonQ展示端到端即時錯誤解碼器，股價跳漲；量子股對利率很敏感，波動大。",
+"source": "CNBC",
+"url": "https://www.cnbc.com/2026/09/23/ionq-shares-rally-after-company-says-it-made-a-major-quantum-computing-breakthrough.html"
+},
+{
+"date": "2026-09-22",
+"themes": [
+"kr-memory",
+"tw-hbm"
+],
+"title": "三星HBM4良率提升至約80%，擴大HBM投片",
+"summary": "三星HBM4良率從60%以下提升到約80%，計畫擴大每月HBM晶圓投入，HBM4競爭加劇。",
+"source": "Sammy Fans",
+"url": "https://www.sammyfans.com/2026/09/22/samsung-and-sk-hynix-accelerate-hbm-production/"
+},
+{
+"date": "2026-09-22",
+"themes": [
+"tw-sat"
+],
+"title": "Starlink V3 Q4大規模部署，台廠接單",
+"summary": "法人預期SpaceX在Q4開始大量部署V3衛星，PCB與射頻元件台廠可望受惠（日期依摘要推估）。",
+"source": "三立新聞",
+"url": "https://www.setn.com/news/1915910"
+},
+{
+"date": "2026-09-21",
+"themes": [
+"tw-passive"
+],
+"title": "Rubin單板MLCC用量近翻倍，國巨受惠轉單",
+"summary": "Rubin平台單板MLCC用量約1.2萬顆；村田停產部分舊規格MLCC，國巨MLCC產能售罄。",
+"source": "旺得富理財網",
+"url": "https://wantrich.chinatimes.com/news/20260921900462-420101"
+},
+{
+"date": "2026-09-21",
+"themes": [
+"tw-power-semi",
+"tw-hvdc"
+],
+"title": "漢磊發表第五代SiC平台，鎖定800V HVDC",
+"summary": "導通損耗降低12%，1200V晶圓測試良率超過90%，已導入伺服器電源驗證。嘉晶在上游磊晶同步受惠。",
+"source": "科技新報",
+"url": "https://technews.tw/2026/09/21/hanlei-unveils-5th-gen-sic-12-conduction-loss-ai-automotive-market/"
+},
+{
+"date": "2026-09-21",
+"themes": [
+"tw-grid"
+],
+"title": "10月電價凍漲，12月再審",
+"summary": "電價審議會算出應調幅12.83%，但暫緩調整、12月再審；台電爭取711億元預算撥補燃料成本，未來電價調漲壓力仍在。",
+"source": "科技新報",
+"url": "https://technews.tw/2026/09/21/electricity-price-review-committee-maintains-current-rates-taipower-prioritizes-budget-allocation/"
+},
+{
+"date": "2026-09-21",
+"themes": [
+"tw-shipping"
+],
+"title": "運價飆漲，貨櫃航運旺季到",
+"summary": "美東線運價每FEU超過1萬美元，但歐洲線單週大跌近一成；燃油成本上升抵銷部分運價利多（日期依摘要推估）。",
+"source": "理財周刊",
+"url": "https://www.moneyweekly.com.tw/ArticleData/Info/Article/243880"
+},
+{
+"date": "2026-09-18",
+"themes": [
+"tw-construct",
+"tw-bank"
+],
+"title": "央行鬆綁房市信用管制",
+"summary": "利率不變，第二戶房貸成數上限從6成提高到7成，並取消購地貸款限期動工的切結；對建商資金和銀行房貸業務是小幅利多。",
+"source": "聯合新聞網",
+"url": "https://udn.com/news/story/7238/9761267"
+},
+{
+"date": "2026-09-18",
+"themes": [
+"us-minerals"
+],
+"title": "中國稀土集團傳間接持股MP Materials",
+"summary": "若交易成真，北京將間接持有MP股份；MP預計Q4開始向GM商業出貨稀土磁鐵（日期依摘要推估）。",
+"source": "MINING.COM",
+"url": "https://www.mining.com/china-rare-earth-eyes-indirect-stake-in-mp-materials/"
+},
+{
+"date": "2026-09-17",
+"themes": [
+"us-quantum"
+],
+"title": "IBM量子晶圓廠獲CHIPS法案10億美元補助",
+"summary": "IBM在紐約Albany興建300mm量子晶圓廠，政府補助10億美元，帶動量子股上漲。",
+"source": "Yahoo Finance",
+"url": "https://finance.yahoo.com/technology/ai/articles/ibm-ionq-stocks-rally-fresh-121230278.html"
+},
+{
+"date": "2026-09-14",
+"themes": [
+"tw-defense2",
+"tw-drone"
+],
+"title": "空軍MQ-9B首度在台升空",
+"summary": "首批MQ-9B在花蓮試飛，提升高空監偵能量；國軍也把多型攻擊無人機納入演習（日期依摘要推估）。",
+"source": "自由時報",
+"url": "https://def.ltn.com.tw/article/breakingnews/5573086"
+},
+{
+"date": "2026-09-14",
+"themes": [
+"tw-insurance",
+"tw-bank"
+],
+"title": "金控前8月獲利已超過去年全年",
+"summary": "國泰金前8月稅後986億元；13家金控前8月合計賺5789億元，已超過去年全年。",
+"source": "新頭殼",
+"url": "https://newtalk.tw/news/view/2026-09-14/1059727"
+},
+{
+"date": "2026-09-05",
+"themes": [],
+"title": "中鋼10月盤價全面調漲",
+"summary": "10月盤價每噸調漲500–600元，反映原料成本上漲與第四季旺季備料，鋼市從谷底回升。",
+"source": "工商時報",
+"url": "https://www.ctee.com.tw/news/20260905700084-439901"
+},
+{
+"date": "2026-09-04",
+"themes": [
+"tw-optical",
+"tw-cpo"
+],
+"title": "台荷矽光子團隊拚2026年底1.6T DR8",
+"summary": "力積電、聯鈞等台廠與工研院、荷蘭Phix合作，目標2026年完成1.6T DR8，2027年底前開發3.2T。",
+"source": "DigiTimes",
+"url": "https://www.digitimes.com/news/a20260904PD230/photonics-silicon-2026-data-center-packaging.html"
+},
+{
+"date": "2026-09-02",
+"themes": [
+"tw-foundry"
+],
+"title": "Intel稱14A客戶洽談已進入產能階段",
+"summary": "財務長表示14A外部客戶的討論已從評估製程進入談產能，但尚未宣布正式客戶；計畫2027年風險試產、2028年量產。",
+"source": "Bits&Chips",
+"url": "https://bits-chips.com/article/intel-signals-external-customer-wins-for-14a-foundry-process/"
+},
+{
+"date": "2026-08-31",
+"themes": [
+"tw-cpo",
+"tw-fabtool"
+],
+"title": "SEMICON Taiwan聚焦CPO與矽光子商轉",
+"summary": "力成與Broadcom合作，今年小量生產光引擎、2027年整合進CPO交換器。展會主軸從前段製程微縮轉向先進封裝。",
+"source": "Taipei Times",
+"url": "https://www.taipeitimes.com/News/biz/archives/2026/08/31/2003863391"
+},
+{
+"date": "2026-08-27",
+"themes": [
+"tw-drone",
+"tw-defense2"
+],
+"title": "無人機條例三讀，6年2400億，軍工股卻急殺",
+"summary": "條例三讀，每年編400億元，2027年要達成非紅供應鏈；相關個股出現利多出盡，後續要看實際訂單。",
+"source": "今周刊",
+"url": "https://www.businesstoday.com.tw/article/category/183027/post/202608270025/"
+},
+{
+"date": "2026-08-26",
+"themes": [
+"us-gpu",
+"us-server",
+"us-cloud"
+],
+"title": "輝達FQ2營收962億美元，FQ3財測1,080億美元",
+"summary": "資料中心營收890億美元、年增117%。Vera Rubin已於FQ3開始量產出貨，但供給受限，財測不計中國營收。",
+"source": "NVIDIA",
+"url": "https://nvidianews.nvidia.com/news/nvidia-announces-financial-results-for-second-quarter-fiscal-2027"
+},
+{
+"date": "2026-08-19",
+"themes": [
+"tw-robot",
+"tw-humanoid"
+],
+"title": "機器人展，上銀、大銀秀人形機器人關節",
+"summary": "上銀以諧波減速機、行星滾柱螺桿搶人形機器人關節商機，但2026年仍是小量開發期。",
+"source": "工商時報",
+"url": "https://www.ctee.com.tw/news/20260819701144-430503"
+},
+{
+"date": "2026-08-18",
+"themes": [
+"tw-drone"
+],
+"title": "國防無人機驗出中國零件，廠商遭羈押",
+"summary": "軍方驗收時發現疑似中國製零件，檢方依國安法偵辦；非紅供應鏈的審查會更嚴，對合規廠商反而有利。",
+"source": "新唐人",
+"url": "https://www.ntdtv.com/b5/mkt_ipad/2026/08/18/a104125285.html"
+}
+]
+}

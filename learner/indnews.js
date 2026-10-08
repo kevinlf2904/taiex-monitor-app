@@ -36,7 +36,7 @@ function inewsView() {
   const months = [...new Set(L.map(x => x.date.slice(0, 7)))];
   return `<p class="note gnote">各產業近期的重點新聞，整理成白話重點並標出相關題材（點題材看產業鏈與圖解）。${D.updated ? `整理於 ${esc(D.updated)}。` : ""}每個題材內頁另有即時新聞。</p>
     <div class="ichips" style="margin:0 12px 6px">${INEWS_GROUPS.map(([k, t]) => `<button class="ichip" data-ingrp="${k}" aria-pressed="${g === k}">${t}</button>`).join("")}</div>
-    ${L.length ? months.map(m => `<h3 class="inmonth">${m.replace("-", " 年 ")} 月</h3><ul class="inlist">${L.filter(x => x.date.startsWith(m)).map(inewsItem).join("")}</ul>`).join("") : `<p class="note gnote">這個分類目前沒有整理的新聞。</p>`}
+    ${L.length ? months.map(m => `<h3 class="inmonth">${m.slice(0, 4)} 年 ${+m.slice(5)} 月</h3><ul class="inlist">${L.filter(x => x.date.startsWith(m)).map(inewsItem).join("")}</ul>`).join("") : `<p class="note gnote">這個分類目前沒有整理的新聞。</p>`}
     <p class="note gnote">新聞重點是整理摘要，請以原文為準；不是投資建議。</p>`;
 }
 // 題材內頁的「最新消息」：整理過的＋即時新聞
@@ -60,6 +60,7 @@ async function inewsLive(T) {
 function inewsInit() {
   $("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const b = e.target.closest("[data-ingrp]"); if (b) { W.indS.ngrp = b.dataset.ingrp; renderInd(); } });
   const css = document.createElement("style"); css.textContent = `
+#lx .scrseg[aria-label="產業地圖"] { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: calc(100% - 24px); } #lx .scrseg[aria-label="產業地圖"] button { white-space: nowrap; flex: none; }
 .inmonth { margin: 18px 12px 6px; font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: .06em; }
 .inlist { list-style: none; margin: 0 12px; padding: 0; } .initem { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .initem a { color: var(--ink); text-decoration: none; } .initem a b { font-weight: 500; font-size: 15px; line-height: 1.5; } .initem a:hover b { text-decoration: underline; }
