@@ -6,6 +6,8 @@
 //   cash     單季現金流：營業、投資、籌資、資本支出、自由現金流（財報上是當年累計，這裡換算成單季）
 //   dividend 每年股利：現金股利、股票股利、除息日
 //   holders  股權分散：每週千張大戶（≥1000 張）與 400 張以上持股比例
+//   dist     最新一週完整的股權分散（每一級距的人數與持股比例）
+//   foreign  外資持股比例（每日）
 //   profile  董事長、總經理、成立／上市日期、資本額、產業、網址、地址
 // 金額單位：元（頁面再換成億）。
 
@@ -95,6 +97,18 @@ export function parseHolders(rows) {
   }
   return [...by.values()].sort((a, b) => a.d.localeCompare(b.d)).map(x => ({ ...x, b400: +x.b400.toFixed(2), b1000: +x.b1000.toFixed(2) }));
 }
+// 最新一週完整的股權分散：每一級距的人數、持股比例（給「籌碼分佈」）
+export function parseDist(rows) {
+  const ok = rows.filter(r => r.date && !/total|合計|差異/i.test(String(r.HoldingSharesLevel || "")) && num(r.percent) != null);
+  if (!ok.length) return null;
+  const last = ok.reduce((m, r) => (r.date > m ? r.date : m), ""), L = ok.filter(r => r.date === last);
+  const lv = r => { const s = String(r.HoldingSharesLevel), lo = /more than/i.test(s) ? lowerOf(s) + 1 : lowerOf(s); return lo; };
+  return { d: last, levels: L.map(r => ({ level: String(r.HoldingSharesLevel).replace(/,/g, ""), lo: lv(r), people: num(r.people), pct: num(r.percent), shares: num(r.unit) })).filter(x => x.lo != null).sort((a, b) => a.lo - b.lo) };
+}
+// 外資持股比例（每日）
+export function parseForeign(rows) {
+  return rows.filter(r => r.date && num(r.ForeignInvestmentSharesRatio) != null).map(r => ({ d: r.date, ratio: num(r.ForeignInvestmentSharesRatio), limit: num(r.ForeignInvestmentUpperLimitRatio) })).sort((a, b) => a.d.localeCompare(b.d));
+}
 // 公司基本資料（證交所 t187ap03_L 是中文欄位；櫃買中心是英文欄位）
 const pickKey = (r, ...res) => { for (const re of res) { const k = Object.keys(r).find(k => re.test(k)); if (k && String(r[k]).trim()) return String(r[k]).trim(); } return null; };
 const rocDate = s => { const m = String(s || "").match(/^(\d{2,4})(\d{2})(\d{2})$/) || String(s || "").match(/^(\d{2,4})[/-](\d{1,2})[/-](\d{1,2})$/); if (!m) return s || null; const y = +m[1] < 1911 ? +m[1] + 1911 : +m[1]; return `${y}-${String(m[2]).padStart(2, "0")}-${String(m[3]).padStart(2, "0")}`; };
@@ -114,13 +128,14 @@ async function profileOf(code) {
 export default async function handler(req, res) {
   const code = String(req.query?.code || "").trim().toUpperCase();
   if (!/^\d{4,6}[A-Z]?$/.test(code)) return res.status(400).json({ ok: false, error: "公司資訊目前只支援台股（4～6 碼代號）。" });
-  const out = { ok: true, code, source: "FinMind（整理自公開資訊觀測站）、證交所／櫃買中心", income: [], balance: [], cash: [], dividend: [], holders: [], profile: null, errors: [] };
+  const out = { ok: true, code, source: "FinMind（整理自公開資訊觀測站）、證交所／櫃買中心", income: [], balance: [], cash: [], dividend: [], holders: [], dist: null, foreign: [], profile: null, errors: [] };
   const jobs = [
     ["income", () => finmind("TaiwanStockFinancialStatements", code, daysAgo(365 * 5 + 120)).then(parseIncome)],
     ["balance", () => finmind("TaiwanStockBalanceSheet", code, daysAgo(365 * 5 + 120)).then(parseBalance)],
     ["cash", () => finmind("TaiwanStockCashFlowsStatement", code, daysAgo(365 * 5 + 120)).then(parseCash)],
     ["dividend", () => finmind("TaiwanStockDividend", code, daysAgo(365 * 8)).then(parseDividend)],
-    ["holders", () => finmind("TaiwanStockHoldingSharesPer", code, daysAgo(200)).then(parseHolders)],
+    ["holders", () => finmind("TaiwanStockHoldingSharesPer", code, daysAgo(200)).then(rows => { out.dist = parseDist(rows); return parseHolders(rows); })],
+    ["foreign", () => finmind("TaiwanStockShareholding", code, daysAgo(200)).then(parseForeign)],
   ];
   const prof = profileOf(code);
   for (const [k, run] of jobs) { try { out[k] = await run(); } catch (e) { out.errors.push(`${k}: ${e.message}`); } await sleep(100); }
