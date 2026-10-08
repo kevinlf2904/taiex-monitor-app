@@ -153,7 +153,7 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
   --up: #c4473f; --down: #2f8358; --up-pill: #c4473f; --down-pill: #2f8358;
   --s1: #a8863a; --band: rgba(0, 0, 0, .035); --shade: rgba(0, 0, 0, .03);
   --grad-strong: #161616; --on-strong: #fbfaf7; --strong-line: #161616;
-  --radius: 18px; --radius-md: 14px; --radius-sm: 12px;
+  --radius: 6px; --radius-md: 5px; --radius-sm: 4px;
   --g1: 8px; --g2: 16px; --g3: 24px; --g4: 32px; --g6: 48px; --gutter: 20px;
 }
 :root[data-style="layout"][data-theme="dark"] {
@@ -199,17 +199,17 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
 /* 膠囊：沒選中是淡灰底，選中是反白（深色＝白底黑字） */
 :root[data-style="layout"] .ichip, :root[data-style="layout"] .groups button, :root[data-style="layout"] .ixc, :root[data-style="layout"] .cochips button, :root[data-style="layout"] .mkseg button { background: var(--surface-2); border-color: transparent; }
 :root[data-style="layout"] .ichip[aria-pressed="true"], :root[data-style="layout"] .groups button[aria-pressed="true"], :root[data-style="layout"] .cochips button[aria-pressed="true"], :root[data-style="layout"] .mkseg button[aria-pressed="true"], :root[data-style="layout"] .sxnav button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-:root[data-style="layout"] .btn { background: var(--surface-2); border-color: transparent; border-radius: 999px; padding-inline: 16px; }
+:root[data-style="layout"] .btn { background: var(--surface-2); border-color: transparent; border-radius: var(--radius-sm); padding-inline: 16px; }
 :root[data-style="layout"] .btn:hover { border-color: var(--muted); }
 :root[data-style="layout"] .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-:root[data-style="layout"] .btn.sm { border-radius: 999px; }
+:root[data-style="layout"] .btn.sm { border-radius: var(--radius-sm); }
 :root[data-style="layout"] input.code, :root[data-style="layout"] select.sel, :root[data-style="layout"] input[type="number"] { background: var(--surface-2); border-color: transparent; }
 /* 清單：列高一點、左右頁邊距一致（網格） */
 :root[data-style="layout"] .row { padding-block: 12px; }
 :root[data-style="layout"] .wl li { border-bottom-color: var(--line); }
 :root[data-style="layout"] .row:hover { background: var(--surface-2); }
 :root[data-style="layout"] .row[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--gold); }
-:root[data-style="layout"] .row .pc { border-radius: 999px; }
+:root[data-style="layout"] .row .pc { border-radius: var(--radius-sm); }
 /* 表格：沒有直線，列距寬，表頭小而淡 */
 :root[data-style="layout"] .tbl th { font-size: 11.5px; font-weight: 400; letter-spacing: .06em; color: var(--muted); padding-block: 8px; }
 :root[data-style="layout"] .tbl td { padding-block: 9px; border-color: var(--line); }
@@ -248,6 +248,13 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
   :root[data-style="layout"] .panel { border-radius: var(--radius-md); }
   :root[data-style="layout"] .panel + .panel { margin-top: var(--g2); }
 }
+
+/* 版心留白：圓角都改小（區塊 6、卡片 5、按鈕與膠囊 4），只有很小的圓點維持圓形 */
+:root[data-style="layout"] :is(.btn, .btn.sm, .row .pc, .ichip, .groups button, .ixc, .cochips button, .mkseg button, .sxnav button, .sxco, .pod .pbadge, .pod .pdir, .pod .pwin, .sxcard .pdir,
+  .tabs, .tabs button, #lessonToc a, #lessonToc button, .icon-btn, .theme-btn, .chip, .seal, .brand b, .msg.user, .afchips button, .stylepick button.sp, .stylepick .sp i) { border-radius: var(--radius-sm); }
+:root[data-style="layout"] :is(#toTop, .chat-fab) { border-radius: 8px; }
+:root[data-style="layout"] img.logo { border-radius: 4px; }
+:root[data-style="layout"] .sxgauge .bar { border-radius: 2px; }
 
 /* ---------- 風格選擇視窗 ---------- */
 .stylepick { position: fixed; inset: 0; z-index: 9998; display: grid; place-items: center; background: rgba(0, 0, 0, .45); padding: 16px; }
