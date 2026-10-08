@@ -409,7 +409,7 @@ class Chart {
       tag(VP.pre, "#f0883e", "壓"); tag(VP.avg, col.muted, "均"); tag(VP.sup, "#4e9af1", "撐");
       ctx.restore();
       // 右側價格軸上的標籤（和富途一樣：橘＝壓力、灰＝平均成本、藍＝支撐）
-      ctx.font = `600 10.5px ${cssVar("--font-num")}`; ctx.textAlign = "left";
+      ctx.font = `500 10.5px ${cssVar("--font-num")}`; ctx.textAlign = "left";
       const used = [];
       [[VP.pre, "#f0883e"], [VP.avg, "#8b8f98"], [VP.sup, "#3b82f6"]].forEach(([v, c]) => { if (v == null) return; let y = Y(v); if (y < top0 + 6 || y > top0 + mainH - 6) return; while (used.some(u => Math.abs(u - y) < 14)) y += 14; used.push(y); const t = fmtP(v), tw = ctx.measureText(t).width + 8; ctx.fillStyle = c; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(L + pw + 2, y - 8, tw, 16, 3) : ctx.rect(L + pw + 2, y - 8, tw, 16); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillText(t, L + pw + 6, y); });
       ctx.font = `11px ${cssVar("--font-num")}`;
@@ -437,7 +437,7 @@ class Chart {
       const x1 = X(z.i1) - bw / 2, x2 = X(Math.min(z.i2, vis - 1)) + bw / 2, y1 = Y(z.top), y2 = Y(z.bot), c = z.color ? cmap[z.color] : z.dir > 0 ? col.up : col.down;
       ctx.fillStyle = c; ctx.globalAlpha = z.alpha ?? (z.kind === "FVG" ? 0.08 : 0.16); ctx.fillRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.globalAlpha = z.alpha != null ? Math.min(0.7, z.alpha * 4) : 0.7;
       ctx.strokeStyle = c; ctx.lineWidth = 1; ctx.setLineDash(z.kind === "FVG" ? [3, 3] : []); ctx.strokeRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.setLineDash([]); ctx.globalAlpha = 1;
-      if (x2 - x1 > 22) { ctx.fillStyle = c; ctx.textAlign = "left"; ctx.font = `600 10px ${cssVar("--font-body")}`; ctx.fillText(z.kind, x1 + 3, Math.max(y1, Math.min(y2, y1 + 7))); ctx.font = `11px ${cssVar("--font-num")}`; }
+      if (x2 - x1 > 22) { ctx.fillStyle = c; ctx.textAlign = "left"; ctx.font = `500 10px ${cssVar("--font-body")}`; ctx.fillText(z.kind, x1 + 3, Math.max(y1, Math.min(y2, y1 + 7))); ctx.font = `11px ${cssVar("--font-num")}`; }
     });
     ctx.restore();
     // 模擬區：底色、機率帶（10–90%、25–75%）、中位數
@@ -449,7 +449,7 @@ class Chart {
       band(F.p90, F.p10, 0.1); band(F.p75, F.p25, 0.16);
       ctx.strokeStyle = col.accent; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(X(F.from - 1), Y(D[F.from - 1].c)); F.p50.forEach((v, t) => ctx.lineTo(X(F.from + t), Y(v))); ctx.stroke(); ctx.setLineDash([]);
       ctx.restore();
-      ctx.fillStyle = col.accent; ctx.textAlign = "left"; ctx.font = `700 11px ${cssVar("--font-body")}`; if (fx < L + pw - 40) ctx.fillText("模擬", fx + 6, top0 + 10); ctx.font = `11px ${cssVar("--font-num")}`;
+      ctx.fillStyle = col.accent; ctx.textAlign = "left"; ctx.font = `500 11px ${cssVar("--font-body")}`; if (fx < L + pw - 40) ctx.fillText("模擬", fx + 6, top0 + 10); ctx.font = `11px ${cssVar("--font-num")}`;
     }
     // K 棒以下到標記為止都裁在價格區內（縱向放大時才不會畫到成交量區）
     ctx.save(); ctx.beginPath(); ctx.rect(0, top0, L + pw + 1, mainH); ctx.clip();
@@ -500,7 +500,7 @@ class Chart {
       const c = cmap[sh.color] || col.accent;
       ctx.strokeStyle = c; ctx.lineWidth = sh.width || 1.5; ctx.setLineDash(sh.dash || []); ctx.beginPath();
       pts.forEach(([i, p], k) => { const x = X(Math.min(i, n - 1)) + (i > n - 1 ? (i - n + 1) * bw : 0); k ? ctx.lineTo(x, Y(p)) : ctx.moveTo(x, Y(p)); }); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = c; ctx.font = `600 10.5px ${cssVar("--font-body")}`;
+      ctx.fillStyle = c; ctx.font = `500 10.5px ${cssVar("--font-body")}`;
       if (sh.label) { const [i, p] = pts[pts.length - 1]; ctx.textAlign = "right"; ctx.fillText(sh.label, Math.min(X(Math.min(i, vis - 1)), L + pw - 2), Y(p) - 6); }
       (sh.tags || []).filter(t => t.i < vis).forEach(t => { ctx.textAlign = "center"; ctx.fillText(t.text, X(t.i), Y(t.p) + (t.below ? 13 : -7)); });
       ctx.font = `11px ${cssVar("--font-num")}`;
@@ -522,7 +522,7 @@ class Chart {
       const y = down ? Math.max(ty, ext + 9) : Math.min(ty, ext - 8);
       return y > top0 + mainH - 5 || y < top0 + 6 ? null : y;
     };
-    const label = (t, tx, ty, c, size) => { ctx.font = `600 ${size}px ${cssVar("--font-body")}`; ctx.textAlign = "center"; ctx.lineJoin = "round"; ctx.lineWidth = 3; ctx.strokeStyle = col.surface; ctx.globalAlpha = 0.85; ctx.strokeText(t, tx, ty); ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, tx, ty); };
+    const label = (t, tx, ty, c, size) => { ctx.font = `500 ${size}px ${cssVar("--font-body")}`; ctx.textAlign = "center"; ctx.lineJoin = "round"; ctx.lineWidth = 3; ctx.strokeStyle = col.surface; ctx.globalAlpha = 0.85; ctx.strokeText(t, tx, ty); ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, tx, ty); };
     // 副圖訊號：在副圖上交叉或離開超買超賣區的那一天，主圖K線也標出來（空心圈，和實心三角的課程／策略訊號區分）
     const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis, Object.fromEntries(["kd", "macd", "rsi", "wr", "custom"].map(k => [k, Chart.sigShow(k)])), Chart.prefs.sigStrongK) : [];
     (o.markers || []).filter(m => m.i < vis && m.i >= va && m.i <= vb).forEach(m => {
@@ -535,7 +535,7 @@ class Chart {
       ctx.closePath(); ctx.fill(); ctx.globalAlpha = m.dim ? 0.3 : 1;
       if (showLabels && m.label) {
         // 標籤互相重疊或會壓到 K 棒時改位置；放不下就不畫字（三角形照畫）
-        ctx.font = `600 10.5px ${cssVar("--font-body")}`; const tw = ctx.measureText(m.label).width;
+        ctx.font = `500 10.5px ${cssVar("--font-body")}`; const tw = ctx.measureText(m.label).width;
         const tx = Math.min(Math.max(x, L + tw / 2 + 2), L + pw - tw / 2 - 2), ty = clearY(tx, tw, buy ? y + s * 1.5 + 9 : y - s * 1.5 - 8, buy);
         if (ty != null && !placed.some(q => Math.abs(q.x - tx) < (q.w + tw) / 2 + 4 && Math.abs(q.y - ty) < 13)) { label(m.label, tx, ty, c, 10.5); placed.push({ x: tx, y: ty, w: tw }); }
         ctx.font = `11px ${cssVar("--font-num")}`;
@@ -556,7 +556,7 @@ class Chart {
       if (gs.length > 1) { ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r + 2.5, 0, Math.PI * 2); ctx.stroke(); }
       ctx.globalAlpha = 1;
       this.sigLinks.push({ i: g.i, side: g.side, x, y: buy ? y + r : y - r, c, on });
-      if (on && Chart.prefs.mk !== "icon") { const t = gs.map(q => q.label).join("・"); ctx.font = `600 10px ${cssVar("--font-body")}`; const tw = ctx.measureText(t).width, tx = Math.min(Math.max(x, L + tw / 2 + 2), L + pw - tw / 2 - 2); label(t, tx, buy ? y + r + 12 : y - r - 6, c, 10); ctx.font = `11px ${cssVar("--font-num")}`; }
+      if (on && Chart.prefs.mk !== "icon") { const t = gs.map(q => q.label).join("・"); ctx.font = `500 10px ${cssVar("--font-body")}`; const tw = ctx.measureText(t).width, tx = Math.min(Math.max(x, L + tw / 2 + 2), L + pw - tw / 2 - 2); label(t, tx, buy ? y + r + 12 : y - r - 6, c, 10); ctx.font = `11px ${cssVar("--font-num")}`; }
     });
 
     ctx.restore();
@@ -672,7 +672,7 @@ class Chart {
     const hi_ = this.hover != null && this.hover < vis ? this.hover : null;
     if (hi_ != null) {
       // 日期標籤（十字線固定時一直顯示，再點一下圖表取消）
-      ctx.font = `600 10.5px ${cssVar("--font-num")}`; const dt = fmtD(D[hi_].d), dw = ctx.measureText(dt).width + 10, dx = Math.min(Math.max(X(hi_) - dw / 2, L), L + pw - dw);
+      ctx.font = `500 10.5px ${cssVar("--font-num")}`; const dt = fmtD(D[hi_].d), dw = ctx.measureText(dt).width + 10, dx = Math.min(Math.max(X(hi_) - dw / 2, L), L + pw - dw);
       ctx.fillStyle = this.pinned ? col.accent : col.ink; ctx.fillRect(dx, H - axisH - 6, dw, axisH - 2); ctx.fillStyle = col.surface; ctx.textAlign = "center"; ctx.fillText(dt, dx + dw / 2, H - axisH / 2 - 4); ctx.font = `11px ${cssVar("--font-num")}`;
       ctx.strokeStyle = this.pinned ? col.accent : col.muted; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.moveTo(Math.round(X(hi_)) + 0.5, top0); ctx.lineTo(Math.round(X(hi_)) + 0.5, H - axisH - 6); ctx.stroke();
       const y = Y(D[hi_].c); ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;

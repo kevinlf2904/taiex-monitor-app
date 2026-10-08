@@ -21,7 +21,9 @@ const ROUTES = {
   screen: () => import("./_lib/screen.js"),
   stockinfo: () => import("./_lib/stockinfo.js"),
   status: () => import("./_lib/status.js"),
+  podcast: () => import("./_lib/podcast.js"),
   stocks: () => import("./_lib/stocks.js"),
+  usmarket: () => import("./_lib/usmarket.js"),
   warn: () => import("./_lib/warn.js"),
 };
 export const ROUTE_NAMES = Object.keys(ROUTES);
