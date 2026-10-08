@@ -45,7 +45,7 @@ async function t86Latest() {
   }
   return null;
 }
-const TW_TYPES = { value: "成交值", volume: "成交量", gain: "漲幅", loss: "跌幅", foreign: "外資買超", trust: "投信買超" };
+const TW_TYPES = { value: "成交值", volume: "成交量", gain: "漲幅", loss: "跌幅", foreign: "外資買超", trust: "投信買超", etf: "ETF" };
 
 export default async function handler(req, res) {
   const market = req.query?.market === "us" ? "us" : "tw", type = String(req.query?.type || (market === "us" ? "active" : "value"));
@@ -64,9 +64,10 @@ export default async function handler(req, res) {
       const L = await marketRows(), all = L.rows.slice(); live = L.live;
       date = L.date || all.find(x => x.date)?.date || null; source = L.source; time = L.time;
       const liquid = all.filter(x => (x.vol || 0) >= 500); // 漲跌幅排行排除成交太少的
-      rows = type === "value" ? all.sort((x, y) => (y.value || 0) - (x.value || 0)) : type === "volume" ? all.sort((x, y) => (y.vol || 0) - (x.vol || 0))
+      rows = type === "etf" ? all.filter(x => /^00\d{2,4}[A-Z]?$/.test(x.code)).sort((x, y) => (y.value || 0) - (x.value || 0)) // ETF 排行：全部 ETF 依成交值（前端再依量、漲跌幅排序）
+        : type === "value" ? all.sort((x, y) => (y.value || 0) - (x.value || 0)) : type === "volume" ? all.sort((x, y) => (y.vol || 0) - (x.vol || 0))
         : type === "gain" ? liquid.sort((x, y) => (y.chgPct ?? -1e9) - (x.chgPct ?? -1e9)) : liquid.sort((x, y) => (x.chgPct ?? 1e9) - (y.chgPct ?? 1e9));
-      rows = rows.slice(0, 30).map(({ date: _, ...x }) => x);
+      rows = rows.slice(0, type === "etf" ? 200 : 30).map(({ date: _, ...x }) => x);
     }
     res.setHeader("Cache-Control", type === "foreign" || type === "trust" ? "s-maxage=600, stale-while-revalidate=1800" : liveCache(live, 20));
     return res.status(200).json({ ok: true, market, type, label: TW_TYPES[type], date, live, time, source, rows });
