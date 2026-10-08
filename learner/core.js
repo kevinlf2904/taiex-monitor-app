@@ -744,3 +744,27 @@ class Chart {
   }
 }
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+
+/* ---------- 自動更新到新版本 ----------
+   每 5 分鐘（以及切回這個分頁時）看一下 version.json；網站部署了新版本時：
+   畫面在背景、或 1 分鐘沒操作就直接重新載入；正在操作、輸入或播音檔時，先在下方顯示「有新版本」，點一下或切回來時再更新。
+   嵌在學堂裡的看盤頁（iframe）交給外層處理。 */
+(function autoUpdate() {
+  if (window.top !== window || !/^https?:$/.test(location.protocol)) return;
+  const cur = (document.body.textContent.match(/版本 (\d{4}\.\d{2}\.\d{2}-\d+)/) || [])[1]; if (!cur) return;
+  let last = Date.now(), next = null;
+  const newer = (a, b) => { const x = String(a).split(/[.-]/).map(Number), y = String(b).split(/[.-]/).map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+  ["pointerdown", "keydown", "wheel", "touchstart"].forEach(t => addEventListener(t, () => { last = Date.now(); }, { passive: true, capture: true }));
+  const docs = () => [document, ...[...document.querySelectorAll("iframe")].map(f => { try { return f.contentDocument; } catch { return null; } }).filter(Boolean)];
+  const busy = () => docs().some(d => [...d.querySelectorAll("audio,video")].some(a => !a.paused) || /^(INPUT|TEXTAREA|SELECT)$/.test(d.activeElement?.tagName || ""));
+  const go = () => { try { sessionStorage.setItem("kline:updatedFrom", cur); } catch {} location.reload(); };
+  const banner = v => { if (document.getElementById("updBar")) return; const b = document.createElement("button"); b.id = "updBar"; b.type = "button";
+    b.textContent = `有新版本（${v}），點一下更新`; b.style.cssText = "position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9999;padding:8px 16px;border-radius:99px;border:1px solid var(--line);background:var(--ink);color:var(--surface);font:inherit;font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:pointer";
+    b.onclick = go; document.body.appendChild(b); };
+  const decide = () => { if (!next) return; if (document.visibilityState === "hidden" || (Date.now() - last > 60000 && !busy())) go(); else banner(next); };
+  const check = async () => {
+    try { const r = await fetch("version.json", { cache: "no-store" }); if (!r.ok) return; const j = await r.json(); if (j?.v && newer(j.v, cur)) { next = j.v; decide(); } } catch {}
+  };
+  setTimeout(check, 15000); setInterval(check, 5 * 60e3); setInterval(decide, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); else decide(); });
+})();

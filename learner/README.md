@@ -170,7 +170,16 @@
 
 ### 名人 Podcast（`api/_lib/podcast.js`、`learner/podcast.js`）
 
-看盤的「名人」分頁，參考 Podket 的做法：
+看盤的「名人」分頁，參考 Podket 的做法。**打開就有整理好的重點、觀點與往績，不用按按鈕等 AI**：
+
+- **自動整理（排程）**：`.github/workflows/podcast-sync.yml` 每 2 小時跑 `scripts/podcast-sync.mjs`。它依 `learner/data/podcast/shows.json` 的節目清單讀 RSS，用 AI 整理新單集，並往前補到一年內每個節目最近 20 集，每次最多 10 集。結果寫進 `learner/data/podcast/index.json`，推回 main 後 Vercel 自動重新部署。
+  - 在 GitHub 的 Settings → Secrets and variables → Actions 新增 `GEMINI_API_KEY`（和 Vercel 上的同一把即可），AI 就能直接聽完整集，沒有時間限制。
+  - 沒設的話，改呼叫已部署網站的 `/api/podcast`（`SITE_URL`，預設 https://kline-school.vercel.app）。這條路受 Vercel 60 秒的限制，太長的單集只能改讀節目說明。
+  - 想加節目，就在 shows.json 加一行：`q` 是搜尋字、`must` 是名稱必須包含的字，或直接填 `feed`。
+- **網頁端**：
+  - 打開名人分頁時讀 index.json；排程還沒處理到的最新單集、自己加的節目，在背景自動整理。
+  - 點開還沒整理的單集會立刻整理。
+  - 分頁開著時每 10 分鐘自動更新。
 
 - **今日摘要**：追蹤的財經 Podcast 最新單集。第一次打開會自動追蹤股癌、兆華與股惑仔、游庭皓的財經皓角等節目（在 Apple Podcasts 目錄找得到的才會加入），「追蹤清單」可以搜尋節目或貼 RSS 網址。
 - **單集重點整理**：在單集頁按「AI 聽完整集整理」，伺服器把音檔上傳到 Gemini（Files API，整理完就刪除），整理出一句話摘要、重點、分段說明、議題，以及主持人**明確看多／看空**的個股（觀點）。沒有 Gemini 時可以「用節目說明整理」（Gemini 或 Claude 讀 show notes）。也可以手動新增觀點。整理結果只存在這個瀏覽器。
@@ -180,6 +189,30 @@
 - **排行榜**：專家排行榜（分數高到低）、反指標排行榜（分數低到高）。只計算你整理過的單集。
 
 API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST { act: "upload" }` 上傳音檔、`GET ?act=file&name=` 查處理狀態、`POST { act: "sum" }` 整理。需要 `GEMINI_API_KEY`（聽音檔）或 `ANTHROPIC_API_KEY`（只能讀節目說明）。這些都是回顧統計，AI 可能聽錯，不是投資建議。
+
+### 大盤：產業熱力圖、原物料外匯（`api/_lib/global.js`）
+
+- **產業熱力圖**：方塊面積是成交金額，顏色是漲跌幅（紅漲綠跌，越深幅度越大），點了開資金分頁的產業成分股。可以切換上市或上櫃。
+- **原物料外匯**（大盤的第三個切換）：`GET /api/global`，資料來自 Yahoo Finance（可能延遲 10～15 分鐘），快取 60 秒，畫面每分鐘自動更新。
+  - 能源：WTI、布蘭特、天然氣、熱燃油、汽油。
+  - 金屬：金、銀、銅、白金、鈀金、鋁。
+  - 農產：黃豆、玉米、小麥、咖啡、糖、棉花。
+  - 航運：BDRY、BOAT。BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。
+  - 外匯：美元指數，以及 1 美元兌台幣、日圓、人民幣、港幣、歐元、英鎊、韓元、澳幣。
+  - 美債殖利率：13 週、5 年、10 年、30 年。
+  - 加密貨幣：比特幣、以太幣。
+
+### ETF 專區的排行與主動式
+
+- 「排行」用 `GET /api/hot?market=tw&type=etf` 拿全部台股 ETF，可以依成交量、成交值、漲幅、跌幅排序；漲跌幅只列成交 200 張以上的。
+- 「主動式」分類：00981A、00403A、00406A。
+
+### 自動更新到新版本
+
+`learner/version.json` 記目前的版本（每次改版和頁尾的版本號一起改）。頁面每 5 分鐘、以及切回分頁時檢查一次；有新版本時：
+
+- 畫面在背景，或 1 分鐘沒有操作，就直接重新載入。
+- 正在操作、輸入或播放音檔時，先在下方顯示「有新版本，點一下更新」。
 
 ### 熱門股與排行（`api/_lib/hot.js`）
 
