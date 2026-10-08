@@ -720,6 +720,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="podcast.js"></script>
 <script src="stockx.js"></script>
 <script src="after.js"></script>
+<script src="indnews.js"></script>
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
@@ -1793,7 +1794,7 @@ $("#lx").addEventListener("change", e => { if (W.lt === "money" && e.target.matc
 if (typeof INDUSTRY_PACK !== "undefined") for (const t of INDUSTRY_PACK) if (!INDUSTRY_MAP.themes.some(x => x.id === t.id)) INDUSTRY_MAP.themes.push(t);
 const indFig = t => (t.fig ? t : typeof INDUSTRY_FIGS !== "undefined" ? INDUSTRY_FIGS[t.id] || null : null);
 const IND = INDUSTRY_MAP, INDT = new Map(IND.themes.map(t => [t.id, t])), MK_NAME = { tw: "台", us: "美", jp: "日", kr: "韓" }, MK_TAG = { tw: "TW", us: "US", jp: "JP", kr: "KR" };
-const IND_COL = { "IC 設計": "#f59e0b", "半導體製造": "#6366f1", "半導體材料": "#8b5cf6", "半導體設備": "#8b5cf6", PCB: "#f97316", 記憶體: "#818cf8", 電子零組件: "#64748b", "AI 伺服器": "#38bdf8", 散熱: "#22d3ee", 電源: "#eab308", 網通: "#0ea5e9", 能源: "#84cc16", 機器人: "#14b8a6", 汽車: "#ef4444", 雲端: "#a78bfa", 資料中心: "#2dd4bf", 光電: "#f472b6", 電子代工: "#60a5fa", 通路: "#94a3b8", 環保: "#4ade80", 工業: "#fb923c", 醫療: "#f87171", 航運: "#38bdf8", 原物料: "#d97706", 營建: "#a8a29e", 金融: "#facc15", 國防: "#65a30d", 消費電子: "#818cf8", 量子運算: "#c084fc", 軟體: "#22d3ee", 資安: "#34d399", 網路平台: "#f472b6", 房地產: "#a8a29e" };
+const IND_COL = { "IC 設計": "#f59e0b", "半導體製造": "#6366f1", "半導體材料": "#8b5cf6", "半導體設備": "#8b5cf6", PCB: "#f97316", 記憶體: "#818cf8", 電子零組件: "#64748b", "AI 伺服器": "#38bdf8", 散熱: "#22d3ee", 電源: "#eab308", 網通: "#0ea5e9", 能源: "#84cc16", 機器人: "#14b8a6", 汽車: "#ef4444", 雲端: "#a78bfa", 資料中心: "#2dd4bf", 光電: "#f472b6", 電子代工: "#60a5fa", 通路: "#94a3b8", 環保: "#4ade80", 工業: "#fb923c", 醫療: "#f87171", 航運: "#38bdf8", 原物料: "#d97706", 營建: "#a8a29e", 金融: "#facc15", 國防: "#65a30d", 航太: "#7dd3fc", 消費電子: "#818cf8", 量子運算: "#c084fc", 軟體: "#22d3ee", 資安: "#34d399", 網路平台: "#f472b6", 房地產: "#a8a29e" };
 const indCol = t => IND_COL[t.cat] || "#94a3b8";
 const IND_ICON = { chip: "M7 7h10v10H7zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4", code: "M8 7l-5 5 5 5M16 7l5 5-5 5", home: "M3 11l9-7 9 7v9h-6v-6H9v6H3z", layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17l9 5 9-5",
   wave: "M4 12a8 8 0 0 1 16 0M7 12a5 5 0 0 1 10 0M12 12h.01", server: "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01", bolt: "M13 2L4 14h7l-1 8 9-12h-7z", fan: "M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0M12 10c0-4 4-6 6-4M14 12c4 0 6 4 4 6M12 14c0 4-4 6-6 4M10 12c-4 0-6-4-4-6",
@@ -1919,13 +1920,14 @@ function renderInd() {
       ${(F => F ? `<section class="iflow ifig"><h4>原理圖解 <button class="ilink" data-izoom="${T.id}">點圖放大 ⤢</button></h4><button class="izbtn" data-izoom="${T.id}" aria-label="放大圖解">${figSvg(F.fig, { id: "d-" + T.id })}</button>${F.fig.alt ? `<p class="note figalt">${esc(F.fig.alt)}</p>` : ""}</section>
         <section class="iseg ihow"><h4>原理說明</h4>${F.how.map(([k, v], i) => `<details ${i < 2 ? "open" : ""}><summary>${esc(k)}</summary><p>${esc(v)}</p></details>`).join("")}</section>
         ${F.trends?.length ? `<section class="iseg itrend"><h4>產業趨勢</h4><div class="itrends">${F.trends.map((x, i) => `<div class="itrc"><span>${i + 1}</span><p>${esc(x)}</p></div>`).join("")}</div></section>` : ""}` : "")(indFig(T))}
-      ${indChain(T)}${indGlobal(T)}
+      ${indChain(T)}${indGlobal(T)}${inewsTheme(T)}
       <section class="iflow"><h4>流程</h4>${flowSvg(T, { cols: isMobile() ? 2 : 3, w: isMobile() ? 330 : 560 })}</section>${indAiBox(T)}`
       + `<p class="note gnote">名單是常被提到的代表公司，不是完整名單；角色是簡化說明，實際營收比重請看財報。</p>`;
     $("#lx").innerHTML = h; loadIndQuotes(indCodes(T)); return;
   }
-  h += `<div class="seg scrseg" role="group" aria-label="產業地圖">${[["themes", "題材總覽"], ["network", "產業網絡"], ["gallery", "產業圖解"], ["fav", "收藏"]].map(([k, t]) => `<button data-iview="${k}" aria-pressed="${S.view === k}">${t}${k === "fav" && fav.size ? ` ${fav.size}` : ""}</button>`).join("")}</div>`;
-  if (S.view === "network") {
+  h += `<div class="seg scrseg" role="group" aria-label="產業地圖">${[["themes", "題材總覽"], ["network", "產業網絡"], ["gallery", "產業圖解"], ["news", "產業新聞"], ["fav", "收藏"]].map(([k, t]) => `<button data-iview="${k}" aria-pressed="${S.view === k}">${t}${k === "fav" && fav.size ? ` ${fav.size}` : ""}</button>`).join("")}</div>`;
+  if (S.view === "news") h += inewsView();
+  else if (S.view === "network") {
     const net = IND.networks.find(n => n.id === S.net) || IND.networks[0], F = S.focus && INDT.get(S.focus);
     h += `<p class="note gnote">一張圖看整條產業怎麼連動：點一個題材會加亮它的上下游，虛線是跨市場的關係；左右滑動看完整網絡。</p><div class="ichips" style="margin:0 12px">${IND.networks.map(n => `<button class="ichip" data-inet="${n.id}" aria-pressed="${n.id === net.id}">${esc(n.name)}</button>`).join("")}</div>
       <div class="inetwrap">${indNetwork(net, S.focus)}</div>`
@@ -2193,6 +2195,7 @@ $("#lx").addEventListener("click", e => { const s = e.target.closest("[data-sel]
 podInit();
 sxInit();
 afterInit();
+inewsInit();
 setTimeout(() => ltabsUi(true), 300);
 // 回到頂端：長頁面捲下去後出現
 { const b = document.createElement("button"); b.id = "toTop"; b.type = "button"; b.textContent = "↑"; b.setAttribute("aria-label", "回到頂端"); b.hidden = true; document.body.appendChild(b);
