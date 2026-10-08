@@ -248,6 +248,10 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mkbox b { font: 500 18px var(--font-num); text-align: right; padding: 4px 10px; border-radius: 4px; } .mkbox b.fill.up { background: var(--up); color: #fff; } .mkbox b.fill.down { background: var(--down); color: #fff; }
 .mkbox b.line.up { border: 1.5px solid var(--up); color: var(--up); } .mkbox b.line.down { border: 1.5px solid var(--down); color: var(--down); }
 .mkmore { margin-top: 8px; } .mkmore summary { cursor: pointer; color: var(--muted); font-size: 13px; } .mksub { margin: 10px 0 4px; font-size: 13px; }
+.secgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin: 8px 0 4px; }
+.secgrid button { border: 1px solid var(--line); border-radius: var(--radius-sm, 8px); background: var(--surface-3); color: var(--ink); font: inherit; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; }
+.secgrid button.up { background: color-mix(in srgb, var(--up) calc(var(--k) * 30%), var(--surface-3)); } .secgrid button.down { background: color-mix(in srgb, var(--down) calc(var(--k) * 30%), var(--surface-3)); }
+.secgrid span { font-size: 13px; } .secgrid b { font-size: 14px; font-weight: 500; font-family: var(--font-num); } .secgrid .up b { color: var(--up); } .secgrid .down b { color: var(--down); } .secgrid small { font-size: 10.5px; color: var(--muted); }
 .tmap { position: relative; height: 300px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
 .tmap button { position: absolute; border: 1px solid var(--bg); color: var(--ink); font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px; overflow: hidden; text-align: center; line-height: 1.25; }
 .tmap button b { font-weight: 500; font-size: 13px; white-space: nowrap; } .tmap button span { font-size: 12px; font-family: var(--font-num); } .tmap button small { font-size: 11px; opacity: .8; }
@@ -665,7 +669,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-42</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-43</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -727,7 +731,7 @@ const W = {
   roK: ["", "D", "60", "1"].includes(String(store.get("watch:rok", ""))) ? String(store.get("watch:rok", "")) : "",
   scrG: store.get("watch:scrg", "smart"), scrOpen: null, cscan: null, news: null,
   mkReg: ["us", "gl"].includes(store.get("watch:mkReg", "tw")) ? store.get("watch:mkReg", "tw") : "tw", usHot: ["active", "gain", "loss"].includes(store.get("watch:usHot", "active")) ? store.get("watch:usHot", "active") : "active",
-  mkM: store.get("watch:mkM", "twse") === "tpex" ? "tpex" : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
+  mkM: ["tpex", "all"].includes(store.get("watch:mkM", "twse")) ? store.get("watch:mkM", "twse") : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
   mkHot: ["value", "gain", "surge", "volume"].includes(store.get("watch:mkHot", "value")) ? store.get("watch:mkHot", "value") : "value", worldR: store.get("watch:worldR", "us"), calWk: 0, calK: ["all", "conf", "ex"].includes(store.get("watch:calK", "all")) ? store.get("watch:calK", "all") : "all", calDay: null, warn: null, warnOpen: "punish", cal: null, futx: null,
   mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), q: "up", rk: "inst", side: "buy", win: "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), rp: { t: null, playing: false, speed: 1, set: "hot" } },
   indS: { view: "themes", mk: "tw", sub: "chain", net: "ai-dc", ...(store.get("watch:inds", null) || {}), open: null, focus: null }, indQ: {},
@@ -2029,17 +2033,17 @@ function renderMkt() {
   const fsec = (key, t, body, extra = "", seg = "") => `<details class="mk mkfold" data-fold="${key}" ${store.get("watch:fold:" + key, false) ? "open" : ""}><summary><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3></summary>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</details>`;
   const MKT2 = [["twse", "上市"], ["tpex", "上櫃"]];
   // 市場概況：漲跌停、漲跌家數（上市／上櫃切換）
-  const B = J.breadthBy?.[W.mkM] || J.breadth;
+  const B = (W.mkM === "all" ? J.breadth : J.breadthBy?.[W.mkM]) || J.breadth, TT = J.totalsBy?.[W.mkM];
   if (B) { const mx = Math.max(1, ...B.buckets.map(x => x.n)), tot = B.up + B.down + B.flat || 1;
     h += sec("市場概況", `<div class="mkbox"><button data-mk="goList" data-v="limit"><span>漲停家數</span><b class="fill up">${B.limUp}</b></button><button data-mk="goList" data-v="limitDown"><span>跌停家數</span><b class="fill down">${B.limDn}</b></button><button data-mk="goRankT" data-v="gain"><span>上漲家數</span><b class="line up">${B.up}</b></button><button data-mk="goRankT" data-v="loss"><span>下跌家數</span><b class="line down">${B.down}</b></button></div>
       <div class="ratio"><span class="up" style="width:${B.up / tot * 100}%"></span><span class="flat" style="width:${B.flat / tot * 100}%"></span><span class="down" style="width:${B.down / tot * 100}%"></span></div>
-      <details class="mkmore"><summary>漲跌幅分佈</summary><div class="hist">${B.buckets.map((x, i) => `<div><small>${x.n}</small><i class="${i < 5 ? "up" : i > 5 ? "down" : "flat"}" style="height:${(x.n / mx * 70).toFixed(0)}px"></i><span data-s="${x.label.replace(/%/g, "")}">${x.label}</span></div>`).join("")}</div></details>`, `平盤 ${B.flat}・股票＋ETF${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, MKT2) : ""); }
+      <details class="mkmore"><summary>漲跌幅分佈</summary><div class="hist">${B.buckets.map((x, i) => `<div><small>${x.n}</small><i class="${i < 5 ? "up" : i > 5 ? "down" : "flat"}" style="height:${(x.n / mx * 70).toFixed(0)}px"></i><span data-s="${x.label.replace(/%/g, "")}">${x.label}</span></div>`).join("")}</div></details>`, `平盤 ${B.flat}・股票＋ETF${TT?.value ? `・成交 ${Math.round(TT.value).toLocaleString()} 億` : ""}${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, [...MKT2, ["all", "全部"]]) : ""); }
   // 產業概況：漲最多、跌最多各 3 個（直條），其餘收在「更多」
   const S = J.sectorsBy?.[W.secM] || J.sectors;
   if (S?.length) { const top = [...S.slice(0, 3), ...S.slice(-3).filter(x => !S.slice(0, 3).includes(x))], mx = Math.max(0.5, ...top.map(x => Math.abs(x.pct || 0))), pre = W.secM === "tpex" ? "櫃" : "市";
     const V = S.slice().sort((a, b) => b.value - a.value).slice(0, 8), vm = Math.max(1, ...V.map(x => x.share || 0)), allMx = Math.max(0.5, ...S.map(x => Math.abs(x.pct || 0)));
     h += sec("產業概況", `<div class="vbars">${top.map(x => `<button data-mk="goSec" data-v="${esc(x.name)}"><small class="${cls(x.pct)}">${sgn(x.pct, 2)}%</small><i class="${cls(x.pct)}" style="height:${Math.max(4, Math.abs(x.pct || 0) / mx * 70).toFixed(0)}px"></i><span>${pre}${esc(secShort(x.name))}</span></button>`).join("")}</div>
-      <details class="mkmore"><summary>全部產業與成交比重</summary><ul class="bars">${S.map(x => `<li data-mk="goSec" data-v="${esc(x.name)}" role="button" tabindex="0"><span>${esc(x.name)}</span><div><i class="${cls(x.pct)}" style="width:${Math.abs(x.pct || 0) / allMx * 100}%"></i></div><b class="${cls(x.pct)}">${sgn(x.pct, 2)}%</b></li>`).join("")}</ul>
+      <details class="mkmore"><summary>全部產業與成交比重</summary><div class="secgrid">${S.map(x => `<button data-mk="goSec" data-v="${esc(x.name)}" style="--k:${Math.min(1, Math.abs(x.pct || 0) / allMx).toFixed(2)}" class="${cls(x.pct)}"><span>${pre}${esc(secShort(x.name))}</span><b>${sgn(x.pct, 2)}%</b><small>${x.value >= 1 ? Math.round(x.value).toLocaleString() + " 億" : ""}</small></button>`).join("")}</div>
       <h4 class="mksub">成交金額比重</h4><ul class="bars">${V.map(x => `<li data-mk="goSec" data-v="${esc(x.name)}" role="button" tabindex="0"><span>${esc(x.name)}</span><div><i class="amt" style="width:${(x.share || 0) / vm * 100}%"></i></div><b>${(x.share || 0).toFixed(1)}%</b></li>`).join("")}</ul></details>`, "市值加權・自行計算", J.sectorsBy ? mkSeg("secM", W.secM, MKT2) : ""); }
   // 產業熱力圖：面積＝成交金額、顏色＝漲跌幅（紅漲綠跌，越深越多）
   if (S?.length) { const T = S.filter(x => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 18);
