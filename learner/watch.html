@@ -2777,7 +2777,8 @@ function drawK(fresh = false, shift = 0) {
   const D = kSeries(), minute = minuteK();
   if (!D || !D.length) { $("#kNote").textContent = minute ? (W.intraErr || (W.off ? "需要部署到網站" : "載入中…")) : W.daily?.err || (W.off ? "需要部署到網站" : "載入中…"); return; }
   const key = W.sel + ":" + W.k + ":" + (minute ? "m" : "d"); if (W.kKey !== key) { fresh = true; W.kKey = key; } // 第一次在技術分頁畫這檔／這個週期時，先顯示最近一段
-  if (W.sel === "T00" || W.sel === "O00") { D.isIndex = true; if (W.k === "D") breadthAttach(D); }
+  if (W.sel === "T00") D.isIndex = true; // TAPI 用加權的成交金額（億元）；櫃買指數的量是千股，不算 TAPI
+  if ((W.sel === "T00" || W.sel === "O00") && W.k === "D") breadthAttach(D);
   const I = indicators(D), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D, I);
   let bt = null; if (S?.fn) try { const units = W.btOpt.size === "units" && !isFut(W.sel), cap = units ? Math.max(1e6, W.btOpt.units * 1000 * Math.max(...D.map(x => x.h)) * 1.01) : 1e6; // 固定張數：資金自動放大到買得起
     bt = backtest(D, sigs, { capital: cap, lot: units ? 1000 : 1, tax: taxOf(W.sel), ...btOptions() }); } catch {}

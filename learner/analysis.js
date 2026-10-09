@@ -145,22 +145,27 @@ function divergences(D, I, ind = "rsi", mode = "regular", upto = D.length, w = 3
   return divergenceCore(D, S, ind, mode, upto, w, DIV_ZONE[ind] || null).map(m => ({ ...m, label: src[0] + m.label }));
 }
 // S：任一條指標序列；zone 為 null 時不限制指標所在區間（例如截圖副圖沒有刻度時）
+// 價格的轉折高（低）點和指標比較時，用指標在轉折點前後 w 根內自己的高（低）點（指標常比價格早或晚一兩根見頂），連線畫在指標真正的高低點上；
+// 指標的差距要超過最近 60 根指標振幅的 3% 才算，避免幾乎一樣高也被當成背離
 function divergenceCore(D, S, ind, mode, upto, w, zone) {
   if (!zone) zone = () => true;
   const { hi, lo } = pivots(D, w, upto), out = [];
-  const push = (a, b, bear, hidden, pa, pb) => {
+  const ext = (i, top) => { let j = null; for (let k = Math.max(0, i - w); k <= Math.min(upto - 1, i + w); k++) if (S[k] != null && (j == null || (top ? S[k] > S[j] : S[k] < S[j]))) j = k; return j; };
+  const amp = i => { let a = Infinity, b = -Infinity; for (let k = Math.max(0, i - 60); k <= i; k++) if (S[k] != null) { a = Math.min(a, S[k]); b = Math.max(b, S[k]); } return b > a ? b - a : 0; };
+  const push = (a, b, ja, jb, bear, hidden, pa, pb) => {
     const i = b + w; if (i >= upto) return;
     out.push({ i, side: bear ? "sell" : "buy", label: (hidden ? "隱藏" : "") + (bear ? "頂背離" : "底背離"), hidden,
-      div: { ind, i1: a, i2: b, p1: pa, p2: pb, v1: S[a], v2: S[b] } });
+      div: { ind, i1: a, i2: b, j1: ja, j2: jb, p1: pa, p2: pb, v1: S[ja], v2: S[jb] } });
   };
-  const pairs = (list, f) => { for (let k = 1; k < list.length; k++) { const a = list[k - 1], b = list[k]; if (b - a < 5 || b - a > 45 || S[a] == null || S[b] == null) continue; f(a, b); } };
-  pairs(hi, (a, b) => {
-    if (mode !== "hidden" && D[b].h > D[a].h && S[b] < S[a] && zone(S[a], true)) push(a, b, true, false, D[a].h, D[b].h);
-    if (mode !== "regular" && D[b].h < D[a].h && S[b] > S[a]) push(a, b, true, true, D[a].h, D[b].h);
+  const pairs = (list, top, f) => { for (let k = 1; k < list.length; k++) { const a = list[k - 1], b = list[k]; if (b - a < 5 || b - a > 45) continue;
+    const ja = ext(a, top), jb = ext(b, top); if (ja == null || jb == null || jb <= ja) continue; const m = amp(b) * 0.03; f(a, b, ja, jb, m); } };
+  pairs(hi, true, (a, b, ja, jb, m) => {
+    if (mode !== "hidden" && D[b].h > D[a].h && S[jb] < S[ja] - m && zone(S[ja], true)) push(a, b, ja, jb, true, false, D[a].h, D[b].h);
+    if (mode !== "regular" && D[b].h < D[a].h && S[jb] > S[ja] + m) push(a, b, ja, jb, true, true, D[a].h, D[b].h);
   });
-  pairs(lo, (a, b) => {
-    if (mode !== "hidden" && D[b].l < D[a].l && S[b] > S[a] && zone(S[a], false)) push(a, b, false, false, D[a].l, D[b].l);
-    if (mode !== "regular" && D[b].l > D[a].l && S[b] < S[a]) push(a, b, false, true, D[a].l, D[b].l);
+  pairs(lo, false, (a, b, ja, jb, m) => {
+    if (mode !== "hidden" && D[b].l < D[a].l && S[jb] > S[ja] + m && zone(S[ja], false)) push(a, b, ja, jb, false, false, D[a].l, D[b].l);
+    if (mode !== "regular" && D[b].l > D[a].l && S[jb] < S[ja] - m) push(a, b, ja, jb, false, true, D[a].l, D[b].l);
   });
   return out.sort((x, y) => x.i - y.i);
 }
@@ -701,7 +706,10 @@ function overlayBuild(D, I, has, opt = {}) {
   if (on("cpat")) safe(() => ex.markers.push(...Signals.chartPat(D, I)));
   // 背離：對畫面上打開的每個副圖指標都找（沒開副圖就用 RSI、MACD）；價格與副圖上各連一條線，標記畫在確認那天
   if (on("div") || on("divH")) safe(() => { const ids = (opt.subs || []).filter(id => DIV_SRC[id]), use = ids.length ? ids : ["rsi", "macd"];
-    use.forEach(id => { if (on("div")) ex.markers.push(...Signals.div(D, I, id)); if (on("divH")) ex.markers.push(...Signals.div(D, I, id, "hidden")); }); });
+    // 同一組價格轉折、同一種背離，好幾個指標都有時合成一個標記（例如「KD、MTM 頂背離」），價格線只畫一條
+    const all = use.flatMap(id => [...(on("div") ? Signals.div(D, I, id) : []), ...(on("divH") ? Signals.div(D, I, id, "hidden") : [])]), by = new Map();
+    for (const m of all) { const k = `${m.div.i1}|${m.div.i2}|${m.side}|${m.hidden ? 1 : 0}`, g = by.get(k); if (g) { g.divs.push(m.div); g.names.push(DIV_SRC[m.div.ind][0]); } else by.set(k, { ...m, divs: [m.div], names: [DIV_SRC[m.div.ind][0]] }); }
+    for (const g of by.values()) ex.markers.push({ ...g, label: g.names.join("、") + (g.hidden ? "隱藏" : "") + (g.side === "sell" ? "頂背離" : "底背離") }); });
   if (on("volx")) safe(() => ex.markers.push(...Signals.vol(D, I)));
   if (on("gap")) safe(() => ex.markers.push(...Signals.gaps(D, I)));
   if (on("trend3")) safe(() => ex.shapes.push(...trend3Shapes(D)));
