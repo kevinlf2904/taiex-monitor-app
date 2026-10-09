@@ -681,7 +681,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.09-58</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.09-59</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2777,7 +2777,8 @@ function drawK(fresh = false, shift = 0) {
   const D = kSeries(), minute = minuteK();
   if (!D || !D.length) { $("#kNote").textContent = minute ? (W.intraErr || (W.off ? "需要部署到網站" : "載入中…")) : W.daily?.err || (W.off ? "需要部署到網站" : "載入中…"); return; }
   const key = W.sel + ":" + W.k + ":" + (minute ? "m" : "d"); if (W.kKey !== key) { fresh = true; W.kKey = key; } // 第一次在技術分頁畫這檔／這個週期時，先顯示最近一段
-  if (W.sel === "T00" || W.sel === "O00") { D.isIndex = true; if (W.k === "D") breadthAttach(D); }
+  if (W.sel === "T00") D.isIndex = true; // TAPI 用加權的成交金額（億元）；櫃買指數的量是千股，不算 TAPI
+  if ((W.sel === "T00" || W.sel === "O00") && W.k === "D") breadthAttach(D);
   const I = indicators(D), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D, I);
   let bt = null; if (S?.fn) try { const units = W.btOpt.size === "units" && !isFut(W.sel), cap = units ? Math.max(1e6, W.btOpt.units * 1000 * Math.max(...D.map(x => x.h)) * 1.01) : 1e6; // 固定張數：資金自動放大到買得起
     bt = backtest(D, sigs, { capital: cap, lot: units ? 1000 : 1, tax: taxOf(W.sel), ...btOptions() }); } catch {}

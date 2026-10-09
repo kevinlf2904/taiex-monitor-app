@@ -179,7 +179,7 @@ const SUBX = {
 function subxMake(id, D, I) {
   const X = SUBX[id]; if (!X) return null; const memo = (I && (I._subx ||= {})) || {}; if (memo[id] !== undefined) return memo[id];
   let C = null; if (!(X.index && !D.isIndex)) try { C = X.make(D, I || indicators(D)); } catch {}
-  return (memo[id] = { id, custom: C ? { ...C, kind: X.kind } : { title: `${X.label}：${X.breadth ? "只有加權、櫃買指數有（要每天的漲跌家數；週、月 K 請切回日 K）" : X.index ? "只有加權、櫃買指數有（大盤成交值 ÷ 指數）" : "資料不夠"}`, lines: [], names: [], range: [0, 1], kind: X.kind, sigs: [] } });
+  return (memo[id] = { id, custom: C ? { ...C, kind: X.kind } : { title: `${X.label}：${X.breadth ? "只有加權、櫃買指數有（要每天的漲跌家數；週、月 K 請切回日 K）" : X.index ? "只有加權指數有（大盤成交金額 ÷ 指數，日 K）" : "資料不夠"}`, lines: [], names: [], range: [0, 1], kind: X.kind, sigs: [] } });
 }
 const SUBX_ITEMS = Object.entries(SUBX).map(([id, x]) => ({ id, label: x.label }));
 
@@ -623,6 +623,8 @@ class Chart {
     ctx.restore();
     // 背離連線：價格圖上連兩個轉折點，副圖顯示同一指標時也連起來
     const divs = (o.markers || []).filter(m => m.div && m.i < vis);
+    // 一組價格轉折可能同時是好幾個指標的背離（m.divs）：價格線畫一次，每個副圖各畫自己的
+    const subDivs = divs.flatMap(m => (m.divs || [m.div]).map(d => ({ d, side: m.side })));
     const divLine = (x1, y1, x2, y2, c) => { ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); [[x1, y1], [x2, y2]].forEach(([a, b]) => { ctx.beginPath(); ctx.arc(a, b, 3, 0, Math.PI * 2); ctx.fill(); }); };
     ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
     divs.forEach(m => divLine(X(m.div.i1), Y(m.div.p1), X(m.div.i2), Y(m.div.p2), m.side === "buy" ? col.up : col.down));
@@ -720,7 +722,7 @@ class Chart {
         lvl(-20, sy); lvl(-80, sy);
         this.line(I.wr, vis, X, sy, col.s2, 1.5); this.subY = sy;
       } else if (sub === "inout" && I.io) {
-        let m = 5; for (let i = 0; i < vis; i++) m = Math.max(m, Math.abs(I.io[i] - 50));
+        let m = 5; for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) m = Math.max(m, Math.abs(I.io[i] - 50));
         const sy = Z(v => subTop + subH / 2 - (v - 50) / m * (subH / 2 - 4), [I.io, I.io5]);
         ctx.globalAlpha = 0.55;
         for (let i = va; i < Math.min(vis, vb + 1); i++) { const v = I.io[i]; ctx.fillStyle = v >= 50 ? col.up : col.down; const y0 = sy(50), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }
@@ -728,16 +730,17 @@ class Chart {
         this.line(I.io5, vis, X, sy, col.s1, 1.5); this.subY = sy;
       } else if (sub === "custom") {
         // 截圖讀出的副圖：值域依資料自動決定
-        const C = C0, vals = [...C.lines.flat(), ...(C.bars || [])].filter(v => v != null);
+        // 值域用畫面上看得到的那一段（OBV、ADL 這種累計值，整段歷史的範圍會把最近的線壓平）
+        const C = C0, win = a => (a || []).slice(Math.max(0, va), Math.min(vis, vb + 1)), vals = [...C.lines.flatMap(win), ...win(C.bars)].filter(v => v != null);
         let lo = C.range ? C.range[0] : Math.min(...vals, C.bars ? 0 : Infinity), hi = C.range ? C.range[1] : Math.max(...vals, C.bars ? 0 : -Infinity);
-        if (hi === lo) { hi += 1; lo -= 1; }
+        if (!isFinite(lo) || !isFinite(hi)) { lo = 0; hi = 1; } if (hi === lo) { hi += 1; lo -= 1; }
         const sy = Z(v => subTop + 4 + (hi - v) / (hi - lo) * (subH - 8), [...C.lines, ...(C.bars ? [C.bars] : [])]);
         (C.levels || []).forEach(v => lvl(v, sy));
         if (C.bars) { ctx.globalAlpha = 0.55; C.bars.forEach((v, i) => { if (i >= vis || !v || !inV(i)) return; ctx.fillStyle = C.barColor ? col[C.barColor] : v >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }); ctx.globalAlpha = 1; if (C.zeroLine) lvl(0, sy); }
         C.lines.forEach((a, k) => this.line(a, vis, X, sy, [col.s1, col.s3, col.s2][k % 3], 1.5));
         // 第二組線（例如累計買超、融資餘額）用自己的刻度，數值標在右側
         if (C.lines2) {
-          const v2 = C.lines2.flat().filter(v => v != null); let lo2 = Math.min(...v2), hi2 = Math.max(...v2); if (hi2 === lo2) { hi2 += 1; lo2 -= 1; }
+          const v2 = C.lines2.flatMap(win).filter(v => v != null); let lo2 = Math.min(...v2), hi2 = Math.max(...v2); if (!v2.length) { lo2 = 0; hi2 = 1; } if (hi2 === lo2) { hi2 += 1; lo2 -= 1; }
           const sy2 = Z(v => subTop + 4 + (hi2 - v) / (hi2 - lo2) * (subH - 8), C.lines2);
           C.lines2.forEach((a, k) => this.line(a, vis, X, sy2, [col.s2, col.accent][k % 2], 1.5));
           ctx.fillStyle = col.muted; ctx.textAlign = "left"; const f2 = C.fmt || fmtN; ctx.fillText(f2(hi2), L + pw + 4, subTop + 10); ctx.fillText(f2(lo2), L + pw + 4, subTop + subH - 2);
@@ -745,7 +748,7 @@ class Chart {
         this.subY = sy;
       } else if (sub === "macd") {
         const { dif, sig, osc } = I.macd; let m = 0;
-        for (let i = 0; i < vis; i++) if (dif[i] != null) m = Math.max(m, Math.abs(dif[i]), Math.abs(sig[i] ?? 0), Math.abs(osc[i] ?? 0));
+        for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) if (dif[i] != null) m = Math.max(m, Math.abs(dif[i]), Math.abs(sig[i] ?? 0), Math.abs(osc[i] ?? 0)); // 用看得到的那段定刻度
         m = m || 1; const sy = Z(v => subTop + subH / 2 - v / m * (subH / 2 - 4), [dif, sig, osc]); this.subY = sy;
         lvl(0, sy);
         ctx.globalAlpha = 0.55;
@@ -755,7 +758,7 @@ class Chart {
       }
       const subY = this.subY || (v => subTop + (100 - v) / 100 * subH);
       ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pw, subH); ctx.clip();
-      divs.filter(m => m.div.ind === (typeof S === "string" ? S : S.id || "pane")).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
+      subDivs.filter(x => x.d.ind === (typeof S === "string" ? S : S.id || "pane")).forEach(({ d, side }) => divLine(X(d.j1 ?? d.i1), subY(d.v1), X(d.j2 ?? d.i2), subY(d.v2), side === "buy" ? col.up : col.down));
       // 副圖上發出訊號的位置：半透明實心點；記下位置，等所有區塊畫完再用虛線連到主圖的圓圈
       sigs.filter(g => g.si === si && g.i >= va && g.i <= vb).forEach(g => {
         const x = X(g.i), y = subY(g.v), c = g.side === "buy" ? col.up : col.down, on = this.hover === g.i;

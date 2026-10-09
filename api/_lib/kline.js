@@ -12,6 +12,8 @@ import { isUS, usName } from "./_yahoo.js";
 import { session } from "./quote.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const INDEX_CODES = new Set(["TAIEX", "TWII", "^TWII", "加權", "加權指數", "大盤", "0000", "IX0001"]);
+// 櫃買指數：Yahoo ^TWOII（成交量單位是千股，和加權的成交金額不同）
+const OTC_CODES = new Set(["櫃買", "櫃買指數", "OTC", "TPEX", "^TWOII", "TWOII", "O00"]);
 
 export const toNum = (v) => {
   if (v == null) return null;
@@ -109,6 +111,15 @@ async function fromTwseIndex(months, anchor) {
   rows.forEach((r) => { r.v = vol.get(r.d) || 0; });
   return rows.length ? { name: "加權指數", rows, market: "指數", source: "證交所", unit: "億元" } : null;
 }
+// 加權指數從 Yahoo 拿到時，成交量換成證交所 FMTQIK 的成交金額（億元），和證交所來源的單位一致；拿不到的月份成交量記 0，不混用千股
+async function fillTaiexAmount(r) {
+  const months = [...new Set(r.rows.map(x => x.d.slice(0, 7)))], vol = new Map();
+  for (let k = 0; k < months.length; k += 4) await Promise.all(months.slice(k, k + 4).map(async m => {
+    try { parseFmtqik(await getJSON(`https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=${m.replace("-", "")}01&response=json`)).forEach((v, d) => vol.set(d, v)); } catch {}
+  }));
+  r.rows.forEach(x => { x.v = vol.get(x.d) || 0; });
+  return { ...r, name: "加權指數", unit: "億元", source: vol.size ? "Yahoo Finance（成交金額：證交所）" : "Yahoo Finance" };
+}
 async function fromYahoo(sym, months, anchor) {
   const span = anchor ? `period1=${Math.floor(anchor.getTime() / 1000) - months * 31 * 86400}&period2=${Math.floor(anchor.getTime() / 1000)}` : `range=${months <= 3 ? "3mo" : months <= 6 ? "6mo" : months <= 12 ? "1y" : "2y"}`;
   const p = parseYahoo(await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?${span}&interval=1d`));
@@ -120,14 +131,16 @@ export default async function handler(req, res) {
   const raw = String(req.query?.code || "").trim().toUpperCase();
   const months = Math.max(1, Math.min(24, parseInt(req.query?.months, 10) || 6));
   const isIndex = INDEX_CODES.has(raw) || INDEX_CODES.has(String(req.query?.code || "").trim());
-  const us = !isIndex && isUS(raw);
-  if (!isIndex && !us && !/^\d{4,6}[A-Z]?$/.test(raw)) return res.status(400).json({ ok: false, error: "請輸入 4 到 6 碼的股票代號（例如 2330、0050、00891），或輸入「加權」看大盤。" });
+  const isOtc = !isIndex && (OTC_CODES.has(raw) || OTC_CODES.has(String(req.query?.code || "").trim()));
+  const us = !isIndex && !isOtc && isUS(raw);
+  if (!isIndex && !isOtc && !us && !/^\d{4,6}[A-Z]?$/.test(raw)) return res.status(400).json({ ok: false, error: "請輸入 4 到 6 碼的股票代號（例如 2330、0050、00891），或輸入「加權」看大盤。" });
 
   // before：只要這一天以前的資料（不含當天）
   const before = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query?.before || "")) ? String(req.query.before) : null;
   const anchor = before ? new Date(new Date(before + "T00:00:00Z").getTime() - 86400e3) : null;
-  const tries = us ? [() => fromYahoo(raw, months, anchor)] : isIndex
-    ? (before || months > 6 ? [() => fromYahoo("^TWII", months, anchor), () => fromTwseIndex(months, anchor)] : [() => fromTwseIndex(months), () => fromYahoo("^TWII", months)])
+  const yIdx = async () => { const r = await fromYahoo("^TWII", months, anchor); return r ? fillTaiexAmount(r) : r; };
+  const tries = us ? [() => fromYahoo(raw, months, anchor)] : isOtc ? [async () => { const r = await fromYahoo("^TWOII", months, anchor); return r && { ...r, name: "櫃買指數", market: "指數" }; }] : isIndex
+    ? (before || months > 6 ? [yIdx, () => fromTwseIndex(months, anchor)] : [() => fromTwseIndex(months), yIdx])
     // 超過半年（名人觀點的 24 個月）：證交所要一個月一個月抓（24 次、上櫃股還要再試 24 次），很容易逾時；先問 Yahoo，一次就拿到
     : before || months > 6
       ? [() => fromYahoo(`${raw}.TW`, months, anchor), () => fromYahoo(`${raw}.TWO`, months, anchor), () => fromTwse(raw, months, anchor), () => fromTpex(raw, months, anchor)]
@@ -140,10 +153,10 @@ export default async function handler(req, res) {
         const seen = new Set(), data = r.rows.filter((x) => !seen.has(x.d) && seen.add(x.d) && (!before || x.d < before)).sort((a, b) => a.d.localeCompare(b.d));
         if (before && !data.length) continue;
         res.setHeader("Cache-Control", before ? "s-maxage=86400, stale-while-revalidate=604800" : session() === "closed" ? "s-maxage=1800, stale-while-revalidate=3600" : "s-maxage=60, stale-while-revalidate=120");
-        return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : raw, us, name: r.name, market: r.market, source: r.source, unit: r.unit, data });
+        return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : isOtc ? "OTC" : raw, us, name: r.name, market: r.market, source: r.source, unit: r.unit, data });
       }
     } catch (e) { errors.push(e.message); }
   }
-  if (before) return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : raw, data: [], end: true, note: `${before} 以前沒有更早的資料了。` });
+  if (before) return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : isOtc ? "OTC" : raw, data: [], end: true, note: `${before} 以前沒有更早的資料了。` });
   return res.status(200).json({ ok: false, error: `找不到 ${raw} 的資料。請確認代號是否正確；若是剛上市或停牌的股票，可能沒有足夠的交易日。${errors.length ? `（${errors[0]}）` : ""}` });
 }
