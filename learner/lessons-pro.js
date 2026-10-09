@@ -15,7 +15,7 @@ function withBreadth(D, seed = 1) {
   });
 }
 // 模擬加權指數的成交值（億元）：量放大的日子成交值也大
-const asIndex = D => D.map(x => ({ ...x, v: Math.round(x.v * x.c / 4e3) }));
+const asIndex = D => Object.assign(D.map(x => ({ ...x, v: Math.round(x.v * x.c / 4e3) })), { isIndex: true });
 const stratMk = id => (D, I) => { try { return stratRun(id, D, I); } catch { return []; } };
 const sigLegend = t => `<p class="note">圖上的三角形是本課規則的買賣點；空心圈是副圖訊號對應到 K 線的位置（圖表工具列的「對應」可以開關）。${t || ""}</p>`;
 
@@ -426,7 +426,7 @@ const LESSON_OPEN_K = {
   "pattern-round": { ov: ["cpat"] }, "pattern-wedge": { ov: ["cpat"] }, gaps: { ov: ["gap"] },
   ma: { main: ["ma5", "ma20", "ma60"] }, vol: { sub: ["vol"], ov: ["volx"] }, sr: { ov: ["sr", "tl"] }, fib: { ov: ["fib"] }, dow: { ov: ["zz"] }, vprofile: { main: ["vp"] },
   rsi: { sub: ["rsi"] }, kd: { sub: ["kd"] }, wr: { sub: ["wr"] }, macd: { sub: ["macd"] }, boll: { main: ["boll"] }, vwap: { main: ["vwap"] },
-  div: { sub: ["rsi", "macd"], ov: ["div"] }, "div-hidden": { sub: ["rsi", "macd"], ov: ["div"] },
+  div: { sub: ["rsi", "macd"], ov: ["div"] }, "div-hidden": { sub: ["rsi", "macd"], ov: ["divH"] },
   mtm: { sub: ["mtm"] }, dmi: { sub: ["dmi"] }, psy: { sub: ["psy"] }, arbr: { sub: ["arbr"] }, obv: { sub: ["obv"] }, vr: { sub: ["vr"] },
   breadth: { sub: ["adr", "obos", "adl"], idx: true }, tapi: { sub: ["tapi"], idx: true },
   trend3: { ov: ["trend3"] }, fan: { ov: ["fan"] }, elliott: { ov: ["wave"] }, ccw: { ov: ["ccw"], sub: ["vol"] }, trendline: { ov: ["tl"] },

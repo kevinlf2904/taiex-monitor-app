@@ -178,8 +178,8 @@ const SUBX = {
 // 字串副圖 → 自訂副圖（同一組資料只算一次）；做不出來（例如個股沒有漲跌家數）時給一個只有標題的空副圖
 function subxMake(id, D, I) {
   const X = SUBX[id]; if (!X) return null; const memo = (I && (I._subx ||= {})) || {}; if (memo[id] !== undefined) return memo[id];
-  let C = null; try { C = X.make(D, I || indicators(D)); } catch {}
-  return (memo[id] = { id, custom: C ? { ...C, kind: X.kind } : { title: `${X.label}：${X.breadth ? "只有加權、櫃買指數有（要每天的漲跌家數）" : "資料不夠"}`, lines: [], names: [], range: [0, 1], kind: X.kind, sigs: [] } });
+  let C = null; if (!(X.index && !D.isIndex)) try { C = X.make(D, I || indicators(D)); } catch {}
+  return (memo[id] = { id, custom: C ? { ...C, kind: X.kind } : { title: `${X.label}：${X.breadth ? "只有加權、櫃買指數有（要每天的漲跌家數；週、月 K 請切回日 K）" : X.index ? "只有加權、櫃買指數有（大盤成交值 ÷ 指數）" : "資料不夠"}`, lines: [], names: [], range: [0, 1], kind: X.kind, sigs: [] } });
 }
 const SUBX_ITEMS = Object.entries(SUBX).map(([id, x]) => ({ id, label: x.label }));
 
@@ -755,7 +755,7 @@ class Chart {
       }
       const subY = this.subY || (v => subTop + (100 - v) / 100 * subH);
       ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pw, subH); ctx.clip();
-      divs.filter(m => m.div.ind === (sub === "custom" ? "pane" : sub)).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
+      divs.filter(m => m.div.ind === (typeof S === "string" ? S : S.id || "pane")).forEach(m => divLine(X(m.div.i1), subY(m.div.v1), X(m.div.i2), subY(m.div.v2), m.side === "buy" ? col.up : col.down));
       // 副圖上發出訊號的位置：半透明實心點；記下位置，等所有區塊畫完再用虛線連到主圖的圓圈
       sigs.filter(g => g.si === si && g.i >= va && g.i <= vb).forEach(g => {
         const x = X(g.i), y = subY(g.v), c = g.side === "buy" ? col.up : col.down, on = this.hover === g.i;
@@ -812,9 +812,10 @@ class Chart {
     if (this.o.subSignals === false) { this.sigUi.innerHTML = ""; this.sigUi.hidden = true; return; }
     const P = Chart.prefs, NM = { kd: "KD", macd: "MACD", rsi: "RSI", wr: "威廉", custom: "副圖" };
     const html = subs.map(S => {
-      const kind = typeof S === "string" ? S : "custom"; if (!["kd", "macd", "rsi", "wr"].includes(kind) && !(S?.custom?.lines?.length >= 2 && S.custom.signals !== false)) return "";
-      const on = P.sig && P.sigKinds[kind] !== false, st = P.sig && !!P.sigStrongK[kind];
-      return `<span class="sg"><em>${NM[kind]}</em><button type="button" data-sk="${kind}" aria-pressed="${on}" title="在主圖標出這個副圖的全部訊號">${kind === "rsi" || kind === "wr" ? "超買超賣" : "金叉死叉"}</button>${kind === "kd" || kind === "macd" ? `<button type="button" data-strongk="${kind}" aria-pressed="${st}" title="${kind === "kd" ? "KD 只標低檔（D<20）金叉、高檔（D>80）死叉" : "MACD 只標零軸上金叉、零軸下死叉"}">只看重點</button>` : ""}</span>`;
+      const kind = typeof S === "string" ? S : S?.custom?.kind || "custom";
+      if (!["kd", "macd", "rsi", "wr"].includes(kind) && !(S?.custom?.sigs?.length) && !(S?.custom?.lines?.length >= 2 && S.custom.signals !== false && !S.custom.sigs)) return "";
+      const on = P.sig && P.sigKinds[kind] !== false, st = P.sig && !!P.sigStrongK[kind], lvl = ["rsi", "wr", "psy", "arbr", "vr", "adr"].includes(kind);
+      return `<span class="sg"><em>${NM[kind] || (S?.id && SUBX[S.id]?.label) || "副圖"}</em><button type="button" data-sk="${kind}" aria-pressed="${on}" title="在主圖標出這個副圖的全部訊號">${lvl ? "超買超賣" : kind === "kd" || kind === "macd" || kind === "custom" ? "金叉死叉" : "訊號"}</button>${kind === "kd" || kind === "macd" ? `<button type="button" data-strongk="${kind}" aria-pressed="${st}" title="${kind === "kd" ? "KD 只標低檔（D<20）金叉、高檔（D>80）死叉" : "MACD 只標零軸上金叉、零軸下死叉"}">只看重點</button>` : ""}</span>`;
     }).join("");
     this.sigUi.hidden = !html; if (this.sigUi.innerHTML !== html) this.sigUi.innerHTML = html;
   }

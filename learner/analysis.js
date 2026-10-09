@@ -53,7 +53,15 @@ const Signals = {
   },
   gaps(D, I, only) { return gapKinds(D).filter(g => !only || only.includes(g.kind)).map(g => ({ i: g.i, side: g.side, label: g.label, pat: g.kind, shapes: g.shapes })); },
   // 型態學突破（逐日重算、只保留當天就看得到的突破）：給策略回測用，避免之後的資料把當時的訊號改掉
-  chartPatLive(D, I, only) { const out = []; for (let k = 30; k < D.length; k++) out.push(...Signals.chartPat(D.slice(0, k + 1), I, only, 25).filter(m => m.i === k)); return out; },
+  // 逐日重算很花時間（3000 根約 1 秒）：已經算過、資料沒變的日子沿用上次的結果，只算新的 K 棒（即時報價只會改最後一根）
+  chartPatLive(D, I, only) {
+    const C = (Signals._pl ||= new Map()), key = (only || []).join(","), prev = C.get(key);
+    let from = 30, out = [];
+    if (prev && prev.n <= D.length) { let ok = true; for (let k = 0; k < prev.n - 1 && ok; k++) ok = prev.fp[k] === D[k].d + ":" + D[k].h + ":" + D[k].l + ":" + D[k].c; if (ok) { from = Math.max(30, prev.n - 1); out = prev.out.filter(m => m.i < from); } }
+    for (let k = from; k < D.length; k++) out.push(...Signals.chartPat(D.slice(0, k + 1), I, only, 25).filter(m => m.i === k));
+    C.set(key, { n: D.length, fp: D.map(x => x.d + ":" + x.h + ":" + x.l + ":" + x.c), out });
+    return out.slice();
+  },
   // 背離：比較相鄰兩個轉折點的價格與指標；轉折點要右側 w 根才確認，所以標記畫在確認那天
   div(D, I, ind = "rsi", mode = "regular", upto = D.length) { return divergences(D, I, ind, mode, upto); },
 };
@@ -123,9 +131,18 @@ function patternSVG(id) {
    一般背離：價格創新高（低）、指標沒有 → 動能衰退，留意反轉。
    隱藏背離：價格沒創新高（低）、指標卻創了 → 趨勢中的回檔，偏向延續。 */
 const DIV_IND = { rsi: "RSI", macd: "MACD", kd: "KD" };
+// 可以算背離的指標：[名稱, 取序列]；序列和副圖畫的那條線一樣，背離連線才會畫在副圖的線上
+const DIV_SRC = {
+  rsi: ["RSI", I => I.rsi], kd: ["KD", I => I.kd.K], macd: ["MACD", I => I.macd.dif], wr: ["威廉", I => I.wr],
+  mtm: ["MTM", I => mtmCalc(I.c).mtm], dmi: ["DMI", (I, D) => dmiCalc(D).pdi], psy: ["PSY", I => psyCalc(I.c)], arbr: ["AR", (I, D) => arbrCalc(D).ar],
+  obv: ["OBV", (I, D) => obvCalc(D)], vr: ["VR", (I, D) => vrCalc(D)],
+  adr: ["ADR", (I, D) => breadthCalc(D)?.adr], obos: ["OBOS", (I, D) => breadthCalc(D)?.obos], adl: ["ADL", (I, D) => breadthCalc(D)?.adl],
+};
+// 一般背離只算指標在相對高（低）檔時：RSI、KD 55／45 以上（以下），MACD 零軸上（下）；其他指標不限
+const DIV_ZONE = { rsi: (v, bear) => (bear ? v >= 55 : v <= 45), kd: (v, bear) => (bear ? v >= 55 : v <= 45), macd: (v, bear) => (bear ? v > 0 : v < 0) };
 function divergences(D, I, ind = "rsi", mode = "regular", upto = D.length, w = 3) {
-  const S = ind === "rsi" ? I.rsi : ind === "macd" ? I.macd.dif : I.kd.K;
-  return divergenceCore(D, S, ind, mode, upto, w, (v, bear) => ind === "macd" ? (bear ? v > 0 : v < 0) : (bear ? v >= 55 : v <= 45));
+  const src = DIV_SRC[ind]; if (!src) return []; let S = null; try { S = src[1](I, D); } catch {} if (!S) return [];
+  return divergenceCore(D, S, ind, mode, upto, w, DIV_ZONE[ind] || null).map(m => ({ ...m, label: src[0] + m.label }));
 }
 // S：任一條指標序列；zone 為 null 時不限制指標所在區間（例如截圖副圖沒有刻度時）
 function divergenceCore(D, S, ind, mode, upto, w, zone) {
@@ -661,7 +678,7 @@ function smcExtra(D) {
 // 可疊在 K 線上的分析（看盤、截圖練習共用），每一項都對應一堂課；聰明錢拆成五項可以分開看
 const OVERLAY_ITEMS = [{ id: "sr", label: "支撐壓力" }, { id: "fib", label: "斐波那契" }, { id: "zz", label: "道氏結構" },
   { id: "smcS", label: "BOS／CHoCH" }, { id: "smcL", label: "流動性" }, { id: "smcOB", label: "訂單塊" }, { id: "smcFVG", label: "FVG" }, { id: "smcPD", label: "溢價折價" },
-  { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }, { id: "gap", label: "缺口種類" }, { id: "div", label: "背離" }, { id: "volx", label: "爆量" },
+  { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }, { id: "gap", label: "缺口種類" }, { id: "div", label: "背離" }, { id: "divH", label: "隱藏背離" }, { id: "volx", label: "爆量" },
   { id: "trend3", label: "三種趨勢" }, { id: "tl", label: "趨勢線" }, { id: "fan", label: "扇形" }, { id: "wave", label: "波浪" }, { id: "ccw", label: "逆時鐘" }];
 // 舊版的「聰明錢」一顆按鈕 → 拆開後的四項（在建立指標列之前把存好的選擇換掉）
 function overlayMigrate(key) {
@@ -682,7 +699,9 @@ function overlayBuild(D, I, has, opt = {}) {
   if (on("smcPD")) safe(() => { const p = premiumDiscount(D); ex.zones.push(...p.zones); ex.shapes.push(...p.shapes.filter(Boolean).filter(s => !(on("fib") && s.color === "accent"))); });
   if (on("candle")) safe(() => ex.markers.push(...Signals.candle(D, I)));
   if (on("cpat")) safe(() => ex.markers.push(...Signals.chartPat(D, I)));
-  if (on("div")) safe(() => ex.markers.push(...Signals.div(D, I, "rsi"), ...Signals.div(D, I, "macd")));
+  // 背離：對畫面上打開的每個副圖指標都找（沒開副圖就用 RSI、MACD）；價格與副圖上各連一條線，標記畫在確認那天
+  if (on("div") || on("divH")) safe(() => { const ids = (opt.subs || []).filter(id => DIV_SRC[id]), use = ids.length ? ids : ["rsi", "macd"];
+    use.forEach(id => { if (on("div")) ex.markers.push(...Signals.div(D, I, id)); if (on("divH")) ex.markers.push(...Signals.div(D, I, id, "hidden")); }); });
   if (on("volx")) safe(() => ex.markers.push(...Signals.vol(D, I)));
   if (on("gap")) safe(() => ex.markers.push(...Signals.gaps(D, I)));
   if (on("trend3")) safe(() => ex.shapes.push(...trend3Shapes(D)));

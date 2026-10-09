@@ -123,22 +123,23 @@ export const fromFinmindRows = rows => (rows || []).map(r => ({ date: r.date, co
 // 期交所 futDataDown CSV（交易日期,契約,到期月份(週別),開盤價,最高價,最低價,收盤價,…,成交量,…,交易時段）
 export const fromTaifexCsv = rows => (rows || []).map(r => { const k = re => Object.keys(r).find(x => re.test(x)); return { date: String(r[k(/交易日期/)] || "").replace(/\//g, "-"), contract: String(r[k(/到期月份/)] || "").trim(), session: /盤後/.test(r[k(/交易時段/)] || "") ? "night" : "day", o: num(r[k(/開盤價/)]), h: num(r[k(/最高價/)]), l: num(r[k(/最低價/)]), c: num(r[k(/收盤價/)]), v: num(r[k(/^成交量/)]) || 0 }; });
 const FM_ID = { TXF: "TX", EXF: "TE", FXF: "TF" };
-async function dailyHistory(cid, months) {
-  const start = iso(new Date(Date.now() - months * 31 * 864e5)), errors = [];
+// before（YYYY-MM-DD）：只要這天以前的（看盤 K 線往左拉、載入更早的資料）
+async function dailyHistory(cid, months, before = null) {
+  const endT = before ? new Date(before + "T00:00:00Z").getTime() - 864e5 : Date.now(), start = iso(new Date(endT - months * 31 * 864e5)), errors = [];
   try {
     const token = (process.env.FINMIND_TOKEN || "").trim();
-    const r = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanFuturesDaily&data_id=${FM_ID[cid]}&start_date=${start}`, { headers: { ...UA, ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(15000) });
-    const j = await r.json(); const d = nearFullDaily(fromFinmindRows(j?.data)); if (d.length > 20) return { data: d, source: "FinMind（期交所每日行情）" };
+    const r = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanFuturesDaily&data_id=${FM_ID[cid]}&start_date=${start}${before ? `&end_date=${iso(new Date(endT))}` : ""}`, { headers: { ...UA, ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(15000) });
+    const j = await r.json(); const d = nearFullDaily(fromFinmindRows(j?.data)).filter(x => !before || x.d < before); if (d.length > (before ? 0 : 20)) return { data: d, source: "FinMind（期交所每日行情）" };
     errors.push(`FinMind：${j?.msg || "沒有資料"}`);
   } catch (e) { errors.push(`FinMind：${e.message}`); }
   try { // 期交所：一次查一個月，最近 6 個月
     const { csvRows } = await import("./mktstats.js"), t = tpe(), rows = [];
     await Promise.all(Array.from({ length: Math.min(6, months) }, async (_, k) => {
-      const e = new Date(t.getTime() - k * 30 * 864e5), b = new Date(e.getTime() - 30 * 864e5), f = d => iso(d).replace(/-/g, "/");
+      const e = new Date((before ? endT : t.getTime()) - k * 30 * 864e5), b = new Date(e.getTime() - 30 * 864e5), f = d => iso(d).replace(/-/g, "/");
       const r = await fetch("https://www.taifex.com.tw/cht/3/futDataDown", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0" }, body: `down_type=1&commodity_id=${FM_ID[cid]}&queryStartDate=${encodeURIComponent(f(b))}&queryEndDate=${encodeURIComponent(f(e))}`, signal: AbortSignal.timeout(15000) });
       if (r.ok) rows.push(...fromTaifexCsv(csvRows(new TextDecoder("big5").decode(await r.arrayBuffer())))); }));
-    const seen = new Set(), d = nearFullDaily(rows.filter(r => { const k = r.date + r.contract + r.session; return !seen.has(k) && seen.add(k); }));
-    if (d.length > 5) return { data: d, source: "期交所每日行情" };
+    const seen = new Set(), d = nearFullDaily(rows.filter(r => { const k = r.date + r.contract + r.session; return !seen.has(k) && seen.add(k); })).filter(x => !before || x.d < before);
+    if (d.length > (before ? 0 : 5)) return { data: d, source: "期交所每日行情" };
     errors.push("期交所：沒有資料");
   } catch (e) { errors.push(`期交所：${e.message}`); }
   throw new Error(errors.join("；"));
@@ -147,10 +148,11 @@ async function dailyHistory(cid, months) {
 export default async function handler(req, res) {
   const cid = Object.hasOwn(FUT_NAMES, String(req.query?.cid || "").toUpperCase()) ? String(req.query.cid).toUpperCase() : "TXF", fname = FUT_NAMES[cid];
   if (String(req.query?.daily || "") === "1") { // 近全日 K
-    try { const months = Math.max(3, Math.min(36, +req.query?.months || 24)), r = await dailyHistory(cid, months);
+    const before = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query?.before || "")) ? String(req.query.before) : null;
+    try { const months = Math.max(3, Math.min(36, +req.query?.months || 24)), r = await dailyHistory(cid, months, before);
       res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=7200");
       return res.status(200).json({ ok: true, code: cid, name: `${fname}近全`, source: r.source, data: r.data.map(({ contract, ...x }) => x) }); }
-    catch (e) { return res.status(200).json({ ok: false, error: `拿不到${fname}日 K（${e.message}）` }); }
+    catch (e) { if (before && /沒有資料/.test(e.message)) return res.status(200).json({ ok: true, code: cid, data: [], end: true }); return res.status(200).json({ ok: false, error: `拿不到${fname}日 K（${e.message}）` }); }
   }
   const nm = nearMonth(Date.now(), cid), sess = sessionOf(), withBars = String(req.query?.bars ?? "1") !== "0", key = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
   let r = null;

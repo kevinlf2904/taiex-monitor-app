@@ -783,7 +783,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.08-57</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.09-58</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -1196,7 +1196,7 @@ VWAP = Σ(典型價 × 成交量) ÷ Σ成交量</div>
   },
   {
     id: "div", title: "背離：價格和指標說不同的話", tag: "動能", seed: 3186, n: 200,
-    variants: [{ label: "RSI", sub: "rsi" }, { label: "MACD", sub: "macd" }, { label: "KD", sub: "kd" }],
+    variants: [{ label: "RSI", sub: "rsi" }, { label: "MACD", sub: "macd" }, { label: "KD", sub: "kd" }, { label: "威廉", sub: "wr" }, { label: "MTM", sub: "mtm" }, { label: "OBV", sub: "obv" }, { label: "DMI", sub: "dmi" }],
     body: `<p>背離是指價格和指標的走勢不一致。價格創新高，指標卻沒有跟著創新高，代表「漲是漲了，但力道變小了」。</p>
 <table><thead><tr><th>類型</th><th>價格</th><th>指標</th><th>意義</th></tr></thead><tbody>
 <tr><td class="down">頂背離</td><td>高點更高</td><td>高點更低</td><td>上漲動能衰退，留意轉弱</td></tr>
@@ -1216,7 +1216,7 @@ VWAP = Σ(典型價 × 成交量) ÷ Σ成交量</div>
   },
   {
     id: "div-hidden", title: "隱藏背離與背離的陷阱", tag: "動能", seed: 4256, n: 200, hidden: true,
-    variants: [{ label: "RSI", sub: "rsi" }, { label: "MACD", sub: "macd" }],
+    variants: [{ label: "RSI", sub: "rsi" }, { label: "MACD", sub: "macd" }, { label: "KD", sub: "kd" }, { label: "MTM", sub: "mtm" }, { label: "OBV", sub: "obv" }],
     body: `<p>隱藏背離和一般背離的方向相反，它暗示的是<strong>趨勢延續</strong>，常用來找順勢的進場點。</p>
 <table><thead><tr><th>類型</th><th>價格</th><th>指標</th><th>意義</th></tr></thead><tbody>
 <tr><td class="up">隱藏底背離</td><td>低點墊高</td><td>低點更低</td><td>上升趨勢中的拉回接近結束，可能續漲</td></tr>
@@ -3695,6 +3695,23 @@ async function loadRealCode(code, months) {
   } catch (e) { note.className = "note real-status err"; note.textContent = e?.message || "載入失敗，請稍後再試。"; }
   finally { btn.disabled = false; }
 }
+// 個股判讀的真實 K 線：往左拉到底就再往前載入一段（一直到資料來源的最早一天），判讀跟著用更長的資料重算
+async function realOlder() {
+  const R = REAL.cur; if (!R?.code || R.source === "匯入的 CSV" || R.end || R.busy || shot.src !== "real" || !/^https?:$/.test(location.protocol)) return;
+  if (R.failAt && Date.now() - R.failAt < 8000) return;
+  R.busy = true; const before = R.data[0].d, note = $("#realNote");
+  try {
+    const r = await fetch(`/api/kline?code=${encodeURIComponent(R.code === "TAIEX" ? "加權" : R.code)}&months=24&before=${before}`), j = await r.json();
+    if (REAL.cur !== R) return; if (!j?.ok) throw new Error(j?.error || `服務回應 ${r.status}`);
+    const older = (j.data || []).filter(x => x.d < before); if (!older.length) { R.end = true; note.textContent = `${realName(R)}：已經載入到最早的 ${before}。`; return; }
+    const n0 = perData(R).length, v = shotChart.view; R.data = [...older, ...R.data]; R.failAt = 0;
+    Chart.keepView = true; try { realRun(true); } finally { Chart.keepView = false; }
+    const add = perData(R).length - n0; if (v) { shotChart.view = shotChart.clampView((v.fa ?? v.a) + add, v.w ?? v.b - v.a + 1); shotChart.draw(); }
+    note.className = "note real-status ok"; note.textContent = `${realName(R)}：${R.data.length} 個交易日（${R.data[0].d} ～ ${R.data[R.data.length - 1].d}）。往左拉可以再載入更早的。`;
+  } catch (e) { R.failAt = Date.now(); note.textContent = `更早的資料暫時載不到（${e.message}），往左拉會再試。`; }
+  finally { R.busy = false; }
+}
+shotChart.onRange = r => { if (r.a <= 3 && shotChart.view) realOlder(); };
 $("#realForm").addEventListener("submit", e => { e.preventDefault(); loadRealCode($("#realCode").value, +$("#realMonths").value); });
 $("#realQuick").addEventListener("click", e => { const b = e.target.closest("[data-code]"); if (!b) return; $("#realCode").value = b.dataset.code; loadRealCode(b.dataset.code, +$("#realMonths").value); });
 $("#realCsv").addEventListener("change", async e => {

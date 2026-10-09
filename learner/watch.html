@@ -681,7 +681,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.08-57</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.09-58</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -802,7 +802,7 @@ async function getJ(url, optional = false) {
 const API_MEM = new Map(), API_CACHE = "kline-api-v1";
 function apiTtl(url) {
   const u = String(url), M = 60e3, H = 3600e3, today = new Date(Date.now() + 8 * H).toISOString().slice(0, 10).replace(/-/g, "");
-  if (/^\/api\/(kline|intraday)\?.*before=/.test(u)) return 12 * H; // 更早的歷史資料不會再變
+  if (/^\/api\/(kline|intraday|futures)\?.*before=/.test(u)) return 12 * H; // 更早的歷史資料不會再變
   if (/^\/api\/daily\?date=/.test(u)) return (u.match(/date=(\d{8})/) || [])[1] < today ? 7 * 24 * H : 5 * M;
   if (/^\/api\/kline\?/.test(u) || /^\/api\/futures\?daily=1/.test(u)) return 5 * M; // 最後一根會跟著即時報價更新，不靠快取
   if (/^\/api\/(stockinfo|news|broker)\?/.test(u)) return 15 * M;
@@ -2722,10 +2722,16 @@ function fmtKD(s) {
   return /^\d{4}-/.test(s) ? s.slice(5).replace("-", "/") : s;
 }
 // 疊加的標記只畫在圖上，不算進策略回測
-const overlays = (D, I) => overlayBuild(D, I, id => dBar.has(id));
+const overlays = (D, I) => overlayBuild(D, I, id => dBar.has(id), { subs: subsFrom(dBar) });
+// 法人、融資副圖：只有台股日 K 有；沒資料時也畫一個只有說明的副圖，點了才看得出有反應
 function chipSubs(D) {
-  const j = W.info; if (!j || W.k !== "D") return [];
-  return [...(dBar.has("inst") && j.inst?.length ? [{ custom: instSub(alignByDate(D, j.inst)) }] : []), ...(dBar.has("margin") && j.margin?.length ? [{ custom: marginSub(alignByDate(D, j.margin)) }] : [])];
+  const j = W.info, out = [];
+  for (const [id, name, key, mk] of [["inst", "法人", "inst", instSub], ["margin", "融資", "margin", marginSub]]) {
+    if (!dBar.has(id)) continue;
+    const why = !isTW(W.sel) || isFut(W.sel) || isIdx(W.sel) ? "只有台股個股有" : W.k !== "D" ? "只有日 K 有（請切回「日」）" : !j ? "資料載入中…" : j.err ? `拿不到資料（${j.err}）` : !j[key]?.length ? "這檔沒有資料" : null;
+    out.push(why ? { custom: { title: `${name}：${why}`, lines: [], names: [], range: [0, 1], signals: false } } : { custom: mk(alignByDate(D, j[key])) });
+  }
+  return out;
 }
 /* ---------- 比較走勢：最多 3 檔，以畫面最左邊那根為 0% ---------- */
 const CMP_COLORS = ["#0ea5e9", "#a855f7", "#f59e0b"];
@@ -2771,7 +2777,7 @@ function drawK(fresh = false, shift = 0) {
   const D = kSeries(), minute = minuteK();
   if (!D || !D.length) { $("#kNote").textContent = minute ? (W.intraErr || (W.off ? "需要部署到網站" : "載入中…")) : W.daily?.err || (W.off ? "需要部署到網站" : "載入中…"); return; }
   const key = W.sel + ":" + W.k + ":" + (minute ? "m" : "d"); if (W.kKey !== key) { fresh = true; W.kKey = key; } // 第一次在技術分頁畫這檔／這個週期時，先顯示最近一段
-  if ((W.sel === "T00" || W.sel === "O00") && W.k === "D") breadthAttach(D);
+  if (W.sel === "T00" || W.sel === "O00") { D.isIndex = true; if (W.k === "D") breadthAttach(D); }
   const I = indicators(D), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D, I);
   let bt = null; if (S?.fn) try { const units = W.btOpt.size === "units" && !isFut(W.sel), cap = units ? Math.max(1e6, W.btOpt.units * 1000 * Math.max(...D.map(x => x.h)) * 1.01) : 1e6; // 固定張數：資金自動放大到買得起
     bt = backtest(D, sigs, { capital: cap, lot: units ? 1000 : 1, tax: taxOf(W.sel), ...btOptions() }); } catch {}
@@ -2788,7 +2794,7 @@ function drawK(fresh = false, shift = 0) {
   // 一開始根數太少、還不能往左拉時，先自動多載入一些
   if (N < want + 10 && !olderState().end && !W.busyOlder && (minute ? W.intra : W.daily?.data?.length)) setTimeout(loadOlder, 0);
   const st = olderState(), first = minute ? D[0].d.split(" ")[0] : W.daily?.data?.[0]?.d;
-  $("#kNote").textContent = `${first ? first.replace(/-/g, "/") + " 起・" : ""}共 ${N} 根${st.end ? (minute ? "（已到資料來源的最早）" : "（已到最早）") : W.busyOlder ? "・載入更早資料中…" : ""}・${minute ? W.intra?.source || "" : W.daily?.source || ""}`;
+  $("#kNote").textContent = `${first ? first.replace(/-/g, "/") + " 起・" : ""}共 ${N} 根${st.end ? (minute ? "（已到資料來源的最早）" : "（已到最早）") : W.busyOlder ? "・載入更早資料中…" : st.failAt ? `・更早的資料暫時載不到（${W.olderErr || "連線問題"}），往左拉會再試` : "・往左拉可以一直載入更早的 K 線"}・${minute ? W.intra?.source || "" : W.daily?.source || ""}`;
   if (S?.fn) { let txt = `${sigs.length} 個訊號`; const r = bt;
     if (r?.trades.length) { const why = {}; r.trades.forEach(t => (why[t.why] = (why[t.why] || 0) + 1));
       txt += `・照做回測 ${r.total >= 0 ? "+" : ""}${(r.total * 100).toFixed(1)}%（買進持有 ${r.bh >= 0 ? "+" : ""}${(r.bh * 100).toFixed(1)}%），${r.trades.length} 筆、勝率 ${Math.round(r.win * 100)}%、最大回落 ${(r.mdd * 100).toFixed(1)}%・出場：${Object.entries(why).map(([k, v]) => `${k} ${v}`).join("、")}`; }
@@ -2810,7 +2816,7 @@ async function loadDaily() {
   const c = W.sel; if (!c || W.off) { drawK(true); return; }
   if (isFut(c)) { // 台指近全日 K：/api/futures?daily=1（每天＝前一晚夜盤＋日盤），最後一根用即時分時補上
     W.daily = { code: c, data: [] }; drawK(true);
-    try { const j = await getJ("/api/futures?daily=1"); if (W.sel !== c) return; W.daily = { code: c, data: j.data || [], source: j.source, end: true }; futMergeDaily(false); }
+    try { const j = await getJ("/api/futures?daily=1"); if (W.sel !== c) return; W.daily = { code: c, data: j.data || [], source: j.source }; futMergeDaily(false); }
     catch (e) { if (W.sel === c) W.daily = { code: c, data: [], err: e.message, end: true }; }
     if (W.sel === c) { if (!minuteK()) drawK(true); renderAna(); } return; }
   W.daily = { code: c, data: [] }; drawK(true);
@@ -2823,23 +2829,26 @@ async function loadDaily() {
   } catch (e) { if (W.sel === c) { W.daily = { code: c, data: [], err: e.message, end: true }; if (!minuteK()) drawK(true); } }
 }
 // 往前載入：日週月 K 問 /api/kline?before=；分 K 問 /api/intraday?before=（假日沒有資料時會自動再往前）
+// 往左拉到底就再往前載入一段，一直到資料來源的最早一天（無限往前）；失敗不放棄，過幾秒往左拉會再試
 async function loadOlder() {
   const c = W.sel, st = olderState(); if (!c || st.end || W.busyOlder || W.off) return;
-  if (isFut(c)) { st.end = true; return; } // 台指期的分 K 只有最近一個日盤＋夜盤
+  if (st.failAt && Date.now() - st.failAt < 8000) return;
+  if (isFut(c) && minuteK()) { st.end = true; return; } // 台指期的分 K 只有最近一個日盤＋夜盤（日 K 可以往前）
   W.busyOlder = true; drawK();
   try {
     if (!minuteK()) {
       const R = W.daily; if (!R?.data?.length) return;
-      const before = R.data[0].d, j = await getJ(`/api/kline?code=${c === "T00" ? "加權" : c === "O00" ? "櫃買" : c}&months=${W.k === "D" ? 12 : 24}&before=${before}`);
+      const before = String(R.data[0].d).slice(0, 10), j = await getJ(isFut(c) ? `/api/futures?daily=1&cid=TXF&months=24&before=${before}` : `/api/kline?code=${c === "T00" ? "加權" : c === "O00" ? "櫃買" : c}&months=24&before=${before}`);
       if (W.sel !== c || W.daily !== R) return;
       const older = (j.data || []).filter(x => x.d < before).map(x => ({ ...x, v: x.v || 0 }));
       if (!older.length) { R.end = true; return; }
+      st.failAt = 0;
       const n0 = kSeries().length; R.data = [...older, ...R.data]; drawK(false, kSeries().length - n0); if (W.cmp.length) loadCmp();
     } else {
       const tf = +W.k, n0 = minuteSeries(tf).length;
       if (await olderMinute(c, tf) && +W.k === tf) drawK(false, minuteSeries(tf).length - n0);
     }
-  } catch (e) { st.end = true; $("#kNote").textContent = `載入更早資料失敗：${e.message}`; }
+  } catch (e) { st.failAt = Date.now(); st.fails = (st.fails || 0) + 1; if (st.fails >= 6) st.end = true; W.olderErr = e.message; }
   finally { W.busyOlder = false; if (W.sel === c) drawK(); }
 }
 // 分 K 往前多載入一段；回傳有沒有拿到新的 K 棒
