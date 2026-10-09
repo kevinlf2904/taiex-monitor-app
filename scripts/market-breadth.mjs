@@ -17,19 +17,19 @@ export function countDay(m) {
 }
 export async function main({ fetchDay = closeToday, now = Date.now(), gap = 2500 } = {}) {
   const old = await readFile(OUT, "utf8").then(JSON.parse).catch(() => null);
-  const have = new Map((old?.rows || []).map(r => [r[0], r])), holes = new Set(old?.holes || []); // holes：沒開盤的平日（國定假日），不用每次再問
+  const have = new Map((old?.rows || []).map(r => [r[0], r])), holes = new Map((old?.holes || []).map(h => (Array.isArray(h) ? h : [h, 1]))); // holes：沒有資料的平日 → 問到幾次空的；連續兩次都空才當成休市（颱風假、國定假日），不再問
   let fetched = 0, wdays = 0;
   for (let k = 0; wdays < KEEP && fetched < MAX_NEW; k++) {
     const t = now - k * 864e5, d = ymd(t), wd = new Date(t + 8 * 3600e3).getUTCDay(); if (wd % 6 === 0) continue;
     wdays++;
-    if ((have.has(d) || holes.has(d)) && k > 1) continue; // 今天、昨天重抓（櫃買資料比較晚出來）
-    try { const m = await fetchDay(d.replace(/-/g, "")); if (m.size > 500) { const n = countDay(m); have.set(d, [d, n.tw[0], n.tw[1], n.otc[0], n.otc[1]]); holes.delete(d); console.log(d, n); } else if (k > 1 && m.size === 0) holes.add(d); }
+    if ((have.has(d) || (holes.get(d) || 0) >= 2) && k > 1) continue; // 今天、昨天重抓（櫃買資料比較晚出來）
+    try { const m = await fetchDay(d.replace(/-/g, "")); if (m.size > 500) { const n = countDay(m); have.set(d, [d, n.tw[0], n.tw[1], n.otc[0], n.otc[1]]); holes.delete(d); console.log(d, n); } else if (k > 1 && m.size === 0) holes.set(d, (holes.get(d) || 0) + 1); }
     catch (e) { console.log(d, e.message); }
     fetched++; await sleep(gap);
   }
   const rows = [...have.values()].sort((a, b) => a[0].localeCompare(b[0])).slice(-KEEP);
   if (rows.length < 5) throw new Error(`只拿到 ${rows.length} 天，資料不夠`);
-  const out = { updated: new Date(now).toISOString(), cols: ["d", "上市漲", "上市跌", "上櫃漲", "上櫃跌"], rows, holes: [...holes].filter(d => d >= rows[0][0]).sort() };
+  const out = { updated: new Date(now).toISOString(), cols: ["d", "上市漲", "上市跌", "上櫃漲", "上櫃跌"], rows, holes: [...holes].filter(([d]) => d >= rows[0][0]).sort((a, b) => a[0].localeCompare(b[0])) };
   await writeFile(OUT, JSON.stringify(out));
   return out;
 }
