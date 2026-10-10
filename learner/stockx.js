@@ -1,14 +1,11 @@
-/* 個股「資訊」分頁：多空、達人觀點、籌碼日報、健檢、屬性、法人目標、法人主力、新聞、產業鏈、資券大戶、籌碼分佈、營收、獲利、財報、
-   基金持股、除權息、行事曆、股東名單、個股資訊。
+/* 個股「總覽／籌碼／財務」分頁裡由這裡畫的子頁（子頁清單在 watch.html 的 DSUB；每種資訊只出現在一個地方）：
+   總覽：多空研判、健檢、屬性與產業鏈、評價推估、達人觀點；籌碼：法人與基金、分點主力、大戶與股權；財務：股利、公司資料、行事曆。
+   （籌碼總覽、營收與估值、財務報表、符合的指標用 watch.html 原本的區塊；新聞在「新聞」分頁。）
    資料都來自已有的 API：/api/stockinfo（W.info：法人、融資券、借券、本益比、營收、季 EPS）、/api/company（W.co：損益、資產負債、現金流、股利、
    股權分散、外資持股、公司資料）、/api/news（W.news）、日 K（W.daily）、名人 Podcast（POD）、產業地圖（IND）。
    免費資料源沒有的（券商目標價、基金持股明細、前十大股東）會清楚標示「估算」或告訴你去哪裡查，不會編數字。
    用到 watch.html 的 W、esc、cls、select、setDtab、loadInfo、loadCo、loadNews、barLineSvg、peBand、IND、indCodes、indChainData，
    analysis.js 的 signed、clsOf，core.js 的 indicators、$、store。 */
-const SX_ITEMS = [["ls", "多空"], ["guru", "達人觀點"], ["daily", "籌碼日報"], ["check", "健檢"], ["attr", "屬性"], ["target", "法人目標"], ["inst", "法人主力"], ["branch", "分點主力"], ["news", "新聞"], ["chain", "產業鏈"], ["mb", "資券大戶"],
-  ["dist", "籌碼分佈"], ["rev", "營收"], ["profit", "獲利"], ["fin", "財報"], ["fund", "基金持股"], ["div", "除權息"], ["cal", "行事曆"], ["holders", "股東名單"], ["info", "個股資訊"]];
-// W 在 watch.html 後面的 script 才定義，所以選到哪一頁在第一次用到時再讀
-const sxCur = () => (W.sx ||= SX_ITEMS.some(x => x[0] === store.get("watch:sx", "ls")) ? store.get("watch:sx", "ls") : "ls");
 const sxN = (v, d = 0) => (v == null || !Number.isFinite(v) ? "—" : v.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d }));
 const sxPct = (v, d = 2) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(d)}%`);
 const sxYi = v => (v == null ? "—" : Math.abs(v) >= 1e8 ? (v / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 }) + " 億" : Math.round(v / 1e4).toLocaleString() + " 萬");
@@ -29,7 +26,7 @@ function sxNeed(what) {
   const c = W.sel;
   if (what === "news" && W.news?.code !== c) loadNews();
   if (what === "branch" && W.br?.code !== c) sxLoadBr();
-  if (what === "guru" && typeof podLoadSrv === "function" && !POD.srv && !POD.srvLoading) { POD.srvLoading = true; podLoadSrv().then(() => { POD.srvLoading = false; podLoadPx(); if (W.dtab === "info") sxRender(); }); }
+  if (what === "guru" && typeof podLoadSrv === "function" && !POD.srv && !POD.srvLoading) { POD.srvLoading = true; podLoadSrv().then(() => { POD.srvLoading = false; podLoadPx(); if (isSxSub()) sxRender(); }); }
 }
 // 券商分點（/api/broker，要 FinMind 贊助會員）
 async function sxLoadBr() {
@@ -38,12 +35,10 @@ async function sxLoadBr() {
   // 不用 getJ：ok:false 時還要讀 needSponsor
   try { const r = await fetch(`/api/broker?code=${c}`), j = await r.json().catch(() => null); if (W.sel !== c) return; W.br = j ? { ...j, code: c } : { code: c, err: r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}` }; }
   catch { if (W.sel === c) W.br = { code: c, err: "連不到伺服器（網路中斷？）" }; }
-  if (W.sel === c && W.dtab === "info") sxRender();
+  if (W.sel === c && isSxSub()) sxRender();
 }
 function sxRender() {
-  const box = $("#sxBox"); if (!box || W.dtab !== "info") return; sxCur();
-  $("#sxNav").innerHTML = SX_ITEMS.map(([k, t]) => `<button data-sx="${k}" aria-pressed="${W.sx === k}">${t}</button>`).join("");
-  const nav = $("#sxNav").querySelector('[aria-pressed="true"]'); if (nav && !sxRender.scrolled) { nav.scrollIntoView({ block: "nearest", inline: "center" }); sxRender.scrolled = true; }
+  const box = $("#sxBox"); if (!box || !isSxSub()) return; W.sx = dSub(); if (!SX[W.sx]) return;
   sxNeed(W.sx);
   let h = ""; try { h = SX[W.sx]() || ""; } catch (e) { console.error("stockx", W.sx, e); h = `<p class="note err">這一頁出錯了（${esc(e.message)}）</p>`; }
   box.innerHTML = h; postHeight();
@@ -170,10 +165,10 @@ const SX = {
     const I = sxI(), px = sxPx(); if (!I) return sxLoad(W.info?.err);
     const eps4 = sxEps4(I), P = (I.per || []).map(x => x.pe).filter(v => v > 0).sort((a, b) => a - b);
     const note = `<p class="note">券商（法人）目標價來自付費研究報告，免費資料源沒有，所以這裡<b>不顯示任何券商目標價</b>。上面是用這檔自己過去 3 年的本益比區間 × 近四季 EPS 推估的「評價區間」，只是參考，不是法人報告。可以到券商 App 或財經新聞查「目標價」。</p>`;
-    if (!eps4 || eps4 <= 0 || P.length < 20) return `${sxH("法人目標", "評價推估")}<p class="note">${eps4 != null && eps4 <= 0 ? "近四季虧損，不能用本益比估。" : "本益比或 EPS 資料不足，無法估算。"}</p>${note}`;
+    if (!eps4 || eps4 <= 0 || P.length < 20) return `${sxH("評價推估")}<p class="note">${eps4 != null && eps4 <= 0 ? "近四季虧損，不能用本益比估。" : "本益比或 EPS 資料不足，無法估算。"}</p>${note}`;
     const q = p => P[Math.min(P.length - 1, Math.floor(p * P.length))], lv = [["便宜", q(0.1)], ["偏低", q(0.3)], ["合理", q(0.5)], ["偏高", q(0.7)], ["昂貴", q(0.9)]].map(([k, pe]) => [k, pe, pe * eps4]);
     const lo = lv[0][2], hi = lv[4][2], pos = px ? Math.max(0, Math.min(100, (px - lo) / ((hi - lo) || 1) * 100)) : null;
-    return `${sxH("法人目標", "評價推估（非券商報告）")}
+    return `${sxH("評價推估", "用本益比區間推估（非券商報告）")}
       <div class="sxgauge"><div class="bar val">${pos != null ? `<i style="left:calc(${pos}% - 6px)"></i>` : ""}</div><div class="lbl"><span>${sxN(lo, 1)}</span><b>現價 ${sxN(px, 2)}</b><span>${sxN(hi, 1)}</span></div></div>
       <div class="cotbl-wrap"><table class="tbl sxtbl"><thead><tr><th>區間</th><th>本益比</th><th>推估股價</th><th>和現價比</th></tr></thead><tbody>${lv.map(([k, pe, p]) => `<tr><td>${k}</td><td>${pe.toFixed(1)}</td><td><b>${sxN(p, 1)}</b></td><td class="${cls(px ? p - px : null)}">${px ? sxPct((p / px - 1) * 100, 1) : "—"}</td></tr>`).join("")}</tbody></table></div>
       <p class="note">近四季 EPS ${eps4.toFixed(2)} 元；本益比區間取過去 3 年第 10／30／50／70／90 百分位。</p>${note}`;
@@ -187,8 +182,7 @@ const SX = {
     return `${sxH("法人動向", "買賣超（張）")}<div class="cotbl-wrap"><table class="tbl sxtbl"><thead><tr><th></th><th>今日</th><th>5 日</th><th>20 日</th><th>60 日</th><th>連續</th></tr></thead><tbody>
       ${ws.map(([k, n]) => `<tr><td>${n}</td>${[1, 5, 20, 60].map(d => { const v = sxSum(A, k, d); return `<td class="${clsOf(v)}">${signed(v)}</td>`; }).join("")}<td>${st(streak(k))}</td></tr>`).join("")}</tbody></table></div>
       ${F.length ? `${sxH("外資持股比例", sxMd(F.at(-1).d))}${sxKv([["目前", F.at(-1).ratio.toFixed(2) + "%"], F.length > 20 && ["20 日變化", sxPct(F.at(-1).ratio - F.at(-21).ratio), cls(F.at(-1).ratio - F.at(-21).ratio)], F.at(-1).limit != null && ["持股上限", F.at(-1).limit + "%"]])}` : ""}
-      ${H.length ? `${sxH("主力（千張大戶）", "每週集保")}${sxKv([["千張大戶持股", H.at(-1).b1000.toFixed(1) + "%"], H.length > 4 && ["4 週變化", sxPct(H.at(-1).b1000 - H.at(-5).b1000), cls(H.at(-1).b1000 - H.at(-5).b1000)], ["400 張以上", H.at(-1).b400 + "%"], ["千張大戶人數", sxN(H.at(-1).people1000)]])}` : ""}
-      <p class="note">「主力」用集保的千張大戶持股變化代表（免費資料沒有券商分點）。外資、投信、自營商買賣超來自證交所。</p>`;
+      <p class="note">外資、投信、自營商買賣超來自證交所；千張大戶持股在「大戶與股權」，券商分點在「分點主力」。</p>`;
   },
   news() {
     const N = W.news; if (!N || N.code !== W.sel || N.loading) return sxLoad();
@@ -228,20 +222,15 @@ const SX = {
       <p class="note">籌碼集中＝前 15 大買超分點合計－前 15 大賣超分點合計，集中 %＝它 ÷ 成交量。家數差＝買超家數－賣超家數：主力集中買進、很多小分點賣出時是負的（籌碼集中）；正的代表買的分點多、籌碼分散。均價是該分點的買進（或賣出）均價。資料：${esc(B.source || "")}。</p>`;
   },
   mb() {
-    const I = sxI(), C = sxC(); if (!I) return sxLoad(W.info?.err);
-    const M = I.margin || [], m = M.at(-1), S = I.short || [], s = S.at(-1), H = C?.holders || [];
-    const chg = (k, n) => (M.length > n ? m[k] - M.at(-1 - n)[k] : null);
-    return `${sxH("融資融券", m ? sxMd(m.d) : "")}${m ? sxKv([["融資餘額", sxN(m.marginBal) + " 張"], ["融資 5 日", signed(chg("marginBal", 5)), clsOf(chg("marginBal", 5))], ["融資使用率", m.marginLimit ? (m.marginBal / m.marginLimit * 100).toFixed(1) + "%" : "—"], ["融券餘額", sxN(m.shortBal) + " 張"], ["融券 5 日", signed(chg("shortBal", 5)), clsOf(chg("shortBal", 5))], ["券資比", m.marginBal ? (m.shortBal / m.marginBal * 100).toFixed(1) + "%" : "—"]]) : `<p class="note">沒有融資融券資料（可能不能信用交易）。</p>`}
-      ${s ? `${sxH("借券賣出", sxMd(s.d))}${sxKv([["借券賣出餘額", sxN(s.sBal) + " 張"], S.length > 5 && ["5 日變化", signed(s.sBal - S.at(-6).sBal), clsOf(-(s.sBal - S.at(-6).sBal))]])}` : ""}
-      ${H.length ? `${sxH("大戶持股", "每週集保")}<div class="cotbl-wrap"><table class="tbl sxtbl"><thead><tr><th>週</th><th>千張大戶</th><th>400 張以上</th><th>千張人數</th></tr></thead><tbody>${H.slice(-8).reverse().map((h, i, a) => `<tr><td>${sxMd(h.d)}</td><td class="${cls(a[i + 1] ? h.b1000 - a[i + 1].b1000 : null)}">${h.b1000}%</td><td>${h.b400}%</td><td>${sxN(h.people1000)}</td></tr>`).join("")}</tbody></table></div>` : ""}
-      <p class="note">券資比高（融券多）時，股價上漲可能引發軋空；融資使用率高代表散戶槓桿多，下跌時容易斷頭賣壓。</p>`;
+    const C = sxC(), H = C?.holders || []; if (!H.length) return "";
+    return `${H.length ? `${sxH("大戶持股", "每週集保")}<div class="cotbl-wrap"><table class="tbl sxtbl"><thead><tr><th>週</th><th>千張大戶</th><th>400 張以上</th><th>千張人數</th></tr></thead><tbody>${H.slice(-8).reverse().map((h, i, a) => `<tr><td>${sxMd(h.d)}</td><td class="${cls(a[i + 1] ? h.b1000 - a[i + 1].b1000 : null)}">${(+h.b1000).toFixed(2)}%</td><td>${(+h.b400).toFixed(2)}%</td><td>${sxN(h.people1000)}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
   },
   dist() {
     const C = sxC(); if (!C) return sxLoad(W.co?.err);
     const T = C.dist; if (!T?.levels?.length) return `<p class="note">沒有股權分散資料。</p>`;
     const mx = Math.max(...T.levels.map(x => x.pct || 0)), lots = lo => (lo >= 1000 ? Math.round(lo / 1000).toLocaleString() + " 張" : lo + " 股");
     const small = T.levels.filter(x => x.lo < 50001).reduce((s, x) => s + x.pct, 0), big = T.levels.filter(x => x.lo >= 400001).reduce((s, x) => s + x.pct, 0);
-    return `${sxH("籌碼分佈（股權分散）", sxMd(T.d) + " 集保")}${sxKv([["散戶 ≤50 張", small.toFixed(1) + "%"], ["大戶 ≥400 張", big.toFixed(1) + "%"], ["總股東人數", sxN(T.levels.reduce((s, x) => s + (x.people || 0), 0))]])}
+    return `${sxH("持股分級（股權分散表）", sxMd(T.d) + " 集保")}${sxKv([["散戶 ≤50 張", small.toFixed(1) + "%"], ["大戶 ≥400 張", big.toFixed(1) + "%"], ["總股東人數", sxN(T.levels.reduce((s, x) => s + (x.people || 0), 0))]])}
       <ul class="sxdist">${T.levels.map(x => `<li><span>${lots(x.lo)} 以上</span><i style="width:${(x.pct || 0) / mx * 100}%"></i><b>${(x.pct || 0).toFixed(2)}%</b><small class="note">${sxN(x.people)} 人</small></li>`).join("")}</ul>
       <p class="note">每一級距是持股數的下限。大戶比例上升、散戶人數減少，通常代表籌碼往少數人集中。價格的籌碼分佈（每個價位的成交量）在「走勢 → 分價量」。</p>${sxBig(C)}`;
   },
@@ -281,7 +270,7 @@ const SX = {
     const L = (C.dividend || []).slice().sort((a, b) => b.y - a.y), px = sxPx(), D = sxD(); if (!L.length) return `<p class="note">沒有配息紀錄。</p>`;
     const fill = x => { if (!x.ex || !D.length) return "—"; const i = D.findIndex(k => k.d >= x.ex); if (i <= 0) return x.ex > (D.at(-1)?.d || "") ? "還沒除息" : "—"; const pre = D[i - 1].c, j = D.slice(i).findIndex(k => k.h >= pre); return j >= 0 ? `<span class="up">已填息（${j + 1} 天）</span>` : `<span class="down">尚未填息</span>`; };
     const y0 = L[0];
-    return `${sxH("除權息")}${sxKv([["最近現金股利", y0.cash ? y0.cash.toFixed(2) + " 元" : "—"], ["最近股票股利", y0.stock ? y0.stock.toFixed(2) + " 元" : "—"], ["現金殖利率", px && y0.cash ? (y0.cash / px * 100).toFixed(2) + "%" : "—"], ["除息日", y0.ex || "—"], ["發放日", y0.pay || "—"]])}
+    return `${sxH("歷年除權息與填息")}
       <div class="cotbl-wrap"><table class="tbl sxtbl"><thead><tr><th>年度</th><th>現金</th><th>股票</th><th>除息日</th><th>發放日</th><th>填息</th></tr></thead><tbody>${L.slice(0, 10).map(x => `<tr><td>${x.y}</td><td>${x.cash ? x.cash.toFixed(2) : "—"}</td><td>${x.stock ? x.stock.toFixed(2) : "—"}</td><td>${x.ex || "—"}</td><td>${x.pay || "—"}</td><td>${fill(x)}</td></tr>`).join("")}</tbody></table></div>
       <p class="note">年度是股利所屬的盈餘年度；填息＝除息後股價回到除息前一天的收盤。</p>`;
   },
@@ -300,7 +289,7 @@ const SX = {
   holders() {
     const C = sxC(); if (!C) return sxLoad(W.co?.err);
     const P = C.profile || {}, T = C.dist, top = T?.levels?.filter(x => x.lo >= 1000001) || [], F = C.foreign?.at(-1);
-    return `${sxH("股東結構")}${sxKv([["董事長", esc(P.chairman || "—")], ["總經理", esc(P.ceo || "—")], ["千張以上股東", top.length ? sxN(top.reduce((s, x) => s + (x.people || 0), 0)) + " 人" : "—"], ["千張以上持股", top.length ? top.reduce((s, x) => s + x.pct, 0).toFixed(1) + "%" : "—"], ["外資持股", F ? F.ratio.toFixed(2) + "%" : "—"]])}
+    return `${sxH("股東結構")}${sxKv([["千張以上股東", top.length ? sxN(top.reduce((s, x) => s + (x.people || 0), 0)) + " 人" : "—"], ["千張以上持股", top.length ? top.reduce((s, x) => s + x.pct, 0).toFixed(1) + "%" : "—"], ["外資持股", F ? F.ratio.toFixed(2) + "%" : "—"]])}
       <p class="note">前十大股東名單、董監事持股明細只在公開資訊觀測站（公司治理 → 董監事持股、股東會年報）公布，沒有免費 API，所以這裡不列名單。上面是從集保股權分散與外資持股整理的股東結構。</p>
       <p><a class="btn sm" href="https://mops.twse.com.tw/" target="_blank" rel="noopener">開啟公開資訊觀測站 ↗</a></p>`;
   },
@@ -308,17 +297,25 @@ const SX = {
     const C = sxC(), P = C?.profile; if (!C) return sxLoad(W.co?.err); if (!P) return `<p class="note">沒有公司基本資料。</p>`;
     const px = sxPx(), cap = P.shares && px ? P.shares * px : null, ind = W.mf?.ind?.[W.sel];
     const row = (k, v) => (v ? `<tr><th>${k}</th><td>${v}</td></tr>` : "");
-    return `${sxH("個股資訊")}<table class="tbl sxinfo"><tbody>${row("公司名稱", esc(P.name))}${row("代號", W.sel)}${row("產業", esc(ind || ""))}${row("董事長", esc(P.chairman))}${row("總經理", esc(P.ceo))}${row("發言人", esc(P.spokesman))}
+    return `${sxH("公司資料")}<table class="tbl sxinfo"><tbody>${row("公司名稱", esc(P.name))}${row("代號", W.sel)}${row("產業", esc(ind || ""))}${row("董事長", esc(P.chairman))}${row("總經理", esc(P.ceo))}${row("發言人", esc(P.spokesman))}
       ${row("成立日期", P.founded)}${row("上市櫃日期", P.listed)}${row("實收資本額", P.capital ? sxYi(P.capital) : "")}${row("發行股數", P.shares ? sxN(P.shares / 1000) + " 張" : "")}${row("市值", cap ? sxYi(cap) : "")}
       ${row("網址", P.web ? `<a href="${esc(/^https?:/.test(P.web) ? P.web : "https://" + P.web)}" target="_blank" rel="noopener">${esc(P.web)}</a>` : "")}${row("地址", esc(P.address))}</tbody></table>`;
   },
 };
+// 合併後的子頁：同一種資訊只出現在一個地方（個股的「總覽／籌碼／財務」子頁都用這裡）
+const SX_BASE = { ...SX };
+Object.assign(SX, {
+  attr: () => (isTW(W.sel) ? SX_BASE.attr() : "") + SX_BASE.chain(),
+  inst: () => SX_BASE.inst() + (sxI()?.inst?.length ? SX_BASE.fund() : ""),
+  big: () => { const C = sxC(); if (!C) return sxLoad(W.co?.err); return (coHoldHtml(C) || "") + (C.dist?.levels?.length ? SX_BASE.dist() : "") + SX_BASE.mb() || `<p class="note">沒有大戶與股權分散資料。</p>`; },
+  div: () => { const C = sxC(); if (!C) return sxLoad(W.co?.err); const h = coDivHtml(C); return h ? h + SX_BASE.div() : `<p class="note">沒有配息紀錄。</p>`; },
+  info: () => SX_BASE.info() + (sxC()?.profile ? SX_BASE.holders() : ""),
+});
 function sxInit() {
   W.brRange = store.get("watch:brr", 1); W.brSide = "buy";
-  $("#sxNav").addEventListener("click", e => { const b = e.target.closest("[data-sx]"); if (!b) return; W.sx = b.dataset.sx; store.set("watch:sx", W.sx); sxRender.scrolled = false; sxRender(); });
   $("#sxBox").addEventListener("click", e => {
     const s = e.target.closest("[data-sel]"); if (s) { select(s.dataset.sel); return; }
-    const g = e.target.closest("[data-sxgo]"); if (g) { if (g.dataset.sxgo === "co") setDtab("co"); else if (g.dataset.sxgo === "pod") { showList(); setLt("pod"); } return; }
+    const g = e.target.closest("[data-sxgo]"); if (g) { if (g.dataset.sxgo === "co") setDtab("fin"), setDsub("report"); else if (g.dataset.sxgo === "pod") { showList(); setLt("pod"); } return; }
     const t = e.target.closest("[data-sxind]"); if (t) { W.indS.open = t.dataset.sxind; showList(); setLt("ind"); return; }
     const r = e.target.closest("[data-brr]"); if (r) { W.brRange = +r.dataset.brr; store.set("watch:brr", W.brRange); sxRender(); return; }
     const sd = e.target.closest("[data-brs]"); if (sd) { W.brSide = sd.dataset.brs; sxRender(); }

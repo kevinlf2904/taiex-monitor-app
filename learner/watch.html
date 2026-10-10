@@ -612,7 +612,8 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
       <div class="row2"><button class="btn primary sm" id="alSave" type="button">儲存提醒</button><button class="btn sm" id="alClear" type="button">清除</button><span class="note" id="alNote"></span></div>
       <p class="note" style="margin:0">頁面開著時每 10 秒檢查一次，觸發後跳出通知並自動關閉。iPhone 要先「加入主畫面」，從主畫面打開才收得到系統通知。</p>
     </div>
-    <div class="seg full dtabs" role="tablist" aria-label="個股內容" id="dTabs"><button data-t="trend">走勢</button><button data-t="tech">技術</button><button data-t="chips">籌碼</button><button data-t="fund">基本面</button><button data-t="co">公司</button><button data-t="info">資訊</button><button data-t="tags">指標</button><button data-t="news">新聞</button></div>
+    <div class="seg full dtabs" role="tablist" aria-label="個股內容" id="dTabs"><button data-t="trend">走勢</button><button data-t="tech">技術</button><button data-t="ovw">總覽</button><button data-t="chips">籌碼</button><button data-t="fin">財務</button><button data-t="news">新聞</button></div>
+    <nav class="sxnav dsub" id="sxNav" role="tablist" aria-label="分頁內容" hidden></nav>
 
     <!-- 走勢：分時＋五檔 -->
     <div class="d-grid" data-pane="trend">
@@ -652,36 +653,36 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
 
     <!-- 籌碼 -->
-    <div class="panel sec" id="secChips" data-pane="chips">
-      <div class="ph"><h2>籌碼</h2><span class="note" id="chipsNote"></span></div>
+    <div class="panel sec" id="secChips" data-pane="chips" data-sub="sum">
+      <div class="ph"><h2>籌碼總覽</h2><span class="note" id="chipsNote"></span></div>
       <ul class="sumlist" id="chipsSum"></ul>
       <div class="chartbox" id="chipsChart"></div>
       <div class="tablewrap" id="chipsTbl"></div>
       <div id="shortBox" hidden></div>
     </div>
 
-    <div class="panel sec" id="secTags" data-pane="tags">
+    <div class="panel sec" id="secTags" data-pane="ovw" data-sub="tags">
       <div class="ph"><h2 id="tagsTitle">符合的指標</h2><span class="note" id="tagsNote"></span></div>
       <div id="tagsBox"></div>
     </div>
-    <div class="panel sec" id="secInfo" data-pane="info" hidden><div class="sxnav" id="sxNav" role="tablist" aria-label="個股資訊"></div><div id="sxBox"></div></div>
+    <div class="panel sec" id="secInfo" data-pane="sx" hidden><div id="sxBox"></div></div>
     <div class="panel sec" id="secNews" data-pane="news">
       <div class="ph"><h2>新聞</h2><span class="note" id="newsNote"></span></div>
       <ul class="newslist" id="newsBox"></ul>
     </div>
     <!-- 基本面 -->
-    <div class="panel sec" id="secCo" data-pane="co">
-      <div class="ph"><h2>公司</h2><span class="note" id="coNote"></span></div>
+    <div class="panel sec" id="secCo" data-pane="fin" data-sub="report">
+      <div class="ph"><h2>財務報表</h2><span class="note" id="coNote"></span></div>
       <div id="coBox"></div>
     </div>
-    <div class="panel sec" id="secFund" data-pane="fund">
-      <div class="ph"><h2>基本面</h2><span class="note" id="fundNote"></span></div>
+    <div class="panel sec" id="secFund" data-pane="fin" data-sub="rev">
+      <div class="ph"><h2>營收與估值</h2><span class="note" id="fundNote"></span></div>
       <ul class="sumlist" id="fundSum"></ul>
       <div class="tablewrap" id="fundTbl"></div>
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.09-59</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.10-60</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1519,10 +1520,10 @@ function stockScore(c, D) {
 }
 const scoreBars = S => SCORE_W.map(([k, t]) => `<div class="sbar"><span>${t}</span><i><b style="width:${S[k]}%;background:${S[k] >= 60 ? "var(--up)" : S[k] <= 40 ? "var(--down)" : "var(--muted)"}"></b></i><em>${S[k]}</em></div>`).join("");
 async function renderTags() {
-  if (W.dtab !== "tags") return;
+  if (W.dtab !== "ovw" || dSub() !== "tags") return;
   const c = W.sel, box = $("#tagsBox"); if (!c) return;
   if (isTW(c) && !isIdx(c) && !W.scr && !W.off) loadScreen().then(() => { if (W.sel === c) renderTags(); });
-  const D = W.daily?.code === c && W.daily.data?.length ? W.daily.data : await klineOf(c); if (W.sel !== c || W.dtab !== "tags") return;
+  const D = W.daily?.code === c && W.daily.data?.length ? W.daily.data : await klineOf(c); if (W.sel !== c || W.dtab !== "ovw" || dSub() !== "tags") return;
   const out = [], grpName = Object.fromEntries(SCR_GROUPS);
   for (const L of W.scr?.lists || []) { const r = L.rows.find(x => x.code === c); if (r) out.push({ k: grpName[scrGroup(L)] || "選股", t: L.title, n: r.note, side: /跌|虧損|年減/.test(L.title) ? "bear" : ["hot", "chips"].includes(scrGroup(L)) ? "bull" : "" }); }
   if (D?.length >= 30) {
@@ -1562,7 +1563,7 @@ function renderNews() {
   const N = W.news, ago = t => { if (!t) return ""; const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${Math.max(1, m)} 分鐘前` : m < 1440 ? `${Math.round(m / 60)} 小時前` : new Date(t + 8 * 3600e3).toISOString().slice(5, 10).replace("-", "/"); };
   $("#newsNote").textContent = N?.source ? `來源：${N.source}，點標題開原文` : "";
   $("#newsBox").innerHTML = N?.err ? `<li class="note err" style="padding:10px 0">⚠ ${esc(N.err)}</li>` : N?.items?.length ? N.items.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.title)}</b><small>${esc(x.source || "")}${x.source ? "・" : ""}${ago(x.at)}</small></a></li>`).join("") : `<li class="note" style="padding:10px 0">沒有找到新聞</li>`;
-  if (W.dtab === "info") sxRender();
+  if (isSxSub()) sxRender();
   postHeight();
 }
 
@@ -2261,8 +2262,8 @@ function select(code, how = "push") {
   navPush(how === "push" ? "push" : "replace");
   $("#main").classList.add("show-detail"); syncLayout();
   $("#learnLink").href = `./?code=${code === "T00" ? "加權" : code}#shot`;
-  const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fund"], #dTabs [data-t="co"], #dTabs [data-t="info"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
-  if (!tw && (W.dtab === "chips" || W.dtab === "fund" || W.dtab === "co" || W.dtab === "info")) W.dtab = "trend";
+  const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fin"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
+  if (!tw && (W.dtab === "chips" || W.dtab === "fin")) W.dtab = "trend";
   $("#learnLink").hidden = isUS(code) || isFut(code);
   const fut = isFut(code); document.querySelectorAll('#kSeg [data-k="D"], #kSeg [data-k="W"], #kSeg [data-k="M"]').forEach(b => (b.hidden = false)); $("#cdpBtn").hidden = fut; tsSegFill(fut);
   renderList(); renderDetailHead(); renderFlow(); setDtab(W.dtab, false); drawTs();
@@ -2284,7 +2285,7 @@ function goY(y = 0) { if (EMBED && parent !== window) post({ type: "watch-top", 
 function restoreY(y) { requestAnimationFrame(() => goY(y)); if (y > 40) [250, 700].forEach(t => setTimeout(() => { if (curY() < y - 40) goY(y); }, t)); }
 function navSnap() {
   const det = $("#main").classList.contains("show-detail") && !!W.sel, lt = W.lt, P = typeof POD !== "undefined" ? POD : null;
-  return { lt, sel: det ? W.sel : null, dt: det ? W.dtab : null,
+  return { lt, sel: det ? W.sel : null, dt: det ? W.dtab : null, ds: det && DSUB[W.dtab] ? dSub() : null,
     io: lt === "ind" ? W.indS?.open || null : null, iv: lt === "ind" ? W.indS?.view || null : null,
     af: lt === "after" && typeof afView === "function" ? afView() : null,
     mv: lt === "money" ? W.mf?.view || null : null, ms: lt === "money" && W.mf?.view === "sector" ? W.mf.sec || null : null,
@@ -2316,7 +2317,7 @@ function navApply(s, y) {
     if (s.lt === "money" && W.mf && s.mv && s.mv !== "replay") { W.mf.view = s.mv; if (s.ms) W.mf.sec = s.ms; }
     if (s.lt === "pod" && typeof POD !== "undefined") { POD.view = s.pv || "home"; const [v, k] = (s.pg || "").split(/:(.*)/s); if (v === "ep") POD.key = k; else if (v === "show") { POD.feed = k; podFeed(k).then(podRender).catch(() => {}); } }
     renderList();
-    if (s.sel && okCode(s.sel)) { select(s.sel, "none"); if (s.dt && s.dt !== W.dtab) setDtab(s.dt, false); }
+    if (s.sel && okCode(s.sel)) { select(s.sel, "none"); if (s.ds && s.dt && DSUB[s.dt]) W.dsub = { ...W.dsub, [s.dt]: s.ds }; if (s.dt && (s.dt !== W.dtab || (s.ds && s.ds !== dSub()))) setDtab(s.dt, false); }
     else if ($("#main").classList.contains("show-detail")) showList(false);
   } finally { NAV.busy = false; }
   navBackUi(); restoreY(y || 0);
@@ -2403,18 +2404,40 @@ function renderBook() {
     <div class="book-sum">五檔委買 ${sb.toLocaleString()} 張・委賣 ${sa.toLocaleString()} 張</div><div class="book-ratio"><span style="width:${sb / (sb + sa || 1) * 100}%;background:var(--up)"></span><span style="flex:1;background:var(--down)"></span></div>`;
   $("#bookNote").textContent = q?.time || "";
 }
-// 個股分頁：走勢／技術／籌碼／基本面
+/* 個股分頁：走勢、技術、總覽、籌碼、財務、新聞；總覽、籌碼、財務底下各有子頁（每種資訊只出現在一個地方）
+   子頁的內容：tags／sum／rev／report 用原本的區塊，其他的由 stockx.js 的 SX 畫在 #sxBox */
+const DSUB = {
+  ovw: [["ls", "多空研判", 1], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "達人觀點"]],
+  chips: [["sum", "籌碼總覽"], ["inst", "法人與基金"], ["branch", "分點主力"], ["big", "大戶與股權"]],
+  fin: [["rev", "營收與估值"], ["report", "財務報表"], ["div", "股利"], ["info", "公司資料"], ["cal", "行事曆"]],
+};
+const DSUB_OWN = new Set(["tags", "sum", "rev", "report"]); // 用原本區塊畫的子頁
+const OLD_DTAB = { fund: ["fin", "rev"], co: ["fin", "report"], info: ["ovw", "ls"], tags: ["ovw", "tags"] }; // 舊版分頁 → 新的分頁＋子頁
+W.dsub = { ovw: "ls", chips: "sum", fin: "rev", ...(store.get("watch:dsub", null) || {}) };
+const dSubs = t => (DSUB[t] || []).filter(x => !x[2] || isTW(W.sel));
+function dSub(t = W.dtab) { const L = dSubs(t); return L.some(x => x[0] === W.dsub[t]) ? W.dsub[t] : L[0]?.[0]; }
+const isSxSub = () => !!DSUB[W.dtab] && !DSUB_OWN.has(dSub());
+function renderDsub() {
+  const nav = $("#sxNav"), L = dSubs(W.dtab), cur = dSub(); nav.hidden = !L.length;
+  nav.innerHTML = L.map(([k, t]) => `<button type="button" role="tab" data-dsub="${k}" aria-pressed="${k === cur}">${t}</button>`).join("");
+}
+function setDsub(k) { W.dsub = { ...W.dsub, [W.dtab]: k }; store.set("watch:dsub", W.dsub); setDtab(W.dtab, false); navPush(); }
 function setDtab(t, scroll = true) {
-  if ((t === "chips" || t === "fund" || t === "co" || t === "info") && !isTW(W.sel)) t = "trend";
+  if (OLD_DTAB[t]) { W.dsub = { ...W.dsub, [OLD_DTAB[t][0]]: OLD_DTAB[t][1] }; t = OLD_DTAB[t][0]; }
+  if ((t === "chips" || t === "fin") && !isTW(W.sel)) t = "trend";
+  if (!["trend", "tech", "ovw", "chips", "fin", "news"].includes(t)) t = "trend";
   W.dtab = t; store.set("watch:dtab", t);
+  const sub = dSub(t), sx = !!DSUB[t] && !DSUB_OWN.has(sub);
   document.querySelectorAll("#dTabs [data-t]").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === t));
-  document.querySelectorAll("[data-pane]").forEach(p => (p.hidden = p.dataset.pane !== t));
-  setQ(t);
-  if (t === "trend") { drawTs(); loadFlow(); } else if (t === "tech") { drawK(); renderAna(); } else if (t === "co") loadCo(); else if (t === "tags") renderTags(); else if (t === "news") loadNews(); else if (t === "info") sxOpen(); else renderInfo();
+  document.querySelectorAll("[data-pane]").forEach(p => (p.hidden = p.dataset.pane === "sx" ? !sx : p.dataset.pane !== t || (!!p.dataset.sub && p.dataset.sub !== sub)));
+  renderDsub(); setQ(t);
+  if (t === "trend") { drawTs(); loadFlow(); } else if (t === "tech") { drawK(); renderAna(); } else if (t === "news") loadNews();
+  else if (sub === "tags") renderTags(); else if (sub === "report") loadCo(); else if (sx) sxOpen(); else renderInfo();
   if (scroll) $("#dTabs").scrollIntoView({ block: "start", behavior: "auto" });
   postHeight();
 }
 $("#dTabs").addEventListener("click", e => { const b = e.target.closest("[data-t]"); if (b) setDtab(b.dataset.t); });
+$("#sxNav").addEventListener("click", e => { const b = e.target.closest("[data-dsub]"); if (b) setDsub(b.dataset.dsub); });
 
 /* ---------- 當日分時：台股 09:00–13:30、美股 09:30–16:00（當地時間），以昨收為中心 ---------- */
 const TS = { hover: null, geo: null };
@@ -2826,7 +2849,7 @@ async function loadDaily() {
     if (W.sel !== c) return;
     W.daily = { code: c, data: j.data.map(x => ({ ...x, v: x.v || 0 })), source: j.source, end: false };
     if (W.detailQ) mergeDaily(W.detailQ, false);
-    if (!minuteK()) drawK(true); renderAna(); if (W.dtab === "chips" || W.dtab === "info") renderInfo(); renderDetailHead(); drawTs(); if (W.cmp.length) loadCmp();
+    if (!minuteK()) drawK(true); renderAna(); if (W.dtab === "chips" || W.dtab === "fin" || isSxSub()) renderInfo(); renderDetailHead(); drawTs(); if (W.cmp.length) loadCmp();
   } catch (e) { if (W.sel === c) { W.daily = { code: c, data: [], err: e.message, end: true }; if (!minuteK()) drawK(true); } }
 }
 // 往前載入：日週月 K 問 /api/kline?before=；分 K 問 /api/intraday?before=（假日沒有資料時會自動再往前）
@@ -2975,7 +2998,7 @@ async function loadInfo() {
 }
 function renderInfo() {
   const j = W.info, D = W.daily?.data;
-  if (W.dtab === "chips") {
+  if (W.dtab === "chips" && dSub() === "sum") {
     if (!j || j.err || !D?.length) { $("#chipsSum").innerHTML = `<li class="note">${j?.err ? esc(j.err) : W.off ? "需要部署到網站" : "載入中…"}</li>`; $("#chipsTbl").innerHTML = ""; chipsChart.host.hidden = true; $("#shortBox").hidden = true; return; }
     const items = chipsSummary(j, D);
     $("#chipsSum").innerHTML = items.length ? items.map(x => `<li><strong>${x.k}</strong>：${x.t}</li>`).join("") : `<li class="note">沒有籌碼資料。</li>`;
@@ -2991,7 +3014,7 @@ function renderInfo() {
       <div><span>融券餘額</span><b>${lots(ss.mBal)}</b></div><div><span>借券賣出餘額</span><b>${lots(ss.sBal)}</b></div><div><span>5 日變化</span><b class="${clsOf(ss.chg5 == null ? null : -ss.chg5)}">${signed(ss.chg5)}</b></div><div><span>回補天數</span><b>${ss.days == null ? "—" : ss.days.toFixed(1) + " 天"}</b></div></div>
       <p class="note" style="margin:0 16px 12px">賣空餘額增加代表看空或避險的人變多；餘額很高時一旦上漲被迫回補，可能出現軋空。借券賣出多半是法人避險或套利，不一定是看空。回補天數＝賣空餘額 ÷ 近 20 日平均成交量。</p>`;
     $("#chipsTbl").innerHTML = rows.length ? `<table class="tbl"><thead><tr><th>日期</th><th>外資</th><th>投信</th><th>自營商</th><th>合計</th><th>融資增減</th><th>融資餘額</th><th>融券餘額</th></tr></thead><tbody>${rows.map(r => { const m = mg.get(r.d) || {}, t = r.foreign + r.trust + r.dealer; return `<tr><td>${r.d.slice(5).replace("-", "/")}</td>${[r.foreign, r.trust, r.dealer, t].map(v => `<td class="${clsOf(v)}">${signed(v)}</td>`).join("")}<td class="${clsOf(m.chg)}">${signed(m.chg)}</td><td>${m.bal != null ? Math.round(m.bal).toLocaleString() : "—"}</td><td>${m.short != null ? Math.round(m.short).toLocaleString() : "—"}</td></tr>`; }).join("")}</tbody></table>` : "";
-  } else if (W.dtab === "fund") {
+  } else if (W.dtab === "fin" && dSub() === "rev") {
     if (!j || j.err || !D?.length) { $("#fundSum").innerHTML = `<li class="note">${j?.err ? esc(j.err) : W.off ? "需要部署到網站" : "載入中…"}</li>`; $("#fundTbl").innerHTML = ""; return; }
     const items = fundSummary(j, D);
     $("#fundSum").innerHTML = items.length ? items.map(x => `<li><strong>${x.k}</strong>：${x.t}</li>`).join("") : `<li class="note">沒有財報資料（ETF 沒有營收與 EPS）。</li>`;
@@ -2999,11 +3022,10 @@ function renderInfo() {
     const rev = (j.revenue || []).slice(-12).reverse(), fin = (j.fin || []).slice(-8).reverse(), per = j.per?.[j.per.length - 1];
     const finAll = j.fin || [], eps = finAll.slice(-8).map(r => { const [y, qq] = String(r.q).split("Q"), ly = finAll.find(x => x.q === `${+y - 1}Q${qq}`); return { label: String(r.q).slice(2), v: r.eps, y: ly && ly.eps ? +((r.eps / Math.abs(ly.eps) - 1) * 100).toFixed(1) : null }; });
     const revs = (j.revenue || []).slice(-12).map(r => ({ label: r.ym.slice(5) + "月", v: +(r.rev / 1e8).toFixed(1), y: r.yoy }));
-    const band = j.per?.length ? peBand(j.per) : "", charts = (band ? `<h3 class="fh">公司估值</h3>${band}` : "") + (eps.length ? `<h3 class="fh">每季 EPS<span class="note">柱＝EPS（元）、線＝年增率</span></h3>${barLineSvg(eps, { fmtV: v => v })}` : "") + (revs.length ? `<h3 class="fh">月營收<span class="note">柱＝營收（億）、線＝年增率</span></h3>${barLineSvg(revs, { bar: "var(--s3)", fmtV: v => Math.round(v) })}` : "");
+    const band = j.per?.length ? peBand(j.per) : "", charts = (band ? `<h3 class="fh">公司估值</h3>${band}` : "") + (revs.length ? `<h3 class="fh">月營收<span class="note">柱＝營收（億）、線＝年增率</span></h3>${barLineSvg(revs, { bar: "var(--s3)", fmtV: v => Math.round(v) })}` : "");
     $("#fundTbl").innerHTML = charts + (per ? `<div class="d-kv" style="margin:0 16px 12px"><div><span>本益比</span><b>${per.pe ?? "—"}</b></div><div><span>股價淨值比</span><b>${per.pb ?? "—"}</b></div><div><span>殖利率</span><b>${per.dy != null ? per.dy + "%" : "—"}</b></div><div><span>日期</span><b>${per.d.replace(/-/g, "/")}</b></div></div>` : "")
-      + (rev.length ? `<table class="tbl"><thead><tr><th>月營收</th><th>營收（億）</th><th>年增</th><th>月增</th></tr></thead><tbody>${rev.map(r => `<tr><td>${r.ym.replace("-", "/")}</td><td>${(r.rev / 1e8).toFixed(2)}</td><td class="${clsOf(r.yoy)}">${r.yoy != null ? (r.yoy > 0 ? "+" : "") + r.yoy + "%" : "—"}</td><td class="${clsOf(r.mom)}">${r.mom != null ? (r.mom > 0 ? "+" : "") + r.mom + "%" : "—"}</td></tr>`).join("")}</tbody></table>` : "")
-      + (fin.length ? `<table class="tbl" style="margin-top:12px"><thead><tr><th>季度</th><th>EPS</th><th>毛利率</th><th>營益率</th><th>淨利率</th></tr></thead><tbody>${fin.map(r => `<tr><td>${r.q}</td><td class="${clsOf(r.eps)}">${r.eps}</td><td>${r.gross ?? "—"}%</td><td>${r.op ?? "—"}%</td><td>${r.net ?? "—"}%</td></tr>`).join("")}</tbody></table>` : "");
-  } else if (W.dtab === "info") sxRender();
+      + (rev.length ? `<table class="tbl"><thead><tr><th>月營收</th><th>營收（億）</th><th>年增</th><th>月增</th></tr></thead><tbody>${rev.map(r => `<tr><td>${r.ym.replace("-", "/")}</td><td>${(r.rev / 1e8).toFixed(2)}</td><td class="${clsOf(r.yoy)}">${r.yoy != null ? (r.yoy > 0 ? "+" : "") + r.yoy + "%" : "—"}</td><td class="${clsOf(r.mom)}">${r.mom != null ? (r.mom > 0 ? "+" : "") + r.mom + "%" : "—"}</td></tr>`).join("")}</tbody></table>` : "");
+  } else if (isSxSub()) sxRender();
   postHeight();
 }
 
@@ -3015,7 +3037,7 @@ async function loadCo() {
   if (W.co?.code === c) return renderCo();
   W.co = { code: c, loading: true }; renderCo();
   try { const j = await getJ(`/api/company?code=${c}`); if (W.sel === c) W.co = { ...j, code: c }; } catch (e) { if (W.sel === c) W.co = { code: c, err: e.message }; }
-  if (W.sel === c) { renderCo(); if (W.dtab === "info") sxRender(); }
+  if (W.sel === c) { renderCo(); if (isSxSub()) sxRender(); }
 }
 const yi = v => (v == null ? "—" : Math.abs(v) >= 1e8 ? (v / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 }) + " 億" : Math.abs(v) >= 1e4 ? (v / 1e4).toLocaleString(undefined, { maximumFractionDigits: 0 }) + " 萬" : v.toLocaleString());
 const yiC = v => (v == null ? "—" : (v / 1e8).toLocaleString(undefined, { maximumFractionDigits: Math.abs(v) >= 1e10 ? 0 : 1 })); // 表格裡的「億元」不帶單位，節省寬度
@@ -3050,14 +3072,11 @@ function renderCo() {
     const eq = b && b0 ? ((b.parentEq ?? b.equity) + (b0.parentEq ?? b0.equity)) / 2 : b?.parentEq ?? b?.equity, as = b && b0 ? (b.assets + b0.assets) / 2 : b?.assets;
     return { q: x.q, eps: x.eps, epsY: x.epsY, roe: ni && eq ? +(ni / eq * 100).toFixed(2) : null, roa: niAll && as ? +(niAll / as * 100).toFixed(2) : null, gm: x.gm, nm: x.nm, cr: b?.cr ?? null, er: b?.er ?? null, fcf: f?.fcf ?? null, fcfY: f?.fcfY ?? null }; });
   let h = "";
-  // 概況
-  const P = J.profile;
-  if (P) h += `<section class="cosec"><h3>概況</h3><dl class="codl">${[["公司名稱", P.name], ["董事長", P.chairman], ["總經理", P.ceo], ["發言人", P.spokesman], ["成立日期", P.founded?.replace(/-/g, "/")], [J.code.length === 4 && W.stocks?.find(x => x[0] === J.code)?.[2] === "上櫃" ? "上櫃日期" : "上市日期", P.listed?.replace(/-/g, "/")], ["實收資本額", P.capital ? yi(P.capital) + "元" : null], ["產業", W.stocks?.find(x => x[0] === J.code)?.[3]], ["地址", P.address]].filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}${P.web ? `<dt>網址</dt><dd><a href="${/^https?:/.test(P.web) ? esc(P.web) : "https://" + esc(P.web)}" target="_blank" rel="noopener">${esc(P.web)}</a></dd>` : ""}</dl></section>`;
   // 最新一季
   const L = inc.at(-1);
   if (L) h += `<section class="cosec"><h3>${L.q.replace("Q", " 年 Q")} 單季報</h3><div class="cokv">${[["營收", yi(L.rev), L.revY], ["營業利益", yi(L.op), L.opY], ["稅後淨利", yi(L.nip ?? L.ni), L.nipY ?? L.niY], ["EPS", L.eps != null ? L.eps.toFixed(2) + " 元" : "—", L.epsY]].map(([k, v, y]) => `<div><span>${k}</span><b>${v}</b><small class="${cls(y)}">年增 ${pctS(y)}</small></div>`).join("")}</div></section>`;
   // 財務報表
-  h += `<section class="cosec"><h3>財務報表 <span class="note">單季</span></h3>${chipsBar("fin", [["inc", "利潤表"], ["bal", "資產負債表"], ["cash", "現金流量表"], ["ratio", "財務指標"]], V.fin)}`;
+  h += `<section class="cosec"><h3>三大報表與財務指標 <span class="note">單季</span></h3>${chipsBar("fin", [["inc", "利潤表"], ["bal", "資產負債表"], ["cash", "現金流量表"], ["ratio", "財務指標"]], V.fin)}`;
   if (V.fin === "inc") { const k = V.inc, map = { rev: ["營收", "revY"], op: ["營業利益", "opY"], ni: ["淨利", "niY"], nip: ["歸屬母公司淨利", "nipY"] }; h += chipsBar("inc", Object.entries(map).map(([a, [t]]) => [a, t]), k) + coChart(inc, { bars: [k], line: map[k][1] }) + `<p class="cleg"><i style="background:var(--accent)"></i>${map[k][0]}（億元）　<i style="background:#f0883e"></i>年增率</p>`; }
   else if (V.fin === "bal") h += coChart(bal, { bars: ["assets", "liab"], line: "debt", fmtL: v => (v == null ? "—" : v.toFixed(2) + "%") }) + `<p class="cleg"><i style="background:var(--accent)"></i>總資產（億元）　<i style="background:var(--s3)"></i>總負債（億元）　<i style="background:#f0883e"></i>負債比率</p>`;
   else if (V.fin === "cash") { const k = V.cash, map = { ocf: ["營業活動現金流", "ocfY"], icf: ["投資活動現金流", "icfY"], fin: ["籌資活動現金流", "finY"], fcf: ["自由現金流", "fcfY"] }; h += chipsBar("cash", Object.entries(map).map(([a, [t]]) => [a, t]), k) + coChart(cash, { bars: [k], line: map[k][1] }) + `<p class="cleg"><i style="background:var(--accent)"></i>${map[k][0]}（億元）　<i style="background:#f0883e"></i>年增率${k === "fcf" ? "　（自由現金流＝營業現金流－資本支出）" : ""}</p>`; }
@@ -3065,21 +3084,28 @@ function renderCo() {
     const m = map[k], pf = v => (v == null ? "—" : v.toFixed(2) + "%");
     h += chipsBar("ratio", Object.entries(map).map(([a, [t]]) => [a, t.replace(/（.*）/, "")]), k) + coChart(ratios, { bars: [k], line: m[1], fmtB: m[2] || pf }) + `<p class="cleg"><i style="background:var(--accent)"></i>${m[0]}${m[1] ? `　<i style="background:#f0883e"></i>${m[3]}` : ""}</p>`; }
   h += `</section>`;
-  // 股利
+  box.innerHTML = h || `<p class="note" style="padding:12px">沒有公司資料。</p>`;
+  $("#coNote").textContent = `${J.source || ""}${J.errors?.length ? `・部分資料暫時拿不到（${J.errors.length} 項）` : ""}`;
+  postHeight();
+}
+// 股利（財務→股利）、股權分散（籌碼→大戶與股權）：原本在「公司」分頁，搬到各自的子頁，資訊只出現一次
+function coDivHtml(J) {
+  const inc = J.income || [], q = W.detailQ || W.quotes.get(J.code), px = q?.price; let h = "";
   const D = J.dividend || [];
   if (D.length) { const last = D.at(-1), epsY = y => { const r = inc.filter(x => x.q.startsWith(y + "Q")); return r.length === 4 ? r.reduce((s, x) => s + x.eps, 0) : null; }, payout = epsY(last.y) ? last.cash / epsY(last.y) * 100 : null;
     const rows = D.slice(-6).map(x => ({ q: String(x.y), label: `${x.y}`, cash: x.cash, stock: x.stock || null, yld: px ? +(x.cash / px * 100).toFixed(2) : null }));
     h += `<section class="cosec"><h3>分紅派息</h3>${last.ex ? `<p class="cobar">最近除息：${last.ex.replace(/-/g, "/")}・${last.y} 年度現金股利 ${last.cash} 元${last.stock ? `、股票股利 ${last.stock} 元` : ""}${last.pay ? `・發放日 ${last.pay.replace(/-/g, "/")}` : ""}</p>` : ""}
       <div class="cokv three"><div><span>現金殖利率</span><b>${px ? (last.cash / px * 100).toFixed(2) + "%" : "—"}</b><small>以現價計</small></div><div><span>盈餘配發率</span><b>${payout ? payout.toFixed(1) + "%" : "—"}</b><small>${last.y} 年度</small></div><div><span>配息頻率</span><b>${last.n >= 4 ? "每季" : last.n >= 2 ? "每半年" : "每年"}</b><small>${last.n || 1} 次／年</small></div></div>
       ${coChart(rows, { bars: ["cash", ...(rows.some(r => r.stock) ? ["stock"] : [])], line: "yld", fmtB: v => (v == null ? "—" : (+v).toFixed(2)), fmtL: v => (v == null ? "—" : v.toFixed(2) + "%") })}<p class="cleg"><i style="background:var(--accent)"></i>現金股利（元）${rows.some(r => r.stock) ? `　<i style="background:var(--s3)"></i>股票股利（元）` : ""}　<i style="background:#f0883e"></i>以現價計算的殖利率</p></section>`; }
-  // 股權分散
+  return h;
+}
+function coHoldHtml(J) {
+  let h = "";
   const Hd = J.holders || [];
   if (Hd.length) { const a = Hd.at(-1), b = Hd[Math.max(0, Hd.length - 5)], vs = Hd.map(x => x.b1000), mx = Math.max(...vs), mn = Math.min(...vs), Wv = 600, Hv = 120, X = i => 10 + i / Math.max(1, Hd.length - 1) * (Wv - 20), Y = v => 10 + (mx - v) / ((mx - mn) || 1) * (Hv - 20);
     h += `<section class="cosec"><h3>股權分散 <span class="note">集保，每週</span></h3><div class="cokv three"><div><span>千張大戶持股</span><b>${a.b1000.toFixed(2)}%</b><small class="${cls(a.b1000 - b.b1000)}">近 4 週 ${a.b1000 - b.b1000 >= 0 ? "+" : ""}${(a.b1000 - b.b1000).toFixed(2)}%</small></div><div><span>400 張以上</span><b>${a.b400.toFixed(2)}%</b><small class="${cls(a.b400 - b.b400)}">近 4 週 ${a.b400 - b.b400 >= 0 ? "+" : ""}${(a.b400 - b.b400).toFixed(2)}%</small></div><div><span>千張大戶人數</span><b>${a.people1000.toLocaleString()}</b><small>${a.d.replace(/-/g, "/")}</small></div></div>
       <svg class="cochart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="千張大戶持股比例"><polyline points="${Hd.map((x, i) => `${X(i).toFixed(1)},${Y(x.b1000).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><p class="cleg"><i style="background:var(--accent)"></i>千張大戶持股比例（${Hd[0].d.slice(5).replace("-", "/")}～${a.d.slice(5).replace("-", "/")}）</p></section>`; }
-  box.innerHTML = h || `<p class="note" style="padding:12px">沒有公司資料。</p>`;
-  $("#coNote").textContent = `${J.source || ""}${J.errors?.length ? `・部分資料暫時拿不到（${J.errors.length} 項）` : ""}`;
-  postHeight();
+  return h;
 }
 $("#coBox").addEventListener("click", e => { const b = e.target.closest("[data-co]"); if (!b) return; const [k, v] = b.dataset.co.split(":"); W.coView = { ...W.coView, [k]: v }; store.set("watch:cov", W.coView); renderCo(); });
 
