@@ -142,7 +142,7 @@ function vrCalc(D, n = 26) {
 function breadthCalc(D, n = 10) {
   const N = D.length, adr = Array(N).fill(null), obos = Array(N).fill(null), adl = Array(N).fill(null); let cum = 0, any = false;
   for (let i = 0; i < N; i++) {
-    const x = D[i]; if (x.adv == null || x.dec == null) { cum = null; continue; } any = true; cum = (cum ?? 0) + x.adv - x.dec; adl[i] = cum;
+    const x = D[i]; if (x.adv == null || x.dec == null) continue; any = true; cum += x.adv - x.dec; // 缺資料的日子跳過，累計不歸零 adl[i] = cum;
     let a = 0, d = 0, ok = i >= n - 1; for (let k = i - n + 1; ok && k <= i; k++) { if (D[k].adv == null) { ok = false; break; } a += D[k].adv; d += D[k].dec; }
     if (ok) { adr[i] = d ? a / d : null; obos[i] = a - d; }
   }
@@ -178,6 +178,11 @@ const SUBX = {
   cci: { label: "CCI", kind: "cci", make: D => { const c = cciCalc(D); return { title: "CCI 20", lines: [c], names: ["CCI"], levels: [100, 0, -100], sigs: lvlSigs(c, -100, 100, "CCI") }; } },
   mfi: { label: "MFI", kind: "mfi", make: D => { const m = mfiCalc(D); return { title: "MFI 14（資金流量）", lines: [m], names: ["MFI"], levels: [80, 20], range: [0, 100], sigs: lvlSigs(m, 20, 80, "MFI") }; } },
   trix: { label: "TRIX", kind: "trix", make: (D, I) => { const t = trixCalc(I.c), m = smaN(t, 9); return { title: "TRIX 12・訊號 9", lines: [t, m], names: ["TRIX", "MA9"], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: crossHold(t, m, 2, "TRIX上穿訊號線", "TRIX跌破訊號線") }; } },
+  srsi: { label: "StochRSI", kind: "srsi", make: (D, I) => { const { K, D: d } = srsiCalc(I.c); return { title: "StochRSI 14・14・3・3", lines: [K, d], names: ["K", "D"], levels: [80, 20], range: [0, 100], sigs: crossSigs(K, d, "StochRSI低檔金叉", "StochRSI高檔死叉", (s, i) => (s === "buy" ? d[i] < 20 : d[i] > 80)) }; } },
+  roc: { label: "ROC", kind: "roc", make: (D, I) => { const r = rocCalc(I.c), m = smaN(r, 6); return { title: "ROC 12・MA 6（%）", lines: [r, m], names: ["ROC", "MA6"], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(2) + "%"), sigs: crossHold(r, r.map(v => (v == null ? null : 0)), 2, "ROC轉正", "ROC轉負") }; } },
+  dma: { label: "DMA", kind: "dma", make: (D, I) => { const { dif, ama } = dmaCalc(I.c); return { title: "DMA 10・50・10（平行線差）", lines: [dif, ama], names: ["DIF", "AMA"], levels: [0], sigs: crossHold(dif, ama, 2, "DMA上穿AMA", "DMA跌破AMA") }; } },
+  emv: { label: "EMV", kind: "emv", make: D => { const { emv, ma } = emvCalc(D); return { title: "EMV 14・MA 9（簡易波動）", lines: [emv, ma], names: ["EMV", "MA9"], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: crossHold(emv, emv.map(v => (v == null ? null : 0)), 2, "EMV轉正", "EMV轉負") }; } },
+  tower: { label: "寶塔線", kind: "tower", make: D => { const { boxes, state } = towerCalc(D); return { title: "寶塔線（三線翻轉）", lines: [], names: [], boxes, tower: state, fmt: fmtP, sigs: boxes.map((x, i) => (x && x.flip ? { i, side: x.up ? "buy" : "sell", label: x.up ? "寶塔翻紅" : "寶塔翻綠", v: x.up ? x.t : x.b } : null)).filter(Boolean) }; } },
   tapi: { label: "TAPI", kind: "tapi", index: true, make: D => { const t = tapiCalc(D), m = smaN(t, 10); return { title: "TAPI 每點成交值（億元）・MA 10", lines: [t, m], names: ["TAPI", "MA10"], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: [] }; } },
 };
 // 字串副圖 → 自訂副圖（同一組資料只算一次）；做不出來（例如個股沒有漲跌家數）時給一個只有標題的空副圖
@@ -209,19 +214,43 @@ function sarCalc(D, step = 0.02, max = 0.2) {
   let up = D[1].c >= D[0].c, af = step, ep = up ? Math.max(D[0].h, D[1].h) : Math.min(D[0].l, D[1].l), sar = up ? Math.min(D[0].l, D[1].l) : Math.max(D[0].h, D[1].h);
   for (let i = 2; i < N; i++) {
     sar = sar + af * (ep - sar);
-    if (up) { sar = Math.min(sar, D[i - 1].l, D[i - 2].l); if (D[i].l < sar) { up = false; sar = ep; ep = D[i].l; af = step; } else if (D[i].h > ep) { ep = D[i].h; af = Math.min(max, af + step); } }
-    else { sar = Math.max(sar, D[i - 1].h, D[i - 2].h); if (D[i].h > sar) { up = true; sar = ep; ep = D[i].h; af = step; } else if (D[i].l < ep) { ep = D[i].l; af = Math.min(max, af + step); } }
+    if (up) { sar = Math.min(sar, D[i - 1].l, D[i - 2].l); if (D[i].l < sar) { up = false; sar = Math.max(ep, D[i].h, D[i - 1].h); ep = D[i].l; af = step; } else if (D[i].h > ep) { ep = D[i].h; af = Math.min(max, af + step); } }
+    else { sar = Math.max(sar, D[i - 1].h, D[i - 2].h); if (D[i].h > sar) { up = true; sar = Math.min(ep, D[i].l, D[i - 1].l); ep = D[i].h; af = step; } else if (D[i].l < ep) { ep = D[i].l; af = Math.min(max, af + step); } }
     o[i] = sar; dir[i] = up ? 1 : -1;
   }
   return { sar: o, dir };
 }
-// 唐奇安通道（20）：最近 n 根的最高、最低價（海龜交易法的突破通道）
-function donchCalc(D, n = 20) { const up = D.map((_, i) => (i >= n - 1 ? Math.max(...D.slice(i - n + 1, i + 1).map(x => x.h)) : null)), lo = D.map((_, i) => (i >= n - 1 ? Math.min(...D.slice(i - n + 1, i + 1).map(x => x.l)) : null)); return { up, lo, mid: up.map((v, i) => (v == null ? null : (v + lo[i]) / 2)) }; }
+// 唐奇安通道（20）：「前」n 根（不含當天）的最高、最低價（海龜交易法的突破通道）；收盤站到上緣外就是創 n 日新高
+function donchCalc(D, n = 20) { const up = D.map((_, i) => (i >= n ? Math.max(...D.slice(i - n, i).map(x => x.h)) : null)), lo = D.map((_, i) => (i >= n ? Math.min(...D.slice(i - n, i).map(x => x.l)) : null)); return { up, lo, mid: up.map((v, i) => (v == null ? null : (v + lo[i]) / 2)) }; }
 // 一目均衡表（9、26、52）：轉換線、基準線、先行帶 A／B（往後畫 26 根，圖上只畫到最後一根）、遲行線（收盤往前畫 26 根）
 function ichiCalc(D) { const mid = (i, n) => { if (i < n - 1) return null; let h = -Infinity, l = Infinity; for (let k = i - n + 1; k <= i; k++) { h = Math.max(h, D[k].h); l = Math.min(l, D[k].l); } return (h + l) / 2; };
   const N = D.length, ten = D.map((_, i) => mid(i, 9)), kij = D.map((_, i) => mid(i, 26)), A = Array(N).fill(null), B = Array(N).fill(null), chi = Array(N).fill(null);
   for (let i = 0; i < N; i++) { const j = i - 26; if (j >= 0) { A[i] = ten[j] != null && kij[j] != null ? (ten[j] + kij[j]) / 2 : null; B[i] = mid(j, 52); } if (i + 26 < N) chi[i] = D[i + 26].c; }
   return { ten, kij, A, B, chi }; }
+// 肯特納通道（Raschke 版）：中線 20 日 EMA，上下各 2 倍 ATR（10）；和布林通道一樣是通道，但寬度跟著 ATR（真實波幅）走，比較平滑
+function keltCalc(D, n = 20, m = 2, an = 10) { const mid = ema(D.map(x => x.c), n), a = atrCalc(D, an); return { mid: mid.map((v, i) => (a[i] == null ? null : v)), up: mid.map((v, i) => (a[i] == null ? null : v + m * a[i])), lo: mid.map((v, i) => (a[i] == null ? null : v - m * a[i])) }; }
+// StochRSI（14、14、3、3）：把 RSI 再做一次隨機指標（RSI 在最近 14 天的高低區間裡的位置），0～100；K＝3 日平均，D＝K 的 3 日平均
+function srsiCalc(c, n = 14, m = 14, k = 3, d = 3) { const r = rsiCalc(c, n), raw = r.map((v, i) => { if (v == null || i < n + m - 1) return null; const w = r.slice(i - m + 1, i + 1), hi = Math.max(...w), lo = Math.min(...w); return hi === lo ? 50 : ((v - lo) / (hi - lo)) * 100; }), K = smaN(raw, k); return { K, D: smaN(K, d) }; }
+// ROC 變動率（12）：今天收盤比 n 天前漲跌幾 %
+function rocCalc(c, n = 12) { return c.map((v, i) => (i >= n && c[i - n] ? (v / c[i - n] - 1) * 100 : null)); }
+// DMA 平行線差（10、50、10）：短均線 − 長均線（DIF），AMA 是 DIF 的 10 日平均
+function dmaCalc(c, s = 10, l = 50, m = 10) { const a = sma(c, s), b = sma(c, l), dif = c.map((_, i) => (a[i] == null || b[i] == null ? null : a[i] - b[i])); return { dif, ama: smaN(dif, m) }; }
+// EMV 簡易波動指標（14、9，台股軟體算法）：中價變動 %×（高低差 ÷ 平均高低差）×（平均量 ÷ 當日量），再取 14 日平均；用很少的量就能推動價格往上＝正值大
+function emvCalc(D, n = 14, m = 9) { const N = D.length, hl = D.map(x => x.h - x.l), mhl = sma(hl, n), mv = sma(D.map(x => x.v || 0), n);
+  const raw = D.map((x, i) => { if (!i || mhl[i] == null || !mhl[i] || !x.v) return null; const p = D[i - 1].h + D[i - 1].l; return p ? (100 * (x.h + x.l - p) / (x.h + x.l)) * (mv[i] / x.v) * (hl[i] / mhl[i]) : null; });
+  const emv = smaN(raw, n); return { emv, ma: smaN(emv, m) }; }
+// 寶塔線（三線翻轉）：收盤創新高續畫紅塔、創新低續畫綠塔；要翻色必須突破（跌破）最近三座塔的最高（最低）點，盤整時不翻色
+// boxes[i]：當天新畫的塔 { t, b, up, flip }，沒有新塔是 null；state[i]：當天為止最後一座塔
+function towerCalc(D, k = 3) { const c = D.map(x => x.c), N = c.length, boxes = Array(N).fill(null), state = Array(N).fill(null), T = []; let dir = 0;
+  const add = (i, x) => { T.push(x); boxes[i] = x; };
+  for (let i = 1; i < N; i++) {
+    if (!T.length) { if (c[i] !== c[0]) { dir = c[i] > c[0] ? 1 : -1; add(i, { t: Math.max(c[0], c[i]), b: Math.min(c[0], c[i]), up: dir > 0, flip: false }); } state[i] = T[T.length - 1] || null; continue; }
+    const last = T[T.length - 1], rec = T.slice(-k);
+    if (dir > 0) { if (c[i] > last.t) add(i, { t: c[i], b: last.t, up: true, flip: false }); else if (c[i] < Math.min(...rec.map(x => x.b))) { add(i, { t: last.b, b: c[i], up: false, flip: true }); dir = -1; } }
+    else { if (c[i] < last.b) add(i, { t: last.b, b: c[i], up: false, flip: false }); else if (c[i] > Math.max(...rec.map(x => x.t))) { add(i, { t: c[i], b: last.t, up: true, flip: true }); dir = 1; } }
+    state[i] = T[T.length - 1];
+  }
+  return { boxes, state }; }
 
 /* ================= 圖表 ================= */
 /* ---------- 技術指標開關 ----------
@@ -240,14 +269,15 @@ function indicatorBar(host, key, groups, defaults, onChange) {
   render();
   return { has: id => state.has(id), get state() { return state; }, set(id, on) { on ? state.add(id) : state.delete(id); render(); }, setGroups(g) { groups = g; render(); } };
 }
-const MAIN_ITEMS = [{ id: "ma5", label: "MA5", color: "--s1" }, { id: "ma10", label: "MA10", color: "--ma10" }, { id: "ma20", label: "MA20", color: "--s2" }, { id: "ma60", label: "MA60", color: "--s3" }, { id: "boll", label: "布林" }, { id: "vwap", label: "VWAP", color: "--vwap" }, { id: "vp", label: "籌碼分佈" }, { id: "sar", label: "SAR" }, { id: "donch", label: "唐奇安通道" }, { id: "ichi", label: "一目均衡表" }];
+const MAIN_ITEMS = [{ id: "ma5", label: "MA5", color: "--s1" }, { id: "ma10", label: "MA10", color: "--ma10" }, { id: "ma20", label: "MA20", color: "--s2" }, { id: "ma60", label: "MA60", color: "--s3" }, { id: "boll", label: "布林", color: "--accent" }, { id: "vwap", label: "VWAP", color: "--vwap" }, { id: "vp", label: "籌碼分佈" }, { id: "sar", label: "SAR", color: "--up" }, { id: "donch", label: "唐奇安通道", color: "--ma10" }, { id: "kelt", label: "肯特納通道", color: "--s2" }, { id: "ichi", label: "一目均衡表", color: "--s3" }];
 // 主圖選項：均線、布林、VWAP、籌碼分佈（Volume Profile）
-const mainOpts = bar => ({ ma: maFrom(bar), boll: bar.has("boll"), vwap: bar.has("vwap"), vp: bar.has("vp"), mainX: ["sar", "donch", "ichi"].filter(id => bar.has(id)) });
+const mainOpts = bar => ({ ma: maFrom(bar), boll: bar.has("boll"), vwap: bar.has("vwap"), vp: bar.has("vp"), mainX: ["sar", "donch", "kelt", "ichi"].filter(id => bar.has(id)) });
 // 主圖延伸疊加：SAR（點）、唐奇安通道、一目均衡表（線＋雲帶）；同一組資料只算一次
 function mainXCalc(id, D, I) { const m = (I._mx ||= {}); if (m[id]) return m[id];
-  if (id === "sar") { const { sar, dir } = sarCalc(D); return (m[id] = { dots: sar.map((p, i) => (p == null ? null : { p, up: dir[i] > 0 })), vals: [["SAR", sar]] }); }
-  if (id === "donch") { const d = donchCalc(D); return (m[id] = { lines: [[d.up, "s3", 1.1], [d.lo, "s3", 1.1], [d.mid, "muted", 0.8, [3, 3]]], vals: [["通道上", d.up], ["通道下", d.lo]] }); }
-  const k = ichiCalc(D); return (m[id] = { cloud: [k.A, k.B], lines: [[k.ten, "s1", 1], [k.kij, "s3", 1.2], [k.chi, "muted", 0.9, [2, 3], 26]], vals: [["轉換", k.ten], ["基準", k.kij], ["先行A", k.A], ["先行B", k.B]] }); }
+  if (id === "sar") { const { sar, dir } = sarCalc(D); return (m[id] = { dots: sar.map((p, i) => (p == null ? null : { p, up: dir[i] > 0 })), vals: [["SAR", sar, "sar"]] }); }
+  if (id === "donch") { const d = donchCalc(D); return (m[id] = { lines: [[d.up, "ma10", 1.4], [d.lo, "ma10", 1.4], [d.mid, "ma10", 0.9, [3, 3]]], vals: [["通道上", d.up, "ma10"], ["通道下", d.lo, "ma10"]] }); }
+  if (id === "kelt") { const k = keltCalc(D); return (m[id] = { lines: [[k.up, "s2", 1.3], [k.lo, "s2", 1.3], [k.mid, "s2", 0.9, [4, 3]]], vals: [["肯特納上", k.up, "s2"], ["肯特納下", k.lo, "s2"]] }); }
+  const k = ichiCalc(D); return (m[id] = { cloud: [k.A, k.B], lines: [[k.ten, "s1", 1.3], [k.kij, "s3", 1.5], [k.chi, "s2", 1, [2, 3], 26]], vals: [["轉換", k.ten, "s1"], ["基準", k.kij, "s3"], ["先行A", k.A, "up"], ["先行B", k.B, "down"]] }); }
 const SUB_ITEMS = [{ id: "vol", label: "成交量" }, { id: "kd", label: "KD" }, { id: "rsi", label: "RSI" }, { id: "macd", label: "MACD" }, { id: "wr", label: "威廉" }, ...SUBX_ITEMS];
 const maFrom = bar => [5, 10, 20, 60].filter(p => bar.has("ma" + p));
 const subsFrom = (bar, ids = ["kd", "rsi", "macd", "wr", "inout", ...Object.keys(SUBX)]) => ids.filter(id => bar.has(id));
@@ -418,12 +448,12 @@ class Chart {
   static prefs = { h: [1, 1.5, 2, 2.5].includes(+store.get("chartH", 1)) ? +store.get("chartH", 1) : 1, log: !!store.get("chartLog", false),
     sh: [1, 1.5, 2].includes(+store.get("chartSubH", 1)) ? +store.get("chartSubH", 1) : 1, fit: !!store.get("chartSubFit", false), sig: store.get("chartSubSig", true) !== false,
     sigStrong: store.get("chartSigStrong", true) !== false, mk: store.get("chartMk", "full") === "icon" ? "icon" : "full", kt: ["candle", "hollow", "ohlc", "line", "area"].includes(store.get("chartKt", "candle")) ? store.get("chartKt", "candle") : "candle",
-    sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, mtm: true, dmi: true, psy: true, arbr: true, obv: true, vr: true, adr: true, obos: true, adl: true, bias: true, cci: true, mfi: true, trix: true, ...(store.get("chartSigKinds", null) || {}) },
+    sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, mtm: true, dmi: true, psy: true, arbr: true, obv: true, vr: true, adr: true, obos: true, adl: true, bias: true, cci: true, mfi: true, trix: true, srsi: true, roc: true, dma: true, emv: true, tower: true, ...(store.get("chartSigKinds", null) || {}) },
     // 「只看重點」每個副圖各自開關（舊版是全部共用一個 sigStrong）
     sigStrongK: { kd: store.get("chartSigStrong", true) !== false, macd: store.get("chartSigStrong", true) !== false, ...(store.get("chartSigStrongK", null) || {}) } };
   // 某個副圖要不要標訊號：「金叉死叉」或「只看重點」任一個開著就標；「只看重點」開著時只標重點交叉
   static sigShow(k) { const P = Chart.prefs; return P.sig && (P.sigKinds[k] !== false || !!P.sigStrongK[k]); }
-  static SIG_KINDS = [["kd", "KD 交叉"], ["macd", "MACD 交叉"], ["rsi", "RSI 30／70"], ["wr", "威廉 −80／−20"], ["mtm", "MTM 零軸"], ["dmi", "DMI 交叉"], ["psy", "PSY 25／75"], ["arbr", "AR 60／150"], ["obv", "OBV 均線"], ["vr", "VR 70／450"], ["adr", "ADR 0.5／1.5"], ["obos", "OBOS 零軸"], ["adl", "ADL 均線"], ["bias", "乖離率 ±5%"], ["cci", "CCI ±100"], ["mfi", "MFI 20／80"], ["trix", "TRIX 交叉"], ["custom", "截圖副圖交叉"]];
+  static SIG_KINDS = [["kd", "KD 交叉"], ["macd", "MACD 交叉"], ["rsi", "RSI 30／70"], ["wr", "威廉 −80／−20"], ["mtm", "MTM 零軸"], ["dmi", "DMI 交叉"], ["psy", "PSY 25／75"], ["arbr", "AR 60／150"], ["obv", "OBV 均線"], ["vr", "VR 70／450"], ["adr", "ADR 0.5／1.5"], ["obos", "OBOS 零軸"], ["adl", "ADL 均線"], ["bias", "乖離率 ±5%"], ["cci", "CCI ±100"], ["mfi", "MFI 20／80"], ["trix", "TRIX 交叉"], ["srsi", "StochRSI 交叉"], ["roc", "ROC 零軸"], ["dma", "DMA 交叉"], ["emv", "EMV 零軸"], ["tower", "寶塔翻色"], ["custom", "截圖副圖交叉"]];
   // 高度、對數座標、副圖貼合是全站共用的偏好：改了以後所有圖表一起重畫
   static setPref(k, v) { Chart.prefs[k] = v; store.set(Chart.PREF_KEYS[k], v); Chart.all.forEach(c => { c.syncBar(); c.draw(); if (!c.pop.hidden) c.renderPop(); }); }
   paneZoom(key) { return this.pz[key] || { z: 1, off: 0 }; }
@@ -492,7 +522,7 @@ class Chart {
     const H = mainH + gap + volH + subs.length * (gap + subH) + axisH + 8;
     if (this.canvas.width !== Math.round(W * dpr) || this.canvas.height !== Math.round(H * dpr)) { this.canvas.width = Math.round(W * dpr); this.canvas.height = Math.round(H * dpr); this.canvas.style.height = H + "px"; } // 尺寸沒變就不重設（重設畫布很慢，拖曳時會閃）
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-    const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface"), vwap: cssVar("--vwap") || "#f472b6" };
+    const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface"), vwap: cssVar("--vwap") || "#f472b6", ma10: cssVar("--ma10") || "#5b9bff" };
     const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R;
     const { a: va, b: vb } = this.range, { fa, w: vwid } = this.vw, bw = pw / vwid, inV = i => i >= va - 1 && i <= vb + 1;
     this.geo = { L, bw, a: va, fa, pw, H, top0: 8, mainH };
@@ -599,8 +629,8 @@ class Chart {
           ctx.fillStyle = A[i] >= B[i] ? col.up : col.down; ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.moveTo(X(i - 1), Y(A[i - 1])); ctx.lineTo(X(i), Y(A[i])); ctx.lineTo(X(i), Y(B[i])); ctx.lineTo(X(i - 1), Y(B[i - 1])); ctx.closePath(); ctx.fill(); }
         ctx.globalAlpha = 1; this.line(A, vis, X, Y, col.up, 0.8, 0.6); this.line(B, vis, X, Y, col.down, 0.8, 0.6); }
       // ahead：這條線用到之後 ahead 根的資料（遲行線），只畫到看得到的範圍，判讀挑戰不會洩漏答案
-      (M.lines || []).forEach(([a, c, w, dash, ahead]) => this.line(ahead ? a.map((v, i) => (i + ahead < vis ? v : null)) : a, vis, X, Y, col[c] || col.accent, w, 0.85, dash));
-      if (M.dots) { const r = Math.max(1.2, Math.min(2.6, bw * 0.18)); for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) { const d = M.dots[i]; if (!d) continue; ctx.fillStyle = d.up ? col.up : col.down; ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.arc(X(i), Y(d.p), r, 0, 7); ctx.fill(); } ctx.globalAlpha = 1; }
+      (M.lines || []).forEach(([a, c, w, dash, ahead]) => this.line(ahead ? a.map((v, i) => (i + ahead < vis ? v : null)) : a, vis, X, Y, col[c] || col.accent, w, 0.95, dash));
+      if (M.dots) { const r = Math.max(1.7, Math.min(3, bw * 0.22)); for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) { const d = M.dots[i]; if (!d) continue; ctx.fillStyle = d.up ? col.up : col.down; ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(X(i), Y(d.p), r, 0, 7); ctx.fill(); } ctx.globalAlpha = 1; }
       ctx.restore();
     }
     // 支撐壓力
@@ -795,12 +825,13 @@ class Chart {
       } else if (sub === "custom") {
         // 截圖讀出的副圖：值域依資料自動決定
         // 值域用畫面上看得到的那一段（OBV、ADL 這種累計值，整段歷史的範圍會把最近的線壓平）
-        const C = C0, win = a => (a || []).slice(Math.max(0, va), Math.min(vis, vb + 1)), vals = [...C.lines.flatMap(win), ...win(C.bars)].filter(v => v != null);
+        const C = C0, win = a => (a || []).slice(Math.max(0, va), Math.min(vis, vb + 1)), vals = [...C.lines.flatMap(win), ...win(C.bars), ...win(C.boxes).flatMap(x => (x ? [x.t, x.b] : []))].filter(v => v != null);
         let lo = C.range ? C.range[0] : Math.min(...vals, C.bars ? 0 : Infinity), hi = C.range ? C.range[1] : Math.max(...vals, C.bars ? 0 : -Infinity);
         if (!isFinite(lo) || !isFinite(hi)) { lo = 0; hi = 1; } if (hi === lo) { hi += 1; lo -= 1; }
         const sy = Z(v => subTop + 4 + (hi - v) / (hi - lo) * (subH - 8), [...C.lines, ...(C.bars ? [C.bars] : [])]);
         (C.levels || []).forEach(v => lvl(v, sy));
         if (C.bars) { ctx.globalAlpha = 0.55; C.bars.forEach((v, i) => { if (i >= vis || !v || !inV(i)) return; ctx.fillStyle = C.barColor ? col[C.barColor] : v >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }); ctx.globalAlpha = 1; if (C.zeroLine) lvl(0, sy); }
+        if (C.boxes) for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) { const x = C.boxes[i]; if (!x) continue; const y0 = sy(x.t), y1 = sy(x.b), w = Math.max(2, Math.round(cw)); ctx.fillStyle = x.up ? col.up : col.down; ctx.globalAlpha = x.flip ? 0.95 : 0.7; ctx.fillRect(Math.round(X(i) - w / 2), Math.min(y0, y1), w, Math.max(1, Math.abs(y1 - y0))); ctx.globalAlpha = 1; }
         C.lines.forEach((a, k) => this.line(a, vis, X, sy, [col.s1, col.s3, col.s2][k % 3], 1.5));
         // 第二組線（例如累計買超、融資餘額）用自己的刻度，數值標在右側
         if (C.lines2) {
@@ -912,7 +943,7 @@ class Chart {
     if (o.vwap) parts.push(`<span style="color:var(--vwap)"><b style="color:inherit">VWAP</b>${fmtP(I.vwap[i])}</span>`);
     if (o.vp && this.vpData) { const V = this.vpData; parts.push(`<span><b>籌碼</b>獲利 ${(V.profit * 100).toFixed(1)}%</span><span style="color:#f0883e"><b style="color:inherit">壓力</b>${fmtP(V.pre)}</span><span style="color:var(--muted)"><b style="color:inherit">均成本</b>${fmtP(V.avg)}</span><span style="color:#3b82f6"><b style="color:inherit">支撐</b>${fmtP(V.sup)}</span>`); }
     if (o.boll) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
-    for (const id of o.mainX || []) mainXCalc(id, D, I).vals.forEach(([n, a]) => a[i] != null && parts.push(`<span><b>${n}</b>${fmtP(a[i])}</span>`));
+    for (const id of o.mainX || []) mainXCalc(id, D, I).vals.forEach(([n, a, c]) => a[i] != null && parts.push(`<span style="color:${c === "sar" ? `var(${mainXCalc(id, D, I).dots[i]?.up ? "--up" : "--down"})` : `var(--${c})`}"><b style="color:inherit">${n}</b>${fmtP(a[i])}</span>`));
     (this.subsN || []).forEach(S => {
       const sub = typeof S === "string" ? S : "custom", C0 = typeof S === "string" ? null : S.custom;
       if (sub === "wr") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">%R</b>${fmtN(I.wr[i])}</span>`);
@@ -922,6 +953,7 @@ class Chart {
       if (sub === "macd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">DIF</b>${fmtN(I.macd.dif[i], 2)}</span><span style="color:var(--s3)"><b style="color:inherit">MACD</b>${fmtN(I.macd.sig[i], 2)}</span><span><b>OSC</b>${fmtN(I.macd.osc[i], 2)}</span>`);
       if (sub === "custom") {
         const f = C0.fmt || fmtN;
+        if (C0.tower && C0.tower[i]) { const x = C0.tower[i]; parts.push(`<span class="${x.up ? "up" : "down"}"><b style="color:inherit">寶塔${x.up ? "紅" : "綠"}</b>${fmtP(x.b)}～${fmtP(x.t)}</span>`); }
         if (C0.bars && C0.barName) parts.push(`<span><b>${C0.barName}</b>${f(C0.bars[i])}</span>`);
         C0.lines.forEach((a, n) => parts.push(`<span style="color:var(${["--s1", "--s3", "--s2"][n % 3]})"><b style="color:inherit">${C0.names[n]}</b>${f(a[i])}</span>`));
         (C0.lines2 || []).forEach((a, n) => parts.push(`<span style="color:var(${["--s2", "--accent"][n % 2]})"><b style="color:inherit">${C0.names2[n]}</b>${f(a[i])}</span>`));
