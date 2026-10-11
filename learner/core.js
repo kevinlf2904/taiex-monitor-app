@@ -92,7 +92,7 @@ function indicators(D) {
   return {
     c,
     ma: n => cache[n] || (cache[n] = sma(c, n)),
-    vma: sma(D.map(x => x.v), 20),
+    vma: sma(D.map(x => x.v || 0), 20), // 沒有量的 K 棒算 0，不然之後的均量都變成 NaN
     rsi: rsiCalc(c), kd: kdCalc(D), macd: macdCalc(c), boll: bollCalc(c), wr: wrCalc(D),
     get vwap() { return cache.vwap || (cache.vwap = vwapCalc(D)); },
     ...(() => { if (D[0].ov == null) return { io: null, io5: null }; const io = D.map(x => { const t = x.iv != null ? x.ov + x.iv : x.v; return t ? x.ov / t * 100 : 50; }); /* 外盤比＝外盤 ÷（外盤＋內盤），無法歸類的量不算進分母 */ return { io, io5: sma(io, 5) }; })(),
@@ -212,8 +212,8 @@ const subsFrom = (bar, ids = ["kd", "rsi", "macd", "wr", "inout", ...Object.keys
 function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
   const out = [], n = Math.min(vis, D.length), st = k => (typeof strong === "object" ? !!strong?.[k] : !!strong); // strong 可以是 { kd, macd } 各自設定
   const cross = (a, b, si, up, dn, keep = () => true) => { for (let i = 1; i < n; i++) { if ([a[i], b[i], a[i - 1], b[i - 1]].some(v => v == null) || D[i].sim) continue;
-    if (a[i - 1] <= b[i - 1] && a[i] > b[i] && keep("buy", b[i])) out.push({ i, si, side: "buy", label: up, v: a[i] });
-    else if (a[i - 1] >= b[i - 1] && a[i] < b[i] && keep("sell", b[i])) out.push({ i, si, side: "sell", label: dn, v: a[i] }); } };
+    if (a[i - 1] <= b[i - 1] && a[i] > b[i] && keep("buy", b[i], a[i])) out.push({ i, si, side: "buy", label: up, v: a[i] });
+    else if (a[i - 1] >= b[i - 1] && a[i] < b[i] && keep("sell", b[i], a[i])) out.push({ i, si, side: "sell", label: dn, v: a[i] }); } };
   const exit = (a, lo, hi, si, name) => { for (let i = 1; i < n; i++) { if (a[i] == null || a[i - 1] == null || D[i].sim) continue;
     if (a[i - 1] < lo && a[i] >= lo) out.push({ i, si, side: "buy", label: name + "脫離超賣", v: a[i] });
     else if (a[i - 1] > hi && a[i] <= hi) out.push({ i, si, side: "sell", label: name + "脫離超買", v: a[i] }); } };
@@ -221,7 +221,7 @@ function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
     if (kinds[typeof S === "string" ? S : S?.custom?.kind || "custom"] === false) return;
     if (S && S.custom && S.custom.sigs) { S.custom.sigs.forEach(g => { if (g.i < n && !D[g.i]?.sim) out.push({ ...g, si }); }); return; }
     if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉", st("kd") ? (side, d) => (side === "buy" ? d < 20 : d > 80) : undefined);
-    else if (S === "macd") cross(I.macd.dif, I.macd.sig, si, "MACD金叉", "MACD死叉", st("macd") ? (side, m) => (side === "buy" ? m > 0 : m < 0) : undefined);
+    else if (S === "macd") cross(I.macd.dif, I.macd.sig, si, "MACD金叉", "MACD死叉", st("macd") ? (side, m, dif) => (side === "buy" ? dif > 0 : dif < 0) : undefined); // 「零軸上金叉」看的是 DIF 本身在零軸上
     else if (S === "rsi") exit(I.rsi, 30, 70, si, "RSI");
     else if (S === "wr") exit(I.wr, -80, -20, si, "威廉");
     else if (S && S.custom && S.custom.lines.length >= 2 && S.custom.signals !== false) { const [a, b] = S.custom.names || []; cross(S.custom.lines[0], S.custom.lines[1], si, a && b ? `${a}上穿${b}` : "副圖金叉", a && b ? `${a}下穿${b}` : "副圖死叉"); }

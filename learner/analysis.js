@@ -11,7 +11,7 @@ const Signals = {
   macd(D, I) { const { dif, sig } = I.macd, m = []; for (let i = 1; i < D.length; i++) { if (crossUp(dif, sig, i)) m.push({ i, side: "buy", label: "DIF上穿" }); else if (crossDn(dif, sig, i)) m.push({ i, side: "sell", label: "DIF下穿" }); } return m; },
   // VWAP：收盤由下往上站上 VWAP、由上往下跌破 VWAP（只取 VWAP 本身向上／向下的那一側，減少盤整時的來回訊號）
   vwap(D, I) { const v = I.vwap, m = []; for (let i = 2; i < D.length; i++) { if (v[i] == null || v[i - 1] == null || v[i - 2] == null) continue; if (D[i].c > v[i] && D[i - 1].c <= v[i - 1] && v[i] >= v[i - 2]) m.push({ i, side: "buy", label: "站上VWAP" }); else if (D[i].c < v[i] && D[i - 1].c >= v[i - 1] && v[i] <= v[i - 2]) m.push({ i, side: "sell", label: "跌破VWAP" }); } return m; },
-  boll(D, I) { const { up, lo } = I.boll, m = []; for (let i = 1; i < D.length; i++) { if (lo[i] == null || lo[i - 1] == null) continue; if (D[i].c < lo[i] && D[i - 1].c >= lo[i - 1]) m.push({ i, side: "buy", label: "跌破下軌" }); else if (D[i].c > up[i] && D[i - 1].c <= up[i - 1]) m.push({ i, side: "sell", label: "突破上軌" }); } return m; },
+  boll(D, I) { const { up, lo } = I.boll, m = []; for (let i = 1; i < D.length; i++) { if (lo[i] == null || lo[i - 1] == null) continue; if (D[i].c < lo[i] && D[i - 1].c >= lo[i - 1]) m.push({ i, side: "buy", label: "觸下軌（逆勢買）" }); else if (D[i].c > up[i] && D[i - 1].c <= up[i - 1]) m.push({ i, side: "sell", label: "突破上軌" }); } return m; },
   vol(D, I) { const m = []; for (let i = 20; i < D.length; i++) if (D[i].v > 2 * I.vma[i - 1]) m.push({ i, side: D[i].c >= D[i].o ? "buy" : "sell", label: "爆量", note: true }); return m; },
   candle(D, I, only) {
     const m = [];
@@ -108,14 +108,13 @@ function detectPattern(D, i) {
   if (rose1 && p.up && p.body > avg && x.dn && x.o > p.c && x.c < p.mid && x.c > p.o) return "darkCloud";
   if (fell1 && p.dn && p.body > avg * 1.2 && x.body < p.body * 0.5 && x.top <= p.o && x.bot >= p.c) return "bullHarami";
   if (rose1 && p.up && p.body > avg * 1.2 && x.body < p.body * 0.5 && x.top <= p.c && x.bot >= p.o) return "bearHarami";
-  if (x.l > p.h * 1.001) return "gapUp";
-  if (x.h < p.l * 0.999) return "gapDown";
-  if (x.rng <= 0) return null;
+  const gap = x.l > p.h * 1.001 ? "gapUp" : x.h < p.l * 0.999 ? "gapDown" : null; // 跳空等單根反轉型態都判斷完再標，跳空的錘子線先算錘子線
+  if (x.rng <= 0) return gap;
   const fell = fellAt(D, i), rose = roseAt(D, i);
-  if (x.body > 0 && x.lower >= 2 * x.body && x.upper <= x.rng * 0.15) return fell ? "hammer" : rose ? "hanging" : null;
-  if (x.body > 0 && x.upper >= 2 * x.body && x.lower <= x.rng * 0.15) return fell ? "invHammer" : rose ? "shooting" : null;
+  if (x.body > 0 && x.lower >= 2 * x.body && x.upper <= x.rng * 0.15 && (fell || rose)) return fell ? "hammer" : "hanging";
+  if (x.body > 0 && x.upper >= 2 * x.body && x.lower <= x.rng * 0.15 && (fell || rose)) return fell ? "invHammer" : "shooting";
   if (x.body <= x.rng * 0.08 && x.rng / x.c > 0.02 && (fell || rose)) return "doji";
-  return null;
+  return gap;
 }
 function patternSVG(id) {
   const P = PATTERNS[id], bars = P.bars, n = bars.length, W = 132, H = 84, pad = 6;
@@ -212,7 +211,8 @@ function marketStructure(D, w = 3, upto = D.length) {
 // 訂單塊（突破前最後一根反向 K 棒）與公平價值缺口（三根 K 棒之間的空白）
 function smcZones(D, ms, upto = D.length) {
   const zones = [];
-  let avg = 0; for (let k = 0; k < upto; k++) avg += D[k].h - D[k].l; avg /= upto;
+  // 平均振幅只用當時以前的 20 根（不能用之後的資料）
+  const avgAt = i => { let s = 0, n = 0; for (let k = Math.max(0, i - 20); k < i; k++) { s += D[k].h - D[k].l; n++; } return n ? s / n : D[i].h - D[i].l; };
   ms.events.forEach(e => {
     const sw = ms.swings.filter(s => s.type === (e.dir > 0 ? "L" : "H") && s.i < e.i).pop(); if (!sw) return;
     let ob = -1; for (let k = e.i - 1; k >= sw.i; k--) if (e.dir > 0 ? D[k].c < D[k].o : D[k].c > D[k].o) { ob = k; break; }
@@ -223,7 +223,7 @@ function smcZones(D, ms, upto = D.length) {
   });
   for (let i = 2; i < upto; i++) {
     const up = D[i].l - D[i - 2].h, dn = D[i - 2].l - D[i].h;
-    if (Math.max(up, dn) < avg * 0.5) continue;
+    if (Math.max(up, dn) < avgAt(i) * 0.5) continue;
     const dir = up > 0 ? 1 : -1, top = dir > 0 ? D[i].l : D[i - 2].l, bot = dir > 0 ? D[i - 2].h : D[i].h;
     let end = upto - 1, hit = false;
     for (let m = i + 1; m < upto; m++) if (dir > 0 ? D[m].l <= top : D[m].h >= bot) { end = m; hit = true; break; }
@@ -259,26 +259,27 @@ const lineAt = (a, b, k) => a.p + (b.p - a.p) * (k - a.i) / (b.i - a.i || 1);
 function chartPatterns(D, upto = D.length, w = 4, only = null, recent = 0) {
   const z = zigzag(D, w, upto), found = [], near = (a, b, t) => Math.abs(a - b) / Math.max(a, b) < t;
   // 從 start 之後找第一根收盤突破 f(k) 的 K 棒
-  const brk = (start, f, up) => { for (let k = start; k < Math.min(upto, start + 30); k++) { const v = f(k); if (up ? D[k].c > v : D[k].c < v) return k; } return null; };
+  // stop：還沒突破頸線前，收盤越過這個價位（例如頭肩頂又創新高）型態就失效
+  const brk = (start, f, up, stop = null) => { for (let k = start; k < Math.min(upto, start + 30); k++) { if (stop != null && (up ? D[k].c < stop : D[k].c > stop)) return null; const v = f(k); if (up ? D[k].c > v : D[k].c < v) return k; } return null; };
   const pre = (s, up) => { const j = Math.max(0, s.i - 20); return up ? D[j].c < s.p * 0.97 : D[j].c > s.p * 1.03; }; // 型態前要有一段趨勢
   for (let j = 0; j < z.length; j++) {
     const s = z.slice(Math.max(0, j - 4), j + 1), last = s[s.length - 1], start = last.conf;
     if (s.length === 5) {
       const [a, b, c, d, e] = s;
       if (a.type === "H" && c.p > a.p * 1.02 && c.p > e.p * 1.02 && near(a.p, e.p, 0.05) && pre(a, true)) {
-        const k = brk(start, x => lineAt(b, d, x), false); if (k != null) found.push({ id: "hsTop", pts: s, neck: [b, d], k, target: lineAt(b, d, k) - (c.p - lineAt(b, d, c.i)) });
+        const k = brk(start, x => lineAt(b, d, x), false, c.p); if (k != null) found.push({ id: "hsTop", pts: s, neck: [b, d], k, target: lineAt(b, d, k) - (c.p - lineAt(b, d, c.i)) });
       }
       if (a.type === "L" && c.p < a.p * 0.98 && c.p < e.p * 0.98 && near(a.p, e.p, 0.05) && pre(a, false)) {
-        const k = brk(start, x => lineAt(b, d, x), true); if (k != null) found.push({ id: "hsBottom", pts: s, neck: [b, d], k, target: lineAt(b, d, k) + (lineAt(b, d, c.i) - c.p) });
+        const k = brk(start, x => lineAt(b, d, x), true, c.p); if (k != null) found.push({ id: "hsBottom", pts: s, neck: [b, d], k, target: lineAt(b, d, k) + (lineAt(b, d, c.i) - c.p) });
       }
     }
     if (s.length >= 3) {
       const [a, b, c] = s.slice(-3);
       if (a.type === "H" && near(a.p, c.p, 0.03) && (a.p - b.p) / a.p > 0.04 && c.i - a.i >= 8 && pre(a, true)) {
-        const k = brk(start, () => b.p, false); if (k != null) found.push({ id: "dTop", pts: [a, b, c], neck: [b, { i: c.i, p: b.p }], k, target: b.p - (Math.max(a.p, c.p) - b.p) });
+        const k = brk(start, () => b.p, false, Math.max(a.p, c.p)); if (k != null) found.push({ id: "dTop", pts: [a, b, c], neck: [b, { i: c.i, p: b.p }], k, target: b.p - (Math.max(a.p, c.p) - b.p) });
       }
       if (a.type === "L" && near(a.p, c.p, 0.03) && (b.p - a.p) / b.p > 0.04 && c.i - a.i >= 8 && pre(a, false)) {
-        const k = brk(start, () => b.p, true); if (k != null) found.push({ id: "dBottom", pts: [a, b, c], neck: [b, { i: c.i, p: b.p }], k, target: b.p + (b.p - Math.min(a.p, c.p)) });
+        const k = brk(start, () => b.p, true, Math.min(a.p, c.p)); if (k != null) found.push({ id: "dBottom", pts: [a, b, c], neck: [b, { i: c.i, p: b.p }], k, target: b.p + (b.p - Math.min(a.p, c.p)) });
       }
     }
     if (s.length >= 4) {
@@ -304,7 +305,8 @@ function chartPatterns(D, upto = D.length, w = 4, only = null, recent = 0) {
   found.sort((a, b) => rank[a.id] - rank[b.id] || a.k - b.k).forEach(f => {
     const s0 = f.pts[0].i, s1 = f.k;
     if (kept.some(g => Math.min(s1, g.k) - Math.max(s0, g.pts[0].i) > 0.5 * Math.min(s1 - s0, g.k - g.pts[0].i))) return;
-    f.side = CHART_PATTERNS[f.id].side === "both" ? (f.dir > 0 ? "buy" : "sell") : CHART_PATTERNS[f.id].side;
+    // 有突破方向（三角、箱型、菱形）時，多空依實際突破方向：上升三角向下跌破就是偏空，不能標成買點
+    f.side = f.dir ? (f.dir > 0 ? "buy" : "sell") : CHART_PATTERNS[f.id].side;
     kept.push(f);
   });
   return kept.sort((a, b) => a.k - b.k);
@@ -328,7 +330,7 @@ function extraPatterns(D, upto, z, recent = 0) {
       }
     }
   }
-  // 圓形頂底：一段 30～60 根的收盤用二次曲線擬合，彎得夠圓（R² ≥ 0.8）、轉折在中段、深度 ≥ 6%；之後收盤越過碗緣才算完成
+  // 圓形頂底：一段 36～60 根的收盤用二次曲線擬合，彎得夠圓（R² ≥ 0.85）、轉折在中段、深度 ≥ 8%；之後收盤越過碗緣才算完成
   for (const w of [36, 48, 60]) for (let e = Math.max(w, from); e <= upto - 3; e += 3) {
     const a = e - w; let sx = 0, sx2 = 0, sx3 = 0, sx4 = 0, sy = 0, sxy = 0, sx2y = 0;
     for (let t = 0; t < w; t++) { const y = c[a + t], t2 = t * t; sx += t; sx2 += t2; sx3 += t2 * t; sx4 += t2 * t2; sy += y; sxy += t * y; sx2y += t2 * y; }
@@ -353,7 +355,7 @@ function extraPatterns(D, upto, z, recent = 0) {
     for (let x = st; x < Math.min(upto, st + 20); x++) { if (c[x] > upL(x)) { k = x; dir = 1; break; } if (c[x] < dnL(x)) { k = x; dir = -1; break; } }
     if (k != null) out.push({ id: "diamond", pts: s, lines: [[h1, h2], [h2, h3], [l1, l2], [l2, l3]], seg: true, k, dir, target: dir > 0 ? upL(k) + (h2.p - l2.p) : dnL(k) - (h2.p - l2.p) });
   }
-  // 旗形：10 根內急漲（跌）≥ 8% 的旗竿，接著 5～20 根小幅反向的整理（回檔不超過旗竿一半），再沿旗竿方向突破整理區
+  // 旗形：10 根內急漲（跌）≥ 10% 的旗竿，接著 4～20 根的整理（回檔不超過旗竿 45%），再沿旗竿方向突破整理區
   for (let i = Math.max(10, from); i < upto - 6; i++) {
     for (const dir of [1, -1]) {
       const base = dir > 0 ? Math.min(...c.slice(i - 10, i)) : Math.max(...c.slice(i - 10, i)), pole = (c[i] - base) * dir;
@@ -388,7 +390,9 @@ function gapKinds(D, upto = D.length) {
     else if (run >= 0.05 && filled == null) kind = "逃逸缺口";
     else continue;
     const side = kind === "竭盡缺口" ? (up ? "sell" : "buy") : up ? "buy" : "sell";
-    out.push({ i: kind === "竭盡缺口" ? filled : i, gi: i, kind, side, label: kind + (kind === "竭盡缺口" ? "（已回補）" : vol >= 1.5 ? "・帶量" : ""), up,
+    // 逃逸缺口要 5 天沒回補才確認，標在第 5 天（不用之後的資料）；資料還不到 5 天就先不標
+    if (kind === "逃逸缺口" && i + 5 >= upto) continue;
+    out.push({ i: kind === "竭盡缺口" ? filled : kind === "逃逸缺口" ? i + 5 : i, gi: i, kind, side, label: kind + (kind === "竭盡缺口" ? "（已回補）" : vol >= 1.5 ? "・帶量" : ""), up,
       shapes: [{ pts: [[i - 1, up ? p.h : p.l], [Math.min(upto - 1, i + 8), up ? p.h : p.l]], color: up ? "up" : "down", dash: [3, 3], width: 1.2 }, { pts: [[i - 1, up ? x.l : x.h], [Math.min(upto - 1, i + 8), up ? x.l : x.h]], color: up ? "up" : "down", dash: [3, 3], width: 1.2 }] });
   }
   return out;
