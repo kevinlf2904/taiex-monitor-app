@@ -148,6 +148,19 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .deep-body > :first-child { margin-top: 0; }
 .deep-body ol { margin: 0 0 10px; padding-left: 1.4em; } .deep-body ol li { margin-bottom: 6px; }
 .deep-body .formula { white-space: pre-wrap; }
+/* 課程表：三欄（手機一欄），每一項點了到那一課 */
+.ctable { margin: 0 0 14px; }
+.ctable > summary { cursor: pointer; font-size: 14px; color: var(--accent); padding: 6px 0; list-style: none; letter-spacing: .04em; }
+.ctable > summary::-webkit-details-marker { display: none; }
+.ctable > summary::before { content: "▸ "; } .ctable[open] > summary::before { content: "▾ "; }
+.ct-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 6px 0 4px; }
+@media (max-width: 900px) { .ct-cols { grid-template-columns: 1fr; } }
+.ct-col h3 { margin: 0 0 6px; font-size: 15px; font-weight: 500; display: flex; gap: 8px; align-items: baseline; } .ct-col h3 span { color: var(--muted); font-size: 13px; font-weight: 400; }
+.ct-col h4 { margin: 10px 0 2px; font-size: 12px; font-weight: 400; color: var(--muted); letter-spacing: .04em; }
+.ct-col ul { list-style: none; margin: 0; padding: 0; }
+.ct-col li button { display: grid; grid-template-columns: 6.5em 1fr auto; gap: 8px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 6px 2px; font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer; }
+.ct-col li button b { font-weight: 500; } .ct-col li button span { color: var(--muted); } .ct-col li button i { color: var(--up); font-style: normal; }
+.ct-col li button:hover b, .ct-col li button[aria-current="true"] b { color: var(--accent); }
 figure.ccw { margin: 0 0 12px; } figure.ccw figcaption { margin-top: 4px; }
 table.mini { border-collapse: collapse; font-size: 13px; margin: 6px 0 12px; } table.mini th, table.mini td { border-bottom: 1px solid var(--line); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; } table.mini th { color: var(--muted); font-weight: 400; }
 .deep-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px 14px; }
@@ -514,6 +527,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
   <section id="view-learn" class="learn" role="tabpanel">
     <nav class="lesson-list" id="lessonList" aria-label="課程目錄"></nav>
     <article class="lesson" id="lesson">
+      <details class="ctable" id="courseTable"><summary>技術分析課程表（初級班・中級班・高級班）</summary><div id="courseTableBox"></div></details>
       <div class="lesson-head">
         <div class="eyebrow" id="lessonEyebrow"></div>
         <h2 id="lessonTitle"></h2>
@@ -769,7 +783,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.11-61</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.11-62</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -2394,9 +2408,10 @@ OTE 區 ≈ 212.8 ～ 222.9（和訂單塊重疊）</div>
 // 進階課程（lessons-pro.js：更多型態、指標與趨勢理論）併進來；深入學習一起併
 LESSONS.push(...LESSONS_PRO); Object.assign(LESSON_DEEP, LESSON_PRO_DEEP);
 const LESSON_GROUPS = [
-  ["基礎", ["kline"]], ["K 線與型態學", ["patterns-rev", "patterns-cont", "chart-patterns", "pattern-round", "pattern-wedge", "gaps"]],
-  ["技術指標", ["ma", "rsi", "kd", "wr", "macd", "mtm", "dmi", "psy", "arbr", "boll", "vwap"]], ["量能與大盤指標", ["vol", "obv", "vr", "inout", "vprofile", "breadth", "tapi"]],
-  ["趨勢理論", ["dow", "trend3", "sr", "trendline", "fan", "elliott", "ccw", "fib"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["籌碼面與基本面", ["chips-inst", "chips-margin", "fund-rev", "fund-val"]], ["風險管理", ["risk"]],
+  ["基礎", ["kline"]], ["初級班：型態學", ["patterns-rev", "patterns-cont", "chart-patterns", "pattern-round", "pattern-wedge", "gaps"]],
+  ["中級班：指標學", ["ma", "rsi", "kd", "wr", "macd", "mtm", "dmi", "psy", "arbr", "boll", "vwap"]], ["中級班：量能與大盤指標", ["vol", "obv", "vr", "inout", "vprofile", "breadth", "tapi"]],
+  ["延伸指標", ["bias", "atr", "cci", "mfi", "trix", "sar", "donch", "ichi"]],
+  ["高級班：趨勢理論", ["dow", "trend3", "sr", "trendline", "fan", "elliott", "ccw", "fib"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["籌碼面與基本面", ["chips-inst", "chips-margin", "fund-rev", "fund-val"]], ["風險管理", ["risk"]],
 ];
 const ORDER = LESSON_GROUPS.flatMap(g => g[1]);
 LESSONS.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
@@ -2423,7 +2438,7 @@ function drawLesson() {
   const L = LESSONS[lessonIdx], v = L.variants ? L.variants[lessonView.variant] : {}, { D, I } = lessonView;
   const all = lessonMarkers(L, D, I, v), markers = lessonView.pat ? all.filter(m => m.pat === lessonView.pat) : all;
   const ex = L.chart.extra ? L.chart.extra(D, I) : {};
-  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, vwap: L.chart.vwap, vp: L.chart.vp, ...(L.chart.subs ? { subs: L.chart.subs(D, I) } : { sub: v.sub || L.chart.sub }), markers, hlines: L.chart.hlines ? L.chart.hlines(D) : L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
+  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, vwap: L.chart.vwap, vp: L.chart.vp, mainX: L.chart.mainX, ...(L.chart.subs ? { subs: L.chart.subs(D, I) } : { sub: v.sub || L.chart.sub }), markers, hlines: L.chart.hlines ? L.chart.hlines(D) : L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
   const g = $("#lessonGallery");
   g.hidden = !L.gallery;
   if (L.gallery) g.innerHTML = L.gallery.map(id => {
@@ -2494,7 +2509,7 @@ function showLesson(i) {
   loadLessonData(); drawLesson();
   $("#lessonPrev").disabled = i === 0;
   $("#lessonNext").textContent = i === LESSONS.length - 1 ? "完成課程，去做測驗 →" : `完成本課，下一課：${LESSONS[i + 1].title.split("：")[0]} →`;
-  renderLessonList();
+  renderLessonList(); if ($("#courseTable").open) renderCourseTable();
 }
 $("#lessonGallery").addEventListener("click", e => {
   const b = e.target.closest("[data-pat]"); if (!b) return;
@@ -2515,11 +2530,20 @@ $("#lessonTools").addEventListener("change", e => {
   lessonCode = /^(加權|大盤|加權指數|TAIEX)$/i.test(v) ? "TAIEX" : v.toUpperCase(); store.set("lessonCode", lessonCode);
   lessonView.real = null; lessonView.seedOff = 0; loadLessonData(); drawLesson();
 });
+// 課程表：點一項就到那一課（有型態卡片的直接選好那個型態）
+function renderCourseTable() {
+  $("#courseTableBox").innerHTML = `<div class="ct-cols">${COURSE_TABLE.map(C => `<section class="ct-col"><h3>${C.name}<span>${C.sub}</span></h3>${C.groups.map(g => `<h4>${g.title}</h4><ul>${g.items.map(([n, d, id, pat]) =>
+    `<li><button type="button" data-ct="${id}" ${pat ? `data-ctpat="${pat}"` : ""} aria-current="${LESSONS[lessonIdx]?.id === id}"><b>${n}</b><span>${d}</span>${done.has(id) ? `<i aria-label="已完成">✓</i>` : ""}</button></li>`).join("")}</ul>`).join("")}</section>`).join("")}</div>`;
+}
+$("#courseTableBox").addEventListener("click", e => { const b = e.target.closest("[data-ct]"); if (!b) return; const i = lessonIndex(b.dataset.ct); if (i < 0) return;
+  showLesson(i); if (b.dataset.ctpat) { lessonView.pat = b.dataset.ctpat; drawLesson(); } $("#courseTable").open = false; $("#lesson").scrollIntoView({ block: "start" }); });
+$("#courseTable").addEventListener("toggle", () => { if ($("#courseTable").open) renderCourseTable(); store.set("ctOpen", $("#courseTable").open); });
+if (store.get("ctOpen", false)) $("#courseTable").open = true;
 // 在看盤的 K 線圖打開這一課：把指標、疊加記到看盤的指標列（同網域共用 localStorage），打開副圖訊號對應，再切到看盤的技術分頁
 function openK(id) {
   const O = LESSON_OPEN_K[id]; if (!O) return;
-  const ids = [...(O.main || []), ...(O.ov || []), ...(O.sub || [])], key = "ind:watch2", cur = new Set(store.get(key, ["ma5", "ma20", "ma60", "vol", "kd"]) || []);
-  ids.forEach(x => cur.add(x)); store.set(key, [...cur]); store.set("watch:dtab", "tech"); store.set("chartSubSig", true); if (!inited.watch) store.set("watch:goK", Date.now());
+  const ids = [...(O.main || []), ...(O.ov || []), ...(O.sub || [])], key = "ind:watch2", cur = new Set(store.get(key, ["ma5", "ma20", "ma60", "vol", "kd"]) || []), ovs = new Set(store.get("ind:watch2ov", []) || []);
+  [...(O.main || []), ...(O.sub || [])].forEach(x => cur.add(x)); (O.ov || []).forEach(x => ovs.add(x)); store.set(key, [...cur]); store.set("ind:watch2ov", [...ovs]); // 看盤的指標、疊加分開存 store.set("watch:dtab", "tech"); store.set("chartSubSig", true); if (!inited.watch) store.set("watch:goK", Date.now());
   const code = O.idx ? "加權" : (() => { const c = store.get("watch:last", null); return c && /^\d{4,6}[A-Z]?$/.test(c) ? c : "2330"; })();
   openWatch(code);
   try { const f = $("#watchFrame"); if (inited.watch && f.contentWindow) f.contentWindow.postMessage({ type: "watch-ind", ids, code: code === "加權" ? "T00" : code }, "*"); } catch {}
@@ -2548,7 +2572,7 @@ const STRATS = {
   choch: { name: "聰明錢：CHoCH 結構轉變", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") },
   bos: { name: "道氏：所有結構突破（BOS + CHoCH）", fn: (D, I) => Signals.structure(D, I, "dow") },
   // 進階指標策略（參數用預設值，定義在 analysis.js 的 STRAT_DEFS）
-  ...Object.fromEntries(["mtm", "dmi", "psy", "arbr", "obv", "vr", "ccw"].map(k => [k, { name: STRAT_DEFS[k].name + "（" + STRAT_DEFS[k].desc.split("，")[0].split("；")[0] + "）", fn: (D, I) => stratRun(k, D, I) }])),
+  ...Object.fromEntries(["mtm", "dmi", "psy", "arbr", "obv", "vr", "bias", "cci", "mfi", "trix", "sar", "ccw"].map(k => [k, { name: STRAT_DEFS[k].name + "（" + STRAT_DEFS[k].desc.split("，")[0].split("；")[0] + "）", fn: (D, I) => stratRun(k, D, I) }])),
 };
 let lab = { src: "sim", seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma"), skip: new Set(), listOpen: false,
   capital: Math.max(10000, +store.get("btCap", 1000000) || 1000000), lot: store.get("btLot", 1) === 1000 ? 1000 : 1, useBuy: store.get("btBuy", true) !== false, useSell: store.get("btSell", true) !== false };
