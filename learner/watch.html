@@ -444,8 +444,12 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .cmpchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 4px; border: 1.5px solid currentColor; font-size: 12.5px; font-weight: 500; margin-right: 4px; }
 .cmpchip button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0 4px; min-width: 24px; min-height: 24px; }
 .kset > summary { list-style: none; cursor: pointer; display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 500; }
+.kbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px 4px; overflow-x: auto; scrollbar-width: none; }
+.klayers > .kset + .kset > summary { border-top: 0; }
+.khelp { margin: 4px 14px 10px; font-size: 13px; } .khelp > summary { cursor: pointer; color: var(--accent); padding: 4px 0; }
+.khelp ol { margin: 6px 0 0; padding-left: 20px; line-height: 1.75; color: var(--ink); } .khelp ul { margin: 2px 0; padding-left: 18px; color: var(--muted); }
 .kset > summary::-webkit-details-marker { display: none; } .kset > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; } .kset[open] > summary::before { transform: rotate(90deg); }
-.kset > summary .note { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.kset > summary .note { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; } .kset > summary > span:first-child { flex: none; white-space: nowrap; }
 .d-ext { display: flex; gap: 8px; align-items: baseline; font: 13px var(--font-num); margin-top: 2px; flex-wrap: wrap; } .d-ext .up { color: var(--up); } .d-ext .down { color: var(--down); } .d-ext b { font-size: 15px; }
 .d-kv small { font-size: 11px; }
 .ixcards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } .ixcards.three .ixcard b { font-size: 16px; } .ixcards.three .ixcard small { font-size: 11px; }
@@ -631,14 +635,29 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 
     <!-- 技術：K 線＋疊加＋策略＋判讀 -->
     <div class="panel sec" id="secK" data-pane="tech">
-      <div class="ph"><h2>K 線</h2><div class="seg" role="group" aria-label="K 線週期" id="kSeg"><button data-k="1">1分</button><button data-k="5">5分</button><button data-k="15">15分</button><button data-k="60">60分</button><button data-k="D" class="gap">日</button><button data-k="W">週</button><button data-k="M">月</button></div></div>
+      <div class="ph"><h2>K 線</h2></div>
       <div class="k-status"><span id="kNote"></span><span>往左拖曳會自動載入更早的資料；兩指縮放；放大後圖表鎖定，按「全部」解鎖</span></div>
-      <details class="kset" id="kset"><summary><span>指標・疊加・策略</span><span class="note" id="ksetSum"></span></summary>
-        <div class="ibar" id="dIbar"></div>
+      <div class="klayers" id="kset">
+      <details class="kset" id="klInd"><summary><span>指標</span><span class="note" id="klIndSum"></span></summary><div class="ibar" id="dIbar"></div></details>
+      <details class="kset" id="klOv"><summary><span>疊加分析</span><span class="note" id="klOvSum"></span></summary><div class="ibar" id="dObar"></div></details>
+      <details class="kset" id="klStrat"><summary><span>策略訊號</span><span class="note" id="klStratSum"></span></summary>
         <div class="strat"><label>策略訊號 <select class="sel" id="stratSel"></select></label><span class="note" id="stratNote"></span></div>
         <details class="stratcfg" id="stratCfg" hidden><summary>參數與買賣方式</summary><div id="stratCfgBox"></div></details>
-        <div class="strat cmp"><span>比較走勢</span><span id="cmpChips"></span><form id="cmpForm" class="cmp-f"><input class="sel" id="cmpIn" placeholder="代號或名稱" aria-label="加入比較的股票" autocomplete="off"><button class="btn sm">加入</button></form><button type="button" class="btn sm" data-cq="T00">＋加權</button><button type="button" class="btn sm" data-cq="O00">＋櫃買</button><span class="note" id="cmpNote">日／週／月 K 才能比較，以畫面最左邊那根為起點換算漲跌幅</span></div>
+        <details class="khelp"><summary>使用方式說明</summary><ol>
+          <li><b>選策略</b>：從上面的選單挑一個策略，買賣訊號會用三角形標在 K 線上（紅＝買、綠＝賣，淡色的是回測期間外不交易的訊號），K 線下方會寫出照做的回測結果。</li>
+          <li><b>調參數</b>：打開「參數與買賣方式」，用滑桿調整策略的參數（例如均線天數、RSI 的超買超賣線）；按「恢復預設參數」回到原本的設定。</li>
+          <li><b>設定回測</b>：
+            <ul><li>回測期間：選開始和結束日期，或按近 3 月、近 1 年、近 3 年、全部；期間比畫面上的資料早時會自動往前載入。</li>
+            <li>初始資金與每次買進：全部資金、一半資金、固定金額或固定張數。</li>
+            <li>成交時機：訊號隔天開盤或當根收盤。</li>
+            <li>出場條件：依賣出訊號、停損、停利、移動停利（從最高點回落）、最多持有幾根，哪個先到就先賣。</li></ul></li>
+          <li><b>看結果</b>：訊號數、回測期間、投入金額、報酬率與賺賠金額，和同一段「買進持有」比較；筆數、勝率、最大回落（資金從高點掉下來最多幾 %）與出場原因。</li>
+          <li><b>注意</b>：只做多、一次一筆；已扣手續費 0.1425%（最低 20 元）與證交稅（股票 0.3%、ETF 0.1%）；沒有計算滑價與股利。回測是過去的結果，不代表未來，也不是投資建議。</li>
+        </ol></details>
       </details>
+      <details class="kset" id="klCmp"><summary><span>比較走勢</span><span class="note" id="klCmpSum"></span></summary><div class="strat cmp"><span>比較走勢</span><span id="cmpChips"></span><form id="cmpForm" class="cmp-f"><input class="sel" id="cmpIn" placeholder="代號或名稱" aria-label="加入比較的股票" autocomplete="off"><button class="btn sm">加入</button></form><button type="button" class="btn sm" data-cq="T00">＋加權</button><button type="button" class="btn sm" data-cq="O00">＋櫃買</button><span class="note" id="cmpNote">日／週／月 K 才能比較，以開始比較時畫面最左邊那天為基準換算漲跌幅（拖曳時不變；按圖上的「全部」重設基準）</span></div></details>
+      </div>
+      <div class="kbar"><div class="seg" role="group" aria-label="K 線週期" id="kSeg"><button data-k="1">1分</button><button data-k="5">5分</button><button data-k="15">15分</button><button data-k="60">60分</button><button data-k="D" class="gap">日</button><button data-k="W">週</button><button data-k="M">月</button></div></div>
       <div class="chartbox" id="kChart"></div>
     </div>
     <div class="panel sec" id="secAna" data-pane="tech">
@@ -682,7 +701,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.11-61</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.11-62</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2681,7 +2700,13 @@ new ResizeObserver(() => { if (W.ftab === "flow" && !$("#fBox").hidden) drawFlow
 /* ---------- K 線：每一種週期往左拉到底都會自動載入更早的資料 ---------- */
 const kChart = new Chart($("#kChart"), { onRange: r => { if (r.a <= 3 && kChart.view && !W.busyOlder) loadOlder(); } });
 overlayMigrate("watch2");
-const dBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "疊加", items: OVERLAY_ITEMS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); });
+// 指標（主圖、副圖）和疊加分析分成兩個可以收合的區塊；舊版存在同一組設定（ind:watch2）裡的疊加，第一次搬到 ind:watch2ov
+{ const ovIds = new Set(OVERLAY_ITEMS.map(x => x.id)), old = store.get("ind:watch2", null);
+  if (Array.isArray(old) && old.some(id => ovIds.has(id))) { if (store.get("ind:watch2ov", null) == null) store.set("ind:watch2ov", old.filter(id => ovIds.has(id))); store.set("ind:watch2", old.filter(id => !ovIds.has(id))); } }
+const dIndBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); });
+const dOvBar = indicatorBar($("#dObar"), "watch2ov", [{ title: "疊加", items: OVERLAY_ITEMS }], [], () => { drawK(); renderAna(); });
+const OV_IDS = new Set(OVERLAY_ITEMS.map(x => x.id));
+const dBar = { has: id => (OV_IDS.has(id) ? dOvBar : dIndBar).has(id), set: (id, on) => (OV_IDS.has(id) ? dOvBar : dIndBar).set(id, on) };
 // 策略：定義在 analysis.js 的 STRAT_DEFS（可調參數）；這裡記住每個策略的參數與買賣方式
 const STRATS = { "": { name: "不顯示" }, ...Object.fromEntries(Object.entries(STRAT_DEFS).map(([k, v]) => [k, { name: v.name, fn: (D, I) => stratRun(k, D, I, (W.stratP || {})[k]) }])) };
 W.stratP = store.get("watch:stratp", {}) || {};
@@ -2725,8 +2750,13 @@ $("#stratCfgBox").addEventListener("click", e => {
   store.set("watch:btopt", O); stratCfgRender(); drawK();
 });
 $("#stratSel").innerHTML = Object.entries(STRATS).map(([k, v]) => `<option value="${k}" ${k === W.strat ? "selected" : ""}>${v.name}</option>`).join("");
-{ const k = $("#kset"), v = store.get("watch:kset", null); k.open = v == null ? !isMobile() : v; k.addEventListener("toggle", () => { store.set("watch:kset", k.open); postHeight(); }); }
-function ksetSummary() { const on = [...$("#dIbar").querySelectorAll('[aria-pressed="true"]')].map(b => b.textContent.trim()); $("#ksetSum").textContent = [on.join("、"), W.strat ? "策略：" + STRATS[W.strat].name : ""].filter(Boolean).join("・"); }
+// 四個區塊各自記住開或關（第一次：寬螢幕打開指標）
+["klInd", "klOv", "klStrat", "klCmp"].forEach(id => { const k = $("#" + id), v = store.get("watch:" + id, null); k.open = v == null ? id === "klInd" && !isMobile() : v; k.addEventListener("toggle", () => { store.set("watch:" + id, k.open); postHeight(); }); });
+function ksetSummary() {
+  const on = id => [...$(id).querySelectorAll('[aria-pressed="true"]')].map(b => b.textContent.trim()).join("、");
+  $("#klIndSum").textContent = on("#dIbar"); $("#klOvSum").textContent = on("#dObar") || "沒有開";
+  $("#klStratSum").textContent = W.strat ? STRATS[W.strat].name : "不顯示"; $("#klCmpSum").textContent = W.cmp?.length ? W.cmp.map(nameOf).join("、") : "";
+}
 $("#stratSel").addEventListener("change", e => { W.strat = e.target.value; store.set("watch:strat", W.strat); stratCfgRender(); drawK(); });
 stratCfgRender();
 const minuteK = () => !"DWM".includes(W.k);
@@ -2770,14 +2800,14 @@ function chipSubs(D) {
   }
   return out;
 }
-/* ---------- 比較走勢：最多 3 檔，以畫面最左邊那根為 0% ---------- */
+/* ---------- 比較走勢：最多 3 檔，以開始比較時畫面最左邊那天為 0%（基準日固定，拖曳時比較線不會上下浮動） ---------- */
 const CMP_COLORS = ["#0ea5e9", "#a855f7", "#f59e0b"];
 const apiK = c => (c === "T00" ? "加權" : c === "O00" ? "櫃買" : c);
 function compareOpt() {
   if (minuteK() || !W.cmp.length) return [];
   return W.cmp.map((c, k) => ({ c, k, R: W.cmpData[c] })).filter(x => x.c !== W.sel && x.R?.pts?.length).map(x => ({ name: nameOf(x.c), color: CMP_COLORS[x.k % 3], pts: x.R.pts }));
 }
-function renderCmp() {
+function renderCmp() { ksetSummary();
   $("#cmpChips").innerHTML = W.cmp.map((c, k) => `<span class="cmpchip" style="color:${CMP_COLORS[k % 3]}">${esc(nameOf(c))}${W.cmpData[c]?.err ? "（讀取失敗）" : W.cmpData[c] && !W.cmpData[c].pts ? "…" : ""}<button type="button" data-cx="${k}" aria-label="移除 ${esc(nameOf(c))}">×</button></span>`).join("");
   document.querySelectorAll("[data-cq]").forEach(b => { b.hidden = W.cmp.includes(b.dataset.cq) || W.cmp.length >= 3; });
 }
