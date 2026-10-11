@@ -143,7 +143,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .d-kv b { font-family: var(--font-num); font-weight: 500; font-size: 14px; }
 .d-hold { font-family: var(--font-num); font-size: 13.5px; padding: 6px 10px; border-radius: 4px; background: var(--surface-2); }
 .d-act { display: flex; gap: 8px; flex-wrap: wrap; }
-@media (max-width: 480px) { .d-act { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 6px; } .d-act .btn { flex: none; padding: 5px 9px; } }
+@media (max-width: 480px) { .d-act { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .d-act .btn { min-width: 0; padding: 6px 4px; justify-content: center; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } } /* 手機：四個按鈕平分一排，「判讀」不會被切掉 */
 .back { display: none; }
 .dtabs { position: sticky; top: 60px; z-index: 5; }
 :root[data-embed="1"] .dtabs { position: static; }
@@ -676,13 +676,13 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
       <div id="coBox"></div>
     </div>
     <div class="panel sec" id="secFund" data-pane="fin" data-sub="rev">
-      <div class="ph"><h2>營收與估值</h2><span class="note" id="fundNote"></span></div>
+      <div class="ph"><h2>營收與獲利</h2><span class="note" id="fundNote"></span></div>
       <ul class="sumlist" id="fundSum"></ul>
       <div class="tablewrap" id="fundTbl"></div>
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.10-60</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.11-61</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2409,7 +2409,7 @@ function renderBook() {
 const DSUB = {
   ovw: [["ls", "多空研判", 1], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "達人觀點"]],
   chips: [["sum", "籌碼總覽"], ["inst", "法人與基金"], ["branch", "分點主力"], ["big", "大戶與股權"]],
-  fin: [["rev", "營收與估值"], ["report", "財務報表"], ["div", "股利"], ["info", "公司資料"], ["cal", "行事曆"]],
+  fin: [["rev", "營收與獲利"], ["report", "財務報表"], ["div", "股利"], ["info", "公司資料"], ["cal", "行事曆"]],
 };
 const DSUB_OWN = new Set(["tags", "sum", "rev", "report"]); // 用原本區塊畫的子頁
 const OLD_DTAB = { fund: ["fin", "rev"], co: ["fin", "report"], info: ["ovw", "ls"], tags: ["ovw", "tags"] }; // 舊版分頁 → 新的分頁＋子頁
@@ -2536,6 +2536,10 @@ function drawTs() {
   }
   const hv = TS.hover != null ? pts.reduce((b, p) => (Math.abs(p.g - TS.hover) < Math.abs(b.g - TS.hover) ? p : b), pts[0]) : null, P = hv || last;
   if (hv) { ctx.strokeStyle = col("--muted"); ctx.globalAlpha = 0.8; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(X(hv.g), top); ctx.lineTo(X(hv.g), H - axH - 6); ctx.moveTo(L, Y(hv.c)); ctx.lineTo(L + pw, Y(hv.c)); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
+  // 查價線：跟著手指／游標的高度，右邊標出那個高度的價格與漲跌幅
+  if (hv && TS.y != null && TS.y >= top && TS.y <= top + mainH) { const yy = Math.round(TS.y) + 0.5, pv = hi - (TS.y - top) / mainH * (hi - lo), t = `${fp(pv)} ${pv >= prev ? "+" : ""}${((pv / prev - 1) * 100).toFixed(2)}%`;
+    ctx.strokeStyle = col("--accent"); ctx.globalAlpha = 0.85; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(L + pw, yy); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.font = `500 10.5px ${col("--font-num")}`; const tw = ctx.measureText(t).width + 8, tx = Math.min(L + pw + 2, Wd - tw - 1); ctx.fillStyle = col("--accent"); ctx.fillRect(tx, yy - 9, tw, 18); ctx.fillStyle = col("--surface"); ctx.textAlign = "left"; ctx.fillText(t, tx + 4, yy); ctx.font = `11px ${col("--font-num")}`; }
   TS.geo = { L, pw, total };
   const ch = P.c / prev - 1;
   $("#tsLeg").innerHTML = `<span><b>${d.fut ? (P.s === "night" ? "夜盤 " : "日盤 ") : ""}${days.length > 1 ? P.d.slice(5).replace("-", "/") + " " : ""}${P.t}</b></span><span class="${cls(ch)}"><b>價</b>${fp(P.c)}（${ch >= 0 ? "+" : ""}${(ch * 100).toFixed(2)}%）</span>${P.a != null && !d.isIdx ? `<span style="color:var(--s1)"><b style="color:inherit">均價</b>${fp(P.a)}</span>` : ""}${d.isIdx ? "" : `<span><b>量</b>${fmtVol(P.v)} ${d.us ? "千股" : d.fut ? "口" : "張"}</span>`}<span><b>${d.fut ? "參考價" : "昨收"}</b>${fp(prev)}</span>`;
@@ -2669,7 +2673,7 @@ $("#fBox").addEventListener("pointerdown", flowPtr);
 $("#fBox").addEventListener("pointerleave", e => { if (e.pointerType === "mouse" && W.flowHov != null) { W.flowHov = null; drawFlow(); } });
 $("#fBox").addEventListener("click", e => { if (e.target.closest("[data-flowx]")) { W.flowHov = null; drawFlow(); return; } const b = e.target.closest("[data-bk]"); if (b) { W.bigK = +b.dataset.bk; store.set("watch:bigk", W.bigK); renderFlow(); } });
 new ResizeObserver(() => { if (W.ftab === "flow" && !$("#fBox").hidden) drawFlow(); }).observe($("#fBox"));
-{ const cv = $("#tsCanvas"), at = e => { if (!TS.geo) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left; TS.hover = Math.max(0, Math.min(TS.geo.total, (x - TS.geo.L) / TS.geo.pw * TS.geo.total)); drawTs(); };
+{ const cv = $("#tsCanvas"), at = e => { if (!TS.geo) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left; TS.hover = Math.max(0, Math.min(TS.geo.total, (x - TS.geo.L) / TS.geo.pw * TS.geo.total)); TS.y = e.clientY - r.top; drawTs(); };
   cv.addEventListener("pointerdown", at); cv.addEventListener("pointermove", e => { if (e.pointerType === "mouse" || e.buttons) at(e); });
   cv.addEventListener("pointerleave", () => { TS.hover = null; drawTs(); }); cv.addEventListener("pointerup", e => { if (e.pointerType !== "mouse") setTimeout(() => { TS.hover = null; drawTs(); }, 1500); });
   new ResizeObserver(() => drawTs()).observe($("#tsBox")); }
@@ -2681,7 +2685,8 @@ const dBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN
 // 策略：定義在 analysis.js 的 STRAT_DEFS（可調參數）；這裡記住每個策略的參數與買賣方式
 const STRATS = { "": { name: "不顯示" }, ...Object.fromEntries(Object.entries(STRAT_DEFS).map(([k, v]) => [k, { name: v.name, fn: (D, I) => stratRun(k, D, I, (W.stratP || {})[k]) }])) };
 W.stratP = store.get("watch:stratp", {}) || {};
-const BT_DEF = { fill: "open", useSell: true, stop: 0, take: 0, trail: 0, hold: 0, size: "all", units: 1 };
+// cap 初始資金（元）、amt 每次固定買進金額（元，size "amount"）、from／to 回測的時間區間（YYYY-MM-DD，空白＝全部）
+const BT_DEF = { fill: "open", useSell: true, stop: 0, take: 0, trail: 0, hold: 0, size: "all", units: 1, cap: 1000000, amt: 100000, from: "", to: "" };
 W.btOpt = { ...BT_DEF, ...(store.get("watch:btopt", {}) || {}) };
 function stratCfgRender() {
   const box = $("#stratCfgBox"), S = STRAT_DEFS[W.strat]; $("#stratCfg").hidden = !S; if (!S) return;
@@ -2692,20 +2697,29 @@ function stratCfgRender() {
       <button class="linkbtn" type="button" data-spreset>恢復預設參數</button>` : `<p class="note">這個策略沒有可調參數。</p>`}
     <h5>買賣方式</h5>
     <div class="scrow"><span>成交時機</span><div class="seg">${[["open", "訊號隔天開盤"], ["close", "訊號當根收盤"]].map(([v, t]) => `<button type="button" data-btfill="${v}" aria-pressed="${O.fill === v}">${t}</button>`).join("")}</div></div>
-    <div class="scrow"><span>每次買進</span><div class="seg">${[["all", "全部資金"], ["half", "一半資金"], ["units", "固定張數"]].map(([v, t]) => `<button type="button" data-btsize="${v}" aria-pressed="${O.size === v}">${t}</button>`).join("")}</div>${O.size === "units" ? num("units", "張數", O.units, 1, 1000, 1, " 張") : ""}</div>
+    <div class="scrow"><span>回測期間</span><label class="scnum"><input type="date" data-btd="from" value="${O.from || ""}" aria-label="開始日期"></label><span>～</span><label class="scnum"><input type="date" data-btd="to" value="${O.to || ""}" aria-label="結束日期"></label>
+      <div class="seg">${[["3m", "近 3 月"], ["1y", "近 1 年"], ["3y", "近 3 年"], ["all", "全部"]].map(([v, t]) => `<button type="button" data-btrange="${v}">${t}</button>`).join("")}</div></div>
+    <div class="scgrid">${num("cap", "初始資金", O.cap, 10000, 1e9, 10000, " 元")}</div>
+    <div class="scrow"><span>每次買進</span><div class="seg">${[["all", "全部資金"], ["half", "一半資金"], ["amount", "固定金額"], ["units", "固定張數"]].map(([v, t]) => `<button type="button" data-btsize="${v}" aria-pressed="${O.size === v}">${t}</button>`).join("")}</div>${O.size === "amount" ? num("amt", "每次金額", O.amt, 1000, 1e9, 1000, " 元") : ""}${O.size === "units" ? num("units", "張數", O.units, 1, 1000, 1, " 張") : ""}</div>
     <div class="scrow"><span>出場條件</span><label class="scchk"><input type="checkbox" data-btsell ${O.useSell ? "checked" : ""}> 依賣出訊號</label></div>
     <div class="scgrid">${num("stop", "停損", O.stop, 0, 50, 0.5, " %")}${num("take", "停利", O.take, 0, 200, 1, " %")}${num("trail", "移動停利（從最高回落）", O.trail, 0, 50, 0.5, " %")}${num("hold", "最多持有", O.hold, 0, 500, 1, " 根")}</div>
     <p class="note">0＝不設。停損、停利、移動停利用盤中最高、最低價判斷（跳空就用開盤價），任何一個條件先到就賣出；圖上會標出出場原因。回測含手續費與證交稅，只做多。</p>`;
 }
-function btOptions() { const O = W.btOpt; return { fill: O.fill, useSell: O.useSell, stop: O.stop / 100, take: O.take / 100, trail: O.trail / 100, hold: O.hold, size: O.size, units: O.units }; }
+function btOptions() { const O = W.btOpt; return { fill: O.fill, useSell: O.useSell, stop: O.stop / 100, take: O.take / 100, trail: O.trail / 100, hold: O.hold, size: O.size, units: O.units, amount: O.amt }; }
+// 回測期間：K 線裡落在 from～to 的那一段（起訖索引）；指標與訊號用整段資料算（前面的資料當暖身），只在這段裡面買賣
+function btWindow(D) { const O = W.btOpt, d = x => String(x.d).slice(0, 10); let a = 0, b = D.length - 1; if (O.from) { const k = D.findIndex(x => d(x) >= O.from); a = k < 0 ? D.length : k; } if (O.to) { for (let k = D.length - 1; k >= 0; k--) if (d(D[k]) <= O.to) { b = k; break; } if (d(D[0]) > O.to) b = -1; } return b - a >= 1 ? { a, b } : null; }
 { const k = $("#stratCfg"), v = store.get("watch:stratcfg", null); k.open = !!v; k.addEventListener("toggle", () => { store.set("watch:stratcfg", k.open); postHeight(); }); }
 $("#stratCfgBox").addEventListener("input", e => {
   const sp = e.target.closest("[data-sp]"); if (sp) { (W.stratP[W.strat] ||= {})[sp.dataset.sp] = +sp.value; sp.previousElementSibling.querySelector("b").textContent = sp.value; store.set("watch:stratp", W.stratP); clearTimeout(W.spT); W.spT = setTimeout(drawK, 120); return; }
+  const bd = e.target.closest("[data-btd]"); if (bd) { W.btOpt[bd.dataset.btd] = bd.value || ""; store.set("watch:btopt", W.btOpt); clearTimeout(W.spT); W.spT = setTimeout(drawK, 250); return; }
   const bt = e.target.closest("[data-bt]"); if (bt) { const v = Math.max(+bt.min, Math.min(+bt.max, +bt.value || 0)); W.btOpt[bt.dataset.bt] = v; store.set("watch:btopt", W.btOpt); clearTimeout(W.spT); W.spT = setTimeout(drawK, 250); }
 });
 $("#stratCfgBox").addEventListener("click", e => {
   const t = e.target, O = W.btOpt;
   if (t.closest("[data-spreset]")) { delete W.stratP[W.strat]; store.set("watch:stratp", W.stratP); stratCfgRender(); drawK(); return; }
+  const rg = t.closest("[data-btrange]"); if (rg) { const v = rg.dataset.btrange, D = kSeries() || [], last = String(D.at(-1)?.d || new Date().toISOString()).slice(0, 10), back = { "3m": 92, "1y": 366, "3y": 1096 }[v];
+    O.from = back ? new Date(new Date(last + "T00:00:00Z").getTime() - back * 864e5).toISOString().slice(0, 10) : ""; O.to = ""; if (back && D.length && String(D[0].d).slice(0, 10) > O.from) loadOlder();
+    store.set("watch:btopt", O); stratCfgRender(); drawK(); return; }
   const f = t.closest("[data-btfill]"), z = t.closest("[data-btsize]"), c = t.closest("[data-btsell]");
   if (f) O.fill = f.dataset.btfill; else if (z) O.size = z.dataset.btsize; else if (c) O.useSell = c.checked; else return;
   store.set("watch:btopt", O); stratCfgRender(); drawK();
@@ -2803,10 +2817,14 @@ function drawK(fresh = false, shift = 0) {
   if (W.sel === "T00") D.isIndex = true; // TAPI 用加權的成交金額（億元）；櫃買指數的量是千股，不算 TAPI
   if ((W.sel === "T00" || W.sel === "O00") && W.k === "D") breadthAttach(D);
   const I = indicators(D), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D, I);
-  let bt = null; if (S?.fn) try { const units = W.btOpt.size === "units" && !isFut(W.sel), cap = units ? Math.max(1e6, W.btOpt.units * 1000 * Math.max(...D.map(x => x.h)) * 1.01) : 1e6; // 固定張數：資金自動放大到買得起
-    bt = backtest(D, sigs, { capital: cap, lot: units ? 1000 : 1, tax: taxOf(W.sel), ...btOptions() }); } catch {}
-  // 停損、停利、移動停利、到期的出場點也標在圖上
+  // 回測：只在「回測期間」裡買賣（訊號用整段資料算），資金用設定的初始資金；固定張數買不起時資金自動放大
+  const win = S?.fn ? btWindow(D) : null; let bt = null;
+  if (win) try { const Dw = D.slice(win.a, win.b + 1), sw = sigs.filter(g => g.i >= win.a && g.i <= win.b).map(g => ({ ...g, i: g.i - win.a })), units = W.btOpt.size === "units" && !isFut(W.sel);
+    const cap = units ? Math.max(W.btOpt.cap, W.btOpt.units * 1000 * Math.max(...Dw.map(x => x.h)) * 1.01) : W.btOpt.cap;
+    bt = backtest(Dw, sw, { capital: cap, lot: units ? 1000 : 1, tax: taxOf(W.sel), ...btOptions() }); bt.trades.forEach(t => { t.i += win.a; t.xi += win.a; }); bt.from = Dw[0].d; bt.to = Dw.at(-1).d; } catch {}
+  // 停損、停利、移動停利、到期的出場點也標在圖上；回測期間外的訊號畫淡
   const exitMk = (bt?.trades || []).filter(t => t.why && !["訊號", "期末"].includes(t.why)).map(t => ({ i: t.xi, side: "sell", label: t.why }));
+  if (win && (win.a > 0 || win.b < D.length - 1)) sigs.forEach(g => { if (g.i < win.a || g.i > win.b) g.dim = true; });
   const old = kChart.view;
   Chart.keepView = !fresh;
   try { kChart.set(D, { I, ...mainOpts(dBar), subs: [...subsFrom(dBar), ...chipSubs(D)], noVol: !dBar.has("vol") || !D.some(x => x.v), volLabel: `量（${isUS(W.sel) ? "千股" : isFut(W.sel) ? "口" : "張"}）`, fmtD: fmtKD, markers: [...sigs, ...exitMk, ...ex.markers], compare: compareOpt(), shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
@@ -2821,8 +2839,8 @@ function drawK(fresh = false, shift = 0) {
   $("#kNote").textContent = `${first ? first.replace(/-/g, "/") + " 起・" : ""}共 ${N} 根${st.end ? (minute ? "（已到資料來源的最早）" : "（已到最早）") : W.busyOlder ? "・載入更早資料中…" : st.failAt ? `・更早的資料暫時載不到（${W.olderErr || "連線問題"}），往左拉會再試` : "・往左拉可以一直載入更早的 K 線"}・${minute ? W.intra?.source || "" : W.daily?.source || ""}`;
   if (S?.fn) { let txt = `${sigs.length} 個訊號`; const r = bt;
     if (r?.trades.length) { const why = {}; r.trades.forEach(t => (why[t.why] = (why[t.why] || 0) + 1));
-      txt += `・照做回測 ${r.total >= 0 ? "+" : ""}${(r.total * 100).toFixed(1)}%（買進持有 ${r.bh >= 0 ? "+" : ""}${(r.bh * 100).toFixed(1)}%），${r.trades.length} 筆、勝率 ${Math.round(r.win * 100)}%、最大回落 ${(r.mdd * 100).toFixed(1)}%・出場：${Object.entries(why).map(([k, v]) => `${k} ${v}`).join("、")}`; }
-    else if (r?.tooSmall) txt += "・資金不夠買一張，可改成固定張數或零股"; $("#stratNote").textContent = txt; }
+      txt += `・${String(r.from).slice(0, 10).replace(/-/g, "/")}～${String(r.to).slice(0, 10).replace(/-/g, "/")} 投入 ${Math.round(r.cap).toLocaleString()} 元，照做回測 ${r.total >= 0 ? "+" : ""}${(r.total * 100).toFixed(1)}%（${r.pnl >= 0 ? "賺" : "賠"} ${Math.abs(Math.round(r.pnl)).toLocaleString()} 元；買進持有 ${r.bh >= 0 ? "+" : ""}${(r.bh * 100).toFixed(1)}%），${r.trades.length} 筆、勝率 ${Math.round(r.win * 100)}%、最大回落 ${(r.mdd * 100).toFixed(1)}%・出場：${Object.entries(why).map(([k, v]) => `${k} ${v}`).join("、")}`; }
+    else if (r?.tooSmall) txt += "・資金不夠買一張，可改成固定張數或零股"; else if (!win) txt += "・回測期間裡沒有 K 線，請調整期間（往左拉可以載入更早的資料）"; else if (r && !r.trades.length) txt += "・回測期間裡沒有成交"; $("#stratNote").textContent = txt; }
   else $("#stratNote").textContent = "選一個策略，買賣訊號會標在 K 線上，並顯示照做的回測結果";
   ksetSummary();
 }
@@ -3000,7 +3018,9 @@ function renderInfo() {
   const j = W.info, D = W.daily?.data;
   if (W.dtab === "chips" && dSub() === "sum") {
     if (!j || j.err || !D?.length) { $("#chipsSum").innerHTML = `<li class="note">${j?.err ? esc(j.err) : W.off ? "需要部署到網站" : "載入中…"}</li>`; $("#chipsTbl").innerHTML = ""; chipsChart.host.hidden = true; $("#shortBox").hidden = true; return; }
-    const items = chipsSummary(j, D);
+    const items = chipsSummary(j, D), mL = j.margin?.at(-1);
+    // 信用交易（原本在「資券大戶」頁）：融資使用率、券資比
+    if (mL?.marginBal) items.push({ k: "信用交易", t: `融資使用率 ${mL.marginLimit ? (mL.marginBal / mL.marginLimit * 100).toFixed(1) + "%" : "—"}、券資比 ${(mL.shortBal / mL.marginBal * 100).toFixed(1)}%（券資比高時，上漲可能引發軋空；融資使用率高代表散戶槓桿多）` });
     $("#chipsSum").innerHTML = items.length ? items.map(x => `<li><strong>${x.k}</strong>：${x.t}</li>`).join("") : `<li class="note">沒有籌碼資料。</li>`;
     $("#chipsNote").textContent = `單位：張・${j.source || ""}`;
     const DD = D.slice(-90), subs = [...(j.inst?.length ? [{ custom: instSub(alignByDate(DD, j.inst)) }] : []), ...(j.margin?.length ? [{ custom: marginSub(alignByDate(DD, j.margin)) }] : []), ...(j.short?.length ? [{ custom: shortSub(alignByDate(DD, j.short)) }] : [])];
@@ -3024,7 +3044,8 @@ function renderInfo() {
     const revs = (j.revenue || []).slice(-12).map(r => ({ label: r.ym.slice(5) + "月", v: +(r.rev / 1e8).toFixed(1), y: r.yoy }));
     const band = j.per?.length ? peBand(j.per) : "", charts = (band ? `<h3 class="fh">公司估值</h3>${band}` : "") + (revs.length ? `<h3 class="fh">月營收<span class="note">柱＝營收（億）、線＝年增率</span></h3>${barLineSvg(revs, { bar: "var(--s3)", fmtV: v => Math.round(v) })}` : "");
     $("#fundTbl").innerHTML = charts + (per ? `<div class="d-kv" style="margin:0 16px 12px"><div><span>本益比</span><b>${per.pe ?? "—"}</b></div><div><span>股價淨值比</span><b>${per.pb ?? "—"}</b></div><div><span>殖利率</span><b>${per.dy != null ? per.dy + "%" : "—"}</b></div><div><span>日期</span><b>${per.d.replace(/-/g, "/")}</b></div></div>` : "")
-      + (rev.length ? `<table class="tbl"><thead><tr><th>月營收</th><th>營收（億）</th><th>年增</th><th>月增</th></tr></thead><tbody>${rev.map(r => `<tr><td>${r.ym.replace("-", "/")}</td><td>${(r.rev / 1e8).toFixed(2)}</td><td class="${clsOf(r.yoy)}">${r.yoy != null ? (r.yoy > 0 ? "+" : "") + r.yoy + "%" : "—"}</td><td class="${clsOf(r.mom)}">${r.mom != null ? (r.mom > 0 ? "+" : "") + r.mom + "%" : "—"}</td></tr>`).join("")}</tbody></table>` : "");
+      + (rev.length ? `<table class="tbl"><thead><tr><th>月營收</th><th>營收（億）</th><th>年增</th><th>月增</th></tr></thead><tbody>${rev.map(r => `<tr><td>${r.ym.replace("-", "/")}</td><td>${(r.rev / 1e8).toFixed(2)}</td><td class="${clsOf(r.yoy)}">${r.yoy != null ? (r.yoy > 0 ? "+" : "") + r.yoy + "%" : "—"}</td><td class="${clsOf(r.mom)}">${r.mom != null ? (r.mom > 0 ? "+" : "") + r.mom + "%" : "—"}</td></tr>`).join("")}</tbody></table>` : "")
+      + (typeof SX !== "undefined" && j.fin?.length ? `<div class="fprofit">${SX.profit()}</div>` : ""); // 獲利：EPS、毛利率、營益率、淨利率（每季）
   } else if (isSxSub()) sxRender();
   postHeight();
 }

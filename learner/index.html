@@ -148,19 +148,6 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .deep-body > :first-child { margin-top: 0; }
 .deep-body ol { margin: 0 0 10px; padding-left: 1.4em; } .deep-body ol li { margin-bottom: 6px; }
 .deep-body .formula { white-space: pre-wrap; }
-/* 華山論劍課程表：三欄（手機一欄），每一項點了到那一課 */
-.ctable { margin: 0 0 14px; }
-.ctable > summary { cursor: pointer; font-size: 14px; color: var(--accent); padding: 6px 0; list-style: none; letter-spacing: .04em; }
-.ctable > summary::-webkit-details-marker { display: none; }
-.ctable > summary::before { content: "▸ "; } .ctable[open] > summary::before { content: "▾ "; }
-.ct-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 6px 0 4px; }
-@media (max-width: 900px) { .ct-cols { grid-template-columns: 1fr; } }
-.ct-col h3 { margin: 0 0 6px; font-size: 15px; font-weight: 500; display: flex; gap: 8px; align-items: baseline; } .ct-col h3 span { color: var(--muted); font-size: 13px; font-weight: 400; }
-.ct-col h4 { margin: 10px 0 2px; font-size: 12px; font-weight: 400; color: var(--muted); letter-spacing: .04em; }
-.ct-col ul { list-style: none; margin: 0; padding: 0; }
-.ct-col li button { display: grid; grid-template-columns: 6.5em 1fr auto; gap: 8px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 6px 2px; font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer; }
-.ct-col li button b { font-weight: 500; } .ct-col li button span { color: var(--muted); } .ct-col li button i { color: var(--up); font-style: normal; }
-.ct-col li button:hover b, .ct-col li button[aria-current="true"] b { color: var(--accent); }
 figure.ccw { margin: 0 0 12px; } figure.ccw figcaption { margin-top: 4px; }
 table.mini { border-collapse: collapse; font-size: 13px; margin: 6px 0 12px; } table.mini th, table.mini td { border-bottom: 1px solid var(--line); padding: 4px 10px 4px 0; text-align: left; vertical-align: top; } table.mini th { color: var(--muted); font-weight: 400; }
 .deep-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px 14px; }
@@ -527,7 +514,6 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
   <section id="view-learn" class="learn" role="tabpanel">
     <nav class="lesson-list" id="lessonList" aria-label="課程目錄"></nav>
     <article class="lesson" id="lesson">
-      <details class="ctable" id="courseTable"><summary>華山論劍技術分析學院・課程表</summary><div id="courseTableBox"></div></details>
       <div class="lesson-head">
         <div class="eyebrow" id="lessonEyebrow"></div>
         <h2 id="lessonTitle"></h2>
@@ -783,7 +769,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.10-60</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.11-61</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -2405,12 +2391,12 @@ OTE 區 ≈ 212.8 ～ 222.9（和訂單塊重疊）</div>
 };
 
 // 課程順序與分組
-// 華山論劍課程表（lessons-pro.js）的新課併進來；深入學習一起併
+// 進階課程（lessons-pro.js：更多型態、指標與趨勢理論）併進來；深入學習一起併
 LESSONS.push(...LESSONS_PRO); Object.assign(LESSON_DEEP, LESSON_PRO_DEEP);
 const LESSON_GROUPS = [
-  ["基礎", ["kline"]], ["初級班：型態學", ["patterns-rev", "patterns-cont", "chart-patterns", "pattern-round", "pattern-wedge", "gaps"]],
-  ["中級班：指標學", ["ma", "rsi", "kd", "wr", "macd", "mtm", "dmi", "psy", "arbr", "boll", "vwap"]], ["中級班：量能與大盤指標", ["vol", "obv", "vr", "inout", "vprofile", "breadth", "tapi"]],
-  ["高級班：趨勢理論", ["dow", "trend3", "sr", "trendline", "fan", "elliott", "ccw", "fib"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["籌碼面與基本面", ["chips-inst", "chips-margin", "fund-rev", "fund-val"]], ["風險管理", ["risk"]],
+  ["基礎", ["kline"]], ["K 線與型態學", ["patterns-rev", "patterns-cont", "chart-patterns", "pattern-round", "pattern-wedge", "gaps"]],
+  ["技術指標", ["ma", "rsi", "kd", "wr", "macd", "mtm", "dmi", "psy", "arbr", "boll", "vwap"]], ["量能與大盤指標", ["vol", "obv", "vr", "inout", "vprofile", "breadth", "tapi"]],
+  ["趨勢理論", ["dow", "trend3", "sr", "trendline", "fan", "elliott", "ccw", "fib"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["籌碼面與基本面", ["chips-inst", "chips-margin", "fund-rev", "fund-val"]], ["風險管理", ["risk"]],
 ];
 const ORDER = LESSON_GROUPS.flatMap(g => g[1]);
 LESSONS.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
@@ -2508,7 +2494,7 @@ function showLesson(i) {
   loadLessonData(); drawLesson();
   $("#lessonPrev").disabled = i === 0;
   $("#lessonNext").textContent = i === LESSONS.length - 1 ? "完成課程，去做測驗 →" : `完成本課，下一課：${LESSONS[i + 1].title.split("：")[0]} →`;
-  renderLessonList(); if ($("#courseTable").open) renderCourseTable();
+  renderLessonList();
 }
 $("#lessonGallery").addEventListener("click", e => {
   const b = e.target.closest("[data-pat]"); if (!b) return;
@@ -2529,15 +2515,6 @@ $("#lessonTools").addEventListener("change", e => {
   lessonCode = /^(加權|大盤|加權指數|TAIEX)$/i.test(v) ? "TAIEX" : v.toUpperCase(); store.set("lessonCode", lessonCode);
   lessonView.real = null; lessonView.seedOff = 0; loadLessonData(); drawLesson();
 });
-// 華山論劍課程表：點一項就到那一課（有型態卡片的直接選好那個型態）
-function renderCourseTable() {
-  $("#courseTableBox").innerHTML = `<div class="ct-cols">${COURSE_TABLE.map(C => `<section class="ct-col"><h3>${C.name}<span>${C.sub}</span></h3>${C.groups.map(g => `<h4>${g.title}</h4><ul>${g.items.map(([n, d, id, pat]) =>
-    `<li><button type="button" data-ct="${id}" ${pat ? `data-ctpat="${pat}"` : ""} aria-current="${LESSONS[lessonIdx]?.id === id}"><b>${n}</b><span>${d}</span>${done.has(id) ? `<i aria-label="已完成">✓</i>` : ""}</button></li>`).join("")}</ul>`).join("")}</section>`).join("")}</div>`;
-}
-$("#courseTableBox").addEventListener("click", e => { const b = e.target.closest("[data-ct]"); if (!b) return; const i = lessonIndex(b.dataset.ct); if (i < 0) return;
-  showLesson(i); if (b.dataset.ctpat) { lessonView.pat = b.dataset.ctpat; drawLesson(); } $("#courseTable").open = false; $("#lesson").scrollIntoView({ block: "start" }); });
-$("#courseTable").addEventListener("toggle", () => { if ($("#courseTable").open) renderCourseTable(); store.set("ctOpen", $("#courseTable").open); });
-if (store.get("ctOpen", false)) $("#courseTable").open = true;
 // 在看盤的 K 線圖打開這一課：把指標、疊加記到看盤的指標列（同網域共用 localStorage），打開副圖訊號對應，再切到看盤的技術分頁
 function openK(id) {
   const O = LESSON_OPEN_K[id]; if (!O) return;
@@ -2570,7 +2547,7 @@ const STRATS = {
   chartPat: { name: "型態學突破（頭肩、M 頭、W 底、三角…）", fn: (D, I) => Signals.chartPatLive(D, I) },
   choch: { name: "聰明錢：CHoCH 結構轉變", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") },
   bos: { name: "道氏：所有結構突破（BOS + CHoCH）", fn: (D, I) => Signals.structure(D, I, "dow") },
-  // 華山論劍中級班的指標（參數用預設值，定義在 analysis.js 的 STRAT_DEFS）
+  // 進階指標策略（參數用預設值，定義在 analysis.js 的 STRAT_DEFS）
   ...Object.fromEntries(["mtm", "dmi", "psy", "arbr", "obv", "vr", "ccw"].map(k => [k, { name: STRAT_DEFS[k].name + "（" + STRAT_DEFS[k].desc.split("，")[0].split("；")[0] + "）", fn: (D, I) => stratRun(k, D, I) }])),
 };
 let lab = { src: "sim", seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma"), skip: new Set(), listOpen: false,
@@ -3835,11 +3812,15 @@ function intraDraw() {
   // 十字線
   const hv = INTRA.hover != null ? P.reduce((a, p) => (Math.abs(p.m - INTRA.hover) < Math.abs(a.m - INTRA.hover) ? p : a), P[0]) : null;
   if (hv) { const x = X(hv.m); c.strokeStyle = muted; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(x, top); c.lineTo(x, vt + vh); c.stroke(); c.setLineDash([]); c.beginPath(); c.arc(x, Y(hv.c), 3.5, 0, 7); c.fillStyle = ink; c.fill(); }
+  // 查價線：跟著手指／游標的高度，右邊標出那個高度的價格與漲跌幅
+  if (hv && INTRA.y != null && INTRA.y >= top && INTRA.y <= top + ph) { const yy = Math.round(INTRA.y) + 0.5, pv = prev + (top + ph / 2 - INTRA.y) / (ph / 2 - 6) * dev, t = `${fmtP(pv)} ${pv >= prev ? "+" : ""}${((pv / prev - 1) * 100).toFixed(2)}%`;
+    c.strokeStyle = css("--accent"); c.globalAlpha = 0.85; c.setLineDash([2, 3]); c.beginPath(); c.moveTo(L, yy); c.lineTo(L + pw, yy); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+    c.font = `500 10.5px ${font}`; const tw = c.measureText(t).width + 8, tx = Math.min(L + pw + 2, W - tw - 1); c.fillStyle = css("--accent"); c.fillRect(tx, yy - 9, tw, 18); c.fillStyle = css("--surface"); c.textAlign = "left"; c.fillText(t, tx + 4, yy); c.font = `10.5px ${font}`; }
   const show = hv || last, pc = (show.c / prev - 1) * 100;
   $("#intraRead").innerHTML = `${show.t}　價 <b class="${pc >= 0 ? "up" : "down"}">${fmtP(show.c)}（${pc >= 0 ? "+" : ""}${pc.toFixed(2)}%）</b>${isIdx ? "" : `　均價 ${fmtP(show.avg)}　量 ${show.v.toLocaleString()} 張`}　昨收 ${fmtP(prev)}`;
   INTRA.geo = { L, pw, N };
 }
-{ const cv = $("#intraCv"), at = e => { const g = INTRA.geo; if (!g) return; const r = cv.getBoundingClientRect(); INTRA.hover = Math.max(0, Math.min(g.N, ((e.clientX - r.left - g.L) / g.pw) * g.N)); intraDraw(); };
+{ const cv = $("#intraCv"), at = e => { const g = INTRA.geo; if (!g) return; const r = cv.getBoundingClientRect(); INTRA.hover = Math.max(0, Math.min(g.N, ((e.clientX - r.left - g.L) / g.pw) * g.N)); INTRA.y = e.clientY - r.top; intraDraw(); };
   cv.addEventListener("pointermove", at); cv.addEventListener("pointerdown", at); cv.addEventListener("pointerleave", () => { INTRA.hover = null; intraDraw(); });
   new ResizeObserver(() => { if (INTRA.data) intraDraw(); }).observe($("#intraChart")); }
 $("#intraPanel").addEventListener("toggle", () => { store.set("intraOpen", $("#intraPanel").open); if ($("#intraPanel").open) intraLoad(true); });
@@ -3985,7 +3966,7 @@ function shotGroups() {
   return [
     { title: "主圖", items: MAIN_ITEMS }, { title: "疊加", items: OVERLAY_ITEMS },
     { title: "副圖", items: [...(shot.hasVol ? [{ id: "vol", label: "成交量" }] : []), ...(shot.src === "real" && INFO.cur?.inst.length ? [{ id: "inst", label: "法人買賣超" }] : []), ...(shot.src === "real" && INFO.cur?.margin.length ? [{ id: "margin", label: "融資" }] : []), ...shot.panes.map((p, k) => ({ p, k, t: p.cfg.type || p.type })).filter(x => x.t !== "vol").map(x => ({ id: "pane:" + x.k, label: `截圖 ${PANE_TYPES[x.t] || "副圖"}` })),
-      ...[["kd", "KD"], ["rsi", "RSI"], ["macd", "MACD"], ["wr", "威廉"]].map(([id, l]) => ({ id, label: shot.src === "real" ? l : "重算 " + l }))] },
+      ...[["kd", "KD"], ["rsi", "RSI"], ["macd", "MACD"], ["wr", "威廉"], ...SUBX_ITEMS.filter(x => !SUBX[x.id].breadth && !SUBX[x.id].index).map(x => [x.id, x.label])].map(([id, l]) => ({ id, label: shot.src === "real" ? l : "重算 " + l }))] },
   ];
 }
 function paneCustom(pane) {
