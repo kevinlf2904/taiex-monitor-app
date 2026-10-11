@@ -422,7 +422,7 @@ function backtest(D, sigs, opt = {}) {
   const cap = opt.capital || 1e6, lot = opt.lot || 1, useBuy = opt.useBuy !== false, useSell = opt.useSell !== false, skip = opt.skip || new Set();
   const TX = opt.tax ?? TAX, fee = amt => Math.max(20, Math.floor(amt * FEE)), tax = amt => Math.floor(amt * TX); // 手續費與證交稅都是無條件捨去；ETF 證交稅 0.1%
   // 買賣方式（預設和以前一樣）：fill "open"＝訊號隔天開盤成交、"close"＝訊號當根收盤成交；
-  // stop 停損、take 停利、trail 移動停利（小數，例 0.08＝8%），hold 最多持有幾根 K 棒；size "all" 全部資金、"half" 一半、"units" 每次固定 units × lot 股
+  // stop 停損、take 停利、trail 移動停利（小數，例 0.08＝8%），hold 最多持有幾根 K 棒；size "all" 全部資金、"half" 一半、"units" 每次固定 units × lot 股、"amount" 每次固定買進 opt.amount 元
   const fillClose = opt.fill === "close", stop = +opt.stop || 0, take = +opt.take || 0, trail = +opt.trail || 0, hold = +opt.hold || 0, size = opt.size || "all", units = Math.max(1, +opt.units || 1);
   // 用手上的現金能買幾股（扣掉手續費後取整數單位）
   const canBuy = (money, px) => { let n = Math.floor(money / (px * (1 + FEE)) / lot) * lot; while (n > 0 && n * px + fee(n * px) > money) n -= lot; return n; };
@@ -430,7 +430,7 @@ function backtest(D, sigs, opt = {}) {
   let cash = cap, sh = 0, pos = null, pending = !useBuy && useSell ? "buy" : null, peak = cap, mdd = 0, costs = 0, missed = 0;
   const trades = [];
   const sell = (i, px, open, why = "訊號") => { const amt = sh * px, c = fee(amt) + tax(amt); costs += c; cash += amt - c; trades.push({ ...pos, xi: i, xpx: px, sh, pnl: amt - c - pos.cost, ret: (amt - c) / pos.cost - 1, open, why }); pos = null; sh = 0; };
-  const buy = (i, px) => { const budget = size === "half" ? cash / 2 : cash; let n = canBuy(budget, px); if (size === "units") n = Math.min(n, units * lot);
+  const buy = (i, px) => { const budget = size === "half" ? cash / 2 : size === "amount" ? Math.min(cash, +opt.amount || cash) : cash; /* amount：每次固定買進金額 */ let n = canBuy(budget, px); if (size === "units") n = Math.min(n, units * lot);
     if (n > 0) { const amt = n * px, c = fee(amt); costs += c; cash -= amt + c; sh = n; pos = { i, px, cost: amt + c, start: i === 0 && !useBuy, hi: px }; } else missed++; };
   for (let i = 0; i < D.length; i++) {
     if (pending === "buy" && !pos) buy(i, D[i].o);
@@ -560,7 +560,7 @@ function zigzagShape(D, tags = true) {
   const z = zigzag(D, 3);
   return { pts: z.map(s => [s.i, s.p]), color: "s2", width: 1.4, tags: tags ? z.map(s => ({ i: s.i, p: s.p, text: s.label, below: s.type === "L" })) : [] };
 }
-/* ---------- 趨勢理論（華山論劍課程表的高級班） ---------- */
+/* ---------- 趨勢理論：三種趨勢、趨勢線、扇形、波浪、逆時鐘曲線 ---------- */
 // 三種趨勢：同一段走勢用大、中、小三種轉折視窗各連一條折線——主要趨勢（大波段）、修正趨勢（主要趨勢裡的回檔反彈）、小趨勢（幾天的波動）
 function trend3Shapes(D) {
   const z = w => zigzag(D, w).map(s => [s.i, s.p]);

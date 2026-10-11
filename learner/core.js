@@ -100,7 +100,7 @@ function indicators(D) {
 }
 
 
-/* ---------- 更多副圖指標（華山論劍課程表的中級班：指標學） ----------
+/* ---------- 更多副圖指標（MTM、DMI、PSY、AR／BR、OBV、VR、騰落指標、TAPI） ----------
    每個指標都算成一個「自訂副圖」（{ custom: { title, lines, names, levels… } }），K 線圖照一般副圖畫；
    sigs 是這個指標自己的買賣訊號（例如 PSY 脫離 25／75），會和 KD、MACD 一樣標回主圖（「對應」功能）。
    大盤寬度指標（ADR、OBOS、ADL）要每天的上漲、下跌家數（D[i].adv、D[i].dec），只有加權／櫃買指數才有。 */
@@ -279,7 +279,7 @@ class Chart {
         // 方向看「兩指一開始怎麼移動」（不是手指放的角度）：移動超過 8px 才決定，之後整個手勢都是同一種
         this.pinch = { mode: null, ax, ay, pane, my: (p.y + q.y) / 2, key: pane?.key, pz: pane && pane.key !== "main" ? { ...this.paneZoom(pane.key) } : null, d: Math.max(30, Math.hypot(p.x - q.x, p.y - q.y)), dy: Math.max(30, ay), yz: this.yz, a: this.vw.fa, w: this.vw.w, mid: this.posAt((p.x + q.x) / 2), mx: (p.x + q.x) / 2 }; this.drag = null; try { cv.setPointerCapture(e.pointerId); } catch {} }
       if (this.ptrs.size === 1) this.tapOk = true;
-      if (e.pointerType === "mouse" && !this.pinned) this.hoverAt(e.offsetX);
+      this.hoverY = e.offsetY; if (e.pointerType === "mouse" && !this.pinned) this.hoverAt(e.offsetX);
     });
     cv.addEventListener("pointermove", e => {
       if (this.ptrs.has(e.pointerId)) this.ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
@@ -329,7 +329,7 @@ class Chart {
       }
       // 滑鼠：十字線跟著游標（固定時不動）；手指：固定十字線後、圖沒有放大時，左右拖曳可以移動十字線
       if (this.drag && Math.hypot(e.offsetX - this.drag.x, e.offsetY - this.drag.y) > 6) this.tapOk = false;
-      if (e.pointerType === "mouse" ? !this.pinned : this.pinned && !this.view && this.drag && !this.drag.moved) this.hoverAt(e.offsetX);
+      if (e.pointerType === "mouse" ? !this.pinned : this.pinned && !this.view && this.drag && !this.drag.moved) { if (this.hoverY !== e.offsetY) { this.hoverY = e.offsetY; this.req(); } this.hoverAt(e.offsetX); }
     });
     const up = e => {
       // 代替頁面捲動時，放開手指後讓頁面再滑一小段（慣性），手感接近一般捲動
@@ -454,7 +454,7 @@ class Chart {
     this.syncBar();
     const X = i => L + bw * (i - fa + 0.5);
     this.bar.classList.toggle("zoomed", !!this.view);
-    const top0 = 8, volTop = top0 + mainH + gap, subTop0 = o.noVol ? volTop : volTop + volH + gap;
+    const top0 = 8, volTop = top0 + mainH + gap, subTop0 = o.noVol ? volTop : volTop + volH + gap; this.paneInv = [];
     const fmtD = o.fmtD || (s => s.slice(5).replace("-", "/"));
     const MA_COL = { 5: col.s1, 10: cssVar("--ma10") || col.accent, 20: col.s2, 60: col.s3 };
     const mas = (o.ma || []).map((n, k) => ({ n, a: I.ma(n), c: MA_COL[n] || [col.s1, col.s2, col.s3][k % 3] }));
@@ -757,6 +757,7 @@ class Chart {
         this.line(dif, vis, X, sy, col.s1, 1.5); this.line(sig, vis, X, sy, col.s3, 1.5);
       }
       const subY = this.subY || (v => subTop + (100 - v) / 100 * subH);
+      { const a0 = subY(0), a1 = subY(1); if (a1 !== a0 && isFinite(a0) && isFinite(a1)) this.paneInv.push({ top: subTop, bot: subTop + subH, inv: y => (y - a0) / (a1 - a0), fmt: C0?.fmt || (v => fmtN(v, Math.abs(v) < 10 ? 2 : 1)) }); }
       ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pw, subH); ctx.clip();
       subDivs.filter(x => x.d.ind === (typeof S === "string" ? S : S.id || "pane")).forEach(({ d, side }) => divLine(X(d.j1 ?? d.i1), subY(d.v1), X(d.j2 ?? d.i2), subY(d.v2), side === "buy" ? col.up : col.down));
       // 副圖上發出訊號的位置：半透明實心點；記下位置，等所有區塊畫完再用虛線連到主圖的圓圈
@@ -793,8 +794,13 @@ class Chart {
       ctx.font = `500 10.5px ${cssVar("--font-num")}`; const dt = fmtD(D[hi_].d), dw = ctx.measureText(dt).width + 10, dx = Math.min(Math.max(X(hi_) - dw / 2, L), L + pw - dw);
       ctx.fillStyle = this.pinned ? col.accent : col.ink; ctx.fillRect(dx, H - axisH - 6, dw, axisH - 2); ctx.fillStyle = col.surface; ctx.textAlign = "center"; ctx.fillText(dt, dx + dw / 2, H - axisH / 2 - 4); ctx.font = `11px ${cssVar("--font-num")}`;
       ctx.strokeStyle = this.pinned ? col.accent : col.muted; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.moveTo(Math.round(X(hi_)) + 0.5, top0); ctx.lineTo(Math.round(X(hi_)) + 0.5, H - axisH - 6); ctx.stroke();
-      const y = Y(D[hi_].c); ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
-      ctx.fillStyle = this.pinned ? col.accent : col.ink; ctx.fillRect(L + pw + 2, y - 9, R - 4, 18); ctx.fillStyle = col.surface; ctx.textAlign = "left"; ctx.fillText(fmtP(D[hi_].c), L + pw + 6, y);
+      // 查價線：跟著游標（或手指點的位置）的高度，右邊標出那個高度的價格；在副圖上標出指標數值。沒有高度時退回收盤價
+      const hy = this.hoverY, inMain = hy != null && hy >= top0 && hy <= top0 + mainH, sp = hy != null && !inMain ? this.paneInv.find(q => hy >= q.top && hy <= q.bot) : null;
+      const yLine = inMain ? hy : sp ? null : Y(D[hi_].c), px = inMain ? itf(thi - (hy - top0) / mainH * (thi - tlo)) : D[hi_].c;
+      const tag = (y, txt) => { ctx.font = `500 10.5px ${cssVar("--font-num")}`; const w = Math.max(R - 4, ctx.measureText(txt).width + 8); ctx.fillStyle = this.pinned ? col.accent : col.ink; ctx.fillRect(Math.min(L + pw + 2, W - w - 1), y - 9, w, 18); ctx.fillStyle = col.surface; ctx.textAlign = "left"; ctx.fillText(txt, Math.min(L + pw + 6, W - w + 3), y); ctx.font = `11px ${cssVar("--font-num")}`; };
+      const hline = y => { ctx.strokeStyle = this.pinned ? col.accent : col.muted; ctx.globalAlpha = 0.7; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(L, Math.round(y) + 0.5); ctx.lineTo(L + pw, Math.round(y) + 0.5); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; };
+      if (yLine != null) { hline(yLine); tag(yLine, fmtP(px)); }
+      if (sp) { hline(hy); const v = sp.inv(hy); if (isFinite(v)) tag(hy, sp.fmt(v)); }
     }
     this.canvas.setAttribute("aria-label", `K線圖，共 ${vis} 個交易日，最後收盤 ${fmtP(D[vis - 1].c)}`);
     this.renderLegend(hi_ ?? vis - 1, mas);
