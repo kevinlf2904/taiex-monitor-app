@@ -142,7 +142,7 @@ function vrCalc(D, n = 26) {
 function breadthCalc(D, n = 10) {
   const N = D.length, adr = Array(N).fill(null), obos = Array(N).fill(null), adl = Array(N).fill(null); let cum = 0, any = false;
   for (let i = 0; i < N; i++) {
-    const x = D[i]; if (x.adv == null || x.dec == null) { cum = null; continue; } any = true; cum = (cum ?? 0) + x.adv - x.dec; adl[i] = cum;
+    const x = D[i]; if (x.adv == null || x.dec == null) continue; any = true; cum += x.adv - x.dec; // 缺資料的日子跳過，累計不歸零 adl[i] = cum;
     let a = 0, d = 0, ok = i >= n - 1; for (let k = i - n + 1; ok && k <= i; k++) { if (D[k].adv == null) { ok = false; break; } a += D[k].adv; d += D[k].dec; }
     if (ok) { adr[i] = d ? a / d : null; obos[i] = a - d; }
   }
@@ -214,14 +214,14 @@ function sarCalc(D, step = 0.02, max = 0.2) {
   let up = D[1].c >= D[0].c, af = step, ep = up ? Math.max(D[0].h, D[1].h) : Math.min(D[0].l, D[1].l), sar = up ? Math.min(D[0].l, D[1].l) : Math.max(D[0].h, D[1].h);
   for (let i = 2; i < N; i++) {
     sar = sar + af * (ep - sar);
-    if (up) { sar = Math.min(sar, D[i - 1].l, D[i - 2].l); if (D[i].l < sar) { up = false; sar = ep; ep = D[i].l; af = step; } else if (D[i].h > ep) { ep = D[i].h; af = Math.min(max, af + step); } }
-    else { sar = Math.max(sar, D[i - 1].h, D[i - 2].h); if (D[i].h > sar) { up = true; sar = ep; ep = D[i].h; af = step; } else if (D[i].l < ep) { ep = D[i].l; af = Math.min(max, af + step); } }
+    if (up) { sar = Math.min(sar, D[i - 1].l, D[i - 2].l); if (D[i].l < sar) { up = false; sar = Math.max(ep, D[i].h, D[i - 1].h); ep = D[i].l; af = step; } else if (D[i].h > ep) { ep = D[i].h; af = Math.min(max, af + step); } }
+    else { sar = Math.max(sar, D[i - 1].h, D[i - 2].h); if (D[i].h > sar) { up = true; sar = Math.min(ep, D[i].l, D[i - 1].l); ep = D[i].h; af = step; } else if (D[i].l < ep) { ep = D[i].l; af = Math.min(max, af + step); } }
     o[i] = sar; dir[i] = up ? 1 : -1;
   }
   return { sar: o, dir };
 }
-// 唐奇安通道（20）：最近 n 根的最高、最低價（海龜交易法的突破通道）
-function donchCalc(D, n = 20) { const up = D.map((_, i) => (i >= n - 1 ? Math.max(...D.slice(i - n + 1, i + 1).map(x => x.h)) : null)), lo = D.map((_, i) => (i >= n - 1 ? Math.min(...D.slice(i - n + 1, i + 1).map(x => x.l)) : null)); return { up, lo, mid: up.map((v, i) => (v == null ? null : (v + lo[i]) / 2)) }; }
+// 唐奇安通道（20）：「前」n 根（不含當天）的最高、最低價（海龜交易法的突破通道）；收盤站到上緣外就是創 n 日新高
+function donchCalc(D, n = 20) { const up = D.map((_, i) => (i >= n ? Math.max(...D.slice(i - n, i).map(x => x.h)) : null)), lo = D.map((_, i) => (i >= n ? Math.min(...D.slice(i - n, i).map(x => x.l)) : null)); return { up, lo, mid: up.map((v, i) => (v == null ? null : (v + lo[i]) / 2)) }; }
 // 一目均衡表（9、26、52）：轉換線、基準線、先行帶 A／B（往後畫 26 根，圖上只畫到最後一根）、遲行線（收盤往前畫 26 根）
 function ichiCalc(D) { const mid = (i, n) => { if (i < n - 1) return null; let h = -Infinity, l = Infinity; for (let k = i - n + 1; k <= i; k++) { h = Math.max(h, D[k].h); l = Math.min(l, D[k].l); } return (h + l) / 2; };
   const N = D.length, ten = D.map((_, i) => mid(i, 9)), kij = D.map((_, i) => mid(i, 26)), A = Array(N).fill(null), B = Array(N).fill(null), chi = Array(N).fill(null);
