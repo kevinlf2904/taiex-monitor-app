@@ -7,7 +7,7 @@
 // 回傳 { ok, source, session: "pre"|"open"|"closed", time, quotes: [{ code, name, market, price, prev, open, high, low, vol, chg, chgPct, time, date, bids:[{p,v}], asks:[{p,v}], estimated }] }
 // 張數單位：張；指數沒有成交量（vol 為 null）。
 
-import { isUS, yahooQuote } from "./_yahoo.js";
+import { isUS, yahooQuote, getJSON as yGet, quoteFromMeta } from "./_yahoo.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json", "Accept-Language": "zh-TW" };
 const INDEX = { T00: { mis: "tse_t00.tw", fugle: "IX0001", name: "加權指數" }, O00: { mis: "otc_o00.tw", fugle: "IX0043", name: "櫃買指數" } };
 const ALIAS = { TAIEX: "T00", "加權": "T00", "加權指數": "T00", "大盤": "T00", TWII: "T00", "櫃買": "O00", "櫃買指數": "O00", TPEX: "O00" };
@@ -53,7 +53,15 @@ async function getJSON(url, headers = {}) {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
+// MIS 連不上（例如證交所擋住雲端主機的連線，錯誤是 fetch failed 或逾時）時，30 秒內不再等它逾時，
+// 所有用到 MIS 的地方（報價、大盤、熱門、選股）都直接改用備援，畫面不會一直「載入中」
+let misDownUntil = 0;
+const netErr = e => !/^HTTP /.test(e?.message || "");
 export async function misFetch(chs) {
+  if (Date.now() < misDownUntil) throw new Error("連不上（30 秒後再試）");
+  try { return await misFetchRaw(chs); } catch (e) { if (netErr(e)) misDownUntil = Date.now() + 30000; throw e; }
+}
+async function misFetchRaw(chs) {
   const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${chs.join("|")}&json=1&delay=0&_=${Date.now()}`;
   let j = null;
   try { j = await getJSON(url, misCookie ? { Cookie: misCookie } : {}); } catch {}
@@ -69,6 +77,35 @@ async function fromMis(codes) {
   const chs = codes.flatMap(c => (INDEX[c] ? [INDEX[c].mis] : [`tse_${c.toLowerCase()}.tw`, `otc_${c.toLowerCase()}.tw`]));
   const rows = (await misFetch(chs)).map(parseMis).filter(q => q.code && (q.price != null || q.prev != null));
   return codes.map(c => rows.find(q => q.code === c)).filter(Boolean);
+}
+// Yahoo Finance 備援：加權 ^TWII、櫃買 ^TWOII，個股先試上市 .TW 再試上櫃 .TWO（Yahoo 的台股報價可能延遲幾分鐘）
+const YIDX = { T00: "^TWII", O00: "^TWOII" };
+async function yahooTw(c) {
+  for (const sym of YIDX[c] ? [YIDX[c]] : [`${c}.TW`, `${c}.TWO`]) {
+    try { const j = await yGet(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1m`, {}, 5000), r = j?.chart?.result?.[0];
+      if (!r?.meta?.regularMarketPrice) continue;
+      const q = quoteFromMeta(sym, r.meta), o = r.indicators?.quote?.[0];
+      const open = o?.open?.find(v => v != null);
+      return { ...q, code: c, name: INDEX[c]?.name || "", market: sym.endsWith(".TWO") || c === "O00" ? "上櫃" : "上市", currency: undefined, us: undefined, session: undefined,
+        open: open != null ? +open.toFixed(2) : null, vol: INDEX[c] ? null : q.vol != null ? Math.round(q.vol / 1000) : null, delayed: true };
+    } catch {}
+  }
+  return null;
+}
+async function fromYahooTw(codes) {
+  const out = []; let k = 0; const worker = async () => { while (k < codes.length) { const q = await yahooTw(codes[k++]); if (q) out.push(q); } };
+  await Promise.all(Array.from({ length: Math.min(8, codes.length) }, worker));
+  return codes.map(c => out.find(q => q.code === c)).filter(Boolean);
+}
+// 富果只拿來補指數（清單模式最多 40 檔，全部問富果會超過每分鐘額度）；3 秒內重複使用
+const fugleIdx = new Map();
+async function fugleIndex(c, key) { const h = fugleIdx.get(c); if (h && Date.now() - h.at < 3000) return h.q; const [q] = await fromFugle([c], key); fugleIdx.set(c, { at: Date.now(), q }); return q; }
+async function fromBackup(codes, key) {
+  const idx = key ? codes.filter(c => INDEX[c]) : [], got = [];
+  for (const c of idx) { try { got.push(await fugleIndex(c, key)); } catch {} }
+  const rest = codes.filter(c => !got.some(q => q.code === c));
+  if (rest.length) got.push(...(await fromYahooTw(rest)));
+  return codes.map(c => got.find(q => q.code === c)).filter(Boolean);
 }
 async function fromFugle(codes, key) {
   const out = [];
@@ -98,12 +135,12 @@ export default async function handler(req, res) {
   const key = (misOnly ? "mis:" : "") + all.join(","), hit = cache.get(key), sess = session();
   if (hit && Date.now() - hit.at < (sess === "closed" ? 30000 : 900)) { res.setHeader("Cache-Control", sess === "closed" ? "s-maxage=30" : "s-maxage=1"); return res.status(200).json(hit.body); }
   const fugleKey = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
-  for (const [source, run] of [...(fugleKey && !misOnly ? [["富果", () => fromFugle(codes, fugleKey)]] : []), ["證交所 MIS", () => fromMis(codes)]]) {
+  for (const [source, run] of [...(fugleKey && !misOnly ? [["富果", () => fromFugle(codes, fugleKey)]] : []), ["證交所 MIS", () => fromMis(codes)], [fugleKey ? "富果指數＋Yahoo（備援）" : "Yahoo Finance（備援，可能延遲）", () => fromBackup(codes, fugleKey)]]) {
     try {
       const quotes = await run();
       if (quotes.length) {
         const uq = await usP; quotes.push(...uq);
-        const body = { ok: true, source, session: sess, today: todayTaipei(), time: new Date().toISOString(), quotes, missing: all.filter(c => !quotes.some(q => q.code === c)) };
+        const body = { ok: true, source, backup: errors.length ? errors.join("；") : undefined, session: sess, today: todayTaipei(), time: new Date().toISOString(), quotes, missing: all.filter(c => !quotes.some(q => q.code === c)) };
         cache.set(key, { at: Date.now(), body });
         // 盤中只快取幾秒；收盤後快取久一點
         res.setHeader("Cache-Control", sess === "closed" ? "s-maxage=120, stale-while-revalidate=600" : "s-maxage=1, stale-while-revalidate=2"); // 盤中每秒更新
