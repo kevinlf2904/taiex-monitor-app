@@ -476,9 +476,14 @@ function readout(D, I, i) {
     out.push({ k: "月線", t: `${c >= m20 ? "站上" : "跌破"}月線，乖離 ${fmtPct(bias, 1)}`, b: Math.abs(bias) > 0.08 ? 0 : (c >= m20 ? 1 : -1), x: Math.abs(bias) > 0.08 ? "乖離過大，留意拉回或反彈" : "" });
   }
   const r = I.rsi[i];
-  if (r != null) out.push({ k: "RSI", t: `${fmtN(r)} ${r >= 70 ? "超買區" : r <= 30 ? "超賣區" : r >= 50 ? "偏強" : "偏弱"}`, b: r >= 70 ? 0 : r <= 30 ? 0 : r >= 50 ? 1 : -1, x: r >= 70 ? "強勢但過熱，可能鈍化也可能回檔" : r <= 30 ? "弱勢但跌深，可能鈍化也可能反彈" : "" });
+  const rD = r != null ? (() => { const sp = dullSpans(I.rsi, 70, 30, 3, i + 1).pop(); return sp && sp.end == null ? sp : null; })() : null;
+  if (r != null) out.push({ k: "RSI", t: `${fmtN(r)} ${r >= 70 ? "超買區" : r <= 30 ? "超賣區" : r >= 50 ? "偏強" : "偏弱"}${rD ? (rD.side > 0 ? `，高檔鈍化 ${i - rD.i0 + 1} 天` : `，低檔鈍化 ${i - rD.i0 + 1} 天`) : ""}`, b: r >= 70 ? 0 : r <= 30 ? 0 : r >= 50 ? 1 : -1, x: r >= 70 ? "強勢但過熱，可能鈍化也可能回檔" : r <= 30 ? "弱勢但跌深，可能鈍化也可能反彈" : "" });
   const K = I.kd.K[i], Dd = I.kd.D[i];
-  if (K != null) out.push({ k: "KD", t: `K ${fmtN(K)} / D ${fmtN(Dd)}，${K > Dd ? "K在D上" : "K在D下"}${K >= 80 ? "，高檔" : K <= 20 ? "，低檔" : ""}`, b: K > Dd ? 1 : -1 });
+  // 鈍化：目前還在連續 3 根以上的高檔（低檔）裡
+  const dullNow = (a, hi, lo) => { const sp = dullSpans(a, hi, lo, 3, i + 1).pop(); return sp && sp.end == null ? { side: sp.side, n: i - sp.i0 + 1 } : null; };
+  const kdD = K != null ? dullNow(I.kd.K, 80, 20) : null;
+  if (K != null) out.push({ k: "KD", t: `K ${fmtN(K)} / D ${fmtN(Dd)}，${K > Dd ? "K在D上" : "K在D下"}${kdD ? (kdD.side > 0 ? `，高檔鈍化（連續 ${kdD.n} 天 K≥80）` : `，低檔鈍化（連續 ${kdD.n} 天 K≤20）`) : K >= 80 ? "，高檔" : K <= 20 ? "，低檔" : ""}`, b: kdD ? kdD.side : K > Dd ? 1 : -1,
+    x: kdD ? (kdD.side > 0 ? "強勢延續，不急著賣；K 跌回 80 以下（鈍化結束）才是轉弱訊號" : "弱勢延續，不急著接；K 回到 20 以上才是止跌訊號") : "" });
   const { dif, sig, osc } = I.macd;
   if (sig[i] != null) {
     const grow = osc[i - 1] != null && Math.abs(osc[i]) > Math.abs(osc[i - 1]);
