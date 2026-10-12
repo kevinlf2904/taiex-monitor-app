@@ -783,7 +783,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.12-64</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.12-65</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -1926,7 +1926,7 @@ RSI = 100 − 100 ÷ (1 + 4) = 80</div>
 <li>先看<strong>均線方向</strong>：月線向上時，只看 KD 的黃金交叉；月線向下時，只看死亡交叉。</li>
 <li>黃金交叉的位置：<strong>D 值在 20 以下</strong>交叉，意義較大。</li>
 <li>K 值連續 3 天 &gt; 80 是高檔鈍化，代表強勢，不急著放空。</li>
-<li>鈍化結束（K 跌回 80 以下）才是比較明確的轉弱訊號。</li>
+<li>鈍化結束（K 跌回 80 以下）才是比較明確的轉弱訊號。</li><li>看盤的 K 線圖會把 KD、RSI、威廉、MFI 的鈍化區間塗上底色，並在確認日（第 3 天）與結束日標出訊號（圖右上「設定」裡的訊號種類「高低檔鈍化」可以開關）。</li>
 <li>搭配背離：價格新低、KD 低點墊高，是底部的線索。</li>
 </ol>
 <h4>參數與變化</h4>
@@ -4546,7 +4546,10 @@ const goTab = t => {
 addEventListener("scroll", () => { PNAV.y = Math.round(scrollY); clearTimeout(PNAV.yt); PNAV.yt = setTimeout(pnavFlush, 250); }, { passive: true });
 addEventListener("popstate", e => { const st = e.state; if (!st?.tab) return; switchTab(st.tab); const y = st.y || 0;
   requestAnimationFrame(() => scrollTo({ top: y })); if (y > 0) [250, 700].forEach(t => setTimeout(() => { if (scrollY < y - 4) scrollTo({ top: y }); }, t)); pnavBackUi(); });
-$(".tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) goTab(b.dataset.tab); });
+$(".tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (!b) return;
+  // 已經在看盤時再點一次「看盤」：從個股頁回到看盤清單（像 App 的分頁鍵）
+  if (b.dataset.tab === "watch" && store.get("tab") === "watch" && !$("#view-watch").hidden) { try { $("#watchFrame").contentWindow.postMessage({ type: "watch-home" }, "*"); } catch {} return; }
+  goTab(b.dataset.tab); });
 // 手機底部選單：練習類（實驗室、挑戰、測驗）收在「練習」裡
 function closeTabMenu() { $("#tabMenu").hidden = true; $("#tab-btn-more").setAttribute("aria-expanded", "false"); }
 $("#tab-btn-more").addEventListener("click", e => { e.stopPropagation(); const open = $("#tabMenu").hidden; $("#tabMenu").hidden = !open; $("#tab-btn-more").setAttribute("aria-expanded", open); });

@@ -176,7 +176,7 @@ const SUBX = {
   bias: { label: "乖離率", kind: "bias", make: (D, I) => { const b6 = biasCalc(I.c, 6); return { title: "乖離率 BIAS 6・12・24（%）", lines: [b6, biasCalc(I.c, 12), biasCalc(I.c, 24)], names: ["BIAS6", "BIAS12", "BIAS24"], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(2) + "%"), sigs: lvlSigs(b6, -5, 5, "BIAS6") }; } },
   atr: { label: "ATR", kind: "atr", make: D => { const a = atrCalc(D); return { title: "ATR 14（平均真實波幅）", lines: [a], names: ["ATR"], lines2: [a.map((v, i) => (v == null ? null : (v / D[i].c) * 100))], names2: ["ATR%"], fmt: v => fmtN(v, 2), signals: false, sigs: [] }; } },
   cci: { label: "CCI", kind: "cci", make: D => { const c = cciCalc(D); return { title: "CCI 20", lines: [c], names: ["CCI"], levels: [100, 0, -100], sigs: lvlSigs(c, -100, 100, "CCI") }; } },
-  mfi: { label: "MFI", kind: "mfi", make: D => { const m = mfiCalc(D); return { title: "MFI 14（資金流量）", lines: [m], names: ["MFI"], levels: [80, 20], range: [0, 100], sigs: lvlSigs(m, 20, 80, "MFI") }; } },
+  mfi: { label: "MFI", kind: "mfi", make: D => { const m = mfiCalc(D); return { title: "MFI 14（資金流量）", lines: [m], names: ["MFI"], levels: [80, 20], range: [0, 100], dull: [80, 20], sigs: lvlSigs(m, 20, 80, "MFI") }; } },
   trix: { label: "TRIX", kind: "trix", make: (D, I) => { const t = trixCalc(I.c), m = smaN(t, 9); return { title: "TRIX 12・訊號 9", lines: [t, m], names: ["TRIX", "MA9"], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: crossHold(t, m, 2, "TRIX上穿訊號線", "TRIX跌破訊號線") }; } },
   srsi: { label: "StochRSI", kind: "srsi", make: (D, I) => { const { K, D: d } = srsiCalc(I.c); return { title: "StochRSI 14・14・3・3", lines: [K, d], names: ["K", "D"], levels: [80, 20], range: [0, 100], sigs: crossSigs(K, d, "StochRSI低檔金叉", "StochRSI高檔死叉", (s, i) => (s === "buy" ? d[i] < 20 : d[i] > 80)) }; } },
   roc: { label: "ROC", kind: "roc", make: (D, I) => { const r = rocCalc(I.c), m = smaN(r, 6); return { title: "ROC 12・MA 6（%）", lines: [r, m], names: ["ROC", "MA6"], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(2) + "%"), sigs: crossHold(r, r.map(v => (v == null ? null : 0)), 2, "ROC轉正", "ROC轉負") }; } },
@@ -283,6 +283,24 @@ const maFrom = bar => [5, 10, 20, 60].filter(p => bar.has("ma" + p));
 const subsFrom = (bar, ids = ["kd", "rsi", "macd", "wr", "inout", ...Object.keys(SUBX)]) => ids.filter(id => bar.has(id));
 
 // 副圖指標發出的訊號：{ i, si（第幾個副圖）, side, label, v（副圖上的位置） }
+// 指標鈍化：連續 n 根在高檔（≥ hi）＝高檔鈍化（強勢延續，不是賣訊），連續 n 根在低檔（≤ lo）＝低檔鈍化（弱勢延續）
+// 回傳 [{ side: 1 高檔／−1 低檔, i0 這段開始, ic 確認日（第 n 根）, end 第一根離開的（還沒結束是 null） }]；只看 upto 之前的資料
+function dullSpans(a, hi, lo, n = 3, upto = a.length) {
+  const out = []; let run = 0, side = 0, i0 = -1;
+  for (let i = 0; i < Math.min(upto, a.length); i++) {
+    const v = a[i], s = v == null ? 0 : v >= hi ? 1 : v <= lo ? -1 : 0;
+    if (s && s === side) run++; else { if (side && run >= n && out.length && out[out.length - 1].end == null) out[out.length - 1].end = i; side = s; run = s ? 1 : 0; i0 = i; }
+    if (s && run === n) out.push({ side: s, i0, ic: i, end: null });
+  }
+  return out;
+}
+// 哪些副圖看鈍化：KD（K 值 80／20）、RSI（70／30）、威廉（−20／−80）；自訂副圖給 dull: [高, 低] 時看第一條線
+function dullOf(S, I) {
+  if (S === "kd") return { a: I.kd.K, hi: 80, lo: 20, name: "KD" };
+  if (S === "rsi") return { a: I.rsi, hi: 70, lo: 30, name: "RSI" };
+  if (S === "wr") return I.wr ? { a: I.wr, hi: -20, lo: -80, name: "威廉" } : null;
+  const C = S?.custom; return C?.dull && C.lines?.[0] ? { a: C.lines[0], hi: C.dull[0], lo: C.dull[1], name: C.names?.[0] || "" } : null;
+}
 // strong：KD 只留低檔（D < 20）的金叉、高檔（D > 80）的死叉（和 KD 課程、策略用的門檻一致）；MACD 只留零軸上方的金叉、零軸下方的死叉（順勢的交叉）
 function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
   const out = [], n = Math.min(vis, D.length), st = k => (typeof strong === "object" ? !!strong?.[k] : !!strong); // strong 可以是 { kd, macd } 各自設定
@@ -293,6 +311,10 @@ function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
     if (a[i - 1] < lo && a[i] >= lo) out.push({ i, si, side: "buy", label: name + "脫離超賣", v: a[i] });
     else if (a[i - 1] > hi && a[i] <= hi) out.push({ i, si, side: "sell", label: name + "脫離超買", v: a[i] }); } };
   subs.forEach((S, si) => {
+    // 高低檔鈍化：確認那天標「高檔鈍化」（偏多，強勢延續）、跌回來那天標「鈍化結束」（偏空）；低檔相反
+    if (kinds.dull !== false) { const src = dullOf(S, I); if (src) dullSpans(src.a, src.hi, src.lo, 3, n).forEach(sp => { const hiS = sp.side > 0, nm = src.name + (hiS ? "高檔鈍化" : "低檔鈍化");
+      if (!D[sp.ic]?.sim) out.push({ i: sp.ic, si, side: hiS ? "buy" : "sell", label: nm, v: src.a[sp.ic], dull: true });
+      if (sp.end != null && sp.end < n && !D[sp.end]?.sim) out.push({ i: sp.end, si, side: hiS ? "sell" : "buy", label: nm + "結束", v: src.a[sp.end], dull: true }); }); }
     if (kinds[typeof S === "string" ? S : S?.custom?.kind || "custom"] === false) return;
     if (S && S.custom && S.custom.sigs) { S.custom.sigs.forEach(g => { if (g.i < n && !D[g.i]?.sim) out.push({ ...g, si }); }); return; }
     if (S === "kd") cross(I.kd.K, I.kd.D, si, "KD金叉", "KD死叉", st("kd") ? (side, d) => (side === "buy" ? d < 20 : d > 80) : undefined);
@@ -448,12 +470,12 @@ class Chart {
   static prefs = { h: [1, 1.5, 2, 2.5].includes(+store.get("chartH", 1)) ? +store.get("chartH", 1) : 1, log: !!store.get("chartLog", false),
     sh: [1, 1.5, 2].includes(+store.get("chartSubH", 1)) ? +store.get("chartSubH", 1) : 1, fit: !!store.get("chartSubFit", false), sig: store.get("chartSubSig", true) !== false,
     sigStrong: store.get("chartSigStrong", true) !== false, mk: store.get("chartMk", "full") === "icon" ? "icon" : "full", kt: ["candle", "hollow", "ohlc", "line", "area"].includes(store.get("chartKt", "candle")) ? store.get("chartKt", "candle") : "candle",
-    sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, mtm: true, dmi: true, psy: true, arbr: true, obv: true, vr: true, adr: true, obos: true, adl: true, bias: true, cci: true, mfi: true, trix: true, srsi: true, roc: true, dma: true, emv: true, tower: true, ...(store.get("chartSigKinds", null) || {}) },
+    sigKinds: { kd: true, macd: true, rsi: true, wr: true, custom: true, mtm: true, dmi: true, psy: true, arbr: true, obv: true, vr: true, adr: true, obos: true, adl: true, bias: true, cci: true, mfi: true, trix: true, dull: true, srsi: true, roc: true, dma: true, emv: true, tower: true, ...(store.get("chartSigKinds", null) || {}) },
     // 「只看重點」每個副圖各自開關（舊版是全部共用一個 sigStrong）
     sigStrongK: { kd: store.get("chartSigStrong", true) !== false, macd: store.get("chartSigStrong", true) !== false, ...(store.get("chartSigStrongK", null) || {}) } };
   // 某個副圖要不要標訊號：「金叉死叉」或「只看重點」任一個開著就標；「只看重點」開著時只標重點交叉
   static sigShow(k) { const P = Chart.prefs; return P.sig && (P.sigKinds[k] !== false || !!P.sigStrongK[k]); }
-  static SIG_KINDS = [["kd", "KD 交叉"], ["macd", "MACD 交叉"], ["rsi", "RSI 30／70"], ["wr", "威廉 −80／−20"], ["mtm", "MTM 零軸"], ["dmi", "DMI 交叉"], ["psy", "PSY 25／75"], ["arbr", "AR 60／150"], ["obv", "OBV 均線"], ["vr", "VR 70／450"], ["adr", "ADR 0.5／1.5"], ["obos", "OBOS 零軸"], ["adl", "ADL 均線"], ["bias", "乖離率 ±5%"], ["cci", "CCI ±100"], ["mfi", "MFI 20／80"], ["trix", "TRIX 交叉"], ["srsi", "StochRSI 交叉"], ["roc", "ROC 零軸"], ["dma", "DMA 交叉"], ["emv", "EMV 零軸"], ["tower", "寶塔翻色"], ["custom", "截圖副圖交叉"]];
+  static SIG_KINDS = [["kd", "KD 交叉"], ["dull", "高低檔鈍化"], ["macd", "MACD 交叉"], ["rsi", "RSI 30／70"], ["wr", "威廉 −80／−20"], ["mtm", "MTM 零軸"], ["dmi", "DMI 交叉"], ["psy", "PSY 25／75"], ["arbr", "AR 60／150"], ["obv", "OBV 均線"], ["vr", "VR 70／450"], ["adr", "ADR 0.5／1.5"], ["obos", "OBOS 零軸"], ["adl", "ADL 均線"], ["bias", "乖離率 ±5%"], ["cci", "CCI ±100"], ["mfi", "MFI 20／80"], ["trix", "TRIX 交叉"], ["srsi", "StochRSI 交叉"], ["roc", "ROC 零軸"], ["dma", "DMA 交叉"], ["emv", "EMV 零軸"], ["tower", "寶塔翻色"], ["custom", "截圖副圖交叉"]];
   // 高度、對數座標、副圖貼合是全站共用的偏好：改了以後所有圖表一起重畫
   static setPref(k, v) { Chart.prefs[k] = v; store.set(Chart.PREF_KEYS[k], v); Chart.all.forEach(c => { c.syncBar(); c.draw(); if (!c.pop.hidden) c.renderPop(); }); }
   paneZoom(key) { return this.pz[key] || { z: 1, off: 0 }; }
@@ -854,6 +876,12 @@ class Chart {
       const subY = this.subY || (v => subTop + (100 - v) / 100 * subH);
       { const a0 = subY(0), a1 = subY(1); if (a1 !== a0 && isFinite(a0) && isFinite(a1)) this.paneInv.push({ top: subTop, bot: subTop + subH, inv: y => (y - a0) / (a1 - a0), fmt: C0?.fmt || (v => fmtN(v, Math.abs(v) < 10 ? 2 : 1)) }); }
       ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pw, subH); ctx.clip();
+      // 鈍化區間：副圖底色淡淡塗上（高檔紅、低檔綠），寬度夠時標字
+      if (Chart.sigShow("dull")) { const src = dullOf(S, I); if (src) dullSpans(src.a, src.hi, src.lo, 3, vis).forEach(sp => {
+        const a0 = Math.max(va, sp.i0), a1 = Math.min(vb, (sp.end ?? vis) - 1); if (a1 < a0) return; const x0 = X(a0) - cw / 2, w = X(a1) - X(a0) + cw;
+        ctx.fillStyle = sp.side > 0 ? col.up : col.down; ctx.globalAlpha = 0.1; ctx.fillRect(x0, subTop, w, subH);
+        if (w > 44) { ctx.globalAlpha = 0.85; ctx.textAlign = "left"; ctx.font = `10px ${cssVar("--font-body")}`; ctx.fillText(sp.side > 0 ? "高檔鈍化" : "低檔鈍化", x0 + 3, sp.side > 0 ? subTop + 11 : subTop + subH - 4); }
+        ctx.globalAlpha = 1; }); }
       subDivs.filter(x => x.d.ind === (typeof S === "string" ? S : S.id || "pane")).forEach(({ d, side }) => divLine(X(d.j1 ?? d.i1), subY(d.v1), X(d.j2 ?? d.i2), subY(d.v2), side === "buy" ? col.up : col.down));
       // 副圖上發出訊號的位置：半透明實心點；記下位置，等所有區塊畫完再用虛線連到主圖的圓圈
       sigs.filter(g => g.si === si && g.i >= va && g.i <= vb).forEach(g => {
