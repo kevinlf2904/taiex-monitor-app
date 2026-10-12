@@ -726,7 +726,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.12-65</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.13-66</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -993,15 +993,17 @@ function gsRender() {
   $("#gsHint").textContent = rec ? (rec.length ? "最近看過" : "輸入代號或名稱（例如 2330、台積、0050、NVDA）") : hits.length ? "" : "找不到，請改用代號（例如 2330、NVDA）";
   $("#gsList").innerHTML = hits.map(([c, n, m], i) => `<li class="${i === W.gsK ? "on" : ""}"><button type="button" role="option" data-gs="${c}"><span class="cd">${c === "T00" ? "加權" : c === "O00" ? "櫃買" : c}</span><span>${esc(n || "")}</span><span class="gm">${esc(m || "")}</span></button>${isIdx(c) ? "" : inAny(c) ? '<span class="note">已在自選</span>' : `<button type="button" class="btn sm" data-gsadd="${c}">＋自選</button>`}</li>`).join("");
 }
+// 搜尋面板也算一頁：打開時記一筆，按「返回」（App 或瀏覽器的返回）就關掉，不會一直蓋在看盤上
 function gsOpen(q = "") {
-  const box = $("#gsearch"); box.hidden = false; W.gsK = 0; $("#gsInput").value = q; goY(0);
+  const box = $("#gsearch"); if (box.hidden) { box.hidden = false; navPush(); } W.gsK = 0; $("#gsInput").value = q; goY(0);
   loadStocks().then(gsRender); gsRender(); setTimeout(() => $("#gsInput").focus(), 30);
 }
-function gsClose() { $("#gsearch").hidden = true; $("#gsInput").blur(); }
+function gsHide() { $("#gsearch").hidden = true; $("#gsInput").blur(); }
+function gsClose() { if ($("#gsearch").hidden) return; if (history.state?.nav?.gs) history.back(); else { gsHide(); navPush("replace"); } }
 function gsGo(c) {
   const n = W.stocks?.find(s => s[0] === c) || US_HINT.find(s => s[0] === c); if (n) W.names[c] = n[1];
   store.set("watch:recent", [c, ...(store.get("watch:recent", []) || []).filter(x => x !== c)].slice(0, 10));
-  gsClose(); W.navList = null; select(c); kick();
+  gsHide(); W.navList = null; navPush("replace"); select(c); kick(); // 用個股頁取代搜尋那一筆：返回時回到搜尋之前的地方
 }
 $("#gsInput").addEventListener("input", () => { W.gsK = 0; gsRender(); });
 $("#gsInput").addEventListener("keydown", e => { const n = $("#gsList").children.length; if (!n) return;
@@ -2370,7 +2372,7 @@ function select(code, how = "push") {
    換「大」畫面（上面這些）用 pushState；只換分段（個股分頁、產業地圖檢視…）用 replaceState，不多一筆上一頁。
    捲動位置：嵌在 K線學堂裡捲的是外層頁面，用 curY()／goY() 換算成看盤頁自己的座標。 */
 const NAV = { ready: false, busy: false, q: 0, mode: null, y: 0, yt: 0 };
-const NAV_MAJOR = ["lt", "sel", "io", "af", "ms", "pg"];
+const NAV_MAJOR = ["lt", "sel", "io", "af", "ms", "pg", "gs"];
 function curY() {
   if (!EMBED || parent === window) return scrollY;
   try { const P = parent, hd = P.document.querySelector(".top"), st = hd && /sticky|fixed/.test(P.getComputedStyle(hd).position) ? hd.offsetHeight : 8; return Math.round(st - frameElement.getBoundingClientRect().top); } catch { return 0; }
@@ -2380,7 +2382,7 @@ function goY(y = 0) { if (EMBED && parent !== window) post({ type: "watch-top", 
 function restoreY(y) { requestAnimationFrame(() => goY(y)); if (y > 40) [250, 700].forEach(t => setTimeout(() => { if (curY() < y - 40) goY(y); }, t)); }
 function navSnap() {
   const det = $("#main").classList.contains("show-detail") && !!W.sel, lt = W.lt, P = typeof POD !== "undefined" ? POD : null;
-  return { lt, sel: det ? W.sel : null, dt: det ? W.dtab : null, ds: det && DSUB[W.dtab] ? dSub() : null,
+  return { gs: $("#gsearch").hidden ? null : 1, lt, sel: det ? W.sel : null, dt: det ? W.dtab : null, ds: det && DSUB[W.dtab] ? dSub() : null,
     io: lt === "ind" ? W.indS?.open || null : null, iv: lt === "ind" ? W.indS?.view || null : null,
     af: lt === "after" && typeof afView === "function" ? afView() : null,
     mv: lt === "money" ? W.mf?.view || null : null, ms: lt === "money" && W.mf?.view === "sector" ? W.mf.sec || null : null,
@@ -2406,6 +2408,7 @@ function navOnScroll() { try { if (EMBED && frameElement?.closest("[hidden]")) r
 function navApply(s, y) {
   NAV.busy = true;
   try {
+    if (!s.gs && !$("#gsearch").hidden) gsHide(); else if (s.gs && $("#gsearch").hidden) { $("#gsearch").hidden = false; gsRender(); }
     if (s.lt && s.lt !== W.lt) setLt(s.lt);
     if (s.lt === "ind" && W.indS) { W.indS.open = s.io || null; if (s.iv) W.indS.view = s.iv; }
     if (s.lt === "after" && s.af) { W.afView = s.af; store.set("watch:af", s.af); }
@@ -3325,7 +3328,7 @@ if (EMBED) {
     else if (e.data.type === "watch-ind" && Array.isArray(e.data.ids)) { // K線學堂「在 K 線圖打開」：打開這一課的指標，副圖訊號對應到 K 線
       const c = String(e.data.code || "").toUpperCase(); if (okCode(c) && c !== W.sel) select(c, "replace");
       e.data.ids.forEach(id => dBar.set(id, true)); Chart.setPref("sig", true); setDtab("tech"); drawK(); renderAna(); ksetSummary(); goKChart(); }
-    else if (e.data.type === "watch-home") { if ($("#main").classList.contains("show-detail")) showList(); else goY(0); }
+    else if (e.data.type === "watch-home") { if (!$("#gsearch").hidden) gsClose(); else if ($("#main").classList.contains("show-detail")) showList(); else goY(0); }
     else if (e.data.type === "watch-select" && e.data.code) select(String(e.data.code).toUpperCase() === "加權" ? "T00" : e.data.code, "replace");
   });
   $("#learnLink").addEventListener("click", e => { e.preventDefault(); post({ type: "open-shot", code: W.sel === "T00" ? "加權" : W.sel }); });
