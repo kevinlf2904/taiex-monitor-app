@@ -701,7 +701,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.11-63</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.12-64</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -873,7 +873,7 @@ async function pollFut(force = false) {
 async function pollList() {
   pollFut().then(() => renderTop()).catch(() => {});
   const j = await getJ(`/api/quote?codes=${visibleCodes().filter(c => !isFut(c)).join(",")}&src=mis`);
-  W.session = j.session; if (j.today) W.today = j.today;
+  W.session = j.session; if (j.today) W.today = j.today; W.qBackup = j.backup ? j.source : null; // 證交所連不上時改用備援來源（富果指數、Yahoo）
   j.quotes.forEach(q => { const old = W.quotes.get(q.code); if (old && old.price != null && q.price != null && old.price !== q.price) W.prevPx.set(q.code, old.price); W.quotes.set(q.code, q); if (q.name && !isIdx(q.code)) W.names[q.code] = q.name; });
   store.set("watch:names", W.names);
 }
@@ -908,8 +908,11 @@ function liveRefresh() {
 // 大盤盤中只重抓個股統計與期貨（行事曆、處置股不用每 30 秒抓）
 async function loadMktLive() {
   W.mktLoading = true; const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
-  try { const [m, ex, fx] = await Promise.all([getJ("/api/market"), fut("EXF"), fut("FXF")]); W.mkt = { ...m, at: Date.now() }; W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; }
-  catch (e) { if (W.mkt) W.mkt.at = Date.now(); } finally { W.mktLoading = false; }
+  // 期貨和大盤統計各自更新：其中一個慢或失敗，不會讓另一個也一直空著
+  const futP = Promise.all([fut("EXF"), fut("FXF")]).then(([ex, fx]) => { W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; if (W.lt === "mkt" && !W.mktLoading) renderList(); });
+  try { const m = await getJ("/api/market"); W.mkt = { ...m, at: Date.now() }; }
+  catch (e) { if (W.mkt) W.mkt.at = Date.now(); else W.mkt = { err: e.message, at: Date.now() }; } finally { W.mktLoading = false; }
+  await futP.catch(() => {});
   if (W.lt === "mkt") { W.ticking = true; try { renderList(); } finally { W.ticking = false; } }
 }
 // 「盤中即時・更新於 10:31:05」或「10/06 收盤後」
@@ -943,8 +946,8 @@ function ixHtml() {
 }
 function renderTop() {
   $("#ix").innerHTML = ixHtml();
-  const on = !W.off && !W.err && W.session && W.session !== "closed", st = W.off ? "離線（需部署）" : W.err ? "連線異常" : W.session === "pre" ? "試撮中" : W.session === "open" ? "盤中即時" : W.session ? "收盤" : "連線中…";
-  $("#dot").className = "dot" + (on ? " on" : W.err ? " err" : ""); $("#statText").textContent = st; $("#stat").title = W.err || "";
+  const on = !W.off && !W.err && W.session && W.session !== "closed", st = W.off ? "離線（需部署）" : W.err ? "連線異常" : W.session === "pre" ? "試撮中" : W.session === "open" ? (W.qBackup ? "盤中（備援）" : "盤中即時") : W.session ? "收盤" : "連線中…";
+  $("#dot").className = "dot" + (on ? " on" : W.err ? " err" : ""); $("#statText").textContent = st; $("#stat").title = W.err || (W.qBackup ? `證交所即時報價連不上，暫用 ${W.qBackup}` : "");
   $("#ix2").innerHTML = `<span class="stat"><i class="dot ${on ? "on" : W.err ? "err" : ""}"></i>${st}</span>` + ixHtml();
 }
 document.addEventListener("click", e => { const b = e.target.closest(".ixc[data-sel]"); if (b) select(b.dataset.sel); });
@@ -2084,10 +2087,13 @@ async function loadMkt(force = false) {
   if (W.off || (!force && W.mkt && Date.now() - W.mkt.at < 300000)) return renderList();
   const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
   loadMktStats(force);
-  const [m, cal, ex, fx, wn] = await Promise.allSettled([getJ("/api/market"), W.cal && !force ? Promise.resolve(W.cal) : getJ("/api/calendar", true), fut("EXF"), fut("FXF"), loadWarn(force)]);
+  // 電指近、金指近先到先顯示，不用等大盤統計（證交所慢的時候大盤統計可能要等比較久）
+  const exP = fut("EXF"), fxP = fut("FXF");
+  Promise.all([exP, fxP]).then(([ex, fx]) => { W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; if (W.lt === "mkt") renderList(); }).catch(() => {});
+  const [m, cal, ex, fx, wn] = await Promise.allSettled([getJ("/api/market"), W.cal && !force ? Promise.resolve(W.cal) : getJ("/api/calendar", true), exP, fxP, loadWarn(force)]);
   W.mkt = m.status === "fulfilled" ? { ...m.value, at: Date.now() } : { err: m.reason?.message, at: Date.now() };
   W.cal = cal.status === "fulfilled" ? cal.value : { err: cal.reason?.message };
-  W.futx = { EXF: ex.value || null, FXF: fx.value || null };
+  W.futx = { EXF: ex.value || W.futx?.EXF || null, FXF: fx.value || W.futx?.FXF || null };
   if (!W.scr) loadScreen(); // 急拉股、選股積木用選股清單
   if (!W.hot["rank:" + W.mkHot] && W.mkHot !== "surge") loadMkHot();
   renderList();
