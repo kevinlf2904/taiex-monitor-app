@@ -65,25 +65,28 @@ export function parseHouseIndex(xml) {
     .map(b => ({ docId: tag(b, "DocID"), name: cleanName([tag(b, "First"), tag(b, "Last"), tag(b, "Suffix")].filter(Boolean).join(" ")), last: tag(b, "Last"), first: tag(b, "First"), state: tag(b, "StateDst"), filed: mdy(tag(b, "FilingDate")), year: tag(b, "Year") }))
     .filter(x => x.docId && x.filed);
 }
-// PTR PDF 的文字（一行一行）→ 交易。電子申報的每一列像：「SP Apple Inc. - Common Stock (AAPL) [ST] P 01/14/2026 01/15/2026 $1,001 - $15,000」
-// 資產名稱、金額常被 PDF 換行切開，所以用「(代號) [類型] 交易類型 日期 日期 金額」當錨點，資產名稱往前找同一列的行；
-// 說明（D :）、申報狀態（F S :）這類附註行不算。只留股票（ST）、選擇權（OP）、ETF（EF）
-const NOISE = /^(?:F\s?S|S\s?O|D|C|L)\s?:|^(?:Filing Status|Description|Subholding|Location|Comments?|ID|Owner|Asset|Transaction|Type|Date|Notification|Amount|Cap\.|Gains|\$200\?|\*)/i;
+// PTR PDF 的文字（一行一行）→ 交易。實際版面（pdfjs 讀出來）：每筆交易的第一行是「持有人 資產名稱… 類型 交易日 通知日 金額下限 -」，
+// 資產名稱的後半、(代號) [資產類型]、金額上限常換到下一兩行，例如：
+//   SP Accenture plc Class A Ordinary Shares S 05/08/2026 06/08/2026 $15,001 -
+//   (ACN) [ST] $50,000
+//   SP Taiwan Semiconductor P 05/08/2026 06/08/2026 $1,001 - $15,000
+//   Manufacturing Company Ltd. (TSM)
+//   [ST]
+// 所以用「類型＋兩個日期＋金額」那一行當每筆的開頭，接著的幾行（到「F S:」「S O:」這類附註為止）併進來再找代號。只留股票（ST）、選擇權（OP）、ETF（EF）
+const NOISE = /^(?:F\s?S|S\s?O|D|C|L)\s?:|^(?:Filing Status|Description|Subholding|Location|Comments?|ID Owner|Type Date|\$200\?|\*|Filing ID|I\s?V\s?D|I\s?P\s?O|C\s?S|Yes No|I CERTIFY|my knowledge|Digitally Signed)/i;
+const TX = /^(.*?)\s*\b(P|S\s*\(\s*partial\s*\)|S|E)\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+(Over\s+\$[\d,]+|\$[\d,]+(?:\s*-\s*(?:\$[\d,]+)?)?)\s*(.*)$/i;
+const AMT_HI = { 1001: 15000, 15001: 50000, 50001: 100000, 100001: 250000, 250001: 500000, 500001: 1000000, 1000001: 5000000, 5000001: 25000000, 25000001: 50000000 };
 export function parseHousePtrText(text) {
-  const t = String(text).replace(/\u0000/g, "").split(/\n/).map(l => l.replace(/\s+/g, " ").trim()).join("\n");
-  const re = /\(\s*([A-Z][A-Z0-9.\-/]{0,9})\s*\)\s*\[\s*([A-Z]{2})\s*\]\s*(P|S\s*\(\s*partial\s*\)|S|E)\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+(\$[\d,]+\s*(?:-\s*\$[\d,]+)?|Over\s+\$[\d,]+|\$[\d,]+\s*\+)/gi;
-  const out = []; let prev = 0;
-  for (const m of t.matchAll(re)) {
-    const before = t.slice(prev, m.index).split("\n"); prev = m.index + m[0].length;
-    const type = m[2].toUpperCase(), kd = kindOf(m[3]); if (!["ST", "OP", "EF"].includes(type) || !kd) continue;
-    const name = []; // 從錨點往前收集資產名稱的行（最多 3 行）
-    for (let k = before.length - 1; k >= 0 && name.length < 3; k--) {
-      const l = before[k]; if (!l) { if (name.length) break; continue; }
-      if (NOISE.test(l) || /\$\s?\d/.test(l) || (/\.$/.test(l) && !/\b(?:Inc|Corp|Co|Ltd|Plc|L\.P|S\.A|N\.V)\.$/i.test(l)) || /\d{1,2}\/\d{1,2}\/\d{4}/.test(l)) break;
-      name.unshift(l); if (/^(SP|JT|DC)\s/.test(l)) break;
-    }
-    let asset = name.join(" ").trim(), owner = "本人"; const om = asset.match(/^(SP|JT|DC)\s+(.*)$/); if (om) { owner = ownerOf(om[1]); asset = om[2]; }
-    out.push({ ticker: m[1].replace(/\.$/, ""), asset: asset.slice(0, 90), assetType: type === "OP" ? "選擇權" : type === "EF" ? "ETF" : "股票", ...kd, owner, traded: mdy(m[4]), notified: mdy(m[5]), amount: amountRange(m[6]) });
+  const L = String(text).replace(/\u0000/g, "").split(/\n/).map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean), out = [];
+  for (let i = 0; i < L.length; i++) {
+    const m = L[i].match(TX); if (!m || NOISE.test(L[i])) continue;
+    const cont = []; for (let k = i + 1; k < L.length && cont.length < 4; k++) { if (TX.test(L[k]) || NOISE.test(L[k])) break; cont.push(L[k]); }
+    const joined = [m[1], m[6], ...cont].join(" ").replace(/\s+/g, " ").trim();
+    const tk = joined.match(/\(\s*([A-Z][A-Z0-9.\-/]{0,9})\s*\)\s*\[\s*([A-Z]{2})\s*\]/); if (!tk) continue;
+    const type = tk[2].toUpperCase(), kd = kindOf(m[2]); if (!["ST", "OP", "EF"].includes(type) || !kd) continue;
+    let amt = amountRange(m[5]); if (amt && amt[1] == null && !/over/i.test(m[5])) { const hi = joined.slice(tk.index + tk[0].length).match(/\$\s?([\d,]+)/) || cont.join(" ").match(/\$\s?([\d,]+)/); amt = [amt[0], hi ? +hi[1].replace(/,/g, "") : AMT_HI[amt[0]] ?? null]; }
+    let asset = joined.slice(0, tk.index).replace(/\$[\d,]+/g, "").trim(), owner = "本人"; const om = asset.match(/^(SP|JT|DC)\s+(.*)$/); if (om) { owner = ownerOf(om[1]); asset = om[2]; }
+    out.push({ ticker: tk[1].replace(/\.$/, ""), asset: asset.slice(0, 90), assetType: type === "OP" ? "選擇權" : type === "EF" ? "ETF" : "股票", ...kd, owner, traded: mdy(m[3]), notified: mdy(m[4]), amount: amt });
   }
   return out;
 }
@@ -177,7 +180,9 @@ export function merge(prev, add, keepFrom) {
 export async function main({ days = 200, log = console.log } = {}) {
   const prev = await readFile(DATA + "congress.json", "utf8").then(JSON.parse).catch(() => ({ trades: [], people: {} }));
   const seen = await readFile(DATA + "congress-docs.json", "utf8").then(JSON.parse).catch(() => ({}));
-  const fromIso = iso(Date.now() - (prev.trades?.length ? 45 : days) * DAY), notes = [], add = { trades: [], people: {} };
+  // 解析器改版（眾議院 PDF 的換行版面）：之前讀到文字卻解析出 0 筆的文件重讀一次，期間拉回完整的 days 天
+  const PARSER = 2, redo = seen._v !== PARSER; if (redo) { for (const k of Object.keys(seen)) if (k[0] === "H" && seen[k] === 0) delete seen[k]; seen._v = PARSER; }
+  const fromIso = iso(Date.now() - (prev.trades?.length && !redo ? 45 : days) * DAY), notes = [], add = { trades: [], people: {} };
   for (const [name, fn] of [["眾議院", house], ["參議院", senate]]) {
     try { const r = await fn(fromIso, seen, log); add.trades.push(...r.trades); Object.assign(add.people, r.people); log(`${name}：新增 ${r.trades.length} 筆`); }
     catch (e) { notes.push(`${name}資料這次沒有更新（${e.message}）`); log(`${name}失敗：${e.message}`); }
@@ -189,4 +194,11 @@ export async function main({ days = 200, log = console.log } = {}) {
   await writeFile(DATA + "congress-docs.json", JSON.stringify(seen));
   return out;
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("ok", o.trades.length, "筆，", Object.keys(o.people).length, "人，資料截止", o.cutoff)).catch(e => { console.error(e); process.exit(1); });
+// 除錯：node scripts/congress.mjs --dump 3 → 印出幾份「讀得到文字但解析出 0 筆」的眾議院 PTR 原文，對照格式用
+async function dump(n) {
+  const seen = await readFile(DATA + "congress-docs.json", "utf8").then(JSON.parse).catch(() => ({})), ids = Object.entries(seen).filter(([k, v]) => k[0] === "H" && v === 0 && k !== "_v").map(([k]) => k.slice(1)).slice(0, n);
+  for (const id of ids) { const y = new Date().getUTCFullYear(); for (const yy of [y, y - 1]) { try { const txt = await pdfText(Buffer.from(await (await get(`https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/${yy}/${id}.pdf`, {}, 1)).arrayBuffer())); console.log(`===== ${id} (${yy}) =====\n${txt.slice(0, 3000)}\n===== 解析：${JSON.stringify(parseHousePtrText(txt).slice(0, 3))}`); break; } catch {} } }
+  const S = Object.entries(seen).filter(([k, v]) => k[0] === "S" && v === 0).map(([k]) => k.slice(1)).slice(0, 1); console.log("參議院 0 筆的例子：", S);
+}
+if (process.argv[2] === "--dump") dump(+process.argv[3] || 3).catch(e => { console.error(e); process.exit(1); });
+else if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("ok", o.trades.length, "筆，", Object.keys(o.people).length, "人，資料截止", o.cutoff)).catch(e => { console.error(e); process.exit(1); });

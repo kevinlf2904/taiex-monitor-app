@@ -5,6 +5,10 @@ on:
     - cron: "37 23 * * *"   # 每天台北 07:37（美東前一天晚上，當天的申報大多已公開）
     - cron: "37 11 * * 1-5" # 週一到週五台北 19:37 再補一次
   workflow_dispatch:
+    inputs:
+      dump:
+        description: "除錯：印出幾份解析不到交易的眾議院 PTR 原文（0＝正常更新）"
+        default: "0"
 permissions:
   contents: write
 concurrency:
@@ -16,14 +20,19 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - run: git pull -q origin main
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: git pull -q origin main
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       # 眾議院的申報是 PDF，用 pdfjs 讀文字（只在排程裡安裝，網站本身不需要）
       - run: npm i --no-save --no-audit --no-fund pdfjs-dist@4.10.38
-      - run: node scripts/congress.mjs
+      - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
+        run: node scripts/congress.mjs --dump ${{ github.event.inputs.dump }}
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: node scripts/congress.mjs
       - name: commit
+        if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
         run: |
           git config user.name "congress"
           git config user.email "congress@users.noreply.github.com"

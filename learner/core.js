@@ -611,8 +611,15 @@ class Chart {
       <div class="prow"><span>訊號標記</span><div class="pseg"><button type="button" data-mk="full" aria-pressed="${P.mk !== "icon"}">符號＋文字</button><button type="button" data-mk="icon" aria-pressed="${P.mk === "icon"}">只有符號</button></div></div>
       <p class="note" style="margin:0">策略與課程的訊號是 K 棒旁的三角形，文字會自動避開 K 棒；副圖指標的訊號（金叉、死叉等）是 K 棒下方（偏多）或上方（偏空）的半透明圓圈，用虛線連到副圖上的訊號點，點一下那根 K 棒就會加深並顯示名稱；每個副圖右上角可以直接開關。點一下圖表可以固定十字線，再點一次取消。</p>
       <div class="prow"><button type="button" class="btn sm" data-p="reset">全部還原</button></div>
-      <p class="note">電腦：Shift＋滾輪縮放游標所在的圖，或上下拖曳右側刻度；放大後可上下拖曳平移。雙擊圖表還原。</p>`;
+      <p class="note">電腦：Shift＋滾輪縮放游標所在的圖，或上下拖曳右側刻度；放大後可上下拖曳平移。雙擊圖表還原。</p>
+      ${this.cfgOn ? `<div class="prow"><strong>線型（顏色、參數、新增線）</strong></div><div class="picfg"></div>` : ""}`;
+    // 線型自訂：列出這張圖目前開著的指標；改了就讓每張圖用新設定重算，並通知頁面（看盤更新指標籤名稱、判讀）
+    const host = this.pop.querySelector(".picfg");
+    if (host) indCfgEditor(host, { ids: () => this.cfgIds(), names: id => { const S = (this.subsN || []).find(x => x.id === id); return S?.custom?.names?.slice(0, S.custom.nBase); },
+      onChange: () => { Chart.all.forEach(c => { if (c.D && c.cfgOn) c.set(c.D, { ...c.o, I: c.o.I?._cfgOf || c.o.I }); }); dispatchEvent(new Event("indcfg")); } });
   }
+  // 這張圖開著、可以自訂的指標（均線算一個）
+  cfgIds() { const o = this.o || {}; return [...(o.ma?.length && !o.maPlain ? ["ma"] : []), ...(o.boll ? ["boll"] : []), ...(o.vwap ? ["vwap"] : []), ...(o.mainX || []), ...(this.subsN || []).map(S => (typeof S === "string" ? S : S.id)).filter(Boolean)]; }
   syncBar() {
     this.canvas.style.touchAction = "pan-y"; // 上下滑永遠交給瀏覽器原生捲動（有慣性、不卡）；左右滑與雙指縮放才由圖表處理
     this.host.classList.toggle("chart-locked", this.locked);
@@ -731,7 +738,8 @@ class Chart {
       const mx = Math.max(...VP.w), maxW = pw * (narrow ? 0.34 : 0.26), bh = Math.max(1, Math.abs(Y(VP.mids[0]) - Y(VP.mids[0] + VP.step)));
       ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
       // 70% 籌碼區間的底色
-      const y70a = Y(VP.r70[1]), y70b = Y(VP.r70[0]); ctx.fillStyle = col.ink; ctx.globalAlpha = 0.045; ctx.fillRect(L + pw - maxW, y70a, maxW, y70b - y70a);
+      // 70% 籌碼區間：左側一條細括號線（不塗底色，深色主題才不會出現一塊白色半透明）
+      const y70a = Y(VP.r70[1]), y70b = Y(VP.r70[0]), bx = L + pw - maxW - 4; ctx.strokeStyle = col.muted; ctx.globalAlpha = 0.55; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(bx + 3, y70a); ctx.lineTo(bx, y70a); ctx.lineTo(bx, y70b); ctx.lineTo(bx + 3, y70b); ctx.stroke();
       VP.w.forEach((x, k) => { const y = Y(VP.mids[k] + VP.step / 2), wd = x / mx * maxW; ctx.fillStyle = VP.mids[k] <= VP.px ? col.up : col.down; ctx.globalAlpha = VP.mids[k] <= VP.px ? 0.26 : 0.2; ctx.fillRect(L + pw - wd, y, wd, Math.max(1, bh - 0.6)); });
       ctx.globalAlpha = 1;
       const tag = (v, c, t) => { if (v == null) return; const y = Y(v); if (y < top0 || y > top0 + mainH) return; ctx.strokeStyle = c; ctx.lineWidth = 0.8; ctx.setLineDash(t === "均" ? [5, 3] : []); ctx.beginPath(); ctx.moveTo(L + pw - maxW - 8, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); };

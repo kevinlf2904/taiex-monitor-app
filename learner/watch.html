@@ -77,6 +77,10 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .icon-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* 版面 */
+.ltabs-top { max-width: 1480px; margin: 0 auto; padding: 10px 16px 0; position: sticky; top: var(--topH, 0px); z-index: 30; background: var(--bg); }
+.ltabs-top[hidden] { display: none; }
+.ltabs-top .ltabs { margin: 0; }
+:root[data-embed="1"] .ltabs-top { padding: 0 0 6px; }
 .w-main { display: grid; grid-template-columns: minmax(300px, 390px) minmax(0, 1fr); gap: 16px; padding: 16px; max-width: 1480px; margin: 0 auto; align-items: start; }
 .w-list { position: sticky; top: 68px; max-height: calc(100vh - 84px); display: flex; flex-direction: column; overflow: hidden; }
 :root[data-embed="1"] .w-main { padding: 0; }
@@ -229,6 +233,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .gs-list li.on [data-gs], .gs-list [data-gs]:hover { color: var(--accent); }
 .gs-hint { margin: 2px 4px 6px; }
 .ltabs .gsbtn { flex: none; padding: 0 10px; }
+.gsadd { width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--muted); font: inherit; font-size: 14px; cursor: text; }
 .djump { display: none; gap: 2px; overflow-x: auto; scrollbar-width: none; padding: 6px 2px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .djump::-webkit-scrollbar { display: none; }
 .djump button { flex: none; padding: 6px 10px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; border-radius: 6px; }
@@ -613,6 +618,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
   <p class="note gs-hint" id="gsHint"></p>
   <ul class="gs-list" id="gsList" role="listbox"></ul>
 </div>
+<div class="ltabs-top" id="ltabsTop"></div>
 <main class="w-main" id="main">
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
@@ -620,7 +626,8 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
       <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="pod">名人</button><button data-l="cong">國會</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button><button data-l="after">盤後</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
-        <form id="addForm" autocomplete="off"><input class="code" id="addCode" placeholder="代號或名稱：2330、台積、NVDA" inputmode="search" enterkeyhint="go" aria-label="搜尋股票（代號或名稱，美股用英文代號）" aria-autocomplete="list" aria-controls="sugg"><button class="btn primary" type="submit">加入</button></form>
+        <button type="button" class="gsadd" data-gsearch-add>🔍 搜尋代號或名稱，加入自選</button>
+        <form id="addForm" autocomplete="off" hidden><input class="code" id="addCode" placeholder="代號或名稱：2330、台積、NVDA" inputmode="search" enterkeyhint="go" aria-label="搜尋股票（代號或名稱，美股用英文代號）" aria-autocomplete="list" aria-controls="sugg"><button class="btn primary" type="submit">加入</button></form>
         <ul class="sugg panel" id="sugg" role="listbox" hidden></ul>
       </div>
       <div class="l-tools" id="lTools"></div>
@@ -681,7 +688,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
       <div class="ph"><h2>K 線</h2></div>
       <div class="k-status"><span id="kNote"></span><span>往左拖曳會自動載入更早的資料；兩指縮放；放大後圖表鎖定，按「全部」解鎖</span></div>
       <div class="klayers" id="kset">
-      <details class="kset" id="klInd"><summary><span>指標</span><span class="note" id="klIndSum"></span></summary><div class="ibar" id="dIbar"></div><details class="icfgbox" id="icfgBox" style="padding:0 14px 8px"><summary>⚙ 自訂線型（線的顏色、參數、新增線）</summary><div id="icfgHost"></div></details></details>
+      <details class="kset" id="klInd"><summary><span>指標</span><span class="note" id="klIndSum"></span></summary><div class="ibar" id="dIbar"></div><p class="note" style="margin:0 14px 8px">線的顏色、參數、新增線：K 線圖右上「設定」→「線型」</p></details>
       <details class="kset" id="klOv"><summary><span>疊加分析</span><span class="note" id="klOvSum"></span></summary><div class="ibar" id="dObar"></div></details>
       <details class="kset" id="klStrat"><summary><span>策略訊號</span><span class="note" id="klStratSum"></span></summary>
         <div class="strat"><label>策略訊號 <select class="sel" id="stratSel"></select></label><span class="note" id="stratNote"></span></div>
@@ -744,7 +751,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.14-68</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.14-69</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1008,17 +1015,18 @@ function gsRender() {
   const q = $("#gsInput").value, inAny = c => W.groups.some(g => g.list.includes(c));
   const rec = q.trim() ? null : (store.get("watch:recent", []) || []).filter(okCode).map(c => [c, nameOf(c), ""]);
   const hits = rec || gsHits(q);
-  $("#gsHint").textContent = rec ? (rec.length ? "最近看過" : "輸入代號或名稱（例如 2330、台積、0050、NVDA）") : hits.length ? "" : "找不到，請改用代號（例如 2330、NVDA）";
+  $("#gsHint").textContent = (W.gsAdd ? "點一檔加入「" + (W.groups[W.gi]?.name || "自選") + "」並打開。" : "") + (rec ? (rec.length ? "最近看過" : "輸入代號或名稱（例如 2330、台積、0050、NVDA）") : hits.length ? "" : "找不到，請改用代號（例如 2330、NVDA）");
   $("#gsList").innerHTML = hits.map(([c, n, m], i) => `<li class="${i === W.gsK ? "on" : ""}"><button type="button" role="option" data-gs="${c}"><span class="cd">${c === "T00" ? "加權" : c === "O00" ? "櫃買" : c}</span><span>${esc(n || "")}</span><span class="gm">${esc(m || "")}</span></button>${isIdx(c) ? "" : inAny(c) ? '<span class="note">已在自選</span>' : `<button type="button" class="btn sm" data-gsadd="${c}">＋自選</button>`}</li>`).join("");
 }
 // 搜尋面板也算一頁：打開時記一筆，按「返回」（App 或瀏覽器的返回）就關掉，不會一直蓋在看盤上
-function gsOpen(q = "") {
-  const box = $("#gsearch"); if (box.hidden) { box.hidden = false; navPush(); } W.gsK = 0; $("#gsInput").value = q; goY(0);
+function gsOpen(q = "", add = false) {
+  W.gsAdd = add; $("#gsHint").dataset.mode = add ? "add" : ""; const box = $("#gsearch"); if (box.hidden) { box.hidden = false; navPush(); } W.gsK = 0; $("#gsInput").value = q; goY(0);
   loadStocks().then(gsRender); gsRender(); setTimeout(() => $("#gsInput").focus(), 30);
 }
 function gsHide() { $("#gsearch").hidden = true; $("#gsInput").blur(); }
 function gsClose() { if ($("#gsearch").hidden) return; if (history.state?.nav?.gs) history.back(); else { gsHide(); navPush("replace"); } }
 function gsGo(c) {
+  if (W.gsAdd) { gsHide(); navPush("replace"); W.gsAdd = false; return pick(c); } // 從自選的「加入自選」打開：加進目前的群組並打開
   const n = W.stocks?.find(s => s[0] === c) || US_HINT.find(s => s[0] === c); if (n) W.names[c] = n[1];
   store.set("watch:recent", [c, ...(store.get("watch:recent", []) || []).filter(x => x !== c)].slice(0, 10));
   gsHide(); W.navList = null; navPush("replace"); select(c); kick(); // 用個股頁取代搜尋那一筆：返回時回到搜尋之前的地方
@@ -1033,7 +1041,7 @@ $("#gsearch").addEventListener("click", e => { const t = e.target;
   if (t.closest("[data-gsclose]")) return gsClose();
   const a = t.closest("[data-gsadd]"); if (a) { const c = a.dataset.gsadd, n = W.stocks?.find(s => s[0] === c) || US_HINT.find(s => s[0] === c); if (n) W.names[c] = n[1]; const gi = addTo(c); if (gi >= 0) { addToast(c, gi); saveGroups(); renderList(); } gsRender(); return; }
   const g = t.closest("[data-gs]"); if (g) gsGo(g.dataset.gs); });
-document.addEventListener("click", e => { if (e.target.closest("[data-gsearch]")) gsOpen(); });
+document.addEventListener("click", e => { if (e.target.closest("[data-gsearch-add]")) gsOpen("", true); else if (e.target.closest("[data-gsearch]")) gsOpen(); });
 document.addEventListener("keydown", e => { if (e.key === "/" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "") && $("#gsearch").hidden) { e.preventDefault(); gsOpen(); } });
 // 個股頁上方的跳轉列：直接回到大盤、自選、選股…，不用一頁一頁返回
 function renderDJump() {
@@ -1200,6 +1208,14 @@ function renderEtf() {
 /* ---------- 清單：自選群組／台股熱門／美股熱門／排行 ---------- */
 const RANKS = [["gain", "漲幅"], ["loss", "跌幅"], ["volume", "成交量"], ["value", "成交值"], ["foreign", "外資買超"], ["trust", "投信買超"]];
 // 清單分頁列：兩邊還有分頁時淡出提示可以滑；選中的分頁自動捲進畫面
+// 平板橫向、電腦：清單分頁列放在整個看盤的上方（全寬、固定在原位），點開個股時不會跟著清單縮到左邊；手機放回清單裡
+function placeTabs() {
+  const t = $("#lTabs"), top = $("#ltabsTop"), mob = isMobile();
+  if (!mob && t.parentElement !== top) top.appendChild(t);
+  else if (mob && t.parentElement === top) $("#ix2").after(t);
+  top.hidden = mob;
+}
+placeTabs(); matchMedia("(max-width: 900px)").addEventListener("change", () => { placeTabs(); ltabsUi(true); });
 function ltabsUi(center = false) {
   const t = $("#lTabs"), a = t.querySelector('[aria-pressed="true"]');
   if (a && center) { const tr = t.getBoundingClientRect(), ar = a.getBoundingClientRect(); if (ar.left < tr.left + 20 || ar.right > tr.right - 24) t.scrollTo({ left: t.scrollLeft + ar.left - tr.left - (tr.width - ar.width) / 2, behavior: "smooth" }); }
@@ -1236,7 +1252,7 @@ function rowHtml(c, q, { rank, metric, star } = {}) {
     <span class="nm">${rank ? `<span class="rk">${rank}</span>` : ""}${nm}<span class="cd">${c}</span>${al ? '<span class="alert-tag" title="已設定價格提醒">🔔</span>' : ""}</span>
     <span class="px ${cls(q.chg)} ${flash}">${fmtPx(q.price, c)}</span>
     <span class="pc ${cls(q.chg)}">${q.chgPct != null ? (q.chgPct > 0 ? "+" : "") + (+q.chgPct).toFixed(2) + "%" : "—"}</span>
-    <span class="sub"><span class="rng" title="今日最低 ${lo ?? "—"} ～ 最高 ${hi ?? "—"}">${rng ? `${q.prev ? `<u style="left:${pos(q.prev)}%"></u>` : ""}<i style="left:calc(${pos(q.price)}% - 1px)"></i>` : ""}</span><span>${metric || `量 ${fmtVol(q.vol)}${q.vol != null ? " " + volUnit(c) : ""}`}</span></span>
+    <span class="sub"><span class="rng" title="今日最低 ${lo ?? "—"} ～ 最高 ${hi ?? "—"}">${rng ? `${q.prev ? `<u style="left:${pos(q.prev)}%"></u>` : ""}<i style="left:calc(${pos(q.price)}% - 1px)"></i>` : ""}</span><span>${metric || `量 ${fmtVol(q.vol)}${q.vol != null ? " " + volUnit(c) : ""}${(() => { const y = isTW(c) && !isIdx(c) ? yldNow(c, q.price) : null; if (isTW(c) && !isIdx(c) && !W.yld?.[c]) yldWant(c); return y != null && y > 0 ? `・殖利率 ${y.toFixed(2)}%` : ""; })()}`}</span></span>
     ${hp ? `<span class="hold ${cls(hp.pnl)}">持股 ${W.hold[c].sh.toLocaleString()} 股・損益 ${hp.pnl >= 0 ? "+" : ""}${Math.round(hp.pnl).toLocaleString()}（${hp.pct >= 0 ? "+" : ""}${hp.pct.toFixed(2)}%）</span>` : ""}
   </button>${star ? `<button class="star" data-star="${c}" aria-pressed="${inAny}" aria-label="${inAny ? "已在自選" : "加入自選"} ${nm}">${inAny ? "★" : "☆"}</button>` : ""}</li>`;
 }
@@ -2503,13 +2519,27 @@ async function congAsk(key) {
 }
 const congAIHtml = key => { const R = W.congAI[key]; if (!R) return ""; return `<div class="caibox">${R.loading ? `<p class="note">AI 整理中（約 10～30 秒）…</p>` : R.err ? `<p class="note">⚠ ${esc(R.err)}</p>` : `<div class="iaitxt">${esc(R.text).replace(/\n/g, "<br>")}</div><p class="note">AI 只根據上面的公開申報整理，可能有誤；請以原始文件為準。</p>`}</div>`; };
 /* ---------- 殖利率：近 12 個月現金股利 ÷ 現價（/api/yield，Yahoo 配息紀錄）；台股、ETF 才有，一檔一天問一次 ---------- */
-W.yld = {};
-function yldNow(c, price) { const y = W.yld[c]?.row; if (!y) return null; const p = price ?? y.price; return p > 0 ? (y.cash12 / p) * 100 : y.yield; }
+W.yld ||= {};
+function yldNow(c, price) { const y = W.yld?.[c]?.row; if (!y) return null; const p = price ?? y.price; return p > 0 ? (y.cash12 / p) * 100 : y.yield; }
 function yldCell(c, q) {
   if (!isTW(c) || isIdx(c)) return ""; const Y = W.yld[c]; if (!Y) { loadYield(c); return `<div><span>殖利率</span><b class="note">…</b></div>`; }
   if (!Y.row) return `<div><span>殖利率</span><b title="${esc(Y.err || "")}">—</b></div>`;
   const y = Y.row, v = yldNow(c, q?.price);
   return `<div title="近 12 個月現金股利 ${y.cash12} 元（${y.n} 次）${y.last ? `，最近一次 ${y.last.d} 配 ${y.last.cash} 元` : ""}；殖利率＝近 12 個月現金股利 ÷ 現價"><span>殖利率</span><b>${v != null ? v.toFixed(2) + "%" : "—"}${y.n ? `<small> 配 ${+y.cash12.toFixed(2)} 元</small>` : ""}</b></div>`;
+}
+// 清單上的殖利率：畫清單時把還沒有資料的代號收集起來，合併成一次 /api/yield（最多 40 檔）；一天內用瀏覽器記住的結果
+// （清單在載入時就會畫，這裡用 W 上的欄位，不用 const，避免宣告前就被呼叫）
+function yldWant(c) { const yldQ = (W.yldQ ||= new Set()); W.yld ||= {};
+  const memo = (W.yldMemo ||= store.get("watch:yld", {}) || {}); if (memo[c] && Date.now() - memo[c].at < 864e5) { W.yld[c] = { row: memo[c].row }; return; }
+  if (W.off || W.yldNo?.has(c)) return; yldQ.add(c); clearTimeout(W.yldT); W.yldT = setTimeout(yldFlush, 400);
+}
+async function yldFlush() {
+  const yldQ = W.yldQ, L = [...yldQ].slice(0, 40); L.forEach(c => yldQ.delete(c)); if (!L.length) return; L.forEach(c => (W.yld[c] = { loading: true }));
+  try { const j = await getJ(`/api/yield?codes=${L.join(",")}`, true), memo = (W.yldMemo ||= store.get("watch:yld", {}) || {});
+    L.forEach(c => { const row = j.rows?.find(x => x.code === c); W.yld[c] = row ? { row } : { err: "沒有配息資料" }; if (row) memo[c] = { at: Date.now(), row }; });
+    const ks = Object.keys(memo); ks.slice(0, Math.max(0, ks.length - 300)).forEach(k => delete memo[k]); store.set("watch:yld", memo); }
+  catch { L.forEach(c => { delete W.yld[c]; (W.yldNo ||= new Set()).add(c); }); }
+  renderList(); if (yldQ.size) W.yldT = setTimeout(yldFlush, 400);
 }
 async function loadYield(c) {
   if (W.off || W.yld[c]) return; W.yld[c] = { loading: true };
@@ -2958,16 +2988,11 @@ overlayMigrate("watch2");
 // 指標（主圖、副圖）和疊加分析分成兩個可以收合的區塊；舊版存在同一組設定（ind:watch2）裡的疊加，第一次搬到 ind:watch2ov
 { const ovIds = new Set(OVERLAY_ITEMS.map(x => x.id)), old = store.get("ind:watch2", null);
   if (Array.isArray(old) && old.some(id => ovIds.has(id))) { if (store.get("ind:watch2ov", null) == null) store.set("ind:watch2ov", old.filter(id => ovIds.has(id))); store.set("ind:watch2", old.filter(id => !ovIds.has(id))); } }
-const dIndBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); if ($("#icfgBox").open) icfg.render(); });
+const dIndBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); });
 const dOvBar = indicatorBar($("#dObar"), "watch2ov", [{ title: "疊加", items: OVERLAY_ITEMS }], [], () => { drawK(); renderAna(); });
 const OV_IDS = new Set(OVERLAY_ITEMS.map(x => x.id));
-// 線型自訂：列出目前開著的指標（均線算一個），改了就重畫；均線籤的名稱跟著更新
-const ICFG_MAIN = ["boll", "vwap", "sar", "donch", "kelt", "ichi"];
-const icfg = indCfgEditor($("#icfgHost"), {
-  ids: () => [...(MAIN_ITEMS.some(it => /^ma\d/.test(it.id) && dIndBar.has(it.id)) || indExtras("ma").length ? ["ma"] : []), ...ICFG_MAIN.filter(id => dIndBar.has(id)), ...["kd", "rsi", "macd", "wr", ...Object.keys(SUBX)].filter(id => dIndBar.has(id))],
-  names: id => (kChart.subsN || []).find(S => S.id === id)?.custom?.names?.slice(0, (kChart.subsN || []).find(S => S.id === id).custom.nBase),
-  onChange: () => { dIndBar.set("ma5", dIndBar.has("ma5")); drawK(); renderAna(); ksetSummary(); } });
-$("#icfgBox").addEventListener("toggle", () => { if ($("#icfgBox").open) icfg.render(); });
+// 線型自訂（在 K 線圖的「設定」裡改）：改了就重畫、更新均線籤的名稱與判讀
+addEventListener("indcfg", () => { dIndBar.set("ma5", dIndBar.has("ma5")); drawK(); renderAna(); ksetSummary(); });
 const dBar = { has: id => (OV_IDS.has(id) ? dOvBar : dIndBar).has(id), set: (id, on) => (OV_IDS.has(id) ? dOvBar : dIndBar).set(id, on) };
 // 策略：定義在 analysis.js 的 STRAT_DEFS（可調參數）；這裡記住每個策略的參數與買賣方式
 const STRATS = { "": { name: "不顯示" }, ...Object.fromEntries(Object.entries(STRAT_DEFS).map(([k, v]) => [k, { name: v.name, fn: (D, I) => stratRun(k, D, I, (W.stratP || {})[k]) }])) };
