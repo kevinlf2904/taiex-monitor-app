@@ -39,6 +39,34 @@ async function pdfLines(buf, maxPages = Infinity) {
   const n = doc.numPages; await doc.destroy(); return { n, pages };
 }
 
+// 一頁頁的文字行（欄位用「 | 」分隔）→ 每位申報人的申報：{ name, org, title, date, kind, stocks: [{ name, owner, sh, raw }] }
+const T = l => l.replace(/\s*\|\s*/g, "").replace(/\s+/g, "");
+const NUM = /^-?[\d,]+(\.\d+)?$/;
+export function parseDecls(lines) {
+  const out = []; let cur = null, sec = null, frag = [], lastRow = null;
+  for (let k = 0; k < lines.length; k++) {
+    const raw = lines[k], t = T(raw); if (!t) continue;
+    if (/^公職人員財產申報表$/.test(t)) { cur = { name: "", org: "", title: "", date: null, kind: "", stocks: [] }; out.push(cur); sec = null; frag = []; lastRow = null; continue; }
+    if (!cur) continue;
+    if (/^監察院公報/.test(t)) continue; // 頁尾
+    if (t.startsWith("申報人姓名")) { cur.name = raw.split("|").map(x => x.trim()).filter(Boolean)[1] || ""; const prev = (lines[k - 1] || "").split("|").map(x => x.trim()).filter(x => x && !/^\d+\.$/.test(x)); if (!cur.org && prev.length) { cur.org = prev[0] || ""; cur.title = prev[1] || ""; } continue; }
+    if (!cur.date) { const m = t.match(/^(\d{2,3})年(\d{1,2})月(\d{1,2})日(.*申報)$/); if (m) { cur.date = `${+m[1] + 1911}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`; cur.kind = m[4].replace(/[()（）]/g, ""); continue; } }
+    if (/^1\.股票（總價額/.test(t)) { sec = "stock"; frag = []; lastRow = null; continue; }
+    if (sec === "stock" && /^2\.債券/.test(t)) { sec = null; continue; }
+    if (sec !== "stock") continue;
+    if (/^(名稱所有人股數|新臺幣總額或折合新臺幣|總額|本欄空白)/.test(t)) continue;
+    const cells = raw.split("|").map(x => x.trim()).filter(Boolean), nums = cells.filter(c => NUM.test(c));
+    if (nums.length >= 2) { // 一筆持股：名稱（可能斷行） | 所有人 | 股數 | 票面價額 | 總額
+      const txt = cells.filter(c => !NUM.test(c)), owner = txt.length >= 2 ? txt[txt.length - 1] : txt.length === 1 && !frag.length ? "" : txt[txt.length - 1] || "";
+      const nm = [...frag, ...(txt.length >= 2 ? txt.slice(0, -1) : txt.length === 1 && !frag.length ? txt : [])].join("");
+      lastRow = { name: nm, owner, sh: +nums[0].replace(/,/g, ""), raw: [...frag, raw].join(" / ") }; cur.stocks.push(lastRow); frag = [];
+    } else if (lastRow && frag.length === 0 && lastRow._pre !== false && cells.length === 1 && k + 1 < lines.length && T(lines[k + 1]).match(/[\d,]{2,}/) == null && !/^2\.債券/.test(T(lines[k + 1]))) {
+      lastRow.name += t; lastRow.raw += " / " + raw; // 名稱的後半段（下一行不是另一筆）
+    } else frag.push(t);
+  }
+  return out.filter(d => d.name);
+}
+
 export async function main() {
   const list = parseList(await getText(LIST)); console.log("期別", list.slice(0, 20).map(x => `${x.no}(${x.date || "?"})`).join("、"));
   if (DUMP) {
@@ -47,7 +75,11 @@ export async function main() {
     const buf = await getBuf(pdf.url); console.log("PDF 大小", buf.length);
     const { n, pages } = await pdfLines(buf, 40); console.log("頁數", n, "前 3 頁行數", pages.slice(0, 3).map(p => p.length));
     pages.slice(0, 3).forEach((p, i) => console.log(`--- 第 ${i + 1} 頁 ---\n` + p.slice(0, 60).join("\n")));
-    const all = pages.flat(), k = all.findIndex(l => /股票/.test(l)); console.log("--- 第一個「股票」附近 ---\n" + (k >= 0 ? all.slice(Math.max(0, k - 30), k + 50).join("\n") : "（前 40 頁沒有）"));
+    const { pages: P } = await pdfLines(buf), all = P.flat(), D = parseDecls(all);
+    console.log("申報人", D.length, "有股票", D.filter(d => d.stocks.length).length, "股票筆數", D.reduce((s, d) => s + d.stocks.length, 0));
+    D.slice(0, 5).forEach(d => console.log("人", JSON.stringify({ ...d, stocks: d.stocks.length })));
+    D.filter(d => d.stocks.length).slice(0, 8).forEach(d => console.log("持股", d.name, d.org, d.title, d.date, d.kind, JSON.stringify(d.stocks.slice(0, 12).map(x => [x.name, x.owner, x.sh, x.raw]))));
+    let shown = 0; for (let k = 0; k < all.length && shown < 4; k++) if (/^1\.股票（總價額/.test(T(all[k])) && !/本欄空白/.test(T(all[k + 3] || "") + T(all[k + 4] || ""))) { console.log("--- 原始股票段 ---\n" + all.slice(k, k + 28).join("\n")); shown++; k += 20; }
     return;
   }
 }
