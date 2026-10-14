@@ -1,0 +1,40 @@
+# 集保股權分散：每週六從集保結算所開放資料整理大戶、散戶持股比例，累積到 learner/data/tdcc/
+name: tdcc
+on:
+  schedule:
+    - cron: "20 2 * * 6"   # 每週六台北 10:20（集保週五晚上公布）
+  workflow_dispatch:
+    inputs:
+      dump:
+        description: "除錯：1＝只印出抓到的原始資料、不存檔（0＝正常更新）"
+        default: "0"
+permissions:
+  contents: write
+concurrency:
+  group: tdcc
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: git pull -q origin main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
+        run: node scripts/tdcc.mjs --dump
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: node scripts/tdcc.mjs
+      - name: commit
+        if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: |
+          git config user.name "tdcc"
+          git config user.email "tdcc@users.noreply.github.com"
+          git add learner/data/tdcc
+          if git diff --cached --quiet; then echo "沒有新資料"; exit 0; fi
+          git commit -m "集保：更新股權分散"
+          for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin HEAD:main && exit 0; git rebase --abort 2>/dev/null; sleep 5; done
+          exit 1

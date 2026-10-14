@@ -1,0 +1,40 @@
+# 籌碼補充：每個交易日晚上整理借券賣出、當日沖銷比例與選擇權 Put/Call 比（learner/data/chipx.json）
+name: chipx
+on:
+  schedule:
+    - cron: "50 11 * * 1-5" # 週一到週五台北 19:50
+  workflow_dispatch:
+    inputs:
+      dump:
+        description: "除錯：1＝只印出抓到的原始資料、不存檔（0＝正常更新）"
+        default: "0"
+permissions:
+  contents: write
+concurrency:
+  group: chipx
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: git pull -q origin main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
+        run: node scripts/chipx.mjs --dump
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: node scripts/chipx.mjs
+      - name: commit
+        if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: |
+          git config user.name "chipx"
+          git config user.email "chipx@users.noreply.github.com"
+          git add learner/data/chipx.json
+          if git diff --cached --quiet; then echo "沒有新資料"; exit 0; fi
+          git commit -m "籌碼：更新借券、當沖、Put/Call 比"
+          for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin HEAD:main && exit 0; git rebase --abort 2>/dev/null; sleep 5; done
+          exit 1
