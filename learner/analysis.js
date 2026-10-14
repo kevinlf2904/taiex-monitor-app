@@ -426,40 +426,42 @@ const btKey = s => `${s.i}${s.side}`;
 const taxOf = c => (/^00\d+B$/.test(c || "") ? 0 : /^00/.test(c || "") ? 0.001 : undefined);
 function backtest(D, sigs, opt = {}) {
   const cap = opt.capital || 1e6, lot = opt.lot || 1, useBuy = opt.useBuy !== false, useSell = opt.useSell !== false, skip = opt.skip || new Set();
-  const TX = opt.tax ?? TAX, fee = amt => Math.max(20, Math.floor(amt * FEE)), tax = amt => Math.floor(amt * TX); // 手續費與證交稅都是無條件捨去；ETF 證交稅 0.1%
+  // 手續費與證交稅都是無條件捨去；ETF 證交稅 0.1%。opt.fee 手續費率（預設 0.1425%，可以乘上券商折扣）、opt.minFee 每筆最低手續費（預設 20 元）、opt.slip 每邊滑價（小數，買進價往上加、賣出價往下扣）
+  const TX = opt.tax ?? TAX, FR = opt.fee ?? FEE, MF = opt.minFee ?? 20, SLIP = +opt.slip || 0, fee = amt => Math.max(MF, Math.floor(amt * FR)), tax = amt => Math.floor(amt * TX);
   // 買賣方式（預設和以前一樣）：fill "open"＝訊號隔天開盤成交、"close"＝訊號當根收盤成交；
   // stop 停損、take 停利、trail 移動停利（小數，例 0.08＝8%），hold 最多持有幾根 K 棒；size "all" 全部資金、"half" 一半、"units" 每次固定 units × lot 股、"amount" 每次固定買進 opt.amount 元
   const fillClose = opt.fill === "close", stop = +opt.stop || 0, take = +opt.take || 0, trail = +opt.trail || 0, hold = +opt.hold || 0, size = opt.size || "all", units = Math.max(1, +opt.units || 1);
   // 用手上的現金能買幾股（扣掉手續費後取整數單位）
-  const canBuy = (money, px) => { let n = Math.floor(money / (px * (1 + FEE)) / lot) * lot; while (n > 0 && n * px + fee(n * px) > money) n -= lot; return n; };
+  const canBuy = (money, px) => { let n = Math.floor(money / (px * (1 + FR)) / lot) * lot; while (n > 0 && n * px + fee(n * px) > money) n -= lot; return n; };
   const at = {}; sigs.forEach(s => { if (s.note || skip.has(btKey(s))) return; if ((s.side === "buy" && useBuy) || (s.side === "sell" && useSell)) at[s.i] = s.side; });
   let cash = cap, sh = 0, pos = null, pending = !useBuy && useSell ? "buy" : null, peak = cap, mdd = 0, costs = 0, missed = 0;
-  const trades = [];
-  const sell = (i, px, open, why = "訊號") => { const amt = sh * px, c = fee(amt) + tax(amt); costs += c; cash += amt - c; trades.push({ ...pos, xi: i, xpx: px, sh, pnl: amt - c - pos.cost, ret: (amt - c) / pos.cost - 1, open, why }); pos = null; sh = 0; };
-  const buy = (i, px) => { const budget = size === "half" ? cash / 2 : size === "amount" ? Math.min(cash, +opt.amount || cash) : cash; /* amount：每次固定買進金額 */ let n = canBuy(budget, px); if (size === "units") n = Math.min(n, units * lot);
-    if (n > 0) { const amt = n * px, c = fee(amt); costs += c; cash -= amt + c; sh = n; pos = { i, px, cost: amt + c, start: i === 0 && !useBuy, hi: px }; } else missed++; };
+  const trades = [], eqs = [];
+  const sell = (i, px0, open, why = "訊號") => { const px = px0 * (1 - SLIP), amt = sh * px, c = fee(amt) + tax(amt); costs += c; cash += amt - c; trades.push({ ...pos, xi: i, xpx: px, sh, pnl: amt - c - pos.cost, ret: (amt - c) / pos.cost - 1, open, why }); pos = null; sh = 0; };
+  const buy = (i, px0) => { const px = px0 * (1 + SLIP), budget = size === "half" ? cash / 2 : size === "amount" ? Math.min(cash, +opt.amount || cash) : cash; /* amount：每次固定買進金額 */ let n = canBuy(budget, px); if (size === "units") n = Math.min(n, units * lot);
+    if (n > 0) { const amt = n * px, c = fee(amt); costs += c; cash -= amt + c; sh = n; pos = { i, px, raw: px0, cost: amt + c, start: i === 0 && !useBuy, hi: px0 }; } else missed++; };
   for (let i = 0; i < D.length; i++) {
     if (pending === "buy" && !pos) buy(i, D[i].o);
     else if (pending === "sell" && pos) sell(i, D[i].o, false);
     pending = null;
     // 出場條件（進場那根之後才檢查）：停損、停利、移動停利用盤中高低價判斷，跳空就用開盤價；持有到期用收盤價
     if (pos && i > pos.i) {
-      const b = D[i], sp = stop ? pos.px * (1 - stop) : null, tp = take ? pos.px * (1 + take) : null, tr = trail ? pos.hi * (1 - trail) : null;
+      const b = D[i], sp = stop ? pos.raw * (1 - stop) : null, tp = take ? pos.raw * (1 + take) : null, tr = trail ? pos.hi * (1 - trail) : null;
       if (sp != null && b.l <= sp) sell(i, Math.min(b.o, sp), false, "停損");
-      else if (tr != null && b.l <= tr) sell(i, Math.min(b.o, tr), false, pos.hi > pos.px ? "移動停利" : "停損");
+      else if (tr != null && b.l <= tr) sell(i, Math.min(b.o, tr), false, pos.hi > pos.raw ? "移動停利" : "停損");
       else if (tp != null && b.h >= tp) sell(i, Math.max(b.o, tp), false, "停利");
       else if (hold && i - pos.i >= hold) sell(i, b.c, false, "到期");
       if (pos) pos.hi = Math.max(pos.hi, b.h);
     }
     if (at[i]) { if (fillClose) { if (at[i] === "buy" && !pos) buy(i, D[i].c); else if (at[i] === "sell" && pos) sell(i, D[i].c, false); } else pending = at[i]; }
-    const eq = cash + sh * D[i].c; peak = Math.max(peak, eq); mdd = Math.max(mdd, 1 - eq / peak);
+    const eq = cash + sh * D[i].c; peak = Math.max(peak, eq); mdd = Math.max(mdd, 1 - eq / peak); eqs.push(eq);
   }
   const last = D.length - 1;
   if (pos) sell(last, D[last].c, true, "期末");
   const wins = trades.filter(t => t.pnl > 0).length;
   // 買進持有：同一筆資金，第一天開盤買進、最後一天收盤賣出（和策略用同樣的成本與交易單位）
-  const bn = canBuy(cap, D[0].o), bAmt = bn * D[0].o, sAmt = bn * D[last].c, bhEnd = cap - bAmt - fee(bAmt) * (bn > 0) + (bn > 0 ? sAmt - fee(sAmt) - tax(sAmt) : 0);
-  return { trades, cap, end: cash, total: cash / cap - 1, pnl: cash - cap, bh: bhEnd / cap - 1, bhEnd, bhShares: bn, mdd, costs, win: trades.length ? wins / trades.length : null, missed, tooSmall: canBuy(cap, Math.min(...D.map(d => d.o))) === 0 };
+  const b0 = D[0].o * (1 + SLIP), bn = canBuy(cap, b0), bAmt = bn * b0, sAmt = bn * D[last].c * (1 - SLIP), bhEnd = cap - bAmt - fee(bAmt) * (bn > 0) + (bn > 0 ? sAmt - fee(sAmt) - tax(sAmt) : 0);
+  if (eqs.length) eqs[last] = cash; /* eq：每根 K 棒收盤時的資產（最後一根是期末賣出後的現金） */
+  return { trades, eq: eqs, cap, end: cash, total: cash / cap - 1, pnl: cash - cap, bh: bhEnd / cap - 1, bhEnd, bhShares: bn, mdd, costs, win: trades.length ? wins / trades.length : null, missed, tooSmall: canBuy(cap, Math.min(...D.map(d => d.o))) === 0 };
 }
 
 /* ================= 判讀 ================= */
