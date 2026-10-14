@@ -4,7 +4,7 @@
 // 來源（官方公開）：SEC EDGAR —— data.sec.gov 的申報清單、www.sec.gov/Archives 的資訊表（information table XML）；
 //   13F 只有 CUSIP 和名稱：股票代號先用 OpenFIGI（CUSIP → 代號，免金鑰、每分鐘有次數限制）查，查過的記在 learner/data/f13-cusip.json；
 //   查不到時再用 SEC 的 company_tickers.json 依公司名稱對照，都對不到就只顯示名稱。
-// SEC 要求程式存取要帶「名稱＋email」格式的 User-Agent（沒有 email 會被擋 403）：預設用 repo 擁有者的 GitHub noreply 地址；
+// SEC 要求程式存取要帶「名稱＋email」格式的 User-Agent（沒有 email 會被擋 403）：預設用網站網域的地址（SEC 不接受 users.noreply.github.com）；
 //   想換成自己的聯絡信箱，在 repo 的 Actions secrets 設 SEC_UA（例如「kline-school you@example.com」）。
 // 注意：13F 只有「季底那天」的多頭持股，不含放空、現金、非美股；申報最晚在季底後 45 天，看到的是過去的部位。
 
@@ -12,7 +12,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const OUT = fileURLToPath(new URL("../learner/data/f13.json", import.meta.url)), CUSIP = fileURLToPath(new URL("../learner/data/f13-cusip.json", import.meta.url));
-const UA = (process.env.SEC_UA || "").trim() || "kline-school-learner kevinlf2904@users.noreply.github.com";
+const UA = (process.env.SEC_UA || "").trim() || "kline-school research admin@kline-school.vercel.app";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const DUMP = process.argv.includes("--dump");
 
@@ -83,21 +83,7 @@ async function holdingsOf(cik, acc) {
   return parseInfoTable(xml);
 }
 
-// 除錯：同一個網址換幾種 User-Agent 試，印出狀態碼與 SEC 回的訊息開頭（分辨是 User-Agent 問題還是來源 IP 被擋）
-async function probe() {
-  const url = "https://data.sec.gov/submissions/CIK0001067983.json";
-  for (const ua of [UA, "kline-school research admin@kline-school.vercel.app", "Mozilla/5.0 (compatible; research; kevinlf2904@users.noreply.github.com)", "Sample Company Name AdminContact@sample.com"]) {
-    for (const hdr of [{}, { Accept: "application/json", "Accept-Encoding": "gzip, deflate", Host: "data.sec.gov" }]) {
-      try { const r = await fetch(url, { headers: { "User-Agent": ua, ...hdr }, signal: AbortSignal.timeout(20000) }); const t = await r.text(); console.log("probe", r.status, JSON.stringify(ua), Object.keys(hdr).length ? "+headers" : "", r.status === 200 ? "" : t.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 300)); }
-      catch (e) { console.log("probe 失敗", ua, e.message); }
-      await sleep(400);
-    }
-  }
-  try { const ip = await (await fetch("https://api.ipify.org")).text(); console.log("runner IP", ip); } catch {}
-}
-
 export async function main() {
-  if (DUMP) await probe();
   let tick = new Map(); try { tick = tickerMap(await get("https://www.sec.gov/files/company_tickers.json")); } catch (e) { console.log("代號對照表失敗", e.message); }
   let cmap = {}; try { cmap = JSON.parse(await readFile(CUSIP, "utf8")); } catch {}
   const funds = [], notes = [];
