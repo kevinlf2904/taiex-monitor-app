@@ -203,6 +203,17 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 #toast { position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 50; background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 4px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.3); max-width: calc(100vw - 32px); }
 .foot { padding: 0 16px 24px; max-width: 1480px; margin: 0 auto; }
 
+/* 工具分頁 */
+.tgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 18px; }
+.csec h4 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 12px 0 4px; }
+.tlist { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.tlist li { padding: 5px 0; border-bottom: 1px solid var(--line); line-height: 1.6; }
+.irform { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+.irform input, .irform select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; min-width: 0; }
+.mgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; }
+.mbox h4 { margin: 4px 0; color: var(--ink); }
+.mtf { padding: 2px 16px 8px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; }
+
 /* 國會山交易 */
 .csec { padding: 10px 14px 16px; border-bottom: 1px solid var(--line); }
 .csec h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 15px; margin: 4px 0 6px; }
@@ -623,7 +634,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
       <div class="l-ix" id="ix2"></div>
-      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="pod">名人</button><button data-l="cong">國會</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button><button data-l="after">盤後</button></div>
+      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="pod">名人</button><button data-l="cong">國會</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button><button data-l="after">盤後</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
         <button type="button" class="gsadd" data-gsearch-add>🔍 搜尋代號或名稱，加入自選</button>
@@ -713,6 +724,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     <div class="panel sec" id="secAna" data-pane="tech">
       <div class="ph"><h2>技術判讀</h2><div class="seg" role="group" aria-label="判讀週期" id="roSeg"><button data-ro="">同 K 線</button><button data-ro="D">日</button><button data-ro="60">60分</button><button data-ro="1">1分</button></div><span class="note" id="anaNote"></span></div>
       <div class="score" id="anaScore"></div>
+      <div id="anaMtf"></div>
       <div class="rogrid" id="anaGrid"></div>
       <details class="ro-more"><summary>每一項的判讀說明</summary><div id="anaRo" style="padding:4px 16px 12px"></div></details>
     </div>
@@ -798,6 +810,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="stockx.js"></script>
 <script src="after.js"></script>
 <script src="indnews.js"></script>
+<script src="tools.js"></script>
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
@@ -1261,19 +1274,19 @@ function renderList() {
   const lx = $("#lx"), ae = document.activeElement;
   if (W.ticking && lx.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
   if (W.ticking && Date.now() - (W.lastPtr || 0) < 900) return;
-  if (W.ticking && (W.lt === "pod" || W.lt === "cong")) return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
+  if (W.ticking && (W.lt === "pod" || W.lt === "cong" || (W.lt === "tools" && W.tv !== "sum"))) return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
   const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details")].map(d => [sum(d), d.open]));
   renderList0();
   if (opened.size) for (const d of lx.querySelectorAll("details")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
 }
 // 平板橫向、電腦：大盤、選股、資金、產業這些內容多的分頁用全寬；點個股時，個股頁從右邊滑出（抽屜），不會把內容擠成一條
-const WIDE_TABS = ["mkt", "screen", "ind", "money", "pod", "after", "cong"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
+const WIDE_TABS = ["mkt", "screen", "ind", "money", "pod", "after", "cong", "tools"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
 function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); }
 function renderList0() {
   syncLayout();
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === W.lt));
   const watch = W.lt === "watch";
-  $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", "mkt", "screen", "ind", "money", "pod", "after", "cong"].includes(W.lt); $("#wl").hidden = ["mkt", "screen", "ind", "money", "pod", "after", "cong"].includes(W.lt);
+  $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", "mkt", "screen", "ind", "money", "pod", "after", "cong", "tools"].includes(W.lt); $("#wl").hidden = ["mkt", "screen", "ind", "money", "pod", "after", "cong", "tools"].includes(W.lt);
   $("#groups").innerHTML = W.groups.map((g, i) => `<button data-g="${i}" aria-pressed="${i === W.gi}">${esc(g.name)} <span class="note">${g.list.length}</span></button>`).join("") + `<button data-g="new" title="新增群組">＋ 群組</button>`;
   const n = $("#wlNote"); n.className = "note w-note"; let note = "";
   if (watch) {
@@ -1308,6 +1321,8 @@ function renderList0() {
     note = renderPod();
   } else if (W.lt === "cong") {
     note = renderCong();
+  } else if (W.lt === "tools") {
+    note = renderTools();
   } else if (W.lt === "after") {
     note = renderAfter();
   } else if (W.lt === "tw") {
@@ -2150,6 +2165,10 @@ function renderInd() {
   $("#lx").innerHTML = h;
   if (S.view === "network" && S.focus) { const el = document.querySelector(`.inode[data-ifocus="${S.focus}"]`), wr = document.querySelector(".inetwrap"); if (el && wr) wr.scrollLeft = Math.max(0, el.offsetLeft - wr.clientWidth / 2 + el.offsetWidth / 2); }
 }
+// 工具分頁（tools.js）：點擊、送出表單、勾選
+$("#lx").addEventListener("click", e => toolsClick(e)); $("#lTools").addEventListener("click", e => toolsClick(e));
+$("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListener("change", e => toolsChange(e));
+setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); }, 3000);
 // 國會分頁：切換頁面（首頁、股票、人物）、期間、排序、在看盤開啟、問 AI
 $("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-cw],[data-csort],[data-copen],[data-cask]"); if (!b) return; const d = b.dataset;
   if (d.cv) { W.cv = d.cv; renderList(); goY(0); navPush(); }
@@ -2576,7 +2595,7 @@ function select(code, how = "push") {
    換「大」畫面（上面這些）用 pushState；只換分段（個股分頁、產業地圖檢視…）用 replaceState，不多一筆上一頁。
    捲動位置：嵌在 K線學堂裡捲的是外層頁面，用 curY()／goY() 換算成看盤頁自己的座標。 */
 const NAV = { ready: false, busy: false, q: 0, mode: null, y: 0, yt: 0 };
-const NAV_MAJOR = ["lt", "sel", "io", "af", "ms", "pg", "gs", "cv"];
+const NAV_MAJOR = ["lt", "sel", "io", "af", "ms", "pg", "gs", "cv", "tv"];
 function curY() {
   if (!EMBED || parent === window) return scrollY;
   try { const P = parent, hd = P.document.querySelector(".top"), st = hd && /sticky|fixed/.test(P.getComputedStyle(hd).position) ? hd.offsetHeight : 8; return Math.round(st - frameElement.getBoundingClientRect().top); } catch { return 0; }
@@ -2590,7 +2609,7 @@ function navSnap() {
     io: lt === "ind" ? W.indS?.open || null : null, iv: lt === "ind" ? W.indS?.view || null : null,
     af: lt === "after" && typeof afView === "function" ? afView() : null,
     mv: lt === "money" ? W.mf?.view || null : null, ms: lt === "money" && W.mf?.view === "sector" ? W.mf.sec || null : null,
-    cv: lt === "cong" ? W.cv || "home" : null,
+    cv: lt === "cong" ? W.cv || "home" : null, tv: lt === "tools" ? W.tv || "sum" : null,
     pv: lt === "pod" ? P?.view || null : null, pg: lt === "pod" && P && (P.view === "ep" || P.view === "show") ? P.view + ":" + (P.view === "ep" ? P.key : P.feed) : null };
 }
 function navUrl(s) { return location.pathname + location.search + (s.sel ? "#" + s.sel : ""); }
@@ -2615,7 +2634,7 @@ function navApply(s, y) {
   try {
     if (!s.gs && !$("#gsearch").hidden) gsHide(); else if (s.gs && $("#gsearch").hidden) { $("#gsearch").hidden = false; gsRender(); }
     if (s.lt && s.lt !== W.lt) setLt(s.lt);
-    if (s.lt === "cong") W.cv = s.cv || "home";
+    if (s.lt === "cong") W.cv = s.cv || "home"; if (s.lt === "tools") W.tv = s.tv || "sum";
     if (s.lt === "ind" && W.indS) { W.indS.open = s.io || null; if (s.iv) W.indS.view = s.iv; }
     if (s.lt === "after" && s.af) { W.afView = s.af; store.set("watch:af", s.af); }
     if (s.lt === "money" && W.mf && s.mv && s.mv !== "replay") { W.mf.view = s.mv; if (s.ms) W.mf.sec = s.ms; }
@@ -3277,6 +3296,7 @@ function renderAna() {
   const I = indicators(D), items = readout(D, I, D.length - 1), bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length, sc = items.length ? (bull - bear) / items.length : 0;
   const lab = sc > 0.35 ? ["偏多", "bull"] : sc > 0.1 ? ["略偏多", "bull"] : sc < -0.35 ? ["偏空", "bear"] : sc < -0.1 ? ["略偏空", "bear"] : ["中性", "flat"];
   const kn = { 1: "1 分 K", 5: "5 分 K", 15: "15 分 K", 60: "60 分 K", D: "日 K", W: "週 K", M: "月 K" }[k];
+  $("#anaMtf").innerHTML = "DWM".includes(k) ? mtfHtml() : "";
   $("#anaScore").innerHTML = `<b class="${lab[1] === "bull" ? "up" : lab[1] === "bear" ? "down" : ""}">${lab[0]}</b><span class="note">${bull} 項偏多、${bear} 項偏空、${items.length - bull - bear} 項中性</span><span class="meter" title="多空分數"><i style="left:calc(${(sc + 1) / 2 * 100}% - 2px)"></i></span>`;
   renderReadout($("#anaRo"), items, true);
   $("#anaGrid").innerHTML = `<div class="rohead"><b class="up">${bull}</b> 看好 <b class="down">${bear}</b> 看淡 <span class="note">${items.length - bull - bear} 中性</span></div>` + items.map(x => `<div class="rocard ${x.b > 0 ? "bull" : x.b < 0 ? "bear" : ""}"><b>${esc(x.k)}</b><span>${esc(String(x.t).split(/[，,；;（(]/)[0])}</span></div>`).join("");
