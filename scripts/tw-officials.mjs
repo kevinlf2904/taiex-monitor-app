@@ -45,7 +45,9 @@ async function pdfLines(buf, maxPages = Infinity) {
 export async function main() {
   const list = parseList(await getText(LIST)); console.log("期別", list.slice(0, 20).map(x => `${x.no}(${x.date || "?"})`).join("、"));
   if (DUMP) {
-    const x = list[0]; if (!x) { console.log((await getText(LIST)).slice(0, 3000)); return; }
+    const x = list[0]; if (!x) { const h = await getText(LIST); console.log("長度", h.length, "\n連結", JSON.stringify([...new Set([...h.matchAll(/News_Content[^"'\s>]*/g)].map(m => m[0]))].slice(0, 20)));
+      for (const m of [...h.matchAll(/第\s*\d+\s*期/g)].slice(0, 6)) console.log("…", h.slice(Math.max(0, m.index - 300), m.index + 200).replace(/\s+/g, " "));
+      console.log("含 iframe／api：", JSON.stringify([...h.matchAll(/(iframe[^>]+src="[^"]+"|\/api\/[^"']+|\.ashx[^"']*)/gi)].map(m => m[0]).slice(0, 15))); return; }
     const html = await getText(x.url), L = pdfLinks(html); console.log("第", x.no, "期 連結", JSON.stringify(L));
     const pdf = L.find(l => /\.pdf|專刊/i.test(l.name) && !/目錄/.test(l.name)) || L[0]; if (!pdf) { console.log(html.slice(0, 3000)); return; }
     const buf = await getBuf(pdf.url); console.log("PDF 大小", buf.length);
