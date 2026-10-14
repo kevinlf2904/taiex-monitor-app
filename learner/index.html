@@ -209,6 +209,11 @@ table.mini { border-collapse: collapse; font-size: 13px; margin: 6px 0 12px; } t
 @media (max-width: 640px) { .ob-grid { grid-template-columns: minmax(0, 1fr); } }
 .ibar { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .ibar.compact { padding: 0; border: 0; }
+.chwrong { margin-top: 14px; padding: 10px 16px; } .chwrong summary { cursor: pointer; font-weight: 500; }
+.chwrong .tlist { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; } .chwrong .tlist li { padding: 6px 0; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.lxbody { padding: 0 16px 14px; } .lxform { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 6px 0 10px; font-size: 13px; }
+.lxform select, .lxform input { padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; max-width: 220px; }
+.lxcombo td { font-weight: 600; } .lxheat td { text-align: center; font-variant-numeric: tabular-nums; min-width: 54px; }
 .ibar-g { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ibar-t { font-size: 12px; color: var(--muted); letter-spacing: .06em; margin-right: 2px; }
 .ichip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 3px; padding: 3px 11px; font-size: 13px; cursor: pointer; }
@@ -567,6 +572,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <div style="display:flex; flex-direction:column; gap:18px; min-width:0">
         <div class="panel chartbox" id="labChart"></div>
         <div class="panel bt" id="btPanel"></div>
+        <div class="panel bt" id="advPanel"></div>
       </div>
       <div class="lab-side">
         <div class="panel ctrl">
@@ -631,6 +637,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
       <div class="verdict" id="chHintBox" hidden></div>
       <div class="verdict" id="chResult" hidden></div>
     </div>
+    <details class="panel chwrong" id="chWrongBox" hidden><summary>判讀挑戰錯題本</summary><ul class="tlist"></ul></details>
   </section>
 
   <!-- 截圖判讀 -->
@@ -790,6 +797,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
 <script src="analysis.js"></script>
 <script src="lessons-more.js"></script>
 <script src="lessons-pro.js"></script>
+<script src="labx.js"></script>
 <script>
 "use strict";
 /* 工具函式、技術指標、指標開關、副圖訊號與 K 線圖（Chart）在 core.js；訊號、型態、背離、結構、回測、判讀、斐波那契、籌碼摘要在 analysis.js（都和看盤頁共用） */
@@ -2606,7 +2614,7 @@ function labDraw() {
   const fibOn = $("#fibz").checked; if (fibOn && fibShape(lab.D)) ex.shapes.push(fibShape(lab.D));
   const off = s => lab.skip.has(btKey(s)) || (s.side === "buy" ? !lab.useBuy : s.side === "sell" ? !lab.useSell : false);
   labChart.set(lab.D, { I: lab.I, ma, maPlain: true, boll: $("#boll").checked, subs: subsFrom(labBar), noVol: !labBar.has("vol"), markers: sigs.map(s => (off(s) ? { ...s, dim: true, label: s.label ? s.label + "（略過）" : s.label } : s)), hlines: [...($("#sr").checked ? srLevels(lab.D) : []), ...(fibOn ? fibLines(lab.D) : [])], shapes: ex.shapes, zones: ex.zones });
-  renderBT(sigs);
+  renderBT(sigs); labxEvents(); labxRender();
 }
 const fmtMoney = v => `${v < 0 ? "−" : ""}${Math.round(Math.abs(v)).toLocaleString()} 元`;
 function renderBT(sigs) {
@@ -2696,6 +2704,8 @@ const CHAL_POOL = [["2330", "台積電"], ["2317", "鴻海"], ["2454", "聯發�
   ["2379", "瑞昱"], ["3034", "聯詠"], ["2345", "智邦"], ["3037", "欣興"], ["2376", "技嘉"], ["6669", "緯穎"], ["2912", "統一超"], ["0050", "元大台灣50"], ["6488", "環球晶"], ["8299", "群聯"], ["TAIEX", "加權指數"]];
 ch.src = store.get("chalSrc", "sim") === "real" ? "real" : "sim";
 $("#stockPool").innerHTML = CHAL_POOL.map(([c, n]) => `<option value="${c === "TAIEX" ? "加權" : c}">${n}</option>`).join("");
+document.addEventListener("click", e => { const b = e.target.closest("[data-chre]"); if (b) chalReplay(chWrong()[+b.dataset.chre]); });
+setTimeout(() => chWrongRender(), 0);
 const chalMasked = D => D.map((x, i) => ({ ...x, d: `第 ${i + 1} 天` }));
 async function chalNew() {
   ch.answered = false; ch.meta = null;
@@ -2707,7 +2717,7 @@ async function chalNew() {
       const j = await fetchReal(pick[0] === "TAIEX" ? "加權" : pick[0], 12); if (tok !== ch.tok) return;
       const rows = j.data, len = SHOW + HORIZON;
       if (rows.length < len) throw { message: `${realName(j)} 只有 ${rows.length} 個交易日，不夠出題（需要 ${len} 天），換一檔試試。` };
-      const a = Math.floor(Math.random() * (rows.length - len + 1));
+      const a = Math.floor(Math.random() * (rows.length - len + 1)); ch.code = pick[0];
       ch.D = rows.slice(a, a + len).map(x => ({ ...x, v: x.v || 0 })); ch.Dm = chalMasked(ch.D); ch.I = indicators(ch.D);
       ch.meta = { name: realName(j), source: j.source, from: ch.D[0].d, ask: ch.D[SHOW - 1].d, to: ch.D[len - 1].d };
       $("#chUp").disabled = $("#chDown").disabled = false;
@@ -2719,6 +2729,27 @@ async function chalNew() {
     }
   } else chalSim();
   chalDraw();
+}
+// 判讀挑戰錯題本：猜錯的題目記下來（模擬題記亂數種子、真實題記代號與起始日），可以重做；重做答對就移出
+const chWrong = () => store.get("chWrong", []) || [];
+function chWrongMark(ok, guess, actual, chg) {
+  let L = chWrong(); const key = ch.meta ? `r:${ch.code}:${ch.meta.from}` : `s:${ch.seed}`;
+  if (ok) { if (ch.replay) L = L.filter(x => x.key !== key); }
+  else if (!L.some(x => x.key === key)) L.unshift({ key, kind: ch.meta ? "real" : "sim", seed: ch.seed, code: ch.code, from: ch.meta?.from, name: ch.meta?.name, ask: ch.meta?.ask, guess, actual, chg: +chg.toFixed(4), at: new Date().toISOString().slice(0, 10) });
+  store.set("chWrong", L.slice(0, 60)); ch.replay = false; chWrongRender();
+}
+function chWrongRender() {
+  const L = chWrong(), el = $("#chWrongBox"); if (!el) return; el.hidden = !L.length;
+  el.querySelector("summary").textContent = `判讀挑戰錯題本（${L.length} 題）`;
+  el.querySelector("ul").innerHTML = L.map((x, i) => `<li><span class="note">${x.at}</span> ${x.kind === "real" ? `${esc(x.name || x.code)}（作答日 ${x.ask}）` : `模擬走勢 #${x.seed}`}：猜${x.guess > 0 ? "漲" : "跌"}，實際${x.actual > 0 ? "漲" : "跌"} <span class="num ${x.chg >= 0 ? "up" : "down"}">${fmtPct(x.chg)}</span> <button class="btn sm" data-chre="${i}">重做</button></li>`).join("");
+}
+async function chalReplay(x) {
+  ch.answered = false; ch.replay = true; $("#chHintBox").hidden = true; $("#chResult").hidden = true; $("#chUp").disabled = $("#chDown").disabled = false; $("#chHint").disabled = false;
+  if (x.kind === "sim") { ch.seed = x.seed; ch.D = genSeries(ch.seed, SHOW + HORIZON); ch.Dm = null; ch.I = indicators(ch.D); ch.meta = null; }
+  else { try { const j = await fetchReal(x.code === "TAIEX" ? "加權" : x.code, 12), a = j.data.findIndex(r => r.d === x.from); if (a < 0 || a + SHOW + HORIZON > j.data.length) throw new Error("這段資料已經超出一年，無法重做");
+    ch.code = x.code; ch.D = j.data.slice(a, a + SHOW + HORIZON).map(r => ({ ...r, v: r.v || 0 })); ch.Dm = chalMasked(ch.D); ch.I = indicators(ch.D); ch.meta = { name: realName(j), source: j.source, from: ch.D[0].d, ask: ch.D[SHOW - 1].d, to: ch.D[ch.D.length - 1].d }; }
+    catch (e) { $("#chNote").textContent = e.message || "載入失敗"; return; } }
+  $("#chNote").textContent = "錯題重做：同一段走勢再判讀一次，答對就會移出錯題本。"; chalDraw(); window.scrollTo({ top: $("#view-challenge").offsetTop - 60, behavior: "smooth" });
 }
 function chalSim() { ch.seed = Math.floor(Math.random() * 1e6); ch.D = genSeries(ch.seed, SHOW + HORIZON); ch.Dm = null; ch.I = indicators(ch.D); ch.meta = null; }
 function setChalSrc(src) {
@@ -2741,6 +2772,7 @@ function chalAnswer(guess) {
   ch.answered = true;
   const p0 = ch.D[SHOW - 1].c, p1 = ch.D[SHOW + HORIZON - 1].c, chg = (p1 - p0) / p0, actual = chg >= 0 ? 1 : -1, ok = guess === actual;
   ch.total++; if (ok) { ch.right++; ch.streak++; ch.best = Math.max(ch.best, ch.streak); store.set("best", ch.best); } else ch.streak = 0;
+  chWrongMark(ok, guess, actual, chg);
   chalScore(); chalDraw();
   $("#chUp").disabled = $("#chDown").disabled = true; $("#chHint").disabled = true;
   const items = readout(ch.D, ch.I, SHOW - 1), bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length;
@@ -2812,7 +2844,10 @@ const QUESTIONS = [
 ];
 let quiz = null;
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-function quizStart() { quiz = { order: shuffle(QUESTIONS.map((_, i) => i)).slice(0, 12), k: 0, score: 0, picked: null }; quizRender(); }
+// 錯題本：答錯的題目記起來（題號 → 次數、最後日期）；複習時答對就移出
+const wrongQ = () => store.get("wrongQ", {}) || {};
+function quizStart(review = false) { const W = Object.keys(wrongQ()).map(Number).filter(i => QUESTIONS[i]); quiz = { review: review && W.length > 0, order: review && W.length ? shuffle(W) : shuffle(QUESTIONS.map((_, i) => i)).slice(0, 12), k: 0, score: 0, picked: null }; quizRender(); }
+function quizMark(i, ok) { const w = wrongQ(); if (ok) { if (quiz.review) delete w[i]; } else w[i] = { n: (w[i]?.n || 0) + 1, at: new Date().toISOString().slice(0, 10) }; store.set("wrongQ", w); }
 function quizRender() {
   const el = $("#quiz"), N = quiz.order.length;
   if (quiz.k >= N) {
@@ -2820,20 +2855,21 @@ function quizRender() {
     const pct = quiz.score / N;
     el.innerHTML = `<div class="panel qcard"><div class="eyebrow">RESULT</div><h2>${quiz.score} / ${N}</h2>
       <p style="margin:0">${pct >= 0.85 ? "觀念很扎實，可以到判讀挑戰實戰看看。" : pct >= 0.6 ? "基礎不錯。答錯的題目回到對應課程複習一下。" : "建議先把課程從頭走一遍，再回來挑戰。"}</p>
-      <p class="note" style="margin:0">歷史最佳：${best} / ${N}</p>
-      <div class="row"><button class="btn primary" id="qAgain">再測一次</button><button class="btn" id="qLearn">回到課程</button></div></div>`;
-    $("#qAgain").addEventListener("click", quizStart); $("#qLearn").addEventListener("click", () => switchTab("learn"));
+      <p class="note" style="margin:0">${quiz.review ? "錯題複習：答對的題目已經移出錯題本。" : `歷史最佳：${best} / ${N}`}</p>
+      <div class="row"><button class="btn primary" id="qAgain">再測一次</button>${Object.keys(wrongQ()).length ? `<button class="btn" id="qWrong">複習錯題（${Object.keys(wrongQ()).length} 題）</button>` : ""}<button class="btn" id="qLearn">回到課程</button></div></div>`;
+    $("#qAgain").addEventListener("click", () => quizStart()); $("#qLearn").addEventListener("click", () => switchTab("learn")); $("#qWrong")?.addEventListener("click", () => quizStart(true));
     return;
   }
   const Q = QUESTIONS[quiz.order[quiz.k]], ans = quiz.picked != null;
   el.innerHTML = `<div class="panel qcard">
-    <div class="qmeta"><span>第 ${quiz.k + 1} / ${N} 題</span><span>得分 <span class="num">${quiz.score}</span></span></div>
+    <div class="qmeta"><span>${quiz.review ? "錯題複習・" : ""}第 ${quiz.k + 1} / ${N} 題</span><span>得分 <span class="num">${quiz.score}</span>${!quiz.review && Object.keys(wrongQ()).length ? `・<button class="linkbtn" id="qWrongTop">錯題本 ${Object.keys(wrongQ()).length} 題</button>` : ""}</span></div>
     <div class="qbar"><i style="width:${quiz.k / N * 100}%"></i></div>
     <div class="qtext">${Q.q}</div>
     <div class="opts">${Q.o.map((t, i) => `<button data-i="${i}" ${ans ? "disabled" : ""} class="${ans && i === Q.a ? "right" : ans && i === quiz.picked ? "wrong" : ""}"><span class="l">${"ABCD"[i]}</span><span>${t}</span></button>`).join("")}</div>
     ${ans ? `<div class="explain"><strong class="${quiz.picked === Q.a ? "down" : "up"}">${quiz.picked === Q.a ? "正確。" : "答錯了。"}</strong>${Q.e}</div><div><button class="btn primary" id="qNext">${quiz.k === N - 1 ? "看結果" : "下一題 →"}</button></div>` : ""}
   </div>`;
-  el.querySelectorAll(".opts button").forEach(b => b.addEventListener("click", () => { quiz.picked = +b.dataset.i; if (quiz.picked === Q.a) quiz.score++; quizRender(); }));
+  el.querySelectorAll(".opts button").forEach(b => b.addEventListener("click", () => { quiz.picked = +b.dataset.i; if (quiz.picked === Q.a) quiz.score++; quizMark(quiz.order[quiz.k], quiz.picked === Q.a); quizRender(); }));
+  $("#qWrongTop")?.addEventListener("click", () => quizStart(true));
   if (ans) $("#qNext").addEventListener("click", () => { quiz.k++; quiz.picked = null; quizRender(); });
 }
 
