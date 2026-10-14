@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const DATA = fileURLToPath(new URL("../learner/data/", import.meta.url)), DUMP = process.argv.includes("--dump");
+const VER = 2; // 解析方式改版就加一，下次執行會把列表上的期別全部重讀
 const BASE = "https://sunshine.cy.gov.tw", LIST = `${BASE}/News.aspx?n=17&sms=8861`;
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner; +https://github.com/kevinlf2904/taiex-monitor-app)" };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -45,7 +46,8 @@ async function pdfLines(buf, maxPages = Infinity) {
 const T = l => String(l).replace(/\s*\|\s*/g, "").replace(/\s+/g, "");
 const NUM = /^-?[\d,]+(\.\d+)?$/, CUR = /^(美元|港幣|日圓|日幣|歐元|人民幣|英鎊|澳幣|加幣|新加坡幣|新幣|瑞士法郎|韓元|泰銖|紐幣|南非幣)$/;
 const open = s => (s.match(/[(（]/g) || []).length - (s.match(/[)）]/g) || []).length;
-export const cleanName = s => String(s).replace(/[(（][\s\S]*$/, "").replace(/^\d*★/, "").replace(/\s+/g, "").trim();
+// 名稱清理：去掉括號備註、表頭殘字「新臺幣總額或折合新臺幣總額」、註記符號（1★、＊）、「股份有限公司」
+export const cleanName = s => String(s).replace(/[(（][\s\S]*$/, "").replace(/新臺幣總額或折合新臺幣(總額)?/g, "").replace(/\d*★/g, "").replace(/[＊*]/g, "").replace(/\s+/g, "").replace(/股份有限公司$/, "").trim();
 export function parseDecls(lines) {
   const out = []; let cur = null, sec = null, buf = "", row = null;
   for (let k = 0; k < lines.length; k++) {
@@ -92,7 +94,10 @@ export async function main() {
 export async function run() {
   const OUT = DATA + "tw-officials.json", DOCS = DATA + "tw-officials-docs.json";
   let old = { issues: [], decl: [] }, docs = { done: [] }; try { old = JSON.parse(await readFile(OUT, "utf8")); } catch {} try { docs = JSON.parse(await readFile(DOCS, "utf8")); } catch {}
-  const list = parseList(await getText(LIST)), todo = list.filter(x => !docs.done.includes(x.no)).slice(0, 40); console.log("要讀", todo.map(x => x.no).join("、") || "沒有新的期別");
+  const list = parseList(await getText(LIST)), onList = new Set(list.map(x => x.no));
+  // 解析方式改版：列表上的期別全部重讀；網站已下架（超過 6 個月）的舊期別無法重讀，保留原本的結果
+  if (docs._v !== VER) { console.log("解析版本更新，重讀列表上的期別"); old = { issues: (old.issues || []).filter(i => !onList.has(i.no)), decl: (old.decl || []).filter(d => !onList.has(d.issue)) }; docs = { done: (docs.done || []).filter(n => !onList.has(n)) }; }
+  const todo = list.filter(x => !docs.done.includes(x.no)).slice(0, 40); console.log("要讀", todo.map(x => x.no).join("、") || "沒有新的期別");
   // 股票簡稱 → 代號（上市＋上櫃全部股票與 ETF 的當天行情名稱）
   const map = new Map(); try { const { parseTwseAll, parseTpexAll } = await import("../api/_lib/hot.js"); const get = async u => (await fetch(u, { headers: UA, signal: AbortSignal.timeout(30000) })).json();
     const [a, b] = await Promise.allSettled([get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL").then(parseTwseAll), get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes").then(parseTpexAll)]);
@@ -110,7 +115,7 @@ export async function run() {
   }
   issues.sort((a, b) => b.no - a.no);
   await writeFile(OUT, JSON.stringify({ updated: new Date().toISOString(), source: "監察院廉政專刊（陽光法令主題網）", issues, decl }));
-  await writeFile(DOCS, JSON.stringify({ done: [...new Set(docs.done)].sort((a, b) => b - a) }));
+  await writeFile(DOCS, JSON.stringify({ _v: VER, done: [...new Set(docs.done)].sort((a, b) => b - a) }));
   console.log("完成：", decl.length, "份申報，", new Set(decl.map(d => d.pid)).size, "人");
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch(e => { console.error(e); process.exit(1); });
