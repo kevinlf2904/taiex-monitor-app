@@ -4,7 +4,7 @@
 // 來源（官方公開）：SEC EDGAR —— data.sec.gov 的申報清單、www.sec.gov/Archives 的資訊表（information table XML）；
 //   13F 只有 CUSIP 和名稱：股票代號先用 OpenFIGI（CUSIP → 代號，免金鑰、每分鐘有次數限制）查，查過的記在 learner/data/f13-cusip.json；
 //   查不到時再用 SEC 的 company_tickers.json 依公司名稱對照，都對不到就只顯示名稱。
-// SEC 要求程式存取要帶「名稱＋email」格式的 User-Agent（沒有 email 會被擋 403）：預設用 repo 擁有者的 GitHub noreply 地址；
+// SEC 要求程式存取要帶「名稱＋email」格式的 User-Agent（沒有 email 會被擋 403）：預設用網站網域的地址（SEC 不接受 users.noreply.github.com）；
 //   想換成自己的聯絡信箱，在 repo 的 Actions secrets 設 SEC_UA（例如「kline-school you@example.com」）。
 // 注意：13F 只有「季底那天」的多頭持股，不含放空、現金、非美股；申報最晚在季底後 45 天，看到的是過去的部位。
 
@@ -12,7 +12,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const OUT = fileURLToPath(new URL("../learner/data/f13.json", import.meta.url)), CUSIP = fileURLToPath(new URL("../learner/data/f13-cusip.json", import.meta.url));
-const UA = (process.env.SEC_UA || "").trim() || "kline-school-learner kevinlf2904@users.noreply.github.com";
+const UA = (process.env.SEC_UA || "").trim() || "kline-school research admin@kline-school.vercel.app";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const DUMP = process.argv.includes("--dump");
 
@@ -39,9 +39,11 @@ export function parseInfoTable(xml) {
   return [...String(xml).matchAll(/<(?:\w+:)?infoTable>([\s\S]*?)<\/(?:\w+:)?infoTable>/gi)].map(m => ({ name: tag(m[1], "nameOfIssuer"), cls: tag(m[1], "titleOfClass"), cusip: tag(m[1], "cusip").toUpperCase(), value: +tag(m[1], "value").replace(/,/g, "") || 0, sh: +tag(m[1], "sshPrnamt").replace(/,/g, "") || 0, type: tag(m[1], "sshPrnamtType"), pc: tag(m[1], "putCall") }));
 }
 // 同一檔（CUSIP）可能分好幾列（不同經理人、帳戶）→ 合併；選擇權（Put／Call）另外算，不混進持股
+// 債券（sshPrnamtType＝PRN，面額不是股數）不算；部分機構的 value 仍用「千美元」申報 → 用每股隱含價格判斷（中位數低於 1 美元就是千元單位）
 export function mergeRows(rows) {
-  const m = new Map();
-  for (const r of rows) { const k = r.cusip + (r.pc ? ":" + r.pc.toUpperCase() : ""); const g = m.get(k) || m.set(k, { name: r.name, cls: r.cls, cusip: r.cusip, pc: r.pc ? r.pc.toUpperCase() : "", value: 0, sh: 0 }).get(k); g.value += r.value; g.sh += r.sh; }
+  const m = new Map(), st = rows.filter(r => !/PRN/i.test(r.type) && r.sh > 0);
+  const px = st.filter(r => !r.pc).map(r => r.value / r.sh).sort((a, b) => a - b), unit = px.length && px[px.length >> 1] < 1 ? 1000 : 1;
+  for (const r0 of st) { const r = { ...r0, value: r0.value * unit }; const k = r.cusip + (r.pc ? ":" + r.pc.toUpperCase() : ""); const g = m.get(k) || m.set(k, { name: r.name, cls: r.cls, cusip: r.cusip, pc: r.pc ? r.pc.toUpperCase() : "", value: 0, sh: 0 }).get(k); g.value += r.value; g.sh += r.sh; }
   return [...m.values()];
 }
 const normName = s => String(s || "").toUpperCase().replace(/&AMP;/g, "&").replace(/\/[A-Z]{2,3}\/?/g, " ").replace(/[.,'"()/]/g, " ").replace(/\b(INC|CORP|CORPORATION|CO|COMPANY|LTD|LIMITED|PLC|HLDGS?|HOLDINGS?|GROUP|N ?V|S ?A|AG|SE|LP|L ?P|THE|COM|CL ?[A-C]|NEW|DEL|ORD|SHS|ADR|SPONSORED|SPON)\b/g, " ").replace(/\s+/g, " ").trim();
@@ -92,8 +94,9 @@ export async function main() {
       const { name, L } = await filingsOf(cik); await sleep(200);
       if (!L.length) { notes.push(`${who}：沒有 13F-HR`); continue; }
       const cur = mergeRows(await holdingsOf(cik, L[0].acc)), prev = L[1] ? mergeRows(await holdingsOf(cik, L[1].acc)) : [];
-      if (Date.now() - Date.parse(L[0].period) > 400 * 864e5) { notes.push(`${who}：最近一份 13F 是 ${L[0].period}，已停止申報`); continue; }
-      const total = cur.filter(r => !r.pc).reduce((s, r) => s + r.value, 0), { rows, sold } = compare(cur, prev);
+      if (Date.now() - Date.parse(L[0].period) > 230 * 864e5) { notes.push(`${who}：最近一份 13F 是 ${L[0].period}，已停止申報`); continue; }
+      // 占比用全部申報市值（含選擇權的標的市值）當分母，只申報選擇權的機構才不會超過 100%
+      const total = cur.reduce((s, r) => s + r.value, 0), { rows, sold } = compare(cur, prev);
       const fmt = r => ({ name: r.name, cls: r.cls, cusip: r.cusip, pc: r.pc || undefined, value: r.value, sh: r.sh, psh: r.psh, pct: total ? +((r.value / total) * 100).toFixed(2) : 0, chg: r.chg });
       rows.sort((a, b) => b.value - a.value);
       // 前 60 大持股＋所有新進、加減碼（變動的才有參考價值），出清的另列
