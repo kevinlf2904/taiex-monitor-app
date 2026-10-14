@@ -2,7 +2,7 @@
    這個檔案只定義函式（載入時 watch.html 的 W 還沒建立），由 watch.html 的清單分頁「工具」呼叫 renderTools()。
    資料都存在這台裝置的瀏覽器（localStorage）；指標用日 K 判斷，日 K 每 5 分鐘重抓一次。 */
 
-const TOOLS_VIEWS = [["sum", "每日摘要"], ["alert", "指標提醒"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"]];
+const TOOLS_VIEWS = [["sum", "每日摘要"], ["scan", "條件選股"], ["rs", "相對強弱"], ["cal", "我的行事曆"], ["alert", "指標提醒"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"]];
 const toolsDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 // 日 K（6 個月）：5 分鐘內重複用
 async function dailyFresh(c) {
@@ -132,6 +132,70 @@ async function multiDraw() {
   }
 }
 
+/* ---------- 條件選股：股票範圍 × 條件積木（全部成立才列出） ---------- */
+// 狀態型條件（今天的狀態，不是「剛發生」）＋上面的事件型條件（COND，今天剛發生）
+const SCOND = [
+  ["above", "收盤在均線之上", "天數", 20, (D, I, p) => { const n = D.length - 1, m = I.ma(p)[n]; return m && D[n].c > m ? `在 MA${p} 上 ${((D[n].c / m - 1) * 100).toFixed(1)}%` : null; }],
+  ["below", "收盤在均線之下", "天數", 20, (D, I, p) => { const n = D.length - 1, m = I.ma(p)[n]; return m && D[n].c < m ? `在 MA${p} 下 ${((1 - D[n].c / m) * 100).toFixed(1)}%` : null; }],
+  ["bull", "均線多頭排列（5>20>60）", null, null, (D, I) => { const n = D.length - 1, a = I.ma(5)[n], b = I.ma(20)[n], c = I.ma(60)[n]; return c && a > b && b > c ? "多頭排列" : null; }],
+  ["bear", "均線空頭排列（5<20<60）", null, null, (D, I) => { const n = D.length - 1, a = I.ma(5)[n], b = I.ma(20)[n], c = I.ma(60)[n]; return c && a < b && b < c ? "空頭排列" : null; }],
+  ["klt", "K 值低於", "數值", 30, (D, I, p) => { const v = I.kd.K[D.length - 1]; return v != null && v < p ? `K ${fmtN(v)}` : null; }],
+  ["kgt", "K 值高於", "數值", 70, (D, I, p) => { const v = I.kd.K[D.length - 1]; return v != null && v > p ? `K ${fmtN(v)}` : null; }],
+  ["difpos", "MACD 的 DIF 在零軸上", null, null, (D, I) => (I.macd.dif[D.length - 1] > 0 ? "DIF > 0" : null)],
+  ["difup", "DIF 在訊號線之上", null, null, (D, I) => { const n = D.length - 1; return I.macd.dif[n] > I.macd.sig[n] ? "DIF > 訊號線" : null; }],
+  ["chg5", "近 5 日漲幅至少（%）", "%", 5, (D, I, p) => { const n = D.length - 1, r = (D[n].c / D[n - 5].c - 1) * 100; return r >= p ? `5 日 ${r >= 0 ? "+" : ""}${r.toFixed(1)}%` : null; }],
+  ["chg5n", "近 5 日跌幅至少（%）", "%", 5, (D, I, p) => { const n = D.length - 1, r = (D[n].c / D[n - 5].c - 1) * 100; return r <= -p ? `5 日 ${r.toFixed(1)}%` : null; }],
+  ["nearhi", "收盤距 60 日高點在（%）以內", "%", 3, (D, I, p) => { const n = D.length - 1, h = Math.max(...D.slice(-60).map(x => x.h)), g = (1 - D[n].c / h) * 100; return g <= p ? `距 60 日高 ${g.toFixed(1)}%` : null; }],
+  ["volr", "今天量是 20 日均量的幾倍以上", "倍數", 1.5, (D, I, p) => { const n = D.length - 1, a = I.vma[n - 1]; return a && D[n].v >= a * p ? `量 ${(D[n].v / a).toFixed(1)} 倍` : null; }],
+  ["minvol", "成交量至少（張）", "張", 500, (D, I, p) => (D[D.length - 1].v >= p ? `量 ${fmtVol(D[D.length - 1].v)} 張` : null)],
+  ["yld", "殖利率至少（%）", "%", 4, null],
+  ...COND.map(([k, t, pn, pd, f]) => [`e:${k}`, `今天：${t}`, pn, pd, f]),
+];
+const SC = () => (W.scan ||= store.get("watch:scan", null) || { uni: "my", codes: "", rules: [{ k: "bull" }, { k: "e:macdgc" }] });
+const scSave = () => store.set("watch:scan", { uni: SC().uni, codes: SC().codes, rules: SC().rules });
+function scUniverse() {
+  const U = SC().uni, hot = (W.hot?.tw?.rows || []).map(r => r.code), etf = (W.etfRank?.rows || []).map(r => r.code);
+  const L = U === "my" ? myCodes().filter(isTW) : U === "hold" ? Object.keys(W.hold || {}).filter(isTW) : U === "hot" ? hot.slice(0, 60) : U === "etf" ? etf.slice(0, 60) : U === "all" ? [...myCodes().filter(isTW), ...Object.keys(W.hold || {}).filter(isTW), ...hot.slice(0, 60)] : String(SC().codes).toUpperCase().split(/[\s,，、]+/).filter(isTW);
+  return [...new Set(L)].slice(0, 120);
+}
+async function scRun() {
+  const S = SC(), uni = scUniverse(); if (!uni.length) return toast("股票範圍是空的");
+  if (S.uni === "hot" && !W.hot?.tw) await loadHot("tw"); if (S.uni === "etf" && !W.etfRank) await loadEtfRank();
+  const list = scUniverse(), R = (W.scanRes = { busy: true, done: 0, total: list.length, rows: [] }); renderList();
+  const need = S.rules.some(r => r.k === "yld"); if (need) { list.forEach(c => yldWant(c)); await new Promise(r => setTimeout(r, 1500)); }
+  let k = 0; const worker = async () => { while (k < list.length) { const c = list[k++], D = await dailyFresh(c); R.done++;
+    if (D && D.length >= 65) { const I = indicators(D), hits = [];
+      for (const r of S.rules) { const C = SCOND.find(x => x[0] === r.k); if (!C) continue; const p = r.p ?? C[3];
+        const m = r.k === "yld" ? (() => { const y = yldNow(c, D[D.length - 1].c); return y != null && y >= p ? `殖利率 ${y.toFixed(2)}%` : null; })() : (() => { try { return C[4](D, I, p); } catch { return null; } })();
+        if (!m) { hits.length = 0; hits.fail = true; break; } hits.push(m); }
+      if (!hits.fail) R.rows.push({ c, hits, px: D[D.length - 1].c, chg: D.length > 1 ? D[D.length - 1].c / D[D.length - 2].c - 1 : 0 }); }
+    if (R.done % 6 === 0 && W.tv === "scan") renderList(); } };
+  await Promise.all(Array.from({ length: 6 }, worker)); R.busy = false; R.at = Date.now(); if (W.lt === "tools") renderList();
+}
+
+/* ---------- 相對強弱（RS）：和加權指數比，近 20／60／120 日誰比較強 ---------- */
+async function rsRun() {
+  const list = (SC().uni === "custom" ? scUniverse() : [...new Set([...myCodes().filter(isTW), ...Object.keys(W.hold || {}).filter(isTW), ...(W.hot?.tw?.rows || []).slice(0, 60).map(r => r.code)])]).slice(0, 120);
+  const R = (W.rsRes = { busy: true, done: 0, total: list.length, rows: [] }); renderList(); if (!W.hot?.tw) loadHot("tw");
+  const T = await dailyFresh("T00"), ret = (D, n) => (D && D.length > n ? D[D.length - 1].c / D[D.length - 1 - n].c - 1 : null), tr = { 20: ret(T, 20), 60: ret(T, 60), 120: ret(T, 120) };
+  let k = 0; const worker = async () => { while (k < list.length) { const c = list[k++], D = await dailyFresh(c); R.done++; if (!D || D.length < 25) continue;
+    const row = { c, px: D[D.length - 1].c }; [20, 60, 120].forEach(n => { const r = ret(D, n); row["r" + n] = r; row["rs" + n] = r != null && tr[n] != null ? (1 + r) / (1 + tr[n]) - 1 : null; }); R.rows.push(row); } };
+  await Promise.all(Array.from({ length: 6 }, worker)); R.tr = tr; R.busy = false; R.at = Date.now(); if (W.lt === "tools") renderList();
+}
+
+/* ---------- 我的行事曆：自選＋庫存的除權息、法說會，加上營收、財報公布期限 ---------- */
+async function calLoad() { if (W.cal && !W.cal.err) return W.cal; try { W.cal = await getJ("/api/calendar", true); } catch (e) { W.cal = { err: e.message }; } return W.cal; }
+function calEvents() {
+  const mine = new Set([...myCodes(), ...Object.keys(W.hold || {})]), today = toolsDay(), end = new Date(Date.now() + 70 * 864e5).toISOString().slice(0, 10), out = [];
+  (W.cal?.rows || []).filter(r => mine.has(r.code) && r.date >= today && r.date <= end).forEach(r => out.push({ d: r.date, code: r.code, t: `${r.kind || "除權息"}${r.cash ? `：現金 ${r.cash} 元` : ""}${r.stock ? `、股票 ${r.stock} 元` : ""}`, k: "div" }));
+  (W.cal?.conf || []).filter(r => mine.has(r.code) && r.date >= today && r.date <= end).forEach(r => out.push({ d: r.date, code: r.code, t: `法說會${r.time ? " " + r.time : ""}${r.place ? "・" + r.place : ""}`, k: "conf" }));
+  // 固定的公布期限：每月 10 日前公布上月營收；財報 Q1 5/15、Q2 8/14、Q3 11/14、年報 3/31（上市櫃公司一般規定）
+  const y = +today.slice(0, 4);
+  for (let m = 0; m < 3; m++) { const dt = new Date(Date.UTC(y, +today.slice(5, 7) - 1 + m, 10)).toISOString().slice(0, 10); if (dt >= today && dt <= end) out.push({ d: dt, t: "上個月營收公布期限（每月 10 日前）", k: "rev" }); }
+  [[`${y}-03-31`, "年度財報公布期限"], [`${y}-05-15`, "第一季財報公布期限"], [`${y}-08-14`, "第二季（半年報）公布期限"], [`${y}-11-14`, "第三季財報公布期限"], [`${y + 1}-03-31`, "年度財報公布期限"]].forEach(([d, t]) => { if (d >= today && d <= end) out.push({ d, t, k: "fin" }); });
+  return out.sort((a, b) => a.d.localeCompare(b.d));
+}
+
 /* ---------- 畫面 ---------- */
 function renderTools() {
   const v = W.tv || "sum";
@@ -151,6 +215,28 @@ function renderTools() {
       <h4>今天的指標提醒</h4><ul class="tlist">${(W.irLog ||= store.get("watch:irlog", []) || []).filter(x => x.d === toolsDay()).map(x => `<li>${x.t} ${esc(nameOf(x.code))} ${x.code}：${esc(x.msg)}</li>`).join("") || `<li class="note">沒有（在「指標提醒」設定條件）</li>`}</ul>
       <h4>國會新申報（最近 3 天）</h4><ul class="tlist">${cg.slice(0, 12).map(t => `<li>${esc(pName(t.pid))} ${t.k === "buy" ? "<b class='up'>買進</b>" : "<b class='down'>賣出</b>"} ${esc(t.ticker)} ${amtTxt(t.amount)} <span class="note">交易日 ${t.traded}</span></li>`).join("") || `<li class="note">沒有</li>`}</ul></section>`;
     note = "摘要用即時報價與日 K 整理；AI 整理只根據畫面上的資料，不是買賣建議。";
+  } else if (v === "scan") {
+    const S = SC(), R = W.scanRes, copt = sel => SCOND.map(([k, t]) => `<option value="${k}" ${k === sel ? "selected" : ""}>${esc(t)}</option>`).join("");
+    h = `<section class="csec"><h3>條件選股</h3>
+      <div class="irform"><label class="note">股票範圍 <select data-scu>${[["my", "自選股"], ["hold", "庫存"], ["hot", "台股熱門前 60"], ["etf", "ETF 成交值前 60"], ["all", "自選＋庫存＋熱門"], ["custom", "自己輸入代號"]].map(([k, t]) => `<option value="${k}" ${S.uni === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+      ${S.uni === "custom" ? `<input data-scc value="${esc(S.codes || "")}" placeholder="代號用空白或逗號分開" style="flex:1;min-width:200px">` : ""}</div>
+      <div class="scrules">${S.rules.map((r, i) => { const C = SCOND.find(x => x[0] === r.k); return `<div class="irform"><span class="note">${i ? "且" : "條件"}</span><select data-scr="${i}">${copt(r.k)}</select>${C?.[2] ? `<input type="number" step="any" data-scp="${i}" value="${r.p ?? C[3]}" style="width:80px" aria-label="${esc(C[2])}"><span class="note">${esc(C[2])}</span>` : ""}<button class="linkbtn" data-scdel="${i}">刪除</button></div>`; }).join("")}</div>
+      <div class="irform"><button class="btn sm" data-scadd>＋ 加一個條件</button><button class="btn sm primary" data-scrun ${R?.busy ? "disabled" : ""}>${R?.busy ? `掃描中 ${R.done}/${R.total}…` : "開始選股"}</button></div>
+      ${R ? `<h4>符合全部條件：${R.rows.length} 檔${R.busy ? "（掃描中）" : `／共掃描 ${R.total} 檔`}</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>收盤</th><th>漲跌</th><th>符合的條件</th></tr></thead><tbody>${R.rows.map(x => `<tr><td><button class="linkbtn" data-tsel="${x.c}">${esc(nameOf(x.c))} ${x.c}</button></td><td>${fmtP(x.px)}</td><td class="${cls(x.chg)}">${(x.chg * 100).toFixed(2)}%</td><td>${x.hits.map(esc).join("・")}</td></tr>`).join("") || `<tr><td colspan="4" class="note">${R.busy ? "…" : "沒有股票同時符合全部條件，試著拿掉一個條件"}</td></tr>`}</tbody></table></div>` : ""}</section>`;
+    note = "用日 K（最近 6 個月）判斷；「今天：」開頭的是今天剛發生的事件（例如金叉），其他是目前的狀態。條件與範圍會記住。只是篩選工具，不是買賣建議。";
+  } else if (v === "rs") {
+    const R = W.rsRes, k = W.rsK || "rs60", rows = (R?.rows || []).filter(x => x[k] != null).sort((a, b) => b[k] - a[k]), n = rows.length;
+    h = `<section class="csec"><h3>相對強弱排行 <span class="seg sm" role="group">${[["rs20", "20 日"], ["rs60", "60 日"], ["rs120", "120 日"]].map(([a, t]) => `<button data-rsk="${a}" aria-pressed="${k === a}">${t}</button>`).join("")}</span> <button class="btn sm primary" data-rsrun ${R?.busy ? "disabled" : ""}>${R?.busy ? `計算中 ${R.done}/${R.total}…` : R ? "重新計算" : "開始計算"}</button></h3>
+      <p class="note">RS＝（1＋個股報酬）÷（1＋加權指數報酬）− 1，正的代表比大盤強。範圍：自選、庫存與台股熱門前 60（條件選股選「自己輸入代號」時改用那些代號）。${R?.tr ? `同期加權指數：20 日 ${retPct(R.tr[20])}、60 日 ${retPct(R.tr[60])}、120 日 ${retPct(R.tr[120])}` : ""}</p>
+      ${R ? `<div class="ctbl"><table><thead><tr><th>#</th><th>股票</th><th>收盤</th><th>20 日</th><th>60 日</th><th>120 日</th><th>RS（${k.slice(2)} 日）</th><th>百分位</th></tr></thead><tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td><button class="linkbtn" data-tsel="${x.c}">${esc(nameOf(x.c))} ${x.c}</button></td><td>${fmtP(x.px)}</td><td class="${cls(x.r20)}">${retPct(x.r20)}</td><td class="${cls(x.r60)}">${retPct(x.r60)}</td><td class="${cls(x.r120)}">${retPct(x.r120)}</td><td class="${cls(x[k])}"><b>${retPct(x[k])}</b></td><td>${n > 1 ? Math.round((1 - i / (n - 1)) * 100) : 100}</td></tr>`).join("")}</tbody></table></div>` : ""}</section>`;
+    note = "相對強弱只看過去的價格表現，強勢股也可能隨時轉弱；百分位 100 是範圍內最強。";
+  } else if (v === "cal") {
+    if (!W.cal) calLoad().then(() => W.lt === "tools" && renderList());
+    const E = calEvents(), by = E.reduce((m, e) => ((m[e.d] ||= []).push(e), m), {});
+    h = `<section class="csec"><h3>我的行事曆 <span class="note">自選與庫存・未來 70 天</span></h3>
+      ${W.cal?.err ? `<p class="note">⚠ 除權息、法說會資料暫時拿不到（${esc(W.cal.err)}），只列固定的公布期限。</p>` : ""}
+      ${Object.entries(by).map(([d, L]) => `<div class="calday"><b>${d.slice(5).replace("-", "/")}（${"日一二三四五六"[new Date(d + "T00:00:00Z").getUTCDay()]}）</b><ul class="tlist">${L.map(e => `<li><span class="ctag ${e.k === "div" ? "many" : "one"}">${{ div: "除權息", conf: "法說會", rev: "營收", fin: "財報" }[e.k]}</span> ${e.code ? `<button class="linkbtn" data-tsel="${e.code}">${esc(nameOf(e.code))} ${e.code}</button> ` : ""}${esc(e.t)}</li>`).join("")}</ul></div>`).join("") || `<p class="note">${W.cal ? "未來 70 天沒有自選、庫存的除權息或法說會。" : "載入中…"}</p>`}</section>`;
+    note = "除權息來自證交所、櫃買中心的預告表，法說會來自公開資訊觀測站；營收、財報是法定公布期限（實際日期公司可能提早）。";
   } else if (v === "alert") {
     const L = IR(), opt = COND.map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join("");
     h = `<section class="csec"><h3>指標條件提醒 <button class="btn sm" data-tx="irnow">立即檢查</button></h3>
@@ -192,8 +278,14 @@ async function jBH() {
   for (const el of document.querySelectorAll("#lx [data-jbh]")) { const [c, a, b] = el.dataset.jbh.split("|"), D = await dailyFresh(c); if (!D?.length) continue;
     const p = d => { let x = null; for (const k of D) { if (String(k.d).slice(0, 10) <= d) x = k.c; else break; } return x; }, pa = p(a), pb = p(b); if (pa && pb && el.isConnected) { el.textContent = ((pb / pa - 1) * 100).toFixed(2) + "%"; el.className = cls(pb - pa); } }
 }
+const retPct = v => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
 function toolsClick(e) {
-  if (W.lt !== "tools") return; const b = e.target.closest("[data-tv],[data-tx],[data-tsel],[data-irdel],[data-paside],[data-jdel],[data-mm]"); if (!b) return; const d = b.dataset;
+  if (W.lt !== "tools") return; const b = e.target.closest("[data-tv],[data-tx],[data-tsel],[data-irdel],[data-paside],[data-jdel],[data-mm],[data-scadd],[data-scdel],[data-scrun],[data-rsk],[data-rsrun]"); if (!b) return; const d = b.dataset;
+  if (b.hasAttribute("data-scadd")) { SC().rules.push({ k: "above" }); scSave(); return renderList(); }
+  if (d.scdel != null) { SC().rules.splice(+d.scdel, 1); scSave(); return renderList(); }
+  if (b.hasAttribute("data-scrun")) return scRun();
+  if (d.rsk) { W.rsK = d.rsk; return renderList(); }
+  if (b.hasAttribute("data-rsrun")) return rsRun();
   if (d.tv) { W.tv = d.tv; renderList(); navPush(); }
   else if (d.tsel) select(d.tsel);
   else if (d.tx === "sumre") { W.sum = null; W.dk = new Map(); renderList(); }
@@ -212,7 +304,14 @@ function toolsSubmit(e) {
   else if (f.id === "jForm") { const c = $("#jCode").value.trim().toUpperCase(), px = +$("#jPx").value; if (!c || !(px > 0)) return toast("請輸入代號和價格"); jAdd({ d: $("#jD").value || toolsDay(), code: c, side: $("#jSide").value, px, sh: +$("#jSh").value || 0, reason: $("#jWhy").value.trim() }); }
   else if (f.id === "mForm") { const L = [...f.querySelectorAll("[data-mc]")].map(x => x.value.trim().toUpperCase()).filter(Boolean).slice(0, 4); store.set("watch:multi", L); renderList(); }
 }
-function toolsChange(e) { if (W.lt === "tools" && e.target.dataset.iron != null) { IR()[+e.target.dataset.iron].on = e.target.checked; irSave(); } }
+function toolsChange(e) {
+  if (W.lt !== "tools") return; const t = e.target, d = t.dataset;
+  if (d.iron != null) { IR()[+d.iron].on = t.checked; irSave(); }
+  else if (d.scu != null) { SC().uni = t.value; scSave(); renderList(); }
+  else if (d.scc != null) { SC().codes = t.value; scSave(); }
+  else if (d.scr != null) { SC().rules[+d.scr] = { k: t.value }; scSave(); renderList(); }
+  else if (d.scp != null) { SC().rules[+d.scp].p = t.value === "" ? null : +t.value; scSave(); }
+}
 // 多週期共振：日、週、月 K 的多空判讀放在一起，三個方向一致才算共振
 function mtfHtml() {
   const base = W.daily?.data; if (!base || base.length < 120) return "";
