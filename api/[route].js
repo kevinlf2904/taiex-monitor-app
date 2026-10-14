@@ -28,6 +28,7 @@ const ROUTES = {
   stocks: () => import("./_lib/stocks.js"),
   usmarket: () => import("./_lib/usmarket.js"),
   warn: () => import("./_lib/warn.js"),
+  yield: () => import("./_lib/yield.js"),
 };
 export const ROUTE_NAMES = Object.keys(ROUTES);
 // 問 AI（對話、讀圖）可能要幾十秒；其他服務幾秒內就回應

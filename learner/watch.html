@@ -726,7 +726,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.13-66</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.14-67</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1126,14 +1126,32 @@ function renderEtfAnnual() {
   return `年化報酬用月線「還原收盤價」（配息再投入）計算，最大跌幅用月收盤（會比日線小一些）。過去績效不代表未來。按「存股試算」會把這一檔和它的年化、最大跌幅帶到存股模擬器。`;
 }
 // ETF 排行：全部台股 ETF（/api/hot?type=etf），依成交量、成交值、漲跌幅排序
-const ETF_RANKS = [["vol", "成交量"], ["value", "成交值"], ["gain", "漲幅"], ["loss", "跌幅"]];
+const ETF_RANKS = [["vol", "成交量"], ["value", "成交值"], ["gain", "漲幅"], ["loss", "跌幅"], ["yield", "殖利率"]];
+// ETF 殖利率：先讀排程算好的 data/etf-yield.json（每個交易日收盤後更新全部台股 ETF），沒有時向 /api/yield 補目前排行裡的 ETF；殖利率用即時股價重算
+async function loadEtfYield() {
+  if (W.etfY || W.off) return; W.etfY = { rows: new Map(), busy: true };
+  try { const r = await fetch("data/etf-yield.json", { cache: "no-cache" }); if (r.ok) { const j = await r.json(); (j.rows || []).forEach(x => W.etfY.rows.set(x.code, x)); W.etfY.updated = j.updated; } } catch {}
+  if (!W.etfY.rows.size) {
+    if (!W.etfRank) await loadEtfRank();
+    const need = [...new Set([...(W.etfRank?.rows || []).map(r => r.code), ...ETF_CATS.flatMap(x => x[3].map(y => y[0]))].filter(c => isTW(c)))].slice(0, 160);
+    for (let i = 0; i < need.length && !W.off; i += 40) { try { const j = await getJ(`/api/yield?codes=${need.slice(i, i + 40).join(",")}`, true); (j.rows || []).forEach(x => W.etfY.rows.set(x.code, x)); } catch {} if (W.lt === "etf") renderList(); }
+  }
+  W.etfY.busy = false; if (W.lt === "etf") renderList();
+}
+const etfYield = (c, price) => { const y = W.etfY?.rows.get(c); if (!y || !y.n) return null; const p = price ?? y.price; return p > 0 ? (y.cash12 / p) * 100 : y.yield; };
 async function loadEtfRank(force = false) {
   if (W.off || W.etfRankLoading || (!force && W.etfRank && Date.now() - W.etfRank.at < 30000)) return;
   W.etfRankLoading = true; try { W.etfRank = { ...(await getJ("/api/hot?market=tw&type=etf", true)), at: Date.now() }; } catch (e) { W.etfRank = { err: e.message, at: Date.now() }; } finally { W.etfRankLoading = false; }
   if (W.lt === "etf" && W.etfCat === "rank") renderList();
 }
 function etfRankRows() {
-  const R = (W.etfRank?.rows || []).map(r => ({ ...r, ...(W.quotes.get(r.code) || {}), code: r.code, name: r.name })), k = W.etfRk || "vol", liq = R.filter(r => (r.vol || 0) >= 200);
+  const k = W.etfRk || "vol";
+  if (k === "yield") { // 全部有配息的台股 ETF，依殖利率由高到低
+    const live = new Map((W.etfRank?.rows || []).map(r => [r.code, r]));
+    return [...(W.etfY?.rows.values() || [])].filter(y => y.n > 0).map(y => { const q = { ...(live.get(y.code) || {}), ...(W.quotes.get(y.code) || {}) }; return { ...q, code: y.code, name: y.name || q.name || nameOf(y.code), price: q.price ?? y.price, y, yv: etfYield(y.code, q.price) }; })
+      .filter(r => r.yv != null).sort((a, b) => b.yv - a.yv);
+  }
+  const R = (W.etfRank?.rows || []).map(r => ({ ...r, ...(W.quotes.get(r.code) || {}), code: r.code, name: r.name })), liq = R.filter(r => (r.vol || 0) >= 200);
   return k === "value" ? R.sort((a, b) => (b.value || 0) - (a.value || 0)) : k === "gain" ? liq.sort((a, b) => (b.chgPct ?? -1e9) - (a.chgPct ?? -1e9)) : k === "loss" ? liq.sort((a, b) => (a.chgPct ?? 1e9) - (b.chgPct ?? 1e9)) : R.sort((a, b) => (b.vol || 0) - (a.vol || 0));
 }
 ETF_CATS.forEach(([, , , L]) => L.forEach(([c, n]) => { if (!W.names[c]) W.names[c] = n; }));
@@ -1148,15 +1166,17 @@ function renderEtf() {
   $("#lTools").innerHTML = `<div class="seg etfseg" role="group" aria-label="ETF 類型" id="etfSeg">${[["rank", "排行"], ["ann", "年化排行"], ...ETF_CATS].map(([id, t]) => `<button data-etf="${id}" aria-pressed="${etfCat()[0] === id}">${t}</button>`).join("")}</div>`;
   if (k === "ann") return renderEtfAnnual();
   if (k === "rank") {
-    const H = W.etfRank, R = etfRankRows(); if (!H) loadEtfRank();
+    const H = W.etfRank, yk = (W.etfRk || "vol") === "yield"; if (!H) loadEtfRank(); if (yk) loadEtfYield(); const R = etfRankRows();
     $("#wl").innerHTML = `<li class="sec-h etf-h"><span>全部台股 ETF ${H?.live ? "・盤中即時" : H?.date ? "・" + H.date.slice(5).replace("-", "/") : ""}</span><span class="seg sm" role="group" aria-label="排序">${ETF_RANKS.map(([v, t]) => `<button data-etfrk="${v}" aria-pressed="${(W.etfRk || "vol") === v}">${t}</button>`).join("")}</span></li>`
-      + (R.length ? R.slice(0, 60).map((r, i) => rowHtml(r.code, r, { rank: i + 1, star: true, metric: (W.etfRk || "vol") === "value" ? `成交值 ${r.value != null ? r.value.toFixed(1) + " 億" : "—"}` : undefined })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有 ETF 排行。" : "載入中…"}</li>`);
+      + (R.length ? R.slice(0, yk ? 100 : 60).map((r, i) => rowHtml(r.code, r, { rank: i + 1, star: true, metric: yk ? `殖利率 ${r.yv.toFixed(2)}%・近 12 月配 ${+r.y.cash12.toFixed(3)} 元（${r.y.n} 次）` : (W.etfRk || "vol") === "value" ? `成交值 ${r.value != null ? r.value.toFixed(1) + " 億" : "—"}` : undefined })).join("") : `<li class="empty note">${!yk && H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有 ETF 排行。" : yk && W.etfY && !W.etfY.busy ? "暫時拿不到配息資料，稍後再試。" : "載入中…"}</li>`);
+    if (yk) return `殖利率＝近 12 個月現金股利合計 ÷ 現價（盤中用即時價重算）。月配、季配、半年配都一樣算 12 個月合計；剛上市不到一年的 ETF 會偏低，配息有部分來自收益平準金或資本利得時，高殖利率不代表一定能維持。資料：Yahoo Finance 配息紀錄${W.etfY?.updated ? `（${new Date(Date.parse(W.etfY.updated) + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/")} 更新）` : ""}。`;
     return `ETF 排行依今天的成交量、成交值或漲跌幅排序（漲跌幅只列成交 200 張以上）。資料：${esc(H?.source || "證交所、櫃買中心")}。`;
   }
-  const rows = L.map(([c, n]) => ({ c, n, q: W.quotes.get(c) }));
+  const rows = L.map(([c, n]) => ({ c, n, q: W.quotes.get(c) })), yshow = k === "div" || k === "bond"; if (yshow) loadEtfYield();
+  if (W.etfSort === "yield") rows.sort((a, b) => (etfYield(b.c, b.q?.price) ?? -1) - (etfYield(a.c, a.q?.price) ?? -1));
   if (W.etfSort === "chg") rows.sort((a, b) => (b.q?.chgPct ?? -1e9) - (a.q?.chgPct ?? -1e9));
-  $("#wl").innerHTML = `<li class="sec-h etf-h"><span>${esc(desc)}</span><span class="seg sm" role="group" aria-label="排序">${[["", "預設"], ["chg", "漲跌幅"]].map(([v, t]) => `<button data-etfs="${v}" aria-pressed="${(W.etfSort || "") === v}">${t}</button>`).join("")}</span></li>`
-    + rows.map(({ c, q }) => rowHtml(c, q, { star: true, metric: q?.vol != null ? undefined : us ? "美元計價" : "等待報價…" })).join("");
+  $("#wl").innerHTML = `<li class="sec-h etf-h"><span>${esc(desc)}</span><span class="seg sm" role="group" aria-label="排序">${[["", "預設"], ["chg", "漲跌幅"], ...(yshow ? [["yield", "殖利率"]] : [])].map(([v, t]) => `<button data-etfs="${v}" aria-pressed="${(W.etfSort || "") === v}">${t}</button>`).join("")}</span></li>`
+    + rows.map(({ c, q }) => { const yv = yshow ? etfYield(c, q?.price) : null; return rowHtml(c, q, { star: true, metric: yv != null ? `殖利率 ${yv.toFixed(2)}%` : q?.vol != null ? undefined : us ? "美元計價" : "等待報價…" }); }).join("");
   return `ETF 是一籃子股票或債券，買一張就分散到很多標的。名單是常見、成交量較大的 ETF，方便比較，不是推薦。${us ? "美股報價來自 Yahoo Finance，可能延遲 15 分鐘。" : "台股 ETF 盤中每秒更新。"}`;
 }
 /* ---------- 清單：自選群組／台股熱門／美股熱門／排行 ---------- */
@@ -2345,6 +2365,23 @@ setTimeout(() => ltabsUi(true), 300);
   b.addEventListener("click", () => scrollTo({ top: 0, behavior: "smooth" })); addEventListener("scroll", () => { b.hidden = scrollY < 1400; }, { passive: true }); }
 $("#lx").addEventListener("toggle", e => { const d = e.target; if (d.matches?.("details[data-fold]")) store.set("watch:fold:" + d.dataset.fold, d.open); }, true);
 
+/* ---------- 殖利率：近 12 個月現金股利 ÷ 現價（/api/yield，Yahoo 配息紀錄）；台股、ETF 才有，一檔一天問一次 ---------- */
+W.yld = {};
+function yldNow(c, price) { const y = W.yld[c]?.row; if (!y) return null; const p = price ?? y.price; return p > 0 ? (y.cash12 / p) * 100 : y.yield; }
+function yldCell(c, q) {
+  if (!isTW(c) || isIdx(c)) return ""; const Y = W.yld[c]; if (!Y) { loadYield(c); return `<div><span>殖利率</span><b class="note">…</b></div>`; }
+  if (!Y.row) return `<div><span>殖利率</span><b title="${esc(Y.err || "")}">—</b></div>`;
+  const y = Y.row, v = yldNow(c, q?.price);
+  return `<div title="近 12 個月現金股利 ${y.cash12} 元（${y.n} 次）${y.last ? `，最近一次 ${y.last.d} 配 ${y.last.cash} 元` : ""}；殖利率＝近 12 個月現金股利 ÷ 現價"><span>殖利率</span><b>${v != null ? v.toFixed(2) + "%" : "—"}${y.n ? `<small> 配 ${+y.cash12.toFixed(2)} 元</small>` : ""}</b></div>`;
+}
+async function loadYield(c) {
+  if (W.off || W.yld[c]) return; W.yld[c] = { loading: true };
+  const memo = store.get("watch:yld", {}) || {}; if (memo[c] && Date.now() - memo[c].at < 864e5) { W.yld[c] = { row: memo[c].row }; if (W.sel === c) renderDetailHead(); return; }
+  try { const j = await getJ(`/api/yield?codes=${c}`); const row = j.rows?.find(x => x.code === c) || null; W.yld[c] = row ? { row } : { err: "沒有配息資料" };
+    if (row) { memo[c] = { at: Date.now(), row }; const keys = Object.keys(memo); if (keys.length > 200) delete memo[keys[0]]; store.set("watch:yld", memo); } }
+  catch (e) { W.yld[c] = { err: e.message }; }
+  if (W.sel === c) renderDetailHead();
+}
 /* ---------- 個股 ---------- */
 function showList(push = true) {
   $("#main").classList.remove("show-detail"); syncLayout(); setQ("list"); postHeight(); if (EMBED && isMobile()) post({ type: "watch-top", y: 0 });
@@ -2449,7 +2486,7 @@ function renderDetailHead() {
   $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today && !us ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${us ? `（美東${sess ? "・" + sess : ""}）` : ""}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}・${us ? "Yahoo（可能延遲）" : isFut(c) ? (q.session === "night" ? "夜盤" : "日盤") : W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err || "";
   const lim = q?.prev && isTW(c) ? [Math.round(q.prev * 1.1 * 100) / 100, Math.round(q.prev * 0.9 * 100) / 100] : null;
   $("#dKv").innerHTML = [["開盤", q?.open], ["最高", q?.high], ["最低", q?.low], [isFut(c) ? "參考價" : "昨收", q?.prev]].map(([k, v]) => `<div><span>${k}</span><b class="${v != null && q?.prev ? cls(v - q.prev) : ""}">${fmtPx(v, c)}</b></div>`).join("")
-    + `<div><span>成交量</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " " + volUnit(c) : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "")
+    + `<div><span>成交量</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " " + volUnit(c) : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "") + yldCell(c, q)
     + (volRatio(c, q) != null ? `<div><span>5日均量比</span><b class="${volRatio(c, q) >= 1.5 ? "up" : ""}">${volRatio(c, q).toFixed(2)} 倍</b></div>` : "")
     + (lim ? `<div><span>漲停</span><b class="up">${fmtP(lim[0])}</b></div><div><span>跌停</span><b class="down">${fmtP(lim[1])}</b></div>` : "");
   $("#dTags").innerHTML = tagsHtml(c, q, lim);

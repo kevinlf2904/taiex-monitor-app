@@ -949,7 +949,10 @@ class Chart {
       const on = P.sig && P.sigKinds[kind] !== false, st = P.sig && !!P.sigStrongK[kind], lvl = ["rsi", "wr", "psy", "arbr", "vr", "adr"].includes(kind);
       return `<span class="sg"><em>${NM[kind] || (S?.id && SUBX[S.id]?.label) || "副圖"}</em><button type="button" data-sk="${kind}" aria-pressed="${on}" title="在主圖標出這個副圖的全部訊號">${lvl ? "超買超賣" : kind === "kd" || kind === "macd" || kind === "custom" ? "金叉死叉" : "訊號"}</button>${kind === "kd" || kind === "macd" ? `<button type="button" data-strongk="${kind}" aria-pressed="${st}" title="${kind === "kd" ? "KD 只標低檔（D<20）金叉、高檔（D>80）死叉" : "MACD 只標零軸上金叉、零軸下死叉"}">只看重點</button>` : ""}</span>`;
     }).join("");
-    this.sigUi.hidden = !html; if (this.sigUi.innerHTML !== html) this.sigUi.innerHTML = html;
+    // 高低檔鈍化：開著 KD、RSI、威廉、MFI 任一個時，多一顆開關（底色區間＋鈍化、鈍化結束的訊號）
+    const dl = this.I && subs.some(S => dullOf(S, this.I)) ? `<span class="sg"><em>鈍化</em><button type="button" data-sk="dull" aria-pressed="${P.sig && P.sigKinds.dull !== false}" title="連續 3 根在高檔或低檔時塗底色並標出鈍化、鈍化結束">高低檔</button></span>` : "";
+    const all = html + dl;
+    this.sigUi.hidden = !all; if (this.sigUi.innerHTML !== all) this.sigUi.innerHTML = all;
   }
   line(a, vis, X, Y, color, w, alpha = 1, dash) {
     const ctx = this.ctx, g = this.geo; ctx.save(); ctx.beginPath(); ctx.rect(g.L, 0, g.pw, g.H); ctx.clip();
