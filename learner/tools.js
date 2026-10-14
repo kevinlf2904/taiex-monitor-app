@@ -413,7 +413,7 @@ function insHtml() {
   const by = [...I.rows.filter(r => r.d >= new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)).reduce((m, r) => { const g = m.get(r.code) || m.set(r.code, { code: r.code, name: r.name, n: 0, sh: 0, who: new Set() }).get(r.code); g.n++; g.sh += r.sh || 0; g.who.add(r.who); return m; }, new Map()).values()].sort((a, b) => b.sh - a.sh).slice(0, 15);
   return `<section class="csec"><h3>內部人持股轉讓申報 <span class="seg sm" role="group">${[["mine", "自選＋庫存"], ["all", "全部"]].map(([k, t]) => `<button data-insf="${k}" aria-pressed="${f === k && !q}">${t}</button>`).join("")}</span> <input data-insq value="${esc(q)}" placeholder="代號或名稱" style="width:110px"></h3>
     <p class="note">董事、監察人、經理人與持股 10% 以上的大股東，要轉讓持股前必須先申報；申報後一個月內才可轉讓，所以這是「打算轉讓」，不一定已經賣出。轉讓方式是「贈與」「信託」通常和買賣無關，「一般交易」「盤後鉅額」才是在市場上賣。</p>
-    ${insTable(L.slice(0, 150))}
+    ${!L.length && f === "mine" && !q ? `<p class="note">自選與庫存最近 120 天沒有內部人轉讓申報；點上面的「全部」看全市場（共 ${I.rows.length} 筆）。</p>` : insTable(L.slice(0, 150))}
     <h4>近 30 天申報轉讓張數最多</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>申報筆數</th><th>人數</th><th>轉讓股數合計</th></tr></thead><tbody>${by.map(g => `<tr><td><button class="linkbtn" data-tsel="${g.code}">${esc(g.name || nameOf(g.code))} ${g.code}</button></td><td>${g.n}</td><td>${g.who.size}</td><td>${insSh(g.sh)}</td></tr>`).join("")}</tbody></table></div>
     <p class="note">資料：${esc(I.source || "")}・更新 ${I.updated ? new Date(Date.parse(I.updated) + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ") : "—"}・保留最近 120 天。</p></section>`;
 }
