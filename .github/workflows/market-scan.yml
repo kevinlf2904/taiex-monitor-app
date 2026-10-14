@@ -1,0 +1,49 @@
+# 全市場日 K＋收盤後 Telegram 提醒：每個交易日收盤後更新上市櫃全部股票的日 K（scripts/market-scan.mjs），
+# 上傳到 GitHub Release「market-data」給網站的「全市場」選股使用；接著檢查雲端同步使用者的提醒並推播（scripts/alerts-push.mjs）。
+name: market-scan
+on:
+  schedule:
+    - cron: "10 8 * * 1-5"   # 週一到週五台北 16:10
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "除錯：1＝只更新快取、印統計，不上傳、不推播"
+        default: "0"
+permissions:
+  contents: write
+concurrency:
+  group: market-scan
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # 歷史日 K 不進 git，用快取在每次執行之間保留（找不到就從 Yahoo 補一年）
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: allk-${{ github.run_id }}
+          restore-keys: allk-
+      - if: ${{ github.event.inputs.dry == '1' }}
+        run: node scripts/market-scan.mjs --dry
+      - if: ${{ github.event.inputs.dry != '1' }}
+        run: node scripts/market-scan.mjs
+      - name: publish
+        if: ${{ github.event.inputs.dry != '1' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view market-data >/dev/null 2>&1 || gh release create market-data --title "全市場日 K（自動產生）" --notes "由 market-scan 排程每天更新，網站透過 /api/allk 讀取。請勿手動修改。" --latest=false
+          gh release upload market-data out/*.json --clobber
+      - name: telegram
+        if: ${{ github.event.inputs.dry != '1' }}
+        env:
+          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: node scripts/alerts-push.mjs

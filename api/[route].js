@@ -3,6 +3,7 @@
 // 收成一個入口後網址不變，之後新增功能也不會超過上限。api/_lib/ 以底線開頭，不會被當成 function。
 
 const ROUTES = {
+  allk: () => import("./_lib/allk.js"),
   annual: () => import("./_lib/annual.js"),
   broker: () => import("./_lib/broker.js"),
   calendar: () => import("./_lib/calendar.js"),
@@ -24,6 +25,7 @@ const ROUTES = {
   screen: () => import("./_lib/screen.js"),
   stockinfo: () => import("./_lib/stockinfo.js"),
   status: () => import("./_lib/status.js"),
+  sync: () => import("./_lib/sync.js"),
   podcast: () => import("./_lib/podcast.js"),
   stocks: () => import("./_lib/stocks.js"),
   usmarket: () => import("./_lib/usmarket.js"),
