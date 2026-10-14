@@ -1,0 +1,34 @@
+# 國會山交易：每天從眾議院書記官、參議院電子申報系統抓新的定期交易報告（PTR），整理成 learner/data/congress.json
+name: congress
+on:
+  schedule:
+    - cron: "37 23 * * *"   # 每天台北 07:37（美東前一天晚上，當天的申報大多已公開）
+    - cron: "37 11 * * 1-5" # 週一到週五台北 19:37 再補一次
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: congress
+  cancel-in-progress: false
+jobs:
+  congress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: git pull -q origin main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # 眾議院的申報是 PDF，用 pdfjs 讀文字（只在排程裡安裝，網站本身不需要）
+      - run: npm i --no-save --no-audit --no-fund pdfjs-dist@4.10.38
+      - run: node scripts/congress.mjs
+      - name: commit
+        run: |
+          git config user.name "congress"
+          git config user.email "congress@users.noreply.github.com"
+          git add learner/data/congress.json learner/data/congress-docs.json
+          if git diff --cached --quiet; then echo "沒有新資料"; exit 0; fi
+          git commit -m "國會山：更新議員交易申報"
+          for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin HEAD:main && exit 0; git rebase --abort 2>/dev/null; sleep 5; done
+          exit 1

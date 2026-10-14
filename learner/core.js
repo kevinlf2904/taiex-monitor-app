@@ -142,7 +142,7 @@ function vrCalc(D, n = 26) {
 function breadthCalc(D, n = 10) {
   const N = D.length, adr = Array(N).fill(null), obos = Array(N).fill(null), adl = Array(N).fill(null); let cum = 0, any = false;
   for (let i = 0; i < N; i++) {
-    const x = D[i]; if (x.adv == null || x.dec == null) continue; any = true; cum += x.adv - x.dec; // 缺資料的日子跳過，累計不歸零 adl[i] = cum;
+    const x = D[i]; if (x.adv == null || x.dec == null) continue; any = true; cum += x.adv - x.dec; /* 缺資料的日子跳過，累計不歸零 */ adl[i] = cum;
     let a = 0, d = 0, ok = i >= n - 1; for (let k = i - n + 1; ok && k <= i; k++) { if (D[k].adv == null) { ok = false; break; } a += D[k].adv; d += D[k].dec; }
     if (ok) { adr[i] = d ? a / d : null; obos[i] = a - d; }
   }
