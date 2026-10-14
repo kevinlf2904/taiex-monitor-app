@@ -69,7 +69,7 @@ export async function main() {
   console.log("補到", ok, "檔");
   const added = appendDay(H, list); console.log("接上今天", added, "檔");
   // 已下市（今天清單沒有、而且 10 個交易日沒更新）的移除
-  const today = list[0].date, codes = new Set(list.map(x => x.code));
+  const today = list.map(x => x.date).filter(Boolean).sort().pop(), codes = new Set(list.map(x => x.code));
   for (const [c, s] of Object.entries(H.s)) if (!codes.has(c) && (!s.b.length || Date.parse(today) - Date.parse(s.b[s.b.length - 1].d) > 20 * 864e5)) delete H.s[c];
   H.updated = new Date().toISOString(); H.date = today;
   await mkdir(ROOT + ".cache", { recursive: true }); await writeFile(CACHE, JSON.stringify(H));

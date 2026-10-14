@@ -431,8 +431,9 @@ function subSignals(D, I, subs, vis, kinds = {}, strong = false) {
 // 要捲動的頁面：嵌在 K線學堂分頁（同網域 iframe、外框依內容長高）時捲動外層頁面
 function pageScroller() { try { let w = window; while (w.parent !== w && w.parent.document) w = w.parent; return w; } catch { return window; } }
 class Chart {
-  constructor(host, { onHover, onRange } = {}) {
-    this.host = host; this.onHover = onHover; this.onRange = onRange;
+  // onTap(pos, price, e)：點一下圖（沒有拖曳）時呼叫，pos 是小數的 K 棒位置、price 是那個高度的價格（不在主圖就是 null）；回傳 true 就不固定十字線（畫線練習用）
+  constructor(host, { onHover, onRange, onTap } = {}) {
+    this.host = host; this.onHover = onHover; this.onRange = onRange; this.onTap = onTap;
     this.legend = document.createElement("div"); this.legend.className = "legend";
     this.canvas = document.createElement("canvas"); this.ctx = this.canvas.getContext("2d");
     this.canvas.setAttribute("role", "img");
@@ -543,6 +544,7 @@ class Chart {
       // 點一下（沒有拖曳）：固定十字線；固定時再點同一根 K 棒就取消
       if (e.type === "pointerup" && this.tapOk && this.drag && !this.drag.moved && this.D && this.ptrs.size === 1 && !this.drag.axis && !this.drag.subAxis) {
         // 手指點兩下（300ms 內、位置相近）＝恢復原本的縮放（iPhone／iPad 上沒有 dblclick）
+        if (this.onTap && this.onTap(this.posAt(e.offsetX), this.priceAt(e.offsetY), e) === true) { this.tapOk = false; this.ptrs.delete(e.pointerId); if (!this.ptrs.size) this.drag = null; this.req(); return; }
         const now = performance.now(), dbl = e.pointerType !== "mouse" && this.lastTap && now - this.lastTap.t < 320 && Math.abs(e.offsetX - this.lastTap.x) < 30 && Math.abs(e.offsetY - this.lastTap.y) < 30;
         this.lastTap = dbl ? null : { t: now, x: e.offsetX, y: e.offsetY };
         if (dbl) { this.pinned = false; this.hover = null; this.resetScale(); this.tapOk = false; this.ptrs.delete(e.pointerId); if (!this.ptrs.size) this.drag = null; return; }
@@ -648,6 +650,7 @@ class Chart {
   hoverAt(x) { const i = this.indexAt(x); if (i !== this.hover) { this.hover = i; this.req(); } }
   // 手勢中的重畫合併到下一個畫面（每個畫面最多畫一次），拖曳、縮放比較順
   req() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; this.draw(); }); }
+  priceAt(y) { return this.geo?.pAt ? this.geo.pAt(y) : null; } // 畫面 y 對應的價格（只在主圖範圍內）
   posAt(x) { if (!this.geo) return null; const { L, bw, fa } = this.geo; return fa + (x - L) / bw; } // 畫面 x 對應的「小數」K 棒位置（縮放的錨點）
   indexAt(x, raw) { if (!this.geo) return null; const { L, bw, fa, a } = this.geo; const i = Math.floor(fa + (x - L) / bw); return raw ? i : Math.max(a, Math.min(Math.min(this.visible - 1, this.range.b), i)); }
   draw() {
@@ -715,6 +718,7 @@ class Chart {
     this.ysm = { lo: tlo, hi: thi };
     lo = itf(tlo); hi = itf(thi);
     const Y = p => top0 + (thi - tf(p)) / (thi - tlo) * mainH;
+    this.geo.pAt = y => (y < top0 || y > top0 + mainH ? null : itf(thi - (y - top0) / mainH * (thi - tlo))); /* 主圖高度 → 價格（Y 的反函數） */
 
     ctx.font = `11px ${cssVar("--font-num")}`; ctx.textBaseline = "middle";
     // 未揭曉區

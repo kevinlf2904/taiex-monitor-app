@@ -1,0 +1,27 @@
+# 自動測試：每個 PR 和推到 main 時跑 tests/run.mjs（排程解析的單元測試＋學堂、看盤每個分頁的瀏覽器測試，任何頁面錯誤都算失敗）
+name: ci
+on:
+  pull_request:
+    paths: ["learner/**", "api/**", "scripts/**", "tests/**", ".github/workflows/ci.yml"]
+  push:
+    branches: [main]
+    paths: ["learner/**.js", "learner/**.html", "learner/**.css", "api/**", "scripts/**", "tests/**"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm i --no-save --no-audit --no-fund playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - run: for f in learner/*.js scripts/*.mjs api/_lib/*.js; do node --check "$f" || exit 1; done
+      - run: node tests/run.mjs

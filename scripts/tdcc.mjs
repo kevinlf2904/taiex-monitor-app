@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const DIR = fileURLToPath(new URL("../learner/data/tdcc/", import.meta.url));
 const URL1 = "https://opendata.tdcc.com.tw/getOD.ashx?id=1-5", KEEP = 52, DUMP = process.argv.includes("--dump");
-const isCode = c => /^(\d{4}|00\d{2,4}[A-Z]?)$/.test(c);
+const isCode = c => /^(\d{4}|00\d{2,4}[A-Z]?)$/.test(c) && !/^000/.test(c); // 000 開頭是債券等，不是股票
 
 // CSV → { date, rows: Map(code → [date, p1000, p400, p50, people, people1000]) }
 export function parseTdcc(csv) {
@@ -32,12 +32,16 @@ export async function main() {
   console.log("資料日期", date, "共", rows.size, "檔");
   if (DUMP) { console.log(csv.split(/\r?\n/).slice(0, 20).join("\n")); console.log(JSON.stringify([...rows].slice(0, 5))); return; }
   await mkdir(DIR, { recursive: true });
-  const by = new Map(); for (const [c, row] of rows) { const k = c.slice(0, 2); (by.get(k) || by.set(k, []).get(k)).push([c, row]); }
+  const by = new Map(), chg = []; for (const [c, row] of rows) { const k = c.slice(0, 2); (by.get(k) || by.set(k, []).get(k)).push([c, row]); }
   for (const [k, L] of by) {
     let cur = {}; try { cur = JSON.parse(await readFile(`${DIR}${k}.json`, "utf8")); } catch {}
-    for (const [c, row] of L) { const a = (cur[c] ||= []); const i = a.findIndex(x => x[0] === row[0]); if (i >= 0) a[i] = row; else a.push(row); a.sort((x, y) => x[0].localeCompare(y[0])); if (a.length > KEEP) a.splice(0, a.length - KEEP); }
+    for (const [c, row] of L) { const a = (cur[c] ||= []); const i = a.findIndex(x => x[0] === row[0]); if (i >= 0) a[i] = row; else a.push(row); a.sort((x, y) => x[0].localeCompare(y[0])); if (a.length > KEEP) a.splice(0, a.length - KEEP);
+      const [p, q] = [a[a.length - 2], a[a.length - 1]]; if (p && q[0] === date && q[4] >= 100) chg.push([c, +(q[1] - p[1]).toFixed(2), q[1], +(q[3] - p[3]).toFixed(2), q[4] - p[4]]); }
     await writeFile(`${DIR}${k}.json`, JSON.stringify(cur));
   }
+  // 大戶動向排行：千張大戶持股比例週變化（百分點）最多、最少各 50 檔；[代號, 千張變化, 千張%, 50 張以下變化, 總人數變化]
+  chg.sort((x, y) => y[1] - x[1]);
+  await writeFile(`${DIR}rank.json`, JSON.stringify({ date, up: chg.slice(0, 50), down: chg.slice(-50).reverse(), n: chg.length }));
   await writeFile(`${DIR}meta.json`, JSON.stringify({ updated: new Date().toISOString(), date, count: rows.size, source: "集保結算所開放資料 1-5 集保戶股權分散表" }));
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch(e => { console.error(e); process.exit(1); });
