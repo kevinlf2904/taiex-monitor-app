@@ -1,0 +1,42 @@
+# 13F 機構持股：每天檢查知名機構有沒有新的 13F 申報（SEC EDGAR），整理成 learner/data/f13.json
+name: sec13f
+on:
+  schedule:
+    - cron: "17 0 * * *"   # 每天台北 08:17（美東前一天晚上）
+  workflow_dispatch:
+    inputs:
+      dump:
+        description: "除錯：1＝只印出抓到的原始資料、不存檔（0＝正常更新）"
+        default: "0"
+permissions:
+  contents: write
+concurrency:
+  group: sec13f
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: git pull -q origin main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
+        run: node scripts/sec13f.mjs --dump
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: node scripts/sec13f.mjs
+        env:
+          SEC_UA: ${{ secrets.SEC_UA }}
+      - name: commit
+        if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: |
+          git config user.name "sec13f"
+          git config user.email "sec13f@users.noreply.github.com"
+          git add learner/data/f13.json learner/data/f13-cusip.json
+          if git diff --cached --quiet; then echo "沒有新資料"; exit 0; fi
+          git commit -m "13F：更新機構持股"
+          for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin HEAD:main && exit 0; git rebase --abort 2>/dev/null; sleep 5; done
+          exit 1

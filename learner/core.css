@@ -135,3 +135,11 @@ body { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .icfoot { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; font-size: 12px; margin: 8px 0 2px; }
 .scalepop .picfg .icfg:first-child { border-top: 0; padding-top: 2px; }
 .scalepop .picfg .icfoot { flex-direction: column; align-items: flex-start; }
+/* 共用表格與數值卡（看盤、實驗室都用） */
+.ctbl { overflow-x: auto; }
+.ctbl table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ctbl th, .ctbl td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+.ctbl th { font-weight: 500; color: var(--muted); font-size: 12px; }
+.cokv { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 10px 0; }
+.cokv > div { background: var(--surface-2); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.cokv > div > span { font-size: 12px; color: var(--muted); } .cokv > div > small { font-size: 11.5px; color: var(--muted); }
