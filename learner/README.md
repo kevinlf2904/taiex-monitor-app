@@ -340,6 +340,12 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
+### 13F、內部人資料上線（2026.10.14-71）
+
+- 13F 排程正式上線：13 家機構（巴菲特、艾克曼、德魯肯米勒、泰珀、克拉曼、索羅斯、達利歐、伍德、李錄、勒布、老虎環球、Coatue、Lone Pine）；艾因霍恩、貝瑞已停止申報。
+  SEC 會擋 `users.noreply.github.com` 的 User-Agent，改用網站網域地址；部分機構用千美元申報會自動換算，債券不列入。
+- 內部人申報：自選與庫存沒有申報時提示切到「全部」。
+
 ### 十五項新功能：工具、實驗室、錯題本、國會延伸、13F、內部人（2026.10.14-70）
 
 看盤新增「工具」分頁（`learner/tools.js`）：
