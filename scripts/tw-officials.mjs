@@ -17,18 +17,15 @@ const getText = async url => { const r = await fetch(url, { headers: UA, signal:
 const getBuf = async url => { const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(120000) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return Buffer.from(await r.arrayBuffer()); };
 const decode = s => String(s).replace(/&amp;/g, "&").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&quot;/g, '"');
 
-// 列表頁 → [{ no, date, url }]（第 N 期、出刊日期 115-09-22、內容頁）
+// 列表頁（表格：序號、期別「廉政專刊第321期」、出刊日期「115-09-22」、電子書 PDF 下載連結）→ [{ no, date, pdf }]
 export function parseList(html) {
   const out = [];
-  for (const m of String(html).matchAll(/<a[^>]+href="([^"]*News_Content\.aspx\?n=17[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi)) {
-    const t = decode(m[2].replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim(), no = t.match(/第\s*(\d+)\s*期/)?.[1]; if (!no) continue;
-    out.push({ no: +no, url: new URL(decode(m[1]), BASE + "/").href, title: t });
+  for (const tr of String(html).split(/<tr[\s>]/i).slice(1)) {
+    const no = tr.match(/廉政專刊第\s*(\d+)\s*期/)?.[1], dm = tr.match(/(\d{3})-(\d{2})-(\d{2})/), pdf = tr.match(/href="([^"]*Download\.ashx[^"]*)"/i)?.[1];
+    if (no && pdf) out.push({ no: +no, date: dm ? `${+dm[1] + 1911}-${dm[2]}-${dm[3]}` : null, pdf: new URL(decode(pdf), BASE + "/").href });
   }
-  for (const m of String(html).matchAll(/第\s*(\d+)\s*期[^<]{0,40}?(\d{3})-(\d{2})-(\d{2})/g)) { const x = out.find(o => o.no === +m[1]); if (x && !x.date) x.date = `${+m[2] + 1911}-${m[3]}-${m[4]}`; }
   return [...new Map(out.map(o => [o.no, o])).values()].sort((a, b) => b.no - a.no);
 }
-// 內容頁 → PDF 下載連結（排除只有目錄的）
-export const pdfLinks = html => [...String(html).matchAll(/href="([^"]*Download\.ashx[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi)].map(m => ({ url: new URL(decode(m[1]), BASE + "/").href, name: decode(m[2].replace(/<[^>]+>/g, "")).trim() }));
 
 async function pdfLines(buf, maxPages = Infinity) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs"), require = createRequire(import.meta.url), root = require.resolve("pdfjs-dist/package.json").replace(/package\.json$/, "");
@@ -45,11 +42,8 @@ async function pdfLines(buf, maxPages = Infinity) {
 export async function main() {
   const list = parseList(await getText(LIST)); console.log("期別", list.slice(0, 20).map(x => `${x.no}(${x.date || "?"})`).join("、"));
   if (DUMP) {
-    const x = list[0]; if (!x) { const h = await getText(LIST); console.log("長度", h.length, "\n連結", JSON.stringify([...new Set([...h.matchAll(/News_Content[^"'\s>]*/g)].map(m => m[0]))].slice(0, 20)));
-      for (const m of [...h.matchAll(/第\s*\d+\s*期/g)].slice(0, 6)) console.log("…", h.slice(Math.max(0, m.index - 300), m.index + 200).replace(/\s+/g, " "));
-      console.log("含 iframe／api：", JSON.stringify([...h.matchAll(/(iframe[^>]+src="[^"]+"|\/api\/[^"']+|\.ashx[^"']*)/gi)].map(m => m[0]).slice(0, 15))); return; }
-    const html = await getText(x.url), L = pdfLinks(html); console.log("第", x.no, "期 連結", JSON.stringify(L));
-    const pdf = L.find(l => /\.pdf|專刊/i.test(l.name) && !/目錄/.test(l.name)) || L[0]; if (!pdf) { console.log(html.slice(0, 3000)); return; }
+    const x = list[0]; if (!x) { console.log((await getText(LIST)).slice(0, 2000)); return; }
+    const pdf = { url: x.pdf }; console.log("第", x.no, "期", x.date, x.pdf);
     const buf = await getBuf(pdf.url); console.log("PDF 大小", buf.length);
     const { n, pages } = await pdfLines(buf, 40); console.log("頁數", n, "前 3 頁行數", pages.slice(0, 3).map(p => p.length));
     pages.slice(0, 3).forEach((p, i) => console.log(`--- 第 ${i + 1} 頁 ---\n` + p.slice(0, 60).join("\n")));
