@@ -20,7 +20,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - run: git pull -q origin main
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: git pull -q origin main
       - uses: actions/setup-node@v4
         with:
           node-version: 22
