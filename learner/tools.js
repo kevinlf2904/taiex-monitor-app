@@ -2,7 +2,7 @@
    這個檔案只定義函式（載入時 watch.html 的 W 還沒建立），由 watch.html 的清單分頁「工具」呼叫 renderTools()。
    資料都存在這台裝置的瀏覽器（localStorage）；指標用日 K 判斷，日 K 每 5 分鐘重抓一次。 */
 
-const TOOLS_VIEWS = [["sum", "每日摘要"], ["scan", "條件選股"], ["rs", "相對強弱"], ["cal", "我的行事曆"], ["ins", "內部人申報"], ["chipx", "籌碼動向"], ["alert", "指標提醒"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["sync", "備份同步"]];
+const TOOLS_VIEWS = [["sum", "每日摘要"], ["alert", "提醒"], ["chipx", "籌碼動向"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["sync", "備份同步"]];
 const toolsDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 // 日 K（6 個月）：5 分鐘內重複用
 async function dailyFresh(c) {
@@ -207,8 +207,8 @@ async function scRun() {
           : (() => { try { return C[4](D, I, p); } catch { return null; } })();
         if (!m) { hits.length = 0; hits.fail = true; break; } hits.push(m); }
       if (!hits.fail) R.rows.push({ c, hits, px: D[D.length - 1].c, chg: D.length > 1 ? D[D.length - 1].c / D[D.length - 2].c - 1 : 0 }); }
-    if (R.done % (mk ? 200 : 6) === 0 && W.tv === "scan") renderList(); } };
-  await Promise.all(Array.from({ length: mk ? 1 : 6 }, worker)); if (mk) R.rows.sort((a, b) => b.chg - a.chg); R.date = mk ? W.allk.date : null; R.busy = false; R.at = Date.now(); if (W.lt === "tools") renderList();
+    if (R.done % (mk ? 200 : 6) === 0 && scanVis()) renderList(); } };
+  await Promise.all(Array.from({ length: mk ? 1 : 6 }, worker)); if (mk) R.rows.sort((a, b) => b.chg - a.chg); R.date = mk ? W.allk.date : null; R.busy = false; R.at = Date.now(); if (toolsOn()) renderList();
 }
 
 /* ---------- 相對強弱（RS）：和加權指數比，近 20／60／120 日誰比較強 ---------- */
@@ -217,28 +217,30 @@ async function rsRun() {
   const list = mk ? Object.keys(W.allk.k) : (SC().uni === "custom" && SC().codes ? String(SC().codes).toUpperCase().split(/[\s,，、]+/).filter(isTW) : [...new Set([...myCodes().filter(isTW), ...Object.keys(W.hold || {}).filter(isTW), ...(W.hot?.tw?.rows || []).slice(0, 60).map(r => r.code)])]).slice(0, mk ? 5000 : 120);
   const R = (W.rsRes = { busy: true, done: 0, total: list.length, rows: [], mk }); renderList(); if (!W.hot?.tw && !mk) loadHot("tw");
   const T = await dailyFresh("T00"), ret = (D, n) => (D && D.length > n ? D[D.length - 1].c / D[D.length - 1 - n].c - 1 : null), tr = { 20: ret(T, 20), 60: ret(T, 60), 120: ret(T, 120) };
-  let k = 0; const worker = async () => { while (k < list.length) { const c = list[k++], D = mk ? allkD(c) : await dailyFresh(c); R.done++; if (mk && R.done % 100 === 0) { await tick0(); if (W.tv === "rs") renderList(); } if (!D || D.length < 25 || (mk && !(D[D.length - 1].v >= 100))) continue;
+  let k = 0; const worker = async () => { while (k < list.length) { const c = list[k++], D = mk ? allkD(c) : await dailyFresh(c); R.done++; if (mk && R.done % 100 === 0) { await tick0(); if (rsVis()) renderList(); } if (!D || D.length < 25 || (mk && !(D[D.length - 1].v >= 100))) continue;
     const row = { c, px: D[D.length - 1].c }; [20, 60, 120].forEach(n => { const r = ret(D, n); row["r" + n] = r; row["rs" + n] = r != null && tr[n] != null ? (1 + r) / (1 + tr[n]) - 1 : null; }); R.rows.push(row); } };
-  await Promise.all(Array.from({ length: mk ? 1 : 6 }, worker)); R.tr = tr; R.busy = false; R.at = Date.now(); if (W.lt === "tools") renderList();
+  await Promise.all(Array.from({ length: mk ? 1 : 6 }, worker)); R.tr = tr; R.busy = false; R.at = Date.now(); if (toolsOn()) renderList();
 }
 
-/* ---------- 我的行事曆：自選＋庫存的除權息、法說會，加上營收、財報公布期限 ---------- */
-async function calLoad() { if (W.cal && !W.cal.err) return W.cal; try { W.cal = await getJ("/api/calendar", true); } catch (e) { W.cal = { err: e.message }; } return W.cal; }
-function calEvents() {
-  const mine = new Set([...myCodes(), ...Object.keys(W.hold || {})]), today = toolsDay(), end = new Date(Date.now() + 70 * 864e5).toISOString().slice(0, 10), out = [];
-  (W.cal?.rows || []).filter(r => mine.has(r.code) && r.date >= today && r.date <= end).forEach(r => out.push({ d: r.date, code: r.code, t: `${r.kind || "除權息"}${r.cash ? `：現金 ${r.cash} 元` : ""}${r.stock ? `、股票 ${r.stock} 元` : ""}`, k: "div" }));
-  (W.cal?.conf || []).filter(r => mine.has(r.code) && r.date >= today && r.date <= end).forEach(r => out.push({ d: r.date, code: r.code, t: `法說會${r.time ? " " + r.time : ""}${r.place ? "・" + r.place : ""}`, k: "conf" }));
-  // 固定的公布期限：每月 10 日前公布上月營收；財報 Q1 5/15、Q2 8/14、Q3 11/14、年報 3/31（上市櫃公司一般規定）
-  const y = +today.slice(0, 4);
-  for (let m = 0; m < 3; m++) { const dt = new Date(Date.UTC(y, +today.slice(5, 7) - 1 + m, 10)).toISOString().slice(0, 10); if (dt >= today && dt <= end) out.push({ d: dt, t: "上個月營收公布期限（每月 10 日前）", k: "rev" }); }
-  [[`${y}-03-31`, "年度財報公布期限"], [`${y}-05-15`, "第一季財報公布期限"], [`${y}-08-14`, "第二季（半年報）公布期限"], [`${y}-11-14`, "第三季財報公布期限"], [`${y + 1}-03-31`, "年度財報公布期限"]].forEach(([d, t]) => { if (d >= today && d <= end) out.push({ d, t, k: "fin" }); });
-  return out.sort((a, b) => a.d.localeCompare(b.d));
+/* ---------- 營收、財報的法定公布期限（大盤「理財行事曆」用）：每月 10 日前公布上月營收；Q1 5/15、Q2 8/14、Q3 11/14、年報 3/31 ---------- */
+function calDeadlines(a, b) {
+  const out = [], y0 = +a.slice(0, 4);
+  for (const y of [y0, y0 + 1]) { for (let m = 1; m <= 12; m++) { const d = `${y}-${String(m).padStart(2, "0")}-10`; if (d >= a && d <= b) out.push({ d, t: "上個月營收公布期限（每月 10 日前）" }); }
+    for (const [md, t] of [["03-31", "年度財報公布期限"], ["05-15", "第一季財報公布期限"], ["08-14", "第二季（半年報）公布期限"], ["11-14", "第三季財報公布期限"]]) { const d = `${y}-${md}`; if (d >= a && d <= b) out.push({ d, t }); } }
+  return out.sort((x, y) => x.d.localeCompare(y.d));
 }
 
 /* ---------- 畫面 ---------- */
+// 這些畫面也被別的分頁借用：條件選股、相對強弱在「選股」，內部人申報在「申報」
+const toolsOn = () => W.lt === "tools" || (W.lt === "screen" && (W.scrG === "custom" || W.scrG === "rs")) || (W.lt === "cong" && (W.cv === "ins" || String(W.cv).startsWith("tw")));
+const scanVis = () => W.lt === "screen" && W.scrG === "custom", rsVis = () => W.lt === "screen" && W.scrG === "rs", insVis = () => W.lt === "cong" && W.cv === "ins";
 function renderTools() {
-  const v = W.tv || "sum";
+  if (!TOOLS_VIEWS.some(x => x[0] === W.tv)) W.tv = "sum";
+  const v = W.tv;
   $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="工具">${TOOLS_VIEWS.map(([k, t]) => `<button data-tv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</div>`;
+  const r = toolsBody(v); $("#lx").innerHTML = r.h; return r.note;
+}
+function toolsBody(v) {
   let h = "", note = "";
   if (v === "sum") {
     const S = W.sum; if (!S && !W.off) setTimeout(sumBuild, 0);
@@ -251,7 +253,7 @@ function renderTools() {
       <div><h4>自選漲幅前 5</h4><ul class="tlist">${mv.slice(0, 5).map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div>
       <div><h4>自選跌幅前 5</h4><ul class="tlist">${mv.slice(-5).reverse().map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div></div>
       <h4>自選股今天觸發的技術訊號 ${S?.busy ? `<span class="note">掃描中…</span>` : ""}</h4><ul class="tlist">${(S?.sig || []).map(s => `<li><button class="linkbtn" data-tsel="${s.c}">${esc(nameOf(s.c))} ${s.c}</button>：${s.ev.map(esc).join("、")} <span class="note">${s.d}</span></li>`).join("") || `<li class="note">${S?.busy ? "…" : "沒有（掃描自選股最多 30 檔的日 K：KD／MACD 交叉、布林突破、20 日新高新低、爆量、鈍化、季線）"}</li>`}</ul>
-      <h4>今天的指標提醒</h4><ul class="tlist">${(W.irLog ||= store.get("watch:irlog", []) || []).filter(x => x.d === toolsDay()).map(x => `<li>${x.t} ${esc(nameOf(x.code))} ${x.code}：${esc(x.msg)}</li>`).join("") || `<li class="note">沒有（在「指標提醒」設定條件）</li>`}</ul>
+      <h4>今天的指標提醒</h4><ul class="tlist">${(W.irLog ||= store.get("watch:irlog", []) || []).filter(x => x.d === toolsDay()).map(x => `<li>${x.t} ${esc(nameOf(x.code))} ${x.code}：${esc(x.msg)}</li>`).join("") || `<li class="note">沒有（在「提醒」設定條件）</li>`}</ul>
       <h4>國會新申報（最近 3 天）</h4><ul class="tlist">${cg.slice(0, 12).map(t => `<li>${esc(pName(t.pid))} ${t.k === "buy" ? "<b class='up'>買進</b>" : "<b class='down'>賣出</b>"} ${esc(t.ticker)} ${amtTxt(t.amount)} <span class="note">交易日 ${t.traded}</span></li>`).join("") || `<li class="note">沒有</li>`}</ul></section>`;
     note = "摘要用即時報價與日 K 整理；AI 整理只根據畫面上的資料，不是買賣建議。";
   } else if (v === "scan") {
@@ -269,13 +271,6 @@ function renderTools() {
       <p class="note">RS＝（1＋個股報酬）÷（1＋加權指數報酬）− 1，正的代表比大盤強。範圍：自選、庫存與台股熱門前 60（條件選股選「自己輸入代號」時改用那些代號）；選「全市場」時用排程整理的全部上市櫃股票（排除當天成交量不到 100 張的）。${R?.tr ? `同期加權指數：20 日 ${retPct(R.tr[20])}、60 日 ${retPct(R.tr[60])}、120 日 ${retPct(R.tr[120])}` : ""}</p>
       ${R ? `<div class="ctbl"><table><thead><tr><th>#</th><th>股票</th><th>收盤</th><th>20 日</th><th>60 日</th><th>120 日</th><th>RS（${k.slice(2)} 日）</th><th>百分位</th></tr></thead><tbody>${rows.slice(0, 300).map((x, i) => `<tr><td>${i + 1}</td><td><button class="linkbtn" data-tsel="${x.c}">${esc(nameOf(x.c))} ${x.c}</button></td><td>${fmtP(x.px)}</td><td class="${cls(x.r20)}">${retPct(x.r20)}</td><td class="${cls(x.r60)}">${retPct(x.r60)}</td><td class="${cls(x.r120)}">${retPct(x.r120)}</td><td class="${cls(x[k])}"><b>${retPct(x[k])}</b></td><td>${n > 1 ? Math.round((1 - i / (n - 1)) * 100) : 100}</td></tr>`).join("")}</tbody></table></div>` : ""}</section>`;
     note = "相對強弱只看過去的價格表現，強勢股也可能隨時轉弱；百分位 100 是範圍內最強。";
-  } else if (v === "cal") {
-    if (!W.cal) calLoad().then(() => W.lt === "tools" && renderList());
-    const E = calEvents(), by = E.reduce((m, e) => ((m[e.d] ||= []).push(e), m), {});
-    h = `<section class="csec"><h3>我的行事曆 <span class="note">自選與庫存・未來 70 天</span></h3>
-      ${W.cal?.err ? `<p class="note">⚠ 除權息、法說會資料暫時拿不到（${esc(W.cal.err)}），只列固定的公布期限。</p>` : ""}
-      ${Object.entries(by).map(([d, L]) => `<div class="calday"><b>${d.slice(5).replace("-", "/")}（${"日一二三四五六"[new Date(d + "T00:00:00Z").getUTCDay()]}）</b><ul class="tlist">${L.map(e => `<li><span class="ctag ${e.k === "div" ? "many" : "one"}">${{ div: "除權息", conf: "法說會", rev: "營收", fin: "財報" }[e.k]}</span> ${e.code ? `<button class="linkbtn" data-tsel="${e.code}">${esc(nameOf(e.code))} ${e.code}</button> ` : ""}${esc(e.t)}</li>`).join("")}</ul></div>`).join("") || `<p class="note">${W.cal ? "未來 70 天沒有自選、庫存的除權息或法說會。" : "載入中…"}</p>`}</section>`;
-    note = "除權息來自證交所、櫃買中心的預告表，法說會來自公開資訊觀測站；營收、財報是法定公布期限（實際日期公司可能提早）。";
   } else if (v === "ins") {
     h = insHtml(); note = "內部人申報是公開資訊，可以當成籌碼面的參考；大股東轉讓的原因很多（繳稅、贈與、信託、資金需求），不一定代表看壞。";
   } else if (v === "chipx") {
@@ -284,13 +279,14 @@ function renderTools() {
     h = syncHtml(); note = "雲端同步只存同步碼的雜湊與你的設定，不需要帳號；同步碼遺失就無法取回雲端資料，記得也匯出一份備份檔。";
   } else if (v === "alert") {
     const L = IR(), opt = COND.map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join("");
-    h = `<section class="csec"><h3>指標條件提醒 <button class="btn sm" data-tx="irnow">立即檢查</button></h3>
+    h = `<section class="csec"><h3>提醒 <button class="btn sm" data-tx="irnow">立即檢查</button></h3><h4>技術指標與策略訊號</h4>
       <p class="note">看盤開著時每 5 分鐘用日 K 檢查一次，條件成立會跳通知（同一條件一天通知一次）。iPad／iPhone 要把網站「加入主畫面」再允許通知，才收得到系統通知；關掉網頁就不會檢查。</p>
       <form class="irform" id="irForm"><input id="irCode" placeholder="代號，例如 2330" value="${esc(W.sel && isTW(W.sel) ? W.sel : "")}" autocomplete="off"><select id="irCond">${opt}</select><input id="irP" type="number" step="any" placeholder="參數" style="width:80px"><button class="btn sm primary">＋ 新增</button></form>
       <div class="ctbl"><table><thead><tr><th>股票</th><th>條件</th><th>目前</th><th>上次通知</th><th></th></tr></thead><tbody>
       ${L.map((r, i) => `<tr><td><button class="linkbtn" data-tsel="${r.code}">${esc(nameOf(r.code))} ${r.code}</button></td><td>${esc(condName(r.cond, r.p))}${condOf(r.cond)?.[2] && !/\bN\b/.test(condOf(r.cond)[1]) ? `（${condOf(r.cond)[2]} ${r.p ?? condOf(r.cond)[3]}）` : ""}</td><td>${r.chk ? (r.now ? `<b class="up">成立</b>：${esc(r.now)}` : `<span class="note">未成立</span>`) : `<span class="note">尚未檢查</span>`}</td><td class="note">${r.last || "—"}</td><td><label class="note"><input type="checkbox" data-iron="${i}" ${r.on ? "checked" : ""}> 開</label> <button class="linkbtn" data-irdel="${i}">刪除</button></td></tr>`).join("") || `<tr><td colspan="5" class="note">還沒有條件。上面輸入代號、選條件就能新增。</td></tr>`}</tbody></table></div>
+      <h4>價格提醒 <span class="note">在個股頁按「🔔 提醒」設定漲到、跌到某價</span></h4><div class="ctbl"><table><tbody>${Object.entries(W.alerts || {}).filter(([, a]) => a?.up || a?.dn).map(([c, a]) => `<tr><td><button class="linkbtn" data-tsel="${c}">${esc(nameOf(c))} ${c}</button></td><td>${a.up ? `漲到 <b class="up">${fmtP(a.up)}</b>` : ""}${a.up && a.dn ? "、" : ""}${a.dn ? `跌到 <b class="down">${fmtP(a.dn)}</b>` : ""}</td><td class="note">現價 ${fmtP(W.quotes.get(c)?.price)}</td><td><button class="linkbtn" data-paldel="${c}">刪除</button></td></tr>`).join("") || `<tr><td class="note">沒有價格提醒</td></tr>`}</tbody></table></div>
       <h4>最近的提醒紀錄</h4><ul class="tlist">${(W.irLog ||= store.get("watch:irlog", []) || []).slice(0, 20).map(x => `<li><span class="note">${x.d} ${x.t}</span> ${esc(nameOf(x.code))} ${x.code}：${esc(x.msg)}</li>`).join("") || "<li class='note'>沒有</li>"}</ul></section>`;
-    note = "價格提醒（漲到、跌到某價）在個股頁的「🔔 提醒」設定；這裡是技術指標與策略訊號的提醒。";
+    note = "技術指標提醒與價格提醒都在這裡管理；綁定 Telegram（備份同步）後，收盤後也會推播。";
   } else if (v === "paper") {
     paperFill(); const A = PA(), E = paEquity(); paSave(); if (A.orders.length) paStart();
     const pos = Object.entries(A.pos).map(([c, p]) => { const px = paPx(c) ?? p.cost / p.sh; return { c, ...p, px, mv: px * p.sh, us: paUS(c) }; }), m = (v, us) => (us ? "$" + (+v.toFixed(2)).toLocaleString() : Math.round(v).toLocaleString());
@@ -326,7 +322,7 @@ function renderTools() {
     note = "每張圖都可以縮放、拖曳；點標題下方的圖會顯示當天數值。";
     setTimeout(multiDraw, 0);
   }
-  $("#lx").innerHTML = h; return note;
+  return { h, note };
 }
 // 依進場理由分類：哪一種理由的勝率、平均報酬最好（模擬交易的「模擬」標籤不算分類）
 function jTagStats(closed) {
@@ -352,7 +348,7 @@ async function jBH() {
 }
 const retPct = v => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
 function toolsClick(e) {
-  if (W.lt !== "tools") return; const b = e.target.closest("[data-tv],[data-tx],[data-tsel],[data-irdel],[data-paside],[data-paodel],[data-jdel],[data-sy],[data-mm],[data-scadd],[data-scdel],[data-scrun],[data-rsk],[data-rsrun],[data-rsu],[data-insf],[data-insbt]"); if (!b) return; const d = b.dataset;
+  if (!toolsOn()) return; const b = e.target.closest("[data-tv],[data-tx],[data-tsel],[data-irdel],[data-paside],[data-paodel],[data-paldel],[data-jdel],[data-sy],[data-mm],[data-scadd],[data-scdel],[data-scrun],[data-rsk],[data-rsrun],[data-rsu],[data-insf],[data-insbt]"); if (!b) return; const d = b.dataset;
   if (b.hasAttribute("data-scadd")) { SC().rules.push({ k: "above" }); scSave(); return renderList(); }
   if (d.scdel != null) { SC().rules.splice(+d.scdel, 1); scSave(); return renderList(); }
   if (b.hasAttribute("data-scrun")) return scRun();
@@ -362,7 +358,7 @@ function toolsClick(e) {
   if (b.hasAttribute("data-insbt")) return insBtRun();
   if (d.insf) { W.insF = d.insf; W.insQ = ""; return renderList(); }
   if (b.hasAttribute("data-rsrun")) return rsRun();
-  if (d.tv) { W.tv = d.tv; renderList(); navPush(); }
+  if (d.tv && W.lt === "tools") { W.tv = d.tv; renderList(); navPush(); }
   else if (d.tsel) select(d.tsel);
   else if (d.tx === "sumre") { W.sum = null; W.dk = new Map(); renderList(); }
   else if (d.tx === "sumai") sumAI();
@@ -376,22 +372,24 @@ function toolsClick(e) {
   else if (d.paside) { e.preventDefault(); const c = $("#paCode").value.trim().toUpperCase(), sh = Math.round(+$("#paSh").value), type = $("#paType").value, px = +$("#paPx").value;
     if (type !== "mkt") { if (!(px > 0)) return toast("請輸入掛單價"); if (!(sh > 0)) return toast("股數要大於 0"); if (isIdx(c) || (!isTW(c) && !isUS(c))) return toast("請輸入台股或美股代號"); PA().orders.push({ c, side: d.paside, sh, type, px, t: Date.now() }); paSave(); paStart(); toast(`已掛單：${type === "limit" ? "限價" : "停損／突破"} ${fmtP(px)}`); return renderList(); }
     const err = paperOrder(c, d.paside, sh); toast(err || `已${d.paside === "buy" ? "買進" : "賣出"} ${nameOf(c)} ${sh} 股`); if (!err) renderList(); }
+  else if (d.paldel) { delete W.alerts[d.paldel]; store.set("watch:alerts", W.alerts); renderList(); if (typeof renderDetailHead === "function") renderDetailHead(); }
   else if (d.paodel != null) { PA().orders.splice(+d.paodel, 1); paSave(); renderList(); }
 }
 function toolsSubmit(e) {
-  if (W.lt !== "tools") return; const f = e.target; e.preventDefault();
+  if (!toolsOn()) return; const f = e.target; e.preventDefault();
   if (f.id === "irForm") { const c = $("#irCode").value.trim().toUpperCase(), cond = $("#irCond").value, C = condOf(cond); if (!isTW(c) && !isUS(c)) return toast("請輸入代號"); IR().push({ code: c, cond, p: C?.[2] && $("#irP").value !== "" ? +$("#irP").value : C?.[3] ?? null, on: true }); irSave(); irStart(); renderList(); irCheck(); try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch {} }
   else if (f.id === "jForm") { const c = $("#jCode").value.trim().toUpperCase(), px = +$("#jPx").value; if (!c || !(px > 0)) return toast("請輸入代號和價格"); jAdd({ d: $("#jD").value || toolsDay(), code: c, side: $("#jSide").value, px, sh: +$("#jSh").value || 0, reason: $("#jWhy").value.trim(), tags: [$("#jTag").value] }); }
   else if (f.id === "mForm") { const L = [...f.querySelectorAll("[data-mc]")].map(x => x.value.trim().toUpperCase()).filter(Boolean).slice(0, 4); store.set("watch:multi", L); renderList(); }
 }
 function toolsChange(e) {
-  if (W.lt !== "tools") return; const t = e.target, d = t.dataset;
+  if (!toolsOn()) return; const t = e.target, d = t.dataset;
   if (d.iron != null) { IR()[+d.iron].on = t.checked; irSave(); }
   else if (t.hasAttribute("data-syfile")) { if (t.files?.[0]) syncImport(t.files[0]); }
   else if (t.hasAttribute("data-syauto")) syncSet({ auto: t.checked });
   else if (d.scu != null) { SC().uni = t.value; scSave(); renderList(); }
   else if (d.scc != null) { SC().codes = t.value; scSave(); }
   else if (d.scr != null) { SC().rules[+d.scr] = { k: t.value }; scSave(); renderList(); }
+  else if (d.twoq != null) { const q = t.value.trim(); if (q !== (W.twoQ || "")) { W.twoQ = q; setTimeout(renderList, 0); } }
   else if (d.insq != null) { const q = t.value.trim().toUpperCase(); if (q !== (W.insQ || "")) { W.insQ = q; setTimeout(renderList, 0); } } // 輸入框被移除時會再觸發一次 change，延後重畫避免巢狀重畫
   else if (d.scp != null) { SC().rules[+d.scp].p = t.value === "" ? null : +t.value; scSave(); }
 }
@@ -492,7 +490,7 @@ function f13CongHtml(A) {
 }
 
 /* ---------- 台股內部人持股轉讓事前申報 ---------- */
-async function insLoad() { if (W.ins) return W.ins; try { const r = await fetch("data/insider.json", { cache: "no-cache" }); if (!r.ok) throw new Error(r.status === 404 ? "排程還沒跑完第一次" : `HTTP ${r.status}`); W.ins = await r.json(); } catch (e) { W.ins = { err: e.message, rows: [] }; } if (W.lt === "tools" || W.dtab) renderList(); return W.ins; }
+async function insLoad() { if (W.ins) return W.ins; try { const r = await fetch("data/insider.json", { cache: "no-cache" }); if (!r.ok) throw new Error(r.status === 404 ? "排程還沒跑完第一次" : `HTTP ${r.status}`); W.ins = await r.json(); } catch (e) { W.ins = { err: e.message, rows: [] }; } if (toolsOn() || W.dtab) renderList(); return W.ins; }
 const insSh = n => (n == null ? "—" : `${Math.round(n / 1000).toLocaleString()} 張`);
 function insTable(L) {
   return `<div class="ctbl"><table><thead><tr><th>申報日</th><th>股票</th><th>申報人</th><th>身分</th><th>轉讓方式</th><th>轉讓股數</th><th>目前持股</th><th>占持股</th></tr></thead><tbody>${L.map(r => `<tr><td>${r.d}</td><td><button class="linkbtn" data-tsel="${r.code}">${esc(r.name || nameOf(r.code))} ${r.code}</button></td><td>${esc(r.who)}</td><td>${esc(r.role)}</td><td>${esc(r.how)}${r.to ? `<div class="note">受讓：${esc(r.to)}</div>` : ""}</td><td>${insSh(r.sh)}</td><td>${insSh(r.hold)}</td><td>${r.sh && r.hold ? Math.round((r.sh / r.hold) * 100) + "%" : "—"}</td></tr>`).join("") || `<tr><td colspan="8" class="note">沒有申報</td></tr>`}</tbody></table></div>`;
@@ -502,8 +500,8 @@ async function insBtRun() {
   const L = (W.ins?.rows || []).filter(r => /一般交易|盤後|鉅額|拍賣/.test(r.how)), codes = [...new Set(L.map(r => r.code))].slice(0, 80);
   const B = (W.insBt = { busy: true, done: 0, total: codes.length, rows: [] }); renderList(); const T = await dailyFresh("T00");
   const at = (D, d, h) => { const i = (D || []).findIndex(x => String(x.d).slice(0, 10) > d); return i < 0 || i + h >= D.length ? null : D[i + h].c / D[i].c - 1; };
-  for (const c of codes) { const D = await dailyFresh(c); B.done++; for (const r of L.filter(x => x.code === c)) { const o = { r }; [5, 20].forEach(h => { o["r" + h] = at(D, r.d, h); o["t" + h] = at(T, r.d, h); }); B.rows.push(o); } if (B.done % 5 === 0 && W.tv === "ins") renderList(); }
-  B.busy = false; if (W.lt === "tools") renderList();
+  for (const c of codes) { const D = await dailyFresh(c); B.done++; for (const r of L.filter(x => x.code === c)) { const o = { r }; [5, 20].forEach(h => { o["r" + h] = at(D, r.d, h); o["t" + h] = at(T, r.d, h); }); B.rows.push(o); } if (B.done % 5 === 0 && insVis()) renderList(); }
+  B.busy = false; if (toolsOn()) renderList();
 }
 function insBtHtml() {
   const B = W.insBt; if (!B) return `<p class="note">董監大股東申報要在市場賣出之後，股價通常怎麼走？按「計算」用最近 120 天的申報算一次（只算一般交易、盤後鉅額這類市場賣出方式）。</p>`;
@@ -659,3 +657,50 @@ function chipsExtra(c) {
   return out;
 }
 if (typeof SX === "object" && SX.guru) SX.guru = (orig => function () { return (orig.call(this) || "") + usHoldersHtml(W.sel); })(SX.guru);
+
+/* ---------- 台灣政治人物財產申報（監察院廉政專刊，排程 scripts/tw-officials.mjs）：持股與前後兩次申報的變化 ---------- */
+// 資料：{ updated, issues: [{ no, date }], decl: [{ pid, name, org, title, date, kind, issue, stocks: [{ name, code, owner, sh }] }] }
+async function twoLoad() { if (W.two) return W.two; try { const r = await fetch("data/tw-officials.json", { cache: "no-cache" }); if (!r.ok) throw new Error(r.status === 404 ? "排程還沒跑完第一次" : `HTTP ${r.status}`); W.two = await r.json(); } catch (e) { W.two = { err: e.message, decl: [] }; } if (W.lt === "cong") renderList(); return W.two; }
+// 每個人依申報日排序；持股依「代號（沒有就用名稱）」加總本人、配偶、子女
+function twoPeople() {
+  if (W.twoP?.src === W.two) return W.twoP.v; const by = new Map();
+  for (const d of W.two?.decl || []) (by.get(d.pid) || by.set(d.pid, []).get(d.pid)).push(d);
+  const key = s => s.code || s.name, sum = d => (d?.stocks || []).reduce((m, s) => m.set(key(s), { k: key(s), code: s.code, name: s.name, sh: (m.get(key(s))?.sh || 0) + (s.sh || 0) }), new Map());
+  const v = [...by].map(([pid, L]) => { L.sort((a, b) => a.date.localeCompare(b.date)); const last = L[L.length - 1], prev = L[L.length - 2], A = sum(last), B = prev ? sum(prev) : null;
+    const chg = !B ? [] : [...new Set([...A.keys(), ...B.keys()])].map(k => { const a = A.get(k), b = B.get(k), x = a || b; const d = (a?.sh || 0) - (b?.sh || 0); return { k, code: x.code, name: x.name, sh: a?.sh || 0, psh: b?.sh || 0, d, t: !b ? "new" : !a ? "sold" : d > 0 ? "add" : d < 0 ? "cut" : "same" }; }).filter(x => x.t !== "same");
+    return { pid, name: last.name, org: last.org, title: last.title, last, prev, hold: [...A.values()], chg, n: L.length }; });
+  W.twoP = { src: W.two, v }; return v;
+}
+const twoLot = n => (Math.abs(n) >= 1000 ? `${Math.round(n / 1000).toLocaleString()} 張` : `${n.toLocaleString()} 股`);
+const twoStk = s => (s.code ? `<button class="linkbtn" data-cv="tw:s:${esc(s.code)}">${esc(nameOf(s.code) !== s.code ? nameOf(s.code) : s.name || "")} ${s.code}</button>` : `<span>${esc(s.name)}</span>`);
+const twoWho = p => `<button class="linkbtn" data-cv="tw:p:${esc(p.pid)}">${esc(p.name)}</button><span class="note"> ${esc([p.org, p.title].filter(Boolean).join("・"))}</span>`;
+function twoNote() { return `資料：監察院廉政專刊（陽光法令主題網）${W.two?.updated ? `，最後更新 ${new Date(Date.parse(W.two.updated) + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}` : ""}。申報的是申報基準日的「持股」，不是交易；前後兩次申報（通常相隔一年或就職、卸任時）的股數差只代表這段期間增加或減少，不知道實際買賣日期與價格。持股含本人、配偶與未成年子女。僅供研究參考，不是買賣建議。`; }
+function twoHtml(arg = "") {
+  const X = W.two; if (!X) { twoLoad(); return `<p class="note" style="padding:16px">載入中…</p>`; }
+  if (X.err || !X.decl?.length) return `<p class="note" style="padding:16px">⚠ 台灣政治人物申報資料還沒有（${esc(X.err || "沒有資料")}）。資料由排程從監察院廉政專刊整理，每週更新。</p>`;
+  const P = twoPeople(), [kind, id] = arg.split(/:(.*)/s);
+  const tag = t => `<span class="ctag ${t === "new" || t === "add" ? "many" : "one"}">${{ new: "新進", add: "增持", cut: "減持", sold: "出清" }[t]}</span>`;
+  if (kind === "p") {
+    const p = P.find(x => x.pid === id); if (!p) return `<p class="note">找不到這個人</p>`;
+    return `<section class="csec"><h3>${esc(p.name)} <span class="note">${esc([p.org, p.title].filter(Boolean).join("・"))}</span></h3>
+      <div class="cokv three"><div><span>最近一次申報</span><b>${p.last.date}</b><small>${esc(p.last.kind)}・廉政專刊第 ${p.last.issue} 期</small></div><div><span>持股</span><b>${p.hold.length} 檔</b><small>含配偶、未成年子女</small></div><div><span>上一次申報</span><b>${p.prev?.date || "—"}</b><small>${p.prev ? esc(p.prev.kind) : "資料裡只有一次"}</small></div></div>
+      ${p.chg.length ? `<h4>和上一次申報相比</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>變化</th><th>上次</th><th>這次</th></tr></thead><tbody>${p.chg.sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).map(c => `<tr><td>${twoStk(c)}</td><td>${tag(c.t)} <span class="${c.d > 0 ? "up" : "down"}">${c.d > 0 ? "+" : ""}${twoLot(c.d)}</span></td><td>${twoLot(c.psh)}</td><td>${twoLot(c.sh)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <h4>最近一次申報的持股</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>股數</th><th>所有人</th></tr></thead><tbody>${(p.last.stocks || []).sort((a, b) => b.sh - a.sh).map(s => `<tr><td>${twoStk(s)}</td><td>${twoLot(s.sh)}</td><td>${esc(s.owner || "")}</td></tr>`).join("") || `<tr><td colspan="3" class="note">申報沒有股票</td></tr>`}</tbody></table></div></section>`;
+  }
+  if (kind === "s") {
+    const H = P.map(p => ({ p, h: p.hold.find(x => x.code === id), c: p.chg.find(x => x.code === id) })).filter(x => x.h || x.c).sort((a, b) => (b.h?.sh || 0) - (a.h?.sh || 0));
+    return `<section class="csec"><h3>${esc(nameOf(id))} ${esc(id)} <button class="btn sm" data-copen="${esc(id)}">在看盤開啟</button></h3><p class="note">${H.filter(x => x.h).length} 位政治人物最近一次申報持有；${H.filter(x => x.c && (x.c.t === "new" || x.c.t === "add")).length} 位比上一次申報增加、${H.filter(x => x.c && (x.c.t === "cut" || x.c.t === "sold")).length} 位減少。</p>
+      <div class="ctbl"><table><thead><tr><th>人物</th><th>持股</th><th>和上次相比</th><th>申報日</th></tr></thead><tbody>${H.map(x => `<tr><td>${twoWho(x.p)}</td><td>${x.h ? twoLot(x.h.sh) : "0"}</td><td>${x.c ? `${tag(x.c.t)} <span class="${x.c.d > 0 ? "up" : "down"}">${x.c.d > 0 ? "+" : ""}${twoLot(x.c.d)}</span>` : `<span class="note">${x.p.prev ? "不變" : "只有一次申報"}</span>`}</td><td>${x.p.last.date}</td></tr>`).join("")}</tbody></table></div></section>`;
+  }
+  // 首頁：熱門持股、持股變化、最近刊登
+  const q = (W.twoQ || "").trim(), hold = new Map(), chg = new Map();
+  for (const p of P) { for (const h of p.hold) if (h.code) { const g = hold.get(h.code) || hold.set(h.code, { code: h.code, name: h.name, n: 0, sh: 0 }).get(h.code); g.n++; g.sh += h.sh; }
+    for (const c of p.chg) if (c.code) { const g = chg.get(c.code) || chg.set(c.code, { code: c.code, name: c.name, up: [], dn: [] }).get(c.code); (c.d > 0 ? g.up : g.dn).push(p.name); } }
+  const H = [...hold.values()].sort((a, b) => b.n - a.n || b.sh - a.sh).slice(0, 30), C = [...chg.values()].sort((a, b) => b.up.length - b.dn.length - (a.up.length - a.dn.length)).slice(0, 25);
+  const recent = (X.decl || []).slice().sort((a, b) => b.issue - a.issue || b.date.localeCompare(a.date)).filter(d => !q || d.name.includes(q) || (d.org || "").includes(q)).slice(0, 40);
+  return `<section class="csec"><h3>台灣政治人物持股 <span class="note">${P.length} 人・${(X.issues || []).length} 期廉政專刊</span> <input data-twoq value="${esc(q)}" placeholder="搜尋姓名或機關" style="width:140px"></h3>
+    <p class="note">監察院每週刊登總統、部會首長、立委、縣市長、議員等的財產申報；這裡整理其中的「股票」。台灣的申報是某一天的<strong>持股</strong>，不是交易紀錄，所以用同一個人前後兩次申報的股數差看增減。</p>
+    <div class="tgrid"><div><h4>最多政治人物持有</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>人數</th><th>合計</th></tr></thead><tbody>${H.map(g => `<tr><td>${twoStk(g)}</td><td><b>${g.n}</b></td><td>${twoLot(g.sh)}</td></tr>`).join("") || `<tr><td colspan="3" class="note">沒有</td></tr>`}</tbody></table></div></div>
+    <div><h4>持股變化（和上次申報相比）</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>增加</th><th>減少</th></tr></thead><tbody>${C.map(g => `<tr><td>${twoStk(g)}</td><td class="up">${g.up.length || ""} <span class="note">${g.up.slice(0, 3).map(esc).join("、")}</span></td><td class="down">${g.dn.length || ""} <span class="note">${g.dn.slice(0, 3).map(esc).join("、")}</span></td></tr>`).join("") || `<tr><td colspan="3" class="note">還沒有同一人兩次以上的申報（資料累積中）</td></tr>`}</tbody></table></div></div></div>
+    <h4>最近刊登的申報</h4><ul class="cfeed">${recent.map(d => `<li><span class="note">第 ${d.issue} 期・${d.date}</span> ${twoWho(P.find(p => p.pid === d.pid) || d)} <span class="note">${esc(d.kind)}</span> ${d.stocks.length ? `持股 ${d.stocks.length} 檔` : `<span class="note">沒有股票</span>`}</li>`).join("") || `<li class="note">沒有符合的申報</li>`}</ul></section>`;
+}
