@@ -340,6 +340,21 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
+### 資料排程加固（2026.10.15-74）
+
+- **寫回 repo**：12 個資料排程共用 `scripts/commit-data.sh`。寫回觸發的分支（`github.ref_name`），commit 訊息加 `[skip ci]`；推送衝突時 `git pull --rebase` 後重試，最多 5 次、間隔遞增加隨機秒數。concurrency 改成 `data-sync-<排程>-<ref>`、`cancel-in-progress: false`。
+  每個排程各自一組，沒有全部共用一組：GitHub 同一組只保留一個「排隊中」的執行，共用一組時同時觸發的排程會被取消而漏跑。
+- **Vercel**：沒有設定略過部署。網站的 `learner/data/*.json` 是隨部署發布的，略過資料 commit 的部署會讓網站資料停在舊版。`GITHUB_TOKEN` 推的 commit 本來就不會再觸發 Actions；`[skip ci]` 另外保證 CI 不會跑。
+- **sec13f**：
+  - User-Agent 改成 `KlineSchool/1.0 (admin@kline-school.vercel.app)`，被 403 時自動改用之前驗證可用的格式；所有 sec.gov 請求共用節流（間隔 ≥125ms，每秒最多 8 次）。
+  - 429／5xx／網路錯誤用指數退避重試，有 `Retry-After` 就照它；解析前檢查 Content-Type。
+  - 每季優先用原始 13F-HR，只有修訂版（13F-HR/A）時才用修訂版；缺欄位的列略過。
+  - 單一機構失敗時沿用上次的資料（標 stale）；全部失敗時不覆寫資料檔。
+- **congress**：403／404 不重試；回應先驗證格式（zip 開頭 `PK`、PDF 開頭 `%PDF`、JSON 的 Content-Type）。兩院都失敗時保留原本的資料不覆寫；HTML 錯誤頁不會再被當成已讀過的文件。
+- **申報後回測**：只算有效日期、標準股票代號的買進；收盤價必須是正數才計算報酬。查無 K 線、申報後還沒有交易日的筆數標成 N/A 並在說明裡列出。
+- **Telegram、內部人、借券**：沒設定 `TELEGRAM_BOT_TOKEN`／KV、送出失敗或 KV 連不上時只印 warning，以成功結束（workflow 該步驟也設 `continue-on-error`）。內部人、借券當沖這次沒讀到資料時保留原本的檔案，不讓排程失敗。
+- 新增 `tests/sim.test.mjs`：用假的 fetch 本機模擬 sec13f、congress 的正常、403、5xx、HTML 錯誤頁、部分失敗等情況。
+
 ### 台灣政治人物申報、功能整理（2026.10.15-73）
 
 - **台灣政治人物持股**（看盤「申報 → 台灣政治人物」）：排程 `scripts/tw-officials.mjs` 每週三、五讀監察院**廉政專刊**（陽光法令主題網，PDF），解析每份公職人員財產申報表的「股票」段（名稱、所有人、股數；處理斷行的「未能交付信託原因」備註、外幣股票、名稱含數字），用上市櫃當天行情名稱對照代號。

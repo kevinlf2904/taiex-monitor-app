@@ -11,8 +11,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-const OUT = fileURLToPath(new URL("../learner/data/f13.json", import.meta.url)), CUSIP = fileURLToPath(new URL("../learner/data/f13-cusip.json", import.meta.url));
-const UA = (process.env.SEC_UA || "").trim() || "kline-school research admin@kline-school.vercel.app";
+const DATA = process.env.DATA_DIR ? process.env.DATA_DIR.replace(/\/?$/, "/") : fileURLToPath(new URL("../learner/data/", import.meta.url)); // DATA_DIR：本機模擬時改寫到別的資料夾
+const OUT = DATA + "f13.json", CUSIP = DATA + "f13-cusip.json";
+// SEC 規定 User-Agent 要能聯絡到人：「程式名稱/版本 (email)」。SEC_UA 可覆蓋；預設格式萬一被 403，改用之前驗證過 SEC 接受的「名稱 email」格式
+const UAS = [(process.env.SEC_UA || "").trim() || "KlineSchool/1.0 (admin@kline-school.vercel.app)", "kline-school research admin@kline-school.vercel.app"];
+let UA = UAS[0];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const DUMP = process.argv.includes("--dump");
 
@@ -24,24 +27,37 @@ export const FUNDS = [
   ["0001167483", "老虎環球 Tiger Global"], ["0001135730", "Coatue"], ["0001061165", "Lone Pine"], ["0001649339", "貝瑞 Michael Burry"],
 ];
 
-async function get(url, type = "json") {
-  for (let k = 0; k < 3; k++) {
-    try { const r = await fetch(url, { headers: { "User-Agent": UA, "Accept-Encoding": "gzip, deflate" }, signal: AbortSignal.timeout(30000) });
-      if (r.status === 429 || r.status >= 500) throw new Error(`HTTP ${r.status}`); if (!r.ok) { const e = new Error(`HTTP ${r.status}`); e.fatal = true; throw e; }
-      return type === "json" ? await r.json() : await r.text(); }
-    catch (e) { if (e.fatal || k === 2) throw e; await sleep(1500 * (k + 1)); }
+// SEC 的公平存取規則：每秒最多 10 次。所有 sec.gov 請求都經過這個節流（間隔至少 125ms，約每秒 8 次）
+const SEC_GAP = 125; let secLast = 0;
+async function throttle() { const w = secLast + SEC_GAP - Date.now(); if (w > 0) await sleep(w); secLast = Date.now(); }
+// 讀 sec.gov：429／5xx／網路錯誤用指數退避重試（1、2、4、8 秒，有 Retry-After 就照它）；403 先換備用 User-Agent 再試一次；
+// 解析前先檢查 HTTP 狀態與 Content-Type（拿到 HTML 錯誤頁就不要當 JSON 解析）
+export async function get(url, type = "json", tries = 5) {
+  let swapped = false;
+  for (let k = 0; k < tries; k++) {
+    let r;
+    try { await throttle(); r = await fetch(url, { headers: { "User-Agent": UA, "Accept-Encoding": "gzip, deflate" }, signal: AbortSignal.timeout(30000) }); }
+    catch (e) { if (k === tries - 1) throw new Error(`連線失敗：${e.message}`); await sleep(1000 * 2 ** k); continue; }
+    if (r.status === 403 && !swapped && UA !== UAS[1]) { console.log("::warning::SEC 回 403，改用備用 User-Agent"); UA = UAS[1]; swapped = true; k--; continue; }
+    if (r.status === 429 || r.status >= 500) { if (k === tries - 1) throw new Error(`HTTP ${r.status}`); const ra = +r.headers.get("retry-after"); await sleep(ra > 0 ? Math.min(ra, 60) * 1000 : 1000 * 2 ** k); continue; }
+    if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
+    const ct = r.headers.get("content-type") || "", body = await r.text();
+    if (type === "json") { if (!/json/i.test(ct) && !/^\s*[[{]/.test(body)) throw new Error(`不是 JSON（${ct || "沒有 Content-Type"}）`); try { return JSON.parse(body); } catch { throw new Error("JSON 解析失敗"); } }
+    return body;
   }
 }
 
 // 資訊表 XML → [{ name, cls, cusip, value, sh, type, pc }]；標籤可能帶命名空間前綴（ns1:infoTable）
 export function parseInfoTable(xml) {
+  const n = v => { const x = +String(v).replace(/[,\s]/g, ""); return Number.isFinite(x) ? x : 0; };
   const tag = (s, t) => { const m = s.match(new RegExp(`<(?:\\w+:)?${t}>([\\s\\S]*?)</(?:\\w+:)?${t}>`, "i")); return m ? m[1].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").trim() : ""; };
-  return [...String(xml).matchAll(/<(?:\w+:)?infoTable>([\s\S]*?)<\/(?:\w+:)?infoTable>/gi)].map(m => ({ name: tag(m[1], "nameOfIssuer"), cls: tag(m[1], "titleOfClass"), cusip: tag(m[1], "cusip").toUpperCase(), value: +tag(m[1], "value").replace(/,/g, "") || 0, sh: +tag(m[1], "sshPrnamt").replace(/,/g, "") || 0, type: tag(m[1], "sshPrnamtType"), pc: tag(m[1], "putCall") }));
+  return [...String(xml).matchAll(/<(?:\w+:)?infoTable>([\s\S]*?)<\/(?:\w+:)?infoTable>/gi)].map(m => ({ name: tag(m[1], "nameOfIssuer"), cls: tag(m[1], "titleOfClass"), cusip: tag(m[1], "cusip").toUpperCase(), value: n(tag(m[1], "value")), sh: n(tag(m[1], "sshPrnamt")), type: tag(m[1], "sshPrnamtType"), pc: tag(m[1], "putCall") }));
 }
 // 同一檔（CUSIP）可能分好幾列（不同經理人、帳戶）→ 合併；選擇權（Put／Call）另外算，不混進持股
 // 債券（sshPrnamtType＝PRN，面額不是股數）不算；部分機構的 value 仍用「千美元」申報 → 用每股隱含價格判斷（中位數低於 1 美元就是千元單位）
+// 缺欄位的列：沒有 CUSIP 或股數不是正數就略過；type 缺的當成股票（SH）
 export function mergeRows(rows) {
-  const m = new Map(), st = rows.filter(r => !/PRN/i.test(r.type) && r.sh > 0);
+  const m = new Map(), st = (Array.isArray(rows) ? rows : []).filter(r => r && r.cusip && !/PRN/i.test(r.type || "") && r.sh > 0 && Number.isFinite(r.value));
   const px = st.filter(r => !r.pc).map(r => r.value / r.sh).sort((a, b) => a - b), unit = px.length && px[px.length >> 1] < 1 ? 1000 : 1;
   for (const r0 of st) { const r = { ...r0, value: r0.value * unit }; const k = r.cusip + (r.pc ? ":" + r.pc.toUpperCase() : ""); const g = m.get(k) || m.set(k, { name: r.name, cls: r.cls, cusip: r.cusip, pc: r.pc ? r.pc.toUpperCase() : "", value: 0, sh: 0 }).get(k); g.value += r.value; g.sh += r.sh; }
   return [...m.values()];
@@ -51,7 +67,7 @@ export function tickerMap(ct) {
   const m = new Map(); for (const x of Object.values(ct || {})) { const k = normName(x.title); if (k && !m.has(k)) m.set(k, x.ticker); } return m;
 }
 // 兩季比較：新進、加碼、減碼、出清（用股數比，避免股價漲跌影響）
-export function compare(cur, prev) {
+export function compare(cur = [], prev = []) {
   const P = new Map(prev.map(r => [r.cusip + r.pc, r])), C = new Set(cur.map(r => r.cusip + r.pc));
   const rows = cur.map(r => { const p = P.get(r.cusip + r.pc); const chg = !p ? "new" : r.sh > p.sh * 1.02 ? "add" : r.sh < p.sh * 0.98 ? "cut" : "same"; return { ...r, psh: p?.sh ?? 0, chg }; });
   const sold = prev.filter(r => !C.has(r.cusip + r.pc)).map(r => ({ ...r, psh: r.sh, sh: 0, value: 0, chg: "sold" }));
@@ -71,45 +87,53 @@ async function figi(cusips, map) {
   }
 }
 
+// 申報清單 → 每一季一份：優先用原始 13F-HR；那一季只有修訂版（13F-HR/A）時改用最新的修訂版。欄位缺漏的略過
+export function pickFilings(R = {}) {
+  const at = (k, i) => (Array.isArray(R[k]) ? R[k][i] : undefined), by = new Map();
+  (Array.isArray(R.form) ? R.form : []).forEach((f, i) => { if (f !== "13F-HR" && f !== "13F-HR/A") return; const acc = at("accessionNumber", i), filed = at("filingDate", i) || "", period = at("reportDate", i) || filed;
+    if (!acc || !period) return; const cur = by.get(period); if (!cur || (cur.form !== "13F-HR" && (f === "13F-HR" || filed > cur.filed))) by.set(period, { form: f, acc, filed, period }); });
+  return [...by.values()].sort((a, b) => b.period.localeCompare(a.period));
+}
 async function filingsOf(cik) {
-  const j = await get(`https://data.sec.gov/submissions/CIK${cik}.json`), R = j.filings?.recent || {};
-  const L = (R.form || []).map((f, i) => ({ form: f, acc: R.accessionNumber[i], filed: R.filingDate[i], period: R.reportDate[i] })).filter(x => x.form === "13F-HR");
-  return { name: j.name, L };
+  const j = await get(`https://data.sec.gov/submissions/CIK${cik}.json`);
+  return { name: j?.name || "", L: pickFilings(j?.filings?.recent) };
 }
 async function holdingsOf(cik, acc) {
   const dir = `https://www.sec.gov/Archives/edgar/data/${+cik}/${acc.replace(/-/g, "")}`;
-  const idx = await get(`${dir}/index.json`); await sleep(150);
+  const idx = await get(`${dir}/index.json`);
   const items = (idx.directory?.item || []).map(x => x.name).filter(n => /\.xml$/i.test(n) && !/primary_doc/i.test(n));
   const pick = items.find(n => /info|table|13f/i.test(n)) || items[0]; if (!pick) throw new Error("找不到資訊表");
-  const xml = await get(`${dir}/${pick}`, "text"); await sleep(150);
+  const xml = await get(`${dir}/${pick}`, "text");
   return parseInfoTable(xml);
 }
 
 export async function main() {
   let tick = new Map(); try { tick = tickerMap(await get("https://www.sec.gov/files/company_tickers.json")); } catch (e) { console.log("代號對照表失敗", e.message); }
   let cmap = {}; try { cmap = JSON.parse(await readFile(CUSIP, "utf8")); } catch {}
-  const funds = [], notes = [];
+  let old = null; try { old = JSON.parse(await readFile(OUT, "utf8")); } catch {}
+  const funds = [], notes = [], oldOf = cik => (old?.funds || []).find(f => f.cik === cik);
   for (const [cik, who] of FUNDS) {
     try {
-      const { name, L } = await filingsOf(cik); await sleep(200);
+      const { name, L } = await filingsOf(cik);
       if (!L.length) { notes.push(`${who}：沒有 13F-HR`); continue; }
       const cur = mergeRows(await holdingsOf(cik, L[0].acc)), prev = L[1] ? mergeRows(await holdingsOf(cik, L[1].acc)) : [];
-      if (Date.now() - Date.parse(L[0].period) > 230 * 864e5) { notes.push(`${who}：最近一份 13F 是 ${L[0].period}，已停止申報`); continue; }
+      const age = Date.now() - Date.parse(L[0].period); if (!Number.isFinite(age) || age > 230 * 864e5) { notes.push(`${who}：最近一份 13F 是 ${L[0].period}，已停止申報`); continue; }
       // 占比用全部申報市值（含選擇權的標的市值）當分母，只申報選擇權的機構才不會超過 100%
       const total = cur.reduce((s, r) => s + r.value, 0), { rows, sold } = compare(cur, prev);
       const fmt = r => ({ name: r.name, cls: r.cls, cusip: r.cusip, pc: r.pc || undefined, value: r.value, sh: r.sh, psh: r.psh, pct: total ? +((r.value / total) * 100).toFixed(2) : 0, chg: r.chg });
       rows.sort((a, b) => b.value - a.value);
       // 前 60 大持股＋所有新進、加減碼（變動的才有參考價值），出清的另列
       const keep = rows.filter((r, i) => i < 60 || r.chg !== "same").slice(0, 150).map(fmt);
-      funds.push({ cik, who, name, period: L[0].period, filed: L[0].filed, prevPeriod: L[1]?.period || null, total, n: rows.filter(r => !r.pc).length, rows: keep, sold: sold.sort((a, b) => b.psh - a.psh).slice(0, 40).map(fmt), doc: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=13F-HR` });
+      funds.push({ cik, who, name, period: L[0].period, filed: L[0].filed, form: L[0].form, prevPeriod: L[1]?.period || null, total, n: rows.filter(r => !r.pc).length, rows: keep, sold: sold.sort((a, b) => b.psh - a.psh).slice(0, 40).map(fmt), doc: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=13F-HR` });
       console.log("ok", who, name, L[0].period, "持股", rows.length, "前 3：", keep.slice(0, 3).map(r => `${r.name} ${r.pct}% ${r.chg}`).join("、"));
       if (DUMP) console.log(JSON.stringify(keep.slice(0, 3)), "出清", sold.length);
-    } catch (e) { notes.push(`${who}：${e.message}`); console.log("失敗", who, e.message); }
-    await sleep(300);
+    } catch (e) { // 這家讀不到：沿用上次的資料（標 stale），不讓單一機構的錯誤清掉它
+      const o = oldOf(cik); if (o) { funds.push({ ...o, stale: true }); notes.push(`${who}：這次讀取失敗（${e.message}），沿用上次 ${o.period} 的資料`); } else notes.push(`${who}：${e.message}`);
+      console.log("::warning::失敗", who, e.message); }
   }
-  if (!funds.length) throw new Error("一家機構都讀不到：" + notes.join("；"));
+  if (!funds.some(f => !f.stale)) { console.log("::warning::一家機構都讀不到，保留原本的資料檔不覆蓋：" + notes.join("；")); return old || { funds: [], notes }; }
   // 補股票代號：OpenFIGI → 名稱對照
-  const all = funds.flatMap(f => [...f.rows, ...f.sold]); await figi([...new Set(all.map(r => r.cusip))], cmap);
+  const all = funds.flatMap(f => [...(f.rows || []), ...(f.sold || [])]); await figi([...new Set(all.map(r => r.cusip))], cmap);
   for (const r of all) r.ticker = cmap[r.cusip] || tick.get(normName(r.name)) || "";
   console.log("代號對到", all.filter(r => r.ticker).length, "/", all.length, "；例：", all.slice(0, 8).map(r => `${r.name}→${r.ticker}`).join("、"));
   if (!DUMP) await writeFile(CUSIP, JSON.stringify(cmap));
@@ -117,4 +141,4 @@ export async function main() {
   if (!DUMP) await writeFile(OUT, JSON.stringify(out));
   return out;
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("完成", o.funds.length, "家；", o.notes.join("；"))).catch(e => { console.error(e); process.exit(1); });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("完成", o?.funds?.length ?? 0, "家；", (o?.notes || []).join("；"))).catch(e => { console.error(e); process.exit(1); });

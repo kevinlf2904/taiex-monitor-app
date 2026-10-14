@@ -11,7 +11,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: chipx
+  group: data-sync-chipx-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   run:
@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
-        run: git pull -q origin main
+        run: git pull -q origin ${{ github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -30,11 +30,7 @@ jobs:
         run: node scripts/chipx.mjs
       - name: commit
         if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        env:
+          COMMIT_NAME: chipx
         run: |
-          git config user.name "chipx"
-          git config user.email "chipx@users.noreply.github.com"
-          git add learner/data/chipx.json
-          if git diff --cached --quiet; then echo "沒有新資料"; exit 0; fi
-          git commit -m "籌碼：更新借券、當沖、Put/Call 比"
-          for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin HEAD:main && exit 0; git rebase --abort 2>/dev/null; sleep 5; done
-          exit 1
+          bash scripts/commit-data.sh "籌碼：更新借券、當沖、Put/Call 比" learner/data/chipx.json

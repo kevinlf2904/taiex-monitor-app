@@ -55,7 +55,8 @@ export async function main() {
     }
   }
   if (DUMP) { console.log("整理後範例", JSON.stringify(got.slice(0, 5)), "共", got.length, "筆；", notes.join("；")); return { rows: got, notes }; }
-  if (!got.length) throw new Error("沒讀到任何申報：" + (notes.join("；") || "找不到資料集"));
+  // 當天沒有任何申報（假日、沒人申報）或資料集暫時讀不到：保留原本累積的資料，不覆寫、不讓排程失敗
+  if (!got.length) { console.log("::warning::這次沒讀到任何申報，保留原本的資料：" + (notes.join("；") || "資料集是空的")); return { rows: old.rows || [], notes, skipped: true }; }
   const from = new Date(Date.now() - KEEP * 864e5).toISOString().slice(0, 10), seen = new Set(), rows = [];
   for (const r of [...got, ...(old.rows || [])]) { const key = [r.d, r.code, r.who, r.how, r.sh].join("|"); if (r.d >= from && !seen.has(key)) { seen.add(key); rows.push(r); } }
   rows.sort((a, b) => b.d.localeCompare(a.d) || a.code.localeCompare(b.code));
@@ -63,4 +64,4 @@ export async function main() {
   await writeFile(OUT, JSON.stringify(out));
   return out;
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("完成", o.rows.length, "筆", (o.notes || []).join("；"))).catch(e => { console.error(e); process.exit(1); });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log(o.skipped ? "沒有更新" : "完成", o.rows?.length ?? 0, "筆", (o.notes || []).join("；"))).catch(e => { console.error(e); process.exit(1); });

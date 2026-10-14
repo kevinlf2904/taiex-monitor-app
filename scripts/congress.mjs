@@ -11,7 +11,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { inflateRawSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 
-const DATA = fileURLToPath(new URL("../learner/data/", import.meta.url));
+const DATA = process.env.DATA_DIR ? process.env.DATA_DIR.replace(/\/?$/, "/") : fileURLToPath(new URL("../learner/data/", import.meta.url)); // DATA_DIR：本機模擬時改寫到別的資料夾
 const UA = "Mozilla/5.0 (compatible; kline-school-learner; +https://github.com/kevinlf2904/taiex-monitor-app)";
 const DAY = 864e5, iso = ms => new Date(ms).toISOString().slice(0, 10);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -38,12 +38,20 @@ export function kindOf(s) {
 }
 const slug = s => String(s).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const cleanName = s => String(s || "").replace(/\b(The\s+)?(Hon\.?|Honorable|Mr\.?|Mrs\.?|Ms\.?|Dr\.?)\s+/gi, "").replace(/\s+/g, " ").trim();
-async function get(url, opt = {}, tries = 3) {
+// 讀官方網站：429／5xx／網路錯誤才重試（指數退避）；403、404 等直接失敗（重試也沒用）；302 是參議院同意條款的正常轉址
+export async function get(url, opt = {}, tries = 3) {
   for (let k = 0; ; k++) {
-    try { const r = await fetch(url, { ...opt, headers: { "User-Agent": UA, ...(opt.headers || {}) }, signal: AbortSignal.timeout(30000), redirect: opt.redirect || "follow" }); if (!r.ok && r.status !== 302) throw new Error(`HTTP ${r.status} ${url}`); return r; }
-    catch (e) { if (k >= tries - 1) throw e; await sleep(1500 * (k + 1)); }
+    let r;
+    try { r = await fetch(url, { ...opt, headers: { "User-Agent": UA, ...(opt.headers || {}) }, signal: AbortSignal.timeout(30000), redirect: opt.redirect || "follow" }); }
+    catch (e) { if (k >= tries - 1) throw new Error(`連線失敗 ${url}：${e.message}`); await sleep(1500 * 2 ** k); continue; }
+    if (r.ok || r.status === 302) return r;
+    if ((r.status === 429 || r.status >= 500) && k < tries - 1) { await sleep(1500 * 2 ** k); continue; }
+    throw Object.assign(new Error(`HTTP ${r.status} ${url}`), { status: r.status });
   }
 }
+// 解析前先確認內容真的是預期的格式（網站出錯時常回 200 的 HTML 錯誤頁）
+export async function getJson(url, opt) { const r = await get(url, opt), ct = r.headers.get("content-type") || "", t = await r.text(); if (!/json/i.test(ct) && !/^\s*[[{]/.test(t)) throw new Error(`不是 JSON（${ct || "沒有 Content-Type"}）：${url}`); return JSON.parse(t); }
+export async function getBytes(url, magic, opt) { const b = Buffer.from(await (await get(url, opt)).arrayBuffer()); if (magic && b.subarray(0, magic.length).toString("latin1") !== magic) throw new Error(`內容不是預期的檔案（開頭 ${JSON.stringify(b.subarray(0, 12).toString("latin1"))}）：${url}`); return b; }
 
 // ---------- 眾議院 ----------
 // 讀 zip（只用到 deflate／不壓縮兩種）→ { 檔名: Buffer }
@@ -108,15 +116,16 @@ async function pdfText(buf) {
 async function house(fromIso, seen, log) {
   const yNow = new Date().getUTCFullYear(), years = [...new Set([yNow, +fromIso.slice(0, 4)])], filings = [];
   for (const y of years) {
-    try { const z = unzip(Buffer.from(await (await get(`https://disclosures-clerk.house.gov/public_disc/financial-pdfs/${y}FD.zip`)).arrayBuffer())); const xml = Object.entries(z).find(([k]) => /\.xml$/i.test(k))?.[1]; if (xml) filings.push(...parseHouseIndex(xml.toString("utf8"))); }
+    try { const z = unzip(await getBytes(`https://disclosures-clerk.house.gov/public_disc/financial-pdfs/${y}FD.zip`, "PK")); const xml = Object.entries(z).find(([k]) => /\.xml$/i.test(k))?.[1]; if (xml) filings.push(...parseHouseIndex(xml.toString("utf8"))); }
     catch (e) { log(`眾議院 ${y} 索引失敗：${e.message}`); }
   }
+  if (!filings.length) throw new Error("眾議院年度索引一份都讀不到"); // 讓 main 知道這次眾議院沒有成功，不要覆寫成空的
   const todo = filings.filter(f => f.filed >= fromIso && !seen[`H${f.docId}`]); log(`眾議院 PTR：索引 ${filings.length} 份，要讀 ${todo.length} 份`);
   const trades = [], people = {};
   for (const f of todo) {
     const url = `https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/${f.year || f.filed.slice(0, 4)}/${f.docId}.pdf`;
     try {
-      const txt = await pdfText(Buffer.from(await (await get(url)).arrayBuffer())), rows = parseHousePtrText(txt), meta = houseMeta(txt);
+      const txt = await pdfText(await getBytes(url, "%PDF")), rows = parseHousePtrText(txt), meta = houseMeta(txt);
       const pid = "h-" + slug(`${f.last}-${f.first}-${f.state}`); people[pid] = { name: meta.name || f.name, chamber: "眾議院", state: f.state };
       rows.forEach(r => trades.push({ ...r, pid, filed: f.filed, doc: url }));
       seen[`H${f.docId}`] = rows.length || (txt.replace(/\s/g, "").length < 200 ? -1 : 0); // -1：掃描的紙本，讀不到文字
@@ -150,7 +159,9 @@ async function senate(fromIso, seen, log) {
   const [y, m, d] = fromIso.split("-"), reports = [];
   for (let start = 0; start < 2000; start += 100) {
     const body = new URLSearchParams({ start: String(start), length: "100", report_types: "[11]", filer_types: "[]", submitted_start_date: `${m}/${d}/${y} 00:00:00`, submitted_end_date: "", candidate_state: "", senator_state: "", office_id: "", first_name: "", last_name: "", csrfmiddlewaretoken: tok });
-    const j = await (await get(`${base}/search/report/data/`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Referer: `${base}/search/`, "X-CSRFToken": jar.get("csrftoken") || tok, Cookie: cookie() }, body }).then(keep)).json();
+    const r0 = await get(`${base}/search/report/data/`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Referer: `${base}/search/`, "X-CSRFToken": jar.get("csrftoken") || tok, Cookie: cookie() }, body }).then(keep);
+    const ct = r0.headers.get("content-type") || "", txt = await r0.text(); if (!/json/i.test(ct) && !/^\s*[[{]/.test(txt)) throw new Error(`參議院清單不是 JSON（${ct}，可能是同意條款的工作階段失效）`);
+    const j = JSON.parse(txt);
     const rows = j?.data || []; rows.forEach(r => { const href = (String(r[3]).match(/href="([^"]+)"/) || [])[1]; if (href) reports.push({ first: cleanName(r[0]), last: cleanName(r[1]), office: String(r[2] || ""), href, filed: mdy(r[4]) }); });
     if (rows.length < 100) break; await sleep(500);
   }
@@ -183,10 +194,13 @@ export async function main({ days = 200, log = console.log } = {}) {
   // 解析器改版（眾議院 PDF 的換行版面）：之前讀到文字卻解析出 0 筆的文件重讀一次，期間拉回完整的 days 天
   const PARSER = 2, redo = seen._v !== PARSER; if (redo) { for (const k of Object.keys(seen)) if (k[0] === "H" && seen[k] === 0) delete seen[k]; seen._v = PARSER; }
   const fromIso = iso(Date.now() - (prev.trades?.length && !redo ? 45 : days) * DAY), notes = [], add = { trades: [], people: {} };
+  let ok = 0;
   for (const [name, fn] of [["眾議院", house], ["參議院", senate]]) {
-    try { const r = await fn(fromIso, seen, log); add.trades.push(...r.trades); Object.assign(add.people, r.people); log(`${name}：新增 ${r.trades.length} 筆`); }
-    catch (e) { notes.push(`${name}資料這次沒有更新（${e.message}）`); log(`${name}失敗：${e.message}`); }
+    try { const r = await fn(fromIso, seen, log); add.trades.push(...r.trades); Object.assign(add.people, r.people); ok++; log(`${name}：新增 ${r.trades.length} 筆`); }
+    catch (e) { notes.push(`${name}資料這次沒有更新（${e.message}）`); log(`::warning::${name}失敗：${e.message}`); }
   }
+  // 兩院都失敗（403、5xx、網站改版…）：保留原本的資料檔，不覆寫；排程照常結束（下次再試）
+  if (!ok) { log("::warning::眾議院、參議院這次都讀不到，保留原本的資料不覆寫"); return { ...prev, notes, skipped: true }; }
   const m = merge(prev, add, iso(Date.now() - 400 * DAY));
   const out = { updated: new Date().toISOString(), cutoff: m.trades.reduce((a, t) => (t.filed > a ? t.filed : a), ""), notes,
     sources: [["眾議院書記官 定期交易報告（PTR）", "https://disclosures-clerk.house.gov/FinancialDisclosure"], ["參議院電子申報系統 定期交易報告", "https://efdsearch.senate.gov/search/"]], ...m };
@@ -201,4 +215,4 @@ async function dump(n) {
   const S = Object.entries(seen).filter(([k, v]) => k[0] === "S" && v === 0).map(([k]) => k.slice(1)).slice(0, 1); console.log("參議院 0 筆的例子：", S);
 }
 if (process.argv[2] === "--dump") dump(+process.argv[3] || 3).catch(e => { console.error(e); process.exit(1); });
-else if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("ok", o.trades.length, "筆，", Object.keys(o.people).length, "人，資料截止", o.cutoff)).catch(e => { console.error(e); process.exit(1); });
+else if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log(o.skipped ? "沒有更新（保留舊資料）" : "ok", o.trades?.length ?? 0, "筆，", Object.keys(o.people || {}).length, "人，資料截止", o.cutoff || "—")).catch(e => { console.error(e); process.exit(1); });

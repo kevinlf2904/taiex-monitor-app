@@ -10,7 +10,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: podcast-sync
+  group: data-sync-podcast-sync-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   sync:
@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # 排隊等前一次跑完時，checkout 的是排隊當下的舊版本；先拉到最新的 main，避免和前一次存的資料衝突
-      - run: git pull -q origin main
+      - run: git pull -q origin ${{ github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -29,11 +29,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SITE_URL: ${{ vars.SITE_URL || 'https://kline-school.vercel.app' }}
       - name: commit
+        env:
+          COMMIT_NAME: podcast-sync
         run: |
-          git config user.name "podcast-sync"
-          git config user.email "podcast-sync@users.noreply.github.com"
-          git add learner/data/podcast
-          if git diff --cached --quiet; then echo "沒有新資料"; exit 0; fi
-          git commit -m "名人 Podcast：自動整理新單集"
-          for i in 1 2 3; do git pull --rebase -X theirs -q origin main && git push -q origin HEAD:main && exit 0; git rebase --abort 2>/dev/null; sleep 5; done
-          exit 1
+          bash scripts/commit-data.sh "名人 Podcast：自動整理新單集" learner/data/podcast
