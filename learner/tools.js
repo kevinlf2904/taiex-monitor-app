@@ -406,26 +406,30 @@ function mtfHtml() {
 const CBT_H = [[21, "30 天"], [63, "90 天"]];
 async function congBtRun(all) {
   const C = W.cong; if (!C?.trades?.length) return;
-  const buys = C.trades.filter(t => t.k === "buy" && t.assetType === "股票" && /^[A-Z][A-Z.]{0,6}$/.test(t.ticker));
+  // 只算一般股票的買進：代號要像美股代號（排除債券、選擇權、基金等非標準代號），交易日、申報日要是有效日期
+  const okDate = d => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d), buys = C.trades.filter(t => t && t.k === "buy" && t.assetType === "股票" && /^[A-Z][A-Z.]{0,6}$/.test(t.ticker || "") && okDate(t.traded) && okDate(t.filed));
   const cnt = buys.reduce((m, t) => m.set(t.ticker, (m.get(t.ticker) || 0) + 1), new Map()), tick = [...cnt].sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, all ? 250 : 60);
   const R = (W.cbt = { busy: true, done: 0, total: tick.length + 1, all }); renderList();
   const load = async T => { if (!Array.isArray(W.congK[T])) { try { const j = await getJ(`/api/kline?code=${encodeURIComponent(T)}&months=12`); W.congK[T] = j.data || []; } catch (e) { W.congK[T] = { err: e.message }; } } R.done++; if (R.done % 5 === 0 && W.lt === "cong" && W.cv === "bt") renderList(); };
   await load("SPY"); let k = 0; await Promise.all(Array.from({ length: 5 }, async () => { while (k < tick.length) await load(tick[k++]); }));
-  const S = Array.isArray(W.congK.SPY) ? W.congK.SPY : [], sIdx = new Map(S.map((x, i) => [String(x.d).slice(0, 10), i])), set = new Set(tick);
+  const S = Array.isArray(W.congK.SPY) ? W.congK.SPY : [], sIdx = new Map(S.map((x, i) => [String(x?.d ?? "").slice(0, 10), i])), set = new Set(tick);
   // 同一檔在交易日前後 30 天內有幾個不同的人買 → 多人共同 vs 單一人物
   const crowd = t => new Set(buys.filter(x => x.ticker === t.ticker && Math.abs(Date.parse(x.traded) - Date.parse(t.traded)) <= 30 * 864e5).map(x => x.pid)).size;
+  // 查不到 K 線、K 線太短、申報日之後還沒有交易日的筆數記成 N/A（跳過，不影響其他筆）
+  R.na = { noK: 0, noDay: 0 };
+  const px = (A, i) => { const c = A?.[i]?.c; return typeof c === "number" && c > 0 ? c : null; }, rr = (a, b) => (a && b ? b / a - 1 : null);
   R.rows = buys.filter(t => set.has(t.ticker)).map(t => {
-    const D = W.congK[t.ticker]; if (!Array.isArray(D) || D.length < 5) return null; const ds = D.map(x => String(x.d).slice(0, 10));
-    const iF = ds.findIndex(d => d > t.filed), iT = ds.findIndex(d => d >= t.traded); if (iF < 0) return null;
-    const ret = (i, h) => (i >= 0 && i + h < D.length ? D[i + h].c / D[i].c - 1 : null);
-    const spy = (i, h) => { if (i < 0 || i + h >= D.length) return null; const a = sIdx.get(ds[i]), b = sIdx.get(ds[i + h]); return a != null && b != null ? S[b].c / S[a].c - 1 : null; };
+    const D = W.congK[t.ticker]; if (!Array.isArray(D) || D.length < 5) { R.na.noK++; return null; } const ds = D.map(x => String(x?.d ?? "").slice(0, 10));
+    const iF = ds.findIndex(d => d > t.filed), iT = ds.findIndex(d => d >= t.traded); if (iF < 0) { R.na.noDay++; return null; }
+    const ret = (i, h) => (i >= 0 && i + h < D.length ? rr(px(D, i), px(D, i + h)) : null);
+    const spy = (i, h) => { if (i < 0 || i + h >= D.length) return null; const a = sIdx.get(ds[i]), b = sIdx.get(ds[i + h]); return a != null && b != null ? rr(px(S, a), px(S, b)) : null; };
     const o = { t, crowd: crowd(t), big: (t.amount?.[0] || 0) >= 50001 };
     CBT_H.forEach(([h]) => { o["f" + h] = ret(iF, h); o["s" + h] = spy(iF, h); o["t" + h] = ret(iT, h); }); return o;
   }).filter(Boolean);
   R.skipped = tick.filter(T => !Array.isArray(W.congK[T]) || !W.congK[T].length); R.busy = false; R.at = Date.now(); if (W.lt === "cong") renderList();
 }
 function cbtStat(L, h, key = "f") {
-  const v = L.map(x => x[key + h]).filter(x => x != null), ex = L.filter(x => x[key + h] != null && x["s" + h] != null).map(x => x[key + h] - x["s" + h]); if (!v.length) return null;
+  const ok = x => typeof x === "number" && Number.isFinite(x), v = L.map(x => x[key + h]).filter(ok), ex = L.filter(x => ok(x[key + h]) && ok(x["s" + h])).map(x => x[key + h] - x["s" + h]); if (!v.length) return null;
   const srt = [...v].sort((a, b) => a - b);
   return { n: v.length, avg: v.reduce((a, b) => a + b, 0) / v.length, med: srt[srt.length >> 1], win: v.filter(x => x > 0).length / v.length, ex: ex.length ? ex.reduce((a, b) => a + b, 0) / ex.length : null, beat: ex.length ? ex.filter(x => x > 0).length / ex.length : null };
 }
@@ -434,14 +438,14 @@ function congBtHtml() {
   let h = `<section class="csec"><h3>申報後跟單回測 ${run}</h3>
     <p class="note">問題：看到議員「申報買進」後才跟著買，賺得到嗎？做法：每一筆股票買進申報，在<strong>申報日之後第一個交易日的收盤</strong>買進，持有約 30 天（21 個交易日）與 90 天（63 個交易日），和同期間的 SPY（標普 500 ETF）比。「交易日進場」是假設在議員實際交易那天就買——現實中看不到，只用來看申報延遲吃掉多少報酬。</p>`;
   if (!R?.rows) return h + `</section>`;
-  const L = R.rows, row = (t, G) => `<tr><td>${t}</td>${CBT_H.map(([hh]) => { const s = cbtStat(G, hh); return s ? `<td>${s.n}</td><td class="${cls(s.avg)}">${retPct(s.avg)}</td><td>${retPct(s.med)}</td><td>${Math.round(s.win * 100)}%</td><td class="${cls(s.ex)}"><b>${retPct(s.ex)}</b></td><td>${s.beat != null ? Math.round(s.beat * 100) + "%" : "—"}</td>` : `<td colspan="6" class="note">還不到持有期間</td>`; }).join("")}</tr>`;
+  const L = R.rows, row = (t, G) => `<tr><td>${t}</td>${CBT_H.map(([hh]) => { const s = cbtStat(G, hh); return s ? `<td>${s.n}</td><td class="${cls(s.avg)}">${retPct(s.avg)}</td><td>${retPct(s.med)}</td><td>${Math.round(s.win * 100)}%</td><td class="${cls(s.ex)}"><b>${retPct(s.ex)}</b></td><td>${s.beat != null ? Math.round(s.beat * 100) + "%" : "—"}</td>` : `<td colspan="6" class="note">N/A（還不到持有期間或沒有股價）</td>`; }).join("")}</tr>`;
   const head = `<thead><tr><th rowspan="2">分組</th>${CBT_H.map(([, t]) => `<th colspan="6">持有 ${t}</th>`).join("")}</tr><tr>${CBT_H.map(() => "<th>筆數</th><th>平均</th><th>中位數</th><th>賺錢比例</th><th>贏 SPY（平均）</th><th>贏 SPY 比例</th>").join("")}</tr></thead>`;
   const tf = cbtStat(L, 21, "t"), tn = cbtStat(L, 63, "t");
   h += `<div class="ctbl"><table>${head}<tbody>${row("全部買進申報", L)}${row("多人共同（前後 30 天 ≥ 2 人買）", L.filter(x => x.crowd >= 2))}${row("單一人物", L.filter(x => x.crowd < 2))}${row("大額（下限 ≥ $50K）", L.filter(x => x.big))}${row("小額（$50K 以下）", L.filter(x => !x.big))}${row("眾議院", L.filter(x => W.cong.people?.[x.t.pid]?.chamber !== "參議院"))}${row("參議院", L.filter(x => W.cong.people?.[x.t.pid]?.chamber === "參議院"))}</tbody></table></div>
     <p class="note">對照：如果能在<strong>交易日</strong>就買，30 天平均 ${retPct(tf?.avg)}、90 天平均 ${retPct(tn?.avg)}（現實中做不到，差距就是申報延遲的成本）。</p>`;
   const per = [...L.reduce((m, x) => m.set(x.t.pid, [...(m.get(x.t.pid) || []), x]), new Map())].map(([pid, G]) => ({ pid, G, s: cbtStat(G, 21) })).filter(x => x.s && x.s.n >= 3).sort((a, b) => (b.s.ex ?? -9) - (a.s.ex ?? -9));
   h += `<h4>依人物（至少 3 筆，依 30 天贏 SPY 排序）</h4><div class="ctbl"><table>${head}<tbody>${per.slice(0, 25).map(x => row(`<button class="linkbtn" data-cv="person:${esc(x.pid)}">${esc(pName(x.pid))}</button>`, x.G)).join("")}</tbody></table></div>
-    <p class="note">樣本：${L.length} 筆買進申報、${new Set(L.map(x => x.t.ticker)).size} 檔股票（資料從 ${L.map(x => x.t.filed).sort()[0] || "—"} 開始，時間還短、樣本小，結果容易被少數幾檔左右）。${R.skipped?.length ? `拿不到股價而略過：${R.skipped.slice(0, 12).map(esc).join("、")}${R.skipped.length > 12 ? ` 等 ${R.skipped.length} 檔` : ""}。` : ""}沒算手續費、匯率與稅；過去的結果不代表未來。</p></section>`;
+    <p class="note">樣本：${L.length} 筆買進申報、${new Set(L.map(x => x.t.ticker)).size} 檔股票（資料從 ${L.map(x => x.t.filed).sort()[0] || "—"} 開始，時間還短、樣本小，結果容易被少數幾檔左右）。${R.skipped?.length ? `拿不到股價而略過：${R.skipped.slice(0, 12).map(esc).join("、")}${R.skipped.length > 12 ? ` 等 ${R.skipped.length} 檔` : ""}。` : ""}${R.na && (R.na.noK || R.na.noDay) ? `N/A（跳過）：查無 K 線 ${R.na.noK} 筆、申報後還沒有交易日 ${R.na.noDay} 筆。` : ""}沒算手續費、匯率與稅；過去的結果不代表未來。</p></section>`;
   return h;
 }
 

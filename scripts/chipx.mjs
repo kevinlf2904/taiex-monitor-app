@@ -66,7 +66,8 @@ export async function main() {
   catch (e) { notes.push(`期交所：${e.message}`); }
   pcr = pcr.sort((a, b) => a[0].localeCompare(b[0])).slice(-120);
   if (DUMP) { console.log("整理：借券", Object.keys(lend).length, "當沖", Object.keys(dt).length, "PCR", pcr.slice(-3), "日期", date, notes); return; }
-  if (!Object.keys(lend).length && !Object.keys(dt).length && !pcr.length) throw new Error("什麼都沒讀到：" + notes.join("；"));
+  if (!Object.keys(lend).length && !Object.keys(dt).length && !(old.pcr || []).length && !pcr.length) { console.log("::warning::什麼都沒讀到，保留原本的資料：" + notes.join("；")); return; }
+  if (!Object.keys(lend).length && !Object.keys(dt).length && pcr.length === (old.pcr || []).length && old.date) { console.log("::warning::借券、當沖都沒讀到（可能是假日），保留原本的資料：" + notes.join("；")); return; }
   await writeFile(OUT, JSON.stringify({ updated: new Date().toISOString(), date, sets: used, notes, lend: Object.keys(lend).length ? lend : old.lend || {}, dt: Object.keys(dt).length ? dt : old.dt || {}, pcr }));
   console.log("完成", used.join("、"), notes.join("；"));
 }

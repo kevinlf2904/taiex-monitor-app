@@ -28,24 +28,26 @@ export function evalDoc(doc, dailyOf, E) {
 }
 
 export async function main() {
-  if (!(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) || !process.env.TELEGRAM_BOT_TOKEN) { console.log("沒有設定雲端儲存或 TELEGRAM_BOT_TOKEN，略過推播"); return; }
+  // 沒設定就略過（推播是附加功能，不能讓整個資料排程失敗）。chat id 來自每個人在網頁上的綁定，所以不需要 TELEGRAM_CHAT_ID
+  if (!(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) || !process.env.TELEGRAM_BOT_TOKEN) { console.log("::warning::沒有設定雲端儲存（KV_REST_API_URL）或 TELEGRAM_BOT_TOKEN，略過推播"); return; }
   const ids = (await kv("SMEMBERS", "alerts")) || []; console.log("有提醒的使用者", ids.length);
   if (!ids.length) return;
   let H = { s: {} }; try { H = JSON.parse(await readFile(CACHE, "utf8")); } catch { console.log("沒有全市場快取，台股提醒會略過"); }
   const E = engine(), us = new Map(), date = H.date || new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
   const docs = [];
-  for (const h of ids) { const v = await kv("GET", `alert:${h}`); if (v) docs.push([h, JSON.parse(v)]); }
+  for (const h of ids) { try { const v = await kv("GET", `alert:${h}`); if (v) docs.push([h, JSON.parse(v)]); } catch (e) { console.log("::warning::讀取提醒設定失敗", h.slice(0, 8), e.message); } }
   for (const [, d] of docs) for (const c of [...(d.rules || []), ...(d.price || [])].map(x => x.code)) if (!isTW(c) && !us.has(c)) { us.set(c, await usDaily(c)); await sleep(300); }
   const dailyOf = c => (isTW(c) ? H.s[c]?.b || null : us.get(c) || null);
   let sent = 0;
   for (const [h, d] of docs) {
-    const msgs = evalDoc(d, dailyOf, E); if (!msgs.length || !d.chat) continue;
+    let msgs = []; try { msgs = evalDoc(d, dailyOf, E); } catch (e) { console.log("::warning::檢查條件失敗", h.slice(0, 8), e.message); continue; } if (!msgs.length || !d.chat) continue;
     const text = `🔔 K線看盤收盤提醒（${date}）\n` + msgs.map(m => "• " + m).join("\n") + "\n\n以收盤後日 K 判斷，不是買賣建議。";
     if (DRY) { console.log(h.slice(0, 8), text); continue; }
-    if (!(await kv("SET", `sent:${h}:${date}`, "1", "NX", "EX", 172800))) continue;
-    try { await tg("sendMessage", { chat_id: d.chat, text }); sent++; } catch (e) { console.log("送出失敗", h.slice(0, 8), e.message); }
+    try { if (!(await kv("SET", `sent:${h}:${date}`, "1", "NX", "EX", 172800))) continue; } catch (e) { console.log("::warning::KV 寫入失敗", e.message); continue; }
+    try { await tg("sendMessage", { chat_id: d.chat, text }); sent++; } catch (e) { console.log("::warning::Telegram 送出失敗", h.slice(0, 8), e.message); }
     await sleep(100);
   }
   console.log("送出", sent, "則");
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch(e => { console.error(e); process.exit(1); });
+// 任何錯誤（KV 連不上、Telegram 掛掉…）都只印 warning、以成功結束：推播失敗不影響全市場資料已經上傳
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch(e => { console.log("::warning::Telegram 推播這次沒有完成：" + e.message); process.exitCode = 0; });

@@ -13,7 +13,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: market-scan
+  group: data-sync-market-scan-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   scan:
@@ -43,6 +43,7 @@ jobs:
           gh release upload market-data out/*.json --clobber
       - name: telegram
         if: ${{ github.event.inputs.dry != '1' }}
+        continue-on-error: true   # 推播失敗只是警告，不讓全市場資料的排程變成失敗
         env:
           KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
           KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
