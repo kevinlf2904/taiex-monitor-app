@@ -4,6 +4,7 @@ name: market-scan
 on:
   schedule:
     - cron: "10 8 * * 1-5"   # 週一到週五台北 16:10
+    - cron: "40 13 * * 1-5"  # 台北 21:40 再跑一次（證交所全市場資料有時傍晚才更新；提醒依資料日期只送一次）
   workflow_dispatch:
     inputs:
       dry:

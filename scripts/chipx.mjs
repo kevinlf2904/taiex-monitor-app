@@ -18,7 +18,7 @@ const keyOf = (ks, ...re) => { for (const e of re) { const x = ks.find(k => e.te
 // 借券：當日借券賣出、借券賣出餘額（股 → 張）
 export function lendRow(r) {
   const ks = Object.keys(r), kc = keyOf(ks, /代號/, /Code/i), code = String(r[kc] ?? "").trim(); if (!/^(\d{4}|00\d{2,4}[A-Z]?)$/.test(code)) return null;
-  const L = ks.filter(k => /借券/.test(k)), sell = keyOf(L, /當日賣出/, /賣出/), bal = keyOf(L, /當日餘額/, /餘額/);
+  const L = ks.filter(k => /借券|SecuritiesBorrowing|SBL/i.test(k)), sell = keyOf(L, /當日賣出/, /^SecuritiesBorrowingSale$/i, /賣出/), bal = keyOf(L, /當日餘額/, /SecuritiesBorrowingBalanceOfTheMarketDay/i, /餘額/);
   const v = k => (k ? num(r[k]) : null); if (v(sell) == null && v(bal) == null) return null;
   return [code, v(sell) != null ? Math.round(v(sell) / 1000) : null, v(bal) != null ? Math.round(v(bal) / 1000) : null];
 }
@@ -35,7 +35,7 @@ export async function main() {
   const lend = {}, dt = {}, notes = [], used = []; let date = null;
   for (const [mk, base, sw] of SRC) {
     let S = null; try { S = await get(sw); } catch (e) { notes.push(`${mk} swagger：${e.message}`); continue; }
-    const sets = [["lend", find(S, /借券/, /餘額表.*月|月報/)], ["dt", find(S, /當日沖銷|現股當沖/, /月|統計/)]];
+    const sets = [["lend", find(S, /借券賣出|借券.*餘額/, /月|費率/)]];
     if (DUMP) console.log(mk, JSON.stringify(sets));
     for (const [kind, paths] of sets) for (const [p, t] of paths) {
       try { const j = await get(base + p), L = Array.isArray(j) ? j : j?.data || [];
@@ -46,11 +46,21 @@ export async function main() {
       catch (e) { notes.push(`${mk} ${p}：${e.message}`); }
     }
   }
+  // 當沖（上市）：證交所「當日沖銷交易標的及成交量值」TWTB4U（OpenAPI 沒有個股當沖成交量），比例＝當沖成交股數 ÷ 當天成交股數（STOCK_DAY_ALL）
+  try {
+    const all = await get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"), vol = new Map(all.map(r => [String(r.Code).trim(), num(r.TradeVolume)]));
+    const d0 = toIso(all[0]?.Date) || new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), j = await get(`https://www.twse.com.tw/rwd/zh/dayTrading/TWTB4U?date=${d0.replace(/-/g, "")}&selectType=All&response=json`);
+    const T = (j.tables || []).find(t => (t.fields || []).some(f => /當日沖銷交易成交股數/.test(f))) || (j.fields ? j : null);
+    if (DUMP) console.log("TWTB4U", d0, j.stat, JSON.stringify((j.tables || []).map(t => t.fields)), JSON.stringify(T?.data?.slice(0, 2)));
+    if (T) { const f = T.fields, iC = f.findIndex(x => /證券代號/.test(x)), iS = f.findIndex(x => /當日沖銷交易成交股數/.test(x)); let n = 0;
+      for (const r of T.data || []) { const c = String(r[iC]).trim(), sh = num(r[iS]), v = vol.get(c); if (sh != null && v) { dt[c] = +((sh / v) * 100).toFixed(2); n++; } }
+      if (n) { used.push(`上市 當日沖銷（${n}）`); date ||= d0; } }
+  } catch (e) { notes.push(`當沖：${e.message}`); }
   // Put/Call 比（期交所）
   let pcr = old.pcr || [];
   try { const sw = await get("https://openapi.taifex.com.tw/swagger.json"), P = find(sw, /Put\/?Call|買賣權.*比/i); if (DUMP) console.log("期交所", JSON.stringify(P));
     for (const [p] of P.slice(0, 1)) { const L = await get("https://openapi.taifex.com.tw/v1" + p); if (DUMP) console.log("PCR 欄位", JSON.stringify(Object.keys(L[0] || {})), JSON.stringify(L.slice(0, 2)));
-      for (const r of L) { const ks = Object.keys(r), d = toIso(r[keyOf(ks, /Date|日期/i)]), vol = num(r[keyOf(ks, /Volume.*Ratio|成交量.*比/i)]), oi = num(r[keyOf(ks, /OpenInterest.*Ratio|未平倉.*比/i)]);
+      for (const r of L) { const ks = Object.keys(r), d = toIso(r[keyOf(ks, /Date|日期/i)]), vol = num(r[keyOf(ks, /Volume.*Ratio|成交量.*比/i)]), oi = num(r[keyOf(ks, /OI.*Ratio|OpenInterest.*Ratio|未平倉.*比/i)]);
         if (d && (vol != null || oi != null)) { const i = pcr.findIndex(x => x[0] === d); const row = [d, vol, oi]; if (i >= 0) pcr[i] = row; else pcr.push(row); } }
       used.push("期交所 Put/Call 比"); } }
   catch (e) { notes.push(`期交所：${e.message}`); }

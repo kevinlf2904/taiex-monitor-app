@@ -2169,7 +2169,8 @@ function renderInd() {
 // 工具分頁（tools.js）：點擊、送出表單、勾選
 $("#lx").addEventListener("click", e => toolsClick(e)); $("#lTools").addEventListener("click", e => toolsClick(e));
 $("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListener("change", e => toolsChange(e));
-setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); }, 3000);
+setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); if ((store.get("watch:paper", null)?.orders || []).length) paStart(); }, 3000);
+setTimeout(syncBoot, 1500); // 雲端同步：開網頁時下載較新的資料、之後有改動自動上傳
 // 國會分頁：切換頁面（首頁、股票、人物）、期間、排序、在看盤開啟、問 AI
 $("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-cw],[data-csort],[data-copen],[data-cask],[data-cbt]"); if (!b) return; const d = b.dataset;
   if (d.cbt) return congBtRun(d.cbt === "all");
@@ -3359,7 +3360,7 @@ function renderInfo() {
   const j = W.info, D = W.daily?.data;
   if (W.dtab === "chips" && dSub() === "sum") {
     if (!j || j.err || !D?.length) { $("#chipsSum").innerHTML = `<li class="note">${j?.err ? esc(j.err) : W.off ? "需要部署到網站" : "載入中…"}</li>`; $("#chipsTbl").innerHTML = ""; chipsChart.host.hidden = true; $("#shortBox").hidden = true; return; }
-    const items = chipsSummary(j, D), mL = j.margin?.at(-1);
+    const items = [...chipsSummary(j, D), ...chipsExtra(W.sel)], mL = j.margin?.at(-1);
     // 信用交易（原本在「資券大戶」頁）：融資使用率、券資比
     if (mL?.marginBal) items.push({ k: "信用交易", t: `融資使用率 ${mL.marginLimit ? (mL.marginBal / mL.marginLimit * 100).toFixed(1) + "%" : "—"}、券資比 ${(mL.shortBal / mL.marginBal * 100).toFixed(1)}%（券資比高時，上漲可能引發軋空；融資使用率高代表散戶槓桿多）` });
     $("#chipsSum").innerHTML = items.length ? items.map(x => `<li><strong>${x.k}</strong>：${x.t}</li>`).join("") : `<li class="note">沒有籌碼資料。</li>`;
