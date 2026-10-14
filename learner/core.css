@@ -121,3 +121,15 @@ body { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 /* 降低刺眼：深色主題裡選中的按鈕、主要按鈕改成中灰底＋淺字（不再是整塊白色），漲跌色塊改成較深的紅綠；淺色主題的白改成米白 */
 :root[data-theme="dark"] { --ink: #e8e8e8; --accent: #d6d6d6; --grad-strong: linear-gradient(180deg, #4a4a4a, #363636); --on-strong: #f2f2f2; --strong-line: #5e5e5e; --up-pill: #c2383f; --down-pill: #138a5c; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ink: #e8e8e8; --accent: #d6d6d6; --grad-strong: linear-gradient(180deg, #4a4a4a, #363636); --on-strong: #f2f2f2; --strong-line: #5e5e5e; --up-pill: #c2383f; --down-pill: #138a5c; } }
+
+/* 線型自訂面板（看盤 K 線「指標」區塊、圖表實驗室） */
+.icfgbox > summary { cursor: pointer; font-size: 13px; color: var(--accent); padding: 6px 0; }
+.icfg { border-top: 1px solid var(--line); padding: 8px 0; }
+.icfg header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 13px; }
+.icfg header .linkbtn { margin-left: auto; font-size: 12px; }
+.icrow { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0; }
+.icl { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.icl input[type=number] { width: 64px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; }
+.icl input[type=color] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
+.icx { padding: 2px 6px; border: 1px dashed var(--line); border-radius: 8px; }
+.icfoot { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; font-size: 12px; margin: 8px 0 2px; }

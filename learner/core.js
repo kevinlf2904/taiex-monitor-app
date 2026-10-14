@@ -28,20 +28,20 @@ function rsiCalc(c, n = 14) {
   }
   return o;
 }
-function kdCalc(D, n = 9) {
+function kdCalc(D, n = 9, ks = 3, ds = 3) {
   const K = Array(D.length).fill(null), Dd = Array(D.length).fill(null); let k = 50, d = 50;
   for (let i = n - 1; i < D.length; i++) {
     let hh = -Infinity, ll = Infinity;
     for (let j = i - n + 1; j <= i; j++) { hh = Math.max(hh, D[j].h); ll = Math.min(ll, D[j].l); }
     const rsv = hh === ll ? 50 : (D[i].c - ll) / (hh - ll) * 100;
-    k = k * 2 / 3 + rsv / 3; d = d * 2 / 3 + k / 3; K[i] = k; Dd[i] = d;
+    k = k * (ks - 1) / ks + rsv / ks; d = d * (ds - 1) / ds + k / ds; K[i] = k; Dd[i] = d;
   }
   return { K, D: Dd };
 }
-function macdCalc(c) {
-  const e12 = ema(c, 12), e26 = ema(c, 26);
-  const dif = c.map((_, i) => i < 25 ? null : e12[i] - e26[i]);
-  const sig = ema(dif, 9).map((v, i) => i < 33 ? null : v);
+function macdCalc(c, f = 12, sl = 26, g = 9) {
+  const e12 = ema(c, f), e26 = ema(c, sl), w = Math.max(f, sl) - 1;
+  const dif = c.map((_, i) => i < w ? null : e12[i] - e26[i]);
+  const sig = ema(dif, g).map((v, i) => i < w + g - 1 ? null : v);
   const osc = dif.map((v, i) => sig[i] == null ? null : v - sig[i]);
   return { dif, sig, osc };
 }
@@ -142,7 +142,7 @@ function vrCalc(D, n = 26) {
 function breadthCalc(D, n = 10) {
   const N = D.length, adr = Array(N).fill(null), obos = Array(N).fill(null), adl = Array(N).fill(null); let cum = 0, any = false;
   for (let i = 0; i < N; i++) {
-    const x = D[i]; if (x.adv == null || x.dec == null) continue; any = true; cum += x.adv - x.dec; // 缺資料的日子跳過，累計不歸零 adl[i] = cum;
+    const x = D[i]; if (x.adv == null || x.dec == null) continue; any = true; cum += x.adv - x.dec; /* 缺資料的日子跳過，累計不歸零 */ adl[i] = cum;
     let a = 0, d = 0, ok = i >= n - 1; for (let k = i - n + 1; ok && k <= i; k++) { if (D[k].adv == null) { ok = false; break; } a += D[k].adv; d += D[k].dec; }
     if (ok) { adr[i] = d ? a / d : null; obos[i] = a - d; }
   }
@@ -162,35 +162,133 @@ function crossHold(a, b, hold, up, dn) {
   return o;
 }
 const fmtBig = v => (v == null ? "—" : Math.abs(v) >= 1e8 ? (v / 1e8).toFixed(2) + "億" : Math.abs(v) >= 1e4 ? (v / 1e4).toFixed(1) + "萬" : fmtN(v));
-// id → { label（指標列上的名字）, kind（訊號種類）, make(D, I) → custom 副圖 }
+// id → { label（指標列上的名字）, kind（訊號種類）, params（可自訂的參數：[key, 名稱, 最小, 最大, 間距, 預設]）, extra（「新增線」：同一副圖再畫一條別的週期）, make(D, I, p) → custom 副圖 }
+const pct2 = v => (v == null ? "—" : v.toFixed(2) + "%");
 const SUBX = {
-  mtm: { label: "MTM", kind: "mtm", make: (D, I) => { const { mtm, ma } = mtmCalc(I.c); return { title: "MTM 10・MA 10", lines: [mtm, ma], names: ["MTM", "MA"], levels: [0], sigs: crossHold(mtm, mtm.map(v => (v == null ? null : 0)), 3, "MTM轉正", "MTM轉負") }; } },
-  dmi: { label: "DMI", kind: "dmi", make: (D, I) => { const { pdi, mdi, adx } = dmiCalc(D); return { title: "DMI 14", lines: [pdi, mdi, adx], names: ["+DI", "−DI", "ADX"], levels: [20, 40], sigs: crossSigs(pdi, mdi, "+DI上穿−DI", "+DI跌破−DI", (s, i) => (adx[i] ?? 0) >= 20) }; } },
-  psy: { label: "PSY", kind: "psy", make: (D, I) => { const p = psyCalc(I.c); return { title: "PSY 12・MA 6", lines: [p, smaN(p, 6)], names: ["PSY", "MA"], levels: [25, 75], range: [0, 100], sigs: lvlSigs(p, 25, 75, "PSY") }; } },
-  arbr: { label: "AR／BR", kind: "arbr", make: D => { const { ar, br } = arbrCalc(D); return { title: "AR・BR 26", lines: [ar, br], names: ["AR", "BR"], levels: [50, 100, 150], sigs: lvlSigs(ar, 60, 150, "AR") }; } },
-  obv: { label: "OBV", kind: "obv", make: D => { const o = obvCalc(D), m = smaN(o, 20); return { title: "OBV・MA 20", lines: [o, m], names: ["OBV", "MA20"], fmt: fmtBig, sigs: crossHold(o, m, 3, "OBV站上均線", "OBV跌破均線") }; } },
-  vr: { label: "VR", kind: "vr", make: D => { const v = vrCalc(D); return { title: "VR 26", lines: [v, smaN(v, 6)], names: ["VR", "MA"], levels: [70, 150, 450], sigs: lvlSigs(v, 70, 450, "VR") }; } },
+  mtm: { label: "MTM", kind: "mtm", params: [["n", "週期", 2, 60, 1, 10], ["m", "均線", 2, 60, 1, 10]], extra: (D, I, n) => mtmCalc(I.c, n).mtm,
+    make: (D, I, p) => { const { mtm, ma } = mtmCalc(I.c, p.n, p.m); return { title: `MTM ${p.n}・MA ${p.m}`, lines: [mtm, ma], names: ["MTM", "MA"], levels: [0], sigs: crossHold(mtm, mtm.map(v => (v == null ? null : 0)), 3, "MTM轉正", "MTM轉負") }; } },
+  dmi: { label: "DMI", kind: "dmi", params: [["n", "週期", 5, 40, 1, 14]],
+    make: (D, I, p) => { const { pdi, mdi, adx } = dmiCalc(D, p.n); return { title: `DMI ${p.n}`, lines: [pdi, mdi, adx], names: ["+DI", "−DI", "ADX"], levels: [20, 40], sigs: crossSigs(pdi, mdi, "+DI上穿−DI", "+DI跌破−DI", (s, i) => (adx[i] ?? 0) >= 20) }; } },
+  psy: { label: "PSY", kind: "psy", params: [["n", "週期", 3, 40, 1, 12], ["m", "均線", 2, 30, 1, 6]], extra: (D, I, n) => psyCalc(I.c, n),
+    make: (D, I, p) => { const v = psyCalc(I.c, p.n); return { title: `PSY ${p.n}・MA ${p.m}`, lines: [v, smaN(v, p.m)], names: ["PSY", "MA"], levels: [25, 75], range: [0, 100], sigs: lvlSigs(v, 25, 75, "PSY") }; } },
+  arbr: { label: "AR／BR", kind: "arbr", params: [["n", "週期", 5, 60, 1, 26]],
+    make: (D, I, p) => { const { ar, br } = arbrCalc(D, p.n); return { title: `AR・BR ${p.n}`, lines: [ar, br], names: ["AR", "BR"], levels: [50, 100, 150], sigs: lvlSigs(ar, 60, 150, "AR") }; } },
+  obv: { label: "OBV", kind: "obv", params: [["m", "均線", 2, 120, 1, 20]],
+    make: (D, I, p) => { const o = obvCalc(D), m = smaN(o, p.m); return { title: `OBV・MA ${p.m}`, lines: [o, m], names: ["OBV", "MA" + p.m], fmt: fmtBig, sigs: crossHold(o, m, 3, "OBV站上均線", "OBV跌破均線") }; } },
+  vr: { label: "VR", kind: "vr", params: [["n", "週期", 5, 60, 1, 26], ["m", "均線", 2, 30, 1, 6]],
+    make: (D, I, p) => { const v = vrCalc(D, p.n); return { title: `VR ${p.n}`, lines: [v, smaN(v, p.m)], names: ["VR", "MA"], levels: [70, 150, 450], sigs: lvlSigs(v, 70, 450, "VR") }; } },
   adr: { label: "ADR", kind: "adr", breadth: true, make: D => { const B = breadthCalc(D); if (!B) return null; return { title: "ADR 漲跌比 10", lines: [B.adr, smaN(B.adr, 6)], names: ["ADR", "MA"], levels: [0.5, 1, 1.5], sigs: lvlSigs(B.adr, 0.5, 1.5, "ADR") }; } },
   obos: { label: "OBOS", kind: "obos", breadth: true, make: D => { const B = breadthCalc(D); if (!B) return null; return { title: "OBOS 超買超賣 10", lines: [B.obos, smaN(B.obos, 6)], names: ["OBOS", "MA"], levels: [0], sigs: crossHold(B.obos, B.obos.map(v => (v == null ? null : 0)), 5, "OBOS轉正", "OBOS轉負") }; } },
   adl: { label: "ADL", kind: "adl", breadth: true, make: D => { const B = breadthCalc(D); if (!B) return null; const m = smaN(B.adl, 10); return { title: "ADL 騰落線・MA 10", lines: [B.adl, m], names: ["ADL", "MA10"], sigs: crossHold(B.adl, m, 5, "ADL站上均線", "ADL跌破均線") }; } },
-  bias: { label: "乖離率", kind: "bias", make: (D, I) => { const b6 = biasCalc(I.c, 6); return { title: "乖離率 BIAS 6・12・24（%）", lines: [b6, biasCalc(I.c, 12), biasCalc(I.c, 24)], names: ["BIAS6", "BIAS12", "BIAS24"], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(2) + "%"), sigs: lvlSigs(b6, -5, 5, "BIAS6") }; } },
-  atr: { label: "ATR", kind: "atr", make: D => { const a = atrCalc(D); return { title: "ATR 14（平均真實波幅）", lines: [a], names: ["ATR"], lines2: [a.map((v, i) => (v == null ? null : (v / D[i].c) * 100))], names2: ["ATR%"], fmt: v => fmtN(v, 2), signals: false, sigs: [] }; } },
-  cci: { label: "CCI", kind: "cci", make: D => { const c = cciCalc(D); return { title: "CCI 20", lines: [c], names: ["CCI"], levels: [100, 0, -100], sigs: lvlSigs(c, -100, 100, "CCI") }; } },
-  mfi: { label: "MFI", kind: "mfi", make: D => { const m = mfiCalc(D); return { title: "MFI 14（資金流量）", lines: [m], names: ["MFI"], levels: [80, 20], range: [0, 100], dull: [80, 20], sigs: lvlSigs(m, 20, 80, "MFI") }; } },
-  trix: { label: "TRIX", kind: "trix", make: (D, I) => { const t = trixCalc(I.c), m = smaN(t, 9); return { title: "TRIX 12・訊號 9", lines: [t, m], names: ["TRIX", "MA9"], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: crossHold(t, m, 2, "TRIX上穿訊號線", "TRIX跌破訊號線") }; } },
-  srsi: { label: "StochRSI", kind: "srsi", make: (D, I) => { const { K, D: d } = srsiCalc(I.c); return { title: "StochRSI 14・14・3・3", lines: [K, d], names: ["K", "D"], levels: [80, 20], range: [0, 100], sigs: crossSigs(K, d, "StochRSI低檔金叉", "StochRSI高檔死叉", (s, i) => (s === "buy" ? d[i] < 20 : d[i] > 80)) }; } },
-  roc: { label: "ROC", kind: "roc", make: (D, I) => { const r = rocCalc(I.c), m = smaN(r, 6); return { title: "ROC 12・MA 6（%）", lines: [r, m], names: ["ROC", "MA6"], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(2) + "%"), sigs: crossHold(r, r.map(v => (v == null ? null : 0)), 2, "ROC轉正", "ROC轉負") }; } },
-  dma: { label: "DMA", kind: "dma", make: (D, I) => { const { dif, ama } = dmaCalc(I.c); return { title: "DMA 10・50・10（平行線差）", lines: [dif, ama], names: ["DIF", "AMA"], levels: [0], sigs: crossHold(dif, ama, 2, "DMA上穿AMA", "DMA跌破AMA") }; } },
-  emv: { label: "EMV", kind: "emv", make: D => { const { emv, ma } = emvCalc(D); return { title: "EMV 14・MA 9（簡易波動）", lines: [emv, ma], names: ["EMV", "MA9"], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: crossHold(emv, emv.map(v => (v == null ? null : 0)), 2, "EMV轉正", "EMV轉負") }; } },
-  tower: { label: "寶塔線", kind: "tower", make: D => { const { boxes, state } = towerCalc(D); return { title: "寶塔線（三線翻轉）", lines: [], names: [], boxes, tower: state, fmt: fmtP, sigs: boxes.map((x, i) => (x && x.flip ? { i, side: x.up ? "buy" : "sell", label: x.up ? "寶塔翻紅" : "寶塔翻綠", v: x.up ? x.t : x.b } : null)).filter(Boolean) }; } },
-  tapi: { label: "TAPI", kind: "tapi", index: true, make: D => { const t = tapiCalc(D), m = smaN(t, 10); return { title: "TAPI 每點成交值（億元）・MA 10", lines: [t, m], names: ["TAPI", "MA10"], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: [] }; } },
+  bias: { label: "乖離率", kind: "bias", params: [["a", "第一條", 2, 120, 1, 6], ["b", "第二條", 2, 120, 1, 12], ["c", "第三條", 2, 240, 1, 24]], extra: (D, I, n) => biasCalc(I.c, n),
+    make: (D, I, p) => { const b1 = biasCalc(I.c, p.a); return { title: `乖離率 BIAS ${p.a}・${p.b}・${p.c}（%）`, lines: [b1, biasCalc(I.c, p.b), biasCalc(I.c, p.c)], names: ["BIAS" + p.a, "BIAS" + p.b, "BIAS" + p.c], levels: [0], fmt: pct2, sigs: lvlSigs(b1, -5, 5, "BIAS" + p.a) }; } },
+  atr: { label: "ATR", kind: "atr", params: [["n", "週期", 2, 60, 1, 14]], extra: (D, I, n) => atrCalc(D, n),
+    make: (D, I, p) => { const a = atrCalc(D, p.n); return { title: `ATR ${p.n}（平均真實波幅）`, lines: [a], names: ["ATR"], lines2: [a.map((v, i) => (v == null ? null : (v / D[i].c) * 100))], names2: ["ATR%"], fmt: v => fmtN(v, 2), signals: false, sigs: [] }; } },
+  cci: { label: "CCI", kind: "cci", params: [["n", "週期", 5, 60, 1, 20]], extra: (D, I, n) => cciCalc(D, n),
+    make: (D, I, p) => { const c = cciCalc(D, p.n); return { title: `CCI ${p.n}`, lines: [c], names: ["CCI"], levels: [100, 0, -100], sigs: lvlSigs(c, -100, 100, "CCI") }; } },
+  mfi: { label: "MFI", kind: "mfi", params: [["n", "週期", 3, 40, 1, 14]], extra: (D, I, n) => mfiCalc(D, n),
+    make: (D, I, p) => { const m = mfiCalc(D, p.n); return { title: `MFI ${p.n}（資金流量）`, lines: [m], names: ["MFI"], levels: [80, 20], range: [0, 100], dull: [80, 20], sigs: lvlSigs(m, 20, 80, "MFI") }; } },
+  trix: { label: "TRIX", kind: "trix", params: [["n", "週期", 3, 40, 1, 12], ["m", "訊號線", 2, 30, 1, 9]],
+    make: (D, I, p) => { const t = trixCalc(I.c, p.n), m = smaN(t, p.m); return { title: `TRIX ${p.n}・訊號 ${p.m}`, lines: [t, m], names: ["TRIX", "MA" + p.m], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: crossHold(t, m, 2, "TRIX上穿訊號線", "TRIX跌破訊號線") }; } },
+  srsi: { label: "StochRSI", kind: "srsi", params: [["n", "RSI 週期", 3, 40, 1, 14], ["m", "區間", 3, 40, 1, 14], ["k", "K 平滑", 1, 10, 1, 3], ["d", "D 平滑", 1, 10, 1, 3]],
+    make: (D, I, p) => { const { K, D: d } = srsiCalc(I.c, p.n, p.m, p.k, p.d); return { title: `StochRSI ${p.n}・${p.m}・${p.k}・${p.d}`, lines: [K, d], names: ["K", "D"], levels: [80, 20], range: [0, 100], sigs: crossSigs(K, d, "StochRSI低檔金叉", "StochRSI高檔死叉", (s, i) => (s === "buy" ? d[i] < 20 : d[i] > 80)) }; } },
+  roc: { label: "ROC", kind: "roc", params: [["n", "週期", 2, 120, 1, 12], ["m", "均線", 2, 30, 1, 6]], extra: (D, I, n) => rocCalc(I.c, n),
+    make: (D, I, p) => { const r = rocCalc(I.c, p.n), m = smaN(r, p.m); return { title: `ROC ${p.n}・MA ${p.m}（%）`, lines: [r, m], names: ["ROC", "MA" + p.m], levels: [0], fmt: pct2, sigs: crossHold(r, r.map(v => (v == null ? null : 0)), 2, "ROC轉正", "ROC轉負") }; } },
+  dma: { label: "DMA", kind: "dma", params: [["s", "短均線", 2, 60, 1, 10], ["l", "長均線", 5, 240, 1, 50], ["m", "AMA", 2, 60, 1, 10]],
+    make: (D, I, p) => { const { dif, ama } = dmaCalc(I.c, p.s, Math.max(p.l, p.s + 1), p.m); return { title: `DMA ${p.s}・${p.l}・${p.m}（平行線差）`, lines: [dif, ama], names: ["DIF", "AMA"], levels: [0], sigs: crossHold(dif, ama, 2, "DMA上穿AMA", "DMA跌破AMA") }; } },
+  emv: { label: "EMV", kind: "emv", params: [["n", "週期", 3, 60, 1, 14], ["m", "均線", 2, 30, 1, 9]],
+    make: (D, I, p) => { const { emv, ma } = emvCalc(D, p.n, p.m); return { title: `EMV ${p.n}・MA ${p.m}（簡易波動）`, lines: [emv, ma], names: ["EMV", "MA" + p.m], levels: [0], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: crossHold(emv, emv.map(v => (v == null ? null : 0)), 2, "EMV轉正", "EMV轉負") }; } },
+  tower: { label: "寶塔線", kind: "tower", params: [["k", "翻色要突破幾座塔", 2, 5, 1, 3]],
+    make: (D, I, p) => { const { boxes, state } = towerCalc(D, p.k); return { title: `寶塔線（${p.k} 線翻轉）`, lines: [], names: [], boxes, tower: state, fmt: fmtP, sigs: boxes.map((x, i) => (x && x.flip ? { i, side: x.up ? "buy" : "sell", label: x.up ? "寶塔翻紅" : "寶塔翻綠", v: x.up ? x.t : x.b } : null)).filter(Boolean) }; } },
+  tapi: { label: "TAPI", kind: "tapi", index: true, params: [["m", "均線", 2, 60, 1, 10]],
+    make: (D, I, p) => { const t = tapiCalc(D), m = smaN(t, p.m); return { title: `TAPI 每點成交值（億元）・MA ${p.m}`, lines: [t, m], names: ["TAPI", "MA" + p.m], fmt: v => (v == null ? "—" : v.toFixed(3)), sigs: [] }; } },
 };
-// 字串副圖 → 自訂副圖（同一組資料只算一次）；做不出來（例如個股沒有漲跌家數）時給一個只有標題的空副圖
-function subxMake(id, D, I) {
-  const X = SUBX[id]; if (!X) return null; const memo = (I && (I._subx ||= {})) || {}; if (memo[id] !== undefined) return memo[id];
-  let C = null; if (!(X.index && !D.isIndex)) try { C = X.make(D, I || indicators(D)); } catch {}
-  return (memo[id] = { id, custom: C ? { ...C, kind: X.kind } : { title: `${X.label}：${X.breadth ? "只有加權、櫃買指數有（要每天的漲跌家數；週、月 K 請切回日 K）" : X.index ? "只有加權指數有（大盤成交金額 ÷ 指數，日 K）" : "資料不夠"}`, lines: [], names: [], range: [0, 1], kind: X.kind, sigs: [] } });
+// 字串副圖 → 自訂副圖（同一組資料、同一組參數只算一次）；做不出來（例如個股沒有漲跌家數）時給一個只有標題的空副圖
+// 參數、「新增線」來自使用者的線型設定（indCfg，教學圖用 noCfg 時一律用預設）
+function subxMake(id, D, I, cfgOn = true) {
+  const X = SUBX[id]; if (!X) return null; const p = indParams(id, cfgOn), ex = cfgOn ? indExtras(id) : [], key = id + "|" + JSON.stringify(p) + "|" + ex.map(e => e.n).join(",");
+  const memo = (I && Object.prototype.hasOwnProperty.call(I, "_subx") ? I._subx : I ? (I._subx = {}) : {}); if (memo[key] !== undefined) return memo[key];
+  let C = null; if (!(X.index && !D.isIndex)) try { C = X.make(D, I || indicators(D), p); } catch {}
+  if (C) C = { ...C, nBase: C.lines.length };
+  if (C && X.extra && ex.length) { C = { ...C, lines: [...C.lines], names: [...C.names] }; ex.forEach(e => { try { C.lines.push(X.extra(D, I, e.n)); C.names.push(X.label.replace(/／.*/, "") + e.n); } catch {} }); }
+  return (memo[key] = { id, custom: C ? { ...C, kind: X.kind } : { title: `${X.label}：${X.breadth ? "只有加權、櫃買指數有（要每天的漲跌家數；週、月 K 請切回日 K）" : X.index ? "只有加權指數有（大盤成交金額 ÷ 指數，日 K）" : "資料不夠"}`, lines: [], names: [], range: [0, 1], kind: X.kind, sigs: [] } });
 }
+/* ---------- 技術線型自訂：每個指標的參數、每條線的顏色、新增線（存在這台裝置；教學範例圖一律用課本的預設） ---------- */
+// params：[key, 名稱, 最小, 最大, 間距, 預設]；colors：[線名, 預設顏色變數]；extra(D, I, n)：「新增線」（同一個指標換一個週期再畫一條）
+const IND_BUILTIN = {
+  ma: { label: "均線", main: true, extra: (D, I, n) => I.ma(n) },
+  boll: { label: "布林通道", main: true, params: [["n", "天數", 5, 120, 1, 20], ["k", "標準差倍數", 1, 4, 0.1, 2]], colors: [["通道", "accent"]] },
+  vwap: { label: "VWAP", main: true, params: [["n", "天數", 5, 120, 1, 20]], colors: [["VWAP", "vwap"]] },
+  sar: { label: "拋物線 SAR", main: true, params: [["st", "加速因子（×0.01）", 1, 5, 1, 2], ["mx", "最大加速（×0.01）", 10, 40, 1, 20]] },
+  donch: { label: "唐奇安通道", main: true, params: [["n", "天數", 5, 120, 1, 20]], colors: [["通道", "ma10"]] },
+  kelt: { label: "肯特納通道", main: true, params: [["n", "EMA 天數", 5, 120, 1, 20], ["m", "ATR 倍數", 0.5, 5, 0.1, 2], ["a", "ATR 天數", 2, 60, 1, 10]], colors: [["通道", "s2"]] },
+  ichi: { label: "一目均衡表", main: true, colors: [["轉換線", "s1"], ["基準線", "s3"], ["遲行線", "s2"]] },
+  kd: { label: "KD", params: [["n", "RSV 天數", 3, 60, 1, 9], ["k", "K 平滑", 2, 10, 1, 3], ["d", "D 平滑", 2, 10, 1, 3]], colors: [["K", "s1"], ["D", "s3"]] },
+  rsi: { label: "RSI", params: [["n", "天數", 2, 60, 1, 14]], colors: [["RSI", "s2"]], extra: (D, I, n) => rsiCalc(I.c, n) },
+  macd: { label: "MACD", params: [["f", "快線 EMA", 2, 60, 1, 12], ["s", "慢線 EMA", 5, 120, 1, 26], ["g", "訊號線", 2, 30, 1, 9]], colors: [["DIF", "s1"], ["MACD", "s3"]] },
+  wr: { label: "威廉 %R", params: [["n", "天數", 3, 60, 1, 14]], colors: [["%R", "s2"]], extra: (D, I, n) => wrCalc(D, n) },
+};
+const EXTRA_PAL = ["#e879f9", "#22c55e", "#f97316", "#38bdf8", "#facc15", "#94a3b8"];
+const MA_SLOTS = [["ma5", 5, "s1"], ["ma10", 10, "ma10"], ["ma20", 20, "s2"], ["ma60", 60, "s3"]];
+let IND_CFG = store.get("indcfg", {}) || {}, IND_VER = 1;
+const isHex = c => /^#[0-9a-f]{6}$/i.test(String(c || ""));
+function indSpec(id) { return IND_BUILTIN[id] || (SUBX[id] ? { label: SUBX[id].label, params: SUBX[id].params, extra: SUBX[id].extra } : null); }
+function indParams(id, on = true) { const p = {}; (indSpec(id)?.params || []).forEach(([k, , lo, hi, , def]) => { const v = on ? IND_CFG[id]?.p?.[k] : null; p[k] = v == null || !isFinite(v) ? def : Math.min(hi, Math.max(lo, +v)); }); return p; }
+function indExtras(id, on = true) { return on ? (IND_CFG[id]?.extra || []).filter(e => e && +e.n >= 1).map(e => ({ n: Math.round(+e.n), c: isHex(e.c) ? e.c : null })) : []; }
+function indColor(id, k, on = true) { const c = on ? IND_CFG[id]?.colors?.[k] : null; return isHex(c) ? c : null; }
+function maSlots(on = true) { return MA_SLOTS.map(([id, n, ck], k) => { const s = on ? IND_CFG.ma?.slots?.[k] : null; return { id, k, n: s?.n >= 1 ? Math.round(s.n) : n, c: isHex(s?.c) ? s.c : null, ck }; }); }
+// 均線顏色：槽或新增線自己設定的顏色；都沒有就用主題色
+function maColor(n, col, on = true) { const s = maSlots(on).find(x => x.n === n); if (s) return s.c || col[s.ck] || col.s1; const j = indExtras("ma", on).findIndex(e => e.n === n); return j >= 0 ? indExtras("ma")[j].c || EXTRA_PAL[j % EXTRA_PAL.length] : null; }
+function indSave() { store.set("indcfg", IND_CFG); IND_VER++; mainItemsSync(); }
+// 有自訂參數時換掉 KD、RSI、MACD、布林、威廉、VWAP（其餘從原本的 I 繼承）；同一組資料、同一版設定只算一次
+const IND_MEMO = new WeakMap();
+function applyIndCfg(D, I) {
+  if (!I || I._cfgOf) return I; const hit = IND_MEMO.get(I); if (hit && hit.v === IND_VER) return hit.I;
+  const P = id => [indParams(id), indParams(id, false)], ch = id => { const [a, b] = P(id); return JSON.stringify(a) !== JSON.stringify(b) ? a : null; };
+  let I2 = I; const set = (k, v) => { if (I2 === I) { I2 = Object.create(I); I2._cfgOf = I; } I2[k] = v; };
+  let p; if ((p = ch("kd"))) set("kd", kdCalc(D, p.n, p.k, p.d)); if ((p = ch("rsi"))) set("rsi", rsiCalc(I.c, p.n)); if ((p = ch("macd"))) set("macd", macdCalc(I.c, p.f, p.s, p.g));
+  if ((p = ch("boll"))) set("boll", bollCalc(I.c, p.n, p.k)); if ((p = ch("wr"))) set("wr", wrCalc(D, p.n));
+  if ((p = ch("vwap"))) { const n = p.n; set("_vw", null); Object.defineProperty(I2, "vwap", { get() { return this._vw || (this._vw = vwapCalc(D, n)); } }); }
+  IND_MEMO.set(I, { v: IND_VER, I: I2 }); return I2;
+}
+// 線型自訂面板：ids() 回傳目前開著的指標；改了就存起來並呼叫 onChange（重畫）。每個指標一區：參數、各線顏色、新增線、恢復預設
+const toHex = c => { c = String(c || "").trim(); if (isHex(c)) return c; const m = c.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i); if (m) return "#" + m.slice(1).map(x => x + x).join(""); const r = c.match(/rgba?\((\d+)\D+(\d+)\D+(\d+)/); return r ? "#" + r.slice(1, 4).map(x => (+x).toString(16).padStart(2, "0")).join("") : "#888888"; };
+function indCfgEditor(host, { ids, names = () => null, onChange }) {
+  const cfg = id => (IND_CFG[id] ||= {}), save = () => { indSave(); onChange?.(); };
+  const num = (attrs, v) => `<input type="number" inputmode="decimal" ${attrs} value="${v}">`;
+  const colorIn = (attrs, v) => `<input type="color" ${attrs} value="${toHex(v)}">`;
+  const sec = id => {
+    const sp = indSpec(id); if (!sp) return ""; const p = indParams(id), ex = indExtras(id);
+    let h = `<section class="icfg" data-icfg="${id}"><header><b>${sp.label}</b><button type="button" class="linkbtn" data-icreset="${id}">恢復預設</button></header>`;
+    if (id === "ma") h += `<div class="icrow">${maSlots().map(sl => `<label class="icl">${num(`data-icma="${sl.k}" min="1" max="600" step="1" aria-label="第 ${sl.k + 1} 條均線天數"`, sl.n)}${colorIn(`data-icmac="${sl.k}" aria-label="MA${sl.n} 顏色"`, sl.c || cssVar("--" + sl.ck))}</label>`).join("")}</div><p class="note">四條均線的天數與顏色（指標列上的 MA 籤會跟著改名）</p>`;
+    if (sp.params?.length) h += `<div class="icrow">${sp.params.map(([k, t, lo, hi, st]) => `<label class="icl"><span>${t}</span>${num(`data-icp="${k}" min="${lo}" max="${hi}" step="${st}"`, p[k])}</label>`).join("")}</div>`;
+    const cols = sp.colors || (SUBX[id] ? (names(id) || []).slice(0, 6).map((n, k) => [n, ["s1", "s3", "s2"][k % 3]]) : []);
+    if (cols.length) h += `<div class="icrow">${cols.map(([t, ck], k) => `<label class="icl">${colorIn(`data-icc="${k}" aria-label="${t} 顏色"`, indColor(id, k) || cssVar("--" + ck))}<span>${t}</span></label>`).join("")}</div>`;
+    if (sp.extra) h += `<div class="icrow">${ex.map((e, j) => `<span class="icl icx">${id === "ma" ? "MA" : sp.label.replace(/[ ／].*/, "")}${num(`data-icxn="${j}" min="1" max="600" step="1" aria-label="新增線天數"`, e.n)}${colorIn(`data-icxc="${j}" aria-label="新增線顏色"`, e.c || EXTRA_PAL[j % 6])}<button type="button" class="linkbtn" data-icxdel="${j}" aria-label="刪除這條線">✕</button></span>`).join("")}<button type="button" class="btn sm" data-icxadd>＋新增線</button></div>`;
+    return h + `</section>`;
+  };
+  const render = () => { const L = [...new Set(ids())].filter(indSpec); host.innerHTML = (L.length ? L.map(sec).join("") : `<p class="note">先在上面開啟指標（均線、KD、RSI…），這裡就會出現它的設定。</p>`) + `<p class="icfoot"><button type="button" class="linkbtn" data-icall>全部恢復預設</button><span class="note">設定存在這台裝置，看盤、圖表實驗室、判讀挑戰、個股判讀都會套用；課程範例圖維持課本的預設。</span></p>`; };
+  let tm = 0;
+  const upd = (e, live) => { const t = e.target, sc = t.closest("[data-icfg]"); if (!sc) return; const id = sc.dataset.icfg, c = cfg(id), d = t.dataset;
+    if (d.icp != null) { if (t.value === "") return; (c.p ||= {})[d.icp] = +t.value; }
+    else if (d.icc != null) (c.colors ||= [])[+d.icc] = t.value;
+    else if (d.icma != null) { if (t.value === "") return; ((c.slots ||= [])[+d.icma] ||= {}).n = Math.max(1, Math.round(+t.value)); }
+    else if (d.icmac != null) ((c.slots ||= [])[+d.icmac] ||= {}).c = t.value;
+    else if (d.icxn != null) { if (t.value === "") return; c.extra[+d.icxn].n = Math.max(1, Math.round(+t.value)); }
+    else if (d.icxc != null) c.extra[+d.icxc].c = t.value; else return;
+    clearTimeout(tm); if (live) tm = setTimeout(save, 250); else save(); };
+  host.addEventListener("input", e => upd(e, true)); host.addEventListener("change", e => upd(e, false));
+  host.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const sc = b.closest("[data-icfg]"), id = sc?.dataset.icfg;
+    if (b.hasAttribute("data-icall")) { IND_CFG = {}; save(); return render(); }
+    if (!id) return; const c = cfg(id);
+    if (b.dataset.icreset) delete IND_CFG[id];
+    else if (b.hasAttribute("data-icxadd")) { const used = new Set([...(id === "ma" ? maSlots().map(x => x.n) : []), ...indExtras(id).map(x => x.n)]), pick = (id === "ma" ? [120, 240, 30, 10, 100, 200] : [6, 24, 9, 30, 60, 3]).find(n => !used.has(n) && n !== indParams(id).n) || 10; (c.extra ||= []).push({ n: pick, c: EXTRA_PAL[(c.extra.length) % 6] }); }
+    else if (b.dataset.icxdel != null) c.extra.splice(+b.dataset.icxdel, 1); else return;
+    save(); render(); });
+  render(); return { render };
+}
+// 新增線（RSI、威廉）：同一組資料只算一次
+function extraSeries(id, D, I, n) { const m = Object.prototype.hasOwnProperty.call(I, "_xs") ? I._xs : (I._xs = {}), k = id + n; return m[k] || (m[k] = indSpec(id).extra(D, I, n)); }
 const SUBX_ITEMS = Object.entries(SUBX).map(([id, x]) => ({ id, label: x.label }));
 
 /* ---------- 延伸指標：乖離率、ATR、CCI、MFI、TRIX（副圖），SAR、唐奇安通道、一目均衡表（主圖） ---------- */
@@ -259,7 +357,7 @@ function indicatorBar(host, key, groups, defaults, onChange) {
   let state = new Set(store.get("ind:" + key, defaults));
   const render = () => {
     host.innerHTML = groups.map(g => `<div class="ibar-g" role="group" aria-label="${g.title}"><span class="ibar-t">${g.title}</span>${g.items.map(it =>
-      `<button type="button" class="ichip" data-id="${it.id}" aria-pressed="${state.has(it.id)}">${it.color ? `<i style="background:var(${it.color})"></i>` : ""}${it.label}</button>`).join("")}</div>`).join("");
+      `<button type="button" class="ichip" data-id="${it.id}" aria-pressed="${state.has(it.id)}">${it.hex || it.color ? `<i style="background:${it.hex || `var(${it.color})`}"></i>` : ""}${it.label}</button>`).join("")}</div>`).join("");
   };
   host.addEventListener("click", e => {
     const b = e.target.closest("[data-id]"); if (!b) return;
@@ -270,16 +368,21 @@ function indicatorBar(host, key, groups, defaults, onChange) {
   return { has: id => state.has(id), get state() { return state; }, set(id, on) { on ? state.add(id) : state.delete(id); render(); }, setGroups(g) { groups = g; render(); } };
 }
 const MAIN_ITEMS = [{ id: "ma5", label: "MA5", color: "--s1" }, { id: "ma10", label: "MA10", color: "--ma10" }, { id: "ma20", label: "MA20", color: "--s2" }, { id: "ma60", label: "MA60", color: "--s3" }, { id: "boll", label: "布林", color: "--accent" }, { id: "vwap", label: "VWAP", color: "--vwap" }, { id: "vp", label: "籌碼分佈" }, { id: "sar", label: "SAR", color: "--up" }, { id: "donch", label: "唐奇安通道", color: "--ma10" }, { id: "kelt", label: "肯特納通道", color: "--s2" }, { id: "ichi", label: "一目均衡表", color: "--s3" }];
+// 均線籤的名稱、顏色點跟著線型自訂（例如把 MA60 改成 MA120）
+function mainItemsSync() { MAIN_ITEMS.forEach(it => { const s = maSlots().find(x => x.id === it.id); if (s) { it.label = "MA" + s.n; it.hex = s.c; } }); }
+mainItemsSync();
 // 主圖選項：均線、布林、VWAP、籌碼分佈（Volume Profile）
 const mainOpts = bar => ({ ma: maFrom(bar), boll: bar.has("boll"), vwap: bar.has("vwap"), vp: bar.has("vp"), mainX: ["sar", "donch", "kelt", "ichi"].filter(id => bar.has(id)) });
 // 主圖延伸疊加：SAR（點）、唐奇安通道、一目均衡表（線＋雲帶）；同一組資料只算一次
-function mainXCalc(id, D, I) { const m = (I._mx ||= {}); if (m[id]) return m[id];
-  if (id === "sar") { const { sar, dir } = sarCalc(D); return (m[id] = { dots: sar.map((p, i) => (p == null ? null : { p, up: dir[i] > 0 })), vals: [["SAR", sar, "sar"]] }); }
-  if (id === "donch") { const d = donchCalc(D); return (m[id] = { lines: [[d.up, "ma10", 1.4], [d.lo, "ma10", 1.4], [d.mid, "ma10", 0.9, [3, 3]]], vals: [["通道上", d.up, "ma10"], ["通道下", d.lo, "ma10"]] }); }
-  if (id === "kelt") { const k = keltCalc(D); return (m[id] = { lines: [[k.up, "s2", 1.3], [k.lo, "s2", 1.3], [k.mid, "s2", 0.9, [4, 3]]], vals: [["肯特納上", k.up, "s2"], ["肯特納下", k.lo, "s2"]] }); }
-  const k = ichiCalc(D); return (m[id] = { cloud: [k.A, k.B], lines: [[k.ten, "s1", 1.3], [k.kij, "s3", 1.5], [k.chi, "s2", 1, [2, 3], 26]], vals: [["轉換", k.ten, "s1"], ["基準", k.kij, "s3"], ["先行A", k.A, "up"], ["先行B", k.B, "down"]] }); }
+// lines：[資料, 預設顏色, 粗細, 虛線, ahead, 顏色槽]；vals：[名稱, 資料, 預設顏色, 顏色槽]（顏色槽對應線型自訂裡的第幾個顏色）
+function mainXCalc(id, D, I, on = true) { const p = indParams(id, on), key = id + JSON.stringify(p), m = (I._mx ||= {}); if (m[key]) return m[key];
+  if (id === "sar") { const { sar, dir } = sarCalc(D, p.st / 100, p.mx / 100); return (m[key] = { dots: sar.map((v, i) => (v == null ? null : { p: v, up: dir[i] > 0 })), vals: [["SAR", sar, "sar"]] }); }
+  if (id === "donch") { const d = donchCalc(D, p.n); return (m[key] = { lines: [[d.up, "ma10", 1.4, null, 0, 0], [d.lo, "ma10", 1.4, null, 0, 0], [d.mid, "ma10", 0.9, [3, 3], 0, 0]], vals: [["通道上", d.up, "ma10", 0], ["通道下", d.lo, "ma10", 0]] }); }
+  if (id === "kelt") { const k = keltCalc(D, p.n, p.m, p.a); return (m[key] = { lines: [[k.up, "s2", 1.3, null, 0, 0], [k.lo, "s2", 1.3, null, 0, 0], [k.mid, "s2", 0.9, [4, 3], 0, 0]], vals: [["肯特納上", k.up, "s2", 0], ["肯特納下", k.lo, "s2", 0]] }); }
+  const k = ichiCalc(D); return (m[key] = { cloud: [k.A, k.B], lines: [[k.ten, "s1", 1.3, null, 0, 0], [k.kij, "s3", 1.5, null, 0, 1], [k.chi, "s2", 1, [2, 3], 26, 2]], vals: [["轉換", k.ten, "s1", 0], ["基準", k.kij, "s3", 1], ["先行A", k.A, "up"], ["先行B", k.B, "down"]] }); }
 const SUB_ITEMS = [{ id: "vol", label: "成交量" }, { id: "kd", label: "KD" }, { id: "rsi", label: "RSI" }, { id: "macd", label: "MACD" }, { id: "wr", label: "威廉" }, ...SUBX_ITEMS];
-const maFrom = bar => [5, 10, 20, 60].filter(p => bar.has("ma" + p));
+// 均線：四個槽（MA5、MA10、MA20、MA60 的籤）的天數可以改，另外「新增線」的均線一直開著
+const maFrom = bar => [...new Set([...maSlots().filter(s => bar.has(s.id)).map(s => s.n), ...indExtras("ma").map(e => e.n)])];
 const subsFrom = (bar, ids = ["kd", "rsi", "macd", "wr", "inout", ...Object.keys(SUBX)]) => ids.filter(id => bar.has(id));
 
 // 副圖指標發出的訊號：{ i, si（第幾個副圖）, side, label, v（副圖上的位置） }
@@ -519,7 +622,14 @@ class Chart {
     this.bar.querySelector('[data-z="scale"]').classList.toggle("on", scaled);
   }
   yZoom(f) { this.yz = Math.max(0.5, Math.min(12, this.yz * f)); if (this.yz <= 1) this.yoff = 0; this.draw(); }
-  set(D, opts = {}) { if (D !== this.D && !Chart.keepView) { this.ysm = null; this.view = null; this.yz = 1; this.yoff = 0; this.yfree = false; this.pz = {}; } if (!Chart.keepView || this.hover == null || this.hover >= D.length) { this.hover = null; this.pinned = false; } this.D = D; this.I = opts.I || indicators(D); this.o = opts; this.draw(); return this; }
+  // 線的顏色：線型自訂的顏色 → 沒有就用主題色（畫布要實際顏色；圖例用 CSS 變數，換主題會跟著變）
+  // 自訂副圖第 k 條線：原本的線用設定的顏色或 s1、s3、s2 輪流；新增線用自己的顏色或備用色盤
+  subColor(S, k, col, css = false) { const C = S.custom, base = C.nBase ?? C.lines.length, id = S.id;
+    if (k >= base) { const e = indExtras(id, this.cfgOn)[k - base]; return e?.c || EXTRA_PAL[(k - base) % 6]; }
+    const ck = ["s1", "s3", "s2"][k % 3]; return id ? (css ? this.lcss(id, k, ck) : this.lc(id, k, ck, col)) : css ? `var(--${ck})` : col[ck]; }
+  lc(id, k, ck, col) { return indColor(id, k, this.cfgOn) || col[ck] || cssVar("--" + ck) || "#888"; }
+  lcss(id, k, ck) { return indColor(id, k, this.cfgOn) || `var(--${ck})`; }
+  set(D, opts = {}) { if (D !== this.D && !Chart.keepView) { this.ysm = null; this.view = null; this.yz = 1; this.yoff = 0; this.yfree = false; this.pz = {}; } if (!Chart.keepView || this.hover == null || this.hover >= D.length) { this.hover = null; this.pinned = false; } this.D = D; this.I = opts.I || indicators(D); if (!opts.noCfg) this.I = applyIndCfg(D, this.I); this.cfgOn = !opts.noCfg; this.o = opts; this.draw(); return this; }
   get visible() { return this.o.visible ?? this.D.length; }
   get range() { return this.view || { a: 0, b: this.D.length - 1 }; }
   // 可見範圍：fa 是小數的起點（拖曳時一個像素一個像素地跟手，不會一次跳一根 K 棒），a、b 是整數索引（給計算用）
@@ -539,7 +649,7 @@ class Chart {
     const W = this.host.clientWidth; if (!W) return;
     const narrow = W < 560;
     // 副圖可以疊好幾個：o.subs = ["kd", "macd", { custom }]；舊的 o.sub 也支援
-    const subs = this.subsN = (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean).map(S => (typeof S === "string" && SUBX[S] ? subxMake(S, D, I) : S)).filter(Boolean);
+    const subs = this.subsN = (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean).map(S => (typeof S === "string" && SUBX[S] ? subxMake(S, D, I, this.cfgOn !== false) : S)).filter(Boolean);
     const mainH = Math.round((narrow ? 230 : 300) * Chart.prefs.h), volH = o.noVol ? 0 : Math.round((narrow ? 52 : 66) * Chart.prefs.sh), subH = Math.round((subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112)) * Chart.prefs.sh), gap = 10, axisH = 20;
     const H = mainH + gap + volH + subs.length * (gap + subH) + axisH + 8;
     if (this.canvas.width !== Math.round(W * dpr) || this.canvas.height !== Math.round(H * dpr)) { this.canvas.width = Math.round(W * dpr); this.canvas.height = Math.round(H * dpr); this.canvas.style.height = H + "px"; } // 尺寸沒變就不重設（重設畫布很慢，拖曳時會閃）
@@ -555,7 +665,7 @@ class Chart {
     const top0 = 8, volTop = top0 + mainH + gap, subTop0 = o.noVol ? volTop : volTop + volH + gap; this.paneInv = [];
     const fmtD = o.fmtD || (s => s.slice(5).replace("-", "/"));
     const MA_COL = { 5: col.s1, 10: cssVar("--ma10") || col.accent, 20: col.s2, 60: col.s3 };
-    const mas = (o.ma || []).map((n, k) => ({ n, a: I.ma(n), c: MA_COL[n] || [col.s1, col.s2, col.s3][k % 3] }));
+    const mas = (o.ma || []).map((n, k) => ({ n, a: I.ma(n), c: (this.cfgOn !== false && !o.maPlain && maColor(n, col)) || MA_COL[n] || [col.s1, col.s2, col.s3][k % 3] }));
     const F = o.future; // { from, p10, p25, p50, p75, p90 }：模擬區的機率帶
 
     // 比較其他股票：以「基準日」那根為 0%，換算成同樣的漲跌幅畫在價格座標上（at：該日或之前最近的收盤）。
@@ -575,7 +685,7 @@ class Chart {
       for (const cp of cmpS) { const v = cp.at(D[i].d); if (v != null) { lo = Math.min(lo, v * cp.k); hi = Math.max(hi, v * cp.k); } }
       if (o.boll && I.boll.up[i] != null) { lo = Math.min(lo, I.boll.lo[i]); hi = Math.max(hi, I.boll.up[i]); }
       if (o.vwap && I.vwap[i] != null) { lo = Math.min(lo, I.vwap[i]); hi = Math.max(hi, I.vwap[i]); }
-      for (const id of o.mainX || []) { const M = mainXCalc(id, D, I); for (const [, a] of M.vals) { const v = a[i]; if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } } }
+      for (const id of o.mainX || []) { const M = mainXCalc(id, D, I, this.cfgOn !== false); for (const [, a] of M.vals) { const v = a[i]; if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } } }
       if (F && i >= F.from) { lo = Math.min(lo, F.p25[i - F.from]); hi = Math.max(hi, F.p75[i - F.from]); } // 外圈機率帶超出就裁掉，真實 K 棒才不會被壓扁
     }
     // 對數座標：用 log(價格) 決定高度；縱向放大：以中間為準把價格範圍縮小，可上下平移（yoff）
@@ -641,17 +751,17 @@ class Chart {
       for (let i = 0; i < vis; i++) if (up[i] != null) { started ? ctx.lineTo(X(i), Y(up[i])) : ctx.moveTo(X(i), Y(up[i])); started = true; }
       for (let i = vis - 1; i >= 0; i--) if (lw[i] != null) ctx.lineTo(X(i), Y(lw[i]));
       ctx.fill(); ctx.restore();
-      this.line(up, vis, X, Y, col.accent, 1, 0.7); this.line(lw, vis, X, Y, col.accent, 1, 0.7); this.line(mid, vis, X, Y, col.accent, 1, 0.45, [3, 3]);
+      const bc = this.lc("boll", 0, "accent", col); this.line(up, vis, X, Y, bc, 1, 0.7); this.line(lw, vis, X, Y, bc, 1, 0.7); this.line(mid, vis, X, Y, bc, 1, 0.45, [3, 3]);
     }
     // 延伸疊加：一目均衡表雲帶（先行帶 A 在上偏多＝紅、B 在上偏空＝綠）、各條線、SAR 點
     for (const id of o.mainX || []) {
-      const M = mainXCalc(id, D, I);
+      const M = mainXCalc(id, D, I, this.cfgOn !== false);
       ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
       if (M.cloud) { const [A, B] = M.cloud; for (let i = Math.max(1, va); i < Math.min(vis, vb + 2); i++) { if ([A[i], B[i], A[i - 1], B[i - 1]].some(v => v == null)) continue;
           ctx.fillStyle = A[i] >= B[i] ? col.up : col.down; ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.moveTo(X(i - 1), Y(A[i - 1])); ctx.lineTo(X(i), Y(A[i])); ctx.lineTo(X(i), Y(B[i])); ctx.lineTo(X(i - 1), Y(B[i - 1])); ctx.closePath(); ctx.fill(); }
         ctx.globalAlpha = 1; this.line(A, vis, X, Y, col.up, 0.8, 0.6); this.line(B, vis, X, Y, col.down, 0.8, 0.6); }
       // ahead：這條線用到之後 ahead 根的資料（遲行線），只畫到看得到的範圍，判讀挑戰不會洩漏答案
-      (M.lines || []).forEach(([a, c, w, dash, ahead]) => this.line(ahead ? a.map((v, i) => (i + ahead < vis ? v : null)) : a, vis, X, Y, col[c] || col.accent, w, 0.95, dash));
+      (M.lines || []).forEach(([a, c, w, dash, ahead, slot]) => this.line(ahead ? a.map((v, i) => (i + ahead < vis ? v : null)) : a, vis, X, Y, (slot != null && indColor(id, slot, this.cfgOn)) || col[c] || col.accent, w, 0.95, dash));
       if (M.dots) { const r = Math.max(1.7, Math.min(3, bw * 0.22)); for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) { const d = M.dots[i]; if (!d) continue; ctx.fillStyle = d.up ? col.up : col.down; ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(X(i), Y(d.p), r, 0, 7); ctx.fill(); } ctx.globalAlpha = 1; }
       ctx.restore();
     }
@@ -722,7 +832,7 @@ class Chart {
     if (cmpS.length) { const hv = Math.min(this.hover ?? i1 - 1, i1 - 1); this.cmpSelf = (D[hv].c / D[bi].c - 1) * 100; this.cmpBaseD = D[bi].d; }
     // 均線
     mas.forEach(m => this.line(m.a, vis, X, Y, m.c, 1.6));
-    if (o.vwap) this.line(I.vwap, vis, X, Y, col.vwap, 1.8);
+    if (o.vwap) this.line(I.vwap, vis, X, Y, this.lc("vwap", 0, "vwap", col), 1.8);
     // 折線、頸線、目標價、結構線（可來自設定或附在標記上；只畫到可見範圍）
     ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
     [...(o.shapes || []), ...(o.markers || []).filter(m => m.i < vis).flatMap(m => m.shapes || [])].forEach(sh => {
@@ -830,13 +940,13 @@ class Chart {
         const [a, b] = sub === "rsi" ? [70, 30] : [80, 20];
         ctx.fillStyle = col.band; ctx.fillRect(L, sy(100), pw, sy(a) - sy(100)); ctx.fillRect(L, sy(b), pw, sy(0) - sy(b));
         lvl(a, sy); lvl(b, sy);
-        if (sub === "rsi") this.line(I.rsi, vis, X, sy, col.s2, 1.5);
-        else { this.line(I.kd.K, vis, X, sy, col.s1, 1.5); this.line(I.kd.D, vis, X, sy, col.s3, 1.5); }
+        if (sub === "rsi") { this.line(I.rsi, vis, X, sy, this.lc("rsi", 0, "s2", col), 1.5); indExtras("rsi", this.cfgOn).forEach((e, j) => this.line(extraSeries("rsi", D, I, e.n), vis, X, sy, e.c || EXTRA_PAL[j % 6], 1.2)); }
+        else { this.line(I.kd.K, vis, X, sy, this.lc("kd", 0, "s1", col), 1.5); this.line(I.kd.D, vis, X, sy, this.lc("kd", 1, "s3", col), 1.5); }
       } else if (sub === "wr") {
         const sy = Z(v => subTop + (-v) / 100 * subH, [I.wr]);
         ctx.fillStyle = col.band; ctx.fillRect(L, sy(0), pw, sy(-20) - sy(0)); ctx.fillRect(L, sy(-80), pw, sy(-100) - sy(-80));
         lvl(-20, sy); lvl(-80, sy);
-        this.line(I.wr, vis, X, sy, col.s2, 1.5); this.subY = sy;
+        this.line(I.wr, vis, X, sy, this.lc("wr", 0, "s2", col), 1.5); indExtras("wr", this.cfgOn).forEach((e, j) => this.line(extraSeries("wr", D, I, e.n), vis, X, sy, e.c || EXTRA_PAL[j % 6], 1.2)); this.subY = sy;
       } else if (sub === "inout" && I.io) {
         let m = 5; for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) m = Math.max(m, Math.abs(I.io[i] - 50));
         const sy = Z(v => subTop + subH / 2 - (v - 50) / m * (subH / 2 - 4), [I.io, I.io5]);
@@ -854,7 +964,7 @@ class Chart {
         (C.levels || []).forEach(v => lvl(v, sy));
         if (C.bars) { ctx.globalAlpha = 0.55; C.bars.forEach((v, i) => { if (i >= vis || !v || !inV(i)) return; ctx.fillStyle = C.barColor ? col[C.barColor] : v >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(v); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.max(1, Math.abs(y1 - y0))); }); ctx.globalAlpha = 1; if (C.zeroLine) lvl(0, sy); }
         if (C.boxes) for (let i = Math.max(0, va); i < Math.min(vis, vb + 1); i++) { const x = C.boxes[i]; if (!x) continue; const y0 = sy(x.t), y1 = sy(x.b), w = Math.max(2, Math.round(cw)); ctx.fillStyle = x.up ? col.up : col.down; ctx.globalAlpha = x.flip ? 0.95 : 0.7; ctx.fillRect(Math.round(X(i) - w / 2), Math.min(y0, y1), w, Math.max(1, Math.abs(y1 - y0))); ctx.globalAlpha = 1; }
-        C.lines.forEach((a, k) => this.line(a, vis, X, sy, [col.s1, col.s3, col.s2][k % 3], 1.5));
+        C.lines.forEach((a, k) => this.line(a, vis, X, sy, this.subColor(S, k, col), k >= (C.nBase ?? 99) ? 1.2 : 1.5));
         // 第二組線（例如累計買超、融資餘額）用自己的刻度，數值標在右側
         if (C.lines2) {
           const v2 = C.lines2.flatMap(win).filter(v => v != null); let lo2 = Math.min(...v2), hi2 = Math.max(...v2); if (!v2.length) { lo2 = 0; hi2 = 1; } if (hi2 === lo2) { hi2 += 1; lo2 -= 1; }
@@ -871,7 +981,7 @@ class Chart {
         ctx.globalAlpha = 0.55;
         for (let i = va; i < Math.min(vis, vb + 1); i++) if (osc[i] != null) { ctx.fillStyle = osc[i] >= 0 ? col.up : col.down; const y0 = sy(0), y1 = sy(osc[i]); ctx.fillRect(Math.round(X(i) - cw / 2), Math.min(y0, y1), Math.max(1, Math.round(cw)), Math.abs(y1 - y0)); }
         ctx.globalAlpha = 1;
-        this.line(dif, vis, X, sy, col.s1, 1.5); this.line(sig, vis, X, sy, col.s3, 1.5);
+        this.line(dif, vis, X, sy, this.lc("macd", 0, "s1", col), 1.5); this.line(sig, vis, X, sy, this.lc("macd", 1, "s3", col), 1.5);
       }
       const subY = this.subY || (v => subTop + (100 - v) / 100 * subH);
       { const a0 = subY(0), a1 = subY(1); if (a1 !== a0 && isFinite(a0) && isFinite(a1)) this.paneInv.push({ top: subTop, bot: subTop + subH, inv: y => (y - a0) / (a1 - a0), fmt: C0?.fmt || (v => fmtN(v, Math.abs(v) < 10 ? 2 : 1)) }); }
@@ -892,7 +1002,8 @@ class Chart {
       ctx.restore();
       ctx.restore(); // 副圖裁切結束
       ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`;
-      const ttl = sub === "custom" ? C0.title : { rsi: "RSI 14", kd: "KD 9", macd: "MACD", wr: "威廉 %R 14", inout: "外盤比（%）" }[sub] || "";
+      const pp = id => indParams(id, this.cfgOn), xn = id => indExtras(id, this.cfgOn).map(e => "・" + e.n).join("");
+      const ttl = sub === "custom" ? C0.title : { rsi: () => `RSI ${pp("rsi").n}${xn("rsi")}`, kd: () => { const q = pp("kd"); return q.k === 3 && q.d === 3 ? `KD ${q.n}` : `KD ${q.n}・${q.k}・${q.d}`; }, macd: () => { const q = pp("macd"); return q.f === 12 && q.s === 26 && q.g === 9 ? "MACD" : `MACD ${q.f}・${q.s}・${q.g}`; }, wr: () => `威廉 %R ${pp("wr").n}${xn("wr")}`, inout: () => "外盤比（%）" }[sub]?.() || "";
       ctx.fillText(ttl, L + 4, subTop + 8);
       // 縮放狀態標在標題旁邊，不壓到線
       if (pzz.z !== 1 || Chart.prefs.fit) { const tx = L + 4 + ctx.measureText(ttl).width + 10; ctx.fillStyle = col.accent; ctx.font = `10px ${cssVar("--font-body")}`; ctx.fillText(Chart.prefs.fit ? "貼合資料" + (pzz.z !== 1 ? `・${+pzz.z.toFixed(1)}×` : "") : `放大 ${+pzz.z.toFixed(1)}×`, tx, subTop + 8); }
@@ -971,22 +1082,23 @@ class Chart {
     if (!o.noVol) parts.push(`<span><b>量</b>${o.volLabel ? Math.round(k.v) : k.v.toLocaleString()}</span>`);
     mas.forEach(m => parts.push(`<span style="color:${m.c}"><b style="color:inherit">MA${m.n}</b>${fmtP(m.a[i])}</span>`));
     (this.sigs || []).filter(g => g.i === i).forEach(g => parts.push(`<span class="${g.side === "buy" ? "up" : "down"}"><b style="color:inherit">${g.side === "buy" ? "○ 偏多" : "○ 偏空"}</b>${g.label}</span>`));
-    if (o.vwap) parts.push(`<span style="color:var(--vwap)"><b style="color:inherit">VWAP</b>${fmtP(I.vwap[i])}</span>`);
+    if (o.vwap) parts.push(`<span style="color:${this.lcss("vwap", 0, "vwap")}"><b style="color:inherit">VWAP</b>${fmtP(I.vwap[i])}</span>`);
     if (o.vp && this.vpData) { const V = this.vpData; parts.push(`<span><b>籌碼</b>獲利 ${(V.profit * 100).toFixed(1)}%</span><span style="color:#f0883e"><b style="color:inherit">壓力</b>${fmtP(V.pre)}</span><span style="color:var(--muted)"><b style="color:inherit">均成本</b>${fmtP(V.avg)}</span><span style="color:#3b82f6"><b style="color:inherit">支撐</b>${fmtP(V.sup)}</span>`); }
-    if (o.boll) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
-    for (const id of o.mainX || []) mainXCalc(id, D, I).vals.forEach(([n, a, c]) => a[i] != null && parts.push(`<span style="color:${c === "sar" ? `var(${mainXCalc(id, D, I).dots[i]?.up ? "--up" : "--down"})` : `var(--${c})`}"><b style="color:inherit">${n}</b>${fmtP(a[i])}</span>`));
+    if (o.boll) parts.push(`<span style="color:${this.lcss("boll", 0, "accent")}"><b style="color:inherit">布林</b>${fmtP(I.boll.up[i])} / ${fmtP(I.boll.lo[i])}</span>`);
+    for (const id of o.mainX || []) mainXCalc(id, D, I, this.cfgOn !== false).vals.forEach(([n, a, c, slot]) => a[i] != null && parts.push(`<span style="color:${c === "sar" ? `var(${mainXCalc(id, D, I, this.cfgOn !== false).dots[i]?.up ? "--up" : "--down"})` : slot != null ? this.lcss(id, slot, c) : `var(--${c})`}"><b style="color:inherit">${n}</b>${fmtP(a[i])}</span>`));
     (this.subsN || []).forEach(S => {
       const sub = typeof S === "string" ? S : "custom", C0 = typeof S === "string" ? null : S.custom;
-      if (sub === "wr") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">%R</b>${fmtN(I.wr[i])}</span>`);
+      const xs = id => indExtras(id, this.cfgOn).map((e, j) => `<span style="color:${e.c || EXTRA_PAL[j % 6]}"><b style="color:inherit">${id === "wr" ? "%R" : "RSI"}${e.n}</b>${fmtN(extraSeries(id, D, I, e.n)[i])}</span>`).join("");
+      if (sub === "wr") parts.push(`<span style="color:${this.lcss("wr", 0, "s2")}"><b style="color:inherit">%R</b>${fmtN(I.wr[i])}</span>` + xs("wr"));
       if (sub === "inout" && I.io) parts.push(`<span><b>外盤</b>${D[i].ov.toLocaleString()}</span><span><b>內盤</b>${D[i].iv.toLocaleString()}</span><span style="color:var(--s1)"><b style="color:inherit">外盤比</b>${fmtN(I.io[i])}%（5日 ${fmtN(I.io5[i])}%）</span>`);
-      if (sub === "rsi") parts.push(`<span style="color:var(--s2)"><b style="color:inherit">RSI</b>${fmtN(I.rsi[i])}</span>`);
-      if (sub === "kd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">K</b>${fmtN(I.kd.K[i])}</span><span style="color:var(--s3)"><b style="color:inherit">D</b>${fmtN(I.kd.D[i])}</span>`);
-      if (sub === "macd") parts.push(`<span style="color:var(--s1)"><b style="color:inherit">DIF</b>${fmtN(I.macd.dif[i], 2)}</span><span style="color:var(--s3)"><b style="color:inherit">MACD</b>${fmtN(I.macd.sig[i], 2)}</span><span><b>OSC</b>${fmtN(I.macd.osc[i], 2)}</span>`);
+      if (sub === "rsi") parts.push(`<span style="color:${this.lcss("rsi", 0, "s2")}"><b style="color:inherit">RSI</b>${fmtN(I.rsi[i])}</span>` + xs("rsi"));
+      if (sub === "kd") parts.push(`<span style="color:${this.lcss("kd", 0, "s1")}"><b style="color:inherit">K</b>${fmtN(I.kd.K[i])}</span><span style="color:${this.lcss("kd", 1, "s3")}"><b style="color:inherit">D</b>${fmtN(I.kd.D[i])}</span>`);
+      if (sub === "macd") parts.push(`<span style="color:${this.lcss("macd", 0, "s1")}"><b style="color:inherit">DIF</b>${fmtN(I.macd.dif[i], 2)}</span><span style="color:${this.lcss("macd", 1, "s3")}"><b style="color:inherit">MACD</b>${fmtN(I.macd.sig[i], 2)}</span><span><b>OSC</b>${fmtN(I.macd.osc[i], 2)}</span>`);
       if (sub === "custom") {
         const f = C0.fmt || fmtN;
         if (C0.tower && C0.tower[i]) { const x = C0.tower[i]; parts.push(`<span class="${x.up ? "up" : "down"}"><b style="color:inherit">寶塔${x.up ? "紅" : "綠"}</b>${fmtP(x.b)}～${fmtP(x.t)}</span>`); }
         if (C0.bars && C0.barName) parts.push(`<span><b>${C0.barName}</b>${f(C0.bars[i])}</span>`);
-        C0.lines.forEach((a, n) => parts.push(`<span style="color:var(${["--s1", "--s3", "--s2"][n % 3]})"><b style="color:inherit">${C0.names[n]}</b>${f(a[i])}</span>`));
+        C0.lines.forEach((a, n) => parts.push(`<span style="color:${this.subColor(S, n, null, true)}"><b style="color:inherit">${C0.names[n]}</b>${f(a[i])}</span>`));
         (C0.lines2 || []).forEach((a, n) => parts.push(`<span style="color:var(${["--s2", "--accent"][n % 2]})"><b style="color:inherit">${C0.names2[n]}</b>${f(a[i])}</span>`));
       }
     });
