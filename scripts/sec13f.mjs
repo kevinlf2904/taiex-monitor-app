@@ -83,7 +83,21 @@ async function holdingsOf(cik, acc) {
   return parseInfoTable(xml);
 }
 
+// 除錯：同一個網址換幾種 User-Agent 試，印出狀態碼與 SEC 回的訊息開頭（分辨是 User-Agent 問題還是來源 IP 被擋）
+async function probe() {
+  const url = "https://data.sec.gov/submissions/CIK0001067983.json";
+  for (const ua of [UA, "kline-school research admin@kline-school.vercel.app", "Mozilla/5.0 (compatible; research; kevinlf2904@users.noreply.github.com)", "Sample Company Name AdminContact@sample.com"]) {
+    for (const hdr of [{}, { Accept: "application/json", "Accept-Encoding": "gzip, deflate", Host: "data.sec.gov" }]) {
+      try { const r = await fetch(url, { headers: { "User-Agent": ua, ...hdr }, signal: AbortSignal.timeout(20000) }); const t = await r.text(); console.log("probe", r.status, JSON.stringify(ua), Object.keys(hdr).length ? "+headers" : "", r.status === 200 ? "" : t.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 300)); }
+      catch (e) { console.log("probe 失敗", ua, e.message); }
+      await sleep(400);
+    }
+  }
+  try { const ip = await (await fetch("https://api.ipify.org")).text(); console.log("runner IP", ip); } catch {}
+}
+
 export async function main() {
+  if (DUMP) await probe();
   let tick = new Map(); try { tick = tickerMap(await get("https://www.sec.gov/files/company_tickers.json")); } catch (e) { console.log("代號對照表失敗", e.message); }
   let cmap = {}; try { cmap = JSON.parse(await readFile(CUSIP, "utf8")); } catch {}
   const funds = [], notes = [];
