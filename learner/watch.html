@@ -2171,7 +2171,8 @@ $("#lx").addEventListener("click", e => toolsClick(e)); $("#lTools").addEventLis
 $("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListener("change", e => toolsChange(e));
 setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); }, 3000);
 // 國會分頁：切換頁面（首頁、股票、人物）、期間、排序、在看盤開啟、問 AI
-$("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-cw],[data-csort],[data-copen],[data-cask]"); if (!b) return; const d = b.dataset;
+$("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-cw],[data-csort],[data-copen],[data-cask],[data-cbt]"); if (!b) return; const d = b.dataset;
+  if (d.cbt) return congBtRun(d.cbt === "all");
   if (d.cv) { W.cv = d.cv; renderList(); goY(0); navPush(); }
   else if (d.cw) { W.cw = +d.cw; renderList(); }
   else if (d.csort) { const [k, v] = d.csort.split(":"); W.csort[k] = v; renderList(); }
@@ -2439,7 +2440,7 @@ async function loadCong(force = false) {
   catch (e) { W.cong = { err: e.message, trades: [], people: {} }; } finally { W.congBusy = false; }
   if (W.lt === "cong") renderList();
 }
-const usd = n => (n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${n}`);
+const usd = n => (n == null ? "—" : n >= 1e9 ? `$${(n / 1e9).toFixed(n >= 1e11 ? 0 : 1)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${n}`);
 const amtTxt = a => (!a ? "—" : a[1] == null ? `${usd(a[0])} 以上` : `${usd(a[0])}～${usd(a[1])}`);
 const amtMid = a => (!a ? 0 : a[1] == null ? a[0] : (a[0] + a[1]) / 2);
 const congDays = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
@@ -2466,13 +2467,15 @@ function congShape(g) { // 多人共同 vs 單一人物為主
 function renderCong() {
   const C = W.cong; if (!C) loadCong();
   const [v, arg] = (W.cv || "home").split(/:(.*)/s);
-  $("#lTools").innerHTML = `<span class="note">美國國會議員公開交易申報${C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span>${v !== "home" ? `<button class="btn sm" data-cv="home">‹ 國會山首頁</button>` : ""}`;
+  $("#lTools").innerHTML = `<span class="note">美國國會議員公開交易申報${C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "國會山"], ["bt", "申報後回測"], ["f13", "13F 機構"]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${v === "stock" || v === "person" || (v === "f13" && arg) ? `<button class="btn sm" data-cv="${v === "f13" ? "f13" : "home"}">‹ 返回</button>` : ""}`;
+  if (v === "f13") { $("#lx").innerHTML = f13Html(arg); return "資料：SEC EDGAR Form 13F-HR（每天檢查一次新申報）；股票代號用 OpenFIGI 由 CUSIP 對照，對不到的只顯示名稱。僅供研究參考，不是買賣建議。"; }
   if (!C || C.err || !C.trades?.length) { $("#lx").innerHTML = `<p class="note" style="padding:16px">${!C ? "載入中…" : C.err ? "⚠ 還沒有資料（" + esc(C.err) + "）。資料由每天的排程從眾議院、參議院官方申報整理，第一次跑完後就會出現。" : "還沒有資料：資料由每天的排程從眾議院、參議院官方申報整理，第一次跑完後就會出現。"}</p>`; return "資料來源：眾議院書記官、參議院電子申報系統的定期交易報告（PTR）。"; }
   const winSeg = `<span class="seg sm" role="group" aria-label="期間">${[30, 90].map(w => `<button data-cw="${w}" aria-pressed="${W.cw === w}">近 ${w} 天</button>`).join("")}</span>`;
   const stockA = t => `<button class="linkbtn ctk" data-cv="stock:${esc(t)}">${esc(t)}</button>`, personA = pid => `<button class="linkbtn" data-cv="person:${esc(pid)}">${esc(pName(pid))}</button><span class="note"> ${pTag(pid)}</span>`;
   const docA = t => (t.doc ? `<a href="${esc(t.doc)}" target="_blank" rel="noopener" class="note">原始文件</a>` : "");
   let h = "";
-  if (v === "home") {
+  if (v === "bt") h = congBtHtml();
+  else if (v === "home") {
     const W30 = congWin(W.cw), cons = congAgg(W30, true), hot = congAgg(W30, false), cs = W.csort.cons, hs = W.csort.hot;
     cons.sort((a, b) => (cs === "amt" ? b.mid - a.mid : b.buyers.size - a.buyers.size || b.mid - a.mid));
     hot.sort((a, b) => (hs === "n" ? b.n - a.n : hs === "amt" ? b.mid - a.mid : b.people.size - a.people.size || b.n - a.n));

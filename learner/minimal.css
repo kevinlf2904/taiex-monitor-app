@@ -276,7 +276,8 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
 :root :is(.btn, .btn.sm, .ichip, .groups button, .ixc, .cochips button, .mkseg button, .sxnav button, .sxco, .chip, .theme-btn, .icon-btn, .tabs, .tabs button, #lessonToc a, #lessonToc button, .afchips button, .pod .pbadge) { background: transparent; border-color: transparent; box-shadow: none; }
 :root :is(.ichip, .groups button, .cochips button, .mkseg button, .sxnav button, .tabs button, #lessonToc a, #lessonToc button, .afchips button)[aria-pressed="true"],
 :root .tabs button[aria-selected="true"], :root #lessonToc [aria-current] { background: transparent; color: var(--ink); border-color: transparent; box-shadow: inset 0 -1.5px 0 var(--gold); font-weight: 500; }
-:root .btn.primary { background: transparent; color: var(--accent); border-color: transparent; box-shadow: inset 0 -1.5px 0 var(--gold); }
+/* 要蓋過 :root[data-style="layout"] .btn.primary 的字色（那條是實心底配底色字，底被上一行拿掉後字會看不見） */
+:root:root .btn.primary { background: transparent; color: var(--accent); border-color: transparent; box-shadow: inset 0 -1.5px 0 var(--gold); }
 :root .btn:hover, :root .chip:hover, :root .theme-btn:hover { color: var(--ink); border-color: transparent; }
 /* 輸入框：只留一條底線 */
 :root :is(input.code, select.sel, input[type="number"], input[type="text"], input[type="search"], select, textarea) { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
