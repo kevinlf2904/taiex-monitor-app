@@ -189,4 +189,11 @@ export async function main({ days = 200, log = console.log } = {}) {
   await writeFile(DATA + "congress-docs.json", JSON.stringify(seen));
   return out;
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("ok", o.trades.length, "筆，", Object.keys(o.people).length, "人，資料截止", o.cutoff)).catch(e => { console.error(e); process.exit(1); });
+// 除錯：node scripts/congress.mjs --dump 3 → 印出幾份「讀得到文字但解析出 0 筆」的眾議院 PTR 原文，對照格式用
+async function dump(n) {
+  const seen = await readFile(DATA + "congress-docs.json", "utf8").then(JSON.parse).catch(() => ({})), ids = Object.entries(seen).filter(([k, v]) => k[0] === "H" && v === 0).map(([k]) => k.slice(1)).slice(0, n);
+  for (const id of ids) { const y = new Date().getUTCFullYear(); for (const yy of [y, y - 1]) { try { const txt = await pdfText(Buffer.from(await (await get(`https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/${yy}/${id}.pdf`, {}, 1)).arrayBuffer())); console.log(`===== ${id} (${yy}) =====\n${txt.slice(0, 3000)}\n===== 解析：${JSON.stringify(parseHousePtrText(txt).slice(0, 3))}`); break; } catch {} } }
+  const S = Object.entries(seen).filter(([k, v]) => k[0] === "S" && v === 0).map(([k]) => k.slice(1)).slice(0, 1); console.log("參議院 0 筆的例子：", S);
+}
+if (process.argv[2] === "--dump") dump(+process.argv[3] || 3).catch(e => { console.error(e); process.exit(1); });
+else if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("ok", o.trades.length, "筆，", Object.keys(o.people).length, "人，資料截止", o.cutoff)).catch(e => { console.error(e); process.exit(1); });
