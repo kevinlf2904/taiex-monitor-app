@@ -663,7 +663,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
       <div class="ph"><h2>K 線</h2></div>
       <div class="k-status"><span id="kNote"></span><span>往左拖曳會自動載入更早的資料；兩指縮放；放大後圖表鎖定，按「全部」解鎖</span></div>
       <div class="klayers" id="kset">
-      <details class="kset" id="klInd"><summary><span>指標</span><span class="note" id="klIndSum"></span></summary><div class="ibar" id="dIbar"></div></details>
+      <details class="kset" id="klInd"><summary><span>指標</span><span class="note" id="klIndSum"></span></summary><div class="ibar" id="dIbar"></div><details class="icfgbox" id="icfgBox" style="padding:0 14px 8px"><summary>⚙ 自訂線型（線的顏色、參數、新增線）</summary><div id="icfgHost"></div></details></details>
       <details class="kset" id="klOv"><summary><span>疊加分析</span><span class="note" id="klOvSum"></span></summary><div class="ibar" id="dObar"></div></details>
       <details class="kset" id="klStrat"><summary><span>策略訊號</span><span class="note" id="klStratSum"></span></summary>
         <div class="strat"><label>策略訊號 <select class="sel" id="stratSel"></select></label><span class="note" id="stratNote"></span></div>
@@ -2819,9 +2819,16 @@ overlayMigrate("watch2");
 // 指標（主圖、副圖）和疊加分析分成兩個可以收合的區塊；舊版存在同一組設定（ind:watch2）裡的疊加，第一次搬到 ind:watch2ov
 { const ovIds = new Set(OVERLAY_ITEMS.map(x => x.id)), old = store.get("ind:watch2", null);
   if (Array.isArray(old) && old.some(id => ovIds.has(id))) { if (store.get("ind:watch2ov", null) == null) store.set("ind:watch2ov", old.filter(id => ovIds.has(id))); store.set("ind:watch2", old.filter(id => !ovIds.has(id))); } }
-const dIndBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); });
+const dIndBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); if ($("#icfgBox").open) icfg.render(); });
 const dOvBar = indicatorBar($("#dObar"), "watch2ov", [{ title: "疊加", items: OVERLAY_ITEMS }], [], () => { drawK(); renderAna(); });
 const OV_IDS = new Set(OVERLAY_ITEMS.map(x => x.id));
+// 線型自訂：列出目前開著的指標（均線算一個），改了就重畫；均線籤的名稱跟著更新
+const ICFG_MAIN = ["boll", "vwap", "sar", "donch", "kelt", "ichi"];
+const icfg = indCfgEditor($("#icfgHost"), {
+  ids: () => [...(MAIN_ITEMS.some(it => /^ma\d/.test(it.id) && dIndBar.has(it.id)) || indExtras("ma").length ? ["ma"] : []), ...ICFG_MAIN.filter(id => dIndBar.has(id)), ...["kd", "rsi", "macd", "wr", ...Object.keys(SUBX)].filter(id => dIndBar.has(id))],
+  names: id => (kChart.subsN || []).find(S => S.id === id)?.custom?.names?.slice(0, (kChart.subsN || []).find(S => S.id === id).custom.nBase),
+  onChange: () => { dIndBar.set("ma5", dIndBar.has("ma5")); drawK(); renderAna(); ksetSummary(); } });
+$("#icfgBox").addEventListener("toggle", () => { if ($("#icfgBox").open) icfg.render(); });
 const dBar = { has: id => (OV_IDS.has(id) ? dOvBar : dIndBar).has(id), set: (id, on) => (OV_IDS.has(id) ? dOvBar : dIndBar).set(id, on) };
 // 策略：定義在 analysis.js 的 STRAT_DEFS（可調參數）；這裡記住每個策略的參數與買賣方式
 const STRATS = { "": { name: "不顯示" }, ...Object.fromEntries(Object.entries(STRAT_DEFS).map(([k, v]) => [k, { name: v.name, fn: (D, I) => stratRun(k, D, I, (W.stratP || {})[k]) }])) };
@@ -2962,7 +2969,7 @@ function drawK(fresh = false, shift = 0) {
   const key = W.sel + ":" + W.k + ":" + (minute ? "m" : "d"); if (W.kKey !== key) { fresh = true; W.kKey = key; } // 第一次在技術分頁畫這檔／這個週期時，先顯示最近一段
   if (W.sel === "T00") D.isIndex = true; // TAPI 用加權的成交金額（億元）；櫃買指數的量是千股，不算 TAPI
   if ((W.sel === "T00" || W.sel === "O00") && W.k === "D") breadthAttach(D);
-  const I = indicators(D), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D, I);
+  const I = applyIndCfg(D, indicators(D)), S = STRATS[W.strat], sigs = S?.fn ? (() => { try { return S.fn(D, I); } catch { return []; } })() : [], ex = overlays(D, I);
   // 回測：只在「回測期間」裡買賣（訊號用整段資料算），資金用設定的初始資金；固定張數買不起時資金自動放大
   const win = S?.fn ? btWindow(D) : null; let bt = null;
   if (win) try { const Dw = D.slice(win.a, win.b + 1), sw = sigs.filter(g => g.i >= win.a && g.i <= win.b).map(g => ({ ...g, i: g.i - win.a })), units = W.btOpt.size === "units" && !isFut(W.sel);

@@ -591,6 +591,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
           <div class="row"><label><input type="checkbox" id="fibz">斐波那契回撤 / 延伸</label></div>
           <h3>副圖</h3>
           <div class="ibar compact" id="labIbar"></div>
+          <details class="icfgbox" id="labIcfgBox"><summary>⚙ 自訂線型（線的顏色、參數、新增線）</summary><div id="labIcfg"></div></details>
         </div>
         <div class="panel ctrl">
           <h3>判讀 <span class="note" id="roDate"></span></h3>
@@ -2438,7 +2439,7 @@ function drawLesson() {
   const L = LESSONS[lessonIdx], v = L.variants ? L.variants[lessonView.variant] : {}, { D, I } = lessonView;
   const all = lessonMarkers(L, D, I, v), markers = lessonView.pat ? all.filter(m => m.pat === lessonView.pat) : all;
   const ex = L.chart.extra ? L.chart.extra(D, I) : {};
-  lessonChart.set(D, { I, ma: L.chart.ma, boll: L.chart.boll, vwap: L.chart.vwap, vp: L.chart.vp, mainX: L.chart.mainX, ...(L.chart.subs ? { subs: L.chart.subs(D, I) } : { sub: v.sub || L.chart.sub }), markers, hlines: L.chart.hlines ? L.chart.hlines(D) : L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
+  lessonChart.set(D, { I, noCfg: true, ma: L.chart.ma, boll: L.chart.boll, vwap: L.chart.vwap, vp: L.chart.vp, mainX: L.chart.mainX, ...(L.chart.subs ? { subs: L.chart.subs(D, I) } : { sub: v.sub || L.chart.sub }), markers, hlines: L.chart.hlines ? L.chart.hlines(D) : L.sr ? srLevels(D) : [], shapes: ex.shapes, zones: ex.zones });
   const g = $("#lessonGallery");
   g.hidden = !L.gallery;
   if (L.gallery) g.innerHTML = L.gallery.map(id => {
@@ -2604,7 +2605,7 @@ function labDraw() {
   if ($("#zz").checked) ex.shapes.push(zigzagShape(lab.D));
   const fibOn = $("#fibz").checked; if (fibOn && fibShape(lab.D)) ex.shapes.push(fibShape(lab.D));
   const off = s => lab.skip.has(btKey(s)) || (s.side === "buy" ? !lab.useBuy : s.side === "sell" ? !lab.useSell : false);
-  labChart.set(lab.D, { I: lab.I, ma, boll: $("#boll").checked, subs: subsFrom(labBar), noVol: !labBar.has("vol"), markers: sigs.map(s => (off(s) ? { ...s, dim: true, label: s.label ? s.label + "（略過）" : s.label } : s)), hlines: [...($("#sr").checked ? srLevels(lab.D) : []), ...(fibOn ? fibLines(lab.D) : [])], shapes: ex.shapes, zones: ex.zones });
+  labChart.set(lab.D, { I: lab.I, ma, maPlain: true, boll: $("#boll").checked, subs: subsFrom(labBar), noVol: !labBar.has("vol"), markers: sigs.map(s => (off(s) ? { ...s, dim: true, label: s.label ? s.label + "（略過）" : s.label } : s)), hlines: [...($("#sr").checked ? srLevels(lab.D) : []), ...(fibOn ? fibLines(lab.D) : [])], shapes: ex.shapes, zones: ex.zones });
   renderBT(sigs);
 }
 const fmtMoney = v => `${v < 0 ? "−" : ""}${Math.round(Math.abs(v)).toLocaleString()} 元`;
@@ -2682,7 +2683,11 @@ $("#btPanel").addEventListener("toggle", e => { if (e.target.classList?.contains
 $("#labNew").addEventListener("click", () => { lab.seed = Math.floor(Math.random() * 1e6); store.set("labSeed", lab.seed); labData(); labDraw(); });
 $("#labLen").addEventListener("change", () => { labData(); labDraw(); });
 ["maA", "maB", "maC", "boll", "sr", "zz", "smcz", "fibz", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
-const labBar = indicatorBar($("#labIbar"), "lab", [{ title: "副圖（可多選）", items: [...SUB_ITEMS, { id: "inout", label: "外盤比" }] }], ["vol", "kd"], () => labDraw());
+const labBar = indicatorBar($("#labIbar"), "lab", [{ title: "副圖（可多選）", items: [...SUB_ITEMS, { id: "inout", label: "外盤比" }] }], ["vol", "kd"], () => { labDraw(); if ($("#labIcfgBox").open) labIcfg.render(); });
+// 線型自訂（副圖與布林；這裡的均線用上面的三條 MA 設定）
+const labIcfg = indCfgEditor($("#labIcfg"), { ids: () => [...($("#boll").checked ? ["boll"] : []), ...["kd", "rsi", "macd", "wr", ...Object.keys(SUBX)].filter(id => labBar.has(id))],
+  names: id => { const S = (labChart.subsN || []).find(x => x.id === id); return S?.custom?.names?.slice(0, S.custom.nBase); }, onChange: () => labDraw() });
+$("#labIcfgBox").addEventListener("toggle", () => { if ($("#labIcfgBox").open) labIcfg.render(); });
 
 /* ================= 判讀挑戰 ================= */
 const HORIZON = 10, SHOW = 120;
