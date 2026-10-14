@@ -635,7 +635,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
       <div class="l-ix" id="ix2"></div>
-      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="pod">名人</button><button data-l="cong">國會</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button><button data-l="after">盤後</button></div>
+      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="pod">名人</button><button data-l="cong">申報</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button><button data-l="after">盤後</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
         <button type="button" class="gsadd" data-gsearch-add>🔍 搜尋代號或名稱，加入自選</button>
@@ -764,7 +764,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.15-72</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.15-73</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1591,7 +1591,7 @@ function scanHit(k, D) {
 // 客戶端掃描：K 線組合（analysis.js 的 KPAT）與技術條件，抓一次日 K 就把所有條件都算完
 const CSCANS = [...KPAT.map(k => ({ id: "k:" + k.id, group: "kline", side: k.side, title: k.name, desc: k.desc, hit: D => k.hit(D) })),
   ...SCANS.map(([k, t, d]) => ({ id: "s:" + k, group: "tech", title: t, desc: d, hit: D => scanHit(k, D) }))];
-const SCR_GROUPS = [["smart", "總覽"], ["score", "評分"], ["hot", "熱門"], ["kline", "K線"], ["tech", "技術"], ["fund", "基本"], ["theme", "題材"], ["chips", "籌碼"]];
+const SCR_GROUPS = [["smart", "總覽"], ["custom", "自訂條件"], ["score", "評分"], ["rs", "相對強弱"], ["hot", "熱門"], ["kline", "K線"], ["tech", "技術"], ["fund", "基本"], ["theme", "題材"], ["chips", "籌碼"]];
 if (!SCR_GROUPS.some(g => g[0] === W.scrG)) W.scrG = "smart";
 function scanUniverse() {
   const fromScr = (W.scr?.lists || []).filter(L => scrGroup(L) === "hot").flatMap(L => L.rows.slice(0, 15).map(r => r.code));
@@ -1619,6 +1619,7 @@ function renderScreen() {
   const J = W.scr, g = W.scrG; let h = "";
   if (J?.ratio) { const t = J.ratio.up + J.ratio.down || 1, u = Math.round(J.ratio.up / t * 100); h += `<div class="adr"><b>漲跌家數比</b><div><span class="up">${u}%</span><span class="adrbar"><i style="width:${u}%"></i></span><span class="down">${100 - u}%</span></div></div>`; }
   h += `<div class="seg scrseg" role="group" aria-label="選股分類">${SCR_GROUPS.map(([k, t]) => `<button data-sg="${k}" aria-pressed="${k === g}">${t}</button>`).join("")}</div>`;
+  if (g === "custom" || g === "rs") { const r = toolsBody(g === "custom" ? "scan" : "rs"); $("#lx").innerHTML = h + r.h + (r.note ? `<p class="note gnote">${r.note}</p>` : ""); return; } // 自訂條件選股、相對強弱（程式在 tools.js）
   const client = g === "kline" || g === "tech", S = W.cscan;
   if (g === "score") { // 綜合評分排行：掃描範圍內每一檔用 stockScore 計分
     if (!W.cscan && W.lt === "screen") setTimeout(runCScan, 0);
@@ -2382,7 +2383,7 @@ function renderMkt() {
     if (!CAL) body = `<p class="note">載入中…</p>`;
     else if (CAL.err || !CAL.rows) body = `<p class="note err">⚠ ${esc(CAL.err || "沒有資料")}</p>`;
     else {
-      const all = [...(K !== "conf" ? CAL.rows.map(r => ({ ...r, t: "ex" })) : []), ...(K !== "ex" ? (CAL.conf || []).map(r => ({ ...r, t: "conf" })) : [])].filter(r => r.date >= a && r.date <= b), by = new Map();
+      const all = [...(K !== "conf" ? CAL.rows.map(r => ({ ...r, t: "ex" })) : []), ...(K !== "ex" ? (CAL.conf || []).map(r => ({ ...r, t: "conf" })) : [])].filter(r => r.date >= a && r.date <= b && (K !== "mine" || mine.has(r.code))), by = new Map();
       all.forEach(r => (by.get(r.date) || by.set(r.date, []).get(r.date)).push(r));
       const days = Array.from({ length: 7 }, (_, k) => { const d = new Date(a + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + k); return d.toISOString().slice(0, 10); });
       const sel = days.includes(W.calDay) ? W.calDay : null;
@@ -2390,8 +2391,9 @@ function renderMkt() {
         return `<button data-mk="calDay" data-v="${d}" aria-pressed="${d === sel}" class="${d === W.today ? "today" : ""}"><small>${"日一二三四五六"[dt.getUTCDay()]}</small><b>${+d.slice(8)}</b><span>${c ? `<i class="cc">說${c}</i>` : ""}${e ? `<i class="ce">息${e}</i>` : ""}${!c && !e ? "—" : ""}</span></button>`; }).join("")}</div>`
         + ([...by].filter(([d]) => !sel || d === sel).map(([d, L]) => { const dt = new Date(d + "T00:00:00Z"); return `<div class="calday"><div class="cald"><b>${d.slice(5).replace("-", "/")}</b><small>（${"日一二三四五六"[dt.getUTCDay()]}）</small></div><ul>${L.sort((x, y) => mine.has(y.code) - mine.has(x.code) || (x.t > y.t ? 1 : -1)).map(r => `<li><button data-sel="${r.code}" class="${mine.has(r.code) ? "mine" : ""}"><span><i class="${r.t === "conf" ? "cc" : "ce"}">${r.t === "conf" ? "法說" : r.kind}</i> ${r.code} ${esc(r.name)}</span><small>${r.t === "conf" ? esc([r.time, (r.note || "").slice(0, 24)].filter(Boolean).join("・")) : `${r.cash ? `現金 ${r.cash} 元` : ""}${r.stock ? `・配股 ${r.stock}` : ""}`}</small></button></li>`).join("")}</ul></div>`; }).join("") || `<p class="note">${(sel || a).slice(5).replace("-", "/")}${sel ? "" : `～${b.slice(5).replace("-", "/")}`} 沒有${K === "conf" ? "法說會" : K === "ex" ? "除權息" : "法說會或除權息"}</p>`);
     }
-    h += fsec("cal", "理財行事曆", body + `<p class="note" style="margin:6px 0 0">★ 是你的自選或庫存；點日期只看那一天，再點一次看整週。資料：${esc(CAL?.source || "證交所、櫃買中心")}，以公告為準。</p>`, `${a.slice(5).replace("-", "/")}～${b.slice(5).replace("-", "/")}`,
-      mkSeg("calWk", String(W.calWk), [["0", "本週"], ["1", "下週"], ["2", "下下週"]]) + " " + mkSeg("calK", K, [["all", "全部"], ["conf", "法說會"], ["ex", "除權息"]])); }
+    const dl = calDeadlines(a, b); if (dl.length && CAL && !CAL.err) body += `<ul class="tlist caldl">${dl.map(x => `<li><span class="ctag one">${x.d.slice(5).replace("-", "/")}</span> ${esc(x.t)}</li>`).join("")}</ul>`;
+    h += fsec("cal", "理財行事曆", body + `<p class="note" style="margin:6px 0 0">★ 是你的自選或庫存（選「★ 我的」只看這些）；點日期只看那一天，再點一次看整週。資料：${esc(CAL?.source || "證交所、櫃買中心")}，以公告為準。</p>`, `${a.slice(5).replace("-", "/")}～${b.slice(5).replace("-", "/")}`,
+      mkSeg("calWk", String(W.calWk), [["0", "本週"], ["1", "下週"], ["2", "下下週"]]) + " " + mkSeg("calK", K, [["all", "全部"], ["mine", "★ 我的"], ["conf", "法說會"], ["ex", "除權息"]])); }
   $("#lx").innerHTML = h;
 }
 // 大盤的產業：到資金分頁打開「產業別」板塊（看成分股）；找不到同名的就到選股
@@ -2468,7 +2470,9 @@ function congShape(g) { // 多人共同 vs 單一人物為主
 function renderCong() {
   const C = W.cong; if (!C) loadCong();
   const [v, arg] = (W.cv || "home").split(/:(.*)/s);
-  $("#lTools").innerHTML = `<span class="note">美國國會議員公開交易申報${C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "國會山"], ["bt", "申報後回測"], ["f13", "13F 機構"]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${v === "stock" || v === "person" || (v === "f13" && arg) ? `<button class="btn sm" data-cv="${v === "f13" ? "f13" : "home"}">‹ 返回</button>` : ""}`;
+  $("#lTools").innerHTML = `<span class="note">${v === "tw" ? "台灣政治人物財產申報（監察院廉政專刊）" : v === "ins" ? "台股內部人持股轉讓事前申報" : v === "f13" ? "美國機構 13F 持股申報" : "美國國會議員公開交易申報"}${(v === "home" || v === "bt" || v === "stock" || v === "person") && C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "美國國會"], ["bt", "申報後回測"], ["f13", "13F 機構"], ["tw", "台灣政治人物"], ["ins", "內部人"]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${v === "stock" || v === "person" || ((v === "f13" || v === "tw") && arg) ? `<button class="btn sm" data-cv="${v === "f13" || v === "tw" ? v : "home"}">‹ 返回</button>` : ""}`;
+  if (v === "ins") { const r = toolsBody("ins"); $("#lx").innerHTML = r.h; return r.note; }
+  if (v === "tw") { $("#lx").innerHTML = twoHtml(arg); return twoNote(); }
   if (v === "f13") { $("#lx").innerHTML = f13Html(arg); return "資料：SEC EDGAR Form 13F-HR（每天檢查一次新申報）；股票代號用 OpenFIGI 由 CUSIP 對照，對不到的只顯示名稱。僅供研究參考，不是買賣建議。"; }
   if (!C || C.err || !C.trades?.length) { $("#lx").innerHTML = `<p class="note" style="padding:16px">${!C ? "載入中…" : C.err ? "⚠ 還沒有資料（" + esc(C.err) + "）。資料由每天的排程從眾議院、參議院官方申報整理，第一次跑完後就會出現。" : "還沒有資料：資料由每天的排程從眾議院、參議院官方申報整理，第一次跑完後就會出現。"}</p>`; return "資料來源：眾議院書記官、參議院電子申報系統的定期交易報告（PTR）。"; }
   const winSeg = `<span class="seg sm" role="group" aria-label="期間">${[30, 90].map(w => `<button data-cw="${w}" aria-pressed="${W.cw === w}">近 ${w} 天</button>`).join("")}</span>`;

@@ -34,6 +34,10 @@ export async function mock(ctx) {
   await ctx.route("**/data/insider.json", r => J(r, { rows: [{ d: "2026-09-01", code: "2330", name: "台積電", who: "董事", role: "董事本人", how: "一般交易", sh: 500000, hold: 2e6, market: "上市" }] }));
   await ctx.route("**/data/chipx.json", r => J(r, { date: "2026-10-13", lend: { "2330": [120, 5000] }, dt: { "2330": 25.5 }, pcr: [["2026-10-13", 88.76, 68.95]], notes: [] }));
   await ctx.route("**/data/tdcc/*.json", r => J(r, {}));
+  await ctx.route("**/data/tw-officials.json", r => J(r, { updated: "2026-10-14T00:00:00Z", issues: [{ no: 321, date: "2026-09-22" }, { no: 300, date: "2026-03-20" }], decl: [
+    { pid: "王小明", name: "王小明", org: "立法院", title: "立法委員", date: "2025-11-01", kind: "定期申報", issue: 300, stocks: [{ name: "台積電", code: "2330", owner: "王小明", sh: 1000 }, { name: "鴻海", code: "2317", owner: "配偶", sh: 2000 }] },
+    { pid: "王小明", name: "王小明", org: "立法院", title: "立法委員", date: "2026-06-29", kind: "就到職申報", issue: 321, stocks: [{ name: "台積電", code: "2330", owner: "王小明", sh: 3000 }, { name: "廣達", code: "2382", owner: "王小明", sh: 1000 }] },
+    { pid: "李大華", name: "李大華", org: "新北市政府", title: "局長", date: "2026-05-01", kind: "就到職申報", issue: 321, stocks: [{ name: "台積電", code: "2330", owner: "李大華", sh: 500 }, { name: "MeganHoldingsLtd", code: "", owner: "李大華", sh: 10, cur: "美元" }] }] }));
   return { KV };
 }
 // 開一個頁面，收集頁面錯誤
