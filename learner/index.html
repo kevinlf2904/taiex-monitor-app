@@ -591,7 +591,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
           <div class="row"><label><input type="checkbox" id="fibz">斐波那契回撤 / 延伸</label></div>
           <h3>副圖</h3>
           <div class="ibar compact" id="labIbar"></div>
-          <details class="icfgbox" id="labIcfgBox"><summary>⚙ 自訂線型（線的顏色、參數、新增線）</summary><div id="labIcfg"></div></details>
+          <p class="note">線的顏色、參數、新增線：圖右上「設定」→「線型」</p>
         </div>
         <div class="panel ctrl">
           <h3>判讀 <span class="note" id="roDate"></span></h3>
@@ -784,7 +784,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.14-68</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.14-69</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -2683,11 +2683,8 @@ $("#btPanel").addEventListener("toggle", e => { if (e.target.classList?.contains
 $("#labNew").addEventListener("click", () => { lab.seed = Math.floor(Math.random() * 1e6); store.set("labSeed", lab.seed); labData(); labDraw(); });
 $("#labLen").addEventListener("change", () => { labData(); labDraw(); });
 ["maA", "maB", "maC", "boll", "sr", "zz", "smcz", "fibz", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
-const labBar = indicatorBar($("#labIbar"), "lab", [{ title: "副圖（可多選）", items: [...SUB_ITEMS, { id: "inout", label: "外盤比" }] }], ["vol", "kd"], () => { labDraw(); if ($("#labIcfgBox").open) labIcfg.render(); });
-// 線型自訂（副圖與布林；這裡的均線用上面的三條 MA 設定）
-const labIcfg = indCfgEditor($("#labIcfg"), { ids: () => [...($("#boll").checked ? ["boll"] : []), ...["kd", "rsi", "macd", "wr", ...Object.keys(SUBX)].filter(id => labBar.has(id))],
-  names: id => { const S = (labChart.subsN || []).find(x => x.id === id); return S?.custom?.names?.slice(0, S.custom.nBase); }, onChange: () => labDraw() });
-$("#labIcfgBox").addEventListener("toggle", () => { if ($("#labIcfgBox").open) labIcfg.render(); });
+const labBar = indicatorBar($("#labIbar"), "lab", [{ title: "副圖（可多選）", items: [...SUB_ITEMS, { id: "inout", label: "外盤比" }] }], ["vol", "kd"], () => labDraw());
+addEventListener("indcfg", () => { if (lab.D) labDraw(); });
 
 /* ================= 判讀挑戰 ================= */
 const HORIZON = 10, SHOW = 120;

@@ -270,6 +270,8 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
 
 /* 無框設計（全部風格）：元件不要框——區塊、卡片、按鈕、膠囊都沒有底色和框線，只剩文字；選中用金色細底線 */
 :root :is(.panel, .card, .sxcard, .mcard, .qcard, .icitem, .itrc, .igchip, .igme, .mchip, .ixcard, .iseg, .iflow, .bwrap, .itheme, .gtile, .cokv > div, .pod .pcard, .pod .pcall, .pod .pfr, .d-kv, .d-kv > div, .mtiles > *, .mkbox > *) { background: transparent; border-color: transparent; box-shadow: none; }
+/* 浮在畫面上的面板（圖表設定、搜尋建議、彈出視窗）要有底色，不然會和底下的圖重疊看不清楚 */
+:root :is(.scalepop, .sugg, .sheet, .shot-pop, .chat-panel).panel, :root .scalepop { background: var(--surface); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
 :root .d-kv { gap: 0; }
 :root :is(.btn, .btn.sm, .ichip, .groups button, .ixc, .cochips button, .mkseg button, .sxnav button, .sxco, .chip, .theme-btn, .icon-btn, .tabs, .tabs button, #lessonToc a, #lessonToc button, .afchips button, .pod .pbadge) { background: transparent; border-color: transparent; box-shadow: none; }
 :root :is(.ichip, .groups button, .cochips button, .mkseg button, .sxnav button, .tabs button, #lessonToc a, #lessonToc button, .afchips button)[aria-pressed="true"],
