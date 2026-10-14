@@ -4,14 +4,15 @@
 // 來源（官方公開）：SEC EDGAR —— data.sec.gov 的申報清單、www.sec.gov/Archives 的資訊表（information table XML）；
 //   13F 只有 CUSIP 和名稱：股票代號先用 OpenFIGI（CUSIP → 代號，免金鑰、每分鐘有次數限制）查，查過的記在 learner/data/f13-cusip.json；
 //   查不到時再用 SEC 的 company_tickers.json 依公司名稱對照，都對不到就只顯示名稱。
-// SEC 要求程式存取要帶可聯絡的 User-Agent：在 repo 的 secrets 設 SEC_UA（例如「名字 email」）會優先使用。
+// SEC 要求程式存取要帶「名稱＋email」格式的 User-Agent（沒有 email 會被擋 403）：預設用 repo 擁有者的 GitHub noreply 地址；
+//   想換成自己的聯絡信箱，在 repo 的 Actions secrets 設 SEC_UA（例如「kline-school you@example.com」）。
 // 注意：13F 只有「季底那天」的多頭持股，不含放空、現金、非美股；申報最晚在季底後 45 天，看到的是過去的部位。
 
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const OUT = fileURLToPath(new URL("../learner/data/f13.json", import.meta.url)), CUSIP = fileURLToPath(new URL("../learner/data/f13-cusip.json", import.meta.url));
-const UA = (process.env.SEC_UA || "").trim() || "kline-school-learner research (https://github.com/kevinlf2904/taiex-monitor-app)";
+const UA = (process.env.SEC_UA || "").trim() || "kline-school-learner kevinlf2904@users.noreply.github.com";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const DUMP = process.argv.includes("--dump");
 

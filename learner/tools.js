@@ -2,7 +2,7 @@
    這個檔案只定義函式（載入時 watch.html 的 W 還沒建立），由 watch.html 的清單分頁「工具」呼叫 renderTools()。
    資料都存在這台裝置的瀏覽器（localStorage）；指標用日 K 判斷，日 K 每 5 分鐘重抓一次。 */
 
-const TOOLS_VIEWS = [["sum", "每日摘要"], ["scan", "條件選股"], ["rs", "相對強弱"], ["cal", "我的行事曆"], ["alert", "指標提醒"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"]];
+const TOOLS_VIEWS = [["sum", "每日摘要"], ["scan", "條件選股"], ["rs", "相對強弱"], ["cal", "我的行事曆"], ["ins", "內部人申報"], ["alert", "指標提醒"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"]];
 const toolsDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 // 日 K（6 個月）：5 分鐘內重複用
 async function dailyFresh(c) {
@@ -237,6 +237,8 @@ function renderTools() {
       ${W.cal?.err ? `<p class="note">⚠ 除權息、法說會資料暫時拿不到（${esc(W.cal.err)}），只列固定的公布期限。</p>` : ""}
       ${Object.entries(by).map(([d, L]) => `<div class="calday"><b>${d.slice(5).replace("-", "/")}（${"日一二三四五六"[new Date(d + "T00:00:00Z").getUTCDay()]}）</b><ul class="tlist">${L.map(e => `<li><span class="ctag ${e.k === "div" ? "many" : "one"}">${{ div: "除權息", conf: "法說會", rev: "營收", fin: "財報" }[e.k]}</span> ${e.code ? `<button class="linkbtn" data-tsel="${e.code}">${esc(nameOf(e.code))} ${e.code}</button> ` : ""}${esc(e.t)}</li>`).join("")}</ul></div>`).join("") || `<p class="note">${W.cal ? "未來 70 天沒有自選、庫存的除權息或法說會。" : "載入中…"}</p>`}</section>`;
     note = "除權息來自證交所、櫃買中心的預告表，法說會來自公開資訊觀測站；營收、財報是法定公布期限（實際日期公司可能提早）。";
+  } else if (v === "ins") {
+    h = insHtml(); note = "內部人申報是公開資訊，可以當成籌碼面的參考；大股東轉讓的原因很多（繳稅、贈與、信託、資金需求），不一定代表看壞。";
   } else if (v === "alert") {
     const L = IR(), opt = COND.map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join("");
     h = `<section class="csec"><h3>指標條件提醒 <button class="btn sm" data-tx="irnow">立即檢查</button></h3>
@@ -280,11 +282,12 @@ async function jBH() {
 }
 const retPct = v => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
 function toolsClick(e) {
-  if (W.lt !== "tools") return; const b = e.target.closest("[data-tv],[data-tx],[data-tsel],[data-irdel],[data-paside],[data-jdel],[data-mm],[data-scadd],[data-scdel],[data-scrun],[data-rsk],[data-rsrun]"); if (!b) return; const d = b.dataset;
+  if (W.lt !== "tools") return; const b = e.target.closest("[data-tv],[data-tx],[data-tsel],[data-irdel],[data-paside],[data-jdel],[data-mm],[data-scadd],[data-scdel],[data-scrun],[data-rsk],[data-rsrun],[data-insf]"); if (!b) return; const d = b.dataset;
   if (b.hasAttribute("data-scadd")) { SC().rules.push({ k: "above" }); scSave(); return renderList(); }
   if (d.scdel != null) { SC().rules.splice(+d.scdel, 1); scSave(); return renderList(); }
   if (b.hasAttribute("data-scrun")) return scRun();
   if (d.rsk) { W.rsK = d.rsk; return renderList(); }
+  if (d.insf) { W.insF = d.insf; W.insQ = ""; return renderList(); }
   if (b.hasAttribute("data-rsrun")) return rsRun();
   if (d.tv) { W.tv = d.tv; renderList(); navPush(); }
   else if (d.tsel) select(d.tsel);
@@ -310,6 +313,7 @@ function toolsChange(e) {
   else if (d.scu != null) { SC().uni = t.value; scSave(); renderList(); }
   else if (d.scc != null) { SC().codes = t.value; scSave(); }
   else if (d.scr != null) { SC().rules[+d.scr] = { k: t.value }; scSave(); renderList(); }
+  else if (d.insq != null) { const q = t.value.trim().toUpperCase(); if (q !== (W.insQ || "")) { W.insQ = q; setTimeout(renderList, 0); } } // 輸入框被移除時會再觸發一次 change，延後重畫避免巢狀重畫
   else if (d.scp != null) { SC().rules[+d.scp].p = t.value === "" ? null : +t.value; scSave(); }
 }
 // 多週期共振：日、週、月 K 的多空判讀放在一起，三個方向一致才算共振
@@ -318,4 +322,98 @@ function mtfHtml() {
   const per = [["日", base], ["週", agg(base, weekKey)], ["月", agg(base, d => d.slice(0, 7))]].map(([t, D]) => { if (!D || D.length < (t === "月" ? 18 : 30)) return [t, null]; const I = indicators(D), it = readout(D, I, D.length - 1), b = it.filter(x => x.b > 0).length, s = it.filter(x => x.b < 0).length, sc = it.length ? (b - s) / it.length : 0; return [t, sc > 0.1 ? 1 : sc < -0.1 ? -1 : 0]; });
   const ok = per.filter(x => x[1] != null), all = ok.length >= 2 && ok.every(x => x[1] === ok[0][1]) && ok[0][1] !== 0;
   return `<div class="mtf"><span class="note">多週期：</span>${per.map(([t, v]) => `<span class="${v > 0 ? "up" : v < 0 ? "down" : ""}">${t} ${v == null ? "資料不足" : v > 0 ? "偏多" : v < 0 ? "偏空" : "中性"}</span>`).join("・")} ${all ? `<b class="${ok[0][1] > 0 ? "up" : "down"}">→ ${ok.length} 個週期${ok[0][1] > 0 ? "偏多" : "偏空"}共振</b>` : `<span class="note">→ 方向不一致，還沒有共振</span>`}</div>`;
+}
+
+/* ---------- 國會：申報後跟單回測（申報公開的隔一個交易日收盤買進，持有 30／90 天，和 SPY 同期比） ---------- */
+// 申報日當天的收盤前不一定看得到申報，所以用「申報日之後第一個交易日的收盤」進場，避免偷看；另外算「交易日進場」當對照（現實中做不到）
+const CBT_H = [[21, "30 天"], [63, "90 天"]];
+async function congBtRun(all) {
+  const C = W.cong; if (!C?.trades?.length) return;
+  const buys = C.trades.filter(t => t.k === "buy" && t.assetType === "股票" && /^[A-Z][A-Z.]{0,6}$/.test(t.ticker));
+  const cnt = buys.reduce((m, t) => m.set(t.ticker, (m.get(t.ticker) || 0) + 1), new Map()), tick = [...cnt].sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, all ? 250 : 60);
+  const R = (W.cbt = { busy: true, done: 0, total: tick.length + 1, all }); renderList();
+  const load = async T => { if (!Array.isArray(W.congK[T])) { try { const j = await getJ(`/api/kline?code=${encodeURIComponent(T)}&months=12`); W.congK[T] = j.data || []; } catch (e) { W.congK[T] = { err: e.message }; } } R.done++; if (R.done % 5 === 0 && W.lt === "cong" && W.cv === "bt") renderList(); };
+  await load("SPY"); let k = 0; await Promise.all(Array.from({ length: 5 }, async () => { while (k < tick.length) await load(tick[k++]); }));
+  const S = Array.isArray(W.congK.SPY) ? W.congK.SPY : [], sIdx = new Map(S.map((x, i) => [String(x.d).slice(0, 10), i])), set = new Set(tick);
+  // 同一檔在交易日前後 30 天內有幾個不同的人買 → 多人共同 vs 單一人物
+  const crowd = t => new Set(buys.filter(x => x.ticker === t.ticker && Math.abs(Date.parse(x.traded) - Date.parse(t.traded)) <= 30 * 864e5).map(x => x.pid)).size;
+  R.rows = buys.filter(t => set.has(t.ticker)).map(t => {
+    const D = W.congK[t.ticker]; if (!Array.isArray(D) || D.length < 5) return null; const ds = D.map(x => String(x.d).slice(0, 10));
+    const iF = ds.findIndex(d => d > t.filed), iT = ds.findIndex(d => d >= t.traded); if (iF < 0) return null;
+    const ret = (i, h) => (i >= 0 && i + h < D.length ? D[i + h].c / D[i].c - 1 : null);
+    const spy = (i, h) => { if (i < 0 || i + h >= D.length) return null; const a = sIdx.get(ds[i]), b = sIdx.get(ds[i + h]); return a != null && b != null ? S[b].c / S[a].c - 1 : null; };
+    const o = { t, crowd: crowd(t), big: (t.amount?.[0] || 0) >= 50001 };
+    CBT_H.forEach(([h]) => { o["f" + h] = ret(iF, h); o["s" + h] = spy(iF, h); o["t" + h] = ret(iT, h); }); return o;
+  }).filter(Boolean);
+  R.skipped = tick.filter(T => !Array.isArray(W.congK[T]) || !W.congK[T].length); R.busy = false; R.at = Date.now(); if (W.lt === "cong") renderList();
+}
+function cbtStat(L, h, key = "f") {
+  const v = L.map(x => x[key + h]).filter(x => x != null), ex = L.filter(x => x[key + h] != null && x["s" + h] != null).map(x => x[key + h] - x["s" + h]); if (!v.length) return null;
+  const srt = [...v].sort((a, b) => a - b);
+  return { n: v.length, avg: v.reduce((a, b) => a + b, 0) / v.length, med: srt[srt.length >> 1], win: v.filter(x => x > 0).length / v.length, ex: ex.length ? ex.reduce((a, b) => a + b, 0) / ex.length : null, beat: ex.length ? ex.filter(x => x > 0).length / ex.length : null };
+}
+function congBtHtml() {
+  const R = W.cbt, run = `<button class="btn sm primary" data-cbt="60" ${R?.busy ? "disabled" : ""}>${R?.busy ? `載入股價 ${R.done}/${R.total}…` : R ? "重新計算" : "開始回測（筆數最多的 60 檔）"}</button> <button class="btn sm" data-cbt="all" ${R?.busy ? "disabled" : ""}>全部股票（較慢）</button>`;
+  let h = `<section class="csec"><h3>申報後跟單回測 ${run}</h3>
+    <p class="note">問題：看到議員「申報買進」後才跟著買，賺得到嗎？做法：每一筆股票買進申報，在<strong>申報日之後第一個交易日的收盤</strong>買進，持有約 30 天（21 個交易日）與 90 天（63 個交易日），和同期間的 SPY（標普 500 ETF）比。「交易日進場」是假設在議員實際交易那天就買——現實中看不到，只用來看申報延遲吃掉多少報酬。</p>`;
+  if (!R?.rows) return h + `</section>`;
+  const L = R.rows, row = (t, G) => `<tr><td>${t}</td>${CBT_H.map(([hh]) => { const s = cbtStat(G, hh); return s ? `<td>${s.n}</td><td class="${cls(s.avg)}">${retPct(s.avg)}</td><td>${retPct(s.med)}</td><td>${Math.round(s.win * 100)}%</td><td class="${cls(s.ex)}"><b>${retPct(s.ex)}</b></td><td>${s.beat != null ? Math.round(s.beat * 100) + "%" : "—"}</td>` : `<td colspan="6" class="note">還不到持有期間</td>`; }).join("")}</tr>`;
+  const head = `<thead><tr><th rowspan="2">分組</th>${CBT_H.map(([, t]) => `<th colspan="6">持有 ${t}</th>`).join("")}</tr><tr>${CBT_H.map(() => "<th>筆數</th><th>平均</th><th>中位數</th><th>賺錢比例</th><th>贏 SPY（平均）</th><th>贏 SPY 比例</th>").join("")}</tr></thead>`;
+  const tf = cbtStat(L, 21, "t"), tn = cbtStat(L, 63, "t");
+  h += `<div class="ctbl"><table>${head}<tbody>${row("全部買進申報", L)}${row("多人共同（前後 30 天 ≥ 2 人買）", L.filter(x => x.crowd >= 2))}${row("單一人物", L.filter(x => x.crowd < 2))}${row("大額（下限 ≥ $50K）", L.filter(x => x.big))}${row("小額（$50K 以下）", L.filter(x => !x.big))}${row("眾議院", L.filter(x => W.cong.people?.[x.t.pid]?.chamber !== "參議院"))}${row("參議院", L.filter(x => W.cong.people?.[x.t.pid]?.chamber === "參議院"))}</tbody></table></div>
+    <p class="note">對照：如果能在<strong>交易日</strong>就買，30 天平均 ${retPct(tf?.avg)}、90 天平均 ${retPct(tn?.avg)}（現實中做不到，差距就是申報延遲的成本）。</p>`;
+  const per = [...L.reduce((m, x) => m.set(x.t.pid, [...(m.get(x.t.pid) || []), x]), new Map())].map(([pid, G]) => ({ pid, G, s: cbtStat(G, 21) })).filter(x => x.s && x.s.n >= 3).sort((a, b) => (b.s.ex ?? -9) - (a.s.ex ?? -9));
+  h += `<h4>依人物（至少 3 筆，依 30 天贏 SPY 排序）</h4><div class="ctbl"><table>${head}<tbody>${per.slice(0, 25).map(x => row(`<button class="linkbtn" data-cv="person:${esc(x.pid)}">${esc(pName(x.pid))}</button>`, x.G)).join("")}</tbody></table></div>
+    <p class="note">樣本：${L.length} 筆買進申報、${new Set(L.map(x => x.t.ticker)).size} 檔股票（資料從 ${L.map(x => x.t.filed).sort()[0] || "—"} 開始，時間還短、樣本小，結果容易被少數幾檔左右）。${R.skipped?.length ? `拿不到股價而略過：${R.skipped.slice(0, 12).map(esc).join("、")}${R.skipped.length > 12 ? ` 等 ${R.skipped.length} 檔` : ""}。` : ""}沒算手續費、匯率與稅；過去的結果不代表未來。</p></section>`;
+  return h;
+}
+
+/* ---------- 13F 機構持股 ---------- */
+async function f13Load() { if (W.f13) return W.f13; try { const r = await fetch("data/f13.json", { cache: "no-cache" }); if (!r.ok) throw new Error(r.status === 404 ? "排程還沒跑完第一次" : `HTTP ${r.status}`); W.f13 = await r.json(); } catch (e) { W.f13 = { err: e.message, funds: [] }; } if (W.lt === "cong") renderList(); return W.f13; }
+const F13_CHG = { new: ["新進", "up"], add: ["加碼", "up"], cut: ["減碼", "down"], sold: ["出清", "down"], same: ["持平", ""] };
+const f13Tag = c => `<span class="ctag ${c === "new" || c === "add" ? "many" : c === "same" ? "" : "one"}">${F13_CHG[c]?.[0] || c}</span>`;
+const f13Tk = r => (r.ticker ? `<button class="linkbtn ctk" data-copen="${esc(r.ticker)}">${esc(r.ticker)}</button>` : "") + `<div class="note cas">${esc(r.name)}${r.pc ? `（${r.pc === "PUT" ? "賣權" : "買權"}）` : ""}</div>`;
+function f13Html(arg) {
+  const F = W.f13; if (!F) { f13Load(); return `<p class="note" style="padding:16px">載入中…</p>`; }
+  if (F.err || !F.funds?.length) return `<p class="note" style="padding:16px">⚠ 13F 資料還沒有（${esc(F.err || "沒有資料")}）。資料由每天的排程從 SEC EDGAR 整理。</p>`;
+  if (arg) {
+    const f = F.funds.find(x => x.cik === arg); if (!f) return `<p class="note">找不到這家機構</p>`;
+    const sh = n => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "K" : n);
+    return `<section class="csec"><h3>${esc(f.who)} <span class="note">${esc(f.name)}</span> <a class="note" href="${esc(f.doc)}" target="_blank" rel="noopener">SEC 原始申報</a></h3>
+      <div class="cokv three"><div><span>持股日期（季底）</span><b>${f.period}</b><small>${f.filed} 申報・上一季 ${f.prevPeriod || "—"}</small></div><div><span>申報市值</span><b>${usd(f.total)}</b><small>${f.n} 檔</small></div><div><span>本季變動</span><b><span class="up">新進 ${f.rows.filter(r => r.chg === "new").length}・加碼 ${f.rows.filter(r => r.chg === "add").length}</span></b><small><span class="down">減碼 ${f.rows.filter(r => r.chg === "cut").length}・出清 ${f.sold.length}</span></small></div></div>
+      <div class="ctbl"><table><thead><tr><th>股票</th><th>占比</th><th>市值</th><th>股數</th><th>上一季股數</th><th>變動</th></tr></thead><tbody>
+      ${f.rows.map(r => `<tr><td>${f13Tk(r)}</td><td>${r.pct}%</td><td>${usd(r.value)}</td><td>${sh(r.sh)}</td><td>${sh(r.psh)}</td><td>${f13Tag(r.chg)}${r.psh && r.chg !== "same" ? ` <span class="note">${retPct(r.sh / r.psh - 1)}</span>` : ""}</td></tr>`).join("")}
+      ${f.sold.map(r => `<tr><td>${f13Tk(r)}</td><td>—</td><td>—</td><td>0</td><td>${sh(r.psh)}</td><td>${f13Tag("sold")}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note">變動用股數比（±2% 以內算持平），不受股價漲跌影響。只列前 60 大與有變動的持股。</p></section>`;
+  }
+  // 機構共同動向：同一檔有幾家新進／加碼、幾家減碼／出清
+  const agg = new Map(); for (const f of F.funds) for (const r of [...f.rows, ...f.sold]) { if (r.pc) continue; const k = r.ticker || r.cusip, g = agg.get(k) || agg.set(k, { r, up: [], dn: [], hold: 0 }).get(k); if (r.chg === "new" || r.chg === "add") g.up.push(f.who); else if (r.chg === "cut" || r.chg === "sold") g.dn.push(f.who); if (r.chg !== "sold") g.hold++; }
+  const A = [...agg.values()], top = A.filter(g => g.up.length).sort((a, b) => b.up.length - a.up.length || a.dn.length - b.dn.length).slice(0, 25), out = A.filter(g => g.dn.length).sort((a, b) => b.dn.length - a.dn.length).slice(0, 15);
+  const who = L => L.map(w => esc(w.split(" ")[0])).join("、");
+  return `<section class="csec"><h3>13F 機構持股 <span class="note">${F.funds.length} 家・SEC Form 13F-HR</span></h3>
+    <p class="note">管理資產 1 億美元以上的機構每季要申報美股多頭持股，最晚在季底後 45 天公開——看到的是<strong>上一季底</strong>的部位，現在可能已經不同；不含放空、現金與非美股。</p>
+    <div class="ctbl"><table><thead><tr><th>機構</th><th>持股日期</th><th>市值</th><th>檔數</th><th>前 3 大</th><th>新進／出清</th></tr></thead><tbody>
+    ${F.funds.map(f => `<tr><td><button class="linkbtn" data-cv="f13:${f.cik}">${esc(f.who)}</button><div class="note cas">${esc(f.name)}</div></td><td>${f.period}<div class="note">${f.filed} 申報</div></td><td>${usd(f.total)}</td><td>${f.n}</td><td>${f.rows.slice(0, 3).map(r => `${esc(r.ticker || r.name)} ${r.pct}%`).join("<br>")}</td><td><span class="up">${f.rows.filter(r => r.chg === "new").length}</span>／<span class="down">${f.sold.length}</span></td></tr>`).join("")}</tbody></table></div>
+    <h4>多家機構同時新進或加碼</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>新進／加碼</th><th>減碼／出清</th><th>持有家數</th></tr></thead><tbody>${top.map(g => `<tr><td>${f13Tk(g.r)}</td><td class="up"><b>${g.up.length}</b> <span class="note">${who(g.up)}</span></td><td class="down">${g.dn.length || ""} <span class="note">${who(g.dn)}</span></td><td>${g.hold}</td></tr>`).join("")}</tbody></table></div>
+    <h4>多家機構減碼或出清</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>減碼／出清</th><th>新進／加碼</th></tr></thead><tbody>${out.map(g => `<tr><td>${f13Tk(g.r)}</td><td class="down"><b>${g.dn.length}</b> <span class="note">${who(g.dn)}</span></td><td class="up">${g.up.length || ""}</td></tr>`).join("")}</tbody></table></div>
+    ${(F.notes || []).length ? `<p class="note">⚠ ${F.notes.map(esc).join("；")}</p>` : ""}</section>`;
+}
+
+/* ---------- 台股內部人持股轉讓事前申報 ---------- */
+async function insLoad() { if (W.ins) return W.ins; try { const r = await fetch("data/insider.json", { cache: "no-cache" }); if (!r.ok) throw new Error(r.status === 404 ? "排程還沒跑完第一次" : `HTTP ${r.status}`); W.ins = await r.json(); } catch (e) { W.ins = { err: e.message, rows: [] }; } if (W.lt === "tools" || W.dtab) renderList(); return W.ins; }
+const insSh = n => (n == null ? "—" : `${Math.round(n / 1000).toLocaleString()} 張`);
+function insTable(L) {
+  return `<div class="ctbl"><table><thead><tr><th>申報日</th><th>股票</th><th>申報人</th><th>身分</th><th>轉讓方式</th><th>轉讓股數</th><th>目前持股</th><th>占持股</th></tr></thead><tbody>${L.map(r => `<tr><td>${r.d}</td><td><button class="linkbtn" data-tsel="${r.code}">${esc(r.name || nameOf(r.code))} ${r.code}</button></td><td>${esc(r.who)}</td><td>${esc(r.role)}</td><td>${esc(r.how)}${r.to ? `<div class="note">受讓：${esc(r.to)}</div>` : ""}</td><td>${insSh(r.sh)}</td><td>${insSh(r.hold)}</td><td>${r.sh && r.hold ? Math.round((r.sh / r.hold) * 100) + "%" : "—"}</td></tr>`).join("") || `<tr><td colspan="8" class="note">沒有申報</td></tr>`}</tbody></table></div>`;
+}
+function insHtml() {
+  const I = W.ins; if (!I) { insLoad(); return `<p class="note">載入中…</p>`; }
+  if (I.err || !I.rows?.length) return `<p class="note">⚠ 內部人申報資料還沒有（${esc(I.err || "沒有資料")}）。資料由每個交易日的排程從證交所、櫃買中心整理。</p>`;
+  const mine = new Set([...myCodes(), ...Object.keys(W.hold || {})]), f = W.insF || "mine", q = (W.insQ || "").trim();
+  const L = I.rows.filter(r => (q ? r.code === q || (r.name || "").includes(q) : f === "mine" ? mine.has(r.code) : true));
+  const by = [...I.rows.filter(r => r.d >= new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)).reduce((m, r) => { const g = m.get(r.code) || m.set(r.code, { code: r.code, name: r.name, n: 0, sh: 0, who: new Set() }).get(r.code); g.n++; g.sh += r.sh || 0; g.who.add(r.who); return m; }, new Map()).values()].sort((a, b) => b.sh - a.sh).slice(0, 15);
+  return `<section class="csec"><h3>內部人持股轉讓申報 <span class="seg sm" role="group">${[["mine", "自選＋庫存"], ["all", "全部"]].map(([k, t]) => `<button data-insf="${k}" aria-pressed="${f === k && !q}">${t}</button>`).join("")}</span> <input data-insq value="${esc(q)}" placeholder="代號或名稱" style="width:110px"></h3>
+    <p class="note">董事、監察人、經理人與持股 10% 以上的大股東，要轉讓持股前必須先申報；申報後一個月內才可轉讓，所以這是「打算轉讓」，不一定已經賣出。轉讓方式是「贈與」「信託」通常和買賣無關，「一般交易」「盤後鉅額」才是在市場上賣。</p>
+    ${insTable(L.slice(0, 150))}
+    <h4>近 30 天申報轉讓張數最多</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>申報筆數</th><th>人數</th><th>轉讓股數合計</th></tr></thead><tbody>${by.map(g => `<tr><td><button class="linkbtn" data-tsel="${g.code}">${esc(g.name || nameOf(g.code))} ${g.code}</button></td><td>${g.n}</td><td>${g.who.size}</td><td>${insSh(g.sh)}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">資料：${esc(I.source || "")}・更新 ${I.updated ? new Date(Date.parse(I.updated) + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ") : "—"}・保留最近 120 天。</p></section>`;
 }

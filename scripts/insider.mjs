@@ -23,17 +23,21 @@ export function toIso(s) {
   return null;
 }
 const num = s => { const v = +String(s ?? "").replace(/[,\s]/g, ""); return Number.isFinite(v) ? v : null; };
-// swagger 裡名稱含「轉讓」的 GET 路徑
+// swagger 裡名稱含「轉讓」的 GET 路徑（「持股未轉讓日報表」是申報後沒轉讓的追蹤，不算）
 export function findPaths(sw) {
-  return Object.entries(sw?.paths || {}).filter(([, v]) => v.get).map(([p, v]) => [p, `${v.get.summary || ""} ${v.get.description || ""} ${(v.get.tags || []).join(" ")}`]).filter(([, t]) => /轉讓/.test(t));
+  return Object.entries(sw?.paths || {}).filter(([, v]) => v.get).map(([p, v]) => [p, `${v.get.summary || ""} ${v.get.description || ""} ${(v.get.tags || []).join(" ")}`]).filter(([, t]) => /轉讓/.test(t) && !/未轉讓/.test(t));
 }
-// 一筆原始資料 → 統一欄位；欄名用關鍵字找
+// 一筆原始資料 → 統一欄位；欄名用關鍵字找（上櫃的日期、代號、名稱是英文欄名）
+// 股數：預定轉讓總股數、目前持有、轉讓後持股都是「自有持股＋保留運用決定權信託股數」兩欄相加；「轉讓方式及股數-轉讓股數」常是空的
 export function normRow(r, market) {
-  const ks = Object.keys(r), k = (...re) => ks.find(x => re.some(e => e.test(x)));
-  const kD = k(/申報日/, /^日期$/, /出表日/), kC = k(/公司代號/, /代號/), kN = k(/公司名稱/, /公司簡稱/, /名稱/), kW = k(/申報人身分/, /身分/, /職稱/), kP = k(/姓名/, /申報人$/, /申報人(?!身)/);
-  const kM = k(/轉讓方式/, /方式/), kS = k(/擬轉讓股數|預定轉讓|申報轉讓股數|轉讓股數/), kH = k(/目前持有|持有股數|持股/), kTo = k(/受讓人/, /受讓/), kR = k(/有效|期間|期限/);
+  const ks = Object.keys(r), k = (...re) => { for (const e of re) { const x = ks.find(y => e.test(y)); if (x) return x; } };
+  const sum = re => { const L = ks.filter(x => re.test(x)); if (!L.length) return null; const v = L.map(x => num(r[x])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) : null; };
+  const kD = k(/申報日/, /出表日/, /^Date$/i, /日期/), kC = k(/公司代號/, /CompanyCode/i, /代號/), kN = k(/公司名稱/, /公司簡稱/, /CompanyName/i);
+  const kW = k(/身分/, /職稱/), kP = k(/姓名/), kM = k(/轉讓方式/), kTo = k(/受讓人/), kR = k(/有效轉讓期間/, /期間/);
   const code = String(r[kC] ?? "").trim(), d = toIso(r[kD]); if (!/^\d{4,6}[A-Z]?$/.test(code) || !d) return null;
-  return { d, code, name: String(r[kN] ?? "").trim(), who: String(r[kP] ?? "").trim(), role: String(r[kW] ?? "").trim(), how: String(r[kM] ?? "").trim(), sh: kS ? num(r[kS]) : null, hold: kH ? num(r[kH]) : null, to: kTo ? String(r[kTo] ?? "").trim() : "", range: kR ? String(r[kR] ?? "").trim() : "", market };
+  const range = kR ? String(r[kR] ?? "").trim().split(/[~～-]/).map(toIso).filter(Boolean) : [];
+  return { d, code, name: String(r[kN] ?? "").trim(), who: String(r[kP] ?? "").trim(), role: String(r[kW] ?? "").trim(), how: String(r[kM] ?? "").trim(),
+    sh: sum(/^預定轉讓總股數/) ?? num(r[k(/轉讓股數/)]), hold: sum(/^目前持有股數/), after: sum(/^預定轉讓後持股/), to: kTo ? String(r[kTo] ?? "").trim() : "", from: range[0] || null, until: range[1] || range[0] || null, market };
 }
 
 export async function main() {

@@ -26,6 +26,8 @@ jobs:
           node-version: 22
       - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
         run: node scripts/sec13f.mjs --dump
+        env:
+          SEC_UA: ${{ secrets.SEC_UA }}
       - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
         run: node scripts/sec13f.mjs
         env:
