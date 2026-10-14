@@ -831,7 +831,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.14-71</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.15-72</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -2776,8 +2776,8 @@ const chWrong = () => store.get("chWrong", []) || [];
 function chWrongMark(ok, guess, actual, chg) {
   const L = chWrong(), key = ch.meta ? `r:${ch.code}:${ch.meta.from}` : `s:${ch.seed}`, k = L.findIndex(x => x.key === key);
   if (k >= 0 && (ch.replay || srsDue(L[k]))) { const nx = srsNext(L[k], ok); if (nx) L[k] = ok ? nx : { ...nx, guess, actual, chg: +chg.toFixed(4), at: srsDay() }; else L.splice(k, 1); }
-  else if (!ok) { if (k >= 0) L[k] = { ...L[k], box: 0, due: srsAdd(srsDay(), 1), guess, actual, chg: +chg.toFixed(4), at: srsDay() };
-    else L.unshift({ key, kind: ch.meta ? "real" : "sim", seed: ch.seed, code: ch.code, from: ch.meta?.from, name: ch.meta?.name, ask: ch.meta?.ask, guess, actual, chg: +chg.toFixed(4), at: srsDay(), box: 0, due: srsAdd(srsDay(), 1) }); }
+  else if (!ok) { if (k >= 0) L[k] = { ...L[k], box: 0, due: srsDay(), guess, actual, chg: +chg.toFixed(4), at: srsDay() };
+    else L.unshift({ key, kind: ch.meta ? "real" : "sim", seed: ch.seed, code: ch.code, from: ch.meta?.from, name: ch.meta?.name, ask: ch.meta?.ask, guess, actual, chg: +chg.toFixed(4), at: srsDay(), box: 0, due: srsDay() }); }
   store.set("chWrong", L.slice(0, 60)); ch.replay = false; chWrongRender();
 }
 function chWrongRender() {
@@ -2896,7 +2896,7 @@ function quizStart(review = false) { const W = wrongQDue(); quiz = { review: rev
 // rev：這次作答算不算複習（錯題複習、每日一題抽到的到期錯題）；一般測驗碰到已到期的錯題也算
 function quizMark(i, ok, rev = quiz?.review) { const w = wrongQ(), x = w[i]; statAdd("quizStat", ok);
   if (x && (rev || srsDue(x))) { const nx = srsNext(x, ok); if (nx) w[i] = { ...nx, n: (x.n || 1) + (ok ? 0 : 1), at: ok ? x.at : srsDay() }; else delete w[i]; }
-  else if (!ok) w[i] = { n: (x?.n || 0) + 1, at: srsDay(), box: 0, due: srsAdd(srsDay(), 1) };
+  else if (!ok) w[i] = { n: (x?.n || 0) + 1, at: srsDay(), box: 0, due: srsDay() }; /* 剛答錯的當天就能複習；複習時又錯才排到隔天 */
   store.set("wrongQ", w); }
 function quizRender() {
   const el = $("#quiz"), N = quiz.order.length;
