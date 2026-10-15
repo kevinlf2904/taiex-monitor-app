@@ -410,7 +410,7 @@ async function congBtRun(all) {
   const okDate = d => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d), buys = C.trades.filter(t => t && t.k === "buy" && t.assetType === "股票" && /^[A-Z][A-Z.]{0,6}$/.test(t.ticker || "") && okDate(t.traded) && okDate(t.filed));
   const cnt = buys.reduce((m, t) => m.set(t.ticker, (m.get(t.ticker) || 0) + 1), new Map()), tick = [...cnt].sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, all ? 250 : 60);
   const R = (W.cbt = { busy: true, done: 0, total: tick.length + 1, all }); renderList();
-  const load = async T => { if (!Array.isArray(W.congK[T])) { try { const j = await getJ(`/api/kline?code=${encodeURIComponent(T)}&months=12`); W.congK[T] = j.data || []; } catch (e) { W.congK[T] = { err: e.message }; } } R.done++; if (R.done % 5 === 0 && W.lt === "cong" && W.cv === "bt") renderList(); };
+  const load = async T => { if (!Array.isArray(W.congK[T])) { try { const j = await getJ(`/api/kline?code=${encodeURIComponent(T)}&months=24`); W.congK[T] = j.data || []; } catch (e) { W.congK[T] = { err: e.message }; } } R.done++; if (R.done % 5 === 0 && W.lt === "cong" && W.cv === "bt") renderList(); };
   await load("SPY"); let k = 0; await Promise.all(Array.from({ length: 5 }, async () => { while (k < tick.length) await load(tick[k++]); }));
   const S = Array.isArray(W.congK.SPY) ? W.congK.SPY : [], sIdx = new Map(S.map((x, i) => [String(x?.d ?? "").slice(0, 10), i])), set = new Set(tick);
   // 同一檔在交易日前後 30 天內有幾個不同的人買 → 多人共同 vs 單一人物
@@ -420,13 +420,46 @@ async function congBtRun(all) {
   const px = (A, i) => { const c = A?.[i]?.c; return typeof c === "number" && c > 0 ? c : null; }, rr = (a, b) => (a && b ? b / a - 1 : null);
   R.rows = buys.filter(t => set.has(t.ticker)).map(t => {
     const D = W.congK[t.ticker]; if (!Array.isArray(D) || D.length < 5) { R.na.noK++; return null; } const ds = D.map(x => String(x?.d ?? "").slice(0, 10));
-    const iF = ds.findIndex(d => d > t.filed), iT = ds.findIndex(d => d >= t.traded); if (iF < 0) { R.na.noDay++; return null; }
+    // K 線開始之後才發生的交易才算（早於第一根 K 線時 findIndex 會回 0，誤用第一天的價）
+    const iF = ds[0] <= t.filed ? ds.findIndex(d => d > t.filed) : -1, iT = ds[0] <= t.traded ? ds.findIndex(d => d >= t.traded) : -1; if (iF < 0) { R.na.noDay++; return null; }
     const ret = (i, h) => (i >= 0 && i + h < D.length ? rr(px(D, i), px(D, i + h)) : null);
     const spy = (i, h) => { if (i < 0 || i + h >= D.length) return null; const a = sIdx.get(ds[i]), b = sIdx.get(ds[i + h]); return a != null && b != null ? rr(px(S, a), px(S, b)) : null; };
     const o = { t, crowd: crowd(t), big: (t.amount?.[0] || 0) >= 50001 };
-    CBT_H.forEach(([h]) => { o["f" + h] = ret(iF, h); o["s" + h] = spy(iF, h); o["t" + h] = ret(iT, h); }); return o;
+    CBT_H.forEach(([h]) => { o["f" + h] = ret(iF, h); o["s" + h] = spy(iF, h); o["t" + h] = ret(iT, h); });
+    // 到今天為止：議員本人（交易日收盤買）與跟單（申報後收盤買）的報酬，用金額區間的中間值估算賺賠多少美元
+    const L = D.length - 1, last = px(D, L), a = sIdx.get(ds[iF]), mid = cplMid(t.amount);
+    Object.assign(o, { pF: px(D, iF), pT: iT >= 0 ? px(D, iT) : null, last, lastD: ds[L], nF: rr(px(D, iF), last), nT: iT >= 0 ? rr(px(D, iT), last) : null, nS: a != null && S.length ? rr(px(S, a), px(S, S.length - 1)) : null, mid });
+    o.pnl = mid != null && o.nT != null ? mid * o.nT : null; return o;
   }).filter(Boolean);
   R.skipped = tick.filter(T => !Array.isArray(W.congK[T]) || !W.congK[T].length); R.busy = false; R.at = Date.now(); if (W.lt === "cong") renderList();
+}
+// 申報金額是區間（例如 $1,001–$15,000）：用中間值估算；只有下限（「$5,000,000 以上」）就用下限
+const cplMid = a => (Array.isArray(a) && a[0] > 0 ? (a[1] > a[0] ? (a[0] + a[1]) / 2 : a[0]) : null);
+const usd0 = v => (v == null ? "—" : `${v < 0 ? "-" : v > 0 ? "+" : ""}${usd(Math.round(Math.abs(v)))}`);
+// 誰買了什麼、賺賠多少：每一筆買進申報到今天的報酬、估計損益，依人物、股票彙總
+function cplHtml(L) {
+  const P = (W.cpl ||= { sort: "pnl", who: "", all: false }), ok = x => typeof x === "number" && Number.isFinite(x), sum = a => a.reduce((x, y) => x + y, 0);
+  const grp = (key) => [...L.reduce((m, x) => m.set(key(x), [...(m.get(key(x)) || []), x]), new Map())].map(([k, G]) => { const T = G.filter(x => ok(x.nT)), F = G.filter(x => ok(x.nF)), V = G.filter(x => ok(x.pnl));
+    return { k, G, n: G.length, inv: sum(V.map(x => x.mid)), pnl: sum(V.map(x => x.pnl)), rT: T.length ? sum(T.map(x => x.nT)) / T.length : null, rF: F.length ? sum(F.map(x => x.nF)) / F.length : null, win: T.length ? T.filter(x => x.nT > 0).length / T.length : null, who: new Set(G.map(x => x.t.pid)).size }; });
+  const ord = { pnl: (a, b) => (b.pnl ?? -Infinity) - (a.pnl ?? -Infinity), loss: (a, b) => (a.pnl ?? Infinity) - (b.pnl ?? Infinity), ret: (a, b) => (b.rT ?? -9) - (a.rT ?? -9), n: (a, b) => b.n - a.n };
+  const seg = [["pnl", "最賺"], ["loss", "最賠"], ["ret", "報酬率"], ["n", "筆數"]].map(([k, t]) => `<button class="btn sm ${P.sort === k ? "primary" : ""}" data-cpl="sort:${k}">${t}</button>`).join(" ");
+  const ppl = grp(x => x.t.pid).sort(ord[P.sort]), stk = grp(x => x.t.ticker).sort(ord[P.sort]);
+  const tot = grp(() => "all")[0];
+  let h = `<h4>誰買了什麼、賺賠多少（買進到今天）</h4>
+    <p class="note">每一筆股票買進申報，從<strong>議員交易日的收盤價</strong>算到最新收盤（${esc(L.map(x => x.lastD).sort().pop() || "—")}）。申報金額只給區間，損益用<strong>區間中間值 × 報酬率</strong>估算，只是大概的數字；之後有沒有賣掉申報裡看不出來，所以一律當作還抱著。「跟單」是申報公開後才買的報酬。</p>
+    <div class="cokv three"><div><span>估計投入</span><b>${usd(Math.round(tot?.inv || 0))}</b><small>${tot?.n || 0} 筆・${new Set(L.map(x => x.t.pid)).size} 人</small></div><div><span>估計損益</span><b class="${cls(tot?.pnl)}">${usd0(tot?.pnl)}</b><small>平均 ${retPct(tot?.rT)}・賺錢 ${tot?.win != null ? Math.round(tot.win * 100) + "%" : "—"}</small></div><div><span>跟單（申報後買）</span><b class="${cls(tot?.rF)}">${retPct(tot?.rF)}</b><small>同期 SPY 平均 ${retPct((() => { const v = L.map(x => x.nS).filter(ok); return v.length ? sum(v) / v.length : null; })())}</small></div></div>
+    <div class="mksegrow">${seg}</div>
+    <div class="ctbl"><table><thead><tr><th>人物</th><th>筆數</th><th>估計投入</th><th>估計損益</th><th>平均報酬</th><th>賺錢比例</th><th>跟單報酬</th></tr></thead><tbody>
+    ${ppl.slice(0, 20).map(g => `<tr${P.who === g.k ? ' class="on"' : ""}><td><button class="linkbtn" data-cpl="who:${esc(g.k)}">${esc(pName(g.k))}</button><div class="note">${esc(W.cong.people?.[g.k]?.chamber || "")}</div></td><td>${g.n}</td><td>${usd(Math.round(g.inv))}</td><td class="${cls(g.pnl)}"><b>${usd0(g.pnl)}</b></td><td class="${cls(g.rT)}">${retPct(g.rT)}</td><td>${g.win != null ? Math.round(g.win * 100) + "%" : "—"}</td><td class="${cls(g.rF)}">${retPct(g.rF)}</td></tr>`).join("")}</tbody></table></div>
+    <h4>依股票</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>買的人數</th><th>筆數</th><th>估計投入</th><th>估計損益</th><th>平均報酬</th><th>跟單報酬</th></tr></thead><tbody>
+    ${stk.slice(0, 15).map(g => `<tr><td><button class="linkbtn ctk" data-copen="${esc(g.k)}">${esc(g.k)}</button></td><td>${g.who}</td><td>${g.n}</td><td>${usd(Math.round(g.inv))}</td><td class="${cls(g.pnl)}"><b>${usd0(g.pnl)}</b></td><td class="${cls(g.rT)}">${retPct(g.rT)}</td><td class="${cls(g.rF)}">${retPct(g.rF)}</td></tr>`).join("")}</tbody></table></div>`;
+  const ord2 = { pnl: (a, b) => (b.pnl ?? -Infinity) - (a.pnl ?? -Infinity), loss: (a, b) => (a.pnl ?? Infinity) - (b.pnl ?? Infinity), ret: (a, b) => (b.nT ?? -9) - (a.nT ?? -9), n: (a, b) => b.t.traded.localeCompare(a.t.traded) };
+  const rows = L.filter(x => !P.who || x.t.pid === P.who).sort(ord2[P.sort]), shown = P.all ? rows : rows.slice(0, 40), px2 = v => (v == null ? "—" : v.toFixed(2));
+  h += `<h4>每一筆交易${P.who ? `：${esc(pName(P.who))} <button class="linkbtn" data-cpl="who:">看全部人</button>` : ""}</h4>
+    <div class="ctbl"><table><thead><tr><th>人物</th><th>股票</th><th>交易日／申報日</th><th>金額</th><th>交易日價 → 最新</th><th>報酬</th><th>估計損益</th><th>跟單報酬</th></tr></thead><tbody>
+    ${shown.map(x => `<tr><td><button class="linkbtn" data-cpl="who:${esc(x.t.pid)}">${esc(pName(x.t.pid))}</button>${x.t.owner && x.t.owner !== "本人" ? `<div class="note">${esc(x.t.owner)}</div>` : ""}</td><td><button class="linkbtn ctk" data-copen="${esc(x.t.ticker)}">${esc(x.t.ticker)}</button></td><td>${x.t.traded}<div class="note">${x.t.filed} 申報</div></td><td>${x.t.amount ? `${usd(x.t.amount[0])}${x.t.amount[1] ? "–" + usd(x.t.amount[1]) : " 以上"}` : "—"}</td><td>${px2(x.pT)} → ${px2(x.last)}</td><td class="${cls(x.nT)}">${retPct(x.nT)}</td><td class="${cls(x.pnl)}"><b>${usd0(x.pnl)}</b></td><td class="${cls(x.nF)}">${retPct(x.nF)}</td></tr>`).join("")}</tbody></table></div>
+    ${rows.length > 40 ? `<button class="btn sm" data-cpl="all:1">${P.all ? "只看前 40 筆" : `顯示全部 ${rows.length} 筆`}</button>` : ""}`;
+  return h;
 }
 function cbtStat(L, h, key = "f") {
   const ok = x => typeof x === "number" && Number.isFinite(x), v = L.map(x => x[key + h]).filter(ok), ex = L.filter(x => ok(x[key + h]) && ok(x["s" + h])).map(x => x[key + h] - x["s" + h]); if (!v.length) return null;
@@ -444,6 +477,7 @@ function congBtHtml() {
   h += `<div class="ctbl"><table>${head}<tbody>${row("全部買進申報", L)}${row("多人共同（前後 30 天 ≥ 2 人買）", L.filter(x => x.crowd >= 2))}${row("單一人物", L.filter(x => x.crowd < 2))}${row("大額（下限 ≥ $50K）", L.filter(x => x.big))}${row("小額（$50K 以下）", L.filter(x => !x.big))}${row("眾議院", L.filter(x => W.cong.people?.[x.t.pid]?.chamber !== "參議院"))}${row("參議院", L.filter(x => W.cong.people?.[x.t.pid]?.chamber === "參議院"))}</tbody></table></div>
     <p class="note">對照：如果能在<strong>交易日</strong>就買，30 天平均 ${retPct(tf?.avg)}、90 天平均 ${retPct(tn?.avg)}（現實中做不到，差距就是申報延遲的成本）。</p>`;
   const per = [...L.reduce((m, x) => m.set(x.t.pid, [...(m.get(x.t.pid) || []), x]), new Map())].map(([pid, G]) => ({ pid, G, s: cbtStat(G, 21) })).filter(x => x.s && x.s.n >= 3).sort((a, b) => (b.s.ex ?? -9) - (a.s.ex ?? -9));
+  h += cplHtml(L);
   h += `<h4>依人物（至少 3 筆，依 30 天贏 SPY 排序）</h4><div class="ctbl"><table>${head}<tbody>${per.slice(0, 25).map(x => row(`<button class="linkbtn" data-cv="person:${esc(x.pid)}">${esc(pName(x.pid))}</button>`, x.G)).join("")}</tbody></table></div>
     <p class="note">樣本：${L.length} 筆買進申報、${new Set(L.map(x => x.t.ticker)).size} 檔股票（資料從 ${L.map(x => x.t.filed).sort()[0] || "—"} 開始，時間還短、樣本小，結果容易被少數幾檔左右）。${R.skipped?.length ? `拿不到股價而略過：${R.skipped.slice(0, 12).map(esc).join("、")}${R.skipped.length > 12 ? ` 等 ${R.skipped.length} 檔` : ""}。` : ""}${R.na && (R.na.noK || R.na.noDay) ? `N/A（跳過）：查無 K 線 ${R.na.noK} 筆、申報後還沒有交易日 ${R.na.noDay} 筆。` : ""}沒算手續費、匯率與稅；過去的結果不代表未來。</p></section>`;
   return h;
@@ -503,7 +537,7 @@ function insTable(L) {
 async function insBtRun() {
   const L = (W.ins?.rows || []).filter(r => /一般交易|盤後|鉅額|拍賣/.test(r.how)), codes = [...new Set(L.map(r => r.code))].slice(0, 80);
   const B = (W.insBt = { busy: true, done: 0, total: codes.length, rows: [] }); renderList(); const T = await dailyFresh("T00");
-  const at = (D, d, h) => { const i = (D || []).findIndex(x => String(x.d).slice(0, 10) > d); return i < 0 || i + h >= D.length ? null : D[i + h].c / D[i].c - 1; };
+  const at = (D, d, h) => { if (!D?.length || String(D[0].d).slice(0, 10) > d) return null; const i = D.findIndex(x => String(x.d).slice(0, 10) > d); return i < 0 || i + h >= D.length ? null : D[i + h].c / D[i].c - 1; };
   for (const c of codes) { const D = await dailyFresh(c); B.done++; for (const r of L.filter(x => x.code === c)) { const o = { r }; [5, 20].forEach(h => { o["r" + h] = at(D, r.d, h); o["t" + h] = at(T, r.d, h); }); B.rows.push(o); } if (B.done % 5 === 0 && insVis()) renderList(); }
   B.busy = false; if (toolsOn()) renderList();
 }
@@ -679,6 +713,43 @@ const twoLot = n => (Math.abs(n) >= 1000 ? `${Math.round(n / 1000).toLocaleStrin
 const twoStk = s => (s.code ? `<button class="linkbtn" data-cv="tw:s:${esc(s.code)}">${esc(nameOf(s.code) !== s.code ? nameOf(s.code) : s.name || "")} ${s.code}</button>` : `<span>${esc(s.name)}</span>`);
 const twoWho = p => `<button class="linkbtn" data-cv="tw:p:${esc(p.pid)}">${esc(p.name)}</button><span class="note"> ${esc([p.org, p.title].filter(Boolean).join("・"))}</span>`;
 function twoNote() { return `資料：監察院廉政專刊（陽光法令主題網）${W.two?.updated ? `，最後更新 ${new Date(Date.parse(W.two.updated) + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}` : ""}。申報的是申報基準日的「持股」，不是交易；前後兩次申報（通常相隔一年或就職、卸任時）的股數差只代表這段期間增加或減少，不知道實際買賣日期與價格。持股含本人、配偶與未成年子女。僅供研究參考，不是買賣建議。`; }
+// 持股損益：申報基準日之後第一個交易日的收盤價 → 最新收盤，乘上申報股數（假設一直持有；之後的買賣看不到）
+async function twoBtLoad(codes) {
+  const K = (W.twoK ||= {}), need = [...new Set(codes)].filter(c => c && K[c] === undefined); if (!need.length) return;
+  const R = (W.twoBt = { busy: true, done: 0, total: need.length }); need.forEach(c => (K[c] = null)); if (W.lt === "cong") renderList();
+  let k = 0; await Promise.all(Array.from({ length: 5 }, async () => { while (k < need.length) { const c = need[k++];
+    try { const j = await getJ(`/api/kline?code=${encodeURIComponent(c)}&months=24`); K[c] = j.data || []; } catch { K[c] = []; }
+    R.done++; if (R.done % 10 === 0 && W.lt === "cong") renderList(); } }));
+  R.busy = false; R.at = Date.now(); if (W.lt === "cong") renderList();
+}
+function twoPnl(p) {
+  const K = W.twoK || {}, date = p.last.date, rows = p.hold.filter(h => h.code && h.sh > 0).map(h => { const D = K[h.code]; if (!Array.isArray(D) || D.length < 2) return { ...h, na: D === null ? "載入中" : "沒有股價" };
+    const ds = D.map(x => String(x?.d ?? "").slice(0, 10)), i = ds[0] <= date ? ds.findIndex(d => d > date) : -1; if (i < 0) return { ...h, na: ds[0] > date ? "申報日太早" : "還沒有交易日" };
+    const p0 = D[i].c, p1 = D[D.length - 1].c; return p0 > 0 && p1 > 0 ? { ...h, p0, p1, d0: ds[i], d1: ds[D.length - 1], v0: h.sh * p0, v1: h.sh * p1, pnl: h.sh * (p1 - p0), r: p1 / p0 - 1 } : { ...h, na: "沒有股價" }; });
+  const ok = rows.filter(x => x.pnl != null), v0 = ok.reduce((a, x) => a + x.v0, 0), v1 = ok.reduce((a, x) => a + x.v1, 0);
+  return { rows, ok, v0, v1, pnl: v1 - v0, r: v0 ? v1 / v0 - 1 : null };
+}
+const twd = v => (v == null ? "—" : `${v < 0 ? "-" : ""}${Math.abs(v) >= 1e8 ? (Math.abs(v) / 1e8).toFixed(2) + " 億" : Math.abs(v) >= 1e4 ? Math.round(Math.abs(v) / 1e4).toLocaleString() + " 萬" : Math.round(Math.abs(v)).toLocaleString()}`);
+const twdS = v => (v == null ? "—" : (v > 0 ? "+" : "") + twd(v));
+function twoPnlHtml(p) {
+  const codes = p.hold.filter(h => h.code).map(h => h.code); if (!codes.length) return "";
+  if (codes.some(c => (W.twoK || {})[c] === undefined)) setTimeout(() => twoBtLoad(codes), 0);
+  const X = twoPnl(p);
+  return `<h4>持股損益（申報後到今天）</h4><p class="note">用申報基準日（${p.last.date}）之後第一個交易日的收盤價，到最新收盤價，乘上申報的股數；假設這段期間一直持有（之後有沒有買賣要等下一次申報才看得到）。</p>
+    <div class="cokv three"><div><span>申報時市值</span><b>${twd(X.v0)}</b><small>${X.ok.length} 檔有股價</small></div><div><span>現在市值</span><b>${twd(X.v1)}</b><small>${esc(X.ok[0]?.d1 || "")}</small></div><div><span>估計損益</span><b class="${cls(X.pnl)}">${twdS(X.ok.length ? X.pnl : null)}</b><small class="${cls(X.r)}">${retPct(X.r)}</small></div></div>
+    <div class="ctbl"><table><thead><tr><th>股票</th><th>股數</th><th>申報後價 → 最新</th><th>報酬</th><th>估計損益（元）</th></tr></thead><tbody>${X.rows.sort((a, b) => (b.pnl ?? -Infinity) - (a.pnl ?? -Infinity)).map(x => `<tr><td>${twoStk(x)}</td><td>${twoLot(x.sh)}</td><td>${x.p0 != null ? `${x.p0} → ${x.p1}` : `<span class="note">${esc(x.na)}</span>`}</td><td class="${cls(x.r)}">${retPct(x.r)}</td><td class="${cls(x.pnl)}"><b>${twdS(x.pnl)}</b></td></tr>`).join("")}</tbody></table></div>`;
+}
+// 首頁：全部人的持股損益排行（按下才載入股價）
+function twoRankHtml(P) {
+  const R = W.twoBt, all = P.flatMap(p => p.hold.filter(h => h.code).map(h => h.code)), run = `<button class="btn sm primary" data-twbt="1" ${R?.busy ? "disabled" : ""}>${R?.busy ? `載入股價 ${R.done}/${R.total}…` : W.twoRank ? "重新整理" : "計算持股損益排行"}</button>`;
+  let h = `<h4>持股損益排行 ${run}</h4>`;
+  if (!W.twoRank || R?.busy) return h + `<p class="note">每個人最近一次申報的持股，從申報日算到今天賺賠多少（共 ${new Set(all).size} 檔股票，要載入一陣子）。</p>`;
+  const L = P.map(p => ({ p, x: twoPnl(p) })).filter(o => o.x.ok.length), srt = W.twoRankS || "pnl", ord = { pnl: (a, b) => b.x.pnl - a.x.pnl, loss: (a, b) => a.x.pnl - b.x.pnl, ret: (a, b) => (b.x.r ?? -9) - (a.x.r ?? -9) }[srt];
+  const seg = [["pnl", "最賺"], ["loss", "最賠"], ["ret", "報酬率"]].map(([k, t]) => `<button class="btn sm ${srt === k ? "primary" : ""}" data-twbt="s:${k}">${t}</button>`).join(" ");
+  return h + `<div class="mksegrow">${seg}</div><div class="ctbl"><table><thead><tr><th>人物</th><th>申報日</th><th>申報時市值</th><th>現在市值</th><th>估計損益</th><th>報酬</th><th>${srt === "loss" ? "賠最多" : "賺最多"}</th></tr></thead><tbody>
+    ${L.sort(ord).slice(0, 30).map(({ p, x }) => { const best = [...x.ok].sort((a, b) => (srt === "loss" ? a.pnl - b.pnl : b.pnl - a.pnl))[0]; return `<tr><td>${twoWho(p)}</td><td>${p.last.date}</td><td>${twd(x.v0)}</td><td>${twd(x.v1)}</td><td class="${cls(x.pnl)}"><b>${twdS(x.pnl)}</b></td><td class="${cls(x.r)}">${retPct(x.r)}</td><td>${best ? `${esc(nameOf(best.code) !== best.code ? nameOf(best.code) : best.name)} <span class="${cls(best.pnl)}">${twdS(best.pnl)}</span>` : ""}</td></tr>`; }).join("")}</tbody></table></div>
+    <p class="note">${L.length} 人有股價可算。估計值：假設申報後一直持有、沒算股利與交易成本。</p>`;
+}
 function twoHtml(arg = "") {
   const X = W.two; if (!X) { twoLoad(); return `<p class="note" style="padding:16px">載入中…</p>`; }
   if (X.err || !X.decl?.length) return `<p class="note" style="padding:16px">⚠ 台灣政治人物申報資料還沒有（${esc(X.err || "沒有資料")}）。資料由排程從監察院廉政專刊整理，每週更新。</p>`;
@@ -689,6 +760,7 @@ function twoHtml(arg = "") {
     return `<section class="csec"><h3>${esc(p.name)} <span class="note">${esc([p.org, p.title].filter(Boolean).join("・"))}</span></h3>
       <div class="cokv three"><div><span>最近一次申報</span><b>${p.last.date}</b><small>${esc(p.last.kind)}・廉政專刊第 ${p.last.issue} 期</small></div><div><span>持股</span><b>${p.hold.length} 檔</b><small>含配偶、未成年子女</small></div><div><span>上一次申報</span><b>${p.prev?.date || "—"}</b><small>${p.prev ? esc(p.prev.kind) : "資料裡只有一次"}</small></div></div>
       ${p.chg.length ? `<h4>和上一次申報相比</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>變化</th><th>上次</th><th>這次</th></tr></thead><tbody>${p.chg.sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).map(c => `<tr><td>${twoStk(c)}</td><td>${tag(c.t)} <span class="${c.d > 0 ? "up" : "down"}">${c.d > 0 ? "+" : ""}${twoLot(c.d)}</span></td><td>${twoLot(c.psh)}</td><td>${twoLot(c.sh)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      ${twoPnlHtml(p)}
       <h4>最近一次申報的持股</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>股數</th><th>所有人</th></tr></thead><tbody>${(p.last.stocks || []).sort((a, b) => b.sh - a.sh).map(s => `<tr><td>${twoStk(s)}</td><td>${twoLot(s.sh)}</td><td>${esc(s.owner || "")}</td></tr>`).join("") || `<tr><td colspan="3" class="note">申報沒有股票</td></tr>`}</tbody></table></div></section>`;
   }
   if (kind === "s") {
@@ -706,5 +778,6 @@ function twoHtml(arg = "") {
     <p class="note">監察院每週刊登總統、部會首長、立委、縣市長、議員等的財產申報；這裡整理其中的「股票」。台灣的申報是某一天的<strong>持股</strong>，不是交易紀錄，所以用同一個人前後兩次申報的股數差看增減。</p>
     <div class="tgrid"><div><h4>最多政治人物持有</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>人數</th><th>合計</th></tr></thead><tbody>${H.map(g => `<tr><td>${twoStk(g)}</td><td><b>${g.n}</b></td><td>${twoLot(g.sh)}</td></tr>`).join("") || `<tr><td colspan="3" class="note">沒有</td></tr>`}</tbody></table></div></div>
     <div><h4>持股變化（和上次申報相比）</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>增加</th><th>減少</th></tr></thead><tbody>${C.map(g => `<tr><td>${twoStk(g)}</td><td class="up">${g.up.length || ""} <span class="note">${g.up.slice(0, 3).map(esc).join("、")}</span></td><td class="down">${g.dn.length || ""} <span class="note">${g.dn.slice(0, 3).map(esc).join("、")}</span></td></tr>`).join("") || `<tr><td colspan="3" class="note">還沒有同一人兩次以上的申報（資料累積中）</td></tr>`}</tbody></table></div></div></div>
+    ${twoRankHtml(P)}
     <h4>最近刊登的申報</h4><ul class="cfeed">${recent.map(d => `<li><span class="note">第 ${d.issue} 期・${d.date}</span> ${twoWho(P.find(p => p.pid === d.pid) || d)} <span class="note">${esc(d.kind)}</span> ${d.stocks.length ? `持股 ${d.stocks.length} 檔` : `<span class="note">沒有股票</span>`}</li>`).join("") || `<li class="note">沒有符合的申報</li>`}</ul></section>`;
 }
