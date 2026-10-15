@@ -15,6 +15,6 @@ export function engine() {
   vm.createContext(c);
   for (const f of ["core.js", "analysis.js", "tools.js"]) vm.runInContext(readFileSync(L(f), "utf8"), c, { filename: f });
   const g = n => vm.runInContext(n, c);
-  ctx = { indicators: g("indicators"), COND: g("COND"), SCOND: g("SCOND"), condOf: g("condOf"), condName: g("condName"), condCheck: g("condCheck") };
+  ctx = { indicators: g("indicators"), COND: g("COND"), SCOND: g("SCOND"), condOf: g("condOf"), condName: g("condName"), condCheck: g("condCheck"), stratRun: g("stratRun") };
   return ctx;
 }
