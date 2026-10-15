@@ -1,0 +1,25 @@
+# 線上網站即時性檢查（除錯用）：手動執行，或平日盤中自動跑一次（09:05、11:05 台北），結果看 log
+name: probe-live
+on:
+  schedule:
+    - cron: "5 1,3 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      n:
+        description: "檢查次數"
+        default: "12"
+      gap:
+        description: "間隔秒數"
+        default: "10"
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/probe-live.mjs ${{ github.event.inputs.n || 12 }} ${{ github.event.inputs.gap || 10 }}
