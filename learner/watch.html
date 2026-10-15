@@ -871,9 +871,11 @@ function toast(t, ms = 4000) { const el = $("#toast"); el.textContent = t; el.hi
 
 /* ---------- 資料 ---------- */
 // optional：附加功能（處置股、行事曆、產業別…）拿不到時不要把整頁切成離線模式
+// 逾時：iPad 睡眠喚醒、切換網路時 fetch 可能永遠不回來，輪詢會一直卡在「上一輪還沒結束」而停止更新，所以每個請求最多等 ms 毫秒
+const tmo = ms => { try { return AbortSignal.timeout(ms); } catch { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; } };
 async function getJ(url, optional = false) {
   const ttl = apiTtl(url); if (ttl) { const hit = await apiCacheGet(url); if (hit) return hit; }
-  let r; try { r = await fetch(url); } catch { throw new Error("連不到伺服器（網路中斷？）"); }
+  let r; try { r = await fetch(url, { signal: tmo(20000) }); } catch (e) { throw new Error(e?.name === "TimeoutError" || e?.name === "AbortError" ? "伺服器太久沒回應" : "連不到伺服器（網路中斷？）"); }
   const t = await r.text().catch(() => ""); let j = null; try { j = JSON.parse(t); } catch {}
   if (!j) { if (r.status === 404 && !optional) W.off = true; throw new Error(r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}`); }
   if (!j.ok) throw new Error(j.error || "拿不到資料");
@@ -932,7 +934,7 @@ function futLocalBars(q) {
 async function pollFut(force = false) {
   if (W.off || (!force && Date.now() - (W.futAt || 0) < (W.quotes.get("TXF")?.fsession && W.quotes.get("TXF").fsession !== "closed" ? 2000 : 15000))) return;
   W.futAt = Date.now();
-  try { const r = await fetch("/api/futures?bars=0"), j = r.ok ? await r.json() : null; if (j?.ok && j.quote) { W.quotes.set("TXF", { ...j.quote, code: "TXF", name: "台指期近月", symbol: j.symbol, settle: j.settle, day: j.day, night: j.night, fsession: j.session }); futRecord(W.quotes.get("TXF")); } } catch {}
+  try { const r = await fetch("/api/futures?bars=0", { signal: tmo(10000) }), j = r.ok ? await r.json() : null; if (j?.ok && j.quote) { W.quotes.set("TXF", { ...j.quote, code: "TXF", name: "台指期近月", symbol: j.symbol, settle: j.settle, day: j.day, night: j.night, fsession: j.session }); futRecord(W.quotes.get("TXF")); } } catch {}
 }
 async function pollList() {
   pollFut().then(() => renderTop()).catch(() => {});
@@ -948,20 +950,20 @@ async function pollDetail() {
   if (q && W.sel === c) { W.detailQ = q; W.detailSrc = j.source; if (q.name && !isIdx(c)) W.names[c] = q.name; mergeDaily(q); }
 }
 async function tick() {
-  if (W.off || W.busy || document.visibilityState === "hidden") return;
-  W.busy = true;
+  if (W.off || (W.busy && Date.now() - W.busy < 30000) || document.visibilityState === "hidden") return;
+  W.busy = Date.now();
   const jobs = [pollList(), pollDetail()];
   if (W.lt === "us" && (!W.hot["us:" + W.usType] || Date.now() - W.hot["us:" + W.usType].at > 60000)) jobs.push(loadHot("us"));
   const res = await Promise.allSettled(jobs), bad = res.find(r => r.status === "rejected");
   W.err = bad ? bad.reason?.message || "更新失敗" : null; if (!bad) W.lastOk = Date.now();
-  W.busy = false; checkAlerts(); W.ticking = true; try { renderAll(); } catch (e) { console.error("tick", e); } finally { W.ticking = false; } loadIntra(); if (W.dtab === "trend") loadFlow(); liveRefresh();
+  W.busy = 0; checkAlerts(); W.ticking = true; try { renderAll(); } catch (e) { console.error("tick", e); } finally { W.ticking = false; } loadIntra(); if (W.dtab === "trend") loadFlow(); liveRefresh();
 }
 // 即時更新：盤中依目前分頁自動重抓（大盤、排行 30 秒，選股 60 秒，產業報價 15 秒）；收盤後資金分頁每 10 分鐘看看今天的法人資料出來了沒
 function liveRefresh() {
   if (W.off) return; const open = W.session === "open" || W.session === "pre", age = o => (o?.at ? Date.now() - o.at : Infinity), t = new Date(Date.now() + 8 * 3600e3), hm = t.getUTCHours() * 60 + t.getUTCMinutes();
   if (W.lt === "mkt" && W.mkReg === "us") { if (age(W.usm) > (W.usm?.session === "open" ? 30000 : 300000)) loadUsMkt(true); }
   else if (W.lt === "mkt" && W.mkReg === "gl") { if (age(W.gl) > 60000) loadGlobal(true); }
-  else if (W.lt === "mkt" && open && age(W.mkt) > 30000 && !W.mktLoading) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
+  else if (W.lt === "mkt" && open && age(W.mkt) > 20000 && !(W.mktLoading && Date.now() - W.mktLoading < 40000)) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
   else if (W.lt === "tw" && open && age(W.hot.tw) > 30000) loadHot("tw");
   else if (W.lt === "rank" && open && !["foreign", "trust"].includes(W.rankType) && age(W.hot["rank:" + W.rankType]) > 30000) loadHot("tw-rank");
   else if (W.lt === "screen" && open && age(W.scr) > 60000 && !W.scrLoading) loadScreen(true);
@@ -971,11 +973,11 @@ function liveRefresh() {
 }
 // 大盤盤中只重抓個股統計與期貨（行事曆、處置股不用每 30 秒抓）
 async function loadMktLive() {
-  W.mktLoading = true; const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
+  W.mktLoading = Date.now(); const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
   // 期貨和大盤統計各自更新：其中一個慢或失敗，不會讓另一個也一直空著
   const futP = Promise.all([fut("EXF"), fut("FXF")]).then(([ex, fx]) => { W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; if (W.lt === "mkt" && !W.mktLoading) renderList(); });
   try { const m = await getJ("/api/market"); W.mkt = { ...m, at: Date.now() }; }
-  catch (e) { if (W.mkt) W.mkt.at = Date.now(); else W.mkt = { err: e.message, at: Date.now() }; } finally { W.mktLoading = false; }
+  catch (e) { if (W.mkt) W.mkt.at = Date.now(); else W.mkt = { err: e.message, at: Date.now() }; } finally { W.mktLoading = 0; }
   await futP.catch(() => {});
   if (W.lt === "mkt") { W.ticking = true; try { renderList(); } finally { W.ticking = false; } }
 }
@@ -983,8 +985,8 @@ async function loadMktLive() {
 const liveTag = (J, closed) => (J?.live ? `<span class="livetag"><i></i>盤中即時・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}</span>` : J?.date ? `${J.date.slice(5).replace("-", "/")} ${closed}` : "");
 // 每秒只更新報價（自選、庫存、熱門清單與個股頁），每 5 秒做一次完整更新（分時、逐筆、各分頁資料）
 async function fastTick() {
-  if (W.off || W.busy || W.fbusy || document.visibilityState === "hidden") return;
-  W.fbusy = true; try { const r = await Promise.allSettled([pollList(), pollDetail()]); if (!r.some(x => x.status === "rejected")) { W.lastOk = Date.now(); W.err = null; } } finally { W.fbusy = false; }
+  if (W.off || (W.busy && Date.now() - W.busy < 30000) || (W.fbusy && Date.now() - W.fbusy < 30000) || document.visibilityState === "hidden") return;
+  W.fbusy = Date.now(); try { const r = await Promise.allSettled([pollList(), pollDetail()]); if (!r.some(x => x.status === "rejected")) { W.lastOk = Date.now(); W.err = null; } } finally { W.fbusy = 0; }
   checkAlerts(); W.ticking = true; // try／finally：重畫出錯也一定要把 ticking 關掉；剛按下去（900ms 內）先不重畫清單，避免點擊被吃掉
   try { renderTop(); if (["watch", "hold", "tw", "us", "rank", "etf"].includes(W.lt) && Date.now() - (W.lastPtr || 0) > 900) renderList(); if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } }
   catch (e) { console.error("fastTick", e); } finally { W.ticking = false; }
@@ -993,6 +995,7 @@ function schedule() { clearTimeout(W.timer); if (W.off) return; const open = any
   W.timer = setTimeout(async () => { W.tn = (W.tn || 0) + 1; if (open && W.tn % 5) await fastTick(); else await tick(); schedule(); }, open ? 1000 : 300000); }
 const kick = () => tick().then(schedule);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") kick(); });
+addEventListener("pageshow", e => { if (e.persisted) kick(); }); // iPad Safari 從上一頁快取回來時計時器可能停了，重新開始輪詢
 document.addEventListener("pointerdown", () => { W.lastPtr = Date.now(); }, true);
 addEventListener("online", kick);
 async function loadHot(market, type) {
@@ -1282,7 +1285,13 @@ function renderList() {
 }
 // 平板橫向、電腦：大盤、選股、資金、產業這些內容多的分頁用全寬；點個股時，個股頁從右邊滑出（抽屜），不會把內容擠成一條
 const WIDE_TABS = ["mkt", "screen", "ind", "money", "pod", "after", "cong", "tools"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
-function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); }
+function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); placeDrawer(); }
+// 嵌在 K線學堂裡時 iframe 和整頁一樣高，固定在 iframe 右側的抽屜會從 iframe 最上面一路拉到最下面：使用者往下捲過之後打開個股，
+// 內容在畫面外、抽屜本身也捲不動。所以抽屜改成貼齊使用者目前看得到的那一段，外層捲動或視窗大小改變時跟著移動。
+function placeDrawer() { const d = $("#detail"), m = $("#main");
+  if (!EMBED || !m.classList.contains("wide") || !m.classList.contains("show-detail") || isMobile()) { d.style.top = d.style.bottom = d.style.height = ""; return; }
+  const v = viewBox(); d.style.top = v.top + "px"; d.style.bottom = "auto"; d.style.height = Math.max(320, v.h) + "px"; }
+if (EMBED) { let rq = 0; const re = () => { if (!rq) rq = requestAnimationFrame(() => { rq = 0; placeDrawer(); }); }; try { parent.addEventListener("scroll", re, { passive: true }); parent.addEventListener("resize", re); } catch {} addEventListener("resize", re); }
 function renderList0() {
   syncLayout();
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === W.lt));

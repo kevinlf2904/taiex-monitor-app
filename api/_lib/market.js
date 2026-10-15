@@ -123,7 +123,7 @@ export default async function handler(req, res) {
   const taiex = M.find(x => /^發行量加權股價指數$/.test(x.name));
   const pickIdx = ["電子類指數", "半導體類指數", "金融保險類指數", "航運類指數", "臺灣50指數", "櫃買指數"].map(n => M.find(x => x.name === n)).filter(Boolean);
   const stocks = all.filter(r => /^\d{4}$/.test(r.code));
-  res.setHeader("Cache-Control", liveCache(L?.live, 20));
+  res.setHeader("Cache-Control", liveCache(L?.live, 15));
   return res.status(200).json({ ok: true, date: L?.date || all.find(x => x.date)?.date || null, live: !!L?.live, time: L?.time || null, note: L?.note || null, source: `${L?.source || "證交所、櫃買中心 OpenAPI"}；美股 Yahoo Finance`,
     breadth: all.length ? breadth(all) : null, coverage: L?.coverage || null, newHL: newHiLo(all, b.value, L?.date || all.find(x => x.date)?.date),
     sectors: I.size ? sectors(stocks, I) : null,
