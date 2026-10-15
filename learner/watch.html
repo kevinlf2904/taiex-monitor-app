@@ -2182,8 +2182,10 @@ $("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListe
 setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); if ((store.get("watch:paper", null)?.orders || []).length) paStart(); }, 3000);
 setTimeout(syncBoot, 1500); // 雲端同步：開網頁時下載較新的資料、之後有改動自動上傳
 // 國會分頁：切換頁面（首頁、股票、人物）、期間、排序、在看盤開啟、問 AI
-$("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-cw],[data-csort],[data-copen],[data-cask],[data-cbt]"); if (!b) return; const d = b.dataset;
+$("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-cw],[data-csort],[data-copen],[data-cask],[data-cbt],[data-cpl],[data-twbt]"); if (!b) return; const d = b.dataset;
+  if (d.twbt) { if (d.twbt.startsWith("s:")) { W.twoRankS = d.twbt.slice(2); return renderList(); } W.twoRank = true; return twoBtLoad(twoPeople().flatMap(p => p.hold.filter(h => h.code).map(h => h.code))).then(renderList); }
   if (d.cbt) return congBtRun(d.cbt === "all");
+  if (d.cpl != null) { const [k, v] = d.cpl.split(/:(.*)/s), P = (W.cpl ||= { sort: "pnl", who: "", all: false }); if (k === "all") P.all = !P.all; else { P[k] = v; P.all = false; } return renderList(); }
   if (d.cv) { W.cv = d.cv; renderList(); goY(0); navPush(); }
   else if (d.cw) { W.cw = +d.cw; renderList(); }
   else if (d.csort) { const [k, v] = d.csort.split(":"); W.csort[k] = v; renderList(); }
@@ -2458,7 +2460,7 @@ const amtMid = a => (!a ? 0 : a[1] == null ? a[0] : (a[0] + a[1]) / 2);
 const congDays = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 const congToday = () => W.cong?.cutoff && W.cong.cutoff > new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10) ? W.cong.cutoff : new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const congFrom = w => new Date(Date.parse(congToday()) - w * 864e5).toISOString().slice(0, 10);
-const pName = pid => W.cong?.people?.[pid]?.name || pid;
+const pName = pid => String(W.cong?.people?.[pid]?.name || pid).replace(/[,，\s]+$/, "");
 const pTag = pid => { const p = W.cong?.people?.[pid]; return p ? `${p.chamber === "參議院" ? "參" : "眾"}${p.state ? "・" + p.state : ""}` : ""; };
 const kTxt = t => (t.k === "buy" ? `<b class="up">買進</b>` : t.k === "sell" ? `<b class="down">賣出${t.partial ? "（部分）" : ""}</b>` : `<b>交換</b>`);
 // 依股票彙整：人數（不重複的人）、筆數、金額區間合計；買進的「最大單一人物占比」用來分辨單人大筆 vs 多人共同
