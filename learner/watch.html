@@ -81,6 +81,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .ltabs-top[hidden] { display: none; }
 .ltabs-top .ltabs { margin: 0; }
 :root[data-embed="1"] .ltabs-top { padding: 0 0 6px; }
+.ltabs-top.pinned, #lTabs.pinned { position: relative; z-index: 30; background: var(--bg); box-shadow: 0 8px 14px -10px rgba(0, 0, 0, .55); }
 .w-main { display: grid; grid-template-columns: minmax(300px, 390px) minmax(0, 1fr); gap: 16px; padding: 16px; max-width: 1480px; margin: 0 auto; align-items: start; }
 .w-list { position: sticky; top: 68px; max-height: calc(100vh - 84px); display: flex; flex-direction: column; overflow: hidden; }
 :root[data-embed="1"] .w-main { padding: 0; }
@@ -673,6 +674,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
         <button class="btn sm" id="favBtn" type="button">☆ 加入自選</button>
         <button class="btn sm" id="holdBtn" type="button">💼 持股</button>
         <button class="btn sm" id="alertBtn" type="button">🔔 提醒</button>
+        <button class="btn sm" id="refreshBtn" type="button" title="重新抓這檔的報價、K 線、分時、籌碼與新聞（不用瀏覽器快取）">↻ 更新</button>
         <a class="btn sm" id="learnLink" href="./" title="到 K線學堂的個股判讀看這一檔">🔍 判讀</a>
       </div>
     </div>
@@ -883,7 +885,7 @@ function toast(t, ms = 4000) { const el = $("#toast"); el.textContent = t; el.hi
 // 逾時：iPad 睡眠喚醒、切換網路時 fetch 可能永遠不回來，輪詢會一直卡在「上一輪還沒結束」而停止更新，所以每個請求最多等 ms 毫秒
 const tmo = ms => { try { return AbortSignal.timeout(ms); } catch { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; } };
 async function getJ(url, optional = false) {
-  const ttl = apiTtl(url); if (ttl) { const hit = await apiCacheGet(url); if (hit) return hit; }
+  const ttl = apiTtl(url); if (ttl && !(W.fresh > Date.now())) { const hit = await apiCacheGet(url); if (hit) return hit; }
   let r; try { r = await fetch(url, { signal: tmo(20000) }); } catch (e) { throw new Error(e?.name === "TimeoutError" || e?.name === "AbortError" ? "伺服器太久沒回應" : "連不到伺服器（網路中斷？）"); }
   const t = await r.text().catch(() => ""); let j = null; try { j = JSON.parse(t); } catch {}
   if (!j) { if (r.status === 404 && !optional) W.off = true; throw new Error(r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}`); }
@@ -974,7 +976,7 @@ function liveRefresh() {
   else if (W.lt === "mkt" && W.mkReg === "gl") { if (age(W.gl) > 60000) loadGlobal(true); }
   else if (W.lt === "mkt" && W.mkReg === "poly") { if (age(W.pm) > 300000) loadPoly(true); }
   else if (W.lt === "mkt" && W.mkReg === "macro") { if (age(W.mc) > 3600e3) loadMacro(true); }
-  else if (W.lt === "mkt" && open && age(W.mkt) > 20000 && !(W.mktLoading && Date.now() - W.mktLoading < 40000)) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
+  else if (W.lt === "mkt" && open && age(W.mkt) > 15000 && !(W.mktLoading && Date.now() - W.mktLoading < 40000)) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
   else if (W.lt === "tw" && open && age(W.hot.tw) > 30000) loadHot("tw");
   else if (W.lt === "rank" && open && !["foreign", "trust"].includes(W.rankType) && age(W.hot["rank:" + W.rankType]) > 30000) loadHot("tw-rank");
   else if (W.lt === "screen" && open && age(W.scr) > 60000 && !W.scrLoading) loadScreen(true);
@@ -999,7 +1001,7 @@ async function fastTick() {
   if (W.off || (W.busy && Date.now() - W.busy < 30000) || (W.fbusy && Date.now() - W.fbusy < 30000) || document.visibilityState === "hidden") return;
   W.fbusy = Date.now(); try { const r = await Promise.allSettled([pollList(), pollDetail()]); if (!r.some(x => x.status === "rejected")) { W.lastOk = Date.now(); W.err = null; } } finally { W.fbusy = 0; }
   checkAlerts(); W.ticking = true; // try／finally：重畫出錯也一定要把 ticking 關掉；剛按下去（900ms 內）先不重畫清單，避免點擊被吃掉
-  try { renderTop(); if (["watch", "hold", "tw", "us", "rank", "etf"].includes(W.lt) && Date.now() - (W.lastPtr || 0) > 900) renderList(); if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } }
+  try { renderTop(); if (["watch", "hold", "tw", "us", "rank", "etf"].includes(W.lt) && Date.now() - (W.lastPtr || 0) > 900) renderList(); else if (W.lt === "mkt" && $("#mkCards")) $("#mkCards").innerHTML = mktCards(); if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } }
   catch (e) { console.error("fastTick", e); } finally { W.ticking = false; }
 }
 function schedule() { clearTimeout(W.timer); if (W.off) return; const open = anyOpen();
@@ -1296,13 +1298,23 @@ function renderList() {
 }
 // 平板橫向、電腦：大盤、選股、資金、產業這些內容多的分頁用全寬；點個股時，個股頁從右邊滑出（抽屜），不會把內容擠成一條
 const WIDE_TABS = ["mkt", "screen", "ind", "money", "pod", "after", "cong", "tools"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
-function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); placeDrawer(); }
+function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); placeDrawer(); if (EMBED) requestAnimationFrame(pinTabs); }
 // 嵌在 K線學堂裡時 iframe 和整頁一樣高，固定在 iframe 右側的抽屜會從 iframe 最上面一路拉到最下面：使用者往下捲過之後打開個股，
 // 內容在畫面外、抽屜本身也捲不動。所以抽屜改成貼齊使用者目前看得到的那一段，外層捲動或視窗大小改變時跟著移動。
 function placeDrawer() { const d = $("#detail"), m = $("#main");
   if (!EMBED || !m.classList.contains("wide") || !m.classList.contains("show-detail") || isMobile()) { d.style.top = d.style.bottom = d.style.height = ""; return; }
   const v = viewBox(); d.style.top = v.top + "px"; d.style.bottom = "auto"; d.style.height = Math.max(320, v.h) + "px"; }
-if (EMBED) { let rq = 0; const re = () => { if (!rq) rq = requestAnimationFrame(() => { rq = 0; placeDrawer(); }); }; try { parent.addEventListener("scroll", re, { passive: true }); parent.addEventListener("resize", re); } catch {} addEventListener("resize", re); }
+// 選單凍結：嵌在 K線學堂裡時 iframe 和整頁一樣高，position: sticky 沒有作用。外層捲動時，用位移把分頁列固定在學堂標題列下方，
+// 捲到哪裡都能直接切換分頁（電腦、平板是上方的分頁列，手機是清單上的分頁列）。
+function pinTabs() {
+  if (!EMBED) return; const mob = isMobile(), el = mob ? $("#lTabs") : $("#ltabsTop"), other = mob ? $("#ltabsTop") : $("#lTabs");
+  if (other && other.style.transform) { other.style.transform = ""; other.classList.remove("pinned"); }
+  if (!el || el.hidden || !el.offsetParent) return;
+  let ft = 0, hb = 0; try { ft = frameElement.getBoundingClientRect().top; const hd = parent.document.querySelector(".top"); if (hd && /sticky|fixed/.test(parent.getComputedStyle(hd).position)) hb = Math.max(0, hd.getBoundingClientRect().bottom); } catch { return; }
+  el.style.transform = ""; const nat = el.getBoundingClientRect().top, maxY = $("#main").getBoundingClientRect().bottom - el.offsetHeight - nat;
+  const ty = Math.max(0, Math.min(maxY, hb - ft - nat)); el.style.transform = ty > 0 ? `translateY(${ty}px)` : ""; el.classList.toggle("pinned", ty > 0);
+}
+if (EMBED) { let rq = 0; const re = () => { if (!rq) rq = requestAnimationFrame(() => { rq = 0; placeDrawer(); pinTabs(); }); }; try { parent.addEventListener("scroll", re, { passive: true }); parent.addEventListener("resize", re); } catch {} addEventListener("resize", re); }
 function renderList0() {
   syncLayout();
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === W.lt));
@@ -2396,17 +2408,22 @@ function renderPoly(top) {
     <p class="note">${esc(PM_IMPACT[e.cat] || "")}</p></section>`).join("") || `<p class="note" style="padding:12px">這個分類目前沒有事件</p>`;
   $("#lx").innerHTML = h + `<p class="note" style="padding:4px 12px 12px">Polymarket 是用加密貨幣下注的預測市場，題目與選項是英文原文；▲▼ 是 24 小時內機率的變化（百分點）。機率是市場共識，不是預測保證；台灣不能下注，這裡只當參考指標。</p>`;
 }
+// 大盤頂端的指數、期貨卡片：每秒報價更新時只重畫這一塊（整個大盤頁每 5 秒才重畫一次）
+function mktCards() {
+  const J = W.mkt, q = c => W.quotes.get(c), card = (c, nm) => { const x = q(c); return `<button class="ixcard" data-sel="${c}"><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price != null ? x.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><small class="${cls(x?.chg)}">${pctTxt(x?.chg, x?.chgPct)}</small></button>`; };
+  const scard = (nm, x, sub, attr = "") => `<button class="ixcard" ${attr}><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price ?? x?.close ?? "—"}</b><small class="${cls(x?.chg)}">${x ? pctTxt(x.chg, x.chgPct) : sub || ""}</small></button>`;
+  const fq = q("TXF"), F = W.futx || {}, t50 = J?.indices?.find(x => /臺灣50|台灣50/.test(x.name));
+  return `${card("T00", "加權指數")}${card("O00", "櫃買指數")}${card("TXF", fq?.session === "night" ? "台指近（夜盤）" : "台指近")}
+    ${scard(F.EXF?.session === "night" ? "電指近（夜盤）" : "電指近", F.EXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="EXF"')}${scard(F.FXF?.session === "night" ? "金指近（夜盤）" : "金指近", F.FXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="FXF"')}${(q("0050")?.price != null ? card("0050", "0050 台灣50") : scard("臺灣 50", t50 ? { price: t50.close.toLocaleString(), chg: t50.chg, chgPct: t50.chgPct } : null, t50?.date ? t50.date.slice(5).replace("-", "/") + " 收盤" : "收盤", 'data-sel="0050" title="看元大台灣50（0050）"'))}`;
+}
 function renderMkt() {
   const top = `<div class="mkreg">${mkSeg("mkReg", W.mkReg || "tw", [["tw", "台股大盤"], ["us", "美股大盤"], ["gl", "原物料外匯"], ["macro", "總經"], ["poly", "預測市場"]])}</div>`;
   if (W.mkReg === "macro") return renderMacro(top);
   if (W.mkReg === "poly") return renderPoly(top);
   if (W.mkReg === "us") return renderUsMkt(top);
   if (W.mkReg === "gl") return renderGlobal(top);
-  const J = W.mkt, q = c => W.quotes.get(c), card = (c, nm) => { const x = q(c); return `<button class="ixcard" data-sel="${c}"><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price != null ? x.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><small class="${cls(x?.chg)}">${pctTxt(x?.chg, x?.chgPct)}</small></button>`; };
-  const scard = (nm, x, sub, attr = "") => `<button class="ixcard" ${attr}><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price ?? x?.close ?? "—"}</b><small class="${cls(x?.chg)}">${x ? pctTxt(x.chg, x.chgPct) : sub || ""}</small></button>`;
-  const fq = q("TXF"), F = W.futx || {}, t50 = J?.indices?.find(x => /臺灣50|台灣50/.test(x.name));
-  let h = top + `<div class="ixcards three">${card("T00", "加權指數")}${card("O00", "櫃買指數")}${card("TXF", fq?.session === "night" ? "台指近（夜盤）" : "台指近")}
-    ${scard(F.EXF?.session === "night" ? "電指近（夜盤）" : "電指近", F.EXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="EXF"')}${scard(F.FXF?.session === "night" ? "金指近（夜盤）" : "金指近", F.FXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="FXF"')}${(q("0050")?.price != null ? card("0050", "0050 台灣50") : scard("臺灣 50", t50 ? { price: t50.close.toLocaleString(), chg: t50.chg, chgPct: t50.chgPct } : null, t50?.date ? t50.date.slice(5).replace("-", "/") + " 收盤" : "收盤", 'data-sel="0050" title="看元大台灣50（0050）"'))}</div>`;
+  const J = W.mkt, q = c => W.quotes.get(c);
+  let h = top + `<div class="ixcards three" id="mkCards">${mktCards()}</div>`;
   if (!J) { $("#lx").innerHTML = h + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有大盤資料。" : "載入中…"}</p>`; return; }
   if (J.err) { $("#lx").innerHTML = h + `<p class="note err" style="padding:12px">⚠ ${esc(J.err)}</p>`; return; }
   const sec = (t, body, extra = "", seg = "") => `<section class="mk"><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</section>`;
@@ -2655,6 +2672,12 @@ async function loadYield(c) {
 function showList(push = true) {
   $("#main").classList.remove("show-detail"); syncLayout(); setQ("list"); postHeight(); if (EMBED && isMobile()) post({ type: "watch-top", y: 0 });
   if (push) navPush();
+}
+// 個股頁「↻ 更新」：10 秒內的請求都不用瀏覽器快取（日 K、籌碼、公司資料、新聞），整檔重新載入
+function refreshDetail() {
+  const c = W.sel; if (!c) return; W.fresh = Date.now() + 10000; W.kc?.delete?.(c); W.co = null; W.yld && delete W.yld[c];
+  const b = $("#refreshBtn"); b.disabled = true; b.textContent = "↻ 更新中…"; setTimeout(() => { b.disabled = false; b.textContent = "↻ 更新"; }, 2500);
+  W.sel = null; select(c, "none"); toast("已重新載入 " + nameOf(c));
 }
 function select(code, how = "push") {
   code = String(code).toUpperCase(); if (!okCode(code)) return;
@@ -3552,6 +3575,7 @@ $("#coBox").addEventListener("click", e => { const b = e.target.closest("[data-c
 
 /* ---------- 價格提醒 ---------- */
 $("#alertBtn").addEventListener("click", () => { $("#alertBox").hidden = !$("#alertBox").hidden; $("#holdBox").hidden = true; if (!$("#alertBox").hidden) $("#alUp").focus(); });
+$("#refreshBtn").addEventListener("click", refreshDetail);
 $("#alSave").addEventListener("click", async () => {
   const c = W.sel, up = parseFloat($("#alUp").value), dn = parseFloat($("#alDn").value), px = (W.detailQ || W.quotes.get(c))?.price;
   if (!(up > 0) && !(dn > 0)) { $("#alNote").textContent = "請至少填一個價格"; return; }
@@ -3628,7 +3652,7 @@ function applyTheme(t) { document.documentElement.dataset.theme = t; $('meta[nam
 /* ---------- 嵌在 K線學堂（?embed=1）：回報高度、接收主題與「看這一檔」、把「判讀」交給外層 ---------- */
 function post(msg) { if (EMBED && parent !== window) parent.postMessage(msg, "*"); }
 let lastH = 0;
-function postHeight() { if (!EMBED) return; requestAnimationFrame(() => { const h = Math.ceil($("#main").getBoundingClientRect().bottom + scrollY + 8); if (Math.abs(h - lastH) > 2) { lastH = h; post({ type: "watch-height", h }); } }); }
+function postHeight() { if (!EMBED) return; requestAnimationFrame(() => { const h = Math.ceil($("#main").getBoundingClientRect().bottom + scrollY + 8); if (Math.abs(h - lastH) > 2) { lastH = h; post({ type: "watch-height", h }); } pinTabs(); }); }
 if (EMBED) {
   new ResizeObserver(postHeight).observe($("#main"));
   addEventListener("message", e => {
