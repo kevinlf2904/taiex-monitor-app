@@ -10,7 +10,8 @@ const OUT = fileURLToPath(new URL("../learner/data/chipx.json", import.meta.url)
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner; +https://github.com/kevinlf2904/taiex-monitor-app)", Accept: "application/json" };
 const get = async url => { const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(30000) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); };
 const num = s => { const v = +String(s ?? "").replace(/[,\s%]/g, ""); return s === "" || s == null || !Number.isFinite(v) ? null : v; };
-export const toIso = s => { const t = String(s ?? "").trim(); let m; if ((m = t.match(/^(\d{4})[-/]?(\d{2})[-/]?(\d{2})$/))) return `${m[1]}-${m[2]}-${m[3]}`; if ((m = t.match(/^(\d{2,3})[-/]?(\d{2})[-/]?(\d{2})$/))) return `${+m[1] + 1911}-${m[2]}-${m[3]}`; return null; };
+import { toIso } from "./insider.mjs"; // 民國／西元日期 → YYYY-MM-DD（和內部人申報共用）
+export { toIso };
 const SRC = [["上市", "https://openapi.twse.com.tw/v1", "https://openapi.twse.com.tw/v1/swagger.json"], ["上櫃", "https://www.tpex.org.tw/openapi/v1", "https://www.tpex.org.tw/openapi/swagger.json"]];
 const find = (sw, re, not) => Object.entries(sw?.paths || {}).filter(([, v]) => v.get).map(([p, v]) => [p, `${v.get.summary || ""} ${v.get.description || ""}`.trim()]).filter(([, t]) => re.test(t) && !(not && not.test(t)));
 const keyOf = (ks, ...re) => { for (const e of re) { const x = ks.find(k => e.test(k)); if (x) return x; } };

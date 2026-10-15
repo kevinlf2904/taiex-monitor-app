@@ -537,7 +537,7 @@ function insTable(L) {
 async function insBtRun() {
   const L = (W.ins?.rows || []).filter(r => /一般交易|盤後|鉅額|拍賣/.test(r.how)), codes = [...new Set(L.map(r => r.code))].slice(0, 80);
   const B = (W.insBt = { busy: true, done: 0, total: codes.length, rows: [] }); renderList(); const T = await dailyFresh("T00");
-  const at = (D, d, h) => { const i = (D || []).findIndex(x => String(x.d).slice(0, 10) > d); return i < 0 || i + h >= D.length ? null : D[i + h].c / D[i].c - 1; };
+  const at = (D, d, h) => { if (!D?.length || String(D[0].d).slice(0, 10) > d) return null; const i = D.findIndex(x => String(x.d).slice(0, 10) > d); return i < 0 || i + h >= D.length ? null : D[i + h].c / D[i].c - 1; };
   for (const c of codes) { const D = await dailyFresh(c); B.done++; for (const r of L.filter(x => x.code === c)) { const o = { r }; [5, 20].forEach(h => { o["r" + h] = at(D, r.d, h); o["t" + h] = at(T, r.d, h); }); B.rows.push(o); } if (B.done % 5 === 0 && insVis()) renderList(); }
   B.busy = false; if (toolsOn()) renderList();
 }
