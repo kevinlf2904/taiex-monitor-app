@@ -488,6 +488,50 @@ async function f13Load() { if (W.f13) return W.f13; try { const r = await fetch(
 const F13_CHG = { new: ["新進", "up"], add: ["加碼", "up"], cut: ["減碼", "down"], sold: ["出清", "down"], same: ["持平", ""] };
 const f13Tag = c => `<span class="ctag ${c === "new" || c === "add" ? "many" : c === "same" ? "" : "one"}">${F13_CHG[c]?.[0] || c}</span>`;
 const f13Tk = r => (r.ticker ? `<button class="linkbtn ctk" data-copen="${esc(r.ticker)}">${esc(r.ticker)}</button>` : "") + `<div class="note cas">${esc(r.name)}${r.pc ? `（${r.pc === "PUT" ? "賣權" : "買權"}）` : ""}</div>`;
+/* ---------- 13F 績效：用申報的持股（市值加權）算報酬，和 SPY 同期比 ----------
+   上一季：上一季底的持股（股數）放到這一季底的報酬（季中買賣看不到，所以是「持股不動」的估計）。
+   這一季：這一季底的持股放到今天。跟單：申報公開後第一個交易日收盤買進到今天。 */
+const usK = async T => { const K = (W.congK ||= {}); if (K[T] != null) return K[T]; try { const j = await getJ(`/api/kline?code=${encodeURIComponent(T.replace(/\./g, "-"))}&months=24`); K[T] = j.data || []; } catch (e) { K[T] = { err: e.message }; } return K[T]; };
+const kOn = (D, d) => { if (!Array.isArray(D) || !D.length || String(D[0].d).slice(0, 10) > d) return null; let x = null; for (const b of D) { if (String(b.d).slice(0, 10) <= d) x = b; else break; } return x?.c > 0 ? x.c : null; };
+const kAfter = (D, d) => { if (!Array.isArray(D) || !D.length || String(D[0].d).slice(0, 10) > d) return null; const b = D.find(x => String(x.d).slice(0, 10) > d); return b?.c > 0 ? b.c : null; };
+const kLast = D => (Array.isArray(D) && D.length ? D[D.length - 1].c : null);
+const f13Tks = f => [...new Set([...f.rows.filter(r => r.ticker && !r.pc).sort((a, b) => b.value - a.value).slice(0, 25), ...[...f.rows, ...f.sold].filter(r => r.ticker && !r.pc && r.psh > 0)].map(r => r.ticker))].slice(0, 45);
+async function f13PerfRun(funds) {
+  const T = [...new Set(["SPY", ...funds.flatMap(f13Tks)])].filter(t => W.congK?.[t] == null), R = (W.f13P = { busy: true, done: 0, total: T.length }); if (W.lt === "cong") renderList();
+  let k = 0; await Promise.all(Array.from({ length: 5 }, async () => { while (k < T.length) { await usK(T[k++]); R.done++; if (R.done % 8 === 0 && W.lt === "cong") renderList(); } }));
+  R.busy = false; R.at = Date.now(); if (W.lt === "cong") renderList();
+}
+function f13Perf(f) {
+  const K = W.congK || {}, S = K.SPY, cur = f.rows.filter(r => r.ticker && !r.pc), w = (L, v) => { const ok = L.filter(x => x.r != null); const t = ok.reduce((a, x) => a + x[v], 0); return t ? { r: ok.reduce((a, x) => a + x[v] * x.r, 0) / t, cov: t } : null; };
+  const now = cur.map(r => { const D = K[r.ticker], p0 = kOn(D, f.period), p1 = kLast(D), pf = kAfter(D, f.filed); return { ...r, p0, p1, pf, r: p0 && p1 ? p1 / p0 - 1 : null, rf: pf && p1 ? p1 / pf - 1 : null }; });
+  const prevL = [...f.rows, ...f.sold].filter(r => r.ticker && !r.pc && r.psh > 0).map(r => { const D = K[r.ticker], a = kOn(D, f.prevPeriod), b = kOn(D, f.period); return { ...r, v0: a ? r.psh * a : 0, r: a && b ? b / a - 1 : null }; });
+  const q = w(now, "value"), fo = w(now.map(x => ({ ...x, r: x.rf })), "value"), pv = f.prevPeriod ? w(prevL, "v0") : null;
+  const sp = (a, b) => { const x = a && kOn(S, a), y = b ? kOn(S, b) : kLast(S); return x && y ? y / x - 1 : null; }, spF = (() => { const x = kAfter(S, f.filed), y = kLast(S); return x && y ? y / x - 1 : null; })();
+  return { now, q, fo, pv, sQ: sp(f.period), sF: spF, sP: f.prevPeriod ? sp(f.prevPeriod, f.period) : null, cov: q ? q.cov / f.total : 0, last: Array.isArray(S) && S.length ? String(S[S.length - 1].d).slice(0, 10) : "" };
+}
+const f13Cell = (r, s) => `<td class="${cls(r)}"><b>${retPct(r)}</b>${s != null && r != null ? `<div class="note ${cls(r - s)}">${r - s >= 0 ? "贏" : "輸"} SPY ${retPct(Math.abs(r - s)).replace("+", "")}</div>` : ""}</td>`;
+function f13PerfHtml(f) {
+  const ready = [...f13Tks(f), "SPY"].every(t => W.congK?.[t] != null); // 抓不到的股票（{ err }）也算載入完成，不會一直重抓
+  if (!ready) { if (!W.f13P?.busy) setTimeout(() => f13PerfRun([f]), 0); return `<h4>績效</h4><p class="note">載入股價 ${W.f13P?.done || 0}/${W.f13P?.total || "…"}</p>`; }
+  const P = f13Perf(f);
+  return `<h4>績效（和 SPY 同期比）</h4><div class="cokv three">
+    <div><span>上一季持股的季度報酬</span><b class="${cls(P.pv?.r)}">${retPct(P.pv?.r)}</b><small>${f.prevPeriod || "—"} → ${f.period}・SPY ${retPct(P.sP)}</small></div>
+    <div><span>本季持股到今天</span><b class="${cls(P.q?.r)}">${retPct(P.q?.r)}</b><small>${f.period} → ${P.last}・SPY ${retPct(P.sQ)}</small></div>
+    <div><span>申報後跟單到今天</span><b class="${cls(P.fo?.r)}">${retPct(P.fo?.r)}</b><small>${f.filed} 申報後買進・SPY ${retPct(P.sF)}</small></div></div>
+    <div class="ctbl"><table><thead><tr><th>股票</th><th>占比</th><th>季底價 → 最新</th><th>報酬</th><th>貢獻</th></tr></thead><tbody>
+    ${P.now.filter(x => x.r != null).sort((a, b) => b.value - a.value).slice(0, 25).map(x => `<tr><td>${f13Tk(x)}</td><td>${x.pct}%</td><td>${x.p0.toFixed(2)} → ${x.p1.toFixed(2)}</td><td class="${cls(x.r)}">${retPct(x.r)}</td><td class="${cls(x.r)}">${retPct((x.pct / 100) * x.r)}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">市值加權、只算有股價的前 25 大持股（約占申報市值 ${Math.round(P.cov * 100)}%），不含選擇權。13F 只看得到季底持股：季中的買賣、放空、現金都不在裡面，所以是「持股不動」的估計，不是基金真正的績效；沒算股利與費用。</p>`;
+}
+function f13RankHtml(F) {
+  const R = W.f13P, all = ["SPY", ...F.funds.flatMap(f13Tks)].every(t => W.congK?.[t] != null);
+  const run = `<button class="btn sm primary" data-f13p="1" ${R?.busy ? "disabled" : ""}>${R?.busy ? `載入股價 ${R.done}/${R.total}…` : all ? "重新整理" : "計算全部機構的績效"}</button>`;
+  if (!all || R?.busy) return `<h4>機構績效排行 ${run}</h4><p class="note">用每家機構申報的持股計算季度報酬與跟單報酬，和 SPY 比（要載入約 ${new Set(F.funds.flatMap(f13Tks)).size} 檔股價）。</p>`;
+  const L = F.funds.map(f => ({ f, P: f13Perf(f) })), k = W.f13Sort || "pv", v = o => (k === "pv" ? o.P.pv?.r : k === "q" ? o.P.q?.r : o.P.fo?.r) ?? -9;
+  const seg = [["pv", "上一季"], ["q", "本季到今天"], ["fo", "跟單到今天"]].map(([x, t]) => `<button class="btn sm ${k === x ? "primary" : ""}" data-f13s="${x}">${t}</button>`).join(" ");
+  return `<h4>機構績效排行 ${run}</h4><div class="mksegrow">${seg}</div><div class="ctbl"><table><thead><tr><th>機構</th><th>上一季持股</th><th>本季持股到今天</th><th>申報後跟單</th></tr></thead><tbody>
+    ${L.sort((a, b) => v(b) - v(a)).map(({ f, P }) => `<tr><td><button class="linkbtn" data-cv="f13:${f.cik}">${esc(f.who)}</button><div class="note">${f.period}</div></td>${f13Cell(P.pv?.r, P.sP)}${f13Cell(P.q?.r, P.sQ)}${f13Cell(P.fo?.r, P.sF)}</tr>`).join("")}</tbody></table></div>
+    <p class="note">市值加權的持股報酬（持股不動的估計），和 SPY 同期比；季中買賣、放空、現金都看不到。</p>`;
+}
 function f13Html(arg) {
   const F = W.f13; if (!F) { f13Load(); return `<p class="note" style="padding:16px">載入中…</p>`; }
   if (F.err || !F.funds?.length) return `<p class="note" style="padding:16px">⚠ 13F 資料還沒有（${esc(F.err || "沒有資料")}）。資料由每天的排程從 SEC EDGAR 整理。</p>`;
@@ -496,7 +540,8 @@ function f13Html(arg) {
     const sh = n => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "K" : n);
     return `<section class="csec"><h3>${esc(f.who)} <span class="note">${esc(f.name)}</span> <a class="note" href="${esc(f.doc)}" target="_blank" rel="noopener">SEC 原始申報</a></h3>
       <div class="cokv three"><div><span>持股日期（季底）</span><b>${f.period}</b><small>${f.filed} 申報・上一季 ${f.prevPeriod || "—"}</small></div><div><span>申報市值</span><b>${usd(f.total)}</b><small>${f.n} 檔</small></div><div><span>本季變動</span><b><span class="up">新進 ${f.rows.filter(r => r.chg === "new").length}・加碼 ${f.rows.filter(r => r.chg === "add").length}</span></b><small><span class="down">減碼 ${f.rows.filter(r => r.chg === "cut").length}・出清 ${f.sold.length}</span></small></div></div>
-      <div class="ctbl"><table><thead><tr><th>股票</th><th>占比</th><th>市值</th><th>股數</th><th>上一季股數</th><th>變動</th></tr></thead><tbody>
+      ${f13PerfHtml(f)}
+      <h4>持股明細</h4>      <div class="ctbl"><table><thead><tr><th>股票</th><th>占比</th><th>市值</th><th>股數</th><th>上一季股數</th><th>變動</th></tr></thead><tbody>
       ${f.rows.map(r => `<tr><td>${f13Tk(r)}</td><td>${r.pct}%</td><td>${usd(r.value)}</td><td>${sh(r.sh)}</td><td>${sh(r.psh)}</td><td>${f13Tag(r.chg)}${r.psh && r.chg !== "same" ? ` <span class="note">${retPct(r.sh / r.psh - 1)}</span>` : ""}</td></tr>`).join("")}
       ${f.sold.map(r => `<tr><td>${f13Tk(r)}</td><td>—</td><td>—</td><td>0</td><td>${sh(r.psh)}</td><td>${f13Tag("sold")}</td></tr>`).join("")}</tbody></table></div>
       <p class="note">變動用股數比（±2% 以內算持平），不受股價漲跌影響。只列前 60 大與有變動的持股。</p></section>`;
@@ -509,6 +554,7 @@ function f13Html(arg) {
     <p class="note">管理資產 1 億美元以上的機構每季要申報美股多頭持股，最晚在季底後 45 天公開——看到的是<strong>上一季底</strong>的部位，現在可能已經不同；不含放空、現金與非美股。</p>
     <div class="ctbl"><table><thead><tr><th>機構</th><th>持股日期</th><th>市值</th><th>檔數</th><th>前 3 大</th><th>新進／出清</th></tr></thead><tbody>
     ${F.funds.map(f => `<tr><td><button class="linkbtn" data-cv="f13:${f.cik}">${esc(f.who)}</button><div class="note cas">${esc(f.name)}</div></td><td>${f.period}<div class="note">${f.filed} 申報</div></td><td>${usd(f.total)}</td><td>${f.n}</td><td>${f.rows.slice(0, 3).map(r => `${esc(r.ticker || r.name)} ${r.pct}%`).join("<br>")}</td><td><span class="up">${f.rows.filter(r => r.chg === "new").length}</span>／<span class="down">${f.sold.length}</span></td></tr>`).join("")}</tbody></table></div>
+    ${f13RankHtml(F)}
     <h4>多家機構同時新進或加碼</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>新進／加碼</th><th>減碼／出清</th><th>持有家數</th></tr></thead><tbody>${top.map(g => `<tr><td>${f13Tk(g.r)}</td><td class="up"><b>${g.up.length}</b> <span class="note">${who(g.up)}</span></td><td class="down">${g.dn.length || ""} <span class="note">${who(g.dn)}</span></td><td>${g.hold}</td></tr>`).join("")}</tbody></table></div>
     <h4>多家機構減碼或出清</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>減碼／出清</th><th>新進／加碼</th></tr></thead><tbody>${out.map(g => `<tr><td>${f13Tk(g.r)}</td><td class="down"><b>${g.dn.length}</b> <span class="note">${who(g.dn)}</span></td><td class="up">${g.up.length || ""}</td></tr>`).join("")}</tbody></table></div>
     ${f13CongHtml(A)}

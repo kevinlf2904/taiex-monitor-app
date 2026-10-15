@@ -2205,7 +2205,9 @@ $("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListe
 setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); if ((store.get("watch:paper", null)?.orders || []).length) paStart(); }, 3000);
 setTimeout(syncBoot, 1500); // 雲端同步：開網頁時下載較新的資料、之後有改動自動上傳
 // 國會分頁：切換頁面（首頁、股票、人物）、期間、排序、在看盤開啟、問 AI
-$("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-cw],[data-csort],[data-copen],[data-cask],[data-cbt],[data-cpl],[data-twbt]"); if (!b) return; const d = b.dataset;
+$("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-cw],[data-csort],[data-copen],[data-cask],[data-cbt],[data-cpl],[data-twbt],[data-f13p],[data-f13s]"); if (!b) return; const d = b.dataset;
+  if (d.f13p) return f13PerfRun(W.f13?.funds || []);
+  if (d.f13s) { W.f13Sort = d.f13s; return renderList(); }
   if (d.twbt) { if (d.twbt.startsWith("s:")) { W.twoRankS = d.twbt.slice(2); return renderList(); } W.twoRank = true; return twoBtLoad(twoPeople().flatMap(p => p.hold.filter(h => h.code).map(h => h.code))).then(renderList); }
   if (d.cbt) return congBtRun(d.cbt === "all");
   if (d.cpl != null) { const [k, v] = d.cpl.split(/:(.*)/s), P = (W.cpl ||= { sort: "pnl", who: "", all: false }); if (k === "all") P.all = !P.all; else { P[k] = v; P.all = false; } return renderList(); }
