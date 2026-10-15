@@ -74,7 +74,7 @@ async function misFetchRaw(chs) {
 }
 async function fromMis(codes) {
   // 不知道是上市還是上櫃，兩個都問，有資料的那個就是
-  const chs = codes.flatMap(c => (INDEX[c] ? [INDEX[c].mis] : [`tse_${c.toLowerCase()}.tw`, `otc_${c.toLowerCase()}.tw`]));
+  const chs = codes.flatMap(c => (INDEX[c] ? [INDEX[c].mis] : [`tse_${c}.tw`, `otc_${c}.tw`]));
   const rows = (await misFetch(chs)).map(parseMis).filter(q => q.code && (q.price != null || q.prev != null));
   return codes.map(c => rows.find(q => q.code === c)).filter(Boolean);
 }

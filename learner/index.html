@@ -831,7 +831,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.15-75</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.16-76</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -2460,7 +2460,7 @@ const LESSON_GROUPS = [
   ["基礎", ["kline"]], ["初級班：型態學", ["patterns-rev", "patterns-cont", "chart-patterns", "pattern-round", "pattern-wedge", "gaps"]],
   ["中級班：指標學", ["ma", "rsi", "kd", "wr", "macd", "mtm", "dmi", "psy", "arbr", "boll", "vwap"]], ["中級班：量能與大盤指標", ["vol", "obv", "vr", "inout", "vprofile", "breadth", "tapi"]],
   ["延伸指標", ["bias", "atr", "cci", "mfi", "trix", "srsi", "roc", "dma", "emv", "sar", "donch", "kelt", "ichi", "tower"]],
-  ["高級班：趨勢理論", ["dow", "trend3", "sr", "trendline", "fan", "elliott", "ccw", "fib"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["籌碼面與基本面", ["chips-inst", "chips-margin", "fund-rev", "fund-val"]], ["風險管理", ["risk"]],
+  ["高級班：趨勢理論", ["dow", "trend3", "sr", "trendline", "fan", "elliott", "ccw", "fib"]], ["價格行為：反轉確認", ["hlbreak", "rule123", "rule2b"]], ["背離", ["div", "div-hidden"]], ["聰明錢", ["smc-structure", "smc-liquidity", "smc-zones", "smc-fvg", "smc-pd"]], ["籌碼面與基本面", ["chips-inst", "chips-margin", "fund-rev", "fund-val"]], ["風險管理", ["risk"]],
 ];
 const ORDER = LESSON_GROUPS.flatMap(g => g[1]);
 LESSONS.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
@@ -2621,7 +2621,7 @@ const STRATS = {
   choch: { name: "聰明錢：CHoCH 結構轉變", fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") },
   bos: { name: "道氏：所有結構突破（BOS + CHoCH）", fn: (D, I) => Signals.structure(D, I, "dow") },
   // 進階指標策略（參數用預設值，定義在 analysis.js 的 STRAT_DEFS）
-  ...Object.fromEntries(["mtm", "dmi", "psy", "arbr", "obv", "vr", "bias", "cci", "mfi", "trix", "srsi", "roc", "dma", "emv", "sar", "kelt", "tower", "ccw"].map(k => [k, { name: STRAT_DEFS[k].name + "（" + STRAT_DEFS[k].desc.split("，")[0].split("；")[0] + "）", fn: (D, I) => stratRun(k, D, I) }])),
+  ...Object.fromEntries(["mtm", "dmi", "psy", "arbr", "obv", "vr", "bias", "cci", "mfi", "trix", "srsi", "roc", "dma", "emv", "sar", "kelt", "tower", "ccw", "hlb", "r123", "b2"].map(k => [k, { name: STRAT_DEFS[k].name + "（" + STRAT_DEFS[k].desc.split("，")[0].split("；")[0] + "）", fn: (D, I) => stratRun(k, D, I) }])),
 };
 let lab = { src: "sim", seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma"), skip: new Set(), listOpen: false,
   capital: Math.max(10000, +store.get("btCap", 1000000) || 1000000), lot: store.get("btLot", 1) === 1000 ? 1000 : 1, useBuy: store.get("btBuy", true) !== false, useSell: store.get("btSell", true) !== false };
@@ -2884,6 +2884,10 @@ const QUESTIONS = [
   { q: "航運、鋼鐵這類景氣循環股，本益比「最低」的時候常常是？", o: ["最好的買點", "股價的相對高點", "獲利最差的時候", "除權息的時候"], a: 1, e: "景氣最好時獲利最高，本益比看起來最低，但之後獲利會下滑；所以景氣循環股常是本益比低時在高點。這類股票較常改看股價淨值比。" },
   { q: "多方的公平價值缺口（FVG）是怎麼形成的？", o: ["開盤價高於前一天收盤", "連續三根 K 棒中，第三根的最低價高於第一根的最高價", "成交量是前一天的兩倍", "收盤價創 20 日新高"], a: 1, e: "中間那根急漲，讓第一根高點和第三根低點之間留下沒有重疊的空白。SMC 認為價格常會回來填補這段失衡。" },
   { q: "關於技術指標，下列敘述何者最正確？", o: ["找到對的指標就能穩定獲利", "指標越多越準", "指標是提高勝算的工具，仍需搭配停損與資金控管", "只要回測賺錢，未來一定賺錢"], a: 2, e: "沒有指標能保證獲利。技術分析的價值在於有規則地進出、控制虧損。" },
+  { q: "「過高破低」裡的「破低 K 棒」是指哪一根？", o: ["創當日新高的那根 K 棒", "跌破創高 K 棒低點的那根 K 棒", "當天最低點的那根 K 棒", "成交量最大的 K 棒"], a: 1, e: "先有創高 K 棒，之後跌破它低點的那根才是破低 K 棒；破低 K 棒的高點是之後的反彈壓力。" },
+  { q: "「破低過高」出現後，哪個價位是之後回檔的支撐？", o: ["創低 K 棒的高點", "過高 K 棒的低點", "當天開盤價", "前一天收盤價"], a: 1, e: "過高 K 棒（突破創低 K 棒高點的那根）的低點，是之後回檔的支撐。" },
+  { q: "123 法則（頭部）的第 3 點有什麼條件？", o: ["要比 1 點高", "要比 1 點低", "要等於 2 點", "要出現大量"], a: 1, e: "3 點是 2 之後的反彈高點，沒有超過 1 點代表不再創新高；之後跌破 2 點才確認反轉。" },
+  { q: "股價突破前高後，兩天內就收盤跌回前高之下，依 2B 法則是？", o: ["突破成功，加碼", "假突破，可能是頭部", "底部訊號", "沒有意義"], a: 1, e: "2B 法則：突破前高後很快收回前高之下是假突破，追高的人被套，常常是頭部。" },
 ];
 let quiz = null;
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }

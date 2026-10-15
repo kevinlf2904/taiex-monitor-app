@@ -623,6 +623,55 @@ function fanSignals(D) {
   return F.lines.map((L, k) => ({ L, k })).filter(x => x.L.brk != null).map(({ L, k }) => ({ i: L.brk, side: F.up ? "sell" : "buy", note: k < 2, label: `${F.up ? "跌破" : "突破"}扇形第 ${k + 1} 線${k === 2 ? "：趨勢反轉" : ""}` }));
 }
 
+/* ---------- 價格行為的反轉訊號：過高破低／破低過高、123 法則、2B 法則 ----------
+   三個都只用「當時已經收完的 K 棒」：轉折點要等右側 w 根才確認，訊號出在跌破／突破的那一根，不會偷看之後的走勢。 */
+const pxR = v => +(+v).toFixed(v >= 100 ? 1 : 2);
+const lvlShape = (i, p, n, up) => ({ pts: [[i, p], [Math.min(n - 1, i + 12), p]], color: up ? "up" : "down", dash: [5, 4], width: 1.3 });
+// 過高破低：創高 K 棒＝創 n 根新高（分 K 且 day=1 時是創「當日」新高）的那一根；之後收盤（conf=0 時只要盤中）跌破它的低點 → 這根是「破低 K 棒」，賣出，
+// 它的高點是之後的反彈壓力。破低過高相反：創低 K 棒之後突破它的高點 →「過高 K 棒」，買進，它的低點是回檔支撐。新的創高（創低）K 棒會取代舊的。
+function hlBreakSignals(D, n = 20, day = 1, conf = 1) {
+  const o = [], intra = day && D.length > 1 && D[0].t != null; let hb = -1, lb = -1, ds = 0;
+  for (let i = 1; i < D.length; i++) {
+    const d = D[i]; if (intra && d.d !== D[i - 1].d) { ds = i; hb = lb = -1; continue; } // 換日：當日的新高新低重新算
+    const from = intra ? ds : Math.max(0, i - n); if (!intra && i < n) continue;
+    if (hb >= 0 && (conf ? d.c : d.l) < D[hb].l) { o.push({ i, side: "sell", label: `破低K棒（壓力 ${pxR(d.h)}）`, shapes: [lvlShape(i, d.h, D.length, false), { pts: [[hb, D[hb].h]], color: "down", tags: [{ i: hb, p: D[hb].h, text: "創高" }] }] }); hb = -1; }
+    else if (lb >= 0 && (conf ? d.c : d.h) > D[lb].h) { o.push({ i, side: "buy", label: `過高K棒（支撐 ${pxR(d.l)}）`, shapes: [lvlShape(i, d.l, D.length, true), { pts: [[lb, D[lb].l]], color: "up", tags: [{ i: lb, p: D[lb].l, text: "創低", below: true }] }] }); lb = -1; }
+    let hi = -Infinity, lo = Infinity; for (let j = from; j < i; j++) { if (D[j].h > hi) hi = D[j].h; if (D[j].l < lo) lo = D[j].l; }
+    if (d.h > hi) hb = i; if (d.l < lo) lb = i;
+  }
+  return o;
+}
+// 已確認的轉折點（第 p 根要到第 p+w 根收完才知道）：依確認時間排序
+function confPivots(D, w) { const { hi, lo } = pivots(D, w); return [...hi.map(i => ({ i, p: D[i].h, H: 1 })), ...lo.map(i => ({ i, p: D[i].l, H: 0 }))].sort((a, b) => a.i + w - (b.i + w) || a.i - b.i); }
+// 123 法則（頭部）：1＝轉折高點、2＝之後的轉折低點、3＝2 之後反彈的最高點但沒超過 1；收盤跌破 2 → 賣出。底部相反。
+function r123Signals(D, w = 3) {
+  const P = confPivots(D, w), o = []; let k = 0, H = null, L = null, used = new Set();
+  for (let i = 1; i < D.length; i++) {
+    while (k < P.length && P[k].i + w <= i) { const p = P[k++]; if (p.H) { if (!H || p.i > H.i) H = p; } else if (!L || p.i > L.i) L = p; }
+    // 頭部：1＝H、2＝H 之後的 L
+    for (const [one, two, top] of [[H, L, true], [L, H, false]]) {
+      if (!one || !two || two.i <= one.i || used.has(two.i) || i - two.i < 2) continue;
+      let ext = top ? -Infinity : Infinity, e3 = -1; for (let j = two.i + 1; j < i; j++) { const v = top ? D[j].h : D[j].l; if (top ? v > ext : v < ext) { ext = v; e3 = j; } }
+      if (e3 < 0 || (top ? ext >= one.p : ext <= one.p)) continue; // 3 超過 1：還在原趨勢，不是反轉
+      const brk = top ? D[i].c < two.p && D[i - 1].c >= two.p : D[i].c > two.p && D[i - 1].c <= two.p; if (!brk) continue;
+      used.add(two.i);
+      o.push({ i, side: top ? "sell" : "buy", label: top ? "123 跌破 2" : "123 突破 2", shapes: [{ pts: [[one.i, one.p], [two.i, two.p], [e3, ext], [i, D[i].c]], color: top ? "down" : "up", width: 1.4, tags: [{ i: one.i, p: one.p, text: "1", below: !top }, { i: two.i, p: two.p, text: "2", below: top }, { i: e3, p: ext, text: "3", below: !top }] }, lvlShape(two.i, two.p, Math.min(D.length, i + 13), !top)] });
+    }
+  }
+  return o;
+}
+// 2B 法則（頭部）：突破前一個轉折高點後，win 根內收盤又跌回那個高點之下（假突破）→ 賣出。底部相反：跌破前低後收回 → 買進。
+function b2Signals(D, w = 3, win = 3) {
+  const P = confPivots(D, w), o = []; let k = 0, H = null, L = null, hBrk = -1, lBrk = -1;
+  for (let i = 1; i < D.length; i++) {
+    while (k < P.length && P[k].i + w <= i) { const p = P[k++]; if (p.H) { if (!H || p.i > H.i) { H = p; hBrk = -1; } } else if (!L || p.i > L.i) { L = p; lBrk = -1; } }
+    const d = D[i];
+    if (H) { if (hBrk < 0 && d.h > H.p) hBrk = i; if (hBrk >= 0) { if (d.c < H.p) { o.push({ i, side: "sell", label: "2B 假突破", shapes: [lvlShape(H.i, H.p, Math.min(D.length, i + 13), false)] }); H = null; } else if (i - hBrk >= win) H = null; } }
+    if (L) { if (lBrk < 0 && d.l < L.p) lBrk = i; if (lBrk >= 0) { if (d.c > L.p) { o.push({ i, side: "buy", label: "2B 假跌破", shapes: [lvlShape(L.i, L.p, Math.min(D.length, i + 13), true)] }); L = null; } else if (i - lBrk >= win) L = null; } }
+  }
+  return o;
+}
+
 // 波浪理論：從明顯的低點（或高點）開始，用轉折點數出 1～5 波推動與 A、B、C 修正，並檢查三條鐵律：
 // 第 2 波不跌破第 1 波起點、第 3 波不是 1、3、5 裡最短的、第 4 波不跌進第 1 波的價格區
 function elliottWaves(D, upto = D.length) {
@@ -1027,6 +1076,13 @@ const STRAT_DEFS = {
     params: [["k", "翻色要突破幾座塔", 2, 5, 1, 3]],
     fn: (D, I, p) => towerCalc(D, p.k).boxes.map((x, i) => (x && x.flip ? { i, side: x.up ? "buy" : "sell", label: x.up ? "寶塔翻紅" : "寶塔翻綠" } : null)).filter(Boolean) },
   ccw: { name: "逆時鐘曲線", desc: "量價進入「陽轉、買進」階段買進，進入「陰轉、賣出」階段賣出", params: [], fn: D => ccwSignals(D) },
+  hlb: { name: "過高破低／破低過高", desc: "創新高的 K 棒被收盤跌破低點（破低 K 棒）賣出，創新低的 K 棒被突破高點（過高 K 棒）買進；分 K 用當日高低點",
+    params: [["n", "日 K 創高天數", 5, 120, 1, 20], ["day", "分 K 用當日新高低（1＝是）", 0, 1, 1, 1], ["conf", "收盤確認（0＝盤中觸及就算）", 0, 1, 1, 1]],
+    fn: (D, I, p) => hlBreakSignals(D, p.n, p.day, p.conf) },
+  r123: { name: "123 法則", desc: "轉折高點 1、回檔低點 2、反彈不過 1 的高點 3，收盤跌破 2 賣出；底部相反",
+    params: [["w", "轉折點確認 K 棒數", 2, 10, 1, 3]], fn: (D, I, p) => r123Signals(D, p.w) },
+  b2: { name: "2B 法則", desc: "突破前高後幾根內又收回前高之下（假突破）賣出；跌破前低後收回買進",
+    params: [["w", "轉折點確認 K 棒數", 2, 10, 1, 3], ["win", "幾根內收回", 1, 10, 1, 3]], fn: (D, I, p) => b2Signals(D, p.w, p.win) },
   pat: { name: "型態學突破", desc: "頭肩、M 頭、W 底、三角、楔形、旗形、圓形、菱形、島型反轉", params: [], fn: (D, I) => Signals.chartPatLive(D, I) },
   choch: { name: "聰明錢 CHoCH", desc: "市場結構轉變", params: [], fn: (D, I) => Signals.structure(D, I, "smc", "CHoCH") },
   bos: { name: "道氏結構突破", desc: "突破前高、跌破前低", params: [], fn: (D, I) => Signals.structure(D, I, "dow") },

@@ -33,3 +33,15 @@ test("嵌入模式往下捲後打開個股：抽屜在可見範圍、可以捲�
   assert.ok(await fr.evaluate(() => $("#detail").scrollTop) > y0);
   await ctx.close();
 });
+
+test("嵌入模式選單凍結：往下捲後分頁列固定在學堂標題列下方、可以點", async () => {
+  const ctx = await B.newContext({ viewport: { width: 1180, height: 820 } }); await mock(ctx); const p = await ctx.newPage();
+  await p.goto(`${S.url}/learner/index.html`); await p.waitForTimeout(1500); await p.evaluate(() => goTab("watch")); await p.waitForTimeout(2500);
+  const fr = p.frames().find(f => /watch\.html/.test(f.url())); await fr.evaluate(() => setLt("cong")); await p.waitForTimeout(1500);
+  await p.evaluate(() => scrollTo(0, 1500)); await p.waitForTimeout(400);
+  const [ft, hb, fl] = await p.evaluate(() => [document.querySelector("#watchFrame").getBoundingClientRect().top, document.querySelector(".top").getBoundingClientRect().bottom, document.querySelector("#watchFrame").getBoundingClientRect().left]);
+  const t = await fr.evaluate(() => $("#ltabsTop").getBoundingClientRect().top); assert.ok(ft < 0 && Math.abs(t + ft - hb) < 3, `分頁列沒有固定（${t + ft} vs ${hb}）`);
+  await p.mouse.click(...await fr.evaluate(() => { const r = document.querySelector('#lTabs [data-l="mkt"]').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }).then(([x, y]) => [x + fl, y + ft]));
+  await p.waitForTimeout(500); assert.equal(await fr.evaluate(() => W.lt), "mkt");
+  await ctx.close();
+});

@@ -32,7 +32,7 @@ export function parseFugleSnapshot(j, market) {
 export async function misAll(base, fetcher = misFetch) {
   const list = base.filter(r => isStockOrEtf(r.code)), out = [], B = 100;
   const batches = []; for (let i = 0; i < list.length; i += B) batches.push(list.slice(i, i + B));
-  const ch = r => `${r.market === "上櫃" ? "otc" : "tse"}_${r.code.toLowerCase()}.tw`;
+  const ch = r => `${r.market === "上櫃" ? "otc" : "tse"}_${r.code}.tw`;
   const one = async (bt, depth = 0) => {
     try { out.push(...(await fetcher(bt.map(ch))).map(parseMis)); }
     catch { if (depth < 2 && bt.length > 1) { const h = Math.ceil(bt.length / 2); await one(bt.slice(0, h), depth + 1); await one(bt.slice(h), depth + 1); } }
