@@ -546,6 +546,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .howto { font-size: 13.5px; line-height: 1.7; background: var(--surface-2); border-radius: 4px; padding: 8px 12px; } .howto ol { margin: 4px 0 0; padding-left: 20px; } .howto code { font-size: 12.5px; }
 .hg-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--line); border-radius: 4px; }
 .hgrid { width: 100%; border-collapse: collapse; font-size: 13px; } .hgrid th { position: sticky; top: 0; background: var(--surface-2); color: var(--muted); font-weight: 500; text-align: left; padding: 6px 6px; font-size: 12px; z-index: 1; } .hgrid th small { display: block; font-size: 10.5px; }
+.hgrid { min-width: 560px; } .hgrid input[type="number"] { min-width: 84px; } .hgrid input[type="date"] { min-width: 138px; } .hgrid input.code { min-width: 120px; }
 .hgrid td { padding: 5px 4px; border-top: 1px solid var(--line); vertical-align: top; } .hgrid td:first-child { width: 40%; } .hgrid td:last-child { width: 32px; text-align: center; }
 .hgrid input { width: 100%; box-sizing: border-box; font: 15px var(--font-num); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 6px 6px; min-height: 36px; }
 .hgrid input:focus { outline: 2px solid var(--accent); outline-offset: -1px; } .hgrid td small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1468,7 +1469,7 @@ function renderHold() {
   if (!R.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">還沒有${us ? "美股" : "台股"}持股。按上面的「✏️ 編輯庫存」一格一格填代號、股數與成本，或用「📷 截圖匯入」上傳券商 App 的庫存截圖。</p>`; $("#wl").innerHTML = ""; return; }
   const ok = R.filter(r => r.mv != null);
   if (!ok.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有報價。" : "等待報價…"}</p>`; }
-  const mv = ok.reduce((s, r) => s + r.mv, 0), cost = ok.reduce((s, r) => s + r.cost, 0), pnl = mv - cost, day = ok.reduce((s, r) => s + (r.day || 0), 0);
+  const mv = ok.reduce((s, r) => s + r.mv, 0), cost = ok.reduce((s, r) => s + r.cost, 0), pnl = ok.reduce((s, r) => s + (r.pnl ?? 0), 0), day = ok.reduce((s, r) => s + (r.day || 0), 0);
   const parts = ok.slice().sort((a, b) => b.mv - a.mv), top = parts.slice(0, 4), rest = parts.slice(4).reduce((s, r) => s + r.mv, 0), slices = [...top.map(r => ({ n: nameOf(r.c), v: r.mv })), ...(rest ? [{ n: "其他", v: rest }] : [])];
   let acc = 0; const grad = slices.map((x, i) => { const a = acc / mv * 360; acc += x.v; return `${PIE[i]} ${a}deg ${acc / mv * 360}deg`; }).join(",");
   if (ok.length) $("#lx").innerHTML = `<div class="hsum"><div><span>今日損益</span><b class="${cls(day)}">${sgn(day)}</b><small class="${cls(day)}">${mv - day ? sgn(day / (mv - day) * 100, 2) + "%" : ""}</small></div><div><span>累積損益</span><b class="${cls(pnl)}">${sgn(pnl)}</b><small class="${cls(pnl)}">${cost ? sgn(pnl / cost * 100, 2) + "%" : ""}</small></div><div><span>股票市值</span><b>${money(mv)}</b><small>成本 ${money(cost)}</small></div></div>
