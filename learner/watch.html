@@ -2364,7 +2364,9 @@ function renderGlobal(top) {
 /* ---------- 總經（FRED）與預測市場（Polymarket） ---------- */
 async function loadMacro(force = false) {
   if (W.off || W.mcLoading || (!force && W.mc && Date.now() - W.mc.at < 3600e3)) return;
-  W.mcLoading = true; try { const j = await getJ("/api/macro", true); W.mc = { ...j, ts: j.at, at: Date.now() }; } catch (e) { W.mc = { err: e.message, at: Date.now() }; } finally { W.mcLoading = false; }
+  W.mcLoading = true; // 先讀每天排程存好的檔案（FRED 擋雲端主機，網站即時抓常逾時），沒有才問 /api/macro
+  try { let j = null; try { const r = await fetch("data/macro.json", { cache: "no-cache", signal: tmo(15000) }); j = r.ok ? await r.json() : null; } catch {}
+    if (!j?.ok) j = await getJ("/api/macro", true); W.mc = { ...j, ts: j.at, at: Date.now() }; } catch (e) { W.mc = { err: e.message, at: Date.now() }; } finally { W.mcLoading = false; }
   if (W.lt === "mkt" && W.mkReg === "macro") renderList();
 }
 async function loadPoly(force = false) {

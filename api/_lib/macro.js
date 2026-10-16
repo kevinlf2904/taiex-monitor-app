@@ -41,11 +41,10 @@ export function sahm(un) {
   const low = Math.min(...m3.slice(Math.max(2, i - 12), i).filter(v => v != null)); return { v: +(m3[i] - low).toFixed(2), d: un[i][0] };
 }
 
-let memo = null;
-export default async function handler(req, res) {
-  if (memo && Date.now() - memo.at < 3 * 3600e3) { res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json(memo.v); }
+// 整理全部數列與重點訊號；排程（scripts/macro.mjs，GitHub Actions）和 /api/macro 共用。FRED 會擋掉部分雲端主機（Vercel 上常逾時），所以網頁優先讀排程存好的 learner/data/macro.json
+export async function buildMacro(timeout = 15000) {
   const since = new Date(Date.now() - 6 * 365 * 864e5).toISOString().slice(0, 10);
-  const got = await Promise.allSettled(SERIES.map(async ([id]) => { const r = await fetch(`${FRED}?id=${id}&cosd=${since}`, { headers: UA, signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return parseCsv(await r.text()); }));
+  const got = await Promise.allSettled(SERIES.map(async ([id]) => { const r = await fetch(`${FRED}?id=${id}&cosd=${since}`, { headers: UA, signal: AbortSignal.timeout(timeout) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return parseCsv(await r.text()); }));
   const series = [], notes = []; let unRaw = null;
   SERIES.forEach(([id, name, group, unit, how, note], k) => {
     const g = got[k]; if (g.status !== "fulfilled" || !g.value.length) { notes.push(`${name}：${g.reason?.message || "沒有資料"}`); return; }
@@ -54,7 +53,7 @@ export default async function handler(req, res) {
     const last = rows[rows.length - 1], prev = rows[rows.length - 2] || null, y1 = rows.filter(r => Date.parse(r[0]) <= Date.parse(last[0]) - 360 * 864e5).pop() || null;
     series.push({ id, name, group, unit, how, note, freq: daily ? "日" : id === "ICSA" ? "週" : id === "A191RL1Q225SBEA" ? "季" : "月", last, prev, y1, data: rows.slice(daily ? -260 : -72) });
   });
-  if (!series.length) return res.status(200).json({ ok: false, error: `拿不到總經數據（${notes.join("；")}）` });
+  if (!series.length) return { ok: false, error: `拿不到總經數據（${notes.join("；")}）` };
   // 重點訊號：殖利率曲線、薩姆規則、通膨方向、VIX、信用利差
   const S = id => series.find(s => s.id === id), signals = [], sm = unRaw ? sahm(unRaw) : null;
   const curve = S("T10Y2Y"); if (curve) signals.push({ k: "殖利率曲線", v: `${curve.last[1].toFixed(2)}`, lv: curve.last[1] < 0 ? 2 : curve.last[1] < 0.3 ? 1 : 0, t: curve.last[1] < 0 ? "倒掛中（衰退前常見）" : curve.data.slice(-130).some(r => r[1] < 0) ? "剛由倒掛轉正，歷史上衰退常在這之後開始" : "正常（長天期高於短天期）" });
@@ -62,7 +61,13 @@ export default async function handler(req, res) {
   const cpi = S("CPILFESL"); if (cpi) { const a = cpi.last[1], b = cpi.data[cpi.data.length - 4]?.[1]; signals.push({ k: "核心通膨", v: a.toFixed(1) + "%", lv: a > 3 ? 2 : a > 2.5 ? 1 : 0, t: `${b != null ? (a < b ? "比 3 個月前降溫" : a > b ? "比 3 個月前升溫" : "和 3 個月前持平") : ""}，聯準會目標 2%` }); }
   const vix = S("VIXCLS"); if (vix) signals.push({ k: "VIX", v: vix.last[1].toFixed(1), lv: vix.last[1] >= 30 ? 2 : vix.last[1] >= 20 ? 1 : 0, t: vix.last[1] >= 30 ? "恐慌" : vix.last[1] >= 20 ? "偏緊張" : "平靜" });
   const hy = S("BAMLH0A0HYM2"); if (hy) signals.push({ k: "信用利差", v: hy.last[1].toFixed(2), lv: hy.last[1] >= 5 ? 2 : hy.last[1] >= 4 ? 1 : 0, t: hy.last[1] >= 5 ? "風險升溫" : hy.last[1] >= 4 ? "略偏高" : "正常" });
-  const v = { ok: true, at: new Date().toISOString(), source: "FRED（美國聯準會聖路易分行）", series, signals, notes };
+  return { ok: true, at: new Date().toISOString(), source: "FRED（美國聯準會聖路易分行）", series, signals, notes };
+}
+
+let memo = null;
+export default async function handler(req, res) {
+  if (memo && Date.now() - memo.at < 3 * 3600e3) { res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json(memo.v); }
+  const v = await buildMacro(8000); if (!v.ok) return res.status(200).json(v);
   memo = { at: Date.now(), v };
   res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400");
   return res.status(200).json(v);
