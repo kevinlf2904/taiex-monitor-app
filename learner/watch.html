@@ -3114,6 +3114,7 @@ new ResizeObserver(() => { if (W.ftab === "flow" && !$("#fBox").hidden) drawFlow
 
 /* ---------- K 線：每一種週期往左拉到底都會自動載入更早的資料 ---------- */
 const kChart = new Chart($("#kChart"), { onRange: r => { if (r.a <= 3 && kChart.view && !W.busyOlder) loadOlder(); } });
+["pointerdown", "pointermove", "wheel"].forEach(t => $("#kChart").addEventListener(t, () => { W.kTouchAt = Date.now(); }, { passive: true, capture: true }));
 overlayMigrate("watch2");
 // 指標（主圖、副圖）和疊加分析分成兩個可以收合的區塊；舊版存在同一組設定（ind:watch2）裡的疊加，第一次搬到 ind:watch2ov
 { const ovIds = new Set(OVERLAY_ITEMS.map(x => x.id)), old = store.get("ind:watch2", null);
@@ -3360,7 +3361,14 @@ function futMergeDaily(redraw = true) {
   const T = futTradeDay(blocks), bars = T.flatMap(B => B.pts); if (!T.tday || !bars.length) return;
   const bar = { d: T.tday, o: bars[0].o, h: Math.max(...bars.map(b => b.h)), l: Math.min(...bars.map(b => b.l)), c: bars[bars.length - 1].c, v: bars.reduce((s, b) => s + (b.v || 0), 0) };
   const D = R.data, last = D[D.length - 1]; if (bar.d < last.d) return; if (last.d === bar.d) D[D.length - 1] = bar; else D.push(bar);
-  if (redraw && !minuteK() && W.dtab === "tech") drawK();
+  if (redraw && !minuteK() && W.dtab === "tech") kLive();
+}
+// 即時報價更新 K 線：整張圖重算（指標、型態、策略）在 iPad 上要幾十毫秒，每秒做一次會讓左右滑動卡頓。
+// 手指或滑鼠正在操作 K 線（或剛放開 1.5 秒內、慣性滑動中）先不重畫，等停下來再補；平常最多 2 秒重畫一次。
+function kLive(fresh) {
+  const c = kChart, busy = c.drag || c.ptrs?.size || c.glide || c.pinch || Date.now() - (W.kTouchAt || 0) < 1500;
+  if (busy || Date.now() - (W.kLiveAt || 0) < 2000) { clearTimeout(W.kLiveT); W.kLiveT = setTimeout(() => kLive(fresh), busy ? 600 : 2000 - (Date.now() - (W.kLiveAt || 0))); return; }
+  W.kLiveAt = Date.now(); drawK(fresh);
 }
 function mergeDaily(q, redraw = true) {
   if (isFut(q.code)) return futMergeDaily(redraw);
@@ -3369,8 +3377,9 @@ function mergeDaily(q, redraw = true) {
   const open = q.open ?? (last.d === q.date ? last.o : null); if (open == null) return;
   const v = q.vol != null ? (isUS(q.code) ? Math.round(q.vol / 1000) : q.vol) : last.d === q.date ? last.v : 0;
   const bar = { d: q.date, o: open, h: Math.max(q.high ?? q.price, q.price), l: Math.min(q.low ?? q.price, q.price), c: q.price, v };
+  const same = last.d === q.date && last.o === bar.o && last.h === bar.h && last.l === bar.l && last.c === bar.c && last.v === bar.v; // 沒有新成交就不用重畫
   if (last.d === q.date) D[D.length - 1] = { ...last, ...bar }; else D.push(bar);
-  if (redraw && !minuteK() && W.dtab === "tech") drawK();
+  if (redraw && !same && !minuteK() && W.dtab === "tech") kLive();
 }
 async function loadIntra(force = false) {
   const c = W.sel; if (!c || W.off) { drawTs(); return; }
@@ -3388,7 +3397,7 @@ async function loadIntra(force = false) {
     } else j = await getJ(`/api/intraday?code=${c}&tf=1`);
     if (W.sel !== c) return;
     const fresh = !W.intra || W.intra.code !== c; W.intra = { ...j, code: c }; W.intraErr = null; if (isFut(c)) futMergeDaily();
-    drawTs(); loadTsHist(); if (minuteK() && W.dtab === "tech") drawK(fresh); if (W.roK && W.roK !== "D") renderAna();
+    drawTs(); loadTsHist(); if (minuteK() && W.dtab === "tech") { if (fresh) drawK(fresh); else kLive(); } if (W.roK && W.roK !== "D") renderAna();
   } catch (e) { if (W.sel === c) { W.intraErr = e.message; drawTs(); if (minuteK()) drawK(); } }
 }
 
