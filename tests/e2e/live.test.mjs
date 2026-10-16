@@ -38,10 +38,11 @@ test("嵌入模式選單凍結：往下捲後分頁列固定在學堂標題列�
   const ctx = await B.newContext({ viewport: { width: 1180, height: 820 } }); await mock(ctx); const p = await ctx.newPage();
   await p.goto(`${S.url}/learner/index.html`); await p.waitForTimeout(1500); await p.evaluate(() => goTab("watch")); await p.waitForTimeout(2500);
   const fr = p.frames().find(f => /watch\.html/.test(f.url())); await fr.evaluate(() => setLt("cong")); await p.waitForTimeout(1500);
+  assert.ok(await p.evaluate(() => $("#watchTabs").classList.contains("off")), "還沒捲動時不該出現");
   await p.evaluate(() => scrollTo(0, 1500)); await p.waitForTimeout(400);
-  const [ft, hb, fl] = await p.evaluate(() => [document.querySelector("#watchFrame").getBoundingClientRect().top, document.querySelector(".top").getBoundingClientRect().bottom, document.querySelector("#watchFrame").getBoundingClientRect().left]);
-  const t = await fr.evaluate(() => $("#ltabsTop").getBoundingClientRect().top); assert.ok(ft < 0 && Math.abs(t + ft - hb) < 3, `分頁列沒有固定（${t + ft} vs ${hb}）`);
-  await p.mouse.click(...await fr.evaluate(() => { const r = document.querySelector('#lTabs [data-l="mkt"]').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }).then(([x, y]) => [x + fl, y + ft]));
-  await p.waitForTimeout(500); assert.equal(await fr.evaluate(() => W.lt), "mkt");
+  const st = await p.evaluate(() => { const n = $("#watchTabs"), r = n.getBoundingClientRect(); return { off: n.classList.contains("off"), top: r.top, hb: document.querySelector(".top").getBoundingClientRect().bottom, n: n.querySelectorAll("button").length }; });
+  assert.ok(!st.off && Math.abs(st.top - st.hb) < 2 && st.n > 5, JSON.stringify(st));
+  await p.click('#watchTabs [data-wl="mkt"]'); await p.waitForTimeout(800); assert.equal(await fr.evaluate(() => W.lt), "mkt");
+  assert.equal(await p.evaluate(() => $('#watchTabs [aria-pressed="true"]')?.dataset.wl), "mkt");
   await ctx.close();
 });

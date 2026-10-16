@@ -3,7 +3,7 @@
 // GET /api/annual?code=S%26P%20500  常見指數名稱，改用追蹤它的 ETF（含息）估算
 // GET /api/annual?code=VOO         英文代號直接當 Yahoo 代號
 // 主要來源 Yahoo Finance 月線的「還原收盤價」（含配息再投入）；失敗時改用 FinMind 還原股價（台股）。
-// 回傳近 1、3、5、10 年與上市以來的年化報酬（CAGR）和期間最大跌幅（月收盤計算，會比日線的跌幅小一些）。
+// 回傳近 1、3、5、10 年與上市以來的年化報酬（CAGR）和期間最大跌幅（月收盤計算，會比日線的跌幅小一些）；periods 含息、periodsPx 不含息（只看股價）。
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 
@@ -36,7 +36,9 @@ export function parseYahooMonthly(j) {
   const rows = r.timestamp.map((t, k) => ({ d: new Date((t + tz) * 1000).toISOString().slice(0, 7), v: vals[k] })).filter(x => x.v != null && x.v > 0);
   // 同一個月重複（最新一筆常是當月盤中）只留最後一筆
   const by = new Map(); rows.forEach(x => by.set(x.d, x.v));
-  return { name: r.meta?.longName || r.meta?.shortName || "", currency: r.meta?.currency || "", adjusted: vals === adj, rows: [...by].map(([d, v]) => ({ d, v })) };
+  // 不含息（只看股價）：用一般收盤價；給存股模擬「股息計算機」比較含息、不含息的年化
+  const px = new Map(); r.timestamp.forEach((t, k) => { const v = close[k]; if (v != null && v > 0) px.set(new Date((t + tz) * 1000).toISOString().slice(0, 7), v); });
+  return { name: r.meta?.longName || r.meta?.shortName || "", currency: r.meta?.currency || "", adjusted: vals === adj, rows: [...by].map(([d, v]) => ({ d, v })), rowsPx: [...px].map(([d, v]) => ({ d, v })) };
 }
 // FinMind 日線（還原股價或一般股價）→ 每月最後一個交易日
 export function monthlyFromDaily(rows) {
@@ -92,7 +94,7 @@ export default async function handler(req, res) {
       const p = await run();
       if (p) {
         res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate=604800");
-        return res.status(200).json({ ok: true, query: raw, symbol: p.symbol, label: t.label || "", name: p.name, currency: p.currency, adjusted: p.adjusted, source: p.source, first: p.rows[0].d, last: p.rows[p.rows.length - 1].d, periods: summarize(p.rows) });
+        return res.status(200).json({ ok: true, query: raw, symbol: p.symbol, label: t.label || "", name: p.name, currency: p.currency, adjusted: p.adjusted, source: p.source, first: p.rows[0].d, last: p.rows[p.rows.length - 1].d, periods: summarize(p.rows), ...(p.adjusted && p.rowsPx?.length > 6 ? { periodsPx: summarize(p.rowsPx) } : {}) });
       }
     } catch (e) { errors.push(e.message); }
   }

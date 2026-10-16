@@ -674,7 +674,7 @@ const LESSON_OPEN_K = {
   mtm: { sub: ["mtm"] }, dmi: { sub: ["dmi"] }, psy: { sub: ["psy"] }, arbr: { sub: ["arbr"] }, obv: { sub: ["obv"] }, vr: { sub: ["vr"] },
   breadth: { sub: ["adr", "obos", "adl"], idx: true }, tapi: { sub: ["tapi"], idx: true },
   bias: { sub: ["bias"] }, atr: { sub: ["atr"] }, cci: { sub: ["cci"] }, mfi: { sub: ["mfi"] }, trix: { sub: ["trix"] }, sar: { main: ["sar"] }, donch: { main: ["donch"] }, ichi: { main: ["ichi"] }, kelt: { main: ["kelt", "boll"] }, srsi: { sub: ["srsi"] }, roc: { sub: ["roc"] }, dma: { sub: ["dma"] }, emv: { sub: ["emv"] }, tower: { sub: ["tower"] },
-  trend3: { ov: ["trend3"] }, fan: { ov: ["fan"] }, elliott: { ov: ["wave"] }, ccw: { ov: ["ccw"], sub: ["vol"] }, trendline: { ov: ["tl"] },
+  hlbreak: { ov: ["hlb"] }, rule123: { ov: ["r123"] }, rule2b: { ov: ["b2"] }, trend3: { ov: ["trend3"] }, fan: { ov: ["fan"] }, elliott: { ov: ["wave"] }, ccw: { ov: ["ccw"], sub: ["vol"] }, trendline: { ov: ["tl"] },
   "smc-structure": { ov: ["smcS"] }, "smc-liquidity": { ov: ["smcL"] }, "smc-zones": { ov: ["smcOB"] }, "smc-fvg": { ov: ["smcFVG"] }, "smc-pd": { ov: ["smcPD"] },
   "chips-inst": { sub: ["inst"] }, "chips-margin": { sub: ["margin"] },
 };

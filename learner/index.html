@@ -76,6 +76,12 @@ try { const ls = localStorage; let st = JSON.parse(ls.getItem("kline:style") || 
   .chat-fab svg { width: 24px; height: 24px; }
 }
 .tab-more, .tab-menu { display: none; }
+/* 看盤的分頁列：往下捲過看盤自己的分頁列後，固定在標題列下方（看盤在 iframe 裡，sticky 沒有作用，所以由這一頁畫） */
+.wtabs { position: fixed; left: 0; right: 0; z-index: 9; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; padding: 6px 12px; background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 8px 16px -12px rgba(0, 0, 0, .6); transition: opacity .18s, transform .18s; }
+.wtabs::-webkit-scrollbar { display: none; } .wtabs.edge { padding-top: max(6px, env(safe-area-inset-top, 0px)); } .wtabs.off { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+.wtabs button { flex: none; font: 500 14px var(--font-body); color: var(--muted); background: none; border: 0; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.wtabs button[aria-pressed="true"] { color: var(--ink, var(--text)); background: var(--surface-2, rgba(127, 127, 127, .15)); }
 .watch-frame { display: block; width: 100%; height: 900px; border: 0; background: transparent; color-scheme: normal; }
 #view-watch { margin: 0 -8px; }
 @media (max-width: 640px) {
@@ -802,6 +808,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
   <!-- 看盤：獨立頁面 watch.html，嵌在這裡（第一次切到這個分頁才載入） -->
   <section id="view-watch" role="tabpanel" hidden>
     <iframe id="watchFrame" class="watch-frame" title="K線看盤" allow="clipboard-write"></iframe>
+    <nav class="wtabs" id="watchTabs" aria-label="看盤分頁（捲動時固定）" hidden></nav>
   </section>
 
   <!-- 存股與槓桿模擬器：獨立頁面 savings.html，嵌在這裡（第一次切到這個分頁才載入） -->
@@ -831,7 +838,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.16-76</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.16-77</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -4822,11 +4829,25 @@ function openWatch(code) {
   if (!inited.watch) WATCH_PENDING = c; goTab("watch");
   if (c && f.contentWindow && inited.watch) f.contentWindow.postMessage({ type: "watch-select", code: c }, "*");
 }
+// 看盤分頁列的固定副本：看盤 iframe 傳來分頁與它在 iframe 裡的位置；捲過那個位置才顯示（只切換顯示、不跟著位移，捲動才順）
+const WT = { items: [], y: 0 };
+function wtRender() {
+  const n = $("#watchTabs"); if (!n) return; n.innerHTML = WT.items.map(x => `<button type="button" data-wl="${esc(x.l)}" aria-pressed="${!!x.on}">${esc(x.t)}</button>`).join(""); n.hidden = !WT.items.length; wtPlace();
+  const a = n.querySelector('[aria-pressed="true"]'); if (a) n.scrollLeft = Math.max(0, a.offsetLeft - n.clientWidth / 2 + a.offsetWidth / 2);
+}
+function wtPlace() {
+  const n = $("#watchTabs"), f = $("#watchFrame"); if (!n || n.hidden) return; const hd = $(".top"), hb = hd && /sticky|fixed/.test(getComputedStyle(hd).position) ? Math.max(0, hd.getBoundingClientRect().bottom) : 0;
+  const fr = f.getBoundingClientRect(), on = !$("#view-watch").hidden && fr.top + WT.y < hb + 2 && fr.bottom > hb + 80;
+  n.style.top = hb + "px"; n.classList.toggle("edge", hb < 1); n.style.left = fr.left + "px"; n.style.right = Math.max(0, innerWidth - fr.right) + "px"; n.classList.toggle("off", !on);
+}
+{ let rq = 0; const re = () => { if (!rq) rq = requestAnimationFrame(() => { rq = 0; wtPlace(); }); }; addEventListener("scroll", re, { passive: true }); addEventListener("resize", re); }
+$("#watchTabs").addEventListener("click", e => { const b = e.target.closest("[data-wl]"); if (b) $("#watchFrame").contentWindow?.postMessage({ type: "watch-lt", l: b.dataset.wl }, "*"); });
 addEventListener("message", e => {
   const f = $("#watchFrame"); if (!f || e.source !== f.contentWindow || !e.data) return;
   if (e.data.type === "watch-height") { if (f.offsetParent) f.style.height = Math.max(240, Math.min(30000, +e.data.h || 0)) + "px"; } // 分頁藏起來時回報的高度不算（切回來才不會先縮成一小截、捲不回原位）
   else if (e.data.type === "watch-top") { const hd = $(".top"), stick = hd && /sticky|fixed/.test(getComputedStyle(hd).position), y = f.getBoundingClientRect().top + scrollY - (stick ? hd.offsetHeight : 8) + (+e.data.y || 0); if (Math.abs(y - scrollY) > 4) scrollTo({ top: Math.max(0, y) }); }
   else if (e.data.type === "watch-nav") { PNAV.wd = +e.data.d || 0; pnavBackUi(); }
+  else if (e.data.type === "watch-tabs") { WT.items = Array.isArray(e.data.items) ? e.data.items : []; WT.y = +e.data.y || 0; wtRender(); }
   else if (e.data.type === "open-shot" && e.data.code) { goTab("shot"); $("#realCode").value = e.data.code; loadRealCode(e.data.code, +$("#realMonths").value); }
 });
 document.addEventListener("click", e => { const a = e.target.closest('a[href^="watch.html"]'); if (!a || e.metaKey || e.ctrlKey || e.shiftKey || a.target === "_blank") return; e.preventDefault(); openWatch(decodeURIComponent((a.getAttribute("href").split("#")[1] || "")).toUpperCase()); });
