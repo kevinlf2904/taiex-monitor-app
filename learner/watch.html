@@ -294,6 +294,19 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .donut span { position: relative; font-size: 12px; font-weight: 500; }
 .pie ul { list-style: none; margin: 0; padding: 0; flex: 1; display: grid; gap: 4px; font-size: 13px; min-width: 0; }
 .pie li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; } .pie li i { width: 10px; height: 10px; border-radius: 2px; } .pie li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .pie li b { font-family: var(--font-num); }
+.yh-top { display: flex; align-items: center; gap: 18px; padding: 12px 16px 6px; } .yh-ring { width: 112px; height: 112px; border-radius: 50%; flex: none; display: grid; place-items: center; position: relative; }
+.yh-ring::before { content: ""; position: absolute; inset: 10px; border-radius: 50%; background: var(--bg); } .yh-ring span { position: relative; display: grid; text-align: center; font-size: 13px; color: var(--muted); gap: 2px; } .yh-ring b { font: 600 16px var(--font-num); letter-spacing: -.02em; }
+.yh-sum { flex: 1; min-width: 0; display: grid; gap: 8px; } .yh-seg { justify-self: start; } .yh-sum dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0; font-size: 15px; }
+.yh-sum dt { display: flex; align-items: center; gap: 6px; color: var(--text); white-space: nowrap; } .yh-sum dd { margin: 0; text-align: right; font: 500 15px var(--font-num); white-space: nowrap; } .yh-sum dt:nth-last-of-type(1), .yh-sum dt:nth-last-of-type(1) + dd { font-size: 13px; color: var(--muted); }
+.sq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; } .sq.acc { background: var(--accent); } .sq.up { background: var(--up); } .sq.down { background: var(--down); }
+.yh-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 4px 16px 10px; font-size: 13px; color: var(--muted); } .yh-bar b { color: var(--text); font: 500 14px var(--font-num); } .yh-bar select { font-size: 12.5px; }
+.yh-head { grid-template-columns: minmax(0, 1.3fr) 1fr 1fr 1fr !important; } .yh-head button { line-height: 1.25; }
+.yh-row { display: grid !important; grid-template-columns: minmax(0, 1.3fr) 1fr 1fr 1fr; align-items: center; text-align: right; } .yh-row > span { display: grid; gap: 1px; } .yh-row > span.nm { text-align: left; }
+.yh-row b { font: 500 15px var(--font-num); } .yh-row small { font: 12.5px var(--font-num); color: var(--muted); } .yh-row > span.up small, .yh-row > span.down small { color: inherit; }
+.yh-li { display: block !important; padding: 0 !important; } .yh-li.open > .yh-row { background: var(--surface-2); } .yh-det dt { white-space: nowrap; } .yh-det { padding: 10px 16px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.yh-det dl { display: grid; grid-template-columns: repeat(2, auto 1fr); gap: 6px 12px; margin: 0 0 10px; font-size: 13.5px; } .yh-det dt { color: var(--muted); } .yh-det dd { margin: 0; text-align: right; font-family: var(--font-num); }
+.yh-act { display: flex; gap: 8px; justify-content: flex-end; } .yh-mix { padding: 12px 16px; display: grid; gap: 6px; } .yh-mixbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; } .yh-mixl { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--muted); } .yh-mixl i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+@media (max-width: 420px) { .yh-ring { width: 104px; height: 104px; } .yh-top { gap: 12px; padding: 10px 12px 4px; } .yh-det dl { grid-template-columns: auto 1fr; } }
 .hhead { display: grid !important; grid-template-columns: minmax(0, 1.3fr) 1fr 1fr 1fr; padding: 0 12px; background: var(--surface-2); }
 .hhead button { border: 0; background: none; color: var(--muted); font-size: 12px; padding: 7px 0; cursor: pointer; text-align: right; } .hhead button:first-child { text-align: left; } .hhead button.on { color: var(--accent); font-weight: 500; }
 .row.hrow { grid-template-columns: minmax(0, 1.3fr) 1fr 1fr 1fr; gap: 4px; font-family: var(--font-num); font-size: 14px; }
@@ -778,7 +791,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.16-77</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.16-78</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1284,7 +1297,8 @@ function sortedWatch(list = curList()) {
   return L;
 }
 // 庫存設定：扣手續費與交易稅（hfee）、加上已領股息（hdiv）、手續費折扣（hdisc）
-W.hfee = store.get("watch:hfee", false); W.hdiv = store.get("watch:hdiv", false); W.hdisc = +store.get("watch:hdisc", 1) || 1;
+// 和券商 App 一樣：預設扣費稅、含息
+W.hfee = store.get("watch:hfee", true); W.hdiv = store.get("watch:hdiv", true); W.hdisc = +store.get("watch:hdisc", 1) || 1;
 // 台股：買進、賣出各收手續費 0.1425%（乘折扣，每筆最低 20 元）；賣出另收證交稅（股票 0.3%、ETF 0.1%、債券 ETF 0）。美股不算（各券商不同）
 function holdCosts(c, h, mv) {
   if (isUS(c)) return { fee: 0, tax: 0 }; const r = 0.001425 * W.hdisc, f = v => Math.max(20, Math.round(v * r));
@@ -1302,10 +1316,13 @@ async function loadHoldDivs(force = false) {
   try { for (let i = 0; i < codes.length; i += 30) { const j = await getJ(`/api/yield?codes=${codes.slice(i, i + 30).join(",")}&hist=1`, true); (j.rows || []).forEach(r => (W.hdivs[r.code] = r)); } } catch {}
   W.hdivLoading = false; if (W.lt === "hold") renderList();
 }
+// 每檔損益（照券商 App 的算法）：持有成本＝買進金額＋買進手續費；含息時再扣掉已領股息（均價跟著下降）；
+// 報酬＝市值－賣出手續費－證交稅－持有成本；損益平衡點＝持有成本 ÷（股數 ×（1－賣出手續費率－稅率））
 function holdPnL(c, q) {
-  const h = W.hold[c]; if (!h || !h.sh || !h.cost || q?.price == null) return null; const mv = h.sh * q.price, cost = h.sh * h.cost;
-  const k = W.hfee ? holdCosts(c, h, mv) : { fee: 0, tax: 0 }, dv = W.hdiv ? holdDiv(c, h)?.got || 0 : 0, pnl = mv - cost - k.fee - k.tax + dv;
-  return { mv, pnl, pct: (pnl / (cost + (W.hfee ? Math.max(20, Math.round(cost * 0.001425 * W.hdisc)) : 0))) * 100, day: q.chg != null ? h.sh * q.chg : null, fee: k.fee, tax: k.tax, dv };
+  const h = W.hold[c]; if (!h || !h.sh || !h.cost || q?.price == null) return null; const mv = h.sh * q.price, buy = h.sh * h.cost, us = isUS(c);
+  const fr = W.hfee && !us ? 0.001425 * W.hdisc : 0, tr = W.hfee && !us ? taxOf(c) ?? 0.003 : 0, bf = fr ? Math.max(20, Math.round(buy * fr)) : 0, sf = fr ? Math.max(20, Math.round(mv * fr)) : 0, tax = Math.round(mv * tr);
+  const dvAll = us ? null : holdDiv(c, h), dv = W.hdiv ? dvAll?.got || 0 : 0, hc = buy + bf - dv, pnl = mv - sf - tax - hc;
+  return { mv, pnl, pct: hc > 0 ? (pnl / hc) * 100 : null, day: q.chg != null ? h.sh * q.chg : null, fee: bf + sf, tax, dv, divGot: dvAll?.got ?? null, divYr: dvAll?.yr ?? null, hc, avg: hc / h.sh, be: hc / (h.sh * (1 - fr - tr)) };
 }
 function rowHtml(c, q, { rank, metric, star } = {}) {
   q = q || {}; const nm = esc(q.name || nameOf(c)), al = W.alerts[c] && (W.alerts[c].up || W.alerts[c].dn), lo = q.low, hi = q.high, rng = lo != null && hi != null && hi > lo && q.price != null;
@@ -1366,9 +1383,7 @@ function renderList0() {
   } else if (W.lt === "hold") {
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
       <div class="imp-btns"><button class="btn sm primary" data-imp="edit">✏️ 編輯庫存</button><button class="btn sm" data-imp="shot">📷 截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
-    const tw = W.holdMkt === "tw"; $("#lTools").insertAdjacentHTML("beforeend", tw ? `<div class="hopts"><label class="chk"><input type="checkbox" data-hopt="hfee" ${W.hfee ? "checked" : ""}> 扣手續費與交易稅</label>
-      <select data-hopt="hdisc" aria-label="手續費折扣" ${W.hfee ? "" : "disabled"}>${[[1, "手續費不打折"], [0.6, "6 折"], [0.5, "5 折"], [0.38, "3.8 折"], [0.28, "2.8 折"], [0.2, "2 折"]].map(([v, t]) => `<option value="${v}" ${W.hdisc === v ? "selected" : ""}>${t}</option>`).join("")}</select>
-      <label class="chk"><input type="checkbox" data-hopt="hdiv" ${W.hdiv ? "checked" : ""}> 含息（加上已領股息）</label></div>` : "");
+    const tw = W.holdMkt === "tw";
     if (tw) loadHoldDivs();
     if (W.holdView === "ana") renderHoldAna(); else renderHold();
     note = `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
@@ -1428,6 +1443,8 @@ $("#listPane").addEventListener("click", e => {
   else if (rm) { W.groups[W.gi].list = curList().filter(c => c !== rm.dataset.rm); saveGroups(); renderList(); }
   else if (g) { if (g.dataset.g === "new") { const name = prompt("新群組名稱", `群組 ${W.groups.length + 1}`); if (name) { W.groups.push({ name: name.slice(0, 12), list: [] }); W.gi = W.groups.length - 1; saveGroups(); renderList(); } } else { W.gi = +g.dataset.g; W.editing = false; saveGroups(); renderList(); kick(); } }
   else if (t.closest("[data-hs]")) { const k = t.closest("[data-hs]").dataset.hs; W.holdDir = W.holdSort === k ? -W.holdDir : 1; W.holdSort = k; renderList(); }
+  else if (t.closest("[data-hx]")) { const c = t.closest("[data-hx]").dataset.hx; W.holdOpen = W.holdOpen === c ? null : c; renderList(); }
+  else if (t.closest("[data-hset]")) { const b = t.closest("[data-hset]"); W[b.dataset.hset] = b.dataset.v === "true"; store.set("watch:" + b.dataset.hset, W[b.dataset.hset]); renderList(); }
   else if (t.closest("[data-hopt]") && t.tagName === "INPUT") { const k = t.dataset.hopt; W[k] = t.checked; store.set("watch:" + k, W[k]); renderList(); }
   else if (t.closest("[data-hm]")) { W.holdMkt = t.closest("[data-hm]").dataset.hm; store.set("watch:hm", W.holdMkt); renderList(); pollList().then(renderList).catch(() => {}); }
   else if (gx && gx.dataset.gx === "mktRefresh") { if (W.mkReg === "us") loadUsMkt(true); else if (W.mkReg === "gl") loadGlobal(true); else loadMkt(true); }
@@ -1469,23 +1486,32 @@ function renderHold() {
   if (!R.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">還沒有${us ? "美股" : "台股"}持股。按上面的「✏️ 編輯庫存」一格一格填代號、股數與成本，或用「📷 截圖匯入」上傳券商 App 的庫存截圖。</p>`; $("#wl").innerHTML = ""; return; }
   const ok = R.filter(r => r.mv != null);
   if (!ok.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有報價。" : "等待報價…"}</p>`; }
-  const mv = ok.reduce((s, r) => s + r.mv, 0), cost = ok.reduce((s, r) => s + r.cost, 0), pnl = ok.reduce((s, r) => s + (r.pnl ?? 0), 0), day = ok.reduce((s, r) => s + (r.day || 0), 0);
-  const parts = ok.slice().sort((a, b) => b.mv - a.mv), top = parts.slice(0, 4), rest = parts.slice(4).reduce((s, r) => s + r.mv, 0), slices = [...top.map(r => ({ n: nameOf(r.c), v: r.mv })), ...(rest ? [{ n: "其他", v: rest }] : [])];
-  let acc = 0; const grad = slices.map((x, i) => { const a = acc / mv * 360; acc += x.v; return `${PIE[i]} ${a}deg ${acc / mv * 360}deg`; }).join(",");
-  if (ok.length) $("#lx").innerHTML = `<div class="hsum"><div><span>今日損益</span><b class="${cls(day)}">${sgn(day)}</b><small class="${cls(day)}">${mv - day ? sgn(day / (mv - day) * 100, 2) + "%" : ""}</small></div><div><span>累積損益</span><b class="${cls(pnl)}">${sgn(pnl)}</b><small class="${cls(pnl)}">${cost ? sgn(pnl / cost * 100, 2) + "%" : ""}</small></div><div><span>股票市值</span><b>${money(mv)}</b><small>成本 ${money(cost)}</small></div></div>
-    ${mv > 0 ? `<div class="pie"><div class="donut" style="background:conic-gradient(${grad})"><span>持股佔比</span></div><ul>${slices.map((x, i) => `<li><i style="background:${PIE[i]}"></i><span>${esc(x.n)}</span><b>${Math.round(x.v / mv * 100)}%</b></li>`).join("")}</ul></div>` : ""}`;
-  // 股息與費稅
-  if (!us && ok.length) { const D = R.map(r => ({ r, v: holdDiv(r.c, r.h) })), got = D.filter(x => x.v?.got != null), yr = D.reduce((a, x) => a + (x.v?.yr || 0), 0), ft = ok.reduce((a, r) => { const p = holdPnL(r.c, r.q); return a + (p?.fee || 0) + (p?.tax || 0); }, 0);
-    $("#lx").insertAdjacentHTML("beforeend", `<div class="hsum hsum2"><div><span>已領股息</span><b>${got.length ? Math.round(got.reduce((a, x) => a + x.v.got, 0)).toLocaleString() : "—"}</b><small>${got.length ? `${got.length} 檔有填買進日期` : W.hdivLoading ? "載入配息…" : "在「編輯庫存」填買進日期才算得出來"}</small></div>
-      <div><span>一年約可領</span><b>${yr ? Math.round(yr).toLocaleString() : "—"}</b><small>${yr ? `月平均 ${Math.round(yr / 12).toLocaleString()}・依近 12 個月配息` : ""}</small></div>
-      <div><span>${W.hfee ? "已扣費稅" : "賣出時的費稅（估）"}</span><b>${Math.round(W.hfee ? ft : ok.reduce((a, r) => { const k = holdCosts(r.c, r.h, r.mv); return a + k.fee + k.tax; }, 0)).toLocaleString()}</b><small>買賣手續費＋證交稅</small></div></div>`); }
-  const k = W.holdSort, dir = W.holdDir; R.sort((a, b) => ((b[k] ?? -1e18) - (a[k] ?? -1e18)) * dir);
+  const P = new Map(ok.map(r => [r.c, holdPnL(r.c, r.q)])), sum = k => ok.reduce((s, r) => s + (P.get(r.c)?.[k] || 0), 0);
+  const mv = sum("mv"), hc = sum("hc"), pnl = sum("pnl"), day = sum("day"), pct = hc > 0 ? pnl / hc : 0, divGot = ok.reduce((s, r) => s + (P.get(r.c)?.divGot || 0), 0), divYr = ok.reduce((s, r) => s + (P.get(r.c)?.divYr || 0), 0);
+  // 環：藍色是成本，綠（跌）或紅（漲）是報酬佔成本的比例
+  const deg = Math.min(360, Math.abs(pct) * 360), ring = `conic-gradient(var(--${pnl >= 0 ? "up" : "down"}) 0deg ${deg}deg, var(--accent) ${deg}deg 360deg)`;
+  const seg = (k, opts) => `<div class="seg yh-seg" role="group">${opts.map(([v, t]) => `<button data-hset="${k}" data-v="${v}" aria-pressed="${String(!!W[k]) === v}">${t}</button>`).join("")}</div>`;
+  if (ok.length) $("#lx").innerHTML = `<div class="yh-top"><div class="yh-ring" style="background:${ring}"><span>股票報酬<b class="${cls(pnl)}">${sgn(pct * 100, 2)}%</b></span></div>
+    <div class="yh-sum">${us ? "" : seg("hdiv", [["true", "含息"], ["false", "不含息"]])}
+      <dl><dt>股票市值</dt><dd>${money(mv)}</dd><dt><i class="sq acc"></i>總成本</dt><dd>${money(hc)}</dd><dt><i class="sq ${pnl >= 0 ? "up" : "down"}"></i>報酬</dt><dd class="${cls(pnl)}">${sgn(pnl)}</dd><dt>今日損益</dt><dd class="${cls(day)}">${sgn(day)}</dd></dl></div></div>
+    ${us ? "" : `<div class="yh-bar"><span>已領股息 <b>${divGot ? Math.round(divGot).toLocaleString() : "—"}</b></span><span>一年約可領 <b>${divYr ? Math.round(divYr).toLocaleString() : "—"}</b></span>
+      <label class="chk"><input type="checkbox" data-hopt="hfee" ${W.hfee ? "checked" : ""}> 扣費稅</label><select data-hopt="hdisc" aria-label="手續費折扣" ${W.hfee ? "" : "disabled"}>${[[1, "手續費不打折"], [0.6, "6 折"], [0.5, "5 折"], [0.38, "3.8 折"], [0.28, "2.8 折"], [0.2, "2 折"]].map(([v, t]) => `<option value="${v}" ${W.hdisc === v ? "selected" : ""}>${t}</option>`).join("")}</select></div>`}`;
+  const k = W.holdSort, dir = W.holdDir, val = r => (k === "pnl" ? P.get(r.c)?.pnl : k === "day" ? r.day : k === "chgPct" ? r.chgPct : r.mv);
+  R.sort((a, b) => ((val(b) ?? -1e18) - (val(a) ?? -1e18)) * dir);
   const th = (key, t) => `<button data-hs="${key}" class="${k === key ? "on" : ""}">${t}${k === key ? (dir > 0 ? " ▼" : " ▲") : ""}</button>`;
-  $("#wl").innerHTML = `<li class="hhead">${th("mv", "庫存股")}${th("day", "今日損益")}${th("chgPct", "股價／漲跌")}${th("pnl", "總損益")}</li>` + R.map(r => `<li><button class="row hrow" data-sel="${r.c}" aria-current="${r.c === W.sel}">
-    <span class="nm">${esc(nameOf(r.c))}<span class="cd">${r.c}・${r.h.sh.toLocaleString()} 股${(() => { const v = us ? null : holdDiv(r.c, r.h); return v ? `・${v.got != null ? `已領息 ${v.got.toLocaleString()}` : v.yr ? `年領約 ${Math.round(v.yr).toLocaleString()}` : ""}` : ""; })()}</span></span>
-    <span class="${cls(r.day)}">${sgn(r.day)}</span>
-    <span class="${cls(r.q?.chg)}"><b>${fmtPx(r.q?.price, r.c)}</b><small>${r.chgPct != null ? sgn(r.chgPct, 2) + "%" : "—"}</small></span>
-    <span class="${cls(r.pnl)}"><b>${sgn(r.pnl)}</b><small>${r.pct != null ? sgn(r.pct, 2) + "%" : "—"}</small></span></button></li>`).join("");
+  const fmtA = v => (v == null ? "—" : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  $("#wl").innerHTML = `<li class="hhead yh-head">${th("mv", "名稱")}${th("chgPct", "市價<br>均價")}${th("day", "股數<br>今日損益")}${th("pnl", "損益")}</li>` + R.map(r => { const p = P.get(r.c), open = W.holdOpen === r.c;
+    return `<li class="yh-li${open ? " open" : ""}"><button class="row yh-row" data-hx="${r.c}" aria-expanded="${open}">
+    <span class="nm">${esc(nameOf(r.c))}<span class="cd">${r.c}${r.h.d ? "・" + r.h.d.slice(2).replace(/-/g, "/") + " 買" : ""}</span></span>
+    <span><b class="${cls(r.q?.chg)}">${fmtPx(r.q?.price, r.c)}</b><small>${p ? fmtA(p.avg) : fmtA(r.h.cost)}</small></span>
+    <span><b>${r.h.sh.toLocaleString()}</b><small class="${cls(r.day)}">${sgn(r.day)}</small></span>
+    <span class="${cls(p?.pnl)}"><b>${sgn(p?.pnl)}</b><small>${p?.pct != null ? sgn(p.pct, 2) + "%" : "—"}</small></span></button>
+    ${open && p ? `<div class="yh-det"><dl><dt>市值</dt><dd>${money(p.mv)}</dd><dt>持有成本</dt><dd>${money(p.hc)}</dd><dt>配息總額</dt><dd>${p.divGot != null ? p.divGot.toLocaleString() : us ? "—" : "填買進日期才算得出來"}</dd><dt>損益平衡點</dt><dd>${fmtA(p.be)}</dd>
+      ${us ? "" : `<dt>一年約可領</dt><dd>${p.divYr ? Math.round(p.divYr).toLocaleString() : "—"}</dd><dt>費稅（估）</dt><dd>${Math.round(p.fee + p.tax).toLocaleString()}</dd>`}</dl>
+      <div class="yh-act"><button class="btn sm primary" data-sel="${r.c}">看走勢 ›</button><button class="btn sm" data-imp="edit">編輯庫存</button></div></div>` : ""}</li>`; }).join("");
+  // 持股佔比
+  if (ok.length > 1 && mv > 0) { const parts = ok.slice().sort((a, b) => b.mv - a.mv), top = parts.slice(0, 4), rest = parts.slice(4).reduce((s, r) => s + r.mv, 0), slices = [...top.map(r => ({ n: nameOf(r.c), v: r.mv })), ...(rest ? [{ n: "其他", v: rest }] : [])];
+    $("#wl").insertAdjacentHTML("beforeend", `<li class="yh-mix"><div class="yh-mixbar">${slices.map((x, i) => `<i style="background:${PIE[i]};flex:${x.v}"></i>`).join("")}</div><div class="yh-mixl">${slices.map((x, i) => `<span><i style="background:${PIE[i]}"></i>${esc(x.n)} ${Math.round(x.v / mv * 100)}%</span>`).join("")}</div></li>`); }
 }
 
 /* ---------- 庫存匯入：截圖（AI 讀圖）、文字；匯出 ---------- */

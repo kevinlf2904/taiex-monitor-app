@@ -14,7 +14,10 @@ function roundTick(p) { const t = tickOf(p); return +(Math.round(p / t) * t).toF
 function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
 function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
 function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
-function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+// CSS 變數讀取會觸發樣式計算，K 線每一格要讀幾十次（手機滑動時很明顯）：快取起來，主題、配色、字型改變（html 的屬性變動）時清掉
+const CSSV = new Map(); let cssvAt = 0;
+function cssVar(n) { const now = performance.now(); if (now - cssvAt > 1500) { CSSV.clear(); cssvAt = now; } let v = CSSV.get(n); if (v === undefined) { v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); CSSV.set(n, v); } return v; }
+try { new MutationObserver(() => CSSV.clear()).observe(document.documentElement, { attributes: true }); } catch {}
 
 /* ================= 指標 ================= */
 function sma(a, n) { const o = Array(a.length).fill(null); let s = 0; for (let i = 0; i < a.length; i++) { s += a[i]; if (i >= n) s -= a[i - n]; if (i >= n - 1) o[i] = s / n; } return o; }
@@ -623,11 +626,13 @@ class Chart {
   // 這張圖開著、可以自訂的指標（均線算一個）
   cfgIds() { const o = this.o || {}; return [...(o.ma?.length && !o.maPlain ? ["ma"] : []), ...(o.boll ? ["boll"] : []), ...(o.vwap ? ["vwap"] : []), ...(o.mainX || []), ...(this.subsN || []).map(S => (typeof S === "string" ? S : S.id)).filter(Boolean)]; }
   syncBar() {
+    // 每畫一格都會呼叫：狀態沒變就不碰 DOM（重設同樣的屬性也會讓瀏覽器重算樣式，手機滑動時會掉格）
+    const scaled = Chart.prefs.h !== 1 || Chart.prefs.log || Chart.prefs.sh !== 1 || Chart.prefs.fit || Object.values(this.pz).some(x => x.z !== 1 || x.off);
+    const k = `${this.locked}|${this.yz > 1.01}|${Chart.prefs.sig}|${scaled}`; if (k === this.barKey) return; this.barKey = k;
     this.canvas.style.touchAction = "pan-y"; // 上下滑永遠交給瀏覽器原生捲動（有慣性、不卡）；左右滑與雙指縮放才由圖表處理
     this.host.classList.toggle("chart-locked", this.locked);
     this.bar.querySelector('[data-z="yin"]').setAttribute("aria-pressed", this.yz > 1.01);
     this.bar.querySelector('[data-z="sig"]').setAttribute("aria-pressed", Chart.prefs.sig);
-    const scaled = Chart.prefs.h !== 1 || Chart.prefs.log || Chart.prefs.sh !== 1 || Chart.prefs.fit || Object.values(this.pz).some(x => x.z !== 1 || x.off);
     this.bar.querySelector('[data-z="scale"]').classList.toggle("on", scaled);
   }
   yZoom(f) { this.yz = Math.max(0.5, Math.min(12, this.yz * f)); if (this.yz <= 1) this.yoff = 0; this.draw(); }
@@ -655,7 +660,7 @@ class Chart {
   indexAt(x, raw) { if (!this.geo) return null; const { L, bw, fa, a } = this.geo; const i = Math.floor(fa + (x - L) / bw); return raw ? i : Math.max(a, Math.min(Math.min(this.visible - 1, this.range.b), i)); }
   draw() {
     if (!this.D) return;
-    const { D, I, o } = this, ctx = this.ctx, dpr = window.devicePixelRatio || 1;
+    const { D, I, o } = this, ctx = this.ctx, dpr = Math.min(2, window.devicePixelRatio || 1); // 手機是 3 倍：畫布像素多一倍多、每格要畫的量也多，2 倍肉眼看不出差別
     const W = this.host.clientWidth; if (!W) return;
     const narrow = W < 560;
     // 副圖可以疊好幾個：o.subs = ["kd", "macd", { custom }]；舊的 o.sub 也支援
@@ -671,7 +676,7 @@ class Chart {
     { const vt = 8 + mainH + gap, st = o.noVol ? vt : vt + volH + gap; this.panes = [{ key: "main", top: 8, h: mainH }, ...(o.noVol ? [] : [{ key: "vol", top: vt, h: volH }]), ...subs.map((_, k) => ({ key: "s" + k, top: st + k * (subH + gap), h: subH }))]; }
     this.syncBar();
     const X = i => L + bw * (i - fa + 0.5);
-    this.bar.classList.toggle("zoomed", !!this.view);
+    if (this.zoomedK !== !!this.view) { this.zoomedK = !!this.view; this.bar.classList.toggle("zoomed", this.zoomedK); }
     const top0 = 8, volTop = top0 + mainH + gap, subTop0 = o.noVol ? volTop : volTop + volH + gap; this.paneInv = [];
     const fmtD = o.fmtD || (s => s.slice(5).replace("-", "/"));
     const MA_COL = { 5: col.s1, 10: cssVar("--ma10") || col.accent, 20: col.s2, 60: col.s3 };
@@ -849,6 +854,7 @@ class Chart {
     ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
     [...(o.shapes || []), ...(o.markers || []).filter(m => m.i < vis).flatMap(m => m.shapes || [])].forEach(sh => {
       if (!sh.pts?.length || sh.pts[0][0] >= vis) return;
+      if (sh.pts.length < 40) { let a = Infinity, b = -Infinity; for (const [i] of sh.pts) { if (i < a) a = i; if (i > b) b = i; } if (b < va - 2 || a > vb + 2) return; } // 整條都在畫面外：不畫（滑動時每一格都要跑）
       const pts = sh.pts.map(([i, p]) => [vis < n ? Math.min(i, vis - 1) : i, p]);
       const c = cmap[sh.color] || col.accent;
       ctx.strokeStyle = c; ctx.lineWidth = (sh.width || 1.5) * 0.7; ctx.setLineDash(sh.dash || []); ctx.beginPath();
@@ -879,7 +885,11 @@ class Chart {
     };
     const label = (t, tx, ty, c, size) => { ctx.font = `500 ${size}px ${cssVar("--font-body")}`; ctx.textAlign = "center"; ctx.lineJoin = "round"; ctx.lineWidth = 3; ctx.strokeStyle = col.surface; ctx.globalAlpha = 0.85; ctx.strokeText(t, tx, ty); ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, tx, ty); };
     // 副圖訊號：在副圖上交叉或離開超買超賣區的那一天，主圖K線也標出來（空心圈，和實心三角的課程／策略訊號區分）
-    const sigs = this.sigs = Chart.prefs.sig && o.subSignals !== false ? subSignals(D, I, subs, vis, Object.fromEntries(Chart.SIG_KINDS.map(([k]) => [k, Chart.sigShow(k)])), Chart.prefs.sigStrongK) : [];
+    // 副圖訊號只跟資料、副圖和開關有關，和畫面範圍無關：同一組條件只算一次（滑動時不用每一格重算）
+    const sigOn = Chart.prefs.sig && o.subSignals !== false, sigShow = sigOn ? Object.fromEntries(Chart.SIG_KINDS.map(([k]) => [k, Chart.sigShow(k)])) : null;
+    const sigKey = sigOn ? JSON.stringify([subs.map(S => (typeof S === "string" ? S : S.id || S.custom?.title || "c")), vis, sigShow, Chart.prefs.sigStrongK]) : "";
+    if (!sigOn) this.sigMemo = null; else if (!this.sigMemo || this.sigMemo.D !== D || this.sigMemo.I !== I || this.sigMemo.k !== sigKey) this.sigMemo = { D, I, k: sigKey, v: subSignals(D, I, subs, vis, sigShow, Chart.prefs.sigStrongK) };
+    const sigs = this.sigs = sigOn ? this.sigMemo.v : [];
     (o.markers || []).filter(m => m.i < vis && m.i >= va && m.i <= vb).forEach(m => {
       const k = D[m.i], x = X(m.i), buy = m.side === "buy", c = m.note ? col.accent : buy ? col.up : col.down;
       const y = buy ? Y(k.l) + 8 : Y(k.h) - 8, s = 5;
@@ -1064,7 +1074,7 @@ class Chart {
         if (b.dataset.sk) Chart.setPref("sigKinds", { ...P.sigKinds, [k]: P.sigKinds[k] === false });
         else if (b.dataset.strongk) Chart.setPref("sigStrongK", { ...P.sigStrongK, [k]: !P.sigStrongK[k] }); });
     }
-    if (this.o.subSignals === false) { this.sigUi.innerHTML = ""; this.sigUi.hidden = true; return; }
+    if (this.o.subSignals === false) { this.sigUi.innerHTML = ""; this.sigHtml = ""; this.sigUi.hidden = true; return; }
     const P = Chart.prefs, NM = { kd: "KD", macd: "MACD", rsi: "RSI", wr: "威廉", custom: "副圖" };
     const html = subs.map(S => {
       const kind = typeof S === "string" ? S : S?.custom?.kind || "custom";
@@ -1075,7 +1085,7 @@ class Chart {
     // 高低檔鈍化：開著 KD、RSI、威廉、MFI 任一個時，多一顆開關（底色區間＋鈍化、鈍化結束的訊號）
     const dl = this.I && subs.some(S => dullOf(S, this.I)) ? `<span class="sg"><em>鈍化</em><button type="button" data-sk="dull" aria-pressed="${P.sig && P.sigKinds.dull !== false}" title="連續 3 根在高檔或低檔時塗底色並標出鈍化、鈍化結束">高低檔</button></span>` : "";
     const all = html + dl;
-    this.sigUi.hidden = !all; if (this.sigUi.innerHTML !== all) this.sigUi.innerHTML = all;
+    this.sigUi.hidden = !all; if (this.sigHtml !== all) { this.sigHtml = all; this.sigUi.innerHTML = all; } // 和上次一樣就不動 DOM（讀 innerHTML 也很貴）
   }
   line(a, vis, X, Y, color, w, alpha = 1, dash) {
     const ctx = this.ctx, g = this.geo; ctx.save(); ctx.beginPath(); ctx.rect(g.L, 0, g.pw, g.H); ctx.clip();
@@ -1117,7 +1127,7 @@ class Chart {
     if (o.compare?.length && this.cmpNow) parts.push(`<span><b>比較（${String(this.cmpBaseD || "").slice(5, 10).replace("-", "/")} 起）</b>本檔 ${fmtPct((this.cmpSelf ?? 0) / 100)}</span>` + this.cmpNow.map(c => `<span style="color:${c.color}"><b style="color:inherit">${c.name}</b>${c.pct == null ? "—" : fmtPct(c.pct / 100)}</span>`).join(""));
     const mk = (o.markers || []).filter(m => m.i === i).map(m => m.label);
     if (mk.length) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">訊號</b>${mk.join("、")}</span>`);
-    this.legend.innerHTML = parts.join("");
+    const lg = parts.join(""); if (this.legHtml !== lg) { this.legHtml = lg; this.legend.innerHTML = lg; }
   }
 }
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
