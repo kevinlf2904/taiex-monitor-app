@@ -791,7 +791,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.16-78</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.16-79</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -983,7 +983,7 @@ async function tick() {
   if (W.lt === "us" && (!W.hot["us:" + W.usType] || Date.now() - W.hot["us:" + W.usType].at > 30000)) jobs.push(loadHot("us"));
   const res = await Promise.allSettled(jobs), bad = res.find(r => r.status === "rejected");
   W.err = bad ? bad.reason?.message || "更新失敗" : null; if (!bad) W.lastOk = Date.now();
-  W.busy = 0; checkAlerts(); W.ticking = true; try { renderAll(); } catch (e) { console.error("tick", e); } finally { W.ticking = false; } loadIntra(); if (W.dtab === "trend") loadFlow(); liveRefresh();
+  W.busy = 0; checkAlerts(); W.ticking = true; try { if (!Chart.busy()) renderAll(); } catch (e) { console.error("tick", e); } finally { W.ticking = false; } loadIntra(); if (W.dtab === "trend") loadFlow(); liveRefresh();
 }
 // 即時更新：盤中依目前分頁自動重抓（大盤、排行 30 秒，選股 60 秒，產業報價 15 秒）；收盤後資金分頁每 10 分鐘看看今天的法人資料出來了沒
 function liveRefresh() {
@@ -1016,10 +1016,13 @@ const liveTag = (J, closed) => (J?.live ? `<span class="livetag"><i></i>盤中�
 async function fastTick() {
   if (W.off || (W.busy && Date.now() - W.busy < 30000) || (W.fbusy && Date.now() - W.fbusy < 30000) || document.visibilityState === "hidden") return;
   W.fbusy = Date.now(); try { const r = await Promise.allSettled([pollList(), pollDetail()]); if (!r.some(x => x.status === "rejected")) { W.lastOk = Date.now(); W.err = null; } } finally { W.fbusy = 0; }
-  checkAlerts(); W.ticking = true; // try／finally：重畫出錯也一定要把 ticking 關掉；剛按下去（900ms 內）先不重畫清單，避免點擊被吃掉
-  try { renderTop(); if (["watch", "hold", "tw", "us", "rank", "etf"].includes(W.lt) && Date.now() - (W.lastPtr || 0) > 900) renderList(); else if (W.lt === "mkt" && $("#mkCards")) $("#mkCards").innerHTML = mktCards(); if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } }
+  checkAlerts(); if (Chart.busy()) return; // 正在拖曳 K 線：這一秒先不重畫（資料已經更新，下一秒再畫），手勢不掉格
+  W.ticking = true; // try／finally：重畫出錯也一定要把 ticking 關掉；剛按下去（900ms 內）先不重畫清單，避免點擊被吃掉
+  try { renderTop(); if (["watch", "hold", "tw", "us", "rank", "etf"].includes(W.lt) && Date.now() - (W.lastPtr || 0) > 900 && !listHidden()) renderList(); else if (W.lt === "mkt" && $("#mkCards")) $("#mkCards").innerHTML = mktCards(); if (W.sel) { renderDetailHead(); if (W.ftab === "book") renderBook(); } }
   catch (e) { console.error("fastTick", e); } finally { W.ticking = false; }
 }
+// 手機看個股時清單整個藏起來：每秒重畫看不到的清單只會拖慢 K 線（回到清單時 showList 會重畫）
+function listHidden() { return isMobile() && $("#main").classList.contains("show-detail"); }
 function schedule() { clearTimeout(W.timer); if (W.off) return; const open = anyOpen();
   W.timer = setTimeout(async () => { W.tn = (W.tn || 0) + 1; if (open && W.tn % 5) await fastTick(); else await tick(); schedule(); }, open ? 1000 : 300000); }
 const kick = () => tick().then(schedule);
@@ -2745,7 +2748,7 @@ async function loadYield(c) {
 }
 /* ---------- 個股 ---------- */
 function showList(push = true) {
-  $("#main").classList.remove("show-detail"); syncLayout(); setQ("list"); postHeight(); if (EMBED && isMobile()) post({ type: "watch-top", y: 0 });
+  const was = listHidden(); $("#main").classList.remove("show-detail"); syncLayout(); if (was) try { renderList(); } catch {} setQ("list"); postHeight(); if (EMBED && isMobile()) post({ type: "watch-top", y: 0 });
   if (push) navPush();
 }
 // 個股頁「↻ 更新」：10 秒內的請求都不用瀏覽器快取（日 K、籌碼、公司資料、新聞），整檔重新載入

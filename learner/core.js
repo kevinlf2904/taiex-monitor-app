@@ -523,7 +523,7 @@ class Chart {
         if (sp && Math.abs(dy) > Math.abs(dx)) { this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {} this.pz[sp.key] = { z: this.drag.pz.z, off: Math.max(-1, Math.min(1, this.drag.pz.off + dy / sp.h)) }; this.req(); return; }
         const panX = Math.abs(dx) > 4 && this.view && !(this.drag.touch && this.drag.dir === "v" && this.yz > 1), panY = this.yz > 1 && Math.abs(dy) > 4 && this.drag.y < G.top0 + G.mainH && (!this.drag.touch || this.drag.dir === "v");
         if (panX || panY) {
-          this.drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch {}
+          if (!this.drag.cap) { this.drag.cap = true; try { cv.setPointerCapture(e.pointerId); } catch {} } this.drag.moved = true;
           if (panX) { this.drag.bw ||= G.bw; this.smoothY = true; const now = performance.now(), fa0 = this.vw.fa; this.view = this.clampView(this.drag.a - dx / this.drag.bw, this.vw.w);
             const dt = now - (this.drag.vt || now - 16); this.drag.vx = 0.7 * (this.drag.vx || 0) + 0.3 * ((this.vw.fa - fa0) / Math.max(1, dt)); this.drag.vt = now; this.drag.panned = true; }
           if (panY) { if (!this.yfree && this.ymid) { this.drag.yoff = this.yoff = this.ymid.off || 0; this.yfree = true; this.drag.y = e.offsetY; } // 從「跟隨」的位置接手
@@ -536,6 +536,7 @@ class Chart {
       if (e.pointerType === "mouse" ? !this.pinned : this.pinned && !this.view && this.drag && !this.drag.moved) { if (this.hoverY !== e.offsetY) { this.hoverY = e.offsetY; this.req(); } this.hoverAt(e.offsetX); }
     });
     const up = e => {
+      Chart.touchAt = performance.now();
       // 代替頁面捲動時，放開手指後讓頁面再滑一小段（慣性），手感接近一般捲動
       const d = this.drag; if (d && d.dir === "v" && Math.abs(d.vy) > 0.2 && e.type === "pointerup") { let v = d.vy * 16; const glide = () => { if (Math.abs(v) < 0.5) return; pageScroller().scrollBy(0, -v); v *= 0.94; requestAnimationFrame(glide); }; requestAnimationFrame(glide); }
       const wasPinch = !!this.pinch;
@@ -572,6 +573,8 @@ class Chart {
     new ResizeObserver(() => this.draw()).observe(host);
   }
   static all = [];
+  // 有圖表正在被拖曳、縮放或慣性滑動（放開後 800ms 內也算）：頁面其他地方的定時重畫先等一下，手勢才不會掉格
+  static busy() { return Chart.all.some(c => c.ptrs.size || c.glide || c.pinch) || performance.now() - (Chart.touchAt || 0) < 800; }
   static LW = 0.6; // 所有指標線的粗細倍數（越小越細，比較好看清楚 K 棒）
   static keepView = false; // 即時報價更新最後一根 K 棒時，保留使用者的縮放與平移
   static PREF_KEYS = { h: "chartH", log: "chartLog", sh: "chartSubH", fit: "chartSubFit", sig: "chartSubSig", sigKinds: "chartSigKinds", sigStrong: "chartSigStrong", sigStrongK: "chartSigStrongK", mk: "chartMk", kt: "chartKt" };
@@ -1127,7 +1130,10 @@ class Chart {
     if (o.compare?.length && this.cmpNow) parts.push(`<span><b>比較（${String(this.cmpBaseD || "").slice(5, 10).replace("-", "/")} 起）</b>本檔 ${fmtPct((this.cmpSelf ?? 0) / 100)}</span>` + this.cmpNow.map(c => `<span style="color:${c.color}"><b style="color:inherit">${c.name}</b>${c.pct == null ? "—" : fmtPct(c.pct / 100)}</span>`).join(""));
     const mk = (o.markers || []).filter(m => m.i === i).map(m => m.label);
     if (mk.length) parts.push(`<span style="color:var(--accent)"><b style="color:inherit">訊號</b>${mk.join("、")}</span>`);
-    const lg = parts.join(""); if (this.legHtml !== lg) { this.legHtml = lg; this.legend.innerHTML = lg; }
+    const lg = parts.join(""); if (this.legHtml !== lg) { this.legHtml = lg; this.legend.innerHTML = lg;
+      // 說明列只長不縮（寬度變了才重算）：十字線經過有訊號的 K 棒時多一行，整張圖不會跟著上下跳
+      const w = this.host.clientWidth; if (w !== this.legW) { this.legW = w; this.legMin = 0; this.legend.style.minHeight = ""; }
+      const h = this.legend.offsetHeight; if (h > (this.legMin || 0)) { this.legMin = h; this.legend.style.minHeight = h + "px"; } }
   }
 }
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
