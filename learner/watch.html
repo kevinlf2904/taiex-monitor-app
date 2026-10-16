@@ -283,6 +283,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 /* 庫存 */
 .lx { border-bottom: 1px solid var(--line); }
 .hsum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 10px 12px; border: 1px solid var(--line); border-radius: 4px; }
+.hsum2 { margin-top: -4px; } .hsum2 b { font-size: 16px; }
+.hopts { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13px; } .hopts select { font-size: 12.5px; }
 .hsum > div { padding: 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; } .hsum > div + div { border-left: 1px solid var(--line); }
 .hsum span { font-size: 12px; color: var(--muted); } .hsum b { font: 500 clamp(13px, 3.9vw, 18px) var(--font-num); white-space: nowrap; letter-spacing: -.02em; } .hsum small { font: 12px var(--font-num); color: var(--muted); } .hsum small.up, .hsum small.down { color: inherit; }
 .hsum .up { color: var(--up); } .hsum .down { color: var(--down); }
@@ -680,7 +682,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
     <div class="panel box" id="holdBox" hidden>
       <strong>持股（只記在這個瀏覽器）</strong>
-      <div class="row2"><label>股數 <input type="number" min="0" step="1" id="hSh" inputmode="numeric"></label><label>平均成本 <input type="number" min="0" step="any" id="hCost" inputmode="decimal"></label></div>
+      <div class="row2"><label>股數 <input type="number" min="0" step="1" id="hSh" inputmode="numeric"></label><label>平均成本 <input type="number" min="0" step="any" id="hCost" inputmode="decimal"></label><label>買進日期 <input type="date" id="hDate"></label></div>
       <div class="row2"><button class="btn primary sm" id="hSave" type="button">儲存</button><button class="btn sm" id="hClear" type="button">清除</button><span class="note" id="hNote">台股 1 張 = 1000 股；損益未扣手續費與證交稅。</span></div>
     </div>
     <div class="panel box" id="alertBox" hidden>
@@ -1280,7 +1282,30 @@ function sortedWatch(list = curList()) {
   else if (W.sort === "vol") L.sort((a, b) => (b.q?.vol ?? -1) * (isUS(b.c) ? 0.001 : 1) - (a.q?.vol ?? -1) * (isUS(a.c) ? 0.001 : 1));
   return L;
 }
-function holdPnL(c, q) { const h = W.hold[c]; if (!h || !h.sh || !h.cost || q?.price == null) return null; const mv = h.sh * q.price, cost = h.sh * h.cost; return { mv, pnl: mv - cost, pct: (mv / cost - 1) * 100, day: q.chg != null ? h.sh * q.chg : null }; }
+// 庫存設定：扣手續費與交易稅（hfee）、加上已領股息（hdiv）、手續費折扣（hdisc）
+W.hfee = store.get("watch:hfee", false); W.hdiv = store.get("watch:hdiv", false); W.hdisc = +store.get("watch:hdisc", 1) || 1;
+// 台股：買進、賣出各收手續費 0.1425%（乘折扣，每筆最低 20 元）；賣出另收證交稅（股票 0.3%、ETF 0.1%、債券 ETF 0）。美股不算（各券商不同）
+function holdCosts(c, h, mv) {
+  if (isUS(c)) return { fee: 0, tax: 0 }; const r = 0.001425 * W.hdisc, f = v => Math.max(20, Math.round(v * r));
+  return { fee: f(h.sh * h.cost) + f(mv), tax: Math.round(mv * (taxOf(c) ?? 0.003)) };
+}
+// 已領股息：有填買進日期才算（除息日在買進日之後的每次配息 × 股數）；沒填日期只能估一年可領多少
+function holdDiv(c, h) {
+  const Y = W.hdivs?.[c]; if (!Y || !h) return null; const yr = Y.cash12 != null ? Y.cash12 * h.sh : null;
+  if (!h.d) return { got: null, yr, n: 0 };
+  const L = (Y.divs || []).filter(([d]) => d > h.d); return { got: Math.round(L.reduce((a, [, v]) => a + v * h.sh, 0)), yr, n: L.length };
+}
+async function loadHoldDivs(force = false) {
+  const codes = Object.keys(W.hold).filter(c => isTW(c) && W.hold[c].sh && (force || !W.hdivs?.[c])); if (!codes.length || W.off || W.hdivLoading) return;
+  W.hdivLoading = true; W.hdivs ||= {};
+  try { for (let i = 0; i < codes.length; i += 30) { const j = await getJ(`/api/yield?codes=${codes.slice(i, i + 30).join(",")}&hist=1`, true); (j.rows || []).forEach(r => (W.hdivs[r.code] = r)); } } catch {}
+  W.hdivLoading = false; if (W.lt === "hold") renderList();
+}
+function holdPnL(c, q) {
+  const h = W.hold[c]; if (!h || !h.sh || !h.cost || q?.price == null) return null; const mv = h.sh * q.price, cost = h.sh * h.cost;
+  const k = W.hfee ? holdCosts(c, h, mv) : { fee: 0, tax: 0 }, dv = W.hdiv ? holdDiv(c, h)?.got || 0 : 0, pnl = mv - cost - k.fee - k.tax + dv;
+  return { mv, pnl, pct: (pnl / (cost + (W.hfee ? Math.max(20, Math.round(cost * 0.001425 * W.hdisc)) : 0))) * 100, day: q.chg != null ? h.sh * q.chg : null, fee: k.fee, tax: k.tax, dv };
+}
 function rowHtml(c, q, { rank, metric, star } = {}) {
   q = q || {}; const nm = esc(q.name || nameOf(c)), al = W.alerts[c] && (W.alerts[c].up || W.alerts[c].dn), lo = q.low, hi = q.high, rng = lo != null && hi != null && hi > lo && q.price != null;
   const pos = v => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100)), was = W.prevPx.get(c), flash = was != null && q.price != null && was !== q.price ? (q.price > was ? "flash-up" : "flash-down") : "", hp = holdPnL(c, q);
@@ -1340,7 +1365,12 @@ function renderList0() {
   } else if (W.lt === "hold") {
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
       <div class="imp-btns"><button class="btn sm primary" data-imp="edit">✏️ 編輯庫存</button><button class="btn sm" data-imp="shot">📷 截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
-    if (W.holdView === "ana") renderHoldAna(); else renderHold(); note = "損益未扣手續費與證交稅；持股只記在這個瀏覽器。在個股頁按「💼 持股」新增或修改。";
+    const tw = W.holdMkt === "tw"; $("#lTools").insertAdjacentHTML("beforeend", tw ? `<div class="hopts"><label class="chk"><input type="checkbox" data-hopt="hfee" ${W.hfee ? "checked" : ""}> 扣手續費與交易稅</label>
+      <select data-hopt="hdisc" aria-label="手續費折扣" ${W.hfee ? "" : "disabled"}>${[[1, "手續費不打折"], [0.6, "6 折"], [0.5, "5 折"], [0.38, "3.8 折"], [0.28, "2.8 折"], [0.2, "2 折"]].map(([v, t]) => `<option value="${v}" ${W.hdisc === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+      <label class="chk"><input type="checkbox" data-hopt="hdiv" ${W.hdiv ? "checked" : ""}> 含息（加上已領股息）</label></div>` : "");
+    if (tw) loadHoldDivs();
+    if (W.holdView === "ana") renderHoldAna(); else renderHold();
+    note = `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
   } else if (W.lt === "screen") {
     $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? liveTag(W.scr, "收盤後資料") : "選股"}・僅供參考，不是買賣建議</span><button class="btn sm" data-gx="scrRefresh">↻ 更新</button>`;
     renderScreen(); note = W.scr?.source ? `資料：${W.scr.source}。「K線」「技術」兩類是在瀏覽器裡掃描自選、庫存、台股熱門與今天熱門清單的日 K；「題材」是常見代表股的參考名單。` : "";
@@ -1388,6 +1418,7 @@ function renderList0() {
   if (W.lt === "cong") n.innerHTML = note; else n.textContent = note;
   renderPort();
 }
+$("#listPane").addEventListener("change", e => { const t = e.target; if (t.dataset?.hopt === "hdisc") { W.hdisc = +t.value || 1; store.set("watch:hdisc", W.hdisc); renderList(); } });
 $("#listPane").addEventListener("click", e => {
   const t = e.target, s = t.closest("[data-sel]"), st = t.closest("[data-star]"), mv = t.closest("[data-mv]"), rm = t.closest("[data-rm]"), g = t.closest("[data-g]"), gx = t.closest("[data-gx]"), so = t.closest("[data-sort]"), us = t.closest("[data-us]"), rk = t.closest("[data-rank]");
   if (st) { const c = st.dataset.star; if (W.groups.some(x => x.list.includes(c))) { W.groups.forEach(x => (x.list = x.list.filter(y => y !== c))); toast("已移出自選", 1500); } else addToast(c, addTo(c)); saveGroups(); renderList(); }
@@ -1396,6 +1427,7 @@ $("#listPane").addEventListener("click", e => {
   else if (rm) { W.groups[W.gi].list = curList().filter(c => c !== rm.dataset.rm); saveGroups(); renderList(); }
   else if (g) { if (g.dataset.g === "new") { const name = prompt("新群組名稱", `群組 ${W.groups.length + 1}`); if (name) { W.groups.push({ name: name.slice(0, 12), list: [] }); W.gi = W.groups.length - 1; saveGroups(); renderList(); } } else { W.gi = +g.dataset.g; W.editing = false; saveGroups(); renderList(); kick(); } }
   else if (t.closest("[data-hs]")) { const k = t.closest("[data-hs]").dataset.hs; W.holdDir = W.holdSort === k ? -W.holdDir : 1; W.holdSort = k; renderList(); }
+  else if (t.closest("[data-hopt]") && t.tagName === "INPUT") { const k = t.dataset.hopt; W[k] = t.checked; store.set("watch:" + k, W[k]); renderList(); }
   else if (t.closest("[data-hm]")) { W.holdMkt = t.closest("[data-hm]").dataset.hm; store.set("watch:hm", W.holdMkt); renderList(); pollList().then(renderList).catch(() => {}); }
   else if (gx && gx.dataset.gx === "mktRefresh") { if (W.mkReg === "us") loadUsMkt(true); else if (W.mkReg === "gl") loadGlobal(true); else loadMkt(true); }
   else if (gx && gx.dataset.gx === "scrRefresh") loadScreen(true);
@@ -1441,10 +1473,15 @@ function renderHold() {
   let acc = 0; const grad = slices.map((x, i) => { const a = acc / mv * 360; acc += x.v; return `${PIE[i]} ${a}deg ${acc / mv * 360}deg`; }).join(",");
   if (ok.length) $("#lx").innerHTML = `<div class="hsum"><div><span>今日損益</span><b class="${cls(day)}">${sgn(day)}</b><small class="${cls(day)}">${mv - day ? sgn(day / (mv - day) * 100, 2) + "%" : ""}</small></div><div><span>累積損益</span><b class="${cls(pnl)}">${sgn(pnl)}</b><small class="${cls(pnl)}">${cost ? sgn(pnl / cost * 100, 2) + "%" : ""}</small></div><div><span>股票市值</span><b>${money(mv)}</b><small>成本 ${money(cost)}</small></div></div>
     ${mv > 0 ? `<div class="pie"><div class="donut" style="background:conic-gradient(${grad})"><span>持股佔比</span></div><ul>${slices.map((x, i) => `<li><i style="background:${PIE[i]}"></i><span>${esc(x.n)}</span><b>${Math.round(x.v / mv * 100)}%</b></li>`).join("")}</ul></div>` : ""}`;
+  // 股息與費稅
+  if (!us && ok.length) { const D = R.map(r => ({ r, v: holdDiv(r.c, r.h) })), got = D.filter(x => x.v?.got != null), yr = D.reduce((a, x) => a + (x.v?.yr || 0), 0), ft = ok.reduce((a, r) => { const p = holdPnL(r.c, r.q); return a + (p?.fee || 0) + (p?.tax || 0); }, 0);
+    $("#lx").insertAdjacentHTML("beforeend", `<div class="hsum hsum2"><div><span>已領股息</span><b>${got.length ? Math.round(got.reduce((a, x) => a + x.v.got, 0)).toLocaleString() : "—"}</b><small>${got.length ? `${got.length} 檔有填買進日期` : W.hdivLoading ? "載入配息…" : "在「編輯庫存」填買進日期才算得出來"}</small></div>
+      <div><span>一年約可領</span><b>${yr ? Math.round(yr).toLocaleString() : "—"}</b><small>${yr ? `月平均 ${Math.round(yr / 12).toLocaleString()}・依近 12 個月配息` : ""}</small></div>
+      <div><span>${W.hfee ? "已扣費稅" : "賣出時的費稅（估）"}</span><b>${Math.round(W.hfee ? ft : ok.reduce((a, r) => { const k = holdCosts(r.c, r.h, r.mv); return a + k.fee + k.tax; }, 0)).toLocaleString()}</b><small>買賣手續費＋證交稅</small></div></div>`); }
   const k = W.holdSort, dir = W.holdDir; R.sort((a, b) => ((b[k] ?? -1e18) - (a[k] ?? -1e18)) * dir);
   const th = (key, t) => `<button data-hs="${key}" class="${k === key ? "on" : ""}">${t}${k === key ? (dir > 0 ? " ▼" : " ▲") : ""}</button>`;
   $("#wl").innerHTML = `<li class="hhead">${th("mv", "庫存股")}${th("day", "今日損益")}${th("chgPct", "股價／漲跌")}${th("pnl", "總損益")}</li>` + R.map(r => `<li><button class="row hrow" data-sel="${r.c}" aria-current="${r.c === W.sel}">
-    <span class="nm">${esc(nameOf(r.c))}<span class="cd">${r.c}・${r.h.sh.toLocaleString()} 股</span></span>
+    <span class="nm">${esc(nameOf(r.c))}<span class="cd">${r.c}・${r.h.sh.toLocaleString()} 股${(() => { const v = us ? null : holdDiv(r.c, r.h); return v ? `・${v.got != null ? `已領息 ${v.got.toLocaleString()}` : v.yr ? `年領約 ${Math.round(v.yr).toLocaleString()}` : ""}` : ""; })()}</span></span>
     <span class="${cls(r.day)}">${sgn(r.day)}</span>
     <span class="${cls(r.q?.chg)}"><b>${fmtPx(r.q?.price, r.c)}</b><small>${r.chgPct != null ? sgn(r.chgPct, 2) + "%" : "—"}</small></span>
     <span class="${cls(r.pnl)}"><b>${sgn(r.pnl)}</b><small>${r.pct != null ? sgn(r.pct, 2) + "%" : "—"}</small></span></button></li>`).join("");
@@ -1482,7 +1519,7 @@ function openImport(kind, rows) {
     const R = imp.rows, edit = kind === "edit" || imp.edit; imp.edit = edit;
     $("#impTitle").textContent = edit ? "編輯庫存" : "匯入庫存";
     body.innerHTML = `<p class="note">${edit ? "直接修改每一格；按 ✕ 刪除一檔，按「＋ 新增一列」加一檔。代號可以輸入名稱（例如「台積電」），離開格子後會自動換成代號。" : "確認每一檔的代號、股數與平均成本（可以直接修改）。推算值可能和券商略有差異（券商的損益通常已扣預估手續費與稅）。"}</p>
-      <div class="hg-wrap"><table class="hgrid"><thead><tr><th>代號／名稱</th><th>股數<small>1 張＝1000 股</small></th><th>平均成本</th><th></th></tr></thead><tbody>${R.map((r, i) => gridRow(r, i)).join("")}</tbody></table></div>
+      <div class="hg-wrap"><table class="hgrid"><thead><tr><th>代號／名稱</th><th>股數<small>1 張＝1000 股</small></th><th>平均成本</th><th>買進日期<small>選填，算已領股息</small></th><th></th></tr></thead><tbody>${R.map((r, i) => gridRow(r, i)).join("")}</tbody></table></div>
       <div class="row2" style="margin:8px 0"><button class="btn sm" data-gadd type="button">＋ 新增一列</button>${edit ? "" : `<button class="btn sm" data-imp2="shot" type="button">＋ 再加截圖</button>`}<button class="btn sm" data-imp2="text" type="button">貼上文字</button></div>
       ${edit ? "" : `<div class="seg" role="group" aria-label="匯入方式" style="margin:0 0 8px">${[["merge", "合併（同代號覆蓋）"], ["replace", "取代全部庫存"]].map(([k, t]) => `<button data-im="${k}" aria-pressed="${imp.mode === k}">${t}</button>`).join("")}</div>`}
       <div class="row2"><button class="btn primary sm" id="impSave" type="button">${edit ? "儲存" : `匯入 ${R.filter(r => r.code || r.sh).length} 檔`}</button><button class="btn sm" data-ic="close" type="button">取消</button></div>`;
@@ -1495,17 +1532,18 @@ function gridRow(r, i) {
   return `<tr class="${rowOk(r) || (!r.code && !r.sh && !r.cost) ? "" : "bad"}" data-row="${i}"><td><input class="code" data-ii="${i}" data-k="code" value="${esc(r.code || r.name || "")}" placeholder="2330 或 台積電" autocomplete="off" aria-label="代號或名稱"><small>${esc(r.code && okCode(r.code) ? nameOf(r.code) : r.how || "")}</small></td>
     <td><input type="number" inputmode="numeric" min="0" step="1" data-ii="${i}" data-k="sh" value="${r.sh ?? ""}" placeholder="1000" aria-label="股數"></td>
     <td><input type="number" inputmode="decimal" min="0" step="any" data-ii="${i}" data-k="cost" value="${r.cost ?? ""}" placeholder="650" aria-label="平均成本"></td>
+    <td><input type="date" data-ii="${i}" data-k="d" value="${esc(r.d || "")}" max="${new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)}" aria-label="買進日期"></td>
     <td><button class="hg-del" data-gdel="${i}" type="button" aria-label="刪除這一列">✕</button></td></tr>`;
 }
 function openHoldEdit() {
   loadStocks();
-  const rows = Object.entries(W.hold).filter(([, h]) => h.sh && h.cost).map(([c, h]) => ({ code: c, name: nameOf(c), sh: h.sh, cost: h.cost, on: true }));
+  const rows = Object.entries(W.hold).filter(([, h]) => h.sh && h.cost).map(([c, h]) => ({ code: c, name: nameOf(c), sh: h.sh, cost: h.cost, d: h.d || null, on: true }));
   imp.mode = "replace"; imp.edit = true; openImport("edit", [...rows, { code: "", sh: null, cost: null, on: true }]);
 }
 $("#impBg").addEventListener("click", closeImport);
 $("#impSheet").addEventListener("input", e => {
   const t = e.target, i = t.dataset.ii; if (i == null) return; const r = imp.rows[+i], k = t.dataset.k;
-  if (k === "code") { const v = t.value.trim().toUpperCase(); r.code = okCode(v) ? v : ""; r.name = t.value.trim(); } else r[k] = t.value === "" ? null : +t.value;
+  if (k === "code") { const v = t.value.trim().toUpperCase(); r.code = okCode(v) ? v : ""; r.name = t.value.trim(); } else if (k === "d") r.d = /^\d{4}-\d{2}-\d{2}$/.test(t.value) ? t.value : null; else r[k] = t.value === "" ? null : +t.value;
   t.closest("tr").classList.toggle("bad", !rowOk(r) && !!(r.code || r.name || r.sh || r.cost));
 });
 // 代號格離開時：輸入的是名稱就換成代號
@@ -1539,7 +1577,7 @@ function saveImport() {
   if (bad) { toast(`有 ${bad} 列資料不完整（每一列都要有代號、股數與成本），請修正或按 ✕ 刪除`, 4000); return; }
   if (!ok.length && !imp.edit) { toast("沒有可以匯入的資料"); return; }
   if (imp.mode === "replace") W.hold = {};
-  ok.forEach(r => { W.hold[r.code] = { sh: r.sh, cost: r.cost }; if (r.name) W.names[r.code] = r.name; if (!W.groups.some(g => g.list.includes(r.code))) addTo(r.code); });
+  ok.forEach(r => { const d = r.d || (imp.mode === "replace" ? null : W.hold[r.code]?.d); W.hold[r.code] = { sh: r.sh, cost: r.cost, ...(d ? { d } : {}) }; if (r.name) W.names[r.code] = r.name; if (!W.groups.some(g => g.list.includes(r.code))) addTo(r.code); });
   const wasEdit = imp.edit; store.set("watch:hold", W.hold); saveGroups(); closeImport();
   toast(wasEdit ? `已儲存庫存（${ok.length} 檔）` : `已匯入 ${ok.length} 檔`, 3000);
   if (ok.length) W.holdMkt = ok.some(r => mktOf(r.code) === W.holdMkt) ? W.holdMkt : mktOf(ok[0].code); setLt("hold"); kick();
@@ -2805,7 +2843,7 @@ function renderDetailHead() {
   $("#alertBtn").textContent = a.up || a.dn ? `🔔 ${[a.up ? "≥" + a.up : "", a.dn ? "≤" + a.dn : ""].filter(Boolean).join("、")}` : "🔔 提醒";
   const h = W.hold[c], hp = holdPnL(c, q);
   $("#dHold").hidden = !hp; if (hp) $("#dHold").innerHTML = `💼 ${h.sh.toLocaleString()} 股・成本 ${fmtPx(h.cost, c)}・市值 ${Math.round(hp.mv).toLocaleString()}・<span class="${cls(hp.pnl)}">損益 ${hp.pnl >= 0 ? "+" : ""}${Math.round(hp.pnl).toLocaleString()}（${hp.pct >= 0 ? "+" : ""}${hp.pct.toFixed(2)}%）</span>${hp.day != null ? `・今日 <span class="${cls(hp.day)}">${hp.day >= 0 ? "+" : ""}${Math.round(hp.day).toLocaleString()}</span>` : ""}`;
-  if (document.activeElement !== $("#hSh")) $("#hSh").value = h?.sh ?? ""; if (document.activeElement !== $("#hCost")) $("#hCost").value = h?.cost ?? "";
+  if (document.activeElement !== $("#hSh")) $("#hSh").value = h?.sh ?? ""; if (document.activeElement !== $("#hCost")) $("#hCost").value = h?.cost ?? ""; if (document.activeElement !== $("#hDate")) $("#hDate").value = h?.d ?? "";
 }
 // 屬性標籤：產業、漲跌停、爆量、創新高低、月強弱、均線排列、法人連買賣（用日 K 與籌碼資料算）
 function pastDaily(c, q) { const D = W.daily?.code === c ? W.daily.data : null; if (!D?.length) return null; return q?.date && D[D.length - 1].d === q.date ? D.slice(0, -1) : D; }
@@ -2831,7 +2869,7 @@ function tagsHtml(c, q, lim) {
 }
 $("#favBtn").addEventListener("click", () => { const c = W.sel; if (!c) return; if (W.groups.some(g => g.list.includes(c))) { W.groups.forEach(g => (g.list = g.list.filter(x => x !== c))); toast("已移出自選", 1500); } else addToast(c, addTo(c)); saveGroups(); renderList(); renderDetailHead(); kick(); });
 $("#holdBtn").addEventListener("click", () => { $("#holdBox").hidden = !$("#holdBox").hidden; $("#alertBox").hidden = true; if (!$("#holdBox").hidden) $("#hSh").focus(); });
-$("#hSave").addEventListener("click", () => { const sh = Math.round(+$("#hSh").value), cost = +$("#hCost").value; if (!(sh > 0 && cost > 0)) { $("#hNote").textContent = "請填股數與平均成本"; return; } W.hold[W.sel] = { sh, cost }; store.set("watch:hold", W.hold); if (!W.groups.some(g => g.list.includes(W.sel))) { addTo(W.sel); } $("#hNote").textContent = "已儲存"; renderDetailHead(); renderList(); });
+$("#hSave").addEventListener("click", () => { const sh = Math.round(+$("#hSh").value), cost = +$("#hCost").value; if (!(sh > 0 && cost > 0)) { $("#hNote").textContent = "請填股數與平均成本"; return; } const d = $("#hDate").value; W.hold[W.sel] = { sh, cost, ...(/^\d{4}-\d{2}-\d{2}$/.test(d) ? { d } : {}) }; store.set("watch:hold", W.hold); if (W.hdivs) delete W.hdivs[W.sel]; if (!W.groups.some(g => g.list.includes(W.sel))) { addTo(W.sel); } $("#hNote").textContent = "已儲存"; renderDetailHead(); renderList(); });
 $("#hClear").addEventListener("click", () => { delete W.hold[W.sel]; store.set("watch:hold", W.hold); $("#hNote").textContent = "已清除"; renderDetailHead(); renderList(); });
 function renderBook() {
   const c = W.sel, q = W.detailQ || W.quotes.get(c), B = q?.bids || [], A = q?.asks || [];

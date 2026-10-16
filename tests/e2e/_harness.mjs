@@ -22,7 +22,7 @@ export async function mock(ctx) {
     J(r, { ok: true, code: c, name: c, market: "上市", source: "t", data: K.map((x, i) => { const cc = +(x.c * (1 + Math.sin(i / (7 + (seed % 5))) * 0.08)).toFixed(1); return { ...x, c: cc, h: +(Math.max(x.o, cc) * 1.01).toFixed(1), l: +(Math.min(x.o, cc) * 0.99).toFixed(1), v: 15000 + (i % 17 === 0 ? 60000 : 0) }; }) }); });
   await ctx.route("**/api/chat", r => J(r, { ok: true, text: "測試回覆" }));
   await ctx.route("**/api/calendar**", r => J(r, { ok: true, rows: [{ date: "2026-10-20", code: "2330", name: "台積電", kind: "除息", cash: 4.5 }], conf: [] }));
-  await ctx.route("**/api/yield**", r => { const cs = (new URL(r.request().url()).searchParams.get("codes") || "").split(","); J(r, { ok: true, rows: cs.map(c => ({ code: c, cash12: 5, n: 1, price: 100, yield: 5 })) }); });
+  await ctx.route("**/api/yield**", r => { const cs = (new URL(r.request().url()).searchParams.get("codes") || "").split(","); J(r, { ok: true, rows: cs.map(c => ({ code: c, cash12: 5, n: 1, price: 100, yield: 5, divs: [["2025-07-10", 2.5], ["2026-01-10", 3]] })) }); });
   const axis = K.map(x => x.d).slice(-130);
   await ctx.route("**/api/allk**", r => { const s = new URL(r.request().url()).searchParams.get("s"), o = { d: axis, date: axis.at(-1), n: {}, m: {}, k: {} };
     for (let i = 0; i < 20; i++) { const c = s + String(100 + i * 7).padStart(3, "0"), cl = axis.map((_, j) => +(100 * (1 + Math.sin((j + i) / (6 + (i % 5))) * 0.1)).toFixed(2)); o.n[c] = "測試" + c; o.m[c] = 0; o.k[c] = [cl, cl.map(x => x * 1.01), cl.map(x => x * 0.99), cl, cl.map(() => 800)]; }

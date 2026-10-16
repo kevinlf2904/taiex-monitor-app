@@ -1,5 +1,5 @@
 // 殖利率：近 12 個月（365 天）的現金股利合計 ÷ 股價，給 learner/watch.html 的個股頁與 ETF 殖利率排行使用。
-// GET /api/yield?codes=2330,0056,00679B → { ok, rows: [{ code, cash12, n, last: { d, cash }, price, yield }], missing }
+// GET /api/yield?codes=2330,0056,00679B → { ok, rows: [{ code, cash12, n, last: { d, cash }, price, yield }], missing }；加 &hist=1 另外附 divs: [[除息日, 每股現金]]
 //   cash12 近 12 個月現金股利（元／股）、n 配息次數、last 最近一次配息、price 計算用的股價（Yahoo 最新價）、yield 殖利率（%）
 // 配息紀錄：Yahoo Finance chart 的 events=div（上市 .TW、上櫃 .TWO，股票、ETF 都有）；Yahoo 沒有時改用 FinMind 除權息結果（只算「息」）。
 // 股票股利不算進殖利率（只算現金）；同一個伺服器實例 6 小時內重複查詢直接用快取。
@@ -30,13 +30,13 @@ export function summarize(code, divs, price, now = Date.now()) {
 
 async function fromYahoo(code) {
   for (const sym of [`${code}.TW`, `${code}.TWO`]) {
-    try { const r = divsFromYahoo(await yGet(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=2y&interval=1mo&events=div`, {}, 7000)); if (r && r.price) return r; } catch {}
+    try { const r = divsFromYahoo(await yGet(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=10y&interval=1mo&events=div`, {}, 7000)); if (r && r.price) return r; } catch {}
   }
   return null;
 }
 async function fromFinmind(code) {
   const token = (process.env.FINMIND_TOKEN || "").trim();
-  const r = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividendResult&data_id=${code}&start_date=${iso(Date.now() - 730 * DAY)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(8000) });
+  const r = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividendResult&data_id=${code}&start_date=${iso(Date.now() - 3650 * DAY)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(8000) });
   const j = await r.json().catch(() => null); if (!Array.isArray(j?.data)) throw new Error(j?.msg || `HTTP ${r.status}`);
   const divs = divsFromFinmind(j.data); return { divs, price: null };
 }
@@ -45,7 +45,7 @@ export async function yieldOf(code) {
   let r = await fromYahoo(code);
   if (!r || !r.divs.length) { try { const f = await fromFinmind(code); if (f.divs.length || !r) r = { divs: f.divs, price: r?.price ?? null, src: "FinMind 除權息結果" }; } catch {} }
   if (!r) return null;
-  const v = { ...summarize(code, r.divs, r.price), source: r.src || "Yahoo Finance 配息紀錄" };
+  const v = { ...summarize(code, r.divs, r.price), divs: r.divs.map(x => [x.d, x.cash]), source: r.src || "Yahoo Finance 配息紀錄" };
   cache.set(code, { at: Date.now(), v }); return v;
 }
 
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
   const out = []; let k = 0;
   const worker = async () => { while (k < codes.length) { const c = codes[k++]; try { const v = await yieldOf(c); if (v) out.push(v); } catch {} } };
   await Promise.all(Array.from({ length: Math.min(6, codes.length) }, worker));
-  const rows = codes.map(c => out.find(x => x.code === c)).filter(Boolean);
+  const hist = !!req.query?.hist, rows = codes.map(c => out.find(x => x.code === c)).filter(Boolean).map(({ divs, ...x }) => (hist ? { ...x, divs } : x)); // hist=1：附上近 10 年每次配息 [日期, 元]（庫存「已領股息」、存股試算用）
   if (!rows.length) return res.status(200).json({ ok: false, error: "暫時拿不到配息資料（Yahoo Finance、FinMind），稍後再試。" });
   res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400");
   return res.status(200).json({ ok: true, source: "Yahoo Finance 配息紀錄（近 12 個月現金股利）", rows, missing: codes.filter(c => !rows.some(r => r.code === c)) });
