@@ -746,7 +746,8 @@ function smcExtra(D) {
 const OVERLAY_ITEMS = [{ id: "sr", label: "支撐壓力" }, { id: "fib", label: "斐波那契" }, { id: "zz", label: "道氏結構" },
   { id: "smcS", label: "BOS／CHoCH" }, { id: "smcL", label: "流動性" }, { id: "smcOB", label: "訂單塊" }, { id: "smcFVG", label: "FVG" }, { id: "smcPD", label: "溢價折價" },
   { id: "candle", label: "K線型態" }, { id: "cpat", label: "型態學" }, { id: "gap", label: "缺口種類" }, { id: "div", label: "背離" }, { id: "divH", label: "隱藏背離" }, { id: "volx", label: "爆量" },
-  { id: "trend3", label: "三種趨勢" }, { id: "tl", label: "趨勢線" }, { id: "fan", label: "扇形" }, { id: "wave", label: "波浪" }, { id: "ccw", label: "逆時鐘" }];
+  { id: "trend3", label: "三種趨勢" }, { id: "tl", label: "趨勢線" }, { id: "fan", label: "扇形" }, { id: "wave", label: "波浪" }, { id: "ccw", label: "逆時鐘" },
+  { id: "hlb", label: "過高破低" }, { id: "r123", label: "123 法則" }, { id: "b2", label: "2B 法則" }];
 // 舊版的「聰明錢」一顆按鈕 → 拆開後的四項（在建立指標列之前把存好的選擇換掉）
 function overlayMigrate(key) {
   const v = store.get("ind:" + key, null); if (!Array.isArray(v) || !v.includes("smc")) return;
@@ -779,6 +780,10 @@ function overlayBuild(D, I, has, opt = {}) {
   if (on("fan")) safe(() => { ex.shapes.push(...fanShapes(fanLines(D), D.length)); ex.markers.push(...fanSignals(D)); });
   if (on("wave")) safe(() => { const w = waveShape(D); if (w) ex.shapes.push(w); ex.markers.push(...waveSignals(D)); });
   if (on("ccw")) safe(() => ex.markers.push(...ccwSignals(D)));
+  // 價格行為：分 K 用當日新高新低（過高破低的原始定義），日 K 用 20 根
+  if (on("hlb")) safe(() => ex.markers.push(...hlBreakSignals(D, 20, 1, 1)));
+  if (on("r123")) safe(() => ex.markers.push(...r123Signals(D, 3)));
+  if (on("b2")) safe(() => ex.markers.push(...b2Signals(D, 3, 3)));
   return ex;
 }
 
