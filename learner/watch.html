@@ -81,7 +81,6 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .ltabs-top[hidden] { display: none; }
 .ltabs-top .ltabs { margin: 0; }
 :root[data-embed="1"] .ltabs-top { padding: 0 0 6px; }
-.ltabs-top.pinned, #lTabs.pinned { position: relative; z-index: 30; background: var(--bg); box-shadow: 0 8px 14px -10px rgba(0, 0, 0, .55); }
 .w-main { display: grid; grid-template-columns: minmax(300px, 390px) minmax(0, 1fr); gap: 16px; padding: 16px; max-width: 1480px; margin: 0 auto; align-items: start; }
 .w-list { position: sticky; top: 68px; max-height: calc(100vh - 84px); display: flex; flex-direction: column; overflow: hidden; }
 :root[data-embed="1"] .w-main { padding: 0; }
@@ -965,7 +964,7 @@ async function tick() {
   if (W.off || (W.busy && Date.now() - W.busy < 30000) || document.visibilityState === "hidden") return;
   W.busy = Date.now();
   const jobs = [pollList(), pollDetail()];
-  if (W.lt === "us" && (!W.hot["us:" + W.usType] || Date.now() - W.hot["us:" + W.usType].at > 60000)) jobs.push(loadHot("us"));
+  if (W.lt === "us" && (!W.hot["us:" + W.usType] || Date.now() - W.hot["us:" + W.usType].at > 30000)) jobs.push(loadHot("us"));
   const res = await Promise.allSettled(jobs), bad = res.find(r => r.status === "rejected");
   W.err = bad ? bad.reason?.message || "更新失敗" : null; if (!bad) W.lastOk = Date.now();
   W.busy = 0; checkAlerts(); W.ticking = true; try { renderAll(); } catch (e) { console.error("tick", e); } finally { W.ticking = false; } loadIntra(); if (W.dtab === "trend") loadFlow(); liveRefresh();
@@ -978,8 +977,8 @@ function liveRefresh() {
   else if (W.lt === "mkt" && W.mkReg === "poly") { if (age(W.pm) > 300000) loadPoly(true); }
   else if (W.lt === "mkt" && W.mkReg === "macro") { if (age(W.mc) > 3600e3) loadMacro(true); }
   else if (W.lt === "mkt" && open && age(W.mkt) > 15000 && !(W.mktLoading && Date.now() - W.mktLoading < 40000)) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
-  else if (W.lt === "tw" && open && age(W.hot.tw) > 30000) loadHot("tw");
-  else if (W.lt === "rank" && open && !["foreign", "trust"].includes(W.rankType) && age(W.hot["rank:" + W.rankType]) > 30000) loadHot("tw-rank");
+  else if (W.lt === "tw" && open && age(W.hot.tw) > 15000) loadHot("tw");
+  else if (W.lt === "rank" && open && !["foreign", "trust"].includes(W.rankType) && age(W.hot["rank:" + W.rankType]) > 15000) loadHot("tw-rank");
   else if (W.lt === "screen" && open && age(W.scr) > 60000 && !W.scrLoading) loadScreen(true);
   else if (W.lt === "etf" && W.etfCat === "rank" && open && age(W.etfRank) > 30000) loadEtfRank(true);
   else if (W.lt === "money") { const F = W.mf, today = t.toISOString().slice(0, 10), last = F.days[F.days.length - 1]?.date;
@@ -1237,6 +1236,13 @@ function renderEtf() {
   return `ETF 是一籃子股票或債券，買一張就分散到很多標的。名單是常見、成交量較大的 ETF，方便比較，不是推薦。${us ? "美股報價來自 Yahoo Finance，可能延遲 15 分鐘。" : "台股 ETF 盤中每秒更新。"}`;
 }
 /* ---------- 清單：自選群組／台股熱門／美股熱門／排行 ---------- */
+// 盤中即時排名：排行資料每 15 秒向伺服器重抓一次，中間用每秒更新的報價（漲跌幅、成交量、成交值）重新排序
+function liveRank(rows, key) {
+  const L = rows.map(r => { const q = W.quotes.get(r.code); if (!q || q.price == null) return r; const vol = q.vol ?? r.vol, value = !isUS(r.code) && vol != null ? +(vol * q.price / 1e5).toFixed(2) : r.value;
+    return { ...r, price: q.price, chg: q.chg ?? r.chg, chgPct: q.chgPct ?? r.chgPct, vol, value, live: true }; });
+  const f = { gain: x => x.chgPct ?? -1e9, loss: x => -(x.chgPct ?? 1e9), volume: x => x.vol ?? -1, value: x => x.value ?? -1, active: x => x.vol ?? -1 }[key];
+  return f ? L.sort((a, b) => f(b) - f(a)) : L;
+}
 const RANKS = [["gain", "漲幅"], ["loss", "跌幅"], ["volume", "成交量"], ["value", "成交值"], ["foreign", "外資買超"], ["trust", "投信買超"]];
 // 清單分頁列：兩邊還有分頁時淡出提示可以滑；選中的分頁自動捲進畫面
 // 平板橫向、電腦：清單分頁列放在整個看盤的上方（全寬、固定在原位），點開個股時不會跟著清單縮到左邊；手機放回清單裡
@@ -1252,7 +1258,7 @@ function ltabsUi(center = false) {
   if (a && center) { const tr = t.getBoundingClientRect(), ar = a.getBoundingClientRect(); if (ar.left < tr.left + 20 || ar.right > tr.right - 24) t.scrollTo({ left: t.scrollLeft + ar.left - tr.left - (tr.width - ar.width) / 2, behavior: "smooth" }); }
   const top = document.querySelector(".w-top"), th = top && getComputedStyle(top).position === "sticky" ? top.offsetHeight : 0, r = document.documentElement.style;
   r.setProperty("--topH", th + "px"); r.setProperty("--stickH", th + (getComputedStyle(t).position === "sticky" ? t.offsetHeight : 0) + "px");
-  t.classList.toggle("fl", t.scrollLeft > 4); t.classList.toggle("fr", t.scrollLeft + t.clientWidth < t.scrollWidth - 4);
+  t.classList.toggle("fl", t.scrollLeft > 4); t.classList.toggle("fr", t.scrollLeft + t.clientWidth < t.scrollWidth - 4); if (EMBED) requestAnimationFrame(postTabs);
 }
 $("#lTabs").addEventListener("scroll", () => ltabsUi(), { passive: true }); addEventListener("resize", () => ltabsUi());
 // 每個分頁記住捲到哪裡，切回來時回到原位
@@ -1299,23 +1305,22 @@ function renderList() {
 }
 // 平板橫向、電腦：大盤、選股、資金、產業這些內容多的分頁用全寬；點個股時，個股頁從右邊滑出（抽屜），不會把內容擠成一條
 const WIDE_TABS = ["mkt", "screen", "ind", "money", "pod", "after", "cong", "tools"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
-function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); placeDrawer(); if (EMBED) requestAnimationFrame(pinTabs); }
+function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); placeDrawer(); if (EMBED) requestAnimationFrame(postTabs); }
 // 嵌在 K線學堂裡時 iframe 和整頁一樣高，固定在 iframe 右側的抽屜會從 iframe 最上面一路拉到最下面：使用者往下捲過之後打開個股，
 // 內容在畫面外、抽屜本身也捲不動。所以抽屜改成貼齊使用者目前看得到的那一段，外層捲動或視窗大小改變時跟著移動。
 function placeDrawer() { const d = $("#detail"), m = $("#main");
   if (!EMBED || !m.classList.contains("wide") || !m.classList.contains("show-detail") || isMobile()) { d.style.top = d.style.bottom = d.style.height = ""; return; }
   const v = viewBox(); d.style.top = v.top + "px"; d.style.bottom = "auto"; d.style.height = Math.max(320, v.h) + "px"; }
-// 選單凍結：嵌在 K線學堂裡時 iframe 和整頁一樣高，position: sticky 沒有作用。外層捲動時，用位移把分頁列固定在學堂標題列下方，
-// 捲到哪裡都能直接切換分頁（電腦、平板是上方的分頁列，手機是清單上的分頁列）。
-function pinTabs() {
-  if (!EMBED) return; const mob = isMobile(), el = mob ? $("#lTabs") : $("#ltabsTop"), other = mob ? $("#ltabsTop") : $("#lTabs");
-  if (other && other.style.transform) { other.style.transform = ""; other.classList.remove("pinned"); }
-  if (!el || el.hidden || !el.offsetParent) return;
-  let ft = 0, hb = 0; try { ft = frameElement.getBoundingClientRect().top; const hd = parent.document.querySelector(".top"); if (hd && /sticky|fixed/.test(parent.getComputedStyle(hd).position)) hb = Math.max(0, hd.getBoundingClientRect().bottom); } catch { return; }
-  el.style.transform = ""; const nat = el.getBoundingClientRect().top, maxY = $("#main").getBoundingClientRect().bottom - el.offsetHeight - nat;
-  const ty = Math.max(0, Math.min(maxY, hb - ft - nat)); el.style.transform = ty > 0 ? `translateY(${ty}px)` : ""; el.classList.toggle("pinned", ty > 0);
+// 選單凍結：嵌在 K線學堂裡時 iframe 和整頁一樣高，position: sticky 沒有作用。改成把分頁列的內容傳給外層頁面，
+// 由外層在標題列下方放一條真正固定（position: fixed）的分頁列，捲過看盤自己的分頁列時才出現；點了再傳回來切換分頁。
+function postTabs() {
+  if (!EMBED) return; const t = $("#lTabs"), box = isMobile() ? t : $("#ltabsTop");
+  const show = !!(box && !box.hidden && t.offsetParent), r = show ? box.getBoundingClientRect() : null;
+  const items = show ? [...t.querySelectorAll("button")].map(b => ({ l: b.dataset.l || (b.hasAttribute("data-gsearch") ? "__search" : ""), t: b.textContent.trim(), on: b.getAttribute("aria-pressed") === "true" })).filter(x => x.l) : [];
+  const key = JSON.stringify([items, r && Math.round(r.bottom)]); if (key === postTabs.k) return; postTabs.k = key;
+  post({ type: "watch-tabs", items, y: r ? Math.round(r.bottom) : 0 });
 }
-if (EMBED) { let rq = 0; const re = () => { if (!rq) rq = requestAnimationFrame(() => { rq = 0; placeDrawer(); pinTabs(); }); }; try { parent.addEventListener("scroll", re, { passive: true }); parent.addEventListener("resize", re); } catch {} addEventListener("resize", re); }
+if (EMBED) { let rq = 0; const re = () => { if (!rq) rq = requestAnimationFrame(() => { rq = 0; placeDrawer(); }); }; try { parent.addEventListener("scroll", re, { passive: true }); parent.addEventListener("resize", re); } catch {} addEventListener("resize", re); }
 function renderList0() {
   syncLayout();
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === W.lt));
@@ -1362,19 +1367,19 @@ function renderList0() {
   } else if (W.lt === "tw") {
     const H = W.hot.tw;
     $("#lTools").innerHTML = `<span class="note">${H?.live ? `${liveTag(H)}・依成交值排序` : `依${H?.date ? " " + H.date.replace(/-/g, "/") + " " : "最近交易日"}成交值排序，價格即時更新`}</span>`;
-    $("#wl").innerHTML = H?.rows?.length ? H.rows.map((r, i) => rowHtml(r.code, W.quotes.get(r.code) || r, { rank: i + 1, metric: `成交值 ${r.value != null ? r.value.toFixed(1) + " 億" : "—"}`, star: true })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有熱門股。" : "載入中…"}</li>`;
+    $("#wl").innerHTML = H?.rows?.length ? (H.live ? liveRank(H.rows, "value") : H.rows).map((r, i) => rowHtml(r.code, W.quotes.get(r.code) || r, { rank: i + 1, metric: `成交值 ${r.value != null ? r.value.toFixed(1) + " 億" : "—"}`, star: true })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有熱門股。" : "載入中…"}</li>`;
     note = H?.source ? `資料：${H.source}` : "";
   } else if (W.lt === "us") {
     const H = W.hot["us:" + W.usType];
-    $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="美股" id="usSeg">${[["active", "最活躍"], ["gain", "漲幅"], ["loss", "跌幅"]].map(([k, t]) => `<button data-us="${k}" aria-pressed="${W.usType === k}">${t}</button>`).join("")}</div><span class="note">每分鐘更新</span>`;
-    $("#wl").innerHTML = H?.rows?.length ? H.rows.map((r, i) => rowHtml(r.code, { ...r, ...(W.quotes.get(r.code) || {}) }, { rank: i + 1, star: true })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有美股資料。" : "載入中…"}</li>`;
+    $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="美股" id="usSeg">${[["active", "最活躍"], ["gain", "漲幅"], ["loss", "跌幅"]].map(([k, t]) => `<button data-us="${k}" aria-pressed="${W.usType === k}">${t}</button>`).join("")}</div><span class="note">依即時報價排名・30 秒重抓名單</span>`;
+    $("#wl").innerHTML = H?.rows?.length ? liveRank(H.rows, W.usType).map((r, i) => rowHtml(r.code, { ...r, ...(W.quotes.get(r.code) || {}) }, { rank: i + 1, star: true })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有美股資料。" : "載入中…"}</li>`;
     note = H?.source ? `資料：${H.source}；美股報價可能延遲 15 分鐘，時間為美東時間` : "";
   } else {
     const H = W.hot["rank:" + W.rankType], chipRank = W.rankType === "foreign" || W.rankType === "trust";
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="排行" id="rankSeg">${RANKS.map(([k, t]) => `<button data-rank="${k}" aria-pressed="${W.rankType === k}">${t}</button>`).join("")}</div>`;
-    $("#wl").innerHTML = H?.rows?.length ? H.rows.map((r, i) => rowHtml(r.code, chipRank ? { name: r.name, ...(W.quotes.get(r.code) || {}) } : { ...r, ...(W.quotes.get(r.code) || {}) }, { rank: i + 1, star: true,
-      metric: chipRank ? `${W.rankType === "foreign" ? "外資" : "投信"}買超 ${r[W.rankType].toLocaleString()} 張` : W.rankType === "value" ? `成交值 ${r.value?.toFixed(1)} 億` : W.rankType === "volume" ? `成交量 ${fmtVol(r.vol)} 張` : `收盤 ${fmtP(r.price)}・${r.chgPct > 0 ? "+" : ""}${r.chgPct}%` })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有排行。" : "載入中…"}</li>`;
-    note = H ? `${H.live ? "盤中即時排行（每 30 秒自動更新）" : H.date ? H.date.replace(/-/g, "/") + " 收盤後統計" : ""}${H.source ? "・" + H.source : ""}；右邊的價格是即時價` : "";
+    $("#wl").innerHTML = H?.rows?.length ? (H.live && !chipRank ? liveRank(H.rows, W.rankType) : H.rows).map((r, i) => rowHtml(r.code, chipRank ? { name: r.name, ...(W.quotes.get(r.code) || {}) } : { ...r, ...(W.quotes.get(r.code) || {}) }, { rank: i + 1, star: true,
+      metric: chipRank ? `${W.rankType === "foreign" ? "外資" : "投信"}買超 ${r[W.rankType].toLocaleString()} 張` : W.rankType === "value" ? `成交值 ${r.value?.toFixed(1)} 億` : W.rankType === "volume" ? `成交量 ${fmtVol(r.vol)} 張` : `${r.live ? "現價" : "收盤"} ${fmtP(r.price)}・${r.chgPct > 0 ? "+" : ""}${(+r.chgPct).toFixed(2)}%` })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有排行。" : "載入中…"}</li>`;
+    note = H ? `${H.live ? "盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）" : H.date ? H.date.replace(/-/g, "/") + " 收盤後統計" : ""}${H.source ? "・" + H.source : ""}；右邊的價格是即時價` : "";
   }
   W.prevPx.clear();
   const ago = W.lastOk ? Math.round((Date.now() - W.lastOk) / 1000) : null;
@@ -3666,7 +3671,7 @@ function applyTheme(t) { document.documentElement.dataset.theme = t; $('meta[nam
 /* ---------- 嵌在 K線學堂（?embed=1）：回報高度、接收主題與「看這一檔」、把「判讀」交給外層 ---------- */
 function post(msg) { if (EMBED && parent !== window) parent.postMessage(msg, "*"); }
 let lastH = 0;
-function postHeight() { if (!EMBED) return; requestAnimationFrame(() => { const h = Math.ceil($("#main").getBoundingClientRect().bottom + scrollY + 8); if (Math.abs(h - lastH) > 2) { lastH = h; post({ type: "watch-height", h }); } pinTabs(); }); }
+function postHeight() { if (!EMBED) return; requestAnimationFrame(() => { const h = Math.ceil($("#main").getBoundingClientRect().bottom + scrollY + 8); if (Math.abs(h - lastH) > 2) { lastH = h; post({ type: "watch-height", h }); } postTabs(); }); }
 if (EMBED) {
   new ResizeObserver(postHeight).observe($("#main"));
   addEventListener("message", e => {
@@ -3678,6 +3683,7 @@ if (EMBED) {
       const c = String(e.data.code || "").toUpperCase(); if (okCode(c) && c !== W.sel) select(c, "replace");
       e.data.ids.forEach(id => dBar.set(id, true)); Chart.setPref("sig", true); setDtab("tech"); drawK(); renderAna(); ksetSummary(); goKChart(); }
     else if (e.data.type === "watch-home") { if (!$("#gsearch").hidden) gsClose(); else if ($("#main").classList.contains("show-detail")) showList(); else goY(0); }
+    else if (e.data.type === "watch-lt" && e.data.l) { const b = e.data.l === "__search" ? $("#lTabs [data-gsearch]") : $("#lTabs").querySelector(`[data-l="${CSS.escape(String(e.data.l))}"]`); if (b) b.click(); if (!(e.data.l === "__search")) goY(0); }
     else if (e.data.type === "watch-select" && e.data.code) select(String(e.data.code).toUpperCase() === "加權" ? "T00" : e.data.code, "replace");
   });
   $("#learnLink").addEventListener("click", e => { e.preventDefault(); post({ type: "open-shot", code: W.sel === "T00" ? "加權" : W.sel }); });
