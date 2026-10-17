@@ -558,6 +558,16 @@ class Chart {
       this.ptrs.delete(e.pointerId); if (this.ptrs.size < 2) this.pinch = null; if (!this.ptrs.size) this.drag = null;
       if (wasPinch && this.ptrs.size === 1) { const [r] = [...this.ptrs.values()]; this.drag = { x: r.x, y: r.y, cx: r.x, cy: r.y, t: performance.now(), vy: 0, touch: true, dir: "h", a: this.vw.fa, yz: this.yz, yoff: this.yoff, pane: null, pz: null, moved: true }; }
     };
+    // iOS：圖在 iframe 裡時 touch-action: pan-y 不一定有效，左右拖曳到一半瀏覽器會把手勢搶走（pointercancel），每次只滑一小段。
+    // 第一個 touchmove 就決定方向：左右（或兩指）＝這次手勢整個不給瀏覽器（preventDefault），上下＝照常原生捲動
+    let tdir = null, t0 = null;
+    cv.addEventListener("touchstart", e => { tdir = null; t0 = e.touches[0] ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
+    cv.addEventListener("touchmove", e => {
+      if (e.touches.length > 1) { tdir = "h"; if (e.cancelable) e.preventDefault(); return; }
+      const t = e.touches[0]; if (!t || !t0) return;
+      if (!tdir) { const dx = Math.abs(t.clientX - t0.x), dy = Math.abs(t.clientY - t0.y); if (dx + dy < 1) return; tdir = dx >= dy ? "h" : "v"; }
+      if (tdir === "h" && (this.view || this.pinned) && e.cancelable) e.preventDefault();
+    }, { passive: false });
     cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
     cv.addEventListener("pointerleave", e => { up(e); if (!this.pinned) { this.hover = null; this.draw(); } });
     cv.addEventListener("dblclick", () => this.resetScale());
@@ -647,6 +657,10 @@ class Chart {
   lc(id, k, ck, col) { return indColor(id, k, this.cfgOn) || col[ck] || cssVar("--" + ck) || "#888"; }
   lcss(id, k, ck) { return indColor(id, k, this.cfgOn) || `var(--${ck})`; }
   set(D, opts = {}) { if (D !== this.D && !Chart.keepView) { this.ysm = null; this.view = null; this.yz = 1; this.yoff = 0; this.yfree = false; this.pz = {}; } if (!Chart.keepView || this.hover == null || this.hover >= D.length) { this.hover = null; this.pinned = false; } this.D = D; this.I = opts.I || indicators(D); if (!opts.noCfg) this.I = applyIndCfg(D, this.I); this.cfgOn = !opts.noCfg; this.o = opts; this.draw(); return this; }
+  // 資料前面插入 n 根（往左拉載入更早的 K 線）：可見範圍、拖曳／雙指的起點、固定的十字線一起往後移 n 根，
+  // 正在拖曳的手勢才不會被彈回原處（要在 set() 之前呼叫）
+  shiftBy(n) { if (!n) return; const v = this.view; if (v) this.view = { a: v.a + n, b: v.b + n, fa: (v.fa ?? v.a) + n, w: v.w ?? v.b - v.a + 1 };
+    if (this.drag && this.drag.a != null) this.drag.a += n; if (this.pinch) { this.pinch.a += n; this.pinch.mid += n; } if (this.hover != null) this.hover += n; }
   get visible() { return this.o.visible ?? this.D.length; }
   get range() { return this.view || { a: 0, b: this.D.length - 1 }; }
   // 可見範圍：fa 是小數的起點（拖曳時一個像素一個像素地跟手，不會一次跳一根 K 棒），a、b 是整數索引（給計算用）
@@ -832,8 +846,8 @@ class Chart {
         continue;
       }
       const y1 = Y(Math.max(k.o, k.c)), y2 = Y(Math.min(k.o, k.c)), bx = Math.round(x - cw / 2), bwid = Math.max(1, Math.round(cw)), bh = Math.max(1, y2 - y1);
-      if (KT === "hollow" && rising && bwid >= 3) {
-        // 空心 K 線：上漲的實體只畫外框，影線不穿過實體
+      if (KT === "hollow" && k.c !== k.o && bwid >= 3) {
+        // 空心 K 線：紅、綠 K 的實體都只畫外框（顏色照漲跌），影線不穿過實體
         ctx.beginPath(); ctx.moveTo(xm, Y(k.h)); ctx.lineTo(xm, y1); ctx.moveTo(xm, y1 + bh); ctx.lineTo(xm, Y(k.l)); ctx.stroke();
         ctx.strokeRect(bx + 0.5, Math.round(y1) + 0.5, bwid - 1, Math.max(1, Math.round(bh) - 1));
       } else {
@@ -1184,12 +1198,11 @@ function openStylePicker(setTheme) {
   const ov = document.createElement("div"); ov.className = "stylepick"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "版面風格");
   const draw = () => {
     const dark = document.documentElement.dataset.theme === "dark", cur = klStyle();
-    const prev = ([bg, sf, acc, ink, r]) => `<i style="background:${bg}"><u style="left:8px;top:8px;right:8px;height:34px;background:${sf};border-radius:${r}px;border:1px solid ${ink}22"></u><u style="left:15px;top:15px;width:30px;height:11px;border-radius:99px;background:${acc}"></u><u style="left:52px;top:17px;width:54px;height:6px;border-radius:3px;background:${ink};opacity:.55"></u><u style="left:15px;top:30px;width:80px;height:4px;border-radius:2px;background:${ink};opacity:.25"></u>`
-      + [[14, 18, "#e0605a"], [30, 12, "#4fae7d"], [46, 22, "#e0605a"], [62, 9, "#4fae7d"], [78, 26, "#e0605a"]].map(([x, h, c]) => `<u style="left:${x}px;bottom:8px;width:10px;height:${h}px;background:${c};border-radius:2px"></u>`).join("")
-      + `<u style="right:12px;bottom:10px;width:46px;height:22px;border-radius:${Math.min(r, 11)}px;background:${sf};border:1px solid ${acc}"></u></i>`;
+    // 簡化版：每個風格一列，四個色點（底、面板、重點、文字）＋名稱，不再畫縮圖
+    const sw = ([bg, sf, acc, ink]) => `<span class="sp-sw" aria-hidden="true">${[bg, sf, acc, ink].map(c => `<i style="background:${c}"></i>`).join("")}</span>`;
     ov.innerHTML = `<div><h3>版面風格<button class="btn sm" data-sp="x" type="button">完成</button></h3><p class="note" style="margin:0">點一下就套用，學堂、看盤一起換；選擇會記在這台裝置。</p>
       <div class="sp-row" style="margin-top:10px"><span class="note">主題</span><div class="seg" role="group">${[["light", "淺色"], ["dark", "深色"]].map(([t, n]) => `<button type="button" data-spt="${t}" aria-pressed="${(t === "dark") === dark}">${n}</button>`).join("")}</div>${cur === "chalk" ? '<span class="note">（黑板風格固定是深色）</span>' : ""}</div>
-      <div class="sp-grid">${KL_STYLES.map(([id, name, desc, pv]) => `<button type="button" class="sp" data-sps="${id}" aria-pressed="${cur === id}">${prev(dark ? pv.d : pv.l)}<b>${name}</b><small>${desc}</small></button>`).join("")}</div></div>`;
+      <div class="sp-list">${KL_STYLES.map(([id, name, desc, pv]) => `<button type="button" class="sp" data-sps="${id}" aria-pressed="${cur === id}">${sw(dark ? pv.d : pv.l)}<span class="sp-t"><b>${name}</b><small>${desc}</small></span><span class="sp-ok" aria-hidden="true">${cur === id ? "✓" : ""}</span></button>`).join("")}</div></div>`;
   };
   draw();
   ov.addEventListener("click", e => {
