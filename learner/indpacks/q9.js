@@ -3,8 +3,8 @@ INDUSTRY_PACK.push(
   { id: "us-quantum", mk: "us", cat: "量子運算", name: "量子運算", icon: "chip",
     desc: "用量子位元取代一般的 0 與 1 來計算，目標是解決傳統電腦算不完的化學、材料與最佳化問題；目前仍在研發與早期商用階段。",
     flow: ["量子位元晶片", "極低溫冷卻", "微波控制與讀出", "錯誤更正", "雲端提供算力"],
-    segs: [{ n: "量子硬體新創", c: [["IONQ", "IonQ", "離子阱量子電腦"], ["RGTI", "Rigetti Computing", "超導量子電腦"], ["QBTS", "D-Wave Quantum", "量子退火"]] },
-      { n: "大型科技公司", c: [["IBM", "IBM", "超導量子電腦與雲端平台"], ["GOOGL", "Alphabet", "Google 量子 AI 晶片"], ["HON", "Honeywell", "持有 Quantinuum"]] }],
+    segs: [{ n: "量子硬體新創", c: [["IONQ", "IonQ"], ["RGTI", "Rigetti Computing"], ["QBTS", "D-Wave Quantum"]] },
+      { n: "大型科技公司", c: [["IBM", "IBM"], ["GOOGL", "Alphabet"], ["HON", "Honeywell"]] }],
     fig: { w: 400, h: 280, alt: "量子運算：量子位元晶片放在一層層降溫的稀釋冷凍機底部，控制電子送微波脈衝進去、讀出訊號送出來，古典電腦與 GPU 解碼錯誤，再透過雲端提供算力；另有離子阱與量子退火等路線", items: [
       // 微波線與讀出線（冷凍機外）
       { t: "arrow", pts: [[244, 34], [244, 18], [72, 18], [72, 40]], c: "orange", label: "微波脈衝", lx: 150, ly: 13 },
@@ -96,24 +96,24 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "控制與量測", items: [
-        { name: "控制與量測電子", desc: "產生精準的微波脈衝操作量子位元，並讀出量測結果", c: [["KEYS", "Keysight", "量子控制與量測系統"]] },
+        { name: "控制與量測電子", desc: "產生精準的微波脈衝操作量子位元，並讀出量測結果", c: [["KEYS", "Keysight"]] },
       ] },
       { tier: "中游", title: "量子電腦系統", items: [
-        { name: "超導量子電腦", desc: "在極低溫晶片上做量子位元，速度快但要大型冷凍機", c: [["IBM", "IBM", "超導量子電腦"], ["GOOGL", "Alphabet", "Google 量子 AI 晶片"], ["RGTI", "Rigetti Computing", "超導量子電腦"]] },
-        { name: "離子阱量子電腦", desc: "用雷射操控懸浮的帶電原子，位元品質高、速度較慢", c: [["IONQ", "IonQ", "離子阱量子電腦"], ["HON", "Honeywell", "持有 Quantinuum 股權"]] },
-        { name: "量子退火", desc: "專門解最佳化問題的量子機器，已有早期商用案例", c: [["QBTS", "D-Wave Quantum", "量子退火與閘道式系統"]] },
+        { name: "超導量子電腦", desc: "在極低溫晶片上做量子位元，速度快但要大型冷凍機", c: [["IBM", "IBM"], ["GOOGL", "Alphabet"], ["RGTI", "Rigetti Computing"]] },
+        { name: "離子阱量子電腦", desc: "用雷射操控懸浮的帶電原子，位元品質高、速度較慢", c: [["IONQ", "IonQ"], ["HON", "Honeywell"]] },
+        { name: "量子退火", desc: "專門解最佳化問題的量子機器，已有早期商用案例", c: [["QBTS", "D-Wave Quantum"]] },
       ] },
       { tier: "下游", title: "算力交付與應用", items: [
-        { name: "GPU 混合運算", desc: "用 GPU 模擬量子電路、即時解碼錯誤，與量子電腦分工", c: [["NVDA", "輝達", "CUDA-Q 混合運算平台"]] },
-        { name: "雲端量子服務", desc: "企業與研究單位透過雲端按使用量存取量子電腦", c: [["AMZN", "亞馬遜", "Amazon Braket"], ["MSFT", "微軟", "Azure Quantum"], ["IBM", "IBM", "IBM Quantum 平台"]] },
+        { name: "GPU 混合運算", desc: "用 GPU 模擬量子電路、即時解碼錯誤，與量子電腦分工", c: [["NVDA", "輝達"]] },
+        { name: "雲端量子服務", desc: "企業與研究單位透過雲端按使用量存取量子電腦", c: [["AMZN", "亞馬遜"], ["MSFT", "微軟"], ["IBM", "IBM"]] },
       ] },
     ] },
 
   { id: "us-saas", mk: "us", cat: "軟體", name: "企業軟體與 SaaS", icon: "code",
     desc: "把企業軟體做成線上服務按月或按年收訂閱費，客戶不用自己裝伺服器；收入可預期、毛利高，近年再加上 AI 助理功能加價收費。",
     flow: ["開發軟體平台", "放上雲端", "企業訂閱", "續約與加購", "AI 功能加值"],
-    segs: [{ n: "企業應用", c: [["CRM", "Salesforce", "客戶關係管理"], ["NOW", "ServiceNow", "IT 與企業流程"], ["WDAY", "Workday", "人資與財務"], ["SAP", "SAP", "企業資源規劃 ERP"]] },
-      { n: "其他軟體", c: [["ADBE", "Adobe", "創意與文件軟體"], ["INTU", "Intuit", "會計與報稅"], ["ORCL", "甲骨文", "資料庫與 ERP"]] }],
+    segs: [{ n: "企業應用", c: [["CRM", "Salesforce"], ["NOW", "ServiceNow"], ["WDAY", "Workday"], ["SAP", "SAP"]] },
+      { n: "其他軟體", c: [["ADBE", "Adobe"], ["INTU", "Intuit"], ["ORCL", "甲骨文"]] }],
     fig: { w: 400, h: 280, alt: "SaaS：員工用瀏覽器登入，AI 代理層與各種應用模組跑在同一套多租戶平台上，平台再跑在公有雲；收入靠訂閱，同一客戶續約加購讓收入逐年墊高", items: [
       // 使用者
       { t: "icon", x: 20, y: 10, s: 18, k: "person", c: "gray" }, { t: "icon", x: 40, y: 10, s: 18, k: "person", c: "gray" }, { t: "icon", x: 60, y: 10, s: 18, k: "person", c: "gray" },
@@ -198,17 +198,17 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "雲端與平台基礎", items: [
-        { name: "公有雲基礎設施", desc: "提供伺服器、儲存與網路，多數 SaaS 跑在上面", c: [["AMZN", "亞馬遜", "AWS"], ["MSFT", "微軟", "Azure"], ["GOOGL", "Alphabet", "Google Cloud"]] },
-        { name: "資料庫與開發平台", desc: "讓軟體存放客戶資料、在同一平台上開發新功能", c: [["ORCL", "甲骨文", "資料庫與雲端平台"], ["MSFT", "微軟", "資料庫與開發工具"]] },
+        { name: "公有雲基礎設施", desc: "提供伺服器、儲存與網路，多數 SaaS 跑在上面", c: [["AMZN", "亞馬遜"], ["MSFT", "微軟"], ["GOOGL", "Alphabet"]] },
+        { name: "資料庫與開發平台", desc: "讓軟體存放客戶資料、在同一平台上開發新功能", c: [["ORCL", "甲骨文"], ["MSFT", "微軟"]] },
       ] },
       { tier: "中游", title: "企業應用軟體", items: [
-        { name: "CRM 客戶關係管理", desc: "管理業務、行銷與客服，記錄每位客戶的往來", c: [["CRM", "Salesforce", "CRM 平台"], ["HUBS", "HubSpot", "中小企業 CRM 與行銷"]] },
-        { name: "IT 與流程管理", desc: "把 IT 維修、員工申請、客服工單做成自動化流程", c: [["NOW", "ServiceNow", "IT 與企業流程平台"]] },
-        { name: "人資財務與 ERP", desc: "薪資、人事、會計、採購與庫存等企業核心系統", c: [["WDAY", "Workday", "人資與財務"], ["SAP", "SAP", "ERP"], ["ORCL", "甲骨文", "雲端 ERP"]] },
-        { name: "創意與專業軟體", desc: "設計、文件、會計報稅等以訂閱制收費的專業工具", c: [["ADBE", "Adobe", "創意與文件軟體"], ["INTU", "Intuit", "會計與報稅"]] },
+        { name: "CRM 客戶關係管理", desc: "管理業務、行銷與客服，記錄每位客戶的往來", c: [["CRM", "Salesforce"], ["HUBS", "HubSpot"]] },
+        { name: "IT 與流程管理", desc: "把 IT 維修、員工申請、客服工單做成自動化流程", c: [["NOW", "ServiceNow"]] },
+        { name: "人資財務與 ERP", desc: "薪資、人事、會計、採購與庫存等企業核心系統", c: [["WDAY", "Workday"], ["SAP", "SAP"], ["ORCL", "甲骨文"]] },
+        { name: "創意與專業軟體", desc: "設計、文件、會計報稅等以訂閱制收費的專業工具", c: [["ADBE", "Adobe"], ["INTU", "Intuit"]] },
       ] },
       { tier: "下游", title: "AI 加值", items: [
-        { name: "AI 助理與代理", desc: "在既有軟體裡加上能自動執行任務的 AI，另外收費", c: [["CRM", "Salesforce", "Agentforce"], ["NOW", "ServiceNow", "AI 代理"], ["MSFT", "微軟", "Copilot"]] },
+        { name: "AI 助理與代理", desc: "在既有軟體裡加上能自動執行任務的 AI，另外收費", c: [["CRM", "Salesforce"], ["NOW", "ServiceNow"], ["MSFT", "微軟"]] },
       ] },
     ],
     peers: ["us-cloud"] },
@@ -216,8 +216,8 @@ INDUSTRY_PACK.push(
   { id: "us-dataplat", mk: "us", cat: "軟體", name: "資料平台與可觀測性", icon: "server",
     desc: "資料平台幫企業把散在各處的資料集中、整理、查詢並拿去訓練 AI；可觀測性軟體則即時監控系統的日誌與指標，出事時第一時間告警。",
     flow: ["蒐集資料", "存進資料湖倉", "查詢分析", "AI 應用", "監控與告警"],
-    segs: [{ n: "資料平台", c: [["SNOW", "Snowflake", "雲端資料倉儲"], ["MDB", "MongoDB", "文件型資料庫"], ["PLTR", "Palantir", "資料整合與分析平台"]] },
-      { n: "可觀測性", c: [["DDOG", "Datadog", "雲端監控"], ["DT", "Dynatrace", "應用程式監控"], ["ESTC", "Elastic", "搜尋與日誌分析"]] }],
+    segs: [{ n: "資料平台", c: [["SNOW", "Snowflake"], ["MDB", "MongoDB"], ["PLTR", "Palantir"]] },
+      { n: "可觀測性", c: [["DDOG", "Datadog"], ["DT", "Dynatrace"], ["ESTC", "Elastic"]] }],
     fig: { w: 400, h: 280, alt: "資料平台：App、感測器與交易系統的資料匯入湖倉，從原始資料清洗成分析用表格，再拿去做報表、訓練 AI 與搜尋；下方的可觀測性軟體收集每台機器的日誌、指標與追蹤，超過閾值就告警", items: [
       // 資料來源
       { t: "icon", x: 16, y: 20, s: 20, k: "phone", c: "blue", label: "App" },
@@ -303,16 +303,16 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "雲端基礎", items: [
-        { name: "雲端基礎設施", desc: "提供運算、儲存與網路，資料平台與監控軟體都跑在上面", c: [["AMZN", "亞馬遜", "AWS"], ["MSFT", "微軟", "Azure"], ["GOOGL", "Alphabet", "Google Cloud"]] },
+        { name: "雲端基礎設施", desc: "提供運算、儲存與網路，資料平台與監控軟體都跑在上面", c: [["AMZN", "亞馬遜"], ["MSFT", "微軟"], ["GOOGL", "Alphabet"]] },
       ] },
       { tier: "中游", title: "資料儲存與查詢", items: [
-        { name: "雲端資料倉儲與湖倉", desc: "集中存放並整理企業資料，提供 SQL 查詢與分析", c: [["SNOW", "Snowflake", "雲端資料倉儲"]] },
-        { name: "營運資料庫", desc: "App 與交易系統即時讀寫資料的地方", c: [["MDB", "MongoDB", "文件型資料庫"], ["ORCL", "甲骨文", "關聯式資料庫"]] },
-        { name: "搜尋與日誌分析", desc: "在大量文件與日誌裡快速找到需要的內容", c: [["ESTC", "Elastic", "搜尋與日誌分析"]] },
+        { name: "雲端資料倉儲與湖倉", desc: "集中存放並整理企業資料，提供 SQL 查詢與分析", c: [["SNOW", "Snowflake"]] },
+        { name: "營運資料庫", desc: "App 與交易系統即時讀寫資料的地方", c: [["MDB", "MongoDB"], ["ORCL", "甲骨文"]] },
+        { name: "搜尋與日誌分析", desc: "在大量文件與日誌裡快速找到需要的內容", c: [["ESTC", "Elastic"]] },
       ] },
       { tier: "下游", title: "分析、AI 與監控", items: [
-        { name: "資料整合與 AI 決策", desc: "把各系統資料串起來，給企業與政府做分析與 AI 決策", c: [["PLTR", "Palantir", "資料整合與 AI 平台"]] },
-        { name: "可觀測性", desc: "收集日誌、指標與追蹤，監控系統健康並即時告警", c: [["DDOG", "Datadog", "雲端監控"], ["DT", "Dynatrace", "應用程式監控"], ["ESTC", "Elastic", "日誌監控"]] },
+        { name: "資料整合與 AI 決策", desc: "把各系統資料串起來，給企業與政府做分析與 AI 決策", c: [["PLTR", "Palantir"]] },
+        { name: "可觀測性", desc: "收集日誌、指標與追蹤，監控系統健康並即時告警", c: [["DDOG", "Datadog"], ["DT", "Dynatrace"], ["ESTC", "Elastic"]] },
       ] },
     ],
     peers: ["us-cloud"] },
@@ -320,8 +320,8 @@ INDUSTRY_PACK.push(
   { id: "us-security", mk: "us", cat: "資安", name: "資安防護", icon: "code",
     desc: "保護企業的網路、帳號、電腦與雲端資料不被駭客入侵或勒索；從防火牆、身分驗證到端點防護層層把關，再由資安監控中心集中分析告警。",
     flow: ["網路防火牆", "身分驗證", "端點防護", "雲端安全", "監控與應變"],
-    segs: [{ n: "平台與網路", c: [["PANW", "Palo Alto Networks", "防火牆與資安平台"], ["FTNT", "Fortinet", "防火牆設備"], ["CHKP", "Check Point", "防火牆"], ["NET", "Cloudflare", "網路安全與 CDN"]] },
-      { n: "端點與身分", c: [["CRWD", "CrowdStrike", "端點防護"], ["ZS", "Zscaler", "雲端安全存取"], ["OKTA", "Okta", "身分驗證"]] }],
+    segs: [{ n: "平台與網路", c: [["PANW", "Palo Alto Networks"], ["FTNT", "Fortinet"], ["CHKP", "Check Point"], ["NET", "Cloudflare"]] },
+      { n: "端點與身分", c: [["CRWD", "CrowdStrike"], ["ZS", "Zscaler"], ["OKTA", "Okta"]] }],
     fig: { w: 400, h: 280, alt: "資安縱深防禦：防火牆擋下惡意流量，遠端員工經雲端閘道連線，進門前要多因素驗證，每台電腦與雲端主機都有防護，所有告警送到資安監控中心由 AI 與分析師處置", items: [
       // 外部
       { t: "icon", x: 16, y: 38, s: 24, k: "person", c: "red", label: "駭客" },
@@ -413,24 +413,24 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "網路邊界", items: [
-        { name: "新世代防火牆", desc: "在網路入口檢查每一筆流量，擋下惡意連線與攻擊", c: [["PANW", "Palo Alto Networks", "防火牆與資安平台"], ["FTNT", "Fortinet", "防火牆與安全晶片"], ["CHKP", "Check Point", "防火牆"]] },
-        { name: "雲端安全存取（SASE）", desc: "員工在任何地方上網都先經過雲端節點檢查", c: [["ZS", "Zscaler", "雲端安全存取"], ["NET", "Cloudflare", "網路安全與 CDN"], ["PANW", "Palo Alto Networks", "Prisma SASE"]] },
+        { name: "新世代防火牆", desc: "在網路入口檢查每一筆流量，擋下惡意連線與攻擊", c: [["PANW", "Palo Alto Networks"], ["FTNT", "Fortinet"], ["CHKP", "Check Point"]] },
+        { name: "雲端安全存取（SASE）", desc: "員工在任何地方上網都先經過雲端節點檢查", c: [["ZS", "Zscaler"], ["NET", "Cloudflare"], ["PANW", "Palo Alto Networks"]] },
       ] },
       { tier: "中游", title: "身分與端點", items: [
-        { name: "身分驗證", desc: "確認登入的人是本人，管理誰能存取哪些系統", c: [["OKTA", "Okta", "身分驗證與單一登入"], ["MSFT", "微軟", "Entra 身分管理"]] },
-        { name: "端點防護（EDR）", desc: "在每台電腦與伺服器上偵測異常程式並隔離", c: [["CRWD", "CrowdStrike", "端點防護平台"], ["S", "SentinelOne", "端點防護"], ["MSFT", "微軟", "Defender"]] },
+        { name: "身分驗證", desc: "確認登入的人是本人，管理誰能存取哪些系統", c: [["OKTA", "Okta"], ["MSFT", "微軟"]] },
+        { name: "端點防護（EDR）", desc: "在每台電腦與伺服器上偵測異常程式並隔離", c: [["CRWD", "CrowdStrike"], ["S", "SentinelOne"], ["MSFT", "微軟"]] },
       ] },
       { tier: "下游", title: "雲端與監控應變", items: [
-        { name: "雲端安全", desc: "檢查雲端主機與帳號的設定、權限與漏洞", c: [["PANW", "Palo Alto Networks", "Prisma Cloud"], ["CRWD", "CrowdStrike", "雲端工作負載防護"]] },
-        { name: "資安監控與應變（SOC）", desc: "集中收集告警、分析事件並指揮處置", c: [["CSCO", "思科", "旗下 Splunk SIEM"], ["PANW", "Palo Alto Networks", "Cortex 監控平台"], ["CRWD", "CrowdStrike", "託管偵測與應變"]] },
+        { name: "雲端安全", desc: "檢查雲端主機與帳號的設定、權限與漏洞", c: [["PANW", "Palo Alto Networks"], ["CRWD", "CrowdStrike"]] },
+        { name: "資安監控與應變（SOC）", desc: "集中收集告警、分析事件並指揮處置", c: [["CSCO", "思科"], ["PANW", "Palo Alto Networks"], ["CRWD", "CrowdStrike"]] },
       ] },
     ] },
 
   { id: "us-itservice", mk: "us", cat: "軟體", name: "系統整合與委外", icon: "link",
     desc: "幫企業規劃、導入並維運資訊系統的顧問與委外公司，把新舊系統、雲端與 AI 串在一起；靠大量工程師的人力與多年合約賺錢。",
     flow: ["顧問規劃", "系統整合", "導入雲端與 AI", "委外維運", "長期續約"],
-    segs: [{ n: "顧問與整合", c: [["ACN", "Accenture", "全球最大 IT 顧問之一"], ["IBM", "IBM", "顧問與混合雲"]] },
-      { n: "委外與開發", c: [["CTSH", "Cognizant", "IT 委外"], ["INFY", "Infosys", "印度 IT 委外"], ["EPAM", "EPAM Systems", "軟體開發外包"]] }],
+    segs: [{ n: "顧問與整合", c: [["ACN", "Accenture"], ["IBM", "IBM"]] },
+      { n: "委外與開發", c: [["CTSH", "Cognizant"], ["INFY", "Infosys"], ["EPAM", "EPAM Systems"]] }],
     fig: { w: 400, h: 280, alt: "IT 服務：一個轉型專案從顧問規劃、設計、建置整合到上線後轉成多年委外維運，人力在建置期最多；整合層把舊主機與 ERP、CRM、雲端 AI 串起來；少數顧問在客戶端、多數工程師在離岸交付中心", items: [
       // 專案時程
       { t: "path", d: "M10 22h64l10 14-10 14h-64l10-14z", c: "purple", fill: 0.18 },
@@ -515,24 +515,24 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "平台與顧問", items: [
-        { name: "雲端與企業軟體平台", desc: "被導入與整合的雲端、ERP、CRM 與 IT 流程軟體", c: [["MSFT", "微軟", "Azure 與企業軟體"], ["SAP", "SAP", "ERP"], ["NOW", "ServiceNow", "IT 流程平台"]] },
-        { name: "策略與技術顧問", desc: "了解企業需求、規劃轉型藍圖與系統架構", c: [["ACN", "Accenture", "策略與技術顧問"], ["IBM", "IBM", "IBM Consulting"]] },
+        { name: "雲端與企業軟體平台", desc: "被導入與整合的雲端、ERP、CRM 與 IT 流程軟體", c: [["MSFT", "微軟"], ["SAP", "SAP"], ["NOW", "ServiceNow"]] },
+        { name: "策略與技術顧問", desc: "了解企業需求、規劃轉型藍圖與系統架構", c: [["ACN", "Accenture"], ["IBM", "IBM"]] },
       ] },
       { tier: "中游", title: "建置與交付", items: [
-        { name: "系統整合", desc: "把新舊系統、資料與雲端串接起來並導入上線", c: [["ACN", "Accenture", "大型系統整合"], ["IBM", "IBM", "混合雲整合"], ["DXC", "DXC Technology", "系統整合與維運"]] },
-        { name: "軟體開發外包", desc: "替客戶開發客製化軟體、App 與數位產品", c: [["EPAM", "EPAM Systems", "軟體開發外包"], ["GLOB", "Globant", "數位產品開發"]] },
-        { name: "離岸委外與維運", desc: "以離岸交付中心長期負責系統維護與升級", c: [["INFY", "Infosys", "印度 IT 委外"], ["CTSH", "Cognizant", "IT 委外"], ["WIT", "Wipro", "印度 IT 委外"]] },
+        { name: "系統整合", desc: "把新舊系統、資料與雲端串接起來並導入上線", c: [["ACN", "Accenture"], ["IBM", "IBM"], ["DXC", "DXC Technology"]] },
+        { name: "軟體開發外包", desc: "替客戶開發客製化軟體、App 與數位產品", c: [["EPAM", "EPAM Systems"], ["GLOB", "Globant"]] },
+        { name: "離岸委外與維運", desc: "以離岸交付中心長期負責系統維護與升級", c: [["INFY", "Infosys"], ["CTSH", "Cognizant"], ["WIT", "Wipro"]] },
       ] },
       { tier: "下游", title: "客戶", items: [
-        { name: "政府與國防 IT", desc: "替政府機關與國防單位建置與維運資訊系統", c: [["BAH", "Booz Allen Hamilton", "政府顧問與 IT"], ["LDOS", "Leidos", "政府與國防 IT"]] },
+        { name: "政府與國防 IT", desc: "替政府機關與國防單位建置與維運資訊系統", c: [["BAH", "Booz Allen Hamilton"], ["LDOS", "Leidos"]] },
       ] },
     ] },
 
   { id: "us-telecom", mk: "us", cat: "網通", name: "電信與數位媒體", icon: "wave",
     desc: "電信業者鋪設基地台與光纖收取每月通話與寬頻費，現金流穩定但投資龐大；數位媒體則製作內容，透過串流平台賺取訂閱與廣告收入。",
     flow: ["鋪設網路", "用戶月費", "內容製作", "串流平台", "訂閱與廣告"],
-    segs: [{ n: "電信與寬頻", c: [["TMUS", "T-Mobile US", "行動通訊"], ["VZ", "Verizon", "行動與光纖"], ["T", "AT&T", "行動與光纖"], ["CMCSA", "Comcast", "有線寬頻與 NBC"]] },
-      { n: "串流媒體", c: [["NFLX", "Netflix", "影音串流"], ["DIS", "迪士尼", "內容與串流"], ["SPOT", "Spotify", "音樂串流"]] }],
+    segs: [{ n: "電信與寬頻", c: [["TMUS", "T-Mobile US"], ["VZ", "Verizon"], ["T", "AT&T"], ["CMCSA", "Comcast"]] },
+      { n: "串流媒體", c: [["NFLX", "Netflix"], ["DIS", "迪士尼"], ["SPOT", "Spotify"]] }],
     fig: { w: 400, h: 280, alt: "電信與媒體：核心網路經光纖接到鐵塔上的 5G 基地台與家用寬頻，用戶每月付月費；串流平台把製作好的內容送到電視與手機，收訂閱費與廣告費；電信先投資後回收，串流靠會員成長攤平內容成本", items: [
       // 電信網路
       { t: "group", x: 8, y: 14, w: 236, h: 150, label: "電信網路", c: "blue" },
@@ -622,24 +622,24 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "網路設備與基礎設施", items: [
-        { name: "基地台與網通設備", desc: "5G 基地台、核心網路與路由交換設備", c: [["ERIC", "愛立信", "基地台與核心網路"], ["NOK", "諾基亞", "基地台與光通訊"], ["CSCO", "思科", "路由與交換設備"]] },
-        { name: "鐵塔與通訊基礎設施", desc: "建鐵塔、小型基地台，出租給多家電信公司掛設備", c: [["AMT", "American Tower", "通訊鐵塔"], ["CCI", "Crown Castle", "鐵塔與光纖"], ["SBAC", "SBA Communications", "通訊鐵塔"]] },
+        { name: "基地台與網通設備", desc: "5G 基地台、核心網路與路由交換設備", c: [["ERIC", "愛立信"], ["NOK", "諾基亞"], ["CSCO", "思科"]] },
+        { name: "鐵塔與通訊基礎設施", desc: "建鐵塔、小型基地台，出租給多家電信公司掛設備", c: [["AMT", "American Tower"], ["CCI", "Crown Castle"], ["SBAC", "SBA Communications"]] },
       ] },
       { tier: "中游", title: "電信營運商", items: [
-        { name: "行動通訊", desc: "經營 4G／5G 行動網路，收手機門號月費", c: [["TMUS", "T-Mobile US", "行動通訊"], ["VZ", "Verizon", "行動與光纖"], ["T", "AT&T", "行動與光纖"]] },
-        { name: "有線與光纖寬頻", desc: "把網路拉進家庭與企業，收寬頻月費", c: [["CMCSA", "Comcast", "有線寬頻"], ["CHTR", "Charter Communications", "有線寬頻"], ["VZ", "Verizon", "Fios 光纖"]] },
+        { name: "行動通訊", desc: "經營 4G／5G 行動網路，收手機門號月費", c: [["TMUS", "T-Mobile US"], ["VZ", "Verizon"], ["T", "AT&T"]] },
+        { name: "有線與光纖寬頻", desc: "把網路拉進家庭與企業，收寬頻月費", c: [["CMCSA", "Comcast"], ["CHTR", "Charter Communications"], ["VZ", "Verizon"]] },
       ] },
       { tier: "下游", title: "內容與串流", items: [
-        { name: "內容製作與版權", desc: "拍攝影集電影、取得體育轉播權，建立片庫", c: [["DIS", "迪士尼", "影視內容與體育"], ["CMCSA", "Comcast", "NBC 環球影業"]] },
-        { name: "串流平台", desc: "把影音內容送到用戶裝置，收訂閱費與廣告費", c: [["NFLX", "Netflix", "影音串流"], ["DIS", "迪士尼", "Disney+ 串流"], ["SPOT", "Spotify", "音樂串流"]] },
+        { name: "內容製作與版權", desc: "拍攝影集電影、取得體育轉播權，建立片庫", c: [["DIS", "迪士尼"], ["CMCSA", "Comcast"]] },
+        { name: "串流平台", desc: "把影音內容送到用戶裝置，收訂閱費與廣告費", c: [["NFLX", "Netflix"], ["DIS", "迪士尼"], ["SPOT", "Spotify"]] },
       ] },
     ] },
 
   { id: "us-adtech", mk: "us", cat: "網路平台", name: "數位廣告 AdTech", icon: "globe",
     desc: "網路廣告的買賣系統：廣告主透過買方平台出價，媒體透過賣方平台提供版位，在不到一秒內完成即時競價；Google、Meta 等平台則在自家生態內一手包辦。",
     flow: ["廣告主預算", "買方平台 DSP", "即時競價", "媒體版位", "成效數據回饋"],
-    segs: [{ n: "封閉平台", c: [["GOOGL", "Alphabet", "搜尋與 YouTube 廣告"], ["META", "Meta", "社群廣告"], ["AMZN", "亞馬遜", "電商廣告"]] },
-      { n: "開放網路廣告", c: [["TTD", "The Trade Desk", "買方平台 DSP"], ["APP", "AppLovin", "行動 App 廣告"], ["MGNI", "Magnite", "賣方平台 SSP"]] }],
+    segs: [{ n: "封閉平台", c: [["GOOGL", "Alphabet"], ["META", "Meta"], ["AMZN", "亞馬遜"]] },
+      { n: "開放網路廣告", c: [["TTD", "The Trade Desk"], ["APP", "AppLovin"], ["MGNI", "Magnite"]] }],
     fig: { w: 400, h: 280, alt: "即時競價：使用者打開網頁，賣方平台把廣告版位送進競價，多個買方平台替廣告主出價，最高價得標的廣告顯示在頁面上，成效數據再回饋調整出價；下方是一手包辦的封閉生態與聯網電視、零售媒體、App 等新版位", items: [
       // 網頁與版位
       { t: "text", x: 49, y: 14, s: 7.5, label: "使用者開網頁", muted: true },
@@ -732,25 +732,25 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "廣告主與衡量", items: [
-        { name: "廣告主與代理商", desc: "決定廣告預算、目標客群與素材，代理商代為規劃投放", c: [["OMC", "Omnicom", "廣告代理集團"]] },
-        { name: "成效衡量與驗證", desc: "檢查廣告是否真的被看到、出現在安全的內容旁", c: [["DV", "DoubleVerify", "廣告驗證與衡量"]] },
+        { name: "廣告主與代理商", desc: "決定廣告預算、目標客群與素材，代理商代為規劃投放", c: [["OMC", "Omnicom"]] },
+        { name: "成效衡量與驗證", desc: "檢查廣告是否真的被看到、出現在安全的內容旁", c: [["DV", "DoubleVerify"]] },
       ] },
       { tier: "中游", title: "程式化交易平台", items: [
-        { name: "買方平台（DSP）", desc: "替廣告主在各家媒體自動出價購買版位", c: [["TTD", "The Trade Desk", "獨立買方平台"], ["AMZN", "亞馬遜", "Amazon DSP"]] },
-        { name: "賣方平台（SSP）", desc: "替媒體把版位送進競價，賣到最好的價格", c: [["MGNI", "Magnite", "賣方平台"], ["PUBM", "PubMatic", "賣方平台"]] },
-        { name: "行動 App 廣告", desc: "替手機遊戲與 App 買量，並用 AI 決定投放", c: [["APP", "AppLovin", "行動廣告平台"]] },
+        { name: "買方平台（DSP）", desc: "替廣告主在各家媒體自動出價購買版位", c: [["TTD", "The Trade Desk"], ["AMZN", "亞馬遜"]] },
+        { name: "賣方平台（SSP）", desc: "替媒體把版位送進競價，賣到最好的價格", c: [["MGNI", "Magnite"], ["PUBM", "PubMatic"]] },
+        { name: "行動 App 廣告", desc: "替手機遊戲與 App 買量，並用 AI 決定投放", c: [["APP", "AppLovin"]] },
       ] },
       { tier: "下游", title: "媒體與版位", items: [
-        { name: "封閉生態平台", desc: "自己擁有用戶、廣告系統與資料，一手包辦買賣", c: [["GOOGL", "Alphabet", "搜尋與 YouTube 廣告"], ["META", "Meta", "社群廣告"], ["AMZN", "亞馬遜", "電商廣告"]] },
-        { name: "聯網電視與零售媒體", desc: "串流電視與零售商的購物資料帶來的新廣告版位", c: [["ROKU", "Roku", "聯網電視平台"], ["WMT", "沃爾瑪", "零售媒體廣告"], ["AMZN", "亞馬遜", "Prime Video 與零售廣告"]] },
+        { name: "封閉生態平台", desc: "自己擁有用戶、廣告系統與資料，一手包辦買賣", c: [["GOOGL", "Alphabet"], ["META", "Meta"], ["AMZN", "亞馬遜"]] },
+        { name: "聯網電視與零售媒體", desc: "串流電視與零售商的購物資料帶來的新廣告版位", c: [["ROKU", "Roku"], ["WMT", "沃爾瑪"], ["AMZN", "亞馬遜"]] },
       ] },
     ] },
 
   { id: "us-exchange", mk: "us", cat: "金融", name: "交易所與金融資料", icon: "link",
     desc: "股票、期貨、選擇權的交易所負責撮合買賣並收手續費，同時把即時報價、指數與信用評級賣給全世界的金融機構，資料授權收入越來越重要。",
     flow: ["投資人下單", "券商送單", "交易所撮合", "結算交割", "資料與指數授權"],
-    segs: [{ n: "交易所", c: [["ICE", "洲際交易所", "紐約證交所與期貨"], ["CME", "CME Group", "期貨與選擇權"], ["NDAQ", "Nasdaq", "交易所與金融軟體"], ["CBOE", "Cboe Global Markets", "選擇權"]] },
-      { n: "資料、指數與評級", c: [["SPGI", "標普全球", "指數與信用評級"], ["MCO", "穆迪", "信用評級"], ["MSCI", "MSCI", "指數與分析工具"]] }],
+    segs: [{ n: "交易所", c: [["ICE", "洲際交易所"], ["CME", "CME Group"], ["NDAQ", "Nasdaq"], ["CBOE", "Cboe Global Markets"]] },
+      { n: "資料、指數與評級", c: [["SPGI", "標普全球"], ["MCO", "穆迪"], ["MSCI", "MSCI"]] }],
     fig: { w: 400, h: 280, alt: "交易所：投資人經券商下單，交易所的撮合引擎把買單與賣單依價格與時間配對成交，結算所站在買賣雙方中間完成交割；成交產生的報價、指數與評級再包裝成資料產品授權出去", items: [
       // 投資人與券商
       { t: "icon", x: 12, y: 26, s: 18, k: "person", c: "gray" }, { t: "icon", x: 12, y: 56, s: 18, k: "person", c: "gray" }, { t: "icon", x: 12, y: 86, s: 18, k: "person", c: "gray" },
@@ -836,24 +836,24 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "交易所", items: [
-        { name: "股票與選擇權交易所", desc: "撮合股票、ETF 與選擇權買賣，收交易與上市費", c: [["ICE", "洲際交易所", "紐約證交所"], ["NDAQ", "Nasdaq", "股票交易所"], ["CBOE", "Cboe Global Markets", "選擇權交易所"]] },
-        { name: "期貨交易所", desc: "提供利率、股價指數、原物料等期貨合約的交易", c: [["CME", "CME Group", "期貨與選擇權"], ["ICE", "洲際交易所", "能源與利率期貨"]] },
+        { name: "股票與選擇權交易所", desc: "撮合股票、ETF 與選擇權買賣，收交易與上市費", c: [["ICE", "洲際交易所"], ["NDAQ", "Nasdaq"], ["CBOE", "Cboe Global Markets"]] },
+        { name: "期貨交易所", desc: "提供利率、股價指數、原物料等期貨合約的交易", c: [["CME", "CME Group"], ["ICE", "洲際交易所"]] },
       ] },
       { tier: "中游", title: "券商與結算", items: [
-        { name: "券商與造市", desc: "接受投資人下單，造市商持續提供買賣報價", c: [["SCHW", "嘉信理財", "券商"], ["HOOD", "Robinhood", "線上券商"], ["IBKR", "Interactive Brokers", "國際券商"], ["VIRT", "Virtu Financial", "造市商"]] },
-        { name: "結算與交割", desc: "站在買賣雙方中間收保證金、確保交割完成", c: [["CME", "CME Group", "CME 結算所"], ["ICE", "洲際交易所", "ICE 結算所"]] },
+        { name: "券商與造市", desc: "接受投資人下單，造市商持續提供買賣報價", c: [["SCHW", "嘉信理財"], ["HOOD", "Robinhood"], ["IBKR", "Interactive Brokers"], ["VIRT", "Virtu Financial"]] },
+        { name: "結算與交割", desc: "站在買賣雙方中間收保證金、確保交割完成", c: [["CME", "CME Group"], ["ICE", "洲際交易所"]] },
       ] },
       { tier: "下游", title: "資料、指數與評級", items: [
-        { name: "指數授權", desc: "編製股價指數，向追蹤指數的 ETF 與基金收授權費", c: [["SPGI", "標普全球", "標普道瓊指數"], ["MSCI", "MSCI", "全球股票指數"], ["NDAQ", "Nasdaq", "Nasdaq-100 指數"]] },
-        { name: "信用評級", desc: "替公司與債券評估違約風險，發債時通常需要評級", c: [["SPGI", "標普全球", "標普信評"], ["MCO", "穆迪", "穆迪信評"]] },
-        { name: "金融資料與分析", desc: "把即時報價、財務資料與分析工具賣給金融機構", c: [["FDS", "FactSet", "金融資料平台"], ["ICE", "洲際交易所", "資料服務"], ["MCO", "穆迪", "Moody's Analytics"]] },
+        { name: "指數授權", desc: "編製股價指數，向追蹤指數的 ETF 與基金收授權費", c: [["SPGI", "標普全球"], ["MSCI", "MSCI"], ["NDAQ", "Nasdaq"]] },
+        { name: "信用評級", desc: "替公司與債券評估違約風險，發債時通常需要評級", c: [["SPGI", "標普全球"], ["MCO", "穆迪"]] },
+        { name: "金融資料與分析", desc: "把即時報價、財務資料與分析工具賣給金融機構", c: [["FDS", "FactSet"], ["ICE", "洲際交易所"], ["MCO", "穆迪"]] },
       ] },
     ] },
 
   { id: "us-altasset", mk: "us", cat: "金融", name: "另類資產與私募信貸", icon: "layers",
     desc: "向退休基金、保險公司與富裕個人募資，投資未上市公司、直接放款給企業、買不動產與基礎建設（含資料中心），收取管理費與績效分成。",
     flow: ["向出資人募資", "成立基金", "投資或放款", "管理與退出", "收管理費與分成"],
-    segs: [{ n: "另類資產管理", c: [["BX", "Blackstone", "私募股權、不動產"], ["KKR", "KKR", "私募股權與基礎建設"], ["APO", "Apollo", "私募信貸與保險"], ["ARES", "Ares Management", "私募信貸"], ["BAM", "Brookfield Asset Management", "基礎建設與再生能源"], ["OWL", "Blue Owl", "私募信貸、資料中心融資"]] }],
+    segs: [{ n: "另類資產管理", c: [["BX", "Blackstone"], ["KKR", "KKR"], ["APO", "Apollo"], ["ARES", "Ares Management"], ["BAM", "Brookfield Asset Management"], ["OWL", "Blue Owl"]] }],
     fig: { w: 400, h: 280, alt: "另類資產：退休基金、保險公司與富裕個人出資給管理公司成立的基金，基金投資私募股權、放款、不動產與資料中心等基礎建設，回收的現金先還出資人本金與報酬，超額獲利再由管理公司抽績效分成", items: [
       // 出資人
       { t: "text", x: 40, y: 16, s: 8, b: true, label: "出資人 LP" },
@@ -940,24 +940,24 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "資金來源", items: [
-        { name: "保險與永續資本", desc: "旗下保險公司把保單資金交給集團長期投資", c: [["APO", "Apollo", "旗下 Athene 保險"], ["KKR", "KKR", "旗下 Global Atlantic 保險"], ["BN", "Brookfield Corporation", "旗下保險與財富業務"]] },
+        { name: "保險與永續資本", desc: "旗下保險公司把保單資金交給集團長期投資", c: [["APO", "Apollo"], ["KKR", "KKR"], ["BN", "Brookfield Corporation"]] },
       ] },
       { tier: "中游", title: "另類資產管理（GP）", items: [
-        { name: "私募股權", desc: "買下或入股未上市公司，改善經營後出售", c: [["BX", "Blackstone", "私募股權"], ["KKR", "KKR", "私募股權"], ["CG", "Carlyle", "私募股權"]] },
-        { name: "私募信貸", desc: "不經銀行，直接放款給企業並收取利息", c: [["ARES", "Ares Management", "私募信貸"], ["APO", "Apollo", "私募信貸"], ["OWL", "Blue Owl", "私募信貸"], ["BX", "Blackstone", "私募信貸"]] },
-        { name: "不動產", desc: "買進倉儲、公寓、辦公室等收租資產", c: [["BX", "Blackstone", "不動產基金"], ["BAM", "Brookfield Asset Management", "不動產"]] },
-        { name: "基礎建設與資料中心", desc: "投資資料中心、電力、再生能源與交通基礎建設", c: [["BAM", "Brookfield Asset Management", "基礎建設與再生能源"], ["KKR", "KKR", "基礎建設"], ["BX", "Blackstone", "資料中心"], ["OWL", "Blue Owl", "資料中心融資"]] },
+        { name: "私募股權", desc: "買下或入股未上市公司，改善經營後出售", c: [["BX", "Blackstone"], ["KKR", "KKR"], ["CG", "Carlyle"]] },
+        { name: "私募信貸", desc: "不經銀行，直接放款給企業並收取利息", c: [["ARES", "Ares Management"], ["APO", "Apollo"], ["OWL", "Blue Owl"], ["BX", "Blackstone"]] },
+        { name: "不動產", desc: "買進倉儲、公寓、辦公室等收租資產", c: [["BX", "Blackstone"], ["BAM", "Brookfield Asset Management"]] },
+        { name: "基礎建設與資料中心", desc: "投資資料中心、電力、再生能源與交通基礎建設", c: [["BAM", "Brookfield Asset Management"], ["KKR", "KKR"], ["BX", "Blackstone"], ["OWL", "Blue Owl"]] },
       ] },
       { tier: "下游", title: "散戶也能參與", items: [
-        { name: "上市 BDC", desc: "在股市掛牌的放款投資公司，把利息大多配給股東", c: [["ARCC", "Ares Capital", "上市 BDC"], ["OBDC", "Blue Owl Capital Corp", "上市 BDC"]] },
+        { name: "上市 BDC", desc: "在股市掛牌的放款投資公司，把利息大多配給股東", c: [["ARCC", "Ares Capital"], ["OBDC", "Blue Owl Capital Corp"]] },
       ] },
     ] },
 
   { id: "us-payment", mk: "us", cat: "金融", name: "金融科技與支付", icon: "link",
     desc: "刷卡、手機支付與線上付款背後的系統：卡組織提供清算網路，發卡銀行負責授權，收單與金流業者幫商店收款，每筆交易都會抽一小部分手續費。",
     flow: ["消費者付款", "商店收款", "收單機構", "卡組織網路", "發卡銀行授權"],
-    segs: [{ n: "卡組織", c: [["V", "Visa", "全球卡片清算網路"], ["MA", "Mastercard", "全球卡片清算網路"], ["AXP", "American Express", "發卡兼網路"]] },
-      { n: "金流與錢包", c: [["PYPL", "PayPal", "線上支付與錢包"], ["XYZ", "Block", "Square 收款與 Cash App"], ["AFRM", "Affirm", "先買後付"]] }],
+    segs: [{ n: "卡組織", c: [["V", "Visa"], ["MA", "Mastercard"], ["AXP", "American Express"]] },
+      { n: "金流與錢包", c: [["PYPL", "PayPal"], ["XYZ", "Block"], ["AFRM", "Affirm"]] }],
     fig: { w: 400, h: 280, alt: "刷卡流程：消費者刷卡或用手機錢包，交易經商店刷卡機、收單機構、卡組織網路送到發卡銀行，銀行核准後幾秒內傳回，之後再清算撥款；商店付的手續費大部分是給發卡行的交換費", items: [
       // 消費者
       { t: "icon", x: 12, y: 34, s: 24, k: "person", c: "gray", label: "消費者" },
@@ -1040,16 +1040,16 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "支付網路", items: [
-        { name: "卡組織清算網路", desc: "連接全球發卡行與收單機構，傳遞授權並清算", c: [["V", "Visa", "全球卡片網路"], ["MA", "Mastercard", "全球卡片網路"], ["AXP", "American Express", "發卡兼網路"]] },
+        { name: "卡組織清算網路", desc: "連接全球發卡行與收單機構，傳遞授權並清算", c: [["V", "Visa"], ["MA", "Mastercard"], ["AXP", "American Express"]] },
       ] },
       { tier: "中游", title: "收單、商家與發卡", items: [
-        { name: "收單與線上金流", desc: "幫實體商店與網店收款，把交易送進卡組織網路", c: [["GPN", "Global Payments", "商家收單"], ["PYPL", "PayPal", "線上金流與 Braintree"]] },
-        { name: "商家收款系統", desc: "刷卡機與 POS 系統，整合點餐、庫存與收款", c: [["XYZ", "Block", "Square 收款系統"], ["TOST", "Toast", "餐廳 POS 系統"]] },
-        { name: "發卡銀行", desc: "發卡給消費者、核准交易並承擔信用風險", c: [["JPM", "摩根大通", "信用卡發卡行"], ["COF", "Capital One", "信用卡發卡行"], ["AXP", "American Express", "自家發卡"]] },
+        { name: "收單與線上金流", desc: "幫實體商店與網店收款，把交易送進卡組織網路", c: [["GPN", "Global Payments"], ["PYPL", "PayPal"]] },
+        { name: "商家收款系統", desc: "刷卡機與 POS 系統，整合點餐、庫存與收款", c: [["XYZ", "Block"], ["TOST", "Toast"]] },
+        { name: "發卡銀行", desc: "發卡給消費者、核准交易並承擔信用風險", c: [["JPM", "摩根大通"], ["COF", "Capital One"], ["AXP", "American Express"]] },
       ] },
       { tier: "下游", title: "消費者支付工具", items: [
-        { name: "數位錢包", desc: "把卡片存進手機或帳戶，一鍵付款與轉帳", c: [["AAPL", "蘋果", "Apple Pay"], ["PYPL", "PayPal", "PayPal 與 Venmo"], ["XYZ", "Block", "Cash App"]] },
-        { name: "先買後付（BNPL）", desc: "結帳時把一筆消費拆成幾期付款", c: [["AFRM", "Affirm", "先買後付"], ["KLAR", "Klarna", "先買後付"]] },
+        { name: "數位錢包", desc: "把卡片存進手機或帳戶，一鍵付款與轉帳", c: [["AAPL", "蘋果"], ["PYPL", "PayPal"], ["XYZ", "Block"]] },
+        { name: "先買後付（BNPL）", desc: "結帳時把一筆消費拆成幾期付款", c: [["AFRM", "Affirm"], ["KLAR", "Klarna"]] },
       ] },
     ] },
 );

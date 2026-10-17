@@ -14,6 +14,21 @@ function roundTick(p) { const t = tickOf(p); return +(Math.round(p / t) * t).toF
 function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
 function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
 function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
+// 品牌（KLineLab K線情報局）：1:1 幾何 K 線圖標（白色實心 K 棒＋影線、45 度切角的鈦金屬灰突破光束）＋Space Grotesk 字標＋PRO 徽章
+const BRAND = { name: "KLineLab", zh: "K線情報局", tag: "將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機" };
+const brandIcon = (s = 32) => `<svg class="bl-ic" viewBox="0 0 512 512" width="${s}" height="${s}" aria-hidden="true"><defs><linearGradient id="blti" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#71717a"/><stop offset=".55" stop-color="#a1a1aa"/><stop offset="1" stop-color="#e4e4e7"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#09090b"/><rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#27272a" stroke-width="8"/><path d="M184 96v320" stroke="#fff" stroke-width="22" stroke-linecap="round"/><rect x="128" y="168" width="112" height="176" rx="12" fill="#fff"/><path d="M296 416h88V112l-88 88z" fill="url(#blti)"/></svg>`;
+const brandHtml = ({ pro = true, zh = true, href = "" } = {}) => `<${href ? `a href="${href}"` : "span"} class="bl">${brandIcon()}<span class="bl-t"><b>${BRAND.name}</b>${zh ? `<small>${BRAND.zh}</small>` : ""}</span>${pro ? `<span class="bl-pro">PRO</span>` : ""}</${href ? "a" : "span"}>`;
+// SVG 縮寫徽章：取名稱前兩個字（英文取字首），底色由名稱雜湊出固定的代表色（不用外部照片或節目封面）
+const BADGE_C = ["#3f3f46", "#1e3a5f", "#3b2f5c", "#14532d", "#5b2121", "#4a3a12", "#0f4c5c", "#52314a"];
+function badgeSvg(name, s = 40) {
+  const n = String(name || "?").trim(), w = n.split(/[\s\-_.]+/).filter(Boolean), ab = /^[A-Za-z]/.test(n) ? (w.length > 1 ? w[0][0] + w[1][0] : n.slice(0, 2)).toUpperCase() : [...n.replace(/\s/g, "")].slice(0, 2).join("");
+  let h = 0; for (const ch of n) h = (h * 31 + ch.codePointAt(0)) | 0; const bg = BADGE_C[Math.abs(h) % BADGE_C.length];
+  const t = ab.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  return `<svg class="badge" viewBox="0 0 40 40" width="${s}" height="${s}" aria-hidden="true"><rect width="40" height="40" rx="10" fill="${bg}"/><rect x=".5" y=".5" width="39" height="39" rx="9.5" fill="none" stroke="rgba(255,255,255,.14)"/><text x="20" y="25.5" text-anchor="middle" font-size="${/^[A-Z]/.test(t) ? 14 : 13}" font-family="Space Grotesk, Inter, Noto Sans TC, sans-serif" font-weight="600" fill="#fff">${t}</text></svg>`;
+}
+// 全站免責聲明（頁尾與每個回測、籌碼分析頁的底部）
+const DISCLAIMER = "本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。";
+const discHtml = () => `<p class="disc">${DISCLAIMER}</p>`;
 // 日 K 合成週 K、月 K：key(日期) 相同的併成一根，日期標示該週（月）最後一個交易日
 function agg(D, key) {
   const out = [];
@@ -1190,7 +1205,8 @@ function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / 
 
 /* ---------- 版面風格（html[data-style]，樣式在 minimal.css；設定記在 kline:style） ---------- */
 const KL_STYLES = [
-  ["layout", "版心留白", "近黑底、大量留白、金色小標（預設）", { l: ["#f5f4f0", "#fbfaf7", "#a8863a", "#161616", 6], d: ["#0e0e0e", "#151515", "#cfae62", "#ececea", 6] }],
+  ["lab", "KLineLab 實驗室", "碳黑底、純白訊號、鈦金屬灰（預設）", { l: ["#fafafa", "#ffffff", "#18181b", "#09090b", 10], d: ["#09090b", "#121215", "#a1a1aa", "#ffffff", 10] }],
+  ["layout", "版心留白", "近黑底、大量留白、金色小標", { l: ["#f5f4f0", "#fbfaf7", "#a8863a", "#161616", 6], d: ["#0e0e0e", "#151515", "#cfae62", "#ececea", 6] }],
   ["minimal", "簡約", "灰階磁磚、赭黃重點", { l: ["#ebebe9", "#e0e0de", "#c39b2f", "#3a3a3a", 14], d: ["#171717", "#222221", "#c9a23a", "#e2e2e0", 14] }],
   ["pro", "專業看盤", "深藍黑底、藍色重點，資訊密集", { l: ["#f2f4f7", "#fbfcfd", "#2a6fdb", "#1c2430", 6], d: ["#0b0e14", "#121821", "#3d8bff", "#e6ebf2", 6] }],
   ["blue", "清爽藍白", "白色卡片、海軍藍，明亮乾淨", { l: ["#eaf0f6", "#f8fafd", "#1f5fc4", "#142339", 16], d: ["#0e1626", "#152038", "#4f8df0", "#e5ecf7", 16] }],
@@ -1199,7 +1215,7 @@ const KL_STYLES = [
 ];
 const klStyle = () => document.documentElement.dataset.style || "minimal";
 function applyStyle(id, save = true) {
-  if (!KL_STYLES.some(s => s[0] === id)) id = "layout";
+  if (!KL_STYLES.some(s => s[0] === id)) id = "lab";
   if (id === "minimal") delete document.documentElement.dataset.style; else document.documentElement.dataset.style = id;
   if (save) store.set("style", id);
   dispatchEvent(new CustomEvent("klinestyle", { detail: id }));

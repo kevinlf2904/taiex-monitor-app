@@ -146,7 +146,7 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
    3. 網格系統：8px 間距系統、統一的欄寬與間距，每一頁對齊同一套網格
    4. 打破網格：只在重點（股價、標題數字）用大字打破節奏
    深色是接近純黑的底、白字、灰色說明、金色小標；淺色是米白紙底、墨黑字 */
-:root[data-style="layout"] {
+:is(:root[data-style="layout"], :root[data-style="lab"]) {
   --bg: #f5f4f0; --surface: #fbfaf7; --surface-2: #efede8; --surface-3: #ffffff;
   --ink: #161616; --muted: #77746d; --line: #e4e1da;
   --accent: #9b7b2f; --accent-soft: rgba(155, 123, 47, .1); --gold: #a8863a; --gold-hi: #c9a85c;
@@ -156,7 +156,7 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
   --radius: 6px; --radius-md: 5px; --radius-sm: 4px;
   --g1: 8px; --g2: 16px; --g3: 24px; --g4: 32px; --g6: 48px; --gutter: 20px;
 }
-:root[data-style="layout"][data-theme="dark"] {
+:is(:root[data-style="layout"], :root[data-style="lab"])[data-theme="dark"] {
   --bg: #0e0e0e; --surface: #151515; --surface-2: #1b1b1b; --surface-3: #212121;
   --ink: #ececea; --muted: #8e8e8b; --line: #242424;
   --accent: #cfae62; --accent-soft: rgba(207, 174, 98, .12); --gold: #cfae62; --gold-hi: #e2c57f;
@@ -164,7 +164,7 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
   --s1: #cfae62; --band: rgba(255, 255, 255, .04); --shade: rgba(255, 255, 255, .03);
   --grad-strong: #ececea; --on-strong: #0e0e0e; --strong-line: #ececea;
 }
-@media (prefers-color-scheme: dark) { :root[data-style="layout"]:not([data-theme="light"]) {
+@media (prefers-color-scheme: dark) { :is(:root[data-style="layout"], :root[data-style="lab"]):not([data-theme="light"]) {
   --bg: #0e0e0e; --surface: #151515; --surface-2: #1b1b1b; --surface-3: #212121;
   --ink: #ececea; --muted: #8e8e8b; --line: #242424;
   --accent: #cfae62; --accent-soft: rgba(207, 174, 98, .12); --gold: #cfae62; --gold-hi: #e2c57f;
@@ -173,100 +173,100 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
   --grad-strong: #ececea; --on-strong: #0e0e0e; --strong-line: #ececea;
 } }
 /* 底：純色、不用漸層；行距放寬 */
-:root[data-style="layout"] body { background: var(--bg); line-height: 1.65; letter-spacing: .03em; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) body { background: var(--bg); line-height: 1.65; letter-spacing: .03em; }
 /* 頂列：和底色融在一起，只靠模糊和一條極淡的線分開 */
-:root[data-style="layout"] .w-top, :root[data-style="layout"] .top { background: color-mix(in srgb, var(--bg) 82%, transparent); border-bottom-color: transparent; box-shadow: 0 1px 0 var(--line); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .w-top, :is(:root[data-style="layout"], :root[data-style="lab"]) .top { background: color-mix(in srgb, var(--bg) 82%, transparent); border-bottom-color: transparent; box-shadow: 0 1px 0 var(--line); }
 /* 區塊：不用框線，靠底色差和留白分隔（留白率高） */
-:root[data-style="layout"] .panel, :root[data-style="layout"] .card { border-color: transparent; background: var(--surface); border-radius: var(--radius); box-shadow: none; }
-:root[data-style="layout"] .panel + .panel, :root[data-style="layout"] .panel + .card, :root[data-style="layout"] .card + .card { margin-top: var(--g3); }
-:root[data-style="layout"] .ph { padding: var(--g2) var(--gutter) 12px; border-bottom-color: transparent; }
-:root[data-style="layout"] .ph h2 { font-size: 18px; font-weight: 600; letter-spacing: .05em; }
-:root[data-style="layout"] h2, :root[data-style="layout"] h3 { letter-spacing: .04em; }
-:root[data-style="layout"] main h2 { font-weight: 700; }
-:root[data-style="layout"] .mk { padding: var(--g2) var(--gutter) var(--g3); border-top-color: transparent; }
-:root[data-style="layout"] .mk + .mk { box-shadow: 0 -1px 0 var(--line); }
-:root[data-style="layout"] .mk h3 { font-size: 17px; font-weight: 600; margin-bottom: 12px; }
-:root[data-style="layout"] .mk h3::before { display: none; }
-:root[data-style="layout"] .note { color: var(--muted); letter-spacing: .03em; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .panel, :is(:root[data-style="layout"], :root[data-style="lab"]) .card { border-color: transparent; background: var(--surface); border-radius: var(--radius); box-shadow: none; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .panel + .panel, :is(:root[data-style="layout"], :root[data-style="lab"]) .panel + .card, :is(:root[data-style="layout"], :root[data-style="lab"]) .card + .card { margin-top: var(--g3); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .ph { padding: var(--g2) var(--gutter) 12px; border-bottom-color: transparent; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .ph h2 { font-size: 18px; font-weight: 600; letter-spacing: .05em; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) h2, :is(:root[data-style="layout"], :root[data-style="lab"]) h3 { letter-spacing: .04em; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) main h2 { font-weight: 700; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .mk { padding: var(--g2) var(--gutter) var(--g3); border-top-color: transparent; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .mk + .mk { box-shadow: 0 -1px 0 var(--line); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .mk h3 { font-size: 17px; font-weight: 600; margin-bottom: 12px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .mk h3::before { display: none; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .note { color: var(--muted); letter-spacing: .03em; }
 /* 小標、副標：金色細字（像參考網站的圖說） */
-:root[data-style="layout"] .ph .note, :root[data-style="layout"] .mk h3 .note, :root[data-style="layout"] .sxh .note, :root[data-style="layout"] .fh .note { color: var(--accent); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .ph .note, :is(:root[data-style="layout"], :root[data-style="lab"]) .mk h3 .note, :is(:root[data-style="layout"], :root[data-style="lab"]) .sxh .note, :is(:root[data-style="layout"], :root[data-style="lab"]) .fh .note { color: var(--accent); }
 /* 分頁：選中的是白字＋金色短底線；沒選中的是灰字 */
-:root[data-style="layout"] .seg { border: 0; background: transparent; }
-:root[data-style="layout"] .seg button { background: transparent; color: var(--muted); letter-spacing: .06em; }
-:root[data-style="layout"] .seg button[aria-pressed="true"] { color: var(--ink); font-weight: 500; }
-:root[data-style="layout"] .seg button[aria-pressed="true"]::after { background: var(--gold); height: 2px; }
-:root[data-style="layout"] .ltabs, :root[data-style="layout"] .dtabs { background: color-mix(in srgb, var(--bg) 88%, transparent); border-bottom-color: transparent; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .seg { border: 0; background: transparent; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .seg button { background: transparent; color: var(--muted); letter-spacing: .06em; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .seg button[aria-pressed="true"] { color: var(--ink); font-weight: 500; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .seg button[aria-pressed="true"]::after { background: var(--gold); height: 2px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .ltabs, :is(:root[data-style="layout"], :root[data-style="lab"]) .dtabs { background: color-mix(in srgb, var(--bg) 88%, transparent); border-bottom-color: transparent; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 /* 膠囊：沒選中是淡灰底，選中是反白（深色＝白底黑字） */
-:root[data-style="layout"] .ichip, :root[data-style="layout"] .groups button, :root[data-style="layout"] .ixc, :root[data-style="layout"] .cochips button, :root[data-style="layout"] .mkseg button { background: var(--surface-2); border-color: transparent; }
-:root[data-style="layout"] .ichip[aria-pressed="true"], :root[data-style="layout"] .groups button[aria-pressed="true"], :root[data-style="layout"] .cochips button[aria-pressed="true"], :root[data-style="layout"] .mkseg button[aria-pressed="true"], :root[data-style="layout"] .sxnav button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-:root[data-style="layout"] .btn { background: var(--surface-2); border-color: transparent; border-radius: var(--radius-sm); padding-inline: 16px; }
-:root[data-style="layout"] .btn:hover { border-color: var(--muted); }
-:root[data-style="layout"] .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-:root[data-style="layout"] .btn.sm { border-radius: var(--radius-sm); }
-:root[data-style="layout"] input.code, :root[data-style="layout"] select.sel, :root[data-style="layout"] input[type="number"] { background: var(--surface-2); border-color: transparent; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .ichip, :is(:root[data-style="layout"], :root[data-style="lab"]) .groups button, :is(:root[data-style="layout"], :root[data-style="lab"]) .ixc, :is(:root[data-style="layout"], :root[data-style="lab"]) .cochips button, :is(:root[data-style="layout"], :root[data-style="lab"]) .mkseg button { background: var(--surface-2); border-color: transparent; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .ichip[aria-pressed="true"], :is(:root[data-style="layout"], :root[data-style="lab"]) .groups button[aria-pressed="true"], :is(:root[data-style="layout"], :root[data-style="lab"]) .cochips button[aria-pressed="true"], :is(:root[data-style="layout"], :root[data-style="lab"]) .mkseg button[aria-pressed="true"], :is(:root[data-style="layout"], :root[data-style="lab"]) .sxnav button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .btn { background: var(--surface-2); border-color: transparent; border-radius: var(--radius-sm); padding-inline: 16px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .btn:hover { border-color: var(--muted); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .btn.sm { border-radius: var(--radius-sm); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) input.code, :is(:root[data-style="layout"], :root[data-style="lab"]) select.sel, :is(:root[data-style="layout"], :root[data-style="lab"]) input[type="number"] { background: var(--surface-2); border-color: transparent; }
 /* 清單：列高一點、左右頁邊距一致（網格） */
-:root[data-style="layout"] .row { padding-block: 12px; }
-:root[data-style="layout"] .wl li { border-bottom-color: var(--line); }
-:root[data-style="layout"] .row:hover { background: var(--surface-2); }
-:root[data-style="layout"] .row[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--gold); }
-:root[data-style="layout"] .row .pc { border-radius: var(--radius-sm); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .row { padding-block: 12px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .wl li { border-bottom-color: var(--line); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .row:hover { background: var(--surface-2); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .row[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--gold); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .row .pc { border-radius: var(--radius-sm); }
 /* 表格：沒有直線，列距寬，表頭小而淡 */
-:root[data-style="layout"] .tbl th { font-size: 11.5px; font-weight: 400; letter-spacing: .06em; color: var(--muted); padding-block: 8px; }
-:root[data-style="layout"] .tbl td { padding-block: 9px; border-color: var(--line); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .tbl th { font-size: 11.5px; font-weight: 400; letter-spacing: .06em; color: var(--muted); padding-block: 8px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .tbl td { padding-block: 9px; border-color: var(--line); }
 /* 卡片、磁磚：同一套圓角，沒有框 */
-:root[data-style="layout"] .ixcard, :root[data-style="layout"] .mcard, :root[data-style="layout"] .iseg, :root[data-style="layout"] .iflow, :root[data-style="layout"] .bwrap, :root[data-style="layout"] .itheme, :root[data-style="layout"] .qcard, :root[data-style="layout"] .icitem, :root[data-style="layout"] .itrc, :root[data-style="layout"] .mchip, :root[data-style="layout"] .d-kv, :root[data-style="layout"] .cokv > div, :root[data-style="layout"] .gtile, :root[data-style="layout"] .sxcard, :root[data-style="layout"] .pod .pcard, :root[data-style="layout"] .pod .pcall { border-color: transparent; box-shadow: none; }
-:root[data-style="layout"] .d-kv { gap: 1px; background: var(--line); overflow: hidden; }
-:root[data-style="layout"] .d-kv > div { background: var(--surface); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .ixcard, :is(:root[data-style="layout"], :root[data-style="lab"]) .mcard, :is(:root[data-style="layout"], :root[data-style="lab"]) .iseg, :is(:root[data-style="layout"], :root[data-style="lab"]) .iflow, :is(:root[data-style="layout"], :root[data-style="lab"]) .bwrap, :is(:root[data-style="layout"], :root[data-style="lab"]) .itheme, :is(:root[data-style="layout"], :root[data-style="lab"]) .qcard, :is(:root[data-style="layout"], :root[data-style="lab"]) .icitem, :is(:root[data-style="layout"], :root[data-style="lab"]) .itrc, :is(:root[data-style="layout"], :root[data-style="lab"]) .mchip, :is(:root[data-style="layout"], :root[data-style="lab"]) .d-kv, :is(:root[data-style="layout"], :root[data-style="lab"]) .cokv > div, :is(:root[data-style="layout"], :root[data-style="lab"]) .gtile, :is(:root[data-style="layout"], :root[data-style="lab"]) .sxcard, :is(:root[data-style="layout"], :root[data-style="lab"]) .pod .pcard, :is(:root[data-style="layout"], :root[data-style="lab"]) .pod .pcall { border-color: transparent; box-shadow: none; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .d-kv { gap: 1px; background: var(--line); overflow: hidden; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .d-kv > div { background: var(--surface); }
 /* 打破網格：只有股價、指數這種重點數字用大而細的字 */
-:root[data-style="layout"] .d-title h1 { font-weight: 700; letter-spacing: .06em; }
-:root[data-style="layout"] .d-px b { font-weight: 300; font-size: clamp(34px, 9vw, 46px); letter-spacing: 0; line-height: 1.1; }
-:root[data-style="layout"] .sxbrlab b, :root[data-style="layout"] .sxscore b { font-weight: 300; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .d-title h1 { font-weight: 700; letter-spacing: .06em; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .d-px b { font-weight: 300; font-size: clamp(34px, 9vw, 46px); letter-spacing: 0; line-height: 1.1; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .sxbrlab b, :is(:root[data-style="layout"], :root[data-style="lab"]) .sxscore b { font-weight: 300; }
 /* 浮動按鈕：大圓、灰底（像參考網站的「回到頂端」） */
-:root[data-style="layout"] #toTop { width: 52px; height: 52px; border: 0; background: color-mix(in srgb, var(--muted) 55%, var(--bg)); color: var(--ink); font-size: 22px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
-:root[data-style="layout"] .qbar { background: color-mix(in srgb, var(--bg) 90%, transparent); border-top-color: transparent; box-shadow: 0 -1px 0 var(--line); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
-:root[data-style="layout"] .seal, :root[data-style="layout"] .brand b { border-radius: 10px; }
-:root[data-style="layout"] .brand h1, :root[data-style="layout"] .brand strong, :root[data-style="layout"] .brand > div > :first-child { white-space: nowrap; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) #toTop { width: 52px; height: 52px; border: 0; background: color-mix(in srgb, var(--muted) 55%, var(--bg)); color: var(--ink); font-size: 22px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .qbar { background: color-mix(in srgb, var(--bg) 90%, transparent); border-top-color: transparent; box-shadow: 0 -1px 0 var(--line); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .seal, :is(:root[data-style="layout"], :root[data-style="lab"]) .brand b { border-radius: 10px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .brand h1, :is(:root[data-style="layout"], :root[data-style="lab"]) .brand strong, :is(:root[data-style="layout"], :root[data-style="lab"]) .brand > div > :first-child { white-space: nowrap; }
 /* 學堂：版心窄一點、段落之間留白多（版面率低） */
-:root[data-style="layout"] main:not(.w-main) { max-width: 1080px; padding-top: var(--g4); }
-:root[data-style="layout"] .lesson { gap: var(--g4); }
-:root[data-style="layout"] .lesson p, :root[data-style="layout"] .panel p { line-height: 1.85; }
-@media (min-width: 900px) { :root[data-style="layout"] .top-inner { max-width: 1080px; } }
+:is(:root[data-style="layout"], :root[data-style="lab"]) main:not(.w-main) { max-width: 1080px; padding-top: var(--g4); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .lesson { gap: var(--g4); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .lesson p, :is(:root[data-style="layout"], :root[data-style="lab"]) .panel p { line-height: 1.85; }
+@media (min-width: 900px) { :is(:root[data-style="layout"], :root[data-style="lab"]) .top-inner { max-width: 1080px; } }
 @media (max-width: 480px) {
-  :root[data-style="layout"] .top-tools { gap: 6px; }
-  :root[data-style="layout"] .prog-bar { display: none; }
-  :root[data-style="layout"] .top-inner { flex-wrap: nowrap; }
-  :root[data-style="layout"] .brand { min-width: 0; flex: 1 1 auto; }
-  :root[data-style="layout"] .brand > div { min-width: 0; }
-  :root[data-style="layout"] .brand h1 { font-size: 19px; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; }
-  :root[data-style="layout"] .top-tools { flex: none; gap: 4px; }
-  :root[data-style="layout"] .top-tools .theme-btn, :root[data-style="layout"] .top-tools .icon-btn { width: 30px; height: 30px; }
-  :root[data-style="layout"] .top-tools .chip { padding-inline: 8px; font-size: 12px; }
-  :root[data-style="layout"] .top .seal.logo { width: 32px; height: 32px; }
-  :root[data-style="layout"] .top-inner { gap: 8px; padding-inline: 12px; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .top-tools { gap: 6px; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .prog-bar { display: none; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .top-inner { flex-wrap: nowrap; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .brand { min-width: 0; flex: 1 1 auto; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .brand > div { min-width: 0; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .brand h1 { font-size: 19px; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .top-tools { flex: none; gap: 4px; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .top-tools .theme-btn, :is(:root[data-style="layout"], :root[data-style="lab"]) .top-tools .icon-btn { width: 30px; height: 30px; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .top-tools .chip { padding-inline: 8px; font-size: 12px; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .top .seal.logo { width: 32px; height: 32px; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .top-inner { gap: 8px; padding-inline: 12px; }
 }
 @media (max-width: 760px) {
-  :root[data-style="layout"] .panel { border-radius: var(--radius-md); }
-  :root[data-style="layout"] .panel + .panel { margin-top: var(--g2); }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .panel { border-radius: var(--radius-md); }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .panel + .panel { margin-top: var(--g2); }
 }
 
 /* 版心留白：圓角都改小（區塊 6、卡片 5、按鈕與膠囊 4），只有很小的圓點維持圓形 */
-:root[data-style="layout"] :is(.btn, .btn.sm, .row .pc, .ichip, .groups button, .ixc, .cochips button, .mkseg button, .sxnav button, .sxco, .pod .pbadge, .pod .pdir, .pod .pwin, .sxcard .pdir,
+:is(:root[data-style="layout"], :root[data-style="lab"]) :is(.btn, .btn.sm, .row .pc, .ichip, .groups button, .ixc, .cochips button, .mkseg button, .sxnav button, .sxco, .pod .pbadge, .pod .pdir, .pod .pwin, .sxcard .pdir,
   .tabs, .tabs button, #lessonToc a, #lessonToc button, .icon-btn, .theme-btn, .chip, .seal, .brand b, .msg.user, .afchips button) { border-radius: var(--radius-sm); }
-:root[data-style="layout"] :is(#toTop, .chat-fab) { border-radius: 8px; }
-:root[data-style="layout"] img.logo { border-radius: 4px; }
-:root[data-style="layout"] .sxgauge .bar { border-radius: 2px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) :is(#toTop, .chat-fab) { border-radius: 8px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) img.logo { border-radius: 4px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .sxgauge .bar { border-radius: 2px; }
 
 /* 版心留白：K線學堂標題小而精緻、橫排（標題｜副標同一行） */
-:root[data-style="layout"] .brand { gap: 10px; }
-:root[data-style="layout"] .brand > div { display: flex; align-items: baseline; gap: 12px; flex-wrap: nowrap; min-width: 0; }
-:root[data-style="layout"] .brand h1 { font-size: 16px; font-weight: 400; letter-spacing: .18em; line-height: 1.2; }
-:root[data-style="layout"] .brand p { font-size: 11px; font-weight: 300; letter-spacing: .12em; white-space: nowrap; padding-left: 12px; border-left: 1px solid var(--line); }
-:root[data-style="layout"] .top .seal.logo { width: 26px; height: 26px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .brand { gap: 10px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .brand > div { display: flex; align-items: baseline; gap: 12px; flex-wrap: nowrap; min-width: 0; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .brand h1 { font-size: 16px; font-weight: 400; letter-spacing: .18em; line-height: 1.2; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .brand p { font-size: 11px; font-weight: 300; letter-spacing: .12em; white-space: nowrap; padding-left: 12px; border-left: 1px solid var(--line); }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .top .seal.logo { width: 26px; height: 26px; }
 /* 學堂內文：字小一點、細一點 */
-:root[data-style="layout"] main:not(.w-main) { font-size: 14.5px; }
-:root[data-style="layout"] main:not(.w-main) h2 { font-size: clamp(19px, 2.4vw, 23px); font-weight: 500; letter-spacing: .06em; }
-:root[data-style="layout"] main:not(.w-main) h3 { font-size: 15.5px; font-weight: 500; }
-:root[data-style="layout"] .lesson p, :root[data-style="layout"] .lesson li { font-weight: 300; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) main:not(.w-main) { font-size: 14.5px; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) main:not(.w-main) h2 { font-size: clamp(19px, 2.4vw, 23px); font-weight: 500; letter-spacing: .06em; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) main:not(.w-main) h3 { font-size: 15.5px; font-weight: 500; }
+:is(:root[data-style="layout"], :root[data-style="lab"]) .lesson p, :is(:root[data-style="layout"], :root[data-style="lab"]) .lesson li { font-weight: 300; }
 
 /* 無框設計（全部風格）：元件不要框——區塊、卡片、按鈕、膠囊都沒有底色和框線，只剩文字；選中用金色細底線 */
 :root :is(.panel, .card, .sxcard, .mcard, .qcard, .icitem, .itrc, .igchip, .igme, .mchip, .ixcard, .iseg, .iflow, .bwrap, .itheme, .gtile, .cokv > div, .pod .pcard, .pod .pcall, .pod .pfr, .d-kv, .d-kv > div, .mtiles > *, .mkbox > *) { background: transparent; border-color: transparent; box-shadow: none; }
@@ -276,7 +276,7 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
 :root :is(.btn, .btn.sm, .ichip, .groups button, .ixc, .cochips button, .mkseg button, .sxnav button, .sxco, .chip, .theme-btn, .icon-btn, .tabs, .tabs button, #lessonToc a, #lessonToc button, .afchips button, .pod .pbadge) { background: transparent; border-color: transparent; box-shadow: none; }
 :root :is(.ichip, .groups button, .cochips button, .mkseg button, .sxnav button, .tabs button, #lessonToc a, #lessonToc button, .afchips button)[aria-pressed="true"],
 :root .tabs button[aria-selected="true"], :root #lessonToc [aria-current] { background: transparent; color: var(--ink); border-color: transparent; box-shadow: inset 0 -1.5px 0 var(--gold); font-weight: 500; }
-/* 要蓋過 :root[data-style="layout"] .btn.primary 的字色（那條是實心底配底色字，底被上一行拿掉後字會看不見） */
+/* 要蓋過 :is(:root[data-style="layout"], :root[data-style="lab"]) .btn.primary 的字色（那條是實心底配底色字，底被上一行拿掉後字會看不見） */
 :root:root .btn.primary { background: transparent; color: var(--accent); border-color: transparent; box-shadow: inset 0 -1.5px 0 var(--gold); }
 :root .btn:hover, :root .chip:hover, :root .theme-btn:hover { color: var(--ink); border-color: transparent; }
 /* 輸入框：只留一條底線 */
@@ -312,3 +312,46 @@ svg circle[stroke-width] { stroke-width: 1.2px; }
 .stylepick .sp-ok { width: 18px; flex: none; color: var(--gold); font-weight: 600; text-align: center; }
 .stylepick button.sp[aria-pressed="true"] b { color: var(--gold); }
 .stylepick .sp-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* ===================== KLineLab 實驗室（預設，品牌配色） =====================
+   版面結構沿用「版心留白」；配色是黑白實驗室：碳黑底 #09090B、微浮起面板 #121215、銳利分割線 #27272A、
+   純白訊號字 #FFFFFF、鈦金屬灰輔助字 #A1A1AA。只有漲跌用紅綠（台股慣例紅漲綠跌）。
+   字體：標題與品牌 Space Grotesk、內文 Inter、數據與座標 JetBrains Mono（中文字缺字時用 Noto Sans TC） */
+:root[data-style="lab"] {
+  --bg: #fafafa; --surface: #ffffff; --surface-2: #f4f4f5; --surface-3: #ffffff;
+  --ink: #09090b; --muted: #52525b; --line: #e4e4e7;
+  --accent: #18181b; --accent-soft: rgba(9, 9, 11, .06); --gold: #71717a; --gold-hi: #a1a1aa;
+  --up: #dc2626; --down: #059669; --up-pill: #dc2626; --down-pill: #059669;
+  --s1: #d97706; --band: rgba(0, 0, 0, .035); --shade: rgba(0, 0, 0, .03);
+  --grad-strong: #09090b; --on-strong: #ffffff; --strong-line: #09090b;
+  --radius: 10px; --radius-md: 8px; --radius-sm: 6px;
+  --font-lab-d: "Space Grotesk", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-lab-b: "Inter", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-lab-m: "JetBrains Mono", "Noto Sans TC", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: var(--font-lab-d); --font-body: var(--font-lab-b); --font-num: var(--font-lab-m); --font-mono: var(--font-lab-m);
+}
+:root[data-style="lab"][data-theme="dark"] {
+  --bg: #09090b; --surface: #121215; --surface-2: #18181b; --surface-3: #1c1c20;
+  --ink: #ffffff; --muted: #a1a1aa; --line: #27272a;
+  --accent: #ffffff; --accent-soft: rgba(255, 255, 255, .08); --gold: #a1a1aa; --gold-hi: #d4d4d8;
+  --up: #f04848; --down: #22c55e; --up-pill: #c93434; --down-pill: #15803d;
+  --s1: #f59e0b; --band: rgba(255, 255, 255, .04); --shade: rgba(255, 255, 255, .03);
+  --grad-strong: #ffffff; --on-strong: #09090b; --strong-line: #ffffff;
+}
+@media (prefers-color-scheme: dark) { :root[data-style="lab"]:not([data-theme="light"]) {
+  --bg: #09090b; --surface: #121215; --surface-2: #18181b; --surface-3: #1c1c20;
+  --ink: #ffffff; --muted: #a1a1aa; --line: #27272a;
+  --accent: #ffffff; --accent-soft: rgba(255, 255, 255, .08); --gold: #a1a1aa; --gold-hi: #d4d4d8;
+  --up: #f04848; --down: #22c55e; --up-pill: #c93434; --down-pill: #15803d;
+  --s1: #f59e0b; --band: rgba(255, 255, 255, .04); --shade: rgba(255, 255, 255, .03);
+  --grad-strong: #ffffff; --on-strong: #09090b; --strong-line: #ffffff;
+} }
+:root[data-style="lab"][data-font="song"] { --font-body: var(--font-song); --font-display: var(--font-song); }
+/* 面板：微浮起＋1px 銳利分割線（實驗室網格感） */
+:root[data-style="lab"] .panel, :root[data-style="lab"] .card { border: 1px solid var(--line); }
+:root[data-style="lab"] h1, :root[data-style="lab"] h2, :root[data-style="lab"] h3, :root[data-style="lab"] .ph h2, :root[data-style="lab"] .tw-h { font-family: var(--font-display); letter-spacing: .01em; }
+:root[data-style="lab"] body { letter-spacing: .01em; }
+/* 導覽列：沉浸式碳黑半透明＋模糊＋底線 */
+:root[data-style="lab"] .w-top, :root[data-style="lab"] .top, :root[data-style="lab"] .ltabs, :root[data-style="lab"] .dtabs { background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: none; border-bottom: 1px solid var(--line); }
+:root[data-style="lab"] .seg button[aria-pressed="true"]::after { background: var(--ink); }
+:root[data-style="lab"] .ph .note, :root[data-style="lab"] .mk h3 .note, :root[data-style="lab"] .sxh .note, :root[data-style="lab"] .fh .note { color: var(--muted); }

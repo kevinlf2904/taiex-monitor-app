@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-Hant" data-style="lab">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#09090B">
+<title>KLineLab Pro｜K線情報局</title>
+<meta name="description" content="KLineLab Pro：台美股機構籌碼、國會申報、供應鏈資金與 K 線回測的量化研究終端機。加入候補名單。">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="watch-icon-180.png">
+<!-- KLineLab Pro 方案頁：方案比較＋候補名單（POST /api/sync op=waitlist，存在 KV）。目前不收費、沒有會員登入。主題跟著首頁（kline:theme）。 -->
+<script>try { document.documentElement.dataset.theme = JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); } catch { document.documentElement.dataset.theme = "dark"; }</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@300;400;500;700&display=swap">
+<link rel="stylesheet" href="core.css">
+<link rel="stylesheet" href="minimal.css">
+<style>
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); }
+.nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.nav-in { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 16px; }
+.nav-in nav { margin-left: auto; display: flex; gap: 14px; font-size: 14px; } .nav-in nav a { color: var(--muted); text-decoration: none; } .nav-in nav a:hover, .nav-in nav a[aria-current] { color: var(--ink); }
+@media (max-width: 520px) { .bl-t small { display: none; } .nav-in nav { gap: 10px; font-size: 13px; } }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+.phero { position: relative; padding: 56px 0 28px; border-bottom: 1px solid var(--line); } .phero::before { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 32px 32px; -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent); mask-image: linear-gradient(180deg, #000 30%, transparent); } .phero .wrap { position: relative; }
+.k { font: 500 12px "JetBrains Mono", monospace; letter-spacing: .18em; color: var(--muted); margin: 0 0 10px; }
+h1 { font: 600 clamp(28px, 5vw, 48px)/1.15 "Space Grotesk", var(--font-display); margin: 0 0 12px; letter-spacing: -.01em; }
+.lead { color: var(--muted); font-size: 16px; line-height: 1.75; max-width: 680px; margin: 0; }
+.plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 28px 0; }
+@media (max-width: 860px) { .plans { grid-template-columns: 1fr; } }
+.plan { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 22px 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.plan.hi { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink) inset; }
+.plan h2 { margin: 0; font: 600 20px "Space Grotesk", var(--font-display); display: flex; align-items: center; gap: 8px; }
+.price { font: 600 30px "JetBrains Mono", monospace; } .price small { font: 400 13px var(--font-body); color: var(--muted); }
+.plan ul { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; }
+.plan li { padding-left: 20px; position: relative; } .plan li::before { content: ""; position: absolute; left: 2px; top: .55em; width: 9px; height: 5px; border-left: 2px solid var(--ink); border-bottom: 2px solid var(--ink); transform: rotate(-45deg); }
+.plan li.soon { color: var(--muted); } .plan li.soon::before { border-color: var(--muted); }
+.tag { font: 500 11px "JetBrains Mono", monospace; letter-spacing: .08em; padding: 3px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); }
+.pbtn { display: inline-flex; justify-content: center; align-items: center; height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: 500 14px var(--font-body); text-decoration: none; cursor: pointer; padding: 0 16px; margin-top: auto; }
+.pbtn.pri { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.wl { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 22px 20px; margin: 0 0 28px; }
+.wl h2 { margin: 0 0 6px; font: 600 20px "Space Grotesk", var(--font-display); }
+.wl form { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; } .wl input, .wl select { height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 0 12px; font: 400 15px var(--font-body); }
+.wl input { flex: 1 1 240px; min-width: 0; } .wl .msg { width: 100%; margin: 4px 0 0; font-size: 13.5px; }
+.faq { margin: 0 0 28px; } .faq details { border-top: 1px solid var(--line); padding: 12px 0; } .faq summary { cursor: pointer; font-weight: 500; } .faq p { color: var(--muted); line-height: 1.7; margin: 8px 0 0; font-size: 14px; }
+.foot { border-top: 1px solid var(--line); padding: 18px 0 36px; font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="nav"><div class="nav-in"><span id="brand"></span><nav><a href="./">學堂</a><a href="watch.html">看盤終端</a><a href="pro.html" aria-current="page">方案</a></nav></div></header>
+<main>
+  <section class="phero"><div class="wrap">
+    <p class="k">KLINELAB PRO</p>
+    <h1>給認真做研究的人：<br>機構籌碼與突破訊號的量化終端機</h1>
+    <p class="lead">KLineLab K線情報局把 SEC 13F 機構持股、美國國會議員申報、台股內部人與借券、供應鏈量價動能矩陣，和 K 線型態辨識、歷史回測放在同一個地方。資料全部來自政府與交易所的公開資訊，由程式自動計算。</p>
+  </div></section>
+  <div class="wrap">
+    <section class="plans" aria-label="方案">
+      <article class="plan"><h2>Free</h2><div class="price">NT$0 <small>現在就能用</small></div>
+        <ul><li>台美股即時報價、K 線與 40+ 技術策略回測</li><li>市場狀態、ATR 參考進出場與部位大小</li><li>13F 機構影子組合回測、國會申報後超額報酬追蹤</li><li>供應鏈題材地圖、量價動能矩陣</li><li>庫存風險分析、多因子排行</li></ul>
+        <a class="pbtn" href="watch.html">進入看盤終端</a></article>
+      <article class="plan hi"><h2>Pro <span class="bl-pro">PRO</span></h2><div class="price">候補中 <small>價格公布前不收費</small></div>
+        <ul><li>Free 的全部功能</li><li class="soon">收盤後 13F／國會／內部人新申報推播</li><li class="soon">全市場多因子每日排名與歷史回測</li><li class="soon">回測與庫存風險報告匯出（CSV／PDF）</li><li class="soon">更高的 AI 解讀額度</li></ul>
+        <a class="pbtn pri" href="#waitlist">加入 Pro 候補名單</a></article>
+      <article class="plan"><h2>Team</h2><div class="price">洽詢 <small>研究團隊、投資社群</small></div>
+        <ul><li>Pro 的全部功能</li><li class="soon">多人共用自選、庫存與研究筆記</li><li class="soon">自訂資料排程與 API</li></ul>
+        <a class="pbtn" href="#waitlist" data-plan="team">登記洽詢</a></article>
+    </section>
+    <p class="note">灰色項目是規劃中的功能，上線時間會先通知候補名單。</p>
+    <section class="wl" id="waitlist"><h2>加入候補名單</h2><p class="note">留下 Email，Pro 開放時第一個通知你。只用來通知方案上線，不會分享給第三方。</p>
+      <form id="wlForm"><input type="email" id="wlEmail" required placeholder="you@example.com" autocomplete="email" aria-label="Email"><select id="wlPlan" aria-label="方案"><option value="pro">Pro</option><option value="team">Team</option></select><button class="pbtn pri" type="submit">送出</button><p class="msg note" id="wlMsg" role="status"></p></form></section>
+    <section class="faq" aria-label="常見問題">
+      <details><summary>資料從哪裡來？合法嗎？</summary><p>13F 來自美國證管會 SEC EDGAR、國會議員交易來自眾議院與參議院的官方申報、台股內部人與借券來自證交所與櫃買中心、台灣政治人物持股來自監察院廉政專刊，都是政府依法公開的資料。報價與 K 線來自交易所與公開行情服務。</p></details>
+      <details><summary>回測結果可以直接拿來下單嗎？</summary><p>不行。回測是用過去的資料模擬，含手續費與稅，但不代表未來；「改善試算」是事後比較，要換一段時間再驗證。平台不提供個股買賣建議。</p></details>
+      <details><summary>現在要付費嗎？</summary><p>不用。目前所有功能都免費，Pro 價格公布前不會收任何費用。</p></details>
+    </section>
+    <footer class="foot"><p id="disc"></p><p><a href="./" style="color:inherit">KLineLab K線情報局</a></p></footer>
+  </div>
+</main>
+<script src="core.js"></script>
+<script>
+"use strict";
+$("#brand").innerHTML = brandHtml({ href: "./" });
+$("#disc").textContent = DISCLAIMER;
+document.querySelectorAll("[data-plan]").forEach(a => a.addEventListener("click", () => { $("#wlPlan").value = a.dataset.plan; }));
+$("#wlForm").addEventListener("submit", async e => {
+  e.preventDefault(); const msg = $("#wlMsg"), btn = e.target.querySelector("button"); btn.disabled = true; msg.textContent = "送出中…";
+  try { const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "waitlist", email: $("#wlEmail").value, plan: $("#wlPlan").value }) });
+    const j = await r.json().catch(() => null); if (!j?.ok) throw new Error(j?.error || (r.status === 404 ? "需要部署到網站才能登記" : `伺服器回應 ${r.status}`));
+    msg.textContent = "已加入候補名單，Pro 開放時會寄信通知你。"; store.set("proWait", { at: Date.now(), plan: $("#wlPlan").value }); e.target.reset(); }
+  catch (err) { msg.textContent = "⚠ " + err.message; }
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>

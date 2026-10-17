@@ -48,7 +48,7 @@ function sxRender() {
   const box = $("#sxBox"); if (!box || !isSxSub()) return; W.sx = dSub(); if (!SX[W.sx]) return;
   sxNeed(W.sx);
   let h = ""; try { h = SX[W.sx]() || ""; } catch (e) { console.error("stockx", W.sx, e); h = `<p class="note err">這一頁出錯了（${esc(e.message)}）</p>`; }
-  box.innerHTML = h; postHeight();
+  box.innerHTML = h + discHtml(); postHeight();
 }
 const sxD = () => (W.daily?.data || []), sxI = () => (W.info && !W.info.err ? W.info : null), sxC = () => (W.co?.code === W.sel && !W.co.loading && !W.co.err ? W.co : null);
 const sxPx = () => (W.detailQ || W.quotes.get(W.sel))?.price ?? sxD().at(-1)?.c ?? null;
@@ -130,14 +130,14 @@ const SX = {
       <p class="note">多頭＝收盤與短均線都在長均線之上、長均線上揚；空頭相反；其他是盤整。ADX 衡量趨勢強度、不分方向。波動用 ATR（平均真實波幅）在自己近一年的百分位判斷。</p>`;
   },
   guru() {
-    if (typeof podCalls !== "function") return sxLoad("名人 Podcast 模組沒有載入。");
+    if (typeof podCalls !== "function") return sxLoad("財經節目 模組沒有載入。");
     if (!POD.srv && POD.srvLoading) return sxLoad();
     const L = podCalls().filter(c => c.code === W.sel).sort((a, b) => b.date.localeCompare(a.date));
-    if (!L.length) return `${sxH("達人觀點", "名人 Podcast 提到這檔的看多／看空")}<p class="note">追蹤的節目最近沒有明確提到 ${esc(nameOf(W.sel))}。到「名人」分頁可以加更多節目。</p>`;
-    return `${sxH("達人觀點", `${L.length} 筆・名人 Podcast`)}${L.slice(0, 12).map(c => { const p = podPerf(c);
+    if (!L.length) return `${sxH("節目觀點", "財經節目提到這檔的看多／看空")}<p class="note">追蹤的節目最近沒有明確提到 ${esc(nameOf(W.sel))}。到「名人」分頁可以加更多節目。</p>`;
+    return `${sxH("節目觀點", `${L.length} 筆・財經節目`)}${L.slice(0, 12).map(c => { const p = podPerf(c);
       return `<div class="sxcard"><div class="sxrow"><b>${esc(c.show)}</b><span class="pdir ${c.dir}">${c.dir === "bear" ? "看空" : "看多"}</span><span class="note">${c.date}</span>${p?.latest ? `<b class="${cls(p.latest.ex)}" style="margin-left:auto">${sxPct(p.latest.ex * 100, 1)}<small class="note"> 對大盤（${p.latest.n} 天）</small></b>` : p?.cur ? `<span class="note" style="margin-left:auto">目前 ${sxPct(p.cur.ex * 100, 1)}</span>` : ""}</div>
         ${c.quote ? `<blockquote>${esc(c.quote)}</blockquote>` : ""}<p class="note">${esc(c.title)}</p></div>`; }).join("")}
-      <p class="note">AI 從節目整理的觀點，可能聽錯；表現是相對大盤的超額報酬。<button class="linkbtn" data-sxgo="pod">到名人看完整往績 ›</button></p>`;
+      <p class="note">AI 從節目整理的觀點，可能聽錯；表現是相對大盤的超額報酬。<button class="linkbtn" data-sxgo="pod">到節目觀點看完整往績 ›</button></p>`;
   },
   daily() {
     const I = sxI(), D = sxD(), C = sxC(); if (!I) return sxLoad(W.info?.err);
@@ -213,7 +213,7 @@ const SX = {
   },
   chain() {
     const th = (typeof IND !== "undefined" ? IND.themes : []).filter(t => indCodes(t).includes(W.sel));
-    if (!th.length) return `${sxH("產業鏈")}<p class="note">產業地圖裡還沒有收錄 ${esc(nameOf(W.sel))}。</p>`;
+    if (!th.length) return `${sxH("產業鏈")}<p class="note">供應鏈題材地圖裡還沒有收錄 ${esc(nameOf(W.sel))}。</p>`;
     return `${sxH("產業鏈", `${th.length} 個題材`)}${th.slice(0, 6).map(T => { const tiers = indChainData(T);
       return `<div class="sxcard"><div class="sxrow"><b>${esc(T.name)}</b><span class="note">${esc(T.cat)}</span><button class="linkbtn" data-sxind="${T.id}" style="margin-left:auto">看圖解 ›</button></div>
         ${tiers.map(g => { const mine = g.items.some(it => it.c.some(x => x[0] === W.sel));

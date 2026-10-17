@@ -3,27 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>K線看盤</title>
+<title>KLineLab｜看盤終端</title>
 <meta name="description" content="自選股（多群組）、台股與美股熱門、排行、當日分時、K 線（分／日／週／月都能往前拉）、技術分析、籌碼、基本面、五檔、持股損益與價格提醒。">
-<meta name="theme-color" content="#171717">
+<meta name="theme-color" content="#09090B">
 <link rel="manifest" href="watch.webmanifest">
 <link rel="apple-touch-icon" href="watch-icon-180.png">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="alternate icon" href="watch-icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="K線看盤">
+<meta name="apple-mobile-web-app-title" content="KLineLab">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script>
 (() => { const d = document.documentElement, q = new URLSearchParams(location.search);
   if (q.has("embed")) d.dataset.embed = "1";
   try { d.dataset.theme = q.get("theme") || JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); } catch { d.dataset.theme = "dark"; }
   try { if ((q.get("font") || JSON.parse(localStorage.getItem("kline:font") || '"sans"')) === "song") d.dataset.font = "song"; } catch {}
-  try { const ls = localStorage; let st = q.get("style") || JSON.parse(ls.getItem("kline:style") || '"layout"'); if (!q.get("style") && ls.getItem("kline:styleV") !== "2") { st = "layout"; ls.setItem("kline:style", '"layout"'); ls.setItem("kline:styleV", "2"); } if (st && st !== "minimal") d.dataset.style = st; } catch {} })();
+  try { const ls = localStorage; let st = q.get("style") || JSON.parse(ls.getItem("kline:style") || '"lab"'); if (!q.get("style") && ls.getItem("kline:styleV") !== "3") { st = "lab"; ls.setItem("kline:style", '"lab"'); ls.setItem("kline:styleV", "3"); } if (st && st !== "minimal") d.dataset.style = st; } catch {} })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@300;400;500;600&display=swap">
 <link rel="stylesheet" href="core.css">
 <style>
 /* 看盤：左邊清單（自選群組／台股熱門／美股熱門／排行）、右邊個股（走勢／技術／籌碼／基本面）。
@@ -498,6 +498,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .ixcards.us .ixcard .spark { width: 100%; height: 22px; margin-top: 2px; }
 .bwrap { margin: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); } .bubble { width: 100%; height: auto; display: block; } .bax { stroke: var(--line); stroke-width: 1; } .bq { font: 500 10px var(--font-body); fill: var(--muted); }
 .bnode { cursor: pointer; } .bnode circle { stroke: none; fill-opacity: var(--bop, .45); transition: fill-opacity .2s; } .bnode.on circle { fill-opacity: min(1, calc(var(--bop, .45) + .35)); } .bnode:focus circle, .bnode:hover circle { fill-opacity: min(1, calc(var(--bop, .45) + .2)); }
+.mtool { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin: 6px 12px; } .mtool .cg-t { font-family: var(--font-display); font-weight: 600; color: var(--ink); letter-spacing: .02em; }
+.ctags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; } .ctg { font-style: normal; font-size: 11px; line-height: 1.5; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); } .ctg.up { color: var(--up); border-color: color-mix(in srgb, var(--up) 40%, transparent); } .ctg.down { color: var(--down); border-color: color-mix(in srgb, var(--down) 40%, transparent); } .ctg.warn { color: var(--ink); }
+.bopr { margin: 0; }
 .bopr { display: flex; align-items: center; gap: 8px; margin: 2px 12px 0; font-size: 12px; color: var(--muted); } .bopr input { flex: 1; max-width: 220px; accent-color: var(--ink); } .bopr b { font: 500 12px var(--font-num); color: var(--ink); min-width: 3em; } .bax-t { font: 10px var(--font-body); fill: var(--muted); } .blab { pointer-events: none; } .blab text { paint-order: stroke; stroke: var(--surface-2); stroke-width: 3px; stroke-linejoin: round; }
 .bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bbtns { display: flex; gap: 8px; flex-wrap: wrap; } .bn { font: 500 9px var(--font-body); fill: var(--ink); text-anchor: middle; pointer-events: none; } .bv { font: 8.5px var(--font-num); fill: var(--ink); opacity: .8; text-anchor: middle; pointer-events: none; }
 .mlist { list-style: none; margin: 0; padding: 0; } .mlist button { width: 100%; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); padding: 9px 2px; cursor: pointer; text-align: left; font: inherit; }
@@ -690,7 +693,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 </head>
 <body>
 <header class="w-top">
-  <a class="brand" href="./" aria-label="K線學堂首頁"><img class="logo" src="logo.svg" alt="" width="34" height="34"><span>K線看盤</span></a>
+  <a class="brand" href="./" aria-label="KLineLab 首頁"><img class="logo" src="logo.svg" alt="" width="34" height="34"><span class="bl-t"><b>KLineLab</b><small>看盤終端</small></span></a><a class="bl-pro" href="pro.html" title="KLineLab Pro 方案">PRO</a>
   <div class="ix" id="ix" aria-label="大盤指數"></div>
   <div class="tools">
     <span class="stat" id="stat"><i class="dot" id="dot"></i><span class="st-t" id="statText">連線中…</span></span>
@@ -709,7 +712,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
       <div class="l-ix" id="ix2"></div>
-      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金</button><button data-l="ind">產業</button><button data-l="etf">ETF</button><button data-l="pod">名人</button><button data-l="cong">申報</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button><button data-l="after">盤後</button></div>
+      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金雷達</button><button data-l="ind">供應鏈</button><button data-l="etf">ETF</button><button data-l="pod">節目觀點</button><button data-l="cong">大戶國會</button><button data-l="tw">台股熱門</button><button data-l="us">美股熱門</button><button data-l="rank">排行</button><button data-l="after">盤後</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
         <button type="button" class="gsadd" data-gsearch-add>🔍 搜尋代號或名稱，加入自選</button>
@@ -739,7 +742,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
         <button class="btn sm" id="holdBtn" type="button">💼 持股</button>
         <button class="btn sm" id="alertBtn" type="button">🔔 提醒</button>
         <button class="btn sm" id="refreshBtn" type="button" title="重新抓這檔的報價、K 線、分時、籌碼與新聞（不用瀏覽器快取）">↻ 更新</button>
-        <a class="btn sm" id="learnLink" href="./" title="到 K線學堂的個股判讀看這一檔">🔍 判讀</a>
+        <a class="btn sm" id="learnLink" href="./" title="到學堂的個股判讀看這一檔">🔍 判讀</a>
       </div>
     </div>
     <div class="panel box" id="holdBox" hidden>
@@ -841,7 +844,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.18-85</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="num" style="margin-left:8px">版本 2026.10.18-86</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -863,7 +866,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     <button data-m="style"><span class="mic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1 0 1.6-.7 1.6-1.5 0-.9-.8-1.3-.8-2.1 0-.9.7-1.6 1.6-1.6h1.9a4.2 4.2 0 0 0 4.2-4.2c0-4.3-3.8-7.6-8.5-7.6z"/><circle cx="7.6" cy="11" r="1"/><circle cx="10.4" cy="7.4" r="1"/><circle cx="14.8" cy="7.6" r="1"/></svg></span>版面風格</button>
     <button data-m="font">Aa 字體：黑體／宋體</button>
     <button data-m="install">📲 加入主畫面</button>
-    <a href="./" id="mLearn">📘 K線學堂</a>
+    <a href="./" id="mLearn">📘 KLineLab 學堂</a>
     <a href="savings.html">💰 存股模擬</a>
   </div>
   <div id="sheetExtra"></div>
@@ -1451,7 +1454,7 @@ function renderList0() {
     $("#lTools").innerHTML = `<span class="note">${tq?.chgPct != null ? `<b class="${cls(tq.chg)}">大盤 ${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct.toFixed(2)}%</b>・` : ""}${last ? `法人資料 ${last.date.replace(/-/g, "/")}${(() => { const t = new Date(Date.now() + 8 * 3600e3); return t.getUTCDay() % 6 && last.date < t.toISOString().slice(0, 10) ? "（今天的約 15:00～16:30 公布，會自動補上）" : ""; })()}` : "板塊資金"}</span><button class="btn sm" data-gx="mfRefresh">↻ 更新</button>`;
     W.mf.view === "replay" ? mfReplayDraw() : renderMoney(); note = "金額＝三大法人買賣超張數 × 收盤價（估算，億元）；板塊是產業地圖的題材加上產業別，一檔股票可能同時算進好幾個板塊。只呈現公開資料的統計，不是投資建議。";
   } else if (W.lt === "ind") {
-    $("#lTools").innerHTML = `<span class="note">產業地圖・代表公司參考名單（整理於 ${INDUSTRY_MAP.updated}），不是推薦</span>`;
+    $("#lTools").innerHTML = `<span class="note">供應鏈題材地圖・代表公司參考名單（整理於 ${INDUSTRY_MAP.updated}），不是推薦</span>`;
     renderInd(); note = "台股、美股有即時報價；日股、韓股只列名稱。題材的平均漲跌是成員今天漲跌幅的簡單平均。";
   } else if (W.lt === "mkt") {
     $("#lTools").innerHTML = `<span class="note">${W.mkReg === "gl" ? `原物料・外匯・利率${W.gl?.at ? `・更新於 ${new Date(W.gl.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
@@ -1483,6 +1486,8 @@ function renderList0() {
       metric: chipRank ? `${W.rankType === "foreign" ? "外資" : "投信"}買超 ${r[W.rankType].toLocaleString()} 張` : W.rankType === "value" ? `成交值 ${r.value?.toFixed(1)} 億` : W.rankType === "volume" ? `成交量 ${fmtVol(r.vol)} 張` : `${r.live ? "現價" : "收盤"} ${fmtP(r.price)}・${r.chgPct > 0 ? "+" : ""}${(+r.chgPct).toFixed(2)}%` })).join("") : `<li class="empty note">${H?.err ? "⚠ " + esc(H.err) : W.off ? "需要部署到網站才有排行。" : "載入中…"}</li>`;
     note = H ? `${H.live ? "盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）" : H.date ? H.date.replace(/-/g, "/") + " 收盤後統計" : ""}${H.source ? "・" + H.source : ""}；右邊的價格是即時價` : "";
   }
+  // 回測、籌碼、申報相關的清單頁底部都放免責聲明
+  if (["cong", "hold", "screen", "money", "tools", "pod", "ind"].includes(W.lt) && !$("#lx").hidden && !$("#lx").querySelector(".disc")) $("#lx").insertAdjacentHTML("beforeend", discHtml());
   W.prevPx.clear();
   const ago = W.lastOk ? Math.round((Date.now() - W.lastOk) / 1000) : null;
   if (W.off) note = "這個環境沒有資料服務；部署到網站（Vercel）後才會有即時資料。";
@@ -1991,7 +1996,7 @@ function newsAiRender() {
   box.innerHTML = qAiBlock({ key: ak, R: W.qai[ak] }, "🤖 AI：這些消息可能的影響"); postHeight();
 }
 
-/* ---------- 資金：板塊資金流向（今日重點、泡泡圖四象限、輪動回放、排行），計算在 flows.js ---------- */
+/* ---------- 主力資金雷達：板塊資金流向（今日重點、量價動能矩陣四象限、雷達回放、排行），計算在 flows.js ---------- */
 // 往前一天一天抓 /api/daily（跳過週末），直到有 need 個交易日；一次只抓一天，避免對證交所太頻繁
 async function loadMoney(need = 10, force = false) {
   const F = W.mf; if (W.off) return renderList();
@@ -2031,8 +2036,8 @@ function renderSector(M) {
       <ol class="mlist">${sorted.map((x, i) => `<li><button data-sel="${x.code}"><span class="rk">${i + 1}</span><span></span><span class="nm">${esc(x.name)}<small>${x.code}・收 ${x.px ?? "—"}・外資 ${flowFmt(x.f5)}・投信 ${flowFmt(x.tr5)}</small></span>${pctB(x.pct1)}${yiB(k === "a1" ? x.a1 : x.a5)}</button></li>`).join("")}</ol>
       <p class="note">金額＝法人買賣超張數 × 收盤價（億元）。右邊是${k === "a1" ? "今日" : "近 5 日"}合計；點個股看 K 線。</p></section>`;
 }
-// 泡泡圖：x＝近 5 日淨流入、y＝加速度（都用平方根縮放）、半徑＝近 5 日淨流入規模（3～30，差距拉大）、顏色＝象限。
-// 重疊的泡泡會稍微推開（不會被推到別的象限），名稱標籤會避開彼此和其他泡泡，放不下就不標（點泡泡看詳細）。
+// 量價動能矩陣：x＝近 5 日淨流入、y＝加速度（都用平方根縮放）、半徑＝近 5 日淨流入規模（3～30，差距拉大）、顏色＝象限。
+// 重疊的圓點會稍微推開（不會被推到別的象限），名稱標籤會避開彼此和其他圓點，放不下就不標（點圓點看詳細）。
 function bubbleLayout(pts, { w = 360, h = 360, scale } = {}) {
   const top = 30, bot = h - 30, L = 8, Rt = w - 8, cx = w / 2, cy = (top + bot) / 2;
   const mx = scale?.mx || Math.max(1, ...pts.map(p => Math.abs(p.net5))), my = scale?.my || Math.max(1, ...pts.map(p => Math.abs(p.accel)));
@@ -2045,36 +2050,36 @@ function bubbleLayout(pts, { w = 360, h = 360, scale } = {}) {
     for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) { const a = N[i], b = N[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01, o = a.r + b.r + 1 - d;
       if (o > 0) { const ux = dx / d, uy = dy / d, k = o / 2; a.x -= ux * k; a.y -= uy * k; b.x += ux * k; b.y += uy * k; clamp(a); clamp(b); moved = true; } }
     if (!moved) break; }
-  // 標籤：前 12 大依序找位置（泡泡裡、上、下、右、左），和已放的標籤或別的泡泡重疊就換位置
+  // 標籤：前 12 大依序找位置（圓點裡、上、下、右、左），和已放的標籤或別的圓點重疊就換位置
   const boxes = [], hit = (r1, r2) => r1.x < r2.x + r2.w && r2.x < r1.x + r1.w && r1.y < r2.y + r2.h && r2.y < r1.y + r1.h;
   const circHit = (r, n) => { const qx = Math.max(r.x, Math.min(n.x, r.x + r.w)), qy = Math.max(r.y, Math.min(n.y, r.y + r.h)); return Math.hypot(qx - n.x, qy - n.y) < n.r - 1; };
   N.forEach((n, i) => { if (i >= 12) return; const nm = n.p.name.length > 6 ? n.p.name.slice(0, 6) + "…" : n.p.name, bw = Math.max(nm.length * 9, flowFmt(n.p.net5).length * 5.4) + 4, bh = 20;
     const cand = [[0, 0, n.r >= 13], [0, -n.r - bh / 2 - 1, true], [0, n.r + bh / 2 + 1, true], [n.r + bw / 2 + 2, 0, true], [-n.r - bw / 2 - 2, 0, true]];
     for (const [dx, dy, ok] of cand) { if (!ok) continue; const r = { x: n.x + dx - bw / 2, y: n.y + dy - bh / 2, w: bw, h: bh };
       if (r.x < 2 || r.x + r.w > w - 2 || r.y < top - 4 || r.y + r.h > bot + 4) continue;
-      if (boxes.some(b => hit(b, r)) || (dx || dy ? N.some(m => m !== n && circHit(r, m)) : false)) continue; // 放在泡泡裡的標籤有描邊，可以壓到旁邊的泡泡
+      if (boxes.some(b => hit(b, r)) || (dx || dy ? N.some(m => m !== n && circHit(r, m)) : false)) continue; // 放在圓點裡的標籤有描邊，可以壓到旁邊的圓點
       boxes.push(r); n.lab = { dx, dy, nm }; break; } });
   return { N, w, h, top, bot, cx, cy, mx, my };
 }
-// 標籤畫在最上層（不會被別的泡泡蓋住），跟著泡泡一起移動
+// 標籤畫在最上層（不會被別的圓點蓋住），跟著圓點一起移動
 const bubbleLabIn = n => `<g class="bl" transform="translate(${n.lab.dx.toFixed(1)},${n.lab.dy.toFixed(1)})"><text y="-1" class="bn">${esc(n.lab.nm)}</text><text y="8.5" class="bv">${flowFmt(n.p.net5)}</text></g>`;
 const bubbleLab = n => (n.lab ? `<g class="blab" data-lb="${esc(n.p.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">${bubbleLabIn(n)}</g>` : "");
 const bubbleNode = (n, sel) => `<g class="bnode${n.p.id === sel ? " on" : ""}" data-mbs="${esc(n.p.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})"><circle r="${n.r.toFixed(1)}" fill="${FLOW_Q[n.p.q][2]}"/><title>${esc(n.p.name)} ${flowFmt(n.p.net5)}</title></g>`;
 function bubbleSvg(pts, { w = 360, h = 360, id = "mfb", scale, sel } = {}) {
   const B = bubbleLayout(pts, { w, h, scale }), lab = (t, x, y, a, c) => `<text x="${x}" y="${y}" text-anchor="${a}" class="bq" style="fill:${c}">${t}</text>`, { top, bot, cx, cy } = B;
-  return `<svg id="${id}" class="bubble" viewBox="0 0 ${w} ${h}" role="img" aria-label="板塊資金四象限泡泡圖">
+  return `<svg id="${id}" class="bubble" viewBox="0 0 ${w} ${h}" role="img" aria-label="量價動能矩陣（板塊資金四象限）">
     <rect x="${cx}" y="${top}" width="${w - 8 - cx}" height="${cy - top}" fill="${FLOW_Q.up[2]}" opacity=".05"/><rect x="8" y="${cy}" width="${cx - 8}" height="${bot - cy}" fill="${FLOW_Q.down[2]}" opacity=".05"/>
     <line x1="${cx}" y1="${top}" x2="${cx}" y2="${bot}" class="bax"/><line x1="8" y1="${cy}" x2="${w - 8}" y2="${cy}" class="bax"/>
-    ${lab("↖ 觀望：流出但放緩", 8, 18, "start", FLOW_Q.watch[2])}${lab("漲潮：加速流入 ↗", w - 8, 18, "end", FLOW_Q.up[2])}${lab("↙ 退潮：加速流出", 8, h - 10, "start", FLOW_Q.down[2])}${lab("輪動：流入但放緩 ↘", w - 8, h - 10, "end", FLOW_Q.rot[2])}
-    <text x="${w - 10}" y="${cy - 4}" text-anchor="end" class="bax-t">淨流入 →</text><text x="${cx + 4}" y="${top + 10}" class="bax-t">加速 ↑</text>
+    ${lab("↖ " + FLOW_Q.watch[0], 8, 18, "start", FLOW_Q.watch[2])}${lab(FLOW_Q.up[0] + " ↗", w - 8, 18, "end", FLOW_Q.up[2])}${lab("↙ " + FLOW_Q.down[0], 8, h - 10, "start", FLOW_Q.down[2])}${lab(FLOW_Q.rot[0] + " ↘", w - 8, h - 10, "end", FLOW_Q.rot[2])}
+    <text x="${w - 10}" y="${cy - 4}" text-anchor="end" class="bax-t">主力淨流入 →</text><text x="${cx + 4}" y="${top + 10}" class="bax-t">動能加速 ↑</text>
     <g class="bnodes">${B.N.map(n => bubbleNode(n, sel)).join("")}</g><g class="blabs">${B.N.map(bubbleLab).join("")}</g></svg>`;
 }
 const easeIO = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-// 泡泡透明度：使用者可調，記在這個瀏覽器
-const bopRow = () => `<label class="bopr">泡泡透明度<input type="range" class="bop-r" min="0.1" max="0.9" step="0.05" value="${W.mf.bop}" aria-label="泡泡透明度"><b>${Math.round(W.mf.bop * 100)}%</b></label>`;
-// 點泡泡：下面顯示這個板塊的數字，再按按鈕進題材內頁
+// 點的透明度：使用者可調，記在這個瀏覽器
+const bopRow = () => `<label class="bopr">點的透明度<input type="range" class="bop-r" min="0.1" max="0.9" step="0.05" value="${W.mf.bop}" aria-label="點的透明度"><b>${Math.round(W.mf.bop * 100)}%</b></label>`;
+// 點圓點：下面顯示這個板塊的數字，再按按鈕進題材內頁
 function bubbleInfo(x) {
-  if (!x) return `<p class="note gnote binfo-empty">點一下泡泡，看這個板塊的法人資金細節。</p>`;
+  if (!x) return `<p class="note gnote binfo-empty">點一下圓點，看這個板塊的法人資金細節。</p>`;
   return `<section class="mcard binfo" style="--qc:${FLOW_Q[x.q][2]}"><h3>${qDot(x.q)}${esc(x.name)} <span class="note">${x.kind}・${x.n} 檔・${FLOW_Q[x.q][0]}（${FLOW_Q[x.q][1]}）</span></h3>
     <div class="bgrid"><span>近 5 日淨流入</span>${yiB(x.net5)}<span>前 5 日</span>${yiB(x.prev5)}<span>加速度</span>${yiB(x.accel)}<span>近 5 日漲跌</span>${pctB(x.pct5)}<span>外資 5 日</span>${yiB(x.f5)}<span>投信 5 日</span>${yiB(x.tr5)}<span>買超家數</span><b>${x.buy5}／${x.n}</b><span>買最多</span><b>${esc(x.top || "—")}</b></div>
     <div class="bbtns"><button class="btn sm primary" data-fsec="${esc(x.id)}">看成分股 ›</button>${INDT.has(x.id) ? `<button class="btn sm" data-iopen-ext="${esc(x.id)}">題材內頁 ›</button>` : ""}</div></section>`;
@@ -2088,7 +2093,7 @@ function mfCanvas(M, mood, sum) {
   block("法人買最多板塊", A.filter(x => x.net1 > 0).sort((a, b) => b.net1 - a.net1).slice(0, 3).map(x => [x.name, flowFmt(x.net1)]), 360, "#e8603c");
   block("法人賣最多板塊", A.filter(x => x.net1 < 0).sort((a, b) => a.net1 - b.net1).slice(0, 3).map(x => [x.name, flowFmt(x.net1)]), 620, "#22a87a");
   c.fillStyle = mute; c.font = "32px sans-serif"; let line = "", y = 900; for (const ch of sum) { if (c.measureText(line + ch).width > W0 - 140) { c.fillText(line, 70, y); y += 46; line = ""; if (y > H0 - 140) break; } line += ch; } if (y <= H0 - 140) c.fillText(line, 70, y);
-  c.fillStyle = mute; c.font = "28px sans-serif"; c.fillText("K線學堂・用公開資料估算，不是投資建議", 70, H0 - 60); return cv;
+  c.fillStyle = mute; c.font = "28px sans-serif"; c.fillText("KLineLab K線情報局・用公開資料估算，不是投資建議", 70, H0 - 60); return cv;
 }
 async function mfShare(how) {
   const M = mfModel(); if (!M) return; const mood = flowMood(M), tq = W.quotes.get("T00"), sum = flowSummary(M, mood, tq?.chgPct), url = location.href.split("#")[0];
@@ -2102,7 +2107,7 @@ async function mfShare(how) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); toast("已下載圖片");
 }
 function renderMoney() {
-  const F = W.mf, M = mfModel(); let h = `<div class="seg scrseg" role="group" aria-label="資金">${[["today", "今日"], ["bubble", "泡泡圖"], ["rank", "排行"]].map(([k, t]) => `<button data-mv="${k}" aria-pressed="${F.view === k}">${t}</button>`).join("")}</div>`;
+  const F = W.mf, M = mfModel(); let h = `<div class="seg scrseg" role="group" aria-label="資金">${[["today", "今日"], ["bubble", "動能矩陣"], ["rank", "排行"]].map(([k, t]) => `<button data-mv="${k}" aria-pressed="${F.view === k}">${t}</button>`).join("")}</div>`;
   if (!M) { $("#lx").innerHTML = h + `<p class="note gnote">${W.off ? "需要部署到網站才有資金資料。" : F.err && !F.loading ? `⚠ ${esc(F.err)}` : `載入最近的交易日資料…${F.prog ? `（${F.prog}）` : ""}<br>第一次要一天一天向證交所抓，大約 10～20 秒；之後會快很多。`}</p>`; return; }
   const T = M.T, A = flowAt(M), S = flowStocks(M), mood = flowMood(M), tq = W.quotes.get("T00"), more = T < 10 ? `<p class="note gnote">目前只有 ${T} 個交易日，加速度需要 10 天才準${F.loading ? "，載入中…" : ""}</p>` : "";
   if (F.view === "sector") h += renderSector(M);
@@ -2118,19 +2123,18 @@ function renderMoney() {
       + `<h4>盤後總結</h4><p class="msum">${esc(flowSummary(M, mood, tq?.chgPct))}</p>
         <button class="btn mshare" data-mshare="share">分享今日盤面</button><div class="mshares"><button data-mshare="line">LINE</button><button data-mshare="threads">Threads</button><button data-mshare="copy">複製圖</button></div></section>`
       + `<section class="mcard"><h3>近 5 日法人買超最多</h3><div class="mchips">${b5.map(x => chip(x, x.net5, `data-fsec="${esc(x.id)}"`)).join("")}</div></section>`
-      + `<button class="mcard mlink" data-mv="replay"><b>板塊資金輪動回放</b><span class="note">近 20 個交易日，資金怎麼移動 ›</span></button>`;
+      + `<button class="mcard mlink" data-mv="replay"><b>主力資金雷達回放</b><span class="note">近 20 個交易日，資金怎麼移動 ›</span></button>`;
   } else if (F.view === "bubble") {
     const cnt = Object.fromEntries(Object.keys(FLOW_Q).map(k => [k, A.filter(x => x.q === k).length])), L = A.filter(x => x.q === F.q).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5));
     h += more + `<div class="qcards">${Object.entries(FLOW_Q).map(([k, [t, d, c]]) => `<button class="qcard" data-mq="${k}" aria-pressed="${F.q === k}" style="--qc:${c}"><span>${t}</span><b>${cnt[k]}</b><small>${d}</small></button>`).join("")}</div>`
-      + bopRow() + `<div class="bwrap" style="--bop:${W.mf.bop}">${bubbleSvg(A.filter(x => Math.abs(x.net5) > 0).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30), { sel: F.bsel })}</div>${bubbleInfo(A.find(x => x.id === F.bsel))}<p class="note gnote">只畫近 5 日金額最大的 30 個板塊；泡泡越大代表近 5 日淨流入（或流出）越多，座標用平方根縮放、重疊的會稍微推開，所以位置是大約的。</p>`
-      + `<button class="btn sm" data-mv="replay" style="margin:0 12px">▶ 資金輪動回放</button>`
+      + `<div class="mtool">${bopRow()}<button class="btn sm" data-mv="replay">▶ 雷達回放</button></div>` + `<div class="bwrap" style="--bop:${W.mf.bop}">${bubbleSvg(A.filter(x => Math.abs(x.net5) > 0).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30), { sel: F.bsel })}</div>${bubbleInfo(A.find(x => x.id === F.bsel))}<p class="note gnote">只畫近 5 日金額最大的 30 個板塊；圓點越大代表近 5 日淨流入（或流出）越多，座標用平方根縮放、重疊的會稍微推開，所以位置是大約的。</p>`
       + `<section class="mcard"><h3>${qDot(F.q)}${FLOW_Q[F.q][0]} <span class="note">${L.length} 個板塊・依近 5 日資金規模</span></h3><ol class="mlist">${L.map((x, i) => `<li><button data-fsec="${esc(x.id)}"><span class="rk">${i + 1}</span><span class="nm">${esc(x.name)}<small>${x.kind}・${x.n} 檔</small></span>${pctB(x.pct5)}${yiB(x.net5)}</button></li>`).join("")}</ol></section>`;
   } else if (F.view === "replay") {
     const t0 = Math.min(9, T - 1), t = F.rp.t == null ? T - 1 : Math.max(t0, Math.min(T - 1, F.rp.t)), { P, pool } = mfReplayPool(M, t); F.rp.fl = null;
     const R = mfReplayBits(M, t, pool, P);
-    h += `<div class="gback"><button class="btn sm" data-mv="bubble">‹ 返回</button><b>板塊資金輪動回放</b><select class="sel" data-mrs aria-label="選板塊"><option value="hot" ${F.rp.set === "hot" ? "selected" : ""}>熱門 30</option><option value="all" ${F.rp.set === "all" ? "selected" : ""}>全部板塊</option></select></div>`
+    h += `<div class="gback"><button class="btn sm" data-mv="bubble">‹ 返回</button><b>主力資金雷達回放</b><select class="sel" data-mrs aria-label="選板塊"><option value="hot" ${F.rp.set === "hot" ? "selected" : ""}>熱門 30</option><option value="all" ${F.rp.set === "all" ? "selected" : ""}>全部板塊</option></select></div>`
       + (T < 12 || F.loading ? `<p class="note gnote mrp-load">${F.loading ? `正在載入更早的資料（${F.prog || ""}）…` : "資料不足 12 個交易日"}</p>` : "")
-      + bopRow() + `<div class="bwrap tide" style="--bop:${W.mf.bop}">${bubbleSvg([], { w: 360, h: 360 })}</div><p class="mrp-sum">${R.sum}</p>
+      + bopRow() + `<div class="bwrap radar" style="--bop:${W.mf.bop}">${bubbleSvg([], { w: 360, h: 360 })}</div><p class="mrp-sum">${R.sum}</p>
       <p class="mrp-date">${R.date}</p><input type="range" class="mrp-range" min="${t0}" max="${T - 1}" step="0.01" value="${F.rp.u ?? t}" aria-label="日期">
       <div class="mrp-ctl"><button class="btn sm" data-mrp="prev">‹</button><button class="btn sm primary" data-mrp="play">${F.rp.playing ? "❚❚ 暫停" : "▶ 播放"}</button><button class="btn sm" data-mrp="next">›</button><button class="btn sm" data-mrp="speed">${F.rp.speed}x</button></div>${bubbleInfo(P.find(x => x.id === F.bsel))}`;
     if (T < 30 && !F.loading) setTimeout(() => loadMoney(30), 0);
@@ -2165,13 +2169,13 @@ function renderMoney() {
   }
   $("#lx").innerHTML = h; if (F.view === "replay") flowMount();
 }
-// 回放：整段期間用同一個比例尺，泡泡位置在不同天之間才能比較
+// 回放：整段期間用同一個比例尺，圓點位置在不同天之間才能比較
 function mfReplayScale(M, t0) { let mx = 1, my = 1; for (let t = t0; t < M.T; t++) for (const x of flowAt(M, t)) { mx = Math.max(mx, Math.abs(x.net5)); my = Math.max(my, Math.abs(x.accel)); } return { mx, my }; }
 function mfReplayPool(M, t) { const F = W.mf, P = flowAt(M, t); if (F.rp.set === "all") return { P, pool: P }; const ids = new Set(flowAt(M).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30).map(x => x.id)); return { P, pool: P.filter(x => ids.has(x.id)) }; }
 function mfReplayBits(M, t, pool, P) { const bmax = P.slice().sort((a, b) => b.net5 - a.net5)[0], smin = P.slice().sort((a, b) => a.net5 - b.net5)[0], dt = new Date(M.dates[t] + "T00:00:00Z");
   return { sum: `近 5 日買最多 <b class="up">${esc(bmax?.name || "—")} ${bmax ? flowFmt(bmax.net5) : ""}</b><br>近 5 日賣最多 <b class="down">${esc(smin?.name || "—")} ${smin ? flowFmt(smin.net5) : ""}</b>`, date: `${M.dates[t].slice(5).replace("-", "/")} 週${"日一二三四五六"[dt.getUTCDay()]}` }; }
-// ---- 資金潮汐：每一天的泡泡版面當關鍵影格，天與天之間用 Catmull-Rom 曲線連續補間（速度連續、不會一頓一頓），
-//      泡泡後面拖著最近兩天多的尾跡；時間軸 u 是連續的（例如 12.37 天），播放、拖拉都是平滑的 ----
+// ---- 雷達回放：每一天的矩陣版面當關鍵影格，天與天之間用 Catmull-Rom 曲線連續補間（速度連續、不會一頓一頓），
+//      圓點後面拖著最近兩天多的尾跡；時間軸 u 是連續的（例如 12.37 天），播放、拖拉都是平滑的 ----
 function flowBuild(M) {
   const F = W.mf, t0 = Math.min(9, M.T - 1), scale = mfReplayScale(M, t0), ids = new Set(mfReplayPool(M, M.T - 1).pool.map(x => x.id)), keys = [], names = {};
   for (let t = t0; t < M.T; t++) { const P = flowAt(M, t).filter(x => ids.has(x.id)), B = bubbleLayout(P, { w: 360, h: 360, scale }), m = new Map();
@@ -2202,7 +2206,7 @@ function flowMount() {
   if (F.rp.u == null || F.rp.u > M.T - 1 || F.rp.u < FL.t0) F.rp.u = F.rp.t ?? M.T - 1;
   flowDraw(); flowTexts(true); if (F.rp.playing) flowLoop();
 }
-// 畫目前 u 的畫面：半透明泡泡（沒有外框、沒有尾跡）、標籤（相鄰兩天的標籤依距離淡入淡出）
+// 畫目前 u 的畫面：半透明圓點（沒有外框、沒有尾跡）、標籤（相鄰兩天的標籤依距離淡入淡出）
 function flowDraw() {
   const F = W.mf, FL = F.rp.fl; if (!FL?.el) return; const u = F.rp.u;
   for (const id of FL.ids) { const E = FL.el[id], P = flowAtU(FL, id, u); if (!P) continue; const col = FLOW_Q[P.q][2];
@@ -2301,7 +2305,7 @@ function indCard(t, fav) {
   return `<article class="itheme" style="--ic:${col}"><div class="ith"><span class="iic">${indIcon(t)}</span><span class="itag">${MK_TAG[t.mk]}</span>
     <span class="iavg ${a ? cls(a.pct) : ""}" title="${a ? `${a.n} 檔的平均漲跌` : "沒有即時報價"}">${a ? `${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%` : "—"}</span>
     <button class="ifav" data-ifav="${t.id}" aria-pressed="${fav.has(t.id)}" aria-label="收藏 ${esc(t.name)}">${fav.has(t.id) ? "♥" : "♡"}</button><span class="icnt">${n} 家公司</span></div>
-    <h3>${esc(t.cat)}<span>｜</span>${esc(t.name)}</h3><p>${esc(t.desc)}</p><button class="igo" data-iopen="${t.id}">探索產業地圖 →</button></article>`;
+    <h3>${esc(t.cat)}<span>｜</span>${esc(t.name)}</h3><p>${esc(t.desc)}</p><button class="igo" data-iopen="${t.id}">探索供應鏈地圖 →</button></article>`;
 }
 // 產業網絡：每一層一列，節點固定寬度，連線用 SVG 曲線；點節點只加亮它的上下游
 function indNetwork(net, focus) {
@@ -2338,9 +2342,26 @@ async function indAsk(id) {
 // 產業價值鏈結構：上游／中游／下游，每一段編號（和圖上的編號圓點一樣），點「N 家」展開公司；沒有 chain 就用 segs 當一層
 const TIER_COL = { 上游: "#3b82f6", 中游: "#f59e0b", 下游: "#10b981" };
 function indChainData(T) { const F = indFig(T); return F?.chain?.length ? F.chain : [{ tier: "產業鏈", title: "", items: T.segs.map(g => ({ name: g.n, desc: "", c: g.c })) }]; }
+// 個股旁的說明由程式產生：所在的產業鏈位置（上中下游・環節）＋我們自己的籌碼標籤（內部人申報、借券賣出異常、千張大戶週增減），不用人工短評
+function indRoleMap(T) { const M = new Map(); for (const g of indChainData(T)) for (const it of g.items) for (const [c] of it.c) (M.get(c) || M.set(c, []).get(c)).push([g.tier, it.name]); return M; }
+function chipTags(c) {
+  const out = [], from = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10), ins = (W.ins?.rows || []).filter(r => r.code === c && r.d >= from).length;
+  if (ins) out.push([`內部人申報 ${ins} 筆`, "warn"]);
+  const L = W.chipx?.lend?.[c]; if (L && L[0] >= 300 && L[1] > 0 && L[0] / L[1] >= 0.05) out.push([`借券賣出異常 ${Math.round(L[0]).toLocaleString()} 張`, "down"]);
+  const t = typeof tdccChg === "function" ? tdccChg(c) : null; if (t != null && Math.abs(t) >= 0.5) out.push([`千張大戶 ${t > 0 ? "+" : ""}${t}%`, t > 0 ? "up" : "down"]);
+  return out;
+}
+// 籌碼標籤要的資料：內部人申報、借券／千張大戶（台股才有）；載完重畫供應鏈頁
+async function indChipLoad(codes) {
+  if (W.off || W.indChipBusy) return; const tw = codes.filter(isTW), need = [...new Set(tw.map(c => c.slice(0, 2)))].filter(k => !W.tdcc?.[k]);
+  if (W.ins && W.chipx && !need.length) return; W.indChipBusy = true;
+  try { await Promise.all([insLoad(), chipxLoad(), ...need.map(tdccShard)]); } catch {} W.indChipBusy = false; if (W.lt === "ind") renderInd();
+}
 function indCoRows(T, list) {
-  return `<ul class="slist">${list.map(([c, nm, role]) => { const q = W.quotes.get(c), ok = indQuotable(c);
-    return `<li>${ok ? `<button data-sel="${c}">` : `<div class="inq">`}<span class="nm">${esc(nm)}<small>${c}・${esc(role)}</small></span><b class="${cls(q?.chg)}">${ok ? fmtP(q?.price) : "—"}<small>${q?.chgPct != null ? (q.chgPct > 0 ? "+" : "") + q.chgPct.toFixed(2) + "%" : ok ? "" : "暫無報價"}</small></b>${ok ? "</button>" : "</div>"}</li>`; }).join("")}</ul>`;
+  const R = indRoleMap(T); indChipLoad(list.map(x => x[0]));
+  return `<ul class="slist">${list.map(([c, nm]) => { const q = W.quotes.get(c), ok = indQuotable(c), pos = R.get(c) || [], tags = chipTags(c);
+    const role = pos.length ? `${pos[0][0]}・${pos[0][1]}${pos.length > 1 ? `（另跨 ${pos.length - 1} 個環節）` : ""}` : T.name;
+    return `<li>${ok ? `<button data-sel="${c}">` : `<div class="inq">`}<span class="nm">${esc(nm)}<small>${c}・${esc(role)}</small>${tags.length ? `<span class="ctags">${tags.map(([t, k]) => `<i class="ctg ${k}">${esc(t)}</i>`).join("")}</span>` : ""}</span><b class="${cls(q?.chg)}">${ok ? fmtP(q?.price) : "—"}<small>${q?.chgPct != null ? (q.chgPct > 0 ? "+" : "") + q.chgPct.toFixed(2) + "%" : ok ? "" : "暫無報價"}</small></b>${ok ? "</button>" : "</div>"}</li>`; }).join("")}</ul>`;
 }
 function indChain(T) {
   const S = W.indS, X = (S.exp ||= {}), CH = indChainData(T); let n = 0;
@@ -2348,7 +2369,7 @@ function indChain(T) {
     return `<div class="itier" style="--tc:${col}"><div class="itierh"><span class="itiern">${esc(g.tier)}</span><b>${esc(g.title || "")}</b><button class="ilink" data-iexp="${tk}" aria-expanded="${!!X[tk]}">看這段的公司 ${X[tk] ? "⌄" : "›"}</button></div>
       ${X[tk] ? indCoRows(T, all) : ""}${g.items.map(it => { n++; const k = `${T.id}:${n}`;
         return `<div class="icitem"><button class="icrow" data-iexp="${k}" aria-expanded="${!!X[k]}"><span class="icn">${n}</span><span class="ict"><b>${esc(it.name)}</b>${it.desc ? `<small>${esc(it.desc)}</small>` : ""}</span><span class="icc">${it.c.length} 家 ${X[k] ? "⌄" : "›"}</span></button>${X[k] ? indCoRows(T, it.c) : ""}</div>`; }).join("")}</div>`; }).join("")}
-    <p class="note">編號和上面圖解裡的編號一樣。名單是常被提到的代表公司，不是完整名單。</p></section>`;
+    <p class="note">編號和上面圖解裡的編號一樣。名單是常被提到的代表公司，不是完整名單；公司旁的位置與籌碼標籤（內部人申報、借券賣出異常、千張大戶週增減）由程式依公開資料自動產生。</p></section>`;
 }
 // 其他市場同主題：圖解包有 peers 就用；沒有就找同類別、名稱最像的其他市場題材
 function indPeers(T) {
@@ -2393,7 +2414,7 @@ function renderInd() {
       + `<p class="note gnote">名單是常被提到的代表公司，不是完整名單；角色是簡化說明，實際營收比重請看財報。</p>`;
     $("#lx").innerHTML = h; loadIndQuotes(indCodes(T)); return;
   }
-  h += `<div class="seg scrseg" role="group" aria-label="產業地圖">${[["themes", "題材總覽"], ["network", "產業網絡"], ["gallery", "產業圖解"], ["news", "產業新聞"], ["fav", "收藏"]].map(([k, t]) => `<button data-iview="${k}" aria-pressed="${S.view === k}">${t}${k === "fav" && fav.size ? ` ${fav.size}` : ""}</button>`).join("")}</div>`;
+  h += `<div class="seg scrseg" role="group" aria-label="供應鏈題材地圖">${[["themes", "題材總覽"], ["network", "產業網絡"], ["gallery", "產業圖解"], ["news", "產業新聞"], ["fav", "收藏"]].map(([k, t]) => `<button data-iview="${k}" aria-pressed="${S.view === k}">${t}${k === "fav" && fav.size ? ` ${fav.size}` : ""}</button>`).join("")}</div>`;
   if (S.view === "news") h += inewsView();
   else if (S.view === "network") {
     const net = IND.networks.find(n => n.id === S.net) || IND.networks[0], F = S.focus && INDT.get(S.focus);
@@ -2824,7 +2845,7 @@ function congShape(g) { // 多人共同 vs 單一人物為主
 function renderCong() {
   const C = W.cong; if (!C) loadCong();
   const [v, arg] = (W.cv || "home").split(/:(.*)/s);
-  $("#lTools").innerHTML = `<span class="note">${v === "tw" ? "台灣政治人物財產申報（監察院廉政專刊）" : v === "ins" ? "台股內部人持股轉讓事前申報" : v === "f13" ? "美國機構 13F 持股申報" : "美國國會議員公開交易申報"}${(v === "home" || v === "bt" || v === "stock" || v === "person") && C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "美國國會"], ["bt", "申報後回測"], ["f13", "13F 機構"], ["tw", "台灣政治人物"], ["ins", "內部人"]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${v === "stock" || v === "person" || ((v === "f13" || v === "tw") && arg) ? `<button class="btn sm" data-cv="${v === "f13" || v === "tw" ? v : "home"}">‹ 返回</button>` : ""}`;
+  $("#lTools").innerHTML = `<span class="note"><b class="cg-t">大戶與國會情報</b>・${v === "tw" ? "台灣政治人物財產申報（監察院廉政專刊）" : v === "ins" ? "台股內部人持股轉讓事前申報" : v === "f13" ? "美國機構 13F 持股申報" : "美國國會議員公開交易申報"}${(v === "home" || v === "bt" || v === "stock" || v === "person") && C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "美國國會"], ["bt", "申報後回測"], ["f13", "13F 機構"], ["tw", "台灣政治人物"], ["ins", "內部人"]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${v === "stock" || v === "person" || ((v === "f13" || v === "tw") && arg) ? `<button class="btn sm" data-cv="${v === "f13" || v === "tw" ? v : "home"}">‹ 返回</button>` : ""}`;
   if (v === "ins") { const r = toolsBody("ins"); $("#lx").innerHTML = r.h; return r.note; }
   if (v === "tw") { $("#lx").innerHTML = twoHtml(arg); return twoNote(); }
   if (v === "f13") { $("#lx").innerHTML = f13Html(arg); return "資料：SEC EDGAR Form 13F-HR（每天檢查一次新申報）；股票代號用 OpenFIGI 由 CUSIP 對照，對不到的只顯示名稱。僅供研究參考，不是買賣建議。"; }
@@ -3106,7 +3127,7 @@ function renderBook() {
 /* 個股分頁：走勢、技術、總覽、籌碼、財務、新聞；總覽、籌碼、財務底下各有子頁（每種資訊只出現在一個地方）
    子頁的內容：tags／sum／rev／report 用原本的區塊，其他的由 stockx.js 的 SX 畫在 #sxBox */
 const DSUB = {
-  ovw: [["ls", "多空研判", 1], ["state", "市場狀態"], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "達人觀點"]],
+  ovw: [["ls", "多空研判", 1], ["state", "市場狀態"], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "節目觀點"]],
   chips: [["sum", "籌碼總覽"], ["inst", "法人與基金"], ["branch", "分點主力"], ["big", "大戶與股權"]],
   fin: [["rev", "營收與獲利"], ["report", "財務報表"], ["div", "股利"], ["info", "公司資料"], ["cal", "行事曆"]],
 };
@@ -3950,7 +3971,7 @@ $("#sheet").addEventListener("click", e => {
 });
 addEventListener("klinestyle", e => { Chart.all.forEach(c => c.draw()); drawTs(); if (W.lt === "money" || W.lt === "mkt") renderList(); post({ type: "kline-style", style: e.detail }); });
 function applyFont(f) { if (f === "song") document.documentElement.dataset.font = "song"; else delete document.documentElement.dataset.font; Chart.all.forEach(c => c.draw()); drawTs(); }
-function applyTheme(t) { document.documentElement.dataset.theme = t; $('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#171717" : "#ebebe9"); Chart.all.forEach(c => c.draw()); drawTs(); }
+function applyTheme(t) { document.documentElement.dataset.theme = t; $('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#09090B" : "#FAFAFA"); Chart.all.forEach(c => c.draw()); drawTs(); }
 
 /* ---------- 嵌在 K線學堂（?embed=1）：回報高度、接收主題與「看這一檔」、把「判讀」交給外層 ---------- */
 function post(msg) { if (EMBED && parent !== window) parent.postMessage(msg, "*"); }

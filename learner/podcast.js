@@ -222,7 +222,7 @@ function podCallCard(c, showEp = true) {
     <div class="pcf note"><span>${c.date}</span>${showEp ? `<button class="linkbtn" data-pep="${c.key}">${esc(c.title)}</button>` : ""}${c.manual ? "<span>手動新增</span>" : ""}<button class="linkbtn pdel" data-pdel="${c.key}|${c.id}">刪除</button></div>
   </div>`;
 }
-const podArt = (s, cl = "part") => (s.art ? `<img class="${cl}" src="${esc(s.art)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="${cl} pnoart">${esc((s.name || "?").slice(0, 2))}</span>`);
+const podArt = (s, cl = "part") => `<span class="${cl} pbadge">${badgeSvg(s.name || s.author)}</span>`; // 不載入節目封面（第三方圖片），改用 SVG 縮寫徽章
 const podEmpty = msg => `<p class="note pempty">${msg}</p>`;
 function podJobHtml(key) {
   const J = POD.job; if (!J || J.key !== key) return "";
@@ -331,10 +331,10 @@ function renderPod() {
   podBoot();
   if (POD.booted && !POD.pxBusy) setTimeout(podLoadPx, 0); // 有缺的股價（或之前失敗的）就補抓
   const tab = ["ep", "show"].includes(POD.view) ? POD.hist.find(h => !["ep", "show"].includes(h.view))?.view || "home" : POD.view;
-  $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="名人" id="podSeg">${[["home", "今日摘要"], ["rank", "走勢"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
+  $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="節目觀點" id="podSeg">${[["home", "今日摘要"], ["rank", "走勢"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
   const body = POD.view === "ep" ? podEpView() : POD.view === "show" ? podShowView() : POD.view === "rank" ? podRankView() : POD.view === "follow" ? podFollowView() : podHome();
   $("#lx").innerHTML = `<div class="pod">${POD.err ? `<p class="note">⚠ ${esc(POD.err)}</p>` : ""}${body}</div>`;
-  return "名人 Podcast：AI 整理重點、追蹤主持人看多／看空的真實表現（相對大盤）。只是回顧統計，不是投資建議。";
+  return "財經節目：AI 整理重點、追蹤主持人看多／看空的真實表現（相對大盤）。只是回顧統計，不是投資建議。";
 }
 // 自動更新：名人分頁開著時每 10 分鐘重抓排程資料、RSS 與股價，並把新單集排進自動整理
 async function podRefresh(force = false) {
@@ -395,7 +395,7 @@ function podInit() {
 .pod .pempty .btn { margin-left: 8px; }
 .pod .part { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; flex: none; background: var(--surface-3); border: 1px solid var(--line); }
 .pod .part.big { width: 72px; height: 72px; border-radius: 6px; } .pod .part.sm { width: 36px; height: 36px; }
-.pod .pnoart { display: inline-grid; place-items: center; font-size: 13px; color: var(--muted); }
+.pod .pbadge { display: inline-grid; place-items: center; overflow: hidden; } .pod .pbadge .badge { width: 100%; height: 100%; } .pod .pnoart { display: inline-grid; place-items: center; font-size: 13px; color: var(--muted); }
 .pod .pavs { display: flex; gap: 14px; overflow-x: auto; padding: 4px 0 12px; scrollbar-width: none; border-bottom: 1px solid var(--line); }
 .pod .pav { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; background: none; cursor: pointer; width: 76px; flex: none; color: var(--ink); }
 .pod .pav .part { width: 64px; height: 64px; } .pod .pav > span:last-child { font-size: 12px; text-align: center; line-height: 1.3; max-height: 2.6em; overflow: hidden; }
