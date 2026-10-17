@@ -116,9 +116,18 @@ export function themeLists(quotes) {
   return CONCEPTS.map(([id, title, codes]) => ({ id: "t:" + id, group: "theme", title, desc: "常被提到的代表股，不是完整名單", rows: codes.map(c => Q.get(c)).filter(Boolean).map(q => row(q, q.market || "")) }));
 }
 export const parseAvg = rows => (Array.isArray(rows) ? rows : []).map(r => ({ code: String(pick(r, "Code") || "").trim(), close: num(pick(r, "ClosingPrice")), avg: num(pick(r, "MonthlyAveragePrice")) })).filter(x => x.code && x.close && x.avg);
-export const parseBw = rows => (Array.isArray(rows) ? rows : []).map(r => ({ code: String(pick(r, "Code") || "").trim(), pe: num(pick(r, "PEratio", "PeRatio")), dy: num(pick(r, "DividendYield")), pb: num(pick(r, "PBratio", "PbRatio")) })).filter(x => x.code);
+export const parseBw = rows => (Array.isArray(rows) ? rows : []).map(r => ({ code: String(pick(r, "Code", "SecuritiesCompanyCode") || "").trim(), pe: num(pick(r, "PEratio", "PeRatio", "PriceEarningRatio")), dy: num(pick(r, "DividendYield", "YieldRatio")), pb: num(pick(r, "PBratio", "PbRatio", "PriceBookRatio")) })).filter(x => x.code);
+// 全市場本益比、股價淨值比、殖利率（看盤「選股 → 評分 → 多因子」的價值因子）：上市 BWIBBU_ALL＋上櫃 tpex_mainboard_peratio_analysis
+// GET /api/screen?bw=1 → { ok, rows: { 代號: [本益比, 淨值比, 殖利率] } }
+export async function valuation() {
+  const r = await Promise.allSettled([getJSON("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL", 15000), getJSON("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis", 15000)]);
+  const rows = {}; for (const x of r) if (x.status === "fulfilled") for (const b of parseBw(x.value)) if (/^\d{4}[A-Z]?$/.test(b.code)) rows[b.code] = [b.pe, b.pb, b.dy];
+  if (!Object.keys(rows).length) throw new Error(r.map(x => x.reason?.message).filter(Boolean).join("；") || "證交所、櫃買中心都沒有回應");
+  return { ok: true, n: Object.keys(rows).length, rows };
+}
 
 export default async function handler(req, res) {
+  if (req.query?.bw) { try { const j = await valuation(); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json(j); } catch (e) { return res.status(200).json({ ok: false, error: e.message }); } }
   const both = async (l, o, parse) => { const r = await Promise.allSettled([getJSON(l, 15000), getJSON(o, 15000)]); return r.flatMap(x => (x.status === "fulfilled" ? parse(x.value) : [])); };
   const [a, b, t, avg, bw, rev, eps, mg] = await Promise.allSettled([
     marketRows(), null,

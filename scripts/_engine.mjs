@@ -1,4 +1,4 @@
-// 在 Node 裡重用網站的技術指標與條件：把 learner/core.js、analysis.js、tools.js 載進沙盒（vm），
+// 在 Node 裡重用網站的技術指標與條件：把 learner/core.js、analysis.js、quant.js、tools.js 載進沙盒（vm），
 // 讓排程（全市場選股、Telegram 提醒）和網頁用同一套 indicators()、COND、SCOND、策略，結果才會一致。
 // 這三個檔案在最上層不碰畫面，只宣告函式與常數；畫面相關的 document、window 用空殼代替。
 import vm from "node:vm";
@@ -13,8 +13,9 @@ export function engine() {
   const c = { console, Math, Date, JSON, Map, Set, WeakMap, Array, Object, Number, String, isFinite, parseFloat, parseInt, setTimeout, clearTimeout, Promise };
   Object.assign(c, { window: c, document: stub, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, navigator: { userAgent: "" }, matchMedia: () => ({ matches: false, addEventListener() {} }), addEventListener() {}, requestAnimationFrame: () => 0, devicePixelRatio: 1, getComputedStyle: () => ({ getPropertyValue: () => "" }) });
   vm.createContext(c);
-  for (const f of ["core.js", "analysis.js", "tools.js"]) vm.runInContext(readFileSync(L(f), "utf8"), c, { filename: f });
+  for (const f of ["core.js", "analysis.js", "quant.js", "tools.js"]) vm.runInContext(readFileSync(L(f), "utf8"), c, { filename: f });
   const g = n => vm.runInContext(n, c);
-  ctx = { indicators: g("indicators"), COND: g("COND"), SCOND: g("SCOND"), condOf: g("condOf"), condName: g("condName"), condCheck: g("condCheck"), stratRun: g("stratRun"), STRAT_DEFS: g("STRAT_DEFS"), backtest: g("backtest") };
+  ctx = { indicators: g("indicators"), COND: g("COND"), SCOND: g("SCOND"), condOf: g("condOf"), condName: g("condName"), condCheck: g("condCheck"), stratRun: g("stratRun"), STRAT_DEFS: g("STRAT_DEFS"), backtest: g("backtest"), agg: g("agg"), weekKey: g("weekKey"),
+    Q: Object.fromEntries(["btMetrics", "regimes", "btBreakdown", "btVariants", "btAdvice", "adxCalc", "marketState", "stateAdvice", "atrSetup", "portRisk", "portPlan", "factorRaw", "factorScore", "factorBacktest", "btReportHtml", "stateHtml", "btReportText"].map(n => [n, g(n)])) };
   return ctx;
 }

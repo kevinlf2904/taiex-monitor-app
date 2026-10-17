@@ -14,6 +14,18 @@ function roundTick(p) { const t = tickOf(p); return +(Math.round(p / t) * t).toF
 function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
 function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
 function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
+// 日 K 合成週 K、月 K：key(日期) 相同的併成一根，日期標示該週（月）最後一個交易日
+function agg(D, key) {
+  const out = [];
+  for (const x of D) { const k = key(x.d), L = out[out.length - 1]; if (L && L.k === k) { L.h = Math.max(L.h, x.h); L.l = Math.min(L.l, x.l); L.c = x.c; L.v += x.v || 0; L.d = x.d; } else out.push({ k, d: x.d, o: x.o, h: x.h, l: x.l, c: x.c, v: x.v || 0 }); }
+  return out;
+}
+const weekKey = d => { const t = new Date(String(d).slice(0, 10) + "T00:00:00Z"), day = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - day); return t.toISOString().slice(0, 10); };
+// 問網站的 AI（/api/chat）：context 是畫面上的資料、q 是問題；回傳文字，失敗丟出錯誤（各頁的「問 AI」都用這個）
+async function aiChat(context, q) {
+  const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ context, messages: [{ role: "user", content: q }] }) });
+  const k = await r.json().catch(() => null); if (!k?.ok) throw new Error(k?.error || (r.status === 404 ? "需要部署到網站才能使用" : `AI 沒有回答（${r.status}）`)); return k.text;
+}
 // CSS 變數讀取會觸發樣式計算，K 線每一格要讀幾十次（手機滑動時很明顯）：快取起來，主題、配色、字型改變（html 的屬性變動）時清掉
 const CSSV = new Map(); let cssvAt = 0;
 function cssVar(n) { const now = performance.now(); if (now - cssvAt > 1500) { CSSV.clear(); cssvAt = now; } let v = CSSV.get(n); if (v === undefined) { v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); CSSV.set(n, v); } return v; }
