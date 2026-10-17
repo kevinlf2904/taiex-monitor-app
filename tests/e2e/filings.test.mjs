@@ -42,3 +42,21 @@ test("台灣政治人物：持股市值排行、分類、億萬、個人頁", as
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("申報歷史：國會全部期間與月份、內部人期間、台灣政治人物歷次申報", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.evaluate(() => setLt("cong")); await p.waitForFunction(() => W.cong?.trades?.length, null, { timeout: 15000 });
+  await p.evaluate(() => { W.cv = "home"; W.cview = "feed"; renderList(); });
+  await p.click('#lx [data-cw="0"]'); await p.waitForTimeout(200);
+  assert.match(await p.evaluate(() => $(".tw-sums").innerText), /全部期間/);
+  const mons = await p.evaluate(() => [...document.querySelectorAll('#lx [data-rkset^="cmon:"]')].map(b => b.dataset.rkset));
+  assert.ok(mons.length > 2, "要能按月份往前翻");
+  await p.click(`#lx [data-rkset="${mons.at(-1)}"]`); await p.waitForTimeout(200);
+  assert.match(await p.evaluate(() => $("#lx h4").innerText), /公開的交易/);
+  // 台灣政治人物：有兩次申報的人可以切換
+  await p.evaluate(() => { W.cv = "tw:p:王小明"; renderList(); }); await p.waitForSelector(".tw-p");
+  const n = await p.evaluate(() => document.querySelectorAll('[data-rkset^="twoDi:"]').length);
+  if (n > 1) { await p.click('[data-rkset="twoDi:1"]'); await p.waitForTimeout(200); assert.match(await p.evaluate(() => $(".tw-tabs").innerText), /持股（/); }
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await ctx.close(); assert.deepEqual(errs, []);
+});

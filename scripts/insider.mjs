@@ -2,7 +2,7 @@
 // 這支程式從證交所、櫃買中心的 OpenAPI 找出「持股轉讓事前申報」的資料集，整理成 learner/data/insider.json，
 // 給 learner/watch.html「工具 → 內部人申報」和個股頁使用。GitHub Actions 每個交易日跑（.github/workflows/insider.yml）。
 // 資料集路徑由 OpenAPI 的 swagger.json 依名稱找（名稱含「轉讓」），欄位也依中文欄名判斷，換路徑或欄位順序也能讀。
-// 申報後一個月內（盤後鉅額、一般交易）才可轉讓，所以「申報」不等於已經賣出；最近 120 天的申報會累積保留。
+// 申報後一個月內（盤後鉅額、一般交易）才可轉讓，所以「申報」不等於已經賣出；最近約 3 年的申報會累積保留。
 //   --dump  只列出找到的資料集與前幾筆原始資料，不寫檔（除錯用）
 
 import { readFile, writeFile } from "node:fs/promises";
@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const OUT = fileURLToPath(new URL("../learner/data/insider.json", import.meta.url));
 const UA = "Mozilla/5.0 (compatible; kline-school-learner; +https://github.com/kevinlf2904/taiex-monitor-app)";
-const DUMP = process.argv.includes("--dump"), KEEP = 120;
+const DUMP = process.argv.includes("--dump"), KEEP = 1100; // 保留約 3 年，網頁可以往前查
 const get = async url => { const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(30000) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); };
 
 const SOURCES = [["上市", "https://openapi.twse.com.tw/v1", "https://openapi.twse.com.tw/v1/swagger.json"], ["上櫃", "https://www.tpex.org.tw/openapi/v1", "https://www.tpex.org.tw/openapi/swagger.json"]];

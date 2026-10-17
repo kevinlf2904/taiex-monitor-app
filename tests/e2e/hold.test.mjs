@@ -25,3 +25,24 @@ test("庫存費稅與股息", async () => {
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("美股庫存匯入：中文名稱對到代號、打錯的代號不會匯入、版面對齊", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  // 報價：只認得 NVDA、SPCX、INTC（其他代號查無資料）
+  await ctx.route("**/api/quote**", r => { const codes = (new URL(r.request().url()).searchParams.get("codes") || "").split(",").filter(c => ["NVDA", "SPCX", "INTC"].includes(c));
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", session: "closed", quotes: codes.map((c, i) => ({ code: c, name: { NVDA: "輝達", SPCX: "SpaceX", INTC: "英特爾" }[c], price: 100 + i, prev: 99, chg: 1, chgPct: 1, date: "2026-10-16" })) }) }); });
+  await ctx.route("**/api/symbol**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, items: [] }) }));
+  await p.evaluate(() => { W.hold = {}; W.holdMkt = "us"; setLt("hold"); openImport("text"); });
+  await p.fill("#impText", "輝達 5 213.8\n太空探索科技公司 8 156.8\nNVDAX 1 10");
+  await p.click("#impParse"); await p.waitForTimeout(200);
+  assert.deepEqual(await p.evaluate(() => imp.rows.map(r => r.code)), ["NVDA", "SPCX", "NVDAX"]);
+  await p.click("#impSave"); await p.waitForTimeout(800);
+  assert.equal(await p.evaluate(() => Object.keys(W.hold).length), 0, "有查不到的代號時不能存");
+  assert.match(await p.evaluate(() => document.body.innerText), /查不到這些代號：NVDAX/);
+  await p.click('[data-gdel="2"]'); await p.click("#impSave"); await p.waitForTimeout(800);
+  assert.deepEqual(await p.evaluate(() => Object.keys(W.hold).sort()), ["NVDA", "SPCX"]);
+  // 每一列都撐滿整行（以前名稱短的列會縮成一半寬）
+  await p.waitForSelector(".yh-row"); const ws = await p.evaluate(() => [...document.querySelectorAll(".yh-row")].map(b => Math.round(b.getBoundingClientRect().width)));
+  assert.ok(ws.length === 2 && ws[0] === ws[1] && ws[0] > 300, String(ws));
+  await ctx.close(); assert.deepEqual(errs, []);
+});

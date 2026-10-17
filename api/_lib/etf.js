@@ -27,19 +27,23 @@ export function parseInfo(html) {
     aum: am ? num(am[1]) * 1e6 : null, cur: am ? am[2] || null : null, fee: num(g("經理費(%)")), ter: num(g("總管理費用(%)")), freq: g("配息頻率"), yield: num(g("殖利率(%)")),
     prem: num(g("折溢價(%)")), sd: num(g("年化標準差(%)")), kind: g("投資標的"), region: g("投資區域"), lev: g("槓桿多空註記") || null, mgr: g("經理人"), strategy: g("投資策略"), kv: kv.filter(([k]) => !/文件下載|官方網站|查看/.test(k)) };
 }
-// 全部持股：「個股名稱｜投資比例(%)｜持有股數 / 口數」
+// 一列一列切開（不跨列比對：有些列的第一格不是數字，跨列會把後面的廣告程式碼也吃進來）
+const rowsOf = seg => String(seg).split(/<tr[\s>]/i).slice(1).map(tr => [...tr.split(/<\/tr>/i)[0].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => m[1]));
+const scope = (h, key) => { const i = h.indexOf(key); if (i < 0) return ""; const j = h.indexOf("</table>", i); return h.slice(i, j > 0 ? j : i + 400000); };
+// 全部持股：「個股名稱｜投資比例(%)｜持有股數 / 口數」（期貨、選擇權的比例可能是負的；債券沒有代號）
 export function parseAll(html) {
-  const h = String(html), i = h.indexOf("全部持股"), seg = i >= 0 ? h.slice(i) : h, date = ymd((seg.match(/資料日期：\s*(\d{4}\/\d{2}\/\d{2})/) || [])[1]);
-  const rows = [];
-  for (const m of seg.matchAll(/<tr[^>]*>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<td[^>]*>\s*([-\d.,]+)\s*<\/td>\s*<td[^>]*>\s*([\d,.]+)\s*<\/td>/gi)) { const n = splitName(m[1]); if (n.name) rows.push({ ...n, pct: num(m[2]), sh: num(m[3]) }); }
+  const h = String(html), seg = scope(h, "全部持股"), date = ymd((seg.match(/資料日期：\s*(\d{4}\/\d{2}\/\d{2})/) || [])[1]), rows = [];
+  for (const c of rowsOf(seg)) { if (c.length < 3) continue; const n = splitName(c[0]), pct = num(txt(c[1])), sh = num(txt(c[2]));
+    if (!n.name || n.name.length > 60 || pct == null || /googletag|function|window\./.test(n.name)) continue; rows.push({ ...n, pct, sh }); }
   return { date, rows };
 }
 // 月持股明細（投信每月公告）：「股票名稱｜持股(千股)｜比例｜增減」；產業分布：「產業｜投資金額｜比例(%)」
 export function parseMonth(html) {
-  const h = String(html), i = h.indexOf("持股明細"), seg = i >= 0 ? h.slice(i) : "", date = ymd((seg.match(/資料日期：\s*(\d{4}\/\d{2}\/\d{2})/) || [])[1]), rows = [];
-  for (const m of seg.matchAll(/<tr[^>]*>\s*<td[^>]*>([^<]{1,40})<\/td>\s*<td[^>]*>\s*([\d,.]+)\s*<\/td>\s*<td[^>]*>\s*([-\d.]+)\s*<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>/gi)) rows.push({ name: txt(m[1]).replace(/\*$/, ""), sh: num(m[2]) != null ? num(m[2]) * 1000 : null, pct: num(m[3]), chg: num(txt(m[4])) });
-  const j = h.indexOf("持股依產業表格"), iseg = j >= 0 ? h.slice(j, h.indexOf("持股依產業表格 End", j) > 0 ? h.indexOf("持股依產業表格 End", j) : j + 20000) : "", idate = ymd((h.slice(Math.max(0, j - 400), j + 400).match(/資料日期：\s*(\d{4}\/\d{2}\/\d{2})/) || [])[1]), ind = [];
-  for (const m of iseg.matchAll(/<tr[^>]*>\s*<td[^>]*>[\s\S]*?<\/td>\s*<td[^>]*>([^<]{1,30})<\/td>\s*<td[^>]*>\s*([\d,.]+)\s*<\/td>\s*<td[^>]*>\s*([-\d.]+)\s*<\/td>/gi)) ind.push({ name: txt(m[1]), pct: num(m[3]) });
+  const h = String(html), seg = scope(h, "持股明細"), date = ymd((seg.match(/資料日期：\s*(\d{4}\/\d{2}\/\d{2})/) || [])[1]), rows = [];
+  for (const c of rowsOf(seg)) { if (c.length < 4) continue; const name = txt(c[0]).replace(/\*$/, ""), sh = num(txt(c[1])), pct = num(txt(c[2]));
+    if (!name || name.length > 40 || pct == null) continue; rows.push({ name, sh: sh != null ? sh * 1000 : null, pct, chg: num(txt(c[3])) }); }
+  const j = h.indexOf("持股依產業表格"), iseg = scope(h, "持股依產業表格"), idate = ymd((h.slice(Math.max(0, j - 400), j + 400).match(/資料日期：\s*(\d{4}\/\d{2}\/\d{2})/) || [])[1]), ind = [];
+  for (const c of rowsOf(iseg)) { if (c.length < 4) continue; const name = txt(c[1]), pct = num(txt(c[3])); if (name && name.length <= 30 && pct != null) ind.push({ name, pct }); }
   return { month: { date, rows }, ind: { date: idate || date, rows: ind } };
 }
 async function page(p, id, ms) { const r = await fetch(`${BASE}${p}.xdjhtm?etfid=${encodeURIComponent(id)}`, { headers: UA, signal: AbortSignal.timeout(ms) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); }

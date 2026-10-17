@@ -8,7 +8,7 @@ export const num = v => (v == null || v === "" ? null : Number.isFinite(+v) ? +v
 export const isUS = c => (/^\^?[A-Z][A-Z0-9]{0,5}([.-][A-Z]{1,3}|=[FX])?$/.test(String(c || "")) || c === "DX-Y.NYB") && !/^(T00|O00)$/.test(c);
 export const US_NAMES = {
   AAPL: "蘋果", MSFT: "微軟", NVDA: "輝達", AMZN: "亞馬遜", GOOGL: "Alphabet", META: "Meta", TSLA: "特斯拉", AVGO: "博通", TSM: "台積電 ADR", AMD: "超微",
-  NFLX: "Netflix", PLTR: "Palantir", INTC: "英特爾", MU: "美光", QCOM: "高通", ARM: "安謀", SMCI: "美超微", COST: "好市多", JPM: "摩根大通", BRK_B: "波克夏",
+  NFLX: "Netflix", PLTR: "Palantir", INTC: "英特爾", SPCX: "SpaceX", MU: "美光", QCOM: "高通", ARM: "安謀", SMCI: "美超微", COST: "好市多", JPM: "摩根大通", BRK_B: "波克夏",
   SPY: "S&P 500 ETF", QQQ: "那斯達克 100 ETF", SOXX: "費半 ETF", TQQQ: "3 倍那斯達克", SOXL: "3 倍半導體", "^GSPC": "S&P 500", "^IXIC": "那斯達克", "^DJI": "道瓊", "^SOX": "費城半導體",
 };
 export const US_POPULAR = ["NVDA", "AAPL", "MSFT", "TSLA", "AMZN", "GOOGL", "META", "AVGO", "TSM", "AMD", "PLTR", "NFLX", "MU", "INTC", "QCOM", "ARM", "SMCI", "COST", "JPM", "SPY", "QQQ", "SOXX", "TQQQ", "SOXL"];

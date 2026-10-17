@@ -12,7 +12,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const DATA = process.env.DATA_DIR ? process.env.DATA_DIR.replace(/\/?$/, "/") : fileURLToPath(new URL("../learner/data/", import.meta.url)); // DATA_DIR：本機模擬時改寫到別的資料夾
-const OUT = DATA + "f13.json", CUSIP = DATA + "f13-cusip.json";
+const OUT = DATA + "f13.json", CUSIP = DATA + "f13-cusip.json", HIST = DATA + "f13-hist.json";
 // SEC 規定 User-Agent 要能聯絡到人：「程式名稱/版本 (email)」。SEC_UA 可覆蓋；預設格式萬一被 403，改用之前驗證過 SEC 接受的「名稱 email」格式
 const UAS = [(process.env.SEC_UA || "").trim() || "KlineSchool/1.0 (admin@kline-school.vercel.app)", "kline-school research admin@kline-school.vercel.app"];
 let UA = UAS[0];
@@ -111,7 +111,7 @@ export async function main() {
   let tick = new Map(); try { tick = tickerMap(await get("https://www.sec.gov/files/company_tickers.json")); } catch (e) { console.log("代號對照表失敗", e.message); }
   let cmap = {}; try { cmap = JSON.parse(await readFile(CUSIP, "utf8")); } catch {}
   let old = null; try { old = JSON.parse(await readFile(OUT, "utf8")); } catch {}
-  const funds = [], notes = [], oldOf = cik => (old?.funds || []).find(f => f.cik === cik);
+  const funds = [], notes = [], oldOf = cik => (old?.funds || []).find(f => f.cik === cik), Ls = new Map();
   for (const [cik, who] of FUNDS) {
     try {
       const { name, L } = await filingsOf(cik);
@@ -119,7 +119,7 @@ export async function main() {
       const cur = mergeRows(await holdingsOf(cik, L[0].acc)), prev = L[1] ? mergeRows(await holdingsOf(cik, L[1].acc)) : [];
       const age = Date.now() - Date.parse(L[0].period); if (!Number.isFinite(age) || age > 230 * 864e5) { notes.push(`${who}：最近一份 13F 是 ${L[0].period}，已停止申報`); continue; }
       // 占比用全部申報市值（含選擇權的標的市值）當分母，只申報選擇權的機構才不會超過 100%
-      const total = cur.reduce((s, r) => s + r.value, 0), { rows, sold } = compare(cur, prev);
+      const total = cur.reduce((s, r) => s + r.value, 0), { rows, sold } = compare(cur, prev); Ls.set(cik, { L, cur, prev });
       const fmt = r => ({ name: r.name, cls: r.cls, cusip: r.cusip, pc: r.pc || undefined, value: r.value, sh: r.sh, psh: r.psh, pct: total ? +((r.value / total) * 100).toFixed(2) : 0, chg: r.chg });
       rows.sort((a, b) => b.value - a.value);
       // 前 60 大持股＋所有新進、加減碼（變動的才有參考價值），出清的另列
@@ -133,12 +133,22 @@ export async function main() {
   }
   if (!funds.some(f => !f.stale)) { console.log("::warning::一家機構都讀不到，保留原本的資料檔不覆蓋：" + notes.join("；")); return old || { funds: [], notes }; }
   // 補股票代號：OpenFIGI → 名稱對照
-  const all = funds.flatMap(f => [...(f.rows || []), ...(f.sold || [])]); await figi([...new Set(all.map(r => r.cusip))], cmap);
+  // 歷史季度（f13-hist.json）：每家機構保留最近 12 季的前 40 大持股；第一次跑時往前補，每次每家最多多讀 2 份，不會讓排程變太久
+  let hist = {}; try { hist = JSON.parse(await readFile(HIST, "utf8")); } catch {}
+  const snap = (period, filed, rows) => { const tot = rows.reduce((a, r) => a + r.value, 0); return { period, filed, total: tot, n: rows.filter(r => !r.pc).length, rows: rows.filter(r => !r.pc).sort((a, b) => b.value - a.value).slice(0, 40).map(r => ({ name: r.name, cusip: r.cusip, value: r.value, sh: r.sh, pct: tot ? +((r.value / tot) * 100).toFixed(2) : 0 })) }; };
+  for (const [cik, who] of FUNDS) { const x = Ls.get(cik); if (!x) continue; const H = (hist[cik] ||= { who, periods: [] }); H.who = who;
+    const add = (f, rows) => { if (!H.periods.some(p => p.period === f.period)) H.periods.push(snap(f.period, f.filed, rows)); };
+    add(x.L[0], x.cur); if (x.L[1]) add(x.L[1], x.prev); let budget = 2;
+    for (const f of x.L.slice(2, 12)) { if (H.periods.some(p => p.period === f.period)) continue; if (budget-- <= 0) break; try { add(f, mergeRows(await holdingsOf(cik, f.acc))); } catch (e) { console.log("歷史季度讀不到", who, f.period, e.message); } }
+    H.periods.sort((a, b) => b.period.localeCompare(a.period)); H.periods = H.periods.slice(0, 12); }
+  const hrows = Object.values(hist).flatMap(H => H.periods.flatMap(p => p.rows));
+  const all = funds.flatMap(f => [...(f.rows || []), ...(f.sold || [])]); await figi([...new Set([...all, ...hrows].map(r => r.cusip))], cmap);
+  for (const r of hrows) r.ticker = cmap[r.cusip] || tick.get(normName(r.name)) || "";
   for (const r of all) r.ticker = cmap[r.cusip] || tick.get(normName(r.name)) || "";
   console.log("代號對到", all.filter(r => r.ticker).length, "/", all.length, "；例：", all.slice(0, 8).map(r => `${r.name}→${r.ticker}`).join("、"));
   if (!DUMP) await writeFile(CUSIP, JSON.stringify(cmap));
   const out = { updated: new Date().toISOString(), source: "SEC EDGAR Form 13F-HR", funds, notes };
-  if (!DUMP) await writeFile(OUT, JSON.stringify(out));
+  if (!DUMP) { await writeFile(OUT, JSON.stringify(out)); await writeFile(HIST, JSON.stringify(hist)); }
   return out;
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("完成", o?.funds?.length ?? 0, "家；", (o?.notes || []).join("；"))).catch(e => { console.error(e); process.exit(1); });

@@ -37,4 +37,4 @@ jobs:
         env:
           COMMIT_NAME: sec13f
         run: |
-          bash scripts/commit-data.sh "13F：更新機構持股" learner/data/f13.json learner/data/f13-cusip.json
+          bash scripts/commit-data.sh "13F：更新機構持股" learner/data/f13.json learner/data/f13-cusip.json learner/data/f13-hist.json
