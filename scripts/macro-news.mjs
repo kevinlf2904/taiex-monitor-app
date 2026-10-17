@@ -30,7 +30,7 @@ export function pick(lists, now = Date.now(), hours = 36, per = PER) {
   for (const it of lists.flat().sort((a, b) => (b.at || 0) - (a.at || 0))) {
     if (!it.at || now - it.at > hours * 3600e3) continue;
     const k = it.title.replace(/[（(【\[][^）)】\]]*[）)】\]]/g, "").replace(/[\s\p{P}]/gu, "").slice(0, 14); if (seen.has(k)) continue; seen.add(k);
-    const topic = topicOf(it.title); if (topic === "市場" && !/股|指數|經濟|市場|期貨|油價|黃金/.test(it.title)) continue;
+    const topic = topicOf(it.title); if (topic === "市場" && !/經濟|總經|財政|赤字|IMF|世界銀行|油價|黃金|衰退|央行/.test(it.title)) continue; // 「市場」類只留跟總經有關的（個股、當沖、公司活動不算）
     out.push({ ...it, topic });
   }
   return out.slice(0, per);
