@@ -58,8 +58,9 @@ export function parseSum(text) {
 }
 async function summarize(tw, us, world) {
   const prompt = PROMPT(tw, us, world);
-  if (KEY) { const r = await geminiJSON([{ text: prompt }], KEY, Date.now() + 60000); return { ...parseSum(r.text), by: r.model }; }
-  const r = await fetch(SITE + "/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: prompt + "\n\n只輸出 JSON。" }] }), signal: AbortSignal.timeout(70000) });
+  // Gemini 先試（三個市場的摘要比較長，最多等 150 秒）；失敗或解析不出來就改用網站的 /api/chat
+  if (KEY) { try { const r = await geminiJSON([{ text: prompt }], KEY, Date.now() + 150000), j = parseSum(r.text); if (j && (j.tw || j.us || j.world)) return { ...j, by: r.model }; console.log("::warning::Gemini 回應解析不出 JSON，改用網站"); } catch (e) { console.log("::warning::Gemini 失敗（" + e.message + "），改用網站"); } }
+  const r = await fetch(SITE + "/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: prompt + "\n\n只輸出 JSON。" }] }), signal: AbortSignal.timeout(90000) });
   const j = await r.json().catch(() => null); if (!j?.ok) throw new Error(j?.error || `網站回應 ${r.status}`);
   return { ...parseSum(j.text), by: j.model || j.provider };
 }
