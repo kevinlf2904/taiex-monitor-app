@@ -314,7 +314,7 @@ svg circle[stroke-width] { stroke-width: 1.2px; }
 .stylepick .sp-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 /* ===================== KLineLab 實驗室（預設，品牌配色） =====================
-   版面結構沿用「版心留白」；配色是黑白實驗室：碳黑底 #09090B、微浮起面板 #121215、銳利分割線 #27272A、
+   版面結構和「版心留白」完全一樣（只換配色與字體）；配色是黑白實驗室：碳黑底 #09090B、微浮起面板 #121215、銳利分割線 #27272A、
    純白訊號字 #FFFFFF、鈦金屬灰輔助字 #A1A1AA。只有漲跌用紅綠（台股慣例紅漲綠跌）。
    字體：標題與品牌 Space Grotesk、內文 Inter、數據與座標 JetBrains Mono（中文字缺字時用 Noto Sans TC） */
 :root[data-style="lab"] {
@@ -324,7 +324,7 @@ svg circle[stroke-width] { stroke-width: 1.2px; }
   --up: #dc2626; --down: #059669; --up-pill: #dc2626; --down-pill: #059669;
   --s1: #d97706; --band: rgba(0, 0, 0, .035); --shade: rgba(0, 0, 0, .03);
   --grad-strong: #09090b; --on-strong: #ffffff; --strong-line: #09090b;
-  --radius: 10px; --radius-md: 8px; --radius-sm: 6px;
+  --radius: 6px; --radius-md: 5px; --radius-sm: 4px;
   --font-lab-d: "Space Grotesk", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   --font-lab-b: "Inter", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   --font-lab-m: "JetBrains Mono", "Noto Sans TC", ui-monospace, "SF Mono", Menlo, monospace;
@@ -347,11 +347,9 @@ svg circle[stroke-width] { stroke-width: 1.2px; }
   --grad-strong: #ffffff; --on-strong: #09090b; --strong-line: #ffffff;
 } }
 :root[data-style="lab"][data-font="song"] { --font-body: var(--font-song); --font-display: var(--font-song); }
-/* 面板：微浮起＋1px 銳利分割線（實驗室網格感） */
-:root[data-style="lab"] .panel, :root[data-style="lab"] .card { border: 1px solid var(--line); }
-:root[data-style="lab"] h1, :root[data-style="lab"] h2, :root[data-style="lab"] h3, :root[data-style="lab"] .ph h2, :root[data-style="lab"] .tw-h { font-family: var(--font-display); letter-spacing: .01em; }
-:root[data-style="lab"] body { letter-spacing: .01em; }
-/* 導覽列：沉浸式碳黑半透明＋模糊＋底線 */
-:root[data-style="lab"] .w-top, :root[data-style="lab"] .top, :root[data-style="lab"] .ltabs, :root[data-style="lab"] .dtabs { background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: none; border-bottom: 1px solid var(--line); }
+:root[data-style="lab"] h1, :root[data-style="lab"] h2, :root[data-style="lab"] h3, :root[data-style="lab"] .ph h2, :root[data-style="lab"] .tw-h { font-family: var(--font-display); }
 :root[data-style="lab"] .seg button[aria-pressed="true"]::after { background: var(--ink); }
 :root[data-style="lab"] .ph .note, :root[data-style="lab"] .mk h3 .note, :root[data-style="lab"] .sxh .note, :root[data-style="lab"] .fh .note { color: var(--muted); }
+/* 新 Logo 在頂列放大一點（原本 26px 太小看不清楚） */
+:is(:root[data-style="layout"], :root[data-style="lab"]) .top .seal.logo { width: 36px; height: 36px; border-radius: 9px; }
+@media (max-width: 640px) { :is(:root[data-style="layout"], :root[data-style="lab"]) .top .seal.logo { width: 30px; height: 30px; } }

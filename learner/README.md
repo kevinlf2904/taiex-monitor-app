@@ -340,6 +340,12 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
+### 版面改回版心留白、節目頭像、Logo 改成 K 字形（2026.10.18-87）
+
+- 版面結構改回「版心留白」（面板不加框線、頂列與分頁列用原本的樣式、圓角 6px），保留 KLineLab 的碳黑配色與 Space Grotesk／Inter／JetBrains Mono 字體。
+- 財經節目改回用頻道自己的頭像；沒有頭像或圖載入失敗時才用 SVG 縮寫徽章。
+- Logo：左邊 K 棒與影線加上白到鈦金屬灰的漸層，右邊光束上下都削 45 度，和 K 棒合起來像字母 K；頂列的 Logo 放大到 36px。圖示與 manifest 加上 `?v=2`，避免瀏覽器與主畫面用到舊的快取圖。
+
 ### 品牌重構：KLineLab K線情報局（2026.10.18-86）
 
 - 品牌：全站改名 **KLineLab（K線情報局）**，定位「將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機」。新 Logo（`logo.svg`：白色實心 K 棒＋影線、45 度切角的鈦金屬灰突破光束），App 圖示、manifest、標題、導覽列（碳黑半透明＋模糊＋分割線）、PRO 徽章（`core.js` 的 `brandHtml`）。

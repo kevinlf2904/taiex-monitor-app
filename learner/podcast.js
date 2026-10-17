@@ -222,7 +222,9 @@ function podCallCard(c, showEp = true) {
     <div class="pcf note"><span>${c.date}</span>${showEp ? `<button class="linkbtn" data-pep="${c.key}">${esc(c.title)}</button>` : ""}${c.manual ? "<span>手動新增</span>" : ""}<button class="linkbtn pdel" data-pdel="${c.key}|${c.id}">刪除</button></div>
   </div>`;
 }
-const podArt = (s, cl = "part") => `<span class="${cl} pbadge">${badgeSvg(s.name || s.author)}</span>`; // 不載入節目封面（第三方圖片），改用 SVG 縮寫徽章
+// 節目頭像：用節目自己的頻道圖；沒有圖或圖載入失敗時改用 SVG 縮寫徽章
+const podArt = (s, cl = "part") => { const nm = s.name || s.author || "?";
+  return s.art ? `<img class="${cl}" src="${esc(s.art)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="${esc(`this.replaceWith(Object.assign(document.createElement('span'), { className: ${JSON.stringify(cl + " pbadge")}, innerHTML: badgeSvg(${JSON.stringify(nm)}) }))`)}">` : `<span class="${cl} pbadge">${badgeSvg(nm)}</span>`; };
 const podEmpty = msg => `<p class="note pempty">${msg}</p>`;
 function podJobHtml(key) {
   const J = POD.job; if (!J || J.key !== key) return "";
