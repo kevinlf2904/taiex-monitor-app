@@ -21,6 +21,12 @@ export async function mock(ctx) {
   await ctx.route("**/api/kline**", r => { const c = new URL(r.request().url()).searchParams.get("code") || "x", seed = [...c].reduce((a, x) => a + x.charCodeAt(0), 0);
     J(r, { ok: true, code: c, name: c, market: "上市", source: "t", data: K.map((x, i) => { const cc = +(x.c * (1 + Math.sin(i / (7 + (seed % 5))) * 0.08)).toFixed(1); return { ...x, c: cc, h: +(Math.max(x.o, cc) * 1.01).toFixed(1), l: +(Math.min(x.o, cc) * 0.99).toFixed(1), v: 15000 + (i % 17 === 0 ? 60000 : 0) }; }) }); });
   await ctx.route("**/api/chat", r => J(r, { ok: true, text: "測試回覆" }));
+  await ctx.route("**/api/etf**", r => { const c = new URL(r.request().url()).searchParams.get("code");
+    J(r, { ok: true, code: c, source: "MoneyDJ 理財網", link: "https://example.com/etf", info: { name: "測試ETF" + c, issuer: "測試投信", index: "測試指數", aum: 2.4e12, cur: "台幣", fee: 0.15, ter: 0.22, freq: "半年配", yield: 1.5, prem: 0.3, sd: 20, n: 3, kind: "股票型", region: "台灣", strategy: "完全複製", kv: [["ETF名稱", "測試ETF"], ["經理費(%)", "0.15"]] },
+      hold: { date: "2026-10-16", rows: [{ name: "台積電", code: "2330", pct: 56.6, sh: 5.8e8 }, { name: "聯發科", code: "2454", pct: 6, sh: 3.5e7 }, { name: "台達電", code: "2308", pct: 3, sh: 4.5e7 }] },
+      month: { date: "2026-09-30", rows: [{ name: "台積電", code: "2330", sh: 5.6e8, pct: 56.45, chg: -0.9 }, { name: "聯發科", code: "2454", sh: 3.4e7, pct: 6.74, chg: 1.1 }] }, ind: { date: "2026-10-09", rows: [{ name: "半導體", pct: 68.9 }, { name: "金融保險", pct: 8 }] } }); });
+  await ctx.route("**/data/etf-hold/**", r => J(r, { code: "0050", name: "元大台灣50", date: "2026-10-16", since: "2026-06-01", rows: [], ev: [{ d: "2026-09-19", t: "in", code: "3017", name: "奇鋐", pct: 0.5 }, { d: "2026-09-19", t: "out", code: "1101", name: "台泥", pct: 0.3 }] }));
+
   await ctx.route("**/api/calendar**", r => J(r, { ok: true, rows: [{ date: "2026-10-20", code: "2330", name: "台積電", kind: "除息", cash: 4.5 }], conf: [] }));
   await ctx.route("**/api/yield**", r => { const cs = (new URL(r.request().url()).searchParams.get("codes") || "").split(","); J(r, { ok: true, rows: cs.map(c => ({ code: c, cash12: 5, n: 1, price: 100, yield: 5, divs: [["2025-07-10", 2.5], ["2026-01-10", 3]] })) }); });
   const axis = K.map(x => x.d).slice(-130);

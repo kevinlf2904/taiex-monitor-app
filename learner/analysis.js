@@ -877,7 +877,7 @@ const signed = v => (v == null ? "—" : `${v > 0 ? "+" : ""}${Math.round(v).toL
 const clsOf = v => (v > 0 ? "up" : v < 0 ? "down" : "");
 function streak(rows, k) { const last = rows[rows.length - 1]?.[k]; if (!last) return 0; let n = 0; for (let i = rows.length - 1; i >= 0 && Math.sign(rows[i][k]) === Math.sign(last); i--) n++; return n * Math.sign(last); }
 function chipsSummary(j, D) {
-  const out = [], inst = j.inst, mg = j.margin;
+  const out = [], inst = Array.isArray(j?.inst) ? j.inst : [], mg = Array.isArray(j?.margin) ? j.margin : []; // ETF 或載入失敗時可能沒有這兩項
   if (inst.length) {
     const sum = (k, n) => inst.slice(-n).reduce((a, r) => a + r[k], 0);
     [["foreign", "外資"], ["trust", "投信"], ["dealer", "自營商"]].forEach(([k, t]) => {

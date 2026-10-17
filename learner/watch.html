@@ -828,7 +828,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.17-81</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單，僅供學習與參考，不構成投資建議。<span class="num" style="margin-left:8px">版本 2026.10.17-82</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2841,8 +2841,10 @@ function select(code, how = "push") {
   navPush(how === "push" ? "push" : "replace");
   $("#main").classList.add("show-detail"); syncLayout();
   $("#learnLink").href = `./?code=${code === "T00" ? "加權" : code}#shot`;
-  const tw = isTW(code); document.querySelectorAll('#dTabs [data-t="chips"], #dTabs [data-t="fin"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
-  if (!tw && (W.dtab === "chips" || W.dtab === "fin")) W.dtab = "trend";
+  const tw = isTW(code), etf = isEtf(code); document.querySelectorAll('#dTabs [data-t="chips"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
+  // ETF：「財務」分頁改成「ETF」（基本資料、成分股、成分股變動、配息），美股 ETF 也有
+  { const f = $('#dTabs [data-t="fin"]'); f.hidden = !tw && !etf; f.textContent = etf ? "ETF" : "財務"; }
+  if ((!tw && W.dtab === "chips") || (!tw && !etf && W.dtab === "fin")) W.dtab = "trend";
   $("#learnLink").hidden = isUS(code) || isFut(code);
   const fut = isFut(code); document.querySelectorAll('#kSeg [data-k="D"], #kSeg [data-k="W"], #kSeg [data-k="M"]').forEach(b => (b.hidden = false)); $("#cdpBtn").hidden = fut; tsSegFill(fut);
   renderList(); renderDetailHead(); renderFlow(); setDtab(W.dtab, false); drawTs();
@@ -2996,7 +2998,9 @@ const DSUB = {
 const DSUB_OWN = new Set(["tags", "sum", "rev", "report"]); // 用原本區塊畫的子頁
 const OLD_DTAB = { fund: ["fin", "rev"], co: ["fin", "report"], info: ["ovw", "ls"], tags: ["ovw", "tags"] }; // 舊版分頁 → 新的分頁＋子頁
 W.dsub = { ovw: "ls", chips: "sum", fin: "rev", ...(store.get("watch:dsub", null) || {}) };
-const dSubs = t => (DSUB[t] || []).filter(x => !x[2] || isTW(W.sel));
+// ETF 的子頁：沒有營收、財報、健檢、評價推估、產業鏈，改成 ETF 自己的基本資料、成分股、成分股變動
+const DSUB_ETF = { fin: [["etfinfo", "基本資料"], ["etfhold", "成分股"], ["etfchg", "成分股變動"], ["div", "配息", 1]] }, ETF_NO = new Set(["check", "target", "attr"]);
+const dSubs = t => (isEtf(W.sel) && DSUB_ETF[t] ? DSUB_ETF[t] : (DSUB[t] || []).filter(x => !(isEtf(W.sel) && ETF_NO.has(x[0])))).filter(x => !x[2] || isTW(W.sel));
 function dSub(t = W.dtab) { const L = dSubs(t); return L.some(x => x[0] === W.dsub[t]) ? W.dsub[t] : L[0]?.[0]; }
 const isSxSub = () => !!DSUB[W.dtab] && !DSUB_OWN.has(dSub());
 function renderDsub() {
@@ -3006,7 +3010,7 @@ function renderDsub() {
 function setDsub(k) { W.dsub = { ...W.dsub, [W.dtab]: k }; store.set("watch:dsub", W.dsub); setDtab(W.dtab, false); navPush(); }
 function setDtab(t, scroll = true) {
   if (OLD_DTAB[t]) { W.dsub = { ...W.dsub, [OLD_DTAB[t][0]]: OLD_DTAB[t][1] }; t = OLD_DTAB[t][0]; }
-  if ((t === "chips" || t === "fin") && !isTW(W.sel)) t = "trend";
+  if ((t === "chips" || t === "fin") && !isTW(W.sel) && !(t === "fin" && isEtf(W.sel))) t = "trend";
   if (!["trend", "tech", "ovw", "chips", "fin", "news"].includes(t)) t = "trend";
   W.dtab = t; store.set("watch:dtab", t);
   const sub = dSub(t), sx = !!DSUB[t] && !DSUB_OWN.has(sub);
