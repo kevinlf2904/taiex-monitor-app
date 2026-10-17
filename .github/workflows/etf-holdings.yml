@@ -1,0 +1,27 @@
+# ETF 成分股：每個交易日台北晚上 7:20 抓 ETF 全部持股（MoneyDJ），和上次比對記下納入／剔除，寫進 learner/data/etf-hold/
+name: etf-holdings
+on:
+  schedule:
+    - cron: "20 11 * * 1-5"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: data-sync-etf-holdings-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: git pull -q origin ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/etf-holdings.mjs
+      - name: commit
+        env:
+          COMMIT_NAME: etf-holdings
+        run: |
+          bash scripts/commit-data.sh "ETF 成分股：更新持股與變動" learner/data/etf-hold

@@ -12,16 +12,13 @@ async function raw(url, n = 600) {
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
 if (process.argv[2] === "ext") {
-  await raw("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_00631l.tw|tse_00632r.tw&json=1&delay=0", 400);
-  await raw("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_00631L.tw|tse_00632R.tw|tse_00675L.tw&json=1&delay=0", 1500);
-  await raw(SITE + "/api/quote?codes=00631L,00632R,00675L,00676R", 1500);
-  await raw(SITE + "/api/kline?code=00631L&months=3", 300);
-  await raw(SITE + "/api/global", 1500);
-  await raw("https://gamma-api.polymarket.com/tags?limit=300", 4000);
-  await raw("https://gamma-api.polymarket.com/events?active=true&closed=false&limit=3&order=volume24hr&ascending=false&tag_slug=economy", 3000);
-  await raw("https://gamma-api.polymarket.com/events?active=true&closed=false&limit=2&order=volume24hr&ascending=false&tag_slug=fed-rates", 2500);
-  for (const id of ["CPIAUCSL", "UNRATE", "FEDFUNDS", "DGS10", "T10Y2Y", "GDPC1", "PAYEMS", "VIXCLS"]) await raw(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=2025-01-01`, 200);
-  await raw("https://index.ndc.gov.tw/n/json/data/eco/indicators", 600);
+  // ETF 成分股、基本資料：MoneyDJ 的表格結構（去掉標籤屬性後印出相關片段）
+  const strip = t => t.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<(\w+)[^>]*>/g, "<$1>").replace(/\s+/g, " ");
+  const frag = (t, key, a = 300, b = 2500) => { if (!t) return; const x = strip(t), i = x.indexOf(key); console.log(`--- 片段「${key}」@${i}\n` + (i < 0 ? x.slice(0, 600) : x.slice(Math.max(0, i - a), i + b))); };
+  const ths = t => [...new Set([...strip(t || "").matchAll(/<th>([^<]{1,30})/g)].map(m => m[1].trim()))].join("|");
+  for (const [id, key] of [["0050.TW", "台積電"], ["SPY", "NVIDIA"]]) for (const pg of ["Basic0007", "Basic0007a", "Basic0007b", "Basic0007B"]) {
+    const h = await raw(`https://www.moneydj.com/ETF/X/Basic/${pg}.xdjhtm?etfid=${id}`, 0); console.log("表頭：", ths(h)); frag(h, key, 1500, 1500);
+  }
   process.exit(0);
 }
 for (let i = 0; i < N; i++) {

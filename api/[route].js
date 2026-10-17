@@ -11,6 +11,7 @@ const ROUTES = {
   chat: () => import("./_lib/chat.js"),
   company: () => import("./_lib/company.js"),
   daily: () => import("./_lib/daily.js"),
+  etf: () => import("./_lib/etf.js"),
   flow: () => import("./_lib/flow.js"),
   futures: () => import("./_lib/futures.js"),
   global: () => import("./_lib/global.js"),

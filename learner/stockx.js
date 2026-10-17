@@ -355,3 +355,56 @@ function sxInit() {
 .sxinfo th { text-align: left; color: var(--muted); font-weight: 400; width: 96px; white-space: nowrap; } .sxinfo td { text-align: left; }`;
   document.head.appendChild(css);
 }
+
+/* ---------- ETF：基本資料、成分股、成分股變動（個股頁「ETF」分頁；資料 /api/etf＝MoneyDJ，變動紀錄由排程存在 data/etf-hold/） ---------- */
+async function etfLoad(c) {
+  if (W.etf?.code === c && (W.etf.loading || W.etf.at)) return;
+  W.etf = { code: c, loading: true };
+  const [a, h] = await Promise.all([getJ(`/api/etf?code=${encodeURIComponent(c)}`, true).catch(e => ({ ok: false, error: e.message })), fetch(`data/etf-hold/${encodeURIComponent(c)}.json`, { cache: "no-cache" }).then(r => (r.ok ? r.json() : null)).catch(() => null)]);
+  if (W.sel !== c) return; W.etf = { ...a, code: c, at: Date.now(), hist: h }; if (isSxSub()) sxRender();
+}
+const etfAmt = (v, cur) => (v == null ? "—" : /美|USD/i.test(cur || "") ? `US$ ${v >= 1e9 ? (v / 1e9).toFixed(1) + "B" : (v / 1e6).toFixed(0) + "M"}` : v >= 1e8 ? `${(v / 1e8).toLocaleString(undefined, { maximumFractionDigits: 0 })} 億` : `${Math.round(v / 1e4).toLocaleString()} 萬`);
+const etfSh = n => (n == null ? "—" : n >= 1e8 ? (n / 1e8).toFixed(2) + " 億股" : n >= 1e4 ? Math.round(n / 1e4).toLocaleString() + " 萬股" : n.toLocaleString() + " 股");
+const etfName = r => (r.code && okCode(r.code) ? `<button class="linkbtn" data-sel="${esc(r.code)}">${esc(r.name)}</button> <span class="note">${esc(r.code)}</span>` : esc(r.name));
+function etfWait() {
+  const E = W.etf; if (W.off) return `<p class="note sxwait">需要部署到網站才有 ETF 資料。</p>`;
+  if (!E || E.code !== W.sel || E.loading) { etfLoad(W.sel); return `<p class="note sxwait">載入 ETF 資料…</p>`; }
+  if (!E.ok) return `<p class="note sxwait">⚠ ${esc(E.error || "拿不到 ETF 資料")}</p>`;
+  return null;
+}
+Object.assign(SX, {
+  etfinfo: () => {
+    const w = etfWait(); if (w) return w; const E = W.etf, I = E.info || {}, nm = I.name || nameOf(W.sel);
+    const lead = `${esc(nm)}${I.issuer ? `由${esc(I.issuer)}發行` : ""}${I.index ? `，追蹤「${esc(I.index)}」` : ""}${I.aum ? `，規模約 ${etfAmt(I.aum, I.cur)}` : ""}${I.fee != null ? `，經理費 ${I.fee}%` : ""}${I.ter != null ? `、總管理費用 ${I.ter}%` : ""}${I.freq ? `，${esc(I.freq)}` : ""}。`;
+    const cards = [{ t: "規模", sub: esc(I.cur || ""), v: etfAmt(I.aum, I.cur) }, { t: "成分股", sub: E.hold?.date ? `持股 ${E.hold.rows.length} 檔` : "", v: I.n != null ? `${I.n} 檔` : `${E.hold?.rows?.length || "—"} 檔` }, { t: "費用", sub: `經理費 ${I.fee ?? "—"}%`, v: I.ter != null ? `${I.ter}%` : I.fee != null ? `${I.fee}%` : "—" },
+      { t: "配息", sub: I.yield != null ? `殖利率 ${I.yield}%` : "", v: esc(I.freq || "—") }, { t: "折溢價", sub: "市價相對淨值", v: I.prem != null ? `${I.prem > 0 ? "+" : ""}${I.prem}%` : "—", vc: I.prem > 0.5 ? "up" : I.prem < -0.5 ? "down" : "" }, { t: "年化標準差", sub: "波動大小", v: I.sd != null ? `${I.sd}%` : "—" }];
+    const ind = E.ind?.rows || [];
+    return `<div class="tw-p">${rkPerson(rkMono(W.sel, "#3d7be0", true), esc(nm), `${esc([I.kind, I.region, I.lev].filter(Boolean).join("・"))}${I.listed ? `　上市 ${I.listed.replace(/-/g, "/")}` : ""}`)}
+      <p class="tw-lead">${lead}</p>${rkCards(cards)}
+      ${ind.length ? `${sxH("持股產業分布", E.ind.date ? `資料日期 ${E.ind.date.replace(/-/g, "/")}` : "")}<ul class="etf-ind">${ind.slice(0, 12).map((x, i) => `<li><span>${esc(x.name)}</span><i style="width:${Math.max(1, x.pct)}%;background:${TWO_PAL[i % TWO_PAL.length]}"></i><b>${x.pct}%</b></li>`).join("")}</ul>` : ""}
+      ${I.strategy ? `${sxH("投資策略")}<p class="sxsay">${esc(I.strategy)}</p>` : ""}
+      ${sxH("完整資料")}<table class="tbl sxinfo"><tbody>${(I.kv || []).filter(([k]) => k !== "投資策略").map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>
+      <p class="note">資料：<a href="${esc(E.link)}" target="_blank" rel="noopener">${esc(E.source)}</a>（每天更新，規模、殖利率、折溢價以括號內日期為準）。</p></div>`;
+  },
+  etfhold: () => {
+    const w = etfWait(); if (w) return w; const E = W.etf, H = E.hold || { rows: [] }; if (!H.rows.length) return `<p class="note sxwait">MoneyDJ 沒有這檔 ETF 的持股明細。</p>`;
+    const top = H.rows.slice().sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0)), n10 = top.slice(0, 10).reduce((a, r) => a + (r.pct || 0), 0), shown = W.etfMore ? top : top.slice(0, 10), rest = top.slice(10);
+    return `<div class="tw-p">${rkTotal(`成分股（資料日期 ${(H.date || "—").replace(/-/g, "/")}）`, `${top.length} 檔`, `前十大合計 ${n10.toFixed(1)}%${top[0] ? `・最大 ${esc(top[0].name)} ${top[0].pct}%` : ""}`)}
+      ${rkTop(shown.map(r => ({ label: etfName(r), pct: r.pct, val: `${r.pct}%`, right: etfSh(r.sh) })).map(x => ({ ...x, pct: null })), rest.length ? `<li class="tw-rest"><div><b>${W.etfMore ? "收合" : `其他 ${rest.length} 檔`}</b>${W.etfMore ? "" : `<small class="note">合計 ${rest.reduce((a, r) => a + (r.pct || 0), 0).toFixed(1)}%</small>`}</div><button type="button" class="linkbtn" data-etfmore="1">${W.etfMore ? "收合" : "展開"}</button></li>` : "")}
+      <p class="note">比例是占 ETF 淨資產；點名稱可以看那檔股票。持股每天會隨申購、買回變動，資料來源：${esc(E.source)}。</p></div>`;
+  },
+  etfchg: () => {
+    const w = etfWait(); if (w) return w; const E = W.etf, Hs = E.hist, M = E.month || { rows: [] }, ev = Hs?.ev || [];
+    const days = [...new Set(ev.map(e => e.d))].sort().reverse();
+    const evH = days.length ? days.map(d => { const L = ev.filter(e => e.d === d), inn = L.filter(e => e.t === "in"), out = L.filter(e => e.t === "out");
+      return `<div class="etf-ev"><h5>${d.replace(/-/g, "/")}<span class="note">納入 ${inn.length}・剔除 ${out.length}</span></h5>${rkList([...inn, ...out].map(e => ({ no: e.t === "in" ? "納入" : "剔除", attr: e.code && okCode(e.code) ? `data-sel="${esc(e.code)}"` : "", mono: rkMono(rkInit(e.name), e.t === "in" ? "#3fa36b" : "#d0643f"), name: esc(e.name), sub: esc(e.code || ""), val: e.pct != null ? `${e.pct}%` : "", vc: e.t === "in" ? "up" : "down", vsub: e.t === "in" ? "納入時比例" : "剔除前比例" })))}</div>`; }).join("")
+      : `<p class="note">${Hs ? `從 ${String(Hs.since || "").replace(/-/g, "/")} 開始每天比對，到現在成分股名單沒有變動。` : "這檔 ETF 還沒有每天比對的紀錄（排程追蹤 ETF 專區裡的 ETF 與常見美股 ETF）；下面先看投信每月公告的權重增減。"}</p>`;
+    const mv = M.rows.filter(r => r.chg != null && r.chg !== 0).sort((a, b) => Math.abs(b.chg) - Math.abs(a.chg));
+    return `<div class="tw-p">${sxH("成分股納入／剔除", Hs?.date ? `最近比對 ${Hs.date.replace(/-/g, "/")}` : "")}${evH}
+      ${M.rows.length ? `${sxH("每月權重增減", M.date ? `${M.date.replace(/-/g, "/")} 投信公告，和上個月比` : "")}${rkList(mv.slice(0, 30).map(r => ({ no: r.chg > 0 ? "增加" : "減少", attr: r.code && okCode(r.code) ? `data-sel="${esc(r.code)}"` : "", mono: rkMono(rkInit(r.name), r.chg > 0 ? "#3fa36b" : "#d0643f"), name: esc(r.name), sub: `${r.code ? esc(r.code) + "・" : ""}持股 ${etfSh(r.sh)}`, val: `${r.chg > 0 ? "+" : ""}${r.chg}%`, vc: r.chg > 0 ? "up" : "down", vsub: `目前 ${r.pct}%` })), "這個月權重都沒有變化")}` : ""}
+      <p class="note">「納入／剔除」是比對前後兩天的全部持股名單；權重增減是投信每月公告的持股比例變化（百分點）。指數定期調整（季度、半年度）時變動最多。</p></div>`;
+  },
+});
+{ const css = document.createElement("style"); css.textContent = `.etf-ind { list-style: none; margin: 0; padding: 0; } .etf-ind li { display: grid; grid-template-columns: 7.5em 1fr 4em; gap: 8px; align-items: center; padding: 4px 0; font-size: 13.5px; } .etf-ind i { display: block; height: 10px; border-radius: 2px; } .etf-ind b { text-align: right; font: 500 13px var(--font-num); }
+.etf-ev h5 { margin: 10px 0 0; font-size: 14px; display: flex; gap: 8px; align-items: baseline; } .etf-ev h5 .note { font-weight: 400; font-size: 12px; }`; document.head.appendChild(css);
+  document.addEventListener("click", e => { const b = e.target.closest("#sxBox [data-etfmore]"); if (b) { W.etfMore = !W.etfMore; sxRender(); } }); }
