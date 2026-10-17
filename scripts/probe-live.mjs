@@ -12,15 +12,14 @@ async function raw(url, n = 600) {
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
 if (process.argv[2] === "ext") {
-  // ETF 成分股、基本資料的候選來源
-  const sw = await raw("https://openapi.twse.com.tw/v1/swagger.json", 0); try { const j = JSON.parse(sw); console.log("TWSE OpenAPI ETF 相關：", Object.entries(j.paths).filter(([k, v]) => /ETF|etf/.test(k + JSON.stringify(v).slice(0, 300))).map(([k, v]) => k + " " + (v.get?.summary || "")).join("\n")); } catch (e) { console.log("swagger 解析失敗", e.message); }
-  await raw("https://www.moneydj.com/ETF/X/Basic/Basic0007a.xdjhtm?etfid=0050.TW", 3000);
-  await raw("https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid=0050.TW", 3000);
-  const y = await raw("https://tw.stock.yahoo.com/quote/0050.TW/holding", 300); if (y) { const i = y.indexOf("台積電"); console.log("Yahoo 持股片段：", i, y.slice(Math.max(0, i - 1500), i + 1500)); }
-  const y2 = await raw("https://tw.stock.yahoo.com/quote/0050.TW/profile", 300); if (y2) { const i = y2.indexOf("經理費"); console.log("Yahoo 基本資料片段：", i, y2.slice(Math.max(0, i - 1500), i + 1500)); }
-  const sa = await raw("https://stockanalysis.com/etf/spy/holdings/", 300); if (sa) { const i = sa.indexOf("NVDA"); console.log("stockanalysis 片段：", i, sa.slice(Math.max(0, i - 800), i + 1200)); }
-  await raw("https://query2.finance.yahoo.com/v10/finance/quoteSummary/SPY?modules=topHoldings,fundProfile", 800);
-  await raw("https://www.twse.com.tw/rwd/zh/ETF/etfBasicInfo?stockNo=0050&response=json", 800);
+  // ETF 成分股、基本資料：MoneyDJ 的表格結構（去掉標籤屬性後印出相關片段）
+  const strip = t => t.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<(\w+)[^>]*>/g, "<$1>").replace(/\s+/g, " ");
+  const frag = (t, key, a = 300, b = 2500) => { if (!t) return; const x = strip(t), i = x.indexOf(key); console.log(`--- 片段「${key}」@${i}\n` + (i < 0 ? x.slice(0, 600) : x.slice(Math.max(0, i - a), i + b))); };
+  for (const id of ["0050.TW", "00878.TW", "SPY", "QQQ"]) {
+    const h = await raw(`https://www.moneydj.com/ETF/X/Basic/Basic0007a.xdjhtm?etfid=${id}`, 0); frag(h, "持股名稱"); frag(h, "資料日期", 200, 400);
+    const g = await raw(`https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid=${id}`, 0); frag(g, "經理費", 2500, 2500);
+  }
+  const c = await raw("https://www.moneydj.com/ETF/X/Basic/Basic0007b.xdjhtm?etfid=0050.TW", 0); frag(c, "持股名稱");
   process.exit(0);
 }
 for (let i = 0; i < N; i++) {

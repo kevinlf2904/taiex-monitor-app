@@ -464,6 +464,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .tw-tabs { margin: 4px 0 8px; } .tw-tbl td.num { text-align: right; font-family: var(--font-num); white-space: nowrap; }
 .tw-sub { margin-top: 14px; } .tw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .tw-chips button, .tw-chips a { border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 6px 12px; border-radius: 4px; font: inherit; font-size: 13.5px; cursor: pointer; text-decoration: none; }
+.menu .mic svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: -2px; margin-right: 4px; }
 .mn-days.mkseg { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 8px 12px 0; } .mn-days button { flex: none; }
 .mnews .mn-sum { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
 .mnews .mn-sum b { font-weight: 600; font-size: 15px; } .mnews .mn-sum ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; font-size: 13.5px; line-height: 1.55; }
@@ -845,7 +846,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     <button data-m="port">💼 持股總覽</button>
     <button data-m="fund">📊 基本面</button>
     <button data-m="theme">◐ 深色／淺色</button>
-    <button data-m="style">🎨 版面風格</button>
+    <button data-m="style"><span class="mic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1 0 1.6-.7 1.6-1.5 0-.9-.8-1.3-.8-2.1 0-.9.7-1.6 1.6-1.6h1.9a4.2 4.2 0 0 0 4.2-4.2c0-4.3-3.8-7.6-8.5-7.6z"/><circle cx="7.6" cy="11" r="1"/><circle cx="10.4" cy="7.4" r="1"/><circle cx="14.8" cy="7.6" r="1"/></svg></span>版面風格</button>
     <button data-m="font">Aa 字體：黑體／宋體</button>
     <button data-m="install">📲 加入主畫面</button>
     <a href="./" id="mLearn">📘 K線學堂</a>
