@@ -99,22 +99,26 @@ export async function run() {
   if (docs._v !== VER) { console.log("解析版本更新，重讀列表上的期別"); old = { issues: (old.issues || []).filter(i => !onList.has(i.no)), decl: (old.decl || []).filter(d => !onList.has(d.issue)) }; docs = { done: (docs.done || []).filter(n => !onList.has(n)) }; }
   const todo = list.filter(x => !docs.done.includes(x.no)).slice(0, 40); console.log("要讀", todo.map(x => x.no).join("、") || "沒有新的期別");
   // 股票簡稱 → 代號（上市＋上櫃全部股票與 ETF 的當天行情名稱）
-  const map = new Map(); try { const { parseTwseAll, parseTpexAll } = await import("../api/_lib/hot.js"); const get = async u => (await fetch(u, { headers: UA, signal: AbortSignal.timeout(30000) })).json();
+  const map = new Map(), close = new Map(); let pxDate = null; try { const { parseTwseAll, parseTpexAll } = await import("../api/_lib/hot.js"); const get = async u => (await fetch(u, { headers: UA, signal: AbortSignal.timeout(30000) })).json();
     const [a, b] = await Promise.allSettled([get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL").then(parseTwseAll), get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes").then(parseTpexAll)]);
-    for (const x of [...(a.value || []), ...(b.value || [])]) { const n = String(x.name).replace(/\s+/g, ""); if (n && !map.has(n)) map.set(n, x.code); } } catch (e) { console.log("代號對照失敗", e.message); }
+    for (const x of [...(a.value || []), ...(b.value || [])]) { const n = String(x.name).replace(/\s+/g, ""); if (n && !map.has(n)) map.set(n, x.code); if (x.price > 0) close.set(x.code, x.price); if (x.date && (!pxDate || x.date > pxDate)) pxDate = x.date; } } catch (e) { console.log("代號對照失敗", e.message); }
   const codeOf = n => map.get(n) || map.get(n.replace(/-?KY$/i, "-KY")) || map.get(n.replace(/股份有限公司$|公司$/, "")) || "";
   const decl = [...(old.decl || [])], seen = new Set(decl.map(d => `${d.pid}|${d.date}|${d.kind}`)), issues = [...(old.issues || [])];
   for (const x of todo) {
     try { const buf = await getBuf(x.pdf), { pages } = await pdfLines(buf), D = parseDecls(pages.flat()); let n = 0;
       for (const d of D) { if (!d.date) continue; const key = `${d.name}|${d.date}|${d.kind}`; if (seen.has(key)) continue; seen.add(key); n++;
         decl.push({ pid: d.name, name: d.name, org: d.org, title: d.title, date: d.date, kind: d.kind, issue: x.no, stocks: d.stocks.map(s => ({ name: s.name, code: s.cur ? "" : codeOf(s.name), owner: s.owner, sh: s.sh, cur: s.cur })) }); }
-      docs.done.push(x.no); if (!issues.some(i => i.no === x.no)) issues.push({ no: x.no, date: x.date });
+      docs.done.push(x.no); if (!issues.some(i => i.no === x.no)) issues.push({ no: x.no, date: x.date, pdf: x.pdf });
       console.log("第", x.no, "期", x.date, "申報", D.length, "人，新增", n, "，股票", D.reduce((a, d) => a + d.stocks.length, 0), "筆，對到代號", D.reduce((a, d) => a + d.stocks.filter(s => !s.cur && codeOf(s.name)).length, 0));
     } catch (e) { console.log("失敗", x.no, e.message); }
     await sleep(800);
   }
   issues.sort((a, b) => b.no - a.no);
-  await writeFile(OUT, JSON.stringify({ updated: new Date().toISOString(), source: "監察院廉政專刊（陽光法令主題網）", issues, decl }));
+  for (const i of issues) { const L = list.find(x => x.no === i.no); if (L && !i.pdf) i.pdf = L.pdf; } // 舊資料補上 PDF 連結（網站只留最近 6 個月）
+  // 申報持股的最新收盤價（每個交易日更新），網頁用來算「持股市值」排行；拿不到就沿用上次的
+  const held = new Set(decl.flatMap(d => d.stocks.map(x => x.code).filter(Boolean))), px = {};
+  for (const c of held) { const v = close.get(c) ?? old.px?.[c]; if (v != null) px[c] = v; }
+  await writeFile(OUT, JSON.stringify({ updated: new Date().toISOString(), source: "監察院廉政專刊（陽光法令主題網）", pxDate: close.size ? pxDate : old.pxDate || null, px, issues, decl }));
   await writeFile(DOCS, JSON.stringify({ _v: VER, done: [...new Set(docs.done)].sort((a, b) => b - a) }));
   console.log("完成：", decl.length, "份申報，", new Set(decl.map(d => d.pid)).size, "人");
 }

@@ -251,7 +251,7 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
 
 /* 版心留白：圓角都改小（區塊 6、卡片 5、按鈕與膠囊 4），只有很小的圓點維持圓形 */
 :root[data-style="layout"] :is(.btn, .btn.sm, .row .pc, .ichip, .groups button, .ixc, .cochips button, .mkseg button, .sxnav button, .sxco, .pod .pbadge, .pod .pdir, .pod .pwin, .sxcard .pdir,
-  .tabs, .tabs button, #lessonToc a, #lessonToc button, .icon-btn, .theme-btn, .chip, .seal, .brand b, .msg.user, .afchips button, .stylepick button.sp, .stylepick .sp i) { border-radius: var(--radius-sm); }
+  .tabs, .tabs button, #lessonToc a, #lessonToc button, .icon-btn, .theme-btn, .chip, .seal, .brand b, .msg.user, .afchips button) { border-radius: var(--radius-sm); }
 :root[data-style="layout"] :is(#toTop, .chat-fab) { border-radius: 8px; }
 :root[data-style="layout"] img.logo { border-radius: 4px; }
 :root[data-style="layout"] .sxgauge .bar { border-radius: 2px; }
@@ -299,12 +299,16 @@ svg circle[stroke-width] { stroke-width: 1.2px; }
 
 /* ---------- 風格選擇視窗 ---------- */
 .stylepick { position: fixed; inset: 0; z-index: 9998; display: grid; place-items: center; background: rgba(0, 0, 0, .45); padding: 16px; }
-.stylepick > div { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.stylepick > div { width: min(420px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
 .stylepick h3 { margin: 0 0 4px; font-size: 18px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
-.stylepick .sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
-.stylepick button.sp { display: flex; flex-direction: column; gap: 6px; padding: 8px; text-align: left; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-2); color: var(--ink); cursor: pointer; font: inherit; }
-.stylepick button.sp[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
+.stylepick .sp-list { display: flex; flex-direction: column; margin: 12px 0 4px; border-top: 1px solid var(--line); }
+.stylepick button.sp { display: flex; align-items: center; gap: 12px; padding: 11px 4px; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--ink); cursor: pointer; font: inherit; }
+.stylepick button.sp:hover { background: var(--surface-2); }
+.stylepick .sp .sp-sw { display: inline-flex; flex: none; }
+.stylepick .sp .sp-sw i { display: block; flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); margin-left: -4px; }
+.stylepick .sp .sp-sw i:first-child { margin-left: 0; }
+.stylepick .sp-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .stylepick .sp b { font-weight: 500; font-size: 14.5px; } .stylepick .sp small { color: var(--muted); font-size: 12px; line-height: 1.45; }
-.stylepick .sp i { display: block; height: 74px; border-radius: 8px; position: relative; overflow: hidden; }
-.stylepick .sp i u { position: absolute; display: block; }
+.stylepick .sp-ok { width: 18px; flex: none; color: var(--gold); font-weight: 600; text-align: center; }
+.stylepick button.sp[aria-pressed="true"] b { color: var(--gold); }
 .stylepick .sp-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

@@ -796,34 +796,77 @@ function twoRankHtml(P) {
     ${L.sort(ord).slice(0, 30).map(({ p, x }) => { const best = [...x.ok].sort((a, b) => (srt === "loss" ? a.pnl - b.pnl : b.pnl - a.pnl))[0]; return `<tr><td>${twoWho(p)}</td><td>${p.last.date}</td><td>${twd(x.v0)}</td><td>${twd(x.v1)}</td><td class="${cls(x.pnl)}"><b>${twdS(x.pnl)}</b></td><td class="${cls(x.r)}">${retPct(x.r)}</td><td>${best ? `${esc(nameOf(best.code) !== best.code ? nameOf(best.code) : best.name)} <span class="${cls(best.pnl)}">${twdS(best.pnl)}</span>` : ""}</td></tr>`; }).join("")}</tbody></table></div>
     <p class="note">${L.length} 人有股價可算。估計值：假設申報後一直持有、沒算股利與交易成本。</p>`;
 }
+// 分類（申報沒有黨籍，依職稱分組）、證券類型、金額格式（完整數字／億萬）
+const TWO_GRP = [["all", "全部"], ["ly", "立法委員"], ["cy", "監察委員"], ["head", "縣市首長"], ["council", "議員"], ["gov", "其他官員"]];
+const twoGrp = p => (/立法委員/.test(p.title) ? "ly" : /監察委員/.test(p.title) ? "cy" : /^(副)?(縣|市)長$/.test(p.title) ? "head" : /議員|議長/.test(p.title) ? "council" : "gov");
+const TWO_GC = { ly: "#3d7be0", cy: "#9b6bd6", head: "#d2913a", council: "#3fa36b", gov: "#8a8f98" };
+const twoType = s => (!s.code ? "其他" : /^00/.test(s.code) ? "ETF" : "個股");
+const twoAmt = v => (v == null ? "—" : W.twoAmt === "short" ? (v >= 1e8 ? `${(v / 1e8).toFixed(2)} 億` : v >= 1e4 ? `${Math.round(v / 1e4).toLocaleString()} 萬` : Math.round(v).toLocaleString()) : `NT$ ${Math.round(v).toLocaleString()}`);
+const twoLots = n => `${+(n / 1000).toFixed(2)} 張`;
+const TWO_PAL = ["#3d6fd6", "#d0643f", "#3fa86b", "#a54bb3", "#c99a3b", "#3aa6b0", "#c24d6d", "#7a8a3a"];
+// 最新收盤價：排程存在資料檔（px）；檔案還沒有價格時改問即時報價（每次 40 檔）
+function twoPx(code) { return W.two?.px?.[code] ?? W.twoLive?.[code] ?? null; }
+async function twoPxLoad() {
+  if (W.twoLive || W.off || Object.keys(W.two?.px || {}).length) return; W.twoLive = {};
+  const codes = [...new Set((W.two?.decl || []).flatMap(d => d.stocks.map(x => x.code).filter(Boolean)))];
+  for (let i = 0; i < codes.length; i += 40) { try { const j = await getJ(`/api/quote?src=mis&codes=${codes.slice(i, i + 40).join(",")}`); for (const q of j.quotes || []) if (q.price ?? q.prev) W.twoLive[q.code] = q.price ?? q.prev; } catch {} }
+  W.twoP = null; if (W.lt === "cong") renderList();
+}
+function twoVal(p) { // 最近一次申報的持股市值（有代號、有收盤價的才算）
+  const rows = p.hold.map(h => { const px = h.code ? twoPx(h.code) : null; return { ...h, px, v: px != null ? px * h.sh : null }; }).sort((a, b) => (b.v ?? -1) - (a.v ?? -1) || b.sh - a.sh);
+  return { rows, total: rows.reduce((a, x) => a + (x.v || 0), 0), n: rows.length };
+}
 function twoHtml(arg = "") {
   const X = W.two; if (!X) { twoLoad(); return `<p class="note" style="padding:16px">載入中…</p>`; }
   if (X.err || !X.decl?.length) return `<p class="note" style="padding:16px">⚠ 台灣政治人物申報資料還沒有（${esc(X.err || "沒有資料")}）。資料由排程從監察院廉政專刊整理，每週更新。</p>`;
+  twoPxLoad();
   const P = twoPeople(), [kind, id] = arg.split(/:(.*)/s);
   const tag = t => `<span class="ctag ${t === "new" || t === "add" ? "many" : "one"}">${{ new: "新進", add: "增持", cut: "減持", sold: "出清" }[t]}</span>`;
+  const pxNote = X.pxDate ? `以 ${X.pxDate.replace(/-/g, "/")} 收盤價計算` : W.twoLive ? "以最新報價計算" : "以台股最新收盤價計算";
+  const amtSeg = `<span class="tw-amt seg sm" role="group" aria-label="金額顯示">${[["full", "完整數字"], ["short", "億萬"]].map(([k, t]) => `<button type="button" data-twamt="${k}" aria-pressed="${(W.twoAmt || "full") === k}">${t}</button>`).join("")}</span>`;
+  const mono = (p, big) => `<span class="tw-mono${big ? " big" : ""}" style="--g:${TWO_GC[twoGrp(p)]}">${esc([...p.name.replace(/\s/g, "")][0] || "?")}</span>`;
   if (kind === "p") {
     const p = P.find(x => x.pid === id); if (!p) return `<p class="note">找不到這個人</p>`;
-    return `<section class="csec"><h3>${esc(p.name)} <span class="note">${esc([p.org, p.title].filter(Boolean).join("・"))}</span></h3>
-      <div class="cokv three"><div><span>最近一次申報</span><b>${p.last.date}</b><small>${esc(p.last.kind)}・廉政專刊第 ${p.last.issue} 期</small></div><div><span>持股</span><b>${p.hold.length} 檔</b><small>含配偶、未成年子女</small></div><div><span>上一次申報</span><b>${p.prev?.date || "—"}</b><small>${p.prev ? esc(p.prev.kind) : "資料裡只有一次"}</small></div></div>
-      ${p.chg.length ? `<h4>和上一次申報相比</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>變化</th><th>上次</th><th>這次</th></tr></thead><tbody>${p.chg.sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).map(c => `<tr><td>${twoStk(c)}</td><td>${tag(c.t)} <span class="${c.d > 0 ? "up" : "down"}">${c.d > 0 ? "+" : ""}${twoLot(c.d)}</span></td><td>${twoLot(c.psh)}</td><td>${twoLot(c.sh)}</td></tr>`).join("")}</tbody></table></div>` : ""}
-      ${twoPnlHtml(p)}
-      <h4>最近一次申報的持股</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>股數</th><th>所有人</th></tr></thead><tbody>${(p.last.stocks || []).sort((a, b) => b.sh - a.sh).map(s => `<tr><td>${twoStk(s)}</td><td>${twoLot(s.sh)}</td><td>${esc(s.owner || "")}</td></tr>`).join("") || `<tr><td colspan="3" class="note">申報沒有股票</td></tr>`}</tbody></table></div></section>`;
+    const V = twoVal(p), top = V.rows.filter(x => x.v), big = top[0], tab = W.twoTab === "chg" ? "chg" : "hold", owners = c => [...new Set((p.last.stocks || []).filter(s => (s.code || s.name) === c).map(s => s.owner).filter(Boolean))].join("、");
+    const decls = (X.decl || []).filter(d => d.pid === p.pid).sort((a, b) => b.date.localeCompare(a.date)), pdf = no => (X.issues || []).find(i => i.no === no)?.pdf;
+    const mates = P.filter(q => q !== p && twoGrp(q) === twoGrp(p) && (twoGrp(p) !== "gov" || q.org === p.org)).map(q => ({ q, v: twoVal(q).total })).sort((a, b) => b.v - a.v).slice(0, 12);
+    const shown = W.twoMore ? top : top.slice(0, 5), rest = top.slice(5), restV = rest.reduce((a, x) => a + x.v, 0);
+    return `<section class="csec tw-p">
+      <div class="tw-head">${mono(p, true)}<div><h2>${esc(p.name)}</h2><p><span class="tw-dot" style="background:${TWO_GC[twoGrp(p)]}"></span>${esc([p.org, p.title].filter(Boolean).join("・"))}　申報日 ${p.last.date.replace(/-/g, "/")}</p></div></div>
+      <p class="tw-lead">${esc(p.name)}為${esc(p.org || "")}${esc(p.title || "")}，依 ${p.last.date.replace(/-/g, "/")} 監察院財產申報資料，共持有 ${V.n} 檔有價證券${V.total ? `，總市值約 ${twoAmt(V.total)}` : ""}${big ? `，最大持股為${esc(nameOf(big.code) !== big.code ? nameOf(big.code) : big.name)}（${big.code}）` : ""}。</p>
+      <div class="tw-total"><span class="note">股票市值，${pxNote}</span>${amtSeg}<b>${V.total ? twoAmt(V.total) : "—"}</b><small class="note">${V.n} 檔證券${V.n - top.length ? `（${V.n - top.length} 檔沒有上市櫃股價，未計入）` : ""}</small></div>
+      ${top.length ? `<ol class="tw-top">${shown.map((x, i) => `<li><span class="tw-rk">${i + 1}</span><i style="background:${TWO_PAL[i % TWO_PAL.length]}"></i><div><b>${twoStk(x)}</b><span class="tw-tp">${twoType(x)}</span><small class="note">${esc(owners(x.k))}</small><small><b>${Math.round(x.v / V.total * 100)}%</b>・${twoAmt(x.v)}</small></div><em>${twoLots(x.sh)}</em></li>`).join("")}
+        ${rest.length ? `<li class="tw-rest"><div><b>${W.twoMore ? "收合" : `其他 ${rest.length} 檔`}</b>${W.twoMore ? "" : `<small class="note">${twoAmt(restV)}・${Math.round(restV / V.total * 100)}%</small>`}</div><button type="button" class="linkbtn" data-twmore="1">${W.twoMore ? "收合" : "展開"}</button></li>` : ""}</ol>` : ""}
+      <div class="tw-tabs seg" role="group"><button type="button" data-twtab="hold" aria-pressed="${tab === "hold"}">持股</button><button type="button" data-twtab="chg" aria-pressed="${tab === "chg"}">變動紀錄 <span class="note">${p.chg.length}</span></button></div>
+      ${tab === "hold" ? `<div class="ctbl tw-tbl"><table><thead><tr><th>名稱</th><th>類型</th><th>持有人</th><th>持有數量</th><th>現價</th></tr></thead><tbody>${V.rows.map(x => `<tr><td>${twoStk(x)}</td><td><span class="tw-tp">${twoType(x)}</span></td><td>${esc(owners(x.k) || "—")}</td><td class="num">${x.sh.toLocaleString()}</td><td class="num">${x.px != null ? `$${x.px}` : "--"}</td></tr>`).join("") || `<tr><td colspan="5" class="note">申報沒有股票</td></tr>`}</tbody></table></div>`
+        : p.chg.length ? `<p class="note">${p.prev.date.replace(/-/g, "/")} → ${p.last.date.replace(/-/g, "/")} 兩次申報的股數差（申報是持股，看不到實際買賣日期與價格）。</p><div class="ctbl tw-tbl"><table><thead><tr><th>股票</th><th>變化</th><th>上次</th><th>這次</th><th>差額</th></tr></thead><tbody>${p.chg.sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).map(c => `<tr><td>${twoStk(c)}</td><td>${tag(c.t)}</td><td class="num">${c.psh.toLocaleString()}</td><td class="num">${c.sh.toLocaleString()}</td><td class="num ${c.d > 0 ? "up" : "down"}">${c.d > 0 ? "+" : ""}${c.d.toLocaleString()}</td></tr>`).join("")}</tbody></table></div>`
+        : `<p class="note">${p.prev ? "兩次申報的持股沒有變化。" : "資料裡只有一次申報，下一次申報後才看得到變化。"}</p>`}
+      ${mates.length ? `<div class="tw-sub"><h4>同為${twoGrp(p) === "gov" ? esc(p.org) : TWO_GRP.find(g => g[0] === twoGrp(p))[1]}</h4><div class="tw-chips">${mates.map(({ q }) => `<button type="button" data-cv="tw:p:${esc(q.pid)}">${esc(q.name)}</button>`).join("")}</div></div>` : ""}
+      <div class="tw-sub"><h4>申報表 PDF</h4><div class="tw-chips">${decls.map(d => pdf(d.issue) ? `<a href="${esc(pdf(d.issue))}" target="_blank" rel="noopener">⤓ ${d.date} ${esc(d.kind.replace(/申報$/, ""))}申報</a>` : `<span class="note">${d.date} ${esc(d.kind)}（廉政專刊第 ${d.issue} 期）</span>`).join("")}</div></div>
+      <details class="tw-more"><summary>申報後持股損益</summary>${twoPnlHtml(p)}</details></section>`;
   }
   if (kind === "s") {
     const H = P.map(p => ({ p, h: p.hold.find(x => x.code === id), c: p.chg.find(x => x.code === id) })).filter(x => x.h || x.c).sort((a, b) => (b.h?.sh || 0) - (a.h?.sh || 0));
     return `<section class="csec"><h3>${esc(nameOf(id))} ${esc(id)} <button class="btn sm" data-copen="${esc(id)}">在看盤開啟</button></h3><p class="note">${H.filter(x => x.h).length} 位政治人物最近一次申報持有；${H.filter(x => x.c && (x.c.t === "new" || x.c.t === "add")).length} 位比上一次申報增加、${H.filter(x => x.c && (x.c.t === "cut" || x.c.t === "sold")).length} 位減少。</p>
-      <div class="ctbl"><table><thead><tr><th>人物</th><th>持股</th><th>和上次相比</th><th>申報日</th></tr></thead><tbody>${H.map(x => `<tr><td>${twoWho(x.p)}</td><td>${x.h ? twoLot(x.h.sh) : "0"}</td><td>${x.c ? `${tag(x.c.t)} <span class="${x.c.d > 0 ? "up" : "down"}">${x.c.d > 0 ? "+" : ""}${twoLot(x.c.d)}</span>` : `<span class="note">${x.p.prev ? "不變" : "只有一次申報"}</span>`}</td><td>${x.p.last.date}</td></tr>`).join("")}</tbody></table></div></section>`;
+      <div class="ctbl"><table><thead><tr><th>人物</th><th>持股</th><th>市值</th><th>和上次相比</th><th>申報日</th></tr></thead><tbody>${H.map(x => `<tr><td>${twoWho(x.p)}</td><td>${x.h ? twoLot(x.h.sh) : "0"}</td><td>${x.h && twoPx(id) != null ? twoAmt(x.h.sh * twoPx(id)) : "—"}</td><td>${x.c ? `${tag(x.c.t)} <span class="${x.c.d > 0 ? "up" : "down"}">${x.c.d > 0 ? "+" : ""}${twoLot(x.c.d)}</span>` : `<span class="note">${x.p.prev ? "不變" : "只有一次申報"}</span>`}</td><td>${x.p.last.date}</td></tr>`).join("")}</tbody></table></div></section>`;
   }
-  // 首頁：熱門持股、持股變化、最近刊登
-  const q = (W.twoQ || "").trim(), hold = new Map(), chg = new Map();
+  // 首頁：持股市值排行榜（分組、各組合計、排行），下面是原本的熱門持股、持股變化、損益排行、最近刊登
+  const q = (W.twoQ || "").trim(), grp = TWO_GRP.some(g => g[0] === W.twoGrp) ? W.twoGrp : "all";
+  const all = P.map(p => ({ p, g: twoGrp(p), ...twoVal(p) })), L = all.filter(o => (grp === "all" || o.g === grp) && (!q || o.p.name.includes(q) || (o.p.org || "").includes(q))).sort((a, b) => b.total - a.total || b.n - a.n);
+  const sums = TWO_GRP.slice(1).map(([k, t]) => { const G = all.filter(o => o.g === k); return { k, t, n: G.length, v: G.reduce((a, o) => a + o.total, 0) }; }).filter(x => x.n);
+  const hold = new Map(), chg = new Map();
   for (const p of P) { for (const h of p.hold) if (h.code) { const g = hold.get(h.code) || hold.set(h.code, { code: h.code, name: h.name, n: 0, sh: 0 }).get(h.code); g.n++; g.sh += h.sh; }
     for (const c of p.chg) if (c.code) { const g = chg.get(c.code) || chg.set(c.code, { code: c.code, name: c.name, up: [], dn: [] }).get(c.code); (c.d > 0 ? g.up : g.dn).push(p.name); } }
   const H = [...hold.values()].sort((a, b) => b.n - a.n || b.sh - a.sh).slice(0, 30), C = [...chg.values()].sort((a, b) => b.up.length - b.dn.length - (a.up.length - a.dn.length)).slice(0, 25);
   const recent = (X.decl || []).slice().sort((a, b) => b.issue - a.issue || b.date.localeCompare(a.date)).filter(d => !q || d.name.includes(q) || (d.org || "").includes(q)).slice(0, 40);
-  return `<section class="csec"><h3>台灣政治人物持股 <span class="note">${P.length} 人・${(X.issues || []).length} 期廉政專刊</span> <input data-twoq value="${esc(q)}" placeholder="搜尋姓名或機關" style="width:140px"></h3>
-    <p class="note">監察院每週刊登總統、部會首長、立委、縣市長、議員等的財產申報；這裡整理其中的「股票」。台灣的申報是某一天的<strong>持股</strong>，不是交易紀錄，所以用同一個人前後兩次申報的股數差看增減。</p>
-    <div class="tgrid"><div><h4>最多政治人物持有</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>人數</th><th>合計</th></tr></thead><tbody>${H.map(g => `<tr><td>${twoStk(g)}</td><td><b>${g.n}</b></td><td>${twoLot(g.sh)}</td></tr>`).join("") || `<tr><td colspan="3" class="note">沒有</td></tr>`}</tbody></table></div></div>
-    <div><h4>持股變化（和上次申報相比）</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>增加</th><th>減少</th></tr></thead><tbody>${C.map(g => `<tr><td>${twoStk(g)}</td><td class="up">${g.up.length || ""} <span class="note">${g.up.slice(0, 3).map(esc).join("、")}</span></td><td class="down">${g.dn.length || ""} <span class="note">${g.dn.slice(0, 3).map(esc).join("、")}</span></td></tr>`).join("") || `<tr><td colspan="3" class="note">還沒有同一人兩次以上的申報（資料累積中）</td></tr>`}</tbody></table></div></div></div>
-    ${twoRankHtml(P)}
-    <h4>最近刊登的申報</h4><ul class="cfeed">${recent.map(d => `<li><span class="note">第 ${d.issue} 期・${d.date}</span> ${twoWho(P.find(p => p.pid === d.pid) || d)} <span class="note">${esc(d.kind)}</span> ${d.stocks.length ? `持股 ${d.stocks.length} 檔` : `<span class="note">沒有股票</span>`}</li>`).join("") || `<li class="note">沒有符合的申報</li>`}</ul></section>`;
+  return `<section class="csec tw-home"><h2 class="tw-h">持股市值排行榜</h2>
+    <p class="note">${P.length} 位政治人物（${(X.issues || []).length} 期監察院廉政專刊）依最近一次申報的持股市值由高至低排列，${pxNote}${X.pxDate ? "，每個交易日更新" : ""}。</p>
+    <div class="tw-ctl"><div class="tw-grp seg" role="group" aria-label="分類">${TWO_GRP.map(([k, t]) => `<button type="button" data-twgrp="${k}" aria-pressed="${grp === k}">${t}</button>`).join("")}</div>${amtSeg}<input data-twoq value="${esc(q)}" placeholder="搜尋姓名或機關" aria-label="搜尋姓名或機關"></div>
+    <h4>各類持股市值合計</h4><div class="tw-sums">${sums.map(x => `<button type="button" data-twgrp="${x.k}" aria-pressed="${grp === x.k}"><b>${x.t}</b><small class="note">${x.n} 位</small><span>${twoAmt(x.v)}</span></button>`).join("")}</div>
+    <ol class="tw-rank">${L.slice(0, W.twoN || 50).map((o, i) => `<li><button type="button" data-cv="tw:p:${esc(o.p.pid)}"><span class="tw-no">${i + 1}</span>${mono(o.p)}<span class="tw-who"><b>${esc(o.p.name)}</b><small class="note">${esc([o.p.org, o.p.title].filter(Boolean).join("・"))}</small></span><span class="tw-v"><b>${o.total ? twoAmt(o.total) : "—"}</b><small class="note">${o.n} 檔</small></span></button></li>`).join("") || `<li class="note">沒有符合的人</li>`}</ol>
+    ${L.length > (W.twoN || 50) ? `<button class="btn sm" data-twn="1" type="button">再顯示 50 位（共 ${L.length} 位）</button>` : ""}
+    <details class="tw-more"><summary>最多政治人物持有的股票、持股變化</summary><div class="tgrid"><div><h4>最多政治人物持有</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>人數</th><th>合計</th></tr></thead><tbody>${H.map(g => `<tr><td>${twoStk(g)}</td><td><b>${g.n}</b></td><td>${twoLot(g.sh)}</td></tr>`).join("") || `<tr><td colspan="3" class="note">沒有</td></tr>`}</tbody></table></div></div>
+    <div><h4>持股變化（和上次申報相比）</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>增加</th><th>減少</th></tr></thead><tbody>${C.map(g => `<tr><td>${twoStk(g)}</td><td class="up">${g.up.length || ""} <span class="note">${g.up.slice(0, 3).map(esc).join("、")}</span></td><td class="down">${g.dn.length || ""} <span class="note">${g.dn.slice(0, 3).map(esc).join("、")}</span></td></tr>`).join("") || `<tr><td colspan="3" class="note">還沒有同一人兩次以上的申報（資料累積中）</td></tr>`}</tbody></table></div></div></div></details>
+    <details class="tw-more"><summary>申報後持股損益排行</summary>${twoRankHtml(P)}</details>
+    <details class="tw-more"><summary>最近刊登的申報</summary><ul class="cfeed">${recent.map(d => `<li><span class="note">第 ${d.issue} 期・${d.date}</span> ${twoWho(P.find(p => p.pid === d.pid) || d)} <span class="note">${esc(d.kind)}</span> ${d.stocks.length ? `持股 ${d.stocks.length} 檔` : `<span class="note">沒有股票</span>`}</li>`).join("") || `<li class="note">沒有符合的申報</li>`}</ul></details></section>`;
 }

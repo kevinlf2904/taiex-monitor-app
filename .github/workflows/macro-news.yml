@@ -1,0 +1,33 @@
+# 每日總經消息：台北早上 7:50（美股收盤後）與下午 5:50（台股收盤、國內數據公布後）各整理一次
+# 抓 Google 新聞的總經標題、分類，有 GEMINI_API_KEY（或網站 /api/chat 可用）時加 AI 摘要，寫進 learner/data/macro-news.json
+name: macro-news
+on:
+  schedule:
+    - cron: "50 23 * * *"
+    - cron: "50 9 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: data-sync-macro-news-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: git pull -q origin ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev --ignore-scripts
+      - run: node scripts/macro-news.mjs
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://kline-school.vercel.app' }}
+      - name: commit
+        env:
+          COMMIT_NAME: macro-news
+        run: |
+          bash scripts/commit-data.sh "總經消息：每日彙整" learner/data/macro-news.json
