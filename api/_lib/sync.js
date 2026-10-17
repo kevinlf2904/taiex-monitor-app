@@ -10,6 +10,7 @@
 // POST /api/sync { op: "tgtest", id }       送一則測試訊息
 // POST /api/sync { op: "tgoff", id }        解除 Telegram 綁定
 // GET  /api/sync?op=cfg                     { kv, tg, bot }
+// POST /api/sync { op: "waitlist", email, plan }  KLineLab Pro 候補名單（pro.html）：存在 KV 的 waitlist 雜湊（email → 時間、方案），同一個 IP 每小時最多 5 次
 import { createHash } from "node:crypto";
 
 const KV_URL = () => (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "").trim().replace(/\/$/, "");
@@ -37,6 +38,11 @@ export function alertDoc(data, chat) {
   return { chat, rules: rules.slice(0, 100), price: price.slice(0, 100), names: g("watch:names") || {} };
 }
 
+// 候補名單的一筆：email 轉小寫並檢查格式，方案只收 pro／team
+export function waitlistEntry(email, plan, now = Date.now()) {
+  const e = String(email || "").trim().toLowerCase(); if (e.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) return null;
+  return { email: e, doc: JSON.stringify({ at: now, plan: plan === "team" ? "team" : "pro" }) };
+}
 export default async function handler(req, res) {
   const q = req.query || {}, b = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}, op = b.op || q.op;
   const hasKv = !!(KV_URL() && KV_TOKEN()), hasTg = !!TG();
@@ -46,6 +52,13 @@ export default async function handler(req, res) {
   }
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "請用 POST" });
   if (!hasKv) return res.status(200).json({ ok: false, error: "伺服器還沒設定雲端儲存（Upstash Redis），目前只能用匯出／匯入備份檔。" });
+  if (op === "waitlist") {
+    const w = waitlistEntry(b.email, b.plan); if (!w) return res.status(400).json({ ok: false, error: "Email 格式不對" });
+    try { const ip = String(req.headers?.["x-forwarded-for"] || "").split(",")[0].trim() || "?", rk = `wl:ip:${hashId(ip).slice(0, 16)}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 3600);
+      if (n > 5) return res.status(429).json({ ok: false, error: "太多次了，請一小時後再試" });
+      await kv("HSET", "waitlist", w.email, w.doc); return res.status(200).json({ ok: true }); }
+    catch (e) { return res.status(200).json({ ok: false, error: e.message }); }
+  }
   if (!okId(b.id)) return res.status(400).json({ ok: false, error: "同步碼格式不對" });
   const h = hashId(b.id), key = `sync:${h}`;
   try {

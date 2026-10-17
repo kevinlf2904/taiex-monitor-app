@@ -80,17 +80,17 @@ Object.assign(INDUSTRY_FIGS, {
     ],
     chain: [
       { tier: "上游", title: "軟體與零組件", items: [
-        { name: "飛控與自主軟體", desc: "穩定姿態、導航、斷訊時自己完成任務的大腦", c: [["UMAC", "Unusual Machines", "飛控與 FPV 零組件"], ["RCAT", "Red Cat", "自有飛控與軟體整合"]] },
-        { name: "資料鏈與地面站", desc: "把畫面傳回來、把指令送上去的加密通訊", c: [["ONDS", "Ondas", "無人系統與專用通訊網路"], ["AVAV", "AeroVironment", "地面控制站與數據鏈"]] },
-        { name: "動力與機體零件", desc: "馬達、螺旋槳、電池、鏡頭與機身", c: [["UMAC", "Unusual Machines", "馬達與無人機零件"], ["8033", "雷虎", "台灣無人機與零組件"]] },
+        { name: "飛控與自主軟體", desc: "穩定姿態、導航、斷訊時自己完成任務的大腦", c: [["UMAC", "Unusual Machines"], ["RCAT", "Red Cat"]] },
+        { name: "資料鏈與地面站", desc: "把畫面傳回來、把指令送上去的加密通訊", c: [["ONDS", "Ondas"], ["AVAV", "AeroVironment"]] },
+        { name: "動力與機體零件", desc: "馬達、螺旋槳、電池、鏡頭與機身", c: [["UMAC", "Unusual Machines"], ["8033", "雷虎"]] },
       ] },
       { tier: "中游", title: "無人機整機", items: [
-        { name: "小型戰術無人機與巡飛彈", desc: "士兵背著走的偵察機，以及盤旋後俯衝攻擊的巡飛彈", c: [["AVAV", "AeroVironment", "小型偵察機與 Switchblade 巡飛彈"], ["RCAT", "Red Cat", "短程偵察無人機"]] },
-        { name: "無人戰機與無人僚機", desc: "噴射動力、可跟著有人戰機出任務的高性能無人機，也包含訓練用靶機", c: [["KTOS", "Kratos", "XQ-58 女武神與靶機"]] },
+        { name: "小型戰術無人機與巡飛彈", desc: "士兵背著走的偵察機，以及盤旋後俯衝攻擊的巡飛彈", c: [["AVAV", "AeroVironment"], ["RCAT", "Red Cat"]] },
+        { name: "無人戰機與無人僚機", desc: "噴射動力、可跟著有人戰機出任務的高性能無人機，也包含訓練用靶機", c: [["KTOS", "Kratos"]] },
       ] },
       { tier: "下游", title: "採購與防禦", items: [
-        { name: "國防預算與量產採購", desc: "國會撥款、軍方定規格，測試競標後下量產訂單", c: [["AVAV", "AeroVironment", "主要軍方供應商"], ["KTOS", "Kratos", "國防合約"], ["RCAT", "Red Cat", "陸軍偵察無人機計畫"]] },
-        { name: "反無人機", desc: "偵測、干擾或攔截敵方無人機，保護基地與部隊", c: [["ONDS", "Ondas", "攔截無人機系統"], ["AVAV", "AeroVironment", "反無人機系統"]] },
+        { name: "國防預算與量產採購", desc: "國會撥款、軍方定規格，測試競標後下量產訂單", c: [["AVAV", "AeroVironment"], ["KTOS", "Kratos"], ["RCAT", "Red Cat"]] },
+        { name: "反無人機", desc: "偵測、干擾或攔截敵方無人機，保護基地與部隊", c: [["ONDS", "Ondas"], ["AVAV", "AeroVironment"]] },
       ] },
     ] },
 
@@ -176,17 +176,17 @@ Object.assign(INDUSTRY_FIGS, {
     ],
     chain: [
       { tier: "上游", title: "火箭與發射", items: [
-        { name: "火箭研發與製造", desc: "引擎、箭體與可重複使用設計，決定每公斤發射成本", c: [["RKLB", "Rocket Lab", "Electron 小型火箭、開發中的 Neutron"], ["FLY", "Firefly Aerospace", "Alpha 火箭"]] },
-        { name: "發射服務與一級回收", desc: "幫客戶把衛星送上軌道，一級回收後整修再飛", c: [["RKLB", "Rocket Lab", "發射服務"], ["FLY", "Firefly Aerospace", "發射服務"]] },
+        { name: "火箭研發與製造", desc: "引擎、箭體與可重複使用設計，決定每公斤發射成本", c: [["RKLB", "Rocket Lab"], ["FLY", "Firefly Aerospace"]] },
+        { name: "發射服務與一級回收", desc: "幫客戶把衛星送上軌道，一級回收後整修再飛", c: [["RKLB", "Rocket Lab"], ["FLY", "Firefly Aerospace"]] },
       ] },
       { tier: "中游", title: "衛星與太空系統", items: [
-        { name: "衛星製造與零組件", desc: "衛星平台、太陽能板、姿態控制與通訊酬載", c: [["RKLB", "Rocket Lab", "衛星平台與零組件"], ["RDW", "Redwire", "展開式太陽能板與結構"], ["2313", "華通", "低軌衛星 PCB"]] },
-        { name: "軌道基建與太空站", desc: "太空站模組、在軌製造與太空基礎設施", c: [["RDW", "Redwire", "太空基礎建設"]] },
-        { name: "月球登陸", desc: "把儀器與貨物送上月球表面的無人登陸器", c: [["LUNR", "Intuitive Machines", "月球著陸服務"], ["FLY", "Firefly Aerospace", "藍幽靈登月器"]] },
+        { name: "衛星製造與零組件", desc: "衛星平台、太陽能板、姿態控制與通訊酬載", c: [["RKLB", "Rocket Lab"], ["RDW", "Redwire"], ["2313", "華通"]] },
+        { name: "軌道基建與太空站", desc: "太空站模組、在軌製造與太空基礎設施", c: [["RDW", "Redwire"]] },
+        { name: "月球登陸", desc: "把儀器與貨物送上月球表面的無人登陸器", c: [["LUNR", "Intuitive Machines"], ["FLY", "Firefly Aerospace"]] },
       ] },
       { tier: "下游", title: "應用與地面", items: [
-        { name: "通訊、觀測與國防應用", desc: "衛星上網、直連手機、對地影像與國防偵察預警", c: [["ASTS", "AST SpaceMobile", "太空直連手機寬頻"], ["RKLB", "Rocket Lab", "國防衛星合約"]] },
-        { name: "地面站與接收設備", desc: "接收衛星訊號、接到網路的天線與設備", c: [["6285", "啟碁", "衛星通訊設備"], ["3491", "昇達科", "衛星地面站微波元件"]] },
+        { name: "通訊、觀測與國防應用", desc: "衛星上網、直連手機、對地影像與國防偵察預警", c: [["ASTS", "AST SpaceMobile"], ["RKLB", "Rocket Lab"]] },
+        { name: "地面站與接收設備", desc: "接收衛星訊號、接到網路的天線與設備", c: [["6285", "啟碁"], ["3491", "昇達科"]] },
       ] },
     ] },
 
@@ -261,15 +261,15 @@ Object.assign(INDUSTRY_FIGS, {
     ],
     chain: [
       { tier: "上游", title: "感測與運算", items: [
-        { name: "感測器（光達、攝影機、雷達）", desc: "看見周圍環境：光達量距離、攝影機看顏色號誌、雷達穿透雨霧", c: [["HSAI", "禾賽", "光達"], ["MBLY", "Mobileye", "視覺感測與雷達方案"]] },
-        { name: "自駕晶片與 AI 模型", desc: "車上即時決策的運算晶片，以及用大量行車資料訓練的模型", c: [["MBLY", "Mobileye", "EyeQ 自駕晶片"], ["TSLA", "Tesla", "自研 AI 晶片與 FSD"], ["NVDA", "輝達", "自駕運算平台"], ["2330", "台積電", "自駕晶片代工"]] },
+        { name: "感測器（光達、攝影機、雷達）", desc: "看見周圍環境：光達量距離、攝影機看顏色號誌、雷達穿透雨霧", c: [["HSAI", "禾賽"], ["MBLY", "Mobileye"]] },
+        { name: "自駕晶片與 AI 模型", desc: "車上即時決策的運算晶片，以及用大量行車資料訓練的模型", c: [["MBLY", "Mobileye"], ["TSLA", "Tesla"], ["NVDA", "輝達"], ["2330", "台積電"]] },
       ] },
       { tier: "中游", title: "自駕系統與車輛", items: [
-        { name: "高精地圖與遠端協助", desc: "記錄車道與號誌細節的地圖，以及卡住時的人員遠端支援", c: [["GOOGL", "Alphabet", "Waymo 自駕系統"], ["PONY", "小馬智行", "中國 Robotaxi"], ["WRD", "文遠知行", "自駕車隊"]] },
-        { name: "叫車平台", desc: "讓乘客叫車、付款，並把需求派給最近的無人車", c: [["UBER", "Uber", "與多家自駕公司合作"], ["GOOGL", "Alphabet", "Waymo 自有 App"], ["TSLA", "Tesla", "自有叫車服務"]] },
+        { name: "高精地圖與遠端協助", desc: "記錄車道與號誌細節的地圖，以及卡住時的人員遠端支援", c: [["GOOGL", "Alphabet"], ["PONY", "小馬智行"], ["WRD", "文遠知行"]] },
+        { name: "叫車平台", desc: "讓乘客叫車、付款，並把需求派給最近的無人車", c: [["UBER", "Uber"], ["GOOGL", "Alphabet"], ["TSLA", "Tesla"]] },
       ] },
       { tier: "下游", title: "營運", items: [
-        { name: "營運車隊", desc: "場站充電、清潔、維修與感測器校正，決定每公里成本", c: [["GOOGL", "Alphabet", "Waymo 車隊"], ["TSLA", "Tesla", "Robotaxi 車隊"], ["PONY", "小馬智行", "車隊營運"], ["WRD", "文遠知行", "車隊營運"]] },
+        { name: "營運車隊", desc: "場站充電、清潔、維修與感測器校正，決定每公里成本", c: [["GOOGL", "Alphabet"], ["TSLA", "Tesla"], ["PONY", "小馬智行"], ["WRD", "文遠知行"]] },
       ] },
     ] },
 
@@ -344,15 +344,15 @@ Object.assign(INDUSTRY_FIGS, {
     ],
     chain: [
       { tier: "上游", title: "研發與臨床", items: [
-        { name: "新藥研發", desc: "改造 GLP-1 分子，或同時作用在多個受體，讓藥效更強、更久", c: [["LLY", "禮來", "Zepbound／Mounjaro、口服藥開發"], ["NVO", "諾和諾德", "Wegovy／Ozempic"], ["AMGN", "安進", "減重新藥開發中"], ["VKTX", "Viking", "減重新藥開發中"]] },
-        { name: "臨床試驗", desc: "一期看安全、二期找劑量、三期大規模證明療效，最花時間與錢", c: [["AMGN", "安進", "臨床試驗中"], ["VKTX", "Viking", "臨床試驗中"], ["LLY", "禮來", "新一代藥物臨床"]] },
+        { name: "新藥研發", desc: "改造 GLP-1 分子，或同時作用在多個受體，讓藥效更強、更久", c: [["LLY", "禮來"], ["NVO", "諾和諾德"], ["AMGN", "安進"], ["VKTX", "Viking"]] },
+        { name: "臨床試驗", desc: "一期看安全、二期找劑量、三期大規模證明療效，最花時間與錢", c: [["AMGN", "安進"], ["VKTX", "Viking"], ["LLY", "禮來"]] },
       ] },
       { tier: "中游", title: "核准與製造", items: [
-        { name: "FDA 核准與適應症擴大", desc: "每個用途都要各自拿到核准：糖尿病、肥胖、心血管、睡眠呼吸中止…", c: [["LLY", "禮來", "已上市藥物"], ["NVO", "諾和諾德", "已上市藥物"]] },
-        { name: "量產：原料藥與注射筆", desc: "胜肽原料藥合成、無菌充填、注射筆組裝，產能曾是供應瓶頸", c: [["LLY", "禮來", "大舉擴建產能"], ["NVO", "諾和諾德", "大舉擴建產能"]] },
+        { name: "FDA 核准與適應症擴大", desc: "每個用途都要各自拿到核准：糖尿病、肥胖、心血管、睡眠呼吸中止…", c: [["LLY", "禮來"], ["NVO", "諾和諾德"]] },
+        { name: "量產：原料藥與注射筆", desc: "胜肽原料藥合成、無菌充填、注射筆組裝，產能曾是供應瓶頸", c: [["LLY", "禮來"], ["NVO", "諾和諾德"]] },
       ] },
       { tier: "下游", title: "通路與處方", items: [
-        { name: "藥局、遠距醫療與直售", desc: "醫師開處方後經藥局、線上診療平台或藥廠直售送到病人手上", c: [["HIMS", "Hims & Hers", "遠距醫療處方"], ["LLY", "禮來", "自營直售平台"], ["NVO", "諾和諾德", "自營直售平台"]] },
+        { name: "藥局、遠距醫療與直售", desc: "醫師開處方後經藥局、線上診療平台或藥廠直售送到病人手上", c: [["HIMS", "Hims & Hers"], ["LLY", "禮來"], ["NVO", "諾和諾德"]] },
       ] },
     ] },
 });

@@ -3,21 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#171717">
-<title>K線學堂</title>
+<meta name="theme-color" content="#09090B">
+<title>KLineLab K線情報局｜台美股量化研究終端機</title>
 <link rel="manifest" href="app.webmanifest">
 <link rel="apple-touch-icon" href="watch-icon-180.png">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="K線學堂">
+<meta name="apple-mobile-web-app-title" content="KLineLab">
+<meta name="description" content="KLineLab K線情報局：將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機。">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script>try { document.documentElement.dataset.theme = JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); } catch { document.documentElement.dataset.theme = "dark"; }</script>
 <script>try { if (JSON.parse(localStorage.getItem("kline:font") || '"sans"') === "song") document.documentElement.dataset.font = "song"; } catch {}
-try { const ls = localStorage; let st = JSON.parse(ls.getItem("kline:style") || '"layout"'); if (ls.getItem("kline:styleV") !== "2") { st = "layout"; ls.setItem("kline:style", '"layout"'); ls.setItem("kline:styleV", "2"); } if (st && st !== "minimal") document.documentElement.dataset.style = st; } catch {}</script>
+try { const ls = localStorage; let st = JSON.parse(ls.getItem("kline:style") || '"lab"'); if (ls.getItem("kline:styleV") !== "3") { st = "lab"; ls.setItem("kline:style", '"lab"'); ls.setItem("kline:styleV", "3"); } if (st && st !== "minimal") document.documentElement.dataset.style = st; } catch {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@300;400;500;600&display=swap">
 <link rel="stylesheet" href="core.css">
 <style>
 /* 主題色、基本樣式與 K 線圖的樣式在 core.css（和看盤頁共用）。
@@ -500,7 +501,29 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .ai-out ul { margin: 0 0 8px; padding-left: 1.2em; }
 @media (max-width: 900px) { .shot-top, .shot-grid { grid-template-columns: minmax(0, 1fr); } }
 
+/* ---------- 首頁 Hero：16:9 實驗室網格＋冷白微光 ---------- */
+.hero { position: relative; max-width: 1180px; margin: 16px auto 8px; padding: 0 16px; }
+.hero-in { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; padding: 36px 32px 24px; background: var(--surface);
+  background-image: radial-gradient(55% 80% at 78% 10%, rgba(255, 255, 255, .09), transparent 70%), linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px; background-position: center, -1px -1px, -1px -1px; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px 36px; align-items: center; }
+:root[data-theme="light"] .hero-in { background-image: radial-gradient(55% 80% at 78% 10%, rgba(9, 9, 11, .05), transparent 70%), linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); }
+.hero-viz { aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--bg) 70%, transparent); background-image: linear-gradient(color-mix(in srgb, var(--line) 70%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--line) 70%, transparent) 1px, transparent 1px); background-size: 20px 20px; box-shadow: 0 0 60px rgba(255, 255, 255, .06); overflow: hidden; }
+.hero-viz svg { width: 100%; height: 100%; display: block; }
+.hero-stats { grid-column: 1 / -1; }
+@media (max-width: 860px) { .hero-in { grid-template-columns: 1fr; } .hero-viz { max-width: 520px; } }
+.hero-k { margin: 0 0 10px; font: 500 12px/1 "JetBrains Mono", var(--font-mono); letter-spacing: .18em; color: var(--muted); text-transform: uppercase; }
+.hero-h { margin: 0 0 14px; font: 600 clamp(26px, 4.4vw, 46px)/1.18 "Space Grotesk", var(--font-display); letter-spacing: -.01em; color: var(--ink); }
+.hero-p { margin: 0 0 22px; font: 400 15px/1.75 "Inter", var(--font-body); color: var(--muted); max-width: 640px; }
+.hero-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+.hero-btn { display: inline-flex; align-items: center; height: 42px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: 500 14px "Inter", var(--font-body); text-decoration: none; cursor: pointer; }
+.hero-btn.pri { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.hero-btn:hover { border-color: var(--ink); }
+.hero-stats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); }
+.hero-stats li { padding: 12px 12px 0 0; display: flex; flex-direction: column; gap: 2px; } .hero-stats b { font: 600 20px "JetBrains Mono", var(--font-mono); color: var(--ink); } .hero-stats span { font-size: 12px; color: var(--muted); }
+@media (max-width: 560px) { .hero-in { padding: 28px 18px 20px; } .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hero-x { position: absolute; top: 10px; right: 26px; z-index: 2; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
 footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.5px; color: var(--muted); }
+footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } footer .ft-brand b { font-family: "Space Grotesk", var(--font-display); font-weight: 600; } footer .ft-brand a { color: var(--ink); }
 
 @media (max-width: 900px) {
   .learn { grid-template-columns: minmax(0, 1fr); }
@@ -523,7 +546,8 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
   <div class="top-inner">
     <div class="brand">
       <img class="seal logo" src="logo.svg" alt="" width="40" height="40">
-      <div><h1>K線學堂</h1><p>台股技術分析互動練習</p></div>
+      <div><h1 class="bl-t"><b>KLineLab</b><small>K線情報局</small></h1><p>台美股量化研究終端機</p></div>
+      <a class="bl-pro" href="pro.html" title="KLineLab Pro 方案">PRO</a>
     </div>
     <nav class="tabs" role="tablist" aria-label="主要區塊">
       <button role="tab" data-tab="watch" id="tab-btn-watch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6"/></svg><span>看盤</span></button>
@@ -542,6 +566,24 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
 </header>
 
 <main>
+  <!-- 首頁 Hero：KLineLab 品牌主張與 CTA（可以收起來，記在 kline:heroHide） -->
+  <section class="hero" id="hero" aria-label="KLineLab K線情報局">
+    <button type="button" class="hero-x" id="heroX" aria-label="收起介紹">×</button>
+    <div class="hero-in"><div class="hero-txt">
+      <p class="hero-k">KLineLab・K線情報局</p>
+      <h2 class="hero-h">把複雜的台美股機構籌碼，<br>化為一目了然的突破訊號。</h2>
+      <p class="hero-p">SEC 13F 機構大戶、美國國會議員申報、台股內部人與供應鏈量價動能矩陣，加上 K 線型態辨識與歷史回測——全部來自政府公開資料，由程式自動計算，給你一個量化研究終端機。</p>
+      <div class="hero-cta"><a class="hero-btn pri" href="pro.html">升級 PRO・加入候補</a><button type="button" class="hero-btn" data-hero-go="watch">進入看盤儀表板 →</button></div>
+    </div>
+      <div class="hero-viz" aria-hidden="true"><svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="hvg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#a1a1aa" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity=".9"/></linearGradient></defs>
+        <path d="M0 132 L40 124 L80 128 L120 112 L160 116 L200 100 L240 96" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 4"/>
+        <g fill="var(--ink)"><rect x="34" y="112" width="10" height="22"/><rect x="74" y="118" width="10" height="16"/><rect x="114" y="100" width="10" height="20"/><rect x="154" y="104" width="10" height="18"/><rect x="194" y="88" width="10" height="20"/></g>
+        <g stroke="var(--ink)" stroke-width="1.4"><path d="M39 104v38M79 110v30M119 92v34M159 96v30M199 80v34"/></g>
+        <path d="M232 150h22V58l-22 22z" fill="url(#hvg)"/><path d="M0 70H320" stroke="var(--muted)" stroke-width=".8" stroke-dasharray="2 5"/><text x="6" y="66" font-size="9" font-family="JetBrains Mono, monospace" fill="var(--muted)">BREAKOUT 壓力</text></svg></div>
+            <ul class="hero-stats"><li><b>13F</b><span>機構影子組合回測</span></li><li><b>國會</b><span>申報後超額報酬追蹤</span></li><li><b>115+</b><span>供應鏈題材地圖</span></li><li><b>40+</b><span>K 線策略回測</span></li></ul>
+
+    </div>
+  </section>
   <!-- 課程 -->
   <section id="view-learn" class="learn" role="tabpanel">
     <nav class="lesson-list" id="lessonList" aria-label="課程目錄"></nav>
@@ -838,7 +880,7 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.18-85</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">Pro 方案</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="ver">版本 2026.10.18-86</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
@@ -1321,7 +1363,7 @@ W 底目標 ≈ 頸線 +（頸線 − 低點）</div>
 </ul>
 ${dowPhaseSVG}
 <table><thead><tr><th>趨勢層級</th><th>時間</th><th>比喻</th></tr></thead><tbody>
-<tr><td>主要趨勢</td><td>一年以上（常持續數年）</td><td>潮汐：決定大方向</td></tr>
+<tr><td>主要趨勢</td><td>一年以上（常持續數年）</td><td>大方向：決定做多或做空</td></tr>
 <tr><td>次級趨勢</td><td>數週到數月</td><td>波浪：主要趨勢中的回檔或反彈，常回吐前一段的 1/3 到 2/3</td></tr>
 <tr><td>日常波動</td><td>幾天</td><td>漣漪：雜訊多，也最容易被操縱</td></tr>
 </tbody></table>
@@ -4656,7 +4698,7 @@ $("#aiAsk").addEventListener("click", async () => {
 /* ---------- 問問題對話框 ----------
    右下角的助教：每次提問都附上「目前畫面」的摘要（課程內容、指標讀數、個股判讀、模擬結果），
    在 Claude 裡開啟時用 sample 能力，部署在網站上時呼叫 /api/chat。 */
-const CHAT_SYS = `你是「K線學堂」裡的技術分析助教，對象是想學台股技術分析的初學者。請用繁體中文、口語但精確地回答。
+const CHAT_SYS = `你是「KLineLab K線情報局」裡的技術分析助教，對象是想學台股技術分析的初學者。請用繁體中文、口語但精確地回答。
 - 優先回答問題；用得到時引用「目前畫面」的數據，並說明你看的是哪個數字。
 - 解釋觀念時舉具體例子；可以建議到學堂的哪一課或哪個功能練習（課程、圖表實驗室、判讀挑戰、個股判讀、觀念測驗）。
 - 回答控制在 300 字以內，必要時用條列，不要用表格。
@@ -4859,6 +4901,10 @@ addEventListener("message", e => {
 document.addEventListener("click", e => { const a = e.target.closest('a[href^="watch.html"]'); if (!a || e.metaKey || e.ctrlKey || e.shiftKey || a.target === "_blank") return; e.preventDefault(); openWatch(decodeURIComponent((a.getAttribute("href").split("#")[1] || "")).toUpperCase()); });
 
 // 深色（黑底）／淺色切換：預設黑底，記在瀏覽器
+// Hero：收起後記住；「進入看盤儀表板」切到看盤分頁
+if (store.get("heroHide", false)) $("#hero").hidden = true;
+$("#heroX").addEventListener("click", () => { $("#hero").hidden = true; store.set("heroHide", true); });
+document.querySelector("[data-hero-go]").addEventListener("click", () => { goTab("watch"); $("#hero").hidden = true; });
 $("#styleBtn").addEventListener("click", () => openStylePicker(t => { if (document.documentElement.dataset.theme !== t) $("#themeBtn").click(); }));
 // 看盤 ETF「年化排行」按「存股試算」：切到存股模擬，帶入這一檔
 var SAV_PENDING = ""; // var：switchTab 在頁面一開始就會用到
@@ -4868,7 +4914,7 @@ addEventListener("klinestyle", e => { ["#watchFrame", "#savingsFrame"].forEach(i
 addEventListener("message", e => { if (e.data?.type === "kline-style" && e.data.style !== klStyle()) applyStyle(e.data.style); else if (e.data?.type === "watch-theme" && document.documentElement.dataset.theme !== e.data.theme) $("#themeBtn").click(); });
 $("#fontBtn").addEventListener("click", () => { const f = document.documentElement.dataset.font === "song" ? "sans" : "song"; if (f === "song") document.documentElement.dataset.font = "song"; else delete document.documentElement.dataset.font; store.set("font", f);
   ["#watchFrame", "#savingsFrame"].forEach(id => { try { $(id)?.contentWindow?.postMessage({ type: "kline-font", font: f }, "*"); } catch {} }); redrawAll(); });
-$("#themeBtn").addEventListener("click", () => { const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = t; store.set("theme", t); $("#savingsFrame").contentWindow?.postMessage({ type: "kline-theme", theme: t }, "*"); $("#watchFrame").contentWindow?.postMessage({ type: "kline-theme", theme: t }, "*"); $('meta[name="theme-color"]')?.setAttribute("content", t === "dark" ? "#171717" : "#ebebe9"); if (INTRA.data) intraDraw(); });
+$("#themeBtn").addEventListener("click", () => { const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = t; store.set("theme", t); $("#savingsFrame").contentWindow?.postMessage({ type: "kline-theme", theme: t }, "*"); $("#watchFrame").contentWindow?.postMessage({ type: "kline-theme", theme: t }, "*"); $('meta[name="theme-color"]')?.setAttribute("content", t === "dark" ? "#09090B" : "#FAFAFA"); if (INTRA.data) intraDraw(); });
 // 主題切換時重畫圖表
 const redrawAll = () => { [lessonChart, labChart, chalChart, shotChart, drawChart].forEach(c => c.draw()); drawShot(); };
 try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redrawAll); } catch {}

@@ -130,6 +130,14 @@ test("量化：投資組合相關性、Beta、集中度、壓力測試", () => {
   const L = portPlan(P, "low"); assert.equal(L.trims.length, 3 - P.rows.filter(r => r.w <= 0.15).length); L.trims.forEach(t => assert.ok(t.cut > 0));
   assert.ok(portPlan(P, "high").trims.every(t => t.w > 0.4));
 });
+test("品牌合規：候補名單 email 檢查、產業資料沒有人工個股短評", async () => {
+  const { waitlistEntry } = await import("../api/_lib/sync.js"), { readFileSync, readdirSync } = await import("node:fs");
+  assert.equal(waitlistEntry(" Me@Example.COM ", "team").email, "me@example.com"); assert.equal(JSON.parse(waitlistEntry("a@b.co", "x").doc).plan, "pro");
+  for (const bad of ["", "abc", "a@b", "a b@c.com", "x".repeat(120) + "@a.com"]) assert.equal(waitlistEntry(bad), null, bad);
+  const L = f => readFileSync(new URL(`../learner/${f}`, import.meta.url), "utf8");
+  for (const f of ["industry.js", "industry-pack.js", "industry-figs.js", ...readdirSync(new URL("../learner/indpacks/", import.meta.url)).map(x => "indpacks/" + x)])
+    assert.doesNotMatch(L(f), /\["[0-9A-Z.^=\-]+", ?"[^"]*", ?"[^"]+"\]/, `${f} 還有個股短評`);
+});
 test("總經：FRED CSV、年增率、薩姆規則", async () => {
   const { parseCsv, transform, sahm } = await import("../api/_lib/macro.js");
   const R = parseCsv("observation_date,CPIAUCSL\n2024-01-01,300\n2024-02-01,.\n2024-03-01,\n" + Array.from({ length: 13 }, (_, i) => `${2025 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}-01,${310 + i}`).join("\n"));

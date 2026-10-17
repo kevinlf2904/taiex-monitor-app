@@ -3,8 +3,8 @@ INDUSTRY_PACK.push(
   { id: "us-crypto", mk: "us", cat: "金融", name: "加密貨幣與比特幣生態", icon: "chip",
     desc: "比特幣靠全球礦工用專用晶片與大量電力維護公開帳本；投資人透過交易所、現貨 ETF 或持幣公司參與，相關股票隨幣價大幅波動。",
     flow: ["電力與礦機", "挖礦記帳", "新幣獎勵", "交易所買賣", "ETF 與公司持有"],
-    segs: [{ n: "交易與持有", c: [["COIN", "Coinbase", "加密貨幣交易所"], ["HOOD", "Robinhood", "券商與加密交易"], ["MSTR", "Strategy", "大量持有比特幣"], ["CRCL", "Circle", "穩定幣 USDC"]] },
-      { n: "挖礦", c: [["MARA", "MARA Holdings", "比特幣挖礦"], ["RIOT", "Riot Platforms", "比特幣挖礦"], ["CLSK", "CleanSpark", "比特幣挖礦"]] }],
+    segs: [{ n: "交易與持有", c: [["COIN", "Coinbase"], ["HOOD", "Robinhood"], ["MSTR", "Strategy"], ["CRCL", "Circle"]] },
+      { n: "挖礦", c: [["MARA", "MARA Holdings"], ["RIOT", "Riot Platforms"], ["CLSK", "CleanSpark"]] }],
     fig: { w: 400, h: 280, alt: "比特幣：電力驅動 ASIC 礦機計算雜湊搶記帳，成功者把交易打包成新區塊並拿到新幣；投資人透過交易所、穩定幣、現貨 ETF 與持幣公司參與", items: [
       { t: "group", x: 8, y: 16, w: 178, h: 132, label: "挖礦機房", c: "orange" },
       { t: "icon", x: 16, y: 40, s: 22, k: "bolt", c: "yellow" }, { t: "text", x: 27, y: 76, s: 8, label: "電力", muted: true },
@@ -96,23 +96,23 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "算力與電力", items: [
-        { name: "礦機晶片（ASIC）", desc: "專門計算 SHA-256 雜湊的晶片，決定每度電能挖多少", c: [["2330", "台積電", "礦機晶片代工"]] },
-        { name: "挖礦與機房", desc: "取得便宜電力、架設大量礦機，靠新幣獎勵與手續費賺錢", c: [["MARA", "MARA Holdings", "比特幣挖礦"], ["RIOT", "Riot Platforms", "比特幣挖礦"], ["CLSK", "CleanSpark", "比特幣挖礦"]] },
+        { name: "礦機晶片（ASIC）", desc: "專門計算 SHA-256 雜湊的晶片，決定每度電能挖多少", c: [["2330", "台積電"]] },
+        { name: "挖礦與機房", desc: "取得便宜電力、架設大量礦機，靠新幣獎勵與手續費賺錢", c: [["MARA", "MARA Holdings"], ["RIOT", "Riot Platforms"], ["CLSK", "CleanSpark"]] },
       ] },
       { tier: "中游", title: "交易與金融基礎設施", items: [
-        { name: "交易所與券商", desc: "撮合加密貨幣買賣，收取交易手續費與託管費", c: [["COIN", "Coinbase", "加密貨幣交易所與託管"], ["HOOD", "Robinhood", "券商與加密交易"]] },
-        { name: "穩定幣", desc: "和美元一比一掛鉤的代幣，是加密市場裡的現金", c: [["CRCL", "Circle", "發行 USDC"], ["COIN", "Coinbase", "USDC 合作與分潤"]] },
+        { name: "交易所與券商", desc: "撮合加密貨幣買賣，收取交易手續費與託管費", c: [["COIN", "Coinbase"], ["HOOD", "Robinhood"]] },
+        { name: "穩定幣", desc: "和美元一比一掛鉤的代幣，是加密市場裡的現金", c: [["CRCL", "Circle"], ["COIN", "Coinbase"]] },
       ] },
       { tier: "下游", title: "投資與持有", items: [
-        { name: "比特幣現貨 ETF", desc: "在股市買賣、背後真的持有比特幣的基金", c: [["BLK", "貝萊德", "發行比特幣現貨 ETF"], ["COIN", "Coinbase", "多檔 ETF 的託管機構"]] },
-        { name: "持幣公司", desc: "把比特幣當公司主要資產，股價跟著幣價放大波動", c: [["MSTR", "Strategy", "大量持有比特幣"]] },
+        { name: "比特幣現貨 ETF", desc: "在股市買賣、背後真的持有比特幣的基金", c: [["BLK", "貝萊德"], ["COIN", "Coinbase"]] },
+        { name: "持幣公司", desc: "把比特幣當公司主要資產，股價跟著幣價放大波動", c: [["MSTR", "Strategy"]] },
       ] },
     ] },
 
   { id: "us-healthins", mk: "us", cat: "醫療", name: "醫療保險與給付體系", icon: "home",
     desc: "美國人看病多數靠雇主或政府資助的醫療保險；保險公司收保費、付醫院與藥品理賠，獲利取決於「收的保費」和「付出的醫療費」之間的差距。",
     flow: ["雇主與政府付保費", "保險公司", "醫院與醫師", "藥品福利管理", "理賠支付"],
-    segs: [{ n: "醫療保險", c: [["UNH", "UnitedHealth", "最大醫療保險與 Optum"], ["ELV", "Elevance Health", "醫療保險"], ["CI", "Cigna", "保險與 Express Scripts"], ["CVS", "CVS Health", "Aetna 保險與藥局"], ["HUM", "Humana", "Medicare 優勢計畫"], ["CNC", "Centene", "Medicaid 保險"]] }],
+    segs: [{ n: "醫療保險", c: [["UNH", "UnitedHealth"], ["ELV", "Elevance Health"], ["CI", "Cigna"], ["CVS", "CVS Health"], ["HUM", "Humana"], ["CNC", "Centene"]] }],
     fig: { w: 400, h: 280, alt: "美國醫療保險：雇主與政府付保費給保險公司，保費大部分變成理賠付給醫院與藥局，藥品支出經過 PBM 談價；下方是一筆理賠的流程", items: [
       { t: "group", x: 8, y: 14, w: 100, h: 178, label: "誰付保費", c: "green" },
       { t: "icon", x: 16, y: 34, s: 22, k: "factory", c: "green" },
@@ -187,24 +187,24 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "保費來源", items: [
-        { name: "雇主團體保險", desc: "公司替員工投保，是商業醫療保險的最大客群", c: [["UNH", "UnitedHealth", "商業團保"], ["ELV", "Elevance Health", "商業團保"], ["CI", "Cigna", "商業團保"]] },
-        { name: "政府醫保計畫", desc: "政府出錢、民間保險公司代為承接的老人與低收入醫保", c: [["HUM", "Humana", "Medicare 優勢計畫"], ["CNC", "Centene", "Medicaid 代管"], ["ELV", "Elevance Health", "Medicaid 與 Medicare"]] },
+        { name: "雇主團體保險", desc: "公司替員工投保，是商業醫療保險的最大客群", c: [["UNH", "UnitedHealth"], ["ELV", "Elevance Health"], ["CI", "Cigna"]] },
+        { name: "政府醫保計畫", desc: "政府出錢、民間保險公司代為承接的老人與低收入醫保", c: [["HUM", "Humana"], ["CNC", "Centene"], ["ELV", "Elevance Health"]] },
       ] },
       { tier: "中游", title: "保險與藥品管理", items: [
-        { name: "承保與理賠", desc: "精算訂保費、審核與支付醫療理賠", c: [["UNH", "UnitedHealth", "最大醫療保險"], ["ELV", "Elevance Health", "醫療保險"], ["CVS", "CVS Health", "旗下 Aetna"], ["CI", "Cigna", "醫療保險"], ["HUM", "Humana", "醫療保險"]] },
-        { name: "藥品福利管理（PBM）", desc: "替保險公司向藥廠談價、管理處方藥支出", c: [["CI", "Cigna", "Express Scripts"], ["CVS", "CVS Health", "CVS Caremark"], ["UNH", "UnitedHealth", "Optum Rx"]] },
+        { name: "承保與理賠", desc: "精算訂保費、審核與支付醫療理賠", c: [["UNH", "UnitedHealth"], ["ELV", "Elevance Health"], ["CVS", "CVS Health"], ["CI", "Cigna"], ["HUM", "Humana"]] },
+        { name: "藥品福利管理（PBM）", desc: "替保險公司向藥廠談價、管理處方藥支出", c: [["CI", "Cigna"], ["CVS", "CVS Health"], ["UNH", "UnitedHealth"]] },
       ] },
       { tier: "下游", title: "醫療服務與藥品", items: [
-        { name: "醫院與醫師", desc: "提供看診、手術與住院，向保險公司請款", c: [["HCA", "HCA Healthcare", "醫院連鎖"], ["UNH", "UnitedHealth", "Optum Health 診所網路"]] },
-        { name: "藥局與藥廠", desc: "開藥、配藥與新藥研發，是醫療支出成長最快的一塊", c: [["CVS", "CVS Health", "連鎖藥局"], ["LLY", "禮來", "減重藥等新藥"]] },
+        { name: "醫院與醫師", desc: "提供看診、手術與住院，向保險公司請款", c: [["HCA", "HCA Healthcare"], ["UNH", "UnitedHealth"]] },
+        { name: "藥局與藥廠", desc: "開藥、配藥與新藥研發，是醫療支出成長最快的一塊", c: [["CVS", "CVS Health"], ["LLY", "禮來"]] },
       ] },
     ] },
 
   { id: "us-housing", mk: "us", cat: "房地產", name: "美國房市", icon: "home",
     desc: "美國房市受房貸利率影響最大：利率決定買不買得起，進而影響新屋開工、成屋買賣，並帶動建材、裝修、房貸與搬遷等一長串下游消費。",
     flow: ["房貸利率", "購屋負擔能力", "新屋開工", "成屋買賣", "建材與裝修需求"],
-    segs: [{ n: "建商", c: [["DHI", "D.R. Horton", "最大建商之一"], ["LEN", "Lennar", "建商"], ["PHM", "PulteGroup", "建商"], ["NVR", "NVR", "建商"]] },
-      { n: "裝修與房貸", c: [["HD", "Home Depot", "建材與居家修繕零售"], ["LOW", "Lowe's", "建材與居家修繕零售"], ["RKT", "Rocket Companies", "房貸"], ["Z", "Zillow", "房產平台"]] }],
+    segs: [{ n: "建商", c: [["DHI", "D.R. Horton"], ["LEN", "Lennar"], ["PHM", "PulteGroup"], ["NVR", "NVR"]] },
+      { n: "裝修與房貸", c: [["HD", "Home Depot"], ["LOW", "Lowe's"], ["RKT", "Rocket Companies"], ["Z", "Zillow"]] }],
     fig: { w: 400, h: 280, alt: "美國房市：房貸利率決定買不買得起；建商用建材蓋新屋，成屋由仲介與平台撮合；買房後帶動修繕與家電家具消費", items: [
       { t: "group", x: 8, y: 14, w: 118, h: 122, label: "資金端", c: "blue" },
       { t: "path", d: "M18 76A26 26 0 0 1 31 53.5", c: "green", w: 4 },
@@ -284,24 +284,24 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "資金與建材", items: [
-        { name: "房貸與放款", desc: "提供購屋貸款，利率高低決定有多少人買得起", c: [["RKT", "Rocket Companies", "房貸"]] },
-        { name: "建材與構件", desc: "木料、屋架、隔熱與屋頂材料", c: [["BLDR", "Builders FirstSource", "木料與預製構件"], ["OC", "Owens Corning", "隔熱與屋頂材料"]] },
+        { name: "房貸與放款", desc: "提供購屋貸款，利率高低決定有多少人買得起", c: [["RKT", "Rocket Companies"]] },
+        { name: "建材與構件", desc: "木料、屋架、隔熱與屋頂材料", c: [["BLDR", "Builders FirstSource"], ["OC", "Owens Corning"]] },
       ] },
       { tier: "中游", title: "蓋房與買賣", items: [
-        { name: "建商", desc: "買地、蓋新屋並銷售，常提供房貸利率補貼", c: [["DHI", "D.R. Horton", "建商"], ["LEN", "Lennar", "建商"], ["PHM", "PulteGroup", "建商"], ["NVR", "NVR", "建商"]] },
-        { name: "成屋買賣平台", desc: "刊登房源、仲介撮合中古屋交易", c: [["Z", "Zillow", "房產平台"], ["COMP", "Compass", "房屋仲介"]] },
+        { name: "建商", desc: "買地、蓋新屋並銷售，常提供房貸利率補貼", c: [["DHI", "D.R. Horton"], ["LEN", "Lennar"], ["PHM", "PulteGroup"], ["NVR", "NVR"]] },
+        { name: "成屋買賣平台", desc: "刊登房源、仲介撮合中古屋交易", c: [["Z", "Zillow"], ["COMP", "Compass"]] },
       ] },
       { tier: "下游", title: "入住後的消費", items: [
-        { name: "居家修繕零售", desc: "賣建材、工具與裝修用品給屋主和包商", c: [["HD", "Home Depot", "居家修繕零售"], ["LOW", "Lowe's", "居家修繕零售"]] },
-        { name: "家電與家具", desc: "搬新家帶動冰箱、洗衣機等大型家電汰換", c: [["WHR", "Whirlpool", "大型家電"]] },
+        { name: "居家修繕零售", desc: "賣建材、工具與裝修用品給屋主和包商", c: [["HD", "Home Depot"], ["LOW", "Lowe's"]] },
+        { name: "家電與家具", desc: "搬新家帶動冰箱、洗衣機等大型家電汰換", c: [["WHR", "Whirlpool"]] },
       ] },
     ] },
 
   { id: "us-minerals", mk: "us", cat: "原物料", name: "關鍵礦產與金屬", icon: "factory",
     desc: "銅、鋰、鎳、稀土、鎵、鍺等金屬是電動車、電網、AI 資料中心與國防的基礎材料；精煉產能高度集中，因此成為各國補貼與出口管制的焦點。",
     flow: ["開採礦石", "選礦", "精煉提純", "金屬材料", "電池、馬達、電網"],
-    segs: [{ n: "銅與鋁", c: [["FCX", "Freeport-McMoRan", "銅礦"], ["SCCO", "Southern Copper", "銅礦"], ["AA", "Alcoa", "鋁"]] },
-      { n: "鋰與稀土", c: [["ALB", "Albemarle", "鋰"], ["MP", "MP Materials", "稀土礦與磁材"]] }],
+    segs: [{ n: "銅與鋁", c: [["FCX", "Freeport-McMoRan"], ["SCCO", "Southern Copper"], ["AA", "Alcoa"]] },
+      { n: "鋰與稀土", c: [["ALB", "Albemarle"], ["MP", "MP Materials"]] }],
     fig: { w: 400, h: 280, alt: "關鍵礦產：銅礦經破碎、浮選、冶煉、電解精煉成銅陰極；鹽湖鹵水日曬濃縮成鋰鹽；稀土礦經上百段萃取分離做成永久磁鐵，最後用在電動車、電網與資料中心", items: [
       { t: "path", d: "M8 40H22L28 50H36L42 60H50L56 70H66L72 60H80L86 50H94L100 40H112V96H8Z", c: "gray", fill: 0.18 },
       { t: "circle", x: 36, y: 80, r: 2.5, c: "orange", fill: 0.8 }, { t: "circle", x: 62, y: 86, r: 2.5, c: "orange", fill: 0.8 }, { t: "circle", x: 84, y: 76, r: 2.5, c: "orange", fill: 0.8 },
@@ -385,25 +385,25 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "開採", items: [
-        { name: "銅礦開採", desc: "大型露天與地下銅礦，產出銅精礦", c: [["FCX", "Freeport-McMoRan", "銅礦"], ["SCCO", "Southern Copper", "銅礦"]] },
-        { name: "鋰資源", desc: "鹽湖鹵水與硬岩鋰礦，做成碳酸鋰或氫氧化鋰", c: [["ALB", "Albemarle", "鋰"], ["SQM", "SQM", "智利鹽湖鋰"]] },
-        { name: "稀土礦", desc: "開採含稀土的礦石，做成混合稀土精礦", c: [["MP", "MP Materials", "美國稀土礦"]] },
+        { name: "銅礦開採", desc: "大型露天與地下銅礦，產出銅精礦", c: [["FCX", "Freeport-McMoRan"], ["SCCO", "Southern Copper"]] },
+        { name: "鋰資源", desc: "鹽湖鹵水與硬岩鋰礦，做成碳酸鋰或氫氧化鋰", c: [["ALB", "Albemarle"], ["SQM", "SQM"]] },
+        { name: "稀土礦", desc: "開採含稀土的礦石，做成混合稀土精礦", c: [["MP", "MP Materials"]] },
       ] },
       { tier: "中游", title: "冶煉與精煉", items: [
-        { name: "冶煉與電解精煉", desc: "把精礦冶煉、電解成高純度銅或鋁", c: [["FCX", "Freeport-McMoRan", "銅冶煉與精煉"], ["SCCO", "Southern Copper", "銅冶煉與精煉"], ["AA", "Alcoa", "氧化鋁與鋁冶煉"]] },
-        { name: "稀土分離與磁材", desc: "化學萃取分離出單一稀土，再做成永久磁鐵", c: [["MP", "MP Materials", "稀土分離與磁材"]] },
+        { name: "冶煉與電解精煉", desc: "把精礦冶煉、電解成高純度銅或鋁", c: [["FCX", "Freeport-McMoRan"], ["SCCO", "Southern Copper"], ["AA", "Alcoa"]] },
+        { name: "稀土分離與磁材", desc: "化學萃取分離出單一稀土，再做成永久磁鐵", c: [["MP", "MP Materials"]] },
       ] },
       { tier: "下游", title: "應用", items: [
-        { name: "電動車與電池", desc: "電池用鋰、馬達用稀土磁鐵、車上大量銅線", c: [["TSLA", "特斯拉", "電動車"]] },
-        { name: "電網與資料中心", desc: "變壓器、電纜與配電設備大量用銅", c: [["ETN", "伊頓", "配電設備"], ["GEV", "GE Vernova", "電網設備"]] },
+        { name: "電動車與電池", desc: "電池用鋰、馬達用稀土磁鐵、車上大量銅線", c: [["TSLA", "特斯拉"]] },
+        { name: "電網與資料中心", desc: "變壓器、電纜與配電設備大量用銅", c: [["ETN", "伊頓"], ["GEV", "GE Vernova"]] },
       ] },
     ] },
 
   { id: "us-oilgas", mk: "us", cat: "能源", name: "能源油氣", icon: "bolt",
     desc: "石油與天然氣從上游開採、中游管線運輸，到下游煉油與發電；美國頁岩油氣讓它成為最大產油國之一，天然氣也是 AI 資料中心的重要電力來源。",
     flow: ["探勘開採", "管線運輸", "煉油", "汽柴油與塑化", "天然氣發電與出口"],
-    segs: [{ n: "整合與上游", c: [["XOM", "ExxonMobil", "整合型石油公司"], ["CVX", "Chevron", "整合型石油公司"], ["COP", "ConocoPhillips", "上游開採"], ["EOG", "EOG Resources", "頁岩油"]] },
-      { n: "天然氣與中游", c: [["EQT", "EQT", "天然氣生產"], ["KMI", "Kinder Morgan", "天然氣管線"], ["LNG", "Cheniere Energy", "液化天然氣出口"], ["SLB", "SLB", "油田服務"]] }],
+    segs: [{ n: "整合與上游", c: [["XOM", "ExxonMobil"], ["CVX", "Chevron"], ["COP", "ConocoPhillips"], ["EOG", "EOG Resources"]] },
+      { n: "天然氣與中游", c: [["EQT", "EQT"], ["KMI", "Kinder Morgan"], ["LNG", "Cheniere Energy"], ["SLB", "SLB"]] }],
     fig: { w: 400, h: 280, alt: "油氣：鑽井平台垂直往下再水平鑽進頁岩層並壓裂；原油經管線送到煉油廠分餾成汽油柴油，天然氣經管線送去液化出口或燃氣電廠供電給資料中心", items: [
       { t: "rect", x: 8, y: 100, w: 196, h: 22, c: "gray", fill: 0.08, stroke: false },
       { t: "rect", x: 8, y: 122, w: 196, h: 26, c: "yellow", fill: 0.1, stroke: false },
@@ -486,25 +486,25 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "探勘與開採", items: [
-        { name: "油田服務", desc: "鑽井、壓裂、完井與設備，替油公司把井打出來", c: [["SLB", "SLB", "油田服務"], ["HAL", "Halliburton", "壓裂與完井"], ["BKR", "Baker Hughes", "油田設備與服務"]] },
-        { name: "油氣開採", desc: "擁有礦區、鑽井生產原油與天然氣", c: [["COP", "ConocoPhillips", "上游開採"], ["EOG", "EOG Resources", "頁岩油"], ["EQT", "EQT", "天然氣生產"]] },
+        { name: "油田服務", desc: "鑽井、壓裂、完井與設備，替油公司把井打出來", c: [["SLB", "SLB"], ["HAL", "Halliburton"], ["BKR", "Baker Hughes"]] },
+        { name: "油氣開採", desc: "擁有礦區、鑽井生產原油與天然氣", c: [["COP", "ConocoPhillips"], ["EOG", "EOG Resources"], ["EQT", "EQT"]] },
       ] },
       { tier: "中游", title: "運輸與出口", items: [
-        { name: "管線與儲運", desc: "用管線、儲槽把油氣送到煉油廠、電廠與港口", c: [["KMI", "Kinder Morgan", "天然氣管線"], ["WMB", "Williams", "天然氣管線"], ["ET", "Energy Transfer", "油氣管線"]] },
-        { name: "LNG 液化出口", desc: "把天然氣冷卻成液體，用船出口到海外", c: [["LNG", "Cheniere Energy", "液化天然氣出口"]] },
+        { name: "管線與儲運", desc: "用管線、儲槽把油氣送到煉油廠、電廠與港口", c: [["KMI", "Kinder Morgan"], ["WMB", "Williams"], ["ET", "Energy Transfer"]] },
+        { name: "LNG 液化出口", desc: "把天然氣冷卻成液體，用船出口到海外", c: [["LNG", "Cheniere Energy"]] },
       ] },
       { tier: "下游", title: "加工與使用", items: [
-        { name: "煉油", desc: "把原油分餾成汽油、柴油、航油與塑化原料", c: [["VLO", "Valero", "煉油"], ["MPC", "Marathon Petroleum", "煉油"], ["PSX", "Phillips 66", "煉油"]] },
-        { name: "整合型石油公司", desc: "從開採、運輸到煉油化工一手包辦", c: [["XOM", "ExxonMobil", "整合型石油公司"], ["CVX", "Chevron", "整合型石油公司"]] },
-        { name: "天然氣發電", desc: "燃氣電廠發電，供應電網與資料中心", c: [["VST", "Vistra", "燃氣發電"]] },
+        { name: "煉油", desc: "把原油分餾成汽油、柴油、航油與塑化原料", c: [["VLO", "Valero"], ["MPC", "Marathon Petroleum"], ["PSX", "Phillips 66"]] },
+        { name: "整合型石油公司", desc: "從開採、運輸到煉油化工一手包辦", c: [["XOM", "ExxonMobil"], ["CVX", "Chevron"]] },
+        { name: "天然氣發電", desc: "燃氣電廠發電，供應電網與資料中心", c: [["VST", "Vistra"]] },
       ] },
     ] },
 
   { id: "us-machinery", mk: "us", cat: "工業", name: "重工機械", icon: "factory",
     desc: "挖土機、礦用卡車、農機、引擎與發電機組等大型機械，服務基建、礦業、農業與能源；景氣循環明顯，但龐大的售後零件與服務提供穩定收入。",
     flow: ["基建與礦業需求", "機械廠製造", "經銷商銷售", "設備使用", "售後零件與服務"],
-    segs: [{ n: "機械製造", c: [["CAT", "Caterpillar", "營建與礦業機械、發電機組"], ["DE", "Deere", "農業機械"], ["CMI", "Cummins", "引擎與發電機"], ["PCAR", "PACCAR", "重型卡車"]] },
-      { n: "能源設備與租賃", c: [["GEV", "GE Vernova", "燃氣渦輪與電網設備"], ["URI", "United Rentals", "設備租賃"]] }],
+    segs: [{ n: "機械製造", c: [["CAT", "Caterpillar"], ["DE", "Deere"], ["CMI", "Cummins"], ["PCAR", "PACCAR"]] },
+      { n: "能源設備與租賃", c: [["GEV", "GE Vernova"], ["URI", "United Rentals"]] }],
     fig: { w: 400, h: 280, alt: "重工機械：挖土機剖面（引擎帶動液壓泵，液壓缸推動動臂與鏟斗）、農機、重型卡車、發電機組供電給資料中心；下方是經銷、租賃、使用到售後零件的循環", items: [
       { t: "rect", x: 18, y: 146, w: 124, h: 24, r: 12, c: "gray", fill: 0.2 },
       { t: "circle", x: 32, y: 158, r: 7, c: "gray", fill: 0.3 }, { t: "circle", x: 56, y: 158, r: 7, c: "gray", fill: 0.3 }, { t: "circle", x: 80, y: 158, r: 7, c: "gray", fill: 0.3 },
@@ -593,26 +593,26 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "關鍵零組件", items: [
-        { name: "引擎與動力系統", desc: "柴油、天然氣引擎與傳動系統，是機器的心臟", c: [["CMI", "Cummins", "引擎與動力系統"]] },
-        { name: "液壓與傳動元件", desc: "液壓泵、液壓缸、閥件與管路", c: [["PH", "Parker-Hannifin", "液壓與運動控制"]] },
+        { name: "引擎與動力系統", desc: "柴油、天然氣引擎與傳動系統，是機器的心臟", c: [["CMI", "Cummins"]] },
+        { name: "液壓與傳動元件", desc: "液壓泵、液壓缸、閥件與管路", c: [["PH", "Parker-Hannifin"]] },
       ] },
       { tier: "中游", title: "整機製造", items: [
-        { name: "營建與礦業機械", desc: "挖土機、裝載機、礦用卡車", c: [["CAT", "Caterpillar", "營建與礦業機械"]] },
-        { name: "農業機械", desc: "曳引機、收割機與精準農業設備", c: [["DE", "Deere", "農業機械"], ["AGCO", "AGCO", "農業機械"]] },
-        { name: "重型卡車", desc: "長途運輸與工程用重卡", c: [["PCAR", "PACCAR", "重型卡車"]] },
-        { name: "發電設備", desc: "發電機組與燃氣渦輪，供電網與資料中心", c: [["GEV", "GE Vernova", "燃氣渦輪"], ["CAT", "Caterpillar", "發電機組"], ["CMI", "Cummins", "發電機組"]] },
+        { name: "營建與礦業機械", desc: "挖土機、裝載機、礦用卡車", c: [["CAT", "Caterpillar"]] },
+        { name: "農業機械", desc: "曳引機、收割機與精準農業設備", c: [["DE", "Deere"], ["AGCO", "AGCO"]] },
+        { name: "重型卡車", desc: "長途運輸與工程用重卡", c: [["PCAR", "PACCAR"]] },
+        { name: "發電設備", desc: "發電機組與燃氣渦輪，供電網與資料中心", c: [["GEV", "GE Vernova"], ["CAT", "Caterpillar"], ["CMI", "Cummins"]] },
       ] },
       { tier: "下游", title: "通路與服務", items: [
-        { name: "經銷與租賃", desc: "在地銷售、出租設備給工程公司", c: [["URI", "United Rentals", "設備租賃"]] },
-        { name: "售後零件與服務", desc: "機器使用十幾年，持續更換零件與保養", c: [["CAT", "Caterpillar", "零件與服務"], ["DE", "Deere", "零件與服務"]] },
+        { name: "經銷與租賃", desc: "在地銷售、出租設備給工程公司", c: [["URI", "United Rentals"]] },
+        { name: "售後零件與服務", desc: "機器使用十幾年，持續更換零件與保養", c: [["CAT", "Caterpillar"], ["DE", "Deere"]] },
       ] },
     ] },
 
   { id: "jp-nand", mk: "jp", cat: "記憶體", name: "日本 NAND 記憶體", icon: "memory",
     desc: "NAND 快閃記憶體斷電後資料不會消失，做成 SSD 和手機儲存；日本鎧俠和美國 SanDisk 共同營運大型晶圓廠，並以 3D 堆疊技術提高容量。",
     flow: ["晶圓", "3D 堆疊儲存單元", "封裝與控制器", "SSD 與記憶卡", "資料中心、手機"],
-    segs: [{ n: "NAND 製造", c: [["285A.T", "鎧俠（Kioxia）", "NAND 快閃記憶體"], ["SNDK", "SanDisk", "美國合資夥伴"]] },
-      { n: "設備與材料", c: [["8035.T", "東京威力科創", "蝕刻與沉積設備"], ["4186.T", "東京應化", "光阻劑"], ["3436.T", "SUMCO", "矽晶圓"]] }],
+    segs: [{ n: "NAND 製造", c: [["285A.T", "鎧俠（Kioxia）"], ["SNDK", "SanDisk"]] },
+      { n: "設備與材料", c: [["8035.T", "東京威力科創"], ["4186.T", "東京應化"], ["3436.T", "SUMCO"]] }],
     peers: ["us-memory", "kr-memory"],
     fig: { w: 400, h: 280, alt: "3D NAND：矽晶圓上交錯堆疊上百層字元線，垂直深孔打穿各層形成通道，側邊做成階梯接點；每個儲存單元的電荷存在環狀陷阱層；晶片堆疊封裝後和控制器組成 SSD", items: [
       { t: "wafer", x: 32, y: 60, r: 22, c: "gray", label: "矽晶圓" },
@@ -691,23 +691,23 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "材料與設備", items: [
-        { name: "矽晶圓", desc: "高純度 300mm 矽晶圓，NAND 的基底", c: [["3436.T", "SUMCO", "矽晶圓"], ["4063.T", "信越化學", "矽晶圓"]] },
-        { name: "沉積與蝕刻設備", desc: "沉積上百層薄膜、打出又深又直的通道孔", c: [["8035.T", "東京威力科創", "蝕刻與沉積設備"], ["LRCX", "科林研發", "高深寬比蝕刻"]] },
-        { name: "光阻與製程材料", desc: "光阻劑與各種薄膜、化學材料", c: [["4186.T", "東京應化", "光阻劑"]] },
+        { name: "矽晶圓", desc: "高純度 300mm 矽晶圓，NAND 的基底", c: [["3436.T", "SUMCO"], ["4063.T", "信越化學"]] },
+        { name: "沉積與蝕刻設備", desc: "沉積上百層薄膜、打出又深又直的通道孔", c: [["8035.T", "東京威力科創"], ["LRCX", "科林研發"]] },
+        { name: "光阻與製程材料", desc: "光阻劑與各種薄膜、化學材料", c: [["4186.T", "東京應化"]] },
       ] },
       { tier: "中游", title: "晶圓製造與控制", items: [
-        { name: "3D NAND 晶圓製造", desc: "堆疊儲存單元做成快閃記憶體晶片（鎧俠為東證 285A）", c: [["SNDK", "SanDisk", "與鎧俠合資營運晶圓廠"], ["005930.KS", "三星電子", "競爭對手"], ["000660.KS", "SK 海力士", "競爭對手"]] },
-        { name: "NAND 控制器", desc: "管理讀寫、錯誤更正與壽命的 SSD 大腦", c: [["8299", "群聯", "NAND 控制器與模組"], ["SIMO", "慧榮", "NAND 控制器"]] },
+        { name: "3D NAND 晶圓製造", desc: "堆疊儲存單元做成快閃記憶體晶片（鎧俠為東證 285A）", c: [["SNDK", "SanDisk"], ["005930.KS", "三星電子"], ["000660.KS", "SK 海力士"]] },
+        { name: "NAND 控制器", desc: "管理讀寫、錯誤更正與壽命的 SSD 大腦", c: [["8299", "群聯"], ["SIMO", "慧榮"]] },
       ] },
       { tier: "下游", title: "封裝模組與應用", items: [
-        { name: "封測與記憶體模組", desc: "把晶片堆疊封裝，再做成 SSD、記憶卡與隨身碟", c: [["6239", "力成", "記憶體封測"], ["3260", "威剛", "記憶體模組"]] },
+        { name: "封測與記憶體模組", desc: "把晶片堆疊封裝，再做成 SSD、記憶卡與隨身碟", c: [["6239", "力成"], ["3260", "威剛"]] },
       ] },
     ] },
 
   { id: "jp-copperfoil", mk: "jp", cat: "PCB", name: "日本銅箔", icon: "layers",
     desc: "銅箔是銅箔基板與印刷電路板的導電層；AI 伺服器與高速交換器需要表面極平滑的高階銅箔來降低訊號損耗，日本廠在高階與載板用極薄銅箔具優勢。",
     flow: ["銅原料", "電解析出", "表面處理", "銅箔基板 CCL", "PCB 與載板"],
-    segs: [{ n: "銅箔", c: [["5706.T", "三井金屬", "載板用極薄銅箔"], ["5801.T", "古河電工", "電解銅箔"], ["5016.T", "JX 金屬", "壓延銅箔與半導體材料"]] }],
+    segs: [{ n: "銅箔", c: [["5706.T", "三井金屬"], ["5801.T", "古河電工"], ["5016.T", "JX 金屬"]] }],
     peers: ["tw-ccl", "tw-pcb"],
     fig: { w: 400, h: 280, alt: "銅箔：銅溶成電解液，通電後銅在旋轉的鈦滾筒上析出成薄片，剝下後表面處理再捲起；高速板要表面平滑的 HVLP 銅箔降低損耗；銅箔壓上玻纖樹脂成 CCL，再做成 AI 伺服器板", items: [
       { t: "box", x: 12, y: 20, w: 56, h: 28, label: "銅原料", s: 9, c: "orange" },
@@ -789,23 +789,23 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "銅原料", items: [
-        { name: "電解銅與銅原料", desc: "冶煉精煉出的高純度銅，溶解成電解液", c: [["5713.T", "住友金屬礦山", "銅冶煉"]] },
+        { name: "電解銅與銅原料", desc: "冶煉精煉出的高純度銅，溶解成電解液", c: [["5713.T", "住友金屬礦山"]] },
       ] },
       { tier: "中游", title: "銅箔製造", items: [
-        { name: "電解銅箔（HVLP）", desc: "滾筒電鍍析出，表面越平滑越適合高速板", c: [["5706.T", "三井金屬", "高階電解銅箔"], ["5801.T", "古河電工", "電解銅箔"], ["8358", "金居", "高階電解銅箔"]] },
-        { name: "載板用極薄銅箔", desc: "附載體的超薄銅箔，用來做 IC 載板細線路", c: [["5706.T", "三井金屬", "載板用極薄銅箔"]] },
-        { name: "壓延銅箔", desc: "把銅反覆輾薄，柔軟耐彎折，用於軟板", c: [["5016.T", "JX 金屬", "壓延銅箔"]] },
+        { name: "電解銅箔（HVLP）", desc: "滾筒電鍍析出，表面越平滑越適合高速板", c: [["5706.T", "三井金屬"], ["5801.T", "古河電工"], ["8358", "金居"]] },
+        { name: "載板用極薄銅箔", desc: "附載體的超薄銅箔，用來做 IC 載板細線路", c: [["5706.T", "三井金屬"]] },
+        { name: "壓延銅箔", desc: "把銅反覆輾薄，柔軟耐彎折，用於軟板", c: [["5016.T", "JX 金屬"]] },
       ] },
       { tier: "下游", title: "基板與電路板", items: [
-        { name: "銅箔基板（CCL）", desc: "銅箔壓上玻纖布與樹脂，是 PCB 的原料", c: [["2383", "台光電", "高速 CCL"], ["6213", "聯茂", "CCL"], ["6274", "台燿", "高速 CCL"]] },
-        { name: "PCB 與 IC 載板", desc: "把 CCL 蝕刻成線路，做成伺服器板與載板", c: [["3037", "欣興", "IC 載板與 PCB"], ["2368", "金像電", "伺服器 PCB"]] },
+        { name: "銅箔基板（CCL）", desc: "銅箔壓上玻纖布與樹脂，是 PCB 的原料", c: [["2383", "台光電"], ["6213", "聯茂"], ["6274", "台燿"]] },
+        { name: "PCB 與 IC 載板", desc: "把 CCL 蝕刻成線路，做成伺服器板與載板", c: [["3037", "欣興"], ["2368", "金像電"]] },
       ] },
     ] },
 
   { id: "kr-components", mk: "kr", cat: "電子零組件", name: "韓國電子元件", icon: "layers",
     desc: "韓國的被動元件、IC 載板與相機模組廠，以三星電機和 LG Innotek 為代表，客戶包括手機品牌、AI 伺服器與汽車，與日本、台灣廠商在同一市場競爭。",
     flow: ["陶瓷與樹脂材料", "MLCC 與載板", "相機模組", "手機、伺服器、汽車"],
-    segs: [{ n: "元件與載板", c: [["009150.KS", "三星電機", "MLCC、FC-BGA 載板、相機模組"], ["011070.KS", "LG Innotek", "相機模組、載板"], ["007660.KS", "ISU Petasys", "AI 伺服器多層板"]] }],
+    segs: [{ n: "元件與載板", c: [["009150.KS", "三星電機"], ["011070.KS", "LG Innotek"], ["007660.KS", "ISU Petasys"]] }],
     peers: ["jp-mlcc", "tw-passive", "tw-substrate"],
     fig: { w: 400, h: 280, alt: "韓國電子元件：MLCC 內部陶瓷與電極交錯疊上百層；FC-BGA 載板用增層膜做細線路連接晶片和主機板；相機模組由鏡片、對焦馬達與感測器組成；AI 伺服器用高層數多層板；客戶是手機、伺服器與汽車", items: [
       // MLCC
@@ -893,17 +893,17 @@ INDUSTRY_PACK.push(
     ],
     chain: [
       { tier: "上游", title: "材料", items: [
-        { name: "增層材料（ABF）", desc: "載板細線路用的絕緣增層膜", c: [["2802.T", "味之素", "ABF 增層膜"]] },
+        { name: "增層材料（ABF）", desc: "載板細線路用的絕緣增層膜", c: [["2802.T", "味之素"]] },
       ] },
       { tier: "中游", title: "元件與模組", items: [
-        { name: "MLCC 積層陶瓷電容", desc: "陶瓷與電極疊上百層，穩定電壓、濾除雜訊", c: [["009150.KS", "三星電機", "MLCC"], ["6981.T", "村田製作所", "MLCC 競爭對手"], ["2327", "國巨", "MLCC 競爭對手"]] },
-        { name: "FC-BGA 載板", desc: "高階處理器用的封裝載板，連接晶片和主機板", c: [["009150.KS", "三星電機", "FC-BGA 載板"], ["011070.KS", "LG Innotek", "載板"], ["4062.T", "揖斐電", "FC-BGA 競爭對手"], ["3037", "欣興", "FC-BGA 競爭對手"]] },
-        { name: "高層數多層板", desc: "AI 伺服器與交換器用的高層數 PCB", c: [["007660.KS", "ISU Petasys", "AI 伺服器多層板"], ["2368", "金像電", "競爭對手"]] },
-        { name: "相機模組", desc: "鏡頭、感測器與對焦馬達組成的模組", c: [["011070.KS", "LG Innotek", "手機相機模組"], ["009150.KS", "三星電機", "相機模組"], ["3008", "大立光", "鏡頭（台灣）"]] },
+        { name: "MLCC 積層陶瓷電容", desc: "陶瓷與電極疊上百層，穩定電壓、濾除雜訊", c: [["009150.KS", "三星電機"], ["6981.T", "村田製作所"], ["2327", "國巨"]] },
+        { name: "FC-BGA 載板", desc: "高階處理器用的封裝載板，連接晶片和主機板", c: [["009150.KS", "三星電機"], ["011070.KS", "LG Innotek"], ["4062.T", "揖斐電"], ["3037", "欣興"]] },
+        { name: "高層數多層板", desc: "AI 伺服器與交換器用的高層數 PCB", c: [["007660.KS", "ISU Petasys"], ["2368", "金像電"]] },
+        { name: "相機模組", desc: "鏡頭、感測器與對焦馬達組成的模組", c: [["011070.KS", "LG Innotek"], ["009150.KS", "三星電機"], ["3008", "大立光"]] },
       ] },
       { tier: "下游", title: "終端客戶", items: [
-        { name: "手機品牌", desc: "旗艦手機是 MLCC 與相機模組最大的客戶", c: [["AAPL", "蘋果", "手機品牌"], ["005930.KS", "三星電子", "手機品牌"]] },
-        { name: "AI 伺服器與汽車", desc: "AI 晶片帶動載板與多層板，車用電子帶動車規元件", c: [["NVDA", "輝達", "AI 晶片與伺服器平台"], ["005380.KS", "現代汽車", "車用元件需求"]] },
+        { name: "手機品牌", desc: "旗艦手機是 MLCC 與相機模組最大的客戶", c: [["AAPL", "蘋果"], ["005930.KS", "三星電子"]] },
+        { name: "AI 伺服器與汽車", desc: "AI 晶片帶動載板與多層板，車用電子帶動車規元件", c: [["NVDA", "輝達"], ["005380.KS", "現代汽車"]] },
       ] },
     ] },
 );

@@ -1,4 +1,4 @@
-# K線學堂（taiex-monitor-app）工作規則
+# KLineLab K線情報局（taiex-monitor-app）工作規則
 
 使用者用繁體中文溝通，常用 iPhone／iPad，回覆一律用繁體中文。
 
