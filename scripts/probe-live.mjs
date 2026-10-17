@@ -12,13 +12,8 @@ async function raw(url, n = 600) {
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
 if (process.argv[2] === "ext") {
-  // ETF 成分股、基本資料：MoneyDJ 的表格結構（去掉標籤屬性後印出相關片段）
-  const strip = t => t.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<(\w+)[^>]*>/g, "<$1>").replace(/\s+/g, " ");
-  const frag = (t, key, a = 300, b = 2500) => { if (!t) return; const x = strip(t), i = x.indexOf(key); console.log(`--- 片段「${key}」@${i}\n` + (i < 0 ? x.slice(0, 600) : x.slice(Math.max(0, i - a), i + b))); };
-  const ths = t => [...new Set([...strip(t || "").matchAll(/<th>([^<]{1,30})/g)].map(m => m[1].trim()))].join("|");
-  for (const [id, key] of [["0050.TW", "台積電"], ["SPY", "NVIDIA"]]) for (const pg of ["Basic0007", "Basic0007a", "Basic0007b", "Basic0007B"]) {
-    const h = await raw(`https://www.moneydj.com/ETF/X/Basic/${pg}.xdjhtm?etfid=${id}`, 0); console.log("表頭：", ths(h)); frag(h, key, 1500, 1500);
-  }
+  // 線上網站的 ETF 資料（Vercel → MoneyDJ）
+  for (const c of ["0050", "00878", "SPY"]) { const t = await raw(SITE + `/api/etf?code=${c}`, 0); try { const j = JSON.parse(t); console.log(c, j.ok, j.error || "", j.info?.name, j.info?.aum, "持股", j.hold?.date, j.hold?.rows?.length, "月", j.month?.date, j.month?.rows?.length, "產業", j.ind?.rows?.length); } catch (e) { console.log(c, "解析失敗", String(t).slice(0, 200)); } }
   process.exit(0);
 }
 for (let i = 0; i < N; i++) {
