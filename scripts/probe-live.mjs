@@ -12,16 +12,15 @@ async function raw(url, n = 600) {
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
 if (process.argv[2] === "ext") {
-  await raw("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_00631l.tw|tse_00632r.tw&json=1&delay=0", 400);
-  await raw("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_00631L.tw|tse_00632R.tw|tse_00675L.tw&json=1&delay=0", 1500);
-  await raw(SITE + "/api/quote?codes=00631L,00632R,00675L,00676R", 1500);
-  await raw(SITE + "/api/kline?code=00631L&months=3", 300);
-  await raw(SITE + "/api/global", 1500);
-  await raw("https://gamma-api.polymarket.com/tags?limit=300", 4000);
-  await raw("https://gamma-api.polymarket.com/events?active=true&closed=false&limit=3&order=volume24hr&ascending=false&tag_slug=economy", 3000);
-  await raw("https://gamma-api.polymarket.com/events?active=true&closed=false&limit=2&order=volume24hr&ascending=false&tag_slug=fed-rates", 2500);
-  for (const id of ["CPIAUCSL", "UNRATE", "FEDFUNDS", "DGS10", "T10Y2Y", "GDPC1", "PAYEMS", "VIXCLS"]) await raw(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=2025-01-01`, 200);
-  await raw("https://index.ndc.gov.tw/n/json/data/eco/indicators", 600);
+  // ETF 成分股、基本資料的候選來源
+  const sw = await raw("https://openapi.twse.com.tw/v1/swagger.json", 0); try { const j = JSON.parse(sw); console.log("TWSE OpenAPI ETF 相關：", Object.entries(j.paths).filter(([k, v]) => /ETF|etf/.test(k + JSON.stringify(v).slice(0, 300))).map(([k, v]) => k + " " + (v.get?.summary || "")).join("\n")); } catch (e) { console.log("swagger 解析失敗", e.message); }
+  await raw("https://www.moneydj.com/ETF/X/Basic/Basic0007a.xdjhtm?etfid=0050.TW", 3000);
+  await raw("https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid=0050.TW", 3000);
+  const y = await raw("https://tw.stock.yahoo.com/quote/0050.TW/holding", 300); if (y) { const i = y.indexOf("台積電"); console.log("Yahoo 持股片段：", i, y.slice(Math.max(0, i - 1500), i + 1500)); }
+  const y2 = await raw("https://tw.stock.yahoo.com/quote/0050.TW/profile", 300); if (y2) { const i = y2.indexOf("經理費"); console.log("Yahoo 基本資料片段：", i, y2.slice(Math.max(0, i - 1500), i + 1500)); }
+  const sa = await raw("https://stockanalysis.com/etf/spy/holdings/", 300); if (sa) { const i = sa.indexOf("NVDA"); console.log("stockanalysis 片段：", i, sa.slice(Math.max(0, i - 800), i + 1200)); }
+  await raw("https://query2.finance.yahoo.com/v10/finance/quoteSummary/SPY?modules=topHoldings,fundProfile", 800);
+  await raw("https://www.twse.com.tw/rwd/zh/ETF/etfBasicInfo?stockNo=0050&response=json", 800);
   process.exit(0);
 }
 for (let i = 0; i < N; i++) {
