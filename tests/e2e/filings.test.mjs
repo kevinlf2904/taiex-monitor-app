@@ -12,7 +12,7 @@ test("國會買進損益", async () => {
   await p.click('#lx [data-cbt="60"]'); await p.waitForFunction(() => W.cbt && !W.cbt.busy, null, { timeout: 90000 });
   const r = await p.evaluate(() => W.cbt.rows.filter(x => x.pnl != null).map(x => [x.mid, x.nT, x.pnl, x.pT, x.last]));
   assert.ok(r.length > 10); for (const [mid, nT, pnl, pT, last] of r) { assert.ok(Math.abs(pnl - mid * nT) < 1e-6); assert.ok(Math.abs(nT - (last / pT - 1)) < 1e-9); }
-  await p.click('#lx [data-cpl="sort:loss"]'); const who = await p.$eval('#lx [data-cpl^="who:"]', b => b.dataset.cpl); await p.click(`#lx [data-cpl="${who}"]`);
+  await p.click('#lx [data-rkset="cbtv:pnl"]'); await p.click('#lx [data-cpl="sort:loss"]'); const who = await p.$eval('#lx [data-cpl^="who:"]', b => b.dataset.cpl); await p.click(`#lx [data-cpl="${who}"]`);
   assert.equal(await p.evaluate(() => W.cpl.who), who.slice(4));
   await ctx.close(); assert.deepEqual(errs, []);
 });

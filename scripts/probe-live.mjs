@@ -15,11 +15,10 @@ if (process.argv[2] === "ext") {
   // ETF 成分股、基本資料：MoneyDJ 的表格結構（去掉標籤屬性後印出相關片段）
   const strip = t => t.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<(\w+)[^>]*>/g, "<$1>").replace(/\s+/g, " ");
   const frag = (t, key, a = 300, b = 2500) => { if (!t) return; const x = strip(t), i = x.indexOf(key); console.log(`--- 片段「${key}」@${i}\n` + (i < 0 ? x.slice(0, 600) : x.slice(Math.max(0, i - a), i + b))); };
-  for (const id of ["0050.TW", "00878.TW", "SPY", "QQQ"]) {
-    const h = await raw(`https://www.moneydj.com/ETF/X/Basic/Basic0007a.xdjhtm?etfid=${id}`, 0); frag(h, "持股名稱"); frag(h, "資料日期", 200, 400);
-    const g = await raw(`https://www.moneydj.com/ETF/X/Basic/Basic0004.xdjhtm?etfid=${id}`, 0); frag(g, "經理費", 2500, 2500);
+  const ths = t => [...new Set([...strip(t || "").matchAll(/<th>([^<]{1,30})/g)].map(m => m[1].trim()))].join("|");
+  for (const [id, key] of [["0050.TW", "台積電"], ["SPY", "NVIDIA"]]) for (const pg of ["Basic0007", "Basic0007a", "Basic0007b", "Basic0007B"]) {
+    const h = await raw(`https://www.moneydj.com/ETF/X/Basic/${pg}.xdjhtm?etfid=${id}`, 0); console.log("表頭：", ths(h)); frag(h, key, 1500, 1500);
   }
-  const c = await raw("https://www.moneydj.com/ETF/X/Basic/Basic0007b.xdjhtm?etfid=0050.TW", 0); frag(c, "持股名稱");
   process.exit(0);
 }
 for (let i = 0; i < N; i++) {
