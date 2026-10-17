@@ -26,6 +26,7 @@ function sxNeed(what) {
   const c = W.sel;
   if (what === "news" && W.news?.code !== c) loadNews();
   if (what === "branch" && W.br?.code !== c) sxLoadBr();
+  if (what === "state" && !isFut(c) && W.stLong?.code !== c) sxLoadLong(c);
   if (what === "guru" && typeof podLoadSrv === "function" && !POD.srv && !POD.srvLoading) { POD.srvLoading = true; podLoadSrv().then(() => { POD.srvLoading = false; podLoadPx(); if (isSxSub()) sxRender(); }); }
 }
 // 券商分點（/api/broker，要 FinMind 贊助會員）
@@ -36,6 +37,12 @@ async function sxLoadBr() {
   try { const r = await fetch(`/api/broker?code=${c}`), j = await r.json().catch(() => null); if (W.sel !== c) return; W.br = j ? { ...j, code: c } : { code: c, err: r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}` }; }
   catch { if (W.sel === c) W.br = { code: c, err: "連不到伺服器（網路中斷？）" }; }
   if (W.sel === c && isSxSub()) sxRender();
+}
+// 市場狀態的週線：另外載入約 2.5 年的日 K 合成週 K（目前的日 K 通常只有半年）
+async function sxLoadLong(c) {
+  if (W.off) return; W.stLong = { code: c, loading: true };
+  try { const j = await getJ(`/api/kline?code=${encodeURIComponent(apiK(c))}&months=30`); W.stLong = { code: c, D: j.data || [] }; } catch (e) { W.stLong = { code: c, err: e.message }; }
+  if (W.sel === c && isSxSub() && dSub() === "state") sxRender();
 }
 function sxRender() {
   const box = $("#sxBox"); if (!box || !isSxSub()) return; W.sx = dSub(); if (!SX[W.sx]) return;
@@ -106,6 +113,21 @@ const SX = {
       <div class="sxgauge"><div class="bar"><i style="left:calc(${pos}% - 6px)"></i></div><div class="lbl"><span class="down">偏空</span><b class="${cls(S.score)}">${S.label}（${S.score > 0 ? "+" : ""}${S.score}）</b><span class="up">偏多</span></div></div>
       <ul class="sxlist">${S.out.map(x => `<li><span class="${x.v > 0 ? "up" : x.v < 0 ? "down" : "muted"}">${x.v > 0 ? "▲ 多" : x.v < 0 ? "▼ 空" : "－ 中"}</span><b>${x.k}</b><span>${esc(x.t)}</span></li>`).join("")}</ul>
       <p class="note">這是把常見指標整理成一個分數，幫你快速看「現在偏哪一邊」，不是買賣建議；盤整時多空訊號常常互相打架。</p>`;
+  },
+  // 市場狀態：日線＋週線的趨勢、波動、量能，適合的策略類型、該避免的事，ATR 參考進出場與部位大小
+  state() {
+    const D = sxD(), c = W.sel; if (D.length < 72) return sxLoad(W.daily?.err || (D.length ? "日 K 太少（至少要 72 根）" : ""));
+    const L = W.stLong?.code === c && W.stLong.D?.length > D.length ? W.stLong.D : D, Sd = marketState(D), Sw = marketState(agg(L, weekKey), { fast: 10, slow: 30, ppy: 52 });
+    const X = Sd ? atrSetup(Sd, W.stCap, W.stRisk / 100, isTW(c) && !isEtf(c) && W.stCap >= 2e6 ? 1000 : 1) : null, ak = "state:" + c;
+    QAI[ak] = { ctx: () => `${nameOf(c)} ${c} 的市場狀態（程式依日 K 計算）：\n${stateText(Sd, "日線", X)}\n${stateText(Sw, "週線")}`, done: sxRender,
+      q: "請只根據上面的數字，用白話整理：1) 日線與週線的趨勢、波動、量能，兩個週期方向一不一致 2) 支撐與壓力區間 3) 關鍵均線的位置 4) 一步一步的判斷流程：什麼情況屬於可以考慮買進、該觀望、該減碼的情境，各自看哪個價位或指標。不要給明確的買賣建議，用繁體中文、條列。" };
+    const same = Sd && Sw && Sd.trend === Sw.trend, form = `<label>帳戶 <input type="number" data-stcap value="${W.stCap}" min="10000" step="10000" inputmode="numeric"> 元</label><label>每筆最多虧 <select data-strisk>${[0.5, 1, 1.5, 2].map(v => `<option value="${v}" ${v === W.stRisk ? "selected" : ""}>${v}%</option>`).join("")}</select></label>`;
+    return `${sxH("市場狀態", "程式依 K 線計算，不是預測")}
+      ${Sd && Sw ? `<p class="sxsay">${same ? `日線、週線都是<b class="${Sd.trend === "bull" ? "up" : Sd.trend === "bear" ? "down" : ""}">${REG_NAME[Sd.trend]}</b>，長短週期方向一致。` : `日線是<b>${REG_NAME[Sd.trend]}</b>、週線是<b>${REG_NAME[Sw.trend]}</b>：短線和長線方向不同，先決定自己做哪個週期，停損也要跟著那個週期設。`}</p>` : ""}
+      ${stateHtml(Sd, "日線", X, { stratBtn: true, sizeForm: form })}
+      <div class="qx-sep"></div>${W.stLong?.code === c && W.stLong.loading ? `<p class="note">週線：載入更長的日 K…</p>` : stateHtml(Sw, "週線")}
+      ${qAiBlock({ key: ak, R: W.qai[ak] }, "🤖 AI 用白話解讀")}
+      <p class="note">多頭＝收盤與短均線都在長均線之上、長均線上揚；空頭相反；其他是盤整。ADX 衡量趨勢強度、不分方向。波動用 ATR（平均真實波幅）在自己近一年的百分位判斷。</p>`;
   },
   guru() {
     if (typeof podCalls !== "function") return sxLoad("名人 Podcast 模組沒有載入。");
@@ -312,9 +334,13 @@ Object.assign(SX, {
   info: () => SX_BASE.info() + (sxC()?.profile ? SX_BASE.holders() : ""),
 });
 function sxInit() {
-  W.brRange = store.get("watch:brr", 1); W.brSide = "buy";
+  W.brRange = store.get("watch:brr", 1); W.brSide = "buy"; W.stCap = +store.get("watch:stcap", 1e6) || 1e6; W.stRisk = +store.get("watch:strisk", 1) || 1;
+  $("#sxBox").addEventListener("change", e => { const t = e.target;
+    if (t.matches("[data-stcap]")) { W.stCap = Math.max(10000, +t.value || 1e6); store.set("watch:stcap", W.stCap); sxRender(); }
+    else if (t.matches("[data-strisk]")) { W.stRisk = +t.value || 1; store.set("watch:strisk", W.stRisk); sxRender(); } });
   $("#sxBox").addEventListener("click", e => {
     const s = e.target.closest("[data-sel]"); if (s) { select(s.dataset.sel); return; }
+    const q = e.target.closest("[data-qstrat]"); if (q) { W.strat = q.dataset.qstrat; store.set("watch:strat", W.strat); if ($("#stratSel")) $("#stratSel").value = W.strat; stratCfgRender(); $("#klStrat").open = true; setDtab("tech"); return; }
     const g = e.target.closest("[data-sxgo]"); if (g) { if (g.dataset.sxgo === "co") setDtab("fin"), setDsub("report"); else if (g.dataset.sxgo === "pod") { showList(); setLt("pod"); } return; }
     const t = e.target.closest("[data-sxind]"); if (t) { W.indS.open = t.dataset.sxind; showList(); setLt("ind"); return; }
     const r = e.target.closest("[data-brr]"); if (r) { W.brRange = +r.dataset.brr; store.set("watch:brr", W.brRange); sxRender(); return; }

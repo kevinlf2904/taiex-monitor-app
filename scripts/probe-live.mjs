@@ -12,9 +12,9 @@ async function raw(url, n = 600) {
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
 if (process.argv[2] === "ext") {
-  // 美股中文名稱搜尋、世界總經（FRED）候選
-  for (const q of ["輝達", "太空探索科技", "英特爾", "space exploration", "SPCX"]) { await raw(`https://tw.stock.yahoo.com/_td-stock/api/resource/AutocompleteService;query=${encodeURIComponent(q)}`, 700); await raw(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`, 500); }
-  for (const id of ["ECBDFR", "IRSTCB01JPM156N", "IRSTCB01GBM156N", "IRLTLT01DEM156N", "IRLTLT01JPM156N", "CP0000EZ19M086NEST", "CPALTT01CNM659N", "JPNCPIALLMINMEI", "LRHUTTTTEZM156S", "DEXJPUS", "DEXCHUS", "DCOILBRENTEU", "PCOPPUSDM", "GEPUCURRENT", "CLVMNACSCAB1GQEA19", "CHNGDPRQPSMEI", "XTEXVA01CNM664S", "BSCICP03CNM665S", "TWNCPIALLMINMEI"]) await raw(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=2025-06-01`, 160);
+  // 多因子的價值因子：上市 BWIBBU_ALL、上櫃本益比分析（確認欄位名稱）＋解析後的筆數
+  for (const u of ["https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL", "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis"]) await raw(u, 600);
+  try { const { valuation } = await import("../api/_lib/screen.js"), v = await valuation(); console.log("valuation 筆數", v.n, "2330", v.rows["2330"], "6488", v.rows["6488"], "8299", v.rows["8299"]); } catch (e) { console.log("valuation 失敗", e.message); }
   process.exit(0);
 }
 for (let i = 0; i < N; i++) {

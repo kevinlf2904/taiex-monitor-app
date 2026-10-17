@@ -49,7 +49,10 @@ async function lxOptimize() {
   const best = grid.flat().filter(g => g.ret != null).sort((a, b) => b.ret - a.ret)[0];
   // 樣本外：用全部資料算訊號（指標需要前面的資料暖機），只看樣本外那一段的交易
   const outOf = (p, o = O) => { const sig = stratRun(LX.opt, D, I, p).filter(x => x.i >= cut).map(x => ({ ...x, i: x.i - cut })); return backtest(D.slice(cut), sig, o).total; };
-  LX.res = { D, px, py, xs, ys, grid, best, cut, bestOut: best ? outOf(best.p) : null, bestOutRaw: best ? outOf(best.p, lxOpt(false)) : null, defIn: backtest(Din, stratRun(LX.opt, Din, Iin), O).total, defOut: outOf({}), bhIn: Din[Din.length - 1].c / Din[0].c - 1, bhOut: D[D.length - 1].c / D[cut].c - 1 };
+  // 最佳化前後比較：預設參數與最佳參數，樣本內、樣本外的完整指標（quant.js 的 btMetrics）
+  const Dout = D.slice(cut), sigOut = p => stratRun(LX.opt, D, I, p).filter(x => x.i >= cut).map(x => ({ ...x, i: x.i - cut }));
+  const cmp = (best ? [["預設參數", {}], ["最佳參數", best.p]] : [["預設參數", {}]]).map(([n, p]) => ({ n, in: btMetrics(backtest(Din, stratRun(LX.opt, Din, Iin, p), O), Din), out: btMetrics(backtest(Dout, sigOut(p), O), Dout) }));
+  LX.res = { cmp, D, px, py, xs, ys, grid, best, cut, bestOut: best ? outOf(best.p) : null, bestOutRaw: best ? outOf(best.p, lxOpt(false)) : null, defIn: backtest(Din, stratRun(LX.opt, Din, Iin), O).total, defOut: outOf({}), bhIn: Din[Din.length - 1].c / Din[0].c - 1, bhOut: D[D.length - 1].c / D[cut].c - 1 };
   LX.busy = false; labxRender();
 }
 /* 滾動驗證：前 30% 當第一段樣本內，後 70% 平均切成 K 個樣本外視窗；每個視窗的樣本內＝緊接在它前面、同樣長度的一段（滾動，不是一直加長）。
@@ -129,6 +132,7 @@ function lxOptHtml() {
   return `<p class="note">樣本內：前 ${R.cut} 根（${lab.D[0].d}～${lab.D[R.cut - 1].d}）；樣本外：後 ${lab.D.length - R.cut} 根。格子是樣本內的總報酬（含成本），★ 是最好的一組。</p>
     <div class="ctbl"><table class="lxheat"><thead><tr><th>${R.py ? esc(R.py[1]) + " ＼ " : ""}${esc(R.px[1])}</th>${R.xs.map(x => `<th>${x}</th>`).join("")}</tr></thead><tbody>
     ${R.grid.map((row, yi) => `<tr><th>${R.py ? R.ys[yi] : ""}</th>${row.map(g => `<td style="background:${col(g.ret)}">${g === R.best ? "★" : ""}${pct(g.ret, 0)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    ${R.cmp ? `<h4 class="qx-h">最佳化前後比較 <span class="note">樣本內是挑參數的那段，樣本外才是真正的考驗</span></h4><div class="qx-tbl"><table><thead><tr><th>參數</th><th>期間</th><th>總報酬</th><th>年化</th><th>夏普</th><th>最大回撤</th><th>勝率</th><th>獲利因子</th><th>筆數</th></tr></thead><tbody>${R.cmp.flatMap(x => [["樣本內", x.in], ["樣本外", x.out]].map(([t, m], k) => `<tr class="${x.n === "最佳參數" ? "qx-me" : ""}"><td>${k ? "" : esc(x.n)}</td><td>${t}</td><td class="${lxCls(m.total)}">${pct(m.total)}</td><td class="${lxCls(m.cagr)}">${pct(m.cagr)}</td><td>${m.sharpe == null ? "—" : m.sharpe.toFixed(2)}</td><td>${pct(-m.mdd)}</td><td>${m.win == null ? "—" : Math.round(m.win * 100) + "%"}</td><td>${m.pf == null ? "—" : m.pf === Infinity ? "∞" : m.pf.toFixed(2)}</td><td>${m.n}</td></tr>`)).join("")}</tbody></table></div>` : ""}
     <div class="cokv three"><div><span>樣本內最好的參數</span><b>${R.best ? Object.entries(R.best.p).map(([k, v]) => `${esc(R.px[0] === k ? R.px[1] : R.py?.[1])} ${v}`).join("、") : "—"}</b><small>樣本內 ${pct(R.best?.ret)}</small></div>
     <div><span>拿到樣本外驗證</span><b class="${lxCls(R.bestOut)}">${pct(R.bestOut)}</b><small>不計成本 ${pct(R.bestOutRaw)}・預設參數樣本外 ${pct(R.defOut)}・買進持有 ${pct(R.bhOut)}</small></div>
     <div><span>判讀</span><b style="font-size:13px">${R.bestOut == null ? "—" : R.bestOut < R.defOut ? "最佳化後反而比預設差：過度擬合" : R.bestOut < (R.best?.ret ?? 0) / 2 ? "樣本外明顯變差，有過度擬合的跡象" : "樣本外也維持，參數比較穩定"}</b><small>看熱力圖：周圍格子也都不錯，才是穩定的參數區；只有一格特別好通常是巧合。只切一次樣本外可能剛好碰上順手的行情，可以再用「滾動驗證」多驗幾段。</small></div></div>`;

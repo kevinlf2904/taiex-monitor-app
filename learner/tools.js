@@ -144,8 +144,7 @@ function sumText() {
 async function sumAI() {
   const set = x => { W.sumAI = x; if (W.lt === "tools") renderList(); }; if (W.off) return set({ err: "需要部署到網站才能使用" });
   set({ loading: true });
-  try { const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ context: sumText(), messages: [{ role: "user", content: "請只根據「目前畫面」的資料，整理成今天的盤後摘要：大盤、自選股表現、觸發的技術訊號、國會新申報，最後列出明天值得留意的 3 件事。不要給買賣建議，用繁體中文、條列。" }] }) });
-    const k = await r.json(); if (!k.ok) throw new Error(k.error || "AI 沒有回答"); set({ text: k.text }); } catch (e) { set({ err: e.message }); }
+  try { set({ text: await aiChat(sumText(), "請只根據「目前畫面」的資料，整理成今天的盤後摘要：大盤、自選股表現、觸發的技術訊號、國會新申報，最後列出明天值得留意的 3 件事。不要給買賣建議，用繁體中文、條列。") }); } catch (e) { set({ err: e.message }); }
 }
 
 /* ---------- 多圖並排 ---------- */
@@ -212,14 +211,59 @@ async function scRun() {
 }
 
 /* ---------- 相對強弱（RS）：和加權指數比，近 20／60／120 日誰比較強 ---------- */
+// 相對強弱、多因子共用的範圍：條件選股選「自己輸入代號」時用那些代號，否則自選＋庫存＋台股熱門前 60
+const rsUniverse = () => (SC().uni === "custom" && SC().codes ? String(SC().codes).toUpperCase().split(/[\s,，、]+/).filter(isTW) : [...new Set([...myCodes().filter(isTW), ...Object.keys(W.hold || {}).filter(isTW), ...(W.hot?.tw?.rows || []).slice(0, 60).map(r => r.code)])]).filter(c => !isIdx(c)).slice(0, 120);
 async function rsRun() {
   const mk = W.rsU === "market"; if (mk) { W.rsRes = { busy: true, done: 0, total: 0, rows: [] }; renderList(); try { await allkLoad(); } catch (e) { W.rsRes = null; renderList(); return toast(e.message); } }
-  const list = mk ? Object.keys(W.allk.k) : (SC().uni === "custom" && SC().codes ? String(SC().codes).toUpperCase().split(/[\s,，、]+/).filter(isTW) : [...new Set([...myCodes().filter(isTW), ...Object.keys(W.hold || {}).filter(isTW), ...(W.hot?.tw?.rows || []).slice(0, 60).map(r => r.code)])]).slice(0, mk ? 5000 : 120);
+  const list = mk ? Object.keys(W.allk.k).slice(0, 5000) : rsUniverse();
   const R = (W.rsRes = { busy: true, done: 0, total: list.length, rows: [], mk }); renderList(); if (!W.hot?.tw && !mk) loadHot("tw");
   const T = await dailyFresh("T00"), ret = (D, n) => (D && D.length > n ? D[D.length - 1].c / D[D.length - 1 - n].c - 1 : null), tr = { 20: ret(T, 20), 60: ret(T, 60), 120: ret(T, 120) };
   let k = 0; const worker = async () => { while (k < list.length) { const c = list[k++], D = mk ? allkD(c) : await dailyFresh(c); R.done++; if (mk && R.done % 100 === 0) { await tick0(); if (rsVis()) renderList(); } if (!D || D.length < 25 || (mk && !(D[D.length - 1].v >= 100))) continue;
     const row = { c, px: D[D.length - 1].c }; [20, 60, 120].forEach(n => { const r = ret(D, n); row["r" + n] = r; row["rs" + n] = r != null && tr[n] != null ? (1 + r) / (1 + tr[n]) - 1 : null; }); R.rows.push(row); } };
   await Promise.all(Array.from({ length: mk ? 1 : 6 }, worker)); R.tr = tr; R.busy = false; R.at = Date.now(); if (toolsOn()) renderList();
+}
+
+/* ---------- 多因子排行（quant.js 的 factorRaw／factorScore）：動能、價值、低波動、趨勢的百分位分數，權重可調；
+   前幾名附 ATR 參考停損與目標（marketState＋atrSetup），可以跑每月再平衡的歷史回測（factorBacktest，價值因子沒有歷史資料不算） ---------- */
+const MF = () => (W.mfx ||= { w: { ...FACTOR_W0, ...(store.get("watch:mfw", null) || {}) }, uni: store.get("watch:mfu", "") || "", top: 10 });
+const mfVis = () => W.lt === "screen" && W.scrG === "score" && W.scoreMode === "factor";
+async function mfValLoad() { if (W.mfVal) return W.mfVal; try { const j = await getJ("/api/screen?bw=1", true); W.mfVal = j.ok ? j.rows : {}; } catch { W.mfVal = {}; } return W.mfVal; }
+async function mfRun() {
+  const S = MF(), mk = S.uni === "market"; W.mfRes = { busy: true, done: 0, total: 0, rows: [] }; W.mfBt = null; renderList();
+  if (mk) { try { await allkLoad(); } catch (e) { W.mfRes = null; renderList(); return toast(e.message); } } else if (!W.hot?.tw) await loadHot("tw").catch(() => {});
+  const list = mk ? Object.keys(W.allk.k) : rsUniverse(), R = (W.mfRes = { busy: true, done: 0, total: list.length, rows: [], mk }), V = await mfValLoad();
+  let k = 0; const worker = async () => { while (k < list.length) { const c = list[k++], D = mk ? allkD(c) : await dailyFresh(c); R.done++; if (mk && R.done % 150 === 0) { await tick0(); if (mfVis()) renderList(); }
+    if (!D || D.length < 72 || (mk && !(D[D.length - 1].v >= 300))) continue; const v = V[c], f = factorRaw(D, D.length - 1, v ? { pe: v[0] } : null); if (f) R.rows.push({ c, f, px: D[D.length - 1].c, pe: v?.[0] ?? null, D: mk ? null : D }); } };
+  await Promise.all(Array.from({ length: mk ? 1 : 6 }, worker)); R.busy = false; R.at = Date.now(); R.val = Object.keys(V).length > 0; if (mfVis()) renderList();
+}
+// 歷史回測：自選＋熱門用約 2 年日 K（每月一期，約 20 期），全市場只有最近 130 個交易日（約 2～3 期，只能參考）
+async function mfBacktest() {
+  const S = MF(), R = W.mfRes; if (!R?.rows.length) return;
+  W.mfBt = { busy: true }; renderList();
+  const series = R.mk ? R.rows.map(r => ({ c: r.c, D: allkD(r.c) })) : await Promise.all(R.rows.map(async r => ({ c: r.c, D: await getJ(`/api/kline?code=${r.c}&months=24`).then(j => j.data || null).catch(() => null) })));
+  W.mfBt = factorBacktest(series, S.w, { hold: 21, top: S.top }) || { err: "能回測的股票太少（至少 4 檔、各 75 根以上）" }; if (mfVis()) renderList();
+}
+function mfHtml() {
+  const S = MF(), R = W.mfRes, B = W.mfBt, tw = Object.values(S.w).reduce((a, b) => a + b, 0) || 1;
+  let h = `<section class="csec"><h3>多因子排行 <span class="seg sm" role="group">${[["", "自選＋熱門"], ["market", "全市場"]].map(([a, t]) => `<button data-mfu="${a}" aria-pressed="${S.uni === a}">${t}</button>`).join("")}</span> <button class="btn sm primary" data-mfrun ${R?.busy ? "disabled" : ""}>${R?.busy ? `計算中 ${R.done}/${R.total}…` : R ? "重新計算" : "開始計算"}</button></h3>
+    <div class="qx-w">${FACTORS.map(([k, t]) => `<label title="${esc(FACTORS.find(x => x[0] === k)[2])}"><span>${t}</span><input type="range" min="0" max="50" step="5" value="${S.w[k]}" data-mfw="${k}" aria-label="${t}權重"><b>${Math.round(S.w[k] / tw * 100)}%</b></label>`).join("")}</div>
+    <details class="mkmore"><summary>每個因子怎麼算</summary><ul class="note">${FACTORS.map(([, t, d]) => `<li><b>${t}</b>：${esc(d)}</li>`).join("")}<li>每個因子換算成範圍內的百分位（0～100，越高越好），再依上面的權重加權平均成總分。權重拉到 0 就是不看那個因子。</li></ul></details>`;
+  if (!R) return h + `<p class="note">按「開始計算」。全市場第一次要下載約 3MB 的全市場日 K。</p></section>`;
+  const rows = factorScore(R.rows.map(r => ({ ...r })), S.w), top = rows.slice(0, 30);
+  const setups = top.map(r => { const D = r.D || (R.mk ? allkD(r.c) : null), St = D ? marketState(D) : null; return St ? { St, X: atrSetup(St) } : null; });
+  h += `<p class="note">${R.busy ? "計算中…" : `共 ${rows.length} 檔有足夠資料${R.mk ? "（排除當天成交量不到 300 張）" : ""}；${R.val ? "本益比來自證交所、櫃買中心" : "本益比暫時拿不到，價值因子都給 50 分"}。`}</p>
+    <div class="ctbl"><table><thead><tr><th>#</th><th>股票</th><th>收盤</th><th>總分</th>${FACTORS.map(([, t]) => `<th>${t}</th>`).join("")}<th>本益比</th><th>行情</th><th>ATR 參考停損／目標</th><th>報酬風險比</th></tr></thead><tbody>
+    ${top.map((r, i) => { const X = setups[i]; return `<tr><td>${i + 1}</td><td><button class="linkbtn" data-tsel="${r.c}">${esc(nameOf(r.c))} ${r.c}</button></td><td>${fmtP(r.px)}</td><td><b class="${r.score >= 70 ? "up" : r.score <= 40 ? "down" : ""}">${r.score}</b></td>${FACTORS.map(([k]) => `<td>${r.s[k]}</td>`).join("")}<td>${r.pe > 0 ? r.pe.toFixed(1) : "—"}</td><td class="${X?.St.trend === "bull" ? "up" : X?.St.trend === "bear" ? "down" : ""}">${X ? REG_NAME[X.St.trend] : "—"}</td><td>${X?.X ? `${fmtP(X.X.stop)}／${fmtP(X.X.tgt)}` : "—"}</td><td class="${X?.X?.rr >= 2 ? "up" : X?.X?.rr < 1.5 ? "down" : ""}">${X?.X ? X.X.rr.toFixed(2) : "—"}</td></tr>`; }).join("") || `<tr><td colspan="12" class="note">${R.busy ? "…" : "沒有資料"}</td></tr>`}</tbody></table></div>`;
+  if (top.length >= 4) { const n = Math.min(S.top, top.length);
+    h += `<h4>投資組合範例 <span class="note">前 ${n} 名等權重，每檔 ${(100 / n).toFixed(0)}%，每月（約 21 個交易日）重新排名、再平衡</span></h4><p>${top.slice(0, n).map(r => `<button class="linkbtn" data-tsel="${r.c}">${esc(nameOf(r.c))}</button>`).join("、")}</p>
+      <div class="irform"><button class="btn sm" data-mfbt ${B?.busy || R.busy ? "disabled" : ""}>${B?.busy ? "回測中…" : "回測這個權重（每月再平衡）"}</button>${R.mk ? `<span class="note">全市場只有最近 130 個交易日，回測期數很少</span>` : ""}</div>`;
+    if (B && !B.busy) h += B.err ? `<p class="note">⚠ ${esc(B.err)}</p>` : B.short ? `<p class="note">資料只有 ${B.days} 個交易日，扣掉計算因子需要的 70 天後不夠一期。</p>`
+      : `${qCards([["前 " + B.top + " 名累積", qP(B.ret), `${B.per.length} 期`, qC(B.ret)], ["同範圍等權重", qP(B.all), "全部股票平均", qC(B.all)], ["勝過同範圍", `${Math.round(B.hit * 100)}%`, "的期數"], ["平均每期超額", qP(B.ex, 2), "前幾名 − 全部平均", qC(B.ex)]])}
+        <div class="ctbl"><table><thead><tr><th>期間</th><th>前 ${B.top} 名</th><th>全部平均</th><th>入選</th></tr></thead><tbody>${B.per.map(x => `<tr><td>${x.d.slice(2)}～${x.to.slice(5)}</td><td class="${cls(x.ret)}">${retPct(x.ret)}</td><td class="${cls(x.all)}">${retPct(x.all)}</td><td class="note">${x.codes.slice(0, 5).map(c => esc(nameOf(c))).join("、")}${x.codes.length > 5 ? "…" : ""}</td></tr>`).join("")}</tbody></table></div>
+        <p class="note">回測用每一期當天為止的資料排名（不偷看未來），不含交易成本；歷史本益比拿不到，所以回測只用動能、低波動、趨勢三個因子。範圍是目前的股票清單，已經下市或被剔除的股票不在裡面（倖存者偏差），結果會偏樂觀。</p>`; }
+  const ak = "mf"; if (top.length) QAI[ak] = { done: renderList, ctx: () => `多因子排行（權重：${FACTORS.map(([k, t]) => `${t} ${Math.round(S.w[k] / tw * 100)}%`).join("、")}；分數是範圍內的百分位）前 10 名：\n` + top.slice(0, 10).map((r, i) => `${i + 1}. ${nameOf(r.c)} ${r.c} 收盤 ${fmtP(r.px)}、總分 ${r.score}、${FACTORS.map(([k, t]) => `${t} ${r.s[k]}`).join("、")}、本益比 ${r.pe > 0 ? r.pe.toFixed(1) : "—"}${setups[i] ? `、行情 ${REG_NAME[setups[i].St.trend]}${setups[i].X ? `、ATR 參考停損 ${fmtP(setups[i].X.stop)} 目標 ${fmtP(setups[i].X.tgt)} 報酬風險比 ${setups[i].X.rr.toFixed(2)}` : ""}` : ""}`).join("\n"),
+    q: "請只根據上面的分數與數字，說明前 5 名各自是靠哪些因子入選、技術面（行情、停損目標、報酬風險比）有什麼要注意的，以及這組權重偏向哪一種風格、在什麼市場環境容易失效。不要給買賣建議，用繁體中文、條列。" };
+  return h + (top.length ? qAiBlock({ key: ak, R: W.qai?.[ak] }, "🤖 AI 說明前 5 名為什麼入選") : "") + `</section>`;
 }
 
 /* ---------- 營收、財報的法定公布期限（大盤「理財行事曆」用）：每月 10 日前公布上月營收；Q1 5/15、Q2 8/14、Q3 11/14、年報 3/31 ---------- */
@@ -232,7 +276,7 @@ function calDeadlines(a, b) {
 
 /* ---------- 畫面 ---------- */
 // 這些畫面也被別的分頁借用：條件選股、相對強弱在「選股」，內部人申報在「申報」
-const toolsOn = () => W.lt === "tools" || (W.lt === "screen" && (W.scrG === "custom" || W.scrG === "rs")) || (W.lt === "cong" && (W.cv === "ins" || String(W.cv).startsWith("tw")));
+const toolsOn = () => W.lt === "tools" || (W.lt === "screen" && (W.scrG === "custom" || W.scrG === "rs" || (W.scrG === "score" && W.scoreMode === "factor"))) || (W.lt === "cong" && (W.cv === "ins" || String(W.cv).startsWith("tw")));
 const scanVis = () => W.lt === "screen" && W.scrG === "custom", rsVis = () => W.lt === "screen" && W.scrG === "rs", insVis = () => W.lt === "cong" && W.cv === "ins";
 function renderTools() {
   if (!TOOLS_VIEWS.some(x => x[0] === W.tv)) W.tv = "sum";
@@ -271,6 +315,8 @@ function toolsBody(v) {
       <p class="note">RS＝（1＋個股報酬）÷（1＋加權指數報酬）− 1，正的代表比大盤強。範圍：自選、庫存與台股熱門前 60（條件選股選「自己輸入代號」時改用那些代號）；選「全市場」時用排程整理的全部上市櫃股票（排除當天成交量不到 100 張的）。${R?.tr ? `同期加權指數：20 日 ${retPct(R.tr[20])}、60 日 ${retPct(R.tr[60])}、120 日 ${retPct(R.tr[120])}` : ""}</p>
       ${R ? `<div class="ctbl"><table><thead><tr><th>#</th><th>股票</th><th>收盤</th><th>20 日</th><th>60 日</th><th>120 日</th><th>RS（${k.slice(2)} 日）</th><th>百分位</th></tr></thead><tbody>${rows.slice(0, 300).map((x, i) => `<tr><td>${i + 1}</td><td><button class="linkbtn" data-tsel="${x.c}">${esc(nameOf(x.c))} ${x.c}</button></td><td>${fmtP(x.px)}</td><td class="${cls(x.r20)}">${retPct(x.r20)}</td><td class="${cls(x.r60)}">${retPct(x.r60)}</td><td class="${cls(x.r120)}">${retPct(x.r120)}</td><td class="${cls(x[k])}"><b>${retPct(x[k])}</b></td><td>${n > 1 ? Math.round((1 - i / (n - 1)) * 100) : 100}</td></tr>`).join("")}</tbody></table></div>` : ""}</section>`;
     note = "相對強弱只看過去的價格表現，強勢股也可能隨時轉弱；百分位 100 是範圍內最強。";
+  } else if (v === "mf") {
+    h = mfHtml(); note = "多因子排行是把幾個常見的選股因子換成分數，幫你縮小研究範圍；ATR 停損與目標是教學用的參考計算，不是買賣建議。";
   } else if (v === "ins") {
     h = insHtml(); note = "內部人申報是公開資訊，可以當成籌碼面的參考；大股東轉讓的原因很多（繳稅、贈與、信託、資金需求），不一定代表看壞。";
   } else if (v === "chipx") {
@@ -295,6 +341,7 @@ function toolsBody(v) {
     h = `<section class="csec"><h3>模擬交易 <span class="note">紙上帳戶・台股＋美股</span> <button class="linkbtn" data-tx="pareset">重設帳戶</button></h3>
       <div class="cokv three">${kv("台股帳戶（台幣）", E.tw, A.init, A.cash)}${kv("美股帳戶（美元）", E.us, A.initUsd, A.usd, true)}<div><span>持股</span><b>${pos.length} 檔</b><small>掛單 ${A.orders.length} 筆</small></div></div>
       <div id="paCurve" class="pacurve"></div>
+      ${jRulesHtml(false)}
       <form class="irform" id="paForm"><input id="paCode" placeholder="代號（台股或美股）" value="${esc(sel)}" autocomplete="off" style="width:120px"><input id="paSh" type="number" min="1" step="1" value="${sel && paUS(sel) ? 10 : 1000}" style="width:90px"><span class="note">股</span>
         <select id="paType"><option value="mkt">市價</option><option value="limit">限價</option><option value="stop">停損／突破</option></select><input id="paPx" type="number" step="any" placeholder="掛單價" style="width:90px">
         <button class="btn sm primary" data-paside="buy">買進</button><button class="btn sm" data-paside="sell">賣出</button></form>
@@ -306,7 +353,8 @@ function toolsBody(v) {
   } else if (v === "journal") {
     const { closed, open } = jClosed(), win = closed.filter(x => x.pnl > 0), loss = closed.filter(x => x.pnl <= 0), avg = a => (a.length ? a.reduce((s, x) => s + x.ret, 0) / a.length : 0);
     h = `<section class="csec"><h3>交易日記 <button class="linkbtn" data-tx="jexport">匯出</button> <button class="btn sm" data-tx="jai">🤖 AI 檢討</button></h3>
-      ${W.jAI ? `<div class="caibox">${W.jAI.loading ? "AI 整理中…" : W.jAI.err ? "⚠ " + esc(W.jAI.err) : esc(W.jAI.text).replace(/\n/g, "<br>")}</div>` : ""}
+      ${W.jAI ? `<div class="caibox">${W.jAI.loading ? "AI 讀最近 20 筆交易中（約 10～30 秒）…" : W.jAI.err ? "⚠ " + esc(W.jAI.err) : esc(W.jAI.text).replace(/\n/g, "<br>") + (jRulesOf(W.jAI.text).length ? `<p><button class="btn sm primary" data-tx="jrsave">把這 ${jRulesOf(W.jAI.text).length} 條存成我的規則</button></p>` : "")}</div>` : ""}
+      ${jRulesHtml()}
       <form class="irform" id="jForm"><input id="jD" type="date" value="${toolsDay()}"><input id="jCode" placeholder="代號" value="${esc(W.sel && isTW(W.sel) ? W.sel : "")}" autocomplete="off" style="width:90px"><select id="jSide"><option value="buy">買進</option><option value="sell">賣出</option></select><input id="jPx" type="number" step="any" placeholder="價格" style="width:90px"><input id="jSh" type="number" step="1" placeholder="股數" style="width:90px"><select id="jTag" aria-label="理由分類">${J_TAGS.map(t => `<option>${t}</option>`).join("")}</select><input id="jWhy" placeholder="理由（例如：突破月線＋量增）" style="flex:1;min-width:160px"><button class="btn sm primary">記下</button></form>
       <div class="cokv three"><div><span>已實現</span><b>${closed.length} 筆</b><small>未平倉 ${open.length} 筆</small></div><div><span>勝率</span><b>${closed.length ? Math.round(win.length / closed.length * 100) + "%" : "—"}</b><small>賺 ${win.length}・賠 ${loss.length}</small></div><div><span>平均賺／賠</span><b>${win.length ? "+" + (avg(win) * 100).toFixed(1) + "%" : "—"} ／ ${loss.length ? (avg(loss) * 100).toFixed(1) + "%" : "—"}</b><small>賺賠比 ${loss.length && win.length ? Math.abs(avg(win) / avg(loss)).toFixed(2) : "—"}・總損益 ${Math.round(closed.reduce((s, x) => s + x.pnl, 0)).toLocaleString()}</small></div></div>
       ${jTagStats(closed)}
@@ -331,24 +379,31 @@ function jTagStats(closed) {
   const rows = [...by].map(([t, L]) => ({ t, n: L.length, win: L.filter(x => x.pnl > 0).length / L.length, avg: L.reduce((s, x) => s + x.ret, 0) / L.length, pnl: L.reduce((s, x) => s + x.pnl, 0) })).sort((a, b) => b.avg - a.avg);
   return `<h4>依進場理由</h4><div class="ctbl"><table><thead><tr><th>理由</th><th>筆數</th><th>勝率</th><th>平均報酬</th><th>總損益</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.t)}</td><td>${r.n}</td><td>${Math.round(r.win * 100)}%</td><td class="${cls(r.avg)}">${retPct(r.avg)}</td><td class="${cls(r.pnl)}">${Math.round(r.pnl).toLocaleString()}</td></tr>`).join("")}</tbody></table></div>${rows.length > 1 ? `<p class="note">${esc(rows[0].t)} 的平均報酬最好、${esc(rows[rows.length - 1].t)} 最差${rows.some(r => r.n < 5) ? "（筆數少於 5 的分類參考價值有限）" : ""}。</p>` : ""}`;
 }
-// AI 檢討：把最近 90 天的日記與已實現結果整理成文字，請 AI 找出習慣上的問題（只根據日記內容）
+// AI 檢討：最近 20 筆已實現交易＋對應的日記（理由、當天技術面）＋賣出後 20 個交易日的走勢（看有沒有太早賣、錯過行情），
+// 請 AI 找出反覆出現的錯誤、錯過的機會、行為偏誤，最後用「【規則】」列 3 條可以立刻執行的個人規則（可以存起來，下單時提醒）
+const JRULES = () => (W.jrules ||= store.get("watch:jrules", []) || []);
+const jrSave = () => store.set("watch:jrules", JRULES());
 async function jAI() {
-  const from = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10), L = JR().filter(e => e.d >= from), { closed } = jClosed();
-  if (!L.length) return toast("最近 90 天沒有日記");
-  const txt = [`最近 90 天交易日記（${L.length} 筆）：`, ...L.slice(0, 80).map(e => `${e.d} ${e.side === "buy" ? "買" : "賣"} ${nameOf(e.code)} ${e.code} ${e.sh || ""}股 @${e.px} 分類:${(e.tags || []).join("/") || "無"} 理由:${e.reason || "無"}${e.snap ? ` 當天K${e.snap.kd[0]}/D${e.snap.kd[1]} RSI${e.snap.rsi} ${e.snap.macd} ${e.snap.ma}` : ""}`),
-    `已實現 ${closed.length} 筆：`, ...closed.filter(x => x.out >= from).slice(-60).map(x => `${x.code} ${x.in}→${x.out} 報酬 ${(x.ret * 100).toFixed(1)}% 分類:${(x.tags || []).join("/")}`)].join("\n");
+  const { closed } = jClosed(), last = closed.slice(-20); if (!last.length) return toast("還沒有已實現的交易（要有買、也有賣）");
   W.jAI = { loading: true }; renderList();
-  try { const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ context: txt, messages: [{ role: "user", content: "請只根據上面的交易日記做檢討：1) 哪一類進場理由表現最好、最差 2) 有沒有重複犯的錯（例如追高、指標過熱時買、停損太慢）3) 下個月可以調整的 3 個具體習慣。用繁體中文、條列，不要給個股買賣建議。" }] }) });
-    const j = await r.json(); W.jAI = j.ok ? { text: j.text } : { err: j.error || "AI 暫時無法回答" }; } catch (e) { W.jAI = { err: e.message }; }
+  const after = async x => { const D = await dailyFresh(x.code); if (!D?.length) return null; const i = D.findIndex(k => String(k.d).slice(0, 10) > x.out); return i < 0 ? null : D[Math.min(D.length - 1, i + 19)].c / x.sell - 1; };
+  const aft = await Promise.all(last.map(x => after(x).catch(() => null))), from = last[0].in, L = JR().filter(e => e.d >= from).slice(0, 80);
+  const txt = [`最近 ${last.length} 筆已實現交易（先進先出配對）：`, ...last.map((x, k) => `${k + 1}. ${nameOf(x.code)} ${x.code} ${x.in} 買 @${x.buy} → ${x.out} 賣 @${x.sell}，報酬 ${(x.ret * 100).toFixed(1)}%，進場分類:${(x.tags || []).join("/") || "無"}，理由:${x.reason || "無"}${aft[k] != null ? `，賣出後 20 個交易日又${aft[k] >= 0 ? "漲" : "跌"} ${(Math.abs(aft[k]) * 100).toFixed(1)}%` : ""}`),
+    `同期的日記（含當天技術面）：`, ...L.map(e => `${e.d} ${e.side === "buy" ? "買" : "賣"} ${nameOf(e.code)} ${e.code} @${e.px} 分類:${(e.tags || []).join("/") || "無"} 理由:${e.reason || "無"}${e.snap ? ` 當天K${e.snap.kd[0]}/D${e.snap.kd[1]} RSI${e.snap.rsi} ${e.snap.macd} ${e.snap.ma}` : ""}`)].join("\n");
+  try { W.jAI = { text: await aiChat(txt, "請只根據上面的交易紀錄分析：1) 反覆出現的錯誤（例如追高、指標過熱時買、停損太慢、虧損時加碼）2) 錯過的機會（賣出後又大漲、太早停利）3) 可能影響決策的行為偏誤（例如處分效應、過度自信、近因偏誤），每點都要指出是哪幾筆。最後一段用「【規則】」開頭，列出 3 條可以立刻執行、具體到數字的個人交易規則（例如「RSI 超過 75 不追買」「單筆虧損 7% 一定停損」），每條一行、用 1. 2. 3. 編號。用繁體中文，不要給個股買賣建議。") }; }
+  catch (e) { W.jAI = { err: e.message }; }
   if (W.lt === "tools") renderList();
 }
+// 從 AI 回覆抓出「【規則】」後面編號的 3 條
+const jRulesOf = t => { const m = String(t || "").split("【規則】")[1]; return m ? m.split("\n").map(x => x.replace(/^\s*(\d+[.、)）]|[-•＊*])\s*/, "").replace(/\*\*/g, "").trim()).filter(x => x.length >= 4).slice(0, 3) : []; };
+const jRulesHtml = (edit = true) => { const R = JRULES(); return R.length || edit ? `<div class="jrules"><b>我的交易規則</b>${R.length ? `<ol>${R.map((r, i) => `<li>${esc(r.t)}${edit ? ` <button class="linkbtn" data-jrdel="${i}">刪除</button>` : ""}</li>`).join("")}</ol>` : `<p class="note">還沒有規則。按「AI 檢討」產生，或自己寫一條。</p>`}${edit ? `<form class="irform" id="jrForm"><input id="jrIn" placeholder="例如：單筆虧損 7% 一定停損" style="flex:1;min-width:180px"><button class="btn sm">＋ 加規則</button></form>` : ""}</div>` : ""; };
 async function jBH() {
   for (const el of document.querySelectorAll("#lx [data-jbh]")) { const [c, a, b] = el.dataset.jbh.split("|"), D = await dailyFresh(c); if (!D?.length) continue;
     const p = d => { let x = null; for (const k of D) { if (String(k.d).slice(0, 10) <= d) x = k.c; else break; } return x; }, pa = p(a), pb = p(b); if (pa && pb && el.isConnected) { el.textContent = ((pb / pa - 1) * 100).toFixed(2) + "%"; el.className = cls(pb - pa); } }
 }
 const retPct = v => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
 function toolsClick(e) {
-  if (!toolsOn()) return; const b = e.target.closest("[data-tv],[data-tx],[data-tsel],[data-irdel],[data-paside],[data-paodel],[data-paldel],[data-jdel],[data-sy],[data-mm],[data-scadd],[data-scdel],[data-scrun],[data-rsk],[data-rsrun],[data-rsu],[data-insf],[data-insbt]" + (W.lt === "cong" ? "" : ",[data-rkset]")); if (!b) return; const d = b.dataset;
+  if (!toolsOn()) return; const b = e.target.closest("[data-tv],[data-tx],[data-tsel],[data-irdel],[data-paside],[data-paodel],[data-paldel],[data-jdel],[data-jrdel],[data-sy],[data-mm],[data-scadd],[data-scdel],[data-scrun],[data-rsk],[data-rsrun],[data-rsu],[data-mfu],[data-mfrun],[data-mfbt],[data-insf],[data-insbt]" + (W.lt === "cong" ? "" : ",[data-rkset]")); if (!b) return; const d = b.dataset;
   if (d.rkset != null) { const [k, v] = d.rkset.split(/:(.*)/s); W[k] = v; store.set("watch:" + k, v); return renderList(); }
   if (b.hasAttribute("data-scadd")) { SC().rules.push({ k: "above" }); scSave(); return renderList(); }
   if (d.scdel != null) { SC().rules.splice(+d.scdel, 1); scSave(); return renderList(); }
@@ -359,12 +414,17 @@ function toolsClick(e) {
   if (b.hasAttribute("data-insbt")) return insBtRun();
   if (d.insf) { W.insF = d.insf; W.insQ = ""; return renderList(); }
   if (b.hasAttribute("data-rsrun")) return rsRun();
+  if (d.mfu != null) { MF().uni = d.mfu; store.set("watch:mfu", d.mfu); W.mfRes = W.mfBt = null; return renderList(); }
+  if (b.hasAttribute("data-mfrun")) return mfRun();
+  if (b.hasAttribute("data-mfbt")) return mfBacktest();
   if (d.tv && W.lt === "tools") { W.tv = d.tv; renderList(); navPush(); }
   else if (d.tsel) select(d.tsel);
   else if (d.tx === "sumre") { W.sum = null; W.dk = new Map(); renderList(); }
   else if (d.tx === "sumai") sumAI();
   else if (d.tx === "irnow") irCheck(true);
   else if (d.tx === "jai") jAI();
+  else if (d.tx === "jrsave") { const L = jRulesOf(W.jAI?.text); W.jrules = [...L.map(t => ({ t, at: toolsDay() })), ...JRULES()].filter((x, i, a) => a.findIndex(y => y.t === x.t) === i).slice(0, 8); jrSave(); toast(`已存 ${L.length} 條規則，下單時會提醒`); renderList(); }
+  else if (d.jrdel != null) { JRULES().splice(+d.jrdel, 1); jrSave(); renderList(); }
   else if (d.tx === "pareset") { if (confirm("重設模擬帳戶（清除持股、掛單與紀錄，回到台幣 100 萬＋美金 3 萬）？")) { W.paper = PAPER0(); paSave(); renderList(); } }
   else if (d.tx === "jexport") { const blob = new Blob([JSON.stringify(JR(), null, 1)], { type: "application/json" }), a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `交易日記-${toolsDay()}.json`; a.click(); }
   else if (d.irdel != null) { IR().splice(+d.irdel, 1); irSave(); renderList(); }
@@ -380,11 +440,13 @@ function toolsSubmit(e) {
   if (!toolsOn()) return; const f = e.target; e.preventDefault();
   if (f.id === "irForm") { const c = $("#irCode").value.trim().toUpperCase(), cond = $("#irCond").value, C = condOf(cond); if (!isTW(c) && !isUS(c)) return toast("請輸入代號"); IR().push({ code: c, cond, p: C?.[2] && $("#irP").value !== "" ? +$("#irP").value : C?.[3] ?? null, on: true }); irSave(); irStart(); renderList(); irCheck(); try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch {} }
   else if (f.id === "jForm") { const c = $("#jCode").value.trim().toUpperCase(), px = +$("#jPx").value; if (!c || !(px > 0)) return toast("請輸入代號和價格"); jAdd({ d: $("#jD").value || toolsDay(), code: c, side: $("#jSide").value, px, sh: +$("#jSh").value || 0, reason: $("#jWhy").value.trim(), tags: [$("#jTag").value] }); }
+  else if (f.id === "jrForm") { const t = $("#jrIn").value.trim(); if (t.length < 2) return toast("請輸入規則"); JRULES().unshift({ t, at: toolsDay() }); W.jrules = JRULES().slice(0, 8); jrSave(); renderList(); }
   else if (f.id === "mForm") { const L = [...f.querySelectorAll("[data-mc]")].map(x => x.value.trim().toUpperCase()).filter(Boolean).slice(0, 4); store.set("watch:multi", L); renderList(); }
 }
 function toolsChange(e) {
   if (!toolsOn()) return; const t = e.target, d = t.dataset;
   if (d.iron != null) { IR()[+d.iron].on = t.checked; irSave(); }
+  else if (d.mfw) { MF().w[d.mfw] = +t.value; store.set("watch:mfw", MF().w); W.mfBt = null; renderList(); }
   else if (t.hasAttribute("data-syfile")) { if (t.files?.[0]) syncImport(t.files[0]); }
   else if (t.hasAttribute("data-syauto")) syncSet({ auto: t.checked });
   else if (d.scu != null) { SC().uni = t.value; scSave(); renderList(); }

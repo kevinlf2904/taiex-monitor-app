@@ -838,12 +838,13 @@ footer { max-width: 1180px; margin: 0 auto; padding: 0 16px 32px; font-size: 12.
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.18-84</span></footer>
+<footer><a href="watch.html">看盤</a>（自選股、熱門股、排行與即時報價）・課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。僅供學習技術分析之用，不構成投資建議。<span class="ver">版本 2026.10.18-85</span></footer>
 
 <script src="core.js"></script>
 <script src="analysis.js"></script>
 <script src="lessons-more.js"></script>
 <script src="lessons-pro.js"></script>
+<script src="quant.js"></script>
 <script src="labx.js"></script>
 <script>
 "use strict";
@@ -2631,7 +2632,8 @@ const STRATS = {
   ...Object.fromEntries(["mtm", "dmi", "psy", "arbr", "obv", "vr", "bias", "cci", "mfi", "trix", "srsi", "roc", "dma", "emv", "sar", "kelt", "tower", "ccw", "hlb", "r123", "b2"].map(k => [k, { name: STRAT_DEFS[k].name + "（" + STRAT_DEFS[k].desc.split("，")[0].split("；")[0] + "）", fn: (D, I) => stratRun(k, D, I) }])),
 };
 let lab = { src: "sim", seed: store.get("labSeed", 2024), D: null, I: null, strat: store.get("labStrat", "ma"), skip: new Set(), listOpen: false,
-  capital: Math.max(10000, +store.get("btCap", 1000000) || 1000000), lot: store.get("btLot", 1) === 1000 ? 1000 : 1, useBuy: store.get("btBuy", true) !== false, useSell: store.get("btSell", true) !== false };
+  capital: Math.max(10000, +store.get("btCap", 1000000) || 1000000), lot: store.get("btLot", 1) === 1000 ? 1000 : 1, useBuy: store.get("btBuy", true) !== false, useSell: store.get("btSell", true) !== false,
+  repOpen: store.get("btRep", false) === true, ai: {}, qa: {} }; // repOpen：完整績效報告展開；ai／qa：報告的「問 AI」答案與題目
 const labChart = new Chart($("#labChart"), { onHover: i => { if (!lab.D) return; $("#roDate").textContent = lab.D[i].d.replace(/-/g, "/"); renderReadout($("#labReadout"), readout(lab.D, lab.I, i)); } });
 const labUsesReal = () => lab.src === "real" && !!REAL.cur;
 function labData() {
@@ -2695,6 +2697,12 @@ function renderBT(sigs) {
     if (r.tooSmall || r.missed) html += `<p class="note" style="margin:0;color:var(--down)">${r.tooSmall ? "資金不足以買進一個單位" : `有 ${r.missed} 次買進訊號因資金不足買不起一個單位而沒有成交`}（股價 × ${lab.lot.toLocaleString()} 股），可以提高資金或改用零股。</p>`;
     if (r.trades.length) html += `<div class="tablewrap"><table class="trades"><thead><tr><th>#</th><th>買進日</th><th>買價</th><th>股數</th><th>賣出日</th><th>賣價</th><th>天數</th><th>損益</th><th>報酬</th></tr></thead><tbody>${r.trades.map((t, k) => `<tr><td>${k + 1}</td><td class="num">${lab.D[t.i].d.slice(5).replace("-", "/")}${t.start ? "†" : ""}</td><td class="num">${fmtP(t.px)}</td><td class="num">${t.sh.toLocaleString()}</td><td class="num">${lab.D[t.xi].d.slice(5).replace("-", "/")}${t.open ? "＊" : ""}</td><td class="num">${fmtP(t.xpx)}</td><td class="num">${t.xi - t.i}</td><td class="num ${cls(t.pnl)}">${t.pnl >= 0 ? "+" : ""}${Math.round(t.pnl).toLocaleString()}</td><td class="num ${cls(t.ret)}">${fmtPct(t.ret)}</td></tr>`).join("")}</tbody></table></div>`;
     else html += `<p class="note" style="margin:0">${lab.useBuy || lab.useSell ? "這段走勢沒有觸發任何交易。換一段走勢、換策略，或在下方訊號清單多勾幾個試試。" : ""}</p>`;
+    // 完整績效報告（quant.js）：展開時才算
+    if (r.trades.length) { let rep = "";
+      if (lab.repOpen) { const base = { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip, tax: taxOf(lc) }, M = btMetrics(r, lab.D), B = btBreakdown(r, lab.D), V = btVariants((s, o) => backtest(lab.D, s, { ...base, ...o }), lab.D, sigs, base), ak = "lab:" + lab.strat;
+        lab.qa[ak] = { ctx: () => `${labUsesReal() ? realName(REAL.cur) + " 的真實日 K" : "程式模擬的走勢"}（${lab.D.length} 根）的回測結果：\n` + btReportText(M, B, V, S.name), q: "請只根據上面的回測數字做風險報酬分析：1) 這個策略的優勢與弱點 2) 哪些行情會讓它失效 3) 3 項降低風險的改善方法 4) 2 種不增加風險、提高報酬的方法，盡量引用「試算」裡的數字。用繁體中文、條列，不要給買賣建議。" };
+        rep = btReportHtml(r, M, B, V, { D: lab.D, ai: { key: ak, R: lab.ai[ak] } }); }
+      html += `<details class="bt-list" id="btRepD"${lab.repOpen ? " open" : ""}><summary>完整績效報告 <span class="note">年化、夏普、回撤、不同行情的表現、改善試算</span></summary>${rep}</details>`; }
     // 訊號清單：可以一個一個勾選要不要照做
     const list = sigs.filter(x => !x.note);
     if (list.length) html += `<details class="bt-list"${lab.listOpen ? " open" : ""}><summary>訊號清單（${nBuy} 個買進、${nSell} 個賣出）— 勾選要不要照做 <span class="note">已略過 ${list.filter(x => lab.skip.has(btKey(x))).length} 個</span></summary>
@@ -2728,13 +2736,16 @@ $("#btPanel").addEventListener("change", e => {
   else return;
   labDraw();
 });
-$("#btPanel").addEventListener("click", e => {
+// 回測報告的「問 AI」：lab.qa[key] ＝ { ctx()、q }，答案存在 lab.ai
+$("#btPanel").addEventListener("click", async e => {
+  const qa = e.target.closest("[data-qai]"); if (qa) { const k = qa.dataset.qai, S = lab.qa[k]; if (!S) return; lab.ai[k] = { loading: true }; labDraw();
+    try { lab.ai[k] = { text: await aiChat(S.ctx(), S.q) }; } catch (er) { lab.ai[k] = { err: er.message }; } labDraw(); return; }
   const b = e.target.closest("[data-bt-all],[data-why]"); if (!b) return;
   if (b.dataset.why) { $("#btWhy").hidden = !$("#btWhy").hidden; return; }
   const S = STRATS[lab.strat], sigs = S.fn ? S.fn(lab.D, lab.I) : [];
   lab.skip = b.dataset.btAll === "1" ? new Set() : new Set(sigs.filter(x => !x.note).map(btKey)); lab.listOpen = true; labDraw();
 });
-$("#btPanel").addEventListener("toggle", e => { if (e.target.classList?.contains("bt-list")) lab.listOpen = e.target.open; }, true);
+$("#btPanel").addEventListener("toggle", e => { if (e.target.id === "btRepD") { if (lab.repOpen !== e.target.open) { lab.repOpen = e.target.open; store.set("btRep", lab.repOpen); if (lab.repOpen) labDraw(); } } else if (e.target.classList?.contains("bt-list")) lab.listOpen = e.target.open; }, true);
 $("#labNew").addEventListener("click", () => { lab.seed = Math.floor(Math.random() * 1e6); store.set("labSeed", lab.seed); labData(); labDraw(); });
 $("#labLen").addEventListener("change", () => { labData(); labDraw(); });
 ["maA", "maB", "maC", "boll", "sr", "zz", "smcz", "fibz", "maAn", "maBn", "maCn"].forEach(id => $("#" + id).addEventListener("change", labDraw));
@@ -3886,13 +3897,8 @@ REAL.long = new Map(); REAL.mins = new Map(); REAL.perBusy = false;
 const PER_NAME = { m: "分 K", D: "日 K", W: "週 K", M: "月 K" };
 const perName = () => (REAL.per === "m" ? `${REAL.minTf} 分 K` : PER_NAME[REAL.per]);
 const perOn = () => shot.src === "real" && REAL.per !== "D" && !!REAL.cur && (REAL.per !== "m" || !!liveCode());
-function weekKey(d) { const t = Date.parse(d + "T00:00:00Z"), w = new Date(t).getUTCDay(); return new Date(t - ((w + 6) % 7) * 864e5).toISOString().slice(0, 10); }
-function aggPer(D, per) {
-  const out = []; let k0 = null;
-  for (const x of D) { const k = per === "W" ? weekKey(x.d) : x.d.slice(0, 7), L = out[out.length - 1];
-    if (L && k === k0) { L.h = Math.max(L.h, x.h); L.l = Math.min(L.l, x.l); L.c = x.c; L.v += x.v || 0; L.d = x.d; } else { out.push({ d: x.d, o: x.o, h: x.h, l: x.l, c: x.c, v: x.v || 0 }); k0 = k; } }
-  return out; // 日期標示該週（月）最後一個交易日
-}
+// 週 K、月 K 由日 K 合成（core.js 的 agg）
+const aggPer = (D, per) => agg(D, per === "W" ? weekKey : d => d.slice(0, 7));
 function perData(R) {
   const per = shot.src === "real" ? REAL.per : "D", note = $("#perNote"); note.textContent = "";
   if (per === "D") return R.data;

@@ -143,3 +143,30 @@ body { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .cokv { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 10px 0; }
 .cokv > div { background: var(--surface-2); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
 .cokv > div > span { font-size: 12px; color: var(--muted); } .cokv > div > small { font-size: 11.5px; color: var(--muted); }
+
+/* ---------- 量化報告（quant.js 的畫面片段，K線學堂與看盤共用） ---------- */
+.qx-h { font-size: 14px; font-weight: 500; margin: 14px 0 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; } .qx-h .note { font-weight: 400; font-size: 12px; }
+.qx-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; margin: 6px 0; }
+.qx-cards > div { display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; border-radius: 10px; background: var(--surface-3); min-width: 0; }
+.qx-cards span { font-size: 12px; color: var(--muted); } .qx-cards b { font-size: 17px; font-weight: 500; font-family: var(--font-num); } .qx-cards small { font-size: 11.5px; color: var(--muted); line-height: 1.35; overflow-wrap: anywhere; }
+.qx-cards b.up { color: var(--up); } .qx-cards b.down { color: var(--down); }
+.qx-list { list-style: none; margin: 4px 0 8px; padding: 0; } .qx-list li { display: grid; grid-template-columns: 7.5em 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; line-height: 1.55; } .qx-list b { font-weight: 500; }
+@media (max-width: 480px) { .qx-list li { grid-template-columns: 1fr; gap: 2px; } }
+.qx-tbl { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 4px 0; } .qx-tbl table { border-collapse: collapse; width: 100%; font-size: 13px; } .qx-tbl th, .qx-tbl td { padding: 5px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.qx-tbl th:first-child, .qx-tbl td:first-child { text-align: left; white-space: normal; min-width: 8em; } .qx-tbl th { font-weight: 400; color: var(--muted); font-size: 12px; } .qx-tbl td small { margin-left: 2px; }
+.qx-tbl .up { color: var(--up); } .qx-tbl .down { color: var(--down); } .qx-tbl tr.qx-base td { font-weight: 500; background: var(--surface-3); } .qx-tbl tr.qx-me td { background: var(--accent-soft); }
+.qx-state { display: flex; gap: 10px; align-items: center; margin: 6px 0; } .qx-state > div:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .qx-state b { font-weight: 500; }
+.qx-badge { flex: none; width: 54px; height: 54px; border-radius: 14px; display: grid; place-items: center; font-size: 16px; font-weight: 500; background: var(--surface-3); }
+.qx-badge.up { background: var(--up); color: #fff; } .qx-badge.down { background: var(--down); color: #fff; }
+.qx-adv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; } .qx-adv h5 { margin: 0 0 4px; font-size: 13px; font-weight: 500; } .qx-adv ul { margin: 0; padding-left: 1.2em; font-size: 13.5px; line-height: 1.6; }
+@media (max-width: 560px) { .qx-adv { grid-template-columns: 1fr; } }
+.qx-size { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13.5px; margin: 6px 0; } .qx-size label { display: inline-flex; gap: 4px; align-items: center; } .qx-size input { width: 110px; } .qx-size b { font-weight: 500; font-family: var(--font-num); }
+.qx-ai { margin: 10px 0; } .qx-aitxt { padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); line-height: 1.7; font-size: 14px; overflow-wrap: anywhere; }
+.qx-bar { display: grid; grid-template-columns: 3.2em 1fr 2.4em; gap: 6px; align-items: center; font-size: 12px; } .qx-bar i { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; } .qx-bar i b { display: block; height: 100%; background: var(--accent); }
+.qx-heat td.c { font-family: var(--font-num); text-align: center; color: var(--ink); }
+.qx-w { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 14px; margin: 6px 0; } .qx-w label { display: grid; grid-template-columns: 3.5em 1fr 2.4em; gap: 6px; align-items: center; font-size: 13px; } .qx-w input { width: 100%; }
+.jrules { padding: 8px 12px; border-radius: 10px; background: var(--surface-3); margin: 8px 0; font-size: 13.5px; } .jrules > b { font-weight: 500; } .jrules ol { margin: 4px 0; padding-left: 1.3em; line-height: 1.7; }
+.newsai:empty { display: none; } .newsai .qx-ai { margin: 4px 14px 8px; }
+.qx-list.tight li { grid-template-columns: 2.6em 1fr; } @media (max-width: 480px) { .qx-list.tight li { grid-template-columns: 2.6em 1fr; gap: 6px; } }
+.qx-sep { height: 1px; background: var(--line); margin: 14px 0 6px; }
+.hrisk { padding: 4px 14px 14px; }
