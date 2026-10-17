@@ -12,13 +12,9 @@ async function raw(url, n = 600) {
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
 if (process.argv[2] === "ext") {
-  // ETF 成分股、基本資料：MoneyDJ 的表格結構（去掉標籤屬性後印出相關片段）
-  const strip = t => t.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<(\w+)[^>]*>/g, "<$1>").replace(/\s+/g, " ");
-  const frag = (t, key, a = 300, b = 2500) => { if (!t) return; const x = strip(t), i = x.indexOf(key); console.log(`--- 片段「${key}」@${i}\n` + (i < 0 ? x.slice(0, 600) : x.slice(Math.max(0, i - a), i + b))); };
-  const ths = t => [...new Set([...strip(t || "").matchAll(/<th>([^<]{1,30})/g)].map(m => m[1].trim()))].join("|");
-  for (const [id, key] of [["0050.TW", "台積電"], ["SPY", "NVIDIA"]]) for (const pg of ["Basic0007", "Basic0007a", "Basic0007b", "Basic0007B"]) {
-    const h = await raw(`https://www.moneydj.com/ETF/X/Basic/${pg}.xdjhtm?etfid=${id}`, 0); console.log("表頭：", ths(h)); frag(h, key, 1500, 1500);
-  }
+  // 美股中文名稱搜尋、世界總經（FRED）候選
+  for (const q of ["輝達", "太空探索科技", "英特爾", "space exploration", "SPCX"]) { await raw(`https://tw.stock.yahoo.com/_td-stock/api/resource/AutocompleteService;query=${encodeURIComponent(q)}`, 700); await raw(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5&newsCount=0`, 500); }
+  for (const id of ["ECBDFR", "IRSTCB01JPM156N", "IRSTCB01GBM156N", "IRLTLT01DEM156N", "IRLTLT01JPM156N", "CP0000EZ19M086NEST", "CPALTT01CNM659N", "JPNCPIALLMINMEI", "LRHUTTTTEZM156S", "DEXJPUS", "DEXCHUS", "DCOILBRENTEU", "PCOPPUSDM", "GEPUCURRENT", "CLVMNACSCAB1GQEA19", "CHNGDPRQPSMEI", "XTEXVA01CNM664S", "BSCICP03CNM665S", "TWNCPIALLMINMEI"]) await raw(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=2025-06-01`, 160);
   process.exit(0);
 }
 for (let i = 0; i < N; i++) {

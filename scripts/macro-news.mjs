@@ -13,6 +13,7 @@ const KEEP = 30, PER = 14;
 export const QUERIES = {
   tw: ["台股 總經", "央行 利率 台灣", "台灣 外銷訂單 出口", "景氣燈號", "台灣 CPI 通膨", "新台幣 匯率", "台灣 GDP 經濟成長", "主計總處"],
   us: ["聯準會 Fed 利率", "美國 CPI 通膨", "美國 非農 就業", "美債 殖利率", "美國 GDP", "FOMC 鮑爾", "美國 零售銷售 PMI", "美元指數"],
+  world: ["歐洲央行 利率", "日本央行 日圓 升息", "中國 經濟 數據 GDP", "中國 人行 降息", "全球 經濟 IMF", "OPEC 原油", "歐元區 通膨", "日經 日本 經濟"],
 };
 export const TOPICS = [
   ["利率", /利率|升息|降息|央行|聯準會|Fed|FOMC|鮑爾|理監事|貨幣政策|點陣圖/i],
@@ -22,6 +23,7 @@ export const TOPICS = [
   ["貿易", /出口|進口|外銷訂單|關稅|貿易|順差|逆差/],
   ["匯率", /新台幣|匯率|美元|日圓|人民幣|升值|貶值|DXY/i],
   ["債市", /殖利率|公債|美債|債券|國債/],
+  ["原物料", /原油|OPEC|油價|銅價|黃金|天然氣|鐵礦/],
 ];
 export const topicOf = t => (TOPICS.find(([, re]) => re.test(t)) || ["市場"])[0];
 // 只留最近 hours 小時內、跟總經有關的標題；同一則新聞在不同關鍵字重複出現只留一次（去掉括號備註與標點後，前 14 個字一樣就算重複）
@@ -35,23 +37,27 @@ export function pick(lists, now = Date.now(), hours = 36, per = PER) {
   }
   return out.slice(0, per);
 }
-const PROMPT = (tw, us) => `你是財經編輯。下面是最近一天台灣與美國的總經新聞標題（只有標題、來源與時間）。請只根據標題整理，不要編造數字或標題沒提到的事。
+const PROMPT = (tw, us, world = []) => `你是財經編輯。下面是最近一天台灣、美國與世界（歐、日、中國、原物料）的總經新聞標題（只有標題、來源與時間）。請只根據標題整理，不要編造數字或標題沒提到的事。
 用繁體中文、台灣用語，輸出 JSON：
 {"tw":{"head":"一句話總結今天台灣總經重點（30 字內）","points":["3～5 條重點，每條 40 字內"],"impact":"對台股可能的影響（60 字內，用『可能』『留意』等保守語氣）"},
- "us":{"head":"...","points":["..."],"impact":"對美股（以及台股）可能的影響"}}
+ "us":{"head":"...","points":["..."],"impact":"對美股（以及台股）可能的影響"},
+ "world":{"head":"...","points":["..."],"impact":"對全球股市與台股可能的影響（例如日圓、人民幣、油價、出口需求）"}}
 某一邊沒有新聞時，那一邊的 points 給空陣列、head 寫「今天沒有重要總經消息」。
 
 【台灣】
 ${tw.map(x => `- ${x.title}（${x.source}）`).join("\n") || "（沒有）"}
 
 【美國】
-${us.map(x => `- ${x.title}（${x.source}）`).join("\n") || "（沒有）"}`;
+${us.map(x => `- ${x.title}（${x.source}）`).join("\n") || "（沒有）"}
+
+【世界】
+${world.map(x => `- ${x.title}（${x.source}）`).join("\n") || "（沒有）"}`;
 export function parseSum(text) {
   const m = String(text || "").match(/\{[\s\S]*\}/); if (!m) return null;
-  try { const j = JSON.parse(m[0]); const ok = s => s && typeof s.head === "string" ? { head: s.head.slice(0, 80), points: (Array.isArray(s.points) ? s.points : []).filter(x => typeof x === "string").slice(0, 6).map(x => x.slice(0, 120)), impact: typeof s.impact === "string" ? s.impact.slice(0, 160) : "" } : null; return { tw: ok(j.tw), us: ok(j.us) }; } catch { return null; }
+  try { const j = JSON.parse(m[0]); const ok = s => s && typeof s.head === "string" ? { head: s.head.slice(0, 80), points: (Array.isArray(s.points) ? s.points : []).filter(x => typeof x === "string").slice(0, 6).map(x => x.slice(0, 120)), impact: typeof s.impact === "string" ? s.impact.slice(0, 160) : "" } : null; return { tw: ok(j.tw), us: ok(j.us), world: ok(j.world) }; } catch { return null; }
 }
-async function summarize(tw, us) {
-  const prompt = PROMPT(tw, us);
+async function summarize(tw, us, world) {
+  const prompt = PROMPT(tw, us, world);
   if (KEY) { const r = await geminiJSON([{ text: prompt }], KEY, Date.now() + 60000); return { ...parseSum(r.text), by: r.model }; }
   const r = await fetch(SITE + "/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: prompt + "\n\n只輸出 JSON。" }] }), signal: AbortSignal.timeout(70000) });
   const j = await r.json().catch(() => null); if (!j?.ok) throw new Error(j?.error || `網站回應 ${r.status}`);
@@ -64,16 +70,16 @@ async function rss(q) {
 // 同一天跑第二次：新標題併進來（舊的保留），摘要換成新的
 export function merge(old, day) {
   const days = (old?.days || []).filter(d => d.date !== day.date), prev = (old?.days || []).find(d => d.date === day.date);
-  if (prev) for (const m of ["tw", "us"]) { const have = new Set(day[m].items.map(x => x.title)); day[m].items = [...day[m].items, ...prev[m].items.filter(x => !have.has(x.title))].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, PER + 6); if (!day[m].sum && prev[m].sum) day[m].sum = prev[m].sum; }
+  if (prev) for (const m of ["tw", "us", "world"]) { if (!day[m] || !prev[m]) continue; const have = new Set(day[m].items.map(x => x.title)); day[m].items = [...day[m].items, ...prev[m].items.filter(x => !have.has(x.title))].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, PER + 6); if (!day[m].sum && prev[m].sum) day[m].sum = prev[m].sum; }
   return { updated: day.at, days: [day, ...days].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, KEEP) };
 }
 export async function main() {
-  const now = Date.now(), date = new Date(now + 8 * 3600e3).toISOString().slice(0, 10), got = { tw: [], us: [] }, errs = [];
-  for (const m of ["tw", "us"]) for (const q of QUERIES[m]) { try { got[m].push(await rss(q)); } catch (e) { errs.push(`${q}：${e.message}`); } await new Promise(r => setTimeout(r, 400)); }
-  const tw = pick(got.tw, now), us = pick(got.us, now);
-  if (!tw.length && !us.length) { console.log("::warning::沒有抓到任何總經新聞，保留原本的資料；" + errs.slice(0, 3).join("；")); return; }
-  let sum = null; try { sum = await summarize(tw, us); } catch (e) { console.log("::warning::AI 摘要失敗，只放標題：" + e.message); }
-  const day = { date, at: now, by: sum?.by || null, tw: { sum: sum?.tw || null, items: tw }, us: { sum: sum?.us || null, items: us } };
+  const now = Date.now(), date = new Date(now + 8 * 3600e3).toISOString().slice(0, 10), got = { tw: [], us: [], world: [] }, errs = [];
+  for (const m of ["tw", "us", "world"]) for (const q of QUERIES[m]) { try { got[m].push(await rss(q)); } catch (e) { errs.push(`${q}：${e.message}`); } await new Promise(r => setTimeout(r, 400)); }
+  const tw = pick(got.tw, now), us = pick(got.us, now), world = pick(got.world, now);
+  if (!tw.length && !us.length && !world.length) { console.log("::warning::沒有抓到任何總經新聞，保留原本的資料；" + errs.slice(0, 3).join("；")); return; }
+  let sum = null; try { sum = await summarize(tw, us, world); } catch (e) { console.log("::warning::AI 摘要失敗，只放標題：" + e.message); }
+  const day = { date, at: now, by: sum?.by || null, tw: { sum: sum?.tw || null, items: tw }, us: { sum: sum?.us || null, items: us }, world: { sum: sum?.world || null, items: world } };
   const old = await readFile(OUT, "utf8").then(JSON.parse).catch(() => null);
   await writeFile(OUT, JSON.stringify(merge(old, day)));
   console.log("完成", date, "台灣", tw.length, "則、美國", us.length, "則", sum ? "，有 AI 摘要" : "", errs.length ? "；失敗：" + errs.join("；") : "");

@@ -382,15 +382,15 @@ Object.assign(SX, {
     return `<div class="tw-p">${rkPerson(rkMono(W.sel, "#3d7be0", true), esc(nm), `${esc([I.kind, I.region, I.lev].filter(Boolean).join("・"))}${I.listed ? `　上市 ${I.listed.replace(/-/g, "/")}` : ""}`)}
       <p class="tw-lead">${lead}</p>${rkCards(cards)}
       ${ind.length ? `${sxH("持股產業分布", E.ind.date ? `資料日期 ${E.ind.date.replace(/-/g, "/")}` : "")}<ul class="etf-ind">${ind.slice(0, 12).map((x, i) => `<li><span>${esc(x.name)}</span><i style="width:${Math.max(1, x.pct)}%;background:${TWO_PAL[i % TWO_PAL.length]}"></i><b>${x.pct}%</b></li>`).join("")}</ul>` : ""}
-      ${I.strategy ? `${sxH("投資策略")}<p class="sxsay">${esc(I.strategy)}</p>` : ""}
-      ${sxH("完整資料")}<table class="tbl sxinfo"><tbody>${(I.kv || []).filter(([k]) => k !== "投資策略").map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>
+      ${I.strategy ? `<details class="tw-more" open><summary>投資策略</summary><p class="sxsay">${esc(I.strategy)}</p></details>` : ""}
+      <details class="tw-more"><summary>完整資料（${(I.kv || []).length} 項）</summary><table class="tbl sxinfo"><tbody>${(I.kv || []).filter(([k]) => k !== "投資策略").map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table></details>
       <p class="note">資料：<a href="${esc(E.link)}" target="_blank" rel="noopener">${esc(E.source)}</a>（每天更新，規模、殖利率、折溢價以括號內日期為準）。</p></div>`;
   },
   etfhold: () => {
     const w = etfWait(); if (w) return w; const E = W.etf, H = E.hold || { rows: [] }; if (!H.rows.length) return `<p class="note sxwait">MoneyDJ 沒有這檔 ETF 的持股明細。</p>`;
-    const top = H.rows.slice().sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0)), n10 = top.slice(0, 10).reduce((a, r) => a + (r.pct || 0), 0), shown = W.etfMore ? top : top.slice(0, 10), rest = top.slice(10);
-    return `<div class="tw-p">${rkTotal(`成分股（資料日期 ${(H.date || "—").replace(/-/g, "/")}）`, `${top.length} 檔`, `前十大合計 ${n10.toFixed(1)}%${top[0] ? `・最大 ${esc(top[0].name)} ${top[0].pct}%` : ""}`)}
-      ${rkTop(shown.map(r => ({ label: etfName(r), pct: r.pct, val: `${r.pct}%`, right: etfSh(r.sh) })).map(x => ({ ...x, pct: null })), rest.length ? `<li class="tw-rest"><div><b>${W.etfMore ? "收合" : `其他 ${rest.length} 檔`}</b>${W.etfMore ? "" : `<small class="note">合計 ${rest.reduce((a, r) => a + (r.pct || 0), 0).toFixed(1)}%</small>`}</div><button type="button" class="linkbtn" data-etfmore="1">${W.etfMore ? "收合" : "展開"}</button></li>` : "")}
+    const top = H.rows.slice().sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0)), n10 = top.slice(0, 10).reduce((a, r) => a + Math.max(0, r.pct || 0), 0), shown = W.etfMore ? top : top.slice(0, 10), rest = top.slice(10);
+    return `<div class="tw-p">${rkTotal(`成分股（資料日期 ${(H.date || "—").replace(/-/g, "/")}）`, `${top.length} 檔`, `前十大合計 ${Math.min(100, n10).toFixed(1)}%${top[0] ? `・最大 ${esc(top[0].name.length > 18 ? top[0].name.slice(0, 18) + "…" : top[0].name)} ${top[0].pct}%` : ""}`)}
+      ${rkTop(shown.map(r => ({ label: etfName(r), pct: r.pct, val: `${r.pct}%`, right: etfSh(r.sh) })).map(x => ({ ...x, pct: null })), rest.length ? `<li class="tw-rest"><div><b>${W.etfMore ? "收合" : `其他 ${rest.length} 檔`}</b>${W.etfMore ? "" : `<small class="note">合計 ${rest.reduce((a, r) => a + Math.max(0, r.pct || 0), 0).toFixed(1)}%</small>`}</div><button type="button" class="linkbtn" data-etfmore="1">${W.etfMore ? "收合" : "展開"}</button></li>` : "")}
       <p class="note">比例是占 ETF 淨資產；點名稱可以看那檔股票。持股每天會隨申購、買回變動，資料來源：${esc(E.source)}。</p></div>`;
   },
   etfchg: () => {
@@ -406,5 +406,6 @@ Object.assign(SX, {
   },
 });
 { const css = document.createElement("style"); css.textContent = `.etf-ind { list-style: none; margin: 0; padding: 0; } .etf-ind li { display: grid; grid-template-columns: 7.5em 1fr 4em; gap: 8px; align-items: center; padding: 4px 0; font-size: 13.5px; } .etf-ind i { display: block; height: 10px; border-radius: 2px; } .etf-ind b { text-align: right; font: 500 13px var(--font-num); }
+.tw-top li > div > b { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
 .etf-ev h5 { margin: 10px 0 0; font-size: 14px; display: flex; gap: 8px; align-items: baseline; } .etf-ev h5 .note { font-weight: 400; font-size: 12px; }`; document.head.appendChild(css);
   document.addEventListener("click", e => { const b = e.target.closest("#sxBox [data-etfmore]"); if (b) { W.etfMore = !W.etfMore; sxRender(); } }); }
