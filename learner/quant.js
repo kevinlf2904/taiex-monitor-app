@@ -255,7 +255,7 @@ function btReportHtml(bt, M, B, V, opt = {}) {
       <ul class="qx-list"><li><b>降低風險</b><span>${A.risk.length ? A.risk.map(x => `${qEsc(x.name)}：回撤 ${(b.mdd * 100).toFixed(1)}% → ${(x.m.mdd * 100).toFixed(1)}%`).join("；") : "試算的做法都沒有在不犧牲太多報酬下降低回撤。"}</span></li>
       <li><b>提高報酬（不增加回撤）</b><span>${A.ret.length ? A.ret.map(x => `${qEsc(x.name)}：報酬 ${qP(b.total)} → ${qP(x.m.total)}`).join("；") : "沒有找到不增加回撤又能提高報酬的做法。"}</span></li></ul>`; }
   if (opt.ai) h += qAiBlock(opt.ai, "🤖 AI 解讀這份回測");
-  return h + (typeof discHtml === "function" ? discHtml() : "");
+  return h;
 }
 // AI 區塊：{ key, R }；R＝undefined（還沒問）、{ loading }、{ err }、{ text }
 function qAiBlock({ key, R }, label = "🤖 問 AI") {

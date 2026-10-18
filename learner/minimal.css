@@ -353,3 +353,15 @@ svg circle[stroke-width] { stroke-width: 1.2px; }
 /* 新 Logo 在頂列放大一點（原本 26px 太小看不清楚） */
 :is(:root[data-style="layout"], :root[data-style="lab"]) .top .seal.logo { width: 36px; height: 36px; border-radius: 9px; }
 @media (max-width: 640px) { :is(:root[data-style="layout"], :root[data-style="lab"]) .top .seal.logo { width: 30px; height: 30px; } }
+/* 按鍵維持無框：PRO 徽章、首頁介紹的按鈕、K 線副圖訊號開關、搜尋加入鈕都用底色區分，不畫外框 */
+.bl-pro, .hero-btn, .hero-x, .sigbar button, .gsadd { border: 0 !important; }
+.bl-pro { background: var(--surface-2); }
+.hero-btn:not(.pri), .hero-x { background: var(--surface-2); }
+.sigbar button { background: var(--surface-2); } .sigbar button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); }
+/* 手機：品牌字樣不要被擠掉（窄螢幕先藏副標與 PRO 徽章）；捲動時頂列不用模糊效果（iOS 捲動比較順） */
+.brand h1.bl-t { overflow: visible !important; text-overflow: clip !important; flex: none; }
+@media (max-width: 480px) { .top .brand .bl-t small, .top .brand > .bl-pro { display: none; } .top .brand p { display: none; } }
+@media (max-width: 900px) {
+  .w-top, .top, .ltabs, .dtabs, :is(:root[data-style="layout"], :root[data-style="lab"]) .w-top, :is(:root[data-style="layout"], :root[data-style="lab"]) .top, :is(:root[data-style="layout"], :root[data-style="lab"]) .ltabs, :is(:root[data-style="layout"], :root[data-style="lab"]) .dtabs { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: var(--bg) !important; }
+  .wl { overflow: visible; overscroll-behavior: auto; }
+}
