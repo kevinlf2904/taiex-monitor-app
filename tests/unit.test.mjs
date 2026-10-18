@@ -232,3 +232,17 @@ test("台指期 1 分 K 存檔：依盤別分組（夜盤跨午夜算同一盤�
   assert.deepEqual(S.map(x => [x.k, x.n, x.first, x.last]), [["2026-10-16-day", 2, "2026-10-16 08:45", "2026-10-16 13:44"], ["2026-10-16-night", 2, "2026-10-16 15:00", "2026-10-17 04:59"]]);
   assert.deepEqual(S[1].bars[1], ["04:59", 1, 2, 0, 1, 3, "2026-10-17"]);
 });
+
+test("FRED 官方介面、Finnhub：回應解析與金鑰不外洩", async () => {
+  const { parseObs } = await import("../api/_lib/macro.js"), { quoteFromFinnhub, newsFromFinnhub, finnhubOk } = await import("../api/_lib/_finnhub.js");
+  assert.deepEqual(parseObs({ observations: [{ date: "2026-10-14", value: "4.05" }, { date: "2026-10-15", value: "." }, { date: "bad", value: "1" }, { date: "2026-10-16", value: "4.1" }] }), [["2026-10-14", 4.05], ["2026-10-16", 4.1]]);
+  assert.deepEqual(parseObs(null), []);
+  const q = quoteFromFinnhub("AAPL", { c: 230.5, pc: 228, o: 229, h: 231, l: 228.5, t: 1760630400 });
+  assert.deepEqual([q.code, q.price, q.prev, q.chg, q.chgPct, q.us, q.src], ["AAPL", 230.5, 228, 2.5, 1.1, true, "Finnhub"]);
+  assert.equal(quoteFromFinnhub("ZZZ", { c: 0, pc: 0 }), null, "沒有成交（全 0）不當成報價");
+  const N = newsFromFinnhub([{ headline: "A", source: "x", url: "https://a.com", datetime: 100 }, { headline: "A", source: "x", url: "https://b.com", datetime: 200 }, { headline: "B", url: "ftp://c", datetime: 300 }, { headline: "C", source: "y", url: "https://c.com", datetime: 300 }]);
+  assert.deepEqual(N.map(x => x.title), ["C", "A"]); assert.equal(N[1].at, 100000);
+  assert.ok(finnhubOk("BRK.B") && finnhubOk("NVDA") && !finnhubOk("^GSPC") && !finnhubOk("2330") && !finnhubOk("DX-Y.NYB"));
+  const { envReport } = await import("../api/_lib/status.js"), R = envReport({ FRED_API_KEY: "abc", FINNHUB_API_KEY: " ", FUGLE_API_KEY: "k" });
+  assert.deepEqual([R.set.FRED_API_KEY, R.set.FINNHUB_API_KEY, R.set.FUGLE_API_KEY], [true, false, true]); assert.ok(!JSON.stringify(R).includes("abc"), "狀態不回傳金鑰");
+});

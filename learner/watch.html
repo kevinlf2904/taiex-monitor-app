@@ -845,7 +845,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.18-93</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.19-94</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2502,10 +2502,11 @@ async function showStatus() {
   openSheet(`<h3>資料來源狀態</h3><p class="note">檢查中…</p>`, false);
   let j; try { const r = await fetch("/api/status"); j = r.ok ? await r.json() : null; if (!j) throw new Error(r.status === 404 ? "這個環境沒有資料服務（要部署到 Vercel 才有）" : `服務回應 ${r.status}`); }
   catch (e) { $("#sheetExtra").innerHTML = `<h3>資料來源狀態</h3><p class="note err">⚠ ${esc(e.message)}</p>`; return; }
-  const row = (name, key, use, opt) => { const on = j.set[key], extra = key === "FUGLE_API_KEY" && on && j.fugle ? (j.fugle.ok ? "・連線正常" : `・${esc(j.fugle.hint || "連線失敗")}`) : "";
-    return `<li class="${on ? (key === "FUGLE_API_KEY" && j.fugle && !j.fugle.ok ? "warn" : "ok") : opt ? "" : "bad"}"><b>${on ? "✅" : opt ? "➖" : "❌"} ${name}</b><span>${key}：${on ? "已讀到" + extra : opt ? "沒有設定（選用）" : "伺服器讀不到"}</span><small>${use}</small></li>`; };
+  const PING = { FUGLE_API_KEY: "fugle", FRED_API_KEY: "fred", FINNHUB_API_KEY: "finnhub" }; // 有連線測試的金鑰
+  const row = (name, key, use, opt) => { const on = j.set[key], pg = j[PING[key]], extra = PING[key] && on && pg ? (pg.ok ? "・連線正常" : `・${esc(pg.hint || "連線失敗")}`) : "";
+    return `<li class="${on ? (PING[key] && pg && !pg.ok ? "warn" : "ok") : opt ? "" : "bad"}"><b>${on ? "✅" : opt ? "➖" : "❌"} ${name}</b><span>${key}：${on ? "已讀到" + extra : opt ? "沒有設定（選用）" : "伺服器讀不到"}</span><small>${use}</small></li>`; };
   const missing = !j.set.FUGLE_API_KEY || !j.set.GEMINI_API_KEY;
-  $("#sheetExtra").innerHTML = `<h3>資料來源狀態</h3><ul class="stlist">${row("富果行情", "FUGLE_API_KEY", "盤中個股報價、分 K、逐筆明細、大戶散戶、資金分佈、台指期分時", false)}${row("Gemini", "GEMINI_API_KEY", "問助教、截圖讀圖、庫存截圖匯入", false)}${row("FinMind", "FINMIND_TOKEN", "籌碼與基本面（沒有也能用，有的話次數上限比較高）", true)}${row("Claude", "ANTHROPIC_API_KEY", "Gemini 忙線時的備援", true)}</ul>
+  $("#sheetExtra").innerHTML = `<h3>資料來源狀態</h3><ul class="stlist">${row("富果行情", "FUGLE_API_KEY", "盤中個股報價、分 K、逐筆明細、大戶散戶、資金分佈、台指期分時", false)}${row("Gemini", "GEMINI_API_KEY", "問助教、截圖讀圖、庫存截圖匯入", false)}${row("FinMind", "FINMIND_TOKEN", "籌碼與基本面（沒有也能用，有的話次數上限比較高）", true)}${row("Claude", "ANTHROPIC_API_KEY", "Gemini 忙線時的備援", true)}${row("FRED 總經", "FRED_API_KEY", "總經數據改走官方介面（沒有也能用公開 CSV）", true)}${row("Finnhub 美股", "FINNHUB_API_KEY", "Yahoo 拿不到美股報價時的備援、美股公司新聞", true)}</ul>
     ${j.similar?.length ? `<p class="note err">⚠ 找到名稱相近但不完全一樣的變數：${j.similar.map(esc).join("、")}。名稱必須完全一樣（全大寫、底線）。</p>` : ""}
     ${missing ? `<div class="howto"><b>讀不到金鑰時這樣修：</b><ol><li>Vercel → 專案 kline-school → Settings → Environment Variables。</li><li>確認名稱完全是 <code>FUGLE_API_KEY</code>（或 <code>GEMINI_API_KEY</code>），Environments 要勾 <b>Production</b>（也可以一起勾 Preview）。</li><li>環境變數只對「之後的部署」生效：到 Deployments → 最新一筆 → ⋯ → <b>Redeploy</b>。</li><li>部署完成後回來按一次這個檢查。</li></ol></div>` : `<p class="note">金鑰都讀到了。如果功能還是不正常，可能是對方服務暫時忙碌或超過免費方案的次數上限。</p>`}
     <p class="note">目前環境：${esc(j.vercelEnv || "未知")}（Production＝正式網址）</p>`;

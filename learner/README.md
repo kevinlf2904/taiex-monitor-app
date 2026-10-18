@@ -340,6 +340,14 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
+### 接上 FRED、Finnhub 免費金鑰（2026.10.19-94）
+
+- FRED：設定 `FRED_API_KEY`（Vercel 與 GitHub secrets）後，總經數據改走官方介面 `api.stlouisfed.org`（不會被雲端主機擋）；沒有金鑰或單一數列失敗時自動改用公開 CSV。`/api/macro`、`macro.json` 多一個 `via` 欄位標示每次用了哪種來源。
+- Finnhub：設定 `FINNHUB_API_KEY`（Vercel）後，Yahoo 拿不到的美股個股報價改問 Finnhub（`/api/quote` 的 `source` 會標示），美股個股新聞多合併 Finnhub 的公司新聞；Google 新聞失敗時也能靠它。指數、期貨、匯率不支援，仍然用 Yahoo。金鑰放在請求標頭，不會出現在網址或錯誤訊息。
+- 「資料來源狀態」（`?debug=1`）多了 FRED、Finnhub 兩列，並用最小的一次請求測試金鑰有沒有生效。
+- `probe-live.yml` 的 `keys` 模式：檢查 GitHub secrets（FRED、富果、FinMind）有沒有設定、能不能用，並試探富果的期貨歷史分 K；只印狀態碼與用量，不印金鑰。
+- `macro.yml` 排程帶入 `FRED_API_KEY`。
+
 ### 台指期分 K 可以往前看、籌碼分佈獨立一欄（2026.10.18-93）
 
 - 台指期分 K 往左拉讀不到更早：期交所只給目前這一盤的 1 分 K。新增排程 `fut-1m.yml`（`scripts/fut-1m.mjs`），日盤收盤後（台北 14:05）與夜盤收盤後（05:20）把這一盤的 1 分 K 存到 `learner/data/fut1m/TXF/`（留最近 120 盤）；看盤往左拉時每次多讀兩盤，1／5／15／60 分 K 都接得起來。歷史從排程開始執行那天起累積。

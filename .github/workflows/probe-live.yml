@@ -23,3 +23,7 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/probe-live.mjs ${{ github.event.inputs.n || 12 }} ${{ github.event.inputs.gap || 10 }}
+        env: # 只有 keys 模式會用到；只回報「有沒有設定、能不能用」，不印金鑰
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
