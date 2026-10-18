@@ -1,5 +1,6 @@
 // 盤中分 K：給 learner/ 個股判讀的「盤中分 K」使用。
-// GET /api/intraday?code=2330&tf=5    tf = 1、5、15、30、60（分鐘）；code 可以是 t00（加權指數）
+// GET /api/intraday?code=2330&tf=5    tf = 1、5、15、30、60（分鐘）；code 可以是 t00（加權指數）、o00（櫃買指數）
+// GET /api/intraday?code=t00&spark=1  只回當天每分鐘收盤 spark: [["09:00", 價], …]（大盤卡片的走勢線用，資料量小）
 // 有設定 FUGLE_API_KEY 時用富果 intraday/candles（1 分 K），否則改用 Yahoo Finance 1 分 K（可能有延遲）。
 // GET /api/intraday?code=2330&tf=5&before=2026-10-01   往前載入那一天以前的分 K（Yahoo；1 分 K 約一個月內、5／15／30 分約兩個月、60 分約兩年）
 // 美股（英文代號）一律用 Yahoo，時間是美東當地時間，量的單位是千股。
@@ -7,8 +8,8 @@
 
 import { isUS, usName, yahooBars, INTRADAY_LIMIT } from "./_yahoo.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
-const INDEX = { T00: { fugle: "IX0001", yahoo: "^TWII", name: "加權指數" } };
-const ALIAS = { TAIEX: "T00", "加權": "T00", "加權指數": "T00", "大盤": "T00", TWII: "T00" };
+const INDEX = { T00: { fugle: "IX0001", yahoo: "^TWII", name: "加權指數" }, O00: { fugle: "IX0043", yahoo: "^TWOII", name: "櫃買指數" } };
+const ALIAS = { TAIEX: "T00", "加權": "T00", "加權指數": "T00", "大盤": "T00", TWII: "T00", "櫃買": "O00", "櫃買指數": "O00", TWOII: "O00" };
 export const TFS = [1, 5, 15, 30, 60];
 const num = v => (v == null || v === "" ? null : Number.isFinite(+v) ? +v : null);
 
@@ -126,6 +127,7 @@ export default async function handler(req, res) {
       const p = await run();
       if (p) {
         res.setHeader("Cache-Control", "s-maxage=20, stale-while-revalidate=60");
+        if (req.query?.spark) return res.status(200).json({ ok: true, code, source: p.source, date: p.date, prev: p.prev ?? null, spark: p.bars.map(b => [b.t, b.c]), session: { open: "09:00", close: "13:30" } });
         return res.status(200).json({ ok: true, code, name: p.name || INDEX[code]?.name || "", source: p.source, date: p.date, tf, prev: p.prev ?? null, bars: aggregate(p.bars.map(b => ({ d: p.date, ...b })), tf), unit: "張", session: { open: "09:00", close: "13:30" } });
       }
       errors.push(`${name}: 沒有資料`);

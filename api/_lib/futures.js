@@ -1,6 +1,7 @@
 // 台指期近月（近全：夜盤＋日盤）：給 learner/watch.html 的「台指期」使用。
 // GET /api/futures            → 報價（日盤、夜盤各一份，current 是正在交易或最近的一盤）＋ 1 分 K（夜盤 15:00–05:00、日盤 08:45–13:45）
 // GET /api/futures?bars=0     → 只要報價（清單輪詢用，比較省）
+// GET /api/futures?bars=spark → 報價＋目前這一盤每分鐘收盤 spark: [["08:45", 價], …]（大盤卡片的走勢線用）
 // 近月合約：每月第三個星期三結算，結算日 13:30 以後改看下個月。代號 TXF＋月份字母（A＝1 月…L＝12 月）＋年份個位數，例如 2026 年 10 月 → TXFJ6。
 // 有 FUGLE_API_KEY 時用富果期貨 API（含 1 分 K）；沒有或失敗時用期交所行情網站（只有報價）。
 
@@ -173,7 +174,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, code: cid, name: `${fname}近全`, source: r.source, data: r.data.map(({ contract, ...x }) => x) }); }
     catch (e) { if (before && /沒有資料/.test(e.message)) return res.status(200).json({ ok: true, code: cid, data: [], end: true }); return res.status(200).json({ ok: false, error: `拿不到${fname}日 K（${e.message}）` }); }
   }
-  const nm = nearMonth(Date.now(), cid), sess = sessionOf(), withBars = String(req.query?.bars ?? "1") !== "0", key = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
+  const nm = nearMonth(Date.now(), cid), sess = sessionOf(), withBars = String(req.query?.bars ?? "1") !== "0", sparkOnly = req.query?.bars === "spark", key = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
   let r = null;
   if (key) { try { r = await fromFugle(nm.code, key, withBars); } catch (e) { errors.push(`富果：${e.message}`); } }
   if (!r || (withBars && !r.bars.length)) { try { const t = await fromTaifex(nm.code, cid, withBars); r = r ? { ...r, bars: t.bars.length ? t.bars : r.bars } : t; } catch (e) { errors.push(`期交所：${e.message}`); } }
@@ -182,5 +183,5 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", `s-maxage=${sess === "closed" ? 60 : withBars ? 5 : 1}, stale-while-revalidate=${sess === "closed" ? 30 : 2}`);
   return res.status(200).json({ ok: true, code: cid, name: `${fname} ${nm.month} 月`, symbol: nm.code, settle: nm.settle, session: sess, source: r.source,
     quote: cur ? { ...cur, code: cid, name: `${fname}近${cur.session === "night" ? "（夜盤）" : "（日盤）"}` } : null, day: r.day, night: r.night,
-    bars: r.bars.map(({ at, ...b }) => b), note: r.bars.length ? null : key ? "富果與期交所都沒有提供這一盤的分 K，改用這個瀏覽器開著時記錄的報價畫分時" : "伺服器讀不到富果 API 金鑰（FUGLE_API_KEY），期交所也沒有提供分 K；改用這個瀏覽器開著時記錄的報價畫分時" });
+    ...(sparkOnly ? { spark: r.bars.filter(b => !cur || b.s === cur.session).map(b => [b.t, b.c]) } : { bars: r.bars.map(({ at, ...b }) => b) }), note: r.bars.length ? null : key ? "富果與期交所都沒有提供這一盤的分 K，改用這個瀏覽器開著時記錄的報價畫分時" : "伺服器讀不到富果 API 金鑰（FUGLE_API_KEY），期交所也沒有提供分 K；改用這個瀏覽器開著時記錄的報價畫分時" });
 }

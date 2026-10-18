@@ -1,5 +1,6 @@
 // 資料來源狀態：檢查伺服器讀得到哪些金鑰、富果能不能連上。只回報「有沒有設定」，絕不回傳金鑰內容。
 // GET /api/status
+// GET /api/status?bench=1  美股報價速度比較：Yahoo 與 Finnhub 各抓 3 次 AAPL、NVDA，回報花多少毫秒與報價時間（Yahoo 是美東時間、Finnhub 是 UTC；不含金鑰）
 // 常見問題：在 Vercel 加了環境變數，但沒有勾 Production（或 Preview），或加完沒有重新部署 → 執行時讀不到。
 
 const KEYS = ["FUGLE_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "FINMIND_TOKEN", "FRED_API_KEY", "FINNHUB_API_KEY"];
@@ -27,7 +28,18 @@ async function ping(url, headers, bad) {
 const pingFred = key => ping(`https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&api_key=${encodeURIComponent(key.trim())}&file_type=json&limit=1`, { Accept: "application/json" }, "金鑰無效，請到 fredaccount.stlouisfed.org/apikeys 確認");
 const pingFinnhub = key => ping("https://finnhub.io/api/v1/quote?symbol=AAPL", { "X-Finnhub-Token": key.trim(), Accept: "application/json" }, "金鑰無效，請到 finnhub.io/dashboard 確認");
 
+async function bench() {
+  const { yahooQuote } = await import("./_yahoo.js"), { finnhubQuote, finnhubOn } = await import("./_finnhub.js"), out = {};
+  for (const [k, f] of [["yahoo", yahooQuote], ...(finnhubOn() ? [["finnhub", finnhubQuote]] : [])]) {
+    const ms = [], px = []; let err = null;
+    for (let i = 0; i < 3; i++) for (const s of ["AAPL", "NVDA"]) { const t0 = Date.now(); try { const q = await f(s); ms.push(Date.now() - t0); px.push(`${s}=${q.price}@${q.time || "?"}${k === "finnhub" ? "Z" : "ET"}`); } catch (e) { err = e.message; } }
+    const avg = a => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
+    out[k] = { n: ms.length, avgMs: avg(ms), maxMs: ms.length ? Math.max(...ms) : null, sample: px.slice(0, 2), err };
+  }
+  return out;
+}
 export default async function handler(req, res) {
+  if (req.query?.bench) { res.setHeader("Cache-Control", "no-store"); return res.status(200).json({ ok: true, bench: await bench(), at: new Date().toISOString() }); }
   const rep = envReport();
   const [fugle, fred, finnhub] = await Promise.all([rep.set.FUGLE_API_KEY ? pingFugle(process.env.FUGLE_API_KEY) : null, rep.set.FRED_API_KEY ? pingFred(process.env.FRED_API_KEY) : null, rep.set.FINNHUB_API_KEY ? pingFinnhub(process.env.FINNHUB_API_KEY) : null]);
   res.setHeader("Cache-Control", "no-store");

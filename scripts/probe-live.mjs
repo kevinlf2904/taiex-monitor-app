@@ -11,6 +11,31 @@ async function raw(url, n = 600) {
   const t0 = Date.now(); try { const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "*/*", Referer: "https://mis.twse.com.tw/stock/index.jsp" }, signal: AbortSignal.timeout(20000) }); const t = await r.text();
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
+if (process.argv[2] === "taifexdl") {
+  // 期交所「前 30 個交易日期貨每筆成交資料」：看下載頁的連結、壓縮檔大小、CSV 欄位與台指期（TX）的日期時間寫法（夜盤怎麼標日期）
+  const { execFileSync } = await import("node:child_process"), { writeFileSync } = await import("node:fs"), os = await import("node:os");
+  const page = await fetch("https://www.taifex.com.tw/cht/3/dlFutPrevious30DataView", { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(20000) }).then(r => r.text()).catch(e => "ERR " + e.message);
+  const links = [...new Set([...page.matchAll(/(?:https?:\/\/[^"' ]*|\/file[^"' ]*)Daily_\d{4}_\d{2}_\d{2}[^"' ]*\.zip/gi)].map(m => m[0].startsWith("/") ? "https://www.taifex.com.tw" + m[0] : m[0]))];
+  console.log("下載頁", page.length, "bytes；zip 連結", links.length, links.slice(0, 4).join("  "), "…", links.slice(-2).join("  "));
+  const csv = links.filter(u => /CSV/i.test(u)); let pick = (csv.length ? csv : links).sort().reverse()[0];
+  if (!pick) { // 下載頁抓不到連結：直接試最近幾天的固定網址
+    console.log(page.slice(0, 300));
+    for (let i = 1; i < 8 && !pick; i++) { const d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10).replace(/-/g, "_");
+      for (const dir of ["DailydownloadCSV", "Dailydownload"]) { const u = `https://www.taifex.com.tw/file/taifex/Dailydownload/${dir}/Daily_${d}.zip`; const r = await fetch(u, { method: "HEAD", headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(15000) }).catch(e => ({ status: e.message, headers: new Map() }));
+        console.log("試", u, r.status, r.headers.get?.("content-type"), r.headers.get?.("content-length")); if (r.status === 200 && !/html/i.test(r.headers.get("content-type") || "")) { pick = u; break; } } }
+  }
+  if (!pick) process.exit(0);
+  const t0 = Date.now(), buf = Buffer.from(await (await fetch(pick, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(60000) })).arrayBuffer()), f = os.tmpdir() + "/d.zip"; writeFileSync(f, buf);
+  console.log("下載", pick, buf.length, "bytes", Date.now() - t0, "ms"); console.log(execFileSync("unzip", ["-l", f]).toString());
+  const raw = execFileSync("unzip", ["-p", f], { maxBuffer: 1 << 30 }), txt = new TextDecoder("big5").decode(raw), L = txt.split(/\r?\n/);
+  console.log("行數", L.length); console.log(L.slice(0, 4).join("\n"));
+  const tx = L.filter(l => /^\s*\d{8}\s*,\s*TX\s*,/.test(l)); console.log("TX 行數", tx.length);
+  const show = re => console.log(re.toString(), "\n" + tx.filter(l => re.test(l)).slice(0, 3).join("\n"));
+  show(/,\s*0845\d\d\s*,|,\s*84[5-9]\d\d\s*,/); show(/,\s*1500\d\d\s*,/); show(/,\s*0000\d\d\s*,/); show(/,\s*0459\d\d\s*,/); show(/,\s*1344\d\d\s*,/);
+  const mon = {}; tx.forEach(l => { const c = l.split(","); const k = c[2].trim(); mon[k] = (mon[k] || 0) + 1; }); console.log("到期月份分佈", JSON.stringify(mon));
+  const dates = {}; tx.forEach(l => { const k = l.split(",")[0].trim(); dates[k] = (dates[k] || 0) + 1; }); console.log("日期分佈", JSON.stringify(dates));
+  process.exit(0);
+}
 if (process.argv[2] === "keys") {
   // 金鑰檢查（GitHub secrets 有沒有設定、能不能用）：只印「有沒有」「狀態碼」「用量」，絕不印金鑰或帶金鑰的網址
   const has = k => !!(process.env[k] && process.env[k].trim()), tk = k => process.env[k].trim();
@@ -30,6 +55,16 @@ if (process.argv[2] === "keys") {
   console.log("網站 /api/status →", st.status ?? st.err, "已設定：", JSON.stringify(J.set || null), "連線測試：", JSON.stringify({ fugle: J.fugle?.ok ?? null, fred: J.fred ? J.fred.ok : null, finnhub: J.finnhub ? J.finnhub.ok : null }), J.fred && !J.fred.ok ? "FRED：" + J.fred.hint : "", J.finnhub && !J.finnhub.ok ? "Finnhub：" + J.finnhub.hint : "");
   const mc = await hit("/api/macro"); console.log("網站 /api/macro →", mc.status ?? mc.err, "來源", mc.j?.via ?? "（舊版沒有 via）", "數列", mc.j?.series?.length, "拿不到", mc.j?.notes?.length ?? "—");
   const qu = await hit("/api/quote?codes=AAPL,NVDA"); console.log("網站 /api/quote 美股 →", qu.status ?? qu.err, qu.j?.source, (qu.j?.quotes || []).map(x => `${x.code}=${x.price}`).join(" "));
+  process.exit(0);
+}
+if (process.argv[2] === "us") {
+  // 美股：Yahoo 與 Finnhub 報價速度（網站 /api/status?bench=1），以及新的 /api/usinfo 公司資料、指標、財報
+  const b = await hit("/api/status?bench=1"); console.log("bench", b.status ?? b.err, JSON.stringify(b.j?.bench || null));
+  for (const c of ["AAPL", "NVDA", "TSM"]) { const u = await hit(`/api/usinfo?code=${c}`), J = u.j || {};
+    console.log(`usinfo ${c}`, u.status ?? u.err, `${u.ms}ms`, J.ok, J.error || "", "來源", J.source, "公司", J.profile?.name, J.profile?.industry, "指標", Object.keys(J.metric || {}).length, JSON.stringify(J.metric || {}).slice(0, 200),
+      "評等", JSON.stringify(J.rec?.[0] || null), "EPS", J.earn?.length, JSON.stringify(J.earn?.at(-1) || null), "SEC 季", J.fin?.q?.length, JSON.stringify(J.fin?.q?.at(-1) || null), "年", J.fin?.y?.length, "errors", JSON.stringify(J.errors)); }
+  const ix = await hit("/api/intraday?code=o00&spark=1"); console.log("櫃買 spark", ix.status ?? ix.err, ix.j?.ok, ix.j?.source, ix.j?.spark?.length, JSON.stringify(ix.j?.spark?.slice(-2)), ix.j?.error || "");
+  const fs = await hit("/api/futures?cid=TXF&bars=spark"); console.log("台指 spark", fs.status ?? fs.err, fs.j?.spark?.length, JSON.stringify(fs.j?.spark?.slice(-2)), "prev", fs.j?.quote?.prev);
   process.exit(0);
 }
 if (process.argv[2] === "fut") {

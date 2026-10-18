@@ -233,6 +233,39 @@ test("台指期 1 分 K 存檔：依盤別分組（夜盤跨午夜算同一盤�
   assert.deepEqual(S[1].bars[1], ["04:59", 1, 2, 0, 1, 3, "2026-10-17"]);
 });
 
+test("台指期補歷史：期交所逐筆成交合成 1 分 K（量除以 2、價差單不算、收盤競價併進最後一根、取主力月份）", async () => {
+  const { ticksToBars, groupSessions } = await import("../scripts/fut-1m.mjs");
+  const csv = ["成交日期,商品代號,到期月份(週別),成交時間,成交價格,成交數量(B+S),近月價格,遠月價格,開盤集合競價 ",
+    "20261015,TX     ,202610     ,150000,46926,118,-,-,*", "20261015,TX     ,202610     ,150030,46930,4,-,-, ", "20261015,TX     ,202611     ,150030,46990,2,-,-, ",
+    "20261015,TX     ,202610/202611,150030,60,2,-,-, ", "20261016,TX     ,202610     ,045959,47341,4,-,-, ", "20261016,TX     ,202610     ,050000,47345,20,-,-, ",
+    "20261016,TXO    ,202610     ,084500,1,20,-,-, ", "20261016,TX     ,202610     ,084500,47228,298,-,-,*", "20261016,TX     ,202610     ,084559,47200,2,-,-, ", "20261016,TX     ,202610     ,134500,47412,50,-,-, "].join("\r\n");
+  const B = ticksToBars(csv);
+  assert.deepEqual(B.map(b => [b.d, b.t, b.s, b.o, b.h, b.l, b.c, b.v]), [["2026-10-15", "15:00", "night", 46926, 46930, 46926, 46930, 61], ["2026-10-16", "04:59", "night", 47341, 47345, 47341, 47345, 12],
+    ["2026-10-16", "08:45", "day", 47228, 47228, 47200, 47200, 150], ["2026-10-16", "13:44", "day", 47412, 47412, 47412, 47412, 25]]);
+  assert.deepEqual(groupSessions(B).map(x => [x.k, x.mon]), [["2026-10-15-night", "202610"], ["2026-10-16-day", "202610"]]);
+});
+
+test("美股公司資料：Finnhub 指標、評等、EPS 與 SEC 季報解析（第四季用年度減前三季）", async () => {
+  const { parseProfile, parseMetric, parseRec, parseEarn, parseConcept } = await import("../api/_lib/usinfo.js");
+  assert.equal(parseProfile({ name: "Apple Inc", marketCapitalization: 3000000, shareOutstanding: 15000 }).cap, 3e12);
+  assert.equal(parseProfile({}), null);
+  assert.deepEqual(parseMetric({ metric: { peTTM: 30.123, peBasicExclExtraTTM: 99, grossMarginTTM: 46.2, beta: null } }), { pe: 30.12, gm: 46.2 });
+  assert.equal(parseMetric({}), null);
+  assert.deepEqual(parseRec([{ period: "2026-10-01", strongBuy: 10, buy: 20, hold: 5, sell: 1, strongSell: 0 }]), [{ period: "2026-10", sb: 10, b: 20, h: 5, s: 1, ss: 0 }]);
+  assert.deepEqual(parseEarn([{ period: "2026-06-30", quarter: 2, year: 2026, actual: 1.5, estimate: 1.4, surprisePercent: 7.1428 }, { period: "2026-03-31", quarter: 1, year: 2026, actual: 1.6, estimate: 1.6 }]).map(x => [x.q, x.surp]), [[1, null], [2, 7.14]]);
+  const C = parseConcept({ units: { USD: [{ frame: "CY2025Q1", val: 10, form: "10-Q" }, { frame: "CY2025Q2", val: 11, form: "10-Q" }, { frame: "CY2025Q3", val: 12, form: "10-Q" }, { frame: "CY2025", val: 50, form: "10-K" }, { val: 99, form: "10-Q" }] } });
+  assert.deepEqual(C.q.map(x => [x.p, x.v]), [["2025Q1", 10], ["2025Q2", 11], ["2025Q3", 12], ["2025Q4", 17]]);
+  assert.deepEqual(C.y.map(x => [x.p, x.v]), [["2025", 50]]);
+});
+
+test("AI 回答快取鍵：同一天同樣內容才相同、不含原文", async () => {
+  const { cacheKey } = await import("../api/_lib/chat.js"), t = [{ role: "user", content: "台積電怎麼看" }];
+  assert.equal(cacheKey("s", t, "2026-10-18"), cacheKey("s", t, "2026-10-18"));
+  assert.notEqual(cacheKey("s", t, "2026-10-18"), cacheKey("s", t, "2026-10-19"));
+  assert.notEqual(cacheKey("s", t, "2026-10-18"), cacheKey("s2", t, "2026-10-18"));
+  assert.match(cacheKey("s", t), /^ai:[0-9a-f]{40}$/);
+});
+
 test("FRED 官方介面、Finnhub：回應解析與金鑰不外洩", async () => {
   const { parseObs } = await import("../api/_lib/macro.js"), { quoteFromFinnhub, newsFromFinnhub, finnhubOk } = await import("../api/_lib/_finnhub.js");
   assert.deepEqual(parseObs({ observations: [{ date: "2026-10-14", value: "4.05" }, { date: "2026-10-15", value: "." }, { date: "bad", value: "1" }, { date: "2026-10-16", value: "4.1" }] }), [["2026-10-14", 4.05], ["2026-10-16", 4.1]]);

@@ -27,6 +27,12 @@ export async function mock(ctx) {
       month: { date: "2026-09-30", rows: [{ name: "台積電", code: "2330", sh: 5.6e8, pct: 56.45, chg: -0.9 }, { name: "聯發科", code: "2454", sh: 3.4e7, pct: 6.74, chg: 1.1 }] }, ind: { date: "2026-10-09", rows: [{ name: "半導體", pct: 68.9 }, { name: "金融保險", pct: 8 }] } }); });
   await ctx.route("**/data/etf-hold/**", r => J(r, { code: "0050", name: "元大台灣50", date: "2026-10-16", since: "2026-06-01", rows: [], ev: [{ d: "2026-09-19", t: "in", code: "3017", name: "奇鋐", pct: 0.5 }, { d: "2026-09-19", t: "out", code: "1101", name: "台泥", pct: 0.3 }] }));
 
+  await ctx.route("**/api/usinfo**", r => J(r, { ok: true, code: "AAPL", source: "Finnhub、SEC EDGAR", errors: [], cik: "0000320193", profile: { name: "Apple Inc", exchange: "NASDAQ", industry: "Technology", country: "US", ipo: "1980-12-12", web: "https://www.apple.com/", cap: 3.5e12, shares: 1.5e10, currency: "USD" },
+    metric: { pe: 33.2, eps: 6.5, div: 0.45, revG: 6.1, beta: 1.2, hi52: 260, lo52: 170, ret52: 12.3, gm: 46.5, om: 31.2, nm: 24.3, roe: 150.2, roa: 28.1, epsG: 9.8, pb: 50.1, ps: 8.7, de: 1.5, cr: 0.9 },
+    rec: [{ period: "2026-10", sb: 12, b: 22, h: 8, s: 1, ss: 0 }, { period: "2026-09", sb: 11, b: 22, h: 9, s: 1, ss: 0 }], earn: [{ period: "2026-03-31", q: 2, y: 2026, actual: 1.6, est: 1.5, surp: 6.67 }, { period: "2026-06-30", q: 3, y: 2026, actual: 1.45, est: 1.43, surp: 1.4 }],
+    fin: { q: [{ p: "2026Q1", rev: 9.5e10, ni: 2.4e10, gp: 4.4e10, op: 2.9e10 }, { p: "2026Q2", rev: 9.4e10, ni: 2.3e10, gp: 4.3e10, op: 2.8e10 }], y: [{ p: "2025", rev: 4.1e11, ni: 1.0e11, gp: 1.9e11, op: 1.3e11 }] } }));
+  await ctx.route(/\/api\/intraday\?.*spark=1/, r => J(r, { ok: true, source: "t", prev: 100, spark: [["09:00", 100], ["10:00", 101], ["11:30", 102]], session: { open: "09:00", close: "13:30" } }));
+  await ctx.route(/\/api\/futures\?.*bars=spark/, r => J(r, { ok: true, quote: { price: 101, chg: 1, chgPct: 1, prev: 100, session: "day" }, spark: [["08:45", 100], ["10:00", 99], ["11:00", 101]] }));
   await ctx.route("**/api/calendar**", r => J(r, { ok: true, rows: [{ date: "2026-10-20", code: "2330", name: "台積電", kind: "除息", cash: 4.5 }], conf: [] }));
   await ctx.route("**/api/yield**", r => { const cs = (new URL(r.request().url()).searchParams.get("codes") || "").split(","); J(r, { ok: true, rows: cs.map(c => ({ code: c, cash12: 5, n: 1, price: 100, yield: 5, divs: [["2025-07-10", 2.5], ["2026-01-10", 3]] })) }); });
   const axis = K.map(x => x.d).slice(-130);

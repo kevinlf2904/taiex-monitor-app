@@ -436,3 +436,54 @@ Object.assign(SX, {
 .tw-top li > div > b { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
 .etf-ev h5 { margin: 10px 0 0; font-size: 14px; display: flex; gap: 8px; align-items: baseline; } .etf-ev h5 .note { font-weight: 400; font-size: 12px; }`; document.head.appendChild(css);
   document.addEventListener("click", e => { const b = e.target.closest("#sxBox [data-etfmore]"); if (b) { W.etfMore = !W.etfMore; sxRender(); } }); }
+
+/* ---------- 美股個股：公司與指標、營收與獲利、分析師與財報（/api/usinfo＝Finnhub 免費版＋SEC EDGAR 申報資料） ---------- */
+async function usLoad(c) {
+  if (W.usi?.code === c && (W.usi.loading || W.usi.at)) return;
+  W.usi = { code: c, loading: true };
+  const j = await getJ(`/api/usinfo?code=${encodeURIComponent(c)}`, true).catch(e => ({ ok: false, error: e.message }));
+  if (W.sel !== c) return; W.usi = { ...j, code: c, at: Date.now() }; if (isSxSub()) sxRender();
+}
+function usWait() {
+  const U = W.usi; if (W.off) return `<p class="note sxwait">需要部署到網站才有美股公司資料。</p>`;
+  if (!U || U.code !== W.sel || U.loading) { usLoad(W.sel); return `<p class="note sxwait">載入美股公司資料…</p>`; }
+  if (!U.ok) return `<p class="note sxwait">⚠ ${esc(U.error || "拿不到美股公司資料")}</p>`;
+  return null;
+}
+// 美元金額：十億以上用 B、其餘用 M，後面附約合台幣幾億（用即時匯率時不準，只給量級感）
+const usAmt = v => (v == null ? "—" : Math.abs(v) >= 1e9 ? `${(v / 1e9).toLocaleString(undefined, { maximumFractionDigits: 1 })}B` : `${(v / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 })}M`);
+const usPctv = (v, d = 1) => (v == null ? "—" : `${v > 0 ? "+" : ""}${(+v).toFixed(d)}%`);
+const usNote = U => `<p class="note">資料：${esc(U.source || "—")}（Finnhub 免費版、SEC EDGAR 申報；每 6 小時更新）。${U.errors?.length ? `<br>部分沒拿到：${esc(U.errors.join("；"))}` : ""}</p>`;
+Object.assign(SX, {
+  usco: () => {
+    const w = usWait(); if (w) return w; const U = W.usi, P = U.profile || {}, M = U.metric || {}, nm = P.name || nameOf(W.sel), px = sxPx();
+    const pos52 = M.hi52 && M.lo52 && px != null && M.hi52 > M.lo52 ? Math.max(0, Math.min(100, ((px - M.lo52) / (M.hi52 - M.lo52)) * 100)) : null;
+    const cards = [{ t: "市值", sub: P.currency || "USD", v: usAmt(P.cap) }, { t: "本益比", sub: "近四季", v: M.pe != null ? sxN(M.pe, 1) : "—" }, { t: "EPS", sub: "近四季（美元）", v: M.eps != null ? sxN(M.eps, 2) : "—" },
+      { t: "殖利率", sub: "近一年", v: M.div != null ? `${sxN(M.div, 2)}%` : "—" }, { t: "營收年增", sub: "近四季", v: usPctv(M.revG), vc: M.revG > 0 ? "up" : M.revG < 0 ? "down" : "" }, { t: "Beta", sub: "相對大盤波動", v: M.beta != null ? sxN(M.beta, 2) : "—" }];
+    return `<div class="tw-p">${rkPerson(rkMono(W.sel, "#3d7be0", true), esc(nm), esc([P.exchange, P.industry, P.country].filter(Boolean).join("・")))}${rkCards(cards)}
+      ${pos52 != null ? `${sxH("52 週位置", `低 ${sxN(M.lo52, 2)}・高 ${sxN(M.hi52, 2)}・一年報酬 ${usPctv(M.ret52)}`)}<div class="sxgauge"><div class="bar"><i style="left:calc(${pos52.toFixed(1)}% - 6px)"></i></div><div class="lbl"><span>52 週低</span><b>${pos52.toFixed(0)}%</b><span>52 週高</span></div></div>` : ""}
+      ${sxH("獲利能力與財務體質")}${sxKv([["毛利率", M.gm != null ? `${sxN(M.gm, 1)}%` : "—"], ["營業利益率", M.om != null ? `${sxN(M.om, 1)}%` : "—"], ["淨利率", M.nm != null ? `${sxN(M.nm, 1)}%` : "—"], ["ROE", M.roe != null ? `${sxN(M.roe, 1)}%` : "—"], ["ROA", M.roa != null ? `${sxN(M.roa, 1)}%` : "—"], ["EPS 年增", usPctv(M.epsG), M.epsG > 0 ? "up" : M.epsG < 0 ? "down" : ""], ["股價淨值比", M.pb != null ? sxN(M.pb, 2) : "—"], ["股價營收比", M.ps != null ? sxN(M.ps, 2) : "—"], ["負債／權益", M.de != null ? sxN(M.de, 2) : "—"], ["流動比", M.cr != null ? sxN(M.cr, 2) : "—"]])}
+      ${sxH("公司資料")}<table class="tbl sxinfo"><tbody>${[["名稱", esc(nm)], ["交易所", esc(P.exchange || "—")], ["產業", esc(P.industry || "—")], ["國家", esc(P.country || "—")], ["上市日", esc(P.ipo || "—")], ["流通股數", P.shares ? `${(P.shares / 1e9).toFixed(2)}B 股` : "—"], ["網站", P.web ? `<a href="${esc(P.web)}" target="_blank" rel="noopener">${esc(P.web.replace(/^https?:\/\//, ""))}</a>` : "—"], ["SEC 申報", U.cik ? `<a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${esc(U.cik)}&type=10-&dateb=&owner=include&count=40" target="_blank" rel="noopener">10-K／10-Q 原文</a>` : "—"]].map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</tbody></table>
+      ${usNote(U)}</div>`;
+  },
+  usfin: () => {
+    const w = usWait(); if (w) return w; const U = W.usi, Q = U.fin?.q || [], Y = U.fin?.y || [];
+    if (!Q.length && !Y.length) return `<p class="note sxwait">SEC 沒有這檔的季報資料（外國公司申報 20-F、或剛上市）。</p>${usNote(U)}`;
+    const mg = r => (r.rev && r.gp != null ? +((r.gp / r.rev) * 100).toFixed(1) : r.rev && r.ni != null ? +((r.ni / r.rev) * 100).toFixed(1) : null), hasGp = Q.some(r => r.gp != null);
+    const tbl = L => `<div class="fscroll"><table class="tbl sxtbl"><thead><tr><th>期間</th><th>營收</th><th>毛利</th><th>營業利益</th><th>淨利</th><th>淨利率</th></tr></thead><tbody>${L.slice().reverse().map(r => `<tr><td>${esc(r.p)}</td><td>${usAmt(r.rev)}</td><td>${usAmt(r.gp)}</td><td>${usAmt(r.op)}</td><td class="${cls(r.ni)}">${usAmt(r.ni)}</td><td>${r.rev && r.ni != null ? `${((r.ni / r.rev) * 100).toFixed(1)}%` : "—"}</td></tr>`).join("")}</tbody></table></div>`;
+    return `<div class="tw-p">${Q.length ? `${sxH("單季營收與獲利", "SEC 10-Q／10-K（美元）")}${barLineSvg(Q.map(r => ({ label: r.p.slice(2), v: r.rev != null ? +(r.rev / 1e9).toFixed(2) : 0, y: mg(r) })), { fmtV: v => v + "B" })}<p class="note">柱＝單季營收（十億美元）、線＝${hasGp ? "毛利率" : "淨利率"}。第四季多半沒有單獨申報，用年度減前三季算。</p>${tbl(Q)}` : ""}
+      ${Y.length ? `${sxH("年度")}${tbl(Y)}` : ""}${usNote(U)}</div>`;
+  },
+  usana: () => {
+    const w = usWait(); if (w) return w; const U = W.usi, R = U.rec || [], E = U.earn || [], r0 = R[0];
+    const tot = r0 ? r0.sb + r0.b + r0.h + r0.s + r0.ss : 0, seg = r0 && tot ? [["強力買進", r0.sb, "var(--up)"], ["買進", r0.b, "color-mix(in srgb, var(--up) 55%, var(--surface-3))"], ["持有", r0.h, "var(--muted)"], ["賣出", r0.s, "color-mix(in srgb, var(--down) 55%, var(--surface-3))"], ["強力賣出", r0.ss, "var(--down)"]] : [];
+    return `<div class="tw-p">${r0 ? `${sxH("分析師評等", `${esc(r0.period)}・${tot} 位分析師`)}<div class="usrec">${seg.map(([t, n, c]) => (n ? `<i style="flex:${n};background:${c}" title="${t} ${n}"></i>` : "")).join("")}</div>
+      <div class="usrec-l">${seg.map(([t, n, c]) => `<span><i style="background:${c}"></i>${t} ${n}</span>`).join("")}</div>
+      ${R.length > 1 ? `<div class="fscroll"><table class="tbl sxtbl"><thead><tr><th>月份</th><th>強買</th><th>買</th><th>持有</th><th>賣</th><th>強賣</th></tr></thead><tbody>${R.map(x => `<tr><td>${esc(x.period)}</td><td>${x.sb}</td><td>${x.b}</td><td>${x.h}</td><td>${x.s}</td><td>${x.ss}</td></tr>`).join("")}</tbody></table></div>` : ""}` : `<p class="note">沒有分析師評等資料。</p>`}
+      ${E.length ? `${sxH("EPS 實際 vs 預估", "近四季（美元）")}${barLineSvg(E.map(x => ({ label: `${String(x.y).slice(2)}Q${x.q}`, v: x.actual ?? 0, y: x.surp })), { fmtV: v => v, fmtY: v => v + "%" })}<p class="note">柱＝實際 EPS、線＝比預估高（低）多少 %。</p>
+      <div class="fscroll"><table class="tbl sxtbl"><thead><tr><th>季度</th><th>實際</th><th>預估</th><th>驚喜</th></tr></thead><tbody>${E.slice().reverse().map(x => `<tr><td>${x.y} Q${x.q}</td><td>${x.actual ?? "—"}</td><td>${x.est ?? "—"}</td><td class="${cls(x.surp)}">${usPctv(x.surp, 2)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <p class="note">評等是分析師的看法彙整，只是參考、不構成投資建議。</p>${usNote(U)}</div>`;
+  },
+});
+{ const css = document.createElement("style"); css.textContent = `.usrec { display: flex; height: 14px; border-radius: 4px; overflow: hidden; gap: 2px; margin: 4px 0 6px; } .usrec i { display: block; min-width: 2px; }
+.usrec-l { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-bottom: 8px; } .usrec-l i { display: inline-block; width: 10px; height: 8px; border-radius: 2px; margin-right: 4px; }`; document.head.appendChild(css); }
