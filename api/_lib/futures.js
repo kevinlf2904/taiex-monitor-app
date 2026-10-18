@@ -75,6 +75,18 @@ async function fromFugle(sym, key, withBars) {
 }
 // 期交所行情網站的 1 分 K（getChartData1M，SymbolID 例如 TXFJ6-F 日盤、TXFJ6-M 夜盤）。官方沒有文件，欄位名稱用關鍵字找，抓不到就算了
 export function parseTaifexChart(j, session, date) {
+  // 實際格式（2026-10 用 probe-live 看到）：RtData.Field＝["T","O","H","L","C","V"]、RtData.Ticks＝[["084600","47228.00",…,"897"], …]，
+  // 時間是這一分鐘「結束」的時間（日盤第一根 084600、夜盤第一根 150100），改成開始時間才和富果的分 K 一致
+  const R = j?.RtData || j, F = Array.isArray(R?.Field) ? R.Field.map(x => String(x).toUpperCase()) : null;
+  if (Array.isArray(R?.Ticks) && Array.isArray(R.Ticks[0])) {
+    const ix = k => { const i = F ? F.indexOf(k) : -1; return i >= 0 ? i : "TOHLCV".indexOf(k); };
+    return R.Ticks.map(r => { const t = String(r[ix("T")] || "").replace(/\D/g, "").padStart(6, "0"); let hh = +t.slice(0, 2), mm = +t.slice(2, 4); if (!(hh < 24 && mm < 60)) return null;
+      mm -= 1; if (mm < 0) { mm = 59; hh = (hh + 23) % 24; }
+      const tt = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`, c = num(r[ix("C")]); if (c == null) return null;
+      const d = session === "night" && hh < 15 ? iso(new Date(Date.parse(date + "T00:00:00Z") + 864e5)) : date;
+      return { at: Date.parse(`${d}T${tt}:00+08:00`), d, t: tt, o: num(r[ix("O")]) ?? c, h: num(r[ix("H")]) ?? c, l: num(r[ix("L")]) ?? c, c, v: num(r[ix("V")]) || 0, s: session }; })
+      .filter(Boolean).sort((a, b) => a.at - b.at);
+  }
   const arr = (() => { const st = [j?.RtData, j]; for (const o of st) { if (Array.isArray(o)) return o; if (o && typeof o === "object") for (const v of Object.values(o)) if (Array.isArray(v) && v.length && typeof v[0] === "object") return v; } return []; })();
   const k = (o, re) => Object.keys(o).find(x => re.test(x));
   return arr.map(x => { const kt = k(x, /time/i), kc = k(x, /close|last|price/i); if (!kt || !kc) return null;
@@ -87,9 +99,9 @@ export function parseTaifexChart(j, session, date) {
 async function taifexBars(q, session) {
   if (!q?.sid) return [];
   const j = await getJSON("https://mis.taifex.com.tw/futures/api/getChartData1M", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ SymbolID: q.sid }) });
-  // 夜盤的交易日：15:00 以後開始那一天
+  // 夜盤的日期：期交所的 CDate 就是夜盤開始（15:00）那一天；週末打開時不能用「今天」推算
   const t = tpe(), start = session === "night" && t.getUTCHours() < 15 ? iso(new Date(t.getTime() - 864e5)) : iso(t);
-  return parseTaifexChart(j, session, session === "night" ? start : q.date || iso(t));
+  return parseTaifexChart(j, session, q.date || start);
 }
 async function fromTaifex(near, cid = "TXF", withBars = false) {
   const body = mt => JSON.stringify({ MarketType: mt, SymbolType: "F", KindID: "1", CID: cid, ExpireMonth: "", RowSize: "全部", PageNo: "", SortColumn: "", AscDesc: "A" });

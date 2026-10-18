@@ -208,3 +208,12 @@ test("節目觀點摘要：新版格式有數字、風險、觀察重點，段�
   assert.deepEqual([j.facts, j.risks, j.watch], [["營收年增 30%"], ["匯率"], ["下週財報"]]);
   assert.deepEqual(parseSum('{"tldr":"x"}').facts, [], "舊格式沒有新欄位也要能讀");
 });
+
+test("期交所 1 分 K：Field＋Ticks 陣列格式（日盤、跨午夜的夜盤）", async () => {
+  const { parseTaifexChart } = await import("../api/_lib/futures.js");
+  const day = parseTaifexChart({ RtData: { Field: ["T", "O", "H", "L", "C", "V"], Ticks: [["084600", "47228.00", "47278.00", "47168.00", "47186.00", "897"], ["134500", "47412.00", "47430.00", "47219.00", "47242.00", "3475"]] } }, "day", "2026-10-16");
+  assert.equal(day.length, 2); assert.deepEqual([day[0].d, day[0].t, day[0].o, day[0].c, day[0].v], ["2026-10-16", "08:45", 47228, 47186, 897]); assert.equal(day[1].t, "13:44");
+  const night = parseTaifexChart({ RtData: { Field: ["T", "O", "H", "L", "C", "V"], Ticks: [["150100", "47269", "47315", "47239", "47310", "221"], ["000100", "47000", "47010", "46990", "47005", "50"], ["050000", "46114", "46157", "46107", "46140", "77"]] } }, "night", "2026-10-16");
+  assert.deepEqual(night.map(b => `${b.d} ${b.t}`), ["2026-10-16 15:00", "2026-10-17 00:00", "2026-10-17 04:59"]);
+  assert.ok(night[0].at < night[1].at && night[1].at < night[2].at, "依時間排序");
+});
