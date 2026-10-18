@@ -217,3 +217,10 @@ test("期交所 1 分 K：Field＋Ticks 陣列格式（日盤、跨午夜的夜�
   assert.deepEqual(night.map(b => `${b.d} ${b.t}`), ["2026-10-16 15:00", "2026-10-17 00:00", "2026-10-17 04:59"]);
   assert.ok(night[0].at < night[1].at && night[1].at < night[2].at, "依時間排序");
 });
+
+test("期交所報價日期：夜盤 05:00 前算隔天，週末打開時近全取夜盤", async () => {
+  const { taifexWhen, pickCurrent } = await import("../api/_lib/futures.js");
+  const n = taifexWhen("20261016", "045957", "night"), d = taifexWhen("20261016", "134459", "day");
+  assert.deepEqual([n.date, n.sdate], ["2026-10-17", "2026-10-16"]); assert.equal(taifexWhen("20261016", "230000", "night").date, "2026-10-16");
+  assert.equal(pickCurrent({ ...d, session: "day" }, { ...n, session: "night" }, "closed").session, "night", "週五夜盤（週六清晨收）比週五日盤新");
+});
