@@ -25,6 +25,11 @@ if (process.argv[2] === "keys") {
     for (const q of ["timeframe=D&from=2026-09-01&to=2026-10-16", "timeframe=1&from=2026-10-12&to=2026-10-16", "timeframe=5&from=2026-10-12&to=2026-10-16"]) { const { j, t } = await call(`富果 期貨歷史 ${sym} ${q.split("&")[0]}`, `${base}/futopt/historical/candles/${sym}?${q}`, h); console.log("  根數", Array.isArray(j?.data) ? j.data.length : "—", "第一筆", JSON.stringify(j?.data?.[0] || null).slice(0, 160), j?.message ? "訊息 " + String(j.message).slice(0, 120) : ""); }
     await call(`富果 期貨盤中分 K ${sym} timeframe=1`, `${base}/futopt/intraday/candles/${sym}?timeframe=1`, h);
   }
+  // 網站（Vercel）那邊：/api/status 只回「有沒有設定」與連線測試結果（部署新版之後才有 FRED、Finnhub 這兩項）
+  const st = await hit("/api/status"), J = st.j || {};
+  console.log("網站 /api/status →", st.status ?? st.err, "已設定：", JSON.stringify(J.set || null), "連線測試：", JSON.stringify({ fugle: J.fugle?.ok ?? null, fred: J.fred ? J.fred.ok : null, finnhub: J.finnhub ? J.finnhub.ok : null }), J.fred && !J.fred.ok ? "FRED：" + J.fred.hint : "", J.finnhub && !J.finnhub.ok ? "Finnhub：" + J.finnhub.hint : "");
+  const mc = await hit("/api/macro"); console.log("網站 /api/macro →", mc.status ?? mc.err, "來源", mc.j?.via ?? "（舊版沒有 via）", "數列", mc.j?.series?.length, "拿不到", mc.j?.notes?.length ?? "—");
+  const qu = await hit("/api/quote?codes=AAPL,NVDA"); console.log("網站 /api/quote 美股 →", qu.status ?? qu.err, qu.j?.source, (qu.j?.quotes || []).map(x => `${x.code}=${x.price}`).join(" "));
   process.exit(0);
 }
 if (process.argv[2] === "fut") {
