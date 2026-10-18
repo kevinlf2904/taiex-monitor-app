@@ -64,23 +64,34 @@ async function shareCardCanvas(spec) {
   x.fillStyle = SCARD.muted; x.font = `400 24px ${SCARD.font}`; x.fillText(`僅供研究參考，非投資建議・${spec.date || new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)}`, P, y + 12);
   return cv;
 }
-// 預覽視窗：下載、複製、分享（手機）
+// 預覽視窗：下載、複製、分享（手機）。看盤、存股在 iframe 裡而且 iframe 跟內容一樣高，固定定位的視窗會出現在
+// iframe 的正中間（常常在畫面外，看起來像按了沒反應），所以同網域時改畫在最上層頁面（index.html 也載入這支，有樣式）
+const scHost = () => { try { if (window.top !== window && window.top.document.body) return window.top; } catch {} return window; };
+let scBusy = false;
 async function shareCardOpen(key) {
-  const f = SHARE[key]; if (!f) return; let spec; try { spec = await f(); } catch (e) { console.error("sharecard", key, e); spec = null; }
-  if (!spec) return scToast("這個區塊還沒有資料，等載入完再分享");
-  const cv = await shareCardCanvas(spec), blob = await new Promise(r => cv.toBlob(r, "image/png")), name = `KLineLab-${spec.name || key}-${new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)}.png`, url = URL.createObjectURL(blob);
-  const file = typeof File === "function" ? new File([blob], name, { type: "image/png" }) : null, canShare = !!(file && navigator.canShare?.({ files: [file] }));
-  const m = document.createElement("div"); m.className = "sc-modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-label", "分享情報圖卡");
-  m.innerHTML = `<div class="sc-box"><img src="${url}" alt="情報圖卡預覽"><div class="sc-acts">${canShare ? '<button type="button" data-sca="share" class="pri">分享</button>' : ""}<button type="button" data-sca="dl"${canShare ? "" : ' class="pri"'}>下載 PNG</button><button type="button" data-sca="copy">複製圖片</button><button type="button" data-sca="x">關閉</button></div></div>`;
-  const close = () => { m.remove(); setTimeout(() => URL.revokeObjectURL(url), 3000); };
-  m.addEventListener("click", async e => { const a = e.target.closest("[data-sca]")?.dataset.sca; if (e.target === m || a === "x") return close();
-    if (a === "dl") { const l = document.createElement("a"); l.href = url; l.download = name; document.body.append(l); l.click(); l.remove(); scToast("已下載圖卡"); }
-    if (a === "copy") { try { await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]); scToast("已複製圖卡"); } catch { scToast("這個瀏覽器不能複製圖片，改用下載"); } }
-    if (a === "share") { try { await navigator.share({ files: [file], text: `${spec.title}｜KLineLab K線情報局 ${SITE_HOST}` }); } catch {} } });
-  document.addEventListener("keydown", function k(e) { if (e.key === "Escape") { close(); document.removeEventListener("keydown", k); } });
-  document.body.append(m);
+  const f = SHARE[key]; if (!f || scBusy) return; scBusy = true;
+  const H = scHost(), D = H.document, wait = scToast("正在產生圖卡…", 0);
+  try {
+    let spec; try { spec = await f(); } catch (e) { console.error("sharecard", key, e); spec = null; }
+    if (!spec) return scToast("這個區塊還沒有資料，等載入完再分享");
+    let cv; try { cv = await shareCardCanvas(spec); } catch (e) { console.error("sharecard draw", key, e); return scToast("圖卡產生失敗，請再試一次"); }
+    const blob = await new Promise(r => cv.toBlob(r, "image/png")); if (!blob) return scToast("圖卡產生失敗，請再試一次");
+    const name = `KLineLab-${spec.name || key}-${new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)}.png`, url = URL.createObjectURL(blob), N = H.navigator;
+    const file = typeof File === "function" ? new File([blob], name, { type: "image/png" }) : null, canShare = !!(file && N.canShare?.({ files: [file] }));
+    const canCopy = !!(N.clipboard?.write && H.ClipboardItem);
+    const m = D.createElement("div"); m.className = "sc-modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-label", "分享情報圖卡");
+    m.innerHTML = `<div class="sc-box"><div class="sc-hd"><b>圖卡預覽</b><button type="button" data-sca="x" class="sc-x" aria-label="關閉">✕</button></div><div class="sc-img"><img src="${url}" alt="情報圖卡預覽"></div>
+      <p class="sc-tip">${canShare ? "手機：按「分享」可以直接存到相簿或傳給朋友；也可以長按圖片儲存。" : "也可以在圖片上按右鍵另存。"}</p>
+      <div class="sc-acts"><button type="button" data-sca="dl" class="pri">📥 下載 PNG 圖片</button>${canCopy ? '<button type="button" data-sca="copy">📋 複製到剪貼簿</button>' : ""}${canShare ? '<button type="button" data-sca="share">分享…</button>' : ""}</div></div>`;
+    const close = () => { m.remove(); D.removeEventListener("keydown", k); setTimeout(() => URL.revokeObjectURL(url), 3000); }, k = e => { if (e.key === "Escape") close(); };
+    m.addEventListener("click", async e => { const a = e.target.closest("[data-sca]")?.dataset.sca; if (e.target === m || a === "x") return close();
+      if (a === "dl") { const l = D.createElement("a"); l.href = url; l.download = name; D.body.append(l); l.click(); l.remove(); scToast("已下載圖卡"); }
+      if (a === "copy") { try { await N.clipboard.write([new H.ClipboardItem({ "image/png": blob })]); scToast("已複製圖卡，可以直接貼上"); } catch { scToast("這個瀏覽器不能複製圖片，請改用下載"); } }
+      if (a === "share") { try { await N.share({ files: [file], text: `${spec.title}｜KLineLab K線情報局 ${SITE_HOST}` }); } catch {} } });
+    D.addEventListener("keydown", k); D.body.append(m); m.querySelector('[data-sca="dl"]').focus({ preventScroll: true });
+  } finally { wait.remove(); scBusy = false; }
 }
-function scToast(t) { const d = document.createElement("div"); d.className = "sc-toast"; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 1800); }
+function scToast(t, ms = 1800) { const D = scHost().document, d = D.createElement("div"); d.className = "sc-toast"; d.setAttribute("role", "status"); d.textContent = t; D.body.append(d); if (ms) setTimeout(() => d.remove(), ms); return d; }
 document.addEventListener("click", e => { const b = e.target.closest("[data-sharecard]"); if (!b) return; e.preventDefault(); e.stopPropagation(); shareCardOpen(b.dataset.sharecard); }, true);
 // 把排行清單（tools.js 的 rkList）讀成圖卡的列
 const scRankRows = (ol, n = 8) => [...(ol?.querySelectorAll(":scope > li") || [])].slice(0, n).map(li => { const v = li.querySelector(".tw-v b"), cl = v?.className || "";
@@ -91,7 +102,9 @@ const scBtn = (key, extra = "") => `<button type="button" class="sharebtn${extra
 .sharebtn { border: 0; border-radius: 6px; background: var(--surface-2, #1c1c20); color: var(--ink, #fff); font: 500 12.5px var(--font-body, sans-serif); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
 .sharebtn.fr { float: right; margin-left: 8px; }
 .sc-modal { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, .72); display: flex; align-items: center; justify-content: center; padding: 16px; }
-.sc-box { background: #121215; border-radius: 10px; padding: 12px; max-width: min(520px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 10px; }
-.sc-box img { width: 100%; min-height: 0; flex: 1; object-fit: contain; border-radius: 6px; background: #09090B; }
+.sc-box { background: #121215; color: #fff; border-radius: 10px; padding: 12px; width: min(520px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 10px; font: 14px sans-serif; }
+.sc-hd { display: flex; align-items: center; justify-content: space-between; } .sc-x { border: 0; background: none; color: #A1A1AA; font-size: 18px; cursor: pointer; padding: 4px 8px; }
+.sc-img { min-height: 0; flex: 1; overflow: auto; border-radius: 6px; background: #09090B; } .sc-img img { width: 100%; display: block; }
+.sc-tip { margin: 0; color: #A1A1AA; font-size: 12.5px; }
 .sc-acts { display: flex; flex-wrap: wrap; gap: 8px; } .sc-acts button { flex: 1 1 auto; border: 0; border-radius: 6px; padding: 10px 12px; background: #27272A; color: #fff; font: 500 14px sans-serif; cursor: pointer; } .sc-acts .pri { background: #fff; color: #09090B; }
 .sc-toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 10000; background: #27272A; color: #fff; padding: 8px 14px; border-radius: 6px; font: 14px sans-serif; }`; document.head.append(s); })();

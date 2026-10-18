@@ -29,12 +29,12 @@
   --f-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#141917; --panel:#1b211f; --ink:#e6ebe8; --muted:#9aa6a1; --line:#2e3734;
+  --bg:#141917; --panel:#1b211f; --ink:#e6ebe8; --muted:#aeb8b4; --line:#2e3734;
   --accent:#7fb3b8; --accent-soft:#22312f;
   --ok:#5cc196; --warn:#e3a94a; --bad:#f07b70; --bad-soft:#3a2321; --warn-soft:#382d1b; --ok-soft:#1d3229;
   --sA:#7fb3b8; --sB:#e3a94a; --sB0:#5d8589; --sB1:#9c8150; --sC:#d08ad4; --lum:66%; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#141917; --panel:#1b211f; --ink:#e6ebe8; --muted:#9aa6a1; --line:#2e3734;
+  --bg:#141917; --panel:#1b211f; --ink:#e6ebe8; --muted:#aeb8b4; --line:#2e3734;
   --accent:#7fb3b8; --accent-soft:#22312f;
   --ok:#5cc196; --warn:#e3a94a; --bad:#f07b70; --bad-soft:#3a2321; --warn-soft:#382d1b; --ok-soft:#1d3229;
   --sA:#7fb3b8; --sB:#e3a94a; --sB0:#5d8589; --sB1:#9c8150; --sC:#d08ad4; --lum:66%; color-scheme:dark}
@@ -141,7 +141,7 @@ main{display:grid;gap:22px;min-width:0}
 .split span{display:block;height:100%}
 
 .tip.sticky{pointer-events:auto}
-#alist{max-height:320px;overflow-y:auto;padding-right:2px}
+#alist{padding-right:2px} /* 不另外捲動：整頁一起捲（避免手機上兩層捲動條） */
 .yrctl{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px 14px;align-items:center;padding:10px 14px}
 @media (max-width:560px){.yrctl{grid-template-columns:1fr auto}.yrctl input[type=range]{grid-column:1/-1;grid-row:2}}
 .bk{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:14px 16px;display:grid;gap:10px;align-content:start}
@@ -198,8 +198,8 @@ body{font-variant-numeric:tabular-nums;letter-spacing:.02em}
 <style>
 /* 和 K線學堂一致的分層灰階：底色 → 面板 → 輸入框 */
 :root{--bg:#e9e9e9;--panel:#fafafa;--ink:#111111;--muted:#666666;--line:#d4d4d4;--accent:#1c1c1c;--accent-soft:rgba(0,0,0,.06);--field:#ffffff}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000000;--panel:#0c0c0c;--ink:#f2f2f2;--muted:#8e8e8e;--line:#262626;--accent:#e4e4e4;--accent-soft:rgba(255,255,255,.08);--field:#212121}}
-:root[data-theme="dark"]{--bg:#000000;--panel:#0c0c0c;--ink:#f2f2f2;--muted:#8e8e8e;--line:#262626;--accent:#e4e4e4;--accent-soft:rgba(255,255,255,.08);--field:#212121}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000000;--panel:#0c0c0c;--ink:#f2f2f2;--muted:#a8a8a8;--line:#262626;--accent:#e4e4e4;--accent-soft:rgba(255,255,255,.08);--field:#212121}}
+:root[data-theme="dark"]{--bg:#000000;--panel:#0c0c0c;--ink:#f2f2f2;--muted:#a8a8a8;--line:#262626;--accent:#e4e4e4;--accent-soft:rgba(255,255,255,.08);--field:#212121}
 body{margin:0;font-weight:300}
 h1,h2,h3,h4,h5,h6,b,strong,th,legend,dt{font-weight:500}
 input.num,select,.arow input,.mrow input{background:var(--field)}
@@ -210,8 +210,8 @@ input.num,select,.arow input,.mrow input{background:var(--field)}
 :root[data-embed="1"] .jump{top:0}
 /* 和 K線學堂「版心留白」一致：近黑／米白底、金色重點；無框設計——面板、卡片、按鈕都不加框，只靠留白分隔 */
 :root{--bg:#f5f4f0;--panel:#f5f4f0;--ink:#161616;--muted:#77746d;--line:#e4e1da;--accent:#9b7b2f;--accent-soft:rgba(155,123,47,.1);--field:transparent}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e0e0e;--panel:#0e0e0e;--ink:#ececea;--muted:#8e8e8b;--line:#242424;--accent:#cfae62;--accent-soft:rgba(207,174,98,.12);--field:transparent}}
-:root[data-theme="dark"]{--bg:#0e0e0e;--panel:#0e0e0e;--ink:#ececea;--muted:#8e8e8b;--line:#242424;--accent:#cfae62;--accent-soft:rgba(207,174,98,.12);--field:transparent}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e0e0e;--panel:#0e0e0e;--ink:#ececea;--muted:#a8a8a4;--line:#242424;--accent:#cfae62;--accent-soft:rgba(207,174,98,.12);--field:transparent}}
+:root[data-theme="dark"]{--bg:#0e0e0e;--panel:#0e0e0e;--ink:#ececea;--muted:#a8a8a4;--line:#242424;--accent:#cfae62;--accent-soft:rgba(207,174,98,.12);--field:transparent}
 .console,.panel,.bk,.kpi,.verdict,.kv{border-color:transparent;box-shadow:none}
 .kv{background:transparent;gap:0}
 .console details{border-top-color:var(--line)}

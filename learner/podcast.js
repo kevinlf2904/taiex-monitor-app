@@ -215,7 +215,7 @@ function podCallCard(c, showEp = true) {
   const main = p?.latest ? `<b class="pex ${cls(p.latest.ex)}">${podPct(p.latest.ex)}</b><span class="note">對大盤・截至 ${p.latest.n}d 結算</span>`
     : p?.cur ? `<b class="pex">${podPct(p.cur.ex)}</b><span class="note">目前（還沒到 7 天）</span>` : `<b class="pex muted">—</b>`;
   return `<div class="pcall">
-    <div class="pch"><button class="pcode" data-sel="${c.code}">${tw ? "TWSE" : "US"}:${c.code}</button><span class="pname">${esc(c.name || nameOf(c.code))}</span><span class="pdir ${c.dir}">${c.dir === "bear" ? "看空" : "看多"}</span><span class="note pst">${status}</span></div>
+    <div class="pch"><button class="pcode" data-sel="${c.code}">${tw ? "TWSE" : "US"}:${c.code}</button><span class="pname">${esc(c.name || nameOf(c.code))}</span><span class="pdir ${c.dir}">${c.dir === "bear" ? "看空" : "看多"}</span>${typeof wStar === "function" ? wStar(c.code) : ""}<span class="note pst">${status}</span></div>
     <div class="pmain">${main}</div>
     ${c.quote ? `<blockquote class="pq ${c.dir}">${esc(c.quote)}</blockquote>` : ""}
     ${p?.series ? podSpark(p.series.map(s => ({ v: s.ex }))) + podCkBar(p) : ""}
