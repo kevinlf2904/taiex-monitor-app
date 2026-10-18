@@ -8,6 +8,7 @@
 // 張數單位：張；指數沒有成交量（vol 為 null）。
 
 import { isUS, yahooQuote, getJSON as yGet, quoteFromMeta } from "./_yahoo.js";
+import { finnhubQuote } from "./_finnhub.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json", "Accept-Language": "zh-TW" };
 const INDEX = { T00: { mis: "tse_t00.tw", fugle: "IX0001", name: "加權指數" }, O00: { mis: "otc_o00.tw", fugle: "IX0043", name: "櫃買指數" } };
 const ALIAS = { TAIEX: "T00", "加權": "T00", "加權指數": "T00", "大盤": "T00", TWII: "T00", "櫃買": "O00", "櫃買指數": "O00", TPEX: "O00" };
@@ -121,13 +122,14 @@ export default async function handler(req, res) {
   if (!all.length) return res.status(400).json({ ok: false, error: "請給股票代號，例如 ?codes=2330,t00（t00 是加權指數）。" });
   const us = all.filter(isUS), codes = all.filter(c => !isUS(c));
   // 只有美股：直接問 Yahoo
-  const usQuotes = () => Promise.allSettled(us.map(yahooQuote)).then(r => r.filter(x => x.status === "fulfilled").map(x => x.value));
+  // Yahoo 拿不到的美股個股，改問 Finnhub（有設定 FINNHUB_API_KEY 才會用；回傳的 src 標示來源）
+  const usQuotes = () => Promise.allSettled(us.map(c => yahooQuote(c).catch(() => finnhubQuote(c)))).then(r => r.filter(x => x.status === "fulfilled").map(x => x.value));
   if (!codes.length) {
     const hitU = cache.get("us:" + us.join(","));
     if (hitU && Date.now() - hitU.at < 15000) return res.status(200).json(hitU.body);
     const quotes = await usQuotes();
     if (!quotes.length) return res.status(200).json({ ok: false, session: session(), error: "暫時拿不到美股報價（Yahoo Finance），稍後再試。" });
-    const body = { ok: true, source: "Yahoo Finance", session: session(), today: todayTaipei(), time: new Date().toISOString(), quotes, missing: us.filter(c => !quotes.some(q => q.code === c)) };
+    const body = { ok: true, source: quotes.some(q => q.src === "Finnhub") ? "Yahoo Finance（部分備援：Finnhub）" : "Yahoo Finance", session: session(), today: todayTaipei(), time: new Date().toISOString(), quotes, missing: us.filter(c => !quotes.some(q => q.code === c)) };
     cache.set("us:" + us.join(","), { at: Date.now(), body }); res.setHeader("Cache-Control", "s-maxage=15, stale-while-revalidate=60");
     return res.status(200).json(body);
   }

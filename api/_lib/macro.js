@@ -1,4 +1,4 @@
-// 總經數據：美國聯準會聖路易分行 FRED 的公開 CSV（不需要金鑰），給 learner/watch.html「大盤 → 總經」使用。
+// 總經數據：美國聯準會聖路易分行 FRED，給 learner/watch.html「大盤 → 總經」使用。有 FRED_API_KEY 時走官方介面（api.stlouisfed.org，不會被雲端主機擋），沒有或失敗時改用公開 CSV（不需要金鑰）。
 // GET /api/macro → { ok, at, series: [{ id, name, group, unit, freq, how, note, last: [日期, 值], prev, chg1y, data: [[日期, 值]...] }], signals: [...] }
 // 數值轉換：yoy＝年增率（%）、diff＝和上一期的差（非農新增就業）、lvl＝原始數值。快取 6 小時（資料一個月才更新一次）。
 const SERIES = [
@@ -35,7 +35,18 @@ const SERIES = [
   ["PCOPPUSDM", "銅價", "世界", "美元／噸", "lvl", "「銅博士」：銅用在電線、建築、電動車，被視為全球景氣指標。", "銅價上漲 → 全球景氣與 AI 電力建設需求強，電線電纜、景氣循環股受惠", "銅價下跌 → 全球景氣轉弱的訊號"],
   ["GEPUCURRENT", "全球經濟政策不確定性", "世界", "點", "lvl", "根據新聞報導算出的政策不確定程度（關稅、選舉、戰爭）。", "不確定性升高 → 資金避險，股市波動變大、黃金與美元受惠", "不確定性下降 → 風險偏好回升"],
 ];
-const FRED = "https://fred.stlouisfed.org/graph/fredgraph.csv";
+const FRED = "https://fred.stlouisfed.org/graph/fredgraph.csv", FRED_API = "https://api.stlouisfed.org/fred/series/observations";
+// 官方介面的回應：{ observations: [{ date, value }] }，缺值是 "."
+export function parseObs(j) {
+  return (Array.isArray(j?.observations) ? j.observations : []).map(o => [o?.date, o?.value]).filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r[0]) && r[1] !== "" && r[1] !== "." && Number.isFinite(+r[1])).map(r => [r[0], +r[1]]);
+}
+// 一個數列：先用官方介面（有金鑰時），失敗再用 CSV。錯誤訊息不含金鑰；回傳 { rows, via }
+async function fredSeries(id, since, timeout, key) {
+  if (key) { try { const r = await fetch(`${FRED_API}?series_id=${encodeURIComponent(id)}&api_key=${encodeURIComponent(key)}&file_type=json&observation_start=${since}`, { headers: { ...UA, Accept: "application/json" }, signal: AbortSignal.timeout(timeout) });
+    if (r.ok) { const rows = parseObs(await r.json()); if (rows.length) return { rows, via: "api" }; } } catch {} }
+  const r = await fetch(`${FRED}?id=${id}&cosd=${since}`, { headers: UA, signal: AbortSignal.timeout(timeout) }); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return { rows: parseCsv(await r.text()), via: "csv" };
+}
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "text/csv,*/*" };
 
 export function parseCsv(t) {
@@ -65,12 +76,12 @@ export function impactOf(rows, up, down) {
 // 整理全部數列與重點訊號；排程（scripts/macro.mjs，GitHub Actions）和 /api/macro 共用。FRED 會擋掉部分雲端主機（Vercel 上常逾時），所以網頁優先讀排程存好的 learner/data/macro.json
 export async function buildMacro(timeout = 15000) {
   const since = new Date(Date.now() - 6 * 365 * 864e5).toISOString().slice(0, 10);
-  const got = await Promise.allSettled(SERIES.map(async ([id]) => { const r = await fetch(`${FRED}?id=${id}&cosd=${since}`, { headers: UA, signal: AbortSignal.timeout(timeout) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return parseCsv(await r.text()); }));
-  const series = [], notes = []; let unRaw = null;
+  const key = (process.env.FRED_API_KEY || "").trim(), got = await Promise.allSettled(SERIES.map(([id]) => fredSeries(id, since, timeout, key)));
+  const series = [], notes = []; let unRaw = null, viaApi = 0;
   SERIES.forEach(([id, name, group, unit, how, note, up, down], k) => {
-    const g = got[k]; if (g.status !== "fulfilled" || !g.value.length) { notes.push(`${name}：${g.reason?.message || "沒有資料"}`); return; }
-    if (id === "UNRATE") unRaw = g.value;
-    let rows = transform(g.value, how); if (!rows.length) return; const daily = rows.length > 400; if (daily) rows = thin(rows);
+    const g = got[k]; if (g.status !== "fulfilled" || !g.value.rows.length) { notes.push(`${name}：${g.reason?.message || "沒有資料"}`); return; }
+    if (g.value.via === "api") viaApi++; if (id === "UNRATE") unRaw = g.value.rows;
+    let rows = transform(g.value.rows, how); if (!rows.length) return; const daily = rows.length > 400; if (daily) rows = thin(rows);
     const last = rows[rows.length - 1], prev = rows[rows.length - 2] || null, y1 = rows.filter(r => Date.parse(r[0]) <= Date.parse(last[0]) - 360 * 864e5).pop() || null;
     const gap = rows.length > 2 ? (Date.parse(last[0]) - Date.parse(rows[Math.max(0, rows.length - 6)][0])) / Math.min(5, rows.length - 1) / 864e5 : 30;
     series.push({ id, name, group, unit, how, note, freq: daily ? "日" : gap > 70 ? "季" : gap > 20 ? "月" : gap > 4 ? "週" : "日", last, prev, y1, data: rows.slice(daily ? -260 : -72), ...impactOf(rows, up, down) });
@@ -83,7 +94,7 @@ export async function buildMacro(timeout = 15000) {
   const cpi = S("CPILFESL"); if (cpi) { const a = cpi.last[1], b = cpi.data[cpi.data.length - 4]?.[1]; signals.push({ k: "核心通膨", v: a.toFixed(1) + "%", lv: a > 3 ? 2 : a > 2.5 ? 1 : 0, t: `${b != null ? (a < b ? "比 3 個月前降溫" : a > b ? "比 3 個月前升溫" : "和 3 個月前持平") : ""}，聯準會目標 2%` }); }
   const vix = S("VIXCLS"); if (vix) signals.push({ k: "VIX", v: vix.last[1].toFixed(1), lv: vix.last[1] >= 30 ? 2 : vix.last[1] >= 20 ? 1 : 0, t: vix.last[1] >= 30 ? "恐慌" : vix.last[1] >= 20 ? "偏緊張" : "平靜" });
   const hy = S("BAMLH0A0HYM2"); if (hy) signals.push({ k: "信用利差", v: hy.last[1].toFixed(2), lv: hy.last[1] >= 5 ? 2 : hy.last[1] >= 4 ? 1 : 0, t: hy.last[1] >= 5 ? "風險升溫" : hy.last[1] >= 4 ? "略偏高" : "正常" });
-  return { ok: true, at: new Date().toISOString(), source: "FRED（美國聯準會聖路易分行）", series, signals, notes };
+  return { ok: true, at: new Date().toISOString(), source: "FRED（美國聯準會聖路易分行）", via: viaApi ? (viaApi === series.length ? "官方介面" : `官方介面 ${viaApi} 個、公開 CSV ${series.length - viaApi} 個`) : "公開 CSV", series, signals, notes };
 }
 
 let memo = null;

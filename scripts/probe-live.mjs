@@ -11,6 +11,22 @@ async function raw(url, n = 600) {
   const t0 = Date.now(); try { const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "*/*", Referer: "https://mis.twse.com.tw/stock/index.jsp" }, signal: AbortSignal.timeout(20000) }); const t = await r.text();
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
+if (process.argv[2] === "keys") {
+  // 金鑰檢查（GitHub secrets 有沒有設定、能不能用）：只印「有沒有」「狀態碼」「用量」，絕不印金鑰或帶金鑰的網址
+  const has = k => !!(process.env[k] && process.env[k].trim()), tk = k => process.env[k].trim();
+  console.log("secrets：", ["FRED_API_KEY", "FUGLE_API_KEY", "FINMIND_TOKEN"].map(k => `${k}=${has(k) ? "有（" + tk(k).length + " 字元）" : "沒有"}`).join("、"));
+  const call = async (label, url, headers = {}) => { const t0 = Date.now(); try { const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json", ...headers }, signal: AbortSignal.timeout(20000) }); const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch {} console.log(`${label} → HTTP ${r.status} ${Date.now() - t0}ms ${t.length} bytes`); return { r, j, t }; } catch (e) { console.log(`${label} → 錯誤 ${e.name === "TimeoutError" ? "逾時" : "網路錯誤"}`); return {}; } };
+  if (has("FRED_API_KEY")) { const { j } = await call("FRED 官方介面 DGS10", `https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&api_key=${encodeURIComponent(tk("FRED_API_KEY"))}&file_type=json&sort_order=desc&limit=3`); console.log("  最近 3 筆：", JSON.stringify((j?.observations || []).map(o => [o.date, o.value])), j?.error_message ? "訊息：" + String(j.error_message).replace(/[0-9a-f]{20,}/gi, "***") : ""); }
+  if (has("FINMIND_TOKEN")) { const { j } = await call("FinMind 使用量", "https://api.web.finmindtrade.com/v2/user_info", { Authorization: `Bearer ${tk("FINMIND_TOKEN")}` }); console.log("  已用／上限：", j?.user_count, "/", j?.api_request_limit, "（等級欄位：", Object.keys(j || {}).filter(k => !/token|key|email|password/i.test(k)).join(","), "）"); }
+  if (has("FUGLE_API_KEY")) {
+    const h = { "X-API-KEY": tk("FUGLE_API_KEY") }, base = "https://api.fugle.tw/marketdata/v1.0";
+    await call("富果 股票報價 2330", `${base}/stock/intraday/quote/2330`, h);
+    const sym = (await import("../api/_lib/futures.js")).nearMonth().code;
+    for (const q of ["timeframe=D&from=2026-09-01&to=2026-10-16", "timeframe=1&from=2026-10-12&to=2026-10-16", "timeframe=5&from=2026-10-12&to=2026-10-16"]) { const { j, t } = await call(`富果 期貨歷史 ${sym} ${q.split("&")[0]}`, `${base}/futopt/historical/candles/${sym}?${q}`, h); console.log("  根數", Array.isArray(j?.data) ? j.data.length : "—", "第一筆", JSON.stringify(j?.data?.[0] || null).slice(0, 160), j?.message ? "訊息 " + String(j.message).slice(0, 120) : ""); }
+    await call(`富果 期貨盤中分 K ${sym} timeframe=1`, `${base}/futopt/intraday/candles/${sym}?timeframe=1`, h);
+  }
+  process.exit(0);
+}
 if (process.argv[2] === "fut") {
   // 台指期分 K：網站 /api/futures 回傳幾根、note、錯誤；再直接看期交所 1 分 K（日盤 -F、夜盤 -M）原始回應
   const f = await hit("/api/futures"); const j = f.j || {}, B = j.bars || [];

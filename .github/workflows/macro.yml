@@ -20,6 +20,8 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/macro.mjs
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
       - name: commit
         env:
           COMMIT_NAME: macro
