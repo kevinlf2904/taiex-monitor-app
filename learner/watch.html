@@ -845,7 +845,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.18-91</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.18-92</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -3200,7 +3200,7 @@ function futData(j) {
   if (W.futTs === "cur") { if (blocks.length > 1) blocks = [{ ...blocks[blocks.length - 1], g0: 0 }]; }
   else blocks = futTradeDay(blocks); // 近全：同一個交易日（前一晚 15:00 起的夜盤＋隔天日盤），時間軸 15:00→13:45
   let sv = 0, spv = 0, last = null;
-  const pts = blocks.flatMap(B => { sv = 0; spv = 0; return B.pts.map(b => { let m = toMin(b.t) - (B.s === "night" ? 900 : 525); if (m < 0) m += 1440; sv += b.v; spv += b.c * b.v; return (last = { blk: B, d: b.d, m, g: B.g0 + Math.min(m, B.len), t: b.t, c: b.c, v: b.v, a: sv ? spv / sv : null, s: B.s }); }); });
+  const pts = blocks.flatMap(B => { sv = 0; spv = 0; return B.pts.map(b => { let m = toMin(b.t) - (B.s === "night" ? 900 : 525); if (m < 0) m += 1440; sv += b.v; spv += b.c * b.v; return (last = { blk: B, d: b.d, m, g: B.g0 + Math.min(m, B.len), t: b.t, o: b.o ?? b.c, h: b.h ?? b.c, l: b.l ?? b.c, c: b.c, v: b.v, a: sv ? spv / sv : null, s: B.s }); }); });
   const total = W.futTs === "cur" ? blocks.reduce((s, B) => s + B.len, 0) || 1 : 1365;
   const ref = W.futTs !== "cur" && blocks[0]?.s === "night" ? j.nprev ?? j.prev : j.prev; // 近全的參考價：這個交易日的參考價（夜盤的參考價）
   return { fut: true, full: W.futTs !== "cur", tday: blocks.tday, blocks, days: [{ d: j.date, pts }], pts, day: j.date, prev: ref ?? pts[0].c, isIdx: false, o: 0, cl: total, us: false, cdp: null };
@@ -3238,7 +3238,7 @@ function drawTs() {
   const { pts, prev, o, cl, days, cdp } = d, span = cl - o, total = span * days.length, X = g => L + g / total * pw, fp = v => fmtPx(v, W.sel);
   const extra = (cdp || []).map(x => x[1]).filter(v => Math.abs(v / prev - 1) < 0.1); // CDP 太遠時不撐大座標
   let hi, lo;
-  if (days.length === 1) { const dev = Math.max(prev * 0.005, ...pts.map(p => Math.abs(p.c - prev)), ...pts.filter(p => p.a).map(p => Math.abs(p.a - prev)), ...extra.map(v => Math.abs(v - prev))) * 1.12; hi = prev + dev; lo = prev - dev; }
+  if (days.length === 1) { const dev = Math.max(prev * 0.005, ...pts.map(p => Math.abs(p.c - prev)), ...(d.fut ? pts.flatMap(p => [Math.abs(p.h - prev), Math.abs(p.l - prev)]) : []), ...pts.filter(p => p.a).map(p => Math.abs(p.a - prev)), ...extra.map(v => Math.abs(v - prev))) * 1.12; hi = prev + dev; lo = prev - dev; }
   else { const vs = [...pts.map(p => p.c), prev, ...extra]; hi = Math.max(...vs); lo = Math.min(...vs); const pad = Math.max((hi - lo) * 0.08, prev * 0.002); hi += pad; lo -= pad; }
   const Y = v => top + (hi - v) / (hi - lo) * mainH;
   const grid = days.length === 1 ? [-2, -1, 0, 1, 2].map(k => prev + (hi - prev) / 1.12 * k / 2) : [0, 1, 2, 3, 4].map(k => lo + (hi - lo) * (k + 0.5) / 5);
@@ -3268,8 +3268,9 @@ function drawTs() {
   });
   ctx.restore();
   if (d.fut && pts.length > 2) { // 最高、最低價標在線上（像券商 App）
-    const hp = pts.reduce((a, b) => (b.c > a.c ? b : a)), lp = pts.reduce((a, b) => (b.c < a.c ? b : a)); ctx.font = `10.5px ${col("--font-num")}`;
-    [[hp, -9, hp.c >= prev ? "--up" : "--down"], [lp, 11, lp.c >= prev ? "--up" : "--down"]].forEach(([p, dy, c]) => { const x = X(p.g); ctx.fillStyle = col(c); ctx.textAlign = x < L + 40 ? "left" : x > L + pw - 40 ? "right" : "center"; ctx.fillText(fp(p.c), x, Math.max(top + 6, Math.min(top + mainH - 6, Y(p.c) + dy))); });
+    // 用分 K 的最高、最低（不是收盤），才和券商 App 的高低點一樣
+    const hp = pts.reduce((a, b) => (b.h > a.h ? b : a)), lp = pts.reduce((a, b) => (b.l < a.l ? b : a)); ctx.font = `10.5px ${col("--font-num")}`;
+    [[hp, hp.h, -9], [lp, lp.l, 11]].forEach(([p, v, dy]) => { const x = X(p.g); ctx.fillStyle = col(v >= prev ? "--up" : "--down"); ctx.textAlign = x < L + 40 ? "left" : x > L + pw - 40 ? "right" : "center"; ctx.fillText(fp(v), x, Math.max(top + 6, Math.min(top + mainH - 6, Y(v) + dy))); });
     ctx.font = `11px ${col("--font-num")}`; }
   ctx.globalAlpha = 1; ctx.fillStyle = col("--muted"); ctx.beginPath(); ctx.arc(X(last.g), Y(last.c), 2.5, 0, Math.PI * 2); ctx.fill();
   if (volH) {
@@ -3286,7 +3287,7 @@ function drawTs() {
   TS.geo = { L, pw, total };
   const ch = P.c / prev - 1;
   $("#tsLeg").innerHTML = `<span><b>${d.fut ? (P.s === "night" ? "夜盤 " : "日盤 ") : ""}${days.length > 1 ? P.d.slice(5).replace("-", "/") + " " : ""}${P.t}</b></span><span class="${cls(ch)}"><b>價</b>${fp(P.c)}（${ch >= 0 ? "+" : ""}${(ch * 100).toFixed(2)}%）</span>${P.a != null && !d.isIdx ? `<span style="color:var(--s1)"><b style="color:inherit">均價</b>${fp(P.a)}</span>` : ""}${d.isIdx ? "" : `<span><b>量</b>${fmtVol(P.v)} ${d.us ? "千股" : d.fut ? "口" : "張"}</span>`}<span><b>${d.fut ? "參考價" : "昨收"}</b>${fp(prev)}</span>`;
-  if (d.fut) { const fo = pts[0].c, fh = Math.max(...pts.map(p => p.c)), fl = Math.min(...pts.map(p => p.c)), fv = pts.reduce((s, p) => s + (p.v || 0), 0);
+  if (d.fut) { const fo = pts[0].o, fh = Math.max(...pts.map(p => p.h)), fl = Math.min(...pts.map(p => p.l)), fv = pts.reduce((s, p) => s + (p.v || 0), 0);
     $("#tsNote").textContent = `${d.full ? `近全 ${d.tday ? d.tday.slice(5).replace("-", "/") + " " : ""}（前一晚夜盤＋日盤）・開 ${fp(fo)} 高 ${fp(fh)} 低 ${fp(fl)} 總量 ${fv.toLocaleString()} 口` : d.blocks[0]?.s === "night" ? "本盤：夜盤 15:00–05:00" : "本盤：日盤 08:45–13:45"}・${W.quotes.get("TXF")?.symbol || ""}・${W.intra.source || ""}`; return; }
   const wantDays = W.tsDays > 1 && days.length < W.tsDays ? (W.tsHist?.code === W.sel ? (W.tsHist.err ? `・前幾天載入失敗：${W.tsHist.err}` : "") : "・載入前幾天中…") : "";
   $("#tsNote").textContent = `${W.intra.date && W.intra.date !== W.today && !d.us ? "最近交易日 " + W.intra.date.replace(/-/g, "/") + "・" : ""}${d.us ? "美東時間・" : ""}${W.intra.source || ""}${wantDays}${W.cdp && !cdp ? "・CDP 需要日 K 資料" : ""}`;

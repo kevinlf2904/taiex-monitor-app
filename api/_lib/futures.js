@@ -49,7 +49,14 @@ export function parseTaifexList(j, near, session, cid = "TXF") {
   const price = num(r.CLastPrice), prev = num(r.CRefPrice), dt = String(r.CDate || ""), tm = String(r.CTime || "").padStart(6, "0");
   return { code: cid, symbol: String(r.SymbolID || "").replace(/-.*/, ""), sid: String(r.SymbolID || ""), name: r.DispCName || FUT_NAMES[cid], session, price, prev, open: num(r.COpenPrice), high: num(r.CHighPrice), low: num(r.CLowPrice), vol: num(r.CTotalVolume),
     chg: price != null && prev ? +(price - prev).toFixed(2) : num(r.CDiff), chgPct: price != null && prev ? +((price / prev - 1) * 100).toFixed(2) : num(r.CDiffRate),
-    time: /^\d{6}$/.test(tm) ? `${tm.slice(0, 2)}:${tm.slice(2, 4)}:${tm.slice(4, 6)}` : null, date: /^\d{8}$/.test(dt) ? `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6)}` : null };
+    time: /^\d{6}$/.test(tm) ? `${tm.slice(0, 2)}:${tm.slice(2, 4)}:${tm.slice(4, 6)}` : null, ...taifexWhen(dt, tm, session) };
+}
+// 期交所的 CDate 是這一盤開始的日期：夜盤 05:00 前的成交其實是隔天。date＝成交當下的日期（顯示用）、sdate＝這一盤開始那天（抓分 K 用）、at＝成交時間（比較哪一盤比較新）
+export function taifexWhen(dt, tm, session) {
+  if (!/^\d{8}$/.test(dt)) return { date: null, sdate: null, at: null };
+  const sdate = `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6)}`, hh = /^\d{6}$/.test(tm) ? +tm.slice(0, 2) : 12;
+  const date = session === "night" && hh < 15 ? iso(new Date(Date.parse(sdate + "T00:00:00Z") + 864e5)) : sdate;
+  return { date, sdate, at: /^\d{6}$/.test(tm) ? Date.parse(`${date}T${tm.slice(0, 2)}:${tm.slice(2, 4)}:${tm.slice(4, 6)}+08:00`) : null };
 }
 // 近全：正在交易的那一盤；都收盤時取時間比較晚的那一盤
 export function pickCurrent(day, night, sess) {
@@ -101,7 +108,7 @@ async function taifexBars(q, session) {
   const j = await getJSON("https://mis.taifex.com.tw/futures/api/getChartData1M", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ SymbolID: q.sid }) });
   // 夜盤的日期：期交所的 CDate 就是夜盤開始（15:00）那一天；週末打開時不能用「今天」推算
   const t = tpe(), start = session === "night" && t.getUTCHours() < 15 ? iso(new Date(t.getTime() - 864e5)) : iso(t);
-  return parseTaifexChart(j, session, q.date || start);
+  return parseTaifexChart(j, session, q.sdate || q.date || start);
 }
 async function fromTaifex(near, cid = "TXF", withBars = false) {
   const body = mt => JSON.stringify({ MarketType: mt, SymbolType: "F", KindID: "1", CID: cid, ExpireMonth: "", RowSize: "全部", PageNo: "", SortColumn: "", AscDesc: "A" });
