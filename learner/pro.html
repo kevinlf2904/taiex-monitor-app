@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#09090B">
-<title>KLineLab Pro｜K線情報局</title>
-<meta name="description" content="KLineLab Pro：台美股機構籌碼、國會申報、供應鏈資金與 K 線回測的量化研究終端機。加入候補名單。">
+<title>公開測試版 (Beta)｜KLineLab K線情報局</title>
+<meta name="description" content="KLineLab K線情報局目前是公開測試版 (Beta)，所有功能免費使用。留下 Email 收更新通知。">
 <link rel="icon" href="logo.svg?v=4" type="image/svg+xml">
 <link rel="apple-touch-icon" href="watch-icon-180.png?v=4">
-<!-- KLineLab Pro 方案頁：方案比較＋候補名單（POST /api/sync op=waitlist，存在 KV）。目前不收費、沒有會員登入。主題跟著首頁（kline:theme）。 -->
+<!-- 公開測試版 (Beta) 說明頁：說明目前全部免費、收更新通知（POST /api/sync op=waitlist，存在 KV）。沒有收費、沒有會員登入。主題跟著首頁（kline:theme）。 -->
 <script>try { document.documentElement.dataset.theme = JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); } catch { document.documentElement.dataset.theme = "dark"; }</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,34 +47,34 @@ h1 { font: 600 clamp(28px, 5vw, 48px)/1.15 "Space Grotesk", var(--font-display);
 </style>
 </head>
 <body>
-<header class="nav"><div class="nav-in"><span id="brand"></span><nav><a href="./">學堂</a><a href="watch.html">看盤終端</a><a href="pro.html" aria-current="page">方案</a></nav></div></header>
+<header class="nav"><div class="nav-in"><span id="brand"></span><nav><a href="./">學堂</a><a href="watch.html">看盤終端</a><a href="pro.html" aria-current="page">Beta</a></nav></div></header>
 <main>
   <section class="phero"><div class="wrap">
-    <p class="k">KLINELAB PRO</p>
-    <h1>給認真做研究的人：<br>機構籌碼與突破訊號的量化終端機</h1>
-    <p class="lead">KLineLab K線情報局把 SEC 13F 機構持股、美國國會議員申報、台股內部人與借券、供應鏈量價動能矩陣，和 K 線型態辨識、歷史回測放在同一個地方。資料全部來自政府與交易所的公開資訊，由程式自動計算。</p>
+    <p class="k">PUBLIC BETA</p>
+    <h1>公開測試版 (Beta)：<br>所有功能免費使用</h1>
+    <p class="lead">KLineLab K線情報局把 SEC 13F 機構持股、美國國會議員申報、台股內部人與借券、供應鏈量價動能矩陣，和 K 線型態辨識、歷史回測放在同一個地方。資料來自政府與交易所的公開資訊，由程式自動計算。測試期間沒有任何付費方案。</p>
   </div></section>
   <div class="wrap">
-    <section class="plans" aria-label="方案">
-      <article class="plan"><h2>Free</h2><div class="price">NT$0 <small>現在就能用</small></div>
-        <ul><li>台美股即時報價、K 線與 40+ 技術策略回測</li><li>市場狀態、ATR 參考進出場與部位大小</li><li>13F 機構影子組合回測、國會申報後超額報酬追蹤</li><li>供應鏈題材地圖、量價動能矩陣</li><li>庫存風險分析、多因子排行</li></ul>
-        <a class="pbtn" href="watch.html">進入看盤終端</a></article>
-      <article class="plan hi"><h2>Pro <span class="bl-pro">PRO</span></h2><div class="price">候補中 <small>價格公布前不收費</small></div>
-        <ul><li>Free 的全部功能</li><li class="soon">收盤後 13F／國會／內部人新申報推播</li><li class="soon">全市場多因子每日排名與歷史回測</li><li class="soon">回測與庫存風險報告匯出（CSV／PDF）</li><li class="soon">更高的 AI 解讀額度</li></ul>
-        <a class="pbtn pri" href="#waitlist">加入 Pro 候補名單</a></article>
-      <article class="plan"><h2>Team</h2><div class="price">洽詢 <small>研究團隊、投資社群</small></div>
-        <ul><li>Pro 的全部功能</li><li class="soon">多人共用自選、庫存與研究筆記</li><li class="soon">自訂資料排程與 API</li></ul>
-        <a class="pbtn" href="#waitlist" data-plan="team">登記洽詢</a></article>
+    <section class="plans" aria-label="測試版內容">
+      <article class="plan"><h2>現在可以用</h2>
+        <ul><li>台美股報價、K 線與 40+ 技術策略回測</li><li>市場狀態、ATR 參考計算</li><li>13F 機構影子組合回測、國會申報後超額報酬追蹤</li><li>供應鏈題材地圖、量價動能矩陣</li><li>庫存風險分析、多因子排行</li></ul>
+        <a class="pbtn" href="watch.html">進入看盤</a></article>
+      <article class="plan hi"><h2>測試中 <span class="bl-pro">Beta</span></h2>
+        <ul><li>功能與版面會常常調整</li><li>資料可能延遲或缺漏，請以官方公告為準</li><li class="soon">收盤後新申報通知</li><li class="soon">研究報告匯出</li></ul>
+        <a class="pbtn pri" href="#waitlist">收更新通知</a></article>
+      <article class="plan"><h2>意見回報</h2>
+        <ul><li>發現資料錯誤</li><li>節目主要求移除節目整理</li><li>想要的新功能</li></ul>
+        <a class="pbtn" id="fbLink" href="#" target="_blank" rel="noopener">意見回報 ↗</a></article>
     </section>
-    <p class="note">灰色項目是規劃中的功能，上線時間會先通知候補名單。</p>
-    <section class="wl" id="waitlist"><h2>加入候補名單</h2><p class="note">留下 Email，Pro 開放時第一個通知你。只用來通知方案上線，不會分享給第三方。</p>
-      <form id="wlForm"><input type="email" id="wlEmail" required placeholder="you@example.com" autocomplete="email" aria-label="Email"><select id="wlPlan" aria-label="方案"><option value="pro">Pro</option><option value="team">Team</option></select><button class="pbtn pri" type="submit">送出</button><p class="msg note" id="wlMsg" role="status"></p></form></section>
+    <p class="note">灰色項目是規劃中的功能。</p>
+    <section class="wl" id="waitlist"><h2>收更新通知</h2><p class="note">留下 Email，有重要更新時通知你。只用來通知，不會分享給第三方。</p>
+      <form id="wlForm"><input type="email" id="wlEmail" required placeholder="you@example.com" autocomplete="email" aria-label="Email"><input type="hidden" id="wlPlan" value="beta"><button class="pbtn pri" type="submit">送出</button><p class="msg note" id="wlMsg" role="status"></p></form></section>
     <section class="faq" aria-label="常見問題">
-      <details><summary>資料從哪裡來？合法嗎？</summary><p>13F 來自美國證管會 SEC EDGAR、國會議員交易來自眾議院與參議院的官方申報、台股內部人與借券來自證交所與櫃買中心、台灣政治人物持股來自監察院廉政專刊，都是政府依法公開的資料。報價與 K 線來自交易所與公開行情服務。</p></details>
-      <details><summary>回測結果可以直接拿來下單嗎？</summary><p>不行。回測是用過去的資料模擬，含手續費與稅，但不代表未來；「改善試算」是事後比較，要換一段時間再驗證。平台不提供個股買賣建議。</p></details>
-      <details><summary>現在要付費嗎？</summary><p>不用。目前所有功能都免費，Pro 價格公布前不會收任何費用。</p></details>
+      <details><summary>資料從哪裡來？</summary><p>13F 來自美國證管會 SEC EDGAR、國會議員交易來自眾議院與參議院的官方申報、台股內部人與借券來自證交所與櫃買中心、台灣政治人物持股來自監察院廉政專刊。部分盤後公開數據取自政府資料開放平臺（依政府資料開放授權條款第1版使用）；盤中報價取自交易所公開行情與第三方行情服務，可能延遲。</p></details>
+      <details><summary>回測結果可以直接拿來下單嗎？</summary><p>不行。回測是用過去的資料模擬，含手續費與稅，但不代表未來。平台不提供個股買賣建議。</p></details>
+      <details><summary>現在要付費嗎？</summary><p>不用。公開測試期間所有功能都免費，沒有付費方案。</p></details>
     </section>
-    <footer class="foot"><p id="disc"></p><p><a href="./" style="color:inherit">KLineLab K線情報局</a></p></footer>
+    <footer class="foot"><p id="disc"></p><p class="data-note"></p><p><a href="./" style="color:inherit">KLineLab K線情報局</a></p></footer>
   </div>
 </main>
 <script src="core.js"></script>
@@ -82,12 +82,12 @@ h1 { font: 600 clamp(28px, 5vw, 48px)/1.15 "Space Grotesk", var(--font-display);
 "use strict";
 $("#brand").innerHTML = brandHtml({ href: "./" });
 $("#disc").textContent = DISCLAIMER;
-document.querySelectorAll("[data-plan]").forEach(a => a.addEventListener("click", () => { $("#wlPlan").value = a.dataset.plan; }));
+$("#fbLink").href = CONTACT_URL;
 $("#wlForm").addEventListener("submit", async e => {
   e.preventDefault(); const msg = $("#wlMsg"), btn = e.target.querySelector("button"); btn.disabled = true; msg.textContent = "送出中…";
   try { const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "waitlist", email: $("#wlEmail").value, plan: $("#wlPlan").value }) });
     const j = await r.json().catch(() => null); if (!j?.ok) throw new Error(j?.error || (r.status === 404 ? "需要部署到網站才能登記" : `伺服器回應 ${r.status}`));
-    msg.textContent = "已加入候補名單，Pro 開放時會寄信通知你。"; store.set("proWait", { at: Date.now(), plan: $("#wlPlan").value }); e.target.reset(); }
+    msg.textContent = "已登記，有重要更新時會通知你。"; store.set("proWait", { at: Date.now(), plan: $("#wlPlan").value }); e.target.reset(); }
   catch (err) { msg.textContent = "⚠ " + err.message; }
   btn.disabled = false;
 });

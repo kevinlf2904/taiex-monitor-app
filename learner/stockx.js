@@ -1,5 +1,5 @@
 /* 個股「總覽／籌碼／財務」分頁裡由這裡畫的子頁（子頁清單在 watch.html 的 DSUB；每種資訊只出現在一個地方）：
-   總覽：多空研判＋市場狀態、健檢、屬性與產業鏈、評價推估、達人觀點；籌碼：法人與基金、分點主力、大戶與股權；財務：股利、公司資料、行事曆。
+   總覽：指標強弱＋市場狀態、健檢、屬性與產業鏈、評價推估、達人觀點；籌碼：法人與基金、分點主力、大戶與股權；財務：股利、公司資料、行事曆。
    （籌碼總覽、營收與估值、財務報表、符合的指標用 watch.html 原本的區塊；新聞在「新聞」分頁。）
    資料都來自已有的 API：/api/stockinfo（W.info：法人、融資券、借券、本益比、營收、季 EPS）、/api/company（W.co：損益、資產負債、現金流、股利、
    股權分散、外資持股、公司資料）、/api/news（W.news）、日 K（W.daily）、名人 Podcast（POD）、產業地圖（IND）。
@@ -69,7 +69,7 @@ function sxSignals() {
   if (I?.inst?.length) { const s = sxSum(I.inst, "foreign", 5) + sxSum(I.inst, "trust", 5) + sxSum(I.inst, "dealer", 5); add("法人 5 日", s > 0 ? 1 : s < 0 ? -1 : 0, `三大法人 5 日合計 ${signed(s)} 張`); }
   if (I?.margin?.length > 5) { const M = I.margin, d = M.at(-1).marginBal - M.at(-6).marginBal, p = c - D[Math.max(0, n - 5)].c; add("融資", d > 0 && p < 0 ? -1 : d < 0 && p > 0 ? 1 : 0, `融資 5 日 ${signed(d)} 張${d > 0 && p < 0 ? "，股價跌融資增（籌碼凌亂）" : d < 0 && p > 0 ? "，股價漲融資減（籌碼安定）" : ""}`); }
   const score = Math.round((out.reduce((s, x) => s + x.v, 0) / (out.length || 1)) * 100);
-  return { out, score, label: score >= 40 ? "偏多" : score >= 15 ? "略偏多" : score <= -40 ? "偏空" : score <= -15 ? "略偏空" : "盤整" };
+  return { out, score, label: score >= 40 ? "指標偏強" : score >= 15 ? "指標略強" : score <= -40 ? "指標偏弱" : score <= -15 ? "指標略弱" : "指標中性" };
 }
 // 分點主力：柱＝每日前 15 大買賣超合計（張，左軸），線＝5 日、20 日集中度（%，右軸）
 function sxBrChart(D) {
@@ -106,14 +106,14 @@ function sxBig(C) {
     <p class="note">大戶＝持股 1,000 張以上，散戶＝50 張以下。董監事（內部人）持股要到公開資訊觀測站查。</p>`;
 }
 const SX = {
-  // 多空研判（台股）：併在市場狀態最上面，不再是獨立子頁
+  // 指標強弱（台股，原多空研判）：併在市場狀態最上面，不再是獨立子頁
   ls() {
     const S = isTW(W.sel) ? sxSignals() : null; if (!S) return "";
     const pos = (S.score + 100) / 2;
-    return `${sxH("多空研判", "技術＋籌碼，每一項 +1／0／−1 平均")}
-      <div class="sxgauge"><div class="bar"><i style="left:calc(${pos}% - 6px)"></i></div><div class="lbl"><span class="down">偏空</span><b class="${cls(S.score)}">${S.label}（${S.score > 0 ? "+" : ""}${S.score}）</b><span class="up">偏多</span></div></div>
-      <ul class="sxlist">${S.out.map(x => `<li><span class="${x.v > 0 ? "up" : x.v < 0 ? "down" : "muted"}">${x.v > 0 ? "▲ 多" : x.v < 0 ? "▼ 空" : "－ 中"}</span><b>${x.k}</b><span>${esc(x.t)}</span></li>`).join("")}</ul>
-      <p class="note">把常見指標整理成一個分數，快速看「現在偏哪一邊」；盤整時多空訊號常常互相打架。</p><div class="qx-sep"></div>`;
+    return `${sxH("指標強弱", "技術＋籌碼，每一項 +1／0／−1 平均")}${scBtn("state", " fr")}
+      <div class="sxgauge"><div class="bar"><i style="left:calc(${pos}% - 6px)"></i></div><div class="lbl"><span class="down">偏弱</span><b class="${cls(S.score)}">${S.label}（${S.score > 0 ? "+" : ""}${S.score}）</b><span class="up">偏強</span></div></div>
+      <ul class="sxlist">${S.out.map(x => `<li><span class="${x.v > 0 ? "up" : x.v < 0 ? "down" : "muted"}">${x.v > 0 ? "▲ 強" : x.v < 0 ? "▼ 弱" : "－ 中"}</span><b>${x.k}</b><span>${esc(x.t)}</span></li>`).join("")}</ul>
+      <p class="note">把常見指標整理成一個分數，快速看各項指標現在偏強還是偏弱；盤整時訊號常常互相打架。這是指標整理，不是買賣建議。</p><div class="qx-sep"></div>`;
   },
   // 市場狀態：日線＋週線的趨勢、波動、量能，適合的策略類型、該避免的事，ATR 參考進出場與部位大小
   state() {
@@ -123,7 +123,7 @@ const SX = {
     QAI[ak] = { ctx: () => `${nameOf(c)} ${c} 的市場狀態（程式依日 K 計算）：\n${stateText(Sd, "日線", X)}\n${stateText(Sw, "週線")}`, done: sxRender,
       q: "請只根據上面的數字，用白話整理：1) 日線與週線的趨勢、波動、量能，兩個週期方向一不一致 2) 支撐與壓力區間 3) 關鍵均線的位置 4) 一步一步的判斷流程：什麼情況屬於可以考慮買進、該觀望、該減碼的情境，各自看哪個價位或指標。不要給明確的買賣建議，用繁體中文、條列。" };
     const same = Sd && Sw && Sd.trend === Sw.trend, form = `<label>帳戶 <input type="number" data-stcap value="${W.stCap}" min="10000" step="10000" inputmode="numeric"> 元</label><label>每筆最多虧 <select data-strisk>${[0.5, 1, 1.5, 2].map(v => `<option value="${v}" ${v === W.stRisk ? "selected" : ""}>${v}%</option>`).join("")}</select></label>`;
-    return `${SX.ls()}${sxH("市場狀態", "程式依 K 線計算，不是預測")}
+    return `${SX.ls()}${sxH("市場狀態", "程式依 K 線計算，不是預測")}${isTW(c) ? "" : scBtn("state", " fr")}
       ${Sd && Sw ? `<p class="sxsay">${same ? `日線、週線都是<b class="${Sd.trend === "bull" ? "up" : Sd.trend === "bear" ? "down" : ""}">${REG_NAME[Sd.trend]}</b>，長短週期方向一致。` : `日線是<b>${REG_NAME[Sd.trend]}</b>、週線是<b>${REG_NAME[Sw.trend]}</b>：短線和長線方向不同，先決定自己做哪個週期，停損也要跟著那個週期設。`}</p>` : ""}
       ${stateHtml(Sd, "日線", X, { stratBtn: true, sizeForm: form })}
       <div class="qx-sep"></div>${W.stLong?.code === c && W.stLong.loading ? `<p class="note">週線：載入更長的日 K…</p>` : stateHtml(Sw, "週線")}

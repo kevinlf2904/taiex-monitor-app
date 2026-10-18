@@ -17,7 +17,7 @@ function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
 // 品牌（KLineLab K線情報局）：1:1 幾何 K 線圖標（空心 K 棒＋影線、上下都削 45 度的鈦金屬灰光束，兩者同寬對稱，合起來像字母 K）＋Space Grotesk 字標＋PRO 徽章
 const BRAND = { name: "KLineLab", zh: "K線情報局", tag: "將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機" };
 const brandIcon = (s = 32) => `<svg class="bl-ic" viewBox="0 0 512 512" width="${s}" height="${s}" aria-hidden="true"><defs><linearGradient id="blkc" gradientUnits="userSpaceOnUse" x1="0" y1="96" x2="0" y2="416"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#e4e4e7"/><stop offset="1" stop-color="#a1a1aa"/></linearGradient><linearGradient id="blti" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#71717a"/><stop offset=".5" stop-color="#a1a1aa"/><stop offset="1" stop-color="#f4f4f5"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#09090b"/><rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#27272a" stroke-width="8"/><path d="M180 100v68M180 344v68" stroke="url(#blkc)" stroke-width="20" stroke-linecap="round"/><rect x="146" y="178" width="68" height="156" rx="8" fill="none" stroke="url(#blkc)" stroke-width="20"/><path d="M288 188 376 100v312l-88-88z" fill="url(#blti)"/></svg>`;
-const brandHtml = ({ pro = true, zh = true, href = "" } = {}) => `<${href ? `a href="${href}"` : "span"} class="bl">${brandIcon()}<span class="bl-t"><b>${BRAND.name}</b>${zh ? `<small>${BRAND.zh}</small>` : ""}</span>${pro ? `<span class="bl-pro">PRO</span>` : ""}</${href ? "a" : "span"}>`;
+const brandHtml = ({ pro = true, zh = true, href = "" } = {}) => `<${href ? `a href="${href}"` : "span"} class="bl">${brandIcon()}<span class="bl-t"><b>${BRAND.name}</b>${zh ? `<small>${BRAND.zh}</small>` : ""}</span>${pro ? `<span class="bl-pro" title="公開測試版 (Beta)">Beta</span>` : ""}</${href ? "a" : "span"}>`;
 // SVG 縮寫徽章：取名稱前兩個字（英文取字首），底色由名稱雜湊出固定的代表色（不用外部照片或節目封面）
 const BADGE_C = ["#3f3f46", "#1e3a5f", "#3b2f5c", "#14532d", "#5b2121", "#4a3a12", "#0f4c5c", "#52314a"];
 function badgeSvg(name, s = 40) {
@@ -28,6 +28,16 @@ function badgeSvg(name, s = 40) {
 }
 // 全站免責聲明（頁尾與每個回測、籌碼分析頁的底部）
 const DISCLAIMER = "本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。";
+// 資料來源與授權（頁尾）、意見回報（節目主要求移除、資料錯誤）、站名網址（分享圖卡用；換網域只改這裡）
+const DATA_NOTE = "部分盤後公開數據取自政府資料開放平臺（依政府資料開放授權條款第1版使用）與公開申報資訊；盤中報價取自交易所公開行情與第三方行情服務，可能延遲。僅供個人研究學習。";
+// 社群入口（頂部「加入盤後情報」）：帳號開好後把網址填進來就會出現；沒填就整個藏起來
+const SOCIAL = { telegram: "", threads: "" };
+const CONTACT_URL = "https://github.com/kevinlf2904/taiex-monitor-app/issues";
+// 除錯工具（資料來源狀態、金鑰檢查）只在網址帶 ?debug=1 或本機開發時顯示
+const DEBUG = typeof location !== "undefined" && (/[?&]debug=1\b/.test(location.search) || /^(localhost|127\.0\.0\.1)$/.test(location.hostname));
+if (DEBUG && typeof document !== "undefined") document.documentElement.dataset.debug = "1";
+const fillDataNote = () => document.querySelectorAll(".data-note").forEach(e => (e.textContent = DATA_NOTE));
+if (typeof document !== "undefined") { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fillDataNote); else fillDataNote(); }
 const discHtml = () => `<p class="disc">${DISCLAIMER}</p>`;
 // 全站線條變細：canvas 畫的每一條線（K 棒影線、均線、指標、分時、格線）粗細 × 0.72，最細 0.5px（高解析度螢幕上是 1 個實體像素）
 (() => { try { const P = CanvasRenderingContext2D.prototype, d = Object.getOwnPropertyDescriptor(P, "lineWidth"); if (!d?.set || P.__thin) return; P.__thin = true;
@@ -801,7 +811,7 @@ class Chart {
       const tag = (v, c, t) => { if (v == null) return; const y = Y(v); if (y < top0 || y > top0 + mainH) return; ctx.strokeStyle = c; ctx.lineWidth = 0.8; ctx.setLineDash(t === "均" ? [5, 3] : []); ctx.beginPath(); ctx.moveTo(L + pw - maxW - 8, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); };
       tag(VP.pre, "#f0883e", "壓"); tag(VP.avg, col.muted, "均"); tag(VP.sup, "#4e9af1", "撐");
       ctx.restore();
-      // 右側價格軸上的標籤（和富途一樣：橘＝壓力、灰＝平均成本、藍＝支撐）
+      // 右側價格軸上的標籤（橘＝壓力、灰＝平均成本、藍＝支撐）
       ctx.font = `500 10.5px ${cssVar("--font-num")}`; ctx.textAlign = "left";
       const used = [];
       [[VP.pre, "#f0883e"], [VP.avg, "#8b8f98"], [VP.sup, "#3b82f6"]].forEach(([v, c]) => { if (v == null) return; let y = Y(v); if (y < top0 + 6 || y > top0 + mainH - 6) return; while (used.some(u => Math.abs(u - y) < 14)) y += 14; used.push(y); const t = fmtP(v), tw = ctx.measureText(t).width + 8; ctx.fillStyle = c; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(L + pw + 2, y - 8, tw, 16, 3) : ctx.rect(L + pw + 2, y - 8, tw, 16); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillText(t, L + pw + 6, y); });

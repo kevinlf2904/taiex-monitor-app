@@ -22,13 +22,15 @@ test("首頁：品牌、碳黑配色、Hero 可收起、頁尾免責聲明", asy
   }
 });
 
-test("Pro 方案頁：方案、候補名單送出、免責聲明", async () => {
+test("公開測試版 (Beta) 頁：沒有價格方案、收更新通知、免責聲明與資料來源", async () => {
   const { ctx, p, errs } = await open(B, S.url, "pro.html", { width: 390, touch: true });
   let sent = null; await ctx.route("**/api/sync", r => { sent = JSON.parse(r.request().postData()); r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true }) }); });
-  assert.match(await p.evaluate(() => document.body.innerText), /Free[\s\S]*Pro[\s\S]*Team/);
-  await p.click('[data-plan="team"]'); await p.fill("#wlEmail", "me@example.com"); await p.click("#wlForm button[type=submit]");
-  await p.waitForFunction(() => /已加入候補名單/.test($("#wlMsg").textContent));
-  assert.deepEqual(sent, { op: "waitlist", email: "me@example.com", plan: "team" });
+  const txt = await p.evaluate(() => document.body.innerText);
+  assert.match(txt, /公開測試版 \(Beta\)/); assert.doesNotMatch(txt, /NT\$|Team|升級 PRO/);
+  assert.match(txt, /政府資料開放授權條款第1版/);
+  await p.fill("#wlEmail", "me@example.com"); await p.click("#wlForm button[type=submit]");
+  await p.waitForFunction(() => /已登記/.test($("#wlMsg").textContent));
+  assert.deepEqual(sent, { op: "waitlist", email: "me@example.com", plan: "beta" });
   assert.match(await p.evaluate(() => $("#disc").textContent), new RegExp(DISC));
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await ctx.close(); assert.deepEqual(errs, []);

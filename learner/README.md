@@ -181,7 +181,7 @@
 
 ### 名人 Podcast（`api/_lib/podcast.js`、`learner/podcast.js`）
 
-看盤的「名人」分頁，參考 Podket 的做法。**打開就有整理好的重點、觀點與往績，不用按按鈕等 AI**：
+看盤的「名人」分頁（現在是情報局的「節目觀點」）。**打開就有整理好的重點、觀點與往績，不用按按鈕等 AI**：
 
 - **自動整理（排程）**：`.github/workflows/podcast-sync.yml` 每 2 小時跑 `scripts/podcast-sync.mjs`。它依 `learner/data/podcast/shows.json` 的節目清單讀 RSS，用 AI 整理新單集，並往前補到一年內每個節目最近 20 集，每次最多 10 集。結果寫進 `learner/data/podcast/index.json`，推回 main 後 Vercel 自動重新部署。
   - 在 GitHub 的 Settings → Secrets and variables → Actions 新增 `GEMINI_API_KEY`（和 Vercel 上的同一把即可），AI 就能直接聽完整集，沒有時間限制。
@@ -245,7 +245,7 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 - **臺灣 50 卡片**：盤中顯示 0050 ETF 的即時價（證交所的臺灣 50 指數 OpenAPI 要收盤後才有當天值，盤中拿到的是前一天收盤）；拿不到 0050 報價時才顯示指數，並標出是哪一天的收盤。
 - **漲跌家數**：股票加 ETF（不含權證），和券商的「整體市場」一樣。漲停、跌停用實際的漲跌停價判斷（昨收 ±10% 再依升降單位取價），槓桿、反向 ETF 不算。
 - **抓全市場報價**：證交所 MIS 每批 100 檔；某一批失敗時會拆半重試。如果還是有缺漏，市場概況會顯示「⚠ 只拿到 X/Y 檔」。
-- **市場概況**可以切換上市、上櫃、全部（全部＝上市＋上櫃，和籌碼K線的「個股漲跌分佈」同一個範圍），旁邊顯示該市場的成交金額。
+- **市場概況**可以切換上市、上櫃、全部（全部＝上市＋上櫃），旁邊顯示該市場的成交金額。
 - **全部產業**：「全部產業與成交比重」裡用方塊列出每個產業的漲跌幅與成交金額，可以直接和券商的「上市產業」頁比對。
 - **股價月新高／月新低**（市場概況）：今天的價格高於前 20 個交易日的最高收盤（或低於最低收盤）的家數。前 20 天的收盤由排程 `.github/workflows/market-hilo.yml`（`scripts/market-hilo.mjs`）每個交易日 14:45、20:10 寫進 `learner/data/market/hilo.json`。
 - **委買委賣、融資融券、期貨淨未平倉**（`GET /api/mktstats`）：
@@ -339,6 +339,23 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 **籌碼分佈**下面多了千張以上大戶持股的面積圖，以及每週「大戶持股（≥1000 張）／散戶持股（≤50 張）／千張人數」表（`holders` 多了 `r50`）。
 
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
+
+### 情報局上線、公開測試版、分享情報圖卡、合規整理（2026.10.18-90）
+
+- 頂部導覽改成「情報局｜看盤｜K線學堂｜存股」：
+  - 資金雷達、大戶國會、供應鏈、節目觀點移到「情報局」，看盤裡不再重複。兩者共用同一個看盤 iframe（`watch.html?mode=intel|watch`），看盤裡的連結跳到情報分頁時外層自動切到情報局。
+  - 課程、個股判讀、圖表實驗室、判讀挑戰、觀念測驗、畫線練習收進「K線學堂」的次導覽，回到學堂時打開上次的子頁。
+- 網址路由（社群貼文直接連到子頁）：`#radar`、`#radar/matrix`、`#radar/rank`、`#congress/us`、`#congress/tw`、`#congress/13f`、`#congress/insider`、`#supply/diagrams`、`#supply/theme/<題材>`、`#podcast`、`#podcast/rank`。首頁與單獨打開的 `watch.html` 都適用，切換子頁時網址跟著更新。
+- 📸 分享情報圖卡（`sharecard.js`）：動能矩陣、美國國會／13F／台灣政治人物／內部人、供應鏈題材、個股指標與狀態、回測報告、存股模擬、觀念測驗結算。用 canvas 依資料重畫成 1080 寬 PNG，上方是品牌與網址（`SITE_HOST`），底部「僅供研究參考，非投資建議」；可分享、下載或複製。不用 html2canvas，iPhone 也能匯出。
+- 公開測試版 (Beta)：頂部、頁尾的 PRO 改成 Beta；`pro.html` 改成 Beta 說明頁（全部免費、收更新通知、意見回報）。候補名單改記成 `plan: "beta"`。
+- 頁尾補資料來源與授權說明（`DATA_NOTE`）；「資料來源狀態」只在 `?debug=1` 或本機開發時顯示。
+- 節目觀點：
+  - 不在站內播放原節目音檔，改成「前往原節目收聽」Apple Podcasts／Spotify／YouTube 連結。
+  - 加上版權說明與移除申請管道（`CONTACT_URL`）。
+  - 介面用詞改成我們自己的說法：最新筆記、提及標的表現、討論議題、筆記字數。
+- 個股「多空研判」改成中性的「指標強弱」：偏強／偏弱，子頁名稱「指標與狀態」。
+- 社群入口「加入盤後情報」：把 `core.js` 的 `SOCIAL` 填上 Telegram／Threads 網址才會出現。
+- 清掉程式註解與說明裡的其他產品名稱，刪除誤傳的 `undefined/` 截圖資料夾。
 
 ### 對稱空心 K logo、線條更細、重複功能合併、節目筆記更完整（2026.10.18-89）
 
@@ -819,7 +836,7 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
   - 營收總表：年增、月增、累計年增、營收最高。
   - 股利總表：殖利率、本益比、淨值比。
 - **ETF**：績效排行連到 ETF 專區的年化排行。配息來源、基本資料排行沒有免費的整理資料，先不做。
-- **主力追蹤**（券商分點勝率王、獲利王…）：需要全市場每天每個分點的明細並另外計算，免費資料拿不到，頁面上說明原因。
+- **主力追蹤**（券商分點的勝率與損益排名）：需要全市場每天每個分點的明細並另外計算，免費資料拿不到，頁面上說明原因。
 
 資料由 GitHub Actions（`.github/workflows/market-after.yml`）每個交易日台北 17:40、21:30 執行 `scripts/market-after.mjs`，抓證交所、櫃買中心的盤後資料，寫進 `learner/data/market/after.json`：
 
