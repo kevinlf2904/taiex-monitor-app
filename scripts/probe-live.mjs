@@ -11,6 +11,25 @@ async function raw(url, n = 600) {
   const t0 = Date.now(); try { const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "*/*", Referer: "https://mis.twse.com.tw/stock/index.jsp" }, signal: AbortSignal.timeout(20000) }); const t = await r.text();
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
+if (process.argv[2] === "taifexdl") {
+  // 期交所「前 30 個交易日期貨每筆成交資料」：看下載頁的連結、壓縮檔大小、CSV 欄位與台指期（TX）的日期時間寫法（夜盤怎麼標日期）
+  const { execFileSync } = await import("node:child_process"), { writeFileSync } = await import("node:fs"), os = await import("node:os");
+  const page = await fetch("https://www.taifex.com.tw/cht/3/dlFutPrevious30DataDown", { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(20000) }).then(r => r.text()).catch(e => "ERR " + e.message);
+  const links = [...new Set([...page.matchAll(/https?:\/\/[^"' ]*Daily_\d{4}_\d{2}_\d{2}[^"' ]*\.zip/gi)].map(m => m[0]))];
+  console.log("下載頁", page.length, "bytes；zip 連結", links.length, links.slice(0, 4).join("  "), "…", links.slice(-2).join("  "));
+  const csv = links.filter(u => /CSV/i.test(u)), pick = (csv.length ? csv : links).sort().reverse()[0];
+  if (!pick) { console.log(page.slice(0, 800)); process.exit(0); }
+  const t0 = Date.now(), buf = Buffer.from(await (await fetch(pick, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(60000) })).arrayBuffer()), f = os.tmpdir() + "/d.zip"; writeFileSync(f, buf);
+  console.log("下載", pick, buf.length, "bytes", Date.now() - t0, "ms"); console.log(execFileSync("unzip", ["-l", f]).toString());
+  const raw = execFileSync("unzip", ["-p", f], { maxBuffer: 1 << 30 }), txt = new TextDecoder("big5").decode(raw), L = txt.split(/\r?\n/);
+  console.log("行數", L.length); console.log(L.slice(0, 4).join("\n"));
+  const tx = L.filter(l => /^\s*\d{8}\s*,\s*TX\s*,/.test(l)); console.log("TX 行數", tx.length);
+  const show = re => console.log(re.toString(), "\n" + tx.filter(l => re.test(l)).slice(0, 3).join("\n"));
+  show(/,\s*0845\d\d\s*,|,\s*84[5-9]\d\d\s*,/); show(/,\s*1500\d\d\s*,/); show(/,\s*0000\d\d\s*,/); show(/,\s*0459\d\d\s*,/); show(/,\s*1344\d\d\s*,/);
+  const mon = {}; tx.forEach(l => { const c = l.split(","); const k = c[2].trim(); mon[k] = (mon[k] || 0) + 1; }); console.log("到期月份分佈", JSON.stringify(mon));
+  const dates = {}; tx.forEach(l => { const k = l.split(",")[0].trim(); dates[k] = (dates[k] || 0) + 1; }); console.log("日期分佈", JSON.stringify(dates));
+  process.exit(0);
+}
 if (process.argv[2] === "keys") {
   // 金鑰檢查（GitHub secrets 有沒有設定、能不能用）：只印「有沒有」「狀態碼」「用量」，絕不印金鑰或帶金鑰的網址
   const has = k => !!(process.env[k] && process.env[k].trim()), tk = k => process.env[k].trim();
