@@ -34,10 +34,10 @@ const DATA_NOTE = "部分盤後公開數據取自政府資料開放平臺（依�
 const SOCIAL = { telegram: "", threads: "" };
 const CONTACT_URL = "https://github.com/kevinlf2904/taiex-monitor-app/issues";
 // 除錯工具（資料來源狀態、金鑰檢查）只在網址帶 ?debug=1 或本機開發時顯示
-const DEBUG = /[?&]debug=1\b/.test(location.search) || /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
-if (DEBUG) document.documentElement.dataset.debug = "1";
+const DEBUG = typeof location !== "undefined" && (/[?&]debug=1\b/.test(location.search) || /^(localhost|127\.0\.0\.1)$/.test(location.hostname));
+if (DEBUG && typeof document !== "undefined") document.documentElement.dataset.debug = "1";
 const fillDataNote = () => document.querySelectorAll(".data-note").forEach(e => (e.textContent = DATA_NOTE));
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fillDataNote); else fillDataNote();
+if (typeof document !== "undefined") { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fillDataNote); else fillDataNote(); }
 const discHtml = () => `<p class="disc">${DISCLAIMER}</p>`;
 // 全站線條變細：canvas 畫的每一條線（K 棒影線、均線、指標、分時、格線）粗細 × 0.72，最細 0.5px（高解析度螢幕上是 1 個實體像素）
 (() => { try { const P = CanvasRenderingContext2D.prototype, d = Object.getOwnPropertyDescriptor(P, "lineWidth"); if (!d?.set || P.__thin) return; P.__thin = true;
