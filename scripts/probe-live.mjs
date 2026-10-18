@@ -14,11 +14,17 @@ async function raw(url, n = 600) {
 if (process.argv[2] === "taifexdl") {
   // 期交所「前 30 個交易日期貨每筆成交資料」：看下載頁的連結、壓縮檔大小、CSV 欄位與台指期（TX）的日期時間寫法（夜盤怎麼標日期）
   const { execFileSync } = await import("node:child_process"), { writeFileSync } = await import("node:fs"), os = await import("node:os");
-  const page = await fetch("https://www.taifex.com.tw/cht/3/dlFutPrevious30DataDown", { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(20000) }).then(r => r.text()).catch(e => "ERR " + e.message);
-  const links = [...new Set([...page.matchAll(/https?:\/\/[^"' ]*Daily_\d{4}_\d{2}_\d{2}[^"' ]*\.zip/gi)].map(m => m[0]))];
+  const page = await fetch("https://www.taifex.com.tw/cht/3/dlFutPrevious30DataView", { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(20000) }).then(r => r.text()).catch(e => "ERR " + e.message);
+  const links = [...new Set([...page.matchAll(/(?:https?:\/\/[^"' ]*|\/file[^"' ]*)Daily_\d{4}_\d{2}_\d{2}[^"' ]*\.zip/gi)].map(m => m[0].startsWith("/") ? "https://www.taifex.com.tw" + m[0] : m[0]))];
   console.log("下載頁", page.length, "bytes；zip 連結", links.length, links.slice(0, 4).join("  "), "…", links.slice(-2).join("  "));
-  const csv = links.filter(u => /CSV/i.test(u)), pick = (csv.length ? csv : links).sort().reverse()[0];
-  if (!pick) { console.log(page.slice(0, 800)); process.exit(0); }
+  const csv = links.filter(u => /CSV/i.test(u)); let pick = (csv.length ? csv : links).sort().reverse()[0];
+  if (!pick) { // 下載頁抓不到連結：直接試最近幾天的固定網址
+    console.log(page.slice(0, 300));
+    for (let i = 1; i < 8 && !pick; i++) { const d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10).replace(/-/g, "_");
+      for (const dir of ["DailydownloadCSV", "Dailydownload"]) { const u = `https://www.taifex.com.tw/file/taifex/Dailydownload/${dir}/Daily_${d}.zip`; const r = await fetch(u, { method: "HEAD", headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(15000) }).catch(e => ({ status: e.message, headers: new Map() }));
+        console.log("試", u, r.status, r.headers.get?.("content-type"), r.headers.get?.("content-length")); if (r.status === 200 && !/html/i.test(r.headers.get("content-type") || "")) { pick = u; break; } } }
+  }
+  if (!pick) process.exit(0);
   const t0 = Date.now(), buf = Buffer.from(await (await fetch(pick, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(60000) })).arrayBuffer()), f = os.tmpdir() + "/d.zip"; writeFileSync(f, buf);
   console.log("下載", pick, buf.length, "bytes", Date.now() - t0, "ms"); console.log(execFileSync("unzip", ["-l", f]).toString());
   const raw = execFileSync("unzip", ["-p", f], { maxBuffer: 1 << 30 }), txt = new TextDecoder("big5").decode(raw), L = txt.split(/\r?\n/);
