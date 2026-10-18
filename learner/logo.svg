@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="KLineLab K線情報局">
-  <!-- KLineLab 標誌：1:1 碳黑方塊；左邊是白到鈦金屬灰漸層的實心 K 棒與上下影線，右邊是上下都削 45 度的鈦金屬灰突破光束，兩個合起來像字母 K -->
+  <!-- KLineLab 標誌：1:1 碳黑方塊；左邊是空心 K 棒（漸層外框＋上下影線），右邊是上下都削 45 度的鈦金屬灰光束，兩者同寬、對稱擺在中線兩側，合起來像字母 K -->
   <defs>
     <linearGradient id="kc" gradientUnits="userSpaceOnUse" x1="0" y1="96" x2="0" y2="416"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#e4e4e7"/><stop offset="1" stop-color="#a1a1aa"/></linearGradient>
     <linearGradient id="ti" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#71717a"/><stop offset=".5" stop-color="#a1a1aa"/><stop offset="1" stop-color="#f4f4f5"/></linearGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="#09090b"/>
   <rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#27272a" stroke-width="8"/>
-  <path d="M184 96v320" stroke="url(#kc)" stroke-width="22" stroke-linecap="round"/>
-  <rect x="128" y="168" width="112" height="176" rx="12" fill="url(#kc)"/>
-  <path d="M284 172 356 100v312l-72-72z" fill="url(#ti)"/>
+  <path d="M180 100v68M180 344v68" stroke="url(#kc)" stroke-width="20" stroke-linecap="round"/>
+  <rect x="146" y="178" width="68" height="156" rx="8" fill="none" stroke="url(#kc)" stroke-width="20"/>
+  <path d="M288 188 376 100v312l-88-88z" fill="url(#ti)"/>
 </svg>

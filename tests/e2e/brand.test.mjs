@@ -73,3 +73,26 @@ test("手機：在清單、分頁列上往上滑，整頁都要能捲動（不�
   for (const [x, y] of [[60, 600], [200, 500], [330, 700]]) { const a = await p.evaluate(() => scrollY); await swipe(x, y); assert.ok(await p.evaluate(() => scrollY) > a, `在 (${x},${y}) 往上滑沒有捲動`); }
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("合併重複功能：盤後、籌碼動向併進排行，盤後總結＋分享在工具，多空研判併進市場狀態", async () => {
+  for (const width of [390, 1280]) {
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+    assert.doesNotMatch(await p.evaluate(() => $("#lTabs").innerText), /盤後/);
+    await p.evaluate(() => setLt("rank")); assert.match(await p.evaluate(() => $("#rkHub").innerText), /盤後資料/);
+    await p.click('#rkHub [data-l="after"]'); await p.waitForTimeout(300);
+    assert.equal(await p.evaluate(() => [W.lt, $('#lTabs [data-l="rank"]').getAttribute("aria-pressed")].join()), "after,true");
+    assert.match(await p.evaluate(() => $("#lx").innerText), /籌碼動向/); assert.doesNotMatch(await p.evaluate(() => $("#lx").innerText), /主力追蹤/);
+    await p.click('[data-af="chipx"]'); await p.waitForFunction(() => /千張大戶/.test($("#lx").innerText));
+    assert.ok(await p.evaluate(() => !TOOLS_VIEWS.some(x => x[0] === "chipx")));
+    // 舊的「工具 → 籌碼動向」會自動帶到新位置
+    await p.evaluate(() => { W.tv = "chipx"; setLt("tools"); }); await p.waitForTimeout(300); assert.equal(await p.evaluate(() => [W.lt, afView()].join()), "after,chipx");
+    // 盤後總結＋分享：在工具 → 每日摘要，資金雷達今日只留連結
+    await p.evaluate(() => { W.mf.model = { T: 1, dates: ["2026-10-16"] }; window.flowMood = () => null; window.flowSummary = () => "測試盤後總結"; W.tv = "sum"; setLt("tools"); });
+    assert.match(await p.evaluate(() => $("#lx").innerText), /盤後總結[\s\S]*測試盤後總結/);
+    assert.equal(await p.evaluate(() => document.querySelectorAll('#lx [data-mshare]').length), 4);
+    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "橫向溢出");
+    // 個股總覽：多空研判不再是獨立子頁
+    assert.ok(await p.evaluate(() => !DSUB.ovw.some(x => x[0] === "ls") && DSUB.ovw[0][0] === "state"));
+    await ctx.close(); assert.deepEqual(errs, []);
+  }
+});

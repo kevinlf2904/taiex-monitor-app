@@ -729,7 +729,7 @@ function ccwSVG(D, W = 340, H = 240) {
   return `<figure class="ccw"><svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" role="img" aria-label="逆時鐘曲線">
     <line x1="${pad}" y1="${H - pad + 6}" x2="${W - 8}" y2="${H - pad + 6}" stroke="var(--line)"/><line x1="${pad}" y1="8" x2="${pad}" y2="${H - pad + 6}" stroke="var(--line)"/>
     <text x="${W - 8}" y="${H - 8}" text-anchor="end" font-size="11" fill="var(--muted)">24 日均量 →</text><text x="${pad - 4}" y="14" text-anchor="end" font-size="11" fill="var(--muted)" transform="rotate(-90 ${pad - 20} 14)">24 日均價 →</text>
-    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linejoin="round"/>${dots}
+    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.2" stroke-linejoin="round"/>${dots}
     <circle cx="${X(S[0].v)}" cy="${Y(S[0].p)}" r="4" fill="none" stroke="var(--muted)"/><circle cx="${X(last.v)}" cy="${Y(last.p)}" r="5" fill="var(${ph[2] === "buy" ? "--up" : "--down"})"/>
   </svg><figcaption class="note">空心圈是起點、實心圈是最後一天（近 90 天）。最後一天在「${ph[0]}」階段（${ph[1]}）。</figcaption></figure>`;
 }

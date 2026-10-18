@@ -5,7 +5,7 @@
 // POST /api/podcast { act: "upload", audio, name }          下載單集音檔、上傳到 Gemini Files（48 小時後自動刪除），回傳 { file, uri, mime, state }
 // GET  /api/podcast?act=file&name=files/xxx                 查上傳的音檔處理好了沒（state: PROCESSING／ACTIVE／FAILED）
 // POST /api/podcast { act: "sum", uri?, mime?, title, show, date, desc }
-//      有 uri：Gemini 聽音檔整理；沒有：用節目說明（show notes）整理。回傳 { tldr, points, sections, calls, topics, mode, model }
+//      有 uri：Gemini 聽音檔整理；沒有：用節目說明（show notes）整理。回傳 { tldr, points, sections, facts, risks, watch, calls, topics, mode, model }
 //      calls：主持人明確看多／看空的個股或 ETF [{ code, name, market: "TW"|"US", dir: "bull"|"bear", quote }]
 // 金鑰只放在 Vercel 環境變數（GEMINI_API_KEY／ANTHROPIC_API_KEY），不會出現在前端。整理結果只存在使用者的瀏覽器。
 
@@ -56,16 +56,21 @@ export function parseRss(xml, n = 30) {
 }
 
 // ---------- AI 整理 ----------
+// 摘要格式版本：改了提示詞就加 1，排程會把每個節目最近幾集用新版重新整理
+export const SUM_VER = 2;
 export const PROMPT = (m, mode) => `你是財經 Podcast 的整理編輯。${mode === "audio" ? "請聽附上的這一集完整音檔" : "這一集只有節目說明文字（沒有逐字稿），請只根據說明文字"}，用繁體中文整理成 JSON（只輸出 JSON，不要其他文字）：
 {
   "tldr": "一句話摘要，60 字以內，講這集最重要的判斷",
-  "points": ["重點 4～7 條，每條 40～90 字，具體寫出主持人的論點與理由"],
-  "sections": [{ "title": "小標 6～14 字", "body": "120～220 字的段落" }],
+  "points": ["重點 6～10 條，每條 60～140 字，具體寫出主持人的論點、理由與舉的例子"],
+  "sections": [{ "title": "小標 6～14 字", "body": "250～450 字的段落，照節目討論的順序，寫出來龍去脈、主持人的推論過程、提到的數據與公司" }],
+  "facts": ["節目提到的具體數字、日期、事件或財報資料 3～8 條，每條 50 字以內，照節目說的寫"],
+  "risks": ["主持人提到的風險、反方看法或要小心的地方 1～4 條，每條 80 字以內"],
+  "watch": ["主持人說接下來要觀察的指標、事件或時間點 1～4 條，每條 60 字以內"],
   "calls": [{ "name": "公司或 ETF 名稱", "code": "台股代號（4～6 碼，ETF 可能有字母結尾）或美股代號", "market": "TW 或 US", "dir": "bull 或 bear", "quote": "主持人說的原話或非常接近原話，60 字以內" }],
   "topics": ["這集討論的議題 2～4 個，每個 12 字以內，可以是問句"]
 }
 規則：
-- sections 2～4 段；${mode === "audio" ? "" : "說明文字太少時 points、sections 可以少一點，不要硬湊；"}不要編造節目沒有講的內容、數字或公司。
+- sections 4～7 段，讀起來像一篇完整的節目筆記；facts、risks、watch 節目沒講就給空陣列；${mode === "audio" ? "" : "說明文字太少時 points、sections 可以少一點，不要硬湊；"}不要編造節目沒有講的內容、數字或公司。
 - calls 只放主持人「明確表達看多或看空」的個股或 ETF（例如：看好、會漲、加碼、買進、續抱＝bull；看壞、轉空、減碼、賣出、避開＝bear）。只是提到、舉例、新聞轉述、廣告業配都不要放。
 - 代號不確定時 code 留空字串，只填 name。美股寫英文代號（例如 NVDA）。同一檔只放一次。最多 12 檔，沒有就給空陣列。
 - 不要加入你自己的投資建議。
@@ -86,15 +91,16 @@ export function parseSum(text) {
   }).filter(c => (c.name || c.code) && !seen.has(c.code || c.name) && seen.add(c.code || c.name)).slice(0, 15);
   return {
     tldr: str(j.tldr, 160),
-    points: (Array.isArray(j.points) ? j.points : []).map(p => str(p, 260)).filter(Boolean).slice(0, 8),
-    sections: (Array.isArray(j.sections) ? j.sections : []).map(x => ({ title: str(x?.title, 40), body: str(x?.body, 700) })).filter(x => x.title && x.body).slice(0, 5),
+    points: (Array.isArray(j.points) ? j.points : []).map(p => str(p, 320)).filter(Boolean).slice(0, 12),
+    sections: (Array.isArray(j.sections) ? j.sections : []).map(x => ({ title: str(x?.title, 40), body: str(x?.body, 1200) })).filter(x => x.title && x.body).slice(0, 8),
+    ...Object.fromEntries([["facts", 10, 120], ["risks", 5, 200], ["watch", 5, 160]].map(([k, n, len]) => [k, (Array.isArray(j[k]) ? j[k] : []).map(p => str(p, len)).filter(Boolean).slice(0, n)])),
     calls, topics: (Array.isArray(j.topics) ? j.topics : []).map(t => str(t, 30)).filter(Boolean).slice(0, 5),
   };
 }
 
 export async function geminiJSON(parts, key, deadline) {
   const models = [...new Set([process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-latest", ...GEMINI_FALLBACKS])];
-  const body = JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.3, maxOutputTokens: 8192 } });
+  const body = JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.3, maxOutputTokens: 16384 } });
   let last = null;
   for (const m of models) {
     const left = deadline - Date.now(); if (left < 4000) break;
@@ -111,7 +117,7 @@ export async function geminiJSON(parts, key, deadline) {
 }
 async function claudeJSON(prompt) {
   const client = new Anthropic();
-  const msg = await client.beta.messages.create({ model: "claude-opus-5-5", max_tokens: 6000, output_config: { effort: "low" }, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", messages: [{ role: "user", content: prompt }] });
+  const msg = await client.beta.messages.create({ model: "claude-opus-5-5", max_tokens: 12000, output_config: { effort: "low" }, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", messages: [{ role: "user", content: prompt }] });
   return { text: msg.content.filter(b => b.type === "text").map(b => b.text).join(""), model: msg.model };
 }
 

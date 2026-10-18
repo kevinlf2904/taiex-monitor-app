@@ -14,9 +14,9 @@ function roundTick(p) { const t = tickOf(p); return +(Math.round(p / t) * t).toF
 function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
 function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
 function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
-// 品牌（KLineLab K線情報局）：1:1 幾何 K 線圖標（漸層實心 K 棒＋影線、上下都削 45 度的鈦金屬灰突破光束，合起來像字母 K）＋Space Grotesk 字標＋PRO 徽章
+// 品牌（KLineLab K線情報局）：1:1 幾何 K 線圖標（空心 K 棒＋影線、上下都削 45 度的鈦金屬灰光束，兩者同寬對稱，合起來像字母 K）＋Space Grotesk 字標＋PRO 徽章
 const BRAND = { name: "KLineLab", zh: "K線情報局", tag: "將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機" };
-const brandIcon = (s = 32) => `<svg class="bl-ic" viewBox="0 0 512 512" width="${s}" height="${s}" aria-hidden="true"><defs><linearGradient id="blkc" gradientUnits="userSpaceOnUse" x1="0" y1="96" x2="0" y2="416"><stop offset="0" stop-color="#fff"/><stop offset=".6" stop-color="#e4e4e7"/><stop offset="1" stop-color="#a1a1aa"/></linearGradient><linearGradient id="blti" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#71717a"/><stop offset=".5" stop-color="#a1a1aa"/><stop offset="1" stop-color="#f4f4f5"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#09090b"/><rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#27272a" stroke-width="8"/><path d="M184 96v320" stroke="url(#blkc)" stroke-width="22" stroke-linecap="round"/><rect x="128" y="168" width="112" height="176" rx="12" fill="url(#blkc)"/><path d="M284 172 356 100v312l-72-72z" fill="url(#blti)"/></svg>`;
+const brandIcon = (s = 32) => `<svg class="bl-ic" viewBox="0 0 512 512" width="${s}" height="${s}" aria-hidden="true"><defs><linearGradient id="blkc" gradientUnits="userSpaceOnUse" x1="0" y1="96" x2="0" y2="416"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#e4e4e7"/><stop offset="1" stop-color="#a1a1aa"/></linearGradient><linearGradient id="blti" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#71717a"/><stop offset=".5" stop-color="#a1a1aa"/><stop offset="1" stop-color="#f4f4f5"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#09090b"/><rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#27272a" stroke-width="8"/><path d="M180 100v68M180 344v68" stroke="url(#blkc)" stroke-width="20" stroke-linecap="round"/><rect x="146" y="178" width="68" height="156" rx="8" fill="none" stroke="url(#blkc)" stroke-width="20"/><path d="M288 188 376 100v312l-88-88z" fill="url(#blti)"/></svg>`;
 const brandHtml = ({ pro = true, zh = true, href = "" } = {}) => `<${href ? `a href="${href}"` : "span"} class="bl">${brandIcon()}<span class="bl-t"><b>${BRAND.name}</b>${zh ? `<small>${BRAND.zh}</small>` : ""}</span>${pro ? `<span class="bl-pro">PRO</span>` : ""}</${href ? "a" : "span"}>`;
 // SVG 縮寫徽章：取名稱前兩個字（英文取字首），底色由名稱雜湊出固定的代表色（不用外部照片或節目封面）
 const BADGE_C = ["#3f3f46", "#1e3a5f", "#3b2f5c", "#14532d", "#5b2121", "#4a3a12", "#0f4c5c", "#52314a"];
@@ -29,6 +29,9 @@ function badgeSvg(name, s = 40) {
 // 全站免責聲明（頁尾與每個回測、籌碼分析頁的底部）
 const DISCLAIMER = "本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。";
 const discHtml = () => `<p class="disc">${DISCLAIMER}</p>`;
+// 全站線條變細：canvas 畫的每一條線（K 棒影線、均線、指標、分時、格線）粗細 × 0.72，最細 0.5px（高解析度螢幕上是 1 個實體像素）
+(() => { try { const P = CanvasRenderingContext2D.prototype, d = Object.getOwnPropertyDescriptor(P, "lineWidth"); if (!d?.set || P.__thin) return; P.__thin = true;
+  Object.defineProperty(P, "lineWidth", { configurable: true, get() { return d.get.call(this); }, set(v) { d.set.call(this, v > 0 ? Math.max(0.5, v * 0.72) : v); } }); } catch {} })();
 // 日 K 合成週 K、月 K：key(日期) 相同的併成一根，日期標示該週（月）最後一個交易日
 function agg(D, key) {
   const out = [];
