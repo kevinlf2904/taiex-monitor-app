@@ -729,7 +729,7 @@ class Chart {
     const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface"), vwap: cssVar("--vwap") || "#f472b6", ma10: cssVar("--ma10") || "#5b9bff" };
     const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R;
     // 開籌碼分佈時，K 棒右邊留一段空白給分佈長條，最新的 K 棒才不會被蓋住
-    const vpW = o.vp ? pw * (narrow ? 0.26 : 0.2) : 0, padR = vpW * 0.8;
+    const vpW = o.vp ? pw * (narrow ? 0.24 : 0.18) : 0, padR = vpW ? vpW + 6 : 0; // 分佈長條自己一條，不和 K 棒重疊
     const { a: va, b: vb } = this.range, { fa, w: vwid } = this.vw, bw = (pw - padR) / vwid, inV = i => i >= va - 1 && i <= vb + 1;
     this.geo = { L, bw, a: va, fa, pw, pe: pw - padR, H, top0: 8, mainH };
     { const vt = 8 + mainH + gap, st = o.noVol ? vt : vt + volH + gap; this.panes = [{ key: "main", top: 8, h: mainH }, ...(o.noVol ? [] : [{ key: "vol", top: vt, h: volH }]), ...subs.map((_, k) => ({ key: "s" + k, top: st + k * (subH + gap), h: subH }))]; }

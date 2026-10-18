@@ -110,7 +110,7 @@ async function taifexBars(q, session) {
   const t = tpe(), start = session === "night" && t.getUTCHours() < 15 ? iso(new Date(t.getTime() - 864e5)) : iso(t);
   return parseTaifexChart(j, session, q.sdate || q.date || start);
 }
-async function fromTaifex(near, cid = "TXF", withBars = false) {
+export async function fromTaifex(near, cid = "TXF", withBars = false) {
   const body = mt => JSON.stringify({ MarketType: mt, SymbolType: "F", KindID: "1", CID: cid, ExpireMonth: "", RowSize: "全部", PageNo: "", SortColumn: "", AscDesc: "A" });
   const post = mt => getJSON("https://mis.taifex.com.tw/futures/api/getQuoteList", { method: "POST", headers: { "Content-Type": "application/json" }, body: body(mt) });
   const [d, n] = await Promise.allSettled([post("0"), post("1")]);

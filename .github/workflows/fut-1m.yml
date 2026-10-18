@@ -1,0 +1,37 @@
+# 台指期 1 分 K 存檔（learner/data/fut1m/TXF）：期交所只給目前這一盤的分 K，每盤收盤後存一份，看盤的台指期分 K 才能往前看
+name: fut-1m
+on:
+  schedule:
+    - cron: "5 6 * * 1-5"    # 台北 14:05（日盤 13:45 收盤後）
+    - cron: "20 21 * * 1-5"  # 台北隔天 05:20（夜盤 05:00 收盤後；週五夜盤在週六清晨收）
+  workflow_dispatch:
+    inputs:
+      dump:
+        description: "除錯：1＝只印出抓到的根數、不存檔（0＝正常更新）"
+        default: "0"
+permissions:
+  contents: write
+concurrency:
+  group: data-sync-fut1m-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: git pull -q origin ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
+        run: node scripts/fut-1m.mjs --dump
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: node scripts/fut-1m.mjs
+      - name: commit
+        if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        env:
+          COMMIT_NAME: fut-1m
+        run: |
+          bash scripts/commit-data.sh "台指期：存 1 分 K" learner/data/fut1m

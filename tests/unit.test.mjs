@@ -224,3 +224,11 @@ test("期交所報價日期：夜盤 05:00 前算隔天，週末打開時近全�
   assert.deepEqual([n.date, n.sdate], ["2026-10-17", "2026-10-16"]); assert.equal(taifexWhen("20261016", "230000", "night").date, "2026-10-16");
   assert.equal(pickCurrent({ ...d, session: "day" }, { ...n, session: "night" }, "closed").session, "night", "週五夜盤（週六清晨收）比週五日盤新");
 });
+
+test("台指期 1 分 K 存檔：依盤別分組（夜盤跨午夜算同一盤）", async () => {
+  const { groupSessions } = await import("../scripts/fut-1m.mjs");
+  const at = (d, t) => Date.parse(`${d}T${t}:00+08:00`), b = (d, t, s) => ({ at: at(d, t), d, t, o: 1, h: 2, l: 0, c: 1, v: 3, s });
+  const S = groupSessions([b("2026-10-16", "08:45", "day"), b("2026-10-16", "13:44", "day"), b("2026-10-16", "15:00", "night"), b("2026-10-17", "04:59", "night")]);
+  assert.deepEqual(S.map(x => [x.k, x.n, x.first, x.last]), [["2026-10-16-day", 2, "2026-10-16 08:45", "2026-10-16 13:44"], ["2026-10-16-night", 2, "2026-10-16 15:00", "2026-10-17 04:59"]]);
+  assert.deepEqual(S[1].bars[1], ["04:59", 1, 2, 0, 1, 3, "2026-10-17"]);
+});

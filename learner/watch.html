@@ -845,7 +845,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.18-92</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.18-93</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -3494,7 +3494,9 @@ const minuteK = () => !"DWM".includes(W.k);
 function minuteSeries(tf) {
   const M = W.mk[tf] || {}, today = [];
   const o = toMin(W.intra?.session?.open || "09:00");
-  for (const b of W.intra?.bars || []) { const o2 = b.s === "night" ? 900 : b.s === "day" ? 525 : o, rel = (toMin(b.t) - o2 + 1440) % 1440, sl = (Math.floor(rel / tf) * tf + o2) % 1440, t = `${String(Math.floor(sl / 60)).padStart(2, "0")}:${String(sl % 60).padStart(2, "0")}`, d = b.d || W.intra.date, L = today[today.length - 1];
+  // 台指期：前幾盤的 1 分 K 來自排程存檔（data/fut1m），接在目前這一盤前面一起分組
+  const cur = W.intra?.bars || [], fk = cur[0] ? `${cur[0].d} ${cur[0].t}` : "9999", old = isFut(W.sel) ? (W.futOld?.bars || []).filter(b => `${b.d} ${b.t}` < fk) : [];
+  for (const b of [...old, ...cur]) { const o2 = b.s === "night" ? 900 : b.s === "day" ? 525 : o, rel = (toMin(b.t) - o2 + 1440) % 1440, sl = (Math.floor(rel / tf) * tf + o2) % 1440, t = `${String(Math.floor(sl / 60)).padStart(2, "0")}:${String(sl % 60).padStart(2, "0")}`, d = b.d || W.intra.date, L = today[today.length - 1];
     if (L && L.t === t && L.dd === d) { L.h = Math.max(L.h, b.h); L.l = Math.min(L.l, b.l); L.c = b.c; L.v += b.v; } else today.push({ dd: d, t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }); }
   const firstToday = today[0]?.dd;
   return [...(M.older || []).filter(b => !firstToday || b.d < firstToday).map(b => ({ d: `${b.d} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v })), ...today.map(b => ({ d: `${b.dd} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }))];
@@ -3652,10 +3654,18 @@ async function loadDaily() {
 // 往左拉到底就再往前載入一段，一直到資料來源的最早一天（無限往前）；失敗不放棄，過幾秒往左拉會再試
 // 圖表正在被拖曳時，把整張重算（指標、策略、回測）延到手放開以後；soft＝畫面已經是新資料，只是更新說明文字
 function whenIdle(fn, soft) { if (soft && Chart.busy()) { setTimeout(() => whenIdle(fn, soft), 300); return; } fn(); }
+// 台指期前幾盤的 1 分 K（scripts/fut-1m.mjs 每盤收盤後存的）：每次往前多讀兩盤
+async function futOlder(c) {
+  if (c !== "TXF") return false; const F = (W.futOld ||= { idx: null, bars: [], next: -1 });
+  if (!F.idx) { try { const r = await fetch("data/fut1m/TXF/index.json", { cache: "no-cache" }); F.idx = r.ok ? (await r.json()).sessions || [] : []; } catch { F.idx = []; } F.next = F.idx.length - 1; }
+  const cur = W.intra?.bars || [], fk = cur[0] ? `${cur[0].d} ${cur[0].t}` : "9999", got = [];
+  while (F.next >= 0 && got.length < 2) { const x = F.idx[F.next--]; if (x.last >= fk) continue; // 和目前這一盤重疊的不用讀
+    try { const r = await fetch(`data/fut1m/TXF/${x.k}.json`); if (r.ok) got.push((await r.json()).bars.map(a => ({ t: a[0], o: a[1], h: a[2], l: a[3], c: a[4], v: a[5], d: a[6], s: x.s }))); } catch {} }
+  if (!got.length) return false; F.bars = [...got.reverse().flat(), ...F.bars]; return true;
+}
 async function loadOlder() {
   const c = W.sel, st = olderState(); if (!c || st.end || W.busyOlder || W.off) return;
   if (st.failAt && Date.now() - st.failAt < 8000) return;
-  if (isFut(c) && minuteK()) { st.end = true; return; } // 台指期的分 K 只有最近一個日盤＋夜盤（日 K 可以往前）
   W.busyOlder = true; let drew = false; if (!Chart.busy()) drawK(); // 拖曳中不重算整張圖（只為了更新「載入中」字樣）
   try {
     if (!minuteK()) {
@@ -3666,6 +3676,9 @@ async function loadOlder() {
       if (!older.length) { R.end = true; return; }
       st.failAt = 0;
       const n0 = kSeries().length; R.data = [...older, ...R.data]; drawK(false, kSeries().length - n0); drew = true; if (W.cmp.length) loadCmp();
+    } else if (isFut(c)) { // 台指期的分 K：期交所只給目前這一盤，更早的讀排程存檔
+      const tf = +W.k, n0 = minuteSeries(tf).length;
+      if (await futOlder(c) && W.sel === c && +W.k === tf) { drawK(false, minuteSeries(tf).length - n0); drew = true; } else st.end = true;
     } else {
       const tf = +W.k, n0 = minuteSeries(tf).length;
       if (await olderMinute(c, tf) && +W.k === tf) { drawK(false, minuteSeries(tf).length - n0); drew = true; }
