@@ -540,7 +540,7 @@ class Chart {
         if (P.mode === "y") { this.yz = Math.max(0.5, Math.min(12, P.yz * Math.max(30, Math.abs(p.y - q.y)) / P.dy)); this.smoothY = false;
           const B = this.ybase; if (this.yz > 1 && B && P.pm != null) { const sp = B.hi - B.lo, half = sp / this.yz / 2, mid = P.pm + P.f * 2 * half - half; this.yfree = true; this.yoff = Math.max(-0.6, Math.min(0.6, (mid - (B.lo + B.hi) / 2) / sp)); }
           else if (this.yz <= 1) this.yoff = 0; this.req(); return; }
-        const w = P.w * P.d / d, shift = G ? ((p.x + q.x) / 2 - P.mx) / (G.pw / w) : 0;
+        const w = P.w * P.d / d, shift = G ? ((p.x + q.x) / 2 - P.mx) / ((G.pe ?? G.pw) / w) : 0;
         this.view = this.clampView(P.mid - (P.mid - P.a) * w / P.w - shift, w); this.req(); return;
       }
       if (this.drag && this.ptrs.size === 1 && this.geo) {
@@ -728,8 +728,10 @@ class Chart {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
     const col = { ink: cssVar("--ink"), muted: cssVar("--muted"), line: cssVar("--line"), up: cssVar("--up"), down: cssVar("--down"), s1: cssVar("--s1"), s2: cssVar("--s2"), s3: cssVar("--s3"), accent: cssVar("--accent"), band: cssVar("--band"), shade: cssVar("--shade"), surface: cssVar("--surface"), vwap: cssVar("--vwap") || "#f472b6", ma10: cssVar("--ma10") || "#5b9bff" };
     const n = D.length, vis = this.visible, L = 8, R = narrow ? 48 : 58, pw = W - L - R;
-    const { a: va, b: vb } = this.range, { fa, w: vwid } = this.vw, bw = pw / vwid, inV = i => i >= va - 1 && i <= vb + 1;
-    this.geo = { L, bw, a: va, fa, pw, H, top0: 8, mainH };
+    // 開籌碼分佈時，K 棒右邊留一段空白給分佈長條，最新的 K 棒才不會被蓋住
+    const vpW = o.vp ? pw * (narrow ? 0.26 : 0.2) : 0, padR = vpW * 0.8;
+    const { a: va, b: vb } = this.range, { fa, w: vwid } = this.vw, bw = (pw - padR) / vwid, inV = i => i >= va - 1 && i <= vb + 1;
+    this.geo = { L, bw, a: va, fa, pw, pe: pw - padR, H, top0: 8, mainH };
     { const vt = 8 + mainH + gap, st = o.noVol ? vt : vt + volH + gap; this.panes = [{ key: "main", top: 8, h: mainH }, ...(o.noVol ? [] : [{ key: "vol", top: vt, h: volH }]), ...subs.map((_, k) => ({ key: "s" + k, top: st + k * (subH + gap), h: subH }))]; }
     this.syncBar();
     const X = i => L + bw * (i - fa + 0.5);
@@ -793,28 +795,31 @@ class Chart {
     // 格線 + 價格座標
     const step = niceStep((hi - lo) / 5);
     ctx.textAlign = "left";
+    // 籌碼分佈（Volume Profile）：疊在主圖右側、半透明；用畫面最右邊那根 K 棒往前 120 根計算，平移時跟著更新
+    const VP = this.vpData = o.vp ? costDist(D, Math.min(vis, vb + 1) - 1, o.vpN || 120, 70) : null;
+    // 價格軸上的壓力／均成本／支撐標籤先排好位置（彼此不重疊），格線的價格字碰到標籤就不寫
+    const vpTags = [];
+    if (VP) [[VP.pre, "#f0883e"], [VP.avg, "#8b8f98"], [VP.sup, "#3b82f6"]].filter(([v]) => v != null).map(([v, c]) => [v, c, Y(v)]).sort((a, b) => a[2] - b[2])
+      .forEach(([v, c, y]) => { if (y < top0 + 6 || y > top0 + mainH - 6) return; const pv = vpTags.at(-1); if (pv && y < pv.y + 17) y = pv.y + 17; vpTags.push({ v, c, y }); });
     for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
       const y = Y(v); ctx.strokeStyle = col.line; ctx.lineWidth = 1; ctx.globalAlpha = 0.6;
       ctx.beginPath(); ctx.moveTo(L, Math.round(y) + 0.5); ctx.lineTo(L + pw, Math.round(y) + 0.5); ctx.stroke(); ctx.globalAlpha = 1;
-      ctx.fillStyle = col.muted; ctx.fillText(fmtP(v), L + pw + 6, y);
+      if (!vpTags.some(t => Math.abs(t.y - y) < 13)) { ctx.fillStyle = col.muted; ctx.fillText(fmtP(v), L + pw + 6, y); }
     }
-    // 籌碼分佈（Volume Profile）：疊在主圖右側、半透明；用畫面最右邊那根 K 棒往前 120 根計算，平移時跟著更新
-    const VP = this.vpData = o.vp ? costDist(D, Math.min(vis, vb + 1) - 1, o.vpN || 120, 70) : null;
     if (VP) {
-      const mx = Math.max(...VP.w), maxW = pw * (narrow ? 0.34 : 0.26), bh = Math.max(1, Math.abs(Y(VP.mids[0]) - Y(VP.mids[0] + VP.step)));
+      const mx = Math.max(...VP.w), maxW = vpW, bh = Math.max(1, Math.abs(Y(VP.mids[0]) - Y(VP.mids[0] + VP.step)));
       ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
       // 70% 籌碼區間的底色
       // 70% 籌碼區間：左側一條細括號線（不塗底色，深色主題才不會出現一塊白色半透明）
       const y70a = Y(VP.r70[1]), y70b = Y(VP.r70[0]), bx = L + pw - maxW - 4; ctx.strokeStyle = col.muted; ctx.globalAlpha = 0.55; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(bx + 3, y70a); ctx.lineTo(bx, y70a); ctx.lineTo(bx, y70b); ctx.lineTo(bx + 3, y70b); ctx.stroke();
-      VP.w.forEach((x, k) => { const y = Y(VP.mids[k] + VP.step / 2), wd = x / mx * maxW; ctx.fillStyle = VP.mids[k] <= VP.px ? col.up : col.down; ctx.globalAlpha = VP.mids[k] <= VP.px ? 0.26 : 0.2; ctx.fillRect(L + pw - wd, y, wd, Math.max(1, bh - 0.6)); });
+      VP.w.forEach((x, k) => { const y = Y(VP.mids[k] + VP.step / 2), wd = x / mx * maxW; ctx.fillStyle = VP.mids[k] <= VP.px ? col.up : col.down; ctx.globalAlpha = VP.mids[k] <= VP.px ? 0.2 : 0.15; ctx.fillRect(L + pw - wd, y, wd, Math.max(1, bh - 0.6)); });
       ctx.globalAlpha = 1;
       const tag = (v, c, t) => { if (v == null) return; const y = Y(v); if (y < top0 || y > top0 + mainH) return; ctx.strokeStyle = c; ctx.lineWidth = 0.8; ctx.setLineDash(t === "均" ? [5, 3] : []); ctx.beginPath(); ctx.moveTo(L + pw - maxW - 8, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); };
       tag(VP.pre, "#f0883e", "壓"); tag(VP.avg, col.muted, "均"); tag(VP.sup, "#4e9af1", "撐");
       ctx.restore();
       // 右側價格軸上的標籤（橘＝壓力、灰＝平均成本、藍＝支撐）
       ctx.font = `500 10.5px ${cssVar("--font-num")}`; ctx.textAlign = "left";
-      const used = [];
-      [[VP.pre, "#f0883e"], [VP.avg, "#8b8f98"], [VP.sup, "#3b82f6"]].forEach(([v, c]) => { if (v == null) return; let y = Y(v); if (y < top0 + 6 || y > top0 + mainH - 6) return; while (used.some(u => Math.abs(u - y) < 14)) y += 14; used.push(y); const t = fmtP(v), tw = ctx.measureText(t).width + 8; ctx.fillStyle = c; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(L + pw + 2, y - 8, tw, 16, 3) : ctx.rect(L + pw + 2, y - 8, tw, 16); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillText(t, L + pw + 6, y); });
+      vpTags.forEach(({ v, c, y }) => { const t = fmtP(v), tw = ctx.measureText(t).width + 8; ctx.fillStyle = c; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(L + pw + 2, y - 8, tw, 16, 3) : ctx.rect(L + pw + 2, y - 8, tw, 16); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillText(t, L + pw + 6, y); });
       ctx.font = `11px ${cssVar("--font-num")}`;
     }
     // 布林

@@ -502,8 +502,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .foot-disc { margin: 4px 16px 12px; } :root[data-embed="1"] .foot-disc { display: none; } .hotmini h3 { display: flex; align-items: baseline; gap: 8px; }
 .ctags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; } .ctg { font-style: normal; font-size: 11px; line-height: 1.5; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); } .ctg.up { color: var(--up); border-color: color-mix(in srgb, var(--up) 40%, transparent); } .ctg.down { color: var(--down); border-color: color-mix(in srgb, var(--down) 40%, transparent); } .ctg.warn { color: var(--ink); }
 .bopr { margin: 0; }
-.bopr { display: flex; align-items: center; gap: 8px; margin: 2px 12px 0; font-size: 12px; color: var(--muted); } .bopr input { flex: 1; max-width: 220px; accent-color: var(--ink); } .bopr b { font: 500 12px var(--font-num); color: var(--ink); min-width: 3em; } .bax-t { font: 10px var(--font-body); fill: var(--muted); } .blab { pointer-events: none; } .blab text { paint-order: stroke; stroke: var(--surface-2); stroke-width: 3px; stroke-linejoin: round; }
-.bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bbtns { display: flex; gap: 8px; flex-wrap: wrap; } .bn { font: 500 9px var(--font-body); fill: var(--ink); text-anchor: middle; pointer-events: none; } .bv { font: 8.5px var(--font-num); fill: var(--ink); opacity: .8; text-anchor: middle; pointer-events: none; }
+.bopr { display: flex; align-items: center; gap: 8px; margin: 2px 12px 0; font-size: 12px; color: var(--muted); } .bopr input { flex: 1; max-width: 220px; accent-color: var(--ink); } .bopr b { font: 500 12px var(--font-num); color: var(--ink); min-width: 3em; } .bax-t { font: 10px var(--font-body); fill: var(--muted); } .blab { pointer-events: none; } .blab text { paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; } /* 標籤字用泡泡自己的顏色（象限色），外圈描深色邊才看得清楚 */
+.bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bbtns { display: flex; gap: 8px; flex-wrap: wrap; } .bn { font: 500 9px var(--font-body); fill: var(--qc, var(--ink)); text-anchor: middle; pointer-events: none; } .bv { font: 8.5px var(--font-num); fill: var(--qc, var(--ink)); opacity: .85; text-anchor: middle; pointer-events: none; }
 .mlist { list-style: none; margin: 0; padding: 0; } .mlist button { width: 100%; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); padding: 9px 2px; cursor: pointer; text-align: left; font: inherit; }
 .mlist .nm { display: flex; flex-direction: column; font-size: 14.5px; min-width: 0; } .mlist .nm small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mlist b { font-size: 13.5px; text-align: right; min-width: 4.2em; }
 .mlist .rk { color: var(--muted); font: 12px var(--font-num); min-width: 1.4em; text-align: right; } .mrk { margin: 8px 12px 0; } .mdesc { margin: 8px 12px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 4px; font-size: 13px; color: var(--muted); }
@@ -845,7 +845,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.18-90</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.18-91</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2080,7 +2080,7 @@ function bubbleLayout(pts, { w = 360, h = 360, scale } = {}) {
 }
 // 標籤畫在最上層（不會被別的圓點蓋住），跟著圓點一起移動
 const bubbleLabIn = n => `<g class="bl" transform="translate(${n.lab.dx.toFixed(1)},${n.lab.dy.toFixed(1)})"><text y="-1" class="bn">${esc(n.lab.nm)}</text><text y="8.5" class="bv">${flowFmt(n.p.net5)}</text></g>`;
-const bubbleLab = n => (n.lab ? `<g class="blab" data-lb="${esc(n.p.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">${bubbleLabIn(n)}</g>` : "");
+const bubbleLab = n => (n.lab ? `<g class="blab" data-lb="${esc(n.p.id)}" style="--qc:${FLOW_Q[n.p.q][2]}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">${bubbleLabIn(n)}</g>` : "");
 const bubbleNode = (n, sel) => `<g class="bnode${n.p.id === sel ? " on" : ""}" data-mbs="${esc(n.p.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})"><circle r="${n.r.toFixed(1)}" fill="${FLOW_Q[n.p.q][2]}"/><title>${esc(n.p.name)} ${flowFmt(n.p.net5)}</title></g>`;
 function bubbleSvg(pts, { w = 360, h = 360, id = "mfb", scale, sel } = {}) {
   const B = bubbleLayout(pts, { w, h, scale }), lab = (t, x, y, a, c) => `<text x="${x}" y="${y}" text-anchor="${a}" class="bq" style="fill:${c}">${t}</text>`, { top, bot, cx, cy } = B;
@@ -2229,7 +2229,7 @@ function flowDraw() {
     E.n.setAttribute("transform", `translate(${P.x.toFixed(1)},${P.y.toFixed(1)})`); E.c.setAttribute("r", Math.max(0, P.r).toFixed(2)); E.c.setAttribute("fill", col); E.n.classList.toggle("on", id === F.bsel);
     const lab = P.wb > P.wa ? P.lb : P.la, op = Math.max(P.wa, P.wb);
     if (lab && op > 0.02) { const b = E.l.firstElementChild; E.l.setAttribute("transform", `translate(${P.x.toFixed(1)},${P.y.toFixed(1)})`); b.setAttribute("transform", `translate(${lab.dx.toFixed(1)},${lab.dy.toFixed(1)})`);
-      b.firstElementChild.textContent = lab.nm; b.lastElementChild.textContent = flowFmt(P.v); E.l.style.opacity = (op * op * (3 - 2 * op)).toFixed(2); } else E.l.style.opacity = 0; }
+      b.firstElementChild.textContent = lab.nm; b.lastElementChild.textContent = flowFmt(P.v); E.l.style.setProperty("--qc", col); E.l.style.opacity = (op * op * (3 - 2 * op)).toFixed(2); } else E.l.style.opacity = 0; }
 }
 // 文字（日期、買賣最多、細節卡、滑桿）只在跨到另一天時更新
 function flowTexts(force) {
@@ -3231,7 +3231,10 @@ function drawTs() {
   const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, Wd, H);
   const col = k => cssVar(k), L = narrow ? 50 : 60, R = narrow ? 44 : 54, pw = Wd - L - R, top = 8;
   ctx.font = `11px ${col("--font-num")}`; ctx.textBaseline = "middle";
-  if (!d) { ctx.fillStyle = col("--muted"); ctx.textAlign = "center"; ctx.font = `13px ${col("--font-body")}`; ctx.fillText(W.off ? "需要部署到網站才有分時資料" : W.intraErr || "今天還沒有分時資料（開盤後才有）", Wd / 2, H / 2); $("#tsLeg").innerHTML = ""; TS.geo = null; $("#tsNote").textContent = ""; return; }
+  if (!d) { ctx.fillStyle = col("--muted"); ctx.textAlign = "center"; ctx.font = `13px ${col("--font-body")}`; { // 訊息太長時換行（手機寬度放不下一行）
+    const msg = W.off ? "需要部署到網站才有分時資料" : W.intraErr || "今天還沒有分時資料（開盤後才有）", lines = []; let ln = "";
+    for (const ch of msg) { if (ctx.measureText(ln + ch).width > Wd - 32) { lines.push(ln); ln = ch; } else ln += ch; } if (ln) lines.push(ln);
+    lines.forEach((t, i) => ctx.fillText(t, Wd / 2, H / 2 + (i - (lines.length - 1) / 2) * 20)); } $("#tsLeg").innerHTML = ""; TS.geo = null; $("#tsNote").textContent = ""; return; }
   const { pts, prev, o, cl, days, cdp } = d, span = cl - o, total = span * days.length, X = g => L + g / total * pw, fp = v => fmtPx(v, W.sel);
   const extra = (cdp || []).map(x => x[1]).filter(v => Math.abs(v / prev - 1) < 0.1); // CDP 太遠時不撐大座標
   let hi, lo;
