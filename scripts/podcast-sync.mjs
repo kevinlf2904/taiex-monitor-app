@@ -4,14 +4,14 @@
 //    - 有 GEMINI_API_KEY（GitHub Actions secret）：直接上傳音檔給 Gemini 聽完整集（沒有時間限制）
 //    - 沒有：改呼叫已部署網站的 /api/podcast（SITE_URL，用 Vercel 上的金鑰；整集太長時改讀節目說明）
 // 3. 寫進 learner/data/podcast/index.json，網頁打開就直接讀，不用等 AI。
-// 選項（環境變數）：MAX_PER_RUN（每次最多整理幾集，預設 15）、BACKFILL（每個節目往前補幾集，預設 30）、DRY=1（不呼叫 AI）
+// 選項（環境變數）：MAX_PER_RUN（每次最多整理幾集，預設 15）、BACKFILL（每個節目往前補幾集，預設 30）、REDO（每個節目最近幾集要用新版摘要格式重整，預設 5）、DRY=1（不呼叫 AI）
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { parseRss, parseSum, PROMPT, uploadAudio, geminiJSON, fileState, fileDelete, itunes } from "../api/_lib/podcast.js";
+import { parseRss, parseSum, PROMPT, SUM_VER, uploadAudio, geminiJSON, fileState, fileDelete, itunes } from "../api/_lib/podcast.js";
 
 const DIR = fileURLToPath(new URL("../learner/data/podcast/", import.meta.url));
 const KEY = (process.env.GEMINI_API_KEY || "").trim(), SITE = (process.env.SITE_URL || "https://kline-school.vercel.app").replace(/\/$/, "");
-const MAX = +process.env.MAX_PER_RUN || 15, BACK = +process.env.BACKFILL || 30, DRY = process.env.DRY === "1", KEEP = 60;
+const MAX = +process.env.MAX_PER_RUN || 15, REDO = process.env.REDO ? +process.env.REDO : 5, BACK = +process.env.BACKFILL || 30, DRY = process.env.DRY === "1", KEEP = 60;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // 和 learner/podcast.js 的 podHash 一樣（單集的 key）
 export const podHash = s => { let h = 5381; for (const ch of String(s)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0; return h.toString(36); };
@@ -24,6 +24,7 @@ async function site(path, body) {
   const j = await r.json().catch(() => null); if (!j) throw new Error(`網站回應 ${r.status}`); if (!j.ok) throw new Error(j.error || "失敗"); return j;
 }
 
+const pick = j => ({ tldr: j.tldr, points: j.points, sections: j.sections, facts: j.facts || [], risks: j.risks || [], watch: j.watch || [], calls: j.calls, topics: j.topics, mode: j.mode, model: j.model });
 // 整理一集：先聽音檔，不行再讀節目說明
 async function summarize(e, show) {
   const meta = { title: e.title, show: show.name, date: twDate(e.date), desc: e.desc }, notesOk = (e.desc || "").replace(/\s/g, "").length >= 40;
@@ -49,12 +50,12 @@ async function summarize(e, show) {
       const up = await site("/api/podcast", { act: "upload", audio: e.audio, name: e.title });
       for (let t = 0, st = up.state; st !== "ACTIVE"; t++) { if (st === "FAILED" || t > 40) throw new Error("音檔處理失敗"); await sleep(4000); st = (await site(`/api/podcast?act=file&name=${encodeURIComponent(up.file)}`)).state; }
       const j = await site("/api/podcast", { act: "sum", ...meta, desc: "", uri: up.uri, mime: up.mime, file: up.file });
-      return { tldr: j.tldr, points: j.points, sections: j.sections, calls: j.calls, topics: j.topics, mode: j.mode, model: j.model };
+      return pick(j);
     } catch (err) { log("  網站聽音檔失敗：", err.message); if (/額度|429/.test(err.message)) throw err; }
   }
   if (!notesOk) throw new Error("沒有音檔、節目說明也太短");
   const j = await site("/api/podcast", { act: "sum", ...meta });
-  return { tldr: j.tldr, points: j.points, sections: j.sections, calls: j.calls, topics: j.topics, mode: j.mode, model: j.model };
+  return pick(j);
 }
 
 export async function main() {
@@ -75,9 +76,9 @@ export async function main() {
   }
   // 2. 待整理：每個節目最新的先、再往前補到 BACKFILL 集（一年內）；新的優先排在前面
   const yearAgo = new Date(Date.now() - 365 * 864e5).toISOString(), todo = [];
-  for (const s of shows) s.eps.filter(e => e.date >= yearAgo).slice(0, BACK).forEach((e, rank) => { const key = podHash(s.feed + "|" + e.guid); if (!idx.eps[key] && (idx.fails[key]?.n || 0) < 3) todo.push({ s, e, key, rank }); });
+  for (const s of shows) s.eps.filter(e => e.date >= yearAgo).slice(0, BACK).forEach((e, rank) => { const key = podHash(s.feed + "|" + e.guid); const o = idx.eps[key], redo = o && rank < REDO && (o.v || 1) < SUM_VER && o.mode !== "manual"; if ((!o || redo) && (idx.fails[key]?.n || 0) < 3) todo.push({ s, e, key, rank, redo }); });
   // 排序：每個節目最新那集優先（今日摘要），接著先補「上架超過 3 天」的舊集——它們的觀點馬上能結算，名人排行才不會一直樣本不足
-  const settleD = new Date(Date.now() - 3 * 864e5).toISOString(), pri = x => (x.rank === 0 ? 0 : x.e.date <= settleD ? 1 : 2);
+  const settleD = new Date(Date.now() - 3 * 864e5).toISOString(), pri = x => (x.redo ? 3 : x.rank === 0 ? 0 : x.e.date <= settleD ? 1 : 2); // 舊格式重整排最後
   todo.sort((a, b) => pri(a) - pri(b) || a.rank - b.rank || b.e.date.localeCompare(a.e.date));
   log(`待整理 ${todo.length} 集，這次最多 ${MAX} 集`, KEY ? "（Gemini 直接聽音檔）" : `（用網站 ${SITE}）`);
   let done = 0;
@@ -85,7 +86,7 @@ export async function main() {
     log("整理：", s.name, e.title);
     try {
       const r = await summarize(e, s);
-      idx.eps[key] = { feed: s.feed, guid: e.guid, title: e.title, date: e.date, audio: e.audio, link: e.link || "", dur: e.dur || null, show: s.name, ...r, at: Date.now() };
+      idx.eps[key] = { feed: s.feed, guid: e.guid, title: e.title, date: e.date, audio: e.audio, link: e.link || "", dur: e.dur || null, show: s.name, ...r, v: SUM_VER, at: Date.now() };
       delete idx.fails[key]; done++; log("  完成：", r.mode, `${r.calls.length} 個觀點`);
     } catch (err) {
       idx.fails[key] = { n: (idx.fails[key]?.n || 0) + 1, err: String(err.message).slice(0, 200), at: Date.now() }; log("  失敗：", err.message);

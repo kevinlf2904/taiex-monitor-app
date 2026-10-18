@@ -5,7 +5,7 @@ const AF_MENU = [
   ["大盤", [["sum", "法人資料總表"], ["go:mkt", "大盤分析"], ["inst", "大盤三大法人買賣超金額"], ["margin", "大盤融資融券餘額"]]],
   ["排行", [["r:mcap", "市值排行"], ["r:chips", "籌碼總覽排行"], ["r:inst", "法人買賣超排行"], ["r:hold", "法人持股排行"], ["r:vs", "法人散戶對做"], ["r:ty", "土洋法人對做"], ["r:mg", "資券增減排行"], ["r:rev", "營收總表排行"], ["r:div", "股利總表排行"]]],
   ["ETF", [["go:etfann", "ETF 績效（年化）排行"]]],
-  ["主力", [["track", "主力追蹤（券商分點勝率）"]]],
+  ["籌碼", [["chipx", "籌碼動向（千張大戶、借券、當沖、Put/Call）"]]],
 ];
 // 欄位：名稱、格式（n 張數帶正負號、y 億元、p 百分比、x 一般數字）
 const AF_COLS = { cap: ["市值(億)", "y0"], v: ["成交(張)", "x"], f: ["外資", "n"], t: ["投信", "n"], d: ["自營", "n"], a: ["合計", "n"], mc: ["融資增減", "n"], sc: ["融券增減", "n"],
@@ -22,7 +22,7 @@ function afFmt(v, f) {
   if (f === "x2") return [v.toFixed(2), ""];
   return [Math.round(v).toLocaleString(), ""];
 }
-const afView = () => (W.afView ||= store.get("watch:af", "menu"));
+const afView = () => { const v = (W.afView ||= store.get("watch:af", "menu")); return v === "track" ? (W.afView = "menu") : v; };
 async function loadAfter(force = false) {
   if (W.afLoading || (!force && W.af && Date.now() - W.af.at < 10 * 60e3)) return;
   W.afLoading = true;
@@ -34,16 +34,14 @@ async function loadAfter(force = false) {
 function afBack(title, sub = "") { return `<div class="afhead"><button class="btn sm" data-af="menu">‹ 盤後</button><b>${esc(title)}</b>${sub ? `<span class="note">${sub}</span>` : ""}</div>`; }
 function renderAfter() {
   const A = W.af, v = afView(), box = $("#lx");
-  $("#lTools").innerHTML = `<span class="note">${A?.date ? `盤後資料・${A.date.replace(/-/g, "/")}` : "盤後資料"}</span>`;
+  $("#lTools").innerHTML = rankHub() + `<span class="note">${A?.date ? `盤後資料・${A.date.replace(/-/g, "/")}` : "盤後資料"}</span>`;
   let h = "";
   if (v === "menu") {
     h = AF_MENU.map(([g, L]) => `<h3 class="afgrp">${g}</h3><ul class="afmenu">${L.map(([k, t]) => `<li><button data-af="${k}">${t}<span>›</span></button></li>`).join("")}</ul>`).join("");
+  } else if (v === "chipx") {
+    h = afBack("籌碼動向") + chipxHtml(); // 籌碼動向原本在工具，跟盤後排行性質一樣，搬來這裡
   } else if (!A || A.err) {
     h = afBack("盤後資料") + `<p class="note" style="padding:12px">${A?.err ? "⚠ " + esc(A.err) : "載入中…"}</p>`;
-  } else if (v === "track") {
-    h = afBack("主力追蹤") + `<div class="sxcard" style="margin:12px"><p>「勝率王、獲利王、報酬率王、主力王」是把<b>每一個券商分點、在每一檔股票</b>的買賣都記下來，模擬當沖、隔日沖、1 天到 1 季的損益，再排名。</p>
-      <p class="note">這需要全市場、每天、每個分點的明細（證交所買賣日報表要輸入驗證碼，免費 API 拿不到；FinMind 要贊助會員，而且全市場一天就是數十萬筆，要另外架資料庫計算）。目前先不做，避免顯示不準的數字。</p>
-      <p class="note">單一個股的分點進出、主力買賣超與集中度，請看個股頁「資訊 → 分點主力」。</p></div>`;
   } else if (v === "sum") {
     const H = A.hist || [], L = H.at(-1), s = (n, k) => H.slice(-n).reduce((t, x) => t + (x.inst?.[k] || 0), 0), M = W.mks;
     if (!M && !W.mksLoading) loadMktStats().then(() => { if (W.lt === "after") renderList(); });

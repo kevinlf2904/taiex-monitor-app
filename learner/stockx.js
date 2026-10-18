@@ -1,5 +1,5 @@
 /* 個股「總覽／籌碼／財務」分頁裡由這裡畫的子頁（子頁清單在 watch.html 的 DSUB；每種資訊只出現在一個地方）：
-   總覽：多空研判、健檢、屬性與產業鏈、評價推估、達人觀點；籌碼：法人與基金、分點主力、大戶與股權；財務：股利、公司資料、行事曆。
+   總覽：多空研判＋市場狀態、健檢、屬性與產業鏈、評價推估、達人觀點；籌碼：法人與基金、分點主力、大戶與股權；財務：股利、公司資料、行事曆。
    （籌碼總覽、營收與估值、財務報表、符合的指標用 watch.html 原本的區塊；新聞在「新聞」分頁。）
    資料都來自已有的 API：/api/stockinfo（W.info：法人、融資券、借券、本益比、營收、季 EPS）、/api/company（W.co：損益、資產負債、現金流、股利、
    股權分散、外資持股、公司資料）、/api/news（W.news）、日 K（W.daily）、名人 Podcast（POD）、產業地圖（IND）。
@@ -81,7 +81,7 @@ function sxBrChart(D) {
   g += [mx, mn].filter(v => v).map(v => `<text x="${L - 4}" y="${Yb(v).toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="11" fill="var(--muted)">${sxN(v)}</text>`).join("");
   g += [lx, ln].filter(v => v).map(v => `<text x="${Wv - R + 4}" y="${Yl(v).toFixed(1)}" dominant-baseline="middle" font-size="11" fill="var(--muted)">${v.toFixed(0)}%</text>`).join("");
   g += D.map((x, i) => `<rect x="${(L + i * cw + cw * 0.15).toFixed(1)}" y="${Math.min(Yb(x.net), Yb(0)).toFixed(1)}" width="${(cw * 0.7).toFixed(1)}" height="${Math.max(1, Math.abs(Yb(x.net) - Yb(0))).toFixed(1)}" fill="${x.net >= 0 ? "var(--up)" : "var(--down)"}" opacity=".75"/>`).join("");
-  for (const [k, col] of [["c5", "#4a86e8"], ["c20", "#f0883e"]]) { const pts = D.map((x, i) => (x[k] == null ? null : `${(L + i * cw + cw / 2).toFixed(1)},${Yl(x[k]).toFixed(1)}`)).filter(Boolean); if (pts.length > 1) g += `<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.6"/>`; }
+  for (const [k, col] of [["c5", "#4a86e8"], ["c20", "#f0883e"]]) { const pts = D.map((x, i) => (x[k] == null ? null : `${(L + i * cw + cw / 2).toFixed(1)},${Yl(x[k]).toFixed(1)}`)).filter(Boolean); if (pts.length > 1) g += `<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.2"/>`; }
   g += [0, n >> 1, n - 1].map(i => `<text x="${(L + i * cw + cw / 2).toFixed(1)}" y="${Hv - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">${sxMd(D[i].d)}</text>`).join("");
   return `<svg class="sxbrchart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="分點買賣超與集中度">${g}</svg>
     <div class="sxlegend"><span><i style="background:var(--up)"></i><i style="background:var(--down)"></i>買賣超（張）</span><span><i style="background:#4a86e8"></i>5 日集中</span><span><i style="background:#f0883e"></i>20 日集中</span></div>`;
@@ -94,7 +94,7 @@ function sxAreaChart(P) {
   const line = P.map((x, i) => `${X(i).toFixed(1)},${Y(x.v).toFixed(1)}`).join(" ");
   return `<svg class="sxbrchart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="千張大戶持股變化">
     ${[mx, mn].map(v => `<line x1="${L}" x2="${Wv - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)" stroke-dasharray="3 4"/><text x="${L - 4}" y="${Y(v).toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="11" fill="var(--muted)">${v.toFixed(2)}</text>`).join("")}
-    <polygon points="${X(0).toFixed(1)},${Hv - B} ${line} ${X(n - 1).toFixed(1)},${Hv - B}" fill="var(--accent-soft)"/><polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+    <polygon points="${X(0).toFixed(1)},${Hv - B} ${line} ${X(n - 1).toFixed(1)},${Hv - B}" fill="var(--accent-soft)"/><polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="1.2"/>
     ${[0, n >> 1, n - 1].map(i => `<text x="${X(i).toFixed(1)}" y="${Hv - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${P[i].label}</text>`).join("")}</svg>`;
 }
 // 大戶持股分布：每週千張以上（大戶）與 50 張以下（散戶）
@@ -106,23 +106,24 @@ function sxBig(C) {
     <p class="note">大戶＝持股 1,000 張以上，散戶＝50 張以下。董監事（內部人）持股要到公開資訊觀測站查。</p>`;
 }
 const SX = {
+  // 多空研判（台股）：併在市場狀態最上面，不再是獨立子頁
   ls() {
-    const S = sxSignals(); if (!S) return sxLoad();
+    const S = isTW(W.sel) ? sxSignals() : null; if (!S) return "";
     const pos = (S.score + 100) / 2;
     return `${sxH("多空研判", "技術＋籌碼，每一項 +1／0／−1 平均")}
       <div class="sxgauge"><div class="bar"><i style="left:calc(${pos}% - 6px)"></i></div><div class="lbl"><span class="down">偏空</span><b class="${cls(S.score)}">${S.label}（${S.score > 0 ? "+" : ""}${S.score}）</b><span class="up">偏多</span></div></div>
       <ul class="sxlist">${S.out.map(x => `<li><span class="${x.v > 0 ? "up" : x.v < 0 ? "down" : "muted"}">${x.v > 0 ? "▲ 多" : x.v < 0 ? "▼ 空" : "－ 中"}</span><b>${x.k}</b><span>${esc(x.t)}</span></li>`).join("")}</ul>
-      <p class="note">這是把常見指標整理成一個分數，幫你快速看「現在偏哪一邊」，不是買賣建議；盤整時多空訊號常常互相打架。</p>`;
+      <p class="note">把常見指標整理成一個分數，快速看「現在偏哪一邊」；盤整時多空訊號常常互相打架。</p><div class="qx-sep"></div>`;
   },
   // 市場狀態：日線＋週線的趨勢、波動、量能，適合的策略類型、該避免的事，ATR 參考進出場與部位大小
   state() {
-    const D = sxD(), c = W.sel; if (D.length < 72) return sxLoad(W.daily?.err || (D.length ? "日 K 太少（至少要 72 根）" : ""));
+    const D = sxD(), c = W.sel; if (D.length < 72) return (D.length >= 30 ? SX.ls() : "") + sxLoad(W.daily?.err || (D.length ? "日 K 太少，市場狀態至少要 72 根" : ""));
     const L = W.stLong?.code === c && W.stLong.D?.length > D.length ? W.stLong.D : D, Sd = marketState(D), Sw = marketState(agg(L, weekKey), { fast: 10, slow: 30, ppy: 52 });
     const X = Sd ? atrSetup(Sd, W.stCap, W.stRisk / 100, isTW(c) && !isEtf(c) && W.stCap >= 2e6 ? 1000 : 1) : null, ak = "state:" + c;
     QAI[ak] = { ctx: () => `${nameOf(c)} ${c} 的市場狀態（程式依日 K 計算）：\n${stateText(Sd, "日線", X)}\n${stateText(Sw, "週線")}`, done: sxRender,
       q: "請只根據上面的數字，用白話整理：1) 日線與週線的趨勢、波動、量能，兩個週期方向一不一致 2) 支撐與壓力區間 3) 關鍵均線的位置 4) 一步一步的判斷流程：什麼情況屬於可以考慮買進、該觀望、該減碼的情境，各自看哪個價位或指標。不要給明確的買賣建議，用繁體中文、條列。" };
     const same = Sd && Sw && Sd.trend === Sw.trend, form = `<label>帳戶 <input type="number" data-stcap value="${W.stCap}" min="10000" step="10000" inputmode="numeric"> 元</label><label>每筆最多虧 <select data-strisk>${[0.5, 1, 1.5, 2].map(v => `<option value="${v}" ${v === W.stRisk ? "selected" : ""}>${v}%</option>`).join("")}</select></label>`;
-    return `${sxH("市場狀態", "程式依 K 線計算，不是預測")}
+    return `${SX.ls()}${sxH("市場狀態", "程式依 K 線計算，不是預測")}
       ${Sd && Sw ? `<p class="sxsay">${same ? `日線、週線都是<b class="${Sd.trend === "bull" ? "up" : Sd.trend === "bear" ? "down" : ""}">${REG_NAME[Sd.trend]}</b>，長短週期方向一致。` : `日線是<b>${REG_NAME[Sd.trend]}</b>、週線是<b>${REG_NAME[Sw.trend]}</b>：短線和長線方向不同，先決定自己做哪個週期，停損也要跟著那個週期設。`}</p>` : ""}
       ${stateHtml(Sd, "日線", X, { stratBtn: true, sizeForm: form })}
       <div class="qx-sep"></div>${W.stLong?.code === c && W.stLong.loading ? `<p class="note">週線：載入更長的日 K…</p>` : stateHtml(Sw, "週線")}

@@ -2,7 +2,7 @@
    這個檔案只定義函式（載入時 watch.html 的 W 還沒建立），由 watch.html 的清單分頁「工具」呼叫 renderTools()。
    資料都存在這台裝置的瀏覽器（localStorage）；指標用日 K 判斷，日 K 每 5 分鐘重抓一次。 */
 
-const TOOLS_VIEWS = [["sum", "每日摘要"], ["alert", "提醒"], ["chipx", "籌碼動向"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["sync", "備份同步"]];
+const TOOLS_VIEWS = [["sum", "每日摘要"], ["alert", "提醒"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["sync", "備份同步"]];
 const toolsDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 // 日 K（6 個月）：5 分鐘內重複用
 async function dailyFresh(c) {
@@ -90,7 +90,7 @@ async function paCurve() {
   const ser = [["台股帳戶", A.eqh.map(r => r[1] / A.init - 1), "var(--up)"], ["美股帳戶", A.eqh.map(r => r[2] / A.initUsd - 1), "var(--gold)"], ["加權指數", A.eqh.map(r => (at(T, r[0]) && at(T, from) ? at(T, r[0]) / at(T, from) - 1 : null)), "var(--muted)"], ["SPY", A.eqh.map(r => (S && at(S, r[0]) && at(S, from) ? at(S, r[0]) / at(S, from) - 1 : null)), "var(--line)"]];
   const all = ser.flatMap(x => x[1]).filter(v => v != null), lo = Math.min(0, ...all), hi = Math.max(0, ...all), W0 = 600, H0 = 160, n = A.eqh.length, X = i => (i / (n - 1)) * (W0 - 8) + 4, Y = v => H0 - 6 - ((v - lo) / (hi - lo || 1)) * (H0 - 12);
   if (!el.isConnected) return;
-  el.innerHTML = `<svg viewBox="0 0 ${W0} ${H0}" preserveAspectRatio="none" style="width:100%;height:160px"><line x1="0" x2="${W0}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)" stroke-dasharray="3 3"/>${ser.map(([, v, col]) => `<polyline fill="none" stroke="${col}" stroke-width="1.6" vector-effect="non-scaling-stroke" points="${v.map((x, i) => (x == null ? "" : `${X(i).toFixed(1)},${Y(x).toFixed(1)}`)).filter(Boolean).join(" ")}"/>`).join("")}</svg>
+  el.innerHTML = `<svg viewBox="0 0 ${W0} ${H0}" preserveAspectRatio="none" style="width:100%;height:160px"><line x1="0" x2="${W0}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)" stroke-dasharray="3 3"/>${ser.map(([, v, col]) => `<polyline fill="none" stroke="${col}" stroke-width="1.2" vector-effect="non-scaling-stroke" points="${v.map((x, i) => (x == null ? "" : `${X(i).toFixed(1)},${Y(x).toFixed(1)}`)).filter(Boolean).join(" ")}"/>`).join("")}</svg>
     <p class="note">${ser.map(([t, v, col]) => `<span style="color:${col}">━</span> ${t} ${v[n - 1] == null ? "—" : retPct(v[n - 1])}`).join("　")}（從 ${from} 起算）</p>`;
 }
 
@@ -276,13 +276,21 @@ function calDeadlines(a, b) {
 
 /* ---------- 畫面 ---------- */
 // 這些畫面也被別的分頁借用：條件選股、相對強弱在「選股」，內部人申報在「申報」
-const toolsOn = () => W.lt === "tools" || (W.lt === "screen" && (W.scrG === "custom" || W.scrG === "rs" || (W.scrG === "score" && W.scoreMode === "factor"))) || (W.lt === "cong" && (W.cv === "ins" || String(W.cv).startsWith("tw")));
+const toolsOn = () => W.lt === "tools" || (W.lt === "after" && afView() === "chipx") || (W.lt === "screen" && (W.scrG === "custom" || W.scrG === "rs" || (W.scrG === "score" && W.scoreMode === "factor"))) || (W.lt === "cong" && (W.cv === "ins" || String(W.cv).startsWith("tw")));
 const scanVis = () => W.lt === "screen" && W.scrG === "custom", rsVis = () => W.lt === "screen" && W.scrG === "rs", insVis = () => W.lt === "cong" && W.cv === "ins";
 function renderTools() {
+  if (W.tv === "chipx") { W.tv = "sum"; W.afView = "chipx"; store.set("watch:af", "chipx"); setTimeout(() => setLt("after"), 0); return ""; } // 籌碼動向搬到排行 → 盤後資料
   if (!TOOLS_VIEWS.some(x => x[0] === W.tv)) W.tv = "sum";
   const v = W.tv;
   $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="工具">${TOOLS_VIEWS.map(([k, t]) => `<button data-tv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</div>`;
   const r = toolsBody(v); $("#lx").innerHTML = r.h; return r.note;
+}
+// 盤後總結＋分享（原本在資金雷達「今日」）：用法人資金資料填固定句型，可分享成圖片或文字
+function sumFlowHtml() {
+  const M = typeof mfModel === "function" ? mfModel() : null;
+  if (!M) { if (!W.off && !W.mf?.loading && !W.mf?.days?.length) setTimeout(() => loadMoney(10), 0); return `<h4>盤後總結</h4><p class="note">${W.off ? "需要部署到網站才有資金資料。" : "載入法人資金資料…"}</p>`; }
+  return `<h4>盤後總結 <span class="note">${M.dates[M.T - 1].slice(5).replace("-", "/")}</span></h4><p class="msum">${esc(flowSummary(M, flowMood(M), W.quotes.get("T00")?.chgPct))}</p>
+      <button class="btn mshare" data-mshare="share">分享今日盤面</button><div class="mshares"><button data-mshare="line">LINE</button><button data-mshare="threads">Threads</button><button data-mshare="copy">複製圖</button></div>`;
 }
 function toolsBody(v) {
   let h = "", note = "";
@@ -296,6 +304,7 @@ function toolsBody(v) {
       <div class="tgrid"><div><h4>大盤</h4><ul class="tlist">${["T00", "O00", "TXF"].map(c => q(c) ? `<li>${esc(q(c).name || nameOf(c))} <b>${fmtP(q(c).price)}</b> <span class="${cls(q(c).chg)}">${q(c).chgPct >= 0 ? "+" : ""}${q(c).chgPct ?? "—"}%</span></li>` : "").join("")}</ul></div>
       <div><h4>自選漲幅前 5</h4><ul class="tlist">${mv.slice(0, 5).map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div>
       <div><h4>自選跌幅前 5</h4><ul class="tlist">${mv.slice(-5).reverse().map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div></div>
+      ${sumFlowHtml()}
       <h4>自選股今天觸發的技術訊號 ${S?.busy ? `<span class="note">掃描中…</span>` : ""}</h4><ul class="tlist">${(S?.sig || []).map(s => `<li><button class="linkbtn" data-tsel="${s.c}">${esc(nameOf(s.c))} ${s.c}</button>：${s.ev.map(esc).join("、")} <span class="note">${s.d}</span></li>`).join("") || `<li class="note">${S?.busy ? "…" : "沒有（掃描自選股最多 30 檔的日 K：KD／MACD 交叉、布林突破、20 日新高新低、爆量、鈍化、季線）"}</li>`}</ul>
       <h4>今天的指標提醒</h4><ul class="tlist">${(W.irLog ||= store.get("watch:irlog", []) || []).filter(x => x.d === toolsDay()).map(x => `<li>${x.t} ${esc(nameOf(x.code))} ${x.code}：${esc(x.msg)}</li>`).join("") || `<li class="note">沒有（在「提醒」設定條件）</li>`}</ul>
       <h4>國會新申報（最近 3 天）</h4><ul class="tlist">${cg.slice(0, 12).map(t => `<li>${esc(pName(t.pid))} ${t.k === "buy" ? "<b class='up'>買進</b>" : "<b class='down'>賣出</b>"} ${esc(t.ticker)} ${amtTxt(t.amount)} <span class="note">交易日 ${t.traded}</span></li>`).join("") || `<li class="note">沒有</li>`}</ul></section>`;
@@ -319,8 +328,6 @@ function toolsBody(v) {
     h = mfHtml(); note = "多因子排行是把幾個常見的選股因子換成分數，幫你縮小研究範圍；ATR 停損與目標是教學用的參考計算，不是買賣建議。";
   } else if (v === "ins") {
     h = insHtml(); note = "內部人申報是公開資訊，可以當成籌碼面的參考；大股東轉讓的原因很多（繳稅、贈與、信託、資金需求），不一定代表看壞。";
-  } else if (v === "chipx") {
-    h = chipxHtml(); note = "集保每週六更新、借券／當沖／Put-Call 比每個交易日晚上更新（排程）。";
   } else if (v === "sync") {
     h = syncHtml(); note = "雲端同步只存同步碼的雜湊與你的設定，不需要帳號；同步碼遺失就無法取回雲端資料，記得也匯出一份備份檔。";
   } else if (v === "alert") {
@@ -403,7 +410,7 @@ async function jBH() {
 }
 const retPct = v => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
 function toolsClick(e) {
-  if (!toolsOn()) return; const b = e.target.closest("[data-tv],[data-tx],[data-tsel],[data-irdel],[data-paside],[data-paodel],[data-paldel],[data-jdel],[data-jrdel],[data-sy],[data-mm],[data-scadd],[data-scdel],[data-scrun],[data-rsk],[data-rsrun],[data-rsu],[data-mfu],[data-mfrun],[data-mfbt],[data-insf],[data-insbt]" + (W.lt === "cong" ? "" : ",[data-rkset]")); if (!b) return; const d = b.dataset;
+  if (!toolsOn()) return; const b = e.target.closest("[data-tv],[data-tx],[data-tsel],[data-irdel],[data-paside],[data-paodel],[data-paldel],[data-jdel],[data-jrdel],[data-sy],[data-mm],[data-scadd],[data-scdel],[data-scrun],[data-rsk],[data-rsrun],[data-rsu],[data-mfu],[data-mfrun],[data-mfbt],[data-insf],[data-insbt],[data-mshare]" + (W.lt === "cong" ? "" : ",[data-rkset]")); if (!b) return; const d = b.dataset;
   if (d.rkset != null) { const [k, v] = d.rkset.split(/:(.*)/s); W[k] = v; store.set("watch:" + k, v); return renderList(); }
   if (b.hasAttribute("data-scadd")) { SC().rules.push({ k: "above" }); scSave(); return renderList(); }
   if (d.scdel != null) { SC().rules.splice(+d.scdel, 1); scSave(); return renderList(); }
@@ -419,6 +426,7 @@ function toolsClick(e) {
   if (b.hasAttribute("data-mfbt")) return mfBacktest();
   if (d.tv && W.lt === "tools") { W.tv = d.tv; renderList(); navPush(); }
   else if (d.tsel) select(d.tsel);
+  else if (d.mshare) mfShare(d.mshare);
   else if (d.tx === "sumre") { W.sum = null; W.dk = new Map(); renderList(); }
   else if (d.tx === "sumai") sumAI();
   else if (d.tx === "irnow") irCheck(true);
@@ -791,7 +799,7 @@ async function tdccRank() { if (W.tdccR) return W.tdccR; try { const r = await f
 
 // 籌碼動向：大戶週變化排行、借券賣出最多、當沖比例最高、選擇權 Put/Call 比
 function chipxHtml() {
-  const X = W.chipx, T = W.tdccR; if (!X) chipxLoad().then(() => W.lt === "tools" && renderList()); if (!T) tdccRank().then(() => W.lt === "tools" && renderList());
+  const X = W.chipx, T = W.tdccR; const re = () => W.lt === "after" && renderList(); if (!X) chipxLoad().then(re); if (!T) tdccRank().then(re);
   const a = (c, extra = "") => `<button class="linkbtn" data-tsel="${c}">${esc(nameOf(c))} ${c}</button>${extra}`;
   const lend = Object.entries(X?.lend || {}).filter(([, v]) => v[0] > 0).sort((p, q) => q[1][0] - p[1][0]).slice(0, 25);
   const dt = Object.entries(X?.dt || {}).filter(([c]) => /^\d{4}$/.test(c)).sort((p, q) => q[1] - p[1]).slice(0, 25), pcr = (X?.pcr || []).slice(-20).reverse();

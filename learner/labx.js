@@ -83,7 +83,7 @@ async function lxWalkRun() {
 function lxCurve(R) {
   const W = 640, H = 190, P = 8, all = [...R.eqW, ...R.eqD, ...R.eqB], lo = Math.min(...all, 1), hi = Math.max(...all, 1), n = R.eqW.length;
   const X = i => P + (W - 2 * P) * i / Math.max(1, n - 1), Y = v => P + (H - 2 * P - 14) * (hi - v) / (hi - lo || 1);
-  const line = (a, c, d = "") => `<polyline fill="none" stroke="${c}" stroke-width="1.8" ${d} points="${a.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ")}"/>`;
+  const line = (a, c, d = "") => `<polyline fill="none" stroke="${c}" stroke-width="1.3" ${d} points="${a.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ")}"/>`;
   const cuts = R.wins.slice(1).map(w => X(w.oa - R.isLen)), D = lab.D;
   return `<svg class="lxcurve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="樣本外串接的資產曲線">
     <line x1="${P}" x2="${W - P}" y1="${Y(1)}" y2="${Y(1)}" stroke="var(--line)"/>${cuts.map(x => `<line x1="${x}" x2="${x}" y1="${P}" y2="${H - 20}" stroke="var(--line)" stroke-dasharray="3 3"/>`).join("")}

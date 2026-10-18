@@ -185,7 +185,7 @@ async function podSum(key, mode) {
       body = { ...body, uri: up.uri, mime: up.mime, file: up.file, desc: "" };
     }
     const j = await podPost(body), calls = await podResolve(j.calls), old = podSums()[key];
-    podLocal()[key] = { tldr: j.tldr, points: j.points, sections: j.sections, topics: j.topics, calls: [...calls, ...(old?.calls || []).filter(c => c.manual)], mode: j.mode, model: j.model, at: Date.now(), feed: it.s.feed, guid: e.guid, title: e.title, date: e.date, show: s.name, audio: e.audio };
+    podLocal()[key] = { tldr: j.tldr, points: j.points, sections: j.sections, facts: j.facts || [], risks: j.risks || [], watch: j.watch || [], topics: j.topics, calls: [...calls, ...(old?.calls || []).filter(c => c.manual)], mode: j.mode, model: j.model, at: Date.now(), feed: it.s.feed, guid: e.guid, title: e.title, date: e.date, show: s.name, audio: e.audio };
     podSave(); POD.job = null; POD.perf = new Map(); podLoadPx();
   } catch (err) { POD.job = { key, err: err.message || "整理失敗", mode }; }
   podRender();
@@ -247,7 +247,7 @@ function podHome() {
   if (!F.length) return POD.busy ? podEmpty("正在找節目…") : podEmpty(`還沒有追蹤節目。<button class="btn sm" data-pv="follow">搜尋節目加入</button>`);
   const eps = F.flatMap(s => podShowEps(s.feed).slice(0, 12).map(e => ({ e, s, key: podKey(s.feed, e.guid) }))).sort((a, b) => b.e.date.localeCompare(a.e.date)).slice(0, 40);
   const av = `<div class="pavs">${F.map(s => `<button class="pav" data-pshow="${esc(s.feed)}">${podArt(s)}<span>${esc(s.name)}</span></button>`).join("")}</div>`;
-  const cards = eps.map(({ e, s, key }) => { const m = S[key], chars = m ? (m.points.join("") + m.sections.map(x => x.body).join("")).length : 0;
+  const cards = eps.map(({ e, s, key }) => { const m = S[key], chars = m ? podChars(m) : 0;
     return `<article class="pep" data-pep="${key}" role="button" tabindex="0">${podArt(s)}<div class="pepb">
       <div class="pmeta"><b>${esc(s.name)}</b><span class="note">・${podRel(e.date)}</span>${podBadge(s.feed)}</div>
       <h4>${esc(e.title)}</h4>
@@ -257,9 +257,10 @@ function podHome() {
   const upd = POD.srv?.updated ? `<p class="note">重點與觀點每 2 小時自動整理・最近更新 ${new Date(Date.parse(POD.srv.updated) + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/")}${POD.job?.busy ? "・正在整理新單集…" : ""}</p>` : POD.job?.busy ? `<p class="note">正在自動整理新單集…</p>` : "";
   return `<h2 class="ph2">今日摘要</h2>${upd}${av}${cards || podEmpty(POD.busy ? "載入單集中…" : "這些節目最近沒有新單集。")}`;
 }
+const podChars = m => [m.points, m.sections.map(x => x.body), m.facts, m.risks, m.watch].map(a => (a || []).join("")).join("").length;
 function podEpView() {
   const key = POD.key, it = podEp(key); if (!it) return podEmpty("找不到這一集。");
-  const { e, s } = it, m = podSums()[key], chars = m ? (m.points.join("") + m.sections.map(x => x.body).join("")).length : 0, calls = podCalls().filter(c => c.key === key);
+  const { e, s } = it, m = podSums()[key], chars = m ? podChars(m) : 0, calls = podCalls().filter(c => c.key === key);
   const unres = (m?.calls || []).filter(c => !c.code);
   return `<div class="ptop sticky"><button class="linkbtn pback" data-pback>‹ 返回</button>${e.audio ? `<a class="btn sm" href="${esc(e.audio)}" target="_blank" rel="noopener">🎧 收聽</a>` : e.link ? `<a class="btn sm" href="${esc(e.link)}" target="_blank" rel="noopener">開啟原始頁面</a>` : ""}</div>
     <h2 class="ph1">${esc(e.title)}</h2>
@@ -268,6 +269,7 @@ function podEpView() {
     ${e.audio ? `<audio class="paudio" controls preload="none" src="${esc(e.audio)}"></audio>` : ""}
     ${m ? `<div class="pkey"><div class="pkh">重點</div><ul>${m.points.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>
       ${m.sections.map(x => `<h3 class="psec">${esc(x.title)}</h3><p class="pbody">${esc(x.body)}</p>`).join("")}
+      ${[["facts", "節目提到的數字與事件"], ["risks", "風險與反方看法"], ["watch", "接下來要觀察"]].map(([k, t]) => m[k]?.length ? `<div class="pkey pkey2"><div class="pkh">${t}</div><ul>${m[k].map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>` : "").join("")}
       ${m.topics?.length ? `<p class="note ptopic">• 你可能感興趣的議題：${m.topics.map(t => `<span>${esc(t)}</span>`).join("、")}</p>` : ""}`
       : `${podJobHtml(key) || `<div class="pjob"><span class="pspin"></span>${podWaitText(s.feed)}</div>`}<details class="pnotes"><summary>不想等？現在就用 AI 整理這集</summary>${podSumBtns(key, e)}</details>${e.desc ? `<details class="pnotes"><summary>節目說明</summary><p class="pbody">${esc(e.desc)}</p></details>` : ""}`}
     <h2 class="ph2">觀點紀錄</h2>
@@ -410,6 +412,7 @@ function podInit() {
 .pod .pbadge.gold { background: color-mix(in srgb, #d9b04a 20%, var(--surface)); color: color-mix(in srgb, #c99a2e 75%, var(--ink)); border-color: color-mix(in srgb, #d9b04a 45%, transparent); } .pod .pbadge.low { opacity: .75; }
 .pod .paudio { width: 100%; margin: 8px 0; }
 .pod .pkey { border-left: 3px solid var(--up); padding: 4px 0 4px 14px; margin: 14px 0; } .pod .pkh { color: var(--up); font-size: 13px; margin-bottom: 4px; }
+.pod .pkey2 { border-left-color: var(--line); } .pod .pkey2 .pkh { color: var(--muted); } .pod .pkey2 li::marker { color: var(--muted); }
 .pod .pkey ul { margin: 0; padding-left: 20px; } .pod .pkey li { margin: 6px 0; line-height: 1.75; } .pod .pkey li::marker { color: var(--up); }
 .pod .psec { font-size: 16px; font-weight: 500; margin: 18px 0 6px; } .pod .pbody { line-height: 1.85; margin: 0 0 8px; white-space: pre-wrap; }
 .pod .pcall { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; margin: 10px 0; background: var(--grad-panel, var(--surface)); }

@@ -6,9 +6,9 @@
 <title>KLineLab｜看盤終端</title>
 <meta name="description" content="自選股（多群組）、台股與美股熱門、排行、當日分時、K 線（分／日／週／月都能往前拉）、技術分析、籌碼、基本面、五檔、持股損益與價格提醒。">
 <meta name="theme-color" content="#09090B">
-<link rel="manifest" href="watch.webmanifest?v=3">
-<link rel="apple-touch-icon" href="watch-icon-180.png?v=3">
-<link rel="icon" href="logo.svg?v=3" type="image/svg+xml">
+<link rel="manifest" href="watch.webmanifest?v=4">
+<link rel="apple-touch-icon" href="watch-icon-180.png?v=4">
+<link rel="icon" href="logo.svg?v=4" type="image/svg+xml">
 <link rel="alternate icon" href="watch-icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -694,7 +694,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 </head>
 <body>
 <header class="w-top">
-  <a class="brand" href="./" aria-label="KLineLab 首頁"><img class="logo" src="logo.svg?v=3" alt="" width="34" height="34"><span class="bl-t"><b>KLineLab</b><small>看盤終端</small></span></a><a class="bl-pro" href="pro.html" title="KLineLab Pro 方案">PRO</a>
+  <a class="brand" href="./" aria-label="KLineLab 首頁"><img class="logo" src="logo.svg?v=4" alt="" width="34" height="34"><span class="bl-t"><b>KLineLab</b><small>看盤終端</small></span></a><a class="bl-pro" href="pro.html" title="KLineLab Pro 方案">PRO</a>
   <div class="ix" id="ix" aria-label="大盤指數"></div>
   <div class="tools">
     <span class="stat" id="stat"><i class="dot" id="dot"></i><span class="st-t" id="statText">連線中…</span></span>
@@ -713,7 +713,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
       <div class="l-ix" id="ix2"></div>
-      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金雷達</button><button data-l="ind">供應鏈</button><button data-l="etf">ETF</button><button data-l="pod">節目觀點</button><button data-l="cong">大戶國會</button><button data-l="rank">排行</button><button data-l="after">盤後</button></div>
+      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金雷達</button><button data-l="ind">供應鏈</button><button data-l="etf">ETF</button><button data-l="pod">節目觀點</button><button data-l="cong">大戶國會</button><button data-l="rank">排行</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
         <button type="button" class="gsadd" data-gsearch-add>🔍 搜尋代號或名稱，加入自選</button>
@@ -845,7 +845,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="num" style="margin-left:8px">版本 2026.10.18-88</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="num" style="margin-left:8px">版本 2026.10.18-89</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1330,8 +1330,8 @@ function placeTabs() {
 }
 placeTabs(); matchMedia("(max-width: 900px)").addEventListener("change", () => { placeTabs(); ltabsUi(true); });
 // 台股熱門、美股熱門併進「排行」分頁（清單上方切換）；大盤的台股、美股頁也各有熱門前 8 名
-const ltTab = () => (W.lt === "tw" || W.lt === "us" ? "rank" : W.lt);
-const rankHub = () => `<div class="seg" role="group" aria-label="排行種類" id="rkHub">${[["rank", "台股排行"], ["tw", "台股熱門"], ["us", "美股熱門"]].map(([k, t]) => `<button data-l="${k}" aria-pressed="${W.lt === k}">${t}</button>`).join("")}</div>`;
+const ltTab = () => (W.lt === "tw" || W.lt === "us" || W.lt === "after" ? "rank" : W.lt); // 熱門、盤後資料都在「排行」裡
+const rankHub = () => `<div class="seg" role="group" aria-label="排行種類" id="rkHub">${[["rank", "台股排行"], ["tw", "台股熱門"], ["us", "美股熱門"], ["after", "盤後資料"]].map(([k, t]) => `<button data-l="${k}" aria-pressed="${W.lt === k}">${t}</button>`).join("")}</div>`;
 $("#lTools").addEventListener("click", e => { const b = e.target.closest("#rkHub [data-l]"); if (b) setLt(b.dataset.l, true); });
 function hotMini(m) {
   const H = m === "us" ? W.hot["us:active"] : W.hot.tw; if (!H && !W.off) loadHot(m === "us" ? "us" : "tw");
@@ -2023,7 +2023,7 @@ async function loadMoney(need = 10, force = false) {
     if (W.lt === "money" && F.view === "replay" && document.getElementById("mfb")) { const el = document.querySelector(".mrp-load"); if (el) el.textContent = `正在載入更早的資料（${F.prog}）…`; }
     else if (W.lt === "money" || (W.lt === "screen" && W.scrG === "score")) renderList();
   }
-  F.loading = false; if (W.lt === "money" || W.lt === "screen") { mfModel(); renderList(); }
+  F.loading = false; if (W.lt === "money" || W.lt === "screen" || (W.lt === "tools" && W.tv === "sum")) { mfModel(); renderList(); }
 }
 const mfModel = () => { const F = W.mf; if (!F.model && F.days.length) F.model = flowModel(F.days, flowSectors(F.ind)); return F.model; };
 const qDot = q => `<i class="qdot" style="background:${FLOW_Q[q][2]}"></i>`;
@@ -2129,8 +2129,7 @@ function renderMoney() {
           <details class="mkmore"><summary>怎麼算的</summary><p class="note">${mood.parts.map(([k, v]) => `${k} ${v >= 0 ? "+" : ""}${v.toFixed(2)}`).join("、")}（各自換成 −1～1 後平均，再換成 0～100）。上漲 ${mood.up}、下跌 ${mood.dn}、漲停 ${mood.lu}、跌停 ${mood.ld}，法人合計 ${flowFmt(mood.net)}。</p></details></div>` : "")
       + `<h4>法人買最多</h4><div class="mchips">${b1.map(x => chip(x, x.net1, `data-fsec="${esc(x.id)}"`)).join("") || '<span class="note">今天沒有買超的板塊</span>'}</div>`
       + `<h4>大戶異常（法人單日買賣金額最大）</h4><div class="mchips">${bb && bb.a1 > 0 ? chip({ name: bb.name, q: "up" }, bb.a1, `data-sel="${bb.code}"`) : ""}${bs && bs.a1 < 0 ? chip({ name: bs.name, q: "down" }, bs.a1, `data-sel="${bs.code}"`) : ""}</div>`
-      + `<h4>盤後總結</h4><p class="msum">${esc(flowSummary(M, mood, tq?.chgPct))}</p>
-        <button class="btn mshare" data-mshare="share">分享今日盤面</button><div class="mshares"><button data-mshare="line">LINE</button><button data-mshare="threads">Threads</button><button data-mshare="copy">複製圖</button></div></section>`
+      + `<button class="mcard mlink" data-l2="tools:sum" style="margin:10px 0 0"><b>盤後總結與分享</b><span class="note">移到「工具 → 每日摘要」 ›</span></button></section>`
       + `<section class="mcard"><h3>近 5 日法人買超最多</h3><div class="mchips">${b5.map(x => chip(x, x.net5, `data-fsec="${esc(x.id)}"`)).join("")}</div></section>`
       + `<button class="mcard mlink" data-mv="replay"><b>主力資金雷達回放</b><span class="note">近 20 個交易日，資金怎麼移動 ›</span></button>`;
   } else if (F.view === "bubble") {
@@ -2250,11 +2249,12 @@ function mfReplayDraw() { const F = W.mf, M = mfModel(), svg = document.getEleme
   if (!M || F.view !== "replay" || !svg || !F.rp.fl?.el || F.rp.fl.T !== M.T) return renderMoney(); flowDraw(); flowTexts(true); }
 function mfStep(d) { const F = W.mf, FL = F.rp.fl; if (!FL) return; const t = Math.round(F.rp.u) + d; flowSeek(t > FL.T - 1 ? FL.t0 : Math.max(FL.t0, t)); }
 function mfPlay(on) { const F = W.mf; F.rp.playing = on; cancelAnimationFrame(F.rp.raf); if (on && F.rp.fl && F.rp.u >= F.rp.fl.T - 1) F.rp.u = F.rp.fl.t0; if (on && F.rp.fl?.el) flowLoop(); flowTexts(true); }
-$("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F = W.mf, b = e.target.closest("[data-mv],[data-mq],[data-mrk],[data-mset],[data-mrp],[data-mshare],[data-fsec],[data-mbs],[data-iopen-ext]"); if (!b) return; const d = b.dataset;
+$("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F = W.mf, b = e.target.closest("[data-mv],[data-mq],[data-mrk],[data-mset],[data-mrp],[data-mshare],[data-l2],[data-fsec],[data-mbs],[data-iopen-ext]"); if (!b) return; const d = b.dataset;
   if (d.mbs) { F.bsel = F.bsel === d.mbs ? null : d.mbs; return F.view === "replay" ? mfReplayDraw() : renderMoney(); }
   if (d.fsec) return secOpen(d.fsec);
   if (d.iopenExt) { W.indS.open = d.iopenExt; return setLt("ind"); }
   if (d.mshare) return mfShare(d.mshare);
+  if (d.l2) { W.tv = "sum"; return setLt("tools", true); }
   if (d.mv) { F.view = d.mv; if (d.mv !== "replay") { mfPlay(false); store.set("watch:mfv", d.mv); } if (d.mv === "replay") { F.rp.t = null; F.rp.u = null; } }
   else if (d.mq) F.q = d.mq; else if (d.mrk) F.rk = d.mrk; else if (d.mset) F[d.mset] = d.v;
   else if (d.mrp === "prev") { mfPlay(false); return mfStep(-1); } else if (d.mrp === "next") { mfPlay(false); return mfStep(1); }
@@ -2553,7 +2553,7 @@ async function loadMkt(force = false) {
   if (!W.hot["rank:" + W.mkHot] && W.mkHot !== "surge") loadMkHot();
   renderList();
 }
-const spark = (a, up) => { if (!a?.length) return ""; const mn = Math.min(...a), mx = Math.max(...a), w = 90, h = 30; return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--${up ? "up" : "down"})" stroke-width="1.4" points="${a.map((v, i) => `${(i / Math.max(1, a.length - 1) * w).toFixed(1)},${(h - 2 - (mx > mn ? (v - mn) / (mx - mn) : 0.5) * (h - 4)).toFixed(1)}`).join(" ")}"/></svg>`; };
+const spark = (a, up) => { if (!a?.length) return ""; const mn = Math.min(...a), mx = Math.max(...a), w = 90, h = 30; return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--${up ? "up" : "down"})" stroke-width="1.1" points="${a.map((v, i) => `${(i / Math.max(1, a.length - 1) * w).toFixed(1)},${(h - 2 - (mx > mn ? (v - mn) / (mx - mn) : 0.5) * (h - 4)).toFixed(1)}`).join(" ")}"/></svg>`; };
 const SEC_SHORT = { 塑膠: "塑膠", 電子零組件: "電零", 半導體: "半導", 油電燃氣: "油電", 通信網路: "通信", 紡織纖維: "紡織", 建材營造: "營建", 電腦及週邊: "電腦", 生技醫療: "生技", 金融保險: "金融", 化學: "化學", 鋼鐵: "鋼鐵", 橡膠: "橡膠", 汽車: "汽車", 航運: "航運", 觀光餐旅: "觀光", 貿易百貨: "貿百", 電機機械: "電機", 電器電纜: "電纜", 玻璃陶瓷: "玻陶", 造紙: "造紙", 食品: "食品", 水泥: "水泥", 電子通路: "通路", 資訊服務: "資服", 其他電子: "其他電", 光電: "光電", 綠能環保: "綠能", 數位雲端: "雲端", 運動休閒: "運動", 居家生活: "居家", 文化創意: "文創", 農業科技: "農科", 電子商務: "電商", 其他: "其他", 綜合: "綜合" };
 const secShort = n => SEC_SHORT[n] || SEC_SHORT[String(n).replace(/(工業|業|類)$/, "")] || String(n).slice(0, 2);
 const MK_HOT = [["value", "最多人看"], ["gain", "大盤強勢"], ["surge", "急拉股"], ["volume", "量大股"]];
@@ -2660,7 +2660,7 @@ async function loadPoly(force = false) {
 function macroChart(data, unit) {
   const v = data.map(r => r[1]), mn = Math.min(...v), mx = Math.max(...v), w = 320, h = 90, X = i => (i / Math.max(1, v.length - 1)) * w, Y = x => h - 6 - (mx > mn ? (x - mn) / (mx - mn) : 0.5) * (h - 12);
   const z = mn < 0 && mx > 0 ? `<line x1="0" x2="${w}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="3 3" stroke-width="0.8"/>` : "";
-  return `<svg class="mcchart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="走勢">${z}<polyline fill="none" stroke="var(--accent)" stroke-width="1.5" points="${v.map((x, i) => `${X(i).toFixed(1)},${Y(x).toFixed(1)}`).join(" ")}"/></svg>
+  return `<svg class="mcchart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="走勢">${z}<polyline fill="none" stroke="var(--accent)" stroke-width="1.1" points="${v.map((x, i) => `${X(i).toFixed(1)},${Y(x).toFixed(1)}`).join(" ")}"/></svg>
     <div class="mcax"><span>${esc(data[0][0].slice(0, 7))}</span><span>最低 ${mn.toLocaleString()}・最高 ${mx.toLocaleString()} ${esc(unit)}</span><span>${esc(data[data.length - 1][0].slice(0, 7))}</span></div>`;
 }
 function renderMacro(top) {
@@ -3137,13 +3137,13 @@ function renderBook() {
 /* 個股分頁：走勢、技術、總覽、籌碼、財務、新聞；總覽、籌碼、財務底下各有子頁（每種資訊只出現在一個地方）
    子頁的內容：tags／sum／rev／report 用原本的區塊，其他的由 stockx.js 的 SX 畫在 #sxBox */
 const DSUB = {
-  ovw: [["ls", "多空研判", 1], ["state", "市場狀態"], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "節目觀點"]],
+  ovw: [["state", "多空與狀態"], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "節目觀點"]],
   chips: [["sum", "籌碼總覽"], ["inst", "法人與基金"], ["branch", "分點主力"], ["big", "大戶與股權"]],
   fin: [["rev", "營收與獲利"], ["report", "財務報表"], ["div", "股利"], ["info", "公司資料"], ["cal", "行事曆"]],
 };
 const DSUB_OWN = new Set(["tags", "sum", "rev", "report"]); // 用原本區塊畫的子頁
-const OLD_DTAB = { fund: ["fin", "rev"], co: ["fin", "report"], info: ["ovw", "ls"], tags: ["ovw", "tags"] }; // 舊版分頁 → 新的分頁＋子頁
-W.dsub = { ovw: "ls", chips: "sum", fin: "rev", ...(store.get("watch:dsub", null) || {}) };
+const OLD_DTAB = { fund: ["fin", "rev"], co: ["fin", "report"], info: ["ovw", "state"], tags: ["ovw", "tags"] }; // 舊版分頁 → 新的分頁＋子頁
+W.dsub = { ovw: "state", chips: "sum", fin: "rev", ...(store.get("watch:dsub", null) || {}) }; if (W.dsub.ovw === "ls") W.dsub.ovw = "state"; // 多空研判已併進市場狀態
 // ETF 的子頁：沒有營收、財報、健檢、評價推估、產業鏈，改成 ETF 自己的基本資料、成分股、成分股變動
 const DSUB_ETF = { fin: [["etfinfo", "基本資料"], ["etfhold", "成分股"], ["etfchg", "成分股變動"], ["div", "配息", 1]] }, ETF_NO = new Set(["check", "target", "attr"]);
 const dSubs = t => (isEtf(W.sel) && DSUB_ETF[t] ? DSUB_ETF[t] : (DSUB[t] || []).filter(x => !(isEtf(W.sel) && ETF_NO.has(x[0])))).filter(x => !x[2] || isTW(W.sel));
@@ -3771,7 +3771,7 @@ function barLineSvg(items, { bar = "var(--accent)", line = "var(--s1)", fmtV = v
   const pl = items.map((x, i) => (x.y == null ? null : `${(x0 + i * bw + bw / 2).toFixed(1)},${Yy(x.y).toFixed(1)}`)).filter(Boolean).join(" ");
   const labs = items.map((x, i) => (items.length <= 8 || i % 2 === items.length % 2 ? `<text x="${(x0 + i * bw + bw / 2).toFixed(1)}" y="${Hv - 6}" text-anchor="middle">${esc(x.label)}</text>` : "")).join("");
   const vals = items.map((x, i) => (items.length <= 8 ? `<text x="${(x0 + i * bw + bw / 2).toFixed(1)}" y="${(Math.min(Yv(x.v), Yv(0)) - 4).toFixed(1)}" text-anchor="middle" class="v">${fmtV(x.v)}</text>` : "")).join("");
-  return `<svg class="blsvg" viewBox="0 0 ${Wv} ${Hv}" role="img">${bars}${pl ? `<polyline points="${pl}" fill="none" stroke="${line}" stroke-width="2"/>${items.map((x, i) => (x.y == null ? "" : `<circle cx="${(x0 + i * bw + bw / 2).toFixed(1)}" cy="${Yy(x.y).toFixed(1)}" r="3" fill="${line}"/>`)).join("")}` : ""}${vals}${labs}</svg>`;
+  return `<svg class="blsvg" viewBox="0 0 ${Wv} ${Hv}" role="img">${bars}${pl ? `<polyline points="${pl}" fill="none" stroke="${line}" stroke-width="1.4"/>${items.map((x, i) => (x.y == null ? "" : `<circle cx="${(x0 + i * bw + bw / 2).toFixed(1)}" cy="${Yy(x.y).toFixed(1)}" r="3" fill="${line}"/>`)).join("")}` : ""}${vals}${labs}</svg>`;
 }
 function peBand(per) {
   const L = per.filter(x => x.pe > 0); if (L.length < 30) return "";
@@ -3779,7 +3779,7 @@ function peBand(per) {
   const Wv = 600, Hv = 150, P = 8, mx = Math.max(...sorted) * 1.05, mn = Math.min(...sorted) * 0.95, X = i => P + i / (L.length - 1) * (Wv - P * 2), Y = v => P + (mx - v) / (mx - mn) * (Hv - P * 2);
   const pts = L.map((x, i) => `${X(i).toFixed(1)},${Y(x.pe).toFixed(1)}`).join(" ");
   return `<div class="pe"><div class="pe-kv"><div><span>本益比</span><b>${cur}</b></div><div><span>近 ${Math.round(L.length / 245) || 1} 年的水平</span><b class="${pct <= 30 ? "up" : pct >= 70 ? "down" : ""}">${pct}%</b></div><div><span>歷史平均</span><b>${avg.toFixed(1)}</b></div></div>
-    <svg class="blsvg" viewBox="0 0 ${Wv} ${Hv}" preserveAspectRatio="none" role="img" aria-label="本益比走勢"><rect x="${P}" y="${Y(q(0.8)).toFixed(1)}" width="${Wv - P * 2}" height="${(Y(q(0.2)) - Y(q(0.8))).toFixed(1)}" fill="var(--accent-soft)"/><line x1="${P}" x2="${Wv - P}" y1="${Y(avg).toFixed(1)}" y2="${Y(avg).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="4 4"/><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.6"/></svg>
+    <svg class="blsvg" viewBox="0 0 ${Wv} ${Hv}" preserveAspectRatio="none" role="img" aria-label="本益比走勢"><rect x="${P}" y="${Y(q(0.8)).toFixed(1)}" width="${Wv - P * 2}" height="${(Y(q(0.2)) - Y(q(0.8))).toFixed(1)}" fill="var(--accent-soft)"/><line x1="${P}" x2="${Wv - P}" y1="${Y(avg).toFixed(1)}" y2="${Y(avg).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="4 4"/><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.2"/></svg>
     <p class="note" style="margin:4px 0 0">水平＝目前本益比在近幾年裡的百分位（越低代表相對便宜）；色帶是 20%～80% 的合理區間，虛線是平均。${L[0].d.replace(/-/g, "/")} 起</p></div>`;
 }
 
@@ -3850,7 +3850,7 @@ function coChart(rows, { bars, line, lineName, fmtB = yiC, fmtL = pctS, colors =
   const lv = line ? R.map(r => r[line]).filter(v => v != null) : [], lx = Math.max(...lv, 0), ln = Math.min(...lv, 0), Yl = v => P + 6 + (lx - v) / ((lx - ln) || 1) * (Hv - P * 2 - 12);
   let svg = `<line x1="${P}" x2="${Wv - P}" y1="${Yb(0)}" y2="${Yb(0)}" stroke="var(--line)"/>`;
   R.forEach((r, i) => bars.forEach((b, k) => { const v = r[b]; if (v == null) return; const x = P + i * cw + cw / 2 - (nb * bw) / 2 + k * bw; svg += `<rect x="${x.toFixed(1)}" y="${Math.min(Yb(v), Yb(0)).toFixed(1)}" width="${(bw - 3).toFixed(1)}" height="${Math.max(1, Math.abs(Yb(v) - Yb(0))).toFixed(1)}" fill="${v < 0 ? "var(--down)" : colors[k]}" rx="2"/>`; }));
-  if (lv.length > 1 || (lv.length && n === 1)) { const pts = R.map((r, i) => (r[line] == null ? null : `${(P + i * cw + cw / 2).toFixed(1)},${Yl(r[line]).toFixed(1)}`)).filter(Boolean); svg += `<polyline points="${pts.join(" ")}" fill="none" stroke="#f0883e" stroke-width="2"/>` + pts.map(p => { const [x, y] = p.split(","); return `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--surface)" stroke="#f0883e" stroke-width="1.6"/>`; }).join(""); }
+  if (lv.length > 1 || (lv.length && n === 1)) { const pts = R.map((r, i) => (r[line] == null ? null : `${(P + i * cw + cw / 2).toFixed(1)},${Yl(r[line]).toFixed(1)}`)).filter(Boolean); svg += `<polyline points="${pts.join(" ")}" fill="none" stroke="#f0883e" stroke-width="1.4"/>` + pts.map(p => { const [x, y] = p.split(","); return `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--surface)" stroke="#f0883e" stroke-width="1.6"/>`; }).join(""); }
   const head = `<tr><th></th>${R.map(r => `<th>${esc(r.label || r.q)}</th>`).join("")}</tr>`;
   const rowsH = bars.map((b, k) => `<tr><td><i style="background:${colors[k]}"></i></td>${R.map(r => `<td style="color:${colors[k]}">${fmtB(r[b])}</td>`).join("")}</tr>`).join("") + (line ? `<tr><td><i style="background:#f0883e"></i></td>${R.map(r => `<td class="${cls(r[line])}">${fmtL(r[line])}</td>`).join("")}</tr>` : "");
   return `<svg class="cochart" viewBox="0 0 ${Wv} ${Hv}" role="img">${svg}</svg><div class="cotbl-wrap"><table class="cotbl">${head}${rowsH}</table></div>`;
