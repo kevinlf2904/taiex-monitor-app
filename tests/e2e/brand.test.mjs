@@ -51,6 +51,25 @@ test("去識別化：量價動能矩陣、節目頭像、供應鏈說明與籌�
   const ind = await p.evaluate(() => $("#lx").innerText);
   assert.match(ind, /2330・(上游|中游|下游|產業鏈)/); assert.match(ind, /借券賣出異常 5,000 張/); assert.match(ind, /內部人申報 1 筆/);
   await p.evaluate(() => { setLt("cong"); W.cv = "home"; renderList(); });
-  assert.match(await p.evaluate(() => $("#lTools").innerText), /大戶與國會情報/); assert.match(await p.evaluate(() => $("#lx").innerText), new RegExp(DISC));
+  assert.match(await p.evaluate(() => $("#lTools").innerText), /大戶與國會情報/); assert.match(await p.evaluate(() => $(".foot-disc").innerText), new RegExp(DISC));
+  // 免責聲明只在頁尾出現一次，不在每個清單、子頁重複
+  assert.equal(await p.evaluate(() => (document.body.innerText.match(/不構成任何證券投資顧問/g) || []).length), 1);
+  // 台股、美股熱門併進排行：清單分頁沒有獨立的熱門，排行上方可以切換
+  assert.doesNotMatch(await p.evaluate(() => $("#lTabs").innerText), /台股熱門|美股熱門/);
+  await p.evaluate(() => setLt("rank")); assert.match(await p.evaluate(() => $("#rkHub").innerText), /台股排行[\s\S]*台股熱門[\s\S]*美股熱門/);
+  await p.click('#rkHub [data-l="us"]'); assert.equal(await p.evaluate(() => [W.lt, $('#lTabs [data-l="rank"]').getAttribute("aria-pressed")].join()), "us,true");
+  await p.evaluate(() => { setLt("mkt"); W.mkReg = "tw"; renderList(); }); assert.ok(await p.evaluate(() => !!document.querySelector(".hotmini [data-hotgo]")));
+  // 選股的數字格：文字和底色要看得清楚（新主題的強調色是白色）
+  assert.ok(await p.evaluate(() => { const b = document.createElement("button"); b.className = "gtile"; b.innerHTML = "<span>x</span><b>3</b>"; document.body.append(b); const cs = getComputedStyle(b.querySelector("b")), ok = cs.color !== cs.backgroundColor; b.remove(); return ok; }));
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("手機：在清單、分頁列上往上滑，整頁都要能捲動（不被內層捲動區卡住）", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.evaluate(() => { W.groups[0].list = Array.from({ length: 40 }, (_, i) => String(1101 + i)); setLt("watch"); });
+  await p.waitForTimeout(800);
+  const c = await ctx.newCDPSession(p), swipe = async (x, y) => { await c.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] }); for (let i = 1; i <= 10; i++) { await c.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - i * 20 }] }); await p.waitForTimeout(16); } await c.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }); await p.waitForTimeout(400); };
+  assert.equal(await p.evaluate(() => getComputedStyle($("#wl")).overflowY), "visible", "手機上清單不要自己捲");
+  for (const [x, y] of [[60, 600], [200, 500], [330, 700]]) { const a = await p.evaluate(() => scrollY); await swipe(x, y); assert.ok(await p.evaluate(() => scrollY) > a, `在 (${x},${y}) 往上滑沒有捲動`); }
   await ctx.close(); assert.deepEqual(errs, []);
 });

@@ -8,5 +8,5 @@
   <rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#27272a" stroke-width="8"/>
   <path d="M184 96v320" stroke="url(#kc)" stroke-width="22" stroke-linecap="round"/>
   <rect x="128" y="168" width="112" height="176" rx="12" fill="url(#kc)"/>
-  <path d="M268 228 396 100v312L268 284z" fill="url(#ti)"/>
+  <path d="M284 172 356 100v312l-72-72z" fill="url(#ti)"/>
 </svg>

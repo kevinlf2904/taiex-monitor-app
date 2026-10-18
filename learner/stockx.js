@@ -48,7 +48,7 @@ function sxRender() {
   const box = $("#sxBox"); if (!box || !isSxSub()) return; W.sx = dSub(); if (!SX[W.sx]) return;
   sxNeed(W.sx);
   let h = ""; try { h = SX[W.sx]() || ""; } catch (e) { console.error("stockx", W.sx, e); h = `<p class="note err">這一頁出錯了（${esc(e.message)}）</p>`; }
-  box.innerHTML = h + discHtml(); postHeight();
+  box.innerHTML = h; postHeight();
 }
 const sxD = () => (W.daily?.data || []), sxI = () => (W.info && !W.info.err ? W.info : null), sxC = () => (W.co?.code === W.sel && !W.co.loading && !W.co.err ? W.co : null);
 const sxPx = () => (W.detailQ || W.quotes.get(W.sel))?.price ?? sxD().at(-1)?.c ?? null;
