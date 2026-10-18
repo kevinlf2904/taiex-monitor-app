@@ -334,7 +334,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
     <main>
       <nav class="jump" aria-label="跳到區塊"><a href="#sec-sum">總覽</a><a href="#sec-pos">部位明細</a><a href="#sec-chart">淨值走勢</a><a href="#sec-ms">里程碑</a><a href="#sec-risk">壓力測試與配置</a><a href="#sec-etf">標的比較</a><a href="#sec-div">股息計算機</a></nav>
       <section class="sec" id="sec-sum">
-        <div class="kpis" id="kpis"></div>
+        <p style="margin:0 0 8px;text-align:right"><button type="button" class="sharebtn" data-sharecard="savings">📸 分享情報圖卡</button></p><div class="kpis" id="kpis"></div>
       </section>
       <section class="sec" id="sec-pos">
         <div class="sec-h"><h2 class="h2">部位明細</h2><p class="lead">每種做法的錢分別放在哪裡。在下方「淨值走勢」移動查價線，這裡會跟著切到那一年。槓桿版的淨值扣回了起始的應急現金，才能和 A、B 公平比較。</p></div>
@@ -434,6 +434,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
   </div>
 </div>
 
+<script src="sharecard.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const wan=v=>{if(!isFinite(v))return "—";const s=v<0?"−":"";v=Math.abs(v);return s+(v>=1e8?(v/1e8).toLocaleString("zh-TW",{maximumFractionDigits:2})+" 億":v>=1e4?(v/1e4).toLocaleString("zh-TW",{maximumFractionDigits:1})+" 萬":Math.round(v).toLocaleString("zh-TW")+" 元")};
@@ -640,6 +641,12 @@ function evText(s){let o="";if(s.neg)o+='<span class="tag bad">淨值曾轉負</
   if(liq)o+=`<span class="tag bad">斷頭</span>第 ${Math.floor(liq.i/12)+1} 年`;return o}
 const hitText=h=>h?`第 ${Math.floor((h-1)/12)+1} 年 ${(h-1)%12+1} 月`:"未達成";
 const ddText=r=>r.wl<-0.0005?`${wan(r.wla)}（${pct1(r.wl)}）`:"沒有虧損";
+// 分享情報圖卡（sharecard.js）：三種做法的期末淨值、投入、年化，加上淨值走勢圖
+let SAV_LAST=null;
+SHARE.savings=()=>{const L=SAV_LAST;if(!L)return null;const {p,mains,a}=L;
+  return {name:"savings",title:`存股模擬：${p.yrs} 年後的淨值`,sub:`起始 ${wan(p.init)}、每月 ${wan(p.mon)}${p.grow?`（每年 +${(p.grow*100).toFixed(1)}%）`:""}、${p.yrs} 年；${short(a)} 年化 ${a.r}%`,
+    stats:mains.map(x=>[x.name.split("・")[0],wan(x.res.v),x.color]),svg:document.getElementById("c-master"),
+    sections:[{h:"各做法結果",rows:mains.map(x=>[x.name,`年化 ${pct1(x.res.irr)}`,"",`投入 ${wan(x.res.tot)}`])}],text:"用固定年化率試算，實際報酬每年都不一樣。"}};
 function renderMain(p){
   const a=p.main,c=p.core,s=p.sat,ann=pathOf(a,p),pc=pathOf(c,p),ps=pathOf(s,p);
   const A=stratDca(p,ann),B=stratCs(p,pc,ps,p.w),B0=stratCs(p,pc,ps,0),B1=stratCs(p,pc,ps,1),Cv=stratLev(p,ann);
@@ -651,6 +658,7 @@ function renderMain(p){
     {key:"C",name:`C 槓桿・${short(a)}`,res:Cv,color:"var(--sC)",width:2.4}];
   $("ledger-lead").innerHTML=`起始 ${wan(p.init)}、每月 ${wan(p.mon)}${p.grow?`（每年 +${(p.grow*100).toFixed(1)}%）`:""}、${p.yrs} 年；${short(a)} 年化 ${a.r}%${G.scen==="crash"?`，第一年 −${a.crash}%`:""}。`;
   const mains=S.filter(x=>!["B0","B1"].includes(x.key)),bestV=Math.max(...mains.map(x=>x.res.v));
+  SAV_LAST={p,mains,a};
   $("kpis").innerHTML=mains.map(x=>{const r=x.res,best=r.v===bestV&&mains.filter(y=>y.res.v===bestV).length<3;
     const note=x.key==="C"?(r.ev.some(e=>e.t==="liq")?'<span class="tag bad">會斷頭</span>':r.ev.length?'<span class="tag warn">會被追繳</span>':'<span class="tag ok">沒被追繳</span>'):'<span class="tag ok">不借錢</span>';
     return `<div class="kpi${best?" lead-best":""}"><div class="nm"><span><span class="swatch" style="background:${x.color}"></span>${x.name}</span>${best?'<span class="badge">最高</span>':""}</div>

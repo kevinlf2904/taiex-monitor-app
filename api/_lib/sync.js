@@ -41,7 +41,7 @@ export function alertDoc(data, chat) {
 // 候補名單的一筆：email 轉小寫並檢查格式，方案只收 pro／team
 export function waitlistEntry(email, plan, now = Date.now()) {
   const e = String(email || "").trim().toLowerCase(); if (e.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) return null;
-  return { email: e, doc: JSON.stringify({ at: now, plan: plan === "team" ? "team" : "pro" }) };
+  return { email: e, doc: JSON.stringify({ at: now, plan: ["team", "pro", "beta"].includes(plan) ? plan : "beta" }) };
 }
 export default async function handler(req, res) {
   const q = req.query || {}, b = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}, op = b.op || q.op;

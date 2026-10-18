@@ -365,3 +365,6 @@ svg circle[stroke-width] { stroke-width: 1.2px; }
   .w-top, .top, .ltabs, .dtabs, :is(:root[data-style="layout"], :root[data-style="lab"]) .w-top, :is(:root[data-style="layout"], :root[data-style="lab"]) .top, :is(:root[data-style="layout"], :root[data-style="lab"]) .ltabs, :is(:root[data-style="layout"], :root[data-style="lab"]) .dtabs { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: var(--bg) !important; }
   .wl { overflow: visible; overscroll-behavior: auto; }
 }
+/* 除錯用的連結（資料來源狀態）只在 ?debug=1 或本機顯示 */
+:root:not([data-debug="1"]) .dbg-only { display: none !important; }
+.data-note { display: block; margin-top: 6px; }

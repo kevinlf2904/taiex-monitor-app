@@ -1,5 +1,5 @@
 /* 名人 Podcast（看盤的「名人」分頁）：追蹤財經 Podcast，AI 整理單集重點，記錄主持人對個股的看多／看空（觀點紀錄），
-   用真實股價追蹤之後的表現（相對大盤的超額報酬：台股比 0050、美股比 SPY），算出往績評分、強項時間框架、跟單模擬與排行榜。
+   用真實股價追蹤之後的表現（相對大盤的超額報酬：台股比 0050、美股比 SPY），算出提及標的表現、強項時間框架、跟單模擬與排行榜。
    - 節目與單集：/api/podcast（Apple Podcasts 目錄＋節目 RSS）
    - 重點與觀點：有 GEMINI_API_KEY 時 AI 聽完整集音檔；否則讀節目說明（show notes）；整理結果只存在這個瀏覽器（localStorage）
    - 股價：/api/kline（日 K）。進場價＝節目上架後下一個交易日的開盤價；檢查點 7／30／60／90／180／365 天。
@@ -90,7 +90,7 @@ async function podFeed(feed, force = false) {
   POD.feeds.set(feed, v); podIndex(feed, v); try { store.set("pod:feed:" + podHash(feed), v); } catch {}
   return v;
 }
-function podShowOf(feed) { const f = podFollows().find(s => s.feed === feed) || (POD.srv?.shows || []).find(s => s.feed === feed), v = POD.feeds.get(feed); return { feed, name: f?.name || v?.show?.name || Object.values(podSums()).find(s => s.feed === feed)?.show || "節目", art: f?.art || v?.show?.art || "", author: f?.author || v?.show?.author || "" }; }
+function podShowOf(feed) { const f = podFollows().find(s => s.feed === feed) || (POD.srv?.shows || []).find(s => s.feed === feed), v = POD.feeds.get(feed); return { feed, id: f?.id || "", name: f?.name || v?.show?.name || Object.values(podSums()).find(s => s.feed === feed)?.show || "節目", art: f?.art || v?.show?.art || "", author: f?.author || v?.show?.author || "" }; }
 function podIndex(feed, v) { (POD.idx ||= new Map()); for (const e of v.eps) POD.idx.set(podKey(feed, e.guid), { e, feed }); }
 function podEp(key) {
   const it = POD.idx?.get(key); if (it) return { e: it.e, s: podShowOf(it.feed) };
@@ -207,7 +207,7 @@ const podCkBar = p => `<div class="pcks">${p.cks.map((k, i) => `<span style="fle
   <div class="pckl">${p.cks.map((k, i) => `<span style="flex:${k.n - (i ? POD_CK[i - 1] : 0)}">${k.n <= 7 ? "" : k.n + "d"}</span>`).join("")}</div>`;
 function podBadge(feed) {
   const st = podStats(podCalls(feed)); if (!st.settled) return "";
-  return `<span class="pbadge ${st.win >= 60 ? "gold" : st.win >= 40 ? "" : "low"}" title="已結算的觀點裡跑贏大盤的比例（${st.settled} 筆）">🏆 跑贏 ${Math.round(st.win)}%</span>`;
+  return `<span class="pbadge ${st.win >= 60 ? "gold" : st.win >= 40 ? "" : "low"}" title="已結算的觀點裡跑贏大盤的比例（${st.settled} 筆）">提及後勝過大盤 ${Math.round(st.win)}%</span>`;
 }
 function podCallCard(c, showEp = true) {
   const p = podPerf(c), tw = /^\d/.test(c.code);
@@ -251,26 +251,32 @@ function podHome() {
     return `<article class="pep" data-pep="${key}" role="button" tabindex="0">${podArt(s)}<div class="pepb">
       <div class="pmeta"><b>${esc(s.name)}</b><span class="note">・${podRel(e.date)}</span>${podBadge(s.feed)}</div>
       <h4>${esc(e.title)}</h4>
-      ${m ? `<p class="ptl">${esc(m.tldr)}</p>${m.topics?.length ? `<p class="note ptopic">• 你可能感興趣的議題：<span>${esc(m.topics[0])}</span></p>` : ""}<p class="note">閱讀約 ${Math.max(1, Math.round(chars / 350))} 分鐘・${m.calls.filter(c => c.code).length} 個觀點</p>`
+      ${m ? `<p class="ptl">${esc(m.tldr)}</p>${m.topics?.length ? `<p class="note ptopic">討論議題：<span>${esc(m.topics[0])}</span></p>` : ""}<p class="note">筆記 ${chars.toLocaleString()} 字・${m.calls.filter(c => c.code).length} 個觀點</p>`
         : `<p class="note ptl">${esc((e.desc || "").replace(/\s+/g, " ").slice(0, 70))}${(e.desc || "").length > 70 ? "…" : ""}</p>${podJobHtml(key) || `<p class="note">${podWaitText(s.feed)}</p>`}`}
     </div></article>`; }).join("");
   const upd = POD.srv?.updated ? `<p class="note">重點與觀點每 2 小時自動整理・最近更新 ${new Date(Date.parse(POD.srv.updated) + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/")}${POD.job?.busy ? "・正在整理新單集…" : ""}</p>` : POD.job?.busy ? `<p class="note">正在自動整理新單集…</p>` : "";
-  return `<h2 class="ph2">今日摘要</h2>${upd}${av}${cards || podEmpty(POD.busy ? "載入單集中…" : "這些節目最近沒有新單集。")}`;
+  return `<h2 class="ph2">最新筆記</h2>${upd}${av}${cards || podEmpty(POD.busy ? "載入單集中…" : "這些節目最近沒有新單集。")}`;
 }
 const podChars = m => [m.points, m.sections.map(x => x.body), m.facts, m.risks, m.watch].map(a => (a || []).join("")).join("").length;
+// 不在站內播放原節目音檔，只連到各平台收聽（版權歸原節目）；Apple 用節目頁，Spotify／YouTube 沒有確切連結，用平台搜尋
+function podListen(s, e) {
+  const q = encodeURIComponent(s.name), apple = /^\d+$/.test(String(s.id || "")) ? `https://podcasts.apple.com/tw/podcast/id${s.id}` : e.link || `https://podcasts.apple.com/tw/search?term=${q}`;
+  return `<div class="plisten"><span class="note">前往原節目收聽</span>${[["Apple Podcasts", apple], ["Spotify", `https://open.spotify.com/search/${q}/podcasts`], ["YouTube", `https://www.youtube.com/results?search_query=${q}`]].map(([t, u]) => `<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener">${t} ↗</a>`).join("")}</div>`;
+}
+const POD_NOTICE = "本區內容為 AI 針對公開播客音訊自動萃取之重點筆記與提及標的統計，音訊與內容版權歸原創節目所有，不代表原節目之投資建議。節目主如不希望節目被整理，請透過意見回報要求移除，我們會盡快處理。";
 function podEpView() {
   const key = POD.key, it = podEp(key); if (!it) return podEmpty("找不到這一集。");
   const { e, s } = it, m = podSums()[key], chars = m ? podChars(m) : 0, calls = podCalls().filter(c => c.key === key);
   const unres = (m?.calls || []).filter(c => !c.code);
-  return `<div class="ptop sticky"><button class="linkbtn pback" data-pback>‹ 返回</button>${e.audio ? `<a class="btn sm" href="${esc(e.audio)}" target="_blank" rel="noopener">🎧 收聽</a>` : e.link ? `<a class="btn sm" href="${esc(e.link)}" target="_blank" rel="noopener">開啟原始頁面</a>` : ""}</div>
+  return `<div class="ptop sticky"><button class="linkbtn pback" data-pback>‹ 返回</button></div>
     <h2 class="ph1">${esc(e.title)}</h2>
     <div class="pmeta"><button class="linkbtn pshowlink" data-pshow="${esc(s.feed)}">${esc(s.name)}</button>${podBadge(s.feed)}</div>
-    <p class="note">${twDate(e.date).replace(/-/g, "/")}${e.dur ? `・${Math.round(e.dur / 60)} 分鐘` : ""}${m ? `・閱讀約 ${Math.max(1, Math.round(chars / 350))} 分鐘` : ""}</p>
-    ${e.audio ? `<audio class="paudio" controls preload="none" src="${esc(e.audio)}"></audio>` : ""}
+    <p class="note">${twDate(e.date).replace(/-/g, "/")}${e.dur ? `・${Math.round(e.dur / 60)} 分鐘` : ""}${m ? `・筆記 ${chars.toLocaleString()} 字` : ""}</p>
+    ${podListen(s, e)}
     ${m ? `<div class="pkey"><div class="pkh">重點</div><ul>${m.points.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>
       ${m.sections.map(x => `<h3 class="psec">${esc(x.title)}</h3><p class="pbody">${esc(x.body)}</p>`).join("")}
       ${[["facts", "節目提到的數字與事件"], ["risks", "風險與反方看法"], ["watch", "接下來要觀察"]].map(([k, t]) => m[k]?.length ? `<div class="pkey pkey2"><div class="pkh">${t}</div><ul>${m[k].map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>` : "").join("")}
-      ${m.topics?.length ? `<p class="note ptopic">• 你可能感興趣的議題：${m.topics.map(t => `<span>${esc(t)}</span>`).join("、")}</p>` : ""}`
+      ${m.topics?.length ? `<p class="note ptopic">討論議題：${m.topics.map(t => `<span>${esc(t)}</span>`).join("、")}</p>` : ""}`
       : `${podJobHtml(key) || `<div class="pjob"><span class="pspin"></span>${podWaitText(s.feed)}</div>`}<details class="pnotes"><summary>不想等？現在就用 AI 整理這集</summary>${podSumBtns(key, e)}</details>${e.desc ? `<details class="pnotes"><summary>節目說明</summary><p class="pbody">${esc(e.desc)}</p></details>` : ""}`}
     <h2 class="ph2">觀點紀錄</h2>
     ${calls.length ? calls.map(c => podCallCard(c, false)).join("") : podEmpty(m ? "這集沒有整理到明確看多或看空的個股。" : "整理重點後，主持人明確看多／看空的個股會出現在這裡。")}
@@ -282,9 +288,9 @@ function podEpView() {
 function podShowView() {
   const s = podShowOf(POD.feed), calls = podCalls(POD.feed).sort((a, b) => b.date.localeCompare(a.date)), st = podStats(calls), v = POD.feeds.get(POD.feed), SE = podShowEps(POD.feed), srvShow = (POD.srv?.shows || []).some(x => x.feed === POD.feed), S = podSums(), sim = podSim(calls, POD.sim), big = podSim(calls, { m: 24, mode: "follow", hold: 30 });
   const info = t => `<span class="pinfo" title="${esc(t)}">ⓘ</span>`, seg = (k, opts) => `<div class="seg" role="group">${opts.map(([val, t]) => `<button data-psim="${k}" data-v="${val}" aria-pressed="${String(POD.sim[k]) === String(val)}">${t}</button>`).join("")}</div>`;
-  const frame = (t, d, f) => `<div class="pfr"><div class="note">${t}</div><div class="note">${d}</div>${f ? `<b class="${cls(f.avg)}">${podPct(f.avg)}</b><span class="note">${f.n} 個檢查點平均，與大盤相比</span>${f.avg > 0 ? '<span class="pwin">跑贏大盤</span>' : ""}` : `<b class="muted">—</b><span class="note">還沒有結算</span>`}</div>`;
+  const frame = (t, d, f) => `<div class="pfr"><div class="note">${t}</div><div class="note">${d}</div>${f ? `<b class="${cls(f.avg)}">${podPct(f.avg)}</b><span class="note">${f.n} 個檢查點平均，與大盤相比</span>${f.avg > 0 ? '<span class="pwin">勝過大盤</span>' : ""}` : `<b class="muted">—</b><span class="note">還沒有結算</span>`}</div>`;
   return `<div class="ptop sticky"><button class="linkbtn pback" data-pback>‹ 返回</button>${podFollows().some(f => f.feed === POD.feed) ? "" : `<button class="btn sm" data-pfol="${esc(POD.feed)}">＋ 追蹤</button>`}</div>
-    <div class="phead">${podArt(s, "part big")}<div><div class="note">往績評分</div><h2 class="ph1">${esc(s.name)}</h2><div class="note">${esc(s.author)}</div></div></div>
+    <div class="phead">${podArt(s, "part big")}<div><div class="note">提及標的追蹤</div><h2 class="ph1">${esc(s.name)}</h2><div class="note">${esc(s.author)}</div></div></div>
     <div class="pcard">
       ${podBadge(POD.feed)}
       ${st.settled ? `<div class="pscore"><b>${st.score.toFixed(1)}</b><span class="note">/ 100 ${info("總分＝準確率 40%＋超額回報 40%＋一致性 20%。已結算的觀點少於 5 筆時標示「樣本少」，分數僅供參考。")}</span></div>${st.few ? `<p class="note">樣本少：目前只有 ${st.settled} 筆已結算，分數僅供參考；每天會自動整理更多集。</p>` : ""}`
@@ -317,7 +323,7 @@ function podRankView() {
   ok.sort((a, b) => (POD.rank === "expert" ? b.st.score - a.st.score : a.st.score - b.st.score));
   const row = (x, i) => `<tr data-pshow="${esc(x.s.feed)}" role="button"><td class="${i < 3 && x.st.settled && !x.st.few ? "ptop3" : ""}">${x.st.settled ? i + 1 : ""}</td><td>${podArt(x.s, "part sm")}</td><td>${esc(x.s.name)}</td><td class="num">${x.st.settled ? `${x.st.score.toFixed(1)}${x.st.few ? `<br><span class="note">樣本少（${x.st.settled}）</span>` : ""}` : `<span class="note">${x.st.settled ? "" : x.st.n ? "未結算" : "—"}</span>`}</td></tr>`;
   return `<div class="ptop"><h2 class="ph2" style="margin:0">${POD.rank === "expert" ? "專家排行榜" : "反指標排行榜"}</h2><div class="seg" role="group">${[["expert", "專家排行榜"], ["contra", "反指標排行榜"]].map(([k, t]) => `<button data-prk="${k}" aria-pressed="${POD.rank === k}">${t}</button>`).join("")}</div></div>
-    <p class="note">${POD.rank === "expert" ? "依往績評分排名" : "分數最低的排前面：反著做反而可能跑贏"}。用自動整理（和你在這個瀏覽器整理）的單集計算；觀點上架 1 天後開始結算，已結算少於 5 筆的標示「樣本少」，排名僅供參考。</p>
+    <p class="note">${POD.rank === "expert" ? "依提及標的後續表現排名" : "提及後表現最弱的排前面"}。用自動整理（和你在這個瀏覽器整理）的單集計算；觀點上架 1 天後開始結算，已結算少於 5 筆的標示「樣本少」，排名僅供參考。</p>
     <table class="prank"><thead><tr><th>#</th><th></th><th>節目</th><th>分數</th></tr></thead><tbody>${[...ok, ...few].map(row).join("") || `<tr><td colspan="4" class="note">還沒有資料。</td></tr>`}</tbody></table>`;
 }
 function podFollowView() {
@@ -327,7 +333,7 @@ function podFollowView() {
     ${POD.qErr ? `<p class="note">⚠ ${esc(POD.qErr)}</p>` : ""}
     ${POD.found ? `<ul class="pfl">${POD.found.map(s => item(s, has(s.feed) ? `<span class="note">已追蹤</span>` : `<button class="btn sm" data-pfol="${esc(s.feed)}">＋ 追蹤</button>`)).join("") || `<li class="note">找不到。也可以直接貼 RSS 網址。</li>`}</ul>` : ""}
     <h2 class="ph2">追蹤中（${F.length}）</h2>
-    <ul class="pfl">${F.map(s => item(s, `<button class="btn sm" data-pshow="${esc(s.feed)}">往績</button><button class="btn sm" data-punf="${esc(s.feed)}">取消追蹤</button>`)).join("") || `<li class="note">還沒有追蹤節目。</li>`}</ul>
+    <ul class="pfl">${F.map(s => item(s, `<button class="btn sm" data-pshow="${esc(s.feed)}">提及追蹤</button><button class="btn sm" data-punf="${esc(s.feed)}">取消追蹤</button>`)).join("") || `<li class="note">還沒有追蹤節目。</li>`}</ul>
     <form class="psearch" data-prss><input name="rss" placeholder="或貼上節目的 RSS 網址（https://…）" autocomplete="off" inputmode="url"><button class="btn sm">加入</button></form>
     <p class="note">節目資料來自 Apple Podcasts 目錄與各節目公開的 RSS。重點整理與觀點紀錄只存在這個瀏覽器；換裝置要重新整理。</p>`;
 }
@@ -335,9 +341,9 @@ function renderPod() {
   podBoot();
   if (POD.booted && !POD.pxBusy) setTimeout(podLoadPx, 0); // 有缺的股價（或之前失敗的）就補抓
   const tab = ["ep", "show"].includes(POD.view) ? POD.hist.find(h => !["ep", "show"].includes(h.view))?.view || "home" : POD.view;
-  $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="節目觀點" id="podSeg">${[["home", "今日摘要"], ["rank", "走勢"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
+  $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="節目觀點" id="podSeg">${[["home", "最新筆記"], ["rank", "提及標的表現"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
   const body = POD.view === "ep" ? podEpView() : POD.view === "show" ? podShowView() : POD.view === "rank" ? podRankView() : POD.view === "follow" ? podFollowView() : podHome();
-  $("#lx").innerHTML = `<div class="pod">${POD.err ? `<p class="note">⚠ ${esc(POD.err)}</p>` : ""}${body}</div>`;
+  $("#lx").innerHTML = `<div class="pod">${POD.err ? `<p class="note">⚠ ${esc(POD.err)}</p>` : ""}${body}<p class="note pnotice">${POD_NOTICE} <a href="${CONTACT_URL}" target="_blank" rel="noopener">意見回報 ↗</a>　節目封面取自各節目公開的 RSS。</p></div>`;
   return "財經節目：AI 整理重點、追蹤主持人看多／看空的真實表現（相對大盤）。只是回顧統計，不是投資建議。";
 }
 // 自動更新：名人分頁開著時每 10 分鐘重抓排程資料、RSS 與股價，並把新單集排進自動整理
@@ -410,7 +416,7 @@ function podInit() {
 .pod .ptl { margin: 0 0 4px; color: var(--muted); line-height: 1.65; } .pod .ptopic span { color: var(--up); }
 .pod .pbadge { font-size: 12px; padding: 1px 9px; border-radius: 99px; background: var(--surface-3); border: 1px solid var(--line); white-space: nowrap; }
 .pod .pbadge.gold { background: color-mix(in srgb, #d9b04a 20%, var(--surface)); color: color-mix(in srgb, #c99a2e 75%, var(--ink)); border-color: color-mix(in srgb, #d9b04a 45%, transparent); } .pod .pbadge.low { opacity: .75; }
-.pod .paudio { width: 100%; margin: 8px 0; }
+.pod .plisten { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; } .pod .pnotice { font-size: 12px; line-height: 1.7; margin: 18px 0 6px; }
 .pod .pkey { border-left: 3px solid var(--up); padding: 4px 0 4px 14px; margin: 14px 0; } .pod .pkh { color: var(--up); font-size: 13px; margin-bottom: 4px; }
 .pod .pkey2 { border-left-color: var(--line); } .pod .pkey2 .pkh { color: var(--muted); } .pod .pkey2 li::marker { color: var(--muted); }
 .pod .pkey ul { margin: 0; padding-left: 20px; } .pod .pkey li { margin: 6px 0; line-height: 1.75; } .pod .pkey li::marker { color: var(--up); }
