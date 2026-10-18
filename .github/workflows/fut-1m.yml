@@ -9,6 +9,9 @@ on:
       dump:
         description: "除錯：1＝只印出抓到的根數、不存檔（0＝正常更新）"
         default: "0"
+      backfill:
+        description: "補歷史：要補幾個交易日（期交所逐筆成交，最多 30；0＝不補）"
+        default: "0"
 permissions:
   contents: write
 concurrency:
@@ -17,7 +20,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
@@ -27,8 +30,10 @@ jobs:
           node-version: 22
       - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
         run: node scripts/fut-1m.mjs --dump
-      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+      - if: ${{ (!github.event.inputs.dump || github.event.inputs.dump == '0') && (!github.event.inputs.backfill || github.event.inputs.backfill == '0') }}
         run: node scripts/fut-1m.mjs
+      - if: ${{ github.event.inputs.backfill && github.event.inputs.backfill != '0' }}
+        run: node scripts/fut-1m.mjs --backfill=${{ github.event.inputs.backfill }} ${{ github.event.inputs.dump == '1' && '--dump' || '' }}
       - name: commit
         if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
         env:

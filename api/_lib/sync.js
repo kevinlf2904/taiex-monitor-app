@@ -21,6 +21,7 @@ export const hashId = id => createHash("sha256").update(String(id)).digest("hex"
 export const bindTok = h => h.slice(0, 24);
 const okId = id => /^[A-Za-z0-9_-]{20,64}$/.test(String(id || ""));
 
+export const kvOn = () => !!(KV_URL() && KV_TOKEN());
 export async function kv(...cmd) {
   const r = await fetch(KV_URL(), { method: "POST", headers: { Authorization: `Bearer ${KV_TOKEN()}`, "Content-Type": "application/json" }, body: JSON.stringify(cmd), signal: AbortSignal.timeout(10000) });
   const j = await r.json().catch(() => null); if (!r.ok || j?.error) throw new Error(j?.error || `KV HTTP ${r.status}`); return j.result;

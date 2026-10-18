@@ -33,8 +33,8 @@ const winPct = (a, t, n) => { let p = 1; for (let k = Math.max(0, t - n + 1); k 
 function flowAt(M, t = M.T - 1) {
   return M.secs.map(S => {
     const net5 = winSum(S.net, t, 5), prev5 = t >= 5 ? winSum(S.net, t - 5, 5) : 0, accel = net5 - prev5;
-    const m5 = S.mem.map(s => ({ s, a: winSum(s.amt, t, 5) })), top = m5.slice().sort((a, b) => b.a - a.a)[0];
-    return { id: S.id, name: S.name, kind: S.kind, net1: S.net[t] || 0, net5, prev5, accel, f5: winSum(S.f, t, 5), tr5: winSum(S.tr, t, 5), f1: S.f[t] || 0, tr1: S.tr[t] || 0,
+    const m5 = S.mem.map(s => ({ s, a: winSum(s.amt, t, 5) })), top = m5.slice().sort((a, b) => b.a - a.a)[0], net1 = S.net[t] || 0, prev1 = t >= 1 ? S.net[t - 1] || 0 : 0;
+    return { id: S.id, name: S.name, kind: S.kind, net1, prev1, accel1: net1 - prev1, q1: flowQuad(net1, net1 - prev1), net5, prev5, accel, f5: winSum(S.f, t, 5), tr5: winSum(S.tr, t, 5), f1: S.f[t] || 0, tr1: S.tr[t] || 0,
       pct1: S.pct[t] || 0, pct5: winPct(S.pct, t, 5), n: S.mem.length, buy1: S.mem.filter(s => s.amt[t] > 0).length, buy5: m5.filter(x => x.a > 0).length,
       top: top && top.a > 0 ? top.s.name : null, topSell: m5.slice().sort((a, b) => a.a - b.a)[0]?.s.name || null, q: flowQuad(net5, accel) };
   });

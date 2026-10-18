@@ -6,6 +6,8 @@
 // 系統提示固定在伺服器端；前端只送對話內容與「目前畫面」的摘要，長度都有上限。
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createHash } from "node:crypto";
+import { kv, kvOn } from "./sync.js";
 
 export const config = { maxDuration: 60 };
 
@@ -40,7 +42,7 @@ export async function askGemini(system, turns, key, model = process.env.GEMINI_M
         j = await r.json().catch(() => ({}));
       } catch (e) { last = { status: 504, message: e.message }; break; } // 逾時或連線錯誤：直接換下一個模型
       if (r.status === 404) { last = { status: 404, message: j?.error?.message || "" }; break; } // 模型名稱不存在（舊模型下架），換下一個
-      if (retryable(r.status)) { last = { status: r.status, message: j?.error?.message || "" }; if (attempt === 0 && r.status !== 429) await wait(1200); else break; continue; }
+      if (retryable(r.status)) { last = { status: r.status, message: j?.error?.message || "" }; if (attempt === 0 && r.status !== 429) await wait(900 + Math.random() * 900); else break; continue; } // 等一下（加一點隨機，避免大家同時重試）
       if (!r.ok) return { ok: false, status: r.status, message: j?.error?.message || "" };
       const c = j.candidates?.[0];
       if (!c) return { ok: false, blocked: true, message: j.promptFeedback?.blockReason || "" };
@@ -62,6 +64,13 @@ function geminiError(r) {
   return `Gemini 服務暫時無法使用（${r.status ?? "連線錯誤"}）`;
 }
 
+// 回答快取（有接 Upstash Redis 才會用）：同一天、同一個畫面內容、同樣的問題直接回上次的答案，不再花 Gemini 額度，
+// 也比較不會遇到免費方案的每分鐘上限。鍵是內容的雜湊（不存原文），6 小時後自動清掉。
+export const cacheKey = (system, turns, day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)) => "ai:" + createHash("sha256").update(JSON.stringify([day, system, turns])).digest("hex").slice(0, 40);
+const AI_TTL = 6 * 3600;
+async function cacheGet(k) { if (!kvOn()) return null; try { const v = await kv("GET", k); return v ? JSON.parse(v) : null; } catch { return null; } }
+async function cachePut(k, v) { if (!kvOn()) return; try { await kv("SET", k, JSON.stringify(v), "EX", AI_TTL); } catch {} }
+
 export default async function handler(req, res) {
   const geminiKey = (process.env.GEMINI_API_KEY || "").trim();
   // GET：只回報目前接的是哪個 AI（不呼叫模型、不花額度），給對話框顯示用
@@ -79,10 +88,13 @@ export default async function handler(req, res) {
   if (!turns.length || turns[turns.length - 1].role !== "user") return res.status(400).json({ ok: false, error: "最後一則必須是使用者的問題" });
   const ctx = typeof context === "string" && context ? `\n\n目前畫面（由頁面自動產生，可能有誤）：\n${context.slice(0, 6000)}` : "";
 
+  const ck = req.body?.nocache ? null : cacheKey(SYSTEM + ctx, turns), hit = ck && (await cacheGet(ck));
+  if (hit?.text) return res.status(200).json({ ...hit, ok: true, cached: true });
   if (geminiKey) {
     try {
       const r = await askGemini(SYSTEM + ctx, turns, geminiKey);
       if (!r.ok && !r.blocked && retryable(r.status) && process.env.ANTHROPIC_API_KEY) return askClaude(); // 有設 Claude 金鑰時，Gemini 忙線就改問 Claude
+      if (r.ok && ck && !r.truncated) await cachePut(ck, { text: r.text, provider: "gemini", model: r.model });
       return res.status(200).json(r.ok ? { ok: true, text: r.text, truncated: r.truncated, provider: "gemini", model: r.model } : { ok: false, error: geminiError(r), provider: "gemini" });
     } catch { return res.status(200).json({ ok: false, error: "連不到 Gemini 服務，請稍後再試。" }); }
   }
@@ -103,6 +115,7 @@ export default async function handler(req, res) {
     if (msg.stop_reason === "refusal") return res.status(200).json({ ok: false, error: "這個問題無法回答，換個方式問問看。" });
     const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
     if (!text) return res.status(200).json({ ok: false, error: "沒有收到回答，請再試一次。" });
+    if (ck && msg.stop_reason !== "max_tokens") await cachePut(ck, { text, provider: "claude", model: msg.model });
     return res.status(200).json({ ok: true, text, truncated: msg.stop_reason === "max_tokens", provider: "claude", model: msg.model });
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) return res.status(200).json({ ok: false, error: "ANTHROPIC_API_KEY 無效，請檢查伺服器設定。" });

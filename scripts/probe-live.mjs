@@ -57,6 +57,16 @@ if (process.argv[2] === "keys") {
   const qu = await hit("/api/quote?codes=AAPL,NVDA"); console.log("網站 /api/quote 美股 →", qu.status ?? qu.err, qu.j?.source, (qu.j?.quotes || []).map(x => `${x.code}=${x.price}`).join(" "));
   process.exit(0);
 }
+if (process.argv[2] === "us") {
+  // 美股：Yahoo 與 Finnhub 報價速度（網站 /api/status?bench=1），以及新的 /api/usinfo 公司資料、指標、財報
+  const b = await hit("/api/status?bench=1"); console.log("bench", b.status ?? b.err, JSON.stringify(b.j?.bench || null));
+  for (const c of ["AAPL", "NVDA", "TSM"]) { const u = await hit(`/api/usinfo?code=${c}`), J = u.j || {};
+    console.log(`usinfo ${c}`, u.status ?? u.err, `${u.ms}ms`, J.ok, J.error || "", "來源", J.source, "公司", J.profile?.name, J.profile?.industry, "指標", Object.keys(J.metric || {}).length, JSON.stringify(J.metric || {}).slice(0, 200),
+      "評等", JSON.stringify(J.rec?.[0] || null), "EPS", J.earn?.length, JSON.stringify(J.earn?.at(-1) || null), "SEC 季", J.fin?.q?.length, JSON.stringify(J.fin?.q?.at(-1) || null), "年", J.fin?.y?.length, "errors", JSON.stringify(J.errors)); }
+  const ix = await hit("/api/intraday?code=o00&spark=1"); console.log("櫃買 spark", ix.status ?? ix.err, ix.j?.ok, ix.j?.source, ix.j?.spark?.length, JSON.stringify(ix.j?.spark?.slice(-2)), ix.j?.error || "");
+  const fs = await hit("/api/futures?cid=TXF&bars=spark"); console.log("台指 spark", fs.status ?? fs.err, fs.j?.spark?.length, JSON.stringify(fs.j?.spark?.slice(-2)), "prev", fs.j?.quote?.prev);
+  process.exit(0);
+}
 if (process.argv[2] === "fut") {
   // 台指期分 K：網站 /api/futures 回傳幾根、note、錯誤；再直接看期交所 1 分 K（日盤 -F、夜盤 -M）原始回應
   const f = await hit("/api/futures"); const j = f.j || {}, B = j.bars || [];

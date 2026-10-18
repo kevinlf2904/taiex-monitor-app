@@ -495,7 +495,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 @media (max-width: 520px) { .pmrows li { grid-template-columns: minmax(0, 1fr) 48px 40px; } .pmrows li > i { display: none; } .mcrow > summary { grid-template-columns: minmax(0, 1fr) auto; } .mcrow > summary > span:last-child { grid-column: 1 / -1; text-align: left; } }
 .mkreg { padding: 8px 12px 0; } .mkreg .mkseg button { font-size: 14px; padding: 6px 14px; }
 @media (max-width: 600px) { .mkreg .mkseg { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; } .mkreg .mkseg::-webkit-scrollbar { display: none; } .mkreg .mkseg button { flex: none; padding: 6px 11px; } }
-.ixcards.us .ixcard .spark { width: 100%; height: 22px; margin-top: 2px; }
+.ixcards.us .ixcard .spark, .ixcard .spark.tsp { width: 100%; height: 22px; margin-top: 2px; } .tsp-prev { stroke: var(--muted); stroke-width: .6; stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; opacity: .7; }
 .bwrap { margin: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); } .bubble { width: 100%; height: auto; display: block; } .bax { stroke: var(--line); stroke-width: 1; } .bq { font: 500 10px var(--font-body); fill: var(--muted); }
 .bnode { cursor: pointer; } .bnode circle { stroke: none; fill-opacity: var(--bop, .45); transition: fill-opacity .2s; } .bnode.on circle { fill-opacity: min(1, calc(var(--bop, .45) + .35)); } .bnode:focus circle, .bnode:hover circle { fill-opacity: min(1, calc(var(--bop, .45) + .2)); }
 .mtool { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin: 6px 12px; } .mtool .cg-t { font-family: var(--font-display); font-weight: 600; color: var(--ink); letter-spacing: .02em; }
@@ -845,7 +845,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.19-94</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.19-95</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -921,7 +921,7 @@ const W = {
   mkReg: ["us", "gl", "macro", "news", "poly"].includes(store.get("watch:mkReg", "tw")) ? store.get("watch:mkReg", "tw") : "tw", usHot: ["active", "gain", "loss"].includes(store.get("watch:usHot", "active")) ? store.get("watch:usHot", "active") : "active",
   mkM: ["tpex", "all"].includes(store.get("watch:mkM", "twse")) ? store.get("watch:mkM", "twse") : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
   mkHot: ["value", "gain", "surge", "volume"].includes(store.get("watch:mkHot", "value")) ? store.get("watch:mkHot", "value") : "value", worldR: store.get("watch:worldR", "us"), calWk: 0, calK: ["all", "conf", "ex"].includes(store.get("watch:calK", "all")) ? store.get("watch:calK", "all") : "all", calDay: null, warn: null, warnOpen: "punish", cal: null, futx: null,
-  mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), q: "up", rk: "inst", side: "buy", win: "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), rp: { t: null, playing: false, speed: 1, set: "hot" } },
+  mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), q: "up", rk: "inst", side: "buy", win: "5", bw: store.get("watch:mfbw", "5") === "1" ? "1" : "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), rp: { t: null, playing: false, speed: 1, set: "hot" } },
   indS: { view: "themes", mk: "tw", sub: "chain", net: "ai-dc", ...(store.get("watch:inds", null) || {}), open: null, focus: null }, indQ: {},
   cmp: (store.get("watch:cmp", []) || []).filter(c => typeof c === "string").slice(0, 3), cmpData: {},
   daily: null, intra: null, intraAt: 0, mk: {}, info: null, hot: {}, timer: null, busy: false, stocks: null, lastOk: 0,
@@ -981,7 +981,7 @@ function apiTtl(url) {
   if (/^\/api\/daily\?date=/.test(u)) return (u.match(/date=(\d{8})/) || [])[1] < today ? 7 * 24 * H : 5 * M;
   if (/^\/api\/kline\?/.test(u) || /^\/api\/futures\?daily=1/.test(u)) return 5 * M; // 最後一根會跟著即時報價更新，不靠快取
   if (/^\/api\/(stockinfo|news|broker)\?/.test(u)) return 15 * M;
-  if (/^\/api\/(company|annual)\?/.test(u) || /^\/api\/daily\?meta=1/.test(u)) return 6 * H;
+  if (/^\/api\/(company|annual|usinfo)\?/.test(u) || /^\/api\/daily\?meta=1/.test(u)) return 6 * H;
   if (/^\/api\/podcast\?(feed|q)=/.test(u)) return 30 * M;
   return 0;
 }
@@ -1065,7 +1065,7 @@ function liveRefresh() {
 }
 // 大盤盤中只重抓個股統計與期貨（行事曆、處置股不用每 30 秒抓）
 async function loadMktLive() {
-  W.mktLoading = Date.now(); const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
+  W.mktLoading = Date.now(); loadIxSpark(); const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
   // 期貨和大盤統計各自更新：其中一個慢或失敗，不會讓另一個也一直空著
   const futP = Promise.all([fut("EXF"), fut("FXF")]).then(([ex, fx]) => { W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; if (W.lt === "mkt" && !W.mktLoading) renderList(); });
   try { const m = await getJ("/api/market"); W.mkt = { ...m, at: Date.now() }; }
@@ -2093,12 +2093,15 @@ function bubbleSvg(pts, { w = 360, h = 360, id = "mfb", scale, sel } = {}) {
 }
 const easeIO = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 // 點的透明度：使用者可調，記在這個瀏覽器
+// 動能矩陣看「近 5 日」或「今日」：今日版用當日淨額當橫軸、跟前一天比的變化當縱軸
+const mfView = A => (W.mf.bw === "1" ? A.map(x => ({ ...x, net5: x.net1 ?? 0, accel: x.accel1 ?? 0, pct5: x.pct1 ?? 0, q: x.q1 || x.q })) : A);
+const bwSeg = () => `<span class="mkseg" role="group" aria-label="期間">${[["5", "近 5 日"], ["1", "今日"]].map(([k, t]) => `<button data-mset="bw" data-v="${k}" aria-pressed="${W.mf.bw === k}">${t}</button>`).join("")}</span>`;
 const bopRow = () => `<label class="bopr">點的透明度<input type="range" class="bop-r" min="0.1" max="0.9" step="0.05" value="${W.mf.bop}" aria-label="點的透明度"><b>${Math.round(W.mf.bop * 100)}%</b></label>`;
 // 點圓點：下面顯示這個板塊的數字，再按按鈕進題材內頁
 function bubbleInfo(x) {
   if (!x) return `<p class="note gnote binfo-empty">點一下圓點，看這個板塊的法人資金細節。</p>`;
-  return `<section class="mcard binfo" style="--qc:${FLOW_Q[x.q][2]}"><h3>${qDot(x.q)}${esc(x.name)} <span class="note">${x.kind}・${x.n} 檔・${FLOW_Q[x.q][0]}（${FLOW_Q[x.q][1]}）</span></h3>
-    <div class="bgrid"><span>近 5 日淨流入</span>${yiB(x.net5)}<span>前 5 日</span>${yiB(x.prev5)}<span>加速度</span>${yiB(x.accel)}<span>近 5 日漲跌</span>${pctB(x.pct5)}<span>外資 5 日</span>${yiB(x.f5)}<span>投信 5 日</span>${yiB(x.tr5)}<span>買超家數</span><b>${x.buy5}／${x.n}</b><span>買最多</span><b>${esc(x.top || "—")}</b></div>
+  return `${(q => `<section class="mcard binfo" style="--qc:${FLOW_Q[q][2]}"><h3>${qDot(q)}${esc(x.name)} <span class="note">${x.kind}・${x.n} 檔・${FLOW_Q[q][0]}（${FLOW_Q[q][1]}）</span></h3>`)(W.mf.bw === "1" && W.mf.view === "bubble" ? x.q1 : x.q)}
+    <div class="bgrid">${W.mf.bw === "1" && W.mf.view === "bubble" ? `<span>今日淨流入</span>${yiB(x.net1)}<span>前一日</span>${yiB(x.prev1)}<span>比前一日</span>${yiB(x.accel1)}<span>今日漲跌</span>${pctB(x.pct1)}<span>外資今日</span>${yiB(x.f1)}<span>投信今日</span>${yiB(x.tr1)}<span>今日買超家數</span><b>${x.buy1}／${x.n}</b></div><div class="bgrid">` : ""}<span>近 5 日淨流入</span>${yiB(x.net5)}<span>前 5 日</span>${yiB(x.prev5)}<span>加速度</span>${yiB(x.accel)}<span>近 5 日漲跌</span>${pctB(x.pct5)}<span>外資 5 日</span>${yiB(x.f5)}<span>投信 5 日</span>${yiB(x.tr5)}<span>買超家數</span><b>${x.buy5}／${x.n}</b><span>買最多</span><b>${esc(x.top || "—")}</b></div>
     <div class="bbtns"><button class="btn sm primary" data-fsec="${esc(x.id)}">看成分股 ›</button>${INDT.has(x.id) ? `<button class="btn sm" data-iopen-ext="${esc(x.id)}">題材內頁 ›</button>` : ""}</div></section>`;
 }
 function mfCanvas(M, mood, sum) {
@@ -2141,10 +2144,10 @@ function renderMoney() {
       + `<section class="mcard"><h3>近 5 日法人買超最多</h3><div class="mchips">${b5.map(x => chip(x, x.net5, `data-fsec="${esc(x.id)}"`)).join("")}</div></section>`
       + `<button class="mcard mlink" data-mv="replay"><b>主力資金雷達回放</b><span class="note">近 20 個交易日，資金怎麼移動 ›</span></button>`;
   } else if (F.view === "bubble") {
-    const cnt = Object.fromEntries(Object.keys(FLOW_Q).map(k => [k, A.filter(x => x.q === k).length])), L = A.filter(x => x.q === F.q).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5));
+    const V = mfView(A), D1 = F.bw === "1", wl = D1 ? "今日" : "近 5 日", cnt = Object.fromEntries(Object.keys(FLOW_Q).map(k => [k, V.filter(x => x.q === k).length])), L = V.filter(x => x.q === F.q).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5));
     h += more + `<div class="qcards">${Object.entries(FLOW_Q).map(([k, [t, d, c]]) => `<button class="qcard" data-mq="${k}" aria-pressed="${F.q === k}" style="--qc:${c}"><span>${t}</span><b>${cnt[k]}</b><small>${d}</small></button>`).join("")}</div>`
-      + `<div class="mtool">${bopRow()}<button class="btn sm" data-mv="replay">▶ 雷達回放</button>${scBtn("matrix")}</div>` + `<div class="bwrap" style="--bop:${W.mf.bop}">${bubbleSvg(A.filter(x => Math.abs(x.net5) > 0).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30), { sel: F.bsel })}</div>${bubbleInfo(A.find(x => x.id === F.bsel))}<p class="note gnote">只畫近 5 日金額最大的 30 個板塊；圓點越大代表近 5 日淨流入（或流出）越多，座標用平方根縮放、重疊的會稍微推開，所以位置是大約的。</p>`
-      + `<section class="mcard"><h3>${qDot(F.q)}${FLOW_Q[F.q][0]} <span class="note">${L.length} 個板塊・依近 5 日資金規模</span></h3><ol class="mlist">${L.map((x, i) => `<li><button data-fsec="${esc(x.id)}"><span class="rk">${i + 1}</span><span class="nm">${esc(x.name)}<small>${x.kind}・${x.n} 檔</small></span>${pctB(x.pct5)}${yiB(x.net5)}</button></li>`).join("")}</ol></section>`;
+      + `<div class="mtool">${bwSeg()}${bopRow()}<button class="btn sm" data-mv="replay">▶ 雷達回放</button>${scBtn("matrix")}</div>` + `<div class="bwrap" style="--bop:${W.mf.bop}">${bubbleSvg(V.filter(x => Math.abs(x.net5) > 0).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30), { sel: F.bsel })}</div>${bubbleInfo(A.find(x => x.id === F.bsel))}<p class="note gnote">只畫${wl}金額最大的 30 個板塊；圓點越大代表${wl}淨流入（或流出）越多，${D1 ? "縱軸是今天比前一個交易日多買（或少買）多少，" : ""}座標用平方根縮放、重疊的會稍微推開，所以位置是大約的。</p>`
+      + `<section class="mcard"><h3>${qDot(F.q)}${FLOW_Q[F.q][0]} <span class="note">${L.length} 個板塊・依${wl}資金規模</span></h3><ol class="mlist">${L.map((x, i) => `<li><button data-fsec="${esc(x.id)}"><span class="rk">${i + 1}</span><span class="nm">${esc(x.name)}<small>${x.kind}・${x.n} 檔</small></span>${pctB(x.pct5)}${yiB(x.net5)}</button></li>`).join("")}</ol></section>`;
   } else if (F.view === "replay") {
     const t0 = Math.min(9, T - 1), t = F.rp.t == null ? T - 1 : Math.max(t0, Math.min(T - 1, F.rp.t)), { P, pool } = mfReplayPool(M, t); F.rp.fl = null;
     const R = mfReplayBits(M, t, pool, P);
@@ -2264,7 +2267,7 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F 
   if (d.mshare) return mfShare(d.mshare);
   if (d.l2) { W.tv = "sum"; return setLt("tools", true); }
   if (d.mv) { F.view = d.mv; if (d.mv !== "replay") { mfPlay(false); store.set("watch:mfv", d.mv); } if (d.mv === "replay") { F.rp.t = null; F.rp.u = null; } }
-  else if (d.mq) F.q = d.mq; else if (d.mrk) F.rk = d.mrk; else if (d.mset) F[d.mset] = d.v;
+  else if (d.mq) F.q = d.mq; else if (d.mrk) F.rk = d.mrk; else if (d.mset) { F[d.mset] = d.v; if (d.mset === "bw") store.set("watch:mfbw", d.v); }
   else if (d.mrp === "prev") { mfPlay(false); return mfStep(-1); } else if (d.mrp === "next") { mfPlay(false); return mfStep(1); }
   else if (d.mrp === "play") return mfPlay(!F.rp.playing); else if (d.mrp === "speed") { F.rp.speed = F.rp.speed >= 4 ? 1 : F.rp.speed * 2; if (F.rp.playing) return mfPlay(true); }
   renderMoney(); });
@@ -2550,7 +2553,7 @@ function mktStatsHtml(sec) {
 async function loadMkt(force = false) {
   if (W.off || (!force && W.mkt && Date.now() - W.mkt.at < 300000)) return renderList();
   const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
-  loadMktStats(force);
+  loadMktStats(force); loadIxSpark(force);
   // 電指近、金指近先到先顯示，不用等大盤統計（證交所慢的時候大盤統計可能要等比較久）
   const exP = fut("EXF"), fxP = fut("FXF");
   Promise.all([exP, fxP]).then(([ex, fx]) => { W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; if (W.lt === "mkt") renderList(); }).catch(() => {});
@@ -2709,12 +2712,33 @@ function renderPoly(top) {
   $("#lx").innerHTML = h + `<p class="note" style="padding:4px 12px 12px">Polymarket 是用加密貨幣下注的預測市場，題目與選項是英文原文；▲▼ 是 24 小時內機率的變化（百分點）。機率是市場共識，不是預測保證；台灣不能下注，這裡只當參考指標。</p>`;
 }
 // 大盤頂端的指數、期貨卡片：每秒報價更新時只重畫這一塊（整個大盤頁每 5 秒才重畫一次）
+// 大盤卡片的走勢線：每分鐘收盤、時間軸固定（台股 09:00–13:30、期貨日盤 08:45–13:45、夜盤 15:00–05:00），昨收畫虛線；
+// 線走到卡片哪裡就是現在幾點，盤中看得出還剩多少（美股卡片是把整段拉滿，這裡比較接近券商 App 的大盤預覽）
+const tmOf = t => { const [a, b] = String(t).split(":").map(Number); return a * 60 + b; };
+function tsSpark(S) {
+  if (!S?.pts?.length) return "";
+  const [o, cl] = S.win, N = (cl - o + 1440) % 1440 || 1440, w = 100, h = 24, P = S.pts.map(([t, c]) => [(tmOf(t) - o + 1440) % 1440, c]).filter(([x, c]) => x <= N && c != null);
+  if (!P.length) return "";
+  const prev = S.prev ?? P[0][1], vs = [prev, ...P.map(p => p[1])], mn = Math.min(...vs), mx = Math.max(...vs), Y = v => (h - 2 - (mx > mn ? (v - mn) / (mx - mn) : 0.5) * (h - 4)).toFixed(1), X = x => ((x / N) * w).toFixed(1);
+  return `<svg class="spark tsp" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><line x1="0" x2="${w}" y1="${Y(prev)}" y2="${Y(prev)}" class="tsp-prev"/><polyline fill="none" stroke="var(--${P.at(-1)[1] >= prev ? "up" : "down"})" stroke-width="1.1" vector-effect="non-scaling-stroke" points="${P.map(([x, c]) => `${X(x)},${Y(c)}`).join(" ")}"/></svg>`;
+}
+async function loadIxSpark(force = false) {
+  if (W.off || W.ixSpBusy) return;
+  const t = new Date(Date.now() + 8 * 3600e3), hm = t.getUTCHours() * 60 + t.getUTCMinutes(), open = t.getUTCDay() % 6 ? (hm >= 525 && hm <= 830) || hm >= 900 || hm <= 305 : t.getUTCDay() === 6 && hm <= 305;
+  if (!force && Date.now() - (W.ixSpAt || 0) < (open ? 60000 : 900000)) return;
+  W.ixSpBusy = 1; W.ixSpAt = Date.now(); const S = W.ixSp || (W.ixSp = {});
+  const st = c => getJ(`/api/intraday?code=${c}&spark=1`, true).then(j => (j.spark?.length ? { pts: j.spark, prev: j.prev, win: [540, 810] } : null)).catch(() => null);
+  const fu = c => getJ(`/api/futures?cid=${c}&bars=spark`, true).then(j => { const q = j.quote; return j.spark?.length ? { pts: j.spark, prev: q?.prev ?? (q?.price != null && q?.chg != null ? q.price - q.chg : null), win: q?.session === "night" ? [900, 300] : [525, 825] } : null; }).catch(() => null);
+  try { const R = await Promise.all([["T00", st("t00")], ["O00", st("o00")], ["0050", st("0050")], ["TXF", fu("TXF")], ["EXF", fu("EXF")], ["FXF", fu("FXF")]].map(async ([k, p]) => [k, await p])); for (const [k, v] of R) if (v) S[k] = v; }
+  finally { W.ixSpBusy = 0; }
+  if (W.lt === "mkt" && $("#mkCards")) $("#mkCards").innerHTML = mktCards();
+}
 function mktCards() {
-  const J = W.mkt, q = c => W.quotes.get(c), card = (c, nm) => { const x = q(c); return `<button class="ixcard" data-sel="${c}"><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price != null ? x.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><small class="${cls(x?.chg)}">${pctTxt(x?.chg, x?.chgPct)}</small></button>`; };
-  const scard = (nm, x, sub, attr = "") => `<button class="ixcard" ${attr}><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price ?? x?.close ?? "—"}</b><small class="${cls(x?.chg)}">${x ? pctTxt(x.chg, x.chgPct) : sub || ""}</small></button>`;
+  const J = W.mkt, q = c => W.quotes.get(c), sp = c => tsSpark(W.ixSp?.[c]), card = (c, nm) => { const x = q(c); return `<button class="ixcard" data-sel="${c}"><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price != null ? x.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><small class="${cls(x?.chg)}">${pctTxt(x?.chg, x?.chgPct)}</small>${sp(c)}</button>`; };
+  const scard = (nm, x, sub, attr = "", c = "") => `<button class="ixcard" ${attr}><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price ?? x?.close ?? "—"}</b><small class="${cls(x?.chg)}">${x ? pctTxt(x.chg, x.chgPct) : sub || ""}</small>${c ? sp(c) : ""}</button>`;
   const fq = q("TXF"), F = W.futx || {}, t50 = J?.indices?.find(x => /臺灣50|台灣50/.test(x.name));
   return `${card("T00", "加權指數")}${card("O00", "櫃買指數")}${card("TXF", fq?.session === "night" ? "台指近（夜盤）" : "台指近")}
-    ${scard(F.EXF?.session === "night" ? "電指近（夜盤）" : "電指近", F.EXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="EXF"')}${scard(F.FXF?.session === "night" ? "金指近（夜盤）" : "金指近", F.FXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="FXF"')}${(q("0050")?.price != null ? card("0050", "0050 台灣50") : scard("臺灣 50", t50 ? { price: t50.close.toLocaleString(), chg: t50.chg, chgPct: t50.chgPct } : null, t50?.date ? t50.date.slice(5).replace("-", "/") + " 收盤" : "收盤", 'data-sel="0050" title="看元大台灣50（0050）"'))}`;
+    ${scard(F.EXF?.session === "night" ? "電指近（夜盤）" : "電指近", F.EXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="EXF"', "EXF")}${scard(F.FXF?.session === "night" ? "金指近（夜盤）" : "金指近", F.FXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="FXF"', "FXF")}${(q("0050")?.price != null ? card("0050", "0050 台灣50") : scard("臺灣 50", t50 ? { price: t50.close.toLocaleString(), chg: t50.chg, chgPct: t50.chgPct } : null, t50?.date ? t50.date.slice(5).replace("-", "/") + " 收盤" : "收盤", 'data-sel="0050" title="看元大台灣50（0050）"', "0050"))}`;
 }
 function renderMkt() {
   const top = `<div class="mkreg">${mkSeg("mkReg", W.mkReg || "tw", [["tw", "台股大盤"], ["us", "美股大盤"], ["gl", "原物料外匯"], ["news", "總經消息"], ["macro", "總經數據"], ["poly", "預測市場"]])}</div>`;
@@ -2998,7 +3022,7 @@ function select(code, how = "push") {
   $("#learnLink").href = `./?code=${code === "T00" ? "加權" : code}#shot`;
   const tw = isTW(code), etf = isEtf(code); document.querySelectorAll('#dTabs [data-t="chips"], #qbar [data-q="chips"]').forEach(b => (b.hidden = !tw));
   // ETF：「財務」分頁改成「ETF」（基本資料、成分股、成分股變動、配息），美股 ETF 也有
-  { const f = $('#dTabs [data-t="fin"]'); f.hidden = !tw && !etf; f.textContent = etf ? "ETF" : "財務"; }
+  { const f = $('#dTabs [data-t="fin"]'); f.hidden = !tw && !etf && !isUSStk(code); f.textContent = etf ? "ETF" : "財務"; }
   if ((!tw && W.dtab === "chips") || (!tw && !etf && W.dtab === "fin")) W.dtab = "trend";
   $("#learnLink").hidden = isUS(code) || isFut(code);
   const fut = isFut(code); document.querySelectorAll('#kSeg [data-k="D"], #kSeg [data-k="W"], #kSeg [data-k="M"]').forEach(b => (b.hidden = false)); $("#cdpBtn").hidden = fut; tsSegFill(fut);
@@ -3155,7 +3179,9 @@ const OLD_DTAB = { fund: ["fin", "rev"], co: ["fin", "report"], info: ["ovw", "s
 W.dsub = { ovw: "state", chips: "sum", fin: "rev", ...(store.get("watch:dsub", null) || {}) }; if (W.dsub.ovw === "ls") W.dsub.ovw = "state"; // 指標強弱（原多空研判）已併進市場狀態
 // ETF 的子頁：沒有營收、財報、健檢、評價推估、產業鏈，改成 ETF 自己的基本資料、成分股、成分股變動
 const DSUB_ETF = { fin: [["etfinfo", "基本資料"], ["etfhold", "成分股"], ["etfchg", "成分股變動"], ["div", "配息", 1]] }, ETF_NO = new Set(["check", "target", "attr"]);
-const dSubs = t => (isEtf(W.sel) && DSUB_ETF[t] ? DSUB_ETF[t] : (DSUB[t] || []).filter(x => !(isEtf(W.sel) && ETF_NO.has(x[0])))).filter(x => !x[2] || isTW(W.sel));
+// 美股個股：財務分頁改成 Finnhub＋SEC 的公司與指標、營收與獲利、分析師與財報
+const DSUB_US = { fin: [["usco", "公司與指標"], ["usfin", "營收與獲利"], ["usana", "分析師與財報"]] }, isUSStk = c => isUS(c) && !isEtf(c) && /^[A-Z]{1,5}(\.[A-Z])?$/.test(c || "");
+const dSubs = t => (isEtf(W.sel) && DSUB_ETF[t] ? DSUB_ETF[t] : isUSStk(W.sel) && DSUB_US[t] ? DSUB_US[t] : (DSUB[t] || []).filter(x => !(isEtf(W.sel) && ETF_NO.has(x[0])))).filter(x => !x[2] || isTW(W.sel));
 function dSub(t = W.dtab) { const L = dSubs(t); return L.some(x => x[0] === W.dsub[t]) ? W.dsub[t] : L[0]?.[0]; }
 const isSxSub = () => !!DSUB[W.dtab] && !DSUB_OWN.has(dSub());
 function renderDsub() {
@@ -3165,7 +3191,7 @@ function renderDsub() {
 function setDsub(k) { W.dsub = { ...W.dsub, [W.dtab]: k }; store.set("watch:dsub", W.dsub); setDtab(W.dtab, false); navPush(); }
 function setDtab(t, scroll = true) {
   if (OLD_DTAB[t]) { W.dsub = { ...W.dsub, [OLD_DTAB[t][0]]: OLD_DTAB[t][1] }; t = OLD_DTAB[t][0]; }
-  if ((t === "chips" || t === "fin") && !isTW(W.sel) && !(t === "fin" && isEtf(W.sel))) t = "trend";
+  if ((t === "chips" || t === "fin") && !isTW(W.sel) && !(t === "fin" && (isEtf(W.sel) || isUSStk(W.sel)))) t = "trend";
   if (!["trend", "tech", "ovw", "chips", "fin", "news"].includes(t)) t = "trend";
   W.dtab = t; store.set("watch:dtab", t);
   const sub = dSub(t), sx = !!DSUB[t] && !DSUB_OWN.has(sub);
@@ -4034,10 +4060,10 @@ if (EMBED) {
 
 /* ---------- 分享情報圖卡的內容（sharecard.js 畫圖） ---------- */
 const scPct = (v, d = 1) => (v == null || !isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(d)}%`), scUd = v => (v > 0 ? "up" : v < 0 ? "down" : "");
-SHARE.matrix = () => { const M = mfModel(); if (!M) return null; const A = flowAt(M), F = W.mf, L = A.filter(x => x.q === F.q).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5));
-  return { name: "radar-matrix", title: "量價動能矩陣", sub: `${M.dates[M.T - 1].replace(/-/g, "/")}・板塊的近 5 日法人資金 × 價格動能`, date: M.dates[M.T - 1],
+SHARE.matrix = () => { const M = mfModel(); if (!M) return null; const A = mfView(flowAt(M)), F = W.mf, wl = F.bw === "1" ? "今日" : "近 5 日", L = A.filter(x => x.q === F.q).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5));
+  return { name: "radar-matrix", title: "量價動能矩陣", sub: `${M.dates[M.T - 1].replace(/-/g, "/")}・板塊的${wl}法人資金 × 價格動能`, date: M.dates[M.T - 1],
     stats: Object.entries(FLOW_Q).map(([k, [t, , c]]) => [t, `${A.filter(x => x.q === k).length} 個`, c]), svg: document.querySelector(".bwrap svg"),
-    sections: [{ h: `${FLOW_Q[F.q][0]}・依近 5 日資金規模`, rows: L.map(x => [x.name, flowFmt(x.net5), scUd(x.net5), `${x.kind}・${x.n} 檔`]) }] }; };
+    sections: [{ h: `${FLOW_Q[F.q][0]}・依${wl}資金規模`, rows: L.map(x => [x.name, flowFmt(x.net5), scUd(x.net5), `${x.kind}・${x.n} 檔`]) }] }; };
 SHARE.cong = () => { const v = String(W.cv || "home").split(":")[0], secs = scSectionsFrom($("#lx"), 8, 2); if (!secs.length) return null;
   return { name: "congress-" + v, title: { home: "美國國會議員交易申報", tw: "台灣政治人物財產申報", f13: "美國機構 13F 持股申報", ins: "台股內部人持股轉讓申報" }[v] || "大戶與國會情報", sub: "大戶與國會情報・依官方公開申報整理，申報可能晚於實際交易", sections: secs }; };
 SHARE.supply = () => { const T = W.indS.open && INDT.get(W.indS.open); if (!T) return null; const q = c => W.quotes.get(c)?.chgPct;
