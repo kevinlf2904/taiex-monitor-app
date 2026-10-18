@@ -12,7 +12,7 @@ test("頂部只剩情報局、看盤、K線學堂、存股；學堂的課程與�
     const { ctx, p, errs } = await open(B, S.url, "index.html", { width, touch: width < 500 });
     assert.equal((await p.evaluate(() => $(".tabs").innerText)).replace(/\s+/g, " ").trim(), "情報局 看盤 K線學堂 存股");
     await p.click("#tab-btn-school"); assert.ok(await p.evaluate(() => !$("#schoolNav").hidden));
-    assert.match(await p.evaluate(() => $("#schoolNav").innerText), /課程[\s\S]*個股判讀[\s\S]*圖表實驗室[\s\S]*判讀挑戰[\s\S]*觀念測驗[\s\S]*畫線練習/);
+    assert.match(await p.evaluate(() => $("#schoolNav").innerText), /課程[\s\S]*AI 截圖診斷[\s\S]*圖表實驗室[\s\S]*判讀挑戰[\s\S]*觀念測驗[\s\S]*畫線練習/);
     await p.click('#schoolNav [data-tab="quiz"]'); assert.ok(await p.evaluate(() => !$("#view-quiz").hidden && $("#tab-btn-school").getAttribute("aria-selected") === "true"));
     await p.click("#tab-btn-savings"); await p.click("#tab-btn-school"); assert.ok(await p.evaluate(() => !$("#view-quiz").hidden), "回到學堂時打開上次的子頁");
     assert.ok(await p.evaluate(() => $("#socialBtn").hidden), "社群帳號還沒開，按鈕先藏著");

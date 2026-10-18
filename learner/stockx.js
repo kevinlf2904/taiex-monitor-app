@@ -457,12 +457,14 @@ const usNote = U => `<p class="note">資料：${esc(U.source || "—")}（Finnhu
 Object.assign(SX, {
   usco: () => {
     const w = usWait(); if (w) return w; const U = W.usi, P = U.profile || {}, M = U.metric || {}, nm = P.name || nameOf(W.sel), px = sxPx();
-    const pos52 = M.hi52 && M.lo52 && px != null && M.hi52 > M.lo52 ? Math.max(0, Math.min(100, ((px - M.lo52) / (M.hi52 - M.lo52)) * 100)) : null;
-    const cards = [{ t: "市值", sub: P.currency || "USD", v: usAmt(P.cap) }, { t: "本益比", sub: "近四季", v: M.pe != null ? sxN(M.pe, 1) : "—" }, { t: "EPS", sub: "近四季（美元）", v: M.eps != null ? sxN(M.eps, 2) : "—" },
+    // ADR（例如 TSM）：Finnhub 的 52 週高低、EPS 是母國股價與幣別，跟美股報價對不上，就不畫位置
+    const adr = px != null && M.hi52 && M.lo52 && (px > M.hi52 * 1.5 || px < M.lo52 * 0.5);
+    const pos52 = !adr && M.hi52 && M.lo52 && px != null && M.hi52 > M.lo52 ? Math.max(0, Math.min(100, ((px - M.lo52) / (M.hi52 - M.lo52)) * 100)) : null;
+    const cards = [{ t: "市值", sub: P.currency || "USD", v: usAmt(P.cap) }, { t: "本益比", sub: "近四季", v: M.pe != null ? sxN(M.pe, 1) : "—" }, { t: "EPS", sub: adr ? "近四季（母國幣別）" : "近四季（美元）", v: M.eps != null ? sxN(M.eps, 2) : "—" },
       { t: "殖利率", sub: "近一年", v: M.div != null ? `${sxN(M.div, 2)}%` : "—" }, { t: "營收年增", sub: "近四季", v: usPctv(M.revG), vc: M.revG > 0 ? "up" : M.revG < 0 ? "down" : "" }, { t: "Beta", sub: "相對大盤波動", v: M.beta != null ? sxN(M.beta, 2) : "—" }];
     return `<div class="tw-p">${rkPerson(rkMono(W.sel, "#3d7be0", true), esc(nm), esc([P.exchange, P.industry, P.country].filter(Boolean).join("・")))}${rkCards(cards)}
       ${pos52 != null ? `${sxH("52 週位置", `低 ${sxN(M.lo52, 2)}・高 ${sxN(M.hi52, 2)}・一年報酬 ${usPctv(M.ret52)}`)}<div class="sxgauge"><div class="bar"><i style="left:calc(${pos52.toFixed(1)}% - 6px)"></i></div><div class="lbl"><span>52 週低</span><b>${pos52.toFixed(0)}%</b><span>52 週高</span></div></div>` : ""}
-      ${sxH("獲利能力與財務體質")}${sxKv([["毛利率", M.gm != null ? `${sxN(M.gm, 1)}%` : "—"], ["營業利益率", M.om != null ? `${sxN(M.om, 1)}%` : "—"], ["淨利率", M.nm != null ? `${sxN(M.nm, 1)}%` : "—"], ["ROE", M.roe != null ? `${sxN(M.roe, 1)}%` : "—"], ["ROA", M.roa != null ? `${sxN(M.roa, 1)}%` : "—"], ["EPS 年增", usPctv(M.epsG), M.epsG > 0 ? "up" : M.epsG < 0 ? "down" : ""], ["股價淨值比", M.pb != null ? sxN(M.pb, 2) : "—"], ["股價營收比", M.ps != null ? sxN(M.ps, 2) : "—"], ["負債／權益", M.de != null ? sxN(M.de, 2) : "—"], ["流動比", M.cr != null ? sxN(M.cr, 2) : "—"]])}
+      ${adr ? `<p class="note">這檔是在美國掛牌的外國公司（ADR）：52 週高低與 EPS 是母國市場的股價與幣別，和美股報價不能直接比，所以不畫 52 週位置。</p>` : ""}${sxH("獲利能力與財務體質")}${sxKv([["毛利率", M.gm != null ? `${sxN(M.gm, 1)}%` : "—"], ["營業利益率", M.om != null ? `${sxN(M.om, 1)}%` : "—"], ["淨利率", M.nm != null ? `${sxN(M.nm, 1)}%` : "—"], ["ROE", M.roe != null ? `${sxN(M.roe, 1)}%` : "—"], ["ROA", M.roa != null ? `${sxN(M.roa, 1)}%` : "—"], ["EPS 年增", usPctv(M.epsG), M.epsG > 0 ? "up" : M.epsG < 0 ? "down" : ""], ["股價淨值比", M.pb != null ? sxN(M.pb, 2) : "—"], ["股價營收比", M.ps != null ? sxN(M.ps, 2) : "—"], ["負債／權益", M.de != null ? sxN(M.de, 2) : "—"], ["流動比", M.cr != null ? sxN(M.cr, 2) : "—"]])}
       ${sxH("公司資料")}<table class="tbl sxinfo"><tbody>${[["名稱", esc(nm)], ["交易所", esc(P.exchange || "—")], ["產業", esc(P.industry || "—")], ["國家", esc(P.country || "—")], ["上市日", esc(P.ipo || "—")], ["流通股數", P.shares ? `${(P.shares / 1e9).toFixed(2)}B 股` : "—"], ["網站", P.web ? `<a href="${esc(P.web)}" target="_blank" rel="noopener">${esc(P.web.replace(/^https?:\/\//, ""))}</a>` : "—"], ["SEC 申報", U.cik ? `<a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${esc(U.cik)}&type=10-&dateb=&owner=include&count=40" target="_blank" rel="noopener">10-K／10-Q 原文</a>` : "—"]].map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</tbody></table>
       ${usNote(U)}</div>`;
   },
@@ -475,12 +477,14 @@ Object.assign(SX, {
       ${Y.length ? `${sxH("年度")}${tbl(Y)}` : ""}${usNote(U)}</div>`;
   },
   usana: () => {
-    const w = usWait(); if (w) return w; const U = W.usi, R = U.rec || [], E = U.earn || [], r0 = R[0];
+    const w = usWait(); if (w) return w; const U = W.usi, R = U.rec || [], E0 = U.earn || [], r0 = R[0];
+    // 實際和預估差好幾倍（ADR 的實際值用母國幣別、預估用美元），驚喜 % 沒有意義：這種季度不列
+    const E = E0.filter(x => !(x.actual && x.est && (x.actual / x.est > 3 || x.actual / x.est < 1 / 3))), eSkip = E0.length - E.length;
     const tot = r0 ? r0.sb + r0.b + r0.h + r0.s + r0.ss : 0, seg = r0 && tot ? [["強力買進", r0.sb, "var(--up)"], ["買進", r0.b, "color-mix(in srgb, var(--up) 55%, var(--surface-3))"], ["持有", r0.h, "var(--muted)"], ["賣出", r0.s, "color-mix(in srgb, var(--down) 55%, var(--surface-3))"], ["強力賣出", r0.ss, "var(--down)"]] : [];
     return `<div class="tw-p">${r0 ? `${sxH("分析師評等", `${esc(r0.period)}・${tot} 位分析師`)}<div class="usrec">${seg.map(([t, n, c]) => (n ? `<i style="flex:${n};background:${c}" title="${t} ${n}"></i>` : "")).join("")}</div>
       <div class="usrec-l">${seg.map(([t, n, c]) => `<span><i style="background:${c}"></i>${t} ${n}</span>`).join("")}</div>
       ${R.length > 1 ? `<div class="fscroll"><table class="tbl sxtbl"><thead><tr><th>月份</th><th>強買</th><th>買</th><th>持有</th><th>賣</th><th>強賣</th></tr></thead><tbody>${R.map(x => `<tr><td>${esc(x.period)}</td><td>${x.sb}</td><td>${x.b}</td><td>${x.h}</td><td>${x.s}</td><td>${x.ss}</td></tr>`).join("")}</tbody></table></div>` : ""}` : `<p class="note">沒有分析師評等資料。</p>`}
-      ${E.length ? `${sxH("EPS 實際 vs 預估", "近四季（美元）")}${barLineSvg(E.map(x => ({ label: `${String(x.y).slice(2)}Q${x.q}`, v: x.actual ?? 0, y: x.surp })), { fmtV: v => v, fmtY: v => v + "%" })}<p class="note">柱＝實際 EPS、線＝比預估高（低）多少 %。</p>
+      ${E.length ? `${sxH("EPS 實際 vs 預估", "近四季（美元）")}${barLineSvg(E.map(x => ({ label: `${String(x.y).slice(2)}Q${x.q}`, v: x.actual ?? 0, y: x.surp })), { fmtV: v => v, fmtY: v => v + "%" })}<p class="note">柱＝實際 EPS、線＝比預估高（低）多少 %。</p>${eSkip ? `<p class="note">另有 ${eSkip} 季實際與預估的幣別不同（ADR），沒有列出。</p>` : ""}
       <div class="fscroll"><table class="tbl sxtbl"><thead><tr><th>季度</th><th>實際</th><th>預估</th><th>驚喜</th></tr></thead><tbody>${E.slice().reverse().map(x => `<tr><td>${x.y} Q${x.q}</td><td>${x.actual ?? "—"}</td><td>${x.est ?? "—"}</td><td class="${cls(x.surp)}">${usPctv(x.surp, 2)}</td></tr>`).join("")}</tbody></table></div>` : ""}
       <p class="note">評等是分析師的看法彙整，只是參考、不構成投資建議。</p>${usNote(U)}</div>`;
   },

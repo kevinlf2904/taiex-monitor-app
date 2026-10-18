@@ -82,7 +82,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .ltabs-top .ltabs { margin: 0; }
 :root[data-embed="1"] .ltabs-top { padding: 0 0 6px; }
 .w-main { display: grid; grid-template-columns: minmax(300px, 390px) minmax(0, 1fr); gap: 16px; padding: 16px; max-width: 1480px; margin: 0 auto; align-items: start; }
-.w-list { position: sticky; top: 68px; max-height: calc(100vh - 84px); display: flex; flex-direction: column; overflow: hidden; }
+.w-list { display: flex; flex-direction: column; } /* 清單不另外捲動，跟著整頁捲（不會出現兩層捲動條） */
 :root[data-embed="1"] .w-main { padding: 0; }
 :root[data-embed="1"] .w-list { position: static; max-height: none; }
 :root[data-embed="1"] .w-top, :root[data-embed="1"] .qbar, :root[data-embed="1"] .foot { display: none !important; }
@@ -102,7 +102,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .sugg .mk { margin-left: auto; font-size: 11.5px; color: var(--muted); }
 .sugg .has { font-size: 11.5px; color: var(--accent); }
 .l-tools { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-.wl { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; overscroll-behavior: contain; }
+.wl { list-style: none; margin: 0; padding: 0; flex: 1; }
 .wl li { border-bottom: 1px solid var(--line); display: flex; align-items: stretch; }
 .row { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 12px; align-items: center; padding: 10px 12px; cursor: pointer; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; }
 .row:hover { background: var(--surface-2); }
@@ -443,7 +443,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .tw-sums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } @media (min-width: 700px) { .tw-sums { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 .tw-sums > * { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; text-align: left; min-width: 0; }
 .tw-sums > [aria-pressed="true"] { border-color: var(--accent); } .tw-sums div.tw-card { cursor: default; } .tw-sums b { font-weight: 600; } .tw-sums > * > span { font-family: var(--font-num); font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
-.tw-rank { list-style: none; margin: 10px 0 0; padding: 0; } .tw-rank li { border-bottom: 1px solid var(--line); }
+.tw-rank { list-style: none; margin: 10px 0 0; padding: 0; } .tw-rank li { border-bottom: 1px solid var(--line); } .tw-rank li:has(> .wstar) { display: flex; align-items: center; } .tw-rank li:has(> .wstar) > button:first-child { flex: 1; min-width: 0; }
+.wstar { flex: none; border: 0; background: none; color: var(--muted); font-size: 17px; line-height: 1; padding: 6px 8px; cursor: pointer; border-radius: 6px; } .wstar[aria-pressed="true"] { color: #f5b301; } .wstar:hover { background: var(--surface-2); }
 .tw-rank button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 2px; background: none; border: 0; color: var(--ink); cursor: pointer; font: inherit; text-align: left; } .tw-rank button:hover { background: var(--surface-2); }
 .tw-no { width: 30px; flex: none; text-align: center; font: 600 18px var(--font-num); color: var(--muted); opacity: .6; }
 .tw-mono { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 4px; background: color-mix(in srgb, var(--g) 18%, var(--surface-2)); border-left: 3px solid var(--g); font-weight: 600; font-size: 17px; color: var(--ink); }
@@ -506,6 +507,10 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bbtns { display: flex; gap: 8px; flex-wrap: wrap; } .bn { font: 500 9px var(--font-body); fill: var(--qc, var(--ink)); text-anchor: middle; pointer-events: none; } .bv { font: 8.5px var(--font-num); fill: var(--qc, var(--ink)); opacity: .85; text-anchor: middle; pointer-events: none; }
 .mlist { list-style: none; margin: 0; padding: 0; } .mlist button { width: 100%; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); padding: 9px 2px; cursor: pointer; text-align: left; font: inherit; }
 .mlist .nm { display: flex; flex-direction: column; font-size: 14.5px; min-width: 0; } .mlist .nm small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mlist b { font-size: 13.5px; text-align: right; min-width: 4.2em; }
+.mlist li:has(> .wstar) { display: flex; align-items: stretch; } .mlist li:has(> .wstar) > button:first-child { flex: 1; min-width: 0; } .mlist .wstar { width: auto; display: block; border-top: 1px solid var(--line); border-radius: 0; padding: 0 8px; } .bmem-h { margin: 10px 0 2px; font-size: 13.5px; font-weight: 500; }
+.d-intel { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; } .ibadge { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12.5px; line-height: 1.5; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ibadge:hover { border-color: var(--ink); } .ibadge.ib-mf { border-color: color-mix(in srgb, var(--qc) 60%, transparent); }
+.hempty { padding: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; } .hempty .note { margin: 0; }
+.hdemo { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 8px 12px; padding: 8px 12px; border-radius: 6px; background: var(--accent-soft, var(--surface-2)); font-size: 13px; }
 .mlist .rk { color: var(--muted); font: 12px var(--font-num); min-width: 1.4em; text-align: right; } .mrk { margin: 8px 12px 0; } .mdesc { margin: 8px 12px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 4px; font-size: 13px; color: var(--muted); }
 .mrp-sum { text-align: center; font-size: 14px; line-height: 1.7; margin: 8px 12px; } .mrp-date { text-align: center; font: 500 20px var(--font-body); margin: 4px 0; } .mrp-range { width: calc(100% - 24px); margin: 4px 12px; } .mrp-ctl { display: flex; justify-content: center; gap: 8px; margin: 6px 12px 12px; }
 .iai .iaitxt { font-size: 14px; line-height: 1.75; }
@@ -654,7 +659,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 .wl li { border-bottom-color: color-mix(in srgb, var(--line) 75%, transparent); }
 .row { padding: 11px 14px; }
 .row:hover { background: var(--grad-btn); }
-.row[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--ink); }
+.row[aria-current="true"] { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
 .row .nm { font-size: 15.5px; font-weight: 500; letter-spacing: .04em; }
 .row .px { font-size: 17px; font-weight: 500; }
 .row .pc { min-width: 76px; padding: 4px 8px; font-size: 13.5px; font-weight: 500; color: var(--ink); background: var(--surface-3); }
@@ -736,6 +741,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
       <div class="d-px"><b id="dPx">—</b><span id="dChg"></span><span class="note" id="dTime"></span></div>
       <div class="d-ext" id="dExt" hidden></div>
       <div class="d-tags" id="dTags"></div>
+      <div class="d-intel" id="dIntel" hidden></div>
       <div class="d-kv" id="dKv"></div>
       <div class="d-hold" id="dHold" hidden></div>
       <div class="d-act">
@@ -743,7 +749,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
         <button class="btn sm" id="holdBtn" type="button">💼 持股</button>
         <button class="btn sm" id="alertBtn" type="button">🔔 提醒</button>
         <button class="btn sm" id="refreshBtn" type="button" title="重新抓這檔的報價、K 線、分時、籌碼與新聞（不用瀏覽器快取）">↻ 更新</button>
-        <a class="btn sm" id="learnLink" href="./" title="到學堂的個股判讀看這一檔">🔍 判讀</a>
+        <a class="btn sm" id="learnLink" href="./" title="到 K線學堂的 AI 截圖診斷看這一檔">🔍 AI 診斷</a>
       </div>
     </div>
     <div class="panel box" id="holdBox" hidden>
@@ -845,7 +851,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.19-95</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.19-96</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -928,6 +934,9 @@ const W = {
 };
 if (W.gi >= W.groups.length) W.gi = 0;
 const curList = () => W.groups[W.gi].list;
+// 隨處加自選：節目觀點、大戶國會、動能矩陣成分股的代號旁都有 ☆／★，點一下加入或移出（不用先打開個股）
+const inWatch = c => W.groups.some(g => g.list.includes(c));
+const wStar = c => { c = String(c || "").toUpperCase(); if (!okCode(c) || isIdx(c)) return ""; const on = inWatch(c); return `<button type="button" class="wstar" data-wstar="${esc(c)}" aria-pressed="${on}" aria-label="${on ? "移出自選" : "加入自選"} ${esc(c)}" title="${on ? "移出自選" : "加入自選"}">${on ? "★" : "☆"}</button>`; };
 const allWatched = () => [...new Set(W.groups.flatMap(g => g.list))];
 const saveGroups = () => { store.set("watch:groups", W.groups); store.set("watch:gi", W.gi); store.set("watch:names", W.names); };
 const isTW = c => /^\d{4,6}[A-Z]?$/.test(c);
@@ -1153,6 +1162,10 @@ $("#gsearch").addEventListener("click", e => { const t = e.target;
   if (t.closest("[data-gsclose]")) return gsClose();
   const a = t.closest("[data-gsadd]"); if (a) { const c = a.dataset.gsadd, n = W.stocks?.find(s => s[0] === c) || US_HINT.find(s => s[0] === c); if (n) W.names[c] = n[1]; const gi = addTo(c); if (gi >= 0) { addToast(c, gi); saveGroups(); renderList(); } gsRender(); return; }
   const g = t.closest("[data-gs]"); if (g) gsGo(g.dataset.gs); });
+document.addEventListener("click", e => { const b = e.target.closest("[data-wstar]"); if (!b) return; e.preventDefault(); e.stopPropagation();
+  const c = b.dataset.wstar; if (inWatch(c)) { W.groups.forEach(g => (g.list = g.list.filter(x => x !== c))); toast(`已把 ${nameOf(c)} 移出自選`, 1500); } else addToast(c, addTo(c));
+  saveGroups(); kick(); const on = inWatch(c); document.querySelectorAll(`[data-wstar="${CSS.escape(c)}"]`).forEach(x => { x.setAttribute("aria-pressed", on); x.textContent = on ? "★" : "☆"; x.setAttribute("aria-label", `${on ? "移出自選" : "加入自選"} ${c}`); x.title = on ? "移出自選" : "加入自選"; });
+  if (W.sel === c) renderDetailHead(); }, true);
 document.addEventListener("click", e => { if (e.target.closest("[data-gsearch-add]")) gsOpen("", true); else if (e.target.closest("[data-gsearch]")) gsOpen(); });
 document.addEventListener("keydown", e => { if (e.key === "/" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "") && $("#gsearch").hidden) { e.preventDefault(); gsOpen(); } });
 // 個股頁上方的跳轉列：直接回到大盤、自選、選股…，不用一頁一頁返回
@@ -1562,7 +1575,9 @@ function holdRows(m) {
 const sgn = (v, d = 0) => (v == null ? "—" : `${v > 0 ? "+" : ""}${d ? v.toFixed(d) : Math.round(v).toLocaleString()}`);
 function renderHold() {
   const m = W.holdMkt, R = holdRows(m), us = m === "us", money = v => (v == null ? "—" : (us ? "US$" : "") + (us ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : Math.round(v).toLocaleString()));
-  if (!R.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">還沒有${us ? "美股" : "台股"}持股。按上面的「✏️ 編輯庫存」一格一格填代號、股數與成本，或用「📷 截圖匯入」上傳券商 App 的庫存截圖。</p>`; $("#wl").innerHTML = ""; return; }
+  if (!R.length) { const none = !Object.keys(W.hold).length; $("#lx").innerHTML = `<div class="hempty"><p class="note">還沒有${us ? "美股" : "台股"}持股。按上面的「✏️ 編輯庫存」一格一格填代號、股數與成本，或用「📷 截圖匯入」上傳券商 App 的庫存截圖。</p>
+    ${none ? `<button type="button" class="btn primary" data-hdemo="load">✨ 載入範例投資組合體驗</button><p class="note">放入台股、美股各幾檔範例部位，可以先看看損益、配息、風險分析長什麼樣子；之後一鍵清除。</p>` : ""}</div>`; $("#wl").innerHTML = ""; return; }
+  const demo = W.hold[Object.keys(W.hold)[0]]?.demo ? `<div class="hdemo"><span>✨ 目前是範例投資組合（不是你的真實持股）</span><button type="button" class="btn sm" data-hdemo="clear">清除範例</button></div>` : "";
   const ok = R.filter(r => r.mv != null);
   if (!ok.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有報價。" : "等待報價…"}</p>`; }
   const P = new Map(ok.map(r => [r.c, holdPnL(r.c, r.q)])), sum = k => ok.reduce((s, r) => s + (P.get(r.c)?.[k] || 0), 0);
@@ -1570,7 +1585,7 @@ function renderHold() {
   // 環：藍色是成本，綠（跌）或紅（漲）是報酬佔成本的比例
   const deg = Math.min(360, Math.abs(pct) * 360), ring = `conic-gradient(var(--${pnl >= 0 ? "up" : "down"}) 0deg ${deg}deg, var(--accent) ${deg}deg 360deg)`;
   const seg = (k, opts) => `<div class="seg yh-seg" role="group">${opts.map(([v, t]) => `<button data-hset="${k}" data-v="${v}" aria-pressed="${String(!!W[k]) === v}">${t}</button>`).join("")}</div>`;
-  if (ok.length) $("#lx").innerHTML = `<div class="yh-top"><div class="yh-ring" style="background:${ring}"><span>股票報酬<b class="${cls(pnl)}">${sgn(pct * 100, 2)}%</b></span></div>
+  if (ok.length) $("#lx").innerHTML = demo + `<div class="yh-top"><div class="yh-ring" style="background:${ring}"><span>股票報酬<b class="${cls(pnl)}">${sgn(pct * 100, 2)}%</b></span></div>
     <div class="yh-sum">${us ? "" : seg("hdiv", [["true", "含息"], ["false", "不含息"]])}
       <dl><dt>股票市值</dt><dd>${money(mv)}</dd><dt><i class="sq acc"></i>總成本</dt><dd>${money(hc)}</dd><dt><i class="sq ${pnl >= 0 ? "up" : "down"}"></i>報酬</dt><dd class="${cls(pnl)}">${sgn(pnl)}</dd><dt>今日損益</dt><dd class="${cls(day)}">${sgn(day)}</dd></dl></div></div>
     ${us ? "" : `<div class="yh-bar"><span>已領股息 <b>${divGot ? Math.round(divGot).toLocaleString() : "—"}</b></span><span>一年約可領 <b>${divYr ? Math.round(divYr).toLocaleString() : "—"}</b></span>
@@ -2039,18 +2054,22 @@ const yiB = v => `<b class="${cls(v)}">${flowFmt(v)}</b>`;
 const pctB = v => `<b class="${cls(v)}">${v >= 0 ? "+" : ""}${v.toFixed(1)}%</b>`;
 // 點板塊（題材或產業別）：在資金分頁裡打開板塊內頁，列出成分股的法人資金
 function secOpen(id) { const F = W.mf; if (F.view !== "sector") F.back = F.view; F.view = "sector"; F.sec = id; F.secSort ||= "a5"; renderMoney(); goY(0); navPush(); }
+// 板塊成分股清單（板塊頁、動能矩陣點圓點後都用這個）：k＝排序（a5 近 5 日金額、a1 今日金額、pct1 漲跌幅），n＝最多幾檔
+function secMembers(M, S, k = "a5", n = 0) {
+  const t = M.T - 1, rows = S.mem.map(s => ({ code: s.code, name: s.name, pct1: s.pct[t] ?? 0, px: s.px[t], a1: s.amt[t] || 0, a5: winSum(s.amt, t, 5), f5: winSum(s.f, t, 5), tr5: winSum(s.tr, t, 5) }))
+    .sort((a, b) => (k === "pct1" ? b.pct1 - a.pct1 : k === "a1" ? b.a1 - a.a1 : b.a5 - a.a5));
+  return `<ol class="mlist">${(n ? rows.slice(0, n) : rows).map((x, i) => `<li><button data-sel="${x.code}"><span class="rk">${i + 1}</span><span></span><span class="nm">${esc(x.name)}<small>${x.code}・收 ${x.px ?? "—"}・外資 ${flowFmt(x.f5)}・投信 ${flowFmt(x.tr5)}</small></span>${pctB(x.pct1)}${yiB(k === "a1" ? x.a1 : x.a5)}</button>${wStar(x.code)}</li>`).join("")}</ol>`;
+}
 function renderSector(M) {
   const F = W.mf; if (!M.secs.some(x => x.id === F.sec) && F.secq) { const m = secMatch(M, F.secq); if (m) F.sec = m.id; }
   const S = M.secs.find(x => x.id === F.sec), A = flowAt(M).find(x => x.id === F.sec), t = M.T - 1;
   if (!S || !A) return `<div class="gback"><button class="btn sm" data-mv="${F.back || "today"}">‹ 返回</button></div><p class="note gnote">找不到這個板塊的資料。</p>`;
-  const rows = S.mem.map(s => ({ code: s.code, name: s.name, pct1: s.pct[t] ?? 0, px: s.px[t], a1: s.amt[t] || 0, a5: winSum(s.amt, t, 5), f5: winSum(s.f, t, 5), tr5: winSum(s.tr, t, 5) }));
-  const k = F.secSort, sorted = rows.slice().sort((a, b) => (k === "pct1" ? b.pct1 - a.pct1 : k === "a1" ? b.a1 - a.a1 : b.a5 - a.a5));
-  const sortB = (key, t) => `<button data-mset="secSort" data-v="${key}" aria-pressed="${k === key}">${t}</button>`;
+  const k = F.secSort, sortB = (key, t) => `<button data-mset="secSort" data-v="${key}" aria-pressed="${k === key}">${t}</button>`;
   return `<div class="gback"><button class="btn sm" data-mv="${F.back || "today"}">‹ 返回</button><b>${esc(S.name)}</b><span class="note">${S.kind}・${S.mem.length} 檔</span>${INDT.has(S.id) ? `<button class="btn sm" data-iopen-ext="${esc(S.id)}">題材內頁 ›</button>` : ""}</div>
     <section class="mcard binfo" style="--qc:${FLOW_Q[A.q][2]}"><h3>${qDot(A.q)}${FLOW_Q[A.q][0]} <span class="note">${FLOW_Q[A.q][1]}</span></h3>
       <div class="bgrid"><span>今日法人淨額</span>${yiB(A.net1)}<span>近 5 日淨流入</span>${yiB(A.net5)}<span>加速度</span>${yiB(A.accel)}<span>近 5 日漲跌（平均）</span>${pctB(A.pct5)}<span>外資 5 日</span>${yiB(A.f5)}<span>投信 5 日</span>${yiB(A.tr5)}<span>今日買超家數</span><b>${A.buy1}／${A.n}</b></div></section>
     <section class="mcard"><h3>成分股 <span class="mkseg">${sortB("a5", "5 日金額")}${sortB("a1", "今日金額")}${sortB("pct1", "漲跌幅")}</span></h3>
-      <ol class="mlist">${sorted.map((x, i) => `<li><button data-sel="${x.code}"><span class="rk">${i + 1}</span><span></span><span class="nm">${esc(x.name)}<small>${x.code}・收 ${x.px ?? "—"}・外資 ${flowFmt(x.f5)}・投信 ${flowFmt(x.tr5)}</small></span>${pctB(x.pct1)}${yiB(k === "a1" ? x.a1 : x.a5)}</button></li>`).join("")}</ol>
+      ${secMembers(M, S, k)}
       <p class="note">金額＝法人買賣超張數 × 收盤價（億元）。右邊是${k === "a1" ? "今日" : "近 5 日"}合計；點個股看 K 線。</p></section>`;
 }
 // 量價動能矩陣：x＝近 5 日淨流入、y＝加速度（都用平方根縮放）、半徑＝近 5 日淨流入規模（3～30，差距拉大）、顏色＝象限。
@@ -2102,7 +2121,9 @@ function bubbleInfo(x) {
   if (!x) return `<p class="note gnote binfo-empty">點一下圓點，看這個板塊的法人資金細節。</p>`;
   return `${(q => `<section class="mcard binfo" style="--qc:${FLOW_Q[q][2]}"><h3>${qDot(q)}${esc(x.name)} <span class="note">${x.kind}・${x.n} 檔・${FLOW_Q[q][0]}（${FLOW_Q[q][1]}）</span></h3>`)(W.mf.bw === "1" && W.mf.view === "bubble" ? x.q1 : x.q)}
     <div class="bgrid">${W.mf.bw === "1" && W.mf.view === "bubble" ? `<span>今日淨流入</span>${yiB(x.net1)}<span>前一日</span>${yiB(x.prev1)}<span>比前一日</span>${yiB(x.accel1)}<span>今日漲跌</span>${pctB(x.pct1)}<span>外資今日</span>${yiB(x.f1)}<span>投信今日</span>${yiB(x.tr1)}<span>今日買超家數</span><b>${x.buy1}／${x.n}</b></div><div class="bgrid">` : ""}<span>近 5 日淨流入</span>${yiB(x.net5)}<span>前 5 日</span>${yiB(x.prev5)}<span>加速度</span>${yiB(x.accel)}<span>近 5 日漲跌</span>${pctB(x.pct5)}<span>外資 5 日</span>${yiB(x.f5)}<span>投信 5 日</span>${yiB(x.tr5)}<span>買超家數</span><b>${x.buy5}／${x.n}</b><span>買最多</span><b>${esc(x.top || "—")}</b></div>
-    <div class="bbtns"><button class="btn sm primary" data-fsec="${esc(x.id)}">看成分股 ›</button>${INDT.has(x.id) ? `<button class="btn sm" data-iopen-ext="${esc(x.id)}">題材內頁 ›</button>` : ""}</div></section>`;
+    ${(() => { const M = W.mf.view === "bubble" ? mfModel() : null, S = M?.secs?.find(s => s.id === x.id); if (!S) return ""; const n = 10, k = W.mf.bw === "1" ? "a1" : "a5";
+      return `<h4 class="bmem-h">成分股 <span class="note">依${k === "a1" ? "今日" : "近 5 日"}法人金額${S.mem.length > n ? `・前 ${n} 檔，共 ${S.mem.length} 檔` : ""}</span></h4>${secMembers(M, S, k, n)}`; })()}
+    <div class="bbtns"><button class="btn sm primary" data-fsec="${esc(x.id)}">${W.mf.view === "bubble" ? "完整成分股與排序 ›" : "看成分股 ›"}</button>${INDT.has(x.id) ? `<button class="btn sm" data-iopen-ext="${esc(x.id)}">題材內頁 ›</button>` : ""}</div></section>`;
 }
 function mfCanvas(M, mood, sum) {
   const A = flowAt(M), last = M.dates[M.T - 1], cv = document.createElement("canvas"), W0 = 1080, H0 = 1350; cv.width = W0; cv.height = H0;
@@ -2907,9 +2928,9 @@ function renderCong() {
       <div class="tw-ctl">${rkSeg("data-cw", String(W.cw), [["30", "近 30 天"], ["90", "近 90 天"], ["180", "半年"], ["365", "一年"], ["0", "全部"]])}<input data-cq value="${esc(W.cq || "")}" placeholder="搜尋議員、代號或公司" aria-label="搜尋議員、代號或公司">${rkSeg("data-rkset", "cview:" + view, [["cview:cons", "共同買進"], ["cview:hot", "熱門股票"], ["cview:ppl", "交易人物"], ["cview:feed", "最新揭露"]])}</div>
       ${rkCards([{ t: "交易筆數", sub: wTxt, v: `${W30.length} 筆` }, { t: "交易人物", sub: `${new Set(W30.filter(t => t.k === "buy").map(t => t.pid)).size} 位有買進`, v: `${new Set(W30.map(t => t.pid)).size} 位` }, { t: "買進金額（估）", sub: `${W30.filter(t => t.k === "buy").length} 筆`, v: usd(Math.round(sumAmt("buy"))), vc: "up" }, { t: "賣出金額（估）", sub: `${W30.filter(t => t.k === "sell").length} 筆`, v: usd(Math.round(sumAmt("sell"))), vc: "down" }])}`;
     if (view === "cons") { cons.sort((a, b) => b.buyers.size - a.buyers.size || b.mid - a.mid);
-      h += `<h4>共同買進：同一檔有幾位議員買（同一人買很多次只算 1 人）</h4>` + rkList(cons.slice(0, 40).map(g => ({ attr: `data-cv="stock:${esc(g.ticker)}"`, mono: rkMono(rkInit(g.ticker), "#3fa36b"), name: esc(g.ticker), sub: esc(g.asset || ""), val: `${g.buyers.size} 人買進`, vc: "up", vsub: `${usd(Math.round(g.mid))}・${esc(plain(g))}` })), "這段期間沒有買進紀錄"); }
+      h += `<h4>共同買進：同一檔有幾位議員買（同一人買很多次只算 1 人）</h4>` + rkList(cons.slice(0, 40).map(g => ({ star: g.ticker, attr: `data-cv="stock:${esc(g.ticker)}"`, mono: rkMono(rkInit(g.ticker), "#3fa36b"), name: esc(g.ticker), sub: esc(g.asset || ""), val: `${g.buyers.size} 人買進`, vc: "up", vsub: `${usd(Math.round(g.mid))}・${esc(plain(g))}` })), "這段期間沒有買進紀錄"); }
     else if (view === "hot") { hot.sort((a, b) => b.people.size - a.people.size || b.n - a.n);
-      h += `<h4>熱門股票：買進、賣出都算，看有幾位議員交易</h4>` + rkList(hot.slice(0, 40).map(g => ({ attr: `data-cv="stock:${esc(g.ticker)}"`, mono: rkMono(rkInit(g.ticker), g.buyers.size >= g.sellers.size ? "#3fa36b" : "#d0643f"), name: esc(g.ticker), sub: esc(g.asset || ""), val: `${g.people.size} 人・${g.n} 筆`, vsub: `<span class="up">買 ${g.buyers.size}</span>／<span class="down">賣 ${g.sellers.size}</span>・${usd(Math.round(g.mid))}` }))); }
+      h += `<h4>熱門股票：買進、賣出都算，看有幾位議員交易</h4>` + rkList(hot.slice(0, 40).map(g => ({ star: g.ticker, attr: `data-cv="stock:${esc(g.ticker)}"`, mono: rkMono(rkInit(g.ticker), g.buyers.size >= g.sellers.size ? "#3fa36b" : "#d0643f"), name: esc(g.ticker), sub: esc(g.asset || ""), val: `${g.people.size} 人・${g.n} 筆`, vsub: `<span class="up">買 ${g.buyers.size}</span>／<span class="down">賣 ${g.sellers.size}</span>・${usd(Math.round(g.mid))}` }))); }
     else if (view === "ppl") { const P = [...W30.reduce((m, t) => { const g = m.get(t.pid) || m.set(t.pid, { pid: t.pid, n: 0, b: 0, s: 0, amt: 0, tk: new Set() }).get(t.pid); g.n++; g.amt += amtMid(t.amount); t.k === "buy" ? g.b++ : t.k === "sell" ? g.s++ : 0; g.tk.add(t.ticker); return m; }, new Map()).values()].sort((a, b) => b.amt - a.amt);
       h += `<h4>交易人物：依交易金額（估）排序</h4>` + rkList(P.slice(0, 50).map(g => { const p = C.people?.[g.pid] || {}; return { attr: `data-cv="person:${esc(g.pid)}"`, mono: rkMono(rkInit(pName(g.pid)), RK_C[p.chamber] || RK_C.眾議院), name: esc(pName(g.pid)), sub: `${esc(p.chamber || "")}${p.state ? "・" + esc(p.state) : ""}・${g.tk.size} 檔`, val: usd(Math.round(g.amt)), vsub: `${g.n} 筆・<span class="up">買 ${g.b}</span>／<span class="down">賣 ${g.s}</span>` }; })); }
     else { const all = (C.trades || []).filter(hit), months = [...new Set(all.map(t => t.filed.slice(0, 7)))].sort().reverse(), mon = months.includes(W.cmon) ? W.cmon : "", recent = (mon ? all.filter(t => t.filed.startsWith(mon)) : all.filter(t => t.filed >= congFrom(30))).sort((a, b) => b.filed.localeCompare(a.filed)).slice(0, mon ? 400 : 80);
@@ -2938,7 +2959,7 @@ function renderCong() {
       ${rkTotal("交易金額合計（估，申報區間中間值）", usd(Math.round(tot)), `${tk.length} 檔股票・<span class="up">買 ${b.length} 筆</span>・<span class="down">賣 ${s.length} 筆</span>`, `<button class="btn sm" data-cask="person:${esc(pid)}">🤖 問 AI 整理</button>`)}
       ${tk.length ? rkTop(shown.map(x => ({ label: `<button class="linkbtn ctk" data-cv="stock:${esc(x.t)}">${esc(x.t)}</button>`, tag: x.b && x.s ? "買賣都有" : x.b ? "買進" : "賣出", sub: esc(x.asset || ""), pct: tot ? (x.amt / tot) * 100 : null, val: usd(Math.round(x.amt)), right: `${x.b + x.s} 筆` })), rest.length ? `<li class="tw-rest"><div><b>${W.rkMore ? "收合" : `其他 ${rest.length} 檔`}</b>${W.rkMore ? "" : `<small class="note">${usd(Math.round(restV))}・${tot ? Math.round((restV / tot) * 100) : 0}%</small>`}</div><button type="button" class="linkbtn" data-rkset="rkMore:${W.rkMore ? "" : "1"}">${W.rkMore ? "收合" : "展開"}</button></li>` : "") : ""}
       ${congAIHtml("person:" + pid)}
-      <h4>交易紀錄</h4>${rkList(L.map(t => ({ no: t.traded.slice(5).replace("-", "/"), attr: `data-cv="stock:${esc(t.ticker)}"`, mono: rkMono(rkInit(t.ticker), t.k === "buy" ? "#3fa36b" : "#d0643f"), name: `<span class="${t.k === "buy" ? "up" : t.k === "sell" ? "down" : ""}">${t.k === "buy" ? "買進" : t.k === "sell" ? "賣出" + (t.partial ? "（部分）" : "") : "交換"}</span> ${esc(t.ticker)}`, sub: `${esc(t.asset || "")}・${t.filed.replace(/-/g, "/")} 申報${t.owner !== "本人" ? "・" + esc(t.owner) : ""}`, val: amtTxt(t.amount) })))}
+      <h4>交易紀錄</h4>${rkList(L.map(t => ({ no: t.traded.slice(5).replace("-", "/"), star: t.ticker, attr: `data-cv="stock:${esc(t.ticker)}"`, mono: rkMono(rkInit(t.ticker), t.k === "buy" ? "#3fa36b" : "#d0643f"), name: `<span class="${t.k === "buy" ? "up" : t.k === "sell" ? "down" : ""}">${t.k === "buy" ? "買進" : t.k === "sell" ? "賣出" + (t.partial ? "（部分）" : "") : "交換"}</span> ${esc(t.ticker)}`, sub: `${esc(t.asset || "")}・${t.filed.replace(/-/g, "/")} 申報${t.owner !== "本人" ? "・" + esc(t.owner) : ""}`, val: amtTxt(t.amount) })))}
       <p class="note">原始文件：${[...new Set(L.filter(t => t.doc).map(t => t.doc))].slice(0, 10).map((d, i) => `<a href="${esc(d)}" target="_blank" rel="noopener">${i + 1}</a>`).join("、") || "—"}。這裡只有「定期交易報告」裡的買賣；年度財產申報（持股清單）不在這份資料裡。</p></section>`;
   }
   $("#lx").innerHTML = h;
@@ -3117,7 +3138,7 @@ function renderDetailHead() {
     + `<div><span>成交量</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " " + volUnit(c) : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "") + yldCell(c, q)
     + (volRatio(c, q) != null ? `<div><span>5日均量比</span><b class="${volRatio(c, q) >= 1.5 ? "up" : ""}">${volRatio(c, q).toFixed(2)} 倍</b></div>` : "")
     + (lim ? `<div><span>漲停</span><b class="up">${fmtP(lim[0])}</b></div><div><span>跌停</span><b class="down">${fmtP(lim[1])}</b></div>` : "");
-  $("#dTags").innerHTML = tagsHtml(c, q, lim);
+  $("#dTags").innerHTML = tagsHtml(c, q, lim); renderIntel();
   if (isFut(c) && q) {
     $("#dKv").innerHTML += [["日盤", q.day], ["夜盤", q.night]].filter(([, x]) => x?.price != null).map(([k, x]) => `<div><span>${k}${x.time ? " " + x.time.slice(0, 5) : ""}</span><b class="${cls(x.chg)}">${fmtP(x.price)}<small> ${x.chg > 0 ? "+" : ""}${x.chg ?? ""}</small></b></div>`).join("") + (q.settle ? `<div><span>結算日</span><b>${q.settle.slice(5).replace("-", "/")}</b></div>` : "");
     $("#dTags").innerHTML = `<span class="ind">期交所・${esc(q.symbol || "近月")}</span><span class="tag ${q.session === "night" ? "hot" : ""}">${q.fsession === "closed" ? "收盤" : q.session === "night" ? "夜盤交易中" : "日盤交易中"}</span>`;
@@ -3131,6 +3152,30 @@ function renderDetailHead() {
   $("#dHold").hidden = !hp; if (hp) $("#dHold").innerHTML = `💼 ${h.sh.toLocaleString()} 股・成本 ${fmtPx(h.cost, c)}・市值 ${Math.round(hp.mv).toLocaleString()}・<span class="${cls(hp.pnl)}">損益 ${hp.pnl >= 0 ? "+" : ""}${Math.round(hp.pnl).toLocaleString()}（${hp.pct >= 0 ? "+" : ""}${hp.pct.toFixed(2)}%）</span>${hp.day != null ? `・今日 <span class="${cls(hp.day)}">${hp.day >= 0 ? "+" : ""}${Math.round(hp.day).toLocaleString()}</span>` : ""}`;
   if (document.activeElement !== $("#hSh")) $("#hSh").value = h?.sh ?? ""; if (document.activeElement !== $("#hCost")) $("#hCost").value = h?.cost ?? ""; if (document.activeElement !== $("#hDate")) $("#hDate").value = h?.d ?? "";
 }
+// 情報局連動徽章：比對已經載入（或順手載入）的情報資料，這檔有被政治人物申報、13F／國會持有、節目提到、在動能矩陣哪一區就顯示
+const INTEL_AR = { up: "↗", rot: "↘", watch: "↖", down: "↙" };
+function intelData(c) {
+  const out = [], tw = isTW(c), us = isUS(c);
+  if (tw && W.two?.decl?.length && typeof twoPeople === "function") { const n = twoPeople().filter(p => p.hold.some(h => h.code === c)).length; if (n) out.push({ k: "tw", t: `🏛️ ${n} 位政治人物申報持有` }); }
+  if (us) { const f = (W.f13?.funds || []).filter(F => (F.rows || []).some(r => r.ticker === c)).length, since = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10), cg = new Set((W.cong?.trades || []).filter(t => t.ticker === c && (t.traded || "") >= since).map(t => t.pid)).size;
+    if (f || cg) out.push({ k: cg ? "cong" : "f13", t: `🐋 ${[f ? `${f} 家 13F 機構持有` : "", cg ? `${cg} 位國會議員近一年交易` : ""].filter(Boolean).join("・")}` }); }
+  if (typeof podCalls === "function" && typeof POD !== "undefined" && POD.srv) { const since = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10), eps = new Set(podCalls().filter(x => x.code === c && x.date >= since).map(x => x.key)).size; if (eps) out.push({ k: "pod", t: `🎙️ 近 90 天 ${eps} 集節目提及` }); }
+  const M = W.mf.model; if (tw && M) { const A = flowAt(M), S = M.secs.filter(x => x.mem.some(m => m.code === c)).map(x => A.find(a => a.id === x.id)).filter(Boolean).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5))[0];
+    if (S) out.push({ k: "mf", id: S.id, q: S.q, t: `🎯 ${S.name}：${INTEL_AR[S.q]} ${FLOW_Q[S.q][0]}` }); }
+  return out;
+}
+function renderIntel() {
+  const c = W.sel, el = $("#dIntel"); if (!el) return; if (!c || isIdx(c) || isFut(c)) { el.hidden = true; return; }
+  if (!W.off && W.intelAsk !== c) { W.intelAsk = c; const re = () => W.sel === c && renderIntel(); // 需要的資料第一次用到時才載入（都是靜態檔，很小）
+    if (isTW(c) && !W.two && typeof twoLoad === "function") twoLoad().then(re); if (isUS(c) && !W.f13 && typeof f13Load === "function") f13Load().then(re); if (isUS(c) && !W.cong) loadCong().then(re);
+    if (typeof POD !== "undefined" && !POD.srv && !POD.srvLoading && typeof podLoadSrv === "function") { POD.srvLoading = true; podLoadSrv().then(() => { POD.srvLoading = false; re(); }); } }
+  const L = intelData(c), h = L.map(x => `<button type="button" class="ibadge ib-${x.k}" data-intel="${x.k}"${x.id ? ` data-iid="${esc(x.id)}"` : ""}${x.q ? ` style="--qc:${FLOW_Q[x.q][2]}"` : ""}>${esc(x.t)} ›</button>`).join("");
+  if (el.innerHTML !== h) el.innerHTML = h; el.hidden = !L.length;
+}
+$("#dIntel").addEventListener("click", e => { const b = e.target.closest("[data-intel]"); if (!b) return; const c = W.sel, k = b.dataset.intel;
+  if (k === "pod") { setDtab("ovw"); setDsub("guru"); return; }
+  if (k === "mf") { showList(); setLt("money"); secOpen(b.dataset.iid); return; }
+  showList(); W.cv = k === "tw" ? `tw:s:${c}` : k === "cong" ? `stock:${c}` : "f13"; setLt("cong"); renderList(); goY(0); });
 // 屬性標籤：產業、漲跌停、爆量、創新高低、月強弱、均線排列、法人連買賣（用日 K 與籌碼資料算）
 function pastDaily(c, q) { const D = W.daily?.code === c ? W.daily.data : null; if (!D?.length) return null; return q?.date && D[D.length - 1].d === q.date ? D.slice(0, -1) : D; }
 function volRatio(c, q) {
@@ -3155,7 +3200,14 @@ function tagsHtml(c, q, lim) {
 }
 $("#favBtn").addEventListener("click", () => { const c = W.sel; if (!c) return; if (W.groups.some(g => g.list.includes(c))) { W.groups.forEach(g => (g.list = g.list.filter(x => x !== c))); toast("已移出自選", 1500); } else addToast(c, addTo(c)); saveGroups(); renderList(); renderDetailHead(); kick(); });
 $("#holdBtn").addEventListener("click", () => { $("#holdBox").hidden = !$("#holdBox").hidden; $("#alertBox").hidden = true; if (!$("#holdBox").hidden) $("#hSh").focus(); });
-$("#hSave").addEventListener("click", () => { const sh = Math.round(+$("#hSh").value), cost = +$("#hCost").value; if (!(sh > 0 && cost > 0)) { $("#hNote").textContent = "請填股數與平均成本"; return; } const d = $("#hDate").value; W.hold[W.sel] = { sh, cost, ...(/^\d{4}-\d{2}-\d{2}$/.test(d) ? { d } : {}) }; store.set("watch:hold", W.hold); if (W.hdivs) delete W.hdivs[W.sel]; if (!W.groups.some(g => g.list.includes(W.sel))) { addTo(W.sel); } $("#hNote").textContent = "已儲存"; renderDetailHead(); renderList(); });
+$("#hSave").addEventListener("click", () => { const sh = Math.round(+$("#hSh").value), cost = +$("#hCost").value; if (!(sh > 0 && cost > 0)) { $("#hNote").textContent = "請填股數與平均成本"; return; } const d = $("#hDate").value; for (const k of Object.keys(W.hold)) if (W.hold[k].demo) delete W.hold[k]; /* 記了真的持股就把範例清掉 */ W.hold[W.sel] = { sh, cost, ...(/^\d{4}-\d{2}-\d{2}$/.test(d) ? { d } : {}) }; store.set("watch:hold", W.hold); if (W.hdivs) delete W.hdivs[W.sel]; if (!W.groups.some(g => g.list.includes(W.sel))) { addTo(W.sel); } $("#hNote").textContent = "已儲存"; renderDetailHead(); renderList(); });
+// 範例投資組合：新訪客一鍵看庫存、損益、風險分析的樣子（標記 demo，清除時只刪範例）
+const HOLD_DEMO = { "2330": { sh: 1000, cost: 820, d: "2025-03-10" }, "0050": { sh: 3000, cost: 150, d: "2024-11-05" }, "2317": { sh: 2000, cost: 160, d: "2025-06-02" }, "2454": { sh: 200, cost: 1150, d: "2025-01-15" }, "2884": { sh: 5000, cost: 26, d: "2024-08-20" },
+  AAPL: { sh: 20, cost: 190, d: "2025-02-03" }, NVDA: { sh: 30, cost: 120, d: "2025-04-08" }, VOO: { sh: 10, cost: 480, d: "2025-01-02" } };
+document.addEventListener("click", e => { const b = e.target.closest("[data-hdemo]"); if (!b) return;
+  if (b.dataset.hdemo === "load") { if (Object.keys(W.hold).length) return; for (const [c, h] of Object.entries(HOLD_DEMO)) W.hold[c] = { ...h, demo: true }; toast("已載入範例投資組合，可以切台股／美股、看風險分析", 2500); }
+  else { for (const c of Object.keys(W.hold)) if (W.hold[c].demo) delete W.hold[c]; toast("已清除範例", 1500); }
+  store.set("watch:hold", W.hold); renderList(); kick(); });
 $("#hClear").addEventListener("click", () => { delete W.hold[W.sel]; store.set("watch:hold", W.hold); $("#hNote").textContent = "已清除"; renderDetailHead(); renderList(); });
 function renderBook() {
   const c = W.sel, q = W.detailQ || W.quotes.get(c), B = q?.bids || [], A = q?.asks || [];
@@ -4120,6 +4172,7 @@ renderAll();
 { const st = history.state; try { history.replaceState({ nav: navSnap(), d: st?.d || 0, y: st?.y || 0 }, "", location.href); } catch {} NAV.ready = true; NAV.y = curY(); navBackUi(); }
 if (Date.now() - (+store.get("watch:goK", 0) || 0) < 15000 && W.sel) { setDtab("tech", false); setTimeout(goKChart, 400); } // 從K線學堂「在 K 線圖打開」第一次打開看盤
 if (!W.off) { kick(); loadStocks(); }
+if (new URLSearchParams(location.search).get("gs")) setTimeout(() => gsOpen(), 0); // 從最上層的「搜尋台美股」打開
 </script>
 </body>
 </html>
