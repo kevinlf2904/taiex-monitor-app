@@ -57,6 +57,7 @@ if (process.argv[2] === "keys") {
   const qu = await hit("/api/quote?codes=AAPL,NVDA"); console.log("網站 /api/quote 美股 →", qu.status ?? qu.err, qu.j?.source, (qu.j?.quotes || []).map(x => `${x.code}=${x.price}`).join(" "));
   process.exit(0);
 }
+if (process.argv[2] === "tpexdump") { process.argv.push("--dump"); const m = await import("./tpex-ic.mjs"); await m.main(); process.exit(0); } // 產業價值鏈抓取（只印數量，不寫檔）
 if (process.argv[2] === "tpexic2") {
   const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school research)" };
   const get = async u => { try { const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(30000) }); return await r.text(); } catch (e) { return "ERR " + e.message; } };
