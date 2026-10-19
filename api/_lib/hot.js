@@ -1,7 +1,7 @@
 // 熱門股與排行：給 learner/watch.html 的「台股熱門」「美股熱門」「排行」使用。
 // GET /api/hot?market=tw&type=value      成交值排行（value）、成交量（volume）、漲幅（gain）、跌幅（loss）、外資買超（foreign）、投信買超（trust）
 // GET /api/hot?market=us&type=active     美股最活躍（active）、漲幅（gain）、跌幅（loss）
-// GET /api/hot?market=tw&type=rows&codes=2330,2454,…  指定代號的即時精簡行情 rows: [[代號, 價, 漲跌%, 成交金額（億）], …]（大盤「產業即時」用，最多 400 檔）
+// GET /api/hot?market=tw&type=rows&codes=2330,2454,…  指定代號的即時精簡行情 rows: [[代號, 價, 漲跌%, 成交金額（億）], …]（大盤「產業即時」用，最多 400 檔；codes=all 回全部上市櫃普通股）
 // 台股成交值／量、漲跌幅排行用 _live.js（盤中是富果行情快照，沒有金鑰時是前一個交易日收盤）；法人買賣超是證交所 T86（收盤後公布，只有上市）。
 
 import { usHot } from "./_yahoo.js";
@@ -57,9 +57,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, market, type, source: h.source, rows: h.rows.slice(0, 30) });
     }
     if (type === "rows") {
-      const want = new Set(String(req.query?.codes || "").split(",").map(c => c.trim()).filter(c => /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 400)), L = await marketRows();
+      const all = req.query?.codes === "all", want = new Set(String(req.query?.codes || "").split(",").map(c => c.trim()).filter(c => /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 400)), L = await marketRows();
       res.setHeader("Cache-Control", liveCache(L.live, 10));
-      return res.status(200).json({ ok: true, market, type, date: L.date, live: L.live, time: L.time, source: L.source, at: Date.now(), rows: L.rows.filter(r => want.has(r.code)).map(r => [r.code, r.price, r.chgPct, r.value]) });
+      return res.status(200).json({ ok: true, market, type, date: L.date, live: L.live, time: L.time, source: L.source, at: Date.now(), rows: L.rows.filter(r => (all ? /^\d{4}$/.test(r.code) : want.has(r.code))).map(r => [r.code, r.price, r.chgPct, r.value]) });
     }
     if (!TW_TYPES[type]) return res.status(400).json({ ok: false, error: `type 要是 ${Object.keys(TW_TYPES).join("、")} 其中之一` });
     let rows, date, source, live = false, time = null;

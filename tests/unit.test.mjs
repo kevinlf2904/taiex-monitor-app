@@ -266,6 +266,16 @@ test("AI 回答快取鍵：同一天同樣內容才相同、不含原文", async
   assert.match(cacheKey("s", t), /^ai:[0-9a-f]{40}$/);
 });
 
+test("櫃買中心產業價值鏈：首頁產業清單、細分產業與上中下游、只收上市櫃公司", async () => {
+  const { parseHome, parseIndustry } = await import("../scripts/tpex-ic.mjs");
+  assert.deepEqual(parseHome(`<a href="introduce.php?ic=D000">半導體</a><a href="introduce.php?ic=A300"><span>◈ 電動車</span><br/>◈ LED 照明</a><a href="introduce.php?ic=D000">半導體</a>`), [{ id: "D000", name: "半導體" }, { id: "A300", name: "電動車／LED 照明" }]);
+  const html = `<div class="chain-title-panel">上游</div><div id="ic_link_D100" class="company-chain-panel">IC<br/>設計</div><div class="chain-title-panel">中游</div><div id="ic_link_D300" class="company-chain-panel">IC/晶圓製造</div>
+    <div id="companyList_D100" title="IC設計"><table><tr><td><b>本國上市公司(2家)</b></td><td><a href="company_basic.php?stk_code=2454" class="c" title="聯發科">聯發科</a></td><td><a href="company_basic.php?stk_code=3034" class="c" title="聯詠">聯詠</a></td></tr>
+    <tr><td><b>本國興櫃公司(1家)</b></td><td><a href="company_basic.php?stk_code=7913" class="c" title="通寶半導體">通寶半導體</a></td></tr></table></div>
+    <div id="companyList_D300" title="IC/晶圓製造"><b>本國上市公司(1家)</b><a href="company_basic.php?stk_code=2330" class="c" title="台積電">台積電</a><b>外國企業(1家)</b><a href="company_basic.php?stk_code=TSMC" title="x">x</a></div>`;
+  assert.deepEqual(parseIndustry(html), [{ id: "D100", name: "IC設計", stage: "上游", codes: [["2454", "聯發科"], ["3034", "聯詠"]] }, { id: "D300", name: "IC/晶圓製造", stage: "中游", codes: [["2330", "台積電"]] }]);
+});
+
 test("FRED 官方介面、Finnhub：回應解析與金鑰不外洩", async () => {
   const { parseObs } = await import("../api/_lib/macro.js"), { quoteFromFinnhub, newsFromFinnhub, finnhubOk } = await import("../api/_lib/_finnhub.js");
   assert.deepEqual(parseObs({ observations: [{ date: "2026-10-14", value: "4.05" }, { date: "2026-10-15", value: "." }, { date: "bad", value: "1" }, { date: "2026-10-16", value: "4.1" }] }), [["2026-10-14", 4.05], ["2026-10-16", 4.1]]);

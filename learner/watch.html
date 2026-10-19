@@ -321,6 +321,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .irb-n small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .irb-t { position: relative; height: 12px; } .irb-t:not(.one)::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: 1px solid var(--line); }
 .irb-t i { position: absolute; top: 0; bottom: 0; border-radius: 2px; min-width: 1px; } .irb-t i.up { background: var(--up); } .irb-t i.down { background: var(--down); } .irb-t i.amt { background: var(--accent); opacity: .7; }
+.irb-mem { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0 12px; padding: 4px 0 10px; } .irb li.open > button { background: var(--surface-2); }
+.irb-mem button { display: flex; justify-content: space-between; gap: 6px; padding: 4px 2px; border-bottom: 1px dashed var(--line); font-size: 12.5px; } .irb-mem button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .irb-mem b { font: 500 12px var(--font-num); }
 .irb em { font: 500 12.5px var(--font-num); font-style: normal; text-align: right; white-space: nowrap; } .irb-more { margin: 8px auto 0; display: block; }
 @media (max-width: 420px) { .irb button { grid-template-columns: minmax(0, 44%) minmax(0, 1fr) 4.4em; gap: 6px; } }
 .ixcard { border: 1px solid var(--line); background: var(--surface-2); border-radius: 4px; padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; color: var(--ink); }
@@ -859,7 +861,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.19-98</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.19-99</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1083,14 +1085,19 @@ function liveRefresh() {
 // 大盤盤中只重抓個股統計與期貨（行事曆、處置股不用每 30 秒抓）
 // 產業即時：供應鏈地圖的細分產業（ASIC 設計服務、ABF 載板…，約 60 個）用即時行情算：成交金額加權漲跌幅、領漲股、資金流向
 // 資金流向是估算：上漲股的成交金額算流入、下跌股算流出（和券商 App 的「資金流向」同一種算法，不是法人買賣超）
-const irtSegs = () => W.irtSegs || (W.irtSegs = (typeof INDUSTRY_MAP !== "undefined" ? INDUSTRY_MAP.themes : []).filter(t => t.mk === "tw").flatMap(t => t.segs.map((g, j) => ({ id: `${t.id}:${j}`, tid: t.id, theme: t.name, name: g.n, codes: [...new Set(g.c.map(x => x[0]))], names: Object.fromEntries(g.c) }))));
-// 題材層級：同一個題材的細分產業合併（代號去重）
-const irtThemes = () => W.irtThemes || (W.irtThemes = [...irtSegs().reduce((m, g) => { const t = m.get(g.tid) || m.set(g.tid, { id: g.tid, tid: g.tid, theme: `${irtSegs().filter(x => x.tid === g.tid).length} 個細分產業`, name: g.theme, codes: [], names: {} }).get(g.tid);
+// 細分產業：櫃買中心「產業價值鏈」（data/tpex-ic.json，每週排程更新；產業 → 上中下游細分產業 → 上市櫃公司），還沒有檔案時改用供應鏈題材
+const irtSegs = () => W.irtSegs || (W.irtSegs = W.tic?.industries?.length
+  ? W.tic.industries.flatMap(I => I.segs.map(g => ({ id: `${I.id}:${g.id}`, tid: I.id, theme: `${I.name}${g.stage ? "・" + g.stage : ""}`, name: g.name, codes: g.codes.map(c => c[0]), names: Object.fromEntries(g.codes) })))
+  : (typeof INDUSTRY_MAP !== "undefined" ? INDUSTRY_MAP.themes : []).filter(t => t.mk === "tw").flatMap(t => t.segs.map((g, j) => ({ id: `${t.id}:${j}`, tid: t.id, theme: t.name, name: g.n, codes: [...new Set(g.c.map(x => x[0]))], names: Object.fromEntries(g.c) }))));
+const irtOff = () => !!W.tic?.industries?.length, irtUnit = () => (irtOff() ? "產業" : "題材");
+async function loadTic() { if (W.tic !== undefined) return; W.tic = null; try { const r = await fetch("data/tpex-ic.json", { cache: "no-cache" }); if (r.ok) { W.tic = await r.json(); W.irtSegs = W.irtThemes = null; } } catch {} }
+// 上一層（產業或題材）：同一層的細分產業合併（代號去重）
+const irtThemes = () => W.irtThemes || (W.irtThemes = [...irtSegs().reduce((m, g) => { const t = m.get(g.tid) || m.set(g.tid, { id: g.tid, tid: g.tid, theme: `${irtSegs().filter(x => x.tid === g.tid).length} 個細分產業`, name: irtOff() ? W.tic.industries.find(I => I.id === g.tid)?.name || g.theme : g.theme, codes: [], names: {} }).get(g.tid);
   t.codes = [...new Set([...t.codes, ...g.codes])]; Object.assign(t.names, g.names); return m; }, new Map()).values()]);
 async function loadIndRt(force = false) {
-  if (W.off || W.irtBusy || (!force && W.irt && Date.now() - W.irt.at < 9000)) return; const S = irtSegs(); if (!S.length) return;
-  W.irtBusy = 1; const codes = [...new Set(S.flatMap(g => g.codes))];
-  try { const j = await getJ(`/api/hot?market=tw&type=rows&codes=${codes.join(",")}`, true); W.irt = { at: Date.now(), live: j.live, date: j.date, source: j.source, q: new Map(j.rows.map(([c, p, pct, v]) => [c, { p, pct, v: v || 0 }])) }; }
+  if (W.off || W.irtBusy || (!force && W.irt && Date.now() - W.irt.at < 9000)) return;
+  W.irtBusy = 1; await loadTic(); if (!irtSegs().length) { W.irtBusy = 0; return; }
+  try { const j = await getJ(`/api/hot?market=tw&type=rows&codes=all`, true); W.irt = { at: Date.now(), live: j.live, date: j.date, source: j.source, q: new Map(j.rows.map(([c, p, pct, v]) => [c, { p, pct, v: v || 0 }])) }; }
   catch (e) { W.irt = { at: Date.now(), err: e.message, q: W.irt?.q || new Map() }; } finally { W.irtBusy = 0; }
   if (W.lt === "mkt" && W.mkReg !== "us" && !W.mktLoading) renderList();
 }
@@ -1102,7 +1109,8 @@ function irtModel(level = "seg") {
 }
 // 產業即時：橫向長條圖（漲紅往右、跌綠往左，以 0 為中線）；可切排序、細分產業／題材，預設只看前 12，展開看全部
 function irtHtml(sec) {
-  const lv = (W.irtL || store.get("watch:irtL", "seg")) === "theme" ? "theme" : "seg", L = irtModel(lv);
+  if (W.tic === undefined) { loadTic().then(() => { if (W.irt) renderList(); }); }
+  const lv = (W.irtL || store.get("watch:irtL", "seg")) === "theme" ? "theme" : "seg", L = irtModel(lv), U = irtUnit();
   if (!L.length) { loadIndRt(); return sec("產業即時", `<p class="note">${W.irt?.err ? "⚠ " + esc(W.irt.err) : W.off ? "需要部署到網站才有資料。" : "載入中…"}</p>`); }
   const k = ["gain", "loss", "flow", "value"].includes(W.irtK || store.get("watch:irtK", "gain")) ? W.irtK || store.get("watch:irtK", "gain") : "gain";
   const ord = { gain: (a, b) => b.pct - a.pct, loss: (a, b) => a.pct - b.pct, flow: (a, b) => b.flow - a.flow, value: (a, b) => b.val - a.val }[k], S = L.slice().sort(ord), all = !!W.irtAll, N = 12;
@@ -1111,14 +1119,15 @@ function irtHtml(sec) {
   // 預設：漲跌幅排序時看最強 6 個＋最弱 6 個，其他排序看前 12；展開看全部
   const shown = all || S.length <= N ? S : k === "gain" || k === "loss" ? [...S.slice(0, N / 2), null, ...S.slice(-N / 2)] : S.slice(0, N);
   const row = g => { if (!g) return `<li class="irb-gap"><span class="note">⋯ 中間 ${S.length - N} 個 ⋯</span></li>`; const v = met(g), w = Math.min(100, Math.abs(v) / mx * 100), c = one ? "amt" : v >= 0 ? "up" : "down", ld = g.pct >= 0 ? g.lead : g.lag;
-    return `<li><button type="button" data-mk="irtOpen" data-v="${esc(g.tid)}" title="${esc(g.name)}：${sgn(g.pct, 2)}%・成交 ${Math.round(g.val)} 億・${g.up}/${g.n} 檔上漲"><span class="irb-n"><b>${esc(g.name)}</b><small>${lv === "theme" ? `${g.n} 檔・${g.up} 漲` : esc(g.theme)}・${esc(ld.nm)} ${sgn(ld.pct, 1)}%</small></span>
-      <span class="irb-t${one ? " one" : ""}"><i class="${c}" style="${one || v >= 0 ? "left" : "right"}:${one ? 0 : 50}%;width:${(one ? w : w / 2).toFixed(1)}%"></i></span><em class="${one ? "" : cls(v)}">${fmt(g)}</em></button></li>`; };
+    const open = W.irtX === g.id, mem = open ? g.codes.map(c => ({ c, nm: g.names[c] || nameOf(c), ...W.irt.q.get(c) })).filter(x => x.pct != null).sort((a, b) => b.pct - a.pct) : [];
+    return `<li${open ? ' class="open"' : ""}><button type="button" data-mk="irtX" data-v="${esc(g.id)}" aria-expanded="${open}" title="${esc(g.name)}：${sgn(g.pct, 2)}%・成交 ${Math.round(g.val)} 億・${g.up}/${g.n} 檔上漲"><span class="irb-n"><b>${esc(g.name)}</b><small>${lv === "theme" ? `${g.n} 檔・${g.up} 漲` : esc(g.theme)}・${esc(ld.nm)} ${sgn(ld.pct, 1)}%</small></span>
+      <span class="irb-t${one ? " one" : ""}"><i class="${c}" style="${one || v >= 0 ? "left" : "right"}:${one ? 0 : 50}%;width:${(one ? w : w / 2).toFixed(1)}%"></i></span><em class="${one ? "" : cls(v)}">${fmt(g)}</em></button>${open ? `<div class="irb-mem">${mem.map(x => `<button type="button" data-sel="${x.c}"><span>${esc(x.nm)}</span><b class="${cls(x.pct)}">${sgn(x.pct, 2)}%</b></button>`).join("")}${irtOff() ? "" : `<button type="button" class="linkbtn" data-mk="irtOpen" data-v="${esc(g.tid)}">題材內頁 ›</button>`}</div>` : ""}</li>`; };
   const up = L.filter(g => g.pct > 0).length;
-  return sec("產業即時", `<p class="note irb-sum">${L.length} 個${lv === "theme" ? "題材" : "細分產業"}：<b class="up">${up} 漲</b>・<b class="down">${L.length - up} 跌（或平）</b>${k === "flow" ? "・資金流向＝上漲股成交金額算流入、下跌股算流出（估算）" : ""}</p>
+  return sec("產業即時", `<p class="note irb-sum">${L.length} 個${lv === "theme" ? U : "細分產業"}：<b class="up">${up} 漲</b>・<b class="down">${L.length - up} 跌（或平）</b>${k === "flow" ? "・資金流向＝上漲股成交金額算流入、下跌股算流出（估算）" : ""}</p>
     <ol class="irb">${shown.map(row).join("")}</ol>
     ${S.length > N ? `<button type="button" class="btn sm irb-more" data-mk="irtAll" data-v="${all ? "" : "1"}">${all ? "收合 ▴" : `看全部 ${S.length} 個 ▾`}</button>` : ""}
-    <p class="note">${lv === "theme" ? "題材" : "細分產業"}依「供應鏈題材」整理（${irtSegs().length} 個細分產業、${irtThemes().length} 個題材，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔）；漲跌是成分股的成交金額加權平均；點一列進題材內頁。${esc(W.irt?.source || "")}</p>`,
-    liveTag({ live: W.irt?.live, at: W.irt?.at, date: W.irt?.date }, "收盤"), mkSeg("irtK", k, [["gain", "漲幅"], ["loss", "跌幅"], ["flow", "資金流向"], ["value", "成交金額"]]) + " " + mkSeg("irtL", lv, [["seg", "細分產業"], ["theme", "題材"]]));
+    <p class="note">${irtOff() ? `分類：<a href="https://ic.tpex.org.tw/" target="_blank" rel="noopener">櫃買中心 產業價值鏈資訊平台</a>（${irtThemes().length} 個產業、${irtSegs().length} 個上中下游細分產業，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔上市櫃公司，${W.tic.updated ? new Date(W.tic.updated).toISOString().slice(0, 10).replace(/-/g, "/") + " 更新" : "每週更新"}；同一家公司可能出現在好幾個細分產業）` : `分類：供應鏈題材（${irtSegs().length} 個細分產業、${irtThemes().length} 個題材，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔）`}；漲跌是成分股的成交金額加權平均；點一列看成分股。行情：${esc(W.irt?.source || "")}</p>`,
+    liveTag({ live: W.irt?.live, at: W.irt?.at, date: W.irt?.date }, "收盤"), mkSeg("irtK", k, [["gain", "漲幅"], ["loss", "跌幅"], ["flow", "資金流向"], ["value", "成交金額"]]) + " " + mkSeg("irtL", lv, [["seg", "細分產業"], ["theme", U]]));
 }
 async function loadMktLive() {
   W.mktLoading = Date.now(); loadIxSpark(); loadIndRt(); const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
@@ -2903,6 +2912,7 @@ $("#lx").addEventListener("click", e => { const b = e.target.closest("[data-mk]"
   if (k === "goSec") { mktSector(v); return; }
   if (k === "irtOpen") { W.indS.open = v; setLt("ind"); return; }
   if (k === "irtAll") { W.irtAll = !!v; renderList(); return; }
+  if (k === "irtX") { W.irtX = W.irtX === v ? null : v; renderList(); return; }
   if (k === "futInfo") { futInfo(v); return; }
   if (k === "fold") return; // 收合由 <details> 自己處理
   if (k === "mnDay") { W.mnDay = v; renderList(); return; }
