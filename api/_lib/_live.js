@@ -44,10 +44,10 @@ export async function misAll(base, fetcher = misFetch) {
     return { code: q.code, name: q.name || o.name || "", market: o.market || q.market, price: q.price, chg: q.chg, chgPct: q.chgPct, vol: q.vol, value: q.vol != null ? +((q.vol * 1000 * q.price) / 1e8).toFixed(2) : null, o: q.open, h: q.high, l: q.low, date: q.date }; });
 }
 
-let memo = null; // 同一個函式執行個體 15 秒內重用，避免同時好幾個 API 重複向資料源要整個市場
+let memo = null; // 同一個函式執行個體 8 秒內重用，避免同時好幾個 API 重複向資料源要整個市場
 const ymd = iso => iso.replace(/-/g, "");
 export async function marketRows() {
-  if (memo && Date.now() - memo.at < 15000) return memo.v;
+  if (memo && Date.now() - memo.at < 8000) return memo.v; // 盤中 8 秒內重用（再加上 CDN 10 秒快取，畫面最慢約 20 秒前的資料）
   const key = (process.env.FUGLE_API_KEY || "").trim(), notes = [], today = todayTaipei(), sess = session(), done = v => { memo = { at: Date.now(), v }; return v; };
   // 1. 富果快照（有金鑰而且方案支援）
   if (key) {
