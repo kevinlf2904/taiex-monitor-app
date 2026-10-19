@@ -1,0 +1,36 @@
+# 櫃買中心產業價值鏈：每週日整理官方的產業 → 上中下游細分產業 → 上市櫃公司，寫進 learner/data/tpex-ic.json（大盤「產業即時」用）
+name: tpex-ic
+on:
+  schedule:
+    - cron: "40 1 * * 0"   # 每週日台北 09:40
+  workflow_dispatch:
+    inputs:
+      dump:
+        description: "除錯：1＝只印出抓到的數量、不存檔（0＝正常更新）"
+        default: "0"
+permissions:
+  contents: write
+concurrency:
+  group: data-sync-tpex-ic-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: git pull -q origin ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
+        run: node scripts/tpex-ic.mjs --dump
+      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        run: node scripts/tpex-ic.mjs
+      - name: commit
+        if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        env:
+          COMMIT_NAME: tpex-ic
+        run: |
+          bash scripts/commit-data.sh "產業價值鏈：更新細分產業" learner/data/tpex-ic.json

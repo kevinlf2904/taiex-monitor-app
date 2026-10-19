@@ -84,8 +84,12 @@ for (const width of [390, 1280]) test(`大盤：產業即時（細分產業漲�
   await p.click('#lx [data-mk="irtL"][data-v="theme"]'); await p.waitForTimeout(150);
   assert.equal(await p.evaluate(() => document.querySelectorAll("#lx .irb li button").length), await p.evaluate(() => irtModel("theme").length));
   assert.deepEqual(await p.evaluate(() => [store.get("watch:irtK"), store.get("watch:irtL")]), ["flow", "theme"]);
-  await p.click("#lx .irb li button"); await p.waitForTimeout(300);
-  assert.equal(await p.evaluate(() => W.lt), "ind");
+  // 官方產業價值鏈：產業層級的名稱、點一列展開成分股
+  assert.match(await p.evaluate(() => $("#lx").innerText), /櫃買中心 產業價值鏈資訊平台[\s\S]*3 個產業、18 個上中下游細分產業/);
+  await p.click("#lx .irb li button"); await p.waitForTimeout(200);
+  assert.ok(await p.evaluate(() => document.querySelectorAll("#lx .irb-mem [data-sel]").length >= 3));
+  await p.click("#lx .irb-mem [data-sel]"); await p.waitForTimeout(300);
+  assert.ok(await p.evaluate(() => !!W.sel));
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await ctx.close(); assert.deepEqual(errs, []);
 });

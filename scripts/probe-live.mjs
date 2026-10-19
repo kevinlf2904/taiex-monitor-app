@@ -57,6 +57,35 @@ if (process.argv[2] === "keys") {
   const qu = await hit("/api/quote?codes=AAPL,NVDA"); console.log("網站 /api/quote 美股 →", qu.status ?? qu.err, qu.j?.source, (qu.j?.quotes || []).map(x => `${x.code}=${x.price}`).join(" "));
   process.exit(0);
 }
+if (process.argv[2] === "tpexdump") { process.argv.push("--dump"); const m = await import("./tpex-ic.mjs"); await m.main(); process.exit(0); } // 產業價值鏈抓取（只印數量，不寫檔）
+if (process.argv[2] === "tpexic2") {
+  const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school research)" };
+  const get = async u => { try { const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(30000) }); return await r.text(); } catch (e) { return "ERR " + e.message; } };
+  const home = await get("https://ic.tpex.org.tw/index.php"), H = home.replace(/\s+/g, " ");
+  console.log("首頁產業名稱：", [...H.matchAll(/introduce\.php\?ic=(\w+)["'][^>]*>([\s\S]{0,200}?)<\/a>/g)].map(m => m[1] + "=" + m[2].replace(/<[^>]+>/g, "").trim()).join("｜"));
+  const t = (await get("https://ic.tpex.org.tw/introduce.php?ic=D000")).replace(/\s+/g, " ");
+  const i = t.indexOf("company_basic.php?stk_code=2401"); console.log("\n公司清單前後：\n" + t.slice(i - 2500, i + 600));
+  const j = t.indexOf("company_basic.php?stk_code=2337"); console.log("\n記憶體附近：\n" + t.slice(j - 1200, j + 300));
+  console.log("\nic_link：", [...t.matchAll(/id="ic_link_(\w+)"[^>]*>([\s\S]{0,80}?)<\/div>/g)].map(m => m[1] + "=" + m[2].replace(/<br\/?>/g, "").replace(/<[^>]+>/g, "")).join("｜"));
+  const js = await get("https://ic.tpex.org.tw/js/D000.js"); console.log("\nD000.js", js.length, js.slice(0, 1500));
+  process.exit(0);
+}
+if (process.argv[2] === "tpexic") {
+  // 櫃買中心「產業價值鏈資訊平台」：看首頁的產業清單連結、一個產業頁（半導體）的結構、子產業的公司清單怎麼放
+  const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school research)", Accept: "text/html,application/json" };
+  const get = async u => { const t0 = Date.now(); try { const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(20000) }); const t = await r.text(); console.log(`\n### ${u} → ${r.status} ${r.headers.get("content-type")} ${t.length} bytes ${Date.now() - t0}ms`); return t; } catch (e) { console.log(`\n### ${u} → 錯誤 ${e.message}`); return ""; } };
+  const links = (t, re) => [...new Set([...t.matchAll(/href=["']([^"']+)["'][^>]*>([^<]{0,40})/g)].filter(m => re.test(m[1])).map(m => `${m[1]} ｜ ${m[2].trim()}`))];
+  const home = await get("https://ic.tpex.org.tw/index.php");
+  const L = links(home, /introduce|ic=|chain|list/i); console.log("首頁產業連結", L.length); console.log(L.slice(0, 60).join("\n"));
+  for (const u of ["https://ic.tpex.org.tw/introduce.php?ic=D000", "https://ic.tpex.org.tw/introduce.php?ic=D000&stk_code=2330"]) {
+    const t = await get(u); const K = links(t, /\.php/); console.log("連結", K.length); console.log(K.slice(0, 80).join("\n"));
+    const sc = [...t.matchAll(/<script[^>]*src=["']([^"']+)["']/g)].map(m => m[1]); console.log("scripts", sc.join(" "));
+    const aj = [...new Set([...t.matchAll(/["']([\w/.-]*\.php[^"']*)["']/g)].map(m => m[1]))]; console.log("php 字串", aj.slice(0, 40).join(" "));
+    const codes = [...new Set([...t.matchAll(/\b(\d{4})\b/g)].map(m => m[1]))]; console.log("4 碼數字", codes.length, codes.slice(0, 40).join(","));
+    console.log("片段", t.replace(/\s+/g, " ").slice(t.replace(/\s+/g, " ").indexOf("上游") - 200, t.replace(/\s+/g, " ").indexOf("上游") + 1500));
+  }
+  process.exit(0);
+}
 if (process.argv[2] === "us") {
   // 美股：Yahoo 與 Finnhub 報價速度（網站 /api/status?bench=1），以及新的 /api/usinfo 公司資料、指標、財報
   const b = await hit("/api/status?bench=1"); console.log("bench", b.status ?? b.err, JSON.stringify(b.j?.bench || null));
