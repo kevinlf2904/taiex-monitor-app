@@ -2831,7 +2831,6 @@ function renderMkt() {
       <div class="ratio"><span class="up" style="width:${B.up / tot * 100}%"></span><span class="flat" style="width:${B.flat / tot * 100}%"></span><span class="down" style="width:${B.down / tot * 100}%"></span></div>
       <details class="mkmore"><summary>漲跌幅分佈</summary><div class="hist">${B.buckets.map((x, i) => `<div><small>${x.n}</small><i class="${i < 5 ? "up" : i > 5 ? "down" : "flat"}" style="height:${(x.n / mx * 70).toFixed(0)}px"></i><span data-s="${x.label.replace(/%/g, "")}">${x.label}</span></div>`).join("")}</div></details>
       <details class="mkmore"><summary>怎麼算的、多久更新</summary><p class="note">家數＝上市（或上櫃）所有股票＋ETF（不含權證、債券），和券商「整體市場」同一個口徑；漲停跌停用昨收算出的實際漲跌停價判斷（槓桿／反向 ETF 沒有漲跌停）；月新高低是收盤價創近 20 個交易日新高或新低。盤中資料來源：${esc(J.source || "")}，畫面每 10 秒更新一次（伺服器最多快取 10 秒）。</p></details>`, `${liveTag(J, "收盤")}・平盤 ${B.flat}・股票＋ETF${TT?.value ? `・成交 ${Math.round(TT.value).toLocaleString()} 億` : ""}${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, [...MKT2, ["all", "全部"]]) : ""); }
-  h += irtHtml(sec);
   // 產業概況：漲最多、跌最多各 3 個（直條），其餘收在「更多」
   const S = J.sectorsBy?.[W.secM] || J.sectors;
   if (S?.length) { const top = [...S.slice(0, 3), ...S.slice(-3).filter(x => !S.slice(0, 3).includes(x))], mx = Math.max(0.5, ...top.map(x => Math.abs(x.pct || 0))), pre = W.secM === "tpex" ? "櫃" : "市";
@@ -2843,6 +2842,7 @@ function renderMkt() {
   if (S?.length) { const T = S.filter(x => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 18);
     if (T.length > 2) h += sec("產業熱力圖", `<div class="tmap">${treemap(T.map(x => x.value), 100, 100).map((r, i) => { const x = T[i], k = Math.min(1, Math.abs(x.pct || 0) / 5), big = r.w * r.h > 90;
       return `<button data-mk="goSec" data-v="${esc(x.name)}" style="left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%;background:color-mix(in srgb, var(--${(x.pct || 0) >= 0 ? "up" : "down"}) ${Math.round(18 + k * 70)}%, var(--surface-2))" title="${esc(x.name)} ${sgn(x.pct, 2)}%・${x.value.toFixed(0)} 億" aria-label="${esc(x.name)} ${sgn(x.pct, 2)}%">${r.w > 8 && r.h > 7 ? `<b>${esc(secShort(x.name))}</b>` : ""}${r.w > 11 && r.h > 13 ? `<span>${sgn(x.pct, 2)}%</span>${big && r.h > 19 ? `<small>${x.value.toFixed(0)}億</small>` : ""}` : ""}</button>`; }).join("")}</div>`, `面積＝成交金額・${W.secM === "tpex" ? "上櫃" : "上市"}`); }
+  h += irtHtml(sec); // 順序：市場概況 → 產業概況 → 產業熱力圖 → 產業即時
   // 熱門台股：最多人看（成交值）、大盤強勢（漲幅）、急拉股（選股）、量大股
   { const t = W.mkHot, rows = t === "surge" ? (W.scr?.lists || []).find(L => L.id === "surge")?.rows || [] : W.hot["rank:" + t]?.rows || [], err = t === "surge" ? W.scr?.err : W.hot["rank:" + t]?.err;
     h += sec("熱門台股", rows.length ? `<div class="mtiles">${rows.slice(0, 6).map(mtile).join("")}</div>` : `<p class="note">${err ? "⚠ " + esc(err) : "載入中…"}</p>`, `<button class="linkbtn" data-mk="goRank">更多 ›</button>`, mkSeg("mkHot", t, MK_HOT)); }
