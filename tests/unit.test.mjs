@@ -289,3 +289,11 @@ test("FRED 官方介面、Finnhub：回應解析與金鑰不外洩", async () =>
   const { envReport } = await import("../api/_lib/status.js"), R = envReport({ FRED_API_KEY: "abc", FINNHUB_API_KEY: " ", FUGLE_API_KEY: "k" });
   assert.deepEqual([R.set.FRED_API_KEY, R.set.FINNHUB_API_KEY, R.set.FUGLE_API_KEY], [true, false, true]); assert.ok(!JSON.stringify(R).includes("abc"), "狀態不回傳金鑰");
 });
+
+test("AI 協作規則：AGENTS.md 與 Antigravity 規則檔一致，CLAUDE.md 引用它", async () => {
+  const { readFile } = await import("node:fs/promises"), rd = p => readFile(new URL(`../${p}`, import.meta.url), "utf8");
+  const [a, g, c] = await Promise.all([rd("AGENTS.md"), rd(".agent/rules/klinelab.md"), rd("CLAUDE.md")]);
+  assert.equal(g, a, "改了 AGENTS.md 要複製到 .agent/rules/klinelab.md");
+  assert.match(c, /^@AGENTS\.md/m);
+  for (const k of ["learner/version.json", "gemini/", "claude/", "密鑰"]) assert.ok(a.includes(k), `AGENTS.md 缺少「${k}」`);
+});
