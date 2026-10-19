@@ -732,6 +732,7 @@ class Chart {
     const vpW = o.vp ? pw * (narrow ? 0.24 : 0.18) : 0, padR = vpW ? vpW + 6 : 0; // 分佈長條自己一條，不和 K 棒重疊
     const { a: va, b: vb } = this.range, { fa, w: vwid } = this.vw, bw = (pw - padR) / vwid, inV = i => i >= va - 1 && i <= vb + 1;
     this.geo = { L, bw, a: va, fa, pw, pe: pw - padR, H, top0: 8, mainH };
+    const pe = pw - padR; // K 棒、均線、指標都只畫到這裡；右邊那一條留給籌碼分佈（不然往左拖時，右邊的均線還在、K 棒卻被分佈蓋住）
     { const vt = 8 + mainH + gap, st = o.noVol ? vt : vt + volH + gap; this.panes = [{ key: "main", top: 8, h: mainH }, ...(o.noVol ? [] : [{ key: "vol", top: vt, h: volH }]), ...subs.map((_, k) => ({ key: "s" + k, top: st + k * (subH + gap), h: subH }))]; }
     this.syncBar();
     const X = i => L + bw * (i - fa + 0.5);
@@ -816,6 +817,7 @@ class Chart {
       ctx.globalAlpha = 1;
       const tag = (v, c, t) => { if (v == null) return; const y = Y(v); if (y < top0 || y > top0 + mainH) return; ctx.strokeStyle = c; ctx.lineWidth = 0.8; ctx.setLineDash(t === "均" ? [5, 3] : []); ctx.beginPath(); ctx.moveTo(L + pw - maxW - 8, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]); };
       tag(VP.pre, "#f0883e", "壓"); tag(VP.avg, col.muted, "均"); tag(VP.sup, "#4e9af1", "撐");
+      ctx.strokeStyle = col.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L + pe + 3.5, top0); ctx.lineTo(L + pe + 3.5, top0 + mainH); ctx.stroke(); // K 棒區和分佈欄的分隔線
       ctx.restore();
       // 右側價格軸上的標籤（橘＝壓力、灰＝平均成本、藍＝支撐）
       ctx.font = `500 10.5px ${cssVar("--font-num")}`; ctx.textAlign = "left";
@@ -825,7 +827,7 @@ class Chart {
     // 布林
     if (o.boll) {
       const { up, lo: lw, mid } = I.boll;
-      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
+      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pe, mainH); ctx.clip();
       ctx.fillStyle = col.band; ctx.beginPath(); let started = false;
       for (let i = 0; i < vis; i++) if (up[i] != null) { started ? ctx.lineTo(X(i), Y(up[i])) : ctx.moveTo(X(i), Y(up[i])); started = true; }
       for (let i = vis - 1; i >= 0; i--) if (lw[i] != null) ctx.lineTo(X(i), Y(lw[i]));
@@ -835,7 +837,7 @@ class Chart {
     // 延伸疊加：一目均衡表雲帶（先行帶 A 在上偏多＝紅、B 在上偏空＝綠）、各條線、SAR 點
     for (const id of o.mainX || []) {
       const M = mainXCalc(id, D, I, this.cfgOn !== false);
-      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
+      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pe, mainH); ctx.clip();
       if (M.cloud) { const [A, B] = M.cloud; for (let i = Math.max(1, va); i < Math.min(vis, vb + 2); i++) { if ([A[i], B[i], A[i - 1], B[i - 1]].some(v => v == null)) continue;
           ctx.fillStyle = A[i] >= B[i] ? col.up : col.down; ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.moveTo(X(i - 1), Y(A[i - 1])); ctx.lineTo(X(i), Y(A[i])); ctx.lineTo(X(i), Y(B[i])); ctx.lineTo(X(i - 1), Y(B[i - 1])); ctx.closePath(); ctx.fill(); }
         ctx.globalAlpha = 1; this.line(A, vis, X, Y, col.up, 0.8, 0.6); this.line(B, vis, X, Y, col.down, 0.8, 0.6); }
@@ -852,7 +854,7 @@ class Chart {
     });
     // 區塊（訂單塊、公平價值缺口）：畫在 K 棒後面，只畫到目前可見的範圍
     const cmap = { up: col.up, down: col.down, accent: col.accent, muted: col.muted, s2: col.s2, ink: col.ink };
-    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pe, mainH); ctx.clip();
     (o.zones || []).filter(z => z.at == null || z.at < vis).forEach(z => {
       const x1 = X(z.i1) - bw / 2, x2 = X(Math.min(z.i2, vis - 1)) + bw / 2, y1 = Y(z.top), y2 = Y(z.bot), c = z.color ? cmap[z.color] : z.dir > 0 ? col.up : col.down;
       ctx.fillStyle = c; ctx.globalAlpha = z.alpha ?? (z.kind === "FVG" ? 0.08 : 0.16); ctx.fillRect(x1, y1, x2 - x1, Math.max(2, y2 - y1)); ctx.globalAlpha = z.alpha != null ? Math.min(0.7, z.alpha * 4) : 0.7;
@@ -864,7 +866,7 @@ class Chart {
     if (F) {
       const fx = Math.max(L, X(F.from - 0.5));
       ctx.fillStyle = col.shade; ctx.fillRect(fx, top0, L + pw - fx, mainH);
-      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
+      ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pe, mainH); ctx.clip();
       const band = (a, b, alpha) => { ctx.fillStyle = col.accent; ctx.globalAlpha = alpha; ctx.beginPath(); ctx.moveTo(X(F.from - 1), Y(D[F.from - 1].c)); a.forEach((v, t) => ctx.lineTo(X(F.from + t), Y(v))); for (let t = b.length - 1; t >= 0; t--) ctx.lineTo(X(F.from + t), Y(b[t])); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; };
       band(F.p90, F.p10, 0.1); band(F.p75, F.p25, 0.16);
       ctx.strokeStyle = col.accent; ctx.lineWidth = 1; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(X(F.from - 1), Y(D[F.from - 1].c)); F.p50.forEach((v, t) => ctx.lineTo(X(F.from + t), Y(v))); ctx.stroke(); ctx.setLineDash([]);
@@ -872,7 +874,7 @@ class Chart {
       ctx.fillStyle = col.accent; ctx.textAlign = "left"; ctx.font = `500 11px ${cssVar("--font-body")}`; if (fx < L + pw - 40) ctx.fillText("模擬", fx + 6, top0 + 10); ctx.font = `11px ${cssVar("--font-num")}`;
     }
     // K 棒以下到標記為止都裁在價格區內（縱向放大時才不會畫到成交量區）
-    ctx.save(); ctx.beginPath(); ctx.rect(0, top0, L + pw + 1, mainH); ctx.clip();
+    ctx.save(); ctx.beginPath(); ctx.rect(0, top0, L + pe + 1, mainH); ctx.clip();
     const cw = Math.max(1, Math.min(14, bw * 0.66)), KT = o.ktype || Chart.prefs.kt, i0 = Math.max(0, va), i1 = Math.min(vis, vb + 1);
     if (KT === "line" || KT === "area") {
       // 收盤線／面積圖：只連收盤價
@@ -913,7 +915,7 @@ class Chart {
     mas.forEach(m => this.line(m.a, vis, X, Y, m.c, 1.6));
     if (o.vwap) this.line(I.vwap, vis, X, Y, this.lc("vwap", 0, "vwap", col), 1.8);
     // 折線、頸線、目標價、結構線（可來自設定或附在標記上；只畫到可見範圍）
-    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pe, mainH); ctx.clip();
     [...(o.shapes || []), ...(o.markers || []).filter(m => m.i < vis).flatMap(m => m.shapes || [])].forEach(sh => {
       if (!sh.pts?.length || sh.pts[0][0] >= vis) return;
       if (sh.pts.length < 40) { let a = Infinity, b = -Infinity; for (const [i] of sh.pts) { if (i < a) a = i; if (i > b) b = i; } if (b < va - 2 || a > vb + 2) return; } // 整條都在畫面外：不畫（滑動時每一格都要跑）
@@ -932,7 +934,7 @@ class Chart {
     // 一組價格轉折可能同時是好幾個指標的背離（m.divs）：價格線畫一次，每個副圖各畫自己的
     const subDivs = divs.flatMap(m => (m.divs || [m.div]).map(d => ({ d, side: m.side })));
     const divLine = (x1, y1, x2, y2, c) => { ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); [[x1, y1], [x2, y2]].forEach(([a, b]) => { ctx.beginPath(); ctx.arc(a, b, 3, 0, Math.PI * 2); ctx.fill(); }); };
-    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pw, mainH); ctx.clip();
+    ctx.save(); ctx.beginPath(); ctx.rect(L, top0, pe, mainH); ctx.clip();
     divs.forEach(m => divLine(X(m.div.i1), Y(m.div.p1), X(m.div.i2), Y(m.div.p2), m.side === "buy" ? col.up : col.down));
     ctx.restore();
     // 標記
@@ -1069,7 +1071,7 @@ class Chart {
       }
       const subY = this.subY || (v => subTop + (100 - v) / 100 * subH);
       { const a0 = subY(0), a1 = subY(1); if (a1 !== a0 && isFinite(a0) && isFinite(a1)) this.paneInv.push({ top: subTop, bot: subTop + subH, inv: y => (y - a0) / (a1 - a0), fmt: C0?.fmt || (v => fmtN(v, Math.abs(v) < 10 ? 2 : 1)) }); }
-      ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pw, subH); ctx.clip();
+      ctx.save(); ctx.beginPath(); ctx.rect(L, subTop, pe, subH); ctx.clip();
       // 鈍化區間：副圖底色淡淡塗上（高檔紅、低檔綠），寬度夠時標字
       if (Chart.sigShow("dull")) { const src = dullOf(S, I); if (src) dullSpans(src.a, src.hi, src.lo, 3, vis).forEach(sp => {
         const a0 = Math.max(va, sp.i0), a1 = Math.min(vb, (sp.end ?? vis) - 1); if (a1 < a0) return; const x0 = X(a0) - cw / 2, w = X(a1) - X(a0) + cw;
@@ -1150,7 +1152,7 @@ class Chart {
     this.sigUi.hidden = !all; if (this.sigHtml !== all) { this.sigHtml = all; this.sigUi.innerHTML = all; } // 和上次一樣就不動 DOM（讀 innerHTML 也很貴）
   }
   line(a, vis, X, Y, color, w, alpha = 1, dash) {
-    const ctx = this.ctx, g = this.geo; ctx.save(); ctx.beginPath(); ctx.rect(g.L, 0, g.pw, g.H); ctx.clip();
+    const ctx = this.ctx, g = this.geo; ctx.save(); ctx.beginPath(); ctx.rect(g.L, 0, g.pe ?? g.pw, g.H); ctx.clip();
     ctx.strokeStyle = color; ctx.lineWidth = Math.max(0.7, w * Chart.LW); ctx.globalAlpha = alpha; if (dash) ctx.setLineDash(dash);
     ctx.beginPath(); let s = false;
     for (let i = 0; i < vis; i++) { if (a[i] == null) { s = false; continue; } s ? ctx.lineTo(X(i), Y(a[i])) : ctx.moveTo(X(i), Y(a[i])); s = true; }

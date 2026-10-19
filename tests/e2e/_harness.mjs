@@ -33,6 +33,8 @@ export async function mock(ctx) {
     fin: { q: [{ p: "2026Q1", rev: 9.5e10, ni: 2.4e10, gp: 4.4e10, op: 2.9e10 }, { p: "2026Q2", rev: 9.4e10, ni: 2.3e10, gp: 4.3e10, op: 2.8e10 }], y: [{ p: "2025", rev: 4.1e11, ni: 1.0e11, gp: 1.9e11, op: 1.3e11 }] } }));
   await ctx.route(/\/api\/intraday\?.*spark=1/, r => J(r, { ok: true, source: "t", prev: 100, spark: [["09:00", 100], ["10:00", 101], ["11:30", 102]], session: { open: "09:00", close: "13:30" } }));
   await ctx.route(/\/api\/futures\?.*bars=spark/, r => J(r, { ok: true, quote: { price: 101, chg: 1, chgPct: 1, prev: 100, session: "day" }, spark: [["08:45", 100], ["10:00", 99], ["11:00", 101]] }));
+  await ctx.route(/\/api\/hot\?.*type=rows/, r => { const cs = (new URL(r.request().url()).searchParams.get("codes") || "").split(",").filter(Boolean);
+    J(r, { ok: true, live: true, date: "2026-10-16", source: "測試行情", rows: cs.map((c, i) => [c, 100 + i, +(((i * 37) % 11) - 5).toFixed(2), 1 + (i % 7)]) }); });
   await ctx.route("**/api/calendar**", r => J(r, { ok: true, rows: [{ date: "2026-10-20", code: "2330", name: "台積電", kind: "除息", cash: 4.5 }], conf: [] }));
   await ctx.route("**/api/yield**", r => { const cs = (new URL(r.request().url()).searchParams.get("codes") || "").split(","); J(r, { ok: true, rows: cs.map(c => ({ code: c, cash12: 5, n: 1, price: 100, yield: 5, divs: [["2025-07-10", 2.5], ["2026-01-10", 3]] })) }); });
   const axis = K.map(x => x.d).slice(-130);

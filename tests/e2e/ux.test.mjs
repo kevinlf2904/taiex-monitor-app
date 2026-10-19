@@ -65,10 +65,29 @@ for (const width of [390, 1280]) test(`看盤：以股查人、☆ 自選、情�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+for (const width of [390, 1280]) test(`大盤：產業即時（細分產業漲跌、領漲股、資金流向）${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  await p.evaluate(() => { W.mkReg = "tw"; setLt("mkt"); });
+  await p.waitForFunction(() => document.querySelectorAll("#lx .irt .irc").length === 6, null, { timeout: 15000 });
+  const t = await p.evaluate(() => $("#lx").innerText);
+  assert.match(t, /產業即時[\s\S]*資金流入[\s\S]*億[\s\S]*資金流出/);
+  assert.match(t, /全部 \d+ 個細分產業/);
+  // 漲幅排序：第一張卡的漲幅 ≥ 第二張
+  const v = await p.evaluate(() => [...document.querySelectorAll("#lx .irc-h span")].slice(0, 2).map(e => parseFloat(e.textContent.replace(/[▲▼]/g, "")) * (e.className.includes("down") ? -1 : 1)));
+  assert.ok(v[0] >= v[1], JSON.stringify(v));
+  await p.click('#lx [data-mk="irtK"][data-v="loss"]'); await p.waitForTimeout(200);
+  assert.equal(await p.evaluate(() => store.get("watch:irtK")), "loss");
+  await p.click("#lx .irc-h"); await p.waitForTimeout(300);
+  assert.equal(await p.evaluate(() => W.lt), "ind");
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 test("畫線練習：點在低點附近會吸到 K 棒低點、畫好後提示看答案", async () => {
   const { ctx, p, errs } = await open(B, S.url, "index.html", { width: 1280 });
   await p.evaluate(() => { dr.mode = "sup"; dr.src = "sim"; goTab("draw"); }); await p.waitForFunction(() => dr.D, null, { timeout: 15000 });
-  const r = await p.evaluate(() => { dr.type = "sup"; const i = 20, low = dr.D[i].l; drTap(i + 0.5, low * 1.004); return [dr.pts[0][1], low, $("#drHint").textContent, $("#drCheck").disabled]; });
-  assert.equal(r[0], r[1]); assert.match(r[2], /畫好了/); assert.equal(r[3], false);
+  // 吸到點擊位置左右 3 根內、離點擊價格最近的低點（不一定是第 20 根）
+  const r = await p.evaluate(() => { dr.type = "sup"; const i = 20, low = dr.D[i].l; drTap(i + 0.5, low * 1.004); return [dr.pts[0][1], dr.D.slice(17, 24).map(k => k.l), low * 1.004, $("#drHint").textContent, $("#drCheck").disabled]; });
+  assert.ok(r[1].includes(r[0]), `應該吸到附近的低點：${r[0]} 不在 ${r[1]}`); assert.ok(Math.abs(r[0] - r[2]) / r[2] < 0.008); assert.match(r[3], /畫好了/); assert.equal(r[4], false);
   await ctx.close(); assert.deepEqual(errs, []);
 });

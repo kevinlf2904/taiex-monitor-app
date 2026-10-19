@@ -1,7 +1,7 @@
 // 大盤總覽：給 learner/watch.html 的「大盤」分頁使用。
 // GET /api/market
 // 台股個股統計來自 _live.js：盤中用富果行情快照（即時，回 live: true、time），沒有金鑰時用證交所、櫃買中心 OpenAPI（前一個交易日收盤）；
-// 盤中的加權、櫃買即時指數由看盤頁另外用 /api/quote 更新；盤中快取 20 秒：
+// 盤中的加權、櫃買即時指數由看盤頁另外用 /api/quote 更新；盤中快取 10 秒：
 //   breadth  漲跌家數（上市櫃股票＋ETF，和券商的「整體市場」口徑一樣）；漲停跌停用實際的漲跌停價判斷（依升降單位）
 //   sectors  產業漲跌（以前一日市值加權的平均漲跌幅）與成交金額比重
 //   contrib  加權指數貢獻點數排行（用發行股數與漲跌估算，只算上市普通股）
@@ -123,7 +123,7 @@ export default async function handler(req, res) {
   const taiex = M.find(x => /^發行量加權股價指數$/.test(x.name));
   const pickIdx = ["電子類指數", "半導體類指數", "金融保險類指數", "航運類指數", "臺灣50指數", "櫃買指數"].map(n => M.find(x => x.name === n)).filter(Boolean);
   const stocks = all.filter(r => /^\d{4}$/.test(r.code));
-  res.setHeader("Cache-Control", liveCache(L?.live, 15));
+  res.setHeader("Cache-Control", liveCache(L?.live, 10));
   return res.status(200).json({ ok: true, date: L?.date || all.find(x => x.date)?.date || null, live: !!L?.live, time: L?.time || null, note: L?.note || null, source: `${L?.source || "證交所、櫃買中心 OpenAPI"}；美股 Yahoo Finance`,
     breadth: all.length ? breadth(all) : null, coverage: L?.coverage || null, newHL: newHiLo(all, b.value, L?.date || all.find(x => x.date)?.date),
     sectors: I.size ? sectors(stocks, I) : null,
