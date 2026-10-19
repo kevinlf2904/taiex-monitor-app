@@ -57,6 +57,18 @@ if (process.argv[2] === "keys") {
   const qu = await hit("/api/quote?codes=AAPL,NVDA"); console.log("網站 /api/quote 美股 →", qu.status ?? qu.err, qu.j?.source, (qu.j?.quotes || []).map(x => `${x.code}=${x.price}`).join(" "));
   process.exit(0);
 }
+if (process.argv[2] === "tpexic2") {
+  const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school research)" };
+  const get = async u => { try { const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(30000) }); return await r.text(); } catch (e) { return "ERR " + e.message; } };
+  const home = await get("https://ic.tpex.org.tw/index.php"), H = home.replace(/\s+/g, " ");
+  console.log("首頁產業名稱：", [...H.matchAll(/introduce\.php\?ic=(\w+)["'][^>]*>([\s\S]{0,200}?)<\/a>/g)].map(m => m[1] + "=" + m[2].replace(/<[^>]+>/g, "").trim()).join("｜"));
+  const t = (await get("https://ic.tpex.org.tw/introduce.php?ic=D000")).replace(/\s+/g, " ");
+  const i = t.indexOf("company_basic.php?stk_code=2401"); console.log("\n公司清單前後：\n" + t.slice(i - 2500, i + 600));
+  const j = t.indexOf("company_basic.php?stk_code=2337"); console.log("\n記憶體附近：\n" + t.slice(j - 1200, j + 300));
+  console.log("\nic_link：", [...t.matchAll(/id="ic_link_(\w+)"[^>]*>([\s\S]{0,80}?)<\/div>/g)].map(m => m[1] + "=" + m[2].replace(/<br\/?>/g, "").replace(/<[^>]+>/g, "")).join("｜"));
+  const js = await get("https://ic.tpex.org.tw/js/D000.js"); console.log("\nD000.js", js.length, js.slice(0, 1500));
+  process.exit(0);
+}
 if (process.argv[2] === "tpexic") {
   // 櫃買中心「產業價值鏈資訊平台」：看首頁的產業清單連結、一個產業頁（半導體）的結構、子產業的公司清單怎麼放
   const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school research)", Accept: "text/html,application/json" };
