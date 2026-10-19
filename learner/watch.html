@@ -315,15 +315,14 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .row.hrow .up { color: var(--up); } .row.hrow .down { color: var(--down); }
 /* 大盤 */
 .ixcards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; }
-.irt { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; } @media (max-width: 520px) { .irt { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.irc { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface-2); min-width: 0; }
-.irc button { border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; text-align: center; min-width: 0; } .irc-h { display: flex; flex-direction: column; gap: 2px; padding: 8px 6px 4px; }
-.irc-h small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .irc-h b { font-weight: 500; font-size: 13.5px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 2.6em; } .irc-h span { font: 500 17px var(--font-num); }
-.irc-s { font-size: 12px; padding: 0 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .irc > .note { text-align: center; font-size: 11px; padding-bottom: 6px; }
-.irtf { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .irtf h5 { margin: 4px 0; font-size: 13px; font-weight: 500; } .irtf ol { list-style: none; margin: 0; padding: 0; }
-.irtf button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 6px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; padding: 6px 0; cursor: pointer; text-align: left; }
-.irtf button > span { display: flex; flex-direction: column; min-width: 0; font-size: 13px; } .irtf small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .irtf em { font-style: normal; font-size: 11.5px; } .irtf b { font: 500 13px var(--font-num); white-space: nowrap; }
-@media (max-width: 420px) { .irtf { grid-template-columns: 1fr; } }
+.irb { list-style: none; margin: 4px 0 0; padding: 0; } .irb li { border-top: 1px solid var(--line); } .irb-sum { margin: 0 0 6px; } .irb-gap { text-align: center; padding: 4px 0; font-size: 12px; }
+.irb button { width: 100%; display: grid; grid-template-columns: minmax(0, 42%) minmax(0, 1fr) 4.6em; gap: 8px; align-items: center; border: 0; background: none; color: var(--ink); font: inherit; padding: 5px 0; cursor: pointer; text-align: left; }
+.irb button:hover { background: var(--surface-2); } .irb-n { display: flex; flex-direction: column; min-width: 0; } .irb-n b { font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.irb-n small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.irb-t { position: relative; height: 12px; } .irb-t:not(.one)::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: 1px solid var(--line); }
+.irb-t i { position: absolute; top: 0; bottom: 0; border-radius: 2px; min-width: 1px; } .irb-t i.up { background: var(--up); } .irb-t i.down { background: var(--down); } .irb-t i.amt { background: var(--accent); opacity: .7; }
+.irb em { font: 500 12.5px var(--font-num); font-style: normal; text-align: right; white-space: nowrap; } .irb-more { margin: 8px auto 0; display: block; }
+@media (max-width: 420px) { .irb button { grid-template-columns: minmax(0, 44%) minmax(0, 1fr) 4.4em; gap: 6px; } }
 .ixcard { border: 1px solid var(--line); background: var(--surface-2); border-radius: 4px; padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; color: var(--ink); }
 .ixcard span { font-size: 13px; } .ixcard b { font: 500 18px var(--font-num); } .ixcard small { font: 12px var(--font-num); }
 .ixcard .up { color: var(--up); } .ixcard .down { color: var(--down); }
@@ -860,7 +859,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.19-97</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.19-98</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1085,6 +1084,9 @@ function liveRefresh() {
 // 產業即時：供應鏈地圖的細分產業（ASIC 設計服務、ABF 載板…，約 60 個）用即時行情算：成交金額加權漲跌幅、領漲股、資金流向
 // 資金流向是估算：上漲股的成交金額算流入、下跌股算流出（和券商 App 的「資金流向」同一種算法，不是法人買賣超）
 const irtSegs = () => W.irtSegs || (W.irtSegs = (typeof INDUSTRY_MAP !== "undefined" ? INDUSTRY_MAP.themes : []).filter(t => t.mk === "tw").flatMap(t => t.segs.map((g, j) => ({ id: `${t.id}:${j}`, tid: t.id, theme: t.name, name: g.n, codes: [...new Set(g.c.map(x => x[0]))], names: Object.fromEntries(g.c) }))));
+// 題材層級：同一個題材的細分產業合併（代號去重）
+const irtThemes = () => W.irtThemes || (W.irtThemes = [...irtSegs().reduce((m, g) => { const t = m.get(g.tid) || m.set(g.tid, { id: g.tid, tid: g.tid, theme: `${irtSegs().filter(x => x.tid === g.tid).length} 個細分產業`, name: g.theme, codes: [], names: {} }).get(g.tid);
+  t.codes = [...new Set([...t.codes, ...g.codes])]; Object.assign(t.names, g.names); return m; }, new Map()).values()]);
 async function loadIndRt(force = false) {
   if (W.off || W.irtBusy || (!force && W.irt && Date.now() - W.irt.at < 9000)) return; const S = irtSegs(); if (!S.length) return;
   W.irtBusy = 1; const codes = [...new Set(S.flatMap(g => g.codes))];
@@ -1092,25 +1094,31 @@ async function loadIndRt(force = false) {
   catch (e) { W.irt = { at: Date.now(), err: e.message, q: W.irt?.q || new Map() }; } finally { W.irtBusy = 0; }
   if (W.lt === "mkt" && W.mkReg !== "us" && !W.mktLoading) renderList();
 }
-function irtModel() {
+function irtModel(level = "seg") {
   const Q = W.irt?.q; if (!Q?.size) return [];
-  return irtSegs().map(g => { const M = g.codes.map(c => ({ c, nm: g.names[c] || nameOf(c), ...Q.get(c) })).filter(x => x.pct != null); if (!M.length) return null;
+  return (level === "theme" ? irtThemes() : irtSegs()).map(g => { const M = g.codes.map(c => ({ c, nm: g.names[c] || nameOf(c), ...Q.get(c) })).filter(x => x.pct != null); if (!M.length) return null;
     const val = M.reduce((a, x) => a + x.v, 0), pct = val > 0 ? M.reduce((a, x) => a + x.pct * x.v, 0) / val : M.reduce((a, x) => a + x.pct, 0) / M.length, lead = M.slice().sort((a, b) => b.pct - a.pct)[0], lag = M.slice().sort((a, b) => a.pct - b.pct)[0];
-    return { ...g, n: M.length, pct, val, flow: M.reduce((a, x) => a + (x.pct > 0 ? x.v : x.pct < 0 ? -x.v : 0), 0), lead, lag }; }).filter(Boolean);
+    return { ...g, n: M.length, up: M.filter(x => x.pct > 0).length, pct, val, flow: M.reduce((a, x) => a + (x.pct > 0 ? x.v : x.pct < 0 ? -x.v : 0), 0), lead, lag }; }).filter(Boolean);
 }
+// 產業即時：橫向長條圖（漲紅往右、跌綠往左，以 0 為中線）；可切排序、細分產業／題材，預設只看前 12，展開看全部
 function irtHtml(sec) {
-  const L = irtModel(); if (!L.length) { loadIndRt(); return sec("產業即時", `<p class="note">${W.irt?.err ? "⚠ " + esc(W.irt.err) : W.off ? "需要部署到網站才有資料。" : "載入中…"}</p>`); }
-  const k = W.irtK || store.get("watch:irtK", "gain"), S = L.slice().sort(k === "loss" ? (a, b) => a.pct - b.pct : k === "value" ? (a, b) => b.val - a.val : (a, b) => b.pct - a.pct), x = k === "loss" ? "lag" : "lead";
-  const card = g => `<div class="irc" style="--k:${Math.min(1, Math.abs(g.pct) / 3).toFixed(2)}"><button type="button" class="irc-h" data-mk="irtOpen" data-v="${esc(g.tid)}"><small>${esc(g.theme)}</small><b>${esc(g.name)}</b><span class="${cls(g.pct)}">${arrow(g.pct)}${Math.abs(g.pct).toFixed(2)}%</span></button>
-    <button type="button" class="irc-s" data-sel="${g[x].c}">${esc(g[x].nm)} <span class="${cls(g[x].pct)}">${arrow(g[x].pct)}${Math.abs(g[x].pct).toFixed(2)}%</span></button>${k === "value" ? `<small class="note">成交 ${Math.round(g.val).toLocaleString()} 億</small>` : ""}</div>`;
-  const F = L.slice().sort((a, b) => b.flow - a.flow), fin = F.filter(g => g.flow > 0).slice(0, 5), fout = F.filter(g => g.flow < 0).slice(-5).reverse();
-  const frow = g => `<li><button type="button" data-mk="irtOpen" data-v="${esc(g.tid)}"><span><small>${esc(g.theme)}</small>${esc(g.name)}<em class="${cls(g.pct)}">${arrow(g.pct)}${Math.abs(g.pct).toFixed(2)}%</em></span><b class="${cls(g.flow)}">${g.flow > 0 ? "+" : ""}${g.flow.toFixed(2)} 億</b></button></li>`;
-  return sec("產業即時", `<div class="irt">${S.slice(0, 6).map(card).join("")}</div>
-    <h4 class="mksub">資金流向 <span class="note">上漲股成交金額算流入、下跌股算流出（估算）</span></h4>
-    <div class="irtf"><div><h5 class="up">資金流入</h5><ol>${fin.map(frow).join("") || '<li class="note">沒有</li>'}</ol></div><div><h5 class="down">資金流出</h5><ol>${fout.map(frow).join("") || '<li class="note">沒有</li>'}</ol></div></div>
-    <details class="mkmore"><summary>全部 ${L.length} 個細分產業</summary><div class="ctbl"><table><thead><tr><th>細分產業</th><th>漲跌</th><th>成交（億）</th><th>資金流向</th><th>領漲</th></tr></thead><tbody>${S.map(g => `<tr><td><button class="linkbtn" data-mk="irtOpen" data-v="${esc(g.tid)}">${esc(g.name)}</button> <small class="note">${esc(g.theme)}・${g.n} 檔</small></td><td class="${cls(g.pct)}">${sgn(g.pct, 2)}%</td><td>${Math.round(g.val).toLocaleString()}</td><td class="${cls(g.flow)}">${g.flow > 0 ? "+" : ""}${g.flow.toFixed(1)}</td><td><button class="linkbtn" data-sel="${g.lead.c}">${esc(g.lead.nm)}</button> <span class="${cls(g.lead.pct)}">${sgn(g.lead.pct, 2)}%</span></td></tr>`).join("")}</tbody></table></div></details>
-    <p class="note">細分產業依「供應鏈題材」整理（${irtSegs().length} 個，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔）；漲跌是成分股的成交金額加權平均。${esc(W.irt?.source || "")}</p>`,
-    liveTag({ live: W.irt?.live, at: W.irt?.at, date: W.irt?.date }, "收盤"), mkSeg("irtK", k, [["gain", "漲幅"], ["loss", "跌幅"], ["value", "成交金額"]]));
+  const lv = (W.irtL || store.get("watch:irtL", "seg")) === "theme" ? "theme" : "seg", L = irtModel(lv);
+  if (!L.length) { loadIndRt(); return sec("產業即時", `<p class="note">${W.irt?.err ? "⚠ " + esc(W.irt.err) : W.off ? "需要部署到網站才有資料。" : "載入中…"}</p>`); }
+  const k = ["gain", "loss", "flow", "value"].includes(W.irtK || store.get("watch:irtK", "gain")) ? W.irtK || store.get("watch:irtK", "gain") : "gain";
+  const ord = { gain: (a, b) => b.pct - a.pct, loss: (a, b) => a.pct - b.pct, flow: (a, b) => b.flow - a.flow, value: (a, b) => b.val - a.val }[k], S = L.slice().sort(ord), all = !!W.irtAll, N = 12;
+  const met = k === "flow" ? g => g.flow : k === "value" ? g => g.val : g => g.pct, mx = Math.max(...S.map(g => Math.abs(met(g))), k === "value" || k === "flow" ? 1 : 0.5), one = k === "value";
+  const fmt = g => (k === "flow" ? `${g.flow > 0 ? "+" : ""}${g.flow.toFixed(1)} 億` : k === "value" ? `${Math.round(g.val).toLocaleString()} 億` : `${sgn(g.pct, 2)}%`);
+  // 預設：漲跌幅排序時看最強 6 個＋最弱 6 個，其他排序看前 12；展開看全部
+  const shown = all || S.length <= N ? S : k === "gain" || k === "loss" ? [...S.slice(0, N / 2), null, ...S.slice(-N / 2)] : S.slice(0, N);
+  const row = g => { if (!g) return `<li class="irb-gap"><span class="note">⋯ 中間 ${S.length - N} 個 ⋯</span></li>`; const v = met(g), w = Math.min(100, Math.abs(v) / mx * 100), c = one ? "amt" : v >= 0 ? "up" : "down", ld = g.pct >= 0 ? g.lead : g.lag;
+    return `<li><button type="button" data-mk="irtOpen" data-v="${esc(g.tid)}" title="${esc(g.name)}：${sgn(g.pct, 2)}%・成交 ${Math.round(g.val)} 億・${g.up}/${g.n} 檔上漲"><span class="irb-n"><b>${esc(g.name)}</b><small>${lv === "theme" ? `${g.n} 檔・${g.up} 漲` : esc(g.theme)}・${esc(ld.nm)} ${sgn(ld.pct, 1)}%</small></span>
+      <span class="irb-t${one ? " one" : ""}"><i class="${c}" style="${one || v >= 0 ? "left" : "right"}:${one ? 0 : 50}%;width:${(one ? w : w / 2).toFixed(1)}%"></i></span><em class="${one ? "" : cls(v)}">${fmt(g)}</em></button></li>`; };
+  const up = L.filter(g => g.pct > 0).length;
+  return sec("產業即時", `<p class="note irb-sum">${L.length} 個${lv === "theme" ? "題材" : "細分產業"}：<b class="up">${up} 漲</b>・<b class="down">${L.length - up} 跌（或平）</b>${k === "flow" ? "・資金流向＝上漲股成交金額算流入、下跌股算流出（估算）" : ""}</p>
+    <ol class="irb">${shown.map(row).join("")}</ol>
+    ${S.length > N ? `<button type="button" class="btn sm irb-more" data-mk="irtAll" data-v="${all ? "" : "1"}">${all ? "收合 ▴" : `看全部 ${S.length} 個 ▾`}</button>` : ""}
+    <p class="note">${lv === "theme" ? "題材" : "細分產業"}依「供應鏈題材」整理（${irtSegs().length} 個細分產業、${irtThemes().length} 個題材，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔）；漲跌是成分股的成交金額加權平均；點一列進題材內頁。${esc(W.irt?.source || "")}</p>`,
+    liveTag({ live: W.irt?.live, at: W.irt?.at, date: W.irt?.date }, "收盤"), mkSeg("irtK", k, [["gain", "漲幅"], ["loss", "跌幅"], ["flow", "資金流向"], ["value", "成交金額"]]) + " " + mkSeg("irtL", lv, [["seg", "細分產業"], ["theme", "題材"]]));
 }
 async function loadMktLive() {
   W.mktLoading = Date.now(); loadIxSpark(); loadIndRt(); const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
@@ -2894,6 +2902,7 @@ $("#lx").addEventListener("click", e => { const b = e.target.closest("[data-mk]"
   if (k === "goInst") { if (v === "money") { W.mf.view = "today"; setLt("money"); } else { W.rankType = v; store.set("watch:rank", v); setLt("rank"); loadHot("tw-rank"); } return; }
   if (k === "goSec") { mktSector(v); return; }
   if (k === "irtOpen") { W.indS.open = v; setLt("ind"); return; }
+  if (k === "irtAll") { W.irtAll = !!v; renderList(); return; }
   if (k === "futInfo") { futInfo(v); return; }
   if (k === "fold") return; // 收合由 <details> 自己處理
   if (k === "mnDay") { W.mnDay = v; renderList(); return; }

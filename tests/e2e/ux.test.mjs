@@ -68,16 +68,23 @@ for (const width of [390, 1280]) test(`看盤：以股查人、☆ 自選、情�
 for (const width of [390, 1280]) test(`大盤：產業即時（細分產業漲跌、領漲股、資金流向）${width}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await p.evaluate(() => { W.mkReg = "tw"; setLt("mkt"); });
-  await p.waitForFunction(() => document.querySelectorAll("#lx .irt .irc").length === 6, null, { timeout: 15000 });
+  // 預設：最強 6 個＋最弱 6 個的長條，中間省略
+  await p.waitForFunction(() => document.querySelectorAll("#lx .irb li button").length === 12, null, { timeout: 15000 });
   const t = await p.evaluate(() => $("#lx").innerText);
-  assert.match(t, /產業即時[\s\S]*資金流入[\s\S]*億[\s\S]*資金流出/);
-  assert.match(t, /全部 \d+ 個細分產業/);
-  // 漲幅排序：第一張卡的漲幅 ≥ 第二張
-  const v = await p.evaluate(() => [...document.querySelectorAll("#lx .irc-h span")].slice(0, 2).map(e => parseFloat(e.textContent.replace(/[▲▼]/g, "")) * (e.className.includes("down") ? -1 : 1)));
-  assert.ok(v[0] >= v[1], JSON.stringify(v));
-  await p.click('#lx [data-mk="irtK"][data-v="loss"]'); await p.waitForTimeout(200);
-  assert.equal(await p.evaluate(() => store.get("watch:irtK")), "loss");
-  await p.click("#lx .irc-h"); await p.waitForTimeout(300);
+  assert.match(t, /產業即時[\s\S]*\d+ 個細分產業：\d+ 漲/); assert.match(t, /中間 \d+ 個/);
+  const v = await p.evaluate(() => [...document.querySelectorAll("#lx .irb em")].map(e => parseFloat(e.textContent)));
+  assert.ok(v[0] >= v[1] && v[1] >= v[5] && v[5] >= v[6], JSON.stringify(v));
+  // 展開看全部
+  const n = await p.evaluate(() => irtModel("seg").length);
+  await p.click('#lx [data-mk="irtAll"]'); await p.waitForTimeout(200);
+  assert.equal(await p.evaluate(() => document.querySelectorAll("#lx .irb li button").length), n);
+  // 資金流向排序、題材層級，選擇會記住
+  await p.click('#lx [data-mk="irtK"][data-v="flow"]'); await p.waitForTimeout(150);
+  assert.match(await p.evaluate(() => $("#lx .irb em").textContent), /億/);
+  await p.click('#lx [data-mk="irtL"][data-v="theme"]'); await p.waitForTimeout(150);
+  assert.equal(await p.evaluate(() => document.querySelectorAll("#lx .irb li button").length), await p.evaluate(() => irtModel("theme").length));
+  assert.deepEqual(await p.evaluate(() => [store.get("watch:irtK"), store.get("watch:irtL")]), ["flow", "theme"]);
+  await p.click("#lx .irb li button"); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => W.lt), "ind");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await ctx.close(); assert.deepEqual(errs, []);
