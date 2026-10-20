@@ -2,7 +2,7 @@
 name: ci
 on:
   pull_request:
-    paths: ["learner/**", "api/**", "scripts/**", "tests/**", ".github/workflows/ci.yml"]
+    paths: ["learner/**", "api/**", "scripts/**", "tests/**", ".github/workflows/ci.yml", "AGENTS.md", "CLAUDE.md", ".agent/**"]
   push:
     branches: [main]
     paths: ["learner/**.js", "learner/**.html", "learner/**.css", "api/**", "scripts/**", "tests/**"]

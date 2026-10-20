@@ -22,8 +22,9 @@
 - **開工前先更新**：`git fetch origin main` 後合併進自己的分支。排程每天都會往 main 寫資料檔（`learner/data/…`）。
 - **合併前才改版本號**：避免兩邊用到同一個 `-N`。合併前看 main 上目前的版本，往上加 1。
 - **一律走 PR**：CI 的 `test` 通過才合併，合併方式用 merge（不要 squash／rebase 別人的提交）。
-- **`learner/watch.html` 很大**：同一時間盡量只有一個 AI 大改它；分工時以頁面或區塊分開。
+- **大檔先上鎖**：`learner/watch.html`、`learner/index.html` 很大，容易衝突。要改它們時，先推一個提交並開 **draft PR**，標題寫「鎖：檔名＋區塊」（例：`鎖：watch.html ETF 分頁`），等於上鎖；開工前先看 open 的 PR，同一個檔案的同一區塊已經被鎖就改做別的，或等它合併。合併或放棄後鎖就解除。
 - **交接**：在 PR 說明寫清楚改了什麼、還有什麼沒做完，另一個 AI 從 PR 接手。
+- **「直接幫我合併」**：推上自己的開發分支 → 開 PR → 等 CI `test` 通過 → 用 merge 方式合併 → 分支重設到最新 main。Antigravity 用 `/merge`（`.agent/workflows/merge.md`）跑同一套步驟。
 - **不要手改** `learner/data/` 裡排程產生的檔案，要改就改產生它的 `scripts/*.mjs`。
 
 ## 版本與發佈
