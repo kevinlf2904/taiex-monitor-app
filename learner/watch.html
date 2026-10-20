@@ -507,14 +507,95 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mkreg { padding: 8px 12px 0; } .mkreg .mkseg button { font-size: 14px; padding: 6px 14px; }
 @media (max-width: 600px) { .mkreg .mkseg { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; } .mkreg .mkseg::-webkit-scrollbar { display: none; } .mkreg .mkseg button { flex: none; padding: 6px 11px; } }
 .ixcards.us .ixcard .spark, .ixcard .spark.tsp { width: 100%; height: 22px; margin-top: 2px; } .tsp-prev { stroke: var(--muted); stroke-width: .6; stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; opacity: .7; }
-.bwrap { margin: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); } .bubble { width: 100%; height: auto; display: block; } .bax { stroke: var(--line); stroke-width: 1; } .bq { font: 500 10px var(--font-body); fill: var(--muted); }
-.bnode { cursor: pointer; } .bnode circle { stroke: none; fill-opacity: var(--bop, .45); transition: fill-opacity .2s; } .bnode.on circle { fill-opacity: min(1, calc(var(--bop, .45) + .35)); } .bnode:focus circle, .bnode:hover circle { fill-opacity: min(1, calc(var(--bop, .45) + .2)); }
+/* 資金雷達視窗自適應：依電腦視窗比例適配寬螢幕、放大檢視填滿畫面 */
+.bwrap { position: relative; margin: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.bwrap svg { width: 100%; height: auto; display: block; }
+@media (min-width: 901px) {
+  .bwrap { width: 100%; max-width: none; margin: 6px auto; }
+  .bwrap.radar { width: 100%; max-width: none; margin: 0 auto; }
+  .mf-desk { display: grid; grid-template-columns: minmax(480px, 1.38fr) minmax(340px, 1fr); gap: 18px 24px; align-items: start; margin: 8px 12px; }
+  .mf-vis { position: sticky; top: calc(var(--topH, 0px) + 50px); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .mf-vis .mtool { margin: 0; gap: 6px 8px; }
+  .mf-vis .bop-r { width: 72px; }
+  .mf-vis .bwrap { margin: 0 auto; width: 100%; }
+  .mf-vis .gnote { margin: 4px 4px 0; }
+  .mf-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .mf-side .qcards { margin: 0; }
+  .mf-side .binfo, .mf-side .binfo-empty { margin: 0; }
+  .mf-side .mcard { margin: 0; }
+}
+/* 動能雷達矩陣與回放 全螢幕／放大檢視（依電腦視窗比例 100% 適配） */
+#secMf.chart-fullscreen, #secMrp.chart-fullscreen {
+  position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; max-height: 100vh !important;
+  z-index: 9999 !important; display: flex !important; flex-direction: column !important; align-items: stretch !important;
+  justify-content: space-between !important; background: var(--bg) !important; overflow: hidden !important;
+  padding: 10px 22px 12px !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; box-sizing: border-box !important;
+}
+#secMf.chart-fullscreen .mf-modes, #secMrp.chart-fullscreen .mf-modes {
+  width: 100% !important; max-width: none !important; justify-content: center !important; margin: 0 0 6px !important; flex-wrap: wrap !important; flex-shrink: 0 !important; overflow: visible !important;
+}
+#secMf.chart-fullscreen .mtool {
+  width: 100% !important; max-width: none !important; justify-content: center !important; margin: 0 0 6px !important; flex-shrink: 0 !important;
+}
+#secMf.chart-fullscreen .bwrap {
+  flex: 1 1 0 !important; min-height: 0 !important; width: 100% !important; max-width: none !important;
+  margin: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; overflow: hidden !important;
+}
+#secMf.chart-fullscreen .bwrap svg {
+  width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100% !important; display: block !important;
+}
+#secMf.chart-fullscreen .mf-rpbar {
+  width: 100% !important; max-width: none !important; margin: 6px 0 0 !important; flex-shrink: 0 !important;
+}
+#secMf.chart-fullscreen .gnote {
+  text-align: center !important; width: 100% !important; max-width: none !important; margin: 4px 0 0 !important; flex-shrink: 0 !important; font-size: 12px !important;
+}
+.mf-modes { margin: 6px 12px; display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 6px; padding-bottom: 2px; }
+.mf-modes::-webkit-scrollbar { display: none; }
+.mf-modes .ichip { flex: none; font-size: 12.5px; padding: 4px 10px; }
+.mf-rpbar { display: flex; align-items: center; gap: 6px 8px; padding: 6px 10px; margin: 6px 12px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); flex-wrap: wrap; }
+.mf-rpbar .mrp-range { flex: 1; min-width: 90px; margin: 0; accent-color: var(--ink); }
+.mf-rpbar .mrp-date { font: 600 12.5px var(--font-num); margin: 0; min-width: 5.2em; text-align: center; color: var(--ink); }
+.mf-rpbar .mrp-sum { font-size: 12px; color: var(--muted); margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+@media (min-width: 901px) {
+  .mf-vis .mf-modes { margin: 0; flex-wrap: wrap; }
+  .mf-vis .mf-rpbar { margin: 0; }
+}
+@media (max-width: 900px) {
+  .mf-desk { display: flex; flex-direction: column; }
+  .mf-side { display: contents; }
+  .mf-side .qcards { order: 0; }
+  .mf-vis { order: 1; }
+  .mf-side .binfo, .mf-side .binfo-empty { order: 2; }
+  .mf-side .mcard { order: 3; }
+  .mrp-desk { display: contents; }
+  .mrp-vis { display: contents; }
+  .mrp-side { display: contents; }
+  .mrp-card { display: contents; }
+}
+@keyframes mfStream { to { stroke-dashoffset: -28; } }
+.mf-flowing .mf-flow-line { stroke-dasharray: 5 7; animation: mfStream 1.1s linear infinite; }
+.mf-flowing .mf-flow-fast { stroke-dasharray: 7 5; animation: mfStream 0.75s linear infinite; }
+.mf-flowing .mf-flow-band { stroke-dasharray: 10 14; animation: mfStream 1.3s linear infinite; }
+.bubble { width: 100%; height: auto; display: block; } .bax { stroke: var(--line); stroke-width: 1; } .bq { font: 500 10.5px var(--font-body); fill: var(--muted); }
+.bnode { cursor: pointer; }
+.bwrap[data-viz="bubble"] .bnode circle:not(.mf-flow-line), .bwrap:not([data-viz]) .bnode circle:not(.mf-flow-line) { stroke: none; fill-opacity: var(--bop, .45); transition: fill-opacity .2s; }
+.bwrap[data-viz="bubble"] .bnode.on circle:not(.mf-flow-line), .bwrap:not([data-viz]) .bnode.on circle:not(.mf-flow-line) { fill-opacity: min(1, calc(var(--bop, .45) + .35)); }
+.bwrap[data-viz="bubble"] .bnode:focus circle:not(.mf-flow-line), .bwrap[data-viz="bubble"] .bnode:hover circle:not(.mf-flow-line), .bwrap:not([data-viz]) .bnode:hover circle:not(.mf-flow-line) { fill-opacity: min(1, calc(var(--bop, .45) + .2)); }
+.bwrap:not([data-viz="bubble"]) .bnode.on, .bwrap:not([data-viz="bubble"]) .bnode:hover { filter: brightness(1.22); }
 .mtool { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin: 6px 12px; } .mtool .cg-t { font-family: var(--font-display); font-weight: 600; color: var(--ink); letter-spacing: .02em; }
 .foot-disc { margin: 4px 16px 12px; } :root[data-embed="1"] .foot-disc { display: none; } .hotmini h3 { display: flex; align-items: baseline; gap: 8px; }
 .ctags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; } .ctg { font-style: normal; font-size: 11px; line-height: 1.5; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); } .ctg.up { color: var(--up); border-color: color-mix(in srgb, var(--up) 40%, transparent); } .ctg.down { color: var(--down); border-color: color-mix(in srgb, var(--down) 40%, transparent); } .ctg.warn { color: var(--ink); }
-.bopr { margin: 0; }
-.bopr { display: flex; align-items: center; gap: 8px; margin: 2px 12px 0; font-size: 12px; color: var(--muted); } .bopr input { flex: 1; max-width: 220px; accent-color: var(--ink); } .bopr b { font: 500 12px var(--font-num); color: var(--ink); min-width: 3em; } .bax-t { font: 10px var(--font-body); fill: var(--muted); } .blab { pointer-events: none; } .blab text { paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; } /* 標籤字用泡泡自己的顏色（象限色），外圈描深色邊才看得清楚 */
-.bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bbtns { display: flex; gap: 8px; flex-wrap: wrap; } .bn { font: 500 9px var(--font-body); fill: var(--qc, var(--ink)); text-anchor: middle; pointer-events: none; } .bv { font: 8.5px var(--font-num); fill: var(--qc, var(--ink)); opacity: .85; text-anchor: middle; pointer-events: none; }
+.bopr { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); } .bopr input { flex: 1; max-width: 220px; accent-color: var(--ink); } .bopr b { font: 500 12px var(--font-num); color: var(--ink); min-width: 3em; } .bax-t { font: 10px var(--font-body); fill: var(--muted); }
+.bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+/* 圈圈內部標籤：極細微小、因應球體動態縮放、絕對不超出球體、自動換行、無描邊半透明 */
+.blab { pointer-events: none; }
+.blab text { stroke: none !important; }
+.bn { font-family: var(--font-body); font-size: var(--bfs, 4.8px); font-weight: 200; fill: var(--qc, var(--ink)); fill-opacity: .82; text-anchor: middle; pointer-events: none; letter-spacing: -.02em; stroke: none; }
+.bv { font-family: var(--font-num); font-size: calc(var(--bfs, 4.8px) * 0.85); font-weight: 200; fill: var(--qc, var(--ink)); fill-opacity: .72; text-anchor: middle; pointer-events: none; font-variant-numeric: tabular-nums; stroke: none; }
+.mftip { position: absolute; pointer-events: none; z-index: 20; padding: 6px 10px; border-radius: 6px; background: var(--ink); color: var(--bg); font-size: 12px; line-height: 1.4; transform: translate(-50%, -100%); margin-top: -10px; box-shadow: 0 4px 16px rgba(0,0,0,.35); white-space: nowrap; }
+.mftip b { font-weight: 600; margin-right: 6px; }
+.mftip span { font-family: var(--font-num); font-weight: 500; }
 .mlist { list-style: none; margin: 0; padding: 0; } .mlist button { width: 100%; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); padding: 9px 2px; cursor: pointer; text-align: left; font: inherit; }
 .mlist .nm { display: flex; flex-direction: column; font-size: 14.5px; min-width: 0; } .mlist .nm small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mlist b { font-size: 13.5px; text-align: right; min-width: 4.2em; }
 .mlist li:has(> .wstar) { display: flex; align-items: stretch; } .mlist li:has(> .wstar) > button:first-child { flex: 1; min-width: 0; } .mlist .wstar { width: auto; display: block; border-top: 1px solid var(--line); border-radius: 0; padding: 0 8px; } .bmem-h { margin: 10px 0 2px; font-size: 13.5px; font-weight: 500; }
@@ -779,7 +860,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     <!-- 走勢：分時＋五檔 -->
     <div class="d-grid" data-pane="trend">
       <div class="panel sec" id="secTs">
-        <div class="ph"><h2>分時</h2><div class="seg" role="group" aria-label="分時天數" id="tsSeg"><button data-ts="1">當日</button><button data-ts="3">三日</button><button data-ts="5">五日</button></div><button class="btn sm" id="cdpBtn" type="button" title="CDP 逆勢操作：用昨天的高低收算出今天的壓力（AH、NH）與支撐（NL、AL）">CDP</button><span class="note" id="tsNote"></span></div>
+        <div class="ph"><h2>分時</h2><div class="seg" role="group" aria-label="分時天數" id="tsSeg"><button data-ts="1">當日</button><button data-ts="3">三日</button><button data-ts="5">五日</button></div><button class="btn sm" id="cdpBtn" type="button" title="CDP 逆勢操作：用昨天的高低收算出今天的壓力（AH、NH）與支撐（NL、AL）">CDP</button><button class="btn sm exp-btn" id="tsExpandBtn" type="button" title="放大走勢圖（全螢幕檢視，或按 Esc 縮小）" aria-label="放大走勢圖">⛶ 放大</button><span class="note" id="tsNote"></span></div>
         <div class="ts" id="tsBox"><div class="ts-leg" id="tsLeg"></div><canvas id="tsCanvas" role="img" aria-label="當日分時走勢"></canvas></div>
       </div>
       <div class="panel sec" id="secBook">
@@ -792,7 +873,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 
     <!-- 技術：K 線＋疊加＋策略＋判讀 -->
     <div class="panel sec" id="secK" data-pane="tech">
-      <div class="ph"><h2>K 線</h2></div>
+      <div class="ph"><h2>K 線</h2><button class="btn sm exp-btn" id="kExpandBtn" type="button" title="放大 K 線圖（全螢幕檢視，或按 Esc 縮小）" aria-label="放大 K 線圖">⛶ 放大</button></div>
       <div class="k-status"><span id="kNote"></span><span>往左拖曳會自動載入更早的資料；兩指縮放；放大後圖表鎖定，按「全部」解鎖</span></div>
       <div class="klayers" id="kset">
       <details class="kset" id="klInd"><summary><span>指標</span><span class="note" id="klIndSum"></span></summary><div class="ibar" id="dIbar"></div><p class="note" style="margin:0 14px 8px">線的顏色、參數、新增線：K 線圖右上「設定」→「線型」</p></details>
@@ -861,7 +942,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.20-100</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.20-102</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -937,7 +1018,7 @@ const W = {
   mkReg: ["us", "gl", "macro", "news", "poly"].includes(store.get("watch:mkReg", "tw")) ? store.get("watch:mkReg", "tw") : "tw", usHot: ["active", "gain", "loss"].includes(store.get("watch:usHot", "active")) ? store.get("watch:usHot", "active") : "active",
   mkM: ["tpex", "all"].includes(store.get("watch:mkM", "twse")) ? store.get("watch:mkM", "twse") : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
   mkHot: ["value", "gain", "surge", "volume"].includes(store.get("watch:mkHot", "value")) ? store.get("watch:mkHot", "value") : "value", worldR: store.get("watch:worldR", "us"), calWk: 0, calK: ["all", "conf", "ex"].includes(store.get("watch:calK", "all")) ? store.get("watch:calK", "all") : "all", calDay: null, warn: null, warnOpen: "punish", cal: null, futx: null,
-  mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), q: "up", rk: "inst", side: "buy", win: "5", bw: store.get("watch:mfbw", "5") === "1" ? "1" : "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), rp: { t: null, playing: false, speed: 1, set: "hot" } },
+  mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), viz: store.get("watch:mfviz", "bubble"), flowOn: store.get("watch:mfflow", true) !== false, full: null, q: "up", rk: "inst", side: "buy", win: "5", bw: store.get("watch:mfbw", "5") === "1" ? "1" : "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), rp: { t: null, playing: false, speed: 1, set: "hot" } },
   indS: { view: "themes", mk: "tw", sub: "chain", net: "ai-dc", ...(store.get("watch:inds", null) || {}), open: null, focus: null }, indQ: {},
   cmp: (store.get("watch:cmp", []) || []).filter(c => typeof c === "string").slice(0, 3), cmpData: {},
   daily: null, intra: null, intraAt: 0, mk: {}, info: null, hot: {}, timer: null, busy: false, stocks: null, lastOk: 0,
@@ -2093,10 +2174,10 @@ async function loadMoney(need = 10, force = false) {
     catch (e) { miss++; F.err = e.message; }
     F.prog = `${F.days.length}/${need}`;
     // 回放畫面已經畫好時只更新進度文字，等全部載完再重畫，避免拖拉日期或播放被打斷
-    if (W.lt === "money" && F.view === "replay" && document.getElementById("mfb")) { const el = document.querySelector(".mrp-load"); if (el) el.textContent = `正在載入更早的資料（${F.prog}）…`; }
+    if (W.lt === "money" && (F.view === "replay" || (F.view === "bubble" && F.rp.playing)) && document.getElementById("mfb")) { const el = document.querySelector(".mrp-load"); if (el) el.textContent = `正在載入更早的資料（${F.prog}）…`; }
     else if (W.lt === "money" || (W.lt === "screen" && W.scrG === "score")) renderList();
   }
-  F.loading = false; if (W.lt === "money" || W.lt === "screen" || (W.lt === "tools" && W.tv === "sum")) { mfModel(); renderList(); }
+  F.loading = false; if (F.rp) F.rp.fl = null; if (W.lt === "money" || W.lt === "screen" || (W.lt === "tools" && W.tv === "sum")) { mfModel(); renderList(); }
 }
 const mfModel = () => { const F = W.mf; if (!F.model && F.days.length) F.model = flowModel(F.days, flowSectors(F.ind)); return F.model; };
 const qDot = q => `<i class="qdot" style="background:${FLOW_Q[q][2]}"></i>`;
@@ -2122,6 +2203,46 @@ function renderSector(M) {
       ${secMembers(M, S, k)}
       <p class="note">金額＝法人買賣超張數 × 收盤價（億元）。右邊是${k === "a1" ? "今日" : "近 5 日"}合計；點個股看 K 線。</p></section>`;
 }
+function wrapBubbleText(name, r) {
+  if (!name) return [];
+  const s = String(name).trim();
+  if (s.length <= 2) return [s];
+  if (s.length === 3) return r < 8.0 ? [s.slice(0, 2), s.slice(2)] : [s];
+  if (s.length === 4) return [s.slice(0, 2), s.slice(2)];
+  if (s.length === 5) return r < 10.5 ? [s.slice(0, 2), s.slice(2, 4)] : [s.slice(0, 2), s.slice(2)];
+  return [s.slice(0, 3), s.slice(3, 6)];
+}
+function calcBubbleLabel(name, net5, r) {
+  if (r < 4.6) return null; // 太小的球體放不下字，完全留空由 Tooltip 顯示
+  const lines = wrapBubbleText(name, r), val = flowFmt(net5);
+  const maxChars = Math.max(...lines.map(s => s.length));
+  const wEm = maxChars * 1.0;
+  // 盡量顯示金額：優先排入金額，只要字體在 2.55px 以上且安全在球體內即顯示金額
+  const wEmWithVal = Math.max(wEm, 2.7);
+  const hEmWithVal = (lines.length === 1 ? 1.0 : 2.1) + 1.0;
+  const dEmWithVal = Math.hypot(wEmWithVal, hEmWithVal);
+  const fsWithVal = (1.64 * r) / dEmWithVal;
+
+  const hasVal = fsWithVal >= 2.55;
+  const fs = hasVal ? Math.min(5.2, fsWithVal) : Math.min(5.2, Math.max(2.6, (1.64 * r) / Math.hypot(wEm, lines.length === 1 ? 1.0 : 2.1)));
+
+  let y1 = 0, y2 = null, yv = null;
+  if (lines.length === 1 && !hasVal) {
+    y1 = 0.35 * fs;
+  } else if (lines.length === 2 && !hasVal) {
+    y1 = -0.25 * fs;
+    y2 = 0.95 * fs;
+  } else if (lines.length === 1 && hasVal) {
+    y1 = -0.15 * fs;
+    yv = 1.05 * fs;
+  } else {
+    // 2 行名稱 + 1 行金額
+    y1 = -0.75 * fs;
+    y2 = 0.38 * fs;
+    yv = 1.45 * fs;
+  }
+  return { dx: 0, dy: 0, nm: lines.join(""), lines, val, hasVal, r, fs, y1, y2, yv };
+}
 // 量價動能矩陣：x＝近 5 日淨流入、y＝加速度（都用平方根縮放）、半徑＝近 5 日淨流入規模（3～30，差距拉大）、顏色＝象限。
 // 重疊的圓點會稍微推開（不會被推到別的象限），名稱標籤會避開彼此和其他圓點，放不下就不標（點圓點看詳細）。
 function bubbleLayout(pts, { w = 360, h = 360, scale } = {}) {
@@ -2136,39 +2257,386 @@ function bubbleLayout(pts, { w = 360, h = 360, scale } = {}) {
     for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) { const a = N[i], b = N[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01, o = a.r + b.r + 1 - d;
       if (o > 0) { const ux = dx / d, uy = dy / d, k = o / 2; a.x -= ux * k; a.y -= uy * k; b.x += ux * k; b.y += uy * k; clamp(a); clamp(b); moved = true; } }
     if (!moved) break; }
-  // 標籤：前 12 大依序找位置（圓點裡、上、下、右、左），和已放的標籤或別的圓點重疊就換位置
-  const boxes = [], hit = (r1, r2) => r1.x < r2.x + r2.w && r2.x < r1.x + r1.w && r1.y < r2.y + r2.h && r2.y < r1.y + r1.h;
-  const circHit = (r, n) => { const qx = Math.max(r.x, Math.min(n.x, r.x + r.w)), qy = Math.max(r.y, Math.min(n.y, r.y + r.h)); return Math.hypot(qx - n.x, qy - n.y) < n.r - 1; };
-  N.forEach((n, i) => { if (i >= 12) return; const nm = n.p.name.length > 6 ? n.p.name.slice(0, 6) + "…" : n.p.name, bw = Math.max(nm.length * 9, flowFmt(n.p.net5).length * 5.4) + 4, bh = 20;
-    const cand = [[0, 0, n.r >= 13], [0, -n.r - bh / 2 - 1, true], [0, n.r + bh / 2 + 1, true], [n.r + bw / 2 + 2, 0, true], [-n.r - bw / 2 - 2, 0, true]];
-    for (const [dx, dy, ok] of cand) { if (!ok) continue; const r = { x: n.x + dx - bw / 2, y: n.y + dy - bh / 2, w: bw, h: bh };
-      if (r.x < 2 || r.x + r.w > w - 2 || r.y < top - 4 || r.y + r.h > bot + 4) continue;
-      if (boxes.some(b => hit(b, r)) || (dx || dy ? N.some(m => m !== n && circHit(r, m)) : false)) continue; // 放在圓點裡的標籤有描邊，可以壓到旁邊的圓點
-      boxes.push(r); n.lab = { dx, dy, nm }; break; } });
+  // 標籤因應球體動態縮放、極細縮小不超出球體、自動換行置中放進球體內部
+  N.forEach(n => {
+    n.lab = calcBubbleLabel(n.p.name, n.p.net5, n.r);
+  });
   return { N, w, h, top, bot, cx, cy, mx, my };
 }
-// 標籤畫在最上層（不會被別的圓點蓋住），跟著圓點一起移動
-const bubbleLabIn = n => `<g class="bl" transform="translate(${n.lab.dx.toFixed(1)},${n.lab.dy.toFixed(1)})"><text y="-1" class="bn">${esc(n.lab.nm)}</text><text y="8.5" class="bv">${flowFmt(n.p.net5)}</text></g>`;
-const bubbleLab = n => (n.lab ? `<g class="blab" data-lb="${esc(n.p.id)}" style="--qc:${FLOW_Q[n.p.q][2]}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">${bubbleLabIn(n)}</g>` : "");
-const bubbleNode = (n, sel) => `<g class="bnode${n.p.id === sel ? " on" : ""}" data-mbs="${esc(n.p.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})"><circle r="${n.r.toFixed(1)}" fill="${FLOW_Q[n.p.q][2]}"/><title>${esc(n.p.name)} ${flowFmt(n.p.net5)}</title></g>`;
-function bubbleSvg(pts, { w = 360, h = 360, id = "mfb", scale, sel } = {}) {
+// 標籤放圈圈裡面：極細微小、因應球體動態縮放不超出球體、無描邊半透明、顏色跟隨象限
+const bubbleLabIn = n => {
+  const l = n.lab; if (!l) return "";
+  const lines = l.lines || [l.nm];
+  const fsBn = `style="font-size:${l.fs.toFixed(1)}px;"`;
+  const fsBv = `style="font-size:${(l.fs * 0.85).toFixed(1)}px;"`;
+  if (lines.length === 1 && !l.hasVal) {
+    return `<g class="bl" transform="translate(0,0)"><text y="${l.y1.toFixed(1)}" class="bn bn1" ${fsBn}>${esc(lines[0])}</text></g>`;
+  }
+  if (lines.length === 2 && !l.hasVal) {
+    return `<g class="bl" transform="translate(0,0)"><text y="${l.y1.toFixed(1)}" class="bn bn1" ${fsBn}>${esc(lines[0])}</text><text y="${l.y2.toFixed(1)}" class="bn bn2" ${fsBn}>${esc(lines[1])}</text></g>`;
+  }
+  if (lines.length === 1 && l.hasVal) {
+    return `<g class="bl" transform="translate(0,0)"><text y="${l.y1.toFixed(1)}" class="bn bn1" ${fsBn}>${esc(lines[0])}</text><text y="${l.yv.toFixed(1)}" class="bv" ${fsBv}>${l.val}</text></g>`;
+  }
+  return `<g class="bl" transform="translate(0,0)"><text y="${l.y1.toFixed(1)}" class="bn bn1" ${fsBn}>${esc(lines[0])}</text><text y="${l.y2.toFixed(1)}" class="bn bn2" ${fsBn}>${esc(lines[1])}</text><text y="${l.yv.toFixed(1)}" class="bv" ${fsBv}>${l.val}</text></g>`;
+};
+const bubbleLab = n => (n.lab ? `<g class="blab" data-lb="${esc(n.p.id)}" style="--qc:${FLOW_Q[n.p.q][2]};--bfs:${n.lab.fs.toFixed(1)}px" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">${bubbleLabIn(n)}</g>` : "");
+const bubbleNode = (n, sel, flowOn = true) => {
+  const c = FLOW_Q[n.p.q][2];
+  return `<g class="bnode${n.p.id === sel ? " on" : ""}" data-mbs="${esc(n.p.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">${flowOn && n.r > 7.5 ? `<circle class="mf-flow-line" r="${(n.r + 1.8).toFixed(1)}" fill="none" stroke="${c}" stroke-width="0.7" stroke-opacity=".45"/>` : ""}<circle r="${n.r.toFixed(1)}" fill="${c}"/><title>${esc(n.p.name)} ${flowFmt(n.p.net5)}</title></g>`;
+};
+function bubbleOnlySvg(pts, { w = 360, h = 360, id = "mfb", scale, sel, flowOn = true } = {}) {
   const B = bubbleLayout(pts, { w, h, scale }), lab = (t, x, y, a, c) => `<text x="${x}" y="${y}" text-anchor="${a}" class="bq" style="fill:${c}">${t}</text>`, { top, bot, cx, cy } = B;
-  return `<svg id="${id}" class="bubble" viewBox="0 0 ${w} ${h}" role="img" aria-label="量價動能矩陣（板塊資金四象限）">
+  return `<svg id="${id}" class="bubble${flowOn ? " mf-flowing" : ""}" viewBox="0 0 ${w} ${h}" role="img" aria-label="量價動能矩陣（板塊資金四象限）">
     <rect x="${cx}" y="${top}" width="${w - 8 - cx}" height="${cy - top}" fill="${FLOW_Q.up[2]}" opacity=".05"/><rect x="8" y="${cy}" width="${cx - 8}" height="${bot - cy}" fill="${FLOW_Q.down[2]}" opacity=".05"/>
     <line x1="${cx}" y1="${top}" x2="${cx}" y2="${bot}" class="bax"/><line x1="8" y1="${cy}" x2="${w - 8}" y2="${cy}" class="bax"/>
     ${lab("↖ " + FLOW_Q.watch[0], 8, 18, "start", FLOW_Q.watch[2])}${lab(FLOW_Q.up[0] + " ↗", w - 8, 18, "end", FLOW_Q.up[2])}${lab("↙ " + FLOW_Q.down[0], 8, h - 10, "start", FLOW_Q.down[2])}${lab(FLOW_Q.rot[0] + " ↘", w - 8, h - 10, "end", FLOW_Q.rot[2])}
     <text x="${w - 10}" y="${cy - 4}" text-anchor="end" class="bax-t">主力淨流入 →</text><text x="${cx + 4}" y="${top + 10}" class="bax-t">動能加速 ↑</text>
-    <g class="bnodes">${B.N.map(n => bubbleNode(n, sel)).join("")}</g><g class="blabs">${B.N.map(bubbleLab).join("")}</g></svg>`;
+    <g class="bnodes">${B.N.map(n => bubbleNode(n, sel, flowOn)).join("")}</g><g class="blabs">${B.N.map(bubbleLab).join("")}</g></svg>`;
 }
+function bubbleSvg(pts, opts = {}) { return bubbleOnlySvg(pts, opts) + `<div class="mftip" id="mfTip" hidden></div>`; }
+
+// 12 種量價動能矩陣視覺化模式（全部支援放大縮小、回放與動態流動）
+const MF_VIZ = [
+  ["bubble", "圓點矩陣", "四象限圓點，面積代表資金規模、顏色代表象限，外圈流動環呈現動能"],
+  ["tiles", "象限磚塊", "四象限等大磚塊，越強越靠外角；直接顯示名稱、金額與 ▲加速／▼放緩"],
+  ["leader", "引線散佈", "保留四象限散佈位置，名稱拉到左右兩側以細線連回，字體固定清晰不重疊"],
+  ["compass", "資金羅盤", "極座標羅盤：指針方向代表所處象限、長度代表資金力道，名稱沿外圈排列"],
+  ["flow", "移轉流向", "左側為前一期象限、右側為當期；流向帶顯示跨區輪動並標出換區板塊"],
+  ["lolli", "雙指標棒棒糖", "名稱置中，左側看淨流入、右側看動能加速度，排行與雙軸力道一目了然"],
+  ["trail", "輪動軌跡", "畫出近 5 日在四象限內的移動軌跡（RRG 風格），順時針代表資金正向輪動"],
+  ["tree", "矩形樹圖", "先依四象限分區，塊內矩形面積代表資金規模、顏色深淺代表強度"],
+  ["bar", "背離條形", "依淨流入規模排序，往右為流入、往左為流出，白色三角標示加速度位置"],
+  ["heat", "熱力格", "每一列為一個板塊、每一格為單日法人淨額（紅買綠賣），最右側為累計"],
+  ["board", "四象限看板", "四象限卡片清單，內含近 10 日迷你柱狀圖與金額，文字最清晰"],
+  ["arrow", "位移箭頭", "空心圈為前一期位置，箭頭指向當期位置，箭頭越長代表變化越劇烈"],
+];
+const mfVizBar = () => `<div class="ichips gcats mf-modes" role="group" aria-label="視覺化模式">${MF_VIZ.map(([k, t]) => `<button type="button" class="ichip" data-mviz="${k}" aria-pressed="${W.mf.viz === k}">${t}</button>`).join("")}</div>`;
+
+function mfSquarify(items, x, y, w, h) {
+  const out = [], total = items.reduce((a, b) => a + b.v, 0); if (!total || w <= 0 || h <= 0) return out;
+  const scale = (w * h) / total; let rest = items.map(i => ({ ...i, a: Math.max(0.01, i.v * scale) }));
+  while (rest.length) {
+    const side = Math.max(1, Math.min(w, h)); let row = [], best = Infinity;
+    for (const it of rest) {
+      const r = [...row, it], s = r.reduce((a, b) => a + b.a, 0);
+      const worst = Math.max(...r.map(z => Math.max((side * side * z.a) / (s * s), (s * s) / (side * side * z.a))));
+      if (worst > best && row.length) break; best = worst; row = r;
+    }
+    const s = row.reduce((a, b) => a + b.a, 0), thick = s / side; let off = 0;
+    row.forEach(z => {
+      const len = thick > 0 ? z.a / thick : 0;
+      out.push(w >= h ? { ...z, x, y: y + off, w: thick, h: len } : { ...z, x: x + off, y, w: len, h: thick });
+      off += len;
+    });
+    if (w >= h) { x += thick; w -= thick; } else { y += thick; h -= thick; }
+    rest = rest.slice(row.length);
+  }
+  return out;
+}
+function mfQuadFrame(W, H, L, R, top, bot) {
+  const cx = (L + R) / 2, cy = (top + bot) / 2;
+  return `<rect x="${cx}" y="${top}" width="${R - cx}" height="${cy - top}" fill="${FLOW_Q.up[2]}" opacity=".05"/>
+    <rect x="${L}" y="${cy}" width="${cx - L}" height="${bot - cy}" fill="${FLOW_Q.down[2]}" opacity=".05"/>
+    <rect x="${L}" y="${top}" width="${R - L}" height="${bot - top}" fill="none" stroke="var(--line)" stroke-opacity=".5"/>
+    <line class="bax" x1="${cx}" y1="${top}" x2="${cx}" y2="${bot}"/><line class="bax" x1="${L}" y1="${cy}" x2="${R}" y2="${cy}"/>
+    <text x="${L + 6}" y="${top + 16}" class="bq" style="fill:${FLOW_Q.watch[2]};font-size:12px">↖ ${FLOW_Q.watch[0]}</text>
+    <text x="${R - 6}" y="${top + 16}" text-anchor="end" class="bq" style="fill:${FLOW_Q.up[2]};font-size:12px">${FLOW_Q.up[0]} ↗</text>
+    <text x="${L + 6}" y="${bot - 8}" class="bq" style="fill:${FLOW_Q.down[2]};font-size:12px">↙ ${FLOW_Q.down[0]}</text>
+    <text x="${R - 6}" y="${bot - 8}" text-anchor="end" class="bq" style="fill:${FLOW_Q.rot[2]};font-size:12px">${FLOW_Q.rot[0]} ↘</text>
+    <text class="bax-t" x="${R - 6}" y="${cy - 6}" text-anchor="end" style="font-size:11px">主力淨流入 →</text>
+    <text class="bax-t" x="${cx + 6}" y="${top + 32}" style="font-size:11px">動能加速 ↑</text>`;
+}
+function mfEnrichPts(M, pts, tCur) {
+  const T = M?.T || 1, t = tCur == null ? T - 1 : Math.max(0, Math.min(T - 1, Math.round(tCur)));
+  const dayMap = idx => {
+    if (!M || T <= 1 || typeof flowAt !== "function") return null;
+    if (!M._dmap || M._dfn !== flowAt || M._dbw !== W.mf.bw) { M._dmap = {}; M._dfn = flowAt; M._dbw = W.mf.bw; }
+    if (!M._dmap[idx]) M._dmap[idx] = new Map(mfView(flowAt(M, idx)).map(x => [x.id, x]));
+    return M._dmap[idx];
+  };
+  return pts.map(p => {
+    const net5 = p.net5 ?? 0, accel = (p.accel ?? p.acc) ?? 0, q = p.q || flowQuad(net5, accel), col = p.col || FLOW_Q[q]?.[2] || "#9aa3ad";
+    if (p.trail && p.prev && p.d10) return { ...p, net5, accel, q, col };
+    let prev = p.prev, trail = p.trail, d10 = p.d10, dDates = p.dDates;
+    if (!prev) {
+      const pm = T > 1 && t > 0 ? dayMap(t - 1)?.get(p.id) : null;
+      if (pm) prev = { net5: pm.net5 ?? 0, accel: (pm.accel ?? pm.acc) ?? 0, q: pm.q || flowQuad(pm.net5 ?? 0, (pm.accel ?? pm.acc) ?? 0) };
+      else { const pn = net5 - accel * 0.4, pa = accel * 0.6; prev = { net5: pn, accel: pa, q: flowQuad(pn, pa) }; }
+    }
+    if (!trail) {
+      if (T > 1 && t > 0) {
+        trail = [4, 3, 2, 1, 0].map(d => { const m = dayMap(Math.max(0, t - d))?.get(p.id); return m ? { net5: m.net5 ?? 0, accel: (m.accel ?? m.acc) ?? 0, q: m.q } : { net5, accel, q }; });
+      } else {
+        trail = [0, 0.25, 0.5, 0.75, 1].map(k => ({ net5: prev.net5 + (net5 - prev.net5) * k, accel: prev.accel + (accel - prev.accel) * k, q }));
+      }
+    }
+    if (!d10) {
+      const S = M?.secs?.find(s => s.id === p.id), t0 = Math.max(0, t - 9);
+      if (S?.net?.length) { d10 = S.net.slice(t0, t + 1); dDates = (M.dates || []).slice(t0, t + 1); }
+      else if (T > 1) { d10 = []; dDates = []; for (let k = t0; k <= t; k++) { d10.push(dayMap(k)?.get(p.id)?.net1 ?? 0); dDates.push(M.dates?.[k] || ""); } }
+      else { d10 = [p.net1 ?? net5]; dDates = [M?.dates?.[0] || "今日"]; }
+    }
+    return { ...p, net5, accel, q, col, prev, trail, d10, dDates };
+  });
+}
+function mfWinSize() {
+  try { if (EMBED && parent && parent !== window && parent.innerWidth) return { vw: parent.innerWidth, vh: parent.innerHeight }; } catch {}
+  return { vw: window.innerWidth || 1280, vh: window.innerHeight || 720 };
+}
+function mfStageDims() {
+  const { vw, vh } = mfWinSize(), isFull = W.mf?.full === "matrix" || W.mf?.full === "replay";
+  if (isFull) {
+    const availW = Math.max(320, vw - 44), availH = Math.max(240, vh - 148);
+    const ar = Math.max(0.75, Math.min(2.35, availW / availH));
+    return ar >= 1
+      ? { ar, bw: Math.round(360 * ar), bh: 360, vw: Math.round(540 * ar), vh: 540 }
+      : { ar, bw: 360, bh: Math.round(360 / ar), vw: 540, vh: Math.round(540 / ar) };
+  }
+  if (vw > 900) {
+    const wrapW = Math.min(1480, vw - 32), colW = Math.max(480, wrapW * 0.57);
+    const availH = Math.max(280, Math.min(540, vh - 360));
+    const ar = Math.max(1.52, Math.min(1.95, colW / availH));
+    return { ar, bw: Math.round(360 * ar), bh: 360, vw: Math.round(520 * ar), vh: 520 };
+  }
+  return { ar: 1, bw: 360, bh: 360, vw: 600, vh: 600 };
+}
+function mfVizOnlySvg(rawPts, { viz = W.mf.viz, w, h, id = "mfb", scale, sel = W.mf.bsel, flowOn = W.mf.flowOn, M = mfModel(), u } = {}) {
+  const dims = mfStageDims();
+  if (viz === "bubble") return bubbleOnlySvg(rawPts, { w: w || dims.bw, h: h || dims.bh, id, scale, sel, flowOn });
+  const pts = mfEnrichPts(M, rawPts, u), W0 = dims.vw, H0 = dims.vh;
+  const mxN = Math.max(1, scale?.mx || 0, ...pts.flatMap(s => [Math.abs(s.net5), Math.abs(s.prev?.net5 || 0), ...(s.trail || []).map(p => Math.abs(p.net5))]));
+  const mxA = Math.max(1, scale?.my || 0, ...pts.flatMap(s => [Math.abs(s.accel), Math.abs(s.prev?.accel || 0), ...(s.trail || []).map(p => Math.abs(p.accel))]));
+  const sq = (v, m) => Math.sign(v) * Math.sqrt(Math.min(1, Math.abs(v) / Math.max(1e-6, m)));
+  const col = s => s.col || FLOW_Q[s.q]?.[2] || "#9aa3ad", fmt = v => flowFmt(v);
+  const bcls = s => `class="bnode${s.id === sel ? " on" : ""}" data-mbs="${esc(s.id)}"`;
+  const wrapSvg = body => `<svg id="${id}" class="bubble${flowOn ? " mf-flowing" : ""}" viewBox="0 0 ${W0} ${H0}" role="img" aria-label="量價動能矩陣（${MF_VIZ.find(x => x[0] === viz)?.[1] || "四象限"}）">${body}</svg>`;
+
+  if (viz === "tiles") {
+    const G = 12, pad = 6, qw = (W0 - pad * 2 - G) / 2, qh = (H0 - pad * 2 - G) / 2, pos = { watch: [0, 0], up: [1, 0], down: [0, 1], rot: [1, 1] };
+    let g = "";
+    Object.entries(pos).forEach(([q, [ix, iy]]) => {
+      const x0 = pad + ix * (qw + G), y0 = pad + iy * (qh + G), L = pts.filter(s => s.q === q).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5));
+      const C = (qw > 420 && L.length > 6) || L.length > 9 ? 4 : 3, R = Math.max(3, Math.ceil(Math.max(1, L.length) / C)), tw = (qw - 16 - (C - 1) * 6) / C, th = Math.min(54, (qh - 38 - (R - 1) * 6) / R);
+      g += `<rect x="${x0}" y="${y0}" width="${qw}" height="${qh}" rx="8" fill="${FLOW_Q[q][2]}" fill-opacity=".05" stroke="${FLOW_Q[q][2]}" stroke-opacity=".28"/>
+        <text x="${ix ? x0 + qw - 10 : x0 + 10}" y="${iy ? y0 + qh - 10 : y0 + 20}" text-anchor="${ix ? "end" : "start"}" style="fill:${FLOW_Q[q][2]};font-size:12.5px;font-weight:600">${FLOW_Q[q][0]}（${L.length}）</text>`;
+      L.forEach((s, i) => {
+        const c = i % C, r = Math.floor(i / C), x = ix ? x0 + qw - 8 - (c + 1) * tw - c * 6 : x0 + 8 + c * (tw + 6), y = iy ? y0 + qh - 30 - (r + 1) * th - r * 6 : y0 + 30 + r * (th + 6);
+        const k = Math.min(1, Math.abs(s.net5) / mxN), ar = s.accel >= 0 ? "▲" : "▼";
+        g += `<g ${bcls(s)}><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${tw.toFixed(1)}" height="${th.toFixed(1)}" rx="6" fill="${col(s)}" fill-opacity="${(0.16 + 0.56 * k).toFixed(2)}" stroke="${col(s)}" stroke-opacity=".6"/>
+          ${k > 0.3 ? `<rect class="mf-flow-line" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${tw.toFixed(1)}" height="${th.toFixed(1)}" rx="6" fill="none" stroke="${col(s)}" stroke-width="1.3" stroke-opacity=".85"/>` : ""}
+          <text x="${(x + 7).toFixed(1)}" y="${(y + th * 0.44).toFixed(1)}" style="font-size:${C > 3 && tw < 95 ? 10.5 : 12.5}px;font-weight:500;fill:var(--ink)">${esc(s.name.slice(0, C > 3 && tw < 95 ? 5 : 6))}</text>
+          <text x="${(x + 7).toFixed(1)}" y="${(y + th * 0.82).toFixed(1)}" style="font-size:${C > 3 && tw < 95 ? 9.5 : 11}px;fill:var(--ink);opacity:.88">${fmt(s.net5)}</text>
+          ${C <= 3 || tw >= 95 ? `<text x="${(x + tw - 6).toFixed(1)}" y="${(y + th * 0.82).toFixed(1)}" text-anchor="end" style="font-size:9.5px;fill:var(--ink);opacity:.72">${ar}${Math.abs(s.accel).toFixed(0)}</text>` : ""}</g>`;
+      });
+    });
+    return wrapSvg(g);
+  }
+  if (viz === "leader") {
+    const L = Math.round(Math.max(128, W0 * 0.17)), R = W0 - L, P = 26, cx = (L + R) / 2, cy = H0 / 2;
+    const arr = pts.map(s => ({ s, x: cx + sq(s.net5, mxN) * (cx - L - 12), y: cy - sq(s.accel, mxA) * (cy - P - 12) }));
+    const place = (list, side) => {
+      list.sort((a, b) => a.y - b.y);
+      const gap = Math.min(19, (H0 - 2 * P - 12) / Math.max(1, list.length));
+      let last = P + 6 - gap;
+      list.forEach(p => { p.ly = Math.max(p.y, last + gap); last = p.ly; });
+      const over = last - (H0 - P - 6); if (over > 0) list.forEach(p => (p.ly -= over));
+      for (let i = 1; i < list.length; i++) if (list[i].ly < list[i - 1].ly + gap) list[i].ly = list[i - 1].ly + gap;
+      list.forEach(p => (p.side = side));
+    };
+    place(arr.filter(p => p.x >= cx), 1); place(arr.filter(p => p.x < cx), -1);
+    let g = mfQuadFrame(W0, H0, L, R, P, H0 - P);
+    arr.forEach(p => {
+      const s = p.s, lx = p.side > 0 ? R + 8 : L - 8, r = 3.5 + 6.5 * Math.sqrt(Math.min(1, Math.abs(s.net5) / mxN));
+      g += `<g ${bcls(s)}><path class="mf-flow-line" d="M${p.x.toFixed(1)} ${p.y.toFixed(1)} L${p.side > 0 ? R : L} ${p.ly.toFixed(1)} H${lx}" fill="none" stroke="${col(s)}" stroke-opacity=".45"/>
+        <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}" fill="${col(s)}" fill-opacity=".85"/>
+        <text x="${lx + p.side * 3}" y="${(p.ly + 4).toFixed(1)}" text-anchor="${p.side > 0 ? "start" : "end"}" style="font-size:11.5px;fill:${col(s)}">${esc(s.name.slice(0, 6))} <tspan style="fill:var(--muted);font-size:10px">${fmt(s.net5)}</tspan></text></g>`;
+    });
+    return wrapSvg(g);
+  }
+  if (viz === "compass") {
+    const cx = W0 / 2, cy = H0 / 2, R0 = Math.round(Math.min(196, Math.min(W0 * 0.28, H0 * 0.35))), RL = R0 + 18;
+    const arr = pts.map(s => { const nx = sq(s.net5, mxN), ny = sq(s.accel, mxA); return { s, a: Math.atan2(ny, nx), m: Math.min(1, Math.hypot(nx, ny) / 1.25) }; });
+    [1, -1].forEach(side => {
+      const L = arr.filter(p => (Math.cos(p.a) >= 0 ? 1 : -1) === side).map(p => ({ p, y: cy - Math.sin(p.a) * RL })).sort((a, b) => a.y - b.y);
+      const gap = Math.min(17, (2 * RL + 24) / Math.max(1, L.length));
+      let last = cy - RL - 12 - gap; L.forEach(o => { o.y = Math.max(o.y, last + gap); last = o.y; });
+      const over = last - (cy + RL + 12); if (over > 0) L.forEach(o => (o.y -= over));
+      for (let i = 1; i < L.length; i++) if (L[i].y < L[i - 1].y + gap) L[i].y = L[i - 1].y + gap;
+      L.forEach(o => { const dy = Math.max(-RL, Math.min(RL, o.y - cy)); o.p.lx = cx + side * Math.sqrt(Math.max(0, RL * RL - dy * dy)) + side * 4; o.p.ly = o.y; o.p.side = side; });
+    });
+    let g = [0.33, 0.66, 1].map(k => `<circle cx="${cx}" cy="${cy}" r="${(R0 * k).toFixed(1)}" fill="none" stroke="var(--line)" stroke-dasharray="${k === 1 ? "" : "3 4"}"/>`).join("")
+      + [["up", -Math.PI / 4], ["watch", -3 * Math.PI / 4], ["down", 3 * Math.PI / 4], ["rot", Math.PI / 4]].map(([q, a]) =>
+        `<path d="M${cx} ${cy} L${(cx + Math.cos(a - Math.PI / 4) * R0).toFixed(1)} ${(cy + Math.sin(a - Math.PI / 4) * R0).toFixed(1)} A${R0} ${R0} 0 0 1 ${(cx + Math.cos(a + Math.PI / 4) * R0).toFixed(1)} ${(cy + Math.sin(a + Math.PI / 4) * R0).toFixed(1)}Z" fill="${FLOW_Q[q][2]}" fill-opacity=".06"/>
+         <text x="${(cx + Math.cos(a) * (R0 + 62)).toFixed(1)}" y="${(cy + Math.sin(a) * (R0 + 62)).toFixed(1)}" text-anchor="middle" style="fill:${FLOW_Q[q][2]};font-size:12px;font-weight:600">${FLOW_Q[q][0]}</text>`).join("")
+      + `<line class="bax" x1="${cx - R0}" y1="${cy}" x2="${cx + R0}" y2="${cy}"/><line class="bax" x1="${cx}" y1="${cy - R0}" x2="${cx}" y2="${cy + R0}"/>`;
+    arr.forEach(p => {
+      const s = p.s, a = -p.a, r = 14 + p.m * (R0 - 14), x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r, lx = p.lx ?? x, ly = p.ly ?? y, side = p.side || 1;
+      g += `<g ${bcls(s)}><line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col(s)}" stroke-width="1.8" stroke-opacity=".55"/>
+        <line class="mf-flow-line" x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col(s)}" stroke-width="2.2" stroke-opacity=".9"/>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="${col(s)}"/><line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${lx.toFixed(1)}" y2="${ly.toFixed(1)}" stroke="${col(s)}" stroke-opacity=".28"/>
+        <text x="${(lx + side * 3).toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="${side > 0 ? "start" : "end"}" style="font-size:11.5px;fill:${col(s)}">${esc(s.name.slice(0, 6))}</text></g>`;
+    });
+    return wrapSvg(g + `<text class="bax-t" x="${cx + R0 - 4}" y="${cy - 6}" text-anchor="end">淨流入 →</text><text class="bax-t" x="${cx + 6}" y="${cy - R0 + 14}">加速 ↑</text>`);
+  }
+  if (viz === "flow") {
+    const KS = ["up", "rot", "watch", "down"], prevQ = s => s.prev?.q || s.q, N = Math.max(1, pts.length), gap = 14, unit = (H0 - 68 - gap * 3) / N, X0 = Math.round(Math.max(126, W0 * 0.17)), X1 = W0 - X0, NW = 14, m = (X0 + X1) / 2;
+    const layout = side => { let y = 34; return Object.fromEntries(KS.map(q => { const n = pts.filter(s => (side ? s.q : prevQ(s)) === q).length, o = { y, h: n * unit, off: 0 }; y += n * unit + gap; return [q, o]; })); };
+    const A = layout(0), B = layout(1);
+    let g = `<text class="bax-t" x="${X0}" y="20" text-anchor="middle" style="font-size:11.5px">前一期象限</text><text class="bax-t" x="${X1}" y="20" text-anchor="middle" style="font-size:11.5px">當期象限</text>`;
+    KS.forEach(q => { [[A, X0, "end", -8], [B, X1 - NW, "start", NW + 8]].forEach(([S, x, an, dx]) => { if (!S[q].h) return;
+      g += `<rect x="${x}" y="${S[q].y.toFixed(1)}" width="${NW}" height="${Math.max(4, S[q].h).toFixed(1)}" rx="3" fill="${FLOW_Q[q][2]}"/>
+        <text x="${x + dx}" y="${(S[q].y + S[q].h / 2 + 4).toFixed(1)}" text-anchor="${an}" style="font-size:12px;fill:${FLOW_Q[q][2]};font-weight:600">${FLOW_Q[q][0]} ${Math.round(S[q].h / unit)}</text>`; }); });
+    KS.forEach(a => KS.forEach(b => {
+      const L = pts.filter(s => prevQ(s) === a && s.q === b); if (!L.length) return;
+      L.forEach((s, idx) => {
+        const ya = A[a].y + A[a].off, yb = B[b].y + B[b].off, h = unit; A[a].off += h; B[b].off += h;
+        const dPath = `M${X0 + NW} ${ya.toFixed(1)} C${m} ${ya.toFixed(1)} ${m} ${yb.toFixed(1)} ${X1 - NW} ${yb.toFixed(1)} V${(yb + h).toFixed(1)} C${m} ${(yb + h).toFixed(1)} ${m} ${(ya + h).toFixed(1)} ${X0 + NW} ${(ya + h).toFixed(1)}Z`;
+        const midLine = `M${X0 + NW} ${(ya + h / 2).toFixed(1)} C${m} ${(ya + h / 2).toFixed(1)} ${m} ${(yb + h / 2).toFixed(1)} ${X1 - NW} ${(yb + h / 2).toFixed(1)}`;
+        g += `<g ${bcls(s)}><path d="${dPath}" fill="${col(s)}" fill-opacity="${a === b ? 0.14 : 0.42}" stroke="${col(s)}" stroke-opacity=".2"/>
+          <path class="mf-flow-band" d="${midLine}" fill="none" stroke="${col(s)}" stroke-width="${a === b ? 1.2 : 2.2}" stroke-opacity="${a === b ? 0.45 : 0.9}"/>
+          ${a !== b || unit >= 16 ? `<text x="${X1 - NW - 8}" y="${(yb + h / 2 + 4).toFixed(1)}" text-anchor="end" style="font-size:11px;fill:var(--ink)">${esc(s.name)} ${fmt(s.net5)}</text>` : ""}</g>`;
+      });
+    }));
+    return wrapSvg(g);
+  }
+  if (viz === "lolli") {
+    const rows = pts.slice().sort((a, b) => b.net5 - a.net5), top = 36, RH = (H0 - top - 14) / Math.max(1, rows.length), M0 = W0 / 2, NWd = 54, half = Math.max(180, Math.min(380, (W0 - NWd * 2 - 36) / 2));
+    const c1 = M0 - NWd - half / 2, c2 = M0 + NWd + half / 2, fs = RH < 20 ? 11 : 12.5;
+    let g = `<text class="bax-t" x="${c1}" y="20" text-anchor="middle" style="font-size:11px">淨流入（← 流出｜流入 →）</text><text class="bax-t" x="${c2}" y="20" text-anchor="middle" style="font-size:11px">加速度（← 放緩｜加速 →）</text>
+      <line class="bax" x1="${c1}" y1="28" x2="${c1}" y2="${H0 - 10}"/><line class="bax" x1="${c2}" y1="28" x2="${c2}" y2="${H0 - 10}"/>`;
+    rows.forEach((s, i) => {
+      const y = top + (i + 0.5) * RH, x1 = c1 + (s.net5 / mxN) * (half / 2 - 10), x2 = c2 + (s.accel / mxA) * (half / 2 - 10);
+      g += `<g ${bcls(s)}><rect x="8" y="${(y - RH / 2).toFixed(1)}" width="${W0 - 16}" height="${RH.toFixed(1)}" fill="transparent"/>
+        <text x="${M0}" y="${(y + 4).toFixed(1)}" text-anchor="middle" style="font-size:${fs}px;fill:${col(s)};font-weight:500">${esc(s.name.slice(0, 6))}</text>
+        <line x1="${c1}" y1="${y.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col(s)}" stroke-width="2.2"/><line class="mf-flow-line" x1="${c1}" y1="${y.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#fff" stroke-width="1.2" stroke-opacity=".55"/><circle cx="${x1.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="${col(s)}"/>
+        <line x1="${c2}" y1="${y.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col(s)}" stroke-width="2" stroke-opacity=".75"/><circle cx="${x2.toFixed(1)}" cy="${y.toFixed(1)}" r="4.2" fill="var(--bg)" stroke="${col(s)}" stroke-width="2"/></g>`;
+    });
+    return wrapSvg(g);
+  }
+  if (viz === "trail") {
+    const P = 28, cx = W0 / 2, cy = H0 / 2, px = p => cx + sq(p.net5, mxN) * (cx - P - 16), py = p => cy - sq(p.accel, mxA) * (cy - P - 16);
+    let g = mfQuadFrame(W0, H0, P, W0 - P, P, H0 - P);
+    pts.forEach(s => {
+      const tr = (s.trail?.length ? s.trail : [s.prev || s, s]).map(p => [px(p), py(p)]), ptsStr = tr.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" "), hd = tr[tr.length - 1];
+      g += `<g ${bcls(s)}><polyline points="${ptsStr}" fill="none" stroke="${col(s)}" stroke-width="1.6" stroke-opacity=".42" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline class="mf-flow-line" points="${ptsStr}" fill="none" stroke="${col(s)}" stroke-width="2.2" stroke-opacity=".9" stroke-linecap="round"/>
+        ${tr.slice(0, -1).map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${(1.6 + i * 0.45).toFixed(1)}" fill="${col(s)}" fill-opacity="${(0.22 + i * 0.14).toFixed(2)}"/>`).join("")}
+        <circle cx="${hd[0].toFixed(1)}" cy="${hd[1].toFixed(1)}" r="6" fill="${col(s)}"/>
+        <text x="${(hd[0] + (hd[0] > W0 - 95 ? -8 : 8)).toFixed(1)}" y="${(hd[1] + 4).toFixed(1)}" text-anchor="${hd[0] > W0 - 95 ? "end" : "start"}" style="font-size:11.5px;fill:${col(s)};font-weight:500">${esc(s.name.slice(0, 6))}</text></g>`;
+    });
+    return wrapSvg(g);
+  }
+  if (viz === "tree") {
+    const groups = ["up", "rot", "watch", "down"].map(q => ({ q, items: pts.filter(s => s.q === q).map(s => ({ s, v: Math.abs(s.net5) + 0.5 })).sort((a, b) => b.v - a.v) }))
+      .filter(g => g.items.length).map(g => ({ ...g, v: g.items.reduce((a, b) => a + b.v, 0) }));
+    const blocks = mfSquarify(groups, 4, 4, W0 - 8, H0 - 8);
+    let g = "";
+    blocks.forEach(b => {
+      g += `<text x="${(b.x + 6).toFixed(1)}" y="${(b.y + 15).toFixed(1)}" style="fill:${FLOW_Q[b.q][2]};font-size:12px;font-weight:600">${FLOW_Q[b.q][0]}</text>`;
+      mfSquarify(b.items, b.x + 2, b.y + 20, Math.max(8, b.w - 4), Math.max(8, b.h - 22)).forEach(c => {
+        const big = c.w > 62 && c.h > 34, s = c.s, k = Math.min(1, Math.abs(s.net5) / mxN);
+        g += `<g ${bcls(s)}><rect x="${(c.x + 1).toFixed(1)}" y="${(c.y + 1).toFixed(1)}" width="${Math.max(2, c.w - 2).toFixed(1)}" height="${Math.max(2, c.h - 2).toFixed(1)}" rx="4" fill="${col(s)}" fill-opacity="${(0.18 + 0.58 * k).toFixed(2)}" stroke="${col(s)}" stroke-opacity=".55"/>
+          ${k > 0.35 ? `<rect class="mf-flow-line" x="${(c.x + 1).toFixed(1)}" y="${(c.y + 1).toFixed(1)}" width="${Math.max(2, c.w - 2).toFixed(1)}" height="${Math.max(2, c.h - 2).toFixed(1)}" rx="4" fill="none" stroke="${col(s)}" stroke-width="1.3" stroke-opacity=".85"/>` : ""}
+          ${c.w > 32 && c.h > 16 ? `<text x="${(c.x + 6).toFixed(1)}" y="${(c.y + 16).toFixed(1)}" style="font-size:${big ? 12.5 : 10}px;font-weight:500;fill:var(--ink)">${esc(s.name.slice(0, big ? 6 : 4))}</text>` : ""}
+          ${big ? `<text x="${(c.x + 6).toFixed(1)}" y="${(c.y + 32).toFixed(1)}" style="font-size:10.5px;fill:var(--ink);opacity:.85">${fmt(s.net5)}</text>` : ""}</g>`;
+      });
+    });
+    return wrapSvg(g);
+  }
+  if (viz === "bar") {
+    const rows = pts.slice().sort((a, b) => b.net5 - a.net5), top = 22, bot = H0 - 26, RH = (bot - top) / Math.max(1, rows.length), L = 110, cx = L + (W0 - L - 24) / 2, half = (W0 - L - 80) / 2, fs = RH < 20 ? 11 : 12.5;
+    let g = `<line class="bax" x1="${cx}" y1="14" x2="${cx}" y2="${bot}"/><text class="bax-t" x="${cx - 6}" y="${H0 - 8}" text-anchor="end">← 淨流出</text><text class="bax-t" x="${cx + 6}" y="${H0 - 8}">淨流入 →</text>`;
+    rows.forEach((s, i) => {
+      const y = top + i * RH, w = (Math.abs(s.net5) / mxN) * half, x = s.net5 >= 0 ? cx : cx - w, ax = cx + (s.accel / mxA) * half * 0.9, bh = Math.max(6, RH - 6);
+      g += `<g ${bcls(s)}><rect x="6" y="${y.toFixed(1)}" width="${W0 - 12}" height="${RH.toFixed(1)}" fill="transparent"/>
+        <text x="${L - 8}" y="${(y + RH * 0.68).toFixed(1)}" text-anchor="end" style="font-size:${fs}px;fill:var(--ink)">${esc(s.name.slice(0, 7))}</text>
+        <rect x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" width="${Math.max(2, w).toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${col(s)}" fill-opacity=".85"/>
+        <line class="mf-flow-line" x1="${cx}" y1="${(y + 3 + bh / 2).toFixed(1)}" x2="${(s.net5 >= 0 ? x + w : x).toFixed(1)}" y2="${(y + 3 + bh / 2).toFixed(1)}" stroke="#fff" stroke-width="1.2" stroke-opacity=".5"/>
+        <text x="${(s.net5 >= 0 ? x + w + 5 : x - 5).toFixed(1)}" y="${(y + RH * 0.68).toFixed(1)}" text-anchor="${s.net5 >= 0 ? "start" : "end"}" class="bax-t" style="font-size:10.5px">${fmt(s.net5)}</text>
+        <path d="M${ax.toFixed(1)} ${(y + 3).toFixed(1)} l3.5 -3.5 h-7 z" fill="var(--ink)" opacity=".75"/></g>`;
+    });
+    return wrapSvg(g);
+  }
+  if (viz === "heat") {
+    const rows = pts.slice().sort((a, b) => b.net5 - a.net5), K = Math.max(1, ...rows.map(s => (s.d10 || []).length)), L = 104, top = 30, RH = (H0 - top - 12) / Math.max(1, rows.length), CW = (W0 - L - 68) / K, fs = RH < 20 ? 11 : 12;
+    const mxD = Math.max(1, ...rows.flatMap(s => (s.d10 || []).map(Math.abs))), cellCol = v => { const k = Math.min(1, Math.abs(v) / mxD) ** 0.7; return v >= 0 ? `rgba(232,96,60,${(0.1 + 0.82 * k).toFixed(2)})` : `rgba(34,168,122,${(0.1 + 0.82 * k).toFixed(2)})`; };
+    const dates = rows[0]?.dDates || [];
+    let g = Array.from({ length: K }, (_, k) => `<text class="bax-t" x="${(L + k * CW + CW / 2).toFixed(1)}" y="${top - 8}" text-anchor="middle" style="font-size:10px">${dates[k] ? dates[k].slice(5).replace("-", "/") : k === K - 1 ? "今日" : "D-" + (K - 1 - k)}</text>`).join("")
+      + `<text class="bax-t" x="${W0 - 32}" y="${top - 8}" text-anchor="middle" style="font-size:10px">累計</text>`;
+    rows.forEach((s, i) => {
+      const y = top + i * RH, d = s.d10 || [s.net1 || 0];
+      g += `<g ${bcls(s)}><text x="${L - 8}" y="${(y + RH * 0.68).toFixed(1)}" text-anchor="end" style="font-size:${fs}px;fill:var(--ink)">${esc(s.name.slice(0, 7))}</text>
+        ${d.map((v, k) => `<rect x="${(L + k * CW + 1).toFixed(1)}" y="${(y + 1).toFixed(1)}" width="${Math.max(2, CW - 2).toFixed(1)}" height="${Math.max(2, RH - 2).toFixed(1)}" rx="2.5" fill="${cellCol(v)}"/>`).join("")}
+        <circle cx="${W0 - 48}" cy="${(y + RH / 2).toFixed(1)}" r="4.5" fill="${col(s)}"/>
+        <text x="${W0 - 38}" y="${(y + RH * 0.68).toFixed(1)}" class="bax-t" style="font-size:10.5px">${s.net5 >= 0 ? "+" : ""}${s.net5.toFixed(0)}</text></g>`;
+    });
+    return wrapSvg(g);
+  }
+  if (viz === "board") {
+    const G = 12, pad = 6, qw = (W0 - pad * 2 - G) / 2, qh = (H0 - pad * 2 - G) / 2, pos = { watch: [0, 0], up: [1, 0], down: [0, 1], rot: [1, 1] };
+    let g = "";
+    Object.entries(pos).forEach(([q, [ix, iy]]) => {
+      const x0 = pad + ix * (qw + G), y0 = pad + iy * (qh + G), L = pts.filter(s => s.q === q).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 9);
+      const rh = Math.min(30, (qh - 36) / Math.max(1, L.length));
+      g += `<rect x="${x0}" y="${y0}" width="${qw}" height="${qh}" rx="8" fill="${FLOW_Q[q][2]}" fill-opacity=".05" stroke="${FLOW_Q[q][2]}" stroke-opacity=".3"/>
+        <text x="${x0 + 12}" y="${y0 + 22}" style="fill:${FLOW_Q[q][2]};font-size:13px;font-weight:600">${FLOW_Q[q][0]} <tspan style="fill:var(--muted);font-weight:400;font-size:11px">${FLOW_Q[q][1]}・${L.length}</tspan></text>`;
+      L.forEach((s, i) => {
+        const y = y0 + 32 + i * rh, d = s.d10 || [s.net1 || 0], mx = Math.max(1, ...d.map(Math.abs)), sx0 = x0 + qw - 140;
+        const bars = d.map((v, k) => { const bh = Math.max(1, (Math.abs(v) / mx) * (rh * 0.36)); return `<rect x="${sx0 + k * 6}" y="${(v >= 0 ? y + rh / 2 - bh : y + rh / 2).toFixed(1)}" width="4.5" height="${bh.toFixed(1)}" fill="${v >= 0 ? FLOW_Q.up[2] : FLOW_Q.down[2]}" opacity=".85"/>`; }).join("");
+        g += `<g ${bcls(s)}><rect x="${x0 + 6}" y="${y.toFixed(1)}" width="${qw - 12}" height="${rh.toFixed(1)}" fill="transparent"/>
+          <line x1="${x0 + 10}" y1="${(y + rh).toFixed(1)}" x2="${x0 + qw - 10}" y2="${(y + rh).toFixed(1)}" stroke="var(--line)" stroke-opacity=".5"/>
+          <text x="${x0 + 12}" y="${(y + rh * 0.66).toFixed(1)}" style="font-size:12.5px;fill:var(--ink)">${esc(s.name.slice(0, 7))}</text>
+          ${bars}<text x="${x0 + qw - 12}" y="${(y + rh * 0.66).toFixed(1)}" text-anchor="end" style="font-size:11.5px;fill:${s.net5 >= 0 ? FLOW_Q.up[2] : FLOW_Q.down[2]};font-variant-numeric:tabular-nums">${fmt(s.net5)}</text></g>`;
+      });
+    });
+    return wrapSvg(g);
+  }
+  // arrow: 位移箭頭（前一期 → 當期）
+  const P = 28, cx = W0 / 2, cy = H0 / 2, px = p => cx + sq(p.net5, mxN) * (cx - P - 16), py = p => cy - sq(p.accel, mxA) * (cy - P - 16);
+  let g = `<defs>${Object.entries(FLOW_Q).map(([q, v]) => `<marker id="mfah-${q}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${v[2]}"/></marker>`).join("")}</defs>` + mfQuadFrame(W0, H0, P, W0 - P, P, H0 - P);
+  pts.forEach(s => {
+    const a = s.prev || s, x0 = px(a), y0 = py(a), x1 = px(s), y1 = py(s);
+    g += `<g ${bcls(s)}><circle cx="${x0.toFixed(1)}" cy="${y0.toFixed(1)}" r="3.2" fill="none" stroke="${col(s)}" stroke-width="1.3" stroke-opacity=".65"/>
+      <line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="${col(s)}" stroke-width="1.8" stroke-opacity=".55" marker-end="url(#mfah-${s.q})"/>
+      <line class="mf-flow-fast" x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="${col(s)}" stroke-width="2.4" stroke-opacity=".95"/>
+      <text x="${(x1 + (x1 > W0 - 95 ? -8 : 8)).toFixed(1)}" y="${(y1 + 4).toFixed(1)}" text-anchor="${x1 > W0 - 95 ? "end" : "start"}" style="font-size:11.5px;fill:${col(s)};font-weight:500">${esc(s.name.slice(0, 6))}</text></g>`;
+  });
+  return wrapSvg(g);
+}
+function mfVizSvg(pts, opts = {}) { return mfVizOnlySvg(pts, opts) + `<div class="mftip" id="mfTip" hidden></div>`; }
+
 const easeIO = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 // 點的透明度：使用者可調，記在這個瀏覽器
 // 動能矩陣看「近 5 日」或「今日」：今日版用當日淨額當橫軸、跟前一天比的變化當縱軸
 const mfView = A => (W.mf.bw === "1" ? A.map(x => ({ ...x, net5: x.net1 ?? 0, accel: x.accel1 ?? 0, pct5: x.pct1 ?? 0, q: x.q1 || x.q })) : A);
 const bwSeg = () => `<span class="mkseg" role="group" aria-label="期間">${[["5", "近 5 日"], ["1", "今日"]].map(([k, t]) => `<button data-mset="bw" data-v="${k}" aria-pressed="${W.mf.bw === k}">${t}</button>`).join("")}</span>`;
 const bopRow = () => `<label class="bopr">點的透明度<input type="range" class="bop-r" min="0.1" max="0.9" step="0.05" value="${W.mf.bop}" aria-label="點的透明度"><b>${Math.round(W.mf.bop * 100)}%</b></label>`;
+// 動能矩陣懸停／觸碰即時資訊卡（Tooltip）
+document.addEventListener("pointermove", e => {
+  const wrap = e.target.closest(".bwrap");
+  const tip = document.getElementById("mfTip");
+  if (!wrap || !tip) { if (tip) tip.hidden = true; return; }
+  const node = e.target.closest(".bnode");
+  if (!node) { tip.hidden = true; return; }
+  const id = node.dataset.mbs;
+  const M = typeof mfModel === "function" ? mfModel() : null;
+  const t = W.mf?.rp?.u != null && M ? Math.max(0, Math.min(M.T - 1, Math.round(W.mf.rp.u))) : undefined;
+  const A = M && typeof flowAt === "function" ? mfView(flowAt(M, t)) : [];
+  const item = A.find(x => x.id === id);
+  if (!item) { tip.hidden = true; return; }
+  const r = wrap.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  tip.innerHTML = `<b>${esc(item.name)}</b> <span style="color:${FLOW_Q[item.q][2]}">${FLOW_Q[item.q][0]}</span><br><span>${flowFmt(item.net5)}</span> ・ 加速度 ${flowFmt(item.accel ?? item.acc ?? 0)}`;
+  tip.style.left = Math.max(60, Math.min(r.width - 60, x)) + "px";
+  tip.style.top = Math.max(32, y - 8) + "px";
+  tip.hidden = false;
+});
+document.addEventListener("pointerleave", () => { const tip = document.getElementById("mfTip"); if (tip) tip.hidden = true; });
+
 // 點圓點：下面顯示這個板塊的數字，再按按鈕進題材內頁
 function bubbleInfo(x) {
-  if (!x) return `<p class="note gnote binfo-empty">點一下圓點，看這個板塊的法人資金細節。</p>`;
+  if (!x) return `<p class="note gnote binfo-empty">點一下板塊，看這個板塊的法人資金細節。</p>`;
   return `${(q => `<section class="mcard binfo" style="--qc:${FLOW_Q[q][2]}"><h3>${qDot(q)}${esc(x.name)} <span class="note">${x.kind}・${x.n} 檔・${FLOW_Q[q][0]}（${FLOW_Q[q][1]}）</span></h3>`)(W.mf.bw === "1" && W.mf.view === "bubble" ? x.q1 : x.q)}
     <div class="bgrid">${W.mf.bw === "1" && W.mf.view === "bubble" ? `<span>今日淨流入</span>${yiB(x.net1)}<span>前一日</span>${yiB(x.prev1)}<span>比前一日</span>${yiB(x.accel1)}<span>今日漲跌</span>${pctB(x.pct1)}<span>外資今日</span>${yiB(x.f1)}<span>投信今日</span>${yiB(x.tr1)}<span>今日買超家數</span><b>${x.buy1}／${x.n}</b></div><div class="bgrid">` : ""}<span>近 5 日淨流入</span>${yiB(x.net5)}<span>前 5 日</span>${yiB(x.prev5)}<span>加速度</span>${yiB(x.accel)}<span>近 5 日漲跌</span>${pctB(x.pct5)}<span>外資 5 日</span>${yiB(x.f5)}<span>投信 5 日</span>${yiB(x.tr5)}<span>買超家數</span><b>${x.buy5}／${x.n}</b><span>買最多</span><b>${esc(x.top || "—")}</b></div>
     ${(() => { const M = W.mf.view === "bubble" ? mfModel() : null, S = M?.secs?.find(s => s.id === x.id); if (!S) return ""; const n = 10, k = W.mf.bw === "1" ? "a1" : "a5";
@@ -2197,8 +2665,12 @@ async function mfShare(how) {
   } catch (e) { if (e.name === "AbortError") return; }
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); toast("已下載圖片");
 }
+const mfT0 = T => (T > 12 ? 9 : Math.min(5, Math.max(0, T - 1)));
 function renderMoney() {
-  const F = W.mf, M = mfModel(); let h = `<div class="seg scrseg" role="group" aria-label="資金">${[["today", "今日"], ["bubble", "動能矩陣"], ["rank", "排行"]].map(([k, t]) => `<button data-mv="${k}" aria-pressed="${F.view === k}">${t}</button>`).join("")}</div>`;
+  const F = W.mf, M = mfModel();
+  if (F.view === "replay") F.view = "bubble";
+  if (F.full === "replay") F.full = "matrix";
+  let h = `<div class="seg scrseg" role="group" aria-label="資金">${[["today", "今日"], ["bubble", "動能矩陣"], ["rank", "排行"]].map(([k, t]) => `<button data-mv="${k}" aria-pressed="${F.view === k}">${t}</button>`).join("")}</div>`;
   if (!M) { $("#lx").innerHTML = h + `<p class="note gnote">${W.off ? "需要部署到網站才有資金資料。" : F.err && !F.loading ? `⚠ ${esc(F.err)}` : `載入最近的交易日資料…${F.prog ? `（${F.prog}）` : ""}<br>第一次要一天一天向證交所抓，大約 10～20 秒；之後會快很多。`}</p>`; return; }
   const T = M.T, A = flowAt(M), S = flowStocks(M), mood = flowMood(M), tq = W.quotes.get("T00"), more = T < 10 ? `<p class="note gnote">目前只有 ${T} 個交易日，加速度需要 10 天才準${F.loading ? "，載入中…" : ""}</p>` : "";
   if (F.view === "sector") h += renderSector(M);
@@ -2216,18 +2688,16 @@ function renderMoney() {
       + `<button class="mcard mlink" data-mv="replay"><b>主力資金雷達回放</b><span class="note">近 20 個交易日，資金怎麼移動 ›</span></button>`;
   } else if (F.view === "bubble") {
     const V = mfView(A), D1 = F.bw === "1", wl = D1 ? "今日" : "近 5 日", cnt = Object.fromEntries(Object.keys(FLOW_Q).map(k => [k, V.filter(x => x.q === k).length])), L = V.filter(x => x.q === F.q).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5));
-    h += more + `<div class="qcards">${Object.entries(FLOW_Q).map(([k, [t, d, c]]) => `<button class="qcard" data-mq="${k}" aria-pressed="${F.q === k}" style="--qc:${c}"><span>${t}</span><b>${cnt[k]}</b><small>${d}</small></button>`).join("")}</div>`
-      + `<div class="mtool">${bwSeg()}${bopRow()}<button class="btn sm" data-mv="replay">▶ 雷達回放</button>${scBtn("matrix")}</div>` + `<div class="bwrap" style="--bop:${W.mf.bop}">${bubbleSvg(V.filter(x => Math.abs(x.net5) > 0).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30), { sel: F.bsel })}</div>${bubbleInfo(A.find(x => x.id === F.bsel))}<p class="note gnote">只畫${wl}金額最大的 30 個板塊；圓點越大代表${wl}淨流入（或流出）越多，${D1 ? "縱軸是今天比前一個交易日多買（或少買）多少，" : ""}座標用平方根縮放、重疊的會稍微推開，所以位置是大約的。</p>`
-      + `<section class="mcard"><h3>${qDot(F.q)}${FLOW_Q[F.q][0]} <span class="note">${L.length} 個板塊・依${wl}資金規模</span></h3><ol class="mlist">${L.map((x, i) => `<li><button data-fsec="${esc(x.id)}"><span class="rk">${i + 1}</span><span class="nm">${esc(x.name)}<small>${x.kind}・${x.n} 檔</small></span>${pctB(x.pct5)}${yiB(x.net5)}</button></li>`).join("")}</ol></section>`;
-  } else if (F.view === "replay") {
-    const t0 = Math.min(9, T - 1), t = F.rp.t == null ? T - 1 : Math.max(t0, Math.min(T - 1, F.rp.t)), { P, pool } = mfReplayPool(M, t); F.rp.fl = null;
-    const R = mfReplayBits(M, t, pool, P);
-    h += `<div class="gback"><button class="btn sm" data-mv="bubble">‹ 返回</button><b>主力資金雷達回放</b><select class="sel" data-mrs aria-label="選板塊"><option value="hot" ${F.rp.set === "hot" ? "selected" : ""}>熱門 30</option><option value="all" ${F.rp.set === "all" ? "selected" : ""}>全部板塊</option></select></div>`
-      + (T < 12 || F.loading ? `<p class="note gnote mrp-load">${F.loading ? `正在載入更早的資料（${F.prog || ""}）…` : "資料不足 12 個交易日"}</p>` : "")
-      + bopRow() + `<div class="bwrap radar" style="--bop:${W.mf.bop}">${bubbleSvg([], { w: 360, h: 360 })}</div><p class="mrp-sum">${R.sum}</p>
-      <p class="mrp-date">${R.date}</p><input type="range" class="mrp-range" min="${t0}" max="${T - 1}" step="0.01" value="${F.rp.u ?? t}" aria-label="日期">
-      <div class="mrp-ctl"><button class="btn sm" data-mrp="prev">‹</button><button class="btn sm primary" data-mrp="play">${F.rp.playing ? "❚❚ 暫停" : "▶ 播放"}</button><button class="btn sm" data-mrp="next">›</button><button class="btn sm" data-mrp="speed">${F.rp.speed}x</button></div>${bubbleInfo(P.find(x => x.id === F.bsel))}`;
-    if (T < 30 && !F.loading) setTimeout(() => loadMoney(30), 0);
+    const t0 = mfT0(T), uCur = F.rp.u != null ? Math.max(t0, Math.min(T - 1, F.rp.u)) : T - 1, tCur = Math.round(uCur), dtObj = new Date((M.dates[tCur] || "2026-01-01") + "T00:00:00Z");
+    const dtLabel = M.dates[tCur] ? `${M.dates[tCur].slice(5).replace("-", "/")} 週${"日一二三四五六"[dtObj.getUTCDay()]}` : wl;
+    const vInfo = MF_VIZ.find(x => x[0] === F.viz) || MF_VIZ[0], isFull = F.full === "matrix";
+    const { P: poolP, pool } = mfReplayPool(M, tCur), R = mfReplayBits(M, tCur, pool, poolP);
+    const drawPts = pool.filter(x => Math.abs(x.net5) > 0).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5));
+    h += more + `<div class="mf-desk"><div class="mf-vis${isFull ? " chart-fullscreen" : ""}" id="secMf">${mfVizBar()}<div class="mtool">${bwSeg()}${bopRow()}<button class="btn sm" data-mflow="1" type="button" aria-pressed="${F.flowOn}" title="切換動態流動效果">🌊 流動</button><button class="btn sm" data-mrp="play" data-mrp-top="1" type="button" aria-pressed="${!!F.rp.playing}" title="在當前頁面直接開啟／暫停跨日雷達回放">${F.rp.playing ? "❚❚ 暫停回放" : "▶ 雷達回放"}</button><button class="btn sm exp-btn" id="mfExpandBtn" data-mexp="matrix" type="button" aria-pressed="${isFull}" title="放大動能雷達（全螢幕檢視，或按 Esc 縮小）" aria-label="放大動能雷達">${isFull ? "✕ 縮小" : "⛶ 放大"}</button>${scBtn("matrix")}</div><div class="bwrap" data-viz="${F.viz}" style="--bop:${W.mf.bop}">${mfVizSvg(drawPts, { viz: F.viz, sel: F.bsel, flowOn: F.flowOn, M, u: uCur })}</div>`
+      + `<div class="mf-rpbar"><button type="button" class="btn sm" data-mrp="prev" title="前一天">‹</button><button type="button" class="btn sm primary" data-mrp="play" aria-pressed="${!!F.rp.playing}">${F.rp.playing ? "❚❚ 暫停" : "▶ 回放"}</button><button type="button" class="btn sm" data-mrp="next" title="後一天">›</button><input type="range" class="mrp-range" min="${t0}" max="${Math.max(t0, T - 1)}" step="0.01" value="${uCur.toFixed(2)}" aria-label="日期"><span class="mrp-date">${dtLabel}</span><button type="button" class="btn sm" data-mrp="speed" title="回放速度">${F.rp.speed}x</button><select class="sel" data-mrs aria-label="選板塊" style="font-size:12.5px;padding:3px 6px"><option value="hot" ${F.rp.set === "hot" ? "selected" : ""}>熱門 30</option><option value="all" ${F.rp.set === "all" ? "selected" : ""}>全部板塊</option></select><span class="mrp-sum">${R.sum.replace("<br>", "・")}</span></div>`
+      + `<p class="note gnote"><b>${vInfo[1]}：</b>${vInfo[2]}（${F.rp.set === "all" ? "顯示全部板塊" : `只畫${wl}金額最大的 30 個板塊`}；${D1 ? "縱軸是今天比前一個交易日多買（或少買）多少，" : ""}座標用平方根縮放，點板塊可看細節。）</p></div>`
+      + `<div class="mf-side"><div class="qcards">${Object.entries(FLOW_Q).map(([k, [t, d, c]]) => `<button class="qcard" data-mq="${k}" aria-pressed="${F.q === k}" style="--qc:${c}"><span>${t}</span><b>${cnt[k]}</b><small>${d}</small></button>`).join("")}</div>${bubbleInfo(poolP.find(x => x.id === F.bsel))}`
+      + `<section class="mcard"><h3>${qDot(F.q)}${FLOW_Q[F.q][0]} <span class="note">${L.length} 個板塊・依${wl}資金規模</span></h3><ol class="mlist">${L.map((x, i) => `<li><button data-fsec="${esc(x.id)}"><span class="rk">${i + 1}</span><span class="nm">${esc(x.name)}<small>${x.kind}・${x.n} 檔</small></span>${pctB(x.pct5)}${yiB(x.net5)}</button></li>`).join("")}</ol></section></div></div>`;
   } else { // 排行
     const RK = [["inst", "法人動向"], ["quiet", "買多漲少"], ["contra", "逆勢買超"], ["odd", "個股異常"], ["fx", "外資投信"]];
     h += `<div class="ichips mrk">${RK.map(([k, t]) => `<button class="ichip" data-mrk="${k}" aria-pressed="${F.rk === k}">${t}</button>`).join("")}</div>`;
@@ -2257,93 +2727,214 @@ function renderMoney() {
     }
     h += more + `<p class="mdesc">${desc}（只呈現事實、不構成投資建議）</p><ol class="mlist" style="margin:0 12px">${rows || '<li class="note" style="padding:10px">沒有符合的資料</li>'}</ol>`;
   }
-  $("#lx").innerHTML = h; if (F.view === "replay") flowMount();
+  $("#lx").innerHTML = h; if (F.view === "bubble" && (F.rp.playing || F.rp.u != null)) flowMount();
 }
-// 回放：整段期間用同一個比例尺，圓點位置在不同天之間才能比較
-function mfReplayScale(M, t0) { let mx = 1, my = 1; for (let t = t0; t < M.T; t++) for (const x of flowAt(M, t)) { mx = Math.max(mx, Math.abs(x.net5)); my = Math.max(my, Math.abs(x.accel)); } return { mx, my }; }
-function mfReplayPool(M, t) { const F = W.mf, P = flowAt(M, t); if (F.rp.set === "all") return { P, pool: P }; const ids = new Set(flowAt(M).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30).map(x => x.id)); return { P, pool: P.filter(x => ids.has(x.id)) }; }
-function mfReplayBits(M, t, pool, P) { const bmax = P.slice().sort((a, b) => b.net5 - a.net5)[0], smin = P.slice().sort((a, b) => a.net5 - b.net5)[0], dt = new Date(M.dates[t] + "T00:00:00Z");
-  return { sum: `近 5 日買最多 <b class="up">${esc(bmax?.name || "—")} ${bmax ? flowFmt(bmax.net5) : ""}</b><br>近 5 日賣最多 <b class="down">${esc(smin?.name || "—")} ${smin ? flowFmt(smin.net5) : ""}</b>`, date: `${M.dates[t].slice(5).replace("-", "/")} 週${"日一二三四五六"[dt.getUTCDay()]}` }; }
-// ---- 雷達回放：每一天的矩陣版面當關鍵影格，天與天之間用 Catmull-Rom 曲線連續補間（速度連續、不會一頓一頓），
-//      圓點後面拖著最近兩天多的尾跡；時間軸 u 是連續的（例如 12.37 天），播放、拖拉都是平滑的 ----
+// 回放：整段期間用同一個比例尺，位置在不同天之間才能比較
+function mfReplayScale(M, t0) { let mx = 1, my = 1; for (let t = t0; t < M.T; t++) for (const x of mfView(flowAt(M, t))) { mx = Math.max(mx, Math.abs(x.net5 ?? 0)); my = Math.max(my, Math.abs(x.accel ?? x.acc ?? 0)); } return { mx, my }; }
+function mfReplayPool(M, t) { const F = W.mf, P = mfView(flowAt(M, t)); if (F.rp.set === "all") return { P, pool: P }; const ids = new Set(mfView(flowAt(M)).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, 30).map(x => x.id)); return { P, pool: P.filter(x => ids.has(x.id)) }; }
+function mfReplayBits(M, t, pool, P) { const bmax = P.slice().sort((a, b) => b.net5 - a.net5)[0], smin = P.slice().sort((a, b) => a.net5 - b.net5)[0], dt = new Date((M.dates[t] || "2026-01-01") + "T00:00:00Z");
+  return { sum: `近 5 日買最多 <b class="up">${esc(bmax?.name || "—")} ${bmax ? flowFmt(bmax.net5) : ""}</b><br>近 5 日賣最多 <b class="down">${esc(smin?.name || "—")} ${smin ? flowFmt(smin.net5) : ""}</b>`, date: `${(M.dates[t] || "").slice(5).replace("-", "/")} 週${"日一二三四五六"[dt.getUTCDay()]}` }; }
+// ---- 雷達回放：每一天的矩陣版面當關鍵影格，天與天之間用 Catmull-Rom 曲線連續補間（所有 12 種視覺化模式共用） ----
 function flowBuild(M) {
-  const F = W.mf, t0 = Math.min(9, M.T - 1), scale = mfReplayScale(M, t0), ids = new Set(mfReplayPool(M, M.T - 1).pool.map(x => x.id)), keys = [], names = {};
-  for (let t = t0; t < M.T; t++) { const P = flowAt(M, t).filter(x => ids.has(x.id)), B = bubbleLayout(P, { w: 360, h: 360, scale }), m = new Map();
-    for (const n of B.N) { m.set(n.p.id, { x: n.x, y: n.y, r: n.r, q: n.p.q, lab: n.lab, v: n.p.net5 }); names[n.p.id] = n.p.name; } keys.push(m); }
-  // 時間上做一次 [1,2,1] 平滑（兩次）：去掉單日跳動，讓路徑像水流一樣圓順；最後一天保留真實位置
+  const F = W.mf, dims = mfStageDims(), bw = dims.bw, bh = dims.bh, t0 = mfT0(M.T), scale = mfReplayScale(M, t0), ids = new Set(mfReplayPool(M, M.T - 1).pool.map(x => x.id)), keys = [], rawKeys = [], names = {};
+  for (let t = t0; t < M.T; t++) {
+    const P = mfView(flowAt(M, t)).filter(x => ids.has(x.id)), rm = new Map();
+    P.forEach(p => { rm.set(p.id, p); names[p.id] = p.name; }); rawKeys.push(rm);
+    const B = bubbleLayout(P, { w: bw, h: bh, scale }), m = new Map();
+    for (const n of B.N) m.set(n.p.id, { x: n.x, y: n.y, r: n.r, q: n.p.q, lab: n.lab, v: n.p.net5 });
+    keys.push(m);
+  }
   for (const id of ids) for (let pass = 0; pass < 2; pass++) { const xs = keys.map(m => m.get(id)); const sm = xs.map((k, j) => { if (!k || j === xs.length - 1) return k; const a = xs[j - 1] || k, b = xs[j + 1] || k;
       return { ...k, x: (a.x + 2 * k.x + b.x) / 4, y: (a.y + 2 * k.y + b.y) / 4, r: (a.r + 2 * k.r + b.r) / 4 }; }); sm.forEach((k, j) => { if (k) keys[j].set(id, k); }); }
-  return { t0, T: M.T, set: F.rp.set, ids: [...ids], keys, names };
+  return { t0, T: M.T, set: F.rp.set, bw: F.bw, w: bw, h: bh, ar: dims.ar, scale, ids: [...ids], keys, rawKeys, names };
 }
 const cr = (p0, p1, p2, p3, f) => { const f2 = f * f, f3 = f2 * f; return 0.5 * (2 * p1 + (-p0 + p2) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f2 + (-p0 + 3 * p1 - 3 * p2 + p3) * f3); };
-// 某個板塊在連續時間 u 的位置與大小；某天沒有資料就沿用最近一天的位置、半徑當 0（淡出／淡入）
-function flowAtU(FL, id, u) {
-  const n = FL.keys.length, x = Math.max(0, Math.min(n - 1, u - FL.t0)), i = Math.min(n - 2, Math.floor(x)), f = n > 1 ? x - i : 0;
-  const K = j => { j = Math.max(0, Math.min(n - 1, j)); const k = FL.keys[j].get(id); if (k) return k; for (let d = 1; d < n; d++) { const a = FL.keys[j - d]?.get(id) || FL.keys[j + d]?.get(id); if (a) return { ...a, r: 0, lab: null }; } return null; };
+function colorLerp(c1, c2, s) {
+  if (!c1 || !c2 || c1 === c2 || s <= 0) return c1 || c2;
+  if (s >= 1) return c2;
+  const p = c => {
+    if (c.charCodeAt(0) === 35 && c.length === 7) return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+    const m = c.match(/\d+/g); return m ? [Number(m[0]), Number(m[1]), Number(m[2])] : [128, 128, 128];
+  };
+  const a = p(c1), b = p(c2);
+  return "rgb(" + Math.round(a[0] + (b[0] - a[0]) * s) + "," + Math.round(a[1] + (b[1] - a[1]) * s) + "," + Math.round(a[2] + (b[2] - a[2]) * s) + ")";
+}
+function flowAtU(FL, id, u, introK = 1) {
+  const n = FL.keys.length, x = Math.max(0, Math.min(n - 1, u - FL.t0)), i = Math.max(0, Math.min(Math.max(0, n - 2), Math.floor(x))), f = n > 1 ? x - i : 0;
+  const K = j => { j = Math.max(0, Math.min(n - 1, j)); const k = FL.keys[j]?.get(id); if (k) return k; for (let d = 1; d < n; d++) { const a = FL.keys[j - d]?.get(id) || FL.keys[j + d]?.get(id); if (a) return { ...a, r: 0, lab: null }; } return null; };
   const p1 = K(i), p2 = n > 1 ? K(i + 1) : p1; if (!p1 || !p2) return null; const p0 = K(i - 1) || p1, p3 = K(i + 2) || p2;
   const s = f * f * (3 - 2 * f);
-  return { x: cr(p0.x, p1.x, p2.x, p3.x, f), y: cr(p0.y, p1.y, p2.y, p3.y, f), r: p1.r + (p2.r - p1.r) * s, q: f < 0.5 ? p1.q : p2.q, v: p1.v + (p2.v - p1.v) * f,
+  let px = n > 1 ? cr(p0.x, p1.x, p2.x, p3.x, f) : p1.x, py = n > 1 ? cr(p0.y, p1.y, p2.y, p3.y, f) : p1.y, pr = p1.r + (p2.r - p1.r) * s;
+  if (introK < 1) { const cx0 = (FL.w || 360) / 2, cy0 = (FL.h || 360) / 2; px = cx0 + (px - cx0) * introK; py = cy0 + (py - cy0) * introK; pr *= 0.4 + 0.6 * introK; }
+  return { x: px, y: py, r: pr, q: f < 0.5 ? p1.q : p2.q, col: colorLerp(FLOW_Q[p1.q]?.[2], FLOW_Q[p2.q]?.[2], s), v: (p1.v + (p2.v - p1.v) * f) * introK,
     la: p1.lab, lb: p2.lab, wa: p1.lab ? 1 - f : 0, wb: p2.lab ? f : 0 };
+}
+function mfPtsAtU(M, FL, u, introK = 1) {
+  const n = FL.rawKeys.length, out = [];
+  const rawAt = (id, uVal) => {
+    const x = Math.max(0, Math.min(n - 1, uVal - FL.t0)), i = Math.max(0, Math.min(Math.max(0, n - 2), Math.floor(x))), f = n > 1 ? x - i : 0, s = f * f * (3 - 2 * f);
+    const K = j => FL.rawKeys[Math.max(0, Math.min(n - 1, j))]?.get(id);
+    let p1 = K(i), p2 = n > 1 ? K(i + 1) : p1; if (!p1 && !p2) return null; p1 ||= p2; p2 ||= p1;
+    const p0 = K(i - 1) || p1, p3 = K(i + 2) || p2;
+    const net5 = n > 1 ? cr(p0.net5 ?? 0, p1.net5 ?? 0, p2.net5 ?? 0, p3.net5 ?? 0, f) : (p1.net5 ?? 0);
+    const accel = n > 1 ? cr(p0.accel ?? 0, p1.accel ?? 0, p2.accel ?? 0, p3.accel ?? 0, f) : (p1.accel ?? 0);
+    const net1 = (p1.net1 ?? 0) + ((p2.net1 ?? 0) - (p1.net1 ?? 0)) * f, pct5 = (p1.pct5 ?? 0) + ((p2.pct5 ?? 0) - (p1.pct5 ?? 0)) * f;
+    const q1 = p1.q || flowQuad(p1.net5 ?? 0, p1.accel ?? 0), q2 = p2.q || flowQuad(p2.net5 ?? 0, p2.accel ?? 0), q = f < 0.5 ? q1 : q2;
+    return { ...p1, net5, accel, net1, pct5, q, col: colorLerp(FLOW_Q[q1]?.[2], FLOW_Q[q2]?.[2], s) };
+  };
+  for (const id of FL.ids) {
+    const cur = rawAt(id, u); if (!cur) continue;
+    const prev = n > 1 && u > FL.t0 ? rawAt(id, Math.max(FL.t0, u - 1)) : { net5: cur.net5 - cur.accel * 0.4, accel: cur.accel * 0.6, q: flowQuad(cur.net5 - cur.accel * 0.4, cur.accel * 0.6) };
+    if (introK < 1) {
+      cur.net5 = prev.net5 + (cur.net5 - prev.net5) * introK;
+      cur.accel = prev.accel + (cur.accel - prev.accel) * introK;
+      cur.col = colorLerp(FLOW_Q[prev.q]?.[2], cur.col, introK);
+    }
+    cur.prev = prev;
+    cur.trail = n > 1 ? [4, 3, 2, 1, 0].map(d => rawAt(id, Math.max(FL.t0, u - d * introK))).filter(Boolean)
+      : [0, 0.25, 0.5, 0.75, 1].map(k => ({ net5: prev.net5 + (cur.net5 - prev.net5) * k, accel: prev.accel + (cur.accel - prev.accel) * k, q: cur.q }));
+    const tEnd = Math.round(u), tStart = Math.max(0, tEnd - 9), S = M.secs?.find(s => s.id === id);
+    if (S?.net?.length) { cur.d10 = S.net.slice(tStart, tEnd + 1); if (cur.d10.length) cur.d10[cur.d10.length - 1] = cur.net1 * introK; }
+    else cur.d10 = [cur.net1 * introK];
+    cur.dDates = (M.dates || []).slice(tStart, tEnd + 1);
+    out.push(cur);
+  }
+  return out;
 }
 function flowMount() {
   const F = W.mf, M = mfModel(), svg = document.getElementById("mfb"); if (!M || !svg) return;
-  if (!F.rp.fl || F.rp.fl.T !== M.T || F.rp.fl.set !== F.rp.set) F.rp.fl = flowBuild(M);
-  const FL = F.rp.fl, g = svg.querySelector(".bnodes"), lg = svg.querySelector(".blabs"), ns = "http://www.w3.org/2000/svg";
-  FL.el = {}; for (const id of FL.ids) {
-    g.insertAdjacentHTML("beforeend", `<g class="bnode" data-mbs="${esc(id)}"><circle r="0"/><title>${esc(FL.names[id] || id)}</title></g>`);
-    lg.insertAdjacentHTML("beforeend", `<g class="blab" style="opacity:0"><g class="bl"><text y="-1" class="bn"></text><text y="8.5" class="bv"></text></g></g>`);
-    FL.el[id] = { n: g.lastElementChild, c: g.lastElementChild.firstElementChild, l: lg.lastElementChild }; }
+  const dims = mfStageDims();
+  if (!F.rp.fl || F.rp.fl.T !== M.T || F.rp.fl.set !== F.rp.set || F.rp.fl.bw !== F.bw || Math.abs((F.rp.fl.ar || 1) - dims.ar) > 0.03) F.rp.fl = flowBuild(M);
+  const FL = F.rp.fl;
   if (F.rp.u == null || F.rp.u > M.T - 1 || F.rp.u < FL.t0) F.rp.u = F.rp.t ?? M.T - 1;
+  if (F.viz === "bubble") {
+    const g = svg.querySelector(".bnodes"), lg = svg.querySelector(".blabs");
+    if (g && lg) {
+      g.innerHTML = ""; lg.innerHTML = ""; FL.el = {};
+      for (const id of FL.ids) {
+        g.insertAdjacentHTML("beforeend", `<g class="bnode" data-mbs="${esc(id)}"><circle class="mf-flow-line" r="0" fill="none" stroke-width="0.7" stroke-opacity="0"/><circle r="0"/><title>${esc(FL.names[id] || id)}</title></g>`);
+        lg.insertAdjacentHTML("beforeend", `<g class="blab" style="opacity:0"><g class="bl"><text class="bn bn1"></text><text class="bn bn2"></text><text class="bv"></text></g></g>`);
+        const nEl = g.lastElementChild;
+        FL.el[id] = { n: nEl, ring: nEl.children[0], c: nEl.children[1], l: lg.lastElementChild };
+      }
+      FL.svgEl = svg;
+    }
+  } else {
+    FL.el = null; FL.svgEl = null;
+  }
   flowDraw(); flowTexts(true); if (F.rp.playing) flowLoop();
 }
-// 畫目前 u 的畫面：半透明圓點（沒有外框、沒有尾跡）、標籤（相鄰兩天的標籤依距離淡入淡出）
 function flowDraw() {
-  const F = W.mf, FL = F.rp.fl; if (!FL?.el) return; const u = F.rp.u;
-  for (const id of FL.ids) { const E = FL.el[id], P = flowAtU(FL, id, u); if (!P) continue; const col = FLOW_Q[P.q][2];
-    E.n.setAttribute("transform", `translate(${P.x.toFixed(1)},${P.y.toFixed(1)})`); E.c.setAttribute("r", Math.max(0, P.r).toFixed(2)); E.c.setAttribute("fill", col); E.n.classList.toggle("on", id === F.bsel);
-    const lab = P.wb > P.wa ? P.lb : P.la, op = Math.max(P.wa, P.wb);
-    if (lab && op > 0.02) { const b = E.l.firstElementChild; E.l.setAttribute("transform", `translate(${P.x.toFixed(1)},${P.y.toFixed(1)})`); b.setAttribute("transform", `translate(${lab.dx.toFixed(1)},${lab.dy.toFixed(1)})`);
-      b.firstElementChild.textContent = lab.nm; b.lastElementChild.textContent = flowFmt(P.v); E.l.style.setProperty("--qc", col); E.l.style.opacity = (op * op * (3 - 2 * op)).toFixed(2); } else E.l.style.opacity = 0; }
+  const F = W.mf, M = mfModel(), FL = F.rp.fl, svg = document.getElementById("mfb"); if (!M || !FL || !svg) return;
+  const u = F.rp.u ?? (M.T - 1), introK = F.rp.introK ?? 1;
+  if (F.viz === "bubble") {
+    if (!FL.el || FL.svgEl !== svg) return flowMount();
+    svg.classList.toggle("mf-flowing", !!F.flowOn);
+    for (const id of FL.ids) {
+      const E = FL.el[id], P = flowAtU(FL, id, u, introK); if (!P) continue;
+      const col = P.col || FLOW_Q[P.q][2], r = Math.max(0, P.r);
+      E.n.setAttribute("transform", `translate(${P.x.toFixed(1)},${P.y.toFixed(1)})`); E.c.setAttribute("r", r.toFixed(2)); E.c.setAttribute("fill", col); E.n.classList.toggle("on", id === F.bsel);
+      if (E.ring) {
+        if (F.flowOn && r > 7.5) { E.ring.setAttribute("r", (r + 1.8).toFixed(1)); E.ring.setAttribute("stroke", col); E.ring.setAttribute("stroke-opacity", "0.45"); }
+        else E.ring.setAttribute("stroke-opacity", "0");
+      }
+      const lab = P.wb > P.wa ? P.lb : P.la, op = Math.max(P.wa, P.wb);
+      if (lab && op > 0.02) { const b = E.l.firstElementChild; E.l.setAttribute("transform", `translate(${P.x.toFixed(1)},${P.y.toFixed(1)})`); b.setAttribute("transform", `translate(${lab.dx.toFixed(1)},${lab.dy.toFixed(1)})`);
+        const bn1 = b.querySelector(".bn1"), bn2 = b.querySelector(".bn2"), bv = b.querySelector(".bv"), lines = lab.lines || [lab.nm];
+        if (bn1) { bn1.textContent = lines[0] || ""; bn1.setAttribute("y", lab.y1.toFixed(1)); bn1.style.fontSize = `${lab.fs.toFixed(1)}px`; }
+        if (bn2) { bn2.textContent = lines[1] || ""; bn2.setAttribute("y", lab.y2 != null ? lab.y2.toFixed(1) : "0"); bn2.style.fontSize = `${lab.fs.toFixed(1)}px`; }
+        if (bv) { bv.textContent = lab.hasVal ? flowFmt(P.v) : ""; bv.setAttribute("y", lab.yv != null ? lab.yv.toFixed(1) : "0"); bv.style.fontSize = `${(lab.fs * 0.85).toFixed(1)}px`; }
+        E.l.style.setProperty("--qc", col); E.l.style.setProperty("--bfs", `${lab.fs.toFixed(1)}px`); E.l.style.opacity = (op * op * (3 - 2 * op)).toFixed(2); } else E.l.style.opacity = 0;
+    }
+  } else {
+    const pts = mfPtsAtU(M, FL, u, introK);
+    const html = mfVizOnlySvg(pts, { viz: F.viz, scale: FL.scale, sel: F.bsel, flowOn: F.flowOn, M, u });
+    const m = html.match(/^<svg[^>]*viewBox="([^"]+)"[^>]*>([\s\S]*)<\/svg>$/);
+    if (m) {
+      if (svg.getAttribute("viewBox") !== m[1]) svg.setAttribute("viewBox", m[1]);
+      svg.classList.toggle("mf-flowing", !!F.flowOn);
+      svg.innerHTML = m[2];
+    } else svg.outerHTML = html;
+  }
 }
 // 文字（日期、買賣最多、細節卡、滑桿）只在跨到另一天時更新
 function flowTexts(force) {
   const F = W.mf, M = mfModel(), FL = F.rp.fl; if (!M || !FL) return; const t = Math.max(FL.t0, Math.min(M.T - 1, Math.round(F.rp.u))), rg = document.querySelector(".mrp-range");
   if (rg && document.activeElement !== rg) rg.value = F.rp.u.toFixed(2);
+  document.querySelectorAll('[data-mrp="play"]').forEach(pb => {
+    const top = pb.hasAttribute("data-mrp-top");
+    pb.textContent = F.rp.playing ? (top ? "❚❚ 暫停回放" : "❚❚ 暫停") : (top ? "▶ 雷達回放" : "▶ 回放");
+    pb.setAttribute("aria-pressed", !!F.rp.playing);
+  });
+  const sp = document.querySelector('[data-mrp="speed"]'); if (sp) sp.textContent = `${F.rp.speed}x`;
   if (!force && t === F.rp.t) return; F.rp.t = t;
   const { P, pool } = mfReplayPool(M, t), R = mfReplayBits(M, t, pool, P), q = s => document.querySelector(s);
-  if (q(".mrp-sum")) q(".mrp-sum").innerHTML = R.sum; if (q(".mrp-date")) q(".mrp-date").textContent = R.date;
-  const pb = q('[data-mrp="play"]'); if (pb) pb.textContent = F.rp.playing ? "❚❚ 暫停" : "▶ 播放"; const sp = q('[data-mrp="speed"]'); if (sp) sp.textContent = `${F.rp.speed}x`;
+  if (q(".mrp-sum")) q(".mrp-sum").innerHTML = R.sum.replace("<br>", "・"); if (q(".mrp-date")) q(".mrp-date").textContent = R.date;
+  document.querySelectorAll(".qcard[data-mq]").forEach(el => { const k = el.dataset.mq, b = el.querySelector("b"); if (b) b.textContent = P.filter(x => x.q === k).length; });
   const bi = q(".binfo, .binfo-empty"); if (bi) bi.outerHTML = bubbleInfo(P.find(x => x.id === F.bsel));
 }
-// 播放：每秒前進 0.5 × 速度 天（1x 約 2 秒一天）；到最後一天停一下再從頭
+// 播放：每秒前進 0.5 × 速度 天（1x 約 2 秒一天）；單日資料時以 introK 0 → 1 演進；到最後一天停一下再從頭
 function flowLoop() {
   const F = W.mf; cancelAnimationFrame(F.rp.raf); let last = performance.now(), hold = 0;
-  const step = now => { if (W.lt !== "money" || F.view !== "replay" || !F.rp.playing || !document.getElementById("mfb")) return; const dt = Math.min(100, now - last); last = now; const FL = F.rp.fl;
-    if (hold > 0) { hold -= dt; if (hold <= 0) F.rp.u = FL.t0; } else { F.rp.u += (dt / 1000) * 0.5 * F.rp.speed; if (F.rp.u >= FL.T - 1) { F.rp.u = FL.T - 1; hold = 1200; } }
-    flowDraw(); flowTexts(); F.rp.raf = requestAnimationFrame(step); };
+  const step = now => {
+    if (W.lt !== "money" || (F.view !== "replay" && F.view !== "bubble") || !F.rp.playing || !document.getElementById("mfb")) return;
+    const dt = Math.min(100, now - last); last = now; const FL = F.rp.fl; if (!FL) return;
+    if (FL.T - 1 <= FL.t0) {
+      if (hold > 0) { hold -= dt; if (hold <= 0) F.rp.introK = 0.08; }
+      else { F.rp.introK = (F.rp.introK ?? 0.08) + (dt / 1200) * F.rp.speed; if (F.rp.introK >= 1) { F.rp.introK = 1; hold = 900; } }
+    } else {
+      F.rp.introK = 1;
+      if (hold > 0) { hold -= dt; if (hold <= 0) F.rp.u = FL.t0; }
+      else { F.rp.u += (dt / 1000) * 0.5 * F.rp.speed; if (F.rp.u >= FL.T - 1) { F.rp.u = FL.T - 1; hold = 1200; } }
+    }
+    flowDraw(); flowTexts(); F.rp.raf = requestAnimationFrame(step);
+  };
   F.rp.raf = requestAnimationFrame(step);
 }
+function flowEnsureMount() {
+  const F = W.mf, M = mfModel(); if (!M) return null;
+  const dims = mfStageDims();
+  if (!F.rp.fl || F.rp.fl.T !== M.T || F.rp.fl.set !== F.rp.set || F.rp.fl.bw !== F.bw || Math.abs((F.rp.fl.ar || 1) - dims.ar) > 0.03 || (F.viz === "bubble" && (!F.rp.fl.el || F.rp.fl.svgEl !== document.getElementById("mfb")))) flowMount();
+  return F.rp.fl;
+}
 // 單步：用 450ms 緩入緩出滑到相鄰的那一天
-function flowSeek(target, ms = 450) { const F = W.mf, FL = F.rp.fl; if (!FL) return; cancelAnimationFrame(F.rp.raf); const from = F.rp.u, t0 = performance.now();
+function flowSeek(target, ms = 450) { const F = W.mf, FL = flowEnsureMount(); if (!FL) return; cancelAnimationFrame(F.rp.raf); const from = F.rp.u, t0 = performance.now();
   const step = now => { const k = Math.min(1, (now - t0) / ms); F.rp.u = from + (target - from) * easeIO(k); flowDraw(); flowTexts(); if (k < 1) F.rp.raf = requestAnimationFrame(step); }; F.rp.raf = requestAnimationFrame(step); }
 // 報價刷新等外部重畫：回放畫面已經在就只更新文字（動畫自己在跑）
 function mfReplayDraw() { const F = W.mf, M = mfModel(), svg = document.getElementById("mfb");
-  if (!M || F.view !== "replay" || !svg || !F.rp.fl?.el || F.rp.fl.T !== M.T) return renderMoney(); flowDraw(); flowTexts(true); }
-function mfStep(d) { const F = W.mf, FL = F.rp.fl; if (!FL) return; const t = Math.round(F.rp.u) + d; flowSeek(t > FL.T - 1 ? FL.t0 : Math.max(FL.t0, t)); }
-function mfPlay(on) { const F = W.mf; F.rp.playing = on; cancelAnimationFrame(F.rp.raf); if (on && F.rp.fl && F.rp.u >= F.rp.fl.T - 1) F.rp.u = F.rp.fl.t0; if (on && F.rp.fl?.el) flowLoop(); flowTexts(true); }
-$("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F = W.mf, b = e.target.closest("[data-mv],[data-mq],[data-mrk],[data-mset],[data-mrp],[data-mshare],[data-l2],[data-fsec],[data-mbs],[data-iopen-ext]"); if (!b) return; const d = b.dataset;
-  if (d.mbs) { F.bsel = F.bsel === d.mbs ? null : d.mbs; return F.view === "replay" ? mfReplayDraw() : renderMoney(); }
+  if (!M || (F.view !== "replay" && F.view !== "bubble") || !svg || !F.rp.fl || F.rp.fl.T !== M.T) return renderMoney(); flowDraw(); flowTexts(true); }
+function mfStep(d) { const F = W.mf, FL = flowEnsureMount(); if (!FL) return; const t = Math.round(F.rp.u) + d; flowSeek(t > FL.T - 1 ? FL.t0 : Math.max(FL.t0, t)); }
+function mfPlay(on) {
+  const F = W.mf, M = mfModel(); F.rp.playing = on; cancelAnimationFrame(F.rp.raf);
+  if (!on) F.rp.introK = 1;
+  if (on && M) {
+    if (M.T < 20 && !F.loading && !W.off) setTimeout(() => loadMoney(20), 0);
+    const FL = flowEnsureMount();
+    if (FL) {
+      if (FL.T - 1 <= FL.t0) F.rp.introK = 0.08;
+      else if (F.rp.u >= FL.T - 1) F.rp.u = FL.t0;
+      flowLoop();
+    }
+  } else if (F.rp.fl) flowDraw();
+  flowTexts(true);
+}
+$("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F = W.mf, b = e.target.closest("[data-mv],[data-mviz],[data-mflow],[data-mq],[data-mrk],[data-mset],[data-mrp],[data-mshare],[data-l2],[data-fsec],[data-mbs],[data-iopen-ext],[data-mexp]"); if (!b) return; const d = b.dataset;
+  if (d.mexp === "matrix" || d.mexp === "replay") return toggleMfExpand();
+  if (d.mviz) { F.viz = d.mviz; store.set("watch:mfviz", F.viz); if (F.rp.fl) { F.rp.fl.el = null; F.rp.fl.svgEl = null; } return renderMoney(); }
+  if (d.mflow) { F.flowOn = !F.flowOn; store.set("watch:mfflow", F.flowOn); b.setAttribute("aria-pressed", F.flowOn); document.getElementById("mfb")?.classList.toggle("mf-flowing", F.flowOn); if (F.rp.fl) flowDraw(); else renderMoney(); return; }
+  if (d.mbs) { F.bsel = F.bsel === d.mbs ? null : d.mbs; return F.rp.playing ? mfReplayDraw() : renderMoney(); }
   if (d.fsec) return secOpen(d.fsec);
   if (d.iopenExt) { W.indS.open = d.iopenExt; return setLt("ind"); }
   if (d.mshare) return mfShare(d.mshare);
   if (d.l2) { W.tv = "sum"; return setLt("tools", true); }
-  if (d.mv) { F.view = d.mv; if (d.mv !== "replay") { mfPlay(false); store.set("watch:mfv", d.mv); } if (d.mv === "replay") { F.rp.t = null; F.rp.u = null; } }
-  else if (d.mq) F.q = d.mq; else if (d.mrk) F.rk = d.mrk; else if (d.mset) { F[d.mset] = d.v; if (d.mset === "bw") store.set("watch:mfbw", d.v); }
+  if (d.mv === "replay") { F.view = "bubble"; store.set("watch:mfv", "bubble"); F.rp.t = null; F.rp.u = null; renderMoney(); mfPlay(true); return; }
+  if (d.mv) { F.view = d.mv; if (d.mv !== "bubble") { mfPlay(false); store.set("watch:mfv", d.mv); } else store.set("watch:mfv", "bubble"); }
+  else if (d.mq) F.q = d.mq; else if (d.mrk) F.rk = d.mrk; else if (d.mset) { F[d.mset] = d.v; if (d.mset === "bw") { store.set("watch:mfbw", d.v); F.rp.fl = null; } }
   else if (d.mrp === "prev") { mfPlay(false); return mfStep(-1); } else if (d.mrp === "next") { mfPlay(false); return mfStep(1); }
-  else if (d.mrp === "play") return mfPlay(!F.rp.playing); else if (d.mrp === "speed") { F.rp.speed = F.rp.speed >= 4 ? 1 : F.rp.speed * 2; if (F.rp.playing) return mfPlay(true); }
+  else if (d.mrp === "play") return mfPlay(!F.rp.playing); else if (d.mrp === "speed") { F.rp.speed = F.rp.speed >= 4 ? 1 : F.rp.speed * 2; if (F.rp.playing) return mfPlay(true); return flowTexts(true); }
   renderMoney(); });
 $("#lx").addEventListener("input", e => { if (W.lt === "money" && e.target.matches(".bop-r")) { const v = +e.target.value; W.mf.bop = v; store.set("watch:bop", v); document.querySelectorAll(".bwrap").forEach(el => el.style.setProperty("--bop", v)); e.target.nextElementSibling.textContent = Math.round(v * 100) + "%"; } });
-$("#lx").addEventListener("input", e => { if (W.lt === "money" && e.target.matches(".mrp-range")) { if (W.mf.rp.playing) mfPlay(false); W.mf.rp.u = +e.target.value; flowDraw(); flowTexts(); } });
+$("#lx").addEventListener("input", e => { if (W.lt === "money" && e.target.matches(".mrp-range")) { if (W.mf.rp.playing) mfPlay(false); flowEnsureMount(); W.mf.rp.u = +e.target.value; flowDraw(); flowTexts(); } });
 $("#lx").addEventListener("change", e => { if (W.lt === "money" && e.target.matches("[data-mrs]")) { W.mf.rp.set = e.target.value; W.mf.rp.fl = null; renderMoney(); } });
 
 /* ---------- 產業地圖：題材總覽、產業網絡、產業圖解（流程圖）、題材內頁 ---------- */
@@ -3174,6 +3765,18 @@ addEventListener("scroll", navOnScroll, { passive: true }); if (EMBED) try { par
 // 清單、題材、盤後、Podcast 裡的點擊：畫面換了就記一筆（navPush 自己比對，沒換就不記）
 ["#lx", "#lTools", "#wl", "#dTabs"].forEach(id => $(id)?.addEventListener("click", () => navPush()));
 $("#dbg").addEventListener("click", () => showList());
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    const full = document.querySelectorAll("#secMf.chart-fullscreen, #secMrp.chart-fullscreen");
+    if (full.length || W.mf.full) {
+      W.mf.full = null;
+      if (W.mf.rp) W.mf.rp.fl = null;
+      renderMoney();
+      syncFullscreenFrame();
+      e.stopPropagation(); return;
+    }
+  }
+});
 document.addEventListener("keydown", e => { if (e.key === "Escape" && wideMode() && $("#main").classList.contains("show-detail") && $("#sheet").hidden && !document.querySelector(".izoom")) showList(); });
 $("#backBtn").addEventListener("click", () => { if ((history.state?.d || 0) > 0) history.back(); else showList(); });
 // 上一檔／下一檔：依點進來時那個清單的順序（自選、熱門、排行、ETF、選股…），手機也可以左右滑
@@ -3361,7 +3964,7 @@ function cdpLevels(day) {
 function drawTs() {
   document.querySelectorAll("#tsSeg [data-ts]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.ts === W.tsDays)); document.querySelectorAll("#tsSeg [data-fts]").forEach(b => b.setAttribute("aria-pressed", b.dataset.fts === (W.futTs === "cur" ? "cur" : "all"))); $("#cdpBtn").setAttribute("aria-pressed", W.cdp);
   const cv = $("#tsCanvas"), host = $("#tsBox"), Wd = host.clientWidth; if (!Wd) return;
-  const d = tsData(), dpr = devicePixelRatio || 1, narrow = Wd < 560, mainH = narrow ? 200 : 250, volH = !d || d.isIdx ? 0 : narrow ? 54 : 70, axH = 18, H = mainH + (volH ? volH + 8 : 0) + axH + 8;
+  const d = tsData(), dpr = devicePixelRatio || 1, narrow = Wd < 560, isFull = !!host.closest(".chart-fullscreen"), mainH = isFull ? Math.max(340, Math.round(window.innerHeight - 170)) : (narrow ? 280 : 380), volH = !d || d.isIdx ? 0 : isFull ? 88 : (narrow ? 65 : 85), axH = 18, H = mainH + (volH ? volH + 8 : 0) + axH + 8;
   cv.width = Wd * dpr; cv.height = H * dpr; cv.style.height = H + "px";
   const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, Wd, H);
   const col = k => cssVar(k), L = narrow ? 50 : 60, R = narrow ? 44 : 54, pw = Wd - L - R, top = 8;
@@ -3443,6 +4046,56 @@ function tsSegFill(fut) { const el = $("#tsSeg"); if (el.dataset.fut === String(
 $("#tsSeg").addEventListener("click", e => { const f = e.target.closest("[data-fts]"); if (f) { W.futTs = f.dataset.fts; store.set("watch:futts2", W.futTs); TS.hover = null; drawTs(); return; } });
 $("#tsSeg").addEventListener("click", e => { const b = e.target.closest("[data-ts]"); if (!b) return; W.tsDays = +b.dataset.ts; store.set("watch:tsd", W.tsDays); TS.hover = null; drawTs(); loadTsHist(); });
 $("#cdpBtn").addEventListener("click", () => { W.cdp = !W.cdp; store.set("watch:cdp", W.cdp); drawTs(); });
+function syncFullscreenFrame() {
+  if (!EMBED) return;
+  try {
+    const f = window.frameElement; if (!f) return;
+    const anyFull = !!document.querySelector(".chart-fullscreen");
+    if (anyFull) {
+      if (f.dataset.prevStyle === undefined) f.dataset.prevStyle = f.getAttribute("style") || "";
+      f.style.cssText = "position:fixed !important;inset:0 !important;width:100vw !important;height:100vh !important;max-height:100vh !important;z-index:9999 !important;border:0 !important;background:var(--bg,#09090b) !important;";
+    } else if (f.dataset.prevStyle !== undefined) {
+      f.setAttribute("style", f.dataset.prevStyle);
+      delete f.dataset.prevStyle;
+      postHeight();
+    }
+  } catch {}
+}
+function toggleMfExpand() {
+  const on = W.mf.full !== "matrix";
+  W.mf.full = on ? "matrix" : null;
+  if (W.mf.rp) W.mf.rp.fl = null;
+  renderMoney();
+  syncFullscreenFrame();
+}
+function toggleMrpExpand() { return toggleMfExpand(); }
+function toggleTsExpand() {
+  const sec = $("#secTs"); if (!sec) return;
+  const on = sec.classList.toggle("chart-fullscreen");
+  const btn = $("#tsExpandBtn");
+  if (btn) { btn.textContent = on ? "✕ 縮小" : "⛶ 放大"; btn.setAttribute("aria-pressed", on); }
+  syncFullscreenFrame();
+  drawTs();
+}
+$("#tsExpandBtn")?.addEventListener("click", toggleTsExpand);
+$("#kExpandBtn")?.addEventListener("click", () => { kChart?.toggleExpand?.(); syncFullscreenFrame(); });
+{
+  let mfResizeT = 0, mfLastAr = 0;
+  const onMfResize = () => {
+    if (W.lt !== "money" || (W.mf.view !== "bubble" && W.mf.view !== "replay")) return;
+    clearTimeout(mfResizeT);
+    mfResizeT = setTimeout(() => {
+      const ar = mfStageDims().ar;
+      if (Math.abs(ar - mfLastAr) > 0.03) {
+        mfLastAr = ar;
+        if (W.mf.rp) W.mf.rp.fl = null;
+        renderMoney();
+      }
+    }, 100);
+  };
+  addEventListener("resize", onMfResize);
+  if (EMBED) try { parent.addEventListener("resize", onMfResize); } catch {}
+}
 
 /* ---------- 五檔／明細／分價量／大戶散戶 ---------- */
 function setFtab(f) { W.ftab = f; store.set("watch:ftab", f); renderFlow(); loadFlow(); }
@@ -4148,7 +4801,7 @@ function applyTheme(t) { document.documentElement.dataset.theme = t; $('meta[nam
 /* ---------- 嵌在 K線學堂（?embed=1）：回報高度、接收主題與「看這一檔」、把「判讀」交給外層 ---------- */
 function post(msg) { if (EMBED && parent !== window) parent.postMessage(msg, "*"); }
 let lastH = 0;
-function postHeight() { if (!EMBED) return; requestAnimationFrame(() => { const h = Math.ceil($("#main").getBoundingClientRect().bottom + scrollY + 8); if (Math.abs(h - lastH) > 2) { lastH = h; post({ type: "watch-height", h }); } postTabs(); }); }
+function postHeight() { if (!EMBED || document.querySelector(".chart-fullscreen")) return; requestAnimationFrame(() => { if (document.querySelector(".chart-fullscreen")) return; const h = Math.ceil($("#main").getBoundingClientRect().bottom + scrollY + 8); if (Math.abs(h - lastH) > 2) { lastH = h; post({ type: "watch-height", h }); } postTabs(); }); }
 if (EMBED) {
   new ResizeObserver(postHeight).observe($("#main"));
   addEventListener("message", e => {
@@ -4198,7 +4851,7 @@ const ROUTES = {
 function applyRoute(r) {
   const [a, b, c] = String(r || "").replace(/^#/, "").split("/"), R = ROUTES[(a || "").toLowerCase()]; if (!R) return false;
   const [lt, subs] = R, sub = b ? subs[b.toLowerCase()] : null;
-  if (lt === "money" && sub) W.mf.view = sub;
+  if (lt === "money" && sub) { W.mf.view = sub === "replay" ? "bubble" : sub; if (sub === "replay") setTimeout(() => mfPlay(true), 60); }
   if (lt === "cong") W.cv = sub || "home";
   if (lt === "ind") { W.indS.open = b === "theme" && c && INDT.get(c) ? c : null; if (sub) W.indS.view = sub; }
   if (lt === "pod" && typeof POD !== "undefined") POD.view = sub || "home";

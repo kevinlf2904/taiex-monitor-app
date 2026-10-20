@@ -490,7 +490,7 @@ class Chart {
     // 縮放工具列：按鈕、Ctrl / ⌘ + 滾輪或雙指縮放，拖曳平移，雙擊還原
     this.bar = document.createElement("div"); this.bar.className = "zoombar";
     // 第二組：縱向（價格軸）放大縮小、圖表高度、對數座標，讓小波動也看得清楚
-    this.bar.innerHTML = `<button type="button" data-z="out" aria-label="時間軸縮小" title="時間軸縮小（看更多 K 棒）">−</button><button type="button" data-z="in" aria-label="時間軸放大" title="時間軸放大（看更少 K 棒）">＋</button><button type="button" data-z="reset" aria-label="顯示全部並還原比例">全部</button><span class="zsep" aria-hidden="true"></span><button type="button" data-z="yin" aria-label="價格軸拉長" title="價格軸拉長：波動看起來更大（也可 Shift＋滾輪，或上下拖曳右側價格軸）">↕＋</button><button type="button" data-z="yout" aria-label="價格軸壓縮" title="價格軸壓縮">↕−</button><button type="button" data-z="sig" aria-pressed="true" title="主副圖對應：副圖指標發出訊號時，在主圖 K 線上標出位置（再按一次關閉）">對應</button><button type="button" data-z="scale" aria-expanded="false" title="主圖與副圖的比例、高度、對數座標、主副圖對應">設定 ▾</button>`;
+    this.bar.innerHTML = `<button type="button" data-z="out" aria-label="時間軸縮小" title="時間軸縮小（看更多 K 棒）">−</button><button type="button" data-z="in" aria-label="時間軸放大" title="時間軸放大（看更少 K 棒）">＋</button><button type="button" data-z="reset" aria-label="顯示全部並還原比例">全部</button><span class="zsep" aria-hidden="true"></span><button type="button" data-z="yin" aria-label="價格軸拉長" title="價格軸拉長：波動看起來更大（也可 Shift＋滾輪，或上下拖曳右側價格軸）">↕＋</button><button type="button" data-z="yout" aria-label="價格軸壓縮" title="價格軸壓縮">↕−</button><button type="button" data-z="sig" aria-pressed="true" title="主副圖對應：副圖指標發出訊號時，在主圖 K 線上標出位置（再按一次關閉）">對應</button><button type="button" data-z="expand" aria-label="全螢幕放大" title="放大圖表（全螢幕檢視，或按 Esc 縮小）">⛶ 放大</button><button type="button" data-z="scale" aria-expanded="false" title="主圖與副圖的比例、高度、對數座標、主副圖對應">設定 ▾</button>`;
     // 比例面板：主圖、副圖各自的縮放與高度（觸控裝置也能用按鈕操作）
     this.pop = document.createElement("div"); this.pop.className = "scalepop panel"; this.pop.hidden = true;
     host.append(this.legend, this.bar, this.pop, this.canvas);
@@ -501,6 +501,7 @@ class Chart {
       if (z === "in") this.zoom(0.6); else if (z === "out") this.zoom(1 / 0.6);
       else if (z === "reset") { this.resetScale(); }
       else if (z === "scale") { this.togglePop(); }
+      else if (z === "expand") { this.toggleExpand(); }
       else if (z === "sig") { Chart.setPref("sig", !Chart.prefs.sig); }
       else if (z === "yin") this.yZoom(1.5); else if (z === "yout") this.yZoom(1 / 1.5);
     });
@@ -717,6 +718,15 @@ class Chart {
   setWidth(w, anchor) { const { fa, w: ow } = this.vw; anchor = anchor ?? fa + ow / 2; const t = (anchor - fa) / ow; this.view = this.clampView(anchor - t * w, w); this.draw(); }
   zoom(f, anchor) { if (!this.D) return; this.setWidth(this.vw.w * f, anchor); }
   hoverAt(x) { const i = this.indexAt(x); if (i !== this.hover) { this.hover = i; this.req(); } }
+  toggleExpand() {
+    const sec = this.host.closest(".sec, .panel, .chartbox") || this.host;
+    const on = sec.classList.toggle("chart-fullscreen");
+    const b = this.bar?.querySelector("[data-z='expand']");
+    if (b) { b.textContent = on ? "✕ 縮小" : "⛶ 放大"; b.setAttribute("aria-pressed", on); }
+    const ext = sec.querySelector("#kExpandBtn");
+    if (ext) { ext.textContent = on ? "✕ 縮小" : "⛶ 放大"; ext.setAttribute("aria-pressed", on); }
+    this.draw();
+  }
   // 手勢中的重畫合併到下一個畫面（每個畫面最多畫一次），拖曳、縮放比較順
   req() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; this.draw(); }); }
   priceAt(y) { return this.geo?.pAt ? this.geo.pAt(y) : null; } // 畫面 y 對應的價格（只在主圖範圍內）
@@ -729,7 +739,7 @@ class Chart {
     const narrow = W < 560;
     // 副圖可以疊好幾個：o.subs = ["kd", "macd", { custom }]；舊的 o.sub 也支援
     const subs = this.subsN = (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean).map(S => (typeof S === "string" && SUBX[S] ? subxMake(S, D, I, this.cfgOn !== false) : S)).filter(Boolean);
-    const mainH = Math.round((narrow ? 230 : 300) * Chart.prefs.h), volH = o.noVol ? 0 : Math.round((narrow ? 52 : 66) * Chart.prefs.sh), subH = Math.round((subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112)) * Chart.prefs.sh), gap = 10, axisH = 20;
+    const isFull = !!(this.host.closest(".chart-fullscreen") || this.host.classList.contains("chart-fullscreen")), volH = o.noVol ? 0 : Math.round((narrow ? 52 : 66) * Chart.prefs.sh), subH = Math.round((subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112)) * Chart.prefs.sh), gap = 10, axisH = 20, mainH = isFull ? Math.max(340, Math.round(window.innerHeight - 130 - (volH ? volH + gap : 0) - subs.length * (subH + gap) - axisH)) : Math.round((narrow ? 230 : 300) * Chart.prefs.h);
     const H = mainH + gap + volH + subs.length * (gap + subH) + axisH + 8;
     if (this.canvas.width !== Math.round(W * dpr) || this.canvas.height !== Math.round(H * dpr)) { this.canvas.width = Math.round(W * dpr); this.canvas.height = Math.round(H * dpr); this.canvas.style.height = H + "px"; } // 尺寸沒變就不重設（重設畫布很慢，拖曳時會閃）
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
@@ -1267,4 +1277,22 @@ function openStylePicker(setTheme) {
   });
   addEventListener("keydown", function k(e) { if (e.key === "Escape") { ov.remove(); removeEventListener("keydown", k); } });
   document.body.appendChild(ov);
+}
+
+if (typeof window !== "undefined" && !window.__chartEscInit) {
+  window.__chartEscInit = true;
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      const full = document.querySelectorAll(".chart-fullscreen");
+      if (full.length) {
+        full.forEach(el => el.classList.remove("chart-fullscreen"));
+        document.querySelectorAll("[data-z='expand'], #kExpandBtn, #tsExpandBtn").forEach(b => {
+          b.textContent = "⛶ 放大";
+          b.setAttribute("aria-pressed", "false");
+        });
+        Chart.all.forEach(c => c.draw());
+        if (typeof drawTs === "function") drawTs();
+      }
+    }
+  });
 }
