@@ -297,6 +297,6 @@ test("AI 協作規則：AGENTS.md 與 Antigravity 規則檔一致，CLAUDE.md �
   assert.match(c, /^@AGENTS\.md/m);
   for (const k of ["learner/version.json", "gemini/", "claude/", "密鑰", "draft PR", "鎖：", ".agent/workflows/merge.md"]) assert.ok(a.includes(k), `AGENTS.md 缺少「${k}」`);
   const m = await rd(".agent/workflows/merge.md");
-  assert.match(m, /^---\ndescription: /, "Antigravity workflow 要有 description");
+  assert.match(m, /^---\r?\ndescription: /, "Antigravity workflow 要有 description");
   for (const k of ["gemini/", "node tests/run.mjs", "merge", "version.json"]) assert.ok(m.includes(k), `merge.md 缺少「${k}」`);
 });
