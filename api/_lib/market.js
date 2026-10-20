@@ -12,7 +12,7 @@
 //   world    國際指數，依地區分組（美國、日本、韓國、香港、中國、歐洲）
 
 import { marketRows, liveCache } from "./_live.js";
-import { getJSON, num, companies } from "./_tw.js";
+import { getJSON, num, rocDate, companies } from "./_tw.js";
 import { yahooBars, quoteFromMeta } from "./_yahoo.js";
 
 const BUCKETS = [[">5%", 5, Infinity], ["3~5%", 3, 5], ["2~3%", 2, 3], ["1~2%", 1, 2], ["0~1%", 0, 1], ["0%", 0, 0], ["0~-1%", -1, 0], ["-1~-2%", -2, -1], ["-2~-3%", -3, -2], ["-3~-5%", -5, -3], ["<-5%", -Infinity, -5]];
@@ -54,7 +54,6 @@ export function contributions(twse, info, taiexPrev) {
   return { pos: out.filter(x => x.pts > 0).slice(0, 10), neg: out.filter(x => x.pts < 0).slice(-10).reverse() };
 }
 // OpenAPI 的類股指數是「最近一個交易日收盤」，日期是民國年（1141007）
-const rocDate = v => { const s = String(v ?? "").replace(/\D/g, ""); return s.length === 7 ? `${+s.slice(0, 3) + 1911}-${s.slice(3, 5)}-${s.slice(5)}` : s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}` : null; };
 export function parseMiIndex(rows) {
   return (Array.isArray(rows) ? rows : []).map(r => {
     const sign = String(r["漲跌"] ?? "").includes("-") ? -1 : 1, pts = num(r["漲跌點數"]), close = num(r["收盤指數"]);

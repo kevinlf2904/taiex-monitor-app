@@ -13,10 +13,11 @@ test("報價請求卡住後會恢復更新", async () => {
     const codes = (new URL(r.request().url()).searchParams.get("codes") || "").split(",").filter(Boolean);
     r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", session: "open", today: "2026-10-15", quotes: codes.map(c => ({ code: c, name: c, price: 100 + n, prev: 100, chg: n, chgPct: n / 100 })) }) }); });
   const p = await ctx.newPage(); await p.clock.install({ time: new Date("2026-10-15T02:00:00Z") }); // 台北 10:00 盤中
+  await p.addInitScript(() => { window.W_TMO = 1500; });
   await p.goto(`${S.url}/learner/watch.html`);
   await p.waitForFunction(() => W.quotes.get("T00")?.price, null, { timeout: 15000 });
-  await p.waitForTimeout(25000); assert.ok(hung); // 卡住的請求 20 秒逾時，之後每秒更新要繼續
-  const after = n; await p.waitForTimeout(3000); assert.ok(n > after, `卡住之後沒有再更新（${after} → ${n}）`);
+  await p.waitForTimeout(3000); assert.ok(hung); // 卡住的請求逾時後，每秒更新要繼續
+  const after = n; await p.waitForTimeout(2200); assert.ok(n > after, `卡住之後沒有再更新（${after} → ${n}）`);
   await ctx.close();
 });
 

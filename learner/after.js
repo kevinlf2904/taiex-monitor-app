@@ -53,7 +53,7 @@ function renderAfter() {
       <p class="note" style="padding:0 12px">三大法人金額是證交所 BFI82U（只有上市）；期貨是期交所，散戶＝法人小台的反向（估算）。</p>`;
   } else if (v === "inst" || v === "margin") {
     const H = (A.hist || []).slice(-20), isI = v === "inst";
-    const items = H.map(x => ({ label: x.d.slice(5).replace("-", "/"), v: isI ? x.inst?.total ?? 0 : x.margin?.finBal ?? 0, y: isI ? null : null }));
+    const items = H.map(x => ({ label: x.d.slice(5).replace("-", "/"), v: isI ? x.inst?.total ?? 0 : x.margin?.finBal ?? 0, y: null }));
     h = afBack(isI ? "大盤三大法人買賣超金額" : "大盤融資融券餘額", isI ? "上市・億元" : "上市") + (H.length ? `<div style="padding:0 8px">${barLineSvg(items, { fmtV: x => Math.round(x) })}</div>` : "")
       + `<div class="cotbl-wrap"><table class="tbl aftbl"><thead><tr><th>日期</th>${isI ? "<th>外資</th><th>投信</th><th>自營商</th><th>合計</th>" : "<th>融資餘額(億)</th><th>增減</th><th>融券(張)</th><th>增減</th>"}</tr></thead><tbody>
       ${[...H].reverse().map(x => `<tr><td>${x.d.slice(5).replace("-", "/")}</td>${isI ? ["foreign", "trust", "dealer", "total"].map(k => { const n = x.inst?.[k]; return `<td class="${cls(n)}">${n == null ? "—" : (n > 0 ? "+" : "") + n.toFixed(2)}</td>`; }).join("")
@@ -90,6 +90,7 @@ function afterInit() {
 .afhead { display: flex; align-items: center; gap: 10px; padding: 10px 12px; flex-wrap: wrap; } .afhead b { font-size: 16px; font-weight: 500; }
 .afchips { padding: 0 12px 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .afchips button { white-space: nowrap; flex-shrink: 0; }
 .aftbl { width: 100%; font-size: 13px; } .aftbl td, .aftbl th { white-space: nowrap; text-align: right; } .aftbl td:first-child, .aftbl th:first-child, .afrank td:nth-child(2), .afrank th:nth-child(2) { text-align: left; }
+.aftbl:not(.afrank) td:first-child, .aftbl:not(.afrank) th:first-child, .afrank td:nth-child(2), .afrank th:nth-child(2) { position: sticky; left: 0; background: var(--surface, var(--bg)); z-index: 1; }
 .afrank tr[data-sel] { cursor: pointer; } .afrank td small { display: block; font-size: 11px; color: var(--muted); } .afrank td small.up { color: var(--up); } .afrank td small.down { color: var(--down); }
 .afnm b { font-weight: 500; } `;
   document.head.appendChild(css);

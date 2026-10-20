@@ -11,7 +11,7 @@ import { parseRss, parseSum, PROMPT, SUM_VER, uploadAudio, geminiJSON, fileState
 
 const DIR = fileURLToPath(new URL("../learner/data/podcast/", import.meta.url));
 const KEY = (process.env.GEMINI_API_KEY || "").trim(), SITE = (process.env.SITE_URL || "https://kline-school.vercel.app").replace(/\/$/, "");
-const MAX = +process.env.MAX_PER_RUN || 15, REDO = process.env.REDO ? +process.env.REDO : 5, BACK = +process.env.BACKFILL || 30, DRY = process.env.DRY === "1", KEEP = 60;
+const MAX = +process.env.MAX_PER_RUN || 15, REDO = process.env.REDO ? +process.env.REDO : 5, BACK = +process.env.BACKFILL || 30, DRY = process.env.DRY === "1", KEEP = +process.env.KEEP || 45;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // 和 learner/podcast.js 的 podHash 一樣（單集的 key）
 export const podHash = s => { let h = 5381; for (const ch of String(s)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0; return h.toString(36); };

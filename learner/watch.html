@@ -637,7 +637,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .cokv > div { background: var(--surface-2); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; } .cokv span { font-size: 12px; color: var(--muted); } .cokv b { font: 500 16px var(--font-num); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .cokv small { font: 12px var(--font-num); color: var(--muted); } .cokv small.up { color: var(--up); } .cokv small.down { color: var(--down); }
 .cochips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; } .cochips button { border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 4px; padding: 4px 10px; font-size: 13px; cursor: pointer; } .cochips button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); font-weight: 500; }
 .cochart { width: 100%; height: auto; max-height: 220px; display: block; }
-.cotbl-wrap { overflow-x: auto; } .cotbl { width: 100%; border-collapse: collapse; font: 12px var(--font-num); } .cotbl th { color: var(--muted); font-weight: 500; padding: 4px 4px; text-align: center; white-space: nowrap; } .cotbl td { padding: 3px 4px; text-align: center; white-space: nowrap; } .cotbl td:first-child { width: 14px; } .cotbl td i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; } .cotbl .up { color: var(--up); } .cotbl .down { color: var(--down); }
+.cotbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; } .cotbl { width: 100%; border-collapse: collapse; font: 12px var(--font-num); } .cotbl th { color: var(--muted); font-weight: 500; padding: 4px 4px; text-align: center; white-space: nowrap; } .cotbl td { padding: 3px 4px; text-align: center; white-space: nowrap; } .cotbl td:first-child { width: 14px; } .cotbl td i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; } .cotbl .up { color: var(--up); } .cotbl .down { color: var(--down); }
 .cleg { margin: 6px 0 0; font-size: 12px; color: var(--muted); } .cleg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
 .cobar { margin: 0 0 8px; padding: 8px 10px; background: var(--surface-2); border-radius: 4px; font-size: 13px; }
 
@@ -861,7 +861,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.19-99</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.20-100</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -959,14 +959,8 @@ const arrow = v => (v > 0 ? "▲" : v < 0 ? "▼" : "");
 const fmtVol = v => (v == null ? "—" : v >= 1e8 ? (v / 1e8).toFixed(2) + " 億" : v >= 1e4 ? (v / 1e4).toFixed(1) + " 萬" : Math.round(v).toLocaleString());
 const volUnit = c => (isUS(c) ? "股" : isFut(c) ? "口" : isIdx(c) ? "" : "張");
 const fmtPx = (v, c) => (v == null ? "—" : isUS(c) ? (+v).toFixed(2) : fmtP(v));
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const isMobile = () => matchMedia("(max-width: 900px)").matches;
 const nameOf = c => (isIdx(c) ? { T00: "加權指數", O00: "櫃買指數", TXF: "台指期近月" }[c] : W.quotes.get(c)?.name || W.names[c] || c);
-function mktSession(now = new Date()) {
-  const t = new Date(now.getTime() + 8 * 3600e3), day = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();
-  if (day === 0 || day === 6) return "closed";
-  return m >= 510 && m < 540 ? "pre" : m >= 540 && m <= 815 ? "open" : "closed";
-}
 const anyOpen = () => mktSession() !== "closed" || [...W.quotes.values()].some(q => q.us && q.session?.state === "open") || (W.sel && isFut(W.sel) && W.quotes.get("TXF")?.fsession && W.quotes.get("TXF").fsession !== "closed");
 // 嵌在 K線學堂裡時，iframe 和整頁一樣高：position: fixed 會跑到很下面看不到，所以改放在使用者目前看得到的位置
 function viewBox() { try { const f = window.frameElement, r = f.getBoundingClientRect(), H = parent.innerHeight; return { top: Math.max(0, -r.top), h: Math.min(H, r.bottom) - Math.max(0, r.top) }; } catch { return { top: scrollY, h: innerHeight }; } }
@@ -983,7 +977,7 @@ function toast(t, ms = 4000) { const el = $("#toast"); el.textContent = t; el.hi
 const tmo = ms => { try { return AbortSignal.timeout(ms); } catch { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; } };
 async function getJ(url, optional = false) {
   const ttl = apiTtl(url); if (ttl && !(W.fresh > Date.now())) { const hit = await apiCacheGet(url); if (hit) return hit; }
-  let r; try { r = await fetch(url, { signal: tmo(20000) }); } catch (e) { throw new Error(e?.name === "TimeoutError" || e?.name === "AbortError" ? "伺服器太久沒回應" : "連不到伺服器（網路中斷？）"); }
+  let r; try { r = await fetch(url, { signal: tmo(W.tmo || window.W_TMO || 20000) }); } catch (e) { throw new Error(e?.name === "TimeoutError" || e?.name === "AbortError" ? "伺服器太久沒回應" : "連不到伺服器（網路中斷？）"); }
   const t = await r.text().catch(() => ""); let j = null; try { j = JSON.parse(t); } catch {}
   if (!j) { if (r.status === 404 && !optional) W.off = true; throw new Error(r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}`); }
   if (!j.ok) throw new Error(j.error || "拿不到資料");

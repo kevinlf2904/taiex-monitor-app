@@ -2,13 +2,7 @@
 // GET /api/stocks → { ok, list: [["2330", "台積電", "上市", "半導體"], ...] }（第 4 欄是產業別，拿不到時省略）
 // 來源：證交所 OpenAPI（上市，含 ETF）、櫃買中心 OpenAPI（上櫃）。清單一天更新一次就夠，快取一天。
 
-import { companies } from "./_tw.js";
-const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
-async function getJSON(url) {
-  const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(9000) });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-}
+import { companies, getJSON } from "./_tw.js";
 const clean = s => String(s ?? "").trim();
 export function parseTwse(rows) { return (Array.isArray(rows) ? rows : []).map(r => [clean(r.Code), clean(r.Name), "上市"]).filter(([c, n]) => /^\d{4,6}[A-Z]?$/.test(c) && n); }
 export function parseTpex(rows) { return (Array.isArray(rows) ? rows : []).map(r => [clean(r.SecuritiesCompanyCode ?? r.Code), clean(r.CompanyName ?? r.Name), "上櫃"]).filter(([c, n]) => /^\d{4,6}[A-Z]?$/.test(c) && n); }

@@ -527,6 +527,11 @@ function irr(init,flows,final){
   let lo=-0.5,hi=0.3;if(f(lo)>0||f(hi)<0){if(final<=0)return -1;return NaN}
   for(let k=0;k<80;k++){const m=(lo+hi)/2;f(m)>0?hi=m:lo=m}return Math.pow(1+(lo+hi)/2,12)-1;
 }
+// 月現金流的內部報酬率（二分法），換算成年化
+function irrCf(cf){
+  const npv=r=>cf.reduce((a,v,t)=>a+v/Math.pow(1+r,t),0);let lo=-0.5,hi=0.5;if(!(npv(lo)*npv(hi)<=0))return null;
+  for(let k=0;k<120;k++){const mid=(lo+hi)/2;if(npv(lo)*npv(mid)<=0)hi=mid;else lo=mid}return Math.pow(1+(lo+hi)/2,12)-1;
+}
 
 /* ---------- strategies ---------- */
 function stratDca(p,ann){const mv=[];
@@ -864,6 +869,23 @@ if(_added){try{$("g-asset").value=G.main}catch(e){}save();try{history.replaceSta
 /* ---------- 股息計算機 ---------- */
 (() => {
   const $ = id => document.getElementById(id), DC = { mode: "re" }, fmt = v => Math.round(v).toLocaleString(), pct = v => (v == null || !isFinite(v) ? "—" : (v >= 0 ? "" : "−") + Math.abs(v * 100).toFixed(2) + "%");
+  const DC_KEY = "kline:divcalc", dcFields = ["dc-init", "dc-mon", "dc-yrs", "dc-y", "dc-g", "dc-freq"];
+  try {
+    const saved = JSON.parse(localStorage.getItem(DC_KEY) || "null");
+    if (saved && typeof saved === "object") {
+      dcFields.forEach(id => { if (saved[id] != null && $(id)) $(id).value = saved[id]; });
+      if (typeof saved.nhi === "boolean" && $("dc-nhi")) $("dc-nhi").checked = saved.nhi;
+      if (saved.code && $("dc-code")) $("dc-code").value = saved.code;
+      if (saved.mode && ["re", "out", "px"].includes(saved.mode)) DC.mode = saved.mode;
+    }
+  } catch {}
+  function saveDc() {
+    try {
+      const o = { mode: DC.mode, nhi: $("dc-nhi")?.checked, code: $("dc-code")?.value || "" };
+      dcFields.forEach(id => { if ($(id)) o[id] = $(id).value; });
+      localStorage.setItem(DC_KEY, JSON.stringify(o));
+    } catch {}
+  }
   // 每月模擬：第 0 個月先投入本金，之後每月月初投入；股價每月成長 (1+g)^(1/12)；配息月依當時股價 × 殖利率 ÷ 次數 發放
   function sim(o, mode) {
     const n = o.yrs * 12, gm = Math.pow(1 + o.g, 1 / 12), step = 12 / o.freq; let P = 100, sh = 0, inv = 0, divSum = 0; const cf = [], rows = []; let yDiv = 0;
@@ -873,12 +895,7 @@ if(_added){try{$("g-asset").value=G.main}catch(e){}save();try{history.replaceSta
       if (m > 0 && m % step === 0 && mode !== "px") { let d = sh * P * o.y / o.freq; if (o.nhi && d >= 20000) d *= 1 - 0.0211; divSum += d; yDiv += d; if (mode === "re") sh += d / P; else cf[m] += d; }
       if (m > 0 && m % 12 === 0) { rows.push({ y: m / 12, inv, div: yDiv, divSum, mv: sh * P }); yDiv = 0; }
     }
-    cf[n] += sh * P; return { mv: sh * P, inv, divSum, rows, irr: irr(cf), lastDiv: rows.length ? rows[rows.length - 1].div : 0 };
-  }
-  // 月現金流的內部報酬率（二分法），換算成年化
-  function irr(cf) {
-    const npv = r => cf.reduce((a, v, t) => a + v / Math.pow(1 + r, t), 0); let lo = -0.5, hi = 0.5; if (!(npv(lo) * npv(hi) <= 0)) return null; // 月報酬 ±50% 的範圍（年化遠超過合理值），避免次方溢位
-    for (let k = 0; k < 120; k++) { const mid = (lo + hi) / 2; if (npv(lo) * npv(mid) <= 0) hi = mid; else lo = mid; } return Math.pow(1 + (lo + hi) / 2, 12) - 1;
+    cf[n] += sh * P; return { mv: sh * P, inv, divSum, rows, irr: irrCf(cf), lastDiv: rows.length ? rows[rows.length - 1].div : 0 };
   }
   const opts = () => ({ init: Math.max(0, +$("dc-init").value || 0), mon: Math.max(0, +$("dc-mon").value || 0), yrs: Math.min(60, Math.max(1, Math.round(+$("dc-yrs").value || 1))), y: (+$("dc-y").value || 0) / 100, g: (+$("dc-g").value || 0) / 100, freq: +$("dc-freq").value || 4, nhi: $("dc-nhi").checked });
   function render() {
@@ -890,20 +907,24 @@ if(_added){try{$("g-asset").value=G.main}catch(e){}save();try{history.replaceSta
       + kpi(`年化報酬率（${DC.mode === "px" ? "不含息" : "含息"}）`, pct(A.irr), `<span>含息</span><b>${pct(withDiv.irr)}</b><span>不含息</span><b>${pct(noDiv.irr)}</b><span>股息貢獻</span><b>${withDiv.irr != null && noDiv.irr != null ? pct(withDiv.irr - noDiv.irr) : "—"}</b>`);
     const show = A.rows.length > 20 ? A.rows.filter(r => r.y <= 5 || r.y % 5 === 0 || r.y === A.rows.length) : A.rows;
     $("dc-body").innerHTML = show.map(r => `<tr><td class="l">第 ${r.y} 年</td><td>${fmt(r.inv)}</td><td>${DC.mode === "px" ? "—" : fmt(r.div)}</td><td>${DC.mode === "px" ? "—" : fmt(r.divSum)}</td><td>${fmt(r.mv)}</td><td>${DC.mode === "px" ? "—" : fmt(r.div / 12)}</td></tr>`).join("");
+    saveDc();
   }
-  // 抓真實資料：台股用 /api/yield 的近 12 個月殖利率；/api/annual 的 5 年（不夠就上市以來）不含息年化當作股價成長，並列出含息、不含息的真實年化
+  // 抓真實資料：台股用 /api/yield 的近 12 個月殖利率；共用 fetchAnnual 的 5 年（不夠就上市以來）不含息年化當作股價成長，並列出含息、不含息的真實年化
   async function fetchReal() {
     const code = $("dc-code").value.trim().toUpperCase(), out = $("dc-real"); if (!code) { out.textContent = "請先填代號"; return; } out.textContent = "載入中…";
     const msg = [];
-    try { if (/^\d{4,6}[A-Z]?$/.test(code)) { const j = await (await fetch(`/api/yield?codes=${code}`)).json(), r = j.rows?.[0]; if (r?.yield != null) { $("dc-y").value = r.yield; msg.push(`近 12 個月殖利率 ${r.yield}%（配 ${r.cash12} 元）`); } } } catch {}
-    try { const j = await (await fetch(`/api/annual?code=${encodeURIComponent(code)}`)).json();
-      if (j.ok) { const pick = P => P?.[5] || P?.max, a = pick(j.periods), b = pick(j.periodsPx);
-        if (b) $("dc-g").value = b.cagr; if (a) msg.push(`${a.years} 年真實年化：含息 ${a.cagr}%${b ? `、不含息 ${b.cagr}%` : ""}`);
-        if (!/^\d/.test(code) && a && b) { $("dc-y").value = Math.max(0, +(a.cagr - b.cagr).toFixed(2)); msg.push("殖利率以含息減不含息估算"); } }
-      else msg.push(j.error || "抓不到歷史年化"); } catch { msg.push("連不到資料服務（部署到網站後才能用）"); }
+    if (/^\d{4,6}[A-Z]?$/.test(code)) {
+      try { const j = await (await fetch(`/api/yield?codes=${code}`)).json(), r = j.rows?.[0]; if (r?.yield != null) { $("dc-y").value = r.yield; msg.push(`近 12 個月殖利率 ${r.yield}%（配 ${r.cash12} 元）`); } else if (j.ok) msg.push("近 12 個月無現金配息紀錄"); }
+      catch { msg.push("殖利率暫時抓不到"); }
+    }
+    try { const j = await fetchAnnual({ name: code }), pick = P => P?.[5] || P?.max, a = pick(j.periods), b = pick(j.periodsPx);
+      if (b) $("dc-g").value = b.cagr; if (a) msg.push(`${a.years} 年真實年化：含息 ${a.cagr}%${b ? `、不含息 ${b.cagr}%` : ""}`);
+      if (!/^\d/.test(code) && a && b) { $("dc-y").value = Math.max(0, +(a.cagr - b.cagr).toFixed(2)); msg.push("殖利率以含息減不含息估算"); }
+    } catch (e) { msg.push(e.message || "連不到資料服務（部署到網站後才能用）"); }
     out.textContent = msg.join("；") || "抓不到資料"; render();
   }
-  ["dc-init", "dc-mon", "dc-yrs", "dc-y", "dc-g", "dc-freq", "dc-nhi"].forEach(id => $(id).addEventListener("input", render));
+  [...dcFields, "dc-nhi"].forEach(id => $(id).addEventListener("input", render));
+  $("dc-code").addEventListener("input", saveDc);
   $("dc-mode").addEventListener("click", e => { const b = e.target.closest("[data-dm]"); if (b) { DC.mode = b.dataset.dm; render(); } });
   $("dc-fetch").addEventListener("click", fetchReal); $("dc-code").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); fetchReal(); } });
   window.dcSim = sim; render();
