@@ -589,11 +589,33 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .bnode { cursor: pointer; }
 .bubble:not(.is-playing) .bnode { transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease; will-change: transform; }
 .bubble:not(.is-playing) .blab { transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease; will-change: transform, opacity; }
-.bubble.is-playing .bnode, .bubble.is-playing .blab { transition: none !important; will-change: transform; }
+.bubble.is-playing .bnode, .bubble.is-playing .blab, .bwrap.is-playing .bnode { transition: none !important; animation: none !important; will-change: transform; }
 .bwrap[data-viz="bubble"] .bnode circle:not(.mf-flow-line), .bwrap:not([data-viz]) .bnode circle:not(.mf-flow-line) { stroke: none; fill-opacity: var(--bop, .45); transition: fill-opacity .2s; }
 .bwrap[data-viz="bubble"] .bnode.on circle:not(.mf-flow-line), .bwrap:not([data-viz]) .bnode.on circle:not(.mf-flow-line) { fill-opacity: min(1, calc(var(--bop, .45) + .35)); }
 .bwrap[data-viz="bubble"] .bnode:focus circle:not(.mf-flow-line), .bwrap[data-viz="bubble"] .bnode:hover circle:not(.mf-flow-line), .bwrap:not([data-viz]) .bnode:hover circle:not(.mf-flow-line) { fill-opacity: min(1, calc(var(--bop, .45) + .2)); }
 .bwrap:not([data-viz="bubble"]) .bnode.on, .bwrap:not([data-viz="bubble"]) .bnode:hover { filter: brightness(1.22); }
+@keyframes mfViewEnter { 0% { opacity: 0.15; transform: scale(0.985); } 100% { opacity: 1; transform: scale(1); } }
+.bwrap.mf-swapping svg { opacity: 0.12 !important; transform: scale(0.98) !important; transition: opacity 0.12s cubic-bezier(0.4, 0, 1, 1), transform 0.12s cubic-bezier(0.4, 0, 1, 1); pointer-events: none; }
+.bwrap.mf-entering svg { animation: mfViewEnter 0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes mfFlowIn { 0% { opacity: 0; transform: scaleX(0.9); } 100% { opacity: 1; transform: scaleX(1); } }
+@keyframes mfTreeIn { 0% { opacity: 0; transform: scale(0.91); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes mfHeatIn { 0% { opacity: 0; transform: translateX(10px); } 100% { opacity: 1; transform: translateX(0); } }
+.bwrap[data-viz="flow"] .bubble:not(.is-playing) .bnode { animation: mfFlowIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: left center; }
+.bwrap[data-viz="flow"] .bnode path { transition: opacity 0.2s ease, stroke-width 0.2s ease; }
+.bwrap[data-viz="flow"] .bnode:hover path:first-child, .bwrap[data-viz="flow"] .bnode.on path:first-child { fill-opacity: 0.65; }
+.bwrap[data-viz="tree"] .bubble:not(.is-playing) .bnode { animation: mfTreeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: center center; }
+.bwrap[data-viz="tree"] .bnode rect { transition: transform 0.2s ease, fill-opacity 0.2s ease, stroke 0.2s ease; }
+.bwrap[data-viz="tree"] .bnode:hover rect:first-child, .bwrap[data-viz="tree"] .bnode.on rect:first-child { stroke-width: 1.8px; stroke: #fff; }
+.bwrap[data-viz="heat"] .bubble:not(.is-playing) .bnode { animation: mfHeatIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bwrap[data-viz="heat"] .bnode { transition: filter 0.18s ease, transform 0.18s ease; }
+.bwrap[data-viz="heat"] .bnode:hover { transform: translateX(3px); }
+@media (prefers-reduced-motion: reduce) {
+  .bwrap.mf-swapping svg, .bwrap.mf-entering svg,
+  .bwrap[data-viz="flow"] .bnode, .bwrap[data-viz="tree"] .bnode, .bwrap[data-viz="heat"] .bnode {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 .mtool { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin: 6px 12px; } .mtool .cg-t { font-family: var(--font-display); font-weight: 600; color: var(--ink); letter-spacing: .02em; }
 .foot-disc { margin: 4px 16px 12px; } :root[data-embed="1"] .foot-disc { display: none; } .hotmini h3 { display: flex; align-items: baseline; gap: 8px; }
 .ctags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; } .ctg { font-style: normal; font-size: 11px; line-height: 1.5; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); } .ctg.up { color: var(--up); border-color: color-mix(in srgb, var(--up) 40%, transparent); } .ctg.down { color: var(--down); border-color: color-mix(in srgb, var(--down) 40%, transparent); } .ctg.warn { color: var(--ink); }
@@ -953,7 +975,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.20-104</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.20-105</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2488,7 +2510,7 @@ function mfVizOnlySvg(rawPts, { viz = W.mf.viz, w, h, id = "mfb", scale, sel = W
   const mxA = Math.max(1, scale?.my || 0, ...pts.flatMap(s => [Math.abs(s.accel), Math.abs(s.prev?.accel || 0), ...(s.trail || []).map(p => Math.abs(p.accel))]));
   const sq = (v, m) => Math.sign(v) * Math.sqrt(Math.min(1, Math.abs(v) / Math.max(1e-6, m)));
   const col = s => s.col || FLOW_Q[s.q]?.[2] || "#9aa3ad", fmt = v => flowFmt(v);
-  const bcls = s => `class="bnode${s.id === sel ? " on" : ""}" data-mbs="${esc(s.id)}"`;
+  const bcls = (s, extra = "") => `class="bnode${s.id === sel ? " on" : ""}"${extra} data-mbs="${esc(s.id)}"`;
   const wrapSvg = body => `<svg id="${id}" class="bubble${flowOn ? " mf-flowing" : ""}${W.mf.rp?.playing ? " is-playing" : ""}" viewBox="${mfViewBox(W0, H0)}" role="img" aria-label="量價動能矩陣（${MF_VIZ.find(x => x[0] === viz)?.[1] || "四象限"}）">${body}</svg>`;
 
   if (viz === "tiles") {
@@ -2566,13 +2588,15 @@ function mfVizOnlySvg(rawPts, { viz = W.mf.viz, w, h, id = "mfb", scale, sel = W
     KS.forEach(q => { [[A, X0, "end", -8], [B, X1 - NW, "start", NW + 8]].forEach(([S, x, an, dx]) => { if (!S[q].h) return;
       g += `<rect x="${x}" y="${S[q].y.toFixed(1)}" width="${NW}" height="${Math.max(4, S[q].h).toFixed(1)}" rx="3" fill="${FLOW_Q[q][2]}"/>
         <text x="${x + dx}" y="${(S[q].y + S[q].h / 2 + 4).toFixed(1)}" text-anchor="${an}" style="font-size:12px;fill:${FLOW_Q[q][2]};font-weight:600">${FLOW_Q[q][0]} ${Math.round(S[q].h / unit)}</text>`; }); });
+    let flowIdx = 0;
     KS.forEach(a => KS.forEach(b => {
       const L = pts.filter(s => prevQ(s) === a && s.q === b); if (!L.length) return;
-      L.forEach((s, idx) => {
+      L.forEach(s => {
         const ya = A[a].y + A[a].off, yb = B[b].y + B[b].off, h = unit; A[a].off += h; B[b].off += h;
         const dPath = `M${X0 + NW} ${ya.toFixed(1)} C${m} ${ya.toFixed(1)} ${m} ${yb.toFixed(1)} ${X1 - NW} ${yb.toFixed(1)} V${(yb + h).toFixed(1)} C${m} ${(yb + h).toFixed(1)} ${m} ${(ya + h).toFixed(1)} ${X0 + NW} ${(ya + h).toFixed(1)}Z`;
         const midLine = `M${X0 + NW} ${(ya + h / 2).toFixed(1)} C${m} ${(ya + h / 2).toFixed(1)} ${m} ${(yb + h / 2).toFixed(1)} ${X1 - NW} ${(yb + h / 2).toFixed(1)}`;
-        g += `<g ${bcls(s)}><path d="${dPath}" fill="${col(s)}" fill-opacity="${a === b ? 0.14 : 0.42}" stroke="${col(s)}" stroke-opacity=".2"/>
+        const delay = Math.min(220, flowIdx++ * 14);
+        g += `<g ${bcls(s, ` style="animation-delay:${delay}ms"`)}><path d="${dPath}" fill="${col(s)}" fill-opacity="${a === b ? 0.14 : 0.42}" stroke="${col(s)}" stroke-opacity=".2"/>
           <path class="mf-flow-band" d="${midLine}" fill="none" stroke="${col(s)}" stroke-width="${a === b ? 1.2 : 2.2}" stroke-opacity="${a === b ? 0.45 : 0.9}"/>
           ${a !== b || unit >= 16 ? `<text x="${X1 - NW - 8}" y="${(yb + h / 2 + 4).toFixed(1)}" text-anchor="end" style="font-size:11px;fill:var(--ink)">${esc(s.name)} ${fmt(s.net5)}</text>` : ""}</g>`;
       });
@@ -2610,12 +2634,13 @@ function mfVizOnlySvg(rawPts, { viz = W.mf.viz, w, h, id = "mfb", scale, sel = W
     const groups = ["up", "rot", "watch", "down"].map(q => ({ q, items: pts.filter(s => s.q === q).map(s => ({ s, v: Math.abs(s.net5) + 0.5 })).sort((a, b) => b.v - a.v) }))
       .filter(g => g.items.length).map(g => ({ ...g, v: g.items.reduce((a, b) => a + b.v, 0) }));
     const blocks = mfSquarify(groups, 4, 4, W0 - 8, H0 - 8);
-    let g = "";
+    let g = "", treeIdx = 0;
     blocks.forEach(b => {
       g += `<text x="${(b.x + 6).toFixed(1)}" y="${(b.y + 15).toFixed(1)}" style="fill:${FLOW_Q[b.q][2]};font-size:12px;font-weight:600">${FLOW_Q[b.q][0]}</text>`;
       mfSquarify(b.items, b.x + 2, b.y + 20, Math.max(8, b.w - 4), Math.max(8, b.h - 22)).forEach(c => {
         const big = c.w > 62 && c.h > 34, s = c.s, k = Math.min(1, Math.abs(s.net5) / mxN);
-        g += `<g ${bcls(s)}><rect x="${(c.x + 1).toFixed(1)}" y="${(c.y + 1).toFixed(1)}" width="${Math.max(2, c.w - 2).toFixed(1)}" height="${Math.max(2, c.h - 2).toFixed(1)}" rx="4" fill="${col(s)}" fill-opacity="${(0.18 + 0.58 * k).toFixed(2)}" stroke="${col(s)}" stroke-opacity=".55"/>
+        const delay = Math.min(220, treeIdx++ * 12);
+        g += `<g ${bcls(s, ` style="animation-delay:${delay}ms"`)}><rect x="${(c.x + 1).toFixed(1)}" y="${(c.y + 1).toFixed(1)}" width="${Math.max(2, c.w - 2).toFixed(1)}" height="${Math.max(2, c.h - 2).toFixed(1)}" rx="4" fill="${col(s)}" fill-opacity="${(0.18 + 0.58 * k).toFixed(2)}" stroke="${col(s)}" stroke-opacity=".55"/>
           ${k > 0.35 ? `<rect class="mf-flow-line" x="${(c.x + 1).toFixed(1)}" y="${(c.y + 1).toFixed(1)}" width="${Math.max(2, c.w - 2).toFixed(1)}" height="${Math.max(2, c.h - 2).toFixed(1)}" rx="4" fill="none" stroke="${col(s)}" stroke-width="1.3" stroke-opacity=".85"/>` : ""}
           ${c.w > 32 && c.h > 16 ? `<text x="${(c.x + 6).toFixed(1)}" y="${(c.y + 16).toFixed(1)}" style="font-size:${big ? 12.5 : 10}px;font-weight:500;fill:var(--ink)">${esc(s.name.slice(0, big ? 6 : 4))}</text>` : ""}
           ${big ? `<text x="${(c.x + 6).toFixed(1)}" y="${(c.y + 32).toFixed(1)}" style="font-size:10.5px;fill:var(--ink);opacity:.85">${fmt(s.net5)}</text>` : ""}</g>`;
@@ -2645,7 +2670,8 @@ function mfVizOnlySvg(rawPts, { viz = W.mf.viz, w, h, id = "mfb", scale, sel = W
       + `<text class="bax-t" x="${W0 - 32}" y="${top - 8}" text-anchor="middle" style="font-size:10px">累計</text>`;
     rows.forEach((s, i) => {
       const y = top + i * RH, d = s.d10 || [s.net1 || 0];
-      g += `<g ${bcls(s)}><text x="${L - 8}" y="${(y + RH * 0.68).toFixed(1)}" text-anchor="end" style="font-size:${fs}px;fill:var(--ink)">${esc(s.name.slice(0, 7))}</text>
+      const delay = Math.min(220, i * 14);
+      g += `<g ${bcls(s, ` style="animation-delay:${delay}ms"`)}><text x="${L - 8}" y="${(y + RH * 0.68).toFixed(1)}" text-anchor="end" style="font-size:${fs}px;fill:var(--ink)">${esc(s.name.slice(0, 7))}</text>
         ${d.map((v, k) => `<rect x="${(L + k * CW + 1).toFixed(1)}" y="${(y + 1).toFixed(1)}" width="${Math.max(2, CW - 2).toFixed(1)}" height="${Math.max(2, RH - 2).toFixed(1)}" rx="2.5" fill="${cellCol(v)}"/>`).join("")}
         <circle cx="${W0 - 48}" cy="${(y + RH / 2).toFixed(1)}" r="4.5" fill="${col(s)}"/>
         <text x="${W0 - 38}" y="${(y + RH * 0.68).toFixed(1)}" class="bax-t" style="font-size:10.5px">${s.net5 >= 0 ? "+" : ""}${s.net5.toFixed(0)}</text></g>`;
@@ -3109,6 +3135,26 @@ function mfPlay(on) {
   } else if (F.rp.fl) flowDraw();
   flowTexts(true);
 }
+let mfSwapTimer = null;
+function mfTransitionSwap(action) {
+  const wrap = document.querySelector(".bwrap");
+  if (!wrap || document.hidden || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+    if (mfSwapTimer) { clearTimeout(mfSwapTimer); mfSwapTimer = null; }
+    action();
+    return;
+  }
+  if (mfSwapTimer) { clearTimeout(mfSwapTimer); mfSwapTimer = null; }
+  wrap.classList.add("mf-swapping");
+  mfSwapTimer = setTimeout(() => {
+    mfSwapTimer = null;
+    action();
+    const nextWrap = document.querySelector(".bwrap");
+    if (nextWrap) {
+      nextWrap.classList.add("mf-entering");
+      setTimeout(() => nextWrap.classList.remove("mf-entering"), 360);
+    }
+  }, 110);
+}
 $("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F = W.mf, b = e.target.closest("[data-mv],[data-mviz],[data-mflow],[data-mq],[data-mrk],[data-mset],[data-mrp],[data-mshare],[data-l2],[data-fsec],[data-mbs],[data-iopen-ext],[data-mexp],[data-mzoom]"); if (!b) return; const d = b.dataset;
   if (d.mzoom) {
     const Z = (W.mf.zoom ||= { k: 1, vx: 0, vy: 0 });
@@ -3118,7 +3164,14 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F 
     return;
   }
   if (d.mexp === "matrix" || d.mexp === "replay") return toggleMfExpand();
-  if (d.mviz) { F.viz = d.mviz; store.set("watch:mfviz", F.viz); if (F.rp.fl) { F.rp.fl.el = null; F.rp.fl.svgEl = null; } return renderMoney(); }
+  if (d.mviz) {
+    return mfTransitionSwap(() => {
+      F.viz = d.mviz;
+      store.set("watch:mfviz", F.viz);
+      if (F.rp.fl) { F.rp.fl.el = null; F.rp.fl.svgEl = null; }
+      renderMoney();
+    });
+  }
   if (d.mflow) { F.flowOn = !F.flowOn; store.set("watch:mfflow", F.flowOn); b.setAttribute("aria-pressed", F.flowOn); document.getElementById("mfb")?.classList.toggle("mf-flowing", F.flowOn); if (F.rp.fl) flowDraw(); else renderMoney(); return; }
   if (d.mbs) { if (mfPointerDrag?.moved) return; F.bsel = F.bsel === d.mbs ? null : d.mbs; return F.rp.playing ? mfReplayDraw() : renderMoney(); }
   if (d.fsec) return secOpen(d.fsec);
@@ -3127,7 +3180,18 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F 
   if (d.l2) { W.tv = "sum"; return setLt("tools", true); }
   if (d.mv === "replay") { F.view = "bubble"; store.set("watch:mfv", "bubble"); F.rp.t = null; F.rp.u = null; renderMoney(); mfPlay(true); return; }
   if (d.mv) { F.view = d.mv; if (d.mv !== "bubble") { mfPlay(false); store.set("watch:mfv", d.mv); } else store.set("watch:mfv", "bubble"); }
-  else if (d.mq) F.q = d.mq; else if (d.mrk) F.rk = d.mrk; else if (d.mset) { F[d.mset] = d.v; if (d.mset === "bw") { store.set("watch:mfbw", d.v); F.rp.fl = null; } }
+  else if (d.mq) F.q = d.mq; else if (d.mrk) F.rk = d.mrk;
+  else if (d.mset) {
+    if (d.mset === "bw") {
+      return mfTransitionSwap(() => {
+        F.bw = d.v;
+        store.set("watch:mfbw", d.v);
+        F.rp.fl = null;
+        renderMoney();
+      });
+    }
+    F[d.mset] = d.v;
+  }
   else if (d.mrp === "prev") { mfPlay(false); return mfStep(-1); } else if (d.mrp === "next") { mfPlay(false); return mfStep(1); }
   else if (d.mrp === "play") return mfPlay(!F.rp.playing); else if (d.mrp === "speed") { F.rp.speed = F.rp.speed >= 4 ? 1 : F.rp.speed * 2; if (F.rp.playing) return mfPlay(true); return flowTexts(true); }
   renderMoney(); });

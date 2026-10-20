@@ -87,20 +87,46 @@ for (const width of [1280, 390]) {
     await p.waitForTimeout(100);
     assert.equal(await p.evaluate(() => document.querySelector(".mf-zval")?.textContent), "100%", "點擊重設按鈕還原 100%");
 
-    // 7. 驗證流線動畫 seamless keyframe 樣式存在
-    const streamCss = await p.evaluate(() => {
+    // 7. 驗證流線動畫 seamless keyframe 樣式存在與模式過場動畫規則
+    const animRules = await p.evaluate(() => {
+      const found = {};
       for (const sheet of document.styleSheets) {
         try {
           for (const rule of sheet.cssRules) {
-            if (rule.name === "mfStream") return rule.cssText;
+            if (rule.name === "mfStream") found.stream = rule.cssText;
+            if (rule.name === "mfViewEnter") found.viewEnter = rule.cssText;
+            if (rule.name === "mfFlowIn") found.flowIn = rule.cssText;
+            if (rule.name === "mfTreeIn") found.treeIn = rule.cssText;
+            if (rule.name === "mfHeatIn") found.heatIn = rule.cssText;
           }
         } catch {}
       }
-      return "";
+      return found;
     });
-    assert.ok(streamCss.includes("24"), "mfStream 動畫設定無縫 -24 偏移循環");
+    assert.ok(animRules.stream?.includes("24"), "mfStream 動畫設定無縫 -24 偏移循環");
+    assert.ok(animRules.viewEnter, "mfViewEnter 視圖切換淡入動畫存在");
+    assert.ok(animRules.flowIn, "mfFlowIn 移轉流向動畫存在");
+    assert.ok(animRules.treeIn, "mfTreeIn 矩形樹圖動畫存在");
+    assert.ok(animRules.heatIn, "mfHeatIn 熱力格動畫存在");
 
-    // 8. 驗證無橫向溢出
+    // 8. 測試模式切換過場：移轉流向 (flow) -> 矩形樹圖 (tree) -> 熱力格 (heat)
+    await p.click('[data-mviz="flow"]');
+    await p.waitForSelector('.bwrap[data-viz="flow"]', { timeout: 3000 });
+    assert.ok(await p.evaluate(() => document.querySelectorAll('.bwrap[data-viz="flow"] .bnode').length > 0), "移轉流向節點已渲染");
+
+    await p.click('[data-mviz="tree"]');
+    await p.waitForSelector('.bwrap[data-viz="tree"]', { timeout: 3000 });
+    assert.ok(await p.evaluate(() => document.querySelectorAll('.bwrap[data-viz="tree"] .bnode').length > 0), "矩形樹圖節點已渲染");
+
+    await p.click('[data-mviz="heat"]');
+    await p.waitForSelector('.bwrap[data-viz="heat"]', { timeout: 3000 });
+    assert.ok(await p.evaluate(() => document.querySelectorAll('.bwrap[data-viz="heat"] .bnode').length > 0), "熱力格節點已渲染");
+
+    // 切回 bubble 象限圖
+    await p.click('[data-mviz="bubble"]');
+    await p.waitForSelector('.bwrap[data-viz="bubble"]', { timeout: 3000 });
+
+    // 9. 驗證無橫向溢出
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "無橫向溢出");
 
     await ctx.close();

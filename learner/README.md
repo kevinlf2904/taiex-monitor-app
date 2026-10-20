@@ -341,6 +341,17 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 移轉流向、矩形樹圖、熱力格過場動畫與無縫切換（2026.10.20-105）
+
+- **移轉流向、矩形樹圖、熱力格優雅過場**：
+  - 移轉流向（`flow`）：每條象限流向曲線與帶狀軌跡依序微延遲淡入（`mfFlowIn`），配合平滑 X 軸彈簧展開；流向路徑支援懸停亮起與粗細漸層。
+  - 矩形樹圖（`tree`）：各象限區塊內的子塊採用階梯式層疊縮放進場（`mfTreeIn`），懸停時加亮白邊無跳閃。
+  - 熱力格（`heat`）：歷日歷史熱力條由上而下水平滑入（`mfHeatIn`），滑鼠懸停行位移反饋。
+- **模式切換容器級交叉淡入淡出（Crossfade Transition）**：
+  - 在切換 12 種視覺化模式（`[data-mviz]`）或切換「近 5 日 / 今日」（`[data-mset="bw"]`）時，透過 `mfTransitionSwap` 執行無閃爍淡出（0.12s）與彈簧淡入（0.28s `mfViewEnter`），消弭版面突兀跳變。
+  - 整合 `prefers-reduced-motion` 無障礙減弱動畫設定，尊重系統偏好。
+  - 雷達回放播放中強制解除各節點進場動畫（`bubble.is-playing .bnode { animation: none !important; }`），兼顧過場美觀與 60fps 高幀率順暢回放。
+
 ### 動能矩陣滾動放大與流動動畫極致順暢（2026.10.20-104）
 
 - **動能矩陣滾動放大與手勢平移**：
