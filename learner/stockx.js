@@ -27,7 +27,7 @@ function sxNeed(what) {
   if (what === "news" && W.news?.code !== c) loadNews();
   if (what === "branch" && W.br?.code !== c) sxLoadBr();
   if (what === "state" && !isFut(c) && W.stLong?.code !== c) sxLoadLong(c);
-  if (what === "guru" && typeof podLoadSrv === "function" && !POD.srv && !POD.srvLoading) { POD.srvLoading = true; podLoadSrv().then(() => { POD.srvLoading = false; podLoadPx(); if (isSxSub()) sxRender(); }); }
+  if (what === "guru" && typeof podLoadSrv === "function" && !POD.srv) podLoadSrv().then(() => { podLoadPx(); if (isSxSub()) sxRender(); });
 }
 // 券商分點（/api/broker，要 FinMind 贊助會員）
 async function sxLoadBr() {
@@ -61,7 +61,7 @@ function sxSignals() {
   const ind = indicators(D), n = D.length - 1, c = D[n].c, m20 = ind.ma(20), m60 = ind.ma(60), out = [];
   const add = (k, v, t) => out.push({ k, v, t });
   if (m20[n] != null) add("月線", c > m20[n] ? 1 : -1, `收盤 ${sxN(c, 2)} ${c > m20[n] ? "站上" : "跌破"} 20 日均線 ${sxN(m20[n], 2)}`);
-  if (m60[n] != null) add("季線", c > m60[n] ? 1 : -1, `${c > m60[n] ? "在" : "在"} 60 日均線 ${sxN(m60[n], 2)} ${c > m60[n] ? "之上" : "之下"}`);
+  if (m60[n] != null) add("季線", c > m60[n] ? 1 : -1, `在 60 日均線 ${sxN(m60[n], 2)} ${c > m60[n] ? "之上" : "之下"}`);
   if (m20[n] != null && m20[n - 5] != null) add("均線方向", m20[n] > m20[n - 5] ? 1 : -1, `20 日均線${m20[n] > m20[n - 5] ? "上揚" : "下彎"}`);
   const K = ind.kd.K[n], Dk = ind.kd.D[n]; if (K != null) add("KD", K > Dk ? 1 : -1, `K ${K.toFixed(0)} ${K > Dk ? ">" : "<"} D ${Dk.toFixed(0)}${K > 80 ? "（高檔）" : K < 20 ? "（低檔）" : ""}`);
   const osc = ind.macd.osc[n]; if (osc != null) add("MACD", osc > 0 ? 1 : -1, `柱狀體${osc > 0 ? "翻紅" : "翻綠"}（${osc.toFixed(2)}）`);

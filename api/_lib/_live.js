@@ -7,14 +7,8 @@
 import { parseTwseAll, parseTpexAll, isStockOrEtf } from "./hot.js";
 import { session, todayTaipei, misFetch, parseMis } from "./quote.js";
 import { closeToday } from "./daily.js";
-
-const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
-const n = v => (v == null || v === "" ? null : Number.isFinite(+v) ? +v : null);
-async function getJSON(url, headers = {}, ms = 12000) {
-  const r = await fetch(url, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(ms) });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-}
+import { getJSON as _getJ, num as n } from "./_tw.js";
+const getJSON = (url, headers = {}, ms = 12000) => _getJ(url, headers, ms);
 
 // 富果快照 → 統一格式。成交量單位：富果股票是「張」，保險起見用成交金額反推（金額 ÷（價 × 量）≈ 1000 代表量是張）
 export function parseFugleSnapshot(j, market) {

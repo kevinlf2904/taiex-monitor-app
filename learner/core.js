@@ -14,6 +14,13 @@ function roundTick(p) { const t = tickOf(p); return +(Math.round(p / t) * t).toF
 function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
 function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
 function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// 台股交易時段（台北時間週一到週五：08:30–09:00 試撮 pre、09:00–13:35 盤中 open、其餘 closed）
+function mktSession(now = new Date()) {
+  const t = new Date(now.getTime() + 8 * 3600e3), day = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();
+  if (day === 0 || day === 6) return "closed";
+  return m >= 510 && m < 540 ? "pre" : m >= 540 && m <= 815 ? "open" : "closed";
+}
 // 品牌（KLineLab K線情報局）：1:1 幾何 K 線圖標（空心 K 棒＋影線、上下都削 45 度的鈦金屬灰光束，兩者同寬對稱，合起來像字母 K）＋Space Grotesk 字標＋PRO 徽章
 const BRAND = { name: "KLineLab", zh: "K線情報局", tag: "將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機" };
 const brandIcon = (s = 32) => `<svg class="bl-ic" viewBox="0 0 512 512" width="${s}" height="${s}" aria-hidden="true"><defs><linearGradient id="blkc" gradientUnits="userSpaceOnUse" x1="0" y1="96" x2="0" y2="416"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#e4e4e7"/><stop offset="1" stop-color="#a1a1aa"/></linearGradient><linearGradient id="blti" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#71717a"/><stop offset=".5" stop-color="#a1a1aa"/><stop offset="1" stop-color="#f4f4f5"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#09090b"/><rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#27272a" stroke-width="8"/><path d="M180 100v68M180 344v68" stroke="url(#blkc)" stroke-width="20" stroke-linecap="round"/><rect x="146" y="178" width="68" height="156" rx="8" fill="none" stroke="url(#blkc)" stroke-width="20"/><path d="M288 188 376 100v312l-88-88z" fill="url(#blti)"/></svg>`;
@@ -23,7 +30,7 @@ const BADGE_C = ["#3f3f46", "#1e3a5f", "#3b2f5c", "#14532d", "#5b2121", "#4a3a12
 function badgeSvg(name, s = 40) {
   const n = String(name || "?").trim(), w = n.split(/[\s\-_.]+/).filter(Boolean), ab = /^[A-Za-z]/.test(n) ? (w.length > 1 ? w[0][0] + w[1][0] : n.slice(0, 2)).toUpperCase() : [...n.replace(/\s/g, "")].slice(0, 2).join("");
   let h = 0; for (const ch of n) h = (h * 31 + ch.codePointAt(0)) | 0; const bg = BADGE_C[Math.abs(h) % BADGE_C.length];
-  const t = ab.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const t = esc(ab);
   return `<svg class="badge" viewBox="0 0 40 40" width="${s}" height="${s}" aria-hidden="true"><rect width="40" height="40" rx="10" fill="${bg}"/><rect x=".5" y=".5" width="39" height="39" rx="9.5" fill="none" stroke="rgba(255,255,255,.14)"/><text x="20" y="25.5" text-anchor="middle" font-size="${/^[A-Z]/.test(t) ? 14 : 13}" font-family="Space Grotesk, Inter, Noto Sans TC, sans-serif" font-weight="600" fill="#fff">${t}</text></svg>`;
 }
 // 全站免責聲明（頁尾與每個回測、籌碼分析頁的底部）

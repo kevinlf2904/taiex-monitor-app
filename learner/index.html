@@ -881,7 +881,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.19-99</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.20-100</span></footer>
 
 <script src="core.js"></script>
 <script src="sharecard.js"></script>
@@ -4055,11 +4055,6 @@ $("#realCsv").addEventListener("change", async e => {
    盤中（台北時間週一到週五 08:30–13:35）每 10 秒問一次；收盤後每 5 分鐘確認一次；頁面在背景時暫停。
    頂部顯示加權指數；個股判讀載入真實個股時，用即時價格更新（或新增）今天這根 K 棒，指標與判讀跟著重算。 */
 const LIVE = { timer: null, paused: !!store.get("livePaused", false), last: null, err: null, busy: false, off: !/^https?:$/.test(location.protocol) };
-function mktSession(now = new Date()) {
-  const t = new Date(now.getTime() + 8 * 3600e3), day = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();
-  if (day === 0 || day === 6) return "closed";
-  return m >= 510 && m < 540 ? "pre" : m >= 540 && m <= 815 ? "open" : "closed";
-}
 const liveCode = () => { const R = REAL.cur; if (!R || shot.src !== "real" || !R.code) return null; return R.code === "TAIEX" ? "T00" : /^\d{4,6}[A-Z]?$/.test(R.code) ? R.code : null; };
 async function liveTick() {
   if (LIVE.off || LIVE.busy || document.visibilityState === "hidden") return;
@@ -4659,7 +4654,6 @@ function aiUpdate() {
   ask.disabled = !aiMode || !shot.file;
   if (!aiMode) $("#aiNote").textContent = "這個環境無法呼叫 Claude。把網站部署到 Vercel 並設定 ANTHROPIC_API_KEY，或在 Claude 裡開啟這個頁面，就能使用這個功能。上面的程式判讀不受影響。";
 }
-function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
 // 簡單的 Markdown（標題、粗體、行內程式碼、項目與編號清單）→ HTML，內容一律先跳脫
 function mdToHtml(md) {
   let html = "", list = null;

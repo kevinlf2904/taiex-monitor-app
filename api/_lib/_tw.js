@@ -1,9 +1,11 @@
 // 共用：證交所、櫃買中心 OpenAPI 的公司基本資料（產業別、發行股數）。檔名以底線開頭，Vercel 不會把它當成 API 路由。
 
-const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
-export const num = v => { if (v == null) return null; const n = parseFloat(String(v).replace(/[,\s+]/g, "")); return Number.isFinite(n) ? n : null; };
-export async function getJSON(url, ms = 9000) {
-  const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(ms) });
+export const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
+export const num = v => { if (v == null || v === "") return null; const n = parseFloat(String(v).replace(/[,\s+]/g, "")); return Number.isFinite(n) ? n : null; };
+export const rocDate = v => { const s = String(v ?? "").replace(/\D/g, ""); return s.length === 7 ? `${+s.slice(0, 3) + 1911}-${s.slice(3, 5)}-${s.slice(5)}` : s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}` : null; };
+export async function getJSON(url, headersOrMs = 9000, ms = 9000) {
+  const isMs = typeof headersOrMs === "number", h = isMs ? UA : { ...UA, ...headersOrMs }, t = isMs ? headersOrMs : ms;
+  const r = await fetch(url, { headers: h, signal: AbortSignal.timeout(t) });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }

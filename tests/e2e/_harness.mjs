@@ -65,5 +65,5 @@ export async function mock(ctx) {
 export async function open(browser, base, file, { width = 1180, touch = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height: 1000 }, hasTouch: touch, isMobile: touch }), errs = [];
   const m = await mock(ctx), p = await ctx.newPage(); p.on("pageerror", e => errs.push(`${width} ${e.message}`)); p.on("dialog", d => d.accept());
-  await p.goto(`${base}/learner/${file}`); await p.waitForTimeout(1200); return { ctx, p, errs, ...m };
+  await p.goto(`${base}/learner/${file}`); await p.waitForTimeout(600); return { ctx, p, errs, ...m };
 }

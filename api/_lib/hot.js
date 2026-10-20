@@ -6,17 +6,10 @@
 
 import { usHot } from "./_yahoo.js";
 import { marketRows, liveCache } from "./_live.js";
-const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
-const num = v => { if (v == null) return null; const n = parseFloat(String(v).replace(/[,\s+]/g, "")); return Number.isFinite(n) ? n : null; };
+import { num, getJSON, rocDate } from "./_tw.js";
 const pick = (r, ...keys) => { for (const k of keys) if (r[k] != null && r[k] !== "") return r[k]; return null; };
 // 股票與 ETF（排除權證、債券等）
 export const isStockOrEtf = c => /^(\d{4}|00\d{2,4}[A-Z]?)$/.test(c);
-async function getJSON(url) {
-  const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(9000) });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-}
-const rocDate = s => { const m = String(s || "").match(/^(\d{3})(\d{2})(\d{2})$/); return m ? `${+m[1] + 1911}-${m[2]}-${m[3]}` : /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}` : null; };
 function row(code, name, market, close, chg, volShares, value) {
   const prev = close != null && chg != null ? close - chg : null;
   return { code, name, market, price: close, chg, chgPct: prev ? +((chg / prev) * 100).toFixed(2) : null, vol: volShares != null ? Math.round(volShares / 1000) : null, value: value != null ? +(value / 1e8).toFixed(2) : null };

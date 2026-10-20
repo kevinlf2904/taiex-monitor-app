@@ -53,4 +53,4 @@ export async function main() {
   await mkdir(fileURLToPath(new URL("../learner/data/", import.meta.url)), { recursive: true });
   await writeFile(OUT, JSON.stringify({ updated: new Date().toISOString(), source: "櫃買中心 產業價值鏈資訊平台 ic.tpex.org.tw", industries: out }));
 }
-if (import.meta.url === `file://${process.argv[1]}`) await main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) await main();

@@ -77,4 +77,4 @@ export async function main() {
   await writeFile(DIR + "index.json", JSON.stringify(idx));
   console.log("已存", idx.sessions.length, "盤");
 }
-if (import.meta.url === `file://${process.argv[1]}`) await main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) await main();
