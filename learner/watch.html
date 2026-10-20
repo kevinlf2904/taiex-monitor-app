@@ -508,8 +508,16 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 @media (max-width: 600px) { .mkreg .mkseg { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; } .mkreg .mkseg::-webkit-scrollbar { display: none; } .mkreg .mkseg button { flex: none; padding: 6px 11px; } }
 .ixcards.us .ixcard .spark, .ixcard .spark.tsp { width: 100%; height: 22px; margin-top: 2px; } .tsp-prev { stroke: var(--muted); stroke-width: .6; stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; opacity: .7; }
 /* 資金雷達視窗自適應：依電腦視窗比例適配寬螢幕、放大檢視填滿畫面 */
-.bwrap { position: relative; margin: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.bwrap { position: relative; margin: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); overflow: hidden; user-select: none; touch-action: pan-y; }
+.bwrap.is-zoomed { cursor: grab; touch-action: none; }
+.bwrap.is-grabbing { cursor: grabbing !important; }
 .bwrap svg { width: 100%; height: auto; display: block; }
+.mf-zoom-ctl { position: absolute; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 2px; background: var(--surface-2); background: color-mix(in srgb, var(--surface-2) 86%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 6px; padding: 2px; z-index: 10; opacity: 0.75; transition: opacity 0.2s; }
+.bwrap:hover .mf-zoom-ctl, .bwrap.is-zoomed .mf-zoom-ctl { opacity: 1; }
+.mf-zbtn { border: 0; background: transparent; color: var(--ink); font-family: var(--font-num); font-size: 11.5px; height: 24px; min-width: 24px; padding: 0 4px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.mf-zbtn:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.mf-zval { font-size: 11px; padding: 0 6px; min-width: 38px; color: var(--muted); }
+.bwrap.is-zoomed .mf-zval { color: var(--accent); font-weight: 600; }
 @media (min-width: 901px) {
   .bwrap { width: 100%; max-width: none; margin: 6px auto; }
   .bwrap.radar { width: 100%; max-width: none; margin: 0 auto; }
@@ -573,12 +581,15 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
   .mrp-side { display: contents; }
   .mrp-card { display: contents; }
 }
-@keyframes mfStream { to { stroke-dashoffset: -28; } }
-.mf-flowing .mf-flow-line { stroke-dasharray: 5 7; animation: mfStream 1.1s linear infinite; }
-.mf-flowing .mf-flow-fast { stroke-dasharray: 7 5; animation: mfStream 0.75s linear infinite; }
-.mf-flowing .mf-flow-band { stroke-dasharray: 10 14; animation: mfStream 1.3s linear infinite; }
+@keyframes mfStream { to { stroke-dashoffset: -24px; } }
+.mf-flowing .mf-flow-line { stroke-dasharray: 6 6; animation: mfStream 0.9s linear infinite; will-change: stroke-dashoffset; }
+.mf-flowing .mf-flow-fast { stroke-dasharray: 6 6; animation: mfStream 0.55s linear infinite; will-change: stroke-dashoffset; }
+.mf-flowing .mf-flow-band { stroke-dasharray: 12 12; animation: mfStream 1.2s linear infinite; will-change: stroke-dashoffset; }
 .bubble { width: 100%; height: auto; display: block; } .bax { stroke: var(--line); stroke-width: 1; } .bq { font: 500 10.5px var(--font-body); fill: var(--muted); }
 .bnode { cursor: pointer; }
+.bubble:not(.is-playing) .bnode { transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease; will-change: transform; }
+.bubble:not(.is-playing) .blab { transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease; will-change: transform, opacity; }
+.bubble.is-playing .bnode, .bubble.is-playing .blab { transition: none !important; will-change: transform; }
 .bwrap[data-viz="bubble"] .bnode circle:not(.mf-flow-line), .bwrap:not([data-viz]) .bnode circle:not(.mf-flow-line) { stroke: none; fill-opacity: var(--bop, .45); transition: fill-opacity .2s; }
 .bwrap[data-viz="bubble"] .bnode.on circle:not(.mf-flow-line), .bwrap:not([data-viz]) .bnode.on circle:not(.mf-flow-line) { fill-opacity: min(1, calc(var(--bop, .45) + .35)); }
 .bwrap[data-viz="bubble"] .bnode:focus circle:not(.mf-flow-line), .bwrap[data-viz="bubble"] .bnode:hover circle:not(.mf-flow-line), .bwrap:not([data-viz]) .bnode:hover circle:not(.mf-flow-line) { fill-opacity: min(1, calc(var(--bop, .45) + .2)); }
@@ -942,7 +953,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.20-103</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.20-104</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1018,7 +1029,7 @@ const W = {
   mkReg: ["us", "gl", "macro", "news", "poly"].includes(store.get("watch:mkReg", "tw")) ? store.get("watch:mkReg", "tw") : "tw", usHot: ["active", "gain", "loss"].includes(store.get("watch:usHot", "active")) ? store.get("watch:usHot", "active") : "active",
   mkM: ["tpex", "all"].includes(store.get("watch:mkM", "twse")) ? store.get("watch:mkM", "twse") : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
   mkHot: ["value", "gain", "surge", "volume"].includes(store.get("watch:mkHot", "value")) ? store.get("watch:mkHot", "value") : "value", worldR: store.get("watch:worldR", "us"), calWk: 0, calK: ["all", "conf", "ex"].includes(store.get("watch:calK", "all")) ? store.get("watch:calK", "all") : "all", calDay: null, warn: null, warnOpen: "punish", cal: null, futx: null,
-  mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), viz: store.get("watch:mfviz", "bubble"), flowOn: store.get("watch:mfflow", true) !== false, full: null, q: "up", rk: "inst", side: "buy", win: "5", bw: store.get("watch:mfbw", "5") === "1" ? "1" : "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), rp: { t: null, playing: false, speed: 1, set: "hot" } },
+  mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), viz: store.get("watch:mfviz", "bubble"), flowOn: store.get("watch:mfflow", true) !== false, full: null, q: "up", rk: "inst", side: "buy", win: "5", bw: store.get("watch:mfbw", "5") === "1" ? "1" : "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), rp: { t: null, playing: false, speed: 1, set: "hot" }, zoom: { k: 1, vx: 0, vy: 0 } },
   indS: { view: "themes", mk: "tw", sub: "chain", net: "ai-dc", ...(store.get("watch:inds", null) || {}), open: null, focus: null }, indQ: {},
   cmp: (store.get("watch:cmp", []) || []).filter(c => typeof c === "string").slice(0, 3), cmpData: {},
   daily: null, intra: null, intraAt: 0, mk: {}, info: null, hot: {}, timer: null, busy: false, stocks: null, lastOk: 0,
@@ -2243,6 +2254,74 @@ function calcBubbleLabel(name, net5, r) {
   }
   return { dx: 0, dy: 0, nm: lines.join(""), lines, val, hasVal, r, fs, y1, y2, yv };
 }
+// 動能矩陣滾動縮放與視口計算
+function mfViewBox(baseW, baseH) {
+  const Z = (W.mf.zoom ||= { k: 1, vx: 0, vy: 0 });
+  Z.baseW = baseW; Z.baseH = baseH;
+  if (!Z.k || Z.k <= 1.001) {
+    Z.k = 1; Z.vx = 0; Z.vy = 0; Z.vw = baseW; Z.vh = baseH;
+    return '0 0 ' + baseW + ' ' + baseH;
+  }
+  const vw = baseW / Z.k, vh = baseH / Z.k;
+  Z.vw = vw; Z.vh = vh;
+  Z.vx = Math.max(0, Math.min(baseW - vw, Z.vx));
+  Z.vy = Math.max(0, Math.min(baseH - vh, Z.vy));
+  return Z.vx.toFixed(2) + ' ' + Z.vy.toFixed(2) + ' ' + vw.toFixed(2) + ' ' + vh.toFixed(2);
+}
+function mfZoomToolbar() {
+  const k = W.mf.zoom?.k || 1;
+  return '<div class="mf-zoom-ctl" role="toolbar" aria-label="縮放控制">' +
+    '<button type="button" class="mf-zbtn" data-mzoom="out" title="縮小 (或滑鼠滾輪往下)" aria-label="縮小">−</button>' +
+    '<button type="button" class="mf-zbtn mf-zval" data-mzoom="reset" title="點擊還原 100% (或雙擊圖表)" aria-label="還原 100%">' + Math.round(k * 100) + '%</button>' +
+    '<button type="button" class="mf-zbtn" data-mzoom="in" title="放大 (或滑鼠滾輪往上)" aria-label="放大">＋</button>' +
+  '</div>';
+}
+function mfUpdateZoomUI() {
+  const Z = (W.mf.zoom ||= { k: 1, vx: 0, vy: 0 });
+  const wrap = document.querySelector('.bwrap');
+  if (wrap) {
+    wrap.classList.toggle('is-zoomed', Z.k > 1.01);
+    const valEl = wrap.querySelector('.mf-zval');
+    if (valEl) valEl.textContent = Math.round(Z.k * 100) + '%';
+  }
+}
+function mfApplyZoom(targetK, centerNormX = 0.5, centerNormY = 0.5) {
+  const svg = document.getElementById('mfb'); if (!svg) return;
+  const Z = (W.mf.zoom ||= { k: 1, vx: 0, vy: 0 });
+  const dims = mfStageDims();
+  const baseW = Z.baseW || (W.mf.viz === 'bubble' ? dims.bw : dims.vw) || 360;
+  const baseH = Z.baseH || (W.mf.viz === 'bubble' ? dims.bh : dims.vh) || 360;
+  const oldK = Z.k || 1;
+  const newK = Math.max(1, Math.min(5, targetK));
+  Z.k = newK;
+  if (newK <= 1.001) {
+    Z.k = 1; Z.vx = 0; Z.vy = 0; Z.vw = baseW; Z.vh = baseH;
+  } else {
+    const oldVw = Z.vw || (baseW / oldK), oldVh = Z.vh || (baseH / oldK);
+    const cx = Z.vx + centerNormX * oldVw;
+    const cy = Z.vy + centerNormY * oldVh;
+    const newVw = baseW / newK, newVh = baseH / newK;
+    Z.vw = newVw; Z.vh = newVh;
+    Z.vx = Math.max(0, Math.min(baseW - newVw, cx - centerNormX * newVw));
+    Z.vy = Math.max(0, Math.min(baseH - newVh, cy - centerNormY * newVh));
+  }
+  const vb = Z.vx.toFixed(2) + ' ' + Z.vy.toFixed(2) + ' ' + (Z.vw || baseW).toFixed(2) + ' ' + (Z.vh || baseH).toFixed(2);
+  svg.setAttribute('viewBox', vb);
+  mfUpdateZoomUI();
+}
+function mfResetZoom() {
+  const Z = (W.mf.zoom ||= { k: 1, vx: 0, vy: 0 });
+  Z.k = 1; Z.vx = 0; Z.vy = 0;
+  const svg = document.getElementById('mfb');
+  if (svg) {
+    const dims = mfStageDims();
+    const baseW = (W.mf.viz === 'bubble' ? dims.bw : dims.vw) || 360;
+    const baseH = (W.mf.viz === 'bubble' ? dims.bh : dims.vh) || 360;
+    Z.vw = baseW; Z.vh = baseH;
+    svg.setAttribute('viewBox', '0 0 ' + baseW + ' ' + baseH);
+  }
+  mfUpdateZoomUI();
+}
 // 量價動能矩陣：x＝近 5 日淨流入、y＝加速度（都用平方根縮放）、半徑＝近 5 日淨流入規模（3～30，差距拉大）、顏色＝象限。
 // 重疊的圓點會稍微推開（不會被推到別的象限），名稱標籤會避開彼此和其他圓點，放不下就不標（點圓點看詳細）。
 function bubbleLayout(pts, { w = 360, h = 360, scale } = {}) {
@@ -2280,21 +2359,21 @@ const bubbleLabIn = n => {
   }
   return `<g class="bl" transform="translate(0,0)"><text y="${l.y1.toFixed(1)}" class="bn bn1" ${fsBn}>${esc(lines[0])}</text><text y="${l.y2.toFixed(1)}" class="bn bn2" ${fsBn}>${esc(lines[1])}</text><text y="${l.yv.toFixed(1)}" class="bv" ${fsBv}>${l.val}</text></g>`;
 };
-const bubbleLab = n => (n.lab ? `<g class="blab" data-lb="${esc(n.p.id)}" style="--qc:${FLOW_Q[n.p.q][2]};--bfs:${n.lab.fs.toFixed(1)}px" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">${bubbleLabIn(n)}</g>` : "");
+const bubbleLab = n => (n.lab ? `<g class="blab" data-lb="${esc(n.p.id)}" style="--qc:${FLOW_Q[n.p.q][2]};--bfs:${n.lab.fs.toFixed(1)}px" transform="translate(${n.x.toFixed(2)},${n.y.toFixed(2)})">${bubbleLabIn(n)}</g>` : "");
 const bubbleNode = (n, sel, flowOn = true) => {
   const c = FLOW_Q[n.p.q][2];
-  return `<g class="bnode${n.p.id === sel ? " on" : ""}" data-mbs="${esc(n.p.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">${flowOn && n.r > 7.5 ? `<circle class="mf-flow-line" r="${(n.r + 1.8).toFixed(1)}" fill="none" stroke="${c}" stroke-width="0.7" stroke-opacity=".45"/>` : ""}<circle r="${n.r.toFixed(1)}" fill="${c}"/><title>${esc(n.p.name)} ${flowFmt(n.p.net5)}</title></g>`;
+  return `<g class="bnode${n.p.id === sel ? " on" : ""}" data-mbs="${esc(n.p.id)}" transform="translate(${n.x.toFixed(2)},${n.y.toFixed(2)})">${flowOn && n.r > 7.5 ? `<circle class="mf-flow-line" r="${(n.r + 1.8).toFixed(1)}" fill="none" stroke="${c}" stroke-width="0.7" stroke-opacity=".45"/>` : ""}<circle r="${n.r.toFixed(1)}" fill="${c}"/><title>${esc(n.p.name)} ${flowFmt(n.p.net5)}</title></g>`;
 };
 function bubbleOnlySvg(pts, { w = 360, h = 360, id = "mfb", scale, sel, flowOn = true } = {}) {
   const B = bubbleLayout(pts, { w, h, scale }), lab = (t, x, y, a, c) => `<text x="${x}" y="${y}" text-anchor="${a}" class="bq" style="fill:${c}">${t}</text>`, { top, bot, cx, cy } = B;
-  return `<svg id="${id}" class="bubble${flowOn ? " mf-flowing" : ""}" viewBox="0 0 ${w} ${h}" role="img" aria-label="量價動能矩陣（板塊資金四象限）">
+  return `<svg id="${id}" class="bubble${flowOn ? " mf-flowing" : ""}${W.mf.rp?.playing ? " is-playing" : ""}" viewBox="${mfViewBox(w, h)}" role="img" aria-label="量價動能矩陣（板塊資金四象限）">
     <rect x="${cx}" y="${top}" width="${w - 8 - cx}" height="${cy - top}" fill="${FLOW_Q.up[2]}" opacity=".05"/><rect x="8" y="${cy}" width="${cx - 8}" height="${bot - cy}" fill="${FLOW_Q.down[2]}" opacity=".05"/>
     <line x1="${cx}" y1="${top}" x2="${cx}" y2="${bot}" class="bax"/><line x1="8" y1="${cy}" x2="${w - 8}" y2="${cy}" class="bax"/>
     ${lab("↖ " + FLOW_Q.watch[0], 8, 18, "start", FLOW_Q.watch[2])}${lab(FLOW_Q.up[0] + " ↗", w - 8, 18, "end", FLOW_Q.up[2])}${lab("↙ " + FLOW_Q.down[0], 8, h - 10, "start", FLOW_Q.down[2])}${lab(FLOW_Q.rot[0] + " ↘", w - 8, h - 10, "end", FLOW_Q.rot[2])}
     <text x="${w - 10}" y="${cy - 4}" text-anchor="end" class="bax-t">主力淨流入 →</text><text x="${cx + 4}" y="${top + 10}" class="bax-t">動能加速 ↑</text>
     <g class="bnodes">${B.N.map(n => bubbleNode(n, sel, flowOn)).join("")}</g><g class="blabs">${B.N.map(bubbleLab).join("")}</g></svg>`;
 }
-function bubbleSvg(pts, opts = {}) { return bubbleOnlySvg(pts, opts) + `<div class="mftip" id="mfTip" hidden></div>`; }
+function bubbleSvg(pts, opts = {}) { return bubbleOnlySvg(pts, opts) + mfZoomToolbar() + `<div class="mftip" id="mfTip" hidden></div>`; }
 
 // 12 種量價動能矩陣視覺化模式（全部支援放大縮小、回放與動態流動）
 const MF_VIZ = [
@@ -2410,7 +2489,7 @@ function mfVizOnlySvg(rawPts, { viz = W.mf.viz, w, h, id = "mfb", scale, sel = W
   const sq = (v, m) => Math.sign(v) * Math.sqrt(Math.min(1, Math.abs(v) / Math.max(1e-6, m)));
   const col = s => s.col || FLOW_Q[s.q]?.[2] || "#9aa3ad", fmt = v => flowFmt(v);
   const bcls = s => `class="bnode${s.id === sel ? " on" : ""}" data-mbs="${esc(s.id)}"`;
-  const wrapSvg = body => `<svg id="${id}" class="bubble${flowOn ? " mf-flowing" : ""}" viewBox="0 0 ${W0} ${H0}" role="img" aria-label="量價動能矩陣（${MF_VIZ.find(x => x[0] === viz)?.[1] || "四象限"}）">${body}</svg>`;
+  const wrapSvg = body => `<svg id="${id}" class="bubble${flowOn ? " mf-flowing" : ""}${W.mf.rp?.playing ? " is-playing" : ""}" viewBox="${mfViewBox(W0, H0)}" role="img" aria-label="量價動能矩陣（${MF_VIZ.find(x => x[0] === viz)?.[1] || "四象限"}）">${body}</svg>`;
 
   if (viz === "tiles") {
     const G = 12, pad = 6, qw = (W0 - pad * 2 - G) / 2, qh = (H0 - pad * 2 - G) / 2, pos = { watch: [0, 0], up: [1, 0], down: [0, 1], rot: [1, 1] };
@@ -2604,7 +2683,7 @@ function mfVizOnlySvg(rawPts, { viz = W.mf.viz, w, h, id = "mfb", scale, sel = W
   });
   return wrapSvg(g);
 }
-function mfVizSvg(pts, opts = {}) { return mfVizOnlySvg(pts, opts) + `<div class="mftip" id="mfTip" hidden></div>`; }
+function mfVizSvg(pts, opts = {}) { return mfVizOnlySvg(pts, opts) + mfZoomToolbar() + `<div class="mftip" id="mfTip" hidden></div>`; }
 
 const easeIO = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 // 點的透明度：使用者可調，記在這個瀏覽器
@@ -2612,11 +2691,118 @@ const easeIO = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const mfView = A => (W.mf.bw === "1" ? A.map(x => ({ ...x, net5: x.net1 ?? 0, accel: x.accel1 ?? 0, pct5: x.pct1 ?? 0, q: x.q1 || x.q })) : A);
 const bwSeg = () => `<span class="mkseg" role="group" aria-label="期間">${[["5", "近 5 日"], ["1", "今日"]].map(([k, t]) => `<button data-mset="bw" data-v="${k}" aria-pressed="${W.mf.bw === k}">${t}</button>`).join("")}</span>`;
 const bopRow = () => `<label class="bopr">點的透明度<input type="range" class="bop-r" min="0.1" max="0.9" step="0.05" value="${W.mf.bop}" aria-label="點的透明度"><b>${Math.round(W.mf.bop * 100)}%</b></label>`;
+// 動能矩陣手勢與滾動放大平移控制
+let mfPointerDrag = null;
+const mfTouchPointers = new Map();
+
+document.addEventListener('wheel', e => {
+  const wrap = e.target.closest('.bwrap');
+  if (!wrap) return;
+  const svg = document.getElementById('mfb');
+  if (!svg) return;
+  const Z = (W.mf.zoom ||= { k: 1, vx: 0, vy: 0 });
+  if (Z.k <= 1.005 && e.deltaY > 0) return;
+  e.preventDefault();
+  const rect = wrap.getBoundingClientRect();
+  const mx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const my = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+  const factor = Math.exp(-e.deltaY * 0.0028);
+  const targetK = Math.max(1, Math.min(5, Z.k * factor));
+  mfApplyZoom(targetK, mx, my);
+}, { passive: false });
+
+document.addEventListener('pointerdown', e => {
+  const wrap = e.target instanceof Element ? e.target.closest('.bwrap') : null;
+  if (!wrap || (e.target instanceof Element && e.target.closest('.mf-zoom-ctl'))) return;
+  mfTouchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const Z = (W.mf.zoom ||= { k: 1, vx: 0, vy: 0 });
+  if (mfTouchPointers.size === 1) {
+    mfPointerDrag = {
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startVx: Z.vx || 0,
+      startVy: Z.vy || 0,
+      moved: false
+    };
+    if (Z.k > 1.01) wrap.classList.add('is-grabbing');
+  } else if (mfTouchPointers.size >= 2) {
+    const pts = [...mfTouchPointers.values()];
+    mfPointerDrag = {
+      isPinch: true,
+      startDist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+      startK: Z.k || 1,
+      centerX: (pts[0].x + pts[1].x) / 2,
+      centerY: (pts[0].y + pts[1].y) / 2,
+      moved: true
+    };
+  }
+});
+
+const endMfPointer = e => {
+  mfTouchPointers.delete(e.pointerId);
+  if (mfPointerDrag && (mfPointerDrag.id === e.pointerId || mfTouchPointers.size === 0)) {
+    const wrap = document.querySelector('.bwrap');
+    if (wrap) wrap.classList.remove('is-grabbing');
+    setTimeout(() => { mfPointerDrag = null; }, 50);
+  }
+};
+document.addEventListener('pointerup', endMfPointer);
+document.addEventListener('pointercancel', endMfPointer);
+
+document.addEventListener('dblclick', e => {
+  const wrap = e.target instanceof Element ? e.target.closest('.bwrap') : null;
+  if (!wrap || (e.target instanceof Element && e.target.closest('.mf-zoom-ctl'))) return;
+  const Z = (W.mf.zoom ||= { k: 1, vx: 0, vy: 0 });
+  if (Z.k > 1.05) {
+    mfResetZoom();
+  } else {
+    const rect = wrap.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) / rect.width;
+    const my = (e.clientY - rect.top) / rect.height;
+    mfApplyZoom(2, mx, my);
+  }
+});
+
 // 動能矩陣懸停／觸碰即時資訊卡（Tooltip）
 document.addEventListener("pointermove", e => {
+  if (mfTouchPointers.has(e.pointerId)) mfTouchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   const wrap = e.target.closest(".bwrap");
   const tip = document.getElementById("mfTip");
-  if (!wrap || !tip) { if (tip) tip.hidden = true; return; }
+  if (mfPointerDrag?.moved && tip) tip.hidden = true;
+  if (mfPointerDrag && wrap) {
+    const svg = document.getElementById("mfb");
+    const Z = (W.mf.zoom ||= { k: 1, vx: 0, vy: 0 });
+    if (mfPointerDrag.isPinch && mfTouchPointers.size >= 2) {
+      const pts = [...mfTouchPointers.values()];
+      const curDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (mfPointerDrag.startDist > 10) {
+        const scale = curDist / mfPointerDrag.startDist;
+        const rect = wrap.getBoundingClientRect();
+        const mx = (mfPointerDrag.centerX - rect.left) / rect.width;
+        const my = (mfPointerDrag.centerY - rect.top) / rect.height;
+        mfApplyZoom(mfPointerDrag.startK * scale, mx, my);
+      }
+      return;
+    }
+    if (mfPointerDrag.id === e.pointerId) {
+      const dx = e.clientX - mfPointerDrag.startX;
+      const dy = e.clientY - mfPointerDrag.startY;
+      if (Math.hypot(dx, dy) > 4) mfPointerDrag.moved = true;
+      if (Z.k > 1.01 && mfPointerDrag.moved && svg) {
+        const rect = wrap.getBoundingClientRect();
+        const dims = mfStageDims();
+        const baseW = Z.baseW || (W.mf.viz === "bubble" ? dims.bw : dims.vw) || 360;
+        const baseH = Z.baseH || (W.mf.viz === "bubble" ? dims.bh : dims.vh) || 360;
+        const vw = Z.vw || (baseW / Z.k), vh = Z.vh || (baseH / Z.k);
+        const scaleX = vw / rect.width, scaleY = vh / rect.height;
+        Z.vx = Math.max(0, Math.min(baseW - vw, mfPointerDrag.startVx - dx * scaleX));
+        Z.vy = Math.max(0, Math.min(baseH - vh, mfPointerDrag.startVy - dy * scaleY));
+        svg.setAttribute("viewBox", `${Z.vx.toFixed(2)} ${Z.vy.toFixed(2)} ${vw.toFixed(2)} ${vh.toFixed(2)}`);
+      }
+    }
+  }
+  if (!wrap || !tip || mfPointerDrag?.moved) { if (tip && !wrap) tip.hidden = true; return; }
   const node = e.target.closest(".bnode");
   if (!node) { tip.hidden = true; return; }
   const id = node.dataset.mbs;
@@ -2693,7 +2879,7 @@ function renderMoney() {
     const vInfo = MF_VIZ.find(x => x[0] === F.viz) || MF_VIZ[0], isFull = F.full === "matrix";
     const { P: poolP, pool } = mfReplayPool(M, tCur), R = mfReplayBits(M, tCur, pool, poolP);
     const drawPts = pool.filter(x => Math.abs(x.net5) > 0).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5));
-    h += more + `<div class="mf-desk"><div class="mf-vis${isFull ? " chart-fullscreen" : ""}" id="secMf">${mfVizBar()}<div class="mtool">${bwSeg()}${bopRow()}<button class="btn sm" data-mflow="1" type="button" aria-pressed="${F.flowOn}" title="切換動態流動效果">🌊 流動</button><button class="btn sm" data-mrp="play" data-mrp-top="1" type="button" aria-pressed="${!!F.rp.playing}" title="在當前頁面直接開啟／暫停跨日雷達回放">${F.rp.playing ? "❚❚ 暫停回放" : "▶ 雷達回放"}</button><button class="btn sm exp-btn" id="mfExpandBtn" data-mexp="matrix" type="button" aria-pressed="${isFull}" title="放大動能雷達（全螢幕檢視，或按 Esc 縮小）" aria-label="放大動能雷達">${isFull ? "✕ 縮小" : "⛶ 放大"}</button>${scBtn("matrix")}</div><div class="bwrap" data-viz="${F.viz}" style="--bop:${W.mf.bop}">${mfVizSvg(drawPts, { viz: F.viz, sel: F.bsel, flowOn: F.flowOn, M, u: uCur })}</div>`
+    h += more + `<div class="mf-desk"><div class="mf-vis${isFull ? " chart-fullscreen" : ""}" id="secMf">${mfVizBar()}<div class="mtool">${bwSeg()}${bopRow()}<button class="btn sm" data-mflow="1" type="button" aria-pressed="${F.flowOn}" title="切換動態流動效果">🌊 流動</button><button class="btn sm" data-mrp="play" data-mrp-top="1" type="button" aria-pressed="${!!F.rp.playing}" title="在當前頁面直接開啟／暫停跨日雷達回放">${F.rp.playing ? "❚❚ 暫停回放" : "▶ 雷達回放"}</button><button class="btn sm exp-btn" id="mfExpandBtn" data-mexp="matrix" type="button" aria-pressed="${isFull}" title="放大動能雷達（全螢幕檢視，或按 Esc 縮小）" aria-label="放大動能雷達">${isFull ? "✕ 縮小" : "⛶ 放大"}</button>${scBtn("matrix")}</div><div class="bwrap${(W.mf.zoom?.k || 1) > 1.01 ? " is-zoomed" : ""}" data-viz="${F.viz}" style="--bop:${W.mf.bop}">${mfVizSvg(drawPts, { viz: F.viz, sel: F.bsel, flowOn: F.flowOn, M, u: uCur })}</div>`
       + `<div class="mf-rpbar"><button type="button" class="btn sm" data-mrp="prev" title="前一天">‹</button><button type="button" class="btn sm primary" data-mrp="play" aria-pressed="${!!F.rp.playing}">${F.rp.playing ? "❚❚ 暫停" : "▶ 回放"}</button><button type="button" class="btn sm" data-mrp="next" title="後一天">›</button><input type="range" class="mrp-range" min="${t0}" max="${Math.max(t0, T - 1)}" step="0.01" value="${uCur.toFixed(2)}" aria-label="日期"><span class="mrp-date">${dtLabel}</span><button type="button" class="btn sm" data-mrp="speed" title="回放速度">${F.rp.speed}x</button><select class="sel" data-mrs aria-label="選板塊" style="font-size:12.5px;padding:3px 6px"><option value="hot" ${F.rp.set === "hot" ? "selected" : ""}>熱門 30</option><option value="all" ${F.rp.set === "all" ? "selected" : ""}>全部板塊</option></select><span class="mrp-sum">${R.sum.replace("<br>", "・")}</span></div>`
       + `<p class="note gnote"><b>${vInfo[1]}：</b>${vInfo[2]}（${F.rp.set === "all" ? "顯示全部板塊" : `只畫${wl}金額最大的 30 個板塊`}；${D1 ? "縱軸是今天比前一個交易日多買（或少買）多少，" : ""}座標用平方根縮放，點板塊可看細節。）</p></div>`
       + `<div class="mf-side"><div class="qcards">${Object.entries(FLOW_Q).map(([k, [t, d, c]]) => `<button class="qcard" data-mq="${k}" aria-pressed="${F.q === k}" style="--qc:${c}"><span>${t}</span><b>${cnt[k]}</b><small>${d}</small></button>`).join("")}</div>${bubbleInfo(poolP.find(x => x.id === F.bsel))}`
@@ -2830,16 +3016,19 @@ function flowDraw() {
   if (F.viz === "bubble") {
     if (!FL.el || FL.svgEl !== svg) return flowMount();
     svg.classList.toggle("mf-flowing", !!F.flowOn);
+    svg.classList.toggle("is-playing", !!F.rp.playing);
+    const vb = mfViewBox(FL.w || dims.bw, FL.h || dims.bh);
+    if (svg.getAttribute("viewBox") !== vb) svg.setAttribute("viewBox", vb);
     for (const id of FL.ids) {
       const E = FL.el[id], P = flowAtU(FL, id, u, introK); if (!P) continue;
       const col = P.col || FLOW_Q[P.q][2], r = Math.max(0, P.r);
-      E.n.setAttribute("transform", `translate(${P.x.toFixed(1)},${P.y.toFixed(1)})`); E.c.setAttribute("r", r.toFixed(2)); E.c.setAttribute("fill", col); E.n.classList.toggle("on", id === F.bsel);
+      E.n.setAttribute("transform", `translate(${P.x.toFixed(2)},${P.y.toFixed(2)})`); E.c.setAttribute("r", r.toFixed(2)); E.c.setAttribute("fill", col); E.n.classList.toggle("on", id === F.bsel);
       if (E.ring) {
         if (F.flowOn && r > 7.5) { E.ring.setAttribute("r", (r + 1.8).toFixed(1)); E.ring.setAttribute("stroke", col); E.ring.setAttribute("stroke-opacity", "0.45"); }
         else E.ring.setAttribute("stroke-opacity", "0");
       }
       const lab = P.wb > P.wa ? P.lb : P.la, op = Math.max(P.wa, P.wb);
-      if (lab && op > 0.02) { const b = E.l.firstElementChild; E.l.setAttribute("transform", `translate(${P.x.toFixed(1)},${P.y.toFixed(1)})`); b.setAttribute("transform", `translate(${lab.dx.toFixed(1)},${lab.dy.toFixed(1)})`);
+      if (lab && op > 0.02) { const b = E.l.firstElementChild; E.l.setAttribute("transform", `translate(${P.x.toFixed(2)},${P.y.toFixed(2)})`); b.setAttribute("transform", `translate(${lab.dx.toFixed(1)},${lab.dy.toFixed(1)})`);
         const bn1 = b.querySelector(".bn1"), bn2 = b.querySelector(".bn2"), bv = b.querySelector(".bv"), lines = lab.lines || [lab.nm];
         if (bn1) { bn1.textContent = lines[0] || ""; bn1.setAttribute("y", lab.y1.toFixed(1)); bn1.style.fontSize = `${lab.fs.toFixed(1)}px`; }
         if (bn2) { bn2.textContent = lines[1] || ""; bn2.setAttribute("y", lab.y2 != null ? lab.y2.toFixed(1) : "0"); bn2.style.fontSize = `${lab.fs.toFixed(1)}px`; }
@@ -2851,8 +3040,10 @@ function flowDraw() {
     const html = mfVizOnlySvg(pts, { viz: F.viz, scale: FL.scale, sel: F.bsel, flowOn: F.flowOn, M, u });
     const m = html.match(/^<svg[^>]*viewBox="([^"]+)"[^>]*>([\s\S]*)<\/svg>$/);
     if (m) {
-      if (svg.getAttribute("viewBox") !== m[1]) svg.setAttribute("viewBox", m[1]);
+      const vb = mfViewBox(dims.vw, dims.vh);
+      if (svg.getAttribute("viewBox") !== vb) svg.setAttribute("viewBox", vb);
       svg.classList.toggle("mf-flowing", !!F.flowOn);
+      svg.classList.toggle("is-playing", !!F.rp.playing);
       svg.innerHTML = m[2];
     } else svg.outerHTML = html;
   }
@@ -2878,7 +3069,7 @@ function flowLoop() {
   const F = W.mf; cancelAnimationFrame(F.rp.raf); let last = performance.now(), hold = 0;
   const step = now => {
     if (W.lt !== "money" || (F.view !== "replay" && F.view !== "bubble") || !F.rp.playing || !document.getElementById("mfb")) return;
-    const dt = Math.min(100, now - last); last = now; const FL = F.rp.fl; if (!FL) return;
+    const dt = Math.min(64, Math.max(1, now - last)); last = now; const FL = F.rp.fl; if (!FL) return;
     if (FL.T - 1 <= FL.t0) {
       if (hold > 0) { hold -= dt; if (hold <= 0) F.rp.introK = 0.08; }
       else { F.rp.introK = (F.rp.introK ?? 0.08) + (dt / 1200) * F.rp.speed; if (F.rp.introK >= 1) { F.rp.introK = 1; hold = 900; } }
@@ -2918,11 +3109,18 @@ function mfPlay(on) {
   } else if (F.rp.fl) flowDraw();
   flowTexts(true);
 }
-$("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F = W.mf, b = e.target.closest("[data-mv],[data-mviz],[data-mflow],[data-mq],[data-mrk],[data-mset],[data-mrp],[data-mshare],[data-l2],[data-fsec],[data-mbs],[data-iopen-ext],[data-mexp]"); if (!b) return; const d = b.dataset;
+$("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F = W.mf, b = e.target.closest("[data-mv],[data-mviz],[data-mflow],[data-mq],[data-mrk],[data-mset],[data-mrp],[data-mshare],[data-l2],[data-fsec],[data-mbs],[data-iopen-ext],[data-mexp],[data-mzoom]"); if (!b) return; const d = b.dataset;
+  if (d.mzoom) {
+    const Z = (W.mf.zoom ||= { k: 1, vx: 0, vy: 0 });
+    if (d.mzoom === "in") mfApplyZoom((Z.k || 1) * 1.25, 0.5, 0.5);
+    else if (d.mzoom === "out") mfApplyZoom((Z.k || 1) / 1.25, 0.5, 0.5);
+    else if (d.mzoom === "reset") mfResetZoom();
+    return;
+  }
   if (d.mexp === "matrix" || d.mexp === "replay") return toggleMfExpand();
   if (d.mviz) { F.viz = d.mviz; store.set("watch:mfviz", F.viz); if (F.rp.fl) { F.rp.fl.el = null; F.rp.fl.svgEl = null; } return renderMoney(); }
   if (d.mflow) { F.flowOn = !F.flowOn; store.set("watch:mfflow", F.flowOn); b.setAttribute("aria-pressed", F.flowOn); document.getElementById("mfb")?.classList.toggle("mf-flowing", F.flowOn); if (F.rp.fl) flowDraw(); else renderMoney(); return; }
-  if (d.mbs) { F.bsel = F.bsel === d.mbs ? null : d.mbs; return F.rp.playing ? mfReplayDraw() : renderMoney(); }
+  if (d.mbs) { if (mfPointerDrag?.moved) return; F.bsel = F.bsel === d.mbs ? null : d.mbs; return F.rp.playing ? mfReplayDraw() : renderMoney(); }
   if (d.fsec) return secOpen(d.fsec);
   if (d.iopenExt) { W.indS.open = d.iopenExt; return setLt("ind"); }
   if (d.mshare) return mfShare(d.mshare);
