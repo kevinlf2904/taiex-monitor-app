@@ -2,6 +2,8 @@
 // GET /api/oapi?src=twse|tpex&p=/opendata/t187ap45_L[&code=2330][&q=關鍵字][&limit=500]
 //   → { ok, src, path, total, cols, rows, more }；code 只留這檔、q 任一欄含關鍵字。資料集清單在 learner/oapi.js 的 OAPI_CAT。
 // GET /api/oapi?stock=2330 → { ok, code, items: [{ k, t, src, path, rows }] }：個股常用的官方資料（上市、上櫃都試，有資料的才回）。
+// GET /api/oapi?earn=1 → { ok, ym, yq, rows: [[代號, 名稱, 產業, 市場, 當月營收(億), 月增%, 年增%, 累計年增%, EPS, 季營收(億), 稅後淨利(億), 毛利率, 營益率, 淨利率]] }：
+//   情報局「財報」用，上市、上櫃的月營收（t187ap05）、季 EPS（t187ap14）、營益分析（t187ap17）合成一張表。
 // 只連固定的兩個網域、路徑只允許英數字與 _ /，不會被拿去連別的網站。同一份資料在這台機器上 15 分鐘內重複用。
 
 import { getJSON } from "./_tw.js";
@@ -49,9 +51,34 @@ export const STOCK_SETS = [
   ["board", "ESG：董事會", "/opendata/t187ap46_L_6", "/t187ap46_O_6"],
 ];
 
+// 財報總表：欄位名稱上市是中文、上櫃有些是英文，用關鍵字找
+const kOf = (r, re) => Object.keys(r || {}).find(k => re.test(k)), nOf = v => { const n = parseFloat(String(v ?? "").replace(/[,\s%]/g, "")); return Number.isFinite(n) ? n : null; };
+const r1 = v => (v == null ? null : Math.round(v * 10) / 10), r2 = v => (v == null ? null : Math.round(v * 100) / 100);
+export function earnRows({ revL = [], revO = [], epsL = [], epsO = [], pmL = [], pmO = [] }) {
+  const M = new Map(), get = (c, n, m) => { if (!M.has(c)) M.set(c, [c, n, "", m, null, null, null, null, null, null, null, null, null, null]); return M.get(c); };
+  let ym = "", yq = "";
+  for (const [rows, m] of [[revL, "上市"], [revO, "上櫃"]]) { const r0 = rows[0]; if (!r0) continue; const k = { c: kOf(r0, /公司代號|SecuritiesCompanyCode/), n: kOf(r0, /公司名稱|CompanyName/), i: kOf(r0, /產業別|Industry/), ym: kOf(r0, /資料年月/),
+      cur: kOf(r0, /當月營收$/), mom: kOf(r0, /上月比較增減/), yoy: kOf(r0, /去年同月增減/), cum: kOf(r0, /前期比較增減/) };
+    for (const r of rows) { const c = String(r[k.c] ?? "").trim(); if (!/^\d{4}[A-Z]?$/.test(c)) continue; const x = get(c, String(r[k.n] ?? "").trim(), m); x[2] = String(r[k.i] ?? "").trim();
+      x[4] = r2(nOf(r[k.cur]) / 1e5); x[5] = r1(nOf(r[k.mom])); x[6] = r1(nOf(r[k.yoy])); x[7] = r1(nOf(r[k.cum])); ym = ym || String(r[k.ym] ?? ""); } }
+  for (const rows of [epsL, epsO]) { const r0 = rows[0]; if (!r0) continue; const k = { c: kOf(r0, /公司代號|SecuritiesCompanyCode/), e: kOf(r0, /基本每股盈餘/), rev: kOf(r0, /^營業收入$/), ni: kOf(r0, /稅後淨利/), y: kOf(r0, /^年度$|^Year$/), q: kOf(r0, /季別/), i: kOf(r0, /產業別/) };
+    for (const r of rows) { const x = M.get(String(r[k.c] ?? "").trim()); if (!x) continue; x[8] = r2(nOf(r[k.e])); x[9] = r2(nOf(r[k.rev]) / 1e5); x[10] = r2(nOf(r[k.ni]) / 1e5); if (!x[2] && k.i) x[2] = String(r[k.i] ?? "").trim(); yq = yq || `${r[k.y]}Q${r[k.q]}`; } }
+  for (const rows of [pmL, pmO]) { const r0 = rows[0]; if (!r0) continue; const k = { c: kOf(r0, /公司代號|SecuritiesCompanyCode/), g: kOf(r0, /^毛利率/), o: kOf(r0, /^營業利益率/), n: kOf(r0, /^稅後純益率/) };
+    for (const r of rows) { const x = M.get(String(r[k.c] ?? "").trim()); if (!x) continue; x[11] = r1(nOf(r[k.g])); x[12] = r1(nOf(r[k.o])); x[13] = r1(nOf(r[k.n])); } }
+  return { ym, yq, rows: [...M.values()] };
+}
+
 export default async function handler(req, res) {
   const q = req.query || {}, code = String(q.code || q.stock || "").trim().toUpperCase();
   if (code && !/^\d{4,6}[A-Z]?$/.test(code)) return res.status(400).json({ ok: false, error: "代號格式不對" });
+  if (q.earn) {
+    const get = (src, p) => rowsOf(src, p).catch(() => []);
+    const [revL, revO, epsL, epsO, pmL, pmO] = await Promise.all([get("twse", "/opendata/t187ap05_L"), get("tpex", "/mopsfin_t187ap05_O"), get("twse", "/opendata/t187ap14_L"), get("tpex", "/mopsfin_t187ap14_O"), get("twse", "/opendata/t187ap17_L"), get("tpex", "/mopsfin_187ap17_O")]);
+    const E = earnRows({ revL, revO, epsL, epsO, pmL, pmO });
+    if (!E.rows.length) return res.status(200).json({ ok: false, error: "證交所、櫃買中心的財報資料暫時連不到" });
+    res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=21600");
+    return res.status(200).json({ ok: true, source: "證交所、櫃買中心開放資料（月營收、各產業 EPS、營益分析）", ...E });
+  }
   if (q.stock) {
     const got = await Promise.all(STOCK_SETS.map(async ([k, t, a, b]) => {
       for (const [src, path] of [["twse", a], ["tpex", b]]) {
