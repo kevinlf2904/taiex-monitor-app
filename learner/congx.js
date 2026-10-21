@@ -41,8 +41,38 @@ function cxFolHtml() {
     <h4>我的自選與庫存：內部人近 30 天申報轉讓</h4>${ins.length ? rkList(ins.slice(0, 30).map(r => ({ no: r.d.slice(5).replace("-", "/"), attr: `data-tsel="${esc(r.code)}"`, mono: "", name: `${esc(r.name)} ${esc(r.code)}`, sub: `${esc(r.who)}（${esc(r.role)}）・${esc(r.how)}`, val: `${Math.round(r.sh / 1000).toLocaleString()} 張`, vc: "down" })), "")
       : `<p class="note">${W.ins ? "近 30 天沒有你自選或庫存股票的內部人轉讓申報。" : "載入中…"}</p>`}
     <h4>我的自選與庫存：有台灣政治人物申報持有</h4>${tw.length ? rkList(tw.slice(0, 30).map(({ p, h }) => ({ attr: `data-cv="tw:p:${esc(p.pid)}"`, mono: "", name: esc(p.name), sub: esc([p.org, p.title].filter(Boolean).join("・")), val: h.map(x => esc(x.name || x.code)).slice(0, 3).join("、"), vsub: `${h.length} 檔` })), "")
-      : `<p class="note">${W.two ? "沒有。" : "載入中…"}</p>`}</section>`;
+      : `<p class="note">${W.two ? "沒有。" : "載入中…"}</p>`}
+    <h4>我的自選與庫存：本週千張大戶動向</h4>${cxTdccFolHtml(mine)}</section>`;
   return h;
+}
+
+function cxTdccFolHtml(mine) {
+  const codes = [...mine].filter(c => typeof isTW === "function" ? isTW(c) : /^\d{4,6}[A-Z]?$/.test(c));
+  if (!codes.length) return `<p class="note">自選股與庫存目前沒有台股標的。</p>`;
+  const need = [...new Set(codes.map(c => c.slice(0, 2)))].filter(k => !W.tdcc?.[k]);
+  if (need.length && !W.tdccShardBusy && typeof tdccShard === "function") {
+    W.tdccShardBusy = true;
+    Promise.all(need.map(tdccShard)).finally(() => { W.tdccShardBusy = false; if (W.lt === "cong" && W.cv === "fol") renderList(); });
+  }
+  const rows = codes.map(c => {
+    const hist = W.tdcc?.[c.slice(0, 2)]?.[c];
+    if (!hist || !hist.length) return null;
+    const cur = hist[hist.length - 1], prev = hist.length >= 2 ? hist[hist.length - 2] : null;
+    const chg = prev ? +(cur[1] - prev[1]).toFixed(2) : 0;
+    return { c, chg, b1k: cur[1], r50: cur[3], ppl: cur[4], d: cur[0] };
+  }).filter(Boolean);
+  if (!rows.length) return `<p class="note">${need.length ? "載入自選股集保股權分散資料中…" : "沒有集保股權分散紀錄。"}</p>`;
+  rows.sort((a, b) => Math.abs(b.chg) - Math.abs(a.chg));
+  return rkList(rows.slice(0, 30).map(r => ({
+    star: r.c,
+    attr: `data-tsel="${esc(r.c)}"`,
+    mono: "",
+    name: `${esc(nameOf(r.c) !== r.c ? nameOf(r.c) : "")} ${esc(r.c)}`,
+    sub: `千張大戶 ${r.b1k.toFixed(2)}%・50 張以下散戶 ${r.r50 != null ? r.r50.toFixed(2) + "%" : "—"}・總股東 ${r.ppl?.toLocaleString() || "—"} 人`,
+    val: `${r.chg > 0 ? "+" : ""}${r.chg.toFixed(2)}%`,
+    vc: r.chg > 0 ? "up" : r.chg < 0 ? "down" : "",
+    vsub: r.d ? `集保 ${r.d.slice(5).replace("-", "/")}` : ""
+  })), "");
 }
 
 // ---------- 大戶共識 ----------
@@ -69,9 +99,19 @@ function cxConsHtml() {
       for (const p of twoPeople()) { for (const h of p.hold) if (h.code) g(h.code, h.name).ppl.add(p.pid); for (const x of p.chg) if (x.code) { if (x.t === "new" || x.t === "add") g(x.code, x.name).add++; else g(x.code, x.name).cut++; } }
       for (const r of W.ins.rows || []) if (r.d >= from && M.has(r.code)) { const x = M.get(r.code); x.ins++; x.insSh += r.sh || 0; }
       const L = [...M.values()].map(x => ({ ...x, sc: x.ppl.size + x.add - x.cut - x.ins * 2 })).filter(x => x.ppl.size >= 2).sort((a, b) => b.sc - a.sc || b.ppl.size - a.ppl.size).slice(0, 40);
-      body = `<h4>多位政治人物持有、內部人沒有在賣（分數＝持有人數 ＋ 增持 − 減持 − 內部人轉讓 ×2）</h4>` + rkList(L.map(x => ({ star: x.c, attr: `data-cv="tw:s:${esc(x.c)}"`, mono: "", name: `${esc(nameOf(x.c) !== x.c ? nameOf(x.c) : x.n || "")} ${esc(x.c)}`,
-        sub: `${x.ppl.size} 位持有${x.add ? `・增持 ${x.add}` : ""}${x.cut ? `・減持 ${x.cut}` : ""}`, val: `${x.sc > 0 ? "+" : ""}${x.sc} 分`, vc: cls(x.sc), vsub: x.ins ? `<span class="down">內部人近 90 天申報轉讓 ${x.ins} 筆・${Math.round(x.insSh / 1000).toLocaleString()} 張</span>` : "內部人近 90 天沒有申報轉讓" })), "沒有資料")
-        + `<p class="note">政治人物持股來自最近一次財產申報（可能是一兩年前）；內部人轉讓是事前申報，不一定真的賣出。</p>`;
+      const need = [...new Set(L.map(x => x.c.slice(0, 2)))].filter(k => !W.tdcc?.[k]);
+      if (need.length && !W.tdccShardBusy && typeof tdccShard === "function") {
+        W.tdccShardBusy = true;
+        Promise.all(need.map(tdccShard)).finally(() => { W.tdccShardBusy = false; if (W.lt === "cong" && W.cv === "cons") renderList(); });
+      }
+      body = `<h4>多位政治人物持有、內部人沒有在賣（分數＝持有人數 ＋ 增持 − 減持 − 內部人轉讓 ×2）</h4>` + rkList(L.map(x => {
+        const tchg = typeof tdccChg === "function" ? tdccChg(x.c) : null;
+        const tdTxt = tchg != null ? `・千張大戶週 <b class="${cls(tchg)}">${tchg > 0 ? "+" : ""}${tchg}%</b>` : "";
+        return { star: x.c, attr: `data-cv="tw:s:${esc(x.c)}"`, mono: "", name: `${esc(nameOf(x.c) !== x.c ? nameOf(x.c) : x.n || "")} ${esc(x.c)}`,
+          sub: `${x.ppl.size} 位持有${x.add ? `・增持 ${x.add}` : ""}${x.cut ? `・減持 ${x.cut}` : ""}`, val: `${x.sc > 0 ? "+" : ""}${x.sc} 分`, vc: cls(x.sc),
+          vsub: (x.ins ? `<span class="down">內部人近 90 天申報轉讓 ${x.ins} 筆・${Math.round(x.insSh / 1000).toLocaleString()} 張</span>` : "內部人近 90 天沒有申報轉讓") + tdTxt };
+      }), "沒有資料")
+        + `<p class="note">政治人物持股來自最近一次財產申報（可能是一兩年前）；內部人轉讓是事前申報，不一定真的賣出；千張大戶為每週集保變化。</p>`;
     }
   }
   return `<section class="csec tw-home">${rkHead("大戶共識榜", "把不同來源的大戶動向疊在一起：同一檔股票有越多種大戶站在同一邊，分數越高。只是整理公開申報，不是買賣建議。")}<div class="tw-ctl">${seg}</div>${body}</section>`;
@@ -241,6 +281,19 @@ function cxInsHeat(rows) {
   for (const r of rows) { const k = cat(r.code), g = M.get(k) || M.set(k, { k, v: { n: 0, sh: 0, mk: 0 }, tk: new Map() }).get(k); g.v.n++; g.v.sh += (r.sh || 0) / 1000; if (mkt(r)) g.v.mk += (r.sh || 0) / 1000; g.tk.set(r.code, (g.tk.get(r.code) || 0) - (r.sh || 0)); }
   return cxHeatTable("主題熱圖：內部人在哪些產業申報轉讓", "張數＝申報轉讓的股數 ÷ 1000；「市場賣出」是一般交易、盤後、鉅額、拍賣這類可能在市場賣掉的方式，贈與、信託不算。", [["n", "申報筆數", 0], ["sh", "轉讓張數", 0], ["mk", "市場賣出張數", 0]], cxRows(M, r => r.v.sh), t => `data-tsel="${esc(t)}"`);
 }
+// 集保千張大戶：各產業主題大戶是增持還是減持
+function cxTdccHeat(T) {
+  const cat = cxCat("tw"), M = new Map();
+  for (const r of (T?.up || [])) {
+    const k = cat(r[0]), g = M.get(k) || M.set(k, { k, v: { up: 0, dn: 0, chg: 0 }, tk: new Map() }).get(k);
+    g.v.up++; g.v.chg += +r[1]; g.tk.set(r[0], (g.tk.get(r[0]) || 0) + +r[1]);
+  }
+  for (const r of (T?.down || [])) {
+    const k = cat(r[0]), g = M.get(k) || M.set(k, { k, v: { up: 0, dn: 0, chg: 0 }, tk: new Map() }).get(k);
+    g.v.dn++; g.v.chg += +r[1]; g.tk.set(r[0], (g.tk.get(r[0]) || 0) + +r[1]);
+  }
+  return cxHeatTable("主題熱圖：各產業千張大戶本週增減動向", "依集保結算所每週千張大戶增減排行統計；千張% 週變動合計為各主題前 50 大增減檔數的持股百分點加總。", [["up", "大戶增持檔數", 1], ["dn", "大戶減持檔數", 0], ["chg", "千張% 週變動合計", 1]], cxRows(M, r => r.v.up - r.v.dn || r.v.chg), t => `data-tsel="${esc(t)}"`);
+}
 // 13F：季底到申報日隔幾天（法規 45 天內）
 function cxF13Lag(F) {
   const L = F.funds.map(f => ({ f, d: congDays(f.period, f.filed) })).filter(x => x.d >= 0).sort((a, b) => b.d - a.d), A = L.map(x => x.d).sort((a, b) => a - b);
@@ -260,3 +313,144 @@ function cxInsFolHtml() {
 }
 document.addEventListener("submit", e => { const f = e.target.closest?.("[data-cxinsadd]"); if (!f) return; e.preventDefault(); const c = String(f.c.value || "").trim().toUpperCase(); if (!/^\d{4,6}[A-Z]?$/.test(c)) return toast("請填台股代號"); if (!cxHas("ins", c)) cxToggle("ins", c, nameOf(c)); renderList(); });
 { const css = document.createElement("style"); css.textContent = `.cxinsf { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; } .cxinsf form { display: flex; gap: 4px; } .cxinsf input { width: 6.5em; font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--ink); }`; document.head.appendChild(css); }
+
+// ---------- 集保千張大戶（大戶國會「千張大戶」分頁） ----------
+function cxTdccHtml() {
+  if (!W.tdccR) {
+    if (typeof tdccRank === "function") tdccRank().then(() => { if (W.lt === "cong" && W.cv === "tdcc") renderList(); });
+    return `<section class="csec tw-home"><p class="note" style="padding:16px">載入集保股權分散表資料中…</p></section>`;
+  }
+  const T = W.tdccR;
+  if (T.err) return `<section class="csec tw-home"><p class="note" style="padding:16px">⚠︎ ${esc(T.err)}</p></section>`;
+
+  const scope = W.tdccScope === "mine" ? "mine" : "all";
+  const view = ["up", "down", "high", "heat"].includes(W.tdccV) ? W.tdccV : "up";
+  const q = (W.tdccQ || "").trim().toUpperCase();
+
+  // 若切換至自選＋庫存，載入所需 shard
+  let mineRows = null;
+  if (scope === "mine") {
+    const mineCodes = [...new Set([...myCodes(), ...Object.keys(W.hold || {})])].filter(c => typeof isTW === "function" ? isTW(c) : /^\d{4,6}[A-Z]?$/.test(c));
+    const need = [...new Set(mineCodes.map(c => c.slice(0, 2)))].filter(k => !W.tdcc?.[k]);
+    if (need.length && !W.tdccShardBusy && typeof tdccShard === "function") {
+      W.tdccShardBusy = true;
+      Promise.all(need.map(tdccShard)).finally(() => {
+        W.tdccShardBusy = false;
+        if (W.lt === "cong" && W.cv === "tdcc") renderList();
+      });
+    }
+    mineRows = mineCodes.map(c => {
+      const hist = W.tdcc?.[c.slice(0, 2)]?.[c];
+      if (!hist || !hist.length) return null;
+      const cur = hist[hist.length - 1], prev = hist.length >= 2 ? hist[hist.length - 2] : null;
+      const chg = prev ? +(cur[1] - prev[1]).toFixed(2) : 0;
+      const r50Chg = prev ? +(cur[3] - prev[3]).toFixed(2) : 0;
+      const pplChg = prev ? cur[4] - prev[4] : 0;
+      return [c, chg, cur[1], r50Chg, pplChg];
+    }).filter(Boolean);
+  }
+
+  // 若使用者輸入股票代號（例如 4 碼數字），確保該代號的分片已載入
+  let singleStockDetail = "";
+  if (/^\d{4,6}[A-Z]?$/.test(q)) {
+    const shardKey = q.slice(0, 2);
+    if (!W.tdcc?.[shardKey] && !W.tdccShardBusy && typeof tdccShard === "function") {
+      W.tdccShardBusy = true;
+      tdccShard(shardKey).finally(() => {
+        W.tdccShardBusy = false;
+        if (W.lt === "cong" && W.cv === "tdcc") renderList();
+      });
+    }
+    const hist = W.tdcc?.[shardKey]?.[q];
+    if (hist && hist.length) {
+      const cur = hist[hist.length - 1], prev = hist.length >= 2 ? hist[hist.length - 2] : null;
+      const chg = prev ? +(cur[1] - prev[1]).toFixed(2) : 0;
+      singleStockDetail = `<div class="cx-stock-card" style="margin:10px 0;padding:12px;background:var(--surface-2);border-radius:8px;border:1px solid var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <b>${esc(nameOf(q))} ${esc(q)}</b>
+          <button class="btn sm" data-tsel="${esc(q)}">在看盤開啟</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;font-size:13px">
+          <div><span class="note">千張大戶</span><br><b class="${cls(chg)}">${cur[1].toFixed(2)}% (${chg > 0 ? "+" : ""}${chg}%)</b></div>
+          <div><span class="note">400 張以上</span><br><b>${cur[2] != null ? cur[2].toFixed(2) + "%" : "—"}</b></div>
+          <div><span class="note">50 張以下散戶</span><br><b>${cur[3] != null ? cur[3].toFixed(2) + "%" : "—"}</b></div>
+          <div><span class="note">總股東人數</span><br><b>${cur[4]?.toLocaleString() || "—"} 人</b></div>
+          <div><span class="note">千張股東人數</span><br><b>${cur[5]?.toLocaleString() || "—"} 人</b></div>
+        </div>
+        <p class="note" style="margin:6px 0 0">資料日期：${cur[0].replace(/-/g, "/")}（每週五公布）</p>
+      </div>`;
+    }
+  }
+
+  let activeList = [];
+  if (scope === "mine") {
+    activeList = (mineRows || []).slice();
+    if (view === "down") activeList.sort((a, b) => a[1] - b[1]);
+    else if (view === "high") activeList.sort((a, b) => b[2] - a[2]);
+    else activeList.sort((a, b) => b[1] - a[1]);
+  } else {
+    if (view === "up") activeList = (T.up || []).slice();
+    else if (view === "down") activeList = (T.down || []).slice();
+    else if (view === "high") {
+      const map = new Map();
+      for (const r of [...(T.up || []), ...(T.down || [])]) map.set(r[0], r);
+      activeList = [...map.values()].sort((a, b) => b[2] - a[2]);
+    }
+  }
+
+  if (q) {
+    activeList = activeList.filter(r => r[0].startsWith(q) || (nameOf(r[0]) || "").toUpperCase().includes(q));
+  }
+
+  const dStr = T.date ? T.date.replace(/-/g, "/") : "最新一週";
+  const upTop = T.up?.[0], dnTop = T.down?.[0];
+
+  const cards = rkCards([
+    { t: "集保統計日", sub: "每週五收盤後公布", v: dStr },
+    { t: "統計上市櫃標的", sub: scope === "mine" ? "自選與庫存" : "集保結算所全市場", v: scope === "mine" ? `${mineRows ? mineRows.length : 0} 檔` : `${T.n || 3000}+ 檔` },
+    { t: "本週大戶增持冠軍", sub: upTop ? `${nameOf(upTop[0])} ${upTop[0]}` : "全市場", v: upTop ? `+${upTop[1]}%` : "—", vc: "up" },
+    { t: "散戶大增/大戶減持", sub: dnTop ? `${nameOf(dnTop[0])} ${dnTop[0]}` : "全市場", v: dnTop ? `${dnTop[1]}%` : "—", vc: "down" }
+  ]);
+
+  const mkItem = r => {
+    const c = r[0], chg = +r[1], b1k = +r[2], r50 = +r[3], ppl = +r[4];
+    const nm = nameOf(c) !== c ? nameOf(c) : "";
+    const focus = chg > 0 && r50 < 0 ? `<span class="up">籌碼集中（大戶增、散戶退）</span>` : chg < 0 && r50 > 0 ? `<span class="down">籌碼渙散（大戶退、散戶接）</span>` : "";
+    return {
+      star: c,
+      attr: `data-tsel="${esc(c)}"`,
+      mono: rkMono(rkInit(nm || c), chg > 0 ? "#3fa36b" : "#d0643f"),
+      name: `${esc(nm)} <span class="note">${esc(c)}</span>`,
+      sub: `千張大戶 ${b1k.toFixed(2)}%・50 張以下散戶週 ${r50 > 0 ? "+" : ""}${r50.toFixed(2)}%・總股東人數 ${ppl > 0 ? "+" : ""}${ppl.toLocaleString()} 人`,
+      val: `${chg > 0 ? "+" : ""}${chg.toFixed(2)}%`,
+      vc: chg > 0 ? "up" : chg < 0 ? "down" : "",
+      vsub: focus || (b1k >= 70 ? `<span class="up">千張佔比 > 70%</span>` : "")
+    };
+  };
+
+  let listHtml = "";
+  if (view === "heat") {
+    listHtml = cxTdccHeat(T);
+  } else {
+    const titles = {
+      up: "千張大戶持股比例週增加最多（前 50 大）",
+      down: "千張大戶持股比例週減少最多（前 50 大，散戶接刀）",
+      high: "千張大戶高度集中持股（千張比例最高排行）"
+    };
+    listHtml = `<h4>${titles[view] || "千張大戶動向"}</h4>` +
+      rkList(activeList.slice(0, 50).map(mkItem), scope === "mine" ? "自選與庫存中沒有符合的標的" : "沒有符合的股票");
+  }
+
+  const h = `<section class="csec tw-home">
+    ${rkHead("集保千張大戶每週動向", `臺灣集中保管結算所（TDCC）每週公布「股權分散表」。統計持有 1,000 張以上的「千張大戶」與 50 張以下「散戶」比例每週變化（百分點）；大戶比例上升且散戶人數下降，代表籌碼流向少數主力手中。`)}
+    ${cxRow("期間", `<span class="note">每週五更新・最新統計日 ${dStr}</span>`)}
+    ${cxRow("篩選", `<div class="tw-grp seg" role="group">${[["all", "全部"], ["mine", "自選＋庫存"]].map(([k, t]) => `<button type="button" data-rkset="tdccScope:${k}" aria-pressed="${scope === k}">${t}</button>`).join("")}</div>${cxQ("tdccQ", "搜尋代號或名稱")}`)}
+    ${cards}
+    ${singleStockDetail}
+    ${cxTabs("tdccV", view, [["up", "大戶增持榜"], ["down", "大戶減持榜"], ["high", "高度集中"], ["heat", "主題熱圖"]])}
+    ${listHtml}
+    <p class="note">資料來源：臺灣集中保管結算所（TDCC）集保戶股權分散表開放資料 1-5。每週五收盤後更新；週變化為持股比例的百分點差額，僅供籌碼集中度分析參考，不構成買賣建議。</p>
+  </section>`;
+
+  return h;
+}

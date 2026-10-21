@@ -689,15 +689,49 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .iai .iaitxt { font-size: 14px; line-height: 1.75; }
 .ithemes { display: flex; flex-direction: column; gap: 10px; margin: 10px 12px; }
 /* 題材總覽：生態群島 */
-.iislands { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 12px; }
-.iisl { border: 1px solid var(--line); background: linear-gradient(160deg, color-mix(in srgb, var(--ic) 14%, var(--surface)), var(--surface-2)); border-radius: 14px; padding: 10px 8px; color: var(--ink); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font: inherit; min-width: 0; transition: transform .2s, border-color .2s, box-shadow .2s; animation: iislIn .45s cubic-bezier(.16, 1, .3, 1) both; }
-.iisl:hover { transform: translateY(-2px); }
-.iisl[aria-pressed="true"] { border-color: var(--ic); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ic) 35%, transparent); }
-.iisl svg { width: 96px; height: 96px; display: block; } .iisl b { font-size: 14.5px; } .iisl small { color: var(--muted); font-size: 11.5px; }
-.iisl .itg { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.iisl .ia { transition: stroke-opacity .2s; }
+.iislands { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 14px; margin: 10px 12px 18px; }
+.iisl { position: relative; border: 1px solid var(--line); background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--ic) 12%, var(--surface)), var(--surface-2) 75%); border-radius: 16px; padding: 14px 12px 12px; color: var(--ink); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; font: inherit; min-width: 0; transition: all .25s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); overflow: hidden; animation: iislIn .45s cubic-bezier(.16, 1, .3, 1) both; }
+.iisl::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--ic), transparent); opacity: 0.6; transition: opacity .25s; }
+.iisl:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--ic) 45%, var(--line)); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px color-mix(in srgb, var(--ic) 20%, transparent); }
+.iisl:hover::before { opacity: 1; }
+.iisl[aria-pressed="true"] { border-color: var(--ic); background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--ic) 20%, var(--surface)), var(--surface-2) 85%); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4), 0 0 20px color-mix(in srgb, var(--ic) 32%, transparent), 0 0 0 1px var(--ic); transform: translateY(-3px); }
+.iisl[aria-pressed="true"]::after { content: ""; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 32px; height: 3px; background: var(--ic); border-radius: 3px 3px 0 0; box-shadow: 0 0 8px var(--ic); }
+.iisl-top-row { width: 100%; display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.iisl-name { font-size: 15px; font-weight: 600; letter-spacing: .02em; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+.iisl-name i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ic); box-shadow: 0 0 6px var(--ic); }
+.iisl-count { font-size: 11px; color: var(--muted); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); padding: 1px 6px; border-radius: 10px; }
+.iisl svg { width: 104px; height: 104px; display: block; margin: 2px 0; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); }
+.iisl .ia { transition: stroke-width .2s, stroke-opacity .2s; }
+.iisl:hover .ia { stroke-opacity: 0.95; }
+.iisl-energy { width: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.iisl-bar { width: 100%; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; display: flex; }
+.iisl-bar > span { height: 100%; transition: width .3s; }
+.iisl-ratio { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-family: var(--font-num); }
+.iisl-ratio .up { color: var(--up); font-weight: 500; }
+.iisl-ratio .down { color: var(--down); font-weight: 500; }
+.iisl-lead { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11.5px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); padding: 3px 8px; border-radius: 6px; box-sizing: border-box; margin-top: 2px; }
+.iisl-lead-tag { color: var(--ic); font-size: 10px; font-weight: 600; border: 1px solid color-mix(in srgb, var(--ic) 40%, transparent); background: color-mix(in srgb, var(--ic) 12%, transparent); border-radius: 3px; padding: 0 4px; flex: none; }
+.iisl-lead-name { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left; }
+.iisl-lead-val { font-family: var(--font-num); font-weight: 500; flex: none; }
+.iisl-lead-val.up { color: var(--up); }
+.iisl-lead-val.down { color: var(--down); }
+.iisl-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; margin: 16px 12px 12px; border-radius: 12px; background: linear-gradient(90deg, color-mix(in srgb, var(--ic) 16%, var(--surface)), var(--surface-2)); border: 1px solid color-mix(in srgb, var(--ic) 35%, var(--line)); }
+.iisl-banner-title { display: flex; align-items: center; gap: 10px; }
+.iisl-banner-dot { width: 12px; height: 12px; border-radius: 4px; background: var(--ic); box-shadow: 0 0 10px var(--ic); }
+.iisl-banner-title h3 { margin: 0; font-size: 17px; font-weight: 600; }
+.iisl-banner-meta { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); }
+.iisl-banner-meta b { font-family: var(--font-num); font-size: 14.5px; }
+.iisl-banner-meta .up { color: var(--up); }
+.iisl-banner-meta .down { color: var(--down); }
 @keyframes iislIn { from { opacity: 0; transform: translateY(8px) scale(.97); } }
 .iisl-h { margin: 14px 14px 0; font-size: 15px; display: flex; align-items: center; gap: 8px; } .iisl-h i { width: 10px; height: 10px; border-radius: 3px; background: var(--ic); } .iisl-h small { color: var(--muted); font-weight: 400; font-size: 12px; }
+@media (max-width: 600px) {
+.iislands { grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 10px 8px 14px; }
+.iisl { padding: 10px 8px 10px; }
+.iisl svg { width: 86px; height: 86px; }
+.iisl-banner { flex-direction: column; align-items: flex-start; gap: 8px; margin: 12px 8px; }
+}
+
 /* 產業網絡：星系 */
 /* 星系固定用深藍夜空＋發光球體與細線網格，淺色主題也一樣 */
 .igal-wrap { margin: 8px 12px; border: 1px solid #1a2a44; border-radius: 16px; background: radial-gradient(ellipse at 50% 42%, #14305a 0%, #0b1a33 45%, #060c18 100%); overflow: hidden; }
@@ -1145,7 +1179,7 @@ const W = {
   holdMkt: store.get("watch:hm", "tw"), holdSort: "mv", holdDir: 1, mkt: null,
   roK: ["", "D", "60", "1"].includes(String(store.get("watch:rok", ""))) ? String(store.get("watch:rok", "")) : "",
   scrG: store.get("watch:scrg", "smart"), scrOpen: null, cscan: null, news: null,
-  twoGrp: store.get("watch:twoGrp", "all"), cview: store.get("watch:cview", "cons"), insW: +store.get("watch:insW", 30), twoW: +store.get("watch:twoW", 0), twov: store.get("watch:twov", "rank"), cbtH: +store.get("watch:cbtH", 21) === 63 ? 63 : 21, f13v: store.get("watch:f13v", "funds"), insv: store.get("watch:insv", "rank"), twoAmt: store.get("watch:twoAmt", "full") === "short" ? "short" : "full",
+  twoGrp: store.get("watch:twoGrp", "all"), cview: store.get("watch:cview", "cons"), tdccV: store.get("watch:tdccV", "up"), tdccScope: store.get("watch:tdccScope", "all"), insW: +store.get("watch:insW", 30), twoW: +store.get("watch:twoW", 0), twov: store.get("watch:twov", "rank"), cbtH: +store.get("watch:cbtH", 21) === 63 ? 63 : 21, f13v: store.get("watch:f13v", "funds"), insv: store.get("watch:insv", "rank"), twoAmt: store.get("watch:twoAmt", "full") === "short" ? "short" : "full",
   mkReg: ["lst", "otc", "off", "us", "gl", "macro", "news", "poly"].includes(store.get("watch:mkReg", "tw")) ? store.get("watch:mkReg", "tw") : "tw", usHot: ["active", "gain", "loss"].includes(store.get("watch:usHot", "active")) ? store.get("watch:usHot", "active") : "active",
   mkM: ["tpex", "all"].includes(store.get("watch:mkM", "twse")) ? store.get("watch:mkM", "twse") : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
   mkHot: ["value", "gain", "surge", "volume"].includes(store.get("watch:mkHot", "value")) ? store.get("watch:mkHot", "value") : "value", worldR: store.get("watch:worldR", "us"), calWk: 0, calK: ["all", "conf", "ex"].includes(store.get("watch:calK", "all")) ? store.get("watch:calK", "all") : "all", calDay: null, warn: null, warnOpen: "punish", cal: null, futx: null,
@@ -3422,22 +3456,106 @@ const indIslOf = t => (IND_ISL.find(x => x[3].includes(t.cat)) || IND_ISL[IND_IS
 const indPctCol = p => (p == null ? "var(--line)" : p >= 0 ? "var(--up)" : "var(--down)");
 const indPctTxt = p => (p == null ? "" : `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`);
 function indIslands(L, sel, fav) {
-  const G = IND_ISL.map(([id, nm, c]) => ({ id, nm, c, T: L.filter(t => indIslOf(t) === id) })).filter(g => g.T.length);
-  if (!G.length) return "";
-  const cur = G.find(g => g.id === sel) || G[0];
-  const card = (g, gi) => {
-    const A = g.T.map(t => indAvg(t)?.pct ?? null), have = A.filter(x => x != null), avg = have.length ? have.reduce((a, b) => a + b, 0) / have.length : null;
-    const n = g.T.length, gap = n > 1 ? 0.07 : 0, R = 40;
-    const arcs = g.T.map((t, i) => { const a0 = -Math.PI / 2 + (i / n) * Math.PI * 2 + gap / 2, a1 = -Math.PI / 2 + ((i + 1) / n) * Math.PI * 2 - gap / 2, p = A[i];
-      const pt = a => `${(48 + R * Math.cos(a)).toFixed(2)} ${(48 + R * Math.sin(a)).toFixed(2)}`;
-      const d = n === 1 ? `M48 8 A40 40 0 1 1 47.99 8` : `M${pt(a0)} A${R} ${R} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${pt(a1)}`;
-      return `<path class="ia" d="${d}" fill="none" stroke-width="10" stroke-linecap="butt" style="stroke:${indPctCol(p)};stroke-opacity:${p == null ? 0.7 : (0.35 + Math.min(0.65, Math.abs(p) / 4)).toFixed(2)}"><title>${esc(t.name)} ${indPctTxt(p)}</title></path>`; }).join("");
-    return `<button class="iisl" data-iisl="${g.id}" aria-pressed="${g === cur}" style="--ic:${g.c};animation-delay:${gi * 50}ms"><svg viewBox="0 0 96 96" aria-hidden="true">${arcs}<circle cx="48" cy="48" r="29" style="fill:${g.c};fill-opacity:.14"/>
-      <text x="48" y="${avg == null ? 53 : 52}" text-anchor="middle" style="font:600 ${avg == null ? 15 : 13}px var(--font-num);fill:${avg == null ? "var(--ink)" : indPctCol(avg)}">${avg == null ? n : indPctTxt(avg)}</text></svg>
-      <b>${g.nm}</b><small>${n} 個題材${have.length ? `・漲 ${have.filter(x => x >= 0).length}／跌 ${have.filter(x => x < 0).length}` : ""}</small><span class="itg">${g.T.slice(0, 3).map(t => esc(t.name)).join("・")}</span></button>`;
-  };
-  return `<div class="iislands">${G.map(card).join("")}</div><h3 class="iisl-h" style="--ic:${cur.c}"><i></i>${cur.nm}<small>${cur.T.length} 個題材</small></h3><div class="ithemes">${cur.T.map(t => indCard(t, fav)).join("")}</div>`;
+const G = IND_ISL.map(([id, nm, c]) => ({ id, nm, c, T: L.filter(t => indIslOf(t) === id) })).filter(g => g.T.length);
+if (!G.length) return "";
+const cur = G.find(g => g.id === sel) || G[0];
+const card = (g, gi) => {
+const A = g.T.map(t => indAvg(t)?.pct ?? null), have = A.filter(x => x != null), avg = have.length ? have.reduce((a, b) => a + b, 0) / have.length : null;
+const n = g.T.length;
+const nUp = have.filter(x => x > 0).length, nDown = have.filter(x => x < 0).length, nFlat = have.filter(x => x === 0).length;
+const upPct = have.length ? ((nUp / have.length) * 100).toFixed(1) : 0;
+const downPct = have.length ? ((nDown / have.length) * 100).toFixed(1) : 0;
+const flatPct = have.length ? ((nFlat / have.length) * 100).toFixed(1) : 0;
+const ranked = g.T.map((t, idx) => ({ t, p: A[idx] })).filter(x => x.p != null).sort((a, b) => b.p - a.p);
+const topT = ranked[0];
+
+const M = n > 14 ? 12 : n;
+const R = 38;
+const gap = M > 1 ? (n > 14 ? 0.09 : 0.07) : 0;
+let segs = [];
+if (n > 14) {
+for (let si = 0; si < M; si++) {
+const startIdx = Math.floor((si * n) / M);
+const endIdx = Math.floor(((si + 1) * n) / M);
+const sliceT = g.T.slice(startIdx, endIdx);
+const sliceP = A.slice(startIdx, endIdx).filter(x => x != null);
+const sliceAvg = sliceP.length ? sliceP.reduce((a, b) => a + b, 0) / sliceP.length : null;
+segs.push({
+p: sliceAvg,
+title: `${sliceT.slice(0, 2).map(x => x.name).join("、")}等 ${sliceT.length} 題材 ${indPctTxt(sliceAvg)}`
+});
 }
+} else {
+segs = g.T.map((t, i) => ({
+p: A[i],
+title: `${t.name} ${indPctTxt(A[i])}`
+}));
+}
+
+const arcs = segs.map((s, i) => {
+const a0 = -Math.PI / 2 + (i / M) * Math.PI * 2 + gap / 2;
+const a1 = -Math.PI / 2 + ((i + 1) / M) * Math.PI * 2 - gap / 2;
+const pt = a => `${(48 + R * Math.cos(a)).toFixed(2)} ${(48 + R * Math.sin(a)).toFixed(2)}`;
+const d = M === 1 ? `M48 10 A38 38 1 1 1 47.99 10` : `M${pt(a0)} A${R} ${R} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${pt(a1)}`;
+return `<path class="ia" d="${d}" fill="none" stroke-width="7" stroke-linecap="round" style="stroke:${indPctCol(s.p)};stroke-opacity:${s.p == null ? 0.4 : (0.45 + Math.min(0.55, Math.abs(s.p) / 3)).toFixed(2)}"><title>${esc(s.title)}</title></path>`;
+}).join("");
+
+return `<button class="iisl" data-iisl="${g.id}" aria-pressed="${g === cur}" style="--ic:${g.c};animation-delay:${gi * 50}ms">
+<div class="iisl-top-row">
+<span class="iisl-name"><i></i>${esc(g.nm)}</span>
+<span class="iisl-count">${n} 題材</span>
+</div>
+<svg viewBox="0 0 96 96" aria-hidden="true">
+<circle cx="48" cy="48" r="38" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="7"/>
+${arcs}
+<circle cx="48" cy="48" r="26" style="fill:${g.c};fill-opacity:.12;stroke:${g.c};stroke-width:1;stroke-opacity:.25"/>
+<text x="48" y="${avg == null ? 53 : 52}" text-anchor="middle" style="font:600 ${avg == null ? 15 : 13}px var(--font-num);fill:${avg == null ? "var(--ink)" : indPctCol(avg)}">${avg == null ? n : indPctTxt(avg)}</text>
+</svg>
+<div class="iisl-energy">
+<div class="iisl-bar">
+${nUp ? `<span style="width:${upPct}%;background:var(--up)"></span>` : ""}
+${nFlat ? `<span style="width:${flatPct}%;background:var(--line)"></span>` : ""}
+${nDown ? `<span style="width:${downPct}%;background:var(--down)"></span>` : ""}
+</div>
+<div class="iisl-ratio">
+<span class="up">${nUp} 漲</span>
+<span class="down">${nDown} 跌</span>
+</div>
+</div>
+${topT ? `<div class="iisl-lead">
+<span class="iisl-lead-tag">領漲</span>
+<span class="iisl-lead-name" title="${esc(topT.t.name)}">${esc(topT.t.name)}</span>
+<span class="iisl-lead-val ${cls(topT.p)}">${indPctTxt(topT.p)}</span>
+</div>` : `<div class="iisl-lead">
+<span class="iisl-lead-tag">題材</span>
+<span class="iisl-lead-name">${g.T.slice(0, 2).map(t => esc(t.name)).join("・")}</span>
+<span class="iisl-lead-val" style="color:var(--muted)">${n} 檔</span>
+</div>`}
+</button>`;
+};
+
+const curA = cur.T.map(t => indAvg(t)?.pct ?? null), curHave = curA.filter(x => x != null);
+const curAvg = curHave.length ? curHave.reduce((a, b) => a + b, 0) / curHave.length : null;
+const curUp = curHave.filter(x => x > 0).length, curDown = curHave.filter(x => x < 0).length;
+const curRanked = cur.T.map((t, idx) => ({ t, p: curA[idx] })).filter(x => x.p != null).sort((a, b) => b.p - a.p);
+const curTop = curRanked[0];
+
+const banner = `<div class="iisl-banner" style="--ic:${cur.c}">
+<div class="iisl-banner-title">
+<div class="iisl-banner-dot"></div>
+<h3>${esc(cur.nm)} 生態群島</h3>
+<span class="iisl-count">${cur.T.length} 個題材</span>
+</div>
+<div class="iisl-banner-meta">
+${curAvg != null ? `<span>今日平均 <b class="${cls(curAvg)}">${indPctTxt(curAvg)}</b></span>` : ""}
+<span>多空比 <b class="up">${curUp}</b> : <b class="down">${curDown}</b></span>
+${curTop ? `<span>最強領漲 <b>${esc(curTop.t.name)} (<span class="${cls(curTop.p)}">${indPctTxt(curTop.p)}</span>)</b></span>` : ""}
+</div>
+</div>`;
+
+return `<div class="iislands">${G.map(card).join("")}</div>${banner}<div class="ithemes">${cur.T.map(t => indCard(t, fav)).join("")}</div>`;
+}
+
 // 產業網絡（星系）：3D 星系，用 canvas 畫。點選的題材（或連線最多的）在正中心發光，其他題材圍繞它轉；三組樣式可自由搭配（記在這個瀏覽器）：
 //   資訊窗格 tip：A 跟著圓點、B 固定在右下角
 //   排列 lay：A 球殼（貼在同一個球面一起轉）、B 原子軌道（每組一條軌道各自公轉，內圈近）、C 雙層球（內層直接相關、外層較遠，轉速不同）
@@ -3770,7 +3888,7 @@ setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) ir
 setTimeout(syncBoot, 1500); // 雲端同步：開網頁時下載較新的資料、之後有改動自動上傳
 // 國會分頁：切換頁面（首頁、股票、人物）、期間、排序、在看盤開啟、問 AI
 $("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-csort],[data-copen],[data-cask],[data-cbt],[data-cpl],[data-twbt],[data-f13p],[data-f13s],[data-twgrp],[data-twamt],[data-twtab],[data-twmore],[data-twn],[data-rkset]"); if (!b) return; const d = b.dataset;
-  if (d.rkset != null) { const [k, val] = d.rkset.split(/:(.*)/s); W[k] = val; if (k === "cbtH") W.cbtH = +val; if (["cview", "f13v", "insv", "twov", "cbtH", "cbtv"].includes(k)) store.set("watch:" + k, W[k]); return renderList(); }
+  if (d.rkset != null) { const [k, val] = d.rkset.split(/:(.*)/s); W[k] = val; if (k === "cbtH") W.cbtH = +val; if (["cview", "f13v", "insv", "twov", "tdccV", "tdccScope", "cbtH", "cbtv"].includes(k)) store.set("watch:" + k, W[k]); return renderList(); }
   if (d.twgrp) { W.twoGrp = d.twgrp; W.twoN = 50; store.set("watch:twoGrp", d.twgrp); return renderList(); }
   if (d.twamt) { W.twoAmt = d.twamt; store.set("watch:twoAmt", d.twamt); return renderList(); }
   if (d.twtab) { W.twoTab = d.twtab; return renderList(); }
@@ -4257,8 +4375,9 @@ function renderCong() {
   const C = W.cong; if (!C) loadCong();
   if (W.cv === "bt") { W.cv = "home"; W.cview = "bt"; } // 申報後回測併進美國國會的「看」分頁（舊網址 #congress/backtest 也會到這裡）
   const [v, arg] = (W.cv || "home").split(/:(.*)/s);
-  $("#lTools").innerHTML = `<span class="note"><b class="cg-t">大戶與國會情報</b>・${v === "tw" ? "台灣政治人物財產申報（監察院廉政專刊）" : v === "ins" ? "台股內部人持股轉讓事前申報" : v === "cons" ? "國會、13F、台灣政治人物、內部人的動向疊在一起" : v === "fol" ? "追蹤的人與自選股的新申報" : v === "f13" ? "美國機構 13F 持股申報" : "美國國會議員公開交易申報"}${(v === "home" || v === "bt" || v === "stock" || v === "person") && C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "美國國會"], ["f13", "13F 機構"], ["tw", "台灣政治人物"], ["ins", "內部人"], ["cons", "大戶共識"], ["fol", `我的追蹤${(n => (n ? `（${n}）` : ""))(cxNewN())}`]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${["home", "f13", "tw", "ins"].includes(v) && !arg ? `<span class="note cx-how">每一類用法都一樣：選<b>期間</b> → 用<b>篩選</b>找人或股票 → 在<b>看</b>選排行、最新申報、主題熱圖、申報延遲、申報後回測；點名字看個人，點股票看個股。</span>` : ""}${v === "stock" || v === "person" || ((v === "f13" || v === "tw") && arg) ? `<button class="btn sm" data-cv="${v === "f13" || v === "tw" ? v : "home"}">‹ 返回</button>` : ""}${["home", "f13", "tw", "ins"].includes(v) && !arg ? scBtn("cong") : ""}`;
+  $("#lTools").innerHTML = `<span class="note"><b class="cg-t">大戶與國會情報</b>・${v === "tw" ? "台灣政治人物財產申報（監察院廉政專刊）" : v === "ins" ? "台股內部人持股轉讓事前申報" : v === "tdcc" ? "集保結算所每週股權分散（千張大戶增減與籌碼集中度）" : v === "cons" ? "國會、13F、台灣政治人物、內部人、千張大戶的動向疊在一起" : v === "fol" ? "追蹤的人與自選股的新申報" : v === "f13" ? "美國機構 13F 持股申報" : "美國國會議員公開交易申報"}${(v === "home" || v === "bt" || v === "stock" || v === "person") && C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "美國國會"], ["f13", "13F 機構"], ["tw", "台灣政治人物"], ["ins", "內部人"], ["tdcc", "千張大戶"], ["cons", "大戶共識"], ["fol", `我的追蹤${(n => (n ? `（${n}）` : ""))(cxNewN())}`]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${["home", "f13", "tw", "ins", "tdcc"].includes(v) && !arg ? `<span class="note cx-how">每一類用法都一樣：選<b>期間</b> → 用<b>篩選</b>找人或股票 → 在<b>看</b>選排行、最新申報、主題熱圖、申報延遲、申報後回測；點名字看個人，點股票看個股。</span>` : ""}${v === "stock" || v === "person" || ((v === "f13" || v === "tw") && arg) ? `<button class="btn sm" data-cv="${v === "f13" || v === "tw" ? v : "home"}">‹ 返回</button>` : ""}${["home", "f13", "tw", "ins", "tdcc"].includes(v) && !arg ? scBtn("cong") : ""}`;
   if (v === "ins") { const r = toolsBody("ins"); $("#lx").innerHTML = r.h; return r.note; }
+  if (v === "tdcc") { $("#lx").innerHTML = cxTdccHtml(); return "資料來源：臺灣集中保管結算所（TDCC）集保戶股權分散表開放資料。每週五收盤後更新，僅供籌碼研究參考，不是買賣建議。"; }
   if (v === "cons") { $("#lx").innerHTML = cxConsHtml(); return "資料：眾議院、參議院定期交易報告、SEC 13F、監察院廉政專刊、公開資訊觀測站內部人轉讓申報。僅供研究參考，不是買賣建議。"; }
   if (v === "fol") { $("#lx").innerHTML = cxFolHtml(); return "追蹤清單存在這台裝置（開了雲端同步會一起備份）；Telegram 推播在收盤後的排程送出。"; }
   if (v === "tw") { $("#lx").innerHTML = twoHtml(arg); cxDecor(v, arg); return twoNote(); }

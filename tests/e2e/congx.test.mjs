@@ -76,6 +76,15 @@ for (const width of [390, 1280]) test(`大戶國會延伸功能 ${width}`, async
   // 13F 主題熱圖
   await p.evaluate(() => { W.cv = "f13"; W.f13v = "heat"; renderList(); }); await p.waitForSelector(".cxheat");
   assert.match(await lx(), /主題熱圖/);
+  // 千張大戶分頁
+  await p.click('#lTools [data-cv="tdcc"]');
+  await p.waitForFunction(() => /集保千張大戶每週動向/.test(document.getElementById("lx").innerText));
+  assert.match(await lx(), /本週大戶增持/);
+  await p.click('#lx [data-rkset="tdccV:down"]');
+  await p.waitForFunction(() => /千張大戶持股比例週減少最多/.test(document.getElementById("lx").innerText));
+  await p.click('#lx [data-rkset="tdccV:heat"]');
+  await p.waitForSelector(".cxheat");
+  assert.match(await lx(), /各產業千張大戶本週增減動向/);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
