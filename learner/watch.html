@@ -207,6 +207,11 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .tgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 18px; }
 .csec h4 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 12px 0 4px; }
 .tlist { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+/* 時間序列圖（learner/tschart.js） */
+.tsbox { position: relative; margin: 6px 0 8px; max-width: 760px; } /* 寬螢幕不要整張放大（字會跟著變大） */ .tschart { display: block; width: 100%; height: auto; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.tsax { stroke: var(--line); } .tsyl { font: 10px var(--font-num); fill: var(--muted); } .tslg { font: 10.5px var(--font-body); fill: var(--ink); } .tscur { stroke: var(--muted); stroke-dasharray: 2 2; }
+.tstip { position: absolute; top: 4px; z-index: 5; pointer-events: none; padding: 6px 9px; border-radius: 6px; background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--line); font: 11.5px var(--font-num); line-height: 1.6; white-space: nowrap; }
+.tstip b { display: block; font-weight: 500; } .tstip span { display: block; } .tstip i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
 /* 工具 → 官方資料：左邊資料集清單、右邊原始表格（手機先清單、選了再看表格） */
 .oabar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; } .oabar .oas { flex: 1 1 200px; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; background: var(--surface-2); color: var(--ink); font-size: 14px; }
 .oagrid { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 14px; align-items: start; margin-top: 8px; }
@@ -1022,7 +1027,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-118</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-119</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1068,6 +1073,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="flows.js"></script>
 <script src="podcast.js"></script>
 <script src="quant.js"></script>
+<script src="tschart.js"></script>
 <script src="stockx.js"></script>
 <script src="after.js"></script>
 <script src="indnews.js"></script>
@@ -4403,7 +4409,7 @@ function renderBook() {
    子頁的內容：tags／sum／rev／report 用原本的區塊，其他的由 stockx.js 的 SX 畫在 #sxBox */
 const DSUB = {
   ovw: [["state", "指標與狀態"], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "節目觀點"]],
-  chips: [["sum", "籌碼總覽"], ["inst", "法人與基金"], ["branch", "分點主力"], ["big", "大戶與股權"]],
+  chips: [["sum", "籌碼總覽"], ["inst", "法人與基金"], ["mgfr", "資券與外資", 1], ["branch", "分點主力"], ["big", "大戶與股權"]],
   fin: [["rev", "營收與獲利"], ["report", "財務報表"], ["div", "股利"], ["info", "公司資料"], ["oapi", "官方資料", 1], ["cal", "行事曆"]],
 };
 const DSUB_OWN = new Set(["tags", "sum", "rev", "report"]); // 用原本區塊畫的子頁

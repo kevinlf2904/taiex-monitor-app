@@ -196,6 +196,28 @@ const SX = {
       <div class="cotbl-wrap"><table class="tbl sxtbl"><thead><tr><th>區間</th><th>本益比</th><th>推估股價</th><th>和現價比</th></tr></thead><tbody>${lv.map(([k, pe, p]) => `<tr><td>${k}</td><td>${pe.toFixed(1)}</td><td><b>${sxN(p, 1)}</b></td><td class="${cls(px ? p - px : null)}">${px ? sxPct((p / px - 1) * 100, 1) : "—"}</td></tr>`).join("")}</tbody></table></div>
       <p class="note">近四季 EPS ${eps4.toFixed(2)} 元；本益比區間取過去 3 年第 10／30／50／70／90 百分位。</p>${note}`;
   },
+  // 資券與外資：融資、融券餘額、券資比、外資持股比例的走勢圖（對照股價）
+  mgfr() {
+    const I = sxI(), C = sxC(), D = sxD(); if (!I) return sxLoad(W.info?.err);
+    const M = I.margin || [], F = C?.foreign || [];
+    if (!M.length && !F.length) return `<p class="note">這檔沒有融資融券或外資持股資料${W.co?.loading ? "（外資持股載入中…）" : ""}。</p>`;
+    const from = [M[0]?.d, F[0]?.d].filter(Boolean).sort()[0], to = [M.at(-1)?.d, F.at(-1)?.d].filter(Boolean).sort().at(-1), px = new Map(D.map(x => [String(x.d).slice(0, 10), x.c])), mg = new Map(M.map(r => [r.d, r])), fr = new Map(F.map(r => [r.d, r.ratio]));
+    // 日期用 K 線的交易日（資券、外資有缺的那天就斷開）；K 線比較短時補上資券、外資自己的日期
+    const dates = [...new Set([...D.map(x => String(x.d).slice(0, 10)), ...M.map(r => r.d), ...F.map(r => r.d)])].filter(d => d >= from && d <= to).sort().slice(-120); // 盤中 K 線已有今天、資券還沒公布，截到資券或外資最後一天
+    const v = (m, k) => dates.map(d => m.get(d)?.[k] ?? null), price = dates.map(d => px.get(d) ?? null), mb = v(mg, "marginBal"), sb = v(mg, "shortBal");
+    const sr = dates.map((d, i) => (mb[i] > 0 && sb[i] != null ? +(sb[i] / mb[i] * 100).toFixed(2) : null)), fv = dates.map(d => fr.get(d) ?? null);
+    const pct = v => (v == null ? "—" : v.toFixed(2) + "%"), z = (a, n) => { const x = a.filter(v => v != null); return x.length > n ? x.at(-1) - x.at(-1 - n) : null; };
+    const m0 = M.at(-1), use = m0?.marginLimit ? m0.marginBal / m0.marginLimit * 100 : null, srNow = sr.filter(v => v != null).at(-1), f0 = F.at(-1)?.ratio;
+    const panels = [];
+    if (M.length) panels.push({ h: 130, series: [{ name: "融資餘額(張)", vals: mb, color: "var(--up)", wide: true }, { name: "股價", vals: price, color: "var(--muted)", axis: "r", fmt: v => (v == null ? "—" : sxN(v, 2)) }] },
+      { h: 100, series: [{ name: "融券餘額(張)", vals: sb, color: "var(--down)", type: "bar" }, { name: "券資比", vals: sr, color: "var(--s1)", axis: "r", fmt: pct }] });
+    if (F.length) panels.push({ h: 110, series: [{ name: "外資持股", vals: fv, color: "var(--s3)", wide: true, fmt: pct }, { name: "股價", vals: price, color: "var(--muted)", axis: "r", dash: 1, fmt: v => (v == null ? "—" : sxN(v, 2)) }] });
+    return `${sxH("資券與外資", `${sxMd(dates[0])}～${sxMd(dates.at(-1))}・手指按著圖左右滑看每天的數字`)}
+      ${sxKv([m0 && ["融資餘額", sxN(m0.marginBal) + " 張"], z(mb, 20) != null && ["融資 20 日", signed(z(mb, 20)) + " 張", clsOf(z(mb, 20))], use != null && ["融資使用率", use.toFixed(1) + "%"],
+        m0 && ["融券餘額", sxN(m0.shortBal) + " 張"], srNow != null && ["券資比", srNow.toFixed(2) + "%"], f0 != null && ["外資持股", f0.toFixed(2) + "%"], z(fv, 20) != null && ["外資 20 日", sxPct(z(fv, 20)), cls(z(fv, 20))]])}
+      ${tsChart({ dates, panels })}
+      <p class="note">融資增加、股價卻不漲，常代表散戶追價、籌碼變亂；券資比高（例如 30% 以上）遇到上漲容易有軋空。外資持股比例連續上升，代表外資在累積部位。資料來自證交所、櫃買中心（經 FinMind 整理）。</p>`;
+  },
   inst() {
     const I = sxI(), C = sxC(); if (!I?.inst?.length) return sxLoad(W.info?.err);
     const A = I.inst, streak = k => { let n = 0; const s = Math.sign(A.at(-1)[k]); if (!s) return 0; for (let i = A.length - 1; i >= 0 && Math.sign(A[i][k]) === s; i--) n++; return n * s; };
@@ -204,7 +226,7 @@ const SX = {
     const H = C?.holders || [], F = C?.foreign || [];
     return `${sxH("法人動向", "買賣超（張）")}<div class="cotbl-wrap"><table class="tbl sxtbl"><thead><tr><th></th><th>今日</th><th>5 日</th><th>20 日</th><th>60 日</th><th>連續</th></tr></thead><tbody>
       ${ws.map(([k, n]) => `<tr><td>${n}</td>${[1, 5, 20, 60].map(d => { const v = sxSum(A, k, d); return `<td class="${clsOf(v)}">${signed(v)}</td>`; }).join("")}<td>${st(streak(k))}</td></tr>`).join("")}</tbody></table></div>
-      ${F.length ? `${sxH("外資持股比例", sxMd(F.at(-1).d))}${sxKv([["目前", F.at(-1).ratio.toFixed(2) + "%"], F.length > 20 && ["20 日變化", sxPct(F.at(-1).ratio - F.at(-21).ratio), cls(F.at(-1).ratio - F.at(-21).ratio)], F.at(-1).limit != null && ["持股上限", F.at(-1).limit + "%"]])}` : ""}
+      ${F.length ? `<p class="note">外資持股 ${F.at(-1).ratio.toFixed(2)}%${F.at(-1).limit != null ? `（上限 ${F.at(-1).limit}%）` : ""}・<button class="linkbtn" data-sxgo="mgfr">看外資持股與融資融券走勢圖 ›</button></p>` : ""}
       <p class="note">外資、投信、自營商買賣超來自證交所；千張大戶持股在「大戶與股權」，券商分點在「分點主力」。</p>`;
   },
   news() {
@@ -342,7 +364,7 @@ function sxInit() {
   $("#sxBox").addEventListener("click", e => {
     const s = e.target.closest("[data-sel]"); if (s) { select(s.dataset.sel); return; }
     const q = e.target.closest("[data-qstrat]"); if (q) { W.strat = q.dataset.qstrat; store.set("watch:strat", W.strat); if ($("#stratSel")) $("#stratSel").value = W.strat; stratCfgRender(); $("#klStrat").open = true; setDtab("tech"); return; }
-    const g = e.target.closest("[data-sxgo]"); if (g) { if (g.dataset.sxgo === "co") setDtab("fin"), setDsub("report"); else if (g.dataset.sxgo === "pod") { showList(); setLt("pod"); } return; }
+    const g = e.target.closest("[data-sxgo]"); if (g) { if (g.dataset.sxgo === "co") setDtab("fin"), setDsub("report"); else if (g.dataset.sxgo === "mgfr") setDsub("mgfr"); else if (g.dataset.sxgo === "pod") { showList(); setLt("pod"); } return; }
     const t = e.target.closest("[data-sxind]"); if (t) { W.indS.open = t.dataset.sxind; showList(); setLt("ind"); return; }
     const r = e.target.closest("[data-brr]"); if (r) { W.brRange = +r.dataset.brr; store.set("watch:brr", W.brRange); sxRender(); return; }
     const sd = e.target.closest("[data-brs]"); if (sd) { W.brSide = sd.dataset.brs; sxRender(); }
