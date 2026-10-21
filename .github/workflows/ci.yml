@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # ubuntu-latest 已換成 26.04，Playwright 1.56 不支援，裝不了 chromium
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
