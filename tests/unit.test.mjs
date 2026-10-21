@@ -155,6 +155,16 @@ test("Polymarket：分類、機率", async () => {
   assert.equal(normEvent({ id: 2, title: "Lakers vs Celtics", markets: [{ outcomes: "[\"Yes\",\"No\"]", outcomePrices: "[\"0.5\",\"0.5\"]" }] }), null);
 });
 
+test("財報總表：上市中文欄位、上櫃英文欄位合成一列（營收換成億、EPS、毛利率）", async () => {
+  const { earnRows } = await import("../api/_lib/oapi.js");
+  const E = earnRows({ revL: [{ 資料年月: "11509", 公司代號: "1101", 公司名稱: "台泥", 產業別: "水泥工業", "營業收入-當月營收": "14321556", "營業收入-上月比較增減(%)": "5.96", "營業收入-去年同月增減(%)": "7.62", "累計營業收入-當月累計營收": "113048525", "累計營業收入-前期比較增減(%)": "3.29" }],
+    revO: [{ 資料年月: "11509", 公司代號: "1240", 公司名稱: "茂生農經", 產業別: "農業科技", "營業收入-當月營收": "282821", "營業收入-去年同月增減(%)": "13.0" }],
+    epsL: [{ 年度: "115", 季別: "2", 公司代號: "1101", "基本每股盈餘(元)": "0.38", 營業收入: "71289957.00", 稅後淨利: "4569799.00" }], epsO: [{ Year: "115", 季別: "2", SecuritiesCompanyCode: "1240", 基本每股盈餘: "2.85", 營業收入: "1440672", 稅後淨利: "126506" }],
+    pmL: [{ 公司代號: "1101", "毛利率(%)(營業毛利)/(營業收入)": "18.22", "營業利益率(%)(營業利益)/(營業收入)": "7.25", "稅後純益率(%)(稅後純益)/(營業收入)": "6.41" }], pmO: [{ SecuritiesCompanyCode: "1240", 毛利率: "15.21", 營業利益率: "6.07", 稅後純益率: "8.78" }] });
+  assert.equal(E.ym, "11509"); assert.equal(E.yq, "115Q2");
+  assert.deepEqual(E.rows[0], ["1101", "台泥", "水泥工業", "上市", 143.22, 6, 7.6, 3.3, 0.38, 712.9, 45.7, 18.2, 7.3, 6.4]);
+  assert.deepEqual(E.rows[1].slice(0, 4), ["1240", "茂生農經", "農業科技", "上櫃"]); assert.equal(E.rows[1][8], 2.85); assert.equal(E.rows[1][11], 15.2);
+});
 test("證交所、櫃買開放資料：只連固定網域、代號欄位、個股篩選、資料集清單", async () => {
   const { default: h, codeKey, filterRows, STOCK_SETS } = await import("../api/_lib/oapi.js"), { readFileSync } = await import("node:fs");
   const call = async query => { let st, body; await h({ query }, { setHeader() {}, status(c) { st = c; return { json(j) { body = j; } }; } }); return { st, body }; };

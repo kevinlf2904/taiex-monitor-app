@@ -59,3 +59,26 @@ test("盤後「外資持股」：類股比率、前 20 名長條圖，上市／�
   await ctx.close();
   assert.deepEqual(errs, []);
 });
+
+test("查價線：營收柱狀、財報、本益比、總經、籌碼分佈等圖表移上去都看得到數字", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  const tips = await p.evaluate(async () => {
+    const box = document.createElement("div"); box.style.cssText = "position:fixed;left:0;top:0;width:600px;background:#000;z-index:99999"; document.body.append(box);
+    const per = Array.from({ length: 40 }, (_, i) => ({ d: `2026-0${1 + (i % 9)}-1${i % 9}`, pe: 15 + i / 10 }));
+    const charts = {
+      bar: barLineSvg([{ label: "1月", v: 10, y: 5 }, { label: "2月", v: 12, y: -3 }, { label: "3月", v: 9, y: 8 }], { fmtV: v => v + "億" }),
+      co: coChart([{ label: "2025Q1", rev: 1e10, revY: 5 }, { label: "2025Q2", rev: 1.2e10, revY: 8 }], { bars: ["rev"], line: "revY" }),
+      pe: peBand(per), macro: macroChart([["2026-01-01", 1.5], ["2026-02-01", 2.1], ["2026-03-01", 1.8]], "%"),
+    };
+    const out = {};
+    for (const [k, h] of Object.entries(charts)) {
+      box.innerHTML = h; await new Promise(r => setTimeout(r, 30)); const svg = box.querySelector(".tsbox svg"); if (!svg) { out[k] = "沒有查價線"; continue; }
+      const r = svg.getBoundingClientRect(); svg.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: r.left + r.width * 0.95, clientY: r.top + r.height / 2 }));
+      const tip = box.querySelector(".tstip"); out[k] = tip.hidden ? "沒顯示" : tip.textContent + (box.querySelector(".tscur").getAttribute("visibility") === "visible" ? "｜線" : "");
+    }
+    box.remove(); return out;
+  });
+  assert.match(tips.bar, /3月.*9億.*8%｜線/); assert.match(tips.co, /2025Q2.*｜線/); assert.match(tips.pe, /本益比 18\.\d｜線/); assert.match(tips.macro, /2026-03-01.*1\.8 %｜線/);
+  await ctx.close();
+  assert.deepEqual(errs, []);
+});

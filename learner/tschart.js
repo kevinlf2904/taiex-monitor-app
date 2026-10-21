@@ -1,7 +1,7 @@
 /* ================= 時間序列圖（融資融券、外資持股…）：一張圖分幾層，每層左右兩個軸，手指或滑鼠移上去看那天的數字 =================
    tsChart({ dates, panels: [{ h, series: [{ name, vals, color, type: "line"|"bar", axis: "l"|"r", fmt }] }] }) → HTML 字串。
    數值可以是 null（那天沒資料，線會斷開）。互動由檔案最下面的 pointer 事件處理，資料放在 TS_DATA，用 data-ts 對應。
-   用到 watch.html 的 esc。 */
+   其他圖表用 xhWrap(svg, 各點 x 座標, i => 說明 HTML) 加上同樣的查價線。用到 watch.html 的 esc。 */
 const TS_DATA = new Map(); let tsSeq = 0;
 const tsFmt = v => (v == null ? "—" : Math.abs(v) >= 1e3 ? Math.round(v).toLocaleString() : (+v.toFixed(2)).toLocaleString());
 function tsChart({ dates, panels, w = 600 }) {
@@ -24,16 +24,26 @@ function tsChart({ dates, panels, w = 600 }) {
     y0 = bot + gap;
   }
   const ticks = [0, Math.round((n - 1) / 2), n - 1].map(i => `<text x="${X(i)}" y="${H - 2}" text-anchor="${i ? (i === n - 1 ? "end" : "middle") : "start"}" class="tsyl">${esc(String(dates[i]).slice(5).replace("-", "/"))}</text>`).join("");
-  TS_DATA.set(id, { dates, panels, n, L, R, w }); if (TS_DATA.size > 30) TS_DATA.delete(TS_DATA.keys().next().value);
+  const all = panels.flatMap(p => p.series).filter((s, i, A) => A.findIndex(x => x.name === s.name) === i); // 同一條（例如股價）出現在兩層只列一次
+  tsReg(id, dates.map((d, i) => X(i)), i => `<b>${esc(dates[i])}</b>${all.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)} ${esc((s.fmt || tsFmt)(s.vals[i]))}</span>`).join("")}`);
   return `<div class="tsbox" data-ts="${id}"><svg class="tschart" viewBox="0 0 ${w} ${H}" role="img" aria-label="${esc(panels.flatMap(p => p.series.map(s => s.name)).join("、"))}走勢">${svg}${ticks}<line class="tscur" x1="0" x2="0" y1="6" y2="${H - 14}" visibility="hidden"/></svg><div class="tstip" hidden></div></div>`;
 }
-// 移上去（或手指按著滑）看那一天的數字
+// 查價線資料：每個點在 SVG 裡的 x 座標、第 i 點要顯示的文字（HTML）
+function tsReg(id, xs, tip) { TS_DATA.set(id, { xs, tip }); if (TS_DATA.size > 60) TS_DATA.delete(TS_DATA.keys().next().value); }
+// 其他圖表（長條、營收、本益比、資產曲線…）共用查價線：把畫好的 <svg> 包起來，加一條游標線和數字框
+function xhWrap(svg, xs, tip) {
+  if (!svg || !xs?.length) return svg || ""; const id = "ts" + ++tsSeq, vb = (svg.match(/viewBox="([^"]+)"/) || [])[1]?.split(/[\s,]+/).map(Number) || [0, 0, 600, 200];
+  tsReg(id, xs, tip); const i = svg.lastIndexOf("</svg>");
+  return `<div class="tsbox xh" data-ts="${id}">${svg.slice(0, i)}<line class="tscur" x1="0" x2="0" y1="${vb[1]}" y2="${vb[1] + vb[3]}" visibility="hidden" vector-effect="non-scaling-stroke"/>${svg.slice(i)}<div class="tstip" hidden></div></div>`;
+}
+// 移上去（或手指按著滑）看那一點的數字
 function tsHover(e) {
   const box = e.target.closest?.(".tsbox"); if (!box) return; const S = TS_DATA.get(box.dataset.ts), svg = box.querySelector("svg"), tip = box.querySelector(".tstip"); if (!S || !svg) return;
-  const r = svg.getBoundingClientRect(), vx = (e.clientX - r.left) / r.width * S.w, i = Math.max(0, Math.min(S.n - 1, Math.round((vx - S.L) / (S.w - S.L - S.R) * (S.n - 1)))), x = S.L + i / (S.n - 1) * (S.w - S.L - S.R);
+  const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal, vx = vb.x + (e.clientX - r.left) / r.width * vb.width;
+  let i = 0; S.xs.forEach((x, k) => { if (Math.abs(x - vx) < Math.abs(S.xs[i] - vx)) i = k; }); const x = S.xs[i];
   const cur = svg.querySelector(".tscur"); cur.setAttribute("x1", x); cur.setAttribute("x2", x); cur.setAttribute("visibility", "visible");
-  tip.innerHTML = `<b>${esc(S.dates[i])}</b>${S.panels.flatMap(p => p.series).filter((s, i, A) => A.findIndex(x => x.name === s.name) === i).map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)} ${esc((s.fmt || tsFmt)(s.vals[i]))}</span>`).join("")}`;
-  tip.hidden = false; const px = x / S.w * r.width; tip.style.left = Math.max(4, Math.min(r.width - tip.offsetWidth - 4, px + (px > r.width / 2 ? -tip.offsetWidth - 10 : 10))) + "px";
+  tip.innerHTML = S.tip(i); tip.hidden = false; const px = (x - vb.x) / vb.width * r.width;
+  tip.style.left = Math.max(4, Math.min(r.width - tip.offsetWidth - 4, px + (px > r.width / 2 ? -tip.offsetWidth - 10 : 10))) + "px";
 }
 const tsHide = box => { box.querySelector(".tstip").hidden = true; box.querySelector(".tscur")?.setAttribute("visibility", "hidden"); };
 // 滑鼠移出就收起；手指放開時也會觸發 pointerout，所以觸控要等點到圖以外的地方才收

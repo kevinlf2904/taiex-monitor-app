@@ -83,7 +83,8 @@ function sxBrChart(D) {
   g += D.map((x, i) => `<rect x="${(L + i * cw + cw * 0.15).toFixed(1)}" y="${Math.min(Yb(x.net), Yb(0)).toFixed(1)}" width="${(cw * 0.7).toFixed(1)}" height="${Math.max(1, Math.abs(Yb(x.net) - Yb(0))).toFixed(1)}" fill="${x.net >= 0 ? "var(--up)" : "var(--down)"}" opacity=".75"/>`).join("");
   for (const [k, col] of [["c5", "#4a86e8"], ["c20", "#f0883e"]]) { const pts = D.map((x, i) => (x[k] == null ? null : `${(L + i * cw + cw / 2).toFixed(1)},${Yl(x[k]).toFixed(1)}`)).filter(Boolean); if (pts.length > 1) g += `<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.2"/>`; }
   g += [0, n >> 1, n - 1].map(i => `<text x="${(L + i * cw + cw / 2).toFixed(1)}" y="${Hv - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">${sxMd(D[i].d)}</text>`).join("");
-  return `<svg class="sxbrchart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="分點買賣超與集中度">${g}</svg>
+  return `${xhWrap(`<svg class="sxbrchart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="分點買賣超與集中度">${g}</svg>`, D.map((x, i) => L + i * cw + cw / 2),
+    i => `<b>${esc(D[i].d)}</b><span><i style="background:${D[i].net >= 0 ? "var(--up)" : "var(--down)"}"></i>買賣超 ${sxN(D[i].net)} 張</span>${D[i].c5 != null ? `<span><i style="background:#4a86e8"></i>5 日集中 ${D[i].c5.toFixed(1)}%</span>` : ""}${D[i].c20 != null ? `<span><i style="background:#f0883e"></i>20 日集中 ${D[i].c20.toFixed(1)}%</span>` : ""}`)}
     <div class="sxlegend"><span><i style="background:var(--up)"></i><i style="background:var(--down)"></i>買賣超（張）</span><span><i style="background:#4a86e8"></i>5 日集中</span><span><i style="background:#f0883e"></i>20 日集中</span></div>`;
 }
 // 大戶：千張以上持股比例的面積圖
@@ -92,10 +93,11 @@ function sxAreaChart(P) {
   const Wv = 400, Hv = 160, L = 38, R = 18, T = 10, B = 22, n = P.length, vs = P.map(x => x.v), mx = Math.max(...vs), mn = Math.min(...vs), pad = (mx - mn) * 0.15 || 0.05;
   const X = i => L + i * (Wv - L - R) / (n - 1), Y = v => T + (mx + pad - v) / (mx - mn + pad * 2) * (Hv - T - B);
   const line = P.map((x, i) => `${X(i).toFixed(1)},${Y(x.v).toFixed(1)}`).join(" ");
-  return `<svg class="sxbrchart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="千張大戶持股變化">
+  return xhWrap(`<svg class="sxbrchart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="千張大戶持股變化">
     ${[mx, mn].map(v => `<line x1="${L}" x2="${Wv - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)" stroke-dasharray="3 4"/><text x="${L - 4}" y="${Y(v).toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="11" fill="var(--muted)">${v.toFixed(2)}</text>`).join("")}
     <polygon points="${X(0).toFixed(1)},${Hv - B} ${line} ${X(n - 1).toFixed(1)},${Hv - B}" fill="var(--accent-soft)"/><polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="1.2"/>
-    ${[0, n >> 1, n - 1].map(i => `<text x="${X(i).toFixed(1)}" y="${Hv - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${P[i].label}</text>`).join("")}</svg>`;
+    ${[0, n >> 1, n - 1].map(i => `<text x="${X(i).toFixed(1)}" y="${Hv - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${P[i].label}</text>`).join("")}</svg>`,
+    P.map((x, i) => X(i)), i => `<b>${esc(P[i].label)}</b><span><i style="background:var(--accent)"></i>${P[i].v.toFixed(2)}%</span>`);
 }
 // 大戶持股分布：每週千張以上（大戶）與 50 張以下（散戶）
 function sxBig(C) {

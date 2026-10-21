@@ -208,8 +208,8 @@ function podSpark(pts, w = 300, h = 56) {
   if (!pts || pts.length < 2) return "";
   const vs = pts.map(p => p.v), lo = Math.min(0, ...vs), hi = Math.max(0, ...vs), rg = hi - lo || 1, X = i => (i / (pts.length - 1)) * w, Y = v => h - 3 - ((v - lo) / rg) * (h - 6), y0 = Y(0), id = "ps" + ++POD.sid;
   const d = pts.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p.v).toFixed(1)}`).join("");
-  return `<svg class="pspark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><defs><clipPath id="${id}a"><rect width="${w}" height="${y0}"/></clipPath><clipPath id="${id}b"><rect y="${y0}" width="${w}" height="${h - y0}"/></clipPath></defs>
-    <line x1="0" x2="${w}" y1="${y0}" y2="${y0}" class="pbase"/><path d="${d}" clip-path="url(#${id}a)" class="pl up"/><path d="${d}" clip-path="url(#${id}b)" class="pl down"/></svg>`;
+  return xhWrap(`<svg class="pspark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><defs><clipPath id="${id}a"><rect width="${w}" height="${y0}"/></clipPath><clipPath id="${id}b"><rect y="${y0}" width="${w}" height="${h - y0}"/></clipPath></defs>
+    <line x1="0" x2="${w}" y1="${y0}" y2="${y0}" class="pbase"/><path d="${d}" clip-path="url(#${id}a)" class="pl up"/><path d="${d}" clip-path="url(#${id}b)" class="pl down"/></svg>`, pts.map((p, i) => X(i)), i => `${pts[i].d ? `<b>${esc(pts[i].d)}</b>` : ""}<span>累計超額 ${podPct(pts[i].v)}</span>`);
 }
 const podCkBar = p => `<div class="pcks">${p.cks.map((k, i) => `<span style="flex:${k.n - (i ? POD_CK[i - 1] : 0)}" class="${k.settled ? (k.ex > 0 ? "win" : "lose") : "open"}" title="${k.n} 天：${k.settled ? podPct(k.ex) : "未到期"}"></span>`).join("")}</div>
   <div class="pckl">${p.cks.map((k, i) => `<span style="flex:${k.n - (i ? POD_CK[i - 1] : 0)}">${k.n <= 7 ? "" : k.n + "d"}</span>`).join("")}</div>`;

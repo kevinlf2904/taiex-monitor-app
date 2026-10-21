@@ -209,3 +209,13 @@ a.bl-pro:hover { border-color: var(--ink); }
 .brand .bl-t small { font-size: 12px; color: var(--muted); letter-spacing: .08em; font-weight: 400; }
 .brand .seal.logo { width: 34px; height: 34px; flex: none; }
 #lx > .disc, #sxBox > .disc { margin: 14px 12px 6px; } .foot-disc { margin: 4px 0 0; padding-top: 6px; }
+
+/* 時間序列圖與查價線（learner/tschart.js，看盤頁與首頁共用） */
+.tsbox { position: relative; margin: 6px 0 8px; max-width: 760px; } /* 寬螢幕不要整張放大（字會跟著變大） */ .tschart { display: block; width: 100%; height: auto; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.tsax { stroke: var(--line); } .tsyl { font: 10px var(--font-num); fill: var(--muted); } .tslg { font: 10.5px var(--font-body); fill: var(--ink); } .tscur { stroke: var(--muted); stroke-dasharray: 2 2; }
+.tstip { position: absolute; top: 4px; z-index: 5; pointer-events: none; padding: 6px 9px; border-radius: 6px; background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--line); font: 11.5px var(--font-num); line-height: 1.6; white-space: nowrap; }
+.tstip b { display: block; font-weight: 500; } .tstip span { display: block; } .tstip i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+.costwrap { position: relative; display: inline-block; } .costwrap canvas { touch-action: pan-y; }
+.costx { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--muted); pointer-events: none; }
+.costtag { position: absolute; right: 16px; transform: translateY(-120%); padding: 2px 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); font: 11px var(--font-num); white-space: nowrap; pointer-events: none; }
+.tsbox.xh { margin: 0; max-width: none; } .tsbox.xh svg { touch-action: pan-y; }

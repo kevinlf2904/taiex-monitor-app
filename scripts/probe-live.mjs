@@ -36,6 +36,17 @@ if (process.argv[2] === "taifexdl") {
   const dates = {}; tx.forEach(l => { const k = l.split(",")[0].trim(); dates[k] = (dates[k] || 0) + 1; }); console.log("日期分佈", JSON.stringify(dates));
   process.exit(0);
 }
+if (process.argv[2] === "earn") {
+  // 情報局「財報」：用真的證交所、櫃買資料跑 /api/oapi?earn=1 的合併邏輯，印出欄位有沒有對上
+  const { rowsOf, earnRows } = await import("../api/_lib/oapi.js"), get = (s, p) => rowsOf(s, p).catch(e => (console.log("失敗", s, p, e.message), []));
+  const [revL, revO, epsL, epsO, pmL, pmO] = await Promise.all([get("twse", "/opendata/t187ap05_L"), get("tpex", "/mopsfin_t187ap05_O"), get("twse", "/opendata/t187ap14_L"), get("tpex", "/mopsfin_t187ap14_O"), get("twse", "/opendata/t187ap17_L"), get("tpex", "/mopsfin_187ap17_O")]);
+  const E = earnRows({ revL, revO, epsL, epsO, pmL, pmO }), n = i => E.rows.filter(r => r[i] != null).length;
+  console.log("ym", E.ym, "yq", E.yq, "rows", E.rows.length, "上市", E.rows.filter(r => r[3] === "上市").length, "上櫃", E.rows.filter(r => r[3] === "上櫃").length);
+  console.log("有值的筆數：營收", n(4), "年增", n(6), "EPS", n(8), "淨利", n(10), "毛利率", n(11), "營益率", n(12), "淨利率", n(13), "產業", E.rows.filter(r => r[2]).length);
+  for (const c of ["2330", "2317", "1101", "6488", "3105"]) console.log(JSON.stringify(E.rows.find(r => r[0] === c)));
+  console.log("JSON 大小", JSON.stringify(E).length);
+  process.exit(0);
+}
 if (process.argv[2] === "oapi") {
   // 證交所、櫃買中心 OpenAPI：列出 swagger 裡所有 GET 資料集（分類、名稱），逐一抓一次，印筆數與第一筆的欄位、範例值（截短）
   for (const [nm, base, sw] of [["證交所", "https://openapi.twse.com.tw/v1", "https://openapi.twse.com.tw/v1/swagger.json"], ["櫃買", "https://www.tpex.org.tw/openapi/v1", "https://www.tpex.org.tw/openapi/swagger.json"]]) {

@@ -207,11 +207,18 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .tgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 18px; }
 .csec h4 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 12px 0 4px; }
 .tlist { list-style: none; margin: 0; padding: 0; font-size: 13px; }
-/* 時間序列圖（learner/tschart.js） */
-.tsbox { position: relative; margin: 6px 0 8px; max-width: 760px; } /* 寬螢幕不要整張放大（字會跟著變大） */ .tschart { display: block; width: 100%; height: auto; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-.tsax { stroke: var(--line); } .tsyl { font: 10px var(--font-num); fill: var(--muted); } .tslg { font: 10.5px var(--font-body); fill: var(--ink); } .tscur { stroke: var(--muted); stroke-dasharray: 2 2; }
-.tstip { position: absolute; top: 4px; z-index: 5; pointer-events: none; padding: 6px 9px; border-radius: 6px; background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--line); font: 11.5px var(--font-num); line-height: 1.6; white-space: nowrap; }
-.tstip b { display: block; font-weight: 500; } .tstip span { display: block; } .tstip i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+/* 情報局「財報」（learner/earn.js） */
+.erbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 0 12px 6px; } .erchk { font-size: 12.5px; color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
+.erchips { padding: 0 12px 6px; } .mk h3 .linkbtn { margin-left: auto; font-size: 12.5px; font-weight: 400; }
+.erlist, .erind { list-style: none; margin: 0; padding: 0; }
+.erlist button { display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(40px, 0.8fr) 5.6em; grid-template-areas: "rk nm bar v" "rk sub sub sub"; gap: 2px 8px; align-items: center; width: 100%; padding: 7px 0; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.erlist .rk { grid-area: rk; color: var(--muted); font: 12px var(--font-num); } .erlist .nm { grid-area: nm; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; } .erlist .nm small { margin-left: 6px; font-size: 11px; color: var(--muted); }
+.erlist i, .erind i { grid-area: bar; height: 7px; border-radius: 4px; background: linear-gradient(90deg, var(--up) var(--w), var(--surface-2) var(--w)); } .erlist i.neg, .erind i.neg { background: linear-gradient(90deg, var(--down) var(--w), var(--surface-2) var(--w)); }
+.erlist b { grid-area: v; text-align: right; font: 500 13px var(--font-num); } .erlist .ersub { grid-area: sub; font-size: 11.5px; color: var(--muted); }
+.erind li { display: grid; grid-template-columns: minmax(0, 7.5em) minmax(40px, 1fr) 5em; grid-template-areas: "n bar v" "sub sub sub"; gap: 2px 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.erind li > span { grid-area: n; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .erind li > span small { margin-left: 4px; font-size: 11px; color: var(--muted); } .erind b { grid-area: v; text-align: right; font: 500 13px var(--font-num); } .erind .ersub { grid-area: sub; font-size: 11.5px; color: var(--muted); }
+@media (max-width: 600px) { .erlist button { grid-template-columns: 22px minmax(0, 1fr) 44px 4.8em; } .erlist .nm small { display: none; } } @media (min-width: 601px) { .erlist .ercode { display: none; } }
+@media (min-width: 1000px) { .earn { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-items: start; } .earn > .gnote, .earn > .erbar, .earn > .erchips, .earn > p { grid-column: 1 / -1; } }
 /* 工具 → 官方資料：左邊資料集清單、右邊原始表格（手機先清單、選了再看表格） */
 .oabar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; } .oabar .oas { flex: 1 1 200px; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; background: var(--surface-2); color: var(--ink); font-size: 14px; }
 .oagrid { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 14px; align-items: start; margin-top: 8px; }
@@ -385,7 +392,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mk h3 { margin: 0 0 8px; font-size: 15px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; } .mk h3::before { content: ""; display: inline-block; width: 3px; height: 14px; background: var(--ink); margin-right: 6px; border-radius: 2px; } .mk h3 { justify-content: flex-start; } .mk h3 .note { margin-left: auto; font-weight: 400; font-size: 12px; }
 .mrows { list-style: none; margin: 0; padding: 0; } .mrows li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .mrows li:last-child { border-bottom: 0; } .mrows b, .mrows li > span:not(:first-child) { font-family: var(--font-num); text-align: right; } .mrows li > span:nth-child(3) { font-size: 12.5px; }
-.mrows.us li { grid-template-columns: minmax(0, 1fr) auto auto 70px; } .spark { width: 70px; height: 26px; }
+.mrows.us li { grid-template-columns: minmax(0, 1fr) auto auto 70px; } .mrows li .glimp { grid-column: 1 / -1; margin-top: -4px; font-size: 12px; line-height: 1.5; color: var(--muted); } .spark { width: 70px; height: 26px; }
 .mrows .up, .bcount .up, .bars .up, .contrib .up { color: var(--up); } .mrows .down, .bcount .down, .bars .down, .contrib .down { color: var(--down); }
 .bcount { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 4px; margin-bottom: 10px; }
 .bcount div { display: flex; flex-direction: column; align-items: center; padding: 6px 0; } .bcount div + div { border-left: 1px solid var(--line); } .bcount span { font-size: 12px; color: var(--muted); } .bcount b { font: 500 18px var(--font-num); }
@@ -505,6 +512,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .cbt-bars { display: flex; flex-direction: column; gap: 3px; } .cbt-bars span { display: grid; grid-template-columns: 2.6em 1fr 4.2em; gap: 6px; align-items: center; } .cbt-bars em { font-style: normal; font-size: 11.5px; color: var(--muted); }
 .cbt-bars i { display: block; height: 9px; border-radius: 2px; min-width: 2px; } .cbt-bars i.pos { background: var(--up); } .cbt-bars i.neg { background: var(--down); } .cbt-bars i.spy { background: var(--muted); opacity: .55; } .cbt-bars b { text-align: right; font: 500 12.5px var(--font-num); }
 .cbt-cta { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; margin: 8px 0 4px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft); color: var(--ink); font: inherit; cursor: pointer; } .cbt-cta b { font-weight: 600; }
+.mc-tone { margin: 8px 0 4px; font-size: 13.5px; line-height: 1.6; } .mc-tone span { color: var(--accent); font-weight: 500; margin-right: 6px; } .mc-tone b { margin-right: 4px; } .mc-tone b.warn { color: #e2b23a; }
+.mcrow > summary .glimp { grid-column: 1 / -1; text-align: left !important; } .mcrow > summary > span.note:nth-last-child(2) { text-align: right; font-size: 12px; } @media (max-width: 520px) { .mcrow > summary > span.note:nth-last-child(2) { grid-column: 1 / -1; text-align: left; } } .mcrow .glimp { display: block; font-size: 12px; color: var(--muted); line-height: 1.5; margin: 2px 0 4px; } .pm-imp { margin: 6px 0 0 !important; font-size: 12.5px !important; }
+.mn-howimp { margin: 6px 0; } .mn-howimp > summary { font-size: 13px; color: var(--accent); cursor: pointer; }
 .mc-imp { list-style: none; margin: 0; padding: 0; } .mc-imp li { display: flex; flex-direction: column; gap: 2px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; line-height: 1.55; } .mc-imp b { font-weight: 600; }
 .mc-ud { margin: 4px 0 0; font-size: 13px; line-height: 1.55; } .mc-ud span { font-weight: 600; margin-right: 6px; }
 .mn-days.mkseg { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 8px 12px 0; } .mn-days button { flex: none; }
@@ -676,6 +686,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .gstage { position: relative; height: 480px; }
 .igalaxy { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
 .ghud { position: absolute; left: 12px; top: 10px; font-size: 12px; font-weight: 300; letter-spacing: .03em; line-height: 1.5; color: #8fa9cc; pointer-events: none; } .ghud b { color: #e9f3ff; font-weight: 400; }
+.gzoom .gpan[aria-pressed="true"] { background: #2a4a7a; color: #fff; }
 .gzoom { position: absolute; right: 10px; top: 10px; display: flex; gap: 2px; background: rgba(10, 22, 42, .7); border: 1px solid #22395e; border-radius: 8px; padding: 2px; z-index: 1; } .gzoom button { min-width: 32px; height: 28px; padding: 0 6px; font: 300 13px var(--font-num); color: #cfe2fb; background: none; border: 0; border-radius: 6px; cursor: pointer; } .gzoom button:hover { background: rgba(127, 196, 255, .14); } .gzoom .gzv { min-width: 48px; font-size: 11.5px; }
 .gcard { position: absolute; width: 230px; background: rgba(10, 22, 42, .94); border: 1px solid #2a4a78; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 300; letter-spacing: .02em; color: #e9f3ff; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); display: grid; gap: 4px; z-index: 2; }
 .gcard[hidden] { display: none; } .gcard.dock { right: 10px; bottom: 10px; width: 250px; } @media (max-width: 900px) { .gcard { width: 196px; font-size: 12px; padding: 8px 10px; } .gcard.dock { left: 8px; right: 8px; width: auto; } }
@@ -693,7 +704,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .itheme h3 { margin: 10px 0 4px; font-size: 17px; } .itheme h3 span { color: var(--muted); margin: 0 4px; font-weight: 400; }
 .itheme p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .igo { margin-top: 8px; border: 0; background: none; color: var(--ink); font: 500 13.5px var(--font-body); padding: 4px 0; cursor: pointer; }
-.ihead { display: flex; align-items: center; gap: 10px; margin: 10px 12px 0; } .ihead h2 { margin: 0; font-size: 18px; } .ihead small { color: var(--muted); font-size: 12px; } .ihead > div { flex: 1; min-width: 0; }
+.ihead { display: flex; align-items: center; gap: 10px; margin: 10px 12px 0; } .ihead h2 { margin: 0; font-size: 18px; } .ihead small { color: var(--muted); font-size: 12px; } .ihead > div { flex: 1; min-width: 0; } @media (max-width: 600px) { .ihead { flex-wrap: wrap; } .ihead > div { order: 5; flex-basis: 100%; } .ihead .ifav { margin-left: auto; } } /* 手機：返回、圖示、分享一列，標題獨立一列（不會被擠成一直條） */
 .idesc { margin: 8px 14px; font-size: 14px; line-height: 1.7; } .iflow, .iseg { margin: 8px 12px; border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; background: var(--surface-2); } .iflow h4, .iseg h4 { margin: 2px 0 8px; font-size: 14px; }
 .flowsvg { width: 100%; height: auto; display: block; } .fstep { font: 500 12.5px/1.25 var(--font-body); color: var(--ink); height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; } .fstep.mini { font-size: 10.5px; font-weight: 500; }
 .inq { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 4px; border-top: 1px solid var(--line); }
@@ -894,7 +905,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
       <div class="l-ix" id="ix2"></div>
-      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金雷達</button><button data-l="ind">供應鏈</button><button data-l="etf">ETF</button><button data-l="pod">節目觀點</button><button data-l="cong">大戶國會</button><button data-l="rank">排行</button></div>
+      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股">🔍</button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金雷達</button><button data-l="earn">財報</button><button data-l="ind">供應鏈</button><button data-l="etf">ETF</button><button data-l="pod">節目觀點</button><button data-l="cong">大戶國會</button><button data-l="rank">排行</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
         <button type="button" class="gsadd" data-gsearch-add>🔍 搜尋代號或名稱，加入自選</button>
@@ -1027,7 +1038,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-119</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-120</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1079,11 +1090,12 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="indnews.js"></script>
 <script src="tools.js"></script>
 <script src="oapi.js"></script>
+<script src="earn.js"></script>
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
-// 嵌在首頁時分兩種模式：mode=intel（情報局：資金雷達、大戶國會、供應鏈、節目觀點）、mode=watch（看盤：其他分頁）；單獨打開 watch.html 時全部都有
-const INTEL_LT = ["money", "cong", "ind", "pod"], ltMode = lt => (INTEL_LT.includes(lt) ? "intel" : "watch");
+// 嵌在首頁時分兩種模式：mode=intel（情報局：資金雷達、財報、大戶國會、供應鏈、節目觀點）、mode=watch（看盤：其他分頁）；單獨打開 watch.html 時全部都有
+const INTEL_LT = ["money", "earn", "cong", "ind", "pod"], ltMode = lt => (INTEL_LT.includes(lt) ? "intel" : "watch");
 let MODE = ((new URLSearchParams(location.search).get("mode") || "").match(/^(intel|watch)$/) || [])[0] || null;
 const inMode = lt => !MODE || ltMode(lt) === MODE, ltKey = m => (m === "intel" ? "watch:lt:intel" : "watch:lt");
 const ltStart = () => { const m = MODE || "watch", v = store.get(ltKey(m), m === "intel" ? "money" : "watch"); return inMode(v) ? v : m === "intel" ? "money" : "watch"; };
@@ -1657,7 +1669,7 @@ function renderList() {
   if (opened.size) for (const d of lx.querySelectorAll("details")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
 }
 // 平板橫向、電腦：大盤、選股、資金、產業這些內容多的分頁用全寬；點個股時，個股頁從右邊滑出（抽屜），不會把內容擠成一條
-const WIDE_TABS = ["mkt", "screen", "ind", "money", "pod", "after", "cong", "tools"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
+const WIDE_TABS = ["mkt", "screen", "ind", "money", "earn", "pod", "after", "cong", "tools"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
 function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); placeDrawer(); if (EMBED) requestAnimationFrame(postTabs); }
 // 嵌在 K線學堂裡時 iframe 和整頁一樣高，固定在 iframe 右側的抽屜會從 iframe 最上面一路拉到最下面：使用者往下捲過之後打開個股，
 // 內容在畫面外、抽屜本身也捲不動。所以抽屜改成貼齊使用者目前看得到的那一段，外層捲動或視窗大小改變時跟著移動。
@@ -1678,7 +1690,7 @@ function renderList0() {
   syncLayout();
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === ltTab()));
   const watch = W.lt === "watch";
-  $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", "mkt", "screen", "ind", "money", "pod", "after", "cong", "tools"].includes(W.lt); $("#wl").hidden = ["mkt", "screen", "ind", "money", "pod", "after", "cong", "tools"].includes(W.lt);
+  $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", ...WIDE_TABS].includes(W.lt); $("#wl").hidden = WIDE_TABS.includes(W.lt); // 全寬分頁共用同一份清單
   $("#groups").innerHTML = W.groups.map((g, i) => `<button data-g="${i}" aria-pressed="${i === W.gi}">${esc(g.name)} <span class="note">${g.list.length}</span></button>`).join("") + `<button data-g="new" title="新增群組">＋ 群組</button>`;
   const n = $("#wlNote"); n.className = "note w-note"; let note = "";
   if (watch) {
@@ -1712,6 +1724,8 @@ function renderList0() {
     renderMkt(); note = W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${W.mkt.live ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布" : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計"}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : "";
   } else if (W.lt === "etf") {
     note = renderEtf();
+  } else if (W.lt === "earn") {
+    note = renderEarn();
   } else if (W.lt === "pod") {
     note = renderPod();
   } else if (W.lt === "cong") {
@@ -3163,10 +3177,14 @@ function flowTexts(force) {
   const sp = document.querySelector('[data-mrp="speed"]'); if (sp) sp.textContent = `${F.rp.speed}x`;
   if (!force && t === F.rp.t) return; F.rp.t = t;
   const { P, pool } = mfReplayPool(M, t), R = mfReplayBits(M, t, pool, P), q = s => document.querySelector(s);
+  // 換日時右側清單、細節卡、摘要的長度會變，版面跟著伸縮會讓頁面（和外層 iframe 高度）跳動：同一段播放裡高度只增不減
+  const HM = (F.rp.hMax ||= {}), hold = (k, el) => { if (!el) return; HM[k] = Math.max(HM[k] || 0, el.offsetHeight); el.style.minHeight = HM[k] + "px"; };
+  const swap = (k, sel, html) => { const el = q(sel); if (!el) return; HM[k] = Math.max(HM[k] || 0, el.offsetHeight); el.outerHTML = html; hold(k, q(sel)); };
+  hold("sum", q(".mrp-sum"));
   if (q(".mrp-sum")) q(".mrp-sum").innerHTML = R.sum.replace("<br>", "・"); if (q(".mrp-date")) q(".mrp-date").textContent = R.date;
   document.querySelectorAll(".qcard[data-mq]").forEach(el => { const k = el.dataset.mq, b = el.querySelector("b"); if (b) b.textContent = P.filter(x => x.q === k).length; });
-  const bi = q(".binfo, .binfo-empty"); if (bi) bi.outerHTML = bubbleInfo(P.find(x => x.id === F.bsel));
-  const ql = q(".mqlist"); if (ql) ql.outerHTML = mfQList(P);
+  swap("bi", ".binfo, .binfo-empty", bubbleInfo(P.find(x => x.id === F.bsel)));
+  swap("ql", ".mqlist", mfQList(P));
 }
 // 播放：每秒前進 0.5 × 速度 天（1x 約 2 秒一天）；單日資料時以 introK 0 → 1 演進；播到最後一天就停在那天（再按播放從頭開始）
 function flowLoop() {
@@ -3199,7 +3217,7 @@ function mfReplayDraw() { const F = W.mf, M = mfModel(), svg = document.getEleme
   if (!M || (F.view !== "replay" && F.view !== "bubble") || !svg || !F.rp.fl || F.rp.fl.T !== M.T) return renderMoney(); flowDraw(); flowTexts(true); }
 function mfStep(d) { const F = W.mf, FL = flowEnsureMount(); if (!FL) return; const t = Math.round(F.rp.u) + d; flowSeek(t > FL.T - 1 ? FL.t0 : Math.max(FL.t0, t)); }
 function mfPlay(on) {
-  const F = W.mf, M = mfModel(); F.rp.playing = on; cancelAnimationFrame(F.rp.raf);
+  const F = W.mf, M = mfModel(); F.rp.playing = on; cancelAnimationFrame(F.rp.raf); if (on) F.rp.hMax = {};
   if (!on) F.rp.introK = 1;
   if (on && M) {
     if (M.T < 20 && !F.loading && !W.off) setTimeout(() => loadMoney(20), 0);
@@ -3381,7 +3399,7 @@ function indGalaxy(net, focus) {
   return `<div class="gxopts"><span>窗格</span>${seg("tip")}<span>排列</span>${seg("lay")}<span>連線</span>${seg("line")}</div>
     <div class="igal-wrap gstage"><canvas class="igalaxy" role="img" aria-label="${esc(net.name)} 產業星系：${esc(INDT.get(core).name)} 在中心，上游 ${ups.size}、下游 ${downs.size}"></canvas>
       <div class="ghud">中心：<b>${esc(INDT.get(core).name)}</b><br>上游 ${ups.size}・下游 ${downs.size}・相關 ${ids.length - 1 - ups.size - downs.size}</div><div class="gcard" hidden></div>
-      <div class="gzoom" role="group" aria-label="縮放"><button type="button" data-gxz="-" aria-label="縮小">－</button><button type="button" data-gxz="0" aria-label="回到原本大小" class="gzv">${Math.round((W.gx.zoom || 1) * 100)}%</button><button type="button" data-gxz="+" aria-label="放大">＋</button></div></div>
+      <div class="gzoom" role="group" aria-label="縮放"><button type="button" data-gxz="-" aria-label="縮小">－</button><button type="button" data-gxz="0" aria-label="回到原本大小" class="gzv">${Math.round((W.gx.zoom || 1) * 100)}%</button><button type="button" data-gxz="+" aria-label="放大">＋</button><button type="button" data-gxz="pan" class="gpan" aria-pressed="${!!W.gx.panMode}" title="拖曳改成移動畫面（也可以按住 Shift 拖、滑鼠右鍵拖，或兩指拖）" aria-label="拖曳移動畫面">✥</button></div></div>
     <div class="igal-leg"><span><i style="background:#ffb26b"></i>上游連線</span><span><i style="background:#6fc3ff"></i>下游連線</span><span><i style="background:#8aa0bf"></i>其他關係</span><span>光暈紅漲綠跌；上半部＝上游、下半部＝下游</span><span>${isMobile() ? "點圓點看資訊、左右拖曳轉動、兩指縮放（放大後拖曳可移動）" : "滑到圓點看資訊、點一下換到中心、拖曳轉動、滾輪縮放（放大後拖曳可移動）"}</span></div>`;
 }
 // 題材在 3D 空間的位置（單位：外圈半徑）
@@ -3479,17 +3497,19 @@ function gxMount() {
     if (zv) zv.textContent = Math.round(z2 * 100) + "%"; idle = performance.now(); dirty = true; };
   cv.addEventListener("wheel", e => { if (!e.ctrlKey && !e.metaKey) { if (Math.abs(e.deltaY) > 2) wheelHint(stage); return; } e.preventDefault(); const [x, y] = xy(e); zoomAt(Math.exp(-e.deltaY * (Math.abs(e.deltaY) < 40 ? 0.01 : 0.0015)), x, y); }, { passive: false });
   cv.parentElement.querySelector(".gzoom")?.addEventListener("click", e => { const b = e.target.closest("[data-gxz]"); if (!b) return; const v = b.dataset.gxz, w = cv.clientWidth, h = cv.clientHeight;
+    if (v === "pan") { G.panMode = !G.panMode; b.setAttribute("aria-pressed", G.panMode); cv.style.cursor = G.panMode ? "move" : "grab"; return; }
     if (v === "0") { G.zoom = 1; G.px = G.py = 0; if (zv) zv.textContent = "100%"; dirty = true; } else zoomAt(v === "+" ? 1.3 : 1 / 1.3, w / 2 + (G.px || 0), h / 2 + 8 + (G.py || 0)); });
   const pts = new Map(); let pinch = null; // 兩指：開合縮放、一起移動就平移
   const pinchInfo = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
   cv.addEventListener("pointerdown", e => { const [x, y] = xy(e); pts.set(e.pointerId, { x, y });
     if (pts.size === 2) { pinch = pinchInfo(); drag = G.drag = null; moved = true; G.drag = { pinch: true }; return; }
-    drag = G.drag = { x: e.clientX, y: e.clientY, th: G.th, ph: G.ph, px: G.px || 0, py: G.py || 0, pan: (G.zoom || 1) > 1.05 }; moved = false; });
+    drag = G.drag = { x: e.clientX, y: e.clientY, th: G.th, ph: G.ph, px: G.px || 0, py: G.py || 0, pan: !!G.panMode || e.shiftKey || e.button === 1 || e.button === 2 }; moved = false; }); // 拖曳＝轉動 3D 角度（放大後也一樣）；移動畫面用 ✥、Shift／右鍵拖或兩指拖
+  cv.addEventListener("contextmenu", e => e.preventDefault());
   cv.addEventListener("pointermove", e => { const [x, y] = xy(e); if (pts.has(e.pointerId)) pts.set(e.pointerId, { x, y });
     if (pinch && pts.size === 2) { const n = pinchInfo(); G.px = (G.px || 0) + n.x - pinch.x; G.py = (G.py || 0) + n.y - pinch.y; zoomAt(n.d / pinch.d, n.x, n.y); pinch = n; return; }
     if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (moved && drag.pan) { const w = cv.clientWidth, h = cv.clientHeight, z = G.zoom || 1; G.px = Math.max(-w * 0.5 * z, Math.min(w * 0.5 * z, drag.px + dx)); G.py = Math.max(-h * 0.5 * z, Math.min(h * 0.5 * z, drag.py + dy)); idle = performance.now(); dirty = true; } // 放大後拖曳＝移動畫面
       else if (moved) { G.th = drag.th + dx * 0.008; if (e.pointerType === "mouse") G.ph = Math.max(-0.05, Math.min(0.8, drag.ph + dy * 0.004)); idle = performance.now(); dirty = true; } return; }
-    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); if (id !== G.hover) { G.hover = id; cv.style.cursor = id ? "pointer" : (G.zoom || 1) > 1.05 ? "move" : "grab"; dirty = true; } gxCard(card, id, x, y); } });
+    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); if (id !== G.hover) { G.hover = id; cv.style.cursor = id ? "pointer" : G.panMode || e.shiftKey ? "move" : "grab"; dirty = true; } gxCard(card, id, x, y); } });
   cv.addEventListener("pointercancel", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; });
   cv.addEventListener("pointerleave", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; if (!G.pin && G.hover) { G.hover = null; card.hidden = true; dirty = true; } });
   cv.addEventListener("pointerup", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; const was = drag; drag = G.drag = null; if (G.pend) { G.pend = false; setTimeout(renderInd); } if (!was || moved) return;
@@ -3811,14 +3831,50 @@ async function loadGlobal(force = false) {
   W.glLoading = true; try { W.gl = { ...(await getJ("/api/global", true)), at: Date.now() }; } catch (e) { W.gl = { err: e.message, at: Date.now() }; } finally { W.glLoading = false; }
   if (W.lt === "mkt" && W.mkReg === "gl") renderList();
 }
+// 原物料、外匯、利率對股市的影響：[上漲時, 下跌時]（依歷史上常見的關係整理，不是預測）
+const GL_IMPACT = {
+  "CL=F": ["油價漲：通膨壓力升高、降息預期降溫；利多油氣、塑化（台塑四寶）、能源股，利空航空、運輸與化工下游", "油價跌：通膨降溫、有利降息預期；航空、運輸、塑化下游成本下降，油氣股承壓"],
+  "BZ=F": ["布蘭特油價漲：多半反映中東、俄烏供給風險；對航空、航運燃料成本不利，油氣與塑化上游受惠", "布蘭特油價跌：供給風險降溫，運輸業成本下降；產油國與油氣股承壓"],
+  "NG=F": ["天然氣漲：發電與化工成本上升，歐洲工業受衝擊；利多天然氣生產商、LNG 相關", "天然氣跌：電力、化工成本下降，對用電大戶（半導體、鋼鐵）有利"],
+  "HO=F": ["熱燃油（柴油）漲：卡車、航運、航空燃料成本上升，壓縮運輸業利潤", "熱燃油跌：運輸業燃料成本下降"],
+  "RB=F": ["汽油漲：美國消費者可支配所得受壓，零售、汽車需求可能轉弱", "汽油跌：美國消費力回升，有利零售與消費股"],
+  "GC=F": ["金價漲：避險情緒或實質利率下降；資金偏保守時，成長股常較弱；利多金礦、黃金 ETF", "金價跌：風險胃納回升或美元、實質利率走強，資金回流股市"],
+  "SI=F": ["白銀漲：兼具避險與工業需求（太陽能、電子），常隨景氣與金價同步", "白銀跌：工業需求或避險需求降溫"],
+  "HG=F": ["銅價漲：「銅博士」反映全球景氣與電網、AI 資料中心需求；利多重電、電線電纜，但增加 PCB、電線成本", "銅價跌：景氣需求轉弱的訊號；電線電纜、PCB 成本下降"],
+  "PL=F": ["白金漲：汽車觸媒與氫能需求升溫", "白金跌：汽車需求或工業需求轉弱"], "PA=F": ["鈀金漲：汽油車觸媒成本上升", "鈀金跌：汽車觸媒成本下降"],
+  "ALI=F": ["鋁價漲：機殼、散熱、汽車零件成本上升；利多鋁業", "鋁價跌：機殼、散熱等用鋁產業成本下降"],
+  "ZS=F": ["黃豆漲：食品、飼料、油脂成本上升（大成、卜蜂等）", "黃豆跌：食品、飼料業成本下降"], "ZC=F": ["玉米漲：飼料與食品成本上升，推升糧食通膨", "玉米跌：飼料、食品成本下降"],
+  "ZW=F": ["小麥漲：麵粉、食品成本上升，糧食通膨壓力", "小麥跌：食品業成本下降"], "KC=F": ["咖啡漲：連鎖咖啡、飲料業成本上升", "咖啡跌：飲料業成本下降"],
+  "SB=F": ["糖價漲：食品飲料成本上升", "糖價跌：食品飲料成本下降"], "CT=F": ["棉花漲：紡織、成衣原料成本上升", "棉花跌：紡織成本下降"],
+  BDRY: ["散裝運價漲：全球原物料需求升溫；利多散裝航運（裕民、新興、慧洋）", "散裝運價跌：原物料需求轉弱，散裝航運獲利承壓"],
+  BOAT: ["航運股走強：貨櫃、散裝運價或需求轉佳，台股航運族群常同步", "航運股走弱：運價回落，台股航運族群常同步走弱"],
+  "DX-Y.NYB": ["美元走強：資金回流美國，新興市場（含台股）外資容易賣超；原物料以美元計價通常走弱", "美元走弱：資金流向新興市場，外資較容易買超台股；原物料與黃金常受惠"],
+  "TWD=X": ["台幣貶值（數字變大）：外資常在賣超匯出；出口廠（電子代工、半導體）有匯兌收益", "台幣升值（數字變小）：外資資金流入、常買超台股；出口廠有匯損，進口、內需股受惠"],
+  "JPY=X": ["日圓貶值：日系競爭對手（工具機、面板、汽車零件）價格更有優勢，對台廠不利；日圓套利交易擴大", "日圓急升：日圓套利交易平倉，全球股市容易短線震盪"],
+  "CNY=X": ["人民幣貶值：中國出口競爭力增加，反映中國經濟偏弱；中概、石化、面板報價承壓", "人民幣升值：中國經濟或資金面轉佳，對中國內需、原物料需求有利"],
+  "HKD=X": ["港幣接近弱方兌換保證：香港資金外流壓力", "港幣偏強：資金流入香港"], "EUR=X": ["歐元貶值（數字變大）：美元相對強勢，歐洲出口受惠", "歐元升值：美元相對弱勢，有利新興市場資金"],
+  "GBP=X": ["英鎊貶值：英國經濟或政策疑慮", "英鎊升值：英國經濟預期轉佳"], "KRW=X": ["韓元貶值：韓國出口（記憶體、面板）報價競爭力增加，常和台幣同步反映外資動向", "韓元升值：外資回流亞洲科技股的訊號"],
+  "AUD=X": ["澳幣貶值：原物料需求與風險胃納轉弱", "澳幣升值：原物料需求與風險胃納回升"],
+  "^IRX": ["短天期利率升：市場預期聯準會不降息或升息，資金成本上升", "短天期利率降：市場預期降息，有利股市評價"],
+  "^FVX": ["5 年期殖利率升：中期利率預期上升，房貸、企業融資成本增加", "5 年期殖利率降：中期利率預期下降，有利房市與舉債企業"],
+  "^TNX": ["10 年期殖利率升：股票評價（本益比）受壓，尤其高本益比的科技、成長股；金融股（壽險、銀行）利差改善", "10 年期殖利率降：有利成長股與高股息股評價；金融股利差收窄"],
+  "^TYX": ["30 年期殖利率升：長期通膨或財政赤字疑慮，長天期債券與房地產承壓", "30 年期殖利率降：長期通膨預期下降，有利房地產與長期資產"],
+  "BTC-USD": ["比特幣漲：市場風險胃納高，投機資金活躍；利多加密貨幣相關股（礦機、交易所）", "比特幣跌：風險胃納下降，投機性高的成長股常一起轉弱"],
+  "ETH-USD": ["以太幣漲：加密生態與風險胃納升溫", "以太幣跌：加密資產與風險資產情緒轉弱"],
+};
 function renderGlobal(top) {
   const J = W.gl;
   if (!J) { $("#lx").innerHTML = top + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有國際行情。" : "載入國際行情…"}</p>`; loadGlobal(); return; }
   if (J.err || !J.ok) { $("#lx").innerHTML = top + `<p class="note err" style="padding:12px">⚠ ${esc(J.err || J.error || "暫時拿不到國際行情")}</p>`; return; }
   const dp = (g, v) => (v == null ? "—" : v.toLocaleString(undefined, { maximumFractionDigits: g === "fx" ? (v < 10 ? 4 : v < 200 ? 3 : 2) : g === "rate" ? 3 : v < 10 ? 3 : 2 }));
   let h = top + `<p class="note gnote">${esc(J.source || "")}・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}</p>`;
+  // 今天變動比較大的（利率 1.5% 以上、其他 2% 以上），先列出對股市可能的影響
+  const imp = x => { const I = GL_IMPACT[x.code]; return I && x.chgPct != null && x.chgPct !== 0 ? I[x.chgPct > 0 ? 0 : 1] : null; }, big = J.groups.flatMap(g => g.rows.filter(x => imp(x) && Math.abs(x.chgPct) >= (g.id === "rate" ? 1.5 : 2)));
+  if (big.length) h += `<section class="mk"><h3>今天變動較大，對股市可能的影響</h3><ul class="mc-imp">${big.map(x => `<li><b>${esc(x.name)} <span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chgPct).toFixed(2)}%</span></b><span>${esc(imp(x))}</span></li>`).join("")}</ul></section>`;
   for (const g of J.groups) h += `<section class="mk"><h3>${esc(g.name)}${g.note ? `<span class="note">${esc(g.note)}</span>` : ""}</h3><ul class="mrows us">${g.rows.map(x => { const sel = okCode(String(x.code)) ? `data-sel="${esc(x.code)}" role="button" tabindex="0"` : ""; if (sel && x.name) W.names[x.code] = x.name; // 點進去的個股頁顯示中文名稱
-    return `<li ${sel}><span>${esc(x.name)} <small class="note">${esc(x.code)}</small></span><b class="${cls(x.chg)}">${dp(g.id, x.price)}</b><span class="${cls(x.chg)}">${x.chgPct == null ? "—" : `${arrow(x.chg)}${Math.abs(x.chgPct).toFixed(2)}%`}</span>${x.spark ? spark(x.spark, (x.chg ?? 0) >= 0) : "<i></i>"}</li>`; }).join("")}</ul></section>`;
+    const I = GL_IMPACT[x.code];
+    return `<li ${sel}><span>${esc(x.name)} <small class="note">${esc(x.code)}</small></span><b class="${cls(x.chg)}">${dp(g.id, x.price)}</b><span class="${cls(x.chg)}">${x.chgPct == null ? "—" : `${arrow(x.chg)}${Math.abs(x.chgPct).toFixed(2)}%`}</span>${x.spark ? spark(x.spark, (x.chg ?? 0) >= 0) : "<i></i>"}${I ? `<small class="glimp">${esc(imp(x) || I[0])}</small>` : ""}</li>`; }).join("")}</ul></section>`;
+  h += `<p class="note" style="padding:4px 12px 12px">每一列下面的灰字是「今天這個方向」對股市常見的影響（沒變動時顯示上漲時的影響），依歷史上常見關係整理，實際還要看市場預期與其他因素，不構成投資建議。</p>`;
   $("#lx").innerHTML = h;
 }
 /* ---------- 總經（FRED）與預測市場（Polymarket） ---------- */
@@ -3839,6 +3895,16 @@ async function loadMnews(force = false) {
     W.mn = { ...j, at: Date.now() }; if (!j.days.some(d => d.date === W.mnDay)) W.mnDay = j.days[0].date; } catch (e) { W.mn = { err: e.message, at: Date.now() }; } finally { W.mnLoading = false; }
   if (W.lt === "mkt" && W.mkReg === "news") renderList();
 }
+// 總經消息的主題 → 對股市常見的影響（主題分類和 scripts/macro-news.mjs 的 TOPICS 一樣）
+const MN_IMPACT = { 利率: "降息（或預期降息）通常推升股市評價，對科技、成長股最有利；升息或「不降息」則讓高本益比股票承壓，壽險、銀行利差改善。",
+  通膨: "通膨高於預期→降息延後、殖利率上升，股市（尤其科技股）容易回檔；通膨降溫→降息預期升高，偏多。",
+  就業: "就業太強可能讓聯準會延後降息（短線偏空）；就業急轉弱則有衰退疑慮（偏空）；溫和放緩對股市最友善。",
+  景氣: "景氣數據轉強有利企業獲利與循環股（原物料、航運、金融）；景氣轉弱時資金偏向防禦股與公債。",
+  貿易: "台灣出口、外銷訂單成長直接反映電子、半導體接單；關稅升溫則對出口導向的台股不利。",
+  匯率: "台幣升值多半伴隨外資買超、台股偏多，但出口廠有匯損；台幣貶值常是外資賣超匯出，出口廠有匯兌收益。",
+  債市: "美債殖利率上升會壓抑股票評價（科技股最敏感）；殖利率下降有利成長股與高股息股。",
+  原物料: "油價上漲推升通膨、不利航空運輸，利多塑化與油氣；銅價上漲反映景氣與電網需求；金價上漲代表避險情緒升溫。",
+  市場: "國際經濟、央行與政策消息會改變市場對景氣與利率的預期，進而影響外資動向與台股。" };
 function renderMnews(top) {
   const J = W.mn;
   if (!J || (W.mnLoading && !J.days)) { $("#lx").innerHTML = top + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有總經消息。" : "載入今天的總經消息…"}</p>`; loadMnews(); return; }
@@ -3847,6 +3913,7 @@ function renderMnews(top) {
   const side = (m, name) => { const X = D[m] || {}, S = X.sum, L = X.items || [];
     return `<section class="mk mnews"><h3>${name}<span class="note">${L.length} 則</span></h3>
       ${S ? `<div class="mn-sum"><b>${esc(S.head)}</b>${S.points?.length ? `<ul>${S.points.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${S.impact ? `<p class="mn-imp"><span>可能影響</span>${esc(S.impact)}</p>` : ""}</div>` : ""}
+      ${(() => { const T = [...new Set(L.map(x => x.topic).filter(t => MN_IMPACT[t]))]; return T.length ? `<details class="mkmore mn-howimp"${S?.impact ? "" : " open"}><summary>這些消息怎麼影響股市（${T.join("、")}）</summary><ul class="mc-imp">${T.map(t => `<li><b>${esc(t)} <small class="note">${L.filter(x => x.topic === t).length} 則</small></b><span>${esc(MN_IMPACT[t])}</span></li>`).join("")}</ul></details>` : ""; })()}
       ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener">${x.topic ? `<em>${esc(x.topic)}</em>` : ""}<span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">今天沒有抓到相關新聞。</p>`}</section>`; };
   $("#lx").innerHTML = top + `<div class="mn-days mkseg">${J.days.slice(0, 10).map(d => `<button type="button" data-mk="mnDay" data-v="${d.date}" aria-pressed="${d === D}">${d.date.slice(5).replace("-", "/")}</button>`).join("")}</div>
     <p class="note gnote">${J.live ? "排程整理的檔案還沒產生，先顯示即時頭條（沒有 AI 摘要）" : `整理於 ${hm(D.at)}${D.by ? "・AI 摘要只根據新聞標題，數字請點原文確認" : "・這次沒有 AI 摘要，只列出分類好的標題"}`}</p>`
@@ -3861,7 +3928,8 @@ async function loadPoly(force = false) {
 function macroChart(data, unit) {
   const v = data.map(r => r[1]), mn = Math.min(...v), mx = Math.max(...v), w = 320, h = 90, X = i => (i / Math.max(1, v.length - 1)) * w, Y = x => h - 6 - (mx > mn ? (x - mn) / (mx - mn) : 0.5) * (h - 12);
   const z = mn < 0 && mx > 0 ? `<line x1="0" x2="${w}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="3 3" stroke-width="0.8"/>` : "";
-  return `<svg class="mcchart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="走勢">${z}<polyline fill="none" stroke="var(--accent)" stroke-width="1.1" points="${v.map((x, i) => `${X(i).toFixed(1)},${Y(x).toFixed(1)}`).join(" ")}"/></svg>
+  return `${xhWrap(`<svg class="mcchart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="走勢">${z}<polyline fill="none" stroke="var(--accent)" stroke-width="1.1" points="${v.map((x, i) => `${X(i).toFixed(1)},${Y(x).toFixed(1)}`).join(" ")}"/></svg>`,
+    v.map((x, i) => X(i)), i => `<b>${esc(data[i][0])}</b><span><i style="background:var(--accent)"></i>${esc(v[i].toLocaleString())} ${esc(unit)}</span>`)}
     <div class="mcax"><span>${esc(data[0][0].slice(0, 7))}</span><span>最低 ${mn.toLocaleString()}・最高 ${mx.toLocaleString()} ${esc(unit)}</span><span>${esc(data[data.length - 1][0].slice(0, 7))}</span></div>`;
 }
 function renderMacro(top) {
@@ -3872,6 +3940,9 @@ function renderMacro(top) {
   const lvC = ["up", "warn", "down"]; // 0 正常、1 留意、2 警訊（漲跌顏色以外另外標示）
   let h = top + `<section class="mk"><h3>總經儀表<span class="note">${esc(J.source)}・${new Date(Date.parse(J.ts) + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}</span></h3>
     <div class="mcsig">${(J.signals || []).map(s => `<div class="lv${s.lv}"><span>${esc(s.k)}</span><b>${esc(s.v)}</b><small>${esc(s.t)}</small></div>`).join("")}</div>
+    ${(() => { const S = J.signals || [], c = [0, 1, 2].map(k => S.filter(s => s.lv === k).length); if (!S.length) return "";
+      const tone = c[2] >= 3 ? ["偏空", "down", "警訊偏多，資金較容易轉向公債、防禦股；持股宜控制部位、留意停損。"] : c[2] + c[1] >= Math.ceil(S.length / 2) ? ["中性偏謹慎", "warn", "留意的項目不少，股市容易隨數據公布震盪；選股重於選市。"] : ["偏多", "up", "大部分指標正常，總經環境對股市（尤其企業獲利）相對友善。"];
+      return `<p class="mc-tone"><span>對股市的整體影響</span><b class="${tone[1]}">${tone[0]}</b>（正常 ${c[0]}・留意 ${c[1]}・警訊 ${c[2]}）${tone[2]}</p>`; })()}
     <p class="note">綠點：正常、黃點：留意、紅點：警訊。總經數據多半一個月公布一次，是看「大方向」用的，不適合拿來做短線。</p></section>`;
   // 現在的走向對股市的影響：挑出最近明顯上升或下降的數列，一句話說明
   const moving = J.series.filter(s => s.dir), arrow = d => (d > 0 ? "▲" : d < 0 ? "▼" : "—");
@@ -3880,13 +3951,13 @@ function renderMacro(top) {
   for (const g of ["通膨", "利率", "就業", "景氣", "資金", "世界"]) {
     const L = J.series.filter(s => s.group === g); if (!L.length) continue;
     h += `<section class="mk"><h3>${g === "世界" ? "世界總經" : g}${g === "世界" ? `<span class="note">歐、日、中國、匯率與原物料</span>` : ""}</h3>${L.map(s => { const d = s.prev ? s.last[1] - s.prev[1] : null;
-      return `<details class="mkmore mcrow"><summary><span>${esc(s.name)}<small class="note"> ${esc(s.freq)}・${esc(s.last[0])}</small></span><b>${fv(s, s.last[1])}<small class="note"> ${esc(s.unit)}</small>${s.dir ? ` <small class="${s.dir > 0 ? "up" : "down"}">${arrow(s.dir)}</small>` : ""}</b><span class="note">${d == null ? "" : `上期 ${fv(s, s.prev[1])}`}${s.y1 ? `・一年前 ${fv(s, s.y1[1])}` : ""}</span></summary>
+      return `<details class="mkmore mcrow"><summary><span>${esc(s.name)}<small class="note"> ${esc(s.freq)}・${esc(s.last[0])}</small></span><b>${fv(s, s.last[1])}<small class="note"> ${esc(s.unit)}</small>${s.dir ? ` <small class="${s.dir > 0 ? "up" : "down"}">${arrow(s.dir)}</small>` : ""}</b><span class="note">${d == null ? "" : `上期 ${fv(s, s.prev[1])}`}${s.y1 ? `・一年前 ${fv(s, s.y1[1])}` : ""}</span>${s.up ? `<small class="glimp">對股市（${s.dir > 0 ? "上升中" : s.dir < 0 ? "下降中" : "持平，上升時"}）：${esc(s.dir < 0 ? s.down : s.up)}</small>` : ""}</summary>
         ${macroChart(s.data, s.unit)}<p class="note">${esc(s.note)}</p>${s.up ? `<p class="mc-ud"><span class="up">上升時</span>${esc(s.up)}</p><p class="mc-ud"><span class="down">下降時</span>${esc(s.down)}</p>` : ""}</details>`; }).join("")}</section>`;
   }
   if (J.notes?.length) h += `<p class="note" style="padding:0 12px">部分數據暫時拿不到：${esc(J.notes.join("；"))}</p>`;
   $("#lx").innerHTML = h + `<p class="note" style="padding:4px 12px 12px">資料：美國聯準會聖路易分行 FRED（含 OECD、歐洲央行等轉載的各國數據）。年增率是和 12 個月前同一期相比。▲▼ 是和約 3 期前比較的方向。</p>`;
 }
-const PM_IMPACT = { "聯準會與利率": "降息機率越高，通常對股市（尤其科技、成長股）越有利", "經濟數據與衰退": "衰退機率上升時，資金常從股票轉向公債", "關稅與貿易": "關稅升溫對出口導向的台股（電子、代工）不利", "台海與地緣政治": "台海、中美緊張會直接影響台股與外資動向", "美股與企業": "美股大型科技股的預期，會帶動台股供應鏈", "美國政治與財政": "政府關門、債務上限等會影響美債與美元", "原物料與加密貨幣": "油價影響通膨與塑化、航運；加密貨幣反映風險胃納" };
+const PM_IMPACT = { "聯準會與利率": "降息機率越高，通常對股市（尤其科技、成長股）越有利；降息機率下降時，美債殖利率上升、成長股承壓", "經濟數據與衰退": "衰退機率上升時，資金常從股票轉向公債", "關稅與貿易": "關稅升溫對出口導向的台股（電子、代工）不利", "台海與地緣政治": "台海、中美緊張會直接影響台股與外資動向", "美股與企業": "美股大型科技股的預期，會帶動台股供應鏈", "美國政治與財政": "政府關門、債務上限等會影響美債與美元", "原物料與加密貨幣": "油價影響通膨與塑化、航運；加密貨幣反映風險胃納" };
 function renderPoly(top) {
   const J = W.pm;
   if (!J) { $("#lx").innerHTML = top + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有預測市場資料。" : "載入 Polymarket…"}</p>`; loadPoly(); return; }
@@ -3895,9 +3966,12 @@ function renderPoly(top) {
   const pct = v => (v == null ? "—" : `${(v * 100).toFixed(v < 0.01 && v > 0 ? 1 : 0)}%`), d1 = v => (v ? `<small class="${cls(v)}">${v > 0 ? "▲" : "▼"}${Math.abs(v * 100).toFixed(1)}</small>` : "");
   let h = top + `<p class="note gnote">${esc(J.source)}・機率＝目前「是」的成交價，代表市場用真錢押注的機率・${new Date(Date.parse(J.ts) + 8 * 3600e3).toISOString().slice(11, 16)} 更新</p>
     <div class="mksegrow" style="padding:0 12px">${mkSeg("pmCat", cur, [["", "全部"], ...cats.map(c => [c, c])])}</div>`;
+  // 24 小時機率變化最大的事件：市場預期正在改變，最可能影響股市
+  const mv = L.map(e => ({ e, m: e.markets.slice().sort((a, b) => Math.abs(b.d1 || 0) - Math.abs(a.d1 || 0))[0] })).filter(x => Math.abs(x.m?.d1 || 0) >= 0.03).sort((a, b) => Math.abs(b.m.d1) - Math.abs(a.m.d1)).slice(0, 5);
+  if (mv.length) h += `<section class="mk"><h3>機率變化最大（24 小時）<span class="note">市場預期正在改變的事件</span></h3><ul class="mc-imp">${mv.map(({ e, m }) => `<li><b>${esc(e.title)}：${esc(m.label || m.q)} ${pct(m.yes)} ${d1(m.d1)}</b><span>${esc(PM_IMPACT[e.cat] || "")}</span></li>`).join("")}</ul></section>`;
   h += L.slice(0, 40).map(e => `<section class="mk pm"><h3><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title)}</a><span class="note">${esc(e.cat)}・24 小時成交 ${usd(e.vol24)}・總成交 ${usd(e.vol)}${e.end ? `・${e.end.slice(5).replace("-", "/")} 結算` : ""}</span></h3>
     <ul class="pmrows">${e.markets.map(m => `<li><span>${esc(m.label || m.q)}</span><i style="--w:${Math.round((m.yes || 0) * 100)}%"></i><b>${pct(m.yes)}</b>${d1(m.d1)}</li>`).join("")}</ul>
-    <p class="note">${esc(PM_IMPACT[e.cat] || "")}</p></section>`).join("") || `<p class="note" style="padding:12px">這個分類目前沒有事件</p>`;
+    ${PM_IMPACT[e.cat] ? `<p class="mn-imp pm-imp"><span>對股市</span>${esc(PM_IMPACT[e.cat])}</p>` : ""}</section>`).join("") || `<p class="note" style="padding:12px">這個分類目前沒有事件</p>`;
   $("#lx").innerHTML = h + `<p class="note" style="padding:4px 12px 12px">Polymarket 是用加密貨幣下注的預測市場，題目與選項是英文原文；▲▼ 是 24 小時內機率的變化（百分點）。機率是市場共識，不是預測保證；台灣不能下注，這裡只當參考指標。</p>`;
 }
 // 大盤頂端的指數、期貨卡片：每秒報價更新時只重畫這一塊（整個大盤頁每 5 秒才重畫一次）
@@ -5105,6 +5179,12 @@ function renderCost() {
   [[C.r90, Wd - 3], [C.r70, Wd - 9]].forEach(([r, x]) => { ctx.beginPath(); ctx.moveTo(x - 3, Y(r[1])); ctx.lineTo(x, Y(r[1])); ctx.lineTo(x, Y(r[0])); ctx.lineTo(x - 3, Y(r[0])); ctx.stroke(); });
   ctx.globalAlpha = 1; ctx.lineWidth = 1.4;
   [[C.pre, "#f0883e"], [C.avg, "#8b8f98"], [C.sup, "#3b82f6"]].forEach(([v, k]) => { if (v == null) return; ctx.strokeStyle = k; ctx.beginPath(); ctx.moveTo(0, Y(v)); ctx.lineTo(Wd, Y(v)); ctx.stroke(); });
+  // 查價線：移上去（手指按著滑）看那個價位、那一格的籌碼比例
+  const tot = C.w.reduce((s, x) => s + x, 0) || 1, wrap = document.createElement("div"); wrap.className = "costwrap"; cv.replaceWith(wrap); wrap.append(cv);
+  wrap.insertAdjacentHTML("beforeend", `<i class="costx" hidden></i><span class="costtag" hidden></span>`);
+  const ln = wrap.querySelector(".costx"), tg = wrap.querySelector(".costtag"), show = e => { const r = cv.getBoundingClientRect(), y = Math.max(0, Math.min(H - 1, e.clientY - r.top)), k = Math.max(0, Math.min(n - 1, Math.floor((H - y) / bh))), px = C.lo + (H - y) / H * (C.hi - C.lo);
+    ln.style.top = tg.style.top = y + "px"; ln.hidden = tg.hidden = false; tg.textContent = `${fp(px)}・籌碼 ${(C.w[k] / tot * 100).toFixed(1)}%・${C.mids[k] <= C.px ? "獲利" : "套牢"}`; };
+  cv.addEventListener("pointermove", show); cv.addEventListener("pointerdown", show); cv.addEventListener("pointerleave", e => { if (e.pointerType !== "touch") ln.hidden = tg.hidden = true; });
 }
 
 /* ---------- 小圖：柱狀＋折線（營收、EPS）、本益比區間 ---------- */
@@ -5116,7 +5196,8 @@ function barLineSvg(items, { bar = "var(--accent)", line = "var(--s1)", fmtV = v
   const pl = items.map((x, i) => (x.y == null ? null : `${(x0 + i * bw + bw / 2).toFixed(1)},${Yy(x.y).toFixed(1)}`)).filter(Boolean).join(" ");
   const labs = items.map((x, i) => (items.length <= 8 || i % 2 === items.length % 2 ? `<text x="${(x0 + i * bw + bw / 2).toFixed(1)}" y="${Hv - 6}" text-anchor="middle">${esc(x.label)}</text>` : "")).join("");
   const vals = items.map((x, i) => (items.length <= 8 ? `<text x="${(x0 + i * bw + bw / 2).toFixed(1)}" y="${(Math.min(Yv(x.v), Yv(0)) - 4).toFixed(1)}" text-anchor="middle" class="v">${fmtV(x.v)}</text>` : "")).join("");
-  return `<svg class="blsvg" viewBox="0 0 ${Wv} ${Hv}" role="img">${bars}${pl ? `<polyline points="${pl}" fill="none" stroke="${line}" stroke-width="1.4"/>${items.map((x, i) => (x.y == null ? "" : `<circle cx="${(x0 + i * bw + bw / 2).toFixed(1)}" cy="${Yy(x.y).toFixed(1)}" r="3" fill="${line}"/>`)).join("")}` : ""}${vals}${labs}</svg>`;
+  return xhWrap(`<svg class="blsvg" viewBox="0 0 ${Wv} ${Hv}" role="img">${bars}${pl ? `<polyline points="${pl}" fill="none" stroke="${line}" stroke-width="1.4"/>${items.map((x, i) => (x.y == null ? "" : `<circle cx="${(x0 + i * bw + bw / 2).toFixed(1)}" cy="${Yy(x.y).toFixed(1)}" r="3" fill="${line}"/>`)).join("")}` : ""}${vals}${labs}</svg>`,
+    items.map((x, i) => x0 + i * bw + bw / 2), i => { const x = items[i]; return `<b>${esc(x.label)}</b><span><i style="background:${x.v < 0 ? "var(--down)" : bar}"></i>${esc(String(fmtV(x.v)))}</span>${x.y == null ? "" : `<span><i style="background:${line}"></i>${esc(String(fmtY(x.y)))}</span>`}`; });
 }
 function peBand(per) {
   const L = per.filter(x => x.pe > 0); if (L.length < 30) return "";
@@ -5124,7 +5205,8 @@ function peBand(per) {
   const Wv = 600, Hv = 150, P = 8, mx = Math.max(...sorted) * 1.05, mn = Math.min(...sorted) * 0.95, X = i => P + i / (L.length - 1) * (Wv - P * 2), Y = v => P + (mx - v) / (mx - mn) * (Hv - P * 2);
   const pts = L.map((x, i) => `${X(i).toFixed(1)},${Y(x.pe).toFixed(1)}`).join(" ");
   return `<div class="pe"><div class="pe-kv"><div><span>本益比</span><b>${cur}</b></div><div><span>近 ${Math.round(L.length / 245) || 1} 年的水平</span><b class="${pct <= 30 ? "up" : pct >= 70 ? "down" : ""}">${pct}%</b></div><div><span>歷史平均</span><b>${avg.toFixed(1)}</b></div></div>
-    <svg class="blsvg" viewBox="0 0 ${Wv} ${Hv}" preserveAspectRatio="none" role="img" aria-label="本益比走勢"><rect x="${P}" y="${Y(q(0.8)).toFixed(1)}" width="${Wv - P * 2}" height="${(Y(q(0.2)) - Y(q(0.8))).toFixed(1)}" fill="var(--accent-soft)"/><line x1="${P}" x2="${Wv - P}" y1="${Y(avg).toFixed(1)}" y2="${Y(avg).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="4 4"/><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.2"/></svg>
+    ${xhWrap(`<svg class="blsvg" viewBox="0 0 ${Wv} ${Hv}" preserveAspectRatio="none" role="img" aria-label="本益比走勢"><rect x="${P}" y="${Y(q(0.8)).toFixed(1)}" width="${Wv - P * 2}" height="${(Y(q(0.2)) - Y(q(0.8))).toFixed(1)}" fill="var(--accent-soft)"/><line x1="${P}" x2="${Wv - P}" y1="${Y(avg).toFixed(1)}" y2="${Y(avg).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="4 4"/><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.2"/></svg>`,
+      L.map((x, i) => X(i)), i => `<b>${esc(L[i].d)}</b><span><i style="background:var(--accent)"></i>本益比 ${L[i].pe}</span>`)}
     <p class="note" style="margin:4px 0 0">水平＝目前本益比在近幾年裡的百分位（越低代表相對便宜）；色帶是 20%～80% 的合理區間，虛線是平均。${L[0].d.replace(/-/g, "/")} 起</p></div>`;
 }
 
@@ -5198,7 +5280,8 @@ function coChart(rows, { bars, line, lineName, fmtB = yiC, fmtL = pctS, colors =
   if (lv.length > 1 || (lv.length && n === 1)) { const pts = R.map((r, i) => (r[line] == null ? null : `${(P + i * cw + cw / 2).toFixed(1)},${Yl(r[line]).toFixed(1)}`)).filter(Boolean); svg += `<polyline points="${pts.join(" ")}" fill="none" stroke="#f0883e" stroke-width="1.4"/>` + pts.map(p => { const [x, y] = p.split(","); return `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--surface)" stroke="#f0883e" stroke-width="1.6"/>`; }).join(""); }
   const head = `<tr><th></th>${R.map(r => `<th>${esc(r.label || r.q)}</th>`).join("")}</tr>`;
   const rowsH = bars.map((b, k) => `<tr><td><i style="background:${colors[k]}"></i></td>${R.map(r => `<td style="color:${colors[k]}">${fmtB(r[b])}</td>`).join("")}</tr>`).join("") + (line ? `<tr><td><i style="background:#f0883e"></i></td>${R.map(r => `<td class="${cls(r[line])}">${fmtL(r[line])}</td>`).join("")}</tr>` : "");
-  return `<svg class="cochart" viewBox="0 0 ${Wv} ${Hv}" role="img">${svg}</svg><div class="cotbl-wrap"><table class="cotbl">${head}${rowsH}</table></div>`;
+  return xhWrap(`<svg class="cochart" viewBox="0 0 ${Wv} ${Hv}" role="img">${svg}</svg>`, R.map((r, i) => P + i * cw + cw / 2), i => { const r = R[i];
+    return `<b>${esc(r.label || r.q)}</b>${bars.map((b, k) => `<span><i style="background:${colors[k]}"></i>${esc(String(fmtB(r[b])))}</span>`).join("")}${line ? `<span><i style="background:#f0883e"></i>${esc(String(fmtL(r[line])))}</span>` : ""}`; }) + `<div class="cotbl-wrap"><table class="cotbl">${head}${rowsH}</table></div>`;
 }
 const chipsBar = (key, opts, cur) => `<div class="cochips">${opts.map(([k, t]) => `<button data-co="${key}:${k}" aria-pressed="${cur === k}">${t}</button>`).join("")}</div>`;
 function renderCo() {
@@ -5247,7 +5330,8 @@ function coHoldHtml(J) {
   const Hd = J.holders || [];
   if (Hd.length) { const a = Hd.at(-1), b = Hd[Math.max(0, Hd.length - 5)], vs = Hd.map(x => x.b1000), mx = Math.max(...vs), mn = Math.min(...vs), Wv = 600, Hv = 120, X = i => 10 + i / Math.max(1, Hd.length - 1) * (Wv - 20), Y = v => 10 + (mx - v) / ((mx - mn) || 1) * (Hv - 20);
     h += `<section class="cosec"><h3>股權分散 <span class="note">集保，每週</span></h3><div class="cokv three"><div><span>千張大戶持股</span><b>${a.b1000.toFixed(2)}%</b><small class="${cls(a.b1000 - b.b1000)}">近 4 週 ${a.b1000 - b.b1000 >= 0 ? "+" : ""}${(a.b1000 - b.b1000).toFixed(2)}%</small></div><div><span>400 張以上</span><b>${a.b400.toFixed(2)}%</b><small class="${cls(a.b400 - b.b400)}">近 4 週 ${a.b400 - b.b400 >= 0 ? "+" : ""}${(a.b400 - b.b400).toFixed(2)}%</small></div><div><span>千張大戶人數</span><b>${a.people1000.toLocaleString()}</b><small>${a.d.replace(/-/g, "/")}</small></div></div>
-      <svg class="cochart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="千張大戶持股比例"><polyline points="${Hd.map((x, i) => `${X(i).toFixed(1)},${Y(x.b1000).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><p class="cleg"><i style="background:var(--accent)"></i>千張大戶持股比例（${Hd[0].d.slice(5).replace("-", "/")}～${a.d.slice(5).replace("-", "/")}）</p></section>`; }
+      ${xhWrap(`<svg class="cochart" viewBox="0 0 ${Wv} ${Hv}" role="img" aria-label="千張大戶持股比例"><polyline points="${Hd.map((x, i) => `${X(i).toFixed(1)},${Y(x.b1000).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg>`,
+        Hd.map((x, i) => X(i)), i => `<b>${esc(Hd[i].d)}</b><span><i style="background:var(--accent)"></i>千張大戶 ${Hd[i].b1000.toFixed(2)}%</span>${Hd[i].b400 != null ? `<span>400 張以上 ${Hd[i].b400.toFixed(2)}%</span>` : ""}`)}<p class="cleg"><i style="background:var(--accent)"></i>千張大戶持股比例（${Hd[0].d.slice(5).replace("-", "/")}～${a.d.slice(5).replace("-", "/")}）</p></section>`; }
   return h;
 }
 $("#coBox").addEventListener("click", e => { const b = e.target.closest("[data-co]"); if (!b) return; const [k, v] = b.dataset.co.split(":"); W.coView = { ...W.coView, [k]: v }; store.set("watch:cov", W.coView); renderCo(); });
@@ -5377,6 +5461,7 @@ const ROUTES = {
   congress: ["cong", { us: "home", tw: "tw", "13f": "f13", insider: "ins", backtest: "bt" }],
   supply: ["ind", { themes: "themes", network: "network", diagrams: "gallery", news: "news", fav: "fav" }],
   podcast: ["pod", { latest: "home", rank: "rank", follow: "follow" }],
+  earnings: ["earn", { summary: "sum", revenue: "rev", eps: "eps", margin: "pm", industry: "ind" }],
 };
 function applyRoute(r) {
   const [a, b, c] = String(r || "").replace(/^#/, "").split("/"), R = ROUTES[(a || "").toLowerCase()]; if (!R) return false;
@@ -5385,6 +5470,7 @@ function applyRoute(r) {
   if (lt === "cong") W.cv = sub || "home";
   if (lt === "ind") { W.indS.open = b === "theme" && c && INDT.get(c) ? c : null; if (sub) W.indS.view = sub; }
   if (lt === "pod" && typeof POD !== "undefined") POD.view = sub || "home";
+  if (lt === "earn") ER().view = sub || "sum";
   if ($("#main").classList.contains("show-detail")) showList(false);
   if (W.lt !== lt) setLt(lt); else { renderList(); navPush(); }
   return true;
@@ -5396,6 +5482,7 @@ function routeOf() {
   if (W.lt === "cong") return sub("cong", String(W.cv || "home").split(":")[0]);
   if (W.lt === "ind") return W.indS.open ? "supply/theme/" + W.indS.open : sub("ind", W.indS.view);
   if (W.lt === "pod") return sub("pod", typeof POD !== "undefined" ? POD.view : "home");
+  if (W.lt === "earn") return sub("earn", ER().view);
   return null;
 }
 /* ---------- 起始 ---------- */
