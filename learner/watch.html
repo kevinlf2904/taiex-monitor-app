@@ -1062,7 +1062,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-132</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-133</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1117,6 +1117,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="earn.js"></script>
 <script src="tpex.js"></script>
 <script src="official.js"></script>
+<script src="macrox.js"></script>
 <script src="finrep.js"></script>
 <script src="congx.js"></script>
 <script>
@@ -3986,7 +3987,7 @@ function renderMnews(top) {
       ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener">${x.topic ? `<em>${esc(x.topic)}</em>` : ""}<span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">今天沒有抓到相關新聞。</p>`}</section>`; };
   $("#lx").innerHTML = top + `<div class="mn-days mkseg">${J.days.slice(0, 10).map(d => `<button type="button" data-mk="mnDay" data-v="${d.date}" aria-pressed="${d === D}">${d.date.slice(5).replace("-", "/")}</button>`).join("")}</div>
     <p class="note gnote">${J.live ? "排程整理的檔案還沒產生，先顯示即時頭條（沒有 AI 摘要）" : `整理於 ${hm(D.at)}${D.by ? "・AI 摘要只根據新聞標題，數字請點原文確認" : "・這次沒有 AI 摘要，只列出分類好的標題"}`}</p>`
-    + side("tw", "台灣總經") + side("us", "美國總經") + (D.world ? side("world", "世界總經（歐、日、中國、原物料）") : "") + `<p class="note" style="padding:4px 12px 12px">來源：Google 新聞搜尋（每天早上 7:50、下午 5:50 整理）。只整理標題與連結，內容以原網站為準；不構成投資建議。</p>`;
+    + (typeof mxNewsHtml === "function" ? mxNewsHtml(J) : "") + side("tw", "台灣總經") + side("us", "美國總經") + (D.world ? side("world", "世界總經（歐、日、中國、原物料）") : "") + `<p class="note" style="padding:4px 12px 12px">來源：Google 新聞搜尋（每天早上 7:50、下午 5:50 整理）。只整理標題與連結，內容以原網站為準；不構成投資建議。</p>`;
 }
 async function loadPoly(force = false) {
   if (W.off || W.pmLoading || (!force && W.pm && Date.now() - W.pm.at < 300000)) return;
@@ -4017,6 +4018,7 @@ function renderMacro(top) {
   const moving = J.series.filter(s => s.dir), arrow = d => (d > 0 ? "▲" : d < 0 ? "▼" : "—");
   if (moving.length) h += `<section class="mk"><h3>最近的變化可能對股市造成的影響<span class="note">和約 3 期前比</span></h3><ul class="mc-imp">${moving.slice(0, 12).map(s => `<li><b>${esc(s.name)} <span class="${s.dir > 0 ? "up" : "down"}">${arrow(s.dir)}</span></b><span>${esc(s.impact)}</span></li>`).join("")}</ul>
     <p class="note">這是依歷史上常見的關係整理的「可能」影響，實際走勢還要看市場預期（公布值比預期好或壞，比數字本身更重要）。</p></section>`;
+  if (typeof mxMacroHtml === "function") h += mxMacroHtml(J); // 景氣循環、衰退警訊、政策立場、金融壓力（macrox.js）
   for (const g of ["通膨", "利率", "就業", "景氣", "資金", "世界"]) {
     const L = J.series.filter(s => s.group === g); if (!L.length) continue;
     h += `<section class="mk"><h3>${g === "世界" ? "世界總經" : g}${g === "世界" ? `<span class="note">歐、日、中國、匯率與原物料</span>` : ""}</h3>${L.map(s => { const d = s.prev ? s.last[1] - s.prev[1] : null;
@@ -4035,6 +4037,7 @@ function renderPoly(top) {
   const pct = v => (v == null ? "—" : `${(v * 100).toFixed(v < 0.01 && v > 0 ? 1 : 0)}%`), d1 = v => (v ? `<small class="${cls(v)}">${v > 0 ? "▲" : "▼"}${Math.abs(v * 100).toFixed(1)}</small>` : "");
   let h = top + `<p class="note gnote">${esc(J.source)}・機率＝目前「是」的成交價，代表市場用真錢押注的機率・${new Date(Date.parse(J.ts) + 8 * 3600e3).toISOString().slice(11, 16)} 更新</p>
     <div class="mksegrow" style="padding:0 12px">${mkSeg("pmCat", cur, [["", "全部"], ...cats.map(c => [c, c])])}</div>`;
+  if (!cur && typeof mxPolyHtml === "function") h += mxPolyHtml(J); // 利率路徑、分歧度、資金注意力（macrox.js）
   // 24 小時機率變化最大的事件：市場預期正在改變，最可能影響股市
   const mv = L.map(e => ({ e, m: e.markets.slice().sort((a, b) => Math.abs(b.d1 || 0) - Math.abs(a.d1 || 0))[0] })).filter(x => Math.abs(x.m?.d1 || 0) >= 0.03).sort((a, b) => Math.abs(b.m.d1) - Math.abs(a.m.d1)).slice(0, 5);
   if (mv.length) h += `<section class="mk"><h3>機率變化最大（24 小時）<span class="note">市場預期正在改變的事件</span></h3><ul class="mc-imp">${mv.map(({ e, m }) => `<li><b>${esc(e.title)}：${esc(m.label || m.q)} ${pct(m.yes)} ${d1(m.d1)}</b><span>${esc(PM_IMPACT[e.cat] || "")}</span></li>`).join("")}</ul></section>`;
