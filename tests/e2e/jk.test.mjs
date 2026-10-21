@@ -20,8 +20,8 @@ test("日股、韓股報價與個股頁", async () => {
 
 test("首頁：往下捲出現「回到最上面」，嵌入的看盤頁不自己捲動", async () => {
   const { ctx, p, errs } = await open(B, S.url, "index.html#congress", { width: 390, touch: true });
-  await p.waitForTimeout(2500);
-  assert.equal(await p.evaluate(() => document.getElementById("toTop").hidden), true);
+  await p.waitForTimeout(2500); // #congress 會先捲到情報區（看內容高度，可能已超過門檻），先回到最上面再測
+  await p.evaluate(() => scrollTo(0, 0)); await p.waitForFunction(() => document.getElementById("toTop").hidden);
   await p.evaluate(() => scrollTo(0, 900)); await p.waitForFunction(() => !document.getElementById("toTop").hidden);
   await p.click("#toTop"); await p.waitForFunction(() => scrollY === 0, null, { timeout: 5000 });
   const f = p.frames().find(x => x.url().includes("watch.html"));
