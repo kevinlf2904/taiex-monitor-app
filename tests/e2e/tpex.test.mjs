@@ -97,3 +97,18 @@ for (const width of [1280, 390]) test(`上市圖表 ${width}`, async () => {
   assert.deepEqual(await p.evaluate(() => [W.lt, W.afView]), ["after", "margin"]);
   await ctx.close(); assert.deepEqual(errs.filter(e => !/after\.json|404/.test(e)), []);
 });
+
+test("點選單不會跳回最前面（左右滑的選單、頁面捲動位置）", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await ctx.route("**/data/tpex.json", r => r.fulfill({ contentType: "application/json", body: JSON.stringify(FIX) }));
+  await p.evaluate(() => setLt("mkt")); await p.waitForTimeout(500);
+  await p.click('#lx [data-mk="mkReg"][data-v="otc"]'); await p.waitForSelector("#lx .otcbox .tschart");
+  await p.evaluate(() => { $("#lx .otcv").scrollLeft = 200; $("#lx .mkreg .mkseg").scrollLeft = 120; scrollTo(0, 300); });
+  await p.$eval('#lx .otcv [data-v="cb"]', b => b.click()); await p.waitForTimeout(150);
+  const st = () => p.evaluate(() => ({ y: scrollY, v: $("#lx .otcv")?.scrollLeft, on: (() => { const b = $('#lx .otcv [aria-pressed="true"]'), r = b.getBoundingClientRect(), R = $("#lx .otcv").getBoundingClientRect(); return r.left >= R.left - 1 && r.right <= R.right + 1; })() }));
+  const a = await st(); assert.ok(a.v > 100 && a.on, `選單留在原位、選中的看得到 ${JSON.stringify(a)}`); assert.equal(a.y, 300);
+  await p.$eval('#lx .mkreg [data-v="poly"]', b => b.click()); await p.waitForTimeout(150);
+  assert.equal(await p.evaluate(() => scrollY), 300, "換到內容還在載入的分頁，頁面不會被拉回最上面");
+  assert.ok(await p.evaluate(() => $("#lx .mkreg .mkseg").scrollLeft) > 0);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
