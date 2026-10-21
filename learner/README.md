@@ -345,6 +345,10 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 美股財報驚喜% 只用 Nasdaq 的數字（2026.10.21-122）
+
+- 剛公布、Nasdaq 還沒標驚喜% 的公司，不再用 EPS 自己換算（那幾小時 EPS 欄有時是 GAAP 數字，和預估的調整後 EPS 口徑不同，會誤判成大幅低於預期），清單上標「驚喜% 待確認」。
+
 ### 財報區分台股、美股＋營收與 EPS 走勢圖、原理圖解互動（2026.10.21-121）
 
 - 情報局「財報」分台股、美股：
