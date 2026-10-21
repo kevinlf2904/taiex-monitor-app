@@ -46,7 +46,7 @@ for (const width of [390, 1280]) test(`看盤：以股查人、☆ 自選、情�
   await p.evaluate(() => { const A = [{ id: "s1", name: "半導體", kind: "產業", n: 2, q: "up", q1: "up", net1: 1e8, prev1: 0, accel1: 1e8, net5: 5e9, prev5: 0, accel: 1e9, pct1: 1, pct5: 2, f1: 0, tr1: 0, f5: 0, tr5: 0, buy1: 2, buy5: 2 }];
     const mem = c => ({ code: c, name: "股" + c, pct: [1], px: [100], amt: [3], f: [1], tr: [1] });
     W.mf.days = [{ date: "2026-10-16", rows: [] }]; W.mf.model = { T: 1, dates: ["2026-10-16"], secs: [{ id: "s1", name: "半導體", kind: "產業", mem: [mem("2330"), mem("2454")] }] }; window.flowAt = () => A; });
-  await p.evaluate(() => select("2330")); await p.waitForFunction(() => /2 位政治人物申報持有/.test($("#dIntel").innerText) && /半導體：↗ 強勢突破區/.test($("#dIntel").innerText), null, { timeout: 15000 });
+  await p.evaluate(() => select("2330")); await p.waitForFunction(() => /申報\s*2 位政治人物持有/.test($("#dIntel").innerText) && /半導體：↗ 強勢突破區/.test($("#dIntel").innerText), null, { timeout: 15000 });
   // 動能矩陣點圓點：下面直接列出成分股（含 ☆）
   await p.evaluate(() => { window.flowStocks = () => []; window.flowMood = () => null; showList(); setLt("money"); W.mf.view = "bubble"; W.mf.bsel = "s1"; W.mf.bw = "5"; renderList(); });
   assert.match(await p.evaluate(() => $("#lx .binfo").innerText), /成分股[\s\S]*股2330[\s\S]*完整成分股與排序/);
@@ -179,13 +179,23 @@ test("原理圖解互動：點編號看那一段與公司、上一段／下一�
   await p.click('.ifig [data-fstep="-1"]'); await p.click('.ifig [data-fstep="-1"]'); assert.ok((await p.textContent(".ifig .figstep")).includes(items.at(-1)), "第 1 段再往前跳到最後一段");
   await p.click(".ifig [data-fplay]"); await p.waitForFunction(() => document.querySelector(".ifig").dataset.fn === "2", null, { timeout: 6000 }); // 從頭播：1 → 2
   assert.equal(await p.textContent(".ifig [data-fplay]"), "❚❚ 暫停"); await p.click(".ifig [data-fplay]"); assert.equal(await p.evaluate(() => W.figTimer), null);
-  // 點圖其他地方＝放大；放大圖裡點編號也看得到說明
+  // 點圖其他地方不會放大，要按「⤢ 放大」；放大圖裡點編號也看得到說明
   await p.evaluate(() => document.querySelector(".ifig svg").dispatchEvent(new MouseEvent("click", { bubbles: true })));
-  await p.waitForSelector(".izoom .fbadge");
+  assert.ok(!(await p.locator(".izoom").count()), "點圖不會放大");
+  await p.click('.ifig [data-izoom]'); await p.waitForSelector(".izoom .fbadge");
   await p.evaluate(() => document.querySelector('.izoom .fbadge[data-n="2"]').dispatchEvent(new MouseEvent("click", { bubbles: true })));
   assert.ok((await p.textContent(".izoom .figstep")).includes(items[1]));
   await p.click('.izoom [data-z="x"]');
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await ctx.close();
   assert.deepEqual(errs, []);
+});
+
+test("手機標題列：KLineLab 字標不會疊到搜尋放大鏡", async () => {
+  for (const width of [360, 375, 390, 430, 600]) {
+    const { ctx, p, errs } = await open(B, S.url, "index.html", { width, touch: true }); await p.waitForTimeout(400);
+    const r = await p.evaluate(() => { const b = document.querySelector(".brand .bl-t b").getBoundingClientRect(), g = document.querySelector("#gsTop").getBoundingClientRect(); return { b: b.right, g: g.left, sw: document.documentElement.scrollWidth }; });
+    assert.ok(r.b <= r.g, `${width}px：字標右緣 ${r.b} 超過放大鏡 ${r.g}`); assert.ok(r.sw <= width + 1, `${width}px 沒有橫向溢出`);
+    await ctx.close(); assert.deepEqual(errs, []);
+  }
 });

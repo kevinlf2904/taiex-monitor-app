@@ -181,8 +181,8 @@ body { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .qx-tbl th:first-child, .qx-tbl td:first-child { text-align: left; white-space: normal; min-width: 8em; } .qx-tbl th { font-weight: 400; color: var(--muted); font-size: 12px; } .qx-tbl td small { margin-left: 2px; }
 .qx-tbl .up { color: var(--up); } .qx-tbl .down { color: var(--down); } .qx-tbl tr.qx-base td { font-weight: 500; background: var(--surface-3); } .qx-tbl tr.qx-me td { background: var(--accent-soft); }
 .qx-state { display: flex; gap: 10px; align-items: center; margin: 6px 0; } .qx-state > div:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .qx-state b { font-weight: 500; }
-.qx-badge { flex: none; width: 54px; height: 54px; border-radius: 14px; display: grid; place-items: center; font-size: 16px; font-weight: 500; background: var(--surface-3); }
-.qx-badge.up { background: var(--up); color: #fff; } .qx-badge.down { background: var(--down); color: #fff; }
+.qx-badge { flex: none; width: 54px; height: 54px; border-radius: 6px; border: 1px solid var(--line); display: grid; place-items: center; font-size: 16px; font-weight: 500; background: var(--surface-3); }
+.qx-badge.up { color: var(--up); } .qx-badge.down { color: var(--down); } /* 單色底、只有字帶漲跌色 */
 .qx-adv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; } .qx-adv h5 { margin: 0 0 4px; font-size: 13px; font-weight: 500; } .qx-adv ul { margin: 0; padding-left: 1.2em; font-size: 13.5px; line-height: 1.6; }
 @media (max-width: 560px) { .qx-adv { grid-template-columns: 1fr; } }
 .qx-size { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13.5px; margin: 6px 0; } .qx-size label { display: inline-flex; gap: 4px; align-items: center; } .qx-size input { width: 110px; } .qx-size b { font-weight: 500; font-family: var(--font-num); }
@@ -219,3 +219,5 @@ a.bl-pro:hover { border-color: var(--ink); }
 .costx { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--muted); pointer-events: none; }
 .costtag { position: absolute; right: 16px; transform: translateY(-120%); padding: 2px 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); font: 11px var(--font-num); white-space: nowrap; pointer-events: none; }
 .tsbox.xh { margin: 0; max-width: none; } .tsbox.xh svg { touch-action: pan-y; }
+/* SVG 縮寫徽章（core.js badgeSvg）：單色，跟著主題的底色與文字色 */
+.badge .bg { fill: var(--surface-3, #27272a); stroke: var(--line); } .badge text { fill: var(--muted); }

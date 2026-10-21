@@ -422,8 +422,8 @@ function podInit() {
 .pod .pep h4 { margin: 4px 0 6px; font-size: 16.5px; font-weight: 500; line-height: 1.45; }
 .pod .pmeta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13.5px; }
 .pod .ptl { margin: 0 0 4px; color: var(--muted); line-height: 1.65; } .pod .ptopic span { color: var(--up); }
-.pod .pbadge { font-size: 12px; padding: 1px 9px; border-radius: 99px; background: var(--surface-3); border: 1px solid var(--line); white-space: nowrap; }
-.pod .pbadge.gold { background: color-mix(in srgb, #d9b04a 20%, var(--surface)); color: color-mix(in srgb, #c99a2e 75%, var(--ink)); border-color: color-mix(in srgb, #d9b04a 45%, transparent); } .pod .pbadge.low { opacity: .75; }
+.pod .pbadge { font-size: 12px; padding: 1px 9px; border-radius: 3px; background: var(--surface-3); border: 1px solid var(--line); white-space: nowrap; }
+.pod .pbadge.gold { color: var(--ink); border-color: var(--muted); font-weight: 500; } .pod .pbadge.low { opacity: .75; }
 .pod .plisten { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; } .pod .pnotice { font-size: 12px; line-height: 1.7; margin: 18px 0 6px; }
 .pod .pkey { border-left: 3px solid var(--up); padding: 4px 0 4px 14px; margin: 14px 0; } .pod .pkh { color: var(--up); font-size: 13px; margin-bottom: 4px; }
 .pod .pkey2 { border-left-color: var(--line); } .pod .pkey2 .pkh { color: var(--muted); } .pod .pkey2 li::marker { color: var(--muted); }
@@ -432,7 +432,7 @@ function podInit() {
 .pod .pcall { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; margin: 10px 0; background: var(--grad-panel, var(--surface)); }
 .pod .pch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .pod .pst { margin-left: auto; }
 .pod .pcode { font-family: var(--font-mono); font-size: 15px; border: 0; background: none; color: var(--ink); cursor: pointer; padding: 0; text-decoration: underline dotted; } .pod .pname { font-size: 13px; color: var(--muted); }
-.pod .pdir { font-size: 12px; padding: 1px 9px; border-radius: 99px; color: #fff; } .pod .pdir.bull { background: var(--up); } .pod .pdir.bear { background: var(--down); }
+.pod .pdir { font-size: 12px; padding: 1px 9px; border-radius: 3px; border: 1px solid currentColor; color: var(--muted); } .pod .pdir.bull { color: var(--up); } .pod .pdir.bear { color: var(--down); }
 .pod .pmain { display: flex; align-items: baseline; gap: 8px; margin: 6px 0; } .pod .pex { font-size: 26px; font-weight: 500; font-family: var(--font-num); }
 .pod .pq { margin: 6px 0 8px; padding: 8px 12px; border-left: 3px solid var(--up); background: var(--accent-soft); border-radius: 4px; line-height: 1.7; } .pod .pq.bear { border-left-color: var(--down); }
 .pod .pspark { display: block; width: 100%; height: 56px; margin: 4px 0; } .pod .pl { fill: none; stroke-width: 1.7; vector-effect: non-scaling-stroke; } .pod .pl.up { stroke: var(--up); } .pod .pl.down { stroke: var(--down); }
@@ -456,7 +456,7 @@ function podInit() {
 .pod .pfh { margin: 10px 0 0; font-size: 14px; font-weight: 500; color: var(--muted); }
 .pod .pfrs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .pod .pfr { border: 1px solid var(--line); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; } .pod .pfr b { font-size: 20px; font-weight: 500; font-family: var(--font-num); }
-.pod .pwin { align-self: flex-start; font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--up); }
+.pod .pwin { align-self: flex-start; font-size: 11px; padding: 1px 7px; border-radius: 3px; border: 1px solid var(--line); color: var(--up); }
 .pod .psimr { display: flex; align-items: baseline; gap: 8px; } .pod .psimr b { font-size: 40px; font-weight: 300; font-family: var(--font-num); }
 .pod .pcard .pspark { height: 90px; } .pod .pcard .seg { align-self: flex-start; flex-wrap: wrap; }
 .pod .peps { list-style: none; margin: 0; padding: 0; } .pod .peps li { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer; } .pod .peps li:hover { background: var(--surface-2); }

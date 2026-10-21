@@ -540,7 +540,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .ixcards.us .ixcard .spark, .ixcard .spark.tsp { width: 100%; height: 22px; margin-top: 2px; } .tsp-prev { stroke: var(--muted); stroke-width: .6; stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; opacity: .7; }
 /* 資金雷達視窗自適應：依電腦視窗比例適配寬螢幕、放大檢視填滿畫面 */
 .bwrap { position: relative; margin: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); overflow: hidden; user-select: none; touch-action: pan-y; }
-.bwrap.is-zoomed { cursor: grab; touch-action: none; }
+.bwrap.is-zoomed { cursor: grab; } @media (pointer: fine) { .bwrap.is-zoomed { touch-action: none; } } /* 手機放大後仍是 pan-y：單指上下滑照常捲動頁面（不會卡在圖上回不到頂端），左右滑與兩指才操作圖 */
 .bwrap.is-grabbing { cursor: grabbing !important; }
 .bwrap svg { width: 100%; height: auto; display: block; }
 .mf-zoom-ctl { position: static; width: fit-content; margin: 2px auto 6px; display: flex; align-items: center; gap: 2px; background: var(--surface-2); background: color-mix(in srgb, var(--surface-2) 86%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 6px; padding: 2px; z-index: 10; opacity: 0.75; transition: opacity 0.2s; }
@@ -665,7 +665,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mlist { list-style: none; margin: 0; padding: 0; } .mlist button { width: 100%; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); padding: 9px 2px; cursor: pointer; text-align: left; font: inherit; }
 .mlist .nm { display: flex; flex-direction: column; font-size: 14.5px; min-width: 0; } .mlist .nm small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mlist b { font-size: 13.5px; text-align: right; min-width: 4.2em; }
 .mlist li:has(> .wstar) { display: flex; align-items: stretch; } .mlist li:has(> .wstar) > button:first-child { flex: 1; min-width: 0; } .mlist .wstar { width: auto; display: block; border-top: 1px solid var(--line); border-radius: 0; padding: 0 8px; } .bmem-h { margin: 10px 0 2px; font-size: 13.5px; font-weight: 500; }
-.d-intel { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; } .ibadge { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12.5px; line-height: 1.5; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ibadge:hover { border-color: var(--ink); } .ibadge.ib-mf { border-color: color-mix(in srgb, var(--qc) 60%, transparent); }
+.d-intel { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; } .ibadge { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 3px; padding: 3px 10px; font: inherit; font-size: 12.5px; line-height: 1.5; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ibadge:hover { border-color: var(--ink); } .ibadge i { font-style: normal; color: var(--muted); margin-right: 7px; padding-right: 7px; border-right: 1px solid var(--line); } /* 徽章一律單色：分類小字＋內容，不用表情符號和彩色框 */
 .hempty { padding: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; } .hempty .note { margin: 0; }
 .hdemo { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 8px 12px; padding: 8px 12px; border-radius: 6px; background: var(--accent-soft, var(--surface-2)); font-size: 13px; }
 .mlist .rk { color: var(--muted); font: 12px var(--font-num); min-width: 1.4em; text-align: right; } .mrk { margin: 8px 12px 0; } .mdesc { margin: 8px 12px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 4px; font-size: 13px; color: var(--muted); }
@@ -731,7 +731,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .figstep { margin: 4px 0 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); } .figstep p { margin: 6px 0; font-size: 13.5px; line-height: 1.6; }
 .fsh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .fsh b { font-size: 15px; } .fsh small { color: var(--muted); font-size: 12px; } .fsc { display: flex; flex-wrap: wrap; gap: 6px; } .fsc small { color: var(--muted); }
 .izinfo { padding: 6px 12px 10px; border-top: 1px solid var(--line); max-height: 38vh; overflow-y: auto; }
-.izbtn { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; color: inherit; }
+.izbtn { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; }
 .izoom { position: fixed; inset: 0; z-index: 90; background: var(--bg); display: flex; flex-direction: column; } .izbar { display: flex; gap: 6px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); } .izbar b { flex: 1; font-size: 15px; }
 .izbody { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; } .izin { padding: 12px; min-width: 100%; box-sizing: border-box; }
 .itrends { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; } .itrc { display: flex; gap: 8px; border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; background: var(--surface); } .itrc span { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--ic, #6366f1); color: #fff; font-size: 12px; font-weight: 500; display: grid; place-items: center; } .itrc p { margin: 0; font-size: 13.5px; line-height: 1.65; }
@@ -1049,7 +1049,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-123</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-124</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2899,6 +2899,14 @@ document.addEventListener("pointermove", e => {
         const mx = (mfPointerDrag.centerX - rect.left) / rect.width;
         const my = (mfPointerDrag.centerY - rect.top) / rect.height;
         mfApplyZoom(mfPointerDrag.startK * scale, mx, my);
+        // 兩指一起移動＝平移（手機放大後單指上下滑是捲動頁面，上下平移改用兩指）
+        const cx = (pts[0].x + pts[1].x) / 2, cy = (pts[0].y + pts[1].y) / 2, L = mfPointerDrag.last || { x: mfPointerDrag.centerX, y: mfPointerDrag.centerY };
+        mfPointerDrag.last = { x: cx, y: cy };
+        if (Z.k > 1.01 && svg && Z.vw && Z.baseW) {
+          Z.vx = Math.max(0, Math.min(Z.baseW - Z.vw, Z.vx - (cx - L.x) * Z.vw / rect.width));
+          Z.vy = Math.max(0, Math.min(Z.baseH - Z.vh, Z.vy - (cy - L.y) * Z.vh / rect.height));
+          svg.setAttribute("viewBox", `${Z.vx.toFixed(2)} ${Z.vy.toFixed(2)} ${Z.vw.toFixed(2)} ${Z.vh.toFixed(2)}`);
+        }
       }
       return;
     }
@@ -3645,14 +3653,14 @@ function figPlay(box, T, on) {
   W.figTimer = setInterval(() => { if (!box.isConnected && box.classList.contains("ifig")) box = document.querySelector(".ifig") || box; // 頁面重畫過就接到新的圖
     if (!box.isConnected || +box.dataset.fn >= L) return figPlay(box, T, false); figStep(box, T, +box.dataset.fn + 1); }, 2600);
 }
-// 頁面裡的圖、放大的圖共用：點編號＝看那一段；點其他地方＝放大
+// 頁面裡的圖、放大的圖共用：點編號＝看那一段；點圖不會放大，要按「⤢ 放大」
 function figClick(e, box, T) {
   const bd = e.target.closest(".fbadge"); if (bd) { figPlay(box, T, false); figStep(box, T, +bd.dataset.n); return true; }
   const st = e.target.closest("[data-fstep]"); if (st) { figPlay(box, T, false); figStep(box, T, (+box.dataset.fn || 0) + +st.dataset.fstep); return true; }
   if (e.target.closest("[data-fplay]")) { figPlay(box, T, !W.figTimer); return true; }
   return false;
 }
-// 點圖放大：全螢幕看圖，可放大縮小、左右上下滑動
+// 按「⤢ 放大」：全螢幕看圖，可放大縮小、左右上下滑動
 function indZoom(id) {
   const T = INDT.get(id), F = T && indFig(T); if (!F) return; let z = isMobile() ? 2 : 1.4;
   const ov = document.createElement("div"); ov.className = "izoom"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", `${T.name} 圖解放大`);
@@ -3671,7 +3679,7 @@ function renderInd() {
     h += `<div class="ihead" style="--ic:${indCol(T)}"><button class="btn sm" data-iopen="">‹ 返回</button><span class="iic">${indIcon(T)}</span><div><small>${esc(T.cat)}・${MK_TAG[T.mk]}</small><h2>${esc(T.name)}</h2></div>
       ${scBtn("supply")}<button class="ifav" data-ifav="${T.id}" aria-pressed="${fav.has(T.id)}" aria-label="收藏">${fav.has(T.id) ? "♥" : "♡"}</button></div>
       <p class="idesc">${esc(T.desc)}</p>${a ? `<p class="note gnote">今天平均 <b class="${cls(a.pct)}">${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%</b>（${a.n} 檔有報價）</p>` : ""}
-      ${(F => F ? `<section class="iflow ifig"><h4>原理圖解 <button class="ilink" data-izoom="${T.id}">點圖放大 ⤢</button></h4><div class="izbtn figi" data-fig="${T.id}" role="button" tabindex="0" aria-label="放大圖解">${figSvg(F.fig, { id: "d-" + T.id })}</div>${figCtl(T)}${F.fig.alt ? `<p class="note figalt">${esc(F.fig.alt)}</p>` : ""}</section>
+      ${(F => F ? `<section class="iflow ifig"><h4>原理圖解${figItems(T).length ? "" : ` <button class="ilink" data-izoom="${T.id}">⤢ 放大</button>`}</h4><div class="izbtn figi">${figSvg(F.fig, { id: "d-" + T.id })}</div>${figCtl(T)}${F.fig.alt ? `<p class="note figalt">${esc(F.fig.alt)}</p>` : ""}</section>
         <section class="iseg ihow"><h4>原理說明</h4>${F.how.map(([k, v], i) => `<details ${i < 2 ? "open" : ""}><summary>${esc(k)}</summary><p>${esc(v)}</p></details>`).join("")}</section>
         ${F.trends?.length ? `<section class="iseg itrend"><h4>產業趨勢</h4><div class="itrends">${F.trends.map((x, i) => `<div class="itrc"><span>${i + 1}</span><p>${esc(x)}</p></div>`).join("")}</div></section>` : ""}` : "")(indFig(T))}
       ${indChain(T)}${indGlobal(T)}${inewsTheme(T)}
@@ -3739,7 +3747,7 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b =
 $("#lTools").addEventListener("click", e => { const b = e.target.closest("[data-cv]"); if (b && W.lt === "cong") { W.cv = b.dataset.cv; renderList(); goY(0); navPush(); } });
 $("#lx").addEventListener("click", e => { if (W.lt === "ind" && e.target.closest("[data-iai]")) indAsk(e.target.closest("[data-iai]").dataset.iai); });
 $("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const z = e.target.closest("[data-izoom]"); if (z) return indZoom(z.dataset.izoom);
-  const fb = e.target.closest(".ifig"); if (fb) { const T = INDT.get(W.indS.open); if (T && figClick(e, fb, T)) return; const fi = e.target.closest("[data-fig]"); if (fi) return indZoom(fi.dataset.fig); }
+  const fb = e.target.closest(".ifig"); if (fb) { const T = INDT.get(W.indS.open); if (T && figClick(e, fb, T)) return; }
   const x = e.target.closest("[data-iexp]"); if (x) { const X = (W.indS.exp ||= {}); X[x.dataset.iexp] = !X[x.dataset.iexp]; renderInd(); } });
 $("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const S = W.indS, gf = e.target.closest("[data-igcat],[data-igmk]"); if (gf) { if (gf.dataset.igcat != null) S.gcat = gf.dataset.igcat || null; else S.gmk = gf.dataset.igmk || null; return renderInd(); }
   const go = e.target.closest("[data-gxo]"); if (go) { const [k, v] = go.dataset.gxo.split(":"); S.gxo = { ...gxOpt(), [k]: v }; go.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === go)));
@@ -4460,12 +4468,12 @@ function renderDetailHead() {
 const INTEL_AR = { up: "↗", rot: "↘", watch: "↖", down: "↙" };
 function intelData(c) {
   const out = [], tw = isTW(c), us = isUS(c);
-  if (tw && W.two?.decl?.length && typeof twoPeople === "function") { const n = twoPeople().filter(p => p.hold.some(h => h.code === c)).length; if (n) out.push({ k: "tw", t: `🏛️ ${n} 位政治人物申報持有` }); }
+  if (tw && W.two?.decl?.length && typeof twoPeople === "function") { const n = twoPeople().filter(p => p.hold.some(h => h.code === c)).length; if (n) out.push({ k: "tw", g: "申報", t: `${n} 位政治人物持有` }); }
   if (us) { const f = (W.f13?.funds || []).filter(F => (F.rows || []).some(r => r.ticker === c)).length, since = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10), cg = new Set((W.cong?.trades || []).filter(t => t.ticker === c && (t.traded || "") >= since).map(t => t.pid)).size;
-    if (f || cg) out.push({ k: cg ? "cong" : "f13", t: `🐋 ${[f ? `${f} 家 13F 機構持有` : "", cg ? `${cg} 位國會議員近一年交易` : ""].filter(Boolean).join("・")}` }); }
-  if (typeof podCalls === "function" && typeof POD !== "undefined" && POD.srv) { const since = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10), eps = new Set(podCalls().filter(x => x.code === c && x.date >= since).map(x => x.key)).size; if (eps) out.push({ k: "pod", t: `🎙️ 近 90 天 ${eps} 集節目提及` }); }
+    if (f || cg) out.push({ k: cg ? "cong" : "f13", g: "大戶", t: `${[f ? `${f} 家 13F 機構持有` : "", cg ? `${cg} 位國會議員近一年交易` : ""].filter(Boolean).join("・")}` }); }
+  if (typeof podCalls === "function" && typeof POD !== "undefined" && POD.srv) { const since = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10), eps = new Set(podCalls().filter(x => x.code === c && x.date >= since).map(x => x.key)).size; if (eps) out.push({ k: "pod", g: "節目", t: `近 90 天 ${eps} 集節目提及` }); }
   const M = W.mf.model; if (tw && M) { const A = flowAt(M), S = M.secs.filter(x => x.mem.some(m => m.code === c)).map(x => A.find(a => a.id === x.id)).filter(Boolean).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5))[0];
-    if (S) out.push({ k: "mf", id: S.id, q: S.q, t: `🎯 ${S.name}：${INTEL_AR[S.q]} ${FLOW_Q[S.q][0]}` }); }
+    if (S) out.push({ k: "mf", id: S.id, q: S.q, g: "資金", t: `${S.name}：${INTEL_AR[S.q]} ${FLOW_Q[S.q][0]}` }); }
   return out;
 }
 function renderIntel() {
@@ -4473,7 +4481,7 @@ function renderIntel() {
   if (!W.off && W.intelAsk !== c) { W.intelAsk = c; const re = () => W.sel === c && renderIntel(); // 需要的資料第一次用到時才載入（都是靜態檔，很小）
     if (isTW(c) && !W.two && typeof twoLoad === "function") twoLoad().then(re); if (isUS(c) && !W.f13 && typeof f13Load === "function") f13Load().then(re); if (isUS(c) && !W.cong) loadCong().then(re);
     if (typeof POD !== "undefined" && !POD.srv && !POD.srvLoading && typeof podLoadSrv === "function") { POD.srvLoading = true; podLoadSrv().then(() => { POD.srvLoading = false; re(); }); } }
-  const L = intelData(c), h = L.map(x => `<button type="button" class="ibadge ib-${x.k}" data-intel="${x.k}"${x.id ? ` data-iid="${esc(x.id)}"` : ""}${x.q ? ` style="--qc:${FLOW_Q[x.q][2]}"` : ""}>${esc(x.t)} ›</button>`).join("");
+  const L = intelData(c), h = L.map(x => `<button type="button" class="ibadge ib-${x.k}" data-intel="${x.k}"${x.id ? ` data-iid="${esc(x.id)}"` : ""}><i>${x.g}</i>${esc(x.t)} ›</button>`).join("");
   if (el.innerHTML !== h) el.innerHTML = h; el.hidden = !L.length;
 }
 $("#dIntel").addEventListener("click", e => { const b = e.target.closest("[data-intel]"); if (!b) return; const c = W.sel, k = b.dataset.intel;
