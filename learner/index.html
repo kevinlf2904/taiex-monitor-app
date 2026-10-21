@@ -437,7 +437,7 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .shot-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .shot-src { overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
 .shot-src-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; padding: 12px 14px 0; }
-#shotCanvas { display: block; width: 100%; touch-action: none; cursor: crosshair; background: var(--surface-2); }
+#shotCanvas { display: block; width: 100%; touch-action: pan-y; cursor: crosshair; background: var(--surface-2); } #shotCanvas.dragmode { touch-action: none; } /* 只有在「框選」模式、已經放了截圖時才吃掉手勢，其他時候手指在圖上也能捲動頁面 */
 .shot-summary { display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; }
 .shot-summary p { margin: 0; }
 .shot-summary .lean { font-family: var(--font-display); font-size: 22px; font-weight: 500; }
@@ -890,7 +890,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.21-127</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.21-128</span></footer>
 
 <script src="core.js"></script>
 <script src="tschart.js"></script>
@@ -3733,7 +3733,7 @@ function shotView() {
   return y1 - y0 < img.naturalHeight * 0.85 ? { y0, y1 } : full;
 }
 function drawShot() {
-  const cv = $("#shotCanvas"), img = shot.img;
+  const cv = $("#shotCanvas"), img = shot.img; cv.classList.toggle("dragmode", !!img && (!shot.mode || shot.mode === "price" || shot.mode === "sub"));
   if (!img) return;
   const W = cv.clientWidth || cv.parentElement.clientWidth, k = W / img.naturalWidth, dpr = window.devicePixelRatio || 1;
   // 手機截圖很長：預設只顯示圖表區（價格區到最後一個副圖），可切換成完整截圖
@@ -4522,7 +4522,7 @@ const MODE_HINT = {
 const setMode = m => {
   shot.mode = m; document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
   $("#modeHint").textContent = MODE_HINT[m] + (m === "cal" ? `（已設定 ${shot.calPts.length}/2）` : ""); hidePop();
-  $("#shotCanvas").style.cursor = m === "edit" ? "pointer" : "crosshair"; drawShot();
+  $("#shotCanvas").style.cursor = m === "edit" ? "pointer" : "crosshair"; $("#shotCanvas").classList.toggle("dragmode", !!shot.img && (m === "price" || m === "sub")); drawShot();
 };
 document.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
 // 截圖上的小視窗：輸入校正價格、修正 K 棒
