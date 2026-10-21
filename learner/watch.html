@@ -665,6 +665,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .gx .gp { font-size: 10.5px; font-weight: 600; } .igalaxy.mob .gx:not(.core) .gn { font-size: 14px; } .igalaxy.mob .gx:not(.core) .gp { font-size: 12.5px; } .gx.core .gn { font-size: 14px; font-weight: 600; } .gx.core .gp { font-size: 12.5px; }
 .gx.core circle.b { animation: gxPulse 2.6s ease-in-out infinite; }
 @keyframes gxPulse { 50% { stroke-width: 4; stroke-opacity: .55; } }
+.igalaxy .gzone { fill: none; } .igalaxy .gzone.up { fill: var(--ink); fill-opacity: .03; } .igalaxy .gmid { stroke: var(--muted); stroke-opacity: .35; stroke-dasharray: 2 5; }
+.igalaxy .gzt { font-size: 11.5px; fill: var(--muted); } .igalaxy.mob .gzt { font-size: 13px; }
 .igal-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 14px 8px; font-size: 12px; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .iisl, .gxi, .gx.core circle.b, .igalaxy .ge.on { animation: none !important; } }
 .itheme { border: 1px solid color-mix(in srgb, var(--ic) 55%, var(--line)); border-radius: 4px; padding: 12px 14px; background: linear-gradient(160deg, color-mix(in srgb, var(--ic) 14%, var(--surface)), var(--surface-2)); }
@@ -1003,7 +1005,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-109</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-110</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -3305,7 +3307,8 @@ function indIslands(L, sel, fav) {
   };
   return `<div class="iislands">${G.map(card).join("")}</div><h3 class="iisl-h" style="--ic:${cur.c}"><i></i>${cur.nm}<small>${cur.T.length} 個題材</small></h3><div class="ithemes">${cur.T.map(t => indCard(t, fav)).join("")}</div>`;
 }
-// 產業網絡（星系）：連線最多的題材（或點選的題材）放中心，其他題材依「隔幾層關係」排在外圈軌道
+// 產業網絡（星系）：連線最多的題材（或點選的題材）放中心，其他題材依「隔幾層關係」排在外圈軌道；
+// 再加上分層的方向：中心的上游（沿連線往回走得到的）放上半圈、下游放下半圈、其他相關題材放左右兩側，連線箭頭由上游指向下游
 function indGalaxy(net, focus) {
   const ids = net.layers.flatMap(([, L]) => L).filter(id => INDT.has(id)), lay = {}, adj = new Map(ids.map(id => [id, new Set()]));
   net.layers.forEach(([, L], r) => L.forEach(id => (lay[id] = r)));
@@ -3314,13 +3317,23 @@ function indGalaxy(net, focus) {
   const dist = { [core]: 0 }, q = [core];
   while (q.length) { const x = q.shift(); for (const y of adj.get(x)) if (dist[y] == null) { dist[y] = dist[x] + 1; q.push(y); } }
   const rings = []; ids.forEach(id => { const k = Math.min(3, dist[id] ?? 3); (rings[k] ||= []).push(id); });
-  const mob = isMobile(), W0 = mob ? 440 : 900, H0 = mob ? 760 : 680, cx = W0 / 2, cy = H0 / 2, pos = {};
+  const reach = (from, dir) => { const S = new Set(), q = [from]; while (q.length) { const x = q.shift(); for (const [a, b] of net.links) { const [s0, t0] = dir ? [a, b] : [b, a]; if (s0 === x && adj.has(t0) && !S.has(t0)) { S.add(t0); q.push(t0); } } } return S; };
+  const ups = reach(core, 0), downs = reach(core, 1), side = id => (ups.has(id) ? -1 : downs.has(id) ? 1 : 0); // -1 上游、1 下游、0 相關
+  const mob = isMobile(), W0 = mob ? 440 : 900, H0 = mob ? 800 : 700, cx = W0 / 2, pos = {};
+  // 上游多就把中心往下移、上半圈拉高（下游多則相反），兩邊各自有足夠空間
+  const nU = ups.size, nD = downs.size, frac = Math.max(0.3, Math.min(0.72, (nU + (ids.length - 1 - nU - nD) / 2 + 1) / (ids.length + 1))), cy = Math.round(34 + frac * (H0 - 78));
   // 每圈半徑依那圈的題材數撐開（太擠的圈自動外推），最後整體縮放到畫面內；同圈題材多時內外交錯，標籤比較不會疊
   const raw = [0]; for (let k = 1; k < rings.length; k++) raw[k] = Math.max(raw[k - 1] + 1, (rings[k]?.length || 0) / (mob ? 6 : 8));
-  const top = raw[raw.length - 1] || 1, ax = W0 / 2 - (mob ? 50 : 84), ay = H0 / 2 - (mob ? 44 : 50);
-  const rx = k => (ax * raw[k]) / top, ry = k => (ay * raw[k]) / top;
-  rings.forEach((L, k) => { if (!L) return; L.sort((a, b) => lay[a] - lay[b]); const zig = L.length > (mob ? 7 : 10);
-    L.forEach((id, i) => { const a = -Math.PI / 2 + k * 0.45 + (i / L.length) * Math.PI * 2, f = zig ? (i % 2 ? 1.08 : 0.86) : 1; pos[id] = k ? [cx + rx(k) * f * Math.cos(a), cy + ry(k) * f * Math.sin(a), k] : [cx, cy, 0]; }); });
+  const top = raw[raw.length - 1] || 1, ax = W0 / 2 - (mob ? 50 : 84), ayU = cy - 46, ayD = H0 - cy - (mob ? 52 : 50);
+  const rx = k => (ax * raw[k]) / top, ry = (k, a) => (((Math.sin(a) < 0 ? ayU : ayD) * raw[k]) / top);
+  // 每一圈分三組放角度：上游在上半圈、下游在下半圈（都依分層由左到右），相關題材輪流放左右兩側的水平帶
+  const spread = (n, a0, a1) => Array.from({ length: n }, (_, i) => a0 + ((i + 0.5) / n) * (a1 - a0));
+  rings.forEach((L, k) => { if (!L) return; if (!k) { pos[L[0]] = [cx, cy, 0]; return; } const zig = L.length > (mob ? 7 : 10), ang = {};
+    const U = L.filter(id => side(id) < 0).sort((a, b) => lay[a] - lay[b]), D = L.filter(id => side(id) > 0).sort((a, b) => lay[a] - lay[b]), M = L.filter(id => !side(id)).sort((a, b) => lay[a] - lay[b]);
+    const m = M.length ? 0.38 : 0.12, ML = M.filter((_, i) => i % 2), MR = M.filter((_, i) => !(i % 2));
+    spread(U.length, -Math.PI + m, -m).forEach((a, i) => (ang[U[i]] = a)); spread(D.length, Math.PI - m, m).forEach((a, i) => (ang[D[i]] = a));
+    spread(MR.length, -m + 0.06, m - 0.06).forEach((a, i) => (ang[MR[i]] = a)); spread(ML.length, Math.PI + m - 0.06, Math.PI - m + 0.06).forEach((a, i) => (ang[ML[i]] = a));
+    [...U, ...D, ...M].forEach((id, i) => { const a = ang[id], f = zig ? (i % 2 ? 1.08 : 0.86) : 1; pos[id] = [cx + rx(k) * f * Math.cos(a), cy + ry(k, a) * f * Math.sin(a), k]; }); });
   // 標籤避讓：每個題材當成「圓圈＋下方兩行字」的方框，互相重疊就沿連線方向推開（中心不動、不推出畫面），手機上字不會疊在一起
   const rOf = k => (k === 0 ? (mob ? 30 : 38) : k === 1 ? (mob ? 11 : 14) : mob ? 9 : 11), nmOf = (t, k) => (k === 0 ? t.name : t.name.length > (mob ? 6 : 8) ? t.name.slice(0, mob ? 6 : 8) + "…" : t.name);
   const box = id => { const [x, y, k] = pos[id], r = rOf(k), w = Math.max(2 * r, nmOf(INDT.get(id), k).length * (mob ? 14.5 : 12.5)) + 6; return k ? { x0: x - w / 2, x1: x + w / 2, y0: y - r - 2, y1: y + r + (mob ? 34 : 30) } : { x0: x - r - 6, x1: x + r + 6, y0: y - r - 6, y1: y + r + 6 }; };
@@ -3330,20 +3343,27 @@ function indGalaxy(net, focus) {
       const A = box(P[i]), B = box(P[j]), ox = Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0), oy = Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0); if (ox <= 0 || oy <= 0) continue;
       const a = pos[P[i]], b = pos[P[j]], horiz = ox < oy, d = horiz ? ox : oy, sg = horiz ? Math.sign(b[0] - a[0] || 1) : Math.sign(b[1] - a[1] || 1), wa = a[2] ? (b[2] ? 0.5 : 1) : 0, wb = 1 - wa;
       if (horiz) { a[0] -= sg * d * wa + sg * 0.5 * wa; b[0] += sg * d * wb + sg * 0.5 * wb; } else { a[1] -= sg * d * wa + sg * 0.5 * wa; b[1] += sg * d * wb + sg * 0.5 * wb; }
-      for (const n of [a, b]) if (n[2]) { n[0] = Math.max(34, Math.min(W0 - 34, n[0])); n[1] = Math.max(16, Math.min(H0 - (mob ? 40 : 36), n[1])); }
+      for (const [id, n] of [[P[i], a], [P[j], b]]) if (n[2]) { const sd = side(id), hw = (box(id).x1 - box(id).x0) / 2; n[0] = Math.max(hw + 2, Math.min(W0 - hw - 2, n[0])); n[1] = Math.max(sd > 0 ? cy + 18 : 30, Math.min(sd < 0 ? cy - 18 : H0 - (mob ? 40 : 36), n[1])); } // 上游不推到中線以下、下游不推到中線以上
       moved = true; }
     if (!moved) break; }
-  let g = rings.map((L, k) => (k && L ? `<ellipse class="orb" cx="${cx}" cy="${cy}" rx="${rx(k).toFixed(1)}" ry="${ry(k).toFixed(1)}"/>` : "")).join("");
-  g += net.links.filter(([a, b]) => pos[a] && pos[b]).map(([a, b]) => { const A = pos[a], B = pos[b], on = a === core || b === core;
-    return `<line class="ge${on ? " on" : ""}" x1="${A[0].toFixed(1)}" y1="${A[1].toFixed(1)}" x2="${B[0].toFixed(1)}" y2="${B[1].toFixed(1)}"/>`; }).join("");
+  // 畫面上下裁到題材實際占用的範圍，下游少時下方不會留一大片空白
+  const BX = P.map(box), VY0 = Math.max(0, Math.floor(Math.min(...BX.map(b => b.y0)) - 30)), VY1 = Math.min(H0, Math.ceil(Math.max(...BX.map(b => b.y1)) + 26));
+  let g = `<defs><marker id="gxa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8Z" style="fill:var(--muted);fill-opacity:.55"/></marker><marker id="gxa2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8Z" style="fill:var(--accent, #6c8cff)"/></marker></defs>
+    <rect class="gzone up" x="0" y="${VY0}" width="${W0}" height="${cy - VY0}"/>
+    <line class="gmid" x1="0" y1="${cy}" x2="${W0}" y2="${cy}"/><text class="gzt" x="10" y="${VY0 + 20}">↑ 上游（供應給中心）</text><text class="gzt" x="10" y="${VY1 - 10}">↓ 下游（中心供應給它）</text>`;
+  g += rings.map((L, k) => { if (!k || !L) return ""; const r = rx(k).toFixed(1), u = ry(k, -1).toFixed(1), d = ry(k, 1).toFixed(1);
+    return `<path class="orb" d="M${cx - r} ${cy} A${r} ${u} 0 0 1 ${+cx + +r} ${cy} A${r} ${d} 0 0 1 ${cx - r} ${cy}"/>`; }).join("");
+  // 連線畫到目標圓圈邊緣為止，箭頭才不會被圓圈蓋住
+  g += net.links.filter(([a, b]) => pos[a] && pos[b]).map(([a, b]) => { const A = pos[a], B = pos[b], on = a === core || b === core, dx = B[0] - A[0], dy = B[1] - A[1], d = Math.hypot(dx, dy) || 1, cut = rOf(B[2]) + 3;
+    return `<line class="ge${on ? " on" : ""}" marker-end="url(#${on ? "gxa2" : "gxa"})" x1="${A[0].toFixed(1)}" y1="${A[1].toFixed(1)}" x2="${(B[0] - (dx / d) * cut).toFixed(1)}" y2="${(B[1] - (dy / d) * cut).toFixed(1)}"/>`; }).join("");
   g += Object.entries(pos).sort((a, b) => b[1][2] - a[1][2]).map(([id, [x, y, k]]) => {
     const t = INDT.get(id), p = indAvg(t)?.pct ?? null, r = rOf(k), nm = nmOf(t, k);
     return `<g class="gx${k === 0 ? " core" : ""}" data-ifocus="${id}" transform="translate(${x.toFixed(1)},${y.toFixed(1)})" role="button" tabindex="0" aria-label="${esc(t.name)}"><g class="gxi" style="--fx:${(cx - x).toFixed(0)}px;--fy:${(cy - y).toFixed(0)}px;animation-delay:${k * 70}ms">
       <circle r="${r}" style="fill:var(--surface)"/><circle class="b" r="${r}" style="fill:${p == null ? indCol(t) : indPctCol(p)};fill-opacity:${p == null ? 0.25 : (0.3 + Math.min(0.55, Math.abs(p) / 4)).toFixed(2)};stroke:${indCol(t)};stroke-width:${k === 0 ? 2.5 : 1.5}"/>
       ${k === 0 ? `<text class="gn" y="${p == null ? 5 : -2}">${esc(nm.length > 7 ? nm.slice(0, 7) + "…" : nm)}</text>${p != null ? `<text class="gp" y="16" style="fill:${indPctCol(p)}">${indPctTxt(p)}</text>` : ""}`
         : `<text class="gn" y="${r + (mob ? 15 : 13)}">${esc(nm)}</text>${p != null ? `<text class="gp" y="${r + (mob ? 29 : 25)}" style="fill:${indPctCol(p)}">${indPctTxt(p)}</text>` : ""}`}<title>${esc(t.name)}・${MK_TAG[t.mk]} ${indPctTxt(p)}</title></g></g>`; }).join("");
-  return `<div class="igal-wrap"><svg class="igalaxy${mob ? " mob" : ""}" viewBox="0 0 ${W0} ${H0}" role="img" aria-label="${esc(net.name)} 產業星系">${g}</svg></div>
-    <div class="igal-leg"><span>中心：${esc(INDT.get(core).name)}</span><span>內圈＝直接上下游、外圈＝隔一層以上</span><span>點任一題材換到中心</span></div>`;
+  return `<div class="igal-wrap"><svg class="igalaxy${mob ? " mob" : ""}" viewBox="0 ${VY0} ${W0} ${VY1 - VY0}" role="img" aria-label="${esc(net.name)} 產業星系">${g}</svg></div>
+    <div class="igal-leg"><span>中心：${esc(INDT.get(core).name)}（上游 ${ups.size}・下游 ${downs.size}）</span><span>上半圈＝上游、下半圈＝下游、左右＝相關但不在同一條鏈上</span><span>越內圈關係越近，箭頭由上游指向下游</span><span>點任一題材換到中心</span></div>`;
 }
 // 產業網絡：每一層一列，節點固定寬度，連線用 SVG 曲線；點節點只加亮它的上下游
 function indNetwork(net, focus) {

@@ -112,6 +112,11 @@ test("產業網絡星系：手機上題材名稱不重疊，點題材換到中�
     for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) { const a = R[i], b = R[j]; if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 2 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 2) out.push([i, j]); }
     return out.length; });
   assert.equal(hits, 0, "題材名稱互相重疊");
+  // 結合分層：中心的上游都在中心上方、下游都在下方，連線有箭頭
+  const dir = await p.evaluate(() => { const net = IND.networks.find(n => n.id === W.indS.net) || IND.networks[0], core = document.querySelector(".igalaxy .gx.core").dataset.ifocus, y = id => document.querySelector(`.igalaxy .gx[data-ifocus="${id}"] circle.b`).getBoundingClientRect().y;
+    const up = net.links.filter(l => l[1] === core).map(l => l[0]), dn = net.links.filter(l => l[0] === core).map(l => l[1]);
+    return { n: up.length + dn.length, bad: [...up.filter(id => y(id) >= y(core)), ...dn.filter(id => y(id) <= y(core))], arrows: document.querySelectorAll(".igalaxy line[marker-end]").length }; });
+  assert.ok(dir.n > 0); assert.deepEqual(dir.bad, [], "上游要在中心上方、下游在下方"); assert.ok(dir.arrows > 0);
   const id = await p.evaluate(() => document.querySelector(".igalaxy .gx:not(.core)").dataset.ifocus);
   await p.click(`.igalaxy .gx[data-ifocus="${id}"] circle.b`);
   assert.equal(await p.evaluate(() => document.querySelector(".igalaxy .gx.core").dataset.ifocus), id);
