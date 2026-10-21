@@ -136,7 +136,16 @@ test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，�
   // 三組樣式都能切換，並記在瀏覽器
   for (const k of ["tip:B", "lay:A", "lay:C", "line:A", "line:C"]) { await p.click(`[data-gxo="${k}"]`); await p.waitForTimeout(80); }
   assert.deepEqual(await p.evaluate(() => store.get("watch:inds").gxo), { tip: "B", lay: "C", line: "C" });
-  await p.click('[data-instyle="layer"]'); await p.waitForSelector(".inetwrap");
+  await p.click('[data-instyle="layer"]'); await p.waitForSelector(".inetwrap .inode2");
   assert.equal(await p.evaluate(() => store.get("watch:inds").nstyle), "layer");
+  // 分層：直式（手機不會橫向捲動），點題材聚焦，只畫它的上下游連線，再點一次取消
+  assert.equal(await p.evaluate(() => document.documentElement.scrollWidth), 390);
+  if (await p.evaluate(() => !!W.indS.focus)) await p.evaluate(() => { W.indS.focus = null; renderInd(); });
+  const fid = await p.evaluate(() => (IND.networks.find(n => n.id === W.indS.net) || IND.networks[0]).layers[1][1][0]);
+  await p.click(`.inode2[data-ifocus="${fid}"]`); await p.waitForSelector(".inode2.on");
+  const fx = await p.evaluate(id => { const net = IND.networks.find(n => n.id === W.indS.net) || IND.networks[0];
+    return { n: net.links.filter(l => l.includes(id)).length, paths: document.querySelectorAll(".inet2 path").length, rel: document.querySelectorAll(".inode2.up, .inode2.dn").length, dim: document.querySelectorAll(".inode2.dim").length, focus: W.indS.focus }; }, fid);
+  assert.equal(fx.focus, fid); assert.equal(fx.paths, fx.n); assert.ok(fx.rel > 0 && fx.dim > 0, JSON.stringify(fx));
+  await p.click(`.inode2[data-ifocus="${fid}"]`); assert.equal(await p.evaluate(() => W.indS.focus), null);
   await ctx.close(); assert.deepEqual(errs, []);
 });
