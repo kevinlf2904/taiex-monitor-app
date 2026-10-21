@@ -102,3 +102,20 @@ test("畫線練習：點在低點附近會吸到 K 棒低點、畫好後提示�
   assert.ok(r[1].includes(r[0]), `應該吸到附近的低點：${r[0]} 不在 ${r[1]}`); assert.ok(Math.abs(r[0] - r[2]) / r[2] < 0.008); assert.match(r[3], /畫好了/); assert.equal(r[4], false);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("產業網絡星系：手機上題材名稱不重疊，點題材換到中心，可切回分層", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.evaluate(() => { setLt("ind"); W.indS.view = "network"; W.indS.nstyle = null; W.indS.focus = null; renderList(); });
+  await p.waitForSelector(".igalaxy .gx.core");
+  await p.waitForTimeout(800); // 等進場動畫跑完再量位置
+  const hits = await p.evaluate(() => { const R = [...document.querySelectorAll(".igalaxy .gx .gn")].map(t => t.getBoundingClientRect()), out = [];
+    for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) { const a = R[i], b = R[j]; if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 2 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 2) out.push([i, j]); }
+    return out.length; });
+  assert.equal(hits, 0, "題材名稱互相重疊");
+  const id = await p.evaluate(() => document.querySelector(".igalaxy .gx:not(.core)").dataset.ifocus);
+  await p.click(`.igalaxy .gx[data-ifocus="${id}"] circle.b`);
+  assert.equal(await p.evaluate(() => document.querySelector(".igalaxy .gx.core").dataset.ifocus), id);
+  await p.click('[data-instyle="layer"]'); await p.waitForSelector(".inetwrap");
+  assert.equal(await p.evaluate(() => store.get("watch:inds").nstyle), "layer");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
