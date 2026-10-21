@@ -49,7 +49,7 @@ function erTrend(c, us) {
   else { const R = J.revenue || [], F = J.fin || [];
     if (R.length) h += `<h4>月營收<span class="note">柱＝營收（億）、線＝年增率</span></h4>${barLineSvg(R.slice(-24).map(r => ({ label: r.ym.slice(2).replace("-", "/"), v: +(r.rev / 1e8).toFixed(1), y: r.yoy })), { bar: "var(--s3)", fmtV: v => v + "億" })}`;
     if (F.length) h += `<h4>季 EPS<span class="note">柱＝每季 EPS（元）、線＝毛利率</span></h4>${barLineSvg(F.slice(-12).map(r => ({ label: String(r.q).slice(2), v: r.eps, y: r.gross })), { fmtV: v => v, fmtY: v => v + "%" })}`; }
-  return `<div class="ertr">${h || `<p class="note">這檔沒有營收或 EPS 歷史資料。</p>`}<div class="ertrf">${go}<span class="note">移上去（手指按著滑）看每期數字</span></div></div>`;
+  return `<div class="ertr">${h || `<p class="note">這檔沒有營收或 EPS 歷史資料。</p>`}${frEarn(c, us, J)}<div class="ertrf">${go}<span class="note">移上去（手指按著滑）看每期數字</span></div></div>`;
 }
 // 排行清單：每列名稱、長條、數值、附帶資訊；點了展開走勢圖
 function erList(L, k, sub) {
