@@ -141,6 +141,17 @@ for (const width of [1280, 390]) {
     await p.waitForSelector('.bwrap[data-viz="heat"]', { timeout: 3000 });
     assert.ok(await p.evaluate(() => document.querySelectorAll('.bwrap[data-viz="heat"] .bnode').length > 0), "熱力格節點已渲染");
 
+    // 每一種圖都能調透明度：只淡化圖形、文字不變，各圖各記各的
+    const setOp = v => p.$eval(".bop-r", (el, v) => { el.value = v; el.dispatchEvent(new Event("input", { bubbles: true })); }, v);
+    await setOp(0.3);
+    const op = await p.evaluate(() => { const g = document.querySelector('.bwrap[data-viz="heat"]'), r = g.querySelector(".bnode rect:not([opacity])"), t = g.querySelector("text");
+      return [+getComputedStyle(r).opacity, +getComputedStyle(t).opacity, document.querySelector(".bopr").textContent]; });
+    assert.ok(Math.abs(op[0] - 0.3) < 0.01 && op[1] === 1 && /圖形透明度30%/.test(op[2]), `熱力格透明度 ${op}`);
+    await p.click('[data-mviz="tree"]'); await p.waitForSelector('.bwrap[data-viz="tree"]');
+    assert.equal(await p.$eval(".bop-r", el => +el.value), 1, "樹圖有自己的透明度（預設 100%）");
+    await p.click('[data-mviz="heat"]'); await p.waitForSelector('.bwrap[data-viz="heat"]');
+    assert.equal(await p.$eval(".bop-r", el => +el.value), 0.3, "切回熱力格記得剛剛調的");
+
     // 切回 bubble 象限圖
     await p.click('[data-mviz="bubble"]');
     await p.waitForSelector('.bwrap[data-viz="bubble"]', { timeout: 3000 });
