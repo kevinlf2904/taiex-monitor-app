@@ -56,7 +56,8 @@
       <div class="kpis" id="rt-kpis"></div><div class="chart" id="rt-chart"></div>`)
     + sec("sec-mon", "月月配組合", "幾檔配息月份不同的 ETF 組在一起，每個月都有股息。填代號和每檔金額，看 12 個月的現金流；空著的月份會推薦可以補的 ETF。", `<div class="dc-in">
       <div class="dc-f dc-wide"><label for="mm-codes">代號（空白或逗號分開）</label><input id="mm-codes" value="${esc(S["mm-codes"] ?? "0056 00878 00919")}" autocomplete="off"></div>
-      ${field("mm-amt", "每檔投入金額", 1000000, 'type="number" min="0" step="10000" inputmode="numeric"')}<div class="dc-f"><span class="lbl">&nbsp;</span><button type="button" class="btn" id="mm-go">算每月股息</button></div></div><div id="mm-out"><p class="hint">按「算每月股息」。</p></div>`));
+      ${field("mm-amt", "每檔投入金額", 1000000, 'type="number" min="0" step="10000" inputmode="numeric"')}<div class="dc-f"><span class="lbl">&nbsp;</span><button type="button" class="btn" id="mm-go">算每月股息</button></div></div><div id="mm-out"><p class="hint">按「算每月股息」。</p></div>`)
+    + sec("sec-dca", "定期定額熱門", "證交所每月公布：在券商設定定期定額的帳戶最多的股票與 ETF。看存股族最常買什麼，點「回測」直接用真實股價試算。", `<div id="dca-out"><p class="hint">載入中…</p></div>`));
   document.querySelector("nav.jump")?.insertAdjacentHTML("beforeend", `<a href="#sec-hold">我的庫存</a><a href="#sec-tax">實拿試算</a><a href="#sec-hist">歷史回測</a><a href="#sec-ret">退休提領</a><a href="#sec-mon">月月配</a>`);
   document.querySelectorAll("#sec-hold input,#sec-tax input,#sec-tax select,#sec-hist input,#sec-ret input,#sec-mon input").forEach(el => el.addEventListener("input", () => { S[el.id] = el.value; save(); }));
 
@@ -172,7 +173,7 @@
   /* ---------- 選單：一次只看一個功能（模擬三種做法時才顯示左邊的控制台） ---------- */
   const led = document.getElementById("ledger")?.closest("section"); if (led && !led.id) led.id = "sec-ledger";
   const GROUPS = [["模擬三種做法", [["sim", "總覽與走勢", "三種做法的期末淨值、年化、部位", ["sec-sum", "sec-pos", "sec-ledger", "sec-chart"]], ["ms", "存錢里程碑", "第幾年存到 100 萬、500 萬…", ["sec-ms"]], ["risk", "壓力測試與配置", "崩盤時會不會被追繳、核心衛星比例", ["sec-risk"]], ["etf", "標的比較", "不同 ETF 用同樣條件比", ["sec-etf"]]]],
-    ["存股工具", [["div", "股息計算機", "每年領多少、含息與不含息報酬", ["sec-div"]], ["hold", "我的庫存股息", "讀看盤庫存，算每月領多少", ["sec-hold"]], ["tax", "實拿股息試算", "健保、稅、手續費扣完拿多少", ["sec-tax"]], ["hist", "真實歷史回測", "真實股價定期定額到今天", ["sec-hist"]], ["ret", "退休提領試算", "每年領生活費能撐多久", ["sec-ret"]], ["mon", "月月配組合", "每個月都有股息的 ETF 組合", ["sec-mon"]]]]];
+    ["存股工具", [["div", "股息計算機", "每年領多少、含息與不含息報酬", ["sec-div"]], ["hold", "我的庫存股息", "讀看盤庫存，算每月領多少", ["sec-hold"]], ["tax", "實拿股息試算", "健保、稅、手續費扣完拿多少", ["sec-tax"]], ["hist", "真實歷史回測", "真實股價定期定額到今天", ["sec-hist"]], ["ret", "退休提領試算", "每年領生活費能撐多久", ["sec-ret"]], ["mon", "月月配組合", "每個月都有股息的 ETF 組合", ["sec-mon"]], ["dca", "定期定額熱門", "大家最常定期定額買的股票、ETF", ["sec-dca"]]]]];
   const ALL = GROUPS.flatMap(([, L]) => L), CONSOLE = new Set(["sim", "ms", "risk", "etf"]), lay = document.querySelector(".layout");
   lay?.insertAdjacentHTML("beforebegin", `<nav class="sx-menu" aria-label="存股模擬選單">${GROUPS.map(([t, L]) => `<div class="sx-mg"><h3>${t}</h3><div class="sx-mi">${L.map(([k, n, d]) => `<button type="button" data-sxg="${k}"><b>${n}</b><small>${d}</small></button>`).join("")}</div></div>`).join("")}</nav>`);
   document.querySelector("nav.jump")?.setAttribute("hidden", "");
@@ -183,7 +184,19 @@
     document.querySelectorAll("[data-sxg]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sxg === g[0]));
     if (scroll) { const m = document.querySelector(".sx-menu"); if (m && m.getBoundingClientRect().top < 0) m.scrollIntoView({ block: "start" }); }
     window.dispatchEvent(new Event("resize")); // 圖表重新量寬度
+    if (g[0] === "dca") dcaLoad();
   }
+  // 定期定額熱門：證交所 ETFReport/ETFRank（經 /api/oapi），每列 No、股票代號名稱戶數、ETF 代號名稱戶數
+  let DCA = null;
+  async function dcaLoad() {
+    const out = $("dca-out"); if (!out || DCA) return; DCA = true;
+    let L; try { L = (await getJ("/api/oapi?src=twse&p=/ETFReport/ETFRank&limit=50")).rows || []; } catch (e) { DCA = null; out.innerHTML = `<p class="hint">⚠︎ ${esc(e.message)}</p>`; return; }
+    const n = v => +String(v || 0).replace(/,/g, "") || 0, col = (c, nm, k) => { const R = L.map(r => [String(r[c] || "").trim(), String(r[nm] || "").trim(), n(r[k])]).filter(x => x[0]), mx = Math.max(1, ...R.map(x => x[2]));
+      return `<ol class="dca-l">${R.map(([cd, name, v]) => `<li><span><b>${esc(name)}</b> <small class="hint">${esc(cd)}</small></span><span class="num">${v.toLocaleString()} 戶</span><button type="button" class="btn sm" data-dcabt="${esc(cd)}">回測</button><i style="width:${Math.round(v / mx * 100)}%"></i></li>`).join("")}</ol>`; };
+    out.innerHTML = L.length ? `<div class="dca-g"><div><h3 class="h3">ETF</h3>${col("ETFsSecurityCode", "ETFsName", "ETFsNumberofTradingAccounts")}</div><div><h3 class="h3">股票</h3>${col("STOCKsSecurityCode", "STOCKsName", "STOCKsNumberofTradingAccounts")}</div></div>
+      <p class="hint">戶數是設定定期定額的帳戶數，不代表報酬好壞；熱門也可能代表價格已經被很多人買高。資料：臺灣證券交易所。</p>` : `<p class="hint">暫時沒有資料。</p>`;
+  }
+  document.addEventListener("click", e => { const b = e.target.closest("[data-dcabt]"); if (!b) return; $("hs-code").value = b.dataset.dcabt; S["hs-code"] = b.dataset.dcabt; save(); sxGo("hist", true); histRun(); });
   document.addEventListener("click", e => { const b = e.target.closest("[data-sxg]"); if (b) sxGo(b.dataset.sxg, true); });
   // 網址帶 #sec-tax 之類就直接打開那一個功能
   const fromHash = () => { const id = location.hash.slice(1), g = ALL.find(x => x[3].includes(id)); return g?.[0]; };
@@ -194,6 +207,8 @@
 .sx-mi button b{font-size:14px;font-weight:500}.sx-mi button small{font-size:11.5px;color:var(--muted);line-height:1.4}.sx-mi button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 .sec[hidden],section[hidden]{display:none!important}.layout.sx-noconsole{grid-template-columns:1fr}.layout.sx-noconsole>.console{display:none}
 @media (max-width:560px){.sx-mi{grid-template-columns:1fr 1fr}.sx-mi button{padding:8px 9px}}
+.dca-g{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}@media (max-width:640px){.dca-g{grid-template-columns:1fr}}.dca-l{list-style:none;margin:0 0 10px;padding:0}
+.dca-l li{position:relative;display:flex;align-items:center;gap:8px;padding:8px 2px 10px;border-bottom:1px solid var(--line)}.dca-l li>span:first-child{flex:1;min-width:0}.dca-l i{position:absolute;left:0;bottom:2px;height:3px;background:var(--accent);opacity:.55;border-radius:2px}
 .mm-bars{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;align-items:end;height:120px;margin:6px 0}
 .mm-bars>div{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;gap:2px}.mm-bars i{display:block;width:70%;background:var(--accent);border-radius:2px 2px 0 0;min-height:2px}.mm-bars i.zero{background:var(--line)}
 .mm-bars b{font:500 10.5px var(--f-num);white-space:nowrap}.mm-bars small{font-size:10.5px;color:var(--muted)}.mm-tbl{min-width:760px}.mm-tbl td,.mm-tbl th{padding:6px 5px}

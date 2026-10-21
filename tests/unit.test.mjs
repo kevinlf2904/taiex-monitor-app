@@ -198,7 +198,7 @@ test("證交所、櫃買開放資料：只連固定網域、代號欄位、個�
   const cat = new Function(readFileSync("learner/oapi.js", "utf8").split("const OA_GROUPS")[0] + "; return OAPI_CAT;")();
   assert.ok(cat.length > 300); assert.equal(new Set(cat.map(x => x[0] + x[1])).size, cat.length);
   for (const x of cat) assert.match(x[1], /^\/[A-Za-z0-9_]+(\/[A-Za-z0-9_]+){0,2}$/);
-  for (const [, , a, b] of STOCK_SETS) { if (a) assert.ok(cat.some(x => x[0] === "上市" && x[1] === a), a); if (b) assert.ok(cat.some(x => x[0] === "上櫃" && x[1] === b), b); }
+  for (const [, , A, B] of STOCK_SETS) { for (const a of [A].flat()) if (a) assert.ok(cat.some(x => x[0] === "上市" && x[1] === a), a); for (const b of [B].flat()) if (b) assert.ok(cat.some(x => x[0] === "上櫃" && x[1] === b), b); } // 財報一個鍵有六種產業格式
 });
 
 import { pick, topicOf, merge, parseSum } from "../scripts/macro-news.mjs";
@@ -361,7 +361,11 @@ test("櫃買圖表排程：指數累積、觀測站月營收解析、產業彙�
     "/tpex_warrant_daily_quts": [{ Date: "1151021", Name: "信驊群益5B購01", TradeValue: "300000", UnderlyingStockCode: "5274", UnderlyingStock: "信驊", UnderlyingStockClosePrice: "16515", "UnderlyingStock PriceChange": "615.00" }, { Date: "1151021", Name: "信驊元大5B售01", TradeValue: "100000", UnderlyingStockCode: "5274", UnderlyingStock: "信驊" }, { Date: "1151021", Name: "擎亞購", TradeValue: "0", UnderlyingStockCode: "8096" }] };
   const get = async p => { if (p === "/tpex_gold_latest") throw new Error("逾時"); return api[p] || []; };
   const getMops = async ([y, m]) => T.parseMops(html(`${y}-${String(m).padStart(2, "0")}`));
-  const o = await T.main({ get, getMops, now: Date.parse("2026-10-21T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
+  const twse = { "/opendata/t187ap42_L": [{ "交易日期": "1151020", "權證名稱": "台積電統一5C購05", "成交金額": "500000" }, { "交易日期": "1151020", "權證名稱": "台積電元大5C售01", "成交金額": "200000" }, { "交易日期": "1151020", "權證名稱": "台泥群益5C購01", "成交金額": "100000" }, { "交易日期": "1151020", "權證名稱": "不存在統一購", "成交金額": "9" }],
+    "/exchangeReport/MI_MARGN": [{ "股票代號": "2330", "股票名稱": "台積電" }, { "股票代號": "1101", "股票名稱": "台泥" }, { "股票代號": "1102", "股票名稱": "亞泥" }] };
+  const getTwse = async p => twse[p] || [];
+  const o = await T.main({ get, getTwse, getMops, now: Date.parse("2026-10-21T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
+  assert.deepEqual(o.snap.wtuL.rows.map(r => r.slice(0, 5)), [["2330", "台積電", 50, 20, 2], ["1101", "台泥", 10, 0, 1]], "上市權證用名稱對標的");
   const C = o.ix.cols, L = o.ix.rows.at(-1);
   assert.deepEqual([L[0], L[C.indexOf("otc")], L[C.indexOf("otcR")], L[C.indexOf("t200")], L[C.indexOf("t200R")]], ["2026-10-21", 395.42, 735.46, 18191.37, 23025.43]);
   assert.deepEqual(o.vol.at(-1), ["2026-10-21", 8.99, 2138.22, 91.1, 395.42]);
@@ -375,7 +379,50 @@ test("櫃買圖表排程：指數累積、觀測站月營收解析、產業彙�
   assert.equal(o.snap.gold, undefined, "黃金抓不到不影響其他");
   // 第二天：舊的日子保留、同一天以新的為準
   api["/tpex_reward_index"] = [{ Date: "1151022", TPExIndex: "400", TPExTotalReturnIndex: "744" }];
-  const o2 = await T.main({ get, getMops, now: Date.parse("2026-10-22T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
+  const o2 = await T.main({ get, getTwse, getMops, now: Date.parse("2026-10-22T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
   assert.deepEqual(o2.ix.rows.map(r => r[0]), ["2026-10-20", "2026-10-21", "2026-10-22"]); assert.equal(o2.ix.rows[1][C.indexOf("t200")], 18191.37);
   await fs.rm(dir, { recursive: true });
+});
+
+test("官方公告：重大訊息、裁罰、經營權異動、董監持股不足、變更交易、新股（欄位錯位）、興櫃、定期定額、券商進出、融資融券、休市日", async () => {
+  const { officialPack } = await import("../api/_lib/official.js"), { parseHoliday } = await import("../api/_lib/calendar.js");
+  const raw = {
+    newsL: [{ "發言日期": "1151020", "發言時間": "70004", "公司代號": "2072", "公司名稱": "世紀風電", "主旨 ": "公告本公司名稱變更", "符合條款": "第51款", "說明": "1.事實發生日" }],
+    newsO: [{ Date: "1151021", "發言日期": "1151020", "發言時間": "214608", SecuritiesCompanyCode: "8277", CompanyName: "商丞", "主旨": "公告董事長配合調查", "符合條款": "第53款", "說明": "說明文字" }],
+    abn: [{ Number: "0", Code: "", Name: "", Date: "1151020" }],
+    fineL: [{ "出表日期": "1151020", "發函日期": "1151012", "股票代號": "1589", "公司名稱": "永冠-KY", "違規事由": "未依規定公告", "違反法規": "證交法", "裁處情形": "處罰鍰 72 萬元" }],
+    infoL: [{ "發函日期": "1151008", "股票代號": "3494", "公司名稱": "誠研", "違規事由": "子公司", "違反資訊申報作業辦法條款": "", "違反重大訊息之查證暨公開處理程序條款": "4條1項6款", "裁罰金額(萬)": "5.0" }],
+    ctrlO: [{ Date: "1151021", SecuritiesCompanyCode: "3489", CompanyName: "森寶", "經營權異動日期": "1150819", "經營權異動說明": "公告收購" }],
+    s3L: [{ "出表日期": "1150819", "連續不足達3個月": "2515", "連續不足達4個月": "1225", "連續不足逾1年以上": "1435 2515" }],
+    altL: [{ Code: "1213", Name: "大飲", PeriodicCallAuctionTrading: " " }], haltL: [{ Code: "1218", Name: "泰山", TradingHaltDate: "1150813", TradingResumptionDate: "1150814" }],
+    cmodeO: [{ SecuritiesCompanyCode: "2067", CompanyName: "嘉鋼", AlteredTrading: "Ｙ", " FinancialAnnouncements": "Ｙ" }],
+    applyL: [{ Code: "1", Company: "7909", ApplicationDate: "鈺祥", Chairman: "1151006", Underwriter: "凱基", UnderwritingPrice: "", ApprovedListingDate: "" }, { Code: "701", Company: "2443", ApplicationDate: "利碟", Chairman: "0890310", Underwriter: "", UnderwritingPrice: "10.5" }],
+    newL: [{ Code: "6467", Company: "泰合", ListingDate: "", ApprovedListingDate: "1151020", Underwriter: "元大", UnderwritingPrice: "105.60", Note: "科技事業" }],
+    first5L: [{ SecurCode: "7689", SecurName: "大鵬科", "1stTradingDate": "1150728", "5thTradingDate": "1150803", PriceUnderwritten: "180.53" }, { SecurCode: "7689", SecurName: "大鵬科" }],
+    esbQ: [{ Date: "1151021", SecuritiesCompanyCode: "1260", CompanyName: "富味鄉", PreviousAveragePrice: "30", Average: "31.5", TransactionVolume: "10996" }],
+    esbRev: [{ "資料年月": "11509", "公司代號": "1260", "公司名稱": "富味鄉", "產業別": "食品工業", "營業收入-當月營收": "467614", "營業收入-去年同月增減(%)": "6.99961", "營業收入-上月比較增減(%)": "3.7689" }],
+    dca: [{ No: "1", STOCKsSecurityCode: "2330", STOCKsName: "台積電", STOCKsNumberofTradingAccounts: "232850", ETFsSecurityCode: "0050", ETFsName: "元大台灣50", ETFsNumberofTradingAccounts: "1275993" }],
+    broker: [{ StockRanking: "1", SecuritiesCompanyCodeAndCompanyName: "富喬(1815)", SecuritiesFirmsCode: "元大", TotalPurchaseShares: "34117", TotalSellShares: "29079" }, { StockRanking: "1", SecuritiesCompanyCodeAndCompanyName: "富喬(1815)", SecuritiesFirmsCode: "凱基", TotalPurchaseShares: "100", TotalSellShares: "0" }],
+    marginL: [{ "股票代號": "2330", "股票名稱": "台積電", "融資今日餘額": "1200", "融資前日餘額": "1000", "融券今日餘額": "10", "融券前日餘額": "12" }],
+    marginO: [{ Date: "1151021", SecuritiesCompanyCode: "8069", CompanyName: "元太", MarginPurchaseBalance: "500", MarginPurchaseBalancePreviousDay: "800", ShortSaleBalance: "50", ShortSaleBalancePreviousDay: "20" }],
+    holiday: [{ Name: "國慶日", Date: "1151010", Description: "依規定放假1日。" }],
+  };
+  const P = officialPack(raw, Date.parse("2026-10-21T10:00:00Z"));
+  assert.deepEqual(P.news.map(r => [r[0], r[1], r[2], r[4], r[5]]), [["2026-10-20", "21:46", "8277", "上櫃", "公告董事長配合調查"], ["2026-10-20", "07:00", "2072", "上市", "公告本公司名稱變更"]]);
+  assert.deepEqual(P.abn, []); assert.equal(P.abnDate, "2026-10-20");
+  assert.deepEqual(P.fines.map(r => [r[1], r[4], r[7]]), [["1589", "金管會裁罰", "處罰鍰 72 萬元"], ["3494", "違反資訊申報", "罰 5 萬元"]]);
+  assert.deepEqual(P.ctrl[0].slice(0, 4), ["2025-08-19".replace("2025", "2026"), "3489", "森寶", "上櫃"]);
+  assert.deepEqual(P.short3, [["1435", 13, "上市"], ["2515", 13, "上市"], ["1225", 4, "上市"]], "同一家取最長的月數");
+  assert.deepEqual(P.alt.map(r => [r[0], r[3]]), [["1213", "變更交易"], ["1218", "暫停交易 2026-08-13～2026-08-14"], ["2067", "變更交易、財報異常"]]);
+  assert.deepEqual(P.ipo.apply.map(r => r.slice(0, 4)), [["7909", "鈺祥", "上市", "2026-10-06"]], "申請上市欄位錯位一格，只留最近兩年");
+  assert.deepEqual(P.ipo.listed[0].slice(0, 5), ["6467", "泰合", "上市", "2026-10-20", 105.6]);
+  assert.equal(P.ipo.first5.length, 1);
+  assert.deepEqual(P.esb.quotes[0], ["1260", "富味鄉", 31.5, 30, 5, 10996]); assert.deepEqual(P.esb.rev[0], ["1260", "富味鄉", "食品工業", 4.68, 7, 3.8]); assert.equal(P.esb.ym, "2026-09");
+  assert.deepEqual(P.dca[0], [1, "2330", "台積電", 232850, "0050", "元大台灣50", 1275993]);
+  assert.deepEqual(P.broker, [[1, "1815", "富喬", [["元大", 34117, 29079], ["凱基", 100, 0]]]]);
+  assert.deepEqual([P.margin.up[0][0], P.margin.up[0][4], P.margin.dn[0][0], P.margin.dn[0][4], P.margin.sUp[0][0]], ["2330", 200, "8069", -300, "8069"]);
+  assert.deepEqual(P.margin.tot, [["上市", 1200, 200, 10, -2], ["上櫃", 500, -300, 50, 30]]);
+  assert.deepEqual(P.holiday, [["2026-10-10", "國慶日", "依規定放假1日。"]]);
+  assert.deepEqual(parseHoliday([{ Name: "國慶日", Date: "1151010", Description: "x" }]), [{ date: "2026-10-10", name: "國慶日", note: "x" }]);
+  assert.deepEqual(officialPack({}).news, [], "全部抓不到也不會出錯");
 });

@@ -351,7 +351,8 @@ function renderPod() {
   const tab = ["ep", "show"].includes(POD.view) ? POD.hist.find(h => !["ep", "show"].includes(h.view))?.view || "home" : POD.view;
   $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="節目觀點" id="podSeg">${[["home", "最新筆記"], ["rank", "提及標的表現"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
   const body = POD.view === "ep" ? podEpView() : POD.view === "show" ? podShowView() : POD.view === "rank" ? podRankView() : POD.view === "follow" ? podFollowView() : podHome();
-  $("#lx").innerHTML = `<div class="pod">${POD.err ? `<p class="note">⚠︎ ${esc(POD.err)}</p>` : ""}${body}<p class="note pnotice">${POD_NOTICE} <a href="${CONTACT_URL}" target="_blank" rel="noopener">意見回報 ↗</a>　節目封面取自各節目公開的 RSS。</p></div>`;
+  const abn = (POD.view === "home" || POD.view === "rank") && typeof offAbnHtml === "function" ? offAbnHtml() : ""; // 證交所點名的節目異常推介個股（official.js）
+  $("#lx").innerHTML = `<div class="pod">${POD.err ? `<p class="note">⚠︎ ${esc(POD.err)}</p>` : ""}${abn}${body}<p class="note pnotice">${POD_NOTICE} <a href="${CONTACT_URL}" target="_blank" rel="noopener">意見回報 ↗</a>　節目封面取自各節目公開的 RSS。</p></div>`;
   return "財經節目：AI 整理重點、追蹤主持人看多／看空的真實表現（相對大盤）。只是回顧統計，不是投資建議。";
 }
 // 自動更新：名人分頁開著時每 10 分鐘重抓排程資料、RSS 與股價，並把新單集排進自動整理

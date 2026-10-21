@@ -117,7 +117,12 @@ function otcWtHtml(D) {
     + (ki >= 0 && R.length >= 2 ? `<div class="mksegrow">${otcRngSeg()}</div>` + tsChart({ w: otcW(), dates: R.map(r => r[0]), panels: [{ h: 130, series: [{ name: "交易人數", type: "bar", vals: R.map(r => r[ki + 1]), color: "var(--accent)" }] }] }) : otcNone("交易人數的歷史還不夠（排程每天記一筆）。"))
     + `<p class="note">權證交易人數暴增常出現在行情熱的時候，散戶槓桿情緒升溫；連續縮小代表追價的人變少。</p>`);
   h += otcSec("權證成交值最多的標的", U?.date ? `${U.date.replace(/-/g, "/")}・萬元` : "", U?.rows?.length ? rkList(U.rows.slice(0, 30).map(r => ({ mono: "", attr: `data-sel="${esc(r[0])}"`, name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: `認購 ${r[2].toLocaleString()}・認售 ${r[3].toLocaleString()}・${r[4]} 檔有成交`, val: (r[2] + r[3]).toLocaleString(), vc: r[2] >= r[3] ? "up" : "down", vsub: r[6] != null ? `標的 ${r[5]}（${r[6] > 0 ? "+" : ""}${r[6]}）` : "", star: r[0] })))
-    + `<p class="note">紅字＝認購比較多（看漲）、綠字＝認售比較多（看跌）。只算上櫃掛牌的權證。</p>` : otcNone("暫時沒有資料。"));
+    + `<p class="note">紅字＝認購比較多（看漲）、綠字＝認售比較多（看跌）。這一份只算上櫃掛牌的權證。</p>` : otcNone("暫時沒有資料。"));
+  const UL = D.snap?.wtuL, B = D.snap?.wcb;
+  h += otcSec("上市權證成交值最多的標的", UL?.date ? `${UL.date.replace(/-/g, "/")}・萬元` : "", UL?.rows?.length ? rkList(UL.rows.slice(0, 30).map(r => ({ mono: "", attr: `data-sel="${esc(r[0])}"`, name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: `認購 ${r[2].toLocaleString()}・認售 ${r[3].toLocaleString()}・${r[4]} 檔有成交`, val: (r[2] + r[3]).toLocaleString(), vc: r[2] >= r[3] ? "up" : "down", star: r[0] })))
+    + `<p class="note">證交所的上市權證成交資料只有權證名稱，標的是用名稱開頭比對股票簡稱，少數對不到的不列入。</p>` : otcNone("上市權證資料還沒有（排程每個交易日收盤後整理）。"));
+  h += otcSec("上櫃牛熊證", B?.date ? `${B.date.replace(/-/g, "/")}・萬元` : "", B?.rows?.length ? rkList(B.rows.map(r => ({ mono: "", name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: `標的 ${esc(r[2])}`, val: r[4].toLocaleString(), vsub: r[3] != null ? `收盤 ${r[3]}` : "" })))
+    : otcNone("最近沒有上櫃牛熊證成交（櫃買中心目前掛牌的牛熊證很少）。"));
   return h;
 }
 

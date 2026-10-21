@@ -2,6 +2,7 @@
 // GET /api/calendar → { ok, rows: [{ date, code, name, kind, cash, stock, market }] }，依日期排序
 // 來源：證交所「除權除息預告表」TWT48U（上市）、櫃買中心除權息預告（上櫃）；欄位名稱用關鍵字找，抓不到的市場就略過。
 // 法說會：公開資訊觀測站「法人說明會一覽表」（本月與下個月，上市＋上櫃），回在 conf：[{ date, time, code, name, place, note, market }]
+// 休市日：證交所「有價證券集中交易市場開（休）市日期」，回在 hol：[{ date, name, note }]
 
 import { getJSON, num } from "./_tw.js";
 
@@ -39,6 +40,7 @@ export function parseConf(html, market) {
   return rows.slice(hi + 1).filter(r => r.length >= H.length - 1).map(r => ({ date: toIso(String(r[iD] ?? "").split(/[至~ ]/)[0]), time: iT >= 0 ? r[iT] : "", code: String(r[iC] ?? "").trim(), name: iN >= 0 ? r[iN] : "", place: iP >= 0 ? String(r[iP]).slice(0, 60) : "", note: iM >= 0 ? String(r[iM]).slice(0, 160) : "", market }))
     .filter(x => x.date && /^\d{4,6}[A-Z]?$/.test(x.code));
 }
+export const parseHoliday = j => (Array.isArray(j) ? j : []).map(r => ({ date: toIso(r.Date), name: String(r.Name ?? "").trim(), note: String(r.Description ?? "").trim() })).filter(x => x.date);
 async function confList() {
   const t = new Date(Date.now() + 8 * 3600e3), months = [[t.getUTCFullYear(), t.getUTCMonth() + 1]]; months.push(months[0][1] === 12 ? [months[0][0] + 1, 1] : [months[0][0], months[0][1] + 1]);
   const jobs = months.flatMap(([y, m]) => [["sii", "上市"], ["otc", "上櫃"]].map(([k, mk]) => fetch("https://mopsov.twse.com.tw/mops/web/ajax_t100sb02_1", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)" },
@@ -53,12 +55,13 @@ export default async function handler(req, res) {
     ["上市", "https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL"],
     ["上櫃", "https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost"],
   ];
-  const [got, cf] = await Promise.all([Promise.allSettled(tries.map(([m, u]) => getJSON(u, 12000).then(j => parseCalendar(j, m)))), confList().catch(() => [])]);
+  const [got, cf, hol] = await Promise.all([Promise.allSettled(tries.map(([m, u]) => getJSON(u, 12000).then(j => parseCalendar(j, m)))), confList().catch(() => []),
+    getJSON("https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule", 12000).then(parseHoliday).catch(() => [])]);
   const seen = new Set(), rows = [], errors = [];
   got.forEach((g, i) => { if (g.status !== "fulfilled") { errors.push(`${tries[i][0]}：${g.reason?.message}`); return; }
     for (const r of g.value) { const k = r.date + r.code; if (!seen.has(k)) { seen.add(k); rows.push(r); } } });
   if (!rows.length && !cf.length) return res.status(200).json({ ok: false, error: `拿不到除權息預告（${errors.join("；") || "沒有資料"}）` });
   rows.sort((a, b) => a.date.localeCompare(b.date) || a.code.localeCompare(b.code));
   res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=21600");
-  return res.status(200).json({ ok: true, source: "證交所、櫃買中心除權除息預告；法說會：公開資訊觀測站", rows, conf: cf, errors });
+  return res.status(200).json({ ok: true, source: "證交所、櫃買中心除權除息預告；法說會：公開資訊觀測站；休市日：證交所", rows, conf: cf, hol, errors });
 }
