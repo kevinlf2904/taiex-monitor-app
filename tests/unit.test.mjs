@@ -418,6 +418,27 @@ test("上市圖表排程：OpenAPI 當月、網站月報表補歷史、類股指
   await fs.rm(dir, { recursive: true });
 });
 
+test("財報進階排程：月營收連續年增與創新高、營益分析換算單季三率、美股營收與歷史累積", async () => {
+  const T = await import("../scripts/earn-hist.mjs"), U = await import("../scripts/us-earn.mjs");
+  const H = {}; for (let i = 0; i < 30; i++) { const y = 2024 + Math.floor(i / 12), m = i % 12 + 1; H[`${y}-${String(m).padStart(2, "0")}`] = 100 + i * 10; } // 一路成長
+  const R = T.revStreak({ "2330": ["台積電", "半導體業", H], "1101": ["台泥", "水泥工業", { "2026-06": 50, "2025-06": 60 }] }, "上市", "2026-06");
+  assert.deepEqual(R.map(r => r.slice(0, 5)), [["2330", "台積電", "半導體業", "上市", 18]], "連續年增 18 個月（只有 30 個月資料），台泥年減不列");
+  assert.equal(R[0][7], 29, "比過去 29 個月都高"); assert.equal(R[0][5], +(((390 / 270) - 1) * 100).toFixed(1));
+  const row = (c, rev, gm, om, nm) => `<tr class='even'><td>${c}</td><td>公司${c}</td><td align='right'>${rev}</td><td align='right'>${gm}</td><td align='right'>${om}</td><td align='right'>9</td><td align='right'>${nm}</td></tr>`;
+  const pg = (rev, gm) => Array.from({ length: 120 }, (_, i) => row(String(1000 + i), rev.toLocaleString(), gm, 10, 5)).join("");
+  const raw = { "2025Q1": T.parsePmHtml(pg(1000, 20)), "2025Q2": T.parsePmHtml(pg(2000, 21)), "2026Q1": T.parsePmHtml(pg(1000, 24)), "2026Q2": T.parsePmHtml(pg(2000, 25)) };
+  assert.deepEqual(raw["2025Q2"]["1000"], ["公司1000", 2000, 21, 10, 5]);
+  assert.deepEqual(T.singleQ(raw, "2026Q2")["1000"], [1000, 26, 10, 5], "累計 2000×25% − 1000×24% ÷ 單季 1000 = 26%");
+  const P = T.pmRows(raw, { "1000": ["半導體業", "上市"] }), r = P.rows.find(x => x[0] === "1000");
+  assert.equal(P.q, "2026Q2"); assert.deepEqual(r.slice(0, 5), ["1000", "公司1000", "半導體業", "上市", 26]); assert.deepEqual([r[7], r[10], r[13]], [2, 4, 1], "季增 2 點（24→26）、年增 4 點（22→26）、連續改善 1 季");
+  const rows = [["2026-10-20", "NVDA", "輝達", 4000, 1.3, 1.2, 8, "盤後", "", null], ["2026-10-30", "AAPL", "蘋果", 3800, null, 2, null, "盤後", "", 1.8]];
+  U.addRevenue(rows, { NVDA: [{ date: "2026-10-21", revenueActual: 51.234e9, revenueEstimate: 50e9 }] });
+  assert.deepEqual(rows[0].slice(10), [51.23, 50], "日期差一天也對得上，十億美元");
+  const h1 = U.mergeHist({ rows: [["2020-01-01", "OLD", "", 1, 1, 1, 0, "", null, null]] }, rows, Date.parse("2026-10-22"));
+  assert.deepEqual(h1.rows.map(x => x[1]), ["NVDA"], "只收已公布的、三年前的丟掉");
+  assert.equal(U.mergeHist(h1, rows, Date.parse("2026-10-22")).rows.length, 1, "同一筆不重複");
+});
+
 test("官方公告：重大訊息、裁罰、經營權異動、董監持股不足、變更交易、新股（欄位錯位）、興櫃、定期定額、券商進出、融資融券、休市日", async () => {
   const { officialPack } = await import("../api/_lib/official.js"), { parseHoliday } = await import("../api/_lib/calendar.js");
   const raw = {

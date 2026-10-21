@@ -132,6 +132,31 @@ if (process.argv[2] === "twsedry") {
   for (const k of ["pledge", "short", "fc", "sus", "sss", "wtu"]) console.log("snap", k, JSON.stringify(o.snap[k])?.slice(0, 400));
   process.exit(0);
 }
+if (process.argv[2] === "earnprobe") {
+  // 財報新功能要用的資料：觀測站營益分析彙總表（各季三率）、Finnhub 財報行事曆（營收實際／預估、歷史公布日）
+  const cut = (s, n = 900) => String(s).replace(/\s+/g, " ").slice(0, n);
+  for (const [typ, y, s] of [["sii", 115, "02"], ["otc", 115, "02"], ["sii", 114, "04"]]) {
+    for (const u of ["https://mopsov.twse.com.tw/mops/web/ajax_t163sb06", "https://mopsov.twse.com.tw/mops/web/ajax_t163sb04"]) {
+      try { const r = await fetch(u, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0" }, body: `encodeURIComponent=1&step=1&firstin=1&off=1&isQuery=Y&TYPEK=${typ}&year=${y}&season=${s}`, signal: AbortSignal.timeout(30000) });
+        const t = await r.text(), i = t.indexOf("公司代號"); console.log(`\n### ${u.split("/").pop()} ${typ} ${y}Q${s} ${r.status} ${t.length} bytes 表格 ${(t.match(/<table/g) || []).length}\n${cut(t.slice(Math.max(0, i - 300), i + 1500), 1800)}`); } catch (e) { console.log(u, "錯誤", e.message); } } }
+  const K = process.env.FINNHUB_API_KEY; if (!K) { console.log("沒有 FINNHUB_API_KEY"); process.exit(0); }
+  const fh = async p => { const r = await fetch("https://finnhub.io/api/v1" + p + (p.includes("?") ? "&" : "?") + "token=" + K, { signal: AbortSignal.timeout(20000) }); return [r.status, await r.json().catch(() => null)]; };
+  const d0 = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10), d1 = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
+  let [st, j] = await fh(`/calendar/earnings?from=${d0}&to=${d1}`); const L = j?.earningsCalendar || []; console.log("\n### finnhub calendar 4 週", st, L.length, "筆", JSON.stringify(L.filter(x => x.revenueActual).slice(0, 2)), JSON.stringify(L.filter(x => !x.revenueActual).slice(0, 1)));
+  for (const sym of ["NVDA", "AAPL"]) { [st, j] = await fh(`/calendar/earnings?symbol=${sym}&from=2023-01-01&to=${d1}`); const E = j?.earningsCalendar || []; console.log(`### finnhub ${sym} 歷史`, st, E.length, "筆", JSON.stringify(E.slice(0, 2)), "…", JSON.stringify(E.slice(-1))); }
+  [st, j] = await fh(`/stock/earnings?symbol=NVDA&limit=12`); console.log("### stock/earnings NVDA", st, Array.isArray(j) ? j.length : j, JSON.stringify(Array.isArray(j) ? j.slice(-1) : ""));
+  process.exit(0);
+}
+if (process.argv[2] === "earndry") {
+  // 財報進階排程用真實資料跑一次（寫到暫存資料夾，不動 repo）
+  const os = await import("node:os"), fs = await import("node:fs/promises"), path = await import("node:path"), { main } = await import("./earn-hist.mjs"), dir = await fs.mkdtemp(os.tmpdir() + "/eh-");
+  for (const f of ["twse-rev.json", "tpex-rev.json"]) await fs.copyFile(new URL(`../learner/data/${f}`, import.meta.url), path.join(dir, f));
+  const o = await main({ dir: f => path.join(dir, f) }), P = o.pm;
+  console.log("連續成長", o.streak?.ym, o.streak?.rows.length, JSON.stringify(o.streak?.rows.slice(0, 3)));
+  console.log("公布進度", o.pub?.ym, o.pub?.n, "/", o.pub?.total);
+  console.log("三率", P?.q, P?.qp, P?.qy, P?.rows.length, "家；三率三升", P?.rows.filter(r => r[7] > 0 && r[8] > 0 && r[9] > 0).length, JSON.stringify(P?.rows.find(r => r[0] === "2330")), JSON.stringify(P?.rows.find(r => r[0] === "1101")));
+  process.exit(0);
+}
 if (process.argv[2] === "tpexcharts") {
   // 情報局「櫃買」圖表用到的資料集：印筆數、欄位、前兩筆與最後一筆（截短），好對欄位名稱
   const P = process.argv[3] === "2" ? ["/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap08_O", "/tpex_gold_market_highlight", "/tpex_warrant_daily_quts", "/tpex_warrant_statistics", "/tpex_warrant_issue"] : ["/tpex_index", "/tpex_reward_index", "/tpex50_index", "/tpex200_change", "/tphd_index", "/tpcgi_reward_index", "/tpci_reward_index", "/tpex_emp88_reward_index", "/tpex_daily_trading_index", "/mopsfin_t187ap05_OA", "/mopsfin_t187ap05_OB", "/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap09_O", "/mopsfin_t187ap08_O", "/tpex_warrant_statistics", "/tpex_intraday_trading_pre", "/tpex_margin_trading_term", "/tpex_esb_eps_rank", "/tpex_gold_latest", "/tpex_gold_market_highlight", "/bond_cb_daily"];

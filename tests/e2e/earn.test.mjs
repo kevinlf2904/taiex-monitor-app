@@ -73,3 +73,57 @@ test("情報局「財報 → 美股」：最近公布、即將公布、優於／
   await ctx.close();
   assert.deepEqual(errs, []);
 });
+
+// 財報進階：行事曆、連續成長、三率轉折、我的持股、同業比較、小學堂、整體看法；個股展開的估值與公布後反應
+const HIST = { updated: "2026-10-21T14:40:00Z", streak: { ym: "2026-09", rows: [["2330", "台積電", "半導體業", "上市", 18, 36.2, 3300, 36], ["3105", "穩懋", "半導體業", "上櫃", 7, 45, 15, 0], ["1101", "台泥", "水泥工業", "上市", 3, 7.6, 143, 0]] },
+  pub: { ym: "2026-09", n: 1700, total: 1859, codes: ["2330", "1101"] },
+  pm: { q: "2026Q2", qp: "2026Q1", qy: "2025Q2", rows: [["2330", "台積電", "半導體業", "上市", 59.1, 49.5, 42.7, 1.2, 0.8, 0.5, 5, 4, 3, 4], ["2317", "鴻海", "其他電子業", "上市", 6.2, 2.9, 2.4, -2.5, -0.3, -0.2, -0.1, 0.1, 0.2, 0], ["1101", "台泥", "水泥工業", "上市", 18.2, 7.3, 6.4, 0.5, -0.1, 0.2, 1, 1, 1, 1]] } };
+for (const width of [1280, 390]) test(`財報進階：行事曆、連續成長、三率轉折、持股健檢、同業比較、小學堂、整體看法 (${width}px)`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width, touch: width < 500 });
+  await p.route("**/api/oapi?earn=1", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, ym: "11509", yq: "115Q2", source: "測試", rows: ROWS }) }));
+  await p.route("**/data/earn-hist.json**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify(HIST) }));
+  await p.route("**/api/calendar**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: [], conf: [{ date: "2099-01-05", time: "14:00", code: "2317", name: "鴻海", place: "台北", market: "上市" }] }) }));
+  await p.route("**/api/stockinfo**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, code: "2330", inst: [], margin: [],
+    per: Array.from({ length: 300 }, (_, i) => ({ d: `2025-${String(1 + (i % 12)).padStart(2, "0")}-01`, pe: 10 + i / 20, pb: 3 + i / 100, dy: 2 })),
+    revenue: Array.from({ length: 24 }, (_, i) => ({ ym: `${2024 + (i >= 12 ? 1 : 0)}-${String(i % 12 + 1).padStart(2, "0")}`, rev: 2e11 + i * 5e9, yoy: i % 3 ? 20 : -5 })), fin: [] }) }));
+  await p.evaluate(() => { W.groups[0].list = ["2330", "2317"]; W.hold = { "1102": { sh: 1000, cost: 30 } }; });
+  await p.click('#lTabs [data-l="earn"]'); await p.waitForSelector(".earn .erlist li");
+  assert.match(await p.textContent(".earn"), /財報整體看法[\s\S]*整體[\s\S]*(偏強|中性|偏弱)[\s\S]*動能：2 家月營收連續年增半年以上/);
+  const T = async v => { await p.click(`[data-erv="${v}"]`); await p.waitForTimeout(150); if (process.env.SHOT) await p.screenshot({ path: `${process.env.SHOT}/earn-${v}-${width}.png`, fullPage: true }); return p.textContent(".earn"); };
+  assert.match(await T("cal"), /月營收公布截止[\s\S]*9 月營收已公布[\s\S]*1,700 家[\s\S]*還沒公布：[\s\S]*鴻海[\s\S]*即將開法說會：鴻海/);
+  assert.match(await T("streak"), /連續 3 個月以上[\s\S]*3 家[\s\S]*台積電[\s\S]*18 個月/);
+  await p.click('[data-exk="xs:hi"]'); assert.match(await p.textContent(".earn"), /營收創新高[\s\S]*台積電[\s\S]*36\+ 個月高/);
+  assert.match(await T("turn"), /三率三升（季）[\s\S]*2 家[\s\S]*台積電/);
+  await p.click('[data-exk="xt:down"]'); assert.equal(await p.evaluate(() => document.querySelector(".erlist .nm").firstChild.textContent), "鴻海", "毛利率下滑最多");
+  const my = await T("my"); assert.match(my, /自選＋庫存 3 檔台股[\s\S]*有警訊[\s\S]*2 檔/); assert.ok(my.indexOf("亞泥") < my.indexOf("台積電"), "有警訊的排前面");
+  assert.match(await T("cmp"), /同業比較[\s\S]*台積電[\s\S]*毛利率季變化/);
+  await p.fill("[data-excmp] input", "1101 1102"); await p.click("[data-excmp] button"); assert.deepEqual(await p.evaluate(() => ER().cmp), ["1101", "1102"]);
+  assert.match(await T("learn"), /三率三升[\s\S]*本益比/);
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  // 個股展開：整體看法、估值位置、月營收公布後股價反應
+  await T("streak"); await p.click('[data-exk="xs:s"]'); await p.click('.erlist button[data-ertr="2330"]'); await p.waitForSelector(".excomp");
+  assert.match(await p.textContent(".excomp"), /整體看法[\s\S]*基本面偏強[\s\S]*連續 18 個月年增[\s\S]*估值位置[\s\S]*本益比/);
+  await p.click('.excomp [data-exk="kl:2330"]'); await p.waitForFunction(() => /年增月|資料不夠|⚠︎/.test(document.querySelector(".excomp")?.textContent || ""));
+  assert.match(await p.textContent(".excomp"), /年增月 5 日/); if (process.env.SHOT) await (await p.$(".excomp")).screenshot({ path: `${process.env.SHOT}/earn-comp-${width}.png` });
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "展開後沒有橫向溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("美股財報進階：財報週對應台股供應鏈、營收驚喜、整體看法、歷史驚喜紀錄", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width: 390, touch: true });
+  const day = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+  await p.route("**/data/us-earn.json**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "Nasdaq", at: new Date().toISOString(), from: day(-14), to: day(14), rows: [
+    [day(-2), "NFLX", "Netflix", 520, 6.1, 5.4, 13, "盤後", "", null, 11.5, 11.0], [day(-1), "TSLA", "特斯拉", 1400, 0.5, 0.62, -19.4, "盤後", "", null, 25, 26], [day(2), "NVDA", "輝達", 4000, null, 1.2, null, "盤後", "", 0.8, null, 50]] }) }));
+  await p.route("**/data/us-earn-hist.json**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ rows: [[day(-1), "TSLA", "特斯拉", 1400, 0.5, 0.62, -19.4, "盤後", 25, 26]] }) }));
+  await p.click('#lTabs [data-l="earn"]'); await p.click('[data-erreg="us"]'); await p.waitForSelector(".earn .erlist li");
+  assert.match(await p.textContent(".earn"), /財報整體看法[\s\S]*EPS 優於預期 50%[\s\S]*營收優於預期 50%/);
+  await p.click('[data-erv="week"]'); await p.waitForTimeout(150);
+  assert.match(await p.textContent(".earn"), /會牽動哪些台股[\s\S]*輝達[\s\S]*台積電/, "輝達對應台股供應鏈");
+  await p.click('[data-erv="rev"]'); await p.waitForTimeout(150);
+  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll(".erlist .nm")].map(x => x.firstChild.textContent)), ["Netflix", "特斯拉"]);
+  assert.match(await p.textContent(".erlist"), /雙優/);
+  await p.click('.erlist button[data-ertr="TSLA"]'); await p.waitForSelector(".excomp");
+  assert.match(await p.textContent(".excomp"), /歷史驚喜紀錄[\s\S]*優於預期/);
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});

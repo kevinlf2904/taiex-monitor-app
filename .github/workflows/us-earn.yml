@@ -1,4 +1,4 @@
-# 美股財報行事曆：每天台北早上 6:23（美股收盤後財報出來）、晚上 9:23（盤前財報出來）從 Nasdaq 更新 learner/data/us-earn.json
+# 美股財報行事曆：每天台北早上 6:23（美股收盤後財報出來）、晚上 9:23（盤前財報出來）從 Nasdaq 更新 learner/data/us-earn.json learner/data/us-earn-hist.json
 name: us-earn
 on:
   schedule:
@@ -13,7 +13,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - run: git pull -q origin ${{ github.ref_name }}
@@ -21,8 +21,10 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/us-earn.mjs
+        env: # 營收實際值與預估（Finnhub）；沒設定也能跑，只是沒有營收驚喜
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
       - name: commit
         env:
           COMMIT_NAME: us-earn
         run: |
-          bash scripts/commit-data.sh "美股財報：更新財報行事曆" learner/data/us-earn.json
+          bash scripts/commit-data.sh "美股財報：更新財報行事曆" learner/data/us-earn.json learner/data/us-earn-hist.json

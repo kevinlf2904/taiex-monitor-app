@@ -1,0 +1,27 @@
+# 財報進階資料：月營收連續成長、創新高、公布進度，觀測站營益分析（三率轉折），寫進 learner/data/earn-hist.json，給情報局「財報」用
+name: earn-hist
+on:
+  schedule:
+    - cron: "40 14 * * 1-5"  # 台北 22:40（排在 twse-daily 21:55、tpex-daily 21:45 之後，月營收是最新的）
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: data-sync-earn-hist-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: git pull -q origin ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/earn-hist.mjs
+      - name: commit
+        env:
+          COMMIT_NAME: earn-hist
+        run: |
+          bash scripts/commit-data.sh "財報：更新連續成長、三率轉折" learner/data/earn-hist.json learner/data/earn-pm.json
