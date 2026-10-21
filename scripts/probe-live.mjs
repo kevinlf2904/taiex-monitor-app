@@ -36,6 +36,16 @@ if (process.argv[2] === "taifexdl") {
   const dates = {}; tx.forEach(l => { const k = l.split(",")[0].trim(); dates[k] = (dates[k] || 0) + 1; }); console.log("日期分佈", JSON.stringify(dates));
   process.exit(0);
 }
+if (process.argv[2] === "usearn") {
+  // 美股財報行事曆：Finnhub /calendar/earnings（要 FINNHUB_API_KEY，只印有沒有、筆數與一筆範例）與 Nasdaq 公開行事曆（不用金鑰）
+  const d = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10), key = (process.env.FINNHUB_API_KEY || "").trim();
+  console.log("FINNHUB_API_KEY", key ? "有" : "沒有");
+  if (key) { try { const r = await fetch(`https://finnhub.io/api/v1/calendar/earnings?from=${d(-14)}&to=${d(14)}`, { headers: { "X-Finnhub-Token": key }, signal: AbortSignal.timeout(20000) }); const j = await r.json().catch(() => null), L = j?.earningsCalendar || [];
+    console.log("Finnhub", r.status, "筆數", L.length, "有實際 EPS", L.filter(x => x.epsActual != null).length, "範例", JSON.stringify(L.find(x => ["NFLX", "TSLA", "TSM", "JPM", "AAPL", "MSFT"].includes(x.symbol)) || L[0])); } catch (e) { console.log("Finnhub 失敗", e.message); } }
+  for (const day of [d(-3), d(-2), d(-1), d(1), d(2)]) { try { const r = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json", Origin: "https://www.nasdaq.com", Referer: "https://www.nasdaq.com/" }, signal: AbortSignal.timeout(20000) });
+    const j = await r.json().catch(() => null), L = j?.data?.rows || []; console.log("Nasdaq", day, r.status, "筆數", L.length, "欄位", L[0] ? Object.keys(L[0]).join(",") : "", "範例", JSON.stringify(L[0] || j?.status || null).slice(0, 400)); } catch (e) { console.log("Nasdaq 失敗", day, e.message); } }
+  process.exit(0);
+}
 if (process.argv[2] === "earn") {
   // 情報局「財報」：用真的證交所、櫃買資料跑 /api/oapi?earn=1 的合併邏輯，印出欄位有沒有對上
   const { rowsOf, earnRows } = await import("../api/_lib/oapi.js"), get = (s, p) => rowsOf(s, p).catch(e => (console.log("失敗", s, p, e.message), []));
