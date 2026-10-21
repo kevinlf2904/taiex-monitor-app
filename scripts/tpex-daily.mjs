@@ -59,6 +59,17 @@ export function warrantUnder(rows) {
     if (/售/.test(r.Name)) g[3] += v; else g[2] += v; g[4]++; }
   return [...M.values()].map(g => [g[0], g[1], Math.round(g[2] / 1e4), Math.round(g[3] / 1e4), g[4], g[5], g[6]]).sort((a, b) => b[2] + b[3] - a[2] - a[3]).slice(0, 60);
 }
+// 上市權證（證交所 t187ap42_L 只有權證名稱、沒有標的代號）：用名稱開頭比對股票簡稱（取最長的），加總成交金額 → 和 warrantUnder 同樣格式
+export function warrantUnderL(rows, names) {
+  const by = new Map(); for (const [c, n] of names) { const k = n.slice(0, 2); (by.get(k) || by.set(k, []).get(k)).push([c, n]); }
+  for (const L of by.values()) L.sort((a, b) => b[1].length - a[1].length);
+  const M = new Map();
+  for (const r of rows || []) { const v = num(r["成交金額"]) || 0; if (!v) continue; const w = str(r["權證名稱"]), hit = (by.get(w.slice(0, 2)) || []).find(([, n]) => w.startsWith(n)); if (!hit) continue;
+    const g = M.get(hit[0]) || M.set(hit[0], [hit[0], hit[1], 0, 0, 0, null, null]).get(hit[0]); if (/售/.test(w.slice(hit[1].length))) g[3] += v; else g[2] += v; g[4]++; }
+  return [...M.values()].map(g => [g[0], g[1], Math.round(g[2] / 1e4), Math.round(g[3] / 1e4), g[4], null, null]).sort((a, b) => b[2] + b[3] - a[2] - a[3]).slice(0, 60);
+}
+// 上櫃牛熊證：有成交的 [代號, 名稱, 標的, 收盤, 成交值(萬)]
+export const wcbRows = R => (R || []).map(r => [str(r.Code), str(r.Name), str(r.UnderlyingStock), num(r.Close), Math.round((num(r.TradeValue) || 0) / 1e4)]).filter(x => x[4] > 0).sort((a, b) => b[4] - a[4]).slice(0, 40);
 // 公開資訊觀測站上櫃月營收彙總表（big5 HTML）：每個產業一張表，每列 代號、名稱、當月、上月、去年當月、月增%、年增%…（千元）
 export function parseMops(html) {
   const out = []; let ind = "";
@@ -86,12 +97,13 @@ const ymBack = ([y, m], n) => { const t = y * 12 + m - 1 - n; return [Math.floor
 const ymKey = ([y, m]) => `${y}-${String(m).padStart(2, "0")}`;
 
 async function api(p) { const r = await fetch(API + p, { headers: UA, signal: AbortSignal.timeout(60000) }); if (!r.ok) throw new Error(`${p} HTTP ${r.status}`); const j = await r.json().catch(() => null); return Array.isArray(j) ? j : []; }
+async function twseApi(p) { const r = await fetch("https://openapi.twse.com.tw/v1" + p, { headers: UA, signal: AbortSignal.timeout(60000) }); if (!r.ok) throw new Error(`${p} HTTP ${r.status}`); const j = await r.json().catch(() => null); return Array.isArray(j) ? j : []; }
 async function mops([y, m]) {
   const r = await fetch(`https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_${y - 1911}_${m}_0.html`, { headers: { "User-Agent": UA["User-Agent"] }, signal: AbortSignal.timeout(60000) });
   if (!r.ok) return []; return parseMops(new TextDecoder("big5").decode(await r.arrayBuffer()));
 }
 
-export async function main({ get = api, getMops = mops, now = Date.now(), gap = 800, out: OUT_ = OUT, rev: REV_ = REV } = {}) {
+export async function main({ get = api, getTwse = twseApi, getMops = mops, now = Date.now(), gap = 800, out: OUT_ = OUT, rev: REV_ = REV } = {}) {
   const old = await readFile(OUT_, "utf8").then(JSON.parse).catch(() => ({})), rh = await readFile(REV_, "utf8").then(JSON.parse).catch(() => ({}));
   const safe = async p => { try { const L = await get(p); await sleep(gap); return L; } catch (e) { console.log("失敗", p, e.message); return null; } };
   const sets = {}; for (const [k, p] of IX) sets[k] = await safe(p) || [];
@@ -123,6 +135,11 @@ export async function main({ get = api, getMops = mops, now = Date.now(), gap = 
   if (gl.length) put("gold", gl.map(r => ({ d: rocDate(r.Date), t: str(r.Time), code: str(r.GoldCode), name: str(r.GoldShortName), buy: num(r["QuotedBuyingB.Price"]), sell: num(r["QuotedSellingS.Price"]), chg: r2(num(r.QuotedSellingChange)), avg: num(r["TradingAvg."]), pavg: num(r["TradingPreAvg."]), hi: num(r.TradingHighest), lo: num(r.TradingLowest), last: num(r["TradingLatestTradingInfo.LatestPrice"]), vol: num(r.TradingVolume), n: num(r.TradingTransaction) })));
   const cb = await safe("/bond_cb_daily"); if (cb?.length) put("cb", { date: rocDate(cb[0].Date), rows: cb.map(r => [str(r.FinancialInstitutionsCode), str(r.FinancialInstitutionsName), num(r.ParValueOfPurchase), num(r.AmountOfPurchase), num(r.ParValueOfSell), num(r.AmountOfSell)]) });
   const wq = await safe("/tpex_warrant_daily_quts"); if (wq?.length) put("wtu", { date: rocDate(wq[0].Date), rows: warrantUnder(wq) });
+  const wb = await safe("/tpex_warrant_wcb_daily_quts"); if (wb) put("wcb", { date: rocDate(wb[0]?.Date) || "", rows: wcbRows(wb) });
+  // 上市權證：證交所的資料集，名稱對代號用融資融券表的股票簡稱
+  const tw = async p => { try { const r = await getTwse(p); await sleep(gap); return r; } catch (e) { console.log("失敗", p, e.message); return null; } };
+  const wl = await tw("/opendata/t187ap42_L"), mg = wl?.length ? await tw("/exchangeReport/MI_MARGN") : null;
+  if (wl?.length && mg?.length) put("wtuL", { date: rocDate(wl[0]["交易日期"]), rows: warrantUnderL(wl, mg.map(r => [str(r["股票代號"]), str(r["股票名稱"])]).filter(x => x[0] && x[1])) });
   const out = { updated: new Date(now).toISOString(), ix: { cols: IX_COLS, rows: ix }, vol, wt, gold, revm: [...revm.values()].sort((a, b) => a.ym.localeCompare(b.ym)).slice(-REV_KEEP), snap };
   if (!ix.length && !out.revm.length) throw new Error("櫃買中心、觀測站都沒拿到資料");
   await writeFile(OUT_, JSON.stringify(out)); await writeFile(REV_, JSON.stringify(rh));

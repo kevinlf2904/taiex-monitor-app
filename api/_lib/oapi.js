@@ -2,11 +2,13 @@
 // GET /api/oapi?src=twse|tpex&p=/opendata/t187ap45_L[&code=2330][&q=關鍵字][&limit=500]
 //   → { ok, src, path, total, cols, rows, more }；code 只留這檔、q 任一欄含關鍵字。資料集清單在 learner/oapi.js 的 OAPI_CAT。
 // GET /api/oapi?stock=2330 → { ok, code, items: [{ k, t, src, path, rows }] }：個股常用的官方資料（上市、上櫃都試，有資料的才回）。
+// GET /api/oapi?official=1 → 情報局「大盤 → 官方公告」：重大訊息、裁罰、新股、興櫃、定期定額…整理成一包（official.js）。
 // GET /api/oapi?earn=1 → { ok, ym, yq, rows: [[代號, 名稱, 產業, 市場, 當月營收(億), 月增%, 年增%, 累計年增%, EPS, 季營收(億), 稅後淨利(億), 毛利率, 營益率, 淨利率]] }：
 //   情報局「財報」用，上市、上櫃的月營收（t187ap05）、季 EPS（t187ap14）、營益分析（t187ap17）合成一張表。
 // 只連固定的兩個網域、路徑只允許英數字與 _ /，不會被拿去連別的網站。同一份資料在這台機器上 15 分鐘內重複用。
 
 import { getJSON } from "./_tw.js";
+import { OFFICIAL_SETS, officialPack } from "./official.js";
 
 const BASE = { twse: "https://openapi.twse.com.tw/v1", tpex: "https://www.tpex.org.tw/openapi/v1" };
 const PATH_RE = /^\/[A-Za-z0-9_]+(\/[A-Za-z0-9_]+){0,2}$/;
@@ -46,7 +48,21 @@ export const STOCK_SETS = [
   ["dt", "當沖標的與統計", "/exchangeReport/TWTB4U", "/tpex_securities"],
   ["sbl", "可借券賣出股數", "/SBL/TWT96U", "/tpex_margin_sbl"],
   ["mon", "月成交資訊", "/exchangeReport/FMSRFK_ALL", null],
+  ["news", "最近的重大訊息", "/opendata/t187ap04_L", "/mopsfin_t187ap04_O"],
+  ["fine", "金管會裁罰", "/opendata/t187ap22_L", "/mopsfin_t187ap22_O"],
+  ["info", "違反資訊申報、重大訊息規定", "/opendata/t187ap23_L", "/mopsfin_t187ap23_O"],
+  ["ctrl", "經營權異動", "/opendata/t187ap24_L", "/mopsfin_t187ap24_O"],
+  // 完整財報（最新一季）：一家公司只會出現在其中一種產業格式
+  ["is", "綜合損益表（最新一季）", ["ci", "basi", "bd", "fh", "ins", "mim"].map(x => `/opendata/t187ap06_L_${x}`), ["ci", "basi", "bd", "fh", "ins", "mim"].map(x => `/mopsfin_t187ap06_O_${x}`)],
+  ["bs", "資產負債表（最新一季）", ["ci", "basi", "bd", "fh", "ins", "mim"].map(x => `/opendata/t187ap07_L_${x}`), ["ci", "basi", "bd", "fh", "ins", "mim"].map(x => `/mopsfin_t187ap07_O_${x}`)],
+  ["margin", "融資融券餘額（最新一日）", "/exchangeReport/MI_MARGN", "/tpex_mainboard_margin_balance"],
+  ["pe", "本益比、殖利率、股價淨值比", "/exchangeReport/BWIBBU_ALL", "/tpex_mainboard_peratio_analysis"],
+  ["year", "歷年成交資訊", "/exchangeReport/FMNPTK_ALL", null],
   ["ghg", "ESG：溫室氣體排放", "/opendata/t187ap46_L_1", "/t187ap46_O_1"],
+  ["energy", "ESG：能源管理", "/opendata/t187ap46_L_2", null],
+  ["water", "ESG：水資源管理", "/opendata/t187ap46_L_3", null],
+  ["waste", "ESG：廢棄物管理", "/opendata/t187ap46_L_4", null],
+  ["infosec", "ESG：資訊安全", "/opendata/t187ap46_L_16", null],
   ["hr", "ESG：人力發展", "/opendata/t187ap46_L_5", "/t187ap46_O_5"],
   ["board", "ESG：董事會", "/opendata/t187ap46_L_6", "/t187ap46_O_6"],
 ];
@@ -79,9 +95,16 @@ export default async function handler(req, res) {
     res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=21600");
     return res.status(200).json({ ok: true, source: "證交所、櫃買中心開放資料（月營收、各產業 EPS、營益分析）", ...E });
   }
+  if (q.official) {
+    const got = await Promise.all(OFFICIAL_SETS.map(([k, src, p]) => rowsOf(src, p).then(r => [k, r]).catch(() => [k, null])));
+    const raw = Object.fromEntries(got.filter(([, r]) => r).map(([k, r]) => [k, r])), miss = got.filter(([, r]) => !r).map(([k]) => k);
+    if (!Object.keys(raw).length) return res.status(200).json({ ok: false, error: "證交所、櫃買中心暫時連不到" });
+    res.setHeader("Cache-Control", "s-maxage=900, stale-while-revalidate=3600");
+    return res.status(200).json({ ok: true, at: new Date().toISOString(), source: "證交所、櫃買中心開放資料", miss, ...officialPack(raw) });
+  }
   if (q.stock) {
     const got = await Promise.all(STOCK_SETS.map(async ([k, t, a, b]) => {
-      for (const [src, path] of [["twse", a], ["tpex", b]]) {
+      for (const [src, path] of [...[a].flat().map(p => ["twse", p]), ...[b].flat().map(p => ["tpex", p])]) {
         if (!path) continue;
         try { const rows = filterRows(await rowsOf(src, path), { code }); if (rows.length) return { k, t, src, path, rows: rows.slice(-24) }; } catch { /* 這一份暫時抓不到就跳過 */ }
       }

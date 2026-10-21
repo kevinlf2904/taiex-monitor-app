@@ -87,6 +87,22 @@ if (process.argv[2] === "mops") {
       const i = t.indexOf("公司代號"); console.log(`\n### ${u} ${r.status} ${r.headers.get("content-type")} ${b.length} bytes\n${t.slice(0, 300)}\n…\n${t.slice(Math.max(0, i - 600), i + 2500).replace(/\s+/g, " ")}`); } catch (e) { console.log(u, "錯誤", e.message); } }
   process.exit(0);
 }
+if (process.argv[2] === "official") {
+  // 「全部加入」用到的證交所、櫃買資料集：印筆數、欄位、第一筆（截短）
+  const P = [["twse", "/opendata/t187ap04_L"], ["tpex", "/mopsfin_t187ap04_O"], ["twse", "/Announcement/BFZFZU_T"], ["twse", "/opendata/t187ap22_L"], ["tpex", "/mopsfin_t187ap22_O"], ["twse", "/opendata/t187ap23_L"], ["twse", "/opendata/t187ap24_L"], ["tpex", "/mopsfin_t187ap24_O"],
+    ["twse", "/opendata/t187ap10_L"], ["tpex", "/mopsfin_t187ap10_O"], ["twse", "/exchangeReport/TWT85U"], ["twse", "/exchangeReport/TWTAWU"], ["tpex", "/tpex_cmode"], ["twse", "/company/applylistingLocal"], ["twse", "/company/newlisting"], ["twse", "/company/suspendListingCsvAndHtml"],
+    ["twse", "/exchangeReport/TWT88U"], ["tpex", "/tpex_esb_applicant_companies"], ["tpex", "/tpex_ipo_no_limit"], ["tpex", "/mopsfin_t187ap03_R"], ["tpex", "/t187ap05_R"], ["tpex", "/tpex_esb_latest_statistics"], ["twse", "/ETFReport/ETFRank"], ["tpex", "/tpex_active_broker_volume"],
+    ["twse", "/holidaySchedule/holidaySchedule"], ["twse", "/opendata/t187ap06_L_ci"], ["tpex", "/mopsfin_t187ap06_O_ci"], ["twse", "/opendata/t187ap07_L_ci"], ["tpex", "/mopsfin_t187ap07_O_ci"], ["twse", "/exchangeReport/MI_MARGN"], ["tpex", "/tpex_mainboard_margin_balance"],
+    ["twse", "/block/BFIAUU_d"], ["tpex", "/tpex_daily_qutoes_block"], ["twse", "/exchangeReport/FMNPTK_ALL"], ["twse", "/opendata/t187ap43_L"], ["twse", "/opendata/t187ap42_L"], ["tpex", "/tpex_warrant_wcb_daily_quts"], ["twse", "/opendata/t187ap46_L_16"], ["tpex", "/t187ap46_O_16"], ["twse", "/opendata/t187ap46_L_2"]];
+  const B = { twse: "https://openapi.twse.com.tw/v1", tpex: "https://www.tpex.org.tw/openapi/v1" };
+  const cut = r => JSON.stringify(r && Object.fromEntries(Object.entries(r).map(([a, b]) => [a, String(b).replace(/\s+/g, " ").slice(0, 30)]))).slice(0, 900);
+  await Promise.all(P.map(async ([s, p], i) => { await sleep(i * 300); let line;
+    try { const r = await fetch(B[s] + p, { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" }, signal: AbortSignal.timeout(90000) }); const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch {} const L = Array.isArray(j) ? j : [];
+      line = L.length ? `### ${s}${p} ${r.status} ${L.length} 筆\n${cut(L[0])}\n…${cut(L[L.length - 1])}` : `### ${s}${p} ${r.status} 0 筆 ${t.length} bytes ${t.slice(0, 160)}`; } catch (e) { line = `### ${s}${p} 錯誤 ${e.message}`; }
+    P[i].out = line; }));
+  for (const x of P) console.log("\n" + x.out);
+  process.exit(0);
+}
 if (process.argv[2] === "tpexcharts") {
   // 情報局「櫃買」圖表用到的資料集：印筆數、欄位、前兩筆與最後一筆（截短），好對欄位名稱
   const P = process.argv[3] === "2" ? ["/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap08_O", "/tpex_gold_market_highlight", "/tpex_warrant_daily_quts", "/tpex_warrant_statistics", "/tpex_warrant_issue"] : ["/tpex_index", "/tpex_reward_index", "/tpex50_index", "/tpex200_change", "/tphd_index", "/tpcgi_reward_index", "/tpci_reward_index", "/tpex_emp88_reward_index", "/tpex_daily_trading_index", "/mopsfin_t187ap05_OA", "/mopsfin_t187ap05_OB", "/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap09_O", "/mopsfin_t187ap08_O", "/tpex_warrant_statistics", "/tpex_intraday_trading_pre", "/tpex_margin_trading_term", "/tpex_esb_eps_rank", "/tpex_gold_latest", "/tpex_gold_market_highlight", "/bond_cb_daily"];
