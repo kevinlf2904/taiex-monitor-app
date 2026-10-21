@@ -207,6 +207,20 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .tgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 18px; }
 .csec h4 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 12px 0 4px; }
 .tlist { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+/* 工具 → 官方資料：左邊資料集清單、右邊原始表格（手機先清單、選了再看表格） */
+.oabar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; } .oabar .oas { flex: 1 1 200px; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; background: var(--surface-2); color: var(--ink); font-size: 14px; }
+.oagrid { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 14px; align-items: start; margin-top: 8px; }
+.oaside { max-height: 70vh; overflow-y: auto; } .oalist { list-style: none; margin: 0; padding: 0; }
+.oalist button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); padding: 7px 6px; border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1.45; cursor: pointer; }
+.oalist button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.oalist small, .oam { font-size: 11px; color: var(--muted); } .oam { margin-right: 6px; } .oalist small { margin-left: 6px; color: var(--accent); }
+.oaview { min-width: 0; } .oaview h3 { margin: 0 0 6px; } .oaback { display: none; margin-bottom: 6px; }
+.oaq { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; } .oaq input { flex: 1 1 120px; min-width: 0; }
+.oatbl { overflow-x: auto; max-height: 70vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; }
+.oatbl table { border-collapse: collapse; font-size: 12px; white-space: nowrap; } .oatbl th, .oatbl td { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.oatbl th { position: sticky; top: 0; background: var(--surface-2); font-weight: 500; color: var(--muted); }
+.oacard { margin-bottom: 14px; } .oacard .oatbl { max-height: 320px; }
+@media (max-width: 760px) { .oagrid { grid-template-columns: minmax(0, 1fr); } .oagrid.has-sel .oaside { display: none; } .oaback { display: inline-flex; } .oaside { max-height: none; } }
 .tlist li { padding: 5px 0; border-bottom: 1px solid var(--line); line-height: 1.6; }
 .irform { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
 .irform input, .irform select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; min-width: 0; }
@@ -1008,7 +1022,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-117</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-118</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1058,6 +1072,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="after.js"></script>
 <script src="indnews.js"></script>
 <script src="tools.js"></script>
+<script src="oapi.js"></script>
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
@@ -1141,6 +1156,7 @@ function apiTtl(url) {
   if (/^\/api\/daily\?date=/.test(u)) return (u.match(/date=(\d{8})/) || [])[1] < today ? 7 * 24 * H : 5 * M;
   if (/^\/api\/kline\?/.test(u) || /^\/api\/futures\?daily=1/.test(u)) return 5 * M; // 最後一根會跟著即時報價更新，不靠快取
   if (/^\/api\/(stockinfo|news|broker)\?/.test(u)) return 15 * M;
+  if (/^\/api\/oapi\?/.test(u)) return 30 * M; // 證交所、櫃買開放資料一天更新一次
   if (/^\/api\/(company|annual|usinfo)\?/.test(u) || /^\/api\/daily\?meta=1/.test(u)) return 6 * H;
   if (/^\/api\/podcast\?(feed|q)=/.test(u)) return 30 * M;
   return 0;
@@ -4388,7 +4404,7 @@ function renderBook() {
 const DSUB = {
   ovw: [["state", "指標與狀態"], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "節目觀點"]],
   chips: [["sum", "籌碼總覽"], ["inst", "法人與基金"], ["branch", "分點主力"], ["big", "大戶與股權"]],
-  fin: [["rev", "營收與獲利"], ["report", "財務報表"], ["div", "股利"], ["info", "公司資料"], ["cal", "行事曆"]],
+  fin: [["rev", "營收與獲利"], ["report", "財務報表"], ["div", "股利"], ["info", "公司資料"], ["oapi", "官方資料", 1], ["cal", "行事曆"]],
 };
 const DSUB_OWN = new Set(["tags", "sum", "rev", "report"]); // 用原本區塊畫的子頁
 const OLD_DTAB = { fund: ["fin", "rev"], co: ["fin", "report"], info: ["ovw", "state"], tags: ["ovw", "tags"] }; // 舊版分頁 → 新的分頁＋子頁

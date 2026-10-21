@@ -2,7 +2,7 @@
    這個檔案只定義函式（載入時 watch.html 的 W 還沒建立），由 watch.html 的清單分頁「工具」呼叫 renderTools()。
    資料都存在這台裝置的瀏覽器（localStorage）；指標用日 K 判斷，日 K 每 5 分鐘重抓一次。 */
 
-const TOOLS_VIEWS = [["sum", "每日摘要"], ["alert", "提醒"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["sync", "備份同步"]];
+const TOOLS_VIEWS = [["sum", "每日摘要"], ["alert", "提醒"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["oapi", "官方資料"], ["sync", "備份同步"]];
 const toolsDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 // 日 K（6 個月）：5 分鐘內重複用
 async function dailyFresh(c) {
@@ -328,6 +328,8 @@ function toolsBody(v) {
     h = mfHtml(); note = "多因子排行是把幾個常見的選股因子換成分數，幫你縮小研究範圍；ATR 停損與目標是教學用的參考計算，不是買賣建議。";
   } else if (v === "ins") {
     h = insHtml(); note = "內部人申報是公開資訊，可以當成籌碼面的參考；大股東轉讓的原因很多（繳稅、贈與、信託、資金需求），不一定代表看壞。";
+  } else if (v === "oapi") {
+    h = oaToolsBody();
   } else if (v === "sync") {
     h = syncHtml(); note = "雲端同步只存同步碼的雜湊與你的設定，不需要帳號；同步碼遺失就無法取回雲端資料，記得也匯出一份備份檔。";
   } else if (v === "alert") {

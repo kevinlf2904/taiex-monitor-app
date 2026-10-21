@@ -23,6 +23,7 @@ const ROUTES = {
   macro: () => import("./_lib/macro.js"),
   market: () => import("./_lib/market.js"),
   news: () => import("./_lib/news.js"),
+  oapi: () => import("./_lib/oapi.js"),
   quote: () => import("./_lib/quote.js"),
   screen: () => import("./_lib/screen.js"),
   stockinfo: () => import("./_lib/stockinfo.js"),
