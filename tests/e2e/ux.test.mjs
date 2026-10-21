@@ -125,6 +125,13 @@ test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，�
   const h = await p.evaluate(() => { const S = W.gxS; return S.hits.filter(x => x.id !== S.core && x.z > 0.1).sort((a, b) => b.z - a.z)[0]; });
   const b2 = await p.locator(".gstage").boundingBox(); await p.touchscreen.tap(b2.x + h.x, b2.y + h.y);
   await p.waitForSelector(".gcard:not([hidden])"); assert.match(await p.textContent(".gcard"), /上游|下游|相關/);
+  assert.ok(await p.evaluate(id => W.gxS.labIds.includes(id), h.id), "被點到的圓點要標名稱");
+  // 縮放：按鈕放大、回到 100%；滾輪也能縮放
+  await p.click('[data-gxz="+"]'); assert.ok(Math.abs((await p.evaluate(() => W.gx.zoom)) - 1.3) < 0.01); assert.equal(await p.textContent(".gzv"), "130%");
+  await p.click('[data-gxz="0"]'); assert.equal(await p.evaluate(() => W.gx.zoom), 1);
+  await p.mouse.move(b2.x + 20, b2.y + b2.height - 20); await p.mouse.wheel(0, -300); await p.waitForTimeout(100); // 避開打開的資訊窗格
+  assert.ok((await p.evaluate(() => W.gx.zoom)) > 1.2, "滾輪放大");
+  await p.click('[data-gxz="0"]');
   await p.click(".gcard [data-ifocus]"); await p.waitForFunction(id => W.gxS?.core === id, h.id);
   // 三組樣式都能切換，並記在瀏覽器
   for (const k of ["tip:B", "lay:A", "lay:C", "line:A", "line:C"]) { await p.click(`[data-gxo="${k}"]`); await p.waitForTimeout(80); }
