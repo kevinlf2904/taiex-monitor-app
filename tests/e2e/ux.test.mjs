@@ -131,6 +131,12 @@ test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，�
   await p.click('[data-gxz="0"]'); assert.equal(await p.evaluate(() => W.gx.zoom), 1);
   await p.mouse.move(b2.x + 20, b2.y + b2.height - 20); await p.mouse.wheel(0, -300); await p.waitForTimeout(100); // 避開打開的資訊窗格
   assert.ok((await p.evaluate(() => W.gx.zoom)) > 1.2, "滾輪放大");
+  // 放大後拖曳＝移動畫面（不是轉動）
+  await p.click('[data-gxz="+"]'); await p.click('[data-gxz="+"]');
+  const v0 = await p.evaluate(() => ({ th: W.gx.th, px: W.gx.px || 0 })), b3 = await p.locator(".gstage").boundingBox(), y3 = b3.y + b3.height * 0.92;
+  await p.mouse.move(b3.x + 30, y3); await p.mouse.down(); await p.mouse.move(b3.x + 130, y3, { steps: 6 }); await p.mouse.up();
+  const v1 = await p.evaluate(() => ({ th: W.gx.th, px: W.gx.px || 0 }));
+  assert.ok(Math.abs(v1.px - v0.px) > 50 && Math.abs(v1.th - v0.th) < 0.01, `放大後拖曳要平移：${JSON.stringify([v0, v1])}`);
   await p.click('[data-gxz="0"]');
   await p.click(".gcard [data-ifocus]"); await p.waitForFunction(id => W.gxS?.core === id, h.id);
   // 三組樣式都能切換，並記在瀏覽器
