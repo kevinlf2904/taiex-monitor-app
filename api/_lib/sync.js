@@ -31,13 +31,18 @@ export async function tg(method, body) {
   const j = await r.json().catch(() => null); if (!j?.ok) throw new Error(j?.description || `Telegram HTTP ${r.status}`); return j.result;
 }
 let botName = null;
-// 提醒用的摘要：指標提醒、價格提醒、股票名稱；有綁 Telegram 才放進 alerts 清單，收盤後的排程只讀這份
+// 提醒用的摘要：指標提醒、價格提醒、股票名稱、追蹤對象；有綁 Telegram 才放進 alerts 清單，收盤後的排程只讀這份
 export function alertDoc(data, chat) {
   const g = k => { try { return JSON.parse(data?.[`kline:${k}`] ?? "null"); } catch { return null; } };
   const rules = (g("watch:irules") || []).filter(r => r?.on && r.code && r.cond).map(r => ({ code: r.code, cond: r.cond, p: r.p ?? null }));
   const price = Object.entries(g("watch:alerts") || {}).map(([code, a]) => ({ code, up: a?.up ?? null, dn: a?.dn ?? null })).filter(a => a.up || a.dn);
-  return { chat, rules: rules.slice(0, 100), price: price.slice(0, 100), names: g("watch:names") || {} };
+  // 追蹤：國會議員、13F 機構（情報局「大戶國會 → 我的追蹤」），加上庫存台股（內部人轉讓申報）
+  const F = g("watch:follow") || {}, ids = k => Object.keys(F[k] || {}).filter(x => typeof x === "string" && x.length < 80).slice(0, 50);
+  const follow = { cong: ids("cong"), f13: ids("f13"), ins: Object.keys(g("watch:hold") || {}).filter(c => /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 100) };
+  return { chat, rules: rules.slice(0, 100), price: price.slice(0, 100), names: g("watch:names") || {}, follow };
 }
+// 有任何要檢查的東西才放進收盤後的推播清單
+export const docHas = d => !!(d.rules.length || d.price.length || d.follow?.cong.length || d.follow?.f13.length || d.follow?.ins.length);
 
 // 候補名單的一筆：email 轉小寫並檢查格式，方案只收 pro／team
 export function waitlistEntry(email, plan, now = Date.now()) {
@@ -68,7 +73,7 @@ export default async function handler(req, res) {
       const body = JSON.stringify({ at: Date.now(), dev: String(b.dev || "").slice(0, 40), data }); if (body.length > MAX) return res.status(413).json({ ok: false, error: `資料太大（${Math.round(body.length / 1024)}KB，上限 900KB）` });
       await kv("SET", key, body);
       const chat = await kv("GET", `tg:${h}`);
-      if (chat) { const doc = alertDoc(data, chat); if (doc.rules.length || doc.price.length) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } else { await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); } }
+      if (chat) { const doc = alertDoc(data, chat); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } else { await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); } }
       return res.status(200).json({ ok: true, at: Date.now(), tg: !!chat });
     }
     if (op === "pull") { const v = await kv("GET", key); if (!v) return res.status(200).json({ ok: false, error: "雲端沒有這個同步碼的資料" }); const j = JSON.parse(v); return res.status(200).json({ ok: true, ...j, tg: !!(await kv("GET", `tg:${h}`)) }); }
@@ -79,7 +84,7 @@ export default async function handler(req, res) {
       if (!m) return res.status(200).json({ ok: false, error: "還沒收到綁定訊息：請先點連結開啟機器人並按「開始（Start）」，再回來按完成綁定。" });
       const chat = m.message.chat.id; await kv("SET", `tg:${h}`, String(chat));
       await tg("sendMessage", { chat_id: chat, text: "✅ K線看盤已綁定。收盤後符合你設定的指標或價格提醒時，會在這裡通知你。" });
-      const v = await kv("GET", key); if (v) { const doc = alertDoc(JSON.parse(v).data, String(chat)); if (doc.rules.length || doc.price.length) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } }
+      const v = await kv("GET", key); if (v) { const doc = alertDoc(JSON.parse(v).data, String(chat)); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } }
       return res.status(200).json({ ok: true });
     }
     if (op === "tgtest") { const chat = await kv("GET", `tg:${h}`); if (!chat) return res.status(200).json({ ok: false, error: "還沒綁定 Telegram" }); await tg("sendMessage", { chat_id: chat, text: "🔔 測試通知：K線看盤的提醒會像這樣送到這裡。" }); return res.status(200).json({ ok: true }); }

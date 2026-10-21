@@ -4,6 +4,7 @@
 // GET /api/annual?code=VOO         英文代號直接當 Yahoo 代號
 // 主要來源 Yahoo Finance 月線的「還原收盤價」（含配息再投入）；失敗時改用 FinMind 還原股價（台股）。
 // 回傳近 1、3、5、10 年與上市以來的年化報酬（CAGR）和期間最大跌幅（月收盤計算，會比日線的跌幅小一些）；periods 含息、periodsPx 不含息（只看股價）。
+// 加 &rows=1 另外附每月收盤 rows（含息還原）、rowsPx（不含息）：[[YYYY-MM, 價格]]，給存股「真實歷史回測」。
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 
@@ -94,7 +95,7 @@ export default async function handler(req, res) {
       const p = await run();
       if (p) {
         res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate=604800");
-        return res.status(200).json({ ok: true, query: raw, symbol: p.symbol, label: t.label || "", name: p.name, currency: p.currency, adjusted: p.adjusted, source: p.source, first: p.rows[0].d, last: p.rows[p.rows.length - 1].d, periods: summarize(p.rows), ...(p.adjusted && p.rowsPx?.length > 6 ? { periodsPx: summarize(p.rowsPx) } : {}) });
+        return res.status(200).json({ ok: true, query: raw, symbol: p.symbol, label: t.label || "", name: p.name, currency: p.currency, adjusted: p.adjusted, source: p.source, first: p.rows[0].d, last: p.rows[p.rows.length - 1].d, periods: summarize(p.rows), ...(p.adjusted && p.rowsPx?.length > 6 ? { periodsPx: summarize(p.rowsPx) } : {}), ...(req.query?.rows ? { rows: p.rows.map(x => [x.d, +x.v.toFixed(4)]), rowsPx: (p.rowsPx || []).map(x => [x.d, +x.v.toFixed(4)]) } : {}) });
       }
     } catch (e) { errors.push(e.message); }
   }

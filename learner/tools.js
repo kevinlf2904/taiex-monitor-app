@@ -643,15 +643,16 @@ function f13Html(arg) {
   }
   // 首頁：機構排行（市值）、共同加碼、共同減碼、國會 × 13F、績效排行
   const agg = new Map(); for (const f of F.funds) for (const r of [...f.rows, ...f.sold]) { if (r.pc) continue; const k = r.ticker || r.cusip, g = agg.get(k) || agg.set(k, { r, up: [], dn: [], hold: 0 }).get(k); if (r.chg === "new" || r.chg === "add") g.up.push(f.who); else if (r.chg === "cut" || r.chg === "sold") g.dn.push(f.who); if (r.chg !== "sold") g.hold++; }
-  const A = [...agg.values()], who = L => L.map(w => esc(w.split(" ")[0])).join("、"), view = ["funds", "up", "dn", "cong", "perf"].includes(W.f13v) ? W.f13v : "funds";
+  const A = [...agg.values()], who = L => L.map(w => esc(w.split(" ")[0])).join("、"), view = ["funds", "up", "dn", "cong", "perf", "heat"].includes(W.f13v) ? W.f13v : "funds";
   const tot = F.funds.reduce((a, f) => a + f.total, 0), nNew = F.funds.reduce((a, f) => a + f.rows.filter(r => r.chg === "new").length, 0), nSold = F.funds.reduce((a, f) => a + f.sold.length, 0);
   let h = `<section class="csec tw-home">${rkHead("13F 機構持股", `管理資產 1 億美元以上的機構每季申報美股多頭持股，最晚季底後 45 天公開——看到的是<strong>上一季底</strong>的部位，現在可能已經不同；不含放空、現金與非美股。`)}
     ${rkCards([{ t: "追蹤機構", sub: "SEC Form 13F-HR", v: `${F.funds.length} 家` }, { t: "申報市值合計", sub: "季底", v: usd(tot) }, { t: "本季新進", sub: "各機構加總", v: `${nNew} 檔`, vc: "up" }, { t: "本季出清", sub: "各機構加總", v: `${nSold} 檔`, vc: "down" }])}
-    <div class="tw-ctl">${rkSeg("data-rkset", "f13v:" + view, [["f13v:funds", "機構排行"], ["f13v:perf", "機構影子組合回測"], ["f13v:up", "共同加碼"], ["f13v:dn", "共同減碼"], ["f13v:cong", "國會 × 13F"]])}</div>`;
+    <div class="tw-ctl">${rkSeg("data-rkset", "f13v:" + view, [["f13v:funds", "機構排行"], ["f13v:perf", "機構影子組合回測"], ["f13v:up", "共同加碼"], ["f13v:dn", "共同減碼"], ["f13v:cong", "國會 × 13F"], ["f13v:heat", "主題熱圖"]])}</div>`;
   if (view === "funds") h += `<button type="button" class="cbt-cta" data-rkset="f13v:perf"><b>13F 機構影子組合回測</b><small class="note">用每家機構申報的持股，算「季度持股報酬」和「申報公開後跟著買到今天」賺多少，和 SPY 比 ›</small></button>` + rkList(F.funds.slice().sort((a, b) => b.total - a.total).map(f => ({ attr: `data-cv="f13:${f.cik}"`, mono: rkMono(rkInit(f.who), RK_C.機構), name: esc(f.who), sub: `${f.rows.slice(0, 3).map(r => `${esc(r.ticker || r.name)} ${r.pct}%`).join("・")}`, val: usd(f.total), vsub: `${f.n} 檔・<span class="up">新進 ${f.rows.filter(r => r.chg === "new").length}</span>／<span class="down">出清 ${f.sold.length}</span>` })));
   else if (view === "up") h += `<h4>多家機構同時新進或加碼</h4>` + rkList(A.filter(g => g.up.length).sort((a, b) => b.up.length - a.up.length || a.dn.length - b.dn.length).slice(0, 30).map(g => ({ star: g.r.ticker, attr: g.r.ticker ? `data-copen="${esc(g.r.ticker)}"` : "", mono: rkMono(rkInit(g.r.ticker || g.r.name), "#3fa36b"), name: tk(g.r), sub: who(g.up), val: `${g.up.length} 家加碼`, vc: "up", vsub: `${g.dn.length ? `${g.dn.length} 家減碼・` : ""}${g.hold} 家持有` })));
   else if (view === "dn") h += `<h4>多家機構減碼或出清</h4>` + rkList(A.filter(g => g.dn.length).sort((a, b) => b.dn.length - a.dn.length).slice(0, 30).map(g => ({ star: g.r.ticker, attr: g.r.ticker ? `data-copen="${esc(g.r.ticker)}"` : "", mono: rkMono(rkInit(g.r.ticker || g.r.name), "#d0643f"), name: tk(g.r), sub: who(g.dn), val: `${g.dn.length} 家減碼`, vc: "down", vsub: `${g.up.length ? `${g.up.length} 家加碼・` : ""}${g.hold} 家持有` })));
   else if (view === "cong") h += f13CongHtml(A);
+  else if (view === "heat") h += cxHeatHtml(F);
   else h += f13RankHtml(F);
   return h + `${(F.notes || []).length ? `<p class="note">⚠ ${F.notes.map(esc).join("；")}</p>` : ""}</section>`;
 }
