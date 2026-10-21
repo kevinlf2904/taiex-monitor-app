@@ -150,6 +150,9 @@ document.addEventListener("click", e => {
   const r = e.target.closest("[data-cxread]"); if (r) { const S = cxSeen(); S[r.dataset.cxread] = new Date().toISOString().slice(0, 10); store.set("watch:folSeen", S); }
 });
 { const css = document.createElement("style"); css.textContent = `.cxbar { display: grid; gap: 6px; margin: 8px 0; } .cxbar > .btn { justify-self: start; } .cxwin h4 { margin: 8px 0 4px; } .cxwin td b { display: block; font-weight: 500; } .cxwin td small { display: block; font-size: 11px; white-space: nowrap; }
+.cx-row { display: flex; gap: 8px; align-items: center; margin: 8px 0; min-width: 0; } .cx-lab { flex: none; width: 2.6em; font-size: 12.5px; color: var(--muted); }
+.cx-body { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; } .cx-body > .seg { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; } .cx-body > .seg::-webkit-scrollbar { display: none; }
+.cx-body > .seg button { flex: none; } .cx-q { flex: 1 1 160px; min-width: 0; } .cx-body .cxrng { margin: 0; } .cx-how { margin: 6px 0 0; }
 .cxheat td, .cxheat th { text-align: center; white-space: nowrap; } .cxheat td:first-child, .cxheat th:first-child { text-align: left; } .cxheat td:last-child { text-align: left; }`; document.head.appendChild(css); }
 
 // ---------- 自訂區間（國會、內部人、台灣政治人物）與 13F 季度區間 ----------
@@ -159,14 +162,33 @@ const cxIn = (d, r) => !!d && (!r.from || d >= r.from) && (!r.to || d <= r.to);
 const cxRngTxt = r => (r.from || r.to ? `${(r.from || "最早").replace(/-/g, "/")}～${(r.to || "最新").replace(/-/g, "/")}` : "全部期間");
 const cxRngHtml = (k, on, lab = "自訂區間") => { const r = cxRng(k);
   return `<div class="cxrng${on ? " on" : ""}"><span class="note">${lab}</span><input type="date" data-cxrng="${k}:from" value="${esc(r.from || "")}" aria-label="開始日期"><span class="note">～</span><input type="date" data-cxrng="${k}:to" value="${esc(r.to || "")}" aria-label="結束日期">${r.from || r.to ? `<button type="button" class="linkbtn" data-cxrngx="${k}">清除</button>` : ""}</div>`; };
-// 設定區間後切到「自訂」：國會 W.cw＝-1、內部人 W.insW＝-1；台灣政治人物直接用區間篩申報
+// 設定區間後切到「自訂」（國會 W.cw、內部人 W.insW、台灣政治人物 W.twoW 都設成 -1）
 function cxRngSet(k, f, v) {
   const R = (W.cxRng ||= store.get("watch:cxRng", {})); R[k] = { ...(R[k] || {}), [f]: v || "" }; if (!R[k].from && !R[k].to) delete R[k]; store.set("watch:cxRng", R);
-  if (k === "cong") { W.cw = R[k] ? -1 : 90; store.set("watch:cw", W.cw); } else if (k === "ins") { W.insW = R[k] ? -1 : 30; store.set("watch:insW", W.insW); }
+  if (CX_WKEY[k]) { W[CX_WKEY[k]] = -1; store.set("watch:" + CX_WKEY[k], -1); }
   W.twoP = null; renderList();
 }
 document.addEventListener("change", e => { const t = e.target.closest?.("[data-cxrng]"); if (!t) return; const [k, f] = t.dataset.cxrng.split(":"); cxRngSet(k, f, t.value); });
 document.addEventListener("click", e => { const b = e.target.closest("[data-cxrngx]"); if (!b) return; const R = (W.cxRng ||= {}); delete R[b.dataset.cxrngx]; store.set("watch:cxRng", R); cxRngSet(b.dataset.cxrngx, "from", ""); });
+
+// ---------- 四個分類（美國國會、13F、台灣政治人物、內部人）共用的操作列 ----------
+// 每一類都一樣：① 期間（同一組選項，自訂才出現日期）② 篩選＋搜尋（打字就篩）③ 重點數字 ④ 看什麼（名稱、順序一致：各自的排行 → 最新申報 → 主題熱圖 → 申報延遲 → 申報後回測）
+const CX_PER = [["30", "近 30 天"], ["90", "近 90 天"], ["180", "半年"], ["365", "一年"], ["0", "全部"], ["-1", "自訂"]];
+const CX_WKEY = { cong: "cw", ins: "insW", tw: "twoW" }, CX_WDEF = { cong: 30, ins: 30, tw: 0 }; // 台灣政治人物一年才申報一兩次，預設看全部
+const cxW = k => { const v = W[CX_WKEY[k]]; return v != null && v !== "" && CX_PER.some(p => +p[0] === +v) ? +v : CX_WDEF[k]; };
+// 目前期間換成日期區間 { from, to }（空的代表不限）
+const cxPer = k => { const w = cxW(k); return w === -1 ? cxRng(k) : w > 0 ? { from: new Date(Date.now() - w * 864e5).toISOString().slice(0, 10) } : {}; };
+const cxWTxt = k => { const w = cxW(k); return w === -1 ? cxRngTxt(cxRng(k)) : w ? CX_PER.find(p => +p[0] === w)[1] : "全部期間"; };
+const cxRow = (lab, body) => (body ? `<div class="cx-row"><span class="cx-lab">${lab}</span><div class="cx-body">${body}</div></div>` : "");
+// 期間列：k 是 cong／ins／tw；13F 傳 per（季度選單）
+const cxPerRow = (k, per) => cxRow("期間", per ?? `${rkSeg("data-cxw", `${k}:${cxW(k)}`, CX_PER.map(([v, t]) => [`${k}:${v}`, t]))}${cxW(k) === -1 ? cxRngHtml(k, true, "從") : ""}`);
+// 搜尋框：key 是存關鍵字的 W 欄位
+const cxQ = (key, ph) => `<input class="cx-q" type="search" data-cxq="${key}" value="${esc(W[key] || "")}" placeholder="${esc(ph)}" aria-label="${esc(ph)}">`;
+const cxTabs = (key, cur, opts) => cxRow("看", rkSeg("data-rkset", `${key}:${cur}`, opts.map(([v, t]) => [`${key}:${v}`, t])));
+document.addEventListener("click", e => { const b = e.target.closest("[data-cxw]"); if (!b) return; const [k, v] = b.dataset.cxw.split(":"); W[CX_WKEY[k]] = +v; store.set("watch:" + CX_WKEY[k], +v); W.twoP = null; renderList(); });
+// 搜尋：打字停 0.35 秒就篩，重畫後游標留在框裡
+document.addEventListener("input", e => { const t = e.target.closest?.("[data-cxq]"); if (!t) return; clearTimeout(W.cxqT);
+  W.cxqT = setTimeout(() => { const k = t.dataset.cxq; W[k] = t.value.trim(); renderList(); const n = document.querySelector(`[data-cxq="${k}"]`); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 350); });
 
 // 13F：選兩個季度（起～迄），用 data/f13-hist.json 重算「迄」那一季的持股和相對「起」的變動，首頁各排行都改看這個區間
 const cxQs = () => [...new Set([...(W.f13?.funds || []).map(f => f.period), ...Object.values(W.f13H || {}).flatMap(h => (h.periods || []).map(p => p.period))])].sort().reverse();
@@ -183,7 +205,7 @@ function cxF13Range(F) {
 const cxF13RngHtml = () => { const qs = cxQs(), Q = W.f13R || {}; if (qs.length < 2) return W.f13H === null ? `<p class="note">載入歷史季度…</p>` : "";
   const to = qs.includes(Q.to) ? Q.to : qs[0], from = qs.includes(Q.from) && Q.from < to ? Q.from : qs[qs.indexOf(to) + 1] || "";
   const sel = (f, cur, L) => `<select data-f13r="${f}" aria-label="${f === "from" ? "起始季度" : "結束季度"}">${L.map(q => `<option value="${q}" ${q === cur ? "selected" : ""}>${q.slice(0, 4)} Q${Math.ceil(+q.slice(5, 7) / 3)}</option>`).join("")}</select>`;
-  return `<div class="cxrng${Q.to || Q.from ? " on" : ""}"><span class="note">比較季度</span>${sel("from", from, qs.filter(q => q < to))}<span class="note">→</span>${sel("to", to, qs)}${Q.to || Q.from ? `<button type="button" class="linkbtn" data-f13rx>回到最新一季</button>` : ""}</div>`; };
+  return `<div class="cxrng${Q.to || Q.from ? " on" : ""}"><span class="note">從</span>${sel("from", from, qs.filter(q => q < to))}<span class="note">→</span>${sel("to", to, qs)}${Q.to || Q.from ? `<button type="button" class="linkbtn" data-f13rx>回到最新一季</button>` : ""}</div>`; };
 document.addEventListener("change", e => { const s = e.target.closest?.("[data-f13r]"); if (!s) return; W.f13R = { ...(W.f13R || {}), [s.dataset.f13r]: s.value }; renderList(); });
 document.addEventListener("click", e => { if (e.target.closest("[data-f13rx]")) { W.f13R = null; renderList(); } });
 { const css = document.createElement("style"); css.textContent = `.cxrng { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; } .cxrng input, .cxrng select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--ink); min-width: 0; max-width: 150px; }
@@ -211,13 +233,13 @@ function cxCongHeat(trades) {
 function cxTwHeat() {
   if (!W.two?.decl) return ""; const cat = cxCat("tw"), M = new Map(), g = c => { const k = cat(c); return M.get(k) || M.set(k, { k, v: { n: 0, new: 0, add: 0, cut: 0, sold: 0 }, tk: new Map(), ppl: new Set() }).get(k); };
   for (const p of twoPeople()) { for (const h of p.hold) if (h.code) { const x = g(h.code); x.ppl.add(p.pid); x.v.n = x.ppl.size; x.tk.set(h.code, (x.tk.get(h.code) || 0) + 1); } for (const c of p.chg) if (c.code) g(c.code).v[c.t]++; }
-  return cxHeatTable("產業熱圖：政治人物持股集中在哪些產業", "持有人數＝申報持有這個主題股票的人數；新進、增持、減持、出清是和自己前一次申報比。只算有台股代號的持股。", [["n", "持有人數", 1], ["new", "新進", 1], ["add", "增持", 1], ["cut", "減持", 0], ["sold", "出清", 0]], cxRows(M, r => r.v.n), t => `data-cv="tw:s:${esc(t)}"`);
+  return cxHeatTable("主題熱圖：政治人物持股集中在哪些產業", "持有人數＝申報持有這個主題股票的人數；新進、增持、減持、出清是和自己前一次申報比。只算有台股代號的持股。", [["n", "持有人數", 1], ["new", "新進", 1], ["add", "增持", 1], ["cut", "減持", 0], ["sold", "出清", 0]], cxRows(M, r => r.v.n), t => `data-cv="tw:s:${esc(t)}"`);
 }
 // 內部人：各產業主題申報轉讓幾筆、幾張（一般交易＝可能在市場賣出）
 function cxInsHeat(rows) {
   const cat = cxCat("tw"), M = new Map(), mkt = r => /一般交易|盤後|鉅額|拍賣/.test(r.how);
   for (const r of rows) { const k = cat(r.code), g = M.get(k) || M.set(k, { k, v: { n: 0, sh: 0, mk: 0 }, tk: new Map() }).get(k); g.v.n++; g.v.sh += (r.sh || 0) / 1000; if (mkt(r)) g.v.mk += (r.sh || 0) / 1000; g.tk.set(r.code, (g.tk.get(r.code) || 0) - (r.sh || 0)); }
-  return cxHeatTable("產業熱圖：內部人在哪些產業申報轉讓", "張數＝申報轉讓的股數 ÷ 1000；「市場賣出」是一般交易、盤後、鉅額、拍賣這類可能在市場賣掉的方式，贈與、信託不算。", [["n", "申報筆數", 0], ["sh", "轉讓張數", 0], ["mk", "市場賣出張數", 0]], cxRows(M, r => r.v.sh), t => `data-tsel="${esc(t)}"`);
+  return cxHeatTable("主題熱圖：內部人在哪些產業申報轉讓", "張數＝申報轉讓的股數 ÷ 1000；「市場賣出」是一般交易、盤後、鉅額、拍賣這類可能在市場賣掉的方式，贈與、信託不算。", [["n", "申報筆數", 0], ["sh", "轉讓張數", 0], ["mk", "市場賣出張數", 0]], cxRows(M, r => r.v.sh), t => `data-tsel="${esc(t)}"`);
 }
 // 13F：季底到申報日隔幾天（法規 45 天內）
 function cxF13Lag(F) {
