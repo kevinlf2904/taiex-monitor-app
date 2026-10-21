@@ -85,10 +85,11 @@ function lxCurve(R) {
   const X = i => P + (W - 2 * P) * i / Math.max(1, n - 1), Y = v => P + (H - 2 * P - 14) * (hi - v) / (hi - lo || 1);
   const line = (a, c, d = "") => `<polyline fill="none" stroke="${c}" stroke-width="1.3" ${d} points="${a.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ")}"/>`;
   const cuts = R.wins.slice(1).map(w => X(w.oa - R.isLen)), D = lab.D;
-  return `<svg class="lxcurve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="樣本外串接的資產曲線">
+  return `${xhWrap(`<svg class="lxcurve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="樣本外串接的資產曲線">
     <line x1="${P}" x2="${W - P}" y1="${Y(1)}" y2="${Y(1)}" stroke="var(--line)"/>${cuts.map(x => `<line x1="${x}" x2="${x}" y1="${P}" y2="${H - 20}" stroke="var(--line)" stroke-dasharray="3 3"/>`).join("")}
     ${line(R.eqB, "var(--muted)", 'stroke-dasharray="4 3"')}${line(R.eqD, "var(--s3)")}${line(R.eqW, "var(--s1)")}
-    <text x="${P}" y="${H - 4}" font-size="11" fill="var(--muted)">${esc(D[R.isLen].d)}</text><text x="${W - P}" y="${H - 4}" font-size="11" fill="var(--muted)" text-anchor="end">${esc(D[R.N - 1].d)}</text></svg>
+    <text x="${P}" y="${H - 4}" font-size="11" fill="var(--muted)">${esc(D[R.isLen].d)}</text><text x="${W - P}" y="${H - 4}" font-size="11" fill="var(--muted)" text-anchor="end">${esc(D[R.N - 1].d)}</text></svg>`,
+      R.eqW.map((v, i) => X(i)), i => `<b>${esc(D[R.isLen + i]?.d || "")}</b><span><i style="background:var(--s1)"></i>滾動驗證 ${pct(R.eqW[i] - 1)}</span><span><i style="background:var(--s3)"></i>固定參數 ${pct(R.eqD[i] - 1)}</span><span><i style="background:var(--muted)"></i>買進持有 ${pct(R.eqB[i] - 1)}</span>`)}
     <div class="lxleg"><span><i style="background:var(--s1)"></i>滾動驗證 ${pct(R.totW)}</span><span><i style="background:var(--s3)"></i>固定預設參數 ${pct(R.totD)}</span><span><i style="background:var(--muted)"></i>買進持有 ${pct(R.totB)}</span></div>`;
 }
 const lxP = (R, p) => Object.entries(p).map(([k, v]) => `${esc(R.A.px[0] === k ? R.A.px[1] : R.A.py?.[1] || k)} ${v}`).join("、");

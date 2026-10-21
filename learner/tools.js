@@ -90,7 +90,8 @@ async function paCurve() {
   const ser = [["台股帳戶", A.eqh.map(r => r[1] / A.init - 1), "var(--up)"], ["美股帳戶", A.eqh.map(r => r[2] / A.initUsd - 1), "var(--gold)"], ["加權指數", A.eqh.map(r => (at(T, r[0]) && at(T, from) ? at(T, r[0]) / at(T, from) - 1 : null)), "var(--muted)"], ["SPY", A.eqh.map(r => (S && at(S, r[0]) && at(S, from) ? at(S, r[0]) / at(S, from) - 1 : null)), "var(--line)"]];
   const all = ser.flatMap(x => x[1]).filter(v => v != null), lo = Math.min(0, ...all), hi = Math.max(0, ...all), W0 = 600, H0 = 160, n = A.eqh.length, X = i => (i / (n - 1)) * (W0 - 8) + 4, Y = v => H0 - 6 - ((v - lo) / (hi - lo || 1)) * (H0 - 12);
   if (!el.isConnected) return;
-  el.innerHTML = `<svg viewBox="0 0 ${W0} ${H0}" preserveAspectRatio="none" style="width:100%;height:160px"><line x1="0" x2="${W0}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)" stroke-dasharray="3 3"/>${ser.map(([, v, col]) => `<polyline fill="none" stroke="${col}" stroke-width="1.2" vector-effect="non-scaling-stroke" points="${v.map((x, i) => (x == null ? "" : `${X(i).toFixed(1)},${Y(x).toFixed(1)}`)).filter(Boolean).join(" ")}"/>`).join("")}</svg>
+  el.innerHTML = `${xhWrap(`<svg viewBox="0 0 ${W0} ${H0}" preserveAspectRatio="none" style="width:100%;height:160px"><line x1="0" x2="${W0}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)" stroke-dasharray="3 3"/>${ser.map(([, v, col]) => `<polyline fill="none" stroke="${col}" stroke-width="1.2" vector-effect="non-scaling-stroke" points="${v.map((x, i) => (x == null ? "" : `${X(i).toFixed(1)},${Y(x).toFixed(1)}`)).filter(Boolean).join(" ")}"/>`).join("")}</svg>`,
+    A.eqh.map((r, i) => X(i)), i => `<b>${esc(A.eqh[i][0])}</b>${ser.map(([t, v, col]) => `<span><i style="background:${col}"></i>${t} ${v[i] == null ? "—" : retPct(v[i])}</span>`).join("")}`)}
     <p class="note">${ser.map(([t, v, col]) => `<span style="color:${col}">━</span> ${t} ${v[n - 1] == null ? "—" : retPct(v[n - 1])}`).join("　")}（從 ${from} 起算）</p>`;
 }
 
