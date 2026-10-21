@@ -36,6 +36,21 @@ if (process.argv[2] === "taifexdl") {
   const dates = {}; tx.forEach(l => { const k = l.split(",")[0].trim(); dates[k] = (dates[k] || 0) + 1; }); console.log("日期分佈", JSON.stringify(dates));
   process.exit(0);
 }
+if (process.argv[2] === "oapi") {
+  // 證交所、櫃買中心 OpenAPI：列出 swagger 裡所有 GET 資料集（分類、名稱），逐一抓一次，印筆數與第一筆的欄位、範例值（截短）
+  for (const [nm, base, sw] of [["證交所", "https://openapi.twse.com.tw/v1", "https://openapi.twse.com.tw/v1/swagger.json"], ["櫃買", "https://www.tpex.org.tw/openapi/v1", "https://www.tpex.org.tw/openapi/swagger.json"]]) {
+    let S; try { S = await (await fetch(sw, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(30000) })).json(); } catch (e) { console.log(nm, "swagger 失敗", e.message); continue; }
+    const paths = Object.entries(S.paths || {}).filter(([, v]) => v.get).map(([k, v]) => [k, (v.get.tags || []).join("/"), v.get.summary || ""]);
+    console.log(`\n######## ${nm} ${paths.length} 個資料集`);
+    let i = 0; const out = new Array(paths.length);
+    await Promise.all(Array.from({ length: 6 }, async () => { while (i < paths.length) { const k = i++, [p, tag, sum] = paths[k];
+      try { const r = await fetch(base + p, { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" }, signal: AbortSignal.timeout(30000) }); const j = await r.json().catch(() => null);
+        const rows = Array.isArray(j) ? j : []; out[k] = `${p}｜${tag}｜${sum}｜${r.status}｜${rows.length} 筆｜${rows[0] ? Object.entries(rows[0]).map(([a, b]) => `${a}=${String(b).slice(0, 14)}`).join("; ").slice(0, 420) : JSON.stringify(j)?.slice(0, 80)}`; }
+      catch (e) { out[k] = `${p}｜${tag}｜${sum}｜錯誤 ${e.message}`; } } }));
+    out.forEach(x => console.log(x));
+  }
+  process.exit(0);
+}
 if (process.argv[2] === "keys") {
   // 金鑰檢查（GitHub secrets 有沒有設定、能不能用）：只印「有沒有」「狀態碼」「用量」，絕不印金鑰或帶金鑰的網址
   const has = k => !!(process.env[k] && process.env[k].trim()), tk = k => process.env[k].trim();
