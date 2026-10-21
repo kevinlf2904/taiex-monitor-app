@@ -80,6 +80,13 @@ if (process.argv[2] === "oapi") {
   }
   process.exit(0);
 }
+if (process.argv[2] === "mops") {
+  // 公開資訊觀測站上櫃月營收彙總（過去月份的 HTML 表）：看抓不抓得到、表格長怎樣，給櫃買「產業營收」補歷史用
+  for (const u of ["https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_8_0.html", "https://mops.twse.com.tw/nas/t21/otc/t21sc03_115_8_0.html", "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_114_9_0.html"]) {
+    try { const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(30000) }); const b = Buffer.from(await r.arrayBuffer()); const t = new TextDecoder(/big5/i.test(r.headers.get("content-type") || "") ? "big5" : "utf-8").decode(b);
+      const i = t.indexOf("公司代號"); console.log(`\n### ${u} ${r.status} ${r.headers.get("content-type")} ${b.length} bytes\n${t.slice(0, 300)}\n…\n${t.slice(Math.max(0, i - 600), i + 2500).replace(/\s+/g, " ")}`); } catch (e) { console.log(u, "錯誤", e.message); } }
+  process.exit(0);
+}
 if (process.argv[2] === "tpexcharts") {
   // 情報局「櫃買」圖表用到的資料集：印筆數、欄位、前兩筆與最後一筆（截短），好對欄位名稱
   const P = process.argv[3] === "2" ? ["/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap08_O", "/tpex_gold_market_highlight", "/tpex_warrant_daily_quts", "/tpex_warrant_statistics", "/tpex_warrant_issue"] : ["/tpex_index", "/tpex_reward_index", "/tpex50_index", "/tpex200_change", "/tphd_index", "/tpcgi_reward_index", "/tpci_reward_index", "/tpex_emp88_reward_index", "/tpex_daily_trading_index", "/mopsfin_t187ap05_OA", "/mopsfin_t187ap05_OB", "/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap09_O", "/mopsfin_t187ap08_O", "/tpex_warrant_statistics", "/tpex_intraday_trading_pre", "/tpex_margin_trading_term", "/tpex_esb_eps_rank", "/tpex_gold_latest", "/tpex_gold_market_highlight", "/bond_cb_daily"];
