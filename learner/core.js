@@ -25,13 +25,11 @@ function mktSession(now = new Date()) {
 const BRAND = { name: "KLineLab", zh: "K線情報局", tag: "將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機" };
 const brandIcon = (s = 32) => `<svg class="bl-ic" viewBox="0 0 512 512" width="${s}" height="${s}" aria-hidden="true"><defs><linearGradient id="blkc" gradientUnits="userSpaceOnUse" x1="0" y1="96" x2="0" y2="416"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#e4e4e7"/><stop offset="1" stop-color="#a1a1aa"/></linearGradient><linearGradient id="blti" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#71717a"/><stop offset=".5" stop-color="#a1a1aa"/><stop offset="1" stop-color="#f4f4f5"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#09090b"/><rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#27272a" stroke-width="8"/><path d="M180 100v68M180 344v68" stroke="url(#blkc)" stroke-width="20" stroke-linecap="round"/><rect x="146" y="178" width="68" height="156" rx="8" fill="none" stroke="url(#blkc)" stroke-width="20"/><path d="M288 188 376 100v312l-88-88z" fill="url(#blti)"/></svg>`;
 const brandHtml = ({ pro = true, zh = true, href = "" } = {}) => `<${href ? `a href="${href}"` : "span"} class="bl">${brandIcon()}<span class="bl-t"><b>${BRAND.name}</b>${zh ? `<small>${BRAND.zh}</small>` : ""}</span>${pro ? `<span class="bl-pro" title="公開測試版 (Beta)">Beta</span>` : ""}</${href ? "a" : "span"}>`;
-// SVG 縮寫徽章：取名稱前兩個字（英文取字首），底色由名稱雜湊出固定的代表色（不用外部照片或節目封面）
-const BADGE_C = ["#3f3f46", "#1e3a5f", "#3b2f5c", "#14532d", "#5b2121", "#4a3a12", "#0f4c5c", "#52314a"];
+// SVG 縮寫徽章：取名稱前兩個字（英文取字首），單色（底色、字色跟著主題，在 core.css 的 .badge）；不用外部照片或節目封面
 function badgeSvg(name, s = 40) {
   const n = String(name || "?").trim(), w = n.split(/[\s\-_.]+/).filter(Boolean), ab = /^[A-Za-z]/.test(n) ? (w.length > 1 ? w[0][0] + w[1][0] : n.slice(0, 2)).toUpperCase() : [...n.replace(/\s/g, "")].slice(0, 2).join("");
-  let h = 0; for (const ch of n) h = (h * 31 + ch.codePointAt(0)) | 0; const bg = BADGE_C[Math.abs(h) % BADGE_C.length];
   const t = esc(ab);
-  return `<svg class="badge" viewBox="0 0 40 40" width="${s}" height="${s}" aria-hidden="true"><rect width="40" height="40" rx="10" fill="${bg}"/><rect x=".5" y=".5" width="39" height="39" rx="9.5" fill="none" stroke="rgba(255,255,255,.14)"/><text x="20" y="25.5" text-anchor="middle" font-size="${/^[A-Z]/.test(t) ? 14 : 13}" font-family="Space Grotesk, Inter, Noto Sans TC, sans-serif" font-weight="600" fill="#fff">${t}</text></svg>`;
+  return `<svg class="badge" viewBox="0 0 40 40" width="${s}" height="${s}" aria-hidden="true"><rect class="bg" x=".5" y=".5" width="39" height="39" rx="6" fill="#27272a" stroke="rgba(255,255,255,.12)"/><text x="20" y="25.5" text-anchor="middle" font-size="${/^[A-Z]/.test(t) ? 14 : 13}" font-family="Space Grotesk, Inter, Noto Sans TC, sans-serif" font-weight="500" fill="#d4d4d8">${t}</text></svg>`;
 }
 // 全站免責聲明（頁尾與每個回測、籌碼分析頁的底部）
 const DISCLAIMER = "本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。";

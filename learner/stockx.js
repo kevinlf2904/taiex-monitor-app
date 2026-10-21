@@ -396,7 +396,7 @@ function sxInit() {
 .sxtag b { font-weight: 500; } .sxtag small { color: var(--muted); font-size: 12px; }
 .sxcard { border: 1px solid var(--line); border-radius: var(--radius-md, 12px); padding: 10px 12px; margin: 8px 0; background: var(--surface-3); } .sxrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sxcard blockquote { margin: 6px 0; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 6px; }
-.sxcard .pdir { font-size: 12px; padding: 1px 8px; border-radius: 99px; color: #fff; } .sxcard .pdir.bull { background: var(--up); } .sxcard .pdir.bear { background: var(--down); }
+.sxcard .pdir { font-size: 12px; padding: 1px 8px; border-radius: 3px; border: 1px solid currentColor; color: var(--muted); } .sxcard .pdir.bull { color: var(--up); } .sxcard .pdir.bear { color: var(--down); }
 .sxtier { border-left: 3px solid var(--line); padding: 4px 0 4px 10px; margin: 8px 0; } .sxtier.me { border-left-color: var(--accent); } .sxtier .tt { font-size: 13px; color: var(--muted); }
 .sxtier .ti { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; } .sxtier .ti small { color: var(--muted); margin-right: 4px; }
 .sxco { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 1px 9px; font: inherit; font-size: 12.5px; cursor: pointer; } .sxco.me { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); } .sxco:disabled { cursor: default; opacity: .7; }

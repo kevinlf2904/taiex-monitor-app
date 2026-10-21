@@ -89,6 +89,18 @@ for (const width of [1280, 390]) {
     const postPanVb = await p.evaluate(() => document.getElementById("mfb").getAttribute("viewBox"));
     assert.notEqual(postPanVb, prePanVb, `拖曳後 viewBox 平移位置改變 (原本 ${prePanVb} vs 現在 ${postPanVb})`);
 
+    // 手機放大後，單指上下滑仍然捲動頁面（之前 touch-action: none 會讓手指在圖上時卡住、回不到最上面）
+    if (width < 500) {
+      assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector(".bwrap")).touchAction), "pan-y", "手機放大後仍可上下捲動頁面");
+      await p.evaluate(() => scrollTo(0, 0)); const box = await p.locator(".bwrap").boundingBox();
+      if (box.y > 200) await p.evaluate(y => scrollTo(0, y), box.y - 100);
+      const y0 = await p.evaluate(() => scrollY), b = await p.locator(".bwrap").boundingBox(), cdp = await ctx.newCDPSession(p), x = b.x + b.width / 2;
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y: b.y + 40 }] });
+      for (let i = 1; i <= 10; i++) { await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: b.y + 40 + i * 25 }] }); await p.waitForTimeout(16); }
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }); await p.waitForTimeout(300);
+      assert.ok(await p.evaluate(() => scrollY) < y0 || y0 === 0, `手指放在放大的矩陣上往下拉，頁面往上捲（${y0} → ${await p.evaluate(() => scrollY)}）`);
+    }
+
     // 6. 點擊還原按鈕
     await p.click('[data-mzoom="reset"]');
     await p.waitForTimeout(100);

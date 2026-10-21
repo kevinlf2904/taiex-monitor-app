@@ -39,6 +39,11 @@ try { const ls = localStorage; let st = JSON.parse(ls.getItem("kline:style") || 
 .gs-top kbd { font: 11px var(--font-num, monospace); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
 @media (max-width: 900px) { .gs-top span, .gs-top kbd { display: none; } .gs-top { padding: 0 8px; } }
 @media (max-width: 440px) { .gs-top { border: 0; background: none; padding: 0 4px; color: var(--ink); } .top-tools { gap: 2px; } }
+/* 窄手機：品牌不縮、字標縮小，工具列讓位（學習進度藏起來、最窄時大盤只留漲跌），搜尋鍵不會疊到 KLineLab 字標 */
+.brand { flex: none; } .top-tools { min-width: 0; }
+@media (max-width: 640px) { .top-tools:has(.mkt-chip:not([hidden])) #progChip { display: none; } }
+@media (max-width: 440px) { .top-inner { gap: 8px; } .brand { gap: 8px; } .brand .seal.logo { width: 30px; height: 30px; } .brand .bl-t b { font-size: 17px; } .top-tools .theme-btn { width: 28px; } }
+@media (max-width: 380px) { .mkt-chip > b { display: none; } } @media (max-width: 340px) { .top-tools .mkt-chip { display: none; } }
 .theme-btn { width: 34px; height: 34px; border-radius: 3px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; display: grid; place-items: center; padding: 0; }
 .theme-btn:hover { color: var(--ink); border-color: var(--accent); }
 .theme-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -881,7 +886,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.21-123</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.21-124</span></footer>
 
 <script src="core.js"></script>
 <script src="tschart.js"></script>
