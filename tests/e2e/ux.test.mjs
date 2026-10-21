@@ -125,7 +125,7 @@ test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，�
   const h = await p.evaluate(() => { const S = W.gxS; return S.hits.filter(x => x.id !== S.core && x.z > 0.1).sort((a, b) => b.z - a.z)[0]; });
   const b2 = await p.locator(".gstage").boundingBox(); await p.touchscreen.tap(b2.x + h.x, b2.y + h.y);
   await p.waitForSelector(".gcard:not([hidden])"); assert.match(await p.textContent(".gcard"), /上游|下游|相關/);
-  assert.ok(await p.evaluate(id => W.gxS.labIds.includes(id), h.id), "被點到的圓點要標名稱");
+  await p.waitForFunction(id => W.gxS.labIds?.includes(id), h.id, { timeout: 3000 }); // 名稱在下一個畫面才畫上去
   // 縮放：按鈕放大、回到 100%；滾輪也能縮放
   await p.click('[data-gxz="+"]'); assert.ok(Math.abs((await p.evaluate(() => W.gx.zoom)) - 1.3) < 0.01); assert.equal(await p.textContent(".gzv"), "130%");
   await p.click('[data-gxz="0"]'); assert.equal(await p.evaluate(() => W.gx.zoom), 1);
