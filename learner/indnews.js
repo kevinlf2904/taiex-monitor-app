@@ -31,7 +31,7 @@ const inewsItem = x => `<li class="initem"><div class="inmeta"><span>${esc(x.dat
 function inewsView() {
   inewsLoad(); const D = INEWS.data, g = W.indS.ngrp || "all";
   if (!D) return `<p class="note gnote">載入中…</p>`;
-  if (D.err && !D.items?.length) return `<p class="note gnote">⚠ ${esc(D.err)}</p>`;
+  if (D.err && !D.items?.length) return `<p class="note gnote">⚠︎ ${esc(D.err)}</p>`;
   const L = (D.items || []).filter(x => g === "all" || (x.themes || []).some(id => inewsGroupOf(INDT.get(id)) === g)).sort((a, b) => b.date.localeCompare(a.date));
   const months = [...new Set(L.map(x => x.date.slice(0, 7)))];
   return `<p class="note gnote">各產業近期的重點新聞，整理成白話重點並標出相關題材（點題材看產業鏈與圖解）。${D.updated ? `整理於 ${esc(D.updated)}。` : ""}每個題材內頁另有即時新聞。</p>
@@ -48,7 +48,7 @@ function inewsTheme(T) {
   return `<section class="iseg inews"><h4>最新消息</h4>
     ${cur.length ? `<ul class="inlist">${cur.map(x => inewsItem({ ...x, themes: x.themes.filter(id => id !== T.id) })).join("")}</ul>` : ""}
     <h5 class="note">即時新聞</h5>${lv?.items?.length ? `<ul class="inlive">${lv.items.slice(0, 8).map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a><small>${esc(x.source || "")}${x.source ? "・" : ""}${ago(x.at)}</small></li>`).join("")}</ul>`
-      : `<p class="note">${lv?.err ? "⚠ " + esc(lv.err) : W.off ? "需要部署到網站才有即時新聞。" : "載入中…"}</p>`}</section>`;
+      : `<p class="note">${lv?.err ? "⚠︎ " + esc(lv.err) : W.off ? "需要部署到網站才有即時新聞。" : "載入中…"}</p>`}</section>`;
 }
 async function inewsLive(T) {
   INEWS.live.set(T.id, { loading: true });

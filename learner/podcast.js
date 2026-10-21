@@ -236,12 +236,12 @@ const podArt = (s, cl = "part") => { const nm = s.name || s.author || "?";
 const podEmpty = msg => `<p class="note pempty">${msg}</p>`;
 function podJobHtml(key) {
   const J = POD.job; if (!J || J.key !== key) return "";
-  return J.err ? `<div class="pjob err">⚠ ${esc(J.err)}${J.mode === "audio" ? ` <button class="btn sm" data-psum="notes" data-k="${key}">改用節目說明整理</button>` : ""}</div>` : `<div class="pjob"><span class="pspin"></span>${esc(J.step)}</div>`;
+  return J.err ? `<div class="pjob err">⚠︎ ${esc(J.err)}${J.mode === "audio" ? ` <button class="btn sm" data-psum="notes" data-k="${key}">改用節目說明整理</button>` : ""}</div>` : `<div class="pjob"><span class="pspin"></span>${esc(J.step)}</div>`;
 }
 function podSumBtns(key, e) {
   const c = POD.cfg, busy = POD.job?.busy;
   if (c && !c.notes) return `<p class="note">伺服器還沒設定 AI 金鑰（GEMINI_API_KEY），沒辦法整理重點。在 Vercel 設定後重新部署就能用；觀點也可以自己在下面新增。</p>`;
-  return `<div class="row psumbtns">${c?.audio !== false && e.audio ? `<button class="btn primary" data-psum="audio" data-k="${key}" ${busy ? "disabled" : ""}>🎧 AI 聽完整集整理</button>` : ""}<button class="btn" data-psum="notes" data-k="${key}" ${busy ? "disabled" : ""}>📝 用節目說明整理</button></div>
+  return `<div class="row psumbtns">${c?.audio !== false && e.audio ? `<button class="btn primary" data-psum="audio" data-k="${key}" ${busy ? "disabled" : ""}>${ico("ear")}AI 聽完整集整理</button>` : ""}<button class="btn" data-psum="notes" data-k="${key}" ${busy ? "disabled" : ""}>${ico("pen")}用節目說明整理</button></div>
     <p class="note">「聽完整集」最完整（一集約 30～60 秒，會用到 Gemini 額度）；節目說明通常只有大綱，整理出來比較少。</p>`;
 }
 
@@ -338,7 +338,7 @@ function podFollowView() {
   const F = podFollows(), has = feed => F.some(s => s.feed === feed);
   const item = (s, act) => `<li class="pfi">${podArt(s, "part sm")}<span><b>${esc(s.name)}</b><span class="note">${esc(s.author || "")}${s.n ? `・${s.n} 集` : ""}</span></span>${act}</li>`;
   return `<form class="psearch" data-psearch><input name="q" placeholder="搜尋 Podcast 節目名稱，例：股癌、財經皓角" value="${esc(POD.q)}" autocomplete="off" enterkeyhint="search"><button class="btn sm primary">搜尋</button></form>
-    ${POD.qErr ? `<p class="note">⚠ ${esc(POD.qErr)}</p>` : ""}
+    ${POD.qErr ? `<p class="note">⚠︎ ${esc(POD.qErr)}</p>` : ""}
     ${POD.found ? `<ul class="pfl">${POD.found.map(s => item(s, has(s.feed) ? `<span class="note">已追蹤</span>` : `<button class="btn sm" data-pfol="${esc(s.feed)}">＋ 追蹤</button>`)).join("") || `<li class="note">找不到。也可以直接貼 RSS 網址。</li>`}</ul>` : ""}
     <h2 class="ph2">追蹤中（${F.length}）</h2>
     <ul class="pfl">${F.map(s => item(s, `<button class="btn sm" data-pshow="${esc(s.feed)}">提及追蹤</button><button class="btn sm" data-punf="${esc(s.feed)}">取消追蹤</button>`)).join("") || `<li class="note">還沒有追蹤節目。</li>`}</ul>
@@ -351,7 +351,7 @@ function renderPod() {
   const tab = ["ep", "show"].includes(POD.view) ? POD.hist.find(h => !["ep", "show"].includes(h.view))?.view || "home" : POD.view;
   $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="節目觀點" id="podSeg">${[["home", "最新筆記"], ["rank", "提及標的表現"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
   const body = POD.view === "ep" ? podEpView() : POD.view === "show" ? podShowView() : POD.view === "rank" ? podRankView() : POD.view === "follow" ? podFollowView() : podHome();
-  $("#lx").innerHTML = `<div class="pod">${POD.err ? `<p class="note">⚠ ${esc(POD.err)}</p>` : ""}${body}<p class="note pnotice">${POD_NOTICE} <a href="${CONTACT_URL}" target="_blank" rel="noopener">意見回報 ↗</a>　節目封面取自各節目公開的 RSS。</p></div>`;
+  $("#lx").innerHTML = `<div class="pod">${POD.err ? `<p class="note">⚠︎ ${esc(POD.err)}</p>` : ""}${body}<p class="note pnotice">${POD_NOTICE} <a href="${CONTACT_URL}" target="_blank" rel="noopener">意見回報 ↗</a>　節目封面取自各節目公開的 RSS。</p></div>`;
   return "財經節目：AI 整理重點、追蹤主持人看多／看空的真實表現（相對大盤）。只是回顧統計，不是投資建議。";
 }
 // 自動更新：名人分頁開著時每 10 分鐘重抓排程資料、RSS 與股價，並把新單集排進自動整理

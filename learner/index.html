@@ -276,6 +276,10 @@ details.verdict summary { cursor: pointer; list-style-position: outside; }
 .chat-fab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .chat-fab[aria-expanded="true"] { display: none; }
 .chat-fab { opacity: .94; } .chat-fab:hover { opacity: 1; }
+/* 回到最上面：往下捲超過大半個畫面才出現，疊在「問問題」上方 */
+#toTop { position: fixed; right: 20px; bottom: 84px; z-index: 30; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink); display: grid; place-items: center; cursor: pointer; transition: opacity .2s, transform .2s; }
+#toTop[hidden] { display: grid; opacity: 0; transform: translateY(8px); pointer-events: none; } #toTop svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 640px) { #toTop { right: 20px; bottom: calc(136px + env(safe-area-inset-bottom, 0px)); } }
 @media (min-width: 641px) { .chat-fab { padding: 10px 16px; font-size: 14px; } }
 .chat-panel { position: fixed; right: 20px; bottom: 20px; z-index: 31; width: min(420px, calc(100vw - 32px)); height: min(620px, calc(100vh - 100px)); display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,.22); overflow: hidden; }
 .chat-panel[hidden] { display: none; }
@@ -855,7 +859,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
   <!-- 測驗 -->
   <!-- 看盤：獨立頁面 watch.html，嵌在這裡（第一次切到這個分頁才載入） -->
   <section id="view-watch" role="tabpanel" hidden>
-    <iframe id="watchFrame" class="watch-frame" title="K線看盤" allow="clipboard-write"></iframe>
+    <iframe id="watchFrame" class="watch-frame" title="K線看盤" allow="clipboard-write" scrolling="no"></iframe>
     <nav class="wtabs" id="watchTabs" aria-label="看盤分頁（捲動時固定）" hidden></nav>
   </section>
 
@@ -865,7 +869,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
       <div><div class="eyebrow">LONG-TERM</div><h2>存股模擬</h2><p class="note" style="margin:6px 0 0;max-width:70ch">技術分析看的是進出時機；存股看的是長期累積。比較定期定額、核心衛星和借錢槓桿三種做法，看複利、里程碑與追繳風險。</p></div>
       <a class="btn" href="savings.html" target="_blank" rel="noopener">在新分頁開啟 ↗</a>
     </div>
-    <iframe id="savingsFrame" class="sav-frame" title="存股與槓桿模擬器" loading="lazy"></iframe>
+    <iframe id="savingsFrame" class="sav-frame" title="存股與槓桿模擬器" loading="lazy" scrolling="no"></iframe>
   </section>
 
   <section id="view-quiz" role="tabpanel" hidden>
@@ -886,7 +890,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.21-126</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.21-127</span></footer>
 
 <script src="core.js"></script>
 <script src="tschart.js"></script>
@@ -2733,7 +2737,7 @@ function renderBT(sigs) {
     const r = backtest(lab.D, sigs, { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip, tax: taxOf(lc) }), cls = x => x > 0 ? "up" : x < 0 ? "down" : "";
     const nBuy = sigs.filter(x => x.side === "buy" && !x.note).length, nSell = sigs.filter(x => x.side === "sell" && !x.note).length;
     const mode = lab.useBuy && lab.useSell ? "" : lab.useBuy ? "只依買進訊號進場，之後一直持有到期末。" : lab.useSell ? "第一天開盤先全額買進，依賣出訊號出場後不再買回。" : "買進、賣出都沒勾，不會有任何交易。";
-    if (idx) html += `<p class="note" style="margin:0 0 8px">⚠ 加權指數本身不能買賣，這裡的回測只是看訊號在指數上的效果；實際可以用 0050 等 ETF 或台指期操作。</p>`;
+    if (idx) html += `<p class="note" style="margin:0 0 8px">⚠︎ 加權指數本身不能買賣，這裡的回測只是看訊號在指數上的效果；實際可以用 0050 等 ETF 或台指期操作。</p>`;
     if (labUsesReal()) html += `<p class="note" style="margin:0 0 8px">${bond ? "債券 ETF 的證交稅停徵到 2026 年底，以 0 計算。" : etf ? "ETF 的證交稅以 0.1% 計算。" : ""}真實股價沒有還原除權息：除息日的下跌會被算成虧損，配息也沒有加回，長期回測（尤其是買進持有）會略為低估。</p>`;
     html += `<div class="stats">
       <div class="stat"><div class="k">策略報酬</div><div class="v ${cls(r.total)}">${fmtPct(r.total, 1)}</div><div class="s ${cls(r.pnl)}">${r.pnl >= 0 ? "+" : ""}${fmtMoney(r.pnl)}</div></div>
@@ -4881,6 +4885,9 @@ const goTab = t => {
   try { if (same || !PNAV.ready) history.replaceState({ ...history.state, tab: t, d: history.state?.d || 0 }, "", location.pathname + "#" + t); else history.pushState({ tab: t, d: (history.state?.d || 0) + 1, y: 0 }, "", location.pathname + "#" + t); } catch {}
   pnavBackUi();
 };
+{ const b = document.createElement("button"); b.id = "toTop"; b.type = "button"; b.hidden = true; b.setAttribute("aria-label", "回到最上面"); b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
+  b.addEventListener("click", () => scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })); document.body.appendChild(b);
+  addEventListener("scroll", () => { const on = scrollY > Math.min(700, innerHeight * 0.8); if (b.hidden === on) b.hidden = !on; }, { passive: true }); }
 addEventListener("scroll", () => { PNAV.y = Math.round(scrollY); clearTimeout(PNAV.yt); PNAV.yt = setTimeout(pnavFlush, 250); }, { passive: true });
 addEventListener("popstate", e => { const st = e.state; if (!st?.tab) return; switchTab(st.tab); const y = st.y || 0;
   requestAnimationFrame(() => scrollTo({ top: y })); if (y > 0) [250, 700].forEach(t => setTimeout(() => { if (scrollY < y - 4) scrollTo({ top: y }); }, t)); pnavBackUi(); });

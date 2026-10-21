@@ -129,7 +129,7 @@ const SX = {
       ${Sd && Sw ? `<p class="sxsay">${same ? `日線、週線都是<b class="${Sd.trend === "bull" ? "up" : Sd.trend === "bear" ? "down" : ""}">${REG_NAME[Sd.trend]}</b>，長短週期方向一致。` : `日線是<b>${REG_NAME[Sd.trend]}</b>、週線是<b>${REG_NAME[Sw.trend]}</b>：短線和長線方向不同，先決定自己做哪個週期，停損也要跟著那個週期設。`}</p>` : ""}
       ${stateHtml(Sd, "日線", X, { stratBtn: true, sizeForm: form })}
       <div class="qx-sep"></div>${W.stLong?.code === c && W.stLong.loading ? `<p class="note">週線：載入更長的日 K…</p>` : stateHtml(Sw, "週線")}
-      ${qAiBlock({ key: ak, R: W.qai[ak] }, "🤖 AI 用白話解讀")}
+      ${qAiBlock({ key: ak, R: W.qai[ak] }, `${ico("ai")}AI 用白話解讀`)}
       <p class="note">多頭＝收盤與短均線都在長均線之上、長均線上揚；空頭相反；其他是盤整。ADX 衡量趨勢強度、不分方向。波動用 ATR（平均真實波幅）在自己近一年的百分位判斷。</p>`;
   },
   guru() {
@@ -233,7 +233,7 @@ const SX = {
   },
   news() {
     const N = W.news; if (!N || N.code !== W.sel || N.loading) return sxLoad();
-    if (N.err) return `<p class="note err">⚠ ${esc(N.err)}</p>`;
+    if (N.err) return `<p class="note err">⚠︎ ${esc(N.err)}</p>`;
     return `${sxH("新聞", N.source || "")}<ul class="sxnews">${(N.items || []).slice(0, 15).map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a><span class="note">${esc(x.source || "")}${x.at ? "・" + new Date(x.at + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/") : ""}</span></li>`).join("") || `<li class="note">沒有新聞。</li>`}</ul>`;
   },
   chain() {
@@ -420,7 +420,7 @@ const etfName = r => (r.code && okCode(r.code) ? `<button class="linkbtn" data-s
 function etfWait() {
   const E = W.etf; if (W.off) return `<p class="note sxwait">需要部署到網站才有 ETF 資料。</p>`;
   if (!E || E.code !== W.sel || E.loading) { etfLoad(W.sel); return `<p class="note sxwait">載入 ETF 資料…</p>`; }
-  if (!E.ok) return `<p class="note sxwait">⚠ ${esc(E.error || "拿不到 ETF 資料")}</p>`;
+  if (!E.ok) return `<p class="note sxwait">⚠︎ ${esc(E.error || "拿不到 ETF 資料")}</p>`;
   return null;
 }
 Object.assign(SX, {
@@ -471,7 +471,7 @@ async function usLoad(c) {
 function usWait() {
   const U = W.usi; if (W.off) return `<p class="note sxwait">需要部署到網站才有美股公司資料。</p>`;
   if (!U || U.code !== W.sel || U.loading) { usLoad(W.sel); return `<p class="note sxwait">載入美股公司資料…</p>`; }
-  if (!U.ok) return `<p class="note sxwait">⚠ ${esc(U.error || "拿不到美股公司資料")}</p>`;
+  if (!U.ok) return `<p class="note sxwait">⚠︎ ${esc(U.error || "拿不到美股公司資料")}</p>`;
   return null;
 }
 // 美元金額：十億以上用 B、其餘用 M，後面附約合台幣幾億（用即時匯率時不準，只給量級感）

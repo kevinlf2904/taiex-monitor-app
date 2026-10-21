@@ -11,6 +11,14 @@ async function raw(url, n = 600) {
   const t0 = Date.now(); try { const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "*/*", Referer: "https://mis.twse.com.tw/stock/index.jsp" }, signal: AbortSignal.timeout(20000) }); const t = await r.text();
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
+if (process.argv[2] === "jk") {
+  // 日股、韓股：用網站同一套 Yahoo 報價、日 K（產業地圖裡 6981.T、005930.KS 這種代號）
+  const { yahooQuote } = await import("../api/_lib/_yahoo.js");
+  for (const c of ["6981.T", "8035.T", "005930.KS", "000660.KS", "000990.KS"]) { try { const q = await yahooQuote(c); console.log(c, q.name, q.market, q.currency, q.price, q.chgPct + "%", q.date, q.time, q.session?.state, q.session?.open, q.session?.close); } catch (e) { console.log(c, "錯誤", e.message); } }
+  const k = await hit("/api/kline?code=6981.T&months=3"); console.log("網站 /api/kline 6981.T", k.status, k.j?.ok, k.j?.data?.length, k.j?.error || "");
+  const q = await hit("/api/quote?codes=6981.T,005930.KS"); console.log("網站 /api/quote", q.status, JSON.stringify(q.j?.quotes?.map(x => [x.code, x.price, x.chgPct]) || q.j).slice(0, 300));
+  process.exit(0);
+}
 if (process.argv[2] === "taifexdl") {
   // 期交所「前 30 個交易日期貨每筆成交資料」：看下載頁的連結、壓縮檔大小、CSV 欄位與台指期（TX）的日期時間寫法（夜盤怎麼標日期）
   const { execFileSync } = await import("node:child_process"), { writeFileSync } = await import("node:fs"), os = await import("node:os");

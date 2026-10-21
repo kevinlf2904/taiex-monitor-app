@@ -254,12 +254,12 @@ function btReportHtml(bt, M, B, V, opt = {}) {
     h += `<h4 class="qx-h">改善試算 <span class="note">同一段資料、同一組訊號換風險控制；是「事後」比較，真的要用請換一段時間再驗證（實驗室有滾動驗證）</span></h4><div class="qx-tbl"><table><thead><tr><th>做法</th><th>總報酬</th><th>年化</th><th>夏普</th><th>最大回撤</th><th>勝率</th><th>筆數</th></tr></thead><tbody>${V.map(x => `<tr class="${x.key === "base" ? "qx-base" : ""}"><td>${qEsc(x.name)}</td><td class="${qC(x.m.total)}">${qP(x.m.total)}</td><td class="${qC(x.m.cagr)}">${qP(x.m.cagr)}</td><td class="${x.key !== "base" && (x.m.sharpe ?? -9) > (b.sharpe ?? -9) + 0.05 ? "up" : ""}">${qX(x.m.sharpe)}</td><td class="${x.key !== "base" && x.m.mdd < b.mdd - 0.005 ? "up" : x.key !== "base" && x.m.mdd > b.mdd + 0.005 ? "down" : ""}">−${(x.m.mdd * 100).toFixed(1)}%</td><td>${x.m.win == null ? "—" : Math.round(x.m.win * 100) + "%"}</td><td>${x.n}</td></tr>`).join("")}</tbody></table></div>
       <ul class="qx-list"><li><b>降低風險</b><span>${A.risk.length ? A.risk.map(x => `${qEsc(x.name)}：回撤 ${(b.mdd * 100).toFixed(1)}% → ${(x.m.mdd * 100).toFixed(1)}%`).join("；") : "試算的做法都沒有在不犧牲太多報酬下降低回撤。"}</span></li>
       <li><b>提高報酬（不增加回撤）</b><span>${A.ret.length ? A.ret.map(x => `${qEsc(x.name)}：報酬 ${qP(b.total)} → ${qP(x.m.total)}`).join("；") : "沒有找到不增加回撤又能提高報酬的做法。"}</span></li></ul>`; }
-  if (opt.ai) h += qAiBlock(opt.ai, "🤖 AI 解讀這份回測");
+  if (opt.ai) h += qAiBlock(opt.ai, `${ico("ai")}AI 解讀這份回測`);
   return h;
 }
 // AI 區塊：{ key, R }；R＝undefined（還沒問）、{ loading }、{ err }、{ text }
-function qAiBlock({ key, R }, label = "🤖 問 AI") {
-  return `<div class="qx-ai">${!R || R.err ? `<button type="button" class="btn sm" data-qai="${qEsc(key)}">${R?.err ? "再試一次" : label}</button>${R?.err ? ` <span class="note">⚠ ${qEsc(R.err)}</span>` : ""}`
+function qAiBlock({ key, R }, label = `${ico("ai")}問 AI`) {
+  return `<div class="qx-ai">${!R || R.err ? `<button type="button" class="btn sm" data-qai="${qEsc(key)}">${R?.err ? "再試一次" : label}</button>${R?.err ? ` <span class="note">⚠︎ ${qEsc(R.err)}</span>` : ""}`
     : R.loading ? `<p class="note">AI 整理中（約 10～30 秒）…</p>` : `<div class="qx-aitxt">${qEsc(R.text).replace(/\n/g, "<br>")}</div><p class="note">AI 只根據上面算出來的數字解讀，可能有誤，不是買賣建議。</p>`}</div>`;
 }
 // 回測報告轉成文字（給 AI 當資料）
@@ -299,7 +299,7 @@ function stateText(S, tf, X) {
 function setupHtml(X, S, opt = {}) {
   const bear = S.trend === "bear";
   return `<h5 class="qx-h">ATR 參考設定 <span class="note">教學用：示範怎麼用波動決定停損、目標與部位，不是買賣建議</span></h5>
-    ${bear ? `<p class="note">⚠ 目前是空頭，順勢的做法是不做多；下面只示範計算方式。</p>` : ""}
+    ${bear ? `<p class="note">⚠︎ 目前是空頭，順勢的做法是不做多；下面只示範計算方式。</p>` : ""}
     ${qCards([["參考進場", qPx(X.entry), "最新收盤"], ["停損", qPx(X.stop), `${X.stopBy}（−${(X.perPct * 100).toFixed(1)}%）`, "down"], ["目標", qPx(X.tgt), `${X.tgtBy}（${qP(X.tgt / X.entry - 1)}）`, "up"],
       ["報酬風險比", `${X.rr.toFixed(2)} : 1`, X.rr >= 2 ? "≥ 2，划算" : X.rr >= 1.5 ? "普通" : "< 1.5，不划算", X.rr >= 2 ? "up" : X.rr < 1.5 ? "down" : ""]])}
     ${opt.sizeForm ? `<div class="qx-size">${opt.sizeForm}<span>每筆最多虧 <b>${Math.round(X.loss).toLocaleString()}</b> 元 → 最多買 <b>${X.sh.toLocaleString()}</b> 股（約 ${Math.round(X.amt).toLocaleString()} 元）</span></div>` : ""}`;

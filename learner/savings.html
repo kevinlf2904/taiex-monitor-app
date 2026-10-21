@@ -205,6 +205,7 @@ h1,h2,h3,h4,h5,h6,b,strong,th,legend,dt{font-weight:500}
 input.num,select,.arow input,.mrow input{background:var(--field)}
 /* 嵌在 K線學堂裡：不留外框邊距、標題縮小、控制台不黏住（iframe 會依內容自動長高） */
 :root[data-embed="1"] .wrap{padding:0 0 24px;max-width:none}
+:root[data-embed="1"],:root[data-embed="1"] body{overflow:hidden;overscroll-behavior:none}
 :root[data-embed="1"] header h1{display:none}
 :root[data-embed="1"] .console{position:static;max-height:none}
 :root[data-embed="1"] .jump{top:0}
@@ -334,7 +335,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
     <main>
       <nav class="jump" aria-label="跳到區塊"><a href="#sec-sum">總覽</a><a href="#sec-pos">部位明細</a><a href="#sec-chart">淨值走勢</a><a href="#sec-ms">里程碑</a><a href="#sec-risk">壓力測試與配置</a><a href="#sec-etf">標的比較</a><a href="#sec-div">股息計算機</a></nav>
       <section class="sec" id="sec-sum">
-        <p style="margin:0 0 8px;text-align:right"><button type="button" class="sharebtn" data-sharecard="savings">📸 分享情報圖卡</button></p><div class="kpis" id="kpis"></div>
+        <p style="margin:0 0 8px;text-align:right"><button type="button" class="sharebtn" data-sharecard="savings"><svg class="ico" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin-right:.32em" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6"/></svg>分享情報圖卡</button></p><div class="kpis" id="kpis"></div>
       </section>
       <section class="sec" id="sec-pos">
         <div class="sec-h"><h2 class="h2">部位明細</h2><p class="lead">每種做法的錢分別放在哪裡。在下方「淨值走勢」移動查價線，這裡會跟著切到那一年。槓桿版的淨值扣回了起始的應急現金，才能和 A、B 公平比較。</p></div>
