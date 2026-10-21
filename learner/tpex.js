@@ -1,22 +1,33 @@
-/* ================= 情報局「大盤 → 櫃買」：櫃買中心的指數、量值、產業營收、創新高、財測、董監、權證、暫停預告、興櫃 EPS、黃金、可轉債圖表 =================
-   資料：data/tpex.json（排程 scripts/tpex-daily.mjs 每個交易日收盤後累積；櫃買 OpenAPI 只給當月，歷史靠排程存下來，月營收從公開資訊觀測站補）。
+/* ================= 情報局「大盤 → 上市／櫃買」：指數、量值、產業營收、創新高、財測、董監、權證、暫停預告，櫃買另有興櫃 EPS、黃金、可轉債，上市另有類股指數 =================
+   資料：data/twse.json、data/tpex.json（排程 scripts/twse-daily.mjs、tpex-daily.mjs 每個交易日收盤後累積；OpenAPI 只給當月，歷史靠排程存下來，月營收從公開資訊觀測站補）。
+   兩個市場共用同一套畫面：MKX 是各市場的名稱與分頁，OTC() 依目前的大盤分頁（W.mkReg 是 lst 或 otc）拿那個市場的狀態。
    點擊用 data-mk="otc…"，watch.html 的 data-mk 處理交給 otcMk()。
-   用到 watch.html 的 W、esc、cls、store、renderList、mkSeg、barLineSvg、tmo，tschart.js 的 tsChart、xhWrap，tools.js 的 rkList、rkCards。 */
-const OTC_VIEWS = [["ix", "指數"], ["vol", "量值"], ["rev", "產業營收"], ["hi", "營收創新高"], ["fc", "財測"], ["dir", "董監"], ["wt", "權證"], ["sus", "暫停預告"], ["esb", "興櫃 EPS"], ["gold", "黃金"], ["cb", "可轉債"]];
+   用到 watch.html 的 W、esc、cls、store、renderList、setLt、mkSeg、barLineSvg、tmo，tschart.js 的 tsChart、xhWrap，tools.js 的 rkList、rkCards。 */
 const OTC_IX = [["otc", "櫃買指數", "var(--accent)"], ["t50", "富櫃 50", "var(--s1)"], ["t200", "富櫃 200", "#3d7be0"], ["hd", "高殖利率", "var(--s3)"], ["cg", "公司治理", "#9b6bd6"], ["ci", "薪酬", "#c24d6d"], ["emp", "勞工就業 88", "#3fa36b"]];
+const LST_IX = [["tx", "加權指數", "var(--accent)"], ["t50", "台灣 50", "var(--s1)"], ["frm", "寶島指數", "#3d7be0"], ["m100", "中型 100", "var(--s3)"], ["hd", "高股息", "#9b6bd6"], ["cg", "公司治理 100", "#c24d6d"], ["emp", "就業 99", "#3fa36b"], ["pay", "高薪 100", "#d08a2e"], ["esg", "永續", "#5fb3b3"]];
+const MKX = {
+  otc: { file: "data/tpex.json", org: "櫃買中心", mk: "上櫃", ix: "otc", ixName: "櫃買指數", IX: OTC_IX, upd: "17:25、21:45", sus: ["暫停先賣後買當沖預告", "暫停融券賣出預告", "股東會、除權息前停券"],
+    views: [["ix", "指數"], ["vol", "量值"], ["rev", "產業營收"], ["hi", "營收創新高"], ["fc", "財測"], ["dir", "董監"], ["wt", "權證"], ["sus", "暫停預告"], ["esb", "興櫃 EPS"], ["gold", "黃金"], ["cb", "可轉債"]],
+    ixNote: "富櫃 50／200：上櫃市值大、流動性好的公司；高殖利率、公司治理、薪酬、勞工就業 88 是依股利、治理評鑑、員工薪酬、聘僱人數挑的成分股。富櫃 200 只有排程開始後每天記下的收盤。" },
+  lst: { file: "data/twse.json", org: "證交所", mk: "上市", ix: "tx", ixName: "加權指數", IX: LST_IX, upd: "17:35、21:55", sus: ["暫停先賣後買當沖預告", "停資停券預告", "股東會、除權息前停止融資融券"],
+    views: [["ix", "指數"], ["sec", "類股"], ["vol", "量值"], ["rev", "產業營收"], ["hi", "營收創新高"], ["fc", "財測"], ["dir", "董監"], ["wt", "權證"], ["sus", "暫停預告"], ["chip", "籌碼"]],
+    ixNote: "台灣 50：市值最大的 50 家；寶島指數：上市加上櫃一起算；中型 100、高股息、公司治理 100、就業 99、高薪 100、永續是證交所依市值、股利、治理評鑑、聘僱、薪資、ESG 挑的成分股，只有排程開始後每天記下的收盤（報酬指數只有加權、台灣 50、寶島）。" },
+};
 const OTC_RNG = [["20", "1 個月"], ["60", "3 個月"], ["120", "半年"], ["250", "1 年"], ["all", "全部"]];
-const OTC = () => (W.otc ||= { view: "ix", rng: "60", tr: "p", ym: "", ind: "", esb: "top", ...(store.get("watch:otc", null) || {}), data: null, loading: false });
-const otcSave = () => { const O = OTC(); store.set("watch:otc", { view: O.view, rng: O.rng, tr: O.tr, esb: O.esb }); };
+const mkxKey = () => (W.mkReg === "lst" ? "lst" : "otc"), mkx = () => MKX[mkxKey()];
+const OTC = (k = mkxKey()) => (W[k] ||= { view: "ix", rng: "60", tr: "p", ym: "", ind: "", esb: "top", ...(store.get("watch:" + k, null) || {}), data: null, loading: false });
+const otcSave = () => { const O = OTC(); store.set("watch:" + mkxKey(), { view: O.view, rng: O.rng, tr: O.tr, esb: O.esb }); };
 async function otcLoad(force = false) {
-  const O = OTC(); if (O.loading || (!force && O.data && Date.now() - O.data.got < 30 * 60e3)) return;
+  const k = mkxKey(), O = OTC(k); if (O.loading || (!force && O.data && Date.now() - O.data.got < 30 * 60e3)) return;
   O.loading = true;
-  try { const r = await fetch("data/tpex.json", { cache: "no-cache", signal: tmo(15000) }); if (!r.ok) throw new Error(r.status === 404 ? "排程還沒跑完第一次，收盤後再來看" : `HTTP ${r.status}`); O.data = { ...(await r.json()), got: Date.now() }; }
+  try { const r = await fetch(MKX[k].file, { cache: "no-cache", signal: tmo(15000) }); if (!r.ok) throw new Error(r.status === 404 ? "排程還沒跑完第一次，收盤後再來看" : `HTTP ${r.status}`); O.data = { ...(await r.json()), got: Date.now() }; }
   catch (e) { O.data = { err: e.message, got: Date.now() }; } finally { O.loading = false; }
-  if (W.lt === "mkt" && W.mkReg === "otc") renderList();
+  if (W.lt === "mkt" && W.mkReg === k) renderList();
 }
 // data-mk="otc…" 的點擊
 function otcMk(k, v) {
   const O = OTC();
+  if (k === "otcGo") { W.afView = v; store.set("watch:af", v); setLt("after"); return true; } // 籌碼：到「盤後資料」的那一頁
   if (k === "otcV") { O.view = v; O.ind = ""; } else if (k === "otcRng") O.rng = v; else if (k === "otcTr") O.tr = v; else if (k === "otcYm") O.ym = v; else if (k === "otcInd") O.ind = O.ind === v ? "" : v; else if (k === "otcEsb") O.esb = v; else return false;
   otcSave(); renderList(); return true;
 }
@@ -29,30 +40,31 @@ const otcNone = t => `<p class="note" style="padding:4px 2px">${t}</p>`;
 
 function renderOtc(top) {
   const O = OTC(), D = O.data;
-  const bar = `<div class="mn-days mkseg otcv">${OTC_VIEWS.map(([k, t]) => `<button type="button" data-mk="otcV" data-v="${k}" aria-pressed="${O.view === k}">${t}</button>`).join("")}</div>`;
-  if (!D) { $("#lx").innerHTML = top + bar + `<p class="note" style="padding:12px">載入櫃買中心資料…</p>`; otcLoad(); return; }
+  const X = mkx(), V = X.views.some(([k]) => k === O.view) ? O.view : "ix";
+  const bar = `<div class="mn-days mkseg otcv">${X.views.map(([k, t]) => `<button type="button" data-mk="otcV" data-v="${k}" aria-pressed="${V === k}">${t}</button>`).join("")}</div>`;
+  if (!D) { $("#lx").innerHTML = top + bar + `<p class="note" style="padding:12px">載入${X.org}資料…</p>`; otcLoad(); return; }
   if (D.err) { $("#lx").innerHTML = top + bar + `<p class="note err" style="padding:12px">⚠︎ ${esc(D.err)}</p>`; return; }
-  const f = { ix: otcIxHtml, vol: otcVolHtml, rev: otcRevHtml, hi: otcHiHtml, fc: otcFcHtml, dir: otcDirHtml, wt: otcWtHtml, sus: otcSusHtml, esb: otcEsbHtml, gold: otcGoldHtml, cb: otcCbHtml }[O.view] || otcIxHtml;
-  $("#lx").innerHTML = top + bar + `<div class="otcbox">${f(D)}</div><p class="note" style="padding:4px 12px 12px">資料：櫃買中心 OpenAPI、公開資訊觀測站；排程每個交易日 17:25、21:45 更新${D.updated ? `（這份整理於 ${new Date(Date.parse(D.updated) + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " ")}）` : ""}。不是投資建議。</p>`;
+  const f = { ix: otcIxHtml, vol: otcVolHtml, rev: otcRevHtml, hi: otcHiHtml, fc: otcFcHtml, dir: otcDirHtml, wt: otcWtHtml, sus: otcSusHtml, esb: otcEsbHtml, gold: otcGoldHtml, cb: otcCbHtml, sec: otcSecHtml, chip: otcChipHtml }[V] || otcIxHtml;
+  $("#lx").innerHTML = top + bar + `<div class="otcbox">${f(D)}</div><p class="note" style="padding:4px 12px 12px">資料：${X.org} OpenAPI、公開資訊觀測站；排程每個交易日 ${X.upd} 更新${D.updated ? `（這份整理於 ${new Date(Date.parse(D.updated) + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " ")}）` : ""}。不是投資建議。</p>`;
 }
 const otcW = () => (innerWidth < 600 ? 400 : 600); // 手機用窄的畫布，軸上的字才不會縮太小
 const otcRngSeg = () => mkSeg("otcRng", OTC().rng, OTC_RNG);
 
 // 指數：櫃買指數 vs 報酬指數；主題指數同一起點 = 100 比較
 function otcIxHtml(D) {
-  const C = D.ix?.cols || [], R = otcCut(D.ix?.rows || []), col = k => C.indexOf(k), O = OTC();
+  const C = D.ix?.cols || [], R = otcCut(D.ix?.rows || []), col = k => C.indexOf(k), O = OTC(), X = mkx();
   if (R.length < 2) return otcNone("指數歷史還不夠（排程每天累積，至少要兩個交易日）。");
   const dates = R.map(r => r[0]), v = k => R.map(r => r[col(k)] ?? null), first = vs => vs.find(x => x != null), last = vs => [...vs].reverse().find(x => x != null);
   const chg = vs => { const a = first(vs), b = last(vs); return a && b ? (b / a - 1) * 100 : null; };
-  const p = v("otc"), tr = v("otcR"), gap = chg(tr) != null && chg(p) != null ? chg(tr) - chg(p) : null;
-  let h = otcSec("櫃買指數 vs 報酬指數", `${otcMd(dates[0])}～${otcMd(dates[dates.length - 1])}`, `<div class="mksegrow">${otcRngSeg()}</div>`
-    + tsChart({ w: otcW(), dates, panels: [{ h: 150, series: [{ name: "櫃買指數", vals: p, color: "var(--accent)", axis: "l", wide: true }, { name: "報酬指數（含息）", vals: tr, color: "var(--s1)", axis: "r" }] }] })
-    + `<p class="note">這段期間櫃買指數 <b class="${cls(chg(p))}">${otcPct(chg(p))}</b>、報酬指數 <b class="${cls(chg(tr))}">${otcPct(chg(tr))}</b>${gap != null ? `，差距 ${gap.toFixed(1)} 個百分點就是股息再投入的效果` : ""}。報酬指數把除息的股息加回去，長期會越拉越開。</p>`);
-  const suf = O.tr === "r" ? "R" : "", S = OTC_IX.map(([k, n, c]) => { const vs = v(k + suf), b = first(vs); return { k, n, c, vs, b, chg: chg(vs) }; }).filter(s => s.b);
+  const p = v(X.ix), tr = v(X.ix + "R"), gap = chg(tr) != null && chg(p) != null ? chg(tr) - chg(p) : null;
+  let h = otcSec(`${X.ixName} vs 報酬指數`, `${otcMd(dates[0])}～${otcMd(dates[dates.length - 1])}`, `<div class="mksegrow">${otcRngSeg()}</div>`
+    + tsChart({ w: otcW(), dates, panels: [{ h: 150, series: [{ name: X.ixName, vals: p, color: "var(--accent)", axis: "l", wide: true }, { name: "報酬指數（含息）", vals: tr, color: "var(--s1)", axis: "r" }] }] })
+    + `<p class="note">這段期間${X.ixName} <b class="${cls(chg(p))}">${otcPct(chg(p))}</b>、報酬指數 <b class="${cls(chg(tr))}">${otcPct(chg(tr))}</b>${gap != null ? `，差距 ${gap.toFixed(1)} 個百分點就是股息再投入的效果` : ""}。報酬指數把除息的股息加回去，長期會越拉越開。</p>`);
+  const suf = O.tr === "r" ? "R" : "", S = X.IX.map(([k, n, c]) => { const vs = v(k + suf), b = first(vs); return { k, n, c, vs, b, chg: chg(vs) }; }).filter(s => s.b);
   h += otcSec("主題指數比較", "同一天起算 = 100", `<div class="mksegrow">${mkSeg("otcTr", O.tr, [["p", "價格指數"], ["r", "報酬指數"]])}</div>`
     + tsChart({ dates, panels: [{ h: 190, series: S.map(s => ({ name: s.n, color: s.c, vals: s.vs.map(x => (x == null ? null : Math.round(x / s.b * 1e4) / 100)), fmt: x => (x == null ? "—" : x.toFixed(1)) })) }] })
     + `<table class="tbl otc-t"><thead><tr><th>指數</th><th>最新</th><th>區間漲跌</th></tr></thead><tbody>${S.sort((a, b) => (b.chg ?? -1e9) - (a.chg ?? -1e9)).map(s => `<tr><td><i class="otc-dot" style="background:${s.c}"></i>${s.n}</td><td>${last(s.vs).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td><td class="${cls(s.chg)}">${otcPct(s.chg)}</td></tr>`).join("")}</tbody></table>
-    <p class="note">富櫃 50／200：上櫃市值大、流動性好的公司；高殖利率、公司治理、薪酬、勞工就業 88 是依股利、治理評鑑、員工薪酬、聘僱人數挑的成分股。富櫃 200 只有排程開始後每天記下的收盤。</p>`);
+    <p class="note">${X.ixNote}</p>`);
   return h;
 }
 
@@ -61,9 +73,10 @@ function otcVolHtml(D) {
   const all = D.vol || [], R = otcCut(all); if (R.length < 2) return otcNone("量值歷史還不夠。");
   const ma = (n, i0) => R.map((_, i) => { const j = all.length - R.length + i, s = all.slice(Math.max(0, j - n + 1), j + 1).map(r => r[2]).filter(x => x != null); return s.length === n ? Math.round(s.reduce((a, b) => a + b, 0) / n) : null; });
   const L = R[R.length - 1], a20 = ma(20)[R.length - 1], ratio = a20 ? L[2] / a20 : null;
-  return otcSec("上櫃日成交量值", `${otcMd(L[0])}`, `<div class="mksegrow">${otcRngSeg()}</div>`
+  const X = mkx();
+  return otcSec(`${X.mk}日成交量值`, `${otcMd(L[0])}`, `<div class="mksegrow">${otcRngSeg()}</div>`
     + rkCards([{ t: "成交金額", v: `${L[2]?.toLocaleString()} 億` }, { t: "成交股數", v: `${L[1]?.toLocaleString()} 億股` }, { t: "成交筆數", v: `${L[3]?.toLocaleString()} 萬筆` }, { t: "和 20 日均量比", v: ratio ? `${(ratio * 100).toFixed(0)}%` : "—", vc: ratio > 1.2 ? "up" : ratio && ratio < 0.8 ? "down" : "", sub: ratio > 1.2 ? "放量" : ratio && ratio < 0.8 ? "量縮" : "" }])
-    + tsChart({ w: otcW(), dates: R.map(r => r[0]), panels: [{ h: 140, series: [{ name: "成交金額（億）", type: "bar", vals: R.map(r => r[2]), color: "var(--muted)" }, { name: "5 日均", vals: ma(5), color: "var(--s1)" }, { name: "20 日均", vals: ma(20), color: "var(--accent)", dash: true }] }, { h: 80, series: [{ name: "櫃買指數", vals: R.map(r => r[4]), color: "var(--s3)" }] }] })
+    + tsChart({ w: otcW(), dates: R.map(r => r[0]), panels: [{ h: 140, series: [{ name: "成交金額（億）", type: "bar", vals: R.map(r => r[2]), color: "var(--muted)" }, { name: "5 日均", vals: ma(5), color: "var(--s1)" }, { name: "20 日均", vals: ma(20), color: "var(--accent)", dash: true }] }, { h: 80, series: [{ name: X.ixName, vals: R.map(r => r[4]), color: "var(--s3)" }] }] })
     + `<p class="note">量價一起看：指數漲、量放大是有人追；指數漲、量縮代表追價意願不高。20 日均線沒有滿 20 天前不畫。</p>`);
 }
 
@@ -72,7 +85,7 @@ function otcRevHtml(D) {
   const M = (D.revm || []).slice(-12), O = OTC(); if (!M.length) return otcNone("月營收歷史還沒整理好。");
   const L = M[M.length - 1], Mr = [...M].reverse(), inds = Object.keys(L.ind).filter(k => L.ind[k][3] >= 2).sort((a, b) => (L.ind[b][1] ?? -1e9) - (L.ind[a][1] ?? -1e9));
   const cell = v => (v == null ? `<td></td>` : `<td style="background:color-mix(in srgb, var(${v >= 0 ? "--up" : "--down"}) ${Math.round(Math.min(1, Math.abs(v) / 40) * 65)}%, transparent)">${v.toFixed(0)}</td>`);
-  let h = otcSec("上櫃各產業營收年增率", `${M.length} 個月・%`, `<div class="cotbl-wrap"><table class="tbl cxheat otc-heat"><thead><tr><th>產業</th>${Mr.map(m => `<th>${+m.ym.slice(5)}月</th>`).join("")}<th>家數</th></tr></thead><tbody>
+  let h = otcSec(`${mkx().mk}各產業營收年增率`, `${M.length} 個月・%`, `<div class="cotbl-wrap"><table class="tbl cxheat otc-heat"><thead><tr><th>產業</th>${Mr.map(m => `<th>${+m.ym.slice(5)}月</th>`).join("")}<th>家數</th></tr></thead><tbody>
     ${inds.map(k => `<tr${O.ind === k ? ' class="on"' : ""}><td><button class="linkbtn" data-mk="otcInd" data-v="${esc(k)}">${esc(k)}</button></td>${Mr.map(m => cell(m.ind[k]?.[1])).join("")}<td>${L.ind[k][3]}</td></tr>`).join("")}</tbody></table></div>
     <p class="note">每格是那個月產業內公司營收加總和去年同月比；紅色成長、綠色衰退，顏色越深幅度越大（40% 以上最深）。最新的月份在最左邊，依最新一個月（${otcYm(L.ym)}）排序，點產業名稱看逐月營收。</p>`);
   if (O.ind && L.ind[O.ind]) { const S = (D.revm || []).filter(m => m.ind[O.ind]).slice(-12);
@@ -85,13 +98,13 @@ function otcHiHtml(D) {
   const M = (D.revm || []).slice(-12), O = OTC(); if (!M.length) return otcNone("月營收歷史還沒整理好。");
   const cur = M.find(m => m.ym === O.ym) || M[M.length - 1];
   let h = otcSec("營收創新高家數", "創 12～24 個月新高", barLineSvg(M.map(m => ({ label: `${+m.ym.slice(5)}月`, v: m.hi.length, y: m.n ? Math.round(m.up / m.n * 100) : null })), { fmtV: v => v })
-    + `<p class="note">柱＝當月營收高於過去 12～24 個月每一個月的上櫃公司家數（至少要有 12 個月的資料才算）；線＝當月月增、年增都是正的家數占比。創新高家數變多，通常代表景氣在擴張。</p>`
+    + `<p class="note">柱＝當月營收高於過去 12～24 個月每一個月的${mkx().mk}公司家數（至少要有 12 個月的資料才算）；線＝當月月增、年增都是正的家數占比。創新高家數變多，通常代表景氣在擴張。</p>`
     + `<div class="mn-days mkseg">${[...M].reverse().map(m => `<button type="button" data-mk="otcYm" data-v="${m.ym}" aria-pressed="${m === cur}">${+m.ym.slice(0, 4) % 100}/${+m.ym.slice(5)}</button>`).join("")}</div>`);
   h += otcSec(`${otcYm(cur.ym)}創新高名單`, `${cur.hi.length} 家`, rkList(cur.hi.slice(0, 60).map(r => ({ mono: "", attr: `data-sel="${esc(r[0])}"`, name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: `${esc(r[2])}・創 ${r[5]} 個月新高`, val: `${r[3].toLocaleString()} 億`, vsub: `年增 ${otcPct(r[4])}`, star: r[0] })), "這個月沒有公司創新高（或歷史資料還不到 12 個月）"));
   return h;
 }
 
-// 財測：櫃買公司公開財務預測的達成情形、差異達 10% 以上（欄位依官方原樣列出）
+// 財測：公司公開財務預測的達成情形、差異達 10% 以上（欄位依官方原樣列出）
 function otcFcHtml(D) {
   const F = D.snap?.fc || {}, tbl = rows => { if (!rows?.length) return ""; const ks = Object.keys(rows[0]).slice(0, 9);
     return `<div class="cotbl-wrap"><table class="tbl otc-t"><thead><tr>${ks.map(k => `<th>${esc(k)}</th>`).join("")}</tr></thead><tbody>${rows.slice(0, 80).map(r => `<tr>${ks.map(k => `<td>${esc(String(r[k] ?? "").trim())}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`; };
@@ -104,26 +117,47 @@ function otcDirHtml(D) {
   const P = D.snap?.pledge, S = D.snap?.short;
   let h = P?.buckets?.length ? otcSec("董監質押比例分布", P.date ? `${P.date.replace(/-/g, "/")} 統計` : "", barLineSvg(P.buckets.map(([k, n]) => ({ label: k.replace(/\s+/g, ""), v: n })), { fmtV: v => v })
     + `<p class="note">董監把持股拿去質押借錢，比例越高，股價大跌時越可能被追繳、斷頭賣壓。</p>`
-    + rkList(P.top.slice(0, 30).map(r => ({ mono: "", attr: `data-sel="${esc(r[0])}"`, name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: "質押占董監持股", val: `${r[2].toFixed(1)}%`, vc: r[2] >= 50 ? "down" : "", star: r[0] })))) : otcSec("董監質押", "", otcNone("暫時沒有資料。"));
+    + rkList(P.top.slice(0, 30).map(r => ({ mono: "", attr: `data-sel="${esc(r[0])}"`, name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: "質押占董監持股", val: r[2] != null ? `${r[2].toFixed(1)}%` : esc(String(r[3] || "").replace(/(\d+)/, "$1%")), vc: (r[2] ?? parseFloat(r[3]) ?? 0) >= 50 ? "down" : "", star: r[0] })))) : otcSec("董監質押", "", otcNone("暫時沒有資料。"));
   h += otcSec("董監持股不足法定成數", S?.date ? `${S.date.replace(/-/g, "/")}・${S.rows.length} 家` : "", S?.rows?.length ? rkList(S.rows.map(r => ({ mono: "", attr: `data-sel="${esc(r[0])}"`, name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: `應持有 ${r[2].toLocaleString()} 張・實際 ${r[3].toLocaleString()} 張`, val: `不足 ${r[4].toLocaleString()} 張`, vsub: r[5] != null ? `差 ${r[5]}%` : "", star: r[0] })))
     + `<p class="note">法律規定全體董事要持有一定比例的股份；持股不足代表董監和公司利益綁得比較鬆，要留意。</p>` : otcNone("這次沒有持股不足的公司。"));
   return h;
 }
 
-// 權證：交易人數趨勢、今天權證成交值最多的標的
+// 權證：交易人數趨勢（櫃買才有）、今天權證成交值最多的標的、上櫃牛熊證
 function otcWtHtml(D) {
-  const C = D.wt?.cols || [], R = otcCut(D.wt?.rows || []), ki = C.findIndex(c => /交易人數/.test(c)), U = D.snap?.wtu, L = R[R.length - 1];
-  let h = otcSec("每日權證交易人數", L ? otcMd(L[0]) : "", (L ? rkCards(C.slice(0, 8).map((c, i) => ({ t: esc(c.replace(/^上櫃/, "")), v: L[i + 1] != null ? L[i + 1].toLocaleString() : "—" }))) : "")
+  const C = D.wt?.cols || [], R = otcCut(D.wt?.rows || []), ki = C.findIndex(c => /交易人數/.test(c)), U = D.snap?.wtu, L = R[R.length - 1], lst = mkxKey() === "lst";
+  let h = lst ? "" : otcSec("每日權證交易人數", L ? otcMd(L[0]) : "", (L ? rkCards(C.slice(0, 8).map((c, i) => ({ t: esc(c.replace(/^上櫃/, "")), v: L[i + 1] != null ? L[i + 1].toLocaleString() : "—" }))) : "")
     + (ki >= 0 && R.length >= 2 ? `<div class="mksegrow">${otcRngSeg()}</div>` + tsChart({ w: otcW(), dates: R.map(r => r[0]), panels: [{ h: 130, series: [{ name: "交易人數", type: "bar", vals: R.map(r => r[ki + 1]), color: "var(--accent)" }] }] }) : otcNone("交易人數的歷史還不夠（排程每天記一筆）。"))
     + `<p class="note">權證交易人數暴增常出現在行情熱的時候，散戶槓桿情緒升溫；連續縮小代表追價的人變少。</p>`);
-  h += otcSec("權證成交值最多的標的", U?.date ? `${U.date.replace(/-/g, "/")}・萬元` : "", U?.rows?.length ? rkList(U.rows.slice(0, 30).map(r => ({ mono: "", attr: `data-sel="${esc(r[0])}"`, name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: `認購 ${r[2].toLocaleString()}・認售 ${r[3].toLocaleString()}・${r[4]} 檔有成交`, val: (r[2] + r[3]).toLocaleString(), vc: r[2] >= r[3] ? "up" : "down", vsub: r[6] != null ? `標的 ${r[5]}（${r[6] > 0 ? "+" : ""}${r[6]}）` : "", star: r[0] })))
-    + `<p class="note">紅字＝認購比較多（看漲）、綠字＝認售比較多（看跌）。這一份只算上櫃掛牌的權證。</p>` : otcNone("暫時沒有資料。"));
-  const UL = D.snap?.wtuL, B = D.snap?.wcb;
-  h += otcSec("上市權證成交值最多的標的", UL?.date ? `${UL.date.replace(/-/g, "/")}・萬元` : "", UL?.rows?.length ? rkList(UL.rows.slice(0, 30).map(r => ({ mono: "", attr: `data-sel="${esc(r[0])}"`, name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: `認購 ${r[2].toLocaleString()}・認售 ${r[3].toLocaleString()}・${r[4]} 檔有成交`, val: (r[2] + r[3]).toLocaleString(), vc: r[2] >= r[3] ? "up" : "down", star: r[0] })))
-    + `<p class="note">證交所的上市權證成交資料只有權證名稱，標的是用名稱開頭比對股票簡稱，少數對不到的不列入。</p>` : otcNone("上市權證資料還沒有（排程每個交易日收盤後整理）。"));
-  h += otcSec("上櫃牛熊證", B?.date ? `${B.date.replace(/-/g, "/")}・萬元` : "", B?.rows?.length ? rkList(B.rows.map(r => ({ mono: "", name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: `標的 ${esc(r[2])}`, val: r[4].toLocaleString(), vsub: r[3] != null ? `收盤 ${r[3]}` : "" })))
+  h += otcSec(`${mkx().mk}權證成交值最多的標的`, U?.date ? `${U.date.replace(/-/g, "/")}・萬元` : "", U?.rows?.length ? rkList(U.rows.slice(0, 30).map(r => ({ mono: "", attr: `data-sel="${esc(r[0])}"`, name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: `認購 ${r[2].toLocaleString()}・認售 ${r[3].toLocaleString()}・${r[4]} 檔有成交`, val: (r[2] + r[3]).toLocaleString(), vc: r[2] >= r[3] ? "up" : "down", vsub: r[6] != null ? `標的 ${r[5]}（${r[6] > 0 ? "+" : ""}${r[6]}）` : "", star: r[0] })))
+    + `<p class="note">紅字＝認購比較多（看漲）、綠字＝認售比較多（看跌）。${lst ? "證交所的上市權證成交資料只有權證名稱，標的是用名稱開頭比對股票簡稱，少數對不到的不列入。" : "這一份只算上櫃掛牌的權證，上市權證在「上市」分頁。"}</p>` : otcNone("暫時沒有資料（排程每個交易日收盤後整理）。"));
+  const B = D.snap?.wcb;
+  if (!lst) h += otcSec("上櫃牛熊證", B?.date ? `${B.date.replace(/-/g, "/")}・萬元` : "", B?.rows?.length ? rkList(B.rows.map(r => ({ mono: "", name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: `標的 ${esc(r[2])}`, val: r[4].toLocaleString(), vsub: r[3] != null ? `收盤 ${r[3]}` : "" })))
     : otcNone("最近沒有上櫃牛熊證成交（櫃買中心目前掛牌的牛熊證很少）。"));
   return h;
+}
+
+// 類股（上市）：各類股指數區間漲跌排行，點類股看它和加權指數同一起點比較
+function otcSecHtml(D) {
+  const C = D.sec?.cols || [], R = otcCut(D.sec?.rows || []), O = OTC(); if (R.length < 2) return otcNone("類股指數的歷史還不夠（排程每天補一些，約一週補滿一年）。");
+  const first = i => R.find(r => r[i + 1] != null)?.[i + 1], last = i => [...R].reverse().find(r => r[i + 1] != null)?.[i + 1], prev = i => { const L = R.filter(r => r[i + 1] != null); return L.length > 1 ? L[L.length - 2][i + 1] : null; };
+  const S = C.map((n, i) => ({ n, i, a: first(i), b: last(i), p: prev(i) })).filter(s => s.a && s.b).map(s => ({ ...s, chg: (s.b / s.a - 1) * 100, d1: s.p ? (s.b / s.p - 1) * 100 : null })).sort((a, b) => b.chg - a.chg);
+  const nm = n => n.replace(/類指數$/, ""), dates = R.map(r => r[0]), mx = Math.max(1e-9, ...S.map(s => Math.abs(s.chg)));
+  let h = otcSec("類股指數區間漲跌", `${otcMd(dates[0])}～${otcMd(dates[dates.length - 1])}・${S.length} 類`, `<div class="mksegrow">${otcRngSeg()}</div>`
+    + `<div class="cotbl-wrap"><table class="tbl otc-t otc-sec"><thead><tr><th>類股</th><th>最新</th><th>今天</th><th>區間</th><th></th></tr></thead><tbody>${S.map(s => `<tr${O.ind === s.n ? ' class="on"' : ""}><td><button class="linkbtn" data-mk="otcInd" data-v="${esc(s.n)}">${esc(nm(s.n))}</button></td><td>${s.b.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td><td class="${cls(s.d1)}">${otcPct(s.d1)}</td><td class="${cls(s.chg)}">${otcPct(s.chg)}</td><td class="otc-hb"><i style="width:${Math.round(Math.abs(s.chg) / mx * 100)}%;background:var(--${s.chg >= 0 ? "up" : "down"})"></i></td></tr>`).join("")}</tbody></table></div>
+    <p class="note">類股指數是證交所依產業分類編的指數。區間漲跌看資金這段時間往哪些產業走；點類股名稱看它和加權指數的比較。</p>`);
+  const s = S.find(x => x.n === O.ind);
+  if (s) { const ix = D.ix?.cols?.indexOf("tx") ?? -1, M = new Map((D.ix?.rows || []).map(r => [r[0], r[ix]])), tx = dates.map(d => (ix > 0 ? M.get(d) ?? null : null)), b0 = tx.find(x => x != null), s0 = s.a;
+    h += otcSec(`${esc(nm(s.n))} vs 加權指數`, "同一天起算 = 100", tsChart({ w: otcW(), dates, panels: [{ h: 170, series: [{ name: nm(s.n), color: "var(--accent)", wide: true, vals: R.map(r => (r[s.i + 1] == null ? null : Math.round(r[s.i + 1] / s0 * 1e4) / 100)), fmt: x => (x == null ? "—" : x.toFixed(1)) },
+      ...(b0 ? [{ name: "加權指數", color: "var(--s1)", vals: tx.map(x => (x == null ? null : Math.round(x / b0 * 1e4) / 100)), fmt: x => (x == null ? "—" : x.toFixed(1)) }] : [])] }] })
+      + `<p class="note">線在加權指數上面＝這段時間比大盤強。</p>`); }
+  return h;
+}
+
+// 籌碼（上市）：三大法人、融資融券、外資持股已經在「盤後資料」，這裡直接帶過去
+function otcChipHtml() {
+  const L = [["inst", "大盤三大法人買賣超金額", "外資、投信、自營商每天買賣超（億元）和走勢"], ["margin", "大盤融資融券餘額", "融資、融券餘額與增減，看散戶槓桿"], ["fr", "外資持股", "各類股外資持股比率、持股前 20 名、增減"], ["chipx", "籌碼動向", "千張大戶、借券、當沖、Put/Call"], ["sum", "法人資料總表", "上市、上櫃三大法人一覽"]];
+  return otcSec("上市籌碼", "在「盤後資料」", `<ul class="afmenu">${L.map(([k, t, s]) => `<li><button type="button" data-mk="otcGo" data-v="${k}"><div>${t}<small class="note" style="display:block;font-size:12px">${s}</small></div><span>›</span></button></li>`).join("")}</ul>`);
 }
 
 // 暫停當沖、暫停融券預告：同一段期間、同一個原因的合併成一條時間軸
@@ -140,7 +174,8 @@ function otcSusHtml(D) {
       <text x="${lw}" y="${H - 4}" class="tsyl">${otcMd(ds[0])}</text><text x="${w - 10}" y="${H - 4}" text-anchor="end" class="tsyl">${otcMd(ds[ds.length - 1])}</text></svg>`;
     return otcSec(title, `${rows.length} 檔`, svg + `<details class="mkmore"><summary>逐檔明細</summary>${rkList(rows.map(r => ({ mono: "", attr: `data-sel="${esc(r[0])}"`, name: `${esc(r[1])} <small class="note">${esc(r[0])}</small>`, sub: esc(r[4] || what), val: `${otcMd(r[2])}～${otcMd(r[3])}`, star: r[0] })))}</details>`);
   };
-  return one("暫停先賣後買當沖預告", D.snap?.sus, "暫停當沖") + one("暫停融券賣出預告", D.snap?.sss, "股東會、除權息前停券")
+  const T = mkx().sus;
+  return one(T[0], D.snap?.sus, "暫停當沖") + one(T[1], D.snap?.sss, T[2])
     + `<p class="note" style="padding:0 12px">虛線是今天。暫停融券多半是股東會或除權息前的「停券」，融券要在期間開始前回補，可能出現軋空；ETF 分配收益前也會暫停當沖先賣。</p>`;
 }
 

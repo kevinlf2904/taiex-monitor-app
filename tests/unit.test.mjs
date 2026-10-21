@@ -361,11 +361,7 @@ test("櫃買圖表排程：指數累積、觀測站月營收解析、產業彙�
     "/tpex_warrant_daily_quts": [{ Date: "1151021", Name: "信驊群益5B購01", TradeValue: "300000", UnderlyingStockCode: "5274", UnderlyingStock: "信驊", UnderlyingStockClosePrice: "16515", "UnderlyingStock PriceChange": "615.00" }, { Date: "1151021", Name: "信驊元大5B售01", TradeValue: "100000", UnderlyingStockCode: "5274", UnderlyingStock: "信驊" }, { Date: "1151021", Name: "擎亞購", TradeValue: "0", UnderlyingStockCode: "8096" }] };
   const get = async p => { if (p === "/tpex_gold_latest") throw new Error("逾時"); return api[p] || []; };
   const getMops = async ([y, m]) => T.parseMops(html(`${y}-${String(m).padStart(2, "0")}`));
-  const twse = { "/opendata/t187ap42_L": [{ "交易日期": "1151020", "權證名稱": "台積電統一5C購05", "成交金額": "500000" }, { "交易日期": "1151020", "權證名稱": "台積電元大5C售01", "成交金額": "200000" }, { "交易日期": "1151020", "權證名稱": "台泥群益5C購01", "成交金額": "100000" }, { "交易日期": "1151020", "權證名稱": "不存在統一購", "成交金額": "9" }],
-    "/exchangeReport/MI_MARGN": [{ "股票代號": "2330", "股票名稱": "台積電" }, { "股票代號": "1101", "股票名稱": "台泥" }, { "股票代號": "1102", "股票名稱": "亞泥" }] };
-  const getTwse = async p => twse[p] || [];
-  const o = await T.main({ get, getTwse, getMops, now: Date.parse("2026-10-21T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
-  assert.deepEqual(o.snap.wtuL.rows.map(r => r.slice(0, 5)), [["2330", "台積電", 50, 20, 2], ["1101", "台泥", 10, 0, 1]], "上市權證用名稱對標的");
+  const o = await T.main({ get, getMops, now: Date.parse("2026-10-21T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
   const C = o.ix.cols, L = o.ix.rows.at(-1);
   assert.deepEqual([L[0], L[C.indexOf("otc")], L[C.indexOf("otcR")], L[C.indexOf("t200")], L[C.indexOf("t200R")]], ["2026-10-21", 395.42, 735.46, 18191.37, 23025.43]);
   assert.deepEqual(o.vol.at(-1), ["2026-10-21", 8.99, 2138.22, 91.1, 395.42]);
@@ -379,8 +375,46 @@ test("櫃買圖表排程：指數累積、觀測站月營收解析、產業彙�
   assert.equal(o.snap.gold, undefined, "黃金抓不到不影響其他");
   // 第二天：舊的日子保留、同一天以新的為準
   api["/tpex_reward_index"] = [{ Date: "1151022", TPExIndex: "400", TPExTotalReturnIndex: "744" }];
-  const o2 = await T.main({ get, getTwse, getMops, now: Date.parse("2026-10-22T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
+  const o2 = await T.main({ get, getMops, now: Date.parse("2026-10-22T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
   assert.deepEqual(o2.ix.rows.map(r => r[0]), ["2026-10-20", "2026-10-21", "2026-10-22"]); assert.equal(o2.ix.rows[1][C.indexOf("t200")], 18191.37);
+  await fs.rm(dir, { recursive: true });
+});
+
+test("上市圖表排程：OpenAPI 當月、網站月報表補歷史、類股指數補日、董監質押、暫停預告、上市權證", async () => {
+  const T = await import("../scripts/twse-daily.mjs"), P = await import("../scripts/tpex-daily.mjs"), os = await import("node:os"), fs = await import("node:fs/promises"), dir = await fs.mkdtemp(os.tmpdir() + "/twse-");
+  const html = `<th class=tt align=left >產業別：半導體業</th><tr align=right><td align=center>2330</td><td align=left>台積電</td><td nowrap> 300,000,000</td><td nowrap> 250,000,000</td><td nowrap> 200,000,000</td><td nowrap> 20.00</td><td nowrap> 50.00</td></tr>`
+    + Array.from({ length: 120 }, (_, i) => `<tr align=right><td align=center>${1100 + i}</td><td align=left>公司${i}</td><td nowrap> 100</td><td nowrap> 100</td><td nowrap> 100</td><td nowrap> 0</td><td nowrap> 0</td></tr>`).join("");
+  const api = { "/indicesReport/MI_5MINS_HIST": [{ Date: "1151020", ClosingIndex: "48,000.5" }, { Date: "1151021", ClosingIndex: "48353.49" }], "/indicesReport/MFI94U": [{ Date: "1151021", TAIEXTotalReturnIndex: "111811.08" }],
+    "/indicesReport/TAI50I": [{ Date: "1151021", Taiwan50Index: "45041.66", Taiwan50TotalReturnIndex: "104203.60" }], "/indicesReport/FRMSA": [{ Date: "1151021", FormosaIndex: "53622.96", FormosaTotalReturnIndex: "83423.23" }],
+    "/exchangeReport/MI_INDEX": [{ "日期": "1151021", "指數": "臺灣高股息指數", "收盤指數": "9,876.5" }, { "日期": "1151021", "指數": "半導體類指數", "收盤指數": "1,234.5" }, { "日期": "1151021", "指數": "半導體類報酬指數", "收盤指數": "2,000" }, { "日期": "1151021", "指數": "臺灣50指數", "收盤指數": "45041.66" }],
+    "/exchangeReport/FMTQIK": [{ Date: "1151021", TradeVolume: "10691867330", TradeValue: "874046252416", Transaction: "4715278", TAIEX: "48353.49", Change: "413.36" }],
+    "/opendata/t187ap09_L": [{ "出表日期": "1150819", "百分比": "90 以上", "公司名稱": "3040      遠見  " }, { "出表日期": "1150819", "百分比": "20 以下", "公司名稱": "1101 台泥 1102 亞泥" }],
+    "/opendata/t187ap08_L": [{ "出表日期": "1150819", "公司代號": "1225", "公司名稱": "福懋油", "全體董事應持有股數": "12000000", "全體董事本人實際持有股數": "6130138", "全體董事不足股數": "5869862" }],
+    "/exchangeReport/TWTBAU1": [{ Code: "00406A", Name: "主動中信台灣收益", StartDate: "1151029", EndDate: "1151104", Reason: "分配收益" }], "/exchangeReport/BFI84U": [{ Code: "2330", Name: "台積電", StartDate: "1151028", EndDate: "1151102", Reason: "股東會" }],
+    "/opendata/t187ap42_L": [{ "交易日期": "1151020", "權證名稱": "台積電統一5C購05", "成交金額": "500000" }, { "交易日期": "1151020", "權證名稱": "台積電元大5C售01", "成交金額": "200000" }, { "交易日期": "1151020", "權證名稱": "台泥群益5C購01", "成交金額": "100000" }, { "交易日期": "1151020", "權證名稱": "不存在統一購", "成交金額": "9" }],
+    "/exchangeReport/MI_MARGN": [{ "股票代號": "2330", "股票名稱": "台積電" }, { "股票代號": "1101", "股票名稱": "台泥" }] };
+  const calls = [], get = async p => api[p] || [];
+  const getRwd = async p => { calls.push(p); const m = p.match(/date=(\d{4})(\d{2})/);
+    if (p.startsWith("afterTrading/FMTQIK") && m[2] === "09") return { stat: "OK", fields: ["日期", "成交股數", "成交金額", "成交筆數", "發行量加權股價指數", "漲跌點數"], data: [["115/09/30", "9,000,000,000", "700,000,000,000", "4,000,000", "47,000.00", "10"]] };
+    if (p.startsWith("TAIEX/MI_5MINS_HIST") && m[2] === "09") return { stat: "OK", fields: ["日期", "開盤指數", "最高指數", "最低指數", "收盤指數"], data: [["115/09/30", "1", "2", "3", "47,000.00"]] };
+    if (p.startsWith("FTSE/TAI50I") && m[2] === "09") return { stat: "OK", fields: ["日期", "臺灣50指數", "臺灣50報酬指數"], data: [["115/09/30", "44,000", "100,000"]] };
+    if (p.startsWith("afterTrading/MI_INDEX")) return { stat: "OK", tables: [{ title: "價格指數", fields: ["指數", "收盤指數"], data: [["半導體類指數", "1,200.0"], ["臺灣高股息指數", "9,800"]] }] };
+    return { stat: "很抱歉，沒有符合條件的資料!" }; };
+  const o = await T.main({ get, getRwd, getMops: async () => P.parseMops(html), now: Date.parse("2026-10-21T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
+  const C = o.ix.cols, row = d => o.ix.rows.find(r => r[0] === d), at = (d, k) => row(d)?.[C.indexOf(k)];
+  assert.deepEqual(["tx", "txR", "t50", "t50R", "frm", "frmR", "hd"].map(k => at("2026-10-21", k)), [48353.49, 111811.08, 45041.66, 104203.6, 53622.96, 83423.23, 9876.5]);
+  assert.deepEqual([at("2026-09-30", "tx"), at("2026-09-30", "t50"), at("2026-09-30", "t50R"), at("2026-09-30", "hd")], [47000, 44000, 100000, 9800], "網站月報表、每日行情補的歷史");
+  assert.deepEqual(o.vol.map(r => r[0]), ["2026-09-30", "2026-10-21"]); assert.deepEqual(o.vol.at(-1), ["2026-10-21", 106.92, 8740.46, 471.5, 48353.49]); assert.deepEqual(o.vol[0].slice(1, 3), [90, 7000]);
+  assert.deepEqual(o.sec.cols, ["半導體類指數"], "類股只收價格指數"); assert.deepEqual(o.sec.rows, [["2026-09-30", 1200], ["2026-10-21", 1234.5]]);
+  assert.ok(!calls.some(p => p.includes("MI_INDEX") && p.includes("20261021")), "今天的類股用 OpenAPI，不再抓網站");
+  assert.deepEqual(o.snap.pledge.buckets, [["90 以上", 1], ["20 以下", 2]]); assert.deepEqual(o.snap.pledge.top[0], ["3040", "遠見", null, "90 以上"]);
+  assert.deepEqual(o.snap.short.rows[0].slice(0, 5), ["1225", "福懋油", 12000, 6130, 5870]);
+  assert.deepEqual(o.snap.sus[0], ["00406A", "主動中信台灣收益", "2026-10-29", "2026-11-04", "分配收益"]); assert.equal(o.snap.sss[0][0], "2330");
+  assert.deepEqual(o.snap.wtu.rows.map(r => r.slice(0, 5)), [["2330", "台積電", 50, 20, 2], ["1101", "台泥", 10, 0, 1]], "上市權證用名稱對標的");
+  assert.equal(o.revm.at(-1).ym, "2026-09"); assert.deepEqual(o.revm.at(-1).ind["半導體業"].slice(0, 2), [3000.12, 50]);
+  // 第二天：已經有的月份不再抓網站
+  calls.length = 0; const o2 = await T.main({ get, getRwd, getMops: async () => P.parseMops(html), now: Date.parse("2026-10-22T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
+  assert.equal(o2.vol.length, 2); assert.ok(calls.filter(p => p.includes("FMTQIK")).length <= 36);
   await fs.rm(dir, { recursive: true });
 });
 

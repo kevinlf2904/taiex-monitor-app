@@ -103,6 +103,22 @@ if (process.argv[2] === "official") {
   for (const x of P) console.log("\n" + x.out);
   process.exit(0);
 }
+if (process.argv[2] === "twsecharts") {
+  // 情報局「上市」圖表：證交所 rwd 的月資料（補歷史用）、類股指數、觀測站上市月營收彙總表，印格式
+  const H = { "User-Agent": "Mozilla/5.0", Accept: "*/*" }, cut = (s, n = 700) => String(s).replace(/\s+/g, " ").slice(0, n);
+  for (const u of ["https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=20240301&response=json", "https://www.twse.com.tw/rwd/zh/indicesReport/MI_5MINS_HIST?date=20240301&response=json", "https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST?date=20240301&response=json",
+    "https://www.twse.com.tw/rwd/zh/TAIEX/MFI94U?date=20240301&response=json", "https://www.twse.com.tw/rwd/zh/indicesReport/MFI94U?date=20240301&response=json", "https://www.twse.com.tw/rwd/zh/FTSE/TAI50I?date=20240301&response=json", "https://www.twse.com.tw/rwd/zh/indicesReport/TAI50I?date=20240301&response=json",
+    "https://www.twse.com.tw/rwd/zh/indicesReport/FRMSA?date=20240301&response=json", "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20240301&type=IND&response=json"]) {
+    try { const r = await fetch(u, { headers: H, signal: AbortSignal.timeout(30000) }); const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch {}
+      console.log(`\n### ${u} ${r.status} ${t.length} bytes`); if (!j) { console.log(cut(t, 200)); continue; }
+      console.log("stat", j.stat, "fields", JSON.stringify(j.fields), "data", j.data?.length, cut(JSON.stringify(j.data?.slice(0, 2))), "tables", j.tables?.length);
+      for (const T of j.tables || []) console.log("  table", T.title, JSON.stringify(T.fields), T.data?.length, cut(JSON.stringify(T.data?.slice(0, 3)), 400)); } catch (e) { console.log(u, "錯誤", e.message); } }
+  try { const r = await fetch("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX", { headers: H, signal: AbortSignal.timeout(60000) }); const L = await r.json(); console.log("\n### openapi MI_INDEX", L.length, "筆"); console.log(L.map(x => x["指數"]).join("、")); } catch (e) { console.log("MI_INDEX 錯誤", e.message); }
+  for (const u of ["https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_115_8_0.html", "https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_112_1_0.html"]) {
+    try { const r = await fetch(u, { headers: H, signal: AbortSignal.timeout(30000) }); const t = new TextDecoder("big5").decode(await r.arrayBuffer()), i = t.indexOf("公司代號");
+      console.log(`\n### ${u} ${r.status} ${t.length}\n${cut(t.slice(Math.max(0, i - 400), i + 1500), 1900)}`); } catch (e) { console.log(u, "錯誤", e.message); } }
+  process.exit(0);
+}
 if (process.argv[2] === "tpexcharts") {
   // 情報局「櫃買」圖表用到的資料集：印筆數、欄位、前兩筆與最後一筆（截短），好對欄位名稱
   const P = process.argv[3] === "2" ? ["/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap08_O", "/tpex_gold_market_highlight", "/tpex_warrant_daily_quts", "/tpex_warrant_statistics", "/tpex_warrant_issue"] : ["/tpex_index", "/tpex_reward_index", "/tpex50_index", "/tpex200_change", "/tphd_index", "/tpcgi_reward_index", "/tpci_reward_index", "/tpex_emp88_reward_index", "/tpex_daily_trading_index", "/mopsfin_t187ap05_OA", "/mopsfin_t187ap05_OB", "/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap09_O", "/mopsfin_t187ap08_O", "/tpex_warrant_statistics", "/tpex_intraday_trading_pre", "/tpex_margin_trading_term", "/tpex_esb_eps_rank", "/tpex_gold_latest", "/tpex_gold_market_highlight", "/bond_cb_daily"];
