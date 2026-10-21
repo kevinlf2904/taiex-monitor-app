@@ -346,3 +346,36 @@ test("AI 協作規則：AGENTS.md 與 Antigravity 規則檔一致，CLAUDE.md �
   assert.match(m, /^---\r?\ndescription: /, "Antigravity workflow 要有 description");
   for (const k of ["gemini/", "node tests/run.mjs", "merge", "version.json"]) assert.ok(m.includes(k), `merge.md 缺少「${k}」`);
 });
+
+test("櫃買圖表排程：指數累積、觀測站月營收解析、產業彙總與創新高、董監質押、權證標的", async () => {
+  const T = await import("../scripts/tpex-daily.mjs"), os = await import("node:os"), fs = await import("node:fs/promises"), dir = await fs.mkdtemp(os.tmpdir() + "/tpex-");
+  const html = ym => `<th class=tt align=left >產業別：半導體業</th><tr align=right><td align=center>3105</td><td align=left>穩懋</td><td nowrap> ${ym === "2026-09" ? "2,000,000" : "1,000,000"}</td><td nowrap> 1,000,000</td><td nowrap> 900,000</td><td nowrap> 5.00</td><Td nowrap> 11.1</td><td nowrap>1</td></tr>`
+    + `<th class=tt align=left >產業別：其他業</th>` + Array.from({ length: 120 }, (_, i) => `<tr align=right><td align=center>${6000 + i}</td><td align=left>公司${i}</td><td nowrap> 100</td><td nowrap> 100</td><td nowrap> 100</td><td nowrap> 0</td><Td nowrap> 0</td></tr>`).join("");
+  const R = T.parseMops(html("2026-09"));
+  assert.equal(R.length, 121); assert.deepEqual([R[0].c, R[0].ind, R[0].cur, R[0].ly, R[0].mom, R[0].yoy], ["3105", "半導體業", 2e6, 9e5, 5, 11.1]);
+  const api = { "/tpex_reward_index": [{ Date: "1151020", TPExIndex: "388", TPExTotalReturnIndex: "720" }, { Date: "1151021", TPExIndex: "395.42", TPExTotalReturnIndex: "735.46" }],
+    "/tpex200_change": [{ "資料日期": "1151021", "指數": "富櫃200報酬指數", "收盤指數": "23,025.43" }, { "資料日期": "1151021", "指數": "富櫃200指數", "收盤指數": "18,191.37" }],
+    "/tpex_daily_trading_index": [{ Date: "1151021", TradeVolume: "898956732", TradeAmount: "213821883572", NumberOfTransactions: "910619", TPExIndex: "395.42" }],
+    "/tpex_warrant_statistics": [{ Date: "1151021", Category: "上櫃權證交易人數", Statistics: "5553" }],
+    "/mopsfin_t187ap09_O": [{ Date: "1150819", Percent: "90 以上", CompanyName: "4502      健信  99.80\r\n7723      築間  91.20\r\n" }, { Date: "1150819", Percent: "20 以下", CompanyName: "8431      匯鑽科  19.74\r\n" }],
+    "/tpex_warrant_daily_quts": [{ Date: "1151021", Name: "信驊群益5B購01", TradeValue: "300000", UnderlyingStockCode: "5274", UnderlyingStock: "信驊", UnderlyingStockClosePrice: "16515", "UnderlyingStock PriceChange": "615.00" }, { Date: "1151021", Name: "信驊元大5B售01", TradeValue: "100000", UnderlyingStockCode: "5274", UnderlyingStock: "信驊" }, { Date: "1151021", Name: "擎亞購", TradeValue: "0", UnderlyingStockCode: "8096" }] };
+  const get = async p => { if (p === "/tpex_gold_latest") throw new Error("逾時"); return api[p] || []; };
+  const getMops = async ([y, m]) => T.parseMops(html(`${y}-${String(m).padStart(2, "0")}`));
+  const o = await T.main({ get, getMops, now: Date.parse("2026-10-21T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
+  const C = o.ix.cols, L = o.ix.rows.at(-1);
+  assert.deepEqual([L[0], L[C.indexOf("otc")], L[C.indexOf("otcR")], L[C.indexOf("t200")], L[C.indexOf("t200R")]], ["2026-10-21", 395.42, 735.46, 18191.37, 23025.43]);
+  assert.deepEqual(o.vol.at(-1), ["2026-10-21", 8.99, 2138.22, 91.1, 395.42]);
+  assert.deepEqual(o.wt.rows.at(-1), ["2026-10-21", 5553]);
+  assert.equal(o.revm.length, 36); assert.equal(o.revm.at(-1).ym, "2026-09");
+  assert.deepEqual(o.revm.at(-1).hi.map(r => r[0]), ["3105"], "9 月營收 200 億高於過去 24 個月"); assert.equal(o.revm.at(-1).hi[0][5], 24);
+  assert.equal(o.revm[0].hi.length, 0, "最早的月份沒有 12 個月可以比");
+  assert.deepEqual(o.revm.at(-1).ind["半導體業"], [20, 122.2, 100, 1]);
+  assert.deepEqual(o.snap.pledge.buckets, [["90 以上", 2], ["20 以下", 1]]); assert.deepEqual(o.snap.pledge.top[0], ["4502", "健信", 99.8]);
+  assert.deepEqual(o.snap.wtu.rows, [["5274", "信驊", 30, 10, 2, 16515, 615]]);
+  assert.equal(o.snap.gold, undefined, "黃金抓不到不影響其他");
+  // 第二天：舊的日子保留、同一天以新的為準
+  api["/tpex_reward_index"] = [{ Date: "1151022", TPExIndex: "400", TPExTotalReturnIndex: "744" }];
+  const o2 = await T.main({ get, getMops, now: Date.parse("2026-10-22T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
+  assert.deepEqual(o2.ix.rows.map(r => r[0]), ["2026-10-20", "2026-10-21", "2026-10-22"]); assert.equal(o2.ix.rows[1][C.indexOf("t200")], 18191.37);
+  await fs.rm(dir, { recursive: true });
+});

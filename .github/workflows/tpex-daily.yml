@@ -1,0 +1,29 @@
+# 櫃買中心圖表資料：每個交易日收盤後把指數、量值、權證、黃金、月營收等累積成歷史（learner/data/tpex.json、tpex-rev.json），給情報局「大盤 → 櫃買」用
+name: tpex-daily
+on:
+  schedule:
+    - cron: "25 9 * * 1-5"   # 台北 17:25（黃金 16:30、權證、指數都出來了）
+    - cron: "45 13 * * 1-5"  # 台北 21:45（觀測站月營收彙總表晚上更新）
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: data-sync-tpex-daily-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # 排隊等前一次跑完時，checkout 的是排隊當下的舊版本；先拉到最新的 main，避免和前一次存的資料衝突
+      - run: git pull -q origin ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/tpex-daily.mjs
+      - name: commit
+        env:
+          COMMIT_NAME: tpex-daily
+        run: |
+          bash scripts/commit-data.sh "櫃買：更新指數、量值、權證、月營收" learner/data/tpex.json learner/data/tpex-rev.json
