@@ -398,12 +398,12 @@ test("上市圖表排程：OpenAPI 當月、網站月報表補歷史、類股指
     if (p.startsWith("afterTrading/FMTQIK") && m[2] === "09") return { stat: "OK", fields: ["日期", "成交股數", "成交金額", "成交筆數", "發行量加權股價指數", "漲跌點數"], data: [["115/09/30", "9,000,000,000", "700,000,000,000", "4,000,000", "47,000.00", "10"]] };
     if (p.startsWith("TAIEX/MI_5MINS_HIST") && m[2] === "09") return { stat: "OK", fields: ["日期", "開盤指數", "最高指數", "最低指數", "收盤指數"], data: [["115/09/30", "1", "2", "3", "47,000.00"]] };
     if (p.startsWith("FTSE/TAI50I") && m[2] === "09") return { stat: "OK", fields: ["日期", "臺灣50指數", "臺灣50報酬指數"], data: [["115/09/30", "44,000", "100,000"]] };
-    if (p.startsWith("afterTrading/MI_INDEX")) return { stat: "OK", tables: [{ title: "價格指數", fields: ["指數", "收盤指數"], data: [["半導體類指數", "1,200.0"], ["臺灣高股息指數", "9,800"]] }] };
+    if (p.startsWith("afterTrading/MI_INDEX")) return { stat: "OK", tables: [{ title: "價格指數", fields: ["指數", "收盤指數"], data: [["半導體類指數", "1,200.0"], ["臺灣高股息指數", "9,800"], ["寶島股價指數", "52,000"], ["機電類指數", "1"]] }, { title: "報酬指數", fields: ["報酬指數", "收盤指數"], data: [["寶島股價報酬指數", "80,000"], ["半導體類報酬指數", "2"]] }] };
     return { stat: "很抱歉，沒有符合條件的資料!" }; };
   const o = await T.main({ get, getRwd, getMops: async () => P.parseMops(html), now: Date.parse("2026-10-21T10:00:00Z"), gap: 0, out: dir + "/t.json", rev: dir + "/r.json" });
   const C = o.ix.cols, row = d => o.ix.rows.find(r => r[0] === d), at = (d, k) => row(d)?.[C.indexOf(k)];
   assert.deepEqual(["tx", "txR", "t50", "t50R", "frm", "frmR", "hd"].map(k => at("2026-10-21", k)), [48353.49, 111811.08, 45041.66, 104203.6, 53622.96, 83423.23, 9876.5]);
-  assert.deepEqual([at("2026-09-30", "tx"), at("2026-09-30", "t50"), at("2026-09-30", "t50R"), at("2026-09-30", "hd")], [47000, 44000, 100000, 9800], "網站月報表、每日行情補的歷史");
+  assert.deepEqual(["tx", "t50", "t50R", "hd", "frm", "frmR"].map(k => at("2026-09-30", k)), [47000, 44000, 100000, 9800, 52000, 80000], "網站月報表、每日行情補的歷史");
   assert.deepEqual(o.vol.map(r => r[0]), ["2026-09-30", "2026-10-21"]); assert.deepEqual(o.vol.at(-1), ["2026-10-21", 106.92, 8740.46, 471.5, 48353.49]); assert.deepEqual(o.vol[0].slice(1, 3), [90, 7000]);
   assert.deepEqual(o.sec.cols, ["半導體類指數"], "類股只收價格指數"); assert.deepEqual(o.sec.rows, [["2026-09-30", 1200], ["2026-10-21", 1234.5]]);
   assert.ok(!calls.some(p => p.includes("MI_INDEX") && p.includes("20261021")), "今天的類股用 OpenAPI，不再抓網站");

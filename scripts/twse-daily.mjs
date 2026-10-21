@@ -18,11 +18,13 @@ const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Acc
 // 指數：[欄位, OpenAPI 資料集, 欄位名, 網站月報表路徑, 網站欄位（比對 fields）]
 export const LX = [["tx", "/indicesReport/MI_5MINS_HIST", "ClosingIndex", "TAIEX/MI_5MINS_HIST", /收盤/], ["txR", "/indicesReport/MFI94U", "TAIEXTotalReturnIndex", "TAIEX/MFI94U", /報酬指數/],
   ["t50", "/indicesReport/TAI50I", "Taiwan50Index", "FTSE/TAI50I", /^臺灣50指數$|^台灣50指數$/], ["t50R", "/indicesReport/TAI50I", "Taiwan50TotalReturnIndex", "FTSE/TAI50I", /50.*報酬/],
-  ["frm", "/indicesReport/FRMSA", "FormosaIndex", "indicesReport/FRMSA", /^寶島股價指數$/], ["frmR", "/indicesReport/FRMSA", "FormosaTotalReturnIndex", "indicesReport/FRMSA", /寶島.*報酬/]];
-// 每日收盤行情裡的主題指數（名稱比對；報酬、槓桿、反向不收）
+  ["frm", "/indicesReport/FRMSA", "FormosaIndex", null], ["frmR", "/indicesReport/FRMSA", "FormosaTotalReturnIndex", null]]; // 寶島指數網站沒有月報表，歷史從每日收盤行情補
+// 每日收盤行情裡的主題指數（名稱完全比對，報酬、槓桿、反向不收）；寶島只用來補歷史
 export const LTHEME = [["m100", /^臺灣中型100指數$/], ["hd", /^臺灣高股息指數$/], ["cg", /^臺灣公司治理100指數$/], ["emp", /^臺灣就業99指數$/], ["pay", /^臺灣高薪100指數$/], ["esg", /^臺灣永續指數$/]];
+const LDAY = [...LTHEME, ["frm", /^寶島股價指數$/], ["frmR", /^寶島股價報酬指數$/]];
 export const LX_COLS = ["d", ...LX.map(x => x[0]), ...LTHEME.map(x => x[0])];
-const isSec = n => /類指數$/.test(n) && !/報酬|槓桿|反向/.test(n);
+// 類股指數：價格指數，不收報酬、槓桿、反向，也不收和細分類重複的大類（水泥窯製、塑膠化工、機電、化學生技醫療）
+const isSec = n => /類指數$/.test(n) && !/報酬|槓桿|反向|兩倍/.test(n) && !/^(水泥窯製|塑膠化工|機電|化學生技醫療)類指數$/.test(n);
 
 // OpenAPI 每日收盤行情（MI_INDEX）：一天所有指數 → { d, theme: {m100: 值}, sec: {名稱: 值} }
 export function miIndex(rows) {
@@ -31,11 +33,11 @@ export function miIndex(rows) {
     const t = LTHEME.find(([, re]) => re.test(n)); if (t) theme[t[0]] = v; if (isSec(n)) sec[n] = v; }
   return { d, theme, sec };
 }
-// 網站的每日收盤行情（type=IND）：tables 裡第一欄是指數名稱、第二欄收盤指數
+// 網站的每日收盤行情（type=IND）：tables（價格指數、報酬指數各三張）裡第一欄是指數名稱、第二欄收盤指數
 export function miIndexRwd(j) {
   const sec = {}, theme = {};
   for (const T of [...(j?.tables || []), j]) for (const r of T?.data || []) { const n = str(r[0]), v = num(r[1]); if (v == null) continue;
-    const t = LTHEME.find(([, re]) => re.test(n)); if (t) theme[t[0]] = v; if (isSec(n)) sec[n] = v; }
+    const t = LDAY.find(([, re]) => re.test(n)); if (t) theme[t[0]] = v; if (isSec(n)) sec[n] = v; }
   return { sec, theme };
 }
 // 網站月報表（{ stat, fields, data }）→ Map(d → { 欄位: 值 })；pick 是 [[欄位, fields 比對]]
@@ -79,7 +81,7 @@ export async function main({ get = oapi, getRwd = rwd, getMops = ym => mops(ym, 
     if (i >= 2 && have.has(k) && haveIx.has(k)) continue; if (n++ >= MONTH_NEW) break;
     if (i || !vadd.size) for (const [d, o] of fmtRwd(await web(`afterTrading/FMTQIK?${q}`))) if (!vadd.has(d)) vadd.set(d, o);
     if (!i && add.size) continue;
-    for (const path of [...new Set(LX.map(x => x[3]))]) for (const [d, o] of rwdMonth(await web(`${path}?${q}`), LX.filter(x => x[3] === path).map(x => [x[0], x[4]])))
+    for (const path of [...new Set(LX.map(x => x[3]).filter(Boolean))]) for (const [d, o] of rwdMonth(await web(`${path}?${q}`), LX.filter(x => x[3] === path).map(x => [x[0], x[4]])))
       for (const [c, v] of Object.entries(o)) if (at(d)[c] == null) at(d)[c] = v; }
   const vol = mergeRows(old.vol, vadd, ["d", "a", "b", "c", "e"]);
   // 類股指數：今天的 OpenAPI，加上往前補沒有的交易日（日期以量值的交易日為準）

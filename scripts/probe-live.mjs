@@ -119,6 +119,19 @@ if (process.argv[2] === "twsecharts") {
       console.log(`\n### ${u} ${r.status} ${t.length}\n${cut(t.slice(Math.max(0, i - 400), i + 1500), 1900)}`); } catch (e) { console.log(u, "錯誤", e.message); } }
   process.exit(0);
 }
+if (process.argv[2] === "twsedry") {
+  // 上市圖表排程用真實資料跑一次（寫到暫存檔，不動 repo），印筆數與最新幾天
+  const os = await import("node:os"), { main } = await import("./twse-daily.mjs"), t0 = Date.now();
+  const o = await main({ out: os.tmpdir() + "/twse.json", rev: os.tmpdir() + "/twse-rev.json" });
+  const C = o.ix.cols, last = o.ix.rows.at(-1), first = o.ix.rows[0];
+  console.log("秒", Math.round((Date.now() - t0) / 1000), "指數", o.ix.rows.length, "天", first?.[0], "～", last?.[0]); console.log(C.map((c, i) => `${c}=${last?.[i]}`).join(" "));
+  console.log("有值天數", C.slice(1).map((c, i) => `${c}:${o.ix.rows.filter(r => r[i + 1] != null).length}`).join(" "));
+  console.log("量值", o.vol.length, "天", JSON.stringify(o.vol.slice(0, 1)), JSON.stringify(o.vol.slice(-2)));
+  console.log("類股", o.sec.cols.length, "類", o.sec.rows.length, "天", o.sec.cols.join("、")); console.log(JSON.stringify(o.sec.rows.at(-1)));
+  console.log("月營收", o.revm.length, "個月", o.revm.at(-1)?.ym, "家數", o.revm.at(-1)?.n, "創新高", o.revm.at(-1)?.hi.length, JSON.stringify(Object.entries(o.revm.at(-1)?.ind || {}).slice(0, 4)));
+  for (const k of ["pledge", "short", "fc", "sus", "sss", "wtu"]) console.log("snap", k, JSON.stringify(o.snap[k])?.slice(0, 400));
+  process.exit(0);
+}
 if (process.argv[2] === "tpexcharts") {
   // 情報局「櫃買」圖表用到的資料集：印筆數、欄位、前兩筆與最後一筆（截短），好對欄位名稱
   const P = process.argv[3] === "2" ? ["/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap08_O", "/tpex_gold_market_highlight", "/tpex_warrant_daily_quts", "/tpex_warrant_statistics", "/tpex_warrant_issue"] : ["/tpex_index", "/tpex_reward_index", "/tpex50_index", "/tpex200_change", "/tphd_index", "/tpcgi_reward_index", "/tpci_reward_index", "/tpex_emp88_reward_index", "/tpex_daily_trading_index", "/mopsfin_t187ap05_OA", "/mopsfin_t187ap05_OB", "/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap09_O", "/mopsfin_t187ap08_O", "/tpex_warrant_statistics", "/tpex_intraday_trading_pre", "/tpex_margin_trading_term", "/tpex_esb_eps_rank", "/tpex_gold_latest", "/tpex_gold_market_highlight", "/bond_cb_daily"];
