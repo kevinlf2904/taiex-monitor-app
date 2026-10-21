@@ -652,27 +652,18 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 /* 產業網絡：星系 */
 /* 星系固定用深藍夜空＋發光球體與細線網格，淺色主題也一樣 */
 .igal-wrap { margin: 8px 12px; border: 1px solid #1a2a44; border-radius: 16px; background: radial-gradient(ellipse at 50% 42%, #14305a 0%, #0b1a33 45%, #060c18 100%); overflow: hidden; }
-.igalaxy { display: block; width: 100%; height: auto; }
-.igalaxy { touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; } .igalaxy:active { cursor: grabbing; }
-.igalaxy .gmesh { fill: none; stroke: #a9d6ff; stroke-opacity: .3; stroke-width: .7; } .igalaxy .gmesh.back { stroke-opacity: .09; }
-.igalaxy .gface { stroke: none; fill: #cfe6ff; } .igalaxy .gface.f1 { fill-opacity: .03; } .igalaxy .gface.f2 { fill-opacity: .07; } .igalaxy .gface.f3 { fill-opacity: .16; }
-.igalaxy .geq { fill: none; stroke: #9fd4ff; stroke-opacity: .25; stroke-dasharray: 3 5; } .igalaxy .grim { fill: none; stroke: #bfe3ff; stroke-opacity: .35; stroke-width: 1.2; }
-.igalaxy .ge { stroke: #8fd0ff; stroke-opacity: .34; stroke-width: .9; fill: none; }
-.igalaxy .ge.on { stroke: #d6efff; stroke-opacity: .95; stroke-width: 1.5; stroke-dasharray: 5 5; animation: gxFlow 1s linear infinite; }
-.igalaxy .gbk { animation: gxTw 6s ease-in-out infinite alternate; } @keyframes gxTw { to { opacity: .1; } }
-.gx .gh { pointer-events: none; } .gx.gk2 .gn, .gx.gk3 .gn { opacity: .85; }
-@keyframes gxFlow { to { stroke-dashoffset: -20; } }
-.gx { cursor: pointer; outline: none; }
-.gx circle.b { transform-box: fill-box; transform-origin: center; transition: transform .2s; }
-.gx:hover circle.b, .gx:focus-visible circle.b { transform: scale(1.12); }
-.gx text { font-size: 12px; fill: #e9f3ff; text-anchor: middle; pointer-events: none; }
-.gx .gn, .gx .gp { paint-order: stroke; stroke: #07101e; stroke-width: 3px; stroke-linejoin: round; } .gx.core .gn { fill: #0b1a33; stroke: none; } .gx.core .gp { stroke: none; font-weight: 700; }
-.gx .gp { font-size: 10.5px; font-weight: 600; } .igalaxy.mob .gx:not(.core) .gn { font-size: 14px; } .igalaxy.mob .gx:not(.core) .gp { font-size: 12.5px; } .gx.core .gn { font-size: 14px; font-weight: 600; } .gx.core .gp { font-size: 12.5px; }
-.gx.core circle.b { animation: gxPulse 2.6s ease-in-out infinite; }
-@keyframes gxPulse { 50% { stroke-width: 4; stroke-opacity: .55; } } .gx.core .gh { animation: gxGlow 2.6s ease-in-out infinite; } @keyframes gxGlow { 50% { opacity: .5; } }
-.igalaxy .gzt { font-size: 11.5px; fill: #8fa9cc; } .igalaxy.mob .gzt { font-size: 13px; }
+.gstage { position: relative; aspect-ratio: 16 / 10; max-height: 640px; } @media (max-width: 900px) { .gstage { aspect-ratio: 1 / 1.08; } }
+.igalaxy { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
+.ghud { position: absolute; left: 12px; top: 10px; font-size: 12px; line-height: 1.5; color: #8fa9cc; pointer-events: none; } .ghud b { color: #e9f3ff; }
+.gcard { position: absolute; width: 230px; background: rgba(10, 22, 42, .94); border: 1px solid #2a4a78; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #e9f3ff; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); display: grid; gap: 4px; z-index: 2; }
+.gcard[hidden] { display: none; } .gcard.dock { right: 10px; bottom: 10px; width: 250px; } @media (max-width: 900px) { .gcard { width: 196px; font-size: 12px; padding: 8px 10px; } .gcard.dock { left: 8px; right: 8px; width: auto; } }
+.gcard .gr { display: flex; justify-content: space-between; gap: 8px; } .gcard .gm { color: #8fa9cc; font-size: 12px; } .gcard .n { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.gcard .gtag { font-style: normal; font-size: 11px; padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; } .gcard .g上游 { color: #ffb26b; } .gcard .g下游 { color: #6fc3ff; } .gcard .g相關, .gcard .g中心 { color: #8fa9cc; }
+.gcard .gbtn { display: flex; gap: 6px; margin-top: 4px; } .gcard .gbtn button { font: 600 12px var(--font-body); color: #06101f; background: #7fc4ff; border: 0; border-radius: 6px; padding: 6px 9px; cursor: pointer; } .gcard .gbtn button + button { background: #2a4a78; color: #e9f3ff; }
+.gxopts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; margin: 6px 12px 4px; font-size: 12px; color: var(--muted); } .gxopts .seg { margin: 0; }
+.igal-leg i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
 .igal-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 14px 8px; font-size: 12px; color: var(--muted); }
-@media (prefers-reduced-motion: reduce) { .iisl, .gx.core circle.b, .gx.core .gh, .igalaxy .gbk, .igalaxy .ge.on { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .iisl { animation: none !important; } }
 .itheme { border: 1px solid color-mix(in srgb, var(--ic) 55%, var(--line)); border-radius: 4px; padding: 12px 14px; background: linear-gradient(160deg, color-mix(in srgb, var(--ic) 14%, var(--surface)), var(--surface-2)); }
 .ith { display: flex; align-items: center; gap: 8px; } .iic { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 4px; color: var(--ic); border: 1px solid color-mix(in srgb, var(--ic) 50%, transparent); background: color-mix(in srgb, var(--ic) 12%, transparent); flex: none; }
 .itag { font: 500 11px var(--font-num); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; } .iavg { font: 500 13px var(--font-num); margin-left: auto; } .iavg.up { color: var(--up); } .iavg.down { color: var(--down); }
@@ -1009,7 +1000,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-112</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-113</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -3311,105 +3302,128 @@ function indIslands(L, sel, fav) {
   };
   return `<div class="iislands">${G.map(card).join("")}</div><h3 class="iisl-h" style="--ic:${cur.c}"><i></i>${cur.nm}<small>${cur.T.length} 個題材</small></h3><div class="ithemes">${cur.T.map(t => indCard(t, fav)).join("")}</div>`;
 }
-// 產業網絡（星系）：3D 網狀球體。點選的題材（或連線最多的）在球心發光，其他題材貼在球面上：
-// 上游在北半球、下游在南半球、相關但不在同一條鏈上的在赤道附近；離中心越多層，緯度越高（越靠近兩極）。
-// 球體會慢慢自轉（只繞垂直軸，所以上游永遠在上、下游永遠在下），手指左右拖曳或滑鼠拖曳可轉動；背面的題材變暗且不標名稱。
+// 產業網絡（星系）：3D 星系，用 canvas 畫。點選的題材（或連線最多的）在正中心發光，其他題材圍繞它轉；三組樣式可自由搭配（記在這個瀏覽器）：
+//   資訊窗格 tip：A 跟著圓點、B 固定在右下角
+//   排列 lay：A 球殼（貼在同一個球面一起轉）、B 原子軌道（每組一條軌道各自公轉，內圈近）、C 雙層球（內層直接相關、外層較遠，轉速不同）
+//   連線 line：A 平常只畫中心放射線，指到某點才展開它的上下游；B 全部畫成往外彎的弧線；C 指到某點時只畫它到中心的最短路徑
+// 不論哪種排列：上游在上半部、下游在下半部、相關但不在同一條鏈上的在中間；前方的點大而亮，後方的點小、暗、略模糊。
+const GX_OPT = { tip: [["A", "跟著圓點"], ["B", "固定角落"]], lay: [["A", "球殼"], ["B", "原子軌道"], ["C", "雙層球"]], line: [["A", "指到才展開"], ["B", "弧線全顯示"], ["C", "只畫路徑"]] };
+const gxOpt = () => ({ tip: "A", lay: "B", line: "B", ...(W.indS.gxo || {}) });
 function indGalaxy(net, focus) {
   const ids = net.layers.flatMap(([, L]) => L).filter(id => INDT.has(id)), lay = {}, adj = new Map(ids.map(id => [id, new Set()]));
   net.layers.forEach(([, L], r) => L.forEach(id => (lay[id] = r)));
-  net.links.forEach(([a, b]) => { if (adj.has(a) && adj.has(b)) { adj.get(a).add(b); adj.get(b).add(a); } });
+  const links = net.links.filter(([a, b]) => adj.has(a) && adj.has(b)); links.forEach(([a, b]) => { adj.get(a).add(b); adj.get(b).add(a); });
   const core = focus && adj.has(focus) ? focus : ids.slice().sort((a, b) => adj.get(b).size - adj.get(a).size)[0];
-  const dist = { [core]: 0 }, q = [core];
-  while (q.length) { const x = q.shift(); for (const y of adj.get(x)) if (dist[y] == null) { dist[y] = dist[x] + 1; q.push(y); } }
-  const reach = (from, dir) => { const S = new Set(), q = [from]; while (q.length) { const x = q.shift(); for (const [a, b] of net.links) { const [s0, t0] = dir ? [a, b] : [b, a]; if (s0 === x && adj.has(t0) && !S.has(t0)) { S.add(t0); q.push(t0); } } } return S; };
-  const ups = reach(core, 0), downs = reach(core, 1), side = id => (ups.has(id) ? -1 : downs.has(id) ? 1 : 0); // -1 上游、1 下游、0 相關
-  const mob = isMobile(), W0 = mob ? 440 : 900, H0 = mob ? 560 : 640, R = mob ? 168 : 232;
-  // 球面座標：同一組（上游／下游／相關 × 第幾層）平均分配經度，各組錯開起點，避免排成一直線
-  const N = [{ id: core, k: 0, s: 0, v: [0, 0, 0] }], grp = {};
-  ids.filter(id => id !== core).forEach(id => { const k = Math.min(3, dist[id] ?? 3), s = side(id); (grp[`${s}:${k}`] ||= []).push(id); });
-  Object.entries(grp).forEach(([key, L], gi) => { const [s, k] = key.split(":").map(Number);
-    L.sort((a, b) => lay[a] - lay[b]).forEach((id, i) => {
-      const lat = s ? -s * ((22 + (k - 1) * 22) * Math.PI) / 180 : ((i % 2 ? -1 : 1) * (5 + (k - 1) * 4) * Math.PI) / 180, lon = gi * 2.39996 + (i / L.length) * Math.PI * 2;
-      N.push({ id, k, s, v: [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)] }); }); });
-  // 裝飾用的網格點（費氏球面均勻分布）＋最近鄰連成三角網，邊緣的三角面比較亮，做出參考圖的切面球體
-  const nDP = mob ? 70 : 110, DP = Array.from({ length: nDP }, (_, i) => { const y = 1 - (2 * (i + 0.5)) / nDP, r = Math.sqrt(1 - y * y), t = i * 2.39996; return [r * Math.cos(t), y, r * Math.sin(t)]; });
-  const allP = [...DP, ...N.slice(1).map(n => n.v)], segs = new Set(), tris = new Set(), d3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-  allP.forEach((p, i) => { const nn = allP.map((o, j) => [j, d3(p, o)]).filter(([j]) => j !== i).sort((a, b) => a[1] - b[1]).slice(0, 3).map(x => x[0]);
-    nn.forEach(j => segs.add([i, j].sort((a, b) => a - b).join(","))); tris.add([i, nn[0], nn[1]].sort((a, b) => a - b).join(",")); });
-  W.gxS = { N, P: allP, segs: [...segs].map(s => s.split(",").map(Number)), tris: [...tris].map(s => s.split(",").map(Number)), links: net.links.filter(([a, b]) => N.some(n => n.id === a) && N.some(n => n.id === b)), W0, H0, R, cx: W0 / 2, cy: H0 / 2 + 6, mob, rOf: k => (k === 0 ? (mob ? 30 : 38) : k === 1 ? (mob ? 12 : 15) : mob ? 10 : 12) };
-  W.gx ||= { th: 0.35, ph: 0.2 };
-  const nmOf = (t, k) => (k === 0 ? t.name : t.name.length > (mob ? 6 : 8) ? t.name.slice(0, mob ? 6 : 8) + "…" : t.name);
-  const nodes = N.map(({ id, k }) => { const t = INDT.get(id), p = indAvg(t)?.pct ?? null, r = W.gxS.rOf(k), nm = nmOf(t, k);
-    return `<g class="gx${k === 0 ? " core" : ""} gk${k}" data-ifocus="${id}" role="button" tabindex="0" aria-label="${esc(t.name)}">
-      <circle class="gh" r="${(r * (k ? 2.6 : 2.1)).toFixed(1)}" fill="url(#gxg${p == null ? "n" : p >= 0 ? "u" : "d"})" style="opacity:${p == null ? 0.7 : (0.55 + Math.min(0.45, Math.abs(p) / 2)).toFixed(2)}"/>
-      <circle class="b" r="${r}" fill="url(#gxs)" style="stroke:${indCol(t)};stroke-width:${k === 0 ? 2.5 : 1.2}"/>
-      ${k === 0 ? `<text class="gn" y="${p == null ? 5 : -2}">${esc(nm.length > 7 ? nm.slice(0, 7) + "…" : nm)}</text>${p != null ? `<text class="gp" y="16" style="fill:${indPctCol(p)}">${indPctTxt(p)}</text>` : ""}`
-        : `<g class="gl"><text class="gn" y="${r + (mob ? 15 : 13)}">${esc(nm)}</text>${p != null ? `<text class="gp" y="${r + (mob ? 29 : 25)}" style="fill:${indPctCol(p)}">${indPctTxt(p)}</text>` : ""}</g>`}<title>${esc(t.name)}・${MK_TAG[t.mk]} ${indPctTxt(p)}</title></g>`; }).join("");
-  const { cx, cy } = W.gxS;
-  queueMicrotask(gxMount); // 畫面放進頁面後才接上旋轉與拖曳
-  return `<div class="igal-wrap"><svg class="igalaxy${mob ? " mob" : ""}" viewBox="0 0 ${W0} ${H0}" role="img" aria-label="${esc(net.name)} 產業星系（3D 球體）">
-    <defs><marker id="gxa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8Z" style="fill:#7fc4ff;fill-opacity:.5"/></marker><marker id="gxa2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8Z" style="fill:#d6efff"/></marker>
-    <radialGradient id="gxs" cx="35%" cy="32%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#d7e9fb"/><stop offset="1" stop-color="#5d7fa6"/></radialGradient>
-    <radialGradient id="gxbase" cx="50%" cy="50%" r="50%"><stop offset="0" style="stop-color:#9fd4ff;stop-opacity:.55"/><stop offset="1" style="stop-color:#9fd4ff;stop-opacity:0"/></radialGradient>
-    <radialGradient id="gxin" cx="50%" cy="58%" r="55%"><stop offset="0" style="stop-color:#1d4a80;stop-opacity:.35"/><stop offset="1" style="stop-color:#0b1a33;stop-opacity:0"/></radialGradient>
-    ${[["u", "var(--up)"], ["d", "var(--down)"], ["n", "#7fc4ff"], ["o", "#ff9a4a"]].map(([k, c]) => `<radialGradient id="gxg${k}"><stop offset="0" style="stop-color:${c};stop-opacity:.75"/><stop offset=".45" style="stop-color:${c};stop-opacity:.22"/><stop offset="1" style="stop-color:${c};stop-opacity:0"/></radialGradient>`).join("")}</defs>
-    ${gxBokeh(W0, 0, H0, ids.length)}
-    <ellipse cx="${cx}" cy="${cy + R + 6}" rx="${R * 0.75}" ry="${R * 0.12}" fill="url(#gxbase)"/><circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#gxin)"/>
-    <path class="gface f1"/><path class="gface f2"/><path class="gface f3"/><path class="gmesh back"/><path class="gmesh"/><path class="geq"/>
-    <circle class="grim" cx="${cx}" cy="${cy}" r="${R}"/>
-    <text class="gzt" x="${cx}" y="${cy - R - 14}" text-anchor="middle">↑ 上游（供應給中心）</text><text class="gzt" x="${cx}" y="${cy + R + 30}" text-anchor="middle">↓ 下游（中心供應給它）</text>
-    <g class="gedges">${W.gxS.links.map(([a, b]) => `<line class="ge${a === core || b === core ? " on" : ""}" data-a="${a}" data-b="${b}" marker-end="url(#${a === core || b === core ? "gxa2" : "gxa"})"/>`).join("")}</g>
-    <g class="gnodes">${nodes}</g></svg></div>
-    <div class="igal-leg"><span>中心：${esc(INDT.get(core).name)}（上游 ${ups.size}・下游 ${downs.size}）</span><span>北半球＝上游、南半球＝下游、赤道＝相關</span><span>越靠近兩極離中心越遠，箭頭由上游指向下游</span><span>左右拖曳可轉動，點題材換到中心</span></div>`;
+  const dist = { [core]: 0 }, prev = {}, q = [core];
+  while (q.length) { const x = q.shift(); for (const y of adj.get(x)) if (dist[y] == null) { dist[y] = dist[x] + 1; prev[y] = x; q.push(y); } }
+  const reach = dir => { const S = new Set(), q = [core]; while (q.length) { const x = q.shift(); for (const [a, b] of links) { const [s0, t0] = dir ? [a, b] : [b, a]; if (s0 === x && !S.has(t0)) { S.add(t0); q.push(t0); } } } return S; };
+  const ups = reach(0), downs = reach(1), side = id => (ups.has(id) ? -1 : downs.has(id) ? 1 : 0); // -1 上游、1 下游、0 相關
+  // 每組（上游／下游／相關 × 第幾層）平均分配經度，各組錯開起點
+  const grp = {}, P = {}; ids.forEach(id => { if (id !== core) (grp[`${side(id)}:${Math.min(3, dist[id] ?? 3)}`] ||= []).push(id); });
+  Object.entries(grp).forEach(([key, L], gi) => { const [s, k] = key.split(":").map(Number); L.sort((a, b) => lay[a] - lay[b]).forEach((id, i) => (P[id] = { s, k, i, lon0: gi * 2.39996 + (i / L.length) * Math.PI * 2 })); });
+  W.gxS = { ids, core, adj, links, dist, prev, ups, downs, P, net: net.id };
+  W.gx ||= { th: 0.4, ph: 0.42 }; W.gx.t ||= 0;
+  const o = gxOpt(), seg = k => `<div class="seg gxseg" role="group" aria-label="${{ tip: "資訊窗格", lay: "排列方式", line: "關係連線" }[k]}">${GX_OPT[k].map(([v, t]) => `<button type="button" data-gxo="${k}:${v}" aria-pressed="${o[k] === v}">${t}</button>`).join("")}</div>`;
+  queueMicrotask(gxMount); // 畫面放進頁面後才接上 canvas、旋轉與拖曳
+  return `<div class="gxopts"><span>窗格</span>${seg("tip")}<span>排列</span>${seg("lay")}<span>連線</span>${seg("line")}</div>
+    <div class="igal-wrap gstage"><canvas class="igalaxy" role="img" aria-label="${esc(net.name)} 產業星系：${esc(INDT.get(core).name)} 在中心，上游 ${ups.size}、下游 ${downs.size}"></canvas>
+      <div class="ghud">中心：<b>${esc(INDT.get(core).name)}</b><br>上游 ${ups.size}・下游 ${downs.size}・相關 ${ids.length - 1 - ups.size - downs.size}</div><div class="gcard" hidden></div></div>
+    <div class="igal-leg"><span><i style="background:#ffb26b"></i>上游連線</span><span><i style="background:#6fc3ff"></i>下游連線</span><span><i style="background:#8aa0bf"></i>其他關係</span><span>光暈紅漲綠跌；上半部＝上游、下半部＝下游</span><span>${isMobile() ? "點圓點看資訊、左右拖曳轉動" : "滑到圓點看資訊、點一下換到中心、拖曳轉動"}</span></div>`;
 }
-// 把球面座標轉到畫面：先繞垂直軸轉 th（自轉），再前傾 ph，最後加一點透視
-function gxProj(v, th, ph) {
-  const { R, cx, cy } = W.gxS, x1 = v[0] * Math.cos(th) + v[2] * Math.sin(th), z1 = -v[0] * Math.sin(th) + v[2] * Math.cos(th);
-  const y2 = v[1] * Math.cos(ph) - z1 * Math.sin(ph), z2 = v[1] * Math.sin(ph) + z1 * Math.cos(ph), f = 5 / (5 - z2);
-  return [cx + x1 * R * f, cy - y2 * R * f, z2, f];
+// 題材在 3D 空間的位置（單位：外圈半徑）
+function gxPos(id, t, lay) {
+  const S = W.gxS; if (id === S.core) return [0, 0, 0]; const { s, k, i, lon0 } = S.P[id];
+  if (lay === "B") { const rk = 0.42 + 0.29 * (k - 1), h = s ? -s * (0.26 + 0.12 * (k - 1)) : (i % 2 ? -1 : 1) * 0.04, rr = Math.sqrt(Math.max(0.05, rk * rk - h * h)), lon = lon0 + t * (0.5 / rk) * (s >= 0 ? 1 : -1) * 0.35;
+    return [rr * Math.sin(lon), h, rr * Math.cos(lon)]; }
+  const r = lay === "C" ? (k === 1 ? 0.56 : 1) : 1, lon = lon0 + (lay === "C" ? (k === 1 ? 0.22 : -0.1) * t : 0);
+  const lat = s ? (-s * (22 + (k - 1) * 22) * Math.PI) / 180 : ((i % 2 ? -1 : 1) * (6 + (k - 1) * 5) * Math.PI) / 180;
+  return [r * Math.cos(lat) * Math.sin(lon), r * Math.sin(lat), r * Math.cos(lat) * Math.cos(lon)];
 }
-function gxFrame(svg) {
-  const S = W.gxS, { th, ph } = W.gx, P = S.P.map(v => gxProj(v, th, ph)), at = {}, f1 = v => v.toFixed(1);
-  // 網格線：正面亮、背面暗；三角面依「靠不靠近邊緣」分三級亮度（邊緣最亮）
-  let fr = "", bk = ""; S.segs.forEach(([i, j]) => { const a = P[i], b = P[j], s = `M${f1(a[0])} ${f1(a[1])}L${f1(b[0])} ${f1(b[1])}`; a[2] + b[2] > 0 ? (fr += s) : (bk += s); });
-  svg.querySelector(".gmesh:not(.back)").setAttribute("d", fr); svg.querySelector(".gmesh.back").setAttribute("d", bk);
-  const F = ["", "", ""]; S.tris.forEach(t => { const z = (P[t[0]][2] + P[t[1]][2] + P[t[2]][2]) / 3; if (z < -0.05) return; const lvl = z < 0.35 ? 2 : z < 0.7 ? 1 : 0; if (!lvl && (t[0] + t[1]) % 4) return;
-    F[lvl] += `M${t.map(i => `${f1(P[i][0])} ${f1(P[i][1])}`).join("L")}Z`; });
-  ["f1", "f2", "f3"].forEach((c, i) => svg.querySelector(`.gface.${c}`).setAttribute("d", F[i]));
-  svg.querySelector(".geq").setAttribute("d", Array.from({ length: 49 }, (_, i) => { const a = (i / 48) * Math.PI * 2, p = gxProj([Math.sin(a), 0, Math.cos(a)], th, ph); return `${i ? "L" : "M"}${f1(p[0])} ${f1(p[1])}`; }).join(""));
-  // 題材：依前後排序，背面變暗縮小；標籤由前往後放，和已放的標籤重疊就不標（點球仍可看名稱）
-  const order = S.N.map(n => ({ n, p: n.k ? gxProj(n.v, th, ph) : [S.cx, S.cy, 0, 1] })).sort((a, b) => (a.n.k ? a.p[2] : 9) - (b.n.k ? b.p[2] : 9)), g = svg.querySelector(".gnodes"), cr = S.rOf(0) + 8, placed = [[S.cx - cr - 30, S.cy - cr, S.cx + cr + 30, S.cy + cr]];
-  order.forEach(({ n, p }) => { at[n.id] = p; const el = g.querySelector(`.gx[data-ifocus="${n.id}"]`); if (!el) return; g.appendChild(el);
-    const sc = n.k ? p[3] * (0.78 + 0.22 * (p[2] + 1) / 2) : 1; el.setAttribute("transform", `translate(${f1(p[0])},${f1(p[1])}) scale(${sc.toFixed(3)})`);
-    el.style.opacity = n.k ? (0.35 + 0.65 * Math.max(0, (p[2] + 1) / 2)).toFixed(2) : 1; el.dataset.front = p[2] > 0.2 ? "1" : "0"; });
-  [...order].reverse().forEach(({ n, p }) => { if (!n.k) return; const el = g.querySelector(`.gx[data-ifocus="${n.id}"] .gl`); if (!el) return;
-    const t = INDT.get(n.id), w = Math.min(t.name.length, S.mob ? 7 : 9) * (S.mob ? 14.5 : 12.5) * p[3], r = S.rOf(n.k) * p[3], box = [p[0] - w / 2, p[1] + r, p[0] + w / 2, p[1] + r + (S.mob ? 34 : 30)];
-    const hit = b => b[0] < box[2] && box[0] < b[2] && b[1] < box[3] && box[1] < b[3];
-    const ok = p[2] > -0.1 && !placed.some(hit) && !order.some(o => o.n.k && o.n !== n && o.p[2] > p[2] && hit((rr => [o.p[0] - rr, o.p[1] - rr, o.p[0] + rr, o.p[1] + rr])(S.rOf(o.n.k) * o.p[3])));
-    el.style.display = ok ? "" : "none"; if (ok) placed.push(box); });
-  svg.querySelectorAll(".ge").forEach(l => { const A = at[l.dataset.a], B = at[l.dataset.b]; if (!A || !B) return; const dx = B[0] - A[0], dy = B[1] - A[1], d = Math.hypot(dx, dy) || 1, kb = S.N.find(n => n.id === l.dataset.b).k, cut = S.rOf(kb) * (kb ? B[3] : 1) + 3;
-    l.setAttribute("x1", f1(A[0])); l.setAttribute("y1", f1(A[1])); l.setAttribute("x2", f1(B[0] - (dx / d) * cut)); l.setAttribute("y2", f1(B[1] - (dy / d) * cut));
-    l.style.opacity = (0.3 + 0.7 * Math.max(0, (Math.min(A[2], B[2]) + 1) / 2)).toFixed(2); });
+const GX_MESH = (() => { const M = Array.from({ length: 90 }, (_, i) => { const y = 1 - (2 * (i + 0.5)) / 90, r = Math.sqrt(1 - y * y), a = i * 2.39996; return [r * Math.cos(a), y, r * Math.sin(a)]; }), seg = [];
+  M.forEach((p, i) => M.map((o, j) => [j, Math.hypot(p[0] - o[0], p[1] - o[1], p[2] - o[2])]).filter(([j]) => j > i).sort((a, b) => a[1] - b[1]).slice(0, 2).forEach(([j]) => seg.push([i, j]))); return { M, seg }; })();
+const GX_BOKEH = (() => { let s = 11; const r = () => ((s = (s * 9301 + 49297) % 233280) / 233280); return Array.from({ length: 40 }, () => [r(), r(), 1 + r() * 3.5, r() < 0.2]); })();
+const gxRgb = v => { const h = String(v).trim().replace("#", ""); return h.length === 6 ? [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)).join(",") : "200,200,200"; };
+function gxDraw(cv) {
+  const S = W.gxS, G = W.gx, o = gxOpt(), ctx = cv.getContext("2d"), w = cv.clientWidth, h = cv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  const css = getComputedStyle(document.documentElement), UP = gxRgb(css.getPropertyValue("--up")), DN = gxRgb(css.getPropertyValue("--down")), font = getComputedStyle(document.body).fontFamily, t = G.t;
+  const R = Math.min(w, h) * (w < 520 ? 0.36 : 0.38), cx = w / 2, cy = h / 2 + 8;
+  const proj = v => { const x1 = v[0] * Math.cos(G.th) + v[2] * Math.sin(G.th), z1 = -v[0] * Math.sin(G.th) + v[2] * Math.cos(G.th), y2 = v[1] * Math.cos(G.ph) - z1 * Math.sin(G.ph), z2 = v[1] * Math.sin(G.ph) + z1 * Math.cos(G.ph), f = 4 / (4 - z2);
+    return { x: cx + x1 * R * f, y: cy - y2 * R * f, z: z2, f }; };
+  GX_BOKEH.forEach(([x, y, r, org], i) => { const a = 0.18 + 0.15 * Math.sin(t * 0.6 + i), g = ctx.createRadialGradient(x * w, y * h, 0, x * w, y * h, r * 3); g.addColorStop(0, org ? `rgba(255,154,74,${a})` : `rgba(127,196,255,${a})`); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x * w, y * h, r * 3, 0, 7); ctx.fill(); });
+  if (o.lay !== "B") (o.lay === "C" ? [0.56, 1] : [1]).forEach(sr => { const MP = GX_MESH.M.map(v => proj(v.map(c => c * sr))); ctx.lineWidth = 0.7;
+    GX_MESH.seg.forEach(([i, j]) => { const a = MP[i], b = MP[j]; ctx.strokeStyle = `rgba(169,214,255,${(a.z + b.z > 0 ? 0.22 : 0.07) * sr})`; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); });
+    ctx.strokeStyle = `rgba(191,227,255,${0.3 * sr})`; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.arc(cx, cy, R * sr, 0, 7); ctx.stroke(); });
+  else new Set(Object.values(S.P).map(p => `${p.s}:${p.k}`)).forEach(key => { const [s, k] = key.split(":").map(Number), rk = 0.42 + 0.29 * (k - 1), hh = s ? -s * (0.26 + 0.12 * (k - 1)) : 0, rr = Math.sqrt(Math.max(0.05, rk * rk - hh * hh));
+    for (let i = 0; i < 64; i++) { const a1 = (i / 64) * Math.PI * 2, a2 = ((i + 1) / 64) * Math.PI * 2, p1 = proj([rr * Math.sin(a1), hh, rr * Math.cos(a1)]), p2 = proj([rr * Math.sin(a2), hh, rr * Math.cos(a2)]), front = p1.z + p2.z > 0;
+      ctx.strokeStyle = `rgba(${s < 0 ? "255,190,130" : s > 0 ? "140,205,255" : "170,190,220"},${front ? 0.42 : 0.12})`; ctx.lineWidth = front ? 1.1 : 0.7; ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); } });
+  const pos = Object.fromEntries(S.ids.map(id => [id, gxPos(id, t, o.lay)])), sc = Object.fromEntries(S.ids.map(id => [id, proj(pos[id])])), focus = G.pin || G.hover;
+  const rel = (a, b) => (S.ups.has(a) && (S.ups.has(b) || b === S.core) ? "255,178,107" : S.downs.has(b) && (S.downs.has(a) || a === S.core) ? "111,195,255" : "138,160,191");
+  const spoke = ([a, b]) => a === S.core || b === S.core, L = [];
+  if (o.line === "B") S.links.forEach(l => L.push({ l, a: spoke(l) ? 0.75 : 0.32, arc: !spoke(l), hl: focus && l.includes(focus) }));
+  else { S.links.filter(spoke).forEach(l => L.push({ l, a: focus && focus !== S.core ? 0.35 : 0.85 }));
+    if (focus && focus !== S.core) {
+      if (o.line === "A") S.links.filter(l => l.includes(focus)).forEach(l => L.push({ l, a: 1, hl: true }));
+      else { const p = [focus]; while (p.at(-1) !== S.core && S.prev[p.at(-1)]) p.push(S.prev[p.at(-1)]); for (let i = 0; i < p.length - 1; i++) { const l = S.links.find(([a, b]) => (a === p[i] && b === p[i + 1]) || (b === p[i] && a === p[i + 1])); if (l) L.push({ l, a: 1, hl: true, w: 2.4 }); } } } }
+  L.forEach(({ l: [a, b], a: al, arc, hl, w: lw }) => { const A = sc[a], B = sc[b], alpha = (hl ? 1 : al) * (0.45 + 0.55 * (Math.min(A.z, B.z) + 1) / 2), col = rel(a, b);
+    ctx.strokeStyle = `rgba(${col},${alpha})`; ctx.lineWidth = lw || (hl ? 1.8 : 1); ctx.setLineDash(hl ? [] : [4, 4]); ctx.lineDashOffset = -t * 18; ctx.beginPath(); ctx.moveTo(A.x, A.y);
+    let ex = A.x, ey = A.y; if (arc) { const m = pos[a].map((v, i) => (v + pos[b][i]) / 2), ml = Math.hypot(...m) || 1, M = proj(m.map(v => (v * 1.18) / ml)); ctx.quadraticCurveTo(M.x, M.y, B.x, B.y); ex = M.x; ey = M.y; } else ctx.lineTo(B.x, B.y);
+    ctx.stroke(); ctx.setLineDash([]);
+    const ang = Math.atan2(B.y - ey, B.x - ex), rB = (b === S.core ? 16 : 6) * B.f + 2, tx = B.x - Math.cos(ang) * rB, ty = B.y - Math.sin(ang) * rB; // 箭頭：上游指向下游
+    ctx.fillStyle = `rgba(${col},${Math.min(1, alpha + 0.2)})`; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(ang - 0.45) * 7, ty - Math.sin(ang - 0.45) * 7); ctx.lineTo(tx - Math.cos(ang + 0.45) * 7, ty - Math.sin(ang + 0.45) * 7); ctx.fill(); });
+  // 題材圓點：由後往前畫；光暈＝今日漲跌，後方變暗、變小、略模糊
+  const hits = [], lab = [], direct = S.adj.get(S.core);
+  S.ids.map(id => ({ id, p: sc[id] })).sort((a, b) => a.p.z - b.p.z).forEach(({ id, p }) => {
+    const isCore = id === S.core, depth = (p.z + 1) / 2, r = isCore ? 16 : (4.2 + 2.6 * depth) * p.f, pct = indAvg(INDT.get(id))?.pct, col = pct == null ? "127,196,255" : pct >= 0 ? UP : DN;
+    const blur = !isCore && p.z < -0.25 && "filter" in ctx; if (blur) ctx.filter = `blur(${(-p.z * 1.6).toFixed(1)}px)`;
+    const ga = (isCore ? 0.9 : 0.25 + 0.5 * depth) * (0.6 + Math.min(0.4, Math.abs(pct || 0) / 2)), gr = r * (isCore ? 3.4 : 3.2), g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, gr);
+    g.addColorStop(0, `rgba(${col},${ga})`); g.addColorStop(1, `rgba(${col},0)`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, gr, 0, 7); ctx.fill();
+    const s = ctx.createRadialGradient(p.x - r * 0.35, p.y - r * 0.4, r * 0.1, p.x, p.y, r); s.addColorStop(0, "#ffffff"); s.addColorStop(0.5, "#d7e9fb"); s.addColorStop(1, "#5d7fa6");
+    ctx.globalAlpha = isCore ? 1 : 0.35 + 0.65 * depth; ctx.fillStyle = s; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill(); ctx.globalAlpha = 1; if (blur) ctx.filter = "none";
+    if (id === focus) { ctx.strokeStyle = "#7fc4ff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, r + 3, 0, 7); ctx.stroke(); }
+    hits.push({ id, x: p.x, y: p.y, r: Math.max(r + 6, 14), z: p.z });
+    if (isCore || id === focus || (direct.has(id) && p.z > 0.15)) lab.push({ id, p, r, isCore }); });
+  // 名稱：中心、指到的點、正面的直接上下游；互相重疊就略過
+  const placed = []; lab.sort((a, b) => (b.isCore ? 9 : b.id === focus ? 8 : b.p.z) - (a.isCore ? 9 : a.id === focus ? 8 : a.p.z)).forEach(({ id, p, r, isCore }) => {
+    const nm = INDT.get(id).name, txt = !isCore && nm.length > 8 ? nm.slice(0, 8) + "…" : nm; ctx.font = `${isCore ? 700 : 500} ${isCore ? 14 : 12}px ${font}`;
+    const tw = ctx.measureText(txt).width, x = p.x - tw / 2, y = p.y + r + (isCore ? 18 : 14), box = [x - 3, y - 12, x + tw + 3, y + 4];
+    if (placed.some(b => b[0] < box[2] && box[0] < b[2] && b[1] < box[3] && box[1] < b[3])) return; placed.push(box);
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(5,12,24,.85)"; ctx.strokeText(txt, x, y); ctx.fillStyle = "#e9f3ff"; ctx.fillText(txt, x, y); });
+  S.hits = hits; S.labels = placed; S.screen = sc;
 }
-// 接上自轉與拖曳：左右拖曳轉動（手機上下滑仍是捲動頁面），拖曳後不觸發點擊；開啟「減少動態效果」時不自轉
+// 資訊窗格：名稱、今日漲跌、和中心的關係、家數、隔幾層、漲跌最大的成分股
+function gxCard(card, id, x, y) {
+  const S = W.gxS, o = gxOpt(); if (!id) { card.hidden = true; return; }
+  const t = INDT.get(id), a = indAvg(t), relT = id === S.core ? "中心" : S.ups.has(id) ? "上游" : S.downs.has(id) ? "下游" : "相關", f = v => `<span class="n ${v >= 0 ? "up" : "down"}">${indPctTxt(v)}</span>`;
+  const mem = indCodes(t).filter(indQuotable).map(c => [c, W.quotes.get(c)?.chgPct]).filter(([, v]) => v != null).sort((p, q) => Math.abs(q[1]) - Math.abs(p[1])).slice(0, o.tip === "B" ? 5 : 3);
+  card.innerHTML = `<div class="gr"><b>${esc(t.name)}</b>${a ? f(a.pct) : ""}</div><div class="gr gm"><span><i class="gtag g${relT}">${relT}</i> ${MK_TAG[t.mk]}・${indCodes(t).length} 家</span><span>${id === S.core ? "" : `隔 ${S.dist[id] ?? "-"} 層`}</span></div>`
+    + mem.map(([c, v]) => `<div class="gr"><span>${esc(W.names[c] || W.quotes.get(c)?.name || c)}</span>${f(v)}</div>`).join("")
+    + `<div class="gbtn">${id !== S.core ? `<button type="button" data-ifocus="${id}">換到中心</button>` : ""}<button type="button" data-iopen="${id}">題材內頁</button></div>`;
+  card.hidden = false; card.classList.toggle("dock", o.tip === "B");
+  if (o.tip === "A") { const st = card.parentElement, cw = card.offsetWidth, ch = card.offsetHeight; card.style.left = Math.min(st.clientWidth - cw - 8, Math.max(8, x + 14)) + "px"; card.style.top = Math.min(st.clientHeight - ch - 8, Math.max(8, y - ch / 2)) + "px"; }
+  else card.style.left = card.style.top = "";
+}
+// 接上互動：滑鼠滑過看窗格、點一下換中心；手指點一下看窗格（窗格裡按「換到中心」）；左右拖曳轉動（手機上下滑仍是捲動頁面）
 function gxMount() {
-  const svg = document.querySelector(".igalaxy"); if (!svg || svg.dataset.on) return; svg.dataset.on = "1"; gxFrame(svg);
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches; let drag = null, moved = false, idle = 0, last = performance.now();
-  svg.addEventListener("pointerdown", e => { drag = W.gx.drag = { x: e.clientX, y: e.clientY, th: W.gx.th, ph: W.gx.ph }; moved = false; });
-  svg.addEventListener("pointermove", e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (!moved) return;
-    W.gx.th = drag.th + dx * 0.008; if (e.pointerType === "mouse") W.gx.ph = Math.max(-0.05, Math.min(0.32, drag.ph + dy * 0.004)); idle = performance.now(); gxFrame(svg); });
-  const up = () => { drag = W.gx.drag = null; if (W.gx.pend) { W.gx.pend = false; setTimeout(renderInd); } }; svg.addEventListener("pointerup", up); svg.addEventListener("pointercancel", up); svg.addEventListener("pointerleave", up);
-  svg.addEventListener("click", e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
-  if (still) return;
-  const tick = now => { if (!svg.isConnected) return; const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    if (!drag && now - idle > 2500 && !document.hidden) { W.gx.th += dt * 0.12; gxFrame(svg); } requestAnimationFrame(tick); };
-  requestAnimationFrame(tick);
-}
-function gxBokeh(W0, y0, y1, n) {
-  let s = 7 + n, out = ""; const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
-  for (let i = 0; i < 46; i++) { const x = rnd() * W0, y = y0 + rnd() * (y1 - y0), r = 2 + rnd() * (i % 7 === 0 ? 16 : 6), o = i % 5 === 0;
-    out += `<circle class="gbk" cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r.toFixed(1)}" fill="url(#gxg${o ? "o" : "n"})" style="opacity:${(0.25 + rnd() * 0.45).toFixed(2)};animation-delay:${(rnd() * 6).toFixed(1)}s"/>`; }
-  return out;
+  const cv = document.querySelector("canvas.igalaxy"); if (!cv || cv.dataset.on) return; cv.dataset.on = "1";
+  const G = W.gx, card = cv.parentElement.querySelector(".gcard"), still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let drag = null, moved = false, idle = 0, last = performance.now(), dirty = true; G.hover = G.pin = null;
+  const xy = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const hit = (x, y) => (W.gxS.hits || []).filter(o => Math.hypot(o.x - x, o.y - y) < o.r).sort((a, b) => b.z - a.z)[0]?.id || null;
+  cv.addEventListener("pointerdown", e => { drag = G.drag = { x: e.clientX, y: e.clientY, th: G.th, ph: G.ph }; moved = false; });
+  cv.addEventListener("pointermove", e => { const [x, y] = xy(e);
+    if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (moved) { G.th = drag.th + dx * 0.008; if (e.pointerType === "mouse") G.ph = Math.max(-0.05, Math.min(0.8, drag.ph + dy * 0.004)); idle = performance.now(); dirty = true; } return; }
+    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); if (id !== G.hover) { G.hover = id; cv.style.cursor = id ? "pointer" : "grab"; dirty = true; } gxCard(card, id, x, y); } });
+  cv.addEventListener("pointerleave", () => { drag = G.drag = null; if (!G.pin && G.hover) { G.hover = null; card.hidden = true; dirty = true; } });
+  cv.addEventListener("pointerup", e => { const was = drag; drag = G.drag = null; if (G.pend) { G.pend = false; setTimeout(renderInd); } if (!was || moved) return;
+    const [x, y] = xy(e), id = hit(x, y);
+    if (e.pointerType === "mouse") { if (id && id !== W.gxS.core) { W.indS.focus = id; renderInd(); } return; }
+    G.pin = id; G.hover = null; gxCard(card, id, x, y); dirty = true; });
+  const tick = now => { if (!cv.isConnected) return; const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!still && !drag && !G.hover && !G.pin && now - idle > 2000 && !document.hidden) { G.t += dt; G.th += dt * 0.1; dirty = true; }
+    if (dirty || W.gxS.redraw) { dirty = W.gxS.redraw = false; gxDraw(cv); } requestAnimationFrame(tick); };
+  gxDraw(cv); requestAnimationFrame(tick);
 }
 // 產業網絡：每一層一列，節點固定寬度，連線用 SVG 曲線；點節點只加亮它的上下游
 function indNetwork(net, focus) {
@@ -3578,6 +3592,8 @@ $("#lx").addEventListener("click", e => { if (W.lt === "ind" && e.target.closest
 $("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const z = e.target.closest("[data-izoom]"); if (z) return indZoom(z.dataset.izoom);
   const x = e.target.closest("[data-iexp]"); if (x) { const X = (W.indS.exp ||= {}); X[x.dataset.iexp] = !X[x.dataset.iexp]; renderInd(); } });
 $("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const S = W.indS, gf = e.target.closest("[data-igcat],[data-igmk]"); if (gf) { if (gf.dataset.igcat != null) S.gcat = gf.dataset.igcat || null; else S.gmk = gf.dataset.igmk || null; return renderInd(); }
+  const go = e.target.closest("[data-gxo]"); if (go) { const [k, v] = go.dataset.gxo.split(":"); S.gxo = { ...gxOpt(), [k]: v }; go.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === go)));
+    if (W.gx) W.gx.pin = W.gx.hover = null; document.querySelector(".gcard")?.setAttribute("hidden", ""); if (W.gxS) W.gxS.redraw = true; store.set("watch:inds", { view: S.view, mk: S.mk, sub: S.sub, net: S.net, isl: S.isl, nstyle: S.nstyle, gxo: S.gxo }); return; }
   const b = e.target.closest("[data-iview],[data-imk],[data-isub],[data-iopen],[data-ifav],[data-inet],[data-ifocus],[data-iisl],[data-instyle]"); if (!b) return;
   const d = b.dataset;
   if (d.iview) S.view = d.iview; else if (d.imk) S.mk = d.imk; else if (d.isub) S.sub = d.isub; else if (d.inet) { S.net = d.inet; S.focus = null; }
@@ -3585,7 +3601,7 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const S = 
   else if (d.iisl) S.isl = d.iisl; else if (d.instyle) S.nstyle = d.instyle;
   else if (d.iopen != null) { S.open = d.iopen || null; goY(0); }
   else if (d.ifav) { const f = indFav(); f.has(d.ifav) ? f.delete(d.ifav) : f.add(d.ifav); store.set("watch:indfav", [...f]); }
-  store.set("watch:inds", { view: S.view, mk: S.mk, sub: S.sub, net: S.net, isl: S.isl, nstyle: S.nstyle }); renderInd(); });
+  store.set("watch:inds", { view: S.view, mk: S.mk, sub: S.sub, net: S.net, isl: S.isl, nstyle: S.nstyle, gxo: S.gxo }); renderInd(); });
 
 /* ---------- 資料來源狀態：伺服器讀得到哪些金鑰（只顯示有沒有，不顯示內容） ---------- */
 async function showStatus() {
