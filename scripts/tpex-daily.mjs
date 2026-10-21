@@ -7,16 +7,16 @@
 //   wt: { cols: [類別...], rows: [[d, ...]] }（每日權證交易人數等）
 //   gold: [[d, 代號, 名稱, 均價, 最高, 最低, 成交量]]
 //   revm: [{ ym, n, up, ind: { 產業: [營收(億), 年增%, 月增%, 家數] }, hi: [[代號, 名稱, 產業, 營收(億), 年增%, 比較月數]] }]（舊到新）
-//   snap: { date, pledge, short, fc, sus, short_sus, esb, gold, cb, wt, wtu }（最新一天的清單） }
+//   snap: { date, pledge, short, fc, sus, sss, esb, gold, cb, wtu, wcb }（最新一天的清單；上市權證在 scripts/twse-daily.mjs） }
 import { writeFile, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { num, rocDate } from "../api/_lib/_tw.js";
 
 const OUT = fileURLToPath(new URL("../learner/data/tpex.json", import.meta.url)), REV = fileURLToPath(new URL("../learner/data/tpex-rev.json", import.meta.url));
 const API = "https://www.tpex.org.tw/openapi/v1", UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
-const KEEP = 750, REV_KEEP = 36, REV_NEW = 40, sleep = ms => new Promise(r => setTimeout(r, ms));
-const r2 = v => (v == null || !Number.isFinite(v) ? null : Math.round(v * 100) / 100), r1 = v => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10);
-const str = v => String(v ?? "").replace(/\s+/g, " ").trim();
+export const KEEP = 750, REV_KEEP = 36, REV_NEW = 40, sleep = ms => new Promise(r => setTimeout(r, ms));
+export const r2 = v => (v == null || !Number.isFinite(v) ? null : Math.round(v * 100) / 100), r1 = v => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10);
+export const str = v => String(v ?? "").replace(/\s+/g, " ").trim();
 
 // 指數：[欄位前綴, 資料集, 價格指數欄, 報酬指數欄]（富櫃 200 只有當日，另外從 /tpex200_change 補）
 export const IX = [["otc", "/tpex_reward_index", "TPExIndex", "TPExTotalReturnIndex"], ["t50", "/tpex50_index", "TPEx50Index", "TPEx50TotalReturnIndex"],
@@ -92,18 +92,32 @@ export function revMonth(ym, rows, rh) {
   return { ym, n: rows.length, up, ind: Object.fromEntries(Object.entries(ind).map(([k, g]) => [k, [r2(g[0] / 1e5), g[1] ? r1((g[0] / g[1] - 1) * 100) : null, g[2] ? r1((g[0] / g[2] - 1) * 100) : null, g[3]]])),
     hi: hi.sort((a, b) => b[3] - a[3]) };
 }
-const ymOf = t => { const d = new Date(t + 8 * 3600e3); return [d.getUTCFullYear(), d.getUTCMonth() + 1]; };
-const ymBack = ([y, m], n) => { const t = y * 12 + m - 1 - n; return [Math.floor(t / 12), t % 12 + 1]; };
-const ymKey = ([y, m]) => `${y}-${String(m).padStart(2, "0")}`;
+export const ymOf = t => { const d = new Date(t + 8 * 3600e3); return [d.getUTCFullYear(), d.getUTCMonth() + 1]; };
+export const ymBack = ([y, m], n) => { const t = y * 12 + m - 1 - n; return [Math.floor(t / 12), t % 12 + 1]; };
+export const ymKey = ([y, m]) => `${y}-${String(m).padStart(2, "0")}`;
 
 async function api(p) { const r = await fetch(API + p, { headers: UA, signal: AbortSignal.timeout(60000) }); if (!r.ok) throw new Error(`${p} HTTP ${r.status}`); const j = await r.json().catch(() => null); return Array.isArray(j) ? j : []; }
-async function twseApi(p) { const r = await fetch("https://openapi.twse.com.tw/v1" + p, { headers: UA, signal: AbortSignal.timeout(60000) }); if (!r.ok) throw new Error(`${p} HTTP ${r.status}`); const j = await r.json().catch(() => null); return Array.isArray(j) ? j : []; }
-async function mops([y, m]) {
-  const r = await fetch(`https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_${y - 1911}_${m}_0.html`, { headers: { "User-Agent": UA["User-Agent"] }, signal: AbortSignal.timeout(60000) });
+// 觀測站月營收彙總表：otc＝上櫃、sii＝上市
+export async function mops([y, m], kind = "otc") {
+  const r = await fetch(`https://mopsov.twse.com.tw/nas/t21/${kind}/t21sc03_${y - 1911}_${m}_0.html`, { headers: { "User-Agent": UA["User-Agent"] }, signal: AbortSignal.timeout(60000) });
   if (!r.ok) return []; return parseMops(new TextDecoder("big5").decode(await r.arrayBuffer()));
 }
 
-export async function main({ get = api, getTwse = twseApi, getMops = mops, now = Date.now(), gap = 800, out: OUT_ = OUT, rev: REV_ = REV } = {}) {
+// 月營收：最近兩個月每次重抓（公司會更正），更早的缺幾個月補幾個月；rh（公司逐月營收）就地更新，回傳 Map(ym → revMonth)
+export async function revUpdate(oldRevm, rh, now, getMops, gap) {
+  const cur = ymOf(now), have = new Set((oldRevm || []).map(x => x.ym)), revm = new Map((oldRevm || []).map(x => [x.ym, x])); let fetched = 0;
+  const months = Array.from({ length: REV_KEEP }, (_, i) => ymBack(cur, i + 1)).reverse(); // 舊到新，創新高要先有前面的月份
+  for (const ym of months) { const k = ymKey(ym), recent = ym[0] * 12 + ym[1] >= cur[0] * 12 + cur[1] - 2;
+    if (have.has(k) && !recent) continue; if (fetched >= REV_NEW) break;
+    let rows = []; try { rows = await getMops(ym); } catch (e) { console.log("觀測站失敗", k, e.message); } fetched++; await sleep(gap);
+    if (rows.length < 100) continue;
+    for (const r of rows) { const x = rh[r.c] ||= [r.n, r.ind, {}]; x[0] = r.n; x[1] = r.ind; if (r.cur != null) x[2][k] = r.cur; if (r.last != null && x[2][ymKey(ymBack(ym, 1))] == null) x[2][ymKey(ymBack(ym, 1))] = r.last; if (r.ly != null && x[2][ymKey(ymBack(ym, 12))] == null) x[2][ymKey(ymBack(ym, 12))] = r.ly; }
+    revm.set(k, revMonth(k, rows, rh)); console.log("月營收", k, rows.length, "家，創新高", revm.get(k).hi.length); }
+  const cut = ymKey(ymBack(cur, REV_KEEP + 26)); for (const x of Object.values(rh)) for (const k of Object.keys(x[2])) if (k < cut) delete x[2][k];
+  return revm;
+}
+
+export async function main({ get = api, getMops = mops, now = Date.now(), gap = 800, out: OUT_ = OUT, rev: REV_ = REV } = {}) {
   const old = await readFile(OUT_, "utf8").then(JSON.parse).catch(() => ({})), rh = await readFile(REV_, "utf8").then(JSON.parse).catch(() => ({}));
   const safe = async p => { try { const L = await get(p); await sleep(gap); return L; } catch (e) { console.log("失敗", p, e.message); return null; } };
   const sets = {}; for (const [k, p] of IX) sets[k] = await safe(p) || [];
@@ -114,16 +128,7 @@ export async function main({ get = api, getTwse = twseApi, getMops = mops, now =
   const wt = { cols: wcols, rows: mergeRows((old.wt?.rows || []).map(r => [r[0], ...wcols.map((c, i) => r[i + 1] ?? null)]), wadd, ["d", ...wcols]) };
   const gl = await safe("/tpex_gold_latest") || [], gnew = gl.map(r => [rocDate(r.Date), str(r.GoldCode), str(r.GoldShortName), num(r["TradingAvg."]), num(r.TradingHighest), num(r.TradingLowest), num(r.TradingVolume)]).filter(r => r[0]);
   const gold = [...new Map([...(old.gold || []), ...gnew].map(r => [r[0] + r[1], r])).values()].sort((a, b) => a[0].localeCompare(b[0])).slice(-KEEP * 2);
-  // 月營收：最近兩個月每次重抓（公司會更正），更早的缺幾個月補幾個月
-  const cur = ymOf(now), have = new Set((old.revm || []).map(x => x.ym)), revm = new Map((old.revm || []).map(x => [x.ym, x])); let fetched = 0;
-  const months = Array.from({ length: REV_KEEP }, (_, i) => ymBack(cur, i + 1)).reverse(); // 舊到新，創新高要先有前面的月份
-  for (const ym of months) { const k = ymKey(ym), recent = ym[0] * 12 + ym[1] >= cur[0] * 12 + cur[1] - 2;
-    if (have.has(k) && !recent) continue; if (fetched >= REV_NEW) break;
-    let rows = []; try { rows = await getMops(ym); } catch (e) { console.log("觀測站失敗", k, e.message); } fetched++; await sleep(gap);
-    if (rows.length < 100) continue;
-    for (const r of rows) { const x = rh[r.c] ||= [r.n, r.ind, {}]; x[0] = r.n; x[1] = r.ind; if (r.cur != null) x[2][k] = r.cur; if (r.last != null && x[2][ymKey(ymBack(ym, 1))] == null) x[2][ymKey(ymBack(ym, 1))] = r.last; if (r.ly != null && x[2][ymKey(ymBack(ym, 12))] == null) x[2][ymKey(ymBack(ym, 12))] = r.ly; }
-    revm.set(k, revMonth(k, rows, rh)); console.log("月營收", k, rows.length, "家，創新高", revm.get(k).hi.length); }
-  const cut = ymKey(ymBack(cur, REV_KEEP + 26)); for (const x of Object.values(rh)) for (const k of Object.keys(x[2])) if (k < cut) delete x[2][k];
+  const revm = await revUpdate(old.revm, rh, now, getMops, gap);
   // 最新一天的清單
   const snap = { ...(old.snap || {}) }, put = (k, v) => { if (v != null) snap[k] = v; };
   const pl = await safe("/mopsfin_t187ap09_O"); if (pl?.length) put("pledge", parsePledge(pl));
@@ -136,10 +141,6 @@ export async function main({ get = api, getTwse = twseApi, getMops = mops, now =
   const cb = await safe("/bond_cb_daily"); if (cb?.length) put("cb", { date: rocDate(cb[0].Date), rows: cb.map(r => [str(r.FinancialInstitutionsCode), str(r.FinancialInstitutionsName), num(r.ParValueOfPurchase), num(r.AmountOfPurchase), num(r.ParValueOfSell), num(r.AmountOfSell)]) });
   const wq = await safe("/tpex_warrant_daily_quts"); if (wq?.length) put("wtu", { date: rocDate(wq[0].Date), rows: warrantUnder(wq) });
   const wb = await safe("/tpex_warrant_wcb_daily_quts"); if (wb) put("wcb", { date: rocDate(wb[0]?.Date) || "", rows: wcbRows(wb) });
-  // 上市權證：證交所的資料集，名稱對代號用融資融券表的股票簡稱
-  const tw = async p => { try { const r = await getTwse(p); await sleep(gap); return r; } catch (e) { console.log("失敗", p, e.message); return null; } };
-  const wl = await tw("/opendata/t187ap42_L"), mg = wl?.length ? await tw("/exchangeReport/MI_MARGN") : null;
-  if (wl?.length && mg?.length) put("wtuL", { date: rocDate(wl[0]["交易日期"]), rows: warrantUnderL(wl, mg.map(r => [str(r["股票代號"]), str(r["股票名稱"])]).filter(x => x[0] && x[1])) });
   const out = { updated: new Date(now).toISOString(), ix: { cols: IX_COLS, rows: ix }, vol, wt, gold, revm: [...revm.values()].sort((a, b) => a.ym.localeCompare(b.ym)).slice(-REV_KEEP), snap };
   if (!ix.length && !out.revm.length) throw new Error("櫃買中心、觀測站都沒拿到資料");
   await writeFile(OUT_, JSON.stringify(out)); await writeFile(REV_, JSON.stringify(rh));

@@ -1,0 +1,29 @@
+# 上市（證交所）圖表資料：每個交易日收盤後把指數、類股指數、量值、月營收等累積成歷史（learner/data/twse.json、twse-rev.json），給情報局「大盤 → 上市」用
+name: twse-daily
+on:
+  schedule:
+    - cron: "35 9 * * 1-5"   # 台北 17:35（指數、權證、暫停預告都出來了）
+    - cron: "55 13 * * 1-5"  # 台北 21:55（觀測站月營收彙總表晚上更新）
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: data-sync-twse-daily-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      # 排隊等前一次跑完時，checkout 的是排隊當下的舊版本；先拉到最新的 main，避免和前一次存的資料衝突
+      - run: git pull -q origin ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/twse-daily.mjs
+      - name: commit
+        env:
+          COMMIT_NAME: twse-daily
+        run: |
+          bash scripts/commit-data.sh "上市：更新指數、類股、量值、月營收" learner/data/twse.json learner/data/twse-rev.json

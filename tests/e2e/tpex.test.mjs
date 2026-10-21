@@ -1,8 +1,9 @@
-// 大盤 → 櫃買：指數、量值、產業營收熱圖、創新高、董監、權證、暫停預告、興櫃、黃金、可轉債每個分頁都畫得出來，手機不橫向溢出
+// 大盤 → 櫃買、上市（同一套畫面）：指數、量值、產業營收熱圖、創新高、董監、權證、暫停預告、興櫃、黃金、可轉債每個分頁都畫得出來，手機不橫向溢出
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium, serve, open } from "./_harness.mjs";
 import { IX_COLS } from "../../scripts/tpex-daily.mjs";
+import { LX_COLS } from "../../scripts/twse-daily.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -59,4 +60,40 @@ test("櫃買：排程還沒產生檔案", async () => {
   await p.evaluate(() => { W.mkReg = "otc"; setLt("mkt"); }); await p.waitForSelector("#lx .err");
   assert.match(await p.evaluate(() => $("#lx").innerText), /排程還沒跑完第一次/);
   await ctx.close(); assert.deepEqual(errs.filter(e => !/404/.test(e)), []);
+});
+
+const SEC = ["水泥類指數", "半導體類指數", "金融保險類指數"];
+const FIXL = {
+  updated: "2026-10-21T09:40:00Z",
+  ix: { cols: LX_COLS, rows: ds.map((d, i) => [d, ...LX_COLS.slice(1).map((c, j) => +(20000 + j * 900 + i * (3 + j) + Math.sin(i / 4) * 40).toFixed(2))]) },
+  sec: { cols: SEC, rows: ds.map((d, i) => [d, 150 + i * 0.1, 1000 + i * 6, 2000 - i * 2]) },
+  vol: ds.map((d, i) => [d, 90 + (i % 5), 7000 + (i % 9) * 300, 400, 20000 + i * 3]),
+  revm: FIX.revm,
+  snap: { pledge: { date: "2026-08-19", buckets: [["90 以上", 1], ["20 以下", 2]], top: [["3040", "遠見", null, "90 以上"], ["1101", "台泥", null, "20 以下"]] }, short: { date: "2026-08-19", rows: [["1225", "福懋油", 12000, 6130, 5870, 48.9]] }, fc: { a: [], b: [] },
+    sus: [["00406A", "主動中信台灣收益", "2026-10-29", "2026-11-04", "分配收益"]], sss: [["2330", "台積電", "2026-10-28", "2026-11-02", "股東會"]], wtu: { date: "2026-10-20", rows: [["2330", "台積電", 50, 20, 2, null, null]] } },
+};
+
+for (const width of [1280, 390]) test(`上市圖表 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 }), shot = async v => process.env.SHOT && await p.screenshot({ path: `${process.env.SHOT}/lst-${v}-${width}.png`, fullPage: true });
+  await ctx.route("**/data/twse.json", r => r.fulfill({ contentType: "application/json", body: JSON.stringify(FIXL) }));
+  await p.evaluate(() => setLt("mkt")); await p.waitForTimeout(500);
+  await p.click('#lx [data-mk="mkReg"][data-v="lst"]'); await p.waitForSelector("#lx .otcbox .tschart");
+  const wide = () => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+  assert.match(await p.evaluate(() => $("#lx").innerText), /加權指數 vs 報酬指數[\s\S]*主題指數比較[\s\S]*台灣 50[\s\S]*高股息/);
+  assert.equal(await p.evaluate(() => document.querySelectorAll('#lx [data-mk="otcV"][data-v="esb"], #lx [data-mk="otcV"][data-v="gold"]').length), 0, "興櫃、黃金是櫃買才有");
+  await shot("ix");
+  const views = { sec: /類股指數區間漲跌[\s\S]*半導體[\s\S]*水泥[\s\S]*金融保險/, vol: /上市日成交量值/, rev: /上市各產業營收年增率/, dir: /董監質押比例分布[\s\S]*遠見[\s\S]*90% 以上[\s\S]*福懋油/, wt: /上市權證成交值最多的標的[\s\S]*台積電/, sus: /暫停先賣後買當沖預告[\s\S]*停資停券預告/, chip: /大盤三大法人買賣超金額[\s\S]*外資持股/ };
+  for (const [v, re] of Object.entries(views)) {
+    await p.$eval(`#lx [data-mk="otcV"][data-v="${v}"]`, b => b.click()); await p.waitForTimeout(150);
+    assert.match(await p.evaluate(() => $("#lx .otcbox").innerText), re, v); assert.ok(await wide(), `${v} 橫向溢出`); await shot(v);
+  }
+  assert.doesNotMatch(await p.evaluate(() => $("#lx .otcbox").innerText), /交易人數/);
+  await p.$eval('#lx [data-mk="otcV"][data-v="sec"]', b => b.click()); await p.waitForTimeout(100);
+  await p.$eval('#lx [data-mk="otcInd"][data-v="半導體類指數"]', b => b.click()); await p.waitForTimeout(100);
+  assert.match(await p.evaluate(() => $("#lx .otcbox").innerText), /半導體 vs 加權指數/);
+  assert.deepEqual(await p.evaluate(() => [store.get("watch:mkReg"), store.get("watch:lst").view, W.otc?.data ?? null]), ["lst", "sec", null], "上市、櫃買各記各的");
+  await p.$eval('#lx [data-mk="otcV"][data-v="chip"]', b => b.click()); await p.waitForTimeout(100);
+  await p.$eval('#lx [data-mk="otcGo"][data-v="margin"]', b => b.click()); await p.waitForTimeout(300);
+  assert.deepEqual(await p.evaluate(() => [W.lt, W.afView]), ["after", "margin"]);
+  await ctx.close(); assert.deepEqual(errs.filter(e => !/after\.json|404/.test(e)), []);
 });
