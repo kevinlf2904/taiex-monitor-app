@@ -38,7 +38,7 @@ export function alertDoc(data, chat) {
   const price = Object.entries(g("watch:alerts") || {}).map(([code, a]) => ({ code, up: a?.up ?? null, dn: a?.dn ?? null })).filter(a => a.up || a.dn);
   // 追蹤：國會議員、13F 機構（情報局「大戶國會 → 我的追蹤」），加上庫存台股（內部人轉讓申報）
   const F = g("watch:follow") || {}, ids = k => Object.keys(F[k] || {}).filter(x => typeof x === "string" && x.length < 80).slice(0, 50);
-  const follow = { cong: ids("cong"), f13: ids("f13"), ins: Object.keys(g("watch:hold") || {}).filter(c => /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 100) };
+  const follow = { cong: ids("cong"), f13: ids("f13"), ins: [...new Set([...Object.keys(g("watch:hold") || {}), ...Object.keys(F.ins || {})])].filter(c => /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 100) };
   return { chat, rules: rules.slice(0, 100), price: price.slice(0, 100), names: g("watch:names") || {}, follow };
 }
 // 有任何要檢查的東西才放進收盤後的推播清單

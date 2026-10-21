@@ -644,17 +644,18 @@ function f13Html(arg) {
   // 首頁：機構排行（市值）、共同加碼、共同減碼、國會 × 13F、績效排行；可以選兩個季度比較（congx.js）
   F = cxF13Range(F);
   const agg = new Map(); for (const f of F.funds) for (const r of [...f.rows, ...f.sold]) { if (r.pc) continue; const k = r.ticker || r.cusip, g = agg.get(k) || agg.set(k, { r, up: [], dn: [], hold: 0 }).get(k); if (r.chg === "new" || r.chg === "add") g.up.push(f.who); else if (r.chg === "cut" || r.chg === "sold") g.dn.push(f.who); if (r.chg !== "sold") g.hold++; }
-  const A = [...agg.values()], who = L => L.map(w => esc(w.split(" ")[0])).join("、"), view = ["funds", "up", "dn", "cong", "perf", "heat"].includes(W.f13v) ? W.f13v : "funds";
+  const A = [...agg.values()], who = L => L.map(w => esc(w.split(" ")[0])).join("、"), view = ["funds", "up", "dn", "cong", "perf", "heat", "lag"].includes(W.f13v) ? W.f13v : "funds";
   const tot = F.funds.reduce((a, f) => a + f.total, 0), nNew = F.funds.reduce((a, f) => a + f.rows.filter(r => r.chg === "new").length, 0), nSold = F.funds.reduce((a, f) => a + f.sold.length, 0);
   let h = `<section class="csec tw-home">${rkHead("13F 機構持股", `管理資產 1 億美元以上的機構每季申報美股多頭持股，最晚季底後 45 天公開——看到的是<strong>上一季底</strong>的部位，現在可能已經不同；不含放空、現金與非美股。`)}
     ${cxF13RngHtml()}${F.range ? `<p class="note">比較 ${F.range.from} → ${F.range.to}：下面的新進、加碼、減碼、出清都是這兩季之間的變化（${F.funds.length} 家兩季都有資料）。</p>` : ""}
     ${rkCards([{ t: "追蹤機構", sub: "SEC Form 13F-HR", v: `${F.funds.length} 家` }, { t: "申報市值合計", sub: "季底", v: usd(tot) }, { t: "本季新進", sub: "各機構加總", v: `${nNew} 檔`, vc: "up" }, { t: "本季出清", sub: "各機構加總", v: `${nSold} 檔`, vc: "down" }])}
-    <div class="tw-ctl">${rkSeg("data-rkset", "f13v:" + view, [["f13v:funds", "機構排行"], ["f13v:perf", "機構影子組合回測"], ["f13v:up", "共同加碼"], ["f13v:dn", "共同減碼"], ["f13v:cong", "國會 × 13F"], ["f13v:heat", "主題熱圖"]])}</div>`;
+    <div class="tw-ctl">${rkSeg("data-rkset", "f13v:" + view, [["f13v:funds", "機構排行"], ["f13v:perf", "機構影子組合回測"], ["f13v:up", "共同加碼"], ["f13v:dn", "共同減碼"], ["f13v:cong", "國會 × 13F"], ["f13v:heat", "主題熱圖"], ["f13v:lag", "申報延遲"]])}</div>`;
   if (view === "funds") h += `<button type="button" class="cbt-cta" data-rkset="f13v:perf"><b>13F 機構影子組合回測</b><small class="note">用每家機構申報的持股，算「季度持股報酬」和「申報公開後跟著買到今天」賺多少，和 SPY 比 ›</small></button>` + rkList(F.funds.slice().sort((a, b) => b.total - a.total).map(f => ({ attr: `data-cv="f13:${f.cik}"`, mono: rkMono(rkInit(f.who), RK_C.機構), name: esc(f.who), sub: `${f.rows.slice(0, 3).map(r => `${esc(r.ticker || r.name)} ${r.pct}%`).join("・")}`, val: usd(f.total), vsub: `${f.n} 檔・<span class="up">新進 ${f.rows.filter(r => r.chg === "new").length}</span>／<span class="down">出清 ${f.sold.length}</span>` })));
   else if (view === "up") h += `<h4>多家機構同時新進或加碼</h4>` + rkList(A.filter(g => g.up.length).sort((a, b) => b.up.length - a.up.length || a.dn.length - b.dn.length).slice(0, 30).map(g => ({ star: g.r.ticker, attr: g.r.ticker ? `data-copen="${esc(g.r.ticker)}"` : "", mono: rkMono(rkInit(g.r.ticker || g.r.name), "#3fa36b"), name: tk(g.r), sub: who(g.up), val: `${g.up.length} 家加碼`, vc: "up", vsub: `${g.dn.length ? `${g.dn.length} 家減碼・` : ""}${g.hold} 家持有` })));
   else if (view === "dn") h += `<h4>多家機構減碼或出清</h4>` + rkList(A.filter(g => g.dn.length).sort((a, b) => b.dn.length - a.dn.length).slice(0, 30).map(g => ({ star: g.r.ticker, attr: g.r.ticker ? `data-copen="${esc(g.r.ticker)}"` : "", mono: rkMono(rkInit(g.r.ticker || g.r.name), "#d0643f"), name: tk(g.r), sub: who(g.dn), val: `${g.dn.length} 家減碼`, vc: "down", vsub: `${g.up.length ? `${g.up.length} 家加碼・` : ""}${g.hold} 家持有` })));
   else if (view === "cong") h += f13CongHtml(A);
   else if (view === "heat") h += cxHeatHtml(F);
+  else if (view === "lag") h += cxF13Lag(F);
   else h += f13RankHtml(F);
   return h + `${(F.notes || []).length ? `<p class="note">⚠︎ ${F.notes.map(esc).join("；")}</p>` : ""}</section>`;
 }
@@ -691,7 +692,7 @@ function insBtHtml() {
 function insHtml() {
   const I = W.ins; if (!I) { insLoad(); return `<p class="note">載入中…</p>`; }
   if (I.err || !I.rows?.length) return `<p class="note">⚠︎ 內部人申報資料還沒有（${esc(I.err || "沒有資料")}）。資料由每個交易日的排程從證交所、櫃買中心整理。</p>`;
-  const mine = new Set([...myCodes(), ...Object.keys(W.hold || {})]), f = W.insF || "mine", q = (W.insQ || "").trim(), view = ["rank", "feed", "bt"].includes(W.insv) ? W.insv : "rank";
+  const mine = new Set([...myCodes(), ...Object.keys(W.hold || {})]), f = W.insF || "mine", q = (W.insQ || "").trim(), view = ["rank", "feed", "bt", "heat"].includes(W.insv) ? W.insv : "rank";
   const none = f === "mine" && !q && !I.rows.some(r => mine.has(r.code)); // 自選、庫存都沒有申報：直接看全部
   const L = I.rows.filter(r => (q ? r.code === q || (r.name || "").includes(q) : f === "mine" && !none ? mine.has(r.code) : true));
   // 期間：近 30／90／365 天或全部；「最新申報」可以按月份往前翻
@@ -703,10 +704,11 @@ function insHtml() {
     <div class="tw-ctl"><div class="tw-grp seg" role="group">${[["mine", "自選＋庫存"], ["all", "全部"]].map(([k, t]) => `<button type="button" data-insf="${k}" aria-pressed="${(none ? "all" : f) === k && !q}">${t}</button>`).join("")}</div><input data-insq value="${esc(q)}" placeholder="代號或名稱" aria-label="代號或名稱"></div>
     <div class="tw-ctl">${rkSeg("data-rkset", "insW:" + IW, [["insW:30", "近 30 天"], ["insW:90", "近 90 天"], ["insW:365", "近一年"], ["insW:0", "全部"]])}${cxRngHtml("ins", IW === -1)}</div>
     ${rkCards([{ t: `${wTxt}申報`, sub: `${new Set(R30.map(r => r.code)).size} 檔股票`, v: `${R30.length} 筆` }, { t: "申報人", sub: "不重複", v: `${new Set(R30.map(r => r.who)).size} 位` }, { t: "轉讓張數合計", sub: wTxt, v: insSh(R30.reduce((a, r) => a + (r.sh || 0), 0)) }, { t: "市場賣出方式", sub: "一般交易、盤後鉅額", v: `${R30.filter(mkt).length} 筆`, vc: "down" }])}
-    <div class="tw-ctl">${rkSeg("data-rkset", "insv:" + view, [["insv:rank", "轉讓最多"], ["insv:feed", "最新申報"], ["insv:bt", "申報後表現"]])}</div>`;
+    <div class="tw-ctl">${rkSeg("data-rkset", "insv:" + view, [["insv:rank", "轉讓最多"], ["insv:feed", "最新申報"], ["insv:heat", "產業熱圖"], ["insv:bt", "申報後表現"]])}</div>${cxInsFolHtml()}`;
   if (none) h += `<p class="note">自選與庫存在資料期間內沒有內部人轉讓申報，下面先列出全市場。</p>`;
   if (view === "rank") h += `<h4>${wTxt}申報轉讓張數最多</h4>` + rkList(by.slice(0, 40).map(g => ({ attr: `data-tsel="${g.code}"`, mono: rkMono(rkInit(g.name || nameOf(g.code)), g.sell ? "#d0643f" : "#8a8f98"), name: `${esc(g.name || nameOf(g.code))} <span class="note">${g.code}</span>`, sub: `${g.n} 筆・${g.who.size} 人${g.sell ? `・市場賣出 ${insSh(g.sell)}` : "・贈與／信託等"}`, val: insSh(g.sh), vc: g.sell ? "down" : "" })), `${wTxt}沒有申報`);
   else if (view === "feed") h += `<div class="mn-days mkseg"><button type="button" data-rkset="insM:" aria-pressed="${!mon}">最新</button>${months.map(m => `<button type="button" data-rkset="insM:${m}" aria-pressed="${mon === m}">${m.replace("-", "/")}</button>`).join("")}</div>` + rkList((mon ? L.filter(r => r.d.startsWith(mon)) : L).slice(0, mon ? 400 : 150).map(r => ({ no: r.d.slice(5).replace("-", "/"), attr: `data-tsel="${r.code}"`, mono: rkMono(rkInit(r.name || nameOf(r.code)), mkt(r) ? "#d0643f" : "#8a8f98"), name: `${nm(r)} <span class="note">${r.code}</span>`, sub: `${esc(r.who)}（${esc(r.role)}）・${esc(r.how)}${r.to ? `・受讓 ${esc(r.to)}` : ""}`, val: insSh(r.sh), vc: mkt(r) ? "down" : "", vsub: `占持股 ${pct(r)}` })), "沒有申報");
+  else if (view === "heat") h += cxInsHeat(R30);
   else h += `<h4>申報後股價表現 <button class="btn sm" data-insbt ${W.insBt?.busy ? "disabled" : ""}>${W.insBt?.busy ? `計算中 ${W.insBt.done}/${W.insBt.total}…` : "計算"}</button></h4>${insBtHtml()}`;
   return h + `<p class="note">資料：${esc(I.source || "")}・更新 ${I.updated ? new Date(Date.parse(I.updated) + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ") : "—"}・保留最近約 3 年（從排程開始累積）。</p></section>`;
 }

@@ -49,6 +49,14 @@ for (const width of [390, 1280]) test(`大戶國會延伸功能 ${width}`, async
   // 我的追蹤：列出追蹤的人、自選股的內部人申報
   await p.evaluate(() => { W.cv = "fol"; renderList(); }); await p.waitForFunction(() => /我的追蹤/.test(document.getElementById("lx").innerText));
   assert.ok((await lx()).includes(await p.evaluate(pid => pName(pid), pid)));
+  // 每一種大戶都有熱圖、申報延遲、追蹤
+  await p.evaluate(() => { W.cv = "home"; W.cview = "heat"; W.cw = 0; renderList(); }); assert.match(await lx(), /主題熱圖：這段期間議員在各產業主題買、賣/);
+  await p.evaluate(() => { W.cv = "f13"; W.f13v = "lag"; W.f13R = null; renderList(); }); assert.match(await lx(), /季底到公開隔幾天[\s\S]*測試機構[\s\S]*45 天/);
+  await p.evaluate(() => { W.cv = "tw"; renderList(); }); await p.waitForFunction(() => /政治人物持股集中在哪些產業/.test(document.getElementById("lx").innerText)); assert.match(await lx(), /申報日到刊登在廉政專刊/);
+  await p.evaluate(() => { W.cv = "ins"; W.insF = "all"; W.insW = 0; W.insv = "heat"; renderList(); }); await p.waitForFunction(() => /內部人在哪些產業申報轉讓/.test(document.getElementById("lx").innerText));
+  await p.fill("[data-cxinsadd] input", "2330"); await p.click("[data-cxinsadd] button"); await p.waitForSelector('.cxinsf [data-cxfol="ins:2330"]');
+  assert.ok(await p.evaluate(() => !!store.get("watch:follow").ins["2330"]), "追蹤公司");
+  await p.evaluate(() => { W.cv = "fol"; renderList(); }); await p.waitForFunction(() => /2330/.test(document.getElementById("lx").innerText) && /申報轉讓/.test(document.getElementById("lx").innerText));
   // 13F 主題熱圖
   await p.evaluate(() => { W.cv = "f13"; W.f13v = "heat"; renderList(); }); await p.waitForSelector(".cxheat");
   assert.match(await lx(), /主題熱圖/);

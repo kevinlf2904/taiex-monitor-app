@@ -7,8 +7,8 @@
    用到 watch.html 的 W、esc、cls、store、getJ、renderList、usd、amtMid、pName、congFrom、congDays、loadCong、IND，tools.js 的 rk*、f13Load、twoLoad、insLoad、twoPeople、myCodes、retPct。 */
 
 // ---------- 追蹤 ----------
-const CX_KINDS = { cong: "國會議員", f13: "13F 機構", tw: "台灣政治人物" };
-const cxFol = () => (W.fol ||= { cong: {}, f13: {}, tw: {}, ...(store.get("watch:follow", null) || {}) });
+const CX_KINDS = { cong: "國會議員", f13: "13F 機構", tw: "台灣政治人物", ins: "內部人" };
+const cxFol = () => (W.fol ||= { cong: {}, f13: {}, tw: {}, ins: {}, ...(store.get("watch:follow", null) || {}) });
 const cxSeen = () => (W.folSeen ||= store.get("watch:folSeen", {}));
 const cxHas = (k, id) => !!cxFol()[k]?.[id];
 function cxToggle(k, id, name) {
@@ -25,6 +25,8 @@ function cxLatest() {
     out.push({ k: "f13", id: cik, name: f?.who || F.f13[cik], d: f?.filed, cv: `f13:${cik}`, txt: f ? `${f.filed.slice(5).replace("-", "/")} 申報 ${f.period} 季底持股：新進或加碼 ${n} 檔、出清 ${f.sold.length} 檔` : W.f13 ? "找不到這家機構" : "載入中…" }); }
   for (const pid of Object.keys(F.tw || {})) { const p = W.two?.decl ? twoPeople().find(x => x.pid === pid) : null;
     out.push({ k: "tw", id: pid, name: p?.name || F.tw[pid], d: p?.last?.date, cv: `tw:p:${pid}`, txt: p ? `${p.last.date.replace(/-/g, "/")} ${esc(p.last.kind || "申報")}：持股 ${p.hold.length} 檔${p.chg.length ? `、和前一次比變動 ${p.chg.length} 檔` : ""}` : W.two ? "找不到這個人" : "載入中…" }); }
+  for (const c of Object.keys(F.ins || {})) { const L = (W.ins?.rows || []).filter(r => r.code === c).sort((a, b) => b.d.localeCompare(a.d)), r = L[0];
+    out.push({ k: "ins", id: c, name: `${r?.name || F.ins[c]} ${c}`, d: r?.d, cv: "ins", txt: r ? `${r.d.slice(5).replace("-", "/")} ${esc(r.who)}（${esc(r.role)}）申報轉讓 ${Math.round((r.sh || 0) / 1000).toLocaleString()} 張・${esc(r.how)}${L.length > 1 ? `・資料期間共 ${L.length} 筆` : ""}` : W.ins ? "資料期間內沒有內部人申報轉讓" : "載入中…" }); }
   return out.sort((a, b) => (b.d || "").localeCompare(a.d || ""));
 }
 const cxNewN = () => cxLatest().filter(x => x.d && x.d > (cxSeen()[`${x.k}:${x.id}`] || "")).length;
@@ -35,7 +37,7 @@ function cxFolHtml() {
   const tw = W.two?.decl ? twoPeople().filter(p => p.hold.some(h => mine.has(h.code))).map(p => ({ p, h: p.hold.filter(h => mine.has(h.code)) })) : [];
   const h = `<section class="csec tw-home">${rkHead("我的追蹤", `追蹤的人有新申報會標「新」；打開看過就算已讀。綁定 Telegram（工具 → 備份同步）後，收盤後的排程也會把追蹤對象的新申報、你自選與庫存股票的內部人轉讓申報推播給你。`)}
     ${L.length ? rkList(L.map(x => { const nw = x.d && x.d > (seen[`${x.k}:${x.id}`] || ""); return { no: CX_KINDS[x.k].slice(0, 2), attr: `data-cv="${esc(x.cv)}" data-cxread="${x.k}:${esc(x.id)}"`, mono: "", name: `${esc(x.name)}${nw ? ' <span class="tw-tp">新</span>' : ""}`, sub: x.txt, val: "" }; }))
-      : `<p class="note">還沒有追蹤任何人。在國會議員、13F 機構、台灣政治人物的頁面按「☆ 追蹤」。</p>`}
+      : `<p class="note">還沒有追蹤任何人。在國會議員、13F 機構、台灣政治人物的頁面按「☆ 追蹤」；內部人在「內部人」分頁輸入公司代號追蹤。</p>`}
     <h4>我的自選與庫存：內部人近 30 天申報轉讓</h4>${ins.length ? rkList(ins.slice(0, 30).map(r => ({ no: r.d.slice(5).replace("-", "/"), attr: `data-tsel="${esc(r.code)}"`, mono: "", name: `${esc(r.name)} ${esc(r.code)}`, sub: `${esc(r.who)}（${esc(r.role)}）・${esc(r.how)}`, val: `${Math.round(r.sh / 1000).toLocaleString()} 張`, vc: "down" })), "")
       : `<p class="note">${W.ins ? "近 30 天沒有你自選或庫存股票的內部人轉讓申報。" : "載入中…"}</p>`}
     <h4>我的自選與庫存：有台灣政治人物申報持有</h4>${tw.length ? rkList(tw.slice(0, 30).map(({ p, h }) => ({ attr: `data-cv="tw:p:${esc(p.pid)}"`, mono: "", name: esc(p.name), sub: esc([p.org, p.title].filter(Boolean).join("・")), val: h.map(x => esc(x.name || x.code)).slice(0, 3).join("、"), vsub: `${h.length} 檔` })), "")
@@ -144,7 +146,7 @@ function cxDecor(v, arg) {
   const head = box.querySelector(".tw-lead") || box.firstElementChild; head ? head.after(bar) : box.prepend(bar);
 }
 document.addEventListener("click", e => {
-  const f = e.target.closest("[data-cxfol]"); if (f) { const [k, id] = f.dataset.cxfol.split(/:(.*)/s); cxToggle(k, id, f.dataset.cxname); f.setAttribute("aria-pressed", cxHas(k, id)); f.textContent = cxHas(k, id) ? "★ 追蹤中" : "☆ 追蹤"; return; }
+  const f = e.target.closest("[data-cxfol]"); if (f) { const [k, id] = f.dataset.cxfol.split(/:(.*)/s); cxToggle(k, id, f.dataset.cxname); if (k === "ins") return renderList(); f.setAttribute("aria-pressed", cxHas(k, id)); f.textContent = cxHas(k, id) ? "★ 追蹤中" : "☆ 追蹤"; return; }
   const r = e.target.closest("[data-cxread]"); if (r) { const S = cxSeen(); S[r.dataset.cxread] = new Date().toISOString().slice(0, 10); store.set("watch:folSeen", S); }
 });
 { const css = document.createElement("style"); css.textContent = `.cxbar { display: grid; gap: 6px; margin: 8px 0; } .cxbar > .btn { justify-self: start; } .cxwin h4 { margin: 8px 0 4px; } .cxwin td b { display: block; font-weight: 500; } .cxwin td small { display: block; font-size: 11px; white-space: nowrap; }
@@ -186,3 +188,53 @@ document.addEventListener("change", e => { const s = e.target.closest?.("[data-f
 document.addEventListener("click", e => { if (e.target.closest("[data-f13rx]")) { W.f13R = null; renderList(); } });
 { const css = document.createElement("style"); css.textContent = `.cxrng { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; } .cxrng input, .cxrng select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--ink); min-width: 0; max-width: 150px; }
 .cxrng.on input, .cxrng.on select { border-color: var(--ink); } .cxrng input[type="date"] { width: 8.6em; padding: 4px; }`; document.head.appendChild(css); }
+
+// ---------- 每一種大戶都有：追蹤、熱圖、申報延遲（補齊美國國會、13F、台灣政治人物、內部人之間缺的功能） ----------
+// 代號 → 產業主題（產業地圖裡的分類；美股、台股各一份），對不到的歸「其他」
+const cxCat = mk => { const M = new Map(); for (const t of (typeof IND !== "undefined" ? IND.themes : [])) if (t.mk === mk) for (const s of t.segs || []) for (const [c] of s.c || []) if (!M.has(c)) M.set(c, t.cat || t.name); return c => M.get(c) || "其他／未分類"; };
+// 熱圖表格：cols＝[[鍵, 標題, 正向?]]，rows＝[{ k, v: {鍵: 數字}, tk: Map(代號→分數) }]
+function cxHeatTable(title, note, cols, rows, openAttr) {
+  const mx = Object.fromEntries(cols.map(([c]) => [c, Math.max(1, ...rows.map(r => r.v[c] || 0))]));
+  const cell = (c, v, up) => `<td style="background:color-mix(in srgb, var(${up ? "--up" : "--down"}) ${Math.round(((v || 0) / mx[c]) * 60)}%, transparent)">${v ? (v >= 1e4 ? Math.round(v / 1e3).toLocaleString() + "K" : Math.round(v).toLocaleString()) : ""}</td>`;
+  return `<h4>${title}</h4><div class="cotbl-wrap"><table class="tbl cxheat"><thead><tr><th>主題</th>${cols.map(([, t]) => `<th>${t}</th>`).join("")}<th>代表股</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td>${esc(r.k)}</td>${cols.map(([c, , up]) => cell(c, r.v[c], up)).join("")}<td>${[...r.tk].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 3).map(([t, v]) => `<button class="linkbtn" ${openAttr(t)}><span class="${cls(v)}">${esc(nameOf(t) !== t ? nameOf(t) : t)}</span></button>`).join(" ")}</td></tr>`).join("") || `<tr><td colspan="${cols.length + 2}" class="note">沒有資料</td></tr>`}</tbody></table></div><p class="note">${note}</p>`;
+}
+const cxRows = (M, key) => [...M.values()].sort((a, b) => (a.k === "其他／未分類") - (b.k === "其他／未分類") || key(b) - key(a));
+// 美國國會：期間內每個主題有幾位議員買、賣，金額（估）
+function cxCongHeat(trades) {
+  const cat = cxCat("us"), M = new Map();
+  for (const t of trades) { if (t.assetType !== "股票" || !t.ticker) continue; const k = cat(t.ticker), g = M.get(k) || M.set(k, { k, v: { b: 0, s: 0, ba: 0, sa: 0 }, tk: new Map(), pb: new Set(), ps: new Set() }).get(k), m = amtMid(t.amount);
+    if (t.k === "buy") { g.pb.add(t.pid); g.v.ba += m; } else if (t.k === "sell") { g.ps.add(t.pid); g.v.sa += m; } g.v.b = g.pb.size; g.v.s = g.ps.size; g.tk.set(t.ticker, (g.tk.get(t.ticker) || 0) + (t.k === "buy" ? 1 : -1)); }
+  return cxHeatTable("主題熱圖：這段期間議員在各產業主題買、賣", "人數＝不同的議員（同一人買很多次算 1 人）；金額用申報區間中間值估算。主題用產業地圖裡的美股分類。", [["b", "買進人數", 1], ["s", "賣出人數", 0], ["ba", "買進金額 $", 1], ["sa", "賣出金額 $", 0]], cxRows(M, r => r.v.b - r.v.s), t => `data-cv="stock:${esc(t)}"`);
+}
+// 台灣政治人物：各產業主題有幾位持有、最近一次申報的新進／增持／減持／出清
+function cxTwHeat() {
+  if (!W.two?.decl) return ""; const cat = cxCat("tw"), M = new Map(), g = c => { const k = cat(c); return M.get(k) || M.set(k, { k, v: { n: 0, new: 0, add: 0, cut: 0, sold: 0 }, tk: new Map(), ppl: new Set() }).get(k); };
+  for (const p of twoPeople()) { for (const h of p.hold) if (h.code) { const x = g(h.code); x.ppl.add(p.pid); x.v.n = x.ppl.size; x.tk.set(h.code, (x.tk.get(h.code) || 0) + 1); } for (const c of p.chg) if (c.code) g(c.code).v[c.t]++; }
+  return cxHeatTable("產業熱圖：政治人物持股集中在哪些產業", "持有人數＝申報持有這個主題股票的人數；新進、增持、減持、出清是和自己前一次申報比。只算有台股代號的持股。", [["n", "持有人數", 1], ["new", "新進", 1], ["add", "增持", 1], ["cut", "減持", 0], ["sold", "出清", 0]], cxRows(M, r => r.v.n), t => `data-cv="tw:s:${esc(t)}"`);
+}
+// 內部人：各產業主題申報轉讓幾筆、幾張（一般交易＝可能在市場賣出）
+function cxInsHeat(rows) {
+  const cat = cxCat("tw"), M = new Map(), mkt = r => /一般交易|盤後|鉅額|拍賣/.test(r.how);
+  for (const r of rows) { const k = cat(r.code), g = M.get(k) || M.set(k, { k, v: { n: 0, sh: 0, mk: 0 }, tk: new Map() }).get(k); g.v.n++; g.v.sh += (r.sh || 0) / 1000; if (mkt(r)) g.v.mk += (r.sh || 0) / 1000; g.tk.set(r.code, (g.tk.get(r.code) || 0) - (r.sh || 0)); }
+  return cxHeatTable("產業熱圖：內部人在哪些產業申報轉讓", "張數＝申報轉讓的股數 ÷ 1000；「市場賣出」是一般交易、盤後、鉅額、拍賣這類可能在市場賣掉的方式，贈與、信託不算。", [["n", "申報筆數", 0], ["sh", "轉讓張數", 0], ["mk", "市場賣出張數", 0]], cxRows(M, r => r.v.sh), t => `data-tsel="${esc(t)}"`);
+}
+// 13F：季底到申報日隔幾天（法規 45 天內）
+function cxF13Lag(F) {
+  const L = F.funds.map(f => ({ f, d: congDays(f.period, f.filed) })).filter(x => x.d >= 0).sort((a, b) => b.d - a.d), A = L.map(x => x.d).sort((a, b) => a - b);
+  return `<h4>申報延遲：季底到公開隔幾天</h4><p class="note">13F 規定季底後 45 天內申報；越晚申報，看到的持股越舊。這一季中位數 ${A[A.length >> 1] ?? "—"} 天。</p>`
+    + rkList(L.map(x => ({ attr: `data-cv="f13:${esc(x.f.cik)}"`, mono: "", name: esc(x.f.who), sub: `${x.f.period} 季底・${x.f.filed} 申報`, val: `${x.d} 天`, vc: x.d > 45 ? "down" : x.d <= 20 ? "up" : "" })), "沒有資料");
+}
+// 台灣政治人物：申報日到刊登在廉政專刊隔幾天
+function cxTwLag() {
+  const X = W.two; if (!X?.decl) return ""; const iss = new Map((X.issues || []).map(i => [i.no, i.date]));
+  const L = X.decl.map(d => ({ d, lag: iss.get(d.issue) ? congDays(d.date, iss.get(d.issue)) : null })).filter(x => x.lag != null && x.lag >= 0), A = L.map(x => x.lag).sort((a, b) => a - b); if (!A.length) return "";
+  return `<h4>申報延遲：申報日到刊登在廉政專刊</h4><p class="note">財產申報要等監察院刊登在廉政專刊才公開。全部 ${A.length} 份申報，中位數隔 ${A[A.length >> 1]} 天、最久 ${A.at(-1)} 天；看到的持股是申報日當時的，不是現在的。</p>`;
+}
+// 內部人：追蹤公司（自選、庫存之外也想追的）
+function cxInsFolHtml() {
+  const F = cxFol().ins || {};
+  return `<div class="cxinsf"><span class="note">追蹤公司的內部人申報</span>${Object.entries(F).map(([c, n]) => `<button type="button" class="ichip" data-cxfol="ins:${esc(c)}" data-cxname="${esc(n)}" aria-pressed="true">★ ${esc(n !== c ? n : nameOf(c))} ${esc(c)}</button>`).join("")}<form data-cxinsadd><input name="c" placeholder="代號" inputmode="numeric" aria-label="追蹤公司代號"><button class="btn sm">☆ 追蹤</button></form></div>`;
+}
+document.addEventListener("submit", e => { const f = e.target.closest?.("[data-cxinsadd]"); if (!f) return; e.preventDefault(); const c = String(f.c.value || "").trim().toUpperCase(); if (!/^\d{4,6}[A-Z]?$/.test(c)) return toast("請填台股代號"); if (!cxHas("ins", c)) cxToggle("ins", c, nameOf(c)); renderList(); });
+{ const css = document.createElement("style"); css.textContent = `.cxinsf { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; } .cxinsf form { display: flex; gap: 4px; } .cxinsf input { width: 6.5em; font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--ink); }`; document.head.appendChild(css); }
