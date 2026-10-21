@@ -3,8 +3,10 @@
    美股：data/us-earn.json（排程每天兩次，scripts/us-earn.mjs），沒有檔案時問 /api/usearn；每列 [日期, 代號, 名稱, 市值(十億美元), 實際EPS, 預估EPS, 驚喜%, 時段, 財報季, 去年同期EPS]。
    月營收、EPS、獲利能力可以選產業看產業內排名（產業比較點產業也會切過去），全部排行的每家公司附「產業第幾名」。
    點公司展開營收、EPS 走勢圖（台股 /api/stockinfo、美股 /api/usinfo，用 watch.html 的 barLineSvg，有查價線）。
+   行事曆、連續成長、三率轉折、我的持股、同業比較、小學堂、財報整體看法、美股財報週與營收驚喜在 earnx.js。
    用到 watch.html 的 W、esc、cls、getJ、store、renderList、barLineSvg、tmo，stockx.js 的 sxMd。 */
-const ER_VIEWS = { tw: [["sum", "總覽"], ["rev", "月營收"], ["eps", "EPS"], ["pm", "獲利能力"], ["ind", "產業比較"]], us: [["recent", "最近公布"], ["up", "即將公布"], ["beat", "優於預期"], ["miss", "低於預期"]] };
+const ER_VIEWS = { tw: [["sum", "總覽"], ["cal", "行事曆"], ["rev", "月營收"], ["streak", "連續成長"], ["eps", "EPS"], ["pm", "獲利能力"], ["turn", "三率轉折"], ["ind", "產業比較"], ["my", "我的持股"], ["cmp", "同業比較"], ["learn", "小學堂"]],
+  us: [["recent", "最近公布"], ["up", "即將公布"], ["week", "財報週"], ["beat", "優於預期"], ["miss", "低於預期"], ["rev", "營收驚喜"], ["learn", "小學堂"]] };
 const ER_K = { c: 0, n: 1, i: 2, m: 3, rev: 4, mom: 5, yoy: 6, cum: 7, eps: 8, qrev: 9, ni: 10, gm: 11, om: 12, nm: 13 };
 // 排行：[鍵, 標題, 欄位, 由大到小?, 說明]
 const ER_RANKS = {
@@ -12,7 +14,7 @@ const ER_RANKS = {
   eps: [["eps", "EPS 最高", "eps", 1, "本季基本每股盈餘（元）"], ["loss", "虧損", "eps", 0, "本季 EPS 為負"], ["ni", "淨利最大", "ni", 1, "本季稅後淨利（億）"]],
   pm: [["gm", "毛利率最高", "gm", 1, "營業毛利 ÷ 營業收入"], ["om", "營益率最高", "om", 1, "營業利益 ÷ 營業收入"], ["nm", "淨利率最高", "nm", 1, "稅後純益 ÷ 營業收入"]],
 };
-const ER = () => (W.er ||= { reg: "tw", view: "sum", usv: "recent", rk: {}, mk: "全部", min: true, big: true, ...(store.get("watch:er", null) || {}), data: null, us: null, tr: {}, open: null });
+const ER = () => (W.er ||= { reg: "tw", view: "sum", usv: "recent", rk: {}, mk: "全部", min: true, big: true, ...(store.get("watch:er", null) || {}), ...(store.get("watch:erx", null) || {}), data: null, us: null, tr: {}, open: null });
 const erSave = () => { const E = ER(); store.set("watch:er", { reg: E.reg, view: E.view, usv: E.usv, rk: E.rk, mk: E.mk, min: E.min, big: E.big, ind: E.ind || "" }); };
 const erYm = s => (s && s.length >= 5 ? `${+s.slice(0, s.length - 2) + 1911} 年 ${+s.slice(-2)} 月` : "");
 const erYq = s => { const m = String(s || "").match(/^(\d+)Q(\d)$/); return m ? `${+m[1] + 1911} 年第 ${m[2]} 季` : ""; };
@@ -50,7 +52,7 @@ function erTrend(c, us) {
   else { const R = J.revenue || [], F = J.fin || [];
     if (R.length) h += `<h4>月營收<span class="note">柱＝營收（億）、線＝年增率</span></h4>${barLineSvg(R.slice(-24).map(r => ({ label: r.ym.slice(2).replace("-", "/"), v: +(r.rev / 1e8).toFixed(1), y: r.yoy })), { bar: "var(--s3)", fmtV: v => v + "億" })}`;
     if (F.length) h += `<h4>季 EPS<span class="note">柱＝每季 EPS（元）、線＝毛利率</span></h4>${barLineSvg(F.slice(-12).map(r => ({ label: String(r.q).slice(2), v: r.eps, y: r.gross })), { fmtV: v => v, fmtY: v => v + "%" })}`; }
-  return `<div class="ertr">${h || `<p class="note">這檔沒有營收或 EPS 歷史資料。</p>`}${frEarn(c, us, J)}<div class="ertrf">${go}<span class="note">移上去（手指按著滑）看每期數字</span></div></div>`;
+  return `<div class="ertr">${h || `<p class="note">這檔沒有營收或 EPS 歷史資料。</p>`}${typeof exCompany === "function" ? exCompany(c, us, J) : ""}${frEarn(c, us, J)}<div class="ertrf">${go}<span class="note">移上去（手指按著滑）看每期數字</span></div></div>`;
 }
 // 排行清單：每列名稱、長條、數值、附帶資訊；點了展開走勢圖
 function erList(L, k, sub) {
@@ -85,9 +87,9 @@ function renderEarnUs(E) {
   const beat = past.filter(r => r[6] != null && r[6] > 0).length, withS = past.filter(r => r[6] != null).length;
   return `<p class="note gnote">${esc(U.source || "")}・${md(U.from)}～${md(U.to)}・${new Date(Date.parse(U.at) + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/")} 更新</p>
     <div class="erbar"><label class="erchk"><input type="checkbox" data-erbig ${E.big ? "checked" : ""}> 只看市值 1,000 億美元以上</label></div>
-    <section class="mk"><h3>重點</h3><div class="d-kv sxkv"><div><span>已公布</span><b>${past.length} 家</b></div><div><span>優於預期</span><b class="up">${withS ? Math.round(beat / withS * 100) : "—"}%</b></div><div><span>未來兩週公布</span><b>${next.length} 家</b></div></div>
+    ${exOverallUs(past)}<section class="mk"><h3>重點</h3><div class="d-kv sxkv"><div><span>已公布</span><b>${past.length} 家</b></div><div><span>優於預期</span><b class="up">${withS ? Math.round(beat / withS * 100) : "—"}%</b></div><div><span>未來兩週公布</span><b>${next.length} 家</b></div></div>
       <p class="note">EPS 優於預期（驚喜）的比例常被拿來看整體財報季的好壞；個股財報公布後，股價反應多半看「和預估比」與財測，而不是數字本身。</p></section>
-    <section class="mk"><h3>${ER_VIEWS.us.find(x => x[0] === V)?.[1] || ""}<span class="note">${L.length} 家・點公司看營收、EPS 走勢</span></h3>${L.length ? `<ol class="erlist">${L.slice(0, 80).map(row).join("")}</ol>` : `<p class="note">沒有符合的公司</p>`}</section>${erLookup(true)}`;
+    ${V === "week" ? exWeek(E, U) : V === "rev" ? exUsRev(E, U, past) : V === "learn" ? exLearn() : `<section class="mk"><h3>${ER_VIEWS.us.find(x => x[0] === V)?.[1] || ""}<span class="note">${L.length} 家・點公司看營收、EPS 走勢</span></h3>${L.length ? `<ol class="erlist">${L.slice(0, 80).map(row).join("")}</ol>` : `<p class="note">沒有符合的公司</p>`}</section>`}${erLookup(true)}`;
 }
 function renderEarn() {
   const E = ER(), us = E.reg === "us";
@@ -116,11 +118,13 @@ function renderEarn() {
   if (E.view === "sum") {
     const withY = all.filter(r => r[6] != null && big(r)), up = withY.filter(r => r[6] > 0).length, epsN = all.filter(r => r[8] != null), loss = epsN.filter(r => r[8] < 0).length, I = erInd(all);
     const t = (grp, key, n) => { const { R, L } = rank(grp, key); return `<section class="mk"><h3>${R[1]}<span class="note">${R[4]}</span><button class="linkbtn" data-errk="${grp}:${key}" data-ergo="${grp}">看前 50 名 ›</button></h3>${erList(L.slice(0, n), R[2], grp === "rev" ? subRev : grp === "eps" ? subEps : subPm)}</section>`; };
-    h += `<section class="mk"><h3>重點<span class="note">產業以月營收年增排序</span></h3><div class="d-kv sxkv"><div><span>營收年增家數</span><b class="up">${withY.length ? Math.round(up / withY.length * 100) : "—"}%</b></div><div><span>年增≥30%</span><b>${withY.filter(r => r[6] >= 30).length} 家</b></div>
+    h += exOverallTw(D, all, big) + `<section class="mk"><h3>重點<span class="note">產業以月營收年增排序</span></h3><div class="d-kv sxkv"><div><span>營收年增家數</span><b class="up">${withY.length ? Math.round(up / withY.length * 100) : "—"}%</b></div><div><span>年增≥30%</span><b>${withY.filter(r => r[6] >= 30).length} 家</b></div>
       <div><span>本季虧損</span><b class="down">${loss} 家</b></div><div><span>最強產業</span><b>${esc(I[0]?.n || "—")}</b></div><div><span>最弱產業</span><b>${esc(I.at(-1)?.n || "—")}</b></div></div>
       <p class="note">月營收每月 10 號前公布、季報在季後 45 天內（第 4 季與年報在隔年 3 月底前）；月營收年增連續成長、EPS 創新高的公司常是法人追蹤的重點。點公司可以展開營收、EPS 走勢圖。</p></section>`
       + erLookup(false) + t("rev", "yoy", 10) + t("eps", "eps", 10) + t("pm", "gm", 10)
       + `<section class="mk"><h3>產業營收年增<span class="note">各產業當月營收合計和去年同月比</span><button class="linkbtn" data-ergo="ind">看全部產業 ›</button></h3>${erIndBars(I.slice(0, 8))}</section>`;
+  } else if (EX_TW_VIEWS[E.view]) {
+    const ok = new Set(all.filter(big).map(r => r[0])); h += EX_TW_VIEWS[E.view](E, D, r => ok.has(r[0]));
   } else if (E.view === "ind") {
     h += `<section class="mk"><h3>產業比較<span class="note">各產業當月營收合計年增率；點產業看產業內排名</span></h3>${erIndBars(erInd(all))}</section>`;
   } else {

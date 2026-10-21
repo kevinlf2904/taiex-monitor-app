@@ -147,6 +147,16 @@ if (process.argv[2] === "earnprobe") {
   [st, j] = await fh(`/stock/earnings?symbol=NVDA&limit=12`); console.log("### stock/earnings NVDA", st, Array.isArray(j) ? j.length : j, JSON.stringify(Array.isArray(j) ? j.slice(-1) : ""));
   process.exit(0);
 }
+if (process.argv[2] === "earndry") {
+  // 財報進階排程用真實資料跑一次（寫到暫存資料夾，不動 repo）
+  const os = await import("node:os"), fs = await import("node:fs/promises"), path = await import("node:path"), { main } = await import("./earn-hist.mjs"), dir = await fs.mkdtemp(os.tmpdir() + "/eh-");
+  for (const f of ["twse-rev.json", "tpex-rev.json"]) await fs.copyFile(new URL(`../learner/data/${f}`, import.meta.url), path.join(dir, f));
+  const o = await main({ dir: f => path.join(dir, f) }), P = o.pm;
+  console.log("連續成長", o.streak?.ym, o.streak?.rows.length, JSON.stringify(o.streak?.rows.slice(0, 3)));
+  console.log("公布進度", o.pub?.ym, o.pub?.n, "/", o.pub?.total);
+  console.log("三率", P?.q, P?.qp, P?.qy, P?.rows.length, "家；三率三升", P?.rows.filter(r => r[7] > 0 && r[8] > 0 && r[9] > 0).length, JSON.stringify(P?.rows.find(r => r[0] === "2330")), JSON.stringify(P?.rows.find(r => r[0] === "1101")));
+  process.exit(0);
+}
 if (process.argv[2] === "tpexcharts") {
   // 情報局「櫃買」圖表用到的資料集：印筆數、欄位、前兩筆與最後一筆（截短），好對欄位名稱
   const P = process.argv[3] === "2" ? ["/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap08_O", "/tpex_gold_market_highlight", "/tpex_warrant_daily_quts", "/tpex_warrant_statistics", "/tpex_warrant_issue"] : ["/tpex_index", "/tpex_reward_index", "/tpex50_index", "/tpex200_change", "/tphd_index", "/tpcgi_reward_index", "/tpci_reward_index", "/tpex_emp88_reward_index", "/tpex_daily_trading_index", "/mopsfin_t187ap05_OA", "/mopsfin_t187ap05_OB", "/mopsfin_t187ap15_O", "/mopsfin_t187ap16_O", "/mopsfin_t187ap09_O", "/mopsfin_t187ap08_O", "/tpex_warrant_statistics", "/tpex_intraday_trading_pre", "/tpex_margin_trading_term", "/tpex_esb_eps_rank", "/tpex_gold_latest", "/tpex_gold_market_highlight", "/bond_cb_daily"];

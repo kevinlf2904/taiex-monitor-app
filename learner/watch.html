@@ -1099,7 +1099,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-135</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-136</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1152,6 +1152,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="tools.js"></script>
 <script src="oapi.js"></script>
 <script src="earn.js"></script>
+<script src="earnx.js"></script>
 <script src="tpex.js"></script>
 <script src="official.js"></script>
 <script src="macrox.js"></script>
@@ -1734,14 +1735,14 @@ function renderList() {
   if (W.ticking && Date.now() - (W.lastPtr || 0) < 900) return;
   if (W.ticking && (W.lt === "pod" || W.lt === "cong" || (W.lt === "tools" && W.tv !== "sum"))) return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
   const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details")].map(d => [sum(d), d.open]));
-  // 換分頁時新內容常常先是一行「載入中」，頁面一變短瀏覽器就把捲動位置拉回最上面：重畫前先撐住原本的高度，內容夠高或 1.5 秒後再放開
+  // 換分頁時新內容常常先是一行「載入中」，頁面一變短瀏覽器就把捲動位置拉回最上面：重畫前先撐住原本的高度，內容夠高或 0.9 秒後再放開
   const xs = hsKeep(), hold = !W.ticking && !lx.hidden && lx.offsetHeight > 0;
   if (hold) { clearTimeout(W.lxHold); lx.style.minHeight = lx.offsetHeight + "px"; }
   renderList0();
   if (opened.size) for (const d of lx.querySelectorAll("details")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
   hsRestore(xs);
   if (hold) { const r = document.createRange(); r.selectNodeContents(lx); const need = parseFloat(lx.style.minHeight) || 0;
-    if (lx.hidden || r.getBoundingClientRect().height >= need - 40) lx.style.minHeight = ""; else W.lxHold = setTimeout(() => { lx.style.minHeight = ""; }, 1500); }
+    if (lx.hidden || r.getBoundingClientRect().height >= need - 40) lx.style.minHeight = ""; else W.lxHold = setTimeout(() => { lx.style.minHeight = ""; }, 900); }
 }
 // 重畫後左右滑動的選單、表格留在原本滑到的位置（不然每點一次就跳回最前面）；選中的那一項不在畫面裡時捲過去
 const HS_SEL = ".seg, .mkseg, .cochips, .afchips, .mf-modes, .gcats, .scrseg, .tw-grp, .cotbl-wrap, .tablewrap, .kbar, .sxnav, .cx-row";
