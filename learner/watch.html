@@ -653,15 +653,16 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 /* 星系固定用深藍夜空＋發光球體與細線網格，淺色主題也一樣 */
 .igal-wrap { margin: 8px 12px; border: 1px solid #1a2a44; border-radius: 16px; background: radial-gradient(ellipse at 50% 42%, #14305a 0%, #0b1a33 45%, #060c18 100%); overflow: hidden; }
 .igalaxy { display: block; width: 100%; height: auto; }
-.igalaxy .orb { fill: none; stroke: #5d9be0; stroke-opacity: .16; stroke-width: .8; }
-.igalaxy .gmesh { stroke: #7fc4ff; stroke-opacity: .13; stroke-width: .7; }
+.igalaxy { touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; } .igalaxy:active { cursor: grabbing; }
+.igalaxy .gmesh { fill: none; stroke: #a9d6ff; stroke-opacity: .3; stroke-width: .7; } .igalaxy .gmesh.back { stroke-opacity: .09; }
+.igalaxy .gface { stroke: none; fill: #cfe6ff; } .igalaxy .gface.f1 { fill-opacity: .03; } .igalaxy .gface.f2 { fill-opacity: .07; } .igalaxy .gface.f3 { fill-opacity: .16; }
+.igalaxy .geq { fill: none; stroke: #9fd4ff; stroke-opacity: .25; stroke-dasharray: 3 5; } .igalaxy .grim { fill: none; stroke: #bfe3ff; stroke-opacity: .35; stroke-width: 1.2; }
 .igalaxy .ge { stroke: #8fd0ff; stroke-opacity: .34; stroke-width: .9; fill: none; }
 .igalaxy .ge.on { stroke: #d6efff; stroke-opacity: .95; stroke-width: 1.5; stroke-dasharray: 5 5; animation: gxFlow 1s linear infinite; }
 .igalaxy .gbk { animation: gxTw 6s ease-in-out infinite alternate; } @keyframes gxTw { to { opacity: .1; } }
 .gx .gh { pointer-events: none; } .gx.gk2 .gn, .gx.gk3 .gn { opacity: .85; }
 @keyframes gxFlow { to { stroke-dashoffset: -20; } }
-.gx { cursor: pointer; outline: none; } .gxi { animation: gxIn .6s cubic-bezier(.16, 1, .3, 1) both; }
-@keyframes gxIn { from { transform: translate(var(--fx), var(--fy)) scale(.3); opacity: 0; } }
+.gx { cursor: pointer; outline: none; }
 .gx circle.b { transform-box: fill-box; transform-origin: center; transition: transform .2s; }
 .gx:hover circle.b, .gx:focus-visible circle.b { transform: scale(1.12); }
 .gx text { font-size: 12px; fill: #e9f3ff; text-anchor: middle; pointer-events: none; }
@@ -669,10 +670,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .gx .gp { font-size: 10.5px; font-weight: 600; } .igalaxy.mob .gx:not(.core) .gn { font-size: 14px; } .igalaxy.mob .gx:not(.core) .gp { font-size: 12.5px; } .gx.core .gn { font-size: 14px; font-weight: 600; } .gx.core .gp { font-size: 12.5px; }
 .gx.core circle.b { animation: gxPulse 2.6s ease-in-out infinite; }
 @keyframes gxPulse { 50% { stroke-width: 4; stroke-opacity: .55; } } .gx.core .gh { animation: gxGlow 2.6s ease-in-out infinite; } @keyframes gxGlow { 50% { opacity: .5; } }
-.igalaxy .gzone { fill: none; } .igalaxy .gzone.up { fill: #7fb4ff; fill-opacity: .035; } .igalaxy .gmid { stroke: #7fb4ff; stroke-opacity: .28; stroke-dasharray: 2 5; }
 .igalaxy .gzt { font-size: 11.5px; fill: #8fa9cc; } .igalaxy.mob .gzt { font-size: 13px; }
 .igal-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 14px 8px; font-size: 12px; color: var(--muted); }
-@media (prefers-reduced-motion: reduce) { .iisl, .gxi, .gx.core circle.b, .gx.core .gh, .igalaxy .gbk, .igalaxy .ge.on { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .iisl, .gx.core circle.b, .gx.core .gh, .igalaxy .gbk, .igalaxy .ge.on { animation: none !important; } }
 .itheme { border: 1px solid color-mix(in srgb, var(--ic) 55%, var(--line)); border-radius: 4px; padding: 12px 14px; background: linear-gradient(160deg, color-mix(in srgb, var(--ic) 14%, var(--surface)), var(--surface-2)); }
 .ith { display: flex; align-items: center; gap: 8px; } .iic { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 4px; color: var(--ic); border: 1px solid color-mix(in srgb, var(--ic) 50%, transparent); background: color-mix(in srgb, var(--ic) 12%, transparent); flex: none; }
 .itag { font: 500 11px var(--font-num); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; } .iavg { font: 500 13px var(--font-num); margin-left: auto; } .iavg.up { color: var(--up); } .iavg.down { color: var(--down); }
@@ -1009,7 +1009,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-111</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-112</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -3264,7 +3264,7 @@ async function loadIndQuotes(codes) {
   for (let i = 0; i < need.length; i += 40) {
     try { const j = await getJ(`/api/quote?codes=${need.slice(i, i + 40).join(",")}&src=mis`); j.quotes.forEach(q => { W.quotes.set(q.code, q); if (q.name && !isIdx(q.code)) W.names[q.code] = q.name; }); } catch {}
   }
-  if (W.lt === "ind") renderInd();
+  if (W.lt === "ind") W.gx?.drag ? (W.gx.pend = true) : renderInd(); // 正在拖曳星系時，等放手再重畫
 }
 const indFav = () => new Set(store.get("watch:indfav", []) || []);
 // 流程圖（產業圖解）：把步驟排成一格一格的方塊，用箭頭串起來；cols 決定一列放幾格
@@ -3311,8 +3311,9 @@ function indIslands(L, sel, fav) {
   };
   return `<div class="iislands">${G.map(card).join("")}</div><h3 class="iisl-h" style="--ic:${cur.c}"><i></i>${cur.nm}<small>${cur.T.length} 個題材</small></h3><div class="ithemes">${cur.T.map(t => indCard(t, fav)).join("")}</div>`;
 }
-// 產業網絡（星系）：連線最多的題材（或點選的題材）放中心，其他題材依「隔幾層關係」排在外圈軌道；
-// 再加上分層的方向：中心的上游（沿連線往回走得到的）放上半圈、下游放下半圈、其他相關題材放左右兩側，連線箭頭由上游指向下游
+// 產業網絡（星系）：3D 網狀球體。點選的題材（或連線最多的）在球心發光，其他題材貼在球面上：
+// 上游在北半球、下游在南半球、相關但不在同一條鏈上的在赤道附近；離中心越多層，緯度越高（越靠近兩極）。
+// 球體會慢慢自轉（只繞垂直軸，所以上游永遠在上、下游永遠在下），手指左右拖曳或滑鼠拖曳可轉動；背面的題材變暗且不標名稱。
 function indGalaxy(net, focus) {
   const ids = net.layers.flatMap(([, L]) => L).filter(id => INDT.has(id)), lay = {}, adj = new Map(ids.map(id => [id, new Set()]));
   net.layers.forEach(([, L], r) => L.forEach(id => (lay[id] = r)));
@@ -3320,61 +3321,89 @@ function indGalaxy(net, focus) {
   const core = focus && adj.has(focus) ? focus : ids.slice().sort((a, b) => adj.get(b).size - adj.get(a).size)[0];
   const dist = { [core]: 0 }, q = [core];
   while (q.length) { const x = q.shift(); for (const y of adj.get(x)) if (dist[y] == null) { dist[y] = dist[x] + 1; q.push(y); } }
-  const rings = []; ids.forEach(id => { const k = Math.min(3, dist[id] ?? 3); (rings[k] ||= []).push(id); });
   const reach = (from, dir) => { const S = new Set(), q = [from]; while (q.length) { const x = q.shift(); for (const [a, b] of net.links) { const [s0, t0] = dir ? [a, b] : [b, a]; if (s0 === x && adj.has(t0) && !S.has(t0)) { S.add(t0); q.push(t0); } } } return S; };
   const ups = reach(core, 0), downs = reach(core, 1), side = id => (ups.has(id) ? -1 : downs.has(id) ? 1 : 0); // -1 上游、1 下游、0 相關
-  const mob = isMobile(), W0 = mob ? 440 : 900, H0 = mob ? 800 : 700, cx = W0 / 2, pos = {};
-  // 上游多就把中心往下移、上半圈拉高（下游多則相反），兩邊各自有足夠空間
-  const nU = ups.size, nD = downs.size, frac = Math.max(0.3, Math.min(0.72, (nU + (ids.length - 1 - nU - nD) / 2 + 1) / (ids.length + 1))), cy = Math.round(34 + frac * (H0 - 78));
-  // 每圈半徑依那圈的題材數撐開（太擠的圈自動外推），最後整體縮放到畫面內；同圈題材多時內外交錯，標籤比較不會疊
-  const raw = [0]; for (let k = 1; k < rings.length; k++) raw[k] = Math.max(raw[k - 1] + 1, (rings[k]?.length || 0) / (mob ? 6 : 8));
-  const top = raw[raw.length - 1] || 1, ax = W0 / 2 - (mob ? 50 : 84), ayU = cy - 46, ayD = H0 - cy - (mob ? 52 : 50);
-  const rx = k => (ax * raw[k]) / top, ry = (k, a) => (((Math.sin(a) < 0 ? ayU : ayD) * raw[k]) / top);
-  // 每一圈分三組放角度：上游在上半圈、下游在下半圈（都依分層由左到右），相關題材輪流放左右兩側的水平帶
-  const spread = (n, a0, a1) => Array.from({ length: n }, (_, i) => a0 + ((i + 0.5) / n) * (a1 - a0));
-  rings.forEach((L, k) => { if (!L) return; if (!k) { pos[L[0]] = [cx, cy, 0]; return; } const zig = L.length > (mob ? 7 : 10), ang = {};
-    const U = L.filter(id => side(id) < 0).sort((a, b) => lay[a] - lay[b]), D = L.filter(id => side(id) > 0).sort((a, b) => lay[a] - lay[b]), M = L.filter(id => !side(id)).sort((a, b) => lay[a] - lay[b]);
-    const m = M.length ? 0.38 : 0.12, ML = M.filter((_, i) => i % 2), MR = M.filter((_, i) => !(i % 2));
-    spread(U.length, -Math.PI + m, -m).forEach((a, i) => (ang[U[i]] = a)); spread(D.length, Math.PI - m, m).forEach((a, i) => (ang[D[i]] = a));
-    spread(MR.length, -m + 0.06, m - 0.06).forEach((a, i) => (ang[MR[i]] = a)); spread(ML.length, Math.PI + m - 0.06, Math.PI - m + 0.06).forEach((a, i) => (ang[ML[i]] = a));
-    [...U, ...D, ...M].forEach((id, i) => { const a = ang[id], f = zig ? (i % 2 ? 1.08 : 0.86) : 1; pos[id] = [cx + rx(k) * f * Math.cos(a), cy + ry(k, a) * f * Math.sin(a), k]; }); });
-  // 標籤避讓：每個題材當成「圓圈＋下方兩行字」的方框，互相重疊就沿連線方向推開（中心不動、不推出畫面），手機上字不會疊在一起
-  const rOf = k => (k === 0 ? (mob ? 30 : 38) : k === 1 ? (mob ? 11 : 14) : mob ? 9 : 11), nmOf = (t, k) => (k === 0 ? t.name : t.name.length > (mob ? 6 : 8) ? t.name.slice(0, mob ? 6 : 8) + "…" : t.name);
-  const box = id => { const [x, y, k] = pos[id], r = rOf(k), w = Math.max(2 * r, nmOf(INDT.get(id), k).length * (mob ? 14.5 : 12.5)) + 6; return k ? { x0: x - w / 2, x1: x + w / 2, y0: y - r - 2, y1: y + r + (mob ? 34 : 30) } : { x0: x - r - 6, x1: x + r + 6, y0: y - r - 6, y1: y + r + 6 }; };
-  const P = Object.keys(pos);
-  for (let it = 0; it < 80; it++) { let moved = false;
-    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
-      const A = box(P[i]), B = box(P[j]), ox = Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0), oy = Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0); if (ox <= 0 || oy <= 0) continue;
-      const a = pos[P[i]], b = pos[P[j]], horiz = ox < oy, d = horiz ? ox : oy, sg = horiz ? Math.sign(b[0] - a[0] || 1) : Math.sign(b[1] - a[1] || 1), wa = a[2] ? (b[2] ? 0.5 : 1) : 0, wb = 1 - wa;
-      if (horiz) { a[0] -= sg * d * wa + sg * 0.5 * wa; b[0] += sg * d * wb + sg * 0.5 * wb; } else { a[1] -= sg * d * wa + sg * 0.5 * wa; b[1] += sg * d * wb + sg * 0.5 * wb; }
-      for (const [id, n] of [[P[i], a], [P[j], b]]) if (n[2]) { const sd = side(id), hw = (box(id).x1 - box(id).x0) / 2; n[0] = Math.max(hw + 2, Math.min(W0 - hw - 2, n[0])); n[1] = Math.max(sd > 0 ? cy + 18 : 30, Math.min(sd < 0 ? cy - 18 : H0 - (mob ? 40 : 36), n[1])); } // 上游不推到中線以下、下游不推到中線以上
-      moved = true; }
-    if (!moved) break; }
-  // 畫面上下裁到題材實際占用的範圍，下游少時下方不會留一大片空白
-  const BX = P.map(box), VY0 = Math.max(0, Math.floor(Math.min(...BX.map(b => b.y0)) - 30)), VY1 = Math.min(H0, Math.ceil(Math.max(...BX.map(b => b.y1)) + 26));
-  let g = `<defs><marker id="gxa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8Z" style="fill:#7fc4ff;fill-opacity:.5"/></marker><marker id="gxa2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8Z" style="fill:#d6efff"/></marker>
-    <radialGradient id="gxs" cx="35%" cy="32%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#d7e9fb"/><stop offset="1" stop-color="#5d7fa6"/></radialGradient>
-    ${[["u", "var(--up)"], ["d", "var(--down)"], ["n", "#7fc4ff"], ["o", "#ff9a4a"]].map(([k, c]) => `<radialGradient id="gxg${k}"><stop offset="0" style="stop-color:${c};stop-opacity:.75"/><stop offset=".45" style="stop-color:${c};stop-opacity:.22"/><stop offset="1" style="stop-color:${c};stop-opacity:0"/></radialGradient>`).join("")}</defs>
-    ${gxBokeh(W0, VY0, VY1, ids.length)}
-    <rect class="gzone up" x="0" y="${VY0}" width="${W0}" height="${cy - VY0}"/>
-    <line class="gmid" x1="0" y1="${cy}" x2="${W0}" y2="${cy}"/><text class="gzt" x="10" y="${VY0 + 20}">↑ 上游（供應給中心）</text><text class="gzt" x="10" y="${VY1 - 10}">↓ 下游（中心供應給它）</text>`;
-  g += rings.map((L, k) => { if (!k || !L) return ""; const r = rx(k).toFixed(1), u = ry(k, -1).toFixed(1), d = ry(k, 1).toFixed(1);
-    return `<path class="orb" d="M${cx - r} ${cy} A${r} ${u} 0 0 1 ${+cx + +r} ${cy} A${r} ${d} 0 0 1 ${cx - r} ${cy}"/>`; }).join("");
-  const real = new Set(net.links.map(([a, b]) => [a, b].sort().join("|"))), mesh = new Set();
-  P.forEach(a => P.filter(b => b !== a).sort((b, c) => Math.hypot(pos[b][0] - pos[a][0], pos[b][1] - pos[a][1]) - Math.hypot(pos[c][0] - pos[a][0], pos[c][1] - pos[a][1])).slice(0, 2).forEach(b => { const key = [a, b].sort().join("|"); if (!real.has(key)) mesh.add(key); }));
-  g += [...mesh].map(key => { const [a, b] = key.split("|"); return `<line class="gmesh" x1="${pos[a][0].toFixed(1)}" y1="${pos[a][1].toFixed(1)}" x2="${pos[b][0].toFixed(1)}" y2="${pos[b][1].toFixed(1)}"/>`; }).join("");
-  // 連線畫到目標圓圈邊緣為止，箭頭才不會被圓圈蓋住
-  g += net.links.filter(([a, b]) => pos[a] && pos[b]).map(([a, b]) => { const A = pos[a], B = pos[b], on = a === core || b === core, dx = B[0] - A[0], dy = B[1] - A[1], d = Math.hypot(dx, dy) || 1, cut = rOf(B[2]) + 3;
-    return `<line class="ge${on ? " on" : ""}" marker-end="url(#${on ? "gxa2" : "gxa"})" x1="${A[0].toFixed(1)}" y1="${A[1].toFixed(1)}" x2="${(B[0] - (dx / d) * cut).toFixed(1)}" y2="${(B[1] - (dy / d) * cut).toFixed(1)}"/>`; }).join("");
-  g += Object.entries(pos).sort((a, b) => b[1][2] - a[1][2]).map(([id, [x, y, k]]) => {
-    const t = INDT.get(id), p = indAvg(t)?.pct ?? null, r = rOf(k), nm = nmOf(t, k);
-    return `<g class="gx${k === 0 ? " core" : ""} gk${k}" data-ifocus="${id}" transform="translate(${x.toFixed(1)},${y.toFixed(1)})" role="button" tabindex="0" aria-label="${esc(t.name)}"><g class="gxi" style="--fx:${(cx - x).toFixed(0)}px;--fy:${(cy - y).toFixed(0)}px;animation-delay:${k * 70}ms">
+  const mob = isMobile(), W0 = mob ? 440 : 900, H0 = mob ? 560 : 640, R = mob ? 168 : 232;
+  // 球面座標：同一組（上游／下游／相關 × 第幾層）平均分配經度，各組錯開起點，避免排成一直線
+  const N = [{ id: core, k: 0, s: 0, v: [0, 0, 0] }], grp = {};
+  ids.filter(id => id !== core).forEach(id => { const k = Math.min(3, dist[id] ?? 3), s = side(id); (grp[`${s}:${k}`] ||= []).push(id); });
+  Object.entries(grp).forEach(([key, L], gi) => { const [s, k] = key.split(":").map(Number);
+    L.sort((a, b) => lay[a] - lay[b]).forEach((id, i) => {
+      const lat = s ? -s * ((22 + (k - 1) * 22) * Math.PI) / 180 : ((i % 2 ? -1 : 1) * (5 + (k - 1) * 4) * Math.PI) / 180, lon = gi * 2.39996 + (i / L.length) * Math.PI * 2;
+      N.push({ id, k, s, v: [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)] }); }); });
+  // 裝飾用的網格點（費氏球面均勻分布）＋最近鄰連成三角網，邊緣的三角面比較亮，做出參考圖的切面球體
+  const nDP = mob ? 70 : 110, DP = Array.from({ length: nDP }, (_, i) => { const y = 1 - (2 * (i + 0.5)) / nDP, r = Math.sqrt(1 - y * y), t = i * 2.39996; return [r * Math.cos(t), y, r * Math.sin(t)]; });
+  const allP = [...DP, ...N.slice(1).map(n => n.v)], segs = new Set(), tris = new Set(), d3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  allP.forEach((p, i) => { const nn = allP.map((o, j) => [j, d3(p, o)]).filter(([j]) => j !== i).sort((a, b) => a[1] - b[1]).slice(0, 3).map(x => x[0]);
+    nn.forEach(j => segs.add([i, j].sort((a, b) => a - b).join(","))); tris.add([i, nn[0], nn[1]].sort((a, b) => a - b).join(",")); });
+  W.gxS = { N, P: allP, segs: [...segs].map(s => s.split(",").map(Number)), tris: [...tris].map(s => s.split(",").map(Number)), links: net.links.filter(([a, b]) => N.some(n => n.id === a) && N.some(n => n.id === b)), W0, H0, R, cx: W0 / 2, cy: H0 / 2 + 6, mob, rOf: k => (k === 0 ? (mob ? 30 : 38) : k === 1 ? (mob ? 12 : 15) : mob ? 10 : 12) };
+  W.gx ||= { th: 0.35, ph: 0.2 };
+  const nmOf = (t, k) => (k === 0 ? t.name : t.name.length > (mob ? 6 : 8) ? t.name.slice(0, mob ? 6 : 8) + "…" : t.name);
+  const nodes = N.map(({ id, k }) => { const t = INDT.get(id), p = indAvg(t)?.pct ?? null, r = W.gxS.rOf(k), nm = nmOf(t, k);
+    return `<g class="gx${k === 0 ? " core" : ""} gk${k}" data-ifocus="${id}" role="button" tabindex="0" aria-label="${esc(t.name)}">
       <circle class="gh" r="${(r * (k ? 2.6 : 2.1)).toFixed(1)}" fill="url(#gxg${p == null ? "n" : p >= 0 ? "u" : "d"})" style="opacity:${p == null ? 0.7 : (0.55 + Math.min(0.45, Math.abs(p) / 2)).toFixed(2)}"/>
-      <circle class="b" r="${r}" fill="url(#gxs)" style="stroke:${indCol(t)};stroke-width:${k === 0 ? 2.5 : 1.2};opacity:${k <= 1 ? 1 : k === 2 ? 0.86 : 0.72}"/>
+      <circle class="b" r="${r}" fill="url(#gxs)" style="stroke:${indCol(t)};stroke-width:${k === 0 ? 2.5 : 1.2}"/>
       ${k === 0 ? `<text class="gn" y="${p == null ? 5 : -2}">${esc(nm.length > 7 ? nm.slice(0, 7) + "…" : nm)}</text>${p != null ? `<text class="gp" y="16" style="fill:${indPctCol(p)}">${indPctTxt(p)}</text>` : ""}`
-        : `<text class="gn" y="${r + (mob ? 15 : 13)}">${esc(nm)}</text>${p != null ? `<text class="gp" y="${r + (mob ? 29 : 25)}" style="fill:${indPctCol(p)}">${indPctTxt(p)}</text>` : ""}`}<title>${esc(t.name)}・${MK_TAG[t.mk]} ${indPctTxt(p)}</title></g></g>`; }).join("");
-  return `<div class="igal-wrap"><svg class="igalaxy${mob ? " mob" : ""}" viewBox="0 ${VY0} ${W0} ${VY1 - VY0}" role="img" aria-label="${esc(net.name)} 產業星系">${g}</svg></div>
-    <div class="igal-leg"><span>中心：${esc(INDT.get(core).name)}（上游 ${ups.size}・下游 ${downs.size}）</span><span>上半圈＝上游、下半圈＝下游、左右＝相關但不在同一條鏈上</span><span>越內圈關係越近，箭頭由上游指向下游</span><span>點任一題材換到中心</span></div>`;
+        : `<g class="gl"><text class="gn" y="${r + (mob ? 15 : 13)}">${esc(nm)}</text>${p != null ? `<text class="gp" y="${r + (mob ? 29 : 25)}" style="fill:${indPctCol(p)}">${indPctTxt(p)}</text>` : ""}</g>`}<title>${esc(t.name)}・${MK_TAG[t.mk]} ${indPctTxt(p)}</title></g>`; }).join("");
+  const { cx, cy } = W.gxS;
+  queueMicrotask(gxMount); // 畫面放進頁面後才接上旋轉與拖曳
+  return `<div class="igal-wrap"><svg class="igalaxy${mob ? " mob" : ""}" viewBox="0 0 ${W0} ${H0}" role="img" aria-label="${esc(net.name)} 產業星系（3D 球體）">
+    <defs><marker id="gxa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8Z" style="fill:#7fc4ff;fill-opacity:.5"/></marker><marker id="gxa2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8Z" style="fill:#d6efff"/></marker>
+    <radialGradient id="gxs" cx="35%" cy="32%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#d7e9fb"/><stop offset="1" stop-color="#5d7fa6"/></radialGradient>
+    <radialGradient id="gxbase" cx="50%" cy="50%" r="50%"><stop offset="0" style="stop-color:#9fd4ff;stop-opacity:.55"/><stop offset="1" style="stop-color:#9fd4ff;stop-opacity:0"/></radialGradient>
+    <radialGradient id="gxin" cx="50%" cy="58%" r="55%"><stop offset="0" style="stop-color:#1d4a80;stop-opacity:.35"/><stop offset="1" style="stop-color:#0b1a33;stop-opacity:0"/></radialGradient>
+    ${[["u", "var(--up)"], ["d", "var(--down)"], ["n", "#7fc4ff"], ["o", "#ff9a4a"]].map(([k, c]) => `<radialGradient id="gxg${k}"><stop offset="0" style="stop-color:${c};stop-opacity:.75"/><stop offset=".45" style="stop-color:${c};stop-opacity:.22"/><stop offset="1" style="stop-color:${c};stop-opacity:0"/></radialGradient>`).join("")}</defs>
+    ${gxBokeh(W0, 0, H0, ids.length)}
+    <ellipse cx="${cx}" cy="${cy + R + 6}" rx="${R * 0.75}" ry="${R * 0.12}" fill="url(#gxbase)"/><circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#gxin)"/>
+    <path class="gface f1"/><path class="gface f2"/><path class="gface f3"/><path class="gmesh back"/><path class="gmesh"/><path class="geq"/>
+    <circle class="grim" cx="${cx}" cy="${cy}" r="${R}"/>
+    <text class="gzt" x="${cx}" y="${cy - R - 14}" text-anchor="middle">↑ 上游（供應給中心）</text><text class="gzt" x="${cx}" y="${cy + R + 30}" text-anchor="middle">↓ 下游（中心供應給它）</text>
+    <g class="gedges">${W.gxS.links.map(([a, b]) => `<line class="ge${a === core || b === core ? " on" : ""}" data-a="${a}" data-b="${b}" marker-end="url(#${a === core || b === core ? "gxa2" : "gxa"})"/>`).join("")}</g>
+    <g class="gnodes">${nodes}</g></svg></div>
+    <div class="igal-leg"><span>中心：${esc(INDT.get(core).name)}（上游 ${ups.size}・下游 ${downs.size}）</span><span>北半球＝上游、南半球＝下游、赤道＝相關</span><span>越靠近兩極離中心越遠，箭頭由上游指向下游</span><span>左右拖曳可轉動，點題材換到中心</span></div>`;
+}
+// 把球面座標轉到畫面：先繞垂直軸轉 th（自轉），再前傾 ph，最後加一點透視
+function gxProj(v, th, ph) {
+  const { R, cx, cy } = W.gxS, x1 = v[0] * Math.cos(th) + v[2] * Math.sin(th), z1 = -v[0] * Math.sin(th) + v[2] * Math.cos(th);
+  const y2 = v[1] * Math.cos(ph) - z1 * Math.sin(ph), z2 = v[1] * Math.sin(ph) + z1 * Math.cos(ph), f = 5 / (5 - z2);
+  return [cx + x1 * R * f, cy - y2 * R * f, z2, f];
+}
+function gxFrame(svg) {
+  const S = W.gxS, { th, ph } = W.gx, P = S.P.map(v => gxProj(v, th, ph)), at = {}, f1 = v => v.toFixed(1);
+  // 網格線：正面亮、背面暗；三角面依「靠不靠近邊緣」分三級亮度（邊緣最亮）
+  let fr = "", bk = ""; S.segs.forEach(([i, j]) => { const a = P[i], b = P[j], s = `M${f1(a[0])} ${f1(a[1])}L${f1(b[0])} ${f1(b[1])}`; a[2] + b[2] > 0 ? (fr += s) : (bk += s); });
+  svg.querySelector(".gmesh:not(.back)").setAttribute("d", fr); svg.querySelector(".gmesh.back").setAttribute("d", bk);
+  const F = ["", "", ""]; S.tris.forEach(t => { const z = (P[t[0]][2] + P[t[1]][2] + P[t[2]][2]) / 3; if (z < -0.05) return; const lvl = z < 0.35 ? 2 : z < 0.7 ? 1 : 0; if (!lvl && (t[0] + t[1]) % 4) return;
+    F[lvl] += `M${t.map(i => `${f1(P[i][0])} ${f1(P[i][1])}`).join("L")}Z`; });
+  ["f1", "f2", "f3"].forEach((c, i) => svg.querySelector(`.gface.${c}`).setAttribute("d", F[i]));
+  svg.querySelector(".geq").setAttribute("d", Array.from({ length: 49 }, (_, i) => { const a = (i / 48) * Math.PI * 2, p = gxProj([Math.sin(a), 0, Math.cos(a)], th, ph); return `${i ? "L" : "M"}${f1(p[0])} ${f1(p[1])}`; }).join(""));
+  // 題材：依前後排序，背面變暗縮小；標籤由前往後放，和已放的標籤重疊就不標（點球仍可看名稱）
+  const order = S.N.map(n => ({ n, p: n.k ? gxProj(n.v, th, ph) : [S.cx, S.cy, 0, 1] })).sort((a, b) => (a.n.k ? a.p[2] : 9) - (b.n.k ? b.p[2] : 9)), g = svg.querySelector(".gnodes"), cr = S.rOf(0) + 8, placed = [[S.cx - cr - 30, S.cy - cr, S.cx + cr + 30, S.cy + cr]];
+  order.forEach(({ n, p }) => { at[n.id] = p; const el = g.querySelector(`.gx[data-ifocus="${n.id}"]`); if (!el) return; g.appendChild(el);
+    const sc = n.k ? p[3] * (0.78 + 0.22 * (p[2] + 1) / 2) : 1; el.setAttribute("transform", `translate(${f1(p[0])},${f1(p[1])}) scale(${sc.toFixed(3)})`);
+    el.style.opacity = n.k ? (0.35 + 0.65 * Math.max(0, (p[2] + 1) / 2)).toFixed(2) : 1; el.dataset.front = p[2] > 0.2 ? "1" : "0"; });
+  [...order].reverse().forEach(({ n, p }) => { if (!n.k) return; const el = g.querySelector(`.gx[data-ifocus="${n.id}"] .gl`); if (!el) return;
+    const t = INDT.get(n.id), w = Math.min(t.name.length, S.mob ? 7 : 9) * (S.mob ? 14.5 : 12.5) * p[3], r = S.rOf(n.k) * p[3], box = [p[0] - w / 2, p[1] + r, p[0] + w / 2, p[1] + r + (S.mob ? 34 : 30)];
+    const hit = b => b[0] < box[2] && box[0] < b[2] && b[1] < box[3] && box[1] < b[3];
+    const ok = p[2] > -0.1 && !placed.some(hit) && !order.some(o => o.n.k && o.n !== n && o.p[2] > p[2] && hit((rr => [o.p[0] - rr, o.p[1] - rr, o.p[0] + rr, o.p[1] + rr])(S.rOf(o.n.k) * o.p[3])));
+    el.style.display = ok ? "" : "none"; if (ok) placed.push(box); });
+  svg.querySelectorAll(".ge").forEach(l => { const A = at[l.dataset.a], B = at[l.dataset.b]; if (!A || !B) return; const dx = B[0] - A[0], dy = B[1] - A[1], d = Math.hypot(dx, dy) || 1, kb = S.N.find(n => n.id === l.dataset.b).k, cut = S.rOf(kb) * (kb ? B[3] : 1) + 3;
+    l.setAttribute("x1", f1(A[0])); l.setAttribute("y1", f1(A[1])); l.setAttribute("x2", f1(B[0] - (dx / d) * cut)); l.setAttribute("y2", f1(B[1] - (dy / d) * cut));
+    l.style.opacity = (0.3 + 0.7 * Math.max(0, (Math.min(A[2], B[2]) + 1) / 2)).toFixed(2); });
+}
+// 接上自轉與拖曳：左右拖曳轉動（手機上下滑仍是捲動頁面），拖曳後不觸發點擊；開啟「減少動態效果」時不自轉
+function gxMount() {
+  const svg = document.querySelector(".igalaxy"); if (!svg || svg.dataset.on) return; svg.dataset.on = "1"; gxFrame(svg);
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches; let drag = null, moved = false, idle = 0, last = performance.now();
+  svg.addEventListener("pointerdown", e => { drag = W.gx.drag = { x: e.clientX, y: e.clientY, th: W.gx.th, ph: W.gx.ph }; moved = false; });
+  svg.addEventListener("pointermove", e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (!moved) return;
+    W.gx.th = drag.th + dx * 0.008; if (e.pointerType === "mouse") W.gx.ph = Math.max(-0.05, Math.min(0.32, drag.ph + dy * 0.004)); idle = performance.now(); gxFrame(svg); });
+  const up = () => { drag = W.gx.drag = null; if (W.gx.pend) { W.gx.pend = false; setTimeout(renderInd); } }; svg.addEventListener("pointerup", up); svg.addEventListener("pointercancel", up); svg.addEventListener("pointerleave", up);
+  svg.addEventListener("click", e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+  if (still) return;
+  const tick = now => { if (!svg.isConnected) return; const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!drag && now - idle > 2500 && !document.hidden) { W.gx.th += dt * 0.12; gxFrame(svg); } requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
 }
 function gxBokeh(W0, y0, y1, n) {
   let s = 7 + n, out = ""; const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
