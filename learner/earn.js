@@ -1,6 +1,7 @@
 /* ================= 情報局「財報」：台股（上市櫃月營收、季 EPS、獲利能力排行與產業比較）、美股（財報行事曆：實際 vs 預估） =================
    台股：/api/oapi?earn=1（證交所、櫃買中心開放資料合成一張表），每列 [代號, 名稱, 產業, 市場, 當月營收(億), 月增%, 年增%, 累計年增%, EPS, 季營收(億), 稅後淨利(億), 毛利率, 營益率, 淨利率]。
    美股：data/us-earn.json（排程每天兩次，scripts/us-earn.mjs），沒有檔案時問 /api/usearn；每列 [日期, 代號, 名稱, 市值(十億美元), 實際EPS, 預估EPS, 驚喜%, 時段, 財報季, 去年同期EPS]。
+   月營收、EPS、獲利能力可以選產業看產業內排名（產業比較點產業也會切過去），全部排行的每家公司附「產業第幾名」。
    點公司展開營收、EPS 走勢圖（台股 /api/stockinfo、美股 /api/usinfo，用 watch.html 的 barLineSvg，有查價線）。
    用到 watch.html 的 W、esc、cls、getJ、store、renderList、barLineSvg、tmo，stockx.js 的 sxMd。 */
 const ER_VIEWS = { tw: [["sum", "總覽"], ["rev", "月營收"], ["eps", "EPS"], ["pm", "獲利能力"], ["ind", "產業比較"]], us: [["recent", "最近公布"], ["up", "即將公布"], ["beat", "優於預期"], ["miss", "低於預期"]] };
@@ -12,7 +13,7 @@ const ER_RANKS = {
   pm: [["gm", "毛利率最高", "gm", 1, "營業毛利 ÷ 營業收入"], ["om", "營益率最高", "om", 1, "營業利益 ÷ 營業收入"], ["nm", "淨利率最高", "nm", 1, "稅後純益 ÷ 營業收入"]],
 };
 const ER = () => (W.er ||= { reg: "tw", view: "sum", usv: "recent", rk: {}, mk: "全部", min: true, big: true, ...(store.get("watch:er", null) || {}), data: null, us: null, tr: {}, open: null });
-const erSave = () => { const E = ER(); store.set("watch:er", { reg: E.reg, view: E.view, usv: E.usv, rk: E.rk, mk: E.mk, min: E.min, big: E.big }); };
+const erSave = () => { const E = ER(); store.set("watch:er", { reg: E.reg, view: E.view, usv: E.usv, rk: E.rk, mk: E.mk, min: E.min, big: E.big, ind: E.ind || "" }); };
 const erYm = s => (s && s.length >= 5 ? `${+s.slice(0, s.length - 2) + 1911} 年 ${+s.slice(-2)} 月` : "");
 const erYq = s => { const m = String(s || "").match(/^(\d+)Q(\d)$/); return m ? `${+m[1] + 1911} 年第 ${m[2]} 季` : ""; };
 async function erLoad(force = false) {
@@ -66,7 +67,7 @@ function erInd(rows) {
 }
 function erIndBars(I) {
   const mx = Math.max(...I.map(g => Math.abs(g.yoy)), 1);
-  return `<ul class="erind">${I.map(g => `<li><span>${esc(g.n)}<small>${g.k} 家</small></span><i class="${g.yoy < 0 ? "neg" : ""}" style="--w:${(Math.abs(g.yoy) / mx * 100).toFixed(1)}%"></i><b class="${cls(g.yoy)}">${erPct(g.yoy)}</b><small class="ersub">營收 ${erNum(g.rev, 0)} 億・平均 EPS ${erNum(g.eps)}・毛利率 ${g.gm == null ? "—" : g.gm.toFixed(1) + "%"}</small></li>`).join("")}</ul>`;
+  return `<ul class="erind">${I.map(g => `<li data-erindset="${esc(g.n)}" role="button" tabindex="0"><span>${esc(g.n)}<small>${g.k} 家</small></span><i class="${g.yoy < 0 ? "neg" : ""}" style="--w:${(Math.abs(g.yoy) / mx * 100).toFixed(1)}%"></i><b class="${cls(g.yoy)}">${erPct(g.yoy)}</b><small class="ersub">營收 ${erNum(g.rev, 0)} 億・平均 EPS ${erNum(g.eps)}・毛利率 ${g.gm == null ? "—" : g.gm.toFixed(1) + "%"}</small></li>`).join("")}</ul>`;
 }
 // 查一檔的走勢（不在排行裡的公司也能看）
 const erLookup = us => { const E = ER(), c = E.look?.[us ? "us" : "tw"];
@@ -102,9 +103,14 @@ function renderEarn() {
     <label class="erchk"><input type="checkbox" data-ermin ${E.min ? "checked" : ""}> 排除小型公司（月營收 1 億以下）</label></div>`;
   const head = `<p class="note gnote">最新月營收：${erYm(D.ym)}・最新季報：${erYq(D.yq)}・${esc(D.source || "")}</p>`;
   let h = head + seg;
-  const rank = (grp, key) => { const R = ER_RANKS[grp].find(x => x[0] === key) || ER_RANKS[grp][0], [, , f, desc] = R, k = ER_K[f];
+  // 排行：先算全部公司的排序，記下每家在自己產業裡第幾名；選了產業就只列那個產業（全部列出）
+  const rank = (grp, key, ind = "") => { const R = ER_RANKS[grp].find(x => x[0] === key) || ER_RANKS[grp][0], [, , f, desc] = R, k = ER_K[f];
     let L = all.filter(r => r[k] != null && big(r)); if (R[0] === "loss") L = L.filter(r => r[k] < 0); if (R[0] === "yoyd") L = L.filter(r => r[k] < 0);
-    return { R, L: L.sort((a, b) => (desc ? b[k] - a[k] : a[k] - b[k])).slice(0, 50) }; };
+    L.sort((a, b) => (desc ? b[k] - a[k] : a[k] - b[k])); const ir = new Map(), cnt = new Map(); for (const r of L) { const n = (cnt.get(r[2]) || 0) + 1; cnt.set(r[2], n); ir.set(r[0], [n, 0]); } for (const r of L) ir.get(r[0])[1] = cnt.get(r[2]);
+    return { R, ir, L: ind ? L.filter(r => r[2] === ind) : L.slice(0, 50) }; };
+  const inds = [...all.reduce((m, r) => (r[2] ? m.set(r[2], (m.get(r[2]) || 0) + 1) : m), new Map())].sort((a, b) => b[1] - a[1]), ind = inds.some(x => x[0] === E.ind) ? E.ind : "";
+  const indSel = `<label class="erind-sel"><span class="note">產業</span><select data-erind aria-label="選產業排名"><option value="">全部產業</option>${inds.map(([n, c]) => `<option value="${esc(n)}" ${n === ind ? "selected" : ""}>${esc(n)}（${c}）</option>`).join("")}</select></label>`;
+  const withIr = (sub, ir) => r => { const x = ir.get(r[0]); return `${x && !ind && r[2] ? `${esc(r[2])}第 ${x[0]}／${x[1]}・` : ""}${sub(r)}`; };
   const tabs = (grp, cur) => `<div class="ichips erchips">${ER_RANKS[grp].map(([k, t]) => `<button class="ichip" data-errk="${grp}:${k}" aria-pressed="${cur === k}">${t}</button>`).join("")}</div>`;
   const subRev = r => `營收 ${erNum(r[4], 1)} 億・年增 ${erPct(r[6])}・月增 ${erPct(r[5])}`, subEps = r => `EPS ${erNum(r[8])}・淨利 ${erNum(r[10], 1)} 億・毛利率 ${r[11] == null ? "—" : r[11] + "%"}`, subPm = r => `毛利率 ${r[11] ?? "—"}%・營益率 ${r[12] ?? "—"}%・淨利率 ${r[13] ?? "—"}%`;
   if (E.view === "sum") {
@@ -116,19 +122,20 @@ function renderEarn() {
       + erLookup(false) + t("rev", "yoy", 10) + t("eps", "eps", 10) + t("pm", "gm", 10)
       + `<section class="mk"><h3>產業營收年增<span class="note">各產業當月營收合計和去年同月比</span><button class="linkbtn" data-ergo="ind">看全部產業 ›</button></h3>${erIndBars(I.slice(0, 8))}</section>`;
   } else if (E.view === "ind") {
-    h += `<section class="mk"><h3>產業比較<span class="note">各產業當月營收合計年增率；下面是平均 EPS 與平均毛利率</span></h3>${erIndBars(erInd(all))}</section>`;
+    h += `<section class="mk"><h3>產業比較<span class="note">各產業當月營收合計年增率；點產業看產業內排名</span></h3>${erIndBars(erInd(all))}</section>`;
   } else {
-    const grp = E.view, key = E.rk[grp] || ER_RANKS[grp][0][0], { R, L } = rank(grp, key);
-    h += tabs(grp, key) + `<section class="mk"><h3>${R[1]}<span class="note">${R[4]}・前 ${L.length} 名</span></h3>${L.length ? erList(L, R[2], grp === "rev" ? subRev : grp === "eps" ? subEps : subPm) : `<p class="note">沒有符合的公司</p>`}</section>`;
+    const grp = E.view, key = E.rk[grp] || ER_RANKS[grp][0][0], { R, L, ir } = rank(grp, key, ind);
+    h += `<div class="erbar">${tabs(grp, key)}${indSel}</div><section class="mk"><h3>${ind ? `${esc(ind)}・` : ""}${R[1]}<span class="note">${R[4]}・${ind ? `產業內 ${L.length} 家` : `前 ${L.length} 名`}</span>${ind ? `<button class="linkbtn" data-erindset="">看全部產業 ›</button>` : ""}</h3>${L.length ? erList(L, R[2], withIr(grp === "rev" ? subRev : grp === "eps" ? subEps : subPm, ir)) : `<p class="note">沒有符合的公司</p>`}</section>`;
   }
   box.innerHTML = `<div class="earn tw">${h}<p class="note" style="padding:4px 12px 12px">${foot}</p></div>`;
   return "";
 }
 $("#lx").addEventListener("click", e => { if (W.lt !== "earn") return; const E = ER();
   const tr = e.target.closest("[data-ertr]"); if (tr) { E.open = E.open === tr.dataset.ertr ? null : tr.dataset.ertr; return renderList(); }
+  const s = e.target.closest("[data-erindset]"); if (s) { E.ind = s.dataset.erindset; if (E.ind && !["rev", "eps", "pm"].includes(E.view)) E.view = "rev"; erSave(); renderList(); return goY(0); }
   const b = e.target.closest("[data-errk],[data-ermk],[data-ergo]"); if (!b) return; const d = b.dataset;
   if (d.errk) { const [g, k] = d.errk.split(":"); E.rk[g] = k; } if (d.ergo) E.view = d.ergo; if (d.ermk) E.mk = d.ermk; erSave(); renderList(); });
-$("#lx").addEventListener("change", e => { if (W.lt !== "earn") return; if (e.target.matches("[data-ermin]")) ER().min = e.target.checked; else if (e.target.matches("[data-erbig]")) ER().big = e.target.checked; else return; erSave(); renderList(); });
+$("#lx").addEventListener("change", e => { if (W.lt !== "earn") return; if (e.target.matches("[data-erind]")) ER().ind = e.target.value; else if (e.target.matches("[data-ermin]")) ER().min = e.target.checked; else if (e.target.matches("[data-erbig]")) ER().big = e.target.checked; else return; erSave(); renderList(); });
 $("#lx").addEventListener("submit", e => { const f = e.target.closest?.("[data-erlook]"); if (!f || W.lt !== "earn") return; e.preventDefault(); const E = ER(), c = String(f.c.value || "").trim().toUpperCase(); if (!c) return; (E.look ||= {})[f.dataset.erlook] = c; delete E.tr[c]; renderList(); });
 $("#lTools").addEventListener("click", e => { if (W.lt !== "earn") return; const E = ER(), b = e.target.closest("[data-erv],[data-erreg]"); if (!b) return;
   if (b.dataset.erreg) E.reg = b.dataset.erreg; else if (E.reg === "us") E.usv = b.dataset.erv; else E.view = b.dataset.erv; E.open = null; erSave(); renderList(); });

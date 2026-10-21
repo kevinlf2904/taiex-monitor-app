@@ -30,8 +30,15 @@ for (const width of [1280, 390]) {
     await p.click('[data-ermk="上市"]'); assert.ok(!(await p.textContent(".earn")).includes("環球晶"), "只看上市");
     await p.click('[data-erv="eps"]'); assert.equal(await first(), "台積電");
     await p.click('[data-erv="pm"]'); assert.equal(await first(), "台積電");
+    // 分產業排名：選水泥工業 → 只列水泥股，依年增排序；全部排行附「產業第幾名」
+    await p.click('[data-ermk="全部"]'); await p.click('[data-erv="rev"]'); await p.click('[data-errk="rev:yoy"]');
+    assert.match(await p.textContent(".erlist"), /半導體業第 1／\d/);
+    await p.selectOption("[data-erind]", "水泥工業"); assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll(".erlist .nm")].map(x => x.firstChild.textContent)), ["台泥", "嘉泥", "亞泥"], "產業內排名");
+    await p.click('[data-erindset=""]'); assert.equal(await p.evaluate(() => ER().ind), "");
     await p.click('[data-erv="ind"]'); assert.ok((await p.textContent(".erind")).includes("水泥工業"));
-    assert.deepEqual(await p.evaluate(() => { const x = store.get("watch:er"); return { view: x.view, rk: x.rk, mk: x.mk, min: x.min, reg: x.reg }; }), { view: "ind", rk: { rev: "yoyd" }, mk: "上市", min: true, reg: "tw" }, "記住上次的設定");
+    await p.click('.erind [data-erindset="水泥工業"]'); assert.equal(await p.evaluate(() => [ER().view, ER().ind].join()), "rev,水泥工業", "點產業切到產業內排名");
+    await p.click('[data-erindset=""]'); await p.click('[data-ermk="上市"]'); await p.click('[data-erv="ind"]');
+    assert.deepEqual(await p.evaluate(() => { const x = store.get("watch:er"); return { view: x.view, rk: x.rk, mk: x.mk, min: x.min, reg: x.reg }; }), { view: "ind", rk: { rev: "yoy" }, mk: "上市", min: true, reg: "tw" }, "記住上次的設定");
     assert.ok(await p.evaluate(() => routeOf()) === "earnings/industry", "網址路由");
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
     // 點公司展開營收、EPS 走勢圖（有查價線），再點「看個股」才進個股

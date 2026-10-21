@@ -613,7 +613,7 @@ function f13RankHtml(F) {
     <p class="note">市值加權的持股報酬（持股不動的估計），和 SPY 同期比；季中買賣、放空、現金都看不到。</p>`;
 }
 function f13Html(arg) {
-  const F = W.f13; if (!F) { f13Load(); return `<p class="note" style="padding:16px">載入中…</p>`; }
+  let F = W.f13; if (!F) { f13Load(); return `<p class="note" style="padding:16px">載入中…</p>`; }
   if (F.err || !F.funds?.length) return `<p class="note" style="padding:16px">⚠ 13F 資料還沒有（${esc(F.err || "沒有資料")}）。資料由每天的排程從 SEC EDGAR 整理。</p>`;
   const sh = n => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "K" : n), tk = r => esc(r.ticker || r.name), nm = r => `${esc(r.name)}${r.pc ? `（${r.pc === "PUT" ? "賣權" : "買權"}）` : ""}`;
   if (arg) {
@@ -641,11 +641,13 @@ function f13Html(arg) {
         : f13PerfHtml(f)}
       <p class="note">變動用股數比（±2% 以內算持平），不受股價漲跌影響。只列前 60 大與有變動的持股。</p></section>`;
   }
-  // 首頁：機構排行（市值）、共同加碼、共同減碼、國會 × 13F、績效排行
+  // 首頁：機構排行（市值）、共同加碼、共同減碼、國會 × 13F、績效排行；可以選兩個季度比較（congx.js）
+  F = cxF13Range(F);
   const agg = new Map(); for (const f of F.funds) for (const r of [...f.rows, ...f.sold]) { if (r.pc) continue; const k = r.ticker || r.cusip, g = agg.get(k) || agg.set(k, { r, up: [], dn: [], hold: 0 }).get(k); if (r.chg === "new" || r.chg === "add") g.up.push(f.who); else if (r.chg === "cut" || r.chg === "sold") g.dn.push(f.who); if (r.chg !== "sold") g.hold++; }
   const A = [...agg.values()], who = L => L.map(w => esc(w.split(" ")[0])).join("、"), view = ["funds", "up", "dn", "cong", "perf", "heat"].includes(W.f13v) ? W.f13v : "funds";
   const tot = F.funds.reduce((a, f) => a + f.total, 0), nNew = F.funds.reduce((a, f) => a + f.rows.filter(r => r.chg === "new").length, 0), nSold = F.funds.reduce((a, f) => a + f.sold.length, 0);
   let h = `<section class="csec tw-home">${rkHead("13F 機構持股", `管理資產 1 億美元以上的機構每季申報美股多頭持股，最晚季底後 45 天公開——看到的是<strong>上一季底</strong>的部位，現在可能已經不同；不含放空、現金與非美股。`)}
+    ${cxF13RngHtml()}${F.range ? `<p class="note">比較 ${F.range.from} → ${F.range.to}：下面的新進、加碼、減碼、出清都是這兩季之間的變化（${F.funds.length} 家兩季都有資料）。</p>` : ""}
     ${rkCards([{ t: "追蹤機構", sub: "SEC Form 13F-HR", v: `${F.funds.length} 家` }, { t: "申報市值合計", sub: "季底", v: usd(tot) }, { t: "本季新進", sub: "各機構加總", v: `${nNew} 檔`, vc: "up" }, { t: "本季出清", sub: "各機構加總", v: `${nSold} 檔`, vc: "down" }])}
     <div class="tw-ctl">${rkSeg("data-rkset", "f13v:" + view, [["f13v:funds", "機構排行"], ["f13v:perf", "機構影子組合回測"], ["f13v:up", "共同加碼"], ["f13v:dn", "共同減碼"], ["f13v:cong", "國會 × 13F"], ["f13v:heat", "主題熱圖"]])}</div>`;
   if (view === "funds") h += `<button type="button" class="cbt-cta" data-rkset="f13v:perf"><b>13F 機構影子組合回測</b><small class="note">用每家機構申報的持股，算「季度持股報酬」和「申報公開後跟著買到今天」賺多少，和 SPY 比 ›</small></button>` + rkList(F.funds.slice().sort((a, b) => b.total - a.total).map(f => ({ attr: `data-cv="f13:${f.cik}"`, mono: rkMono(rkInit(f.who), RK_C.機構), name: esc(f.who), sub: `${f.rows.slice(0, 3).map(r => `${esc(r.ticker || r.name)} ${r.pct}%`).join("・")}`, val: usd(f.total), vsub: `${f.n} 檔・<span class="up">新進 ${f.rows.filter(r => r.chg === "new").length}</span>／<span class="down">出清 ${f.sold.length}</span>` })));
@@ -693,13 +695,13 @@ function insHtml() {
   const none = f === "mine" && !q && !I.rows.some(r => mine.has(r.code)); // 自選、庫存都沒有申報：直接看全部
   const L = I.rows.filter(r => (q ? r.code === q || (r.name || "").includes(q) : f === "mine" && !none ? mine.has(r.code) : true));
   // 期間：近 30／90／365 天或全部；「最新申報」可以按月份往前翻
-  const IW = [30, 90, 365, 0].includes(+W.insW) ? +W.insW : 30, d30 = IW ? new Date(Date.now() - IW * 864e5).toISOString().slice(0, 10) : "0000", R30 = L.filter(r => r.d >= d30), mkt = r => /一般交易|盤後|鉅額|拍賣/.test(r.how), wTxt = IW ? `近 ${IW} 天` : "全部期間";
+  const IW = [30, 90, 365, 0, -1].includes(+W.insW) ? +W.insW : 30, d30 = IW > 0 ? new Date(Date.now() - IW * 864e5).toISOString().slice(0, 10) : "0000", R30 = L.filter(r => (IW === -1 ? cxIn(r.d, cxRng("ins")) : r.d >= d30)), mkt = r => /一般交易|盤後|鉅額|拍賣/.test(r.how), wTxt = IW === -1 ? cxRngTxt(cxRng("ins")) : IW ? `近 ${IW} 天` : "全部期間";
   const months = [...new Set(L.map(r => r.d.slice(0, 7)))].sort().reverse(), mon = months.includes(W.insM) ? W.insM : "";
   const by = [...R30.reduce((m, r) => { const g = m.get(r.code) || m.set(r.code, { code: r.code, name: r.name, n: 0, sh: 0, sell: 0, who: new Set() }).get(r.code); g.n++; g.sh += r.sh || 0; if (mkt(r)) g.sell += r.sh || 0; g.who.add(r.who); return m; }, new Map()).values()].sort((a, b) => b.sh - a.sh);
   const nm = r => esc(r.name || nameOf(r.code)), pct = r => (r.sh && r.hold ? Math.round((r.sh / r.hold) * 100) + "%" : "—");
   let h = `<section class="csec tw-home">${rkHead("內部人持股轉讓申報", "董事、監察人、經理人與持股 10% 以上的大股東，轉讓持股前要先申報，申報後一個月內才可轉讓——這是「打算轉讓」，不一定已經賣出。「贈與」「信託」通常和買賣無關，「一般交易」「盤後鉅額」才是在市場上賣。")}
     <div class="tw-ctl"><div class="tw-grp seg" role="group">${[["mine", "自選＋庫存"], ["all", "全部"]].map(([k, t]) => `<button type="button" data-insf="${k}" aria-pressed="${(none ? "all" : f) === k && !q}">${t}</button>`).join("")}</div><input data-insq value="${esc(q)}" placeholder="代號或名稱" aria-label="代號或名稱"></div>
-    <div class="tw-ctl">${rkSeg("data-rkset", "insW:" + IW, [["insW:30", "近 30 天"], ["insW:90", "近 90 天"], ["insW:365", "近一年"], ["insW:0", "全部"]])}</div>
+    <div class="tw-ctl">${rkSeg("data-rkset", "insW:" + IW, [["insW:30", "近 30 天"], ["insW:90", "近 90 天"], ["insW:365", "近一年"], ["insW:0", "全部"]])}${cxRngHtml("ins", IW === -1)}</div>
     ${rkCards([{ t: `${wTxt}申報`, sub: `${new Set(R30.map(r => r.code)).size} 檔股票`, v: `${R30.length} 筆` }, { t: "申報人", sub: "不重複", v: `${new Set(R30.map(r => r.who)).size} 位` }, { t: "轉讓張數合計", sub: wTxt, v: insSh(R30.reduce((a, r) => a + (r.sh || 0), 0)) }, { t: "市場賣出方式", sub: "一般交易、盤後鉅額", v: `${R30.filter(mkt).length} 筆`, vc: "down" }])}
     <div class="tw-ctl">${rkSeg("data-rkset", "insv:" + view, [["insv:rank", "轉讓最多"], ["insv:feed", "最新申報"], ["insv:bt", "申報後表現"]])}</div>`;
   if (none) h += `<p class="note">自選與庫存在資料期間內沒有內部人轉讓申報，下面先列出全市場。</p>`;
@@ -863,13 +865,14 @@ const RK_C = { 眾議院: "#3d7be0", 參議院: "#c24d6d", 個股: "#3fa36b", �
 async function twoLoad() { if (W.two) return W.two; try { const r = await fetch("data/tw-officials.json", { cache: "no-cache" }); if (!r.ok) throw new Error(r.status === 404 ? "排程還沒跑完第一次" : `HTTP ${r.status}`); W.two = await r.json(); } catch (e) { W.two = { err: e.message, decl: [] }; } if (W.lt === "cong") renderList(); return W.two; }
 // 每個人依申報日排序；持股依「代號（沒有就用名稱）」加總本人、配偶、子女
 function twoPeople() {
-  if (W.twoP?.src === W.two) return W.twoP.v; const by = new Map();
-  for (const d of W.two?.decl || []) (by.get(d.pid) || by.set(d.pid, []).get(d.pid)).push(d);
+  const R = typeof cxRng === "function" ? cxRng("tw") : {}, rk = JSON.stringify(R); // 自訂區間：只看這段期間內的申報（最新一次、和前一次比都在區間內）
+  if (W.twoP?.src === W.two && W.twoP.rk === rk) return W.twoP.v; const by = new Map();
+  for (const d of W.two?.decl || []) if (!R.from && !R.to || cxIn(d.date, R)) (by.get(d.pid) || by.set(d.pid, []).get(d.pid)).push(d);
   const key = s => s.code || s.name, sum = d => (d?.stocks || []).reduce((m, s) => m.set(key(s), { k: key(s), code: s.code, name: s.name, sh: (m.get(key(s))?.sh || 0) + (s.sh || 0) }), new Map());
   const v = [...by].map(([pid, L]) => { L.sort((a, b) => a.date.localeCompare(b.date)); const last = L[L.length - 1], prev = L[L.length - 2], A = sum(last), B = prev ? sum(prev) : null;
     const chg = !B ? [] : [...new Set([...A.keys(), ...B.keys()])].map(k => { const a = A.get(k), b = B.get(k), x = a || b; const d = (a?.sh || 0) - (b?.sh || 0); return { k, code: x.code, name: x.name, sh: a?.sh || 0, psh: b?.sh || 0, d, t: !b ? "new" : !a ? "sold" : d > 0 ? "add" : d < 0 ? "cut" : "same" }; }).filter(x => x.t !== "same");
     return { pid, name: last.name, org: last.org, title: last.title, last, prev, hold: [...A.values()], chg, n: L.length }; });
-  W.twoP = { src: W.two, v }; return v;
+  W.twoP = { src: W.two, rk, v }; return v;
 }
 const twoLot = n => (Math.abs(n) >= 1000 ? `${Math.round(n / 1000).toLocaleString()} 張` : `${n.toLocaleString()} 股`);
 const twoStk = s => (s.code ? `<button class="linkbtn" data-cv="tw:s:${esc(s.code)}">${esc(nameOf(s.code) !== s.code ? nameOf(s.code) : s.name || "")} ${s.code}</button>${typeof wStar === "function" ? wStar(s.code) : ""}` : `<span>${esc(s.name)}</span>`);
@@ -993,7 +996,7 @@ function twoHtml(arg = "") {
   const recent = (X.decl || []).slice().sort((a, b) => b.issue - a.issue || b.date.localeCompare(a.date)).filter(d => !q || d.name.includes(q) || (d.org || "").includes(q)).slice(0, 40);
   return `<section class="csec tw-home"><h2 class="tw-h">持股市值排行榜</h2>
     <p class="note">${P.length} 位政治人物（${(X.issues || []).length} 期監察院廉政專刊）依最近一次申報的持股市值由高至低排列，${pxNote}${X.pxDate ? "，每個交易日更新" : ""}。</p>
-    <div class="tw-ctl"><div class="tw-grp seg" role="group" aria-label="分類">${TWO_GRP.map(([k, t]) => `<button type="button" data-twgrp="${k}" aria-pressed="${grp === k}">${t}</button>`).join("")}</div>${amtSeg}<input data-twoq value="${esc(q)}" placeholder="姓名、機關或股票（2330、台積電）" aria-label="搜尋姓名、機關或股票"></div>${bsHtml}
+    <div class="tw-ctl"><div class="tw-grp seg" role="group" aria-label="分類">${TWO_GRP.map(([k, t]) => `<button type="button" data-twgrp="${k}" aria-pressed="${grp === k}">${t}</button>`).join("")}</div>${amtSeg}<input data-twoq value="${esc(q)}" placeholder="姓名、機關或股票（2330、台積電）" aria-label="搜尋姓名、機關或股票"></div>${cxRngHtml("tw", !!(cxRng("tw").from || cxRng("tw").to), "申報日期區間")}${bsHtml}
     <h4>各類持股市值合計</h4><div class="tw-sums">${sums.map(x => `<button type="button" data-twgrp="${x.k}" aria-pressed="${grp === x.k}"><b>${x.t}</b><small class="note">${x.n} 位</small><span>${twoAmt(x.v)}</span></button>`).join("")}</div>
     <ol class="tw-rank">${L.slice(0, W.twoN || 50).map((o, i) => `<li><button type="button" data-cv="tw:p:${esc(o.p.pid)}"><span class="tw-no">${i + 1}</span>${mono(o.p)}<span class="tw-who"><b>${esc(o.p.name)}</b><small class="note">${esc([o.p.org, o.p.title].filter(Boolean).join("・"))}</small></span><span class="tw-v"><b>${o.total ? twoAmt(o.total) : "—"}</b><small class="note">${o.n} 檔</small></span></button></li>`).join("") || (BS ? "" : `<li class="note">沒有符合的人${q ? "（也沒有人申報持有這檔股票）" : ""}</li>`)}</ol>
     ${L.length > (W.twoN || 50) ? `<button class="btn sm" data-twn="1" type="button">再顯示 50 位（共 ${L.length} 位）</button>` : ""}
