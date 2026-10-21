@@ -103,23 +103,29 @@ test("畫線練習：點在低點附近會吸到 K 棒低點、畫好後提示�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
-test("產業網絡星系：手機上題材名稱不重疊，點題材換到中心，可切回分層", async () => {
+test("產業網絡星系（3D 球體）：手機上題材名稱不重疊，點題材換到中心，可切回分層", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.emulateMedia({ reducedMotion: "reduce" }); // 不自轉，量位置和點擊時球才不會動
   await p.evaluate(() => { setLt("ind"); W.indS.view = "network"; W.indS.nstyle = null; W.indS.focus = null; renderList(); });
   await p.waitForSelector(".igalaxy .gx.core");
-  await p.waitForTimeout(800); // 等進場動畫跑完再量位置
+  assert.ok(await p.evaluate(() => document.querySelectorAll(".igalaxy .gmesh, .igalaxy .gface").length >= 4), "球面網格");
   const hits = await p.evaluate(() => { const R = [...document.querySelectorAll(".igalaxy .gx .gn")].map(t => t.getBoundingClientRect()), out = [];
     for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) { const a = R[i], b = R[j]; if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 2 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 2) out.push([i, j]); }
     return out.length; });
   assert.equal(hits, 0, "題材名稱互相重疊");
-  // 結合分層：中心的上游都在中心上方、下游都在下方，連線有箭頭
+  // 結合分層：上游在北半球（畫面上中心上方）、下游在南半球（下方），連線有箭頭
   const dir = await p.evaluate(() => { const net = IND.networks.find(n => n.id === W.indS.net) || IND.networks[0], core = document.querySelector(".igalaxy .gx.core").dataset.ifocus, y = id => document.querySelector(`.igalaxy .gx[data-ifocus="${id}"] circle.b`).getBoundingClientRect().y;
     const up = net.links.filter(l => l[1] === core).map(l => l[0]), dn = net.links.filter(l => l[0] === core).map(l => l[1]);
     return { n: up.length + dn.length, bad: [...up.filter(id => y(id) >= y(core)), ...dn.filter(id => y(id) <= y(core))], arrows: document.querySelectorAll(".igalaxy line[marker-end]").length }; });
   assert.ok(dir.n > 0); assert.deepEqual(dir.bad, [], "上游要在中心上方、下游在下方"); assert.ok(dir.arrows > 0);
-  const id = await p.evaluate(() => document.querySelector(".igalaxy .gx:not(.core)").dataset.ifocus);
-  await p.click(`.igalaxy .gx[data-ifocus="${id}"] circle.b`);
-  assert.equal(await p.evaluate(() => document.querySelector(".igalaxy .gx.core").dataset.ifocus), id);
+  // 左右拖曳會轉動球體，且不會誤觸成點擊
+  await p.waitForTimeout(1500); await p.locator(".igalaxy").scrollIntoViewIfNeeded(); // 等報價載完重畫後再拖
+  const th0 = await p.evaluate(() => W.gx.th), bb = await p.locator(".igalaxy").boundingBox(), y = bb.y + bb.height * 0.8;
+  await p.mouse.move(bb.x + 60, y); await p.mouse.down(); await p.mouse.move(bb.x + 180, y, { steps: 6 }); await p.mouse.up();
+  assert.ok(Math.abs((await p.evaluate(() => W.gx.th)) - th0) > 0.3, "拖曳要轉動球體");
+  const id2 = await p.evaluate(() => document.querySelector('.igalaxy .gx:not(.core)[data-front="1"]').dataset.ifocus); // 挑球體正面的題材來點
+  await p.click(`.igalaxy .gx[data-ifocus="${id2}"] circle.b`);
+  assert.equal(await p.evaluate(() => document.querySelector(".igalaxy .gx.core").dataset.ifocus), id2);
   await p.click('[data-instyle="layer"]'); await p.waitForSelector(".inetwrap");
   assert.equal(await p.evaluate(() => store.get("watch:inds").nstyle), "layer");
   await ctx.close(); assert.deepEqual(errs, []);
