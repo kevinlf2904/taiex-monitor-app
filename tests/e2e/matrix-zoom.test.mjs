@@ -170,7 +170,7 @@ test("動能矩陣回放：右側象限清單與數量跟著回放日期，播�
   let want = 11;
   for (const viz of ["heat", "flow", "tree"]) {
     await p.evaluate(v => { W.mf.viz = v; W.mf.rp.fl = null; renderList(); }, viz);
-    await p.click('[data-mrp="prev"]'); await p.waitForTimeout(600);
+    await p.click('[data-mrp="prev"]'); await p.waitForFunction(() => !W.mf.rp.seeking, null, { timeout: 5000 }); // 等補間跑完（機器忙時 450ms 動畫會拉長）
     assert.equal(await p.evaluate(() => Math.round(W.mf.rp.u)), --want, `${viz} 上一天`);
     assert.ok(await p.evaluate(() => !document.getElementById("mfb").classList.contains("is-playing")), `${viz} 補間結束後恢復過場動畫`);
   }
