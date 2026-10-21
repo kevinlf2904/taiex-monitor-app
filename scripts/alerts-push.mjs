@@ -1,4 +1,5 @@
-// 收盤後 Telegram 提醒：讀雲端同步裡「有綁定 Telegram」的使用者的指標提醒與價格提醒，用收盤後的日 K 檢查，成立就推播。
+// 收盤後 Telegram 提醒：讀雲端同步裡「有綁定 Telegram」的使用者的指標提醒與價格提醒，用收盤後的日 K 檢查，成立就推播；
+// 另外推播追蹤的國會議員、13F 機構的新申報，以及庫存台股的內部人轉讓申報（情報局「大戶國會 → 我的追蹤」）。
 // 在 .github/workflows/market-scan.yml 裡、全市場日 K 更新之後執行：台股直接用 .cache/allk.json，美股向 Yahoo 抓。
 // 條件判斷用網站同一套程式（scripts/_engine.mjs 載入 learner/tools.js 的 COND），結果和網頁上的「指標提醒」一致。
 // 需要的 GitHub secrets：KV_REST_API_URL、KV_REST_API_TOKEN（和 Vercel 上同一個 Upstash）、TELEGRAM_BOT_TOKEN；沒設定就直接結束。
@@ -27,6 +28,20 @@ export function evalDoc(doc, dailyOf, E) {
   return out;
 }
 
+// 追蹤對象的新申報（learner/data 裡排程整理好的檔案）：since 之後申報的才算；k 是去重用的鍵（同一筆只推一次）
+export function evalFollow(doc, D, since) {
+  const F = doc.follow || {}, out = [], pn = pid => D.cong?.people?.[pid]?.name || pid;
+  for (const pid of F.cong || []) { const L = (D.cong?.trades || []).filter(t => t.pid === pid && t.filed >= since); if (!L.length) continue;
+    const by = L.reduce((m, t) => m.set(t.filed, [...(m.get(t.filed) || []), t]), new Map());
+    for (const [d, T] of by) out.push({ k: `c:${pid}:${d}`, m: `國會 ${pn(pid)} ${d.slice(5)} 申報：${[...new Set(T.map(t => `${t.k === "buy" ? "買" : t.k === "sell" ? "賣" : "換"} ${t.ticker}`))].slice(0, 8).join("、")}${T.length > 8 ? ` 等 ${T.length} 筆` : ""}` }); }
+  for (const cik of F.f13 || []) { const f = (D.f13?.funds || []).find(x => x.cik === cik); if (!f || !(f.filed >= since)) continue; const n = c => f.rows.filter(r => r.chg === c).length;
+    out.push({ k: `f:${cik}:${f.period}`, m: `13F ${f.who} 申報 ${f.period} 季底持股：新進 ${n("new")}、加碼 ${n("add")}、減碼 ${n("cut")}、出清 ${(f.sold || []).length}` }); }
+  const mine = new Set(F.ins || []);
+  for (const r of D.ins?.rows || []) if (mine.has(r.code) && r.d >= since) out.push({ k: `i:${r.code}:${r.d}:${r.who}:${r.sh}`, m: `內部人 ${r.name} ${r.code}：${r.who}（${r.role}）申報轉讓 ${Math.round((r.sh || 0) / 1000).toLocaleString()} 張（${r.how}）` });
+  return out;
+}
+const readData = async f => { try { return JSON.parse(await readFile(fileURLToPath(new URL(`../learner/data/${f}`, import.meta.url)), "utf8")); } catch { return null; } };
+
 export async function main() {
   // 沒設定就略過（推播是附加功能，不能讓整個資料排程失敗）。chat id 來自每個人在網頁上的綁定，所以不需要 TELEGRAM_CHAT_ID
   if (!(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) || !process.env.TELEGRAM_BOT_TOKEN) { console.log("::warning::沒有設定雲端儲存（KV_REST_API_URL）或 TELEGRAM_BOT_TOKEN，略過推播"); return; }
@@ -38,12 +53,18 @@ export async function main() {
   for (const h of ids) { try { const v = await kv("GET", `alert:${h}`); if (v) docs.push([h, JSON.parse(v)]); } catch (e) { console.log("::warning::讀取提醒設定失敗", h.slice(0, 8), e.message); } }
   for (const [, d] of docs) for (const c of [...(d.rules || []), ...(d.price || [])].map(x => x.code)) if (!isTW(c) && !us.has(c)) { us.set(c, await usDaily(c)); await sleep(300); }
   const dailyOf = c => (isTW(c) ? H.s[c]?.b || null : us.get(c) || null);
+  const FD = { cong: await readData("congress.json"), f13: await readData("f13.json"), ins: await readData("insider.json") }, since = new Date(Date.parse(date) - 4 * 864e5).toISOString().slice(0, 10);
   let sent = 0;
   for (const [h, d] of docs) {
-    let msgs = []; try { msgs = evalDoc(d, dailyOf, E); } catch (e) { console.log("::warning::檢查條件失敗", h.slice(0, 8), e.message); continue; } if (!msgs.length || !d.chat) continue;
-    const text = `🔔 K線看盤收盤提醒（${date}）\n` + msgs.map(m => "• " + m).join("\n") + "\n\n以收盤後日 K 判斷，不是買賣建議。";
+    if (!d.chat) continue;
+    let msgs = []; try { msgs = evalDoc(d, dailyOf, E); } catch (e) { console.log("::warning::檢查條件失敗", h.slice(0, 8), e.message); }
+    // 指標、價格提醒同一天只送一次；追蹤的新申報每一筆只送一次
+    if (msgs.length && !DRY) { try { if (!(await kv("SET", `sent:${h}:${date}`, "1", "NX", "EX", 172800))) msgs = []; } catch (e) { console.log("::warning::KV 寫入失敗", e.message); msgs = []; } }
+    const fol = [];
+    for (const x of evalFollow(d, FD, since)) { if (DRY) { fol.push(x.m); continue; } try { if (await kv("SET", `seenf:${h}:${x.k}`, "1", "NX", "EX", 3456000)) fol.push(x.m); } catch {} }
+    if (!msgs.length && !fol.length) continue;
+    const text = `🔔 K線看盤收盤提醒（${date}）\n` + [...msgs, ...fol.slice(0, 20)].map(m => "• " + m).join("\n") + (fol.length > 20 ? `\n…另有 ${fol.length - 20} 則追蹤申報` : "") + "\n\n以收盤後日 K 與公開申報整理，不是買賣建議。";
     if (DRY) { console.log(h.slice(0, 8), text); continue; }
-    try { if (!(await kv("SET", `sent:${h}:${date}`, "1", "NX", "EX", 172800))) continue; } catch (e) { console.log("::warning::KV 寫入失敗", e.message); continue; }
     try { await tg("sendMessage", { chat_id: d.chat, text }); sent++; } catch (e) { console.log("::warning::Telegram 送出失敗", h.slice(0, 8), e.message); }
     await sleep(100);
   }

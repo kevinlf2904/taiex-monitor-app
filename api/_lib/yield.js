@@ -1,6 +1,6 @@
 // 殖利率：近 12 個月（365 天）的現金股利合計 ÷ 股價，給 learner/watch.html 的個股頁與 ETF 殖利率排行使用。
 // GET /api/yield?codes=2330,0056,00679B → { ok, rows: [{ code, cash12, n, last: { d, cash }, price, yield }], missing }；加 &hist=1 另外附 divs: [[除息日, 每股現金]]
-//   cash12 近 12 個月現金股利（元／股）、n 配息次數、last 最近一次配息、price 計算用的股價（Yahoo 最新價）、yield 殖利率（%）
+//   cash12 近 12 個月現金股利（元／股）、n 配息次數、months 近 12 個月在哪幾個月除息（存股「月月配組合」用）、last 最近一次配息、price 計算用的股價（Yahoo 最新價）、yield 殖利率（%）
 // 配息紀錄：Yahoo Finance chart 的 events=div（上市 .TW、上櫃 .TWO，股票、ETF 都有）；Yahoo 沒有時改用 FinMind 除權息結果（只算「息」）。
 // 股票股利不算進殖利率（只算現金）；同一個伺服器實例 6 小時內重複查詢直接用快取。
 
@@ -25,7 +25,7 @@ export function divsFromFinmind(rows) {
 // 近 12 個月合計與殖利率
 export function summarize(code, divs, price, now = Date.now()) {
   const from = iso(now - 365 * DAY), L = divs.filter(x => x.d > from), cash12 = +L.reduce((s, x) => s + x.cash, 0).toFixed(4), last = divs[divs.length - 1] || null;
-  return { code, cash12, n: L.length, last: last ? { d: last.d, cash: last.cash } : null, price: price ?? null, yield: price > 0 ? +((cash12 / price) * 100).toFixed(2) : null };
+  return { code, cash12, n: L.length, months: [...new Set(L.map(x => +x.d.slice(5, 7)))].sort((a, b) => a - b), last: last ? { d: last.d, cash: last.cash } : null, price: price ?? null, yield: price > 0 ? +((cash12 / price) * 100).toFixed(2) : null };
 }
 
 async function fromYahoo(code) {

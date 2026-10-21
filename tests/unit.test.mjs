@@ -6,7 +6,8 @@ import { mergeRows, compare, parseInfoTable } from "../scripts/sec13f.mjs";
 import { parseTdcc } from "../scripts/tdcc.mjs";
 import { lendRow } from "../scripts/chipx.mjs";
 import { appendDay, shards } from "../scripts/market-scan.mjs";
-import { evalDoc } from "../scripts/alerts-push.mjs";
+import { evalDoc, evalFollow } from "../scripts/alerts-push.mjs";
+import { alertDoc, docHas } from "../api/_lib/sync.js";
 import { engine } from "../scripts/_engine.mjs";
 
 test("內部人：上市中文欄位、上櫃英文欄位", () => {
@@ -42,6 +43,15 @@ test("Node 沙盒載入網站的指標與提醒條件", () => {
   assert.ok(E.COND.length > 20); assert.ok(E.indicators(D).kd.K.length === 120);
   const out = evalDoc({ names: { "2330": "台積電" }, rules: [{ code: "2330", cond: "rsigt", p: 1 }], price: [{ code: "2330", up: 50 }] }, c => (c === "2330" ? D : null), E);
   assert.equal(out.length, 2); assert.match(out[0], /台積電 2330：RSI/);
+});
+test("Telegram 追蹤推播：追蹤的議員、13F 機構新申報與庫存股內部人轉讓", () => {
+  const doc = alertDoc({ "kline:watch:follow": JSON.stringify({ cong: { "h-x": "X" }, f13: { "001": "巴菲特" }, tw: {} }), "kline:watch:hold": JSON.stringify({ "2330": { sh: 1000 }, AAPL: { sh: 1 } }) }, "1");
+  assert.deepEqual(doc.follow, { cong: ["h-x"], f13: ["001"], ins: ["2330"] }); assert.ok(docHas(doc)); assert.ok(!docHas(alertDoc({}, "1")), "沒有任何設定就不放進推播清單");
+  const D = { cong: { people: { "h-x": { name: "Jane X" } }, trades: [{ pid: "h-x", ticker: "NVDA", k: "buy", filed: "2026-10-20" }, { pid: "h-x", ticker: "AAPL", k: "sell", filed: "2026-10-20" }, { pid: "h-x", ticker: "OLD", k: "buy", filed: "2026-09-01" }, { pid: "h-y", ticker: "MSFT", k: "buy", filed: "2026-10-20" }] },
+    f13: { funds: [{ cik: "001", who: "巴菲特", period: "2026-09-30", filed: "2026-10-19", rows: [{ chg: "new" }, { chg: "add" }], sold: [{}] }] }, ins: { rows: [{ d: "2026-10-20", code: "2330", name: "台積電", who: "某董事", role: "董事本人", how: "贈與", sh: 5000 }, { d: "2026-10-20", code: "2317", name: "鴻海", who: "x", role: "x", how: "x", sh: 1 }] } };
+  const out = evalFollow(doc, D, "2026-10-17");
+  assert.equal(out.length, 3); assert.match(out[0].m, /Jane X 10-20 申報：買 NVDA、賣 AAPL/); assert.match(out[1].m, /新進 1、加碼 1、減碼 0、出清 1/); assert.match(out[2].m, /台積電 2330：某董事.*5 張/);
+  assert.equal(new Set(out.map(x => x.k)).size, 3, "每一則有自己的去重鍵");
 });
 import { parseDecls, parseList } from "../scripts/tw-officials.mjs";
 test("廉政專刊：列表表格、申報表股票段（括號備註、外幣、名稱含數字）", () => {

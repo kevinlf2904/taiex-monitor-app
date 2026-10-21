@@ -20,7 +20,7 @@ export async function main({ gap = 350, list = null, calc = yieldOf } = {}) {
   const L = list || (await etfAll()); if (!L.length) throw new Error("拿不到 ETF 清單");
   const rows = [];
   for (const e of L) {
-    try { const y = await calc(e.code); if (y) rows.push({ code: e.code, name: e.name, market: e.market, cash12: y.cash12, n: y.n, last: y.last, price: y.price, yield: y.yield }); } catch (err) { console.log("失敗", e.code, err.message); }
+    try { const y = await calc(e.code); if (y) rows.push({ code: e.code, name: e.name, market: e.market, cash12: y.cash12, n: y.n, months: y.months, last: y.last, price: y.price, yield: y.yield }); } catch (err) { console.log("失敗", e.code, err.message); }
     await sleep(gap);
   }
   const out = { updated: new Date().toISOString(), source: "Yahoo Finance 配息紀錄（近 12 個月現金股利 ÷ 股價）", rows };
