@@ -981,7 +981,12 @@ function twoHtml(arg = "") {
   }
   if (kind === "s") {
     const H = P.map(p => ({ p, h: p.hold.find(x => x.code === id), c: p.chg.find(x => x.code === id) })).filter(x => x.h || x.c).sort((a, b) => (b.h?.sh || 0) - (a.h?.sh || 0));
-    return `<section class="csec"><h3>${esc(nameOf(id))} ${esc(id)} <button class="btn sm" data-copen="${esc(id)}">在看盤開啟</button></h3><p class="note">${H.filter(x => x.h).length} 位政治人物最近一次申報持有；${H.filter(x => x.c && (x.c.t === "new" || x.c.t === "add")).length} 位比上一次申報增加、${H.filter(x => x.c && (x.c.t === "cut" || x.c.t === "sold")).length} 位減少。</p>
+    const tdHist = W.tdcc?.[id.slice(0, 2)]?.[id];
+    if (!tdHist && !W.tdccShardBusy && typeof tdccShard === "function") { W.tdccShardBusy = true; tdccShard(id.slice(0, 2)).finally(() => { W.tdccShardBusy = false; if (W.lt === "cong" && W.cv === "tw:s:" + id) renderList(); }); }
+    const cur = tdHist?.[tdHist.length - 1], prev = tdHist?.length >= 2 ? tdHist[tdHist.length - 2] : null;
+    const tchg = prev ? +(cur[1] - prev[1]).toFixed(2) : null;
+    const tdNote = cur ? `・集保千張大戶 <b>${cur[1].toFixed(2)}%</b>${tchg != null ? `（週 <span class="${cls(tchg)}">${tchg > 0 ? "+" : ""}${tchg}%</span>）` : ""}・散戶 50 張以下 ${cur[3] != null ? cur[3].toFixed(2) + "%" : "—"}` : "";
+    return `<section class="csec"><h3>${esc(nameOf(id))} ${esc(id)} <button class="btn sm" data-copen="${esc(id)}">在看盤開啟</button></h3><p class="note">${H.filter(x => x.h).length} 位政治人物最近一次申報持有；${H.filter(x => x.c && (x.c.t === "new" || x.c.t === "add")).length} 位比上一次申報增加、${H.filter(x => x.c && (x.c.t === "cut" || x.c.t === "sold")).length} 位減少${tdNote}。</p>
       <div class="ctbl"><table><thead><tr><th>人物</th><th>持股</th><th>市值</th><th>和上次相比</th><th>申報日</th></tr></thead><tbody>${H.map(x => `<tr><td>${twoWho(x.p)}</td><td>${x.h ? twoLot(x.h.sh) : "0"}</td><td>${x.h && twoPx(id) != null ? twoAmt(x.h.sh * twoPx(id)) : "—"}</td><td>${x.c ? `${tag(x.c.t)} <span class="${x.c.d > 0 ? "up" : "down"}">${x.c.d > 0 ? "+" : ""}${twoLot(x.c.d)}</span>` : `<span class="note">${x.p.prev ? "不變" : "只有一次申報"}</span>`}</td><td>${x.p.last.date}</td></tr>`).join("")}</tbody></table></div></section>`;
   }
   // 首頁：持股市值排行榜（分組、各組合計、排行），下面是原本的熱門持股、持股變化、損益排行、最近刊登
