@@ -44,15 +44,22 @@ for (const width of [1280, 390]) {
     assert.equal(zoomInText, "125%", "放大後顯示 125%");
     assert.ok(await p.evaluate(() => document.querySelector(".bwrap").classList.contains("is-zoomed")), "有 is-zoomed 樣式");
 
-    // 3. 測試滑鼠滾輪放大 (wheel zoom)
+    // 3. 一般滾輪要留給頁面捲動（不縮放、不擋預設行為），Ctrl／⌘＋滾輪（觸控板捏合）才縮放
+    const plain = await p.evaluate(() => {
+      const wrap = document.querySelector(".bwrap"), k0 = W.mf.zoom.k;
+      const ev = new WheelEvent("wheel", { deltaY: -200, clientX: 200, clientY: 200, bubbles: true, cancelable: true });
+      wrap.dispatchEvent(ev);
+      return { blocked: ev.defaultPrevented, same: W.mf.zoom.k === k0, hint: !!wrap.querySelector(".wheel-hint") };
+    });
+    assert.deepEqual(plain, { blocked: false, same: true, hint: true }, "一般滾輪不縮放、頁面照常捲動，並提示用 Ctrl／⌘");
     await p.evaluate(() => {
       const wrap = document.querySelector(".bwrap");
-      const ev = new WheelEvent("wheel", { deltaY: -200, clientX: 200, clientY: 200, bubbles: true, cancelable: true });
+      const ev = new WheelEvent("wheel", { deltaY: -200, clientX: 200, clientY: 200, ctrlKey: true, bubbles: true, cancelable: true });
       wrap.dispatchEvent(ev);
     });
     await p.waitForTimeout(100);
     const wheelZoomK = await p.evaluate(() => W.mf.zoom.k);
-    assert.ok(wheelZoomK > 1.25, `滾輪放大後比例大於 1.25 (目前 ${wheelZoomK})`);
+    assert.ok(wheelZoomK > 1.25, `Ctrl＋滾輪放大後比例大於 1.25 (目前 ${wheelZoomK})`);
 
     // 4. 測試雙擊還原 (double click reset)
     await p.evaluate(() => {
@@ -133,3 +140,40 @@ for (const width of [1280, 390]) {
     assert.deepEqual(errs, []);
   });
 }
+
+test("動能矩陣回放：右側象限清單與數量跟著回放日期，播到最後一天停住，各種模式都沒有錯誤", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  await p.evaluate(() => {
+    // 12 天、6 個板塊：前幾天 a 最大、後幾天 f 最大，象限清單第一名要跟著日期換
+    const ids = ["a", "b", "c", "d", "e", "f"], T = 12, dates = Array.from({ length: T }, (_, t) => `2026-10-${String(t + 1).padStart(2, "0")}`);
+    const at = t => ids.map((id, i) => { const big = t < 6 ? i === 0 : i === 5, v = (big ? 9e9 : (i + 1) * 1e9) * (1 + t / 20);
+      return { id, name: "板塊" + id, kind: "題材", n: 3, q: "up", q1: "up", net1: v / 5, prev1: 0, accel1: 1e8, net5: v, prev5: 0, accel: 1e9 + i * 1e8, pct1: 1, pct5: 2, f1: 0, tr1: 0, f5: 0, tr5: 0, buy1: 2, buy5: 2 }; });
+    W.mf.days = dates.map(date => ({ date, rows: [] }));
+    W.mf.model = { T, dates, secs: [] };
+    window.mfModel = () => W.mf.model;
+    window.flowAt = (M, t = T - 1) => at(t);
+    window.flowStocks = () => [];
+    window.flowMood = () => null;
+    showList(); setLt("money"); W.mf.view = "bubble"; W.mf.viz = "bubble"; W.mf.q = "up"; W.mf.rp.speed = 4; renderList();
+  });
+  await p.waitForSelector(".bwrap #mfb");
+  const top = () => p.evaluate(() => document.querySelector(".mqlist li .nm")?.firstChild?.textContent);
+  assert.equal(await top(), "板塊f", "最新一天第一名是 f");
+  await p.click('[data-mrp="play"]');
+  await p.waitForFunction(() => W.mf.rp.u != null && W.mf.rp.u < 6);
+  assert.equal(await top(), "板塊a", "回放到前幾天時第一名換成 a");
+  await p.waitForFunction(() => !W.mf.rp.playing, null, { timeout: 15000 });
+  const end = await p.evaluate(() => ({ u: W.mf.rp.u, btn: document.querySelector('[data-mrp="play"]:not([data-mrp-top])').textContent }));
+  assert.deepEqual(end, { u: 11, btn: "▶ 回放" }, "播到最後一天停住，按鈕變回播放");
+  assert.equal(await top(), "板塊f");
+  // 其他視覺化模式也能回放、拖滑桿
+  let want = 11;
+  for (const viz of ["heat", "flow", "tree"]) {
+    await p.evaluate(v => { W.mf.viz = v; W.mf.rp.fl = null; renderList(); }, viz);
+    await p.click('[data-mrp="prev"]'); await p.waitForTimeout(600);
+    assert.equal(await p.evaluate(() => Math.round(W.mf.rp.u)), --want, `${viz} 上一天`);
+    assert.ok(await p.evaluate(() => !document.getElementById("mfb").classList.contains("is-playing")), `${viz} 補間結束後恢復過場動畫`);
+  }
+  await ctx.close();
+  assert.deepEqual(errs, []);
+});
