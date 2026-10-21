@@ -125,18 +125,33 @@ test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，�
   const h = await p.evaluate(() => { const S = W.gxS; return S.hits.filter(x => x.id !== S.core && x.z > 0.1).sort((a, b) => b.z - a.z)[0]; });
   const b2 = await p.locator(".gstage").boundingBox(); await p.touchscreen.tap(b2.x + h.x, b2.y + h.y);
   await p.waitForSelector(".gcard:not([hidden])"); assert.match(await p.textContent(".gcard"), /上游|下游|相關/);
-  assert.ok(await p.evaluate(id => W.gxS.labIds.includes(id), h.id), "被點到的圓點要標名稱");
+  await p.waitForFunction(id => W.gxS.labIds?.includes(id), h.id, { timeout: 3000 }); // 名稱在下一個畫面才畫上去
   // 縮放：按鈕放大、回到 100%；滾輪也能縮放
   await p.click('[data-gxz="+"]'); assert.ok(Math.abs((await p.evaluate(() => W.gx.zoom)) - 1.3) < 0.01); assert.equal(await p.textContent(".gzv"), "130%");
   await p.click('[data-gxz="0"]'); assert.equal(await p.evaluate(() => W.gx.zoom), 1);
   await p.mouse.move(b2.x + 20, b2.y + b2.height - 20); await p.mouse.wheel(0, -300); await p.waitForTimeout(100); // 避開打開的資訊窗格
   assert.ok((await p.evaluate(() => W.gx.zoom)) > 1.2, "滾輪放大");
+  // 放大後拖曳＝移動畫面（不是轉動）
+  await p.click('[data-gxz="+"]'); await p.click('[data-gxz="+"]');
+  const v0 = await p.evaluate(() => ({ th: W.gx.th, px: W.gx.px || 0 })), b3 = await p.locator(".gstage").boundingBox(), y3 = b3.y + b3.height * 0.92;
+  await p.mouse.move(b3.x + 30, y3); await p.mouse.down(); await p.mouse.move(b3.x + 130, y3, { steps: 6 }); await p.mouse.up();
+  const v1 = await p.evaluate(() => ({ th: W.gx.th, px: W.gx.px || 0 }));
+  assert.ok(Math.abs(v1.px - v0.px) > 50 && Math.abs(v1.th - v0.th) < 0.01, `放大後拖曳要平移：${JSON.stringify([v0, v1])}`);
   await p.click('[data-gxz="0"]');
   await p.click(".gcard [data-ifocus]"); await p.waitForFunction(id => W.gxS?.core === id, h.id);
   // 三組樣式都能切換，並記在瀏覽器
   for (const k of ["tip:B", "lay:A", "lay:C", "line:A", "line:C"]) { await p.click(`[data-gxo="${k}"]`); await p.waitForTimeout(80); }
   assert.deepEqual(await p.evaluate(() => store.get("watch:inds").gxo), { tip: "B", lay: "C", line: "C" });
-  await p.click('[data-instyle="layer"]'); await p.waitForSelector(".inetwrap");
+  await p.click('[data-instyle="layer"]'); await p.waitForSelector(".inetwrap .inode2");
   assert.equal(await p.evaluate(() => store.get("watch:inds").nstyle), "layer");
+  // 分層：直式（手機不會橫向捲動），點題材聚焦，只畫它的上下游連線，再點一次取消
+  assert.equal(await p.evaluate(() => document.documentElement.scrollWidth), 390);
+  if (await p.evaluate(() => !!W.indS.focus)) await p.evaluate(() => { W.indS.focus = null; renderInd(); });
+  const fid = await p.evaluate(() => (IND.networks.find(n => n.id === W.indS.net) || IND.networks[0]).layers[1][1][0]);
+  await p.click(`.inode2[data-ifocus="${fid}"]`); await p.waitForSelector(".inode2.on");
+  const fx = await p.evaluate(id => { const net = IND.networks.find(n => n.id === W.indS.net) || IND.networks[0];
+    return { n: net.links.filter(l => l.includes(id)).length, paths: document.querySelectorAll(".inet2 path").length, rel: document.querySelectorAll(".inode2.up, .inode2.dn").length, dim: document.querySelectorAll(".inode2.dim").length, focus: W.indS.focus }; }, fid);
+  assert.equal(fx.focus, fid); assert.equal(fx.paths, fx.n); assert.ok(fx.rel > 0 && fx.dim > 0, JSON.stringify(fx));
+  await p.click(`.inode2[data-ifocus="${fid}"]`); assert.equal(await p.evaluate(() => W.indS.focus), null);
   await ctx.close(); assert.deepEqual(errs, []);
 });

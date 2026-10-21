@@ -652,7 +652,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 /* 產業網絡：星系 */
 /* 星系固定用深藍夜空＋發光球體與細線網格，淺色主題也一樣 */
 .igal-wrap { margin: 8px 12px; border: 1px solid #1a2a44; border-radius: 16px; background: radial-gradient(ellipse at 50% 42%, #14305a 0%, #0b1a33 45%, #060c18 100%); overflow: hidden; }
-.gstage { position: relative; aspect-ratio: 16 / 10; max-height: 640px; } @media (max-width: 900px) { .gstage { aspect-ratio: 1 / 1.08; } }
+.gstage { position: relative; height: 480px; }
 .igalaxy { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
 .ghud { position: absolute; left: 12px; top: 10px; font-size: 12px; font-weight: 300; letter-spacing: .03em; line-height: 1.5; color: #8fa9cc; pointer-events: none; } .ghud b { color: #e9f3ff; font-weight: 400; }
 .gzoom { position: absolute; right: 10px; top: 10px; display: flex; gap: 2px; background: rgba(10, 22, 42, .7); border: 1px solid #22395e; border-radius: 8px; padding: 2px; z-index: 1; } .gzoom button { min-width: 32px; height: 28px; padding: 0 6px; font: 300 13px var(--font-num); color: #cfe2fb; background: none; border: 0; border-radius: 6px; cursor: pointer; } .gzoom button:hover { background: rgba(127, 196, 255, .14); } .gzoom .gzv { min-width: 48px; font-size: 11.5px; }
@@ -663,7 +663,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .gcard .gbtn { display: flex; gap: 6px; margin-top: 4px; } .gcard .gbtn button { font: 500 12px var(--font-body); color: #06101f; background: #7fc4ff; border: 0; border-radius: 6px; padding: 6px 9px; cursor: pointer; } .gcard .gbtn button + button { background: #2a4a78; color: #e9f3ff; }
 .gxopts .seg button { font-weight: 300; letter-spacing: .03em; } .gxopts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; margin: 6px 12px 4px; font-size: 12px; color: var(--muted); } .gxopts .seg { margin: 0; }
 .igal-leg i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
-.igal-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 14px 8px; font-size: 12px; color: var(--muted); }
+.igal-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 14px 8px; font-size: 12px; color: var(--muted); } .igal-leg span { min-width: 0; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) { .iisl { animation: none !important; } }
 .itheme { border: 1px solid color-mix(in srgb, var(--ic) 55%, var(--line)); border-radius: 4px; padding: 12px 14px; background: linear-gradient(160deg, color-mix(in srgb, var(--ic) 14%, var(--surface)), var(--surface-2)); }
 .ith { display: flex; align-items: center; gap: 8px; } .iic { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 4px; color: var(--ic); border: 1px solid color-mix(in srgb, var(--ic) 50%, transparent); background: color-mix(in srgb, var(--ic) 12%, transparent); flex: none; }
@@ -677,10 +677,15 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .flowsvg { width: 100%; height: auto; display: block; } .fstep { font: 500 12.5px/1.25 var(--font-body); color: var(--ink); height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; } .fstep.mini { font-size: 10.5px; font-weight: 500; }
 .inq { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 4px; border-top: 1px solid var(--line); }
 .ichips { display: flex; flex-wrap: wrap; gap: 6px; }
-.inetwrap { overflow-x: auto; margin: 8px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); -webkit-overflow-scrolling: touch; }
-.inet { position: relative; } .inet svg { position: absolute; inset: 0; pointer-events: none; } .ilayer { position: absolute; left: 10px; font-size: 12.5px; font-weight: 500; color: var(--muted); letter-spacing: .1em; }
-.inode { position: absolute; border: 1px solid var(--line); border-left: 4px solid var(--ic); border-radius: 4px; background: var(--surface); color: var(--ink); text-align: left; padding: 6px 10px; cursor: pointer; display: flex; flex-direction: column; justify-content: center; gap: 2px; transition: opacity .15s; }
-.inode b { font-size: 13px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } .inode small { font: 11px var(--font-num); color: var(--muted); } .inode.on { border-color: var(--ic); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ic) 40%, transparent); }
+.inetwrap { margin: 8px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); }
+.inet2 { position: relative; padding: 10px 10px 14px; display: grid; gap: 20px; } .inet2 > svg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 0; }
+.inet2 path { fill: none; stroke-width: 1.8; } .inet2 path.lu { stroke: #e08a3c; } .inet2 path.ld { stroke: #3b8fd9; } .inet2 path.lo { stroke: var(--muted); stroke-width: 1; opacity: .22; }
+.ilay h5 { margin: 0 0 7px; font-size: 12.5px; font-weight: 400; color: var(--muted); letter-spacing: .06em; display: flex; align-items: center; gap: 6px; } .ilay h5 i { font-style: normal; font-size: 11px; padding: 0 6px; border: 1px solid var(--line); border-radius: 3px; }
+.ilay-n { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; position: relative; z-index: 1; } @media (min-width: 1000px) { .ilay-n { grid-template-columns: repeat(var(--cols, 6), minmax(0, 1fr)); } .inet2 { gap: 26px; } } /* 電腦：每層一列，整張網絡不用捲動 */ @media (max-width: 420px) { .ilay-n { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.inode2 { position: relative; min-width: 0; border: 1px solid var(--line); border-left: 3px solid var(--ic); border-radius: 4px; background: var(--surface); color: var(--ink); text-align: left; padding: 7px 9px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; transition: opacity .15s, box-shadow .15s; }
+.inode2 b { font-size: 13px; font-weight: 500; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .inode2 .ir { display: flex; justify-content: space-between; gap: 6px; font: 11px var(--font-num); color: var(--muted); }
+.inode2.on { box-shadow: 0 0 0 2px var(--ic); } .inode2.up { box-shadow: 0 0 0 1.5px #e08a3c; } .inode2.dn { box-shadow: 0 0 0 1.5px #3b8fd9; } .inode2.dim { opacity: .32; }
+.inode2 .itg { position: absolute; top: -8px; right: 6px; font: 500 10.5px var(--font-body); font-style: normal; padding: 0 5px; border-radius: 3px; color: #fff; } .inode2 .itg.u { background: #e08a3c; } .inode2 .itg.d { background: #3b8fd9; }
 .ifocus { margin: 0 12px 12px; border: 1px solid var(--ic); border-radius: 4px; padding: 10px 12px; background: color-mix(in srgb, var(--ic) 8%, var(--surface-2)); } .ifocus small { margin-left: 8px; color: var(--muted); } .ifocus p { margin: 6px 0; font-size: 13.5px; line-height: 1.6; }
 .ifig h4 { display: flex; align-items: center; justify-content: space-between; } .ilink { background: none; border: 0; color: var(--accent, #3b82f6); font: inherit; font-size: 13px; cursor: pointer; padding: 2px 0; }
 .izbtn { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; color: inherit; }
@@ -1001,7 +1006,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-115</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-116</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -3330,7 +3335,7 @@ function indGalaxy(net, focus) {
     <div class="igal-wrap gstage"><canvas class="igalaxy" role="img" aria-label="${esc(net.name)} 產業星系：${esc(INDT.get(core).name)} 在中心，上游 ${ups.size}、下游 ${downs.size}"></canvas>
       <div class="ghud">中心：<b>${esc(INDT.get(core).name)}</b><br>上游 ${ups.size}・下游 ${downs.size}・相關 ${ids.length - 1 - ups.size - downs.size}</div><div class="gcard" hidden></div>
       <div class="gzoom" role="group" aria-label="縮放"><button type="button" data-gxz="-" aria-label="縮小">－</button><button type="button" data-gxz="0" aria-label="回到原本大小" class="gzv">${Math.round((W.gx.zoom || 1) * 100)}%</button><button type="button" data-gxz="+" aria-label="放大">＋</button></div></div>
-    <div class="igal-leg"><span><i style="background:#ffb26b"></i>上游連線</span><span><i style="background:#6fc3ff"></i>下游連線</span><span><i style="background:#8aa0bf"></i>其他關係</span><span>光暈紅漲綠跌；上半部＝上游、下半部＝下游</span><span>${isMobile() ? "點圓點看資訊、左右拖曳轉動、兩指縮放" : "滑到圓點看資訊、點一下換到中心、拖曳轉動、滾輪縮放"}</span></div>`;
+    <div class="igal-leg"><span><i style="background:#ffb26b"></i>上游連線</span><span><i style="background:#6fc3ff"></i>下游連線</span><span><i style="background:#8aa0bf"></i>其他關係</span><span>光暈紅漲綠跌；上半部＝上游、下半部＝下游</span><span>${isMobile() ? "點圓點看資訊、左右拖曳轉動、兩指縮放（放大後拖曳可移動）" : "滑到圓點看資訊、點一下換到中心、拖曳轉動、滾輪縮放（放大後拖曳可移動）"}</span></div>`;
 }
 // 題材在 3D 空間的位置（單位：外圈半徑）
 function gxPos(id, t, lay) {
@@ -3350,7 +3355,7 @@ function gxDraw(cv) {
   if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
   const css = getComputedStyle(document.documentElement), UP = gxRgb(css.getPropertyValue("--up")), DN = gxRgb(css.getPropertyValue("--down")), font = getComputedStyle(document.body).fontFamily, t = G.t;
-  const Z = G.zoom || 1, zr = Math.sqrt(Z), R = Math.min(w, h) * (w < 520 ? 0.36 : 0.38) * Z, cx = w / 2 + (G.px || 0), cy = h / 2 + 8 + (G.py || 0); // 放大時球體跟著變大，圓點只放大一點點（√倍），點和點之間就分得開
+  const Z = G.zoom || 1, zr = Math.sqrt(Z), R = Math.min(w, h) * (w < 520 ? 0.36 : 0.43) * Z, cx = w / 2 + (G.px || 0), cy = h / 2 + 8 + (G.py || 0); // 放大時球體跟著變大，圓點只放大一點點（√倍），點和點之間就分得開
   const proj = v => { const x1 = v[0] * Math.cos(G.th) + v[2] * Math.sin(G.th), z1 = -v[0] * Math.sin(G.th) + v[2] * Math.cos(G.th), y2 = v[1] * Math.cos(G.ph) - z1 * Math.sin(G.ph), z2 = v[1] * Math.sin(G.ph) + z1 * Math.cos(G.ph), f = 4 / (4 - z2);
     return { x: cx + x1 * R * f, y: cy - y2 * R * f, z: z2, f }; };
   GX_BOKEH.forEach(([x, y, r, org], i) => { const a = 0.18 + 0.15 * Math.sin(t * 0.6 + i), g = ctx.createRadialGradient(x * w, y * h, 0, x * w, y * h, r * 3); g.addColorStop(0, org ? `rgba(255,154,74,${a})` : `rgba(127,196,255,${a})`); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x * w, y * h, r * 3, 0, 7); ctx.fill(); });
@@ -3413,7 +3418,10 @@ function gxCard(card, id, x, y) {
 // 接上互動：滑鼠滑過看窗格、點一下換中心；手指點一下看窗格（窗格裡按「換到中心」）；左右拖曳轉動（手機上下滑仍是捲動頁面）
 function gxMount() {
   const cv = document.querySelector("canvas.igalaxy"); if (!cv || cv.dataset.on) return; cv.dataset.on = "1";
-  const G = W.gx, card = cv.parentElement.querySelector(".gcard"), still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const G = W.gx, card = cv.parentElement.querySelector(".gcard"), still = matchMedia("(prefers-reduced-motion: reduce)").matches, stage = cv.parentElement;
+  // 星系高度配合螢幕比例：手機約視窗高的 62%（寬的 0.95～1.3 倍），電腦約 72%（寬的 0.45～0.75 倍），整個星系一次看得完
+  const fit = () => { const { vh } = mfWinSize(), w = stage.clientWidth, mob = w < 700; stage.style.height = Math.round(Math.max(320, Math.min(vh * (mob ? 0.62 : 0.72), w * (mob ? 1.3 : 0.75)), w * (mob ? 0.95 : 0.45))) + "px"; };
+  fit(); new ResizeObserver(() => { fit(); dirty = true; }).observe(stage);
   let drag = null, moved = false, idle = 0, last = performance.now(), dirty = true; G.hover = G.pin = null;
   const xy = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   const hit = (x, y) => (W.gxS.hits || []).filter(o => Math.hypot(o.x - x, o.y - y) < o.r).sort((a, b) => b.z - a.z)[0]?.id || null;
@@ -3429,11 +3437,12 @@ function gxMount() {
   const pinchInfo = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
   cv.addEventListener("pointerdown", e => { const [x, y] = xy(e); pts.set(e.pointerId, { x, y });
     if (pts.size === 2) { pinch = pinchInfo(); drag = G.drag = null; moved = true; G.drag = { pinch: true }; return; }
-    drag = G.drag = { x: e.clientX, y: e.clientY, th: G.th, ph: G.ph }; moved = false; });
+    drag = G.drag = { x: e.clientX, y: e.clientY, th: G.th, ph: G.ph, px: G.px || 0, py: G.py || 0, pan: (G.zoom || 1) > 1.05 }; moved = false; });
   cv.addEventListener("pointermove", e => { const [x, y] = xy(e); if (pts.has(e.pointerId)) pts.set(e.pointerId, { x, y });
     if (pinch && pts.size === 2) { const n = pinchInfo(); G.px = (G.px || 0) + n.x - pinch.x; G.py = (G.py || 0) + n.y - pinch.y; zoomAt(n.d / pinch.d, n.x, n.y); pinch = n; return; }
-    if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (moved) { G.th = drag.th + dx * 0.008; if (e.pointerType === "mouse") G.ph = Math.max(-0.05, Math.min(0.8, drag.ph + dy * 0.004)); idle = performance.now(); dirty = true; } return; }
-    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); if (id !== G.hover) { G.hover = id; cv.style.cursor = id ? "pointer" : "grab"; dirty = true; } gxCard(card, id, x, y); } });
+    if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (moved && drag.pan) { const w = cv.clientWidth, h = cv.clientHeight, z = G.zoom || 1; G.px = Math.max(-w * 0.5 * z, Math.min(w * 0.5 * z, drag.px + dx)); G.py = Math.max(-h * 0.5 * z, Math.min(h * 0.5 * z, drag.py + dy)); idle = performance.now(); dirty = true; } // 放大後拖曳＝移動畫面
+      else if (moved) { G.th = drag.th + dx * 0.008; if (e.pointerType === "mouse") G.ph = Math.max(-0.05, Math.min(0.8, drag.ph + dy * 0.004)); idle = performance.now(); dirty = true; } return; }
+    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); if (id !== G.hover) { G.hover = id; cv.style.cursor = id ? "pointer" : (G.zoom || 1) > 1.05 ? "move" : "grab"; dirty = true; } gxCard(card, id, x, y); } });
   cv.addEventListener("pointercancel", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; });
   cv.addEventListener("pointerleave", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; if (!G.pin && G.hover) { G.hover = null; card.hidden = true; dirty = true; } });
   cv.addEventListener("pointerup", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; const was = drag; drag = G.drag = null; if (G.pend) { G.pend = false; setTimeout(renderInd); } if (!was || moved) return;
@@ -3445,18 +3454,27 @@ function gxMount() {
     if (dirty || W.gxS.redraw) { dirty = W.gxS.redraw = false; gxDraw(cv); } requestAnimationFrame(tick); };
   gxDraw(cv); requestAnimationFrame(tick);
 }
-// 產業網絡：每一層一列，節點固定寬度，連線用 SVG 曲線；點節點只加亮它的上下游
+// 產業網絡（分層）：直式，上游在上、下游在下，每一層的題材自動換行（手機不用左右滑）；節點顯示今日漲跌。
+// 點一個題材就聚焦：它的直接上游（橘）、下游（藍）標出來並連線，其他變暗；再點一次取消。連線在版面排好後才依實際位置畫。
 function indNetwork(net, focus) {
-  const NW = 160, NH = 58, GX = 22, RH = 118, top = 30, cols = Math.max(...net.layers.map(([, L]) => L.length)), W0 = cols * (NW + GX) + 10, H0 = net.layers.length * RH + 6, at = {};
-  net.layers.forEach(([, L], r) => L.forEach((id, i) => { at[id] = { x: 6 + i * (NW + GX), y: top + r * RH } }));
-  const near = new Set(focus ? [focus, ...net.links.filter(l => l.includes(focus)).flat()] : []);
-  const edges = net.links.map(([a, b]) => { const A = at[a], B = at[b], ta = INDT.get(a), tb = INDT.get(b), on = focus && (a === focus || b === focus), dim = focus && !on;
-    let d; if (A.y === B.y) d = `M${A.x + NW} ${A.y + NH / 2} L${B.x} ${B.y + NH / 2}`; else { const x1 = A.x + NW / 2, y1 = A.y + NH, x2 = B.x + NW / 2, y2 = B.y; d = `M${x1} ${y1} C${x1} ${y1 + 40} ${x2} ${y2 - 40} ${x2} ${y2}`; }
-    return `<path d="${d}" fill="none" stroke="${on ? indCol(ta) : "var(--muted)"}" stroke-width="${on ? 2.2 : 1.2}" opacity="${dim ? 0.12 : on ? 0.95 : 0.45}" ${ta.mk !== tb.mk ? 'stroke-dasharray="5 4"' : ""}/>`; }).join("");
-  const nodes = Object.entries(at).map(([id, p]) => { const t = INDT.get(id), dim = focus && !near.has(id);
-    return `<button class="inode${id === focus ? " on" : ""}" style="left:${p.x}px;top:${p.y}px;width:${NW}px;height:${NH}px;--ic:${indCol(t)};opacity:${dim ? 0.3 : 1}" data-ifocus="${id}"><b>${esc(t.name)}</b><small>${MK_TAG[t.mk]}・${indCodes(t).length} 家</small></button>`; }).join("");
-  const labels = net.layers.map(([nm], r) => `<div class="ilayer" style="top:${top + r * RH - 24}px">${esc(nm)}</div>`).join("");
-  return `<div class="inet" style="width:${W0}px;height:${H0 + top}px">${labels}<svg width="${W0}" height="${H0 + top}" aria-hidden="true">${edges}</svg>${nodes}</div>`;
+  const ups = new Set(focus ? net.links.filter(l => l[1] === focus).map(l => l[0]) : []), downs = new Set(focus ? net.links.filter(l => l[0] === focus).map(l => l[1]) : []), n = net.layers.length;
+  const stage = r => (r === 0 ? "上游" : r === n - 1 ? "下游" : "中游");
+  const node = id => { const t = INDT.get(id); if (!t) return ""; const a = indAvg(t), rel = id === focus ? " on" : ups.has(id) ? " up" : downs.has(id) ? " dn" : focus ? " dim" : "";
+    return `<button type="button" class="inode2${rel}" data-ifocus="${id}" title="${esc(t.name)}" style="--ic:${indCol(t)}"${id === focus ? ' aria-pressed="true"' : ""}>${ups.has(id) ? '<i class="itg u">上游</i>' : downs.has(id) ? '<i class="itg d">下游</i>' : ""}<b>${esc(t.name)}</b><span class="ir"><small>${MK_TAG[t.mk]}・${indCodes(t).length} 家</small>${a ? `<span class="${a.pct >= 0 ? "up" : "down"}">${indPctTxt(a.pct)}</span>` : ""}</span></button>`; };
+  queueMicrotask(indNetDraw);
+  return `<div class="inet2" style="--cols:${Math.min(9, Math.max(...net.layers.map(([, L]) => L.length)))}" data-links='${esc(JSON.stringify(net.links))}' data-focus="${esc(focus || "")}"><svg aria-hidden="true"></svg>${net.layers.map(([nm, L], r) => `<section class="ilay"><h5><i>${stage(r)}</i>${esc(nm)}</h5><div class="ilay-n">${L.map(node).join("")}</div></section>`).join("")}</div>`;
+}
+function indNetDraw() {
+  const box = document.querySelector(".inet2"); if (!box || box.dataset.on) return; box.dataset.on = "1";
+  const links = JSON.parse(box.dataset.links || "[]"), f = box.dataset.focus || null, svg = box.querySelector("svg");
+  const draw = () => { if (!box.isConnected) return; const R = box.getBoundingClientRect(); svg.setAttribute("width", R.width); svg.setAttribute("height", R.height);
+    const at = {}; box.querySelectorAll(".inode2").forEach(el => { const r = el.getBoundingClientRect(); at[el.dataset.ifocus] = { x: r.left - R.left, y: r.top - R.top, w: r.width, h: r.height }; });
+    svg.innerHTML = links.map(([a, b]) => { const A = at[a], B = at[b]; if (!A || !B) return ""; const on = f && (a === f || b === f);
+      if (f && !on) return ""; // 聚焦時只畫它自己的上下游線，其他線全部收起來
+      let d; if (Math.abs(A.y - B.y) < 4) { const l = A.x < B.x ? A : B, r = A.x < B.x ? B : A; d = `M${l.x + l.w} ${l.y + l.h / 2} L${r.x} ${r.y + r.h / 2}`; }
+      else { const dn = A.y < B.y, x1 = A.x + A.w / 2, y1 = dn ? A.y + A.h : A.y, x2 = B.x + B.w / 2, y2 = dn ? B.y : B.y + B.h, my = (y1 + y2) / 2; d = `M${x1.toFixed(1)} ${y1.toFixed(1)} C${x1.toFixed(1)} ${my.toFixed(1)} ${x2.toFixed(1)} ${my.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`; }
+      return `<path d="${d}" class="${on ? (b === f ? "lu" : "ld") : "lo"}"/>`; }).join(""); };
+  draw(); new ResizeObserver(draw).observe(box);
 }
 // 大廠動向：先抓這個題材的新聞標題，再請 AI 只根據這些標題整理（沒有提到的不推測）
 function indAiBox(T) {
@@ -3556,10 +3574,11 @@ function renderInd() {
   if (S.view === "news") h += inewsView();
   else if (S.view === "network") {
     const net = IND.networks.find(n => n.id === S.net) || IND.networks[0], F = S.focus && INDT.get(S.focus);
-    h += `<p class="note gnote">一張圖看整條產業怎麼連動：點一個題材會加亮它的上下游，虛線是跨市場的關係；左右滑動看完整網絡。</p><div class="ichips" style="margin:0 12px">${IND.networks.map(n => `<button class="ichip" data-inet="${n.id}" aria-pressed="${n.id === net.id}">${esc(n.name)}</button>`).join("")}</div>
+    h += `<p class="note gnote">一張圖看整條產業怎麼連動：${S.nstyle === "layer" ? "由上往下是上游到下游；點一個題材聚焦它的直接上游（橘）和下游（藍），再點一次取消。" : "點一個題材會換到中心，上半部是上游、下半部是下游。"}</p><div class="ichips" style="margin:0 12px">${IND.networks.map(n => `<button class="ichip" data-inet="${n.id}" aria-pressed="${n.id === net.id}">${esc(n.name)}</button>`).join("")}</div>
       <div class="seg scrseg" role="group" aria-label="網絡樣式"><button data-instyle="galaxy" aria-pressed="${S.nstyle !== "layer"}">星系</button><button data-instyle="layer" aria-pressed="${S.nstyle === "layer"}">分層</button></div>
-      ${S.nstyle === "layer" ? `<div class="inetwrap">${indNetwork(net, S.focus)}</div>` : indGalaxy(net, S.focus)}`
-      + (F ? `<div class="ifocus" style="--ic:${indCol(F)}"><b>${esc(F.name)}</b><small>${MK_TAG[F.mk]}・${esc(F.cat)}</small><p>${esc(F.desc)}</p><p class="note">上游：${net.links.filter(l => l[1] === F.id).map(l => INDT.get(l[0]).name).join("、") || "—"}；下游：${net.links.filter(l => l[0] === F.id).map(l => INDT.get(l[1]).name).join("、") || "—"}</p><button class="btn sm primary" data-iopen="${F.id}">看這段的公司 →</button></div>` : "");
+      ${S.nstyle === "layer" ? "" : indGalaxy(net, S.focus)}`
+      + (F ? `<div class="ifocus" style="--ic:${indCol(F)}"><b>${esc(F.name)}</b><small>${MK_TAG[F.mk]}・${esc(F.cat)}</small><p>${esc(F.desc)}</p><p class="note">上游：${net.links.filter(l => l[1] === F.id).map(l => INDT.get(l[0]).name).join("、") || "—"}；下游：${net.links.filter(l => l[0] === F.id).map(l => INDT.get(l[1]).name).join("、") || "—"}</p><button class="btn sm primary" data-iopen="${F.id}">看這段的公司 →</button>${S.nstyle === "layer" ? ` <button class="btn sm" data-ifocus="${F.id}">取消聚焦</button>` : ""}</div>` : "")
+      + (S.nstyle === "layer" ? `<div class="inetwrap">${indNetwork(net, S.focus)}</div>` : "");
     loadIndQuotes(net.layers.flatMap(([, L]) => L).map(id => INDT.get(id)).filter(Boolean).flatMap(indCodes));
   } else if (S.view === "gallery") {
     const cats = [...new Set(IND.themes.map(t => t.cat))], G = IND.themes.filter(t => (!S.gcat || t.cat === S.gcat) && (!S.gmk || t.mk === S.gmk));
@@ -3581,7 +3600,7 @@ function renderInd() {
     }
   }
   $("#lx").innerHTML = h;
-  if (S.view === "network" && S.focus) { const el = document.querySelector(`.inode[data-ifocus="${S.focus}"]`), wr = document.querySelector(".inetwrap"); if (el && wr) wr.scrollLeft = Math.max(0, el.offsetLeft - wr.clientWidth / 2 + el.offsetWidth / 2); }
+  if (S.jump) { const el = document.querySelector(`.inode2[data-ifocus="${S.jump}"]`); S.jump = null; el?.scrollIntoView({ block: "center" }); } // 分層聚焦後上方多了說明，讓點的題材留在畫面中間
 }
 // 工具分頁（tools.js）：點擊、送出表單、勾選
 $("#lx").addEventListener("click", e => toolsClick(e)); $("#lTools").addEventListener("click", e => toolsClick(e));
@@ -3617,7 +3636,7 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const S = 
   const b = e.target.closest("[data-iview],[data-imk],[data-isub],[data-iopen],[data-ifav],[data-inet],[data-ifocus],[data-iisl],[data-instyle]"); if (!b) return;
   const d = b.dataset;
   if (d.iview) S.view = d.iview; else if (d.imk) S.mk = d.imk; else if (d.isub) S.sub = d.isub; else if (d.inet) { S.net = d.inet; S.focus = null; }
-  else if (d.ifocus) S.focus = S.focus === d.ifocus ? null : d.ifocus;
+  else if (d.ifocus) { S.focus = S.focus === d.ifocus ? null : d.ifocus; S.jump = d.ifocus; }
   else if (d.iisl) S.isl = d.iisl; else if (d.instyle) S.nstyle = d.instyle;
   else if (d.iopen != null) { S.open = d.iopen || null; goY(0); }
   else if (d.ifav) { const f = indFav(); f.has(d.ifav) ? f.delete(d.ifav) : f.add(d.ifav); store.set("watch:indfav", [...f]); }
