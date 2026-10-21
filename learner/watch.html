@@ -1051,7 +1051,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-128</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-129</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -4217,7 +4217,7 @@ function renderCong() {
   if (v === "ins") { const r = toolsBody("ins"); $("#lx").innerHTML = r.h; return r.note; }
   if (v === "cons") { $("#lx").innerHTML = cxConsHtml(); return "資料：眾議院、參議院定期交易報告、SEC 13F、監察院廉政專刊、公開資訊觀測站內部人轉讓申報。僅供研究參考，不是買賣建議。"; }
   if (v === "fol") { $("#lx").innerHTML = cxFolHtml(); return "追蹤清單存在這台裝置（開了雲端同步會一起備份）；Telegram 推播在收盤後的排程送出。"; }
-  if (v === "tw") { $("#lx").innerHTML = twoHtml(arg); cxDecor(v, arg); return twoNote(); }
+  if (v === "tw") { $("#lx").innerHTML = twoHtml(arg); if (!arg && W.two?.decl?.length) $("#lx").insertAdjacentHTML("beforeend", `<section class="csec tw-home">${cxTwHeat()}${cxTwLag()}</section>`); cxDecor(v, arg); return twoNote(); }
   if (v === "f13") { $("#lx").innerHTML = f13Html(arg); cxDecor(v, arg); return "資料：SEC EDGAR Form 13F-HR（每天檢查一次新申報）；股票代號用 OpenFIGI 由 CUSIP 對照，對不到的只顯示名稱。僅供研究參考，不是買賣建議。"; }
   if (!C || C.err || !C.trades?.length) { $("#lx").innerHTML = `<p class="note" style="padding:16px">${!C ? "載入中…" : C.err ? "⚠︎ 還沒有資料（" + esc(C.err) + "）。資料由每天的排程從眾議院、參議院官方申報整理，第一次跑完後就會出現。" : "還沒有資料：資料由每天的排程從眾議院、參議院官方申報整理，第一次跑完後就會出現。"}</p>`; return "資料來源：眾議院書記官、參議院電子申報系統的定期交易報告（PTR）。"; }
   const winSeg = `<span class="seg sm" role="group" aria-label="期間">${[30, 90].map(w => `<button data-cw="${w}" aria-pressed="${W.cw === w}">近 ${w} 天</button>`).join("")}</span>`;
@@ -4228,10 +4228,10 @@ function renderCong() {
   else if (v === "home") {
     // 排行版型：近 30／90 天（依交易日）的合計卡片＋四種排行（共同買進、熱門股票、交易人物、最新揭露）
     const q = (W.cq || "").trim().toLowerCase(), hit = t => !q || t.ticker.toLowerCase().includes(q) || pName(t.pid).toLowerCase().includes(q) || (t.asset || "").toLowerCase().includes(q), wTxt = W.cw === -1 ? cxRngTxt(cxRng("cong")) : W.cw ? `近 ${W.cw} 天` : "全部期間";
-    const W30 = congWin(W.cw).filter(hit), cons = congAgg(W30, true), hot = congAgg(W30, false), view = ["cons", "hot", "ppl", "feed", "lag"].includes(W.cview) ? W.cview : "cons";
+    const W30 = congWin(W.cw).filter(hit), cons = congAgg(W30, true), hot = congAgg(W30, false), view = ["cons", "hot", "ppl", "feed", "lag", "heat"].includes(W.cview) ? W.cview : "cons";
     const sumAmt = k => W30.filter(t => t.k === k).reduce((a, t) => a + amtMid(t.amount), 0), plain = g => congShape(g).replace(/<[^>]+>/g, "");
     h += `<section class="csec tw-home">${rkHead("美國國會議員交易", `參、眾議員依法公開的股票交易（定期交易報告 PTR）。依<strong>交易日期</strong>統計${wTxt}（資料從 ${(W.cong.trades || []).map(t => t.traded).sort()[0] || "—"} 開始）；金額只有申報區間，這裡用中間值估算。`)}
-      <div class="tw-ctl">${rkSeg("data-cw", String(W.cw), [["30", "近 30 天"], ["90", "近 90 天"], ["180", "半年"], ["365", "一年"], ["0", "全部"]])}${cxRngHtml("cong", W.cw === -1)}<input data-cq value="${esc(W.cq || "")}" placeholder="搜尋議員、代號或公司" aria-label="搜尋議員、代號或公司">${rkSeg("data-rkset", "cview:" + view, [["cview:cons", "共同買進"], ["cview:hot", "熱門股票"], ["cview:lag", "申報延遲"], ["cview:ppl", "交易人物"], ["cview:feed", "最新揭露"]])}</div>
+      <div class="tw-ctl">${rkSeg("data-cw", String(W.cw), [["30", "近 30 天"], ["90", "近 90 天"], ["180", "半年"], ["365", "一年"], ["0", "全部"]])}${cxRngHtml("cong", W.cw === -1)}<input data-cq value="${esc(W.cq || "")}" placeholder="搜尋議員、代號或公司" aria-label="搜尋議員、代號或公司">${rkSeg("data-rkset", "cview:" + view, [["cview:cons", "共同買進"], ["cview:hot", "熱門股票"], ["cview:heat", "主題熱圖"], ["cview:lag", "申報延遲"], ["cview:ppl", "交易人物"], ["cview:feed", "最新揭露"]])}</div>
       ${rkCards([{ t: "交易筆數", sub: wTxt, v: `${W30.length} 筆` }, { t: "交易人物", sub: `${new Set(W30.filter(t => t.k === "buy").map(t => t.pid)).size} 位有買進`, v: `${new Set(W30.map(t => t.pid)).size} 位` }, { t: "買進金額（估）", sub: `${W30.filter(t => t.k === "buy").length} 筆`, v: usd(Math.round(sumAmt("buy"))), vc: "up" }, { t: "賣出金額（估）", sub: `${W30.filter(t => t.k === "sell").length} 筆`, v: usd(Math.round(sumAmt("sell"))), vc: "down" }])}`;
     if (view === "cons") { cons.sort((a, b) => b.buyers.size - a.buyers.size || b.mid - a.mid);
       h += `<h4>共同買進：同一檔有幾位議員買（同一人買很多次只算 1 人）</h4>` + rkList(cons.slice(0, 40).map(g => ({ star: g.ticker, attr: `data-cv="stock:${esc(g.ticker)}"`, mono: rkMono(rkInit(g.ticker), "#3fa36b"), name: esc(g.ticker), sub: esc(g.asset || ""), val: `${g.buyers.size} 人買進`, vc: "up", vsub: `${usd(Math.round(g.mid))}・${esc(plain(g))}` })), "這段期間沒有買進紀錄"); }
@@ -4240,6 +4240,7 @@ function renderCong() {
     else if (view === "ppl") { const P = [...W30.reduce((m, t) => { const g = m.get(t.pid) || m.set(t.pid, { pid: t.pid, n: 0, b: 0, s: 0, amt: 0, tk: new Set() }).get(t.pid); g.n++; g.amt += amtMid(t.amount); t.k === "buy" ? g.b++ : t.k === "sell" ? g.s++ : 0; g.tk.add(t.ticker); return m; }, new Map()).values()].sort((a, b) => b.amt - a.amt);
       h += `<h4>交易人物：依交易金額（估）排序</h4>` + rkList(P.slice(0, 50).map(g => { const p = C.people?.[g.pid] || {}; return { attr: `data-cv="person:${esc(g.pid)}"`, mono: rkMono(rkInit(pName(g.pid)), RK_C[p.chamber] || RK_C.眾議院), name: esc(pName(g.pid)), sub: `${esc(p.chamber || "")}${p.state ? "・" + esc(p.state) : ""}・${g.tk.size} 檔`, val: usd(Math.round(g.amt)), vsub: `${g.n} 筆・<span class="up">買 ${g.b}</span>／<span class="down">賣 ${g.s}</span>` }; })); }
     else if (view === "lag") h += cxLagHtml({ trades: (C.trades || []).filter(hit) });
+    else if (view === "heat") h += cxCongHeat(W30);
     else { const all = (C.trades || []).filter(hit), months = [...new Set(all.map(t => t.filed.slice(0, 7)))].sort().reverse(), mon = months.includes(W.cmon) ? W.cmon : "", recent = (mon ? all.filter(t => t.filed.startsWith(mon)) : all.filter(t => t.filed >= congFrom(30))).sort((a, b) => b.filed.localeCompare(a.filed)).slice(0, mon ? 400 : 80);
       h += `<h4>${mon ? `${mon.replace("-", "/")} 公開的交易` : "最新揭露：最近 30 天才公開的交易"}（依申報日期；實際交易可能早很多）</h4><div class="mn-days mkseg"><button type="button" data-rkset="cmon:" aria-pressed="${!mon}">最近 30 天</button>${months.map(m => `<button type="button" data-rkset="cmon:${m}" aria-pressed="${mon === m}">${m.replace("-", "/")}</button>`).join("")}</div>` + rkList(recent.map(t => { const p = C.people?.[t.pid] || {}; return { no: t.filed.slice(5).replace("-", "/"), attr: `data-cv="person:${esc(t.pid)}"`, mono: rkMono(rkInit(t.ticker), t.k === "buy" ? "#3fa36b" : "#d0643f"), name: `${esc(pName(t.pid))} <span class="${t.k === "buy" ? "up" : t.k === "sell" ? "down" : ""}">${t.k === "buy" ? "買進" : t.k === "sell" ? "賣出" : "交換"}</span> ${esc(t.ticker)}`, sub: `${esc(p.chamber || "")}・交易日 ${t.traded.replace(/-/g, "/")}・隔 ${congDays(t.traded, t.filed)} 天申報${t.owner !== "本人" ? "・" + esc(t.owner) : ""}`, val: amtTxt(t.amount), vsub: esc(t.asset || "") }; }), mon ? "這個月沒有揭露" : "最近 30 天沒有新揭露"); }
     h += `</section>`;

@@ -80,7 +80,7 @@
       <p class="hint">用近 12 個月的配息推估，未來配息可能變多或變少。<button type="button" class="sx-link" id="hx-tax">把 ${fmt(year)} 元帶到「實拿股息試算」 ›</button></p>`;
   }
   $("hx-go").addEventListener("click", holdRun);
-  document.addEventListener("click", e => { if (e.target.id === "hx-tax") { $("tx-div").value = Math.round(S.holdYear || 0); S["tx-div"] = $("tx-div").value; save(); taxRun(); $("sec-tax").scrollIntoView({ behavior: "smooth" }); } });
+  document.addEventListener("click", e => { if (e.target.id === "hx-tax") { $("tx-div").value = Math.round(S.holdYear || 0); S["tx-div"] = $("tx-div").value; save(); taxRun(); sxGo("tax", true); } });
 
   /* ---------- 實拿股息試算 ---------- */
   // 綜合所得稅級距（115 年申報、114 年度所得適用；國稅局每年依物價調整）
@@ -169,7 +169,32 @@
   ["kpis", "dc-kpis"].forEach(id => { const el = $(id); if (el) new MutationObserver(inflate).observe(el, { childList: true }); });
   ["if-on", "if-r"].forEach(id => $(id).addEventListener("input", () => { S.ifOn = $("if-on").checked; S.ifR = $("if-r").value; save(); inflate(); })); inflate();
 
-  const css = document.createElement("style"); css.textContent = `.mm-bars{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;align-items:end;height:120px;margin:6px 0}
+  /* ---------- 選單：一次只看一個功能（模擬三種做法時才顯示左邊的控制台） ---------- */
+  const led = document.getElementById("ledger")?.closest("section"); if (led && !led.id) led.id = "sec-ledger";
+  const GROUPS = [["模擬三種做法", [["sim", "總覽與走勢", "三種做法的期末淨值、年化、部位", ["sec-sum", "sec-pos", "sec-ledger", "sec-chart"]], ["ms", "存錢里程碑", "第幾年存到 100 萬、500 萬…", ["sec-ms"]], ["risk", "壓力測試與配置", "崩盤時會不會被追繳、核心衛星比例", ["sec-risk"]], ["etf", "標的比較", "不同 ETF 用同樣條件比", ["sec-etf"]]]],
+    ["存股工具", [["div", "股息計算機", "每年領多少、含息與不含息報酬", ["sec-div"]], ["hold", "我的庫存股息", "讀看盤庫存，算每月領多少", ["sec-hold"]], ["tax", "實拿股息試算", "健保、稅、手續費扣完拿多少", ["sec-tax"]], ["hist", "真實歷史回測", "真實股價定期定額到今天", ["sec-hist"]], ["ret", "退休提領試算", "每年領生活費能撐多久", ["sec-ret"]], ["mon", "月月配組合", "每個月都有股息的 ETF 組合", ["sec-mon"]]]]];
+  const ALL = GROUPS.flatMap(([, L]) => L), CONSOLE = new Set(["sim", "ms", "risk", "etf"]), lay = document.querySelector(".layout");
+  lay?.insertAdjacentHTML("beforebegin", `<nav class="sx-menu" aria-label="存股模擬選單">${GROUPS.map(([t, L]) => `<div class="sx-mg"><h3>${t}</h3><div class="sx-mi">${L.map(([k, n, d]) => `<button type="button" data-sxg="${k}"><b>${n}</b><small>${d}</small></button>`).join("")}</div></div>`).join("")}</nav>`);
+  document.querySelector("nav.jump")?.setAttribute("hidden", "");
+  function sxGo(k, scroll) {
+    const g = ALL.find(x => x[0] === k) || ALL[0], on = new Set(g[3]); S.grp = g[0]; save();
+    ALL.flatMap(x => x[3]).forEach(id => { const el = $(id); if (el) el.hidden = !on.has(id); });
+    lay?.classList.toggle("sx-noconsole", !CONSOLE.has(g[0]));
+    document.querySelectorAll("[data-sxg]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sxg === g[0]));
+    if (scroll) { const m = document.querySelector(".sx-menu"); if (m && m.getBoundingClientRect().top < 0) m.scrollIntoView({ block: "start" }); }
+    window.dispatchEvent(new Event("resize")); // 圖表重新量寬度
+  }
+  document.addEventListener("click", e => { const b = e.target.closest("[data-sxg]"); if (b) sxGo(b.dataset.sxg, true); });
+  // 網址帶 #sec-tax 之類就直接打開那一個功能
+  const fromHash = () => { const id = location.hash.slice(1), g = ALL.find(x => x[3].includes(id)); return g?.[0]; };
+  sxGo(fromHash() || S.grp || "sim"); addEventListener("hashchange", () => { const k = fromHash(); if (k) sxGo(k); });
+
+  const css = document.createElement("style"); css.textContent = `.sx-menu{display:grid;gap:10px;margin:14px 0 4px}.sx-mg h3{margin:0 0 6px;font-size:12.5px;font-weight:500;color:var(--muted);letter-spacing:.04em}
+.sx-mi{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}.sx-mi button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);cursor:pointer;min-width:0}
+.sx-mi button b{font-size:14px;font-weight:500}.sx-mi button small{font-size:11.5px;color:var(--muted);line-height:1.4}.sx-mi button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.sec[hidden],section[hidden]{display:none!important}.layout.sx-noconsole{grid-template-columns:1fr}.layout.sx-noconsole>.console{display:none}
+@media (max-width:560px){.sx-mi{grid-template-columns:1fr 1fr}.sx-mi button{padding:8px 9px}}
+.mm-bars{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;align-items:end;height:120px;margin:6px 0}
 .mm-bars>div{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;gap:2px}.mm-bars i{display:block;width:70%;background:var(--accent);border-radius:2px 2px 0 0;min-height:2px}.mm-bars i.zero{background:var(--line)}
 .mm-bars b{font:500 10.5px var(--f-num);white-space:nowrap}.mm-bars small{font-size:10.5px;color:var(--muted)}.mm-tbl{min-width:760px}.mm-tbl td,.mm-tbl th{padding:6px 5px}
 .mm-sug{list-style:none;margin:0;padding:0;display:grid;gap:6px}.mm-sug li{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.mm-sug b{min-width:3em;font-size:13px}.swatch{display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle}
