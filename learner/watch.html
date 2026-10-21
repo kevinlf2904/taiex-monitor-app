@@ -654,13 +654,14 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .igal-wrap { margin: 8px 12px; border: 1px solid #1a2a44; border-radius: 16px; background: radial-gradient(ellipse at 50% 42%, #14305a 0%, #0b1a33 45%, #060c18 100%); overflow: hidden; }
 .gstage { position: relative; aspect-ratio: 16 / 10; max-height: 640px; } @media (max-width: 900px) { .gstage { aspect-ratio: 1 / 1.08; } }
 .igalaxy { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
-.ghud { position: absolute; left: 12px; top: 10px; font-size: 12px; line-height: 1.5; color: #8fa9cc; pointer-events: none; } .ghud b { color: #e9f3ff; }
-.gcard { position: absolute; width: 230px; background: rgba(10, 22, 42, .94); border: 1px solid #2a4a78; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #e9f3ff; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); display: grid; gap: 4px; z-index: 2; }
+.ghud { position: absolute; left: 12px; top: 10px; font-size: 12px; font-weight: 300; letter-spacing: .03em; line-height: 1.5; color: #8fa9cc; pointer-events: none; } .ghud b { color: #e9f3ff; font-weight: 400; }
+.gzoom { position: absolute; right: 10px; top: 10px; display: flex; gap: 2px; background: rgba(10, 22, 42, .7); border: 1px solid #22395e; border-radius: 8px; padding: 2px; z-index: 1; } .gzoom button { min-width: 32px; height: 28px; padding: 0 6px; font: 300 13px var(--font-num); color: #cfe2fb; background: none; border: 0; border-radius: 6px; cursor: pointer; } .gzoom button:hover { background: rgba(127, 196, 255, .14); } .gzoom .gzv { min-width: 48px; font-size: 11.5px; }
+.gcard { position: absolute; width: 230px; background: rgba(10, 22, 42, .94); border: 1px solid #2a4a78; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 300; letter-spacing: .02em; color: #e9f3ff; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); display: grid; gap: 4px; z-index: 2; }
 .gcard[hidden] { display: none; } .gcard.dock { right: 10px; bottom: 10px; width: 250px; } @media (max-width: 900px) { .gcard { width: 196px; font-size: 12px; padding: 8px 10px; } .gcard.dock { left: 8px; right: 8px; width: auto; } }
-.gcard .gr { display: flex; justify-content: space-between; gap: 8px; } .gcard .gm { color: #8fa9cc; font-size: 12px; } .gcard .n { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.gcard .gr { display: flex; justify-content: space-between; gap: 8px; } .gcard b { font-weight: 500; } .gcard .gm { color: #8fa9cc; font-size: 12px; } .gcard .n { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .gcard .gtag { font-style: normal; font-size: 11px; padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; } .gcard .g上游 { color: #ffb26b; } .gcard .g下游 { color: #6fc3ff; } .gcard .g相關, .gcard .g中心 { color: #8fa9cc; }
-.gcard .gbtn { display: flex; gap: 6px; margin-top: 4px; } .gcard .gbtn button { font: 600 12px var(--font-body); color: #06101f; background: #7fc4ff; border: 0; border-radius: 6px; padding: 6px 9px; cursor: pointer; } .gcard .gbtn button + button { background: #2a4a78; color: #e9f3ff; }
-.gxopts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; margin: 6px 12px 4px; font-size: 12px; color: var(--muted); } .gxopts .seg { margin: 0; }
+.gcard .gbtn { display: flex; gap: 6px; margin-top: 4px; } .gcard .gbtn button { font: 500 12px var(--font-body); color: #06101f; background: #7fc4ff; border: 0; border-radius: 6px; padding: 6px 9px; cursor: pointer; } .gcard .gbtn button + button { background: #2a4a78; color: #e9f3ff; }
+.gxopts .seg button { font-weight: 300; letter-spacing: .03em; } .gxopts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; margin: 6px 12px 4px; font-size: 12px; color: var(--muted); } .gxopts .seg { margin: 0; }
 .igal-leg i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
 .igal-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 14px 8px; font-size: 12px; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .iisl { animation: none !important; } }
@@ -1000,7 +1001,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-113</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-114</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -3327,8 +3328,9 @@ function indGalaxy(net, focus) {
   queueMicrotask(gxMount); // 畫面放進頁面後才接上 canvas、旋轉與拖曳
   return `<div class="gxopts"><span>窗格</span>${seg("tip")}<span>排列</span>${seg("lay")}<span>連線</span>${seg("line")}</div>
     <div class="igal-wrap gstage"><canvas class="igalaxy" role="img" aria-label="${esc(net.name)} 產業星系：${esc(INDT.get(core).name)} 在中心，上游 ${ups.size}、下游 ${downs.size}"></canvas>
-      <div class="ghud">中心：<b>${esc(INDT.get(core).name)}</b><br>上游 ${ups.size}・下游 ${downs.size}・相關 ${ids.length - 1 - ups.size - downs.size}</div><div class="gcard" hidden></div></div>
-    <div class="igal-leg"><span><i style="background:#ffb26b"></i>上游連線</span><span><i style="background:#6fc3ff"></i>下游連線</span><span><i style="background:#8aa0bf"></i>其他關係</span><span>光暈紅漲綠跌；上半部＝上游、下半部＝下游</span><span>${isMobile() ? "點圓點看資訊、左右拖曳轉動" : "滑到圓點看資訊、點一下換到中心、拖曳轉動"}</span></div>`;
+      <div class="ghud">中心：<b>${esc(INDT.get(core).name)}</b><br>上游 ${ups.size}・下游 ${downs.size}・相關 ${ids.length - 1 - ups.size - downs.size}</div><div class="gcard" hidden></div>
+      <div class="gzoom" role="group" aria-label="縮放"><button type="button" data-gxz="-" aria-label="縮小">－</button><button type="button" data-gxz="0" aria-label="回到原本大小" class="gzv">${Math.round((W.gx.zoom || 1) * 100)}%</button><button type="button" data-gxz="+" aria-label="放大">＋</button></div></div>
+    <div class="igal-leg"><span><i style="background:#ffb26b"></i>上游連線</span><span><i style="background:#6fc3ff"></i>下游連線</span><span><i style="background:#8aa0bf"></i>其他關係</span><span>光暈紅漲綠跌；上半部＝上游、下半部＝下游</span><span>${isMobile() ? "點圓點看資訊、左右拖曳轉動、兩指縮放" : "滑到圓點看資訊、點一下換到中心、拖曳轉動、滾輪縮放"}</span></div>`;
 }
 // 題材在 3D 空間的位置（單位：外圈半徑）
 function gxPos(id, t, lay) {
@@ -3348,7 +3350,7 @@ function gxDraw(cv) {
   if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
   const css = getComputedStyle(document.documentElement), UP = gxRgb(css.getPropertyValue("--up")), DN = gxRgb(css.getPropertyValue("--down")), font = getComputedStyle(document.body).fontFamily, t = G.t;
-  const R = Math.min(w, h) * (w < 520 ? 0.36 : 0.38), cx = w / 2, cy = h / 2 + 8;
+  const Z = G.zoom || 1, zr = Math.sqrt(Z), R = Math.min(w, h) * (w < 520 ? 0.36 : 0.38) * Z, cx = w / 2 + (G.px || 0), cy = h / 2 + 8 + (G.py || 0); // 放大時球體跟著變大，圓點只放大一點點（√倍），點和點之間就分得開
   const proj = v => { const x1 = v[0] * Math.cos(G.th) + v[2] * Math.sin(G.th), z1 = -v[0] * Math.sin(G.th) + v[2] * Math.cos(G.th), y2 = v[1] * Math.cos(G.ph) - z1 * Math.sin(G.ph), z2 = v[1] * Math.sin(G.ph) + z1 * Math.cos(G.ph), f = 4 / (4 - z2);
     return { x: cx + x1 * R * f, y: cy - y2 * R * f, z: z2, f }; };
   GX_BOKEH.forEach(([x, y, r, org], i) => { const a = 0.18 + 0.15 * Math.sin(t * 0.6 + i), g = ctx.createRadialGradient(x * w, y * h, 0, x * w, y * h, r * 3); g.addColorStop(0, org ? `rgba(255,154,74,${a})` : `rgba(127,196,255,${a})`); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x * w, y * h, r * 3, 0, 7); ctx.fill(); });
@@ -3370,12 +3372,12 @@ function gxDraw(cv) {
     ctx.strokeStyle = `rgba(${col},${alpha})`; ctx.lineWidth = lw || (hl ? 1.8 : 1); ctx.setLineDash(hl ? [] : [4, 4]); ctx.lineDashOffset = -t * 18; ctx.beginPath(); ctx.moveTo(A.x, A.y);
     let ex = A.x, ey = A.y; if (arc) { const m = pos[a].map((v, i) => (v + pos[b][i]) / 2), ml = Math.hypot(...m) || 1, M = proj(m.map(v => (v * 1.18) / ml)); ctx.quadraticCurveTo(M.x, M.y, B.x, B.y); ex = M.x; ey = M.y; } else ctx.lineTo(B.x, B.y);
     ctx.stroke(); ctx.setLineDash([]);
-    const ang = Math.atan2(B.y - ey, B.x - ex), rB = (b === S.core ? 16 : 6) * B.f + 2, tx = B.x - Math.cos(ang) * rB, ty = B.y - Math.sin(ang) * rB; // 箭頭：上游指向下游
+    const ang = Math.atan2(B.y - ey, B.x - ex), rB = (b === S.core ? 16 : 6) * zr * B.f + 2, tx = B.x - Math.cos(ang) * rB, ty = B.y - Math.sin(ang) * rB; // 箭頭：上游指向下游
     ctx.fillStyle = `rgba(${col},${Math.min(1, alpha + 0.2)})`; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(ang - 0.45) * 7, ty - Math.sin(ang - 0.45) * 7); ctx.lineTo(tx - Math.cos(ang + 0.45) * 7, ty - Math.sin(ang + 0.45) * 7); ctx.fill(); });
   // 題材圓點：由後往前畫；光暈＝今日漲跌，後方變暗、變小、略模糊
   const hits = [], lab = [], direct = S.adj.get(S.core);
   S.ids.map(id => ({ id, p: sc[id] })).sort((a, b) => a.p.z - b.p.z).forEach(({ id, p }) => {
-    const isCore = id === S.core, depth = (p.z + 1) / 2, r = isCore ? 16 : (4.2 + 2.6 * depth) * p.f, pct = indAvg(INDT.get(id))?.pct, col = pct == null ? "127,196,255" : pct >= 0 ? UP : DN;
+    const isCore = id === S.core, depth = (p.z + 1) / 2, r = (isCore ? 16 : (4.2 + 2.6 * depth) * p.f) * zr, pct = indAvg(INDT.get(id))?.pct, col = pct == null ? "127,196,255" : pct >= 0 ? UP : DN;
     const blur = !isCore && p.z < -0.25 && "filter" in ctx; if (blur) ctx.filter = `blur(${(-p.z * 1.6).toFixed(1)}px)`;
     const ga = (isCore ? 0.9 : 0.25 + 0.5 * depth) * (0.6 + Math.min(0.4, Math.abs(pct || 0) / 2)), gr = r * (isCore ? 3.4 : 3.2), g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, gr);
     g.addColorStop(0, `rgba(${col},${ga})`); g.addColorStop(1, `rgba(${col},0)`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, gr, 0, 7); ctx.fill();
@@ -3384,13 +3386,17 @@ function gxDraw(cv) {
     if (id === focus) { ctx.strokeStyle = "#7fc4ff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, r + 3, 0, 7); ctx.stroke(); }
     hits.push({ id, x: p.x, y: p.y, r: Math.max(r + 6, 14), z: p.z });
     if (isCore || id === focus || (direct.has(id) && p.z > 0.15)) lab.push({ id, p, r, isCore }); });
-  // 名稱：中心、指到的點、正面的直接上下游；互相重疊就略過
-  const placed = []; lab.sort((a, b) => (b.isCore ? 9 : b.id === focus ? 8 : b.p.z) - (a.isCore ? 9 : a.id === focus ? 8 : a.p.z)).forEach(({ id, p, r, isCore }) => {
-    const nm = INDT.get(id).name, txt = !isCore && nm.length > 8 ? nm.slice(0, 8) + "…" : nm; ctx.font = `${isCore ? 700 : 500} ${isCore ? 14 : 12}px ${font}`;
-    const tw = ctx.measureText(txt).width, x = p.x - tw / 2, y = p.y + r + (isCore ? 18 : 14), box = [x - 3, y - 12, x + tw + 3, y + 4];
-    if (placed.some(b => b[0] < box[2] && box[0] < b[2] && b[1] < box[3] && box[1] < b[3])) return; placed.push(box);
-    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(5,12,24,.85)"; ctx.strokeText(txt, x, y); ctx.fillStyle = "#e9f3ff"; ctx.fillText(txt, x, y); });
-  S.hits = hits; S.labels = placed; S.screen = sc;
+  // 名稱：指到的點一定標（完整名稱），再來是中心、正面的直接上下游（放大後標得更多）；互相重疊就略過。字用細體，外圍淡淡的暗邊讓它在亮點上也看得清楚
+  if (Z > 1.3) S.ids.forEach(id => { const p = sc[id]; if (id !== S.core && id !== focus && !direct.has(id) && p.z > 0.25 && p.x > 0 && p.x < w && p.y > 0 && p.y < h) lab.push({ id, p, r: (4.2 + 2.6 * (p.z + 1) / 2) * p.f * zr, isCore: false }); });
+  const placed = [], labIds = [], rank = o => (o.id === focus ? 10 : o.isCore ? 9 : o.p.z);
+  if ("letterSpacing" in ctx) ctx.letterSpacing = "0.03em";
+  lab.sort((a, b) => rank(b) - rank(a)).forEach(({ id, p, r, isCore }) => {
+    const on = id === focus, nm = INDT.get(id).name, txt = !isCore && !on && nm.length > 8 ? nm.slice(0, 8) + "…" : nm; ctx.font = `${isCore ? 500 : on ? 400 : 300} ${isCore ? 13.5 : on ? 12.5 : 11.5}px ${font}`;
+    const tw = ctx.measureText(txt).width, x = p.x - tw / 2, y = p.y + r + (isCore ? 17 : 13), box = [x - 3, y - 11, x + tw + 3, y + 4];
+    if (!on && placed.some(b => b[0] < box[2] && box[0] < b[2] && b[1] < box[3] && box[1] < b[3])) return; placed.push(box); labIds.push(id);
+    ctx.lineWidth = 2.4; ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(5,12,24,.72)"; ctx.strokeText(txt, x, y); ctx.fillStyle = on ? "#ffffff" : isCore ? "#eef5ff" : "rgba(220,233,251,.92)"; ctx.fillText(txt, x, y); });
+  if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
+  S.hits = hits; S.labels = placed; S.labIds = labIds; S.screen = sc;
 }
 // 資訊窗格：名稱、今日漲跌、和中心的關係、家數、隔幾層、漲跌最大的成分股
 function gxCard(card, id, x, y) {
@@ -3411,12 +3417,26 @@ function gxMount() {
   let drag = null, moved = false, idle = 0, last = performance.now(), dirty = true; G.hover = G.pin = null;
   const xy = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   const hit = (x, y) => (W.gxS.hits || []).filter(o => Math.hypot(o.x - x, o.y - y) < o.r).sort((a, b) => b.z - a.z)[0]?.id || null;
-  cv.addEventListener("pointerdown", e => { drag = G.drag = { x: e.clientX, y: e.clientY, th: G.th, ph: G.ph }; moved = false; });
-  cv.addEventListener("pointermove", e => { const [x, y] = xy(e);
+  // 縮放：以指定的點為中心放大縮小（0.6～4 倍），回到 1 倍以下時自動置中
+  const zv = cv.parentElement.querySelector(".gzv"), zoomAt = (k, mx, my) => { const w = cv.clientWidth, h = cv.clientHeight, z1 = G.zoom || 1, z2 = Math.max(0.6, Math.min(4, z1 * k)), f = z2 / z1;
+    const cx = w / 2 + (G.px || 0), cy = h / 2 + 8 + (G.py || 0); G.zoom = z2;
+    if (z2 <= 1) G.px = G.py = 0; else { G.px = Math.max(-w * 0.5 * z2, Math.min(w * 0.5 * z2, mx - (mx - cx) * f - w / 2)); G.py = Math.max(-h * 0.5 * z2, Math.min(h * 0.5 * z2, my - (my - cy) * f - h / 2 - 8)); }
+    if (zv) zv.textContent = Math.round(z2 * 100) + "%"; idle = performance.now(); dirty = true; };
+  cv.addEventListener("wheel", e => { e.preventDefault(); const [x, y] = xy(e); zoomAt(Math.exp(-e.deltaY * 0.0015), x, y); }, { passive: false });
+  cv.parentElement.querySelector(".gzoom")?.addEventListener("click", e => { const b = e.target.closest("[data-gxz]"); if (!b) return; const v = b.dataset.gxz, w = cv.clientWidth, h = cv.clientHeight;
+    if (v === "0") { G.zoom = 1; G.px = G.py = 0; if (zv) zv.textContent = "100%"; dirty = true; } else zoomAt(v === "+" ? 1.3 : 1 / 1.3, w / 2 + (G.px || 0), h / 2 + 8 + (G.py || 0)); });
+  const pts = new Map(); let pinch = null; // 兩指：開合縮放、一起移動就平移
+  const pinchInfo = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+  cv.addEventListener("pointerdown", e => { const [x, y] = xy(e); pts.set(e.pointerId, { x, y });
+    if (pts.size === 2) { pinch = pinchInfo(); drag = G.drag = null; moved = true; G.drag = { pinch: true }; return; }
+    drag = G.drag = { x: e.clientX, y: e.clientY, th: G.th, ph: G.ph }; moved = false; });
+  cv.addEventListener("pointermove", e => { const [x, y] = xy(e); if (pts.has(e.pointerId)) pts.set(e.pointerId, { x, y });
+    if (pinch && pts.size === 2) { const n = pinchInfo(); G.px = (G.px || 0) + n.x - pinch.x; G.py = (G.py || 0) + n.y - pinch.y; zoomAt(n.d / pinch.d, n.x, n.y); pinch = n; return; }
     if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (moved) { G.th = drag.th + dx * 0.008; if (e.pointerType === "mouse") G.ph = Math.max(-0.05, Math.min(0.8, drag.ph + dy * 0.004)); idle = performance.now(); dirty = true; } return; }
     if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); if (id !== G.hover) { G.hover = id; cv.style.cursor = id ? "pointer" : "grab"; dirty = true; } gxCard(card, id, x, y); } });
-  cv.addEventListener("pointerleave", () => { drag = G.drag = null; if (!G.pin && G.hover) { G.hover = null; card.hidden = true; dirty = true; } });
-  cv.addEventListener("pointerup", e => { const was = drag; drag = G.drag = null; if (G.pend) { G.pend = false; setTimeout(renderInd); } if (!was || moved) return;
+  cv.addEventListener("pointercancel", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; });
+  cv.addEventListener("pointerleave", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; if (!G.pin && G.hover) { G.hover = null; card.hidden = true; dirty = true; } });
+  cv.addEventListener("pointerup", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; const was = drag; drag = G.drag = null; if (G.pend) { G.pend = false; setTimeout(renderInd); } if (!was || moved) return;
     const [x, y] = xy(e), id = hit(x, y);
     if (e.pointerType === "mouse") { if (id && id !== W.gxS.core) { W.indS.focus = id; renderInd(); } return; }
     G.pin = id; G.hover = null; gxCard(card, id, x, y); dirty = true; });
