@@ -1,0 +1,28 @@
+# 美股財報行事曆：每天台北早上 6:23（美股收盤後財報出來）、晚上 9:23（盤前財報出來）從 Nasdaq 更新 learner/data/us-earn.json
+name: us-earn
+on:
+  schedule:
+    - cron: "23 22 * * *"
+    - cron: "23 13 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: data-sync-us-earn-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: git pull -q origin ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/us-earn.mjs
+      - name: commit
+        env:
+          COMMIT_NAME: us-earn
+        run: |
+          bash scripts/commit-data.sh "美股財報：更新財報行事曆" learner/data/us-earn.json
