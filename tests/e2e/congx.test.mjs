@@ -11,6 +11,28 @@ for (const width of [390, 1280]) test(`大戶國會延伸功能 ${width}`, async
   await p.evaluate(() => { showList(); setLt("cong"); });
   await p.waitForFunction(() => W.cong?.trades?.length, null, { timeout: 15000 });
   const lx = () => p.evaluate(() => document.getElementById("lx").innerText);
+  // 清單每一列：名稱按鈕要佔滿整列（之前 ☆ 吃掉 width: 100%，點哪裡都變成加自選）
+  const bw = await p.evaluate(() => { const li = document.querySelector("#lx .tw-rank li"), b = li.querySelector("button"); return [b.getBoundingClientRect().width, li.getBoundingClientRect().width]; });
+  assert.ok(bw[0] > bw[1] * 0.7, `名稱按鈕寬 ${bw[0]}／整列 ${bw[1]}`);
+  await p.locator("#lx .tw-rank li > button").first().click(); assert.match(await p.evaluate(() => W.cv), /^(stock|person):/, "點列會打開股票或人物");
+  await p.evaluate(() => { W.cv = "home"; renderList(); });
+  // 國會自訂區間
+  await p.fill('[data-cxrng="cong:from"]', "2025-01-01"); await p.fill('[data-cxrng="cong:to"]', "2025-03-31"); await p.dispatchEvent('[data-cxrng="cong:to"]', "change");
+  await p.waitForFunction(() => W.cw === -1); assert.match(await lx(), /2025\/01\/01～2025\/03\/31/);
+  assert.ok(await p.evaluate(() => congWin(-1).every(t => t.traded >= "2025-01-01" && t.traded <= "2025-03-31")));
+  await p.click("[data-cxrngx]"); assert.equal(await p.evaluate(() => W.cw), 90, "清除區間回到近 90 天");
+  // 13F 季度區間（用歷史季度重算變動）
+  await p.route("**/data/f13-hist.json", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ "1": { who: "測試機構", periods: [{ period: "2026-03-31", filed: "2026-05-15", total: 5e7, rows: [{ name: "NVIDIA", cusip: "2", ticker: "NVDA", value: 5e7, sh: 5e5 }, { name: "OLD", cusip: "9", ticker: "OLD", value: 1e6, sh: 1e4 }] }] } }) }));
+  await p.evaluate(() => { W.f13H = undefined; W.cv = "f13"; W.f13v = "up"; renderList(); }); await p.waitForSelector('[data-f13r="to"]');
+  await p.selectOption('[data-f13r="from"]', "2026-03-31"); await p.waitForFunction(() => /比較 2026-03-31 → 2026-06-30/.test(document.getElementById("lx").innerText));
+  assert.deepEqual(await p.evaluate(() => { const F = cxF13Range(W.f13).funds[0]; return [F.rows.find(r => r.ticker === "NVDA").chg, F.sold.map(r => r.ticker)]; }), ["add", ["OLD"]]);
+  // 內部人、台灣政治人物自訂區間
+  await p.evaluate(() => { W.cv = "ins"; W.insF = "all"; renderList(); }); await p.fill('[data-cxrng="ins:from"]', "2026-08-01"); await p.dispatchEvent('[data-cxrng="ins:from"]', "change"); await p.waitForFunction(() => W.insW === -1);
+  assert.match(await lx(), /2026\/08\/01～最新申報/);
+  await p.evaluate(() => { W.cv = "tw"; renderList(); }); await p.fill('[data-cxrng="tw:from"]', "2026-06-01"); await p.dispatchEvent('[data-cxrng="tw:from"]', "change");
+  assert.deepEqual(await p.evaluate(() => twoPeople().map(x => x.name)), ["王小明"], "只看區間內的申報");
+  await p.click("[data-cxrngx]"); assert.equal(await p.evaluate(() => twoPeople().length), 2);
+  await p.evaluate(() => { W.cv = "home"; renderList(); });
   // 大戶共識：台股（政治人物持有＋內部人）
   await p.click('#lTools [data-cv="cons"]'); await p.waitForFunction(() => /大戶共識榜/.test(document.getElementById("lx").innerText));
   await p.click('[data-rkset="cxReg:tw"]'); await p.waitForFunction(() => /2330/.test(document.getElementById("lx").innerText), null, { timeout: 15000 });

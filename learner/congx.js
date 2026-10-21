@@ -149,3 +149,40 @@ document.addEventListener("click", e => {
 });
 { const css = document.createElement("style"); css.textContent = `.cxbar { display: grid; gap: 6px; margin: 8px 0; } .cxbar > .btn { justify-self: start; } .cxwin h4 { margin: 8px 0 4px; } .cxwin td b { display: block; font-weight: 500; } .cxwin td small { display: block; font-size: 11px; white-space: nowrap; }
 .cxheat td, .cxheat th { text-align: center; white-space: nowrap; } .cxheat td:first-child, .cxheat th:first-child { text-align: left; } .cxheat td:last-child { text-align: left; }`; document.head.appendChild(css); }
+
+// ---------- 自訂區間（國會、內部人、台灣政治人物）與 13F 季度區間 ----------
+// 區間存在 watch:cxRng（{ cong: { from, to }, ins: …, tw: … }）；日期是 YYYY-MM-DD，空的代表不限
+const cxRng = k => (W.cxRng ||= store.get("watch:cxRng", {}))[k] || {};
+const cxIn = (d, r) => !!d && (!r.from || d >= r.from) && (!r.to || d <= r.to);
+const cxRngTxt = r => (r.from || r.to ? `${(r.from || "最早").replace(/-/g, "/")}～${(r.to || "最新").replace(/-/g, "/")}` : "全部期間");
+const cxRngHtml = (k, on, lab = "自訂區間") => { const r = cxRng(k);
+  return `<div class="cxrng${on ? " on" : ""}"><span class="note">${lab}</span><input type="date" data-cxrng="${k}:from" value="${esc(r.from || "")}" aria-label="開始日期"><span class="note">～</span><input type="date" data-cxrng="${k}:to" value="${esc(r.to || "")}" aria-label="結束日期">${r.from || r.to ? `<button type="button" class="linkbtn" data-cxrngx="${k}">清除</button>` : ""}</div>`; };
+// 設定區間後切到「自訂」：國會 W.cw＝-1、內部人 W.insW＝-1；台灣政治人物直接用區間篩申報
+function cxRngSet(k, f, v) {
+  const R = (W.cxRng ||= store.get("watch:cxRng", {})); R[k] = { ...(R[k] || {}), [f]: v || "" }; if (!R[k].from && !R[k].to) delete R[k]; store.set("watch:cxRng", R);
+  if (k === "cong") { W.cw = R[k] ? -1 : 90; store.set("watch:cw", W.cw); } else if (k === "ins") { W.insW = R[k] ? -1 : 30; store.set("watch:insW", W.insW); }
+  W.twoP = null; renderList();
+}
+document.addEventListener("change", e => { const t = e.target.closest?.("[data-cxrng]"); if (!t) return; const [k, f] = t.dataset.cxrng.split(":"); cxRngSet(k, f, t.value); });
+document.addEventListener("click", e => { const b = e.target.closest("[data-cxrngx]"); if (!b) return; const R = (W.cxRng ||= {}); delete R[b.dataset.cxrngx]; store.set("watch:cxRng", R); cxRngSet(b.dataset.cxrngx, "from", ""); });
+
+// 13F：選兩個季度（起～迄），用 data/f13-hist.json 重算「迄」那一季的持股和相對「起」的變動，首頁各排行都改看這個區間
+const cxQs = () => [...new Set([...(W.f13?.funds || []).map(f => f.period), ...Object.values(W.f13H || {}).flatMap(h => (h.periods || []).map(p => p.period))])].sort().reverse();
+function cxF13Range(F) {
+  if (W.f13H === undefined) { W.f13H = null; fetch("data/f13-hist.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : {})).catch(() => ({})).then(j => { W.f13H = j || {}; if (W.lt === "cong") renderList(); }); }
+  const Q = W.f13R || {}, qs = cxQs(); if (!W.f13H || (!Q.to && !Q.from)) return F;
+  const to = qs.includes(Q.to) ? Q.to : qs[0], from = qs.includes(Q.from) && Q.from < to ? Q.from : qs[qs.indexOf(to) + 1]; if (!from) return F;
+  const per = (f, q) => (f.period === q ? { period: f.period, filed: f.filed, total: f.total, rows: f.rows } : (W.f13H[f.cik]?.periods || []).find(p => p.period === q));
+  const funds = F.funds.map(f => { const B = per(f, to), A = per(f, from); if (!B || !A) return null; const am = new Map(A.rows.map(r => [r.cusip, r])), bm = new Set(B.rows.map(r => r.cusip));
+    const rows = B.rows.map(r => { const a = am.get(r.cusip), x = a && a.sh ? r.sh / a.sh : null; return { ...r, psh: a?.sh || 0, chg: !a ? "new" : x > 1.02 ? "add" : x < 0.98 ? "cut" : "same" }; });
+    return { ...f, period: to, prevPeriod: from, filed: B.filed || f.filed, total: B.total ?? rows.reduce((s, r) => s + (r.value || 0), 0), n: rows.length, rows, sold: A.rows.filter(r => !bm.has(r.cusip)).map(r => ({ ...r, chg: "sold", psh: r.sh, sh: 0 })) }; }).filter(Boolean);
+  return { ...F, funds, range: { from, to } };
+}
+const cxF13RngHtml = () => { const qs = cxQs(), Q = W.f13R || {}; if (qs.length < 2) return W.f13H === null ? `<p class="note">載入歷史季度…</p>` : "";
+  const to = qs.includes(Q.to) ? Q.to : qs[0], from = qs.includes(Q.from) && Q.from < to ? Q.from : qs[qs.indexOf(to) + 1] || "";
+  const sel = (f, cur, L) => `<select data-f13r="${f}" aria-label="${f === "from" ? "起始季度" : "結束季度"}">${L.map(q => `<option value="${q}" ${q === cur ? "selected" : ""}>${q.slice(0, 4)} Q${Math.ceil(+q.slice(5, 7) / 3)}</option>`).join("")}</select>`;
+  return `<div class="cxrng${Q.to || Q.from ? " on" : ""}"><span class="note">比較季度</span>${sel("from", from, qs.filter(q => q < to))}<span class="note">→</span>${sel("to", to, qs)}${Q.to || Q.from ? `<button type="button" class="linkbtn" data-f13rx>回到最新一季</button>` : ""}</div>`; };
+document.addEventListener("change", e => { const s = e.target.closest?.("[data-f13r]"); if (!s) return; W.f13R = { ...(W.f13R || {}), [s.dataset.f13r]: s.value }; renderList(); });
+document.addEventListener("click", e => { if (e.target.closest("[data-f13rx]")) { W.f13R = null; renderList(); } });
+{ const css = document.createElement("style"); css.textContent = `.cxrng { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; } .cxrng input, .cxrng select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--ink); min-width: 0; max-width: 150px; }
+.cxrng.on input, .cxrng.on select { border-color: var(--ink); } .cxrng input[type="date"] { width: 8.6em; padding: 4px; }`; document.head.appendChild(css); }

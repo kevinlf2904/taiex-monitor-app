@@ -209,8 +209,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .tlist { list-style: none; margin: 0; padding: 0; font-size: 13px; }
 /* 情報局「財報」（learner/earn.js） */
 .erbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 0 12px 6px; } .erchk { font-size: 12.5px; color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
-.erchips { padding: 0 12px 6px; } .mk h3 .linkbtn { margin-left: auto; font-size: 12.5px; font-weight: 400; }
-.erlist, .erind { list-style: none; margin: 0; padding: 0; }
+.erchips { padding: 0 12px 6px; } .erbar .erchips { padding: 0; } .mk h3 .linkbtn { margin-left: auto; font-size: 12.5px; font-weight: 400; }
+.erlist, .erind { list-style: none; margin: 0; padding: 0; } .erind li[data-erindset] { cursor: pointer; } .erind li[data-erindset]:hover { background: var(--surface-2); } .erind-sel { display: inline-flex; gap: 6px; align-items: center; } .erind-sel select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--ink); max-width: 13em; }
 .erlist > li > button { display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(40px, 0.8fr) 5.6em; grid-template-areas: "rk nm bar v" "rk sub sub sub"; gap: 2px 8px; align-items: center; width: 100%; padding: 7px 0; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
 .erlist .rk { grid-area: rk; color: var(--muted); font: 12px var(--font-num); } .erlist .nm { grid-area: nm; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; } .erlist .nm small { margin-left: 6px; font-size: 11px; color: var(--muted); }
 .erlist > li > button > i, .erind li > i { grid-area: bar; height: 7px; border-radius: 4px; background: linear-gradient(90deg, var(--up) var(--w), var(--surface-2) var(--w)); } .erlist > li > button > i.neg, .erind li > i.neg { background: linear-gradient(90deg, var(--down) var(--w), var(--surface-2) var(--w)); }
@@ -481,7 +481,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .tw-sums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } @media (min-width: 700px) { .tw-sums { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 .tw-sums > * { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; text-align: left; min-width: 0; }
 .tw-sums > [aria-pressed="true"] { border-color: var(--accent); } .tw-sums div.tw-card { cursor: default; } .tw-sums b { font-weight: 600; } .tw-sums > * > span { font-family: var(--font-num); font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
-.tw-rank { list-style: none; margin: 10px 0 0; padding: 0; } .tw-rank li { border-bottom: 1px solid var(--line); } .tw-rank li:has(> .wstar) { display: flex; align-items: center; } .tw-rank li:has(> .wstar) > button:first-child { flex: 1; min-width: 0; }
+.tw-rank { list-style: none; margin: 10px 0 0; padding: 0; } .tw-rank li { border-bottom: 1px solid var(--line); } .tw-rank li:has(> .wstar) { display: flex; align-items: center; } .tw-rank li:has(> .wstar) > button:first-child { flex: 1; min-width: 0; } .tw-rank li > .wstar { width: auto; flex: none; padding: 10px 8px; } /* ☆ 也是 button，不能吃到 .tw-rank button 的 width: 100%（否則整列都變成 ☆、點不到名稱） */
 .wstar { flex: none; border: 0; background: none; color: var(--muted); font-size: 17px; line-height: 1; padding: 6px 8px; cursor: pointer; border-radius: 6px; } .wstar[aria-pressed="true"] { color: #f5b301; } .wstar:hover { background: var(--surface-2); }
 .tw-rank button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 2px; background: none; border: 0; color: var(--ink); cursor: pointer; font: inherit; text-align: left; } .tw-rank button:hover { background: var(--surface-2); }
 .tw-no { width: 30px; flex: none; text-align: center; font: 600 18px var(--font-num); color: var(--muted); opacity: .6; }
@@ -1049,7 +1049,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-125</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-126</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -4200,7 +4200,7 @@ function congAgg(trades, onlyBuy) {
     if (t.k === "buy") { g.buyers.add(t.pid); g.nb++; } else if (t.k === "sell") { g.sellers.add(t.pid); g.ns++; } if (!g.asset && t.asset) g.asset = t.asset; }
   return [...m.values()].map(g => { const top = Math.max(...g.by.values()); return { ...g, top: g.mid ? top / g.mid : 1, topP: [...g.by].sort((a, b) => b[1] - a[1])[0]?.[0] }; });
 }
-const congWin = w => (W.cong?.trades || []).filter(t => !w || t.traded >= congFrom(w)); // w＝0：全部期間
+const congWin = w => (W.cong?.trades || []).filter(t => (w === -1 ? cxIn(t.traded, cxRng("cong")) : !w || t.traded >= congFrom(w))); // w＝0：全部期間、-1：自訂區間（congx.js）
 function congShape(g) { // 多人共同 vs 單一人物為主
   const n = g.buyers?.size ?? g.people.size;
   if (n <= 1) return `<span class="ctag one">單一人物</span>`;
@@ -4224,11 +4224,11 @@ function renderCong() {
   if (v === "bt") h = congBtHtml();
   else if (v === "home") {
     // 排行版型：近 30／90 天（依交易日）的合計卡片＋四種排行（共同買進、熱門股票、交易人物、最新揭露）
-    const q = (W.cq || "").trim().toLowerCase(), hit = t => !q || t.ticker.toLowerCase().includes(q) || pName(t.pid).toLowerCase().includes(q) || (t.asset || "").toLowerCase().includes(q), wTxt = W.cw ? `近 ${W.cw} 天` : "全部期間";
+    const q = (W.cq || "").trim().toLowerCase(), hit = t => !q || t.ticker.toLowerCase().includes(q) || pName(t.pid).toLowerCase().includes(q) || (t.asset || "").toLowerCase().includes(q), wTxt = W.cw === -1 ? cxRngTxt(cxRng("cong")) : W.cw ? `近 ${W.cw} 天` : "全部期間";
     const W30 = congWin(W.cw).filter(hit), cons = congAgg(W30, true), hot = congAgg(W30, false), view = ["cons", "hot", "ppl", "feed", "lag"].includes(W.cview) ? W.cview : "cons";
     const sumAmt = k => W30.filter(t => t.k === k).reduce((a, t) => a + amtMid(t.amount), 0), plain = g => congShape(g).replace(/<[^>]+>/g, "");
     h += `<section class="csec tw-home">${rkHead("美國國會議員交易", `參、眾議員依法公開的股票交易（定期交易報告 PTR）。依<strong>交易日期</strong>統計${wTxt}（資料從 ${(W.cong.trades || []).map(t => t.traded).sort()[0] || "—"} 開始）；金額只有申報區間，這裡用中間值估算。`)}
-      <div class="tw-ctl">${rkSeg("data-cw", String(W.cw), [["30", "近 30 天"], ["90", "近 90 天"], ["180", "半年"], ["365", "一年"], ["0", "全部"]])}<input data-cq value="${esc(W.cq || "")}" placeholder="搜尋議員、代號或公司" aria-label="搜尋議員、代號或公司">${rkSeg("data-rkset", "cview:" + view, [["cview:cons", "共同買進"], ["cview:hot", "熱門股票"], ["cview:lag", "申報延遲"], ["cview:ppl", "交易人物"], ["cview:feed", "最新揭露"]])}</div>
+      <div class="tw-ctl">${rkSeg("data-cw", String(W.cw), [["30", "近 30 天"], ["90", "近 90 天"], ["180", "半年"], ["365", "一年"], ["0", "全部"]])}${cxRngHtml("cong", W.cw === -1)}<input data-cq value="${esc(W.cq || "")}" placeholder="搜尋議員、代號或公司" aria-label="搜尋議員、代號或公司">${rkSeg("data-rkset", "cview:" + view, [["cview:cons", "共同買進"], ["cview:hot", "熱門股票"], ["cview:lag", "申報延遲"], ["cview:ppl", "交易人物"], ["cview:feed", "最新揭露"]])}</div>
       ${rkCards([{ t: "交易筆數", sub: wTxt, v: `${W30.length} 筆` }, { t: "交易人物", sub: `${new Set(W30.filter(t => t.k === "buy").map(t => t.pid)).size} 位有買進`, v: `${new Set(W30.map(t => t.pid)).size} 位` }, { t: "買進金額（估）", sub: `${W30.filter(t => t.k === "buy").length} 筆`, v: usd(Math.round(sumAmt("buy"))), vc: "up" }, { t: "賣出金額（估）", sub: `${W30.filter(t => t.k === "sell").length} 筆`, v: usd(Math.round(sumAmt("sell"))), vc: "down" }])}`;
     if (view === "cons") { cons.sort((a, b) => b.buyers.size - a.buyers.size || b.mid - a.mid);
       h += `<h4>共同買進：同一檔有幾位議員買（同一人買很多次只算 1 人）</h4>` + rkList(cons.slice(0, 40).map(g => ({ star: g.ticker, attr: `data-cv="stock:${esc(g.ticker)}"`, mono: rkMono(rkInit(g.ticker), "#3fa36b"), name: esc(g.ticker), sub: esc(g.asset || ""), val: `${g.buyers.size} 人買進`, vc: "up", vsub: `${usd(Math.round(g.mid))}・${esc(plain(g))}` })), "這段期間沒有買進紀錄"); }
