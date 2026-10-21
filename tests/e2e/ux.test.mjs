@@ -161,3 +161,28 @@ test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，�
   await p.click(`.inode2[data-ifocus="${fid}"]`); assert.equal(await p.evaluate(() => W.indS.focus), null);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("原理圖解互動：點編號看那一段與公司、上一段／下一段、逐步播放、放大圖裡也能點", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.evaluate(() => { setLt("ind"); W.indS.open = "tw-liquid"; renderList(); });
+  await p.waitForSelector(".ifig .fbadge");
+  const items = await p.evaluate(() => figItems(INDT.get("tw-liquid")).map(x => x.name));
+  assert.ok(items.length >= 3);
+  await p.evaluate(() => document.querySelector('.ifig .fbadge[data-n="1"]').dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  assert.ok(!(await p.locator(".izoom").count()), "點編號不會打開放大");
+  assert.ok((await p.textContent(".ifig .figstep")).includes(items[0]), "顯示第 1 段");
+  assert.equal(await p.evaluate(() => [...document.querySelectorAll(".ifig .fbadge.on")].map(g => g.dataset.n).join()), "1", "只有第 1 個編號亮");
+  await p.click('.ifig [data-fstep="1"]'); assert.ok((await p.textContent(".ifig .figstep")).includes(items[1]), "下一段");
+  await p.click('.ifig [data-fstep="-1"]'); await p.click('.ifig [data-fstep="-1"]'); assert.ok((await p.textContent(".ifig .figstep")).includes(items.at(-1)), "第 1 段再往前跳到最後一段");
+  await p.click(".ifig [data-fplay]"); await p.waitForFunction(() => document.querySelector(".ifig").dataset.fn === "2", null, { timeout: 6000 }); // 從頭播：1 → 2
+  assert.equal(await p.textContent(".ifig [data-fplay]"), "❚❚ 暫停"); await p.click(".ifig [data-fplay]"); assert.equal(await p.evaluate(() => W.figTimer), null);
+  // 點圖其他地方＝放大；放大圖裡點編號也看得到說明
+  await p.evaluate(() => document.querySelector(".ifig svg").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  await p.waitForSelector(".izoom .fbadge");
+  await p.evaluate(() => document.querySelector('.izoom .fbadge[data-n="2"]').dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  assert.ok((await p.textContent(".izoom .figstep")).includes(items[1]));
+  await p.click('.izoom [data-z="x"]');
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await ctx.close();
+  assert.deepEqual(errs, []);
+});
