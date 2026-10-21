@@ -543,7 +543,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .bwrap.is-zoomed { cursor: grab; touch-action: none; }
 .bwrap.is-grabbing { cursor: grabbing !important; }
 .bwrap svg { width: 100%; height: auto; display: block; }
-.mf-zoom-ctl { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; background: var(--surface-2); background: color-mix(in srgb, var(--surface-2) 86%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 6px; padding: 2px; z-index: 10; opacity: 0.75; transition: opacity 0.2s; }
+.mf-zoom-ctl { position: static; width: fit-content; margin: 2px auto 6px; display: flex; align-items: center; gap: 2px; background: var(--surface-2); background: color-mix(in srgb, var(--surface-2) 86%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 6px; padding: 2px; z-index: 10; opacity: 0.75; transition: opacity 0.2s; }
 .bwrap:hover .mf-zoom-ctl, .bwrap.is-zoomed .mf-zoom-ctl { opacity: 1; }
 .mf-zbtn { border: 0; background: transparent; color: var(--ink); font-family: var(--font-num); font-size: 11.5px; height: 24px; min-width: 24px; padding: 0 4px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .mf-zbtn:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
@@ -689,7 +689,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .igalaxy { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
 .ghud { position: absolute; left: 12px; top: 10px; font-size: 12px; font-weight: 300; letter-spacing: .03em; line-height: 1.5; color: #8fa9cc; pointer-events: none; } .ghud b { color: #e9f3ff; font-weight: 400; }
 .gzoom .gpan[aria-pressed="true"] { background: #2a4a7a; color: #fff; }
-.gzoom { position: absolute; right: 10px; top: 10px; display: flex; gap: 2px; background: rgba(10, 22, 42, .7); border: 1px solid #22395e; border-radius: 8px; padding: 2px; z-index: 1; } .gzoom button { min-width: 32px; height: 28px; padding: 0 6px; font: 300 13px var(--font-num); color: #cfe2fb; background: none; border: 0; border-radius: 6px; cursor: pointer; } .gzoom button:hover { background: rgba(127, 196, 255, .14); } .gzoom .gzv { min-width: 48px; font-size: 11.5px; }
+.gx-free .igalaxy { touch-action: none; } .gzoom .gfree { padding: 0 10px; } .gzoom .gfree[aria-pressed="true"] { background: #2a4a7a; color: #fff; }
+.gzoom { position: static; width: fit-content; margin: 6px 0 0 auto; display: flex; gap: 2px; background: rgba(10, 22, 42, .7); border: 1px solid #22395e; border-radius: 8px; padding: 2px; z-index: 1; } .gzoom button { min-width: 32px; height: 28px; padding: 0 6px; font: 300 13px var(--font-num); color: #cfe2fb; background: none; border: 0; border-radius: 6px; cursor: pointer; } .gzoom button:hover { background: rgba(127, 196, 255, .14); } .gzoom .gzv { min-width: 48px; font-size: 11.5px; }
 .gcard { position: absolute; width: 230px; background: rgba(10, 22, 42, .94); border: 1px solid #2a4a78; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 300; letter-spacing: .02em; color: #e9f3ff; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); display: grid; gap: 4px; z-index: 2; }
 .gcard[hidden] { display: none; } .gcard.dock { right: 10px; bottom: 10px; width: 250px; } @media (max-width: 900px) { .gcard { width: 196px; font-size: 12px; padding: 8px 10px; } .gcard.dock { left: 8px; right: 8px; width: auto; } }
 .gcard .gr { display: flex; justify-content: space-between; gap: 8px; } .gcard b { font-weight: 500; } .gcard .gm { color: #8fa9cc; font-size: 12px; } .gcard .n { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
@@ -724,6 +725,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .ifig h4 { display: flex; align-items: center; justify-content: space-between; } .ilink { background: none; border: 0; color: var(--accent, #3b82f6); font: inherit; font-size: 13px; cursor: pointer; padding: 2px 0; }
 .fbadge { cursor: pointer; transition: opacity .25s; } .fsel .fbadge { opacity: .35; } .fsel .fbadge.on { opacity: 1; animation: fpulse 1.1s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes fpulse { 50% { transform: scale(1.35); } } @media (prefers-reduced-motion: reduce) { .fsel .fbadge.on { animation: none; } }
+/* 原理圖：電腦上不超過視窗高度（整張看得到），置中 */
+.ifig .izbtn svg { display: block; width: 100%; height: auto; max-height: min(68vh, 620px); margin: 0 auto; }
 .figctl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 4px; } .figctl .note { font-size: 12px; }
 .figstep { margin: 4px 0 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); } .figstep p { margin: 6px 0; font-size: 13.5px; line-height: 1.6; }
 .fsh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .fsh b { font-size: 15px; } .fsh small { color: var(--muted); font-size: 12px; } .fsc { display: flex; flex-wrap: wrap; gap: 6px; } .fsc small { color: var(--muted); }
@@ -1046,7 +1049,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-122</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.21-123</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1099,6 +1102,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="tools.js"></script>
 <script src="oapi.js"></script>
 <script src="earn.js"></script>
+<script src="finrep.js"></script>
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
@@ -1993,11 +1997,13 @@ $("#impFile").addEventListener("change", async e => {
     imp.mode = Object.keys(W.hold).length ? imp.mode : "merge"; imp.edit = false; openImport("review", merged);
   } catch (err) { openImport("err", err.message); }
 });
+// 下載檔案（庫存 CSV、盤面圖片、財報 CSV 共用）
+function dlBlob(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
 function exportHold() {
   const E = Object.entries(W.hold).filter(([, h]) => h.sh && h.cost); if (!E.length) { toast("還沒有庫存可以匯出"); return; }
   const txt = E.map(([c, h]) => `${c},${nameOf(c)},${h.sh},${h.cost}`).join("\n");
   try { navigator.clipboard?.writeText(txt); } catch {}
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["代號,名稱,股數,成本\n" + txt], { type: "text/csv" })); a.download = `庫存-${W.today}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  dlBlob(new Blob(["代號,名稱,股數,成本\n" + txt], { type: "text/csv" }), `庫存-${W.today}.csv`);
   toast("已下載 CSV，並複製到剪貼簿（可以貼到「文字匯入」還原）", 3500);
 }
 
@@ -2965,7 +2971,7 @@ async function mfShare(how) {
     if (how === "share" && navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], text: sum }); return; }
     if (how === "copy" && navigator.clipboard && window.ClipboardItem) { await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]); toast("已複製圖片"); return; }
   } catch (e) { if (e.name === "AbortError") return; }
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); toast("已下載圖片");
+  dlBlob(blob, file.name); toast("已下載圖片");
 }
 const mfT0 = T => (T > 12 ? 9 : Math.min(5, Math.max(0, T - 1)));
 function renderMoney() {
@@ -3406,9 +3412,9 @@ function indGalaxy(net, focus) {
   queueMicrotask(gxMount); // 畫面放進頁面後才接上 canvas、旋轉與拖曳
   return `<div class="gxopts"><span>窗格</span>${seg("tip")}<span>排列</span>${seg("lay")}<span>連線</span>${seg("line")}</div>
     <div class="igal-wrap gstage"><canvas class="igalaxy" role="img" aria-label="${esc(net.name)} 產業星系：${esc(INDT.get(core).name)} 在中心，上游 ${ups.size}、下游 ${downs.size}"></canvas>
-      <div class="ghud">中心：<b>${esc(INDT.get(core).name)}</b><br>上游 ${ups.size}・下游 ${downs.size}・相關 ${ids.length - 1 - ups.size - downs.size}</div><div class="gcard" hidden></div>
-      <div class="gzoom" role="group" aria-label="縮放"><button type="button" data-gxz="-" aria-label="縮小">－</button><button type="button" data-gxz="0" aria-label="回到原本大小" class="gzv">${Math.round((W.gx.zoom || 1) * 100)}%</button><button type="button" data-gxz="+" aria-label="放大">＋</button><button type="button" data-gxz="pan" class="gpan" aria-pressed="${!!W.gx.panMode}" title="拖曳改成移動畫面（也可以按住 Shift 拖、滑鼠右鍵拖，或兩指拖）" aria-label="拖曳移動畫面">✥</button></div></div>
-    <div class="igal-leg"><span><i style="background:#ffb26b"></i>上游連線</span><span><i style="background:#6fc3ff"></i>下游連線</span><span><i style="background:#8aa0bf"></i>其他關係</span><span>光暈紅漲綠跌；上半部＝上游、下半部＝下游</span><span>${isMobile() ? "點圓點看資訊、左右拖曳轉動、兩指縮放（放大後拖曳可移動）" : "滑到圓點看資訊、點一下換到中心、拖曳轉動、滾輪縮放（放大後拖曳可移動）"}</span></div>`;
+      <div class="ghud">中心：<b>${esc(INDT.get(core).name)}</b><br>上游 ${ups.size}・下游 ${downs.size}・相關 ${ids.length - 1 - ups.size - downs.size}</div><div class="gcard" hidden></div></div>
+      <div class="gzoom" role="group" aria-label="縮放與轉動"><button type="button" data-gxz="free" class="gfree" aria-pressed="${!!W.gx.free}" title="自由轉動：手指上下左右拖都能調整角度（開著時在圖上不能捲動頁面）" aria-label="自由轉動">↻ 轉動</button><button type="button" data-gxz="-" aria-label="縮小">－</button><button type="button" data-gxz="0" aria-label="回到原本大小" class="gzv">${Math.round((W.gx.zoom || 1) * 100)}%</button><button type="button" data-gxz="+" aria-label="放大">＋</button><button type="button" data-gxz="pan" class="gpan" aria-pressed="${!!W.gx.panMode}" title="拖曳改成移動畫面（也可以按住 Shift 拖、滑鼠右鍵拖，或兩指拖）" aria-label="拖曳移動畫面">✥</button></div>
+    <div class="igal-leg"><span><i style="background:#ffb26b"></i>上游連線</span><span><i style="background:#6fc3ff"></i>下游連線</span><span><i style="background:#8aa0bf"></i>其他關係</span><span>光暈紅漲綠跌；上半部＝上游、下半部＝下游</span><span>${isMobile() ? "點圓點看資訊、左右拖曳轉動、兩指縮放；按「↻ 轉動」後上下拖可以調整角度、按 ✥ 可以拖曳移動" : "滑到圓點看資訊、點一下換到中心、拖曳轉動（上下拖調角度）、Ctrl／⌘＋滾輪縮放、✥ 或 Shift 拖移動畫面"}</span></div>`;
 }
 // 題材在 3D 空間的位置（單位：外圈半徑）
 function gxPos(id, t, lay) {
@@ -3499,12 +3505,14 @@ function gxMount() {
   const xy = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   const hit = (x, y) => (W.gxS.hits || []).filter(o => Math.hypot(o.x - x, o.y - y) < o.r).sort((a, b) => b.z - a.z)[0]?.id || null;
   // 縮放：以指定的點為中心放大縮小（0.6～4 倍），回到 1 倍以下時自動置中
-  const zv = cv.parentElement.querySelector(".gzv"), zoomAt = (k, mx, my) => { const w = cv.clientWidth, h = cv.clientHeight, z1 = G.zoom || 1, z2 = Math.max(0.6, Math.min(4, z1 * k)), f = z2 / z1;
+  const bar = stage.parentElement.querySelector(".gzoom"), zv = bar?.querySelector(".gzv"), zoomAt = (k, mx, my) => { const w = cv.clientWidth, h = cv.clientHeight, z1 = G.zoom || 1, z2 = Math.max(0.6, Math.min(4, z1 * k)), f = z2 / z1;
     const cx = w / 2 + (G.px || 0), cy = h / 2 + 8 + (G.py || 0); G.zoom = z2;
     if (z2 <= 1) G.px = G.py = 0; else { G.px = Math.max(-w * 0.5 * z2, Math.min(w * 0.5 * z2, mx - (mx - cx) * f - w / 2)); G.py = Math.max(-h * 0.5 * z2, Math.min(h * 0.5 * z2, my - (my - cy) * f - h / 2 - 8)); }
     if (zv) zv.textContent = Math.round(z2 * 100) + "%"; idle = performance.now(); dirty = true; };
   cv.addEventListener("wheel", e => { if (!e.ctrlKey && !e.metaKey) { if (Math.abs(e.deltaY) > 2) wheelHint(stage); return; } e.preventDefault(); const [x, y] = xy(e); zoomAt(Math.exp(-e.deltaY * (Math.abs(e.deltaY) < 40 ? 0.01 : 0.0015)), x, y); }, { passive: false });
-  cv.parentElement.querySelector(".gzoom")?.addEventListener("click", e => { const b = e.target.closest("[data-gxz]"); if (!b) return; const v = b.dataset.gxz, w = cv.clientWidth, h = cv.clientHeight;
+  stage.classList.toggle("gx-free", !!G.free);
+  bar?.addEventListener("click", e => { const b = e.target.closest("[data-gxz]"); if (!b) return; const v = b.dataset.gxz, w = cv.clientWidth, h = cv.clientHeight;
+    if (v === "free") { G.free = !G.free; b.setAttribute("aria-pressed", G.free); stage.classList.toggle("gx-free", G.free); return; }
     if (v === "pan") { G.panMode = !G.panMode; b.setAttribute("aria-pressed", G.panMode); cv.style.cursor = G.panMode ? "move" : "grab"; return; }
     if (v === "0") { G.zoom = 1; G.px = G.py = 0; if (zv) zv.textContent = "100%"; dirty = true; } else zoomAt(v === "+" ? 1.3 : 1 / 1.3, w / 2 + (G.px || 0), h / 2 + 8 + (G.py || 0)); });
   const pts = new Map(); let pinch = null; // 兩指：開合縮放、一起移動就平移
@@ -3516,7 +3524,7 @@ function gxMount() {
   cv.addEventListener("pointermove", e => { const [x, y] = xy(e); if (pts.has(e.pointerId)) pts.set(e.pointerId, { x, y });
     if (pinch && pts.size === 2) { const n = pinchInfo(); G.px = (G.px || 0) + n.x - pinch.x; G.py = (G.py || 0) + n.y - pinch.y; zoomAt(n.d / pinch.d, n.x, n.y); pinch = n; return; }
     if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (moved && drag.pan) { const w = cv.clientWidth, h = cv.clientHeight, z = G.zoom || 1; G.px = Math.max(-w * 0.5 * z, Math.min(w * 0.5 * z, drag.px + dx)); G.py = Math.max(-h * 0.5 * z, Math.min(h * 0.5 * z, drag.py + dy)); idle = performance.now(); dirty = true; } // 放大後拖曳＝移動畫面
-      else if (moved) { G.th = drag.th + dx * 0.008; if (e.pointerType === "mouse") G.ph = Math.max(-0.05, Math.min(0.8, drag.ph + dy * 0.004)); idle = performance.now(); dirty = true; } return; }
+      else if (moved) { G.th = drag.th + dx * 0.008; if (e.pointerType === "mouse" || G.free) G.ph = Math.max(-0.05, Math.min(0.8, drag.ph + dy * 0.004)); idle = performance.now(); dirty = true; } return; }
     if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); if (id !== G.hover) { G.hover = id; cv.style.cursor = id ? "pointer" : G.panMode || e.shiftKey ? "move" : "grab"; dirty = true; } gxCard(card, id, x, y); } });
   cv.addEventListener("pointercancel", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; });
   cv.addEventListener("pointerleave", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; if (!G.pin && G.hover) { G.hover = null; card.hidden = true; dirty = true; } });
@@ -3620,7 +3628,7 @@ function indGlobal(T) {
 }
 // 原理圖解互動導覽：點圖上的編號（或逐步播放）看那一段在做什麼、有哪些公司；編號和下面的價值鏈一樣
 const figItems = T => indChainData(T).flatMap(g => g.items.map(it => ({ ...it, tier: g.tier, title: g.title })));
-const figCtl = T => figItems(T).length ? `<div class="figctl" data-fctl="${T.id}"><button type="button" class="btn sm" data-fstep="-1" aria-label="上一段">‹</button><button type="button" class="btn sm primary" data-fplay>▶ 逐步看流程</button><button type="button" class="btn sm" data-fstep="1" aria-label="下一段">›</button><span class="note">或點圖上的編號</span></div><div class="figstep" hidden></div>` : "";
+const figCtl = (T, zoomBtn = true) => figItems(T).length ? `<div class="figctl" data-fctl="${T.id}">${zoomBtn ? `<button type="button" class="btn sm" data-izoom="${T.id}" aria-label="放大圖解">⤢ 放大</button>` : ""}<button type="button" class="btn sm" data-fstep="-1" aria-label="上一段">‹</button><button type="button" class="btn sm primary" data-fplay>▶ 逐步看流程</button><button type="button" class="btn sm" data-fstep="1" aria-label="下一段">›</button><span class="note">或點圖上的編號</span></div><div class="figstep" hidden></div>` : "";
 function figStepHtml(T, n) {
   const L = figItems(T), it = L[n - 1]; if (!it) return "";
   return `<div class="fsh"><span class="icn">${n}</span><b>${esc(it.name)}</b><small>${esc(it.tier)}${it.title ? "・" + esc(it.title) : ""}・${n}／${L.length}</small></div>${it.desc ? `<p>${esc(it.desc)}</p>` : ""}
@@ -3648,7 +3656,7 @@ function figClick(e, box, T) {
 function indZoom(id) {
   const T = INDT.get(id), F = T && indFig(T); if (!F) return; let z = isMobile() ? 2 : 1.4;
   const ov = document.createElement("div"); ov.className = "izoom"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", `${T.name} 圖解放大`);
-  ov.innerHTML = `<div class="izbar"><b>${esc(T.name)}</b><button class="btn sm" data-z="-">－</button><button class="btn sm" data-z="+">＋</button><button class="btn sm" data-z="x" aria-label="關閉">✕</button></div><div class="izbody"><div class="izin">${figSvg(F.fig, { id: "z-" + T.id })}</div></div><div class="izinfo">${figCtl(T)}</div>`;
+  ov.innerHTML = `<div class="izbar"><b>${esc(T.name)}</b><button class="btn sm" data-z="-">－</button><button class="btn sm" data-z="+">＋</button><button class="btn sm" data-z="x" aria-label="關閉">✕</button></div><div class="izbody"><div class="izin">${figSvg(F.fig, { id: "z-" + T.id })}</div></div><div class="izinfo">${figCtl(T, false)}</div>`;
   const set = () => { ov.querySelector(".izin").style.width = `${z * 100}%`; };
   const close = () => { figPlay(ov, T, false); ov.remove(); document.removeEventListener("keydown", esc_); }, esc_ = e => { if (e.key === "Escape") close(); };
   ov.addEventListener("click", e => { if (figClick(e, ov, T)) return; const b = e.target.closest("[data-z]"); if (!b) return; if (b.dataset.z === "x") return close(); z = Math.min(4, Math.max(1, z + (b.dataset.z === "+" ? 0.5 : -0.5))); set(); });
@@ -4520,7 +4528,7 @@ function renderBook() {
 const DSUB = {
   ovw: [["state", "指標與狀態"], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "節目觀點"]],
   chips: [["sum", "籌碼總覽"], ["inst", "法人與基金"], ["mgfr", "資券與外資", 1], ["branch", "分點主力"], ["big", "大戶與股權"]],
-  fin: [["rev", "營收與獲利"], ["report", "財務報表"], ["div", "股利"], ["info", "公司資料"], ["oapi", "官方資料", 1], ["cal", "行事曆"]],
+  fin: [["rev", "營收與獲利"], ["report", "財務報表"], ["fana", "財報分析"], ["div", "股利"], ["info", "公司資料"], ["oapi", "官方資料", 1], ["cal", "行事曆"]],
 };
 const DSUB_OWN = new Set(["tags", "sum", "rev", "report"]); // 用原本區塊畫的子頁
 const OLD_DTAB = { fund: ["fin", "rev"], co: ["fin", "report"], info: ["ovw", "state"], tags: ["ovw", "tags"] }; // 舊版分頁 → 新的分頁＋子頁
@@ -4528,7 +4536,7 @@ W.dsub = { ovw: "state", chips: "sum", fin: "rev", ...(store.get("watch:dsub", n
 // ETF 的子頁：沒有營收、財報、健檢、評價推估、產業鏈，改成 ETF 自己的基本資料、成分股、成分股變動
 const DSUB_ETF = { fin: [["etfinfo", "基本資料"], ["etfhold", "成分股"], ["etfchg", "成分股變動"], ["div", "配息", 1]] }, ETF_NO = new Set(["check", "target", "attr"]);
 // 美股個股：財務分頁改成 Finnhub＋SEC 的公司與指標、營收與獲利、分析師與財報
-const DSUB_US = { fin: [["usco", "公司與指標"], ["usfin", "營收與獲利"], ["usana", "分析師與財報"]] }, isUSStk = c => isUS(c) && !isEtf(c) && /^[A-Z]{1,5}(\.[A-Z])?$/.test(c || "");
+const DSUB_US = { fin: [["usco", "公司與指標"], ["usfin", "營收與獲利"], ["usana", "分析師與財報"], ["fana", "財報分析"]] }, isUSStk = c => isUS(c) && !isEtf(c) && /^[A-Z]{1,5}(\.[A-Z])?$/.test(c || "");
 const dSubs = t => (isEtf(W.sel) && DSUB_ETF[t] ? DSUB_ETF[t] : isUSStk(W.sel) && DSUB_US[t] ? DSUB_US[t] : (DSUB[t] || []).filter(x => !(isEtf(W.sel) && ETF_NO.has(x[0])))).filter(x => !x[2] || isTW(W.sel));
 function dSub(t = W.dtab) { const L = dSubs(t); return L.some(x => x[0] === W.dsub[t]) ? W.dsub[t] : L[0]?.[0]; }
 const isSxSub = () => !!DSUB[W.dtab] && !DSUB_OWN.has(dSub());

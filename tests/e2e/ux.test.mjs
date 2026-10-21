@@ -142,6 +142,9 @@ test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，�
   assert.ok(Math.abs(v1.th - v0.th) > 0.3 && Math.abs(v1.px - v0.px) < 1, `放大後拖曳要轉動：${JSON.stringify([v0, v1])}`);
   await p.click('[data-gxz="pan"]'); const v2 = await dragX();
   assert.ok(Math.abs(v2.px - v1.px) > 50 && Math.abs(v2.th - v1.th) < 0.01, `✥ 模式拖曳要平移：${JSON.stringify([v1, v2])}`);
+  // 縮放鍵在畫布外面，不會擋住圓點；「↻ 轉動」開著時手機上下拖也能調角度（畫布不讓頁面捲動）
+  assert.ok(await p.evaluate(() => { const g = document.querySelector(".gzoom").getBoundingClientRect(), c = document.querySelector(".igalaxy").getBoundingClientRect(); return g.top >= c.bottom - 1; }), "縮放鍵在畫布下方");
+  await p.click('[data-gxz="free"]'); assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector(".igalaxy")).touchAction), "none"); await p.click('[data-gxz="free"]');
   await p.click('[data-gxz="pan"]');
   await p.click('[data-gxz="0"]');
   await p.click(".gcard [data-ifocus]"); await p.waitForFunction(id => W.gxS?.core === id, h.id);

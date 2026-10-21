@@ -10,7 +10,7 @@ for (const width of [390, 1280]) test(`美股個股財務分頁、大盤走勢�
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await p.evaluate(() => { select("AAPL"); setDtab("fin"); }); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => $('#dTabs [data-t="fin"]').hidden), false);
-  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#sxNav [data-dsub]")].map(b => b.textContent)), ["公司與指標", "營收與獲利", "分析師與財報"]);
+  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#sxNav [data-dsub]")].map(b => b.textContent)), ["公司與指標", "營收與獲利", "分析師與財報", "財報分析"]);
   await p.waitForFunction(() => /Apple Inc/.test($("#sxBox").innerText), null, { timeout: 15000 });
   assert.match(await p.evaluate(() => $("#sxBox").innerText), /市值[\s\S]*3,?500B|市值[\s\S]*3.5/);
   assert.match(await p.evaluate(() => $("#sxBox").innerText), /毛利率[\s\S]*46.5%/);
