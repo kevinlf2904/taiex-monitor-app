@@ -126,13 +126,16 @@ test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，�
   const b2 = await p.locator(".gstage").boundingBox(); await p.touchscreen.tap(b2.x + h.x, b2.y + h.y);
   await p.waitForSelector(".gcard:not([hidden])"); assert.match(await p.textContent(".gcard"), /上游|下游|相關/);
   await p.waitForFunction(id => W.gxS.labIds?.includes(id), h.id, { timeout: 3000 }); // 名稱在下一個畫面才畫上去
-  // 縮放：按鈕放大、回到 100%；滾輪也能縮放
+  // 縮放：按鈕放大、回到 100%；Ctrl／⌘＋滾輪也能縮放
   await p.click('[data-gxz="+"]'); assert.ok(Math.abs((await p.evaluate(() => W.gx.zoom)) - 1.3) < 0.01); assert.equal(await p.textContent(".gzv"), "130%");
   await p.click('[data-gxz="0"]'); assert.equal(await p.evaluate(() => W.gx.zoom), 1);
   await p.mouse.move(b2.x + 20, b2.y + b2.height - 20); await p.mouse.wheel(0, -300); await p.waitForTimeout(100); // 避開打開的資訊窗格
-  assert.ok((await p.evaluate(() => W.gx.zoom)) > 1.2, "滾輪放大");
+  assert.equal(await p.evaluate(() => W.gx.zoom), 1, "一般滾輪留給頁面捲動，不縮放");
+  await p.keyboard.down("Control"); await p.mouse.wheel(0, -300); await p.keyboard.up("Control"); await p.waitForTimeout(100);
+  assert.ok((await p.evaluate(() => W.gx.zoom)) > 1.2, "Ctrl＋滾輪放大");
   // 放大後拖曳＝移動畫面（不是轉動）
-  await p.click('[data-gxz="+"]'); await p.click('[data-gxz="+"]');
+  await p.evaluate(() => document.querySelector(".gstage").scrollIntoView({ block: "center" })); // 一般滾輪剛才捲動了頁面
+  await p.click('[data-gxz="0"]'); await p.click('[data-gxz="+"]'); await p.click('[data-gxz="+"]');
   const v0 = await p.evaluate(() => ({ th: W.gx.th, px: W.gx.px || 0 })), b3 = await p.locator(".gstage").boundingBox(), y3 = b3.y + b3.height * 0.92;
   await p.mouse.move(b3.x + 30, y3); await p.mouse.down(); await p.mouse.move(b3.x + 130, y3, { steps: 6 }); await p.mouse.up();
   const v1 = await p.evaluate(() => ({ th: W.gx.th, px: W.gx.px || 0 }));
