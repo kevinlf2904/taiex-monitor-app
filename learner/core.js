@@ -739,7 +739,15 @@ class Chart {
     const narrow = W < 560;
     // 副圖可以疊好幾個：o.subs = ["kd", "macd", { custom }]；舊的 o.sub 也支援
     const subs = this.subsN = (o.subs || (o.sub ? [o.sub] : [])).filter(Boolean).map(S => (typeof S === "string" && SUBX[S] ? subxMake(S, D, I, this.cfgOn !== false) : S)).filter(Boolean);
-    const isFull = !!(this.host.closest(".chart-fullscreen") || this.host.classList.contains("chart-fullscreen")), volH = o.noVol ? 0 : Math.round((narrow ? 52 : 66) * Chart.prefs.sh), subH = Math.round((subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112)) * Chart.prefs.sh), gap = 10, axisH = 20, mainH = isFull ? Math.max(340, Math.round(window.innerHeight - 130 - (volH ? volH + gap : 0) - subs.length * (subH + gap) - axisH)) : Math.round((narrow ? 230 : 300) * Chart.prefs.h);
+    const isFull = !!(this.host.closest(".chart-fullscreen") || this.host.classList.contains("chart-fullscreen")), gap = 10, axisH = 20;
+    let volH = o.noVol ? 0 : Math.round((narrow ? 52 : 66) * Chart.prefs.sh), subH = Math.round((subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112)) * Chart.prefs.sh), mainH;
+    if (isFull) {
+      // 全螢幕：主圖、成交量、副圖要一起塞進畫面（手機橫拿、螢幕矮時，成交量和副圖等比例縮小，不會被擠到畫面外）
+      const top = Math.min(window.innerHeight * 0.45, Math.max(0, this.canvas.getBoundingClientRect().top)), avail = window.innerHeight - top - 6, minMain = narrow || window.innerHeight < 500 ? 130 : 200;
+      const rest = volH + subs.length * (gap + subH), fixed = gap + rest + axisH + 8;
+      if (avail - fixed < minMain && rest > 0) { const f = Math.max(0.4, (avail - minMain - gap - subs.length * gap - axisH - 8) / (volH + subs.length * subH)); volH = Math.round(volH * f); subH = Math.round(subH * f); }
+      mainH = Math.max(minMain, Math.round(avail - (gap + volH + subs.length * (gap + subH) + axisH + 8)));
+    } else mainH = Math.round((narrow ? 230 : 300) * Chart.prefs.h);
     const H = mainH + gap + volH + subs.length * (gap + subH) + axisH + 8;
     if (this.canvas.width !== Math.round(W * dpr) || this.canvas.height !== Math.round(H * dpr)) { this.canvas.width = Math.round(W * dpr); this.canvas.height = Math.round(H * dpr); this.canvas.style.height = H + "px"; } // 尺寸沒變就不重設（重設畫布很慢，拖曳時會閃）
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);

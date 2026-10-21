@@ -73,3 +73,19 @@ test("空心 K：紅綠 K 實體都只畫外框", async () => {
   assert.equal(r.up[3], 0, "紅 K 實體中間有填色"); assert.equal(r.down[3], 0, "綠 K 實體中間有填色");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("K 線、分時全螢幕：手機橫拿（矮螢幕）時成交量與副圖也都在畫面內", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 844, touch: true });
+  await p.setViewportSize({ width: 844, height: 390 });
+  await p.evaluate(() => { select("2330"); setDtab("tech"); });
+  await p.waitForFunction(() => kChart.D?.length > 60 && kChart.o, null, { timeout: 20000 });
+  await p.evaluate(() => kChart.canvas.scrollIntoView({ block: "center" })); await p.click('[data-z="expand"]'); await p.waitForTimeout(500);
+  const k = await p.evaluate(() => { const r = kChart.canvas.getBoundingClientRect(), last = kChart.panes.at(-1), vol = kChart.panes.find(x => x.key === "vol"); return { volBottom: r.top + vol.top + vol.h, lastBottom: r.top + last.top + last.h, vh: innerHeight }; });
+  assert.ok(k.volBottom <= k.vh && k.lastBottom <= k.vh, `K 線全螢幕超出畫面：${JSON.stringify(k)}`);
+  await p.click('[data-z="expand"]');
+  await p.evaluate(() => setDtab("trend")); await p.waitForTimeout(500);
+  await p.evaluate(() => document.getElementById("tsExpandBtn").scrollIntoView({ block: "center" })); await p.click("#tsExpandBtn"); await p.waitForTimeout(500);
+  const t = await p.evaluate(() => { const r = document.getElementById("tsCanvas").getBoundingClientRect(); return { bottom: r.bottom, vh: innerHeight }; });
+  assert.ok(t.bottom <= t.vh + 1, `分時全螢幕超出畫面：${JSON.stringify(t)}`);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
