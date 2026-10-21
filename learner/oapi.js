@@ -411,7 +411,7 @@ function oaToolsBody() {
   const view = !X ? `<p class="note">從左邊挑一份資料集。標「可查個股」的可以只看某一檔。</p>`
     : `<h3>${esc(X[2])} <span class="note">${X[0]}・${esc(X[3])}</span></h3>
       <form class="oaq" data-oaform><input name="code" inputmode="numeric" placeholder="${X[4] ? "股票代號（例 2330）" : "這份沒有個股代號欄"}" value="${esc(A.code)}" ${X[4] ? "" : "disabled"} aria-label="股票代號"><input name="q" placeholder="關鍵字" value="${esc(A.q)}" aria-label="關鍵字"><button class="btn sm primary">查詢</button>${A.code || A.q ? `<button type="button" class="btn sm" data-oaclr>清除</button>` : ""}</form>
-      ${W.off ? `<p class="note">需要部署到網站才有資料。</p>` : !D || D.loading ? `<p class="note">向${X[0] === "上市" ? "證交所" : "櫃買中心"}抓資料…</p>` : D.err ? `<p class="note err">⚠ ${esc(D.err)}</p>`
+      ${W.off ? `<p class="note">需要部署到網站才有資料。</p>` : !D || D.loading ? `<p class="note">向${X[0] === "上市" ? "證交所" : "櫃買中心"}抓資料…</p>` : D.err ? `<p class="note err">⚠︎ ${esc(D.err)}</p>`
         : `<p class="note">${A.code || A.q ? `符合 ${D.total.toLocaleString()} 筆／` : ""}共 ${D.all.toLocaleString()} 筆${D.total > 200 ? "，只列前 200 筆（加代號或關鍵字縮小範圍）" : ""}・來源：${X[0] === "上市" ? "證交所" : "櫃買中心"} OpenAPI <code>${esc(X[1])}</code></p>${oaTable(D.rows, D.cols, D.codeKey)}`}`;
   return `<section class="csec oa"><h3>證交所、櫃買中心官方開放資料 <span class="note">${OAPI_CAT.length} 份公開資料集，每天更新；直接看原始表格</span></h3>
     <div class="oabar">${seg("m", ["全部", "上市", "上櫃"])}<input class="oas" type="search" placeholder="找資料集（例：股利、融資、ESG）" value="${esc(A.s)}" aria-label="找資料集"></div>

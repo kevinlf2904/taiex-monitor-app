@@ -88,7 +88,7 @@ $("#wlForm").addEventListener("submit", async e => {
   try { const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "waitlist", email: $("#wlEmail").value, plan: $("#wlPlan").value }) });
     const j = await r.json().catch(() => null); if (!j?.ok) throw new Error(j?.error || (r.status === 404 ? "需要部署到網站才能登記" : `伺服器回應 ${r.status}`));
     msg.textContent = "已登記，有重要更新時會通知你。"; store.set("proWait", { at: Date.now(), plan: $("#wlPlan").value }); e.target.reset(); }
-  catch (err) { msg.textContent = "⚠ " + err.message; }
+  catch (err) { msg.textContent = "⚠︎ " + err.message; }
   btn.disabled = false;
 });
 </script>

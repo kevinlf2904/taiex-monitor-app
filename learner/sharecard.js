@@ -1,8 +1,11 @@
 /* 分享情報圖卡：把一個區塊的重點畫成 PNG（品牌標頭＋網址、底部「僅供研究參考，非投資建議」），可以下載、複製或用手機分享。
    不用 html2canvas／foreignObject（iPhone Safari 會讓畫布無法匯出），改成依資料用 canvas 重畫；圖表用 SVG（把顏色、字型寫進每個元素）畫進去。
-   用法：在區塊放 <button class="sharebtn" data-sharecard="key">📸 分享情報圖卡</button>，並在 SHARE[key] 放一個回傳圖卡內容的函式：
+   用法：在區塊放 <button class="sharebtn" data-sharecard="key">分享情報圖卡</button>，並在 SHARE[key] 放一個回傳圖卡內容的函式：
    { title, sub, stats: [[名稱, 數值, 顏色]], sections: [{ h, rows: [[左, 右, 右邊顏色, 左邊小字]] }], svg: 元素, text: 段落, name: 檔名 }
    首頁、看盤、存股模擬三頁都載入這支（存股模擬不載 core.js，所以這裡不依賴 core.js）。 */
+// 圖示：看盤、首頁有 core.js 的 ico()；存股頁沒有，就用這裡的三個
+const SC_ICO = { dl: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', copy: '<rect x="8" y="8" width="11" height="12" rx="2"/><path d="M5 16V5a1 1 0 0 1 1-1h9"/>', share: '<path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6"/>' };
+const scIco = n => (typeof ico === "function" ? ico(n) : `<svg width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin-right:.32em" aria-hidden="true">${SC_ICO[n]}</svg>`);
 const SITE_HOST = "kline-school.vercel.app"; // 換網域只要改這裡
 const SHARE = {};
 const SCARD = { W: 1080, P: 64, bg: "#09090B", card: "#121215", line: "#27272A", ink: "#FFFFFF", muted: "#A1A1AA", up: "#ef4444", down: "#22c55e",
@@ -82,7 +85,7 @@ async function shareCardOpen(key) {
     const m = D.createElement("div"); m.className = "sc-modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-label", "分享情報圖卡");
     m.innerHTML = `<div class="sc-box"><div class="sc-hd"><b>圖卡預覽</b><button type="button" data-sca="x" class="sc-x" aria-label="關閉">✕</button></div><div class="sc-img"><img src="${url}" alt="情報圖卡預覽"></div>
       <p class="sc-tip">${canShare ? "手機：按「分享」可以直接存到相簿或傳給朋友；也可以長按圖片儲存。" : "也可以在圖片上按右鍵另存。"}</p>
-      <div class="sc-acts"><button type="button" data-sca="dl" class="pri">📥 下載 PNG 圖片</button>${canCopy ? '<button type="button" data-sca="copy">📋 複製到剪貼簿</button>' : ""}${canShare ? '<button type="button" data-sca="share">分享…</button>' : ""}</div></div>`;
+      <div class="sc-acts"><button type="button" data-sca="dl" class="pri">${scIco("dl")}下載 PNG 圖片</button>${canCopy ? '<button type="button" data-sca="copy">${scIco("copy")}複製到剪貼簿</button>' : ""}${canShare ? '<button type="button" data-sca="share">分享…</button>' : ""}</div></div>`;
     const close = () => { m.remove(); D.removeEventListener("keydown", k); setTimeout(() => URL.revokeObjectURL(url), 3000); }, k = e => { if (e.key === "Escape") close(); };
     m.addEventListener("click", async e => { const a = e.target.closest("[data-sca]")?.dataset.sca; if (e.target === m || a === "x") return close();
       if (a === "dl") { const l = D.createElement("a"); l.href = url; l.download = name; D.body.append(l); l.click(); l.remove(); scToast("已下載圖卡"); }
@@ -97,7 +100,7 @@ document.addEventListener("click", e => { const b = e.target.closest("[data-shar
 const scRankRows = (ol, n = 8) => [...(ol?.querySelectorAll(":scope > li") || [])].slice(0, n).map(li => { const v = li.querySelector(".tw-v b"), cl = v?.className || "";
   return [`${li.querySelector(".tw-no")?.textContent.trim() || ""}. ${li.querySelector(".tw-who b")?.textContent.trim() || ""}`, v?.textContent.trim() || "", /\bup\b/.test(cl) ? "up" : /\bdown\b/.test(cl) ? "down" : "", li.querySelector(".tw-who small")?.textContent.trim() || ""]; });
 const scSectionsFrom = (root, n = 8, maxSec = 2) => [...(root?.querySelectorAll("ol.tw-rank") || [])].slice(0, maxSec).map(ol => { let h = ol.previousElementSibling; while (h && !/^H[2-4]$/.test(h.tagName)) h = h.previousElementSibling; return { h: h?.textContent.trim() || "", rows: scRankRows(ol, n) }; }).filter(s => s.rows.length);
-const scBtn = (key, extra = "") => `<button type="button" class="sharebtn${extra}" data-sharecard="${key}">📸 分享情報圖卡</button>`;
+const scBtn = (key, extra = "") => `<button type="button" class="sharebtn${extra}" data-sharecard="${key}">${scIco("share")}分享情報圖卡</button>`;
 (() => { const s = document.createElement("style"); s.textContent = `
 .sharebtn { border: 0; border-radius: 6px; background: var(--surface-2, #1c1c20); color: var(--ink, #fff); font: 500 12.5px var(--font-body, sans-serif); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
 .sharebtn.fr { float: right; margin-left: 8px; }

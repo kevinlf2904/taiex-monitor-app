@@ -43,7 +43,7 @@ function renderAfter() {
   } else if (v === "fr") {
     h = afBack("外資持股", "證交所、櫃買中心") + afFrHtml();
   } else if (!A || A.err) {
-    h = afBack("盤後資料") + `<p class="note" style="padding:12px">${A?.err ? "⚠ " + esc(A.err) : "載入中…"}</p>`;
+    h = afBack("盤後資料") + `<p class="note" style="padding:12px">${A?.err ? "⚠︎ " + esc(A.err) : "載入中…"}</p>`;
   } else if (v === "sum") {
     const H = A.hist || [], L = H.at(-1), s = (n, k) => H.slice(-n).reduce((t, x) => t + (x.inst?.[k] || 0), 0), M = W.mks;
     if (!M && !W.mksLoading) loadMktStats().then(() => { if (W.lt === "after") renderList(); });
@@ -104,7 +104,7 @@ function afFrHtml() {
     if (up.length) chg = `<h3 class="afgrp">上市櫃外資持股增加最多 <span class="note">${esc((A.frDate || "").replace(/-/g, "/"))} 比前一個交易日，百分點</span></h3>${afBars(up.map(nm), { max: mx, fmt: f, sel: 1 })}
       <h3 class="afgrp">上市櫃外資持股減少最多</h3>${afBars(dn.map(nm), { max: mx, fmt: f, sel: 1 })}`; }
   if (W.off) return seg + `<p class="note" style="padding:12px">需要部署到網站才有資料。</p>`;
-  if (!D) return seg + `<p class="note" style="padding:12px">${F?.loading || !F ? "向證交所、櫃買中心抓資料…" : "⚠ 暫時拿不到外資持股資料"}</p>` + chg;
+  if (!D) return seg + `<p class="note" style="padding:12px">${F?.loading || !F ? "向證交所、櫃買中心抓資料…" : "⚠︎ 暫時拿不到外資持股資料"}</p>` + chg;
   return seg + (D.cat ? `<h3 class="afgrp">各類股外資持股比率 <span class="note">外資持有股數 ÷ 發行股數</span></h3>${afBars(D.cat, { max: 100 })}` : "")
     + (D.top ? `<h3 class="afgrp">外資持股比率前 20 名</h3>${afBars(D.top.map(x => ({ ...x, n: x.n || nameOf(x.c) })), { max: 100, sel: 1 })}` : "") + chg
     + `<p class="note" style="padding:4px 12px">類股與前 20 名來自證交所 MI_QFIIS、櫃買中心僑外資持股比例表（每個交易日更新）；增減來自盤後資料。點股票看個股的外資持股走勢。</p>`;

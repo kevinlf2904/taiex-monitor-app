@@ -258,13 +258,13 @@ function mfHtml() {
   if (top.length >= 4) { const n = Math.min(S.top, top.length);
     h += `<h4>投資組合範例 <span class="note">前 ${n} 名等權重，每檔 ${(100 / n).toFixed(0)}%，每月（約 21 個交易日）重新排名、再平衡</span></h4><p>${top.slice(0, n).map(r => `<button class="linkbtn" data-tsel="${r.c}">${esc(nameOf(r.c))}</button>`).join("、")}</p>
       <div class="irform"><button class="btn sm" data-mfbt ${B?.busy || R.busy ? "disabled" : ""}>${B?.busy ? "回測中…" : "回測這個權重（每月再平衡）"}</button>${R.mk ? `<span class="note">全市場只有最近 130 個交易日，回測期數很少</span>` : ""}</div>`;
-    if (B && !B.busy) h += B.err ? `<p class="note">⚠ ${esc(B.err)}</p>` : B.short ? `<p class="note">資料只有 ${B.days} 個交易日，扣掉計算因子需要的 70 天後不夠一期。</p>`
+    if (B && !B.busy) h += B.err ? `<p class="note">⚠︎ ${esc(B.err)}</p>` : B.short ? `<p class="note">資料只有 ${B.days} 個交易日，扣掉計算因子需要的 70 天後不夠一期。</p>`
       : `${qCards([["前 " + B.top + " 名累積", qP(B.ret), `${B.per.length} 期`, qC(B.ret)], ["同範圍等權重", qP(B.all), "全部股票平均", qC(B.all)], ["勝過同範圍", `${Math.round(B.hit * 100)}%`, "的期數"], ["平均每期超額", qP(B.ex, 2), "前幾名 − 全部平均", qC(B.ex)]])}
         <div class="ctbl"><table><thead><tr><th>期間</th><th>前 ${B.top} 名</th><th>全部平均</th><th>入選</th></tr></thead><tbody>${B.per.map(x => `<tr><td>${x.d.slice(2)}～${x.to.slice(5)}</td><td class="${cls(x.ret)}">${retPct(x.ret)}</td><td class="${cls(x.all)}">${retPct(x.all)}</td><td class="note">${x.codes.slice(0, 5).map(c => esc(nameOf(c))).join("、")}${x.codes.length > 5 ? "…" : ""}</td></tr>`).join("")}</tbody></table></div>
         <p class="note">回測用每一期當天為止的資料排名（不偷看未來），不含交易成本；歷史本益比拿不到，所以回測只用動能、低波動、趨勢三個因子。範圍是目前的股票清單，已經下市或被剔除的股票不在裡面（倖存者偏差），結果會偏樂觀。</p>`; }
   const ak = "mf"; if (top.length) QAI[ak] = { done: renderList, ctx: () => `多因子排行（權重：${FACTORS.map(([k, t]) => `${t} ${Math.round(S.w[k] / tw * 100)}%`).join("、")}；分數是範圍內的百分位）前 10 名：\n` + top.slice(0, 10).map((r, i) => `${i + 1}. ${nameOf(r.c)} ${r.c} 收盤 ${fmtP(r.px)}、總分 ${r.score}、${FACTORS.map(([k, t]) => `${t} ${r.s[k]}`).join("、")}、本益比 ${r.pe > 0 ? r.pe.toFixed(1) : "—"}${setups[i] ? `、行情 ${REG_NAME[setups[i].St.trend]}${setups[i].X ? `、ATR 參考停損 ${fmtP(setups[i].X.stop)} 目標 ${fmtP(setups[i].X.tgt)} 報酬風險比 ${setups[i].X.rr.toFixed(2)}` : ""}` : ""}`).join("\n"),
     q: "請只根據上面的分數與數字，說明前 5 名各自是靠哪些因子入選、技術面（行情、停損目標、報酬風險比）有什麼要注意的，以及這組權重偏向哪一種風格、在什麼市場環境容易失效。不要給買賣建議，用繁體中文、條列。" };
-  return h + (top.length ? qAiBlock({ key: ak, R: W.qai?.[ak] }, "🤖 AI 說明前 5 名為什麼入選") : "") + `</section>`;
+  return h + (top.length ? qAiBlock({ key: ak, R: W.qai?.[ak] }, `${ico("ai")}AI 說明前 5 名為什麼入選`) : "") + `</section>`;
 }
 
 /* ---------- 營收、財報的法定公布期限（大盤「理財行事曆」用）：每月 10 日前公布上月營收；Q1 5/15、Q2 8/14、Q3 11/14、年報 3/31 ---------- */
@@ -300,8 +300,8 @@ function toolsBody(v) {
     const q = c => W.quotes.get(c), mv = myCodes().map(c => ({ c, q: q(c) })).filter(x => x.q?.chgPct != null).sort((a, b) => b.q.chgPct - a.q.chgPct);
     const row = x => `<li><button class="linkbtn" data-tsel="${x.c}">${esc(nameOf(x.c))} <span class="note">${x.c}</span></button> <b class="${cls(x.q.chg)}">${x.q.chgPct >= 0 ? "+" : ""}${(+x.q.chgPct).toFixed(2)}%</b></li>`;
     const cg = (W.cong?.trades || []).filter(t => t.filed >= new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10));
-    h = `<section class="csec"><h3>每日盤後摘要 <span class="note">${toolsDay()}</span> <button class="btn sm" data-tx="sumre">↻ 重新整理</button> <button class="btn sm" data-tx="sumai">🤖 AI 整理</button></h3>
-      ${W.sumAI ? `<div class="caibox">${W.sumAI.loading ? "AI 整理中…" : W.sumAI.err ? "⚠ " + esc(W.sumAI.err) : esc(W.sumAI.text).replace(/\n/g, "<br>")}</div>` : ""}
+    h = `<section class="csec"><h3>每日盤後摘要 <span class="note">${toolsDay()}</span> <button class="btn sm" data-tx="sumre">↻ 重新整理</button> <button class="btn sm" data-tx="sumai">${ico("ai")}AI 整理</button></h3>
+      ${W.sumAI ? `<div class="caibox">${W.sumAI.loading ? "AI 整理中…" : W.sumAI.err ? "⚠︎ " + esc(W.sumAI.err) : esc(W.sumAI.text).replace(/\n/g, "<br>")}</div>` : ""}
       <div class="tgrid"><div><h4>大盤</h4><ul class="tlist">${["T00", "O00", "TXF"].map(c => q(c) ? `<li>${esc(q(c).name || nameOf(c))} <b>${fmtP(q(c).price)}</b> <span class="${cls(q(c).chg)}">${q(c).chgPct >= 0 ? "+" : ""}${q(c).chgPct ?? "—"}%</span></li>` : "").join("")}</ul></div>
       <div><h4>自選漲幅前 5</h4><ul class="tlist">${mv.slice(0, 5).map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div>
       <div><h4>自選跌幅前 5</h4><ul class="tlist">${mv.slice(-5).reverse().map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div></div>
@@ -340,7 +340,7 @@ function toolsBody(v) {
       <form class="irform" id="irForm"><input id="irCode" placeholder="代號，例如 2330" value="${esc(W.sel && isTW(W.sel) ? W.sel : "")}" autocomplete="off"><select id="irCond">${opt}</select><input id="irP" type="number" step="any" placeholder="參數" style="width:80px"><button class="btn sm primary">＋ 新增</button></form>
       <div class="ctbl"><table><thead><tr><th>股票</th><th>條件</th><th>目前</th><th>上次通知</th><th></th></tr></thead><tbody>
       ${L.map((r, i) => `<tr><td><button class="linkbtn" data-tsel="${r.code}">${esc(nameOf(r.code))} ${r.code}</button></td><td>${esc(condName(r.cond, r.p))}${condOf(r.cond)?.[2] && !/\bN\b/.test(condOf(r.cond)[1]) ? `（${condOf(r.cond)[2]} ${r.p ?? condOf(r.cond)[3]}）` : ""}</td><td>${r.chk ? (r.now ? `<b class="up">成立</b>：${esc(r.now)}` : `<span class="note">未成立</span>`) : `<span class="note">尚未檢查</span>`}</td><td class="note">${r.last || "—"}</td><td><label class="note"><input type="checkbox" data-iron="${i}" ${r.on ? "checked" : ""}> 開</label> <button class="linkbtn" data-irdel="${i}">刪除</button></td></tr>`).join("") || `<tr><td colspan="5" class="note">還沒有條件。上面輸入代號、選條件就能新增。</td></tr>`}</tbody></table></div>
-      <h4>價格提醒 <span class="note">在個股頁按「🔔 提醒」設定漲到、跌到某價</span></h4><div class="ctbl"><table><tbody>${Object.entries(W.alerts || {}).filter(([, a]) => a?.up || a?.dn).map(([c, a]) => `<tr><td><button class="linkbtn" data-tsel="${c}">${esc(nameOf(c))} ${c}</button></td><td>${a.up ? `漲到 <b class="up">${fmtP(a.up)}</b>` : ""}${a.up && a.dn ? "、" : ""}${a.dn ? `跌到 <b class="down">${fmtP(a.dn)}</b>` : ""}</td><td class="note">現價 ${fmtP(W.quotes.get(c)?.price)}</td><td><button class="linkbtn" data-paldel="${c}">刪除</button></td></tr>`).join("") || `<tr><td class="note">沒有價格提醒</td></tr>`}</tbody></table></div>
+      <h4>價格提醒 <span class="note">在個股頁按「提醒」設定漲到、跌到某價</span></h4><div class="ctbl"><table><tbody>${Object.entries(W.alerts || {}).filter(([, a]) => a?.up || a?.dn).map(([c, a]) => `<tr><td><button class="linkbtn" data-tsel="${c}">${esc(nameOf(c))} ${c}</button></td><td>${a.up ? `漲到 <b class="up">${fmtP(a.up)}</b>` : ""}${a.up && a.dn ? "、" : ""}${a.dn ? `跌到 <b class="down">${fmtP(a.dn)}</b>` : ""}</td><td class="note">現價 ${fmtP(W.quotes.get(c)?.price)}</td><td><button class="linkbtn" data-paldel="${c}">刪除</button></td></tr>`).join("") || `<tr><td class="note">沒有價格提醒</td></tr>`}</tbody></table></div>
       <h4>最近的提醒紀錄</h4><ul class="tlist">${(W.irLog ||= store.get("watch:irlog", []) || []).slice(0, 20).map(x => `<li><span class="note">${x.d} ${x.t}</span> ${esc(nameOf(x.code))} ${x.code}：${esc(x.msg)}</li>`).join("") || "<li class='note'>沒有</li>"}</ul></section>`;
     note = "技術指標提醒與價格提醒都在這裡管理；綁定 Telegram（備份同步）後，收盤後也會推播。";
   } else if (v === "paper") {
@@ -356,14 +356,14 @@ function toolsBody(v) {
         <select id="paType"><option value="mkt">市價</option><option value="limit">限價</option><option value="stop">停損／突破</option></select><input id="paPx" type="number" step="any" placeholder="掛單價" style="width:90px">
         <button class="btn sm primary" data-paside="buy">買進</button><button class="btn sm" data-paside="sell">賣出</button></form>
       <p class="note">市價用目前的即時報價成交。限價：買進在價格跌到限價以下、賣出在漲到限價以上時成交；停損／突破：賣出在跌破觸發價、買進在突破觸發價時成交（看盤開著時每 20 秒檢查）。台股手續費 0.1425%（最低 20 元）＋賣出證交稅（股票 0.3%、ETF 0.1%）；美股不收手續費、只算美元。每筆會自動記到交易日記（標「模擬」）。</p>
-      ${A.orders.length ? `<h4>掛單中</h4><div class="ctbl"><table><tbody>${A.orders.map((o, i) => `<tr><td>${esc(nameOf(o.c))} ${o.c}</td><td>${o.side === "buy" ? "<b class='up'>買</b>" : "<b class='down'>賣</b>"} ${o.sh.toLocaleString()} 股</td><td>${o.type === "limit" ? "限價" : "停損／突破"} ${fmtP(o.px)}</td><td class="note">現價 ${fmtP(paPx(o.c))}${o.err ? "・⚠ " + esc(o.err) : ""}</td><td><button class="linkbtn" data-paodel="${i}">取消</button></td></tr>`).join("")}</tbody></table></div>` : ""}
+      ${A.orders.length ? `<h4>掛單中</h4><div class="ctbl"><table><tbody>${A.orders.map((o, i) => `<tr><td>${esc(nameOf(o.c))} ${o.c}</td><td>${o.side === "buy" ? "<b class='up'>買</b>" : "<b class='down'>賣</b>"} ${o.sh.toLocaleString()} 股</td><td>${o.type === "limit" ? "限價" : "停損／突破"} ${fmtP(o.px)}</td><td class="note">現價 ${fmtP(paPx(o.c))}${o.err ? "・⚠︎ " + esc(o.err) : ""}</td><td><button class="linkbtn" data-paodel="${i}">取消</button></td></tr>`).join("")}</tbody></table></div>` : ""}
       <div class="ctbl"><table><thead><tr><th>股票</th><th>股數</th><th>平均成本</th><th>現價</th><th>未實現損益</th></tr></thead><tbody>${pos.map(x => `<tr><td><button class="linkbtn" data-tsel="${x.c}">${esc(nameOf(x.c))} ${x.c}</button></td><td>${x.sh.toLocaleString()}</td><td>${fmtP(x.cost / x.sh)}</td><td>${fmtP(x.px)}</td><td class="${cls(x.mv - x.cost)}">${m(x.mv - x.cost, x.us)}（${((x.mv / x.cost - 1) * 100).toFixed(2)}%）</td></tr>`).join("") || `<tr><td colspan="5" class="note">還沒有持股</td></tr>`}</tbody></table></div>
       <h4>成交紀錄</h4><div class="ctbl"><table><tbody>${A.hist.slice(0, 40).map(x => `<tr><td class="note">${new Date(x.t + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ")}</td><td>${esc(nameOf(x.c))} ${x.c}</td><td>${x.side === "buy" ? "<b class='up'>買</b>" : "<b class='down'>賣</b>"} ${x.sh.toLocaleString()} 股 @ ${fmtP(x.px)} <span class="note">${esc(x.how || "市價")}</span></td><td class="note">${x.fee ? "費 " + x.fee : ""}${x.tax ? `・稅 ${x.tax}` : ""}</td><td class="${cls(x.pnl)}">${x.pnl != null ? "損益 " + x.pnl.toLocaleString() : ""}</td></tr>`).join("") || `<tr><td class="note">沒有</td></tr>`}</tbody></table></div></section>`;
     note = "模擬交易只記在這台裝置（可以在「備份同步」同步到其他裝置），用來練習，不會真的下單。"; setTimeout(paCurve, 0);
   } else if (v === "journal") {
     const { closed, open } = jClosed(), win = closed.filter(x => x.pnl > 0), loss = closed.filter(x => x.pnl <= 0), avg = a => (a.length ? a.reduce((s, x) => s + x.ret, 0) / a.length : 0);
-    h = `<section class="csec"><h3>交易日記 <button class="linkbtn" data-tx="jexport">匯出</button> <button class="btn sm" data-tx="jai">🤖 AI 檢討</button></h3>
-      ${W.jAI ? `<div class="caibox">${W.jAI.loading ? "AI 讀最近 20 筆交易中（約 10～30 秒）…" : W.jAI.err ? "⚠ " + esc(W.jAI.err) : esc(W.jAI.text).replace(/\n/g, "<br>") + (jRulesOf(W.jAI.text).length ? `<p><button class="btn sm primary" data-tx="jrsave">把這 ${jRulesOf(W.jAI.text).length} 條存成我的規則</button></p>` : "")}</div>` : ""}
+    h = `<section class="csec"><h3>交易日記 <button class="linkbtn" data-tx="jexport">匯出</button> <button class="btn sm" data-tx="jai">${ico("ai")}AI 檢討</button></h3>
+      ${W.jAI ? `<div class="caibox">${W.jAI.loading ? "AI 讀最近 20 筆交易中（約 10～30 秒）…" : W.jAI.err ? "⚠︎ " + esc(W.jAI.err) : esc(W.jAI.text).replace(/\n/g, "<br>") + (jRulesOf(W.jAI.text).length ? `<p><button class="btn sm primary" data-tx="jrsave">把這 ${jRulesOf(W.jAI.text).length} 條存成我的規則</button></p>` : "")}</div>` : ""}
       ${jRulesHtml()}
       <form class="irform" id="jForm"><input id="jD" type="date" value="${toolsDay()}"><input id="jCode" placeholder="代號" value="${esc(W.sel && isTW(W.sel) ? W.sel : "")}" autocomplete="off" style="width:90px"><select id="jSide"><option value="buy">買進</option><option value="sell">賣出</option></select><input id="jPx" type="number" step="any" placeholder="價格" style="width:90px"><input id="jSh" type="number" step="1" placeholder="股數" style="width:90px"><select id="jTag" aria-label="理由分類">${J_TAGS.map(t => `<option>${t}</option>`).join("")}</select><input id="jWhy" placeholder="理由（例如：突破月線＋量增）" style="flex:1;min-width:160px"><button class="btn sm primary">記下</button></form>
       <div class="cokv three"><div><span>已實現</span><b>${closed.length} 筆</b><small>未平倉 ${open.length} 筆</small></div><div><span>勝率</span><b>${closed.length ? Math.round(win.length / closed.length * 100) + "%" : "—"}</b><small>賺 ${win.length}・賠 ${loss.length}</small></div><div><span>平均賺／賠</span><b>${win.length ? "+" + (avg(win) * 100).toFixed(1) + "%" : "—"} ／ ${loss.length ? (avg(loss) * 100).toFixed(1) + "%" : "—"}</b><small>賺賠比 ${loss.length && win.length ? Math.abs(avg(win) / avg(loss)).toFixed(2) : "—"}・總損益 ${Math.round(closed.reduce((s, x) => s + x.pnl, 0)).toLocaleString()}</small></div></div>
@@ -614,7 +614,7 @@ function f13RankHtml(F) {
 }
 function f13Html(arg) {
   let F = W.f13; if (!F) { f13Load(); return `<p class="note" style="padding:16px">載入中…</p>`; }
-  if (F.err || !F.funds?.length) return `<p class="note" style="padding:16px">⚠ 13F 資料還沒有（${esc(F.err || "沒有資料")}）。資料由每天的排程從 SEC EDGAR 整理。</p>`;
+  if (F.err || !F.funds?.length) return `<p class="note" style="padding:16px">⚠︎ 13F 資料還沒有（${esc(F.err || "沒有資料")}）。資料由每天的排程從 SEC EDGAR 整理。</p>`;
   const sh = n => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "K" : n), tk = r => esc(r.ticker || r.name), nm = r => `${esc(r.name)}${r.pc ? `（${r.pc === "PUT" ? "賣權" : "買權"}）` : ""}`;
   if (arg) {
     const f = F.funds.find(x => x.cik === arg); if (!f) return `<p class="note">找不到這家機構</p>`;
@@ -656,7 +656,7 @@ function f13Html(arg) {
   else if (view === "cong") h += f13CongHtml(A);
   else if (view === "heat") h += cxHeatHtml(F);
   else h += f13RankHtml(F);
-  return h + `${(F.notes || []).length ? `<p class="note">⚠ ${F.notes.map(esc).join("；")}</p>` : ""}</section>`;
+  return h + `${(F.notes || []).length ? `<p class="note">⚠︎ ${F.notes.map(esc).join("；")}</p>` : ""}</section>`;
 }
 // 國會 × 13F：近 90 天議員買進的股票，對照機構本季是加碼還是減碼
 function f13CongHtml(A) {
@@ -690,7 +690,7 @@ function insBtHtml() {
 }
 function insHtml() {
   const I = W.ins; if (!I) { insLoad(); return `<p class="note">載入中…</p>`; }
-  if (I.err || !I.rows?.length) return `<p class="note">⚠ 內部人申報資料還沒有（${esc(I.err || "沒有資料")}）。資料由每個交易日的排程從證交所、櫃買中心整理。</p>`;
+  if (I.err || !I.rows?.length) return `<p class="note">⚠︎ 內部人申報資料還沒有（${esc(I.err || "沒有資料")}）。資料由每個交易日的排程從證交所、櫃買中心整理。</p>`;
   const mine = new Set([...myCodes(), ...Object.keys(W.hold || {})]), f = W.insF || "mine", q = (W.insQ || "").trim(), view = ["rank", "feed", "bt"].includes(W.insv) ? W.insv : "rank";
   const none = f === "mine" && !q && !I.rows.some(r => mine.has(r.code)); // 自選、庫存都沒有申報：直接看全部
   const L = I.rows.filter(r => (q ? r.code === q || (r.name || "").includes(q) : f === "mine" && !none ? mine.has(r.code) : true));
@@ -758,7 +758,7 @@ function syncHtml() {
   else if (!S.id) h += `<p class="note">第一台裝置按「建立同步碼」，再到另一台裝置輸入同一組同步碼，兩邊就會同步。同步碼等於密碼，不要給別人。</p>
     <div class="irform"><button class="btn sm primary" data-sy="new">建立同步碼</button><input data-syid placeholder="已經有同步碼？貼在這裡" style="flex:1;min-width:200px" autocomplete="off"><button class="btn sm" data-sy="join">加入</button></div>`;
   else h += `<div class="cokv three"><div><span>同步碼</span><b style="font-size:13px;word-break:break-all">${W.syShow ? esc(S.id) : "••••••••" + esc(S.id.slice(-4))}</b><small><button class="linkbtn" data-sy="show">${W.syShow ? "隱藏" : "顯示"}</button> <button class="linkbtn" data-sy="copy">複製</button></small></div>
-      <div><span>上次同步</span><b>${S.at ? new Date(S.at + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ") : "—"}</b><small>${dirty ? "這台有新的改動" : "已是最新"}${W.syncErr ? "・⚠ " + esc(W.syncErr) : ""}</small></div>
+      <div><span>上次同步</span><b>${S.at ? new Date(S.at + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ") : "—"}</b><small>${dirty ? "這台有新的改動" : "已是最新"}${W.syncErr ? "・⚠︎ " + esc(W.syncErr) : ""}</small></div>
       <div><span>自動同步</span><b><label class="note"><input type="checkbox" data-syauto ${S.auto !== false ? "checked" : ""}> 開</label></b><small>開網頁時下載、改動後自動上傳</small></div></div>
     <div class="irform"><button class="btn sm primary" data-sy="push">⬆ 上傳到雲端</button><button class="btn sm" data-sy="pull">⬇ 從雲端下載</button><button class="linkbtn" data-sy="leave">這台停止同步</button></div>`;
   h += `<h4>Telegram 收盤提醒</h4>`;
@@ -766,7 +766,7 @@ function syncHtml() {
   else if (!S.id) h += `<p class="note">先建立同步碼，提醒條件才會存到雲端讓收盤後的排程檢查。</p>`;
   else if (!S.tg) h += `<p class="note">1. 點下面的連結開啟 Telegram 機器人，按「開始（Start）」　2. 回到這裡按「完成綁定」。</p>
     <div class="irform"><a class="btn sm" href="https://t.me/${esc(C.bot || "")}?start=${esc(W.syncTok || "")}" target="_blank" rel="noopener">開啟 @${esc(C.bot || "機器人")}</a><button class="btn sm primary" data-sy="tgbind">完成綁定</button></div>`;
-  else h += `<p class="note">✅ 已綁定。每個交易日收盤後檢查「指標提醒」（${IR().filter(r => r.on).length} 條）與價格提醒，成立就通知。改了提醒條件會自動上傳。</p><div class="irform"><button class="btn sm" data-sy="tgtest">傳測試訊息</button><button class="linkbtn" data-sy="tgoff">解除綁定</button></div>`;
+  else h += `<p class="note">✓ 已綁定。每個交易日收盤後檢查「指標提醒」（${IR().filter(r => r.on).length} 條）與價格提醒，成立就通知。改了提醒條件會自動上傳。</p><div class="irform"><button class="btn sm" data-sy="tgtest">傳測試訊息</button><button class="linkbtn" data-sy="tgoff">解除綁定</button></div>`;
   return h + `</section>`;
 }
 async function syncClick(d) {
@@ -818,7 +818,7 @@ function chipxHtml() {
     <p class="note">未平倉 Put/Call 比＞100% 代表賣權（看跌保護）未平倉比買權多；常見的解讀是比例偏高時市場有支撐、偏低時過熱，但只是情緒參考。</p>
     <div class="tgrid"><div><h4>借券賣出最多（張）</h4>${tb(["股票", "當日借券賣出", "借券餘額"], lend.map(([c, v]) => `<tr><td>${a(c)}</td><td>${(v[0] ?? 0).toLocaleString()}</td><td>${(v[1] ?? 0).toLocaleString()}</td></tr>`).join(""))}</div>
     <div><h4>當沖比例最高（上市）</h4>${tb(["股票", "當沖比例"], dt.map(([c, v]) => `<tr><td>${a(c)}</td><td>${v}%</td></tr>`).join(""))}</div></div>
-    <p class="note">借券賣出多半是法人避險或套利，不一定是看空；當沖比例高代表短線交易熱絡、波動可能較大。${(X?.notes || []).length ? "⚠ " + X.notes.map(esc).join("；") : ""}</p></section>`;
+    <p class="note">借券賣出多半是法人避險或套利，不一定是看空；當沖比例高代表短線交易熱絡、波動可能較大。${(X?.notes || []).length ? "⚠︎ " + X.notes.map(esc).join("；") : ""}</p></section>`;
 }
 
 /* ---------- 個股頁：美股「達人觀點」加 13F 機構持股、國會交易；台股「籌碼總覽」加當沖比例、內部人申報 ---------- */
@@ -945,7 +945,7 @@ function twoVal(p) { // 最近一次申報的持股市值（有代號、有收�
 }
 function twoHtml(arg = "") {
   const X = W.two; if (!X) { twoLoad(); return `<p class="note" style="padding:16px">載入中…</p>`; }
-  if (X.err || !X.decl?.length) return `<p class="note" style="padding:16px">⚠ 台灣政治人物申報資料還沒有（${esc(X.err || "沒有資料")}）。資料由排程從監察院廉政專刊整理，每週更新。</p>`;
+  if (X.err || !X.decl?.length) return `<p class="note" style="padding:16px">⚠︎ 台灣政治人物申報資料還沒有（${esc(X.err || "沒有資料")}）。資料由排程從監察院廉政專刊整理，每週更新。</p>`;
   twoPxLoad();
   const P = twoPeople(), [kind, id] = arg.split(/:(.*)/s);
   const tag = t => `<span class="ctag ${t === "new" || t === "add" ? "many" : "one"}">${{ new: "新進", add: "增持", cut: "減持", sold: "出清" }[t]}</span>`;

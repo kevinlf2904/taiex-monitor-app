@@ -5,7 +5,9 @@ const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Acc
 export const num = v => (v == null || v === "" ? null : Number.isFinite(+v) ? +v : null);
 // 美股或其他 Yahoo 代號（不是台股數字代號）
 // 美股代號，也接受 Yahoo 的期貨（CL=F）、匯率（TWD=X）、加密貨幣（BTC-USD）、利率指數（^TNX）與美元指數（DX-Y.NYB），原物料外匯頁點進去才查得到
-export const isUS = c => (/^\^?[A-Z][A-Z0-9]{0,5}([.-][A-Z]{1,3}|=[FX])?$/.test(String(c || "")) || c === "DX-Y.NYB") && !/^(T00|O00)$/.test(c);
+// 「用 Yahoo 查的代號」：美股、指數、期貨匯率，加上日股（6981.T）、韓股（005930.KS／KQ）
+export const isJK = c => /^(\d{4}[A-Z0-9]?\.T|\d{6}\.K[SQ])$/.test(String(c || ""));
+export const isUS = c => (/^\^?[A-Z][A-Z0-9]{0,5}([.-][A-Z]{1,3}|=[FX])?$/.test(String(c || "")) || c === "DX-Y.NYB" || isJK(c)) && !/^(T00|O00)$/.test(c);
 export const US_NAMES = {
   AAPL: "蘋果", MSFT: "微軟", NVDA: "輝達", AMZN: "亞馬遜", GOOGL: "Alphabet", META: "Meta", TSLA: "特斯拉", AVGO: "博通", TSM: "台積電 ADR", AMD: "超微",
   NFLX: "Netflix", PLTR: "Palantir", INTC: "英特爾", SPCX: "SpaceX", MU: "美光", QCOM: "高通", ARM: "安謀", SMCI: "美超微", COST: "好市多", JPM: "摩根大通", BRK_B: "波克夏",

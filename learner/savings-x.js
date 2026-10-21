@@ -66,7 +66,7 @@
   async function holdRun() {
     const H = holdings(), out = $("hx-out"); if (!H.length) { out.innerHTML = `<p class="hint">庫存裡還沒有台股。到「看盤 → 庫存」新增持股（或匯入範例庫存），再回來按一次。</p>`; return; }
     out.innerHTML = `<p class="hint">抓 ${H.length} 檔的配息紀錄…</p>`;
-    let R; try { R = await yieldOf(H.map(h => h.code)); } catch (e) { out.innerHTML = `<p class="hint">⚠ ${esc(e.message)}</p>`; return; }
+    let R; try { R = await yieldOf(H.map(h => h.code)); } catch (e) { out.innerHTML = `<p class="hint">⚠︎ ${esc(e.message)}</p>`; return; }
     const nm = names(), rows = H.map(h => { const r = R.find(x => x.code === h.code), m = r ? monthCash(r) : {}; return { ...h, r, m, year: r ? r.cash12 * h.sh : 0, mv: r?.price ? r.price * h.sh : null }; });
     const year = rows.reduce((a, x) => a + x.year, 0), mv = rows.reduce((a, x) => a + (x.mv || 0), 0), cost = rows.reduce((a, x) => a + (x.cost ? x.cost * x.sh : 0), 0), goal = num("hx-goal") * 12;
     const byM = MON.map((_, i) => rows.reduce((a, x) => a + (x.m[i + 1] || 0) * x.sh, 0)), mx = Math.max(1, ...byM), y = mv ? year / mv : null, gap = Math.max(0, goal - year);
@@ -103,8 +103,8 @@
   async function histRun() {
     const code = $("hs-code").value.trim().toUpperCase(), from = $("hs-from").value || "2015-01", init = Math.max(0, num("hs-init")), mon = Math.max(0, num("hs-mon")), out = $("hs-out");
     if (!code) return; out.innerHTML = `<p class="hint">抓 ${esc(code)} 的歷史月線…</p>`;
-    let j; try { j = await getJ(`/api/annual?code=${encodeURIComponent(code)}&rows=1`); } catch (e) { out.innerHTML = `<p class="hint">⚠ ${esc(e.message)}</p>`; return; }
-    const A = (j.rows || []).filter(r => r[0] >= from), Px = new Map(j.rowsPx || []); if (A.length < 3) { out.innerHTML = `<p class="hint">⚠ ${esc(code)} 在 ${from} 之後的資料太少（最早 ${esc(j.first || "—")}）。</p>`; return; }
+    let j; try { j = await getJ(`/api/annual?code=${encodeURIComponent(code)}&rows=1`); } catch (e) { out.innerHTML = `<p class="hint">⚠︎ ${esc(e.message)}</p>`; return; }
+    const A = (j.rows || []).filter(r => r[0] >= from), Px = new Map(j.rowsPx || []); if (A.length < 3) { out.innerHTML = `<p class="hint">⚠︎ ${esc(code)} 在 ${from} 之後的資料太少（最早 ${esc(j.first || "—")}）。</p>`; return; }
     let sa = 0, sp = 0, inv = 0, peak = 0, mdd = 0; const cf = [], va = [], vp = [], vi = [], hasPx = A.every(r => Px.has(r[0]));
     A.forEach(([d, pa], i) => { const pp = Px.get(d), c = (i === 0 ? init : 0) + mon, last = i === A.length - 1;
       if (!last && c > 0) { sa += c / pa; if (pp) sp += c / pp; inv += c; cf.push(-c); } else cf.push(0);
@@ -144,7 +144,7 @@
     const codes = [...new Set($("mm-codes").value.toUpperCase().split(/[\s,，、]+/).filter(c => /^\d{4,6}[A-Z]?$/.test(c)))].slice(0, 12), amt = Math.max(0, num("mm-amt")), out = $("mm-out");
     if (!codes.length) { out.innerHTML = `<p class="hint">請填台股 ETF 代號，例如 0056 00878 00919。</p>`; return; }
     out.innerHTML = `<p class="hint">抓配息紀錄…</p>`;
-    let R; try { R = await yieldOf(codes); } catch (e) { out.innerHTML = `<p class="hint">⚠ ${esc(e.message)}</p>`; return; }
+    let R; try { R = await yieldOf(codes); } catch (e) { out.innerHTML = `<p class="hint">⚠︎ ${esc(e.message)}</p>`; return; }
     const rows = codes.map(c => { const r = R.find(x => x.code === c); if (!r?.price) return { c, r }; const sh = Math.floor(amt / r.price), m = monthCash(r); return { c, r, sh, m, cash: MON.map((_, i) => (m[i + 1] || 0) * sh) }; });
     const ok = rows.filter(x => x.cash), tot = MON.map((_, i) => ok.reduce((a, x) => a + x.cash[i], 0)), year = tot.reduce((a, b) => a + b, 0), empty = MON.map((_, i) => i + 1).filter(m => !tot[m - 1]), mx = Math.max(1, ...tot);
     const Y = await etfY(), nm = Object.fromEntries((Y.rows || []).map(r => [r.code, r.name])), sug = empty.map(m => [m, (Y.rows || []).filter(r => !codes.includes(r.code) && r.yield >= 3 && monthsOf(r).includes(m)).sort((a, b) => b.yield - a.yield).slice(0, 3)]);

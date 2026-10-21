@@ -42,7 +42,7 @@ function erTrend(c, us) {
   const E = ER(), J = E.tr[c]; if (!J) setTimeout(() => erTrLoad(c, us), 0);
   const go = `<button type="button" class="btn sm" data-sel="${esc(c)}">看個股 ›</button>`;
   if (!J || J.loading) return `<div class="ertr"><p class="note">載入營收、EPS 走勢…</p></div>`;
-  if (J.err) return `<div class="ertr"><p class="note">⚠ ${esc(J.err)}</p>${go}</div>`;
+  if (J.err) return `<div class="ertr"><p class="note">⚠︎ ${esc(J.err)}</p>${go}</div>`;
   let h = "";
   if (us) { const Q = J.fin?.q || [], Ea = J.earn || [], mg = r => (r.rev && r.ni != null ? +((r.ni / r.rev) * 100).toFixed(1) : null);
     if (Q.length) h += `<h4>單季營收<span class="note">柱＝營收（十億美元）、線＝淨利率</span></h4>${barLineSvg(Q.slice(-12).map(r => ({ label: r.p.slice(2), v: r.rev != null ? +(r.rev / 1e9).toFixed(2) : 0, y: mg(r) })), { bar: "var(--s3)", fmtV: v => v + "B" })}`;
@@ -74,7 +74,7 @@ const erLookup = us => { const E = ER(), c = E.look?.[us ? "us" : "tw"];
   return `<section class="mk erlook"><h3>查一檔的營收、EPS 走勢</h3><form class="oaq" data-erlook="${us ? "us" : "tw"}"><input name="c" placeholder="${us ? "美股代號（例 NVDA）" : "股票代號（例 2330）"}" value="${esc(c || "")}" aria-label="股票代號" autocapitalize="characters"><button class="btn sm primary">看走勢</button></form>${c ? erTrend(c, us) : ""}</section>`; };
 function renderEarnUs(E) {
   const U = E.us; if (!U || (!E.usLoading && Date.now() - U.got > 30 * 60e3)) setTimeout(erUsLoad, 0);
-  if (!U || U.err) return `<p class="note gnote">${U?.err ? "⚠ " + esc(U.err) : "抓美股財報行事曆…"}</p>`;
+  if (!U || U.err) return `<p class="note gnote">${U?.err ? "⚠︎ " + esc(U.err) : "抓美股財報行事曆…"}</p>`;
   const today = new Date(Date.now() - 4 * 3600e3).toISOString().slice(0, 10), big = r => !E.big || r[3] >= 100, md = d => d.slice(5).replace("-", "/");
   const past = U.rows.filter(r => r[4] != null && big(r)), next = U.rows.filter(r => r[4] == null && r[0] >= today && big(r));
   const V = E.usv, L = V === "up" ? next.slice().sort((a, b) => a[0].localeCompare(b[0]) || b[3] - a[3]) : V === "beat" ? past.filter(r => r[6] != null).sort((a, b) => b[6] - a[6]) : V === "miss" ? past.filter(r => r[6] != null).sort((a, b) => a[6] - b[6]) : past.slice().sort((a, b) => b[0].localeCompare(a[0]) || b[3] - a[3]);
@@ -97,7 +97,7 @@ function renderEarn() {
   if (W.off) { box.innerHTML = `<p class="note gnote">需要部署到網站才有財報資料。</p>`; return ""; }
   if (us) { box.innerHTML = `<div class="earn us">${renderEarnUs(E)}<p class="note" style="padding:4px 12px 12px">${foot}</p></div>`; return ""; }
   const D = E.data; if (!D || (!D.loading && Date.now() - D.at > 30 * 60e3)) setTimeout(erLoad, 0);
-  if (!D || D.err) { box.innerHTML = `<p class="note gnote">${D?.err ? "⚠ " + esc(D.err) : "向證交所、櫃買中心抓最新月營收與財報…"}</p>`; return ""; }
+  if (!D || D.err) { box.innerHTML = `<p class="note gnote">${D?.err ? "⚠︎ " + esc(D.err) : "向證交所、櫃買中心抓最新月營收與財報…"}</p>`; return ""; }
   const mk = E.mk, all = D.rows.filter(r => mk === "全部" || r[3] === mk), big = r => !E.min || (r[4] ?? 0) >= 1 || (r[9] ?? 0) >= 3; // 排除營收很小的公司（基期小，年增率容易失真）
   const seg = `<div class="erbar"><span class="mkseg">${["全部", "上市", "上櫃"].map(k => `<button data-ermk="${k}" aria-pressed="${mk === k}">${k}</button>`).join("")}</span>
     <label class="erchk"><input type="checkbox" data-ermin ${E.min ? "checked" : ""}> 排除小型公司（月營收 1 億以下）</label></div>`;
