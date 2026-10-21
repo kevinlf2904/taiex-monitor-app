@@ -155,6 +155,22 @@ test("Polymarket：分類、機率", async () => {
   assert.equal(normEvent({ id: 2, title: "Lakers vs Celtics", markets: [{ outcomes: "[\"Yes\",\"No\"]", outcomePrices: "[\"0.5\",\"0.5\"]" }] }), null);
 });
 
+test("證交所、櫃買開放資料：只連固定網域、代號欄位、個股篩選、資料集清單", async () => {
+  const { default: h, codeKey, filterRows, STOCK_SETS } = await import("../api/_lib/oapi.js"), { readFileSync } = await import("node:fs");
+  const call = async query => { let st, body; await h({ query }, { setHeader() {}, status(c) { st = c; return { json(j) { body = j; } }; } }); return { st, body }; };
+  for (const p of ["//evil.com/x", "/../x", "/a?b=1", "/a/b/c/d", "x"]) assert.equal((await call({ src: "twse", p })).st, 400, `擋掉 ${p}`);
+  assert.equal((await call({ src: "evil", p: "/opendata/t187ap45_L" })).st, 400);
+  assert.equal((await call({ stock: "2330;rm" })).st, 400);
+  assert.equal(codeKey({ 出表日期: "1", 公司代號: "2330" }), "公司代號"); assert.equal(codeKey({ Date: "1", SecuritiesCompanyCode: "6488" }), "SecuritiesCompanyCode"); assert.equal(codeKey({ Date: "1" }), null);
+  assert.deepEqual(filterRows([{ Code: "2330" }, { Code: "23301" }, { Code: "2317" }], { code: "2330" }), [{ Code: "2330" }]);
+  assert.equal(filterRows([{ Code: "2330", N: "台積電" }, { Code: "2317", N: "鴻海" }], { q: "鴻" }).length, 1);
+  // 前端的資料集清單：路徑都通過後端的格式檢查、沒有重複；個股常用資料都在清單裡
+  const cat = new Function(readFileSync("learner/oapi.js", "utf8").split("const OA_GROUPS")[0] + "; return OAPI_CAT;")();
+  assert.ok(cat.length > 300); assert.equal(new Set(cat.map(x => x[0] + x[1])).size, cat.length);
+  for (const x of cat) assert.match(x[1], /^\/[A-Za-z0-9_]+(\/[A-Za-z0-9_]+){0,2}$/);
+  for (const [, , a, b] of STOCK_SETS) { if (a) assert.ok(cat.some(x => x[0] === "上市" && x[1] === a), a); if (b) assert.ok(cat.some(x => x[0] === "上櫃" && x[1] === b), b); }
+});
+
 import { pick, topicOf, merge, parseSum } from "../scripts/macro-news.mjs";
 test("總經消息：分類、去重、只留一天內、同日合併、摘要解析", () => {
   assert.equal(topicOf("聯準會宣布降息一碼"), "利率"); assert.equal(topicOf("美國9月CPI年增2.9%"), "通膨"); assert.equal(topicOf("非農新增就業15萬"), "就業"); assert.equal(topicOf("新台幣升值2角"), "匯率");
