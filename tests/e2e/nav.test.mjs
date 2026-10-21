@@ -21,17 +21,17 @@ test("頂部只剩情報局、看盤、K線學堂、存股；學堂的課程與�
   }
 });
 
-test("情報局：四大情報獨立在情報局，看盤裡不重複；網址路由直接打開子頁", async () => {
+test("情報局：五大情報（含財報）獨立在情報局，看盤裡不重複；網址路由直接打開子頁", async () => {
   const { ctx, p, errs } = await open(B, S.url, "index.html#radar/matrix", { width: 1280 });
   let f = await frame(p);
   assert.equal(await p.evaluate(() => $("#tab-btn-intel").getAttribute("aria-selected")), "true");
   await p.waitForTimeout(300);
   assert.deepEqual(await f.evaluate(() => [W.lt, W.mf.view]), ["money", "bubble"]);
   const vis = () => f.evaluate(() => [...document.querySelectorAll("#lTabs [data-l]")].filter(b => !b.hidden).map(b => b.dataset.l).join());
-  assert.equal(await vis(), "money,ind,pod,cong");
+  assert.equal(await vis(), "money,earn,ind,pod,cong");
   // 切到看盤：同一個 iframe 換成看盤的分頁組，回到上次的看盤分頁
   await p.click("#tab-btn-watch"); await p.waitForTimeout(300);
-  assert.doesNotMatch(await vis(), /money|ind|pod|cong/); assert.ok(!["money", "ind", "pod", "cong"].includes(await f.evaluate(() => W.lt)));
+  assert.doesNotMatch(await vis(), /money|earn|ind|pod|cong/); assert.ok(!["money", "earn", "ind", "pod", "cong"].includes(await f.evaluate(() => W.lt)));
   // 看盤裡的連結跳到情報分頁：外層自動切到情報局
   await f.evaluate(() => setLt("cong")); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => $("#tab-btn-intel").getAttribute("aria-selected")), "true");

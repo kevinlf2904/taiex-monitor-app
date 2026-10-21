@@ -34,7 +34,7 @@ Object.assign(INDUSTRY_FIGS, {
       { t: "text", x: 101, y: 168, s: 7.5, label: "AI PC 門檻：NPU 40 TOPS 以上", muted: true },
       // 右：雲端 vs 邊緣
       { t: "group", x: 202, y: 14, w: 190, h: 170, label: "雲端 AI vs 邊緣 AI", c: "purple" },
-      { t: "line", pts: [[297, 32], [297, 132]], c: "gray", dash: true, w: 1 },
+      { t: "line", pts: [[297, 32], [297, 122]], c: "gray", dash: true, w: 1 },
       { t: "icon", x: 234, y: 30, s: 26, k: "cloud", c: "gray" },
       { t: "text", x: 247, y: 72, s: 8.5, b: true, label: "雲端 AI" },
       { t: "text", x: 247, y: 88, s: 7.5, label: "要連網、有延遲", muted: true },
@@ -101,23 +101,22 @@ Object.assign(INDUSTRY_FIGS, {
       { t: "text", x: 67, y: 100, s: 7.5, label: "新輸電線、變電所", muted: true },
       { t: "text", x: 67, y: 113, s: 7.5, label: "都要蓋好幾年", muted: true },
       { t: "text", x: 67, y: 126, s: 7.5, label: "併網審查大排隊", muted: true },
-      { t: "arrow", pts: [[100, 52], [134, 52]], c: "red", dash: true },
-      { t: "text", x: 116, y: 46, s: 7, c: "red", label: "來不及" },
+      { t: "arrow", pts: [[100, 62], [144, 62]], c: "red", dash: true },
+      { t: "text", x: 114, y: 56, s: 7, c: "red", label: "來不及" },
       { t: "text", x: 67, y: 152, s: 7.5, label: "AI 園區用電", muted: true },
       { t: "text", x: 67, y: 166, s: 7.5, b: true, label: "上百 MW～GW 級" },
       // 中右：現場發電
       { t: "group", x: 134, y: 14, w: 258, h: 170, label: "機房旁邊自己發電", c: "orange" },
       // 燃料電池
-      { t: "stack", x: 148, y: 34, w: 56, h: 52, n: 6, c: "orange" },
+      { t: "stack", x: 148, y: 38, w: 56, h: 48, n: 6, c: "orange" },
       { t: "text", x: 176, y: 98, s: 8, b: true, label: "燃料電池 SOFC" },
       { t: "text", x: 176, y: 110, s: 7, label: "電化學反應、不燃燒", muted: true },
-      { t: "badge", x: 148, y: 32, n: 3, c: "orange" },
+      { t: "badge", x: 210, y: 40, n: 3, c: "orange" },
       // 熱交換器
       { t: "rect", x: 148, y: 120, w: 56, h: 18, c: "red", fill: 0.15, r: 3 },
       { t: "wave", x: 152, y: 129, w: 48, n: 4, a: 2.5, c: "red", sw: 1.2 },
       { t: "text", x: 176, y: 150, s: 7, label: "熱交換器回收熱能", muted: true },
       { t: "badge", x: 208, y: 120, n: 2, c: "red" },
-      { t: "line", pts: [[176, 86], [176, 120]], c: "red", w: 1, dash: true },
       // 燃氣渦輪
       { t: "rect", x: 222, y: 36, w: 70, h: 30, c: "blue", fill: 0.15, r: 4 },
       { t: "path", d: "M230 44l18 4v6l-18 4zM252 46h22v14h-22zM274 44l12 -4v26l-12 -4z", c: "blue", fill: 0.3, w: 1 },
@@ -136,7 +135,7 @@ Object.assign(INDUSTRY_FIGS, {
       { t: "icon", x: 304, y: 64, s: 14, k: "bolt", c: "yellow" },
       // 天然氣管線
       { t: "line", pts: [[142, 170], [300, 170]], c: "green", w: 3 },
-      { t: "line", pts: [[160, 170], [160, 138]], c: "green", w: 1.6 },
+      { t: "line", pts: [[144, 170], [144, 129], [148, 129]], c: "green", w: 1.6 },
       { t: "line", pts: [[236, 170], [236, 126]], c: "green", w: 1.6 },
       { t: "line", pts: [[284, 170], [284, 126]], c: "green", w: 1.6 },
       { t: "text", x: 344, y: 173, s: 7.5, b: true, label: "天然氣管線" },
@@ -256,6 +255,5 @@ Object.assign(INDUSTRY_FIGS, {
       { tier: "下游", title: "支付應用", items: [
         { name: "支付、跨境匯款與商家收款", desc: "卡組織與支付平台用穩定幣結算，讓商家和個人更快收到錢", c: [["V", "Visa"], ["MA", "Mastercard"], ["PYPL", "PayPal"]] },
       ] },
-    ],
-    peers: ["us-crypto", "us-payment"] },
+    ] },
 });
