@@ -155,13 +155,13 @@ test("Polymarket：分類、機率", async () => {
   assert.equal(normEvent({ id: 2, title: "Lakers vs Celtics", markets: [{ outcomes: "[\"Yes\",\"No\"]", outcomePrices: "[\"0.5\",\"0.5\"]" }] }), null);
 });
 
-test("美股財報行事曆：Nasdaq 欄位解析（$、括號負數、N/A、市值門檻、驚喜%）", async () => {
+test("美股財報行事曆：Nasdaq 欄位解析（$、括號負數、N/A、市值門檻、驚喜% 只用 Nasdaq 的）", async () => {
   const { parseDay } = await import("../api/_lib/usearn.js");
   const R = parseDay("2026-10-20", [{ eps: "$1.66", surprise: "N/A", time: "time-pre-market", symbol: "GE", name: "GE Aerospace", marketCap: "$322,972,451,000", fiscalQuarterEnding: "Sep/2026", epsForecast: "$2.02" },
     { eps: "($0.25)", surprise: "-150", time: "time-after-hours", symbol: "RIVN", name: "Rivian", marketCap: "$15,000,000,000", epsForecast: "$0.10" },
     { symbol: "TINY", marketCap: "$1,000,000", eps: "$1" }, { lastYearEPS: "$1.99", symbol: "PG", name: "Procter & Gamble Company (The)", marketCap: "$366,539,833,000", epsForecast: "$1.89", time: "time-not-supplied" }]);
   assert.equal(R.length, 3, "市值 50 億美元以下不留");
-  assert.deepEqual(R[0].slice(1, 8), ["GE", "GE Aerospace", 323, 1.66, 2.02, -17.8, "盤前"]);
+  assert.deepEqual(R[0].slice(1, 8), ["GE", "GE Aerospace", 323, 1.66, 2.02, null, "盤前"], "Nasdaq 沒給驚喜% 時不自己換算（口徑可能不同）");
   assert.equal(R[1][4], -0.25); assert.equal(R[1][6], -150); assert.equal(R[1][7], "盤後");
   assert.deepEqual([R[2][2], R[2][4], R[2][9], R[2][7]], ["Procter & Gamble Company", null, 1.99, ""]);
 });

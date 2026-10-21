@@ -80,7 +80,7 @@ function renderEarnUs(E) {
   const mx = Math.max(...L.map(r => Math.abs(r[6] || 0)), 1);
   const row = (r, i) => { const op = E.open === r[1], up = V === "up";
     return `<li${op ? ' class="on"' : ""}><button data-ertr="${esc(r[1])}" data-erus="1" aria-expanded="${op}"><span class="rk">${i + 1}</span><span class="nm">${esc(r[2])}<small>${esc(r[1])}</small></span>${up ? `<i style="--w:0%"></i><b>${md(r[0])}</b>` : `<i class="${r[6] < 0 ? "neg" : ""}" style="--w:${Math.min(100, Math.abs(r[6] || 0) / mx * 100).toFixed(1)}%"></i><b class="${cls(r[6])}">${r[6] == null ? "—" : erPct(r[6])}</b>`}
-      <small class="ersub"><span class="ercode">${esc(r[1])}・</span>${up ? `${r[7] || "時間未定"}・預估 EPS ${erNum(r[5])}${r[9] != null ? `・去年同期 ${erNum(r[9])}` : ""}` : `${md(r[0])} ${r[7]}・實際 ${erNum(r[4])} vs 預估 ${erNum(r[5])}`}・市值 ${erNum(r[3] * 10, 0)} 億美元</small></button>${op ? erTrend(r[1], true) : ""}</li>`; };
+      <small class="ersub"><span class="ercode">${esc(r[1])}・</span>${up ? `${r[7] || "時間未定"}・預估 EPS ${erNum(r[5])}${r[9] != null ? `・去年同期 ${erNum(r[9])}` : ""}` : `${md(r[0])} ${r[7]}・實際 ${erNum(r[4])} vs 預估 ${erNum(r[5])}${r[6] == null ? "（驚喜% 待確認）" : ""}`}・市值 ${erNum(r[3] * 10, 0)} 億美元</small></button>${op ? erTrend(r[1], true) : ""}</li>`; };
   const beat = past.filter(r => r[6] != null && r[6] > 0).length, withS = past.filter(r => r[6] != null).length;
   return `<p class="note gnote">${esc(U.source || "")}・${md(U.from)}～${md(U.to)}・${new Date(Date.parse(U.at) + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/")} 更新</p>
     <div class="erbar"><label class="erchk"><input type="checkbox" data-erbig ${E.big ? "checked" : ""}> 只看市值 1,000 億美元以上</label></div>

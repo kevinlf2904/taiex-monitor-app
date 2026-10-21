@@ -8,9 +8,10 @@ const H = { "User-Agent": "Mozilla/5.0", Accept: "application/json", Origin: "ht
 const money = v => { const n = parseFloat(String(v ?? "").replace(/[$,\s]/g, "")); return Number.isFinite(n) ? n : null; }; // "$1.13"、"($0.25)" 是負數
 const eps = v => { const s = String(v ?? "").trim(); if (!s || /N\/A/i.test(s)) return null; const n = money(s.replace(/[()]/g, "")); return n == null ? null : /^\(/.test(s) ? -n : n; };
 const TIME = { "time-pre-market": "盤前", "time-after-hours": "盤後" };
+// 驚喜% 只用 Nasdaq 給的：剛公布、還沒標驚喜的那幾小時，eps 欄有時是 GAAP 數字，和預估（調整後 EPS）口徑不同，自己換算會失真
 export function parseDay(date, rows) {
   return (Array.isArray(rows) ? rows : []).map(r => { const cap = money(r.marketCap); if (!r.symbol || cap == null || cap < 5e9) return null; const a = eps(r.eps), f = eps(r.epsForecast), sp = parseFloat(r.surprise);
-    return [date, String(r.symbol).trim(), usName(String(r.symbol).trim(), String(r.name || "").replace(/\s*\(The\)$/, "").trim()), Math.round(cap / 1e8) / 10, a, f, Number.isFinite(sp) ? sp : a != null && f ? Math.round((a - f) / Math.abs(f) * 1000) / 10 : null, TIME[r.time] || "", String(r.fiscalQuarterEnding || ""), eps(r.lastYearEPS)]; }).filter(Boolean);
+    return [date, String(r.symbol).trim(), usName(String(r.symbol).trim(), String(r.name || "").replace(/\s*\(The\)$/, "").trim()), Math.round(cap / 1e8) / 10, a, f, Number.isFinite(sp) ? sp : null, TIME[r.time] || "", String(r.fiscalQuarterEnding || ""), eps(r.lastYearEPS)]; }).filter(Boolean);
 }
 // 過去 back 天到未來 ahead 天（跳過週末），每天一頁，同時最多 5 個請求
 export async function buildUsEarn(ms = 15000, back = 14, ahead = 14) {
