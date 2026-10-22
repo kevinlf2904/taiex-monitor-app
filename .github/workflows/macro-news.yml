@@ -1,10 +1,9 @@
-# 每日總經消息：台北早上 7:50（美股收盤後）與下午 5:50（台股收盤、國內數據公布後）各整理一次
+# 總經消息：每小時整理一次（美股盤中大漲大跌時，一小時內就看得到原因）
 # 抓 Google 新聞的總經標題、分類，有 GEMINI_API_KEY（或網站 /api/chat 可用）時加 AI 摘要，寫進 learner/data/macro-news.json
 name: macro-news
 on:
   schedule:
-    - cron: "50 23 * * *"
-    - cron: "50 9 * * *"
+    - cron: "47 * * * *"
   workflow_dispatch:
 permissions:
   contents: write

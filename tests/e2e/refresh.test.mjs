@@ -24,3 +24,19 @@ for (const width of [390, 1280]) test(`更新鍵有反應、會重抓 ${width}`,
   for (const k of ["scrRefresh"]) { const s = `#lTools [data-gx="${k}"]`; if (!(await p.$(s))) continue; await p.$eval(s, b => b.click()); await p.waitForFunction(() => /已更新/.test(document.getElementById("toast").textContent)); }
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+for (const width of [390, 1280]) test(`美股大盤「今天為什麼跌」：指數、盤勢頭條、每小時總經摘要、AI 整理 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  const J = (r, o) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o) }), now = Date.now(), day = new Date(now + 8 * 3600e3).toISOString().slice(0, 10);
+  await ctx.route("**/api/usmarket", r => J(r, { ok: true, date: "2026-10-22", session: "open", source: "測試", indices: [{ code: "^GSPC", name: "S&P 500", price: 5800, chg: -120, chgPct: -2.1 }, { code: "^IXIC", name: "那斯達克", price: 18000, chg: -560, chgPct: -3.0 }], sectors: [{ code: "XLK", name: "科技", chgPct: -3.5 }], megas: [{ code: "NVDA", name: "輝達", price: 120, chgPct: -5 }], macro: [] }));
+  await ctx.route("**/api/news**", r => J(r, { ok: true, items: [{ title: "美股重挫 那斯達克跌3% 晶片股遭拋售", source: "測試報", link: "https://example.com/a", at: now - 1800e3 }] }));
+  await ctx.route("**/data/macro-news.json", r => J(r, { updated: now, days: [{ date: day, at: now, us: { sum: { head: "通膨高於預期，降息延後，美股重挫", points: [], impact: "科技股承壓" }, items: [{ title: "美國CPI高於預期 美股大跌", topic: "盤勢", source: "測試", link: "https://example.com/b", at: now - 600e3 }] }, tw: { items: [] } }] }));
+  await p.evaluate(() => { showList(); W.mkReg = "us"; setLt("mkt"); });
+  await p.waitForFunction(() => /晶片股遭拋售/.test(document.querySelector("#lx .uswhy")?.innerText || ""));
+  const t = await p.textContent("#lx .uswhy");
+  assert.match(t, /美股今天為什麼跌？/); assert.match(t, /那斯達克 -3\.00%/); assert.match(t, /通膨高於預期，降息延後/); assert.match(t, /CPI高於預期 美股大跌/);
+  await p.click('#lx .uswhy [data-qai="uswhy"]'); await p.waitForFunction(() => /測試回覆/.test(document.querySelector("#lx .uswhy")?.innerText || ""));
+  if (process.env.SHOT) await p.locator("#lx .uswhy").screenshot({ path: `${process.env.SHOT}/uswhy-${width}.png` });
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "不橫向溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});

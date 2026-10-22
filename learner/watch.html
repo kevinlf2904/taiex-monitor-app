@@ -1142,7 +1142,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-146</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-147</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1916,7 +1916,7 @@ $("#listPane").addEventListener("click", e => {
   else if (t.closest("[data-hset]")) { const b = t.closest("[data-hset]"); W[b.dataset.hset] = b.dataset.v === "true"; store.set("watch:" + b.dataset.hset, W[b.dataset.hset]); renderList(); }
   else if (t.closest("[data-hopt]") && t.tagName === "INPUT") { const k = t.dataset.hopt; W[k] = t.checked; store.set("watch:" + k, W[k]); renderList(); }
   else if (t.closest("[data-hm]")) { W.holdMkt = t.closest("[data-hm]").dataset.hm; store.set("watch:hm", W.holdMkt); renderList(); pollList().then(renderList).catch(() => {}); }
-  else if (gx && gx.dataset.gx === "mktRefresh") { const f = { us: loadUsMkt, gl: loadGlobal, macro: loadMacro, poly: loadPoly, news: loadMnews, otc: otcLoad, lst: otcLoad, off: offLoad }[W.mkReg] || loadMkt; rfRun("mktRefresh", () => f(true)); }
+  else if (gx && gx.dataset.gx === "mktRefresh") { const f = { us: f => Promise.all([loadUsMkt(f), loadUsNews(f)]), gl: loadGlobal, macro: loadMacro, poly: loadPoly, news: loadMnews, otc: otcLoad, lst: otcLoad, off: offLoad }[W.mkReg] || loadMkt; rfRun("mktRefresh", () => f(true)); }
   else if (gx && gx.dataset.gx === "scrRefresh") rfRun("scrRefresh", () => loadScreen(true));
   else if (gx && gx.dataset.gx === "mfRefresh") rfRun("mfRefresh", () => { W.mf.days = W.mf.days.filter(d => d.date < W.today); W.mf.tried = new Set(); return loadMoney(10, true); });
   else if (t.closest("[data-hrtol]")) { W.hrTol = t.closest("[data-hrtol]").dataset.hrtol; store.set("watch:hrtol", W.hrTol); renderList(); }
@@ -4043,12 +4043,39 @@ function renderUsMkt(top) {
   const ST = { open: "盤中", pre: "盤前", closed: "已收盤" }[J.session] || "";
   let h = top + `<p class="note gnote">美股${ST}・${J.date ? J.date.replace(/-/g, "/") : ""}（美東時間）・${esc(J.source || "")}</p>`;
   h += `<div class="ixcards three us">${J.indices.map(card).join("")}</div>`;
+  h += usWhyHtml(J);
   if (J.macro?.length) h += sec("期貨與宏觀", `<ul class="mrows us">${J.macro.map(x => `<li ${sel(x) ? sel(x) + ' role="button" tabindex="0"' : ""}><span>${esc(x.name)}</span><b class="${cls(x.chg)}">${x.price?.toLocaleString(undefined, { maximumFractionDigits: x.code === "^TNX" ? 3 : 2 }) ?? "—"}${x.code === "^TNX" ? "%" : ""}</b><span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chgPct ?? 0).toFixed(2)}%</span>${spark(x.spark, (x.chg ?? 0) >= 0)}</li>`).join("")}</ul>`, "期貨與加密貨幣不能開 K 線");
   if (J.sectors?.length) { const mx = Math.max(0.3, ...J.sectors.map(x => Math.abs(x.chgPct || 0)));
     h += sec("類股表現", `<ul class="bars">${J.sectors.map(x => `<li ${sel(x)} role="button" tabindex="0"><span>${esc(x.name)} <small class="note">${x.code}</small></span><div><i class="${cls(x.chgPct)}" style="width:${Math.abs(x.chgPct || 0) / mx * 100}%"></i></div><b class="${cls(x.chgPct)}">${sgn(x.chgPct ?? 0, 2)}%</b></li>`).join("")}</ul>`, "SPDR 類股 ETF"); }
   if (J.megas?.length) h += sec("權值股", `<div class="mtiles">${J.megas.map(mtile).join("")}</div>`);
   h += hotSec(sec, "us");
   $("#lx").innerHTML = h;
+}
+// 美股為什麼漲跌：指數漲跌＋最新盤勢頭條（/api/news）＋每小時整理的總經消息（data/macro-news.json），可以請 AI 根據這些整理原因
+const US_WHY_Q = "美股 道瓊 那斯達克 收盤";
+async function loadUsNews(force = false) {
+  if (W.off || W.usnBusy || (!force && W.usn && Date.now() - W.usn.at < 600e3)) return; W.usnBusy = true;
+  try { const j = await getJ(`/api/news?q=${encodeURIComponent(US_WHY_Q)}`, true); W.usn = { items: (j.items || []).filter(x => !x.at || Date.now() - x.at < 36 * 3600e3).slice(0, 6), at: Date.now() }; } catch (e) { W.usn = { items: [], err: e.message, at: Date.now() }; } finally { W.usnBusy = false; }
+  if (W.lt === "mkt" && W.mkReg === "us") renderList();
+}
+function usWhyHtml(J) {
+  loadUsNews(); if (!W.mn) loadMnews();
+  const ix = (J.indices || []).filter(x => x.chgPct != null), big = ix.reduce((a, x) => (Math.abs(x.chgPct) > Math.abs(a?.chgPct ?? 0) ? x : a), null), mv = big?.chgPct ?? 0;
+  const D = W.mn?.days?.[0], S = D?.us?.sum, why = (D?.us?.items || []).filter(x => x.topic === "盤勢").slice(0, 3), news = W.usn?.items || [];
+  const hm = t => (t ? new Date(t + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " ") : "");
+  const L = [...why, ...news.filter(x => !why.some(y => y.title === x.title))].slice(0, 5);
+  const key = "uswhy"; QAI[key] = { done: renderList, ctx: () => [`美股（${J.date || ""}，${{ open: "盤中", pre: "盤前", closed: "已收盤" }[J.session] || ""}）：` + ix.map(x => `${x.name} ${sgn(x.chgPct, 2)}%`).join("、"),
+      J.sectors?.length ? "類股 ETF：" + [...J.sectors].sort((a, b) => (a.chgPct ?? 0) - (b.chgPct ?? 0)).map(x => `${x.name} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : "",
+      J.macro?.length ? "期貨與宏觀：" + J.macro.map(x => `${x.name} ${x.price ?? "—"}（${sgn(x.chgPct ?? 0, 2)}%）`).join("、") : "",
+      J.megas?.length ? "權值股：" + J.megas.map(x => `${x.name || x.code} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : "",
+      "最新新聞標題：\n" + [...L, ...(D?.us?.items || []).filter(x => !L.includes(x)).slice(0, 10)].map(x => `- ${x.title}（${x.source || ""} ${hm(x.at)}）`).join("\n")].filter(Boolean).join("\n"),
+    q: "請用繁體中文回答：1) 今天美股為什麼這樣走（只根據上面的新聞標題與漲跌數字，引用標題裡的原因，沒有寫到的不要猜）2) 哪些類股、權值股帶頭漲跌 3) 對明天台股可能的影響（哪些族群要留意）4) 接下來要追蹤的數據或事件。每項 2～3 句，語氣保守。" };
+  const title = Math.abs(mv) >= 1 ? `美股今天為什麼${mv < 0 ? "跌" : "漲"}？` : "美股今天的盤勢";
+  return `<section class="mk uswhy"><h3>${title}${big ? `<span class="note">${esc(big.name)} <b class="${cls(mv)}">${sgn(mv, 2)}%</b></span>` : ""}</h3>
+    ${S?.head ? `<p class="mn-sum"><b>${esc(S.head)}</b>${S.impact ? `<br><small class="note">可能影響：${esc(S.impact)}</small>` : ""}</p>` : ""}
+    ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener"><span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">${W.usnBusy || !W.usn ? "載入最新頭條…" : W.usn.err ? "⚠︎ " + esc(W.usn.err) : "還沒有相關頭條"}</p>`}
+    ${qAiBlock({ key, R: W.qai[key] }, `${ico("ai")}AI 整理漲跌原因`)}
+    <p class="note">頭條即時從 Google 新聞抓；總經消息每小時整理一次（大盤 → 總經消息）。</p></section>`;
 }
 // 方塊樹狀圖（squarified）：values 依大小排好，回傳每塊在 W×H 裡的位置（這裡用百分比）
 function treemap(values, W, H) {
@@ -4126,13 +4153,13 @@ async function loadMacro(force = false) {
 }
 // 每日總經消息：排程（scripts/macro-news.mjs）每天整理兩次存成 data/macro-news.json；檔案還沒有時，改抓即時頭條（沒有 AI 摘要）
 async function loadMnews(force = false) {
-  if (W.off || W.mnLoading || (!force && W.mn && Date.now() - W.mn.at < 1800e3)) return;
+  if (W.off || W.mnLoading || (!force && W.mn && Date.now() - W.mn.at < 600e3)) return;
   W.mnLoading = true; if (W.lt === "mkt" && W.mkReg === "news") renderList();
   try { let j = null; try { const r = await fetch("data/macro-news.json", { cache: "no-cache", signal: tmo(15000) }); j = r.ok ? await r.json() : null; } catch {}
     if (!j?.days?.length) { const [tw, us, world] = await Promise.all(["台灣 央行 景氣 出口", "聯準會 美國 CPI 就業", "歐洲央行 日本央行 中國經濟"].map(q => getJ(`/api/news?q=${encodeURIComponent(q)}`, true).then(x => x.items || []).catch(() => [])));
       if (!tw.length && !us.length) throw new Error("暫時拿不到總經新聞"); j = { live: true, days: [{ date: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), at: Date.now(), tw: { items: tw.slice(0, 14) }, us: { items: us.slice(0, 14) }, world: { items: world.slice(0, 14) } }] }; }
     W.mn = { ...j, at: Date.now() }; if (!j.days.some(d => d.date === W.mnDay)) W.mnDay = j.days[0].date; } catch (e) { W.mn = { err: e.message, at: Date.now() }; } finally { W.mnLoading = false; }
-  if (W.lt === "mkt" && W.mkReg === "news") renderList();
+  if (W.lt === "mkt" && (W.mkReg === "news" || W.mkReg === "us")) renderList();
 }
 // 總經消息的主題 → 對股市常見的影響（主題分類和 scripts/macro-news.mjs 的 TOPICS 一樣）
 const MN_IMPACT = { 利率: "降息（或預期降息）通常推升股市評價，對科技、成長股最有利；升息或「不降息」則讓高本益比股票承壓，壽險、銀行利差改善。",
@@ -4143,6 +4170,7 @@ const MN_IMPACT = { 利率: "降息（或預期降息）通常推升股市評價
   匯率: "台幣升值多半伴隨外資買超、台股偏多，但出口廠有匯損；台幣貶值常是外資賣超匯出，出口廠有匯兌收益。",
   債市: "美債殖利率上升會壓抑股票評價（科技股最敏感）；殖利率下降有利成長股與高股息股。",
   原物料: "油價上漲推升通膨、不利航空運輸，利多塑化與油氣；銅價上漲反映景氣與電網需求；金價上漲代表避險情緒升溫。",
+  盤勢: "美股大漲大跌常在隔天傳到台股：費半、那斯達克影響電子與半導體權值股，道瓊影響傳產與金融；先看報導寫的原因（數據、財報、利率、地緣政治），再看是一次性的事件還是趨勢改變。",
   市場: "國際經濟、央行與政策消息會改變市場對景氣與利率的預期，進而影響外資動向與台股。" };
 function renderMnews(top) {
   const J = W.mn;
@@ -4156,7 +4184,7 @@ function renderMnews(top) {
       ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener">${x.topic ? `<em>${esc(x.topic)}</em>` : ""}<span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">今天沒有抓到相關新聞。</p>`}</section>`; };
   $("#lx").innerHTML = top + `<div class="mn-days mkseg">${J.days.slice(0, 10).map(d => `<button type="button" data-mk="mnDay" data-v="${d.date}" aria-pressed="${d === D}">${d.date.slice(5).replace("-", "/")}</button>`).join("")}</div>
     <p class="note gnote">${J.live ? "排程整理的檔案還沒產生，先顯示即時頭條（沒有 AI 摘要）" : `整理於 ${hm(D.at)}${D.by ? "・AI 摘要只根據新聞標題，數字請點原文確認" : "・這次沒有 AI 摘要，只列出分類好的標題"}`}</p>`
-    + (typeof mxNewsHtml === "function" ? mxNewsHtml(J) : "") + side("tw", "台灣總經") + side("us", "美國總經") + (D.world ? side("world", "世界總經（歐、日、中國、原物料）") : "") + `<p class="note" style="padding:4px 12px 12px">來源：Google 新聞搜尋（每天早上 7:50、下午 5:50 整理）。只整理標題與連結，內容以原網站為準；不構成投資建議。</p>`;
+    + (typeof mxNewsHtml === "function" ? mxNewsHtml(J) : "") + side("tw", "台灣總經") + side("us", "美國總經") + (D.world ? side("world", "世界總經（歐、日、中國、原物料）") : "") + `<p class="note" style="padding:4px 12px 12px">來源：Google 新聞搜尋（每小時整理一次）。只整理標題與連結，內容以原網站為準；不構成投資建議。</p>`;
 }
 async function loadPoly(force = false) {
   if (W.off || W.pmLoading || (!force && W.pm && Date.now() - W.pm.at < 300000)) return;
