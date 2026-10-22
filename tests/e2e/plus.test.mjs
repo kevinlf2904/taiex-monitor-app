@@ -138,3 +138,21 @@ test("離線快取：開過一次之後，沒有網路也打得開，並顯示�
   await ctx.setOffline(false); await p.evaluate(() => dispatchEvent(new Event("online"))); assert.equal(await p.evaluate(() => !!document.getElementById("netBar")), false);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+for (const width of [390, 1280]) test(`供應鏈「生態群島」：電腦一列排完、手機一列一座，點島切換，不撐破畫面 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width, touch: width < 500 });
+  await p.evaluate(() => { showList?.(); setLt("ind"); W.indS.view = "themes"; W.indS.open = null; renderList(); });
+  await p.waitForSelector(".iisl"); await p.waitForFunction(() => /平均/.test($(".iislands").textContent), null, { timeout: 15000 });
+  // offsetTop／offsetWidth 不受進場動畫（transform）影響
+  const L = await p.evaluate(() => [...document.querySelectorAll(".iisl")].map(b => [b.offsetTop, b.offsetWidth, b.querySelector(".iisl-name").scrollWidth <= b.querySelector(".iisl-name").clientWidth + 1]));
+  assert.ok(L.length >= 5);
+  if (width > 1000) assert.equal(new Set(L.map(x => x[0])).size, 1, "電腦版所有群島排在同一列");
+  else { assert.equal(new Set(L.map(x => x[0])).size, L.length, "手機一列一座"); assert.ok(L.every(x => x[1] > 340), "手機版卡片佔滿寬度"); assert.ok(L.every(x => x[2]), "島名不會被截斷"); }
+  await p.locator('.iisl[data-iisl="semi"]').click(); // 用 locator：報價回來會重畫，每次點之前重新找
+  await p.waitForFunction(() => document.querySelector('.iisl[data-iisl="semi"]')?.getAttribute("aria-pressed") === "true");
+  assert.match(await p.textContent(".iisl-banner h3"), /半導體 生態群島/);
+  assert.match(await p.textContent(".iisl-stats"), /今日平均[\s\S]*漲／跌題材[\s\S]*最強題材/);
+  assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector(".iisl-top b")).backgroundColor), "rgba(0, 0, 0, 0)", "最強題材沒有被別的樣式套上底色");
+  assert.ok(await noOverflow(p));
+  await ctx.close(); assert.deepEqual(errs, []);
+});
