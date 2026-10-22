@@ -23,8 +23,11 @@ test("K 線放大：首頁裡直拿、橫拿、轉向都塞得進螢幕，縮小
     const m = await fit(F()); assert.equal(m.boxH, h, `${w}x${h} 放大框＝螢幕高 ${JSON.stringify(m)}`);
     assert.ok(m.canvasBottom <= m.limit, `${w}x${h} K 線畫在畫面內 ${JSON.stringify(m)}`); assert.ok(m.scroll <= 1, `${w}x${h} 不用捲動`); assert.ok(m.canvasW >= m.boxW - 40, `${w}x${h} 寬度填滿`);
   }
+  // 放大中首頁的頂部列、底部分頁列藏起來（iPad Safari 會把頂部列的毛玻璃畫在放大的圖上面，最上面變暗）
+  assert.deepEqual(await p.evaluate(() => [".top", ".tabs"].map(s => getComputedStyle(document.querySelector(s)).visibility)), ["hidden", "hidden"]);
   await F().evaluate(() => kChart.bar.querySelector("[data-z=expand]").click()); await p.waitForTimeout(500);
   assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector("#watchFrame")).position), "static", "縮小後還原");
+  assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector(".top")).visibility), "visible", "縮小後頂部列回來");
   assert.ok(await p.evaluate(h0 => Math.abs(document.querySelector("#watchFrame").offsetHeight - h0) < 400, h0), "iframe 高度回到內容高度");
   // Esc 也能縮小並還原 iframe
   await F().evaluate(() => kChart.bar.querySelector("[data-z=expand]").click()); await p.waitForTimeout(300); await F().evaluate(() => dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
@@ -37,5 +40,23 @@ test("K 線放大：單獨開看盤頁（電腦）也塞得進畫面", async () 
   await p.evaluate(() => select("2330")); await p.waitForTimeout(800); await p.evaluate(() => setDtab("tech")); await p.waitForFunction(() => typeof kChart !== "undefined" && kChart?.D?.length, null, { timeout: 15000 });
   await p.evaluate(() => kChart.bar.querySelector("[data-z=expand]").click()); await p.waitForTimeout(400);
   const m = await fit(p.mainFrame()); assert.equal(m.boxH, 1000); assert.ok(m.canvasBottom <= m.limit && m.scroll <= 1, JSON.stringify(m));
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+for (const [w, h] of [[1024, 1366], [1366, 1024]]) test(`K 線放大：iPad ${w}x${h}（右側抽屜）最上面沒有東西蓋住`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "index.html#watch", { width: w, touch: true });
+  await p.setViewportSize({ width: w, height: h }); await p.waitForTimeout(1200);
+  const F = () => p.frames().find(x => x.url().includes("watch.html"));
+  await F().evaluate(() => select("2330")); await p.waitForTimeout(800); await F().evaluate(() => setDtab("tech"));
+  await F().waitForFunction(() => typeof kChart !== "undefined" && kChart?.D?.length, null, { timeout: 15000 });
+  await p.evaluate(() => scrollTo(0, 400)); await F().evaluate(() => kChart.bar.querySelector("[data-z=expand]").click()); await p.waitForTimeout(500);
+  // 最上面一排每個點最上層都是放大框裡的東西；頂部列、分頁列、抽屜分頁列都藏起來
+  const top = await F().evaluate(() => [10, 40, 70].flatMap(y => [0.1, 0.5, 0.9].map(x => !!document.elementFromPoint(innerWidth * x, y)?.closest(".chart-fullscreen"))));
+  assert.ok(top.every(Boolean), JSON.stringify(top));
+  assert.deepEqual(await F().evaluate(() => [".ltabs-top", ".dtabs"].map(s => getComputedStyle(document.querySelector(s)).visibility)), ["hidden", "hidden"]);
+  assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector(".top")).visibility), "hidden");
+  const m = await fit(F()); assert.equal(m.boxH, h); assert.ok(m.canvasBottom <= m.limit && m.scroll <= 1, JSON.stringify(m));
+  await F().evaluate(() => kChart.bar.querySelector("[data-z=expand]").click()); await p.waitForTimeout(400);
+  assert.deepEqual(await F().evaluate(() => [".ltabs-top", ".dtabs"].map(s => getComputedStyle(document.querySelector(s)).visibility)), ["visible", "visible"], "縮小後都回來");
   await ctx.close(); assert.deepEqual(errs, []);
 });

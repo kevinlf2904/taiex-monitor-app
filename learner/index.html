@@ -34,6 +34,9 @@ try { const ls = localStorage; let st = JSON.parse(ls.getItem("kline:style") || 
   border-bottom: 1px solid var(--line);
 }
 .top-tools { display: flex; align-items: center; gap: 8px; }
+/* 看盤頁的圖表放大時（iframe 固定成螢幕大小），首頁的頂部列、分頁列、浮動按鈕先藏起來：iPad Safari 會把頂部列的毛玻璃畫在 iframe 上面 */
+html:is(:has(iframe[data-prev-style]), :has(.chart-fullscreen)) :is(.top, .wtabs, .tabs, #navBackFab, .chat-fab, #toTop) { visibility: hidden !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html:is(:has(iframe[data-prev-style]), :has(.chart-fullscreen)) body::before { display: none; }
 /* 狀態列底下固定一條底色，標題列捲走之後內容也不會疊在時間、電量上 */
 body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top, 0px); background: var(--bg); z-index: 60; pointer-events: none; }
 #drCheck.ready { animation: drReady 1.2s ease 2; } @keyframes drReady { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 35%, transparent); } }
@@ -894,7 +897,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.22-141</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.22-142</span></footer>
 
 <script src="core.js"></script>
 <script src="tschart.js"></script>
