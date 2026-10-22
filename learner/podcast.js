@@ -7,8 +7,8 @@
 const POD_SEED = [["股癌", "股癌"], ["兆華與股惑仔", "股惑仔"], ["游庭皓的財經皓角", "皓角"], ["理財達人秀", "理財達人秀"], ["Money&Love 投資頻道", "Money"], ["金唬男", "金唬男"]];
 const POD_CK = [1, 3, 7, 30, 60, 90, 180, 365]; // 檢查點（上架後幾天）：加上 1、3 天，最近的觀點也能很快結算
 const _podP = store.get("pod:prefs", null) || {};
-const POD = { view: "home", feed: null, key: null, hist: [], rank: _podP.rank === "contra" ? "contra" : "expert", cw: [7, 30, 90].includes(_podP.cw) ? _podP.cw : 30, sim: { m: [1, 3, 6, 12].includes(_podP.m) ? _podP.m : 3, mode: ["follow", "bull", "rev"].includes(_podP.mode) ? _podP.mode : "follow", hold: [7, 30, 90].includes(_podP.hold) ? _podP.hold : 30 }, cfg: null, feeds: new Map(), px: new Map(), pxBusy: false, job: null, q: "", found: null, qErr: null, busy: 0, booted: false, sid: 0, err: null };
-const podSavePrefs = () => store.set("pod:prefs", { rank: POD.rank, cw: POD.cw, ...POD.sim });
+const POD = { view: "home", feed: null, key: null, hist: [], cw: [7, 30, 90].includes(_podP.cw) ? _podP.cw : 30, sim: { m: [1, 3, 6, 12].includes(_podP.m) ? _podP.m : 3, mode: ["follow", "bull", "rev"].includes(_podP.mode) ? _podP.mode : "follow", hold: [7, 30, 90].includes(_podP.hold) ? _podP.hold : 30 }, cfg: null, feeds: new Map(), px: new Map(), pxBusy: false, job: null, q: "", found: null, qErr: null, busy: 0, booted: false, sid: 0, err: null };
+const podSavePrefs = () => store.set("pod:prefs", { cw: POD.cw, ...POD.sim });
 // 整理結果有兩個來源：排程整理好的（learner/data/podcast/index.json，打開就有）＋這個瀏覽器自己整理或手動新增的（localStorage）
 const podLocal = () => (POD.local ||= store.get("pod:sums", {}) || {});
 const podSave = () => { POD.merged = null; try { store.set("pod:sums", podLocal()); } catch { POD.err = "瀏覽器的儲存空間滿了，舊的整理結果可能存不下。"; } };
@@ -372,10 +372,10 @@ function podConsView() {
 function podRankView() {
   const shows = [...new Set([...podFollows().map(s => s.feed), ...Object.values(podSums()).map(s => s.feed)])].map(feed => ({ s: podShowOf(feed), st: podStats(podCalls(feed)) }));
   const ok = shows.filter(x => x.st.settled), few = shows.filter(x => !x.st.settled);
-  ok.sort((a, b) => (POD.rank === "expert" ? b.st.score - a.st.score : a.st.score - b.st.score));
+  ok.sort((a, b) => b.st.score - a.st.score);
   const row = (x, i) => `<tr data-pshow="${esc(x.s.feed)}" role="button"><td class="${i < 3 && x.st.settled && !x.st.few ? "ptop3" : ""}">${x.st.settled ? i + 1 : ""}</td><td>${podArt(x.s, "part sm")}</td><td>${esc(x.s.name)}</td><td class="num">${x.st.settled ? `${x.st.score.toFixed(1)}${x.st.few ? `<br><span class="note">樣本少（${x.st.settled}）</span>` : ""}` : `<span class="note">${x.st.settled ? "" : x.st.n ? "未結算" : "—"}</span>`}</td></tr>`;
-  return `<div class="ptop"><h2 class="ph2" style="margin:0">${POD.rank === "expert" ? "專家排行榜" : "反指標排行榜"}</h2><div class="seg" role="group">${[["expert", "專家排行榜"], ["contra", "反指標排行榜"]].map(([k, t]) => `<button data-prk="${k}" aria-pressed="${POD.rank === k}">${t}</button>`).join("")}</div></div>
-    <p class="note">${POD.rank === "expert" ? "依提及標的後續表現排名" : "提及後表現最弱的排前面"}。用自動整理（和你在這個瀏覽器整理）的單集計算；觀點上架 1 天後開始結算，已結算少於 5 筆的標示「樣本少」，排名僅供參考。</p>
+  return `<h2 class="ph2">專家排行榜</h2>
+    <p class="note">依提及標的後續表現排名。用自動整理（和你在這個瀏覽器整理）的單集計算；觀點上架 1 天後開始結算，已結算少於 5 筆的標示「樣本少」，排名僅供參考。</p>
     <table class="prank"><thead><tr><th>#</th><th></th><th>節目</th><th>分數</th></tr></thead><tbody>${[...ok, ...few].map(row).join("") || `<tr><td colspan="4" class="note">還沒有資料。</td></tr>`}</tbody></table>`;
 }
 function podFollowView() {
@@ -433,7 +433,6 @@ function podInit() {
     else if (g("[data-punf]")) { const feed = g("[data-punf]").dataset.punf; store.set("pod:follows", podFollows().filter(f => f.feed !== feed)); podRender(); }
     else if (g("[data-pqsrc]")) { POD.qsrc = g("[data-pqsrc]").dataset.pqsrc; POD.found = null; POD.qErr = null; podRender(); }
     else if (g("[data-pcw]")) { POD.cw = +g("[data-pcw]").dataset.pcw; podSavePrefs(); podRender(); }
-    else if (g("[data-prk]")) { POD.rank = g("[data-prk]").dataset.prk; podSavePrefs(); podRender(); }
     else if (g("[data-psim]")) { const b = g("[data-psim]"), k = b.dataset.psim; POD.sim[k] = k === "m" ? +b.dataset.v : b.dataset.v; podSavePrefs(); podRender(); }
     else if (g("[data-pbatch]")) { const m = g("[data-pbatch]").dataset.pbatch; podBatch(POD.feed, m === "audio" ? 3 : 5, m); }
     else if (g("[data-pshow]")) podGo("show", { feed: g("[data-pshow]").dataset.pshow });
