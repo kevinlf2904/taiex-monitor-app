@@ -1317,6 +1317,7 @@ function openStylePicker(setTheme) {
 
 // 嵌在別的頁面（iframe：首頁的看盤、存股）裡放大圖表時，把整個 iframe 固定成螢幕大小（避開瀏海與底部橫條）；
 // 不然「全螢幕」只會和 iframe 一樣高（整頁內容的高度，好幾千 px），手機直拿、橫拿、電腦都塞不進畫面。縮小時還原，看盤頁再回報一次高度
+// 放大時頂部列、分頁列、浮動按鈕藏起來（core.css 的 html:has(.chart-fullscreen)、index.html 的 html:has(iframe[data-prev-style])）
 function chartFrameSync() {
   let f = null; try { f = window.frameElement; } catch {} if (!f) return;
   if (document.querySelector(".chart-fullscreen")) {

@@ -113,8 +113,13 @@ button, select, input { font: inherit; color: inherit; }
   flex-direction: column !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch !important;
-  box-shadow: 0 0 50px rgba(0,0,0,.7) !important;
+  box-shadow: none !important;
+  visibility: visible !important;
 }
+/* 放大中：頂部列、分頁列、底部列、浮動按鈕都藏起來，也不留毛玻璃效果（iPad Safari 會把它們畫在放大的圖上面，最上面變暗、按鈕糊掉）；
+   右側抽屜的進場動畫（transform）也拿掉，放大框才是相對整個螢幕定位 */
+html:has(.chart-fullscreen) :is(.w-top, .ltabs-top, .ltabs, .dtabs, .qbar, .dbg, #toTop, #navBack, .chat-fab) { visibility: hidden !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html:has(.chart-fullscreen) .w-detail { animation: none !important; transform: none !important; }
 .chart-fullscreen .ph { padding: 6px 0 10px !important; flex-shrink: 0 !important; border-bottom: 1px solid var(--line) !important; }
 .chart-fullscreen .ts, .chart-fullscreen .chartbox { flex: 1 !important; width: 100% !important; min-height: 0 !important; }
 .chart-fullscreen .ts canvas, .chart-fullscreen .chartbox canvas { width: 100% !important; }
