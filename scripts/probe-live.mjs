@@ -87,6 +87,46 @@ if (process.argv[2] === "mops") {
       const i = t.indexOf("公司代號"); console.log(`\n### ${u} ${r.status} ${r.headers.get("content-type")} ${b.length} bytes\n${t.slice(0, 300)}\n…\n${t.slice(Math.max(0, i - 600), i + 2500).replace(/\s+/g, " ")}`); } catch (e) { console.log(u, "錯誤", e.message); } }
   process.exit(0);
 }
+if (process.argv[2] === "histprobe2") {
+  // 第二輪：先讀表單欄位名稱，再照欄位送出查詢（觀測站內部人轉讓、集保個股某一週）
+  const cut = (s, n = 900) => String(s).replace(/\s+/g, " ").slice(0, n), UA = { "User-Agent": "Mozilla/5.0" };
+  const fields = t => [...t.matchAll(/<(input|select)[^>]*name=["']?([\w.]+)["']?[^>]*>/gi)].map(m => `${m[1]}:${m[2]}${(m[0].match(/value=["']([^"']*)["']/) || [])[1] ? "=" + m[0].match(/value=["']([^"']*)["']/)[1].slice(0, 20) : ""}`);
+  for (const u of ["https://mopsov.twse.com.tw/mops/web/t56sb12", "https://mopsov.twse.com.tw/mops/web/t56sb12_q1"]) {
+    try { const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(30000) }); const t = await r.text(); console.log(`\n### 表單 ${u} ${r.status} ${t.length}\n${fields(t).join(" ")}\n${cut(t.slice(t.indexOf("<form"), t.indexOf("<form") + 2500), 2500)}`); } catch (e) { console.log(u, "錯誤", e.message); } }
+  const tryMops = async (u, body) => { try { const r = await fetch(u, { method: "POST", headers: { ...UA, "Content-Type": "application/x-www-form-urlencoded" }, body, signal: AbortSignal.timeout(30000) }); const t = await r.text(), i = t.indexOf("<table");
+    console.log(`\n### POST ${u.split("/").pop()} ${body} → ${r.status} ${t.length} 表格 ${(t.match(/<table/g) || []).length} 列 ${(t.match(/<tr/g) || []).length}\n${cut(t.slice(i < 0 ? 0 : i, (i < 0 ? 0 : i) + 1800), 1800)}`); } catch (e) { console.log("錯誤", e.message); } };
+  for (const b of ["encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=sii&sdate=114/03/01&edate=114/03/31", "encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=sii&date1=114/03/01&date2=114/03/31",
+    "encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=sii&year=114&month=03&day1=01&day2=31", "encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=sii&s_date=1140301&e_date=1140331"]) await tryMops("https://mopsov.twse.com.tw/mops/web/ajax_t56sb12", b);
+  // 集保：拿 token 與 cookie，再查 2330 最近第二個週次、一年前的週次
+  try { const r = await fetch("https://www.tdcc.com.tw/portal/zh/smWeb/qryStock", { headers: UA, signal: AbortSignal.timeout(30000) }), t = await r.text(), ck = (r.headers.get("set-cookie") || "").split(";")[0];
+    const tok = (t.match(/name="SYNCHRONIZER_TOKEN"[^>]*value="([^"]+)"/) || t.match(/value="([^"]+)"[^>]*name="SYNCHRONIZER_TOKEN"/) || [])[1], D = [...t.matchAll(/<option[^>]*value="(\d{8})"/g)].map(m => m[1]);
+    console.log(`\n### 集保表單欄位 ${fields(t.slice(t.indexOf("<form"), t.indexOf("</form>") + 7)).join(" ")}\ntoken ${tok ? tok.length + " 字" : "沒有"} cookie ${ck ? "有" : "沒有"}`);
+    for (const d of [D[1], D.at(-1)]) {
+      const body = new URLSearchParams({ SYNCHRONIZER_TOKEN: tok || "", SYNCHRONIZER_URI: "/portal/zh/smWeb/qryStock", method: "submit", firmNo: "", scaDate: d, sqlMethod: "StockNo", stockNo: "2330", stockName: "" });
+      const r2 = await fetch("https://www.tdcc.com.tw/portal/zh/smWeb/qryStock", { method: "POST", headers: { ...UA, "Content-Type": "application/x-www-form-urlencoded", Cookie: ck }, body, signal: AbortSignal.timeout(30000) }), t2 = await r2.text(), i = t2.indexOf("持股/單位數分級");
+      console.log(`\n### 集保 2330 ${d} → ${r2.status} ${t2.length} bytes\n${cut(t2.slice(Math.max(0, i - 200), i + 2200), 2400)}`);
+    } } catch (e) { console.log("集保錯誤", e.message); }
+  process.exit(0);
+}
+if (process.argv[2] === "histprobe") {
+  // 大戶國會補歷史資料：觀測站內部人持股轉讓事前申報（過去月份）、集保股權分散表過去週次、FinMind 全市場持股分級（看有沒有權限）
+  const cut = (s, n = 900) => String(s).replace(/\s+/g, " ").slice(0, n), UA = { "User-Agent": "Mozilla/5.0" };
+  const post = async (u, body) => { try { const r = await fetch(u, { method: "POST", headers: { ...UA, "Content-Type": "application/x-www-form-urlencoded" }, body, signal: AbortSignal.timeout(30000) }); const t = await r.text(), i = Math.max(t.indexOf("申報日期"), t.indexOf("申報人"), t.indexOf("公司代號"));
+    console.log(`\n### POST ${u.split("/").pop()} ${body.slice(0, 120)} → ${r.status} ${t.length} bytes 表格 ${(t.match(/<table/g) || []).length}\n${cut(t.slice(Math.max(0, i - 200), i + 1500), 1700)}`); } catch (e) { console.log(u, "錯誤", e.message); } };
+  for (const typ of ["sii", "otc"]) for (const u of ["https://mopsov.twse.com.tw/mops/web/ajax_t56sb12_q1", "https://mopsov.twse.com.tw/mops/web/ajax_t56sb12"]) {
+    await post(u, `encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=${typ}&year=114&smonth=3&emonth=3&sday=1&eday=31&co_id=`);
+    await post(u, `encodeURIComponent=1&run=Y&step=1&TYPEK=${typ}&year=114&month=03&begin_day=1&end_day=31&co_id=`);
+  }
+  for (const u of ["https://www.tdcc.com.tw/portal/zh/smWeb/qryStock", "https://www.tdcc.com.tw/smWeb/QryStockAjax.do"]) {
+    try { const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(30000) }); const t = await r.text(), d = [...t.matchAll(/<option[^>]*value="(\d{8})"/g)].map(m => m[1]);
+      console.log(`\n### GET ${u} → ${r.status} ${t.length} bytes 週次 ${d.length} 個：${d.slice(0, 3).join(",")}…${d.slice(-2).join(",")} token ${/SYNCHRONIZER_TOKEN/.test(t)} cookie ${(r.headers.get("set-cookie") || "").slice(0, 60)}`); } catch (e) { console.log(u, "錯誤", e.message); } }
+  const K = (process.env.FINMIND_TOKEN || "").trim(), fm = async q => { try { const r = await fetch(`https://api.finmindtrade.com/api/v4/data?${q}`, { headers: K ? { Authorization: `Bearer ${K}` } : {}, signal: AbortSignal.timeout(60000) }); const j = await r.json(); console.log(`\n### FinMind ${q} → ${r.status} ${j.msg || ""} ${j.data?.length ?? "?"} 筆 ${JSON.stringify(j.data?.[0] || "")}`); } catch (e) { console.log("FinMind 錯誤", e.message); } };
+  console.log("FINMIND_TOKEN", K ? "有設定" : "沒有");
+  await fm("dataset=TaiwanStockHoldingSharesPer&start_date=2025-10-17&end_date=2025-10-17");
+  await fm("dataset=TaiwanStockHoldingSharesPer&data_id=2330&start_date=2023-01-01&end_date=2023-02-01");
+  await fm("dataset=TaiwanStockHoldingSharesPer&data_id=2330&start_date=2019-01-01&end_date=2019-01-31");
+  process.exit(0);
+}
 if (process.argv[2] === "official") {
   // 「全部加入」用到的證交所、櫃買資料集：印筆數、欄位、第一筆（截短）
   const P = [["twse", "/opendata/t187ap04_L"], ["tpex", "/mopsfin_t187ap04_O"], ["twse", "/Announcement/BFZFZU_T"], ["twse", "/opendata/t187ap22_L"], ["tpex", "/mopsfin_t187ap22_O"], ["twse", "/opendata/t187ap23_L"], ["twse", "/opendata/t187ap24_L"], ["tpex", "/mopsfin_t187ap24_O"],
