@@ -431,7 +431,7 @@ function toolsClick(e) {
   if (b.hasAttribute("data-mfrun")) return mfRun();
   if (b.hasAttribute("data-mfbt")) return mfBacktest();
   if (d.tv && W.lt === "tools") { W.tv = d.tv; renderList(); navPush(); }
-  else if (d.tsel) select(d.tsel);
+  else if (d.tsel) W.lt === "cong" ? cxOpenTw(d.tsel) : select(d.tsel); // 大戶國會（內部人）裡點股票：先到台股個股頁看大戶全貌
   else if (d.mshare) mfShare(d.mshare);
   else if (d.tx === "sumre") { W.sum = null; W.dk = new Map(); renderList(); }
   else if (d.tx === "sumai") sumAI();
@@ -983,16 +983,6 @@ function twoHtml(arg = "") {
       ${mates.length ? `<div class="tw-sub"><h4>同為${twoGrp(p) === "gov" ? esc(p.org) : TWO_GRP.find(g => g[0] === twoGrp(p))[1]}</h4><div class="tw-chips">${mates.map(({ q }) => `<button type="button" data-cv="tw:p:${esc(q.pid)}">${esc(q.name)}</button>`).join("")}</div></div>` : ""}
       <div class="tw-sub"><h4>申報表 PDF</h4><div class="tw-chips">${decls.map(d => pdf(d.issue) ? `<a href="${esc(pdf(d.issue))}" target="_blank" rel="noopener">⤓ ${d.date} ${esc(d.kind.replace(/申報$/, ""))}申報</a>` : `<span class="note">${d.date} ${esc(d.kind)}（廉政專刊第 ${d.issue} 期）</span>`).join("")}</div></div>
       <details class="tw-more"><summary>申報後持股損益</summary>${twoPnlHtml(p)}</details></section>`;
-  }
-  if (kind === "s") {
-    const H = P.map(p => ({ p, h: p.hold.find(x => x.code === id), c: p.chg.find(x => x.code === id) })).filter(x => x.h || x.c).sort((a, b) => (b.h?.sh || 0) - (a.h?.sh || 0));
-    const tdHist = W.tdcc?.[id.slice(0, 2)]?.[id];
-    if (!tdHist && !W.tdccShardBusy && typeof tdccShard === "function") { W.tdccShardBusy = true; tdccShard(id.slice(0, 2)).finally(() => { W.tdccShardBusy = false; if (W.lt === "cong" && W.cv === "tw:s:" + id) renderList(); }); }
-    const cur = tdHist?.[tdHist.length - 1], prev = tdHist?.length >= 2 ? tdHist[tdHist.length - 2] : null;
-    const tchg = prev ? +(cur[1] - prev[1]).toFixed(2) : null;
-    const tdNote = cur ? `・集保千張大戶 <b>${cur[1].toFixed(2)}%</b>${tchg != null ? `（週 <span class="${cls(tchg)}">${tchg > 0 ? "+" : ""}${tchg}%</span>）` : ""}・散戶 50 張以下 ${cur[3] != null ? cur[3].toFixed(2) + "%" : "—"}` : "";
-    return `<section class="csec"><h3>${esc(nameOf(id))} ${esc(id)} <button class="btn sm" data-copen="${esc(id)}">在看盤開啟</button></h3><p class="note">${H.filter(x => x.h).length} 位政治人物最近一次申報持有；${H.filter(x => x.c && (x.c.t === "new" || x.c.t === "add")).length} 位比上一次申報增加、${H.filter(x => x.c && (x.c.t === "cut" || x.c.t === "sold")).length} 位減少${tdNote}。</p>
-      <div class="ctbl"><table><thead><tr><th>人物</th><th>持股</th><th>市值</th><th>和上次相比</th><th>申報日</th></tr></thead><tbody>${H.map(x => `<tr><td>${twoWho(x.p)}</td><td>${x.h ? twoLot(x.h.sh) : "0"}</td><td>${x.h && twoPx(id) != null ? twoAmt(x.h.sh * twoPx(id)) : "—"}</td><td>${x.c ? `${tag(x.c.t)} <span class="${x.c.d > 0 ? "up" : "down"}">${x.c.d > 0 ? "+" : ""}${twoLot(x.c.d)}</span>` : `<span class="note">${x.p.prev ? "不變" : "只有一次申報"}</span>`}</td><td>${x.p.last.date}</td></tr>`).join("")}</tbody></table></div></section>`;
   }
   // 首頁：持股市值排行榜（分組、各組合計、排行），下面是原本的熱門持股、持股變化、損益排行、最近刊登
   const q = (W.twoQ || "").trim(), grp = TWO_GRP.some(g => g[0] === W.twoGrp) ? W.twoGrp : "all", view = ["rank", "hot", "feed", "heat", "lag", "bt"].includes(W.twov) ? W.twov : "rank";

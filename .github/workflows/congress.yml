@@ -9,6 +9,9 @@ on:
       dump:
         description: "除錯：印出幾份解析不到交易的眾議院 PTR 原文（0＝正常更新）"
         default: "0"
+      year:
+        description: "補更早的年份：填年份（例如 2025）就讀那一年申報的全部 PTR，存到 learner/data/congress-arch/；空白＝正常更新"
+        default: ""
 permissions:
   contents: write
 concurrency:
@@ -17,7 +20,7 @@ concurrency:
 jobs:
   congress:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
       - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
@@ -29,11 +32,17 @@ jobs:
       - run: npm i --no-save --no-audit --no-fund pdfjs-dist@4.10.38
       - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
         run: node scripts/congress.mjs --dump ${{ github.event.inputs.dump }}
-      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+      - if: ${{ (!github.event.inputs.dump || github.event.inputs.dump == '0') && !github.event.inputs.year }}
         run: node scripts/congress.mjs
+      - if: ${{ (!github.event.inputs.dump || github.event.inputs.dump == '0') && github.event.inputs.year }}
+        env:
+          YEAR: ${{ github.event.inputs.year }}
+        run: node scripts/congress.mjs --year "$YEAR" --minutes 85
       - name: commit
         if: ${{ github.ref == 'refs/heads/main' && (!github.event.inputs.dump || github.event.inputs.dump == '0') }}
         env:
           COMMIT_NAME: congress
+          YEAR: ${{ github.event.inputs.year }}
         run: |
-          bash scripts/commit-data.sh "國會山：更新議員交易申報" learner/data/congress.json learner/data/congress-docs.json
+          if [ -n "$YEAR" ]; then bash scripts/commit-data.sh "國會山：補 ${YEAR//[^0-9]/} 年申報" learner/data/congress-arch
+          else bash scripts/commit-data.sh "國會山：更新議員交易申報" learner/data/congress.json learner/data/congress-docs.json; fi

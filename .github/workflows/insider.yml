@@ -8,6 +8,9 @@ on:
       dump:
         description: "除錯：1＝只印出抓到的原始資料、不存檔（0＝正常更新）"
         default: "0"
+      year:
+        description: "補更早的年份：填年份（例如 2025）就從公開資訊觀測站逐日查那一年的申報，存到 learner/data/insider-arch/；空白＝正常更新"
+        default: ""
 permissions:
   contents: write
 concurrency:
@@ -16,7 +19,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
       - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
@@ -26,11 +29,17 @@ jobs:
           node-version: 22
       - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
         run: node scripts/insider.mjs --dump
-      - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+      - if: ${{ (!github.event.inputs.dump || github.event.inputs.dump == '0') && !github.event.inputs.year }}
         run: node scripts/insider.mjs
+      - if: ${{ (!github.event.inputs.dump || github.event.inputs.dump == '0') && github.event.inputs.year }}
+        env:
+          YEAR: ${{ github.event.inputs.year }}
+        run: node scripts/insider.mjs --year "$YEAR" --minutes 85
       - name: commit
         if: ${{ github.ref == 'refs/heads/main' && (!github.event.inputs.dump || github.event.inputs.dump == '0') }}
         env:
           COMMIT_NAME: insider
+          YEAR: ${{ github.event.inputs.year }}
         run: |
-          bash scripts/commit-data.sh "內部人：更新持股轉讓申報" learner/data/insider.json
+          if [ -n "$YEAR" ]; then bash scripts/commit-data.sh "內部人：補 ${YEAR//[^0-9]/} 年申報" learner/data/insider-arch
+          else bash scripts/commit-data.sh "內部人：更新持股轉讓申報" learner/data/insider.json; fi

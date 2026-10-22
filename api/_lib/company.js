@@ -105,6 +105,10 @@ export function parseDist(rows) {
   const lv = r => { const s = String(r.HoldingSharesLevel), lo = /more than/i.test(s) ? lowerOf(s) + 1 : lowerOf(s); return lo; };
   return { d: last, levels: L.map(r => ({ level: String(r.HoldingSharesLevel).replace(/,/g, ""), lo: lv(r), people: num(r.people), pct: num(r.percent), shares: num(r.unit) })).filter(x => x.lo != null).sort((a, b) => a.lo - b.lo) };
 }
+// FinMind 持股分級要付費方案才查得到：改從集保網站查最近半年（api/_lib/tdcc.js），換成一樣的欄位
+export const tdccHolders = rows => rows.map(([d, p1000, p400, p50, , n1000]) => ({ d, b400: p400, b1000: p1000, people1000: n1000, r50: p50 }));
+export const tdccDist = D => (D ? { d: D.d, levels: D.levels.map(x => ({ level: String(x.range || "").replace(/,/g, ""), lo: lowerOf(x.range), people: x.people, pct: x.pct, shares: x.shares })).filter(x => x.lo != null) } : null);
+async function holdersFromTdcc(code) { const { tdccWeeks } = await import("./tdcc.js"), r = await tdccWeeks(code, { from: daysAgo(200) }); if (!r.rows.length) throw new Error("集保也查不到"); return { holders: tdccHolders(r.rows), dist: tdccDist(r.dist) }; }
 // 外資持股比例（每日）
 export function parseForeign(rows) {
   return rows.filter(r => r.date && num(r.ForeignInvestmentSharesRatio) != null).map(r => ({ d: r.date, ratio: num(r.ForeignInvestmentSharesRatio), limit: num(r.ForeignInvestmentUpperLimitRatio) })).sort((a, b) => a.d.localeCompare(b.d));
@@ -134,7 +138,8 @@ export default async function handler(req, res) {
     ["balance", () => finmind("TaiwanStockBalanceSheet", code, daysAgo(365 * 5 + 120)).then(parseBalance)],
     ["cash", () => finmind("TaiwanStockCashFlowsStatement", code, daysAgo(365 * 5 + 120)).then(parseCash)],
     ["dividend", () => finmind("TaiwanStockDividend", code, daysAgo(365 * 8)).then(parseDividend)],
-    ["holders", () => finmind("TaiwanStockHoldingSharesPer", code, daysAgo(200)).then(rows => { out.dist = parseDist(rows); return parseHolders(rows); })],
+    ["holders", () => finmind("TaiwanStockHoldingSharesPer", code, daysAgo(200)).then(rows => { out.dist = parseDist(rows); return parseHolders(rows); }).then(H => (H.length ? H : Promise.reject(new Error("沒有資料"))))
+      .catch(() => holdersFromTdcc(code).then(x => { out.dist = x.dist; out.source += "、集保結算所"; return x.holders; }))],
     ["foreign", () => finmind("TaiwanStockShareholding", code, daysAgo(200)).then(parseForeign)],
   ];
   const prof = profileOf(code);
