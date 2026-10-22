@@ -14,7 +14,9 @@ test("手機：所有分頁都能捲到底、再捲回最上面，手指放在�
     await p.evaluate(t => goTab(t), tab); await p.waitForTimeout(1200);
     if (lt) { await F().evaluate(l => { showList(); setLt(l); }, lt); await p.waitForTimeout(1000); }
     await p.evaluate(() => scrollTo(0, 0)); for (let i = 0; i < 3; i++) await drag(cdp, p, 195, 800, 250);
-    const down = await p.evaluate(() => scrollY); for (let i = 0; i < 5; i++) await drag(cdp, p, 195, 250, 800);
+    // 手指快速滑動後還有慣性捲動：等位置停下來再量；往回捲直到頂（慢的機器上慣性會多捲一段，固定滑 5 次可能還沒到頂）
+    const still = async () => { let a = -1, b = await p.evaluate(() => scrollY); while (a !== b) { a = b; await p.waitForTimeout(250); b = await p.evaluate(() => scrollY); } return b; };
+    const down = await still(); for (let i = 0; i < 12 && (await still()) > 0; i++) await drag(cdp, p, 195, 250, 800);
     assert.ok(down > 300, `${tab}/${lt} 往下捲：${down}`); assert.equal(await p.evaluate(() => scrollY), 0, `${tab}/${lt} 捲回最上面`);
   }
   const onEl = async (label, sel, inFrame = true) => {
