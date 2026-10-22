@@ -38,20 +38,23 @@ export function rankOf(all, date, n) {
     const q = a[a.length - 1]; if (!q || q[0] !== date || !(q[4] >= 100)) continue;
     let p = null; if (n === 1) p = a[a.length - 2]; else for (let i = a.length - 2, best = 10.5 * 864e5; i >= 0; i--) { const gap = Math.abs(Date.parse(a[i][0]) - target); if (gap < best) { best = gap; p = a[i]; } if (Date.parse(a[i][0]) < target - 10 * 864e5) break; }
     if (!p) continue; if (!from || p[0] < from) from = p[0];
-    chg.push([c, +(q[1] - p[1]).toFixed(2), q[1], +(q[3] - p[3]).toFixed(2), q[4] - p[4]]);
+    chg.push([c, +(q[1] - p[1]).toFixed(2), q[1], +(q[3] - p[3]).toFixed(2), p[4] > 0 ? q[4] - p[4] : null]); // 舊週次沒有總人數（0）就不算人數變化
   }
   chg.sort((x, y) => y[1] - x[1]);
   return chg.length ? { from, n: chg.length, up: chg.slice(0, 50), down: chg.slice(-50).reverse() } : null;
 }
 async function loadAll() { const by = new Map(); for (const f of (await readdir(DIR).catch(() => []))) if (/^\d{2}\.json$/.test(f)) { try { by.set(f.slice(0, 2), JSON.parse(await readFile(DIR + f, "utf8"))); } catch {} } return by; }
-// 補歷史：歷史最短的 N 檔（同樣短就先補股東人數多的），從集保網站查網站上有、資料裡沒有的週次
+// 要補的：歷史不到 50 週的，或有週次沒有總人數（之前從網站補的沒讀到合計列）
+export const needFix = a => a.length < 50 || a.some(r => !(r[4] > 0));
+// 補歷史：歷史最短的 N 檔（同樣短就先補股東人數多的），從集保網站查網站上有的週次（資料裡已有、但沒有總人數的也重查）
 async function backfill(by, n, minutes) {
-  const tried = JSON.parse(await readFile(`${DIR}bf.json`, "utf8").catch(() => "{}")), soon = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10); // 查過但網站也沒有更早資料的（新上市…），30 天內不再查
-  const t0 = Date.now(), L = [...by.values()].flatMap(o => Object.entries(o)).filter(([c, a]) => isCode(c) && a.length && a.length < 50 && !(tried[c] > soon)).sort((x, y) => x[1].length - y[1].length || (y[1].at(-1)[4] || 0) - (x[1].at(-1)[4] || 0)).slice(0, n);
+  const tried = JSON.parse(await readFile(`${DIR}bf.json`, "utf8").catch(() => "{}")), soon = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), FIX = "2026-10-23"; // 查過的 30 天內不再查；FIX 之前查過的（當時沒讀到總人數）要重查
+  const t0 = Date.now(), L = [...by.values()].flatMap(o => Object.entries(o)).filter(([c, a]) => isCode(c) && a.length && needFix(a) && !(tried[c] > soon && tried[c] >= FIX)).sort((x, y) => x[1].length - y[1].length || (y[1].at(-1)[4] || 0) - (x[1].at(-1)[4] || 0)).slice(0, n);
   let done = 0, rows = 0;
   for (const [c, a] of L) {
     if (Date.now() - t0 > minutes * 60e3) { console.log(`補歷史：時間到，先補到這裡（${done}／${L.length} 檔）`); break; }
-    try { const r = await tdccWeeks(c, { to: new Date(Date.parse(a[0][0]) - 864e5).toISOString().slice(0, 10) }); for (const row of r.rows) addRow(a, row); rows += r.rows.length; tried[c] = new Date().toISOString().slice(0, 10); } catch (e) { console.log(`  ${c} 失敗：${e.message}`); }
+    const zero = a.filter(r => !(r[4] > 0)).map(r => r[0]), to = new Date(Date.parse(zero.length ? zero.at(-1) : a[0][0]) + (zero.length ? 0 : -864e5)).toISOString().slice(0, 10);
+    try { const r = await tdccWeeks(c, { to }); for (const row of r.rows) addRow(a, row); rows += r.rows.length; tried[c] = new Date().toISOString().slice(0, 10); } catch (e) { console.log(`  ${c} 失敗：${e.message}`); }
     done++; if (done % 25 === 0) console.log(`補歷史：${done}／${L.length} 檔，新增 ${rows} 週`);
   }
   await writeFile(`${DIR}bf.json`, JSON.stringify(tried));
@@ -70,10 +73,12 @@ export async function main() {
   if (BF > 0) await backfill(by, BF, MIN);
   for (const [k, o] of by) await writeFile(`${DIR}${k}.json`, JSON.stringify(o));
   // 大戶動向排行：千張大戶持股比例變化（百分點）最多、最少各 50 檔；本週的放最上層（舊格式），4／13／26／52 週放 per
+  // 開放資料偶爾給到比資料裡還舊的一週（快取沒更新），排行一律用資料裡最新的一週
   const all = [...by.values()].flatMap(o => Object.entries(o)), per = {};
-  for (const n of PERIODS) { const x = rankOf(all, date, n); if (x) per[n] = x; }
-  const dates = [...new Set(all.flatMap(([, a]) => a.map(x => x[0])))].sort().reverse().slice(0, KEEP);
-  await writeFile(`${DIR}rank.json`, JSON.stringify({ date, ...(per[1] || { up: [], down: [], n: 0 }), per, dates, shards: [...by.keys()].sort() }));
-  await writeFile(`${DIR}meta.json`, JSON.stringify({ updated: new Date().toISOString(), date, count: rows.size, first: dates.at(-1), source: "集保結算所開放資料 1-5 集保戶股權分散表；更早的週次由集保網站查詢補齊" }));
+  const dates = [...new Set(all.flatMap(([, a]) => a.map(x => x[0])))].sort().reverse().slice(0, KEEP), top = dates[0] > date ? dates[0] : date;
+  if (top !== date) console.log(`::warning::開放資料的週次 ${date} 比資料裡最新的 ${top} 舊，排行用 ${top}`);
+  for (const n of PERIODS) { const x = rankOf(all, top, n); if (x) per[n] = x; }
+  await writeFile(`${DIR}rank.json`, JSON.stringify({ date: top, ...(per[1] || { up: [], down: [], n: 0 }), per, dates, shards: [...by.keys()].sort() }));
+  await writeFile(`${DIR}meta.json`, JSON.stringify({ updated: new Date().toISOString(), date: top, count: rows.size, first: dates.at(-1), source: "集保結算所開放資料 1-5 集保戶股權分散表；更早的週次由集保網站查詢補齊" }));
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch(e => { console.error(e); process.exit(1); });

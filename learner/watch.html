@@ -689,8 +689,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mrp-sum { text-align: center; font-size: 14px; line-height: 1.7; margin: 8px 12px; } .mrp-date { text-align: center; font: 500 20px var(--font-body); margin: 4px 0; } .mrp-range { width: calc(100% - 24px); margin: 4px 12px; } .mrp-ctl { display: flex; justify-content: center; gap: 8px; margin: 6px 12px 12px; }
 .iai .iaitxt { font-size: 14px; line-height: 1.75; }
 .ithemes { display: flex; flex-direction: column; gap: 10px; margin: 10px 12px; }
-/* 題材總覽：生態群島（電腦一列排完、手機改成一列一座：圓環在左、資訊在右）；和全站一樣無框：沒有底色、框線、陰影，區塊之間只用留白，選中用細底線；顏色都用主題變數 */
-.iislands { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 18px 16px; margin: 12px 12px 6px; }
+/* 題材總覽：生態群島（電腦一列 6 座、兩列排完；手機一列兩座：圓環在左、資訊在右）；和全站一樣無框：沒有底色、框線、陰影，區塊之間只用留白，選中用細底線；顏色都用主題變數 */
+.iislands { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 18px 16px; margin: 12px 12px 6px; }
+@media (min-width: 1100px) { .iislands { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 .iisl { --ink2: color-mix(in srgb, var(--ink) 72%, transparent); position: relative; display: grid; grid-template-areas: "hd" "ring" "br" "lead"; justify-items: stretch; gap: 8px; min-width: 0; padding: 8px 2px 10px; font: inherit; color: var(--ink); text-align: left; cursor: pointer;
   border: 0; border-radius: 0; background: transparent; box-shadow: none; transition: box-shadow .2s, opacity .2s; animation: iislIn .4s cubic-bezier(.16, 1, .3, 1) both; }
 .iislands:has(.iisl[aria-pressed="true"]) .iisl:not([aria-pressed="true"]) { opacity: .62; }
@@ -726,9 +727,13 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 @keyframes iislIn { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { .iisl { animation: none; transition: none; } }
 @media (max-width: 600px) {
-  .iislands { grid-template-columns: 1fr; gap: 12px; margin: 10px 10px 6px; }
-  .iisl { grid-template-columns: 72px minmax(0, 1fr); grid-template-areas: "ring hd" "ring br" "ring lead"; column-gap: 12px; row-gap: 6px; align-items: center; padding: 6px 2px 8px; }
-  .iisl-ring { width: 72px; height: 72px; }
+  .iislands { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin: 10px 10px 6px; }
+  .iisl { grid-template-columns: 54px minmax(0, 1fr); grid-template-areas: "ring hd" "ring br" "lead lead"; column-gap: 9px; row-gap: 5px; align-items: center; padding: 6px 0 8px; }
+  .iisl-hd { flex-direction: column; align-items: flex-start; gap: 1px; }
+  .iisl-name { font-size: 14px; }
+  .iisl-ring { width: 54px; height: 54px; }
+  .iisl-ring .v { font-size: 18px; transform: translateY(4px); } .iisl-ring .k { display: none; }
+  .iisl-lead { font-size: 11.5px; }
   .iisl-banner { grid-template-columns: 1fr; margin: 8px 10px 10px; padding: 4px 2px; }
   .iisl-stats { display: grid; grid-template-columns: auto auto minmax(0, 1fr); justify-content: stretch; gap: 14px; }
 }
@@ -1131,7 +1136,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-142</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-143</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1193,6 +1198,7 @@ tr.on td { background: var(--surface-2); }
 <script src="brief.js"></script>
 <script src="fundx.js"></script>
 <script src="figx.js"></script>
+<script src="relx.js"></script>
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
@@ -3452,12 +3458,16 @@ function indFigsLoad() {
     sc.onload = () => { indFigsLoad.done = true; ok(); if (W.lt === "ind") renderInd(); }; sc.onerror = () => { indFigsLoad.p = null; ok(); }; document.head.appendChild(sc); }));
 }
 const IND = INDUSTRY_MAP, INDT = new Map(IND.themes.map(t => [t.id, t])), MK_NAME = { tw: "台", us: "美", jp: "日", kr: "韓" }, MK_TAG = { tw: "TW", us: "US", jp: "JP", kr: "KR" };
-const IND_COL = { "IC 設計": "#f59e0b", "半導體製造": "#6366f1", "半導體材料": "#8b5cf6", "半導體設備": "#8b5cf6", PCB: "#f97316", 記憶體: "#818cf8", 電子零組件: "#64748b", "AI 伺服器": "#38bdf8", 散熱: "#22d3ee", 電源: "#eab308", 網通: "#0ea5e9", 能源: "#84cc16", 機器人: "#14b8a6", 汽車: "#ef4444", 雲端: "#a78bfa", 資料中心: "#2dd4bf", 光電: "#f472b6", 電子代工: "#60a5fa", 通路: "#94a3b8", 環保: "#4ade80", 工業: "#fb923c", 醫療: "#f87171", 航運: "#38bdf8", 原物料: "#d97706", 營建: "#a8a29e", 金融: "#facc15", 國防: "#65a30d", 航太: "#7dd3fc", 消費電子: "#818cf8", 量子運算: "#c084fc", 軟體: "#22d3ee", 資安: "#34d399", 網路平台: "#f472b6", 房地產: "#a8a29e" };
+const IND_COL = { "IC 設計": "#f59e0b", "半導體製造": "#6366f1", "半導體材料": "#8b5cf6", "半導體設備": "#8b5cf6", PCB: "#f97316", 記憶體: "#818cf8", 電子零組件: "#64748b", "AI 伺服器": "#38bdf8", 散熱: "#22d3ee", 電源: "#eab308", 網通: "#0ea5e9", 能源: "#84cc16", 機器人: "#14b8a6", 汽車: "#ef4444", 雲端: "#a78bfa", 資料中心: "#2dd4bf", 光電: "#f472b6", 電子代工: "#60a5fa", 通路: "#94a3b8", 環保: "#4ade80", 工業: "#fb923c", 醫療: "#f87171", 航運: "#38bdf8", 原物料: "#d97706", 營建: "#a8a29e", 金融: "#facc15", 國防: "#65a30d", 航太: "#7dd3fc", 消費電子: "#818cf8", 量子運算: "#c084fc", 軟體: "#22d3ee", 資安: "#34d399", 網路平台: "#f472b6", 房地產: "#a8a29e", 遊戲娛樂: "#c084fc", 民生消費: "#e879f9", 觀光餐飲: "#fb7185", 紡織製鞋: "#f0abfc", 運動休閒: "#2dd4bf", 商社: "#38bdf8", 造船: "#0ea5e9" };
 const indCol = t => IND_COL[t.cat] || "#94a3b8";
 const IND_ICON = { chip: "M7 7h10v10H7zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4", code: "M8 7l-5 5 5 5M16 7l5 5-5 5", home: "M3 11l9-7 9 7v9h-6v-6H9v6H3z", layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17l9 5 9-5",
   wave: "M4 12a8 8 0 0 1 16 0M7 12a5 5 0 0 1 10 0M12 12h.01", server: "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01", bolt: "M13 2L4 14h7l-1 8 9-12h-7z", fan: "M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0M12 10c0-4 4-6 6-4M14 12c4 0 6 4 4 6M12 14c0 4-4 6-6 4M10 12c-4 0-6-4-4-6",
   link: "M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1", memory: "M3 8h18v8H3zM7 8v8M11 8v8M15 8v8M5 16v3M19 16v3", factory: "M3 21V10l6 4V10l6 4V6l6 4v11z", globe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18",
-  battery: "M3 8h15v8H3zM18 11h3v2h-3M6 11v2M9 11v2", wind: "M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8", robot: "M8 8h8v8H8zM12 4v4M10 11h.01M14 11h.01M6 12H4M20 12h-2M10 16v4M14 16v4", sat: "M4 20l4-4M13 7l4 4M9 11l4-4 4 4-4 4zM6 14a4 4 0 0 0 4 4", car: "M5 16h14l-1-5-3-3H9l-3 3zM7 19a1 1 0 1 0 0-2M17 19a1 1 0 1 0 0-2" };
+  battery: "M3 8h15v8H3zM18 11h3v2h-3M6 11v2M9 11v2", wind: "M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8", robot: "M8 8h8v8H8zM12 4v4M10 11h.01M14 11h.01M6 12H4M20 12h-2M10 16v4M14 16v4", sat: "M4 20l4-4M13 7l4 4M9 11l4-4 4 4-4 4zM6 14a4 4 0 0 0 4 4", car: "M5 16h14l-1-5-3-3H9l-3 3zM7 19a1 1 0 1 0 0-2M17 19a1 1 0 1 0 0-2",
+  shop: "M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6", game: "M6 8h12a4 4 0 0 1 4 4v1a3 3 0 0 1-5.5 1.7L15 13H9l-1.5 1.7A3 3 0 0 1 2 13v-1a4 4 0 0 1 4-4zM7 10v4M5 12h4M16 11h.01M18 13h.01", ship: "M3 15h18l-3 5H6zM6 15V9h12v6M12 9V4",
+  bank: "M3 9l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 21h18", shield: "M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z", truck: "M2 7h12v9H2zM14 10h4l3 3v3h-7M6 19a1.5 1.5 0 1 0 0-3M17 19a1.5 1.5 0 1 0 0-3",
+  pill: "M5 13l6-6a4 4 0 0 1 6 6l-6 6a4 4 0 0 1-6-6zM8 10l6 6", display: "M3 4h18v12H3zM9 20h6M12 16v4", bike: "M6 18a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M18 18a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M6 14.5l4-7h5l3 7M10 7.5l2 7",
+  shirt: "M8 3l-5 3 2 4 3-1v12h8V9l3 1 2-4-5-3c-1 2-2 3-4 3s-3-1-4-3z", food: "M3 12h18a9 9 0 0 1-18 0zM12 8V4M8 9V6M16 9V6" };
 const indIcon = (t, sz = 22) => `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${IND_ICON[t.icon] || IND_ICON.chip}"/></svg>`;
 // 題材的公司：segs 加上圖解包裡價值鏈（chain）提到的公司
 const indCodes = t => [...new Set([...t.segs.flatMap(g => g.c.map(x => x[0])), ...(indXref(t.id)?.cc || (indFig(t)?.chain || []).flatMap(g => g.items.flatMap(i => i.c.map(x => x[0]))))])];
@@ -3494,11 +3504,18 @@ function indCard(t, fav) {
     <h3>${esc(t.cat)}<span>｜</span>${esc(t.name)}</h3><p>${esc(t.desc)}</p><button class="igo" data-iopen="${t.id}">探索供應鏈地圖 →</button></article>`;
 }
 // 題材總覽：依產業類別聚成幾座「群島」，圓環每一段是一個題材（顏色＝今日平均漲跌）
-const IND_ISL = [["ai", "AI 算力", "#38bdf8", ["AI 伺服器", "散熱", "電源", "資料中心", "雲端", "網通", "光電", "軟體", "資安", "網路平台"]],
-  ["semi", "半導體", "#6366f1", ["IC 設計", "半導體製造", "半導體材料", "半導體設備", "記憶體", "PCB", "電子零組件", "電子代工", "量子運算", "消費電子", "通路"]],
-  ["energy", "能源綠電", "#84cc16", ["能源", "環保", "原物料", "營建", "房地產"]],
-  ["move", "移動與機器人", "#14b8a6", ["機器人", "汽車", "工業", "航運"]],
-  ["def", "國防航太", "#7dd3fc", ["國防", "航太"]], ["etc", "其他", "#94a3b8", []]];
+const IND_ISL = [["ai", "AI 算力", "#38bdf8", ["AI 伺服器", "散熱", "電源", "資料中心", "雲端", "網通"]],
+  ["semi", "半導體", "#6366f1", ["IC 設計", "半導體製造", "半導體材料", "半導體設備", "記憶體", "量子運算"]],
+  ["elec", "電子零組件", "#f97316", ["PCB", "電子零組件", "電子代工", "消費電子", "通路", "光電"]],
+  ["soft", "軟體網路", "#22d3ee", ["軟體", "資安", "網路平台", "遊戲娛樂"]],
+  ["energy", "能源原物料", "#84cc16", ["能源", "環保", "原物料", "營建", "房地產"]],
+  ["move", "移動機器人", "#14b8a6", ["機器人", "汽車", "工業"]],
+  ["trans", "運輸貿易", "#0ea5e9", ["航運", "造船", "商社"]],
+  ["def", "國防航太", "#7dd3fc", ["國防", "航太"]],
+  ["fin", "金融", "#facc15", ["金融"]],
+  ["health", "醫療健康", "#f87171", ["醫療"]],
+  ["consumer", "民生消費", "#e879f9", ["民生消費", "觀光餐飲", "紡織製鞋", "運動休閒"]],
+  ["etc", "其他", "#94a3b8", []]];
 const indIslOf = t => (IND_ISL.find(x => x[3].includes(t.cat)) || IND_ISL[IND_ISL.length - 1])[0];
 const indPctCol = p => (p == null ? "var(--line)" : p >= 0 ? "var(--up)" : "var(--down)");
 const indPctTxt = p => (p == null ? "" : `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`);
@@ -3819,7 +3836,7 @@ function renderInd() {
   const S = W.indS, fav = indFav(); let h = "";
   const T = S.open && INDT.get(S.open);
   // 上排選單：題材內頁也留著（之前點進圖解後選單就不見了），點了離開內頁到那個分頁
-  const menu = `<div class="seg scrseg" role="group" aria-label="供應鏈題材地圖">${[["themes", "題材總覽"], ["network", "產業網絡"], ["gallery", "產業圖解"], ["news", "產業新聞"], ["fav", "收藏"]].map(([k, t]) => `<button data-iview="${k}" aria-pressed="${S.view === k}">${t}${k === "fav" && fav.size ? ` ${fav.size}` : ""}</button>`).join("")}</div>`;
+  const menu = `<div class="seg scrseg" role="group" aria-label="供應鏈題材地圖">${[["themes", "題材總覽"], ["network", "產業網絡"], ["gallery", "產業圖解"], ["rel", "關聯"], ["news", "產業新聞"], ["fav", "收藏"]].map(([k, t]) => `<button data-iview="${k}" aria-pressed="${S.view === k}">${t}${k === "fav" && fav.size ? ` ${fav.size}` : ""}</button>`).join("")}</div>`;
   if (T) { // 題材內頁
     const a = indAvg(T);
     h += menu + `<div class="ihead" style="--ic:${indCol(T)}"><button class="btn sm" data-iopen="">‹ 返回</button><span class="iic">${indIcon(T)}</span><div><small>${esc(T.cat)}・${MK_TAG[T.mk]}</small><h2>${esc(T.name)}</h2></div>
@@ -3828,7 +3845,7 @@ function renderInd() {
       ${(F => F ? `<section class="iflow ifig"><h4>原理圖解${figItems(T).length ? "" : ` <button class="ilink" data-izoom="${T.id}">⤢ 放大</button>`}</h4><div class="izbtn figi">${figSvg(F.fig, { id: "d-" + T.id })}</div>${figCtl(T)}${F.fig.alt ? `<p class="note figalt">${esc(F.fig.alt)}</p>` : ""}</section>
         <section class="iseg ihow"><h4>原理說明 <span class="note">虛線底的名詞可以點，看解釋</span></h4>${figHowHtml(F, T)}</section>
         ${F.trends?.length ? `<section class="iseg itrend"><h4>產業趨勢</h4><div class="itrends">${F.trends.map((x, i) => `<div class="itrc"><span>${i + 1}</span><p>${figGl(x, T)}</p></div>`).join("")}</div></section>` : ""}${figQuiz(T)}` : "")(indFig(T))}
-      ${indChain(T)}${indGlobal(T)}${inewsTheme(T)}
+      ${indChain(T)}${indGlobal(T)}${relTheme(T)}${inewsTheme(T)}
       <section class="iflow"><h4>流程</h4>${flowSvg(T, { cols: isMobile() ? 2 : 3, w: isMobile() ? 330 : 560 })}</section>${indAiBox(T)}`
       + `<p class="note gnote">名單是常被提到的代表公司，不是完整名單；角色是簡化說明，實際營收比重請看財報。</p>`;
     const ff = !!document.activeElement?.matches?.("[data-ffind]");
@@ -3838,6 +3855,7 @@ function renderInd() {
   }
   h += menu;
   if (S.view === "news") h += inewsView();
+  else if (S.view === "rel") h += relView();
   else if (S.view === "network") {
     const net = IND.networks.find(n => n.id === S.net) || IND.networks[0], F = S.focus && INDT.get(S.focus);
     h += `<p class="note gnote">一張圖看整條產業怎麼連動：${S.nstyle === "layer" ? "由上往下是上游到下游；點一個題材聚焦它的直接上游（橘）和下游（藍），再點一次取消。" : "點一個題材會換到中心，上半部是上游、下半部是下游。"}</p><div class="ichips" style="margin:0 12px">${IND.networks.map(n => `<button class="ichip" data-inet="${n.id}" aria-pressed="${n.id === net.id}">${esc(n.name)}</button>`).join("")}</div>

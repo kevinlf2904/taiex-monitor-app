@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { normRow, parseMopsDay } from "../scripts/insider.mjs";
 import { mergeRows, compare, parseInfoTable } from "../scripts/sec13f.mjs";
-import { parseTdcc, rankOf, addRow } from "../scripts/tdcc.mjs";
+import { parseTdcc, rankOf, addRow, needFix } from "../scripts/tdcc.mjs";
 import { parseWeek, weekRow, tokenOf, datesOf, tdccWeeks } from "../api/_lib/tdcc.js";
 import { tdccHolders, tdccDist } from "../api/_lib/company.js";
 import { lendRow } from "../scripts/chipx.mjs";
@@ -591,6 +591,10 @@ test("集保網站查詢：解析分級表、週資料欄位和排程一樣、to
   assert.equal(parseWeek(page("t", 0)), null, "查無此資料");
   const W = parseWeek(page("t", 1)); assert.equal(W.levels.length, 7);
   assert.deepEqual(weekRow("2026-10-16", W), ["2026-10-16", 84.56, 86.06, 5, 3098860, 1476]);
+  // 網站的合計列有時沒有序號：用「合計」認；真的沒有合計列就把 1～15 級人數加起來
+  const W2 = parseWeek(page("t", 1).replace('<td align="center">17</td>', '<td align="center"></td>')); assert.equal(W2.levels.at(-1).lv, 17);
+  assert.equal(weekRow("d", { levels: W.levels.filter(x => x.lv !== 17) })[4], 2459344 + 446137 + 1000 + 300 + 1476);
+  assert.ok(needFix([["2026-01-02", 1, 1, 1, 0, 1], ...Array(55).fill(["d", 1, 1, 1, 5, 1])]), "有週次沒有總人數要重查"); assert.ok(!needFix(Array(55).fill(["d", 1, 1, 1, 5, 1])));
   // 每條連線先開查詢頁，之後每次送出都用上一個回應給的 token；查無資料的週次跳過
   const seen = []; let n = 0;
   const fetchFn = async (u, o = {}) => { if (o.method !== "POST") return new Response(page(`t${n++}`, 0), { headers: { "set-cookie": "JSESSIONID=x; Path=/" } });
@@ -625,4 +629,20 @@ test("觀測站持股轉讓日報表（補更早年份）：欄位和 OpenAPI �
   assert.equal(L.length, 2, "說明列、表頭不算");
   assert.deepEqual(L[0], { d: "2021-06-01", code: "2426", name: "鼎元", who: "許敏川之配偶", role: "董事配偶", how: "一般交易(每日得轉讓股數限制)", sh: 250000, hold: 1336560, after: 1086560, to: "", from: "2021-06-04", until: "2021-07-03", market: "上市" });
   assert.deepEqual([L[1].code, L[1].sh, L[1].hold, L[1].after], ["2801", 400000000, 2341359334, 1941359334], "前面多一格（異動情形）也對得上，自有＋信託相加");
+});
+test("題材連動：週報酬、相關係數、領先落後、上三角索引；產業圖解原始檔檢查通過", async () => {
+  const { dailyRet, themeRet, weekly, corr, leadCorr, triIdx, compute, mkOf, ySym } = await import("../scripts/theme-corr.mjs");
+  assert.equal(mkOf("2330"), "tw"); assert.equal(mkOf("8058.T"), "jp"); assert.equal(mkOf("329180.KS"), "kr"); assert.equal(mkOf("NVDA"), "us"); assert.equal(ySym("BRK.B"), "BRK-B");
+  assert.ok(Math.abs(corr([1, 2, 3, 4], [2, 4, 6, 8]) - 1) < 1e-9); assert.ok(Math.abs(corr([1, 2, 3, 4], [4, 3, 2, 1]) + 1) < 1e-9);
+  assert.equal(dailyRet([["a", 10], ["b", 11], ["c", 30]]).size, 1, "一天漲超過 50% 當資料錯誤");
+  const W = weekly(new Map([["2026-10-19", 0.1], ["2026-10-20", 0.1], ["2026-10-26", -0.5]])); assert.ok(Math.abs(W.get("2026-10-19") - 0.21) < 1e-9); assert.equal(W.get("2026-10-26"), -0.5);
+  const N = 5, seen = new Set(); for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) { const k = triIdx(i, j, N); assert.equal(k, triIdx(j, i, N)); seen.add(k); } assert.deepEqual([...seen].sort((a, b) => a - b), [...Array(10).keys()]);
+  // B 每天照抄 A 前一天的漲跌 → A 領先 B
+  const days = Array.from({ length: 300 }, (_, i) => new Date(Date.UTC(2025, 0, 1) + i * 864e5).toISOString().slice(0, 10)), r = days.map((_, i) => Math.sin(i * 1.7) * 0.02);
+  const A = new Map(days.map((d, i) => [d, r[i]])), B = new Map(days.map((d, i) => [d, i ? r[i - 1] : 0]));
+  assert.ok(leadCorr(A, B).r > 0.9); assert.ok(leadCorr(B, A).r < 0.5);
+  const R = compute([{ id: "a", mk: "us", codes: ["X"] }, { id: "b", mk: "tw", codes: ["1"] }], new Map([["X", A], ["1", B]]));
+  assert.deepEqual(R.ids, ["a", "b"]); assert.equal(R.lead[0][0], "a"); assert.equal(R.lead[0][1], "b"); assert.equal(R.c.length, 1);
+  assert.equal(themeRet([new Map([["d", 0.1]]), new Map([["d", 0.3]])]).get("d"), 0.2);
+  const { execFileSync } = await import("node:child_process"); execFileSync("node", [new URL("../scripts/check-indpack.mjs", import.meta.url).pathname], { stdio: "pipe" }); // 有 ✗ 會丟錯
 });
