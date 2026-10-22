@@ -7,6 +7,8 @@ const S = await serve(), B = await (await chromium()).launch();
 // 自己開 context 的測試也擋掉離線快取（sw.js）：service worker 轉送的請求不會經過下面的假資料（route）
 test.after(async () => { await B.close(); S.close(); });
 
+// 等嵌入的看盤頁程式跑完（CI 比較慢，固定等 2.5 秒有時還沒好）
+const watchFrame = async p => { for (let i = 0; i < 150; i++) { const f = p.frames().find(f => /watch\.html/.test(f.url())); if (f && await f.evaluate(() => typeof setLt === "function").catch(() => false)) return f; await p.waitForTimeout(100); } throw new Error("看盤頁沒有載入"); };
 test("報價請求卡住後會恢復更新", async () => {
   const ctx = await B.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block" }); await mock(ctx);
   let n = 0, hung = false;
@@ -24,8 +26,8 @@ test("報價請求卡住後會恢復更新", async () => {
 
 test("嵌入模式往下捲後打開個股：抽屜在可見範圍、可以捲動", async () => {
   const ctx = await B.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" }); await mock(ctx); const p = await ctx.newPage();
-  await p.goto(`${S.url}/learner/index.html`); await p.waitForTimeout(1500); await p.evaluate(() => goTab("watch")); await p.waitForTimeout(2500);
-  const fr = p.frames().find(f => /watch\.html/.test(f.url())); await fr.evaluate(() => setLt("cong")); await p.waitForTimeout(1200);
+  await p.goto(`${S.url}/learner/index.html`); await p.waitForTimeout(1500); await p.evaluate(() => goTab("watch"));
+  const fr = await watchFrame(p); await fr.evaluate(() => setLt("cong")); await p.waitForTimeout(1200);
   await p.evaluate(() => { const f = document.querySelector("#watchFrame"); f.style.height = "5000px"; scrollTo(0, 1500); }); await p.waitForTimeout(300);
   await fr.evaluate(() => { select("2330"); setDtab("tech"); }); await p.waitForTimeout(2000);
   const st = await fr.evaluate(() => { const d = $("#detail"), r = d.getBoundingClientRect(); return { top: r.top, h: r.height, sh: d.scrollHeight }; });
@@ -38,8 +40,8 @@ test("嵌入模式往下捲後打開個股：抽屜在可見範圍、可以捲�
 
 test("嵌入模式選單凍結：往下捲後分頁列固定在學堂標題列下方、可以點", async () => {
   const ctx = await B.newContext({ viewport: { width: 1180, height: 820 }, serviceWorkers: "block" }); await mock(ctx); const p = await ctx.newPage();
-  await p.goto(`${S.url}/learner/index.html`); await p.waitForTimeout(1500); await p.evaluate(() => goTab("watch")); await p.waitForTimeout(2500);
-  const fr = p.frames().find(f => /watch\.html/.test(f.url())); await fr.evaluate(() => setLt("cong")); await p.waitForTimeout(1500);
+  await p.goto(`${S.url}/learner/index.html`); await p.waitForTimeout(1500); await p.evaluate(() => goTab("watch"));
+  const fr = await watchFrame(p); await fr.evaluate(() => setLt("cong")); await p.waitForTimeout(1500);
   assert.ok(await p.evaluate(() => $("#watchTabs").classList.contains("off")), "還沒捲動時不該出現");
   await p.evaluate(() => scrollTo(0, 1500)); await p.waitForTimeout(400);
   const st = await p.evaluate(() => { const n = $("#watchTabs"), r = n.getBoundingClientRect(); return { off: n.classList.contains("off"), top: r.top, hb: document.querySelector(".top").getBoundingClientRect().bottom, n: n.querySelectorAll("button").length }; });
