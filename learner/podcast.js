@@ -83,7 +83,7 @@ function podAutoQueue() {
     .filter(x => !S[x.key] && !POD.fail[x.key] && (!x.srv || stale || x.e.date > addDays(upd.slice(0, 10), -3))).sort((a, b) => b.e.date.localeCompare(a.e.date))[0];
   if (!c) return;
   POD.auto = c.key;
-  podSum(c.key, POD.cfg.audio && c.e.audio ? "audio" : "notes").then(() => { if (POD.job?.err && POD.job.key === c.key) { POD.fail[c.key] = POD.job.err; POD.job = null; } POD.auto = null; podRender(); setTimeout(podAutoQueue, 1500); });
+  podSum(c.key, podMode(c.e)).then(() => { if (POD.job?.err && POD.job.key === c.key) { POD.fail[c.key] = POD.job.err; POD.job = null; } POD.auto = null; podRender(); setTimeout(podAutoQueue, 1500); });
 }
 async function podLoadFeeds(force = false) {
   const F = podFollows(); POD.busy++; podRender();
@@ -178,9 +178,12 @@ async function podResolve(calls) {
   }
   return out;
 }
+// 整理方式：YouTube 影片給 AI 看完整支、Podcast 聽完整集（伺服器有 Gemini 金鑰時），不然讀節目說明
+const podMode = e => (POD.cfg?.audio && e.video ? "video" : POD.cfg?.audio && e.audio ? "audio" : "notes");
+const podIsYt = s => !!(s?.yt || /youtube\.com\/feeds\/videos\.xml/.test(s?.feed || ""));
 async function podSum(key, mode) {
   const it = podEp(key); if (!it || POD.job?.busy) return;
-  const { e, s } = it; POD.job = { key, busy: true, mode, step: mode === "audio" ? "下載音檔、上傳給 AI…" : "AI 讀節目說明中…" }; podRender();
+  const { e, s } = it; POD.job = { key, busy: true, mode, step: mode === "audio" ? "下載音檔、上傳給 AI…" : mode === "video" ? "AI 看完整支影片、整理重點與觀點中（約 30～90 秒）…" : "AI 讀節目說明中…" }; podRender();
   try {
     let body = { act: "sum", title: e.title, show: s.name, date: twDate(e.date), desc: e.desc };
     if (mode === "audio") {
@@ -191,7 +194,7 @@ async function podSum(key, mode) {
       while (st !== "ACTIVE") { if (st === "FAILED" || Date.now() - t0 > 180000) throw new Error("AI 處理音檔失敗，可以改用節目說明整理。"); await podSleep(3000); st = (await getJ(`/api/podcast?act=file&name=${encodeURIComponent(up.file)}`, true)).state; }
       POD.job.step = "AI 聽完整集、整理重點與觀點中（約 20～50 秒）…"; podRender();
       body = { ...body, uri: up.uri, mime: up.mime, file: up.file, desc: "" };
-    }
+    } else if (mode === "video") { if (!e.video) throw new Error("這集沒有影片網址"); body = { ...body, video: e.video, desc: "" }; }
     const j = await podPost(body), calls = await podResolve(j.calls), old = podSums()[key];
     podLocal()[key] = { tldr: j.tldr, points: j.points, sections: j.sections, facts: j.facts || [], risks: j.risks || [], watch: j.watch || [], topics: j.topics, calls: [...calls, ...(old?.calls || []).filter(c => c.manual)], mode: j.mode, model: j.model, at: Date.now(), feed: it.s.feed, guid: e.guid, title: e.title, date: e.date, show: s.name, audio: e.audio };
     podSave(); POD.job = null; POD.perf = new Map(); podLoadPx();
@@ -214,7 +217,10 @@ function podSpark(pts, w = 300, h = 56) {
 const podCkBar = p => `<div class="pcks">${p.cks.map((k, i) => `<span style="flex:${k.n - (i ? POD_CK[i - 1] : 0)}" class="${k.settled ? (k.ex > 0 ? "win" : "lose") : "open"}" title="${k.n} 天：${k.settled ? podPct(k.ex) : "未到期"}"></span>`).join("")}</div>
   <div class="pckl">${p.cks.map((k, i) => `<span style="flex:${k.n - (i ? POD_CK[i - 1] : 0)}">${k.n <= 7 ? "" : k.n + "d"}</span>`).join("")}</div>`;
 function podBadge(feed) {
-  const st = podStats(podCalls(feed)); if (!st.settled) return "";
+  const yt = podIsYt(podShowOf(feed)) ? `<span class="pyt">YouTube</span>` : "", st = podStats(podCalls(feed)); if (!st.settled) return yt;
+  return yt + podBadge0(st);
+}
+function podBadge0(st) {
   return `<span class="pbadge ${st.win >= 60 ? "gold" : st.win >= 40 ? "" : "low"}" title="已結算的觀點裡跑贏大盤的比例（${st.settled} 筆）">提及後勝過大盤 ${Math.round(st.win)}%</span>`;
 }
 function podCallCard(c, showEp = true) {
@@ -236,11 +242,13 @@ const podArt = (s, cl = "part") => { const nm = s.name || s.author || "?";
 const podEmpty = msg => `<p class="note pempty">${msg}</p>`;
 function podJobHtml(key) {
   const J = POD.job; if (!J || J.key !== key) return "";
-  return J.err ? `<div class="pjob err">⚠︎ ${esc(J.err)}${J.mode === "audio" ? ` <button class="btn sm" data-psum="notes" data-k="${key}">改用節目說明整理</button>` : ""}</div>` : `<div class="pjob"><span class="pspin"></span>${esc(J.step)}</div>`;
+  return J.err ? `<div class="pjob err">⚠︎ ${esc(J.err)}${J.mode === "audio" || J.mode === "video" ? ` <button class="btn sm" data-psum="notes" data-k="${key}">改用${J.mode === "video" ? "影片" : "節目"}說明整理</button>` : ""}</div>` : `<div class="pjob"><span class="pspin"></span>${esc(J.step)}</div>`;
 }
 function podSumBtns(key, e) {
   const c = POD.cfg, busy = POD.job?.busy;
   if (c && !c.notes) return `<p class="note">伺服器還沒設定 AI 金鑰（GEMINI_API_KEY），沒辦法整理重點。在 Vercel 設定後重新部署就能用；觀點也可以自己在下面新增。</p>`;
+  if (e.video) return `<div class="row psumbtns">${c?.audio !== false ? `<button class="btn primary" data-psum="video" data-k="${key}" ${busy ? "disabled" : ""}>${ico("ear")}AI 看完整支影片整理</button>` : ""}<button class="btn" data-psum="notes" data-k="${key}" ${busy ? "disabled" : ""}>${ico("pen")}用影片說明整理</button></div>
+    <p class="note">「看完整支影片」最完整（約 30～90 秒，會用到 Gemini 額度）；影片說明通常很短，整理出來比較少。</p>`;
   return `<div class="row psumbtns">${c?.audio !== false && e.audio ? `<button class="btn primary" data-psum="audio" data-k="${key}" ${busy ? "disabled" : ""}>${ico("ear")}AI 聽完整集整理</button>` : ""}<button class="btn" data-psum="notes" data-k="${key}" ${busy ? "disabled" : ""}>${ico("pen")}用節目說明整理</button></div>
     <p class="note">「聽完整集」最完整（一集約 30～60 秒，會用到 Gemini 額度）；節目說明通常只有大綱，整理出來比較少。</p>`;
 }
@@ -268,10 +276,11 @@ function podHome() {
 const podChars = m => [m.points, m.sections.map(x => x.body), m.facts, m.risks, m.watch].map(a => (a || []).join("")).join("").length;
 // 不在站內播放原節目音檔，只連到各平台收聽（版權歸原節目）；Apple 用節目頁，Spotify／YouTube 沒有確切連結，用平台搜尋
 function podListen(s, e) {
+  if (e.video) return `<div class="plisten"><span class="note">前往原影片觀看</span><a class="btn sm" href="${esc(e.video)}" target="_blank" rel="noopener">YouTube ↗</a></div>`;
   const q = encodeURIComponent(s.name), apple = /^\d+$/.test(String(s.id || "")) ? `https://podcasts.apple.com/tw/podcast/id${s.id}` : (/^https?:\/\//i.test(e.link || "") ? e.link : "") || `https://podcasts.apple.com/tw/search?term=${q}`; // 節目 RSS 給的連結只收 http(s)
   return `<div class="plisten"><span class="note">前往原節目收聽</span>${[["Apple Podcasts", apple], ["Spotify", `https://open.spotify.com/search/${q}/podcasts`], ["YouTube", `https://www.youtube.com/results?search_query=${q}`]].map(([t, u]) => `<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener">${t} ↗</a>`).join("")}</div>`;
 }
-const POD_NOTICE = "本區內容為 AI 針對公開播客音訊自動萃取之重點筆記與提及標的統計，音訊與內容版權歸原創節目所有，不代表原節目之投資建議。節目主如不希望節目被整理，請透過意見回報要求移除，我們會盡快處理。";
+const POD_NOTICE = "本區內容為 AI 針對公開播客音訊與 YouTube 影片自動萃取之重點筆記與提及標的統計，音訊、影片與內容版權歸原創節目所有，不代表原節目之投資建議。節目主如不希望節目被整理，請透過意見回報要求移除，我們會盡快處理。";
 function podEpView() {
   const key = POD.key, it = podEp(key); if (!it) return podEmpty("找不到這一集。");
   const { e, s } = it, m = podSums()[key], chars = m ? podChars(m) : 0, calls = podCalls().filter(c => c.key === key);
@@ -290,7 +299,7 @@ function podEpView() {
     ${calls.length ? calls.map(c => podCallCard(c, false)).join("") : podEmpty(m ? "這集沒有整理到明確看多或看空的個股。" : "整理重點後，主持人明確看多／看空的個股會出現在這裡。")}
     ${unres.length ? `<p class="note">代號沒對上的：${unres.map(c => esc(c.name)).join("、")}（可以在下面用代號手動新增）</p>` : ""}
     <form class="padd" data-padd="${key}"><span class="note">手動新增觀點</span><input name="code" placeholder="代號，例 2330、NVDA" autocomplete="off" required><select name="dir"><option value="bull">看多</option><option value="bear">看空</option></select><input name="quote" placeholder="主持人怎麼說（選填）" maxlength="120"><button class="btn sm">新增</button></form>
-    ${m ? `<p class="note pfoot">由 AI ${m.mode === "audio" ? "聽完整集" : "讀節目說明"}整理（${esc(m.model || "")}，${new Date(m.at + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}）。AI 可能聽錯或漏掉，引述是接近原話，請以節目為準；觀點表現用真實股價計算，不是投資建議。
+    ${m ? `<p class="note pfoot">由 AI ${m.mode === "audio" ? "聽完整集" : m.mode === "video" ? "看完整支影片" : "讀節目說明"}整理（${esc(m.model || "")}，${new Date(m.at + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}）。AI 可能聽錯或漏掉，引述是接近原話，請以節目為準；觀點表現用真實股價計算，不是投資建議。
       <button class="linkbtn" data-psum="${m.mode}" data-k="${key}">重新整理</button>${m.mode !== "audio" && POD.cfg?.audio && e.audio ? `<button class="linkbtn" data-psum="audio" data-k="${key}">改用 AI 聽完整集</button>` : ""}</p>${podJobHtml(key)}` : ""}`;
 }
 function podShowView() {
@@ -368,19 +377,21 @@ function podRankView() {
 function podFollowView() {
   const F = podFollows(), has = feed => F.some(s => s.feed === feed);
   const item = (s, act) => `<li class="pfi">${podArt(s, "part sm")}<span><b>${esc(s.name)}</b><span class="note">${esc(s.author || "")}${s.n ? `・${s.n} 集` : ""}</span></span>${act}</li>`;
-  return `<form class="psearch" data-psearch><input name="q" placeholder="搜尋 Podcast 節目名稱，例：股癌、財經皓角" value="${esc(POD.q)}" autocomplete="off" enterkeyhint="search"><button class="btn sm primary">搜尋</button></form>
+  const yt = POD.qsrc === "yt";
+  return `<div class="seg" role="group" aria-label="搜尋來源">${[["pod", "Podcast"], ["yt", "YouTube"]].map(([k, t]) => `<button data-pqsrc="${k}" aria-pressed="${(POD.qsrc || "pod") === k}">${t}</button>`).join("")}</div>
+    <form class="psearch" data-psearch><input name="q" placeholder="${yt ? "搜尋 YouTube 頻道名稱，例：M觀點、柴鼠兄弟" : "搜尋 Podcast 節目名稱，例：股癌、財經皓角"}" value="${esc(POD.q)}" autocomplete="off" enterkeyhint="search"><button class="btn sm primary">搜尋</button></form>
     ${POD.qErr ? `<p class="note">⚠︎ ${esc(POD.qErr)}</p>` : ""}
     ${POD.found ? `<ul class="pfl">${POD.found.map(s => item(s, has(s.feed) ? `<span class="note">已追蹤</span>` : `<button class="btn sm" data-pfol="${esc(s.feed)}">＋ 追蹤</button>`)).join("") || `<li class="note">找不到。也可以直接貼 RSS 網址。</li>`}</ul>` : ""}
     <h2 class="ph2">追蹤中（${F.length}）</h2>
     <ul class="pfl">${F.map(s => item(s, `<button class="btn sm" data-pshow="${esc(s.feed)}">提及追蹤</button><button class="btn sm" data-punf="${esc(s.feed)}">取消追蹤</button>`)).join("") || `<li class="note">還沒有追蹤節目。</li>`}</ul>
-    <form class="psearch" data-prss><input name="rss" placeholder="或貼上節目的 RSS 網址（https://…）" autocomplete="off" inputmode="url"><button class="btn sm">加入</button></form>
+    <form class="psearch" data-prss><input name="rss" placeholder="或貼上 RSS 網址、YouTube 頻道網址或 @帳號" autocomplete="off" inputmode="url"><button class="btn sm">加入</button></form>
     <p class="note">節目資料來自 Apple Podcasts 目錄與各節目公開的 RSS。重點整理與觀點紀錄只存在這個瀏覽器；換裝置要重新整理。</p>`;
 }
 function renderPod() {
   podBoot();
   if (POD.booted && !POD.pxBusy) setTimeout(podLoadPx, 0); // 有缺的股價（或之前失敗的）就補抓
   const tab = ["ep", "show"].includes(POD.view) ? POD.hist.find(h => !["ep", "show"].includes(h.view))?.view || "home" : POD.view;
-  $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="Podcast 觀點" id="podSeg">${[["home", "最新筆記"], ["cons", "共識與分歧"], ["rank", "提及標的表現"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
+  $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="提及標的" id="podSeg">${[["home", "最新筆記"], ["cons", "共識與分歧"], ["rank", "節目排行"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
   const body = POD.view === "ep" ? podEpView() : POD.view === "show" ? podShowView() : POD.view === "rank" ? podRankView() : POD.view === "cons" ? podConsView() : POD.view === "follow" ? podFollowView() : podHome();
   const abn = (POD.view === "home" || POD.view === "rank") && typeof offAbnHtml === "function" ? offAbnHtml() : ""; // 證交所點名的節目異常推介個股（official.js）
   $("#lx").innerHTML = `<div class="pod">${POD.err ? `<p class="note">⚠︎ ${esc(POD.err)}</p>` : ""}${abn}${body}<p class="note pnotice">${POD_NOTICE} <a href="${CONTACT_URL}" target="_blank" rel="noopener">意見回報 ↗</a>　節目封面取自各節目公開的 RSS。</p></div>`;
@@ -394,7 +405,7 @@ async function podRefresh(force = false) {
 function podGo(view, extra = {}) {
   POD.hist.push({ view: POD.view, feed: POD.feed, key: POD.key }); if (POD.hist.length > 30) POD.hist.shift();
   Object.assign(POD, { view, ...extra }); if (view === "show") podFeed(POD.feed).then(podRender).catch(() => {});
-  if (view === "ep" && !podSums()[POD.key] && POD.cfg?.notes && !POD.job?.busy && !POD.fail?.[POD.key]) { const it = podEp(POD.key); if (it) podSum(POD.key, POD.cfg.audio && it.e.audio ? "audio" : "notes").then(() => setTimeout(podAutoQueue, 1500)); } // 打開還沒整理的單集：馬上自動整理
+  if (view === "ep" && !podSums()[POD.key] && POD.cfg?.notes && !POD.job?.busy && !POD.fail?.[POD.key]) { const it = podEp(POD.key); if (it) podSum(POD.key, podMode(it.e)).then(() => setTimeout(podAutoQueue, 1500)); } // 打開還沒整理的單集：馬上自動整理
   podRender(); $("#lx").scrollTop = 0; goY(0); navPush();
 }
 function podInit() {
@@ -413,8 +424,9 @@ function podInit() {
     else if (g("[data-psum]")) { const b = g("[data-psum]"); podSum(b.dataset.k, b.dataset.psum); }
     else if (g("[data-pdel]")) { const [key, id] = g("[data-pdel]").dataset.pdel.split("|"), L = podLocal()[key]; if (!confirm("刪除這筆觀點？")) return;
       if (L?.calls?.some(c => c.id === id)) L.calls = L.calls.filter(c => c.id !== id); else store.set("pod:hide", [...(store.get("pod:hide", []) || []), id]); podSave(); podRender(); }
-    else if (g("[data-pfol]")) { const feed = g("[data-pfol]").dataset.pfol, s = POD.found?.find(x => x.feed === feed) || { ...podShowOf(feed), feed }; store.set("pod:follows", [...podFollows().filter(f => f.feed !== feed), { id: s.id || podHash(feed), name: s.name, author: s.author, art: s.art, feed }]); podFeed(feed).then(podRender).catch(() => {}); podRender(); }
+    else if (g("[data-pfol]")) { const feed = g("[data-pfol]").dataset.pfol, s = POD.found?.find(x => x.feed === feed) || { ...podShowOf(feed), feed }; store.set("pod:follows", [...podFollows().filter(f => f.feed !== feed), { id: s.id || podHash(feed), name: s.name, author: s.author, art: s.art, feed, ...(s.yt ? { yt: true } : {}) }]); podFeed(feed).then(podRender).catch(() => {}); podRender(); }
     else if (g("[data-punf]")) { const feed = g("[data-punf]").dataset.punf; store.set("pod:follows", podFollows().filter(f => f.feed !== feed)); podRender(); }
+    else if (g("[data-pqsrc]")) { POD.qsrc = g("[data-pqsrc]").dataset.pqsrc; POD.found = null; POD.qErr = null; podRender(); }
     else if (g("[data-pcw]")) { POD.cw = +g("[data-pcw]").dataset.pcw; podSavePrefs(); podRender(); }
     else if (g("[data-prk]")) { POD.rank = g("[data-prk]").dataset.prk; podSavePrefs(); podRender(); }
     else if (g("[data-psim]")) { const b = g("[data-psim]"), k = b.dataset.psim; POD.sim[k] = k === "m" ? +b.dataset.v : b.dataset.v; podSavePrefs(); podRender(); }
@@ -427,7 +439,10 @@ function podInit() {
   lx.addEventListener("submit", async e => {
     if (W.lt !== "pod") return; const f = e.target; e.preventDefault();
     if (f.matches("[data-psearch]")) { POD.q = f.q.value.trim(); if (!POD.q) return; POD.qErr = null; POD.found = null; podRender();
-      try { POD.found = (await getJ(`/api/podcast?q=${encodeURIComponent(POD.q)}`, true)).shows; } catch (err) { POD.qErr = err.message; } podRender(); }
+      try { POD.found = (await getJ(`/api/podcast?${POD.qsrc === "yt" ? "yts" : "q"}=${encodeURIComponent(POD.q)}`, true)).shows; } catch (err) { POD.qErr = err.message; } podRender(); }
+    else if (f.matches("[data-prss]") && /^@|youtube\.com\//i.test(f.rss.value.trim())) { // YouTube 頻道：先找出頻道的影片 RSS
+      try { const ch = (await getJ(`/api/podcast?yt=${encodeURIComponent(f.rss.value.trim())}`, true)).shows?.[0]; if (!ch) throw new Error("找不到這個 YouTube 頻道");
+        store.set("pod:follows", [...podFollows().filter(x => x.feed !== ch.feed), { id: ch.id, name: ch.name, author: ch.author, art: ch.art, feed: ch.feed, yt: true }]); podFeed(ch.feed, true).catch(() => {}); POD.qErr = null; } catch (err) { POD.qErr = err.message; } podRender(); }
     else if (f.matches("[data-prss]")) { const url = f.rss.value.trim(); if (!/^https?:\/\//.test(url)) return;
       try { const v = await podFeed(url, true); store.set("pod:follows", [...podFollows().filter(x => x.feed !== url), { id: podHash(url), name: v.show.name || url, author: v.show.author, art: v.show.art, feed: url }]); POD.qErr = null; } catch (err) { POD.qErr = err.message; } podRender(); }
     else if (f.matches("[data-padd]")) {
@@ -462,6 +477,7 @@ function podInit() {
 .pod .pkey2 { border-left-color: var(--line); } .pod .pkey2 .pkh { color: var(--muted); } .pod .pkey2 li::marker { color: var(--muted); }
 .pod .pkey ul { margin: 0; padding-left: 20px; } .pod .pkey li { margin: 6px 0; line-height: 1.75; } .pod .pkey li::marker { color: var(--up); }
 .pod .psec { font-size: 16px; font-weight: 500; margin: 18px 0 6px; } .pod .pbody { line-height: 1.85; margin: 0 0 8px; white-space: pre-wrap; }
+.pod .pyt { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 3px; font-size: 11px; line-height: 18px; color: #fff; background: #e62117; vertical-align: middle; }
 .pod .pconsl { list-style: none; margin: 4px 0 14px; padding: 0; display: grid; gap: 12px; }
 .pod .pcons { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 0 8px; } .pod .pcons > small { flex-basis: 100%; line-height: 1.6; } .pod .pcons .pq { flex-basis: 100%; margin: 2px 0 0; } .pod .pcons .pq small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
 .pod .pcbar { display: inline-flex; width: 64px; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--ink) 8%, transparent); } .pod .pcbar i { height: 100%; } .pod .pcbar .up { background: var(--up); } .pod .pcbar .down { background: var(--down); }

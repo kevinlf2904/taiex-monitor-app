@@ -39,7 +39,7 @@ test("公開測試版 (Beta) 頁：沒有價格方案、收更新通知、免責
 test("去識別化：量價動能矩陣、節目頭像、供應鏈說明與籌碼標籤、大戶與國會情報", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
   await ctx.route("**/data/podcast/**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ shows: [{ feed: "f1", name: "測試節目", author: "主持人", art: "https://example.com/cover.jpg" }], eps: [] }) }));
-  const tabs = await p.evaluate(() => $("#lTabs").innerText); assert.match(tabs, /資金雷達[\s\S]*供應鏈[\s\S]*Podcast 觀點[\s\S]*大戶國會/); assert.doesNotMatch(tabs, /名人/);
+  const tabs = await p.evaluate(() => $("#lTabs").innerText); assert.match(tabs, /資金雷達[\s\S]*供應鏈[\s\S]*提及標的[\s\S]*大戶國會/); assert.doesNotMatch(tabs, /名人/);
   assert.deepEqual(await p.evaluate(() => Object.values(FLOW_Q).map(x => x[0])), ["強勢突破區", "高檔調節區", "主力吸籌區", "量縮整理區"]);
   await p.evaluate(() => { setLt("money"); W.mf.view = "bubble"; renderList(); });
   assert.doesNotMatch(await p.evaluate(() => document.body.innerText), /潮汐|漲潮|退潮|泡泡/);

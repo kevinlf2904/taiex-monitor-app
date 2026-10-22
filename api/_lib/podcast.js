@@ -1,11 +1,13 @@
 // 名人 Podcast：給 learner/watch.html 的「名人」分頁使用。
 // GET  /api/podcast?q=股癌                 搜尋節目（Apple Podcasts 目錄），回傳 { shows: [{ id, name, author, art, feed }] }
+// GET  /api/podcast?yts=財經                 搜尋 YouTube 頻道，回傳 { shows: [...] }（feed 是頻道的影片 RSS）
+// GET  /api/podcast?yt=@handle 或頻道網址     找出 YouTube 頻道的影片 RSS
 // GET  /api/podcast?feed=<RSS 網址>&n=30    讀節目的 RSS，回傳 { show, eps: [{ guid, title, date, desc, audio, mime, bytes, dur, link, img }] }
 // GET  /api/podcast?act=cfg                 目前能不能用 AI 整理（有 GEMINI_API_KEY 才能「聽完整集」，只有 ANTHROPIC_API_KEY 時只能讀節目說明）
 // POST /api/podcast { act: "upload", audio, name }          下載單集音檔、上傳到 Gemini Files（48 小時後自動刪除），回傳 { file, uri, mime, state }
 // GET  /api/podcast?act=file&name=files/xxx                 查上傳的音檔處理好了沒（state: PROCESSING／ACTIVE／FAILED）
-// POST /api/podcast { act: "sum", uri?, mime?, title, show, date, desc }
-//      有 uri：Gemini 聽音檔整理；沒有：用節目說明（show notes）整理。回傳 { tldr, points, sections, facts, risks, watch, calls, topics, mode, model }
+// POST /api/podcast { act: "sum", uri?, mime?, video?, title, show, date, desc }
+//      有 uri：Gemini 聽音檔整理；有 video（YouTube 影片網址）：Gemini 直接看影片整理；都沒有：用節目說明（show notes）整理。回傳 { tldr, points, sections, facts, risks, watch, calls, topics, mode, model }
 //      calls：主持人明確看多／看空的個股或 ETF [{ code, name, market: "TW"|"US", dir: "bull"|"bear", quote }]
 // 金鑰只放在 Vercel 環境變數（GEMINI_API_KEY／ANTHROPIC_API_KEY），不會出現在前端。整理結果只存在使用者的瀏覽器。
 
@@ -72,8 +74,21 @@ export function durSec(v) {
   const p = s.split(":").map(Number); if (p.some(x => !Number.isFinite(x))) return null;
   return p.reduce((a, x) => a * 60 + x, 0);
 }
+// YouTube 頻道的影片 RSS（Atom：<feed><entry>…）：每支影片的 video 是觀看網址（Gemini 可以直接看），沒有音檔；#shorts 短影片不收
+export const ytWatch = id => (/^[\w-]{11}$/.test(id) ? `https://www.youtube.com/watch?v=${id}` : "");
+export const isYtVideo = u => /^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}$/.test(String(u || ""));
+export function parseYt(xml, n = 30) {
+  const s = String(xml || ""), first = s.search(/<entry[\s>]/i), head = first > 0 ? s.slice(0, first) : s;
+  const show = { name: txt(head, "title"), author: txt(tag(head, "author"), "name"), art: "", desc: "", link: httpOnly(attr(head, "link", "href")), yt: true };
+  const eps = (s.match(/<entry[\s>][\s\S]*?<\/entry>/gi) || []).map(it => {
+    const id = txt(it, "yt:videoId"), date = Date.parse(txt(it, "published")), title = txt(it, "title"), video = ytWatch(id);
+    return { guid: "yt:" + id, title, date: Number.isFinite(date) ? new Date(date).toISOString() : null, desc: txt(it, "media:description").slice(0, 6000), audio: "", video, mime: "", bytes: null, dur: null, link: video, img: httpOnly(attr(it, "media:thumbnail", "url")) || null };
+  }).filter(e => e.title && e.date && e.video && !/#shorts?\b/i.test(e.title + " " + e.desc.slice(0, 200))).slice(0, n);
+  return { show, eps };
+}
 export function parseRss(xml, n = 30) {
   const s = String(xml || ""), first = s.search(/<item[\s>]/i), head = first > 0 ? s.slice(0, first) : s;
+  if (first < 0 && /<entry[\s>]/i.test(s) && /yt:videoId/.test(s)) return parseYt(s, n); // YouTube 頻道
   const show = { name: txt(head, "title"), author: txt(head, "itunes:author") || txt(head, "managingEditor"), art: attr(head, "itunes:image", "href") || txt(tag(head, "image"), "url"), desc: txt(head, "description").slice(0, 600), link: httpOnly(txt(head, "link")) };
   show.art = httpOnly(show.art);
   const items = s.match(/<item[\s>][\s\S]*?<\/item>/gi) || [];
@@ -89,7 +104,7 @@ export function parseRss(xml, n = 30) {
 // ---------- AI 整理 ----------
 // 摘要格式版本：改了提示詞就加 1，排程會把每個節目最近幾集用新版重新整理
 export const SUM_VER = 2;
-export const PROMPT = (m, mode) => `你是財經 Podcast 的整理編輯。${mode === "audio" ? "請聽附上的這一集完整音檔" : "這一集只有節目說明文字（沒有逐字稿），請只根據說明文字"}，用繁體中文整理成 JSON（只輸出 JSON，不要其他文字）：
+export const PROMPT = (m, mode) => `你是財經 Podcast 與 YouTube 節目的整理編輯。${mode === "audio" ? "請聽附上的這一集完整音檔" : mode === "video" ? "請看附上的這支 YouTube 影片完整內容（以講者說的話為主，畫面上的圖表與字幕也可以參考）" : "這一集只有節目說明文字（沒有逐字稿），請只根據說明文字"}，用繁體中文整理成 JSON（只輸出 JSON，不要其他文字）：
 {
   "tldr": "一句話摘要，60 字以內，講這集最重要的判斷",
   "points": ["重點 6～10 條，每條 60～140 字，具體寫出主持人的論點、理由與舉的例子"],
@@ -129,9 +144,9 @@ export function parseSum(text) {
   };
 }
 
-export async function geminiJSON(parts, key, deadline) {
+export async function geminiJSON(parts, key, deadline, extra = {}) {
   const models = [...new Set([process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-latest", ...GEMINI_FALLBACKS])];
-  const body = JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.3, maxOutputTokens: 16384 } });
+  const body = JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.3, maxOutputTokens: 16384, ...extra } });
   let last = null;
   for (const m of models) {
     const left = deadline - Date.now(); if (left < 4000) break;
@@ -166,6 +181,47 @@ export async function uploadAudio(url, name, key, { dlMs = 30000, upMs = 40000 }
   return { file: j.file.name, uri: j.file.uri, mime, state: j.file.state || "PROCESSING", mb: +(buf.length / 1048576).toFixed(1) };
 }
 
+// YouTube 影片給 Gemini：影片以說話為主，畫面每 20 秒取一張、低解析度，一小時的影片約十幾萬 token（不然整支高畫質很容易超過上限）
+export const ytParts = (video, prompt) => [{ fileData: { fileUri: video }, videoMetadata: { fps: 0.05 } }, { text: prompt }];
+export const YT_CFG = { mediaResolution: "MEDIA_RESOLUTION_LOW" };
+// YouTube 頻道：搜尋（解析搜尋結果頁，不需要 API 金鑰）、用 @handle／頻道網址找頻道代號；影片 RSS 是 /feeds/videos.xml?channel_id=UC…
+const YT = "https://www.youtube.com", ytFeed = id => `${YT}/feeds/videos.xml?channel_id=${id}`, YT_HDR = { ...UA, "Accept-Language": "zh-TW,zh;q=0.9" };
+export function ytSearchParse(html) {
+  const out = [], seen = new Set();
+  const h = String(html);
+  for (const m of h.matchAll(/"channelRenderer":\{"channelId":"(UC[\w-]{22})"/g)) {
+    const id = m[1], b = h.slice(m.index + m[0].length, m.index + m[0].length + 2500); if (seen.has(id)) continue; seen.add(id);
+    const name = decode((b.match(/"title":\{"simpleText":"((?:[^"\\]|\\.)*)"/) || [])[1] || "").replace(/\\u0026/g, "&").replace(/\\"/g, '"');
+    let art = (b.match(/"thumbnails":\[\{"url":"([^"]+)"/) || [])[1] || ""; if (art.startsWith("//")) art = "https:" + art;
+    if (name) out.push({ id, name, author: name, art: httpOnly(art), feed: ytFeed(id), yt: true });
+  }
+  return out.slice(0, 12);
+}
+export function ytChannelParse(html) {
+  const s = String(html), id = (s.match(/"(?:externalId|channelId)":"(UC[\w-]{22})"/) || s.match(/channel\/(UC[\w-]{22})/) || [])[1];
+  if (!id) return null;
+  const meta = p => decode((s.match(new RegExp(`<meta property="og:${p}" content="([^"]*)"`)) || [])[1] || "");
+  return { id, name: meta("title") || id, author: meta("title"), art: httpOnly(meta("image")), feed: ytFeed(id), yt: true };
+}
+export async function ytSearch(q) {
+  const r = await fetch(`${YT}/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D`, { headers: YT_HDR, signal: AbortSignal.timeout(12000) }); // sp＝只找頻道
+  if (!r.ok) throw new Error(`YouTube 搜尋失敗（HTTP ${r.status}）`); return ytSearchParse(await r.text());
+}
+// 輸入可以是 @handle、頻道網址（/@xxx、/channel/UC…、/c/xxx、/user/xxx）或頻道代號
+export function ytInput(raw) {
+  const v = String(raw || "").trim(); let m;
+  if ((m = v.match(/(?:^|\/channel\/)(UC[\w-]{22})\b/))) return { id: m[1] };
+  if ((m = v.match(/^@([\w.\-\u0080-\uffff]{2,60})$/) || v.match(/youtube\.com\/@([^/?#\s]+)/i))) return { path: "/@" + encodeURIComponent(decodeURIComponent(m[1])) };
+  if ((m = v.match(/youtube\.com\/(c|user)\/([^/?#\s]+)/i))) return { path: `/${m[1]}/${encodeURIComponent(decodeURIComponent(m[2]))}` };
+  return null;
+}
+export async function ytChannel(raw) {
+  const k = ytInput(raw); if (!k) return null;
+  const r = await fetch(YT + (k.id ? `/channel/${k.id}` : k.path), { headers: YT_HDR, signal: AbortSignal.timeout(12000) });
+  if (!r.ok) throw new Error(`找不到這個 YouTube 頻道（HTTP ${r.status}）`);
+  return ytChannelParse(await r.text()) || (k.id ? { id: k.id, name: k.id, author: "", art: "", feed: ytFeed(k.id), yt: true } : null);
+}
+
 export async function itunes(q) {
   const u = `https://itunes.apple.com/search?media=podcast&entity=podcast&country=TW&limit=12&term=${encodeURIComponent(q)}`;
   const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(10000) }); if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -189,10 +245,12 @@ export default async function handler(req, res) {
       }
       if (b.act === "sum") {
         const meta = { title: String(b.title || "").slice(0, 200), show: String(b.show || "").slice(0, 100), date: String(b.date || "").slice(0, 20), desc: String(b.desc || "").slice(0, 6000) };
-        const uri = typeof b.uri === "string" && /^https:\/\/generativelanguage\.googleapis\.com\//.test(b.uri) ? b.uri : null, mode = uri ? "audio" : "notes";
+        const uri = typeof b.uri === "string" && /^https:\/\/generativelanguage\.googleapis\.com\//.test(b.uri) ? b.uri : null, video = !uri && isYtVideo(b.video) ? b.video : null, mode = uri ? "audio" : video ? "video" : "notes";
+        if (video && !gem) return res.status(200).json({ ok: false, error: "看 YouTube 影片需要在 Vercel 設定 GEMINI_API_KEY；現在可以先用影片說明整理。" });
         if (mode === "notes" && meta.desc.replace(/\s/g, "").length < 40) return res.status(200).json({ ok: false, error: "這集的節目說明太短，沒辦法只靠說明整理。" });
         let out;
-        if (gem) out = await geminiJSON([...(uri ? [{ fileData: { mimeType: String(b.mime || "audio/mpeg"), fileUri: uri } }] : []), { text: PROMPT(meta, mode) }], gem, deadline);
+        if (gem && video) out = await geminiJSON(ytParts(video, PROMPT(meta, mode)), gem, deadline, YT_CFG);
+        else if (gem) out = await geminiJSON([...(uri ? [{ fileData: { mimeType: String(b.mime || "audio/mpeg"), fileUri: uri } }] : []), { text: PROMPT(meta, mode) }], gem, deadline);
         else if (claude && mode === "notes") out = await claudeJSON(PROMPT(meta, mode));
         else return res.status(200).json({ ok: false, error: "伺服器沒有設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY），無法用 AI 整理。" });
         if (uri && b.file && /^files\/[a-z0-9-]+$/i.test(b.file)) await fetch(`${GEMINI}/v1beta/${b.file}`, { method: "DELETE", headers: { "x-goog-api-key": gem }, signal: AbortSignal.timeout(5000) }).catch(() => {}); // 整理完就刪掉音檔（等它刪完，回應送出後函式可能就被凍結）
@@ -214,6 +272,16 @@ export default async function handler(req, res) {
       res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate=604800");
       return res.status(200).json({ ok: true, shows });
     }
+    if (q.yts) {
+      const shows = await ytSearch(String(q.yts).slice(0, 60));
+      res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate=604800");
+      return res.status(200).json({ ok: true, shows });
+    }
+    if (q.yt) {
+      const ch = await ytChannel(String(q.yt).slice(0, 200)); if (!ch) return res.status(200).json({ ok: false, error: "看不懂這個 YouTube 頻道網址，請貼頻道首頁網址或 @帳號" });
+      res.setHeader("Cache-Control", "s-maxage=86400");
+      return res.status(200).json({ ok: true, shows: [ch] });
+    }
     if (q.feed) {
       const url = safeUrl(q.feed); if (!url) return res.status(400).json({ ok: false, error: "RSS 網址不正確" });
       const r = await safeFetch(url, { headers: { ...UA, Accept: "application/rss+xml, application/xml, text/xml, */*" }, signal: AbortSignal.timeout(15000) });
@@ -223,7 +291,7 @@ export default async function handler(req, res) {
       res.setHeader("Cache-Control", "s-maxage=900, stale-while-revalidate=3600");
       return res.status(200).json({ ok: true, feed: url, ...p });
     }
-    return res.status(400).json({ ok: false, error: "用法：?q=節目名稱、?feed=RSS 網址、?act=cfg" });
+    return res.status(400).json({ ok: false, error: "用法：?q=節目名稱、?yts=YouTube 頻道名稱、?yt=@帳號或頻道網址、?feed=RSS 網址、?act=cfg" });
   } catch (e) {
     return res.status(200).json({ ok: false, error: e.message || "處理失敗" });
   }

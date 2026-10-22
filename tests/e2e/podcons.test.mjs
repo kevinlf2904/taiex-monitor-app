@@ -1,11 +1,11 @@
-// Podcast 觀點 → 共識與分歧：多個節目一起看多／看空、意見分歧、熱度上升；同一個節目講很多次只算一次
+// 提及標的 → 共識與分歧：多個節目一起看多／看空、意見分歧、熱度上升；同一個節目講很多次只算一次
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium, serve, open } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
-for (const width of [390, 1280]) test(`Podcast 觀點：共識與分歧 ${width}`, async () => {
+for (const width of [390, 1280]) test(`提及標的：共識與分歧 ${width}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width, touch: width < 500 });
   const R = await p.evaluate(() => { const t = "2026-10-22", d = n => addDays(t, -n), c = (code, dir, feed, n, quote = "") => ({ code, name: code, dir, feed, show: feed, date: d(n), quote });
     const L = [c("2330", "bull", "A", 1, "看好"), c("2330", "bull", "A", 2), c("2330", "bull", "B", 3), c("2317", "bear", "A", 5), c("2317", "bear", "C", 6), c("NVDA", "bull", "A", 4), c("NVDA", "bear", "B", 10), c("2454", "bull", "A", 40), c("2454", "bull", "B", 41),
