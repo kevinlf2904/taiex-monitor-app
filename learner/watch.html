@@ -1009,7 +1009,7 @@ tr.on td { background: var(--surface-2); }
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
       <div class="l-ix" id="ix2"></div>
-      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股"><svg class="ico" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin:0" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金雷達</button><button data-l="earn">財報</button><button data-l="ind">供應鏈</button><button data-l="etf">ETF</button><button data-l="pod">節目觀點</button><button data-l="cong">大戶國會</button><button data-l="rank">排行</button></div>
+      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股"><svg class="ico" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin:0" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金雷達</button><button data-l="earn">財報</button><button data-l="ind">供應鏈</button><button data-l="etf">ETF</button><button data-l="pod">Podcast 觀點</button><button data-l="cong">大戶國會</button><button data-l="rank">排行</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
         <button type="button" class="gsadd" data-gsearch-add><svg class="ico" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin-right:.32em" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>搜尋代號或名稱，加入自選</button>
@@ -1142,7 +1142,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-144</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-145</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1209,7 +1209,7 @@ tr.on td { background: var(--surface-2); }
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
-// 嵌在首頁時分兩種模式：mode=intel（情報局：資金雷達、財報、大戶國會、供應鏈、節目觀點）、mode=watch（看盤：其他分頁）；單獨打開 watch.html 時全部都有
+// 嵌在首頁時分兩種模式：mode=intel（情報局：資金雷達、財報、大戶國會、供應鏈、Podcast 觀點）、mode=watch（看盤：其他分頁）；單獨打開 watch.html 時全部都有
 const INTEL_LT = ["money", "earn", "cong", "ind", "pod"], ltMode = lt => (INTEL_LT.includes(lt) ? "intel" : "watch");
 let MODE = ((new URLSearchParams(location.search).get("mode") || "").match(/^(intel|watch)$/) || [])[0] || null;
 const inMode = lt => !MODE || ltMode(lt) === MODE, ltKey = m => (m === "intel" ? "watch:lt:intel" : "watch:lt");
@@ -1239,7 +1239,7 @@ const W = {
 };
 if (W.gi >= W.groups.length) W.gi = 0;
 const curList = () => W.groups[W.gi].list;
-// 隨處加自選：節目觀點、大戶國會、動能矩陣成分股的代號旁都有 ☆／★，點一下加入或移出（不用先打開個股）
+// 隨處加自選：Podcast 觀點、大戶國會、動能矩陣成分股的代號旁都有 ☆／★，點一下加入或移出（不用先打開個股）
 const inWatch = c => W.groups.some(g => g.list.includes(c));
 const wStar = c => { c = String(c || "").toUpperCase(); if (!okCode(c) || isIdx(c)) return ""; const on = inWatch(c); return `<button type="button" class="wstar" data-wstar="${esc(c)}" aria-pressed="${on}" aria-label="${on ? "移出自選" : "加入自選"} ${esc(c)}" title="${on ? "移出自選" : "加入自選"}">${on ? "★" : "☆"}</button>`; };
 const allWatched = () => [...new Set(W.groups.flatMap(g => g.list))];
@@ -4729,7 +4729,7 @@ function renderBook() {
 /* 個股分頁：走勢、技術、總覽、籌碼、財務、新聞；總覽、籌碼、財務底下各有子頁（每種資訊只出現在一個地方）
    子頁的內容：tags／sum／rev／report 用原本的區塊，其他的由 stockx.js 的 SX 畫在 #sxBox */
 const DSUB = {
-  ovw: [["state", "指標與狀態"], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "節目觀點"]],
+  ovw: [["state", "指標與狀態"], ["check", "健檢", 1], ["tags", "符合的指標"], ["attr", "屬性與產業鏈"], ["target", "評價推估", 1], ["guru", "Podcast 觀點"]],
   chips: [["sum", "籌碼總覽"], ["inst", "法人與基金"], ["mgfr", "資券與外資", 1], ["branch", "分點主力"], ["big", "大戶與股權"]],
   fin: [["rev", "營收與獲利"], ["report", "財務報表"], ["fana", "財報分析"], ["div", "股利"], ["info", "公司資料"], ["oapi", "官方資料", 1], ["cal", "行事曆"]],
 };

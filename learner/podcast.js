@@ -7,8 +7,8 @@
 const POD_SEED = [["股癌", "股癌"], ["兆華與股惑仔", "股惑仔"], ["游庭皓的財經皓角", "皓角"], ["理財達人秀", "理財達人秀"], ["Money&Love 投資頻道", "Money"], ["金唬男", "金唬男"]];
 const POD_CK = [1, 3, 7, 30, 60, 90, 180, 365]; // 檢查點（上架後幾天）：加上 1、3 天，最近的觀點也能很快結算
 const _podP = store.get("pod:prefs", null) || {};
-const POD = { view: "home", feed: null, key: null, hist: [], rank: _podP.rank === "contra" ? "contra" : "expert", sim: { m: [1, 3, 6, 12].includes(_podP.m) ? _podP.m : 3, mode: ["follow", "bull", "rev"].includes(_podP.mode) ? _podP.mode : "follow", hold: [7, 30, 90].includes(_podP.hold) ? _podP.hold : 30 }, cfg: null, feeds: new Map(), px: new Map(), pxBusy: false, job: null, q: "", found: null, qErr: null, busy: 0, booted: false, sid: 0, err: null };
-const podSavePrefs = () => store.set("pod:prefs", { rank: POD.rank, ...POD.sim });
+const POD = { view: "home", feed: null, key: null, hist: [], rank: _podP.rank === "contra" ? "contra" : "expert", cw: [7, 30, 90].includes(_podP.cw) ? _podP.cw : 30, sim: { m: [1, 3, 6, 12].includes(_podP.m) ? _podP.m : 3, mode: ["follow", "bull", "rev"].includes(_podP.mode) ? _podP.mode : "follow", hold: [7, 30, 90].includes(_podP.hold) ? _podP.hold : 30 }, cfg: null, feeds: new Map(), px: new Map(), pxBusy: false, job: null, q: "", found: null, qErr: null, busy: 0, booted: false, sid: 0, err: null };
+const podSavePrefs = () => store.set("pod:prefs", { rank: POD.rank, cw: POD.cw, ...POD.sim });
 // 整理結果有兩個來源：排程整理好的（learner/data/podcast/index.json，打開就有）＋這個瀏覽器自己整理或手動新增的（localStorage）
 const podLocal = () => (POD.local ||= store.get("pod:sums", {}) || {});
 const podSave = () => { POD.merged = null; try { store.set("pod:sums", podLocal()); } catch { POD.err = "瀏覽器的儲存空間滿了，舊的整理結果可能存不下。"; } };
@@ -325,6 +325,37 @@ function podShowView() {
     <h2 class="ph2">單集 ${v && !srvShow ? `<span class="pbatch">${POD.cfg?.notes ? `<button class="btn sm" data-pbatch="notes" ${POD.job?.busy ? "disabled" : ""}>整理最近 5 集（節目說明）</button>${POD.cfg?.audio ? `<button class="btn sm" data-pbatch="audio" ${POD.job?.busy ? "disabled" : ""}>整理最近 3 集（聽完整集）</button>` : ""}` : ""}</span>` : ""}</h2>
     ${SE.length ? `<ul class="peps">${SE.slice(0, 60).map(e => { const key = podKey(POD.feed, e.guid); return `<li data-pep="${key}" role="button" tabindex="0"><span>${esc(e.title)}</span><span class="note">${twDate(e.date).slice(5).replace("-", "/")}${S[key] ? "・✓ 已整理" : ""}</span></li>`; }).join("")}</ul>${POD.job?.busy ? podJobHtml(POD.job.key) : ""}` : podEmpty(POD.busy ? "載入中…" : "沒有單集資料。")}`;
 }
+// 共識與分歧：期間內每一檔被幾個不同節目看多／看空（同一節目講很多次只算一個），找出多個節目一起看好、一起看壞、意見相反，以及最近一週熱度上升最快的標的
+const POD_CW = [7, 30, 90];
+function podCons(calls, days, today = podToday()) {
+  const from = addDays(today, -days), wk = addDays(today, -7), M = new Map();
+  for (const c of calls) { if (!c.code || c.date < from) continue;
+    const g = M.get(c.code) || M.set(c.code, { code: c.code, name: c.name, bull: new Map(), bear: new Map(), n: 0, n7: 0, last: c }).get(c.code);
+    g[c.dir === "bear" ? "bear" : "bull"].set(c.feed, c); g.n++; if (c.date > wk) g.n7++; if (c.date > g.last.date) g.last = c; }
+  const L = [...M.values()].map(g => ({ ...g, nb: g.bull.size, ns: g.bear.size, pre: (g.n - g.n7) / Math.max(1, (days - 7) / 7) })); // pre：前面每週平均被提到幾次
+  return { bull: L.filter(g => g.nb >= 2 && g.nb > g.ns).sort((a, b) => b.nb - a.nb || b.n - a.n), bear: L.filter(g => g.ns >= 2 && g.ns > g.nb).sort((a, b) => b.ns - a.ns || b.n - a.n),
+    split: L.filter(g => g.nb && g.ns).sort((a, b) => Math.min(b.nb, b.ns) - Math.min(a.nb, a.ns) || b.n - a.n),
+    hot: days > 7 ? L.filter(g => g.n7 >= 2 && g.n7 > g.pre).sort((a, b) => b.n7 - b.pre - (a.n7 - a.pre)).slice(0, 15) : [] };
+}
+function podConsView() {
+  const days = POD_CW.includes(POD.cw) ? POD.cw : 30, R = podCons(podCalls(), days);
+  const shows = m => [...m.values()].map(c => esc(c.show || "")).join("、");
+  const row = (g, extra = "") => { const tw = /^\d/.test(g.code), q = typeof W !== "undefined" ? W.quotes?.get(g.code) : null, tot = g.nb + g.ns || 1;
+    return `<li class="pcons"><button class="pcode" data-sel="${esc(g.code)}">${tw ? "TWSE" : "US"}:${esc(g.code)}</button><span class="pname">${esc(g.name || nameOf(g.code))}</span>${typeof wStar === "function" ? wStar(g.code) : ""}
+      ${q?.chgPct != null ? `<b class="${cls(q.chgPct)}">${q.chgPct > 0 ? "+" : ""}${(+q.chgPct).toFixed(2)}%</b>` : ""}
+      <span class="pcbar" title="看多 ${g.nb} 個節目、看空 ${g.ns} 個節目"><i class="up" style="width:${(g.nb / tot * 100).toFixed(0)}%"></i><i class="down" style="width:${(g.ns / tot * 100).toFixed(0)}%"></i></span>
+      <span class="note">看多 ${g.nb}・看空 ${g.ns}${extra}</span>
+      <small class="note">${g.nb ? `看多：${shows(g.bull)}` : ""}${g.nb && g.ns ? "　" : ""}${g.ns ? `看空：${shows(g.bear)}` : ""}</small>
+      ${g.last?.quote ? `<blockquote class="pq ${g.last.dir}">${esc(g.last.quote)}<small>— ${esc(g.last.show || "")}・${esc(g.last.date)}</small></blockquote>` : ""}</li>`; };
+  const sec = (t, d, L, extra) => `<h2 class="ph2">${t} <span class="note">${L.length} 檔</span></h2><p class="note">${d}</p>${L.length ? `<ul class="pconsl">${L.slice(0, 20).map(g => row(g, extra?.(g))).join("")}</ul>` : `<p class="note">這段期間沒有。</p>`}`;
+  const codes = [...new Set([...R.bull, ...R.bear, ...R.split, ...R.hot].map(g => g.code))]; if (codes.length && typeof loadIndQuotes === "function") loadIndQuotes(codes); // 今天漲跌
+  return `<div class="ptop"><h2 class="ph2" style="margin:0">共識與分歧</h2><div class="seg" role="group" aria-label="期間">${POD_CW.map(d => `<button data-pcw="${d}" aria-pressed="${d === days}">近 ${d} 天</button>`).join("")}</div></div>
+    <p class="note">同一檔股票被幾個不同節目看多或看空（同一個節目講很多次只算一次）。用自動整理與你在這個瀏覽器整理的單集；只是統計誰說了什麼，不代表會漲跌。</p>
+    ${sec("多個節目一起看多", "至少兩個節目看多、而且看多的節目比看空多。", R.bull)}
+    ${sec("多個節目一起看空", "至少兩個節目看空、而且看空的節目比看多多。", R.bear)}
+    ${sec("意見分歧", "這段期間有節目看多、也有節目看空。", R.split)}
+    ${days > 7 ? sec("熱度上升", "最近 7 天被提到的次數，比前面平均每週多最多。", R.hot, g => `・近 7 天 ${g.n7} 次（之前每週約 ${g.pre.toFixed(1)} 次）`) : ""}`;
+}
 function podRankView() {
   const shows = [...new Set([...podFollows().map(s => s.feed), ...Object.values(podSums()).map(s => s.feed)])].map(feed => ({ s: podShowOf(feed), st: podStats(podCalls(feed)) }));
   const ok = shows.filter(x => x.st.settled), few = shows.filter(x => !x.st.settled);
@@ -349,8 +380,8 @@ function renderPod() {
   podBoot();
   if (POD.booted && !POD.pxBusy) setTimeout(podLoadPx, 0); // 有缺的股價（或之前失敗的）就補抓
   const tab = ["ep", "show"].includes(POD.view) ? POD.hist.find(h => !["ep", "show"].includes(h.view))?.view || "home" : POD.view;
-  $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="節目觀點" id="podSeg">${[["home", "最新筆記"], ["rank", "提及標的表現"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
-  const body = POD.view === "ep" ? podEpView() : POD.view === "show" ? podShowView() : POD.view === "rank" ? podRankView() : POD.view === "follow" ? podFollowView() : podHome();
+  $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="Podcast 觀點" id="podSeg">${[["home", "最新筆記"], ["cons", "共識與分歧"], ["rank", "提及標的表現"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
+  const body = POD.view === "ep" ? podEpView() : POD.view === "show" ? podShowView() : POD.view === "rank" ? podRankView() : POD.view === "cons" ? podConsView() : POD.view === "follow" ? podFollowView() : podHome();
   const abn = (POD.view === "home" || POD.view === "rank") && typeof offAbnHtml === "function" ? offAbnHtml() : ""; // 證交所點名的節目異常推介個股（official.js）
   $("#lx").innerHTML = `<div class="pod">${POD.err ? `<p class="note">⚠︎ ${esc(POD.err)}</p>` : ""}${abn}${body}<p class="note pnotice">${POD_NOTICE} <a href="${CONTACT_URL}" target="_blank" rel="noopener">意見回報 ↗</a>　節目封面取自各節目公開的 RSS。</p></div>`;
   return "財經節目：AI 整理重點、追蹤主持人看多／看空的真實表現（相對大盤）。只是回顧統計，不是投資建議。";
@@ -384,6 +415,7 @@ function podInit() {
       if (L?.calls?.some(c => c.id === id)) L.calls = L.calls.filter(c => c.id !== id); else store.set("pod:hide", [...(store.get("pod:hide", []) || []), id]); podSave(); podRender(); }
     else if (g("[data-pfol]")) { const feed = g("[data-pfol]").dataset.pfol, s = POD.found?.find(x => x.feed === feed) || { ...podShowOf(feed), feed }; store.set("pod:follows", [...podFollows().filter(f => f.feed !== feed), { id: s.id || podHash(feed), name: s.name, author: s.author, art: s.art, feed }]); podFeed(feed).then(podRender).catch(() => {}); podRender(); }
     else if (g("[data-punf]")) { const feed = g("[data-punf]").dataset.punf; store.set("pod:follows", podFollows().filter(f => f.feed !== feed)); podRender(); }
+    else if (g("[data-pcw]")) { POD.cw = +g("[data-pcw]").dataset.pcw; podSavePrefs(); podRender(); }
     else if (g("[data-prk]")) { POD.rank = g("[data-prk]").dataset.prk; podSavePrefs(); podRender(); }
     else if (g("[data-psim]")) { const b = g("[data-psim]"), k = b.dataset.psim; POD.sim[k] = k === "m" ? +b.dataset.v : b.dataset.v; podSavePrefs(); podRender(); }
     else if (g("[data-pbatch]")) { const m = g("[data-pbatch]").dataset.pbatch; podBatch(POD.feed, m === "audio" ? 3 : 5, m); }
@@ -430,6 +462,9 @@ function podInit() {
 .pod .pkey2 { border-left-color: var(--line); } .pod .pkey2 .pkh { color: var(--muted); } .pod .pkey2 li::marker { color: var(--muted); }
 .pod .pkey ul { margin: 0; padding-left: 20px; } .pod .pkey li { margin: 6px 0; line-height: 1.75; } .pod .pkey li::marker { color: var(--up); }
 .pod .psec { font-size: 16px; font-weight: 500; margin: 18px 0 6px; } .pod .pbody { line-height: 1.85; margin: 0 0 8px; white-space: pre-wrap; }
+.pod .pconsl { list-style: none; margin: 4px 0 14px; padding: 0; display: grid; gap: 12px; }
+.pod .pcons { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 0 8px; } .pod .pcons > small { flex-basis: 100%; line-height: 1.6; } .pod .pcons .pq { flex-basis: 100%; margin: 2px 0 0; } .pod .pcons .pq small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.pod .pcbar { display: inline-flex; width: 64px; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--ink) 8%, transparent); } .pod .pcbar i { height: 100%; } .pod .pcbar .up { background: var(--up); } .pod .pcbar .down { background: var(--down); }
 .pod .pcall { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; margin: 10px 0; background: var(--grad-panel, var(--surface)); }
 .pod .pch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .pod .pst { margin-left: auto; }
 .pod .pcode { font-family: var(--font-mono); font-size: 15px; border: 0; background: none; color: var(--ink); cursor: pointer; padding: 0; text-decoration: underline dotted; } .pod .pname { font-size: 13px; color: var(--muted); }
