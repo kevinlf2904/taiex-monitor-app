@@ -726,7 +726,7 @@ class Chart {
     if (b) { b.textContent = on ? "✕ 縮小" : "⛶ 放大"; b.setAttribute("aria-pressed", on); }
     const ext = sec.querySelector("#kExpandBtn");
     if (ext) { ext.textContent = on ? "✕ 縮小" : "⛶ 放大"; ext.setAttribute("aria-pressed", on); }
-    this.draw();
+    chartFrameSync(); this.draw(); requestAnimationFrame(() => this.draw()); // iframe 改成滿版後下一個畫面尺寸才確定，再畫一次
   }
   // 手勢中的重畫合併到下一個畫面（每個畫面最多畫一次），拖曳、縮放比較順
   req() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; this.draw(); }); }
@@ -743,8 +743,10 @@ class Chart {
     const isFull = !!(this.host.closest(".chart-fullscreen") || this.host.classList.contains("chart-fullscreen")), gap = 10, axisH = 20;
     let volH = o.noVol ? 0 : Math.round((narrow ? 52 : 66) * Chart.prefs.sh), subH = Math.round((subs.length > 1 ? (narrow ? 80 : 96) : (narrow ? 92 : 112)) * Chart.prefs.sh), mainH;
     if (isFull) {
-      // 全螢幕：主圖、成交量、副圖要一起塞進畫面（手機橫拿、螢幕矮時，成交量和副圖等比例縮小，不會被擠到畫面外）
-      const top = Math.min(window.innerHeight * 0.45, Math.max(0, this.canvas.getBoundingClientRect().top)), avail = window.innerHeight - top - 6, minMain = narrow || window.innerHeight < 500 ? 130 : 200;
+      // 全螢幕：主圖、成交量、副圖要一起塞進放大框（手機直拿、橫拿都一樣；螢幕矮時成交量和副圖等比例縮小，不會被擠到畫面外）
+      // 用放大框本身的高度算（扣掉上面的工具列、下面的留白與安全區），不用 innerHeight：嵌在 iframe 裡時 innerHeight 可能是整頁的高度
+      const box = this.host.closest(".chart-fullscreen") || this.host, bh = box.clientHeight, pb = parseFloat(getComputedStyle(box).paddingBottom) || 0;
+      const top = Math.min(bh * 0.45, Math.max(0, this.canvas.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop)), avail = bh - pb - top - 4, minMain = narrow || bh < 500 ? 130 : 200;
       const rest = volH + subs.length * (gap + subH), fixed = gap + rest + axisH + 8;
       if (avail - fixed < minMain && rest > 0) { const f = Math.max(0.4, (avail - minMain - gap - subs.length * gap - axisH - 8) / (volH + subs.length * subH)); volH = Math.round(volH * f); subH = Math.round(subH * f); }
       mainH = Math.max(minMain, Math.round(avail - (gap + volH + subs.length * (gap + subH) + axisH + 8)));
@@ -1313,13 +1315,26 @@ function openStylePicker(setTheme) {
   document.body.appendChild(ov);
 }
 
+// 嵌在別的頁面（iframe：首頁的看盤、存股）裡放大圖表時，把整個 iframe 固定成螢幕大小（避開瀏海與底部橫條）；
+// 不然「全螢幕」只會和 iframe 一樣高（整頁內容的高度，好幾千 px），手機直拿、橫拿、電腦都塞不進畫面。縮小時還原，看盤頁再回報一次高度
+function chartFrameSync() {
+  let f = null; try { f = window.frameElement; } catch {} if (!f) return;
+  if (document.querySelector(".chart-fullscreen")) {
+    if (f.dataset.prevStyle === undefined) f.dataset.prevStyle = f.getAttribute("style") || "";
+    const t = "env(safe-area-inset-top, 0px)", r = "env(safe-area-inset-right, 0px)", b = "env(safe-area-inset-bottom, 0px)", l = "env(safe-area-inset-left, 0px)";
+    f.style.cssText = `position:fixed !important;top:${t} !important;left:${l} !important;width:calc(100% - ${l} - ${r}) !important;height:calc(100vh - ${t} - ${b}) !important;height:calc(100dvh - ${t} - ${b}) !important;max-height:none !important;margin:0 !important;z-index:9999 !important;border:0 !important;background:var(--bg,#09090b) !important;`;
+  } else if (f.dataset.prevStyle !== undefined) { f.setAttribute("style", f.dataset.prevStyle); delete f.dataset.prevStyle; if (typeof postHeight === "function") postHeight(); }
+}
+// 放大中轉向、或手機網址列收合（高度變了但寬度沒變）：重畫放大的圖
+if (typeof window !== "undefined") addEventListener("resize", () => { for (const c of Chart.all || []) if (c.host.closest(".chart-fullscreen")) c.req(); });
+
 if (typeof window !== "undefined" && !window.__chartEscInit) {
   window.__chartEscInit = true;
   window.addEventListener("keydown", e => {
     if (e.key === "Escape") {
       const full = document.querySelectorAll(".chart-fullscreen");
       if (full.length) {
-        full.forEach(el => el.classList.remove("chart-fullscreen"));
+        full.forEach(el => el.classList.remove("chart-fullscreen")); chartFrameSync();
         document.querySelectorAll("[data-z='expand'], #kExpandBtn, #tsExpandBtn").forEach(b => {
           b.textContent = "⛶ 放大";
           b.setAttribute("aria-pressed", "false");
