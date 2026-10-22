@@ -1916,7 +1916,7 @@ $("#listPane").addEventListener("click", e => {
   else if (t.closest("[data-hset]")) { const b = t.closest("[data-hset]"); W[b.dataset.hset] = b.dataset.v === "true"; store.set("watch:" + b.dataset.hset, W[b.dataset.hset]); renderList(); }
   else if (t.closest("[data-hopt]") && t.tagName === "INPUT") { const k = t.dataset.hopt; W[k] = t.checked; store.set("watch:" + k, W[k]); renderList(); }
   else if (t.closest("[data-hm]")) { W.holdMkt = t.closest("[data-hm]").dataset.hm; store.set("watch:hm", W.holdMkt); renderList(); pollList().then(renderList).catch(() => {}); }
-  else if (gx && gx.dataset.gx === "mktRefresh") { const f = { us: f => Promise.all([loadUsMkt(f), loadUsNews(f)]), gl: loadGlobal, macro: loadMacro, poly: loadPoly, news: loadMnews, otc: otcLoad, lst: otcLoad, off: offLoad }[W.mkReg] || loadMkt; rfRun("mktRefresh", () => f(true)); }
+  else if (gx && gx.dataset.gx === "mktRefresh") { const f = { us: f => Promise.all([loadUsMkt(f), loadWhyNews("us", f)]), gl: loadGlobal, macro: loadMacro, poly: loadPoly, news: loadMnews, otc: otcLoad, lst: otcLoad, off: offLoad }[W.mkReg] || (f => Promise.all([loadMkt(f), loadWhyNews("tw", f)])); rfRun("mktRefresh", () => f(true)); }
   else if (gx && gx.dataset.gx === "scrRefresh") rfRun("scrRefresh", () => loadScreen(true));
   else if (gx && gx.dataset.gx === "mfRefresh") rfRun("mfRefresh", () => { W.mf.days = W.mf.days.filter(d => d.date < W.today); W.mf.tried = new Set(); return loadMoney(10, true); });
   else if (t.closest("[data-hrtol]")) { W.hrTol = t.closest("[data-hrtol]").dataset.hrtol; store.set("watch:hrtol", W.hrTol); renderList(); }
@@ -4051,31 +4051,39 @@ function renderUsMkt(top) {
   h += hotSec(sec, "us");
   $("#lx").innerHTML = h;
 }
-// 美股為什麼漲跌：指數漲跌＋最新盤勢頭條（/api/news）＋每小時整理的總經消息（data/macro-news.json），可以請 AI 根據這些整理原因
-const US_WHY_Q = "美股 道瓊 那斯達克 收盤";
-async function loadUsNews(force = false) {
-  if (W.off || W.usnBusy || (!force && W.usn && Date.now() - W.usn.at < 600e3)) return; W.usnBusy = true;
-  try { const j = await getJ(`/api/news?q=${encodeURIComponent(US_WHY_Q)}`, true); W.usn = { items: (j.items || []).filter(x => !x.at || Date.now() - x.at < 36 * 3600e3).slice(0, 6), at: Date.now() }; } catch (e) { W.usn = { items: [], err: e.message, at: Date.now() }; } finally { W.usnBusy = false; }
-  if (W.lt === "mkt" && W.mkReg === "us") renderList();
+// 大盤為什麼漲跌（美股大盤、台股大盤共用）：最大漲跌的指數＋最新盤勢頭條（/api/news）＋每小時整理的總經消息（data/macro-news.json），可以請 AI 根據這些整理原因
+const WHY = { us: { q: "美股 道瓊 那斯達克 收盤", name: "美股", next: "對明天台股可能的影響（哪些族群要留意）" }, tw: { q: "台股 加權指數 盤勢", name: "台股", next: "接下來幾天要留意的族群與風險" } };
+async function loadWhyNews(m, force = false) {
+  const N = (W.whyN ||= {}), X = N[m]; if (W.off || X?.busy || (!force && X?.at && Date.now() - X.at < 600e3)) return; N[m] = { ...X, busy: true };
+  try { const j = await getJ(`/api/news?q=${encodeURIComponent(WHY[m].q)}`, true); N[m] = { items: (j.items || []).filter(x => !x.at || Date.now() - x.at < 36 * 3600e3).slice(0, 6), at: Date.now() }; } catch (e) { N[m] = { items: [], err: e.message, at: Date.now() }; }
+  if (W.lt === "mkt" && (W.mkReg || "tw") === m) renderList();
 }
-function usWhyHtml(J) {
-  loadUsNews(); if (!W.mn) loadMnews();
-  const ix = (J.indices || []).filter(x => x.chgPct != null), big = ix.reduce((a, x) => (Math.abs(x.chgPct) > Math.abs(a?.chgPct ?? 0) ? x : a), null), mv = big?.chgPct ?? 0;
-  const D = W.mn?.days?.[0], S = D?.us?.sum, why = (D?.us?.items || []).filter(x => x.topic === "盤勢").slice(0, 3), news = W.usn?.items || [];
+// ix：[{ name, chgPct }] 指數；info：給 AI 的其他畫面資料（類股、法人、權值股…）
+function whyHtml(m, ix, info = []) {
+  loadWhyNews(m); if (!W.mn) loadMnews();
+  const C = WHY[m], NW = W.whyN?.[m], big = ix.filter(x => x.chgPct != null).reduce((a, x) => (Math.abs(x.chgPct) > Math.abs(a?.chgPct ?? 0) ? x : a), null), mv = big?.chgPct ?? 0;
+  const D = W.mn?.days?.[0], S = D?.[m]?.sum, why = (D?.[m]?.items || []).filter(x => x.topic === "盤勢").slice(0, 3), news = NW?.items || [];
   const hm = t => (t ? new Date(t + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " ") : "");
-  const L = [...why, ...news.filter(x => !why.some(y => y.title === x.title))].slice(0, 5);
-  const key = "uswhy"; QAI[key] = { done: renderList, ctx: () => [`美股（${J.date || ""}，${{ open: "盤中", pre: "盤前", closed: "已收盤" }[J.session] || ""}）：` + ix.map(x => `${x.name} ${sgn(x.chgPct, 2)}%`).join("、"),
-      J.sectors?.length ? "類股 ETF：" + [...J.sectors].sort((a, b) => (a.chgPct ?? 0) - (b.chgPct ?? 0)).map(x => `${x.name} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : "",
-      J.macro?.length ? "期貨與宏觀：" + J.macro.map(x => `${x.name} ${x.price ?? "—"}（${sgn(x.chgPct ?? 0, 2)}%）`).join("、") : "",
-      J.megas?.length ? "權值股：" + J.megas.map(x => `${x.name || x.code} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : "",
-      "最新新聞標題：\n" + [...L, ...(D?.us?.items || []).filter(x => !L.includes(x)).slice(0, 10)].map(x => `- ${x.title}（${x.source || ""} ${hm(x.at)}）`).join("\n")].filter(Boolean).join("\n"),
-    q: "請用繁體中文回答：1) 今天美股為什麼這樣走（只根據上面的新聞標題與漲跌數字，引用標題裡的原因，沒有寫到的不要猜）2) 哪些類股、權值股帶頭漲跌 3) 對明天台股可能的影響（哪些族群要留意）4) 接下來要追蹤的數據或事件。每項 2～3 句，語氣保守。" };
-  const title = Math.abs(mv) >= 1 ? `美股今天為什麼${mv < 0 ? "跌" : "漲"}？` : "美股今天的盤勢";
-  return `<section class="mk uswhy"><h3>${title}${big ? `<span class="note">${esc(big.name)} <b class="${cls(mv)}">${sgn(mv, 2)}%</b></span>` : ""}</h3>
+  const L = [...why, ...news.filter(x => !why.some(y => y.title === x.title))].slice(0, 5), key = "why:" + m;
+  QAI[key] = { done: renderList, ctx: () => [`${C.name}指數：` + ix.filter(x => x.chgPct != null).map(x => `${x.name} ${sgn(x.chgPct, 2)}%`).join("、"), ...info,
+      "最新新聞標題：\n" + [...L, ...(D?.[m]?.items || []).filter(x => !L.includes(x)).slice(0, 10)].map(x => `- ${x.title}（${x.source || ""} ${hm(x.at)}）`).join("\n")].filter(Boolean).join("\n"),
+    q: `請用繁體中文回答：1) 今天${C.name}為什麼這樣走（只根據上面的新聞標題與漲跌數字，引用標題裡的原因，沒有寫到的不要猜）2) 哪些類股、權值股帶頭漲跌 3) ${C.next} 4) 接下來要追蹤的數據或事件。每項 2～3 句，語氣保守。` };
+  const title = Math.abs(mv) >= 1 ? `${C.name}今天為什麼${mv < 0 ? "跌" : "漲"}？` : `${C.name}今天的盤勢`;
+  return `<section class="mk mkwhy"><h3>${title}${big ? `<span class="note">${esc(big.name)} <b class="${cls(mv)}">${sgn(mv, 2)}%</b></span>` : ""}</h3>
     ${S?.head ? `<p class="mn-sum"><b>${esc(S.head)}</b>${S.impact ? `<br><small class="note">可能影響：${esc(S.impact)}</small>` : ""}</p>` : ""}
-    ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener"><span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">${W.usnBusy || !W.usn ? "載入最新頭條…" : W.usn.err ? "⚠︎ " + esc(W.usn.err) : "還沒有相關頭條"}</p>`}
+    ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener"><span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">${!NW || NW.busy ? "載入最新頭條…" : NW.err ? "⚠︎ " + esc(NW.err) : "還沒有相關頭條"}</p>`}
     ${qAiBlock({ key, R: W.qai[key] }, `${ico("ai")}AI 整理漲跌原因`)}
     <p class="note">頭條即時從 Google 新聞抓；總經消息每小時整理一次（大盤 → 總經消息）。</p></section>`;
+}
+const usWhyHtml = J => whyHtml("us", J.indices || [], [J.sectors?.length ? "類股 ETF：" + [...J.sectors].sort((a, b) => (a.chgPct ?? 0) - (b.chgPct ?? 0)).map(x => `${x.name} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : "",
+  J.macro?.length ? "期貨與宏觀：" + J.macro.map(x => `${x.name} ${x.price ?? "—"}（${sgn(x.chgPct ?? 0, 2)}%）`).join("、") : "", J.megas?.length ? "權值股：" + J.megas.map(x => `${x.name || x.code} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : ""]);
+function twWhyHtml() {
+  const J = W.mkt && !W.mkt.err ? W.mkt : {}, q = c => W.quotes.get(c), S = J.sectors || [], C = J.contrib;
+  const ix = [["T00", "加權指數"], ["O00", "櫃買指數"], ["TXF", "台指期"]].map(([c, name]) => ({ name, chgPct: q(c)?.chgPct }));
+  return whyHtml("tw", ix, [S.length ? "產業：" + [...S].sort((a, b) => (a.pct ?? 0) - (b.pct ?? 0)).map(x => `${x.name} ${sgn(x.pct ?? 0, 2)}%`).join("、") : "",
+    J.inst ? `三大法人（上市）：外資 ${sgn(J.inst.foreign, 2)} 億、投信 ${sgn(J.inst.trust, 2)} 億、自營商 ${sgn(J.inst.dealer, 2)} 億` : "",
+    C ? "加權指數貢獻點數：" + [...C.pos.slice(0, 5), ...C.neg.slice(0, 5)].map(x => `${x.name} ${sgn(x.pts, 2)} 點`).join("、") : "",
+    W.usm?.indices?.length ? "昨晚美股：" + W.usm.indices.map(x => `${x.name} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : ""]);
 }
 // 方塊樹狀圖（squarified）：values 依大小排好，回傳每塊在 W×H 裡的位置（這裡用百分比）
 function treemap(values, W, H) {
@@ -4159,7 +4167,7 @@ async function loadMnews(force = false) {
     if (!j?.days?.length) { const [tw, us, world] = await Promise.all(["台灣 央行 景氣 出口", "聯準會 美國 CPI 就業", "歐洲央行 日本央行 中國經濟"].map(q => getJ(`/api/news?q=${encodeURIComponent(q)}`, true).then(x => x.items || []).catch(() => [])));
       if (!tw.length && !us.length) throw new Error("暫時拿不到總經新聞"); j = { live: true, days: [{ date: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), at: Date.now(), tw: { items: tw.slice(0, 14) }, us: { items: us.slice(0, 14) }, world: { items: world.slice(0, 14) } }] }; }
     W.mn = { ...j, at: Date.now() }; if (!j.days.some(d => d.date === W.mnDay)) W.mnDay = j.days[0].date; } catch (e) { W.mn = { err: e.message, at: Date.now() }; } finally { W.mnLoading = false; }
-  if (W.lt === "mkt" && (W.mkReg === "news" || W.mkReg === "us")) renderList();
+  if (W.lt === "mkt" && (W.mkReg === "news" || W.mkReg === "us" || (W.mkReg || "tw") === "tw")) renderList();
 }
 // 總經消息的主題 → 對股市常見的影響（主題分類和 scripts/macro-news.mjs 的 TOPICS 一樣）
 const MN_IMPACT = { 利率: "降息（或預期降息）通常推升股市評價，對科技、成長股最有利；升息或「不降息」則讓高本益比股票承壓，壽險、銀行利差改善。",
@@ -4283,6 +4291,7 @@ function renderMkt() {
   if (W.mkReg === "gl") return renderGlobal(top);
   const J = W.mkt, q = c => W.quotes.get(c);
   let h = top + `<div class="ixcards three" id="mkCards">${mktCards()}</div>`;
+  h += twWhyHtml();
   const sec = (t, body, extra = "", seg = "") => `<section class="mk"><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</section>`;
   // 產業即時用自己的資料（/api/hot?type=rows），大盤統計還沒到或失敗時也照樣顯示
   if (!J) { $("#lx").innerHTML = h + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有大盤資料。" : "載入中…"}</p>` + irtHtml(sec) + hotSec(sec, "tw"); return; }

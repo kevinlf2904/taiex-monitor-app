@@ -32,11 +32,30 @@ for (const width of [390, 1280]) test(`美股大盤「今天為什麼跌」：�
   await ctx.route("**/api/news**", r => J(r, { ok: true, items: [{ title: "美股重挫 那斯達克跌3% 晶片股遭拋售", source: "測試報", link: "https://example.com/a", at: now - 1800e3 }] }));
   await ctx.route("**/data/macro-news.json", r => J(r, { updated: now, days: [{ date: day, at: now, us: { sum: { head: "通膨高於預期，降息延後，美股重挫", points: [], impact: "科技股承壓" }, items: [{ title: "美國CPI高於預期 美股大跌", topic: "盤勢", source: "測試", link: "https://example.com/b", at: now - 600e3 }] }, tw: { items: [] } }] }));
   await p.evaluate(() => { showList(); W.mkReg = "us"; setLt("mkt"); });
-  await p.waitForFunction(() => /晶片股遭拋售/.test(document.querySelector("#lx .uswhy")?.innerText || ""));
-  const t = await p.textContent("#lx .uswhy");
+  await p.waitForFunction(() => /晶片股遭拋售/.test(document.querySelector("#lx .mkwhy")?.innerText || ""));
+  const t = await p.textContent("#lx .mkwhy");
   assert.match(t, /美股今天為什麼跌？/); assert.match(t, /那斯達克 -3\.00%/); assert.match(t, /通膨高於預期，降息延後/); assert.match(t, /CPI高於預期 美股大跌/);
-  await p.click('#lx .uswhy [data-qai="uswhy"]'); await p.waitForFunction(() => /測試回覆/.test(document.querySelector("#lx .uswhy")?.innerText || ""));
-  if (process.env.SHOT) await p.locator("#lx .uswhy").screenshot({ path: `${process.env.SHOT}/uswhy-${width}.png` });
+  await p.click('#lx .mkwhy [data-qai="why:us"]'); await p.waitForFunction(() => /測試回覆/.test(document.querySelector("#lx .mkwhy")?.innerText || ""));
+  if (process.env.SHOT) await p.locator("#lx .mkwhy").screenshot({ path: `${process.env.SHOT}/uswhy-${width}.png` });
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "不橫向溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("台股大盤「今天為什麼漲跌」：盤勢頭條、台灣總經摘要、AI 整理（帶產業、法人資料）", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  const J = (r, o) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o) }), now = Date.now(), day = new Date(now + 8 * 3600e3).toISOString().slice(0, 10);
+  await ctx.route("**/api/news**", r => J(r, { ok: true, items: [{ title: "台股重挫400點 外資大賣半導體", source: "測試報", link: "https://example.com/t", at: now - 1800e3 }] }));
+  await ctx.route("**/data/macro-news.json", r => J(r, { updated: now, days: [{ date: day, at: now, tw: { sum: { head: "美股科技股重挫拖累台股", points: [], impact: "電子權值股承壓" }, items: [] }, us: { items: [] } }] }));
+  await ctx.route("**/api/market", r => J(r, { ok: true, source: "測試", date: day, indices: [], sectors: [{ name: "半導體業", pct: -3.2, value: 1, share: 30 }, { name: "航運業", pct: 1.1, value: 1, share: 3 }], inst: { foreign: -320.5, trust: 12, dealer: -8, total: -316.5 } }));
+  let asked = "";
+  await ctx.route("**/api/chat", async r => { asked = r.request().postData() || ""; J(r, { ok: true, text: "測試回覆" }); });
+  await p.evaluate(() => { showList(); W.mkReg = "tw"; setLt("mkt"); });
+  await p.waitForFunction(() => /外資大賣半導體/.test(document.querySelector("#lx .mkwhy")?.innerText || ""));
+  const t = await p.textContent("#lx .mkwhy");
+  assert.match(t, /台股今天(為什麼(漲|跌)？|的盤勢)/); assert.match(t, /美股科技股重挫拖累台股/);
+  await p.waitForFunction(() => W.mkt && !W.mkt.err);
+  await p.click('#lx .mkwhy [data-qai="why:tw"]'); await p.waitForFunction(() => /測試回覆/.test(document.querySelector("#lx .mkwhy")?.innerText || ""));
+  assert.match(asked, /半導體業 -3\.20%/); assert.match(asked, /外資 -320\.50 億/); assert.match(asked, /台股重挫400點/);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "不橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
