@@ -1135,7 +1135,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-139</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-140</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1280,6 +1280,7 @@ function apiTtl(url) {
   if (/^\/api\/kline\?/.test(u) || /^\/api\/futures\?daily=1/.test(u)) return 5 * M; // 最後一根會跟著即時報價更新，不靠快取
   if (/^\/api\/(stockinfo|news|broker)\?/.test(u)) return 15 * M;
   if (/^\/api\/oapi\?/.test(u)) return 30 * M; // 證交所、櫃買開放資料一天更新一次
+  if (/^\/api\/tdcc\?/.test(u)) return 12 * H; // 集保股權分散一週才更新一次
   if (/^\/api\/(company|annual|usinfo)\?/.test(u) || /^\/api\/daily\?meta=1/.test(u)) return 6 * H;
   if (/^\/api\/podcast\?(feed|q)=/.test(u)) return 30 * M;
   return 0;
@@ -3876,8 +3877,9 @@ $("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListe
 setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); if ((store.get("watch:paper", null)?.orders || []).length) paStart(); if (["rev", "pm3", "conf"].some(k => EVA()[k])) evStart(); }, 3000);
 setTimeout(syncBoot, 1500); // 雲端同步：開網頁時下載較新的資料、之後有改動自動上傳
 // 國會分頁：切換頁面（首頁、股票、人物）、期間、排序、在看盤開啟、問 AI
-$("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-csort],[data-copen],[data-cask],[data-cbt],[data-cpl],[data-twbt],[data-f13p],[data-f13s],[data-twgrp],[data-twamt],[data-twtab],[data-twmore],[data-twn],[data-rkset]"); if (!b) return; const d = b.dataset;
-  if (d.rkset != null) { const [k, val] = d.rkset.split(/:(.*)/s); W[k] = val; if (k === "cbtH") W.cbtH = +val; if (["cview", "f13v", "insv", "twov", "tdccV", "tdccScope", "cbtH", "cbtv"].includes(k)) store.set("watch:" + k, W[k]); return renderList(); }
+$("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-csort],[data-copen],[data-cask],[data-cbt],[data-cpl],[data-twbt],[data-f13p],[data-f13s],[data-twgrp],[data-twamt],[data-twtab],[data-twmore],[data-twn],[data-rkset],[data-tsel]"); if (!b) return; const d = b.dataset;
+  if (d.tsel) { if (!toolsOn()) cxOpenTw(d.tsel); return; } // 千張大戶、大戶共識、我的追蹤裡的台股：到台股個股頁（內部人分頁由 tools.js 處理）
+  if (d.rkset != null) { const [k, val] = d.rkset.split(/:(.*)/s); W[k] = val; if (k === "cbtH") W.cbtH = +val; if (["cview", "f13v", "insv", "twov", "tdccV", "tdccScope", "tdccP", "cxTdW", "cbtH", "cbtv"].includes(k)) store.set("watch:" + k, W[k]); return renderList(); }
   if (d.twgrp) { W.twoGrp = d.twgrp; W.twoN = 50; store.set("watch:twoGrp", d.twgrp); return renderList(); }
   if (d.twamt) { W.twoAmt = d.twamt; store.set("watch:twoAmt", d.twamt); return renderList(); }
   if (d.twtab) { W.twoTab = d.twtab; return renderList(); }
@@ -4363,11 +4365,12 @@ function renderCong() {
   const C = W.cong; if (!C) loadCong();
   if (W.cv === "bt") { W.cv = "home"; W.cview = "bt"; } // 申報後回測併進美國國會的「看」分頁（舊網址 #congress/backtest 也會到這裡）
   const [v, arg] = (W.cv || "home").split(/:(.*)/s);
-  $("#lTools").innerHTML = `<span class="note"><b class="cg-t">大戶與國會情報</b>・${v === "tw" ? "台灣政治人物財產申報（監察院廉政專刊）" : v === "ins" ? "台股內部人持股轉讓事前申報" : v === "tdcc" ? "集保結算所每週股權分散（千張大戶增減與籌碼集中度）" : v === "cons" ? "國會、13F、台灣政治人物、內部人、千張大戶的動向疊在一起" : v === "fol" ? "追蹤的人與自選股的新申報" : v === "f13" ? "美國機構 13F 持股申報" : "美國國會議員公開交易申報"}${(v === "home" || v === "bt" || v === "stock" || v === "person") && C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "美國國會"], ["f13", "13F 機構"], ["tw", "台灣政治人物"], ["ins", "內部人"], ["tdcc", "千張大戶"], ["cons", "大戶共識"], ["fol", `我的追蹤${(n => (n ? `（${n}）` : ""))(cxNewN())}`]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${["home", "f13", "tw", "ins", "tdcc"].includes(v) && !arg ? `<span class="note cx-how">每一類用法都一樣：選<b>期間</b> → 用<b>篩選</b>找人或股票 → 在<b>看</b>選排行、最新申報、主題熱圖、申報延遲、申報後回測；點名字看個人，點股票看個股。</span>` : ""}${v === "stock" || v === "person" || ((v === "f13" || v === "tw") && arg) ? `<button class="btn sm" data-cv="${v === "f13" || v === "tw" ? v : "home"}">‹ 返回</button>` : ""}${["home", "f13", "tw", "ins", "tdcc"].includes(v) && !arg ? scBtn("cong") : ""}`;
+  $("#lTools").innerHTML = `<span class="note"><b class="cg-t">大戶與國會情報</b>・${v === "tw" && arg?.startsWith("s:") ? "台股大戶全貌（千張大戶、內部人、政治人物）" : v === "tw" ? "台灣政治人物財產申報（監察院廉政專刊）" : v === "ins" ? "台股內部人持股轉讓事前申報" : v === "tdcc" ? "集保結算所每週股權分散（千張大戶增減與籌碼集中度）" : v === "cons" ? "國會、13F、台灣政治人物、內部人、千張大戶的動向疊在一起" : v === "fol" ? "追蹤的人與自選股的新申報" : v === "f13" ? "美國機構 13F 持股申報" : "美國國會議員公開交易申報"}${(v === "home" || v === "bt" || v === "stock" || v === "person") && C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "美國國會"], ["f13", "13F 機構"], ["tw", "台灣政治人物"], ["ins", "內部人"], ["tdcc", "千張大戶"], ["cons", "大戶共識"], ["fol", `我的追蹤${(n => (n ? `（${n}）` : ""))(cxNewN())}`]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${cxGoHtml()}${["home", "f13", "tw", "ins", "tdcc"].includes(v) && !arg ? `<span class="note cx-how">每一類用法都一樣：選<b>期間</b>（太早的資料會自動補抓）→ 用<b>篩選</b>找人或股票 → 在<b>看</b>選排行、最新申報、主題熱圖、申報延遲、申報後回測；點名字看個人，點股票看那檔的大戶全貌（也可以在上面直接查個股）。</span>` : ""}${v === "stock" || v === "person" || ((v === "f13" || v === "tw") && arg) ? `<button class="btn sm" data-cv="${v === "f13" || v === "tw" ? v : "home"}">‹ 返回</button>` : ""}${["home", "f13", "tw", "ins", "tdcc"].includes(v) && !arg ? scBtn("cong") : ""}`;
   if (v === "ins") { const r = toolsBody("ins"); $("#lx").innerHTML = r.h; return r.note; }
   if (v === "tdcc") { $("#lx").innerHTML = cxTdccHtml(); return "資料來源：臺灣集中保管結算所（TDCC）集保戶股權分散表開放資料。每週五收盤後更新，僅供籌碼研究參考，不是買賣建議。"; }
   if (v === "cons") { $("#lx").innerHTML = cxConsHtml(); return "資料：眾議院、參議院定期交易報告、SEC 13F、監察院廉政專刊、公開資訊觀測站內部人轉讓申報。僅供研究參考，不是買賣建議。"; }
   if (v === "fol") { $("#lx").innerHTML = cxFolHtml(); return "追蹤清單存在這台裝置（開了雲端同步會一起備份）；Telegram 推播在收盤後的排程送出。"; }
+  if (v === "tw" && arg?.startsWith("s:")) { $("#lx").innerHTML = cxTwStock(arg.slice(2)); return "資料：集保結算所股權分散表（排程每週累積，更早的週次向集保網站查詢）、公開資訊觀測站內部人轉讓事前申報、監察院廉政專刊。僅供研究參考，不是買賣建議。"; }
   if (v === "tw") { $("#lx").innerHTML = twoHtml(arg); cxDecor(v, arg); return twoNote(); }
   if (v === "f13") { $("#lx").innerHTML = f13Html(arg); cxDecor(v, arg); return "資料：SEC EDGAR Form 13F-HR（每天檢查一次新申報）；股票代號用 OpenFIGI 由 CUSIP 對照，對不到的只顯示名稱。僅供研究參考，不是買賣建議。"; }
   if (!C || C.err || !C.trades?.length) { $("#lx").innerHTML = `<p class="note" style="padding:16px">${!C ? "載入中…" : C.err ? "⚠︎ 還沒有資料（" + esc(C.err) + "）。資料由每天的排程從眾議院、參議院官方申報整理，第一次跑完後就會出現。" : "還沒有資料：資料由每天的排程從眾議院、參議院官方申報整理，第一次跑完後就會出現。"}</p>`; return "資料來源：眾議院書記官、參議院電子申報系統的定期交易報告（PTR）。"; }
@@ -4404,6 +4407,7 @@ function renderCong() {
       <div class="tw-ctl"><button class="btn sm" data-copen="${esc(T)}">在看盤開啟</button><button class="btn sm" data-cask="stock:${esc(T)}">${ico("ai")}問 AI 整理</button></div>
       ${rkCards([st(30), st(90), { t: "買進日期（近 90 天）", sub: b90.length > 1 ? `相隔 ${congDays(b90[0], b90[b90.length - 1])} 天・${congDays(b90[0], b90[b90.length - 1]) <= 14 ? "集中在相近日期" : "分散在不同時間"}` : "", v: b90.length ? `${b90[0].slice(5).replace("-", "/")}～${b90[b90.length - 1].slice(5).replace("-", "/")}` : "—" }])}
       ${congAIHtml("stock:" + T)}<div class="chartbox" id="congChart"></div><p class="note">人物標記對應交易日期，標在當天的收盤價，<strong>不是實際成交價</strong>（申報只有日期和金額區間）。</p>
+      ${cxF13Of(T)}
       <h4>交易紀錄</h4>${rkList(all.map(t => { const p = C.people?.[t.pid] || {}; return { no: t.traded.slice(5).replace("-", "/"), attr: `data-cv="person:${esc(t.pid)}"`, mono: rkMono(rkInit(pName(t.pid)), RK_C[p.chamber] || RK_C.眾議院), name: `${esc(pName(t.pid))} <span class="${t.k === "buy" ? "up" : t.k === "sell" ? "down" : ""}">${t.k === "buy" ? "買進" : t.k === "sell" ? "賣出" + (t.partial ? "（部分）" : "") : "交換"}</span>`, sub: `${esc(p.chamber || "")}・${t.filed.replace(/-/g, "/")} 申報（隔 ${congDays(t.traded, t.filed)} 天）${t.owner !== "本人" ? "・" + esc(t.owner) : ""}${t.assetType !== "股票" ? "・" + esc(t.assetType) : ""}`, val: amtTxt(t.amount), vsub: t.doc ? "有原始文件" : "" }; }))}
       <p class="note">原始文件：${all.filter(t => t.doc).slice(0, 8).map(t => `<a href="${esc(t.doc)}" target="_blank" rel="noopener">${t.filed}</a>`).join("、") || "—"}</p></section>`;
   } else if (v === "person") {

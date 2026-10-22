@@ -33,6 +33,7 @@ const ROUTES = {
   poly: () => import("./_lib/poly.js"),
   stocks: () => import("./_lib/stocks.js"),
   symbol: () => import("./_lib/symbol.js"),
+  tdcc: () => import("./_lib/tdcc.js"),
   usearn: () => import("./_lib/usearn.js"),
   usinfo: () => import("./_lib/usinfo.js"),
   usmarket: () => import("./_lib/usmarket.js"),

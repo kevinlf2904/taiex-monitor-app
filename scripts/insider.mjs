@@ -4,8 +4,10 @@
 // 資料集路徑由 OpenAPI 的 swagger.json 依名稱找（名稱含「轉讓」），欄位也依中文欄名判斷，換路徑或欄位順序也能讀。
 // 申報後一個月內（盤後鉅額、一般交易）才可轉讓，所以「申報」不等於已經賣出；最近約 3 年的申報會累積保留。
 //   --dump  只列出找到的資料集與前幾筆原始資料，不寫檔（除錯用）
+//   --year 2025 [--minutes 80]  補更早的年份：從公開資訊觀測站「持股轉讓日報表」逐日查那一年上市、上櫃的申報，存到 learner/data/insider-arch/2025.json＋index.json
+//     （OpenAPI 只有最近幾天；網頁選的期間比主檔早時才讀年份檔）。查過的日子記在年份檔的 days，時間不夠先存，再跑一次接著查。
 
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const OUT = fileURLToPath(new URL("../learner/data/insider.json", import.meta.url));
@@ -64,4 +66,45 @@ export async function main() {
   await writeFile(OUT, JSON.stringify(out));
   return out;
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log(o.skipped ? "沒有更新" : "完成", o.rows?.length ?? 0, "筆", (o.notes || []).join("；"))).catch(e => { console.error(e); process.exit(1); });
+// ---------- 補更早的年份（公開資訊觀測站 持股轉讓日報表） ----------
+// 第一步（ajax_t56sb12_q1／q2）只回一張要再送的表單；直接送第二步：step=2、report＝SY（上市）／OY（上櫃），日期用民國年
+const MOPS = "https://mopsov.twse.com.tw/mops/web/ajax_t56sb12", ARCH = fileURLToPath(new URL("../learner/data/insider-arch/", import.meta.url));
+const cellsOf = tr => [...tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => m[1].replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim());
+// 日報表 HTML → 和 OpenAPI 一樣的列（normRow 的欄位）。欄位依「申報日期」那格往後數：代號、名稱、身分、姓名、轉讓方式、轉讓股數、每日盤中最大得轉讓股數、受讓人、
+// 目前持有（自有、信託）、預定轉讓總股數（自有、信託）、預定轉讓後持股（自有、信託）、有效轉讓期間
+export function parseMopsDay(html, market) {
+  const out = [];
+  for (const m of String(html).matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const c = cellsOf(m[1]), i = c.findIndex(x => /^\d{2,3}\/\d{2}\/\d{2}$/.test(x)); if (i < 0 || c.length < i + 16) continue;
+    const d = toIso(c[i]), code = c[i + 1]; if (!d || !/^\d{4,6}[A-Z]?$/.test(code)) continue;
+    const two = k => { const a = num(c[k]), b = num(c[k + 1]); return a == null && b == null ? null : (a || 0) + (b || 0); }, range = c[i + 15].split(/[~～]/).map(toIso).filter(Boolean);
+    out.push({ d, code, name: c[i + 2], who: c[i + 4], role: c[i + 3], how: c[i + 5], sh: two(i + 11) ?? num(c[i + 6]), hold: two(i + 9), after: two(i + 13), to: c[i + 8], from: range[0] || null, until: range[1] || range[0] || null, market });
+  }
+  return out;
+}
+const mopsDay = async (iso, report) => { const [y, m, d] = iso.split("-"), body = `encodeURIComponent=1&step=2&year=${+y - 1911}&month=${m}&day=${d}&report=${report}&firstin=true`;
+  for (let k = 0; ; k++) { const r = await fetch(MOPS, { method: "POST", headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded" }, body, signal: AbortSignal.timeout(30000) }); const t = await r.text();
+    if (r.ok && !/查詢過於頻繁|頻繁|稍後再試|安全性考量/.test(t)) return t; if (k >= 3) throw new Error(`HTTP ${r.status}${/頻繁/.test(t) ? "（查詢太頻繁）" : ""}`); await new Promise(z => setTimeout(z, 15000 * (k + 1))); } };
+export async function archive(year, { minutes = 80, log = console.log } = {}) {
+  const y = +year, today = new Date().toISOString().slice(0, 10); if (!(y >= 2008 && `${y}` <= today.slice(0, 4))) throw new Error(`年份不對：${year}`);
+  const f = `${ARCH}${y}.json`, prev = await readFile(f, "utf8").then(JSON.parse).catch(() => ({ rows: [], days: {} })), days = prev.days || {}, rows = [...(prev.rows || [])], seen = new Set(rows.map(r => [r.d, r.code, r.who, r.how, r.sh].join("|")));
+  const deadline = Date.now() + minutes * 60e3; let left = 0, fail = 0;
+  for (let t = Date.parse(`${y}-01-01`); t <= Date.parse(`${y}-12-31`); t += 864e5) {
+    const iso = new Date(t).toISOString().slice(0, 10), wd = new Date(t).getUTCDay(); if (iso >= today || wd === 0 || wd === 6) continue;
+    for (const [rep, market] of [["SY", "上市"], ["OY", "上櫃"]]) {
+      const key = `${iso}:${rep}`; if (days[key] != null) continue; if (Date.now() > deadline) { left++; continue; }
+      try { const L = parseMopsDay(await mopsDay(iso, rep), market); for (const r of L) { const k = [r.d, r.code, r.who, r.how, r.sh].join("|"); if (!seen.has(k)) { seen.add(k); rows.push(r); } } days[key] = L.length; }
+      catch (e) { fail++; log(`  ${key} 失敗：${e.message}`); }
+      await new Promise(z => setTimeout(z, 1200));
+    }
+  }
+  rows.sort((a, b) => b.d.localeCompare(a.d) || a.code.localeCompare(b.code));
+  const done = !left && !fail, out = { year: y, updated: new Date().toISOString(), done, source: "公開資訊觀測站 股權轉讓事前申報－上市、上櫃公司持股轉讓日報表", rows, days };
+  await mkdir(ARCH, { recursive: true }); await writeFile(f, JSON.stringify(out));
+  const idx = await readFile(`${ARCH}index.json`, "utf8").then(JSON.parse).catch(() => ({ years: {} })), D = rows.map(r => r.d).sort();
+  idx.years[y] = { n: rows.length, from: D[0] || null, to: D.at(-1) || null, done }; idx.updated = out.updated; await writeFile(`${ARCH}index.json`, JSON.stringify(idx));
+  log(`${y} 年：${rows.length} 筆申報${done ? "，查完了" : `，還有 ${left} 天沒查、${fail} 天失敗（再跑一次會接著查）`}`);
+  return out;
+}
+if (process.argv[2] === "--year") archive(process.argv[3], { minutes: +(process.argv[process.argv.indexOf("--minutes") + 1]) || 80 }).catch(e => { console.error(e); process.exit(1); });
+else if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log(o.skipped ? "沒有更新" : "完成", o.rows?.length ?? 0, "筆", (o.notes || []).join("；"))).catch(e => { console.error(e); process.exit(1); });

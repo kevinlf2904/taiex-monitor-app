@@ -1,9 +1,11 @@
 // 排程程式的解析函式：用固定的範例資料確認欄位對應沒壞（node --test tests/unit.test.mjs）
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normRow } from "../scripts/insider.mjs";
+import { normRow, parseMopsDay } from "../scripts/insider.mjs";
 import { mergeRows, compare, parseInfoTable } from "../scripts/sec13f.mjs";
-import { parseTdcc } from "../scripts/tdcc.mjs";
+import { parseTdcc, rankOf, addRow } from "../scripts/tdcc.mjs";
+import { parseWeek, weekRow, tokenOf, datesOf, tdccWeeks } from "../api/_lib/tdcc.js";
+import { tdccHolders, tdccDist } from "../api/_lib/company.js";
 import { lendRow } from "../scripts/chipx.mjs";
 import { appendDay, shards } from "../scripts/market-scan.mjs";
 import { evalDoc, evalFollow } from "../scripts/alerts-push.mjs";
@@ -578,4 +580,49 @@ test("事件提醒設定寫進推播清單：只看庫存或加上自選；只�
   assert.deepEqual(alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ pm3: true, scope: "all" }) }, "1").ev, { on: ["pm3"], codes: ["2330", "2317"] });
   assert.equal(docHas(alertDoc({ "kline:watch:evalert": JSON.stringify({ brief: true }) }, "1")), true, "沒有庫存也可以收早報");
   assert.equal(docHas(alertDoc({ "kline:watch:evalert": JSON.stringify({ rev: true }) }, "1")), false, "勾了營收但沒有庫存就不用檢查");
+});
+
+test("集保網站查詢：解析分級表、週資料欄位和排程一樣、token 每次換新", async () => {
+  const lv = [[1, "1-999", 2459344, 287438824, 1.1], [2, "1,000-5,000", 446137, 853315544, 3.29], [8, "40,001-50,000", 1000, 1e6, 0.61], [12, "400,001-600,000", 300, 2e8, 1.5], [15, "1,000,001以上", 1476, 2.2e10, 84.56], [16, "差異數調整（說明4）", 0, 0, 0], [17, "合　計", 3098860, 2.59e10, 100]];
+  const page = (tok, rows) => `<form><input type="hidden" name="SYNCHRONIZER_TOKEN" value="${tok}"><select name="scaDate"><option value="20261016">20261016</option><option value="20261008">20261008</option><option value="20251023">20251023</option></select></form>
+    <table class="table"><thead><tr><th>序</th><th>持股/單位數分級</th><th>人數</th><th>股數/單位數</th><th>占集保庫存數比例 (%)</th></tr></thead>${rows ? lv.map(r => `<tr><td align="center">${r[0]}</td><td>${r[1]}</td><td align="right">${r[2].toLocaleString()}</td><td>${r[3].toLocaleString()}</td><td>${r[4].toFixed(2)}</td></tr>`).join("") : `<tr><td colspan="5"><span>查無此資料</span></td></tr>`}</table>`;
+  assert.equal(tokenOf(page("abc-123", 0)), "abc-123");
+  assert.deepEqual(datesOf(page("t", 0)), ["2026-10-16", "2026-10-08", "2025-10-23"]);
+  assert.equal(parseWeek(page("t", 0)), null, "查無此資料");
+  const W = parseWeek(page("t", 1)); assert.equal(W.levels.length, 7);
+  assert.deepEqual(weekRow("2026-10-16", W), ["2026-10-16", 84.56, 86.06, 5, 3098860, 1476]);
+  // 每條連線先開查詢頁，之後每次送出都用上一個回應給的 token；查無資料的週次跳過
+  const seen = []; let n = 0;
+  const fetchFn = async (u, o = {}) => { if (o.method !== "POST") return new Response(page(`t${n++}`, 0), { headers: { "set-cookie": "JSESSIONID=x; Path=/" } });
+    const b = new URLSearchParams(o.body); seen.push([b.get("scaDate"), b.get("SYNCHRONIZER_TOKEN"), o.headers.Cookie, b.get("stockNo")]); return new Response(page(`t${n++}`, b.get("scaDate") !== "20251023")); };
+  const r = await tdccWeeks("2330", { from: "2025-01-01", to: "2026-10-10", conc: 1, fetchFn });
+  assert.deepEqual(r.rows.map(x => x[0]), ["2026-10-08"], "只查 from～to 之間、查無資料的不放");
+  assert.deepEqual(seen.map(x => x[0]), ["20261008", "20251023"]); assert.ok(seen.every(x => x[2] === "JSESSIONID=x" && x[3] === "2330"));
+  assert.notEqual(seen[0][1], seen[1][1], "第二次用新的 token");
+  assert.equal(r.dist.d, "2026-10-08"); assert.ok(r.dist.levels.every(x => x.lv <= 15));
+  // /api/company 股權分散備援：換成 FinMind 一樣的欄位
+  assert.deepEqual(tdccHolders(r.rows), [{ d: "2026-10-08", b400: 86.06, b1000: 84.56, people1000: 1476, r50: 5 }]);
+  assert.deepEqual(tdccDist(r.dist).levels.map(x => x.lo), [1, 1000, 40001, 400001, 1000001]);
+});
+
+test("集保排程：每檔每週一列、保留 156 週，4／13 週排行用最接近 n 週前的那週", () => {
+  const a = []; for (let i = 0; i < 160; i++) addRow(a, [new Date(Date.parse("2023-09-01") + i * 7 * 864e5).toISOString().slice(0, 10), 50 + i * 0.1, 60, 20 - i * 0.01, 1000 + i, 10]);
+  assert.equal(a.length, 156); assert.equal(a[0][0], "2023-09-29"); addRow(a, [a.at(-1)[0], 99, 60, 20, 1000, 10]); assert.equal(a.length, 156, "同一週取代不重複");
+  const d = a.at(-1)[0], b = a.map((r, i) => [r[0], 40 - i * 0.05, 60, 30, 500, 5]).slice(-10), small = [[d, 50, 60, 20, 50, 1]];
+  const R4 = rankOf([["2330", a], ["2317", b], ["9999", small]], d, 4);
+  assert.equal(R4.from, a.at(-5)[0]); assert.deepEqual(R4.up.map(x => x[0]), ["2330", "2317"], "人數不到 100 的不排");
+  assert.equal(R4.up[0][1], +(99 - a.at(-5)[1]).toFixed(2)); assert.equal(R4.down[0][0], "2317");
+  assert.equal(rankOf([["2317", b]], d, 13), null, "歷史不夠 13 週就沒有排行");
+});
+
+test("觀測站持股轉讓日報表（補更早年份）：欄位和 OpenAPI 的列一樣", () => {
+  const td = a => `<tr>${a.map(x => `<td>${x}</td>`).join("")}</tr>`;
+  const html = `<table><tr><th>異動情形</th><th>申報日期</th><th>公司代號</th></tr>${td(["轉讓方式", "轉讓股數", "自有持股"])}
+    ${td(["110/06/01", "2426", "鼎元", "董事配偶", "許敏川之配偶", "一般交易(每日得轉讓股數限制)", "250,000", "330,622", "&nbsp;", "1,336,560", "0", "250,000", "0", "1,086,560", "0", "110/06/04 ~ 110/07/03", ""])}
+    ${td(["", "110/06/01", "2801", "彰銀", "大股東本人", "台新金融控股股份有限公司", "鉅額逐筆交易", "400,000,000", "", "", "2,341,359,234", "100", "400,000,000", "0", "1,941,359,234", "100", "110/06/04 ~ 110/07/03", "是"])}
+    ${td(["(1) 以上資料係由各公司自行建檔提供參考"])}</table>`;
+  const L = parseMopsDay(html, "上市");
+  assert.equal(L.length, 2, "說明列、表頭不算");
+  assert.deepEqual(L[0], { d: "2021-06-01", code: "2426", name: "鼎元", who: "許敏川之配偶", role: "董事配偶", how: "一般交易(每日得轉讓股數限制)", sh: 250000, hold: 1336560, after: 1086560, to: "", from: "2021-06-04", until: "2021-07-03", market: "上市" });
+  assert.deepEqual([L[1].code, L[1].sh, L[1].hold, L[1].after], ["2801", 400000000, 2341359334, 1941359334], "前面多一格（異動情形）也對得上，自有＋信託相加");
 });

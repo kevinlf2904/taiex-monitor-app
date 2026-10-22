@@ -7,7 +7,7 @@
 // 交易日期（實際成交）和申報日期（公開）分開存：首頁「交易動態」看申報日期，30／90 天統計看交易日期。
 // 金額只有區間（例如 $1,001 - $15,000），不是實際金額；標在股價圖上的是交易日的收盤價，不是實際成交價。
 
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { inflateRawSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 
@@ -113,16 +113,17 @@ async function pdfText(buf) {
   }
   await doc.destroy(); return lines.join("\n");
 }
-async function house(fromIso, seen, log) {
-  const yNow = new Date().getUTCFullYear(), years = [...new Set([yNow, +fromIso.slice(0, 4)])], filings = [];
+async function house(fromIso, seen, log, { to = "", deadline = Infinity } = {}) {
+  const yNow = to ? +to.slice(0, 4) : new Date().getUTCFullYear(), years = [...new Set([yNow, +fromIso.slice(0, 4)])], filings = [];
   for (const y of years) {
     try { const z = unzip(await getBytes(`https://disclosures-clerk.house.gov/public_disc/financial-pdfs/${y}FD.zip`, "PK")); const xml = Object.entries(z).find(([k]) => /\.xml$/i.test(k))?.[1]; if (xml) filings.push(...parseHouseIndex(xml.toString("utf8"))); }
     catch (e) { log(`眾議院 ${y} 索引失敗：${e.message}`); }
   }
   if (!filings.length) throw new Error("眾議院年度索引一份都讀不到"); // 讓 main 知道這次眾議院沒有成功，不要覆寫成空的
-  const todo = filings.filter(f => f.filed >= fromIso && !seen[`H${f.docId}`]); log(`眾議院 PTR：索引 ${filings.length} 份，要讀 ${todo.length} 份`);
+  const todo = filings.filter(f => f.filed >= fromIso && (!to || f.filed <= to) && !seen[`H${f.docId}`]); log(`眾議院 PTR：索引 ${filings.length} 份，要讀 ${todo.length} 份`);
   const trades = [], people = {};
   for (const f of todo) {
+    if (Date.now() > deadline) { log("眾議院：時間到，剩下的下次再讀"); break; }
     const url = `https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/${f.year || f.filed.slice(0, 4)}/${f.docId}.pdf`;
     try {
       const txt = await pdfText(await getBytes(url, "%PDF")), rows = parseHousePtrText(txt), meta = houseMeta(txt);
@@ -150,7 +151,7 @@ export function parseSenatePtrHtml(html) {
   return out;
 }
 export function senateName(html) { const h = String(html); return cleanName(((h.match(/<h2[^>]*class="[^"]*filedReport[^"]*"[^>]*>([\s\S]*?)<\/h2>/i) || h.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || "").replace(/<[^>]+>/g, " ").replace(/\(.*?\)/g, "")); }
-async function senate(fromIso, seen, log) {
+async function senate(fromIso, seen, log, { to = "", deadline = Infinity } = {}) {
   const base = "https://efdsearch.senate.gov", jar = new Map(), cookie = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
   const keep = r => { const sc = r.headers.getSetCookie?.() || [r.headers.get("set-cookie") || ""]; sc.forEach(c => { const m = String(c).match(/^([^=;\s]+)=([^;]*)/); if (m) jar.set(m[1], m[2]); }); return r; };
   const home = await (await get(`${base}/search/home/`).then(keep)).text();
@@ -158,7 +159,7 @@ async function senate(fromIso, seen, log) {
   await get(`${base}/search/home/`, { method: "POST", redirect: "manual", headers: { "Content-Type": "application/x-www-form-urlencoded", Referer: `${base}/search/home/`, Cookie: cookie() }, body: new URLSearchParams({ prohibition_agreement: "1", csrfmiddlewaretoken: tok }) }).then(keep);
   const [y, m, d] = fromIso.split("-"), reports = [];
   for (let start = 0; start < 2000; start += 100) {
-    const body = new URLSearchParams({ start: String(start), length: "100", report_types: "[11]", filer_types: "[]", submitted_start_date: `${m}/${d}/${y} 00:00:00`, submitted_end_date: "", candidate_state: "", senator_state: "", office_id: "", first_name: "", last_name: "", csrfmiddlewaretoken: tok });
+    const body = new URLSearchParams({ start: String(start), length: "100", report_types: "[11]", filer_types: "[]", submitted_start_date: `${m}/${d}/${y} 00:00:00`, submitted_end_date: to ? `${to.slice(5, 7)}/${to.slice(8)}/${to.slice(0, 4)} 23:59:59` : "", candidate_state: "", senator_state: "", office_id: "", first_name: "", last_name: "", csrfmiddlewaretoken: tok });
     const r0 = await get(`${base}/search/report/data/`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Referer: `${base}/search/`, "X-CSRFToken": jar.get("csrftoken") || tok, Cookie: cookie() }, body }).then(keep);
     const ct = r0.headers.get("content-type") || "", txt = await r0.text(); if (!/json/i.test(ct) && !/^\s*[[{]/.test(txt)) throw new Error(`參議院清單不是 JSON（${ct}，可能是同意條款的工作階段失效）`);
     const j = JSON.parse(txt);
@@ -168,6 +169,7 @@ async function senate(fromIso, seen, log) {
   const todo = reports.filter(r => /\/ptr\//.test(r.href) && !seen[`S${r.href}`]); log(`參議院 PTR：清單 ${reports.length} 份（紙本 ${reports.filter(r => /\/paper\//.test(r.href)).length} 份略過），要讀 ${todo.length} 份`);
   const trades = [], people = {};
   for (const r of todo) {
+    if (Date.now() > deadline) { log("參議院：時間到，剩下的下次再讀"); break; }
     const url = base + r.href;
     try {
       const html = await (await get(url, { headers: { Cookie: cookie(), Referer: `${base}/search/` } }).then(keep)).text(), rows = parseSenatePtrHtml(html);
@@ -208,6 +210,27 @@ export async function main({ days = 200, log = console.log } = {}) {
   await writeFile(DATA + "congress-docs.json", JSON.stringify(seen));
   return out;
 }
+// 補更早的年份：node scripts/congress.mjs --year 2025 [--minutes 80] → learner/data/congress-arch/2025.json（那一年「申報」的全部 PTR）＋ index.json
+// 主檔 congress.json 只留最近約 400 天；網頁選的期間比主檔早時，才去讀這些年份檔（大戶國會「美國國會」的期間）。
+// 讀過的文件記在年份檔自己的 docs 裡，時間不夠時先存起來，再跑一次會接著讀（done 變成 true 代表那一年讀完了）。
+export const ARCH = DATA + "congress-arch/";
+export async function archive(year, { minutes = 80, log = console.log } = {}) {
+  const y = +year; if (!(y >= 2012 && y <= new Date().getUTCFullYear())) throw new Error(`年份不對：${year}`);
+  const f = `${ARCH}${y}.json`, prev = await readFile(f, "utf8").then(JSON.parse).catch(() => ({ trades: [], people: {}, docs: {} })), seen = prev.docs || {};
+  const deadline = Date.now() + minutes * 60e3, from = `${y}-01-01`, to = `${y}-12-31`, add = { trades: [], people: {} }, notes = [];
+  for (const [name, fn] of [["眾議院", house], ["參議院", senate]]) {
+    try { const r = await fn(from, seen, log, { to, deadline }); add.trades.push(...r.trades); Object.assign(add.people, r.people); log(`${y} ${name}：新增 ${r.trades.length} 筆`); }
+    catch (e) { notes.push(`${name}：${e.message}`); log(`::warning::${y} ${name}失敗：${e.message}`); }
+  }
+  const m = merge(prev, add, "0000"), done = Date.now() <= deadline && !notes.length;
+  const out = { year: y, updated: new Date().toISOString(), done, notes, ...m, docs: seen };
+  await mkdir(ARCH, { recursive: true }); await writeFile(f, JSON.stringify(out));
+  const idx = await readFile(`${ARCH}index.json`, "utf8").then(JSON.parse).catch(() => ({ years: {} })), T = m.trades.map(t => t.traded).sort();
+  idx.years[y] = { n: m.trades.length, people: Object.keys(m.people).length, from: T[0] || null, to: T.at(-1) || null, filedTo: m.trades[0]?.filed || null, done };
+  idx.updated = out.updated; await writeFile(`${ARCH}index.json`, JSON.stringify(idx));
+  log(`${y} 年：${m.trades.length} 筆、${Object.keys(m.people).length} 人${done ? "，讀完了" : "，還沒讀完（再跑一次會接著讀）"}`);
+  return out;
+}
 // 除錯：node scripts/congress.mjs --dump 3 → 印出幾份「讀得到文字但解析出 0 筆」的眾議院 PTR 原文，對照格式用
 async function dump(n) {
   const seen = await readFile(DATA + "congress-docs.json", "utf8").then(JSON.parse).catch(() => ({})), ids = Object.entries(seen).filter(([k, v]) => k[0] === "H" && v === 0 && k !== "_v").map(([k]) => k.slice(1)).slice(0, n);
@@ -215,4 +238,5 @@ async function dump(n) {
   const S = Object.entries(seen).filter(([k, v]) => k[0] === "S" && v === 0).map(([k]) => k.slice(1)).slice(0, 1); console.log("參議院 0 筆的例子：", S);
 }
 if (process.argv[2] === "--dump") dump(+process.argv[3] || 3).catch(e => { console.error(e); process.exit(1); });
+else if (process.argv[2] === "--year") archive(process.argv[3], { minutes: +(process.argv[process.argv.indexOf("--minutes") + 1]) || 80 }).catch(e => { console.error(e); process.exit(1); });
 else if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log(o.skipped ? "沒有更新（保留舊資料）" : "ok", o.trades?.length ?? 0, "筆，", Object.keys(o.people || {}).length, "人，資料截止", o.cutoff || "—")).catch(e => { console.error(e); process.exit(1); });
