@@ -87,6 +87,25 @@ if (process.argv[2] === "mops") {
       const i = t.indexOf("公司代號"); console.log(`\n### ${u} ${r.status} ${r.headers.get("content-type")} ${b.length} bytes\n${t.slice(0, 300)}\n…\n${t.slice(Math.max(0, i - 600), i + 2500).replace(/\s+/g, " ")}`); } catch (e) { console.log(u, "錯誤", e.message); } }
   process.exit(0);
 }
+if (process.argv[2] === "histprobe") {
+  // 大戶國會補歷史資料：觀測站內部人持股轉讓事前申報（過去月份）、集保股權分散表過去週次、FinMind 全市場持股分級（看有沒有權限）
+  const cut = (s, n = 900) => String(s).replace(/\s+/g, " ").slice(0, n), UA = { "User-Agent": "Mozilla/5.0" };
+  const post = async (u, body) => { try { const r = await fetch(u, { method: "POST", headers: { ...UA, "Content-Type": "application/x-www-form-urlencoded" }, body, signal: AbortSignal.timeout(30000) }); const t = await r.text(), i = Math.max(t.indexOf("申報日期"), t.indexOf("申報人"), t.indexOf("公司代號"));
+    console.log(`\n### POST ${u.split("/").pop()} ${body.slice(0, 120)} → ${r.status} ${t.length} bytes 表格 ${(t.match(/<table/g) || []).length}\n${cut(t.slice(Math.max(0, i - 200), i + 1500), 1700)}`); } catch (e) { console.log(u, "錯誤", e.message); } };
+  for (const typ of ["sii", "otc"]) for (const u of ["https://mopsov.twse.com.tw/mops/web/ajax_t56sb12_q1", "https://mopsov.twse.com.tw/mops/web/ajax_t56sb12"]) {
+    await post(u, `encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=${typ}&year=114&smonth=3&emonth=3&sday=1&eday=31&co_id=`);
+    await post(u, `encodeURIComponent=1&run=Y&step=1&TYPEK=${typ}&year=114&month=03&begin_day=1&end_day=31&co_id=`);
+  }
+  for (const u of ["https://www.tdcc.com.tw/portal/zh/smWeb/qryStock", "https://www.tdcc.com.tw/smWeb/QryStockAjax.do"]) {
+    try { const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(30000) }); const t = await r.text(), d = [...t.matchAll(/<option[^>]*value="(\d{8})"/g)].map(m => m[1]);
+      console.log(`\n### GET ${u} → ${r.status} ${t.length} bytes 週次 ${d.length} 個：${d.slice(0, 3).join(",")}…${d.slice(-2).join(",")} token ${/SYNCHRONIZER_TOKEN/.test(t)} cookie ${(r.headers.get("set-cookie") || "").slice(0, 60)}`); } catch (e) { console.log(u, "錯誤", e.message); } }
+  const K = (process.env.FINMIND_TOKEN || "").trim(), fm = async q => { try { const r = await fetch(`https://api.finmindtrade.com/api/v4/data?${q}`, { headers: K ? { Authorization: `Bearer ${K}` } : {}, signal: AbortSignal.timeout(60000) }); const j = await r.json(); console.log(`\n### FinMind ${q} → ${r.status} ${j.msg || ""} ${j.data?.length ?? "?"} 筆 ${JSON.stringify(j.data?.[0] || "")}`); } catch (e) { console.log("FinMind 錯誤", e.message); } };
+  console.log("FINMIND_TOKEN", K ? "有設定" : "沒有");
+  await fm("dataset=TaiwanStockHoldingSharesPer&start_date=2025-10-17&end_date=2025-10-17");
+  await fm("dataset=TaiwanStockHoldingSharesPer&data_id=2330&start_date=2023-01-01&end_date=2023-02-01");
+  await fm("dataset=TaiwanStockHoldingSharesPer&data_id=2330&start_date=2019-01-01&end_date=2019-01-31");
+  process.exit(0);
+}
 if (process.argv[2] === "official") {
   // 「全部加入」用到的證交所、櫃買資料集：印筆數、欄位、第一筆（截短）
   const P = [["twse", "/opendata/t187ap04_L"], ["tpex", "/mopsfin_t187ap04_O"], ["twse", "/Announcement/BFZFZU_T"], ["twse", "/opendata/t187ap22_L"], ["tpex", "/mopsfin_t187ap22_O"], ["twse", "/opendata/t187ap23_L"], ["twse", "/opendata/t187ap24_L"], ["tpex", "/mopsfin_t187ap24_O"],
