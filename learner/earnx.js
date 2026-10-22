@@ -166,20 +166,23 @@ function exUsRev(E, U, past) {
 const exPctile = (L, v) => (L.length < 20 || v == null ? null : Math.round(L.filter(x => x <= v).length / L.length * 100));
 async function exKline(c) { const k = "k:" + c; if (EX.k[k]) return; EX.k[k] = { loading: true };
   try { const j = await getJ(`/api/kline?code=${encodeURIComponent(c)}&months=30`); EX.k[k] = { rows: j.data || [] }; } catch (e) { EX.k[k] = { err: e.message }; } if (W.lt === "earn") renderList(); }
-// 月營收公布（次月 10 號前）後 5、20 個交易日的漲跌，分成年增、年減兩組
+// 月營收公布（次月 10 號前）前 5、後 5、後 20 個交易日的漲跌，分成年增、年減兩組
 function exRevReact(R, K) {
   const out = []; if (!K?.length) return out;
   for (const r of R.slice(-24)) { if (r.yoy == null) continue; const [y, m] = r.ym.split("-").map(Number), ev = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-10`;
     const i = K.findIndex(x => x.d > ev); if (i < 1 || i + 19 >= K.length) continue; const b = K[i - 1].c;
-    out.push({ ym: r.ym, yoy: r.yoy, r5: (K[i + 4].c / b - 1) * 100, r20: (K[i + 19].c / b - 1) * 100 }); }
+    out.push({ ym: r.ym, yoy: r.yoy, pre5: i >= 6 ? (b / K[i - 6].c - 1) * 100 : null, r5: (K[i + 4].c / b - 1) * 100, r20: (K[i + 19].c / b - 1) * 100 }); }
   return out;
 }
 function exReactTw(c, J) {
-  const k = EX.k["k:" + c]; if (!k) return `<div class="frdl"><button type="button" class="btn sm" data-exk="kl:${esc(c)}">看月營收公布後股價反應 ›</button></div>`;
+  const k = EX.k["k:" + c]; if (!k) return `<div class="frdl"><button type="button" class="btn sm" data-exk="kl:${esc(c)}">看公布前後的股價習慣 ›</button></div>`;
   if (k.loading) return `<p class="note">載入股價…</p>`; if (k.err) return `<p class="note">⚠︎ ${esc(k.err)}</p>`;
   const L = exRevReact(J.revenue || [], k.rows); if (L.length < 4) return `<p class="note">資料不夠，算不出公布後的股價反應。</p>`;
   const avg = (A, f) => (A.length ? A.reduce((s, x) => s + f(x), 0) / A.length : null), U = L.filter(x => x.yoy > 0), D = L.filter(x => x.yoy <= 0);
-  return `<h4>月營收公布後股價反應<span class="note">近 ${L.length} 個月・平均漲跌</span></h4>
+  const pre = L.filter(x => x.pre5 != null), mv = avg(L, x => Math.abs(x.r5)), big = L.filter(x => Math.abs(x.r5) >= 5).length;
+  return `<h4>公布前後的股價習慣<span class="note">月營收・近 ${L.length} 個月</span></h4>
+    <div class="d-kv sxkv"><div><span>公布前 5 日平均</span><b class="${cls(avg(pre, x => x.pre5))}">${pre.length ? erPct(avg(pre, x => x.pre5)) : "—"}</b><small class="note">上漲 ${pre.filter(x => x.pre5 > 0).length}／${pre.length} 次</small></div><div><span>公布後 5 日平均波動</span><b>${mv.toFixed(1)}%</b><small class="note">不分漲跌；超過 5% 有 ${big} 次</small></div></div>
+    <p class="note">${mv >= 6 ? "這檔在營收公布後常大幅波動，公布前要想好部位大小。" : mv <= 3 ? "公布後通常波動不大。" : ""}${pre.length && avg(pre, x => x.pre5) >= 2 ? "公布前常先漲，市場可能提前反映。" : ""}</p>
     <div class="d-kv sxkv"><div><span>年增月 5 日</span><b class="${cls(avg(U, x => x.r5))}">${U.length ? erPct(avg(U, x => x.r5)) : "—"}</b><small class="note">${U.length} 次・上漲 ${U.filter(x => x.r5 > 0).length} 次</small></div><div><span>年減月 5 日</span><b class="${cls(avg(D, x => x.r5))}">${D.length ? erPct(avg(D, x => x.r5)) : "—"}</b><small class="note">${D.length} 次</small></div><div><span>20 日平均</span><b class="${cls(avg(L, x => x.r20))}">${erPct(avg(L, x => x.r20))}</b></div></div>
     ${barLineSvg(L.map(x => ({ label: x.ym.slice(2).replace("-", "/"), v: +x.r5.toFixed(1), y: x.yoy })), { fmtV: v => v + "%", fmtY: v => v + "%" })}<p class="note">以次月 10 號當公布日。柱＝公布後 5 個交易日漲跌、線＝那個月營收年增率。年增時常漲、年減時常跌，代表股價對營收很敏感；反過來常常「利多出盡」。</p>`;
 }
@@ -195,7 +198,7 @@ function exUsHist(c, J) {
   const n = E.filter(x => x.surp > 0).length, avg = E.length ? E.reduce((s, x) => s + x.surp, 0) / E.length : null;
   const k = EX.k["k:" + c], K = k?.rows || [], react = H.map(r => { const i = K.findIndex(x => x.d >= r[0]); if (i < 1) return null; const a = r[7] === "盤後" ? i : i - 1, b = r[7] === "盤後" ? i + 1 : i; return K[b] && K[a] ? { d: r[0], s: r[6], v: (K[b].c / K[a].c - 1) * 100 } : null; }).filter(Boolean);
   if (H.length && !k) setTimeout(() => exKline(c), 0);
-  return `<h4>歷史驚喜紀錄</h4><div class="d-kv sxkv"><div><span>優於預期</span><b class="${n / (E.length || 1) >= 0.75 ? "up" : ""}">${n}／${E.length} 季</b></div><div><span>平均驚喜</span><b class="${cls(avg)}">${avg == null ? "—" : erPct(avg)}</b></div>${react.length ? `<div><span>公布後隔天平均</span><b class="${cls(react.reduce((s, x) => s + x.v, 0) / react.length)}">${erPct(react.reduce((s, x) => s + x.v, 0) / react.length)}</b><small class="note">${react.length} 次</small></div>` : ""}</div>
+  return `<h4>歷史驚喜紀錄</h4><div class="d-kv sxkv"><div><span>優於預期</span><b class="${n / (E.length || 1) >= 0.75 ? "up" : ""}">${n}／${E.length} 季</b></div><div><span>平均驚喜</span><b class="${cls(avg)}">${avg == null ? "—" : erPct(avg)}</b></div>${react.length ? `<div><span>隔天平均波動</span><b>${(react.reduce((t, x) => t + Math.abs(x.v), 0) / react.length).toFixed(1)}%</b><small class="note">不分漲跌・上漲 ${react.filter(x => x.v > 0).length}／${react.length} 次</small></div>` : ""}${react.length ? `<div><span>公布後隔天平均</span><b class="${cls(react.reduce((s, x) => s + x.v, 0) / react.length)}">${erPct(react.reduce((s, x) => s + x.v, 0) / react.length)}</b><small class="note">${react.length} 次</small></div>` : ""}</div>
     ${react.length ? `<p class="note">${react.map(x => `${x.d.slice(2).replace(/-/g, "/")}：驚喜 ${x.s == null ? "—" : erPct(x.s)}，股價 ${erPct(x.v)}`).join("；")}</p>` : `<p class="note">公布後股價反應從排程開始記錄的財報算起，會越來越完整。</p>`}`;
 }
 // 個股「整體看法」：一句話總結，再接估值、反應
@@ -208,7 +211,7 @@ function exCompany(c, us, J) {
   if (r?.[8] != null) { pts.push(r[8] < 0 ? `本季虧損（EPS ${erNum(r[8])}）` : `本季 EPS ${erNum(r[8])} 元`); if (r[8] < 0) tone[1]++; }
   if (pe != null) pts.push(`本益比在近三年的 ${pe}% 位置（${pe >= 80 ? "偏貴" : pe <= 20 ? "偏便宜" : "中間"}）`);
   const t = tone[0] - tone[1] >= 2 ? ["基本面偏強", "up"] : tone[1] - tone[0] >= 1 ? ["基本面轉弱", "down"] : ["基本面普通", ""];
-  return `<div class="excomp">${pts.length ? `<h4>整體看法</h4><p class="frsum ${t[1]}">${t[0]}：${esc(pts.join("；"))}。${pe >= 80 && t[1] === "up" ? "好消息可能已經反映在股價。" : pe != null && pe <= 20 && t[1] === "up" ? "財報轉好但估值還在低檔，值得追蹤。" : ""}</p>` : ""}${exValTw(J)}${exReactTw(c, J)}</div>`;
+  return `<div class="excomp">${pts.length ? `<h4>整體看法</h4><p class="frsum ${t[1]}">${t[0]}：${esc(pts.join("；"))}。${pe >= 80 && t[1] === "up" ? "好消息可能已經反映在股價。" : pe != null && pe <= 20 && t[1] === "up" ? "財報轉好但估值還在低檔，值得追蹤。" : ""}</p>` : ""}${exValTw(J)}${exReactTw(c, J)}${typeof epConf === "function" ? epConf(c) : ""}</div>`;
 }
 // earn.js 的分頁接進來
 const EX_TW_VIEWS = { cal: exCal, streak: exStreak, turn: exTurn, my: exMy, cmp: exCmp, learn: exLearn };

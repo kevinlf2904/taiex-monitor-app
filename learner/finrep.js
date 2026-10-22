@@ -108,7 +108,7 @@ function frEarn(c, us, J) {
   if (!C) return `<div class="frdl"><button type="button" class="btn sm" data-frco="${esc(c)}">財報分析與下載 ›</button></div>`;
   if (C.loading) return `<p class="note">載入損益表、資產負債表、現金流量表…</p>`;
   if (C.err || C.ok === false) return `<p class="note">⚠︎ ${esc(C.err || C.error || "拿不到財報")}</p>`;
-  return `<h4>財報分析<span class="note">損益、資產負債、現金流</span></h4>${frView(frTW(C, J), c, false)}`;
+  return `<h4>財報分析<span class="note">損益、資產負債、現金流</span></h4>${frView(frTW(C, J), c, false)}${typeof epTW === "function" ? epTW(c, C) : ""}`;
 }
 async function frLoadCo(c) {
   if (FR.co[c] && !FR.co[c].err) return; FR.co[c] = { loading: true }; if (W.lt === "earn") renderList();

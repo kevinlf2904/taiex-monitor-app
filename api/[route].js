@@ -10,6 +10,7 @@ const ROUTES = {
   "chart-read": () => import("./_lib/chart-read.js"),
   chat: () => import("./_lib/chat.js"),
   company: () => import("./_lib/company.js"),
+  confai: () => import("./_lib/confai.js"),
   daily: () => import("./_lib/daily.js"),
   etf: () => import("./_lib/etf.js"),
   flow: () => import("./_lib/flow.js"),
@@ -41,7 +42,7 @@ const ROUTES = {
   yield: () => import("./_lib/yield.js"),
 };
 export const ROUTE_NAMES = Object.keys(ROUTES);
-const AI_ROUTES = new Set(["chat", "chart-read", "import", "podcast"]);
+const AI_ROUTES = new Set(["chat", "chart-read", "import", "podcast", "confai"]);
 // 問 AI（對話、讀圖）可能要幾十秒；其他服務幾秒內就回應
 export const config = { maxDuration: 60 };
 

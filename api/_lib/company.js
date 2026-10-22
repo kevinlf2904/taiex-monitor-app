@@ -2,7 +2,7 @@
 // GET /api/company?code=2330
 // 來源：FinMind 開放資料（整理自公開資訊觀測站）＋證交所／櫃買中心 OpenAPI 的公司基本資料。
 //   income   單季損益：營收、毛利、營業利益、稅後淨利、歸屬母公司淨利、EPS
-//   balance  資產負債（季底）：總資產、總負債、權益、流動資產、流動負債
+//   balance  資產負債（季底）：總資產、總負債、權益、流動資產、流動負債、存貨、應收帳款
 //   cash     單季現金流：營業、投資、籌資、資本支出、自由現金流（財報上是當年累計，這裡換算成單季）
 //   dividend 每年股利：現金股利、股票股利、除息日
 //   holders  股權分散：每週千張大戶（≥1000 張）、400 張以上、50 張以下（散戶，r50）持股比例
@@ -51,6 +51,7 @@ export function parseBalance(rows) {
   return byDate(rows, [
     ["assets", ["TotalAssets"], ["資產總額", "資產總計"]], ["liab", ["Liabilities"], ["負債總額", "負債總計"]], ["equity", ["Equity"], ["權益總額", "權益總計"]],
     ["ca", ["CurrentAssets"], ["流動資產合計"]], ["cl", ["CurrentLiabilities"], ["流動負債合計"]], ["parentEq", ["EquityAttributableToOwnersOfParent"], ["歸屬於母公司業主之權益合計"]],
+    ["inv", ["Inventories"], ["存貨"]], ["ar", ["AccountsReceivableNet"], ["應收帳款淨額"]],
   ]).filter(x => x.assets != null).map(x => ({ q: qOf(x.d), ...x, liab: x.liab ?? (x.equity != null ? x.assets - x.equity : null), equity: x.equity ?? (x.liab != null ? x.assets - x.liab : null) }));
 }
 // 現金流量表是「當年累計」：Q2 = 上半年 − Q1，依此類推

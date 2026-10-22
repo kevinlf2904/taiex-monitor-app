@@ -11,6 +11,13 @@ async function raw(url, n = 600) {
   const t0 = Date.now(); try { const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "*/*", Referer: "https://mis.twse.com.tw/stock/index.jsp" }, signal: AbortSignal.timeout(20000) }); const t = await r.text();
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
+if (process.argv[2] === "confai") {
+  // 法說會重點：找台積電、鴻海最近的法說會簡報，AI 讀簡報（需要 GEMINI_API_KEY）
+  const C = await import("../api/_lib/confai.js");
+  for (const c of ["2330", "2317"]) { try { const L = await C.confList(c); console.log(c, "法說會", L.length, "次", JSON.stringify(L.slice(0, 3)));
+    const f = L.find(x => x.file); if (f && process.env.GEMINI_API_KEY) { const t0 = Date.now(), v = await C.summarizeConf(f.file, c, process.env.GEMINI_API_KEY.trim(), Date.now() + 120000); console.log(c, "AI", `${Date.now() - t0}ms`, JSON.stringify(v).slice(0, 900)); } } catch (e) { console.log(c, "失敗", e.message); } }
+  process.exit(0);
+}
 if (process.argv[2] === "earnplus") {
   // 財報新功能的資料來源：FinMind 資產負債表科目名稱、觀測站法說會簡報檔、美股財測新聞
   const tok = (process.env.FINMIND_TOKEN || "").trim(), H = tok ? { Authorization: `Bearer ${tok}` } : {};
