@@ -15,16 +15,17 @@ export function parseWeek(html) {
   const tb = t.slice(i, t.indexOf("</table>", i)), levels = [];
   for (const r of tb.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
     const c = [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => strip(m[1])); if (c.length < 5) continue;
-    const lv = num(c[0]); if (!(lv >= 1)) continue;
+    const lv = /合\s*計/.test(c[1]) ? 17 : num(c[0]); if (!(lv >= 1)) continue; // 合計列有時沒有序號
     levels.push({ lv, range: c[1], people: num(c[2]), shares: num(c[3]), pct: num(c[4]) });
   }
   return levels.length ? { levels } : null;
 }
 // 分級 → [日期, 千張%, 400 張以上%, 50 張以下%, 總人數, 千張人數]（和 scripts/tdcc.mjs 一樣：15 級＝1,000 張以上、12～15 級＝400 張以上、1～8 級＝50 張以下、17 級＝合計）
+// 總人數用合計列；沒有合計列就把 1～15 級的人數加起來（每個股東只會在一個級距）
 export function weekRow(date, W) {
-  let p1000 = 0, p400 = 0, p50 = 0, people = 0, n1000 = 0;
-  for (const x of W.levels) { const p = x.pct || 0; if (x.lv === 15) { p1000 += p; n1000 += x.people || 0; } if (x.lv >= 12 && x.lv <= 15) p400 += p; if (x.lv <= 8) p50 += p; if (x.lv === 17) people = x.people || 0; }
-  return [date, +p1000.toFixed(2), +p400.toFixed(2), +p50.toFixed(2), people, n1000];
+  let p1000 = 0, p400 = 0, p50 = 0, people = 0, sum = 0, n1000 = 0;
+  for (const x of W.levels) { const p = x.pct || 0; if (x.lv === 15) { p1000 += p; n1000 += x.people || 0; } if (x.lv >= 12 && x.lv <= 15) p400 += p; if (x.lv <= 8) p50 += p; if (x.lv === 17) people = x.people || 0; if (x.lv <= 15) sum += x.people || 0; }
+  return [date, +p1000.toFixed(2), +p400.toFixed(2), +p50.toFixed(2), people || sum, n1000];
 }
 // 一條連線：打開查詢頁 → 依序查 dates 裡的每一週（每次用上一個回應的 token）
 async function session(code, dates, out, fetchFn) {

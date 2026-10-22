@@ -316,7 +316,7 @@ const cxTdccP = () => { const v = +(W.tdccP ?? store.get("watch:tdccP", 1)); ret
 function cxTdPair(c, a, from, to) {
   if (!a?.length) return null; const q = [...a].reverse().find(r => !to || r[0] <= to), p = a.find(r => r[0] >= from);
   if (!p || !q || p[0] >= q[0] || Date.parse(p[0]) - Date.parse(from) > 10 * 864e5) return null;
-  return [c, +(q[1] - p[1]).toFixed(2), q[1], +(q[3] - p[3]).toFixed(2), q[4] - p[4]];
+  return [c, +(q[1] - p[1]).toFixed(2), q[1], +(q[3] - p[3]).toFixed(2), p[4] > 0 && q[4] > 0 ? q[4] - p[4] : null]; // 舊週次沒有總人數就不算人數變化
 }
 async function cxTdccAll(T) {
   if (W.tdccAll) return; W.tdccAll = "busy"; renderList();
@@ -353,7 +353,7 @@ function cxTdccHtml() {
     const need = [...new Set(mineCodes.map(c => c.slice(0, 2)))].filter(k => !W.tdcc?.[k]);
     if (need.length && !W.tdccShardBusy && typeof tdccShard === "function") { W.tdccShardBusy = true; Promise.all(need.map(tdccShard)).finally(() => { W.tdccShardBusy = false; if (W.lt === "cong" && W.cv === "tdcc") renderList(); }); }
     const f0 = from || (T.date ? new Date(Date.parse(T.date) - 7 * 864e5 - 3 * 864e5).toISOString().slice(0, 10) : "");
-    mineRows = mineCodes.map(c => { const a = W.tdcc?.[c.slice(0, 2)]?.[c]; if (!a?.length) return null; if (pTxt === "本週") { const cur = a.at(-1), prev = a.at(-2); return [c, prev ? +(cur[1] - prev[1]).toFixed(2) : 0, cur[1], prev ? +(cur[3] - prev[3]).toFixed(2) : 0, prev ? cur[4] - prev[4] : 0]; } return cxTdPair(c, a, f0, to); }).filter(Boolean);
+    mineRows = mineCodes.map(c => { const a = W.tdcc?.[c.slice(0, 2)]?.[c]; if (!a?.length) return null; if (pTxt === "本週") { const cur = a.at(-1), prev = a.at(-2); return [c, prev ? +(cur[1] - prev[1]).toFixed(2) : 0, cur[1], prev ? +(cur[3] - prev[3]).toFixed(2) : 0, prev?.[4] > 0 && cur[4] > 0 ? cur[4] - prev[4] : null]; } return cxTdPair(c, a, f0, to); }).filter(Boolean);
   }
   let activeList = [];
   if (scope === "mine") { activeList = (mineRows || []).slice(); if (view === "down") activeList.sort((a, b) => a[1] - b[1]); else if (view === "high") activeList.sort((a, b) => b[2] - a[2]); else activeList.sort((a, b) => b[1] - a[1]); }
@@ -369,10 +369,10 @@ function cxTdccHtml() {
     { t: "散戶大增/大戶減持", sub: dnTop ? `${nameOf(dnTop[0])} ${dnTop[0]}` : "全市場", v: dnTop ? `${dnTop[1]}%` : "—", vc: "down", attr: dnTop ? `data-cv="tw:s:${esc(dnTop[0])}"` : "" }
   ]);
   const mkItem = r => {
-    const c = r[0], chg = +r[1], b1k = +r[2], r50 = +r[3], ppl = +r[4], nm = nameOf(c) !== c ? nameOf(c) : "";
+    const c = r[0], chg = +r[1], b1k = +r[2], r50 = +r[3], ppl = r[4] == null ? null : +r[4], nm = nameOf(c) !== c ? nameOf(c) : "";
     const focus = chg > 0 && r50 < 0 ? `<span class="up">籌碼集中（大戶增、散戶退）</span>` : chg < 0 && r50 > 0 ? `<span class="down">籌碼渙散（大戶退、散戶接）</span>` : "";
     return { star: c, attr: `data-cv="tw:s:${esc(c)}"`, mono: rkMono(rkInit(nm || c), chg > 0 ? "#3fa36b" : "#d0643f"), name: `${esc(nm)} <span class="note">${esc(c)}</span>`,
-      sub: `千張大戶 ${b1k.toFixed(2)}%・50 張以下散戶${pW} ${r50 > 0 ? "+" : ""}${r50.toFixed(2)}%・總股東人數 ${ppl > 0 ? "+" : ""}${ppl.toLocaleString()} 人`,
+      sub: `千張大戶 ${b1k.toFixed(2)}%・50 張以下散戶${pW} ${r50 > 0 ? "+" : ""}${r50.toFixed(2)}%${ppl == null ? "" : `・總股東人數 ${ppl > 0 ? "+" : ""}${ppl.toLocaleString()} 人`}`,
       val: `${chg > 0 ? "+" : ""}${chg.toFixed(2)}%`, vc: chg > 0 ? "up" : chg < 0 ? "down" : "", vsub: focus || (b1k >= 70 ? `<span class="up">千張佔比 > 70%</span>` : "") };
   };
   const titles = { up: `千張大戶持股比例${pW}增加最多（前 50 大）`, down: `千張大戶持股比例${pW}減少最多（前 50 大，散戶接刀）`, high: "千張大戶高度集中持股（千張比例最高排行）" };
@@ -484,7 +484,7 @@ function cxTwStock(id) {
     <h4>千張大戶持股走勢</h4>${cxRow("期間", rkSeg("data-rkset", `cxTdW:${w}`, CX_TDP.map(([v, t]) => [`cxTdW:${v}`, t])) + (dP != null ? `<span class="note">${HS[0][0].replace(/-/g, "/")} 起 <b class="${cls(dP)}">${sgn(dP)}</b></span>` : ""))}
     ${tdState ? `<p class="note">${tdState}</p>` : ""}${tdTxt ? `<p class="note">${tdTxt}</p>` : ""}
     ${HS.length >= 2 ? `<div class="cxtd">${cxTdLine(HS, 1, "var(--ink)", "千張大戶持股比例")}${cxTdLine(HS, 3, "var(--muted)", "50 張以下散戶持股比例")}</div>` : HS.length ? `<p class="note">這段期間只有 ${HS.length} 週資料，至少兩週才畫得出走勢。</p>` : ""}
-    ${HS.length ? `<details class="tw-more"${HS.length <= 8 ? " open" : ""}><summary>每週明細（${HS.length} 週）</summary><div class="ctbl"><table><thead><tr><th>集保日</th><th>千張大戶</th><th>週變化</th><th>400 張以上</th><th>50 張以下</th><th>總人數</th></tr></thead><tbody>${HS.slice().reverse().map((r, i, A) => { const p = A[i + 1], d = p ? +(r[1] - p[1]).toFixed(2) : null; return `<tr><td>${r[0].replace(/-/g, "/")}</td><td class="num">${r[1].toFixed(2)}%</td><td class="num ${cls(d)}">${sgn(d)}</td><td class="num">${r[2] != null ? r[2].toFixed(2) + "%" : "—"}</td><td class="num">${r[3] != null ? r[3].toFixed(2) + "%" : "—"}</td><td class="num">${(r[4] || 0).toLocaleString()}</td></tr>`; }).join("")}</tbody></table></div></details>` : ""}
+    ${HS.length ? `<details class="tw-more"${HS.length <= 8 ? " open" : ""}><summary>每週明細（${HS.length} 週）</summary><div class="ctbl"><table><thead><tr><th>集保日</th><th>千張大戶</th><th>週變化</th><th>400 張以上</th><th>50 張以下</th><th>總人數</th></tr></thead><tbody>${HS.slice().reverse().map((r, i, A) => { const p = A[i + 1], d = p ? +(r[1] - p[1]).toFixed(2) : null; return `<tr><td>${r[0].replace(/-/g, "/")}</td><td class="num">${r[1].toFixed(2)}%</td><td class="num ${cls(d)}">${sgn(d)}</td><td class="num">${r[2] != null ? r[2].toFixed(2) + "%" : "—"}</td><td class="num">${r[3] != null ? r[3].toFixed(2) + "%" : "—"}</td><td class="num">${r[4] > 0 ? r[4].toLocaleString() : "—"}</td></tr>`; }).join("")}</tbody></table></div></details>` : ""}
     <h4>內部人申報轉讓</h4>${cxPerRow("ins")}
     ${!W.ins ? `<p class="note">載入中…</p>` : rkList(ins.slice(0, 60).map(r => ({ no: r.d.slice(5).replace("-", "/"), mono: "", name: `${esc(r.who)} <span class="note">${esc(r.role)}</span>`, sub: `${r.d.slice(0, 4)}・${esc(r.how)}${r.to ? `・受讓 ${esc(r.to)}` : ""}`, val: insSh(r.sh), vc: mkt(r) ? "down" : "", vsub: r.hold ? `占持股 ${Math.round((r.sh / r.hold) * 100)}%` : "" })), `${cxWTxt("ins")}沒有內部人申報轉讓`)}
     <h4>政治人物申報持有</h4>${!W.two ? `<p class="note">載入中…</p>` : PH.length ? `<p class="note">${PH.filter(x => x.h).length} 位政治人物最近一次申報持有；${PH.filter(x => x.c && (x.c.t === "new" || x.c.t === "add")).length} 位比上一次申報增加、${PH.filter(x => x.c && (x.c.t === "cut" || x.c.t === "sold")).length} 位減少。</p>
