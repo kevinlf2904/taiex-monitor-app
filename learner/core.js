@@ -46,7 +46,6 @@ const DEBUG = typeof location !== "undefined" && (/[?&]debug=1\b/.test(location.
 if (DEBUG && typeof document !== "undefined") document.documentElement.dataset.debug = "1";
 const fillDataNote = () => document.querySelectorAll(".data-note").forEach(e => (e.textContent = DATA_NOTE));
 if (typeof document !== "undefined") { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fillDataNote); else fillDataNote(); }
-const discHtml = () => `<p class="disc">${DISCLAIMER}</p>`;
 // 全站線條變細：canvas 畫的每一條線（K 棒影線、均線、指標、分時、格線）粗細 × 0.72，最細 0.5px（高解析度螢幕上是 1 個實體像素）
 (() => { try { const P = CanvasRenderingContext2D.prototype, d = Object.getOwnPropertyDescriptor(P, "lineWidth"); if (!d?.set || P.__thin) return; P.__thin = true;
   Object.defineProperty(P, "lineWidth", { configurable: true, get() { return d.get.call(this); }, set(v) { d.set.call(this, v > 0 ? Math.max(0.5, v * 0.72) : v); } }); } catch {} })();
@@ -58,8 +57,10 @@ function agg(D, key) {
 }
 const weekKey = d => { const t = new Date(String(d).slice(0, 10) + "T00:00:00Z"), day = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - day); return t.toISOString().slice(0, 10); };
 // 問網站的 AI（/api/chat）：context 是畫面上的資料、q 是問題；回傳文字，失敗丟出錯誤（各頁的「問 AI」都用這個）
+// 連線逾時：網路卡住時 fetch 不會自己結束，按鈕會一直停在「載入中」（舊版 Safari 沒有 AbortSignal.timeout）
+const tmo = ms => { try { return AbortSignal.timeout(ms); } catch { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; } };
 async function aiChat(context, q) {
-  const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ context, messages: [{ role: "user", content: q }] }) });
+  const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ context, messages: [{ role: "user", content: q }] }), signal: tmo(65000) }).catch(e => { throw new Error(e.name === "TimeoutError" || e.name === "AbortError" ? "AI 回答太久，請再試一次" : "連不上 AI 服務"); });
   const k = await r.json().catch(() => null); if (!k?.ok) throw new Error(k?.error || (r.status === 404 ? "需要部署到網站才能使用" : `AI 沒有回答（${r.status}）`)); return k.text;
 }
 // CSS 變數讀取會觸發樣式計算，K 線每一格要讀幾十次（手機滑動時很明顯）：快取起來，主題、配色、字型改變（html 的屬性變動）時清掉
@@ -155,7 +156,6 @@ function indicators(D) {
    每個指標都算成一個「自訂副圖」（{ custom: { title, lines, names, levels… } }），K 線圖照一般副圖畫；
    sigs 是這個指標自己的買賣訊號（例如 PSY 脫離 25／75），會和 KD、MACD 一樣標回主圖（「對應」功能）。
    大盤寬度指標（ADR、OBOS、ADL）要每天的上漲、下跌家數（D[i].adv、D[i].dec），只有加權／櫃買指數才有。 */
-const nz = v => (v == null || !isFinite(v) ? null : v);
 // MTM 動量：今天收盤減 n 天前收盤；MA 是 MTM 的 m 日平均
 function mtmCalc(c, n = 10, m = 10) { const v = c.map((x, i) => (i >= n ? x - c[i - n] : null)); return { mtm: v, ma: smaN(v, m) }; }
 // 有空值的平均（前面還沒有值的部分跳過）
@@ -496,7 +496,7 @@ class Chart {
     this.pop = document.createElement("div"); this.pop.className = "scalepop panel"; this.pop.hidden = true;
     host.append(this.legend, this.bar, this.pop, this.canvas);
     this.hover = null; this.view = null; this.ptrs = new Map(); this.yz = 1; this.yoff = 0; this.yfree = false; this.pz = {};
-    Chart.all.push(this); this.syncBar();
+    Chart.all = Chart.all.filter(c => c.canvas.isConnected); Chart.all.push(this); this.syncBar(); // 多圖、13F 小圖會一直重建：已經不在頁面上的圖表拿掉，才不會越積越多
     this.bar.addEventListener("click", e => {
       const z = e.target.closest("[data-z]")?.dataset.z;
       if (z === "in") this.zoom(0.6); else if (z === "out") this.zoom(1 / 0.6);
@@ -1228,20 +1228,23 @@ function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / 
 /* ---------- 自動更新到新版本 ----------
    每 5 分鐘（以及切回這個分頁時）看一下 version.json；網站部署了新版本時：
    畫面在背景、或 1 分鐘沒操作就直接重新載入；正在操作、輸入或播音檔時，先在下方顯示「有新版本」，點一下或切回來時再更新。
-   嵌在學堂裡的看盤頁（iframe）交給外層處理。 */
+   嵌在學堂裡的看盤頁（iframe）交給外層處理：iframe 只記下最後操作的時間（klAct），外層判斷「有沒有在操作」時一起看。 */
 (function autoUpdate() {
-  if (window.top !== window || !/^https?:$/.test(location.protocol)) return;
+  const acts = ["pointerdown", "keydown", "wheel", "touchstart"];
+  if (window.top !== window) { acts.forEach(t => addEventListener(t, () => { window.klAct = Date.now(); }, { passive: true, capture: true })); return; }
+  if (!/^https?:$/.test(location.protocol)) return;
   const cur = (document.body.textContent.match(/版本 (\d{4}\.\d{2}\.\d{2}-\d+)/) || [])[1]; if (!cur) return;
   let last = Date.now(), next = null;
   const newer = (a, b) => { const x = String(a).split(/[.-]/).map(Number), y = String(b).split(/[.-]/).map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
-  ["pointerdown", "keydown", "wheel", "touchstart"].forEach(t => addEventListener(t, () => { last = Date.now(); }, { passive: true, capture: true }));
-  const docs = () => [document, ...[...document.querySelectorAll("iframe")].map(f => { try { return f.contentDocument; } catch { return null; } }).filter(Boolean)];
+  acts.forEach(t => addEventListener(t, () => { last = Date.now(); }, { passive: true, capture: true }));
+  const wins = () => [...document.querySelectorAll("iframe")].map(f => { try { return f.contentWindow?.document && f.contentWindow; } catch { return null; } }).filter(Boolean);
+  const docs = () => [document, ...wins().map(w => w.document)], lastAct = () => Math.max(last, ...wins().map(w => +w.klAct || 0));
   const busy = () => docs().some(d => [...d.querySelectorAll("audio,video")].some(a => !a.paused) || /^(INPUT|TEXTAREA|SELECT)$/.test(d.activeElement?.tagName || ""));
   const go = () => { try { sessionStorage.setItem("kline:updatedFrom", cur); } catch {} location.reload(); };
   const banner = v => { if (document.getElementById("updBar")) return; const b = document.createElement("button"); b.id = "updBar"; b.type = "button";
     b.textContent = `有新版本（${v}），點一下更新`; b.style.cssText = "position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9999;padding:8px 16px;border-radius:99px;border:1px solid var(--line);background:var(--ink);color:var(--surface);font:inherit;font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:pointer";
     b.onclick = go; document.body.appendChild(b); };
-  const decide = () => { if (!next) return; if (document.visibilityState === "hidden" || (Date.now() - last > 60000 && !busy())) go(); else banner(next); };
+  const decide = () => { if (!next) return; if (document.visibilityState === "hidden" || (Date.now() - lastAct() > 60000 && !busy())) go(); else banner(next); };
   const check = async () => {
     try { const r = await fetch("version.json", { cache: "no-store" }); if (!r.ok) return; const j = await r.json(); if (j?.v && newer(j.v, cur)) { next = j.v; decide(); } } catch {}
   };

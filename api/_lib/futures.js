@@ -172,7 +172,7 @@ export default async function handler(req, res) {
     try { const months = Math.max(3, Math.min(36, +req.query?.months || 24)), r = await dailyHistory(cid, months, before);
       res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=7200");
       return res.status(200).json({ ok: true, code: cid, name: `${fname}近全`, source: r.source, data: r.data.map(({ contract, ...x }) => x) }); }
-    catch (e) { if (before && /沒有資料/.test(e.message)) return res.status(200).json({ ok: true, code: cid, data: [], end: true }); return res.status(200).json({ ok: false, error: `拿不到${fname}日 K（${e.message}）` }); }
+    catch (e) { if (before && /沒有資料/.test(e.message) && !/HTTP|timeout|逾時|fetch failed|abort/i.test(e.message)) return res.status(200).json({ ok: true, code: cid, data: [], end: true }); return res.status(200).json({ ok: false, error: `拿不到${fname}日 K（${e.message}）` }); }
   }
   const nm = nearMonth(Date.now(), cid), sess = sessionOf(), withBars = String(req.query?.bars ?? "1") !== "0", sparkOnly = req.query?.bars === "spark", key = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
   let r = null;

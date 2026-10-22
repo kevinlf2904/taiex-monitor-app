@@ -25,6 +25,36 @@ export function safeUrl(raw) {
   return u.toString();
 }
 
+// 內網位址：127/8、10/8、172.16/12、192.168/16、169.254/16、100.64/10（CGNAT）、0/8、組播；IPv6 的 ::1、fc00::/7、fe80::/10、對應到 IPv4 的 ::ffff:x.x.x.x
+export function privIp(ip) {
+  const s = String(ip || "").toLowerCase(), m4 = s.match(/^(?:::ffff:)?(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m4) { const [a, b] = [+m4[1], +m4[2]]; return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127); }
+  return s === "::" || s === "::1" || /^f[cd]/.test(s) || /^fe[89ab]/.test(s) || s.startsWith("::ffff:");
+}
+// 抓外部網址：每一次跳轉都重新檢查網址，且網域解析出來的 IP 不能是內網（擋「看起來是公開網址、其實指到本機」的手法）
+export async function safeFetch(raw, opts = {}, { hops = 5, lookup = null } = {}) {
+  const dns = lookup || (await import("node:dns/promises")).lookup;
+  let url = raw;
+  for (let i = 0; i <= hops; i++) {
+    const u = safeUrl(url); if (!u) throw new Error("網址不正確");
+    let addrs; try { addrs = await dns(new URL(u).hostname, { all: true }); } catch { throw new Error("找不到這個網址"); }
+    if (!addrs.length || addrs.some(a => privIp(a.address))) throw new Error("不允許連到這個網址");
+    const r = await fetch(u, { ...opts, redirect: "manual" });
+    const loc = r.status >= 300 && r.status < 400 ? r.headers.get("location") : null;
+    if (!loc) return r;
+    url = new URL(loc, u).toString();
+  }
+  throw new Error("網址跳轉太多次");
+}
+// 讀回應內容，超過上限就中止（不先把整個檔案讀進記憶體才發現太大）
+export async function readCapped(r, max) {
+  if (!r.body?.getReader) { const b = Buffer.from(await r.arrayBuffer()); if (b.length > max) throw new Error("檔案太大"); return b; }
+  const rd = r.body.getReader(), parts = []; let n = 0;
+  for (;;) { const { done, value } = await rd.read(); if (done) break; n += value.length; if (n > max) { try { await rd.cancel(); } catch {} throw new Error("檔案太大"); } parts.push(value); }
+  return Buffer.concat(parts.map(p => Buffer.from(p)));
+}
+const httpOnly = u => (/^https?:\/\//i.test(String(u || "").trim()) ? String(u).trim() : "");
+
 // ---------- RSS ----------
 const ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 export const decode = s => String(s || "").replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => e[0] === "#" ? String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : +e.slice(1)) : ENT[e.toLowerCase()] ?? m);
@@ -44,13 +74,14 @@ export function durSec(v) {
 }
 export function parseRss(xml, n = 30) {
   const s = String(xml || ""), first = s.search(/<item[\s>]/i), head = first > 0 ? s.slice(0, first) : s;
-  const show = { name: txt(head, "title"), author: txt(head, "itunes:author") || txt(head, "managingEditor"), art: attr(head, "itunes:image", "href") || txt(tag(head, "image"), "url"), desc: txt(head, "description").slice(0, 600), link: txt(head, "link") };
+  const show = { name: txt(head, "title"), author: txt(head, "itunes:author") || txt(head, "managingEditor"), art: attr(head, "itunes:image", "href") || txt(tag(head, "image"), "url"), desc: txt(head, "description").slice(0, 600), link: httpOnly(txt(head, "link")) };
+  show.art = httpOnly(show.art);
   const items = s.match(/<item[\s>][\s\S]*?<\/item>/gi) || [];
   const eps = items.slice(0, n).map(it => {
     const audio = attr(it, "enclosure", "url"), date = Date.parse(txt(it, "pubDate"));
     const desc = htmlText(tag(it, "content:encoded")) || txt(it, "description") || txt(it, "itunes:summary");
     return { guid: txt(it, "guid") || audio || txt(it, "title"), title: txt(it, "title"), date: Number.isFinite(date) ? new Date(date).toISOString() : null, desc: desc.slice(0, 6000),
-      audio, mime: attr(it, "enclosure", "type") || "audio/mpeg", bytes: +attr(it, "enclosure", "length") || null, dur: durSec(txt(it, "itunes:duration")), link: txt(it, "link"), img: attr(it, "itunes:image", "href") || null };
+      audio: httpOnly(audio), mime: attr(it, "enclosure", "type") || "audio/mpeg", bytes: +attr(it, "enclosure", "length") || null, dur: durSec(txt(it, "itunes:duration")), link: httpOnly(txt(it, "link")), img: httpOnly(attr(it, "itunes:image", "href")) || null }; // 連結只收 http(s)，擋 javascript: 這類網址
   }).filter(e => e.title && e.date);
   return { show, eps };
 }
@@ -116,17 +147,17 @@ export async function geminiJSON(parts, key, deadline) {
   throw new Error(last || "Gemini 沒有回應");
 }
 async function claudeJSON(prompt) {
-  const client = new Anthropic();
+  const client = new Anthropic({ timeout: 50000, maxRetries: 0 }); // 要在 Vercel 的 60 秒內回完
   const msg = await client.beta.messages.create({ model: "claude-opus-5-5", max_tokens: 12000, output_config: { effort: "low" }, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", messages: [{ role: "user", content: prompt }] });
   return { text: msg.content.filter(b => b.type === "text").map(b => b.text).join(""), model: msg.model };
 }
 
 // ---------- 音檔上傳到 Gemini Files（可續傳上傳的兩步驟：start → upload, finalize） ----------
 export async function uploadAudio(url, name, key, { dlMs = 30000, upMs = 40000 } = {}) {
-  const r = await fetch(url, { headers: UA, redirect: "follow", signal: AbortSignal.timeout(dlMs) });
+  const r = await safeFetch(url, { headers: UA, signal: AbortSignal.timeout(dlMs) });
   if (!r.ok) throw new Error(`下載音檔失敗（HTTP ${r.status}）`);
   const len = +r.headers.get("content-length") || 0; if (len > MAX_AUDIO) throw new Error(`音檔太大（${Math.round(len / 1048576)}MB），改用節目說明整理。`);
-  const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > MAX_AUDIO) throw new Error("音檔太大，改用節目說明整理。");
+  const buf = await readCapped(r, MAX_AUDIO).catch(e => { throw new Error(/太大/.test(e.message) ? "音檔太大，改用節目說明整理。" : e.message); });
   let mime = (r.headers.get("content-type") || "").split(";")[0].trim(); if (!/^audio\//.test(mime)) mime = /\.m4a(\?|$)/i.test(url) ? "audio/mp4" : "audio/mpeg";
   const st = await fetch(`${GEMINI}/upload/v1beta/files`, { method: "POST", headers: { "x-goog-api-key": key, "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start", "X-Goog-Upload-Header-Content-Length": String(buf.length), "X-Goog-Upload-Header-Content-Type": mime, "Content-Type": "application/json" }, body: JSON.stringify({ file: { display_name: String(name || "podcast").slice(0, 100) } }), signal: AbortSignal.timeout(15000) });
   const up = st.headers.get("x-goog-upload-url"); if (!st.ok || !up) throw new Error(`上傳到 Gemini 失敗（HTTP ${st.status}）`);
@@ -164,7 +195,7 @@ export default async function handler(req, res) {
         if (gem) out = await geminiJSON([...(uri ? [{ fileData: { mimeType: String(b.mime || "audio/mpeg"), fileUri: uri } }] : []), { text: PROMPT(meta, mode) }], gem, deadline);
         else if (claude && mode === "notes") out = await claudeJSON(PROMPT(meta, mode));
         else return res.status(200).json({ ok: false, error: "伺服器沒有設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY），無法用 AI 整理。" });
-        if (uri && b.file && /^files\/[a-z0-9-]+$/i.test(b.file)) fetch(`${GEMINI}/v1beta/${b.file}`, { method: "DELETE", headers: { "x-goog-api-key": gem } }).catch(() => {}); // 整理完就刪掉音檔
+        if (uri && b.file && /^files\/[a-z0-9-]+$/i.test(b.file)) await fetch(`${GEMINI}/v1beta/${b.file}`, { method: "DELETE", headers: { "x-goog-api-key": gem }, signal: AbortSignal.timeout(5000) }).catch(() => {}); // 整理完就刪掉音檔（等它刪完，回應送出後函式可能就被凍結）
         const sum = parseSum(out.text); if (!sum) return res.status(200).json({ ok: false, error: "AI 回傳的格式不對，請再試一次。" });
         return res.status(200).json({ ok: true, ...sum, mode, model: out.model });
       }
@@ -185,9 +216,9 @@ export default async function handler(req, res) {
     }
     if (q.feed) {
       const url = safeUrl(q.feed); if (!url) return res.status(400).json({ ok: false, error: "RSS 網址不正確" });
-      const r = await fetch(url, { headers: { ...UA, Accept: "application/rss+xml, application/xml, text/xml, */*" }, redirect: "follow", signal: AbortSignal.timeout(15000) });
+      const r = await safeFetch(url, { headers: { ...UA, Accept: "application/rss+xml, application/xml, text/xml, */*" }, signal: AbortSignal.timeout(15000) });
       if (!r.ok) return res.status(200).json({ ok: false, error: `讀不到這個節目的 RSS（HTTP ${r.status}）` });
-      const p = parseRss(await r.text(), Math.max(1, Math.min(100, +q.n || 30)));
+      const p = parseRss((await readCapped(r, 15 * 1048576)).toString("utf8"), Math.max(1, Math.min(100, +q.n || 30)));
       if (!p.eps.length) return res.status(200).json({ ok: false, error: "這個 RSS 裡沒有單集" });
       res.setHeader("Cache-Control", "s-maxage=900, stale-while-revalidate=3600");
       return res.status(200).json({ ok: true, feed: url, ...p });

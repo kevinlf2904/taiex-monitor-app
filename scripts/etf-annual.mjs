@@ -1,6 +1,6 @@
 // ETF 年化報酬排行：把 learner/watch.html 裡 ETF 專區的每一檔，用 /api/annual 同一套算法（Yahoo 月線還原收盤，含息）
 // 算出近 1、3、5、10 年與上市以來的年化報酬、最大跌幅，寫進 learner/data/etf-annual.json。
-// GitHub Actions 每週跑一次（.github/workflows/market-hilo.yml 的 annual 工作），網頁打開就有排行；缺的再即時向 /api/annual 補。
+// GitHub Actions 每週跑一次（.github/workflows/etf-annual.yml），網頁打開就有排行；缺的再即時向 /api/annual 補。
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import annual from "../api/_lib/annual.js";
@@ -29,6 +29,8 @@ export async function main({ gap = 800, fetcher = call } = {}) {
     await sleep(gap);
   }
   const out = { updated: new Date().toISOString(), source: "Yahoo Finance 月線還原收盤（含配息再投入）", rows };
+  // Yahoo 擋 GitHub 的機器時大部分會失敗：成功不到一半就保留原本的檔案，不要用空排行蓋掉
+  if (rows.length < list.length * 0.5) { console.log(`::warning::只算出 ${rows.length}／${list.length} 檔，保留原本的資料`); return out; }
   await writeFile(OUT, JSON.stringify(out));
   return out;
 }

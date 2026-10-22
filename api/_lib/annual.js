@@ -74,7 +74,7 @@ async function fromYahoo(symbol) {
   return p && p.rows.length >= 7 ? { ...p, symbol, source: "Yahoo Finance" } : null;
 }
 async function fromFinMind(code) {
-  const token = process.env.FINMIND_TOKEN, h = token ? { Authorization: `Bearer ${token}` } : {};
+  const token = (process.env.FINMIND_TOKEN || "").trim(), h = token ? { Authorization: `Bearer ${token}` } : {};
   for (const [ds, adjusted] of [["TaiwanStockPriceAdj", true], ["TaiwanStockPrice", false]]) {
     try {
       const j = await getJSON(`https://api.finmindtrade.com/api/v4/data?dataset=${ds}&data_id=${encodeURIComponent(code)}&start_date=2000-01-01`, h);

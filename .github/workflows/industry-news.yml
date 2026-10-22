@@ -1,0 +1,31 @@
+# 產業新聞：每天台北早上 7:20 用產業地圖的題材名稱抓 Google 新聞標題，有 GEMINI_API_KEY 時整理成一句重點，寫進 learner/data/industry-news.json
+name: industry-news
+on:
+  schedule:
+    - cron: "20 23 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: data-sync-industry-news-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: git pull -q origin ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev --ignore-scripts
+      - run: node scripts/industry-news.mjs
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: commit
+        if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
+        env:
+          COMMIT_NAME: industry-news
+        run: |
+          bash scripts/commit-data.sh "產業新聞：每日更新" learner/data/industry-news.json

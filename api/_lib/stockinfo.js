@@ -18,7 +18,7 @@ async function getJSON(url, headers = {}) {
   return j;
 }
 async function finmind(dataset, code, start) {
-  const token = process.env.FINMIND_TOKEN;
+  const token = (process.env.FINMIND_TOKEN || "").trim();
   const j = await getJSON(`https://api.finmindtrade.com/api/v4/data?dataset=${dataset}&data_id=${encodeURIComponent(code)}&start_date=${start}`, token ? { Authorization: `Bearer ${token}` } : {});
   if (!j || (j.status && j.status !== 200) || !Array.isArray(j.data)) throw new Error(j?.msg || "FinMind 沒有回傳資料");
   return j.data;

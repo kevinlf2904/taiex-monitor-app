@@ -35,7 +35,7 @@ jobs:
       - if: ${{ github.event.inputs.backfill && github.event.inputs.backfill != '0' }}
         run: node scripts/fut-1m.mjs --backfill=${{ github.event.inputs.backfill }} ${{ github.event.inputs.dump == '1' && '--dump' || '' }}
       - name: commit
-        if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        if: ${{ github.ref == 'refs/heads/main' && (!github.event.inputs.dump || github.event.inputs.dump == '0') }}
         env:
           COMMIT_NAME: fut-1m
         run: |

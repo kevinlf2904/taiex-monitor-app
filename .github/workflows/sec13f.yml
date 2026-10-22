@@ -33,7 +33,7 @@ jobs:
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
       - name: commit
-        if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        if: ${{ github.ref == 'refs/heads/main' && (!github.event.inputs.dump || github.event.inputs.dump == '0') }}
         env:
           COMMIT_NAME: sec13f
         run: |

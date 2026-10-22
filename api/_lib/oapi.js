@@ -15,7 +15,7 @@ const PATH_RE = /^\/[A-Za-z0-9_]+(\/[A-Za-z0-9_]+){0,2}$/;
 const TTL = 15 * 60e3, MAX = 2000;
 const cache = new Map();
 export async function rowsOf(src, path) {
-  const url = BASE[src] + path, hit = cache.get(url);
+  const url = (Object.hasOwn(BASE, src) ? BASE[src] : "") + path, hit = cache.get(url);
   if (hit && Date.now() - hit.at < TTL) return hit.p;
   const p = getJSON(url, 20000).then(j => (Array.isArray(j) ? j : []));
   cache.set(url, { at: Date.now(), p }); p.catch(() => cache.delete(url));
@@ -114,7 +114,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, code, items: got.filter(Boolean) });
   }
   const src = String(q.src || ""), path = String(q.p || "");
-  if (!BASE[src] || !PATH_RE.test(path)) return res.status(400).json({ ok: false, error: "資料集參數不對" });
+  if (!Object.hasOwn(BASE, src) || !PATH_RE.test(path)) return res.status(400).json({ ok: false, error: "資料集參數不對" });
   let rows;
   try { rows = await rowsOf(src, path); } catch (e) { return res.status(200).json({ ok: false, error: `${src === "twse" ? "證交所" : "櫃買中心"}暫時連不到（${e.message}）` }); }
   const out = filterRows(rows, { code, q: q.q ? String(q.q).slice(0, 40) : "" }), lim = Math.max(1, Math.min(MAX, +q.limit || 500));

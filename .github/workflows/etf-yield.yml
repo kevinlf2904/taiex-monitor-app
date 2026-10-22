@@ -12,7 +12,7 @@ concurrency:
 jobs:
   yield:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60   # 357 檔要跑 25～30 分鐘，留餘裕
     steps:
       - uses: actions/checkout@v4
       # 排隊等前一次跑完時，checkout 的是排隊當下的舊版本；先拉到最新的 main，避免和前一次存的資料衝突
@@ -21,7 +21,10 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/etf-yield.mjs
+        env: # Yahoo 拿不到時改問 FinMind，帶金鑰才不會用匿名額度
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
       - name: commit
+        if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:
           COMMIT_NAME: etf-yield
         run: |

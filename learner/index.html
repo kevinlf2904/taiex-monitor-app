@@ -894,7 +894,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.21-136</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.22-137</span></footer>
 
 <script src="core.js"></script>
 <script src="tschart.js"></script>
@@ -4075,14 +4075,14 @@ async function liveTick() {
   const code = LIVE.paused ? null : liveCode(), codes = ["T00", ...(code && code !== "T00" ? [code] : [])];
   LIVE.busy = true;
   try {
-    const r = await fetch(`/api/quote?codes=${codes.join(",")}`), j = await r.json().catch(() => null);
+    const r = await fetch(`/api/quote?codes=${codes.join(",")}`, { signal: tmo(10000) }), j = await r.json().catch(() => null);
     if (!j) { if (r.status === 404) LIVE.off = true; throw new Error(r.status === 404 ? "這個環境沒有即時報價服務" : `即時報價服務回應 ${r.status}`); }
     if (!j.ok) throw new Error(j.error || "拿不到即時報價");
     LIVE.last = j; LIVE.err = null;
     const ix = j.quotes.find(q => q.code === "T00"); if (ix) renderMktChip(ix, j);
     const q = code && j.quotes.find(x => x.code === code);
     if (q) applyLive(q, j);
-  } catch (e) { LIVE.err = e.message; }
+  } catch (e) { LIVE.err = /Timeout|Abort/.test(e.name) ? "即時報價連線逾時，稍後自動再試" : e.message; }
   finally { LIVE.busy = false; renderLiveBar(); if (!LIVE.paused) intraLoad(); }
 }
 function liveSchedule() {
@@ -4134,12 +4134,12 @@ async function intraLoad(force = false) {
   if (!force && INTRA.code === code && INTRA.data && (sess === "closed" ? age < 600000 : age < 30000)) return;
   INTRA.busy = true; $("#intraNote").textContent = "載入中…";
   try {
-    const r = await fetch(`/api/intraday?code=${code}&tf=1`), j = await r.json().catch(() => null);
+    const r = await fetch(`/api/intraday?code=${code}&tf=1`, { signal: tmo(15000) }), j = await r.json().catch(() => null);
     if (!j) { if (r.status === 404) { INTRA.off = true; P.hidden = true; } throw new Error(`分時服務回應 ${r.status}`); }
     if (!j.ok) throw new Error(j.error);
     if (liveCode() !== code) return;
     INTRA.data = j; INTRA.code = code; INTRA.at = Date.now(); intraDraw();
-  } catch (e) { $("#intraNote").textContent = e.message || "載入失敗"; }
+  } catch (e) { $("#intraNote").textContent = /Timeout|Abort/.test(e.name) ? "分時資料連線逾時，稍後自動再試" : e.message || "載入失敗"; }
   finally { INTRA.busy = false; }
 }
 const tMin = t => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
@@ -4953,7 +4953,8 @@ var SAV_PENDING = ""; // var：switchTab 在頁面一開始就會用到
 addEventListener("message", e => { if (e.data?.type !== "open-savings" || e.source !== $("#watchFrame")?.contentWindow) return; const q = String(e.data.q || "").slice(0, 200);
   if (!/^add=/.test(q)) return; SAV_PENDING = q; const f = $("#savingsFrame"); if (f.src) f.src = "savings.html?embed=1&theme=" + (document.documentElement.dataset.theme || "dark") + "&" + q; goTab("savings"); SAV_PENDING = ""; });
 addEventListener("klinestyle", e => { ["#watchFrame", "#savingsFrame"].forEach(id => { try { $(id)?.contentWindow?.postMessage({ type: "kline-style", style: e.detail }, "*"); } catch {} }); redrawAll(); });
-addEventListener("message", e => { if (e.data?.type === "kline-style" && e.data.style !== klStyle()) applyStyle(e.data.style); else if (e.data?.type === "watch-theme" && document.documentElement.dataset.theme !== e.data.theme) $("#themeBtn").click(); });
+addEventListener("message", e => { if (![$("#watchFrame")?.contentWindow, $("#savingsFrame")?.contentWindow].includes(e.source)) return; // 只聽自己嵌的頁面
+  if (e.data?.type === "kline-style" && e.data.style !== klStyle()) applyStyle(e.data.style); else if (e.data?.type === "watch-theme" && document.documentElement.dataset.theme !== e.data.theme) $("#themeBtn").click(); });
 $("#fontBtn").addEventListener("click", () => { const f = document.documentElement.dataset.font === "song" ? "sans" : "song"; if (f === "song") document.documentElement.dataset.font = "song"; else delete document.documentElement.dataset.font; store.set("font", f);
   ["#watchFrame", "#savingsFrame"].forEach(id => { try { $(id)?.contentWindow?.postMessage({ type: "kline-font", font: f }, "*"); } catch {} }); redrawAll(); });
 $("#themeBtn").addEventListener("click", () => { const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = t; store.set("theme", t); $("#savingsFrame").contentWindow?.postMessage({ type: "kline-theme", theme: t }, "*"); $("#watchFrame").contentWindow?.postMessage({ type: "kline-theme", theme: t }, "*"); $('meta[name="theme-color"]')?.setAttribute("content", t === "dark" ? "#09090B" : "#FAFAFA"); if (INTRA.data) intraDraw(); });

@@ -113,6 +113,8 @@ export async function run() {
     } catch (e) { console.log("失敗", x.no, e.message); }
     await sleep(800);
   }
+  // 上次讀的時候股票行情剛好抓不到、代號是空的：這次有對照表就補上（不然那一期的股票永遠對不到代號）
+  if (map.size) for (const d of decl) for (const s of d.stocks || []) if (!s.cur && !s.code) s.code = codeOf(s.name);
   issues.sort((a, b) => b.no - a.no);
   for (const i of issues) { const L = list.find(x => x.no === i.no); if (L && !i.pdf) i.pdf = L.pdf; } // 舊資料補上 PDF 連結（網站只留最近 6 個月）
   // 申報持股的最新收盤價（每個交易日更新），網頁用來算「持股市值」排行；拿不到就沿用上次的

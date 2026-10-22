@@ -39,9 +39,10 @@ async function bench() {
   return out;
 }
 export default async function handler(req, res) {
-  if (req.query?.bench) { res.setHeader("Cache-Control", "no-store"); return res.status(200).json({ ok: true, bench: await bench(), at: new Date().toISOString() }); }
+  // bench 會連打 12 次報價：要帶伺服器設定的 STATUS_KEY 才跑，避免被拿來耗光 Finnhub 每分鐘的額度
+  if (req.query?.bench) { const k = (process.env.STATUS_KEY || "").trim(); if (!k || req.query.key !== k) return res.status(403).json({ ok: false, error: "測速要帶 key" }); res.setHeader("Cache-Control", "no-store"); return res.status(200).json({ ok: true, bench: await bench(), at: new Date().toISOString() }); }
   const rep = envReport();
   const [fugle, fred, finnhub] = await Promise.all([rep.set.FUGLE_API_KEY ? pingFugle(process.env.FUGLE_API_KEY) : null, rep.set.FRED_API_KEY ? pingFred(process.env.FRED_API_KEY) : null, rep.set.FINNHUB_API_KEY ? pingFinnhub(process.env.FINNHUB_API_KEY) : null]);
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=120"); // 每分鐘最多真的連一次外部服務
   return res.status(200).json({ ok: true, ...rep, fugle, fred, finnhub });
 }

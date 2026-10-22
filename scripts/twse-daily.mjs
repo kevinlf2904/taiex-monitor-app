@@ -62,7 +62,7 @@ export function parsePledgeL(rows) {
 // 暫停先賣後買當沖預告（TWTBAU1）、停資停券預告（BFI84U）：[代號, 名稱, 開始, 結束, 原因]
 export const susRowsL = rows => (rows || []).map(r => [str(r.Code), str(r.Name), rocDate(r.StartDate), rocDate(r.EndDate), str(r.Reason)]).filter(r => r[0] && r[2]);
 
-async function oapi(p) { const r = await fetch("https://openapi.twse.com.tw/v1" + p, { headers: UA, signal: AbortSignal.timeout(60000) }); if (!r.ok) throw new Error(`${p} HTTP ${r.status}`); const j = await r.json().catch(() => null); return Array.isArray(j) ? j : []; }
+async function oapi(p) { const r = await fetch("https://openapi.twse.com.tw/v1" + p, { headers: UA, signal: AbortSignal.timeout(60000) }); if (!r.ok) throw new Error(`${p} HTTP ${r.status}`); const j = await r.json().catch(() => null); if (!Array.isArray(j)) throw new Error(`${p} 回的不是資料（可能在維護）`); return j; } // 維護頁面當成失敗，沿用上次的清單，不要被空清單蓋掉
 async function rwd(p) { const r = await fetch("https://www.twse.com.tw/rwd/zh/" + p + (p.includes("?") ? "&" : "?") + "response=json", { headers: UA, signal: AbortSignal.timeout(30000) }); if (!r.ok) throw new Error(`${p} HTTP ${r.status}`); return r.json(); }
 
 export async function main({ get = oapi, getRwd = rwd, getMops = ym => mops(ym, "sii"), now = Date.now(), gap = 1200, out: OUT_ = OUT, rev: REV_ = REV } = {}) {

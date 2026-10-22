@@ -21,7 +21,10 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/etf-annual.mjs
+        env: # Yahoo 拿不到時改問 FinMind，帶金鑰才不會用匿名額度
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
       - name: commit
+        if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:
           COMMIT_NAME: etf-annual
         run: |
