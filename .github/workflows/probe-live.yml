@@ -20,6 +20,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: npm ci --omit=dev --ignore-scripts # yt 模式會載入 api/_lib（要用到套件）
       - run: node scripts/probe-live.mjs ${{ github.event.inputs.n || 12 }} ${{ github.event.inputs.gap || 10 }}
         env: # 只有 keys 模式會用到；只回報「有沒有設定、能不能用」，不印金鑰
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
