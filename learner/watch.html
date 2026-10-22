@@ -1142,7 +1142,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-145</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-146</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1270,6 +1270,13 @@ function toast(t, ms = 4000) { const el = $("#toast"); el.textContent = t; el.hi
 /* ---------- 資料 ---------- */
 // optional：附加功能（處置股、行事曆、產業別…）拿不到時不要把整頁切成離線模式
 // 逾時：iPad 睡眠喚醒、切換網路時 fetch 可能永遠不回來，輪詢會一直卡在「上一輪還沒結束」而停止更新，所以每個請求最多等 ms 毫秒
+// 清單上方共用的「↻ 更新」：按下後變「更新中…」，好了跳「已更新 時間」；更新時不用本機快取（W.fresh），不然像官方公告會拿到 30 分鐘前存的那份，看起來沒反應
+const rfBtn = k => `<button class="btn sm" data-gx="${k}" ${W.rfBusy === k ? "disabled" : ""}>${W.rfBusy === k ? "↻ 更新中…" : "↻ 更新"}</button>`;
+async function rfRun(k, f) {
+  if (W.rfBusy) return; W.rfBusy = k; W.fresh = Date.now() + 15000; renderList();
+  try { await f(); toast(`已更新 ${new Date(Date.now() + 8 * 3600e3).toISOString().slice(11, 19)}`, 1500); } catch (e) { toast(`更新失敗：${e.message}`, 2500); }
+  finally { W.rfBusy = null; renderList(); }
+}
 async function getJ(url, optional = false) {
   const ttl = apiTtl(url); if (ttl && !(W.fresh > Date.now())) { const hit = await apiCacheGet(url); if (hit) return hit; }
   let r; try { r = await fetch(url, { signal: tmo(W.tmo || window.W_TMO || 20000) }); } catch (e) { throw new Error(e?.name === "TimeoutError" || e?.name === "AbortError" ? "伺服器太久沒回應" : "連不到伺服器（網路中斷？）"); }
@@ -1848,17 +1855,17 @@ function renderList0() {
     if (W.holdView === "ana") renderHoldAna(); else if (W.holdView === "risk") renderHoldRisk(); else if (W.holdView === "macro") renderHoldMacro(); else renderHold();
     note = `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
   } else if (W.lt === "screen") {
-    $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? liveTag(W.scr, "收盤後資料") : "選股"}・僅供參考，不是買賣建議</span><button class="btn sm" data-gx="scrRefresh">↻ 更新</button>`;
+    $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? liveTag(W.scr, "收盤後資料") : "選股"}・僅供參考，不是買賣建議</span>${rfBtn("scrRefresh")}`;
     renderScreen(); note = W.scr?.source ? `資料：${W.scr.source}。「K線」「技術」兩類是在瀏覽器裡掃描自選、庫存、台股熱門與今天熱門清單的日 K；「題材」是常見代表股的參考名單。` : "";
   } else if (W.lt === "money") {
     const D = W.mf.days, last = D[D.length - 1], tq = W.quotes.get("T00");
-    $("#lTools").innerHTML = `<span class="note">${tq?.chgPct != null ? `<b class="${cls(tq.chg)}">大盤 ${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct.toFixed(2)}%</b>・` : ""}${last ? `法人資料 ${last.date.replace(/-/g, "/")}${(() => { const t = new Date(Date.now() + 8 * 3600e3); return t.getUTCDay() % 6 && last.date < t.toISOString().slice(0, 10) ? "（今天的約 15:00～16:30 公布，會自動補上）" : ""; })()}` : "板塊資金"}</span><button class="btn sm" data-gx="mfRefresh">↻ 更新</button>`;
+    $("#lTools").innerHTML = `<span class="note">${tq?.chgPct != null ? `<b class="${cls(tq.chg)}">大盤 ${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct.toFixed(2)}%</b>・` : ""}${last ? `法人資料 ${last.date.replace(/-/g, "/")}${(() => { const t = new Date(Date.now() + 8 * 3600e3); return t.getUTCDay() % 6 && last.date < t.toISOString().slice(0, 10) ? "（今天的約 15:00～16:30 公布，會自動補上）" : ""; })()}` : "板塊資金"}</span>${rfBtn("mfRefresh")}`;
     W.mf.view === "replay" ? mfReplayDraw() : renderMoney(); note = "金額＝三大法人買賣超張數 × 收盤價（估算，億元）；板塊是產業地圖的題材加上產業別，一檔股票可能同時算進好幾個板塊。只呈現公開資料的統計，不是投資建議。";
   } else if (W.lt === "ind") {
     $("#lTools").innerHTML = `<span class="note">供應鏈題材地圖・代表公司參考名單（整理於 ${INDUSTRY_MAP.updated}），不是推薦</span>`;
     renderInd(); note = "台股、美股有即時報價；日股、韓股只列名稱。題材的平均漲跌是成員今天漲跌幅的簡單平均。";
   } else if (W.lt === "mkt") {
-    $("#lTools").innerHTML = `<span class="note">${W.mkReg === "otc" ? "櫃買中心・每個交易日收盤後更新" : W.mkReg === "lst" ? "證交所・每個交易日收盤後更新" : W.mkReg === "off" ? "證交所、櫃買中心公告・約 15 分鐘更新" : W.mkReg === "gl" ? `原物料・外匯・利率${W.gl?.at ? `・更新於 ${new Date(W.gl.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span><button class="btn sm" data-gx="mktRefresh">↻ 更新</button>`;
+    $("#lTools").innerHTML = `<span class="note">${W.mkReg === "otc" ? "櫃買中心・每個交易日收盤後更新" : W.mkReg === "lst" ? "證交所・每個交易日收盤後更新" : W.mkReg === "off" ? "證交所、櫃買中心公告・約 15 分鐘更新" : W.mkReg === "gl" ? `原物料・外匯・利率${W.gl?.at ? `・更新於 ${new Date(W.gl.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span>${rfBtn("mktRefresh")}`;
     renderMkt(); note = W.mkReg === "otc" || W.mkReg === "lst" || W.mkReg === "off" ? "" : W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${W.mkt.live ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布" : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計"}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : "";
   } else if (W.lt === "etf") {
     note = renderEtf();
@@ -1909,9 +1916,9 @@ $("#listPane").addEventListener("click", e => {
   else if (t.closest("[data-hset]")) { const b = t.closest("[data-hset]"); W[b.dataset.hset] = b.dataset.v === "true"; store.set("watch:" + b.dataset.hset, W[b.dataset.hset]); renderList(); }
   else if (t.closest("[data-hopt]") && t.tagName === "INPUT") { const k = t.dataset.hopt; W[k] = t.checked; store.set("watch:" + k, W[k]); renderList(); }
   else if (t.closest("[data-hm]")) { W.holdMkt = t.closest("[data-hm]").dataset.hm; store.set("watch:hm", W.holdMkt); renderList(); pollList().then(renderList).catch(() => {}); }
-  else if (gx && gx.dataset.gx === "mktRefresh") { const f = { us: loadUsMkt, gl: loadGlobal, macro: loadMacro, poly: loadPoly, news: loadMnews, otc: otcLoad, lst: otcLoad, off: offLoad }[W.mkReg] || loadMkt; f(true); }
-  else if (gx && gx.dataset.gx === "scrRefresh") loadScreen(true);
-  else if (gx && gx.dataset.gx === "mfRefresh") { W.mf.days = W.mf.days.filter(d => d.date < W.today); W.mf.tried = new Set(); loadMoney(10, true); }
+  else if (gx && gx.dataset.gx === "mktRefresh") { const f = { us: loadUsMkt, gl: loadGlobal, macro: loadMacro, poly: loadPoly, news: loadMnews, otc: otcLoad, lst: otcLoad, off: offLoad }[W.mkReg] || loadMkt; rfRun("mktRefresh", () => f(true)); }
+  else if (gx && gx.dataset.gx === "scrRefresh") rfRun("scrRefresh", () => loadScreen(true));
+  else if (gx && gx.dataset.gx === "mfRefresh") rfRun("mfRefresh", () => { W.mf.days = W.mf.days.filter(d => d.date < W.today); W.mf.tried = new Set(); return loadMoney(10, true); });
   else if (t.closest("[data-hrtol]")) { W.hrTol = t.closest("[data-hrtol]").dataset.hrtol; store.set("watch:hrtol", W.hrTol); renderList(); }
   else if (t.closest("[data-hv]")) { W.holdView = t.closest("[data-hv]").dataset.hv; store.set("watch:hv", W.holdView); renderList(); }
   else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a === "shot") $("#impFile").click(); else if (a === "edit") openHoldEdit(); else if (a === "text") openImport("text"); else exportHold(); }
