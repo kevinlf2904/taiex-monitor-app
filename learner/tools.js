@@ -563,6 +563,8 @@ function congBtHtml(inner = false) { // inner：放在美國國會頁的「申�
 }
 
 /* ---------- 13F 機構持股 ---------- */
+// 13F 歷史季度（data/f13-hist.json）：第一次用到才載入，13F 頁和區間比較共用
+function f13HLoad() { if (W.f13H === undefined) { W.f13H = null; fetch("data/f13-hist.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : {})).catch(() => ({})).then(j => { W.f13H = j || {}; if (W.lt === "cong") renderList(); }); } }
 async function f13Load() { if (W.f13) return W.f13; try { const r = await fetch("data/f13.json", { cache: "no-cache" }); if (!r.ok) throw new Error(r.status === 404 ? "排程還沒跑完第一次" : `HTTP ${r.status}`); W.f13 = await r.json(); } catch (e) { W.f13 = { err: e.message, funds: [] }; } if (W.lt === "cong") renderList(); return W.f13; }
 const F13_CHG = { new: ["新進", "up"], add: ["加碼", "up"], cut: ["減碼", "down"], sold: ["出清", "down"], same: ["持平", ""] };
 const f13Tag = c => `<span class="ctag ${c === "new" || c === "add" ? "many" : c === "same" ? "" : "one"}">${F13_CHG[c]?.[0] || c}</span>`;
@@ -588,7 +590,6 @@ function f13Perf(f) {
   const sp = (a, b) => { const x = a && kOn(S, a), y = b ? kOn(S, b) : kLast(S); return x && y ? y / x - 1 : null; }, spF = (() => { const x = kAfter(S, f.filed), y = kLast(S); return x && y ? y / x - 1 : null; })();
   return { now, q, fo, pv, sQ: sp(f.period), sF: spF, sP: f.prevPeriod ? sp(f.prevPeriod, f.period) : null, cov: q ? q.cov / f.total : 0, last: Array.isArray(S) && S.length ? String(S[S.length - 1].d).slice(0, 10) : "" };
 }
-const f13Cell = (r, s) => `<td class="${cls(r)}"><b>${retPct(r)}</b>${s != null && r != null ? `<div class="note ${cls(r - s)}">${r - s >= 0 ? "贏" : "輸"} SPY ${retPct(Math.abs(r - s)).replace("+", "")}</div>` : ""}</td>`;
 function f13PerfHtml(f) {
   const ready = [...f13Tks(f), "SPY"].every(t => W.congK?.[t] != null); // 抓不到的股票（{ err }）也算載入完成，不會一直重抓
   if (!ready) { if (!W.f13P?.busy) setTimeout(() => f13PerfRun([f]), 0); return `<h4>績效</h4><p class="note">載入股價 ${W.f13P?.done || 0}/${W.f13P?.total || "…"}</p>`; }
@@ -618,7 +619,7 @@ function f13Html(arg) {
   if (arg) {
     const f = F.funds.find(x => x.cik === arg); if (!f) return `<p class="note">找不到這家機構</p>`;
     // 歷史季度（data/f13-hist.json，排程每季累積）：選過去的季度就看那一季的持股與和前一季的差別
-    if (W.f13H === undefined) { W.f13H = null; fetch("data/f13-hist.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : {})).catch(() => ({})).then(j => { W.f13H = j || {}; if (W.lt === "cong") renderList(); }); }
+    f13HLoad();
     const HP = W.f13H?.[f.cik]?.periods || [], qs = [...new Set([f.period, ...HP.map(p => p.period)])].sort().reverse(), qsel = qs.includes(W.f13Q) && W.f13Q !== f.period ? W.f13Q : null;
     const qbar = qs.length > 1 ? `<div class="mn-days mkseg">${qs.map(q => `<button type="button" data-rkset="f13Q:${q === f.period ? "" : q}" aria-pressed="${(qsel || f.period) === q}">${q.slice(0, 7).replace("-", "/")}${q === f.period ? "（最新）" : ""}</button>`).join("")}</div>` : `<p class="note">過去季度的持股由排程每天往前補（每次每家 2 季），之後就能在這裡切換季度。</p>`;
     if (qsel) { const i = HP.findIndex(p => p.period === qsel), P = HP[i], Q = HP[i + 1], key = r => r.cusip || r.name, prevM = new Map((Q?.rows || []).map(r => [key(r), r]));
@@ -716,15 +717,16 @@ function insHtml() {
 /* ---------- 備份同步：匯出／匯入備份檔；有雲端儲存時用同步碼在 iPad、手機之間同步；綁定 Telegram 收收盤後提醒 ---------- */
 // 同步的內容：瀏覽器裡 kline: 開頭的設定與紀錄（自選、庫存、提醒、日記、模擬帳戶、錯題本…）；單筆超過 150KB 的多半是快取，不同步
 const SYNC_K = "kline-sync";
+const SYNC_SKIP = /^kline:watch:ft:/; // 台指期盤中報價暫存：只對這台裝置有用、每 5 秒變一次，不要同步（不然每分鐘都要上傳）
 const syncGet = () => { try { return JSON.parse(localStorage.getItem(SYNC_K) || "{}"); } catch { return {}; } };
 const syncSet = o => { try { localStorage.setItem(SYNC_K, JSON.stringify({ ...syncGet(), ...o })); } catch {} };
-function syncSnap() { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k?.startsWith("kline:")) continue; const v = localStorage.getItem(k); if (v != null && v.length < 150000) o[k] = v; } } catch {} return o; }
+function syncSnap() { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k?.startsWith("kline:") || SYNC_SKIP.test(k)) continue; const v = localStorage.getItem(k); if (v != null && v.length < 150000) o[k] = v; } } catch {} return o; }
 const syncHash = o => { let h = 0; const s = JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]])); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
 function syncApply(data) { let n = 0; try { for (const [k, v] of Object.entries(data || {})) if (k.startsWith("kline:") && typeof v === "string") { localStorage.setItem(k, v); n++; } } catch {} return n; }
 const syncNewId = () => { const a = new Uint8Array(18); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 async function syncTok(id) { const b = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id))); return [...b].map(x => x.toString(16).padStart(2, "0")).join("").slice(0, 24); }
-async function syncApi(op, extra = {}) { const S = syncGet(); const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, id: S.id, ...extra }) }); return r.json(); }
-async function syncCfg() { if (W.syncCfg) return W.syncCfg; try { W.syncCfg = await (await fetch("/api/sync?op=cfg")).json(); } catch { W.syncCfg = { kv: false }; } return W.syncCfg; }
+async function syncApi(op, extra = {}) { const S = syncGet(); const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, id: S.id, ...extra }), signal: tmo(20000) }).catch(e => { throw new Error(/Timeout|Abort/.test(e.name) ? "雲端連線逾時" : "連不上雲端"); }); return r.json(); }
+async function syncCfg() { if (W.syncCfg) return W.syncCfg; try { W.syncCfg = await (await fetch("/api/sync?op=cfg", { signal: tmo(10000) })).json(); } catch { W.syncCfg = { kv: false }; } return W.syncCfg; }
 async function syncPush(quiet) {
   const S = syncGet(); if (!S.id) return; const data = syncSnap(), h = syncHash(data);
   const j = await syncApi("push", { data, dev: navigator.userAgent.match(/iPad|iPhone|Android|Mac|Windows/)?.[0] || "" }).catch(e => ({ ok: false, error: e.message }));

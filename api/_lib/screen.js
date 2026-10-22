@@ -136,7 +136,7 @@ export default async function handler(req, res) {
     getJSON("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL").then(parseBw),
     both("https://openapi.twse.com.tw/v1/opendata/t187ap05_L", "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O", parseRevenue),
     both("https://openapi.twse.com.tw/v1/opendata/t187ap14_L", "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap14_O", parseEps),
-    both("https://openapi.twse.com.tw/v1/opendata/t187ap17_L", "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap17_O", parseMargins),
+    both("https://openapi.twse.com.tw/v1/opendata/t187ap17_L", "https://www.tpex.org.tw/openapi/v1/mopsfin_187ap17_O" /* 櫃買的資料集名稱本來就少一個 t */, parseMargins),
   ]);
   const L = a.value, quotes = L?.rows || [];
   if (!quotes.length) return res.status(200).json({ ok: false, error: `拿不到選股資料（${a.reason?.message || "沒有資料"}）` });

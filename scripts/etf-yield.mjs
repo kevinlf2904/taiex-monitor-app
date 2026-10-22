@@ -24,6 +24,8 @@ export async function main({ gap = 350, list = null, calc = yieldOf } = {}) {
     await sleep(gap);
   }
   const out = { updated: new Date().toISOString(), source: "Yahoo Finance 配息紀錄（近 12 個月現金股利 ÷ 股價）", rows };
+  // 成功不到一半（多半是 Yahoo 擋 GitHub 的機器）就保留原本的檔案，不要用空排行蓋掉
+  if (rows.length < L.length * 0.5) { console.log(`::warning::只算出 ${rows.length}／${L.length} 檔，保留原本的資料`); return out; }
   await writeFile(OUT, JSON.stringify(out));
   return out;
 }

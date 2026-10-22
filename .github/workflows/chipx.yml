@@ -29,7 +29,7 @@ jobs:
       - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
         run: node scripts/chipx.mjs
       - name: commit
-        if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
+        if: ${{ github.ref == 'refs/heads/main' && (!github.event.inputs.dump || github.event.inputs.dump == '0') }}
         env:
           COMMIT_NAME: chipx
         run: |

@@ -27,6 +27,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SITE_URL: ${{ vars.SITE_URL || 'https://kline-school.vercel.app' }}
       - name: commit
+        if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:
           COMMIT_NAME: macro-news
         run: |

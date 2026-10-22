@@ -481,3 +481,43 @@ test("官方公告：重大訊息、裁罰、經營權異動、董監持股不�
   assert.deepEqual(parseHoliday([{ Name: "國慶日", Date: "1151010", Description: "x" }]), [{ date: "2026-10-10", name: "國慶日", note: "x" }]);
   assert.deepEqual(officialPack({}).news, [], "全部抓不到也不會出錯");
 });
+import { aiLimit, AI_LIMITS } from "../api/_lib/_limit.js";
+import { privIp, safeFetch, safeUrl, readCapped } from "../api/_lib/podcast.js";
+import { themesOf, queryOf, mergeNews } from "../scripts/industry-news.mjs";
+test("AI 次數限制：每 IP 每小時、全站每天", async () => {
+  const M = new Map(), store = async k => { const n = (M.get(k) || 0) + 1; M.set(k, n); return n; }, req = ip => ({ headers: { "x-forwarded-for": ip + ", 10.0.0.1" } }), t = Date.parse("2026-10-22T03:00:00Z");
+  for (let i = 0; i < AI_LIMITS.podcast[0]; i++) assert.equal(await aiLimit(req("1.2.3.4"), "podcast", t, store), null);
+  assert.match(await aiLimit(req("1.2.3.4"), "podcast", t, store), /每小時最多 6 次/);
+  assert.equal(await aiLimit(req("5.6.7.8"), "podcast", t, store), null, "別的 IP 不受影響");
+  assert.equal(await aiLimit(req("1.2.3.4"), "podcast", t + 3600e3, store), null, "下一個小時重新計算");
+  assert.equal(await aiLimit(req("1.2.3.4"), "quote", t, store), null, "不是 AI 服務不限制");
+  assert.equal(await aiLimit(req("1.2.3.4"), "chat", t, async () => { throw new Error("KV 壞了"); }), null, "計數器壞掉時放行");
+  M.clear(); let day = 0; const big = async k => (k.includes(":day:") ? ++day + AI_LIMITS.chat[1] : 1);
+  assert.match(await aiLimit(req("9.9.9.9"), "chat", t, big), /今天的 AI 使用量已達上限/);
+  assert.ok(![...M.keys()].some(k => k.includes("1.2.3.4")), "IP 只存雜湊");
+});
+test("節目匯入：擋內網位址與跳轉到內網", async () => {
+  for (const ip of ["127.0.0.1", "10.1.2.3", "172.20.0.1", "192.168.1.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1"]) assert.equal(privIp(ip), true, ip);
+  for (const ip of ["8.8.8.8", "172.32.0.1", "100.128.0.1", "2001:4860::8888"]) assert.equal(privIp(ip), false, ip);
+  assert.equal(safeUrl("http://169.254.169.254/latest"), null); assert.equal(safeUrl("file:///etc/passwd"), null); assert.equal(safeUrl("https://u:p@a.com/"), null);
+  const DNS = { "feed.example.com": "93.184.216.34", "evil.example.com": "127.0.0.1" }, lookup = async h => (DNS[h] ? [{ address: DNS[h] }] : Promise.reject(new Error("ENOTFOUND")));
+  const real = globalThis.fetch, seen = [];
+  globalThis.fetch = async (u, o) => { seen.push([u, o.redirect]); return u.includes("/go") ? new Response("", { status: 302, headers: { location: "http://evil.example.com/x" } }) : new Response("ok"); };
+  try {
+    assert.equal(await (await safeFetch("https://feed.example.com/rss", {}, { lookup })).text(), "ok");
+    assert.equal(seen[0][1], "manual", "自己處理跳轉");
+    await assert.rejects(safeFetch("https://evil.example.com/rss", {}, { lookup }), /不允許/);
+    await assert.rejects(safeFetch("https://feed.example.com/go", {}, { lookup }), /不允許/, "跳轉到內網也要擋");
+    await assert.rejects(safeFetch("https://nope.example.com/", {}, { lookup }), /找不到/);
+  } finally { globalThis.fetch = real; }
+  await assert.rejects(readCapped(new Response("x".repeat(2000)), 1000), /太大/); assert.equal((await readCapped(new Response("abc"), 10)).toString(), "abc");
+});
+test("產業新聞：題材搜尋字、同一則合併題材、保留 60 天", async () => {
+  const T = themesOf(await (await import("node:fs/promises")).readFile(new URL("../learner/industry.js", import.meta.url), "utf8"));
+  assert.ok(T.length > 10 && T.every(t => t.id && t.name));
+  assert.equal(queryOf({ name: "AI 先進封裝（CoWoS）", mk: "tw" }), "AI 先進封裝 CoWoS"); assert.equal(queryOf({ name: "量子電腦", mk: "us" }), "量子電腦 美股");
+  const now = Date.parse("2026-10-22T00:00:00Z"), old = { items: [{ date: "2026-10-20", themes: ["a"], title: "台積電先進封裝擴產 - 經濟日報", summary: "s", url: "u" }, { date: "2026-07-01", themes: ["a"], title: "舊新聞", url: "u" }] };
+  const N = mergeNews(old, [{ date: "2026-10-21", themes: ["b"], title: "台積電先進封裝擴產 - 經濟日報", url: "u2" }, { date: "2026-10-21", themes: ["c"], title: "新的一則", url: "u3" }], now);
+  assert.deepEqual(N.map(x => x.title), ["新的一則", "台積電先進封裝擴產 - 經濟日報"]); assert.deepEqual(N[1].themes, ["a", "b"]); assert.equal(N[1].summary, "s", "已經有的重點不重做");
+  assert.deepEqual(old.items[0].themes, ["a"], "不改到舊資料");
+});

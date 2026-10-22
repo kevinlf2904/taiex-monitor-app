@@ -24,6 +24,7 @@ jobs:
         env: # 營收實際值與預估（Finnhub）；沒設定也能跑，只是沒有營收驚喜
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
       - name: commit
+        if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:
           COMMIT_NAME: us-earn
         run: |

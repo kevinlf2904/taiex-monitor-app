@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   if (!MEDIA_TYPES.includes(mediaType)) return res.status(400).json({ ok: false, error: "不支援的圖片格式" });
   const ctx = numbers ? "" : typeof context === "string" && context ? `\n\n參考資料：程式在瀏覽器中自動辨識的結果如下，可能有誤，請以圖片為準。\n${context.slice(0, 3000)}` : "";
 
-  const client = new Anthropic();
+  const client = new Anthropic({ timeout: 55000, maxRetries: 0 }); // 要在 Vercel 的 60 秒內回完
   try {
     const msg = await client.beta.messages.create({
       model: "claude-opus-5-5",

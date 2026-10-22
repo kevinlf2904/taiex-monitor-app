@@ -83,7 +83,9 @@ export default async function handler(req, res) {
   if (!quotes.size || !inst.size) {
     // 證交所連不上時不要被當成假日快取起來
     if (q.status === "rejected" || i.status === "rejected") return res.status(200).json({ ok: false, error: `證交所資料暫時拿不到（${(q.reason || i.reason)?.message}）` });
-    res.setHeader("Cache-Control", past ? "s-maxage=2592000" : "s-maxage=600");
+    // 證交所明確說「沒有符合條件的資料」才是休市，可以快取 30 天；其他空回應（維護中、只回一半）只快取 10 分鐘
+    const holiday = /沒有符合條件/.test(String(q.value?.stat || "")) && /沒有符合條件/.test(String(i.value?.stat || ""));
+    res.setHeader("Cache-Control", past && holiday ? "s-maxage=2592000" : "s-maxage=600");
     return res.status(200).json({ ok: true, date: iso, empty: true });
   }
   const tp = o.status === "fulfilled" ? o.value : [];

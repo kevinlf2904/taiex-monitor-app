@@ -40,6 +40,7 @@ const ROUTES = {
   yield: () => import("./_lib/yield.js"),
 };
 export const ROUTE_NAMES = Object.keys(ROUTES);
+const AI_ROUTES = new Set(["chat", "chart-read", "import", "podcast"]);
 // 問 AI（對話、讀圖）可能要幾十秒；其他服務幾秒內就回應
 export const config = { maxDuration: 60 };
 
@@ -49,6 +50,8 @@ export default async function handler(req, res) {
   if (!load) return res.status(404).json({ ok: false, error: `沒有 /api/${name} 這個服務` });
   // 動態路由的參數（route）不要傳給各處理程式，避免和它們自己的查詢參數混在一起
   if (req.query) { const { route, ...rest } = req.query; req.query = rest; }
+  // 會花錢的 AI 服務（POST）先檢查次數上限
+  if (req.method === "POST" && AI_ROUTES.has(name)) { const { aiLimit } = await import("./_lib/_limit.js"), why = await aiLimit(req, name); if (why) return res.status(429).json({ ok: false, error: why }); }
   const mod = await load();
   return mod.default(req, res);
 }

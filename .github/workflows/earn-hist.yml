@@ -1,8 +1,13 @@
 # 財報進階資料：月營收連續成長、創新高、公布進度，觀測站營益分析（三率轉折），寫進 learner/data/earn-hist.json，給情報局「財報」用
 name: earn-hist
 on:
+  # GitHub 的排程常延遲好幾個小時，不保證排在 twse-daily、tpex-daily 後面；改成它們跑完就接著跑（月營收一定是最新的），另留一個晚上的排程當備援
+  workflow_run:
+    workflows: [twse-daily, tpex-daily]
+    types: [completed]
+    branches: [main]
   schedule:
-    - cron: "40 14 * * 1-5"  # 台北 22:40（排在 twse-daily 21:55、tpex-daily 21:45 之後，月營收是最新的）
+    - cron: "40 16 * * 1-5"  # 台北 00:40 備援
   workflow_dispatch:
 permissions:
   contents: write
@@ -21,6 +26,7 @@ jobs:
           node-version: 22
       - run: node scripts/earn-hist.mjs
       - name: commit
+        if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:
           COMMIT_NAME: earn-hist
         run: |

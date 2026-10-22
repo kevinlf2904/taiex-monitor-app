@@ -1,4 +1,4 @@
-// 名人 Podcast 的排程整理（GitHub Actions 每 2 小時跑一次，見 .github/workflows/podcast-sync.yml）。
+// 名人 Podcast 的排程整理（GitHub Actions 每小時排一次（GitHub 忙時會延遲），見 .github/workflows/podcast-sync.yml）。
 // 1. 依 learner/data/podcast/shows.json 到 Apple Podcasts 目錄找節目（或用填好的 feed），讀 RSS
 // 2. 還沒整理的單集（新的優先，再往前補到一年內），用 AI 整理成重點與觀點：
 //    - 有 GEMINI_API_KEY（GitHub Actions secret）：直接上傳音檔給 Gemini 聽完整集（沒有時間限制）

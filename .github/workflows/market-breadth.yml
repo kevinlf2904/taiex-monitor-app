@@ -23,6 +23,7 @@ jobs:
           node-version: 22
       - run: node scripts/market-breadth.mjs
       - name: commit
+        if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:
           COMMIT_NAME: market-breadth
         run: |

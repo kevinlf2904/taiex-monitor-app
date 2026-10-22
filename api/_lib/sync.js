@@ -50,7 +50,8 @@ export function waitlistEntry(email, plan, now = Date.now()) {
   return { email: e, doc: JSON.stringify({ at: now, plan: ["team", "pro", "beta"].includes(plan) ? plan : "beta" }) };
 }
 export default async function handler(req, res) {
-  const q = req.query || {}, b = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}, op = b.op || q.op;
+  let b; try { b = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}; } catch { return res.status(400).json({ ok: false, error: "資料格式不對" }); }
+  const q = req.query || {}, op = b.op || q.op;
   const hasKv = !!(KV_URL() && KV_TOKEN()), hasTg = !!TG();
   if (op === "cfg") {
     if (hasTg && !botName) { try { botName = (await tg("getMe")).username; } catch {} }

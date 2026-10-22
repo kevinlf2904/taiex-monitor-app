@@ -90,10 +90,11 @@ export default async function handler(req, res) {
 
   const ck = req.body?.nocache ? null : cacheKey(SYSTEM + ctx, turns), hit = ck && (await cacheGet(ck));
   if (hit?.text) return res.status(200).json({ ...hit, ok: true, cached: true });
+  const t0 = Date.now(), left = () => 57000 - (Date.now() - t0); // 整個請求要在 60 秒內回完（超過 Vercel 會回非 JSON 的 504）
   if (geminiKey) {
     try {
       const r = await askGemini(SYSTEM + ctx, turns, geminiKey);
-      if (!r.ok && !r.blocked && retryable(r.status) && process.env.ANTHROPIC_API_KEY) return askClaude(); // 有設 Claude 金鑰時，Gemini 忙線就改問 Claude
+      if (!r.ok && !r.blocked && retryable(r.status) && process.env.ANTHROPIC_API_KEY && left() > 20000) return askClaude(); // 有設 Claude 金鑰時，Gemini 忙線就改問 Claude
       if (r.ok && ck && !r.truncated) await cachePut(ck, { text: r.text, provider: "gemini", model: r.model });
       return res.status(200).json(r.ok ? { ok: true, text: r.text, truncated: r.truncated, provider: "gemini", model: r.model } : { ok: false, error: geminiError(r), provider: "gemini" });
     } catch { return res.status(200).json({ ok: false, error: "連不到 Gemini 服務，請稍後再試。" }); }
@@ -101,7 +102,7 @@ export default async function handler(req, res) {
 
   return askClaude();
   async function askClaude() {
-  const client = new Anthropic();
+  const client = new Anthropic({ timeout: Math.max(10000, left()), maxRetries: 0 });
   try {
     const msg = await client.beta.messages.create({
       model: "claude-opus-5-5",

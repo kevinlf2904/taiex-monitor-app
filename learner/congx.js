@@ -233,7 +233,7 @@ document.addEventListener("input", e => { const t = e.target.closest?.("[data-cx
 // 13F：選兩個季度（起～迄），用 data/f13-hist.json 重算「迄」那一季的持股和相對「起」的變動，首頁各排行都改看這個區間
 const cxQs = () => [...new Set([...(W.f13?.funds || []).map(f => f.period), ...Object.values(W.f13H || {}).flatMap(h => (h.periods || []).map(p => p.period))])].sort().reverse();
 function cxF13Range(F) {
-  if (W.f13H === undefined) { W.f13H = null; fetch("data/f13-hist.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : {})).catch(() => ({})).then(j => { W.f13H = j || {}; if (W.lt === "cong") renderList(); }); }
+  f13HLoad();
   const Q = W.f13R || {}, qs = cxQs(); if (!W.f13H || (!Q.to && !Q.from)) return F;
   const to = qs.includes(Q.to) ? Q.to : qs[0], from = qs.includes(Q.from) && Q.from < to ? Q.from : qs[qs.indexOf(to) + 1]; if (!from) return F;
   const per = (f, q) => (f.period === q ? { period: f.period, filed: f.filed, total: f.total, rows: f.rows } : (W.f13H[f.cik]?.periods || []).find(p => p.period === q));

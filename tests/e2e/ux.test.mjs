@@ -11,7 +11,7 @@ for (const width of [390, 1280]) test(`首頁：全域搜尋、分享圖卡預�
   await p.evaluate(() => goTab("school")); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => !!document.querySelector("#gsTop") && getComputedStyle(document.querySelector("#gsTop")).display !== "none"), true);
   await p.click("#gsTop");
-  await p.waitForFunction(() => { const f = document.querySelector("#watchFrame"); return f?.contentWindow?.document?.querySelector("#gsearch") && !f.contentWindow.document.querySelector("#gsearch").hidden; }, null, { timeout: 15000 });
+  await p.waitForFunction(() => { const f = document.querySelector("#watchFrame"); return f?.contentWindow?.document?.querySelector("#gsearch") && !f.contentWindow.document.querySelector("#gsearch").hidden; }, null, { timeout: 30000 }); // 第一次載入看盤頁（iframe）在 CI 上偶爾超過 15 秒
   assert.equal(await p.evaluate(() => CUR_TAB), "watch");
   // 情報局的大戶國會：在 iframe 裡按「分享情報圖卡」，預覽視窗出現在最上層頁面（看得到），有下載與複製
   const f = p.frame({ url: /watch\.html/ });

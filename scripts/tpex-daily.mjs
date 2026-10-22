@@ -96,7 +96,7 @@ export const ymOf = t => { const d = new Date(t + 8 * 3600e3); return [d.getUTCF
 export const ymBack = ([y, m], n) => { const t = y * 12 + m - 1 - n; return [Math.floor(t / 12), t % 12 + 1]; };
 export const ymKey = ([y, m]) => `${y}-${String(m).padStart(2, "0")}`;
 
-async function api(p) { const r = await fetch(API + p, { headers: UA, signal: AbortSignal.timeout(60000) }); if (!r.ok) throw new Error(`${p} HTTP ${r.status}`); const j = await r.json().catch(() => null); return Array.isArray(j) ? j : []; }
+async function api(p) { const r = await fetch(API + p, { headers: UA, signal: AbortSignal.timeout(60000) }); if (!r.ok) throw new Error(`${p} HTTP ${r.status}`); const j = await r.json().catch(() => null); if (!Array.isArray(j)) throw new Error(`${p} 回的不是資料（可能在維護）`); return j; } // 維護頁面當成失敗，沿用上次的清單，不要被空清單蓋掉
 // 觀測站月營收彙總表：otc＝上櫃、sii＝上市
 export async function mops([y, m], kind = "otc") {
   const r = await fetch(`https://mopsov.twse.com.tw/nas/t21/${kind}/t21sc03_${y - 1911}_${m}_0.html`, { headers: { "User-Agent": UA["User-Agent"] }, signal: AbortSignal.timeout(60000) });

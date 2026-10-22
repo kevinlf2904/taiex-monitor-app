@@ -35,14 +35,14 @@ jobs:
       - if: ${{ github.event.inputs.dry != '1' }}
         run: node scripts/market-scan.mjs
       - name: publish
-        if: ${{ github.event.inputs.dry != '1' }}
+        if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' }}   # 只有 main 會上傳正式資料
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view market-data >/dev/null 2>&1 || gh release create market-data --title "全市場日 K（自動產生）" --notes "由 market-scan 排程每天更新，網站透過 /api/allk 讀取。請勿手動修改。" --latest=false
           gh release upload market-data out/*.json --clobber
       - name: telegram
-        if: ${{ github.event.inputs.dry != '1' }}
+        if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' }}   # 只有 main 會發真的推播
         continue-on-error: true   # 推播失敗只是警告，不讓全市場資料的排程變成失敗
         env:
           KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}

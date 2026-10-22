@@ -30,6 +30,7 @@ jobs:
           MAX_PER_RUN: "6"
           SITE_URL: ${{ vars.SITE_URL || 'https://kline-school.vercel.app' }}
       - name: commit
+        if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:
           COMMIT_NAME: podcast-sync
         run: |

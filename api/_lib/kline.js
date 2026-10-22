@@ -157,6 +157,8 @@ export default async function handler(req, res) {
       }
     } catch (e) { errors.push(e.message); }
   }
-  if (before) return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : isOtc ? "OTC" : raw, data: [], end: true, note: `${before} 以前沒有更早的資料了。` });
+  // 只有每個來源都正常回應（沒有錯誤）卻沒有更早的資料，才告訴頁面「到底了」；連線失敗時讓頁面之後還能再拉
+  if (before && !errors.length) return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : isOtc ? "OTC" : raw, data: [], end: true, note: `${before} 以前沒有更早的資料了。` });
+  if (before) return res.status(200).json({ ok: false, error: `暫時拿不到更早的資料（${errors[0]}）` });
   return res.status(200).json({ ok: false, error: `找不到 ${raw} 的資料。請確認代號是否正確；若是剛上市或停牌的股票，可能沒有足夠的交易日。${errors.length ? `（${errors[0]}）` : ""}` });
 }
