@@ -2,11 +2,11 @@
 // GET  /api/confai?code=2330            → { ok, list: [{ date, time, note, file, en }] }（近 4 個月，新到舊；同一份簡報只留一次）
 // POST /api/confai { code, file }        → { ok, head, outlook[], margin, capex, demand, risks[], quotes[], model, cached }
 // 簡報檔放在 mopsov.twse.com.tw/nas/STR/（檔名＝代號＋法說會日期＋M／E＋序號）；同一份簡報整理過就存在 KV，之後直接回。
-import { geminiJSON } from "./podcast.js";
+import { geminiJSON, uploadBuf, fileState, fileDelete } from "./podcast.js";
 import { kv, kvOn } from "./sync.js";
 import { toIso } from "./calendar.js";
 
-const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)" }, MAX_MB = 15, TTL = 180 * 86400;
+const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)" }, MAX_MB = 45, INLINE_MB = 12, TTL = 180 * 86400;
 const strip = h => String(h).replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
 export const okFile = (code, f) => typeof f === "string" && new RegExp(`^${code}\\d{8}[ME]\\d{3}\\.pdf$`, "i").test(f);
 // 一覽表裡這家公司的列：[日期, 時間, 擇要訊息, 中文簡報檔, 英文簡報檔]
@@ -70,7 +70,13 @@ export async function summarizeConf(file, name, key, deadline = Date.now() + 550
   const r = await fetch(`https://mopsov.twse.com.tw/nas/STR/${file}`, { headers: UA, signal: AbortSignal.timeout(15000) });
   if (!r.ok || !/pdf/i.test(r.headers.get("content-type") || "")) throw new Error(`簡報下載失敗（HTTP ${r.status}）`);
   const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > MAX_MB * 1048576) throw new Error(`簡報太大（${(buf.length / 1048576).toFixed(0)}MB）`);
-  const out = await geminiJSON([{ inlineData: { mimeType: "application/pdf", data: buf.toString("base64") } }, { text: PROMPT(name) }], key, deadline), s = parseConfSum(out.text);
-  if (!s) throw new Error("AI 回傳格式不對，請再試一次");
-  return { ...s, file, model: out.model };
+  // 小檔直接夾帶；大檔（base64 後會超過 Gemini 單次請求 20MB）先上傳到 Gemini 檔案區，用完刪掉
+  let up = null;
+  try {
+    if (buf.length > INLINE_MB * 1048576) { up = await uploadBuf(buf, "application/pdf", file, key, 30000); for (let t = 0; up.state !== "ACTIVE"; t++) { if (up.state === "FAILED" || t > 20) throw new Error("AI 處理簡報失敗"); await new Promise(x => setTimeout(x, 1500)); up.state = await fileState(up.file, key); } }
+    const doc = up ? { fileData: { mimeType: "application/pdf", fileUri: up.uri } } : { inlineData: { mimeType: "application/pdf", data: buf.toString("base64") } };
+    const out = await geminiJSON([doc, { text: PROMPT(name) }], key, deadline), s = parseConfSum(out.text);
+    if (!s) throw new Error("AI 回傳格式不對，請再試一次");
+    return { ...s, file, model: out.model };
+  } finally { if (up?.file) fileDelete(up.file, key); }
 }
