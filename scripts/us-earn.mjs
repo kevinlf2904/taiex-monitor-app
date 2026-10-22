@@ -1,7 +1,7 @@
 // 美股財報行事曆：每天兩次從 Nasdaq 整理過去、未來各兩週市值 50 億美元以上公司的財報（實際 EPS、預估、驚喜%），
 // 存成 learner/data/us-earn.json，給情報局「財報 → 美股」。拿不到時保留原本的檔案，不讓排程失敗。
 // 有 FINNHUB_API_KEY 時，市值 500 億美元以上的公司再問 Finnhub 營收實際值與預估（每列補 [10] 實際營收、[11] 預估營收，十億美元）。
-// 已公布的財報另外累積到 learner/data/us-earn-hist.json（給「歷史驚喜紀錄」與公布後股價反應；Finnhub 免費版查不到過去的公布日，只能從排程開始記）。
+// 已公布的財報另外累積到 learner/data/us-earn-hist.json（給「歷史驚喜紀錄」與公布後股價反應）；手動執行時填 back 可以從 Nasdaq 補更早的歷史。
 import { writeFile, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { buildUsEarn } from "../api/_lib/usearn.js";
@@ -27,12 +27,14 @@ async function finnhubCal(syms, from, to, key) {
   return out;
 }
 export async function main() {
-  const v = await buildUsEarn(30000);
-  if (!v.ok) { console.log("::warning::" + v.error + "，保留原本的資料"); return; }
+  // BACK：往回抓幾天（手動執行時可以填 400 補一年多的歷史）；行事曆檔只留最近兩週，更早的只併進歷史
+  const back = Math.min(1100, Math.max(14, +process.env.BACK || 14)), all = await buildUsEarn(30000, back), cut = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+  if (!all.ok) { console.log("::warning::" + all.error + "，保留原本的資料"); return; }
+  const v = { ...all, from: all.from < cut ? cut : all.from, rows: all.rows.filter(r => r[0] >= cut) };
   const key = process.env.FINNHUB_API_KEY;
   if (key) { const syms = [...new Set(v.rows.filter(r => r[3] >= 50).map(r => r[1]))]; addRevenue(v.rows, await finnhubCal(syms, v.from, v.to, key)); console.log("營收：問了", syms.length, "家，有營收", v.rows.filter(r => r[10] != null || r[11] != null).length, "筆"); }
   await writeFile(OUT, JSON.stringify(v));
-  const old = await readFile(HIST, "utf8").then(JSON.parse).catch(() => null); await writeFile(HIST, JSON.stringify(mergeHist(old, v.rows)));
-  console.log("完成", v.rows.length, "筆", v.from, "～", v.to, v.errors ? `（${v.errors} 天沒抓到）` : "");
+  const old = await readFile(HIST, "utf8").then(JSON.parse).catch(() => null); await writeFile(HIST, JSON.stringify(mergeHist(old, [...all.rows.filter(r => r[0] < cut), ...v.rows])));
+  console.log("完成", v.rows.length, "筆", v.from, "～", v.to, back > 14 ? `；歷史補到 ${all.from}（${all.rows.length - v.rows.length} 筆）` : "", all.errors ? `（${all.errors} 天沒抓到）` : "");
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch(e => { console.log("::warning::美股財報這次沒有更新：" + e.message); });

@@ -1,4 +1,4 @@
-// 大盤 → 官方公告：每個分頁都畫得出來、篩選與搜尋、個股徽章、提及標的的異常推介提醒、存股的定期定額熱門、行事曆休市日
+// 大盤 → 官方公告：每個分頁都畫得出來、篩選與搜尋、個股徽章、節目頁的異常推介提醒、存股的定期定額熱門、行事曆休市日
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium, serve, open } from "./_harness.mjs";
@@ -51,7 +51,7 @@ for (const width of [1280, 390]) test(`官方公告 ${width}`, async () => {
   // 行事曆休市日
   await p.evaluate(() => { showList(); W.mkReg = "tw"; setLt("mkt"); }); await p.waitForFunction(() => document.querySelector(".caldays button.hol"), null, { timeout: 15000 });
   assert.match(await p.evaluate(() => document.querySelector(".caldl")?.textContent || ""), /休市：國慶日/);
-  // 提及標的：證交所點名的異常推介個股
+  // 節目：證交所點名的異常推介個股
   await p.evaluate(() => setLt("pod")); await p.waitForSelector("#lx .offabn"); assert.match(await p.evaluate(() => $("#lx .offabn").innerText), /長榮/);
   assert.deepEqual(await p.evaluate(() => [store.get("watch:off").view, store.get("watch:off").esb]), ["esb", "rev"]);
   await ctx.close(); assert.deepEqual(errs, []);
