@@ -5,6 +5,10 @@ on:
     - cron: "23 22 * * *"
     - cron: "23 13 * * *"
   workflow_dispatch:
+    inputs:
+      back:
+        description: "往回抓幾天（補歷史填 400）"
+        default: "14"
 permissions:
   contents: write
 concurrency:
@@ -13,7 +17,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - run: git pull -q origin ${{ github.ref_name }}
@@ -23,6 +27,7 @@ jobs:
       - run: node scripts/us-earn.mjs
         env: # 營收實際值與預估（Finnhub）；沒設定也能跑，只是沒有營收驚喜
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          BACK: ${{ github.event.inputs.back || 14 }}
       - name: commit
         if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:

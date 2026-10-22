@@ -174,7 +174,11 @@ export async function uploadAudio(url, name, key, { dlMs = 30000, upMs = 40000 }
   const len = +r.headers.get("content-length") || 0; if (len > MAX_AUDIO) throw new Error(`音檔太大（${Math.round(len / 1048576)}MB），改用節目說明整理。`);
   const buf = await readCapped(r, MAX_AUDIO).catch(e => { throw new Error(/太大/.test(e.message) ? "音檔太大，改用節目說明整理。" : e.message); });
   let mime = (r.headers.get("content-type") || "").split(";")[0].trim(); if (!/^audio\//.test(mime)) mime = /\.m4a(\?|$)/i.test(url) ? "audio/mp4" : "audio/mpeg";
-  const st = await fetch(`${GEMINI}/upload/v1beta/files`, { method: "POST", headers: { "x-goog-api-key": key, "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start", "X-Goog-Upload-Header-Content-Length": String(buf.length), "X-Goog-Upload-Header-Content-Type": mime, "Content-Type": "application/json" }, body: JSON.stringify({ file: { display_name: String(name || "podcast").slice(0, 100) } }), signal: AbortSignal.timeout(15000) });
+  return uploadBuf(buf, mime, name || "podcast", key, upMs);
+}
+// 檔案上傳到 Gemini（音檔、太大不能直接夾帶的 PDF）：回 { file, uri, mime, state, mb }
+export async function uploadBuf(buf, mime, name, key, upMs = 40000) {
+  const st = await fetch(`${GEMINI}/upload/v1beta/files`, { method: "POST", headers: { "x-goog-api-key": key, "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start", "X-Goog-Upload-Header-Content-Length": String(buf.length), "X-Goog-Upload-Header-Content-Type": mime, "Content-Type": "application/json" }, body: JSON.stringify({ file: { display_name: String(name).slice(0, 100) } }), signal: AbortSignal.timeout(15000) });
   const up = st.headers.get("x-goog-upload-url"); if (!st.ok || !up) throw new Error(`上傳到 Gemini 失敗（HTTP ${st.status}）`);
   const fin = await fetch(up, { method: "POST", headers: { "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize" }, body: buf, signal: AbortSignal.timeout(upMs) });
   const j = await fin.json().catch(() => ({})); if (!fin.ok || !j.file?.uri) throw new Error(`上傳到 Gemini 失敗（HTTP ${fin.status}）`);

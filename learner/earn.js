@@ -6,7 +6,7 @@
    行事曆、連續成長、三率轉折、我的持股、同業比較、小學堂、財報整體看法、美股財報週與營收驚喜在 earnx.js；估值地圖、事件回測在 fundx.js。
    用到 watch.html 的 W、esc、cls、getJ、store、renderList、barLineSvg、tmo，stockx.js 的 sxMd。 */
 const ER_VIEWS = { tw: [["sum", "總覽"], ["cal", "行事曆"], ["rev", "月營收"], ["streak", "連續成長"], ["eps", "EPS"], ["pm", "獲利能力"], ["turn", "三率轉折"], ["ind", "產業比較"], ["my", "我的持股"], ["cmp", "同業比較"], ["map", "估值地圖"], ["evt", "事件回測"], ["learn", "小學堂"]],
-  us: [["recent", "最近公布"], ["up", "即將公布"], ["week", "財報週"], ["beat", "優於預期"], ["miss", "低於預期"], ["rev", "營收驚喜"], ["learn", "小學堂"]] };
+  us: [["recent", "最近公布"], ["up", "即將公布"], ["week", "財報週"], ["beat", "優於預期"], ["miss", "低於預期"], ["rev", "營收驚喜"], ["guide", "財測"], ["learn", "小學堂"]] };
 const ER_K = { c: 0, n: 1, i: 2, m: 3, rev: 4, mom: 5, yoy: 6, cum: 7, eps: 8, qrev: 9, ni: 10, gm: 11, om: 12, nm: 13 };
 // 排行：[鍵, 標題, 欄位, 由大到小?, 說明]
 const ER_RANKS = {
@@ -74,22 +74,24 @@ function erIndBars(I) {
 // 查一檔的走勢（不在排行裡的公司也能看）
 const erLookup = us => { const E = ER(), c = E.look?.[us ? "us" : "tw"];
   return `<section class="mk erlook"><h3>查一檔的營收、EPS 走勢</h3><form class="oaq" data-erlook="${us ? "us" : "tw"}"><input name="c" placeholder="${us ? "美股代號（例 NVDA）" : "股票代號（例 2330）"}" value="${esc(c || "")}" aria-label="股票代號" autocapitalize="characters"><button class="btn sm primary">看走勢</button></form>${c ? erTrend(c, us) : ""}</section>`; };
+// 財測（scripts/us-earn.mjs 從公布後的英文新聞標題判斷）：[12] 1 上修、-1 下修、0 維持
+const erGuide = r => (r[12] == null ? "" : `・<b class="${r[12] > 0 ? "up" : r[12] < 0 ? "down" : ""}">財測${r[12] > 0 ? "上修" : r[12] < 0 ? "下修" : "維持"}</b>`);
 function renderEarnUs(E) {
   const U = E.us; if (!U || (!E.usLoading && Date.now() - U.got > 30 * 60e3)) setTimeout(erUsLoad, 0);
   if (!U || U.err) return `<p class="note gnote">${U?.err ? "⚠︎ " + esc(U.err) : "抓美股財報行事曆…"}</p>`;
   const today = new Date(Date.now() - 4 * 3600e3).toISOString().slice(0, 10), big = r => !E.big || r[3] >= 100, md = d => d.slice(5).replace("-", "/");
   const past = U.rows.filter(r => r[4] != null && big(r)), next = U.rows.filter(r => r[4] == null && r[0] >= today && big(r));
-  const V = E.usv, L = V === "up" ? next.slice().sort((a, b) => a[0].localeCompare(b[0]) || b[3] - a[3]) : V === "beat" ? past.filter(r => r[6] != null).sort((a, b) => b[6] - a[6]) : V === "miss" ? past.filter(r => r[6] != null).sort((a, b) => a[6] - b[6]) : past.slice().sort((a, b) => b[0].localeCompare(a[0]) || b[3] - a[3]);
+  const V = E.usv, L = V === "up" ? next.slice().sort((a, b) => a[0].localeCompare(b[0]) || b[3] - a[3]) : V === "beat" ? past.filter(r => r[6] != null).sort((a, b) => b[6] - a[6]) : V === "miss" ? past.filter(r => r[6] != null).sort((a, b) => a[6] - b[6]) : V === "guide" ? past.filter(r => r[12] != null).sort((a, b) => b[12] - a[12] || b[3] - a[3]) : past.slice().sort((a, b) => b[0].localeCompare(a[0]) || b[3] - a[3]);
   const mx = Math.max(...L.map(r => Math.abs(r[6] || 0)), 1);
   const row = (r, i) => { const op = E.open === r[1], up = V === "up";
     return `<li${op ? ' class="on"' : ""}><button data-ertr="${esc(r[1])}" data-erus="1" aria-expanded="${op}"><span class="rk">${i + 1}</span><span class="nm">${esc(r[2])}<small>${esc(r[1])}</small></span>${up ? `<i style="--w:0%"></i><b>${md(r[0])}</b>` : `<i class="${r[6] < 0 ? "neg" : ""}" style="--w:${Math.min(100, Math.abs(r[6] || 0) / mx * 100).toFixed(1)}%"></i><b class="${cls(r[6])}">${r[6] == null ? "—" : erPct(r[6])}</b>`}
-      <small class="ersub"><span class="ercode">${esc(r[1])}・</span>${up ? `${r[7] || "時間未定"}・預估 EPS ${erNum(r[5])}${r[9] != null ? `・去年同期 ${erNum(r[9])}` : ""}` : `${md(r[0])} ${r[7]}・實際 ${erNum(r[4])} vs 預估 ${erNum(r[5])}${r[6] == null ? "（驚喜% 待確認）" : ""}`}・市值 ${erNum(r[3] * 10, 0)} 億美元</small></button>${op ? erTrend(r[1], true) : ""}</li>`; };
+      <small class="ersub"><span class="ercode">${esc(r[1])}・</span>${up ? `${r[7] || "時間未定"}・預估 EPS ${erNum(r[5])}${r[9] != null ? `・去年同期 ${erNum(r[9])}` : ""}` : `${md(r[0])} ${r[7]}・實際 ${erNum(r[4])} vs 預估 ${erNum(r[5])}${r[6] == null ? "（驚喜% 待確認）" : ""}${erGuide(r)}`}・市值 ${erNum(r[3] * 10, 0)} 億美元${V === "guide" && r[13] ? `<br>${esc(r[13])}` : ""}</small></button>${op ? erTrend(r[1], true) : ""}</li>`; };
   const beat = past.filter(r => r[6] != null && r[6] > 0).length, withS = past.filter(r => r[6] != null).length;
   return `<p class="note gnote">${esc(U.source || "")}・${md(U.from)}～${md(U.to)}・${new Date(Date.parse(U.at) + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/")} 更新</p>
     <div class="erbar"><label class="erchk"><input type="checkbox" data-erbig ${E.big ? "checked" : ""}> 只看市值 1,000 億美元以上</label></div>
     ${exOverallUs(past)}<section class="mk"><h3>重點</h3><div class="d-kv sxkv"><div><span>已公布</span><b>${past.length} 家</b></div><div><span>優於預期</span><b class="up">${withS ? Math.round(beat / withS * 100) : "—"}%</b></div><div><span>未來兩週公布</span><b>${next.length} 家</b></div></div>
       <p class="note">EPS 優於預期（驚喜）的比例常被拿來看整體財報季的好壞；個股財報公布後，股價反應多半看「和預估比」與財測，而不是數字本身。</p></section>
-    ${V === "week" ? exWeek(E, U) : V === "rev" ? exUsRev(E, U, past) : V === "learn" ? exLearn() : `<section class="mk"><h3>${ER_VIEWS.us.find(x => x[0] === V)?.[1] || ""}<span class="note">${L.length} 家・點公司看營收、EPS 走勢</span></h3>${L.length ? `<ol class="erlist">${L.slice(0, 80).map(row).join("")}</ol>` : `<p class="note">沒有符合的公司</p>`}</section>`}${erLookup(true)}`;
+    ${V === "guide" ? `<p class="note gnote">財測（公司對下一季、全年的展望）常比當季數字更影響股價。這裡依公布後的英文新聞標題判斷上修／下修／維持，只是粗略分類，每家下面列出判斷依據的新聞標題。${past.some(r => r[12] !== undefined) ? "" : "排程下一次執行後才會有資料。"}</p>` : ""}${V === "week" ? exWeek(E, U) : V === "rev" ? exUsRev(E, U, past) : V === "learn" ? exLearn() : `<section class="mk"><h3>${ER_VIEWS.us.find(x => x[0] === V)?.[1] || ""}<span class="note">${L.length} 家・點公司看營收、EPS 走勢</span></h3>${L.length ? `<ol class="erlist">${L.slice(0, 80).map(row).join("")}</ol>` : `<p class="note">沒有符合的公司</p>`}</section>`}${erLookup(true)}`;
 }
 function renderEarn() {
   const E = ER(), us = E.reg === "us";

@@ -140,7 +140,7 @@ const SX = {
     return `${sxH("提及標的", `${L.length} 筆・財經節目`)}${L.slice(0, 12).map(c => { const p = podPerf(c);
       return `<div class="sxcard"><div class="sxrow"><b>${esc(c.show)}</b><span class="pdir ${c.dir}">${c.dir === "bear" ? "看空" : "看多"}</span><span class="note">${c.date}</span>${p?.latest ? `<b class="${cls(p.latest.ex)}" style="margin-left:auto">${sxPct(p.latest.ex * 100, 1)}<small class="note"> 對大盤（${p.latest.n} 天）</small></b>` : p?.cur ? `<span class="note" style="margin-left:auto">目前 ${sxPct(p.cur.ex * 100, 1)}</span>` : ""}</div>
         ${c.quote ? `<blockquote>${esc(c.quote)}</blockquote>` : ""}<p class="note">${esc(c.title)}</p></div>`; }).join("")}
-      <p class="note">AI 從節目整理的觀點，可能聽錯；表現是相對大盤的超額報酬。<button class="linkbtn" data-sxgo="pod">到提及標的看完整往績 ›</button></p>`;
+      <p class="note">AI 從節目整理的觀點，可能聽錯；表現是相對大盤的超額報酬。<button class="linkbtn" data-sxgo="pod">到節目看完整往績 ›</button></p>`;
   },
   daily() {
     const I = sxI(), D = sxD(), C = sxC(); if (!I) return sxLoad(W.info?.err);

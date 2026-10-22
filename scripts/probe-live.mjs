@@ -11,6 +11,25 @@ async function raw(url, n = 600) {
   const t0 = Date.now(); try { const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "*/*", Referer: "https://mis.twse.com.tw/stock/index.jsp" }, signal: AbortSignal.timeout(20000) }); const t = await r.text();
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
+if (process.argv[2] === "confai") {
+  // 法說會重點：找台積電、鴻海最近的法說會簡報，AI 讀簡報（需要 GEMINI_API_KEY）
+  const C = await import("../api/_lib/confai.js");
+  for (const c of ["2330", "2317"]) { try { const L = await C.confList(c); console.log(c, "法說會", L.length, "次", JSON.stringify(L.slice(0, 3)));
+    const f = L.find(x => x.file); if (f && process.env.GEMINI_API_KEY) { const t0 = Date.now(), v = await C.summarizeConf(f.file, c, process.env.GEMINI_API_KEY.trim(), Date.now() + 120000); console.log(c, "AI", `${Date.now() - t0}ms`, JSON.stringify(v).slice(0, 900)); } } catch (e) { console.log(c, "失敗", e.message); } }
+  process.exit(0);
+}
+if (process.argv[2] === "earnplus") {
+  // 財報新功能的資料來源：FinMind 資產負債表科目名稱、觀測站法說會簡報檔、美股財測新聞
+  const tok = (process.env.FINMIND_TOKEN || "").trim(), H = tok ? { Authorization: `Bearer ${tok}` } : {};
+  try { const j = await (await fetch("https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockBalanceSheet&data_id=2330&start_date=2026-01-01", { headers: H })).json(), L = (j.data || []).filter(r => r.date === j.data.at(-1)?.date);
+    console.log("FinMind 資產負債", j.data?.length, L.filter(r => /Inventor|Receivable|Contract|存貨|應收|合約/.test(r.type + r.origin_name)).map(r => `${r.type}｜${r.origin_name}｜${r.value}`).join("\n")); } catch (e) { console.log("FinMind 失敗", e.message); }
+  for (const [y, m] of [[115, "09"], [115, "08"], [115, "07"]]) { try { const h = await (await fetch("https://mopsov.twse.com.tw/mops/web/ajax_t100sb02_1", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0" }, body: `encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=sii&year=${y}&month=${m}` })).text();
+    const i = h.indexOf("2330"); console.log("法說會", y, m, h.length, "表頭", (h.match(/<th[^>]*>[\s\S]*?<\/th>/gi) || []).map(x => x.replace(/<[^>]+>/g, "").trim()).filter(Boolean).slice(0, 14).join("|"), "\n2330 附近", i >= 0 ? h.slice(i - 100, i + 900).replace(/\s+/g, " ") : "沒有");
+    const pdf = (h.match(/[\w]+\.pdf/gi) || [])[0]; if (pdf) for (const u of [`https://mopsov.twse.com.tw/nas/STR/${pdf}`, `https://mops.twse.com.tw/nas/STR/${pdf}`]) { try { const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0" } }); console.log("PDF", u, r.status, r.headers.get("content-type"), r.headers.get("content-length")); } catch (e) { console.log("PDF", u, e.message); } }
+  } catch (e) { console.log("法說會失敗", e.message); } }
+  for (const s of ["NVDA", "TSLA", "NFLX"]) { try { const t = await (await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(s + " guidance when:30d")}&hl=en-US&gl=US&ceid=US:en`)).text(); console.log("財測新聞", s, (t.match(/<title>[^<]+<\/title>/g) || []).slice(1, 7).map(x => x.replace(/<\/?title>/g, "")).join(" ｜ ")); } catch (e) { console.log("財測新聞失敗", s, e.message); } }
+  process.exit(0);
+}
 if (process.argv[2] === "fred") {
   // 總經數據排程（scripts/macro.mjs）同一套：FRED 官方介面＋CSV，看幾個數列拿得到、拿不到的原因（不印金鑰）
   const { buildMacro } = await import("../api/_lib/macro.js"), t0 = Date.now(), j = await buildMacro();

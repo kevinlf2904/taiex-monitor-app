@@ -1,6 +1,6 @@
 /* ================= 情報局「大盤 → 官方公告」：證交所、櫃買中心開放資料的公告類資料 =================
    資料：/api/oapi?official=1（api/_lib/official.js 整理），15 分鐘內不重抓。分頁：重大訊息、風險警示、新股、興櫃、定期定額、融資融券、券商進出、鉅額交易、休市日。
-   另外提供：個股徽章（offFlags，watch.html 的 intelData 用）、提及標的頁的「異常推介個股」提醒（offAbnHtml，podcast.js 用）。
+   另外提供：個股徽章（offFlags，watch.html 的 intelData 用）、節目頁的「異常推介個股」提醒（offAbnHtml，podcast.js 用）。
    點擊用 data-mk="off…"，watch.html 的 data-mk 處理交給 offMk()。用到 watch.html 的 W、esc、cls、store、renderList、getJ、mkSeg、nameOf、allWatched，tools.js 的 rkList、rkCards，congx.js 的 cxQ。 */
 const OFF_VIEWS = [["news", "重大訊息"], ["risk", "風險警示"], ["ipo", "新股"], ["esb", "興櫃"], ["dca", "定期定額"], ["margin", "融資融券"], ["broker", "券商進出"], ["block", "鉅額交易"], ["holiday", "休市日"]];
 const OFFS = () => (W.offs ||= { view: "news", scope: "all", esb: "up", mg: "up", ...(store.get("watch:off", null) || {}) });
@@ -122,7 +122,7 @@ function offFlags(c) {
   if (risk.length) out.push({ k: "off", v: "risk", g: "警示", t: [...new Set(risk)].slice(0, 2).join("・") });
   return out;
 }
-// 提及標的頁：證交所點名的投資理財節目異常推介個股
+// 節目頁：證交所點名的投資理財節目異常推介個股
 function offAbnHtml() {
   const D = W.offc; if (!D) { if (!W.off) setTimeout(offLoad, 0); return ""; } if (!D.ok) return "";
   return `<div class="offabn"><b>證交所：投資理財節目異常推介個股</b>${D.abn.length ? D.abn.map(r => `<button type="button" class="linkbtn" data-sel="${esc(r[1])}">${offNm(r[1], r[2])}</button>`).join("、") : `<span class="note">最近一次公布（${offYmd(D.abnDate)}）沒有點名個股</span>`}

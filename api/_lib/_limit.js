@@ -1,11 +1,11 @@
-// 呼叫次數限制：會花錢的 AI 服務（對話、讀圖、匯入、節目摘要）每個 IP 每小時、全站每天各有上限，避免被人用程式一直打、燒掉 API 費用。
+// 呼叫次數限制：會花錢的 AI 服務（對話、讀圖、匯入、節目摘要、法說會重點）每個 IP 每小時、全站每天各有上限，避免被人用程式一直打、燒掉 API 費用。
 // 有 Upstash Redis（KV_REST_API_URL）時存在 KV，所有 serverless 執行個體共用；沒有時用記憶體（只擋得住同一個執行個體，聊勝於無）。
 // 上限可用環境變數調整：AI_HOURLY_PER_IP（每 IP 每小時，預設依服務）、AI_DAILY_CAP（全站每天每個服務，預設依服務）。
 import { createHash } from "node:crypto";
 import { kv, kvOn } from "./sync.js";
 
 // [每 IP 每小時, 全站每天]
-export const AI_LIMITS = { chat: [40, 1500], "chart-read": [10, 300], import: [10, 300], podcast: [6, 150] };
+export const AI_LIMITS = { chat: [40, 1500], "chart-read": [10, 300], import: [10, 300], podcast: [6, 150], confai: [10, 200] };
 const mem = new Map();
 const ipOf = req => String(req.headers?.["x-forwarded-for"] || req.headers?.["x-real-ip"] || "").split(",")[0].trim() || "?";
 // 回傳 null＝可以通過；字串＝要擋下來的原因

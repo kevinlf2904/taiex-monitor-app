@@ -438,6 +438,16 @@ test("財報進階排程：月營收連續年增與創新高、營益分析換�
   assert.deepEqual(rows[0].slice(10), [51.23, 50], "日期差一天也對得上，十億美元");
   const h1 = U.mergeHist({ rows: [["2020-01-01", "OLD", "", 1, 1, 1, 0, "", null, null]] }, rows, Date.parse("2026-10-22"));
   assert.deepEqual(h1.rows.map(x => x[1]), ["NVDA"], "只收已公布的、三年前的丟掉");
+  assert.deepEqual(U.guideOf(["Nvidia raises full-year guidance after record quarter", "Nvidia stock jumps"]).g, 1);
+  assert.deepEqual(U.guideOf(["Tesla cuts 2027 outlook as demand slows", "Tesla shares fall"]).g, -1);
+  assert.deepEqual(U.guideOf(["Netflix reaffirms full-year outlook"]).g, 0);
+  assert.equal(U.guideOf(["Netflix shares fall over 4% on soft current-quarter revenue guidance"]).g, -1); assert.equal(U.guideOf(["Record Revenue, Huge Guidance Push NVIDIA to Near All-Time Highs"]).g, 1);
+  const C = await import("../api/_lib/confai.js"), td = (...c) => `<tr class='even'>${c.map(x => `<td>${x}</td>`).join("")}</tr>`, a = f => `<a href='#' onclick='document.fm_fileDownload.fileName.value="${f}";document.fm_fileDownload.submit();'>${f}</a>`;
+  const cf = C.parseConfRows(`<table>${td("2330", "台積電", "115/07/16", "14:00", "台北", "公布第2季財報及第3季展望", a("233020260716M001.pdf"), a("233020260716E001.pdf"), "", "")}${td("2317", "鴻海", "115/07/20", "", "", "", "", "", "", "")}</table>`, "2330");
+  assert.deepEqual(cf, [{ date: "2026-07-16", time: "14:00", note: "公布第2季財報及第3季展望", file: "233020260716M001.pdf", en: "233020260716E001.pdf" }]);
+  assert.ok(C.okFile("2330", "233020260716M001.pdf")); assert.ok(!C.okFile("2330", "../../etc/passwd")); assert.ok(!C.okFile("2330", "231720260716M001.pdf"), "只能讀自己公司的簡報");
+  assert.equal(C.parseConfSum('{"head":"AI 需求強","outlook":["Q3 營收 300 億美元"],"risks":[1,"匯率"]}').risks.join(), "匯率");
+  assert.equal(U.guideOf(["Apple stock rises 2%"]).g, null, "沒提財測的標題不算");
   assert.equal(U.mergeHist(h1, rows, Date.parse("2026-10-22")).rows.length, 1, "同一筆不重複");
 });
 
