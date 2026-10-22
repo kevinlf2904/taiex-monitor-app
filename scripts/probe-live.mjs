@@ -87,6 +87,21 @@ if (process.argv[2] === "mops") {
       const i = t.indexOf("公司代號"); console.log(`\n### ${u} ${r.status} ${r.headers.get("content-type")} ${b.length} bytes\n${t.slice(0, 300)}\n…\n${t.slice(Math.max(0, i - 600), i + 2500).replace(/\s+/g, " ")}`); } catch (e) { console.log(u, "錯誤", e.message); } }
   process.exit(0);
 }
+if (process.argv[2] === "histprobe4") {
+  // 第四輪：觀測站內部人轉讓日報表的第二步（ajax_t56sb12 step=2、report=SY）實際表格；上櫃（t56sb12_q2）的 report 代碼
+  const cut = (s, n = 900) => String(s).replace(/\s+/g, " ").slice(0, n), UA = { "User-Agent": "Mozilla/5.0" };
+  const post = async (u, body) => { try { const r = await fetch(u, { method: "POST", headers: { ...UA, "Content-Type": "application/x-www-form-urlencoded" }, body, signal: AbortSignal.timeout(30000) }); const t = await r.text(), i = t.indexOf("<table");
+    const trs = [...t.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map(m => [...m[1].matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi)].map(c => c[1].replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim()));
+    console.log(`\n### POST ${u.split("/").pop()} ${body} → ${r.status} ${t.length} 表格 ${(t.match(/<table/g) || []).length} 列 ${trs.length}\n${trs.slice(0, 8).map(x => JSON.stringify(x)).join("\n")}\n${i < 0 ? cut(t, 1200) : ""}`); return t; } catch (e) { console.log("錯誤", e.message); return ""; } };
+  await post("https://mopsov.twse.com.tw/mops/web/ajax_t56sb12", "encodeURIComponent=1&run=Y&step=2&year=114&month=03&day=03&report=SY&firstin=true");
+  await post("https://mopsov.twse.com.tw/mops/web/ajax_t56sb12", "encodeURIComponent=1&step=2&year=114&month=03&day=03&report=SY&firstin=true");
+  for (const q of ["t56sb12_q2", "t56sb12_q3"]) {
+    try { const t = await (await fetch(`https://mopsov.twse.com.tw/mops/web/${q}`, { headers: UA, signal: AbortSignal.timeout(30000) })).text(); console.log(`\n### ${q} 標題 ${cut((t.match(/id='caption'>([\s\S]*?)<\/div>/) || [])[1] || "", 120)}`); } catch (e) { console.log(q, "錯誤", e.message); }
+    const t2 = await post(`https://mopsov.twse.com.tw/mops/web/ajax_${q}`, "encodeURIComponent=1&step=1&firstin=true&off=1&year=114&month=03&day=03"); console.log("report 代碼", (t2.match(/name='report' value='(\w+)'/) || [])[1]);
+  }
+  await post("https://mopsov.twse.com.tw/mops/web/ajax_t56sb12", "encodeURIComponent=1&step=2&year=110&month=06&day=01&report=SY&firstin=true");
+  process.exit(0);
+}
 if (process.argv[2] === "histprobe3") {
   // 第三輪：觀測站內部人轉讓的查詢表單送到哪裡、月日欄位的值；新版觀測站 JSON API
   const cut = (s, n = 900) => String(s).replace(/\s+/g, " ").slice(0, n), UA = { "User-Agent": "Mozilla/5.0" };
