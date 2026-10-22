@@ -3,9 +3,9 @@
    美股：data/us-earn.json（排程每天兩次，scripts/us-earn.mjs），沒有檔案時問 /api/usearn；每列 [日期, 代號, 名稱, 市值(十億美元), 實際EPS, 預估EPS, 驚喜%, 時段, 財報季, 去年同期EPS]。
    月營收、EPS、獲利能力可以選產業看產業內排名（產業比較點產業也會切過去），全部排行的每家公司附「產業第幾名」。
    點公司展開營收、EPS 走勢圖（台股 /api/stockinfo、美股 /api/usinfo，用 watch.html 的 barLineSvg，有查價線）。
-   行事曆、連續成長、三率轉折、我的持股、同業比較、小學堂、財報整體看法、美股財報週與營收驚喜在 earnx.js。
+   行事曆、連續成長、三率轉折、我的持股、同業比較、小學堂、財報整體看法、美股財報週與營收驚喜在 earnx.js；估值地圖、事件回測在 fundx.js。
    用到 watch.html 的 W、esc、cls、getJ、store、renderList、barLineSvg、tmo，stockx.js 的 sxMd。 */
-const ER_VIEWS = { tw: [["sum", "總覽"], ["cal", "行事曆"], ["rev", "月營收"], ["streak", "連續成長"], ["eps", "EPS"], ["pm", "獲利能力"], ["turn", "三率轉折"], ["ind", "產業比較"], ["my", "我的持股"], ["cmp", "同業比較"], ["learn", "小學堂"]],
+const ER_VIEWS = { tw: [["sum", "總覽"], ["cal", "行事曆"], ["rev", "月營收"], ["streak", "連續成長"], ["eps", "EPS"], ["pm", "獲利能力"], ["turn", "三率轉折"], ["ind", "產業比較"], ["my", "我的持股"], ["cmp", "同業比較"], ["map", "估值地圖"], ["evt", "事件回測"], ["learn", "小學堂"]],
   us: [["recent", "最近公布"], ["up", "即將公布"], ["week", "財報週"], ["beat", "優於預期"], ["miss", "低於預期"], ["rev", "營收驚喜"], ["learn", "小學堂"]] };
 const ER_K = { c: 0, n: 1, i: 2, m: 3, rev: 4, mom: 5, yoy: 6, cum: 7, eps: 8, qrev: 9, ni: 10, gm: 11, om: 12, nm: 13 };
 // 排行：[鍵, 標題, 欄位, 由大到小?, 說明]

@@ -4,10 +4,11 @@ import assert from "node:assert/strict";
 import { chromium, serve, mock } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
+// 自己開 context 的測試也擋掉離線快取（sw.js）：service worker 轉送的請求不會經過下面的假資料（route）
 test.after(async () => { await B.close(); S.close(); });
 
 test("報價請求卡住後會恢復更新", async () => {
-  const ctx = await B.newContext({ viewport: { width: 1280, height: 900 } }); await mock(ctx);
+  const ctx = await B.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block" }); await mock(ctx);
   let n = 0, hung = false;
   await ctx.route("**/api/quote**", r => { if (++n === 3 && !hung) { hung = true; return; } // 第 3 個請求永遠不回應
     const codes = (new URL(r.request().url()).searchParams.get("codes") || "").split(",").filter(Boolean);
@@ -22,7 +23,7 @@ test("報價請求卡住後會恢復更新", async () => {
 });
 
 test("嵌入模式往下捲後打開個股：抽屜在可見範圍、可以捲動", async () => {
-  const ctx = await B.newContext({ viewport: { width: 1440, height: 900 } }); await mock(ctx); const p = await ctx.newPage();
+  const ctx = await B.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" }); await mock(ctx); const p = await ctx.newPage();
   await p.goto(`${S.url}/learner/index.html`); await p.waitForTimeout(1500); await p.evaluate(() => goTab("watch")); await p.waitForTimeout(2500);
   const fr = p.frames().find(f => /watch\.html/.test(f.url())); await fr.evaluate(() => setLt("cong")); await p.waitForTimeout(1200);
   await p.evaluate(() => { const f = document.querySelector("#watchFrame"); f.style.height = "5000px"; scrollTo(0, 1500); }); await p.waitForTimeout(300);
@@ -36,7 +37,7 @@ test("嵌入模式往下捲後打開個股：抽屜在可見範圍、可以捲�
 });
 
 test("嵌入模式選單凍結：往下捲後分頁列固定在學堂標題列下方、可以點", async () => {
-  const ctx = await B.newContext({ viewport: { width: 1180, height: 820 } }); await mock(ctx); const p = await ctx.newPage();
+  const ctx = await B.newContext({ viewport: { width: 1180, height: 820 }, serviceWorkers: "block" }); await mock(ctx); const p = await ctx.newPage();
   await p.goto(`${S.url}/learner/index.html`); await p.waitForTimeout(1500); await p.evaluate(() => goTab("watch")); await p.waitForTimeout(2500);
   const fr = p.frames().find(f => /watch\.html/.test(f.url())); await fr.evaluate(() => setLt("cong")); await p.waitForTimeout(1500);
   assert.ok(await p.evaluate(() => $("#watchTabs").classList.contains("off")), "還沒捲動時不該出現");

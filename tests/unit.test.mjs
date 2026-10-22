@@ -521,3 +521,61 @@ test("產業新聞：題材搜尋字、同一則合併題材、保留 60 天", a
   assert.deepEqual(N.map(x => x.title), ["新的一則", "台積電先進封裝擴產 - 經濟日報"]); assert.deepEqual(N[1].themes, ["a", "b"]); assert.equal(N[1].summary, "s", "已經有的重點不重做");
   assert.deepEqual(old.items[0].themes, ["a"], "不改到舊資料");
 });
+import { revEvents, pmEvents, entryIdx, marketIndex, study, revAnn, qAnn } from "../scripts/event-study.mjs";
+const plain = v => JSON.parse(JSON.stringify(v)); // 沙盒（vm）裡產生的物件換成一般物件再比
+test("事件提醒 evScan：營收公布、三率三升、法說會只提醒前一個交易日", () => {
+  const { B } = engine(), rev = { 2330: { ...plain(B.revOf({ ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`2025-${String(i + 1).padStart(2, "0")}`, 100])), "2025-09": 200, "2026-08": 250, "2026-09": 300 })), name: "台積電" } };
+  assert.equal(rev[2330].ym, "2026-09"); assert.equal(Math.round(rev[2330].yoy), 50); assert.equal(Math.round(rev[2330].mom), 20);
+  const D = { rev, pm: { q: "2026Q2", rows: [["2330", "台積電", "半導體業", "上市", 59, 49, 42, 1, 0.5, 0.2], ["2317", "鴻海", "", "上市", 6, 3, 2, 1, -1, 1]] },
+    conf: [{ date: "2026-10-26", time: "14:00", code: "2330", name: "台積電" }, { date: "2026-10-27", code: "2317", name: "鴻海" }] };
+  const H = plain(B.evScan(["2330", "2317"], D, "2026-10-23")); // 10/23 是週五，下一個交易日是 10/26 週一
+  assert.deepEqual(H.map(x => x.kind).sort(), ["conf", "pm3", "rev"]); assert.ok(H.every(x => x.code === "2330"), "鴻海三率沒有全升、法說會還太遠");
+  assert.equal(H.find(x => x.kind === "conf").k, "c:2330:2026-10-26"); assert.match(H.find(x => x.kind === "rev").m, /9 月營收 0\.00 億，年增 \+50\.0%、月增 \+20\.0%/);
+  assert.deepEqual(plain(B.evScan([], D, "2026-10-23")), [], "沒有代號就沒有事件");
+});
+test("早報 briefParts／briefText：沒有資料的段落不放，庫存排前面", () => {
+  const { B } = engine(), G = { us: { ok: true, date: "2026-10-21", indices: [{ code: "^SOX", name: "費半", price: 6000, chgPct: -2.1 }], megas: [], macro: [] }, fut: { ok: true, night: { price: 23000, chg: -40, chgPct: -0.17 } }, cal: { rows: [{ date: "2026-10-22", code: "1101", kind: "除息", cash: 1 }, { date: "2026-10-22", code: "2330", kind: "除息", cash: 4.5 }], conf: [] } };
+  const P = plain(B.briefParts(G, { codes: ["2330"], names: { 2330: "台積電", 1101: "台泥" } }, "2026-10-22"));
+  assert.deepEqual(P.map(p => p.t), ["昨晚美股（美東 10/21）", "台指期", "今天的除權息、法說會"]);
+  assert.match(P[2].L[0].s, /^★ 台積電 2330 除息 現金 4\.5 元/); assert.equal(P[0].L[0].k, "down");
+  const T = B.briefText(P, "2026-10-22"); assert.match(T, /^☀️ KLineLab 早報（10\/22 週四）/); assert.match(T, /【台指期】\n• 夜盤 23,000（-40 點，-0\.2%）/); assert.match(T, /不是買賣建議/);
+  assert.deepEqual(plain(B.briefParts({}, {})), [], "全部拿不到就是空的（排程不會送出空的早報）");
+});
+test("總經敏感度 macroBeta：Beta 正確、美股因子對齊前一晚、不用到未來", () => {
+  const { B } = engine(), days = [], d = new Date("2026-01-05T00:00:00Z"); while (days.length < 160) { if (d.getUTCDay() % 6) days.push(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() + 1); }
+  let s = 1, f = 100; const F = [], noise = i => Math.sin(i * 7.3) * 0.002, fr = i => Math.sin(i * 1.7) * 0.01 + Math.cos(i * 0.9) * 0.006;
+  days.forEach((dd, i) => { F.push({ d: dd, c: f }); f *= 1 + fr(i + 1); });
+  const S0 = [], S1 = []; let a = 1, b = 1; days.forEach((dd, i) => { S0.push({ d: dd, c: a }); S1.push({ d: dd, c: b }); a *= 1 + 0.6 * fr(i + 1) + noise(i); b *= 1 + 0.6 * fr(i) + noise(i); });
+  const same = B.macroBeta(S0, F, { lag: 0 }), late = B.macroBeta(S1, F, { lag: 1 }), wrong = B.macroBeta(S1, F, { lag: 0 });
+  assert.ok(Math.abs(same.beta - 0.6) < 0.05 && same.corr > 0.95, `同一天：${same.beta}`);
+  assert.ok(Math.abs(late.beta - 0.6) < 0.05 && late.corr > 0.95, `前一晚：${late.beta}`);
+  assert.ok(Math.abs(wrong.corr) < 0.5, "時間沒對齊時相關性低");
+  let yv = 4, px = 100; const T = [], Y = []; days.forEach((dd, i) => { T.push({ d: dd, c: yv }); Y.push({ d: dd, c: px }); const dy = Math.sin(i * 2.1) * 0.05; yv += dy; px *= 1 - 0.3 * Math.sin((i - 1) * 2.1) * 0.05 + noise(i); });
+  assert.ok(B.macroBeta(Y, T, { kind: "diff", lag: 1 }).beta < 0, "殖利率上升、股價下跌 → Beta 為負");
+  assert.equal(B.macroBeta(S0.slice(0, 20), F, {}), null, "資料不到 40 天不算");
+});
+test("財報事件回測：事件判斷、公布後才進場、超額報酬", () => {
+  assert.equal(revAnn("2026-09"), "2026-10-11"); assert.equal(revAnn("2026-12"), "2027-01-11"); assert.equal(qAnn("2026Q2"), "2026-08-15"); assert.equal(qAnn("2026Q4"), "2027-04-01");
+  const H = {}; for (let i = 0; i < 30; i++) { const y = 2024 + Math.floor(i / 12), m = (i % 12) + 1; H[`${y}-${String(m).padStart(2, "0")}`] = i < 26 ? 100 + (i % 3) : i === 26 ? 90 : 200; }
+  const E = revEvents(H), kinds = E.map(e => `${e.t}:${e.p}`);
+  assert.ok(kinds.includes("high:2026-04"), "2026-04 營收創新高"); assert.ok(kinds.includes("turn:2026-04") && kinds.includes("yoy30:2026-04"), "年減轉年增、年增衝過 30%");
+  assert.ok(!kinds.some(k => k.startsWith("high:2024")), "資料不到 24 個月不算新高"); assert.ok(E.every(e => e.ann > `${e.p}-31`), "公布日都在該月之後");
+  assert.deepEqual(pmEvents({ "2026Q1": [30, 10, 8], "2026Q2": [31, 11, 9], "2026Q4": [20, 5, 4] }).map(e => `${e.t}:${e.p}`), ["pm3:2026Q2"], "Q2→Q4 不連續不算");
+  const bars = ["2026-10-09", "2026-10-12", "2026-10-13", "2026-10-14"].map((d, i) => ({ d, c: 100 + i }));
+  assert.equal(entryIdx(bars, "2026-10-11"), 1, "公布日 10/11 是週日，10/12 收盤進場"); assert.equal(entryIdx(bars, "2026-11-11"), -1, "超過 7 天沒有資料不算");
+  // 兩檔：A 公布後漲、B 是基準；未來的價格改變不會影響是否進場與進場價
+  const days = Array.from({ length: 40 }, (_, i) => new Date(Date.UTC(2026, 9, 1 + i)).toISOString().slice(0, 10));
+  const A = { c: "1111", n: "甲", ind: "測試業", bars: days.map((d, i) => ({ d, c: d < "2026-10-11" ? 100 : 100 + (i - 10) })), rev: H, pm: {} }, Bm = { c: "2222", n: "乙", bars: days.map(d => ({ d, c: 50 })) };
+  const M = marketIndex([A.bars, Bm.bars]), T = study([A, Bm], M, [5]).find(x => x.t === "high");
+  assert.equal(T.stats[5], null, "2026-04 的事件不在這段日 K 裡");
+  const H2 = { ...H, "2026-09": 999 }, A2 = { ...A, rev: H2 }, T2 = study([A2, Bm], marketIndex([A2.bars, Bm.bars]), [5]).find(x => x.t === "high");
+  assert.equal(T2.stats[5].n, 1); assert.equal(T2.recent[0][3], "2026-10-11", "10/11 收盤進場"); assert.ok(Math.abs(T2.stats[5].avg - 0.05) < 1e-9, "進場價 100、5 天後 105");
+  assert.ok(T2.stats[5].ex < T2.stats[5].avg && T2.stats[5].ex > 0, "超額報酬扣掉大盤（等權平均也被甲拉高）");
+});
+test("事件提醒設定寫進推播清單：只看庫存或加上自選；只勾早報也算", () => {
+  const data = { "kline:watch:evalert": JSON.stringify({ rev: true, brief: true, scope: "hold" }), "kline:watch:hold": JSON.stringify({ 2330: { sh: 1 }, AAPL: { sh: 1 }, 9999: { sh: 1, demo: true } }), "kline:watch:groups": JSON.stringify([{ list: ["2317", "NVDA"] }]) };
+  assert.deepEqual(alertDoc(data, "1").ev, { on: ["rev", "brief"], codes: ["2330"] });
+  assert.deepEqual(alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ pm3: true, scope: "all" }) }, "1").ev, { on: ["pm3"], codes: ["2330", "2317"] });
+  assert.equal(docHas(alertDoc({ "kline:watch:evalert": JSON.stringify({ brief: true }) }, "1")), true, "沒有庫存也可以收早報");
+  assert.equal(docHas(alertDoc({ "kline:watch:evalert": JSON.stringify({ rev: true }) }, "1")), false, "勾了營收但沒有庫存就不用檢查");
+});

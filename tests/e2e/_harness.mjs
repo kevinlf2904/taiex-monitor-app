@@ -62,8 +62,9 @@ export async function mock(ctx) {
   return { KV };
 }
 // 開一個頁面，收集頁面錯誤
-export async function open(browser, base, file, { width = 1180, touch = false } = {}) {
-  const ctx = await browser.newContext({ viewport: { width, height: 1000 }, hasTouch: touch, isMobile: touch }), errs = [];
+// sw：允許離線快取（sw.js）；預設擋掉，假資料（route）才不會被 service worker 繞過
+export async function open(browser, base, file, { width = 1180, touch = false, sw = false } = {}) {
+  const ctx = await browser.newContext({ viewport: { width, height: 1000 }, hasTouch: touch, isMobile: touch, serviceWorkers: sw ? "allow" : "block" }), errs = [];
   const m = await mock(ctx), p = await ctx.newPage(); p.on("pageerror", e => errs.push(`${width} ${e.message}`)); p.on("dialog", d => d.accept());
   await p.goto(`${base}/learner/${file}`); await p.waitForTimeout(600); return { ctx, p, errs, ...m };
 }

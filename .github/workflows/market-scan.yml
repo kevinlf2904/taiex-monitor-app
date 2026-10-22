@@ -1,5 +1,6 @@
 # 全市場日 K＋收盤後 Telegram 提醒：每個交易日收盤後更新上市櫃全部股票的日 K（scripts/market-scan.mjs），
-# 上傳到 GitHub Release「market-data」給網站的「全市場」選股使用；接著檢查雲端同步使用者的提醒並推播（scripts/alerts-push.mjs）。
+# 上傳到 GitHub Release「market-data」給網站的「全市場」選股使用；接著算財報事件回測（scripts/event-study.mjs），
+# 再檢查雲端同步使用者的提醒並推播（scripts/alerts-push.mjs）。
 name: market-scan
 on:
   schedule:
@@ -41,6 +42,14 @@ jobs:
         run: |
           gh release view market-data >/dev/null 2>&1 || gh release create market-data --title "全市場日 K（自動產生）" --notes "由 market-scan 排程每天更新，網站透過 /api/allk 讀取。請勿手動修改。" --latest=false
           gh release upload market-data out/*.json --clobber
+      # 財報事件回測（營收創新高、三率三升…之後的報酬）：用剛更新好的全市場日 K 算，寫回 learner/data/event-study.json
+      - if: ${{ github.event.inputs.dry != '1' }}
+        run: node scripts/event-study.mjs
+      - name: commit event study
+        if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' }}
+        env:
+          COMMIT_NAME: event-study
+        run: bash scripts/commit-data.sh "財報：更新事件回測" learner/data/event-study.json
       - name: telegram
         if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' }}   # 只有 main 會發真的推播
         continue-on-error: true   # 推播失敗只是警告，不讓全市場資料的排程變成失敗

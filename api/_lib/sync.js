@@ -39,10 +39,13 @@ export function alertDoc(data, chat) {
   // 追蹤：國會議員、13F 機構（情報局「大戶國會 → 我的追蹤」），加上庫存台股（內部人轉讓申報）
   const F = g("watch:follow") || {}, ids = k => Object.keys(F[k] || {}).filter(x => typeof x === "string" && x.length < 80).slice(0, 50);
   const follow = { cong: ids("cong"), f13: ids("f13"), ins: [...new Set([...Object.keys(g("watch:hold") || {}), ...Object.keys(F.ins || {})])].filter(c => /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 100) };
-  return { chat, rules: rules.slice(0, 100), price: price.slice(0, 100), names: g("watch:names") || {}, follow };
+  // 事件提醒（工具 → 提醒 → 事件提醒）：營收公布、三率三升、法說會前一天、每日早報；範圍是庫存台股（選「庫存＋自選」時加上自選）
+  const E = g("watch:evalert") || {}, on = ["rev", "pm3", "conf", "brief"].filter(k => E[k] === true), hold = g("watch:hold") || {};
+  const evCodes = on.length ? [...new Set([...Object.keys(hold).filter(c => !hold[c]?.demo), ...(E.scope === "all" ? (g("watch:groups") || []).flatMap(x => (Array.isArray(x?.list) ? x.list : [])) : [])])].filter(c => typeof c === "string" && /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 150) : [];
+  return { chat, rules: rules.slice(0, 100), price: price.slice(0, 100), names: g("watch:names") || {}, follow, ev: { on, codes: evCodes } };
 }
-// 有任何要檢查的東西才放進收盤後的推播清單
-export const docHas = d => !!(d.rules.length || d.price.length || d.follow?.cong.length || d.follow?.f13.length || d.follow?.ins.length);
+// 有任何要檢查的東西才放進收盤後的推播清單（早報只要勾了就算，沒有庫存也有大盤的部分）
+export const docHas = d => !!(d.rules.length || d.price.length || d.follow?.cong.length || d.follow?.f13.length || d.follow?.ins.length || d.ev?.on.includes("brief") || (d.ev?.on.length && d.ev.codes.length));
 
 // 候補名單的一筆：email 轉小寫並檢查格式，方案只收 pro／team
 export function waitlistEntry(email, plan, now = Date.now()) {

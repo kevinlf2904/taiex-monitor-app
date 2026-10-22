@@ -14,7 +14,7 @@
 <meta name="description" content="KLineLab K線情報局：將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機。">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script>try { document.documentElement.dataset.theme = JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); } catch { document.documentElement.dataset.theme = "dark"; }</script>
-<script>try { if (JSON.parse(localStorage.getItem("kline:font") || '"sans"') === "song") document.documentElement.dataset.font = "song"; } catch {}
+<script>try { if (JSON.parse(localStorage.getItem("kline:font") || '"sans"') === "song") document.documentElement.dataset.font = "song"; if (JSON.parse(localStorage.getItem("kline:big") || "false")) document.documentElement.dataset.big = "1"; } catch {}
 try { const ls = localStorage; let st = JSON.parse(ls.getItem("kline:style") || '"lab"'); if (ls.getItem("kline:styleV") !== "3") { st = "lab"; ls.setItem("kline:style", '"lab"'); ls.setItem("kline:styleV", "3"); } if (st && st !== "minimal") document.documentElement.dataset.style = st; } catch {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -894,7 +894,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.22-137</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.22-138</span></footer>
 
 <script src="core.js"></script>
 <script src="tschart.js"></script>

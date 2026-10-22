@@ -221,3 +221,11 @@ a.bl-pro:hover { border-color: var(--ink); }
 .tsbox.xh { margin: 0; max-width: none; } .tsbox.xh svg { touch-action: pan-y; }
 /* SVG 縮寫徽章（core.js badgeSvg）：單色，跟著主題的底色與文字色 */
 .badge .bg { fill: var(--surface-3, #27272a); stroke: var(--line); } .badge text { fill: var(--muted); }
+
+/* 大按鈕模式（版面風格 → 按鈕大小）：字放大一級、常用按鈕至少 40px 高，觸控比較不會點錯 */
+html[data-big] { font-size: 112.5%; }
+html[data-big] .btn, html[data-big] .seg button, html[data-big] .mkseg button, html[data-big] .ichip, html[data-big] .groups button, html[data-big] .ltabs button { min-height: 40px; padding-left: 14px; padding-right: 14px; font-size: 15px; }
+html[data-big] .btn.sm { min-height: 36px; font-size: 14px; }
+html[data-big] .note { font-size: 13.5px; }
+html[data-big] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), html[data-big] select { font-size: 16px; min-height: 38px; }
+html[data-big] .linkbtn { padding-top: 4px; padding-bottom: 4px; }

@@ -1,0 +1,35 @@
+# 每日早報（Telegram）：每個交易日早上 07:40（台北），整理昨晚美股、台指期夜盤、今天的除權息與法說會、持股新消息，
+# 推播給在看盤「工具 → 提醒 → 事件提醒」勾了「每日早報」並綁定 Telegram 的人（scripts/morning-brief.mjs）。
+name: morning-brief
+on:
+  schedule:
+    - cron: "40 23 * * 0-4"   # UTC 週日到週四 23:40 ＝ 台北週一到週五 07:40
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "除錯：1＝只印出早報內容，不送出"
+        default: "0"
+permissions:
+  contents: read
+concurrency:
+  group: morning-brief-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: ${{ github.event.inputs.dry == '1' || github.ref != 'refs/heads/main' }}
+        run: node scripts/morning-brief.mjs --dry
+      - name: telegram
+        if: ${{ github.event.inputs.dry != '1' && github.ref == 'refs/heads/main' }}   # 只有 main 會發真的推播
+        env:
+          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
+        run: node scripts/morning-brief.mjs

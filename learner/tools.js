@@ -2,7 +2,7 @@
    這個檔案只定義函式（載入時 watch.html 的 W 還沒建立），由 watch.html 的清單分頁「工具」呼叫 renderTools()。
    資料都存在這台裝置的瀏覽器（localStorage）；指標用日 K 判斷，日 K 每 5 分鐘重抓一次。 */
 
-const TOOLS_VIEWS = [["sum", "每日摘要"], ["alert", "提醒"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["oapi", "官方資料"], ["sync", "備份同步"]];
+const TOOLS_VIEWS = [["brief", "早報"], ["sum", "每日摘要"], ["alert", "提醒"], ["notes", "筆記追蹤"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["oapi", "官方資料"], ["sync", "備份同步"]];
 const toolsDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 // 日 K（6 個月）：5 分鐘內重複用
 async function dailyFresh(c) {
@@ -341,6 +341,7 @@ function toolsBody(v) {
       <div class="ctbl"><table><thead><tr><th>股票</th><th>條件</th><th>目前</th><th>上次通知</th><th></th></tr></thead><tbody>
       ${L.map((r, i) => `<tr><td><button class="linkbtn" data-tsel="${r.code}">${esc(nameOf(r.code))} ${r.code}</button></td><td>${esc(condName(r.cond, r.p))}${condOf(r.cond)?.[2] && !/\bN\b/.test(condOf(r.cond)[1]) ? `（${condOf(r.cond)[2]} ${r.p ?? condOf(r.cond)[3]}）` : ""}</td><td>${r.chk ? (r.now ? `<b class="up">成立</b>：${esc(r.now)}` : `<span class="note">未成立</span>`) : `<span class="note">尚未檢查</span>`}</td><td class="note">${r.last || "—"}</td><td><label class="note"><input type="checkbox" data-iron="${i}" ${r.on ? "checked" : ""}> 開</label> <button class="linkbtn" data-irdel="${i}">刪除</button></td></tr>`).join("") || `<tr><td colspan="5" class="note">還沒有條件。上面輸入代號、選條件就能新增。</td></tr>`}</tbody></table></div>
       <h4>價格提醒 <span class="note">在個股頁按「提醒」設定漲到、跌到某價</span></h4><div class="ctbl"><table><tbody>${Object.entries(W.alerts || {}).filter(([, a]) => a?.up || a?.dn).map(([c, a]) => `<tr><td><button class="linkbtn" data-tsel="${c}">${esc(nameOf(c))} ${c}</button></td><td>${a.up ? `漲到 <b class="up">${fmtP(a.up)}</b>` : ""}${a.up && a.dn ? "、" : ""}${a.dn ? `跌到 <b class="down">${fmtP(a.dn)}</b>` : ""}</td><td class="note">現價 ${fmtP(W.quotes.get(c)?.price)}</td><td><button class="linkbtn" data-paldel="${c}">刪除</button></td></tr>`).join("") || `<tr><td class="note">沒有價格提醒</td></tr>`}</tbody></table></div>
+      ${evaHtml()}
       <h4>最近的提醒紀錄</h4><ul class="tlist">${(W.irLog ||= store.get("watch:irlog", []) || []).slice(0, 20).map(x => `<li><span class="note">${x.d} ${x.t}</span> ${esc(nameOf(x.code))} ${x.code}：${esc(x.msg)}</li>`).join("") || "<li class='note'>沒有</li>"}</ul></section>`;
     note = "技術指標提醒與價格提醒都在這裡管理；綁定 Telegram（備份同步）後，收盤後也會推播。";
   } else if (v === "paper") {
@@ -372,6 +373,8 @@ function toolsBody(v) {
       <h4>每一筆</h4><ul class="tlist">${JR().slice(0, 60).map(e => `<li><span class="note">${e.d}</span> ${e.side === "buy" ? "<b class='up'>買</b>" : "<b class='down'>賣</b>"} <button class="linkbtn" data-tsel="${e.code}">${esc(nameOf(e.code))} ${e.code}</button> ${e.sh ? e.sh.toLocaleString() + " 股" : ""} @ ${fmtP(e.px)} ${e.tags?.length ? `<span class="ctag one">${e.tags.map(esc).join("・")}</span>` : ""}<br><span>${esc(e.reason || "")}</span>${e.snap ? `<br><span class="note">當天：K ${e.snap.kd[0]}／D ${e.snap.kd[1]}・RSI ${e.snap.rsi}・${esc(e.snap.macd)}・${esc(e.snap.ma)}</span>` : ""} <button class="linkbtn" data-jdel="${e.id}">刪除</button></li>`).join("") || `<li class="note">還沒有紀錄。每次買賣記下理由，之後回頭看哪些理由真的賺錢。</li>`}</ul></section>`;
     note = "日記只存在這台裝置（可以匯出備份）；「當天」是記錄日期那根日 K 的指標，「同期買進持有」是同一段期間抱著不動的報酬。";
     setTimeout(jBH, 0);
+  } else if (v === "brief" || v === "notes") { // 早報、筆記追蹤（brief.js）
+    ({ h, note } = v === "brief" ? briefHtml() : ntHtml());
   } else if (v === "multi") {
     const mode = W.multiMode || "codes", codes = multiCodes();
     h = `<section class="csec"><h3>多圖並排 <span class="seg sm" role="group">${[["codes", "4 檔股票"], ["tf", "同一檔 4 個週期"]].map(([k, t]) => `<button data-mm="${k}" aria-pressed="${mode === k}">${t}</button>`).join("")}</span></h3>
