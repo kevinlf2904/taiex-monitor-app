@@ -431,6 +431,8 @@ function cxGo(raw) {
   if (!cxIsTw(c) && !/^[A-Z][A-Z.\-]{0,6}$/.test(c)) { const n = String(raw).trim(), N = Object.entries(W.names || {}), hit = N.find(([, v]) => v === n) || N.find(([, v]) => String(v).includes(n)); if (!hit) return toast(`找不到「${n}」，請輸入代號`); c = hit[0]; }
   W.cv = cxIsTw(c) ? `tw:s:${c}` : `stock:${c}`; W.twoTab = "hold"; W.rkMore = ""; renderList(); goY(0); navPush();
 }
+// 國會分頁的工具列：內容沒變就不重畫（背景資料載入完重畫時，查個股框裡打到一半的字和游標才不會不見）
+const cxSetTools = h => { const el = $("#lTools"); if (el._h === h && el.querySelector(".cx-go")) return; el.innerHTML = h; el._h = h; };
 const cxGoHtml = () => `<form class="cx-go" data-cxgo role="search"><input name="q" type="search" placeholder="查個股：2330、NVDA" aria-label="查個股（台股、美股代號或名稱）" autocomplete="off" enterkeyhint="search"><button class="btn sm">查</button></form>`;
 document.addEventListener("submit", e => { const f = e.target.closest?.("[data-cxgo]"); if (!f) return; e.preventDefault(); cxGo(f.q.value); });
 // 大戶國會裡點到台股（千張大戶、大戶共識、我的追蹤、內部人、熱圖…）都先到台股個股頁，那裡再「在看盤開啟」
