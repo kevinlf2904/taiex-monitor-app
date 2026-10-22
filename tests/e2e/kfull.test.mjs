@@ -1,7 +1,7 @@
 // K 線圖「⛶ 放大」：嵌在首頁（iframe）時整個 iframe 固定成螢幕大小，手機直拿、橫拿、轉向、電腦都塞得進畫面；縮小後還原
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, watchFrame } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -12,7 +12,7 @@ const fit = F => F.evaluate(() => { const f = document.querySelector(".chart-ful
 test("K 線放大：首頁裡直拿、橫拿、轉向都塞得進螢幕，縮小還原", async () => {
   const { ctx, p, errs } = await open(B, S.url, "index.html#watch", { width: 390, touch: true });
   await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(1200);
-  const F = () => p.frames().find(x => x.url().includes("watch.html"));
+  await watchFrame(p); const F = () => p.frames().find(x => x.url().includes("watch.html"));
   await F().evaluate(() => select("2330")); await p.waitForTimeout(800); await F().evaluate(() => setDtab("tech"));
   await F().waitForFunction(() => typeof kChart !== "undefined" && kChart?.D?.length, null, { timeout: 15000 });
   await p.evaluate(() => scrollTo(0, 500)); const h0 = await p.evaluate(() => document.querySelector("#watchFrame").offsetHeight);
@@ -46,7 +46,7 @@ test("K 線放大：單獨開看盤頁（電腦）也塞得進畫面", async () 
 for (const [w, h] of [[1024, 1366], [1366, 1024]]) test(`K 線放大：iPad ${w}x${h}（右側抽屜）最上面沒有東西蓋住`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "index.html#watch", { width: w, touch: true });
   await p.setViewportSize({ width: w, height: h }); await p.waitForTimeout(1200);
-  const F = () => p.frames().find(x => x.url().includes("watch.html"));
+  await watchFrame(p); const F = () => p.frames().find(x => x.url().includes("watch.html"));
   await F().evaluate(() => select("2330")); await p.waitForTimeout(800); await F().evaluate(() => setDtab("tech"));
   await F().waitForFunction(() => typeof kChart !== "undefined" && kChart?.D?.length, null, { timeout: 15000 });
   await p.evaluate(() => scrollTo(0, 400)); await F().evaluate(() => kChart.bar.querySelector("[data-z=expand]").click()); await p.waitForTimeout(500);

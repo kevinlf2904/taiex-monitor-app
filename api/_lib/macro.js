@@ -41,12 +41,17 @@ export function parseObs(j) {
   return (Array.isArray(j?.observations) ? j.observations : []).map(o => [o?.date, o?.value]).filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r[0]) && r[1] !== "" && r[1] !== "." && Number.isFinite(+r[1])).map(r => [r[0], +r[1]]);
 }
 // 一個數列：先用官方介面（有金鑰時），失敗再用 CSV。錯誤訊息不含金鑰；回傳 { rows, via }
+// 官方介面太頻繁會回 429、偶爾 5xx：等一下再試一次；CSV 被擋時會回 200 的網頁，解析不出資料就把兩邊的狀態寫進錯誤，排程 log 看得出原因
 async function fredSeries(id, since, timeout, key) {
-  if (key) { try { const r = await fetch(`${FRED_API}?series_id=${encodeURIComponent(id)}&api_key=${encodeURIComponent(key)}&file_type=json&observation_start=${since}`, { headers: { ...UA, Accept: "application/json" }, signal: AbortSignal.timeout(timeout) });
-    if (r.ok) { const rows = parseObs(await r.json()); if (rows.length) return { rows, via: "api" }; } } catch {} }
-  const r = await fetch(`${FRED}?id=${id}&cosd=${since}`, { headers: UA, signal: AbortSignal.timeout(timeout) }); if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return { rows: parseCsv(await r.text()), via: "csv" };
+  let why = "";
+  if (key) for (let a = 0; a < 2; a++) { try { const r = await fetch(`${FRED_API}?series_id=${encodeURIComponent(id)}&api_key=${encodeURIComponent(key)}&file_type=json&observation_start=${since}`, { headers: { ...UA, Accept: "application/json" }, signal: AbortSignal.timeout(timeout) });
+    if (r.ok) { const rows = parseObs(await r.json()); if (rows.length) return { rows, via: "api" }; why = "官方介面沒有資料"; break; } why = `官方介面 HTTP ${r.status}`; if (r.status !== 429 && r.status < 500) break; } catch (e) { why = `官方介面 ${e.name === "TimeoutError" ? "逾時" : "連線失敗"}`; } await new Promise(x => setTimeout(x, 1500)); }
+  const r = await fetch(`${FRED}?id=${id}&cosd=${since}`, { headers: UA, signal: AbortSignal.timeout(timeout) }); if (!r.ok) throw new Error(`${why ? why + "，" : ""}CSV HTTP ${r.status}`);
+  const rows = parseCsv(await r.text()); if (!rows.length) throw new Error(`${why ? why + "，" : ""}CSV 沒有資料（可能被擋）`);
+  return { rows, via: "csv" };
 }
+// 同時最多 n 個請求（30 個數列一次全發容易被 FRED 限流）
+async function pool(items, n, fn) { const out = Array(items.length); let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; try { out[k] = { status: "fulfilled", value: await fn(items[k]) }; } catch (e) { out[k] = { status: "rejected", reason: e }; } } })); return out; }
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "text/csv,*/*" };
 
 export function parseCsv(t) {
@@ -76,7 +81,7 @@ export function impactOf(rows, up, down) {
 // 整理全部數列與重點訊號；排程（scripts/macro.mjs，GitHub Actions）和 /api/macro 共用。FRED 會擋掉部分雲端主機（Vercel 上常逾時），所以網頁優先讀排程存好的 learner/data/macro.json
 export async function buildMacro(timeout = 15000) {
   const since = new Date(Date.now() - 6 * 365 * 864e5).toISOString().slice(0, 10);
-  const key = (process.env.FRED_API_KEY || "").trim(), got = await Promise.allSettled(SERIES.map(([id]) => fredSeries(id, since, timeout, key)));
+  const key = (process.env.FRED_API_KEY || "").trim(), got = await pool(SERIES, 6, ([id]) => fredSeries(id, since, timeout, key));
   const series = [], notes = []; let unRaw = null, viaApi = 0;
   SERIES.forEach(([id, name, group, unit, how, note, up, down], k) => {
     const g = got[k]; if (g.status !== "fulfilled" || !g.value.rows.length) { notes.push(`${name}：${g.reason?.message || "沒有資料"}`); return; }

@@ -1,14 +1,13 @@
 // 即時更新與版面：報價請求卡住時輪詢要能自己恢復；嵌在 K線學堂裡往下捲之後打開個股，抽屜要出現在看得到的地方而且能捲
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, mock } from "./_harness.mjs";
+import { chromium, serve, mock, watchFrame } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 // 自己開 context 的測試也擋掉離線快取（sw.js）：service worker 轉送的請求不會經過下面的假資料（route）
 test.after(async () => { await B.close(); S.close(); });
 
 // 等嵌入的看盤頁程式跑完（CI 比較慢，固定等 2.5 秒有時還沒好）
-const watchFrame = async p => { for (let i = 0; i < 150; i++) { const f = p.frames().find(f => /watch\.html/.test(f.url())); if (f && await f.evaluate(() => typeof setLt === "function").catch(() => false)) return f; await p.waitForTimeout(100); } throw new Error("看盤頁沒有載入"); };
 test("報價請求卡住後會恢復更新", async () => {
   const ctx = await B.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block" }); await mock(ctx);
   let n = 0, hung = false;

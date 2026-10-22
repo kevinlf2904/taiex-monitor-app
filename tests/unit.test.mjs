@@ -205,7 +205,7 @@ test("證交所、櫃買開放資料：只連固定網域、代號欄位、個�
 
 import { pick, topicOf, merge, parseSum } from "../scripts/macro-news.mjs";
 test("總經消息：分類、去重、只留一天內、同日合併、摘要解析", () => {
-  assert.equal(topicOf("聯準會宣布降息一碼"), "利率"); assert.equal(topicOf("美國9月CPI年增2.9%"), "通膨"); assert.equal(topicOf("非農新增就業15萬"), "就業"); assert.equal(topicOf("新台幣升值2角"), "匯率");
+  assert.equal(topicOf("聯準會宣布降息一碼"), "利率"); assert.equal(topicOf("美國9月CPI年增2.9%"), "通膨"); assert.equal(topicOf("非農新增就業15萬"), "就業"); assert.equal(topicOf("新台幣升值2角"), "匯率"); assert.equal(topicOf("美股重挫 那斯達克跌3% 科技股遭拋售"), "盤勢"); assert.equal(topicOf("美股大跌原因一次看"), "盤勢"); assert.equal(topicOf("加權指數盤後紀錄及早盤當沖選股"), "市場");
   const now = Date.parse("2026-10-17T00:00:00Z"), a = (title, h) => ({ title, source: "s", link: "https://x/" + title, at: now - h * 3600e3 });
   const L = pick([[a("央行理監事會維持利率不變 市場關注", 1), a("某藝人結婚", 2), a("〈友達運動會〉集團朝類控股架構轉型", 2), a("加權指數盤後紀錄及早盤當沖選股", 2)], [a("央行理監事會維持利率不變 市場關注（更新）", 3), a("美債殖利率走高", 50)]], now);
   assert.deepEqual(L.map(x => x.topic), ["利率"]);

@@ -31,7 +31,7 @@ async function summarize(e, show) {
   if (KEY) {
     if (e.video) { // YouTube：Gemini 直接看影片
       try { const out = await geminiJSON(ytParts(e.video, PROMPT(meta, "video")), KEY, Date.now() + 240000, YT_CFG), s = parseSum(out.text); if (s) return { ...s, mode: "video", model: out.model }; throw new Error("AI 回傳格式不對"); }
-      catch (err) { log("  看影片失敗：", err.message); if (/429|quota|RESOURCE_EXHAUSTED/i.test(err.message)) throw err; }
+      catch (err) { log("  看影片失敗：", err.message); if (/429|quota|RESOURCE_EXHAUSTED|503|UNAVAILABLE|high demand|overloaded/i.test(err.message)) throw err; } // 忙線、額度：留到下次重試，不要用影片說明湊一份 0 個觀點的整理
     }
     if (e.audio) {
       let up = null;
@@ -75,7 +75,7 @@ export async function main() {
       let s = c.feed ? { name: c.name || q, feed: c.feed } : old?.feed ? old : null;
       if (!s && c.yt) s = await ytChannel(c.yt); // YouTube：@帳號或頻道網址
       else if (!s && c.ytq) s = (await ytSearch(c.ytq)).find(x => x.name.includes(c.must || c.ytq)); // YouTube：搜尋頻道
-      else if (!s) s = (await itunes(c.q)).find(x => x.name.includes(c.must || c.q));
+      else if (!s) s = (await itunes(c.q)).find(x => x.name.includes(c.must || c.q)) || (await ytSearch(c.q).catch(() => [])).find(x => x.name.includes(c.must || c.q)); // Apple Podcasts 找不到（節目下架或只在 YouTube）就找同名 YouTube 頻道
       if (!s) { log("找不到節目：", q); continue; }
       const p = parseRss(await getText(s.feed), 80);
       shows.push({ q, id: s.id || podHash(s.feed), name: p.show.name || s.name, author: p.show.author || s.author || "", art: p.show.art || s.art || old?.art || "", feed: s.feed, ...(p.show.yt || s.yt ? { yt: true } : {}), eps: p.eps });
@@ -84,7 +84,7 @@ export async function main() {
   }
   // 2. 待整理：每個節目最新的先、再往前補到 BACKFILL 集（一年內）；新的優先排在前面
   const yearAgo = new Date(Date.now() - 365 * 864e5).toISOString(), todo = [];
-  for (const s of shows) s.eps.filter(e => e.date >= yearAgo).slice(0, BACK).forEach((e, rank) => { const key = podHash(s.feed + "|" + e.guid); const o = idx.eps[key], redo = o && rank < REDO && (o.v || 1) < SUM_VER && o.mode !== "manual"; if ((!o || redo) && (idx.fails[key]?.n || 0) < 3) todo.push({ s, e, key, rank, redo }); });
+  for (const s of shows) s.eps.filter(e => e.date >= yearAgo).slice(0, BACK).forEach((e, rank) => { const key = podHash(s.feed + "|" + e.guid); const o = idx.eps[key], redo = o && ((rank < REDO && (o.v || 1) < SUM_VER && o.mode !== "manual") || (e.video && o.mode === "notes" && !o.calls?.length && !o.redo)); if ((!o || redo) && (idx.fails[key]?.n || 0) < 3) todo.push({ s, e, key, rank, redo }); });
   // 排序：每個節目最新那集優先（今日摘要），接著先補「上架超過 3 天」的舊集——它們的觀點馬上能結算，名人排行才不會一直樣本不足
   const settleD = new Date(Date.now() - 3 * 864e5).toISOString(), pri = x => (x.redo ? 3 : x.rank === 0 ? 0 : x.e.date <= settleD ? 1 : 2); // 舊格式重整排最後
   todo.sort((a, b) => pri(a) - pri(b) || a.rank - b.rank || b.e.date.localeCompare(a.e.date));
@@ -94,7 +94,7 @@ export async function main() {
     log("整理：", s.name, e.title);
     try {
       const r = await summarize(e, s);
-      idx.eps[key] = { feed: s.feed, guid: e.guid, title: e.title, date: e.date, audio: e.audio, ...(e.video ? { video: e.video } : {}), link: e.link || "", dur: e.dur || null, show: s.name, ...r, v: SUM_VER, at: Date.now() };
+      idx.eps[key] = { ...(idx.eps[key]?.mode === "notes" && e.video ? { redo: 1 } : {}), feed: s.feed, guid: e.guid, title: e.title, date: e.date, audio: e.audio, ...(e.video ? { video: e.video } : {}), link: e.link || "", dur: e.dur || null, show: s.name, ...r, v: SUM_VER, at: Date.now() };
       delete idx.fails[key]; done++; log("  完成：", r.mode, `${r.calls.length} 個觀點`);
     } catch (err) {
       idx.fails[key] = { n: (idx.fails[key]?.n || 0) + 1, err: String(err.message).slice(0, 200), at: Date.now() }; log("  失敗：", err.message);

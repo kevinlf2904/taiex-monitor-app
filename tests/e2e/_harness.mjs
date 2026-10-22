@@ -63,6 +63,8 @@ export async function mock(ctx) {
 }
 // 開一個頁面，收集頁面錯誤
 // sw：允許離線快取（sw.js）；預設擋掉，假資料（route）才不會被 service worker 繞過
+// 首頁裡的看盤 iframe：等它的程式都載入（setLt、select 定義好）才回傳；CI 機器慢時 iframe 出現了但程式還沒跑完，直接呼叫會 ReferenceError
+export async function watchFrame(p) { for (let i = 0; i < 150; i++) { const f = p.frames().find(f => /watch\.html/.test(f.url())); if (f && await f.evaluate(() => typeof setLt === "function" && typeof select === "function" && typeof W !== "undefined").catch(() => false)) return f; await p.waitForTimeout(100); } throw new Error("看盤頁沒有載入"); }
 export async function open(browser, base, file, { width = 1180, touch = false, sw = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height: 1000 }, hasTouch: touch, isMobile: touch, serviceWorkers: sw ? "allow" : "block" }), errs = [];
   const m = await mock(ctx), p = await ctx.newPage(); p.on("pageerror", e => errs.push(`${width} ${e.message}`)); p.on("dialog", d => d.accept());
