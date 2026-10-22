@@ -60,7 +60,10 @@ test("去識別化：量價動能矩陣、節目頭像、供應鏈說明與籌�
   assert.doesNotMatch(await p.evaluate(() => $("#lTabs").innerText), /台股熱門|美股熱門/);
   await p.evaluate(() => setLt("rank")); assert.match(await p.evaluate(() => $("#rkHub").innerText), /台股排行[\s\S]*台股熱門[\s\S]*美股熱門/);
   await p.click('#rkHub [data-l="us"]'); assert.equal(await p.evaluate(() => [W.lt, $('#lTabs [data-l="rank"]').getAttribute("aria-pressed")].join()), "us,true");
-  await p.evaluate(() => { setLt("mkt"); W.mkReg = "tw"; renderList(); }); assert.ok(await p.evaluate(() => !!document.querySelector(".hotmini [data-hotgo]")));
+  // 大盤的熱門股只有一區（台股、美股切換），沒有另外的「前 8 名」
+  await p.evaluate(() => { setLt("mkt"); W.mkReg = "tw"; renderList(); }); assert.ok(await p.evaluate(() => !!document.querySelector("[data-hotgo]")));
+  assert.equal(await p.evaluate(() => [...document.querySelectorAll("#lx section.mk h3")].filter(h => /熱門/.test(h.textContent)).length), 1);
+  await p.click('[data-mk="hotM"][data-v="tw:us"]'); assert.equal(await p.evaluate(() => document.querySelector("[data-hotgo]").dataset.hotgo), "us");
   // 選股的數字格：文字和底色要看得清楚（新主題的強調色是白色）
   assert.ok(await p.evaluate(() => { const b = document.createElement("button"); b.className = "gtile"; b.innerHTML = "<span>x</span><b>3</b>"; document.body.append(b); const cs = getComputedStyle(b.querySelector("b")), ok = cs.color !== cs.backgroundColor; b.remove(); return ok; }));
   await ctx.close(); assert.deepEqual(errs, []);

@@ -43,3 +43,15 @@ for (const width of [390, 1280]) test(`供應鏈「關聯」分頁與題材內�
   assert.ok(await noOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("橫向滑動的選單列：每秒重畫後不會跳回最左邊；選中的在右邊也會捲進畫面", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width: 390, touch: true });
+  await p.evaluate(() => { showList(); setLt("ind"); W.indS.view = "news"; W.indS.open = null; renderInd(); });
+  const bar = '#lx .scrseg[aria-label="供應鏈題材地圖"]';
+  const vis = () => p.evaluate(s => { const el = document.querySelector(s), a = el.querySelector('[aria-pressed="true"]').getBoundingClientRect(), b = el.getBoundingClientRect(); return a.left >= b.left - 1 && a.right <= b.right + 1; }, bar);
+  assert.ok(await vis(), "選中的「產業新聞」在右邊，重畫後要捲進畫面");
+  const end = await p.evaluate(s => { const el = document.querySelector(s); el.scrollLeft = el.scrollWidth; return Math.round(el.scrollLeft); }, bar); assert.ok(end > 0);
+  await p.evaluate(() => renderInd()); // 報價回來時直接重畫
+  assert.equal(await p.evaluate(s => Math.round(document.querySelector(s).scrollLeft), bar), end, "重畫後還在原本的位置");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
