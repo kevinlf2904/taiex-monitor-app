@@ -1,7 +1,7 @@
 // 日股、韓股：產業地圖的 6981.T、005930.KS 這類代號可以抓報價、開個股頁；首頁「回到最上面」按鈕；嵌入的看盤頁自己不捲動
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, watchFrame } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -24,7 +24,7 @@ test("首頁：往下捲出現「回到最上面」，嵌入的看盤頁不自�
   await p.evaluate(() => scrollTo(0, 0)); await p.waitForFunction(() => document.getElementById("toTop").hidden);
   await p.evaluate(() => scrollTo(0, 900)); await p.waitForFunction(() => !document.getElementById("toTop").hidden);
   await p.click("#toTop"); await p.waitForFunction(() => scrollY === 0, null, { timeout: 5000 });
-  const f = p.frames().find(x => x.url().includes("watch.html"));
+  const f = await watchFrame(p);
   assert.equal(await f.evaluate(() => getComputedStyle(document.documentElement).overflowY), "hidden");
   assert.equal(await p.getAttribute("#watchFrame", "scrolling"), "no");
   await ctx.close(); assert.deepEqual(errs, []);

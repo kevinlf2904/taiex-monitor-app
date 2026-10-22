@@ -11,6 +11,12 @@ async function raw(url, n = 600) {
   const t0 = Date.now(); try { const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "*/*", Referer: "https://mis.twse.com.tw/stock/index.jsp" }, signal: AbortSignal.timeout(20000) }); const t = await r.text();
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
+if (process.argv[2] === "fred") {
+  // 總經數據排程（scripts/macro.mjs）同一套：FRED 官方介面＋CSV，看幾個數列拿得到、拿不到的原因（不印金鑰）
+  const { buildMacro } = await import("../api/_lib/macro.js"), t0 = Date.now(), j = await buildMacro();
+  console.log("FRED", j.ok ? "成功" : "失敗", `${Date.now() - t0}ms`, "數列", j.series?.length ?? 0, "拿不到", (j.notes || []).length, j.error ? j.error.slice(0, 600) : (j.notes || []).slice(0, 5).join("；"));
+  process.exit(0);
+}
 if (process.argv[2] === "yt") {
   // YouTube：搜尋頻道、用 @帳號找頻道、讀影片 RSS（Podcast 觀點的 YouTube 來源）
   const P = await import("../api/_lib/podcast.js");
