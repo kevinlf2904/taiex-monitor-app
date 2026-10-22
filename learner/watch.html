@@ -19,6 +19,7 @@
   if (q.has("embed")) d.dataset.embed = "1";
   try { d.dataset.theme = q.get("theme") || JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); } catch { d.dataset.theme = "dark"; }
   try { if ((q.get("font") || JSON.parse(localStorage.getItem("kline:font") || '"sans"')) === "song") d.dataset.font = "song"; } catch {}
+  try { if (JSON.parse(localStorage.getItem("kline:big") || "false")) d.dataset.big = "1"; } catch {}
   try { const ls = localStorage; let st = q.get("style") || JSON.parse(ls.getItem("kline:style") || '"lab"'); if (!q.get("style") && ls.getItem("kline:styleV") !== "3") { st = "lab"; ls.setItem("kline:style", '"lab"'); ls.setItem("kline:styleV", "3"); } if (st && st !== "minimal") d.dataset.style = st; } catch {} })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -942,6 +943,28 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 @keyframes drawerIn { from { transform: translateX(48px); opacity: 0; } }
 @keyframes fadeIn { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .w-main.wide.show-detail .w-detail, .dbg { animation: none; } }
+/* 早報、事件提醒、筆記追蹤（brief.js） */
+.bfgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 0 18px; } .bfsec h4 { margin-top: 10px; }
+.evopts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 6px; margin: 6px 0 8px; }
+.evopt { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; } .evopt .note { flex-basis: 100%; margin: 0; font-size: 12px; }
+.ntbar { display: block; width: 72px; height: 4px; border-radius: 2px; background: var(--surface-2); margin-top: 4px; overflow: hidden; } .ntbar i { display: block; height: 100%; background: var(--accent); }
+.nttbl td { vertical-align: top; } .ntnotes { min-width: 180px; max-width: 360px; white-space: normal; } .ntnotes div { margin-bottom: 3px; }
+/* 條件組合、事件回測、估值地圖、總經敏感度（fundx.js） */
+.cbpre { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 10px; } .cbsv { display: inline-flex; align-items: center; gap: 2px; }
+.cbconds { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 6px; }
+.cbc { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; } .cbc.on { border-color: var(--accent); background: var(--accent-soft, var(--surface-2)); }
+.cbc select { font: inherit; font-size: 13px; padding: 1px 4px; } .cbc .note { font-size: 12px; margin: 0; }
+.cbtbl small, .evtbl small { display: block; } .evtbl td, .cbtbl td { white-space: nowrap; }
+.evhist { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 120px; margin: 6px 0 4px; }
+.evhist div { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; } .evhist i { display: block; width: 100%; min-height: 1px; border-radius: 2px 2px 0 0; opacity: .75; }
+.evhist i.upb { background: var(--up); } .evhist i.dn { background: var(--down); } .evhist small { font-size: 10px; color: var(--muted); white-space: nowrap; transform: scale(.92); }
+tr.on td { background: var(--surface-2); }
+.fxmapbox { width: 100%; overflow: hidden; } .fxmap { width: 100%; height: auto; display: block; }
+.fxmap .gl { stroke: var(--line); stroke-width: .6; } .fxmap .md { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; } .fxmap .ax { fill: var(--muted); font-size: 11px; } .fxmap .qd { fill: var(--muted); font-size: 11px; opacity: .8; }
+.fxmap .pt { cursor: pointer; } .fxmap circle.u { fill: var(--up); fill-opacity: .45; } .fxmap circle.d { fill: var(--down); fill-opacity: .45; } .fxmap .pt:hover circle, .fxmap .pt.cur circle { fill-opacity: .85; stroke: var(--ink); stroke-width: 1.2; }
+.fxmap .lb { fill: var(--ink); font-size: 11px; pointer-events: none; } .fxrank li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } .fxrank b { margin-left: auto; }
+.mstbl td { background: color-mix(in srgb, var(--surface-2) calc(var(--ms, 0) * 100%), transparent); } .mstbl td small { display: block; } .mstbl tr.tot td { border-top: 1px solid var(--line); }
+.msum { margin: 8px 0; line-height: 1.6; }
 /* 橫向捲動的按鈕列：左右還有內容時邊緣淡出，提示可以滑（hsFade 依捲動位置加上 hs-l／hs-r） */
 .hs-l { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px); mask-image: linear-gradient(90deg, transparent 0, #000 18px); }
 .hs-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); }
@@ -1167,6 +1190,8 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 <script src="macrox.js"></script>
 <script src="finrep.js"></script>
 <script src="congx.js"></script>
+<script src="brief.js"></script>
+<script src="fundx.js"></script>
 <script>
 "use strict";
 const EMBED = document.documentElement.dataset.embed === "1";
@@ -1750,7 +1775,7 @@ function renderList() {
   if (W.ticking && lx.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
   if (W.ticking && Date.now() - (W.lastPtr || 0) < 900) return;
   if (W.ticking && W.lt === "ind") { if (W.indLast) loadIndQuotes(W.indLast); return; } // 產業地圖（星系、圖解）每 5 秒整個重建很耗電：只重抓成員報價，有變動才重畫
-  if (W.ticking && W.lt === "money") return; // 資金分頁是收盤資料，自己載入完才重畫
+  if (W.ticking && (W.lt === "money" || (W.lt === "screen" && W.scrG === "combo") || (W.lt === "hold" && (W.holdView === "risk" || W.holdView === "macro")))) return; // 資金分頁、條件組合、庫存風險與總經敏感度用收盤資料，自己載入完才重畫
   if (W.ticking && (W.lt === "pod" || W.lt === "cong" || (W.lt === "tools" && W.tv !== "sum"))) return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
   const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details")].map(d => [sum(d), d.open]));
   // 換分頁時新內容常常先是一行「載入中」，頁面一變短瀏覽器就把捲動位置拉回最上面：重畫前先撐住原本的高度，內容夠高或 0.9 秒後再放開
@@ -1807,11 +1832,11 @@ function renderList0() {
       : `<li class="empty note">這個群組還沒有股票。在上面輸入代號或名稱加入，或從「台股熱門」「美股熱門」「排行」按 ☆ 加入（台股、美股會自動放進各自的群組）。</li>`;
     note = `${curList().length} 檔・${anyOpen() ? "盤中每秒自動更新" : "收盤後每 5 分鐘確認一次"}`;
   } else if (W.lt === "hold") {
-    $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"], ["risk", "風險"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
+    $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"], ["risk", "風險"], ["macro", "總經敏感度"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
       <div class="imp-btns"><button class="btn sm primary" data-imp="edit">${ico("pen")}編輯庫存</button><button class="btn sm" data-imp="shot">${ico("cam")}截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
     const tw = W.holdMkt === "tw";
     if (tw) loadHoldDivs();
-    if (W.holdView === "ana") renderHoldAna(); else if (W.holdView === "risk") renderHoldRisk(); else renderHold();
+    if (W.holdView === "ana") renderHoldAna(); else if (W.holdView === "risk") renderHoldRisk(); else if (W.holdView === "macro") renderHoldMacro(); else renderHold();
     note = `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
   } else if (W.lt === "screen") {
     $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? liveTag(W.scr, "收盤後資料") : "選股"}・僅供參考，不是買賣建議</span><button class="btn sm" data-gx="scrRefresh">↻ 更新</button>`;
@@ -2210,7 +2235,7 @@ function scanHit(k, D) {
 // 客戶端掃描：K 線組合（analysis.js 的 KPAT）與技術條件，抓一次日 K 就把所有條件都算完
 const CSCANS = [...KPAT.map(k => ({ id: "k:" + k.id, group: "kline", side: k.side, title: k.name, desc: k.desc, hit: D => k.hit(D) })),
   ...SCANS.map(([k, t, d]) => ({ id: "s:" + k, group: "tech", title: t, desc: d, hit: D => scanHit(k, D) }))];
-const SCR_GROUPS = [["smart", "總覽"], ["custom", "自訂條件"], ["score", "評分"], ["rs", "相對強弱"], ["hot", "熱門"], ["kline", "K線"], ["tech", "技術"], ["fund", "基本"], ["theme", "題材"], ["chips", "籌碼"]];
+const SCR_GROUPS = [["smart", "總覽"], ["combo", "條件組合"], ["custom", "自訂條件"], ["score", "評分"], ["rs", "相對強弱"], ["hot", "熱門"], ["kline", "K線"], ["tech", "技術"], ["fund", "基本"], ["theme", "題材"], ["chips", "籌碼"]];
 if (!SCR_GROUPS.some(g => g[0] === W.scrG)) W.scrG = "smart";
 function scanUniverse() {
   const fromScr = (W.scr?.lists || []).filter(L => scrGroup(L) === "hot").flatMap(L => L.rows.slice(0, 15).map(r => r.code));
@@ -2238,6 +2263,7 @@ function renderScreen() {
   const J = W.scr, g = W.scrG; let h = "";
   if (J?.ratio) { const t = J.ratio.up + J.ratio.down || 1, u = Math.round(J.ratio.up / t * 100); h += `<div class="adr"><b>漲跌家數比</b><div><span class="up">${u}%</span><span class="adrbar"><i style="width:${u}%"></i></span><span class="down">${100 - u}%</span></div></div>`; }
   h += `<div class="seg scrseg" role="group" aria-label="選股分類">${SCR_GROUPS.map(([k, t]) => `<button data-sg="${k}" aria-pressed="${k === g}">${t}</button>`).join("")}</div>`;
+  if (g === "combo") { $("#lx").innerHTML = h + cbHtml(); return; } // 財報＋籌碼條件組合（fundx.js）
   if (g === "custom" || g === "rs") { const r = toolsBody(g === "custom" ? "scan" : "rs"); $("#lx").innerHTML = h + r.h + (r.note ? `<p class="note gnote">${r.note}</p>` : ""); return; } // 自訂條件選股、相對強弱（程式在 tools.js）
   const client = g === "kline" || g === "tech", S = W.cscan;
   if (g === "score") { // 綜合評分排行（規則計分）或多因子排行（tools.js 的 mfHtml）
@@ -3903,7 +3929,7 @@ function renderInd() {
 // 工具分頁（tools.js）：點擊、送出表單、勾選
 $("#lx").addEventListener("click", e => toolsClick(e)); $("#lTools").addEventListener("click", e => toolsClick(e));
 $("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListener("change", e => toolsChange(e));
-setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); if ((store.get("watch:paper", null)?.orders || []).length) paStart(); }, 3000);
+setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); if ((store.get("watch:paper", null)?.orders || []).length) paStart(); if (["rev", "pm3", "conf"].some(k => EVA()[k])) evStart(); }, 3000);
 setTimeout(syncBoot, 1500); // 雲端同步：開網頁時下載較新的資料、之後有改動自動上傳
 // 國會分頁：切換頁面（首頁、股票、人物）、期間、排序、在看盤開啟、問 AI
 $("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-csort],[data-copen],[data-cask],[data-cbt],[data-cpl],[data-twbt],[data-f13p],[data-f13s],[data-twgrp],[data-twamt],[data-twtab],[data-twmore],[data-twn],[data-rkset]"); if (!b) return; const d = b.dataset;
@@ -4661,6 +4687,7 @@ function intelData(c) {
     if (f || cg) out.push({ k: cg ? "cong" : "f13", g: "大戶", t: `${[f ? `${f} 家 13F 機構持有` : "", cg ? `${cg} 位國會議員近一年交易` : ""].filter(Boolean).join("・")}` }); }
   if (typeof podCalls === "function" && typeof POD !== "undefined" && POD.srv) { const since = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10), eps = new Set(podCalls().filter(x => x.code === c && x.date >= since).map(x => x.key)).size; if (eps) out.push({ k: "pod", g: "節目", t: `近 90 天 ${eps} 集節目提及` }); }
   if (tw && typeof offFlags === "function") out.push(...offFlags(c)); // 官方公告：重大訊息、風險警示（official.js）
+  const nb = typeof ntBadge === "function" ? ntBadge(c) : null; if (nb) out.push(nb); // 自己的看盤筆記（brief.js）
   const M = W.mf.model; if (tw && M?.secs) { const A = flowAt(M), S = M.secs.filter(x => x.mem.some(m => m.code === c)).map(x => A.find(a => a.id === x.id)).filter(Boolean).sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5))[0];
     if (S) out.push({ k: "mf", id: S.id, q: S.q, g: "資金", t: `${S.name}：${INTEL_AR[S.q]} ${FLOW_Q[S.q][0]}` }); }
   return out;
@@ -4680,6 +4707,7 @@ $("#dIntel").addEventListener("click", e => { const b = e.target.closest("[data-
   if (k === "pod") { setDtab("ovw"); setDsub("guru"); return; }
   if (k === "off") { OFFS().view = b.dataset.iid || "news"; W.offQ = c; OFFS().scope = "all"; W.mkReg = "off"; store.set("watch:mkReg", "off"); showList(); setLt("mkt"); return; }
   if (k === "mf") { showList(); setLt("money"); secOpen(b.dataset.iid); return; }
+  if (k === "note") { showList(); W.tv = "notes"; setLt("tools"); return; }
   showList(); W.cv = k === "tw" ? `tw:s:${c}` : k === "cong" ? `stock:${c}` : "f13"; setLt("cong"); renderList(); goY(0); });
 // 屬性標籤：產業、漲跌停、爆量、創新高低、月強弱、均線排列、法人連買賣（用日 K 與籌碼資料算）
 function pastDaily(c, q) { const D = W.daily?.code === c ? W.daily.data : null; if (!D?.length) return null; return q?.date && D[D.length - 1].d === q.date ? D.slice(0, -1) : D; }
@@ -4771,7 +4799,6 @@ const toMin = t => { const [h, m] = String(t).split(":").map(Number); return h *
 // 台指期：W.futTs＝"cur" 只看目前這一盤（預設，日盤不會被 14 小時的夜盤擠成一小段）、"all" 近全（夜盤＋日盤接在一起）
 // 期交所的交易日：夜盤（15:00–隔天 05:00）算在下一個交易日。取最後一個夜盤，加上接在它後面的日盤；沒有夜盤就只有日盤。
 // 在 15:00→13:45 的時間軸上：夜盤從 0 分開始、日盤從 1065 分（08:45）開始，中間 05:00–08:45 留白（和券商 App 一樣）
-const nextWd = d => { const t = new Date(d + "T00:00:00Z"); do t.setUTCDate(t.getUTCDate() + 1); while (t.getUTCDay() % 6 === 0); return t.toISOString().slice(0, 10); };
 function futTradeDay(blocks) {
   let iN = -1; blocks.forEach((B, i) => { if (B.s === "night") iN = i; });
   const N = iN >= 0 ? blocks[iN] : null, D = (N ? blocks.slice(iN + 1) : blocks.slice(-1)).find(B => B.s === "day") || null;
@@ -5596,7 +5623,9 @@ $("#alSave").addEventListener("click", async () => {
 $("#alClear").addEventListener("click", () => { delete W.alerts[W.sel]; store.set("watch:alerts", W.alerts); $("#alNote").textContent = "已清除"; renderDetailHead(); renderList(); });
 function notify(title, body) {
   toast(`${title}：${body}`, 8000); try { navigator.vibrate?.([120, 60, 120]); } catch {}
-  try { if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, tag: title, icon: "watch-icon-192.png" }); } catch {}
+  // 有離線快取（sw.js）時用它發通知：加到主畫面的 iPhone／iPad 只支援這種；沒有才用 new Notification
+  try { if ("Notification" in window && Notification.permission === "granted") { const o = { body, tag: title, icon: "watch-icon-192.png" }, plain = () => { try { new Notification(title, o); } catch {} };
+    (navigator.serviceWorker?.getRegistration?.() || Promise.resolve(null)).then(r => (r?.showNotification ? r.showNotification(title, o) : plain())).catch(plain); } } catch {}
 }
 function checkAlerts() {
   let changed = false;

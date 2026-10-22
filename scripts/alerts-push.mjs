@@ -1,5 +1,6 @@
 // 收盤後 Telegram 提醒：讀雲端同步裡「有綁定 Telegram」的使用者的指標提醒與價格提醒，用收盤後的日 K 檢查，成立就推播；
-// 另外推播追蹤的國會議員、13F 機構的新申報，以及庫存台股的內部人轉讓申報（情報局「大戶國會 → 我的追蹤」）。
+// 另外推播追蹤的國會議員、13F 機構的新申報，以及庫存台股的內部人轉讓申報（情報局「大戶國會 → 我的追蹤」）；
+// 有勾「事件提醒」的人，再加上庫存（可含自選）的營收公布、三率三升、法說會前一天（判斷用 learner/brief.js 的 evScan，和網頁一樣）。
 // 在 .github/workflows/market-scan.yml 裡、全市場日 K 更新之後執行：台股直接用 .cache/allk.json，美股向 Yahoo 抓。
 // 條件判斷用網站同一套程式（scripts/_engine.mjs 載入 learner/tools.js 的 COND），結果和網頁上的「指標提醒」一致。
 // 需要的 GitHub secrets：KV_REST_API_URL、KV_REST_API_TOKEN（和 Vercel 上同一個 Upstash）、TELEGRAM_BOT_TOKEN；沒設定就直接結束。
@@ -41,6 +42,17 @@ export function evalFollow(doc, D, since) {
   return out;
 }
 const readData = async f => { try { return JSON.parse(await readFile(fileURLToPath(new URL(`../learner/data/${f}`, import.meta.url)), "utf8")); } catch { return null; } };
+// 直接呼叫網站的 API 處理程式（不用經過網址），回傳它的 JSON
+export async function callApi(mod, query = {}) {
+  let out = null; const res = { setHeader() {}, status() { return res; }, json(o) { out = o; return res; } };
+  try { await (await mod).default({ method: "GET", query, headers: {} }, res); } catch (e) { return { ok: false, error: e.message }; }
+  return out;
+}
+// 事件提醒要的資料：上市櫃月營收歷史（排程整理的 twse-rev／tpex-rev）、三率（earn-hist.json）、法說會（/api/calendar）
+export async function evDataOf(E, cal) {
+  const rev = {}; for (const f of ["twse-rev.json", "tpex-rev.json"]) for (const [c, v] of Object.entries((await readData(f)) || {})) { const r = Array.isArray(v) ? E.B.revOf(v[2]) : null; if (r) rev[c] = { ...r, name: v[0] }; }
+  return { rev, pm: (await readData("earn-hist.json"))?.pm || null, conf: cal?.conf || [] };
+}
 
 export async function main() {
   // 沒設定就略過（推播是附加功能，不能讓整個資料排程失敗）。chat id 來自每個人在網頁上的綁定，所以不需要 TELEGRAM_CHAT_ID
@@ -54,6 +66,7 @@ export async function main() {
   for (const [, d] of docs) for (const c of [...(d.rules || []), ...(d.price || [])].map(x => x.code)) if (!isTW(c) && !us.has(c)) { us.set(c, await usDaily(c)); await sleep(300); }
   const dailyOf = c => (isTW(c) ? H.s[c]?.b || null : us.get(c) || null);
   const FD = { cong: await readData("congress.json"), f13: await readData("f13.json"), ins: await readData("insider.json") }, since = new Date(Date.parse(date) - 4 * 864e5).toISOString().slice(0, 10);
+  const evOn = docs.some(([, d]) => d.ev?.on?.some(k => k !== "brief")), ED = evOn ? await evDataOf(E, await callApi(import("../api/_lib/calendar.js"))) : null;
   let sent = 0;
   for (const [h, d] of docs) {
     if (!d.chat) continue;
@@ -61,7 +74,8 @@ export async function main() {
     // 指標、價格提醒同一天只送一次；追蹤的新申報每一筆只送一次
     if (msgs.length && !DRY) { try { if (!(await kv("SET", `sent:${h}:${date}`, "1", "NX", "EX", 172800))) msgs = []; } catch (e) { console.log("::warning::KV 寫入失敗", e.message); msgs = []; } }
     const fol = [];
-    for (const x of evalFollow(d, FD, since)) { if (DRY) { fol.push(x.m); continue; } try { if (await kv("SET", `seenf:${h}:${x.k}`, "1", "NX", "EX", 3456000)) fol.push(x.m); } catch {} }
+    const ev = ED && d.ev?.codes?.length ? E.B.evScan(d.ev.codes, { ...ED, names: d.names }, E.B.twDay()).filter(x => d.ev.on.includes(x.kind)).map(x => ({ k: "e:" + x.k, m: x.m })) : [];
+    for (const x of [...evalFollow(d, FD, since), ...ev]) { if (DRY) { fol.push(x.m); continue; } try { if (await kv("SET", `seenf:${h}:${x.k}`, "1", "NX", "EX", x.k.startsWith("e:") ? 10368000 : 3456000)) fol.push(x.m); /* 事件記 120 天：同一季的三率三升不會再推 */ } catch {} }
     if (!msgs.length && !fol.length) continue;
     const text = `🔔 K線看盤收盤提醒（${date}）\n` + [...msgs, ...fol.slice(0, 20)].map(m => "• " + m).join("\n") + (fol.length > 20 ? `\n…另有 ${fol.length - 20} 則追蹤申報` : "") + "\n\n以收盤後日 K 與公開申報整理，不是買賣建議。";
     if (DRY) { console.log(h.slice(0, 8), text); continue; }

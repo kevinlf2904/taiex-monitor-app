@@ -148,6 +148,27 @@ function atrSetup(S, cap = 1e6, risk = 0.01, lot = 1) {
   return { entry: c, stop, tgt, rr: (tgt - c) / per, per, perPct: per / c, sh, amt: sh * c, loss: sh * per, stopBy: sup ? "支撐下方" : "2 倍 ATR", tgtBy: res ? "上方壓力" : "3 倍 ATR" };
 }
 
+/* ---------- 總經敏感度：個股日報酬對總經因子（匯率、美債殖利率、費半…）的 Beta 與相關係數 ----------
+   D：個股日 K；F：因子日 K。kind "pct"＝用漲跌幅（匯率、指數），"diff"＝用變動量（殖利率，單位是百分點）。
+   lag 1：美股收盤在台股收盤之後，台股第 t 天的報酬對應「前一個台股交易日（含）到第 t 天（不含）」之間的美股變動；
+   lag 0：同一天（匯率、美股看美股）。兩個台股交易日之間有好幾天因子資料時（連假）合起來算，每天的因子變動只用一次，不會用到未來。 */
+function macroBeta(D, F, { kind = "pct", lag = 0, win = 120 } = {}) {
+  if (!D?.length || !F?.length) return null;
+  const day = x => String(x.d).slice(0, 10), fc = []; for (let i = 1; i < F.length; i++) { const a = F[i - 1].c, b = F[i].c; if (a > 0 && b > 0) fc.push([day(F[i]), kind === "diff" ? b - a : b / a - 1]); }
+  const xs = [], ys = []; let j = 0;
+  for (let i = 1; i < D.length; i++) {
+    const a = D[i - 1].c, b = D[i].c, d0 = day(D[i - 1]), d1 = day(D[i]); if (!(a > 0) || !(b > 0)) continue;
+    const inWin = d => (lag ? d >= d0 && d < d1 : d > d0 && d <= d1);
+    while (j < fc.length && (lag ? fc[j][0] < d0 : fc[j][0] <= d0)) j++;
+    let x = kind === "diff" ? 0 : 1, n = 0; for (let k = j; k < fc.length && inWin(fc[k][0]); k++) { x = kind === "diff" ? x + fc[k][1] : x * (1 + fc[k][1]); n++; }
+    if (!n) continue; xs.push(kind === "diff" ? x : x - 1); ys.push(b / a - 1);
+  }
+  const X = xs.slice(-win), Y = ys.slice(-win), n = X.length; if (n < 40) return null;
+  const mx = X.reduce((s, v) => s + v, 0) / n, my = Y.reduce((s, v) => s + v, 0) / n; let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < n; i++) { const u = X[i] - mx, w = Y[i] - my; sxy += u * w; sxx += u * u; syy += w * w; }
+  return sxx > 0 && syy > 0 ? { beta: sxy / sxx, corr: sxy / Math.sqrt(sxx * syy), n } : null;
+}
+
 /* ---------- 6. 投資組合風險 ---------- */
 // items：[{ c, mv, D }]（同一個市場的持股，日 K）；bench：大盤日 K。用最近 win 個共同交易日的日報酬
 function portRisk(items, bench, win = 120) {

@@ -1252,6 +1252,27 @@ function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / 
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); else decide(); });
 })();
 
+/* ---------- 離線快取（PWA，sw.js）＋離線提示 ----------
+   只在網站上（http/https）、最上層頁面註冊；嵌在首頁的看盤頁在同一個範圍裡，一起被照顧到。沒有網路時畫面下方顯示「離線中」，連回來就收起。 */
+if (typeof window !== "undefined" && window.top === window && /^https?:$/.test(location.protocol)) {
+  if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  const netBar = () => { let b = document.getElementById("netBar"); if (navigator.onLine) return b?.remove(); if (b || !document.body) return;
+    b = document.createElement("div"); b.id = "netBar"; b.setAttribute("role", "status"); b.textContent = "離線中：顯示上次載入的資料，連上網路後會自動更新";
+    b.style.cssText = "position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9998;padding:7px 14px;border-radius:99px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);font-size:13px;max-width:calc(100vw - 32px);text-align:center";
+    document.body.appendChild(b); };
+  addEventListener("offline", netBar); addEventListener("online", netBar); addEventListener("load", netBar);
+}
+
+/* ---------- 大按鈕模式（html[data-big]，樣式在 core.css；設定記在 kline:big）：學堂、看盤、存股一起換，iframe 之間用 postMessage 通知 ---------- */
+function applyBig(on, from = null) {
+  on = !!on; const d = document.documentElement; if ((d.dataset.big === "1") === on) return; // 狀態一樣就停，訊息不會在頁面之間來回傳
+  if (on) d.dataset.big = "1"; else delete d.dataset.big; store.set("big", on);
+  for (const f of document.querySelectorAll("iframe")) if (f.contentWindow && f.contentWindow !== from) try { f.contentWindow.postMessage({ type: "kline-big", on }, "*"); } catch {}
+  if (window.top !== window && from !== parent) try { parent.postMessage({ type: "kline-big", on }, "*"); } catch {}
+  try { Chart.all.forEach(c => c.draw()); } catch {}
+}
+if (typeof window !== "undefined") addEventListener("message", e => { if (e.data?.type === "kline-big" && e.origin === location.origin) applyBig(e.data.on, e.source); });
+
 /* ---------- 版面風格（html[data-style]，樣式在 minimal.css；設定記在 kline:style） ---------- */
 const KL_STYLES = [
   ["lab", "KLineLab 實驗室", "碳黑底、純白訊號、鈦金屬灰（預設）", { l: ["#fafafa", "#ffffff", "#18181b", "#09090b", 10], d: ["#09090b", "#121215", "#a1a1aa", "#ffffff", 10] }],
@@ -1279,12 +1300,13 @@ function openStylePicker(setTheme) {
     const sw = ([bg, sf, acc, ink]) => `<span class="sp-sw" aria-hidden="true">${[bg, sf, acc, ink].map(c => `<i style="background:${c}"></i>`).join("")}</span>`;
     ov.innerHTML = `<div><h3>版面風格<button class="btn sm" data-sp="x" type="button">完成</button></h3><p class="note" style="margin:0">點一下就套用，學堂、看盤一起換；選擇會記在這台裝置。</p>
       <div class="sp-row" style="margin-top:10px"><span class="note">主題</span><div class="seg" role="group">${[["light", "淺色"], ["dark", "深色"]].map(([t, n]) => `<button type="button" data-spt="${t}" aria-pressed="${(t === "dark") === dark}">${n}</button>`).join("")}</div>${cur === "chalk" ? '<span class="note">（黑板風格固定是深色）</span>' : ""}</div>
+      <div class="sp-row"><span class="note">按鈕大小</span><div class="seg" role="group">${[["0", "一般"], ["1", "大按鈕"]].map(([v, n]) => `<button type="button" data-spb="${v}" aria-pressed="${(document.documentElement.dataset.big === "1") === (v === "1")}">${n}</button>`).join("")}</div><span class="note">大按鈕：字和按鈕放大，手機比較好點</span></div>
       <div class="sp-list">${KL_STYLES.map(([id, name, desc, pv]) => `<button type="button" class="sp" data-sps="${id}" aria-pressed="${cur === id}">${sw(dark ? pv.d : pv.l)}<span class="sp-t"><b>${name}</b><small>${desc}</small></span><span class="sp-ok" aria-hidden="true">${cur === id ? "✓" : ""}</span></button>`).join("")}</div></div>`;
   };
   draw();
   ov.addEventListener("click", e => {
-    const s = e.target.closest("[data-sps]"), t = e.target.closest("[data-spt]");
-    if (s) { applyStyle(s.dataset.sps); draw(); } else if (t) { setTheme?.(t.dataset.spt); draw(); }
+    const s = e.target.closest("[data-sps]"), t = e.target.closest("[data-spt]"), b = e.target.closest("[data-spb]");
+    if (s) { applyStyle(s.dataset.sps); draw(); } else if (t) { setTheme?.(t.dataset.spt); draw(); } else if (b) { applyBig(b.dataset.spb === "1"); draw(); }
     else if (e.target === ov || e.target.closest('[data-sp="x"]')) ov.remove();
   });
   addEventListener("keydown", function k(e) { if (e.key === "Escape") { ov.remove(); removeEventListener("keydown", k); } });
