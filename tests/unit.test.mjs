@@ -646,3 +646,19 @@ test("題材連動：週報酬、相關係數、領先落後、上三角索引�
   assert.equal(themeRet([new Map([["d", 0.1]]), new Map([["d", 0.3]])]).get("d"), 0.2);
   const { execFileSync } = await import("node:child_process"); execFileSync("node", [new URL("../scripts/check-indpack.mjs", import.meta.url).pathname], { stdio: "pipe" }); // 有 ✗ 會丟錯
 });
+test("YouTube：頻道影片 RSS、搜尋結果、頻道網址解析，影片交給 Gemini 看", async () => {
+  const P = await import("../api/_lib/podcast.js");
+  const xml = `<?xml version="1.0"?><feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/"><title>M觀點</title><link rel="alternate" href="https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv"/><author><name>M觀點</name></author>
+    <entry><yt:videoId>abcdefghijk</yt:videoId><title>台積電法說會重點 &amp; AI 需求</title><published>2026-10-20T10:00:00+00:00</published><media:group><media:description>今天聊台積電</media:description><media:thumbnail url="https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg"/></media:group></entry>
+    <entry><yt:videoId>zyxwvutsrqp</yt:videoId><title>一分鐘看懂 #shorts</title><published>2026-10-21T10:00:00+00:00</published></entry></feed>`;
+  const R = P.parseRss(xml);
+  assert.equal(R.show.name, "M觀點"); assert.ok(R.show.yt); assert.equal(R.eps.length, 1, "#shorts 不收");
+  assert.deepEqual([R.eps[0].guid, R.eps[0].video, R.eps[0].title, R.eps[0].audio, R.eps[0].desc], ["yt:abcdefghijk", "https://www.youtube.com/watch?v=abcdefghijk", "台積電法說會重點 & AI 需求", "", "今天聊台積電"]);
+  assert.ok(P.isYtVideo(R.eps[0].video)); assert.ok(!P.isYtVideo("https://evil.example.com/watch?v=abcdefghijk"));
+  const html = `..."channelRenderer":{"channelId":"UCabcdefghijklmnopqrstuv","title":{"simpleText":"M觀點"},"thumbnail":{"thumbnails":[{"url":"//yt3.ggpht.com/a.jpg"}]},"subscriberCountText":{}...`;
+  assert.deepEqual(P.ytSearchParse(html)[0], { id: "UCabcdefghijklmnopqrstuv", name: "M觀點", author: "M觀點", art: "https://yt3.ggpht.com/a.jpg", feed: "https://www.youtube.com/feeds/videos.xml?channel_id=UCabcdefghijklmnopqrstuv", yt: true });
+  assert.equal(P.ytChannelParse(`<meta property="og:title" content="柴鼠兄弟"><script>{"externalId":"UCzzzzzzzzzzzzzzzzzzzzzz"}</script>`).name, "柴鼠兄弟");
+  assert.deepEqual(P.ytInput("@miulaviewpoint"), { path: "/@miulaviewpoint" }); assert.equal(P.ytInput("https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv").id, "UCabcdefghijklmnopqrstuv"); assert.equal(P.ytInput("https://evil.example.com"), null);
+  const parts = P.ytParts("https://www.youtube.com/watch?v=abcdefghijk", "x"); assert.equal(parts[0].fileData.fileUri, "https://www.youtube.com/watch?v=abcdefghijk"); assert.ok(parts[0].videoMetadata.fps < 1);
+  assert.match(P.PROMPT({ title: "t" }, "video"), /YouTube 影片/);
+});

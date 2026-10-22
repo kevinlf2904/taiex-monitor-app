@@ -11,6 +11,13 @@ async function raw(url, n = 600) {
   const t0 = Date.now(); try { const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "*/*", Referer: "https://mis.twse.com.tw/stock/index.jsp" }, signal: AbortSignal.timeout(20000) }); const t = await r.text();
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
+if (process.argv[2] === "yt") {
+  // YouTube：搜尋頻道、用 @帳號找頻道、讀影片 RSS（Podcast 觀點的 YouTube 來源）
+  const P = await import("../api/_lib/podcast.js");
+  for (const q of ["M觀點", "柴鼠兄弟", "Mr.Market市場先生", "老王愛說笑"]) { try { const L = await P.ytSearch(q); console.log("搜尋", q, "→", L.slice(0, 3).map(x => `${x.name}｜${x.id}`).join("、") || "（沒有）"); } catch (e) { console.log("搜尋", q, "錯誤", e.message); } }
+  try { const ch = await P.ytChannel("@Gooaye"); console.log("@Gooaye →", JSON.stringify(ch)); if (ch) { const t = await (await fetch(ch.feed)).text(), R = P.parseRss(t, 5); console.log("RSS", R.show.name, R.eps.length, "支", JSON.stringify(R.eps.slice(0, 2).map(e => [e.title, e.date, e.video, e.desc.slice(0, 60)]))); } } catch (e) { console.log("@Gooaye 錯誤", e.message); }
+  process.exit(0);
+}
 if (process.argv[2] === "jk") {
   // 日股、韓股：用網站同一套 Yahoo 報價、日 K（產業地圖裡 6981.T、005930.KS 這種代號）
   const { yahooQuote } = await import("../api/_lib/_yahoo.js");

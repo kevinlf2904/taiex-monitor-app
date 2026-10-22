@@ -136,11 +136,11 @@ const SX = {
     if (typeof podCalls !== "function") return sxLoad("財經節目 模組沒有載入。");
     if (!POD.srv && POD.srvLoading) return sxLoad();
     const L = podCalls().filter(c => c.code === W.sel).sort((a, b) => b.date.localeCompare(a.date));
-    if (!L.length) return `${sxH("節目觀點", "財經節目提到這檔的看多／看空")}<p class="note">追蹤的節目最近沒有明確提到 ${esc(nameOf(W.sel))}。到「名人」分頁可以加更多節目。</p>`;
-    return `${sxH("節目觀點", `${L.length} 筆・財經節目`)}${L.slice(0, 12).map(c => { const p = podPerf(c);
+    if (!L.length) return `${sxH("提及標的", "財經節目提到這檔的看多／看空")}<p class="note">追蹤的節目最近沒有明確提到 ${esc(nameOf(W.sel))}。到「名人」分頁可以加更多節目。</p>`;
+    return `${sxH("提及標的", `${L.length} 筆・財經節目`)}${L.slice(0, 12).map(c => { const p = podPerf(c);
       return `<div class="sxcard"><div class="sxrow"><b>${esc(c.show)}</b><span class="pdir ${c.dir}">${c.dir === "bear" ? "看空" : "看多"}</span><span class="note">${c.date}</span>${p?.latest ? `<b class="${cls(p.latest.ex)}" style="margin-left:auto">${sxPct(p.latest.ex * 100, 1)}<small class="note"> 對大盤（${p.latest.n} 天）</small></b>` : p?.cur ? `<span class="note" style="margin-left:auto">目前 ${sxPct(p.cur.ex * 100, 1)}</span>` : ""}</div>
         ${c.quote ? `<blockquote>${esc(c.quote)}</blockquote>` : ""}<p class="note">${esc(c.title)}</p></div>`; }).join("")}
-      <p class="note">AI 從節目整理的觀點，可能聽錯；表現是相對大盤的超額報酬。<button class="linkbtn" data-sxgo="pod">到節目觀點看完整往績 ›</button></p>`;
+      <p class="note">AI 從節目整理的觀點，可能聽錯；表現是相對大盤的超額報酬。<button class="linkbtn" data-sxgo="pod">到提及標的看完整往績 ›</button></p>`;
   },
   daily() {
     const I = sxI(), D = sxD(), C = sxC(); if (!I) return sxLoad(W.info?.err);

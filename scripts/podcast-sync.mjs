@@ -1,13 +1,13 @@
 // 名人 Podcast 的排程整理（GitHub Actions 每小時排一次（GitHub 忙時會延遲），見 .github/workflows/podcast-sync.yml）。
-// 1. 依 learner/data/podcast/shows.json 到 Apple Podcasts 目錄找節目（或用填好的 feed），讀 RSS
+// 1. 依 learner/data/podcast/shows.json 到 Apple Podcasts 目錄找節目（或用填好的 feed）、YouTube 頻道（yt：@帳號或頻道網址；ytq：搜尋字），讀 RSS
 // 2. 還沒整理的單集（新的優先，再往前補到一年內），用 AI 整理成重點與觀點：
-//    - 有 GEMINI_API_KEY（GitHub Actions secret）：直接上傳音檔給 Gemini 聽完整集（沒有時間限制）
+//    - 有 GEMINI_API_KEY（GitHub Actions secret）：直接上傳音檔給 Gemini 聽完整集（沒有時間限制）；YouTube 影片把網址直接給 Gemini 看
 //    - 沒有：改呼叫已部署網站的 /api/podcast（SITE_URL，用 Vercel 上的金鑰；整集太長時改讀節目說明）
 // 3. 寫進 learner/data/podcast/index.json，網頁打開就直接讀，不用等 AI。
 // 選項（環境變數）：MAX_PER_RUN（每次最多整理幾集，預設 15）、BACKFILL（每個節目往前補幾集，預設 30）、REDO（每個節目最近幾集要用新版摘要格式重整，預設 5）、DRY=1（不呼叫 AI）
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { parseRss, parseSum, PROMPT, SUM_VER, uploadAudio, geminiJSON, fileState, fileDelete, itunes } from "../api/_lib/podcast.js";
+import { parseRss, parseSum, PROMPT, SUM_VER, uploadAudio, geminiJSON, fileState, fileDelete, itunes, ytParts, YT_CFG, ytSearch, ytChannel } from "../api/_lib/podcast.js";
 
 const DIR = fileURLToPath(new URL("../learner/data/podcast/", import.meta.url));
 const KEY = (process.env.GEMINI_API_KEY || "").trim(), SITE = (process.env.SITE_URL || "https://kline-school.vercel.app").replace(/\/$/, "");
@@ -29,6 +29,10 @@ const pick = j => ({ tldr: j.tldr, points: j.points, sections: j.sections, facts
 async function summarize(e, show) {
   const meta = { title: e.title, show: show.name, date: twDate(e.date), desc: e.desc }, notesOk = (e.desc || "").replace(/\s/g, "").length >= 40;
   if (KEY) {
+    if (e.video) { // YouTube：Gemini 直接看影片
+      try { const out = await geminiJSON(ytParts(e.video, PROMPT(meta, "video")), KEY, Date.now() + 240000, YT_CFG), s = parseSum(out.text); if (s) return { ...s, mode: "video", model: out.model }; throw new Error("AI 回傳格式不對"); }
+      catch (err) { log("  看影片失敗：", err.message); if (/429|quota|RESOURCE_EXHAUSTED/i.test(err.message)) throw err; }
+    }
     if (e.audio) {
       let up = null;
       try {
@@ -45,6 +49,7 @@ async function summarize(e, show) {
     if (!s) throw new Error("AI 回傳格式不對"); return { ...s, mode: "notes", model: out.model };
   }
   // 沒有金鑰：用網站的 API
+  if (e.video) { try { return pick(await site("/api/podcast", { act: "sum", ...meta, desc: "", video: e.video })); } catch (err) { log("  網站看影片失敗：", err.message); if (/額度|429/.test(err.message)) throw err; } }
   if (e.audio) {
     try {
       const up = await site("/api/podcast", { act: "upload", audio: e.audio, name: e.title });
@@ -65,12 +70,15 @@ export async function main() {
   // 1. 節目
   const shows = [];
   for (const c of cfg.shows) {
-    const old = idx.shows.find(s => s.q === c.q);
+    const q = c.q || c.yt || c.ytq, old = idx.shows.find(s => s.q === q);
     try {
-      let s = c.feed ? { name: c.name || c.q, feed: c.feed } : old?.feed ? old : null;
-      if (!s) { const hit = (await itunes(c.q)).find(x => x.name.includes(c.must || c.q)); if (!hit) { log("找不到節目：", c.q); continue; } s = hit; }
+      let s = c.feed ? { name: c.name || q, feed: c.feed } : old?.feed ? old : null;
+      if (!s && c.yt) s = await ytChannel(c.yt); // YouTube：@帳號或頻道網址
+      else if (!s && c.ytq) s = (await ytSearch(c.ytq)).find(x => x.name.includes(c.must || c.ytq)); // YouTube：搜尋頻道
+      else if (!s) s = (await itunes(c.q)).find(x => x.name.includes(c.must || c.q));
+      if (!s) { log("找不到節目：", q); continue; }
       const p = parseRss(await getText(s.feed), 80);
-      shows.push({ q: c.q, id: s.id || podHash(s.feed), name: p.show.name || s.name, author: p.show.author || s.author || "", art: p.show.art || s.art || "", feed: s.feed, eps: p.eps });
+      shows.push({ q, id: s.id || podHash(s.feed), name: p.show.name || s.name, author: p.show.author || s.author || "", art: p.show.art || s.art || old?.art || "", feed: s.feed, ...(p.show.yt || s.yt ? { yt: true } : {}), eps: p.eps });
       log("節目：", p.show.name, `${p.eps.length} 集`);
     } catch (err) { log("節目讀取失敗：", c.q, err.message); if (old) shows.push({ ...old, eps: [] }); }
   }
@@ -86,7 +94,7 @@ export async function main() {
     log("整理：", s.name, e.title);
     try {
       const r = await summarize(e, s);
-      idx.eps[key] = { feed: s.feed, guid: e.guid, title: e.title, date: e.date, audio: e.audio, link: e.link || "", dur: e.dur || null, show: s.name, ...r, v: SUM_VER, at: Date.now() };
+      idx.eps[key] = { feed: s.feed, guid: e.guid, title: e.title, date: e.date, audio: e.audio, ...(e.video ? { video: e.video } : {}), link: e.link || "", dur: e.dur || null, show: s.name, ...r, v: SUM_VER, at: Date.now() };
       delete idx.fails[key]; done++; log("  完成：", r.mode, `${r.calls.length} 個觀點`);
     } catch (err) {
       idx.fails[key] = { n: (idx.fails[key]?.n || 0) + 1, err: String(err.message).slice(0, 200), at: Date.now() }; log("  失敗：", err.message);
@@ -98,7 +106,7 @@ export async function main() {
   const feeds = new Set(shows.map(s => s.feed)), byFeed = {};
   for (const [k, v] of Object.entries(idx.eps)) if (feeds.has(v.feed)) (byFeed[v.feed] ||= []).push([k, v]);
   const eps = Object.fromEntries(Object.values(byFeed).flatMap(L => L.sort((a, b) => b[1].date.localeCompare(a[1].date)).slice(0, KEEP)));
-  const latest = Object.fromEntries(shows.map(s => [s.feed, s.eps.slice(0, 12).map(e => ({ guid: e.guid, title: e.title, date: e.date, audio: e.audio, link: e.link || "", dur: e.dur || null, desc: (e.desc || "").slice(0, 400) }))]));
+  const latest = Object.fromEntries(shows.map(s => [s.feed, s.eps.slice(0, 12).map(e => ({ guid: e.guid, title: e.title, date: e.date, audio: e.audio, ...(e.video ? { video: e.video, img: e.img } : {}), link: e.link || "", dur: e.dur || null, desc: (e.desc || "").slice(0, 400) }))]));
   const out = { updated: new Date().toISOString(), engine: KEY ? "gemini" : "site", shows: shows.map(({ eps: _, ...s }) => s), latest, eps, fails: Object.fromEntries(Object.entries(idx.fails).filter(([k]) => !eps[k])), pending: Math.max(0, todo.length - done) };
   await writeFile(DIR + "index.json", JSON.stringify(out));
   log(`完成：這次整理 ${done} 集，共 ${Object.keys(eps).length} 集，還有 ${out.pending} 集待整理`);
