@@ -1,4 +1,4 @@
-// 分頁用到才載入的程式：還沒載好就打開財報、大戶國會、大盤的上市／櫃買／官方公告、工具官方資料、選股條件組合、庫存總經敏感度，都會先顯示「載入中」再畫出來，不會出錯
+// 分頁用到才載入的程式：還沒載好就打開財報、大盤的上市／櫃買／官方公告、工具官方資料、選股條件組合、庫存總經敏感度，都會先顯示「載入中」再畫出來，不會出錯
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium, serve, open } from "./_harness.mjs";
@@ -11,7 +11,6 @@ for (const width of [390, 1280]) test(`分頁程式延後載入：打開就自�
   const loaded = () => p.evaluate(() => [...document.scripts].map(s => (s.getAttribute("src") || "").split("?")[0]).filter(Boolean));
   assert.ok(!(await loaded()).includes("earn.js"), "一打開不載財報的程式");
   const steps = [["earn", () => { setLt("earn"); }, () => typeof ER === "function" && !/載入中/.test($("#lx").textContent)],
-    ["cong", () => { setLt("cong"); }, () => typeof cxSetTools === "function" && !/載入中/.test($("#lx").textContent)],
     ["mkx", () => { W.mkReg = "off"; setLt("mkt"); }, () => typeof renderOff === "function" && !/載入中/.test($("#lx").textContent)],
     ["oapi", () => { W.tv = "oapi"; setLt("tools"); }, () => typeof oaToolsBody === "function"]];
   for (const [g, go, done] of steps) {

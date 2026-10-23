@@ -42,7 +42,7 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
 test("事件提醒：營收公布、三率三升、法說會前一天，同一件事只通知一次；筆記追蹤：記筆記、目標價、徽章", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
   await fund(p);
-  await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 500 } }; W.tv = "alert"; setLt("tools"); });
+  await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 500 } }; W.cal = null; W.tv = "alert"; setLt("tools"); }); // 開頁時「今日重點」可能已經用預設假資料抓過行事曆
   await p.waitForSelector('[data-eva="rev"]');
   for (const k of ["rev", "pm3", "conf"]) await p.click(`[data-eva="${k}"]`);
   assert.deepEqual(await p.evaluate(() => { const S = store.get("watch:evalert"); return [S.rev, S.pm3, S.conf, !!S.brief]; }), [true, true, true, false]);

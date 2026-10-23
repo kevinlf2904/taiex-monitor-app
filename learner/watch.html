@@ -1206,6 +1206,7 @@ tr.on td { background: var(--surface-2); }
 <script src="indnews.js"></script>
 <script src="tools.js"></script>
 <script src="macrox.js"></script>
+<script src="congx.js"></script>
 <script src="brief.js"></script>
 <script src="figx.js"></script>
 <script src="relx.js"></script>
@@ -1280,10 +1281,11 @@ async function rfRun(k, f) {
   try { await f(); toast(`已更新 ${new Date(Date.now() + 8 * 3600e3).toISOString().slice(11, 19)}`, 1500); } catch (e) { toast(`更新失敗：${e.message}`, 2500); }
   finally { W.rfBusy = null; renderList(); }
 }
-// 只有幾個分頁用到的程式等用到才載入（看盤頁一打開少載、少解析約 270KB，手機開頁快約 1/4）：
-//   earn＝財報（也給庫存「總經敏感度」、選股「條件組合」、事件提醒用）、mkx＝大盤的上市／櫃買／官方公告、oapi＝工具「官方資料」、cong＝大戶國會（也給工具「內部人」用）
+// 只有幾個分頁用到的程式等用到才載入（看盤頁一打開少載、少解析約 200KB）：
+//   earn＝財報（也給庫存「總經敏感度」、選股「條件組合」、事件提醒用）、mkx＝大盤的上市／櫃買／官方公告、oapi＝工具「官方資料」
+//   congx.js（大戶國會）的小工具（cxQ、cxRow…）很多分頁都在用，照常一開始就載入
 // 打開頁面幾秒、閒下來後也會在背景先載好，之後切分頁不用等；同一組只載一次，照順序載（後面的檔會用到前面的）。
-const LAZY = { earn: ["earn.js", "earnx.js", "earnplus.js", "finrep.js", "fundx.js"], mkx: ["tpex.js", "official.js"], oapi: ["oapi.js"], cong: ["congx.js"] }, LZ = {};
+const LAZY = { earn: ["earn.js", "earnx.js", "earnplus.js", "finrep.js", "fundx.js"], mkx: ["tpex.js", "official.js"], oapi: ["oapi.js"] }, LZ = {};
 function lazy(g) {
   return (LZ[g] ||= LAZY[g].reduce((p, f) => p.then(() => new Promise((ok, no) => { const s = document.createElement("script"); s.src = f; s.onload = ok; s.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(s); })), Promise.resolve())
     .then(() => { LZ[g].done = true; }, e => { delete LZ[g]; noteErr("載入程式", e); throw e; }));
@@ -1920,7 +1922,7 @@ function renderList0() {
   } else if (W.lt === "pod") {
     note = renderPod();
   } else if (W.lt === "cong") {
-    if (!lazyOk("cong")) $("#lTools").innerHTML = ""; note = lazyRun("cong", () => renderCong());
+    note = renderCong();
   } else if (W.lt === "tools") {
     note = renderTools();
   } else if (W.lt === "after") {
