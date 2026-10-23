@@ -1262,7 +1262,9 @@ if (typeof window !== "undefined" && window.top === window && /^https?:$/.test(l
     b = document.createElement("div"); b.id = "netBar"; b.setAttribute("role", "status"); b.textContent = "離線中：顯示上次載入的資料，連上網路後會自動更新";
     b.style.cssText = "position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9998;padding:7px 14px;border-radius:99px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);font-size:13px;max-width:calc(100vw - 32px);text-align:center";
     document.body.appendChild(b); };
-  addEventListener("offline", netBar); addEventListener("online", netBar); addEventListener("load", netBar);
+  // 只有持續離線 3 秒還是離線才顯示：切換分頁、網路短暫抖動時 navigator.onLine 會一下 false 一下 true，不要一直跳
+  let netT = 0; const netLater = () => { clearTimeout(netT); if (navigator.onLine) return netBar(); netT = setTimeout(netBar, 3000); };
+  addEventListener("offline", netLater); addEventListener("online", netLater); addEventListener("load", netLater);
 }
 
 /* ---------- 大按鈕模式（html[data-big]，樣式在 core.css；設定記在 kline:big）：學堂、看盤、存股一起換，iframe 之間用 postMessage 通知 ---------- */

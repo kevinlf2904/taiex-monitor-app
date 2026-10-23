@@ -10,6 +10,7 @@ async function shot(p, key) {
   await p.click(`[data-sharecard="${key}"]`);
   await p.waitForFunction(() => { const i = document.querySelector(".sc-modal img"); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 });
   const [w, h] = await p.evaluate(() => { const i = document.querySelector(".sc-modal img"); return [i.naturalWidth, i.naturalHeight]; });
+  assert.doesNotMatch(await p.textContent(".sc-modal"), /\$\{/, `${key} 按鈕文字不能露出程式碼`);
   assert.equal(w, 1080, key); assert.ok(h > 500 && h < 6000, `${key} 高度 ${h}`);
   await p.click('.sc-modal [data-sca="x"]'); assert.equal(await p.evaluate(() => document.querySelectorAll(".sc-modal").length), 0);
 }

@@ -133,7 +133,7 @@ test("產業網絡星系：手機預設窗格在圖下方＋原子軌道＋弧�
   assert.ok(nb.n === 0 || nb.lab >= Math.min(nb.n, 2), `連到的產業要標名稱：${JSON.stringify(nb)}`);
   // 縮放：按鈕放大、回到 100%；Ctrl／⌘＋滾輪也能縮放
   await p.click('[data-gxz="+"]'); assert.ok(Math.abs((await p.evaluate(() => W.gx.zoom)) - 1.3) < 0.01); assert.equal(await p.textContent(".gzv"), "130%");
-  await p.click('[data-gxz="0"]'); assert.equal(await p.evaluate(() => W.gx.zoom), 1);
+  await p.evaluate(() => { W.gx.th = 2; }); await p.click('[data-gxz="0"]'); assert.deepEqual(await p.evaluate(() => [W.gx.zoom, W.gx.th]), [1, 0.4], "重置：大小與角度都回到原本");
   await p.mouse.move(b2.x + 20, b2.y + b2.height - 20); await p.mouse.wheel(0, -300); await p.waitForTimeout(100); // 避開打開的資訊窗格
   assert.equal(await p.evaluate(() => W.gx.zoom), 1, "一般滾輪留給頁面捲動，不縮放");
   await p.keyboard.down("Control"); await p.mouse.wheel(0, -300); await p.keyboard.up("Control"); await p.waitForTimeout(100);

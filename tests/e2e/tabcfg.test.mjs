@@ -1,4 +1,4 @@
-// 分頁自訂：⋯ 打開編輯，取消勾選藏分頁、↑↓ 改順序、恢復預設；記在瀏覽器，重新整理還在；目前所在的分頁不能藏
+// 分頁自訂：⚙ 自訂 打開編輯，取消勾選藏分頁、↑↓ 改順序、恢復預設；記在瀏覽器，重新整理還在；目前所在的分頁不能藏
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium, serve, open } from "./_harness.mjs";
