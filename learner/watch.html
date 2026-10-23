@@ -1983,7 +1983,8 @@ function renderList0() {
   } else if (W.lt === "cong") {
     note = renderCong();
   } else if (W.lt === "today") { // 情報局「今日重點」：早報＋每日摘要整成一頁（brief.js 的 todayPage）
-    $("#lTools").innerHTML = ""; const r = todayPage(); $("#lx").innerHTML = r.h; note = r.note;
+    // 自動更新時內容沒變就不重畫（不然每次報價更新整頁重建，按鈕會在手指按下去時被換掉）
+    const r = todayPage(), lx = $("#lx"); if (!(W.ticking && lx.dataset.v === "today" && lx._h === r.h)) { $("#lTools").innerHTML = ""; lx.innerHTML = r.h; lx._h = r.h; lx.dataset.v = "today"; } note = r.note;
   } else if (W.lt === "tools") {
     note = renderTools();
   } else if (W.lt === "after") {
@@ -5927,8 +5928,8 @@ function renderAll() { renderTop(); renderList(); if (W.sel) { renderDetailHead(
 const h0 = location.hash.slice(1).toUpperCase();
 document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === ltTab()));
 modeUi();
-if (okCode(h0)) select(h0, "none");
-else if (ROUTES[h0.split("/")[0].toLowerCase()]) setTimeout(() => applyRoute(location.hash.slice(1)), 0);
+if (ROUTES[h0.split("/")[0].toLowerCase()]) setTimeout(() => applyRoute(location.hash.slice(1)), 0); // 先看是不是分頁網址（#daily、#radar 這些字也長得像美股代號）
+else if (okCode(h0)) select(h0, "none");
 else if (!isMobile()) { const c = W.last && okCode(W.last) ? W.last : curList()[0]; if (c) select(c, "none"); }
 else setQ("list");
 setLt(W.lt);
