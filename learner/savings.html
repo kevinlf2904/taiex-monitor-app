@@ -841,7 +841,10 @@ document.querySelectorAll("#scenchips .chip").forEach(c=>c.addEventListener("cli
 document.querySelectorAll("#rebchips .chip").forEach(c=>c.addEventListener("click",()=>{G.reb=c.dataset.reb;renderAll()}));
 $("openall").addEventListener("click",()=>document.querySelectorAll("#console details").forEach(d=>d.open=true));
 $("closeall").addEventListener("click",()=>document.querySelectorAll("#console details").forEach(d=>d.open=false));
-if(window.matchMedia&&matchMedia("(max-width:900px)").matches)document.querySelectorAll("#console details").forEach((d,i)=>{if(i>0)d.open=false});
+// 控制台各區塊的展開／收合記在這個瀏覽器（kline:savopen）；第一次用：手機只開第一區，電腦全開
+{const DS=[...document.querySelectorAll("#console details")];let O=null;try{O=JSON.parse(localStorage.getItem("kline:savopen")||"null")}catch(e){}
+if(Array.isArray(O)&&O.length===DS.length)DS.forEach((d,i)=>{d.open=!!O[i]});else if(window.matchMedia&&matchMedia("(max-width:900px)").matches)DS.forEach((d,i)=>{if(i>0)d.open=false});
+DS.forEach(d=>d.addEventListener("toggle",()=>{try{localStorage.setItem("kline:savopen",JSON.stringify(DS.map(x=>x.open)))}catch(e){}}));}
 load();ASSETS.forEach(a=>{delete a.busy});
 // 從看盤 ETF「年化排行」帶過來：?add=0050 元大台灣50&r=12.3&crash=33 → 新增（或更新）這個標的、設為主要標的、勾選比較
 function addFromQuery(q){const name=(q.get("add")||"").trim().slice(0,40);if(!name)return null;const code=name.split(/\s+/)[0].toUpperCase(),r=parseFloat(q.get("r")),cr=parseFloat(q.get("crash"));

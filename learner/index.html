@@ -137,7 +137,9 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 
 /* ---------- learn ---------- */
 .learn { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
-.lesson-list { position: sticky; top: 90px; display: flex; flex-direction: column; gap: 2px; }
+.lesson-side { position: sticky; top: 90px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lsearch { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); } .lnone { padding: 6px 10px; margin: 0; }
+.lesson-list { display: flex; flex-direction: column; gap: 2px; }
 .lesson-list button {
   text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 4px; cursor: pointer;
   display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 6px; font-size: 14px; color: var(--muted);
@@ -219,7 +221,7 @@ table.mini { border-collapse: collapse; font-size: 13px; margin: 6px 0 12px; } t
 .pname { display: flex; align-items: center; gap: 6px; font-weight: 500; font-size: 14.5px; }
 .pdesc { color: var(--muted); }
 .pcount { font-size: 12px; color: var(--accent); font-weight: 500; }
-.lesson-list { max-height: calc(100vh - 110px); overflow-y: auto; }
+.lesson-list { max-height: calc(100vh - 150px); overflow-y: auto; }
 .lgroup { font-size: 11.5px; letter-spacing: .1em; color: var(--muted); font-weight: 500; padding: 10px 10px 2px; white-space: nowrap; }
 .ob { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 .ob-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -550,7 +552,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
 
 @media (max-width: 900px) {
   .learn { grid-template-columns: minmax(0, 1fr); }
-  .lesson-list { position: static; flex-direction: row; overflow-x: auto; padding-bottom: 4px; max-height: none; align-items: center; }
+  .lesson-side { position: static; } .lesson-list { position: static; flex-direction: row; overflow-x: auto; padding-bottom: 4px; max-height: none; align-items: center; }
   .lesson-list button { grid-template-columns: auto auto auto; white-space: nowrap; }
   .lab { grid-template-columns: minmax(0, 1fr); }
   .top { position: static; }
@@ -606,7 +608,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
   <nav class="subnav" id="schoolNav" role="tablist" aria-label="K線學堂" hidden><button role="tab" data-tab="learn" id="tab-btn-learn">課程</button><button role="tab" data-tab="shot" id="tab-btn-shot">AI 截圖診斷</button><button role="tab" data-tab="lab" id="tab-btn-lab">圖表實驗室</button><button role="tab" data-tab="challenge" id="tab-btn-challenge">判讀挑戰</button><button role="tab" data-tab="quiz" id="tab-btn-quiz">觀念測驗</button><button role="tab" data-tab="draw" id="tab-btn-draw">畫線練習</button></nav>
   <!-- 課程 -->
   <section id="view-learn" class="learn" role="tabpanel">
-    <nav class="lesson-list" id="lessonList" aria-label="課程目錄"></nav>
+    <div class="lesson-side"><input type="search" id="lessonSearch" class="lsearch" placeholder="搜尋課程（例：背離、KD、頭肩）" aria-label="搜尋課程" autocomplete="off"><nav class="lesson-list" id="lessonList" aria-label="課程目錄"></nav></div>
     <article class="lesson" id="lesson">
       <details class="ctable" id="courseTable"><summary>技術分析課程表（初級班・中級班・高級班）</summary><div id="courseTableBox"></div></details>
       <div class="lesson-head">
@@ -901,7 +903,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.23-152</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.23-153</span></footer>
 
 <script src="core.js"></script>
 <script src="foldx.js"></script>
@@ -2548,8 +2550,12 @@ let lessonIdx = Math.max(0, lessonIndex(store.get("lessonId", "kline")));
 let lessonView = { seedOff: 0, variant: 0, pat: null, D: null, I: null };
 const lessonChart = new Chart($("#lessonChart"));
 function updateProgress() { $("#progChip").innerHTML = `<span class="prog-bar" aria-hidden="true"><i style="width:${done.size / LESSONS.length * 100}%"></i></span><span class="pt">已完成 </span>${done.size} / ${LESSONS.length}<span class="pt"> 課</span>`; $("#progChip").setAttribute("aria-label", `已完成 ${done.size} / ${LESSONS.length} 課`); }
+// 課程搜尋：標題、分組、重點整理、課文都比對；有輸入時只列符合的課（分組標題照樣顯示）
+let lessonQ = "";
+const lessonHit = l => { const q = lessonQ.trim().toLowerCase(); return !q || (l._txt ||= [l.title, l.group, ...(l.keys || []), String(l.body || "").replace(/<[^>]+>/g, "")].join(" ").toLowerCase()).includes(q); };
 function renderLessonList() {
-  $("#lessonList").innerHTML = LESSONS.map((l, i) => `${i === 0 || LESSONS[i - 1].group !== l.group ? (g => `<div class="lgroup">${l.group}<span>${g.filter(x => done.has(x.id)).length}/${g.length}</span></div>`)(LESSONS.filter(x => x.group === l.group)) : ""}<button data-i="${i}" aria-current="${i === lessonIdx}"><span class="n">${String(i + 1).padStart(2, "0")}</span><span>${l.title.split("：")[0]}</span><span class="done">${done.has(l.id) ? "●" : ""}</span></button>`).join("");
+  const hit = LESSONS.map(lessonHit);
+  $("#lessonList").innerHTML = (hit.some(Boolean) ? "" : `<p class="note lnone">找不到「${esc(lessonQ)}」相關的課。</p>`) + LESSONS.map((l, i) => !hit[i] ? "" : `${!lessonQ.trim() && (i === 0 || LESSONS[i - 1].group !== l.group) || lessonQ.trim() && LESSONS.findIndex((x, k) => hit[k] && x.group === l.group) === i ? (g => `<div class="lgroup">${l.group}<span>${g.filter(x => done.has(x.id)).length}/${g.length}</span></div>`)(LESSONS.filter(x => x.group === l.group)) : ""}<button data-i="${i}" aria-current="${i === lessonIdx}"><span class="n">${String(i + 1).padStart(2, "0")}</span><span>${l.title.split("：")[0]}</span><span class="done">${done.has(l.id) ? "●" : ""}</span></button>`).join("");
 }
 function lessonMarkers(L, D, I, v) {
   if (L.gallery) return L.galleryKind === "chart" ? Signals.chartPat(D, I, L.gallery) : L.galleryKind === "gap" ? Signals.gaps(D, I, L.gallery) : Signals.candle(D, I, L.gallery);
@@ -2689,6 +2695,7 @@ function openK(id) {
   openWatch(code);
   try { const f = $("#watchFrame"); if (inited.watch && f.contentWindow) f.contentWindow.postMessage({ type: "watch-ind", ids, code: code === "加權" ? "T00" : code }, "*"); } catch {}
 }
+$("#lessonSearch").addEventListener("input", e => { lessonQ = e.target.value; renderLessonList(); });
 $("#lessonList").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { showLesson(+b.dataset.i); window.scrollTo({ top: 0 }); } });
 $("#lessonPrev").addEventListener("click", () => { showLesson(lessonIdx - 1); window.scrollTo({ top: 0 }); });
 $("#lessonNext").addEventListener("click", () => {
