@@ -51,11 +51,12 @@ for (const width of [390, 1280]) test(`K線學堂課程搜尋 ${width}`, async (
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
-test("Telegram 還沒設定：說暫時不能用、可以複製今日重點 390", async () => {
+test("Telegram 還沒設定：今日重點卡不放推播按鈕、可以複製 390", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await ctx.route(/\/api\/sync\?op=cfg/, r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ kv: true, tg: false }) }));
   await p.evaluate(() => { W.syncCfg = null; W.td = { at: Date.now() }; W.hold = { 1234: { sh: 1000, cost: 50 } }; W.quotes.set("1234", { ...(W.quotes.get("1234") || {}), chgPct: -4.2 }); setLt("watch"); renderList(); });
-  await p.click("#todayCard [data-tgone]"); await p.waitForSelector("#sheetExtra .tgone [data-tdcopy]");
-  assert.match(await p.textContent("#sheetExtra .tgone"), /暫時還不能使用/);
+  await p.waitForFunction(() => W.syncCfg && !W.cfgBusy); await p.evaluate(() => renderToday(true));
+  assert.ok(await p.$("#todayCard [data-tdcopy]"), "複製還在");
+  assert.equal(await p.$("#todayCard [data-tgone]"), null, "不放一個按了才說不能用的按鈕");
   await ctx.close(); assert.deepEqual(errs, []);
 });

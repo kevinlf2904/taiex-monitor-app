@@ -12,12 +12,18 @@ test("首頁：品牌、碳黑配色、Hero 可收起、頁尾免責聲明", asy
     const { ctx, p, errs } = await open(B, S.url, "index.html", { width, touch: width < 500 });
     assert.match(await p.title(), /KLineLab/);
     assert.deepEqual(await p.evaluate(() => [document.documentElement.dataset.style, getComputedStyle(document.body).backgroundColor]), ["lab", "rgb(9, 9, 11)"]);
-    assert.match(await p.evaluate(() => $("#hero").innerText), /把複雜的台美股機構籌碼[\s\S]*突破訊號/);
+    // 新訪客預設在 K線學堂：情報局的介紹卡不擋在課程上面；切到情報局才出現
+    assert.equal(await p.evaluate(() => [CUR_TAB, $("#hero").hidden].join()), "learn,true", "K線學堂第一個畫面就是課程");
+    await p.evaluate(() => goTab("intel")); await p.waitForTimeout(300);
+    const hero = await p.evaluate(() => $("#hero").innerText);
+    assert.match(hero, /把台美股公開資料[\s\S]*看得懂的研究工具[\s\S]*政府公開資料與市場行情[\s\S]*不是投資建議/);
+    assert.doesNotMatch(hero, /突破訊號|全部來自政府公開資料/, "不誇大、不寫成交易訊號");
     assert.ok(await p.evaluate(() => !!document.querySelector('#hero a[href="pro.html"]')));
     assert.match(await p.evaluate(() => document.querySelector("footer").innerText), new RegExp(DISC));
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "橫向溢出");
     await p.click("#heroX"); assert.ok(await p.evaluate(() => $("#hero").hidden && store.get("heroHide", false)));
     await p.reload(); await p.waitForTimeout(600); assert.ok(await p.evaluate(() => $("#hero").hidden), "收起要記住");
+    await p.evaluate(() => goTab("intel")); assert.ok(await p.evaluate(() => $("#hero").hidden), "收起後切回情報局也不再出現");
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });

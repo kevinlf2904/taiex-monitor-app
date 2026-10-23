@@ -180,9 +180,10 @@ function renderToday(show) {
   const el = $("#todayCard"); if (!el) return; if (!show || W.off) { el.hidden = true; return; }
   const T = (W.td ||= {}); if (!T.busy && Date.now() - (T.at || 0) > 30 * 60e3) { T.busy = true; T.at = Date.now();
     Promise.allSettled([W.cal ? null : getJ("/api/calendar", true).then(j => { if (j?.ok) W.cal = j; }), W.mn ? null : loadMnews(), etfHoldLoad([...new Set([...Object.keys(W.hold || {}), ...myCodes()])])]).finally(() => { T.busy = false; if (W.lt === "watch") renderToday(true); }); }
+  if (!W.syncCfg && !W.cfgBusy) { W.cfgBusy = true; syncCfg().finally(() => { W.cfgBusy = false; if (W.lt === "watch") renderToday(true); }); } // 要知道伺服器有沒有設定 Telegram，才決定顯不顯示推播按鈕
   const P = todayParts(); if (!P.length) { el.hidden = true; return; }
   const h = `<details class="today" data-tdopen${store.get("watch:today", true) ? " open" : ""}><summary><b>今日重點</b><span class="note">${twDay().slice(5).replace("-", "/")}・${P.length} 項</span></summary>
-    <ul>${P.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul><div class="tdbtns"><button type="button" class="linkbtn tdmore" data-tdgo="brief">看完整早報 ›</button><button type="button" class="linkbtn tdmore" data-tdcopy>📋 複製</button><button type="button" class="linkbtn tdmore" data-tgone>${syncGet().tg && EVA().close ? "✓ 收盤後推到 Telegram" : "📲 每天推到 Telegram"}</button></div></details>`;
+    <ul>${P.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul><div class="tdbtns"><button type="button" class="linkbtn tdmore" data-tdgo="brief">看完整早報 ›</button><button type="button" class="linkbtn tdmore" data-tdcopy>📋 複製</button>${W.syncCfg?.kv && W.syncCfg?.tg ? `<button type="button" class="linkbtn tdmore" data-tgone>${syncGet().tg && EVA().close ? "✓ 收盤後推到 Telegram" : "📲 每天推到 Telegram"}</button>` : ""}</div></details>`; // 伺服器還沒設定 Telegram 就不顯示，不放一個按了才說不能用的按鈕
   if (el._h !== h) { el._h = h; el.innerHTML = h; } el.hidden = false; // 內容沒變就不重畫（每 5 秒報價更新時不閃）
 }
 document.addEventListener("toggle", e => { if (e.target.matches?.("[data-tdopen]")) store.set("watch:today", e.target.open); }, true);

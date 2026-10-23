@@ -591,9 +591,9 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button type="button" class="hero-x" id="heroX" aria-label="收起介紹">×</button>
     <div class="hero-in"><div class="hero-txt">
       <p class="hero-k">KLineLab・K線情報局</p>
-      <h2 class="hero-h">把複雜的台美股機構籌碼，<br>化為一目了然的突破訊號。</h2>
-      <p class="hero-p">SEC 13F 機構大戶、美國國會議員申報、台股內部人與供應鏈量價動能矩陣，加上 K 線型態辨識與歷史回測——全部來自政府公開資料，由程式自動計算，給你一個量化研究終端機。</p>
-      <div class="hero-cta"><a class="hero-btn pri" href="pro.html">公開測試版 (Beta)・收更新通知</a><button type="button" class="hero-btn" data-hero-go="intel">進入情報局 →</button></div>
+      <h2 class="hero-h">把台美股公開資料，<br>整理成看得懂的研究工具。</h2>
+      <p class="hero-p">SEC 13F 機構持股、美國國會議員與台灣政治人物申報、台股內部人與供應鏈題材，加上 K 線型態與歷史回測。資料來自政府公開資料與市場行情（部分報價可能延遲），由程式整理計算，只供研究學習，不是投資建議。</p>
+      <div class="hero-cta"><button type="button" class="hero-btn pri" data-hero-go="intel">進入情報局 →</button><a class="hero-btn" href="pro.html">公開測試版 (Beta)・收更新通知</a></div>
     </div>
       <div class="hero-viz" aria-hidden="true"><svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="hvg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#a1a1aa" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity=".9"/></linearGradient></defs>
         <path d="M0 132 L40 124 L80 128 L120 112 L160 116 L200 100 L240 96" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 4"/>
@@ -4895,6 +4895,7 @@ function switchTab(t) {
   if (t === "school") t = store.get("schoolTab", "learn");
   if (!TABS.includes(t)) t = "learn";
   const view = t === "intel" ? "watch" : t, prevFrameMode = CUR_TAB === "intel" ? "intel" : "watch"; CUR_TAB = t;
+  $("#hero").hidden = t !== "intel" || !!store.get("heroHide", false); // 情報局的介紹只在情報局顯示：點 K線學堂、看盤、存股，第一個畫面就是那一頁的內容
   TABS.filter(x => x !== "intel").forEach(x => { $("#view-" + x).hidden = x !== view; });
   [["intel", t === "intel"], ["watch", t === "watch"], ["school", SCHOOL.includes(t)], ["savings", t === "savings"]].forEach(([k, on]) => $("#tab-btn-" + k).setAttribute("aria-selected", on));
   SCHOOL.forEach(x => $("#tab-btn-" + x).setAttribute("aria-selected", x === t)); $("#schoolNav").hidden = !SCHOOL.includes(t);
