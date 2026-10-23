@@ -16,7 +16,7 @@ for (const width of [390, 1280]) test(`今日重點卡 ${width}`, async () => {
   });
   await p.waitForSelector("#todayCard:not([hidden]) .today");
   const t = await p.textContent("#todayCard");
-  assert.match(t, /今日重點[\s\S]*盤勢[\s\S]*加權 [-+]\d+\.\d\d%：台股跟著費半重挫/); assert.match(t, /大漲跌[\s\S]*★\S*1234\S* -4\.2%|大漲跌[\s\S]*★\S+ -4\.2%/); assert.match(t, /今天 \S+ 除息[\s\S]*明天 \S+ 法說會/);
+  assert.match(t, /今日重點[\s\S]*盤勢[\s\S]*加權 [-+]\d+\.\d\d%\s*AI 新聞摘要台股跟著費半重挫/); assert.match(t, /大漲跌[\s\S]*★\S*1234\S* -4\.2%|大漲跌[\s\S]*★\S+ -4\.2%/); assert.match(t, /今天 \S+ 除息[\s\S]*明天 \S+ 法說會/);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
   await p.click("#todayCard summary"); await p.waitForFunction(() => store.get("watch:today") === false, null, { timeout: 3000 });
   await p.click("#todayCard summary");

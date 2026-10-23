@@ -477,6 +477,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .msum { font-size: 14px; line-height: 1.75; margin: 0 0 10px; } .mshare { width: 100%; } .mshares { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; } .mshares button { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); padding: 10px 0; font: 500 13px var(--font-body); cursor: pointer; }
 .qcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 12px; } .qcard { border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--muted); cursor: pointer; padding: 8px 2px; display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: .65; font: inherit; }
 .qcard[aria-pressed="true"] { opacity: 1; border-color: var(--qc); } .qcard span { color: var(--qc); font-weight: 500; font-size: 13.5px; } .qcard b { font: 500 24px var(--font-num); color: var(--qc); } .qcard small { font-size: 11px; }
+.mkclosed { margin: 6px 12px 0; padding: 8px 10px; border-radius: 8px; background: var(--chip, rgba(127,127,127,.12)); }
 .livetag { display: inline-flex; align-items: center; gap: 5px; color: var(--up, #e8603c); font-weight: 500; } .livetag i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: livepulse 1.6s ease-in-out infinite; }
 @keyframes livepulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } } @media (prefers-reduced-motion: reduce) { .livetag i { animation: none; } }
 [data-mk][role="button"], li[data-sel][role="button"] { cursor: pointer; } [data-mk][role="button"]:hover, li[data-sel][role="button"]:hover { background: var(--surface-2); }
@@ -529,6 +530,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mc-ud { margin: 4px 0 0; font-size: 13px; line-height: 1.55; } .mc-ud span { font-weight: 600; margin-right: 6px; }
 .mn-days.mkseg { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 8px 12px 0; } .mn-days button { flex: none; }
 .mnews .mn-sum { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+.aitag { display: inline-block; align-self: flex-start; font-size: 11px; line-height: 1.6; padding: 0 6px; margin-right: 6px; border-radius: 4px; border: 1px solid var(--line, rgba(127,127,127,.35)); color: var(--muted); font-weight: 500; vertical-align: 1px; }
 .mnews .mn-sum b { font-weight: 600; font-size: 15px; } .mnews .mn-sum ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; font-size: 13.5px; line-height: 1.55; }
 .mnews .mn-imp { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink); } .mnews .mn-imp span { color: var(--accent); font-weight: 500; margin-right: 6px; }
 .mn-list { list-style: none; margin: 0; padding: 0; } .mn-list li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
@@ -1500,6 +1502,14 @@ async function loadMktLive() {
   await futP.catch(() => {});
   if (W.lt === "mkt") { W.ticking = true; try { renderList(); } finally { W.ticking = false; } }
 }
+// 台股今天沒有開盤時的說明（週末、證交所公布的休市日、颱風假這類臨時休市）：報價日期 d 不是今天才回傳；[短的狀態, 完整說明]
+function twClosedNote(d, now = Date.now()) {
+  if (!d || d >= W.today) return null;
+  const wd = new Date(W.today + "T00:00:00Z").getUTCDay(), hol = (W.cal?.hol || []).find(x => x.date === W.today), hm = new Date(now + 8 * 3600e3).toISOString().slice(11, 16), last = d.slice(5).replace("-", "/");
+  if (wd % 6 === 0 || hol) return ["休市", `今日休市${hol ? `（${hol.name}）` : ""}・顯示最近交易日 ${last} 收盤`];
+  if (hm < "09:00") return ["尚未開盤", `尚未開盤・顯示 ${last} 收盤`];
+  return ["今日無交易", `今天沒有成交資料（休市或暫停交易，例如颱風假）・顯示最近交易日 ${last} 收盤`];
+}
 // 「盤中即時・更新於 10:31:05」或「10/06 收盤後」
 const liveTag = (J, closed) => (J?.live ? `<span class="livetag"><i></i>盤中即時・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}</span>` : J?.date ? `${J.date.slice(5).replace("-", "/")} ${closed}` : "");
 // 每秒只更新報價（自選、庫存、熱門清單與個股頁），每 5 秒做一次完整更新（分時、逐筆、各分頁資料）
@@ -1535,8 +1545,9 @@ function ixHtml() {
 }
 function renderTop() {
   $("#ix").innerHTML = ixHtml();
-  const on = !W.off && !W.err && W.session && W.session !== "closed", st = W.off ? "離線（需部署）" : W.err ? "連線異常" : W.session === "pre" ? "試撮中" : W.session === "open" ? (W.qBackup ? "盤中（備援）" : "盤中即時") : W.session ? "收盤" : "連線中…";
-  $("#dot").className = "dot" + (on ? " on" : W.err ? " err" : ""); $("#statText").textContent = st; $("#stat").title = W.err || (W.qBackup ? `證交所即時報價連不上，暫用 ${W.qBackup}` : "");
+  const cn = W.session === "closed" ? twClosedNote(W.quotes.get("T00")?.date) : null;
+  const on = !W.off && !W.err && W.session && W.session !== "closed", st = W.off ? "離線（需部署）" : W.err ? "連線異常" : W.session === "pre" ? "試撮中" : W.session === "open" ? (W.qBackup ? "盤中（備援）" : "盤中即時") : cn ? cn[0] : W.session ? "收盤" : "連線中…";
+  $("#dot").className = "dot" + (on ? " on" : W.err ? " err" : ""); $("#statText").textContent = st; $("#stat").title = W.err || (W.qBackup ? `證交所即時報價連不上，暫用 ${W.qBackup}` : cn ? cn[1] : "");
   $("#ix2").innerHTML = `<span class="stat"><i class="dot ${on ? "on" : W.err ? "err" : ""}"></i>${st}</span>` + ixHtml();
 }
 document.addEventListener("click", e => { const b = e.target.closest(".ixc[data-sel]"); if (b) select(b.dataset.sel); });
@@ -4185,6 +4196,8 @@ async function loadWhyNews(m, force = false) {
   if (W.lt === "mkt" && (W.mkReg || "tw") === m) renderList();
 }
 // ix：[{ name, chgPct }] 指數；info：給 AI 的其他畫面資料（類股、法人、權值股…）
+// AI 依新聞整理的文字前面都加這個標記：跟行情數字放在一起時，看得出哪些是程式算的、哪些是 AI 寫的
+const aiTag = at => `<span class="aitag" title="AI 只根據新聞標題整理，不是即時行情；數字請點原文確認">AI 新聞摘要${at ? "・" + new Date(at + 8 * 3600e3).toISOString().slice(11, 16) : ""}</span>`;
 function whyHtml(m, ix, info = []) {
   loadWhyNews(m); if (!W.mn) loadMnews();
   const C = WHY[m], NW = W.whyN?.[m], big = ix.filter(x => x.chgPct != null).reduce((a, x) => (Math.abs(x.chgPct) > Math.abs(a?.chgPct ?? 0) ? x : a), null), mv = big?.chgPct ?? 0;
@@ -4196,7 +4209,7 @@ function whyHtml(m, ix, info = []) {
     q: `請用繁體中文回答：1) 今天${C.name}為什麼這樣走（只根據上面的新聞標題與漲跌數字，引用標題裡的原因，沒有寫到的不要猜）2) 哪些類股、權值股帶頭漲跌 3) ${C.next} 4) 接下來要追蹤的數據或事件。每項 2～3 句，語氣保守。` };
   const title = Math.abs(mv) >= 1 ? `${C.name}今天為什麼${mv < 0 ? "跌" : "漲"}？` : `${C.name}今天的盤勢`;
   return `<section class="mk mkwhy"><h3>${title}${big ? `<span class="note">${esc(big.name)} <b class="${cls(mv)}">${sgn(mv, 2)}%</b></span>` : ""}</h3>
-    ${S?.head ? `<p class="mn-sum"><b>${esc(S.head)}</b>${S.impact ? `<br><small class="note">可能影響：${esc(S.impact)}</small>` : ""}</p>` : ""}
+    ${S?.head ? `<p class="mn-sum">${aiTag(D.at)}<b>${esc(S.head)}</b>${S.impact ? `<br><small class="note">可能影響：${esc(S.impact)}</small>` : ""}</p>` : ""}
     ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener"><span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">${!NW || NW.busy ? "載入最新頭條…" : NW.err ? "⚠︎ " + esc(NW.err) : "還沒有相關頭條"}</p>`}
     ${qAiBlock({ key, R: W.qai[key] }, `${ico("ai")}AI 整理漲跌原因`)}
     <p class="note">頭條即時從 Google 新聞抓；總經消息每小時整理一次（大盤 → 總經消息）。</p></section>`;
@@ -4313,7 +4326,7 @@ function renderMnews(top) {
   const D = J.days.find(d => d.date === W.mnDay) || J.days[0], hm = t => (t ? new Date(t + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " ") : "");
   const side = (m, name) => { const X = D[m] || {}, S = X.sum, L = X.items || [];
     return `<section class="mk mnews"><h3>${name}<span class="note">${L.length} 則</span></h3>
-      ${S ? `<div class="mn-sum"><b>${esc(S.head)}</b>${S.points?.length ? `<ul>${S.points.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${S.impact ? `<p class="mn-imp"><span>可能影響</span>${esc(S.impact)}</p>` : ""}</div>` : ""}
+      ${S ? `<div class="mn-sum">${aiTag()}<b>${esc(S.head)}</b>${S.points?.length ? `<ul>${S.points.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${S.impact ? `<p class="mn-imp"><span>可能影響</span>${esc(S.impact)}</p>` : ""}</div>` : ""}
       ${(() => { const T = [...new Set(L.map(x => x.topic).filter(t => MN_IMPACT[t]))]; return T.length ? `<details class="mkmore mn-howimp"${S?.impact ? "" : " open"}><summary>這些消息怎麼影響股市（${T.join("、")}）</summary><ul class="mc-imp">${T.map(t => `<li><b>${esc(t)} <small class="note">${L.filter(x => x.topic === t).length} 則</small></b><span>${esc(MN_IMPACT[t])}</span></li>`).join("")}</ul></details>` : ""; })()}
       ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener">${x.topic ? `<em>${esc(x.topic)}</em>` : ""}<span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">今天沒有抓到相關新聞。</p>`}</section>`; };
   $("#lx").innerHTML = top + `<div class="mn-days mkseg">${J.days.slice(0, 10).map(d => `<button type="button" data-mk="mnDay" data-v="${d.date}" aria-pressed="${d === D}">${d.date.slice(5).replace("-", "/")}</button>`).join("")}</div>
@@ -4417,7 +4430,8 @@ function renderMkt() {
   if (W.mkReg === "us") return renderUsMkt(top);
   if (W.mkReg === "gl") return renderGlobal(top);
   const J = W.mkt, q = c => W.quotes.get(c);
-  let h = top + `<div class="ixcards three" id="mkCards">${mktCards()}</div>`;
+  const cn = twClosedNote(q("T00")?.date);
+  let h = top + `<div class="ixcards three" id="mkCards">${mktCards()}</div>` + (cn ? `<p class="note mkclosed">📅 ${esc(cn[1])}</p>` : "");
   h += twWhyHtml();
   const sec = (t, body, extra = "", seg = "") => `<section class="mk"><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</section>`;
   // 產業即時用自己的資料（/api/hot?type=rows），大盤統計還沒到或失敗時也照樣顯示
@@ -4803,10 +4817,10 @@ function renderDetailHead() {
   $("#dPx").textContent = fmtPx(q?.price, c); $("#dPx").className = cls(q?.chg);
   $("#dChg").textContent = q?.chg != null ? `${arrow(q.chg)}${fmtPx(Math.abs(q.chg), c)}（${q.chgPct > 0 ? "+" : ""}${q.chgPct != null ? (+q.chgPct).toFixed(2) : "—"}%）` : ""; $("#dChg").className = cls(q?.chg);
   const sess = us ? { open: "盤中", pre: "盤前", closed: "收盤" }[q?.session?.state] || "" : "";
-  $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today && !us ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${us ? `（美東${sess ? "・" + sess : ""}）` : ""}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}・${us ? "Yahoo（可能延遲）" : isFut(c) ? (q.session === "night" ? "夜盤" : "日盤") : W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err || "";
+  $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today && !us ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${us ? `（美東${sess ? "・" + sess : ""}）` : ""}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}${!us && !isFut(c) && twClosedNote(q.date) ? "・" + twClosedNote(q.date)[0] : ""}・${us ? "Yahoo（可能延遲）" : isFut(c) ? (q.session === "night" ? "夜盤" : "日盤") : W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err || "";
   const lim = q?.prev && isTW(c) && !/[LRK]$/.test(c) ? twLimits(q.prev, isEtf(c)) : null; // 槓桿、反向 ETF 沒有漲跌停
   $("#dKv").innerHTML = [["開盤", q?.open], ["最高", q?.high], ["最低", q?.low], [isFut(c) ? "參考價" : "昨收", q?.prev]].map(([k, v]) => `<div><span>${k}</span><b class="${v != null && q?.prev ? cls(v - q.prev) : ""}">${fmtPx(v, c)}</b></div>`).join("")
-    + `<div><span>成交量</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " " + volUnit(c) : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "") + yldCell(c, q)
+    + `<div><span${isTW(c) && !isIdx(c) ? ` title="集中市場整股成交張數（1 張＝1000 股），不含盤後零股與鉅額交易，所以會比總成交股數少一點"` : ""}>成交量${isTW(c) && !isIdx(c) ? "（整股）" : ""}</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " " + volUnit(c) : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "") + yldCell(c, q)
     + (volRatio(c, q) != null ? `<div><span>5日均量比</span><b class="${volRatio(c, q) >= 1.5 ? "up" : ""}">${volRatio(c, q).toFixed(2)} 倍</b></div>` : "")
     + (lim ? `<div><span>漲停</span><b class="up">${fmtP(lim[0])}</b></div><div><span>跌停</span><b class="down">${fmtP(lim[1])}</b></div>` : "");
   $("#dTags").innerHTML = tagsHtml(c, q, lim); renderIntel();
@@ -4863,6 +4877,7 @@ function volRatio(c, q) {
 function tagsHtml(c, q, lim) {
   const st = W.stocks?.find(x => x[0] === c), out = [], tag = (t, k = "") => out.push(`<span class="tag ${k}">${t}</span>`);
   const ind = isIdx(c) ? "" : [isUS(c) ? q?.market || "美股" : st?.[2] || q?.market, st?.[3]].filter(Boolean).join("・");
+  if (W.kOdd === c) out.push(`<span class="tag" title="報價的昨收和 K 線最後一根收盤差超過 11%：可能是減資、分割、除權還原或資料延遲。K 線先不接上今天的報價。">⚠︎ K 線與報價待確認</span>`);
   if (lim && q?.price != null) { if (q.price >= lim[0] - 1e-6) tag("漲停", "up"); else if (q.price <= lim[1] + 1e-6) tag("跌停", "down"); }
   const P = pastDaily(c, q), px = q?.price;
   if (P && P.length >= 60 && px != null) {
@@ -5514,6 +5529,10 @@ function mergeDaily(q, redraw = true) {
   const R = W.daily; if (!R || !R.data?.length || q.code !== W.sel || q.price == null || !q.date) return;
   const D = R.data, last = D[D.length - 1]; if (q.date < last.d) return;
   const open = q.open ?? (last.d === q.date ? last.o : null); if (open == null) return;
+  // 台股：報價的昨收和 K 線前一根收盤差超過 11%（漲跌停是 10%）→ 兩邊資料對不上（減資、分割、還原權值不同或資料延遲），不把今天硬接上去，免得畫出 −80% 這種不可能的一根
+  const pc = (last.d === q.date ? D[D.length - 2] : last)?.c;
+  if (isTW(q.code) && !isIdx(q.code) && pc && q.prev && Math.abs(q.prev / pc - 1) > 0.11) { if (W.kOdd !== q.code) { W.kOdd = q.code; if (W.sel === q.code) renderDetailHead(); } return; }
+  if (W.kOdd === q.code) W.kOdd = null;
   const v = q.vol != null ? (isUS(q.code) ? Math.round(q.vol / 1000) : q.vol) : last.d === q.date ? last.v : 0;
   const bar = { d: q.date, o: open, h: Math.max(q.high ?? q.price, q.price), l: Math.min(q.low ?? q.price, q.price), c: q.price, v };
   const same = last.d === q.date && last.o === bar.o && last.h === bar.h && last.l === bar.l && last.c === bar.c && last.v === bar.v; // 沒有新成交就不用重畫
