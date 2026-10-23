@@ -14,6 +14,7 @@ import { parseT86 } from "./hot.js";
 import { marketRows, liveCache } from "./_live.js";
 import { getJSON, num } from "./_tw.js";
 import { CONCEPTS } from "./_concepts.js";
+import { limits, tick as mtick } from "./market.js";
 
 const pick = (r, ...ks) => { for (const k of ks) if (r[k] != null && r[k] !== "") return r[k]; return null; };
 const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
@@ -45,9 +46,9 @@ export function buildLists({ quotes, t86 = [], avg = [], bw = [] }) {
   return lists.map(L => ({ ...L, group: G[L.id] }));
 }
 
-// 台股升降單位與漲停價（前一天收盤 × 1.1，往下取到升降單位）
-export const tick = p => (p < 10 ? 0.01 : p < 50 ? 0.05 : p < 100 ? 0.1 : p < 500 ? 0.5 : p < 1000 ? 1 : 5);
-export const limitPrice = (prev, up = true) => { const raw = prev * (up ? 1.1 : 0.9), t = tick(raw); return +((up ? Math.floor(raw / t + 1e-9) : Math.ceil(raw / t - 1e-9)) * t).toFixed(2); };
+// 台股升降單位與漲停價：和大盤統計同一套（api/_lib/market.js 的 limits）
+export const tick = p => mtick(p, false);
+export const limitPrice = (prev, up = true) => limits(prev, false)[up ? "up" : "dn"];
 const pct = v => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 // 熱門：只用當天的開高低收與成交量
 export function hotLists(quotes, avg = []) {

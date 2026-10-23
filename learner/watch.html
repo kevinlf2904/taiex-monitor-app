@@ -4804,7 +4804,7 @@ function renderDetailHead() {
   $("#dChg").textContent = q?.chg != null ? `${arrow(q.chg)}${fmtPx(Math.abs(q.chg), c)}（${q.chgPct > 0 ? "+" : ""}${q.chgPct != null ? (+q.chgPct).toFixed(2) : "—"}%）` : ""; $("#dChg").className = cls(q?.chg);
   const sess = us ? { open: "盤中", pre: "盤前", closed: "收盤" }[q?.session?.state] || "" : "";
   $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today && !us ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${us ? `（美東${sess ? "・" + sess : ""}）` : ""}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}・${us ? "Yahoo（可能延遲）" : isFut(c) ? (q.session === "night" ? "夜盤" : "日盤") : W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err || "";
-  const lim = q?.prev && isTW(c) ? [Math.round(q.prev * 1.1 * 100) / 100, Math.round(q.prev * 0.9 * 100) / 100] : null;
+  const lim = q?.prev && isTW(c) && !/[LRK]$/.test(c) ? twLimits(q.prev, isEtf(c)) : null; // 槓桿、反向 ETF 沒有漲跌停
   $("#dKv").innerHTML = [["開盤", q?.open], ["最高", q?.high], ["最低", q?.low], [isFut(c) ? "參考價" : "昨收", q?.prev]].map(([k, v]) => `<div><span>${k}</span><b class="${v != null && q?.prev ? cls(v - q.prev) : ""}">${fmtPx(v, c)}</b></div>`).join("")
     + `<div><span>成交量</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " " + volUnit(c) : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "") + yldCell(c, q)
     + (volRatio(c, q) != null ? `<div><span>5日均量比</span><b class="${volRatio(c, q) >= 1.5 ? "up" : ""}">${volRatio(c, q).toFixed(2)} 倍</b></div>` : "")
@@ -4863,7 +4863,7 @@ function volRatio(c, q) {
 function tagsHtml(c, q, lim) {
   const st = W.stocks?.find(x => x[0] === c), out = [], tag = (t, k = "") => out.push(`<span class="tag ${k}">${t}</span>`);
   const ind = isIdx(c) ? "" : [isUS(c) ? q?.market || "美股" : st?.[2] || q?.market, st?.[3]].filter(Boolean).join("・");
-  if (lim && q?.price != null) { if (q.price >= lim[0]) tag("漲停", "up"); else if (q.price <= lim[1]) tag("跌停", "down"); }
+  if (lim && q?.price != null) { if (q.price >= lim[0] - 1e-6) tag("漲停", "up"); else if (q.price <= lim[1] + 1e-6) tag("跌停", "down"); }
   const P = pastDaily(c, q), px = q?.price;
   if (P && P.length >= 60 && px != null) {
     const r = volRatio(c, q); if (r != null && r >= 2) tag(`爆量 ${r.toFixed(1)} 倍`, "hot");

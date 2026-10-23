@@ -11,6 +11,8 @@ function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; le
 // 台股升降單位（檔位）
 function tickOf(p) { return p < 10 ? 0.01 : p < 50 ? 0.05 : p < 100 ? 0.1 : p < 500 ? 0.5 : p < 1000 ? 1 : 5; }
 function roundTick(p) { const t = tickOf(p); return +(Math.round(p / t) * t).toFixed(2); }
+// 漲跌停價：昨收 ×1.1（×0.9）再往內取到升降單位（ETF 的升降單位不同）；和 api/_lib/market.js 的 limits 同一套
+function twLimits(prev, etf = false) { const t = p => (etf ? (p < 50 ? 0.01 : 0.05) : tickOf(p)), u = prev * 1.1, d = prev * 0.9; return [+(Math.floor(u / t(u) + 1e-9) * t(u)).toFixed(2), +(Math.ceil(d / t(d) - 1e-9) * t(d)).toFixed(2)]; }
 function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
 function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
 function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
