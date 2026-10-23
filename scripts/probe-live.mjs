@@ -14,7 +14,7 @@ async function raw(url, n = 600) {
 if (process.argv[2] === "confai") {
   // 法說會重點：找台積電、鴻海最近的法說會簡報，AI 讀簡報（需要 GEMINI_API_KEY）
   const C = await import("../api/_lib/confai.js");
-  for (const c of ["2330", "2317"]) { try { const L = await C.confList(c); console.log(c, "法說會", L.length, "次", JSON.stringify(L.slice(0, 3)));
+  for (const c of ["2330", "2317", "2454", "1216", "8299", "6488"]) { try { const t0 = Date.now(), L = await C.confList(c); console.log(c, "法說會", L.length, "次", `${Date.now() - t0}ms`, JSON.stringify(L.slice(0, 3)).slice(0, 600)); if (!["2330", "2317"].includes(c)) continue;
     const f = L.find(x => x.file); if (f && process.env.GEMINI_API_KEY) { const t0 = Date.now(), v = await C.summarizeConf(f.file, c, process.env.GEMINI_API_KEY.trim(), Date.now() + 120000); console.log(c, "AI", `${Date.now() - t0}ms`, JSON.stringify(v).slice(0, 900)); } } catch (e) { console.log(c, "失敗", e.message); } }
   process.exit(0);
 }
