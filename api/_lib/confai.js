@@ -7,6 +7,9 @@ import { geminiJSON, uploadBuf, fileState, fileDelete } from "./podcast.js";
 import { kv, kvOn } from "./sync.js";
 import { toIso } from "./calendar.js";
 import { okAcc, usConfList, summarizeUs } from "./usconf.js";
+import { WEB_TRIES } from "./_limit.js";
+import { userMsg } from "./_err.js";
+import { createHash } from "node:crypto";
 // 美股（代號是英文字母）：「法說會」改用 SEC 8-K 的財報新聞稿（api/_lib/usconf.js）；file 是申報編號（accession number）
 const isUs = code => /^[A-Z][A-Z.-]{0,6}$/.test(code);
 
@@ -59,8 +62,10 @@ export function parseConfCmp(text) {
   const s = (x, n) => (typeof x === "string" ? x.slice(0, n) : "");
   return { tone, head: s(j.head, 80), changes: (Array.isArray(j.changes) ? j.changes : []).filter(c => c && typeof c.k === "string").slice(0, 5).map(c => ({ k: s(c.k, 20), now: s(c.now, 120), before: s(c.before, 120) })) };
 }
-export async function compareConf(a, b, name, key, deadline = Date.now() + 40000) {
-  const out = await geminiJSON([{ text: CMP_PROMPT(name) + "\n\n【這一季】\n" + JSON.stringify(slim(a)) + "\n\n【上一季】\n" + JSON.stringify(slim(b)) }], key, deadline, {}, "gemini-flash-lite-latest");
+// 兩季比較的快取鍵：比較的內容（a、b）是瀏覽器送來的，要算進鍵裡，不然有人送假的整理結果就會被存起來給所有人看
+export const cmpKey = (file, prev, a, b) => `confcmp:${file}:${prev}:${createHash("sha256").update(JSON.stringify([slim(a), slim(b)])).digest("hex").slice(0, 16)}`;
+export async function compareConf(a, b, name, key, deadline = Date.now() + 40000, tries = Infinity) {
+  const out = await geminiJSON([{ text: CMP_PROMPT(name) + "\n\n【這一季】\n" + JSON.stringify(slim(a)) + "\n\n【上一季】\n" + JSON.stringify(slim(b)) }], key, deadline, {}, "gemini-flash-lite-latest", tries);
   const r = parseConfCmp(out.text); if (!r) throw new Error("AI 回傳格式不對，請再試一次"); return { ...r, model: out.model };
 }
 const PROMPT = name => `你是台股研究員。這是「${name}」法人說明會的簡報。請只根據簡報內容整理，不要加簡報沒寫的數字或推測，用繁體中文、台灣用語，輸出 JSON：
@@ -80,34 +85,34 @@ export function parseConfSum(text) {
 }
 
 export default async function handler(req, res) {
-  const body = req.method === "POST" ? (typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}) : {};
+  let body = {}; if (req.method === "POST") { try { body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}; } catch { return res.status(400).json({ ok: false, error: "資料格式不對" }); } }
   const code = String(req.query?.code || body.code || "").trim().toUpperCase();
   if (!/^\d{4,6}[A-Z]?$/.test(code) && !isUs(code)) return res.status(400).json({ ok: false, error: "代號不對（台股數字代號或美股英文代號）" });
   if (req.method !== "POST") {
     try { const list = isUs(code) ? await usConfList(code) : await confList(code); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json({ ok: true, code, list }); }
-    catch (e) { return res.status(200).json({ ok: false, error: `拿不到法說會資料（${e.message}）` }); }
+    catch (e) { return res.status(200).json({ ok: false, error: `拿不到法說會資料（${userMsg(e, "來源暫時沒有回應", "confai")}）` }); }
   }
   const file = String(body.file || ""), name = String(body.name || code).slice(0, 20);
   if (!okFile(code, file)) return res.status(400).json({ ok: false, error: "簡報檔名不對" });
   if (body.op === "cmp") { // 兩季比較：同一組簡報比過就存起來
     const prev = String(body.prev || ""); if (!okFile(code, prev) || !body.a?.head || !body.b?.head) return res.status(400).json({ ok: false, error: "比較的資料不完整" });
-    const ck2 = `confcmp:${file}:${prev}`;
+    const ck2 = cmpKey(file, prev, body.a, body.b);
     if (kvOn()) { try { const v = await kv("GET", ck2); if (v) return res.status(200).json({ ok: true, ...JSON.parse(v), cached: true }); } catch {} }
     const key = (process.env.GEMINI_API_KEY || "").trim(); if (!key) return res.status(200).json({ ok: false, error: "伺服器沒有設定 AI 金鑰（GEMINI_API_KEY）" });
-    try { const v = { ...(await compareConf(body.a, body.b, name, key)), file, prev }; if (kvOn()) { try { await kv("SET", ck2, JSON.stringify(v), "EX", TTL); } catch {} } return res.status(200).json({ ok: true, ...v }); }
-    catch (e) { return res.status(200).json({ ok: false, error: e.message }); }
+    try { const v = { ...(await compareConf(body.a, body.b, name, key, Date.now() + 40000, WEB_TRIES)), file, prev }; if (kvOn()) { try { await kv("SET", ck2, JSON.stringify(v), "EX", TTL); } catch {} } return res.status(200).json({ ok: true, ...v }); }
+    catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "AI 比較失敗，請稍後再試", "confai") }); }
   }
   const ck = `${isUs(code) ? "usconf" : "confai"}:${file}`;
   if (kvOn()) { try { const v = await kv("GET", ck); if (v) return res.status(200).json({ ok: true, ...JSON.parse(v), cached: true }); } catch {} }
   const key = (process.env.GEMINI_API_KEY || "").trim(); if (!key) return res.status(200).json({ ok: false, error: "伺服器沒有設定 AI 金鑰（GEMINI_API_KEY）" });
   try {
-    const v = isUs(code) ? await summarizeUs(code, file, name, key, Date.now() + 55000, parseConfSum) : await summarizeConf(file, name, key);
+    const v = isUs(code) ? await summarizeUs(code, file, name, key, Date.now() + 55000, parseConfSum, WEB_TRIES) : await summarizeConf(file, name, key, Date.now() + 55000, WEB_TRIES);
     if (kvOn()) { try { await kv("SET", ck, JSON.stringify(v), "EX", TTL); } catch {} }
     return res.status(200).json({ ok: true, ...v });
-  } catch (e) { return res.status(200).json({ ok: false, error: e.message }); }
+  } catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "AI 整理失敗，請稍後再試", "confai") }); }
 }
 // 下載簡報、交給 Gemini 讀；排程或 probe-live 也可以直接呼叫
-export async function summarizeConf(file, name, key, deadline = Date.now() + 55000) {
+export async function summarizeConf(file, name, key, deadline = Date.now() + 55000, tries = Infinity) {
   const r = await fetch(`https://mopsov.twse.com.tw/nas/STR/${file}`, { headers: UA, signal: AbortSignal.timeout(25000) }); // 大簡報（15MB 以上）15 秒可能下載不完
   if (!r.ok || !/pdf/i.test(r.headers.get("content-type") || "")) throw new Error(`簡報下載失敗（HTTP ${r.status}）`);
   const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > MAX_MB * 1048576) throw new Error(`簡報太大（${(buf.length / 1048576).toFixed(0)}MB）`);
@@ -116,7 +121,7 @@ export async function summarizeConf(file, name, key, deadline = Date.now() + 550
   try {
     if (buf.length > INLINE_MB * 1048576) { up = await uploadBuf(buf, "application/pdf", file, key, 30000); for (let t = 0; up.state !== "ACTIVE"; t++) { if (up.state === "FAILED" || t > 20) throw new Error("AI 處理簡報失敗"); await new Promise(x => setTimeout(x, 1500)); up.state = await fileState(up.file, key); } }
     const doc = up ? { fileData: { mimeType: "application/pdf", fileUri: up.uri } } : { inlineData: { mimeType: "application/pdf", data: buf.toString("base64") } };
-    const out = await geminiJSON([doc, { text: PROMPT(name) }], key, deadline, {}, "gemini-flash-lite-latest"), s = parseConfSum(out.text); // 讀幾十頁簡報，lite 約 10～20 秒，一般型號實測可能超過 60 秒
+    const out = await geminiJSON([doc, { text: PROMPT(name) }], key, deadline, {}, "gemini-flash-lite-latest", tries), s = parseConfSum(out.text); // 讀幾十頁簡報，lite 約 10～20 秒，一般型號實測可能超過 60 秒
     if (!s) throw new Error("AI 回傳格式不對，請再試一次");
     return { ...s, file, model: out.model };
   } finally { if (up?.file) fileDelete(up.file, key); }

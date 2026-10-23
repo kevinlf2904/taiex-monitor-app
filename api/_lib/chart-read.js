@@ -4,8 +4,6 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-export const config = { maxDuration: 60, api: { bodyParser: { sizeLimit: "4mb" } } };
-
 const PROMPT = `你是一位耐心的台股技術分析老師。使用者上傳了一張看盤軟體的 K 線截圖，想學習怎麼讀圖。請用繁體中文、以教學口吻解說。
 
 請依序使用以下標題（每個標題獨立一行，以「## 」開頭），每段 2–5 句或條列：

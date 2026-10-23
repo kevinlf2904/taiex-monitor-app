@@ -512,8 +512,8 @@ test("官方公告：重大訊息、裁罰、經營權異動、董監持股不�
   assert.deepEqual(parseHoliday([{ Name: "國慶日", Date: "1151010", Description: "x" }]), [{ date: "2026-10-10", name: "國慶日", note: "x" }]);
   assert.deepEqual(officialPack({}).news, [], "全部抓不到也不會出錯");
 });
-import { aiLimit, AI_LIMITS } from "../api/_lib/_limit.js";
-import { privIp, safeFetch, safeUrl, readCapped } from "../api/_lib/podcast.js";
+import { aiLimit, AI_LIMITS, limitsOf } from "../api/_lib/_limit.js";
+import { privIp, safeFetch, safeUrl, readCapped, pinnedGet } from "../api/_lib/podcast.js";
 import { themesOf, queryOf, mergeNews } from "../scripts/industry-news.mjs";
 test("AI 次數限制：每 IP 每小時、全站每天", async () => {
   const M = new Map(), store = async k => { const n = (M.get(k) || 0) + 1; M.set(k, n); return n; }, req = ip => ({ headers: { "x-forwarded-for": ip + ", 10.0.0.1" } }), t = Date.parse("2026-10-22T03:00:00Z");
@@ -522,7 +522,15 @@ test("AI 次數限制：每 IP 每小時、全站每天", async () => {
   assert.equal(await aiLimit(req("5.6.7.8"), "podcast", t, store), null, "別的 IP 不受影響");
   assert.equal(await aiLimit(req("1.2.3.4"), "podcast", t + 3600e3, store), null, "下一個小時重新計算");
   assert.equal(await aiLimit(req("1.2.3.4"), "quote", t, store), null, "不是 AI 服務不限制");
-  assert.equal(await aiLimit(req("1.2.3.4"), "chat", t, async () => { throw new Error("KV 壞了"); }), null, "計數器壞掉時放行");
+  const bad = async () => { throw new Error("KV 壞了"); };
+  for (let i = 0; i < 20; i++) assert.equal(await aiLimit(req("4.4.4.4"), "chat", t, bad), null);
+  assert.match(await aiLimit(req("4.4.4.4"), "chat", t, bad), /每小時最多 20 次/, "計數器壞掉時改用記憶體的保守上限（每 IP 一半），不直接放行");
+  assert.deepEqual(limitsOf("chat", false), [20, 150], "沒有 KV：每 IP 一半、每天十分之一");
+  process.env.AI_DAILY_CAP = "5000"; process.env.AI_HOURLY_PER_IP_CHART_READ = "3";
+  assert.deepEqual(limitsOf("chat"), [40, 1500], "舊的全站變數只能調低，不會放寬");
+  assert.deepEqual(limitsOf("chart-read"), [3, 300], "每個服務分開設");
+  process.env.AI_DAILY_CAP = "100"; assert.deepEqual(limitsOf("chat"), [40, 100]);
+  delete process.env.AI_DAILY_CAP; delete process.env.AI_HOURLY_PER_IP_CHART_READ;
   M.clear(); let day = 0; const big = async k => (k.includes(":day:") ? ++day + AI_LIMITS.chat[1] : 1);
   assert.match(await aiLimit(req("9.9.9.9"), "chat", t, big), /今天的 AI 使用量已達上限/);
   assert.ok(![...M.keys()].some(k => k.includes("1.2.3.4")), "IP 只存雜湊");
@@ -532,15 +540,17 @@ test("節目匯入：擋內網位址與跳轉到內網", async () => {
   for (const ip of ["8.8.8.8", "172.32.0.1", "100.128.0.1", "2001:4860::8888"]) assert.equal(privIp(ip), false, ip);
   assert.equal(safeUrl("http://169.254.169.254/latest"), null); assert.equal(safeUrl("file:///etc/passwd"), null); assert.equal(safeUrl("https://u:p@a.com/"), null);
   const DNS = { "feed.example.com": "93.184.216.34", "evil.example.com": "127.0.0.1" }, lookup = async h => (DNS[h] ? [{ address: DNS[h] }] : Promise.reject(new Error("ENOTFOUND")));
-  const real = globalThis.fetch, seen = [];
-  globalThis.fetch = async (u, o) => { seen.push([u, o.redirect]); return u.includes("/go") ? new Response("", { status: 302, headers: { location: "http://evil.example.com/x" } }) : new Response("ok"); };
-  try {
-    assert.equal(await (await safeFetch("https://feed.example.com/rss", {}, { lookup })).text(), "ok");
-    assert.equal(seen[0][1], "manual", "自己處理跳轉");
-    await assert.rejects(safeFetch("https://evil.example.com/rss", {}, { lookup }), /不允許/);
-    await assert.rejects(safeFetch("https://feed.example.com/go", {}, { lookup }), /不允許/, "跳轉到內網也要擋");
-    await assert.rejects(safeFetch("https://nope.example.com/", {}, { lookup }), /找不到/);
-  } finally { globalThis.fetch = real; }
+  const seen = [], get = async (u, a) => { seen.push([u, a.address]); return u.includes("/go") ? new Response("", { status: 302, headers: { location: "http://evil.example.com/x" } }) : new Response("ok"); };
+  assert.equal(await (await safeFetch("https://feed.example.com/rss", {}, { lookup, get })).text(), "ok");
+  assert.deepEqual(seen[0], ["https://feed.example.com/rss", "93.184.216.34"], "連線用剛檢查過的 IP（不再查一次 DNS）");
+  await assert.rejects(safeFetch("https://evil.example.com/rss", {}, { lookup, get }), /不允許/);
+  await assert.rejects(safeFetch("https://feed.example.com/go", {}, { lookup, get }), /不允許/, "跳轉到內網也要擋");
+  await assert.rejects(safeFetch("https://nope.example.com/", {}, { lookup, get }), /找不到/);
+  // 真的連線：本機伺服器，lookup 直接回 127.0.0.1（測 pinnedGet 本身；safeFetch 會擋內網，所以直接呼叫）
+  const srv = (await import("node:http")).createServer((q, r) => { r.writeHead(200, { "x-host": q.headers.host }); r.end("pinned"); });
+  await new Promise(r => srv.listen(0, r));
+  try { const r = await pinnedGet(`http://pinned.example.com:${srv.address().port}/a`, { address: "127.0.0.1" }); assert.equal(await r.text(), "pinned"); assert.match(r.headers.get("x-host"), /^pinned\.example\.com:/, "Host 標頭還是原本的網域"); }
+  finally { srv.close(); }
   await assert.rejects(readCapped(new Response("x".repeat(2000)), 1000), /太大/); assert.equal((await readCapped(new Response("abc"), 10)).toString(), "abc");
 });
 test("產業新聞：題材搜尋字、同一則合併題材、保留 60 天", async () => {

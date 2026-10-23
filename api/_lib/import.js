@@ -5,6 +5,8 @@
 // 用 GEMINI_API_KEY（Gemini 會看圖）；沒有時用 ANTHROPIC_API_KEY。
 
 import Anthropic from "@anthropic-ai/sdk";
+import { aiLimit, WEB_TRIES, claudeFallbackOn } from "./_limit.js";
+import { userMsg } from "./_err.js";
 
 const PROMPT = `這是台股或美股券商 App 的庫存（持股）畫面截圖。請把畫面上「每一檔持股」的數字讀出來，只輸出 JSON。
 規則：
@@ -39,15 +41,17 @@ export function parseImages(images) {
 }
 const extractJSON = t => { const m = String(t || "").match(/\{[\s\S]*\}/); if (!m) return null; try { return JSON.parse(m[0]); } catch { return null; } };
 
-async function viaGemini(imgs, key) {
+async function viaGemini(imgs, key, deadline = Date.now() + 52000) {
   const models = [...new Set([process.env.GEMINI_MODEL || "gemini-2.5-flash", "gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"])];
   const body = JSON.stringify({ contents: [{ role: "user", parts: [...imgs.map(i => ({ inline_data: { mime_type: i.mime, data: i.data } })), { text: PROMPT }] }],
     generationConfig: { temperature: 0, maxOutputTokens: 8192, responseMimeType: "application/json", responseSchema: SCHEMA } });
-  let last = null;
+  let last = null, calls = 0;
   for (const m of models) {
     for (let attempt = 0; attempt < 2; attempt++) {
+      // 每一次呼叫都算錢、整個請求要在 60 秒內回完：最多 WEB_TRIES 次，剩不到 5 秒就不再試
+      const left = deadline - Date.now(); if (calls++ >= WEB_TRIES || left < 5000) return { ok: false, status: last?.status || 504, message: last?.message || "逾時" };
       let r, j;
-      try { r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body, signal: AbortSignal.timeout(40000) }); j = await r.json().catch(() => ({})); }
+      try { r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body, signal: AbortSignal.timeout(Math.min(40000, left - 1000)) }); j = await r.json().catch(() => ({})); }
       catch (e) { last = { status: 504, message: e.message }; break; }
       if (r.status === 404) { last = { status: 404 }; break; }
       if ([429, 500, 502, 503, 504].includes(r.status)) { last = { status: r.status, message: j?.error?.message }; if (attempt === 0 && r.status !== 429) { await new Promise(res => setTimeout(res, 1200)); continue; } break; }
@@ -59,27 +63,29 @@ async function viaGemini(imgs, key) {
   }
   return { ok: false, status: last?.status || 503, message: last?.message || "" };
 }
-async function viaClaude(imgs) {
-  const client = new Anthropic({ timeout: 55000, maxRetries: 0 }); // 要在 Vercel 的 60 秒內回完
+async function viaClaude(imgs, timeout = 55000) {
+  const client = new Anthropic({ timeout, maxRetries: 0 }); // 要在 Vercel 的 60 秒內回完
   const msg = await client.messages.create({ model: "claude-opus-5-5", max_tokens: 8000,
     messages: [{ role: "user", content: [...imgs.map(i => ({ type: "image", source: { type: "base64", media_type: i.mime, data: i.data } })), { type: "text", text: PROMPT + "\n只輸出 {\"rows\":[...]} 這個 JSON，不要其他文字。" }] }] });
   const parsed = extractJSON(msg.content.filter(b => b.type === "text").map(b => b.text).join(""));
   return parsed ? { ok: true, rows: parsed.rows, model: msg.model } : { ok: false, status: 422, message: "讀不出表格" };
 }
 
-export const config = { api: { bodyParser: { sizeLimit: "4mb" } } };
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "只接受 POST" });
   const imgs = parseImages(req.body?.images);
   if (!imgs.length) return res.status(400).json({ ok: false, error: "請上傳庫存畫面的截圖（JPG／PNG）" });
   const gk = (process.env.GEMINI_API_KEY || "").trim(), ck = process.env.ANTHROPIC_API_KEY;
   if (!gk && !ck) return res.status(200).json({ ok: false, error: "截圖匯入需要 AI 讀圖：請在 Vercel 設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY）。也可以改用「文字匯入」。" });
+  const t0 = Date.now();
   try {
-    let r = gk ? await viaGemini(imgs, gk) : null;
-    if ((!r || !r.ok) && ck) r = await viaClaude(imgs);
+    let r = gk ? await viaGemini(imgs, gk, t0 + 52000) : null;
+    // 沒有 Gemini 金鑰才直接用 Claude；Gemini 失敗改問 Claude 要開 AI_CLAUDE_FALLBACK、時間還夠、而且沒超過備援的全站上限
+    if (!r && ck) r = await viaClaude(imgs);
+    else if (!r.ok && ck && claudeFallbackOn() && Date.now() - t0 < 25000 && !(await aiLimit(req, "claude-fb"))) r = await viaClaude(imgs, 55000 - (Date.now() - t0));
     if (!r.ok) return res.status(200).json({ ok: false, error: r.status === 503 || r.status === 500 ? "AI 讀圖服務目前太忙，請過一兩分鐘再試。" : r.status === 429 ? "AI 讀圖的免費額度暫時用完，請稍後再試。" : r.status === 422 ? "沒有讀出持股表格，請確認截圖是庫存或即時損益的畫面。" : `AI 讀圖失敗（${r.status}）` });
     const rows = cleanRows(r.rows);
     if (!rows.length) return res.status(200).json({ ok: false, error: "截圖裡沒有讀到持股，請換一張清楚一點的庫存畫面。" });
     return res.status(200).json({ ok: true, rows, model: r.model });
-  } catch (e) { return res.status(200).json({ ok: false, error: `讀圖失敗（${e.message}）` }); }
+  } catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "讀圖失敗，請稍後再試", "import") }); }
 }

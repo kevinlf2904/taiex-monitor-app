@@ -43,8 +43,12 @@ const ROUTES = {
 };
 export const ROUTE_NAMES = Object.keys(ROUTES);
 const AI_ROUTES = new Set(["chat", "chart-read", "import", "podcast", "confai"]);
-// 問 AI（對話、讀圖）可能要幾十秒；其他服務幾秒內就回應
+// 問 AI（對話、讀圖）可能要幾十秒；其他服務幾秒內就回應。
+// 只有這個入口檔的 config 會生效（api/_lib/ 裡的檔案不是 function，寫 config 沒有作用）；請求內容的上限是平台的 4.5MB，各處理程式自己再檢查大小
 export const config = { maxDuration: 60 };
+// Vercel 的 Node 執行環境解析網址時用到 url.parse()，每個執行個體都會印一次 DEP0169 警告、被記成錯誤日誌，把真正的錯誤淹沒：只濾掉這一個警告
+const emitWarning = process.emitWarning;
+process.emitWarning = function (w, ...a) { const code = typeof a[0] === "object" ? a[0]?.code : a[1]; if (code === "DEP0169") return; return emitWarning.call(this, w, ...a); };
 
 export default async function handler(req, res) {
   const name = String(req.query?.route || "").toLowerCase();

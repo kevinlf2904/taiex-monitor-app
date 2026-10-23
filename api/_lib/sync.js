@@ -12,13 +12,15 @@
 // GET  /api/sync?op=cfg                     { kv, tg, bot }
 // POST /api/sync { op: "waitlist", email, plan }  KLineLab Pro 候補名單（pro.html）：存在 KV 的 waitlist 雜湊（email → 時間、方案），同一個 IP 每小時最多 5 次
 import { createHash } from "node:crypto";
+import { userMsg } from "./_err.js";
 
 const KV_URL = () => (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "").trim().replace(/\/$/, "");
 const KV_TOKEN = () => (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
 const TG = () => (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-const MAX = 900 * 1024;
+const MAX = 900 * 1024, KEEP = 400 * 86400; // 同步資料 400 天沒更新就自動刪掉（每次上傳都會重新計時）
 export const hashId = id => createHash("sha256").update(String(id)).digest("hex");
 export const bindTok = h => h.slice(0, 24);
+const ipOf = req => String(req.headers?.["x-forwarded-for"] || req.headers?.["x-real-ip"] || "").split(",")[0].trim() || "?";
 const okId = id => /^[A-Za-z0-9_-]{20,64}$/.test(String(id || ""));
 
 export const kvOn = () => !!(KV_URL() && KV_TOKEN());
@@ -66,18 +68,21 @@ export default async function handler(req, res) {
   if (!hasKv) return res.status(200).json({ ok: false, error: "伺服器還沒設定雲端儲存（Upstash Redis），目前只能用匯出／匯入備份檔。" });
   if (op === "waitlist") {
     const w = waitlistEntry(b.email, b.plan); if (!w) return res.status(400).json({ ok: false, error: "Email 格式不對" });
-    try { const ip = String(req.headers?.["x-forwarded-for"] || "").split(",")[0].trim() || "?", rk = `wl:ip:${hashId(ip).slice(0, 16)}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 3600);
+    try { const rk = `wl:ip:${hashId(ipOf(req)).slice(0, 16)}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 3600);
       if (n > 5) return res.status(429).json({ ok: false, error: "太多次了，請一小時後再試" });
       await kv("HSET", "waitlist", w.email, w.doc); return res.status(200).json({ ok: true }); }
-    catch (e) { return res.status(200).json({ ok: false, error: e.message }); }
+    catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "雲端儲存暫時連不到，請稍後再試", "sync") }); }
   }
   if (!okId(b.id)) return res.status(400).json({ ok: false, error: "同步碼格式不對" });
   const h = hashId(b.id), key = `sync:${h}`;
   try {
     if (op === "push") {
+      // 每個 IP 每小時最多上傳 30 次：避免被人用程式一直塞新的同步碼，把雲端空間塞滿
+      const rk = `sp:ip:${hashId(ipOf(req)).slice(0, 16)}:${Math.floor(Date.now() / 3600e3)}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 3600);
+      if (n > 30) return res.status(429).json({ ok: false, error: "上傳太頻繁了，請一小時後再試" });
       const data = b.data && typeof b.data === "object" ? b.data : null; if (!data) return res.status(400).json({ ok: false, error: "沒有資料" });
       const body = JSON.stringify({ at: Date.now(), dev: String(b.dev || "").slice(0, 40), data }); if (body.length > MAX) return res.status(413).json({ ok: false, error: `資料太大（${Math.round(body.length / 1024)}KB，上限 900KB）` });
-      await kv("SET", key, body);
+      await kv("SET", key, body, "EX", KEEP);
       const chat = await kv("GET", `tg:${h}`);
       if (chat) { const doc = alertDoc(data, chat); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } else { await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); } }
       return res.status(200).json({ ok: true, at: Date.now(), tg: !!chat });
@@ -96,5 +101,5 @@ export default async function handler(req, res) {
     if (op === "tgtest") { const chat = await kv("GET", `tg:${h}`); if (!chat) return res.status(200).json({ ok: false, error: "還沒綁定 Telegram" }); await tg("sendMessage", { chat_id: chat, text: "🔔 測試通知：K線看盤的提醒會像這樣送到這裡。" }); return res.status(200).json({ ok: true }); }
     if (op === "tgoff") { await kv("DEL", `tg:${h}`); await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); return res.status(200).json({ ok: true }); }
     return res.status(400).json({ ok: false, error: "不認得的 op" });
-  } catch (e) { return res.status(200).json({ ok: false, error: e.message }); }
+  } catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "雲端儲存或 Telegram 暫時連不到，請稍後再試", "sync") }); }
 }

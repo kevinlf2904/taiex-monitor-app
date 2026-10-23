@@ -12,6 +12,11 @@
 // 金鑰只放在 Vercel 環境變數（GEMINI_API_KEY／ANTHROPIC_API_KEY），不會出現在前端。整理結果只存在使用者的瀏覽器。
 
 import { GEMINI_FALLBACKS } from "./chat.js";
+import { WEB_TRIES } from "./_limit.js";
+import { userMsg } from "./_err.js";
+import http from "node:http";
+import https from "node:https";
+import { Readable } from "node:stream";
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)" };
 const MAX_AUDIO = 150 * 1024 * 1024; // Gemini Files 上限 2GB；這裡受伺服器記憶體限制，一小時左右的節目約 30～60MB
@@ -32,15 +37,27 @@ export function privIp(ip) {
   if (m4) { const [a, b] = [+m4[1], +m4[2]]; return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127); }
   return s === "::" || s === "::1" || /^f[cd]/.test(s) || /^fe[89ab]/.test(s) || s.startsWith("::ffff:");
 }
+// 真的連線時就用剛檢查過的那個 IP（不再查一次 DNS）：擋「檢查時是公開 IP、連線時換成內網」的 DNS rebinding
+export function pinnedGet(u, addr, opts = {}) {
+  const fam = addr.family || (String(addr.address).includes(":") ? 6 : 4);
+  return new Promise((ok, no) => {
+    const U = new URL(u), q = (U.protocol === "https:" ? https : http).request(U, { method: "GET", headers: opts.headers || {}, signal: opts.signal,
+      lookup: (h, o, cb) => (o?.all ? cb(null, [{ address: addr.address, family: fam }]) : cb(null, addr.address, fam)) }, r => {
+      const h = new Headers(); for (const [k, v] of Object.entries(r.headers)) for (const x of [].concat(v)) h.append(k, x);
+      ok(new Response(r.statusCode === 204 || r.statusCode === 304 ? null : Readable.toWeb(r), { status: r.statusCode, headers: h }));
+    });
+    q.on("error", no); q.end();
+  });
+}
 // 抓外部網址：每一次跳轉都重新檢查網址，且網域解析出來的 IP 不能是內網（擋「看起來是公開網址、其實指到本機」的手法）
-export async function safeFetch(raw, opts = {}, { hops = 5, lookup = null } = {}) {
+export async function safeFetch(raw, opts = {}, { hops = 5, lookup = null, get = pinnedGet } = {}) {
   const dns = lookup || (await import("node:dns/promises")).lookup;
   let url = raw;
   for (let i = 0; i <= hops; i++) {
     const u = safeUrl(url); if (!u) throw new Error("網址不正確");
     let addrs; try { addrs = await dns(new URL(u).hostname, { all: true }); } catch { throw new Error("找不到這個網址"); }
     if (!addrs.length || addrs.some(a => privIp(a.address))) throw new Error("不允許連到這個網址");
-    const r = await fetch(u, { ...opts, redirect: "manual" });
+    const r = await get(u, addrs[0], opts);
     const loc = r.status >= 300 && r.status < 400 ? r.headers.get("location") : null;
     if (!loc) return r;
     url = new URL(loc, u).toString();
@@ -143,12 +160,12 @@ export function parseSum(text) {
   };
 }
 
-export async function geminiJSON(parts, key, deadline, extra = {}, first = null) { // first：這個用途先試的型號（例如讀簡報用較快的 lite）
+export async function geminiJSON(parts, key, deadline, extra = {}, first = null, tries = Infinity) { // first：這個用途先試的型號（例如讀簡報用較快的 lite）；tries：最多呼叫幾次（網站上 WEB_TRIES，排程不限）
   const models = [...new Set([...(first ? [first] : []), process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-latest", ...GEMINI_FALLBACKS])];
   const body = JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.3, maxOutputTokens: 16384, ...extra } });
-  let last = null;
+  let last = null, calls = 0;
   for (const m of models) {
-    const left = deadline - Date.now(); if (left < 4000) break;
+    const left = deadline - Date.now(); if (left < 4000 || calls++ >= tries) break;
     try {
       const r = await fetch(`${GEMINI}/v1beta/models/${m}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body, signal: AbortSignal.timeout(left - 1500) });
       const j = await r.json().catch(() => ({}));
@@ -253,11 +270,11 @@ export default async function handler(req, res) {
         if (video && !gem) return res.status(200).json({ ok: false, error: "看 YouTube 影片需要在 Vercel 設定 GEMINI_API_KEY；現在可以先用影片說明整理。" });
         if (mode === "notes" && meta.desc.replace(/\s/g, "").length < 40) return res.status(200).json({ ok: false, error: "這集的節目說明太短，沒辦法只靠說明整理。" });
         let out;
-        if (gem && video) out = await geminiJSON(ytParts(video, PROMPT(meta, mode)), gem, deadline, YT_CFG);
-        else if (gem) out = await geminiJSON([...(uri ? [{ fileData: { mimeType: String(b.mime || "audio/mpeg"), fileUri: uri } }] : []), { text: PROMPT(meta, mode) }], gem, deadline);
+        if (gem && video) out = await geminiJSON(ytParts(video, PROMPT(meta, mode)), gem, deadline, YT_CFG, null, WEB_TRIES);
+        else if (gem) out = await geminiJSON([...(uri ? [{ fileData: { mimeType: String(b.mime || "audio/mpeg"), fileUri: uri } }] : []), { text: PROMPT(meta, mode) }], gem, deadline, {}, null, WEB_TRIES);
         else if (claude && mode === "notes") out = await claudeJSON(PROMPT(meta, mode));
         else return res.status(200).json({ ok: false, error: "伺服器沒有設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY），無法用 AI 整理。" });
-        if (uri && b.file && /^files\/[a-z0-9-]+$/i.test(b.file)) await fetch(`${GEMINI}/v1beta/${b.file}`, { method: "DELETE", headers: { "x-goog-api-key": gem }, signal: AbortSignal.timeout(5000) }).catch(() => {}); // 整理完就刪掉音檔（等它刪完，回應送出後函式可能就被凍結）
+        if (uri && b.file && /^files\/[a-z0-9-]+$/i.test(b.file) && uri.endsWith("/" + b.file)) await fetch(`${GEMINI}/v1beta/${b.file}`, { method: "DELETE", headers: { "x-goog-api-key": gem }, signal: AbortSignal.timeout(5000) }).catch(() => {}); // 整理完就刪掉音檔（等它刪完，回應送出後函式可能就被凍結）
         const sum = parseSum(out.text); if (!sum) return res.status(200).json({ ok: false, error: "AI 回傳的格式不對，請再試一次。" });
         return res.status(200).json({ ok: true, ...sum, mode, model: out.model });
       }
@@ -297,6 +314,6 @@ export default async function handler(req, res) {
     }
     return res.status(400).json({ ok: false, error: "用法：?q=節目名稱、?yts=YouTube 頻道名稱、?yt=@帳號或頻道網址、?feed=RSS 網址、?act=cfg" });
   } catch (e) {
-    return res.status(200).json({ ok: false, error: e.message || "處理失敗" });
+    return res.status(200).json({ ok: false, error: userMsg(e, "處理失敗，請稍後再試", "podcast") });
   }
 }
