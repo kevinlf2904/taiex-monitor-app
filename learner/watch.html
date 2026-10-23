@@ -47,6 +47,7 @@ body { line-height: 1.5; }
 .ibar-t { font-size: 12px; color: var(--muted); letter-spacing: .06em; margin-right: 2px; }
 .ichip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 3px; padding: 3px 11px; font-size: 13px; cursor: pointer; }
 .ichip i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.ichip.imore { border-style: dashed; } .ibar-pre .ichip { font-size: 12.5px; }
 .ichip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 500; }
 input.code, select.sel { padding: 8px 11px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-3); color: var(--ink); font-size: 16px; min-width: 0; }
 select.sel { font-size: 14px; padding: 6px 9px; }
@@ -477,6 +478,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .msum { font-size: 14px; line-height: 1.75; margin: 0 0 10px; } .mshare { width: 100%; } .mshares { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; } .mshares button { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); padding: 10px 0; font: 500 13px var(--font-body); cursor: pointer; }
 .qcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 12px; } .qcard { border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--muted); cursor: pointer; padding: 8px 2px; display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: .65; font: inherit; }
 .qcard[aria-pressed="true"] { opacity: 1; border-color: var(--qc); } .qcard span { color: var(--qc); font-weight: 500; font-size: 13.5px; } .qcard b { font: 500 24px var(--font-num); color: var(--qc); } .qcard small { font-size: 11px; }
+.mkclosed { margin: 6px 12px 0; padding: 8px 10px; border-radius: 8px; background: var(--chip, rgba(127,127,127,.12)); }
 .livetag { display: inline-flex; align-items: center; gap: 5px; color: var(--up, #e8603c); font-weight: 500; } .livetag i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: livepulse 1.6s ease-in-out infinite; }
 @keyframes livepulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } } @media (prefers-reduced-motion: reduce) { .livetag i { animation: none; } }
 [data-mk][role="button"], li[data-sel][role="button"] { cursor: pointer; } [data-mk][role="button"]:hover, li[data-sel][role="button"]:hover { background: var(--surface-2); }
@@ -529,6 +531,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mc-ud { margin: 4px 0 0; font-size: 13px; line-height: 1.55; } .mc-ud span { font-weight: 600; margin-right: 6px; }
 .mn-days.mkseg { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 8px 12px 0; } .mn-days button { flex: none; }
 .mnews .mn-sum { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+.aitag { display: inline-block; align-self: flex-start; font-size: 11px; line-height: 1.6; padding: 0 6px; margin-right: 6px; border-radius: 4px; border: 1px solid var(--line, rgba(127,127,127,.35)); color: var(--muted); font-weight: 500; vertical-align: 1px; }
 .mnews .mn-sum b { font-weight: 600; font-size: 15px; } .mnews .mn-sum ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; font-size: 13.5px; line-height: 1.55; }
 .mnews .mn-imp { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink); } .mnews .mn-imp span { color: var(--accent); font-weight: 500; margin-right: 6px; }
 .mn-list { list-style: none; margin: 0; padding: 0; } .mn-list li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
@@ -975,6 +978,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 @keyframes fadeIn { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .w-main.wide.show-detail .w-detail, .dbg { animation: none; } }
 /* 早報、事件提醒、筆記追蹤（brief.js） */
+.tdsec { margin: 18px 0 2px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .02em; } .csec h3 + .tdsec, .csec h3 + .mkclosed + .tdsec { border-top: 0; margin-top: 6px; }
 .bfgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 0 18px; } .bfsec h4 { margin-top: 10px; }
 .evopts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 6px; margin: 6px 0 8px; }
 .evopt { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; } .evopt .note { flex-basis: 100%; margin: 0; font-size: 12px; }
@@ -1008,7 +1012,6 @@ tr.on td { background: var(--surface-2); }
 .hs-l.hs-r { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 22px), transparent); }
 /* 觸控裝置：小按鈕的可點範圍加大（文字連結用透明的外框撐大，不改版面） */
 @media (pointer: coarse) {
-  .linkbtn { position: relative; } .linkbtn::after { content: ""; position: absolute; inset: -9px -6px; }
   .mkseg button { padding: 5px 11px; } .groups button, .ichip { padding: 6px 12px; }
 }
 </style>
@@ -1170,7 +1173,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-155</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.24-156</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1500,6 +1503,14 @@ async function loadMktLive() {
   await futP.catch(() => {});
   if (W.lt === "mkt") { W.ticking = true; try { renderList(); } finally { W.ticking = false; } }
 }
+// 台股今天沒有開盤時的說明（週末、證交所公布的休市日、颱風假這類臨時休市）：報價日期 d 不是今天才回傳；[短的狀態, 完整說明]
+function twClosedNote(d, now = Date.now()) {
+  if (!d || d >= W.today) return null;
+  const wd = new Date(W.today + "T00:00:00Z").getUTCDay(), hol = (W.cal?.hol || []).find(x => x.date === W.today), hm = new Date(now + 8 * 3600e3).toISOString().slice(11, 16), last = d.slice(5).replace("-", "/");
+  if (wd % 6 === 0 || hol) return ["休市", `今日休市${hol ? `（${hol.name}）` : ""}・顯示最近交易日 ${last} 收盤`];
+  if (hm < "09:00") return ["尚未開盤", `尚未開盤・顯示 ${last} 收盤`];
+  return ["今日無交易", `今天沒有成交資料（休市或暫停交易，例如颱風假）・顯示最近交易日 ${last} 收盤`];
+}
 // 「盤中即時・更新於 10:31:05」或「10/06 收盤後」
 const liveTag = (J, closed) => (J?.live ? `<span class="livetag"><i></i>盤中即時・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}</span>` : J?.date ? `${J.date.slice(5).replace("-", "/")} ${closed}` : "");
 // 每秒只更新報價（自選、庫存、熱門清單與個股頁），每 5 秒做一次完整更新（分時、逐筆、各分頁資料）
@@ -1535,8 +1546,9 @@ function ixHtml() {
 }
 function renderTop() {
   $("#ix").innerHTML = ixHtml();
-  const on = !W.off && !W.err && W.session && W.session !== "closed", st = W.off ? "離線（需部署）" : W.err ? "連線異常" : W.session === "pre" ? "試撮中" : W.session === "open" ? (W.qBackup ? "盤中（備援）" : "盤中即時") : W.session ? "收盤" : "連線中…";
-  $("#dot").className = "dot" + (on ? " on" : W.err ? " err" : ""); $("#statText").textContent = st; $("#stat").title = W.err || (W.qBackup ? `證交所即時報價連不上，暫用 ${W.qBackup}` : "");
+  const cn = W.session === "closed" ? twClosedNote(W.quotes.get("T00")?.date) : null;
+  const on = !W.off && !W.err && W.session && W.session !== "closed", st = W.off ? "離線（需部署）" : W.err ? "連線異常" : W.session === "pre" ? "試撮中" : W.session === "open" ? (W.qBackup ? "盤中（備援）" : "盤中即時") : cn ? cn[0] : W.session ? "收盤" : "連線中…";
+  $("#dot").className = "dot" + (on ? " on" : W.err ? " err" : ""); $("#statText").textContent = st; $("#stat").title = W.err || (W.qBackup ? `證交所即時報價連不上，暫用 ${W.qBackup}` : cn ? cn[1] : "");
   $("#ix2").innerHTML = `<span class="stat"><i class="dot ${on ? "on" : W.err ? "err" : ""}"></i>${st}</span>` + ixHtml();
 }
 document.addEventListener("click", e => { const b = e.target.closest(".ixc[data-sel]"); if (b) select(b.dataset.sel); });
@@ -1866,7 +1878,7 @@ function renderList() {
   if (W.ticking && Date.now() - (W.lastPtr || 0) < 900) return;
   if (W.ticking && W.lt === "ind") { if (W.indLast) loadIndQuotes(W.indLast); return; } // 產業地圖（星系、圖解）每 5 秒整個重建很耗電：只重抓成員報價，有變動才重畫
   if (W.ticking && (W.lt === "money" || (W.lt === "screen" && W.scrG === "combo") || (W.lt === "hold" && (W.holdView === "risk" || W.holdView === "macro")))) return; // 資金分頁、條件組合、庫存風險與總經敏感度用收盤資料，自己載入完才重畫
-  if (W.ticking && (W.lt === "pod" || W.lt === "cong" || (W.lt === "tools" && W.tv !== "sum"))) return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
+  if (W.ticking && (W.lt === "pod" || W.lt === "cong" || (W.lt === "tools" && W.tv !== "today"))) return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
   const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details")].map(d => [sum(d), d.open]));
   // 換分頁時新內容常常先是一行「載入中」，頁面一變短瀏覽器就把捲動位置拉回最上面：重畫前先撐住原本的高度，內容夠高或 0.9 秒後再放開
   const xs = hsKeep(), hold = !W.ticking && !lx.hidden && lx.offsetHeight > 0;
@@ -1936,8 +1948,10 @@ function renderList0() {
     const mixed = !W.editing && groupMkt(W.groups[W.gi]) === "mix";
     const L = W.editing ? curList().map(c => ({ c })) : mixed ? [{ h: "台股" }, ...sortedWatch(curList().filter(c => !isUS(c))), { h: "美股（美元・可能延遲 15 分鐘）" }, ...sortedWatch(curList().filter(isUS))] : sortedWatch();
     const editRow = (c, k) => `<li><div class="row" style="cursor:default"><span class="nm">${esc(nameOf(c))}<span class="cd">${c}</span></span><span></span><span class="edit-ctl"><button data-mv="${k}" data-d="-1" aria-label="上移" ${k ? "" : "disabled"}>↑</button><button data-mv="${k}" data-d="1" aria-label="下移" ${k < L.length - 1 ? "" : "disabled"}>↓</button><button data-rm="${c}" aria-label="移除 ${esc(nameOf(c))}">✕</button></span></div></li>`;
-    $("#wl").innerHTML = L.length ? L.map(({ h, c, q }, k) => (h ? `<li class="sec-h">${h}</li>` : W.editing ? editRow(c, k) : rowHtml(c, q))).join("")
-      : `<li class="empty note">這個群組還沒有股票。在上面輸入代號或名稱加入，或從「台股熱門」「美股熱門」「排行」按 ☆ 加入（台股、美股會自動放進各自的群組）。</li>`;
+    // 報價全部拿不到（伺服器或資料來源出錯）：清單上方直接說原因和重試，不要只剩一排「—」讓人以為還在載入
+    const qErr = !W.editing && !W.off && W.err && L.some(x => x.c) && L.every(x => !x.c || W.quotes.get(x.c)?.price == null) ? `<li class="empty note err wl-err">⚠︎ 報價暫時拿不到（${esc(W.err)}）。<button type="button" class="btn sm" data-wlretry>重試</button></li>` : "";
+    $("#wl").innerHTML = qErr + (L.length ? L.map(({ h, c, q }, k) => (h ? `<li class="sec-h">${h}</li>` : W.editing ? editRow(c, k) : rowHtml(c, q))).join("")
+      : `<li class="empty note">這個群組還沒有股票。在上面輸入代號或名稱加入，或從「台股熱門」「美股熱門」「排行」按 ☆ 加入（台股、美股會自動放進各自的群組）。</li>`);
     note = `${curList().length} 檔・${anyOpen() ? "盤中每秒自動更新" : "收盤後每 5 分鐘確認一次"}`;
   } else if (W.lt === "hold") {
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"], ["risk", "風險"], ["macro", "總經敏感度"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
@@ -2521,7 +2535,7 @@ async function loadMoney(need = 10, force = false) {
     if (W.lt === "money" && (F.view === "replay" || (F.view === "bubble" && F.rp.playing)) && document.getElementById("mfb")) { const el = document.querySelector(".mrp-load"); if (el) el.textContent = `正在載入更早的資料（${F.prog}）…`; }
     else if (W.lt === "money" || (W.lt === "screen" && W.scrG === "score")) renderList();
   }
-  F.loading = false; if (F.rp) F.rp.fl = null; if (W.lt === "money" || W.lt === "screen" || (W.lt === "tools" && W.tv === "sum")) { mfModel(); renderList(); }
+  F.loading = false; if (F.rp) F.rp.fl = null; if (W.lt === "money" || W.lt === "screen" || (W.lt === "tools" && W.tv === "today")) { mfModel(); renderList(); }
 }
 const mfModel = () => { const F = W.mf; if (!F.model && F.days.length) F.model = flowModel(F.days, flowSectors(F.ind)); return F.model; };
 const qDot = q => `<i class="qdot" style="background:${FLOW_Q[q][2]}"></i>`;
@@ -3234,7 +3248,7 @@ function renderMoney() {
           <details class="mkmore"><summary>怎麼算的</summary><p class="note">${mood.parts.map(([k, v]) => `${k} ${v >= 0 ? "+" : ""}${v.toFixed(2)}`).join("、")}（各自換成 −1～1 後平均，再換成 0～100）。上漲 ${mood.up}、下跌 ${mood.dn}、漲停 ${mood.lu}、跌停 ${mood.ld}，法人合計 ${flowFmt(mood.net)}。</p></details></div>` : "")
       + `<h4>法人買最多</h4><div class="mchips">${b1.map(x => chip(x, x.net1, `data-fsec="${esc(x.id)}"`)).join("") || '<span class="note">今天沒有買超的板塊</span>'}</div>`
       + `<h4>大戶異常（法人單日買賣金額最大）</h4><div class="mchips">${bb && bb.a1 > 0 ? chip({ name: bb.name, q: "up" }, bb.a1, `data-sel="${bb.code}"`) : ""}${bs && bs.a1 < 0 ? chip({ name: bs.name, q: "down" }, bs.a1, `data-sel="${bs.code}"`) : ""}</div>`
-      + `<button class="mcard mlink" data-l2="tools:sum" style="margin:10px 0 0"><b>盤後總結與分享</b><span class="note">移到「工具 → 每日摘要」 ›</span></button></section>`
+      + `<button class="mcard mlink" data-l2="tools:sum" style="margin:10px 0 0"><b>盤後總結與分享</b><span class="note">在「工具 → 今日重點」 ›</span></button></section>`
       + `<section class="mcard"><h3>近 5 日法人買超最多</h3><div class="mchips">${b5.map(x => chip(x, x.net5, `data-fsec="${esc(x.id)}"`)).join("")}</div></section>`
       + `<button class="mcard mlink" data-mv="replay"><b>主力資金雷達回放</b><span class="note">近 20 個交易日，資金怎麼移動 ›</span></button>`;
   } else if (F.view === "bubble") {
@@ -3529,7 +3543,7 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F 
   if (d.fsec) return secOpen(d.fsec);
   if (d.iopenExt) { W.indS.open = d.iopenExt; return setLt("ind"); }
   if (d.mshare) return mfShare(d.mshare);
-  if (d.l2) { W.tv = "sum"; return setLt("tools", true); }
+  if (d.l2) { W.tv = "today"; return setLt("tools", true); }
   if (d.mv === "replay") { F.view = "bubble"; store.set("watch:mfv", "bubble"); F.rp.t = null; F.rp.u = null; renderMoney(); mfPlay(true); return; }
   if (d.mv) { F.view = d.mv; if (d.mv !== "bubble") { mfPlay(false); store.set("watch:mfv", d.mv); } else store.set("watch:mfv", "bubble"); }
   else if (d.mq) F.q = d.mq; else if (d.mrk) F.rk = d.mrk;
@@ -4014,6 +4028,7 @@ function renderInd0() {
 }
 // 工具分頁（tools.js）：點擊、送出表單、勾選
 $("#lx").addEventListener("click", e => { if (e.target.closest("[data-lxretry]")) renderList(); });
+$("#wl").addEventListener("click", e => { const b = e.target.closest("[data-wlretry]"); if (b) { b.disabled = true; b.textContent = "更新中…"; W.busy = 0; tick().finally(() => { W.lastPtr = 0; renderList(); }); } }); // 剛按下去 0.9 秒內自動更新不重畫清單：重試完自己重畫一次
 document.addEventListener("click", e => { const b = e.target.closest("[data-mine],[data-mineset]"); if (!b) return; W.mine = b.dataset.mineset != null ? b.dataset.mineset === "1" : !W.mine; store.set("watch:mine", W.mine); renderList(); });
 $("#lx").addEventListener("click", e => toolsClick(e)); $("#lTools").addEventListener("click", e => toolsClick(e));
 $("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListener("change", e => toolsChange(e));
@@ -4185,6 +4200,8 @@ async function loadWhyNews(m, force = false) {
   if (W.lt === "mkt" && (W.mkReg || "tw") === m) renderList();
 }
 // ix：[{ name, chgPct }] 指數；info：給 AI 的其他畫面資料（類股、法人、權值股…）
+// AI 依新聞整理的文字前面都加這個標記：跟行情數字放在一起時，看得出哪些是程式算的、哪些是 AI 寫的
+const aiTag = at => `<span class="aitag" title="AI 只根據新聞標題整理，不是即時行情；數字請點原文確認">AI 新聞摘要${at ? "・" + new Date(at + 8 * 3600e3).toISOString().slice(11, 16) : ""}</span>`;
 function whyHtml(m, ix, info = []) {
   loadWhyNews(m); if (!W.mn) loadMnews();
   const C = WHY[m], NW = W.whyN?.[m], big = ix.filter(x => x.chgPct != null).reduce((a, x) => (Math.abs(x.chgPct) > Math.abs(a?.chgPct ?? 0) ? x : a), null), mv = big?.chgPct ?? 0;
@@ -4196,7 +4213,7 @@ function whyHtml(m, ix, info = []) {
     q: `請用繁體中文回答：1) 今天${C.name}為什麼這樣走（只根據上面的新聞標題與漲跌數字，引用標題裡的原因，沒有寫到的不要猜）2) 哪些類股、權值股帶頭漲跌 3) ${C.next} 4) 接下來要追蹤的數據或事件。每項 2～3 句，語氣保守。` };
   const title = Math.abs(mv) >= 1 ? `${C.name}今天為什麼${mv < 0 ? "跌" : "漲"}？` : `${C.name}今天的盤勢`;
   return `<section class="mk mkwhy"><h3>${title}${big ? `<span class="note">${esc(big.name)} <b class="${cls(mv)}">${sgn(mv, 2)}%</b></span>` : ""}</h3>
-    ${S?.head ? `<p class="mn-sum"><b>${esc(S.head)}</b>${S.impact ? `<br><small class="note">可能影響：${esc(S.impact)}</small>` : ""}</p>` : ""}
+    ${S?.head ? `<p class="mn-sum">${aiTag(D.at)}<b>${esc(S.head)}</b>${S.impact ? `<br><small class="note">可能影響：${esc(S.impact)}</small>` : ""}</p>` : ""}
     ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener"><span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">${!NW || NW.busy ? "載入最新頭條…" : NW.err ? "⚠︎ " + esc(NW.err) : "還沒有相關頭條"}</p>`}
     ${qAiBlock({ key, R: W.qai[key] }, `${ico("ai")}AI 整理漲跌原因`)}
     <p class="note">頭條即時從 Google 新聞抓；總經消息每小時整理一次（大盤 → 總經消息）。</p></section>`;
@@ -4313,7 +4330,7 @@ function renderMnews(top) {
   const D = J.days.find(d => d.date === W.mnDay) || J.days[0], hm = t => (t ? new Date(t + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " ") : "");
   const side = (m, name) => { const X = D[m] || {}, S = X.sum, L = X.items || [];
     return `<section class="mk mnews"><h3>${name}<span class="note">${L.length} 則</span></h3>
-      ${S ? `<div class="mn-sum"><b>${esc(S.head)}</b>${S.points?.length ? `<ul>${S.points.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${S.impact ? `<p class="mn-imp"><span>可能影響</span>${esc(S.impact)}</p>` : ""}</div>` : ""}
+      ${S ? `<div class="mn-sum">${aiTag()}<b>${esc(S.head)}</b>${S.points?.length ? `<ul>${S.points.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${S.impact ? `<p class="mn-imp"><span>可能影響</span>${esc(S.impact)}</p>` : ""}</div>` : ""}
       ${(() => { const T = [...new Set(L.map(x => x.topic).filter(t => MN_IMPACT[t]))]; return T.length ? `<details class="mkmore mn-howimp"${S?.impact ? "" : " open"}><summary>這些消息怎麼影響股市（${T.join("、")}）</summary><ul class="mc-imp">${T.map(t => `<li><b>${esc(t)} <small class="note">${L.filter(x => x.topic === t).length} 則</small></b><span>${esc(MN_IMPACT[t])}</span></li>`).join("")}</ul></details>` : ""; })()}
       ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener">${x.topic ? `<em>${esc(x.topic)}</em>` : ""}<span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">今天沒有抓到相關新聞。</p>`}</section>`; };
   $("#lx").innerHTML = top + `<div class="mn-days mkseg">${J.days.slice(0, 10).map(d => `<button type="button" data-mk="mnDay" data-v="${d.date}" aria-pressed="${d === D}">${d.date.slice(5).replace("-", "/")}</button>`).join("")}</div>
@@ -4417,7 +4434,8 @@ function renderMkt() {
   if (W.mkReg === "us") return renderUsMkt(top);
   if (W.mkReg === "gl") return renderGlobal(top);
   const J = W.mkt, q = c => W.quotes.get(c);
-  let h = top + `<div class="ixcards three" id="mkCards">${mktCards()}</div>`;
+  const cn = twClosedNote(q("T00")?.date);
+  let h = top + `<div class="ixcards three" id="mkCards">${mktCards()}</div>` + (cn ? `<p class="note mkclosed">📅 ${esc(cn[1])}</p>` : "");
   h += twWhyHtml();
   const sec = (t, body, extra = "", seg = "") => `<section class="mk"><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</section>`;
   // 產業即時用自己的資料（/api/hot?type=rows），大盤統計還沒到或失敗時也照樣顯示
@@ -4729,7 +4747,7 @@ function navSnap() {
     io: lt === "ind" ? W.indS?.open || null : null, iv: lt === "ind" ? W.indS?.view || null : null,
     af: lt === "after" && typeof afView === "function" ? afView() : null,
     mv: lt === "money" ? W.mf?.view || null : null, ms: lt === "money" && W.mf?.view === "sector" ? W.mf.sec || null : null,
-    cv: lt === "cong" ? W.cv || "home" : null, tv: lt === "tools" ? W.tv || "sum" : null,
+    cv: lt === "cong" ? W.cv || "home" : null, tv: lt === "tools" ? W.tv || "today" : null,
     pv: lt === "pod" ? P?.view || null : null, pg: lt === "pod" && P && (P.view === "ep" || P.view === "show") ? P.view + ":" + (P.view === "ep" ? P.key : P.feed) : null };
 }
 function navUrl(s) { const r = s.sel ? null : routeOf(); if (EMBED) post({ type: "watch-at", route: r, mode: MODE }); return location.pathname + location.search + (s.sel ? "#" + s.sel : r ? "#" + r : ""); }
@@ -4754,7 +4772,7 @@ function navApply(s, y) {
   try {
     if (!s.gs && !$("#gsearch").hidden) gsHide(); else if (s.gs && $("#gsearch").hidden) { $("#gsearch").hidden = false; gsRender(); }
     if (s.lt && s.lt !== W.lt) setLt(s.lt);
-    if (s.lt === "cong") W.cv = s.cv || "home"; if (s.lt === "tools") W.tv = s.tv || "sum";
+    if (s.lt === "cong") W.cv = s.cv || "home"; if (s.lt === "tools") W.tv = s.tv || "today";
     if (s.lt === "ind" && W.indS) { W.indS.open = s.io || null; if (s.iv) W.indS.view = s.iv; }
     if (s.lt === "after" && s.af) { W.afView = s.af; store.set("watch:af", s.af); }
     if (s.lt === "money" && W.mf && s.mv && s.mv !== "replay") { W.mf.view = s.mv; if (s.ms) W.mf.sec = s.ms; }
@@ -4803,10 +4821,10 @@ function renderDetailHead() {
   $("#dPx").textContent = fmtPx(q?.price, c); $("#dPx").className = cls(q?.chg);
   $("#dChg").textContent = q?.chg != null ? `${arrow(q.chg)}${fmtPx(Math.abs(q.chg), c)}（${q.chgPct > 0 ? "+" : ""}${q.chgPct != null ? (+q.chgPct).toFixed(2) : "—"}%）` : ""; $("#dChg").className = cls(q?.chg);
   const sess = us ? { open: "盤中", pre: "盤前", closed: "收盤" }[q?.session?.state] || "" : "";
-  $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today && !us ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${us ? `（美東${sess ? "・" + sess : ""}）` : ""}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}・${us ? "Yahoo（可能延遲）" : isFut(c) ? (q.session === "night" ? "夜盤" : "日盤") : W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err || "";
-  const lim = q?.prev && isTW(c) ? [Math.round(q.prev * 1.1 * 100) / 100, Math.round(q.prev * 0.9 * 100) / 100] : null;
+  $("#dTime").textContent = q?.time ? `${q.date && q.date !== W.today && !us ? q.date.replace(/-/g, "/") + " " : ""}${q.time}${us ? `（美東${sess ? "・" + sess : ""}）` : ""}${q.estimated ? "（最近沒有成交，用買賣價中間估）" : ""}${!us && !isFut(c) && twClosedNote(q.date) ? "・" + twClosedNote(q.date)[0] : ""}・${us ? "Yahoo（可能延遲）" : isFut(c) ? (q.session === "night" ? "夜盤" : "日盤") : W.detailSrc || "證交所 MIS"}` : W.off ? "需要部署到網站才有報價" : W.err || "";
+  const lim = q?.prev && isTW(c) && !/[LRK]$/.test(c) ? twLimits(q.prev, isEtf(c)) : null; // 槓桿、反向 ETF 沒有漲跌停
   $("#dKv").innerHTML = [["開盤", q?.open], ["最高", q?.high], ["最低", q?.low], [isFut(c) ? "參考價" : "昨收", q?.prev]].map(([k, v]) => `<div><span>${k}</span><b class="${v != null && q?.prev ? cls(v - q.prev) : ""}">${fmtPx(v, c)}</b></div>`).join("")
-    + `<div><span>成交量</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " " + volUnit(c) : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "") + yldCell(c, q)
+    + `<div><span${isTW(c) && !isIdx(c) ? ` title="集中市場整股成交張數（1 張＝1000 股），不含盤後零股與鉅額交易，所以會比總成交股數少一點"` : ""}>成交量${isTW(c) && !isIdx(c) ? "（整股）" : ""}</span><b>${fmtVol(q?.vol)}${q?.vol != null ? " " + volUnit(c) : ""}</b></div>` + (q?.high && q?.low && q?.prev ? `<div><span>振幅</span><b>${((q.high - q.low) / q.prev * 100).toFixed(2)}%</b></div>` : "") + yldCell(c, q)
     + (volRatio(c, q) != null ? `<div><span>5日均量比</span><b class="${volRatio(c, q) >= 1.5 ? "up" : ""}">${volRatio(c, q).toFixed(2)} 倍</b></div>` : "")
     + (lim ? `<div><span>漲停</span><b class="up">${fmtP(lim[0])}</b></div><div><span>跌停</span><b class="down">${fmtP(lim[1])}</b></div>` : "");
   $("#dTags").innerHTML = tagsHtml(c, q, lim); renderIntel();
@@ -4863,7 +4881,8 @@ function volRatio(c, q) {
 function tagsHtml(c, q, lim) {
   const st = W.stocks?.find(x => x[0] === c), out = [], tag = (t, k = "") => out.push(`<span class="tag ${k}">${t}</span>`);
   const ind = isIdx(c) ? "" : [isUS(c) ? q?.market || "美股" : st?.[2] || q?.market, st?.[3]].filter(Boolean).join("・");
-  if (lim && q?.price != null) { if (q.price >= lim[0]) tag("漲停", "up"); else if (q.price <= lim[1]) tag("跌停", "down"); }
+  if (W.kOdd === c) out.push(`<span class="tag" title="報價的昨收和 K 線最後一根收盤差超過 11%：可能是減資、分割、除權還原或資料延遲。K 線先不接上今天的報價。">⚠︎ K 線與報價待確認</span>`);
+  if (lim && q?.price != null) { if (q.price >= lim[0] - 1e-6) tag("漲停", "up"); else if (q.price <= lim[1] + 1e-6) tag("跌停", "down"); }
   const P = pastDaily(c, q), px = q?.price;
   if (P && P.length >= 60 && px != null) {
     const r = volRatio(c, q); if (r != null && r >= 2) tag(`爆量 ${r.toFixed(1)} 倍`, "hot");
@@ -5224,8 +5243,10 @@ overlayMigrate("watch2");
 // 指標（主圖、副圖）和疊加分析分成兩個可以收合的區塊；舊版存在同一組設定（ind:watch2）裡的疊加，第一次搬到 ind:watch2ov
 { const ovIds = new Set(OVERLAY_ITEMS.map(x => x.id)), old = store.get("ind:watch2", null);
   if (Array.isArray(old) && old.some(id => ovIds.has(id))) { if (store.get("ind:watch2ov", null) == null) store.set("ind:watch2ov", old.filter(id => ovIds.has(id))); store.set("ind:watch2", old.filter(id => !ovIds.has(id))); } }
-const dIndBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); });
-const dOvBar = indicatorBar($("#dObar"), "watch2ov", [{ title: "疊加", items: OVERLAY_ITEMS }], [], () => { drawK(); renderAna(); });
+// 指標很多：先列常用的（主圖 6 個、副圖 5 個、疊加 6 個），其餘收在「更多」；上面另有一鍵組合
+const dIndBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS, more: 6 }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }], more: 5 }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); ksetSummary(); },
+  [["新手常用", ["ma5", "ma20", "ma60", "vol", "kd"]], ["看趨勢", ["ma20", "ma60", "boll", "vol", "macd"]], ["看動能", ["ma5", "ma20", "vol", "kd", "rsi", "macd"]], ["只看 K 線", []]]);
+const dOvBar = indicatorBar($("#dObar"), "watch2ov", [{ title: "疊加", items: OVERLAY_ITEMS, more: 6 }], [], () => { drawK(); renderAna(); ksetSummary(); });
 const OV_IDS = new Set(OVERLAY_ITEMS.map(x => x.id));
 // 線型自訂（在 K 線圖的「設定」裡改）：改了就重畫、更新均線籤的名稱與判讀
 addEventListener("indcfg", () => { dIndBar.set("ma5", dIndBar.has("ma5")); drawK(); renderAna(); ksetSummary(); });
@@ -5514,6 +5535,10 @@ function mergeDaily(q, redraw = true) {
   const R = W.daily; if (!R || !R.data?.length || q.code !== W.sel || q.price == null || !q.date) return;
   const D = R.data, last = D[D.length - 1]; if (q.date < last.d) return;
   const open = q.open ?? (last.d === q.date ? last.o : null); if (open == null) return;
+  // 台股：報價的昨收和 K 線前一根收盤差超過 11%（漲跌停是 10%）→ 兩邊資料對不上（減資、分割、還原權值不同或資料延遲），不把今天硬接上去，免得畫出 −80% 這種不可能的一根
+  const pc = (last.d === q.date ? D[D.length - 2] : last)?.c;
+  if (isTW(q.code) && !isIdx(q.code) && pc && q.prev && Math.abs(q.prev / pc - 1) > 0.11) { if (W.kOdd !== q.code) { W.kOdd = q.code; if (W.sel === q.code) renderDetailHead(); } return; }
+  if (W.kOdd === q.code) W.kOdd = null;
   const v = q.vol != null ? (isUS(q.code) ? Math.round(q.vol / 1000) : q.vol) : last.d === q.date ? last.v : 0;
   const bar = { d: q.date, o: open, h: Math.max(q.high ?? q.price, q.price), l: Math.min(q.low ?? q.price, q.price), c: q.price, v };
   const same = last.d === q.date && last.o === bar.o && last.h === bar.h && last.l === bar.l && last.c === bar.c && last.v === bar.v; // 沒有新成交就不用重畫

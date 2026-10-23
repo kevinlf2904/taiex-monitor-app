@@ -2,7 +2,7 @@
    這個檔案只定義函式（載入時 watch.html 的 W 還沒建立），由 watch.html 的清單分頁「工具」呼叫 renderTools()。
    資料都存在這台裝置的瀏覽器（localStorage）；指標用日 K 判斷，日 K 每 5 分鐘重抓一次。 */
 
-const TOOLS_VIEWS = [["brief", "早報"], ["sum", "每日摘要"], ["alert", "提醒"], ["notes", "筆記追蹤"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["oapi", "官方資料"], ["sync", "備份同步"]];
+const TOOLS_VIEWS = [["today", "今日重點"], ["alert", "提醒"], ["notes", "筆記追蹤"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["oapi", "官方資料"], ["sync", "備份同步"]];
 const toolsDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 // 日 K（6 個月）：5 分鐘內重複用
 async function dailyFresh(c) {
@@ -146,11 +146,6 @@ function sumText() {
   cg.forEach(t => lines.push(`國會新申報：${pName(t.pid)} ${t.k === "buy" ? "買進" : "賣出"} ${t.ticker} ${amtTxt(t.amount)}（交易日 ${t.traded}）`));
   return lines.join("\n");
 }
-async function sumAI() {
-  const set = x => { W.sumAI = x; if (W.lt === "tools") renderList(); }; if (W.off) return set({ err: "需要部署到網站才能使用" });
-  set({ loading: true });
-  try { set({ text: await aiChat(sumText(), "請只根據「目前畫面」的資料，整理成今天的盤後摘要：大盤、自選股表現、觸發的技術訊號、國會新申報，最後列出明天值得留意的 3 件事。不要給買賣建議，用繁體中文、條列。") }); } catch (e) { set({ err: e.message }); }
-}
 
 /* ---------- 多圖並排 ---------- */
 function multiCodes() { const s = store.get("watch:multi", null); return Array.isArray(s) && s.length ? s : myCodes().slice(0, 4); }
@@ -284,8 +279,9 @@ function calDeadlines(a, b) {
 const toolsOn = () => W.lt === "tools" || (W.lt === "after" && afView() === "chipx") || (W.lt === "screen" && (W.scrG === "custom" || W.scrG === "rs" || (W.scrG === "score" && W.scoreMode === "factor"))) || (W.lt === "cong" && (W.cv === "ins" || String(W.cv).startsWith("tw")));
 const scanVis = () => W.lt === "screen" && W.scrG === "custom", rsVis = () => W.lt === "screen" && W.scrG === "rs", insVis = () => W.lt === "cong" && W.cv === "ins";
 function renderTools() {
-  if (W.tv === "chipx") { W.tv = "sum"; W.afView = "chipx"; store.set("watch:af", "chipx"); setTimeout(() => setLt("after"), 0); return ""; } // 籌碼動向搬到排行 → 盤後資料
-  if (!TOOLS_VIEWS.some(x => x[0] === W.tv)) W.tv = "sum";
+  if (W.tv === "chipx") { W.tv = "today"; W.afView = "chipx"; store.set("watch:af", "chipx"); setTimeout(() => setLt("after"), 0); return ""; } // 籌碼動向搬到排行 → 盤後資料
+  if (W.tv === "brief" || W.tv === "sum") W.tv = "today"; // 早報、每日摘要合併成「今日重點」：舊的分頁記錄、連結都帶過去
+  if (!TOOLS_VIEWS.some(x => x[0] === W.tv)) W.tv = "today";
   const v = W.tv;
   $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="工具">${TOOLS_VIEWS.map(([k, t]) => `<button data-tv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</div>`;
   const r = toolsBody(v); $("#lx").innerHTML = r.h; return r.note;
@@ -297,24 +293,27 @@ function sumFlowHtml() {
   return `<h4>盤後總結 <span class="note">${M.dates[M.T - 1].slice(5).replace("-", "/")}</span></h4><p class="msum">${esc(flowSummary(M, flowMood(M), W.quotes.get("T00")?.chgPct))}</p>
       <button class="btn mshare" data-mshare="share">分享今日盤面</button><div class="mshares"><button data-mshare="line">LINE</button><button data-mshare="threads">Threads</button><button data-mshare="copy">複製圖</button></div>`;
 }
+// 盤後那一半（今日重點頁用）：大盤、自選漲跌、盤後總結、技術訊號、指標提醒、國會新申報
+function sumBody() {
+  let h = "";
+  const S = W.sum; if (!S && !W.off) setTimeout(sumBuild, 0);
+  const q = c => W.quotes.get(c), mv = myCodes().map(c => ({ c, q: q(c) })).filter(x => x.q?.chgPct != null).sort((a, b) => b.q.chgPct - a.q.chgPct);
+  const row = x => `<li><button class="linkbtn" data-tsel="${x.c}">${esc(nameOf(x.c))} <span class="note">${x.c}</span></button> <b class="${cls(x.q.chg)}">${x.q.chgPct >= 0 ? "+" : ""}${(+x.q.chgPct).toFixed(2)}%</b></li>`;
+  const cg = (W.cong?.trades || []).filter(t => t.filed >= new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10));
+  h = `
+    <div class="tgrid"><div><h4>大盤</h4><ul class="tlist">${["T00", "O00", "TXF"].map(c => q(c) ? `<li>${esc(q(c).name || nameOf(c))} <b>${fmtP(q(c).price)}</b> <span class="${cls(q(c).chg)}">${q(c).chgPct >= 0 ? "+" : ""}${q(c).chgPct ?? "—"}%</span></li>` : "").join("")}</ul></div>
+    <div><h4>自選漲幅前 5</h4><ul class="tlist">${mv.slice(0, 5).map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div>
+    <div><h4>自選跌幅前 5</h4><ul class="tlist">${mv.slice(-5).reverse().map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div></div>
+    ${sumFlowHtml()}
+    <h4>自選股今天觸發的技術訊號 ${S?.busy ? `<span class="note">掃描中…</span>` : ""}</h4><ul class="tlist">${(S?.sig || []).map(s => `<li><button class="linkbtn" data-tsel="${s.c}">${esc(nameOf(s.c))} ${s.c}</button>：${s.ev.map(esc).join("、")} <span class="note">${s.d}</span></li>`).join("") || `<li class="note">${S?.busy ? "…" : "沒有（掃描自選股最多 30 檔的日 K：KD／MACD 交叉、布林突破、20 日新高新低、爆量、鈍化、季線）"}</li>`}</ul>
+    <h4>今天的指標提醒</h4><ul class="tlist">${(W.irLog ||= store.get("watch:irlog", []) || []).filter(x => x.d === toolsDay()).map(x => `<li>${x.t} ${esc(nameOf(x.code))} ${x.code}：${esc(x.msg)}</li>`).join("") || `<li class="note">沒有（在「提醒」設定條件）</li>`}</ul>
+    <h4>國會新申報（最近 3 天）</h4><ul class="tlist">${cg.slice(0, 12).map(t => `<li>${esc(pName(t.pid))} ${t.k === "buy" ? "<b class='up'>買進</b>" : "<b class='down'>賣出</b>"} ${esc(t.ticker)} ${amtTxt(t.amount)} <span class="note">交易日 ${t.traded}</span></li>`).join("") || `<li class="note">沒有</li>`}</ul>`;
+  return h;
+}
 function toolsBody(v) {
   let h = "", note = "";
-  if (v === "sum") {
-    const S = W.sum; if (!S && !W.off) setTimeout(sumBuild, 0);
-    const q = c => W.quotes.get(c), mv = myCodes().map(c => ({ c, q: q(c) })).filter(x => x.q?.chgPct != null).sort((a, b) => b.q.chgPct - a.q.chgPct);
-    const row = x => `<li><button class="linkbtn" data-tsel="${x.c}">${esc(nameOf(x.c))} <span class="note">${x.c}</span></button> <b class="${cls(x.q.chg)}">${x.q.chgPct >= 0 ? "+" : ""}${(+x.q.chgPct).toFixed(2)}%</b></li>`;
-    const cg = (W.cong?.trades || []).filter(t => t.filed >= new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10));
-    h = `<section class="csec"><h3>每日盤後摘要 <span class="note">${toolsDay()}</span> <button class="btn sm" data-tx="sumre">↻ 重新整理</button> <button class="btn sm" data-tx="sumai">${ico("ai")}AI 整理</button></h3>
-      ${W.sumAI ? `<div class="caibox">${W.sumAI.loading ? "AI 整理中…" : W.sumAI.err ? "⚠︎ " + esc(W.sumAI.err) : esc(W.sumAI.text).replace(/\n/g, "<br>")}</div>` : ""}
-      <div class="tgrid"><div><h4>大盤</h4><ul class="tlist">${["T00", "O00", "TXF"].map(c => q(c) ? `<li>${esc(q(c).name || nameOf(c))} <b>${fmtP(q(c).price)}</b> <span class="${cls(q(c).chg)}">${q(c).chgPct >= 0 ? "+" : ""}${q(c).chgPct ?? "—"}%</span></li>` : "").join("")}</ul></div>
-      <div><h4>自選漲幅前 5</h4><ul class="tlist">${mv.slice(0, 5).map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div>
-      <div><h4>自選跌幅前 5</h4><ul class="tlist">${mv.slice(-5).reverse().map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div></div>
-      ${sumFlowHtml()}
-      <h4>自選股今天觸發的技術訊號 ${S?.busy ? `<span class="note">掃描中…</span>` : ""}</h4><ul class="tlist">${(S?.sig || []).map(s => `<li><button class="linkbtn" data-tsel="${s.c}">${esc(nameOf(s.c))} ${s.c}</button>：${s.ev.map(esc).join("、")} <span class="note">${s.d}</span></li>`).join("") || `<li class="note">${S?.busy ? "…" : "沒有（掃描自選股最多 30 檔的日 K：KD／MACD 交叉、布林突破、20 日新高新低、爆量、鈍化、季線）"}</li>`}</ul>
-      <h4>今天的指標提醒</h4><ul class="tlist">${(W.irLog ||= store.get("watch:irlog", []) || []).filter(x => x.d === toolsDay()).map(x => `<li>${x.t} ${esc(nameOf(x.code))} ${x.code}：${esc(x.msg)}</li>`).join("") || `<li class="note">沒有（在「提醒」設定條件）</li>`}</ul>
-      <h4>國會新申報（最近 3 天）</h4><ul class="tlist">${cg.slice(0, 12).map(t => `<li>${esc(pName(t.pid))} ${t.k === "buy" ? "<b class='up'>買進</b>" : "<b class='down'>賣出</b>"} ${esc(t.ticker)} ${amtTxt(t.amount)} <span class="note">交易日 ${t.traded}</span></li>`).join("") || `<li class="note">沒有</li>`}</ul></section>`;
-    note = "摘要用即時報價與日 K 整理；AI 整理只根據畫面上的資料，不是買賣建議。";
-  } else if (v === "scan") {
+  if (v === "today") return todayPage(); // 早報＋每日摘要整成一頁（brief.js）
+  if (v === "scan") {
     const S = SC(), R = W.scanRes, copt = sel => SCOND.map(([k, t]) => `<option value="${k}" ${k === sel ? "selected" : ""}>${esc(t)}</option>`).join("");
     h = `<section class="csec"><h3>條件選股</h3>
       <div class="irform"><label class="note">股票範圍 <select data-scu>${[["my", "自選股"], ["hold", "庫存"], ["hot", "台股熱門前 60"], ["etf", "ETF 成交值前 60"], ["all", "自選＋庫存＋熱門"], ["market", "全市場（上市櫃約 2300 檔）"], ["custom", "自己輸入代號"]].map(([k, t]) => `<option value="${k}" ${S.uni === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -377,8 +376,8 @@ function toolsBody(v) {
       <h4>每一筆</h4><ul class="tlist">${JR().slice(0, 60).map(e => `<li><span class="note">${e.d}</span> ${e.side === "buy" ? "<b class='up'>買</b>" : "<b class='down'>賣</b>"} <button class="linkbtn" data-tsel="${e.code}">${esc(nameOf(e.code))} ${e.code}</button> ${e.sh ? e.sh.toLocaleString() + " 股" : ""} @ ${fmtP(e.px)} ${e.tags?.length ? `<span class="ctag one">${e.tags.map(esc).join("・")}</span>` : ""}<br><span>${esc(e.reason || "")}</span>${e.snap ? `<br><span class="note">當天：K ${e.snap.kd[0]}／D ${e.snap.kd[1]}・RSI ${e.snap.rsi}・${esc(e.snap.macd)}・${esc(e.snap.ma)}</span>` : ""} <button class="linkbtn" data-jdel="${e.id}">刪除</button></li>`).join("") || `<li class="note">還沒有紀錄。每次買賣記下理由，之後回頭看哪些理由真的賺錢。</li>`}</ul></section>`;
     note = "日記只存在這台裝置（可以匯出備份）；「當天」是記錄日期那根日 K 的指標，「同期買進持有」是同一段期間抱著不動的報酬。";
     setTimeout(jBH, 0);
-  } else if (v === "brief" || v === "notes") { // 早報、筆記追蹤（brief.js）
-    ({ h, note } = v === "brief" ? briefHtml() : ntHtml());
+  } else if (v === "notes") { // 筆記追蹤（brief.js）
+    ({ h, note } = ntHtml());
   } else if (v === "multi") {
     const mode = W.multiMode || "codes", codes = multiCodes();
     h = `<section class="csec"><h3>多圖並排 <span class="seg sm" role="group">${[["codes", "4 檔股票"], ["tf", "同一檔 4 個週期"]].map(([k, t]) => `<button data-mm="${k}" aria-pressed="${mode === k}">${t}</button>`).join("")}</span></h3>
@@ -437,8 +436,6 @@ function toolsClick(e) {
   if (d.tv && W.lt === "tools") { W.tv = d.tv; renderList(); navPush(); }
   else if (d.tsel) W.lt === "cong" ? cxOpenTw(d.tsel) : select(d.tsel); // 大戶國會（內部人）裡點股票：先到台股個股頁看大戶全貌
   else if (d.mshare) mfShare(d.mshare);
-  else if (d.tx === "sumre") { W.sum = null; W.dk = new Map(); renderList(); }
-  else if (d.tx === "sumai") sumAI();
   else if (d.tx === "irnow") irCheck(true);
   else if (d.tx === "jai") jAI();
   else if (d.tx === "jrsave") { const L = jRulesOf(W.jAI?.text); W.jrules = [...L.map(t => ({ t, at: toolsDay() })), ...JRULES()].filter((x, i, a) => a.findIndex(y => y.t === x.t) === i).slice(0, 8); jrSave(); toast(`已存 ${L.length} 條規則，下單時會提醒`); renderList(); }
@@ -763,6 +760,7 @@ function syncHtml() {
   let h = `<section class="csec"><h3>備份與同步</h3>
     <h4>備份檔</h4><p class="note">把這台裝置的自選、庫存、提醒、交易日記、模擬帳戶、錯題本、線型設定（共 ${n} 項）存成一個檔案，換裝置或清除瀏覽器資料後可以匯入。</p>
     <div class="irform"><button class="btn sm primary" data-sy="export">⬇ 匯出備份檔</button><label class="btn sm">⬆ 匯入備份檔<input type="file" accept="application/json,.json" data-syfile hidden></label></div>
+    <p class="note">匯入只收這裡匯出的 .json 備份檔；匯入後，檔案裡有的項目會蓋掉這台裝置現在的設定（沒有的項目保留）。不確定的話，先按「匯出備份檔」留一份。</p>
     <h4>雲端同步</h4>`;
   if (!C) h += `<p class="note">檢查中…</p>`;
   else if (!C.kv) h += `<p class="note">網站的雲端同步暫時還不能使用，目前只能用上面的備份檔。${DEBUG ? "（除錯：Vercel 專案的 Storage 加上 Upstash for Redis，重新部署後就能用同步碼）" : ""}</p>`;

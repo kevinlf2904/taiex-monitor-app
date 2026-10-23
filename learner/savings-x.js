@@ -160,7 +160,7 @@
   document.addEventListener("click", e => { const b = e.target.closest("[data-mmadd]"); if (b) { $("mm-codes").value = `${$("mm-codes").value.trim()} ${b.dataset.mmadd}`; S["mm-codes"] = $("mm-codes").value; save(); monRun(); } });
 
   /* ---------- 通膨換算（總覽與股息計算機的期末金額） ---------- */
-  const sum = $("sec-sum"); sum?.insertAdjacentHTML("beforeend", `<label class="toggle" style="margin-top:10px"><input type="checkbox" id="if-on" ${S.ifOn ? "checked" : ""}> 換算成今天的購買力，每年通膨 <input type="number" id="if-r" value="${esc(S.ifR ?? 2)}" min="0" max="15" step="0.1" style="width:64px" inputmode="decimal"> %</label>`);
+  const sum = $("sec-sum"); sum?.insertAdjacentHTML("beforeend", `<label class="toggle" style="margin-top:10px"><input type="checkbox" id="if-on" ${S.ifOn ? "checked" : ""}> 換算成今天的購買力，每年通膨 <input type="number" id="if-r" aria-label="每年通膨率（%）" value="${esc(S.ifR ?? 2)}" min="0" max="15" step="0.1" style="width:64px" inputmode="decimal"> %</label>`);
   const today = (v, yrs) => v / Math.pow(1 + (+$("if-r").value || 0) / 100, yrs);
   function inflate() {
     document.querySelectorAll(".if-note").forEach(x => x.remove()); if (!$("if-on")?.checked) return;

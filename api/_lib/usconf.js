@@ -32,12 +32,12 @@ const PROMPT = name => `你是美股研究員。這是「${name}」最新一季�
  "demand":"各產品線、業務部門或地區的表現與需求（80 字內）",
  "risks":["新聞稿提到的風險或不利因素，最多 3 條"],
  "quotes":["值得注意的管理層原文句子（保留英文原文），最多 3 句"]}`;
-export async function summarizeUs(sym, acc, name, key, deadline = Date.now() + 55000, parse) {
+export async function summarizeUs(sym, acc, name, key, deadline = Date.now() + 55000, parse, tries = Infinity) {
   const cik = await cikOf(sym); if (!cik) throw new Error("SEC 找不到這個代號");
   const idx = await sec(dir(cik, acc) + "index.json"), f = pickEx99(idx?.directory?.item); if (!f) throw new Error("這份申報找不到財報新聞稿");
   const r = await fetch(dir(cik, acc) + f, { headers: { "User-Agent": SEC_UA() }, signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error(`新聞稿下載失敗（HTTP ${r.status}）`);
   const text = htmlText(await r.text()).slice(0, 150000); if (text.length < 500) throw new Error("新聞稿內容太短，沒辦法整理");
-  const out = await geminiJSON([{ text: PROMPT(name) + "\n\n" + text }], key, deadline, {}, "gemini-flash-lite-latest"), s = parse(out.text);
+  const out = await geminiJSON([{ text: PROMPT(name) + "\n\n" + text }], key, deadline, {}, "gemini-flash-lite-latest", tries), s = parse(out.text);
   if (!s) throw new Error("AI 回傳格式不對，請再試一次");
   return { ...s, file: acc, url: dir(cik, acc) + f, model: out.model };
 }

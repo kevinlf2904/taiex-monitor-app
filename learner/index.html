@@ -68,6 +68,9 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .brand p { margin: 0; font-size: 12px; color: var(--muted); letter-spacing: 0.05em; }
 #navBackFab { position: fixed; left: 14px; bottom: 24px; z-index: 30; height: 38px; padding: 0 16px; border-radius: 999px; border: 0; background: color-mix(in srgb, var(--ink) 14%, var(--bg)); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
 @media (max-width: 640px) { #navBackFab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } }
+/* 手機上往下捲時浮動按鈕（返回、回到最上面、問問題）先淡出，不蓋住正在看的報價、圖表；停下來或往上捲就回來 */
+:is(#navBackFab, #toTop, .chat-fab) { transition: opacity .2s, transform .2s; }
+@media (max-width: 640px) { html.fab-quiet :is(#navBackFab, #toTop, .chat-fab) { opacity: 0 !important; transform: translateY(14px); pointer-events: none; } }
 .tabs { display: flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px; padding: 3px; overflow-x: auto; max-width: 100%; }
 .tabs button {
   border: 0; background: transparent; padding: 5px 14px; border-radius: 3px; cursor: pointer;
@@ -536,6 +539,7 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .hero-viz svg { width: 100%; height: 100%; display: block; }
 .hero-stats { grid-column: 1 / -1; }
 @media (max-width: 860px) { .hero-in { grid-template-columns: 1fr; } .hero-viz { max-width: 520px; } }
+@media (max-width: 640px) { .hero-viz { display: none; } } /* 手機上介紹卡只留文字和按鈕，不佔掉整個第一屏 */
 .hero-k { margin: 0 0 10px; font: 500 12px/1 "JetBrains Mono", var(--font-mono); letter-spacing: .18em; color: var(--muted); text-transform: uppercase; }
 .hero-h { margin: 0 0 14px; font: 600 clamp(26px, 4.4vw, 46px)/1.18 "Space Grotesk", var(--font-display); letter-spacing: -.01em; color: var(--ink); }
 .hero-p { margin: 0 0 22px; font: 400 15px/1.75 "Inter", var(--font-body); color: var(--muted); max-width: 640px; }
@@ -591,9 +595,9 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button type="button" class="hero-x" id="heroX" aria-label="收起介紹">×</button>
     <div class="hero-in"><div class="hero-txt">
       <p class="hero-k">KLineLab・K線情報局</p>
-      <h2 class="hero-h">把複雜的台美股機構籌碼，<br>化為一目了然的突破訊號。</h2>
-      <p class="hero-p">SEC 13F 機構大戶、美國國會議員申報、台股內部人與供應鏈量價動能矩陣，加上 K 線型態辨識與歷史回測——全部來自政府公開資料，由程式自動計算，給你一個量化研究終端機。</p>
-      <div class="hero-cta"><a class="hero-btn pri" href="pro.html">公開測試版 (Beta)・收更新通知</a><button type="button" class="hero-btn" data-hero-go="intel">進入情報局 →</button></div>
+      <h2 class="hero-h">把台美股公開資料，<br>整理成看得懂的研究工具。</h2>
+      <p class="hero-p">SEC 13F 機構持股、美國國會議員與台灣政治人物申報、台股內部人與供應鏈題材，加上 K 線型態與歷史回測。資料來自政府公開資料與市場行情（部分報價可能延遲），由程式整理計算，只供研究學習，不是投資建議。</p>
+      <div class="hero-cta"><button type="button" class="hero-btn pri" data-hero-go="intel">進入情報局 →</button><a class="hero-btn" href="pro.html">公開測試版 (Beta)・收更新通知</a></div>
     </div>
       <div class="hero-viz" aria-hidden="true"><svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="hvg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#a1a1aa" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity=".9"/></linearGradient></defs>
         <path d="M0 132 L40 124 L80 128 L120 112 L160 116 L200 100 L240 96" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 4"/>
@@ -666,9 +670,9 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
         </div>
         <div class="panel ctrl">
           <h3>主圖疊加</h3>
-          <div class="row"><label><input type="checkbox" id="maA" checked><span class="swatch" style="background:var(--s1)"></span>MA</label><input type="number" id="maAn" value="5" min="2" max="120"></div>
-          <div class="row"><label><input type="checkbox" id="maB" checked><span class="swatch" style="background:var(--s2)"></span>MA</label><input type="number" id="maBn" value="20" min="2" max="120"></div>
-          <div class="row"><label><input type="checkbox" id="maC"><span class="swatch" style="background:var(--s3)"></span>MA</label><input type="number" id="maCn" value="60" min="2" max="240"></div>
+          <div class="row"><label><input type="checkbox" id="maA" checked><span class="swatch" style="background:var(--s1)"></span>MA</label><input type="number" id="maAn" value="5" min="2" max="120" aria-label="第一條均線天數"></div>
+          <div class="row"><label><input type="checkbox" id="maB" checked><span class="swatch" style="background:var(--s2)"></span>MA</label><input type="number" id="maBn" value="20" min="2" max="120" aria-label="第二條均線天數"></div>
+          <div class="row"><label><input type="checkbox" id="maC"><span class="swatch" style="background:var(--s3)"></span>MA</label><input type="number" id="maCn" value="60" min="2" max="240" aria-label="第三條均線天數"></div>
           <div class="row"><label><input type="checkbox" id="boll">布林通道 (20, 2)</label></div>
           <div class="row"><label><input type="checkbox" id="sr">支撐 / 壓力線</label></div>
           <div class="row"><label><input type="checkbox" id="zz">轉折點與結構（道氏 / HH、HL）</label></div>
@@ -903,7 +907,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.23-155</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.24-156</span></footer>
 
 <script src="core.js"></script>
 <script src="foldx.js"></script>
@@ -4895,6 +4899,7 @@ function switchTab(t) {
   if (t === "school") t = store.get("schoolTab", "learn");
   if (!TABS.includes(t)) t = "learn";
   const view = t === "intel" ? "watch" : t, prevFrameMode = CUR_TAB === "intel" ? "intel" : "watch"; CUR_TAB = t;
+  $("#hero").hidden = t !== "intel" || !!store.get("heroHide", false); // 情報局的介紹只在情報局顯示：點 K線學堂、看盤、存股，第一個畫面就是那一頁的內容
   TABS.filter(x => x !== "intel").forEach(x => { $("#view-" + x).hidden = x !== view; });
   [["intel", t === "intel"], ["watch", t === "watch"], ["school", SCHOOL.includes(t)], ["savings", t === "savings"]].forEach(([k, on]) => $("#tab-btn-" + k).setAttribute("aria-selected", on));
   SCHOOL.forEach(x => $("#tab-btn-" + x).setAttribute("aria-selected", x === t)); $("#schoolNav").hidden = !SCHOOL.includes(t);
@@ -4919,7 +4924,8 @@ function switchTab(t) {
 const PNAV = { y: 0, yt: 0, wd: 0, ready: false };
 function pnavFlush() { clearTimeout(PNAV.yt); PNAV.yt = 0; const st = history.state; if (st?.tab && st.y !== PNAV.y) try { history.replaceState({ ...st, y: PNAV.y }, "", location.href); } catch {} }
 function pnavBackUi() {
-  const on = (history.state?.d || 0) > 0 || ((CUR_TAB === "watch" || CUR_TAB === "intel") && PNAV.wd > 0);
+  // 看盤、情報局裡面自己有「← 返回」（個股頁標題旁、各子頁上方），外層不再疊一顆浮動的返回
+  const on = (history.state?.d || 0) > 0 && CUR_TAB !== "watch" && CUR_TAB !== "intel";
   let b = $("#navBackFab"); if (!b && on) { b = document.createElement("button"); b.id = "navBackFab"; b.type = "button"; b.textContent = "‹ 返回"; b.setAttribute("aria-label", "回上一頁"); b.addEventListener("click", () => history.back()); document.body.appendChild(b); }
   if (b) b.hidden = !on;
 }
@@ -4931,6 +4937,8 @@ const goTab = t => {
 { const b = document.createElement("button"); b.id = "toTop"; b.type = "button"; b.hidden = true; b.setAttribute("aria-label", "回到最上面"); b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
   b.addEventListener("click", () => scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })); document.body.appendChild(b);
   addEventListener("scroll", () => { const on = scrollY > Math.min(700, innerHeight * 0.8); if (b.hidden === on) b.hidden = !on; }, { passive: true }); }
+// 往下捲的時候先淡出，停下 0.7 秒（或往上捲）就回來：看東西時不擋，要按「回到最上面」時又找得到
+{ let y0 = scrollY, t = 0; const de = document.documentElement; addEventListener("scroll", () => { const y = scrollY, d = y - y0; clearTimeout(t); t = setTimeout(() => de.classList.remove("fab-quiet"), 700); if (Math.abs(d) < 8 && y > 40) return; de.classList.toggle("fab-quiet", d > 0 && y > 120); y0 = y; }, { passive: true }); }
 addEventListener("scroll", () => { PNAV.y = Math.round(scrollY); clearTimeout(PNAV.yt); PNAV.yt = setTimeout(pnavFlush, 250); }, { passive: true });
 addEventListener("popstate", e => { const st = e.state; if (!st?.tab) return; switchTab(st.tab); const y = st.y || 0;
   requestAnimationFrame(() => scrollTo({ top: y })); if (y > 0) [250, 700].forEach(t => setTimeout(() => { if (scrollY < y - 4) scrollTo({ top: y }); }, t)); pnavBackUi(); });

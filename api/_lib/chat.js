@@ -8,8 +8,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { kv, kvOn } from "./sync.js";
-
-export const config = { maxDuration: 60 };
+import { aiLimit, WEB_TRIES, claudeFallbackOn } from "./_limit.js";
 
 const SYSTEM = `你是「K線學堂」裡的技術分析助教，對象是想學台股技術分析的初學者。請用繁體中文、口語但精確地回答。
 - 優先回答使用者的問題；用得到時，引用「目前畫面」提供的數據（課程、指標讀數、截圖或個股的判讀結果），並說明你看的是哪個數字。
@@ -23,17 +22,18 @@ const GEMINI_DEFAULT = "gemini-flash-latest";
 // 503（模型過載）、500、429（太忙）時：同一個模型等一下重試一次，再換下一個備用模型
 export const GEMINI_FALLBACKS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-lite-latest"];
 const retryable = s => s === 503 || s === 500 || s === 502 || s === 504 || s === 429;
-export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL, { wait = ms => new Promise(r => setTimeout(r, ms)), deadline = Date.now() + 50000 } = {}) {
+export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL, { wait = ms => new Promise(r => setTimeout(r, ms)), deadline = Date.now() + 50000, tries = WEB_TRIES } = {}) {
   const models = [...new Set([model || GEMINI_DEFAULT, GEMINI_DEFAULT, ...GEMINI_FALLBACKS])];
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: turns.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
     generationConfig: { maxOutputTokens: 4096, temperature: 0.6 },
   });
-  let last = null;
+  let last = null, calls = 0;
   for (const m of models) {
     for (let attempt = 0; attempt < 2; attempt++) {
       const left = deadline - Date.now(); if (left < 3000) return { ok: false, status: last?.status || 504, message: last?.message || "逾時" };
+      if (calls++ >= tries) return { ok: false, status: last?.status || 503, message: last?.message || "" }; // 每一次呼叫都算錢：忙線時最多重試到 tries 次
       let r, j;
       try {
         r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
   if (geminiKey) {
     try {
       const r = await askGemini(SYSTEM + ctx, turns, geminiKey);
-      if (!r.ok && !r.blocked && retryable(r.status) && process.env.ANTHROPIC_API_KEY && left() > 20000) return askClaude(); // 有設 Claude 金鑰時，Gemini 忙線就改問 Claude
+      if (!r.ok && !r.blocked && retryable(r.status) && process.env.ANTHROPIC_API_KEY && claudeFallbackOn() && left() > 20000 && !(await aiLimit(req, "claude-fb"))) return askClaude(); // Gemini 忙線改問 Claude：要開 AI_CLAUDE_FALLBACK，而且有自己的全站上限
       if (r.ok && ck && !r.truncated) await cachePut(ck, { text: r.text, provider: "gemini", model: r.model });
       return res.status(200).json(r.ok ? { ok: true, text: r.text, truncated: r.truncated, provider: "gemini", model: r.model } : { ok: false, error: geminiError(r), provider: "gemini" });
     } catch { return res.status(200).json({ ok: false, error: "連不到 Gemini 服務，請稍後再試。" }); }

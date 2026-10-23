@@ -11,6 +11,8 @@ function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; le
 // 台股升降單位（檔位）
 function tickOf(p) { return p < 10 ? 0.01 : p < 50 ? 0.05 : p < 100 ? 0.1 : p < 500 ? 0.5 : p < 1000 ? 1 : 5; }
 function roundTick(p) { const t = tickOf(p); return +(Math.round(p / t) * t).toFixed(2); }
+// 漲跌停價：昨收 ×1.1（×0.9）再往內取到升降單位（ETF 的升降單位不同）；和 api/_lib/market.js 的 limits 同一套
+function twLimits(prev, etf = false) { const t = p => (etf ? (p < 50 ? 0.01 : 0.05) : tickOf(p)), u = prev * 1.1, d = prev * 0.9; return [+(Math.floor(u / t(u) + 1e-9) * t(u)).toFixed(2), +(Math.ceil(d / t(d) - 1e-9) * t(d)).toFixed(2)]; }
 function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
 function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
 function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
@@ -404,13 +406,19 @@ function towerCalc(D, k = 3) { const c = D.map(x => x.c), N = c.length, boxes = 
 /* ================= 圖表 ================= */
 /* ---------- 技術指標開關 ----------
    一排可切換的小籤，分成「主圖」「副圖」兩組；狀態記在瀏覽器裡，下次打開還在。 */
-function indicatorBar(host, key, groups, defaults, onChange) {
-  let state = new Set(store.get("ind:" + key, defaults));
+// presets：[[名稱, 指標 id...]] 一鍵套用的組合（新手不用從幾十個指標裡挑）；群組有 more＝n 時只先列前 n 個，其餘收在「更多」（有開著的照樣列出）
+function indicatorBar(host, key, groups, defaults, onChange, presets = []) {
+  let state = new Set(store.get("ind:" + key, defaults)), more = !!store.get("ind:" + key + ":more", false);
+  const chip = it => `<button type="button" class="ichip" data-id="${it.id}" aria-pressed="${state.has(it.id)}">${it.hex || it.color ? `<i style="background:${it.hex || `var(${it.color})`}"></i>` : ""}${it.label}</button>`;
   const render = () => {
-    host.innerHTML = groups.map(g => `<div class="ibar-g" role="group" aria-label="${g.title}"><span class="ibar-t">${g.title}</span>${g.items.map(it =>
-      `<button type="button" class="ichip" data-id="${it.id}" aria-pressed="${state.has(it.id)}">${it.hex || it.color ? `<i style="background:${it.hex || `var(${it.color})`}"></i>` : ""}${it.label}</button>`).join("")}</div>`).join("");
+    const pre = presets.length ? `<div class="ibar-g ibar-pre" role="group" aria-label="快速組合"><span class="ibar-t">組合</span>${presets.map(([t, ids], i) => `<button type="button" class="ichip" data-pre="${i}" aria-pressed="${ids.length === state.size && ids.every(x => state.has(x))}">${t}</button>`).join("")}</div>` : "";
+    const hidden = g => (g.more && !more ? g.items.slice(g.more).filter(it => !state.has(it.id)) : []);
+    host.innerHTML = pre + groups.map(g => { const H = new Set(hidden(g));
+      return `<div class="ibar-g" role="group" aria-label="${g.title}"><span class="ibar-t">${g.title}</span>${g.items.filter(it => !H.has(it)).map(chip).join("")}${g.more && g.items.length > g.more ? `<button type="button" class="ichip imore" data-more aria-expanded="${more}">${more ? "收起" : `更多 ${H.size} 個 ▾`}</button>` : ""}</div>`; }).join("");
   };
   host.addEventListener("click", e => {
+    if (e.target.closest("[data-more]")) { more = !more; store.set("ind:" + key + ":more", more); return render(); }
+    const p = e.target.closest("[data-pre]"); if (p) { state = new Set(presets[+p.dataset.pre][1]); store.set("ind:" + key, [...state]); render(); return onChange(state); }
     const b = e.target.closest("[data-id]"); if (!b) return;
     const id = b.dataset.id; state.has(id) ? state.delete(id) : state.add(id);
     store.set("ind:" + key, [...state]); render(); onChange(state);
