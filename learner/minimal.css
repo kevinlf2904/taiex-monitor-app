@@ -321,7 +321,7 @@ svg circle[stroke-width] { stroke-width: 1.2px; }
   --bg: #fafafa; --surface: #ffffff; --surface-2: #f4f4f5; --surface-3: #ffffff;
   --ink: #09090b; --muted: #52525b; --line: #e4e4e7;
   --accent: #18181b; --accent-soft: rgba(9, 9, 11, .06); --gold: #71717a; --gold-hi: #a1a1aa;
-  --up: #dc2626; --down: #059669; --up-pill: #dc2626; --down-pill: #059669;
+  --up: #dc2626; --down: #047857; --up-pill: #dc2626; --down-pill: #047857; /* 跌的綠在淺色底對比 5.4（原 #059669 只有 3.6，小字不到 AA 4.5） */
   --s1: #d97706; --band: rgba(0, 0, 0, .035); --shade: rgba(0, 0, 0, .03);
   --grad-strong: #09090b; --on-strong: #ffffff; --strong-line: #09090b;
   --radius: 6px; --radius-md: 5px; --radius-sm: 4px;
