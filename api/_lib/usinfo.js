@@ -7,13 +7,13 @@
 import { finnhubOn, finnhubOk } from "./_finnhub.js";
 
 const FH = "https://finnhub.io/api/v1", fhKey = () => (process.env.FINNHUB_API_KEY || "").trim();
-const SEC_UA = () => (process.env.SEC_UA || "").trim() || "KlineSchool/1.0 (admin@kline-school.vercel.app)";
+export const SEC_UA = () => (process.env.SEC_UA || "").trim() || "KlineSchool/1.0 (admin@kline-school.vercel.app)";
 const num = v => (v == null || v === "" ? null : Number.isFinite(+v) ? +v : null);
 async function fh(path) {
   const r = await fetch(`${FH}${path}`, { headers: { "X-Finnhub-Token": fhKey(), Accept: "application/json" }, signal: AbortSignal.timeout(7000) });
   if (!r.ok) throw new Error(`Finnhub HTTP ${r.status}`); return r.json();
 }
-async function sec(url) {
+export async function sec(url) {
   const r = await fetch(url, { headers: { "User-Agent": SEC_UA(), Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error(`SEC HTTP ${r.status}`); return r.json();
 }
@@ -49,7 +49,7 @@ export function parseConcept(j) {
   return { q: sort(q).slice(-12), y: sort(y).slice(-6) };
 }
 let TICK = null; // ticker → CIK（約 1 萬檔，同一個執行個體重用）
-async function cikOf(sym) {
+export async function cikOf(sym) {
   if (!TICK || Date.now() - TICK.at > 864e5) { const j = await sec("https://www.sec.gov/files/company_tickers.json"); const m = new Map(); for (const x of Object.values(j || {})) if (x?.ticker) m.set(String(x.ticker).toUpperCase(), x.cik_str); TICK = { m, at: Date.now() }; }
   const c = TICK.m.get(sym) ?? TICK.m.get(sym.replace(".", "-")); return c == null ? null : String(c).padStart(10, "0");
 }

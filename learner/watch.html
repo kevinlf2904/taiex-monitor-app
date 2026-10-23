@@ -610,6 +610,11 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 }
 .mf-modes { margin: 6px 12px; display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 6px; padding-bottom: 2px; }
 .mf-modes::-webkit-scrollbar { display: none; }
+.mfvbar { display: flex; align-items: center; gap: 6px; margin: 6px 12px; min-width: 0; } .mfvbar .mf-modes { margin: 0 !important; flex: 0 1 auto; min-width: 0; }
+.mfmore { position: relative; flex: none; } .mfmore > summary { list-style: none; cursor: pointer; font-size: 12.5px; padding: 4px 10px; white-space: nowrap; } .mfmore > summary::-webkit-details-marker { display: none; }
+.mfmore-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; width: min(300px, calc(100vw - 32px)); padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+.mfmore-pop button { text-align: left; font: inherit; font-size: 12.5px; padding: 7px 10px; border: 0; border-radius: 7px; background: none; color: var(--ink); cursor: pointer; } .mfmore-pop button:hover, .mfmore-pop button[aria-pressed="true"] { background: var(--surface-2); }
+#secMf.chart-fullscreen .mfvbar { width: 100%; justify-content: center; margin: 0 0 6px; flex-shrink: 0; }
 .mf-modes .ichip { flex: none; font-size: 12.5px; padding: 4px 10px; }
 .mf-rpbar { display: flex; align-items: center; gap: 6px 8px; padding: 6px 10px; margin: 6px 12px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); flex-wrap: wrap; }
 .mf-rpbar .mrp-range { flex: 1; min-width: 90px; margin: 0; accent-color: var(--ink); }
@@ -749,7 +754,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .ghud { position: absolute; left: 12px; top: 10px; font-size: 11px; font-weight: 200; letter-spacing: .03em; line-height: 1.5; color: #8fa9cc; pointer-events: none; } .ghud b { color: #e9f3ff; font-weight: 300; }
 .gzoom .gpan[aria-pressed="true"] { background: #2a4a7a; color: #fff; }
 .gx-free .igalaxy { touch-action: none; } .gzoom .gfree { padding: 0 10px; } .gzoom .gfree[aria-pressed="true"] { background: #2a4a7a; color: #fff; }
-.gzoom { position: static; width: fit-content; margin: 6px 0 0 auto; display: flex; gap: 2px; background: rgba(10, 22, 42, .7); border: 1px solid #22395e; border-radius: 8px; padding: 2px; z-index: 1; } .gzoom button { min-width: 32px; height: 28px; padding: 0 6px; font: 300 13px var(--font-num); color: #cfe2fb; background: none; border: 0; border-radius: 6px; cursor: pointer; } .gzoom button:hover { background: rgba(127, 196, 255, .14); } .gzoom .gzv { min-width: 48px; font-size: 11.5px; }
+.gzoom { position: static; width: fit-content; margin: 6px 0 0 auto; display: flex; gap: 2px; background: rgba(10, 22, 42, .7); border: 1px solid #22395e; border-radius: 8px; padding: 2px; z-index: 1; } .gzoom button { min-width: 32px; height: 28px; padding: 0 6px; font: 300 13px var(--font-num); color: #cfe2fb; background: none; border: 0; border-radius: 6px; cursor: pointer; } .gzoom button:hover { background: rgba(127, 196, 255, .14); } .gzoom .gzv { min-width: 44px; font: 300 11.5px var(--font-num); color: #cfe2fb; display: grid; place-items: center; } .gzoom .greset { padding: 0 10px; font-family: var(--font); font-size: 12px; }
 .gcard { position: absolute; width: 230px; background: rgba(10, 22, 42, .9); border: 1px solid #2a4a78; border-radius: 10px; padding: 9px 11px; font-size: 12px; font-weight: 200; letter-spacing: .02em; color: #e9f3ff; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); display: grid; gap: 4px; z-index: 2; }
 .gcard[hidden] { display: none; } .gcard.dock { position: static; width: auto; margin: 6px 12px 0; background: #0b1a33; } @media (max-width: 900px) { .gcard { width: 188px; font-size: 11.5px; padding: 7px 9px; } .gcard.dock { width: auto; } }
 .gcard .glink { font-size: 11px; color: #b9cbe4; line-height: 1.5; overflow-wrap: anywhere; } .gcard .glink .gtag { font-size: 10px; margin-right: 2px; }
@@ -1019,7 +1024,7 @@ tr.on td { background: var(--surface-2); }
   <section class="w-list panel" aria-label="清單" id="listPane">
     <div class="l-head">
       <div class="l-ix" id="ix2"></div>
-      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股"><svg class="ico" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin:0" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金雷達</button><button data-l="earn">財報</button><button data-l="ind">供應鏈</button><button data-l="etf">ETF</button><button data-l="pod">節目</button><button data-l="cong">大戶國會</button><button data-l="rank">排行</button><button type="button" class="ltedit" data-tabcfg aria-label="編輯分頁（順序、隱藏）" title="編輯分頁">⋯</button></div>
+      <div class="seg full ltabs" role="group" aria-label="清單" id="lTabs"><button type="button" class="gsbtn" data-gsearch aria-label="搜尋個股"><svg class="ico" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin:0" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button><button data-l="watch">自選</button><button data-l="hold">庫存</button><button data-l="tools">工具</button><button data-l="mkt">大盤</button><button data-l="screen">選股</button><button data-l="money">資金雷達</button><button data-l="earn">財報</button><button data-l="ind">供應鏈</button><button data-l="etf">ETF</button><button data-l="pod">節目</button><button data-l="cong">大戶國會</button><button data-l="rank">排行</button><button type="button" class="ltedit" data-tabcfg aria-label="編輯分頁（順序、隱藏）" title="編輯分頁">⚙ 自訂</button></div>
       <div class="groups" id="groups"></div>
       <div class="search" id="searchBox">
         <button type="button" class="gsadd" data-gsearch-add><svg class="ico" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin-right:.32em" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>搜尋代號或名稱，加入自選</button>
@@ -1153,7 +1158,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-150</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-151</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1845,7 +1850,8 @@ function renderList() {
   // 換分頁時新內容常常先是一行「載入中」，頁面一變短瀏覽器就把捲動位置拉回最上面：重畫前先撐住原本的高度，內容夠高或 0.9 秒後再放開
   const xs = hsKeep(), hold = !W.ticking && !lx.hidden && lx.offsetHeight > 0;
   if (hold) { clearTimeout(W.lxHold); lx.style.minHeight = lx.offsetHeight + "px"; }
-  renderList0();
+  // 某個分頁畫的時候出錯（資料格式不對、程式還沒載完）：不要留一片空白，說明並給「重試」，錯誤記到資料來源狀態
+  try { renderList0(); } catch (e) { noteErr("畫面", e); lx.hidden = false; lx.innerHTML = `<p class="note err" style="padding:12px">⚠︎ 這個畫面暫時顯示不出來（${esc(e.message)}）。<button class="linkbtn" data-lxretry>重試</button></p>`; }
   if (opened.size) for (const d of lx.querySelectorAll("details")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
   hsRestore(xs); hsFadeAll();
   if (hold) { const r = document.createRange(); r.selectNodeContents(lx); const need = parseFloat(lx.style.minHeight) || 0;
@@ -2678,7 +2684,12 @@ const MF_VIZ = [
   ["board", "四象限看板", "四象限卡片清單，內含近 10 日迷你柱狀圖與金額，文字最清晰"],
   ["arrow", "位移箭頭", "空心圈為前一期位置，箭頭指向當期位置，箭頭越長代表變化越劇烈"],
 ];
-const mfVizBar = () => `<div class="ichips gcats mf-modes" role="group" aria-label="視覺化模式">${MF_VIZ.map(([k, t]) => `<button type="button" class="ichip" data-mviz="${k}" aria-pressed="${W.mf.viz === k}">${t}</button>`).join("")}</div>`;
+// 常用的 4 種直接放按鈕，其他收進「更多視角」；選了收起來的那種，它也會出現在按鈕列（看得到現在用哪種）
+const MF_VIZ_MAIN = ["bubble", "tiles", "compass", "flow"];
+document.addEventListener("click", e => { for (const d of document.querySelectorAll(".mfmore[open]")) if (!d.contains(e.target)) d.open = false; }); // 點別的地方就收起「更多視角」
+const mfVizBar = () => { const cur = W.mf.viz, chip = ([k, t]) => `<button type="button" class="ichip" data-mviz="${k}" aria-pressed="${cur === k}">${t}</button>`, more = MF_VIZ.filter(x => !MF_VIZ_MAIN.includes(x[0]));
+  return `<div class="mfvbar"><div class="ichips gcats mf-modes" role="group" aria-label="視覺化模式">${MF_VIZ.filter(x => MF_VIZ_MAIN.includes(x[0]) || x[0] === cur).map(chip).join("")}</div>
+    <details class="mfmore"><summary class="ichip">更多視角 ▾</summary><div class="mfmore-pop" role="group" aria-label="更多視角">${more.map(([k, t, d]) => `<button type="button" data-mviz="${k}" aria-pressed="${cur === k}" title="${esc(d)}">${t}</button>`).join("")}</div></details></div>`; };
 
 function mfSquarify(items, x, y, w, h) {
   const out = [], total = items.reduce((a, b) => a + b.v, 0); if (!total || w <= 0 || h <= 0) return out;
@@ -3645,7 +3656,7 @@ function indGalaxy(net, focus) {
   return `<details class="gxopts-d" data-gxopen${store.get("watch:gxopen", false) ? " open" : ""}><summary>樣式<span class="note">${nm("lay")}・${nm("line")}・窗格${nm("tip")}</span></summary><div class="gxopts"><span>窗格</span>${seg("tip")}<span>排列</span>${seg("lay")}<span>連線</span>${seg("line")}</div></details>
     <div class="igal-wrap gstage"><canvas class="igalaxy" role="img" aria-label="${esc(net.name)} 產業星系：${esc(INDT.get(core).name)} 在中心，上游 ${ups.size}、下游 ${downs.size}"></canvas>
       <div class="ghud">中心：<b>${esc(INDT.get(core).name)}</b><br>上游 ${ups.size}・下游 ${downs.size}・相關 ${ids.length - 1 - ups.size - downs.size}</div><div class="gcard" hidden></div></div>
-      <div class="gzoom" role="group" aria-label="縮放與轉動"><button type="button" data-gxz="free" class="gfree" aria-pressed="${!!W.gx.free}" title="自由轉動：手指上下左右拖都能調整角度（開著時在圖上不能捲動頁面）" aria-label="自由轉動">↻ 轉動</button><button type="button" data-gxz="-" aria-label="縮小">－</button><button type="button" data-gxz="0" aria-label="回到原本大小" class="gzv">${Math.round((W.gx.zoom || 1) * 100)}%</button><button type="button" data-gxz="+" aria-label="放大">＋</button><button type="button" data-gxz="pan" class="gpan" aria-pressed="${!!W.gx.panMode}" title="拖曳改成移動畫面（也可以按住 Shift 拖、滑鼠右鍵拖，或兩指拖）" aria-label="拖曳移動畫面">✥</button></div>
+      <div class="gzoom" role="group" aria-label="縮放與轉動"><button type="button" data-gxz="free" class="gfree" aria-pressed="${!!W.gx.free}" title="自由轉動：手指上下左右拖都能調整角度（開著時在圖上不能捲動頁面）" aria-label="自由轉動">↻ 轉動</button><button type="button" data-gxz="-" aria-label="縮小">－</button><span class="gzv" aria-live="polite">${Math.round((W.gx.zoom || 1) * 100)}%</span><button type="button" data-gxz="+" aria-label="放大">＋</button><button type="button" data-gxz="0" class="greset" title="回到原本大小、位置與角度" aria-label="重置">重置</button><button type="button" data-gxz="pan" class="gpan" aria-pressed="${!!W.gx.panMode}" title="拖曳改成移動畫面（也可以按住 Shift 拖、滑鼠右鍵拖，或兩指拖）" aria-label="拖曳移動畫面">✥</button></div>
     <div class="igal-leg"><span><i style="background:#ffb26b"></i>上游連線</span><span><i style="background:#6fc3ff"></i>下游連線</span><span><i style="background:#8aa0bf"></i>其他關係</span><span>光暈紅漲綠跌；上半部＝上游、下半部＝下游</span><span>${isMobile() ? "點圓點看資訊、左右拖曳轉動、兩指縮放；按「↻ 轉動」後上下拖可以調整角度、按 ✥ 可以拖曳移動" : "滑到圓點看資訊、點一下換到中心、拖曳轉動（上下拖調角度）、Ctrl／⌘＋滾輪縮放、✥ 或 Shift 拖移動畫面"}</span></div>`;
 }
 document.addEventListener("toggle", e => { if (e.target.matches?.("[data-gxopen]")) store.set("watch:gxopen", e.target.open); }, true); // 樣式選項收合狀態記在這個瀏覽器
@@ -3708,7 +3719,9 @@ function gxDraw(cv) {
   const placed = [], labIds = [], rank = o => (o.id === focus ? 10 : o.isCore ? 9 : nb.has(o.id) ? 5 + o.p.z : o.p.z);
   if ("letterSpacing" in ctx) ctx.letterSpacing = "0.03em";
   lab.sort((a, b) => rank(b) - rank(a)).forEach(({ id, p, r, isCore }) => {
-    const on = id === focus, nm = INDT.get(id).name, txt = !isCore && !on && !nb.has(id) && nm.length > 8 ? nm.slice(0, 8) + "…" : nm; ctx.font = `${isCore ? 400 : on ? 300 : 200} ${isCore ? 12 : on ? 11.5 : 10.5}px ${font}`;
+    // 外圈的名稱：先拿掉括號裡的補充（「AI 先進封裝（CoWoS）」→「AI 先進封裝」），還是太長才截斷；指到的、中心、連到的寫完整
+    const on = id === focus, nm = INDT.get(id).name, sh = nm.replace(/\s*[（(][^）)]*[）)]\s*/g, " ").trim() || nm, txt = isCore || on || nb.has(id) ? nm : sh.length > 10 ? sh.slice(0, 10) + "…" : sh;
+    ctx.font = `${isCore ? 400 : on ? 300 : 200} ${isCore ? 12.5 : on ? 12 : 11.5}px ${font}`;
     const tw = ctx.measureText(txt).width, x = p.x - tw / 2, hitB = B => placed.some(b => b[0] < B[2] && B[0] < b[2] && b[1] < B[3] && B[1] < b[3]);
     let y = p.y + r + (isCore ? 15 : 12), box = [x - 3, y - 10, x + tw + 3, y + 3];
     if (!on && hitB(box) && nb.has(id)) { y = p.y - r - 5; box = [x - 3, y - 10, x + tw + 3, y + 3]; } // 連到的產業：下面放不下就改放圓點上面
@@ -3760,7 +3773,7 @@ function gxMount() {
   bar?.addEventListener("click", e => { const b = e.target.closest("[data-gxz]"); if (!b) return; const v = b.dataset.gxz, w = cv.clientWidth, h = cv.clientHeight;
     if (v === "free") { G.free = !G.free; b.setAttribute("aria-pressed", G.free); stage.classList.toggle("gx-free", G.free); return; }
     if (v === "pan") { G.panMode = !G.panMode; b.setAttribute("aria-pressed", G.panMode); cv.style.cursor = G.panMode ? "move" : "grab"; return; }
-    if (v === "0") { G.zoom = 1; G.px = G.py = 0; if (zv) zv.textContent = "100%"; dirty = true; } else zoomAt(v === "+" ? 1.3 : 1 / 1.3, w / 2 + (G.px || 0), h / 2 + 8 + (G.py || 0)); });
+    if (v === "0") { G.zoom = 1; G.px = G.py = 0; G.th = 0.4; G.ph = 0.42; if (zv) zv.textContent = "100%"; dirty = true; } else zoomAt(v === "+" ? 1.3 : 1 / 1.3, w / 2 + (G.px || 0), h / 2 + 8 + (G.py || 0)); });
   const pts = new Map(); let pinch = null; // 兩指：開合縮放、一起移動就平移
   const pinchInfo = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
   cv.addEventListener("pointerdown", e => { const [x, y] = xy(e); pts.set(e.pointerId, { x, y });
@@ -3962,6 +3975,7 @@ function renderInd0() {
   if (S.jump) { const el = document.querySelector(`.inode2[data-ifocus="${S.jump}"]`); S.jump = null; el?.scrollIntoView({ block: "center" }); } // 分層聚焦後上方多了說明，讓點的題材留在畫面中間
 }
 // 工具分頁（tools.js）：點擊、送出表單、勾選
+$("#lx").addEventListener("click", e => { if (e.target.closest("[data-lxretry]")) renderList(); });
 $("#lx").addEventListener("click", e => toolsClick(e)); $("#lTools").addEventListener("click", e => toolsClick(e));
 $("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListener("change", e => toolsChange(e));
 setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); if ((store.get("watch:paper", null)?.orders || []).length) paStart(); if (["rev", "pm3", "conf"].some(k => EVA()[k])) evStart(); }, 3000);

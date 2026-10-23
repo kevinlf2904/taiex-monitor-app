@@ -1,15 +1,19 @@
 // 法說會重點：公開資訊觀測站「法人說明會一覽表」找一家公司最近幾次法說會與簡報檔，AI 讀簡報（PDF）整理重點。
 // GET  /api/confai?code=2330            → { ok, list: [{ date, time, note, file, en }] }（今年和去年，新到舊，含已排定還沒開的；同一天同一份簡報只留一次）
 // POST /api/confai { code, file }        → { ok, head, outlook[], margin, capex, demand, risks[], quotes[], model, cached }
+// POST /api/confai { op: "cmp", code, file, prev, a, b } → { ok, tone, head, changes: [{ k, now, before }] }（a、b＝這次、上一季的整理結果，AI 比較兩份文字，不再讀簡報）
 // 簡報檔放在 mopsov.twse.com.tw/nas/STR/（檔名＝代號＋法說會日期＋M／E＋序號）；同一份簡報整理過就存在 KV，之後直接回。
 import { geminiJSON, uploadBuf, fileState, fileDelete } from "./podcast.js";
 import { kv, kvOn } from "./sync.js";
 import { toIso } from "./calendar.js";
+import { okAcc, usConfList, summarizeUs } from "./usconf.js";
+// 美股（代號是英文字母）：「法說會」改用 SEC 8-K 的財報新聞稿（api/_lib/usconf.js）；file 是申報編號（accession number）
+const isUs = code => /^[A-Z][A-Z.-]{0,6}$/.test(code);
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)" }, MAX_MB = 45, INLINE_MB = 12, TTL = 180 * 86400;
 const strip = h => String(h).replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
   .replace(/[\u200e\u200f\u202a-\u202e]/g, "").replace(/\s+/g, " ").trim(); // 觀測站的文字夾了很多 &#8206;（看不見的方向符號）
-export const okFile = (code, f) => typeof f === "string" && new RegExp(`^${code}\\d{8}[ME]\\d{3}\\.pdf$`, "i").test(f);
+export const okFile = (code, f) => (isUs(code) ? okAcc(f) : typeof f === "string" && new RegExp(`^${code}\\d{8}[ME]\\d{3}\\.pdf$`, "i").test(f));
 // 一覽表裡這家公司的列：[日期, 時間, 擇要訊息, 中文簡報檔, 英文簡報檔]
 export function parseConfRows(html, code) {
   const out = [];
@@ -34,6 +38,31 @@ export async function confList(code) {
 }
 // 要整理哪一場：最近一次已經召開、有簡報的（還沒開的常沒有簡報）；learner/earnplus.js 的 epConf 用同一個規則
 export const pickConf = (L, today) => L.find(x => x.file && x.date <= today) || L.find(x => x.file) || null;
+// 上一季：比 f 的簡報早 40 天以上、不同檔的最近一份（簡報檔名＝代號＋日期＋M＋序號，用檔名的日期比較，同一份簡報在多場論壇重複用也不會誤判）
+const fileDay = (code, f) => String(f || "").slice(code.length, code.length + 8);
+export function prevConf(L, f, code) {
+  if (!f?.file) return null; if (isUs(code)) return L.find(x => x.file && x.file !== f.file && Date.parse(f.date) - Date.parse(x.date) >= 40 * 864e5) || null; // 美股：每季一份 8-K，用申報日期
+  const d0 = Date.parse(fileDay(code, f.file).replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3"));
+  return L.find(x => x.file && x.file !== f.file && d0 - Date.parse(fileDay(code, x.file).replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3")) >= 40 * 864e5) || null;
+}
+// 兩季比較：只把兩份整理好的重點（文字）交給 AI，請它說哪些地方變了；tone＝更樂觀／差不多／更保守
+const CMP_PROMPT = name => `你是台股研究員。下面是「${name}」最近兩次法說會簡報的重點整理（新的是「這一季」，舊的是「上一季」）。請只根據這兩份整理比較，不要加沒寫到的數字或推測，用繁體中文、台灣用語，輸出 JSON：
+{"tone":"更樂觀 或 差不多 或 更保守（整體展望和上一季比）",
+ "head":"一句話說最大的變化（40 字內）",
+ "changes":[{"k":"項目（例：營收展望、毛利率指引、資本支出、需求、風險）","now":"這一季怎麼說（40 字內）","before":"上一季怎麼說（40 字內）"}]}
+changes 最多 5 項，只列真的有變化的；兩份都沒提到的項目不要列。`;
+const slim = v => { const S = (x, n) => (typeof x === "string" ? x.slice(0, n) : ""), A = x => (Array.isArray(x) ? x.filter(y => typeof y === "string").slice(0, 6).map(y => y.slice(0, 160)) : []);
+  return { head: S(v?.head, 120), outlook: A(v?.outlook), margin: S(v?.margin, 240), capex: S(v?.capex, 240), demand: S(v?.demand, 240), risks: A(v?.risks) }; };
+export function parseConfCmp(text) {
+  const m = String(text || "").match(/\{[\s\S]*\}/); if (!m) return null; let j; try { j = JSON.parse(m[0]); } catch { return null; }
+  const tone = ["更樂觀", "差不多", "更保守"].find(t => String(j?.tone || "").includes(t)); if (!tone) return null;
+  const s = (x, n) => (typeof x === "string" ? x.slice(0, n) : "");
+  return { tone, head: s(j.head, 80), changes: (Array.isArray(j.changes) ? j.changes : []).filter(c => c && typeof c.k === "string").slice(0, 5).map(c => ({ k: s(c.k, 20), now: s(c.now, 120), before: s(c.before, 120) })) };
+}
+export async function compareConf(a, b, name, key, deadline = Date.now() + 40000) {
+  const out = await geminiJSON([{ text: CMP_PROMPT(name) + "\n\n【這一季】\n" + JSON.stringify(slim(a)) + "\n\n【上一季】\n" + JSON.stringify(slim(b)) }], key, deadline, {}, "gemini-flash-lite-latest");
+  const r = parseConfCmp(out.text); if (!r) throw new Error("AI 回傳格式不對，請再試一次"); return { ...r, model: out.model };
+}
 const PROMPT = name => `你是台股研究員。這是「${name}」法人說明會的簡報。請只根據簡報內容整理，不要加簡報沒寫的數字或推測，用繁體中文、台灣用語，輸出 JSON：
 {"head":"一句話總結這次法說會最重要的訊息（40 字內）",
  "outlook":["公司對下一季或全年的展望與指引，3～5 條，每條 50 字內，有數字就寫數字（營收、毛利率、營益率區間）"],
@@ -53,18 +82,26 @@ export function parseConfSum(text) {
 export default async function handler(req, res) {
   const body = req.method === "POST" ? (typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}) : {};
   const code = String(req.query?.code || body.code || "").trim().toUpperCase();
-  if (!/^\d{4,6}[A-Z]?$/.test(code)) return res.status(400).json({ ok: false, error: "法說會只支援台股代號" });
+  if (!/^\d{4,6}[A-Z]?$/.test(code) && !isUs(code)) return res.status(400).json({ ok: false, error: "代號不對（台股數字代號或美股英文代號）" });
   if (req.method !== "POST") {
-    try { const list = await confList(code); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json({ ok: true, code, list }); }
+    try { const list = isUs(code) ? await usConfList(code) : await confList(code); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json({ ok: true, code, list }); }
     catch (e) { return res.status(200).json({ ok: false, error: `拿不到法說會資料（${e.message}）` }); }
   }
   const file = String(body.file || ""), name = String(body.name || code).slice(0, 20);
   if (!okFile(code, file)) return res.status(400).json({ ok: false, error: "簡報檔名不對" });
-  const ck = `confai:${file}`;
+  if (body.op === "cmp") { // 兩季比較：同一組簡報比過就存起來
+    const prev = String(body.prev || ""); if (!okFile(code, prev) || !body.a?.head || !body.b?.head) return res.status(400).json({ ok: false, error: "比較的資料不完整" });
+    const ck2 = `confcmp:${file}:${prev}`;
+    if (kvOn()) { try { const v = await kv("GET", ck2); if (v) return res.status(200).json({ ok: true, ...JSON.parse(v), cached: true }); } catch {} }
+    const key = (process.env.GEMINI_API_KEY || "").trim(); if (!key) return res.status(200).json({ ok: false, error: "伺服器沒有設定 AI 金鑰（GEMINI_API_KEY）" });
+    try { const v = { ...(await compareConf(body.a, body.b, name, key)), file, prev }; if (kvOn()) { try { await kv("SET", ck2, JSON.stringify(v), "EX", TTL); } catch {} } return res.status(200).json({ ok: true, ...v }); }
+    catch (e) { return res.status(200).json({ ok: false, error: e.message }); }
+  }
+  const ck = `${isUs(code) ? "usconf" : "confai"}:${file}`;
   if (kvOn()) { try { const v = await kv("GET", ck); if (v) return res.status(200).json({ ok: true, ...JSON.parse(v), cached: true }); } catch {} }
   const key = (process.env.GEMINI_API_KEY || "").trim(); if (!key) return res.status(200).json({ ok: false, error: "伺服器沒有設定 AI 金鑰（GEMINI_API_KEY）" });
   try {
-    const v = await summarizeConf(file, name, key);
+    const v = isUs(code) ? await summarizeUs(code, file, name, key, Date.now() + 55000, parseConfSum) : await summarizeConf(file, name, key);
     if (kvOn()) { try { await kv("SET", ck, JSON.stringify(v), "EX", TTL); } catch {} }
     return res.status(200).json({ ok: true, ...v });
   } catch (e) { return res.status(200).json({ ok: false, error: e.message }); }

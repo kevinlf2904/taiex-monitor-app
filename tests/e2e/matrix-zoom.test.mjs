@@ -128,16 +128,18 @@ for (const width of [1280, 390]) {
     assert.ok(animRules.treeIn, "mfTreeIn 矩形樹圖動畫存在");
     assert.ok(animRules.heatIn, "mfHeatIn 熱力格動畫存在");
 
-    // 8. 測試模式切換過場：移轉流向 (flow) -> 矩形樹圖 (tree) -> 熱力格 (heat)
-    await p.click('[data-mviz="flow"]');
+    // 8. 測試模式切換過場：移轉流向 (flow) -> 矩形樹圖 (tree) -> 熱力格 (heat)；常用 4 種在按鈕列，其他在「更多視角」裡
+    const viz = async k => { if (!(await p.$(`.mf-modes [data-mviz="${k}"]`))) await p.click(".mfmore > summary"); await p.click(`[data-mviz="${k}"]:visible`); };
+    assert.equal(await p.$$eval(".mf-modes [data-mviz]", L => L.length), 4, "按鈕列只放常用的 4 種");
+    await viz('flow');
     await p.waitForSelector('.bwrap[data-viz="flow"]', { timeout: 3000 });
     assert.ok(await p.evaluate(() => document.querySelectorAll('.bwrap[data-viz="flow"] .bnode').length > 0), "移轉流向節點已渲染");
 
-    await p.click('[data-mviz="tree"]');
+    await viz('tree');
     await p.waitForSelector('.bwrap[data-viz="tree"]', { timeout: 3000 });
     assert.ok(await p.evaluate(() => document.querySelectorAll('.bwrap[data-viz="tree"] .bnode').length > 0), "矩形樹圖節點已渲染");
 
-    await p.click('[data-mviz="heat"]');
+    await viz('heat');
     await p.waitForSelector('.bwrap[data-viz="heat"]', { timeout: 3000 });
     assert.ok(await p.evaluate(() => document.querySelectorAll('.bwrap[data-viz="heat"] .bnode').length > 0), "熱力格節點已渲染");
 
@@ -147,13 +149,13 @@ for (const width of [1280, 390]) {
     const op = await p.evaluate(() => { const g = document.querySelector('.bwrap[data-viz="heat"]'), r = g.querySelector(".bnode rect:not([opacity])"), t = g.querySelector("text");
       return [+getComputedStyle(r).opacity, +getComputedStyle(t).opacity, document.querySelector(".bopr").textContent]; });
     assert.ok(Math.abs(op[0] - 0.3) < 0.01 && op[1] === 1 && /圖形透明度30%/.test(op[2]), `熱力格透明度 ${op}`);
-    await p.click('[data-mviz="tree"]'); await p.waitForSelector('.bwrap[data-viz="tree"]');
+    await viz('tree'); await p.waitForSelector('.bwrap[data-viz="tree"]');
     assert.equal(await p.$eval(".bop-r", el => +el.value), 1, "樹圖有自己的透明度（預設 100%）");
-    await p.click('[data-mviz="heat"]'); await p.waitForSelector('.bwrap[data-viz="heat"]');
+    await viz('heat'); await p.waitForSelector('.bwrap[data-viz="heat"]');
     assert.equal(await p.$eval(".bop-r", el => +el.value), 0.3, "切回熱力格記得剛剛調的");
 
     // 切回 bubble 象限圖
-    await p.click('[data-mviz="bubble"]');
+    await viz('bubble');
     await p.waitForSelector('.bwrap[data-viz="bubble"]', { timeout: 3000 });
 
     // 9. 驗證無橫向溢出

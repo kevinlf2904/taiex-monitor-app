@@ -85,7 +85,7 @@ async function shareCardOpen(key) {
     const m = D.createElement("div"); m.className = "sc-modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-label", "分享情報圖卡");
     m.innerHTML = `<div class="sc-box"><div class="sc-hd"><b>圖卡預覽</b><button type="button" data-sca="x" class="sc-x" aria-label="關閉">✕</button></div><div class="sc-img"><img src="${url}" alt="情報圖卡預覽"></div>
       <p class="sc-tip">${canShare ? "手機：按「分享」可以直接存到相簿或傳給朋友；也可以長按圖片儲存。" : "也可以在圖片上按右鍵另存。"}</p>
-      <div class="sc-acts"><button type="button" data-sca="dl" class="pri">${scIco("dl")}下載 PNG 圖片</button>${canCopy ? '<button type="button" data-sca="copy">${scIco("copy")}複製到剪貼簿</button>' : ""}${canShare ? '<button type="button" data-sca="share">分享…</button>' : ""}</div></div>`;
+      <div class="sc-acts"><button type="button" data-sca="dl" class="pri">${scIco("dl")}下載 PNG 圖片</button>${canCopy ? `<button type="button" data-sca="copy">${scIco("copy")}複製到剪貼簿</button>` : ""}${canShare ? '<button type="button" data-sca="share">分享…</button>' : ""}</div></div>`;
     const close = () => { m.remove(); D.removeEventListener("keydown", k); setTimeout(() => URL.revokeObjectURL(url), 3000); }, k = e => { if (e.key === "Escape") close(); };
     m.addEventListener("click", async e => { const a = e.target.closest("[data-sca]")?.dataset.sca; if (e.target === m || a === "x") return close();
       if (a === "dl") { const l = D.createElement("a"); l.href = url; l.download = name; D.body.append(l); l.click(); l.remove(); scToast("已下載圖卡"); }

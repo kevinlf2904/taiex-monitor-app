@@ -14,8 +14,12 @@ async function raw(url, n = 600) {
 if (process.argv[2] === "confai") {
   // 法說會重點：找台積電、鴻海最近的法說會簡報，AI 讀簡報（需要 GEMINI_API_KEY）
   const C = await import("../api/_lib/confai.js");
+  const U = await import("../api/_lib/usconf.js");
+  for (const c of ["NVDA", "AAPL"]) { try { const t0 = Date.now(), L = await U.usConfList(c); console.log(c, "8-K 2.02", L.length, "份", `${Date.now() - t0}ms`, JSON.stringify(L.slice(0, 2)));
+    if (L[0] && process.env.GEMINI_API_KEY) { const t1 = Date.now(), v = await U.summarizeUs(c, L[0].file, c, process.env.GEMINI_API_KEY.trim(), Date.now() + 120000, C.parseConfSum); console.log(c, "AI", `${Date.now() - t1}ms`, JSON.stringify(v).slice(0, 900)); } } catch (e) { console.log(c, "失敗", e.message); } }
   for (const c of ["2330", "2317", "2454", "1216", "8299", "6488"]) { try { const t0 = Date.now(), L = await C.confList(c); console.log(c, "法說會", L.length, "次", `${Date.now() - t0}ms`, JSON.stringify(L.slice(0, 3)).slice(0, 600)); if (!["2330", "2317"].includes(c)) continue;
-    const f = L.find(x => x.file); if (f && process.env.GEMINI_API_KEY) { const t0 = Date.now(), v = await C.summarizeConf(f.file, c, process.env.GEMINI_API_KEY.trim(), Date.now() + 120000); console.log(c, "AI", `${Date.now() - t0}ms`, JSON.stringify(v).slice(0, 900)); } } catch (e) { console.log(c, "失敗", e.message); } }
+    const f = L.find(x => x.file); if (f && process.env.GEMINI_API_KEY) { const t0 = Date.now(), v = await C.summarizeConf(f.file, c, process.env.GEMINI_API_KEY.trim(), Date.now() + 120000); console.log(c, "AI", `${Date.now() - t0}ms`, JSON.stringify(v).slice(0, 900));
+      const pv = C.prevConf(L, f, c); if (c === "2330" && pv) { const v2 = await C.summarizeConf(pv.file, c, process.env.GEMINI_API_KEY.trim(), Date.now() + 120000), t2 = Date.now(), cm = await C.compareConf(v, v2, c, process.env.GEMINI_API_KEY.trim()); console.log(c, "上一季", pv.file, "比較", `${Date.now() - t2}ms`, JSON.stringify(cm)); } } } catch (e) { console.log(c, "失敗", e.message); } }
   process.exit(0);
 }
 if (process.argv[2] === "conf2") {
