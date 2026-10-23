@@ -763,6 +763,7 @@ function syncHtml() {
   let h = `<section class="csec"><h3>備份與同步</h3>
     <h4>備份檔</h4><p class="note">把這台裝置的自選、庫存、提醒、交易日記、模擬帳戶、錯題本、線型設定（共 ${n} 項）存成一個檔案，換裝置或清除瀏覽器資料後可以匯入。</p>
     <div class="irform"><button class="btn sm primary" data-sy="export">⬇ 匯出備份檔</button><label class="btn sm">⬆ 匯入備份檔<input type="file" accept="application/json,.json" data-syfile hidden></label></div>
+    <p class="note">匯入只收這裡匯出的 .json 備份檔；匯入後，檔案裡有的項目會蓋掉這台裝置現在的設定（沒有的項目保留）。不確定的話，先按「匯出備份檔」留一份。</p>
     <h4>雲端同步</h4>`;
   if (!C) h += `<p class="note">檢查中…</p>`;
   else if (!C.kv) h += `<p class="note">網站的雲端同步暫時還不能使用，目前只能用上面的備份檔。${DEBUG ? "（除錯：Vercel 專案的 Storage 加上 Upstash for Redis，重新部署後就能用同步碼）" : ""}</p>`;

@@ -237,3 +237,8 @@ html[data-big] .btn.sm { min-height: 36px; font-size: 14px; }
 html[data-big] .note { font-size: 13.5px; }
 html[data-big] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), html[data-big] select { font-size: 16px; min-height: 38px; }
 html[data-big] .linkbtn { padding-top: 4px; padding-bottom: 4px; }
+/* 觸控裝置：小按鈕、文字連結的可點範圍至少 24px（用透明的外框撐大，不改版面）；首頁和看盤共用 */
+@media (pointer: coarse) {
+  :is(.linkbtn, [data-sk], [data-strongk], .qmark, footer .ft-brand a, .bl-pro) { position: relative; }
+  :is(.linkbtn, [data-sk], [data-strongk], .qmark, footer .ft-brand a, .bl-pro)::after { content: ""; position: absolute; inset: -9px -6px; }
+}

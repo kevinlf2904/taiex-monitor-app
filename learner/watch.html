@@ -47,6 +47,7 @@ body { line-height: 1.5; }
 .ibar-t { font-size: 12px; color: var(--muted); letter-spacing: .06em; margin-right: 2px; }
 .ichip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 3px; padding: 3px 11px; font-size: 13px; cursor: pointer; }
 .ichip i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.ichip.imore { border-style: dashed; } .ibar-pre .ichip { font-size: 12.5px; }
 .ichip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 500; }
 input.code, select.sel { padding: 8px 11px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-3); color: var(--ink); font-size: 16px; min-width: 0; }
 select.sel { font-size: 14px; padding: 6px 9px; }
@@ -1010,7 +1011,6 @@ tr.on td { background: var(--surface-2); }
 .hs-l.hs-r { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 22px), transparent); }
 /* 觸控裝置：小按鈕的可點範圍加大（文字連結用透明的外框撐大，不改版面） */
 @media (pointer: coarse) {
-  .linkbtn { position: relative; } .linkbtn::after { content: ""; position: absolute; inset: -9px -6px; }
   .mkseg button { padding: 5px 11px; } .groups button, .ichip { padding: 6px 12px; }
 }
 </style>
@@ -5242,8 +5242,10 @@ overlayMigrate("watch2");
 // 指標（主圖、副圖）和疊加分析分成兩個可以收合的區塊；舊版存在同一組設定（ind:watch2）裡的疊加，第一次搬到 ind:watch2ov
 { const ovIds = new Set(OVERLAY_ITEMS.map(x => x.id)), old = store.get("ind:watch2", null);
   if (Array.isArray(old) && old.some(id => ovIds.has(id))) { if (store.get("ind:watch2ov", null) == null) store.set("ind:watch2ov", old.filter(id => ovIds.has(id))); store.set("ind:watch2", old.filter(id => !ovIds.has(id))); } }
-const dIndBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }] }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); });
-const dOvBar = indicatorBar($("#dObar"), "watch2ov", [{ title: "疊加", items: OVERLAY_ITEMS }], [], () => { drawK(); renderAna(); });
+// 指標很多：先列常用的（主圖 6 個、副圖 5 個、疊加 6 個），其餘收在「更多」；上面另有一鍵組合
+const dIndBar = indicatorBar($("#dIbar"), "watch2", [{ title: "主圖", items: MAIN_ITEMS, more: 6 }, { title: "副圖", items: [...SUB_ITEMS, { id: "inst", label: "法人" }, { id: "margin", label: "融資" }], more: 5 }], ["ma5", "ma20", "ma60", "vol", "kd"], () => { drawK(); renderAna(); ksetSummary(); },
+  [["新手常用", ["ma5", "ma20", "ma60", "vol", "kd"]], ["看趨勢", ["ma20", "ma60", "boll", "vol", "macd"]], ["看動能", ["ma5", "ma20", "vol", "kd", "rsi", "macd"]], ["只看 K 線", []]]);
+const dOvBar = indicatorBar($("#dObar"), "watch2ov", [{ title: "疊加", items: OVERLAY_ITEMS, more: 6 }], [], () => { drawK(); renderAna(); ksetSummary(); });
 const OV_IDS = new Set(OVERLAY_ITEMS.map(x => x.id));
 // 線型自訂（在 K 線圖的「設定」裡改）：改了就重畫、更新均線籤的名稱與判讀
 addEventListener("indcfg", () => { dIndBar.set("ma5", dIndBar.has("ma5")); drawK(); renderAna(); ksetSummary(); });

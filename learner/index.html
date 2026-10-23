@@ -68,6 +68,9 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .brand p { margin: 0; font-size: 12px; color: var(--muted); letter-spacing: 0.05em; }
 #navBackFab { position: fixed; left: 14px; bottom: 24px; z-index: 30; height: 38px; padding: 0 16px; border-radius: 999px; border: 0; background: color-mix(in srgb, var(--ink) 14%, var(--bg)); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
 @media (max-width: 640px) { #navBackFab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } }
+/* 手機上往下捲時浮動按鈕（返回、回到最上面、問問題）先淡出，不蓋住正在看的報價、圖表；往上捲或停在最上面就回來 */
+:is(#navBackFab, #toTop, .chat-fab) { transition: opacity .2s, transform .2s; }
+@media (max-width: 640px) { html.fab-quiet :is(#navBackFab, #toTop, .chat-fab) { opacity: 0 !important; transform: translateY(14px); pointer-events: none; } }
 .tabs { display: flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px; padding: 3px; overflow-x: auto; max-width: 100%; }
 .tabs button {
   border: 0; background: transparent; padding: 5px 14px; border-radius: 3px; cursor: pointer;
@@ -536,6 +539,7 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 .hero-viz svg { width: 100%; height: 100%; display: block; }
 .hero-stats { grid-column: 1 / -1; }
 @media (max-width: 860px) { .hero-in { grid-template-columns: 1fr; } .hero-viz { max-width: 520px; } }
+@media (max-width: 640px) { .hero-viz { display: none; } } /* 手機上介紹卡只留文字和按鈕，不佔掉整個第一屏 */
 .hero-k { margin: 0 0 10px; font: 500 12px/1 "JetBrains Mono", var(--font-mono); letter-spacing: .18em; color: var(--muted); text-transform: uppercase; }
 .hero-h { margin: 0 0 14px; font: 600 clamp(26px, 4.4vw, 46px)/1.18 "Space Grotesk", var(--font-display); letter-spacing: -.01em; color: var(--ink); }
 .hero-p { margin: 0 0 22px; font: 400 15px/1.75 "Inter", var(--font-body); color: var(--muted); max-width: 640px; }
@@ -666,9 +670,9 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
         </div>
         <div class="panel ctrl">
           <h3>主圖疊加</h3>
-          <div class="row"><label><input type="checkbox" id="maA" checked><span class="swatch" style="background:var(--s1)"></span>MA</label><input type="number" id="maAn" value="5" min="2" max="120"></div>
-          <div class="row"><label><input type="checkbox" id="maB" checked><span class="swatch" style="background:var(--s2)"></span>MA</label><input type="number" id="maBn" value="20" min="2" max="120"></div>
-          <div class="row"><label><input type="checkbox" id="maC"><span class="swatch" style="background:var(--s3)"></span>MA</label><input type="number" id="maCn" value="60" min="2" max="240"></div>
+          <div class="row"><label><input type="checkbox" id="maA" checked><span class="swatch" style="background:var(--s1)"></span>MA</label><input type="number" id="maAn" value="5" min="2" max="120" aria-label="第一條均線天數"></div>
+          <div class="row"><label><input type="checkbox" id="maB" checked><span class="swatch" style="background:var(--s2)"></span>MA</label><input type="number" id="maBn" value="20" min="2" max="120" aria-label="第二條均線天數"></div>
+          <div class="row"><label><input type="checkbox" id="maC"><span class="swatch" style="background:var(--s3)"></span>MA</label><input type="number" id="maCn" value="60" min="2" max="240" aria-label="第三條均線天數"></div>
           <div class="row"><label><input type="checkbox" id="boll">布林通道 (20, 2)</label></div>
           <div class="row"><label><input type="checkbox" id="sr">支撐 / 壓力線</label></div>
           <div class="row"><label><input type="checkbox" id="zz">轉折點與結構（道氏 / HH、HL）</label></div>
@@ -4920,7 +4924,8 @@ function switchTab(t) {
 const PNAV = { y: 0, yt: 0, wd: 0, ready: false };
 function pnavFlush() { clearTimeout(PNAV.yt); PNAV.yt = 0; const st = history.state; if (st?.tab && st.y !== PNAV.y) try { history.replaceState({ ...st, y: PNAV.y }, "", location.href); } catch {} }
 function pnavBackUi() {
-  const on = (history.state?.d || 0) > 0 || ((CUR_TAB === "watch" || CUR_TAB === "intel") && PNAV.wd > 0);
+  // 看盤、情報局裡面自己有「← 返回」（個股頁標題旁、各子頁上方），外層不再疊一顆浮動的返回
+  const on = (history.state?.d || 0) > 0 && CUR_TAB !== "watch" && CUR_TAB !== "intel";
   let b = $("#navBackFab"); if (!b && on) { b = document.createElement("button"); b.id = "navBackFab"; b.type = "button"; b.textContent = "‹ 返回"; b.setAttribute("aria-label", "回上一頁"); b.addEventListener("click", () => history.back()); document.body.appendChild(b); }
   if (b) b.hidden = !on;
 }
@@ -4932,6 +4937,7 @@ const goTab = t => {
 { const b = document.createElement("button"); b.id = "toTop"; b.type = "button"; b.hidden = true; b.setAttribute("aria-label", "回到最上面"); b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
   b.addEventListener("click", () => scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })); document.body.appendChild(b);
   addEventListener("scroll", () => { const on = scrollY > Math.min(700, innerHeight * 0.8); if (b.hidden === on) b.hidden = !on; }, { passive: true }); }
+{ let y0 = scrollY; addEventListener("scroll", () => { const y = scrollY, d = y - y0; if (Math.abs(d) < 8 && y > 40) return; document.documentElement.classList.toggle("fab-quiet", d > 0 && y > 120); y0 = y; }, { passive: true }); }
 addEventListener("scroll", () => { PNAV.y = Math.round(scrollY); clearTimeout(PNAV.yt); PNAV.yt = setTimeout(pnavFlush, 250); }, { passive: true });
 addEventListener("popstate", e => { const st = e.state; if (!st?.tab) return; switchTab(st.tab); const y = st.y || 0;
   requestAnimationFrame(() => scrollTo({ top: y })); if (y > 0) [250, 700].forEach(t => setTimeout(() => { if (scrollY < y - 4) scrollTo({ top: y }); }, t)); pnavBackUi(); });

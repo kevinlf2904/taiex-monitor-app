@@ -406,13 +406,19 @@ function towerCalc(D, k = 3) { const c = D.map(x => x.c), N = c.length, boxes = 
 /* ================= 圖表 ================= */
 /* ---------- 技術指標開關 ----------
    一排可切換的小籤，分成「主圖」「副圖」兩組；狀態記在瀏覽器裡，下次打開還在。 */
-function indicatorBar(host, key, groups, defaults, onChange) {
-  let state = new Set(store.get("ind:" + key, defaults));
+// presets：[[名稱, 指標 id...]] 一鍵套用的組合（新手不用從幾十個指標裡挑）；群組有 more＝n 時只先列前 n 個，其餘收在「更多」（有開著的照樣列出）
+function indicatorBar(host, key, groups, defaults, onChange, presets = []) {
+  let state = new Set(store.get("ind:" + key, defaults)), more = !!store.get("ind:" + key + ":more", false);
+  const chip = it => `<button type="button" class="ichip" data-id="${it.id}" aria-pressed="${state.has(it.id)}">${it.hex || it.color ? `<i style="background:${it.hex || `var(${it.color})`}"></i>` : ""}${it.label}</button>`;
   const render = () => {
-    host.innerHTML = groups.map(g => `<div class="ibar-g" role="group" aria-label="${g.title}"><span class="ibar-t">${g.title}</span>${g.items.map(it =>
-      `<button type="button" class="ichip" data-id="${it.id}" aria-pressed="${state.has(it.id)}">${it.hex || it.color ? `<i style="background:${it.hex || `var(${it.color})`}"></i>` : ""}${it.label}</button>`).join("")}</div>`).join("");
+    const pre = presets.length ? `<div class="ibar-g ibar-pre" role="group" aria-label="快速組合"><span class="ibar-t">組合</span>${presets.map(([t, ids], i) => `<button type="button" class="ichip" data-pre="${i}" aria-pressed="${ids.length === state.size && ids.every(x => state.has(x))}">${t}</button>`).join("")}</div>` : "";
+    const hidden = g => (g.more && !more ? g.items.slice(g.more).filter(it => !state.has(it.id)) : []);
+    host.innerHTML = pre + groups.map(g => { const H = new Set(hidden(g));
+      return `<div class="ibar-g" role="group" aria-label="${g.title}"><span class="ibar-t">${g.title}</span>${g.items.filter(it => !H.has(it)).map(chip).join("")}${g.more && g.items.length > g.more ? `<button type="button" class="ichip imore" data-more aria-expanded="${more}">${more ? "收起" : `更多 ${H.size} 個 ▾`}</button>` : ""}</div>`; }).join("");
   };
   host.addEventListener("click", e => {
+    if (e.target.closest("[data-more]")) { more = !more; store.set("ind:" + key + ":more", more); return render(); }
+    const p = e.target.closest("[data-pre]"); if (p) { state = new Set(presets[+p.dataset.pre][1]); store.set("ind:" + key, [...state]); render(); return onChange(state); }
     const b = e.target.closest("[data-id]"); if (!b) return;
     const id = b.dataset.id; state.has(id) ? state.delete(id) : state.add(id);
     store.set("ind:" + key, [...state]); render(); onChange(state);
