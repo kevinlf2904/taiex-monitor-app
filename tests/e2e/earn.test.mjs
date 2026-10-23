@@ -88,6 +88,7 @@ for (const width of [1280, 390]) test(`財報進階：行事曆、連續成長�
     revenue: Array.from({ length: 24 }, (_, i) => ({ ym: `${2024 + (i >= 12 ? 1 : 0)}-${String(i % 12 + 1).padStart(2, "0")}`, rev: 2e11 + i * 5e9, yoy: i % 3 ? 20 : -5 })), fin: [] }) }));
   await p.evaluate(() => { W.groups[0].list = ["2330", "2317"]; W.hold = { "1102": { sh: 1000, cost: 30 } }; });
   await p.click('#lTabs [data-l="earn"]'); await p.waitForSelector(".earn .erlist li");
+  await p.waitForFunction(() => /動能：/.test(document.querySelector(".earn")?.textContent || ""), null, { timeout: 15000 }); // 連續成長（earn-hist）比列表晚到，main 上 CI 偶爾在它到之前就比對
   assert.match(await p.textContent(".earn"), /財報整體看法[\s\S]*整體[\s\S]*(偏強|中性|偏弱)[\s\S]*動能：2 家月營收連續年增半年以上/);
   const T = async v => { await p.click(`[data-erv="${v}"]`); await p.waitForTimeout(150); if (process.env.SHOT) await p.screenshot({ path: `${process.env.SHOT}/earn-${v}-${width}.png`, fullPage: true }); return p.textContent(".earn"); };
   assert.match(await T("cal"), /月營收公布截止[\s\S]*9 月營收已公布[\s\S]*1,700 家[\s\S]*還沒公布：[\s\S]*鴻海[\s\S]*即將開法說會：鴻海/);
