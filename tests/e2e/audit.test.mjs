@@ -47,3 +47,16 @@ for (const width of [390, 1280]) test(`只有圖示的按鈕都有 aria-label �
   for (const lt of ["watch", "money", "earn", "ind", "cong"]) { await w.p.evaluate(lt => setLt(lt), lt); await w.p.waitForTimeout(400); assert.deepEqual(await w.p.evaluate(iconBtns), [], `看盤 ${lt}`); }
   await ctx.close(); await w.ctx.close();
 });
+
+test("移出自選可以復原（星號、清單上的移除鍵）", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.evaluate(() => { W.groups = [{ name: "自選", list: ["2330", "2317", "2454"] }]; W.gi = 0; saveGroups(); setLt("watch"); renderList(); });
+  await p.evaluate(() => { document.body.insertAdjacentHTML("beforeend", wStar("2317")); document.body.lastElementChild.click(); }); // 隨處的 ☆／★（排行、題材、抽屜…）都是 wStar
+  assert.deepEqual(await p.evaluate(() => W.groups[0].list), ["2330", "2454"]);
+  await p.waitForSelector("#toast:not([hidden]) .toast-undo"); await p.click("#toast .toast-undo");
+  assert.deepEqual(await p.evaluate(() => [W.groups[0].list, store.get("watch:groups")[0].list]), [["2330", "2317", "2454"], ["2330", "2317", "2454"]], "放回原位、也存起來");
+  await p.evaluate(() => { W.editing = true; renderList(); }); await p.click('[data-rm="2454"]');
+  assert.deepEqual(await p.evaluate(() => W.groups[0].list), ["2330", "2317"]);
+  await p.click("#toast .toast-undo"); assert.deepEqual(await p.evaluate(() => W.groups[0].list), ["2330", "2317", "2454"]);
+  await ctx.close(); assert.deepEqual(errs, []);
+});

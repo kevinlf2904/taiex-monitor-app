@@ -203,6 +203,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .menu a:hover, .menu button:hover { border-color: var(--accent); }
 .alist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .alist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); font-size: 14px; }
+.toast-undo { margin-left: 12px; padding: 2px 10px; border: 1px solid currentColor; border-radius: 99px; background: none; color: inherit; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
 #toast { position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 50; background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 4px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.3); max-width: calc(100vw - 32px); }
 .foot { padding: 0 16px 24px; max-width: 1480px; margin: 0 auto; }
 
@@ -1287,7 +1288,12 @@ function place(el, where = "bottom") {
   if (where === "toast") { el.style.top = v.top + Math.max(80, v.h - 110) + "px"; el.style.bottom = "auto"; }
   else { el.style.top = v.top + 12 + "px"; el.style.bottom = "auto"; el.style.maxHeight = Math.max(320, v.h - 24) + "px"; }
 }
-function toast(t, ms = 4000) { const el = $("#toast"); el.textContent = t; el.hidden = false; place(el, "toast"); clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), ms); }
+function toast(t, ms = 4000, undo = null) { const el = $("#toast"); el.textContent = t;
+  if (undo) { const b = document.createElement("button"); b.type = "button"; b.className = "toast-undo"; b.textContent = "復原"; b.onclick = () => { undo(); el.hidden = true; }; el.append(b); } // 刪除類操作：toast 上給「復原」
+  el.hidden = false; place(el, "toast"); clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), ms); }
+// 移出自選（星號、清單上的移除鍵）：先記下各群組原本的清單，5 秒內可以按「復原」放回原位
+function unwatch(c, msg, only = null) { const snap = W.groups.map(g => [...g.list]); W.groups.forEach((g, i) => { if (only == null || i === only) g.list = g.list.filter(x => x !== c); }); saveGroups();
+  toast(msg, 5000, () => { W.groups.forEach((g, i) => { if (snap[i]) g.list = snap[i]; }); saveGroups(); kick(); renderList(); document.querySelectorAll(`[data-wstar="${CSS.escape(c)}"]`).forEach(x => { x.setAttribute("aria-pressed", true); x.textContent = "★"; }); toast("已復原", 1200); }); }
 
 /* ---------- 資料 ---------- */
 // optional：附加功能（處置股、行事曆、產業別…）拿不到時不要把整頁切成離線模式
@@ -1575,7 +1581,7 @@ $("#gsearch").addEventListener("click", e => { const t = e.target;
   const a = t.closest("[data-gsadd]"); if (a) { const c = a.dataset.gsadd, n = W.stocks?.find(s => s[0] === c) || US_HINT.find(s => s[0] === c); if (n) W.names[c] = n[1]; const gi = addTo(c); if (gi >= 0) { addToast(c, gi); saveGroups(); renderList(); } gsRender(); return; }
   const g = t.closest("[data-gs]"); if (g) gsGo(g.dataset.gs); });
 document.addEventListener("click", e => { const b = e.target.closest("[data-wstar]"); if (!b) return; e.preventDefault(); e.stopPropagation();
-  const c = b.dataset.wstar; if (inWatch(c)) { W.groups.forEach(g => (g.list = g.list.filter(x => x !== c))); toast(`已把 ${nameOf(c)} 移出自選`, 1500); } else addToast(c, addTo(c));
+  const c = b.dataset.wstar; if (inWatch(c)) unwatch(c, `已把 ${nameOf(c)} 移出自選`); else addToast(c, addTo(c));
   saveGroups(); kick(); const on = inWatch(c); document.querySelectorAll(`[data-wstar="${CSS.escape(c)}"]`).forEach(x => { x.setAttribute("aria-pressed", on); x.textContent = on ? "★" : "☆"; x.setAttribute("aria-label", `${on ? "移出自選" : "加入自選"} ${c}`); x.title = on ? "移出自選" : "加入自選"; });
   if (W.sel === c) renderDetailHead(); }, true);
 document.addEventListener("click", e => { if (e.target.closest("[data-gsearch-add]")) gsOpen("", true); else if (e.target.closest("[data-gsearch]")) gsOpen(); });
@@ -1992,10 +1998,10 @@ function renderList0() {
 $("#listPane").addEventListener("change", e => { const t = e.target; if (t.dataset?.hopt === "hdisc") { W.hdisc = +t.value || 1; store.set("watch:hdisc", W.hdisc); renderList(); } });
 $("#listPane").addEventListener("click", e => {
   const t = e.target, s = t.closest("[data-sel]"), st = t.closest("[data-star]"), mv = t.closest("[data-mv]"), rm = t.closest("[data-rm]"), g = t.closest("[data-g]"), gx = t.closest("[data-gx]"), so = t.closest("[data-sort]"), us = t.closest("[data-us]"), rk = t.closest("[data-rank]");
-  if (st) { const c = st.dataset.star; if (W.groups.some(x => x.list.includes(c))) { W.groups.forEach(x => (x.list = x.list.filter(y => y !== c))); toast("已移出自選", 1500); } else addToast(c, addTo(c)); saveGroups(); renderList(); }
+  if (st) { const c = st.dataset.star; if (W.groups.some(x => x.list.includes(c))) unwatch(c, `已把 ${nameOf(c)} 移出自選`); else addToast(c, addTo(c)); saveGroups(); renderList(); }
   else if (s) select(s.dataset.sel);
   else if (mv) { const L = curList(), k = +mv.dataset.mv, d = +mv.dataset.d; [L[k], L[k + d]] = [L[k + d], L[k]]; saveGroups(); renderList(); }
-  else if (rm) { W.groups[W.gi].list = curList().filter(c => c !== rm.dataset.rm); saveGroups(); renderList(); }
+  else if (rm) { unwatch(rm.dataset.rm, `已從「${W.groups[W.gi].name}」移除 ${nameOf(rm.dataset.rm)}`, W.gi); renderList(); }
   else if (g) { if (g.dataset.g === "new") { const name = prompt("新群組名稱", `群組 ${W.groups.length + 1}`); if (name) { W.groups.push({ name: name.slice(0, 12), list: [] }); W.gi = W.groups.length - 1; saveGroups(); renderList(); } } else { W.gi = +g.dataset.g; W.editing = false; saveGroups(); renderList(); kick(); } }
   else if (t.closest("[data-hs]")) { const k = t.closest("[data-hs]").dataset.hs; W.holdDir = W.holdSort === k ? -W.holdDir : 1; W.holdSort = k; renderList(); }
   else if (t.closest("[data-hx]")) { const c = t.closest("[data-hx]").dataset.hx; W.holdOpen = W.holdOpen === c ? null : c; renderList(); }
