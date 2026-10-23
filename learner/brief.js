@@ -273,3 +273,15 @@ $("#lx").addEventListener("click", e => {
     aiChat(briefText(P), "請用繁體中文、白話，把這份早報整理成 5 句以內的重點：昨晚美股和台指期夜盤代表今天開盤可能的氣氛、今天要注意的事件、和我的持股有關的消息。只根據上面的資料，不要編造數字，最後提醒這不是買賣建議。")
       .then(t => { W.bfAI = { text: t }; }, err => { W.bfAI = { err: err.message }; }).finally(() => renderList()); }
 });
+
+/* ---------- 新手 30 秒上手指引：還沒自己編過自選（watch:groups 沒存過）、也沒按過 ✕ 才顯示；所有分頁最上面一條，單色、可關閉 ---------- */
+const ONB_DEMO = [{ name: "自選", list: ["2330", "2317", "2454", "2382", "3231", "2308", "0050"] }, { name: "美股", list: ["NVDA", "AAPL", "MSFT", "TSM", "AVGO"] }];
+function renderOnb() {
+  const el = document.getElementById("onbBar"); if (!el) return;
+  const show = !W.off && !store.get("watch:groups", null) && !store.get("watch:onbOff", false); el.hidden = !show; if (!show || el.firstChild) return;
+  el.innerHTML = `<div class="onb" role="note"><span>💡 初次使用？① 點任一股票代號，右邊會滑出個股抽屜（同業 PK、大戶與政治人物申報）　② <button type="button" class="linkbtn" data-onb="demo">✨ 一鍵載入台美股熱門自選範例</button>，立即體驗「★ 只看我的自選」過濾</span><button type="button" class="onb-x" data-onb="x" aria-label="關閉新手指引" title="關閉新手指引">✕</button></div>`;
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-onb]"); if (!b) return;
+  store.set("watch:onbOff", true);
+  if (b.dataset.onb === "demo") { W.groups = ONB_DEMO.map(g => ({ ...g, list: [...g.list] })); W.gi = 0; saveGroups(); W.mine = true; store.set("watch:mine", true); toast("已載入熱門自選範例，並打開「★ 只看我的自選」"); setLt("earn"); }
+  renderOnb(); renderList(); });

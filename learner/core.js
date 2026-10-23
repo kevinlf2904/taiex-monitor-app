@@ -1263,8 +1263,10 @@ if (typeof window !== "undefined" && window.top === window && /^https?:$/.test(l
     b.style.cssText = "position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9998;padding:7px 14px;border-radius:99px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);font-size:13px;max-width:calc(100vw - 32px);text-align:center";
     document.body.appendChild(b); };
   // 只有持續離線 3 秒還是離線才顯示：切換分頁、網路短暫抖動時 navigator.onLine 會一下 false 一下 true，不要一直跳
+  // 只看 navigator.onLine（讀快取、靜態 JSON 備援都不算離線）；online 立刻收起；回到頁面（切回 App、從背景回來、bfcache 還原）時重新判斷，不會留著舊的提示
   let netT = 0; const netLater = () => { clearTimeout(netT); if (navigator.onLine) return netBar(); netT = setTimeout(netBar, 3000); };
-  addEventListener("offline", netLater); addEventListener("online", netLater); addEventListener("load", netLater);
+  addEventListener("offline", netLater); addEventListener("online", netLater); addEventListener("load", netLater); addEventListener("pageshow", netLater);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") netLater(); });
 }
 
 /* ---------- 大按鈕模式（html[data-big]，樣式在 core.css；設定記在 kline:big）：學堂、看盤、存股一起換，iframe 之間用 postMessage 通知 ---------- */
@@ -1347,4 +1349,13 @@ if (typeof window !== "undefined" && !window.__chartEscInit) {
       }
     }
   });
+}
+
+/* ---------- 無障礙：只有圖示或符號的按鈕（✕、＋、−、↑、☆、SVG…）要有 aria-label，也給同樣的 title（滑鼠停上去看得到說明）
+   新畫出來的按鈕也會補上（MutationObserver，閒下來時才處理一批） ---------- */
+if (typeof document !== "undefined" && typeof MutationObserver !== "undefined") {
+  const iconOnly = b => !/[\p{Script=Han}A-Za-z0-9]/u.test(b.textContent || "");
+  const fix = root => { for (const b of (root.querySelectorAll ? root.querySelectorAll("button:not([title])") : [])) { const a = b.getAttribute("aria-label"); if (a && iconOnly(b)) b.title = a; } };
+  let q = false; const later = () => { if (q) return; q = true; (window.requestIdleCallback || (f => setTimeout(f, 50)))(() => { q = false; fix(document); }); };
+  addEventListener("DOMContentLoaded", () => { fix(document); new MutationObserver(later).observe(document.body, { childList: true, subtree: true }); });
 }

@@ -65,8 +65,10 @@ export async function mock(ctx) {
 // sw：允許離線快取（sw.js）；預設擋掉，假資料（route）才不會被 service worker 繞過
 // 首頁裡的看盤 iframe：等它的程式都載入（setLt、select 定義好）才回傳；CI 機器慢時 iframe 出現了但程式還沒跑完，直接呼叫會 ReferenceError
 export async function watchFrame(p) { for (let i = 0; i < 150; i++) { const f = p.frames().find(f => /watch\.html/.test(f.url())); if (f && await f.evaluate(() => typeof setLt === "function" && typeof select === "function" && typeof W !== "undefined").catch(() => false)) { await f.evaluate(() => Promise.all(Object.keys(LAZY).map(lazy))).catch(() => {}); return f; } await p.waitForTimeout(100); } throw new Error("看盤頁沒有載入"); }
-export async function open(browser, base, file, { width = 1180, touch = false, sw = false, lazy = true } = {}) {
+// onboard：顯示新手指引條（預設關掉，其他測試的版面不受影響；要測指引條時傳 true）
+export async function open(browser, base, file, { width = 1180, touch = false, sw = false, lazy = true, onboard = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height: 1000 }, hasTouch: touch, isMobile: touch, serviceWorkers: sw ? "allow" : "block" }), errs = [];
+  if (!onboard) await ctx.addInitScript(() => { try { localStorage.setItem("kline:watch:onbOff", "true"); } catch {} });
   const m = await mock(ctx), p = await ctx.newPage(); p.on("pageerror", e => errs.push(`${width} ${e.message}`)); p.on("dialog", d => d.accept());
   await p.goto(`${base}/learner/${file}`); await p.waitForTimeout(600);
   if (lazy) await p.evaluate(() => typeof LAZY === "object" && Promise.all(Object.keys(LAZY).map(lazy))).catch(() => {}); // 分頁用到才載的程式（watch.html 的 lazy）先載好，測試直接呼叫裡面的函式也不會找不到

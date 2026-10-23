@@ -277,6 +277,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .gs-hint { margin: 2px 4px 6px; }
 .ltabs .gsbtn { flex: none; padding: 0 10px; }
 .today { margin: 8px 12px 4px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 13px; } .today > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; list-style: none; min-height: 28px; align-items: center; } .today > summary::-webkit-details-marker { display: none; } .today > summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .15s; } .today:not([open]) > summary::after { transform: rotate(-90deg); }
+.onb { display: flex; align-items: flex-start; gap: 8px; margin: 6px 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); font-size: 13px; line-height: 1.6; color: var(--ink); } .onb > span { flex: 1; min-width: 0; } .onb .linkbtn { font-weight: 500; } .onb-x { flex: none; border: 0; background: none; color: var(--muted); font-size: 15px; width: 32px; height: 28px; cursor: pointer; }
 .today ul { list-style: none; margin: 6px 0 4px; padding: 0; } .today li { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); line-height: 1.5; } .today .tdk { color: var(--muted); font-size: 12px; } .today .tdv { min-width: 0; overflow-wrap: anywhere; } .today .linkbtn { text-align: left; } .today .tdmore { font-size: 12px; color: var(--muted); } .today .tdbtns { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; } .tgone h3 { margin: 0 0 8px; font-size: 16px; } .tgone .tgsteps { margin: 8px 0; padding-left: 20px; } .ltabs .ltedit { flex: none; padding: 0 10px; color: var(--muted); letter-spacing: .05em; }
 .tabcfg { list-style: none; margin: 8px 0 12px; padding: 0; } .tabcfg li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); } .tabcfg li:first-child { border-top: 0; }
 .tabcfg label { display: flex; align-items: center; gap: 8px; min-height: 36px; flex: 1; } .tabcfg span { display: flex; gap: 6px; } .tabcfg .btn { min-width: 40px; min-height: 36px; }
@@ -1042,6 +1043,7 @@ tr.on td { background: var(--surface-2); }
       </div>
       <div class="l-tools" id="lTools"></div>
     </div>
+    <div id="onbBar" hidden></div>
     <div id="todayCard" hidden></div>
     <div class="lx" id="lx" hidden></div>
     <ul class="wl" id="wl"></ul>
@@ -1167,7 +1169,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-154</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-155</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1918,7 +1920,7 @@ if (EMBED) { let rq = 0; const re = () => { if (!rq) rq = requestAnimationFrame(
 function renderList0() {
   syncLayout();
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === ltTab()));
-  const watch = W.lt === "watch"; renderToday(watch);
+  const watch = W.lt === "watch"; renderOnb(); renderToday(watch);
   $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", ...WIDE_TABS].includes(W.lt); $("#wl").hidden = WIDE_TABS.includes(W.lt); // 全寬分頁共用同一份清單
   $("#groups").innerHTML = W.groups.map((g, i) => `<button data-g="${i}" aria-pressed="${i === W.gi}">${esc(g.name)} <span class="note">${g.list.length}</span></button>`).join("") + `<button data-g="new" title="新增群組">＋ 群組</button>`;
   const n = $("#wlNote"); n.className = "note w-note"; let note = "";
