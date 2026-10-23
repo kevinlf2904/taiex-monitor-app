@@ -69,7 +69,7 @@ export default async function handler(req, res) {
 }
 // 下載簡報、交給 Gemini 讀；排程或 probe-live 也可以直接呼叫
 export async function summarizeConf(file, name, key, deadline = Date.now() + 55000) {
-  const r = await fetch(`https://mopsov.twse.com.tw/nas/STR/${file}`, { headers: UA, signal: AbortSignal.timeout(15000) });
+  const r = await fetch(`https://mopsov.twse.com.tw/nas/STR/${file}`, { headers: UA, signal: AbortSignal.timeout(25000) }); // 大簡報（15MB 以上）15 秒可能下載不完
   if (!r.ok || !/pdf/i.test(r.headers.get("content-type") || "")) throw new Error(`簡報下載失敗（HTTP ${r.status}）`);
   const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > MAX_MB * 1048576) throw new Error(`簡報太大（${(buf.length / 1048576).toFixed(0)}MB）`);
   // 小檔直接夾帶；大檔（base64 後會超過 Gemini 單次請求 20MB）先上傳到 Gemini 檔案區，用完刪掉
@@ -77,7 +77,7 @@ export async function summarizeConf(file, name, key, deadline = Date.now() + 550
   try {
     if (buf.length > INLINE_MB * 1048576) { up = await uploadBuf(buf, "application/pdf", file, key, 30000); for (let t = 0; up.state !== "ACTIVE"; t++) { if (up.state === "FAILED" || t > 20) throw new Error("AI 處理簡報失敗"); await new Promise(x => setTimeout(x, 1500)); up.state = await fileState(up.file, key); } }
     const doc = up ? { fileData: { mimeType: "application/pdf", fileUri: up.uri } } : { inlineData: { mimeType: "application/pdf", data: buf.toString("base64") } };
-    const out = await geminiJSON([doc, { text: PROMPT(name) }], key, deadline), s = parseConfSum(out.text);
+    const out = await geminiJSON([doc, { text: PROMPT(name) }], key, deadline, {}, "gemini-flash-lite-latest"), s = parseConfSum(out.text); // 讀幾十頁簡報，lite 約 10～20 秒，一般型號實測可能超過 60 秒
     if (!s) throw new Error("AI 回傳格式不對，請再試一次");
     return { ...s, file, model: out.model };
   } finally { if (up?.file) fileDelete(up.file, key); }
