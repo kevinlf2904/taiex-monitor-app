@@ -31,7 +31,7 @@ test("每日總經消息", async () => {
   const it = (title, topic, h) => ({ title, source: "測試報", link: "https://example.com/" + encodeURIComponent(title), at: Date.parse("2026-10-17T00:00:00Z") - h * 3600e3, topic });
   const day = (date, sum) => ({ date, at: Date.parse(date + "T00:00:00Z"), by: sum ? "m" : null, tw: { sum: sum ? { head: "央行按兵不動", points: ["外銷訂單年增"], impact: "可能支撐電子股" } : null, items: [it("央行利率決議維持不變", "利率", 1), it("9 月外銷訂單創高", "貿易", 2)] }, us: { sum: null, items: [it("美國 CPI 高於預期", "通膨", 3)] }, world: { sum: null, items: [it("日本央行升息 日圓走強", "利率", 4)] } });
   await ctx.route("**/data/macro-news.json", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ updated: 1, days: [day("2026-10-17", true), day("2026-10-16", false)] }) }));
-  await p.evaluate(() => setLt("mkt")); await p.waitForTimeout(500);
+  await p.evaluate(() => { W.mn = null; setLt("mkt"); }); // 開頁時「今日重點」可能已經抓過真的總經消息 await p.waitForTimeout(500);
   await p.click('#lx [data-mk="mkReg"][data-v="news"]'); await p.waitForSelector("#lx .mn-sum");
   const txt = await p.evaluate(() => $("#lx").innerText);
   assert.match(await p.evaluate(() => $("#lx").textContent), /主題熱度[\s\S]*新聞語氣/);
