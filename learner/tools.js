@@ -765,7 +765,7 @@ function syncHtml() {
     <div class="irform"><button class="btn sm primary" data-sy="export">⬇ 匯出備份檔</button><label class="btn sm">⬆ 匯入備份檔<input type="file" accept="application/json,.json" data-syfile hidden></label></div>
     <h4>雲端同步</h4>`;
   if (!C) h += `<p class="note">檢查中…</p>`;
-  else if (!C.kv) h += `<p class="note">網站還沒設定雲端儲存，目前只能用上面的備份檔。（管理者：在 Vercel 專案的 Storage 加上 Upstash for Redis，重新部署後這裡就能用同步碼。）</p>`;
+  else if (!C.kv) h += `<p class="note">網站的雲端同步暫時還不能使用，目前只能用上面的備份檔。${DEBUG ? "（除錯：Vercel 專案的 Storage 加上 Upstash for Redis，重新部署後就能用同步碼）" : ""}</p>`;
   else if (!S.id) h += `<p class="note">第一台裝置按「建立同步碼」，再到另一台裝置輸入同一組同步碼，兩邊就會同步。同步碼等於密碼，不要給別人。</p>
     <div class="irform"><button class="btn sm primary" data-sy="new">建立同步碼</button><input data-syid placeholder="已經有同步碼？貼在這裡" style="flex:1;min-width:200px" autocomplete="off"><button class="btn sm" data-sy="join">加入</button></div>`;
   else h += `<div class="cokv three"><div><span>同步碼</span><b style="font-size:13px;word-break:break-all">${W.syShow ? esc(S.id) : "••••••••" + esc(S.id.slice(-4))}</b><small><button class="linkbtn" data-sy="show">${W.syShow ? "隱藏" : "顯示"}</button> <button class="linkbtn" data-sy="copy">複製</button></small></div>

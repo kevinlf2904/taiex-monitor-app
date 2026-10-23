@@ -144,8 +144,8 @@ function fxMap(E, D, ok) {
         <dt>月營收</dt><dd>${pk.rev.toFixed(1)} 億</dd>${g != null ? `<dt>成長÷本益比</dt><dd>${g.toFixed(2)}</dd>` : ""}</dl>
       <button type="button" class="btn sm primary" data-sel="${esc(pk.c)}">看個股 ›</button></div>`; })();
   const L = P.filter(p => p.yoy > 0).map(p => ({ ...p, g: p.yoy / p.pe })).sort((a, b) => b.g - a.g).slice(0, 12);
-  return `<section class="mk"><h3>同業估值地圖<span class="note">${esc(ind)}・${P.length} 家有本益比</span>${exNote("估值地圖", "橫軸是本益比（股價 ÷ 近四季 EPS，越左越便宜），縱軸是最新月營收年增（越上面成長越快），圓圈越大營收越大；虛線是產業中位數。左上角是「相對便宜又在成長」的公司，但便宜也可能有原因（例如獲利只是一次性的），要搭配營收與 EPS 趨勢看。")}</h3>
-    <div class="erbar">${sel}</div><div class="fxmapbox">${svg}${box}</div>
+  return `<section class="mk${W.fxFull ? " fxfull" : ""}"><h3>同業估值地圖<span class="note">${esc(ind)}・${P.length} 家有本益比</span>${exNote("估值地圖", "橫軸是本益比（股價 ÷ 近四季 EPS，越左越便宜），縱軸是最新月營收年增（越上面成長越快），圓圈越大營收越大；虛線是產業中位數。左上角是「相對便宜又在成長」的公司，但便宜也可能有原因（例如獲利只是一次性的），要搭配營收與 EPS 趨勢看。")}</h3>
+    <div class="erbar">${sel}<button type="button" class="btn sm fxfullbtn" data-fxfull aria-pressed="${!!W.fxFull}">${W.fxFull ? "✕ 縮小" : "⛶ 全螢幕"}</button></div><div class="fxmapbox">${svg}${box}</div>
     <p class="note">產業中位數：本益比 ${mPe.toFixed(1)} 倍、營收年增 ${erPct(mY)}。點圓圈看這家公司的估值細節。</p>
     ${L.length ? `<h4>成長 ÷ 本益比 <span class="note">年增率除以本益比，越高代表每一倍本益比換到的成長越多（類似 PEG 的倒數）</span></h4><ol class="tlist fxrank">${L.map(p => `<li><button class="linkbtn" data-sel="${esc(p.c)}">${esc(p.n)} ${p.c}</button> <span class="note">本益比 ${p.pe.toFixed(1)}・年增 ${erPct(p.yoy)}</span> <b>${p.g.toFixed(2)}</b></li>`).join("")}</ol>` : ""}</section>`;
 }
@@ -207,3 +207,6 @@ function fxPeer(c) {
     ${F.map(f => { const b = best(f); return `<tr><td>${f[0]}</td>${R.map(r => { const v = f[1](r); return `<td class="${v != null && v === b ? "exbest" : ""}${r === me ? " pkme" : ""}">${f[2](v)}</td>`; }).join("")}</tr>`; }).join("")}</tbody></table></div>
     <p class="note">粗體是這一列最好的（本益比、股價淨值比越低越好）。三率、EPS 是最新一季，估值是最近交易日；不同產業標準差很多，同業比才有意義。</p></section>`;
 }
+// 估值地圖全螢幕（和動能矩陣的「⛶ 放大」一樣）：Esc 或再按一次縮小
+$("#lx").addEventListener("click", e => { if (W.lt !== "earn" || !e.target.closest("[data-fxfull]")) return; W.fxFull = !W.fxFull; renderList(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && W.fxFull) { W.fxFull = false; renderList(); } });

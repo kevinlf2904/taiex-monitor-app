@@ -620,6 +620,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 #secMf.chart-fullscreen .mfvbar { width: 100%; justify-content: center; margin: 0 0 6px; flex-shrink: 0; }
 .mf-modes .ichip { flex: none; font-size: 12.5px; padding: 4px 10px; }
 .minebtn { flex: none; white-space: nowrap; margin: 4px 0; }
+.segall { position: sticky !important; right: 0; z-index: 1; flex: none; margin-left: auto; padding: 4px 10px !important; font: inherit; font-size: 12px !important; color: var(--ink) !important; background: var(--bg) !important; border: 1px solid var(--line) !important; border-radius: 99px !important; box-shadow: -10px 0 10px var(--bg); cursor: pointer; white-space: nowrap; }
+.segpick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 4px 0; } .segpick .sgh { grid-column: 1 / -1; margin: 6px 0 0; font-size: 12px; font-weight: 400; color: var(--muted); }
+.segpick button { font: inherit; font-size: 13.5px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--ink); cursor: pointer; } .segpick button[aria-pressed="true"] { border-color: var(--ink); font-weight: 500; }
 .mf-rpbar { display: flex; align-items: center; gap: 6px 8px; padding: 6px 10px; margin: 6px 12px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); flex-wrap: wrap; }
 .mf-rpbar .mrp-range { flex: 1; min-width: 90px; margin: 0; accent-color: var(--ink); }
 .mf-rpbar .mrp-date { font: 600 12.5px var(--font-num); margin: 0; min-width: 5.2em; text-align: center; color: var(--ink); }
@@ -990,7 +993,9 @@ tr.on td { background: var(--surface-2); }
 .fxtip-h { display: flex; align-items: baseline; gap: 6px; } .fxtip-h b { font-size: 14px; } .fxtip-x { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; width: 32px; height: 28px; cursor: pointer; }
 @media (max-width: 700px) { .fxtip { position: static; transform: none; width: auto; margin-top: 6px; box-shadow: none; } } /* 手機圖太小，資訊框改放圖下方 */
 .fxtip-q { font-weight: 500; } .fxtip dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; } .fxtip dt { color: var(--muted); } .fxtip dd { margin: 0; text-align: right; font-family: var(--font-num); } .fxtip dd small { display: block; font-family: var(--font-body); font-size: 11px; } .fxmap { width: 100%; height: auto; display: block; }
-.fxmap .gl { stroke: var(--line); stroke-width: .6; } .fxmap .md { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; } .fxmap .ax { fill: var(--muted); font-size: 11px; } .fxmap .qd { fill: var(--muted); font-size: 11px; opacity: .8; }
+.fxmap .gl { stroke: var(--line); stroke-width: .6; } .fxmap .md { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; } .fxmap .ax { fill: var(--ink); opacity: .7; font-size: 12px; } .fxmap .qd { fill: var(--ink); opacity: .55; font-size: 12px; }
+@media (max-width: 600px) { .fxmap .ax, .fxmap .qd { font-size: 18px; } .fxmap .lb { font-size: 16px; } } /* 手機上整張圖縮小一半多，字要放大才看得到 */
+.mk.fxfull { position: fixed; inset: 0; z-index: 60; margin: 0; overflow-y: auto; background: var(--bg); padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); } .mk.fxfull .fxmap { max-height: calc(100vh - 150px); width: 100%; } .fxfullbtn { margin-left: auto; }
 .fxmap .pt { cursor: pointer; } .fxmap circle.u { fill: var(--up); fill-opacity: .45; } .fxmap circle.d { fill: var(--down); fill-opacity: .45; } .fxmap .pt:hover circle, .fxmap .pt.cur circle { fill-opacity: .85; stroke: var(--ink); stroke-width: 1.2; }
 .fxmap .lb { fill: var(--ink); font-size: 11px; pointer-events: none; } .fxrank li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } .fxrank b { margin-left: auto; }
 .mstbl td { background: color-mix(in srgb, var(--surface-2) calc(var(--ms, 0) * 100%), transparent); } .mstbl td small { display: block; } .mstbl tr.tot td { border-top: 1px solid var(--line); }
@@ -1162,7 +1167,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-152</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-153</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1787,7 +1792,7 @@ function ltabsUi(center = false) {
   t.classList.toggle("fl", t.scrollLeft > 4); t.classList.toggle("fr", t.scrollLeft + t.clientWidth < t.scrollWidth - 4); if (EMBED) requestAnimationFrame(postTabs);
 }
 $("#lTabs").addEventListener("scroll", () => ltabsUi(), { passive: true }); addEventListener("resize", () => ltabsUi());
-function hsFade(el) { const w = el.scrollWidth - el.clientWidth; el.classList.toggle("hs-l", w > 4 && el.scrollLeft > 4); el.classList.toggle("hs-r", w > 4 && el.scrollLeft < w - 4); }
+function hsFade(el) { const w = el.scrollWidth - el.clientWidth; el.classList.toggle("hs-l", w > 4 && el.scrollLeft > 4); el.classList.toggle("hs-r", w > 4 && el.scrollLeft < w - 4 && !el.querySelector(":scope > .segall")); } // 有「▾ 全部」貼在右邊時右緣不淡出（不然按鈕會被淡掉）
 function hsFadeAll() { document.querySelectorAll(".groups, .djump, .mn-days, .mkreg .mkseg, .mf-modes, .gcats, .scrseg, .kbar, #lTools > .seg").forEach(hsFade); }
 document.addEventListener("scroll", e => { if (e.target.matches?.(".groups, .djump, .mn-days, .mkreg .mkseg, .mf-modes, .gcats, .scrseg, .kbar, #lTools > .seg")) hsFade(e.target); }, { passive: true, capture: true });
 // 每個分頁記住捲到哪裡，切回來時回到原位
@@ -1861,10 +1866,27 @@ function renderList() {
   // 某個分頁畫的時候出錯（資料格式不對、程式還沒載完）：不要留一片空白，說明並給「重試」，錯誤記到資料來源狀態
   try { renderList0(); } catch (e) { noteErr("畫面", e); lx.hidden = false; lx.innerHTML = `<p class="note err" style="padding:12px">⚠︎ 這個畫面暫時顯示不出來（${esc(e.message)}）。<button class="linkbtn" data-lxretry>重試</button></p>`; }
   if (opened.size) for (const d of lx.querySelectorAll("details")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
-  hsRestore(xs); hsFadeAll();
+  hsRestore(xs); hsFadeAll(); segAllMount();
   if (hold) { const r = document.createRange(); r.selectNodeContents(lx); const need = parseFloat(lx.style.minHeight) || 0;
     if (lx.hidden || r.getBoundingClientRect().height >= need - 40) lx.style.minHeight = ""; else W.lxHold = setTimeout(() => { lx.style.minHeight = ""; }, 900); }
 }
+// 手機上很長、要一直往左滑的子頁籤（財報、大盤、櫃買圖表…）：右下加「▾ 全部 N 項」，點了用網格一次列出全部（分組標籤一起帶過去），點一項就切過去
+const SEGALL_SEL = "#lTools > .seg, .mkreg .mkseg, .mkseg.otcv";
+function segAllMount() {
+  if (!isMobile()) return;
+  // 按鈕放在那一排的最右邊（position: sticky 貼著右緣），不另外佔一行：加上去、拿掉都不會讓頁面高度改變、捲動位置跳動
+  document.querySelectorAll(SEGALL_SEL).forEach((el, k) => { let a = el.querySelector(":scope > .segall"); const B = [...el.querySelectorAll(":scope > button:not(.segall)")];
+    const over = el.scrollWidth - (a ? a.offsetWidth : 0) > el.clientWidth + 8;
+    if (B.length < 7 || !over) return a?.remove();
+    if (!a) { el.insertAdjacentHTML("beforeend", `<button type="button" class="segall" aria-label="列出全部 ${B.length} 項">▾ 全部</button>`); a = el.lastElementChild; }
+    a.dataset.segall = k; hsFade(el); });
+}
+document.addEventListener("click", e => {
+  const a = e.target.closest("[data-segall]"); if (a) { const el = document.querySelectorAll(SEGALL_SEL)[+a.dataset.segall]; if (!el) return; W.segAllK = +a.dataset.segall;
+    const items = [...el.children].map((c, i) => (c.matches(".segall") ? "" : c.matches(".tgrp") ? `<h4 class="sgh">${esc(c.textContent)}</h4>` : c.tagName === "BUTTON" ? `<button type="button" data-segpick="${i}" aria-pressed="${c.getAttribute("aria-pressed") === "true"}">${esc(c.textContent)}</button>` : "")).join("");
+    return openSheet(`<div class="segpick">${items}</div>`, false); }
+  const p = e.target.closest("[data-segpick]"); if (p) { const b = document.querySelectorAll(SEGALL_SEL)[W.segAllK]?.children[+p.dataset.segpick]; closeSheet(); b?.click(); } // 每次重抓：報價更新時選單可能已經重畫
+});
 // 重畫後左右滑動的選單、表格留在原本滑到的位置（不然每點一次就跳回最前面）；選中的那一項不在畫面裡時捲過去
 const HS_SEL = ".seg, .mkseg, .cochips, .afchips, .mf-modes, .gcats, .scrseg, .tw-grp, .cotbl-wrap, .tablewrap, .kbar, .sxnav, .cx-row, .ichips, .rheat";
 const hsKey = els => { const n = {}; return els.map(e => { const c = e.className.replace(/\s*\bhs-[lr]\b/g, ""); n[c] = (n[c] || 0) + 1; return c + "|" + n[c]; }); }; // 不含左右漸層的 hs-l、hs-r（重畫後的新元素還沒有，不拿掉就永遠對不上、選單被拉回最左邊）

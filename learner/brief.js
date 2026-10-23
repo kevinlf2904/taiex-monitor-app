@@ -181,14 +181,16 @@ function renderToday(show) {
     Promise.allSettled([W.cal ? null : getJ("/api/calendar", true).then(j => { if (j?.ok) W.cal = j; }), W.mn ? null : loadMnews(), etfHoldLoad([...new Set([...Object.keys(W.hold || {}), ...myCodes()])])]).finally(() => { T.busy = false; if (W.lt === "watch") renderToday(true); }); }
   const P = todayParts(); if (!P.length) { el.hidden = true; return; }
   const h = `<details class="today" data-tdopen${store.get("watch:today", true) ? " open" : ""}><summary><b>今日重點</b><span class="note">${twDay().slice(5).replace("-", "/")}・${P.length} 項</span></summary>
-    <ul>${P.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul><div class="tdbtns"><button type="button" class="linkbtn tdmore" data-tdgo="brief">看完整早報 ›</button><button type="button" class="linkbtn tdmore" data-tgone>${syncGet().tg && EVA().close ? "✓ 收盤後推到 Telegram" : "📲 每天推到 Telegram"}</button></div></details>`;
+    <ul>${P.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul><div class="tdbtns"><button type="button" class="linkbtn tdmore" data-tdgo="brief">看完整早報 ›</button><button type="button" class="linkbtn tdmore" data-tdcopy>📋 複製</button><button type="button" class="linkbtn tdmore" data-tgone>${syncGet().tg && EVA().close ? "✓ 收盤後推到 Telegram" : "📲 每天推到 Telegram"}</button></div></details>`;
   if (el._h !== h) { el._h = h; el.innerHTML = h; } el.hidden = false; // 內容沒變就不重畫（每 5 秒報價更新時不閃）
 }
 document.addEventListener("toggle", e => { if (e.target.matches?.("[data-tdopen]")) store.set("watch:today", e.target.open); }, true);
 // 一鍵推到 Telegram：沒有同步碼就自動建一組、勾好「收盤重點」「每日早報」並上傳；剩下的是打開機器人按「開始」、回來按「完成綁定」（同步、綁定用 tools.js 的備份同步）
 function tgOneHtml() {
   const C = W.syncCfg, S = syncGet(), A = EVA();
-  if (!C?.kv || !C?.tg) return `<div class="tgone"><h3>每天推到 Telegram</h3><p class="note">${C?.kv ? "網站還沒設定 Telegram 機器人。" : "網站還沒設定雲端儲存。"}（管理者：Vercel 環境變數加上 Upstash 與 TELEGRAM_BOT_TOKEN）</p></div>`;
+  // 網站還沒設定好推播：一般訪客只看到「暫時不能用」和複製文字；設定方法（管理者用）只在 ?debug=1 顯示
+  if (!C?.kv || !C?.tg) return `<div class="tgone"><h3>每天推到 Telegram</h3><p class="note">Telegram 推播暫時還不能使用。可以先複製今日重點，貼到 LINE、Telegram 或備忘錄。</p>
+    <div class="irform"><button class="btn sm primary" data-tdcopy>📋 複製今日重點</button></div>${DEBUG ? `<p class="note">（除錯：${C?.kv ? "缺 TELEGRAM_BOT_TOKEN" : "缺雲端儲存 Upstash（KV_REST_API_URL）"}，在 Vercel 環境變數設定後重新部署）</p>` : ""}</div>`;
   const opts = [["close", "收盤重點", "每個交易日收盤後：自選與庫存的漲跌、大漲跌、今明兩天除權息與法說會、ETF 換股"], ["brief", "每日早報", "每個交易日早上 07:40：昨晚美股、台指期夜盤、今天的行事曆"]]
     .map(([k, t, d]) => `<label class="evopt"><input type="checkbox" data-tgk="${k}" ${A[k] ? "checked" : ""}><b>${t}</b><span class="note">${d}</span></label>`).join("");
   return `<div class="tgone"><h3>每天推到 Telegram</h3>${S.tg ? `<p class="note">✓ 已綁定，不用開著網頁也會收到。指標、價格、事件提醒也會一起推播。</p><div class="evopts">${opts}</div>
@@ -204,6 +206,10 @@ async function tgOneOpen() {
 }
 document.addEventListener("click", async e => { const t = e.target;
   if (t.closest("[data-tgone]")) return tgOneOpen();
+  if (t.closest("[data-tdcopy]")) { // 今日重點的純文字（每項一行），貼到 LINE、備忘錄
+    const L = [...document.querySelectorAll("#todayCard .today li")].map(li => `• ${li.querySelector(".tdk")?.textContent || ""}：${(li.querySelector(".tdv")?.textContent || "").replace(/\s+/g, " ").trim()}`);
+    const txt = `今日重點（${twDay().slice(5).replace("-", "/")}）\n${L.join("\n")}\n— KLineLab K線情報局，僅供研究參考`;
+    try { await navigator.clipboard.writeText(txt); toast("已複製今日重點"); } catch { toast("這個瀏覽器不能自動複製"); } return; }
   if (t.closest("[data-tgone-bind]")) { await syncClick({ sy: "tgbind" }); $("#sheetExtra").innerHTML = tgOneHtml(); return renderToday(W.lt === "watch"); }
   if (t.closest("[data-tgone-test]")) return syncClick({ sy: "tgtest" });
   if (t.closest("[data-tgone-more]")) { closeSheet(); W.tv = "sync"; return setLt("tools"); } });
