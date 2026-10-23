@@ -24,7 +24,7 @@ export function pickEx99(items) {
 }
 export const htmlText = h => String(h).replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ").replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, "\n").replace(/<[^>]+>/g, " ")
   .replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/&#8217;|&rsquo;/g, "'").replace(/&#822[01];|&[lr]dquo;/g, '"').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").replace(/\n\s*\n+/g, "\n").trim();
-const PROMPT = name => `你是美股研究員。這是「${name}」最新一季的財報新聞稿（earnings release，美國公司申報 SEC 8-K 的附件）。請只根據新聞稿內容整理，不要加沒寫的數字或推測，用繁體中文、台灣用語（金額用美元，例如「營收 351 億美元」），輸出 JSON：
+const PROMPT = name => `你是美股研究員。這是「${name}」最新一季的財報新聞稿（earnings release，美國公司申報 SEC 8-K 的附件）。請只根據新聞稿內容整理，不要加沒寫的數字或推測，用繁體中文、台灣用語。金額一律照原文的寫法加「美元」（例如 $46.7 billion 寫「46.7 billion 美元」、$950 million 寫「950 million 美元」），不要自己換算成億或萬，避免單位算錯。輸出 JSON：
 {"head":"一句話總結這季最重要的訊息（40 字內）",
  "outlook":["公司給的下一季或全年財測（guidance）與展望，3～5 條，每條 50 字內，有數字就寫數字；沒有財測就寫管理層對前景的說法"],
  "margin":"毛利率、營益率的表現與指引（60 字內，沒有就寫空字串）",
