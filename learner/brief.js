@@ -72,6 +72,7 @@ function evaHtml() {
 }
 // 網頁版的事件檢查：營收用財報分頁的上市櫃月營收表，三率用 data/earn-hist.json，法說會用 /api/calendar
 async function evData() {
+  await lazy("earn"); // 財報的程式（earn.js、fundx.js）用到才載入
   const [eh, cal] = await Promise.all([ehLoad(), W.cal?.conf ? W.cal : getJ("/api/calendar", true).catch(() => null)]); // ehLoad 在 fundx.js
   if (cal?.ok) W.cal = cal;
   const E = ER(); if (!E.data?.rows) await erLoad(); const R = ER().data, hi = new Map((eh?.streak?.rows || []).map(r => [r[0], r[7]]));

@@ -330,7 +330,7 @@ function toolsBody(v) {
   } else if (v === "ins") {
     h = insHtml(); note = "內部人申報是公開資訊，可以當成籌碼面的參考；大股東轉讓的原因很多（繳稅、贈與、信託、資金需求），不一定代表看壞。";
   } else if (v === "oapi") {
-    h = oaToolsBody();
+    h = lazyOk("oapi") ? oaToolsBody() : (lazy("oapi").then(renderList), LZ_WAIT); // oapi.js 用到才載入（watch.html 的 lazy）
   } else if (v === "sync") {
     h = syncHtml(); note = "雲端同步只存同步碼的雜湊與你的設定，不需要帳號；同步碼遺失就無法取回雲端資料，記得也匯出一份備份檔。";
   } else if (v === "alert") {
