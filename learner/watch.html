@@ -620,7 +620,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 #secMf.chart-fullscreen .mfvbar { width: 100%; justify-content: center; margin: 0 0 6px; flex-shrink: 0; }
 .mf-modes .ichip { flex: none; font-size: 12.5px; padding: 4px 10px; }
 .minebtn { flex: none; white-space: nowrap; margin: 4px 0; }
-.segall { display: block; margin: 2px 12px 2px auto; padding: 4px 10px; font: inherit; font-size: 12px; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 99px; cursor: pointer; }
+.segall { position: sticky !important; right: 0; z-index: 1; flex: none; margin-left: auto; padding: 4px 10px !important; font: inherit; font-size: 12px !important; color: var(--ink) !important; background: var(--bg) !important; border: 1px solid var(--line) !important; border-radius: 99px !important; box-shadow: -10px 0 10px var(--bg); cursor: pointer; white-space: nowrap; }
 .segpick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 4px 0; } .segpick .sgh { grid-column: 1 / -1; margin: 6px 0 0; font-size: 12px; font-weight: 400; color: var(--muted); }
 .segpick button { font: inherit; font-size: 13.5px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--ink); cursor: pointer; } .segpick button[aria-pressed="true"] { border-color: var(--ink); font-weight: 500; }
 .mf-rpbar { display: flex; align-items: center; gap: 6px 8px; padding: 6px 10px; margin: 6px 12px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); flex-wrap: wrap; }
@@ -1792,7 +1792,7 @@ function ltabsUi(center = false) {
   t.classList.toggle("fl", t.scrollLeft > 4); t.classList.toggle("fr", t.scrollLeft + t.clientWidth < t.scrollWidth - 4); if (EMBED) requestAnimationFrame(postTabs);
 }
 $("#lTabs").addEventListener("scroll", () => ltabsUi(), { passive: true }); addEventListener("resize", () => ltabsUi());
-function hsFade(el) { const w = el.scrollWidth - el.clientWidth; el.classList.toggle("hs-l", w > 4 && el.scrollLeft > 4); el.classList.toggle("hs-r", w > 4 && el.scrollLeft < w - 4); }
+function hsFade(el) { const w = el.scrollWidth - el.clientWidth; el.classList.toggle("hs-l", w > 4 && el.scrollLeft > 4); el.classList.toggle("hs-r", w > 4 && el.scrollLeft < w - 4 && !el.querySelector(":scope > .segall")); } // 有「▾ 全部」貼在右邊時右緣不淡出（不然按鈕會被淡掉）
 function hsFadeAll() { document.querySelectorAll(".groups, .djump, .mn-days, .mkreg .mkseg, .mf-modes, .gcats, .scrseg, .kbar, #lTools > .seg").forEach(hsFade); }
 document.addEventListener("scroll", e => { if (e.target.matches?.(".groups, .djump, .mn-days, .mkreg .mkseg, .mf-modes, .gcats, .scrseg, .kbar, #lTools > .seg")) hsFade(e.target); }, { passive: true, capture: true });
 // 每個分頁記住捲到哪裡，切回來時回到原位
@@ -1874,14 +1874,16 @@ function renderList() {
 const SEGALL_SEL = "#lTools > .seg, .mkreg .mkseg, .mkseg.otcv";
 function segAllMount() {
   if (!isMobile()) return;
-  document.querySelectorAll(SEGALL_SEL).forEach((el, k) => { const B = [...el.querySelectorAll(":scope > button")], nx = el.nextElementSibling;
-    if (B.length < 7 || el.scrollWidth <= el.clientWidth + 8) { if (nx?.matches(".segall")) nx.remove(); return; }
-    if (nx?.matches(".segall")) { nx.dataset.segall = k; return; }
-    el.insertAdjacentHTML("afterend", `<button type="button" class="segall" data-segall="${k}">▾ 全部 ${B.length} 項</button>`); });
+  // 按鈕放在那一排的最右邊（position: sticky 貼著右緣），不另外佔一行：加上去、拿掉都不會讓頁面高度改變、捲動位置跳動
+  document.querySelectorAll(SEGALL_SEL).forEach((el, k) => { let a = el.querySelector(":scope > .segall"); const B = [...el.querySelectorAll(":scope > button:not(.segall)")];
+    const over = el.scrollWidth - (a ? a.offsetWidth : 0) > el.clientWidth + 8;
+    if (B.length < 7 || !over) return a?.remove();
+    if (!a) { el.insertAdjacentHTML("beforeend", `<button type="button" class="segall" aria-label="列出全部 ${B.length} 項">▾ 全部</button>`); a = el.lastElementChild; }
+    a.dataset.segall = k; hsFade(el); });
 }
 document.addEventListener("click", e => {
   const a = e.target.closest("[data-segall]"); if (a) { const el = document.querySelectorAll(SEGALL_SEL)[+a.dataset.segall]; if (!el) return; W.segAllK = +a.dataset.segall;
-    const items = [...el.children].map((c, i) => (c.matches(".tgrp") ? `<h4 class="sgh">${esc(c.textContent)}</h4>` : c.tagName === "BUTTON" ? `<button type="button" data-segpick="${i}" aria-pressed="${c.getAttribute("aria-pressed") === "true"}">${esc(c.textContent)}</button>` : "")).join("");
+    const items = [...el.children].map((c, i) => (c.matches(".segall") ? "" : c.matches(".tgrp") ? `<h4 class="sgh">${esc(c.textContent)}</h4>` : c.tagName === "BUTTON" ? `<button type="button" data-segpick="${i}" aria-pressed="${c.getAttribute("aria-pressed") === "true"}">${esc(c.textContent)}</button>` : "")).join("");
     return openSheet(`<div class="segpick">${items}</div>`, false); }
   const p = e.target.closest("[data-segpick]"); if (p) { const b = document.querySelectorAll(SEGALL_SEL)[W.segAllK]?.children[+p.dataset.segpick]; closeSheet(); b?.click(); } // 每次重抓：報價更新時選單可能已經重畫
 });

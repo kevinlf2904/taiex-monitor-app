@@ -13,8 +13,8 @@ test("手機子頁籤「▾ 全部」、估值地圖全螢幕 390", async () => 
   await ctx.route("**/api/oapi?earn=1", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, ym: "11509", yq: "115Q2", source: "測試", rows: ROWS }) }));
   await ctx.route("**/api/screen?bw=1", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: { 2330: [24.5, 6.8, 1.6], 2303: [12, 1.5, 4], 6488: [18.2, 2.1, 3.9], 3105: [30, 1.5, 1] } }) }));
   await p.evaluate(() => { ER().view = "sum"; ER().reg = "tw"; showList(); setLt("earn"); });
-  await p.waitForSelector("#lTools + .segall, .segall");
-  assert.match(await p.textContent(".segall"), /全部 1[3-9] 項/);
+  await p.waitForSelector(".segall");
+  assert.match(await p.getAttribute(".segall", "aria-label"), /全部 1[3-9] 項/); assert.equal(await p.evaluate(() => document.querySelector(".segall").parentElement.matches("#lTools > .seg")), true, "放在那一排裡面，不另外佔一行");
   await p.click(".segall"); await p.waitForSelector("#sheetExtra .segpick");
   assert.match(await p.textContent("#sheetExtra .segpick"), /總覽[\s\S]*排行[\s\S]*月營收[\s\S]*比較[\s\S]*估值地圖[\s\S]*研究/, "分組標籤一起帶過去");
   await p.click('#sheetExtra .segpick button:text-is("估值地圖")');

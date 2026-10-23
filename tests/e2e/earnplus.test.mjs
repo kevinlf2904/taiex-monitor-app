@@ -17,6 +17,7 @@ const INFO = { ok: true, code: "2330", inst: [], margin: [], per: [], revenue: A
 for (const width of [390, 1280]) test(`財報第二批：體質、股利預估、法說會 AI ${width}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width, touch: width < 500 });
   const posted = [];
+  await p.route("**/data/confai.json**", r => J(r, { sums: {}, cmps: {} })); // 不讀排程每天更新的真資料（裡面有的簡報會跳過 AI、自動比較，測試結果會跟著資料變）
   await p.route("**/api/company**", r => J(r, CO)); await p.route("**/api/stockinfo**", r => J(r, INFO));
   await p.route("**/api/oapi?earn=1", r => J(r, { ok: true, ym: "11509", yq: "115Q2", source: "測試", rows: [["2330", "台積電", "半導體業", "上市", 3300, 5.1, 36.2, 38.4, 15.2, 9300, 3980, 59.1, 49.5, 42.7]] }));
   await p.route("**/api/confai**", r => { if (r.request().method() === "POST") { const q = JSON.parse(r.request().postData()); posted.push(q);
