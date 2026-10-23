@@ -1172,7 +1172,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-155</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.24-156</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -4027,7 +4027,7 @@ function renderInd0() {
 }
 // 工具分頁（tools.js）：點擊、送出表單、勾選
 $("#lx").addEventListener("click", e => { if (e.target.closest("[data-lxretry]")) renderList(); });
-$("#wl").addEventListener("click", e => { const b = e.target.closest("[data-wlretry]"); if (b) { b.disabled = true; b.textContent = "更新中…"; W.busy = 0; tick(); } });
+$("#wl").addEventListener("click", e => { const b = e.target.closest("[data-wlretry]"); if (b) { b.disabled = true; b.textContent = "更新中…"; W.busy = 0; tick().finally(() => { W.lastPtr = 0; renderList(); }); } }); // 剛按下去 0.9 秒內自動更新不重畫清單：重試完自己重畫一次
 document.addEventListener("click", e => { const b = e.target.closest("[data-mine],[data-mineset]"); if (!b) return; W.mine = b.dataset.mineset != null ? b.dataset.mineset === "1" : !W.mine; store.set("watch:mine", W.mine); renderList(); });
 $("#lx").addEventListener("click", e => toolsClick(e)); $("#lTools").addEventListener("click", e => toolsClick(e));
 $("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListener("change", e => toolsChange(e));

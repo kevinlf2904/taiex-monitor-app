@@ -535,6 +535,18 @@ test("AI 次數限制：每 IP 每小時、全站每天", async () => {
   assert.match(await aiLimit(req("9.9.9.9"), "chat", t, big), /今天的 AI 使用量已達上限/);
   assert.ok(![...M.keys()].some(k => k.includes("1.2.3.4")), "IP 只存雜湊");
 });
+test("API 稽核修正：比較快取鍵含內容、錯誤訊息不帶外部原文、狀態頁擋多餘參數、選股漲停價", async () => {
+  const { cmpKey } = await import("../api/_lib/confai.js"), { userMsg } = await import("../api/_lib/_err.js");
+  const a = { head: "營收成長" }, b = { head: "毛利率下滑" };
+  assert.equal(cmpKey("2330x.pdf", "2330y.pdf", a, b), cmpKey("2330x.pdf", "2330y.pdf", { ...a }, { ...b }), "同樣內容同一個鍵");
+  assert.notEqual(cmpKey("2330x.pdf", "2330y.pdf", a, b), cmpKey("2330x.pdf", "2330y.pdf", { head: "假的" }, b), "送假的整理結果不會蓋掉別人的快取");
+  const err = console.error; console.error = () => {};
+  try { assert.equal(userMsg(new Error("簡報太大（50MB）"), "x"), "簡報太大（50MB）", "自己寫的中文訊息照回"); assert.equal(userMsg(new Error("WRONGPASS invalid token"), "雲端暫時連不到"), "雲端暫時連不到", "外部原文不帶出去"); }
+  finally { console.error = err; }
+  const { default: status } = await import("../api/_lib/status.js"), res = { h: {}, setHeader(k, v) { this.h[k] = v; }, status(n) { this.code = n; return this; }, end() { return this; }, json(j) { this.j = j; return this; } };
+  await status({ query: { x: "123" } }, res); assert.equal(res.code, 308); assert.equal(res.h.Location, "/api/status", "多帶亂數參數就轉回標準網址（CDN 快取才對得到）");
+  const { limitPrice } = await import("../api/_lib/screen.js"); assert.deepEqual([limitPrice(2420), limitPrice(2420, false), limitPrice(9.5)], [2660, 2180, 10.45]);
+});
 test("節目匯入：擋內網位址與跳轉到內網", async () => {
   for (const ip of ["127.0.0.1", "10.1.2.3", "172.20.0.1", "192.168.1.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1"]) assert.equal(privIp(ip), true, ip);
   for (const ip of ["8.8.8.8", "172.32.0.1", "100.128.0.1", "2001:4860::8888"]) assert.equal(privIp(ip), false, ip);
