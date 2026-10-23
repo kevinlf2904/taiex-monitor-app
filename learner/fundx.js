@@ -191,3 +191,19 @@ function renderHoldMacro() {
     <h4 class="qx-h">每個因子為什麼重要</h4><ul class="qx-list tight">${MACRO_F.map(f => `<li><b>${f[1]}</b><span>${f[6]}</span></li>`).join("")}</ul>
     <p class="note">${S.ok.every(Boolean) ? "" : "有些因子的資料暫時拿不到，那一欄會是空的。"}這是線性的估計：真的大跌時相關性通常會變高，實際影響可能更大。不是投資建議。</p></div>`;
 }
+
+/* ---------- 個股「財務」的同業 PK：同產業月營收最大的 4 家（自己不在前 4 就換掉第 4 名），比估值與三率 ---------- */
+// 資料：財報分頁的上市櫃月營收＋季報總表（ER().data.rows）、本益比／股價淨值比／殖利率（W.mfVal，/api/screen?bw=1）
+function fxPeer(c) {
+  const D = ER().data, me = D.rows.find(r => r[0] === c); if (!me?.[2]) return "";
+  const V = W.mfVal || {}, L = D.rows.filter(r => r[2] === me[2] && r[4] != null).sort((a, b) => b[4] - a[4]); if (L.length < 2) return "";
+  const R = L.slice(0, 4); if (!R.includes(me)) R[R.length === 4 ? 3 : R.length] = me;
+  const pct = v => (v == null ? "—" : v + "%");
+  // [名稱, 取值, 顯示, 越大越好？]（本益比、股價淨值比越低越便宜）
+  const F = [["本益比", r => (V[r[0]]?.[0] > 0 ? V[r[0]][0] : null), v => (v == null ? "—" : v), false], ["股價淨值比", r => V[r[0]]?.[1] ?? null, v => (v == null ? "—" : v), false], ["殖利率", r => V[r[0]]?.[2] ?? null, pct, true],
+    ["毛利率", r => r[11], pct, true], ["營益率", r => r[12], pct, true], ["淨利率", r => r[13], pct, true], ["本季 EPS", r => r[8], v => erNum(v), true], ["月營收年增", r => r[6], erPct, true]];
+  const best = f => { const v = R.map(f[1]).filter(x => x != null); return v.length > 1 ? (f[3] ? Math.max(...v) : Math.min(...v)) : null; };
+  return `<section class="pkbox"><h3 class="fh">同業 PK<span class="note">${esc(me[2])}・月營收前 ${R.length} 大</span></h3><div class="cotbl-wrap"><table class="tbl excmp pktbl"><thead><tr><th></th>${R.map(r => `<th${r === me ? ' class="pkme"' : ""}><button class="linkbtn" data-sel="${esc(r[0])}">${esc(r[1])}</button></th>`).join("")}</tr></thead><tbody>
+    ${F.map(f => { const b = best(f); return `<tr><td>${f[0]}</td>${R.map(r => { const v = f[1](r); return `<td class="${v != null && v === b ? "exbest" : ""}${r === me ? " pkme" : ""}">${f[2](v)}</td>`; }).join("")}</tr>`; }).join("")}</tbody></table></div>
+    <p class="note">粗體是這一列最好的（本益比、股價淨值比越低越好）。三率、EPS 是最新一季，估值是最近交易日；不同產業標準差很多，同業比才有意義。</p></section>`;
+}

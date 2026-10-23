@@ -42,7 +42,7 @@ function renderOtc(top) {
   const O = OTC(), D = O.data;
   const X = mkx(), V = X.views.some(([k]) => k === O.view) ? O.view : "ix";
   const bar = `<div class="mn-days mkseg otcv">${X.views.map(([k, t]) => `<button type="button" data-mk="otcV" data-v="${k}" aria-pressed="${V === k}">${t}</button>`).join("")}</div>`;
-  if (!D) { $("#lx").innerHTML = top + bar + `<p class="note" style="padding:12px">載入${X.org}資料…</p>`; otcLoad(); return; }
+  if (!D) { $("#lx").innerHTML = top + bar + skel(`載入${X.org}資料…`); otcLoad(); return; }
   if (D.err) { $("#lx").innerHTML = top + bar + `<p class="note err" style="padding:12px">⚠︎ ${esc(D.err)}</p>`; return; }
   const f = { ix: otcIxHtml, vol: otcVolHtml, rev: otcRevHtml, hi: otcHiHtml, fc: otcFcHtml, dir: otcDirHtml, wt: otcWtHtml, sus: otcSusHtml, esb: otcEsbHtml, gold: otcGoldHtml, cb: otcCbHtml, sec: otcSecHtml, chip: otcChipHtml }[V] || otcIxHtml;
   $("#lx").innerHTML = top + bar + `<div class="otcbox">${f(D)}</div><p class="note" style="padding:4px 12px 12px">資料：${X.org} OpenAPI、公開資訊觀測站；排程每個交易日 ${X.upd} 更新${D.updated ? `（這份整理於 ${new Date(Date.parse(D.updated) + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " ")}）` : ""}。不是投資建議。</p>`;

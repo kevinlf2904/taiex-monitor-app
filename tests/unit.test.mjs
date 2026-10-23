@@ -609,10 +609,46 @@ test("財報事件回測：事件判斷、公布後才進場、超額報酬", ()
 });
 test("事件提醒設定寫進推播清單：只看庫存或加上自選；只勾早報也算", () => {
   const data = { "kline:watch:evalert": JSON.stringify({ rev: true, brief: true, scope: "hold" }), "kline:watch:hold": JSON.stringify({ 2330: { sh: 1 }, AAPL: { sh: 1 }, 9999: { sh: 1, demo: true } }), "kline:watch:groups": JSON.stringify([{ list: ["2317", "NVDA"] }]) };
-  assert.deepEqual(alertDoc(data, "1").ev, { on: ["rev", "brief"], codes: ["2330"] });
-  assert.deepEqual(alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ pm3: true, scope: "all" }) }, "1").ev, { on: ["pm3"], codes: ["2330", "2317"] });
+  assert.deepEqual(alertDoc(data, "1").ev, { on: ["rev", "brief"], codes: ["2330"], mine: [] });
+  assert.deepEqual(alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ pm3: true, scope: "all" }) }, "1").ev, { on: ["pm3"], codes: ["2330", "2317"], mine: [] });
+  // ETF 換股、收盤重點也要寫進去（收盤重點看自選＋庫存全部，含美股）
+  const cl = alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ etf: true, close: true }) }, "1").ev;
+  assert.deepEqual(cl.on, ["etf", "close"]); assert.deepEqual(cl.mine, ["2330", "AAPL", "2317", "NVDA"]);
+  assert.equal(docHas(alertDoc({ "kline:watch:evalert": JSON.stringify({ close: true }), "kline:watch:groups": JSON.stringify([{ list: ["NVDA"] }]) }, "1")), true, "只勾收盤重點、自選有股票就推");
   assert.equal(docHas(alertDoc({ "kline:watch:evalert": JSON.stringify({ brief: true }) }, "1")), true, "沒有庫存也可以收早報");
   assert.equal(docHas(alertDoc({ "kline:watch:evalert": JSON.stringify({ rev: true }) }, "1")), false, "勾了營收但沒有庫存就不用檢查");
+});
+
+test("收盤重點：今日重點卡和 Telegram 用同一套內容（漲跌家數、大漲跌、今明兩天、ETF 換股）", () => {
+  const { todayData, closeText } = engine().B, pct = { 2330: 3.5, 2317: -1, NVDA: -4.2, "0050": 0.2 };
+  const D = todayData({ mine: new Set(["2330", "2317", "NVDA", "0050", "T00"]), pct: c => pct[c] ?? null, today: "2026-10-23",
+    cal: { rows: [{ date: "2026-10-26", code: "2317", kind: "除息" }, { date: "2026-10-30", code: "2330" }], conf: [{ date: "2026-10-23", code: "0050" }] },
+    etf: { "0050": { ev: [{ d: "2026-10-22", t: "in", code: "3017", name: "奇鋐" }, { d: "2026-10-01", t: "out", code: "1101", name: "台泥" }] } } });
+  const J = x => JSON.parse(JSON.stringify(x)); // 沙盒裡的陣列和這裡的不是同一個 Array，比較前轉一次
+  assert.deepEqual([D.n, D.up, D.dn], [4, 2, 2], "指數沒有漲跌不算");
+  assert.deepEqual(J(D.mv.map(x => x[0])), ["NVDA", "2330"], "超過 3% 才算大漲跌，依幅度排序");
+  assert.deepEqual(J(D.cal.map(([x, w]) => [x.code, w])), [["2317", "除息"], ["0050", "法說會"]], "10/23 是週五，下一個平日是 10/26");
+  const t = closeText(D, { 2330: "台積電", 2317: "鴻海" });
+  assert.match(t, /今日收盤重點（10\/23）[\s\S]*上漲 2、下跌 2[\s\S]*NVDA -4\.2%、台積電 \+3\.5%[\s\S]*明天 鴻海 除息、今天 0050 法說會[\s\S]*0050 10\/22 新增 奇鋐/);
+  assert.doesNotMatch(t, /台泥/, "ETF 換股只看近 3 天");
+  assert.equal(closeText(todayData({ mine: new Set(), pct: () => null, today: "2026-10-23" })), "", "沒有內容就不送");
+});
+
+test("今日符合型態的個股：和課程範例圖用同一套判斷、只看今天、成交值排序、每型態最多 12 檔", async () => {
+  const { patternHits } = await import("../scripts/pattern-today.mjs"), E = engine();
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, H = { date: "2026-10-23", s: {} };
+  for (let k = 0; k < 400; k++) { let c = 50 + rnd() * 100; const b = [];
+    for (let i = 0; i < 120; i++) { const o = c * (1 + (rnd() - 0.5) * 0.03); c = o * (1 + (rnd() - 0.5) * 0.06);
+      b.push({ d: i === 119 ? "2026-10-23" : new Date(Date.UTC(2026, 3, 1) + i * 864e5).toISOString().slice(0, 10), o, h: Math.max(o, c) * (1 + rnd() * 0.02), l: Math.min(o, c) * (1 - rnd() * 0.02), c, v: k % 10 ? 600 + Math.round(rnd() * 5000) : 100 }); }
+    H.s[String(1000 + k)] = { n: "股" + k, b }; }
+  H.s["0050"] = { n: "ETF", b: H.s["1001"].b }; H.s["1001"].b = H.s["1001"].b.slice(0, -1); // ETF 不算；今天沒有資料的不算
+  const R = patternHits(H, E); assert.equal(R.n, 359, "成交不到 500 張、ETF、今天沒資料的都略過");
+  assert.ok(Object.keys(R.hits).length >= 10);
+  for (const [id, L] of Object.entries(R.hits)) { assert.ok(L.length <= 12);
+    const tv = L.map(([c]) => { const b = H.s[c].b.at(-1); return b.c * b.v; }); assert.deepEqual(tv, [...tv].sort((a, b) => b - a), `${id} 依成交值排序`);
+    for (const [c] of L) { const D = H.s[c].b, I = E.indicators(D), last = D.length - 1;
+      const ok = E.S.detectPattern(D, last) === id || E.S.Signals.chartPat(D, I).some(m => m.i === last && m.pat === id) || E.S.Signals.gaps(D, I).some(m => m.i === last && m.pat === id);
+      assert.ok(ok, `${c} 今天真的有 ${id}`); } }
 });
 
 test("集保網站查詢：解析分級表、週資料欄位和排程一樣、token 每次換新", async () => {

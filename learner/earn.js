@@ -5,8 +5,9 @@
    點公司展開營收、EPS 走勢圖（台股 /api/stockinfo、美股 /api/usinfo，用 watch.html 的 barLineSvg，有查價線）。
    行事曆、連續成長、三率轉折、我的持股、同業比較、小學堂、財報整體看法、美股財報週與營收驚喜在 earnx.js；估值地圖、事件回測在 fundx.js。
    用到 watch.html 的 W、esc、cls、getJ、store、renderList、barLineSvg、tmo，stockx.js 的 sxMd。 */
-const ER_VIEWS = { tw: [["sum", "總覽"], ["cal", "行事曆"], ["rev", "月營收"], ["streak", "連續成長"], ["eps", "EPS"], ["pm", "獲利能力"], ["turn", "三率轉折"], ["ind", "產業比較"], ["my", "我的持股"], ["cmp", "同業比較"], ["map", "估值地圖"], ["evt", "事件回測"], ["learn", "小學堂"]],
-  us: [["recent", "最近公布"], ["up", "即將公布"], ["week", "財報週"], ["beat", "優於預期"], ["miss", "低於預期"], ["rev", "營收驚喜"], ["guide", "財測"], ["learn", "小學堂"]] };
+// ["|", "名稱"] 是分組標籤：子頁籤多，分成幾段比較好找
+const ER_VIEWS = { tw: [["sum", "總覽"], ["cal", "行事曆"], ["|", "排行"], ["rev", "月營收"], ["streak", "連續成長"], ["eps", "EPS"], ["pm", "獲利能力"], ["turn", "三率轉折"], ["ind", "產業比較"], ["|", "比較"], ["my", "我的持股"], ["cmp", "同業比較"], ["map", "估值地圖"], ["|", "研究"], ["evt", "事件回測"], ["learn", "小學堂"]],
+  us: [["recent", "最近公布"], ["up", "即將公布"], ["week", "財報週"], ["|", "驚喜"], ["beat", "優於預期"], ["miss", "低於預期"], ["rev", "營收驚喜"], ["guide", "財測"], ["|", "研究"], ["learn", "小學堂"]] };
 const ER_K = { c: 0, n: 1, i: 2, m: 3, rev: 4, mom: 5, yoy: 6, cum: 7, eps: 8, qrev: 9, ni: 10, gm: 11, om: 12, nm: 13 };
 // 排行：[鍵, 標題, 欄位, 由大到小?, 說明]
 const ER_RANKS = {
@@ -78,8 +79,8 @@ const erLookup = us => { const E = ER(), c = E.look?.[us ? "us" : "tw"];
 const erGuide = r => (r[12] == null ? "" : `・<b class="${r[12] > 0 ? "up" : r[12] < 0 ? "down" : ""}">財測${r[12] > 0 ? "上修" : r[12] < 0 ? "下修" : "維持"}</b>`);
 function renderEarnUs(E) {
   const U = E.us; if (!U || (!E.usLoading && Date.now() - U.got > 30 * 60e3)) setTimeout(erUsLoad, 0);
-  if (!U || U.err) return `<p class="note gnote">${U?.err ? "⚠︎ " + esc(U.err) : "抓美股財報行事曆…"}</p>`;
-  const today = new Date(Date.now() - 4 * 3600e3).toISOString().slice(0, 10), big = r => !E.big || r[3] >= 100, md = d => d.slice(5).replace("-", "/");
+  if (!U || U.err) return U?.err ? `<p class="note gnote">⚠︎ ${esc(U.err)}</p>` : skel("抓美股財報行事曆…", 6);
+  const today = new Date(Date.now() - 4 * 3600e3).toISOString().slice(0, 10), mf = mineF(), big = r => (!E.big || r[3] >= 100) && mf(r[1]), md = d => d.slice(5).replace("-", "/");
   const past = U.rows.filter(r => r[4] != null && big(r)), next = U.rows.filter(r => r[4] == null && r[0] >= today && big(r));
   const V = E.usv, L = V === "up" ? next.slice().sort((a, b) => a[0].localeCompare(b[0]) || b[3] - a[3]) : V === "beat" ? past.filter(r => r[6] != null).sort((a, b) => b[6] - a[6]) : V === "miss" ? past.filter(r => r[6] != null).sort((a, b) => a[6] - b[6]) : V === "guide" ? past.filter(r => r[12] != null).sort((a, b) => b[12] - a[12] || b[3] - a[3]) : past.slice().sort((a, b) => b[0].localeCompare(a[0]) || b[3] - a[3]);
   const mx = Math.max(...L.map(r => Math.abs(r[6] || 0)), 1);
@@ -96,13 +97,13 @@ function renderEarnUs(E) {
 function renderEarn() {
   const E = ER(), us = E.reg === "us";
   $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="台股或美股">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-erreg="${k}" aria-pressed="${E.reg === k}">${t}</button>`).join("")}</div>
-    <div class="seg" role="group" aria-label="財報">${ER_VIEWS[E.reg].map(([k, t]) => `<button data-erv="${k}" aria-pressed="${(us ? E.usv : E.view) === k}">${t}</button>`).join("")}</div>`;
+    <div class="seg" role="group" aria-label="財報">${ER_VIEWS[E.reg].map(([k, t]) => (k === "|" ? `<span class="tgrp">${t}</span>` : `<button data-erv="${k}" aria-pressed="${(us ? E.usv : E.view) === k}">${t}</button>`)).join("")}</div>${mineBtn()}`;
   const box = $("#lx"), foot = us ? "美股財報行事曆來自 Nasdaq（每天整理兩次），走勢來自 SEC 財報與 Finnhub；只整理公開數字，不構成投資建議。" : "月營收、EPS、營益分析來自證交所與櫃買中心開放資料（公開資訊觀測站彙整），每天更新；點公司看營收、EPS 走勢。只整理公開數字，不構成投資建議。";
   if (W.off) { box.innerHTML = `<p class="note gnote">需要部署到網站才有財報資料。</p>`; return ""; }
   if (us) { box.innerHTML = `<div class="earn us">${renderEarnUs(E)}<p class="note" style="padding:4px 12px 12px">${foot}</p></div>`; return ""; }
   const D = E.data; if (!D || (!D.loading && Date.now() - D.at > 30 * 60e3)) setTimeout(erLoad, 0);
-  if (!D || D.err) { box.innerHTML = `<p class="note gnote">${D?.err ? "⚠︎ " + esc(D.err) : "向證交所、櫃買中心抓最新月營收與財報…"}</p>`; return ""; }
-  const mk = E.mk, all = D.rows.filter(r => mk === "全部" || r[3] === mk), big = r => !E.min || (r[4] ?? 0) >= 1 || (r[9] ?? 0) >= 3; // 排除營收很小的公司（基期小，年增率容易失真）
+  if (!D || D.err) { box.innerHTML = D?.err ? `<p class="note gnote">⚠︎ ${esc(D.err)}</p>` : skel("向證交所、櫃買中心抓最新月營收與財報…", 6); return ""; }
+  const mk = E.mk, mf = mineF(), all = D.rows.filter(r => (mk === "全部" || r[3] === mk) && mf(r[0])), big = r => !E.min || (r[4] ?? 0) >= 1 || (r[9] ?? 0) >= 3; // 排除營收很小的公司（基期小，年增率容易失真）
   const seg = `<div class="erbar"><span class="mkseg">${["全部", "上市", "上櫃"].map(k => `<button data-ermk="${k}" aria-pressed="${mk === k}">${k}</button>`).join("")}</span>
     <label class="erchk"><input type="checkbox" data-ermin ${E.min ? "checked" : ""}> 排除小型公司（月營收 1 億以下）</label></div>`;
   const head = `<p class="note gnote">最新月營收：${erYm(D.ym)}・最新季報：${erYq(D.yq)}・${esc(D.source || "")}</p>`;

@@ -130,7 +130,7 @@ for (const width of [1280, 390]) {
 
     // 8. 測試模式切換過場：移轉流向 (flow) -> 矩形樹圖 (tree) -> 熱力格 (heat)；常用 4 種在按鈕列，其他在「更多視角」裡
     const viz = async k => { if (!(await p.$(`.mf-modes [data-mviz="${k}"]`))) await p.click(".mfmore > summary"); await p.click(`[data-mviz="${k}"]:visible`); };
-    assert.equal(await p.$$eval(".mf-modes [data-mviz]", L => L.length), 4, "按鈕列只放常用的 4 種");
+    assert.equal(await p.$$eval(".mf-modes [data-mviz]", L => L.length), 3, "按鈕列只放常用的 3 種");
     await viz('flow');
     await p.waitForSelector('.bwrap[data-viz="flow"]', { timeout: 3000 });
     assert.ok(await p.evaluate(() => document.querySelectorAll('.bwrap[data-viz="flow"] .bnode').length > 0), "移轉流向節點已渲染");

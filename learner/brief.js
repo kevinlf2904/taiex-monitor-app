@@ -5,7 +5,8 @@
    筆記追蹤：每檔可以記筆記（記下當時的價格）、設目標價（寫進價格提醒，到價會通知），清單看現價離目標還差多少。
    evScan、revOf、briefParts、briefText 是純函式（不碰畫面），排程透過 scripts/_engine.mjs 載入，網頁和推播的內容才會一樣。
    用到 watch.html 的 W、esc、cls、getJ、store、renderList、nameOf、fmtP、toast、notify、mkSeg，tools.js 的 myCodes，earn.js 的 ER、erLoad，fundx.js 的 ehLoad，core.js 的 aiChat。 */
-const EV_KINDS = [["rev", "營收公布", "每月 10 日前公布上個月營收時"], ["pm3", "三率三升", "季報出來，毛利率、營益率、淨利率都比上一季高"], ["conf", "法說會前一天", "下一個交易日要開法說會"], ["etf", "ETF 換股", "持有或自選的 ETF 新增、剔除成分股（近 7 天）"], ["brief", "每日早報", "每個交易日早上 07:40（Telegram）"]];
+const EV_KINDS = [["rev", "營收公布", "每月 10 日前公布上個月營收時"], ["pm3", "三率三升", "季報出來，毛利率、營益率、淨利率都比上一季高"], ["conf", "法說會前一天", "下一個交易日要開法說會"], ["etf", "ETF 換股", "持有或自選的 ETF 新增、剔除成分股（近 7 天）"], ["brief", "每日早報", "每個交易日早上 07:40（Telegram）"], ["close", "收盤重點", "每個交易日收盤後，把今日重點（自選與庫存大漲跌、今明兩天除權息與法說會、ETF 換股、事件）推到 Telegram"]];
+const EV_PUSH = ["brief", "close"]; // 只有 Telegram 推播的項目，網頁不跳通知
 const twDay = (ms = Date.now(), add = 0) => new Date(ms + 8 * 3600e3 + add * 864e5).toISOString().slice(0, 10);
 // 下一個平日（不管國定假日）；watch.html 的除權息、法說會日期也用這個
 const nextWd = d => { const t = new Date(d + "T00:00:00Z"); do t.setUTCDate(t.getUTCDate() + 1); while (t.getUTCDay() % 6 === 0); return t.toISOString().slice(0, 10); };
@@ -98,7 +99,7 @@ async function evData() {
   return { rev, pm: eh?.pm, conf: cal?.conf || [], etf: await etfHoldLoad(evCodes()), names: W.names };
 }
 async function evCheck(quiet = false) {
-  const S = EVA(), on = EV_KINDS.map(x => x[0]).filter(k => k !== "brief" && S[k]); if (!on.length || W.off || W.evBusy) return;
+  const S = EVA(), on = EV_KINDS.map(x => x[0]).filter(k => !EV_PUSH.includes(k) && S[k]); if (!on.length || W.off || W.evBusy) return;
   W.evBusy = true; if (!quiet) renderList();
   try {
     const hits = evScan(evCodes(), await evData()).filter(x => on.includes(x.kind)), seen = new Set(store.get("watch:evseen", []) || []), fresh = hits.filter(x => !seen.has(x.k));
@@ -140,16 +141,33 @@ function briefHtml() {
 
 /* ---------- 今日重點卡（自選分頁最上面）：盤勢一句話、持股／自選大漲跌、今明兩天的除權息與法說會、事件提醒、追蹤節目的新整理；點了直接過去 ---------- */
 // 只用已經載好的資料（報價、行事曆、總經消息、節目索引）；行事曆、總經消息沒有的話背景補抓一次（30 分鐘內不重抓）
+// 今日重點的內容（網頁的今日重點卡、收盤後 Telegram「收盤重點」共用，scripts/alerts-push.mjs 透過 _engine.mjs 載入）
+// mine 是自選＋庫存的代號、pct(代號) 回傳漲跌%（指數回 null）、cal 是 /api/calendar 的 { rows, conf }、etf 是 ETF 代號 → etf-hold 檔
+function todayData({ mine, pct, cal, etf = {}, today = twDay() }) {
+  const t1 = nextWd(today), M = [...mine], P = M.map(c => [c, pct(c)]).filter(([, v]) => v != null && isFinite(v));
+  return { today, t1, n: P.length, up: P.filter(([, v]) => v > 0).length, dn: P.filter(([, v]) => v < 0).length,
+    mv: P.filter(([, v]) => Math.abs(v) >= 3).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])),
+    cal: [...(cal?.rows || []).map(x => [x, x.kind || "除權息"]), ...(cal?.conf || []).map(x => [x, "法說會"])].filter(([x]) => mine.has(x.code) && (x.date === today || x.date === t1)),
+    ee: M.filter(c => etf[c]).flatMap(c => etfEvOf(etf[c], today, 3).map(x => [c, x])) }; // 持有／自選的 ETF 近 3 天換股
+}
+// Telegram「收盤重點」的文字；ev 是 evScan 的事件訊息
+function closeText(D, names = {}, ev = []) {
+  const nm = c => names[c] || c, pc = v => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`, L = [];
+  if (D.n) L.push(`自選與庫存 ${D.n} 檔：上漲 ${D.up}、下跌 ${D.dn}`);
+  if (D.mv.length) L.push(`大漲跌：${D.mv.slice(0, 6).map(([c, v]) => `${nm(c)} ${pc(v)}`).join("、")}${D.mv.length > 6 ? ` 等 ${D.mv.length} 檔` : ""}`);
+  if (D.cal.length) L.push(`今明兩天：${D.cal.slice(0, 6).map(([x, w]) => `${x.date === D.today ? "今天" : "明天"} ${nm(x.code)} ${w}`).join("、")}`);
+  if (D.ee.length) L.push(`ETF 換股：${D.ee.slice(0, 3).map(([c, x]) => `${nm(c)} ${etfEvTxt(x)}`).join("、")}`);
+  for (const m of ev.slice(0, 5)) L.push(m);
+  return L.length ? `📋 今日收盤重點（${D.today.slice(5).replace("-", "/")}）\n` + L.map(x => "• " + x).join("\n") : "";
+}
 function todayParts() {
-  const P = [], hold = Object.keys(W.hold || {}).filter(c => !W.hold[c]?.demo), mine = new Set([...hold, ...myCodes()]), t = twDay(), t1 = nextWd(t), nm = c => nameOf(c) || c;
-  const ix = W.quotes.get("T00")?.chgPct, S = W.mn?.days?.[0]?.tw?.sum;
+  const P = [], hold = Object.keys(W.hold || {}).filter(c => !W.hold[c]?.demo), mine = new Set([...hold, ...myCodes()]), t = twDay(), nm = c => nameOf(c) || c;
+  const ix = W.quotes.get("T00")?.chgPct, S = W.mn?.days?.[0]?.tw?.sum, EH = W.etfH || {};
+  const D = todayData({ mine, pct: c => (isIdx(c) ? null : W.quotes.get(c)?.chgPct), cal: W.cal, etf: Object.fromEntries(Object.entries(EH).filter(([, x]) => x?.j).map(([c, x]) => [c, x.j])), today: t });
   if (ix != null || S?.head) P.push(["盤勢", `<button class="linkbtn" data-tdgo="mkt">${ix != null ? `加權 <b class="${cls(ix)}">${sgn(ix, 2)}%</b>${S?.head ? "：" : ""}` : ""}${esc(S?.head || "")}</button>`]);
-  const mv = [...mine].map(c => [c, W.quotes.get(c)?.chgPct]).filter(([c, v]) => v != null && Math.abs(v) >= 3 && !isIdx(c)).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
-  if (mv.length) P.push(["大漲跌", mv.slice(0, 4).map(([c, v]) => `<button class="linkbtn" data-sel="${esc(c)}">${hold.includes(c) ? "★" : ""}${esc(nm(c))} <b class="${cls(v)}">${sgn(v, 1)}%</b></button>`).join("、") + (mv.length > 4 ? ` 等 ${mv.length} 檔` : "")]);
-  const cal = [...(W.cal?.rows || []).map(x => [x, x.kind || "除權息"]), ...(W.cal?.conf || []).map(x => [x, "法說會"])].filter(([x]) => mine.has(x.code) && (x.date === t || x.date === t1));
-  if (cal.length) P.push(["今明兩天", cal.slice(0, 5).map(([x, w]) => `<button class="linkbtn" data-sel="${esc(x.code)}">${x.date === t ? "今天" : "明天"} ${esc(nm(x.code))} ${w}</button>`).join("、")]);
-  const EH = W.etfH || {}, ee = [...mine].filter(c => EH[c]?.j).flatMap(c => etfEvOf(EH[c].j, t, 3).map(x => [c, x])); // 持有／自選的 ETF 近 3 天換股
-  if (ee.length) P.push(["ETF 換股", ee.slice(0, 3).map(([c, x]) => `<button class="linkbtn" data-sel="${esc(c)}">${esc(nm(c))} ${esc(etfEvTxt(x))}</button>`).join("、")]);
+  if (D.mv.length) P.push(["大漲跌", D.mv.slice(0, 4).map(([c, v]) => `<button class="linkbtn" data-sel="${esc(c)}">${hold.includes(c) ? "★" : ""}${esc(nm(c))} <b class="${cls(v)}">${sgn(v, 1)}%</b></button>`).join("、") + (D.mv.length > 4 ? ` 等 ${D.mv.length} 檔` : "")]);
+  if (D.cal.length) P.push(["今明兩天", D.cal.slice(0, 5).map(([x, w]) => `<button class="linkbtn" data-sel="${esc(x.code)}">${x.date === t ? "今天" : "明天"} ${esc(nm(x.code))} ${w}</button>`).join("、")]);
+  if (D.ee.length) P.push(["ETF 換股", D.ee.slice(0, 3).map(([c, x]) => `<button class="linkbtn" data-sel="${esc(c)}">${esc(nm(c))} ${esc(etfEvTxt(x))}</button>`).join("、")]);
   const evh = (W.evHits || []).filter(x => x.kind !== "etf"); if (evh.length) P.push(["事件提醒", evh.slice(0, 3).map(x => `<button class="linkbtn" data-sel="${esc(x.code)}">${esc(x.m)}</button>`).join("、")]);
   if (typeof POD !== "undefined" && POD.srv?.eps && typeof podFollows === "function") {
     const F = new Set(podFollows().map(s => s.feed)), since = Date.now() - 24 * 3600e3, E = Object.values(POD.srv.eps).filter(e => F.has(e.feed) && Date.parse(e.date) > since);
@@ -163,10 +181,33 @@ function renderToday(show) {
     Promise.allSettled([W.cal ? null : getJ("/api/calendar", true).then(j => { if (j?.ok) W.cal = j; }), W.mn ? null : loadMnews(), etfHoldLoad([...new Set([...Object.keys(W.hold || {}), ...myCodes()])])]).finally(() => { T.busy = false; if (W.lt === "watch") renderToday(true); }); }
   const P = todayParts(); if (!P.length) { el.hidden = true; return; }
   const h = `<details class="today" data-tdopen${store.get("watch:today", true) ? " open" : ""}><summary><b>今日重點</b><span class="note">${twDay().slice(5).replace("-", "/")}・${P.length} 項</span></summary>
-    <ul>${P.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul><button type="button" class="linkbtn tdmore" data-tdgo="brief">看完整早報 ›</button></details>`;
+    <ul>${P.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul><div class="tdbtns"><button type="button" class="linkbtn tdmore" data-tdgo="brief">看完整早報 ›</button><button type="button" class="linkbtn tdmore" data-tgone>${syncGet().tg && EVA().close ? "✓ 收盤後推到 Telegram" : "📲 每天推到 Telegram"}</button></div></details>`;
   if (el._h !== h) { el._h = h; el.innerHTML = h; } el.hidden = false; // 內容沒變就不重畫（每 5 秒報價更新時不閃）
 }
 document.addEventListener("toggle", e => { if (e.target.matches?.("[data-tdopen]")) store.set("watch:today", e.target.open); }, true);
+// 一鍵推到 Telegram：沒有同步碼就自動建一組、勾好「收盤重點」「每日早報」並上傳；剩下的是打開機器人按「開始」、回來按「完成綁定」（同步、綁定用 tools.js 的備份同步）
+function tgOneHtml() {
+  const C = W.syncCfg, S = syncGet(), A = EVA();
+  if (!C?.kv || !C?.tg) return `<div class="tgone"><h3>每天推到 Telegram</h3><p class="note">${C?.kv ? "網站還沒設定 Telegram 機器人。" : "網站還沒設定雲端儲存。"}（管理者：Vercel 環境變數加上 Upstash 與 TELEGRAM_BOT_TOKEN）</p></div>`;
+  const opts = [["close", "收盤重點", "每個交易日收盤後：自選與庫存的漲跌、大漲跌、今明兩天除權息與法說會、ETF 換股"], ["brief", "每日早報", "每個交易日早上 07:40：昨晚美股、台指期夜盤、今天的行事曆"]]
+    .map(([k, t, d]) => `<label class="evopt"><input type="checkbox" data-tgk="${k}" ${A[k] ? "checked" : ""}><b>${t}</b><span class="note">${d}</span></label>`).join("");
+  return `<div class="tgone"><h3>每天推到 Telegram</h3>${S.tg ? `<p class="note">✓ 已綁定，不用開著網頁也會收到。指標、價格、事件提醒也會一起推播。</p><div class="evopts">${opts}</div>
+      <div class="irform"><button class="btn sm" data-tgone-test>傳測試訊息</button><button class="linkbtn" data-tgone-more>更多設定（備份同步）›</button></div>`
+    : `<div class="evopts">${opts}</div><ol class="note tgsteps"><li>按「開啟機器人」，在 Telegram 按「開始（Start）」</li><li>回到這裡按「完成綁定」</li></ol>
+      <div class="irform"><a class="btn sm" href="https://t.me/${esc(C.bot || "")}?start=${esc(W.syncTok || "")}" target="_blank" rel="noopener">開啟 @${esc(C.bot || "機器人")}</a><button class="btn sm primary" data-tgone-bind>完成綁定</button></div>
+      <p class="note">已經自動建立同步碼並上傳自選、庫存（換裝置時在「工具 → 備份同步」輸入同一組就能接著用）。</p>`}</div>`;
+}
+async function tgOneOpen() {
+  const C = await syncCfg(); if (C.kv && C.tg) { const A = EVA(); if (!syncGet().id) { syncSet({ id: syncNewId(), auto: true, at: 0, hash: 0 }); A.close = A.brief = true; evaSave(); } else if (!syncGet().tg) { A.close = true; evaSave(); }
+    await syncPush(true); W.syncTok = await syncTok(syncGet().id); }
+  openSheet(tgOneHtml(), false);
+}
+document.addEventListener("click", async e => { const t = e.target;
+  if (t.closest("[data-tgone]")) return tgOneOpen();
+  if (t.closest("[data-tgone-bind]")) { await syncClick({ sy: "tgbind" }); $("#sheetExtra").innerHTML = tgOneHtml(); return renderToday(W.lt === "watch"); }
+  if (t.closest("[data-tgone-test]")) return syncClick({ sy: "tgtest" });
+  if (t.closest("[data-tgone-more]")) { closeSheet(); W.tv = "sync"; return setLt("tools"); } });
+document.addEventListener("change", e => { const k = e.target.dataset?.tgk; if (!k) return; EVA()[k] = e.target.checked; evaSave(); syncPush(true); renderToday(W.lt === "watch"); });
 document.addEventListener("click", e => { const g = e.target.closest("[data-tdgo]"); if (!g) return; const v = g.dataset.tdgo;
   if (v === "mkt") { W.mkReg = "tw"; setLt("mkt"); } else if (v === "pod") setLt("pod"); else if (v === "brief") { W.tv = "brief"; setLt("tools"); } });
 
@@ -211,7 +252,7 @@ $("#lx").addEventListener("submit", e => {
   if (up > 0 || dn > 0) { const a = W.alerts[c] || {}; W.alerts[c] = { up: up > 0 ? up : a.up ?? null, dn: dn > 0 ? dn : a.dn ?? null, name: nameOf(c) }; store.set("watch:alerts", W.alerts); }
   W.ntAt = 0; toast("已記下", 1500); renderList();
 });
-$("#lx").addEventListener("change", e => { const k = e.target.dataset?.eva; if (!k || W.lt !== "tools") return; EVA()[k] = e.target.checked; evaSave(); if (e.target.checked && k !== "brief") { try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch {} evStart(); } renderList(); });
+$("#lx").addEventListener("change", e => { const k = e.target.dataset?.eva; if (!k || W.lt !== "tools") return; EVA()[k] = e.target.checked; evaSave(); if (e.target.checked && !EV_PUSH.includes(k)) { try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch {} evStart(); } renderList(); });
 $("#lx").addEventListener("click", e => {
   if (W.lt !== "tools") return; const b = e.target.closest("[data-ntdel],[data-ntclr],[data-mk='evscope'],[data-tx='bfre'],[data-tx='bfai'],[data-tx='bfcopy'],[data-tx='evnow']"); if (!b) return;
   const d = b.dataset;

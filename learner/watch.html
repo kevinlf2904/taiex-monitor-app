@@ -277,7 +277,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .gs-hint { margin: 2px 4px 6px; }
 .ltabs .gsbtn { flex: none; padding: 0 10px; }
 .today { margin: 8px 12px 4px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 13px; } .today > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; list-style: none; min-height: 28px; align-items: center; } .today > summary::-webkit-details-marker { display: none; } .today > summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .15s; } .today:not([open]) > summary::after { transform: rotate(-90deg); }
-.today ul { list-style: none; margin: 6px 0 4px; padding: 0; } .today li { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); line-height: 1.5; } .today .tdk { color: var(--muted); font-size: 12px; } .today .tdv { min-width: 0; overflow-wrap: anywhere; } .today .linkbtn { text-align: left; } .today .tdmore { font-size: 12px; color: var(--muted); } .ltabs .ltedit { flex: none; padding: 0 10px; color: var(--muted); letter-spacing: .05em; }
+.today ul { list-style: none; margin: 6px 0 4px; padding: 0; } .today li { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); line-height: 1.5; } .today .tdk { color: var(--muted); font-size: 12px; } .today .tdv { min-width: 0; overflow-wrap: anywhere; } .today .linkbtn { text-align: left; } .today .tdmore { font-size: 12px; color: var(--muted); } .today .tdbtns { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; } .tgone h3 { margin: 0 0 8px; font-size: 16px; } .tgone .tgsteps { margin: 8px 0; padding-left: 20px; } .ltabs .ltedit { flex: none; padding: 0 10px; color: var(--muted); letter-spacing: .05em; }
 .tabcfg { list-style: none; margin: 8px 0 12px; padding: 0; } .tabcfg li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); } .tabcfg li:first-child { border-top: 0; }
 .tabcfg label { display: flex; align-items: center; gap: 8px; min-height: 36px; flex: 1; } .tabcfg span { display: flex; gap: 6px; } .tabcfg .btn { min-width: 40px; min-height: 36px; }
 .gsadd { width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--muted); font: inherit; font-size: 14px; cursor: text; }
@@ -552,6 +552,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 @media (min-width: 1000px) { .offbox { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-items: start; } .offbox > :only-child, .otcbox > :only-child, .offbox > p, .otcbox > p { grid-column: 1 / -1; } } .otcbox { padding: 0 0 4px; } .mk.otc h4 { margin: 12px 0 4px; font-size: 13.5px; } .otc-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
 .otc-t td:first-child, .otc-t th:first-child { text-align: left; } .otc-heat td { font-size: 11.5px; padding: 5px 6px; } .otc-heat tr.on td, .otc-t tr.on td { outline: 1px solid var(--accent); outline-offset: -1px; } .otc-sec .otc-hb { width: 22%; min-width: 48px; } .otc-hb i { display: block; height: 8px; border-radius: 2px; opacity: .75; } .otc-gold + .otc-gold { margin-top: 10px; } .otc-gold > b { display: block; margin: 4px 0; }
 @media (min-width: 1000px) { .otcbox { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-items: start; } }
+.skel { padding: 12px; } .skel > .note { margin: 0 0 10px; } .skel > i { display: block; height: 14px; margin: 0 0 12px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-2) 0%, var(--line) 50%, var(--surface-2) 100%); background-size: 200% 100%; animation: skel 1.2s ease-in-out infinite; } .skel > i:nth-of-type(1) { height: 44px; }
+@keyframes skel { from { background-position: 100% 0; } to { background-position: -100% 0; } } @media (prefers-reduced-motion: reduce) { .skel > i { animation: none; } }
+.tgrp { flex: none; align-self: center; font-size: 11px; color: var(--muted); padding: 0 2px 0 8px; margin-left: 4px; border-left: 1px solid var(--line); white-space: nowrap; letter-spacing: .04em; } .tgrp:first-child { border-left: 0; margin-left: 0; padding-left: 0; }
 .mkreg { padding: 8px 12px 0; } .mkreg .mkseg button { font-size: 14px; padding: 6px 14px; }
 @media (max-width: 600px) { .mkreg .mkseg { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; } .mkreg .mkseg::-webkit-scrollbar { display: none; } .mkreg .mkseg button { flex: none; padding: 6px 11px; } }
 .ixcards.us .ixcard .spark, .ixcard .spark.tsp { width: 100%; height: 22px; margin-top: 2px; } .tsp-prev { stroke: var(--muted); stroke-width: .6; stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; opacity: .7; }
@@ -616,6 +619,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mfmore-pop button { text-align: left; font: inherit; font-size: 12.5px; padding: 7px 10px; border: 0; border-radius: 7px; background: none; color: var(--ink); cursor: pointer; } .mfmore-pop button:hover, .mfmore-pop button[aria-pressed="true"] { background: var(--surface-2); }
 #secMf.chart-fullscreen .mfvbar { width: 100%; justify-content: center; margin: 0 0 6px; flex-shrink: 0; }
 .mf-modes .ichip { flex: none; font-size: 12.5px; padding: 4px 10px; }
+.minebtn { flex: none; white-space: nowrap; margin: 4px 0; }
 .mf-rpbar { display: flex; align-items: center; gap: 6px 8px; padding: 6px 10px; margin: 6px 12px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); flex-wrap: wrap; }
 .mf-rpbar .mrp-range { flex: 1; min-width: 90px; margin: 0; accent-color: var(--ink); }
 .mf-rpbar .mrp-date { font: 600 12.5px var(--font-num); margin: 0; min-width: 5.2em; text-align: center; color: var(--ink); }
@@ -1158,7 +1162,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-151</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-152</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1225,6 +1229,8 @@ const inMode = lt => !MODE || ltMode(lt) === MODE, ltKey = m => (m === "intel" ?
 const ltStart = () => { const m = MODE || "watch", v = store.get(ltKey(m), m === "intel" ? "money" : "watch"); return inMode(v) ? v : m === "intel" ? "money" : "watch"; };
 /* ---------- 狀態（記在瀏覽器；和 K線學堂同網域時共用主題） ---------- */
 const DEFAULT_GROUPS = [{ name: "自選", list: ["2330", "2317", "2454", "0050", "2603", "2881"] }, { name: "美股", list: ["NVDA", "AAPL", "TSLA", "TSM"] }];
+// 動能矩陣預設用「象限磚塊」：以前存的「圓點矩陣」（舊預設）換一次，之後自己再選圓點矩陣就照記
+function mfVizInit() { let v = store.get("watch:mfviz", "tiles"); if (v === "bubble" && !store.get("watch:mfviz2", false)) { v = "tiles"; store.set("watch:mfviz", v); } store.set("watch:mfviz2", true); return v; }
 const W = {
   groups: store.get("watch:groups", null) || [{ name: "自選", list: store.get("watch:list", DEFAULT_GROUPS[0].list) }, DEFAULT_GROUPS[1]],
   gi: +store.get("watch:gi", 0) || 0, names: store.get("watch:names", {}), sort: store.get("watch:sort", "custom"), alerts: store.get("watch:alerts", {}), hold: store.get("watch:hold", {}),
@@ -1237,11 +1243,11 @@ const W = {
   holdMkt: store.get("watch:hm", "tw"), holdSort: "mv", holdDir: 1, mkt: null,
   roK: ["", "D", "60", "1"].includes(String(store.get("watch:rok", ""))) ? String(store.get("watch:rok", "")) : "",
   scrG: store.get("watch:scrg", "smart"), scrOpen: null, cscan: null, news: null,
-  twoGrp: store.get("watch:twoGrp", "all"), cview: store.get("watch:cview", "cons"), tdccV: store.get("watch:tdccV", "up"), tdccScope: store.get("watch:tdccScope", "all"), insW: +store.get("watch:insW", 30), twoW: +store.get("watch:twoW", 0), twov: store.get("watch:twov", "rank"), cbtH: +store.get("watch:cbtH", 21) === 63 ? 63 : 21, f13v: store.get("watch:f13v", "funds"), insv: store.get("watch:insv", "rank"), twoAmt: store.get("watch:twoAmt", "full") === "short" ? "short" : "full",
+  twoGrp: store.get("watch:twoGrp", "all"), cview: store.get("watch:cview", "cons"), tdccV: store.get("watch:tdccV", "up"), mine: !!store.get("watch:mine", false), insW: +store.get("watch:insW", 30), twoW: +store.get("watch:twoW", 0), twov: store.get("watch:twov", "rank"), cbtH: +store.get("watch:cbtH", 21) === 63 ? 63 : 21, f13v: store.get("watch:f13v", "funds"), insv: store.get("watch:insv", "rank"), twoAmt: store.get("watch:twoAmt", "full") === "short" ? "short" : "full",
   mkReg: ["lst", "otc", "off", "us", "gl", "macro", "news", "poly"].includes(store.get("watch:mkReg", "tw")) ? store.get("watch:mkReg", "tw") : "tw", usHot: ["active", "gain", "loss"].includes(store.get("watch:usHot", "active")) ? store.get("watch:usHot", "active") : "active",
   mkM: ["tpex", "all"].includes(store.get("watch:mkM", "twse")) ? store.get("watch:mkM", "twse") : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
   mkHot: ["value", "gain", "surge", "volume"].includes(store.get("watch:mkHot", "value")) ? store.get("watch:mkHot", "value") : "value", worldR: store.get("watch:worldR", "us"), calWk: 0, calK: ["all", "conf", "ex"].includes(store.get("watch:calK", "all")) ? store.get("watch:calK", "all") : "all", calDay: null, warn: null, warnOpen: "punish", cal: null, futx: null,
-  mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), viz: store.get("watch:mfviz", "bubble"), flowOn: store.get("watch:mfflow", true) !== false, full: null, q: "up", rk: "inst", side: "buy", win: "5", bw: store.get("watch:mfbw", "5") === "1" ? "1" : "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), bopv: store.get("watch:bopv", null) || {}, rp: { t: null, playing: false, speed: 1, set: "hot" }, zoom: { k: 1, vx: 0, vy: 0 } },
+  mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), viz: mfVizInit(), flowOn: store.get("watch:mfflow", true) !== false, full: null, q: "up", rk: "inst", side: "buy", win: "5", bw: store.get("watch:mfbw", "5") === "1" ? "1" : "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), bopv: store.get("watch:bopv", null) || {}, rp: { t: null, playing: false, speed: 1, set: "hot" }, zoom: { k: 1, vx: 0, vy: 0 } },
   indS: { view: "themes", mk: "tw", sub: "chain", net: "ai-dc", ...(store.get("watch:inds", null) || {}), open: null, focus: null }, indQ: {},
   cmp: (store.get("watch:cmp", []) || []).filter(c => typeof c === "string").slice(0, 3), cmpData: {},
   daily: null, intra: null, intraAt: 0, mk: {}, info: null, hot: {}, timer: null, busy: false, stocks: null, lastOk: 0,
@@ -1295,7 +1301,9 @@ function lazy(g) {
   return (LZ[g] ||= LAZY[g].reduce((p, f) => p.then(() => new Promise((ok, no) => { const s = document.createElement("script"); s.src = f; s.onload = ok; s.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(s); })), Promise.resolve())
     .then(() => { LZ[g].done = true; }, e => { delete LZ[g]; noteErr("載入程式", e); throw e; }));
 }
-const lazyOk = g => !!LZ[g]?.done, LZ_WAIT = `<p class="note" style="padding:12px">載入中…</p>`;
+// 載入中的骨架屏：幾條淡淡的閃動色塊撐住版面（不會先一行字再整片跳出來），文字留給螢幕閱讀器與「載入中」的說明
+const skel = (msg = "載入中…", n = 4) => `<div class="skel" role="status" aria-busy="true"><p class="note">${msg}</p>${Array.from({ length: n }, (_, i) => `<i style="width:${[92, 76, 84, 64, 88, 70][i % 6]}%"></i>`).join("")}</div>`;
+const lazyOk = g => !!LZ[g]?.done, LZ_WAIT = skel();
 // 這個分頁要的程式還沒載入：先顯示「載入中」，好了再整個重畫；載入失敗就說明（通常是網路斷了）
 function lazyRun(g, fn) {
   if (lazyOk(g)) return fn();
@@ -2011,7 +2019,7 @@ function renderHold() {
     ${none ? `<button type="button" class="btn primary" data-hdemo="load">✨ 載入範例投資組合體驗</button><p class="note">放入台股、美股各幾檔範例部位，可以先看看損益、配息、風險分析長什麼樣子；之後一鍵清除。</p>` : ""}</div>`; $("#wl").innerHTML = ""; return; }
   const demo = W.hold[Object.keys(W.hold)[0]]?.demo ? `<div class="hdemo"><span>✨ 目前是範例投資組合（不是你的真實持股）</span><button type="button" class="btn sm" data-hdemo="clear">清除範例</button></div>` : "";
   const ok = R.filter(r => r.mv != null);
-  if (!ok.length) { $("#lx").innerHTML = `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有報價。" : "等待報價…"}</p>`; }
+  if (!ok.length) { $("#lx").innerHTML = (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有報價。</p>` : skel("等待報價…")); }
   const P = new Map(ok.map(r => [r.c, holdPnL(r.c, r.q)])), sum = k => ok.reduce((s, r) => s + (P.get(r.c)?.[k] || 0), 0);
   const mv = sum("mv"), hc = sum("hc"), pnl = sum("pnl"), day = sum("day"), pct = hc > 0 ? pnl / hc : 0, divGot = ok.reduce((s, r) => s + (P.get(r.c)?.divGot || 0), 0), divYr = ok.reduce((s, r) => s + (P.get(r.c)?.divYr || 0), 0);
   // 環：藍色是成本，綠（跌）或紅（漲）是報酬佔成本的比例
@@ -2684,8 +2692,8 @@ const MF_VIZ = [
   ["board", "四象限看板", "四象限卡片清單，內含近 10 日迷你柱狀圖與金額，文字最清晰"],
   ["arrow", "位移箭頭", "空心圈為前一期位置，箭頭指向當期位置，箭頭越長代表變化越劇烈"],
 ];
-// 常用的 4 種直接放按鈕，其他收進「更多視角」；選了收起來的那種，它也會出現在按鈕列（看得到現在用哪種）
-const MF_VIZ_MAIN = ["bubble", "tiles", "compass", "flow"];
+// 常用的 3 種直接放按鈕，其他收進「更多視角」；選了收起來的那種，它也會出現在按鈕列（看得到現在用哪種）
+const MF_VIZ_MAIN = ["tiles", "compass", "flow"];
 document.addEventListener("click", e => { for (const d of document.querySelectorAll(".mfmore[open]")) if (!d.contains(e.target)) d.open = false; }); // 點別的地方就收起「更多視角」
 const mfVizBar = () => { const cur = W.mf.viz, chip = ([k, t]) => `<button type="button" class="ichip" data-mviz="${k}" aria-pressed="${cur === k}">${t}</button>`, more = MF_VIZ.filter(x => !MF_VIZ_MAIN.includes(x[0]));
   return `<div class="mfvbar"><div class="ichips gcats mf-modes" role="group" aria-label="視覺化模式">${MF_VIZ.filter(x => MF_VIZ_MAIN.includes(x[0]) || x[0] === cur).map(chip).join("")}</div>
@@ -3976,6 +3984,7 @@ function renderInd0() {
 }
 // 工具分頁（tools.js）：點擊、送出表單、勾選
 $("#lx").addEventListener("click", e => { if (e.target.closest("[data-lxretry]")) renderList(); });
+document.addEventListener("click", e => { const b = e.target.closest("[data-mine],[data-mineset]"); if (!b) return; W.mine = b.dataset.mineset != null ? b.dataset.mineset === "1" : !W.mine; store.set("watch:mine", W.mine); renderList(); });
 $("#lx").addEventListener("click", e => toolsClick(e)); $("#lTools").addEventListener("click", e => toolsClick(e));
 $("#lx").addEventListener("submit", e => toolsSubmit(e)); $("#lx").addEventListener("change", e => toolsChange(e));
 setTimeout(() => { if ((store.get("watch:irules", []) || []).some(r => r.on)) irStart(); if ((store.get("watch:paper", null)?.orders || []).length) paStart(); if (["rev", "pm3", "conf"].some(k => EVA()[k])) evStart(); }, 3000);
@@ -3983,7 +3992,7 @@ setTimeout(syncBoot, 1500); // 雲端同步：開網頁時下載較新的資料�
 // 國會分頁：切換頁面（首頁、股票、人物）、期間、排序、在看盤開啟、問 AI
 $("#lx").addEventListener("click", e => { if (W.lt !== "cong") return; const b = e.target.closest("[data-cv],[data-csort],[data-copen],[data-cask],[data-cbt],[data-cpl],[data-twbt],[data-f13p],[data-f13s],[data-twgrp],[data-twamt],[data-twtab],[data-twmore],[data-twn],[data-rkset],[data-tsel]"); if (!b) return; const d = b.dataset;
   if (d.tsel) { if (!toolsOn()) cxOpenTw(d.tsel); return; } // 千張大戶、大戶共識、我的追蹤裡的台股：到台股個股頁（內部人分頁由 tools.js 處理）
-  if (d.rkset != null) { const [k, val] = d.rkset.split(/:(.*)/s); W[k] = val; if (k === "cbtH") W.cbtH = +val; if (["cview", "f13v", "insv", "twov", "tdccV", "tdccScope", "tdccP", "cxTdW", "cbtH", "cbtv"].includes(k)) store.set("watch:" + k, W[k]); return renderList(); }
+  if (d.rkset != null) { const [k, val] = d.rkset.split(/:(.*)/s); W[k] = val; if (k === "cbtH") W.cbtH = +val; if (["cview", "f13v", "insv", "twov", "tdccV", "tdccP", "cxTdW", "cbtH", "cbtv"].includes(k)) store.set("watch:" + k, W[k]); return renderList(); }
   if (d.twgrp) { W.twoGrp = d.twgrp; W.twoN = 50; store.set("watch:twoGrp", d.twgrp); return renderList(); }
   if (d.twamt) { W.twoAmt = d.twamt; store.set("watch:twoAmt", d.twamt); return renderList(); }
   if (d.twtab) { W.twoTab = d.twtab; return renderList(); }
@@ -4109,7 +4118,8 @@ async function loadMkHot() {
   try { const j = await getJ(`/api/hot?market=tw&type=${t}`); W.hot["rank:" + t] = { ...j, at: Date.now() }; j.rows.forEach(r => { if (r.name) W.names[r.code] = r.name; }); } catch (e) { W.hot["rank:" + t] = { rows: [], err: e.message, at: Date.now() }; }
   renderList();
 }
-const mkSeg = (key, val, opts) => `<span class="mkseg">${opts.map(([k, t]) => `<button data-mk="${key}" data-v="${k}" aria-pressed="${k === val}">${t}</button>`).join("")}</span>`;
+// 選項裡的 ["|", "名稱"] 是分組標籤（子頁籤多的時候分段，比較好找）
+const mkSeg = (key, val, opts) => `<span class="mkseg">${opts.map(([k, t]) => (k === "|" ? `<span class="tgrp">${t}</span>` : `<button data-mk="${key}" data-v="${k}" aria-pressed="${k === val}">${t}</button>`)).join("")}</span>`;
 const pctTxt = (chg, pct) => (chg != null ? `${arrow(chg)}${Math.abs(chg).toLocaleString(undefined, { maximumFractionDigits: 2 })}（${Math.abs(pct ?? 0).toFixed(2)}%）` : "");
 // 除權息：以台北時間的週一為一週開始
 const weekRange = k => { const t = new Date(Date.now() + 8 * 3600e3), d = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - d + k * 7); const a = t.toISOString().slice(0, 10); t.setUTCDate(t.getUTCDate() + 6); return [a, t.toISOString().slice(0, 10)]; };
@@ -4122,7 +4132,7 @@ async function loadUsMkt(force = false) {
 }
 function renderUsMkt(top) {
   const J = W.usm, sec = (t, body, extra = "", seg = "") => `<section class="mk"><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</section>`;
-  if (!J) { $("#lx").innerHTML = top + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有美股資料。" : "載入美股大盤…"}</p>`; loadUsMkt(); return; }
+  if (!J) { $("#lx").innerHTML = top + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有美股資料。</p>` : skel("載入美股大盤…")); loadUsMkt(); return; }
   if (J.err || !J.ok) { $("#lx").innerHTML = top + `<p class="note err" style="padding:12px">⚠︎ ${esc(J.err || J.error || "暫時拿不到美股資料")}</p>`; return; }
   const sel = x => (okCode(String(x.code).toUpperCase()) ? `data-sel="${esc(String(x.code).toUpperCase())}"` : "");
   const card = x => `<button class="ixcard" ${sel(x)}><span>${esc(x.name)}</span><b class="${cls(x.chg)}">${x.price?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? "—"}</b><small class="${cls(x.chg)}">${pctTxt(x.chg, x.chgPct)}</small>${spark(x.spark, (x.chg ?? 0) >= 0)}</button>`;
@@ -4224,7 +4234,7 @@ const GL_IMPACT = {
 };
 function renderGlobal(top) {
   const J = W.gl;
-  if (!J) { $("#lx").innerHTML = top + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有國際行情。" : "載入國際行情…"}</p>`; loadGlobal(); return; }
+  if (!J) { $("#lx").innerHTML = top + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有國際行情。</p>` : skel("載入國際行情…")); loadGlobal(); return; }
   if (J.err || !J.ok) { $("#lx").innerHTML = top + `<p class="note err" style="padding:12px">⚠︎ ${esc(J.err || J.error || "暫時拿不到國際行情")}</p>`; return; }
   const dp = (g, v) => (v == null ? "—" : v.toLocaleString(undefined, { maximumFractionDigits: g === "fx" ? (v < 10 ? 4 : v < 200 ? 3 : 2) : g === "rate" ? 3 : v < 10 ? 3 : 2 }));
   let h = top + `<p class="note gnote">${esc(J.source || "")}・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}</p>`;
@@ -4268,7 +4278,7 @@ const MN_IMPACT = { 利率: "降息（或預期降息）通常推升股市評價
   市場: "國際經濟、央行與政策消息會改變市場對景氣與利率的預期，進而影響外資動向與台股。" };
 function renderMnews(top) {
   const J = W.mn;
-  if (!J || (W.mnLoading && !J.days)) { $("#lx").innerHTML = top + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有總經消息。" : "載入今天的總經消息…"}</p>`; loadMnews(); return; }
+  if (!J || (W.mnLoading && !J.days)) { $("#lx").innerHTML = top + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有總經消息。</p>` : skel("載入今天的總經消息…")); loadMnews(); return; }
   if (J.err) { $("#lx").innerHTML = top + `<p class="note err" style="padding:12px">⚠︎ ${esc(J.err)}</p>`; return; }
   const D = J.days.find(d => d.date === W.mnDay) || J.days[0], hm = t => (t ? new Date(t + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " ") : "");
   const side = (m, name) => { const X = D[m] || {}, S = X.sum, L = X.items || [];
@@ -4295,7 +4305,7 @@ function macroChart(data, unit) {
 }
 function renderMacro(top) {
   const J = W.mc;
-  if (!J) { $("#lx").innerHTML = top + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有總經數據。" : "載入總經數據…"}</p>`; loadMacro(); return; }
+  if (!J) { $("#lx").innerHTML = top + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有總經數據。</p>` : skel("載入總經數據…")); loadMacro(); return; }
   if (J.err || !J.ok) { $("#lx").innerHTML = top + `<p class="note err" style="padding:12px">⚠︎ ${esc(J.err || J.error || "暫時拿不到總經數據")}</p>`; return; }
   const fv = (s, v) => (v == null ? "—" : `${s.id === "ICSA" ? Math.round(v).toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
   const lvC = ["up", "warn", "down"]; // 0 正常、1 留意、2 警訊（漲跌顏色以外另外標示）
@@ -4322,7 +4332,7 @@ function renderMacro(top) {
 const PM_IMPACT = { "聯準會與利率": "降息機率越高，通常對股市（尤其科技、成長股）越有利；降息機率下降時，美債殖利率上升、成長股承壓", "經濟數據與衰退": "衰退機率上升時，資金常從股票轉向公債", "關稅與貿易": "關稅升溫對出口導向的台股（電子、代工）不利", "台海與地緣政治": "台海、中美緊張會直接影響台股與外資動向", "美股與企業": "美股大型科技股的預期，會帶動台股供應鏈", "美國政治與財政": "政府關門、債務上限等會影響美債與美元", "原物料與加密貨幣": "油價影響通膨與塑化、航運；加密貨幣反映風險胃納" };
 function renderPoly(top) {
   const J = W.pm;
-  if (!J) { $("#lx").innerHTML = top + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有預測市場資料。" : "載入 Polymarket…"}</p>`; loadPoly(); return; }
+  if (!J) { $("#lx").innerHTML = top + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有預測市場資料。</p>` : skel("載入 Polymarket…")); loadPoly(); return; }
   if (J.err || !J.ok) { $("#lx").innerHTML = top + `<p class="note err" style="padding:12px">⚠︎ ${esc(J.err || J.error || "暫時拿不到預測市場資料")}</p>`; return; }
   const cats = [...new Set(J.events.map(e => e.cat))], cur = cats.includes(W.pmCat) ? W.pmCat : "", L = J.events.filter(e => !cur || e.cat === cur);
   const pct = v => (v == null ? "—" : `${(v * 100).toFixed(v < 0.01 && v > 0 ? 1 : 0)}%`), d1 = v => (v ? `<small class="${cls(v)}">${v > 0 ? "▲" : "▼"}${Math.abs(v * 100).toFixed(1)}</small>` : "");
@@ -4367,7 +4377,7 @@ function mktCards() {
     ${scard(F.EXF?.session === "night" ? "電指近（夜盤）" : "電指近", F.EXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="EXF"', "EXF")}${scard(F.FXF?.session === "night" ? "金指近（夜盤）" : "金指近", F.FXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="FXF"', "FXF")}${(q("0050")?.price != null ? card("0050", "0050 台灣50") : scard("臺灣 50", t50 ? { price: t50.close.toLocaleString(), chg: t50.chg, chgPct: t50.chgPct } : null, t50?.date ? t50.date.slice(5).replace("-", "/") + " 收盤" : "收盤", 'data-sel="0050" title="看元大台灣50（0050）"', "0050"))}`;
 }
 function renderMkt() {
-  const top = `<div class="mkreg">${mkSeg("mkReg", W.mkReg || "tw", [["tw", "台股大盤"], ["lst", "上市"], ["otc", "櫃買"], ["off", "官方公告"], ["us", "美股大盤"], ["gl", "原物料外匯"], ["news", "總經消息"], ["macro", "總經數據"], ["poly", "預測市場"]])}</div>`;
+  const top = `<div class="mkreg">${mkSeg("mkReg", W.mkReg || "tw", [["|", "台股"], ["tw", "台股大盤"], ["lst", "上市"], ["otc", "櫃買"], ["off", "官方公告"], ["|", "國際"], ["us", "美股大盤"], ["gl", "原物料外匯"], ["|", "總經"], ["news", "總經消息"], ["macro", "總經數據"], ["poly", "預測市場"]])}</div>`;
   if (/^(otc|lst|off)$/.test(W.mkReg) && !lazyOk("mkx")) { $("#lx").innerHTML = top + LZ_WAIT; lazy("mkx").then(renderList); return; }
   if (W.mkReg === "otc" || W.mkReg === "lst") return renderOtc(top);
   if (W.mkReg === "off") return renderOff(top);
@@ -4381,7 +4391,7 @@ function renderMkt() {
   h += twWhyHtml();
   const sec = (t, body, extra = "", seg = "") => `<section class="mk"><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</section>`;
   // 產業即時用自己的資料（/api/hot?type=rows），大盤統計還沒到或失敗時也照樣顯示
-  if (!J) { $("#lx").innerHTML = h + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有大盤資料。" : "載入中…"}</p>` + irtHtml(sec) + hotSec(sec, "tw"); return; }
+  if (!J) { $("#lx").innerHTML = h + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有大盤資料。</p>` : skel("載入中…")) + irtHtml(sec) + hotSec(sec, "tw"); return; }
   if (J.err) { $("#lx").innerHTML = h + `<p class="note err" style="padding:12px">⚠︎ ${esc(J.err)}</p>` + irtHtml(sec) + hotSec(sec, "tw"); return; }
   // 可收合的區塊：標題列點一下收起／展開，狀態記在這個瀏覽器（預設收起）
   const fsec = (key, t, body, extra = "", seg = "") => `<details class="mk mkfold" data-fold="${key}" ${store.get("watch:fold:" + key, false) ? "open" : ""}><summary><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3></summary>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</details>`;
@@ -4522,7 +4532,7 @@ function renderCong() {
   const C = W.cong; if (!C) loadCong();
   if (W.cv === "bt") { W.cv = "home"; W.cview = "bt"; } // 申報後回測併進美國國會的「看」分頁（舊網址 #congress/backtest 也會到這裡）
   const [v, arg] = (W.cv || "home").split(/:(.*)/s);
-  cxSetTools(`<span class="note"><b class="cg-t">大戶與國會情報</b>・${v === "tw" && arg?.startsWith("s:") ? "台股大戶全貌（千張大戶、內部人、政治人物）" : v === "tw" ? "台灣政治人物財產申報（監察院廉政專刊）" : v === "ins" ? "台股內部人持股轉讓事前申報" : v === "tdcc" ? "集保結算所每週股權分散（千張大戶增減與籌碼集中度）" : v === "cons" ? "國會、13F、台灣政治人物、內部人、千張大戶的動向疊在一起" : v === "fol" ? "追蹤的人與自選股的新申報" : v === "f13" ? "美國機構 13F 持股申報" : "美國國會議員公開交易申報"}${(v === "home" || v === "bt" || v === "stock" || v === "person") && C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "美國國會"], ["f13", "13F 機構"], ["tw", "台灣政治人物"], ["ins", "內部人"], ["tdcc", "千張大戶"], ["cons", "大戶共識"], ["fol", `我的追蹤${(n => (n ? `（${n}）` : ""))(cxNewN())}`]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${cxGoHtml()}${["home", "f13", "tw", "ins", "tdcc"].includes(v) && !arg ? `<span class="note cx-how">每一類用法都一樣：選<b>期間</b>（太早的資料會自動補抓）→ 用<b>篩選</b>找人或股票 → 在<b>看</b>選排行、最新申報、主題熱圖、申報延遲、申報後回測；點名字看個人，點股票看那檔的大戶全貌（也可以在上面直接查個股）。</span>` : ""}${v === "stock" || v === "person" || ((v === "f13" || v === "tw") && arg) ? `<button class="btn sm" data-cv="${v === "f13" || v === "tw" ? v : "home"}">‹ 返回</button>` : ""}${["home", "f13", "tw", "ins", "tdcc"].includes(v) && !arg ? scBtn("cong") : ""}`);
+  cxSetTools(`<span class="note"><b class="cg-t">大戶與國會情報</b>・${v === "tw" && arg?.startsWith("s:") ? "台股大戶全貌（千張大戶、內部人、政治人物）" : v === "tw" ? "台灣政治人物財產申報（監察院廉政專刊）" : v === "ins" ? "台股內部人持股轉讓事前申報" : v === "tdcc" ? "集保結算所每週股權分散（千張大戶增減與籌碼集中度）" : v === "cons" ? "國會、13F、台灣政治人物、內部人、千張大戶的動向疊在一起" : v === "fol" ? "追蹤的人與自選股的新申報" : v === "f13" ? "美國機構 13F 持股申報" : "美國國會議員公開交易申報"}${(v === "home" || v === "bt" || v === "stock" || v === "person") && C?.cutoff ? `・資料截止 ${C.cutoff.replace(/-/g, "/")}（最新申報日）` : ""}</span><span class="seg sm" role="group" aria-label="國會分頁">${[["home", "美國國會"], ["f13", "13F 機構"], ["tw", "台灣政治人物"], ["ins", "內部人"], ["tdcc", "千張大戶"], ["cons", "大戶共識"], ["fol", `我的追蹤${(n => (n ? `（${n}）` : ""))(cxNewN())}`]].map(([k, t]) => `<button data-cv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</span>${cxGoHtml()}${["home", "f13", "tw", "ins", "tdcc"].includes(v) && !arg ? `<span class="note cx-how">每一類用法都一樣：選<b>期間</b>（太早的資料會自動補抓）→ 用<b>篩選</b>找人或股票 → 在<b>看</b>選排行、最新申報、主題熱圖、申報延遲、申報後回測；點名字看個人，點股票看那檔的大戶全貌（也可以在上面直接查個股）。</span>` : ""}${v === "stock" || v === "person" || ((v === "f13" || v === "tw") && arg) ? `<button class="btn sm" data-cv="${v === "f13" || v === "tw" ? v : "home"}">‹ 返回</button>` : ""}${["home", "f13", "tw", "ins", "tdcc"].includes(v) && !arg ? scBtn("cong") : ""}${["home", "tw", "ins", "tdcc", "cons"].includes(v) && !arg ? mineBtn() : ""}`);
   if (v === "ins") { const r = toolsBody("ins"); $("#lx").innerHTML = r.h; return r.note; }
   if (v === "tdcc") { $("#lx").innerHTML = cxTdccHtml(); return "資料來源：臺灣集中保管結算所（TDCC）集保戶股權分散表開放資料。每週五收盤後更新，僅供籌碼研究參考，不是買賣建議。"; }
   if (v === "cons") { $("#lx").innerHTML = cxConsHtml(); return "資料：眾議院、參議院定期交易報告、SEC 13F、監察院廉政專刊、公開資訊觀測站內部人轉讓申報。僅供研究參考，不是買賣建議。"; }
@@ -4535,7 +4545,7 @@ function renderCong() {
   let h = "";
   if (v === "home") {
     // 和 13F、台灣政治人物、內部人同一套操作列（congx.js 的 cxPerRow、cxRow、cxTabs）：期間 → 篩選 → 合計卡片 → 看什麼
-    const q = (W.cq || "").trim().toLowerCase(), hit = t => !q || t.ticker.toLowerCase().includes(q) || pName(t.pid).toLowerCase().includes(q) || (t.asset || "").toLowerCase().includes(q), wTxt = cxWTxt("cong");
+    const q = (W.cq || "").trim().toLowerCase(), mf = mineF(), hit = t => mf(t.ticker) && (!q || t.ticker.toLowerCase().includes(q) || pName(t.pid).toLowerCase().includes(q) || (t.asset || "").toLowerCase().includes(q)), wTxt = cxWTxt("cong");
     const W30 = congWin(cxW("cong")).filter(hit), cons = congAgg(W30, true), hot = congAgg(W30, false), view = ["cons", "hot", "ppl", "feed", "lag", "heat", "bt"].includes(W.cview) ? W.cview : "cons";
     const sumAmt = k => W30.filter(t => t.k === k).reduce((a, t) => a + amtMid(t.amount), 0), plain = g => congShape(g).replace(/<[^>]+>/g, "");
     h += `<section class="csec tw-home">${rkHead("美國國會議員交易", `參、眾議員依法公開的股票交易（定期交易報告 PTR）。依<strong>交易日期</strong>統計${wTxt}（資料從 ${(W.cong.trades || []).map(t => t.traded).sort()[0] || "—"} 開始）；金額只有申報區間，這裡用中間值估算。`)}
@@ -5580,6 +5590,13 @@ async function loadInfo() {
   catch (e) { if (W.sel === c) W.info = { code: c, err: e.message }; }
   if (W.sel === c) { renderInfo(); renderDetailHead(); if (W.dtab === "tech" && (dBar.has("inst") || dBar.has("margin"))) drawK(); }
 }
+// 個股「財務」：同業前 4 強 PK（fundx.js 的 fxPeer）；財報程式、全市場財報表、本益比還沒載入就背景載好再畫一次
+function peerPk(c) {
+  if (!isTW(c) || isIdx(c) || W.off) return "";
+  if (lazyOk("earn") && ER().data?.rows && W.mfVal) return fxPeer(c);
+  if (!W.pkBusy) { W.pkBusy = true; lazy("earn").then(() => Promise.all([ER().data?.rows ? null : erLoad(), mfValLoad()])).catch(() => {}).finally(() => { W.pkBusy = false; if (W.sel === c && W.dtab === "fin" && ER().data?.rows) renderInfo(); }); }
+  return ER().data?.err ? "" : `<section class="pkbox"><h3 class="fh">同業 PK</h3>${skel("載入同業財報與估值…", 3)}</section>`;
+}
 function renderInfo() {
   const j = W.info, D = W.daily?.data;
   if (W.dtab === "chips" && dSub() === "sum") {
@@ -5611,7 +5628,7 @@ function renderInfo() {
     const band = j.per?.length ? peBand(j.per) : "", charts = (band ? `<h3 class="fh">公司估值</h3>${band}` : "") + (revs.length ? `<h3 class="fh">月營收<span class="note">柱＝營收（億）、線＝年增率</span></h3>${barLineSvg(revs, { bar: "var(--s3)", fmtV: v => Math.round(v) })}` : "");
     $("#fundTbl").innerHTML = charts + (per ? `<div class="d-kv" style="margin:0 16px 12px"><div><span>本益比</span><b>${per.pe ?? "—"}</b></div><div><span>股價淨值比</span><b>${per.pb ?? "—"}</b></div><div><span>殖利率</span><b>${per.dy != null ? per.dy + "%" : "—"}</b></div><div><span>日期</span><b>${per.d.replace(/-/g, "/")}</b></div></div>` : "")
       + (rev.length ? `<table class="tbl"><thead><tr><th>月營收</th><th>營收（億）</th><th>年增</th><th>月增</th></tr></thead><tbody>${rev.map(r => `<tr><td>${r.ym.replace("-", "/")}</td><td>${(r.rev / 1e8).toFixed(2)}</td><td class="${clsOf(r.yoy)}">${r.yoy != null ? (r.yoy > 0 ? "+" : "") + r.yoy + "%" : "—"}</td><td class="${clsOf(r.mom)}">${r.mom != null ? (r.mom > 0 ? "+" : "") + r.mom + "%" : "—"}</td></tr>`).join("")}</tbody></table>` : "")
-      + (typeof SX !== "undefined" && j.fin?.length ? `<div class="fprofit">${SX.profit()}</div>` : ""); // 獲利：EPS、毛利率、營益率、淨利率（每季）
+      + peerPk(W.sel) + (typeof SX !== "undefined" && j.fin?.length ? `<div class="fprofit">${SX.profit()}</div>` : ""); // 獲利：EPS、毛利率、營益率、淨利率（每季）
   } else if (isSxSub()) sxRender();
   postHeight();
 }
@@ -5648,7 +5665,7 @@ function coChart(rows, { bars, line, lineName, fmtB = yiC, fmtL = pctS, colors =
 const chipsBar = (key, opts, cur) => `<div class="cochips">${opts.map(([k, t]) => `<button data-co="${key}:${k}" aria-pressed="${cur === k}">${t}</button>`).join("")}</div>`;
 function renderCo() {
   const J = W.co, box = $("#coBox"), V = W.coView;
-  if (!J || J.loading) { box.innerHTML = `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有公司資料。" : "載入中…"}</p>`; postHeight(); return; }
+  if (!J || J.loading) { box.innerHTML = (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有公司資料。</p>` : skel("載入中…")); postHeight(); return; }
   if (J.err) { box.innerHTML = `<p class="note err" style="padding:12px">⚠︎ ${esc(J.err)}</p>`; postHeight(); return; }
   const inc = J.income || [], bal = J.balance || [], cash = J.cash || [], q = W.detailQ || W.quotes.get(J.code), px = q?.price;
   inc.forEach((x, i) => { x.revY = yoyOf(inc, i, "rev"); x.opY = yoyOf(inc, i, "op"); x.niY = yoyOf(inc, i, "ni"); x.nipY = yoyOf(inc, i, "nip"); x.epsY = yoyOf(inc, i, "eps"); x.gm = x.rev ? +(x.gp / x.rev * 100).toFixed(2) : null; x.om = x.rev && x.op != null ? +(x.op / x.rev * 100).toFixed(2) : null; x.nm = x.rev && x.ni != null ? +(x.ni / x.rev * 100).toFixed(2) : null; });

@@ -87,7 +87,7 @@ function cxConsHtml() {
       for (const t of W.cong.trades) if (t.assetType === "股票" && cxIn(t.traded, R) && /^[A-Z][A-Z.]{0,6}$/.test(t.ticker || "")) { const x = g(t.ticker); x.asset ||= t.asset; if (t.k === "buy") x.buy.add(t.pid); else if (t.k === "sell") x.sell.add(t.pid); }
       for (const f of W.f13.funds) for (const r of [...f.rows, ...f.sold]) { if (!r.ticker || r.pc) continue; const x = g(r.ticker); x.asset ||= r.name; const who = f.who.split(" ")[0];
         if (r.chg === "new" || r.chg === "add") x.up.push(who); else if (r.chg === "cut" || r.chg === "sold" || f.sold.includes(r)) x.dn.push(who); }
-      const L = [...M.values()].map(x => ({ ...x, sc: x.buy.size * 2 + x.up.length - x.sell.size - x.dn.length })).filter(x => x.buy.size && x.up.length).sort((a, b) => b.sc - a.sc || b.buy.size - a.buy.size).slice(0, 40);
+      const mf = mineF(), L = [...M.values()].map(x => ({ ...x, sc: x.buy.size * 2 + x.up.length - x.sell.size - x.dn.length })).filter(x => x.buy.size && x.up.length && mf(x.tk)).sort((a, b) => b.sc - a.sc || b.buy.size - a.buy.size).slice(0, 40);
       body = `<h4>議員在買、機構也在加碼（分數＝議員買進人數 ×2 ＋ 加碼機構 − 賣出議員 − 減碼機構）</h4>` + rkList(L.map(x => ({ star: x.tk, attr: `data-cv="stock:${esc(x.tk)}"`, mono: "", name: esc(x.tk), sub: esc(x.asset || ""),
         val: `${x.sc > 0 ? "+" : ""}${x.sc} 分`, vc: cls(x.sc), vsub: `<span class="up">議員買 ${x.buy.size}</span>${x.sell.size ? `／<span class="down">賣 ${x.sell.size}</span>` : ""}・<span class="up">機構加碼 ${x.up.length}</span>${x.dn.length ? `／<span class="down">減碼 ${x.dn.length}</span>` : ""}` })), "目前沒有兩邊同時在買的股票")
         + `<p class="note">議員買進看${wTxt}（交易日）；機構動向是上一季 13F（季底後 45 天才公開）。兩邊時間點不同，只能當研究起點。</p>`;
@@ -98,7 +98,7 @@ function cxConsHtml() {
       const M = new Map(), g = (c, n) => M.get(c) || M.set(c, { c, n, ppl: new Set(), add: 0, cut: 0, ins: 0, insSh: 0 }).get(c);
       for (const p of twoPeople()) { for (const h of p.hold) if (h.code) g(h.code, h.name).ppl.add(p.pid); for (const x of p.chg) if (x.code) { if (x.t === "new" || x.t === "add") g(x.code, x.name).add++; else g(x.code, x.name).cut++; } }
       for (const r of W.ins.rows || []) if (cxIn(r.d, R) && M.has(r.code)) { const x = M.get(r.code); x.ins++; x.insSh += r.sh || 0; }
-      const L = [...M.values()].map(x => ({ ...x, sc: x.ppl.size + x.add - x.cut - x.ins * 2 })).filter(x => x.ppl.size >= 2).sort((a, b) => b.sc - a.sc || b.ppl.size - a.ppl.size).slice(0, 40);
+      const mf = mineF(), L = [...M.values()].map(x => ({ ...x, sc: x.ppl.size + x.add - x.cut - x.ins * 2 })).filter(x => x.ppl.size >= 2 && mf(x.c)).sort((a, b) => b.sc - a.sc || b.ppl.size - a.ppl.size).slice(0, 40);
       const need = [...new Set(L.map(x => x.c.slice(0, 2)))].filter(k => !W.tdcc?.[k]);
       if (need.length && !W.tdccShardBusy && typeof tdccShard === "function") {
         W.tdccShardBusy = true;
@@ -331,7 +331,7 @@ function cxTdccHtml() {
   }
   const T = W.tdccR;
   if (T.err) return `<section class="csec tw-home"><p class="note" style="padding:16px">⚠︎ ${esc(T.err)}</p></section>`;
-  const scope = W.tdccScope === "mine" ? "mine" : "all", view = ["up", "down", "high", "heat"].includes(W.tdccV) ? W.tdccV : "up", q = (W.tdccQ || "").trim().toUpperCase();
+  const scope = W.mine ? "mine" : "all", view = ["up", "down", "high", "heat"].includes(W.tdccV) ? W.tdccV : "up", q = (W.tdccQ || "").trim().toUpperCase();
   const n = cxTdccP(), dates = T.dates || [], dStr = T.date ? T.date.replace(/-/g, "/") : "最新一週";
   // 期間 → 起訖日與這段期間的排行（{ up, down }）
   let from = "", to = T.date || "", set = null, perNote = "";
@@ -380,7 +380,7 @@ function cxTdccHtml() {
   return `<section class="csec tw-home">
     ${rkHead("集保千張大戶每週動向", `臺灣集中保管結算所（TDCC）每週公布「股權分散表」。統計持有 1,000 張以上的「千張大戶」與 50 張以下「散戶」比例的變化（百分點）；大戶比例上升且散戶人數下降，代表籌碼流向少數主力手中。點股票看那一檔每週走勢、內部人申報、政治人物持股。`)}
     ${per}${perNote ? `<p class="note">${perNote}</p>` : ""}
-    ${cxRow("篩選", `<div class="tw-grp seg" role="group">${[["all", "全部"], ["mine", "自選＋庫存"]].map(([k, t]) => `<button type="button" data-rkset="tdccScope:${k}" aria-pressed="${scope === k}">${t}</button>`).join("")}</div>${cxQ("tdccQ", "搜尋代號或名稱")}`)}
+    ${cxRow("篩選", `<div class="tw-grp seg" role="group">${[["all", "全部"], ["mine", "自選＋庫存"]].map(([k, t]) => `<button type="button" data-mineset="${k === "mine" ? 1 : 0}" aria-pressed="${scope === k}">${t}</button>`).join("")}</div>${cxQ("tdccQ", "搜尋代號或名稱")}`)}
     ${cards}${one}
     ${cxTabs("tdccV", view, [["up", "大戶增持榜"], ["down", "大戶減持榜"], ["high", "高度集中"], ["heat", "主題熱圖"]])}
     ${listHtml}
