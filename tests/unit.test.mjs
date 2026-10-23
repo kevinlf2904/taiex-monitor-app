@@ -446,6 +446,11 @@ test("財報進階排程：月營收連續年增與創新高、營益分析換�
   const cf = C.parseConfRows(`<table>${td("2330", "台積電", "115/07/16", "14:00", "台北", "公布第2季財報及第3季展望", a("233020260716M001.pdf"), a("233020260716E001.pdf"), "", "")}${td("2317", "鴻海", "115/07/20", "", "", "", "", "", "", "")}</table>`, "2330");
   assert.deepEqual(cf, [{ date: "2026-07-16", time: "14:00", note: "公布第2季財報及第3季展望", file: "233020260716M001.pdf", en: "233020260716E001.pdf" }]);
   assert.equal(C.parseConfRows(`<table>${td("2454", "聯發科", "115/10/30", "15:00", "", "&#8206;(1) 公布第3季財報 &amp; 展望 &#8206;", "", "", "", "")}</table>`, "2454")[0].note, "(1) 公布第3季財報 & 展望", "觀測站夾的 &#8206; 要拿掉");
+  const today = "2026-10-23", PL = [{ date: "2026-10-30", file: null }, { date: "2026-10-28", file: "x2.pdf" }, { date: "2026-10-15", file: "x1.pdf" }];
+  assert.equal(C.pickConf(PL, today).file, "x1.pdf", "還沒開的不選"); assert.equal(C.pickConf(PL.slice(0, 2), today).file, "x2.pdf", "只有還沒開的就用它"); assert.equal(C.pickConf([], today), null);
+  const CS = await import("../scripts/confai-sync.mjs");
+  assert.deepEqual(CS.bigCodes({ ranks: [{ id: "mcap", tabs: [{ rows: [{ c: "2330" }, { c: "2454" }] }] }] }, [{ 2317: ["鴻海", "", { "2026-08": 5, "2026-09": 9 }], 1101: ["台泥", "", { "2026-09": 1 }], "00878": ["ETF", "", { "2026-09": 99 }] }, { 8299: ["群聯", "", { "2026-09": 3 }] }], 4), ["2330", "2454", "2317", "8299"], "市值排前面，再用最新月營收補，ETF 不算");
+  assert.deepEqual(Object.keys(CS.prune({ a: { date: "2026-10-01" }, b: { date: "2024-01-01" } }, Date.parse("2026-10-23"), 400)), ["a"]);
   assert.ok(C.okFile("2330", "233020260716M001.pdf")); assert.ok(!C.okFile("2330", "../../etc/passwd")); assert.ok(!C.okFile("2330", "231720260716M001.pdf"), "只能讀自己公司的簡報");
   assert.equal(C.parseConfSum('{"head":"AI 需求強","outlook":["Q3 營收 300 億美元"],"risks":[1,"匯率"]}').risks.join(), "匯率");
   assert.equal(U.guideOf(["Apple stock rises 2%"]).g, null, "沒提財測的標題不算");

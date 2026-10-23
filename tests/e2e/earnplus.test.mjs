@@ -34,6 +34,10 @@ for (const width of [390, 1280]) test(`財報第二批：體質、股利預估�
   assert.equal(await p.getAttribute('.ertr .epconf a', "href"), "https://mopsov.twse.com.tw/nas/STR/233020261016M001.pdf");
   assert.match(await p.textContent(".ertr .epsum"), /AI 需求強勁[\s\S]*展望與指引[\s\S]*330 億美元[\s\S]*資本支出[\s\S]*簡報原文/);
   assert.deepEqual(posted.map(x => [x.code, x.file]), [["2330", "233020261016M001.pdf"]]);
+  // 排程已經整理好的（data/confai.json）直接顯示，不再請 AI
+  await p.evaluate(() => { EP.sum = {}; EP.pre = { sums: { "233020261016M001.pdf": { head: "排程先整理好的重點", outlook: ["展望一"], margin: "", capex: "", demand: "", risks: [], quotes: [] } } }; renderList(); });
+  await p.waitForFunction(() => /排程先整理好的重點/.test(document.querySelector(".ertr .epsum")?.textContent || "")); await p.waitForTimeout(300);
+  assert.equal(posted.length, 1, "排程整理過的不再呼叫 AI");
   // 公布前後股價習慣
   await p.click('.ertr [data-exk="kl:2330"]'); await p.waitForFunction(() => /公布前 5 日平均/.test(document.querySelector(".ertr")?.innerText || ""), null, { timeout: 15000 });
   assert.match(await p.textContent(".ertr"), /公布後 5 日平均波動/);

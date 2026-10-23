@@ -1,0 +1,37 @@
+# 法說會重點：每天台北晚上 7:41（法說會多在下午開，簡報當天上傳）把大公司最近一次法說會的簡報交給 AI 整理，寫進 learner/data/confai.json
+# 網頁打開公司時先讀這個檔，有整理好的直接顯示；沒有的才即時請網站上的 AI 整理（scripts/confai-sync.mjs）
+name: confai-sync
+on:
+  schedule:
+    - cron: "41 11 * * *"
+  workflow_dispatch:
+    inputs:
+      max:
+        description: "這次最多整理幾份（第一次補齊可填 100）"
+        default: "20"
+permissions:
+  contents: write
+concurrency:
+  group: data-sync-confai-sync-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - run: git pull -q origin ${{ github.ref_name }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev --ignore-scripts
+      - run: node scripts/confai-sync.mjs
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MAX_PER_RUN: ${{ github.event.inputs.max || '20' }}
+      - name: commit
+        if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
+        env:
+          COMMIT_NAME: confai-sync
+        run: |
+          bash scripts/commit-data.sh "法說會重點：AI 整理新簡報" learner/data/confai.json
