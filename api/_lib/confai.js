@@ -32,6 +32,8 @@ export async function confList(code) {
   return got.flatMap(x => (x.status === "fulfilled" ? x.value : [])).sort((a, b) => b.date.localeCompare(a.date))
     .filter(x => { const k = x.date + (x.file || ""); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 12);
 }
+// 要整理哪一場：最近一次已經召開、有簡報的（還沒開的常沒有簡報）；learner/earnplus.js 的 epConf 用同一個規則
+export const pickConf = (L, today) => L.find(x => x.file && x.date <= today) || L.find(x => x.file) || null;
 const PROMPT = name => `你是台股研究員。這是「${name}」法人說明會的簡報。請只根據簡報內容整理，不要加簡報沒寫的數字或推測，用繁體中文、台灣用語，輸出 JSON：
 {"head":"一句話總結這次法說會最重要的訊息（40 字內）",
  "outlook":["公司對下一季或全年的展望與指引，3～5 條，每條 50 字內，有數字就寫數字（營收、毛利率、營益率區間）"],

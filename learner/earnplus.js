@@ -3,7 +3,7 @@
    股價習慣在 earnx.js 的 exReactTw（月營收公布前後）、exUsHist（美股財報公布隔天）；美股財測在 earn.js 的「財測」分頁。
    全部只用公開財報數字照公式算，AI 只整理公司自己的簡報；不是投資建議。
    用到 finrep.js 的 frYi、frPctTxt，earn.js 的 erNum，watch.html 的 W、esc、cls、renderList、barLineSvg、tmo。 */
-const EP = { conf: {}, sum: {} };
+const EP = { conf: {}, sum: {}, pre: null };
 const epYoY = (L, k) => { const a = L.at(-1)?.[k], b = L.at(-5)?.[k]; return a != null && b ? (a / b - 1) * 100 : null; };
 // 體質：存貨、應收帳款跟營收比誰長得快；存貨週轉天數（用營收估）；近 8 季自由現金流
 function epHealth(C) {
@@ -33,9 +33,11 @@ function epDiv(c, C) {
 }
 const epTW = (c, C) => `<div class="epbox">${epHealth(C)}${epDiv(c, C)}</div>`;
 // 法說會：展開公司就自動到觀測站找今年和去年的法說會，最近一次有簡報的直接請 AI 讀簡報整理重點（同一份簡報整理過伺服器會記住，第二個人打開是秒回）
+// 大公司的簡報排程每天先整理好（scripts/confai-sync.mjs → data/confai.json），有的話直接用，不用等 AI
 async function epConfLoad(c) {
   EP.conf[c] = { loading: true };
-  try { EP.conf[c] = await getJ(`/api/confai?code=${encodeURIComponent(c)}`, true); } catch (e) { EP.conf[c] = { err: e.message }; } if (W.lt === "earn") renderList();
+  const pre = EP.pre ? null : fetch("data/confai.json", { cache: "no-cache", signal: tmo(15000) }).then(r => (r.ok ? r.json() : { sums: {} })).catch(() => ({ sums: {} }));
+  try { EP.conf[c] = await getJ(`/api/confai?code=${encodeURIComponent(c)}`, true); } catch (e) { EP.conf[c] = { err: e.message }; } if (pre) EP.pre = await pre; if (W.lt === "earn") renderList();
 }
 async function epSum(c, file) {
   EP.sum[file] = { loading: true };
@@ -50,7 +52,7 @@ function epConf(c) {
   if (S.err || S.ok === false) return `${H}<p class="note">⚠︎ ${esc(S.err || S.error)} <button type="button" class="btn sm" data-epconf="${esc(c)}">再試一次</button></p>`;
   const L = S.list || []; if (!L.length) return `${H}<p class="note">今年和去年都沒有法說會的紀錄（不是每家公司都會開）。</p>`;
   const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), next = L.filter(x => x.date > today).at(-1);
-  const f = L.find(x => x.file && x.date <= today) || L.find(x => x.file), R = f ? EP.sum[f.file] : null, pdf = x => `https://mopsov.twse.com.tw/nas/STR/${x}`;
+  const f = L.find(x => x.file && x.date <= today) || L.find(x => x.file), R = f ? EP.sum[f.file] || EP.pre?.sums?.[f.file] : null, pdf = x => `https://mopsov.twse.com.tw/nas/STR/${x}`; // 選哪一場和 api/_lib/confai.js 的 pickConf 一樣
   if (f && !R && !W.off) setTimeout(() => !EP.sum[f.file] && epSum(c, f.file)); // 有簡報就直接請 AI 整理
   const sum = !f ? `<p class="note">最近幾次都沒有上傳簡報檔，AI 沒辦法整理。</p>` : !R || R.loading ? `<p class="note">AI 讀 ${f.date.replace(/-/g, "/")} 的簡報中（第一次約 20～60 秒，整理過的會直接顯示）…</p>`
     : R.err ? `<p class="note">⚠︎ ${esc(R.err)} <button type="button" class="btn sm" data-epsum="${esc(c)}|${esc(f.file)}">再試一次</button></p>`

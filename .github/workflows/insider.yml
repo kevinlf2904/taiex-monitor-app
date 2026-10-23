@@ -21,10 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 100
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
         run: git pull -q origin ${{ github.ref_name }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}

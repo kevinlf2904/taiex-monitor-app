@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # 排隊等前一次跑完時，checkout 的是排隊當下的舊版本；先拉到最新的 main，避免和前一次存的資料衝突
       - run: git pull -q origin ${{ github.ref_name }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: node scripts/market-after.mjs

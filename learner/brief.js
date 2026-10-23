@@ -72,6 +72,7 @@ function evaHtml() {
 }
 // 網頁版的事件檢查：營收用財報分頁的上市櫃月營收表，三率用 data/earn-hist.json，法說會用 /api/calendar
 async function evData() {
+  await lazy("earn"); // 財報的程式（earn.js、fundx.js）用到才載入
   const [eh, cal] = await Promise.all([ehLoad(), W.cal?.conf ? W.cal : getJ("/api/calendar", true).catch(() => null)]); // ehLoad 在 fundx.js
   if (cal?.ok) W.cal = cal;
   const E = ER(); if (!E.data?.rows) await erLoad(); const R = ER().data, hi = new Map((eh?.streak?.rows || []).map(r => [r[0], r[7]]));
@@ -119,6 +120,36 @@ function briefHtml() {
     <p class="note">想每天早上在手機收到：到「提醒」勾「每日早報」，再到「備份同步」綁定 Telegram 並上傳。</p></section>`;
   return { h, note: "早報整理自 Yahoo Finance、期交所、證交所、公開資訊觀測站與新聞標題；只是摘要，不是買賣建議。" };
 }
+
+/* ---------- 今日重點卡（自選分頁最上面）：盤勢一句話、持股／自選大漲跌、今明兩天的除權息與法說會、事件提醒、追蹤節目的新整理；點了直接過去 ---------- */
+// 只用已經載好的資料（報價、行事曆、總經消息、節目索引）；行事曆、總經消息沒有的話背景補抓一次（30 分鐘內不重抓）
+function todayParts() {
+  const P = [], hold = Object.keys(W.hold || {}).filter(c => !W.hold[c]?.demo), mine = new Set([...hold, ...myCodes()]), t = twDay(), t1 = nextWd(t), nm = c => nameOf(c) || c;
+  const ix = W.quotes.get("T00")?.chgPct, S = W.mn?.days?.[0]?.tw?.sum;
+  if (ix != null || S?.head) P.push(["盤勢", `<button class="linkbtn" data-tdgo="mkt">${ix != null ? `加權 <b class="${cls(ix)}">${sgn(ix, 2)}%</b>${S?.head ? "：" : ""}` : ""}${esc(S?.head || "")}</button>`]);
+  const mv = [...mine].map(c => [c, W.quotes.get(c)?.chgPct]).filter(([c, v]) => v != null && Math.abs(v) >= 3 && !isIdx(c)).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  if (mv.length) P.push(["大漲跌", mv.slice(0, 4).map(([c, v]) => `<button class="linkbtn" data-sel="${esc(c)}">${hold.includes(c) ? "★" : ""}${esc(nm(c))} <b class="${cls(v)}">${sgn(v, 1)}%</b></button>`).join("、") + (mv.length > 4 ? ` 等 ${mv.length} 檔` : "")]);
+  const cal = [...(W.cal?.rows || []).map(x => [x, x.kind || "除權息"]), ...(W.cal?.conf || []).map(x => [x, "法說會"])].filter(([x]) => mine.has(x.code) && (x.date === t || x.date === t1));
+  if (cal.length) P.push(["今明兩天", cal.slice(0, 5).map(([x, w]) => `<button class="linkbtn" data-sel="${esc(x.code)}">${x.date === t ? "今天" : "明天"} ${esc(nm(x.code))} ${w}</button>`).join("、")]);
+  if (W.evHits?.length) P.push(["事件提醒", W.evHits.slice(0, 3).map(x => `<button class="linkbtn" data-sel="${esc(x.code)}">${esc(x.m)}</button>`).join("、")]);
+  if (typeof POD !== "undefined" && POD.srv?.eps && typeof podFollows === "function") {
+    const F = new Set(podFollows().map(s => s.feed)), since = Date.now() - 24 * 3600e3, E = Object.values(POD.srv.eps).filter(e => F.has(e.feed) && Date.parse(e.date) > since);
+    if (E.length) P.push(["節目", `<button class="linkbtn" data-tdgo="pod">追蹤的節目 24 小時內有 ${E.length} 集：${esc([...new Set(E.map(e => e.show))].slice(0, 2).join("、"))}${E.length > 2 ? "…" : ""}</button>`]);
+  }
+  return P;
+}
+function renderToday(show) {
+  const el = $("#todayCard"); if (!el) return; if (!show || W.off) { el.hidden = true; return; }
+  const T = (W.td ||= {}); if (!T.busy && Date.now() - (T.at || 0) > 30 * 60e3) { T.busy = true; T.at = Date.now();
+    Promise.allSettled([W.cal ? null : getJ("/api/calendar", true).then(j => { if (j?.ok) W.cal = j; }), W.mn ? null : loadMnews()]).finally(() => { T.busy = false; if (W.lt === "watch") renderToday(true); }); }
+  const P = todayParts(); if (!P.length) { el.hidden = true; return; }
+  const h = `<details class="today" data-tdopen${store.get("watch:today", true) ? " open" : ""}><summary><b>今日重點</b><span class="note">${twDay().slice(5).replace("-", "/")}・${P.length} 項</span></summary>
+    <ul>${P.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul><button type="button" class="linkbtn tdmore" data-tdgo="brief">看完整早報 ›</button></details>`;
+  if (el._h !== h) { el._h = h; el.innerHTML = h; } el.hidden = false; // 內容沒變就不重畫（每 5 秒報價更新時不閃）
+}
+document.addEventListener("toggle", e => { if (e.target.matches?.("[data-tdopen]")) store.set("watch:today", e.target.open); }, true);
+document.addEventListener("click", e => { const g = e.target.closest("[data-tdgo]"); if (!g) return; const v = g.dataset.tdgo;
+  if (v === "mkt") { W.mkReg = "tw"; setLt("mkt"); } else if (v === "pod") setLt("pod"); else if (v === "brief") { W.tv = "brief"; setLt("tools"); } });
 
 /* ---------- 筆記追蹤：W.notes = { 代號: [{ at, t, px }] }；目標價就是價格提醒（W.alerts） ---------- */
 const NT = () => (W.notes ||= store.get("watch:notes", {}) || {});
