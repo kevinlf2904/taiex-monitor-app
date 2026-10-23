@@ -29,12 +29,12 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   await p.route("**/api/usmarket", r => J(r, { ok: true, date: "2026-10-21", indices: [{ code: "^DJI", name: "道瓊工業", price: 42100, chgPct: 0.8 }, { code: "^SOX", name: "費城半導體", price: 6100, chgPct: -1.2 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 210, chgPct: 1.5 }], macro: [{ code: "^TNX", name: "10 年期公債殖利率", price: 4.2, chgPct: 0.3 }], sectors: [] }));
   await p.route(/\/api\/futures\?bars=0$/, r => J(r, { ok: true, quote: { price: 23000, chg: -50, chgPct: -0.22, session: "night" }, night: { price: 23000, chg: -50, chgPct: -0.22, time: "05:00" }, day: null }));
   await p.route("**/api/news**", r => J(r, { ok: true, items: [{ title: "台積電先進封裝擴產", source: "測試報", link: "https://example.com/a", at: Date.now() - 3600e3 }] }));
-  await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 500 } }; showList?.(); W.tv = "brief"; setLt("tools"); });
+  await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 500 } }; showList?.(); setLt("today"); });
   await p.waitForFunction(() => /持股新消息/.test($("#lx").innerText), null, { timeout: 15000 });
   const t = await p.evaluate(() => $("#lx").innerText);
   for (const s of ["昨晚美股", "道瓊工業", "費城半導體", "台積電 ADR", "台指期", "夜盤 23,000", "除權息", "2330 除息 現金 4.5 元", "台積電先進封裝擴產", "今天要注意", "法說會"]) assert.ok(t.includes(s), `早報要有「${s}」`);
   assert.ok(t.indexOf("★ ") > 0 && t.indexOf("★ ") < t.indexOf("1101 除息"), "庫存的除權息排前面、有星號");
-  assert.equal(await p.evaluate(() => W.tv), "today", "舊的「早報」分頁帶到合併後的「今日重點」");
+  assert.equal(await p.evaluate(() => W.lt), "today", "舊的「早報」分頁帶到情報局的「今日重點」");
   assert.match(t, /盤前・昨晚美股[\s\S]*(盤中|盤後)・大盤、自選與訊號|(盤中|盤後)・大盤、自選與訊號[\s\S]*盤前・昨晚美股/, "早報和每日摘要在同一頁");
   assert.equal(await p.$$eval("#lx [data-tx='tdai']", L => L.length), 1, "AI 整理只有一個");
   await p.click('[data-tx="tdai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
@@ -93,7 +93,7 @@ for (const width of [390, 1280]) test(`財報「事件回測」「估值地圖�
   await p.route("**/data/event-study.json", r => J(r, { updated: "2026-10-21T10:00:00Z", from: "2025-10-01", to: "2026-10-21", stocks: 1800, ns: [5, 10, 20],
     types: [{ t: "high", name: "月營收創新高", desc: "當月營收比過去至少 24 個月都高", stats: { 5: st(320, 0.012), 10: st(310, 0.021), 20: st(300, 0.034) }, hist: [5, 8, 20, 40, 60, 70, 50, 25, 12, 10], ind: [["半導體業", 40, 0.05, 0.6], ["水泥工業", 9, -0.01, 0.4]], recent: [["2330", "台積電", "2026-09", "2026-10-13", 0.02, null, null]] },
       { t: "pm3", name: "三率三升", desc: "毛利率、營益率、淨利率都比上一季高", stats: { 5: st(120, 0.005), 10: st(118, 0.01), 20: st(110, 0.02) }, hist: [1, 2, 5, 10, 20, 30, 20, 10, 5, 7], ind: [], recent: [] }] }));
-  await p.evaluate(() => { showList?.(); setLt("earn"); ER().reg = "tw"; ER().view = "evt"; renderList(); });
+  await p.evaluate(() => { ER().data = null; showList?.(); setLt("earn"); ER().reg = "tw"; ER().view = "evt"; renderList(); }); // 情報局預設的今日重點可能已經用預設假資料抓過財報
   await p.waitForSelector(".evtbl"); let t = await p.evaluate(() => $("#lx").innerText);
   assert.match(t, /20 天\s+300\s+\+3\.4%/); assert.match(t, /半導體業/); assert.match(t, /進行中/);
   await p.click('.ichip[data-erevt="pm3"]'); await p.waitForFunction(() => /110/.test($(".evtbl").innerText));

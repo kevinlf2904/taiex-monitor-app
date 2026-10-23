@@ -20,7 +20,7 @@ const erSave = () => { const E = ER(); store.set("watch:er", { reg: E.reg, view:
 const erYm = s => (s && s.length >= 5 ? `${+s.slice(0, s.length - 2) + 1911} 年 ${+s.slice(-2)} 月` : "");
 const erYq = s => { const m = String(s || "").match(/^(\d+)Q(\d)$/); return m ? `${+m[1] + 1911} 年第 ${m[2]} 季` : ""; };
 async function erLoad(force = false) {
-  const E = ER(); if (W.off || E.loading || (!force && E.data && Date.now() - E.data.at < 30 * 60e3)) return;
+  const E = ER(); if (W.off || E.loading || (!force && E.data && Date.now() - E.data.at < (E.data.err ? 60e3 : 30 * 60e3))) return; // 失敗的結果只留 1 分鐘（今日重點等別頁先抓失敗，不會讓財報卡在錯誤畫面半小時）
   E.loading = true; try { const j = await getJ("/api/oapi?earn=1"); E.data = { ...j, at: Date.now() }; } catch (e) { E.data = { err: e.message, at: Date.now() }; } finally { E.loading = false; }
   if (W.lt === "earn") renderList();
 }

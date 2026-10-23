@@ -11,7 +11,7 @@ async function trim() { const c = await caches.open(C), K = (await c.keys()).fil
 const fromCache = async (req, opt) => (await caches.match(req, opt)) || null;
 self.addEventListener("fetch", e => {
   const req = e.request, u = new URL(req.url);
-  if (req.method !== "GET" || u.origin !== location.origin || LIVE.test(u.pathname) || /version\.json$/.test(u.pathname) || req.cache === "no-store") return;
+  if (req.method !== "GET" || u.origin !== location.origin || u.pathname.startsWith("/_vercel/") || LIVE.test(u.pathname) || /version\.json$/.test(u.pathname) || req.cache === "no-store") return;
   if (req.mode === "navigate") { // 頁面：先上網；快取只存路徑（watch.html?embed=1… 都算同一頁），離線時用快取
     e.respondWith(fetch(req).then(r => put(u.pathname, r)).catch(async () => (await fromCache(u.pathname)) || (await fromCache(req, { ignoreSearch: true })) || (await fromCache("index.html")) || new Response("離線中，請連上網路後再試。", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } })));
     return;

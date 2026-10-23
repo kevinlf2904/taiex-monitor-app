@@ -69,6 +69,8 @@ export async function watchFrame(p) { for (let i = 0; i < 150; i++) { const f = 
 export async function open(browser, base, file, { width = 1180, touch = false, sw = false, lazy = true, onboard = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height: 1000 }, hasTouch: touch, isMobile: touch, serviceWorkers: sw ? "allow" : "block" }), errs = [];
   if (!onboard) await ctx.addInitScript(() => { try { localStorage.setItem("kline:watch:onbOff", "true"); } catch {} });
+  // 情報局預設打開「今日重點」（會順便抓財報、行事曆）：其他測試照舊從資金雷達開始，避免在測試設好假資料前就先抓過；要測今日重點的自己切過去
+  await ctx.addInitScript(() => { try { if (!localStorage.getItem("kline:watch:lt:intel")) localStorage.setItem("kline:watch:lt:intel", '"money"'); } catch {} });
   const m = await mock(ctx), p = await ctx.newPage(); p.on("pageerror", e => errs.push(`${width} ${e.message}`)); p.on("dialog", d => d.accept());
   await p.goto(`${base}/learner/${file}`); await p.waitForTimeout(600);
   if (lazy) await p.evaluate(() => typeof LAZY === "object" && Promise.all(Object.keys(LAZY).map(lazy))).catch(() => {}); // 分頁用到才載的程式（watch.html 的 lazy）先載好，測試直接呼叫裡面的函式也不會找不到
