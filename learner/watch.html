@@ -988,16 +988,16 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 .evhist div { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; } .evhist i { display: block; width: 100%; min-height: 1px; border-radius: 2px 2px 0 0; opacity: .75; }
 .evhist i.upb { background: var(--up); } .evhist i.dn { background: var(--down); } .evhist small { font-size: 10px; color: var(--muted); white-space: nowrap; transform: scale(.92); }
 tr.on td { background: var(--surface-2); }
-.fxmapbox { width: 100%; position: relative; } .fxmap .pt.pick circle { fill-opacity: .95; stroke: var(--ink); stroke-width: 2; }
+.fxmapbox { width: 100%; position: relative; margin: 6px 0; }
 .fxtip { position: absolute; transform: translate(var(--tx), var(--ty)); width: min(240px, 62%); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font-size: 12.5px; box-shadow: 0 8px 24px rgba(0, 0, 0, .28); z-index: 2; display: grid; gap: 6px; }
 .fxtip-h { display: flex; align-items: baseline; gap: 6px; } .fxtip-h b { font-size: 14px; } .fxtip-x { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; width: 32px; height: 28px; cursor: pointer; }
 @media (max-width: 700px) { .fxtip { position: static; transform: none; width: auto; margin-top: 6px; box-shadow: none; } } /* 手機圖太小，資訊框改放圖下方 */
 .fxtip-q { font-weight: 500; } .fxtip dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; } .fxtip dt { color: var(--muted); } .fxtip dd { margin: 0; text-align: right; font-family: var(--font-num); } .fxtip dd small { display: block; font-family: var(--font-body); font-size: 11px; } .fxmap { width: 100%; height: auto; display: block; }
-.fxmap .gl { stroke: var(--line); stroke-width: .6; } .fxmap .md { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; } .fxmap .ax { fill: var(--ink); opacity: .7; font-size: 12px; } .fxmap .qd { fill: var(--ink); opacity: .55; font-size: 12px; }
-@media (max-width: 600px) { .fxmap .ax, .fxmap .qd { font-size: 18px; } .fxmap .lb { font-size: 16px; } } /* 手機上整張圖縮小一半多，字要放大才看得到 */
-.mk.fxfull { position: fixed; inset: 0; z-index: 60; margin: 0; overflow-y: auto; background: var(--bg); padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); } .mk.fxfull .fxmap { max-height: calc(100vh - 150px); width: 100%; } .fxfullbtn { margin-left: auto; }
-.fxmap .pt { cursor: pointer; } .fxmap circle.u { fill: var(--up); fill-opacity: .45; } .fxmap circle.d { fill: var(--down); fill-opacity: .45; } .fxmap .pt:hover circle, .fxmap .pt.cur circle { fill-opacity: .85; stroke: var(--ink); stroke-width: 1.2; }
-.fxmap .lb { fill: var(--ink); font-size: 11px; pointer-events: none; } .fxrank li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } .fxrank b { margin-left: auto; }
+/* 估值地圖：和動能矩陣的圓點矩陣同一套樣式（象限淡色底、無框半透明圓點、名稱與數字放在圓裡），可以縮放、拖曳 */
+.fxwrap { position: relative; margin: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: pan-y; } .fxwrap.is-zoomed { touch-action: none; }
+.fxmap .bnode { cursor: pointer; } .fxmap .bnode circle { stroke: none; fill-opacity: .45; transition: fill-opacity .2s; } .fxmap .bnode:hover circle { fill-opacity: .65; } .fxmap .bnode.on circle { fill-opacity: .9; } .fxmap .bnode.cur circle { stroke: var(--ink); stroke-width: 1; }
+.fxmap .fxmd { font: 9px var(--font-num); fill: var(--muted); } .fxwrap:hover .mf-zoom-ctl, .fxwrap.is-zoomed .mf-zoom-ctl { opacity: 1; }
+.fxrank li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } .fxrank b { margin-left: auto; }
 .mstbl td { background: color-mix(in srgb, var(--surface-2) calc(var(--ms, 0) * 100%), transparent); } .mstbl td small { display: block; } .mstbl tr.tot td { border-top: 1px solid var(--line); }
 .msum { margin: 8px 0; line-height: 1.6; }
 /* 橫向捲動的按鈕列：左右還有內容時邊緣淡出，提示可以滑（hsFade 依捲動位置加上 hs-l／hs-r） */
@@ -1167,7 +1167,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-153</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-154</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2548,9 +2548,9 @@ function wrapBubbleText(name, r) {
   if (s.length === 5) return r < 10.5 ? [s.slice(0, 2), s.slice(2, 4)] : [s.slice(0, 2), s.slice(2)];
   return [s.slice(0, 3), s.slice(3, 6)];
 }
-function calcBubbleLabel(name, net5, r) {
+function calcBubbleLabel(name, net5, r, valTxt) { // valTxt：球裡第二行要顯示的數字（預設是淨流入金額；估值地圖放本益比）
   if (r < 4.6) return null; // 太小的球體放不下字，完全留空由 Tooltip 顯示
-  const lines = wrapBubbleText(name, r), val = flowFmt(net5);
+  const lines = wrapBubbleText(name, r), val = valTxt ?? flowFmt(net5);
   const maxChars = Math.max(...lines.map(s => s.length));
   const wEm = maxChars * 1.0;
   // 盡量顯示金額：優先排入金額，只要字體在 2.55px 以上且安全在球體內即顯示金額
