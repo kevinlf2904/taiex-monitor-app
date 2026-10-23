@@ -978,6 +978,7 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 @keyframes fadeIn { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .w-main.wide.show-detail .w-detail, .dbg { animation: none; } }
 /* 早報、事件提醒、筆記追蹤（brief.js） */
+.tdsec { margin: 18px 0 2px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .02em; } .csec h3 + .tdsec, .csec h3 + .mkclosed + .tdsec { border-top: 0; margin-top: 6px; }
 .bfgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 0 18px; } .bfsec h4 { margin-top: 10px; }
 .evopts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 6px; margin: 6px 0 8px; }
 .evopt { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; } .evopt .note { flex-basis: 100%; margin: 0; font-size: 12px; }
@@ -1877,7 +1878,7 @@ function renderList() {
   if (W.ticking && Date.now() - (W.lastPtr || 0) < 900) return;
   if (W.ticking && W.lt === "ind") { if (W.indLast) loadIndQuotes(W.indLast); return; } // 產業地圖（星系、圖解）每 5 秒整個重建很耗電：只重抓成員報價，有變動才重畫
   if (W.ticking && (W.lt === "money" || (W.lt === "screen" && W.scrG === "combo") || (W.lt === "hold" && (W.holdView === "risk" || W.holdView === "macro")))) return; // 資金分頁、條件組合、庫存風險與總經敏感度用收盤資料，自己載入完才重畫
-  if (W.ticking && (W.lt === "pod" || W.lt === "cong" || (W.lt === "tools" && W.tv !== "sum"))) return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
+  if (W.ticking && (W.lt === "pod" || W.lt === "cong" || (W.lt === "tools" && W.tv !== "today"))) return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
   const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details")].map(d => [sum(d), d.open]));
   // 換分頁時新內容常常先是一行「載入中」，頁面一變短瀏覽器就把捲動位置拉回最上面：重畫前先撐住原本的高度，內容夠高或 0.9 秒後再放開
   const xs = hsKeep(), hold = !W.ticking && !lx.hidden && lx.offsetHeight > 0;
@@ -2534,7 +2535,7 @@ async function loadMoney(need = 10, force = false) {
     if (W.lt === "money" && (F.view === "replay" || (F.view === "bubble" && F.rp.playing)) && document.getElementById("mfb")) { const el = document.querySelector(".mrp-load"); if (el) el.textContent = `正在載入更早的資料（${F.prog}）…`; }
     else if (W.lt === "money" || (W.lt === "screen" && W.scrG === "score")) renderList();
   }
-  F.loading = false; if (F.rp) F.rp.fl = null; if (W.lt === "money" || W.lt === "screen" || (W.lt === "tools" && W.tv === "sum")) { mfModel(); renderList(); }
+  F.loading = false; if (F.rp) F.rp.fl = null; if (W.lt === "money" || W.lt === "screen" || (W.lt === "tools" && W.tv === "today")) { mfModel(); renderList(); }
 }
 const mfModel = () => { const F = W.mf; if (!F.model && F.days.length) F.model = flowModel(F.days, flowSectors(F.ind)); return F.model; };
 const qDot = q => `<i class="qdot" style="background:${FLOW_Q[q][2]}"></i>`;
@@ -3247,7 +3248,7 @@ function renderMoney() {
           <details class="mkmore"><summary>怎麼算的</summary><p class="note">${mood.parts.map(([k, v]) => `${k} ${v >= 0 ? "+" : ""}${v.toFixed(2)}`).join("、")}（各自換成 −1～1 後平均，再換成 0～100）。上漲 ${mood.up}、下跌 ${mood.dn}、漲停 ${mood.lu}、跌停 ${mood.ld}，法人合計 ${flowFmt(mood.net)}。</p></details></div>` : "")
       + `<h4>法人買最多</h4><div class="mchips">${b1.map(x => chip(x, x.net1, `data-fsec="${esc(x.id)}"`)).join("") || '<span class="note">今天沒有買超的板塊</span>'}</div>`
       + `<h4>大戶異常（法人單日買賣金額最大）</h4><div class="mchips">${bb && bb.a1 > 0 ? chip({ name: bb.name, q: "up" }, bb.a1, `data-sel="${bb.code}"`) : ""}${bs && bs.a1 < 0 ? chip({ name: bs.name, q: "down" }, bs.a1, `data-sel="${bs.code}"`) : ""}</div>`
-      + `<button class="mcard mlink" data-l2="tools:sum" style="margin:10px 0 0"><b>盤後總結與分享</b><span class="note">移到「工具 → 每日摘要」 ›</span></button></section>`
+      + `<button class="mcard mlink" data-l2="tools:sum" style="margin:10px 0 0"><b>盤後總結與分享</b><span class="note">在「工具 → 今日重點」 ›</span></button></section>`
       + `<section class="mcard"><h3>近 5 日法人買超最多</h3><div class="mchips">${b5.map(x => chip(x, x.net5, `data-fsec="${esc(x.id)}"`)).join("")}</div></section>`
       + `<button class="mcard mlink" data-mv="replay"><b>主力資金雷達回放</b><span class="note">近 20 個交易日，資金怎麼移動 ›</span></button>`;
   } else if (F.view === "bubble") {
@@ -3542,7 +3543,7 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F 
   if (d.fsec) return secOpen(d.fsec);
   if (d.iopenExt) { W.indS.open = d.iopenExt; return setLt("ind"); }
   if (d.mshare) return mfShare(d.mshare);
-  if (d.l2) { W.tv = "sum"; return setLt("tools", true); }
+  if (d.l2) { W.tv = "today"; return setLt("tools", true); }
   if (d.mv === "replay") { F.view = "bubble"; store.set("watch:mfv", "bubble"); F.rp.t = null; F.rp.u = null; renderMoney(); mfPlay(true); return; }
   if (d.mv) { F.view = d.mv; if (d.mv !== "bubble") { mfPlay(false); store.set("watch:mfv", d.mv); } else store.set("watch:mfv", "bubble"); }
   else if (d.mq) F.q = d.mq; else if (d.mrk) F.rk = d.mrk;
@@ -4746,7 +4747,7 @@ function navSnap() {
     io: lt === "ind" ? W.indS?.open || null : null, iv: lt === "ind" ? W.indS?.view || null : null,
     af: lt === "after" && typeof afView === "function" ? afView() : null,
     mv: lt === "money" ? W.mf?.view || null : null, ms: lt === "money" && W.mf?.view === "sector" ? W.mf.sec || null : null,
-    cv: lt === "cong" ? W.cv || "home" : null, tv: lt === "tools" ? W.tv || "sum" : null,
+    cv: lt === "cong" ? W.cv || "home" : null, tv: lt === "tools" ? W.tv || "today" : null,
     pv: lt === "pod" ? P?.view || null : null, pg: lt === "pod" && P && (P.view === "ep" || P.view === "show") ? P.view + ":" + (P.view === "ep" ? P.key : P.feed) : null };
 }
 function navUrl(s) { const r = s.sel ? null : routeOf(); if (EMBED) post({ type: "watch-at", route: r, mode: MODE }); return location.pathname + location.search + (s.sel ? "#" + s.sel : r ? "#" + r : ""); }
@@ -4771,7 +4772,7 @@ function navApply(s, y) {
   try {
     if (!s.gs && !$("#gsearch").hidden) gsHide(); else if (s.gs && $("#gsearch").hidden) { $("#gsearch").hidden = false; gsRender(); }
     if (s.lt && s.lt !== W.lt) setLt(s.lt);
-    if (s.lt === "cong") W.cv = s.cv || "home"; if (s.lt === "tools") W.tv = s.tv || "sum";
+    if (s.lt === "cong") W.cv = s.cv || "home"; if (s.lt === "tools") W.tv = s.tv || "today";
     if (s.lt === "ind" && W.indS) { W.indS.open = s.io || null; if (s.iv) W.indS.view = s.iv; }
     if (s.lt === "after" && s.af) { W.afView = s.af; store.set("watch:af", s.af); }
     if (s.lt === "money" && W.mf && s.mv && s.mv !== "replay") { W.mf.view = s.mv; if (s.ms) W.mf.sec = s.ms; }

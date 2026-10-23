@@ -77,3 +77,20 @@ test("外層浮動返回：看盤、情報局不疊，學堂裡照常 390", asyn
   assert.equal(await p.evaluate(() => document.documentElement.classList.contains("fab-quiet")), false, "停下來就回來");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+for (const width of [390, 1280]) test(`今日重點、早報、每日摘要整成一頁；今日重點卡「看完整」直接過去 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  assert.deepEqual(await p.evaluate(() => TOOLS_VIEWS.filter(x => ["today", "brief", "sum"].includes(x[0])).map(x => x[1])), ["今日重點"], "工具裡只剩一個「今日重點」");
+  await p.evaluate(() => { W.td = { at: Date.now() }; W.hold = { 1234: { sh: 1000, cost: 50 } }; W.quotes.set("1234", { ...(W.quotes.get("1234") || {}), chgPct: -4.2 }); setLt("watch"); renderList(); });
+  await p.click('#todayCard [data-tdgo="brief"]'); await p.waitForTimeout(800);
+  assert.deepEqual(await p.evaluate(() => [W.lt, W.tv]), ["tools", "today"]);
+  const t = await p.textContent("#lx");
+  assert.match(t, /今日重點[\s\S]*重新整理[\s\S]*AI 整理[\s\S]*複製文字/);
+  assert.match(t, /盤前・昨晚美股與今天的行事曆/); assert.match(t, /(盤中|盤後)・大盤、自選與訊號[\s\S]*自選漲幅前 5[\s\S]*技術訊號/);
+  for (const k of ["tdre", "tdai", "tdtxt"]) assert.equal(await p.$$eval(`#lx [data-tx="${k}"]`, L => L.length), 1, `${k} 只有一個`);
+  assert.match(await p.evaluate(() => todayText()), /今日重點[\s\S]*【盤勢與自選】[\s\S]*不是買賣建議/, "複製的文字包含早報和盤勢兩部分");
+  // 舊的分頁記錄（早報、每日摘要）都帶到今日重點
+  for (const old of ["brief", "sum"]) { await p.evaluate(o => { W.tv = o; setLt("tools"); }, old); assert.equal(await p.evaluate(() => W.tv), "today"); }
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});

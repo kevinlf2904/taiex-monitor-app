@@ -34,7 +34,10 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   const t = await p.evaluate(() => $("#lx").innerText);
   for (const s of ["昨晚美股", "道瓊工業", "費城半導體", "台積電 ADR", "台指期", "夜盤 23,000", "除權息", "2330 除息 現金 4.5 元", "台積電先進封裝擴產", "今天要注意", "法說會"]) assert.ok(t.includes(s), `早報要有「${s}」`);
   assert.ok(t.indexOf("★ ") > 0 && t.indexOf("★ ") < t.indexOf("1101 除息"), "庫存的除權息排前面、有星號");
-  await p.click('[data-tx="bfai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
+  assert.equal(await p.evaluate(() => W.tv), "today", "舊的「早報」分頁帶到合併後的「今日重點」");
+  assert.match(t, /盤前・昨晚美股[\s\S]*(盤中|盤後)・大盤、自選與訊號|(盤中|盤後)・大盤、自選與訊號[\s\S]*盤前・昨晚美股/, "早報和每日摘要在同一頁");
+  assert.equal(await p.$$eval("#lx [data-tx='tdai']", L => L.length), 1, "AI 整理只有一個");
+  await p.click('[data-tx="tdai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
   assert.ok(await noOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
