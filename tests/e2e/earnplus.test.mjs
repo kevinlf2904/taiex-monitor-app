@@ -20,7 +20,7 @@ for (const width of [390, 1280]) test(`財報第二批：體質、股利預估�
   await p.route("**/api/company**", r => J(r, CO)); await p.route("**/api/stockinfo**", r => J(r, INFO));
   await p.route("**/api/oapi?earn=1", r => J(r, { ok: true, ym: "11509", yq: "115Q2", source: "測試", rows: [["2330", "台積電", "半導體業", "上市", 3300, 5.1, 36.2, 38.4, 15.2, 9300, 3980, 59.1, 49.5, 42.7]] }));
   await p.route("**/api/confai**", r => { if (r.request().method() === "POST") { posted.push(JSON.parse(r.request().postData())); return J(r, { ok: true, head: "AI 需求強勁，第四季營收再創新高", outlook: ["第四季營收 330 億美元", "毛利率 59%～61%"], margin: "毛利率優於預期", capex: "全年資本支出 420 億美元", demand: "AI 加速器需求強", risks: ["匯率"], quotes: ["We expect our business to be supported by strong demand"] }); }
-    return J(r, { ok: true, code: "2330", list: [{ date: "2026-10-16", time: "14:00", note: "公布第3季財報及第4季展望", file: "233020261016M001.pdf", en: "233020261016E001.pdf" }, { date: "2026-09-14", time: "08:00", note: "UBS 論壇", file: null, en: null }] }); });
+    return J(r, { ok: true, code: "2330", list: [{ date: "2099-01-20", time: "15:00", note: "下一季法說會", file: null, en: null }, { date: "2026-10-16", time: "14:00", note: "公布第3季財報及第4季展望", file: "233020261016M001.pdf", en: "233020261016E001.pdf" }, { date: "2026-09-14", time: "08:00", note: "UBS 論壇", file: null, en: null }] }); });
   await p.click('#lTabs [data-l="earn"]'); await p.click('[data-erv="eps"]'); await p.click('.erlist button[data-ertr="2330"]');
   await p.waitForSelector('.ertr [data-frco="2330"]'); await p.click('.ertr [data-frco="2330"]');
   await p.waitForFunction(() => /股利預估/.test(document.querySelector(".ertr")?.innerText || ""));
@@ -28,11 +28,10 @@ for (const width of [390, 1280]) test(`財報第二批：體質、股利預估�
   assert.match(t, /存貨年增\s*⚠︎ \+50\.0%[\s\S]*存貨堆得比營收快/, "存貨比營收長得快要提醒");
   assert.match(t, /自由現金流（近 8 季）/); assert.match(t, /存貨週轉天數/);
   assert.match(t, /預估全年現金股利\s*17\.31 元/, "近四季 EPS 53.6 × 平均配息率 32.3%"); assert.match(t, /常在幾月除息\s*6 月/);
-  // 法說會
-  await p.click('.ertr [data-epconf="2330"]'); await p.waitForSelector('.ertr [data-epsum]');
-  assert.match(await p.textContent(".ertr"), /10\/16 公布第3季財報及第4季展望/);
+  // 法說會：不用按，展開就自動找法說會、自動請 AI 讀最近一次（已經開過的）簡報；還沒開的列成「下一場」
+  await p.waitForSelector(".ertr .epsum", { timeout: 15000 });
+  assert.match(await p.textContent(".ertr"), /10\/16 公布第3季財報及第4季展望/); assert.match(await p.textContent(".ertr"), /下一場：01\/20 15:00/);
   assert.equal(await p.getAttribute('.ertr .epconf a', "href"), "https://mopsov.twse.com.tw/nas/STR/233020261016M001.pdf");
-  await p.click('.ertr [data-epsum]'); await p.waitForSelector(".ertr .epsum");
   assert.match(await p.textContent(".ertr .epsum"), /AI 需求強勁[\s\S]*展望與指引[\s\S]*330 億美元[\s\S]*資本支出[\s\S]*簡報原文/);
   assert.deepEqual(posted.map(x => [x.code, x.file]), [["2330", "233020261016M001.pdf"]]);
   // 公布前後股價習慣

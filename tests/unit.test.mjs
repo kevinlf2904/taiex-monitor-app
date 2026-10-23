@@ -445,6 +445,7 @@ test("財報進階排程：月營收連續年增與創新高、營益分析換�
   const C = await import("../api/_lib/confai.js"), td = (...c) => `<tr class='even'>${c.map(x => `<td>${x}</td>`).join("")}</tr>`, a = f => `<a href='#' onclick='document.fm_fileDownload.fileName.value="${f}";document.fm_fileDownload.submit();'>${f}</a>`;
   const cf = C.parseConfRows(`<table>${td("2330", "台積電", "115/07/16", "14:00", "台北", "公布第2季財報及第3季展望", a("233020260716M001.pdf"), a("233020260716E001.pdf"), "", "")}${td("2317", "鴻海", "115/07/20", "", "", "", "", "", "", "")}</table>`, "2330");
   assert.deepEqual(cf, [{ date: "2026-07-16", time: "14:00", note: "公布第2季財報及第3季展望", file: "233020260716M001.pdf", en: "233020260716E001.pdf" }]);
+  assert.equal(C.parseConfRows(`<table>${td("2454", "聯發科", "115/10/30", "15:00", "", "&#8206;(1) 公布第3季財報 &amp; 展望 &#8206;", "", "", "", "")}</table>`, "2454")[0].note, "(1) 公布第3季財報 & 展望", "觀測站夾的 &#8206; 要拿掉");
   assert.ok(C.okFile("2330", "233020260716M001.pdf")); assert.ok(!C.okFile("2330", "../../etc/passwd")); assert.ok(!C.okFile("2330", "231720260716M001.pdf"), "只能讀自己公司的簡報");
   assert.equal(C.parseConfSum('{"head":"AI 需求強","outlook":["Q3 營收 300 億美元"],"risks":[1,"匯率"]}').risks.join(), "匯率");
   assert.equal(U.guideOf(["Apple stock rises 2%"]).g, null, "沒提財測的標題不算");

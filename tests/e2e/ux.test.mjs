@@ -103,12 +103,13 @@ test("畫線練習：點在低點附近會吸到 K 棒低點、畫好後提示�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
-test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，三組可切換並記住；點圓點看資訊、換到中心", async () => {
+test("產業網絡星系：手機預設窗格在圖下方＋原子軌道＋弧線，樣式收合、三組可切換並記住；點圓點看資訊、連到的產業標名稱、換到中心", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.emulateMedia({ reducedMotion: "reduce" }); // 不自轉，量位置和點擊時圓點才不會動
   await p.evaluate(() => { setLt("ind"); W.indS.view = "network"; W.indS.nstyle = null; W.indS.focus = null; W.indS.gxo = null; renderList(); });
   await p.waitForSelector("canvas.igalaxy"); await p.waitForTimeout(1500); // 等報價載完重畫
-  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('[data-gxo][aria-pressed="true"]')].map(b => b.dataset.gxo)), ["tip:A", "lay:B", "line:B"]);
+  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('[data-gxo][aria-pressed="true"]')].map(b => b.dataset.gxo)), ["tip:B", "lay:B", "line:B"]);
+  assert.equal(await p.evaluate(() => document.querySelector("[data-gxopen]").open), false, "樣式選項預設收起來");
   // 上游在中心上方、下游在下方
   const dir = await p.evaluate(() => { const S = W.gxS, y = id => S.screen[id].y, c = y(S.core), up = S.links.filter(l => l[1] === S.core).map(l => l[0]), dn = S.links.filter(l => l[0] === S.core).map(l => l[1]);
     return { n: up.length + dn.length, bad: [...up.filter(id => y(id) >= c), ...dn.filter(id => y(id) <= c)], hits: S.hits.length, ids: S.ids.length }; });
@@ -126,6 +127,10 @@ test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，�
   const b2 = await p.locator(".gstage").boundingBox(); await p.touchscreen.tap(b2.x + h.x, b2.y + h.y);
   await p.waitForSelector(".gcard:not([hidden])"); assert.match(await p.textContent(".gcard"), /上游|下游|相關/);
   await p.waitForFunction(id => W.gxS.labIds?.includes(id), h.id, { timeout: 3000 }); // 名稱在下一個畫面才畫上去
+  // 窗格在星系圖下方，不蓋住任何星球；點到的題材連到的產業都標上名稱（放得下的話）
+  assert.ok(await p.evaluate(() => document.querySelector(".gcard").getBoundingClientRect().top >= document.querySelector(".igalaxy").getBoundingClientRect().bottom - 1), "窗格在畫布下方");
+  const nb = await p.evaluate(id => { const S = W.gxS, L = [...S.adj.get(id)]; return { n: L.length, lab: L.filter(x => S.labIds.includes(x)).length }; }, h.id);
+  assert.ok(nb.n === 0 || nb.lab >= Math.min(nb.n, 2), `連到的產業要標名稱：${JSON.stringify(nb)}`);
   // 縮放：按鈕放大、回到 100%；Ctrl／⌘＋滾輪也能縮放
   await p.click('[data-gxz="+"]'); assert.ok(Math.abs((await p.evaluate(() => W.gx.zoom)) - 1.3) < 0.01); assert.equal(await p.textContent(".gzv"), "130%");
   await p.click('[data-gxz="0"]'); assert.equal(await p.evaluate(() => W.gx.zoom), 1);
@@ -149,8 +154,9 @@ test("產業網絡星系：預設窗格跟著圓點＋原子軌道＋弧線，�
   await p.click('[data-gxz="0"]');
   await p.click(".gcard [data-ifocus]"); await p.waitForFunction(id => W.gxS?.core === id, h.id);
   // 三組樣式都能切換，並記在瀏覽器
-  for (const k of ["tip:B", "lay:A", "lay:C", "line:A", "line:C"]) { await p.click(`[data-gxo="${k}"]`); await p.waitForTimeout(80); }
-  assert.deepEqual(await p.evaluate(() => store.get("watch:inds").gxo), { tip: "B", lay: "C", line: "C" });
+  await p.click("[data-gxopen] > summary"); await p.waitForFunction(() => store.get("watch:gxopen") === true); // toggle 事件是非同步的
+  for (const k of ["tip:A", "lay:A", "lay:C", "line:A", "line:C"]) { await p.click(`[data-gxo="${k}"]`); await p.waitForTimeout(80); }
+  assert.deepEqual(await p.evaluate(() => store.get("watch:inds").gxo), { tip: "A", lay: "C", line: "C" });
   await p.click('[data-instyle="layer"]'); await p.waitForSelector(".inetwrap .inode2");
   assert.equal(await p.evaluate(() => store.get("watch:inds").nstyle), "layer");
   // 分層：直式（手機不會橫向捲動），點題材聚焦，只畫它的上下游連線，再點一次取消
