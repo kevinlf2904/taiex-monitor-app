@@ -276,7 +276,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
             <div class="chips" role="group" aria-label="真實年化率的期間" id="realchips">
               <button type="button" class="chip" data-ry="3">近 3 年</button><button type="button" class="chip" data-ry="5">近 5 年</button><button type="button" class="chip" data-ry="10">近 10 年</button><button type="button" class="chip" data-ry="max">上市以來</button>
             </div><span class="hint">資料不夠長時改用上市以來的全部資料並標示實際年數；不到 3 年的不套用。</span></div>
-          <label class="toggle"><input type="checkbox" id="real-crash" checked> 「崩盤 %」也改成同期間的歷史最大跌幅</label>
+          <label class="toggle"><input type="checkbox" id="real-crash" checked> 「崩��� %」也改成同期間的歷史最大跌幅</label>
           <div class="btnrow"><button type="button" class="btn" id="real-all">全部標的抓真實年化</button><button type="button" class="btn ghost" id="real-main">只抓主要標的</button><button type="button" class="btn ghost" id="real-clear" title="清除標示，數字保留">清除標示</button></div>
           <div id="real-list" class="real-list" aria-live="polite"></div>
         </div>
@@ -309,7 +309,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
       </details>
 
       <details open>
-        <summary>借款結構（C）<small id="sum-l"></small></summary>
+        <summary>借款���構（C）<small id="sum-l"></small></summary>
         <div class="gbody">
           <div class="field"><div class="top"><label for="credit">信貸金額</label></div><input type="range" id="credit" min="0" max="5000000" step="10000" value="1000000" data-scale="10000" data-unit="萬"></div>
           <div class="field"><div class="top"><label for="crate">信貸利率</label></div><input type="range" id="crate" min="0" max="15" step="0.1" value="3" data-unit="%"></div>
@@ -353,7 +353,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
           <thead><tr><th class="l">做法</th><th>總投入</th><th>期末淨值</th><th>獲利</th><th>年化（IRR）</th><th title="途中淨值低於累計投入最多的時候">最大帳面虧損</th><th>達到目標</th><th class="l">途中發生</th></tr></thead>
           <tbody id="ledger"></tbody>
         </table></div>
-        <p class="hint" style="margin:0">年化（IRR）是你這筆錢實際的報酬率，扣掉借款成本、把每月投入的時間點算進去。不借錢的做法在「每年照年化」時，IRR 會等於你填的年化；槓桿版會高於或低於它，取決於借款利率和有沒有被追繳。</p>
+        <p class="hint" style="margin:0">年化（IRR）是你這筆錢實際的報酬率，扣掉借款成本、把每月投入的時間點算進去。不借錢的做法在「���年照年化」時，IRR 會等於你填的年化；槓桿版會高於或低於它，取決於借款利率和有沒有被追繳。</p>
       </section>
 
       <section class="sec" id="sec-chart">
@@ -936,5 +936,6 @@ if(_added){try{$("g-asset").value=G.main}catch(e){}save();try{history.replaceSta
 </script>
 <script src="savings-x.js"></script>
 <p style="max-width:1100px;margin:18px auto 24px;padding:0 16px;font-size:11.5px;line-height:1.6;color:var(--muted,#a1a1aa)">KLineLab K線情報局・本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>
+<script type="module" src="analytics-init.js"></script>
 </body>
 </html>

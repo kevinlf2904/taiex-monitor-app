@@ -90,7 +90,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
   .top-inner { flex-wrap: nowrap; }
   #progChip .pt { display: none; }
   #progChip .prog-bar { width: 36px; }
-  /* 問問題改成圓形圖示按鈕，少擋一點內容 */
+  /* 問問題改��圓形圖示按鈕，少擋一點內容 */
   .chat-fab { width: 52px; height: 52px; padding: 0; justify-content: center; }
   .chat-fab span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .chat-fab svg { width: 24px; height: 24px; }
@@ -592,7 +592,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <div class="hero-in"><div class="hero-txt">
       <p class="hero-k">KLineLab・K線情報局</p>
       <h2 class="hero-h">把複雜的台美股機構籌碼，<br>化為一目了然的突破訊號。</h2>
-      <p class="hero-p">SEC 13F 機構大戶、美國國會議員申報、台股內部人與供應鏈量價動能矩陣，加上 K 線型態辨識與歷史回測——全部來自政府公開資料，由程式自動計算，給你一個量化研究終端機。</p>
+      <p class="hero-p">SEC 13F 機構大戶、美國國會議員申報、台股內部人與供���鏈量價動能矩陣，加上 K 線型態辨識與歷史回測——全部來自政府公開資料，由程式自動計算，給你一個量化研究終端機。</p>
       <div class="hero-cta"><a class="hero-btn pri" href="pro.html">公開測試版 (Beta)・收更新通知</a><button type="button" class="hero-btn" data-hero-go="intel">進入情報局 →</button></div>
     </div>
       <div class="hero-viz" aria-hidden="true"><svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="hvg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#a1a1aa" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity=".9"/></linearGradient></defs>
@@ -773,7 +773,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
       </form>
       <div class="row real-quick" id="realQuick"><span class="note">常用：</span><button class="ichip" data-code="加權">加權指數</button><button class="ichip" data-code="2330">2330 台積電</button><button class="ichip" data-code="2317">2317 鴻海</button><button class="ichip" data-code="2454">2454 聯發科</button><button class="ichip" data-code="0050">0050</button></div>
       <div class="row note"><label class="btn" for="realCsv">匯入 CSV</label><input type="file" id="realCsv" accept=".csv,text/csv,text/plain" multiple hidden><span>沒有網路資料服務時：到證交所「個股日成交資訊」下載 CSV（可一次選多個月），或匯入 Yahoo 財經、看盤軟體匯出的日 K。</span></div>
-      <p class="note real-status" id="realNote">資料來源：證交所、櫃買中心（日 K 每天收盤後更新），找不到時改用 Yahoo Finance；盤中會用證交所即時報價更新今天這根 K 棒。</p>
+      <p class="note real-status" id="realNote">資料來源：證交所、櫃���中心（日 K 每天收盤後更新），找不到時改用 Yahoo Finance；盤中會用證交所即時報價更新今天這根 K 棒。</p>
       <div class="live-bar" id="liveBar" hidden>
         <div class="live-main"><span class="live-dot" id="liveDot" aria-hidden="true"></span><strong id="liveName"></strong><span class="live-px num" id="livePx"></span><span class="num" id="liveChg"></span><span class="note" id="liveMeta"></span></div>
         <div class="row live-ctl"><button type="button" class="btn sm" id="livePause">暫停即時</button><a class="btn sm" id="liveWatch" href="watch.html">到看盤看這檔</a><details class="live-book"><summary>五檔</summary><div id="liveBook"></div></details></div>
@@ -1162,7 +1162,7 @@ const LESSONS = [
     id: "patterns-rev", title: "反轉型態：多空換手的瞬間", tag: "型態", seed: 1106, n: 160,
     gallery: ["hammer", "hanging", "invHammer", "shooting", "doji", "bullEngulf", "bearEngulf", "bullHarami", "bearHarami", "piercing", "darkCloud", "morningStar", "eveningStar"],
     body: `<p>單根 K 棒只反映一天的力量。把兩三根放在一起看，才看得出多空換手的過程。反轉型態要出現在<strong>一段明顯的漲勢或跌勢之後</strong>才有意義；在盤整區間中間出現，多半只是雜訊。</p>
-<p>下面每張卡片的淡色 K 棒是型態出現前的走勢，深色才是型態本身。點一下卡片，圖上就只標出那一種型態。</p>`,
+<p>下面每張卡片的淡色 K 棒是型態出現前的走勢，深色才是型態本身。點一下卡���，圖上就只標出那一種型態。</p>`,
     after: `<p>判讀時注意三件事：</p>
 <ul>
 <li><strong>位置</strong>：底部型態要出現在跌深之後、靠近支撐；頂部型態要在漲多之後、靠近壓力。</li>
@@ -1204,7 +1204,7 @@ const LESSONS = [
     keys: ["均線是落後指標：它告訴你已經發生的趨勢，不是預測未來。", "盤整時均線反覆交叉，訊號容易來回被巴（假訊號）。", "週期越短越靈敏、但雜訊越多；越長越穩、但反應越慢。"],
   },
   {
-    id: "vol", title: "成交量：價格的力道從哪裡來", tag: "量能", seed: 37, n: 150,
+    id: "vol", title: "成交量：價格的��道從哪裡來", tag: "量能", seed: 37, n: 150,
     body: `<p>成交量是當天成交的股數，台股以<strong>張</strong>計（1 張 = 1,000 股）。量代表參與的人數與資金，是判斷走勢「有沒有力」的依據。</p>
 <table><thead><tr><th>情境</th><th>常見解讀</th></tr></thead><tbody>
 <tr><td class="up">價漲量增</td><td>買盤積極追價，上漲較健康</td></tr>
@@ -1284,7 +1284,7 @@ VWAP = Σ(典型價 × 成交量) ÷ Σ成交量</div>
 <ul>
 <li><strong>分 K（當日）</strong>：從開盤累計到現在，每天重新計算，就是看盤軟體分時圖上的「均價線」。法人常用它衡量今天買得好不好：買在 VWAP 之下＝比市場平均便宜。</li>
 <li><strong>日 K</strong>：這裡用最近 20 根滾動計算（20 期 VWAP），可以想成「近一個月的量價平均成本」。</li>
-<li>價格在 VWAP 之上，代表近期買進的人平均是賺錢的，多方佔優；跌破 VWAP，近期買進的人平均套牢，上方容易有解套賣壓。</li>
+<li>價格在 VWAP 之上，代表近期買進的人平均是賺錢的，多方佔優；跌破 VWAP，近期買進的人平均套牢，上方容易有解套��壓。</li>
 </ul>`,
     chart: { ma: [20], vwap: true, markers: (D, I) => Signals.vwap(D, I) },
     try: "把 VWAP 和 MA20 比一比：成交量突然放大的那幾天，VWAP 會被拉向那幾天的價格，MA20 卻不會。看看站上、跌破 VWAP 之後的走勢。",
@@ -1363,7 +1363,7 @@ VWAP = Σ(典型價 × 成交量) ÷ Σ成交量</div>
     gallery: ["hsTop", "hsBottom", "dTop", "dBottom", "ascTri", "descTri", "symTri", "box"], galleryKind: "chart",
     body: `<p>K 線型態看的是幾天內的多空換手；<strong>型態學</strong>則是把幾週到幾個月的走勢當成一張圖，找出市場反覆出現的形狀。型態由轉折高低點組成，最重要的一條線叫<strong>頸線</strong>：收盤跌破（或突破）頸線，型態才算完成。</p>
 <p>點選卡片，圖上只標出那種型態，並畫出轉折點（實線）、頸線或趨勢線（虛線）與測量目標。</p>`,
-    after: `<p><strong>測量幅度</strong>：型態完成後的最小目標，通常是把型態的高度從突破點再量一次。</p>
+    after: `<p><strong>測量幅度</strong>：型態完成後的最小目��，通常是把型態的高度從突破點再量一次。</p>
 <div class="formula">M 頭目標 ≈ 頸線 −（高點 − 頸線）
 W 底目標 ≈ 頸線 +（頸線 − 低點）</div>
 <table><thead><tr><th>型態</th><th>性質</th><th>判讀重點</th></tr></thead><tbody>
@@ -1374,7 +1374,7 @@ W 底目標 ≈ 頸線 +（頸線 − 低點）</div>
 <tr><td>箱型</td><td>整理</td><td>上緣壓力、下緣支撐，突破後常走出約一個箱高</td></tr>
 <tr><td>旗形 / 楔形</td><td>持續</td><td>急漲急跌後的短暫整理（本工具不自動偵測）</td></tr>
 </tbody></table>
-<p>最常見的失敗是<strong>假突破</strong>：突破後很快又回到型態裡。很多人會等價格回測頸線不破再進場。</p>`,
+<p>最常見的失敗���<strong>假突破</strong>：突破後很快又回到型態裡。很多人會等價格回測頸線不破再進場。</p>`,
     chart: { ma: [20] },
     try: "點「M 頭」或「頭肩頂」，看跌破頸線之後價格有沒有走到虛線標示的目標；再按「換一段走勢」比較成功與失敗的例子。",
     keys: ["型態要「完成」才算數：還沒跌破頸線的 M 頭只是兩個高點。", "量能是型態的確認：底部突破要有量，頭部常見右邊量縮。", "目標價只是參考距離，不保證會到，也可能一下就超過。"],
@@ -1540,7 +1540,7 @@ ${smcObSVG}
 <li><strong>停損</strong>：放在訂單塊另一側之外（多方訂單塊的下緣之下）。</li>
 <li><strong>失效</strong>：收盤直接穿過整個訂單塊，它就失效了；原本的多方訂單塊常反過來變成壓力，稱為<strong>突破塊</strong>（Breaker Block）。</li>
 </ul>`,
-    after: `<p>圖上的實線框是訂單塊（紅色多方、綠色空方），從那根 K 棒延伸到價格第一次回到框內為止。對照結構突破的標記，可以看到每個訂單塊後面都跟著一次 BOS 或 CHoCH。</p>`,
+    after: `<p>圖上的實線框是訂單塊（紅色多方、綠色空方），從那根 K 棒延伸到價格第一次回到框內為止。對照結構突破的標記，��以看到每個訂單塊後面都跟著一次 BOS 或 CHoCH。</p>`,
     chart: { ma: [], markers: (D, I) => Signals.structure(D, I, "smc"), extra: D => ({ zones: smcZones(D, marketStructure(D)).filter(z => z.kind === "OB") }) },
     try: "看每個訂單塊被第一次回測時，價格有沒有在框裡止跌；再找一個被收盤直接穿過的訂單塊，觀察它之後有沒有變成反方向的壓力或支撐。",
     keys: ["訂單塊＝造成結構突破的那段急漲（急跌）之前，最後一根反向 K 棒。", "第一次回測最有效，停損放在訂單塊外側。", "順著結構使用：上升結構只用多方訂單塊。"],
@@ -1594,7 +1594,7 @@ ${smcPdSVG}
 <table><thead><tr><th>法人</th><th>是誰</th><th>特性</th></tr></thead><tbody>
 <tr><td>外資</td><td>外國的基金、銀行、避險基金</td><td>資金最大，偏好權值股（台積電、聯發科…）；看中長線，也受匯率與國際股市影響。連續大買或大賣常帶動大盤方向。</td></tr>
 <tr><td>投信</td><td>國內的基金公司（共同基金、ETF）</td><td>資金比外資小，偏好中小型成長股；一旦開始買常會連續買好幾天，季底前常見「作帳」拉抬持股。</td></tr>
-<tr><td>自營商</td><td>證券公司自己的部位</td><td>分「自行買賣」與「避險」（發行權證後的避險買賣），進出快、偏短線，參考性最低。</td></tr>
+<tr><td>自營商</td><td>證券公司自己的部位</td><td>分「自行買賣」與「避險」（發行權證後的避險買賣��，進出快、偏短線，參考性最低。</td></tr>
 </tbody></table>
 <div class="formula">買賣超 = 買進張數 − 賣出張數（正數是買超、負數是賣超；1 張 = 1000 股）</div>
 <h3>常用的看法</h3>
@@ -1665,13 +1665,13 @@ EPS = 歸屬母公司業主的稅後淨利 ÷ 加權平均流通在外股數</di
     id: "fund-val", title: "基本面（二）：本益比、淨值比與殖利率", tag: "基本面", seed: 7633, n: 240,
     body: `<p>公司賺錢不代表股票便宜。<strong>估值</strong>回答的是：用現在的價格買，划不划算？</p>
 <table><thead><tr><th>指標</th><th>公式</th><th>適合</th></tr></thead><tbody>
-<tr><td>本益比 PE</td><td>股價 ÷ 近四季 EPS</td><td>獲利穩定的公司。代表「用幾年的獲利回本」</td></tr>
+<tr><td>本益比 PE</td><td>股價 ÷ 近四季 EPS</td><td>獲利穩��的公司。代表「用幾年的獲利回本」</td></tr>
 <tr><td>股價淨值比 PB</td><td>股價 ÷ 每股淨值</td><td>金融股、景氣循環股（獲利波動大，本益比失真）</td></tr>
 <tr><td>殖利率</td><td>現金股利 ÷ 股價</td><td>存股、高股息族群</td></tr>
 </tbody></table>
 <p>例：股價 300 元、近四季 EPS 20 元 → 本益比 15 倍；每年配 10 元現金股利 → 殖利率 3.3%。</p>
 <h3>本益比河流圖</h3>
-<p>把「近四季 EPS × 不同倍數」畫成幾條線，例如 10、13、16、19、22 倍，股價在河流裡的位置就是它現在的評價高低：靠近下緣代表相對便宜，靠近上緣代表相對昂貴。要和<strong>這檔股票自己的歷史</strong>比，不同產業的合理本益比差很多。</p>
+<p>把「近四季 EPS × 不同倍數」畫成幾條線，例如 10、13、16、19、22 ��，股價在河流裡的位置就是它現在的評價高低：靠近下緣代表相對便宜，靠近上緣代表相對昂貴。要和<strong>這檔股票自己的歷史</strong>比，不同產業的合理本益比差很多。</p>
 <h3>陷阱</h3>
 <ul>
 <li><strong>景氣循環股</strong>（航運、鋼鐵、面板、記憶體）：獲利最好、本益比最低的時候，往往是股價高點；本益比很高（甚至虧損）的時候反而是低點。這類股票改看股價淨值比。</li>
@@ -1777,7 +1777,7 @@ const LESSON_DEEP = {
 <p>跳空缺口則代表「急」：買方（或賣方）急到不願意在昨天的價格成交。缺口沒被回補，代表那股急迫還在；被回補，代表急迫已經消失。</p>
 <h4>實戰判讀步驟</h4>
 <ol>
-<li>確認<strong>原本的趨勢方向</strong>（例如均線向上）。</li>
+<li>確認<strong>原本的趨勢方向</strong>（例如均線向���）。</li>
 <li>觀察整理期間的<strong>量是否萎縮</strong>：健康的休息通常量縮。</li>
 <li>標出整理區的<strong>上下緣</strong>。</li>
 <li>等<strong>帶量突破</strong>整理區、方向與原趨勢一致。</li>
@@ -1956,7 +1956,7 @@ K 棒：開高走低（長上影線）</div>
 <h4>實戰判讀步驟</h4>
 <ol>
 <li>找出<strong>多次被測試</strong>的高點或低點（碰到兩三次以上）。</li>
-<li>標出<strong>大量成交的價格區</strong>：大量區通常是強支撐或強壓力。</li>
+<li>標出<strong>大量成交的價格區</strong>：大量區通常是���支撐或強壓力。</li>
 <li>加上<strong>整數關卡</strong>（100、500、1000 元）與前高前低。</li>
 <li>把支撐壓力當成「區間」而不是一條線，通常有 1～2% 的寬度。</li>
 <li>觀察價格在區間的反應：有效跌破要看收盤，最好連續兩天。</li>
@@ -2074,7 +2074,7 @@ D = 35 × 2/3 + 53.3 × 1/3 ≈ 41.1</div>
 <p>解讀：K 從 40 升到 53，高於 D，維持多方。但交叉位置在中間區域，不是低檔交叉，訊號力道普通。若月線也向上，可以視為順勢的動能延續；若隔天收盤跌到 51.5 元以下（9 日高低不變）讓 K 再跌破 D，這次交叉就失效。</p>`,
 
   wr: `<h4>原理拆解</h4>
-<p>威廉指標 %R 衡量今天收盤價離最近 14 天<strong>最高價</strong>有多遠。收在最高價時 %R = 0，收在最低價時 %R = −100。它和 KD 的 RSV 幾乎是同一件事，只是方向倒過來、而且沒有平滑，所以反應更快、更敏感。</p>
+<p>威廉指標 %R 衡量今天收盤價���最近 14 天<strong>最高價</strong>有多遠。收在最高價時 %R = 0，收在最低價時 %R = −100。它和 KD 的 RSV 幾乎是同一件事，只是方向倒過來、而且沒有平滑，所以反應更快、更敏感。</p>
 <h4>實戰判讀步驟</h4>
 <ol>
 <li>確認你的看盤軟體是 <strong>−100～0</strong> 還是 <strong>0～100（去掉負號）</strong>的畫法，兩者的超買超賣方向相反。</li>
@@ -2187,7 +2187,7 @@ DIF &gt; 0 且由下穿上 MACD → 零軸上方金叉</div>
 <div class="formula">價格高點：88 → 92（更高）
 RSI 高點：76 → 68（更低）
 → 頂背離，確認線 = 82 元</div>
-<p>解讀：背離只是警訊。若收盤跌破 82 元，價格結構也轉弱，警訊才得到確認。若價格繼續創高、RSI 也跟著創高，背離就被化解了。</p>`,
+<p>解讀：背離只是警訊。若收盤跌破 82 元，價格結構也轉弱，警訊才得到確認。��價格繼續創高、RSI 也跟著創高，背離就被化解了。</p>`,
 
   "div-hidden": `<h4>原理拆解</h4>
 <p>隱藏背離是<strong>順勢</strong>的訊號。上升趨勢中回檔，價格的低點比前一個低點高（結構仍是多頭），但指標的低點卻比前一次更低。意思是：這次回檔時賣壓「看起來」很重、指標跌得很深，價格卻守住了更高的低點，代表下方買盤強，回檔可能已經結束。</p>
@@ -2216,7 +2216,7 @@ RSI 高點：76 → 68（更低）
 <div class="formula">價格低點：45 → 48（更高）
 RSI 低點：38 → 33（更低）
 → 隱藏底背離，失效點 = 48 元</div>
-<p>解讀：價格守住更高的低點，指標卻顯示賣壓很重，偏向回檔結束、上升趨勢延續。若之後收盤跌破 48 元，高點低點墊高的結構被破壞，訊號失效。</p>`,
+<p>解讀：價格守住更高的低點，指標卻顯示���壓很重，偏向回檔結束、上升趨勢延續。若之後收盤跌破 48 元，高點低點墊高的結構被破壞，訊號失效。</p>`,
 
   risk: `<h4>原理拆解</h4>
 <p>技術分析能提高的只是「勝率」或「賺賠比」的一點點優勢，不可能每次都對。決定長期結果的，是<strong>錯的時候賠多少、對的時候賺多少</strong>。只要每次虧損都被控制在小範圍，即使勝率只有 40%，賺賠比 2:1 仍然可以長期打平以上。</p>
@@ -2437,11 +2437,11 @@ OTE 區 ≈ 212.8 ～ 222.9（和訂單塊重疊）</div>
 <p>解讀：投信持續布局、股價同步上漲，籌碼面與價格一致。之後要觀察投信是否轉為連續賣超；若投信開始連賣、股價跌破這段上漲的起漲區（約 80 元），代表布局行情可能結束。</p>`,
 
   "chips-margin": `<h4>原理拆解</h4>
-<p>融資是散戶向券商借錢買股票，融券是借股票來賣。融資餘額增加代表散戶看好並加槓桿；但散戶的持股比較不穩定，跌的時候容易恐慌賣出，甚至被追繳斷頭。所以「價漲資減」被視為籌碼安定（散戶在賣、法人或大戶接手），「價漲資增」則代表散戶追價、籌碼凌亂。</p>
+<p>融資是散戶向券商借錢買股票，融券是借股票來賣。融資餘額增加代表散戶看好並加槓桿；但散戶的持股比較不穩定，跌的時候容易恐慌賣出，甚至被追繳斷頭。所以「價漲資減」被視為籌碼安���（散戶在賣、法人或大戶接手），「價漲資增」則代表散戶追價、籌碼凌亂。</p>
 <p>融券增加代表有人看空；但融券最後必須買回，如果股價上漲，空方被迫回補，反而推升股價（軋空）。</p>
 <h4>實戰判讀步驟</h4>
 <ol>
-<li>比較<strong>股價方向</strong>與<strong>融資餘額方向</strong>。</li>
+<li>比較<strong>股價方向</strong>���<strong>融資餘額方向</strong>。</li>
 <li>計算<strong>融資使用率</strong>：越高代表散戶槓桿越重。</li>
 <li>觀察<strong>券資比</strong>：融券 ÷ 融資，偏高時有軋空的可能。</li>
 <li>大跌時融資大減，代表斷頭賣壓釋放，常接近短期低點。</li>
@@ -2794,7 +2794,7 @@ function renderBT(sigs) {
         lab.qa[ak] = { ctx: () => `${labUsesReal() ? realName(REAL.cur) + " 的真實日 K" : "程式模擬的走勢"}（${lab.D.length} 根）的回測結果：\n` + btReportText(M, B, V, S.name), q: "請只根據上面的回測數字做風險報酬分析：1) 這個策略的優勢與弱點 2) 哪些行情會讓它失效 3) 3 項降低風險的改善方法 4) 2 種不增加風險、提高報酬的方法，盡量引用「試算」裡的數字。用繁體中文、條列，不要給買賣建議。" };
         rep = btReportHtml(r, M, B, V, { D: lab.D, ai: { key: ak, R: lab.ai[ak] } }); }
       html += `<details class="bt-list" id="btRepD"${lab.repOpen ? " open" : ""}><summary>完整績效報告 <span class="note">年化、夏普、回撤、不同行情的表現、改善試算</span></summary>${rep}</details>`; }
-    // 訊號清單：可以一個一個勾選要不要照做
+    // 訊號清單：可���一個一個勾選要不要照做
     const list = sigs.filter(x => !x.note);
     if (list.length) html += `<details class="bt-list"${lab.listOpen ? " open" : ""}><summary>訊號清單（${nBuy} 個買進、${nSell} 個賣出）— 勾選要不要照做 <span class="note">已略過 ${list.filter(x => lab.skip.has(btKey(x))).length} 個</span></summary>
       <div class="row" style="gap:6px;margin:8px 0"><button type="button" class="btn sm" data-bt-all="1">全部勾選</button><button type="button" class="btn sm" data-bt-all="0">全部取消</button></div>
@@ -2870,7 +2870,7 @@ async function chalNew() {
       ch.D = rows.slice(a, a + len).map(x => ({ ...x, v: x.v || 0 })); ch.Dm = chalMasked(ch.D); ch.I = indicators(ch.D);
       ch.meta = { name: realName(j), source: j.source, from: ch.D[0].d, ask: ch.D[SHOW - 1].d, to: ch.D[len - 1].d };
       $("#chUp").disabled = $("#chDown").disabled = false;
-      $("#chNote").textContent = "真實歷史題：從熱門股過去一年的日K中隨機截一段，作答前不顯示股名和日期。看完答案再對照當時的指標。";
+      $("#chNote").textContent = "真實歷史題：從熱門股過去一年的��K中隨機截一段，作答前不顯示股名和日期。看完答案再對照當時的指標。";
     } catch (err) {
       if (tok !== ch.tok) return;
       $("#chNote").textContent = `${err?.message || "載入失敗"}　先改用模擬走勢出題。`;
@@ -2973,7 +2973,7 @@ const QUESTIONS = [
   { q: "依道氏理論，上升趨勢的定義是？", o: ["收盤價在月線之上", "高點與低點都一個比一個高", "連續三天收紅", "成交量持續放大"], a: 1, e: "道氏理論用轉折點定義趨勢：高點越來越高（HH）、低點也越來越高（HL）就是上升趨勢，直到出現明確的反轉訊號。" },
   { q: "道氏理論中，「指數必須互相確認」在台股常被怎麼應用？", o: ["只看加權指數就好", "拿加權指數對照櫃買指數或不同類股指數，看是否同步創高或破底", "比較美元與台幣", "比較開盤與收盤價"], a: 1, e: "原本是工業指數與運輸指數互相確認。兩個相關的指數同時創高（或破底），趨勢才算被確認。" },
   { q: "「外盤」成交代表什麼？", o: ["外資買進", "買方主動以委賣價成交", "賣方主動以委買價成交", "盤後交易"], a: 1, e: "外盤是買方等不及、直接用委賣價買進；內盤是賣方主動用委買價賣出。和外資無關。" },
-  { q: "某天外盤比高達 70%，但股價收在當天最低附近，比較合理的解讀是？", o: ["明天一定大漲", "外盤大代表一定有人在買，不用擔心", "要提防有人用對敲製造買氣、實際在出貨", "內外盤和股價完全無關"], a: 2, e: "外盤比高只表示主動買的量多。價格卻漲不上去，可能是上方有大量賣單，甚至是刻意對敲，要配合價格與量能判斷。" },
+  { q: "某天外盤比高達 70%，但股價收���當天最低附近，比較合理的解讀是？", o: ["明天一定大漲", "外盤大代表一定有人在買，不用擔心", "要提防有人用對敲製造買氣、實際在出貨", "內外盤和股價完全無關"], a: 2, e: "外盤比高只表示主動買的量多。價格卻漲不上去，可能是上方有大量賣單，甚至是刻意對敲，要配合價格與量能判斷。" },
   { q: "威廉指標 %R 為 −10，代表？", o: ["收盤接近 14 日最低價，超賣", "收盤接近 14 日最高價，超買區", "指標失效", "成交量放大"], a: 1, e: "%R 衡量收盤離 14 日最高價多遠。−20 以上代表收盤接近近期高點，是超買區；−80 以下是超賣區。" },
   { q: "某台股看盤軟體把威廉指標畫成 0～100、沒有負號，數值 85 代表？", o: ["超買", "超賣", "中性", "黃金交叉"], a: 1, e: "這種畫法是把 %R 的負號拿掉，數值越大代表收盤離高點越遠，所以 80 以上是超賣，和 KD 剛好相反。" },
   { q: "M 頭型態什麼時候才算「完成」？", o: ["出現第二個高點時", "收盤跌破兩個高點中間的低點（頸線）時", "成交量放大時", "KD 死亡交叉時"], a: 1, e: "沒有跌破頸線的 M 頭只是兩個高點。收盤跌破頸線，型態才完成；最小目標約是頸線往下再量一次高點到頸線的距離。" },
@@ -2996,7 +2996,7 @@ const QUESTIONS = [
   { q: "「過高破低」裡的「破低 K 棒」是指哪一根？", o: ["創當日新高的那根 K 棒", "跌破創高 K 棒低點的那根 K 棒", "當天最低點的那根 K 棒", "成交量最大的 K 棒"], a: 1, e: "先有創高 K 棒，之後跌破它低點的那根才是破低 K 棒；破低 K 棒的高點是之後的反彈壓力。" },
   { q: "「破低過高」出現後，哪個價位是之後回檔的支撐？", o: ["創低 K 棒的高點", "過高 K 棒的低點", "當天開盤價", "前一天收盤價"], a: 1, e: "過高 K 棒（突破創低 K 棒高點的那根）的低點，是之後回檔的支撐。" },
   { q: "123 法則（頭部）的第 3 點有什麼條件？", o: ["要比 1 點高", "要比 1 點低", "要等於 2 點", "要出現大量"], a: 1, e: "3 點是 2 之後的反彈高點，沒有超過 1 點代表不再創新高；之後跌破 2 點才確認反轉。" },
-  { q: "股價突破前高後，兩天內就收盤跌回前高之下，依 2B 法則是？", o: ["突破成功，加碼", "假突破，可能是頭部", "底部訊號", "沒有意義"], a: 1, e: "2B 法則：突破前高後很快收回前高之下是假突破，追高的人被套，常常是頭部。" },
+  { q: "股價突破前高後，兩天內就收盤跌回前高之下，依 2B 法則是？", o: ["突破成功，加碼", "假突破，可能是頭部", "底部訊號", "沒有意義"], a: 1, e: "2B 法則：突破��高後很快收回前高之下是假突破，追高的人被套，常常是頭部。" },
 ];
 let quiz = null;
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
@@ -3334,7 +3334,7 @@ function removeNonCandles(cm, W, H) {
     const full = ks.filter(isFull).length;
     // 兩個字：只清掉沒有貫穿欄的（K 棒一定有實體或影線從頂連到底）
     if (ks.length === 2) { if (!full && ks.some(k => multiRow(k) >= 0.2 && !hollowish(k)) && !ks.some(sibling)) ks.forEach(k => kill.add(k)); else return; }
-    else if (full > ks.length * 0.5) return; // 多數有貫穿的一欄：比較像一排 K 棒
+    else if (full > ks.length * 0.5) return; // 多數有貫穿的一欄：��較像一排 K 棒
     ks.forEach(k => kill.add(k));
     // 小數點、逗號這類小元件也一起清掉
     const gx0 = Math.min(...ks.map(k => comps[k].x0)), gx1 = Math.max(...ks.map(k => comps[k].x1)), gy0 = Math.min(...ks.map(k => comps[k].y0)), gy1 = Math.max(...ks.map(k => comps[k].y1));
@@ -4009,7 +4009,7 @@ REAL.long = new Map(); REAL.mins = new Map(); REAL.perBusy = false;
 const PER_NAME = { m: "分 K", D: "日 K", W: "週 K", M: "月 K" };
 const perName = () => (REAL.per === "m" ? `${REAL.minTf} 分 K` : PER_NAME[REAL.per]);
 const perOn = () => shot.src === "real" && REAL.per !== "D" && !!REAL.cur && (REAL.per !== "m" || !!liveCode());
-// 週 K、月 K 由日 K 合成（core.js 的 agg）
+// 週 K、月 K 由日 K 合成（core.js 的 agg��
 const aggPer = (D, per) => agg(D, per === "W" ? weekKey : d => d.slice(0, 7));
 function perData(R) {
   const per = shot.src === "real" ? REAL.per : "D", note = $("#perNote"); note.textContent = "";
@@ -4424,7 +4424,7 @@ function renderSimStats(sim, mode, days, bias) {
     ["收在現價之上", Math.round(sim.stats.up * 100) + "%"],
     ...(above ? [["碰到上方空方區塊", Math.round(sim.touch(above.bot, true) * 100) + "%"]] : []),
     ...(below ? [["跌到下方多方區塊", Math.round(sim.touch(below.top, false) * 100) + "%"]] : []),
-    ...((fl => fl && (fl.up ? fl.ret[4].price < c : fl.ret[4].price > c) ? [[`回到斐波那契 61.8%（${cal ? fmtP(fl.ret[4].price) : fmtPct(fl.ret[4].price / c - 1, 1)}）`, Math.round(sim.touch(fl.ret[4].price, !fl.up) * 100) + "%"]] : [])(fibLevels(D))),
+    ...((fl => fl && (fl.up ? fl.ret[4].price < c : fl.ret[4].price > c) ? [[`回到斐波那契 61.8%（${cal ? fmtP(fl.ret[4].price) : fmtPct(fl.ret[4].price / c - 1, 1)}��`, Math.round(sim.touch(fl.ret[4].price, !fl.up) * 100) + "%"]] : [])(fibLevels(D))),
     ...(cal && N.hi > c ? [[`再創圖上最高 ${fmtX(N.hi)}`, Math.round(sim.touch(N.hi, true) * 100) + "%"]] : []),
     ...(cal && N.lo && N.lo < c ? [[`跌破圖上最低 ${fmtX(N.lo)}`, Math.round(sim.touch(N.lo, false) * 100) + "%"]] : []),
   ];
@@ -4437,7 +4437,7 @@ function renderSimStats(sim, mode, days, bias) {
   else if (mode === "tech") { const it = sim.why.items || [], b = it.filter(x => x.b > 0).map(x => x.k), r = it.filter(x => x.b < 0).map(x => x.k); driftWhy = `最後一根的指標：偏多 ${b.length} 項（${b.join("、") || "無"}）、偏空 ${r.length} 項（${r.join("、") || "無"}），換算偏向 ${bias.toFixed(2)}，每天加上 ${pct(sim.drift, 3)}（累計約 ${pct(dd, 1)}）。`; }
   else { const ev = sim.why.ev; driftWhy = ev ? `最近一次結構事件是 ${n0 - 1 - ev.i} 根前的${ev.dir > 0 ? "向上" : "向下"} ${ev.kind}，所以偏向 ${bias > 0 ? "+" : ""}${bias.toFixed(1)}，每天加上 ${pct(sim.drift, 3)}（累計約 ${pct(dd, 1)}）。` : "找不到結構事件，所以不加方向。"; }
   const why = `<details class="sim-why" open><summary><strong>這個模擬參考了什麼？為什麼長這樣？</strong></summary><ol>
-    <li><strong>資料來源</strong>：${shot.src === "real" ? `只用 ${esc(realName(REAL.cur))} 最近 ${f.n} 根真實${perOn() ? perName() : "日 K"}（${perOn() && REAL.per === "m" ? REAL.mins.get(`${liveCode()}|${REAL.minTf}`)?.source || "" : REAL.cur.source}），起點是最後一${perOn() && REAL.per === "m" ? "根" : "天"}的收盤 ${fmtX(c)}` : `只用這張截圖重建出來的最近 ${f.n} 根 K 棒${realLast ? "，起點是你填的圖上收盤 " + fmtX(c) : ""}`}。沒有用到新聞、財報、籌碼或大盤。</li>
+    <li><strong>資料來源</strong>：${shot.src === "real" ? `只用 ${esc(realName(REAL.cur))} 最近 ${f.n} 根真實${perOn() ? perName() : "日 K"}（${perOn() && REAL.per === "m" ? REAL.mins.get(`${liveCode()}|${REAL.minTf}`)?.source || "" : REAL.cur.source}），起點是最後一${perOn() && REAL.per === "m" ? "根" : "天"}的收盤 ${fmtX(c)}` : `只用這張截圖重建出來的最近 ${f.n} 根 K 棒${realLast ? "，起點是你��的圖上收盤 " + fmtX(c) : ""}`}。沒有用到新聞、財報、籌碼或大盤。</li>
     <li><strong>每天怎麼走</strong>：每條路徑的每一天，都從這 ${f.n} 根的真實日漲跌幅裡隨機抽一個（漲的日子佔 ${Math.round(f.upShare * 100)}%，最大單日 ${pct(f.maxUp, 1)}、最大跌幅 ${pct(f.maxDn, 1)}），所以大漲大跌出現的頻率和這檔股票過去一樣。重複 ${sim.paths} 次，得到 ${sim.paths} 條可能的路徑。</li>
     <li><strong>方向（${SIM_MODES[mode]}）</strong>：${driftWhy}整體${dirTxt}，這就是中位數${sim.stats.p50 >= c ? "高於" : "低於"}現價的原因。</li>
     <li><strong>範圍為什麼這麼寬</strong>：每日波動約 ${(sim.sd * 100).toFixed(1)}%，波動會隨時間累積（大約乘上天數的平方根），${days} 根後的一個標準差約 ±${(spread * 100).toFixed(1)}%。所以越往右，機率帶越寬。</li>
@@ -4633,7 +4633,7 @@ $("#smcSummary").addEventListener("click", e => { const b = e.target.closest("[d
 $("#shotSummary").addEventListener("click", e => { const b = e.target.closest("[data-lesson]"); if (b) { switchTab("learn"); showLesson(+b.dataset.lesson); } });
 
 /* ---------- 請 Claude 解讀 ----------
-   在 Claude 裡開啟時用頁面的 sample 能力（以檢視者自己的帳號）；
+   在 Claude 裡開��時用頁面的 sample 能力（以檢視者自己的帳號）；
    部署在網站上時呼叫 /api/chart-read（伺服器端需設定 ANTHROPIC_API_KEY）。 */
 const AI_PROMPT = `你是一位耐心的台股技術分析老師。使用者上傳了一張看盤軟體的 K 線截圖，想學習怎麼讀圖。請用繁體中文、以教學口吻解說。
 
@@ -4763,7 +4763,7 @@ $("#aiAsk").addEventListener("click", async () => {
    右下角的助教：每次提問都附上「目前畫面」的摘要（課程內容、指標讀數、個股判讀、模擬結果），
    在 Claude 裡開啟時用 sample 能力，部署在網站上時呼叫 /api/chat。 */
 const CHAT_SYS = `你是「KLineLab K線情報局」裡的技術分析助教，對象是想學台股技術分析的初學者。請用繁體中文、口語但精確地回答。
-- 優先回答問題；用得到時引用「目前畫面」的數據，並說明你看的是哪個數字。
+- 優先回答問題；用得到時引用「目前畫面」的數據，並說��你看的是哪個數字。
 - 解釋觀念時舉具體例子；可以建議到學堂的哪一課或哪個功能練習（課程、圖表實驗室、判讀挑戰、AI 截圖診斷、觀念測驗）。
 - 回答控制在 300 字以內，必要時用條列，不要用表格。
 - 不提供個股買賣建議、目標價或明牌，也不保證結果；被問到時說明技術分析的限制，並把問題轉成「該怎麼判讀」。
@@ -4910,7 +4910,7 @@ function switchTab(t) {
     if (t === "draw") drNew();
     if (view === "watch") $("#watchFrame").src = `watch.html?embed=1&mode=${t === "intel" ? "intel" : "watch"}&theme=` + (document.documentElement.dataset.theme || "dark") + (GS_PENDING ? "&gs=1" : "") + (WATCH_PENDING ? "#" + WATCH_PENDING : INTEL_ROUTE ? "#" + INTEL_ROUTE : ""); GS_PENDING = false;
     if (t === "savings") $("#savingsFrame").src = "savings.html?embed=1&theme=" + (document.documentElement.dataset.theme || "dark") + (SAV_PENDING ? "&" + SAV_PENDING : "");
-    if (t === "shot") makeSampleShot().then(s => { if (!shot.img && !REAL.cur) shotLoad(s.blob, s); }); // 已經載入真實個股（例如從看盤頁帶過來）就不蓋掉
+    if (t === "shot") makeSampleShot().then(s => { if (!shot.img && !REAL.cur) shotLoad(s.blob, s); }); // 已經載入真實個股（例如從看盤���帶過來）就不蓋掉
   }
   window.scrollTo({ top: 0 });
 }
@@ -5011,5 +5011,6 @@ liveKick(); // 頂部加權指數
 switchTab(location.hash.slice(1) || store.get("tab", "learn"));
 { const st = history.state; try { history.replaceState({ tab: store.get("tab"), d: st?.d || 0, y: st?.y || 0 }, "", location.href); } catch {} PNAV.ready = true; PNAV.y = Math.round(scrollY); pnavBackUi(); }
 </script>
+<script type="module" src="analytics-init.js"></script>
 </body>
 </html>

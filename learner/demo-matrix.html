@@ -359,7 +359,7 @@ function vTiles() {
   });
   stage.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
   return { t: "象限磚塊圖", d: "四象限保留原位，每個板塊是一塊大小相同的磚，越強的越靠外角；磚上直接寫名稱、5 日金額、加速度（▲加速／▼放緩）。",
-    pro: "字固定大小、絕對不會重疊或超出；比卡片清單更有「矩陣」的感覺，最適合直接取代現在的圖。", con: "磚塊大小相同，金額差距要靠顏色深淺和數字看。" };
+    pro: "字固定大小、絕對不會重疊或超出；比卡片清單更有「矩陣」的感覺，最適合直接取代現在的圖。", con: "磚塊大小相同，金額差距要靠顏色深淺和數字��。" };
 }
 
 // ---------------- 9. 資金羅盤 ----------------
@@ -479,5 +479,6 @@ window.addEventListener("resize", () => renderCur(false));
 
 show(0);
 </script>
+<script type="module" src="analytics-init.js"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@
     "dev": "node scripts/dev.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.131.0"
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@vercel/analytics": "^2.0.1"
   }
 }
