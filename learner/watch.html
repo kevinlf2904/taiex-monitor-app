@@ -1284,12 +1284,19 @@ async function rfRun(k, f) {
   try { await f(); toast(`已更新 ${new Date(Date.now() + 8 * 3600e3).toISOString().slice(11, 19)}`, 1500); } catch (e) { toast(`更新失敗：${e.message}`, 2500); }
   finally { W.rfBusy = null; renderList(); }
 }
+// 錯誤紀錄：資料服務失敗、程式錯誤都記在這裡（最近 60 筆，存在這個瀏覽器），「資料來源狀態」裡看得到，回報問題時不用猜
+function noteErr(where, e) {
+  const L = store.get("watch:errs", []); L.push([Date.now(), String(where).slice(0, 120), String(e?.message || e).slice(0, 200)]); store.set("watch:errs", L.slice(-60));
+}
+addEventListener("error", e => noteErr(`程式 ${(e.filename || "").split("/").pop()}:${e.lineno || ""}`, e.message));
+addEventListener("unhandledrejection", e => noteErr("程式（非同步）", e.reason));
 async function getJ(url, optional = false) {
   const ttl = apiTtl(url); if (ttl && !(W.fresh > Date.now())) { const hit = await apiCacheGet(url); if (hit) return hit; }
-  let r; try { r = await fetch(url, { signal: tmo(W.tmo || window.W_TMO || 20000) }); } catch (e) { throw new Error(e?.name === "TimeoutError" || e?.name === "AbortError" ? "伺服器太久沒回應" : "連不到伺服器（網路中斷？）"); }
+  const fail = m => { const p = String(url).split("?")[0]; if (!(W.off && /資料服務/.test(m))) noteErr(p, m); return new Error(m); }; // 本機沒有資料服務的不記
+  let r; try { r = await fetch(url, { signal: tmo(W.tmo || window.W_TMO || 20000) }); } catch (e) { throw fail(e?.name === "TimeoutError" || e?.name === "AbortError" ? "伺服器太久沒回應" : "連不到伺服器（網路中斷？）"); }
   const t = await r.text().catch(() => ""); let j = null; try { j = JSON.parse(t); } catch {}
-  if (!j) { if (r.status === 404 && !optional) W.off = true; throw new Error(r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}`); }
-  if (!j.ok) throw new Error(j.error || "拿不到資料");
+  if (!j) { if (r.status === 404 && !optional) W.off = true; throw fail(r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}`); }
+  if (!j.ok) throw fail(j.error || "拿不到資料");
   if (ttl && !j.empty) apiCachePut(url, t, ttl); // 空的（假日、資料還沒出來）不留，下次再問
   return j;
 }
@@ -3965,7 +3972,7 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const S = 
 async function showStatus() {
   openSheet(`<h3>資料來源狀態</h3><p class="note">檢查中…</p>`, false);
   let j; try { const r = await fetch("/api/status"); j = r.ok ? await r.json() : null; if (!j) throw new Error(r.status === 404 ? "這個環境沒有資料服務（要部署到 Vercel 才有）" : `服務回應 ${r.status}`); }
-  catch (e) { $("#sheetExtra").innerHTML = `<h3>資料來源狀態</h3><p class="note err">⚠︎ ${esc(e.message)}</p>`; return; }
+  catch (e) { $("#sheetExtra").innerHTML = `<h3>資料來源狀態</h3><p class="note err">⚠︎ ${esc(e.message)}</p>${errLogHtml()}`; return; }
   const PING = { FUGLE_API_KEY: "fugle", FRED_API_KEY: "fred", FINNHUB_API_KEY: "finnhub" }; // 有連線測試的金鑰
   const row = (name, key, use, opt) => { const on = j.set[key], pg = j[PING[key]], extra = PING[key] && on && pg ? (pg.ok ? "・連線正常" : `・${esc(pg.hint || "連線失敗")}`) : "";
     return `<li class="${on ? (PING[key] && pg && !pg.ok ? "warn" : "ok") : opt ? "" : "bad"}"><b>${on ? "✓" : opt ? "–" : "✕"} ${name}</b><span>${key}：${on ? "已讀到" + extra : opt ? "沒有設定（選用）" : "伺服器讀不到"}</span><small>${use}</small></li>`; };
@@ -3973,8 +3980,17 @@ async function showStatus() {
   $("#sheetExtra").innerHTML = `<h3>資料來源狀態</h3><ul class="stlist">${row("富果行情", "FUGLE_API_KEY", "盤中個股報價、分 K、逐筆明細、大戶散戶、資金分佈、台指期分時", false)}${row("Gemini", "GEMINI_API_KEY", "問助教、截圖讀圖、庫存截圖匯入", false)}${row("FinMind", "FINMIND_TOKEN", "籌碼與基本面（沒有也能用，有的話次數上限比較高）", true)}${row("Claude", "ANTHROPIC_API_KEY", "Gemini 忙線時的備援", true)}${row("FRED 總經", "FRED_API_KEY", "總經數據改走官方介面（沒有也能用公開 CSV）", true)}${row("Finnhub 美股", "FINNHUB_API_KEY", "Yahoo 拿不到美股報價時的備援、美股公司新聞", true)}</ul>
     ${j.similar?.length ? `<p class="note err">⚠︎ 找到名稱相近但不完全一樣的變數：${j.similar.map(esc).join("、")}。名稱必須完全一樣（全大寫、底線）。</p>` : ""}
     ${missing ? `<div class="howto"><b>讀不到金鑰時這樣修：</b><ol><li>Vercel → 專案 kline-school → Settings → Environment Variables。</li><li>確認名稱完全是 <code>FUGLE_API_KEY</code>（或 <code>GEMINI_API_KEY</code>），Environments 要勾 <b>Production</b>（也可以一起勾 Preview）。</li><li>環境變數只對「之後的部署」生效：到 Deployments → 最新一筆 → ⋯ → <b>Redeploy</b>。</li><li>部署完成後回來按一次這個檢查。</li></ol></div>` : `<p class="note">金鑰都讀到了。如果功能還是不正常，可能是對方服務暫時忙碌或超過免費方案的次數上限。</p>`}
-    <p class="note">目前環境：${esc(j.vercelEnv || "未知")}（Production＝正式網址）</p>`;
+    <p class="note">目前環境：${esc(j.vercelEnv || "未知")}（Production＝正式網址）</p>${errLogHtml()}`;
 }
+// 最近的錯誤（這個瀏覽器）：時間、哪個資料服務或程式、原因；同一種錯誤合併顯示次數
+function errLogHtml() {
+  const L = store.get("watch:errs", []); if (!L.length) return `<h4>最近的錯誤</h4><p class="note">這個瀏覽器最近沒有發生錯誤。</p>`;
+  const G = new Map(); for (const [t, w, m] of L) { const k = w + "|" + m, g = G.get(k) || { t, w, m, n: 0 }; g.n++; g.t = Math.max(g.t, t); G.set(k, g); }
+  const hm = t => new Date(t + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/");
+  return `<h4>最近的錯誤<span class="note">這個瀏覽器、最近 ${L.length} 筆</span></h4><ul class="stlist errlog">${[...G.values()].sort((a, b) => b.t - a.t).slice(0, 20).map(g => `<li class="warn"><b>${esc(g.w)}</b><span>${esc(g.m)}${g.n > 1 ? `（${g.n} 次）` : ""}</span><small>${hm(g.t)}</small></li>`).join("")}</ul>
+    <button type="button" class="btn sm" data-errclr>清除紀錄</button>`;
+}
+document.addEventListener("click", e => { if (e.target.closest("[data-errclr]")) { store.set("watch:errs", []); const b = e.target.closest("[data-errclr]"); b.previousElementSibling?.remove(); b.outerHTML = `<p class="note">已清除。</p>`; } });
 document.addEventListener("click", e => { if (e.target.closest("[data-st]")) { e.preventDefault(); showStatus(); } });
 
 /* ---------- 大盤：指數、美股、法人、漲跌分佈、貢獻點數、產業 ---------- */

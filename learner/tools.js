@@ -720,7 +720,7 @@ function insHtml() {
 /* ---------- 備份同步：匯出／匯入備份檔；有雲端儲存時用同步碼在 iPad、手機之間同步；綁定 Telegram 收收盤後提醒 ---------- */
 // 同步的內容：瀏覽器裡 kline: 開頭的設定與紀錄（自選、庫存、提醒、日記、模擬帳戶、錯題本…）；單筆超過 150KB 的多半是快取，不同步
 const SYNC_K = "kline-sync";
-const SYNC_SKIP = /^kline:watch:ft:/; // 台指期盤中報價暫存：只對這台裝置有用、每 5 秒變一次，不要同步（不然每分鐘都要上傳）
+const SYNC_SKIP = /^kline:watch:(ft:|errs$)/; // 台指期盤中報價暫存（每 5 秒變一次）、錯誤紀錄：只對這台裝置有用，不要同步
 const syncGet = () => { try { return JSON.parse(localStorage.getItem(SYNC_K) || "{}"); } catch { return {}; } };
 const syncSet = o => { try { localStorage.setItem(SYNC_K, JSON.stringify({ ...syncGet(), ...o })); } catch {} };
 function syncSnap() { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k?.startsWith("kline:") || SYNC_SKIP.test(k)) continue; const v = localStorage.getItem(k); if (v != null && v.length < 150000) o[k] = v; } } catch {} return o; }
