@@ -275,7 +275,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .gs-list [data-gs] .gm { margin-left: auto; color: var(--muted); font-size: 12px; }
 .gs-list li.on [data-gs], .gs-list [data-gs]:hover { color: var(--accent); }
 .gs-hint { margin: 2px 4px 6px; }
-.ltabs .gsbtn { flex: none; padding: 0 10px; } .ltabs .ltedit { flex: none; padding: 0 10px; color: var(--muted); letter-spacing: .05em; }
+.ltabs .gsbtn { flex: none; padding: 0 10px; }
+.today { margin: 8px 12px 4px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 13px; } .today > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; list-style: none; min-height: 28px; align-items: center; } .today > summary::-webkit-details-marker { display: none; } .today > summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .15s; } .today:not([open]) > summary::after { transform: rotate(-90deg); }
+.today ul { list-style: none; margin: 6px 0 4px; padding: 0; } .today li { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); line-height: 1.5; } .today .tdk { color: var(--muted); font-size: 12px; } .today .tdv { min-width: 0; overflow-wrap: anywhere; } .today .linkbtn { text-align: left; } .today .tdmore { font-size: 12px; color: var(--muted); } .ltabs .ltedit { flex: none; padding: 0 10px; color: var(--muted); letter-spacing: .05em; }
 .tabcfg { list-style: none; margin: 8px 0 12px; padding: 0; } .tabcfg li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); } .tabcfg li:first-child { border-top: 0; }
 .tabcfg label { display: flex; align-items: center; gap: 8px; min-height: 36px; flex: 1; } .tabcfg span { display: flex; gap: 6px; } .tabcfg .btn { min-width: 40px; min-height: 36px; }
 .gsadd { width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--muted); font: inherit; font-size: 14px; cursor: text; }
@@ -1026,6 +1028,7 @@ tr.on td { background: var(--surface-2); }
       </div>
       <div class="l-tools" id="lTools"></div>
     </div>
+    <div id="todayCard" hidden></div>
     <div class="lx" id="lx" hidden></div>
     <ul class="wl" id="wl"></ul>
     <div class="port" id="port" hidden></div>
@@ -1877,7 +1880,7 @@ if (EMBED) { let rq = 0; const re = () => { if (!rq) rq = requestAnimationFrame(
 function renderList0() {
   syncLayout();
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === ltTab()));
-  const watch = W.lt === "watch";
+  const watch = W.lt === "watch"; renderToday(watch);
   $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", ...WIDE_TABS].includes(W.lt); $("#wl").hidden = WIDE_TABS.includes(W.lt); // 全寬分頁共用同一份清單
   $("#groups").innerHTML = W.groups.map((g, i) => `<button data-g="${i}" aria-pressed="${i === W.gi}">${esc(g.name)} <span class="note">${g.list.length}</span></button>`).join("") + `<button data-g="new" title="新增群組">＋ 群組</button>`;
   const n = $("#wlNote"); n.className = "note w-note"; let note = "";
