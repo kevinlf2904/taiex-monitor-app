@@ -8,7 +8,7 @@ test.after(async () => { await B.close(); S.close(); });
 const ROWS = [["2330", "台積電", "半導體業", "上市", 3300, 5.1, 36.2, 38.4, 15.2, 9300, 3980, 59.1, 49.5, 42.7], ["2303", "聯電", "半導體業", "上市", 200, 1, 8, 5, 0.8, 600, 90, 30, 20, 18],
   ["6488", "環球晶", "半導體業", "上櫃", 50, 2, -8.3, -6, 2.5, 160, 12, 30, 20, 7.5], ["3105", "穩懋", "半導體業", "上櫃", 15, 8, 45, 22, 1.2, 45, 5, 25, 12, 11]];
 
-test("手機子頁籤「▾ 全部」、估值地圖全螢幕 390", async () => {
+test("手機子頁籤「▾ 全部」、估值地圖縮放 390", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width: 390, touch: true });
   await ctx.route("**/api/oapi?earn=1", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, ym: "11509", yq: "115Q2", source: "測試", rows: ROWS }) }));
   await ctx.route("**/api/screen?bw=1", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: { 2330: [24.5, 6.8, 1.6], 2303: [12, 1.5, 4], 6488: [18.2, 2.1, 3.9], 3105: [30, 1.5, 1] } }) }));
@@ -19,9 +19,13 @@ test("手機子頁籤「▾ 全部」、估值地圖全螢幕 390", async () => 
   assert.match(await p.textContent("#sheetExtra .segpick"), /總覽[\s\S]*排行[\s\S]*月營收[\s\S]*比較[\s\S]*估值地圖[\s\S]*研究/, "分組標籤一起帶過去");
   await p.click('#sheetExtra .segpick button:text-is("估值地圖")');
   assert.equal(await p.evaluate(() => ER().view), "map"); assert.equal(await p.isHidden("#sheet"), true, "選了就關掉");
-  await p.waitForSelector("[data-fxfull]", { timeout: 15000 });
-  await p.click("[data-fxfull]"); assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector(".mk.fxfull")).position), "fixed");
-  await p.keyboard.press("Escape"); assert.equal(await p.evaluate(() => !!document.querySelector(".mk.fxfull")), false, "Esc 縮小");
+  // 估值地圖：圓點矩陣樣式（四象限、圓裡有名稱）＋縮放（按鈕、雙擊還原），手機用方形版面
+  await p.waitForSelector(".fxwrap #fxmap .bnode", { timeout: 15000 });
+  assert.equal(await p.getAttribute("#fxmap", "data-w"), "360", "手機用方形版面");
+  assert.match(await p.textContent("#fxmap"), /便宜＋成長[\s\S]*貴＋成長[\s\S]*便宜＋衰退[\s\S]*貴＋衰退/);
+  assert.ok(await p.$$eval("#fxmap .blab", L => L.length) >= 1, "大的圓裡面有名稱");
+  await p.click('[data-fxz="in"]'); assert.equal(await p.textContent(".fxwrap .mf-zval"), "140%"); assert.notEqual(await p.getAttribute("#fxmap", "viewBox"), "0 0 360 360");
+  await p.dblclick("#fxmap", { position: { x: 30, y: 60 } }); assert.equal(await p.getAttribute("#fxmap", "viewBox"), "0.00 0.00 360.00 360.00", "雙擊還原");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
