@@ -99,7 +99,13 @@ for (const width of [390, 1280]) test(`財報「事件回測」「估值地圖�
   await p.click('[data-erv="map"]'); await p.waitForSelector(".fxmap circle", { timeout: 15000 });
   assert.equal(await p.evaluate(() => document.querySelectorAll(".fxmap circle").length), 3, "半導體業 3 家（台積電、環球晶、穩懋）");
   assert.match(await p.evaluate(() => $("#lx").innerText), /便宜＋成長[\s\S]*成長 ÷ 本益比/);
-  await p.click('.fxmap [data-sel="3105"] circle'); assert.equal(await p.evaluate(() => W.sel), "3105");
+  // 點圓圈 → 旁邊跳出資訊框（不會直接跳走），框裡按「看個股」才切換；資訊框不能超出圖
+  await p.click('.fxmap [data-fxpt="3105"] circle'); await p.waitForSelector(".fxtip");
+  assert.match(await p.textContent(".fxtip"), /本益比[\s\S]*中位數[\s\S]*同業第 \d 低（共 3 家）[\s\S]*營收年增/); assert.notEqual(await p.evaluate(() => W.sel), "3105");
+  assert.ok(await p.evaluate(() => { const b = document.querySelector(".fxmapbox").getBoundingClientRect(), t = document.querySelector(".fxtip").getBoundingClientRect(); return t.left >= b.left - 1 && t.right <= b.right + 1; }), "資訊框在圖裡面");
+  assert.ok(await noOverflow(p)); if (process.env.SHOT) await p.locator("section.mk:has(.fxmap)").screenshot({ path: `${process.env.SHOT}/fxmap-${width}.png` });
+  await p.click(".fxtip-x"); await p.waitForSelector(".fxtip", { state: "detached" });
+  await p.click('.fxmap [data-fxpt="3105"] circle'); await p.click('.fxtip [data-sel="3105"]'); assert.equal(await p.evaluate(() => W.sel), "3105");
   assert.ok(await noOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });

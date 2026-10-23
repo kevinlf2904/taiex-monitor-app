@@ -14,8 +14,18 @@ async function raw(url, n = 600) {
 if (process.argv[2] === "confai") {
   // 法說會重點：找台積電、鴻海最近的法說會簡報，AI 讀簡報（需要 GEMINI_API_KEY）
   const C = await import("../api/_lib/confai.js");
-  for (const c of ["2330", "2317"]) { try { const L = await C.confList(c); console.log(c, "法說會", L.length, "次", JSON.stringify(L.slice(0, 3)));
+  for (const c of ["2330", "2317", "2454", "1216", "8299", "6488"]) { try { const t0 = Date.now(), L = await C.confList(c); console.log(c, "法說會", L.length, "次", `${Date.now() - t0}ms`, JSON.stringify(L.slice(0, 3)).slice(0, 600)); if (!["2330", "2317"].includes(c)) continue;
     const f = L.find(x => x.file); if (f && process.env.GEMINI_API_KEY) { const t0 = Date.now(), v = await C.summarizeConf(f.file, c, process.env.GEMINI_API_KEY.trim(), Date.now() + 120000); console.log(c, "AI", `${Date.now() - t0}ms`, JSON.stringify(v).slice(0, 900)); } } catch (e) { console.log(c, "失敗", e.message); } }
+  process.exit(0);
+}
+if (process.argv[2] === "conf2") {
+  // 法說會找不到的原因：線上 /api/confai 的回應、觀測站用 co_id 單查一家公司（一年）可不可以
+  const { parseConfRows } = await import("../api/_lib/confai.js");
+  for (const c of ["2330", "2454", "2603", "3008", "1301", "2884", "8299", "6488", "3529"]) {
+    const r = await hit(`/api/confai?code=${c}`); console.log("線上", c, r.status, r.ms + "ms", r.err || JSON.stringify(r.j).slice(0, 300)); }
+  for (const body of ["encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=all&co_id=2454&year=115&month=", "encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=sii&co_id=2454&year=115&month=all", "encodeURIComponent=1&step=1&firstin=1&off=1&co_id=2454&year=115", "encodeURIComponent=1&step=1&firstin=1&off=1&TYPEK=otc&co_id=8299&year=115&month="]) {
+    try { const t0 = Date.now(), h = await (await fetch("https://mopsov.twse.com.tw/mops/web/ajax_t100sb02_1", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0" }, body, signal: AbortSignal.timeout(20000) })).text(), code = body.match(/co_id=(\d+)/)[1], L = parseConfRows(h, code);
+      console.log("單查", body, `${Date.now() - t0}ms`, h.length, "列", L.length, JSON.stringify(L.slice(0, 4)).slice(0, 500), L.length ? "" : h.replace(/\s+/g, " ").slice(0, 300)); } catch (e) { console.log("單查失敗", body, e.message); } }
   process.exit(0);
 }
 if (process.argv[2] === "earnplus") {

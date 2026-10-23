@@ -742,13 +742,15 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .igal-wrap { margin: 8px 12px; border: 1px solid #1a2a44; border-radius: 16px; background: radial-gradient(ellipse at 50% 42%, #14305a 0%, #0b1a33 45%, #060c18 100%); overflow: hidden; }
 .gstage { position: relative; height: 480px; }
 .igalaxy { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
-.ghud { position: absolute; left: 12px; top: 10px; font-size: 12px; font-weight: 300; letter-spacing: .03em; line-height: 1.5; color: #8fa9cc; pointer-events: none; } .ghud b { color: #e9f3ff; font-weight: 400; }
+.ghud { position: absolute; left: 12px; top: 10px; font-size: 11px; font-weight: 200; letter-spacing: .03em; line-height: 1.5; color: #8fa9cc; pointer-events: none; } .ghud b { color: #e9f3ff; font-weight: 300; }
 .gzoom .gpan[aria-pressed="true"] { background: #2a4a7a; color: #fff; }
 .gx-free .igalaxy { touch-action: none; } .gzoom .gfree { padding: 0 10px; } .gzoom .gfree[aria-pressed="true"] { background: #2a4a7a; color: #fff; }
 .gzoom { position: static; width: fit-content; margin: 6px 0 0 auto; display: flex; gap: 2px; background: rgba(10, 22, 42, .7); border: 1px solid #22395e; border-radius: 8px; padding: 2px; z-index: 1; } .gzoom button { min-width: 32px; height: 28px; padding: 0 6px; font: 300 13px var(--font-num); color: #cfe2fb; background: none; border: 0; border-radius: 6px; cursor: pointer; } .gzoom button:hover { background: rgba(127, 196, 255, .14); } .gzoom .gzv { min-width: 48px; font-size: 11.5px; }
-.gcard { position: absolute; width: 230px; background: rgba(10, 22, 42, .94); border: 1px solid #2a4a78; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 300; letter-spacing: .02em; color: #e9f3ff; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); display: grid; gap: 4px; z-index: 2; }
-.gcard[hidden] { display: none; } .gcard.dock { right: 10px; bottom: 10px; width: 250px; } @media (max-width: 900px) { .gcard { width: 196px; font-size: 12px; padding: 8px 10px; } .gcard.dock { left: 8px; right: 8px; width: auto; } }
-.gcard .gr { display: flex; justify-content: space-between; gap: 8px; } .gcard b { font-weight: 500; } .gcard .gm { color: #8fa9cc; font-size: 12px; } .gcard .n { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.gcard { position: absolute; width: 230px; background: rgba(10, 22, 42, .9); border: 1px solid #2a4a78; border-radius: 10px; padding: 9px 11px; font-size: 12px; font-weight: 200; letter-spacing: .02em; color: #e9f3ff; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); display: grid; gap: 4px; z-index: 2; }
+.gcard[hidden] { display: none; } .gcard.dock { position: static; width: auto; margin: 6px 12px 0; background: #0b1a33; } @media (max-width: 900px) { .gcard { width: 188px; font-size: 11.5px; padding: 7px 9px; } .gcard.dock { width: auto; } }
+.gcard .glink { font-size: 11px; color: #b9cbe4; line-height: 1.5; overflow-wrap: anywhere; } .gcard .glink .gtag { font-size: 10px; margin-right: 2px; }
+.gxopts-d { margin: 6px 12px 0; } .gxopts-d > summary { cursor: pointer; font-size: 12.5px; color: var(--muted); padding: 6px 0; list-style: none; display: flex; gap: 8px; align-items: baseline; } .gxopts-d > summary::-webkit-details-marker { display: none; } .gxopts-d > summary::before { content: "▸"; transition: transform .15s; } .gxopts-d[open] > summary::before { transform: rotate(90deg); } .gxopts-d > summary .note { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; } .gxopts-d .gxopts { margin: 0 0 4px; }
+.gcard .gr { display: flex; justify-content: space-between; gap: 8px; } .gcard b { font-weight: 400; } .gcard .gm { color: #8fa9cc; font-size: 11px; } .gcard .n { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .gcard .gtag { font-style: normal; font-size: 11px; padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; } .gcard .g上游 { color: #ffb26b; } .gcard .g下游 { color: #6fc3ff; } .gcard .g相關, .gcard .g中心 { color: #8fa9cc; }
 .gcard .gbtn { display: flex; gap: 6px; margin-top: 4px; } .gcard .gbtn button { font: 500 12px var(--font-body); color: #06101f; background: #7fc4ff; border: 0; border-radius: 6px; padding: 6px 9px; cursor: pointer; } .gcard .gbtn button + button { background: #2a4a78; color: #e9f3ff; }
 .gxopts .seg button { font-weight: 300; letter-spacing: .03em; } .gxopts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; margin: 6px 12px 4px; font-size: 12px; color: var(--muted); } .gxopts .seg { margin: 0; }
@@ -970,7 +972,11 @@ input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
 .evhist div { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; } .evhist i { display: block; width: 100%; min-height: 1px; border-radius: 2px 2px 0 0; opacity: .75; }
 .evhist i.upb { background: var(--up); } .evhist i.dn { background: var(--down); } .evhist small { font-size: 10px; color: var(--muted); white-space: nowrap; transform: scale(.92); }
 tr.on td { background: var(--surface-2); }
-.fxmapbox { width: 100%; overflow: hidden; } .fxmap { width: 100%; height: auto; display: block; }
+.fxmapbox { width: 100%; position: relative; } .fxmap .pt.pick circle { fill-opacity: .95; stroke: var(--ink); stroke-width: 2; }
+.fxtip { position: absolute; transform: translate(var(--tx), var(--ty)); width: min(240px, 62%); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font-size: 12.5px; box-shadow: 0 8px 24px rgba(0, 0, 0, .28); z-index: 2; display: grid; gap: 6px; }
+.fxtip-h { display: flex; align-items: baseline; gap: 6px; } .fxtip-h b { font-size: 14px; } .fxtip-x { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; width: 32px; height: 28px; cursor: pointer; }
+@media (max-width: 700px) { .fxtip { position: static; transform: none; width: auto; margin-top: 6px; box-shadow: none; } } /* 手機圖太小，資訊框改放圖下方 */
+.fxtip-q { font-weight: 500; } .fxtip dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; } .fxtip dt { color: var(--muted); } .fxtip dd { margin: 0; text-align: right; font-family: var(--font-num); } .fxtip dd small { display: block; font-family: var(--font-body); font-size: 11px; } .fxmap { width: 100%; height: auto; display: block; }
 .fxmap .gl { stroke: var(--line); stroke-width: .6; } .fxmap .md { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; } .fxmap .ax { fill: var(--muted); font-size: 11px; } .fxmap .qd { fill: var(--muted); font-size: 11px; opacity: .8; }
 .fxmap .pt { cursor: pointer; } .fxmap circle.u { fill: var(--up); fill-opacity: .45; } .fxmap circle.d { fill: var(--down); fill-opacity: .45; } .fxmap .pt:hover circle, .fxmap .pt.cur circle { fill-opacity: .85; stroke: var(--ink); stroke-width: 1.2; }
 .fxmap .lb { fill: var(--ink); font-size: 11px; pointer-events: none; } .fxrank li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } .fxrank b { margin-left: auto; }
@@ -1142,7 +1148,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.22-148</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.23-149</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -3572,12 +3578,12 @@ return `<div class="iislands">${G.map(card).join("")}</div>${banner}<div class="
 }
 
 // 產業網絡（星系）：3D 星系，用 canvas 畫。點選的題材（或連線最多的）在正中心發光，其他題材圍繞它轉；三組樣式可自由搭配（記在這個瀏覽器）：
-//   資訊窗格 tip：A 跟著圓點、B 固定在右下角
+//   資訊窗格 tip：A 跟著圓點（放在圓點外側，不蓋住中心）、B 放在星系圖下方（完全不擋星球；手機預設）
 //   排列 lay：A 球殼（貼在同一個球面一起轉）、B 原子軌道（每組一條軌道各自公轉，內圈近）、C 雙層球（內層直接相關、外層較遠，轉速不同）
 //   連線 line：A 平常只畫中心放射線，指到某點才展開它的上下游；B 全部畫成往外彎的弧線；C 指到某點時只畫它到中心的最短路徑
 // 不論哪種排列：上游在上半部、下游在下半部、相關但不在同一條鏈上的在中間；前方的點大而亮，後方的點小、暗、略模糊。
-const GX_OPT = { tip: [["A", "跟著圓點"], ["B", "固定角落"]], lay: [["A", "球殼"], ["B", "原子軌道"], ["C", "雙層球"]], line: [["A", "指到才展開"], ["B", "弧線全顯示"], ["C", "只畫路徑"]] };
-const gxOpt = () => ({ tip: "A", lay: "B", line: "B", ...(W.indS.gxo || {}) });
+const GX_OPT = { tip: [["A", "跟著圓點"], ["B", "圖下方"]], lay: [["A", "球殼"], ["B", "原子軌道"], ["C", "雙層球"]], line: [["A", "指到才展開"], ["B", "弧線全顯示"], ["C", "只畫路徑"]] };
+const gxOpt = () => ({ tip: isMobile() ? "B" : "A", lay: "B", line: "B", ...(W.indS.gxo || {}) });
 function indGalaxy(net, focus) {
   const ids = net.layers.flatMap(([, L]) => L).filter(id => INDT.has(id)), lay = {}, adj = new Map(ids.map(id => [id, new Set()]));
   net.layers.forEach(([, L], r) => L.forEach(id => (lay[id] = r)));
@@ -3594,12 +3600,14 @@ function indGalaxy(net, focus) {
   W.gx ||= { th: 0.4, ph: 0.42 }; W.gx.t ||= 0;
   const o = gxOpt(), seg = k => `<div class="seg gxseg" role="group" aria-label="${{ tip: "資訊窗格", lay: "排列方式", line: "關係連線" }[k]}">${GX_OPT[k].map(([v, t]) => `<button type="button" data-gxo="${k}:${v}" aria-pressed="${o[k] === v}">${t}</button>`).join("")}</div>`;
   queueMicrotask(gxMount); // 畫面放進頁面後才接上 canvas、旋轉與拖曳
-  return `<div class="gxopts"><span>窗格</span>${seg("tip")}<span>排列</span>${seg("lay")}<span>連線</span>${seg("line")}</div>
+  const nm = k => GX_OPT[k].find(x => x[0] === o[k])?.[1] || "";
+  return `<details class="gxopts-d" data-gxopen${store.get("watch:gxopen", false) ? " open" : ""}><summary>樣式<span class="note">${nm("lay")}・${nm("line")}・窗格${nm("tip")}</span></summary><div class="gxopts"><span>窗格</span>${seg("tip")}<span>排列</span>${seg("lay")}<span>連線</span>${seg("line")}</div></details>
     <div class="igal-wrap gstage"><canvas class="igalaxy" role="img" aria-label="${esc(net.name)} 產業星系：${esc(INDT.get(core).name)} 在中心，上游 ${ups.size}、下游 ${downs.size}"></canvas>
       <div class="ghud">中心：<b>${esc(INDT.get(core).name)}</b><br>上游 ${ups.size}・下游 ${downs.size}・相關 ${ids.length - 1 - ups.size - downs.size}</div><div class="gcard" hidden></div></div>
       <div class="gzoom" role="group" aria-label="縮放與轉動"><button type="button" data-gxz="free" class="gfree" aria-pressed="${!!W.gx.free}" title="自由轉動：手指上下左右拖都能調整角度（開著時在圖上不能捲動頁面）" aria-label="自由轉動">↻ 轉動</button><button type="button" data-gxz="-" aria-label="縮小">－</button><button type="button" data-gxz="0" aria-label="回到原本大小" class="gzv">${Math.round((W.gx.zoom || 1) * 100)}%</button><button type="button" data-gxz="+" aria-label="放大">＋</button><button type="button" data-gxz="pan" class="gpan" aria-pressed="${!!W.gx.panMode}" title="拖曳改成移動畫面（也可以按住 Shift 拖、滑鼠右鍵拖，或兩指拖）" aria-label="拖曳移動畫面">✥</button></div>
     <div class="igal-leg"><span><i style="background:#ffb26b"></i>上游連線</span><span><i style="background:#6fc3ff"></i>下游連線</span><span><i style="background:#8aa0bf"></i>其他關係</span><span>光暈紅漲綠跌；上半部＝上游、下半部＝下游</span><span>${isMobile() ? "點圓點看資訊、左右拖曳轉動、兩指縮放；按「↻ 轉動」後上下拖可以調整角度、按 ✥ 可以拖曳移動" : "滑到圓點看資訊、點一下換到中心、拖曳轉動（上下拖調角度）、Ctrl／⌘＋滾輪縮放、✥ 或 Shift 拖移動畫面"}</span></div>`;
 }
+document.addEventListener("toggle", e => { if (e.target.matches?.("[data-gxopen]")) store.set("watch:gxopen", e.target.open); }, true); // 樣式選項收合狀態記在這個瀏覽器
 // 題材在 3D 空間的位置（單位：外圈半徑）
 function gxPos(id, t, lay) {
   const S = W.gxS; if (id === S.core) return [0, 0, 0]; const { s, k, i, lon0 } = S.P[id];
@@ -3643,7 +3651,7 @@ function gxDraw(cv) {
     const ang = Math.atan2(B.y - ey, B.x - ex), rB = (b === S.core ? 16 : 6) * zr * B.f + 2, tx = B.x - Math.cos(ang) * rB, ty = B.y - Math.sin(ang) * rB; // 箭頭：上游指向下游
     ctx.fillStyle = `rgba(${col},${Math.min(1, alpha + 0.2)})`; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(ang - 0.45) * 7, ty - Math.sin(ang - 0.45) * 7); ctx.lineTo(tx - Math.cos(ang + 0.45) * 7, ty - Math.sin(ang + 0.45) * 7); ctx.fill(); });
   // 題材圓點：由後往前畫；光暈＝今日漲跌，後方變暗、變小、略模糊
-  const hits = [], lab = [], direct = S.adj.get(S.core);
+  const hits = [], lab = [], direct = S.adj.get(S.core), nb = focus && focus !== S.core ? S.adj.get(focus) || new Set() : new Set(); // nb：點選的題材直接連到的產業，名稱一定標出來
   S.ids.map(id => ({ id, p: sc[id] })).sort((a, b) => a.p.z - b.p.z).forEach(({ id, p }) => {
     const isCore = id === S.core, depth = (p.z + 1) / 2, r = (isCore ? 16 : (4.2 + 2.6 * depth) * p.f) * zr, pct = indAvg(INDT.get(id))?.pct, col = pct == null ? "127,196,255" : pct >= 0 ? UP : DN;
     const blur = !isCore && p.z < -0.25 && "filter" in ctx; if (blur) ctx.filter = `blur(${(-p.z * 1.6).toFixed(1)}px)`;
@@ -3653,30 +3661,43 @@ function gxDraw(cv) {
     ctx.globalAlpha = isCore ? 1 : 0.35 + 0.65 * depth; ctx.fillStyle = s; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill(); ctx.globalAlpha = 1; if (blur) ctx.filter = "none";
     if (id === focus) { ctx.strokeStyle = "#7fc4ff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, r + 3, 0, 7); ctx.stroke(); }
     hits.push({ id, x: p.x, y: p.y, r: Math.max(r + 6, 14), z: p.z });
-    if (isCore || id === focus || (direct.has(id) && p.z > 0.15)) lab.push({ id, p, r, isCore }); });
+    if (isCore || id === focus || nb.has(id) || (direct.has(id) && p.z > -0.1)) lab.push({ id, p, r, isCore }); });
   // 名稱：指到的點一定標（完整名稱），再來是中心、正面的直接上下游（放大後標得更多）；互相重疊就略過。字用細體，外圍淡淡的暗邊讓它在亮點上也看得清楚
   if (Z > 1.3) S.ids.forEach(id => { const p = sc[id]; if (id !== S.core && id !== focus && !direct.has(id) && p.z > 0.25 && p.x > 0 && p.x < w && p.y > 0 && p.y < h) lab.push({ id, p, r: (4.2 + 2.6 * (p.z + 1) / 2) * p.f * zr, isCore: false }); });
-  const placed = [], labIds = [], rank = o => (o.id === focus ? 10 : o.isCore ? 9 : o.p.z);
+  const placed = [], labIds = [], rank = o => (o.id === focus ? 10 : o.isCore ? 9 : nb.has(o.id) ? 5 + o.p.z : o.p.z);
   if ("letterSpacing" in ctx) ctx.letterSpacing = "0.03em";
   lab.sort((a, b) => rank(b) - rank(a)).forEach(({ id, p, r, isCore }) => {
-    const on = id === focus, nm = INDT.get(id).name, txt = !isCore && !on && nm.length > 8 ? nm.slice(0, 8) + "…" : nm; ctx.font = `${isCore ? 500 : on ? 400 : 300} ${isCore ? 13.5 : on ? 12.5 : 11.5}px ${font}`;
-    const tw = ctx.measureText(txt).width, x = p.x - tw / 2, y = p.y + r + (isCore ? 17 : 13), box = [x - 3, y - 11, x + tw + 3, y + 4];
-    if (!on && placed.some(b => b[0] < box[2] && box[0] < b[2] && b[1] < box[3] && box[1] < b[3])) return; placed.push(box); labIds.push(id);
-    ctx.lineWidth = 2.4; ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(5,12,24,.72)"; ctx.strokeText(txt, x, y); ctx.fillStyle = on ? "#ffffff" : isCore ? "#eef5ff" : "rgba(220,233,251,.92)"; ctx.fillText(txt, x, y); });
+    const on = id === focus, nm = INDT.get(id).name, txt = !isCore && !on && !nb.has(id) && nm.length > 8 ? nm.slice(0, 8) + "…" : nm; ctx.font = `${isCore ? 400 : on ? 300 : 200} ${isCore ? 12 : on ? 11.5 : 10.5}px ${font}`;
+    const tw = ctx.measureText(txt).width, x = p.x - tw / 2, hitB = B => placed.some(b => b[0] < B[2] && B[0] < b[2] && b[1] < B[3] && B[1] < b[3]);
+    let y = p.y + r + (isCore ? 15 : 12), box = [x - 3, y - 10, x + tw + 3, y + 3];
+    if (!on && hitB(box) && nb.has(id)) { y = p.y - r - 5; box = [x - 3, y - 10, x + tw + 3, y + 3]; } // 連到的產業：下面放不下就改放圓點上面
+    if (!on && hitB(box)) return; placed.push(box); labIds.push(id);
+    ctx.lineWidth = 1.6; ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(5,12,24,.6)"; ctx.strokeText(txt, x, y); ctx.fillStyle = on ? "#ffffff" : isCore ? "#eef5ff" : nb.has(id) ? "#ffe2c4" : "rgba(220,233,251,.9)"; ctx.fillText(txt, x, y); });
   if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
   S.hits = hits; S.labels = placed; S.labIds = labIds; S.screen = sc;
 }
 // 資訊窗格：名稱、今日漲跌、和中心的關係、家數、隔幾層、漲跌最大的成分股
-function gxCard(card, id, x, y) {
-  const S = W.gxS, o = gxOpt(); if (!id) { card.hidden = true; return; }
+function gxCard(card, id, x, y, again) {
+  const S = W.gxS, o = gxOpt(); if (!id) { card.hidden = true; return; } if (!again) W.gx.cardFix = { id, x, y }; // 名稱下一個畫面才畫上去，畫完再挑一次位置
   const t = INDT.get(id), a = indAvg(t), relT = id === S.core ? "中心" : S.ups.has(id) ? "上游" : S.downs.has(id) ? "下游" : "相關", f = v => `<span class="n ${v >= 0 ? "up" : "down"}">${indPctTxt(v)}</span>`;
   const mem = indCodes(t).filter(indQuotable).map(c => [c, W.quotes.get(c)?.chgPct]).filter(([, v]) => v != null).sort((p, q) => Math.abs(q[1]) - Math.abs(p[1])).slice(0, o.tip === "B" ? 5 : 3);
   card.innerHTML = `<div class="gr"><b>${esc(t.name)}</b>${a ? f(a.pct) : ""}</div><div class="gr gm"><span><i class="gtag g${relT}">${relT}</i> ${MK_TAG[t.mk]}・${indCodes(t).length} 家</span><span>${id === S.core ? "" : `隔 ${S.dist[id] ?? "-"} 層`}</span></div>`
     + mem.map(([c, v]) => `<div class="gr"><span>${esc(W.names[c] || W.quotes.get(c)?.name || c)}</span>${f(v)}</div>`).join("")
+    + [["上游", S.links.filter(l => l[1] === id).map(l => l[0])], ["下游", S.links.filter(l => l[0] === id).map(l => l[1])]].filter(x => x[1].length).map(([k, L]) => `<div class="glink"><i class="gtag g${k}">${k}</i> ${L.map(x => esc(INDT.get(x)?.name || x)).join("、")}</div>`).join("")
     + `<div class="gbtn">${id !== S.core ? `<button type="button" data-ifocus="${id}">換到中心</button>` : ""}<button type="button" data-iopen="${id}">題材內頁</button></div>`;
-  card.hidden = false; card.classList.toggle("dock", o.tip === "B");
-  if (o.tip === "A") { const st = card.parentElement, cw = card.offsetWidth, ch = card.offsetHeight; card.style.left = Math.min(st.clientWidth - cw - 8, Math.max(8, x + 14)) + "px"; card.style.top = Math.min(st.clientHeight - ch - 8, Math.max(8, y - ch / 2)) + "px"; }
-  else card.style.left = card.style.top = "";
+  // B：放在星系圖下方（不蓋住任何星球）；A：放在圓點靠外側那一邊，盡量不擋中心和其他星球
+  const st = card.closest(".gstage") || document.querySelector(".gstage"); card.hidden = false; card.classList.toggle("dock", o.tip === "B");
+  if (o.tip === "B") { if (card.parentElement === st) (st.nextElementSibling?.matches(".gzoom") ? st.nextElementSibling : st).after(card); card.style.left = card.style.top = "";
+    if (!again) { const r = card.getBoundingClientRect(); if (r.top > innerHeight - 40) card.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); } return; } // 窗格完全在畫面外（星系很高時）才捲過去
+  if (card.parentElement !== st) st.appendChild(card);
+  // 圓點四周 8 個候選位置，挑蓋到最少星球和名稱的（中心、這個題材連到的產業蓋到扣更多分）
+  const cw = card.offsetWidth, ch = card.offsetHeight, W0 = st.clientWidth, H0 = st.clientHeight, nb = S.adj.get(id) || new Set(), hw = Math.max(14, t.name.length * 6.5);
+  const cand = [[x + 16, y - ch / 2], [x - 16 - cw, y - ch / 2], [x - cw / 2, y - ch - 14], [x - cw / 2, y + 14], [x + 16, y - ch - 8], [x - 16 - cw, y - ch - 8], [x + 16, y + 8], [x - 16 - cw, y + 8], [x + hw + 6, y - ch / 2], [x - hw - 6 - cw, y - ch / 2], [x + hw + 6, y - 14], [x - hw - 6 - cw, y - 14]]
+    .map(([l, t]) => [Math.min(W0 - cw - 6, Math.max(6, l)), Math.min(H0 - ch - 6, Math.max(6, t))]);
+  const cost = ([l, t]) => { const r = l + cw, b = t + ch; let n = x + hw > l && x - hw < r && y + 30 > t && y - 14 < b ? 50 : 0; // 不能蓋到自己（圓點和下面的名稱；名稱下一個畫面才畫，先用字數估寬度）
+    for (const o of S.hits || []) if (o.x + o.r > l && o.x - o.r < r && o.y + o.r > t && o.y - o.r < b) n += o.id === S.core ? 4 : nb.has(o.id) ? 3 : o.z > 0 ? 1 : 0.3;
+    (S.labels || []).forEach((B, i) => { if (B[0] < r && l < B[2] && B[1] < b && t < B[3]) n += S.labIds[i] === id ? 50 : nb.has(S.labIds[i]) ? 3 : 1; }); return n; };
+  const [bl, bt] = cand.map(c => [c, cost(c)]).sort((a, b) => a[1] - b[1])[0][0]; card.style.left = bl + "px"; card.style.top = bt + "px";
 }
 // 接上互動：滑鼠滑過看窗格、點一下換中心；手指點一下看窗格（窗格裡按「換到中心」）；左右拖曳轉動（手機上下滑仍是捲動頁面）
 function gxMount() {
@@ -3718,7 +3739,7 @@ function gxMount() {
     G.pin = id; G.hover = null; gxCard(card, id, x, y); dirty = true; });
   const tick = now => { if (!cv.isConnected) return; const dt = Math.min(0.05, (now - last) / 1000); last = now;
     if (!still && !drag && !G.hover && !G.pin && now - idle > 2000 && !document.hidden) { G.t += dt; G.th += dt * 0.1; dirty = true; }
-    if (dirty || W.gxS.redraw) { dirty = W.gxS.redraw = false; gxDraw(cv); } requestAnimationFrame(tick); };
+    if (dirty || W.gxS.redraw) { dirty = W.gxS.redraw = false; gxDraw(cv); const f = G.cardFix; if (f && !card.hidden && (G.pin || G.hover) === f.id) { G.cardFix = null; gxCard(card, f.id, f.x, f.y, true); } } requestAnimationFrame(tick); };
   gxDraw(cv); requestAnimationFrame(tick);
 }
 // 產業網絡（分層）：直式，上游在上、下游在下，每一層的題材自動換行（手機不用左右滑）；節點顯示今日漲跌。

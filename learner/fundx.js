@@ -121,7 +121,7 @@ function fxMap(E, D, ok) {
   const Wd = 640, Hd = 380, pad = { l: 44, r: 14, t: 16, b: 34 }, peMax = Math.min(80, Math.max(...P.map(p => p.pe)) * 1.08), ys = P.map(p => Math.max(-60, Math.min(150, p.yoy)));
   const yLo = Math.min(-10, ...ys) - 5, yHi = Math.max(20, ...ys) + 5, X = v => pad.l + (Math.min(v, peMax) / peMax) * (Wd - pad.l - pad.r), Y = v => pad.t + (1 - (Math.max(yLo, Math.min(yHi, v)) - yLo) / (yHi - yLo)) * (Hd - pad.t - pad.b);
   const mPe = qMed(P.map(p => p.pe)), mY = qMed(P.map(p => p.yoy)), rMax = Math.max(...P.map(p => p.rev), 1e-9), big = new Set([...P].sort((a, b) => b.rev - a.rev).slice(0, 8).map(p => p.c));
-  const tk = n => Array.from({ length: n + 1 }, (_, i) => i / n), cur = W.sel;
+  const tk = n => Array.from({ length: n + 1 }, (_, i) => i / n), cur = W.sel, pk = P.find(p => p.c === E.mapPick) || null, rr = p => 4 + 16 * Math.sqrt(p.rev / rMax);
   const svg = `<svg class="fxmap" viewBox="0 0 ${Wd} ${Hd}" role="img" aria-label="${esc(ind)} 本益比與營收年增">
     ${tk(4).map(f => { const v = f * peMax; return `<line x1="${X(v)}" x2="${X(v)}" y1="${pad.t}" y2="${Hd - pad.b}" class="gl"/><text x="${X(v)}" y="${Hd - pad.b + 14}" text-anchor="middle" class="ax">${v.toFixed(0)}</text>`; }).join("")}
     ${tk(4).map(f => { const v = yLo + f * (yHi - yLo); return `<line x1="${pad.l}" x2="${Wd - pad.r}" y1="${Y(v)}" y2="${Y(v)}" class="gl"/><text x="${pad.l - 6}" y="${Y(v) + 4}" text-anchor="end" class="ax">${v.toFixed(0)}%</text>`; }).join("")}
@@ -129,16 +129,31 @@ function fxMap(E, D, ok) {
     <text x="${pad.l + 6}" y="${pad.t + 14}" class="qd">便宜＋成長</text><text x="${Wd - pad.r - 6}" y="${pad.t + 14}" text-anchor="end" class="qd">貴＋成長</text>
     <text x="${pad.l + 6}" y="${Hd - pad.b - 8}" class="qd">便宜＋衰退</text><text x="${Wd - pad.r - 6}" y="${Hd - pad.b - 8}" text-anchor="end" class="qd">貴＋衰退</text>
     <text x="${(pad.l + Wd - pad.r) / 2}" y="${Hd - 4}" text-anchor="middle" class="ax">本益比（倍）→</text>
-    ${[...P].sort((a, b) => b.rev - a.rev).map(p => `<g data-sel="${esc(p.c)}" class="pt${p.c === cur ? " cur" : ""}"><title>${esc(p.n)} ${p.c}：本益比 ${p.pe.toFixed(1)}、營收年增 ${erPct(p.yoy)}、月營收 ${p.rev.toFixed(1)} 億</title><circle cx="${X(p.pe).toFixed(1)}" cy="${Y(p.yoy).toFixed(1)}" r="${(4 + 16 * Math.sqrt(p.rev / rMax)).toFixed(1)}" class="${p.yoy >= 0 ? "u" : "d"}"/>${big.has(p.c) || p.c === cur ? `<text x="${X(p.pe).toFixed(1)}" y="${(Y(p.yoy) - 6 - 16 * Math.sqrt(p.rev / rMax)).toFixed(1)}" text-anchor="middle" class="lb">${esc(p.n.slice(0, 5))}</text>` : ""}</g>`).join("")}</svg>`;
+    ${[...P].sort((a, b) => b.rev - a.rev).map(p => `<g data-fxpt="${esc(p.c)}" class="pt${p.c === cur ? " cur" : ""}${p === pk ? " pick" : ""}"><title>${esc(p.n)} ${p.c}：本益比 ${p.pe.toFixed(1)}、營收年增 ${erPct(p.yoy)}、月營收 ${p.rev.toFixed(1)} 億</title><circle cx="${X(p.pe).toFixed(1)}" cy="${Y(p.yoy).toFixed(1)}" r="${rr(p).toFixed(1)}" class="${p.yoy >= 0 ? "u" : "d"}"/>${big.has(p.c) || p.c === cur || p === pk ? `<text x="${X(p.pe).toFixed(1)}" y="${(Y(p.yoy) - 2 - rr(p)).toFixed(1)}" text-anchor="middle" class="lb">${esc(p.n.slice(0, 5))}</text>` : ""}</g>`).join("")}</svg>`;
+  // 點圓圈：旁邊跳出資訊框（和產業中位數比、同業排第幾、象限），再點「看個股」才切換；點空白或 × 關掉
+  const box = !pk ? "" : (() => { const lx = X(pk.pe) / Wd * 100, ty = Y(pk.yoy) / Hd * 100, n = P.length, peR = [...P].sort((a, b) => a.pe - b.pe).indexOf(pk) + 1, yR = [...P].sort((a, b) => b.yoy - a.yoy).indexOf(pk) + 1, dPe = (pk.pe / mPe - 1) * 100;
+    const q = `${pk.pe <= mPe ? "便宜" : "貴"}＋${pk.yoy >= mY ? "成長" : "衰退"}`, g = pk.yoy > 0 ? pk.yoy / pk.pe : null;
+    // 放左邊還是右邊：放得下（約占圖寬 42%）的那一邊裡，蓋到比較少圓圈的
+    const cnt = (a, b) => P.filter(p => p !== pk && X(p.pe) / Wd * 100 > a && X(p.pe) / Wd * 100 < b).length, rightOk = lx + 44 < 100, leftOk = lx - 44 > 0;
+    const right = rightOk && (!leftOk || cnt(lx, lx + 44) <= cnt(lx - 44, lx));
+    return `<div class="fxtip" style="left:${lx.toFixed(1)}%;top:${ty.toFixed(1)}%;--tx:${right ? "14px" : "calc(-100% - 14px)"};--ty:${ty < 30 ? "-10%" : ty > 70 ? "-90%" : "-50%"}" role="dialog" aria-label="${esc(pk.n)} 估值">
+      <div class="fxtip-h"><b>${esc(pk.n)}</b> <span class="note">${pk.c}</span><button type="button" class="fxtip-x" data-fxpt="" aria-label="關閉">×</button></div>
+      <div class="fxtip-q">${q}<span class="note">（相對產業中位數）</span></div>
+      <dl><dt>本益比</dt><dd>${pk.pe.toFixed(1)} 倍<small class="note">比中位數${dPe >= 0 ? "貴" : "便宜"} ${Math.abs(dPe).toFixed(0)}%</small><small class="note">同業第 ${peR} 低（共 ${n} 家）</small></dd>
+        <dt>營收年增</dt><dd class="${pk.yoy >= 0 ? "up" : "down"}">${erPct(pk.yoy)}<small class="note">中位數 ${erPct(mY)}</small><small class="note">成長第 ${yR} 名</small></dd>
+        <dt>月營收</dt><dd>${pk.rev.toFixed(1)} 億</dd>${g != null ? `<dt>成長÷本益比</dt><dd>${g.toFixed(2)}</dd>` : ""}</dl>
+      <button type="button" class="btn sm primary" data-sel="${esc(pk.c)}">看個股 ›</button></div>`; })();
   const L = P.filter(p => p.yoy > 0).map(p => ({ ...p, g: p.yoy / p.pe })).sort((a, b) => b.g - a.g).slice(0, 12);
   return `<section class="mk"><h3>同業估值地圖<span class="note">${esc(ind)}・${P.length} 家有本益比</span>${exNote("估值地圖", "橫軸是本益比（股價 ÷ 近四季 EPS，越左越便宜），縱軸是最新月營收年增（越上面成長越快），圓圈越大營收越大；虛線是產業中位數。左上角是「相對便宜又在成長」的公司，但便宜也可能有原因（例如獲利只是一次性的），要搭配營收與 EPS 趨勢看。")}</h3>
-    <div class="erbar">${sel}</div><div class="fxmapbox">${svg}</div>
-    <p class="note">產業中位數：本益比 ${mPe.toFixed(1)} 倍、營收年增 ${erPct(mY)}。點圓圈看個股。</p>
+    <div class="erbar">${sel}</div><div class="fxmapbox">${svg}${box}</div>
+    <p class="note">產業中位數：本益比 ${mPe.toFixed(1)} 倍、營收年增 ${erPct(mY)}。點圓圈看這家公司的估值細節。</p>
     ${L.length ? `<h4>成長 ÷ 本益比 <span class="note">年增率除以本益比，越高代表每一倍本益比換到的成長越多（類似 PEG 的倒數）</span></h4><ol class="tlist fxrank">${L.map(p => `<li><button class="linkbtn" data-sel="${esc(p.c)}">${esc(p.n)} ${p.c}</button> <span class="note">本益比 ${p.pe.toFixed(1)}・年增 ${erPct(p.yoy)}</span> <b>${p.g.toFixed(2)}</b></li>`).join("")}</ol>` : ""}</section>`;
 }
 Object.assign(EX_TW_VIEWS, { evt: fxEvt, map: fxMap });
 $("#lx").addEventListener("click", e => { if (W.lt !== "earn") return; const b = e.target.closest("[data-erevt]"); if (b) { store.set("watch:erevt", b.dataset.erevt); renderList(); } });
-$("#lx").addEventListener("change", e => { if (W.lt === "earn" && e.target.matches("[data-fxmap]")) { ER().mapInd = e.target.value; renderList(); } });
+$("#lx").addEventListener("change", e => { if (W.lt === "earn" && e.target.matches("[data-fxmap]")) { ER().mapInd = e.target.value; ER().mapPick = null; renderList(); } });
+$("#lx").addEventListener("click", e => { if (W.lt !== "earn") return; const g = e.target.closest("[data-fxpt]"); // 估值地圖：點圓圈開資訊框、再點一次或點空白關掉
+  if (g) { const c = g.dataset.fxpt; ER().mapPick = c && ER().mapPick !== c ? c : null; renderList(); } else if (ER().mapPick && e.target.closest(".fxmap") ) { ER().mapPick = null; renderList(); } });
 
 /* ---------- 庫存 → 總經敏感度 ---------- */
 // [代號, 名稱, 算法, 台股的落後天數, 情境說明, 情境的幅度, 為什麼重要]

@@ -143,8 +143,8 @@ export function parseSum(text) {
   };
 }
 
-export async function geminiJSON(parts, key, deadline, extra = {}) {
-  const models = [...new Set([process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-latest", ...GEMINI_FALLBACKS])];
+export async function geminiJSON(parts, key, deadline, extra = {}, first = null) { // first：這個用途先試的型號（例如讀簡報用較快的 lite）
+  const models = [...new Set([...(first ? [first] : []), process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-latest", ...GEMINI_FALLBACKS])];
   const body = JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.3, maxOutputTokens: 16384, ...extra } });
   let last = null;
   for (const m of models) {

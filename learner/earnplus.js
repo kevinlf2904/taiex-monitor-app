@@ -32,30 +32,33 @@ function epDiv(c, C) {
     <p class="note">近四季 EPS ${eps4.toFixed(2)} 元。配息率大於 100% 代表配的比賺的多，難持續；公司實際配多少由董事會決定，這只是照過去習慣的估算。</p>`;
 }
 const epTW = (c, C) => `<div class="epbox">${epHealth(C)}${epDiv(c, C)}</div>`;
-// 法說會：觀測站一覽表找最近幾次；有簡報檔的可以請 AI 讀簡報整理重點
+// 法說會：展開公司就自動到觀測站找今年和去年的法說會，最近一次有簡報的直接請 AI 讀簡報整理重點（同一份簡報整理過伺服器會記住，第二個人打開是秒回）
 async function epConfLoad(c) {
-  EP.conf[c] = { loading: true }; renderList();
+  EP.conf[c] = { loading: true };
   try { EP.conf[c] = await getJ(`/api/confai?code=${encodeURIComponent(c)}`, true); } catch (e) { EP.conf[c] = { err: e.message }; } if (W.lt === "earn") renderList();
 }
 async function epSum(c, file) {
-  EP.sum[file] = { loading: true }; renderList();
+  EP.sum[file] = { loading: true };
   try { const r = await fetch("/api/confai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: c, file, name: typeof nameOf === "function" ? nameOf(c) : c }), signal: tmo(65000) });
     const j = await r.json().catch(() => null); EP.sum[file] = j?.ok ? j : { err: j?.error || (r.status === 404 ? "需要部署到網站才能使用" : `服務回應 ${r.status}`) }; }
   catch (e) { EP.sum[file] = { err: e.name === "TimeoutError" || e.name === "AbortError" ? "AI 太久沒回應，請再試一次" : "連不到伺服器" }; }
   if (W.lt === "earn") renderList();
 }
 function epConf(c) {
-  const S = EP.conf[c]; if (!S) return `<div class="frdl"><button type="button" class="btn sm" data-epconf="${esc(c)}">看法說會重點 ›</button></div>`;
-  if (S.loading) return `<p class="note">找最近的法說會…</p>`; if (S.err || S.ok === false) return `<p class="note">⚠︎ ${esc(S.err || S.error)}</p>`;
-  const L = S.list || []; if (!L.length) return `<h4>法說會</h4><p class="note">近 4 個月沒有召開法說會的紀錄。</p>`;
-  const f = L.find(x => x.file), R = f ? EP.sum[f.file] : null, pdf = x => `https://mopsov.twse.com.tw/nas/STR/${x}`;
-  const sum = !f ? `<p class="note">最近幾次都沒有上傳簡報檔，AI 沒辦法整理。</p>` : !R ? `<button type="button" class="btn sm primary" data-epsum="${esc(c)}|${esc(f.file)}">${typeof ico === "function" ? ico("ai") : ""}AI 讀簡報整理重點</button>`
-    : R.loading ? `<p class="note">AI 讀簡報中（約 20～60 秒）…</p>` : R.err ? `<p class="note">⚠︎ ${esc(R.err)} <button type="button" class="btn sm" data-epsum="${esc(c)}|${esc(f.file)}">再試一次</button></p>`
+  const S = EP.conf[c], H = `<h4>法說會重點</h4>`; if (!S && !W.off) setTimeout(() => !EP.conf[c] && epConfLoad(c)); // 畫完再開始載入（避免在畫面組字串時又重畫）
+  if (!S || S.loading) return `${H}<p class="note">找今年和去年的法說會…</p>`;
+  if (S.err || S.ok === false) return `${H}<p class="note">⚠︎ ${esc(S.err || S.error)} <button type="button" class="btn sm" data-epconf="${esc(c)}">再試一次</button></p>`;
+  const L = S.list || []; if (!L.length) return `${H}<p class="note">今年和去年都沒有法說會的紀錄（不是每家公司都會開）。</p>`;
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), next = L.filter(x => x.date > today).at(-1);
+  const f = L.find(x => x.file && x.date <= today) || L.find(x => x.file), R = f ? EP.sum[f.file] : null, pdf = x => `https://mopsov.twse.com.tw/nas/STR/${x}`;
+  if (f && !R && !W.off) setTimeout(() => !EP.sum[f.file] && epSum(c, f.file)); // 有簡報就直接請 AI 整理
+  const sum = !f ? `<p class="note">最近幾次都沒有上傳簡報檔，AI 沒辦法整理。</p>` : !R || R.loading ? `<p class="note">AI 讀 ${f.date.replace(/-/g, "/")} 的簡報中（第一次約 20～60 秒，整理過的會直接顯示）…</p>`
+    : R.err ? `<p class="note">⚠︎ ${esc(R.err)} <button type="button" class="btn sm" data-epsum="${esc(c)}|${esc(f.file)}">再試一次</button></p>`
     : `<div class="epsum"><p class="frsum"><b>${esc(R.head)}</b></p>${R.outlook.length ? `<div class="pkh">展望與指引</div><ul>${R.outlook.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
       ${[["毛利率、營益率", R.margin], ["資本支出、擴產", R.capex], ["需求", R.demand]].filter(x => x[1]).map(([t, v]) => `<p><span class="note">${t}</span><br>${esc(v)}</p>`).join("")}
       ${R.risks.length ? `<div class="pkh">風險</div><ul>${R.risks.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${R.quotes.length ? `<div class="pkh">簡報原文</div><ul class="epq">${R.quotes.map(x => `<li>「${esc(x)}」</li>`).join("")}</ul>` : ""}
       <p class="note">AI 只根據公司簡報整理，可能有誤，數字請以簡報為準；不是投資建議。</p></div>`;
-  return `<h4>法說會重點<span class="note">${f ? `${f.date.replace(/-/g, "/")} 的簡報` : ""}</span></h4>${sum}
+  return `<h4>法說會重點<span class="note">${f ? `${f.date.replace(/-/g, "/")} 的簡報` : ""}</span></h4>${next ? `<p class="note">下一場：${next.date.slice(5).replace("-", "/")} ${esc(next.time || "")}</p>` : ""}${sum}
     <ul class="epconf">${L.slice(0, 4).map(x => `<li><b>${x.date.slice(5).replace("-", "/")}</b> ${esc(x.note || "")}${x.file ? ` <a href="${pdf(x.file)}" target="_blank" rel="noopener">簡報</a>` : ""}${x.en ? ` <a href="${pdf(x.en)}" target="_blank" rel="noopener">英文</a>` : ""}</li>`).join("")}</ul>`;
 }
 $("#lx").addEventListener("click", e => {
