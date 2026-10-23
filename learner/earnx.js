@@ -203,7 +203,7 @@ function exUsHist(c, J) {
 }
 // 個股「整體看法」：一句話總結，再接估值、反應
 function exCompany(c, us, J) {
-  if (us) return `<div class="excomp">${exUsHist(c, J)}</div>`;
+  if (us) return `<div class="excomp">${exUsHist(c, J)}${typeof epConf === "function" ? epConf(c) : ""}</div>`; // 財報新聞稿重點（earnplus.js、SEC 8-K）
   const D = ER().data, r = (D?.rows || []).find(x => x[0] === c), H = exH(), s = H?.streak?.rows.find(x => x[0] === c), p = H?.pm?.rows.find(x => x[0] === c), P = (J.per || []).filter(x => x.pe > 0), pe = P.length ? exPctile(P.map(x => x.pe), P.at(-1).pe) : null;
   const pts = [], tone = [0, 0];
   if (r?.[6] != null) { pts.push(`營收${r[6] >= 20 ? "成長強勁" : r[6] > 0 ? "溫和成長" : "衰退"}（月營收年增 ${erPct(r[6])}${s?.[4] >= 3 ? `，已連續 ${s[4]} 個月年增` : ""}${s?.[7] ? `，創 ${s[7]} 個月新高` : ""}）`); tone[r[6] > 0 ? 0 : 1]++; }

@@ -6,11 +6,14 @@
 import { geminiJSON, uploadBuf, fileState, fileDelete } from "./podcast.js";
 import { kv, kvOn } from "./sync.js";
 import { toIso } from "./calendar.js";
+import { okAcc, usConfList, summarizeUs } from "./usconf.js";
+// 美股（代號是英文字母）：「法說會」改用 SEC 8-K 的財報新聞稿（api/_lib/usconf.js）；file 是申報編號（accession number）
+const isUs = code => /^[A-Z][A-Z.-]{0,6}$/.test(code);
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)" }, MAX_MB = 45, INLINE_MB = 12, TTL = 180 * 86400;
 const strip = h => String(h).replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
   .replace(/[\u200e\u200f\u202a-\u202e]/g, "").replace(/\s+/g, " ").trim(); // 觀測站的文字夾了很多 &#8206;（看不見的方向符號）
-export const okFile = (code, f) => typeof f === "string" && new RegExp(`^${code}\\d{8}[ME]\\d{3}\\.pdf$`, "i").test(f);
+export const okFile = (code, f) => (isUs(code) ? okAcc(f) : typeof f === "string" && new RegExp(`^${code}\\d{8}[ME]\\d{3}\\.pdf$`, "i").test(f));
 // 一覽表裡這家公司的列：[日期, 時間, 擇要訊息, 中文簡報檔, 英文簡報檔]
 export function parseConfRows(html, code) {
   const out = [];
@@ -38,7 +41,8 @@ export const pickConf = (L, today) => L.find(x => x.file && x.date <= today) || 
 // 上一季：比 f 的簡報早 40 天以上、不同檔的最近一份（簡報檔名＝代號＋日期＋M＋序號，用檔名的日期比較，同一份簡報在多場論壇重複用也不會誤判）
 const fileDay = (code, f) => String(f || "").slice(code.length, code.length + 8);
 export function prevConf(L, f, code) {
-  if (!f?.file) return null; const d0 = Date.parse(fileDay(code, f.file).replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3"));
+  if (!f?.file) return null; if (isUs(code)) return L.find(x => x.file && x.file !== f.file && Date.parse(f.date) - Date.parse(x.date) >= 40 * 864e5) || null; // 美股：每季一份 8-K，用申報日期
+  const d0 = Date.parse(fileDay(code, f.file).replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3"));
   return L.find(x => x.file && x.file !== f.file && d0 - Date.parse(fileDay(code, x.file).replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3")) >= 40 * 864e5) || null;
 }
 // 兩季比較：只把兩份整理好的重點（文字）交給 AI，請它說哪些地方變了；tone＝更樂觀／差不多／更保守
@@ -78,9 +82,9 @@ export function parseConfSum(text) {
 export default async function handler(req, res) {
   const body = req.method === "POST" ? (typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}) : {};
   const code = String(req.query?.code || body.code || "").trim().toUpperCase();
-  if (!/^\d{4,6}[A-Z]?$/.test(code)) return res.status(400).json({ ok: false, error: "法說會只支援台股代號" });
+  if (!/^\d{4,6}[A-Z]?$/.test(code) && !isUs(code)) return res.status(400).json({ ok: false, error: "代號不對（台股數字代號或美股英文代號）" });
   if (req.method !== "POST") {
-    try { const list = await confList(code); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json({ ok: true, code, list }); }
+    try { const list = isUs(code) ? await usConfList(code) : await confList(code); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json({ ok: true, code, list }); }
     catch (e) { return res.status(200).json({ ok: false, error: `拿不到法說會資料（${e.message}）` }); }
   }
   const file = String(body.file || ""), name = String(body.name || code).slice(0, 20);
@@ -93,11 +97,11 @@ export default async function handler(req, res) {
     try { const v = { ...(await compareConf(body.a, body.b, name, key)), file, prev }; if (kvOn()) { try { await kv("SET", ck2, JSON.stringify(v), "EX", TTL); } catch {} } return res.status(200).json({ ok: true, ...v }); }
     catch (e) { return res.status(200).json({ ok: false, error: e.message }); }
   }
-  const ck = `confai:${file}`;
+  const ck = `${isUs(code) ? "usconf" : "confai"}:${file}`;
   if (kvOn()) { try { const v = await kv("GET", ck); if (v) return res.status(200).json({ ok: true, ...JSON.parse(v), cached: true }); } catch {} }
   const key = (process.env.GEMINI_API_KEY || "").trim(); if (!key) return res.status(200).json({ ok: false, error: "伺服器沒有設定 AI 金鑰（GEMINI_API_KEY）" });
   try {
-    const v = await summarizeConf(file, name, key);
+    const v = isUs(code) ? await summarizeUs(code, file, name, key, Date.now() + 55000, parseConfSum) : await summarizeConf(file, name, key);
     if (kvOn()) { try { await kv("SET", ck, JSON.stringify(v), "EX", TTL); } catch {} }
     return res.status(200).json({ ok: true, ...v });
   } catch (e) { return res.status(200).json({ ok: false, error: e.message }); }

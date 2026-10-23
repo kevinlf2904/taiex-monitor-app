@@ -63,5 +63,10 @@ test("美股財報：財測上修／下修分頁", async () => {
   const t = await p.textContent(".erlist");
   assert.match(t, /Nvidia[\s\S]*財測上修[\s\S]*raises full-year guidance[\s\S]*Netflix[\s\S]*財測下修/, "上修排前面、列出依據的標題"); assert.doesNotMatch(t, /Apple/, "看不出財測的不列");
   await p.click('[data-erv="recent"]'); assert.match(await p.textContent(".erlist"), /財測上修/, "最近公布也標出財測");
+  // 美股的「法說會」：SEC 8-K 財報新聞稿重點、上一季用申報日期找、連到 SEC 原文
+  const h = await p.evaluate(() => { EP.conf.NVDA = { ok: true, list: [{ date: "2026-08-27", file: "0001045810-26-000099", url: "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000099/", note: "季度財報新聞稿（8-K Item 2.02）" }, { date: "2026-05-28", file: "0001045810-26-000040", url: "https://www.sec.gov/x/", note: "季度財報新聞稿（8-K Item 2.02）" }] };
+    EP.sum["0001045810-26-000099"] = { head: "資料中心營收創新高", outlook: ["下季營收約 540 億美元"], margin: "毛利率 72%", capex: "", demand: "", risks: [], quotes: ["Demand for Blackwell is extraordinary"] };
+    EP.sum["0001045810-26-000040"] = { loading: true }; const d = document.createElement("div"); d.innerHTML = epConf("NVDA"); return d.textContent; });
+  assert.match(h, /財報新聞稿重點[\s\S]*08\/27 的新聞稿[\s\S]*資料中心營收創新高[\s\S]*下季營收約 540 億美元[\s\S]*跟上一季比[\s\S]*05\/28 的新聞稿[\s\S]*SEC 原文/);
   await ctx.close(); assert.deepEqual(errs, []);
 });

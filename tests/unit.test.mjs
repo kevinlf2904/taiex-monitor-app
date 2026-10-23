@@ -446,6 +446,15 @@ test("財報進階排程：月營收連續年增與創新高、營益分析換�
   const cf = C.parseConfRows(`<table>${td("2330", "台積電", "115/07/16", "14:00", "台北", "公布第2季財報及第3季展望", a("233020260716M001.pdf"), a("233020260716E001.pdf"), "", "")}${td("2317", "鴻海", "115/07/20", "", "", "", "", "", "", "")}</table>`, "2330");
   assert.deepEqual(cf, [{ date: "2026-07-16", time: "14:00", note: "公布第2季財報及第3季展望", file: "233020260716M001.pdf", en: "233020260716E001.pdf" }]);
   assert.equal(C.parseConfRows(`<table>${td("2454", "聯發科", "115/10/30", "15:00", "", "&#8206;(1) 公布第3季財報 &amp; 展望 &#8206;", "", "", "", "")}</table>`, "2454")[0].note, "(1) 公布第3季財報 & 展望", "觀測站夾的 &#8206; 要拿掉");
+  const UC = await import("../api/_lib/usconf.js");
+  const sub = { filings: { recent: { form: ["10-Q", "8-K", "8-K", "4", "8-K"], filingDate: ["2026-08-28", "2026-08-27", "2026-07-01", "2026-06-01", "2026-05-28"], accessionNumber: ["0001045810-26-000100", "0001045810-26-000099", "0001045810-26-000050", "x", "0001045810-26-000040"], items: ["", "2.02,9.01", "5.07", "", "2.02,9.01"] } } };
+  assert.deepEqual(UC.parseUs8k(sub, "0001045810").map(x => [x.date, x.file]), [["2026-08-27", "0001045810-26-000099"], ["2026-05-28", "0001045810-26-000040"]], "只留 8-K Item 2.02");
+  assert.equal(UC.parseUs8k(sub, "0001045810")[0].url, "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000099/");
+  assert.equal(UC.pickEx99([{ name: "0001045810-26-000099-index.htm", size: 1 }, { name: "nvda-20260827.htm", size: 30 }, { name: "q2fy27pr.htm", size: 90 }, { name: "ex99-1.htm", size: 80 }]), "ex99-1.htm");
+  assert.equal(UC.pickEx99([{ name: "nvda-8k.htm", size: 30 }, { name: "q2fy27pr.htm", size: 90 }]), "q2fy27pr.htm", "沒有 ex99 就用最大的");
+  assert.equal(UC.htmlText("<p>Revenue&nbsp;was $46.7&#160;billion</p><script>x()</script><div>NVIDIA&#8217;s</div>"), "Revenue was $46.7 billion\nNVIDIA's");
+  assert.ok(C.okFile("NVDA", "0001045810-26-000099") && !C.okFile("NVDA", "../etc") && !C.okFile("2330", "0001045810-26-000099"));
+  assert.equal(C.prevConf([{ date: "2026-08-27", file: "a" }, { date: "2026-08-01", file: "b" }, { date: "2026-05-28", file: "c" }], { date: "2026-08-27", file: "a" }, "NVDA").file, "c", "美股用申報日期找上一季");
   const QL = [{ date: "2026-10-15", file: "233020261015M001.pdf" }, { date: "2026-09-14", file: "233020260716M001.pdf" }, { date: "2026-07-20", file: "233020260716M002.pdf" }, { date: "2026-04-16", file: "233020260416M001.pdf" }];
   assert.equal(C.prevConf(QL, QL[0], "2330").file, "233020260716M001.pdf", "上一季：早 40 天以上的另一份簡報"); assert.equal(C.prevConf(QL, QL[3], "2330"), null);
   assert.deepEqual(C.parseConfCmp('{"tone":"整體更保守","head":"下修全年","changes":[{"k":"營收","now":"成長 10%","before":"成長 15%"},{"x":1}]}'), { tone: "更保守", head: "下修全年", changes: [{ k: "營收", now: "成長 10%", before: "成長 15%" }] });
