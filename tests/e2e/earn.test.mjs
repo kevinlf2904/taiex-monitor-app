@@ -103,7 +103,7 @@ for (const width of [1280, 390]) test(`財報進階：行事曆、連續成長�
   // 個股展開：整體看法、估值位置、月營收公布後股價反應
   await T("streak"); await p.click('[data-exk="xs:s"]'); await p.click('.erlist button[data-ertr="2330"]'); await p.waitForSelector(".excomp");
   assert.match(await p.textContent(".excomp"), /整體看法[\s\S]*基本面偏強[\s\S]*連續 18 個月年增[\s\S]*估值位置[\s\S]*本益比/);
-  await p.click('.excomp [data-exk="kl:2330"]'); await p.waitForFunction(() => /年增月|資料不夠|⚠︎/.test(document.querySelector(".excomp")?.textContent || ""));
+  await p.click('.excomp [data-exk="kl:2330"]'); await p.waitForFunction(() => /年增月|資料不夠/.test(document.querySelector(".excomp")?.textContent || "")); // 法說會會自動載入（這裡沒 mock 會出現 ⚠︎），所以不能只等 ⚠︎
   assert.match(await p.textContent(".excomp"), /年增月 5 日/); if (process.env.SHOT) await (await p.$(".excomp")).screenshot({ path: `${process.env.SHOT}/earn-comp-${width}.png` });
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "展開後沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
