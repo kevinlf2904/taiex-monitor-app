@@ -128,3 +128,21 @@ test("美股財報進階：財報週對應台股供應鏈、營收驚喜、整�
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// 個股「財務」的同業 PK：同產業月營收前 4 大，比估值與三率；自己那欄底色不同，每列最好的是粗體（本益比越低越好）
+for (const width of [390, 1280]) test(`個股財務：同業 PK 小表 (${width}px)`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  await ctx.route("**/api/oapi?earn=1", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, ym: "11509", yq: "115Q2", source: "測試", rows: ROWS }) }));
+  await ctx.route("**/api/screen?bw=1", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: { 2330: [24.5, 6.8, 1.6], 6488: [18.2, 2.1, 3.9], 3105: [-1, 1.5, null] } }) }));
+  await ctx.route("**/api/stockinfo**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, code: "6488", inst: [], margin: [], per: [], fin: [],
+    revenue: Array.from({ length: 12 }, (_, i) => ({ ym: `2026-${String(i + 1).padStart(2, "0")}`, rev: 5e9, yoy: 3 })) }) }));
+  await p.evaluate(() => { select("6488"); setDtab("fin"); setDsub("rev"); });
+  await p.waitForSelector(".pktbl", { timeout: 15000 });
+  assert.deepEqual(await p.$$eval(".pktbl thead th button", L => L.map(x => x.textContent)), ["台積電", "環球晶", "穩懋"], "半導體業依月營收排序");
+  assert.equal(await p.textContent(".pktbl thead th.pkme"), "環球晶", "自己那欄標出來");
+  const row = k => p.$$eval(".pktbl tbody tr", (L, k) => { const r = L.find(x => x.cells[0].textContent === k); return [...r.cells].slice(1).map(c => [c.textContent, c.classList.contains("exbest")]); }, k);
+  assert.deepEqual(await row("本益比"), [["24.5", false], ["18.2", true], ["—", false]], "虧損沒有本益比；越低越好");
+  assert.deepEqual((await row("毛利率")).map(x => x[1]), [true, false, false]);
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});

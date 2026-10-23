@@ -205,6 +205,9 @@ table.mini { border-collapse: collapse; font-size: 13px; margin: 6px 0 12px; } t
 .anatomy .lbl-strong { fill: var(--ink); font-weight: 500; }
 .anatomy .guide { stroke: var(--line); stroke-dasharray: 3 3; }
 
+.ptoday { margin: 12px 0 0; } .ptoday h3 { font-size: 15px; margin: 0 0 6px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; } .ptoday h3 .note { font-weight: 400; font-size: 12px; }
+.ptrow { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); align-items: start; } .ptrow > b { font-size: 13px; font-weight: 500; padding-top: 4px; }
+.ptchips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; } .ptchip { font: inherit; font-size: 12.5px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface-2); color: var(--ink); cursor: pointer; white-space: nowrap; } .ptchip small { color: var(--muted); } .ptchip .up { color: var(--up); } .ptchip .down { color: var(--down); }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
 .pcard {
   display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; cursor: pointer;
@@ -620,6 +623,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
         <div class="try" id="lessonTry"></div>
       </div>
       <div class="gallery" id="lessonGallery" hidden></div>
+      <div class="ptoday" id="lessonToday" hidden></div>
       <div class="prose" id="lessonAfter" hidden></div>
       <section class="panel deep" id="lessonDeep" aria-labelledby="deepTitle" hidden>
         <div class="deep-head"><div><div class="eyebrow">DEEP DIVE</div><h3 id="deepTitle">深入學習</h3></div><span class="note">分成五個部分，可以一頁一頁看</span></div>
@@ -897,7 +901,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.23-151</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.10.23-152</span></footer>
 
 <script src="core.js"></script>
 <script src="foldx.js"></script>
@@ -2573,7 +2577,25 @@ function drawLesson() {
   const srcNote = lessonSrc !== "real" ? "" : lessonView.loading ? "正在載入真實資料…" : lessonView.err ? `${lessonView.err}　先顯示模擬走勢。` : R ? `${R.name}・${R.from.replace(/-/g, "/")} – ${R.to.replace(/-/g, "/")}${simData ? "（K 線是真實的，籌碼與財報數字是依股價產生的示意）" : ""}` : "";
   $("#lessonTools").innerHTML = `${srcSeg}${codeIn}${seg}<span class="note">${[srcNote, what ? `${what}：圖中找到 ${markers.length} 次` : ""].filter(Boolean).join("　")}</span><span style="flex:1"></span>${lessonView.pat ? `<button class="btn" data-clear>顯示全部型態</button>` : ""}<button class="btn" data-reseed>換一段走勢</button>${LESSON_OPEN_K[L.id] ? `<button class="btn" data-openk title="到看盤的技術分頁，用真實 K 線打開這一課的指標，並把訊號對應到 K 線上">在 K 線圖打開</button>` : ""}`;
   if (L.widget === "ccw") $("#lessonWidget").innerHTML = ccwSVG(D);
+  const T = $("#lessonToday"); T.hidden = !L.gallery; if (L.gallery) T.innerHTML = ptHtml(lessonView.pat ? [lessonView.pat] : L.gallery, galleryDefs(L));
 }
+/* ---------- 今日符合型態的個股：排程（scripts/pattern-today.mjs）每個交易日收盤後掃全市場，型態課與錯題本下面列出；點一檔就用它的真實 K 線當範例圖 ---------- */
+let PT = undefined; // undefined＝還沒載、null＝沒有資料
+function ptLoad() { if (PT !== undefined || ptLoad.p) return; ptLoad.p = fetch("data/pattern-today.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : null)).catch(() => null).then(j => { PT = j?.hits ? j : null; drawLesson(); if (quiz && quiz.k >= quiz.order.length) quizRender(); }); } // 測驗結果頁的錯題型態也補畫
+const ptDefs = id => PATTERNS[id] || CHART_PATTERNS[id] || (typeof GAP_PATTERNS !== "undefined" && GAP_PATTERNS[id]) || null;
+function ptHtml(ids, defs = null, title = "今天收盤出現這些型態的個股") {
+  if (PT === undefined) { ptLoad(); return ""; }
+  if (!PT) return "";
+  const rows = ids.map(id => [id, (defs?.[id] || ptDefs(id))?.name || id, PT.hits[id] || []]), any = rows.some(r => r[2].length);
+  return `<h3>${title}<span class="note">${PT.date.slice(5).replace("-", "/")} 收盤・全市場成交值最大的 12 檔・點一檔用它的 K 線當範例圖</span></h3>
+    ${any ? rows.filter(r => r[2].length).map(([id, nm, L]) => `<div class="ptrow"><b>${esc(nm)}</b><div class="ptchips">${L.map(([c, n, px, ch]) => `<button type="button" class="ptchip" data-ptcode="${esc(c)}" data-ptpat="${esc(id)}">${esc(n)} <small>${esc(c)}</small> <span class="${ch > 0 ? "up" : ch < 0 ? "down" : ""}">${ch > 0 ? "+" : ""}${ch.toFixed(1)}%</span></button>`).join("")}</div></div>`).join("")
+      : `<p class="note">今天沒有個股出現${ids.length === 1 ? `「${esc(rows[0][1])}」` : "這些型態"}。</p>`}<p class="note">型態只是統計上的線索，要搭配趨勢、成交量與隔天走勢確認，不是買賣建議。</p>`;
+}
+// 點了：到有這個型態的課（錯題本也是），範例圖換成這檔的真實 K 線（最近一段，今天那根在最右邊），並選好這個型態
+document.addEventListener("click", e => { const b = e.target.closest("[data-ptcode]"); if (!b) return; const id = b.dataset.ptpat, i = LESSONS.findIndex(l => l.gallery?.includes(id)); if (i < 0) return;
+  if (CUR_TAB !== "learn") switchTab("learn"); if (i !== lessonIdx) showLesson(i);
+  lessonSrc = "real"; store.set("lessonSrc", lessonSrc); lessonCode = b.dataset.ptcode; store.set("lessonCode", lessonCode);
+  lessonView.real = null; lessonView.seedOff = 0; lessonView.D = null; lessonView.pat = lessonView.keepPat = id; loadLessonData(); drawLesson(); $("#lessonChart").scrollIntoView({ block: "center", behavior: "smooth" }); });
 let lessonSrc = store.get("lessonSrc", "sim") === "real" ? "real" : "sim", lessonCode = store.get("lessonCode", "2330");
 function loadLessonData() {
   const L = LESSONS[lessonIdx], V = lessonView;
@@ -2583,7 +2605,7 @@ function loadLessonData() {
   fetchReal(lessonCode === "TAIEX" ? "加權" : lessonCode, 12).then(j => {
     if (V.tok !== tok || lessonView !== V) return;
     const n = Math.min(L.n, j.data.length), max = j.data.length - n, a = first && !V.seedOff ? max : Math.floor(Math.random() * (max + 1));
-    V.D = j.data.slice(a, a + n).map(x => ({ ...x, v: x.v || 0 })); V.I = indicators(V.D); V.pat = null;
+    V.D = j.data.slice(a, a + n).map(x => ({ ...x, v: x.v || 0 })); V.I = indicators(V.D); V.pat = V.keepPat || null; V.keepPat = null; // 從「今日符合型態」點進來的保留選好的型態
     V.real = { name: realName(j), from: V.D[0].d, to: V.D[n - 1].d };
   }).catch(err => { if (V.tok === tok) { V.err = err?.message || "載入失敗"; V.real = null; V.D = genSeries(L.seed + V.seedOff * 7919, L.n); V.I = indicators(V.D); } })
     .finally(() => { if (V.tok === tok && lessonView === V) { V.loading = false; drawLesson(); } });
@@ -2983,6 +3005,12 @@ function quizMark(i, ok, rev = quiz?.review) { const w = wrongQ(), x = w[i]; sta
   else if (!ok) w[i] = { n: (x?.n || 0) + 1, at: srsDay(), box: 0, due: srsDay() }; /* 剛答錯的當天就能複習；複習時又錯才排到隔天 */
   store.set("wrongQ", w); }
 let QUIZ_LAST = null;
+// 錯題本裡講到的型態（題目、解說、正確答案提到的型態名稱），列出今天出現這些型態的真實個股
+function ptWrongHtml() {
+  const txt = Object.keys(wrongQ()).map(i => QUESTIONS[+i]).filter(Boolean).map(q => q.q + q.e + q.o[q.a]).join("\n");
+  const ids = LESSONS.flatMap(l => l.gallery || []).filter((id, k, a) => a.indexOf(id) === k && txt.includes(ptDefs(id)?.name || "\u0000"));
+  if (!ids.length) return ""; const h = ptHtml(ids, null, "錯題講到的型態：今天出現的個股"); return h ? `<div class="ptoday">${h}</div>` : "";
+}
 SHARE.quiz = () => { const Q = QUIZ_LAST; if (!Q) return null; const pct = Q.score / Q.N;
   return { name: "quiz", title: `K線學堂觀念測驗：${Q.score} / ${Q.N}`, sub: Q.review ? "錯題複習" : `歷史最佳 ${Q.best} / ${Q.N}`,
     stats: [["答對", `${Q.score} 題`, "up"], ["答錯", `${Q.N - Q.score} 題`, "down"], ["正確率", `${Math.round(pct * 100)}%`]],
@@ -2997,7 +3025,7 @@ function quizRender() {
       <p style="margin:0">${pct >= 0.85 ? "觀念很扎實，可以到判讀挑戰實戰看看。" : pct >= 0.6 ? "基礎不錯。答錯的題目回到對應課程複習一下。" : "建議先把課程從頭走一遍，再回來挑戰。"}</p>
       <p class="note" style="margin:0">${quiz.review ? "錯題複習：答對的題目延後到下一次複習（1、3、7、14、30 天），答錯的明天再複習一次。" : `歷史最佳：${best} / ${N}`}</p>
       <div class="row"><button class="btn primary" id="qAgain">再測一次</button>${wrongQDue().length ? `<button class="btn" id="qWrong">複習到期錯題（${wrongQDue().length} 題）</button>` : ""}<button class="btn" id="qLearn">回到課程</button></div>
-      ${!wrongQDue().length && Object.keys(wrongQ()).length ? `<p class="note" style="margin:0">錯題本還有 ${Object.keys(wrongQ()).length} 題，今天都不用複習；下次複習：${srsNextDay(Object.values(wrongQ()))}。</p>` : ""}</div>`;
+      ${!wrongQDue().length && Object.keys(wrongQ()).length ? `<p class="note" style="margin:0">錯題本還有 ${Object.keys(wrongQ()).length} 題，今天都不用複習；下次複習：${srsNextDay(Object.values(wrongQ()))}。</p>` : ""}${ptWrongHtml()}</div>`;
     $("#qAgain").addEventListener("click", () => quizStart()); $("#qLearn").addEventListener("click", () => switchTab("learn")); $("#qWrong")?.addEventListener("click", () => quizStart(true));
     return;
   }

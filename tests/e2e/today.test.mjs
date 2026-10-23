@@ -23,3 +23,23 @@ for (const width of [390, 1280]) test(`今日重點卡 ${width}`, async () => {
   await p.click('#todayCard [data-tdgo="mkt"]'); assert.equal(await p.evaluate(() => W.lt), "mkt"); assert.equal(await p.isHidden("#todayCard"), true, "其他分頁不顯示");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// 一鍵推到 Telegram：沒有同步碼自動建立、勾好收盤重點與早報並上傳；開機器人 → 完成綁定 → 顯示已綁定
+for (const width of [390, 1280]) test(`今日重點卡一鍵推到 Telegram ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  const posts = [];
+  await ctx.route(/\/api\/sync\?op=cfg/, r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ kv: true, tg: true, bot: "kl_test_bot" }) }));
+  await ctx.route(/\/api\/sync$/, r => { const b = JSON.parse(r.request().postData() || "{}"); posts.push(b.op);
+    r.fulfill({ contentType: "application/json", body: JSON.stringify(b.op === "push" ? { ok: true, at: Date.now(), tg: posts.includes("tgbind") } : { ok: true }) }); });
+  await p.evaluate(() => { localStorage.removeItem("kline-sync"); W.syncCfg = null; W.td = { at: Date.now() }; W.hold = { 1234: { sh: 1000, cost: 50 } }; W.quotes.set("1234", { ...(W.quotes.get("1234") || {}), chgPct: -4.2 }); setLt("watch"); renderList(); });
+  await p.click("#todayCard [data-tgone]"); await p.waitForSelector("#sheetExtra .tgone [data-tgone-bind]");
+  assert.match(await p.getAttribute("#sheetExtra .tgone a[href*='t.me']", "href"), /t\.me\/kl_test_bot\?start=[0-9a-f]{24}$/, "連結帶綁定碼");
+  assert.deepEqual(await p.evaluate(() => [!!syncGet().id, EVA().close, EVA().brief]), [true, true, true], "自動建同步碼、勾好收盤重點與早報");
+  assert.ok(posts.includes("push"), "設定已上傳");
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  await p.click("#sheetExtra [data-tgone-bind]"); await p.waitForSelector("#sheetExtra [data-tgone-test]");
+  assert.match(await p.textContent("#sheetExtra"), /已綁定/);
+  await p.uncheck('#sheetExtra [data-tgk="brief"]'); assert.equal(await p.evaluate(() => EVA().brief), false, "可以只留收盤重點");
+  assert.match(await p.textContent("#todayCard [data-tgone]"), /✓ 收盤後推到 Telegram/);
+  await ctx.close(); assert.deepEqual(errs, []);
+});

@@ -351,7 +351,7 @@ function podCons(calls, days, today = podToday()) {
     hot: days > 7 ? L.filter(g => g.n7 >= 2 && g.n7 > g.pre).sort((a, b) => b.n7 - b.pre - (a.n7 - a.pre)).slice(0, 15) : [] };
 }
 function podConsView() {
-  const days = POD_CW.includes(POD.cw) ? POD.cw : 30, R = podCons(podCalls(), days);
+  const days = POD_CW.includes(POD.cw) ? POD.cw : 30, mf = typeof mineF === "function" ? mineF() : () => true, R = podCons(podCalls().filter(c => mf(c.code)), days);
   const shows = m => [...m.values()].map(c => esc(c.show || "")).join("、");
   const row = (g, extra = "") => { const tw = /^\d/.test(g.code), q = typeof W !== "undefined" ? W.quotes?.get(g.code) : null, tot = g.nb + g.ns || 1;
     return `<li class="pcons"><button class="pcode" data-sel="${esc(g.code)}">${tw ? "TWSE" : "US"}:${esc(g.code)}</button><span class="pname">${esc(g.name || nameOf(g.code))}</span>${typeof wStar === "function" ? wStar(g.code) : ""}
@@ -395,7 +395,7 @@ function renderPod() {
   podBoot();
   if (POD.booted && !POD.pxBusy) setTimeout(podLoadPx, 0); // 有缺的股價（或之前失敗的）就補抓
   const tab = ["ep", "show"].includes(POD.view) ? POD.hist.find(h => !["ep", "show"].includes(h.view))?.view || "home" : POD.view;
-  $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="節目" id="podSeg">${[["home", "最新筆記"], ["cons", "共識與分歧"], ["rank", "節目排行"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}`;
+  $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="節目" id="podSeg">${[["home", "最新筆記"], ["cons", "共識與分歧"], ["rank", "節目排行"], ["follow", "追蹤清單"]].map(([k, t]) => `<button data-pv="${k}" aria-pressed="${tab === k}">${t}</button>`).join("")}</div>${POD.busy || POD.pxBusy ? '<span class="note">更新中…</span>' : `<button class="btn sm" data-prefresh>↻ 更新</button>`}${POD.view === "cons" && typeof mineBtn === "function" ? mineBtn() : ""}`;
   const body = POD.view === "ep" ? podEpView() : POD.view === "show" ? podShowView() : POD.view === "rank" ? podRankView() : POD.view === "cons" ? podConsView() : POD.view === "follow" ? podFollowView() : podHome();
   const showAbn = POD.view === "home" || POD.view === "rank"; // 證交所點名的節目異常推介個股（official.js，用到才載入；載好再畫一次）
   const abn = !showAbn ? "" : typeof offAbnHtml === "function" ? offAbnHtml() : (typeof lazy === "function" && lazy("mkx").then(() => W.lt === "pod" && typeof offAbnHtml === "function" && podRender(), () => {}), "");

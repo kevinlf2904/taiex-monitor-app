@@ -11,6 +11,10 @@ async function dailyFresh(c) {
   M.set(c, { at: Date.now(), p }); return p;
 }
 const myCodes = () => [...new Set(W.groups.flatMap(g => g.list))].filter(c => !isIdx(c));
+// ★ 只看我的自選：財報、法說會、節目共識、大戶國會共用同一個開關（W.mine，記在 watch:mine），範圍是自選＋庫存
+const mineCodes = () => new Set([...myCodes(), ...Object.keys(W.hold || {})]);
+const mineF = () => { if (!W.mine) return () => true; const S = mineCodes(); return c => S.has(String(c || "").toUpperCase()); };
+const mineBtn = () => `<button type="button" class="ichip minebtn" data-mine aria-pressed="${!!W.mine}" title="財報、法說會、節目共識、大戶國會都只列自選與庫存的股票">★ 只看我的自選</button>`;
 
 /* ---------- 指標條件 ---------- */
 // [id, 名稱, 參數名稱（沒有就 null）, 預設參數, 判斷(D, I, p) → 最後一根成立就回傳說明]
@@ -697,8 +701,8 @@ function insBtHtml() {
 function insHtml() {
   const I = W.ins; if (!I) { insLoad(); return `<p class="note">載入中…</p>`; }
   if (I.err || !I.rows?.length) return `<p class="note">⚠︎ 內部人申報資料還沒有（${esc(I.err || "沒有資料")}）。資料由每個交易日的排程從證交所、櫃買中心整理。</p>`;
-  const mine = new Set([...myCodes(), ...Object.keys(W.hold || {})]), f = W.insF || "mine", q = (W.insQ || "").trim().toUpperCase(), view = ["rank", "feed", "bt", "heat"].includes(W.insv) ? W.insv : "rank";
-  const none = f === "mine" && !q && !I.rows.some(r => mine.has(r.code)); // 自選、庫存都沒有申報：直接看全部
+  const mine = mineCodes(), f = W.mine ? "mine" : W.insF || "mine", q = (W.insQ || "").trim().toUpperCase(), view = ["rank", "feed", "bt", "heat"].includes(W.insv) ? W.insv : "rank";
+  const none = !W.mine && f === "mine" && !q && !I.rows.some(r => mine.has(r.code)); // 自選、庫存都沒有申報：直接看全部（開著「★ 只看我的自選」就不換）
   const L = I.rows.filter(r => (q ? r.code.startsWith(q) || (r.name || "").toUpperCase().includes(q) : f === "mine" && !none ? mine.has(r.code) : true));
   // 期間：近 30／90／365 天或全部；「最新申報」可以按月份往前翻
   const per = cxPer("ins"), R30 = L.filter(r => cxIn(r.d, per)), mkt = r => /一般交易|盤後|鉅額|拍賣/.test(r.how), wTxt = cxWTxt("ins");
@@ -954,7 +958,7 @@ function twoHtml(arg = "") {
   const X = W.two; if (!X) { twoLoad(); return `<p class="note" style="padding:16px">載入中…</p>`; }
   if (X.err || !X.decl?.length) return `<p class="note" style="padding:16px">⚠︎ 台灣政治人物申報資料還沒有（${esc(X.err || "沒有資料")}）。資料由排程從監察院廉政專刊整理，每週更新。</p>`;
   twoPxLoad();
-  const P = twoPeople(), [kind, id] = arg.split(/:(.*)/s);
+  const mf = mineF(), [kind, id] = arg.split(/:(.*)/s), P = twoPeople().filter(p => !W.mine || kind === "p" || p.hold.some(h => mf(h.code))); // ★ 只看我的自選：只列持有自選或庫存股票的人
   const tag = t => `<span class="ctag ${t === "new" || t === "add" ? "many" : "one"}">${{ new: "新進", add: "增持", cut: "減持", sold: "出清" }[t]}</span>`;
   const pxNote = X.pxDate ? `以 ${X.pxDate.replace(/-/g, "/")} 收盤價計算` : W.twoLive ? "以最新報價計算" : "以台股最新收盤價計算";
   const amtSeg = `<span class="tw-amt seg sm" role="group" aria-label="金額顯示">${[["full", "完整數字"], ["short", "億萬"]].map(([k, t]) => `<button type="button" data-twamt="${k}" aria-pressed="${(W.twoAmt || "full") === k}">${t}</button>`).join("")}</span>`;

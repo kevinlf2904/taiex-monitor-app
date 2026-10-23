@@ -16,7 +16,8 @@ export function engine() {
   for (const f of ["core.js", "analysis.js", "quant.js", "tools.js", "brief.js"]) vm.runInContext(readFileSync(L(f), "utf8"), c, { filename: f });
   const g = n => vm.runInContext(n, c);
   ctx = { indicators: g("indicators"), COND: g("COND"), SCOND: g("SCOND"), condOf: g("condOf"), condName: g("condName"), condCheck: g("condCheck"), stratRun: g("stratRun"), STRAT_DEFS: g("STRAT_DEFS"), backtest: g("backtest"), agg: g("agg"), weekKey: g("weekKey"),
-    B: Object.fromEntries(["evScan", "revOf", "briefParts", "briefText", "twDay", "macroBeta"].map(n => [n, g(n)])), // 事件提醒、早報（brief.js）
+    S: { Signals: g("Signals"), detectPattern: g("detectPattern"), PATTERNS: g("PATTERNS"), CHART_PATTERNS: g("CHART_PATTERNS") }, // K 線型態、型態學、缺口（K線學堂的型態課）
+    B: Object.fromEntries(["evScan", "revOf", "briefParts", "briefText", "twDay", "macroBeta", "todayData", "closeText"].map(n => [n, g(n)])), // 事件提醒、早報（brief.js）
     Q: Object.fromEntries(["btMetrics", "regimes", "btBreakdown", "btVariants", "btAdvice", "adxCalc", "marketState", "stateAdvice", "atrSetup", "portRisk", "portPlan", "factorRaw", "factorScore", "factorBacktest", "btReportHtml", "stateHtml", "btReportText"].map(n => [n, g(n)])) };
   return ctx;
 }

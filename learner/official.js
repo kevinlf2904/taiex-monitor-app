@@ -31,7 +31,7 @@ function offFilter(rows, ci = 0, ni = 1) {
 function renderOff(top) {
   const O = OFFS(), D = W.offc;
   const bar = `<div class="mn-days mkseg otcv">${OFF_VIEWS.map(([k, t]) => `<button type="button" data-mk="offV" data-v="${k}" aria-pressed="${O.view === k}">${t}</button>`).join("")}</div>`;
-  if (!D) { $("#lx").innerHTML = top + bar + `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有官方公告。" : "載入證交所、櫃買中心公告…"}</p>`; offLoad(); return; }
+  if (!D) { $("#lx").innerHTML = top + bar + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有官方公告。</p>` : skel("載入證交所、櫃買中心公告…")); offLoad(); return; }
   if (D.err || !D.ok) { $("#lx").innerHTML = top + bar + `<p class="note err" style="padding:12px">⚠︎ ${esc(D.err || D.error || "暫時拿不到資料")}</p>`; return; }
   const filt = !["dca", "holiday"].includes(O.view) ? `<div class="cx-row" style="padding:0 12px"><span class="cx-lab">篩選</span><div class="cx-body">${mkSeg("offScope", O.scope, [["all", "全部"], ["mine", "自選＋庫存"]])}${cxQ("offQ", "搜尋代號或名稱")}</div></div>` : "";
   const f = { news: offNewsHtml, risk: offRiskHtml, ipo: offIpoHtml, esb: offEsbHtml, dca: offDcaHtml, margin: offMarginHtml, broker: offBrokerHtml, block: offBlockHtml, holiday: offHolHtml }[O.view] || offNewsHtml;
