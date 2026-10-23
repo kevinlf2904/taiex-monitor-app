@@ -69,5 +69,11 @@ test("外層浮動返回：看盤、情報局不疊，學堂裡照常 390", asyn
   assert.equal(await p.evaluate(() => !!$("#navBackFab") && !$("#navBackFab").hidden), true, "學堂裡往下一頁，有返回");
   await p.evaluate(() => goTab("watch")); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => !$("#navBackFab") || $("#navBackFab").hidden), true, "看盤裡面自己有返回，外層不疊");
+  // 往下捲時浮動按鈕淡出，停下 0.7 秒就回來（「回到最上面」才按得到）
+  await p.evaluate(() => goTab("learn")); await p.evaluate(() => scrollTo(0, 0)); await p.waitForTimeout(100);
+  await p.mouse.wheel(0, 1500); await p.waitForTimeout(120);
+  assert.equal(await p.evaluate(() => document.documentElement.classList.contains("fab-quiet")), true, "往下捲時淡出");
+  await p.waitForTimeout(900);
+  assert.equal(await p.evaluate(() => document.documentElement.classList.contains("fab-quiet")), false, "停下來就回來");
   await ctx.close(); assert.deepEqual(errs, []);
 });

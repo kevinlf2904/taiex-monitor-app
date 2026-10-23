@@ -68,7 +68,7 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 .brand p { margin: 0; font-size: 12px; color: var(--muted); letter-spacing: 0.05em; }
 #navBackFab { position: fixed; left: 14px; bottom: 24px; z-index: 30; height: 38px; padding: 0 16px; border-radius: 999px; border: 0; background: color-mix(in srgb, var(--ink) 14%, var(--bg)); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
 @media (max-width: 640px) { #navBackFab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } }
-/* 手機上往下捲時浮動按鈕（返回、回到最上面、問問題）先淡出，不蓋住正在看的報價、圖表；往上捲或停在最上面就回來 */
+/* 手機上往下捲時浮動按鈕（返回、回到最上面、問問題）先淡出，不蓋住正在看的報價、圖表；停下來或往上捲就回來 */
 :is(#navBackFab, #toTop, .chat-fab) { transition: opacity .2s, transform .2s; }
 @media (max-width: 640px) { html.fab-quiet :is(#navBackFab, #toTop, .chat-fab) { opacity: 0 !important; transform: translateY(14px); pointer-events: none; } }
 .tabs { display: flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px; padding: 3px; overflow-x: auto; max-width: 100%; }
@@ -4937,7 +4937,8 @@ const goTab = t => {
 { const b = document.createElement("button"); b.id = "toTop"; b.type = "button"; b.hidden = true; b.setAttribute("aria-label", "回到最上面"); b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
   b.addEventListener("click", () => scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })); document.body.appendChild(b);
   addEventListener("scroll", () => { const on = scrollY > Math.min(700, innerHeight * 0.8); if (b.hidden === on) b.hidden = !on; }, { passive: true }); }
-{ let y0 = scrollY; addEventListener("scroll", () => { const y = scrollY, d = y - y0; if (Math.abs(d) < 8 && y > 40) return; document.documentElement.classList.toggle("fab-quiet", d > 0 && y > 120); y0 = y; }, { passive: true }); }
+// 往下捲的時候先淡出，停下 0.7 秒（或往上捲）就回來：看東西時不擋，要按「回到最上面」時又找得到
+{ let y0 = scrollY, t = 0; const de = document.documentElement; addEventListener("scroll", () => { const y = scrollY, d = y - y0; clearTimeout(t); t = setTimeout(() => de.classList.remove("fab-quiet"), 700); if (Math.abs(d) < 8 && y > 40) return; de.classList.toggle("fab-quiet", d > 0 && y > 120); y0 = y; }, { passive: true }); }
 addEventListener("scroll", () => { PNAV.y = Math.round(scrollY); clearTimeout(PNAV.yt); PNAV.yt = setTimeout(pnavFlush, 250); }, { passive: true });
 addEventListener("popstate", e => { const st = e.state; if (!st?.tab) return; switchTab(st.tab); const y = st.y || 0;
   requestAnimationFrame(() => scrollTo({ top: y })); if (y > 0) [250, 700].forEach(t => setTimeout(() => { if (scrollY < y - 4) scrollTo({ top: y }); }, t)); pnavBackUi(); });
