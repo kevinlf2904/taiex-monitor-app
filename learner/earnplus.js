@@ -3,7 +3,7 @@
    股價習慣在 earnx.js 的 exReactTw（月營收公布前後）、exUsHist（美股財報公布隔天）；美股財測在 earn.js 的「財測」分頁。
    全部只用公開財報數字照公式算，AI 只整理公司自己的簡報；不是投資建議。
    用到 finrep.js 的 frYi、frPctTxt，earn.js 的 erNum，watch.html 的 W、esc、cls、renderList、barLineSvg、tmo。 */
-const EP = { conf: {}, sum: {}, pre: null };
+const EP = { conf: {}, sum: {}, cmp: {}, pre: null };
 const epYoY = (L, k) => { const a = L.at(-1)?.[k], b = L.at(-5)?.[k]; return a != null && b ? (a / b - 1) * 100 : null; };
 // 體質：存貨、應收帳款跟營收比誰長得快；存貨週轉天數（用營收估）；近 8 季自由現金流
 function epHealth(C) {
@@ -46,6 +46,27 @@ async function epSum(c, file) {
   catch (e) { EP.sum[file] = { err: e.name === "TimeoutError" || e.name === "AbortError" ? "AI 太久沒回應，請再試一次" : "連不到伺服器" }; }
   if (W.lt === "earn") renderList();
 }
+// 跟上一季比：上一季（比這份早 40 天以上的另一份簡報，和 api/_lib/confai.js 的 prevConf 一樣）也整理好時，請 AI 比較兩份重點；排程比過的直接用
+const epDay = (c, f) => Date.parse(String(f).slice(c.length, c.length + 8).replace(/(\d{4})(\d\d)(\d\d)/, "$1-$2-$3"));
+const epPrev = (L, f, c) => (f?.file ? L.find(x => x.file && x.file !== f.file && epDay(c, f.file) - epDay(c, x.file) >= 40 * 864e5) || null : null);
+async function epCmpRun(c, f, p, a, b) {
+  const k = f + "|" + p; EP.cmp[k] = { loading: true };
+  try { const r = await fetch("/api/confai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "cmp", code: c, file: f, prev: p, a, b, name: typeof nameOf === "function" ? nameOf(c) : c }), signal: tmo(50000) });
+    const j = await r.json().catch(() => null); EP.cmp[k] = j?.ok ? j : { err: j?.error || `服務回應 ${r.status}` }; }
+  catch (e) { EP.cmp[k] = { err: e.name === "TimeoutError" || e.name === "AbortError" ? "AI 太久沒回應，請再試一次" : "連不到伺服器" }; }
+  if (W.lt === "earn") renderList();
+}
+function epCmpHtml(c, f, p, R) {
+  const B = EP.sum[p.file] || EP.pre?.sums?.[p.file], k = f.file + "|" + p.file, pre = EP.pre?.cmps?.[f.file], C = EP.cmp[k] || (pre?.prev === p.file ? pre : null), d = p.date.replace(/-/g, "/"), H = `<div class="pkh">跟上一季比<span class="note">${d} 的簡報</span></div>`;
+  if (!C) {
+    if (B?.head) { setTimeout(() => !EP.cmp[k] && epCmpRun(c, f.file, p.file, R, B)); return `${H}<p class="note">AI 比較兩季中…</p>`; }
+    return B?.loading ? `${H}<p class="note">AI 讀上一季的簡報中…</p>` : `${H}${B?.err ? `<p class="note">⚠︎ ${esc(B.err)}</p>` : ""}<button type="button" class="btn sm" data-epsum="${esc(c)}|${esc(p.file)}">跟上一季比（AI 讀 ${d} 的簡報）</button>`;
+  }
+  if (C.loading) return `${H}<p class="note">AI 比較兩季中…</p>`;
+  if (C.err) return `${H}<p class="note">⚠︎ ${esc(C.err)} <button type="button" class="btn sm" data-epcmp="${esc(c)}|${esc(f.file)}|${esc(p.file)}">再試一次</button></p>`;
+  return `<div class="epcmp">${H}<p><b class="eptone ${C.tone === "更樂觀" ? "up" : C.tone === "更保守" ? "down" : ""}">${esc(C.tone)}</b> ${esc(C.head || "")}</p>
+    ${C.changes?.length ? `<ul>${C.changes.map(x => `<li><b>${esc(x.k)}</b><span>這一季：${esc(x.now || "—")}</span><small class="note">上一季：${esc(x.before || "—")}</small></li>`).join("")}</ul>` : ""}</div>`;
+}
 function epConf(c) {
   const S = EP.conf[c], H = `<h4>法說會重點</h4>`; if (!S && !W.off) setTimeout(() => !EP.conf[c] && epConfLoad(c)); // 畫完再開始載入（避免在畫面組字串時又重畫）
   if (!S || S.loading) return `${H}<p class="note">找今年和去年的法說會…</p>`;
@@ -59,13 +80,17 @@ function epConf(c) {
     : `<div class="epsum"><p class="frsum"><b>${esc(R.head)}</b></p>${R.outlook.length ? `<div class="pkh">展望與指引</div><ul>${R.outlook.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
       ${[["毛利率、營益率", R.margin], ["資本支出、擴產", R.capex], ["需求", R.demand]].filter(x => x[1]).map(([t, v]) => `<p><span class="note">${t}</span><br>${esc(v)}</p>`).join("")}
       ${R.risks.length ? `<div class="pkh">風險</div><ul>${R.risks.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${R.quotes.length ? `<div class="pkh">簡報原文</div><ul class="epq">${R.quotes.map(x => `<li>「${esc(x)}」</li>`).join("")}</ul>` : ""}
+      ${(p => (p ? epCmpHtml(c, f, p, R) : ""))(epPrev(L, f, c))}
       <p class="note">AI 只根據公司簡報整理，可能有誤，數字請以簡報為準；不是投資建議。</p></div>`;
   return `<h4>法說會重點<span class="note">${f ? `${f.date.replace(/-/g, "/")} 的簡報` : ""}</span></h4>${next ? `<p class="note">下一場：${next.date.slice(5).replace("-", "/")} ${esc(next.time || "")}</p>` : ""}${sum}
     <ul class="epconf">${L.slice(0, 4).map(x => `<li><b>${x.date.slice(5).replace("-", "/")}</b> ${esc(x.note || "")}${x.file ? ` <a href="${pdf(x.file)}" target="_blank" rel="noopener">簡報</a>` : ""}${x.en ? ` <a href="${pdf(x.en)}" target="_blank" rel="noopener">英文</a>` : ""}</li>`).join("")}</ul>`;
 }
 $("#lx").addEventListener("click", e => {
   if (W.lt !== "earn") return; const a = e.target.closest("[data-epconf]"), b = e.target.closest("[data-epsum]");
+  const m = e.target.closest("[data-epcmp]");
   if (a) epConfLoad(a.dataset.epconf); else if (b) { const [c, f] = b.dataset.epsum.split("|"); epSum(c, f); }
+  else if (m) { const [c, f, p] = m.dataset.epcmp.split("|"); delete EP.cmp[f + "|" + p]; renderList(); }
 });
 { const css = document.createElement("style"); css.textContent = `.epbox { margin-top: 6px; } .epkv { list-style: none; margin: 4px 0; padding: 0; } .epkv li { display: grid; grid-template-columns: minmax(0, 8em) auto; gap: 0 10px; padding: 6px 0; border-top: 1px solid var(--line); } .epkv li:first-child { border-top: 0; } .epkv small { grid-column: 1 / -1; }
-.epsum ul, .epconf { margin: 4px 0 8px; padding-left: 1.2em; line-height: 1.6; } .epsum p { margin: 6px 0; line-height: 1.6; } .epconf { list-style: none; padding: 0; font-size: 13px; } .epconf li { padding: 4px 0; border-top: 1px solid var(--line); } .epconf a { margin-left: 4px; } .epq li { color: var(--muted); } .epbox .d-kv small { display: block; } .epwarn { color: var(--ink); }`; document.head.appendChild(css); }
+.epsum ul, .epconf { margin: 4px 0 8px; padding-left: 1.2em; line-height: 1.6; } .epsum p { margin: 6px 0; line-height: 1.6; } .epconf { list-style: none; padding: 0; font-size: 13px; } .epconf li { padding: 4px 0; border-top: 1px solid var(--line); } .epconf a { margin-left: 4px; } .epq li { color: var(--muted); } .epbox .d-kv small { display: block; }
+.epcmp ul { list-style: none; padding: 0; } .epcmp li { display: grid; gap: 2px; padding: 6px 0; border-top: 1px solid var(--line); } .epcmp li b { font-size: 13px; } .eptone { padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor; font-size: 12px; } .epwarn { color: var(--ink); }`; document.head.appendChild(css); }

@@ -1,13 +1,13 @@
 // 收盤後 Telegram 提醒：讀雲端同步裡「有綁定 Telegram」的使用者的指標提醒與價格提醒，用收盤後的日 K 檢查，成立就推播；
 // 另外推播追蹤的國會議員、13F 機構的新申報，以及庫存台股的內部人轉讓申報（情報局「大戶國會 → 我的追蹤」）；
-// 有勾「事件提醒」的人，再加上庫存（可含自選）的營收公布、三率三升、法說會前一天（判斷用 learner/brief.js 的 evScan，和網頁一樣）。
+// 有勾「事件提醒」的人，再加上庫存（可含自選）的營收公布、三率三升、法說會前一天、ETF 換股（判斷用 learner/brief.js 的 evScan，和網頁一樣）。
 // 在 .github/workflows/market-scan.yml 裡、全市場日 K 更新之後執行：台股直接用 .cache/allk.json，美股向 Yahoo 抓。
 // 條件判斷用網站同一套程式（scripts/_engine.mjs 載入 learner/tools.js 的 COND），結果和網頁上的「指標提醒」一致。
 // 需要的 GitHub secrets：KV_REST_API_URL、KV_REST_API_TOKEN（和 Vercel 上同一個 Upstash）、TELEGRAM_BOT_TOKEN；沒設定就直接結束。
 // 同一個人同一天只送一次（KV 記 sent:<id>:<日期>，兩天後自動過期）。
 //   --dry  只印出會送的內容，不送出
 
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { engine } from "./_engine.mjs";
 import { kv, tg } from "../api/_lib/sync.js";
@@ -51,7 +51,8 @@ export async function callApi(mod, query = {}) {
 // 事件提醒要的資料：上市櫃月營收歷史（排程整理的 twse-rev／tpex-rev）、三率（earn-hist.json）、法說會（/api/calendar）
 export async function evDataOf(E, cal) {
   const rev = {}; for (const f of ["twse-rev.json", "tpex-rev.json"]) for (const [c, v] of Object.entries((await readData(f)) || {})) { const r = Array.isArray(v) ? E.B.revOf(v[2]) : null; if (r) rev[c] = { ...r, name: v[0] }; }
-  return { rev, pm: (await readData("earn-hist.json"))?.pm || null, conf: cal?.conf || [] };
+  const etf = {}; for (const f of await readdir(fileURLToPath(new URL("../learner/data/etf-hold/", import.meta.url))).catch(() => [])) if (f.endsWith(".json")) { const j = await readData("etf-hold/" + f); if (j?.ev?.length) etf[f.slice(0, -5)] = { name: j.name, ev: j.ev }; } // ETF 換股
+  return { rev, pm: (await readData("earn-hist.json"))?.pm || null, conf: cal?.conf || [], etf };
 }
 
 export async function main() {

@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       max:
-        description: "這次最多整理幾份（第一次補齊可填 100）"
-        default: "20"
+        description: "這次最多呼叫幾次 AI（整理一份簡報、比較一次兩季各算一次；第一次補齊可填 300）"
+        default: "40"
 permissions:
   contents: write
 concurrency:
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
       - run: git pull -q origin ${{ github.ref_name }}
@@ -28,7 +28,7 @@ jobs:
       - run: node scripts/confai-sync.mjs
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          MAX_PER_RUN: ${{ github.event.inputs.max || '20' }}
+          MAX_PER_RUN: ${{ github.event.inputs.max || '40' }}
       - name: commit
         if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:

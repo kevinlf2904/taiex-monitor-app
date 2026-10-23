@@ -446,6 +446,10 @@ test("財報進階排程：月營收連續年增與創新高、營益分析換�
   const cf = C.parseConfRows(`<table>${td("2330", "台積電", "115/07/16", "14:00", "台北", "公布第2季財報及第3季展望", a("233020260716M001.pdf"), a("233020260716E001.pdf"), "", "")}${td("2317", "鴻海", "115/07/20", "", "", "", "", "", "", "")}</table>`, "2330");
   assert.deepEqual(cf, [{ date: "2026-07-16", time: "14:00", note: "公布第2季財報及第3季展望", file: "233020260716M001.pdf", en: "233020260716E001.pdf" }]);
   assert.equal(C.parseConfRows(`<table>${td("2454", "聯發科", "115/10/30", "15:00", "", "&#8206;(1) 公布第3季財報 &amp; 展望 &#8206;", "", "", "", "")}</table>`, "2454")[0].note, "(1) 公布第3季財報 & 展望", "觀測站夾的 &#8206; 要拿掉");
+  const QL = [{ date: "2026-10-15", file: "233020261015M001.pdf" }, { date: "2026-09-14", file: "233020260716M001.pdf" }, { date: "2026-07-20", file: "233020260716M002.pdf" }, { date: "2026-04-16", file: "233020260416M001.pdf" }];
+  assert.equal(C.prevConf(QL, QL[0], "2330").file, "233020260716M001.pdf", "上一季：早 40 天以上的另一份簡報"); assert.equal(C.prevConf(QL, QL[3], "2330"), null);
+  assert.deepEqual(C.parseConfCmp('{"tone":"整體更保守","head":"下修全年","changes":[{"k":"營收","now":"成長 10%","before":"成長 15%"},{"x":1}]}'), { tone: "更保守", head: "下修全年", changes: [{ k: "營收", now: "成長 10%", before: "成長 15%" }] });
+  assert.equal(C.parseConfCmp('{"tone":"不知道"}'), null, "tone 只能是三種之一");
   const today = "2026-10-23", PL = [{ date: "2026-10-30", file: null }, { date: "2026-10-28", file: "x2.pdf" }, { date: "2026-10-15", file: "x1.pdf" }];
   assert.equal(C.pickConf(PL, today).file, "x1.pdf", "還沒開的不選"); assert.equal(C.pickConf(PL.slice(0, 2), today).file, "x2.pdf", "只有還沒開的就用它"); assert.equal(C.pickConf([], today), null);
   const CS = await import("../scripts/confai-sync.mjs");
@@ -550,6 +554,10 @@ test("事件提醒 evScan：營收公布、三率三升、法說會只提醒前�
   assert.deepEqual(H.map(x => x.kind).sort(), ["conf", "pm3", "rev"]); assert.ok(H.every(x => x.code === "2330"), "鴻海三率沒有全升、法說會還太遠");
   assert.equal(H.find(x => x.kind === "conf").k, "c:2330:2026-10-26"); assert.match(H.find(x => x.kind === "rev").m, /9 月營收 0\.00 億，年增 \+50\.0%、月增 \+20\.0%/);
   assert.deepEqual(plain(B.evScan([], D, "2026-10-23")), [], "沒有代號就沒有事件");
+  // ETF 換股：只看近 7 天、有股票代號的（期貨換月不算），同一天合成一則
+  const E = { etf: { "0050": { name: "元大台灣50", ev: [{ d: "2026-10-20", t: "in", code: "2345", name: "智邦" }, { d: "2026-10-20", t: "out", code: "1101", name: "台泥" }, { d: "2026-10-20", t: "in", code: null, name: "臺股期貨 202611" }, { d: "2026-09-01", t: "in", code: "2330", name: "台積電" }] } } };
+  const EH = plain(B.evScan(["0050"], E, "2026-10-23"));
+  assert.deepEqual(EH.map(x => [x.kind, x.k]), [["etf", "e:0050:2026-10-20"]]); assert.match(EH[0].m, /元大台灣50 0050 換股：10\/20 新增 智邦，剔除 台泥$/);
 });
 test("早報 briefParts／briefText：沒有資料的段落不放，庫存排前面", () => {
   const { B } = engine(), G = { us: { ok: true, date: "2026-10-21", indices: [{ code: "^SOX", name: "費半", price: 6000, chgPct: -2.1 }], megas: [], macro: [] }, fut: { ok: true, night: { price: 23000, chg: -40, chgPct: -0.17 } }, cal: { rows: [{ date: "2026-10-22", code: "1101", kind: "除息", cash: 1 }, { date: "2026-10-22", code: "2330", kind: "除息", cash: 4.5 }], conf: [] } };

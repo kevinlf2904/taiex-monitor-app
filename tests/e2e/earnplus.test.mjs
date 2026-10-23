@@ -19,8 +19,11 @@ for (const width of [390, 1280]) test(`財報第二批：體質、股利預估�
   const posted = [];
   await p.route("**/api/company**", r => J(r, CO)); await p.route("**/api/stockinfo**", r => J(r, INFO));
   await p.route("**/api/oapi?earn=1", r => J(r, { ok: true, ym: "11509", yq: "115Q2", source: "測試", rows: [["2330", "台積電", "半導體業", "上市", 3300, 5.1, 36.2, 38.4, 15.2, 9300, 3980, 59.1, 49.5, 42.7]] }));
-  await p.route("**/api/confai**", r => { if (r.request().method() === "POST") { posted.push(JSON.parse(r.request().postData())); return J(r, { ok: true, head: "AI 需求強勁，第四季營收再創新高", outlook: ["第四季營收 330 億美元", "毛利率 59%～61%"], margin: "毛利率優於預期", capex: "全年資本支出 420 億美元", demand: "AI 加速器需求強", risks: ["匯率"], quotes: ["We expect our business to be supported by strong demand"] }); }
-    return J(r, { ok: true, code: "2330", list: [{ date: "2099-01-20", time: "15:00", note: "下一季法說會", file: null, en: null }, { date: "2026-10-16", time: "14:00", note: "公布第3季財報及第4季展望", file: "233020261016M001.pdf", en: "233020261016E001.pdf" }, { date: "2026-09-14", time: "08:00", note: "UBS 論壇", file: null, en: null }] }); });
+  await p.route("**/api/confai**", r => { if (r.request().method() === "POST") { const q = JSON.parse(r.request().postData()); posted.push(q);
+      if (q.op === "cmp") return J(r, { ok: true, tone: "更樂觀", head: "全年成長目標上調", changes: [{ k: "營收展望", now: "全年成長 30%", before: "全年成長 25%" }] });
+      if (q.file === "233020260716M001.pdf") return J(r, { ok: true, head: "上一季：需求穩健", outlook: ["全年成長 25%"], margin: "", capex: "", demand: "", risks: [], quotes: [] });
+      return J(r, { ok: true, head: "AI 需求強勁，第四季營收再創新高", outlook: ["第四季營收 330 億美元", "毛利率 59%～61%"], margin: "毛利率優於預期", capex: "全年資本支出 420 億美元", demand: "AI 加速器需求強", risks: ["匯率"], quotes: ["We expect our business to be supported by strong demand"] }); }
+    return J(r, { ok: true, code: "2330", list: [{ date: "2099-01-20", time: "15:00", note: "下一季法說會", file: null, en: null }, { date: "2026-10-16", time: "14:00", note: "公布第3季財報及第4季展望", file: "233020261016M001.pdf", en: "233020261016E001.pdf" }, { date: "2026-07-16", time: "14:00", note: "第2季法說會", file: "233020260716M001.pdf", en: null }, { date: "2026-09-14", time: "08:00", note: "UBS 論壇", file: null, en: null }] }); });
   await p.click('#lTabs [data-l="earn"]'); await p.click('[data-erv="eps"]'); await p.click('.erlist button[data-ertr="2330"]');
   await p.waitForSelector('.ertr [data-frco="2330"]'); await p.click('.ertr [data-frco="2330"]');
   await p.waitForFunction(() => /股利預估/.test(document.querySelector(".ertr")?.innerText || ""));
@@ -38,6 +41,10 @@ for (const width of [390, 1280]) test(`財報第二批：體質、股利預估�
   await p.evaluate(() => { EP.sum = {}; EP.pre = { sums: { "233020261016M001.pdf": { head: "排程先整理好的重點", outlook: ["展望一"], margin: "", capex: "", demand: "", risks: [], quotes: [] } } }; renderList(); });
   await p.waitForFunction(() => /排程先整理好的重點/.test(document.querySelector(".ertr .epsum")?.textContent || "")); await p.waitForTimeout(300);
   assert.equal(posted.length, 1, "排程整理過的不再呼叫 AI");
+  // 跟上一季比：按了才讀上一季（07/16）的簡報，讀好自動比較兩季
+  await p.click('.ertr [data-epsum="2330|233020260716M001.pdf"]'); await p.waitForSelector(".ertr .epcmp", { timeout: 15000 });
+  assert.match(await p.textContent(".ertr .epcmp"), /跟上一季比[\s\S]*更樂觀[\s\S]*全年成長目標上調[\s\S]*營收展望[\s\S]*這一季：全年成長 30%[\s\S]*上一季：全年成長 25%/);
+  assert.deepEqual(posted.slice(1).map(x => [x.op || "sum", x.file, x.prev || ""]), [["sum", "233020260716M001.pdf", ""], ["cmp", "233020261016M001.pdf", "233020260716M001.pdf"]]);
   // 公布前後股價習慣
   await p.click('.ertr [data-exk="kl:2330"]'); await p.waitForFunction(() => /公布前 5 日平均/.test(document.querySelector(".ertr")?.innerText || ""), null, { timeout: 15000 });
   assert.match(await p.textContent(".ertr"), /公布後 5 日平均波動/);
