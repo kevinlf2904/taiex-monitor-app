@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-24.04 # ubuntu-latest 已換成 26.04，Playwright 1.56 不支援，裝不了 chromium
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm i --no-save --no-audit --no-fund playwright@1.56.1
