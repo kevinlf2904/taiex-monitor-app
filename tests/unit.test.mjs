@@ -737,7 +737,7 @@ test("題材連動：週報酬、相關係數、領先落後、上三角索引�
   const R = compute([{ id: "a", mk: "us", codes: ["X"] }, { id: "b", mk: "tw", codes: ["1"] }], new Map([["X", A], ["1", B]]));
   assert.deepEqual(R.ids, ["a", "b"]); assert.equal(R.lead[0][0], "a"); assert.equal(R.lead[0][1], "b"); assert.equal(R.c.length, 1);
   assert.equal(themeRet([new Map([["d", 0.1]]), new Map([["d", 0.3]])]).get("d"), 0.2);
-  const { execFileSync } = await import("node:child_process"); execFileSync("node", [new URL("../scripts/check-indpack.mjs", import.meta.url).pathname], { stdio: "pipe" }); // 有 ✗ 會丟錯
+  const { execFileSync } = await import("node:child_process"); execFileSync("node", [(await import("node:url")).fileURLToPath(new URL("../scripts/check-indpack.mjs", import.meta.url))], { stdio: "pipe" }); // 有 ✗ 會丟錯
 });
 test("YouTube：頻道影片 RSS、搜尋結果、頻道網址解析，影片交給 Gemini 看", async () => {
   const P = await import("../api/_lib/podcast.js");
@@ -755,3 +755,280 @@ test("YouTube：頻道影片 RSS、搜尋結果、頻道網址解析，影片交
   const parts = P.ytParts("https://www.youtube.com/watch?v=abcdefghijk", "x"); assert.equal(parts[0].fileData.fileUri, "https://www.youtube.com/watch?v=abcdefghijk"); assert.ok(parts[0].videoMetadata.fps < 1);
   assert.match(P.PROMPT({ title: "t" }, "video"), /YouTube 影片/);
 });
+
+test("每日市場決策中心 Round 2：交易日曆、時間注入、嚴格資料可信度與客觀驗證", () => {
+  const B = engine().B;
+  assert.ok(typeof B.sessionStatus === "function");
+  assert.ok(typeof B.briefScenarios === "function");
+  assert.ok(typeof B.validatePlan === "function");
+  assert.ok(typeof B.marketSnapshot === "function");
+  assert.ok(typeof B.isValidSnapshot === "function");
+  assert.ok(typeof B.evaluateDataStatus === "function");
+  assert.ok(typeof B.saveBriefSnapshot === "function");
+  assert.ok(typeof B.getBriefSnapshot === "function");
+  assert.ok(typeof B.resolveTime === "function");
+  assert.ok(typeof B.resolveHolidays === "function");
+  assert.ok(typeof B.findLastTradeDate === "function");
+
+  // ==========================================
+  // A. 交易日與休市日測試（10 個案例）
+  // ==========================================
+
+  // A1. 正常交易日且行事曆已確認
+  const a1 = B.sessionStatus("2026-10-27T02:00:00Z", { holidays: [], calendarStatus: "confirmed" });
+  assert.equal(a1.session, "live");
+  assert.equal(a1.calendarVerified, true);
+  assert.equal(a1.isClosed, false);
+
+  // A2. 週末（週六、週日）
+  const a2Sat = B.sessionStatus("2026-10-24T06:00:00Z", { holidays: [] });
+  assert.equal(a2Sat.session, "closed");
+  assert.equal(a2Sat.label, "週末休市");
+  assert.equal(a2Sat.isWeekend, true);
+  assert.equal(a2Sat.isClosed, true);
+  const a2Sun = B.sessionStatus("2026-10-25T06:00:00Z", { holidays: [] });
+  assert.equal(a2Sun.session, "closed");
+  assert.equal(a2Sun.label, "週末休市");
+  assert.equal(a2Sun.isWeekend, true);
+
+  // A3. 官方公告休市日（國定假日／補假）
+  const a3 = B.sessionStatus("2026-10-26T06:00:00Z", { holidays: [{ date: "2026-10-26", name: "光復節補假" }] });
+  assert.equal(a3.session, "closed");
+  assert.equal(a3.label, "今日休市");
+  assert.equal(a3.holidayName, "光復節補假");
+  assert.equal(a3.isClosed, true);
+
+  // A4. 臨時停市日（如颱風假）
+  const a4 = B.sessionStatus("2026-10-02T02:00:00Z", { holidays: [{ date: "2026-10-02", name: "颱風停市" }] });
+  assert.equal(a4.session, "closed");
+  assert.equal(a4.reason, "颱風停市");
+  assert.equal(a4.holidayName, "颱風停市");
+
+  // A5. 明確傳入空行事曆（holidays: []）且未確認開市狀態
+  const a5 = B.sessionStatus("2026-10-27T02:00:00Z", { holidays: [] });
+  assert.equal(a5.session, "live");
+
+  // A6. 完全沒有傳入行事曆（holidays: undefined）降級為待確認
+  const a6 = B.sessionStatus("2026-10-27T02:00:00Z");
+  assert.equal(a6.session, "unknown", "無任何日曆來源時降級為 unknown");
+  assert.equal(a6.status, "pending");
+  assert.equal(a6.calendarVerified, false);
+
+  // A7. 沒有官方行事曆且無法確認當日是否交易
+  const a7 = B.sessionStatus("2026-10-27T02:00:00Z", { calendarStatus: "unknown" });
+  assert.equal(a7.session, "unknown");
+  assert.equal(a7.isClosed, null);
+  assert.match(a7.warning, /安全降級/);
+
+  // A8. 休市日使用最近一個已確認交易日的行情
+  const a8 = B.sessionStatus("2026-10-26T06:00:00Z", {
+    holidays: [{ date: "2026-10-26", name: "光復節補假" }],
+    lastTradeDate: "2026-10-23"
+  });
+  assert.match(a8.displayNote, /顯示最近交易日 10\/23 收盤/);
+  assert.equal(a8.lastTradeDate, "2026-10-23");
+
+  // A9. 行情來源日期與最近交易日不符
+  const a9 = B.evaluateDataStatus({
+    market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.1, date: "2026-10-20" } },
+    session: "closed",
+    tradeDate: "2026-10-26"
+  });
+  assert.equal(a9.dataStatus, "stale");
+  assert.match(a9.reason, /2026-10-20/);
+
+  // A10. 跨年、跨月及台灣時區日期邊界
+  // UTC 2026-12-31 16:30 = TW 2027-01-01 00:30 (跨年且元旦休市)
+  const a10 = B.sessionStatus("2026-12-31T16:30:00Z", { holidays: [{ date: "2027-01-01", name: "元旦" }] });
+  assert.equal(a10.tradeDate, "2027-01-01");
+  assert.equal(a10.session, "closed");
+  assert.equal(a10.holidayName, "元旦");
+
+  // ==========================================
+  // B. 時間注入與時區一致性測試（5 個案例）
+  // ==========================================
+
+  // B1. 使用固定 now 可以得到可重現的結果
+  const fixedNow = 1793088000000;
+  const snapB1_1 = B.marketSnapshot({ now: fixedNow, holidays: [], calendarStatus: "confirmed" });
+  const snapB1_2 = B.marketSnapshot({ now: fixedNow, holidays: [], calendarStatus: "confirmed" });
+  assert.equal(snapB1_1.meta.asOf, snapB1_2.meta.asOf);
+  assert.equal(snapB1_1.meta.tradeDate, snapB1_2.meta.tradeDate);
+
+  // B2. 同一次計算中的 session 與 asOf 使用一致的時間基準
+  const snapB2 = B.marketSnapshot({ now: "2026-10-27T00:30:00Z", holidays: [], calendarStatus: "confirmed" });
+  assert.equal(snapB2.meta.session, "pre");
+  assert.equal(snapB2.meta.asOf, "08:30:00");
+
+  // B3. UTC 日期與台灣日期不同時，結果仍正確
+  // UTC 2026-10-26 23:30 = TW 2026-10-27 07:30
+  const snapB3 = B.marketSnapshot({ now: "2026-10-26T23:30:00Z", holidays: [], calendarStatus: "confirmed" });
+  assert.equal(snapB3.meta.tradeDate, "2026-10-27");
+  assert.equal(snapB3.meta.session, "pre");
+
+  // B4. 歷史日期不會被當作目前交易日
+  const snapB4 = B.marketSnapshot({ now: "2026-10-27T08:00:00Z", date: "2026-10-01", holidays: [], calendarStatus: "confirmed" });
+  assert.equal(snapB4.meta.tradeDate, "2026-10-01");
+
+  // B5. 日期跨日時，不會因重複讀取系統時間而產生矛盾（由 resolveTime 單次注入）
+  const tResolved = B.resolveTime("2026-10-27T15:59:59.999Z");
+  assert.equal(tResolved.twDate, "2026-10-27");
+  assert.equal(tResolved.hm, "23:59");
+
+  // ==========================================
+  // C. 資料完整性與可信度評定測試（15 個案例）
+  // ==========================================
+
+  // C1. 完整且日期一致的官方資料
+  const c1 = B.evaluateDataStatus({
+    market: {
+      taiex: { price: 23500, close: 23500, high: 23600, low: 23400, chgPct: 0.5, vol: 3500, date: "2026-10-27", source: "twse" },
+      inst: { date: "2026-10-27", foreign: 100, trust: 20 }
+    },
+    session: "post",
+    tradeDate: "2026-10-27"
+  });
+  assert.equal(c1.dataStatus, "official");
+  assert.equal(c1.sourceVerified, true);
+
+  // C2. 缺少加權指數
+  const c2 = B.evaluateDataStatus({ market: {} });
+  assert.equal(c2.dataStatus, "missing");
+  assert.equal(c2.completeness, "none");
+
+  // C3. 缺少行情日期
+  const c3 = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0 } } });
+  assert.equal(c3.dataStatus, "insufficient");
+  assert.equal(c3.completeness, "missing_date");
+
+  // C4. 行情日期格式錯誤
+  const c4 = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0, date: "115/10/27" } } });
+  assert.equal(c4.dataStatus, "corrupted");
+  assert.equal(c4.completeness, "invalid_date");
+
+  // C5. 漲跌幅缺失 (null / undefined)
+  const c5 = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: null, date: "2026-10-27" } } });
+  assert.equal(c5.dataStatus, "partial");
+  assert.equal(c5.completeness, "missing_fields");
+
+  // C6. 收盤價缺失或為 0
+  const c6_1 = B.evaluateDataStatus({ market: { taiex: { high: 23100, low: 22900, chgPct: 0.1, date: "2026-10-27" } } });
+  assert.equal(c6_1.dataStatus, "insufficient");
+  const c6_2 = B.evaluateDataStatus({ market: { taiex: { price: 0, high: 23100, low: 22900, chgPct: 0.1, date: "2026-10-27" } } });
+  assert.equal(c6_2.dataStatus, "insufficient");
+
+  // C7. 成交量為負數
+  const c7 = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.1, vol: -50, date: "2026-10-27" } } });
+  assert.equal(c7.dataStatus, "corrupted");
+  assert.equal(c7.completeness, "corrupted_volume");
+
+  // C8. 高低價關係不合理 (high < low 或 close > high)
+  const c8_1 = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 22800, low: 22900, chgPct: 0.5, date: "2026-10-27" } } });
+  assert.equal(c8_1.dataStatus, "corrupted");
+  const c8_2 = B.evaluateDataStatus({ market: { taiex: { price: 23500, high: 23400, low: 23300, chgPct: 0.5, date: "2026-10-27" } } });
+  assert.equal(c8_2.dataStatus, "corrupted");
+
+  // C9. 法人資料日期與指數日期不一致
+  const c9 = B.evaluateDataStatus({
+    market: {
+      taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.2, date: "2026-10-27", source: "twse" },
+      inst: { date: "2026-10-26", foreign: 50 }
+    },
+    session: "post",
+    tradeDate: "2026-10-27"
+  });
+  assert.equal(c9.dataStatus, "partial");
+  assert.equal(c9.completeness, "inst_date_mismatch");
+
+  // C10. 法人資料過期（同 C9 標籤）
+  assert.match(c9.reason, /籌碼日期（2026-10-26）與指數日期（2026-10-27）不一致/);
+
+  // C11. 只有法人資料，但缺少必要指數資料
+  const c11 = B.evaluateDataStatus({ market: { inst: { foreign: 50, date: "2026-10-27" } } });
+  assert.equal(c11.dataStatus, "missing");
+
+  // C12. 官方來源存在，但必要欄位不完整
+  const c12 = B.evaluateDataStatus({ market: { taiex: { price: 23000, date: "2026-10-27", source: "twse" } }, session: "post", tradeDate: "2026-10-27" });
+  assert.equal(c12.dataStatus, "partial");
+
+  // C13. 第三方資料完整，但來源尚未驗證
+  const c13 = B.evaluateDataStatus({
+    market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-27", source: "some_unverified_api" }, inst: { foreign: 50 } },
+    session: "post",
+    tradeDate: "2026-10-27"
+  });
+  assert.equal(c13.dataStatus, "unverified");
+
+  // C14. 沒有更新時間戳記 -> 仍保留未知，不編造
+  const c14 = B.marketSnapshot({
+    now: "2026-10-27T08:00:00Z",
+    market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-27", source: "twse" } },
+    holidays: [],
+    calendarStatus: "confirmed"
+  });
+  assert.equal(c14.meta.updatedAt, null, "無更新時間時不編造時間戳");
+
+  // C15. 使用最近交易日資料，但今日為休市日
+  const c15 = B.evaluateDataStatus({
+    market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-23" } },
+    session: "closed",
+    tradeDate: "2026-10-24"
+  });
+  assert.equal(c15.dataStatus, "stale");
+  assert.equal(c15.dataStatusLabel, "休市資料");
+
+  // ==========================================
+  // D. 快照保存與客觀情境驗證測試（12 個案例）
+  // ==========================================
+  const planD = B.briefScenarios({}, "2026-10-27", 23400);
+
+  // D1. 當日有效快照
+  assert.ok(B.isValidSnapshot(planD, "2026-10-27"));
+
+  // D2. 日期不符的快照
+  assert.equal(B.isValidSnapshot(planD, "2026-10-28"), false);
+
+  // D3. 缺少日期的快照
+  assert.equal(B.isValidSnapshot({ keyLevels: planD.keyLevels, scenarios: planD.scenarios }), false);
+
+  // D4. 快照欄位不完整
+  assert.equal(B.isValidSnapshot({ tradeDate: "2026-10-27", keyLevels: { pressure: 100 } }), false);
+
+  // D5. 快照儲存失敗時不假裝成功
+  const failingStore = { get: () => null, set: () => { throw new Error("quota exceeded"); } };
+  assert.equal(B.saveBriefSnapshot("2026-10-27", planD, failingStore), false);
+
+  // D6. 預判日期與行情日期不符
+  const d6 = B.validatePlan(planD, { price: 23500, high: 23600, low: 23400, date: "2026-10-26" });
+  assert.equal(d6.status, "date_mismatch");
+
+  // D7. 缺少收盤價
+  const d7 = B.validatePlan(planD, { high: 23600, low: 23400, date: "2026-10-27" });
+  assert.equal(d7.status, "insufficient_data");
+
+  // D8. 缺少高低點
+  const d8 = B.validatePlan(planD, { price: 23500, date: "2026-10-27" });
+  assert.equal(d8.status, "insufficient_data");
+
+  // D9. 漲跌幅未知 -> 正常驗證但標註漲跌幅未知，不預設為 0
+  const d9 = B.validatePlan(planD, { price: planD.keyLevels.pivot + 20, high: planD.keyLevels.pressure - 10, low: planD.keyLevels.pivot - 10, chgPct: null, date: "2026-10-27" });
+  assert.equal(d9.status, "verified");
+  assert.match(d9.analysisText, /漲跌幅未知/);
+
+  // D10. 僅部分情境條件成立（收盤過分水嶺但未達壓力）
+  const d10 = B.validatePlan(planD, { price: planD.keyLevels.pivot + 20, high: planD.keyLevels.pressure - 10, low: planD.keyLevels.pivot - 10, chgPct: 0.3, date: "2026-10-27" });
+  assert.equal(d10.metKey, "bull");
+  assert.equal(d10.pressureHit, false);
+  assert.match(d10.outcomeLabel, /多方觀察/);
+
+  // D11. 完整情境成立（收盤高於分水嶺且觸及壓力）
+  const d11 = B.validatePlan(planD, { price: planD.keyLevels.pivot + 50, high: planD.keyLevels.pressure + 20, low: planD.keyLevels.pivot, chgPct: 0.8, date: "2026-10-27" });
+  assert.equal(d11.pressureHit, true);
+  assert.match(d11.outcomeLabel, /部分符合/);
+
+  // D12. 情境條件不成立（跌破支撐）
+  const d12 = B.validatePlan(planD, { price: planD.keyLevels.support - 30, high: planD.keyLevels.pivot - 10, low: planD.keyLevels.support - 50, chgPct: -1.2, date: "2026-10-27" });
+  assert.equal(d12.metKey, "bear");
+  assert.equal(d12.supportHit, true);
+});
+
