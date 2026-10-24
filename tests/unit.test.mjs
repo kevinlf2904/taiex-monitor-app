@@ -1032,3 +1032,724 @@ test("每日市場決策中心 Round 2：交易日曆、時間注入、嚴格資
   assert.equal(d12.supportHit, true);
 });
 
+
+
+test("Phase 5 最終缺陷修正：早報結論真實資料、量能驗證、資料完整度、日曆快照防護", () => {
+  const B = engine().B;
+
+  // ==========================================
+  // E. 早報結論必須由有效資料產生 (dailyBriefSummaryHtml)
+  // ==========================================
+  const planE = B.briefScenarios({}, "2026-10-27", 23000);
+
+  // E1. 全部缺失 (G 為空或缺少美股與期貨)
+  const hE1 = B.dailyBriefSummaryHtml({}, planE);
+  assert.match(hE1, /資料不足，暫不判定/);
+  assert.match(hE1, /缺少必要行情：費半指數行情、台指期夜盤行情/);
+  assert.doesNotMatch(hE1, /行情已更新/);
+  assert.doesNotMatch(hE1, /國際半導體指數強勢/);
+  assert.doesNotMatch(hE1, /夜盤期貨維持正向溢價/);
+
+  // E2. 費半缺失、期貨存在
+  const hE2 = B.dailyBriefSummaryHtml({
+    fut: { night: { price: 23100, chg: 80 } }
+  }, planE);
+  assert.match(hE2, /資料不足，暫不判定/);
+  assert.match(hE2, /缺少必要行情：費半指數行情/);
+  assert.doesNotMatch(hE2, /台指期夜盤走揚/);
+
+  // E3. 期貨缺失、費半存在
+  const hE3 = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 1.5 }] }
+  }, planE);
+  assert.match(hE3, /資料不足，暫不判定/);
+  assert.match(hE3, /缺少必要行情：台指期夜盤行情/);
+  assert.doesNotMatch(hE3, /費城半導體上漲/);
+
+  // E4. 過期資料 (stale = true)
+  const hE4 = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 1.5, stale: true }] },
+    fut: { night: { price: 23100, chg: 80 } }
+  }, planE);
+  assert.match(hE4, /資料不足，暫不判定/);
+  assert.match(hE4, /費半指數過期資料/);
+
+  // E5. 真實零漲跌 (費半 0.00%、期貨 0 點)
+  const hE5 = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5000, chgPct: 0.0 }] },
+    fut: { night: { price: 23000, chg: 0 } }
+  }, planE);
+  assert.doesNotMatch(hE5, /資料不足/);
+  assert.match(hE5, /平盤（0\.00% \/ 0 點）/);
+  assert.match(hE5, /費城半導體收在平盤（0.00%）/);
+
+  // E6. 走勢矛盾 (費半大漲 +1.8%，夜盤期貨重挫 -150 點)
+  const hE6 = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5200, chgPct: 1.8 }] },
+    fut: { night: { price: 22850, chg: -150 } }
+  }, planE);
+  assert.match(hE6, /美股與期貨走勢分歧/);
+  assert.match(hE6, /訊號相互抵銷/);
+
+  // E7. 有效完整資料 (費半上漲 +1.2%，期貨上漲 +80 點)
+  const hE7 = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5150, chgPct: 1.2 }] },
+    fut: { night: { price: 23080, chg: 80 } }
+  }, planE);
+  assert.match(hE7, /台指期夜盤走揚 \+80 點/);
+  assert.match(hE7, /費城半導體上漲 \+1.20%/);
+
+  // ==========================================
+  // F. 成交量必須真正參與驗證，或明確標示未驗證 (validatePlan)
+  // ==========================================
+  const planF = B.briefScenarios({}, "2026-10-27", 23000);
+
+  // F1. 缺失成交量數據
+  const f1 = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, date: "2026-10-27" });
+  assert.equal(f1.volumeStatus, "missing");
+  assert.equal(f1.volumeConfirmed, false);
+  assert.match(f1.volumeLabel, /缺少成交量數據/);
+
+  // F2. 成交量為 0
+  const f2 = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: 0, date: "2026-10-27" });
+  assert.equal(f2.volumeStatus, "zero_volume");
+  assert.equal(f2.volumeConfirmed, false);
+  assert.match(f2.volumeLabel, /成交量為 0/);
+
+  // F3. 成交量無效 (負數、NaN、Infinity)
+  const f3a = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: -100, date: "2026-10-27" });
+  assert.equal(f3a.volumeStatus, "invalid");
+  assert.equal(f3a.volumeConfirmed, false);
+  const f3b = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: NaN, date: "2026-10-27" });
+  assert.equal(f3b.volumeStatus, "invalid");
+
+  // F4. 有成交量但無均量比較基準 -> 明確標示「量能未驗證（缺少均量比較基準）」
+  const f4 = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: 350000, date: "2026-10-27" });
+  assert.equal(f4.volumeStatus, "unverified");
+  assert.equal(f4.volumeConfirmed, false);
+  assert.match(f4.volumeLabel, /缺少均量比較基準/);
+
+  // F4b. 雖有名稱如 avgVolume 但缺少中繼資料 (單位/期間/來源/時間) -> 安全降級為未驗證
+  const f4b = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: 4000, avgVolume: 3000, date: "2026-10-27" });
+  assert.equal(f4b.volumeStatus, "unverified");
+  assert.equal(f4b.volumeConfirmed, false);
+  assert.match(f4b.volumeLabel, /缺少單位中繼資料/);
+
+  // F5. 成交量達標量能確認 (實際 4000 億，5 日均量 3000 億 -> 133%，且單位與期間中繼資料齊全驗證)
+  const f5 = B.validatePlan(planF, {
+    price: 23100, high: 23200, low: 22950, chgPct: 0.4,
+    volume: 4000, volumeUnit: "billion", volumePeriod: "full_day",
+    baselineVolume: 3000, baselineUnit: "billion", baselinePeriod: "full_day",
+    baselineDate: "2026-10-26", baselineSource: "twse_5ma",
+    date: "2026-10-27"
+  });
+  assert.equal(f5.volumeStatus, "confirmed");
+  assert.equal(f5.volumeConfirmed, true);
+  assert.equal(f5.volumeRatio, 1.33);
+  assert.match(f5.volumeLabel, /量能已確認（達.*基準量 133%）/);
+
+  // F6. 成交量未達標量能不足 (實際 2000 億，5 日均量 3000 億 -> 67%)
+  const f6 = B.validatePlan(planF, {
+    price: 23100, high: 23200, low: 22950, chgPct: 0.4,
+    volume: 2000, volumeUnit: "billion", volumePeriod: "full_day",
+    baselineVolume: 3000, baselineUnit: "billion", baselinePeriod: "full_day",
+    baselineDate: "2026-10-26", baselineSource: "twse_5ma",
+    date: "2026-10-27"
+  });
+  assert.equal(f6.volumeStatus, "below_average");
+  assert.equal(f6.volumeConfirmed, false);
+  assert.equal(f6.volumeRatio, 0.67);
+  assert.match(f6.volumeLabel, /量能未確認（量能不足，僅達.*基準量 67%）/);
+
+  // F7. 價格結構與量能確認分開呈現：突破壓力但量能不足
+  const f7 = B.validatePlan(planF, {
+    price: planF.keyLevels.pressure + 10, high: planF.keyLevels.pressure + 20, low: planF.keyLevels.pivot, chgPct: 1.1,
+    volume: 2000, volumeUnit: "billion", volumePeriod: "full_day",
+    baselineVolume: 3000, baselineUnit: "billion", baselinePeriod: "full_day",
+    baselineDate: "2026-10-26", baselineSource: "twse_5ma",
+    date: "2026-10-27"
+  });
+  assert.equal(f7.metKey, "bull");
+  assert.equal(f7.pressureHit, true);
+  assert.equal(f7.volumeConfirmed, false);
+  assert.match(f7.analysisText, /多方推進情境/);
+  assert.match(f7.analysisText, /量能未確認/);
+
+  // F8. validateHtml 畫面渲染量能狀態
+  const valHtml = B.validateHtml(f5, planF);
+  assert.match(valHtml, /量能判定：/);
+  assert.match(valHtml, /量能已確認/);
+
+  // ==========================================
+  // G. 統一資料完整度定義 (briefScenarios, coreMarketCardsHtml)
+  // ==========================================
+
+  // G1. coreMarketCardsHtml: price 為 0、負數、NaN、Infinity -> 顯示「資料暫缺」
+  const badCardsHtml = B.coreMarketCardsHtml({
+    taiex: { price: 0, date: "2026-10-27" }
+  }, {
+    fut: { night: { price: NaN, chg: 50 } },
+    us: { indices: [{ code: "^SOX", price: Infinity, chgPct: 1.2 }, { code: "^IXIC", price: -100, chgPct: 0.5 }] }
+  }, { isClosed: false }, { dataStatusLabel: "即時資料" });
+
+  assert.match(badCardsHtml, /data-dhcode="T00"[^]*?資料暫缺/);
+  assert.match(badCardsHtml, /data-dhcode="TXF"[^]*?資料暫缺/);
+  assert.match(badCardsHtml, /data-dhcode="\^SOX"[^]*?資料暫缺/);
+  assert.match(badCardsHtml, /data-dhcode="\^IXIC"[^]*?資料暫缺/);
+
+  // G2. coreMarketCardsHtml: 價格有效但漲跌幅缺失 -> 顯示「漲跌幅未知」，不可預設為 0%
+  const noChgCardHtml = B.coreMarketCardsHtml({
+    taiex: { price: 23200, chgPct: null, date: "2026-10-27" }
+  }, {}, { isClosed: false }, { dataStatusLabel: "即時資料" });
+  assert.match(noChgCardHtml, /漲跌幅未知/);
+  assert.doesNotMatch(noChgCardHtml, /\+0\.00%/);
+
+  // G3. briefScenarios: 必要指標缺失時 macroStatus 絕不能為 complete_macro
+  const bsNoSox = B.briefScenarios({
+    us: { indices: [{ code: "^IXIC", price: 18000, chgPct: 1.0 }] },
+    fut: { night: { price: 23000, chg: 50 } }
+  }, "2026-10-27", 23000);
+  assert.equal(bsNoSox.macroStatus, "partial_macro");
+  assert.match(bsNoSox.macroNote, /部分必要美股\/期貨資料缺失/);
+
+  // G4. briefScenarios: 必要指標齊全但缺少選配 TSM -> partial_macro
+  const bsNoTsm = B.briefScenarios({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 1.5 }, { code: "^IXIC", price: 18000, chgPct: 1.0 }] },
+    fut: { night: { price: 23000, chg: 50 } }
+  }, "2026-10-27", 23000);
+  assert.equal(bsNoTsm.macroStatus, "partial_macro");
+  assert.match(bsNoTsm.macroNote, /缺少 TSM 選配行情/);
+
+  // G5. briefScenarios: 必要指標 + 選配 TSM 全數齊全 -> complete_macro
+  const bsComplete = B.briefScenarios({
+    us: {
+      indices: [{ code: "^SOX", price: 5100, chgPct: 1.5 }, { code: "^IXIC", price: 18000, chgPct: 1.0 }],
+      megas: [{ code: "TSM", price: 195, chgPct: 2.0 }]
+    },
+    fut: { night: { price: 23000, chg: 50 } }
+  }, "2026-10-27", 23000);
+  assert.equal(bsComplete.macroStatus, "complete_macro");
+  assert.match(bsComplete.macroNote, /國際行情與選配指標完整/);
+
+  // ==========================================
+  // H. 官方交易日曆與快照防護
+  // ==========================================
+
+  // H1. 交易日曆連線失敗 (failed) -> sessionStatus 回傳 unknown，採安全降級處理，不假定為正常交易日
+  const sessCalFail = B.sessionStatus("2026-10-27T02:00:00Z", {
+    calendarStatus: "failed"
+  });
+  assert.equal(sessCalFail.session, "unknown");
+  assert.equal(sessCalFail.calendarVerified, false);
+  assert.equal(sessCalFail.calendarStatus, "failed");
+  assert.match(sessCalFail.warning, /官方交易日曆連線失敗/);
+
+  // H2. 特殊休市（如颱風假動態休市日傳入） -> 正確判定今日休市，不硬編碼
+  const sessTyphoon = B.sessionStatus("2026-10-27T02:00:00Z", {
+    holidays: [{ date: "2026-10-27", name: "颱風天然災害停止上班" }],
+    calendarStatus: "confirmed"
+  });
+  assert.equal(sessTyphoon.session, "closed");
+  assert.equal(sessTyphoon.isClosed, true);
+  assert.equal(sessTyphoon.reason, "颱風天然災害停止上班");
+
+  // H3. 快照覆寫防護：已存在有效快照時，拒絕二次寫入
+  const mockStore = new Map();
+  const storeAdapter = {
+    get: (k) => mockStore.get(k) || null,
+    set: (k, v) => { mockStore.set(k, v); }
+  };
+  const snap1 = B.briefScenarios({}, "2026-10-27", 23000);
+  const save1 = B.saveBriefSnapshot("2026-10-27", snap1, storeAdapter);
+  assert.equal(save1, true, "首次儲存原始快照成功");
+
+  // 試圖用另一個快照覆寫
+  const snap2 = B.briefScenarios({}, "2026-10-27", 23800);
+  const save2 = B.saveBriefSnapshot("2026-10-27", snap2, storeAdapter);
+  assert.equal(save2, false, "已存在原始快照時拒絕覆寫");
+  assert.equal(storeAdapter.get("watch:brief:snap:2026-10-27").keyLevels.pivot, snap1.keyLevels.pivot, "原始快照維持不變");
+
+  // H4. 跨交易日快照防護：若快照日期與分析交易日不符，拒絕儲存
+  const crossDaySnap = B.briefScenarios({}, "2026-10-26", 23000);
+  const saveCrossDay = B.saveBriefSnapshot("2026-10-27", crossDaySnap, storeAdapter);
+  assert.equal(saveCrossDay, false, "跨交易日快照拒絕儲存");
+});
+
+test('Phase 6 最終修正：台指期漲跌點數真實依據、成交量比較基準驗證與安全降級', () => {
+  const B = engine().B;
+  const plan = B.briefScenarios({}, "2026-10-27", 23000);
+
+  // ==========================================
+  // 1. 修正 A：台指期漲跌點數真實依據（禁止固定乘數、優先實際點數、基準缺失安全降級）
+  // ==========================================
+
+  // 1a. 只有漲跌幅 (chgPct: 1.0) 但無實際點數且無有效基準價 -> 不得使用 1.0 * 200 = 200 點推算，必須顯示「夜盤漲跌點數未知」
+  const summaryNoPrev = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23200, chgPct: 1.0, chg: null, prev: null } }
+  }, plan);
+  assert.match(summaryNoPrev, /夜盤漲跌點數未知/);
+  assert.doesNotMatch(summaryNoPrev, /200\s*點/);
+  assert.doesNotMatch(summaryNoPrev, /走揚 \+200/);
+
+  // 1b. 只有漲跌幅但有有效現價與可對應前收基準價 (現價 23150, 前收 23000) -> 正確推算點數差 +150 點
+  const summaryWithPrev = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23150, chgPct: 0.65, prev: 23000, contract: "TXF202611", prevContract: "TXF202611" } }
+  }, plan);
+  assert.match(summaryWithPrev, /台指期夜盤走揚 \+150 點/);
+
+  // 1c. 前收基準無效 (prev: 0, prev: NaN, prev: -100) -> 顯示夜盤漲跌點數未知
+  const summaryInvalidPrev = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23150, chgPct: 0.65, prev: 0 } }
+  }, plan);
+  assert.match(summaryInvalidPrev, /夜盤漲跌點數未知/);
+
+  // 1d. 合約不符 (換月合約，contract != prevContract) -> 拒絕逕行相減，顯示夜盤漲跌點數未知
+  const summaryContractMismatch = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23150, chgPct: 0.65, prev: 23000, contract: "TXF202612", prevContract: "TXF202611" } }
+  }, plan);
+  assert.match(summaryContractMismatch, /夜盤漲跌點數未知/);
+
+  // 1e. 優先採用來源提供之實際有限漲跌點數 (fut.chg: -85)
+  const summaryActualChg = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23000, chg: -85, chgPct: -0.37 } }
+  }, plan);
+  assert.match(summaryActualChg, /台指期夜盤走跌 -85 點/);
+
+  // ==========================================
+  // 2. 修正 B：成交量比較基準驗證（單位一致性、期間相容性、時間有效性、來源可靠性）
+  // ==========================================
+
+  // 2a. 單位不一致：實際量以股數（shares）提供，均量以張數（lots）提供 -> 拒絕直接比對，安全降級為未驗證
+  const vUnitMismatch = B.validatePlan(plan, {
+    price: 23100, high: 23200, low: 22950, chgPct: 0.4, date: "2026-10-27",
+    volume: 350000000, volumeUnit: "shares", volumePeriod: "full_day",
+    baselineVolume: 350000, baselineUnit: "lots", baselinePeriod: "full_day",
+    baselineDate: "2026-10-26", baselineSource: "twse_5ma"
+  });
+  assert.equal(vUnitMismatch.volumeStatus, "unverified");
+  assert.equal(vUnitMismatch.volumeConfirmed, false);
+  assert.match(vUnitMismatch.volumeLabel, /實際量與均量單位不一致：shares vs lots/);
+  assert.match(vUnitMismatch.volumeReason, /實際量單位（shares）與均量單位（lots）不符/);
+
+  // 2b. 比較期間不相容：盤中累積量（intraday）直接與全日均量（full_day）比較 -> 拒絕直接判定，安全降級為未驗證
+  const vPeriodMismatch = B.validatePlan(plan, {
+    price: 23100, high: 23200, low: 22950, chgPct: 0.4, date: "2026-10-27",
+    volume: 1500, volumeUnit: "billion", volumePeriod: "intraday",
+    baselineVolume: 3000, baselineUnit: "billion", baselinePeriod: "full_day",
+    baselineDate: "2026-10-26", baselineSource: "twse_5ma"
+  });
+  assert.equal(vPeriodMismatch.volumeStatus, "unverified");
+  assert.equal(vPeriodMismatch.volumeConfirmed, false);
+  assert.match(vPeriodMismatch.volumeLabel, /盤中累積量不可直接與全日均量比較/);
+  assert.match(vPeriodMismatch.volumeReason, /盤中累積量未換算，不可直接與全日均量比較/);
+
+  // 2c. 均量基準缺少時間或來源不明 -> 安全降級為未驗證
+  const vNoTimeSource = B.validatePlan(plan, {
+    price: 23100, high: 23200, low: 22950, chgPct: 0.4, date: "2026-10-27",
+    volume: 4000, volumeUnit: "billion", volumePeriod: "full_day",
+    baselineVolume: 3000, baselineUnit: "billion", baselinePeriod: "full_day",
+    baselineDate: null, baselineSource: null
+  });
+  assert.equal(vNoTimeSource.volumeStatus, "unverified");
+  assert.equal(vNoTimeSource.volumeConfirmed, false);
+  assert.match(vNoTimeSource.volumeLabel, /缺少均量基準有效日期/);
+
+  const vNoSource = B.validatePlan(plan, {
+    price: 23100, high: 23200, low: 22950, chgPct: 0.4, date: "2026-10-27",
+    volume: 4000, volumeUnit: "billion", volumePeriod: "full_day",
+    baselineVolume: 3000, baselineUnit: "billion", baselinePeriod: "full_day",
+    baselineDate: "2026-10-26", baselineSource: null
+  });
+  assert.equal(vNoSource.volumeStatus, "unverified");
+  assert.match(vNoSource.volumeLabel, /缺少均量基準來源/);
+  assert.match(vNoSource.volumeReason, /缺少均量計算來源/);
+
+  // 2d. 均量基準日期異常（基準日期晚於實際行情日期，存在未來偷看風險） -> 拒絕採用
+  const vFutureBaseline = B.validatePlan(plan, {
+    price: 23100, high: 23200, low: 22950, chgPct: 0.4, date: "2026-10-27",
+    volume: 4000, volumeUnit: "billion", volumePeriod: "full_day",
+    baselineVolume: 3000, baselineUnit: "billion", baselinePeriod: "full_day",
+    baselineDate: "2026-10-28", baselineSource: "twse_5ma"
+  });
+  assert.equal(vFutureBaseline.volumeStatus, "unverified");
+  assert.equal(vFutureBaseline.volumeConfirmed, false);
+  assert.match(vFutureBaseline.volumeLabel, /均量基準日期晚於行情日期/);
+
+  // 2e. 有效且同單位、同期間、來源與日期驗證通過之比較基準 -> 正確計算比率並判定已確認
+  const vConfirmed = B.validatePlan(plan, {
+    price: 23100, high: 23200, low: 22950, chgPct: 0.4, date: "2026-10-27",
+    volume: 4500, volumeUnit: "billion", volumePeriod: "full_day",
+    baselineVolume: 3000, baselineUnit: "billion", baselinePeriod: "full_day",
+    baselineDate: "2026-10-26", baselineSource: "twse_5ma"
+  });
+  assert.equal(vConfirmed.volumeStatus, "confirmed");
+  assert.equal(vConfirmed.volumeConfirmed, true);
+  assert.equal(vConfirmed.volumeRatio, 1.5);
+  assert.match(vConfirmed.volumeLabel, /量能已確認（達.*基準量 150%）/);
+
+  // 2f. UI validateHtml 明確呈現狀態標籤與未驗證樣式
+  const htmlUnverified = B.validateHtml(vUnitMismatch, plan);
+  assert.match(htmlUnverified, /class="note"[^>]*>量能未驗證（實際量與均量單位不一致/);
+
+  const htmlConfirmed = B.validateHtml(vConfirmed, plan);
+  assert.match(htmlConfirmed, /class="up"[^>]*>量能已確認（達.*基準量 150%）/);
+
+  const vBelow = B.validatePlan(plan, {
+    price: 23100, high: 23200, low: 22950, chgPct: 0.4, date: "2026-10-27",
+    volume: 2400, volumeUnit: "billion", volumePeriod: "full_day",
+    baselineVolume: 3000, baselineUnit: "billion", baselinePeriod: "full_day",
+    baselineDate: "2026-10-26", baselineSource: "twse_5ma"
+  });
+  const htmlBelow = B.validateHtml(vBelow, plan);
+  assert.match(htmlBelow, /class="down"[^>]*>量能未確認（量能不足，僅達.*基準量 80%）/);
+});
+
+test('Phase 6.1 獨立驗收缺口修正：合約代碼完整驗證、均量有效期限政策與中繼嚴格性', () => {
+  const B = engine().B;
+  const plan = B.briefScenarios({}, "2026-10-27", 23000);
+
+  // ==========================================
+  // 1. 台指期合約代碼嚴格驗證 (Section 2)
+  // ==========================================
+
+  // 1a. 合約代碼兩者皆存在且相同 -> 正確相減計算點數差 (+150 點)
+  const sContractSame = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23150, chgPct: 0.65, prev: 23000, contract: "TXF202611", prevContract: "TXF202611" } }
+  }, plan);
+  assert.match(sContractSame, /台指期夜盤走揚 \+150 點/);
+
+  // 1b. 合約代碼兩者不一致 (換月合約 TXF202612 vs TXF202611) -> 拒絕相減，回傳夜盤漲跌點數未知
+  const sContractMismatch = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23150, chgPct: 0.65, prev: 23000, contract: "TXF202612", prevContract: "TXF202611" } }
+  }, plan);
+  assert.match(sContractMismatch, /夜盤漲跌點數未知/);
+  assert.doesNotMatch(sContractMismatch, /走揚 \+150/);
+
+  // 1c. 現價合約代碼缺失 (contract 為 null 或空字串) -> 拒絕相減，回傳夜盤漲跌點數未知
+  const sCurContractMissing = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23150, chgPct: 0.65, prev: 23000, contract: null, prevContract: "TXF202611" } }
+  }, plan);
+  assert.match(sCurContractMissing, /夜盤漲跌點數未知/);
+
+  // 1d. 前收合約代碼缺失 (prevContract 為 null 或空字串) -> 拒絕相減，回傳夜盤漲跌點數未知
+  const sPrevContractMissing = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23150, chgPct: 0.65, prev: 23000, contract: "TXF202611", prevContract: "" } }
+  }, plan);
+  assert.match(sPrevContractMissing, /夜盤漲跌點數未知/);
+
+  // 1e. 前收價格無效 (prev 為 0, NaN, -100) -> 拒絕相減，回傳夜盤漲跌點數未知
+  const sPrevPriceZero = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23150, chgPct: 0.65, prev: 0, contract: "TXF202611", prevContract: "TXF202611" } }
+  }, plan);
+  assert.match(sPrevPriceZero, /夜盤漲跌點數未知/);
+
+  const sPrevPriceNaN = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23150, chgPct: 0.65, prev: NaN, contract: "TXF202611", prevContract: "TXF202611" } }
+  }, plan);
+  assert.match(sPrevPriceNaN, /夜盤漲跌點數未知/);
+
+  // 1f. 真實點數有效 (chg: -85 或 changePoints: +120) -> 優先直接採用真實點數
+  const sDirectChg = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23000, chg: -85, chgPct: -0.37 } }
+  }, plan);
+  assert.match(sDirectChg, /台指期夜盤走跌 -85 點/);
+
+  const sChangePoints = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 0.8 }] },
+    fut: { night: { price: 23120, changePoints: 120, chgPct: 0.52 } }
+  }, plan);
+  assert.match(sChangePoints, /台指期夜盤走揚 \+120 點/);
+
+  // ==========================================
+  // 2. 成交量基準有效期限政策與中繼嚴格性 (Section 3)
+  // ==========================================
+
+  // 2a. 有效基準 (twse_5ma 在 7 天內，同為 full_day，單位同為 billion) -> 驗證通過，確認量能
+  const vValid = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vValid.volumeStatus, "confirmed");
+  assert.equal(vValid.volumeConfirmed, true);
+  assert.equal(vValid.volumeRatio, 1.2);
+  assert.match(vValid.volumeLabel, /量能已確認（達全日基準量 120%）/);
+
+  // 2b. 過期基準 (twse_5ma 基準日 2026-10-15 距離行情日 2026-10-27 達 12 天 > 7 天) -> 回傳 unverified
+  const vExpired5ma = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-15", source: "twse_5ma" }
+  });
+  assert.equal(vExpired5ma.volumeStatus, "unverified");
+  assert.equal(vExpired5ma.volumeConfirmed, false);
+  assert.match(vExpired5ma.volumeLabel, /量能未驗證（均量基準已過期）/);
+  assert.match(vExpired5ma.volumeReason, /已超過 5日均量基準 之 7 天上限/);
+
+  // 2c. 未來日期 (基準日 2026-10-28 晚於行情日 2026-10-27) -> 回傳 unverified
+  const vFutureDate = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-28", source: "twse_5ma" }
+  });
+  assert.equal(vFutureDate.volumeStatus, "unverified");
+  assert.match(vFutureDate.volumeLabel, /均量基準日期晚於行情日期/);
+
+  // 2d. 缺少來源 (source 為 null 或空字串) -> 回傳 unverified
+  const vMissingSource = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: null }
+  });
+  assert.equal(vMissingSource.volumeStatus, "unverified");
+  assert.match(vMissingSource.volumeLabel, /缺少均量基準來源/);
+
+  // 2e. 來源不明 (source 不在受信政策清單中，如 random_blog) -> 回傳 unverified
+  const vUntrustedSource = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "random_blog" }
+  });
+  assert.equal(vUntrustedSource.volumeStatus, "unverified");
+  assert.match(vUntrustedSource.volumeLabel, /均量基準來源不明/);
+  assert.match(vUntrustedSource.volumeReason, /未在受信基準來源清單中/);
+
+  // 2f. 缺少期間 (未提供 baselinePeriod，且不得自動預設為 full_day) -> 回傳 unverified
+  const vMissingPeriod = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vMissingPeriod.volumeStatus, "unverified");
+  assert.match(vMissingPeriod.volumeLabel, /缺少期間中繼資料/);
+  assert.match(vMissingPeriod.volumeReason, /不可逕行假定為全日成交量/);
+
+  // 2g. 缺少單位 (未提供 baselineUnit) -> 回傳 unverified
+  const vMissingUnit = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vMissingUnit.volumeStatus, "unverified");
+  assert.match(vMissingUnit.volumeLabel, /缺少單位中繼資料/);
+
+  // 2h. 盤中對全日 (intraday vs full_day) -> 回傳 unverified
+  const vIntradayVsFull = B.verifyVolumeStatus({
+    volume: 1800, volumeUnit: "billion", volumePeriod: "intraday", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vIntradayVsFull.volumeStatus, "unverified");
+  assert.match(vIntradayVsFull.volumeLabel, /盤中累積量不可直接與全日均量比較/);
+
+  // 2i. 全日對全日 (full_day vs full_day，且未達均量) -> 正確判定 below_average
+  const vBelowFull = B.verifyVolumeStatus({
+    volume: 2400, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vBelowFull.volumeStatus, "below_average");
+  assert.equal(vBelowFull.volumeConfirmed, false);
+  assert.equal(vBelowFull.volumeRatio, 0.8);
+  assert.match(vBelowFull.volumeLabel, /量能未確認（量能不足，僅達全日基準量 80%）/);
+
+  // 2j. 20日均量有效期限政策 (twse_20ma 上限 14 天：10 天有效，16 天過期)
+  const v20maValid = B.verifyVolumeStatus({
+    volume: 3300, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-17", source: "twse_20ma" }
+  });
+  assert.equal(v20maValid.volumeStatus, "confirmed");
+
+  const v20maExpired = B.verifyVolumeStatus({
+    volume: 3300, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-10", source: "twse_20ma" }
+  });
+  assert.equal(v20maExpired.volumeStatus, "unverified");
+  assert.match(v20maExpired.volumeLabel, /量能未驗證（均量基準已過期）/);
+  assert.match(v20maExpired.volumeReason, /已超過 20日均量基準 之 14 天上限/);
+
+  // 2k. 來源白名單防護：含有受信字串（如 twse 或 5ma）但非白名單識別碼者一律拒絕
+  const vFakeTwse = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_unauthorized_scraper" }
+  });
+  assert.equal(vFakeTwse.volumeStatus, "unverified");
+  assert.match(vFakeTwse.volumeLabel, /均量基準來源不明/);
+  assert.match(vFakeTwse.volumeReason, /未在受信基準來源清單中/);
+
+  const vFake5ma = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "unverified_5ma" }
+  });
+  assert.equal(vFake5ma.volumeStatus, "unverified");
+  assert.match(vFake5ma.volumeLabel, /均量基準來源不明/);
+
+  // 2l. 白名單來源期間相容性限制：twse_5ma 不支援 intraday 期間
+  const vTwse5maIntraday = B.verifyVolumeStatus({
+    volume: 1800, volumeUnit: "billion", volumePeriod: "intraday", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 1500, unit: "billion", period: "intraday", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vTwse5maIntraday.volumeStatus, "unverified");
+  assert.match(vTwse5maIntraday.volumeLabel, /比較期間不相容/);
+  assert.match(vTwse5maIntraday.volumeReason, /不支援期間「intraday」/);
+
+  // 2m. 白名單來源 snapshot 支援 intraday 期間
+  const vSnapshotIntraday = B.verifyVolumeStatus({
+    volume: 1800, volumeUnit: "billion", volumePeriod: "intraday", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 1500, unit: "billion", period: "intraday", date: "2026-10-27", source: "snapshot" }
+  });
+  assert.equal(vSnapshotIntraday.volumeStatus, "confirmed");
+  assert.equal(vSnapshotIntraday.volumeConfirmed, true);
+  assert.equal(vSnapshotIntraday.volumeRatio, 1.2);
+
+  // 2n. 過期精確邊界測試 (Boundary Tests)
+  // 5ma: 正好 7 天有效 (2026-10-20 至 2026-10-27)
+  const v5maBoundaryValid = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-20", source: "twse_5ma" }
+  });
+  assert.equal(v5maBoundaryValid.volumeStatus, "confirmed");
+
+  // 5ma: 超過 7 天 (8 天即過期, 2026-10-19 至 2026-10-27)
+  const v5maBoundaryExpired = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-19", source: "twse_5ma" }
+  });
+  assert.equal(v5maBoundaryExpired.volumeStatus, "unverified");
+  assert.match(v5maBoundaryExpired.volumeLabel, /均量基準已過期/);
+
+  // snapshot: 正好 4 天有效 (涵蓋週末或連假跨期, 2026-10-23 至 2026-10-27)
+  const vSnapBoundaryValid = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-23", source: "snapshot" }
+  });
+  assert.equal(vSnapBoundaryValid.volumeStatus, "confirmed");
+
+  // snapshot: 超過 4 天 (5 天即過期, 2026-10-22 至 2026-10-27)
+  const vSnapBoundaryExpired = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-22", source: "snapshot" }
+  });
+  assert.equal(vSnapBoundaryExpired.volumeStatus, "unverified");
+  assert.match(vSnapBoundaryExpired.volumeLabel, /均量基準已過期/);
+
+  // official: 正好 7 天有效 (2026-10-20 至 2026-10-27)
+  const vOfficialBoundaryValid = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-20", source: "twse_official" }
+  });
+  assert.equal(vOfficialBoundaryValid.volumeStatus, "confirmed");
+
+  // official: 超過 7 天 (8 天即過期)
+  const vOfficialBoundaryExpired = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-19", source: "twse_official" }
+  });
+  assert.equal(vOfficialBoundaryExpired.volumeStatus, "unverified");
+
+  // 20ma: 正好 14 天有效 (2026-10-13 至 2026-10-27)
+  const v20maBoundaryValid = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-13", source: "twse_20ma" }
+  });
+  assert.equal(v20maBoundaryValid.volumeStatus, "confirmed");
+
+  // 20ma: 超過 14 天 (15 天即過期, 2026-10-12 至 2026-10-27)
+  const v20maBoundaryExpired = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-12", source: "twse_20ma" }
+  });
+  assert.equal(v20maBoundaryExpired.volumeStatus, "unverified");
+
+  // 2o. 無效日期測試 (Invalid Date)
+  // 行情日期為非法日期 (2026-99-99)
+  const vInvalidActualDate = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-99-99"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vInvalidActualDate.volumeStatus, "unverified");
+  assert.match(vInvalidActualDate.volumeLabel, /日期格式無效/);
+
+  // 基準日期為無效字串 (invalid-date)
+  const vInvalidBaseDate = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "invalid-date", source: "twse_5ma" }
+  });
+  assert.equal(vInvalidBaseDate.volumeStatus, "unverified");
+  assert.match(vInvalidBaseDate.volumeLabel, /缺少均量基準有效日期/);
+
+  // 2p. 缺少單位測試 (Missing Units)
+  // 實際行情缺少單位
+  const vMissingActualUnit = B.verifyVolumeStatus({
+    volume: 3600, volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vMissingActualUnit.volumeStatus, "unverified");
+  assert.match(vMissingActualUnit.volumeLabel, /缺少單位中繼資料/);
+
+  // 基準量缺少單位
+  const vMissingBaseUnit = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vMissingBaseUnit.volumeStatus, "unverified");
+  assert.match(vMissingBaseUnit.volumeLabel, /缺少單位中繼資料/);
+
+  // 單位不一致 (shares vs billion)
+  const vUnitMismatch2 = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "shares", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vUnitMismatch2.volumeStatus, "unverified");
+  assert.match(vUnitMismatch2.volumeLabel, /實際量與均量單位不一致/);
+
+  // 2q. 期間不相容測試 (Period Incompatibility)
+  // actual full_day vs base intraday
+  const vFullVsIntraday = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "intraday", date: "2026-10-27", source: "snapshot" }
+  });
+  assert.equal(vFullVsIntraday.volumeStatus, "unverified");
+  assert.match(vFullVsIntraday.volumeLabel, /比較期間不相容/);
+
+  // 2r. 不可信來源防護 (Untrusted Source)
+  const vUntrustedOther = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "5ma_unofficial" }
+  });
+  assert.equal(vUntrustedOther.volumeStatus, "unverified");
+  assert.match(vUntrustedOther.volumeLabel, /均量基準來源不明/);
+});
