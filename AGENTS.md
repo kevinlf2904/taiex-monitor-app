@@ -1,6 +1,6 @@
 # KLineLab K線情報局（taiex-monitor-app）共用工作規則
 
-這份是所有 AI 協作者（Claude Code、Gemini／Antigravity…）共用的規則。
+這份是所有 AI 協作者（Claude Code、Gemini／Antigravity、ChatGPT／Codex）共用的規則。Codex 會自己讀這個檔案。
 `.agent/rules/klinelab.md` 是給 Antigravity 讀的同一份內容，兩個檔案必須完全一樣（`tests/unit.test.mjs` 會檢查），改一個就要複製到另一個。
 `CLAUDE.md` 會引用這份，另外只寫 Claude Code 專用的事。
 
@@ -18,13 +18,19 @@
 
 ## 多個 AI 一起協作
 
-- **各用各的分支**：Claude Code 用 `claude/…`，Gemini／Antigravity 用 `gemini/…`。不要直接推 main，也不要推到別人的分支。
+- **各用各的分支**：Claude Code 用 `claude/…`，Gemini／Antigravity 用 `gemini/…`，ChatGPT／Codex 用 `codex/…`。不要直接推 main，也不要推到別人的分支。
+- **分工**（使用者沒指定時的預設，同一個區塊同一時間只給一個 AI 做）：
+  - Claude Code：跨檔案的功能、API 與排程、合併與發佈。
+  - Gemini／Antigravity：使用者指定的頁面或區塊。
+  - ChatGPT：審查別人的 PR、整站稽核、補測試案例。ChatGPT 對話接 GitHub 只能讀，報告貼給要動手的 AI 或寫在 PR 留言；Codex 可以改程式，開 `codex/…` 分支的 PR。
+- **別的 AI 的報告是待驗證的線索**：先在程式裡確認，再動手；回報時列出哪些成立、哪些不成立或已經修過，不要照單全收。
+- **互相審查**：PR 開好後可以請另一個 AI 看。要 ChatGPT 看，就在 PR 留言 `@codex review`（要先在 ChatGPT 的 Codex 設定開啟這個 repo 的程式碼審查）。審查意見由開 PR 的 AI 處理，不要直接推到別人的分支。
 - **開工前先更新**：`git fetch origin main` 後合併進自己的分支。排程每天都會往 main 寫資料檔（`learner/data/…`）。
 - **合併前才改版本號**：避免兩邊用到同一個 `-N`。合併前看 main 上目前的版本，往上加 1。
 - **一律走 PR**：CI 的 `test` 通過才合併，合併方式用 merge（不要 squash／rebase 別人的提交）。
 - **大檔先上鎖**：`learner/watch.html`、`learner/index.html` 很大，容易衝突。要改它們時，先推一個提交並開 **draft PR**，標題寫「鎖：檔名＋區塊」（例：`鎖：watch.html ETF 分頁`），等於上鎖；開工前先看 open 的 PR，同一個檔案的同一區塊已經被鎖就改做別的，或等它合併。合併或放棄後鎖就解除。
-- **交接**：在 PR 說明寫清楚改了什麼、還有什麼沒做完，另一個 AI 從 PR 接手。
-- **「直接幫我合併」**：推上自己的開發分支 → 開 PR → 等 CI `test` 通過 → 用 merge 方式合併 → 分支重設到最新 main。Antigravity 用 `/merge`（`.agent/workflows/merge.md`）跑同一套步驟。
+- **交接**：PR 說明照 `.github/pull_request_template.md` 寫：誰做的、改了什麼、還有什麼沒做完、測試結果，另一個 AI 從 PR 接手。
+- **「直接幫我合併」**：推上自己的開發分支 → 開 PR → 等 CI `test` 通過 → 用 merge 方式合併 → 分支重設到最新 main。Antigravity 用 `/merge`（`.agent/workflows/merge.md`）跑同一套步驟。Codex 開完 PR 就交接，合併由使用者或 Claude Code／Antigravity 照這套步驟做。
 - **不要手改** `learner/data/` 裡排程產生的檔案，要改就改產生它的 `scripts/*.mjs`。
 
 ## 版本與發佈

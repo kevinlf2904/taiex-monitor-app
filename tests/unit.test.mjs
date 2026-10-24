@@ -343,10 +343,12 @@ test("AI 協作規則：AGENTS.md 與 Antigravity 規則檔一致，CLAUDE.md �
   const [a, g, c] = await Promise.all([rd("AGENTS.md"), rd(".agent/rules/klinelab.md"), rd("CLAUDE.md")]);
   assert.equal(g, a, "改了 AGENTS.md 要複製到 .agent/rules/klinelab.md");
   assert.match(c, /^@AGENTS\.md/m);
-  for (const k of ["learner/version.json", "gemini/", "claude/", "密鑰", "draft PR", "鎖：", ".agent/workflows/merge.md"]) assert.ok(a.includes(k), `AGENTS.md 缺少「${k}」`);
+  for (const k of ["learner/version.json", "gemini/", "claude/", "codex/", "pull_request_template.md", "密鑰", "draft PR", "鎖：", ".agent/workflows/merge.md"]) assert.ok(a.includes(k), `AGENTS.md 缺少「${k}」`);
   const m = await rd(".agent/workflows/merge.md");
   assert.match(m, /^---\r?\ndescription: /, "Antigravity workflow 要有 description");
   for (const k of ["gemini/", "node tests/run.mjs", "merge", "version.json"]) assert.ok(m.includes(k), `merge.md 缺少「${k}」`);
+  const pt = await rd(".github/pull_request_template.md");
+  for (const k of ["誰做的", "改了什麼", "還沒做完", "測試"]) assert.ok(pt.includes(k), `PR 範本缺少「${k}」`);
 });
 
 test("櫃買圖表排程：指數累積、觀測站月營收解析、產業彙總與創新高、董監質押、權證標的", async () => {
