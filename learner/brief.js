@@ -354,14 +354,15 @@ function briefScenarios(G, today, basePrice, meta = {}) {
   const futPx = futObj?.price ?? futObj?.close;
   const isFutPriceValid = futObj != null && typeof futPx === "number" && isFinite(futPx) && futPx > 0;
   let futChg = null;
-  if (futObj && typeof futObj.chg === "number" && isFinite(futObj.chg)) {
-    futChg = futObj.chg;
+  const rawFutChg = futObj?.chg ?? futObj?.changePoints;
+  if (typeof rawFutChg === "number" && isFinite(rawFutChg)) {
+    futChg = rawFutChg;
   } else if (isFutPriceValid) {
     const prev = futObj.prev ?? futObj.referencePrice ?? futObj.refPrice;
-    if (typeof prev === "number" && isFinite(prev) && prev > 0) {
-      if (!futObj.contract || !futObj.prevContract || futObj.contract === futObj.prevContract) {
-        futChg = Math.round(futPx - prev);
-      }
+    const curContract = (typeof futObj.contract === "string" && futObj.contract.trim()) ? futObj.contract.trim() : null;
+    const prevContract = (typeof futObj.prevContract === "string" && futObj.prevContract.trim()) ? futObj.prevContract.trim() : null;
+    if (typeof prev === "number" && isFinite(prev) && prev > 0 && curContract && prevContract && curContract === prevContract) {
+      futChg = Math.round(futPx - prev);
     }
   }
   const isFutValid = isFutPriceValid && futChg != null;
@@ -672,20 +673,21 @@ function verifyVolumeStatus(actual, plan) {
     if (s === "lots" || s === "張") return "lots";
     if (s === "billion" || s === "億" || s === "100m") return "billion";
     if (s === "contracts" || s === "口") return "contracts";
-    return s;
+    return null;
   };
 
   const actualUnit = normUnit(actual?.volumeUnit ?? actual?.unit);
   const baseUnit = normUnit(baseObj?.unit ?? actual?.baselineUnit ?? actual?.baseUnit ?? plan?.baselineUnit);
 
   if (!actualUnit || !baseUnit) {
+    const missing = !actualUnit && !baseUnit ? "實際量與均量" : (!actualUnit ? "實際量" : "均量");
     return {
       actualVolume: rawVol,
       volumeStatus: "unverified",
       volumeConfirmed: false,
       volumeRatio: null,
       volumeLabel: "量能未驗證（缺少單位中繼資料，基準不可靠）",
-      volumeReason: "缺少成交量或均量單位中繼資料，不可逕行比對",
+      volumeReason: `缺少${missing}單位中繼資料，不可逕行比對`,
       volumeBaseline: rawBase
     };
   }
@@ -707,20 +709,22 @@ function verifyVolumeStatus(actual, plan) {
     const s = p.trim().toLowerCase();
     if (["full_day", "daily", "post", "close", "全日", "日盤", "收盤"].includes(s)) return "full_day";
     if (["intraday", "live", "spark", "盤中", "即時", "撮合"].includes(s)) return "intraday";
-    return s;
+    return null;
   };
 
+  // 不得讓缺少期間中繼的資料自動預設為 full_day 後直接確認量能
   const actualPeriod = normPeriod(actual?.volumePeriod ?? actual?.period ?? (actual?.session === "post" ? "full_day" : actual?.session === "live" ? "intraday" : null));
-  const basePeriod = normPeriod(baseObj?.period ?? actual?.baselinePeriod ?? plan?.baselinePeriod ?? "full_day");
+  const basePeriod = normPeriod(baseObj?.period ?? actual?.baselinePeriod ?? plan?.baselinePeriod);
 
   if (!actualPeriod || !basePeriod) {
+    const missing = !actualPeriod && !basePeriod ? "實際量與均量" : (!actualPeriod ? "實際量" : "均量");
     return {
       actualVolume: rawVol,
       volumeStatus: "unverified",
       volumeConfirmed: false,
       volumeRatio: null,
       volumeLabel: "量能未驗證（缺少期間中繼資料）",
-      volumeReason: "缺少成交量比較期間中繼資料",
+      volumeReason: `缺少${missing}比較期間中繼資料，不可逕行假定為全日成交量`,
       volumeBaseline: rawBase
     };
   }
@@ -753,14 +757,38 @@ function verifyVolumeStatus(actual, plan) {
   const baseDate = baseObj?.date ?? actual?.baselineDate ?? plan?.baselineDate;
   const baseSource = baseObj?.source ?? actual?.baselineSource ?? plan?.baselineSource;
 
-  if (!baseDate || !/^\d{4}-\d{2}-\d{2}$/.test(baseDate)) {
+  if (!actualDate || typeof actualDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(actualDate)) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（缺少行情日期）",
+      volumeReason: "缺少行情日期，無法驗證基準有效期限",
+      volumeBaseline: rawBase
+    };
+  }
+
+  if (!baseDate || typeof baseDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(baseDate)) {
     return {
       actualVolume: rawVol,
       volumeStatus: "unverified",
       volumeConfirmed: false,
       volumeRatio: null,
       volumeLabel: "量能未驗證（缺少均量基準有效日期）",
-      volumeReason: "缺少均量基準日期，無法確認是否過期",
+      volumeReason: "缺少均量基準日期或格式無效，無法確認是否過期",
+      volumeBaseline: rawBase
+    };
+  }
+
+  if (baseDate > actualDate) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（均量基準日期晚於行情日期）",
+      volumeReason: `均量日期（${baseDate}）超前於實際行情日期（${actualDate}），存在未來資訊嫌疑`,
       volumeBaseline: rawBase
     };
   }
@@ -777,14 +805,42 @@ function verifyVolumeStatus(actual, plan) {
     };
   }
 
-  if (actualDate && baseDate > actualDate) {
+  // 基準有效期限政策：依據均量基準類型與來源，定義嚴格之最大允許日曆天數
+  const srcLower = baseSource.trim().toLowerCase();
+  let policy = null;
+  if (srcLower.includes("snapshot") || srcLower.includes("pre_market") || srcLower.includes("prev")) {
+    policy = { type: "snapshot", maxDays: 4, label: "盤前快照/前日量基準" };
+  } else if (srcLower.includes("5ma") || srcLower.includes("5d")) {
+    policy = { type: "5ma", maxDays: 7, label: "5日均量基準" };
+  } else if (srcLower.includes("20ma") || srcLower.includes("20d") || srcLower.includes("monthly")) {
+    policy = { type: "20ma", maxDays: 14, label: "20日均量基準" };
+  } else if (srcLower.includes("twse") || srcLower.includes("tpex") || srcLower.includes("taifex") || srcLower.includes("official")) {
+    policy = { type: "official_general", maxDays: 7, label: "官方均量基準" };
+  }
+
+  if (!policy) {
     return {
       actualVolume: rawVol,
       volumeStatus: "unverified",
       volumeConfirmed: false,
       volumeRatio: null,
-      volumeLabel: "量能未驗證（均量基準日期晚於行情日期）",
-      volumeReason: `均量日期（${baseDate}）超前於實際行情日期（${actualDate}），存在未來資訊嫌疑`,
+      volumeLabel: "量能未驗證（均量基準來源不明）",
+      volumeReason: `均量來源（${baseSource}）未在受信基準來源清單中，基準不可靠`,
+      volumeBaseline: rawBase
+    };
+  }
+
+  const diffMs = new Date(actualDate).getTime() - new Date(baseDate).getTime();
+  const diffDays = Math.round(diffMs / 86400e3);
+
+  if (diffDays > policy.maxDays) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（均量基準已過期）",
+      volumeReason: `均量基準已過期（基準日 ${baseDate} 距行情日 ${actualDate} 達 ${diffDays} 天，已超過 ${policy.label} 之 ${policy.maxDays} 天上限）`,
       volumeBaseline: rawBase
     };
   }
@@ -1072,16 +1128,19 @@ function dailyBriefSummaryHtml(G, plan) {
   const hasValidFutPrice = Boolean(fut && isValidPrice(futPx));
   const isFutExpired = Boolean(fut && (fut.stale || fut.expired));
 
-  // 台指期漲跌點數判定（嚴格依據真實點數或有效現價與可對應前收計算，禁止使用固定乘數）
+  // 台指期漲跌點數判定（嚴格依據真實點數或有效現價與可確認同一合約之前收基準計算，禁止使用固定乘數）
   let fChg = null;
-  if (fut && typeof fut.chg === "number" && isFinite(fut.chg)) {
-    fChg = fut.chg;
+  const rawChg = fut?.chg ?? fut?.changePoints;
+  if (typeof rawChg === "number" && isFinite(rawChg)) {
+    // 只有來源提供可信且有效的實際漲跌點數時，才可直接採用
+    fChg = rawChg;
   } else if (hasValidFutPrice) {
     const prev = fut.prev ?? fut.referencePrice ?? fut.refPrice;
-    if (isValidPrice(prev)) {
-      if (!fut.contract || !fut.prevContract || fut.contract === fut.prevContract) {
-        fChg = Math.round(futPx - prev);
-      }
+    const curContract = (typeof fut.contract === "string" && fut.contract.trim()) ? fut.contract.trim() : null;
+    const prevContract = (typeof fut.prevContract === "string" && fut.prevContract.trim()) ? fut.prevContract.trim() : null;
+    // 若任一合約識別資料缺失或兩者不一致，不得自行相減，應回傳未知狀態 (fChg 為 null)
+    if (isValidPrice(prev) && curContract && prevContract && curContract === prevContract) {
+      fChg = Math.round(futPx - prev);
     }
   }
 
