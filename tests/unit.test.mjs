@@ -1032,3 +1032,221 @@ test("每日市場決策中心 Round 2：交易日曆、時間注入、嚴格資
   assert.equal(d12.supportHit, true);
 });
 
+
+
+test("Phase 5 最終缺陷修正：早報結論真實資料、量能驗證、資料完整度、日曆快照防護", () => {
+  const B = engine().B;
+
+  // ==========================================
+  // E. 早報結論必須由有效資料產生 (dailyBriefSummaryHtml)
+  // ==========================================
+  const planE = B.briefScenarios({}, "2026-10-27", 23000);
+
+  // E1. 全部缺失 (G 為空或缺少美股與期貨)
+  const hE1 = B.dailyBriefSummaryHtml({}, planE);
+  assert.match(hE1, /資料不足，暫不判定/);
+  assert.match(hE1, /缺少必要行情：費半指數行情、台指期夜盤行情/);
+  assert.doesNotMatch(hE1, /行情已更新/);
+  assert.doesNotMatch(hE1, /國際半導體指數強勢/);
+  assert.doesNotMatch(hE1, /夜盤期貨維持正向溢價/);
+
+  // E2. 費半缺失、期貨存在
+  const hE2 = B.dailyBriefSummaryHtml({
+    fut: { night: { price: 23100, chg: 80 } }
+  }, planE);
+  assert.match(hE2, /資料不足，暫不判定/);
+  assert.match(hE2, /缺少必要行情：費半指數行情/);
+  assert.doesNotMatch(hE2, /台指期夜盤走揚/);
+
+  // E3. 期貨缺失、費半存在
+  const hE3 = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 1.5 }] }
+  }, planE);
+  assert.match(hE3, /資料不足，暫不判定/);
+  assert.match(hE3, /缺少必要行情：台指期夜盤行情/);
+  assert.doesNotMatch(hE3, /費城半導體上漲/);
+
+  // E4. 過期資料 (stale = true)
+  const hE4 = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 1.5, stale: true }] },
+    fut: { night: { price: 23100, chg: 80 } }
+  }, planE);
+  assert.match(hE4, /資料不足，暫不判定/);
+  assert.match(hE4, /費半指數過期資料/);
+
+  // E5. 真實零漲跌 (費半 0.00%、期貨 0 點)
+  const hE5 = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5000, chgPct: 0.0 }] },
+    fut: { night: { price: 23000, chg: 0 } }
+  }, planE);
+  assert.doesNotMatch(hE5, /資料不足/);
+  assert.match(hE5, /平盤（0\.00% \/ 0 點）/);
+  assert.match(hE5, /費城半導體收在平盤（0.00%）/);
+
+  // E6. 走勢矛盾 (費半大漲 +1.8%，夜盤期貨重挫 -150 點)
+  const hE6 = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5200, chgPct: 1.8 }] },
+    fut: { night: { price: 22850, chg: -150 } }
+  }, planE);
+  assert.match(hE6, /美股與期貨走勢分歧/);
+  assert.match(hE6, /訊號相互抵銷/);
+
+  // E7. 有效完整資料 (費半上漲 +1.2%，期貨上漲 +80 點)
+  const hE7 = B.dailyBriefSummaryHtml({
+    us: { indices: [{ code: "^SOX", price: 5150, chgPct: 1.2 }] },
+    fut: { night: { price: 23080, chg: 80 } }
+  }, planE);
+  assert.match(hE7, /台指期夜盤走揚 \+80 點/);
+  assert.match(hE7, /費城半導體上漲 \+1.20%/);
+
+  // ==========================================
+  // F. 成交量必須真正參與驗證，或明確標示未驗證 (validatePlan)
+  // ==========================================
+  const planF = B.briefScenarios({}, "2026-10-27", 23000);
+
+  // F1. 缺失成交量數據
+  const f1 = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, date: "2026-10-27" });
+  assert.equal(f1.volumeStatus, "missing");
+  assert.equal(f1.volumeConfirmed, false);
+  assert.match(f1.volumeLabel, /缺少成交量數據/);
+
+  // F2. 成交量為 0
+  const f2 = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: 0, date: "2026-10-27" });
+  assert.equal(f2.volumeStatus, "zero_volume");
+  assert.equal(f2.volumeConfirmed, false);
+  assert.match(f2.volumeLabel, /成交量為 0/);
+
+  // F3. 成交量無效 (負數、NaN、Infinity)
+  const f3a = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: -100, date: "2026-10-27" });
+  assert.equal(f3a.volumeStatus, "invalid");
+  assert.equal(f3a.volumeConfirmed, false);
+  const f3b = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: NaN, date: "2026-10-27" });
+  assert.equal(f3b.volumeStatus, "invalid");
+
+  // F4. 有成交量但無均量比較基準 -> 明確標示「量能未驗證（缺少均量比較基準）」
+  const f4 = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: 350000, date: "2026-10-27" });
+  assert.equal(f4.volumeStatus, "unverified");
+  assert.equal(f4.volumeConfirmed, false);
+  assert.match(f4.volumeLabel, /缺少均量比較基準/);
+
+  // F5. 成交量達標量能確認 (實際 4000 億，5 日均量 3000 億 -> 133%)
+  const f5 = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: 4000, avgVolume: 3000, date: "2026-10-27" });
+  assert.equal(f5.volumeStatus, "confirmed");
+  assert.equal(f5.volumeConfirmed, true);
+  assert.equal(f5.volumeRatio, 1.33);
+  assert.match(f5.volumeLabel, /量能已確認（達基準量 133%）/);
+
+  // F6. 成交量未達標量能不足 (實際 2000 億，5 日均量 3000 億 -> 67%)
+  const f6 = B.validatePlan(planF, { price: 23100, high: 23200, low: 22950, chgPct: 0.4, volume: 2000, avgVolume: 3000, date: "2026-10-27" });
+  assert.equal(f6.volumeStatus, "below_average");
+  assert.equal(f6.volumeConfirmed, false);
+  assert.equal(f6.volumeRatio, 0.67);
+  assert.match(f6.volumeLabel, /量能未確認（量能不足，僅達基準量 67%）/);
+
+  // F7. 價格結構與量能確認分開呈現：突破壓力但量能不足
+  const f7 = B.validatePlan(planF, { price: planF.keyLevels.pressure + 10, high: planF.keyLevels.pressure + 20, low: planF.keyLevels.pivot, chgPct: 1.1, volume: 2000, avgVolume: 3000, date: "2026-10-27" });
+  assert.equal(f7.metKey, "bull");
+  assert.equal(f7.pressureHit, true);
+  assert.equal(f7.volumeConfirmed, false);
+  assert.match(f7.analysisText, /多方推進情境/);
+  assert.match(f7.analysisText, /量能未確認/);
+
+  // F8. validateHtml 畫面渲染量能狀態
+  const valHtml = B.validateHtml(f5, planF);
+  assert.match(valHtml, /量能判定：/);
+  assert.match(valHtml, /量能已確認/);
+
+  // ==========================================
+  // G. 統一資料完整度定義 (briefScenarios, coreMarketCardsHtml)
+  // ==========================================
+
+  // G1. coreMarketCardsHtml: price 為 0、負數、NaN、Infinity -> 顯示「資料暫缺」
+  const badCardsHtml = B.coreMarketCardsHtml({
+    taiex: { price: 0, date: "2026-10-27" }
+  }, {
+    fut: { night: { price: NaN, chg: 50 } },
+    us: { indices: [{ code: "^SOX", price: Infinity, chgPct: 1.2 }, { code: "^IXIC", price: -100, chgPct: 0.5 }] }
+  }, { isClosed: false }, { dataStatusLabel: "即時資料" });
+
+  assert.match(badCardsHtml, /data-dhcode="T00"[^]*?資料暫缺/);
+  assert.match(badCardsHtml, /data-dhcode="TXF"[^]*?資料暫缺/);
+  assert.match(badCardsHtml, /data-dhcode="\^SOX"[^]*?資料暫缺/);
+  assert.match(badCardsHtml, /data-dhcode="\^IXIC"[^]*?資料暫缺/);
+
+  // G2. coreMarketCardsHtml: 價格有效但漲跌幅缺失 -> 顯示「漲跌幅未知」，不可預設為 0%
+  const noChgCardHtml = B.coreMarketCardsHtml({
+    taiex: { price: 23200, chgPct: null, date: "2026-10-27" }
+  }, {}, { isClosed: false }, { dataStatusLabel: "即時資料" });
+  assert.match(noChgCardHtml, /漲跌幅未知/);
+  assert.doesNotMatch(noChgCardHtml, /\+0\.00%/);
+
+  // G3. briefScenarios: 必要指標缺失時 macroStatus 絕不能為 complete_macro
+  const bsNoSox = B.briefScenarios({
+    us: { indices: [{ code: "^IXIC", price: 18000, chgPct: 1.0 }] },
+    fut: { night: { price: 23000, chg: 50 } }
+  }, "2026-10-27", 23000);
+  assert.equal(bsNoSox.macroStatus, "partial_macro");
+  assert.match(bsNoSox.macroNote, /部分必要美股\/期貨資料缺失/);
+
+  // G4. briefScenarios: 必要指標齊全但缺少選配 TSM -> partial_macro
+  const bsNoTsm = B.briefScenarios({
+    us: { indices: [{ code: "^SOX", price: 5100, chgPct: 1.5 }, { code: "^IXIC", price: 18000, chgPct: 1.0 }] },
+    fut: { night: { price: 23000, chg: 50 } }
+  }, "2026-10-27", 23000);
+  assert.equal(bsNoTsm.macroStatus, "partial_macro");
+  assert.match(bsNoTsm.macroNote, /缺少 TSM 選配行情/);
+
+  // G5. briefScenarios: 必要指標 + 選配 TSM 全數齊全 -> complete_macro
+  const bsComplete = B.briefScenarios({
+    us: {
+      indices: [{ code: "^SOX", price: 5100, chgPct: 1.5 }, { code: "^IXIC", price: 18000, chgPct: 1.0 }],
+      megas: [{ code: "TSM", price: 195, chgPct: 2.0 }]
+    },
+    fut: { night: { price: 23000, chg: 50 } }
+  }, "2026-10-27", 23000);
+  assert.equal(bsComplete.macroStatus, "complete_macro");
+  assert.match(bsComplete.macroNote, /國際行情與選配指標完整/);
+
+  // ==========================================
+  // H. 官方交易日曆與快照防護
+  // ==========================================
+
+  // H1. 交易日曆連線失敗 (failed) -> sessionStatus 回傳 unknown，採安全降級處理，不假定為正常交易日
+  const sessCalFail = B.sessionStatus("2026-10-27T02:00:00Z", {
+    calendarStatus: "failed"
+  });
+  assert.equal(sessCalFail.session, "unknown");
+  assert.equal(sessCalFail.calendarVerified, false);
+  assert.equal(sessCalFail.calendarStatus, "failed");
+  assert.match(sessCalFail.warning, /官方交易日曆連線失敗/);
+
+  // H2. 特殊休市（如颱風假動態休市日傳入） -> 正確判定今日休市，不硬編碼
+  const sessTyphoon = B.sessionStatus("2026-10-27T02:00:00Z", {
+    holidays: [{ date: "2026-10-27", name: "颱風天然災害停止上班" }],
+    calendarStatus: "confirmed"
+  });
+  assert.equal(sessTyphoon.session, "closed");
+  assert.equal(sessTyphoon.isClosed, true);
+  assert.equal(sessTyphoon.reason, "颱風天然災害停止上班");
+
+  // H3. 快照覆寫防護：已存在有效快照時，拒絕二次寫入
+  const mockStore = new Map();
+  const storeAdapter = {
+    get: (k) => mockStore.get(k) || null,
+    set: (k, v) => { mockStore.set(k, v); }
+  };
+  const snap1 = B.briefScenarios({}, "2026-10-27", 23000);
+  const save1 = B.saveBriefSnapshot("2026-10-27", snap1, storeAdapter);
+  assert.equal(save1, true, "首次儲存原始快照成功");
+
+  // 試圖用另一個快照覆寫
+  const snap2 = B.briefScenarios({}, "2026-10-27", 23800);
+  const save2 = B.saveBriefSnapshot("2026-10-27", snap2, storeAdapter);
+  assert.equal(save2, false, "已存在原始快照時拒絕覆寫");
+  assert.equal(storeAdapter.get("watch:brief:snap:2026-10-27").keyLevels.pivot, snap1.keyLevels.pivot, "原始快照維持不變");
+
+  // H4. 跨交易日快照防護：若快照日期與分析交易日不符，拒絕儲存
+  const crossDaySnap = B.briefScenarios({}, "2026-10-26", 23000);
+  const saveCrossDay = B.saveBriefSnapshot("2026-10-27", crossDaySnap, storeAdapter);
+  assert.equal(saveCrossDay, false, "跨交易日快照拒絕儲存");
+});

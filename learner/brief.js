@@ -250,7 +250,8 @@ function sessionStatus(now = Date.now(), opts = {}) {
   const holInfo = resolveHolidays(options);
   const holList = holInfo.list;
 
-  const calendarUnverified = options.calendarStatus === "unknown" || options.isUnknown ||
+  const calendarFailed = options.calendarStatus === "failed" || options.calendarStatus === "error" || Boolean(options.cal?.error);
+  const calendarUnverified = calendarFailed || options.calendarStatus === "unknown" || options.isUnknown ||
     (holList === null && !isWeekend && options.calendarStatus !== "confirmed");
 
   if (calendarUnverified) {
@@ -263,7 +264,10 @@ function sessionStatus(now = Date.now(), opts = {}) {
       isWeekend,
       isClosed: null,
       calendarVerified: false,
-      warning: "無法取得官方交易日曆，採安全降級處理"
+      calendarStatus: calendarFailed ? "failed" : "unverified",
+      warning: calendarFailed
+        ? "官方交易日曆連線失敗，採安全降級處理，不假定為正常交易日"
+        : "無法取得官方交易日曆，採安全降級處理"
     };
   }
 
@@ -335,11 +339,30 @@ function briefScenarios(G, today, basePrice, meta = {}) {
   const tsmObj = (G?.us?.megas || []).find(x => x.code === "TSM");
   const futObj = G?.fut?.night || G?.fut?.quote;
 
-  const sox = soxObj?.chgPct != null && isFinite(soxObj.chgPct) ? soxObj.chgPct : null;
-  const ixic = ixicObj?.chgPct != null && isFinite(ixicObj.chgPct) ? ixicObj.chgPct : null;
-  const tsm = tsmObj?.chgPct != null && isFinite(tsmObj.chgPct) ? tsmObj.chgPct : null;
-  const futChg = futObj?.chg != null && isFinite(futObj.chg) ? futObj.chg : null;
-  const macroMissing = sox == null || ixic == null || futChg == null;
+  const soxPx = soxObj?.close ?? soxObj?.price;
+  const isSoxValid = soxObj != null && typeof soxPx === "number" && isFinite(soxPx) && soxPx > 0 && soxObj.chgPct != null && isFinite(soxObj.chgPct);
+  const sox = isSoxValid ? soxObj.chgPct : null;
+
+  const ixicPx = ixicObj?.close ?? ixicObj?.price;
+  const isIxicValid = ixicObj != null && typeof ixicPx === "number" && isFinite(ixicPx) && ixicPx > 0 && ixicObj.chgPct != null && isFinite(ixicObj.chgPct);
+  const ixic = isIxicValid ? ixicObj.chgPct : null;
+
+  const tsmPx = tsmObj?.close ?? tsmObj?.price;
+  const isTsmValid = tsmObj != null && typeof tsmPx === "number" && isFinite(tsmPx) && tsmPx > 0 && tsmObj.chgPct != null && isFinite(tsmObj.chgPct);
+  const tsm = isTsmValid ? tsmObj.chgPct : null;
+
+  const futPx = futObj?.price ?? futObj?.close;
+  const isFutValid = futObj != null && typeof futPx === "number" && isFinite(futPx) && futPx > 0 && futObj.chg != null && isFinite(futObj.chg);
+  const futChg = isFutValid ? futObj.chg : null;
+
+  // 必要指標：費半(^SOX)、那斯達克(^IXIC)、台指期夜盤(TXF)；選配指標：台積電 ADR(TSM)
+  const requiredComplete = isSoxValid && isIxicValid && isFutValid;
+  const allComplete = requiredComplete && isTsmValid;
+
+  const macroStatus = !requiredComplete ? "partial_macro" : (allComplete ? "complete_macro" : "partial_macro");
+  const macroNote = !requiredComplete
+    ? "部分必要美股/期貨資料缺失，關鍵位階依基準價推估"
+    : (allComplete ? "國際行情與選配指標完整" : "必要國際指標完整（缺少 TSM 選配行情）");
 
   const ref = basePrice;
   const shift = futChg != null ? Math.round(futChg * 0.85) : 0;
@@ -355,8 +378,8 @@ function briefScenarios(G, today, basePrice, meta = {}) {
     sourceAsOf: meta.sourceAsOf || null,
     refPriceDate: meta.refPriceDate || null,
     macroSignals: { sox, ixic, tsm, futChg },
-    macroStatus: macroMissing ? "partial_macro" : "complete_macro",
-    macroNote: macroMissing ? "部分美股/期貨資料缺失，關鍵位階依基準價推估" : "國際行情完整",
+    macroStatus,
+    macroNote,
     keyLevels: { pressure, pivot, support },
     scenarios: {
       bull: {
@@ -610,16 +633,21 @@ function validatePlan(plan, actual) {
   const hi = actual?.high;
   const lo = actual?.low;
   const chg = actual?.chgPct;
-  const vol = actual?.volume ?? actual?.vol;
+  const rawVol = actual?.volume ?? actual?.vol;
+  const rawBase = actual?.volumeBaseline ?? actual?.avgVolume ?? actual?.vol5 ?? actual?.vol20 ?? plan?.volumeBaseline ?? plan?.keyLevels?.expectedVolume ?? null;
 
-  if (px == null || hi == null || lo == null || !isFinite(px) || !isFinite(hi) || !isFinite(lo)) {
+  if (px == null || hi == null || lo == null || !isFinite(px) || !isFinite(hi) || !isFinite(lo) || px <= 0 || hi <= 0 || lo <= 0) {
     return {
       status: "insufficient_data",
       outcomeLabel: "行情資料不足，無法判定",
-      analysisText: "實際行情缺少收盤價、最高價或最低價等必要欄位，降級為資料不足，不預設為守穩或未突破。",
+      analysisText: "實際行情缺少有效收盤價、最高價或最低價等必要欄位，降級為資料不足，不預設為守穩或未突破。",
       pressureHit: null,
       supportHit: null,
-      metKey: null
+      metKey: null,
+      actualVolume: null,
+      volumeStatus: "insufficient_quote",
+      volumeConfirmed: false,
+      volumeLabel: "行情數據不足"
     };
   }
 
@@ -649,8 +677,48 @@ function validatePlan(plan, actual) {
     observationText = `收盤 ${px.toLocaleString()} 點介於支撐 ${support.toLocaleString()} 點與分水嶺 ${pivot.toLocaleString()} 點之間；低點 ${lo.toLocaleString()} 點${supportHit ? "曾回測支撐" : "守穩支撐"}，高點 ${hi.toLocaleString()} 點${pressureHit ? "曾測壓力" : "未達壓力"}。`;
   }
 
+  // 量能驗證：價格結構與量能確認分開呈現，不以量能硬改價格結構
+  let volumeStatus = "unverified";
+  let volumeConfirmed = false;
+  let volumeRatio = null;
+  let volumeLabel = "量能未驗證";
+
+  if (rawVol == null) {
+    volumeStatus = "missing";
+    volumeConfirmed = false;
+    volumeLabel = "量能未驗證（缺少成交量數據）";
+  } else if (typeof rawVol !== "number" || !isFinite(rawVol) || rawVol < 0) {
+    volumeStatus = "invalid";
+    volumeConfirmed = false;
+    volumeLabel = "量能未驗證（成交量數值無效）";
+  } else if (rawVol === 0) {
+    volumeStatus = "zero_volume";
+    volumeConfirmed = false;
+    volumeLabel = "量能未驗證（成交量為 0）";
+  } else {
+    const hasValidBase = rawBase != null && typeof rawBase === "number" && isFinite(rawBase) && rawBase > 0;
+    if (!hasValidBase) {
+      volumeStatus = "unverified";
+      volumeConfirmed = false;
+      volumeLabel = "量能未驗證（缺少均量比較基準）";
+    } else {
+      const ratio = +(rawVol / rawBase).toFixed(2);
+      const ratioPct = Math.round(ratio * 100);
+      volumeRatio = ratio;
+      if (ratio >= 1.0) {
+        volumeStatus = "confirmed";
+        volumeConfirmed = true;
+        volumeLabel = `量能已確認（達基準量 ${ratioPct}%）`;
+      } else {
+        volumeStatus = "below_average";
+        volumeConfirmed = false;
+        volumeLabel = `量能未確認（量能不足，僅達基準量 ${ratioPct}%）`;
+      }
+    }
+  }
+
   const chgStr = chg != null && isFinite(chg) ? `（${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%）` : "（漲跌幅未知）";
-  const analysisText = `實際收盤 ${px.toLocaleString()} 點${chgStr}。${outcomeLabel}；${observationText}`;
+  const analysisText = `實際收盤 ${px.toLocaleString()} 點${chgStr}。${outcomeLabel}；${observationText}【${volumeLabel}】`;
 
   return {
     status: "verified",
@@ -659,7 +727,12 @@ function validatePlan(plan, actual) {
     actualClose: px,
     actualHigh: hi,
     actualLow: lo,
-    actualVolume: vol != null && isFinite(vol) ? vol : null,
+    actualVolume: (typeof rawVol === "number" && isFinite(rawVol)) ? rawVol : null,
+    volumeStatus,
+    volumeConfirmed,
+    volumeRatio,
+    volumeLabel,
+    volumeBaseline: (rawBase != null && isFinite(rawBase)) ? rawBase : null,
     pressureHit,
     supportHit,
     closeAbovePivot: px >= pivot,
@@ -760,27 +833,31 @@ function coreMarketCardsHtml(market, G, sess, dataEval) {
   const ixic = us.find(x => x.code === "^IXIC");
   const tsm = (G?.us?.megas || []).find(x => x.code === "TSM");
 
+  const isValidPrice = v => v != null && typeof v === "number" && isFinite(v) && v > 0;
+
   const card = (title, code, obj, fallbackSub = "") => {
-    if (!obj || (obj.price == null && obj.close == null)) {
+    const px = obj?.price ?? obj?.close;
+    if (!obj || !isValidPrice(px)) {
       return `<div class="dh-core-card missing" data-dhcode="${esc(code)}">
         <div class="dh-cc-head"><b>${esc(title)}</b><span class="note">${esc(code)}</span></div>
         <div class="dh-cc-val"><span class="dh-missing-tag">資料暫缺</span></div>
         <div class="dh-cc-sub note">${esc(fallbackSub || "等待連線更新")}</div>
       </div>`;
     }
-    const px = obj.price ?? obj.close;
-    const chg = obj.chg;
-    const pct = obj.chgPct;
-    const k = cls(chg ?? pct ?? 0);
+    const chg = (typeof obj.chg === "number" && isFinite(obj.chg)) ? obj.chg : null;
+    const pct = (typeof obj.chgPct === "number" && isFinite(obj.chgPct)) ? obj.chgPct : null;
+    const hasValidPct = pct != null;
+    const k = hasValidPct ? cls(chg ?? pct) : "";
     const pStr = fmtP(px);
-    const pctStr = pct != null && isFinite(pct) ? `${pct >= 0 ? "+" : ""}${(+pct).toFixed(2)}%` : "—";
-    const chgStr = chg != null && isFinite(chg) ? `${chg >= 0 ? "+" : ""}${fmtP(chg)}` : "";
+    const pctStr = hasValidPct ? `${pct >= 0 ? "+" : ""}${(+pct).toFixed(2)}%` : "漲跌幅未知";
+    const chgStr = chg != null ? `${chg >= 0 ? "+" : ""}${fmtP(chg)}` : "";
+    const chgDisplay = hasValidPct ? (chgStr ? `${chgStr} (${pctStr})` : pctStr) : pctStr;
 
     return `<div class="dh-core-card" data-dhcode="${esc(code)}">
       <div class="dh-cc-head"><b>${esc(title)}</b><span class="note">${esc(code)}</span></div>
       <div class="dh-cc-body">
         <div class="dh-cc-val ${k}">${pStr}</div>
-        <div class="dh-cc-chg ${k}">${chgStr ? chgStr + " (" + pctStr + ")" : pctStr}</div>
+        <div class="dh-cc-chg ${k}">${esc(chgDisplay)}</div>
       </div>
       <div class="dh-cc-sub note">${esc(obj.time || obj.date || fallbackSub || "收盤定案")}</div>
     </div>`;
@@ -801,24 +878,74 @@ function dailyBriefSummaryHtml(G, plan) {
   const fut = G?.fut?.night || G?.fut?.quote;
   const p = plan?.keyLevels;
 
-  let lead = "美股主要指數與台指期夜盤行情已更新，早盤觀察權值股量能與分水嶺防守強度。";
-  let upward = "國際半導體指數強勢、夜盤期貨維持正向溢價，帶動電子族群開盤動能。";
-  let downward = "短線漲多乖離或美債殖利率波動風險，需密切留意多空分水嶺防守強度。";
+  const isValidPrice = v => v != null && typeof v === "number" && isFinite(v) && v > 0;
+  const isSoxValid = Boolean(sox && isValidPrice(sox.close ?? sox.price) && sox.chgPct != null && isFinite(sox.chgPct));
+  const isSoxExpired = Boolean(sox && (sox.stale || sox.expired));
 
-  if (sox?.chgPct != null && isFinite(sox.chgPct)) {
-    if (sox.chgPct > 0.5) {
-      upward = `費城半導體上漲 ${sox.chgPct.toFixed(2)}%，有助台股半導體與 AI 供應鏈開盤動能。`;
-    } else if (sox.chgPct < -0.5) {
-      downward = `費城半導體下跌 ${Math.abs(sox.chgPct).toFixed(2)}%，科技權值股開盤面臨整理壓力。`;
-      lead = "美股科技股拉回整理，台指期開盤預期受壓，嚴密觀察下檔支撐位階。";
-    }
-  }
+  const futPx = fut?.price ?? fut?.close;
+  const isFutValid = Boolean(fut && isValidPrice(futPx) && ((fut.chg != null && isFinite(fut.chg)) || (fut.chgPct != null && isFinite(fut.chgPct))));
+  const isFutExpired = Boolean(fut && (fut.stale || fut.expired));
 
-  if (fut?.chg != null && isFinite(fut.chg)) {
-    if (fut.chg > 50) {
-      lead = `台指期夜盤走揚 ${fut.chg > 0 ? "+" : ""}${fut.chg} 點，有利加權早盤開高挑戰關鍵位階。`;
-    } else if (fut.chg < -50) {
-      lead = `台指期夜盤走跌 ${fut.chg} 點，加權早盤面臨回測，留意分水嶺能否守穩。`;
+  const missingItems = [];
+  if (!isSoxValid) missingItems.push("費半指數行情");
+  else if (isSoxExpired) missingItems.push("費半指數過期資料");
+
+  if (!isFutValid) missingItems.push("台指期夜盤行情");
+  else if (isFutExpired) missingItems.push("台指期夜盤過期資料");
+
+  let lead = "";
+  let upward = "";
+  let downward = "";
+
+  if (missingItems.length > 0) {
+    lead = `資料不足，暫不判定（缺少必要行情：${missingItems.join("、")}）。`;
+    upward = `缺少完整必要行情（${missingItems.join("、")}），暫不對上漲動能做單向研判。`;
+    downward = "關鍵數據未齊全，請留意開盤不確定性，以客觀關鍵位階防守為準。";
+  } else {
+    // Both SOX and Fut are valid and not expired
+    const sPct = sox.chgPct;
+    const fChg = fut.chg ?? Math.round((fut.chgPct || 0) * 200);
+
+    // 檢查矛盾訊號
+    if ((sPct >= 1.0 && fChg <= -100) || (sPct <= -1.0 && fChg >= 100)) {
+      lead = `美股與期貨走勢分歧（費半 ${sPct >= 0 ? "+" : ""}${sPct.toFixed(2)}%，夜盤 ${fChg >= 0 ? "+" : ""}${fChg} 點），訊號相互抵銷，早盤偏向多空拉鋸，嚴密觀察分水嶺防守。`;
+      upward = sPct >= 1.0 ? `費城半導體大漲 +${sPct.toFixed(2)}%，但期貨夜盤走弱，開盤動能可能受制於避險情緒。` : `期貨夜盤逆勢走揚 +${fChg} 點，支撐早盤開盤表現，惟美股科技股重挫需防補跌。`;
+      downward = "市場訊號存在明顯矛盾，避免單向追價，重點在於分水嶺防守位階是否被摜破。";
+    } else if (sPct === 0 && fChg === 0) {
+      // 真實零漲跌
+      lead = "美股主要指數與台指期夜盤收在平盤（0.00% / 0 點），早盤動能中性，觀察開盤量能與位階拉鋸。";
+      upward = "費城半導體收在平盤（0.00%），外盤無顯著利空，科技股以個股題材輪動為主。";
+      downward = "國際行情無方向指引，權值股缺乏推升力道，需提防量縮拉回回測支撐。";
+    } else {
+      if (fChg > 50) {
+        lead = `台指期夜盤走揚 +${fChg} 點，有利加權早盤開高挑戰關鍵位階。`;
+      } else if (fChg < -50) {
+        lead = `台指期夜盤走跌 ${fChg} 點，加權早盤面臨回測，留意分水嶺能否守穩。`;
+      } else if (fChg === 0) {
+        lead = `台指期夜盤收在平盤（0 點），費半變動 ${sPct >= 0 ? "+" : ""}${sPct.toFixed(2)}%，早盤預估平穩開出。`;
+      } else {
+        lead = `美股費半（${sPct >= 0 ? "+" : ""}${sPct.toFixed(2)}%）與台指期夜盤（${fChg >= 0 ? "+" : ""}${fChg} 點）已更新，早盤觀察權值股量能與分水嶺防守強度。`;
+      }
+
+      if (sPct > 0.5) {
+        upward = `費城半導體上漲 +${sPct.toFixed(2)}%，有助台股半導體與 AI 供應鏈開盤動能。`;
+      } else if (sPct === 0) {
+        upward = "費城半導體收在平盤（0.00%），科技股動能平穩，題材輪動為主。";
+      } else if (sPct > 0) {
+        upward = `費城半導體微揚 +${sPct.toFixed(2)}%，提供早盤基本支撐動能。`;
+      } else {
+        upward = "美股半導體偏弱，早盤多方需仰賴內資或金融傳產撐盤。";
+      }
+
+      if (sPct < -0.5) {
+        downward = `費城半導體下跌 ${sPct.toFixed(2)}%，科技權值股開盤面臨整理壓力。`;
+      } else if (sPct === 0) {
+        downward = "外部國際無顯著利空催化，主要觀察盤中權值賣壓與量能萎縮風險。";
+      } else if (sPct < 0) {
+        downward = `費城半導體微幅收低 ${sPct.toFixed(2)}%，留意開盤震盪壓回。`;
+      } else {
+        downward = "短線漲多乖離或美債殖利率波動風險，需密切留意多空分水嶺防守強度。";
+      }
     }
   }
 
@@ -897,6 +1024,7 @@ function validateHtml(val, plan) {
       <span>實際收盤：<b>${val.actualClose.toLocaleString()}</b></span>
       <span>壓力位：<b>${val.pressureHit ? "✓ 曾觸及" : "未觸及"}</b></span>
       <span>支撐位：<b>${val.supportHit ? "⚠ 曾回測" : "✓ 守穩"}</b></span>
+      <span>量能判定：<b class="${val.volumeConfirmed ? 'up' : 'note'}">${esc(val.volumeLabel || "量能未驗證")}</b></span>
     </div>
   </div>`;
 }
