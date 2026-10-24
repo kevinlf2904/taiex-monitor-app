@@ -1,6 +1,7 @@
 import { chromium, serve, mock } from "../tests/e2e/_harness.mjs";
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -14,16 +15,85 @@ if (!fs.existsSync(OUT_DIR)) {
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-function verifyPng(filePath) {
+function decodeAndVerifyPng(filePath, expectedWidth, minHeight = 100) {
   if (!fs.existsSync(filePath)) throw new Error(`[PNG Error] File does not exist: ${filePath}`);
-  const stat = fs.statSync(filePath);
-  if (stat.size < 10000) throw new Error(`[PNG Error] File too small (${stat.size} bytes): ${filePath}`);
-  const fd = fs.openSync(filePath, "r");
-  const buf = Buffer.alloc(8);
-  fs.readSync(fd, buf, 0, 8, 0);
-  fs.closeSync(fd);
-  if (!buf.equals(PNG_MAGIC)) throw new Error(`[PNG Error] Invalid PNG magic header: ${filePath}`);
-  return stat.size;
+  const buf = fs.readFileSync(filePath);
+  if (buf.length < 10000) throw new Error(`[PNG Error] File too small (${buf.length} bytes): ${filePath}`);
+
+  // 1. 驗證 PNG 8-byte 魔術標頭
+  if (!buf.subarray(0, 8).equals(PNG_MAGIC)) {
+    throw new Error(`[PNG Error] Invalid PNG magic header in ${filePath}`);
+  }
+
+  // 2. 驗證 IHDR 區塊並解析真實像素尺寸
+  const ihdrLen = buf.readUInt32BE(8);
+  const ihdrType = buf.toString("ascii", 12, 16);
+  if (ihdrType !== "IHDR" || ihdrLen !== 13) {
+    throw new Error(`[PNG Error] Missing or invalid IHDR chunk in ${filePath}`);
+  }
+
+  const width = buf.readUInt32BE(16);
+  const height = buf.readUInt32BE(20);
+
+  if (expectedWidth && width !== expectedWidth) {
+    throw new Error(`[PNG Error] Width mismatch in ${filePath}: expected ${expectedWidth}px, got ${width}px`);
+  }
+  if (height < minHeight) {
+    throw new Error(`[PNG Error] Height too small in ${filePath}: got ${height}px, expected >= ${minHeight}px`);
+  }
+
+  // 3. 收集 IDAT 壓縮圖塊並驗證 IEND 結束標記
+  let offset = 8 + 12 + ihdrLen;
+  const idatBuffers = [];
+  let hasIend = false;
+
+  while (offset < buf.length) {
+    if (offset + 8 > buf.length) throw new Error(`[PNG Error] Unexpected EOF while reading chunk header in ${filePath}`);
+    const chunkLen = buf.readUInt32BE(offset);
+    const chunkType = buf.toString("ascii", offset + 4, offset + 8);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + chunkLen;
+    if (dataEnd + 4 > buf.length) throw new Error(`[PNG Error] Chunk ${chunkType} truncated in ${filePath}`);
+
+    if (chunkType === "IDAT") {
+      idatBuffers.push(buf.subarray(dataStart, dataEnd));
+    } else if (chunkType === "IEND") {
+      hasIend = true;
+      break;
+    }
+    offset = dataEnd + 4; // skip CRC
+  }
+
+  if (!hasIend) throw new Error(`[PNG Error] Missing IEND chunk in ${filePath}`);
+  if (idatBuffers.length === 0) throw new Error(`[PNG Error] Missing IDAT chunk in ${filePath}`);
+
+  // 4. 使用 zlib 解碼 IDAT 串流，確認圖檔完整可解碼，無壞損
+  const combinedIdat = Buffer.concat(idatBuffers);
+  const decompressed = zlib.inflateSync(combinedIdat);
+  if (!decompressed || decompressed.length === 0) {
+    throw new Error(`[PNG Error] Failed to decode/inflate IDAT compressed payload in ${filePath}`);
+  }
+
+  return { width, height, size: buf.length, decompressedBytes: decompressed.length };
+}
+
+async function verifyBrowserDecoding(p, filePath, expectedWidth) {
+  const buf = fs.readFileSync(filePath);
+  const base64 = buf.toString("base64");
+  const dataUrl = `data:image/png;base64,${base64}`;
+  const decoded = await p.evaluate(async (src) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, complete: img.complete });
+      img.onerror = (e) => reject(new Error("Browser engine failed to decode image: " + e));
+      img.src = src;
+    });
+  }, dataUrl);
+
+  if (!decoded.complete || decoded.naturalWidth !== expectedWidth || decoded.naturalHeight <= 0) {
+    throw new Error(`[Browser Decode Failure] Image ${filePath} failed browser decoding: ${JSON.stringify(decoded)}`);
+  }
+  return decoded;
 }
 
 async function capture() {
@@ -118,8 +188,9 @@ async function capture() {
       // 01-index-390-hero-collapsed: 首頁簡介收合狀態
       const file1 = path.join(OUT_DIR, "01-index-390-hero-collapsed.png");
       await p.screenshot({ path: file1 });
-      const sz1 = verifyPng(file1);
-      console.log(`Saved & Verified: 01-index-390-hero-collapsed.png (${sz1} bytes)`);
+      const info1 = decodeAndVerifyPng(file1, 390);
+      await verifyBrowserDecoding(p, file1, 390);
+      console.log(`Saved, Decoded & Verified: 01-index-390-hero-collapsed.png (${info1.width}x${info1.height}, ${info1.size} bytes)`);
 
       // 點擊展開 Hero 抽屜
       await p.click("#heroBar");
@@ -146,8 +217,9 @@ async function capture() {
       // 02-index-390-hero-expanded: 首頁簡介展開狀態
       const file2 = path.join(OUT_DIR, "02-index-390-hero-expanded.png");
       await p.screenshot({ path: file2 });
-      const sz2 = verifyPng(file2);
-      console.log(`Saved & Verified: 02-index-390-hero-expanded.png (${sz2} bytes)`);
+      const info2 = decodeAndVerifyPng(file2, 390);
+      await verifyBrowserDecoding(p, file2, 390);
+      console.log(`Saved, Decoded & Verified: 02-index-390-hero-expanded.png (${info2.width}x${info2.height}, ${info2.size} bytes)`);
 
       await ctx.close();
     }
@@ -183,8 +255,9 @@ async function capture() {
       await p.waitForTimeout(400);
       const file3 = path.join(OUT_DIR, "03-hub-390-top.png");
       await p.screenshot({ path: file3 });
-      const sz3 = verifyPng(file3);
-      console.log(`Saved & Verified: 03-hub-390-top.png (${sz3} bytes)`);
+      const info3 = decodeAndVerifyPng(file3, 390);
+      await verifyBrowserDecoding(p, file3, 390);
+      console.log(`Saved, Decoded & Verified: 03-hub-390-top.png (${info3.width}x${info3.height}, ${info3.size} bytes)`);
 
       // 04-hub-390-mid: 中段（實盤驗證時間軸、收盤價、壓力／支撐觸及、成交量比較基準判定徽章）
       await p.evaluate(() => {
@@ -195,8 +268,9 @@ async function capture() {
       await p.waitForTimeout(400);
       const file4 = path.join(OUT_DIR, "04-hub-390-mid.png");
       await p.screenshot({ path: file4 });
-      const sz4 = verifyPng(file4);
-      console.log(`Saved & Verified: 04-hub-390-mid.png (${sz4} bytes)`);
+      const info4 = decodeAndVerifyPng(file4, 390);
+      await verifyBrowserDecoding(p, file4, 390);
+      console.log(`Saved, Decoded & Verified: 04-hub-390-mid.png (${info4.width}x${info4.height}, ${info4.size} bytes)`);
 
       // 05-hub-390-bot: 下段（多因子雷達、客觀應對行動、頁尾資料來源宣告）
       await p.evaluate(() => {
@@ -207,8 +281,9 @@ async function capture() {
       await p.waitForTimeout(400);
       const file5 = path.join(OUT_DIR, "05-hub-390-bot.png");
       await p.screenshot({ path: file5 });
-      const sz5 = verifyPng(file5);
-      console.log(`Saved & Verified: 05-hub-390-bot.png (${sz5} bytes)`);
+      const info5 = decodeAndVerifyPng(file5, 390);
+      await verifyBrowserDecoding(p, file5, 390);
+      console.log(`Saved, Decoded & Verified: 05-hub-390-bot.png (${info5.width}x${info5.height}, ${info5.size} bytes)`);
 
       await ctx.close();
     }
@@ -232,8 +307,9 @@ async function capture() {
 
       const file6 = path.join(OUT_DIR, "06-hub-768-tablet.png");
       await p.screenshot({ path: file6 });
-      const sz6 = verifyPng(file6);
-      console.log(`Saved & Verified: 06-hub-768-tablet.png (${sz6} bytes)`);
+      const info6 = decodeAndVerifyPng(file6, 768);
+      await verifyBrowserDecoding(p, file6, 768);
+      console.log(`Saved, Decoded & Verified: 06-hub-768-tablet.png (${info6.width}x${info6.height}, ${info6.size} bytes)`);
 
       await ctx.close();
     }
@@ -257,8 +333,9 @@ async function capture() {
 
       const file7 = path.join(OUT_DIR, "07-hub-1280-desktop.png");
       await p.screenshot({ path: file7 });
-      const sz7 = verifyPng(file7);
-      console.log(`Saved & Verified: 07-hub-1280-desktop.png (${sz7} bytes)`);
+      const info7 = decodeAndVerifyPng(file7, 1280);
+      await verifyBrowserDecoding(p, file7, 1280);
+      console.log(`Saved, Decoded & Verified: 07-hub-1280-desktop.png (${info7.width}x${info7.height}, ${info7.size} bytes)`);
 
       // 5. Desktop (1280 x 800) - 缺失行情安全降級情境
       // 注入空白行情資料，驗證全域防禦降級：顯示「資料不足，暫不判定」與「資料暫缺」
@@ -291,8 +368,9 @@ async function capture() {
 
       const file8 = path.join(OUT_DIR, "08-hub-1280-missing-data.png");
       await p.screenshot({ path: file8 });
-      const sz8 = verifyPng(file8);
-      console.log(`Saved & Verified: 08-hub-1280-missing-data.png (${sz8} bytes)`);
+      const info8 = decodeAndVerifyPng(file8, 1280);
+      await verifyBrowserDecoding(p, file8, 1280);
+      console.log(`Saved, Decoded & Verified: 08-hub-1280-missing-data.png (${info8.width}x${info8.height}, ${info8.size} bytes)`);
 
       await ctx.close();
     }
@@ -307,23 +385,34 @@ async function capture() {
       throw new Error(`[Assertion Failure] Detected ${pageErrors.length} browser errors during execution.`);
     }
 
-    // 驗證所有 8 張截圖存在且大於 10KB
+    // 驗證所有 8 張截圖解碼與視口相符
     const expectedScreenshots = [
-      "01-index-390-hero-collapsed.png",
-      "02-index-390-hero-expanded.png",
-      "03-hub-390-top.png",
-      "04-hub-390-mid.png",
-      "05-hub-390-bot.png",
-      "06-hub-768-tablet.png",
-      "07-hub-1280-desktop.png",
-      "08-hub-1280-missing-data.png"
+      { name: "01-index-390-hero-collapsed.png", width: 390 },
+      { name: "02-index-390-hero-expanded.png", width: 390 },
+      { name: "03-hub-390-top.png", width: 390 },
+      { name: "04-hub-390-mid.png", width: 390 },
+      { name: "05-hub-390-bot.png", width: 390 },
+      { name: "06-hub-768-tablet.png", width: 768 },
+      { name: "07-hub-1280-desktop.png", width: 1280 },
+      { name: "08-hub-1280-missing-data.png", width: 1280 }
     ];
 
-    for (const name of expectedScreenshots) {
-      const fullPath = path.join(OUT_DIR, name);
-      verifyPng(fullPath);
+    console.log("\n=== 圖片解碼與尺寸規格驗證 ===");
+    const decodeReport = [];
+    for (const item of expectedScreenshots) {
+      const fullPath = path.join(OUT_DIR, item.name);
+      const res = decodeAndVerifyPng(fullPath, item.width);
+      decodeReport.push({
+        file: item.name,
+        expectedWidth: item.width,
+        actualWidth: res.width,
+        actualHeight: res.height,
+        fileSize: `${Math.round(res.size / 1024)} KB`,
+        decodable: "YES (zlib inflate PASS)"
+      });
     }
-    console.log("\nAll 8 screenshots successfully verified (exist, valid PNG header, size >= 10KB).");
+    console.table(decodeReport);
+    console.log("All 8 screenshots successfully verified (exist, valid PNG header, size >= 10KB, full zlib decompression PASS, exact viewport width matched).");
 
     // 可選複製到對話 Artifact 目錄（若環境變數有指定且目錄存在）
     if (OPTIONAL_ARTIFACT_DIR && fs.existsSync(OPTIONAL_ARTIFACT_DIR)) {

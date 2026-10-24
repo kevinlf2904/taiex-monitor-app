@@ -805,18 +805,24 @@ function verifyVolumeStatus(actual, plan) {
     };
   }
 
-  // 基準有效期限政策：依據均量基準類型與來源，定義嚴格之最大允許日曆天數
-  const srcLower = baseSource.trim().toLowerCase();
-  let policy = null;
-  if (srcLower.includes("snapshot") || srcLower.includes("pre_market") || srcLower.includes("prev")) {
-    policy = { type: "snapshot", maxDays: 4, label: "盤前快照/前日量基準" };
-  } else if (srcLower.includes("5ma") || srcLower.includes("5d")) {
-    policy = { type: "5ma", maxDays: 7, label: "5日均量基準" };
-  } else if (srcLower.includes("20ma") || srcLower.includes("20d") || srcLower.includes("monthly")) {
-    policy = { type: "20ma", maxDays: 14, label: "20日均量基準" };
-  } else if (srcLower.includes("twse") || srcLower.includes("tpex") || srcLower.includes("taifex") || srcLower.includes("official")) {
-    policy = { type: "official_general", maxDays: 7, label: "官方均量基準" };
-  }
+  // 來源受信白名單與政策定義（禁止模糊 substring/includes 比對）
+  const VOLUME_BASELINE_WHITELIST = {
+    "twse_5ma": { type: "5ma", maxDays: 7, label: "5日均量基準", allowedPeriods: ["full_day"] },
+    "5ma": { type: "5ma", maxDays: 7, label: "5日均量基準", allowedPeriods: ["full_day"] },
+    "tpex_5ma": { type: "5ma", maxDays: 7, label: "5日均量基準", allowedPeriods: ["full_day"] },
+    "twse_20ma": { type: "20ma", maxDays: 14, label: "20日均量基準", allowedPeriods: ["full_day"] },
+    "20ma": { type: "20ma", maxDays: 14, label: "20日均量基準", allowedPeriods: ["full_day"] },
+    "tpex_20ma": { type: "20ma", maxDays: 14, label: "20日均量基準", allowedPeriods: ["full_day"] },
+    "twse_official": { type: "official", maxDays: 7, label: "官方均量基準", allowedPeriods: ["full_day"] },
+    "tpex_official": { type: "official", maxDays: 7, label: "官方均量基準", allowedPeriods: ["full_day"] },
+    "twse_prev": { type: "prev_day", maxDays: 4, label: "盤前快照/前日量基準", allowedPeriods: ["full_day"] },
+    "snapshot": { type: "snapshot", maxDays: 4, label: "盤前快照/前日量基準", allowedPeriods: ["full_day", "intraday"] },
+    "pre_market": { type: "snapshot", maxDays: 4, label: "盤前快照/前日量基準", allowedPeriods: ["full_day", "intraday"] },
+    "pre_market_snapshot": { type: "snapshot", maxDays: 4, label: "盤前快照/前日量基準", allowedPeriods: ["full_day", "intraday"] }
+  };
+
+  const srcKey = baseSource.trim().toLowerCase();
+  const policy = VOLUME_BASELINE_WHITELIST[srcKey];
 
   if (!policy) {
     return {
@@ -826,6 +832,19 @@ function verifyVolumeStatus(actual, plan) {
       volumeRatio: null,
       volumeLabel: "量能未驗證（均量基準來源不明）",
       volumeReason: `均量來源（${baseSource}）未在受信基準來源清單中，基準不可靠`,
+      volumeBaseline: rawBase
+    };
+  }
+
+  // 驗證均量基準期間是否屬於該來源白名單允許之期間
+  if (!policy.allowedPeriods.includes(basePeriod)) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: `量能未驗證（比較期間不相容：${actualPeriod} vs ${basePeriod}）`,
+      volumeReason: `來源 ${srcKey} 不支援期間「${basePeriod}」（僅支援：${policy.allowedPeriods.join("、")}）`,
       volumeBaseline: rawBase
     };
   }

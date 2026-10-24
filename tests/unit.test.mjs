@@ -1581,4 +1581,42 @@ test('Phase 6.1 獨立驗收缺口修正：合約代碼完整驗證、均量有�
   assert.equal(v20maExpired.volumeStatus, "unverified");
   assert.match(v20maExpired.volumeLabel, /量能未驗證（均量基準已過期）/);
   assert.match(v20maExpired.volumeReason, /已超過 20日均量基準 之 14 天上限/);
+
+  // 2k. 來源白名單防護：含有受信字串（如 twse 或 5ma）但非白名單識別碼者一律拒絕
+  const vFakeTwse = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_unauthorized_scraper" }
+  });
+  assert.equal(vFakeTwse.volumeStatus, "unverified");
+  assert.match(vFakeTwse.volumeLabel, /均量基準來源不明/);
+  assert.match(vFakeTwse.volumeReason, /未在受信基準來源清單中/);
+
+  const vFake5ma = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "unverified_5ma" }
+  });
+  assert.equal(vFake5ma.volumeStatus, "unverified");
+  assert.match(vFake5ma.volumeLabel, /均量基準來源不明/);
+
+  // 2l. 白名單來源期間相容性限制：twse_5ma 不支援 intraday 期間
+  const vTwse5maIntraday = B.verifyVolumeStatus({
+    volume: 1800, volumeUnit: "billion", volumePeriod: "intraday", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 1500, unit: "billion", period: "intraday", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vTwse5maIntraday.volumeStatus, "unverified");
+  assert.match(vTwse5maIntraday.volumeLabel, /比較期間不相容/);
+  assert.match(vTwse5maIntraday.volumeReason, /不支援期間「intraday」/);
+
+  // 2m. 白名單來源 snapshot 支援 intraday 期間
+  const vSnapshotIntraday = B.verifyVolumeStatus({
+    volume: 1800, volumeUnit: "billion", volumePeriod: "intraday", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 1500, unit: "billion", period: "intraday", date: "2026-10-27", source: "snapshot" }
+  });
+  assert.equal(vSnapshotIntraday.volumeStatus, "confirmed");
+  assert.equal(vSnapshotIntraday.volumeConfirmed, true);
+  assert.equal(vSnapshotIntraday.volumeRatio, 1.2);
 });
