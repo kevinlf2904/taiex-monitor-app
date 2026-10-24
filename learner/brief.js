@@ -330,12 +330,19 @@ function briefScenarios(G, today, basePrice, meta = {}) {
   }
 
   const us = G?.us?.indices || [];
-  const sox = us.find(x => x.code === "^SOX")?.chgPct ?? 0;
-  const ixic = us.find(x => x.code === "^IXIC")?.chgPct ?? 0;
-  const tsm = (G?.us?.megas || []).find(x => x.code === "TSM")?.chgPct ?? 0;
-  const futChg = G?.fut?.night?.chg ?? G?.fut?.quote?.chg ?? 0;
+  const soxObj = us.find(x => x.code === "^SOX");
+  const ixicObj = us.find(x => x.code === "^IXIC");
+  const tsmObj = (G?.us?.megas || []).find(x => x.code === "TSM");
+  const futObj = G?.fut?.night || G?.fut?.quote;
+
+  const sox = soxObj?.chgPct != null && isFinite(soxObj.chgPct) ? soxObj.chgPct : null;
+  const ixic = ixicObj?.chgPct != null && isFinite(ixicObj.chgPct) ? ixicObj.chgPct : null;
+  const tsm = tsmObj?.chgPct != null && isFinite(tsmObj.chgPct) ? tsmObj.chgPct : null;
+  const futChg = futObj?.chg != null && isFinite(futObj.chg) ? futObj.chg : null;
+  const macroMissing = sox == null || ixic == null || futChg == null;
+
   const ref = basePrice;
-  const shift = Math.round(futChg * 0.85);
+  const shift = futChg != null ? Math.round(futChg * 0.85) : 0;
   const pivot = Math.round((ref + shift) / 10) * 10;
   const delta = Math.max(80, Math.round(ref * 0.006));
   const pressure = pivot + delta;
@@ -348,6 +355,8 @@ function briefScenarios(G, today, basePrice, meta = {}) {
     sourceAsOf: meta.sourceAsOf || null,
     refPriceDate: meta.refPriceDate || null,
     macroSignals: { sox, ixic, tsm, futChg },
+    macroStatus: macroMissing ? "partial_macro" : "complete_macro",
+    macroNote: macroMissing ? "部分美股/期貨資料缺失，關鍵位階依基準價推估" : "國際行情完整",
     keyLevels: { pressure, pivot, support },
     scenarios: {
       bull: {
@@ -739,6 +748,102 @@ function marketSnapshot({
 
 const briefFlowFmt = v => (v == null ? "—" : `${v >= 0 ? "+" : ""}${Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)}億`);
 
+
+/* ---------- 決策中心：核心市場卡、每日早報結論、資料狀態 ---------- */
+function coreMarketCardsHtml(market, G, sess, dataEval) {
+  const tq = market?.taiex;
+  const fq = G?.fut?.night || G?.fut?.quote || market?.futures;
+  const us = G?.us?.indices || [];
+  const sox = us.find(x => x.code === "^SOX");
+  const ixic = us.find(x => x.code === "^IXIC");
+  const tsm = (G?.us?.megas || []).find(x => x.code === "TSM");
+
+  const card = (title, code, obj, fallbackSub = "") => {
+    if (!obj || (obj.price == null && obj.close == null)) {
+      return `<div class="dh-core-card missing">
+        <div class="dh-cc-head"><b>${esc(title)}</b><span class="note">${esc(code)}</span></div>
+        <div class="dh-cc-val"><span class="dh-missing-tag">資料暫缺</span></div>
+        <div class="dh-cc-sub note">${esc(fallbackSub || "等待連線更新")}</div>
+      </div>`;
+    }
+    const px = obj.price ?? obj.close;
+    const chg = obj.chg;
+    const pct = obj.chgPct;
+    const k = cls(chg ?? pct ?? 0);
+    const pStr = fmtP(px);
+    const pctStr = pct != null && isFinite(pct) ? `${pct >= 0 ? "+" : ""}${(+pct).toFixed(2)}%` : "—";
+    const chgStr = chg != null && isFinite(chg) ? `${chg >= 0 ? "+" : ""}${fmtP(chg)}` : "";
+
+    return `<div class="dh-core-card">
+      <div class="dh-cc-head"><b>${esc(title)}</b><span class="note">${esc(code)}</span></div>
+      <div class="dh-cc-body">
+        <div class="dh-cc-val ${k}">${pStr}</div>
+        <div class="dh-cc-chg ${k}">${chgStr ? chgStr + " (" + pctStr + ")" : pctStr}</div>
+      </div>
+      <div class="dh-cc-sub note">${esc(obj.time || obj.date || fallbackSub || "收盤定案")}</div>
+    </div>`;
+  };
+
+  return `<div class="dh-core-grid">
+    ${card("加權指數", "T00", tq, sess.isClosed ? "最近交易日收盤" : dataEval.dataStatusLabel)}
+    ${card("台指期夜盤", "TXF", fq, fq?.lab || "期交所")}
+    ${card("費城半導體", "^SOX", sox, "美股主要指數")}
+    ${card("那斯達克", "^IXIC", ixic, "美股主要指數")}
+    ${card("台積電 ADR", "TSM", tsm, "美股存託憑證")}
+  </div>`;
+}
+
+function dailyBriefSummaryHtml(G, plan) {
+  const us = G?.us?.indices || [];
+  const sox = us.find(x => x.code === "^SOX");
+  const fut = G?.fut?.night || G?.fut?.quote;
+  const p = plan?.keyLevels;
+
+  let lead = "美股主要指數與台指期夜盤行情已更新，早盤觀察權值股量能與分水嶺防守強度。";
+  let upward = "國際半導體指數強勢、夜盤期貨維持正向溢價，帶動電子族群開盤動能。";
+  let downward = "短線漲多乖離或美債殖利率波動風險，需密切留意多空分水嶺防守強度。";
+
+  if (sox?.chgPct != null && isFinite(sox.chgPct)) {
+    if (sox.chgPct > 0.5) {
+      upward = `費城半導體上漲 ${sox.chgPct.toFixed(2)}%，有助台股半導體與 AI 供應鏈開盤動能。`;
+    } else if (sox.chgPct < -0.5) {
+      downward = `費城半導體下跌 ${Math.abs(sox.chgPct).toFixed(2)}%，科技權值股開盤面臨整理壓力。`;
+      lead = "美股科技股拉回整理，台指期開盤預期受壓，嚴密觀察下檔支撐位階。";
+    }
+  }
+
+  if (fut?.chg != null && isFinite(fut.chg)) {
+    if (fut.chg > 50) {
+      lead = `台指期夜盤走揚 ${fut.chg > 0 ? "+" : ""}${fut.chg} 點，有利加權早盤開高挑戰關鍵位階。`;
+    } else if (fut.chg < -50) {
+      lead = `台指期夜盤走跌 ${fut.chg} 點，加權早盤面臨回測，留意分水嶺能否守穩。`;
+    }
+  }
+
+  return `<div class="dh-brief-summary">
+    <div class="dh-conclusion-box">
+      <div class="dh-cbox-title">💡 今日市場結論與決策核心</div>
+      <p class="dh-cbox-lead">${esc(lead)}</p>
+    </div>
+    <div class="dh-factor-grid">
+      <div class="dh-factor bull">
+        <div class="dh-fac-head">▲ 主要上漲驅動因素</div>
+        <p>${esc(upward)}</p>
+      </div>
+      <div class="dh-factor bear">
+        <div class="dh-fac-head">▼ 主要下跌觀察風險</div>
+        <p>${esc(downward)}</p>
+      </div>
+    </div>
+    ${p ? `<div class="dh-brief-levels">
+      <span class="note">關鍵觀察指標：</span>
+      <span class="dh-lvl pres">壓力 <b>${p.pressure.toLocaleString()}</b></span>
+      <span class="dh-lvl piv">分水嶺 <b>${p.pivot.toLocaleString()}</b></span>
+      <span class="dh-lvl supp">支撐 <b>${p.support.toLocaleString()}</b></span>
+    </div>` : ""}
+  </div>`;
+}
+
 function briefScenariosHtml(plan) {
   if (!plan?.keyLevels) return `<div class="dh-card"><div class="dh-head"><b>盤前情境推演與分水嶺</b><span class="note">無盤前推演快照</span></div><p class="note">缺少當日盤前預測快照。</p></div>`;
   const { pressure, pivot, support } = plan.keyLevels;
@@ -764,8 +869,19 @@ function briefScenariosHtml(plan) {
   </div>`;
 }
 
-function validateHtml(val) {
-  if (!val) return `<div class="dh-card val"><div class="dh-head"><b>早報情境盤後驗證</b><span class="note">等待收盤定案後自動對照</span></div><p class="note">盤中進行中，收盤後將以早報儲存的原始關鍵點位進行實際走勢驗證。</p></div>`;
+function validateHtml(val, plan) {
+  if (!val) {
+    const p = plan?.keyLevels;
+    return `<div class="dh-card val pending">
+      <div class="dh-head"><b>早報情境與盤後驗證時序軸</b><span class="dh-tag live">時序進行中</span></div>
+      <p class="dh-val-txt">盤前 08:30 已保存原始推演分水嶺與支撐壓力。盤中撮合中，收盤後將自動比對客觀高低點與收盤價。</p>
+      ${p ? `<div class="dh-val-stats">
+        <span>分水嶺：<b>${p.pivot.toLocaleString()}</b></span>
+        <span>關鍵壓力：<b>${p.pressure.toLocaleString()}</b></span>
+        <span>關鍵支撐：<b>${p.support.toLocaleString()}</b></span>
+      </div>` : ""}
+    </div>`;
+  }
   if (val.status === "missing_pre_market_plan") {
     return `<div class="dh-card val"><div class="dh-head"><b>早報情境盤後驗證</b><span class="dh-tag missing">缺少盤前預測</span></div><p class="note">${esc(val.analysisText)}</p></div>`;
   }
@@ -776,7 +892,7 @@ function validateHtml(val) {
     <div class="dh-head"><b>早報情境盤後驗證</b><span class="dh-tag ${val.metKey}">${esc(val.outcomeLabel)}</span></div>
     <p class="dh-val-txt">${esc(val.analysisText)}</p>
     <div class="dh-val-stats">
-      <span>收盤：<b>${val.actualClose.toLocaleString()}</b></span>
+      <span>實際收盤：<b>${val.actualClose.toLocaleString()}</b></span>
       <span>壓力位：<b>${val.pressureHit ? "✓ 曾觸及" : "未觸及"}</b></span>
       <span>支撐位：<b>${val.supportHit ? "⚠ 曾回測" : "✓ 守穩"}</b></span>
     </div>
@@ -787,7 +903,7 @@ function flowsDecisionHtml(M) {
   if (!M || !M.secs || !M.stocks) {
     const F = W?.mf;
     if (!W?.off && F && !F.loading && !F.sumTry) { F.sumTry = true; setTimeout(() => loadMoney(10), 0); }
-    return `<div class="dh-card"><div class="dh-head"><b>資金雷達</b><span class="note">板塊輪動與法人資金</span></div><p class="note">載入法人資金資料中…</p><button type="button" class="linkbtn" data-tdgo="radar">前往資金雷達完整分析 ›</button></div>`;
+    return `<div class="dh-card"><div class="dh-head"><b>資金雷達・板塊輪動與資金流向</b><span class="note">板塊輪動與法人資金</span></div><p class="note">載入法人資金資料中…</p><button type="button" class="btn sm" data-tdgo="radar">前往資金雷達完整分析 ›</button></div>`;
   }
   const mood = typeof flowMood === "function" ? flowMood(M) : null;
   const A = typeof flowAt === "function" ? flowAt(M) : [];
@@ -795,15 +911,26 @@ function flowsDecisionHtml(M) {
   const buy = A.filter(x => x.net1 > 0).sort((a, b) => b.net1 - a.net1).slice(0, 3);
   const sell = A.filter(x => x.net1 < 0).sort((a, b) => a.net1 - b.net1).slice(0, 3);
   const odd = S.filter(x => x.mult >= 3 && Math.abs(x.a1) >= 3).length;
-  const L = x => `${esc(x.name)} <b class="${cls(x.net1)}">${briefFlowFmt(x.net1)}</b>`;
+  const L = x => `<span class="dh-sec-pill ${x.net1 > 0 ? 'up' : 'down'}">${esc(x.name)} <b>${briefFlowFmt(x.net1)}</b></span>`;
 
-  return `<div class="dh-card">
+  return `<div class="dh-card flows">
     <div class="dh-head"><b>資金雷達・板塊輪動與資金流向</b><span class="note">${M.dates[M.T - 1]?.slice(5).replace("-", "/")}</span></div>
-    ${mood ? `<p>法人情緒：<b>${mood.score} 分（${mood.label}）</b>・上漲 ${mood.up} 家／下跌 ${mood.dn} 家</p>` : ""}
-    <p>資金流入前三板塊：${buy.length ? buy.map(L).join("、") : "無顯著流入"}</p>
-    <p>資金流出前三板塊：${sell.length ? sell.map(L).join("、") : "無顯著流出"}</p>
-    <p>異常爆量個股（逾前4日均量3倍且逾3億）：<b>${odd}</b> 檔</p>
-    <div style="margin-top:6px"><button type="button" class="btn sm" data-tdgo="radar">前往資金雷達完整板塊與矩陣分析 ›</button></div>
+    ${mood ? `<div class="dh-mood-row">
+      <span class="dh-mood-badge ${mood.score >= 60 ? 'bull' : mood.score <= 40 ? 'bear' : 'neutral'}">法人情緒 ${mood.score} 分・${mood.label}</span>
+      <span class="note">上漲 ${mood.up} 家／下跌 ${mood.dn} 家（漲停 ${mood.lu || 0} / 跌停 ${mood.ld || 0}）</span>
+    </div>` : ""}
+    <div class="dh-flow-groups">
+      <div class="dh-fg">
+        <span class="dh-fg-title">資金流入前三板塊：</span>
+        <div class="dh-fg-pills">${buy.length ? buy.map(L).join(" ") : "<span class='note'>無顯著流入</span>"}</div>
+      </div>
+      <div class="dh-fg">
+        <span class="dh-fg-title">資金流出前三板塊：</span>
+        <div class="dh-fg-pills">${sell.length ? sell.map(L).join(" ") : "<span class='note'>無顯著流出</span>"}</div>
+      </div>
+    </div>
+    <p class="note" style="margin:6px 0">異常爆量個股（成交額逾前 4 日均量 3 倍且逾 3 億）：<b>${odd}</b> 檔</p>
+    <div style="margin-top:8px"><button type="button" class="btn sm primary" data-tdgo="radar">前往資金雷達完整板塊與矩陣分析 ›</button></div>
   </div>`;
 }
 
@@ -848,7 +975,49 @@ function todayPage() {
   const nowMs = Date.now();
   const t = twDay(), cn = typeof twClosedNote === "function" ? twClosedNote(W.quotes?.get?.("T00")?.date) : null, pm = tdAfter(nowMs), C = W.syncCfg;
   const tq = W.quotes?.get?.("T00");
+  const oq = W.quotes?.get?.("O00");
+  const fq = W.quotes?.get?.("TXF");
   const sess = sessionStatus(nowMs, { holidays: W.cal?.hol, lastTradeDate: tq?.date });
+
+  const market = {
+    taiex: tq ? {
+      code: "T00",
+      name: "加權指數",
+      price: tq.price,
+      close: tq.price,
+      high: tq.high,
+      low: tq.low,
+      chg: tq.chg,
+      chgPct: tq.chgPct,
+      volume: tq.vol,
+      date: tq.date,
+      time: tq.time,
+      source: tq.source || "twse"
+    } : null,
+    otc: oq ? {
+      code: "O00",
+      name: "櫃買指數",
+      price: oq.price,
+      chg: oq.chg,
+      chgPct: oq.chgPct,
+      date: oq.date
+    } : null,
+    futures: fq ? {
+      code: "TXF",
+      name: "台指期",
+      price: fq.price,
+      chg: fq.chg,
+      chgPct: fq.chgPct,
+      date: fq.date
+    } : null
+  };
+
+  const dataEval = evaluateDataStatus({
+    market,
+    G: W.bf || {},
+    session: sess.session,
+    tradeDate: t
+  });
 
   let plan = getBriefSnapshot(t);
   if (!plan && (sess.session === "pre" || !pm)) {
@@ -866,28 +1035,63 @@ function todayPage() {
   }) : null;
   const M = typeof mfModel === "function" ? mfModel() : null;
 
-  const pre = `<h4 class="tdsec">盤前・昨晚美股與今天的行事曆</h4>${briefBody()}${briefScenariosHtml(plan)}`;
-  const post = `<h4 class="tdsec">${pm ? "盤後" : "盤中"}・大盤、自選與訊號</h4>${pm && val ? validateHtml(val) : ""}${sumBody()}${flowsDecisionHtml(M)}${nextActionHtml(plan, val)}`;
-
   const style = `<style>
-    .dh-status-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 10px; background: var(--surface-2); border-radius: 6px; font-size: 12.5px; margin-bottom: 8px; }
-    .dh-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #fff; }
+    .dh-status-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
+    .dh-sb-left { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .dh-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #fff; }
     .dh-badge.pre { background: #2563eb; }
     .dh-badge.live { background: #059669; }
     .dh-badge.post { background: #7c3aed; }
     .dh-badge.closed { background: var(--muted); }
     .dh-badge.unknown { background: #d97706; }
-    .dh-card { padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); margin: 10px 0; font-size: 13px; line-height: 1.6; }
+    .dh-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); }
+    .dh-tag.status-official { border-color: #059669; color: #059669; }
+    .dh-tag.status-verified { border-color: var(--accent, #6366f1); color: var(--accent, #6366f1); }
+    .dh-tag.status-live { border-color: #059669; color: #059669; }
+    .dh-tag.status-delayed { border-color: #d97706; color: #d97706; }
+    .dh-tag.status-partial { border-color: #d97706; color: #d97706; }
+    .dh-tag.status-missing, .dh-tag.missing { background: var(--surface-2); color: var(--muted); }
+    .dh-note-bar { padding: 6px 12px; background: rgba(99, 102, 241, 0.06); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; margin-bottom: 12px; }
+    
+    .dh-title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 14px; }
+    .dh-title-row h3 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+    .dh-title-btns { display: flex; align-items: center; gap: 6px; }
+
+    /* 核心市場卡 Grid */
+    .dh-core-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .dh-core-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; }
+    .dh-cc-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; margin-bottom: 4px; }
+    .dh-cc-body { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin: 4px 0; }
+    .dh-cc-val { font-size: 16px; font-weight: 700; font-family: var(--font-mono, monospace); }
+    .dh-cc-chg { font-size: 12.5px; font-weight: 600; font-family: var(--font-mono, monospace); }
+    .dh-cc-sub { font-size: 11px; color: var(--muted); }
+    .dh-missing-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--surface-2); color: var(--muted); }
+
+    /* 每日早報結構化結論 */
+    .dh-brief-summary { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 8px 0 12px; }
+    .dh-conclusion-box { margin-bottom: 10px; }
+    .dh-cbox-title { font-size: 13px; font-weight: 600; color: var(--accent, #6366f1); margin-bottom: 4px; }
+    .dh-cbox-lead { font-size: 13.5px; line-height: 1.6; margin: 0; font-weight: 500; }
+    .dh-factor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 8px 0; }
+    .dh-factor { padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.5; }
+    .dh-factor.bull { background: rgba(220, 38, 38, 0.06); border-left: 3px solid var(--up); }
+    .dh-factor.bear { background: rgba(37, 99, 235, 0.06); border-left: 3px solid var(--down); }
+    .dh-fac-head { font-weight: 600; margin-bottom: 2px; }
+    .dh-factor p { margin: 0; }
+    .dh-brief-levels { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
+
+    /* 通用決策中心卡片 */
+    .dh-card { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); margin: 10px 0; font-size: 13px; line-height: 1.6; }
     .dh-card.val { border-color: var(--accent, #6366f1); background: var(--surface-2); }
     .dh-card.act { border-left: 3px solid var(--accent, #6366f1); }
-    .dh-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
-    .dh-head b { font-size: 13.5px; }
+    .dh-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+    .dh-head b { font-size: 14px; }
     .dh-levels { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
     .dh-lvl { padding: 3px 8px; border-radius: 4px; font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); }
     .dh-lvl.pres b { color: var(--down); }
     .dh-lvl.piv b { color: var(--accent, #6366f1); }
     .dh-lvl.supp b { color: var(--up); }
-    .sc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 8px; margin-top: 6px; }
+    .sc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 8px; margin-top: 8px; }
     .sc-card { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
     .sc-card.bull { border-left: 3px solid var(--up); }
     .sc-card.neutral { border-left: 3px solid var(--muted); }
@@ -898,28 +1102,97 @@ function todayPage() {
     .sc-bias.bull { background: rgba(220,38,38,0.1); color: var(--up); }
     .sc-bias.neutral { background: var(--surface); color: var(--muted); }
     .sc-bias.bear { background: rgba(37,99,235,0.1); color: var(--down); }
-    .dh-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); }
-    .dh-tag.missing { background: var(--surface-2); color: var(--muted); }
-    .dh-val-txt { margin: 4px 0 6px; font-size: 13px; font-weight: 500; }
-    .dh-val-stats { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); }
+    .dh-val-txt { margin: 6px 0 8px; font-size: 13.5px; font-weight: 500; }
+    .dh-val-stats { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
     .dh-val-stats b { color: var(--ink); }
+
+    /* 資金雷達樣式 */
+    .dh-mood-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12.5px; }
+    .dh-mood-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+    .dh-mood-badge.bull { background: rgba(220, 38, 38, 0.12); color: var(--up); }
+    .dh-mood-badge.bear { background: rgba(37, 99, 235, 0.12); color: var(--down); }
+    .dh-mood-badge.neutral { background: var(--surface-2); color: var(--muted); }
+    .dh-flow-groups { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+    .dh-fg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; }
+    .dh-fg-title { color: var(--muted); min-width: 130px; }
+    .dh-fg-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .dh-sec-pill { font-size: 11.5px; padding: 2px 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); }
+    .dh-sec-pill.up b { color: var(--up); }
+    .dh-sec-pill.down b { color: var(--down); }
+
+    .dh-footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; color: var(--muted); }
+    @media (max-width: 640px) {
+      .dh-status-bar { flex-direction: column; align-items: flex-start; }
+      .dh-core-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+      .dh-factor-grid { grid-template-columns: 1fr; }
+    }
   </style>`;
 
   const h = `<section class="csec">${style}
+    <!-- 1. 市場狀態列 -->
     <div class="dh-status-bar">
-      <div>
+      <div class="dh-sb-left">
         <span class="dh-badge ${sess.session}">${sess.label}</span>
+        <span class="dh-tag status-${dataEval.dataStatus}">${dataEval.dataStatusLabel}</span>
         <span class="note">資料時間 ${sess.hm}・${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}</span>
       </div>
-      ${sess.displayNote ? `<div class="note">${esc(sess.displayNote)}</div>` : tq?.price ? `<div>加權 <b>${fmtP(tq.price)}</b> <span class="${cls(tq.chg)}">${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct ?? "—"}%</span></div>` : ""}
+      <div class="dh-sb-right">
+        ${tq?.price ? `<div>加權 <b>${fmtP(tq.price)}</b> <span class="${cls(tq.chg)}">${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct ?? "—"}%</span></div>` : ""}
+      </div>
     </div>
-    <h3>今日重點 <span class="note">${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}</span> <button class="btn sm" data-tx="tdre">↻ 重新整理</button> <button class="btn sm" data-tx="tdai">${ico("ai")}AI 整理</button> <button class="btn sm" data-tx="tdtxt">複製文字</button></h3>
+    ${sess.displayNote ? `<div class="dh-note-bar note">📅 ${esc(sess.displayNote)}</div>` : ""}
+
+    <!-- 標題與操作按鈕 -->
+    <div class="dh-title-row">
+      <h3>今日重點 <span class="note">${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}</span></h3>
+      <div class="dh-title-btns">
+        <button class="btn sm" data-tx="tdre">↻ 重新整理</button>
+        <button class="btn sm" data-tx="tdai">${ico("ai")}AI 整理</button>
+        <button class="btn sm" data-tx="tdtxt">複製文字</button>
+      </div>
+    </div>
     ${cn ? `<p class="note mkclosed">📅 ${esc(cn[1])}</p>` : ""}
     ${W.tdAI ? `<div class="caibox">${W.tdAI.loading ? "AI 整理中…" : W.tdAI.err ? "⚠︎ " + esc(W.tdAI.err) : esc(W.tdAI.text).replace(/\n/g, "<br>")}</div>` : ""}
-    ${pm ? post + pre : pre + post}
-    ${C?.kv && C?.tg ? `<p class="note">想每天在手機收到：<button type="button" class="linkbtn" data-tgone>📲 推到 Telegram</button>（早上早報、收盤後重點）。</p>` : ""}
+
+    <!-- 2. 核心市場卡 -->
+    ${coreMarketCardsHtml(market, W.bf, sess, dataEval)}
+
+    <!-- 3. 每日早報（結論優先、結構化驅動/風險、美股與行事曆清單） -->
+    <div class="dh-sec-wrap">
+      <h4 class="tdsec">盤前・昨晚美股與今天的行事曆</h4>
+      ${dailyBriefSummaryHtml(W.bf, plan)}
+      <div class="dh-card">${briefBody()}</div>
+    </div>
+
+    <!-- 4. 今日重點驗證（早報情境與盤後驗證時序軸） -->
+    <div class="dh-sec-wrap">
+      ${validateHtml(val, plan)}
+      ${briefScenariosHtml(plan)}
+    </div>
+
+    <!-- 5. 資金雷達（板塊輪動與資金流向） -->
+    <div class="dh-sec-wrap">
+      ${flowsDecisionHtml(M)}
+    </div>
+
+    <!-- 6. 自選動態與技術訊號（包含加權、自選漲跌、技術訊號與盤後總結） -->
+    <div class="dh-sec-wrap">
+      <h4 class="tdsec">${pm ? "盤後" : "盤中"}・大盤、自選與訊號</h4>
+      ${sumBody()}
+    </div>
+
+    <!-- 7. 下一交易日行動清單與紀律觀察 -->
+    <div class="dh-sec-wrap">
+      ${nextActionHtml(plan, val)}
+    </div>
+
+    <!-- 8. 資料來源、本機儲存限制與免責頁尾 -->
+    <footer class="dh-footer">
+      <p class="note">資料來源：Yahoo Finance、期交所、證交所、公開資訊觀測站；盤前推演快照暫存於瀏覽器 LocalStorage，更換裝置或清除瀏覽紀錄時不會同步保留；所有指標由程式客觀計算，僅供研究參考，不構成證券投資顧問或個股買賣建議。</p>
+      ${C?.kv && C?.tg ? `<p class="note">想每天在手機收到：<button type="button" class="linkbtn" data-tgone>📲 推到 Telegram</button>（早上早報、收盤後重點）。</p>` : ""}
+    </footer>
   </section>`;
-  return { h, note: "整理自 Yahoo Finance、期交所、證交所、公開資訊觀測站、新聞標題與即時報價；只是摘要，不是買賣建議。" };
+  return { h, note: "整理自 Yahoo Finance、期交所、證交所、公開資訊觀測站、新聞標題與即時報價；盤前預判快照存於本機瀏覽器 LocalStorage，清除瀏覽紀錄或跨裝置時不會同步；只是摘要，不是買賣建議。" };
 }
 
 
