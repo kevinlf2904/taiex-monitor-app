@@ -762,7 +762,7 @@ function coreMarketCardsHtml(market, G, sess, dataEval) {
 
   const card = (title, code, obj, fallbackSub = "") => {
     if (!obj || (obj.price == null && obj.close == null)) {
-      return `<div class="dh-core-card missing">
+      return `<div class="dh-core-card missing" data-dhcode="${esc(code)}">
         <div class="dh-cc-head"><b>${esc(title)}</b><span class="note">${esc(code)}</span></div>
         <div class="dh-cc-val"><span class="dh-missing-tag">資料暫缺</span></div>
         <div class="dh-cc-sub note">${esc(fallbackSub || "等待連線更新")}</div>
@@ -776,7 +776,7 @@ function coreMarketCardsHtml(market, G, sess, dataEval) {
     const pctStr = pct != null && isFinite(pct) ? `${pct >= 0 ? "+" : ""}${(+pct).toFixed(2)}%` : "—";
     const chgStr = chg != null && isFinite(chg) ? `${chg >= 0 ? "+" : ""}${fmtP(chg)}` : "";
 
-    return `<div class="dh-core-card">
+    return `<div class="dh-core-card" data-dhcode="${esc(code)}">
       <div class="dh-cc-head"><b>${esc(title)}</b><span class="note">${esc(code)}</span></div>
       <div class="dh-cc-body">
         <div class="dh-cc-val ${k}">${pStr}</div>
@@ -907,9 +907,12 @@ function flowsDecisionHtml(M) {
     if (!W?.off && F && !F.loading && !F.sumTry) { F.sumTry = true; setTimeout(() => loadMoney(10), 0); }
     return `<div class="dh-card"><div class="dh-head"><b>資金雷達・板塊輪動與資金流向</b><span class="note">板塊輪動與法人資金</span></div><p class="note">載入法人資金資料中…</p><button type="button" class="btn sm" data-tdgo="radar">前往資金雷達完整分析 ›</button></div>`;
   }
-  const mood = typeof flowMood === "function" ? flowMood(M) : null;
-  const A = typeof flowAt === "function" ? flowAt(M) : [];
-  const S = typeof flowStocks === "function" ? flowStocks(M) : [];
+  let mood = null;
+  try { mood = typeof flowMood === "function" ? flowMood(M) : null; } catch {}
+  let A = [];
+  try { A = typeof flowAt === "function" ? flowAt(M) : []; } catch {}
+  let S = [];
+  try { S = typeof flowStocks === "function" ? flowStocks(M) : []; } catch {}
   const buy = A.filter(x => x.net1 > 0).sort((a, b) => b.net1 - a.net1).slice(0, 3);
   const sell = A.filter(x => x.net1 < 0).sort((a, b) => a.net1 - b.net1).slice(0, 3);
   const odd = S.filter(x => x.mult >= 3 && Math.abs(x.a1) >= 3).length;
