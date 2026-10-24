@@ -17,7 +17,7 @@ export function engine() {
   const g = n => vm.runInContext(n, c);
   ctx = { indicators: g("indicators"), COND: g("COND"), SCOND: g("SCOND"), condOf: g("condOf"), condName: g("condName"), condCheck: g("condCheck"), stratRun: g("stratRun"), STRAT_DEFS: g("STRAT_DEFS"), backtest: g("backtest"), agg: g("agg"), weekKey: g("weekKey"),
     S: { Signals: g("Signals"), detectPattern: g("detectPattern"), PATTERNS: g("PATTERNS"), CHART_PATTERNS: g("CHART_PATTERNS") }, // K 線型態、型態學、缺口（K線學堂的型態課）
-    B: Object.fromEntries(["evScan", "revOf", "briefParts", "briefText", "twDay", "macroBeta", "todayData", "closeText", "sessionStatus", "briefScenarios", "validatePlan", "marketSnapshot", "isValidSnapshot", "evaluateDataStatus", "getBriefSnapshot", "saveBriefSnapshot"].map(n => [n, g(n)])), // 事件提醒、早報、決策中心（brief.js）
+    B: Object.fromEntries(["evScan", "revOf", "briefParts", "briefText", "twDay", "macroBeta", "todayData", "closeText", "sessionStatus", "briefScenarios", "validatePlan", "marketSnapshot", "isValidSnapshot", "evaluateDataStatus", "getBriefSnapshot", "saveBriefSnapshot", "resolveTime", "resolveHolidays", "findLastTradeDate"].map(n => [n, g(n)])), // 事件提醒、早報、決策中心（brief.js）
     Q: Object.fromEntries(["btMetrics", "regimes", "btBreakdown", "btVariants", "btAdvice", "adxCalc", "marketState", "stateAdvice", "atrSetup", "portRisk", "portPlan", "factorRaw", "factorScore", "factorBacktest", "btReportHtml", "stateHtml", "btReportText"].map(n => [n, g(n)])) };
   return ctx;
 }
