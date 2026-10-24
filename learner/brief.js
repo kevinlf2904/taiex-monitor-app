@@ -352,8 +352,19 @@ function briefScenarios(G, today, basePrice, meta = {}) {
   const tsm = isTsmValid ? tsmObj.chgPct : null;
 
   const futPx = futObj?.price ?? futObj?.close;
-  const isFutValid = futObj != null && typeof futPx === "number" && isFinite(futPx) && futPx > 0 && futObj.chg != null && isFinite(futObj.chg);
-  const futChg = isFutValid ? futObj.chg : null;
+  const isFutPriceValid = futObj != null && typeof futPx === "number" && isFinite(futPx) && futPx > 0;
+  let futChg = null;
+  if (futObj && typeof futObj.chg === "number" && isFinite(futObj.chg)) {
+    futChg = futObj.chg;
+  } else if (isFutPriceValid) {
+    const prev = futObj.prev ?? futObj.referencePrice ?? futObj.refPrice;
+    if (typeof prev === "number" && isFinite(prev) && prev > 0) {
+      if (!futObj.contract || !futObj.prevContract || futObj.contract === futObj.prevContract) {
+        futChg = Math.round(futPx - prev);
+      }
+    }
+  }
+  const isFutValid = isFutPriceValid && futChg != null;
 
   // 必要指標：費半(^SOX)、那斯達克(^IXIC)、台指期夜盤(TXF)；選配指標：台積電 ADR(TSM)
   const requiredComplete = isSoxValid && isIxicValid && isFutValid;
@@ -594,6 +605,216 @@ function evaluateDataStatus({ market = {}, G = {}, session = "post", tradeDate =
   return { dataStatus: "partial", dataStatusLabel: "部分正式", reason: "指數已收盤，法人籌碼資料結算中", marketDate, sourceVerified: taiex.source || "unknown", completeness: "awaiting_inst" };
 }
 
+function verifyVolumeStatus(actual, plan) {
+  const rawVol = actual?.volume ?? actual?.vol;
+
+  if (rawVol == null) {
+    return {
+      actualVolume: null,
+      volumeStatus: "missing",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（缺少成交量數據）",
+      volumeReason: "缺少成交量數據",
+      volumeBaseline: null
+    };
+  }
+
+  if (typeof rawVol !== "number" || !isFinite(rawVol) || rawVol < 0) {
+    return {
+      actualVolume: null,
+      volumeStatus: "invalid",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（成交量數值無效）",
+      volumeReason: "成交量數值非有限正數",
+      volumeBaseline: null
+    };
+  }
+
+  if (rawVol === 0) {
+    return {
+      actualVolume: 0,
+      volumeStatus: "zero_volume",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（成交量為 0）",
+      volumeReason: "成交量為 0",
+      volumeBaseline: null
+    };
+  }
+
+  const baseObj = (actual?.baseline && typeof actual.baseline === "object") ? actual.baseline
+    : (actual?.volumeBaseline && typeof actual.volumeBaseline === "object") ? actual.volumeBaseline
+    : (plan?.volumeBaseline && typeof plan.volumeBaseline === "object") ? plan.volumeBaseline
+    : null;
+
+  const rawBase = baseObj
+    ? (baseObj.volume ?? baseObj.val ?? baseObj.value)
+    : (actual?.baselineVolume ?? actual?.volumeBaseline ?? actual?.avgVolume ?? actual?.vol5 ?? actual?.vol20 ?? plan?.volumeBaseline ?? plan?.keyLevels?.expectedVolume ?? null);
+
+  if (rawBase == null || typeof rawBase !== "number" || !isFinite(rawBase) || rawBase <= 0) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（缺少均量比較基準）",
+      volumeReason: "缺少有效均量比較基準",
+      volumeBaseline: null
+    };
+  }
+
+  const normUnit = u => {
+    if (!u || typeof u !== "string") return null;
+    const s = u.trim().toLowerCase();
+    if (s === "shares" || s === "股") return "shares";
+    if (s === "lots" || s === "張") return "lots";
+    if (s === "billion" || s === "億" || s === "100m") return "billion";
+    if (s === "contracts" || s === "口") return "contracts";
+    return s;
+  };
+
+  const actualUnit = normUnit(actual?.volumeUnit ?? actual?.unit);
+  const baseUnit = normUnit(baseObj?.unit ?? actual?.baselineUnit ?? actual?.baseUnit ?? plan?.baselineUnit);
+
+  if (!actualUnit || !baseUnit) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（缺少單位中繼資料，基準不可靠）",
+      volumeReason: "缺少成交量或均量單位中繼資料，不可逕行比對",
+      volumeBaseline: rawBase
+    };
+  }
+
+  if (actualUnit !== baseUnit) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: `量能未驗證（實際量與均量單位不一致：${actualUnit} vs ${baseUnit}）`,
+      volumeReason: `實際量單位（${actualUnit}）與均量單位（${baseUnit}）不符，拒絕混用比較`,
+      volumeBaseline: rawBase
+    };
+  }
+
+  const normPeriod = p => {
+    if (!p || typeof p !== "string") return null;
+    const s = p.trim().toLowerCase();
+    if (["full_day", "daily", "post", "close", "全日", "日盤", "收盤"].includes(s)) return "full_day";
+    if (["intraday", "live", "spark", "盤中", "即時", "撮合"].includes(s)) return "intraday";
+    return s;
+  };
+
+  const actualPeriod = normPeriod(actual?.volumePeriod ?? actual?.period ?? (actual?.session === "post" ? "full_day" : actual?.session === "live" ? "intraday" : null));
+  const basePeriod = normPeriod(baseObj?.period ?? actual?.baselinePeriod ?? plan?.baselinePeriod ?? "full_day");
+
+  if (!actualPeriod || !basePeriod) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（缺少期間中繼資料）",
+      volumeReason: "缺少成交量比較期間中繼資料",
+      volumeBaseline: rawBase
+    };
+  }
+
+  if (actualPeriod === "intraday" && basePeriod === "full_day") {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（盤中累積量不可直接與全日均量比較）",
+      volumeReason: "盤中累積量未換算，不可直接與全日均量比較",
+      volumeBaseline: rawBase
+    };
+  }
+
+  if (actualPeriod !== basePeriod) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: `量能未驗證（比較期間不相容：${actualPeriod} vs ${basePeriod}）`,
+      volumeReason: `實際量期間（${actualPeriod}）與均量期間（${basePeriod}）不相容`,
+      volumeBaseline: rawBase
+    };
+  }
+
+  const actualDate = actual?.date ?? actual?.marketDate;
+  const baseDate = baseObj?.date ?? actual?.baselineDate ?? plan?.baselineDate;
+  const baseSource = baseObj?.source ?? actual?.baselineSource ?? plan?.baselineSource;
+
+  if (!baseDate || !/^\d{4}-\d{2}-\d{2}$/.test(baseDate)) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（缺少均量基準有效日期）",
+      volumeReason: "缺少均量基準日期，無法確認是否過期",
+      volumeBaseline: rawBase
+    };
+  }
+
+  if (!baseSource || typeof baseSource !== "string" || !baseSource.trim()) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（缺少均量基準來源）",
+      volumeReason: "缺少均量計算來源，基準不可靠",
+      volumeBaseline: rawBase
+    };
+  }
+
+  if (actualDate && baseDate > actualDate) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（均量基準日期晚於行情日期）",
+      volumeReason: `均量日期（${baseDate}）超前於實際行情日期（${actualDate}），存在未來資訊嫌疑`,
+      volumeBaseline: rawBase
+    };
+  }
+
+  const ratio = +(rawVol / rawBase).toFixed(2);
+  const ratioPct = Math.round(ratio * 100);
+
+  if (ratio >= 1.0) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "confirmed",
+      volumeConfirmed: true,
+      volumeRatio: ratio,
+      volumeLabel: `量能已確認（達全日基準量 ${ratioPct}%）`,
+      volumeReason: `成交量 ${rawVol} ${actualUnit} 達基準均量 ${rawBase} ${baseUnit} 之 ${ratioPct}%`,
+      volumeBaseline: rawBase
+    };
+  } else {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "below_average",
+      volumeConfirmed: false,
+      volumeRatio: ratio,
+      volumeLabel: `量能未確認（量能不足，僅達全日基準量 ${ratioPct}%）`,
+      volumeReason: `成交量 ${rawVol} ${actualUnit} 僅達基準均量 ${rawBase} ${baseUnit} 之 ${ratioPct}%`,
+      volumeBaseline: rawBase
+    };
+  }
+}
+
 function validatePlan(plan, actual) {
   if (!plan || !plan.keyLevels) {
     return {
@@ -678,44 +899,8 @@ function validatePlan(plan, actual) {
   }
 
   // 量能驗證：價格結構與量能確認分開呈現，不以量能硬改價格結構
-  let volumeStatus = "unverified";
-  let volumeConfirmed = false;
-  let volumeRatio = null;
-  let volumeLabel = "量能未驗證";
-
-  if (rawVol == null) {
-    volumeStatus = "missing";
-    volumeConfirmed = false;
-    volumeLabel = "量能未驗證（缺少成交量數據）";
-  } else if (typeof rawVol !== "number" || !isFinite(rawVol) || rawVol < 0) {
-    volumeStatus = "invalid";
-    volumeConfirmed = false;
-    volumeLabel = "量能未驗證（成交量數值無效）";
-  } else if (rawVol === 0) {
-    volumeStatus = "zero_volume";
-    volumeConfirmed = false;
-    volumeLabel = "量能未驗證（成交量為 0）";
-  } else {
-    const hasValidBase = rawBase != null && typeof rawBase === "number" && isFinite(rawBase) && rawBase > 0;
-    if (!hasValidBase) {
-      volumeStatus = "unverified";
-      volumeConfirmed = false;
-      volumeLabel = "量能未驗證（缺少均量比較基準）";
-    } else {
-      const ratio = +(rawVol / rawBase).toFixed(2);
-      const ratioPct = Math.round(ratio * 100);
-      volumeRatio = ratio;
-      if (ratio >= 1.0) {
-        volumeStatus = "confirmed";
-        volumeConfirmed = true;
-        volumeLabel = `量能已確認（達基準量 ${ratioPct}%）`;
-      } else {
-        volumeStatus = "below_average";
-        volumeConfirmed = false;
-        volumeLabel = `量能未確認（量能不足，僅達基準量 ${ratioPct}%）`;
-      }
-    }
-  }
+  const volRes = verifyVolumeStatus(actual, plan);
+  const { actualVolume, volumeStatus, volumeConfirmed, volumeRatio, volumeLabel, volumeReason, volumeBaseline } = volRes;
 
   const chgStr = chg != null && isFinite(chg) ? `（${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%）` : "（漲跌幅未知）";
   const analysisText = `實際收盤 ${px.toLocaleString()} 點${chgStr}。${outcomeLabel}；${observationText}【${volumeLabel}】`;
@@ -727,12 +912,13 @@ function validatePlan(plan, actual) {
     actualClose: px,
     actualHigh: hi,
     actualLow: lo,
-    actualVolume: (typeof rawVol === "number" && isFinite(rawVol)) ? rawVol : null,
+    actualVolume,
     volumeStatus,
     volumeConfirmed,
     volumeRatio,
     volumeLabel,
-    volumeBaseline: (rawBase != null && isFinite(rawBase)) ? rawBase : null,
+    volumeReason,
+    volumeBaseline,
     pressureHit,
     supportHit,
     closeAbovePivot: px >= pivot,
@@ -883,8 +1069,23 @@ function dailyBriefSummaryHtml(G, plan) {
   const isSoxExpired = Boolean(sox && (sox.stale || sox.expired));
 
   const futPx = fut?.price ?? fut?.close;
-  const isFutValid = Boolean(fut && isValidPrice(futPx) && ((fut.chg != null && isFinite(fut.chg)) || (fut.chgPct != null && isFinite(fut.chgPct))));
+  const hasValidFutPrice = Boolean(fut && isValidPrice(futPx));
   const isFutExpired = Boolean(fut && (fut.stale || fut.expired));
+
+  // 台指期漲跌點數判定（嚴格依據真實點數或有效現價與可對應前收計算，禁止使用固定乘數）
+  let fChg = null;
+  if (fut && typeof fut.chg === "number" && isFinite(fut.chg)) {
+    fChg = fut.chg;
+  } else if (hasValidFutPrice) {
+    const prev = fut.prev ?? fut.referencePrice ?? fut.refPrice;
+    if (isValidPrice(prev)) {
+      if (!fut.contract || !fut.prevContract || fut.contract === fut.prevContract) {
+        fChg = Math.round(futPx - prev);
+      }
+    }
+  }
+
+  const isFutValid = Boolean(fut && hasValidFutPrice && !isFutExpired);
 
   const missingItems = [];
   if (!isSoxValid) missingItems.push("費半指數行情");
@@ -904,29 +1105,11 @@ function dailyBriefSummaryHtml(G, plan) {
   } else {
     // Both SOX and Fut are valid and not expired
     const sPct = sox.chgPct;
-    const fChg = fut.chg ?? Math.round((fut.chgPct || 0) * 200);
+    const sPctStr = `${sPct >= 0 ? "+" : ""}${sPct.toFixed(2)}%`;
 
-    // 檢查矛盾訊號
-    if ((sPct >= 1.0 && fChg <= -100) || (sPct <= -1.0 && fChg >= 100)) {
-      lead = `美股與期貨走勢分歧（費半 ${sPct >= 0 ? "+" : ""}${sPct.toFixed(2)}%，夜盤 ${fChg >= 0 ? "+" : ""}${fChg} 點），訊號相互抵銷，早盤偏向多空拉鋸，嚴密觀察分水嶺防守。`;
-      upward = sPct >= 1.0 ? `費城半導體大漲 +${sPct.toFixed(2)}%，但期貨夜盤走弱，開盤動能可能受制於避險情緒。` : `期貨夜盤逆勢走揚 +${fChg} 點，支撐早盤開盤表現，惟美股科技股重挫需防補跌。`;
-      downward = "市場訊號存在明顯矛盾，避免單向追價，重點在於分水嶺防守位階是否被摜破。";
-    } else if (sPct === 0 && fChg === 0) {
-      // 真實零漲跌
-      lead = "美股主要指數與台指期夜盤收在平盤（0.00% / 0 點），早盤動能中性，觀察開盤量能與位階拉鋸。";
-      upward = "費城半導體收在平盤（0.00%），外盤無顯著利空，科技股以個股題材輪動為主。";
-      downward = "國際行情無方向指引，權值股缺乏推升力道，需提防量縮拉回回測支撐。";
-    } else {
-      if (fChg > 50) {
-        lead = `台指期夜盤走揚 +${fChg} 點，有利加權早盤開高挑戰關鍵位階。`;
-      } else if (fChg < -50) {
-        lead = `台指期夜盤走跌 ${fChg} 點，加權早盤面臨回測，留意分水嶺能否守穩。`;
-      } else if (fChg === 0) {
-        lead = `台指期夜盤收在平盤（0 點），費半變動 ${sPct >= 0 ? "+" : ""}${sPct.toFixed(2)}%，早盤預估平穩開出。`;
-      } else {
-        lead = `美股費半（${sPct >= 0 ? "+" : ""}${sPct.toFixed(2)}%）與台指期夜盤（${fChg >= 0 ? "+" : ""}${fChg} 點）已更新，早盤觀察權值股量能與分水嶺防守強度。`;
-      }
-
+    if (fChg == null) {
+      // 來源僅有漲跌幅但無有效基準前收價，或合約不符：顯示「夜盤漲跌點數未知」，不可自行估算，不轉為 0，不偏多或偏空
+      lead = `美股費半（${sPctStr}）已更新，夜盤漲跌點數未知，早盤觀察權值股量能與分水嶺防守強度。`;
       if (sPct > 0.5) {
         upward = `費城半導體上漲 +${sPct.toFixed(2)}%，有助台股半導體與 AI 供應鏈開盤動能。`;
       } else if (sPct === 0) {
@@ -936,15 +1119,49 @@ function dailyBriefSummaryHtml(G, plan) {
       } else {
         upward = "美股半導體偏弱，早盤多方需仰賴內資或金融傳產撐盤。";
       }
-
-      if (sPct < -0.5) {
-        downward = `費城半導體下跌 ${sPct.toFixed(2)}%，科技權值股開盤面臨整理壓力。`;
-      } else if (sPct === 0) {
-        downward = "外部國際無顯著利空催化，主要觀察盤中權值賣壓與量能萎縮風險。";
-      } else if (sPct < 0) {
-        downward = `費城半導體微幅收低 ${sPct.toFixed(2)}%，留意開盤震盪壓回。`;
+      downward = "夜盤漲跌點數未知，期貨端無有效點數依據，需密切留意多空分水嶺防守強度。";
+    } else {
+      // fChg 有真實點數依據
+      // 檢查矛盾訊號
+      if ((sPct >= 1.0 && fChg <= -100) || (sPct <= -1.0 && fChg >= 100)) {
+        lead = `美股與期貨走勢分歧（費半 ${sPctStr}，夜盤 ${fChg >= 0 ? "+" : ""}${fChg} 點），訊號相互抵銷，早盤偏向多空拉鋸，嚴密觀察分水嶺防守。`;
+        upward = sPct >= 1.0 ? `費城半導體大漲 +${sPct.toFixed(2)}%，但期貨夜盤走弱，開盤動能可能受制於避險情緒。` : `期貨夜盤逆勢走揚 +${fChg} 點，支撐早盤開盤表現，惟美股科技股重挫需防補跌。`;
+        downward = "市場訊號存在明顯矛盾，避免單向追價，重點在於分水嶺防守位階是否被摜破。";
+      } else if (sPct === 0 && fChg === 0) {
+        // 真實零漲跌
+        lead = "美股主要指數與台指期夜盤收在平盤（0.00% / 0 點），早盤動能中性，觀察開盤量能與位階拉鋸。";
+        upward = "費城半導體收在平盤（0.00%），外盤無顯著利空，科技股以個股題材輪動為主。";
+        downward = "國際行情無方向指引，權值股缺乏推升力道，需提防量縮拉回回測支撐。";
       } else {
-        downward = "短線漲多乖離或美債殖利率波動風險，需密切留意多空分水嶺防守強度。";
+        if (fChg > 50) {
+          lead = `台指期夜盤走揚 +${fChg} 點，有利加權早盤開高挑戰關鍵位階。`;
+        } else if (fChg < -50) {
+          lead = `台指期夜盤走跌 ${fChg} 點，加權早盤面臨回測，留意分水嶺能否守穩。`;
+        } else if (fChg === 0) {
+          lead = `台指期夜盤收在平盤（0 點），費半變動 ${sPctStr}，早盤預估平穩開出。`;
+        } else {
+          lead = `美股費半（${sPctStr}）與台指期夜盤（${fChg >= 0 ? "+" : ""}${fChg} 點）已更新，早盤觀察權值股量能與分水嶺防守強度。`;
+        }
+
+        if (sPct > 0.5) {
+          upward = `費城半導體上漲 +${sPct.toFixed(2)}%，有助台股半導體與 AI 供應鏈開盤動能。`;
+        } else if (sPct === 0) {
+          upward = "費城半導體收在平盤（0.00%），科技股動能平穩，題材輪動為主。";
+        } else if (sPct > 0) {
+          upward = `費城半導體微揚 +${sPct.toFixed(2)}%，提供早盤基本支撐動能。`;
+        } else {
+          upward = "美股半導體偏弱，早盤多方需仰賴內資或金融傳產撐盤。";
+        }
+
+        if (sPct < -0.5) {
+          downward = `費城半導體下跌 ${sPct.toFixed(2)}%，科技權值股開盤面臨整理壓力。`;
+        } else if (sPct === 0) {
+          downward = "外部國際無顯著利空催化，主要觀察盤中權值賣壓與量能萎縮風險。";
+        } else if (sPct < 0) {
+          downward = `費城半導體微幅收低 ${sPct.toFixed(2)}%，留意開盤震盪壓回。`;
+        } else {
+          downward = "短線漲多乖離或美債殖利率波動風險，需密切留意多空分水嶺防守強度。";
+        }
       }
     }
   }
@@ -1024,7 +1241,7 @@ function validateHtml(val, plan) {
       <span>實際收盤：<b>${val.actualClose.toLocaleString()}</b></span>
       <span>壓力位：<b>${val.pressureHit ? "✓ 曾觸及" : "未觸及"}</b></span>
       <span>支撐位：<b>${val.supportHit ? "⚠ 曾回測" : "✓ 守穩"}</b></span>
-      <span>量能判定：<b class="${val.volumeConfirmed ? 'up' : 'note'}">${esc(val.volumeLabel || "量能未驗證")}</b></span>
+      <span>量能判定：<b class="${val.volumeConfirmed ? 'up' : (val.volumeStatus === 'below_average' ? 'down' : 'note')}">${esc(val.volumeLabel || "量能未驗證")}</b></span>
     </div>
   </div>`;
 }
