@@ -139,20 +139,317 @@ function briefBody() {
 /* ---------- 今日重點（情報局分頁）：早報（盤前）＋每日摘要（盤中、盤後）整成一頁；自選最上面的今日重點卡是它的縮小版 ----------
    13:30 收盤前先看盤前那一半（昨晚美股、台指期、今天的行事曆），收盤後先看盤後那一半（大盤、自選漲跌、技術訊號）；重新整理、AI 整理、複製都只有一個 */
 const tdAfter = (now = Date.now()) => new Date(now + 8 * 3600e3).toISOString().slice(11, 16) >= "13:30";
+
+/* ---------- 每日市場決策中心：盤前預判、情境推演、盤後驗證與共同契約 ---------- */
+function sessionStatus(ms = Date.now()) {
+  const d = new Date(ms + 8 * 3600e3);
+  const hm = d.toISOString().slice(11, 16);
+  const day = d.getUTCDay();
+  const isWeekend = day === 0 || day === 6;
+  let session = "post", status = "official", label = "盤後定案";
+  if (isWeekend) {
+    session = "closed";
+    status = "closed";
+    label = "假日休市";
+  } else if (hm < "09:00") {
+    session = "pre";
+    status = "preview";
+    label = "盤前預判";
+  } else if (hm <= "13:30") {
+    session = "live";
+    status = "intraday";
+    label = "盤中撮合";
+  } else if (hm < "15:00") {
+    session = "post";
+    status = "settling";
+    label = "盤後結算";
+  }
+  return { session, status, label, hm, isWeekend };
+}
+
+function getBriefSnapshot(today = twDay()) {
+  try {
+    if (typeof store !== "undefined" && store?.get) {
+      return store.get("watch:brief:snap:" + today, null);
+    }
+  } catch {}
+  return null;
+}
+
+function saveBriefSnapshot(today, plan) {
+  if (!today || !plan) return;
+  try {
+    if (typeof store !== "undefined" && store?.get && store?.set) {
+      const existing = store.get("watch:brief:snap:" + today, null);
+      if (!existing) store.set("watch:brief:snap:" + today, plan);
+    }
+  } catch {}
+}
+
+function briefScenarios(G, today = twDay(), basePrice = 23400) {
+  const us = G?.us?.indices || [];
+  const sox = us.find(x => x.code === "^SOX")?.chgPct ?? 0;
+  const ixic = us.find(x => x.code === "^IXIC")?.chgPct ?? 0;
+  const tsm = (G?.us?.megas || []).find(x => x.code === "TSM")?.chgPct ?? 0;
+  const futChg = G?.fut?.night?.chg ?? G?.fut?.quote?.chg ?? 0;
+  const ref = basePrice || 23400;
+  const shift = Math.round(futChg * 0.85);
+  const pivot = Math.round((ref + shift) / 10) * 10;
+  const delta = Math.max(80, Math.round(ref * 0.006));
+  const pressure = pivot + delta;
+  const support = pivot - delta;
+
+  return {
+    today,
+    createdAt: new Date().toISOString(),
+    macroSignals: { sox, ixic, tsm, futChg },
+    keyLevels: { pressure, pivot, support },
+    scenarios: {
+      bull: {
+        title: "多方推進情境",
+        trigger: `開高站穩分水嶺 ${pivot.toLocaleString()} 點，電子權值股帶量表態`,
+        target: `挑戰關鍵壓力位 ${pressure.toLocaleString()} 點`,
+        invalidation: `跌破分水嶺 ${pivot.toLocaleString()} 點且反抽無法站回`,
+        bias: "看多"
+      },
+      neutral: {
+        title: "區間震盪情境",
+        trigger: `在支撐 ${support.toLocaleString()} 至壓力 ${pressure.toLocaleString()} 間狹幅拉鋸`,
+        target: `個股題材輪動，權值量縮整理`,
+        invalidation: `帶量跌破 ${support.toLocaleString()} 或突破 ${pressure.toLocaleString()}`,
+        bias: "盤整"
+      },
+      bear: {
+        title: "空方防守情境",
+        trigger: `開低摜破分水嶺 ${pivot.toLocaleString()} 點並下探支撐 ${support.toLocaleString()} 點`,
+        target: `回測前波整數防守位`,
+        invalidation: `迅速強勢拉回站穩 ${pivot.toLocaleString()} 點`,
+        bias: "看空"
+      }
+    }
+  };
+}
+
+function validatePlan(plan, actual) {
+  if (!plan?.keyLevels || !actual?.price) return null;
+  const { pressure, pivot, support } = plan.keyLevels;
+  const px = actual.price;
+  const hi = actual.high ?? px;
+  const lo = actual.low ?? px;
+  const chg = actual.chgPct ?? 0;
+
+  let metKey = "neutral";
+  if (px >= pivot) {
+    metKey = "bull";
+  } else if (px < support) {
+    metKey = "bear";
+  } else {
+    metKey = "neutral";
+  }
+
+  const pressureHit = hi >= pressure;
+  const supportHit = lo <= support;
+  const metScenario = plan.scenarios?.[metKey];
+  const outcomeLabel = (metScenario?.title || "區間震盪") + "成立";
+  const analysisText = `實際收盤 ${px.toLocaleString()} 點（${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%）。${outcomeLabel}；盤中高點 ${hi.toLocaleString()} 點${pressureHit ? "觸及壓力位" : "未過壓力"}，盤中低點 ${lo.toLocaleString()} 點${supportHit ? "曾測支撐位" : "守穩支撐"}。`;
+
+  return {
+    metKey,
+    outcomeLabel,
+    actualClose: px,
+    actualHigh: hi,
+    actualLow: lo,
+    pressureHit,
+    supportHit,
+    analysisText,
+    planCreatedAt: plan.createdAt
+  };
+}
+
+function marketSnapshot({ date = twDay(), G = {}, market = {}, flows = {} } = {}) {
+  const meta = {
+    ...sessionStatus(),
+    tradeDate: date,
+    asOf: new Date(Date.now() + 8 * 3600e3).toISOString().slice(11, 16),
+    sourceNote: "證交所／櫃買中心／期交所／Yahoo Finance",
+    dataStatus: G?.fut?.ok ? "intraday" : "official"
+  };
+  const plan = briefScenarios(G, date, market.taiex?.price || 23400);
+  const validation = market.taiex?.price ? validatePlan(plan, {
+    price: market.taiex.price,
+    high: market.taiex.high,
+    low: market.taiex.low,
+    chgPct: market.taiex.chgPct ?? 0
+  }) : null;
+  return { meta, market, plan, flows, validation };
+}
+
+const briefFlowFmt = v => (v == null ? "—" : `${v >= 0 ? "+" : ""}${Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)}億`);
+
+function briefScenariosHtml(plan) {
+  if (!plan?.keyLevels) return "";
+  const { pressure, pivot, support } = plan.keyLevels;
+  const sc = plan.scenarios || {};
+  return `<div class="dh-card">
+    <div class="dh-head"><b>盤前情境推演與分水嶺</b><span class="note">早報推估・不可覆寫保存</span></div>
+    <div class="dh-levels">
+      <span class="dh-lvl pres">壓力 <b>${pressure.toLocaleString()}</b></span>
+      <span class="dh-lvl piv">分水嶺 <b>${pivot.toLocaleString()}</b></span>
+      <span class="dh-lvl supp">支撐 <b>${support.toLocaleString()}</b></span>
+    </div>
+    <div class="sc-grid">
+      ${["bull", "neutral", "bear"].map(k => {
+        const s = sc[k]; if (!s) return "";
+        return `<div class="sc-card ${k}">
+          <h5><b>${esc(s.title)}</b><span class="sc-bias ${k}">${esc(s.bias)}</span></h5>
+          <p><b>條件：</b>${esc(s.trigger)}</p>
+          <p><b>目標：</b>${esc(s.target)}</p>
+          <p class="note"><b>失效：</b>${esc(s.invalidation)}</p>
+        </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+
+function validateHtml(val) {
+  if (!val) return `<div class="dh-card val"><div class="dh-head"><b>早報情境盤後驗證</b><span class="note">等待收盤定案後自動對照</span></div><p class="note">盤中進行中，收盤後將以早報儲存的原始關鍵點位進行實際走勢驗證。</p></div>`;
+  return `<div class="dh-card val">
+    <div class="dh-head"><b>早報情境盤後驗證</b><span class="dh-tag ${val.metKey}">${esc(val.outcomeLabel)}</span></div>
+    <p class="dh-val-txt">${esc(val.analysisText)}</p>
+    <div class="dh-val-stats">
+      <span>收盤：<b>${val.actualClose.toLocaleString()}</b></span>
+      <span>壓力位：<b>${val.pressureHit ? "✓ 曾觸及" : "未觸及"}</b></span>
+      <span>支撐位：<b>${val.supportHit ? "⚠ 曾回測" : "✓ 守穩"}</b></span>
+    </div>
+  </div>`;
+}
+
+function flowsDecisionHtml(M) {
+  if (!M) {
+    const F = W?.mf;
+    if (!W?.off && F && !F.loading && !F.sumTry) { F.sumTry = true; setTimeout(() => loadMoney(10), 0); }
+    return `<div class="dh-card"><div class="dh-head"><b>資金雷達</b><span class="note">板塊輪動與法人資金</span></div><p class="note">載入法人資金資料中…</p><button type="button" class="linkbtn" data-tdgo="radar">前往資金雷達完整分析 ›</button></div>`;
+  }
+  const mood = typeof flowMood === "function" ? flowMood(M) : null;
+  const A = typeof flowAt === "function" ? flowAt(M) : [];
+  const S = typeof flowStocks === "function" ? flowStocks(M) : [];
+  const buy = A.filter(x => x.net1 > 0).sort((a, b) => b.net1 - a.net1).slice(0, 3);
+  const sell = A.filter(x => x.net1 < 0).sort((a, b) => a.net1 - b.net1).slice(0, 3);
+  const odd = S.filter(x => x.mult >= 3 && Math.abs(x.a1) >= 3).length;
+  const L = x => `${esc(x.name)} <b class="${cls(x.net1)}">${briefFlowFmt(x.net1)}</b>`;
+
+  return `<div class="dh-card">
+    <div class="dh-head"><b>資金雷達・板塊輪動與資金流向</b><span class="note">${M.dates[M.T - 1]?.slice(5).replace("-", "/")}</span></div>
+    ${mood ? `<p>法人情緒：<b>${mood.score} 分（${mood.label}）</b>・上漲 ${mood.up} 家／下跌 ${mood.dn} 家</p>` : ""}
+    <p>資金流入前三板塊：${buy.length ? buy.map(L).join("、") : "無顯著流入"}</p>
+    <p>資金流出前三板塊：${sell.length ? sell.map(L).join("、") : "無顯著流出"}</p>
+    <p>異常爆量個股（逾前4日均量3倍且逾3億）：<b>${odd}</b> 檔</p>
+    <div style="margin-top:6px"><button type="button" class="btn sm" data-tdgo="radar">前往資金雷達完整板塊與矩陣分析 ›</button></div>
+  </div>`;
+}
+
+function nextActionHtml(plan, val) {
+  const p = plan?.keyLevels;
+  return `<div class="dh-card act">
+    <div class="dh-head"><b>下一交易日行動清單與紀律觀察</b></div>
+    <ul class="tlist">
+      <li><b>關鍵位階觀察：</b>${p ? `以壓力 ${p.pressure.toLocaleString()} 點、分水嶺 ${p.pivot.toLocaleString()} 點、支撐 ${p.support.toLocaleString()} 點為盤勢多空判斷基準。` : "待盤前計算分水嶺與支撐壓力。"}</li>
+      <li><b>防守與停損紀律：</b>跌破分水嶺或支撐位時，嚴格審視庫存部位停損與減碼條件，不盲目逆勢攤平。</li>
+      <li><b>動能與族群跟隨：</b>關注資金流入續強族群，不追高離乖離過大的過熱標的。</li>
+    </ul>
+    <p class="note" style="margin-top:4px">註：依據量化指標與公開資訊整理，僅為條件式推演，不是買賣建議。</p>
+  </div>`;
+}
+
 function todayText() {
   const t = twDay(), P = briefP();
-  return `📋 KLineLab 今日重點（${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}）\n`
-    + (P.length ? P.map(p => `\n【${p.t}】\n` + p.L.map(x => "• " + x.s).join("\n")).join("\n") + "\n" : "")
-    + `\n【盤勢與自選】\n${sumText()}\n\n整理自公開資料，不是買賣建議。`;
+  const plan = getBriefSnapshot(t) || briefScenarios(W.bf, t, W.quotes?.get?.("T00")?.price);
+  const val = W.quotes?.get?.("T00")?.price ? validatePlan(plan, {
+    price: W.quotes.get("T00").price,
+    high: W.quotes.get("T00").high,
+    low: W.quotes.get("T00").low,
+    chgPct: W.quotes.get("T00").chgPct ?? 0
+  }) : null;
+  let txt = `📋 KLineLab 今日重點（${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}）\n`;
+  if (P.length) txt += P.map(p => `\n【${p.t}】\n` + p.L.map(x => "• " + x.s).join("\n")).join("\n") + "\n";
+  if (plan?.keyLevels) {
+    txt += `\n【盤前關鍵價位】\n• 關鍵壓力：${plan.keyLevels.pressure.toLocaleString()} 點\n• 多空分水嶺：${plan.keyLevels.pivot.toLocaleString()} 點\n• 關鍵支撐：${plan.keyLevels.support.toLocaleString()} 點\n`;
+  }
+  if (val?.outcomeLabel) {
+    txt += `\n【早報情境驗證】\n• ${val.analysisText}\n`;
+  }
+  txt += `\n【盤勢與自選】\n${sumText()}\n\n整理自公開資料，不是買賣建議。`;
+  return txt;
 }
+
 function todayPage() {
-  const t = twDay(), cn = typeof twClosedNote === "function" ? twClosedNote(W.quotes.get("T00")?.date) : null, pm = tdAfter(), C = W.syncCfg;
-  const pre = `<h4 class="tdsec">盤前・昨晚美股與今天的行事曆</h4>${briefBody()}`, post = `<h4 class="tdsec">${pm ? "盤後" : "盤中"}・大盤、自選與訊號</h4>${sumBody()}`;
-  const h = `<section class="csec"><h3>今日重點 <span class="note">${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}</span> <button class="btn sm" data-tx="tdre">↻ 重新整理</button> <button class="btn sm" data-tx="tdai">${ico("ai")}AI 整理</button> <button class="btn sm" data-tx="tdtxt">複製文字</button></h3>
+  const t = twDay(), cn = typeof twClosedNote === "function" ? twClosedNote(W.quotes?.get?.("T00")?.date) : null, pm = tdAfter(), C = W.syncCfg;
+  const sess = sessionStatus();
+  const tq = W.quotes?.get?.("T00");
+  let plan = getBriefSnapshot(t);
+  if (!plan) {
+    plan = briefScenarios(W.bf, t, tq?.price);
+    if (plan && (!pm || sess.session === "pre")) saveBriefSnapshot(t, plan);
+  }
+  const val = tq?.price ? validatePlan(plan, {
+    price: tq.price,
+    high: tq.high,
+    low: tq.low,
+    chgPct: tq.chgPct ?? 0
+  }) : null;
+  const M = typeof mfModel === "function" ? mfModel() : null;
+
+  const pre = `<h4 class="tdsec">盤前・昨晚美股與今天的行事曆</h4>${briefBody()}${briefScenariosHtml(plan)}`;
+  const post = `<h4 class="tdsec">${pm ? "盤後" : "盤中"}・大盤、自選與訊號</h4>${pm && val ? validateHtml(val) : ""}${sumBody()}${flowsDecisionHtml(M)}${nextActionHtml(plan, val)}`;
+
+  const style = `<style>
+    .dh-status-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 10px; background: var(--surface-2); border-radius: 6px; font-size: 12.5px; margin-bottom: 8px; }
+    .dh-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #fff; }
+    .dh-badge.pre { background: #2563eb; }
+    .dh-badge.live { background: #059669; }
+    .dh-badge.post { background: #7c3aed; }
+    .dh-badge.closed { background: var(--muted); }
+    .dh-card { padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); margin: 10px 0; font-size: 13px; line-height: 1.6; }
+    .dh-card.val { border-color: var(--accent, #6366f1); background: var(--surface-2); }
+    .dh-card.act { border-left: 3px solid var(--accent, #6366f1); }
+    .dh-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
+    .dh-head b { font-size: 13.5px; }
+    .dh-levels { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+    .dh-lvl { padding: 3px 8px; border-radius: 4px; font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+    .dh-lvl.pres b { color: var(--down); }
+    .dh-lvl.piv b { color: var(--accent, #6366f1); }
+    .dh-lvl.supp b { color: var(--up); }
+    .sc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 8px; margin-top: 6px; }
+    .sc-card { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+    .sc-card.bull { border-left: 3px solid var(--up); }
+    .sc-card.neutral { border-left: 3px solid var(--muted); }
+    .sc-card.bear { border-left: 3px solid var(--down); }
+    .sc-card h5 { margin: 0 0 4px; font-size: 12.5px; display: flex; justify-content: space-between; }
+    .sc-card p { margin: 2px 0; font-size: 12px; }
+    .sc-bias { font-size: 11px; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
+    .sc-bias.bull { background: rgba(220,38,38,0.1); color: var(--up); }
+    .sc-bias.neutral { background: var(--surface); color: var(--muted); }
+    .sc-bias.bear { background: rgba(37,99,235,0.1); color: var(--down); }
+    .dh-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); }
+    .dh-val-txt { margin: 4px 0 6px; font-size: 13px; font-weight: 500; }
+    .dh-val-stats { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); }
+    .dh-val-stats b { color: var(--ink); }
+  </style>`;
+
+  const h = `<section class="csec">${style}
+    <div class="dh-status-bar">
+      <div>
+        <span class="dh-badge ${sess.session}">${sess.label}</span>
+        <span class="note">資料時間 ${sess.hm}・${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}</span>
+      </div>
+      ${tq?.price ? `<div>加權 <b>${fmtP(tq.price)}</b> <span class="${cls(tq.chg)}">${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct ?? "—"}%</span></div>` : ""}
+    </div>
+    <h3>今日重點 <span class="note">${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}</span> <button class="btn sm" data-tx="tdre">↻ 重新整理</button> <button class="btn sm" data-tx="tdai">${ico("ai")}AI 整理</button> <button class="btn sm" data-tx="tdtxt">複製文字</button></h3>
     ${cn ? `<p class="note mkclosed">📅 ${esc(cn[1])}</p>` : ""}
     ${W.tdAI ? `<div class="caibox">${W.tdAI.loading ? "AI 整理中…" : W.tdAI.err ? "⚠︎ " + esc(W.tdAI.err) : esc(W.tdAI.text).replace(/\n/g, "<br>")}</div>` : ""}
     ${pm ? post + pre : pre + post}
-    ${C?.kv && C?.tg ? `<p class="note">想每天在手機收到：<button type="button" class="linkbtn" data-tgone>📲 推到 Telegram</button>（早上早報、收盤後重點）。</p>` : ""}</section>`;
+    ${C?.kv && C?.tg ? `<p class="note">想每天在手機收到：<button type="button" class="linkbtn" data-tgone>📲 推到 Telegram</button>（早上早報、收盤後重點）。</p>` : ""}
+  </section>`;
   return { h, note: "整理自 Yahoo Finance、期交所、證交所、公開資訊觀測站、新聞標題與即時報價；只是摘要，不是買賣建議。" };
 }
 
@@ -234,7 +531,7 @@ document.addEventListener("click", async e => { const t = e.target;
   if (t.closest("[data-tgone-more]")) { closeSheet(); W.tv = "sync"; return setLt("tools"); } });
 document.addEventListener("change", e => { const k = e.target.dataset?.tgk; if (!k) return; EVA()[k] = e.target.checked; evaSave(); syncPush(true); renderToday(W.lt === "watch"); });
 document.addEventListener("click", e => { const g = e.target.closest("[data-tdgo]"); if (!g) return; const v = g.dataset.tdgo;
-  if (v === "mkt") { W.mkReg = "tw"; setLt("mkt"); } else if (v === "pod") setLt("pod"); else if (v === "brief") setLt("today"); });
+  if (v === "mkt") { W.mkReg = "tw"; setLt("mkt"); } else if (v === "pod") setLt("pod"); else if (v === "brief") setLt("today"); else if (v === "radar") setLt("money"); });
 
 /* ---------- 筆記追蹤：W.notes = { 代號: [{ at, t, px }] }；目標價就是價格提醒（W.alerts） ---------- */
 const NT = () => (W.notes ||= store.get("watch:notes", {}) || {});

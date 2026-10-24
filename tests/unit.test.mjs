@@ -737,7 +737,7 @@ test("題材連動：週報酬、相關係數、領先落後、上三角索引�
   const R = compute([{ id: "a", mk: "us", codes: ["X"] }, { id: "b", mk: "tw", codes: ["1"] }], new Map([["X", A], ["1", B]]));
   assert.deepEqual(R.ids, ["a", "b"]); assert.equal(R.lead[0][0], "a"); assert.equal(R.lead[0][1], "b"); assert.equal(R.c.length, 1);
   assert.equal(themeRet([new Map([["d", 0.1]]), new Map([["d", 0.3]])]).get("d"), 0.2);
-  const { execFileSync } = await import("node:child_process"); execFileSync("node", [new URL("../scripts/check-indpack.mjs", import.meta.url).pathname], { stdio: "pipe" }); // 有 ✗ 會丟錯
+  const { execFileSync } = await import("node:child_process"); execFileSync("node", [(await import("node:url")).fileURLToPath(new URL("../scripts/check-indpack.mjs", import.meta.url))], { stdio: "pipe" }); // 有 ✗ 會丟錯
 });
 test("YouTube：頻道影片 RSS、搜尋結果、頻道網址解析，影片交給 Gemini 看", async () => {
   const P = await import("../api/_lib/podcast.js");
@@ -754,4 +754,69 @@ test("YouTube：頻道影片 RSS、搜尋結果、頻道網址解析，影片交
   assert.deepEqual(P.ytInput("@miulaviewpoint"), { path: "/@miulaviewpoint" }); assert.equal(P.ytInput("https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv").id, "UCabcdefghijklmnopqrstuv"); assert.equal(P.ytInput("https://evil.example.com"), null);
   const parts = P.ytParts("https://www.youtube.com/watch?v=abcdefghijk", "x"); assert.equal(parts[0].fileData.fileUri, "https://www.youtube.com/watch?v=abcdefghijk"); assert.ok(parts[0].videoMetadata.fps < 1);
   assert.match(P.PROMPT({ title: "t" }, "video"), /YouTube 影片/);
+});
+
+test("每日市場決策中心：盤前預判狀態、情境推演、盤後客觀驗證與共同市場快照", () => {
+  const B = engine().B;
+  assert.ok(typeof B.sessionStatus === "function");
+  assert.ok(typeof B.briefScenarios === "function");
+  assert.ok(typeof B.validatePlan === "function");
+  assert.ok(typeof B.marketSnapshot === "function");
+
+  // 1. sessionStatus: 週末休市、盤前預判、盤中撮合、盤後結算、盤後定案
+  const sat = Date.parse("2026-10-24T02:00:00Z"); // 10:00 TW
+  assert.equal(B.sessionStatus(sat).session, "closed");
+  assert.equal(B.sessionStatus(sat).isWeekend, true);
+
+  const pre = Date.parse("2026-10-26T00:30:00Z"); // 08:30 TW
+  assert.equal(B.sessionStatus(pre).session, "pre");
+  assert.equal(B.sessionStatus(pre).label, "盤前預判");
+
+  const live = Date.parse("2026-10-26T02:30:00Z"); // 10:30 TW
+  assert.equal(B.sessionStatus(live).session, "live");
+  assert.equal(B.sessionStatus(live).label, "盤中撮合");
+
+  const post1 = Date.parse("2026-10-26T06:00:00Z"); // 14:00 TW
+  assert.equal(B.sessionStatus(post1).session, "post");
+  assert.equal(B.sessionStatus(post1).status, "settling");
+
+  const post2 = Date.parse("2026-10-26T07:30:00Z"); // 15:30 TW
+  assert.equal(B.sessionStatus(post2).session, "post");
+  assert.equal(B.sessionStatus(post2).status, "official");
+
+  // 2. briefScenarios: 關鍵壓力、分水嶺、支撐與三情境（多方、盤整、空方）
+  const G = {
+    us: { indices: [{ code: "^SOX", chgPct: 1.5 }], megas: [{ code: "TSM", chgPct: 2.1 }] },
+    fut: { night: { chg: 80 } }
+  };
+  const plan = B.briefScenarios(G, "2026-10-26", 23400);
+  assert.equal(plan.today, "2026-10-26");
+  assert.ok(plan.keyLevels.pivot > 23400, "夜盤漲，分水嶺上移");
+  assert.ok(plan.keyLevels.pressure > plan.keyLevels.pivot);
+  assert.ok(plan.keyLevels.support < plan.keyLevels.pivot);
+  assert.ok(plan.scenarios.bull.trigger.includes(plan.keyLevels.pivot.toLocaleString()));
+  assert.ok(plan.scenarios.bear.target.length > 0);
+
+  // 3. validatePlan: 實際收盤與早報情境對照
+  const valBull = B.validatePlan(plan, { price: plan.keyLevels.pivot + 50, high: plan.keyLevels.pressure + 20, low: plan.keyLevels.pivot - 10, chgPct: 0.8 });
+  assert.equal(valBull.metKey, "bull");
+  assert.equal(valBull.pressureHit, true);
+  assert.match(valBull.outcomeLabel, /多方推進/);
+
+  const valBear = B.validatePlan(plan, { price: plan.keyLevels.support - 30, high: plan.keyLevels.pivot - 10, low: plan.keyLevels.support - 50, chgPct: -1.2 });
+  assert.equal(valBear.metKey, "bear");
+  assert.equal(valBear.supportHit, true);
+  assert.match(valBear.outcomeLabel, /空方防守/);
+
+  // 4. marketSnapshot: 共同市場快照契約
+  const snap = B.marketSnapshot({
+    date: "2026-10-26",
+    G,
+    market: { taiex: { price: 23550, high: 23620, low: 23450, chgPct: 0.64 } },
+    flows: { mood: { score: 65, label: "偏樂觀" } }
+  });
+  assert.equal(snap.meta.tradeDate, "2026-10-26");
+  assert.ok(snap.plan.keyLevels);
+  assert.ok(snap.validation);
+  assert.equal(snap.flows.mood.score, 65);
 });
