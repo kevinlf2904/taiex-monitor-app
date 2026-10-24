@@ -610,6 +610,7 @@ function validatePlan(plan, actual) {
   const hi = actual?.high;
   const lo = actual?.low;
   const chg = actual?.chgPct;
+  const vol = actual?.volume ?? actual?.vol;
 
   if (px == null || hi == null || lo == null || !isFinite(px) || !isFinite(hi) || !isFinite(lo)) {
     return {
@@ -658,6 +659,7 @@ function validatePlan(plan, actual) {
     actualClose: px,
     actualHigh: hi,
     actualLow: lo,
+    actualVolume: vol != null && isFinite(vol) ? vol : null,
     pressureHit,
     supportHit,
     closeAbovePivot: px >= pivot,
@@ -957,6 +959,7 @@ function todayText() {
     high: tq.high,
     low: tq.low,
     chgPct: tq.chgPct,
+    volume: tq.vol,
     date: tq.date
   }) : null;
   let txt = `📋 KLineLab 今日重點（${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]})\n`;
@@ -1031,6 +1034,7 @@ function todayPage() {
     high: tq.high,
     low: tq.low,
     chgPct: tq.chgPct,
+    volume: tq.vol,
     date: tq.date
   }) : null;
   const M = typeof mfModel === "function" ? mfModel() : null;
