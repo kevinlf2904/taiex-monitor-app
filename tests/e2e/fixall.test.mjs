@@ -90,6 +90,9 @@ for (const width of [390, 1280]) test(`今日重點（早報＋每日摘要）�
   assert.match(t, /盤前・昨晚美股與今天的行事曆/); assert.match(t, /(盤中|盤後)・大盤、自選與訊號[\s\S]*自選漲幅前 5[\s\S]*技術訊號/);
   for (const k of ["tdre", "tdai", "tdtxt"]) assert.equal(await p.$$eval(`#lx [data-tx="${k}"]`, L => L.length), 1, `${k} 只有一個`);
   assert.match(await p.evaluate(() => todayText()), /今日重點[\s\S]*【盤勢與自選】[\s\S]*不是買賣建議/, "複製的文字包含早報和盤勢兩部分");
+  // 法人資金資料抓不到（測試的 /api/daily 沒資料）：只抓一次就說明，不會畫完又回去抓、整頁一直重畫
+  const n0 = await p.evaluate(() => { window.__rl = 0; const o = renderList; window.renderList = function () { window.__rl++; return o.apply(this, arguments); }; return 0; });
+  await p.waitForTimeout(1500); assert.ok(await p.evaluate(() => window.__rl) < 5 + n0, "今日重點沒有一直重畫");
   await p.click('#lx [data-tx="tdai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
   // 舊的分頁記錄（工具 → 早報、每日摘要、今日重點）都帶到情報局的今日重點
   for (const old of ["brief", "sum", "today"]) { await p.evaluate(o => { setLt("watch"); W.tv = o; setLt("tools"); }, old); await p.waitForTimeout(200); assert.equal(await p.evaluate(() => W.lt), "today", old); }

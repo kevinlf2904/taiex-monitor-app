@@ -289,7 +289,9 @@ function renderTools() {
 // 盤後總結＋分享（原本在資金雷達「今日」）：用法人資金資料填固定句型，可分享成圖片或文字
 function sumFlowHtml() {
   const M = typeof mfModel === "function" ? mfModel() : null;
-  if (!M) { if (!W.off && !W.mf?.loading && !W.mf?.days?.length) setTimeout(() => loadMoney(10), 0); return `<h4>盤後總結</h4><p class="note">${W.off ? "需要部署到網站才有資金資料。" : "載入法人資金資料…"}</p>`; }
+  // 只自動抓一次：抓完還是沒資料（證交所連不到）就說明，不然 loadMoney 畫完又回來抓，整頁一直重畫、按鈕按不到
+  const F = W.mf, wait = F?.loading || (F && !F.sumTry);
+  if (!M) { if (!W.off && F && !F.loading && !F.sumTry) { F.sumTry = true; setTimeout(() => loadMoney(10), 0); } return `<h4>盤後總結</h4><p class="note">${W.off ? "需要部署到網站才有資金資料。" : wait ? "載入法人資金資料…" : "法人資金資料暫時拿不到，稍後按「↻ 重新整理」再試。"}</p>`; }
   return `<h4>盤後總結 <span class="note">${M.dates[M.T - 1].slice(5).replace("-", "/")}</span></h4><p class="msum">${esc(flowSummary(M, flowMood(M), W.quotes.get("T00")?.chgPct))}</p>
       <button class="btn mshare" data-mshare="share">分享今日盤面</button><div class="mshares"><button data-mshare="line">LINE</button><button data-mshare="threads">Threads</button><button data-mshare="copy">複製圖</button></div>`;
 }
