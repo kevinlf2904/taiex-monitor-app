@@ -781,7 +781,22 @@ function verifyVolumeStatus(actual, plan) {
     };
   }
 
-  if (baseDate > actualDate) {
+  const tActual = new Date(actualDate).getTime();
+  const tBase = new Date(baseDate).getTime();
+
+  if (Number.isNaN(tActual) || Number.isNaN(tBase)) {
+    return {
+      actualVolume: rawVol,
+      volumeStatus: "unverified",
+      volumeConfirmed: false,
+      volumeRatio: null,
+      volumeLabel: "量能未驗證（日期格式無效）",
+      volumeReason: `行情日期（${actualDate}）或基準日期（${baseDate}）無法解析為有效日期`,
+      volumeBaseline: rawBase
+    };
+  }
+
+  if (baseDate > actualDate || tBase > tActual) {
     return {
       actualVolume: rawVol,
       volumeStatus: "unverified",
@@ -806,6 +821,11 @@ function verifyVolumeStatus(actual, plan) {
   }
 
   // 來源受信白名單與政策定義（禁止模糊 substring/includes 比對）
+  // 政策理由與依據：
+  // 1. 5ma (7天)：5 個交易日為 1 週；考慮週末 2 天，允許上限 7 個日曆天，超過整週無更新即失去 5 日即時性。
+  // 2. 20ma (14天)：20 個交易日約為 1 個交易月；考慮連假與雙週跨期，允許上限 14 個日曆天，超過半個月未更新即失真。
+  // 3. official (7天)：證交所/櫃買官方週報與統計發布週期為 7 個日曆天。
+  // 4. snapshot/prev_day (4天)：盤前快照基準；涵蓋台股常態週末（3天）與 3~4 天連假，開盤當日仍可安全對齊，超過 4 天即廢棄。
   const VOLUME_BASELINE_WHITELIST = {
     "twse_5ma": { type: "5ma", maxDays: 7, label: "5日均量基準", allowedPeriods: ["full_day"] },
     "5ma": { type: "5ma", maxDays: 7, label: "5日均量基準", allowedPeriods: ["full_day"] },
@@ -849,7 +869,7 @@ function verifyVolumeStatus(actual, plan) {
     };
   }
 
-  const diffMs = new Date(actualDate).getTime() - new Date(baseDate).getTime();
+  const diffMs = tActual - tBase;
   const diffDays = Math.round(diffMs / 86400e3);
 
   if (diffDays > policy.maxDays) {

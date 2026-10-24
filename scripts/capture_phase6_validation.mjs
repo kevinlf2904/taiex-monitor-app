@@ -15,7 +15,25 @@ if (!fs.existsSync(OUT_DIR)) {
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-function decodeAndVerifyPng(filePath, expectedWidth, minHeight = 100) {
+// IEEE 802.3 CRC32 快速對照表
+const CRC32_TABLE = new Uint32Array(256);
+for (let i = 0; i < 256; i++) {
+  let c = i;
+  for (let k = 0; k < 8; k++) {
+    c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+  }
+  CRC32_TABLE[i] = c;
+}
+
+function crc32(buffer) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buffer.length; i++) {
+    c = CRC32_TABLE[(c ^ buffer[i]) & 0xff] ^ (c >>> 8);
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function decodeAndVerifyPng(filePath, expectedWidth, expectedHeight) {
   if (!fs.existsSync(filePath)) throw new Error(`[PNG Error] File does not exist: ${filePath}`);
   const buf = fs.readFileSync(filePath);
   if (buf.length < 10000) throw new Error(`[PNG Error] File too small (${buf.length} bytes): ${filePath}`);
@@ -25,7 +43,7 @@ function decodeAndVerifyPng(filePath, expectedWidth, minHeight = 100) {
     throw new Error(`[PNG Error] Invalid PNG magic header in ${filePath}`);
   }
 
-  // 2. 驗證 IHDR 區塊並解析真實像素尺寸
+  // 2. 驗證 IHDR 區塊並解析真實像素尺寸與色彩格式
   const ihdrLen = buf.readUInt32BE(8);
   const ihdrType = buf.toString("ascii", 12, 16);
   if (ihdrType !== "IHDR" || ihdrLen !== 13) {
@@ -34,16 +52,18 @@ function decodeAndVerifyPng(filePath, expectedWidth, minHeight = 100) {
 
   const width = buf.readUInt32BE(16);
   const height = buf.readUInt32BE(20);
+  const bitDepth = buf[24];
+  const colorType = buf[25];
 
   if (expectedWidth && width !== expectedWidth) {
     throw new Error(`[PNG Error] Width mismatch in ${filePath}: expected ${expectedWidth}px, got ${width}px`);
   }
-  if (height < minHeight) {
-    throw new Error(`[PNG Error] Height too small in ${filePath}: got ${height}px, expected >= ${minHeight}px`);
+  if (expectedHeight && height !== expectedHeight) {
+    throw new Error(`[PNG Error] Height mismatch in ${filePath}: expected ${expectedHeight}px, got ${height}px`);
   }
 
-  // 3. 收集 IDAT 壓縮圖塊並驗證 IEND 結束標記
-  let offset = 8 + 12 + ihdrLen;
+  // 3. 遍歷所有 Chunk：驗證邊界、每個 Chunk 的 CRC32、收集 IDAT 並確認 IEND 結束
+  let offset = 8;
   const idatBuffers = [];
   let hasIend = false;
 
@@ -55,29 +75,48 @@ function decodeAndVerifyPng(filePath, expectedWidth, minHeight = 100) {
     const dataEnd = dataStart + chunkLen;
     if (dataEnd + 4 > buf.length) throw new Error(`[PNG Error] Chunk ${chunkType} truncated in ${filePath}`);
 
+    // CRC 驗證：PNG CRC32 計算範圍為 Chunk Type + Chunk Data
+    const chunkPayload = buf.subarray(offset + 4, dataEnd);
+    const expectedCrc = buf.readUInt32BE(dataEnd);
+    const actualCrc = crc32(chunkPayload);
+    if (expectedCrc !== actualCrc) {
+      throw new Error(`[PNG Error] CRC32 mismatch in chunk ${chunkType} of ${filePath}: expected 0x${expectedCrc.toString(16)}, got 0x${actualCrc.toString(16)}`);
+    }
+
     if (chunkType === "IDAT") {
       idatBuffers.push(buf.subarray(dataStart, dataEnd));
     } else if (chunkType === "IEND") {
       hasIend = true;
+      offset = dataEnd + 4;
       break;
     }
     offset = dataEnd + 4; // skip CRC
   }
 
   if (!hasIend) throw new Error(`[PNG Error] Missing IEND chunk in ${filePath}`);
+  if (offset !== buf.length) throw new Error(`[PNG Error] Trailing garbage after IEND chunk in ${filePath} (offset ${offset} vs file size ${buf.length})`);
   if (idatBuffers.length === 0) throw new Error(`[PNG Error] Missing IDAT chunk in ${filePath}`);
 
-  // 4. 使用 zlib 解碼 IDAT 串流，確認圖檔完整可解碼，無壞損
+  // 4. 使用 zlib 解碼 IDAT 串流，確認圖檔完整可解碼，並斷言解壓縮後的像素 raw scanline 長度完全相符
   const combinedIdat = Buffer.concat(idatBuffers);
   const decompressed = zlib.inflateSync(combinedIdat);
   if (!decompressed || decompressed.length === 0) {
     throw new Error(`[PNG Error] Failed to decode/inflate IDAT compressed payload in ${filePath}`);
   }
 
-  return { width, height, size: buf.length, decompressedBytes: decompressed.length };
+  // PNG scanline: 每一列包含 1 個 filter byte，加上 width * bytesPerPixel
+  const channels = colorType === 6 ? 4 : colorType === 2 ? 3 : colorType === 4 ? 2 : 1;
+  const bytesPerPixel = channels * (bitDepth / 8);
+  const expectedDecompressedBytes = height * (1 + width * bytesPerPixel);
+
+  if (decompressed.length !== expectedDecompressedBytes) {
+    throw new Error(`[PNG Error] Decompressed scanline length mismatch in ${filePath}: expected ${expectedDecompressedBytes} bytes, got ${decompressed.length} bytes`);
+  }
+
+  return { width, height, size: buf.length, decompressedBytes: decompressed.length, bitDepth, colorType };
 }
 
-async function verifyBrowserDecoding(p, filePath, expectedWidth) {
+async function verifyBrowserDecoding(p, filePath, expectedWidth, expectedHeight) {
   const buf = fs.readFileSync(filePath);
   const base64 = buf.toString("base64");
   const dataUrl = `data:image/png;base64,${base64}`;
@@ -90,8 +129,8 @@ async function verifyBrowserDecoding(p, filePath, expectedWidth) {
     });
   }, dataUrl);
 
-  if (!decoded.complete || decoded.naturalWidth !== expectedWidth || decoded.naturalHeight <= 0) {
-    throw new Error(`[Browser Decode Failure] Image ${filePath} failed browser decoding: ${JSON.stringify(decoded)}`);
+  if (!decoded.complete || decoded.naturalWidth !== expectedWidth || decoded.naturalHeight !== expectedHeight) {
+    throw new Error(`[Browser Decode Failure] Image ${filePath} failed browser decoding: expected ${expectedWidth}x${expectedHeight}, got ${JSON.stringify(decoded)}`);
   }
   return decoded;
 }
@@ -188,8 +227,8 @@ async function capture() {
       // 01-index-390-hero-collapsed: 首頁簡介收合狀態
       const file1 = path.join(OUT_DIR, "01-index-390-hero-collapsed.png");
       await p.screenshot({ path: file1 });
-      const info1 = decodeAndVerifyPng(file1, 390);
-      await verifyBrowserDecoding(p, file1, 390);
+      const info1 = decodeAndVerifyPng(file1, 390, 844);
+      await verifyBrowserDecoding(p, file1, 390, 844);
       console.log(`Saved, Decoded & Verified: 01-index-390-hero-collapsed.png (${info1.width}x${info1.height}, ${info1.size} bytes)`);
 
       // 點擊展開 Hero 抽屜
@@ -217,8 +256,8 @@ async function capture() {
       // 02-index-390-hero-expanded: 首頁簡介展開狀態
       const file2 = path.join(OUT_DIR, "02-index-390-hero-expanded.png");
       await p.screenshot({ path: file2 });
-      const info2 = decodeAndVerifyPng(file2, 390);
-      await verifyBrowserDecoding(p, file2, 390);
+      const info2 = decodeAndVerifyPng(file2, 390, 844);
+      await verifyBrowserDecoding(p, file2, 390, 844);
       console.log(`Saved, Decoded & Verified: 02-index-390-hero-expanded.png (${info2.width}x${info2.height}, ${info2.size} bytes)`);
 
       await ctx.close();
@@ -255,8 +294,8 @@ async function capture() {
       await p.waitForTimeout(400);
       const file3 = path.join(OUT_DIR, "03-hub-390-top.png");
       await p.screenshot({ path: file3 });
-      const info3 = decodeAndVerifyPng(file3, 390);
-      await verifyBrowserDecoding(p, file3, 390);
+      const info3 = decodeAndVerifyPng(file3, 390, 844);
+      await verifyBrowserDecoding(p, file3, 390, 844);
       console.log(`Saved, Decoded & Verified: 03-hub-390-top.png (${info3.width}x${info3.height}, ${info3.size} bytes)`);
 
       // 04-hub-390-mid: 中段（實盤驗證時間軸、收盤價、壓力／支撐觸及、成交量比較基準判定徽章）
@@ -268,8 +307,8 @@ async function capture() {
       await p.waitForTimeout(400);
       const file4 = path.join(OUT_DIR, "04-hub-390-mid.png");
       await p.screenshot({ path: file4 });
-      const info4 = decodeAndVerifyPng(file4, 390);
-      await verifyBrowserDecoding(p, file4, 390);
+      const info4 = decodeAndVerifyPng(file4, 390, 844);
+      await verifyBrowserDecoding(p, file4, 390, 844);
       console.log(`Saved, Decoded & Verified: 04-hub-390-mid.png (${info4.width}x${info4.height}, ${info4.size} bytes)`);
 
       // 05-hub-390-bot: 下段（多因子雷達、客觀應對行動、頁尾資料來源宣告）
@@ -281,8 +320,8 @@ async function capture() {
       await p.waitForTimeout(400);
       const file5 = path.join(OUT_DIR, "05-hub-390-bot.png");
       await p.screenshot({ path: file5 });
-      const info5 = decodeAndVerifyPng(file5, 390);
-      await verifyBrowserDecoding(p, file5, 390);
+      const info5 = decodeAndVerifyPng(file5, 390, 844);
+      await verifyBrowserDecoding(p, file5, 390, 844);
       console.log(`Saved, Decoded & Verified: 05-hub-390-bot.png (${info5.width}x${info5.height}, ${info5.size} bytes)`);
 
       await ctx.close();
@@ -307,8 +346,8 @@ async function capture() {
 
       const file6 = path.join(OUT_DIR, "06-hub-768-tablet.png");
       await p.screenshot({ path: file6 });
-      const info6 = decodeAndVerifyPng(file6, 768);
-      await verifyBrowserDecoding(p, file6, 768);
+      const info6 = decodeAndVerifyPng(file6, 768, 1024);
+      await verifyBrowserDecoding(p, file6, 768, 1024);
       console.log(`Saved, Decoded & Verified: 06-hub-768-tablet.png (${info6.width}x${info6.height}, ${info6.size} bytes)`);
 
       await ctx.close();
@@ -333,8 +372,8 @@ async function capture() {
 
       const file7 = path.join(OUT_DIR, "07-hub-1280-desktop.png");
       await p.screenshot({ path: file7 });
-      const info7 = decodeAndVerifyPng(file7, 1280);
-      await verifyBrowserDecoding(p, file7, 1280);
+      const info7 = decodeAndVerifyPng(file7, 1280, 800);
+      await verifyBrowserDecoding(p, file7, 1280, 800);
       console.log(`Saved, Decoded & Verified: 07-hub-1280-desktop.png (${info7.width}x${info7.height}, ${info7.size} bytes)`);
 
       // 5. Desktop (1280 x 800) - 缺失行情安全降級情境
@@ -368,8 +407,8 @@ async function capture() {
 
       const file8 = path.join(OUT_DIR, "08-hub-1280-missing-data.png");
       await p.screenshot({ path: file8 });
-      const info8 = decodeAndVerifyPng(file8, 1280);
-      await verifyBrowserDecoding(p, file8, 1280);
+      const info8 = decodeAndVerifyPng(file8, 1280, 800);
+      await verifyBrowserDecoding(p, file8, 1280, 800);
       console.log(`Saved, Decoded & Verified: 08-hub-1280-missing-data.png (${info8.width}x${info8.height}, ${info8.size} bytes)`);
 
       await ctx.close();
@@ -385,34 +424,35 @@ async function capture() {
       throw new Error(`[Assertion Failure] Detected ${pageErrors.length} browser errors during execution.`);
     }
 
-    // 驗證所有 8 張截圖解碼與視口相符
+    // 驗證所有 8 張截圖解碼與視口精確尺寸相符
     const expectedScreenshots = [
-      { name: "01-index-390-hero-collapsed.png", width: 390 },
-      { name: "02-index-390-hero-expanded.png", width: 390 },
-      { name: "03-hub-390-top.png", width: 390 },
-      { name: "04-hub-390-mid.png", width: 390 },
-      { name: "05-hub-390-bot.png", width: 390 },
-      { name: "06-hub-768-tablet.png", width: 768 },
-      { name: "07-hub-1280-desktop.png", width: 1280 },
-      { name: "08-hub-1280-missing-data.png", width: 1280 }
+      { name: "01-index-390-hero-collapsed.png", width: 390, height: 844 },
+      { name: "02-index-390-hero-expanded.png", width: 390, height: 844 },
+      { name: "03-hub-390-top.png", width: 390, height: 844 },
+      { name: "04-hub-390-mid.png", width: 390, height: 844 },
+      { name: "05-hub-390-bot.png", width: 390, height: 844 },
+      { name: "06-hub-768-tablet.png", width: 768, height: 1024 },
+      { name: "07-hub-1280-desktop.png", width: 1280, height: 800 },
+      { name: "08-hub-1280-missing-data.png", width: 1280, height: 800 }
     ];
 
-    console.log("\n=== 圖片解碼與尺寸規格驗證 ===");
+    console.log("\n=== 圖片解碼、CRC32 與精確尺寸規格驗證 ===");
     const decodeReport = [];
     for (const item of expectedScreenshots) {
       const fullPath = path.join(OUT_DIR, item.name);
-      const res = decodeAndVerifyPng(fullPath, item.width);
+      const res = decodeAndVerifyPng(fullPath, item.width, item.height);
       decodeReport.push({
         file: item.name,
-        expectedWidth: item.width,
-        actualWidth: res.width,
-        actualHeight: res.height,
+        expectedDimensions: `${item.width}x${item.height}`,
+        actualDimensions: `${res.width}x${res.height}`,
         fileSize: `${Math.round(res.size / 1024)} KB`,
+        crcPass: "YES",
+        decompressedLengthMatch: `YES (${res.decompressedBytes} B)`,
         decodable: "YES (zlib inflate PASS)"
       });
     }
     console.table(decodeReport);
-    console.log("All 8 screenshots successfully verified (exist, valid PNG header, size >= 10KB, full zlib decompression PASS, exact viewport width matched).");
+    console.log("All 8 screenshots successfully verified (exist, valid PNG header, size >= 10KB, full zlib decompression PASS, exact viewport width & height matched, CRC verified).");
 
     // 可選複製到對話 Artifact 目錄（若環境變數有指定且目錄存在）
     if (OPTIONAL_ARTIFACT_DIR && fs.existsSync(OPTIONAL_ARTIFACT_DIR)) {

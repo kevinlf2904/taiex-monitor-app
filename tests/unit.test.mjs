@@ -1619,4 +1619,137 @@ test('Phase 6.1 獨立驗收缺口修正：合約代碼完整驗證、均量有�
   assert.equal(vSnapshotIntraday.volumeStatus, "confirmed");
   assert.equal(vSnapshotIntraday.volumeConfirmed, true);
   assert.equal(vSnapshotIntraday.volumeRatio, 1.2);
+
+  // 2n. 過期精確邊界測試 (Boundary Tests)
+  // 5ma: 正好 7 天有效 (2026-10-20 至 2026-10-27)
+  const v5maBoundaryValid = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-20", source: "twse_5ma" }
+  });
+  assert.equal(v5maBoundaryValid.volumeStatus, "confirmed");
+
+  // 5ma: 超過 7 天 (8 天即過期, 2026-10-19 至 2026-10-27)
+  const v5maBoundaryExpired = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-19", source: "twse_5ma" }
+  });
+  assert.equal(v5maBoundaryExpired.volumeStatus, "unverified");
+  assert.match(v5maBoundaryExpired.volumeLabel, /均量基準已過期/);
+
+  // snapshot: 正好 4 天有效 (涵蓋週末或連假跨期, 2026-10-23 至 2026-10-27)
+  const vSnapBoundaryValid = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-23", source: "snapshot" }
+  });
+  assert.equal(vSnapBoundaryValid.volumeStatus, "confirmed");
+
+  // snapshot: 超過 4 天 (5 天即過期, 2026-10-22 至 2026-10-27)
+  const vSnapBoundaryExpired = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-22", source: "snapshot" }
+  });
+  assert.equal(vSnapBoundaryExpired.volumeStatus, "unverified");
+  assert.match(vSnapBoundaryExpired.volumeLabel, /均量基準已過期/);
+
+  // official: 正好 7 天有效 (2026-10-20 至 2026-10-27)
+  const vOfficialBoundaryValid = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-20", source: "twse_official" }
+  });
+  assert.equal(vOfficialBoundaryValid.volumeStatus, "confirmed");
+
+  // official: 超過 7 天 (8 天即過期)
+  const vOfficialBoundaryExpired = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-19", source: "twse_official" }
+  });
+  assert.equal(vOfficialBoundaryExpired.volumeStatus, "unverified");
+
+  // 20ma: 正好 14 天有效 (2026-10-13 至 2026-10-27)
+  const v20maBoundaryValid = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-13", source: "twse_20ma" }
+  });
+  assert.equal(v20maBoundaryValid.volumeStatus, "confirmed");
+
+  // 20ma: 超過 14 天 (15 天即過期, 2026-10-12 至 2026-10-27)
+  const v20maBoundaryExpired = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-12", source: "twse_20ma" }
+  });
+  assert.equal(v20maBoundaryExpired.volumeStatus, "unverified");
+
+  // 2o. 無效日期測試 (Invalid Date)
+  // 行情日期為非法日期 (2026-99-99)
+  const vInvalidActualDate = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-99-99"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vInvalidActualDate.volumeStatus, "unverified");
+  assert.match(vInvalidActualDate.volumeLabel, /日期格式無效/);
+
+  // 基準日期為無效字串 (invalid-date)
+  const vInvalidBaseDate = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "invalid-date", source: "twse_5ma" }
+  });
+  assert.equal(vInvalidBaseDate.volumeStatus, "unverified");
+  assert.match(vInvalidBaseDate.volumeLabel, /缺少均量基準有效日期/);
+
+  // 2p. 缺少單位測試 (Missing Units)
+  // 實際行情缺少單位
+  const vMissingActualUnit = B.verifyVolumeStatus({
+    volume: 3600, volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vMissingActualUnit.volumeStatus, "unverified");
+  assert.match(vMissingActualUnit.volumeLabel, /缺少單位中繼資料/);
+
+  // 基準量缺少單位
+  const vMissingBaseUnit = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vMissingBaseUnit.volumeStatus, "unverified");
+  assert.match(vMissingBaseUnit.volumeLabel, /缺少單位中繼資料/);
+
+  // 單位不一致 (shares vs billion)
+  const vUnitMismatch2 = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "shares", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "twse_5ma" }
+  });
+  assert.equal(vUnitMismatch2.volumeStatus, "unverified");
+  assert.match(vUnitMismatch2.volumeLabel, /實際量與均量單位不一致/);
+
+  // 2q. 期間不相容測試 (Period Incompatibility)
+  // actual full_day vs base intraday
+  const vFullVsIntraday = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "intraday", date: "2026-10-27", source: "snapshot" }
+  });
+  assert.equal(vFullVsIntraday.volumeStatus, "unverified");
+  assert.match(vFullVsIntraday.volumeLabel, /比較期間不相容/);
+
+  // 2r. 不可信來源防護 (Untrusted Source)
+  const vUntrustedOther = B.verifyVolumeStatus({
+    volume: 3600, volumeUnit: "billion", volumePeriod: "full_day", date: "2026-10-27"
+  }, {
+    volumeBaseline: { volume: 3000, unit: "billion", period: "full_day", date: "2026-10-26", source: "5ma_unofficial" }
+  });
+  assert.equal(vUntrustedOther.volumeStatus, "unverified");
+  assert.match(vUntrustedOther.volumeLabel, /均量基準來源不明/);
 });
