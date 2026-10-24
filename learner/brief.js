@@ -141,52 +141,121 @@ function briefBody() {
 const tdAfter = (now = Date.now()) => new Date(now + 8 * 3600e3).toISOString().slice(11, 16) >= "13:30";
 
 /* ---------- 每日市場決策中心：盤前預判、情境推演、盤後驗證與共同契約 ---------- */
-function sessionStatus(ms = Date.now()) {
-  const d = new Date(ms + 8 * 3600e3);
-  const hm = d.toISOString().slice(11, 16);
-  const day = d.getUTCDay();
-  const isWeekend = day === 0 || day === 6;
-  let session = "post", status = "official", label = "盤後定案";
-  if (isWeekend) {
-    session = "closed";
-    status = "closed";
-    label = "假日休市";
-  } else if (hm < "09:00") {
-    session = "pre";
-    status = "preview";
-    label = "盤前預判";
-  } else if (hm <= "13:30") {
-    session = "live";
-    status = "intraday";
-    label = "盤中撮合";
-  } else if (hm < "15:00") {
-    session = "post";
-    status = "settling";
-    label = "盤後結算";
-  }
-  return { session, status, label, hm, isWeekend };
+const SNAPSHOT_STORAGE_NOTE = "快照儲存於瀏覽器 localStorage（鍵值 watch:brief:snap:YYYY-MM-DD）。受限於本機儲存機制，清除瀏覽器快取、更換裝置或無痕模式將無法保留歷史快照；非跨裝置雲端資料庫。";
+
+function isValidSnapshot(snap, expectedDate = null) {
+  if (!snap || typeof snap !== "object") return false;
+  if (!snap.tradeDate || typeof snap.tradeDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(snap.tradeDate)) return false;
+  if (expectedDate && snap.tradeDate !== expectedDate) return false;
+  if (!snap.createdAt || typeof snap.createdAt !== "string") return false;
+  const kl = snap.keyLevels;
+  if (!kl || typeof kl !== "object") return false;
+  if (typeof kl.pressure !== "number" || !isFinite(kl.pressure) || kl.pressure <= 0) return false;
+  if (typeof kl.pivot !== "number" || !isFinite(kl.pivot) || kl.pivot <= 0) return false;
+  if (typeof kl.support !== "number" || !isFinite(kl.support) || kl.support <= 0) return false;
+  if (kl.pressure <= kl.pivot || kl.pivot <= kl.support) return false;
+  const sc = snap.scenarios;
+  if (!sc || typeof sc !== "object") return false;
+  if (!sc.bull?.title || !sc.bull?.trigger) return false;
+  if (!sc.neutral?.title || !sc.neutral?.trigger) return false;
+  if (!sc.bear?.title || !sc.bear?.trigger) return false;
+  return true;
 }
 
-function getBriefSnapshot(today = twDay()) {
+function getBriefSnapshot(today = twDay(), storeObj = null) {
   try {
-    if (typeof store !== "undefined" && store?.get) {
-      return store.get("watch:brief:snap:" + today, null);
+    const s = storeObj || (typeof store !== "undefined" ? store : null);
+    if (s?.get) {
+      const snap = s.get("watch:brief:snap:" + today, null);
+      if (snap && isValidSnapshot(snap, today)) {
+        return snap;
+      }
     }
   } catch {}
   return null;
 }
 
-function saveBriefSnapshot(today, plan) {
-  if (!today || !plan) return;
+function saveBriefSnapshot(today, plan, storeObj = null) {
+  if (!today || !isValidSnapshot(plan, today)) return false;
   try {
-    if (typeof store !== "undefined" && store?.get && store?.set) {
-      const existing = store.get("watch:brief:snap:" + today, null);
-      if (!existing) store.set("watch:brief:snap:" + today, plan);
+    const s = storeObj || (typeof store !== "undefined" ? store : null);
+    if (s?.get && s?.set) {
+      const existing = s.get("watch:brief:snap:" + today, null);
+      if (existing && isValidSnapshot(existing, today)) {
+        return false; // 不得覆寫已保存的有效原始快照
+      }
+      s.set("watch:brief:snap:" + today, plan);
+      return true;
     }
   } catch {}
+  return false;
 }
 
-function briefScenarios(G, today = twDay(), basePrice = 23400) {
+function sessionStatus(ms = Date.now(), opts = {}) {
+  const d = new Date(ms + 8 * 3600e3);
+  const tradeDate = d.toISOString().slice(0, 10);
+  const hm = d.toISOString().slice(11, 16);
+  const day = d.getUTCDay();
+  const isWeekend = day === 0 || day === 6;
+
+  const holList = opts.holidays || opts.cal?.hol || (typeof W !== "undefined" ? W.cal?.hol : null) || [];
+  const hol = holList.find(x => x && x.date === tradeDate);
+
+  if (opts.calendarStatus === "unknown" || opts.isUnknown) {
+    return {
+      session: "unknown",
+      status: "pending",
+      label: "交易狀態待確認",
+      hm,
+      tradeDate,
+      isWeekend,
+      isClosed: null,
+      warning: "無法取得即時官方交易日曆，採安全降級處理"
+    };
+  }
+
+  if (isWeekend) {
+    return {
+      session: "closed",
+      status: "closed",
+      label: "週末休市",
+      hm,
+      tradeDate,
+      isWeekend: true,
+      isClosed: true,
+      reason: "週末例行休市",
+      displayNote: opts.lastTradeDate ? `今日休市（週末例行休市）・顯示最近交易日 ${opts.lastTradeDate.slice(5).replace("-", "/")} 收盤` : "今日休市（週末例行休市）"
+    };
+  }
+
+  if (hol) {
+    const holName = hol.name || "官方公告休市";
+    return {
+      session: "closed",
+      status: "closed",
+      label: "今日休市",
+      hm,
+      tradeDate,
+      isWeekend: false,
+      isClosed: true,
+      reason: holName,
+      holidayName: holName,
+      displayNote: opts.lastTradeDate ? `今日休市（${holName}）・顯示最近交易日 ${opts.lastTradeDate.slice(5).replace("-", "/")} 收盤` : `今日休市（${holName}）`
+    };
+  }
+
+  if (hm < "09:00") {
+    return { session: "pre", status: "preview", label: "盤前預判", hm, tradeDate, isWeekend: false, isClosed: false };
+  } else if (hm <= "13:30") {
+    return { session: "live", status: "intraday", label: "盤中撮合", hm, tradeDate, isWeekend: false, isClosed: false };
+  } else if (hm < "15:00") {
+    return { session: "post", status: "settling", label: "盤後結算", hm, tradeDate, isWeekend: false, isClosed: false };
+  } else {
+    return { session: "post", status: "official", label: "盤後定案", hm, tradeDate, isWeekend: false, isClosed: false };
+  }
+}
+
+function briefScenarios(G, today = twDay(), basePrice = 23400, meta = {}) {
   const us = G?.us?.indices || [];
   const sox = us.find(x => x.code === "^SOX")?.chgPct ?? 0;
   const ixic = us.find(x => x.code === "^IXIC")?.chgPct ?? 0;
@@ -200,8 +269,10 @@ function briefScenarios(G, today = twDay(), basePrice = 23400) {
   const support = pivot - delta;
 
   return {
-    today,
-    createdAt: new Date().toISOString(),
+    tradeDate: today,
+    createdAt: meta.createdAt || new Date().toISOString(),
+    source: meta.source || "Yahoo Finance、期交所夜盤",
+    sourceAsOf: meta.sourceAsOf || new Date(Date.now() + 8 * 3600e3).toISOString().slice(11, 16),
     macroSignals: { sox, ixic, tsm, futChg },
     keyLevels: { pressure, pivot, support },
     scenarios: {
@@ -226,34 +297,80 @@ function briefScenarios(G, today = twDay(), basePrice = 23400) {
         invalidation: `迅速強勢拉回站穩 ${pivot.toLocaleString()} 點`,
         bias: "看空"
       }
-    }
+    },
+    storageNote: SNAPSHOT_STORAGE_NOTE
   };
 }
 
 function validatePlan(plan, actual) {
-  if (!plan?.keyLevels || !actual?.price) return null;
-  const { pressure, pivot, support } = plan.keyLevels;
-  const px = actual.price;
-  const hi = actual.high ?? px;
-  const lo = actual.low ?? px;
-  const chg = actual.chgPct ?? 0;
-
-  let metKey = "neutral";
-  if (px >= pivot) {
-    metKey = "bull";
-  } else if (px < support) {
-    metKey = "bear";
-  } else {
-    metKey = "neutral";
+  if (!plan || !plan.keyLevels) {
+    return {
+      status: "missing_pre_market_plan",
+      outcomeLabel: "缺少盤前預測，無法進行歷史驗證",
+      analysisText: "缺少當日盤前預測快照，無法進行客觀歷史驗證（不可臨時生成預測冒充原始預測）。",
+      pressureHit: null,
+      supportHit: null,
+      metKey: null
+    };
   }
 
+  const px = actual?.close ?? actual?.price;
+  const hi = actual?.high;
+  const lo = actual?.low;
+  const chg = actual?.chgPct ?? 0;
+
+  if (px == null || hi == null || lo == null || !isFinite(px) || !isFinite(hi) || !isFinite(lo)) {
+    return {
+      status: "insufficient_data",
+      outcomeLabel: "行情資料不足，無法判定",
+      analysisText: "實際行情缺少收盤價、最高價或最低價等必要欄位，降級為資料不足，不預設為守穩或未突破。",
+      pressureHit: null,
+      supportHit: null,
+      metKey: null
+    };
+  }
+
+  if (actual.date && plan.tradeDate && actual.date !== plan.tradeDate) {
+    return {
+      status: "date_mismatch",
+      outcomeLabel: "日期不一致，無法驗證",
+      analysisText: `行情日期（${actual.date}）與預測快照日期（${plan.tradeDate}）不一致，不同交易日不可混用。`,
+      pressureHit: null,
+      supportHit: null,
+      metKey: null
+    };
+  }
+
+  const { pressure, pivot, support } = plan.keyLevels;
   const pressureHit = hi >= pressure;
   const supportHit = lo <= support;
-  const metScenario = plan.scenarios?.[metKey];
-  const outcomeLabel = (metScenario?.title || "區間震盪") + "成立";
-  const analysisText = `實際收盤 ${px.toLocaleString()} 點（${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%）。${outcomeLabel}；盤中高點 ${hi.toLocaleString()} 點${pressureHit ? "觸及壓力位" : "未過壓力"}，盤中低點 ${lo.toLocaleString()} 點${supportHit ? "曾測支撐位" : "守穩支撐"}。`;
+
+  let metKey = "neutral";
+  let outcomeLabel = "區間震盪（部分符合）";
+  let observationText = "";
+
+  if (px >= pressure) {
+    metKey = "bull";
+    outcomeLabel = pressureHit ? "多方推進情境（部分符合：收盤突破壓力）" : "多方情境（收盤突破壓力）";
+    observationText = `收盤 ${px.toLocaleString()} 點站上關鍵壓力位 ${pressure.toLocaleString()} 點；盤中高點 ${hi.toLocaleString()} 點觸及壓力。`;
+  } else if (px >= pivot) {
+    metKey = "bull";
+    outcomeLabel = pressureHit ? "多方推進情境（部分符合：達分水嶺且觸及壓力）" : "多方觀察（收盤高於分水嶺，但未過壓力）";
+    observationText = `收盤 ${px.toLocaleString()} 點高於分水嶺 ${pivot.toLocaleString()} 點；高點 ${hi.toLocaleString()} 點${pressureHit ? "曾觸及壓力位" : "未達壓力位"}。單憑收盤高於分水嶺不足以判定多方條件全部成立，屬部分符合。`;
+  } else if (px < support) {
+    metKey = "bear";
+    outcomeLabel = supportHit ? "空方防守情境（部分符合：跌破分水嶺並破支撐）" : "空方觀察（收盤低於支撐位）";
+    observationText = `收盤 ${px.toLocaleString()} 點跌破關鍵支撐 ${support.toLocaleString()} 點；低點 ${lo.toLocaleString()} 點${supportHit ? "下探跌破支撐" : "曾測支撐"}。`;
+  } else {
+    metKey = "neutral";
+    outcomeLabel = "區間震盪情境（部分符合：分水嶺至支撐拉鋸）";
+    observationText = `收盤 ${px.toLocaleString()} 點介於支撐 ${support.toLocaleString()} 點與分水嶺 ${pivot.toLocaleString()} 點之間；低點 ${lo.toLocaleString()} 點${supportHit ? "曾回測支撐" : "守穩支撐"}，高點 ${hi.toLocaleString()} 點${pressureHit ? "曾測壓力" : "未達壓力"}。`;
+  }
+
+  const analysisText = `實際收盤 ${px.toLocaleString()} 點（${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%）。${outcomeLabel}；${observationText}`;
 
   return {
+    status: "verified",
     metKey,
     outcomeLabel,
     actualClose: px,
@@ -261,33 +378,92 @@ function validatePlan(plan, actual) {
     actualLow: lo,
     pressureHit,
     supportHit,
+    closeAbovePivot: px >= pivot,
     analysisText,
     planCreatedAt: plan.createdAt
   };
 }
 
-function marketSnapshot({ date = twDay(), G = {}, market = {}, flows = {} } = {}) {
+function evaluateDataStatus({ market = {}, G = {}, session = "post", tradeDate = twDay() }) {
+  const taiex = market.taiex;
+  if (!taiex || (taiex.price == null && taiex.close == null)) {
+    return { dataStatus: "missing", dataStatusLabel: "資料缺失", reason: "缺少加權指數行情資料" };
+  }
+  if (taiex.date && taiex.date < tradeDate) {
+    return { dataStatus: "stale", dataStatusLabel: "過期資料", reason: `加權指數資料日期為 ${taiex.date}，非今日交易資料` };
+  }
+  if (taiex.high == null || taiex.low == null) {
+    return { dataStatus: "partial", dataStatusLabel: "部分資料", reason: "加權指數缺少高低點等完整盤中欄位" };
+  }
+  if (session === "closed") {
+    return { dataStatus: "stale", dataStatusLabel: "休市資料", reason: "休市期間顯示最近交易日收盤行情" };
+  }
+  if (session === "pre") {
+    return { dataStatus: "preview", dataStatusLabel: "盤前預判", reason: "開盤前預估資料" };
+  }
+  if (session === "live") {
+    return taiex.delayed
+      ? { dataStatus: "delayed", dataStatusLabel: "延遲資料", reason: "行情有延遲" }
+      : { dataStatus: "live", dataStatusLabel: "即時資料", reason: "盤中撮合即時資料" };
+  }
+  const hasInst = Boolean(market.inst || G?.inst || (market.flows && market.flows.dates));
+  if (!hasInst) {
+    return { dataStatus: "partial", dataStatusLabel: "部分正式", reason: "指數已收盤，法人籌碼資料結算中" };
+  }
+  return { dataStatus: "official", dataStatusLabel: "官方收盤", reason: "加權指數與三大法人籌碼已正式定案" };
+}
+
+function marketSnapshot({ date = twDay(), G = {}, market = {}, flows = {}, snapshot = null, storeObj = null, holidays = [], calendarStatus = null } = {}) {
+  const sess = sessionStatus(Date.now(), { holidays, calendarStatus, lastTradeDate: market.taiex?.date });
+  const dataEval = evaluateDataStatus({ market, G, session: sess.session, tradeDate: date });
+
   const meta = {
-    ...sessionStatus(),
+    ...sess,
     tradeDate: date,
     asOf: new Date(Date.now() + 8 * 3600e3).toISOString().slice(11, 16),
     sourceNote: "證交所／櫃買中心／期交所／Yahoo Finance",
-    dataStatus: G?.fut?.ok ? "intraday" : "official"
+    dataStatus: dataEval.dataStatus,
+    dataStatusLabel: dataEval.dataStatusLabel,
+    dataStatusReason: dataEval.reason,
+    storageNote: SNAPSHOT_STORAGE_NOTE
   };
-  const plan = briefScenarios(G, date, market.taiex?.price || 23400);
-  const validation = market.taiex?.price ? validatePlan(plan, {
-    price: market.taiex.price,
-    high: market.taiex.high,
-    low: market.taiex.low,
-    chgPct: market.taiex.chgPct ?? 0
-  }) : null;
+
+  let plan = null;
+  if (snapshot && isValidSnapshot(snapshot, date)) {
+    plan = snapshot;
+  } else {
+    plan = getBriefSnapshot(date, storeObj);
+  }
+
+  if (!plan && sess.session === "pre") {
+    plan = briefScenarios(G, date, market.taiex?.price || 23400, {
+      source: "盤前預判模型",
+      sourceAsOf: meta.asOf
+    });
+    if (storeObj || typeof store !== "undefined") {
+      saveBriefSnapshot(date, plan, storeObj);
+    }
+  }
+
+  let validation = null;
+  if (market.taiex) {
+    validation = validatePlan(plan, {
+      price: market.taiex.price ?? market.taiex.close,
+      close: market.taiex.close ?? market.taiex.price,
+      high: market.taiex.high,
+      low: market.taiex.low,
+      chgPct: market.taiex.chgPct ?? 0,
+      date: market.taiex.date || date
+    });
+  }
+
   return { meta, market, plan, flows, validation };
 }
 
 const briefFlowFmt = v => (v == null ? "—" : `${v >= 0 ? "+" : ""}${Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)}億`);
 
 function briefScenariosHtml(plan) {
-  if (!plan?.keyLevels) return "";
+  if (!plan?.keyLevels) return `<div class="dh-card"><div class="dh-head"><b>盤前情境推演與分水嶺</b><span class="note">無盤前推演快照</span></div><p class="note">缺少當日盤前預測快照。</p></div>`;
   const { pressure, pivot, support } = plan.keyLevels;
   const sc = plan.scenarios || {};
   return `<div class="dh-card">
@@ -313,6 +489,12 @@ function briefScenariosHtml(plan) {
 
 function validateHtml(val) {
   if (!val) return `<div class="dh-card val"><div class="dh-head"><b>早報情境盤後驗證</b><span class="note">等待收盤定案後自動對照</span></div><p class="note">盤中進行中，收盤後將以早報儲存的原始關鍵點位進行實際走勢驗證。</p></div>`;
+  if (val.status === "missing_pre_market_plan") {
+    return `<div class="dh-card val"><div class="dh-head"><b>早報情境盤後驗證</b><span class="dh-tag missing">缺少盤前預測</span></div><p class="note">${esc(val.analysisText)}</p></div>`;
+  }
+  if (val.status === "insufficient_data" || val.status === "date_mismatch") {
+    return `<div class="dh-card val"><div class="dh-head"><b>早報情境盤後驗證</b><span class="dh-tag missing">${esc(val.outcomeLabel)}</span></div><p class="note">${esc(val.analysisText)}</p></div>`;
+  }
   return `<div class="dh-card val">
     <div class="dh-head"><b>早報情境盤後驗證</b><span class="dh-tag ${val.metKey}">${esc(val.outcomeLabel)}</span></div>
     <p class="dh-val-txt">${esc(val.analysisText)}</p>
@@ -363,12 +545,14 @@ function nextActionHtml(plan, val) {
 
 function todayText() {
   const t = twDay(), P = briefP();
-  const plan = getBriefSnapshot(t) || briefScenarios(W.bf, t, W.quotes?.get?.("T00")?.price);
+  const plan = getBriefSnapshot(t);
   const val = W.quotes?.get?.("T00")?.price ? validatePlan(plan, {
     price: W.quotes.get("T00").price,
+    close: W.quotes.get("T00").price,
     high: W.quotes.get("T00").high,
     low: W.quotes.get("T00").low,
-    chgPct: W.quotes.get("T00").chgPct ?? 0
+    chgPct: W.quotes.get("T00").chgPct ?? 0,
+    date: W.quotes.get("T00").date || t
   }) : null;
   let txt = `📋 KLineLab 今日重點（${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}）\n`;
   if (P.length) txt += P.map(p => `\n【${p.t}】\n` + p.L.map(x => "• " + x.s).join("\n")).join("\n") + "\n";
@@ -384,18 +568,22 @@ function todayText() {
 
 function todayPage() {
   const t = twDay(), cn = typeof twClosedNote === "function" ? twClosedNote(W.quotes?.get?.("T00")?.date) : null, pm = tdAfter(), C = W.syncCfg;
-  const sess = sessionStatus();
   const tq = W.quotes?.get?.("T00");
+  const sess = sessionStatus(Date.now(), { holidays: W.cal?.hol, lastTradeDate: tq?.date });
+
   let plan = getBriefSnapshot(t);
-  if (!plan) {
+  if (!plan && (sess.session === "pre" || !pm)) {
     plan = briefScenarios(W.bf, t, tq?.price);
-    if (plan && (!pm || sess.session === "pre")) saveBriefSnapshot(t, plan);
+    if (plan) saveBriefSnapshot(t, plan);
   }
+
   const val = tq?.price ? validatePlan(plan, {
     price: tq.price,
+    close: tq.price,
     high: tq.high,
     low: tq.low,
-    chgPct: tq.chgPct ?? 0
+    chgPct: tq.chgPct ?? 0,
+    date: tq.date || t
   }) : null;
   const M = typeof mfModel === "function" ? mfModel() : null;
 
@@ -409,6 +597,7 @@ function todayPage() {
     .dh-badge.live { background: #059669; }
     .dh-badge.post { background: #7c3aed; }
     .dh-badge.closed { background: var(--muted); }
+    .dh-badge.unknown { background: #d97706; }
     .dh-card { padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); margin: 10px 0; font-size: 13px; line-height: 1.6; }
     .dh-card.val { border-color: var(--accent, #6366f1); background: var(--surface-2); }
     .dh-card.act { border-left: 3px solid var(--accent, #6366f1); }
@@ -431,6 +620,7 @@ function todayPage() {
     .sc-bias.neutral { background: var(--surface); color: var(--muted); }
     .sc-bias.bear { background: rgba(37,99,235,0.1); color: var(--down); }
     .dh-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); }
+    .dh-tag.missing { background: var(--surface-2); color: var(--muted); }
     .dh-val-txt { margin: 4px 0 6px; font-size: 13px; font-weight: 500; }
     .dh-val-stats { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); }
     .dh-val-stats b { color: var(--ink); }
@@ -442,7 +632,7 @@ function todayPage() {
         <span class="dh-badge ${sess.session}">${sess.label}</span>
         <span class="note">資料時間 ${sess.hm}・${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}</span>
       </div>
-      ${tq?.price ? `<div>加權 <b>${fmtP(tq.price)}</b> <span class="${cls(tq.chg)}">${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct ?? "—"}%</span></div>` : ""}
+      ${sess.displayNote ? `<div class="note">${esc(sess.displayNote)}</div>` : tq?.price ? `<div>加權 <b>${fmtP(tq.price)}</b> <span class="${cls(tq.chg)}">${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct ?? "—"}%</span></div>` : ""}
     </div>
     <h3>今日重點 <span class="note">${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}</span> <button class="btn sm" data-tx="tdre">↻ 重新整理</button> <button class="btn sm" data-tx="tdai">${ico("ai")}AI 整理</button> <button class="btn sm" data-tx="tdtxt">複製文字</button></h3>
     ${cn ? `<p class="note mkclosed">📅 ${esc(cn[1])}</p>` : ""}

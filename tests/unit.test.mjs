@@ -756,67 +756,158 @@ test("YouTube：頻道影片 RSS、搜尋結果、頻道網址解析，影片交
   assert.match(P.PROMPT({ title: "t" }, "video"), /YouTube 影片/);
 });
 
-test("每日市場決策中心：盤前預判狀態、情境推演、盤後客觀驗證與共同市場快照", () => {
+test("每日市場決策中心 P1/P2：交易日曆、不可覆寫快照、盤後客觀驗證與資料狀態", () => {
   const B = engine().B;
   assert.ok(typeof B.sessionStatus === "function");
   assert.ok(typeof B.briefScenarios === "function");
   assert.ok(typeof B.validatePlan === "function");
   assert.ok(typeof B.marketSnapshot === "function");
+  assert.ok(typeof B.isValidSnapshot === "function");
+  assert.ok(typeof B.evaluateDataStatus === "function");
+  assert.ok(typeof B.saveBriefSnapshot === "function");
+  assert.ok(typeof B.getBriefSnapshot === "function");
 
-  // 1. sessionStatus: 週末休市、盤前預判、盤中撮合、盤後結算、盤後定案
-  const sat = Date.parse("2026-10-24T02:00:00Z"); // 10:00 TW
-  assert.equal(B.sessionStatus(sat).session, "closed");
-  assert.equal(B.sessionStatus(sat).isWeekend, true);
+  // 1. P1-2: 交易日與休市日判定（週末、國定補假、一般交易日各時段、未知降級）
+  // 2026-10-24 星期六
+  const sat = B.sessionStatus(Date.parse("2026-10-24T06:00:00Z"), { lastTradeDate: "2026-10-23" });
+  assert.equal(sat.session, "closed");
+  assert.equal(sat.status, "closed");
+  assert.equal(sat.label, "週末休市");
+  assert.equal(sat.isWeekend, true);
+  assert.match(sat.displayNote, /顯示最近交易日 10\/23 收盤/);
 
-  const pre = Date.parse("2026-10-26T00:30:00Z"); // 08:30 TW
-  assert.equal(B.sessionStatus(pre).session, "pre");
-  assert.equal(B.sessionStatus(pre).label, "盤前預判");
+  // 2026-10-25 星期日
+  const sun = B.sessionStatus(Date.parse("2026-10-25T02:00:00Z"));
+  assert.equal(sun.session, "closed");
+  assert.equal(sun.status, "closed");
+  assert.equal(sun.label, "週末休市");
+  assert.equal(sun.isWeekend, true);
 
-  const live = Date.parse("2026-10-26T02:30:00Z"); // 10:30 TW
-  assert.equal(B.sessionStatus(live).session, "live");
-  assert.equal(B.sessionStatus(live).label, "盤中撮合");
-
-  const post1 = Date.parse("2026-10-26T06:00:00Z"); // 14:00 TW
-  assert.equal(B.sessionStatus(post1).session, "post");
-  assert.equal(B.sessionStatus(post1).status, "settling");
-
-  const post2 = Date.parse("2026-10-26T07:30:00Z"); // 15:30 TW
-  assert.equal(B.sessionStatus(post2).session, "post");
-  assert.equal(B.sessionStatus(post2).status, "official");
-
-  // 2. briefScenarios: 關鍵壓力、分水嶺、支撐與三情境（多方、盤整、空方）
-  const G = {
-    us: { indices: [{ code: "^SOX", chgPct: 1.5 }], megas: [{ code: "TSM", chgPct: 2.1 }] },
-    fut: { night: { chg: 80 } }
-  };
-  const plan = B.briefScenarios(G, "2026-10-26", 23400);
-  assert.equal(plan.today, "2026-10-26");
-  assert.ok(plan.keyLevels.pivot > 23400, "夜盤漲，分水嶺上移");
-  assert.ok(plan.keyLevels.pressure > plan.keyLevels.pivot);
-  assert.ok(plan.keyLevels.support < plan.keyLevels.pivot);
-  assert.ok(plan.scenarios.bull.trigger.includes(plan.keyLevels.pivot.toLocaleString()));
-  assert.ok(plan.scenarios.bear.target.length > 0);
-
-  // 3. validatePlan: 實際收盤與早報情境對照
-  const valBull = B.validatePlan(plan, { price: plan.keyLevels.pivot + 50, high: plan.keyLevels.pressure + 20, low: plan.keyLevels.pivot - 10, chgPct: 0.8 });
-  assert.equal(valBull.metKey, "bull");
-  assert.equal(valBull.pressureHit, true);
-  assert.match(valBull.outcomeLabel, /多方推進/);
-
-  const valBear = B.validatePlan(plan, { price: plan.keyLevels.support - 30, high: plan.keyLevels.pivot - 10, low: plan.keyLevels.support - 50, chgPct: -1.2 });
-  assert.equal(valBear.metKey, "bear");
-  assert.equal(valBear.supportHit, true);
-  assert.match(valBear.outcomeLabel, /空方防守/);
-
-  // 4. marketSnapshot: 共同市場快照契約
-  const snap = B.marketSnapshot({
-    date: "2026-10-26",
-    G,
-    market: { taiex: { price: 23550, high: 23620, low: 23450, chgPct: 0.64 } },
-    flows: { mood: { score: 65, label: "偏樂觀" } }
+  // 2026-10-26 官方補假休市（光復節補假）
+  const monHol = B.sessionStatus(Date.parse("2026-10-26T06:00:00Z"), {
+    holidays: [{ date: "2026-10-26", name: "光復節補假" }],
+    lastTradeDate: "2026-10-23"
   });
-  assert.equal(snap.meta.tradeDate, "2026-10-26");
-  assert.ok(snap.plan.keyLevels);
-  assert.ok(snap.validation);
-  assert.equal(snap.flows.mood.score, 65);
+  assert.equal(monHol.session, "closed");
+  assert.equal(monHol.status, "closed");
+  assert.equal(monHol.label, "今日休市");
+  assert.equal(monHol.holidayName, "光復節補假");
+  assert.notEqual(monHol.status, "official", "休市日不得標示為當日正式盤後");
+  assert.match(monHol.displayNote, /光復節補假.*顯示最近交易日 10\/23 收盤/);
+
+  // 2026-10-27 一般交易日盤前、盤中、盤後結算、盤後定案
+  const tPre = B.sessionStatus(Date.parse("2026-10-27T00:30:00Z")); // 08:30 TW
+  assert.equal(tPre.session, "pre");
+  assert.equal(tPre.label, "盤前預判");
+
+  const tLive = B.sessionStatus(Date.parse("2026-10-27T02:30:00Z")); // 10:30 TW
+  assert.equal(tLive.session, "live");
+  assert.equal(tLive.label, "盤中撮合");
+
+  const tPostSettling = B.sessionStatus(Date.parse("2026-10-27T06:00:00Z")); // 14:00 TW
+  assert.equal(tPostSettling.session, "post");
+  assert.equal(tPostSettling.status, "settling");
+  assert.equal(tPostSettling.label, "盤後結算");
+
+  const tPostOfficial = B.sessionStatus(Date.parse("2026-10-27T07:30:00Z")); // 15:30 TW
+  assert.equal(tPostOfficial.session, "post");
+  assert.equal(tPostOfficial.status, "official");
+  assert.equal(tPostOfficial.label, "盤後定案");
+
+  // 無法確認官方交易狀態降級
+  const tUnknown = B.sessionStatus(Date.parse("2026-10-27T02:30:00Z"), { calendarStatus: "unknown" });
+  assert.equal(tUnknown.session, "unknown");
+  assert.equal(tUnknown.status, "pending");
+  assert.equal(tUnknown.label, "交易狀態待確認");
+
+  // 2. P2-1: 快照驗證與不可覆寫性測試
+  const mockStore = new Map();
+  const storeAdapter = {
+    get: k => mockStore.get(k) || null,
+    set: (k, v) => mockStore.set(k, v)
+  };
+
+  const validPlan = B.briefScenarios({
+    us: { indices: [{ code: "^SOX", chgPct: 1.2 }], megas: [{ code: "TSM", chgPct: 1.8 }] },
+    fut: { night: { chg: 60 } }
+  }, "2026-10-27", 23400);
+
+  assert.ok(B.isValidSnapshot(validPlan, "2026-10-27"), "快照結構有效");
+  assert.equal(B.saveBriefSnapshot("2026-10-27", validPlan, storeAdapter), true, "首次保存成功");
+
+  // 嘗試以不同價位覆寫快照：必須被阻止（不可覆寫原始預測）
+  const modifiedPlan = B.briefScenarios({}, "2026-10-27", 24000);
+  assert.equal(B.saveBriefSnapshot("2026-10-27", modifiedPlan, storeAdapter), false, "重複保存被阻擋，確保快照不可覆寫");
+  assert.equal(B.getBriefSnapshot("2026-10-27", storeAdapter).keyLevels.pivot, validPlan.keyLevels.pivot, "保存的快照內容保持原始數值");
+
+  // 損壞資料拒絕
+  mockStore.set("watch:brief:snap:2026-10-28", { corrupt: true, keyLevels: { pressure: 100, pivot: 200 } }); // pressure <= pivot
+  assert.equal(B.getBriefSnapshot("2026-10-28", storeAdapter), null, "損壞快照返回 null");
+
+  // 跨日期讀取拒絕
+  assert.equal(B.getBriefSnapshot("2026-10-29", storeAdapter), null, "不同日期讀取返回 null");
+
+  // 3. P1-1: 盤後驗證不可臨時生成預測冒充原始預測
+  const snapNoPrePlan = B.marketSnapshot({
+    date: "2026-10-27",
+    market: { taiex: { price: 23500, high: 23600, low: 23400, chgPct: 0.5, date: "2026-10-27" } },
+    snapshot: null,
+    storeObj: { get: () => null, set: () => {} }
+  });
+  assert.equal(snapNoPrePlan.plan, null, "無盤前快照時不可動態生成充數");
+  assert.equal(snapNoPrePlan.validation.status, "missing_pre_market_plan");
+  assert.match(snapNoPrePlan.validation.outcomeLabel, /缺少盤前預測/);
+
+  // 4. P1-3: 情境成立判定修正（收盤高於分水嶺不直接等同完整多方情境成立、部分符合、資料不足與日期不一致）
+  // 4-1. 收盤高於分水嶺，但高點未達壓力位：多方觀察（非完整成立）
+  const valAbovePivotNoPressure = B.validatePlan(validPlan, {
+    close: validPlan.keyLevels.pivot + 20,
+    high: validPlan.keyLevels.pressure - 20,
+    low: validPlan.keyLevels.pivot - 10,
+    chgPct: 0.4,
+    date: "2026-10-27"
+  });
+  assert.equal(valAbovePivotNoPressure.metKey, "bull");
+  assert.equal(valAbovePivotNoPressure.pressureHit, false);
+  assert.match(valAbovePivotNoPressure.outcomeLabel, /多方觀察/);
+  assert.match(valAbovePivotNoPressure.analysisText, /未達壓力/);
+
+  // 4-2. 收盤高於分水嶺，且高點觸及壓力位：部分符合
+  const valAbovePivotHitPressure = B.validatePlan(validPlan, {
+    close: validPlan.keyLevels.pivot + 50,
+    high: validPlan.keyLevels.pressure + 10,
+    low: validPlan.keyLevels.pivot,
+    chgPct: 0.9,
+    date: "2026-10-27"
+  });
+  assert.equal(valAbovePivotHitPressure.pressureHit, true);
+  assert.match(valAbovePivotHitPressure.outcomeLabel, /部分符合/);
+
+  // 4-3. 缺少必要行情欄位：降級為資料不足，不可將缺失值默認成已守穩
+  const valMissingData = B.validatePlan(validPlan, {
+    close: 23500,
+    high: null,
+    low: null,
+    date: "2026-10-27"
+  });
+  assert.equal(valMissingData.status, "insufficient_data");
+  assert.match(valMissingData.outcomeLabel, /資料不足/);
+
+  // 4-4. 行情日期與預測快照日期不一致：拒絕驗證
+  const valDateMismatch = B.validatePlan(validPlan, {
+    close: 23500,
+    high: 23600,
+    low: 23400,
+    date: "2026-10-26" // Plan is 2026-10-27
+  });
+  assert.equal(valDateMismatch.status, "date_mismatch");
+  assert.match(valDateMismatch.outcomeLabel, /日期不一致/);
+
+  // 5. P2-2: 資料狀態標籤評定（區分 missing / stale / live / delayed / partial / official）
+  assert.equal(B.evaluateDataStatus({ market: {} }).dataStatus, "missing", "缺少行情時為 missing");
+  assert.equal(B.evaluateDataStatus({ market: { taiex: { price: 23000, date: "2026-10-20" } }, tradeDate: "2026-10-27" }).dataStatus, "stale", "日期早於今日為 stale");
+  assert.equal(B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, date: "2026-10-27" } }, session: "live", tradeDate: "2026-10-27" }).dataStatus, "live", "盤中撮合為 live");
+  assert.equal(B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, date: "2026-10-27", delayed: true } }, session: "live", tradeDate: "2026-10-27" }).dataStatus, "delayed", "延遲行情標記 delayed");
+  assert.equal(B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, date: "2026-10-27" } }, session: "post", tradeDate: "2026-10-27" }).dataStatus, "partial", "無法人籌碼時為 partial");
+  assert.equal(B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, date: "2026-10-27" }, inst: { foreign: 50 } }, session: "post", tradeDate: "2026-10-27" }).dataStatus, "official", "指數加法人籌碼完整時為 official");
 });
