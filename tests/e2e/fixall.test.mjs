@@ -1,7 +1,7 @@
 // 全站稽核修正：漲跌停依升降單位、休市日標示、自選拿不到報價時說原因、K 線與報價對不上不硬接、指標一鍵組合與「更多」、外層浮動返回只在學堂存股出現
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, watchFrame } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -78,19 +78,44 @@ test("外層浮動返回：看盤、情報局不疊，學堂裡照常 390", asyn
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
-for (const width of [390, 1280]) test(`今日重點、早報、每日摘要整成一頁；今日重點卡「看完整」直接過去 ${width}`, async () => {
+for (const width of [390, 1280]) test(`今日重點（早報＋每日摘要）在情報局；今日重點卡「看完整」直接過去 ${width}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
-  assert.deepEqual(await p.evaluate(() => TOOLS_VIEWS.filter(x => ["today", "brief", "sum"].includes(x[0])).map(x => x[1])), ["今日重點"], "工具裡只剩一個「今日重點」");
+  assert.equal(await p.evaluate(() => TOOLS_VIEWS.some(x => ["today", "brief", "sum"].includes(x[0]))), false, "工具裡不再有早報、每日摘要");
+  assert.equal(await p.evaluate(() => INTEL_LT[0]), "today", "情報局第一個分頁");
   await p.evaluate(() => { W.td = { at: Date.now() }; W.hold = { 1234: { sh: 1000, cost: 50 } }; W.quotes.set("1234", { ...(W.quotes.get("1234") || {}), chgPct: -4.2 }); setLt("watch"); renderList(); });
   await p.click('#todayCard [data-tdgo="brief"]'); await p.waitForTimeout(800);
-  assert.deepEqual(await p.evaluate(() => [W.lt, W.tv]), ["tools", "today"]);
+  assert.equal(await p.evaluate(() => W.lt), "today");
   const t = await p.textContent("#lx");
   assert.match(t, /今日重點[\s\S]*重新整理[\s\S]*AI 整理[\s\S]*複製文字/);
   assert.match(t, /盤前・昨晚美股與今天的行事曆/); assert.match(t, /(盤中|盤後)・大盤、自選與訊號[\s\S]*自選漲幅前 5[\s\S]*技術訊號/);
   for (const k of ["tdre", "tdai", "tdtxt"]) assert.equal(await p.$$eval(`#lx [data-tx="${k}"]`, L => L.length), 1, `${k} 只有一個`);
   assert.match(await p.evaluate(() => todayText()), /今日重點[\s\S]*【盤勢與自選】[\s\S]*不是買賣建議/, "複製的文字包含早報和盤勢兩部分");
-  // 舊的分頁記錄（早報、每日摘要）都帶到今日重點
-  for (const old of ["brief", "sum"]) { await p.evaluate(o => { W.tv = o; setLt("tools"); }, old); assert.equal(await p.evaluate(() => W.tv), "today"); }
+  // 法人資金資料抓不到（測試的 /api/daily 沒資料）：只抓一次就說明，不會畫完又回去抓、整頁一直重畫
+  const n0 = await p.evaluate(() => { window.__rl = 0; const o = renderList; window.renderList = function () { window.__rl++; return o.apply(this, arguments); }; return 0; });
+  await p.waitForTimeout(1500); assert.ok(await p.evaluate(() => window.__rl) < 5 + n0, "今日重點沒有一直重畫");
+  await p.click('#lx [data-tx="tdai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
+  // 舊的分頁記錄（工具 → 早報、每日摘要、今日重點）都帶到情報局的今日重點
+  for (const old of ["brief", "sum", "today"]) { await p.evaluate(o => { setLt("watch"); W.tv = o; setLt("tools"); }, old); await p.waitForTimeout(200); assert.equal(await p.evaluate(() => W.lt), "today", old); }
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("首頁：情報局的第一個分頁是今日重點，網址 #daily 直接打開；看盤的今日重點卡切到情報局 390", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "index.html#daily", { width: 390, touch: true });
+  const f = await watchFrame(p);
+  assert.equal(await p.evaluate(() => CUR_TAB), "intel");
+  await f.waitForFunction(() => W.lt === "today"); assert.match(await f.textContent("#lx"), /盤前・昨晚美股/);
+  assert.equal(await f.evaluate(() => [...document.querySelectorAll("#lTabs [data-l]")].map(b => b.dataset.l).filter(inMode)[0]), "today", "情報局分頁列第一個");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("流量分析：只在正式網站載入，本機、預覽都不載；常見問題寫清楚只統計匿名瀏覽次數", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "index.html", { width: 1280 });
+  const reqs = []; p.on("request", r => /_vercel\/insights/.test(r.url()) && reqs.push(r.url()));
+  await p.reload(); await p.waitForTimeout(800);
+  assert.deepEqual(reqs, [], "localhost 不載入"); assert.equal(await p.evaluate(() => typeof window.va), "undefined");
+  const src = await (await import("node:fs/promises")).readFile(new URL("../../learner/va.js", import.meta.url), "utf8");
+  assert.match(src, /location\.hostname !== "kline-school\.vercel\.app"/); assert.match(src, /window\.top !== window/, "嵌在首頁的看盤頁不重複計算");
+  await p.goto(`${S.url}/learner/pro.html`); assert.match(await p.textContent("body"), /Vercel Web Analytics 統計匿名的瀏覽次數[\s\S]*不用 Cookie、不記錄你是誰/);
   await ctx.close(); assert.deepEqual(errs, []);
 });

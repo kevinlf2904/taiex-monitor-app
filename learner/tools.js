@@ -2,7 +2,7 @@
    這個檔案只定義函式（載入時 watch.html 的 W 還沒建立），由 watch.html 的清單分頁「工具」呼叫 renderTools()。
    資料都存在這台裝置的瀏覽器（localStorage）；指標用日 K 判斷，日 K 每 5 分鐘重抓一次。 */
 
-const TOOLS_VIEWS = [["today", "今日重點"], ["alert", "提醒"], ["notes", "筆記追蹤"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["oapi", "官方資料"], ["sync", "備份同步"]];
+const TOOLS_VIEWS = [["alert", "提醒"], ["notes", "筆記追蹤"], ["paper", "模擬交易"], ["journal", "交易日記"], ["multi", "多圖並排"], ["oapi", "官方資料"], ["sync", "備份同步"]];
 const toolsDay = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 // 日 K（6 個月）：5 分鐘內重複用
 async function dailyFresh(c) {
@@ -134,7 +134,7 @@ async function sumBuild() {
     if (ev.length) S.sig.push({ c, ev, d: String(D[n].d).slice(0, 10) });
   }
   if (!W.cong && typeof loadCong === "function") await loadCong();
-  S.busy = false; S.at = Date.now(); if (W.lt === "tools") renderList();
+  S.busy = false; S.at = Date.now(); if (W.lt === "today") renderList();
 }
 function sumText() {
   const q = c => W.quotes.get(c), mv = myCodes().map(c => ({ c, q: q(c) })).filter(x => x.q?.chgPct != null).sort((a, b) => b.q.chgPct - a.q.chgPct);
@@ -276,12 +276,12 @@ function calDeadlines(a, b) {
 
 /* ---------- 畫面 ---------- */
 // 這些畫面也被別的分頁借用：條件選股、相對強弱在「選股」，內部人申報在「申報」
-const toolsOn = () => W.lt === "tools" || (W.lt === "after" && afView() === "chipx") || (W.lt === "screen" && (W.scrG === "custom" || W.scrG === "rs" || (W.scrG === "score" && W.scoreMode === "factor"))) || (W.lt === "cong" && (W.cv === "ins" || String(W.cv).startsWith("tw")));
+const toolsOn = () => W.lt === "tools" || W.lt === "today" || (W.lt === "after" && afView() === "chipx") || (W.lt === "screen" && (W.scrG === "custom" || W.scrG === "rs" || (W.scrG === "score" && W.scoreMode === "factor"))) || (W.lt === "cong" && (W.cv === "ins" || String(W.cv).startsWith("tw")));
 const scanVis = () => W.lt === "screen" && W.scrG === "custom", rsVis = () => W.lt === "screen" && W.scrG === "rs", insVis = () => W.lt === "cong" && W.cv === "ins";
 function renderTools() {
-  if (W.tv === "chipx") { W.tv = "today"; W.afView = "chipx"; store.set("watch:af", "chipx"); setTimeout(() => setLt("after"), 0); return ""; } // 籌碼動向搬到排行 → 盤後資料
-  if (W.tv === "brief" || W.tv === "sum") W.tv = "today"; // 早報、每日摘要合併成「今日重點」：舊的分頁記錄、連結都帶過去
-  if (!TOOLS_VIEWS.some(x => x[0] === W.tv)) W.tv = "today";
+  if (W.tv === "chipx") { W.tv = "alert"; W.afView = "chipx"; store.set("watch:af", "chipx"); setTimeout(() => setLt("after"), 0); return ""; } // 籌碼動向搬到排行 → 盤後資料
+  if (["today", "brief", "sum"].includes(W.tv)) { W.tv = "alert"; setTimeout(() => setLt("today"), 0); return ""; } // 早報、每日摘要合併成情報局的「今日重點」：舊的分頁記錄、連結都帶過去
+  if (!TOOLS_VIEWS.some(x => x[0] === W.tv)) W.tv = TOOLS_VIEWS[0][0];
   const v = W.tv;
   $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="工具">${TOOLS_VIEWS.map(([k, t]) => `<button data-tv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</div>`;
   const r = toolsBody(v); $("#lx").innerHTML = r.h; return r.note;
@@ -289,7 +289,9 @@ function renderTools() {
 // 盤後總結＋分享（原本在資金雷達「今日」）：用法人資金資料填固定句型，可分享成圖片或文字
 function sumFlowHtml() {
   const M = typeof mfModel === "function" ? mfModel() : null;
-  if (!M) { if (!W.off && !W.mf?.loading && !W.mf?.days?.length) setTimeout(() => loadMoney(10), 0); return `<h4>盤後總結</h4><p class="note">${W.off ? "需要部署到網站才有資金資料。" : "載入法人資金資料…"}</p>`; }
+  // 只自動抓一次：抓完還是沒資料（證交所連不到）就說明，不然 loadMoney 畫完又回來抓，整頁一直重畫、按鈕按不到
+  const F = W.mf, wait = F?.loading || (F && !F.sumTry);
+  if (!M) { if (!W.off && F && !F.loading && !F.sumTry) { F.sumTry = true; setTimeout(() => loadMoney(10), 0); } return `<h4>盤後總結</h4><p class="note">${W.off ? "需要部署到網站才有資金資料。" : wait ? "載入法人資金資料…" : "法人資金資料暫時拿不到，稍後按「↻ 重新整理」再試。"}</p>`; }
   return `<h4>盤後總結 <span class="note">${M.dates[M.T - 1].slice(5).replace("-", "/")}</span></h4><p class="msum">${esc(flowSummary(M, flowMood(M), W.quotes.get("T00")?.chgPct))}</p>
       <button class="btn mshare" data-mshare="share">分享今日盤面</button><div class="mshares"><button data-mshare="line">LINE</button><button data-mshare="threads">Threads</button><button data-mshare="copy">複製圖</button></div>`;
 }
@@ -312,7 +314,6 @@ function sumBody() {
 }
 function toolsBody(v) {
   let h = "", note = "";
-  if (v === "today") return todayPage(); // 早報＋每日摘要整成一頁（brief.js）
   if (v === "scan") {
     const S = SC(), R = W.scanRes, copt = sel => SCOND.map(([k, t]) => `<option value="${k}" ${k === sel ? "selected" : ""}>${esc(t)}</option>`).join("");
     h = `<section class="csec"><h3>條件選股</h3>

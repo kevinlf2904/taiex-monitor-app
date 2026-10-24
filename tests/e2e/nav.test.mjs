@@ -28,7 +28,7 @@ test("情報局：五大情報（含財報）獨立在情報局，看盤裡不�
   await p.waitForTimeout(300);
   assert.deepEqual(await f.evaluate(() => [W.lt, W.mf.view]), ["money", "bubble"]);
   const vis = () => f.evaluate(() => [...document.querySelectorAll("#lTabs [data-l]")].filter(b => !b.hidden).map(b => b.dataset.l).join());
-  assert.equal(await vis(), "money,earn,ind,pod,cong");
+  assert.equal(await vis(), "today,money,earn,ind,pod,cong");
   // 切到看盤：同一個 iframe 換成看盤的分頁組，回到上次的看盤分頁
   await p.click("#tab-btn-watch"); await p.waitForTimeout(300);
   assert.doesNotMatch(await vis(), /money|earn|ind|pod|cong/); assert.ok(!["money", "earn", "ind", "pod", "cong"].includes(await f.evaluate(() => W.lt)));
