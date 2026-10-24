@@ -784,7 +784,7 @@ function validateHtml(val) {
 }
 
 function flowsDecisionHtml(M) {
-  if (!M) {
+  if (!M || !M.secs || !M.stocks) {
     const F = W?.mf;
     if (!W?.off && F && !F.loading && !F.sumTry) { F.sumTry = true; setTimeout(() => loadMoney(10), 0); }
     return `<div class="dh-card"><div class="dh-head"><b>資金雷達</b><span class="note">板塊輪動與法人資金</span></div><p class="note">載入法人資金資料中…</p><button type="button" class="linkbtn" data-tdgo="radar">前往資金雷達完整分析 ›</button></div>`;

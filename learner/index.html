@@ -530,7 +530,25 @@ footer .ver { margin-left: 8px; font-family: var(--font-mono); opacity: .7; whit
 @media (max-width: 900px) { .shot-top, .shot-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---------- 首頁 Hero：16:9 實驗室網格＋冷白微光 ---------- */
-.hero { position: relative; max-width: 1180px; margin: 16px auto 8px; padding: 0 16px; }
+/* ---------- 首頁 Hero：可收合抽屜（手機版預設收合） ---------- */
+.hero { position: relative; max-width: 1180px; margin: 12px auto 8px; padding: 0 16px; }
+.hero-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; transition: background .15s, border-color .15s; user-select: none; }
+.hero-bar:hover { border-color: var(--ink); }
+.hero-bar-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink); }
+.hero-bar-icon { font-size: 15px; }
+.hero-bar-sub { font-size: 12px; color: var(--muted); font-weight: 400; }
+.hero-bar-actions { display: flex; align-items: center; gap: 10px; }
+.hero-toggle-btn { font-size: 12px; color: var(--accent, #6366f1); font-weight: 600; padding: 2px 6px; border-radius: 4px; background: rgba(99, 102, 241, 0.08); }
+.hero-bar .hero-x { position: static; width: 26px; height: 26px; font-size: 16px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.hero.open .hero-bar { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
+.hero-collapse { border: 1px solid var(--line); border-top: 0; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; overflow: hidden; transition: max-height .25s ease, opacity .2s ease; }
+.hero:not(.open) .hero-collapse { max-height: 0; opacity: 0; border-color: transparent; pointer-events: none; }
+.hero.open .hero-collapse { max-height: 1200px; opacity: 1; }
+.hero-collapse .hero-in { border-top-left-radius: 0; border-top-right-radius: 0; border: 0; }
+@media (max-width: 640px) {
+  .hero-bar-sub { display: none; }
+  .hero-bar { padding: 6px 10px; }
+}
 .hero-in { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; padding: 36px 32px 24px; background: var(--surface);
   background-image: radial-gradient(55% 80% at 78% 10%, rgba(255, 255, 255, .09), transparent 70%), linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
   background-size: auto, 32px 32px, 32px 32px; background-position: center, -1px -1px, -1px -1px; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px 36px; align-items: center; }
@@ -591,22 +609,33 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
 </header>
 
 <main>
-  <!-- 首頁 Hero：KLineLab 品牌主張與 CTA（可以收起來，記在 kline:heroHide） -->
+  <!-- 首頁 Hero：KLineLab 品牌主張與可收合導覽（手機版預設收合，點擊切換展開） -->
   <section class="hero" id="hero" aria-label="KLineLab K線情報局">
-    <button type="button" class="hero-x" id="heroX" aria-label="收起介紹">×</button>
-    <div class="hero-in"><div class="hero-txt">
-      <p class="hero-k">KLineLab・K線情報局</p>
-      <h2 class="hero-h">把台美股公開資料，<br>整理成看得懂的研究工具。</h2>
-      <p class="hero-p">SEC 13F 機構持股、美國國會議員與台灣政治人物申報、台股內部人與供應鏈題材，加上 K 線型態與歷史回測。資料來自政府公開資料與市場行情（部分報價可能延遲），由程式整理計算，只供研究學習，不是投資建議。</p>
-      <div class="hero-cta"><button type="button" class="hero-btn pri" data-hero-go="intel">進入情報局 →</button><a class="hero-btn" href="pro.html">公開測試版 (Beta)・收更新通知</a></div>
+    <div class="hero-bar" id="heroBar" role="button" tabindex="0" aria-expanded="false" aria-controls="heroCollapse" aria-label="切換首頁簡介">
+      <div class="hero-bar-title">
+        <span class="hero-bar-icon">💡</span>
+        <span class="hero-bar-name">首頁簡介・KLineLab K線情報局</span>
+        <span class="hero-bar-sub">台美股量化研究終端機</span>
+      </div>
+      <div class="hero-bar-actions">
+        <span class="hero-toggle-btn" id="heroToggleText">展開介紹 ▾</span>
+        <button type="button" class="hero-x" id="heroX" aria-label="收起介紹" title="收起介紹">×</button>
+      </div>
     </div>
-      <div class="hero-viz" aria-hidden="true"><svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="hvg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#a1a1aa" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity=".9"/></linearGradient></defs>
-        <path d="M0 132 L40 124 L80 128 L120 112 L160 116 L200 100 L240 96" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 4"/>
-        <g fill="var(--ink)"><rect x="34" y="112" width="10" height="22"/><rect x="74" y="118" width="10" height="16"/><rect x="114" y="100" width="10" height="20"/><rect x="154" y="104" width="10" height="18"/><rect x="194" y="88" width="10" height="20"/></g>
-        <g stroke="var(--ink)" stroke-width="1.4"><path d="M39 104v38M79 110v30M119 92v34M159 96v30M199 80v34"/></g>
-        <path d="M232 150h22V58l-22 22z" fill="url(#hvg)"/><path d="M0 70H320" stroke="var(--muted)" stroke-width=".8" stroke-dasharray="2 5"/><text x="6" y="66" font-size="9" font-family="JetBrains Mono, monospace" fill="var(--muted)">BREAKOUT 壓力</text></svg></div>
-            <ul class="hero-stats"><li><b>13F</b><span>機構影子組合回測</span></li><li><b>國會</b><span>申報後超額報酬追蹤</span></li><li><b>115+</b><span>供應鏈題材地圖</span></li><li><b>40+</b><span>K 線策略回測</span></li></ul>
-
+    <div class="hero-collapse" id="heroCollapse">
+      <div class="hero-in"><div class="hero-txt">
+        <p class="hero-k">KLineLab・K線情報局</p>
+        <h2 class="hero-h">把台美股公開資料，<br>整理成看得懂的研究工具。</h2>
+        <p class="hero-p">SEC 13F 機構持股、美國國會議員與台灣政治人物申報、台股內部人與供應鏈題材，加上 K 線型態與歷史回測。資料來自政府公開資料與市場行情（部分報價可能延遲），由程式整理計算，只供研究學習，不是投資建議。</p>
+        <div class="hero-cta"><button type="button" class="hero-btn pri" data-hero-go="intel">進入情報局 →</button><a class="hero-btn" href="pro.html">公開測試版 (Beta)・收更新通知</a></div>
+      </div>
+        <div class="hero-viz" aria-hidden="true"><svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="hvg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#a1a1aa" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity=".9"/></linearGradient></defs>
+          <path d="M0 132 L40 124 L80 128 L120 112 L160 116 L200 100 L240 96" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 4"/>
+          <g fill="var(--ink)"><rect x="34" y="112" width="10" height="22"/><rect x="74" y="118" width="10" height="16"/><rect x="114" y="100" width="10" height="20"/><rect x="154" y="104" width="10" height="18"/><rect x="194" y="88" width="10" height="20"/></g>
+          <g stroke="var(--ink)" stroke-width="1.4"><path d="M39 104v38M79 110v30M119 92v34M159 96v30M199 80v34"/></g>
+          <path d="M232 150h22V58l-22 22z" fill="url(#hvg)"/><path d="M0 70H320" stroke="var(--muted)" stroke-width=".8" stroke-dasharray="2 5"/><text x="6" y="66" font-size="9" font-family="JetBrains Mono, monospace" fill="var(--muted)">BREAKOUT 壓力</text></svg></div>
+              <ul class="hero-stats"><li><b>13F</b><span>機構影子組合回測</span></li><li><b>國會</b><span>申報後超額報酬追蹤</span></li><li><b>115+</b><span>供應鏈題材地圖</span></li><li><b>40+</b><span>K 線策略回測</span></li></ul>
+      </div>
     </div>
   </section>
   <!-- K線學堂的次導覽：課程、判讀、練習都收在這裡 -->
@@ -4991,10 +5020,52 @@ document.addEventListener("click", e => { const a = e.target.closest('a[href^="w
 // 深色（黑底）／淺色切換：預設黑底，記在瀏覽器
 // 社群入口：core.js 的 SOCIAL 有填網址才顯示
 { const L = [["telegram", "Telegram"], ["threads", "Threads"]].filter(([k]) => SOCIAL[k]); if (L.length) { const b = $("#socialBtn"); b.innerHTML = "加入盤後情報" + L.map(([k, t]) => `<a href="${esc(SOCIAL[k])}" target="_blank" rel="noopener">${t} ↗</a>`).join(""); b.hidden = false; } }
-// Hero：收起後記住；「進入看盤儀表板」切到看盤分頁
-if (store.get("heroHide", false)) $("#hero").hidden = true;
-$("#heroX").addEventListener("click", () => { $("#hero").hidden = true; store.set("heroHide", true); });
-document.querySelector("[data-hero-go]").addEventListener("click", () => { goTab("intel"); $("#hero").hidden = true; });
+// Hero：可收合抽屜邏輯；手機版預設收合、桌面版可展開
+const heroEl = $("#hero");
+const heroBar = $("#heroBar");
+const heroCollapse = $("#heroCollapse");
+const heroToggle = $("#heroToggleText");
+const heroX = $("#heroX");
+
+function setHeroOpen(open, save = true) {
+  if (!heroEl || !heroCollapse) return;
+  heroEl.classList.toggle("open", open);
+  heroBar?.setAttribute("aria-expanded", String(open));
+  if (heroToggle) heroToggle.textContent = open ? "收合介紹 ▴" : "展開介紹 ▾";
+  if (save) store.set("heroOpen", open);
+}
+
+if (heroEl) {
+  const isMobile = window.innerWidth <= 640;
+  if (store.get("heroHide", false)) {
+    heroEl.hidden = true;
+  } else {
+    const initOpen = store.get("heroOpen", !isMobile);
+    setHeroOpen(initOpen, false);
+  }
+
+  heroBar?.addEventListener("click", e => {
+    if (e.target.closest("#heroX")) return;
+    const next = !heroEl.classList.contains("open");
+    setHeroOpen(next, true);
+  });
+  heroBar?.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const next = !heroEl.classList.contains("open");
+      setHeroOpen(next, true);
+    }
+  });
+  heroX?.addEventListener("click", e => {
+    e.stopPropagation();
+    heroEl.hidden = true;
+    store.set("heroHide", true);
+  });
+  document.querySelector("[data-hero-go]")?.addEventListener("click", () => {
+    goTab("intel");
+    setHeroOpen(false, true);
+  });
+}
 $("#styleBtn").addEventListener("click", () => openStylePicker(t => { if (document.documentElement.dataset.theme !== t) $("#themeBtn").click(); }));
 // 看盤 ETF「年化排行」按「存股試算」：切到存股模擬，帶入這一檔
 var SAV_PENDING = ""; // var：switchTab 在頁面一開始就會用到
