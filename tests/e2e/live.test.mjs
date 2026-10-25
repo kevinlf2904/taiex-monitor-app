@@ -44,8 +44,8 @@ test("嵌入模式選單凍結：往下捲後分頁列固定在學堂標題列�
   assert.ok(await p.evaluate(() => $("#watchTabs").classList.contains("off")), "還沒捲動時不該出現");
   await p.evaluate(() => scrollTo(0, 1500)); await p.waitForTimeout(400);
   const st = await p.evaluate(() => { const n = $("#watchTabs"), r = n.getBoundingClientRect(); return { off: n.classList.contains("off"), top: r.top, hb: document.querySelector(".top").getBoundingClientRect().bottom, n: n.querySelectorAll("button").length }; });
-  // 大戶國會在情報局：固定的分頁列只有情報局的分頁（搜尋＋今日重點＋5 個）
-  assert.ok(!st.off && Math.abs(st.top - st.hb) < 2 && st.n === 7, JSON.stringify(st));
+  // 大戶國會在情報局：固定的分頁列只有情報局的分頁（搜尋＋今日市場＋盤中監控＋5 個）
+  assert.ok(!st.off && Math.abs(st.top - st.hb) < 2 && st.n === 8, JSON.stringify(st));
   assert.equal(await p.evaluate(() => $("#tab-btn-intel").getAttribute("aria-selected")), "true");
   await p.click('#watchTabs [data-wl="ind"]'); await p.waitForTimeout(800); assert.equal(await fr.evaluate(() => W.lt), "ind");
   assert.equal(await p.evaluate(() => $('#watchTabs [aria-pressed="true"]')?.dataset.wl), "ind");
