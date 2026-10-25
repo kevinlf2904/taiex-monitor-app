@@ -7,6 +7,7 @@
 import { parseTwseAll, parseTpexAll, isStockOrEtf } from "./hot.js";
 import { session, todayTaipei, misFetch, parseMis } from "./quote.js";
 import { closeToday } from "./daily.js";
+import { holWarm } from "./calendar.js";
 import { getJSON as _getJ, num as n } from "./_tw.js";
 const getJSON = (url, headers = {}, ms = 12000) => _getJ(url, headers, ms);
 
@@ -41,6 +42,7 @@ export async function misAll(base, fetcher = misFetch) {
 let memo = null; // 同一個函式執行個體 8 秒內重用，避免同時好幾個 API 重複向資料源要整個市場
 const ymd = iso => iso.replace(/-/g, "");
 export async function marketRows() {
+  holWarm(); // 休市日表：session() 要靠它認出平日的國定假日
   if (memo && Date.now() - memo.at < 8000) return memo.v; // 盤中 8 秒內重用（再加上 CDN 10 秒快取，畫面最慢約 20 秒前的資料）
   const key = (process.env.FUGLE_API_KEY || "").trim(), notes = [], today = todayTaipei(), sess = session(), done = v => { memo = { at: Date.now(), v }; return v; };
   // 1. 富果快照（有金鑰而且方案支援）

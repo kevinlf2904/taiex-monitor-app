@@ -1753,3 +1753,38 @@ test('Phase 6.1 獨立驗收缺口修正：合約代碼完整驗證、均量有�
   assert.equal(vUntrustedOther.volumeStatus, "unverified");
   assert.match(vUntrustedOther.volumeLabel, /均量基準來源不明/);
 });
+
+test("休市日判斷：前端 mktSession／twDayState 與伺服器 session 一致，休市日表抓不到時是「不知道」", async () => {
+  const vm = await import("node:vm"), { readFileSync } = await import("node:fs");
+  const stub = new Proxy(function () {}, { get: (t, k) => (k === Symbol.toPrimitive ? () => "" : stub), apply: () => stub, construct: () => stub }); // 和 scripts/_engine.mjs 一樣：畫面相關的全域用空殼
+  const c = { console, Math, Date, JSON, Map, Set, Array, Object, Number, String, isFinite, parseFloat, parseInt, setTimeout, clearTimeout, Promise, document: stub, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, addEventListener() {}, matchMedia: () => ({ matches: false, addEventListener() {} }), navigator: { userAgent: "" }, location: { protocol: "file:" } };
+  c.window = c; vm.createContext(c); vm.runInContext(readFileSync(new URL("../learner/core.js", import.meta.url), "utf8") + ";this.F={mktSession,twDayState,twHolSet,twDayMark,TWHOL};", c);
+  const { mktSession, twDayState, twHolSet, twDayMark, TWHOL } = c.F, at = (d, hm) => new Date(`${d}T${hm}:00+08:00`);
+  const reset = () => Object.assign(TWHOL, { set: null, year: "", at: 0, mark: null });
+  const { session } = await import("../api/_lib/quote.js"), { holLoad, holState, holOk, closedHol } = await import("../api/_lib/calendar.js");
+  const HOL = [{ date: "2026-01-01", name: "開國紀念日", note: "" }, { date: "2026-10-27", name: "測試假日", note: "" }, { date: "2026-10-28", name: "國曆新年開始交易日", note: "" }, { date: "2026-10-29", name: "", note: "農曆春節前最後交易日" }];
+  // 1. 還沒拿到表：平日是「不知道」，mktSession 照舊只看時間（回傳格式不變）；週末一定休市
+  reset();
+  assert.equal(twDayState(at("2026-10-26", "10:00")), "unknown"); assert.equal(mktSession(at("2026-10-26", "10:00")), "open");
+  assert.equal(twDayState(at("2026-10-25", "10:00")), "closed"); assert.equal(mktSession(at("2026-10-25", "10:00")), "closed");
+  // 2. 表抓失敗（空的）、格式錯（沒有日期）、過期（沒有今年）：都不算拿到
+  for (const bad of [[], null, [{ name: "x" }], [{ date: "2025-01-01", name: "去年" }]]) { assert.equal(twHolSet(bad, at("2026-10-26", "10:00")), false); assert.equal(twDayState(at("2026-10-26", "10:00")), "unknown"); }
+  assert.equal(holOk([], "2026"), false); assert.equal(holOk([{ date: "2025-12-31" }], "2026"), false);
+  // 3. 拿到表：平日交易日 trade；表上的休市日 closed；「開始交易日」「最後交易日」是有開盤的日子
+  assert.equal(twHolSet(HOL, at("2026-10-26", "10:00")), true);
+  assert.equal(twDayState(at("2026-10-26", "10:00")), "trade"); assert.equal(twDayState(at("2026-10-27", "10:00")), "closed");
+  assert.equal(twDayState(at("2026-10-28", "10:00")), "trade"); assert.equal(twDayState(at("2026-10-29", "10:00")), "trade");
+  assert.deepEqual(closedHol(HOL).map(x => x.date), ["2026-01-01", "2026-10-27"]);
+  // 4. 交易時段邊界（程式定義：08:30–09:00 試撮、09:00–13:35 盤中，13:35 這一分鐘還算盤中）
+  const B = { "08:29": "closed", "08:30": "pre", "08:59": "pre", "09:00": "open", "13:25": "open", "13:30": "open", "13:35": "open", "13:36": "closed", "14:00": "closed" };
+  for (const [hm, want] of Object.entries(B)) { assert.equal(mktSession(at("2026-10-26", hm)), want, `交易日 ${hm}`); assert.equal(mktSession(at("2026-10-27", hm)), "closed", `休市日 ${hm}`); }
+  // 5. 伺服器 session() 用同一份表，對同一個時間的判斷和前端一樣（週末、交易日、休市日、開始交易日、各個邊界）
+  assert.equal(holLoad(HOL, +at("2026-10-26", "10:00")), true); assert.equal(holState("2026-10-27"), "closed"); assert.equal(holState("2026-10-26"), "trade");
+  for (const d of ["2026-10-24", "2026-10-25", "2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30"]) for (const hm of Object.keys(B)) assert.equal(session(at(d, hm)), mktSession(at(d, hm)), `${d} ${hm}`);
+  // 6. 報價佐證：表抓不到時，加權的日期是今天就確定開盤；跨日不沿用前一天的佐證
+  reset(); twDayMark("2026-10-26", "trade");
+  assert.equal(twDayState(at("2026-10-26", "11:00")), "trade"); assert.equal(twDayState(at("2026-10-27", "09:00")), "unknown");
+  twDayMark("2026-10-27", "closed"); assert.equal(twDayState(at("2026-10-27", "10:00")), "closed"); assert.equal(mktSession(at("2026-10-27", "10:00")), "closed");
+  // 7. 表上的休市日不會被報價佐證蓋掉（休市日不會有「今天」的加權報價）
+  twHolSet(HOL, at("2026-10-27", "10:00")); twDayMark("2026-10-27", "trade"); assert.equal(twDayState(at("2026-10-27", "10:00")), "closed");
+});

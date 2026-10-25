@@ -9,6 +9,7 @@
 
 import { isUS, yahooQuote, getJSON as yGet, quoteFromMeta } from "./_yahoo.js";
 import { finnhubQuote } from "./_finnhub.js";
+import { holState, holWarm } from "./calendar.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json", "Accept-Language": "zh-TW" };
 const INDEX = { T00: { mis: "tse_t00.tw", fugle: "IX0001", name: "加權指數" }, O00: { mis: "otc_o00.tw", fugle: "IX0043", name: "櫃買指數" } };
 const ALIAS = { TAIEX: "T00", "加權": "T00", "加權指數": "T00", "大盤": "T00", TWII: "T00", "櫃買": "O00", "櫃買指數": "O00", TPEX: "O00" };
@@ -20,6 +21,7 @@ export const num = v => { if (v == null || v === "-" || v === "") return null; c
 export function session(now = new Date()) {
   const t = new Date(now.getTime() + 8 * 3600e3), day = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();
   if (day === 0 || day === 6) return "closed";
+  if (holState(t.toISOString().slice(0, 10)) === "closed") return "closed"; // 證交所公布的平日休市（國定假日）；還沒拿到休市日表時照舊只看時間
   if (m >= 8 * 60 + 30 && m < 9 * 60) return "pre";
   if (m >= 9 * 60 && m <= 13 * 60 + 35) return "open";
   return "closed";
@@ -118,6 +120,7 @@ async function fromFugle(codes, key) {
 }
 
 export default async function handler(req, res) {
+  holWarm(); // 休市日表（12 小時更新一次，不等它；第一次拿到之前 session() 照舊只看週末與時間）
   const misOnly = req.query?.src === "mis", all = normCodes(req.query?.codes ?? req.query?.code, misOnly ? 40 : 10);
   if (!all.length) return res.status(400).json({ ok: false, error: "請給股票代號，例如 ?codes=2330,t00（t00 是加權指數）。" });
   const us = all.filter(isUS), codes = all.filter(c => !isUS(c));
