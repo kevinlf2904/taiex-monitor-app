@@ -21,7 +21,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`週末：�
   assert.equal(C.lvl, C.ink, "壓力、分水嶺、支撐用中性色"); assert.ok(!/37, 99, 235|5, 150, 105|124, 58, 237|99, 102, 241/.test(C.badgeBg), `徽章不是寫死的藍綠紫：${C.badgeBg}`); assert.ok(C.num, "價位用行情數字字型");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
   // 全部展開：資金卡只有一張、資金資料的狀態只說一次、週末不寫「盤中」
-  await p.click("#lx [data-tdall]"); await p.waitForFunction(() => document.querySelectorAll("#lx details.dh-sec[open] .dh-sec-b").length === 6); const t2 = await p.evaluate(() => $("#lx").innerText), cnt = re => (t2.match(re) || []).length;
+  await p.click("#lx [data-tdall]"); await p.waitForFunction(() => document.querySelectorAll("#lx details.dh-sec[open] .dh-sec-b").length === 7); const t2 = await p.evaluate(() => $("#lx").innerText), cnt = re => (t2.match(re) || []).length;
   assert.equal(cnt(/資金雷達・板塊輪動與資金流向/g), 1); assert.equal(cnt(/法人資金資料/g), 1, "資金資料的狀態只說一次");
   assert.match(t2, /最近交易日盤後・大盤、自選與訊號/, "週末不寫「盤中」");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");

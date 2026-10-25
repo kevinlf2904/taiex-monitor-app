@@ -1399,7 +1399,6 @@ function flowsDecisionHtml(M) {
       ${row("大戶異常（法人單日買賣金額最大）：", [bb?.a1 > 0 ? P(bb) : "", bs?.a1 < 0 ? P(bs) : ""].join(" ").trim(), "沒有明顯的大額買賣")}
     </div>
     <p class="note" style="margin:6px 0">異常爆量個股（成交額逾前 4 日均量 3 倍且逾 3 億）：<b>${odd}</b> 檔${M.T < 10 ? `・目前只有 ${M.T} 個交易日，近 5 日與加速度要 10 天才準` : ""}</p>` : ""}
-    ${typeof sumFlowHtml === "function" ? sumFlowHtml(M) : ""}
     ${go}
   </div>`;
 }
@@ -1443,7 +1442,7 @@ function todayText() {
 }
 
 // 今日市場的展開狀態：外部指定的時段（W.tdPh，例如 #radar/today、資金雷達原本的「今日」、今日重點卡的「看完整」）優先，否則只展開現在的時段
-const TD_OPEN = { pre: ["pre", "mac"], live: ["live"], post: ["live", "flow", "post"], closed: ["pre", "mac", "live"], flow: ["flow"], mine: ["mine"], mac: ["mac"] }; // 收盤後、休市日的「盤後整理」（大盤、自選與訊號）預設打開
+const TD_OPEN = { pre: ["pre", "mac"], live: ["live"], post: ["live", "flow", "sum", "post"], closed: ["pre", "mac", "live"], flow: ["flow"], sum: ["sum"], mine: ["mine"], mac: ["mac"] }; // 收盤後、休市日的「盤後整理」（大盤、自選與訊號）預設打開
 function tdOpenState(t, phDef) {
   const want = W.tdPh?.d === t ? W.tdPh.ph : null, ph = want || phDef;
   if (W.tdOpen?.d !== t || W.tdOpen.ph !== ph) W.tdOpen = { d: t, ph, s: Object.fromEntries((TD_OPEN[ph] || []).map(k => [k, true])) };
@@ -1469,10 +1468,12 @@ function tdMacBody() {
     <p class="note">原物料外匯來自 Yahoo Finance，可能延遲 10～15 分鐘；完整資料與對股市的影響在大盤頁。</p>`;
 }
 // 展開一個區塊才畫它的內容；全部展開／收合
-document.addEventListener("toggle", e => { const d = e.target; if (!d.matches?.("details[data-tdbox]") || W.lt !== "today" || !W.tdOpen) return; const k = d.dataset.tdbox;
-  if (!!W.tdOpen.s[k] === d.open) return; W.tdOpen.s[k] = d.open; if (d.open) renderList(); }, true);
+// 點標題當下就記下來（報價每秒重畫，等 toggle 事件才記，剛好重畫時這一下會被吃掉）；toggle 時沒內容再補畫
+document.addEventListener("click", e => { const sm = e.target.closest?.("details[data-tdbox] > summary"); if (!sm || W.lt !== "today" || !W.tdOpen) return; const d = sm.parentElement; W.tdOpen.s[d.dataset.tdbox] = !d.open; }, true);
+document.addEventListener("toggle", e => { const d = e.target; if (!d.matches?.("details[data-tdbox]") || W.lt !== "today" || !W.tdOpen) return;
+  W.tdOpen.s[d.dataset.tdbox] = d.open; if (d.open && !d.querySelector(".dh-sec-b")) renderList(); }, true);
 document.addEventListener("click", e => { const b = e.target.closest("[data-tdall]"); if (!b || W.lt !== "today" || !W.tdOpen) return; const on = b.dataset.tdall === "1";
-  for (const k of ["pre", "mac", "live", "flow", "mine", "post"]) W.tdOpen.s[k] = on; renderList(); });
+  for (const k of ["pre", "mac", "live", "flow", "sum", "mine", "post"]) W.tdOpen.s[k] = on; renderList(); });
 // 今日市場「盤中」面板最上面一行：盤中監控今天的事件數（事件本體在盤中監控分頁，這裡只連過去）
 function monLine() {
   if (typeof monE !== "function") return "";
@@ -1578,14 +1579,29 @@ function tdLiveViz(evs, hold, pm) {
   const heat = L.length ? `<div class="td-heat">${L.map(([c, v]) => `<span class="${v >= 0 ? "up" : "down"}${H.has(c) ? " own" : ""}" style="--a:${(Math.min(Math.abs(v) / 5, 1) * 0.75 + 0.12).toFixed(2)}"><em>${esc(nameOf(c) || c)}</em><b class="num">${tdPctTxt(v)}</b></span>`).join("")}</div>` : "";
   return tl + heat;
 }
-// 資金雷達：法人情緒刻度＋今天法人買最多 3 個、賣最多 2 個板塊
+// 資金雷達：近 5 日法人買超最多 3 個、賣超最多 2 個板塊＋大戶異常（今天的情緒與板塊在「盤後總結」）
 function tdFlowViz(M) {
   if (!M) return "";
-  let mood = null, A = []; try { mood = typeof flowMood === "function" ? flowMood(M) : null; } catch {} try { A = M.secs && typeof flowAt === "function" ? flowAt(M) : []; } catch {}
+  let A = [], S = []; try { A = M.secs && typeof flowAt === "function" ? flowAt(M) : []; } catch {} try { S = M.stocks && typeof flowStocks === "function" ? flowStocks(M) : []; } catch {}
+  const top = s => A.filter(x => tdOk(x.net5) && s * x.net5 > 0).sort((a, b) => s * (b.net5 - a.net5));
+  const R = [...top(1).slice(0, 3), ...top(-1).slice(0, 2).reverse()].map(x => [x.name, x.net5, briefFlowFmt(x.net5)]);
+  const big = S.filter(x => /^\d{4}$/.test(x.code) && tdOk(x.a1)), bb = big.reduce((m, x) => (!m || x.a1 > m.a1 ? x : m), null), bs = big.reduce((m, x) => (!m || x.a1 < m.a1 ? x : m), null);
+  const bg = [bb?.a1 > 0 && `<span class="up">▲ ${esc(bb.name)} ${briefFlowFmt(bb.a1)}</span>`, bs?.a1 < 0 && `<span class="down">▼ ${esc(bs.name)} ${briefFlowFmt(bs.a1)}</span>`].filter(Boolean);
+  return R.length || bg.length ? `${R.length ? `<div class="td-cap note">近 5 日法人買賣超（板塊）</div>${tdBars(R)}` : ""}${bg.length ? `<div class="td-big note">大戶異常 ${bg.join("")}</div>` : ""}` : "";
+}
+// 盤後總結：當天的計分板——加權、漲跌家數、法人情緒、異常個股＋今天法人買賣最多的板塊（文字與分享選項在點開後）
+function tdSumViz(M, tq) {
+  if (!M) return "";
+  let mood = null, A = [], S = []; try { mood = typeof flowMood === "function" ? flowMood(M) : null; } catch {} try { A = M.secs && typeof flowAt === "function" ? flowAt(M) : []; } catch {} try { S = M.stocks && typeof flowStocks === "function" ? flowStocks(M) : []; } catch {}
+  const d = M.dates?.[M.T - 1], ix = tq?.date === d && tdOk(tq?.chgPct) ? tq.chgPct : null, odd = S.filter(x => x.mult >= 3 && Math.abs(x.a1) >= 3).length;
+  const g = mood && tdOk(mood.score) ? (() => { const a = Math.PI * (1 - mood.score / 100), x = 30 + 24 * Math.cos(a), y = 30 - 24 * Math.sin(a); return `<svg viewBox="0 0 60 34" aria-hidden="true"><path class="bg" d="M6 30A24 24 0 0 1 54 30"/><path class="${mood.score >= 50 ? "up" : "down"}" d="M6 30A24 24 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)}"/></svg>`; })() : "";
+  const K = [ix != null && [`加權`, `<b class="num ${cls(ix)}">${tdPctTxt(ix)}</b>`, ""],
+    mood && tdOk(mood.up) && [`漲／跌家數`, `<b class="num"><span class="up">${mood.up}</span>／<span class="down">${mood.dn}</span></b>`, mood.lu || mood.ld ? `漲停 ${mood.lu || 0}・跌停 ${mood.ld || 0}` : ""],
+    mood && tdOk(mood.score) && [`法人情緒`, `<span class="td-gauge">${g}<b class="num">${mood.score}</b></span>`, esc(mood.label)],
+    S.length && [`異常個股`, `<b class="num">${odd}</b>`, "法人金額放大 3 倍"]].filter(Boolean);
   const top = s => A.filter(x => tdOk(x.net1) && s * x.net1 > 0).sort((a, b) => s * (b.net1 - a.net1));
-  const R = [...top(1).slice(0, 3), ...top(-1).slice(0, 2).reverse()].map(x => [x.name, x.net1, briefFlowFmt(x.net1)]);
-  const g = mood && tdOk(mood.score) ? (() => { const a = Math.PI * (1 - mood.score / 100), x = 30 + 24 * Math.cos(a), y = 30 - 24 * Math.sin(a); return `<div class="td-gauge" role="img" aria-label="法人情緒 ${mood.score} 分，${esc(mood.label)}"><svg viewBox="0 0 60 34" aria-hidden="true"><path class="bg" d="M6 30A24 24 0 0 1 54 30"/><path class="${mood.score >= 50 ? "up" : "down"}" d="M6 30A24 24 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)}"/></svg><b class="num">${mood.score}</b><span class="note">${esc(mood.label)}</span></div>`; })() : "";
-  return g || R.length ? `<div class="td-flow">${g}${tdBars(R)}</div>` : "";
+  const R = [...top(1).slice(0, 3), ...top(-1).slice(0, 3).reverse()].map(x => [x.name, x.net1, briefFlowFmt(x.net1)]);
+  return K.length || R.length ? `${K.length ? `<div class="td-kpi">${K.map(([n, v, sub]) => `<div><span class="note">${n}</span>${v}${sub ? `<small class="note">${sub}</small>` : ""}</div>`).join("")}</div>` : ""}${R.length ? `<div class="td-cap note">今天法人買賣最多的板塊</div>${tdBars(R)}` : ""}` : "";
 }
 // 我的重點：接下來 7 個交易日的小行事曆，點是庫存、自選的法說會、除權息、ETF 換股、事件提醒
 function tdMineViz(t, mine) {
@@ -1693,6 +1709,7 @@ function todayPage() {
     ["mac", "總經儀表板", tdMacSum(), () => tdMacBody(), () => tdMacViz()],
     ["live", when === "盤中" ? "盤中動態" : when === "盤後" ? "盤後整理" : `${when}整理`, `${alerts ? `■ 警示 ${alerts} 件・` : mon.length ? `事件 ${mon.length} 件・` : ""}${D.n ? `自選與庫存 ${D.up} 漲 ${D.dn} 跌` : "大盤、自選與訊號"}`, () => `${monLine()}${sumHead}`, () => tdLiveViz(mon, hold, pm || sess.session === "closed")],
     ["flow", "資金雷達", inS || outS ? [inS && `${inS.name}流入`, outS && `${outS.name}流出`].filter(Boolean).join("、") : "法人資金與板塊輪動", () => flowsDecisionHtml(M), () => tdFlowViz(M)], // 資料狀態只在內容說一次
+    ["sum", "盤後總結", M ? `${M.dates?.[M.T - 1]?.slice(5).replace("-", "/") || ""} 收盤後的一天整理` : "收盤後整理當天的盤面", () => (M && typeof sumFlowHtml === "function" ? sumFlowHtml(M) : `<p class="note">資金雷達有資料以後，這裡會把當天的漲跌家數、情緒與板塊整理成一段話（資料狀態見「資金雷達」）。</p>`), () => tdSumViz(M, tq)],
     ["mine", "我的重點", mine.length ? mine.map(([k]) => k).join("・") : "庫存與自選今天沒有特別的事", () => mine.length ? `<ul class="tdlist">${mine.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul>` : `<p class="note">庫存與自選今天沒有大漲跌、除權息、法說會、ETF 換股或事件提醒。</p>`, () => tdMineViz(t, new Set([...hold, ...myCodes()]))],
     ["post", "收盤驗證與下一步", val?.outcomeLabel || (pm ? "收盤後對照盤前推演" : "13:30 收盤後對照盤前推演"), () => `${validateHtml(val, vPlan)}${nextActionHtml(plan, val)}`, () => tdPostViz(tq, kl, val, pm || sess.session === "closed")]
   ];
@@ -1714,7 +1731,8 @@ function todayPage() {
       <div class="dh-title-btns">
         <button class="td-ib" data-tx="tdre" title="重新整理">↻<span class="td-vh">重新整理</span></button>
         <button class="td-ib" data-tx="tdai" title="AI 整理">${ico("ai")}<span class="td-vh">AI 整理</span></button>
-        <button class="td-ib" data-tx="tdtxt" title="複製文字">⧉<span class="td-vh">複製文字</span></button>
+        <button class="td-ib" data-tx="tdtxt" title="複製文字">${ico("copy")}<span class="td-vh">複製文字</span></button>
+        ${M ? `<button class="td-ib" data-mshare="share" title="分享今日盤面（圖片）">${ico("share")}<span class="td-vh">分享今日盤面</span></button>` : ""}
       </div>
     </div>
     ${sess.displayNote || cn ? `<div class="dh-note-bar note">📅 ${esc(sess.displayNote || cn[1])}</div>` : ""}

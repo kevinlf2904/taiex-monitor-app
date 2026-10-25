@@ -372,7 +372,7 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-page .dh-status-bar { flex-direction: row; flex-wrap: nowrap; align-items: center; padding: 4px 4px 4px 12px; margin-bottom: 10px; }
 .td-page .dh-title-btns { display: flex; flex: none; }
 .td-ib { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--radius); background: transparent; color: var(--muted); font: inherit; font-size: 17px; cursor: pointer; }
-.td-ib:hover { color: var(--ink); background: var(--surface-2); } .td-ib svg { width: 18px; height: 18px; }
+.td-ib:hover { color: var(--ink); background: var(--surface-2); } .td-ib svg { width: 18px; height: 18px; margin: 0 !important; }
 .td-hero { display: grid; gap: 12px; margin-bottom: 14px; }
 .td-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .td-head { display: flex; align-items: center; gap: 12px; }
@@ -430,6 +430,11 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 u.conf { background: var(--up); } u.div { background: var(--down); } u.etf { background: var(--ink); } u.ev { background: var(--warn); }
 .td-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 10.5px; } .td-legend u { margin-right: 3px; vertical-align: 1px; }
 .td-chk { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; } .td-chk u { display: inline-block; width: 9px; height: 9px; margin-right: 4px; border-radius: 50%; border: 1px solid var(--muted); vertical-align: -1px; } .td-chk .on u { background: var(--up); border-color: var(--up); } .td-chk .on { color: var(--ink); }
+.td-big { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11.5px; } .td-big .up { color: var(--up); } .td-big .down { color: var(--down); }
+.td-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 6px; }
+.td-kpi > div { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-radius: var(--radius); background: var(--surface-2); min-width: 0; }
+.td-kpi .note { font-size: 10.5px; } .td-kpi b { font-size: 16px; font-weight: 500; } .td-kpi small { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-kpi .td-gauge { display: flex; align-items: flex-end; gap: 4px; } .td-kpi .td-gauge svg { width: 38px; height: 22px; } .td-kpi .td-gauge b { margin: 0; }
 /* 版面：手機一欄；平板 2 欄、電腦 3 欄，打開的那塊佔整排（dense：收著的小塊往上補空位，不留洞） */
 .dh-sec[open] { grid-column: 1 / -1; }
 @media (min-width: 600px) { .dh-secs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
