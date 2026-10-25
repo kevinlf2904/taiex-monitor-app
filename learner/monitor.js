@@ -1,5 +1,5 @@
 /* ================= 情報局「盤中監控」（M1：這個頁面開著、在前景時才偵測） =================
-   偵測規則與事件模型都是純函式（monScan、monMerge…），排程（scripts/_engine.mjs）之後可以直接重用；畫面在 watch.html 的 monPage。
+   偵測規則與事件模型都是純函式（monScan、monMerge…），伺服器巡檢（M2：scripts/monitor.mjs 透過 scripts/_engine.mjs）用同一套；畫面在 monPage。
    範圍：大盤漲跌門檻、自選＋台股庫存的漲跌幅與漲跌停、今日市場的推估關鍵價位、既有到價提醒與指標提醒（只記錄，通知照原本的）、資料過期／來源失敗。
    事件 id＝交易日:類型:代號:方向，同一件事升級（例如跌 1% → 跌 2%）只更新 level，不會再開一件；資料過期時不判斷，避免不可靠的警示。
    事件存在這台瀏覽器（kline:watch:mon:v1:YYYY-MM-DD），每天最多 200 件、只留 20 天、不雲端同步（tools.js 的 SYNC_SKIP）。 */
@@ -8,6 +8,7 @@ const MON_LV = { IDX: [1, 2, 3], SYM: [5, 7] }; // 大盤 ±1/2/3%、個股 ±5/
 const MON_SYM_SEV = ["watch", "alert", "alert"]; // 個股：5% 注意、7% 和漲跌停是警示（會推播）
 const MON_SEV = ["info", "watch", "alert"], MON_SEV_TXT = { info: "● 留意", watch: "▲ 注意", alert: "■ 警示" };
 const monKey = d => `watch:mon:v1:${d}`;
+const monTime = t => new Date(t + 8 * 3600e3).toISOString().slice(11, 19); // 台灣時間 HH:MM:SS
 // 報價可不可以拿來判斷：今天的、有成交價、不是估價、3 分鐘內（盤中）
 function monFresh(q, today, now = Date.now()) {
   if (!q || q.price == null || !isFinite(q.price) || q.estimated) return false;
@@ -15,7 +16,7 @@ function monFresh(q, today, now = Date.now()) {
   if (q.time && /^\d{2}:\d{2}/.test(q.time)) { const [h, m, s = 0] = q.time.split(":").map(Number), t = Date.parse(`${today}T00:00:00+08:00`) + ((h * 60 + m) * 60 + s) * 1e3; if (now - t > MON_STALE) return false; }
   return true;
 }
-// 一輪偵測：Q＝報價 Map（代號 → quote）、ctx＝{ today, codes: [{ c, hold }], plan（今日市場的推演快照）, prevPx（上一輪的價格）, names, now }
+// 一輪偵測：Q＝報價 Map（代號 → quote）、ctx＝{ today, codes: [{ c, hold }]（沒給 hold＝伺服器巡檢，標題不分庫存／自選）, plan（今日市場的推演快照）, prevPx（上一輪的價格）, names, now }
 // 回傳候選事件 [{ id, type, code, dir, level, sev, title, msg, px, pct }]，還沒有和既有事件合併
 function monScan(Q, ctx) {
   const out = [], { today, now = Date.now() } = ctx, nm = c => ctx.names?.[c] || Q.get(c)?.name || c, pc = v => `${v > 0 ? "+" : ""}${(+v).toFixed(2)}%`;
@@ -29,10 +30,10 @@ function monScan(Q, ctx) {
   }
   for (const { c, hold } of ctx.codes || []) {
     const q = Q.get(c); if (!monFresh(q, today, now) || q.chgPct == null || !q.prev) continue;
-    const a = Math.abs(q.chgPct), dir = q.chgPct >= 0 ? "up" : "dn", who = hold ? "庫存" : "自選";
+    const a = Math.abs(q.chgPct), dir = q.chgPct >= 0 ? "up" : "dn", who = hold == null ? "" : hold ? "庫存 " : "自選 ";
     const [lu, ld] = typeof twLimits === "function" ? twLimits(q.prev, /^00/.test(c)) : [null, null], lim = dir === "up" ? lu && q.price >= lu : ld && q.price <= ld;
     const lv = lim ? 3 : MON_LV.SYM.filter(x => a >= x).length;
-    if (lv) out.push({ id: `${today}:SYM:${c}:${dir}`, type: "SYM", code: c, dir, level: lv, sev: MON_SYM_SEV[lv - 1], title: `${who} ${nm(c)} ${lim ? (dir === "up" ? "漲停" : "跌停") : `${dir === "up" ? "漲" : "跌"}超過 ${MON_LV.SYM[lv - 1]}%`}`, msg: `${nm(c)} ${c} ${fmtP(q.price)}（${pc(q.chgPct)}）`, px: q.price, pct: q.chgPct });
+    if (lv) out.push({ id: `${today}:SYM:${c}:${dir}`, type: "SYM", code: c, dir, level: lv, sev: MON_SYM_SEV[lv - 1], title: `${who}${nm(c)} ${lim ? (dir === "up" ? "漲停" : "跌停") : `${dir === "up" ? "漲" : "跌"}超過 ${MON_LV.SYM[lv - 1]}%`}`, msg: `${nm(c)} ${c} ${fmtP(q.price)}（${pc(q.chgPct)}）`, px: q.price, pct: q.chgPct });
   }
   return out;
 }
@@ -62,7 +63,7 @@ function monData(E, today, bad, msg, now = Date.now()) {
 // 通知節流：只推「警示」等級、同一檔 15 分鐘最多一則、每天最多 20 則（和未來 Telegram 的規格一致）
 function monShouldNotify(e, E, now = Date.now()) {
   if (e.sev !== "alert") return false;
-  const sent = Object.values(E).flatMap(x => x.notified.filter(n => n.ok && !n.via).map(n => ({ ...n, code: x.code })));
+  const sent = Object.values(E).flatMap(x => x.notified.filter(n => n.ok && n.ch === "local" && !n.via).map(n => ({ ...n, code: x.code })));
   if (sent.length >= 20) return false;
   return !sent.some(n => n.code === e.code && now - n.at < 15 * 60e3);
 }
@@ -84,6 +85,23 @@ function monStatus({ day, sess, hidden, err, staleN, lastOk, now = Date.now() })
   if (staleN) return ["stale", `有 ${staleN} 檔報價超過 3 分鐘沒更新，這些先不判斷`];
   if (!lastOk) return ["loading", "第一次抓報價中…"];
   return ["on", "監控中（這個頁面開著、在前景時才偵測，關掉就停）"];
+}
+// 伺服器巡檢（scripts/monitor.mjs）的事件併進這台的事件表：沒有的加進來、等級比較高的升級；回傳變動幾件
+function monSrvMerge(E, list) {
+  let n = 0;
+  for (const s of Array.isArray(list) ? list : []) {
+    if (!s?.id || typeof s.id !== "string" || !MON_SEV.includes(s.sev)) continue; const e = E[s.id];
+    if (!e) { if (Object.keys(E).length >= MON_MAX) continue; E[s.id] = { ...s, snaps: (s.snaps || []).slice(-MON_SNAPS), notified: s.notified || [], origin: "server" }; n++; }
+    else if (s.level > e.level) { Object.assign(e, { level: s.level, sev: s.sev, title: s.title, msg: s.msg, px: s.px, pct: s.pct, last: s.last }); n++; }
+  }
+  return n;
+}
+// 伺服器巡檢的狀態：沒有今天的執行紀錄＝沒在跑；連續 3 次失敗＝中斷；超過 20 分鐘沒跑＝延遲（GitHub 排程常會晚幾分鐘）
+function monSrvState(runs, now = Date.now()) {
+  if (!runs?.last) return ["off", "伺服器巡檢今天沒有執行：只有這個頁面開著時偵測"];
+  if (runs.streak >= 3) return ["down", `伺服器巡檢中斷（連續 ${runs.streak} 次失敗${runs.err ? `：${runs.err}` : ""}）`];
+  if (now - runs.last > 20 * 60e3) return ["late", `伺服器巡檢延遲：最後一次 ${monTime(runs.last)}`];
+  return ["ok", `伺服器巡檢正常：最後一次 ${monTime(runs.last)}（約每 5–15 分鐘）`];
 }
 
 /* ---------- 網頁：每 20 秒抓一次「大盤＋自選＋台股庫存」的報價（不放進每秒的報價更新），偵測、存檔、通知 ---------- */
@@ -113,24 +131,30 @@ async function monTick(now = Date.now()) {
     M.prevPx = { T00: Q.get("T00")?.price };
   }
   for (const x of (W.irLog ||= store.get("watch:irlog", []) || []).filter(x => x.d === today)) monRule(E, today, x.code, `指標提醒：${nameOf(x.code)} ${x.code}`, x.msg, now); // 指標提醒（tools.js 每 5 分鐘檢查、已經通知過）
+  if (!(M.srvAt > now - MON_SRV_EVERY)) { M.srvAt = now; await monSrvPull(today, E); }
   monSave(today); if (W.lt === "mon") renderList(); return M;
+}
+// 伺服器巡檢的事件（/api/sync?op=mon），2 分鐘拿一次；拿不到就算了，這台照樣自己偵測
+const MON_SRV_EVERY = 120e3;
+async function monSrvPull(d, E) {
+  try { const j = await getJ(`/api/sync?op=mon&date=${d}`); if (!j?.ok || !j.kv) return; W.mon.runs = j.runs || null; monSrvMerge(E, j.events); } catch {}
 }
 // 一打開清一次 20 天前的事件
 function monLoop() { clearTimeout(W.monTimer); if (!W.monGcAt) { W.monGcAt = Date.now(); monGc(); } if (W.off) return; W.monTimer = setTimeout(() => monTick().finally(monLoop), MON_EVERY); }
 // 到價提醒觸發時記一件（通知已經由 checkAlerts 送出）
 function monAlertHit(c, title, msg) { const d = W.today || twDay(); if (monRule(monE(d), d, c, title, msg)) monSave(d); }
 function monState() { const M = W.mon || {}; return monStatus({ day: twDayState(), sess: mktSession(), hidden: monHidden(), err: M.fails ? M.err : null, staleN: M.staleN, lastOk: M.okAt }); }
-const monTime = t => new Date(t + 8 * 3600e3).toISOString().slice(11, 19);
 function monPage() {
   const d = W.today || twDay(), E = monE(d), L = Object.values(E).sort((a, b) => (a.state === "open") - (b.state === "open") || b.last - a.last).reverse(), [st, txt] = monState(), M = W.mon || {}, codes = monCodes();
   const empty = { on: "今天目前沒有觸發事件（監控正常）。", loading: "第一次抓報價中…", paused: "監控暫停中，這段時間沒有偵測。", closed: "現在不在交易時段，沒有監控。", unknown: "還不能確認今天有沒有開盤，先不監控。", error: "報價來源失敗，現在沒有資料——不代表沒有事件。", stale: "部分報價過期，這些代號先不判斷。" }[st];
-  const row = e => `<li><button type="button" class="mon-ev ${e.sev}${e.state === "closed" ? " done" : ""}" data-mon="${monHash(e.id)}"><span class="mon-sev">${MON_SEV_TXT[e.sev]}</span><b>${esc(e.title)}</b><span class="note">${esc(e.msg)}</span><span class="note mon-t">${monTime(e.first)}${e.snaps.length > 1 ? `・更新 ${e.snaps.length - 1} 次` : ""}${e.state === "closed" ? "・已結束" : ""}</span></button></li>`;
+  const row = e => `<li><button type="button" class="mon-ev ${e.sev}${e.state === "closed" ? " done" : ""}" data-mon="${monHash(e.id)}"><span class="mon-sev">${MON_SEV_TXT[e.sev]}</span><b>${esc(e.title)}</b><span class="note">${esc(e.msg)}</span><span class="note mon-t">${e.origin === "server" ? "伺服器・" : ""}${monTime(e.first)}${e.snaps.length > 1 ? `・更新 ${e.snaps.length - 1} 次` : ""}${e.state === "closed" ? "・已結束" : ""}</span></button></li>`;
   const h = `<section class="csec mon">
     <div class="dh-status-bar"><div class="dh-sb-left"><span class="dh-badge mon-${st}">${{ on: "監控中", loading: "載入中", paused: "暫停", closed: "未開盤／休市", unknown: "交易日待確認", error: "來源失敗", stale: "資料過期" }[st]}</span><span class="note">${esc(txt)}</span></div></div>
     <h3>盤中監控 <span class="note">${d.slice(5).replace("-", "/")}</span></h3>
+    <p class="note mon-srv">${esc(monSrvState(M.runs)[1])}</p>
     <p class="note">監控範圍：大盤＋自選 ${codes.filter(x => !x.hold).length} 檔＋台股庫存 ${codes.filter(x => x.hold).length} 檔，每 20 秒一次${M.okAt ? `・最後成功 ${monTime(M.okAt)}` : ""}${M.fails ? `・連續失敗 ${M.fails} 次` : ""}。只推「■ 警示」到這台裝置（同一檔 15 分鐘最多一則、每天最多 20 則）；到價、指標提醒照原本的方式通知，這裡一起記錄。</p>
     ${L.length ? `<ul class="mon-list">${L.map(row).join("")}</ul>` : `<p class="note mon-empty">${empty}</p>`}
-    <details class="dh-more"><summary>怎麼判斷的</summary><p class="note">大盤漲跌超過 1%、2%、3%；自選與庫存漲跌超過 5%、7% 或漲跌停；加權穿越今日市場的推估分水嶺、支撐、壓力。同一檔同一方向一天只開一件，幅度變大時更新同一件。報價超過 3 分鐘沒更新、不是今天的、或只是估價時不判斷。事件只代表行情達到條件，不代表原因，也不是買賣建議。事件存在這台裝置 20 天，不會雲端同步。</p></details>
+    <details class="dh-more"><summary>怎麼判斷的</summary><p class="note">大盤漲跌超過 1%、2%、3%；自選與庫存漲跌超過 5%、7% 或漲跌停；加權穿越今日市場的推估分水嶺、支撐、壓力。同一檔同一方向一天只開一件，幅度變大時更新同一件。報價超過 3 分鐘沒更新、不是今天的、或只是估價時不判斷。事件只代表行情達到條件，不代表原因，也不是買賣建議。事件存在這台裝置 20 天，不會雲端同步。伺服器巡檢開著時，關掉頁面也會檢查（GitHub 排程，約每 5–15 分鐘），它找到的標「伺服器」；在「工具 → 提醒」勾「盤中警示」並綁定 Telegram，會收到「■ 警示」。</p></details>
   </section>`;
   return { h, note: "盤中監控只在這個頁面開著、在前景時偵測；關掉或切到 K線學堂、存股就暫停。" };
 }
@@ -140,7 +164,7 @@ function monDetail(hash) {
   openSheet(`<h3>${esc(e.title)}</h3><p class="note">${MON_SEV_TXT[e.sev]}・${{ IDX: "大盤", SYM: "個股", LEVEL: "關鍵價位", RULE: "提醒", DATA: "資料" }[e.type] || e.type}・${monTime(e.first)} 開始${e.last !== e.first ? `・${monTime(e.last)} 更新` : ""}・${e.state === "closed" ? "已結束" : "進行中"}</p>
     <p>${esc(e.msg)}</p>
     ${e.snaps.length ? `<h4>當時的報價</h4><ul class="tlist">${e.snaps.map(s => `<li>${monTime(s.at)}　${fmtP(s.px)}　<span class="${cls(s.pct)}">${s.pct >= 0 ? "+" : ""}${(+s.pct).toFixed(2)}%</span></li>`).join("")}</ul>` : ""}
-    <h4>通知</h4><p class="note">${e.notified.length ? e.notified.map(n => `${monTime(n.at)} ${n.via ? `由${n.via}通知` : n.ok ? "已通知這台裝置" : `通知失敗：${esc(n.err || "")}`}`).join("；") : "沒有通知（只推「■ 警示」等級）"}</p>
+    <h4>通知</h4><p class="note">${e.notified.length ? e.notified.map(n => `${monTime(n.at)} ${n.via ? `由${n.via}通知` : n.ch === "tg" ? (n.ok ? `Telegram 推播 ${n.n || 1} 人` : `Telegram 失敗：${esc(n.err || "")}`) : n.ok ? "已通知這台裝置" : `通知失敗：${esc(n.err || "")}`}`).join("；") : "沒有通知（只推「■ 警示」等級）"}</p>
     ${e.code && e.code !== "T00" ? `<p><button type="button" class="btn sm" data-sel="${esc(e.code)}">看 ${esc(nameOf(e.code))} 個股頁 ›</button></p>` : ""}
     <p class="note">事件只代表行情達到條件，不代表原因，也不是買賣建議。</p>`, false);
 }

@@ -5,8 +5,8 @@
    筆記追蹤：每檔可以記筆記（記下當時的價格）、設目標價（寫進價格提醒，到價會通知），清單看現價離目標還差多少。
    evScan、revOf、briefParts、briefText 是純函式（不碰畫面），排程透過 scripts/_engine.mjs 載入，網頁和推播的內容才會一樣。
    用到 watch.html 的 W、esc、cls、getJ、store、renderList、nameOf、fmtP、toast、notify、mkSeg，tools.js 的 myCodes，earn.js 的 ER、erLoad，fundx.js 的 ehLoad，core.js 的 aiChat。 */
-const EV_KINDS = [["rev", "營收公布", "每月 10 日前公布上個月營收時"], ["pm3", "三率三升", "季報出來，毛利率、營益率、淨利率都比上一季高"], ["conf", "法說會前一天", "下一個交易日要開法說會"], ["etf", "ETF 換股", "持有或自選的 ETF 新增、剔除成分股（近 7 天）"], ["brief", "每日早報", "每個交易日早上 07:40（Telegram）"], ["close", "收盤重點", "每個交易日收盤後，把今日重點（自選與庫存大漲跌、今明兩天除權息與法說會、ETF 換股、事件）推到 Telegram"]];
-const EV_PUSH = ["brief", "close"]; // 只有 Telegram 推播的項目，網頁不跳通知
+const EV_KINDS = [["rev", "營收公布", "每月 10 日前公布上個月營收時"], ["pm3", "三率三升", "季報出來，毛利率、營益率、淨利率都比上一季高"], ["conf", "法說會前一天", "下一個交易日要開法說會"], ["etf", "ETF 換股", "持有或自選的 ETF 新增、剔除成分股（近 7 天）"], ["brief", "每日早報", "每個交易日早上 07:40（Telegram）"], ["close", "收盤重點", "每個交易日收盤後，把今日重點（自選與庫存大漲跌、今明兩天除權息與法說會、ETF 換股、事件）推到 Telegram"], ["mon", "盤中警示", "伺服器盤中巡檢（約每 5–15 分鐘）發現大盤或庫存、自選的「■ 警示」時推到 Telegram；同一檔 15 分鐘最多一則、每天最多 20 則"]];
+const EV_PUSH = ["brief", "close", "mon"]; // 只有 Telegram 推播的項目，網頁不跳通知（盤中警示在網頁上由盤中監控分頁自己通知）
 const twDay = (ms = Date.now(), add = 0) => new Date(ms + 8 * 3600e3 + add * 864e5).toISOString().slice(0, 10);
 // 下一個平日（不管國定假日）；watch.html 的除權息、法說會日期也用這個
 const nextWd = d => { const t = new Date(d + "T00:00:00Z"); do t.setUTCDate(t.getUTCDate() + 1); while (t.getUTCDay() % 6 === 0); return t.toISOString().slice(0, 10); };

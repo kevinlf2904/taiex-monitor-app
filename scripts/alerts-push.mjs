@@ -69,7 +69,7 @@ export async function main() {
   for (const [, d] of docs) for (const c of [...(d.rules || []), ...(d.price || [])].map(x => x.code).concat(closeOn(d) ? d.ev.mine : [])) if (!isTW(c) && !us.has(c)) { us.set(c, await usDaily(c)); await sleep(300); }
   const dailyOf = c => (isTW(c) ? H.s[c]?.b || null : us.get(c) || null);
   const FD = { cong: await readData("congress.json"), f13: await readData("f13.json"), ins: await readData("insider.json") }, since = new Date(Date.parse(date) - 4 * 864e5).toISOString().slice(0, 10);
-  const evOn = docs.some(([, d]) => d.ev?.on?.some(k => k !== "brief")), CAL = evOn ? await callApi(import("../api/_lib/calendar.js")) : null, ED = evOn ? await evDataOf(E, CAL) : null;
+  const evOn = docs.some(([, d]) => d.ev?.on?.some(k => k !== "brief" && k !== "mon")), CAL = evOn ? await callApi(import("../api/_lib/calendar.js")) : null, ED = evOn ? await evDataOf(E, CAL) : null;
   const pctOf = c => { const D = dailyOf(c); return D?.length > 1 && D.at(-2).c ? (D.at(-1).c / D.at(-2).c - 1) * 100 : null; };
   let sent = 0;
   for (const [h, d] of docs) {

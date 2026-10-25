@@ -633,8 +633,8 @@ test("財報事件回測：事件判斷、公布後才進場、超額報酬", ()
 });
 test("事件提醒設定寫進推播清單：只看庫存或加上自選；只勾早報也算", () => {
   const data = { "kline:watch:evalert": JSON.stringify({ rev: true, brief: true, scope: "hold" }), "kline:watch:hold": JSON.stringify({ 2330: { sh: 1 }, AAPL: { sh: 1 }, 9999: { sh: 1, demo: true } }), "kline:watch:groups": JSON.stringify([{ list: ["2317", "NVDA"] }]) };
-  assert.deepEqual(alertDoc(data, "1").ev, { on: ["rev", "brief"], codes: ["2330"], mine: [] });
-  assert.deepEqual(alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ pm3: true, scope: "all" }) }, "1").ev, { on: ["pm3"], codes: ["2330", "2317"], mine: [] });
+  assert.deepEqual(alertDoc(data, "1").ev, { on: ["rev", "brief"], codes: ["2330"], mine: [], mon: [] });
+  assert.deepEqual(alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ pm3: true, scope: "all" }) }, "1").ev, { on: ["pm3"], codes: ["2330", "2317"], mine: [], mon: [] });
   // ETF 換股、收盤重點也要寫進去（收盤重點看自選＋庫存全部，含美股）
   const cl = alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ etf: true, close: true }) }, "1").ev;
   assert.deepEqual(cl.on, ["etf", "close"]); assert.deepEqual(cl.mine, ["2330", "AAPL", "2317", "NVDA"]);
@@ -1838,7 +1838,8 @@ test("盤中監控 M1：偵測規則、同一件事升級不重開、資料過�
   const e1 = E["2026-10-26:SYM:2330:up"]; assert.equal(monShouldNotify(E["2026-10-26:IDX:T00:dn"], E, now), true, "跌 3%＝警示");
   assert.equal(monShouldNotify({ ...e1, sev: "watch" }, E, now), false);
   e1.notified.push({ ch: "local", at: now, ok: true }); assert.equal(monShouldNotify({ ...e1, id: "x" }, E, now + 60e3), false, "15 分鐘內同一檔"); assert.equal(monShouldNotify({ ...e1, id: "x" }, E, now + 16 * 60e3), true);
-  const F = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [i, { code: String(i), notified: [{ at: now, ok: true }] }])); assert.equal(monShouldNotify({ code: "9", sev: "alert" }, F, now + 3600e3), false, "一天 20 則");
+  const F = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [i, { code: String(i), notified: [{ ch: "local", at: now, ok: true }] }])); assert.equal(monShouldNotify({ code: "9", sev: "alert" }, F, now + 3600e3), false, "一天 20 則");
+  for (const x of Object.values(F)) x.notified[0].ch = "tg"; assert.equal(monShouldNotify({ code: "9", sev: "alert" }, F, now + 3600e3), true, "伺服器的 Telegram 推播不算這台的次數");
   assert.match(monHash("a"), /^[0-9a-f]{8}$/); assert.notEqual(monHash("a"), monHash("b"));
   // 狀態：七種文字都不同
   const S = [{ day: "closed" }, { day: "unknown" }, { day: "trade", sess: "pre" }, { day: "trade", sess: "open", hidden: true }, { day: "trade", sess: "open", err: "x" }, { day: "trade", sess: "open", staleN: 2, lastOk: 1 }, { day: "trade", sess: "open" }, { day: "trade", sess: "open", lastOk: 1 }].map(o => monStatus(o)[0]);
@@ -1847,4 +1848,58 @@ test("盤中監控 M1：偵測規則、同一件事升級不重開、資料過�
   const M = new Map([["kline:watch:mon:v1:2026-09-01", "{}"], ["kline:watch:mon:v1:2026-10-20", "{}"], ["kline:watch:mon:v2:2026-09-01", "{}"], ["kline:watch:alerts", "{}"], ["kline:watch:list", "[]"]]);
   assert.equal(monGc(now, { get length() { return M.size; }, key: i => [...M.keys()][i], removeItem: k => M.delete(k) }), 1);
   assert.deepEqual([...M.keys()].sort(), ["kline:watch:alerts", "kline:watch:list", "kline:watch:mon:v1:2026-10-20", "kline:watch:mon:v2:2026-09-01"]);
+});
+
+import { memKv, monAllow, runOnce } from "../scripts/monitor.mjs";
+import { monPublic, monRuns } from "../api/_lib/sync.js";
+test("盤中監控 M2（伺服器巡檢）：重跑不重複通知、只通知庫存自選有的人、節流、來源失敗不產生事件、公開資料不含使用者", async () => {
+  const today = "2026-10-26", t0 = Date.parse("2026-10-26T10:00:30+08:00");
+  // 推播清單：盤中警示的範圍是庫存台股＋自選台股（範例庫存不算）；沒勾就沒有
+  const doc = alertDoc({ "kline:watch:evalert": JSON.stringify({ mon: true }), "kline:watch:hold": JSON.stringify({ 2330: { sh: 1 }, 2454: { demo: true }, AAPL: { sh: 1 } }), "kline:watch:groups": JSON.stringify([{ list: ["9999", "TSLA"] }]) }, "c1");
+  assert.deepEqual(doc.ev.mon.sort(), ["2330", "9999"]); assert.equal(docHas(doc), true);
+  assert.deepEqual(alertDoc({ "kline:watch:hold": JSON.stringify({ 2330: { sh: 1 } }) }, "c1").ev.mon, []);
+  await assert.rejects(memKv()("SADD", "x"), /不支援/, "記憶體替身遇到沒寫的指令要丟錯，不能默默忽略");
+  const J = x => JSON.parse(JSON.stringify(x)); // 沙盒（vm）裡建的陣列和這裡的原型不同，比對前先轉成一般資料
+  const users = { u1: { chat: "c1", ev: { on: ["mon"], mon: ["2330"] } }, u2: { chat: "c2", ev: { on: ["mon"], mon: ["9999"] } }, u3: { chat: "c3", ev: { on: ["close"], mon: [] } } };
+  const base = memKv();
+  const kvx = async (cmd, k, ...a) => (cmd === "SMEMBERS" && k === "alerts" ? Object.keys(users) : cmd === "GET" && /^alert:/.test(k) ? JSON.stringify(users[k.slice(6)]) : base(cmd, k, ...a));
+  const sent = [], tg = async (m, b) => { if (b.chat_id === "bad") throw new Error("chat not found"); sent.push(b.chat_id); };
+  let px = { T00: 97.5, 2330: 110, 9999: 101 }; const q = c => ({ code: c, name: "股" + c, price: px[c] ?? 100, prev: 100, chgPct: +(((px[c] ?? 100) / 100 - 1) * 100).toFixed(2), date: today }); // 沒有 time：過期判斷在 M1 的測試
+  const quotes = async codes => codes.map(q), log = () => {};
+  // 第一輪：大盤跌 2.5%（注意，不推）、2330 漲停（警示，只推給 u1）
+  let r = await runOnce({ kv: kvx, tg, quotes, now: t0, log });
+  assert.deepEqual(J(r.up.map(e => e.id).sort()), ["2026-10-26:IDX:T00:dn", "2026-10-26:SYM:2330:up"]); assert.deepEqual(sent, ["c1"], "個股警示只給庫存自選裡有它的人；u3 沒勾盤中警示");
+  assert.match(r.up.find(e => e.code === "2330").title, /^股2330 漲停$/, "伺服器的標題不分庫存／自選");
+  // 重跑同一輪（排程重送、重試）：不開新事件、不重複通知
+  r = await runOnce({ kv: kvx, tg, quotes, now: t0 + 60e3, log }); assert.equal(r.up.length, 0); assert.deepEqual(sent, ["c1"]);
+  // 大盤升級到跌 3%（警示）：人人都收；同一件只升級
+  px.T00 = 96.8; r = await runOnce({ kv: kvx, tg, quotes, now: t0 + 120e3, log });
+  assert.deepEqual(J(r.up.map(e => e.id)), ["2026-10-26:IDX:T00:dn"]); assert.deepEqual(sent.sort(), ["c1", "c1", "c2"].sort());
+  const E = monPublic(await kvx("HGETALL", "mon:2026-10-26")); assert.equal(E.length, 2, "存起來的只有事件（上一輪價格不算）");
+  const ix = E.find(e => e.id.endsWith("IDX:T00:dn")); assert.equal(ix.level, 3); assert.equal(ix.snaps.length, 2); assert.deepEqual(ix.notified.map(n => [n.ch, n.ok, n.n]), [["tg", true, 2]]);
+  assert.ok(!JSON.stringify(E).includes("c1") && !JSON.stringify(E).includes("u1"), "公開的事件不含 chat id 或使用者");
+  assert.equal(await kvx("TTL", "mon:2026-10-26"), 30 * 86400, "事件 30 天過期");
+  // 節流：同一檔 15 分鐘一則、每天 20 則；同一件同等級只送一次
+  const k2 = memKv(), e = { id: "x", code: "2330", level: 3, sev: "alert" };
+  assert.equal(await monAllow(k2, "h", e, today), true); assert.equal(await monAllow(k2, "h", e, today), false, "同一件同等級");
+  assert.equal(await monAllow(k2, "h", { ...e, id: "y" }, today), false, "同一檔 15 分鐘內"); assert.equal(await monAllow(k2, "h", { ...e, sev: "watch", id: "z" }, today), false, "注意不推");
+  let ok = 0; for (let i = 0; i < 25; i++) if (await monAllow(k2, "h", { ...e, id: "c" + i, code: "c" + i }, today)) ok++;
+  assert.equal(ok, 19, "一天最多 20 則（前面已經送了 1 則）"); assert.equal(await k2("TTL", "moncnt:h:2026-10-26"), 2 * 86400);
+  // Telegram 失敗：記在事件的 notified，不影響事件
+  users.u2.chat = "bad"; px[9999] = 91; r = await runOnce({ kv: kvx, tg, quotes, now: t0 + 30 * 60e3, log });
+  const e9 = r.up.find(x => x.code === "9999"); assert.equal(e9.sev, "alert"); assert.deepEqual(J(e9.notified.map(n => [n.ok, n.err])), [[false, "chat not found"]]);
+  // 來源失敗：不產生事件，連續失敗次數往上加；成功後歸零
+  const bad = async () => { throw new Error("證交所逾時"); };
+  for (let i = 0; i < 3; i++) assert.equal((await runOnce({ kv: kvx, tg, quotes: bad, now: t0 + (40 + i) * 60e3, log })).error, "證交所逾時");
+  let R = monRuns(await kvx("HGETALL", "mon:2026-10-26:runs")); assert.equal(R.streak, 3); assert.equal(R.err, "證交所逾時");
+  assert.deepEqual(engine().M.monSrvState(R, t0 + 43 * 60e3)[0], "down");
+  await runOnce({ kv: kvx, tg, quotes, now: t0 + 45 * 60e3, log }); R = monRuns(await kvx("HGETALL", "mon:2026-10-26:runs")); assert.equal(R.streak, 0); assert.equal(engine().M.monSrvState(R, t0 + 46 * 60e3)[0], "ok");
+  assert.equal(engine().M.monSrvState(R, t0 + 70 * 60e3)[0], "late"); assert.equal(engine().M.monSrvState(null)[0], "off");
+  // 不在交易時段、休市（加權報價不是今天）：什麼都不做
+  assert.equal((await runOnce({ kv: kvx, tg, quotes, now: Date.parse("2026-10-26T14:00:00+08:00"), log })).skipped, "session");
+  assert.equal((await runOnce({ kv: kvx, tg, quotes: async c => c.map(x => ({ ...q(x), date: "2026-10-23" })), now: t0, log })).skipped, "closed");
+  // 網頁合併伺服器事件：沒有的加進來、等級高的升級、這台已有的不重複
+  const { monSrvMerge } = engine().M, L = { [ix.id]: { ...ix, level: 2, sev: "watch", origin: "client" } };
+  assert.equal(monSrvMerge(L, [...E, { id: "bad", sev: "evil" }]), 2); assert.equal(L[ix.id].level, 3); assert.equal(L[ix.id].origin, "client", "這台原本就有的保留來源");
+  assert.equal(Object.values(L).find(x => x.code === "2330").origin, "server"); assert.equal(monSrvMerge(L, E), 0, "重複合併沒有變動");
 });

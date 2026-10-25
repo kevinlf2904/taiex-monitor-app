@@ -59,6 +59,32 @@ test("報價過期不判斷；來源連續失敗記一件、畫面說「不代�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+test("伺服器巡檢（M2）：網頁合併伺服器事件、標「伺服器」、顯示巡檢狀態與 Telegram 推播紀錄；連續失敗顯示中斷 390", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true }); await quotes(ctx); await setup(p);
+  const at = Date.parse(`${TODAY}T09:55:00+08:00`), runs = { cur: { last: at, lastOk: at, ok: 10, fail: 0, streak: 0, err: "" } };
+  const ev = { id: `${TODAY}:SYM:2454:dn`, type: "SYM", code: "2454", dir: "dn", level: 3, sev: "alert", title: "股2454 跌停", msg: "股2454 2454 90.0（-10.00%）", px: 90, pct: -10, first: at, last: at, state: "open", snaps: [{ at, px: 90, pct: -10 }], notified: [{ ch: "tg", at, ok: true, n: 3 }], origin: "server" };
+  await ctx.route("**/api/sync?op=mon**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, kv: true, events: [ev], runs: runs.cur }) }));
+  await p.evaluate(() => monTick()); await p.evaluate(() => setLt("mon")); await p.waitForSelector("#lx .mon-ev");
+  let t = await p.evaluate(() => $("#lx").innerText); assert.match(t, /伺服器巡檢正常：最後一次 09:55:00/); assert.match(t, /股2454 跌停[\s\S]*伺服器・09:55:00/);
+  assert.ok(await p.evaluate(() => Object.keys(monE("2026-10-26")).includes("2026-10-26:SYM:2454:dn")), "存進這台的事件表");
+  await p.click(`#lx .mon-ev[data-mon="${await p.evaluate(id => monHash(id), ev.id)}"]`); await p.waitForFunction(() => !$("#sheet").hidden && /Telegram 推播 3 人/.test($("#sheetExtra").innerText));
+  assert.equal((await p.evaluate(() => __notes)).includes("股2454 跌停"), false, "伺服器的事件不在這台再跳一次通知");
+  // 連續失敗：顯示中斷（2 分鐘拿一次，測試裡把上次時間清掉）
+  runs.cur = { ...runs.cur, streak: 3, err: "證交所逾時" }; await p.evaluate(() => { W.mon.srvAt = 0; $("#sheet").hidden = true; return monTick(); });
+  t = await p.evaluate(() => $("#lx").innerText); assert.match(t, /伺服器巡檢中斷（連續 3 次失敗：證交所逾時）/);
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  await p.evaluate(() => clearTimeout(W.monTimer));
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("工具 → 提醒：多了「盤中警示」（只有 Telegram，勾了不跳網頁通知要求）1280", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  await p.evaluate(() => setLt("tools")); await p.waitForSelector('#lx [data-eva="mon"]', { timeout: 15000 });
+  assert.match(await p.evaluate(() => $('#lx [data-eva="mon"]').closest("label").innerText), /盤中警示[\s\S]*15 分鐘最多一則、每天最多 20 則/);
+  await p.check('#lx [data-eva="mon"]'); assert.equal(await p.evaluate(() => store.get("watch:evalert").mon), true);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 test("網址 #monitor 打開盤中監控；自訂過分頁順序（沒有盤中監控）的人：排在今日市場後面、不改寫設定 390", async () => {
   const { ctx, p, errs } = await open(B, S.url, "index.html#monitor", { width: 390, touch: true });
   const f = await watchFrame(p); assert.equal(await p.evaluate(() => CUR_TAB), "intel"); await f.waitForFunction(() => W.lt === "mon");
