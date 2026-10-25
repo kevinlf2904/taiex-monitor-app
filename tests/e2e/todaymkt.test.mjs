@@ -6,7 +6,7 @@ import { chromium, serve, open, watchFrame } from "./_harness.mjs";
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
 
-const openOf = p => p.evaluate(() => [...document.querySelectorAll("#lx details.dh-sec[open]")].map(d => d.dataset.tdsec));
+const openOf = p => p.evaluate(() => [...document.querySelectorAll("#lx details.dh-sec[open]")].map(d => d.dataset.tdbox));
 const nowOf = p => p.evaluate(() => document.querySelector("#lx details.dh-sec.now")?.dataset.tdsec);
 
 for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市場：固定順序的區塊、四種時段預設展開現在那一塊、展開才畫內容 ${width} ${theme}`, async () => {
@@ -19,7 +19,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
     await p.clock.setFixedTime(new Date(at));
     await p.evaluate(() => { W.tdPh = null; setLt("today"); renderList(); });
     await p.waitForFunction(() => !!document.querySelector("#lx details.dh-sec"), null, { timeout: 15000 });
-    assert.deepEqual(await p.$$eval("#lx details.dh-sec", L => L.map(d => d.dataset.tdsec)), ["pre", "mac", "live", "flow", "mine", "post"], "順序固定");
+    assert.deepEqual(await p.$$eval("#lx details.dh-sec", L => L.map(d => d.dataset.tdbox)), ["pre", "mac", "live", "flow", "mine", "post"], "順序固定");
     assert.deepEqual(await openOf(p), want, at); assert.equal(await nowOf(p), now, `「現在」標在目前時段 ${at}`);
     const t = await p.evaluate(() => $("#lx").innerText);
     assert.match(t, re, at); assert.match(t, /今日市場[\s\S]*重新整理/);
@@ -27,7 +27,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `沒有橫向溢出 ${at}`);
   }
   // 點標題展開別的區塊：每秒重畫也不會收回去（同一天記在記憶體）
-  await p.click('#lx details[data-tdsec="mine"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdsec="mine"] .dh-sec-b'));
+  await p.click('#lx details[data-tdbox="mine"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="mine"] .dh-sec-b'));
   await p.evaluate(() => { W.ticking = true; renderList(); W.ticking = false; renderList(); });
   assert.deepEqual(await openOf(p), ["pre", "mac", "mine"]);
   // 全部展開、全部收合
@@ -43,11 +43,11 @@ test("總經儀表板：昨晚美股只在這裡（核心卡已有的費半、�
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.clock.setFixedTime(new Date("2026-10-26T08:00:00+08:00"));
   await p.evaluate(() => { W.bf = { at: Date.now(), us: { ok: true, date: "2026-10-25", indices: [{ code: "^DJI", name: "道瓊工業", price: 42000, chgPct: 0.5 }, { code: "^SOX", name: "費城半導體", price: 5800, chgPct: 1.6 }, { code: "^IXIC", name: "那斯達克", price: 18000, chgPct: 0.9 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 190, chgPct: 2 }], macro: [{ code: "^TNX", name: "美國 10 年期公債殖利率", price: 4.21, chgPct: -0.5 }] } }; W.tdPh = null; setLt("today"); renderList(); });
-  await p.waitForFunction(() => /台幣/.test(document.querySelector('#lx details[data-tdsec="mac"]')?.innerText || ""), null, { timeout: 15000 });
-  const m = await p.evaluate(() => document.querySelector('#lx details[data-tdsec="mac"]').innerText);
+  await p.waitForFunction(() => /台幣/.test(document.querySelector('#lx details[data-tdbox="mac"]')?.innerText || ""), null, { timeout: 15000 });
+  const m = await p.evaluate(() => document.querySelector('#lx details[data-tdbox="mac"]').innerText);
   assert.match(m, /道瓊 \+0\.5%・美債 4\.21%・台幣 31\.20/, "摘要用核心卡沒有的數字"); assert.match(m, /昨晚美股[\s\S]*道瓊工業[\s\S]*美國 10 年期/); assert.match(m, /美元／台幣[\s\S]*原油/);
   assert.doesNotMatch(m, /費城半導體|那斯達克|台積電 ADR/, "核心卡已經有的不重複");
-  assert.equal(await p.evaluate(() => (document.querySelector('#lx details[data-tdsec="pre"]').innerText.match(/昨晚美股/g) || []).length), 0, "盤前推演不再列昨晚美股");
+  assert.equal(await p.evaluate(() => (document.querySelector('#lx details[data-tdbox="pre"]').innerText.match(/昨晚美股/g) || []).length), 0, "盤前推演不再列昨晚美股");
   await p.click('#lx [data-tdgo="mkt:gl"]'); await p.waitForFunction(() => W.lt === "mkt" && W.mkReg === "gl");
   await ctx.close(); assert.deepEqual(errs, []);
 });
@@ -57,7 +57,7 @@ test("盤中監控有進行中的警示：狀態列顯示「■ 警示 N 件」�
   await p.clock.setFixedTime(new Date("2026-10-26T10:00:00+08:00"));
   await p.evaluate(() => { W.today = "2026-10-26"; W.monE = { d: "2026-10-26", E: { "2026-10-26:SYM:2330:up": { id: "2026-10-26:SYM:2330:up", type: "SYM", code: "2330", dir: "up", level: 3, sev: "alert", title: "台積電 漲停", msg: "x", first: Date.now(), last: Date.now(), state: "open", snaps: [], notified: [] } } }; W.tdPh = null; setLt("today"); renderList(); });
   await p.waitForSelector("#lx .dh-status-bar [data-l2mon]");
-  assert.match(await p.textContent("#lx .dh-status-bar [data-l2mon]"), /■ 警示 1 件/); assert.match(await p.textContent('#lx details[data-tdsec="live"] summary'), /■ 警示 1 件/);
+  assert.match(await p.textContent("#lx .dh-status-bar [data-l2mon]"), /■ 警示 1 件/); assert.match(await p.textContent('#lx details[data-tdbox="live"] summary'), /■ 警示 1 件/);
   await p.click("#lx .dh-status-bar [data-l2mon]"); await p.waitForFunction(() => W.lt === "mon");
   await p.evaluate(() => clearTimeout(W.monTimer));
   await ctx.close(); assert.deepEqual(errs, []);

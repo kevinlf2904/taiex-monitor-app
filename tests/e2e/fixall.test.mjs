@@ -88,8 +88,8 @@ for (const width of [390, 1280]) test(`今日重點（早報＋每日摘要）�
   const t = await p.textContent("#lx");
   assert.match(t, /今日市場[\s\S]*重新整理[\s\S]*AI 整理[\s\S]*複製文字/);
   // 今日重點卡「看完整」打開「我的重點」區塊；其他區塊點標題展開：盤前是早報與推演，盤中是大盤與自選
-  assert.equal(await p.evaluate(() => document.querySelector('#lx details[data-tdsec="mine"]').open), true, "看完整＝我的重點");
-  const secText = async k => { if (!(await p.evaluate(k => document.querySelector(`#lx details[data-tdsec="${k}"]`).open, k))) await p.click(`#lx details[data-tdsec="${k}"] > summary`); await p.waitForFunction(k => !!document.querySelector(`#lx details[data-tdsec="${k}"] .dh-sec-b`), k); return p.evaluate(k => document.querySelector(`#lx details[data-tdsec="${k}"]`).innerText, k); };
+  assert.equal(await p.evaluate(() => document.querySelector('#lx details[data-tdbox="mine"]').open), true, "看完整＝我的重點");
+  const secText = async k => { if (!(await p.evaluate(k => document.querySelector(`#lx details[data-tdbox="${k}"]`).open, k))) await p.click(`#lx details[data-tdbox="${k}"] > summary`); await p.waitForFunction(k => !!document.querySelector(`#lx details[data-tdbox="${k}"] .dh-sec-b`), k); return p.evaluate(k => document.querySelector(`#lx details[data-tdbox="${k}"]`).innerText, k); };
   assert.match(await secText("pre"), /盤前推演[\s\S]*(情境|推演)/);
   assert.match(await secText("live"), /(盤中|盤後)・大盤、自選與訊號[\s\S]*自選漲幅前 5[\s\S]*技術訊號/);
   for (const k of ["tdre", "tdai", "tdtxt"]) assert.equal(await p.$$eval(`#lx [data-tx="${k}"]`, L => L.length), 1, `${k} 只有一個`);

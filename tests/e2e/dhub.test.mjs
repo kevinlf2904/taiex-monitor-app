@@ -10,7 +10,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`週末：�
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await p.clock.setFixedTime(new Date("2026-10-25T10:00:00+08:00")); // 週日
   await p.evaluate(t => { document.documentElement.dataset.theme = t; localStorage.removeItem("kline:watch:brief:snap:2026-10-25"); setLt("today"); }, theme);
-  await p.waitForFunction(() => document.querySelector('#lx details[data-tdsec="pre"]')?.open && /下一交易日/.test($("#lx").innerText), null, { timeout: 15000 }); // 休市日預設展開「盤前推演」（下一交易日的準備）
+  await p.waitForFunction(() => document.querySelector('#lx details[data-tdbox="pre"]')?.open && /下一交易日/.test($("#lx").innerText), null, { timeout: 15000 }); // 休市日預設展開「盤前推演」（下一交易日的準備）
   const t = await p.evaluate(() => $("#lx").innerText);
   assert.match(t, /今天休市，下面是下一交易日 10\/26（週一）的盤前推演/);
   assert.doesNotMatch(t, /日期不一致/, "不再替休市日產生推演、再說日期對不上");

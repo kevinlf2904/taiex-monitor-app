@@ -61,7 +61,7 @@ test("舊的「今日」：存過的設定改看動能矩陣（不改寫）、#r
   await p.reload(); await p.waitForFunction(() => typeof W !== "undefined" && typeof setLt === "function");
   assert.equal(await p.evaluate(() => W.mf.view), "bubble"); assert.equal(await p.evaluate(() => localStorage.getItem("kline:watch:mfv")), JSON.stringify("today"), "沒有改寫使用者存的值");
   await p.evaluate(() => applyRoute("radar/today")); await p.waitForFunction(() => W.lt === "today");
-  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#lx details.dh-sec[open]")].map(d => d.dataset.tdsec)), ["flow", "post"], "展開資金雷達與收盤驗證");
+  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#lx details.dh-sec[open]")].map(d => d.dataset.tdbox)), ["flow", "post"], "展開資金雷達與收盤驗證");
   await p.evaluate(() => { setLt("money"); W.tdPh = null; }); await p.evaluate(() => { const b = document.createElement("button"); b.dataset.mv = "today"; $("#lx").append(b); b.click(); });
   await p.waitForFunction(() => W.lt === "today" && W.tdPh?.ph === "post");
   await ctx.close(); assert.deepEqual(errs, []);

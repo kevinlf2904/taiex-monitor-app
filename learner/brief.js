@@ -1463,7 +1463,7 @@ function tdMacBody() {
     <p class="note">原物料外匯來自 Yahoo Finance，可能延遲 10～15 分鐘；完整資料與對股市的影響在大盤頁。</p>`;
 }
 // 展開一個區塊才畫它的內容；全部展開／收合
-document.addEventListener("toggle", e => { const d = e.target; if (!d.matches?.("details[data-tdsec]") || W.lt !== "today" || !W.tdOpen) return; const k = d.dataset.tdsec;
+document.addEventListener("toggle", e => { const d = e.target; if (!d.matches?.("details[data-tdbox]") || W.lt !== "today" || !W.tdOpen) return; const k = d.dataset.tdbox;
   if (!!W.tdOpen.s[k] === d.open) return; W.tdOpen.s[k] = d.open; if (d.open) renderList(); }, true);
 document.addEventListener("click", e => { const b = e.target.closest("[data-tdall]"); if (!b || W.lt !== "today" || !W.tdOpen) return; const on = b.dataset.tdall === "1";
   for (const k of ["pre", "mac", "live", "flow", "mine", "post"]) W.tdOpen.s[k] = on; renderList(); });
@@ -1559,12 +1559,12 @@ function todayPage() {
       <div class="dh-card">${briefBody(["昨晚美股"])}</div>`],
     ["mac", "總經儀表板", tdMacSum(), () => tdMacBody()],
     ["live", "盤中動態", `${alerts ? `■ 警示 ${alerts} 件・` : mon.length ? `事件 ${mon.length} 件・` : ""}${D.n ? `自選與庫存 ${D.up} 漲 ${D.dn} 跌` : "大盤、自選與訊號"}`, () => `${monLine()}${sumHead}`],
-    ["flow", "資金雷達", inS || outS ? [inS && `${inS.name}流入`, outS && `${outS.name}流出`].filter(Boolean).join("、") : M ? "法人資金與板塊輪動" : "法人資金資料載入中", () => flowsDecisionHtml(M)],
+    ["flow", "資金雷達", inS || outS ? [inS && `${inS.name}流入`, outS && `${outS.name}流出`].filter(Boolean).join("、") : "法人資金與板塊輪動", () => flowsDecisionHtml(M)] // 資料狀態只在內容說一次,
     ["mine", "我的重點", mine.length ? mine.map(([k]) => k).join("・") : "庫存與自選今天沒有特別的事", () => mine.length ? `<ul class="tdlist">${mine.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul>` : `<p class="note">庫存與自選今天沒有大漲跌、除權息、法說會、ETF 換股或事件提醒。</p>`],
     ["post", "收盤驗證與下一步", val?.outcomeLabel || (pm ? "收盤後對照盤前推演" : "13:30 收盤後對照盤前推演"), () => `${validateHtml(val, vPlan)}${nextActionHtml(plan, val)}`]
   ];
   const now = { pre: "pre", live: "live", post: "post", closed: "pre" }[sess.session] || phDef, all = SEC.every(([k]) => O.s[k]);
-  const secs = SEC.map(([k, name, sum, body]) => `<details class="dh-sec${k === now ? " now" : ""}" data-tdsec="${k}"${O.s[k] ? " open" : ""}><summary><span class="dh-sec-t"><b>${name}</b>${k === now ? `<span class="dh-now">・現在</span>` : ""}</span><span class="dh-sec-s note">${esc(sum)}</span></summary>${O.s[k] ? `<div class="dh-sec-b">${body()}</div>` : ""}</details>`).join("");
+  const secs = SEC.map(([k, name, sum, body]) => `<details class="dh-sec${k === now ? " now" : ""}" data-tdbox="${k}"${O.s[k] ? " open" : ""}><summary><span class="dh-sec-t"><b>${name}</b>${k === now ? `<span class="dh-now">・現在</span>` : ""}</span><span class="dh-sec-s note">${esc(sum)}</span></summary>${O.s[k] ? `<div class="dh-sec-b">${body()}</div>` : ""}</details>`).join("");
 
   const h = `<section class="csec">
     <!-- 摘要層：狀態與資料新鮮度、核心市場卡、今日結論（固定在上面） -->

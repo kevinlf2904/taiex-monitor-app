@@ -36,7 +36,7 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   assert.ok(t.indexOf("★ ") > 0 && t.indexOf("★ ") < t.indexOf("1101 除息"), "庫存的除權息排前面、有星號");
   assert.equal(await p.evaluate(() => W.lt), "today", "舊的「早報」分頁帶到情報局的「今日市場」");
   assert.match(t, /盤前推演[\s\S]*總經儀表板[\s\S]*昨晚美股/); assert.equal((t.match(/昨晚美股/g) || []).length, 1, "昨晚美股只在總經儀表板，盤前推演不再列一次");
-  await p.click('#lx details[data-tdsec="live"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdsec="live"] .dh-sec-b'));
+  await p.click('#lx details[data-tdbox="live"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="live"] .dh-sec-b'));
   assert.match(await p.evaluate(() => $("#lx").innerText), /(盤中|盤後)・大盤、自選與訊號/, "每日摘要在同一頁的「盤中動態」");
   assert.equal(await p.$$eval("#lx [data-tx='tdai']", L => L.length), 1, "AI 整理只有一個");
   await p.click('[data-tx="tdai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));

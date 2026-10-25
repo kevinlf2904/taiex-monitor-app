@@ -1888,13 +1888,13 @@ function renderList() {
   if (W.ticking && W.lt === "ind") { if (W.indLast) loadIndQuotes(W.indLast); return; } // 產業地圖（星系、圖解）每 5 秒整個重建很耗電：只重抓成員報價，有變動才重畫
   if (W.ticking && (W.lt === "money" || (W.lt === "screen" && W.scrG === "combo") || (W.lt === "hold" && (W.holdView === "risk" || W.holdView === "macro")))) return; // 資金分頁、條件組合、庫存風險與總經敏感度用收盤資料，自己載入完才重畫
   if (W.ticking && (W.lt === "pod" || W.lt === "cong" || W.lt === "tools")) return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
-  const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details:not([data-tdsec])")].map(d => [sum(d), d.open])); // 今日市場的區塊自己記開合（W.tdOpen），不用摘要文字對
+  const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details:not([data-tdbox])")].map(d => [sum(d), d.open])); // 今日市場的區塊自己記開合（W.tdOpen），不用摘要文字對
   // 換分頁時新內容常常先是一行「載入中」，頁面一變短瀏覽器就把捲動位置拉回最上面：重畫前先撐住原本的高度，內容夠高或 0.9 秒後再放開
   const xs = hsKeep(), hold = !W.ticking && !lx.hidden && lx.offsetHeight > 0;
   if (hold) { clearTimeout(W.lxHold); lx.style.minHeight = lx.offsetHeight + "px"; }
   // 某個分頁畫的時候出錯（資料格式不對、程式還沒載完）：不要留一片空白，說明並給「重試」，錯誤記到資料來源狀態
   try { renderList0(); } catch (e) { noteErr("畫面", e); lx.hidden = false; lx.innerHTML = `<p class="note err" style="padding:12px">⚠︎ 這個畫面暫時顯示不出來（${esc(e.message)}）。<button class="linkbtn" data-lxretry>重試</button></p>`; }
-  if (opened.size) for (const d of lx.querySelectorAll("details:not([data-tdsec])")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
+  if (opened.size) for (const d of lx.querySelectorAll("details:not([data-tdbox])")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
   hsRestore(xs); hsFadeAll(); segAllMount();
   if (hold) { const r = document.createRange(); r.selectNodeContents(lx); const need = parseFloat(lx.style.minHeight) || 0;
     if (lx.hidden || r.getBoundingClientRect().height >= need - 40) lx.style.minHeight = ""; else W.lxHold = setTimeout(() => { lx.style.minHeight = ""; }, 900); }
