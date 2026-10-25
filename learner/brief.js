@@ -171,12 +171,18 @@ function resolveHolidays(opts = {}) {
   return { list: null, source: "none" };
 }
 
-function findLastTradeDate(fromDate, holList = null) {
+// 休市日表裡的「開始交易日」「最後交易日」有開盤，不算休市（和 core.js 的 twHolSet、api/_lib/calendar.js 的 closedHol 同一條規則）
+const holClosed = x => !/開始交易|最後交易/.test(Array.isArray(x) ? `${x[1] || ""}` : `${x?.name || ""}${x?.note || ""}`);
+const holSetOf = holList => new Set((holList || []).filter(holClosed).map(x => x?.date || (Array.isArray(x) ? x[0] : null)).filter(Boolean));
+function findLastTradeDate(fromDate, holList = null) { return stepTradeDate(fromDate, holList, -1); }
+// 下一個交易日（跳過週末與休市日）：休市日的盤前推演以它為目標日
+function findNextTradeDate(fromDate, holList = null) { return stepTradeDate(fromDate, holList, 1); }
+function stepTradeDate(fromDate, holList, dir) {
   if (!fromDate || !/^\d{4}-\d{2}-\d{2}$/.test(fromDate)) return null;
   const d = new Date(fromDate + "T00:00:00Z");
-  const holSet = new Set((holList || []).map(x => x?.date || (Array.isArray(x) ? x[0] : null)).filter(Boolean));
+  const holSet = holSetOf(holList);
   for (let i = 0; i < 30; i++) {
-    d.setUTCDate(d.getUTCDate() - 1);
+    d.setUTCDate(d.getUTCDate() + dir);
     const dateStr = d.toISOString().slice(0, 10);
     const day = d.getUTCDay();
     const isWk = day === 0 || day === 6;
@@ -207,6 +213,13 @@ function isValidSnapshot(snap, expectedDate = null) {
   return true;
 }
 
+// 盤前推演快照每天一筆（watch:brief:snap:YYYY-MM-DD）：只留 20 天（春節連假也夠驗證），只清鍵名格式完全符合的，不碰其他資料
+function briefSnapGc(now = Date.now(), ls = typeof localStorage !== "undefined" ? localStorage : null) {
+  if (!ls || briefSnapGc.done) return 0; briefSnapGc.done = true;
+  const cut = new Date(now + 8 * 3600e3 - 20 * 864e5).toISOString().slice(0, 10), old = [];
+  try { for (let i = 0; i < ls.length; i++) { const m = /^kline:watch:brief:snap:(\d{4}-\d{2}-\d{2})$/.exec(ls.key(i) || ""); if (m && m[1] < cut) old.push(m[0]); } old.forEach(k => ls.removeItem(k)); } catch {}
+  return old.length;
+}
 function getBriefSnapshot(today, storeObj = null) {
   const targetDate = today || resolveTime().twDate;
   try {
@@ -290,7 +303,7 @@ function sessionStatus(now = Date.now(), opts = {}) {
     };
   }
 
-  const hol = (holList || []).find(x => (x?.date === tradeDate) || (Array.isArray(x) && x[0] === tradeDate));
+  const hol = (holList || []).filter(holClosed).find(x => (x?.date === tradeDate) || (Array.isArray(x) && x[0] === tradeDate));
   if (hol) {
     const holName = hol.name || (Array.isArray(hol) ? hol[1] : null) || "官方公告休市";
     const lastTradingDay = options.lastTradeDate || findLastTradeDate(tradeDate, holList);
@@ -1345,29 +1358,28 @@ function validateHtml(val, plan) {
 }
 
 function flowsDecisionHtml(M) {
-  if (!M || !M.secs || !M.stocks) {
-    const F = W?.mf;
-    if (!W?.off && F && !F.loading && !F.sumTry) { F.sumTry = true; setTimeout(() => loadMoney(10), 0); }
-    return `<div class="dh-card"><div class="dh-head"><b>資金雷達・板塊輪動與資金流向</b><span class="note">板塊輪動與法人資金</span></div><p class="note">載入法人資金資料中…</p><button type="button" class="btn sm" data-tdgo="radar">前往資金雷達完整分析 ›</button></div>`;
-  }
+  const head = d => `<div class="dh-head"><b>資金雷達・板塊輪動與資金流向</b><span class="note">${d || "板塊輪動與法人資金"}</span></div>`;
+  const go = `<div style="margin-top:8px"><button type="button" class="btn sm primary" data-tdgo="radar">前往資金雷達完整板塊與矩陣分析 ›</button></div>`;
+  // 資金資料這頁只出現在這一張卡（原本盤後總結在下面又寫一次）；還沒有資料時的說明和盤後總結共用 tools.js 的 flowWaitNote
+  if (!M) return `<div class="dh-card">${head()}<p class="note">${typeof flowWaitNote === "function" ? flowWaitNote() : "載入法人資金資料…"}</p>${go}</div>`;
   let mood = null;
   try { mood = typeof flowMood === "function" ? flowMood(M) : null; } catch {}
   let A = [];
-  try { A = typeof flowAt === "function" ? flowAt(M) : []; } catch {}
+  try { A = M.secs && typeof flowAt === "function" ? flowAt(M) : []; } catch {}
   let S = [];
-  try { S = typeof flowStocks === "function" ? flowStocks(M) : []; } catch {}
+  try { S = M.stocks && typeof flowStocks === "function" ? flowStocks(M) : []; } catch {}
   const buy = A.filter(x => x.net1 > 0).sort((a, b) => b.net1 - a.net1).slice(0, 3);
   const sell = A.filter(x => x.net1 < 0).sort((a, b) => a.net1 - b.net1).slice(0, 3);
   const odd = S.filter(x => x.mult >= 3 && Math.abs(x.a1) >= 3).length;
   const L = x => `<span class="dh-sec-pill ${x.net1 > 0 ? 'up' : 'down'}">${esc(x.name)} <b>${briefFlowFmt(x.net1)}</b></span>`;
 
   return `<div class="dh-card flows">
-    <div class="dh-head"><b>資金雷達・板塊輪動與資金流向</b><span class="note">${M.dates[M.T - 1]?.slice(5).replace("-", "/")}</span></div>
+    ${head(M.dates?.[M.T - 1]?.slice(5).replace("-", "/"))}
     ${mood ? `<div class="dh-mood-row">
       <span class="dh-mood-badge ${mood.score >= 60 ? 'bull' : mood.score <= 40 ? 'bear' : 'neutral'}">法人情緒 ${mood.score} 分・${mood.label}</span>
       <span class="note">上漲 ${mood.up} 家／下跌 ${mood.dn} 家（漲停 ${mood.lu || 0} / 跌停 ${mood.ld || 0}）</span>
     </div>` : ""}
-    <div class="dh-flow-groups">
+    ${M.secs && M.stocks ? `<div class="dh-flow-groups">
       <div class="dh-fg">
         <span class="dh-fg-title">資金流入前三板塊：</span>
         <div class="dh-fg-pills">${buy.length ? buy.map(L).join(" ") : "<span class='note'>無顯著流入</span>"}</div>
@@ -1377,8 +1389,9 @@ function flowsDecisionHtml(M) {
         <div class="dh-fg-pills">${sell.length ? sell.map(L).join(" ") : "<span class='note'>無顯著流出</span>"}</div>
       </div>
     </div>
-    <p class="note" style="margin:6px 0">異常爆量個股（成交額逾前 4 日均量 3 倍且逾 3 億）：<b>${odd}</b> 檔</p>
-    <div style="margin-top:8px"><button type="button" class="btn sm primary" data-tdgo="radar">前往資金雷達完整板塊與矩陣分析 ›</button></div>
+    <p class="note" style="margin:6px 0">異常爆量個股（成交額逾前 4 日均量 3 倍且逾 3 億）：<b>${odd}</b> 檔</p>` : ""}
+    ${typeof sumFlowHtml === "function" ? sumFlowHtml(M) : ""}
+    ${go}
   </div>`;
 }
 
@@ -1426,7 +1439,9 @@ function todayPage() {
   const tq = W.quotes?.get?.("T00");
   const oq = W.quotes?.get?.("O00");
   const fq = W.quotes?.get?.("TXF");
-  const sess = sessionStatus(nowMs, { holidays: W.cal?.hol, lastTradeDate: tq?.date });
+  // 休市日表：行事曆載入了就用它，還沒有就用看盤一打開就抓的那份（core.js 的 TWHOL）
+  const holL = W.cal?.hol || (typeof TWHOL !== "undefined" && TWHOL.set ? [...TWHOL.set].map(date => ({ date })) : undefined);
+  const sess = sessionStatus(nowMs, { holidays: holL, lastTradeDate: tq?.date });
 
   const market = {
     taiex: tq ? {
@@ -1468,13 +1483,17 @@ function todayPage() {
     tradeDate: t
   });
 
-  let plan = getBriefSnapshot(t);
-  if (!plan && (sess.session === "pre" || !pm)) {
-    plan = briefScenarios(W.bf, t, tq?.price);
-    if (plan) saveBriefSnapshot(t, plan);
+  // 週末、休市日：盤前推演以下一個交易日為目標（以最近交易日收盤推估）；盤後驗證對照「報價那一天」的快照，不拿休市日的推演去比
+  const target = sess.session === "closed" ? findNextTradeDate(t, holL || []) || t : t;
+  let plan = getBriefSnapshot(target);
+  if (!plan && (target !== t || sess.session === "pre" || !pm)) {
+    plan = briefScenarios(W.bf, target, tq?.price);
+    if (plan) saveBriefSnapshot(target, plan);
   }
+  const vPlan = tq?.date ? (tq.date === target ? plan : getBriefSnapshot(tq.date)) : null;
+  briefSnapGc();
 
-  const val = tq?.price ? validatePlan(plan, {
+  const val = tq?.price ? validatePlan(vPlan, {
     price: tq.price,
     close: tq.price,
     high: tq.high,
@@ -1485,100 +1504,7 @@ function todayPage() {
   }) : null;
   const M = typeof mfModel === "function" ? mfModel() : null;
 
-  const style = `<style>
-    .dh-status-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
-    .dh-sb-left { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-    .dh-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #fff; }
-    .dh-badge.pre { background: #2563eb; }
-    .dh-badge.live { background: #059669; }
-    .dh-badge.post { background: #7c3aed; }
-    .dh-badge.closed { background: var(--muted); }
-    .dh-badge.unknown { background: #d97706; }
-    .dh-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); }
-    .dh-tag.status-official { border-color: #059669; color: #059669; }
-    .dh-tag.status-verified { border-color: var(--accent, #6366f1); color: var(--accent, #6366f1); }
-    .dh-tag.status-live { border-color: #059669; color: #059669; }
-    .dh-tag.status-delayed { border-color: #d97706; color: #d97706; }
-    .dh-tag.status-partial { border-color: #d97706; color: #d97706; }
-    .dh-tag.status-missing, .dh-tag.missing { background: var(--surface-2); color: var(--muted); }
-    .dh-note-bar { padding: 6px 12px; background: rgba(99, 102, 241, 0.06); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; margin-bottom: 12px; }
-    
-    .dh-title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 14px; }
-    .dh-title-row h3 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
-    .dh-title-btns { display: flex; align-items: center; gap: 6px; }
-
-    /* 核心市場卡 Grid */
-    .dh-core-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
-    .dh-core-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; }
-    .dh-cc-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; margin-bottom: 4px; }
-    .dh-cc-body { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin: 4px 0; }
-    .dh-cc-val { font-size: 16px; font-weight: 700; font-family: var(--font-mono, monospace); }
-    .dh-cc-chg { font-size: 12.5px; font-weight: 600; font-family: var(--font-mono, monospace); }
-    .dh-cc-sub { font-size: 11px; color: var(--muted); }
-    .dh-missing-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--surface-2); color: var(--muted); }
-
-    /* 每日早報結構化結論 */
-    .dh-brief-summary { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 8px 0 12px; }
-    .dh-conclusion-box { margin-bottom: 10px; }
-    .dh-cbox-title { font-size: 13px; font-weight: 600; color: var(--accent, #6366f1); margin-bottom: 4px; }
-    .dh-cbox-lead { font-size: 13.5px; line-height: 1.6; margin: 0; font-weight: 500; }
-    .dh-factor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 8px 0; }
-    .dh-factor { padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.5; }
-    .dh-factor.bull { background: rgba(220, 38, 38, 0.06); border-left: 3px solid var(--up); }
-    .dh-factor.bear { background: rgba(37, 99, 235, 0.06); border-left: 3px solid var(--down); }
-    .dh-fac-head { font-weight: 600; margin-bottom: 2px; }
-    .dh-factor p { margin: 0; }
-    .dh-brief-levels { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
-
-    /* 通用決策中心卡片 */
-    .dh-card { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); margin: 10px 0; font-size: 13px; line-height: 1.6; }
-    .dh-card.val { border-color: var(--accent, #6366f1); background: var(--surface-2); }
-    .dh-card.act { border-left: 3px solid var(--accent, #6366f1); }
-    .dh-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
-    .dh-head b { font-size: 14px; }
-    .dh-levels { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
-    .dh-lvl { padding: 3px 8px; border-radius: 4px; font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); }
-    .dh-lvl.pres b { color: var(--down); }
-    .dh-lvl.piv b { color: var(--accent, #6366f1); }
-    .dh-lvl.supp b { color: var(--up); }
-    .sc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 8px; margin-top: 8px; }
-    .sc-card { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
-    .sc-card.bull { border-left: 3px solid var(--up); }
-    .sc-card.neutral { border-left: 3px solid var(--muted); }
-    .sc-card.bear { border-left: 3px solid var(--down); }
-    .sc-card h5 { margin: 0 0 4px; font-size: 12.5px; display: flex; justify-content: space-between; }
-    .sc-card p { margin: 2px 0; font-size: 12px; }
-    .sc-bias { font-size: 11px; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
-    .sc-bias.bull { background: rgba(220,38,38,0.1); color: var(--up); }
-    .sc-bias.neutral { background: var(--surface); color: var(--muted); }
-    .sc-bias.bear { background: rgba(37,99,235,0.1); color: var(--down); }
-    .dh-val-txt { margin: 6px 0 8px; font-size: 13.5px; font-weight: 500; }
-    .dh-val-stats { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
-    .dh-val-stats b { color: var(--ink); }
-
-    /* 資金雷達樣式 */
-    .dh-mood-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12.5px; }
-    .dh-mood-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
-    .dh-mood-badge.bull { background: rgba(220, 38, 38, 0.12); color: var(--up); }
-    .dh-mood-badge.bear { background: rgba(37, 99, 235, 0.12); color: var(--down); }
-    .dh-mood-badge.neutral { background: var(--surface-2); color: var(--muted); }
-    .dh-flow-groups { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
-    .dh-fg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; }
-    .dh-fg-title { color: var(--muted); min-width: 130px; }
-    .dh-fg-pills { display: flex; flex-wrap: wrap; gap: 6px; }
-    .dh-sec-pill { font-size: 11.5px; padding: 2px 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); }
-    .dh-sec-pill.up b { color: var(--up); }
-    .dh-sec-pill.down b { color: var(--down); }
-
-    .dh-footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; color: var(--muted); }
-    @media (max-width: 640px) {
-      .dh-status-bar { flex-direction: column; align-items: flex-start; }
-      .dh-core-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
-      .dh-factor-grid { grid-template-columns: 1fr; }
-    }
-  </style>`;
-
-  const h = `<section class="csec">${style}
+  const h = `<section class="csec">
     <!-- 1. 市場狀態列 -->
     <div class="dh-status-bar">
       <div class="dh-sb-left">
@@ -1590,7 +1516,7 @@ function todayPage() {
         ${tq?.price ? `<div>加權 <b>${fmtP(tq.price)}</b> <span class="${cls(tq.chg)}">${tq.chgPct >= 0 ? "+" : ""}${tq.chgPct ?? "—"}%</span></div>` : ""}
       </div>
     </div>
-    ${sess.displayNote ? `<div class="dh-note-bar note">📅 ${esc(sess.displayNote)}</div>` : ""}
+    ${sess.displayNote || cn ? `<div class="dh-note-bar note">📅 ${esc(sess.displayNote || cn[1])}</div>` : ""}
 
     <!-- 標題與操作按鈕 -->
     <div class="dh-title-row">
@@ -1601,7 +1527,6 @@ function todayPage() {
         <button class="btn sm" data-tx="tdtxt">複製文字</button>
       </div>
     </div>
-    ${cn ? `<p class="note mkclosed">📅 ${esc(cn[1])}</p>` : ""}
     ${W.tdAI ? `<div class="caibox">${W.tdAI.loading ? "AI 整理中…" : W.tdAI.err ? "⚠︎ " + esc(W.tdAI.err) : esc(W.tdAI.text).replace(/\n/g, "<br>")}</div>` : ""}
 
     <!-- 2. 核心市場卡 -->
@@ -1616,7 +1541,8 @@ function todayPage() {
 
     <!-- 4. 今日重點驗證（早報情境與盤後驗證時序軸） -->
     <div class="dh-sec-wrap">
-      ${validateHtml(val, plan)}
+      ${validateHtml(val, vPlan)}
+      ${target !== t && plan ? `<p class="note">今天休市，下面是下一交易日 ${target.slice(5).replace("-", "/")}（週${WEEK[new Date(target + "T00:00:00Z").getUTCDay()]}）的盤前推演${tq?.date ? `，以 ${tq.date.slice(5).replace("-", "/")} 收盤推估` : ""}。</p>` : ""}
       ${briefScenariosHtml(plan)}
     </div>
 
@@ -1627,7 +1553,7 @@ function todayPage() {
 
     <!-- 6. 自選動態與技術訊號（包含加權、自選漲跌、技術訊號與盤後總結） -->
     <div class="dh-sec-wrap">
-      <h4 class="tdsec">${pm ? "盤後" : "盤中"}・大盤、自選與訊號</h4>
+      <h4 class="tdsec">${{ live: "盤中", pre: "前一交易日盤後", closed: "最近交易日盤後", post: "盤後" }[sess.session] || (pm ? "盤後" : "盤中")}・大盤、自選與訊號</h4>
       ${sumBody()}
     </div>
 

@@ -1788,3 +1788,21 @@ test("休市日判斷：前端 mktSession／twDayState 與伺服器 session 一�
   // 7. 表上的休市日不會被報價佐證蓋掉（休市日不會有「今天」的加權報價）
   twHolSet(HOL, at("2026-10-27", "10:00")); twDayMark("2026-10-27", "trade"); assert.equal(twDayState(at("2026-10-27", "10:00")), "closed");
 });
+
+test("決策中心整理：下一交易日、開始交易日不算休市、只清過期的推演快照", () => {
+  const { findNextTradeDate, findLastTradeDate, sessionStatus, briefSnapGc } = engine().B;
+  const HOL = [{ date: "2026-10-26", name: "測試假日" }, { date: "2026-10-28", name: "國曆新年開始交易日" }];
+  assert.equal(findNextTradeDate("2026-10-23", []), "2026-10-26", "週五的下一交易日是週一");
+  assert.equal(findNextTradeDate("2026-10-24", HOL), "2026-10-27", "週一休市就跳到週二");
+  assert.equal(findNextTradeDate("2026-10-27", HOL), "2026-10-28", "「開始交易日」有開盤");
+  assert.equal(findLastTradeDate("2026-10-27", HOL), "2026-10-23");
+  const at = (d, hm) => new Date(`${d}T${hm}:00+08:00`).getTime();
+  assert.equal(sessionStatus(at("2026-10-28", "10:00"), { holidays: HOL }).session, "live", "開始交易日不是休市");
+  assert.equal(sessionStatus(at("2026-10-26", "10:00"), { holidays: HOL }).session, "closed");
+  // 快照清理：只刪鍵名格式完全符合、超過 20 天的；其他資料（筆記、自選、格式不符的鍵）都不動
+  const M = new Map([["kline:watch:brief:snap:2026-09-01", "{}"], ["kline:watch:brief:snap:2026-10-20", "{}"], ["kline:watch:brief:snap:2026-09-01x", "{}"], ["kline:watch:notes", "{}"], ["kline:watch:list", "[]"], ["other:brief:snap:2026-09-01", "{}"]]);
+  const ls = { get length() { return M.size; }, key: i => [...M.keys()][i], removeItem: k => M.delete(k) };
+  briefSnapGc.done = false; assert.equal(briefSnapGc(at("2026-10-25", "10:00"), ls), 1);
+  assert.deepEqual([...M.keys()].sort(), ["kline:watch:brief:snap:2026-09-01x", "kline:watch:brief:snap:2026-10-20", "kline:watch:list", "kline:watch:notes", "other:brief:snap:2026-09-01"]);
+  assert.equal(briefSnapGc(at("2026-10-25", "10:00"), ls), 0, "一次載入只清一次");
+});
