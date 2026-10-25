@@ -64,14 +64,24 @@ test("盤中監控有進行中的警示：狀態列顯示「■ 警示 N 件」�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
-test("手機第一屏：狀態、核心卡、今日結論都在一個螢幕內；缺資料的核心卡縮小 390", async () => {
+test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心數字都在一個螢幕內；沒資料的數字不留空格 390", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.clock.setFixedTime(new Date("2026-10-26T10:00:00+08:00"));
   await p.evaluate(() => { setLt("today"); scrollTo(0, 0); $("#lx").scrollTop = 0; });
-  await p.waitForSelector("#lx .dh-core-grid", { timeout: 15000 });
-  const r = await p.evaluate(() => { const top = s => document.querySelector(s)?.getBoundingClientRect().top; return { H: innerHeight, bar: top("#lx .dh-status-bar"), grid: top("#lx .dh-core-grid"), sum: top("#lx .dh-brief-summary") ?? top("#lx .dh-conclusion-box"), miss: [...document.querySelectorAll("#lx .dh-core-card.missing")].map(e => e.getBoundingClientRect().height), full: [...document.querySelectorAll("#lx .dh-core-card:not(.missing)")].map(e => e.getBoundingClientRect().height) }; });
-  assert.ok(r.bar < r.H && r.grid < r.H && r.sum < r.H, `第一屏：${JSON.stringify(r)}`);
-  if (r.miss.length && r.full.length) assert.ok(Math.max(...r.miss) < Math.min(...r.full), "缺資料的卡比較矮");
+  await p.waitForSelector("#lx .dh-core-grid", { timeout: 15000 }); await p.waitForSelector("#lx .td-ix", { timeout: 15000 }); // 分時用大盤頁同一份走勢線（測試假資料 3 點）
+  const r = await p.evaluate(() => { const top = s => document.querySelector(s)?.getBoundingClientRect().top; return { H: innerHeight, bar: top("#lx .dh-status-bar"), hero: top("#lx .td-main"), chart: top("#lx .td-ix"), grid: top("#lx .dh-core-grid"), miss: document.querySelectorAll("#lx .dh-core-card.missing").length, t00: document.querySelectorAll('#lx .td-side [data-dhcode="T00"]').length }; });
+  assert.ok(r.bar < r.H && r.hero < r.H && r.chart < r.H && r.grid < r.H, `第一屏：${JSON.stringify(r)}`);
+  assert.equal(r.miss, 0, "今日市場的數字列不放「資料暫缺」"); assert.equal(r.t00, 0, "加權在最上面，數字列不重複");
+  // 三個按鈕是圖示，文字給讀螢幕的人；按鈕至少 44px
+  assert.deepEqual(await p.$$eval("#lx .dh-status-bar [data-tx]", L => L.map(b => [b.textContent.trim(), b.getBoundingClientRect().height >= 44])), [["↻重新整理", true], ["AI 整理", true], ["⧉複製文字", true]]);
+  // 早報的文字結論收在「盤前推演」裡面，外層不再是一大段字
+  assert.equal(await p.$$eval("#lx .dh-brief-summary", L => L.filter(e => !e.closest("details[data-tdbox]")).length), 0);
+  // 每一塊外層是圖：盤中（監控時間軸＋自選熱度格）、我的重點（7 個交易日）、收盤驗證（交易時間進度）；圖在 summary 裡，收著也看得到
+  const V = await p.evaluate(() => ({ heat: document.querySelectorAll('#lx details[data-tdbox="live"] > summary .td-heat span').length, tl: !!document.querySelector('#lx details[data-tdbox="live"] > summary .td-tl'),
+    cal: document.querySelectorAll('#lx details[data-tdbox="mine"] > summary .td-cal > span').length, post: !!document.querySelector('#lx details[data-tdbox="post"] > summary .td-tl'), pre: !!document.querySelector('#lx details[data-tdbox="pre"] > summary .td-sc') }));
+  assert.ok(V.heat > 0 && V.tl && V.post && V.pre, JSON.stringify(V)); assert.equal(V.cal, 7, "7 個交易日");
+  await p.click('#lx details[data-tdbox="pre"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="pre"] .dh-sec-b'));
+  assert.match(await p.evaluate(() => $('#lx details[data-tdbox="pre"] .dh-sec-b').innerText), /上漲|下跌|資料不足/);
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
