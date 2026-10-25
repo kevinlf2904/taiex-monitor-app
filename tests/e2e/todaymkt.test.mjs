@@ -7,7 +7,7 @@ const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
 
 const openOf = p => p.evaluate(() => [...document.querySelectorAll("#lx details.dh-sec[open]")].map(d => d.dataset.tdbox));
-const nowOf = p => p.evaluate(() => document.querySelector("#lx details.dh-sec.now")?.dataset.tdsec);
+const nowOf = p => p.evaluate(() => document.querySelector("#lx details.dh-sec.now")?.dataset.tdbox);
 
 for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市場：固定順序的區塊、四種時段預設展開現在那一塊、展開才畫內容 ${width} ${theme}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
@@ -55,7 +55,7 @@ test("總經儀表板：昨晚美股只在這裡（核心卡已有的費半、�
 test("盤中監控有進行中的警示：狀態列顯示「■ 警示 N 件」，點了到盤中監控 390", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.clock.setFixedTime(new Date("2026-10-26T10:00:00+08:00"));
-  await p.evaluate(() => { W.today = "2026-10-26"; W.monE = { d: "2026-10-26", E: { "2026-10-26:SYM:2330:up": { id: "2026-10-26:SYM:2330:up", type: "SYM", code: "2330", dir: "up", level: 3, sev: "alert", title: "台積電 漲停", msg: "x", first: Date.now(), last: Date.now(), state: "open", snaps: [], notified: [] } } }; W.tdPh = null; setLt("today"); renderList(); });
+  await p.evaluate(() => { const d = W.today || twDay(); W.monE = { d, E: { [d + ":SYM:2330:up"]: { id: d + ":SYM:2330:up", type: "SYM", code: "2330", dir: "up", level: 3, sev: "alert", title: "台積電 漲停", msg: "x", first: Date.now(), last: Date.now(), state: "open", snaps: [], notified: [] } } }; W.tdPh = null; setLt("today"); renderList(); });
   await p.waitForSelector("#lx .dh-status-bar [data-l2mon]");
   assert.match(await p.textContent("#lx .dh-status-bar [data-l2mon]"), /■ 警示 1 件/); assert.match(await p.textContent('#lx details[data-tdbox="live"] summary'), /■ 警示 1 件/);
   await p.click("#lx .dh-status-bar [data-l2mon]"); await p.waitForFunction(() => W.lt === "mon");
