@@ -87,10 +87,11 @@ for (const width of [390, 1280]) test(`今日重點（早報＋每日摘要）�
   assert.equal(await p.evaluate(() => W.lt), "today");
   const t = await p.textContent("#lx");
   assert.match(t, /今日市場[\s\S]*重新整理[\s\S]*AI 整理[\s\S]*複製文字/);
-  // 時段面板一次一個：盤前是早報與推演，盤中、盤後都有大盤與自選
-  const phText = async k => { await p.click(`#lx [data-tdph="${k}"]`); return p.textContent("#lx"); };
-  assert.match(await phText("pre"), /盤前・昨晚美股與今天的行事曆/);
-  for (const k of ["live", "post"]) assert.match(await phText(k), /(盤中|盤後)・大盤、自選與訊號[\s\S]*自選漲幅前 5[\s\S]*技術訊號/, k);
+  // 今日重點卡「看完整」打開「我的重點」區塊；其他區塊點標題展開：盤前是早報與推演，盤中是大盤與自選
+  assert.equal(await p.evaluate(() => document.querySelector('#lx details[data-tdsec="mine"]').open), true, "看完整＝我的重點");
+  const secText = async k => { if (!(await p.evaluate(k => document.querySelector(`#lx details[data-tdsec="${k}"]`).open, k))) await p.click(`#lx details[data-tdsec="${k}"] > summary`); await p.waitForFunction(k => !!document.querySelector(`#lx details[data-tdsec="${k}"] .dh-sec-b`), k); return p.evaluate(k => document.querySelector(`#lx details[data-tdsec="${k}"]`).innerText, k); };
+  assert.match(await secText("pre"), /盤前推演[\s\S]*(情境|推演)/);
+  assert.match(await secText("live"), /(盤中|盤後)・大盤、自選與訊號[\s\S]*自選漲幅前 5[\s\S]*技術訊號/);
   for (const k of ["tdre", "tdai", "tdtxt"]) assert.equal(await p.$$eval(`#lx [data-tx="${k}"]`, L => L.length), 1, `${k} 只有一個`);
   assert.match(await p.evaluate(() => todayText()), /今日重點[\s\S]*【盤勢與自選】[\s\S]*不是買賣建議/, "複製的文字包含早報和盤勢兩部分");
   // 法人資金資料抓不到（測試的 /api/daily 沒資料）：只抓一次就說明，不會畫完又回去抓、整頁一直重畫
@@ -107,7 +108,7 @@ test("首頁：情報局的第一個分頁是今日重點，網址 #daily 直接
   const { ctx, p, errs } = await open(B, S.url, "index.html#daily", { width: 390, touch: true });
   const f = await watchFrame(p);
   assert.equal(await p.evaluate(() => CUR_TAB), "intel");
-  await f.waitForFunction(() => W.lt === "today"); await f.evaluate(() => { W.tdPh = { d: twDay(), ph: "pre" }; renderList(); }); assert.match(await f.textContent("#lx"), /今日市場[\s\S]*盤前・昨晚美股/);
+  await f.waitForFunction(() => W.lt === "today"); await f.evaluate(() => { W.tdPh = { d: twDay(), ph: "pre" }; renderList(); }); assert.match(await f.textContent("#lx"), /今日市場[\s\S]*盤前推演[\s\S]*總經儀表板[\s\S]*昨晚美股/);
   assert.equal(await f.evaluate(() => [...document.querySelectorAll("#lTabs [data-l]")].map(b => b.dataset.l).filter(inMode)[0]), "today", "情報局分頁列第一個");
   await ctx.close(); assert.deepEqual(errs, []);
 });

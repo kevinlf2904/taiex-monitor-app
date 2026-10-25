@@ -97,7 +97,7 @@ test("合併重複功能：盤後、籌碼動向併進排行，盤後總結＋�
     assert.ok(await p.evaluate(() => !TOOLS_VIEWS.some(x => x[0] === "chipx")));
     // 舊的「工具 → 籌碼動向」會自動帶到新位置
     await p.evaluate(() => { W.tv = "chipx"; setLt("tools"); }); await p.waitForTimeout(300); assert.equal(await p.evaluate(() => [W.lt, afView()].join()), "after,chipx");
-    // 盤後總結＋分享：在情報局 → 今日市場的「盤後」面板，資金雷達今日只留連結
+    // 盤後總結＋分享：在情報局 → 今日市場盤後展開的「資金雷達」區塊
     await p.evaluate(() => { W.mf.model = { T: 1, dates: ["2026-10-16"] }; window.flowMood = () => null; window.flowSummary = () => "測試盤後總結"; W.tdPh = { d: twDay(), ph: "post" }; setLt("today"); });
     assert.match(await p.evaluate(() => $("#lx").innerText), /盤後總結[\s\S]*測試盤後總結/);
     assert.equal(await p.evaluate(() => document.querySelectorAll('#lx [data-mshare]').length), 4);

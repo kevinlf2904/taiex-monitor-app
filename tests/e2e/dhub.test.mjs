@@ -10,7 +10,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`週末：�
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await p.clock.setFixedTime(new Date("2026-10-25T10:00:00+08:00")); // 週日
   await p.evaluate(t => { document.documentElement.dataset.theme = t; localStorage.removeItem("kline:watch:brief:snap:2026-10-25"); setLt("today"); }, theme);
-  await p.waitForFunction(() => /盤前・昨晚美股/.test($("#lx").innerText), null, { timeout: 15000 }); // 休市日預設「盤前」面板（下一交易日的準備）
+  await p.waitForFunction(() => document.querySelector('#lx details[data-tdsec="pre"]')?.open && /下一交易日/.test($("#lx").innerText), null, { timeout: 15000 }); // 休市日預設展開「盤前推演」（下一交易日的準備）
   const t = await p.evaluate(() => $("#lx").innerText);
   assert.match(t, /今天休市，下面是下一交易日 10\/26（週一）的盤前推演/);
   assert.doesNotMatch(t, /日期不一致/, "不再替休市日產生推演、再說日期對不上");
@@ -20,8 +20,8 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`週末：�
   const C = await p.evaluate(() => { const g = s => getComputedStyle(document.querySelector(s)), ink = getComputedStyle(document.body).color; return { ink, lvl: g("#lx .dh-lvl b").color, badgeBg: g("#lx .dh-badge").backgroundColor, num: g("#lx .dh-lvl b").fontFamily === getComputedStyle(document.querySelector(".num") || document.body).fontFamily || /Song|宋|Serif|PMingLiU/i.test(g("#lx .dh-lvl b").fontFamily) }; });
   assert.equal(C.lvl, C.ink, "壓力、分水嶺、支撐用中性色"); assert.ok(!/37, 99, 235|5, 150, 105|124, 58, 237|99, 102, 241/.test(C.badgeBg), `徽章不是寫死的藍綠紫：${C.badgeBg}`); assert.ok(C.num, "價位用行情數字字型");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
-  // 盤後面板：資金卡只有一張、資金資料的狀態只說一次、週末不寫「盤中」
-  await p.click('#lx [data-tdph="post"]'); const t2 = await p.evaluate(() => $("#lx").innerText), cnt = re => (t2.match(re) || []).length;
+  // 全部展開：資金卡只有一張、資金資料的狀態只說一次、週末不寫「盤中」
+  await p.click("#lx [data-tdall]"); await p.waitForFunction(() => document.querySelectorAll("#lx details.dh-sec[open] .dh-sec-b").length === 6); const t2 = await p.evaluate(() => $("#lx").innerText), cnt = re => (t2.match(re) || []).length;
   assert.equal(cnt(/資金雷達・板塊輪動與資金流向/g), 1); assert.equal(cnt(/法人資金資料/g), 1, "資金資料的狀態只說一次");
   assert.match(t2, /最近交易日盤後・大盤、自選與訊號/, "週末不寫「盤中」");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");

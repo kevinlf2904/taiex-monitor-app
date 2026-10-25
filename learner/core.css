@@ -335,8 +335,25 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 }
   
 /* 今日市場：時段面板（沿用 .seg）、缺資料的核心卡縮小、細節收合 */
-.dh-phase { display: flex; width: 100%; margin: 14px 0 6px; } .dh-phase button { flex: 1; } .dh-now { font-size: 11px; color: var(--muted); }
-.dh-panel { min-height: 120px; }
+/* 今日市場的收合區塊：固定順序，現在的時段預設展開；摘要一行，展開才畫內容 */
+.dh-secbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 6px; }
+.dh-secs { display: flex; flex-direction: column; gap: 8px; }
+.dh-sec { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.dh-sec.now { border-color: var(--accent); }
+.dh-sec > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t c" "s c"; align-items: center; column-gap: 10px; min-height: 52px; padding: 8px 12px; box-sizing: border-box; }
+.dh-sec > summary::-webkit-details-marker { display: none; }
+.dh-sec > summary::after { content: ""; grid-area: c; width: 8px; height: 8px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); margin: -4px 4px 0; transition: transform .15s; }
+.dh-sec[open] > summary::after { transform: rotate(-135deg); margin-top: 4px; }
+.dh-sec-t { grid-area: t; font-size: 15px; } .dh-sec-s { grid-area: s; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dh-sec-b { padding: 4px 12px 12px; border-top: 1px solid var(--line); }
+.dh-now { font-size: 11px; color: var(--muted); }
+.dh-badge.mon-alert { cursor: pointer; border: 0; font: inherit; font-size: 11px; color: var(--up); background: color-mix(in srgb, var(--up) 12%, transparent); }
+.dh-mac { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; margin: 8px 0; }
+.dh-mac > div { display: flex; flex-direction: column; padding: 6px 8px; border-radius: var(--radius); background: var(--surface-2); font-size: 12.5px; } .dh-mac b { font-weight: 500; font-size: 14px; }
+.dh-mac-go { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0; }
+.tdlist { list-style: none; margin: 6px 0 0; padding: 0; } .tdlist li { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); line-height: 1.5; } .tdlist li:first-child { border-top: 0; }
+.tdlist .tdk { color: var(--muted); font-size: 12px; } .tdlist .tdv { min-width: 0; overflow-wrap: anywhere; } .tdlist .linkbtn { text-align: left; }
+@media (prefers-reduced-motion: reduce) { .dh-sec > summary::after { transition: none; } }
 .dh-core-card.missing { padding: 6px 10px; align-self: start; order: 1; } /* 缺資料的排到後面、不撐高 */ .dh-core-card.missing .dh-cc-sub { display: none; } .dh-core-card.missing .dh-cc-val { font-size: 12px; }
 .dh-more { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .dh-more summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
