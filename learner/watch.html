@@ -1174,7 +1174,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.24-158</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.25-159</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1284,7 +1284,9 @@ const volUnit = c => (isUS(c) ? "股" : isFut(c) ? "口" : isIdx(c) ? "" : "張"
 const fmtPx = (v, c) => (v == null ? "—" : isUS(c) ? (+v).toFixed(2) : fmtP(v));
 const isMobile = () => matchMedia("(max-width: 900px)").matches;
 const nameOf = c => (isIdx(c) ? { T00: "加權指數", O00: "櫃買指數", TXF: "台指期近月" }[c] : W.quotes.get(c)?.name || W.names[c] || c);
-const anyOpen = () => mktSession() !== "closed" || [...W.quotes.values()].some(q => q.us && q.session?.state === "open") || (W.sel && isFut(W.sel) && W.quotes.get("TXF")?.fsession && W.quotes.get("TXF").fsession !== "closed");
+// 台股：今天確定開盤（twDayState 是 trade）才算；還不知道有沒有開盤時不跑每秒的報價（schedule 改成 30 秒一次）
+const twLive = () => mktSession() !== "closed" && twDayState() === "trade", twUnsure = () => mktSession() !== "closed" && twDayState() === "unknown";
+const anyOpen = () => twLive() || [...W.quotes.values()].some(q => q.us && q.session?.state === "open") || (W.sel && isFut(W.sel) && W.quotes.get("TXF")?.fsession && W.quotes.get("TXF").fsession !== "closed");
 // 嵌在 K線學堂裡時，iframe 和整頁一樣高：position: fixed 會跑到很下面看不到，所以改放在使用者目前看得到的位置
 function viewBox() { try { const f = window.frameElement, r = f.getBoundingClientRect(), H = parent.innerHeight; return { top: Math.max(0, -r.top), h: Math.min(H, r.bottom) - Math.max(0, r.top) }; } catch { return { top: scrollY, h: innerHeight }; } }
 function place(el, where = "bottom") {
@@ -1409,6 +1411,9 @@ async function pollList() {
   pollFut().then(() => renderTop()).catch(() => {});
   const j = await getJ(`/api/quote?codes=${visibleCodes().filter(c => !isFut(c)).map(encodeURIComponent).join(",")}&src=mis`);
   W.session = j.session; if (j.today) W.today = j.today; W.qBackup = j.backup ? j.source : null; // 證交所連不上時改用備援來源（富果指數、Yahoo）
+  // 有沒有開盤的報價佐證（休市日表抓不到時靠這個）：加權的日期是今天＝有開盤；09:10 以後還停在前一天＝今天沒開盤（颱風假這類臨時休市）。備援來源不算
+  const t0 = j.quotes.find(q => q.code === "T00"), hm = new Date(Date.now() + 8 * 3600e3).toISOString().slice(11, 16);
+  if (!j.backup && j.today && t0?.date) { if (t0.date === j.today) twDayMark(j.today, "trade"); else if (t0.date < j.today && hm >= "09:10" && hm <= "13:35" && twDayState() === "unknown") twDayMark(j.today, "closed"); }
   let nm = false; // 名字有變才存（原本每秒把整份幾千檔的名稱表寫進 localStorage，iPad 會卡）
   j.quotes.forEach(q => { const old = W.quotes.get(q.code); if (old && old.price != null && q.price != null && old.price !== q.price) W.prevPx.set(q.code, old.price); W.quotes.set(q.code, q); if (q.name && !isIdx(q.code) && W.names[q.code] !== q.name) { W.names[q.code] = q.name; nm = true; } });
   if (nm) store.set("watch:names", W.names);
@@ -1526,7 +1531,8 @@ async function fastTick() {
 // 手機看個股時清單整個藏起來：每秒重畫看不到的清單只會拖慢 K 線（回到清單時 showList 會重畫）
 function listHidden() { return isMobile() && $("#main").classList.contains("show-detail"); }
 function schedule() { clearTimeout(W.timer); if (W.off) return; const open = anyOpen();
-  W.timer = setTimeout(async () => { W.tn = (W.tn || 0) + 1; if (open && W.tn % 5) await fastTick(); else await tick(); schedule(); }, open ? 1000 : 300000); }
+  if (!TWHOL.set || Date.now() - TWHOL.at > 12 * 3600e3) twHolEnsure().then(ok => { if (ok) { renderTop(); schedule(); } }); // 休市日表到了就照新的判斷重排
+  W.timer = setTimeout(async () => { W.tn = (W.tn || 0) + 1; if (open && W.tn % 5) await fastTick(); else await tick(); schedule(); }, open ? 1000 : twUnsure() ? 30000 : 300000); }
 const kick = () => tick().then(schedule);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") kick(); });
 addEventListener("pageshow", e => { if (e.persisted) kick(); }); // iPad Safari 從上一頁快取回來時計時器可能停了，重新開始輪詢
@@ -1548,8 +1554,8 @@ function ixHtml() {
 function renderTop() {
   $("#ix").innerHTML = ixHtml();
   const cn = W.session === "closed" ? twClosedNote(W.quotes.get("T00")?.date) : null;
-  const on = !W.off && !W.err && W.session && W.session !== "closed", st = W.off ? "離線（需部署）" : W.err ? "連線異常" : W.session === "pre" ? "試撮中" : W.session === "open" ? (W.qBackup ? "盤中（備援）" : "盤中即時") : cn ? cn[0] : W.session ? "收盤" : "連線中…";
-  $("#dot").className = "dot" + (on ? " on" : W.err ? " err" : ""); $("#statText").textContent = st; $("#stat").title = W.err || (W.qBackup ? `證交所即時報價連不上，暫用 ${W.qBackup}` : cn ? cn[1] : "");
+  const on = !W.off && !W.err && W.session && W.session !== "closed" && !twUnsure(), st = W.off ? "離線（需部署）" : W.err ? "連線異常" : W.session !== "closed" && twUnsure() ? "交易日待確認" : W.session === "pre" ? "試撮中" : W.session === "open" ? (W.qBackup ? "盤中（備援）" : "盤中即時") : cn ? cn[0] : W.session ? "收盤" : "連線中…";
+  $("#dot").className = "dot" + (on ? " on" : W.err ? " err" : ""); $("#statText").textContent = st; $("#stat").title = W.err || (W.qBackup ? `證交所即時報價連不上，暫用 ${W.qBackup}` : cn ? cn[1] : W.session !== "closed" && twUnsure() ? "還拿不到證交所休市日表，暫時每 30 秒更新一次；確認有開盤後恢復即時" : "");
   $("#ix2").innerHTML = `<span class="stat"><i class="dot ${on ? "on" : W.err ? "err" : ""}"></i>${st}</span>` + ixHtml();
 }
 document.addEventListener("click", e => { const b = e.target.closest(".ixc[data-sel]"); if (b) select(b.dataset.sel); });

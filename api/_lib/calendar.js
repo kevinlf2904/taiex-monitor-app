@@ -41,6 +41,24 @@ export function parseConf(html, market) {
     .filter(x => x.date && /^\d{4,6}[A-Z]?$/.test(x.code));
 }
 export const parseHoliday = j => (Array.isArray(j) ? j : []).map(r => ({ date: toIso(r.Date), name: String(r.Name ?? "").trim(), note: String(r.Description ?? "").trim() })).filter(x => x.date);
+// 證交所的休市日表也列了「開始交易日」「最後交易日」這種**有開盤**的日子，判斷休市要排除（learner/core.js 的 twHolSet 同一條規則）
+export const closedHol = hol => (hol || []).filter(x => x?.date && !/開始交易|最後交易/.test(`${x.name || ""}${x.note || ""}`));
+// 表裡有今年的日期才算拿到（抓失敗、格式變了都會是空的，不能當成「今年沒有假日」）
+export const holOk = (hol, year) => (hol || []).some(x => String(x?.date || "").startsWith(year));
+const HOL_URL = "https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule";
+// 伺服器端的休市日快取（給 quote.js 的 session() 用）：12 小時更新一次，失敗 10 分鐘後再試；沒拿到就是「不知道」，session() 維持原本只看週末與時間的判斷
+const HOL = { set: null, year: "", at: 0, failAt: 0, p: null };
+export function holLoad(hol, now = Date.now()) {
+  const year = new Date(now + 8 * 3600e3).toISOString().slice(0, 4);
+  if (!holOk(hol, year)) return false;
+  Object.assign(HOL, { set: new Set(closedHol(hol).map(x => x.date)), year, at: now }); return true;
+}
+export function holWarm(now = Date.now()) {
+  if (HOL.p || (HOL.set && now - HOL.at < 12 * 3600e3 && HOL.year === new Date(now + 8 * 3600e3).toISOString().slice(0, 4)) || now - HOL.failAt < 600e3) return HOL.p;
+  return (HOL.p = getJSON(HOL_URL, 8000).then(parseHoliday).then(h => { if (!holLoad(h)) HOL.failAt = Date.now(); }).catch(() => { HOL.failAt = Date.now(); }).finally(() => { HOL.p = null; }));
+}
+// "closed"：證交所公布休市；"trade"：清單裡沒有今天；"unknown"：還沒拿到清單（週末另外判斷）
+export const holState = iso => (!HOL.set || !String(iso).startsWith(HOL.year) ? "unknown" : HOL.set.has(iso) ? "closed" : "trade");
 async function confList() {
   const t = new Date(Date.now() + 8 * 3600e3), months = [[t.getUTCFullYear(), t.getUTCMonth() + 1]]; months.push(months[0][1] === 12 ? [months[0][0] + 1, 1] : [months[0][0], months[0][1] + 1]);
   const jobs = months.flatMap(([y, m]) => [["sii", "上市"], ["otc", "上櫃"]].map(([k, mk]) => fetch("https://mopsov.twse.com.tw/mops/web/ajax_t100sb02_1", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)" },
@@ -50,18 +68,26 @@ async function confList() {
 }
 
 export default async function handler(req, res) {
+  // ?hol=1：只要休市日（網頁一打開就要判斷今天有沒有開盤，不必等除權息、法說會）
+  if (req.query?.hol) {
+    const year = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 4), hol = await getJSON(HOL_URL, 12000).then(parseHoliday).catch(() => []), ok = holOk(hol, year);
+    if (ok) holLoad(hol);
+    res.setHeader("Cache-Control", ok ? "s-maxage=43200, stale-while-revalidate=86400" : "s-maxage=300");
+    return res.status(200).json({ ok: true, hol, holOk: ok, source: "證交所" });
+  }
   const tries = [
     ["上市", "https://www.twse.com.tw/rwd/zh/exRight/TWT48U?response=json"],
     ["上市", "https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL"],
     ["上櫃", "https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost"],
   ];
   const [got, cf, hol] = await Promise.all([Promise.allSettled(tries.map(([m, u]) => getJSON(u, 12000).then(j => parseCalendar(j, m)))), confList().catch(() => []),
-    getJSON("https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule", 12000).then(parseHoliday).catch(() => [])]);
+    getJSON(HOL_URL, 12000).then(parseHoliday).catch(() => [])]);
   const seen = new Set(), rows = [], errors = [];
   got.forEach((g, i) => { if (g.status !== "fulfilled") { errors.push(`${tries[i][0]}：${g.reason?.message}`); return; }
     for (const r of g.value) { const k = r.date + r.code; if (!seen.has(k)) { seen.add(k); rows.push(r); } } });
   if (!rows.length && !cf.length) return res.status(200).json({ ok: false, error: `拿不到除權息預告（${errors.join("；") || "沒有資料"}）` });
   rows.sort((a, b) => a.date.localeCompare(b.date) || a.code.localeCompare(b.code));
   res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=21600");
-  return res.status(200).json({ ok: true, source: "證交所、櫃買中心除權除息預告；法說會：公開資訊觀測站；休市日：證交所", rows, conf: cf, hol, errors });
+  const year = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 4), hOk = holOk(hol, year); if (hOk) holLoad(hol);
+  return res.status(200).json({ ok: true, source: "證交所、櫃買中心除權除息預告；法說會：公開資訊觀測站；休市日：證交所", rows, conf: cf, hol, holOk: hOk, errors });
 }

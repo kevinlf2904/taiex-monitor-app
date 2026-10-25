@@ -17,11 +17,38 @@ function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.to
 function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
 function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-// 台股交易時段（台北時間週一到週五：08:30–09:00 試撮 pre、09:00–13:35 盤中 open、其餘 closed）
+// 台股交易時段（台北時間週一到週五：08:30–09:00 試撮 pre、09:00–13:35 盤中 open、其餘 closed）；證交所公布的平日休市日也是 closed
 function mktSession(now = new Date()) {
   const t = new Date(now.getTime() + 8 * 3600e3), day = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();
-  if (day === 0 || day === 6) return "closed";
+  if (day === 0 || day === 6 || twDayState(now) === "closed") return "closed";
   return m >= 510 && m < 540 ? "pre" : m >= 540 && m <= 815 ? "open" : "closed";
+}
+/* ---------- 今天有沒有開盤：證交所休市日表（/api/calendar?hol=1）＋報價佐證 ----------
+   "trade" 確定開盤、"closed" 確定休市（週末、休市日表、報價佐證）、"unknown" 還不知道（剛打開、表抓不到或過期）。
+   不知道的時候 mktSession 照舊只看時間（回傳格式不變），由呼叫的地方決定要不要降頻（看盤頁改成 30 秒一次，不跑每秒的報價）。
+   休市日表也列了「開始交易日」「最後交易日」這種有開盤的日子，要排除（和 api/_lib/calendar.js 的 closedHol 同一條規則）。 */
+const TWHOL = { set: null, year: "", at: 0, failAt: 0, p: null, mark: null };
+const twIso = (now = new Date()) => new Date(+now + 8 * 3600e3).toISOString().slice(0, 10);
+function twHolSet(hol, now = new Date()) {
+  const year = twIso(now).slice(0, 4), L = Array.isArray(hol) ? hol : [];
+  if (!L.some(x => String(x?.date || "").startsWith(year))) return false; // 表裡沒有今年的日期：當成沒拿到，不是「今年沒有假日」
+  Object.assign(TWHOL, { set: new Set(L.filter(x => x?.date && !/開始交易|最後交易/.test(`${x.name || ""}${x.note || ""}`)).map(x => x.date)), year, at: +now }); return true;
+}
+// 報價佐證：加權指數的報價日期是今天＝有開盤；開盤後一段時間還停在前一天（颱風假這類臨時休市）＝沒開盤。只記今天這一筆
+const twDayMark = (iso, st) => { TWHOL.mark = { d: iso, st }; };
+function twDayState(now = new Date()) {
+  const iso = twIso(now), wd = new Date(iso + "T00:00:00Z").getUTCDay();
+  if (wd === 0 || wd === 6) return "closed";
+  if (TWHOL.set && iso.startsWith(TWHOL.year) && TWHOL.set.has(iso)) return "closed";
+  if (TWHOL.mark?.d === iso) return TWHOL.mark.st;
+  return TWHOL.set && iso.startsWith(TWHOL.year) ? "trade" : "unknown";
+}
+// 載入休市日表：剛打開、過了 12 小時、換日時重抓；失敗 10 分鐘後再試。回傳 true＝這次有新拿到（呼叫的地方可以重排更新頻率）
+function twHolEnsure(now = Date.now()) {
+  if (!/^https?:$/.test(location.protocol) || TWHOL.p || now - TWHOL.failAt < 600e3) return Promise.resolve(false);
+  if (TWHOL.set && now - TWHOL.at < 12 * 3600e3 && twIso(new Date(now)).startsWith(TWHOL.year)) return Promise.resolve(false);
+  return (TWHOL.p = fetch("/api/calendar?hol=1", { signal: AbortSignal.timeout?.(12000) }).then(r => r.json()).then(j => { if (!(j?.holOk && twHolSet(j.hol))) { TWHOL.failAt = Date.now(); return false; } return true; })
+    .catch(() => { TWHOL.failAt = Date.now(); return false; }).finally(() => { TWHOL.p = null; }));
 }
 // 品牌（KLineLab K線情報局）：1:1 幾何 K 線圖標（空心 K 棒＋影線、上下都削 45 度的鈦金屬灰光束，兩者同寬對稱，合起來像字母 K）＋Space Grotesk 字標＋PRO 徽章
 const BRAND = { name: "KLineLab", zh: "K線情報局", tag: "將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機" };

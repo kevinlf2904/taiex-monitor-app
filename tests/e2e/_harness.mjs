@@ -38,7 +38,9 @@ export async function mock(ctx) {
     return { id, name, segs: Array.from({ length: 6 }, (_, j) => ({ id: `${id[0]}${j}00`, name: `${name}細分${j + 1}`, stage: ["上游", "中游", "下游"][j % 3], codes: IC.slice((i * 5 + j) % 12, (i * 5 + j) % 12 + 4).map(c => [c, "股" + c]) })) }; }) }));
   await ctx.route(/\/api\/hot\?.*type=rows/, r => { const q = new URL(r.request().url()).searchParams.get("codes") || "", cs = q === "all" ? IC : q.split(",").filter(Boolean);
     J(r, { ok: true, live: true, date: "2026-10-16", source: "測試行情", rows: cs.map((c, i) => [c, 100 + i, +(((i * 37) % 11) - 5).toFixed(2), 1 + (i % 7)]) }); });
-  await ctx.route("**/api/calendar**", r => J(r, { ok: true, rows: [{ date: "2026-10-20", code: "2330", name: "台積電", kind: "除息", cash: 4.5 }], conf: [] }));
+  // 休市日表：給一筆今年的假日，平日就是「確定開盤」（和加休市日判斷之前的行為一樣，測試不會因為執行的時間不同而不同）
+  const Y = new Date(Date.now() + 8 * 3600e3).getUTCFullYear(), HOL = [{ date: `${Y}-01-01`, name: "開國紀念日", note: "" }];
+  await ctx.route("**/api/calendar**", r => J(r, new URL(r.request().url()).searchParams.get("hol") ? { ok: true, hol: HOL, holOk: true } : { ok: true, rows: [{ date: "2026-10-20", code: "2330", name: "台積電", kind: "除息", cash: 4.5 }], conf: [], hol: HOL, holOk: true }));
   await ctx.route("**/api/yield**", r => { const cs = (new URL(r.request().url()).searchParams.get("codes") || "").split(","); J(r, { ok: true, rows: cs.map(c => ({ code: c, cash12: 5, n: 1, price: 100, yield: 5, divs: [["2025-07-10", 2.5], ["2026-01-10", 3]] })) }); });
   const axis = K.map(x => x.d).slice(-130);
   await ctx.route("**/api/allk**", r => { const s = new URL(r.request().url()).searchParams.get("s"), o = { d: axis, date: axis.at(-1), n: {}, m: {}, k: {} };
