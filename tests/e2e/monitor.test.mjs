@@ -59,6 +59,21 @@ test("報價過期不判斷；來源連續失敗記一件、畫面說「不代�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+test("報價不完整：缺一檔、缺時間、價格無效都不判斷；狀態寫出檔數，不顯示「今天目前沒有觸發事件」1280", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  await ctx.route("**/api/quote**", r => { const codes = (new URL(r.request().url()).searchParams.get("codes") || "").split(",").filter(Boolean);
+    const q = c => ({ code: c, name: "股" + c, price: c === "9999" ? 0 : 100.5, prev: 100, chgPct: c === "9999" ? -100 : 0.5, date: TODAY, time: c === "1101" ? null : "10:00:00", market: "上市" });
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", session: "open", today: TODAY, quotes: codes.filter(c => c !== "2330").map(q) }) }); });
+  await setup(p); await p.evaluate(() => { W.groups[0].list = ["9999", "1101"]; W.quotes.clear(); });
+  await p.evaluate(() => monTick()); await p.evaluate(() => setLt("mon")); await p.waitForSelector("#lx .dh-status-bar");
+  const t = await p.evaluate(() => $("#lx").innerText);
+  assert.match(t, /資料不完整[\s\S]*3／4 檔報價有問題（[^）]*沒有報價 1 檔[^）]*）/); assert.match(t, /價格無效 1 檔/); assert.match(t, /缺時間 1 檔/);
+  assert.doesNotMatch(t, /今天目前沒有觸發事件/); assert.match(t, /不代表沒有事件/);
+  assert.deepEqual(Object.keys(await p.evaluate(() => monE("2026-10-26"))), [], "價格是 0 的 9999（-100%）不會變成跌停事件");
+  await p.evaluate(() => clearTimeout(W.monTimer));
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 test("伺服器巡檢（M2）：網頁合併伺服器事件、標「伺服器」、顯示巡檢狀態與 Telegram 推播紀錄；連續失敗顯示中斷 390", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true }); await quotes(ctx); await setup(p);
   const at = Date.parse(`${TODAY}T09:55:00+08:00`), runs = { cur: { last: at, lastOk: at, ok: 10, fail: 0, streak: 0, err: "" } };
@@ -71,7 +86,12 @@ test("伺服器巡檢（M2）：網頁合併伺服器事件、標「伺服器」
   assert.equal((await p.evaluate(() => __notes)).includes("股2454 跌停"), false, "伺服器的事件不在這台再跳一次通知");
   // 連續失敗：顯示中斷（2 分鐘拿一次，測試裡把上次時間清掉）
   runs.cur = { ...runs.cur, streak: 3, err: "證交所逾時" }; await p.evaluate(() => { W.mon.srvAt = 0; $("#sheet").hidden = true; return monTick(); });
-  t = await p.evaluate(() => $("#lx").innerText); assert.match(t, /伺服器巡檢中斷（連續 3 次失敗：證交所逾時）/);
+  t = await p.evaluate(() => $("#lx").innerText); assert.match(t, /伺服器巡檢中斷（連續 3 次失敗：證交所逾時；最後成功 09:55:00）/);
+  // 部分報價有問題、休市略過：狀態寫清楚
+  runs.cur = { ...runs.cur, streak: 0, err: "", badN: 2, badTxt: "沒有報價 2 檔" }; await p.evaluate(() => { W.mon.srvAt = 0; return monTick(); });
+  assert.match(await p.evaluate(() => $("#lx").innerText), /伺服器巡檢 09:55:00：2 檔報價有問題（沒有報價 2 檔），這些沒有判斷/);
+  runs.cur = { ...runs.cur, skip: "unknown", skipAt: at + 60e3 }; await p.evaluate(() => { W.mon.srvAt = 0; return monTick(); });
+  assert.match(await p.evaluate(() => $("#lx").innerText), /伺服器巡檢暫停：休市日表拿不到，交易日待確認/);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
   await p.evaluate(() => clearTimeout(W.monTimer));
   await ctx.close(); assert.deepEqual(errs, []);

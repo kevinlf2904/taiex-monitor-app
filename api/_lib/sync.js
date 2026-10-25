@@ -63,7 +63,11 @@ export function monPublic(raw) {
   return Object.values(hashObj(raw)).map(v => { try { return JSON.parse(v); } catch { return null; } }).filter(e => e?.id).slice(0, 200)
     .map(({ id, type, code, dir, level, sev, title, msg, px, pct, first, last, state, snaps, notified }) => ({ id, type, code, dir, level, sev, title, msg, px, pct, first, last, state, snaps: (snaps || []).slice(-20), notified: (notified || []).map(n => ({ ch: n.ch, at: n.at, ok: !!n.ok, n: n.n || 0, ...(n.err ? { err: String(n.err).slice(0, 80) } : {}) })), origin: "server" }));
 }
-export function monRuns(raw) { const r = hashObj(raw); if (!r.last) return null; const n = k => +r[k] || 0; return { last: n("last"), lastOk: n("lastOk"), ok: n("ok"), fail: n("fail"), streak: n("streak"), err: r.err ? String(r.err).slice(0, 80) : "" }; }
+// 執行紀錄：last 最後一次巡檢、lastOk 最後成功、streak 連續失敗、badN／badTxt 這輪有問題的報價、skip／skipAt 略過的原因（closed 休市、unknown 交易日待確認、notoday 加權報價不是今天）
+export function monRuns(raw) {
+  const r = hashObj(raw); if (!r.last && !r.skipAt) return null; const n = k => +r[k] || 0, s = k => (r[k] ? String(r[k]).slice(0, 80) : "");
+  return { last: n("last"), lastOk: n("lastOk"), ok: n("ok"), fail: n("fail"), streak: n("streak"), err: s("err"), badN: n("badN"), badTxt: s("badTxt"), skip: ["closed", "unknown", "notoday"].includes(r.skip) ? r.skip : "", skipAt: n("skipAt") };
+}
 
 // 候補名單的一筆：email 轉小寫並檢查格式，方案只收 pro／team
 export function waitlistEntry(email, plan, now = Date.now()) {

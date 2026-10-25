@@ -44,7 +44,7 @@ export const parseHoliday = j => (Array.isArray(j) ? j : []).map(r => ({ date: t
 // 證交所的休市日表也列了「開始交易日」「最後交易日」這種**有開盤**的日子，判斷休市要排除（learner/core.js 的 twHolSet 同一條規則）
 export const closedHol = hol => (hol || []).filter(x => x?.date && !/開始交易|最後交易/.test(`${x.name || ""}${x.note || ""}`));
 // 表裡有今年的日期才算拿到（抓失敗、格式變了都會是空的，不能當成「今年沒有假日」）
-export const holOk = (hol, year) => (hol || []).some(x => String(x?.date || "").startsWith(year));
+export const holOk = (hol, year) => (Array.isArray(hol) ? hol : []).some(x => typeof x?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x.date) && x.date.startsWith(year)); // 和 learner/core.js 的 twHolSet 同一條規則
 const HOL_URL = "https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule";
 // 伺服器端的休市日快取（給 quote.js 的 session() 用）：12 小時更新一次，失敗 10 分鐘後再試；沒拿到就是「不知道」，session() 維持原本只看週末與時間的判斷
 const HOL = { set: null, year: "", at: 0, failAt: 0, p: null };

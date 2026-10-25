@@ -9,13 +9,27 @@ const MON_SYM_SEV = ["watch", "alert", "alert"]; // 個股：5% 注意、7% 和�
 const MON_SEV = ["info", "watch", "alert"], MON_SEV_TXT = { info: "● 留意", watch: "▲ 注意", alert: "■ 警示" };
 const monKey = d => `watch:mon:v1:${d}`;
 const monTime = t => new Date(t + 8 * 3600e3).toISOString().slice(11, 19); // 台灣時間 HH:MM:SS
-// 報價可不可以拿來判斷：今天的、有成交價、不是估價、3 分鐘內（盤中）
-function monFresh(q, today, now = Date.now()) {
-  if (!q || q.price == null || !isFinite(q.price) || q.estimated) return false;
-  if (q.date && q.date !== today) return false;
-  if (q.time && /^\d{2}:\d{2}/.test(q.time)) { const [h, m, s = 0] = q.time.split(":").map(Number), t = Date.parse(`${today}T00:00:00+08:00`) + ((h * 60 + m) * 60 + s) * 1e3; if (now - t > MON_STALE) return false; }
-  return true;
+// 報價可不可以拿來判斷：回傳 "ok" 或問題代碼。價格與昨收要是正數、不是估價、日期是今天、有時間而且 3 分鐘內（網頁與伺服器巡檢共用）
+const MON_BAD = { missing: "沒有報價", price: "價格無效", estimated: "只有估價", nodate: "缺日期", notoday: "不是今天的", notime: "缺時間", stale: "超過 3 分鐘沒更新" };
+function monCheck(q, today, now = Date.now()) {
+  if (!q) return "missing";
+  const pos = v => typeof v === "number" && isFinite(v) && v > 0;
+  if (!pos(q.price) || !pos(q.prev)) return "price";
+  if (q.estimated) return "estimated";
+  if (!q.date) return "nodate";
+  if (q.date !== today) return "notoday";
+  const m = /^(\d{2}):(\d{2})(?::(\d{2}))?/.exec(q.time || ""); if (!m) return "notime";
+  if (now - (Date.parse(`${today}T00:00:00+08:00`) + ((+m[1] * 60 + +m[2]) * 60 + +(m[3] || 0)) * 1e3) > MON_STALE) return "stale";
+  return "ok";
 }
+const monFresh = (q, today, now = Date.now()) => monCheck(q, today, now) === "ok";
+// 一輪報價的完整度：哪些代號不能用、為什麼（不能用的不判斷，也不能當成「沒有事件」）
+function monAudit(Q, codes, today, now = Date.now()) {
+  const bad = {}; let ok = 0;
+  for (const c of codes) { const r = monCheck(Q.get(c), today, now); if (r === "ok") ok++; else (bad[r] ||= []).push(c); }
+  return { n: codes.length, ok, badN: codes.length - ok, bad, t00: codes.includes("T00") ? monCheck(Q.get("T00"), today, now) : null };
+}
+const monAuditTxt = a => Object.entries(a?.bad || {}).map(([k, L]) => `${MON_BAD[k] || k} ${L.length} 檔`).join("、");
 // 一輪偵測：Q＝報價 Map（代號 → quote）、ctx＝{ today, codes: [{ c, hold }]（沒給 hold＝伺服器巡檢，標題不分庫存／自選）, plan（今日市場的推演快照）, prevPx（上一輪的價格）, names, now }
 // 回傳候選事件 [{ id, type, code, dir, level, sev, title, msg, px, pct }]，還沒有和既有事件合併
 function monScan(Q, ctx) {
@@ -76,7 +90,8 @@ function monGc(now = Date.now(), ls = typeof localStorage !== "undefined" ? loca
   return old.length;
 }
 // 監控狀態：區分「監控中」「暫停（切走、背景）」「未開盤／休市」「不知道有沒有開盤」「來源失敗」「資料過期」
-function monStatus({ day, sess, hidden, err, staleN, lastOk, now = Date.now() }) {
+function monStatus({ day, sess, hidden, err, staleN, audit, lastOk, now = Date.now() }) {
+  if (audit?.badN && day === "trade" && sess === "open" && !hidden && !err) return ["stale", `${audit.t00 && audit.t00 !== "ok" ? `加權指數報價${MON_BAD[audit.t00]}，大盤先不判斷；` : ""}${audit.badN}／${audit.n} 檔報價有問題（${monAuditTxt(audit)}），這些先不判斷，不代表它們沒有事件`];
   if (day === "closed") return ["closed", "今天休市，不監控"];
   if (day === "unknown") return ["unknown", "還不能確認今天有沒有開盤（休市日表抓不到），先不監控"];
   if (sess !== "open") return ["closed", sess === "pre" ? "試撮中，09:00 開盤後開始監控" : "不在交易時段（09:00–13:30），不監控"];
@@ -97,10 +112,15 @@ function monSrvMerge(E, list) {
   return n;
 }
 // 伺服器巡檢的狀態：沒有今天的執行紀錄＝沒在跑；連續 3 次失敗＝中斷；超過 20 分鐘沒跑＝延遲（GitHub 排程常會晚幾分鐘）
+// 略過（休市、交易日待確認、加權報價不是今天）的紀錄比最後一次巡檢新時，顯示略過的原因；部分報價有問題時寫出檔數
+const MON_SKIP = { closed: "今天休市", unknown: "休市日表拿不到，交易日待確認", notoday: "加權報價不是今天的（可能臨時休市）" };
 function monSrvState(runs, now = Date.now()) {
+  if (runs?.skipAt && !(runs.last > runs.skipAt)) return ["skip", `伺服器巡檢暫停：${MON_SKIP[runs.skip] || runs.skip}（${monTime(runs.skipAt)}）`];
   if (!runs?.last) return ["off", "伺服器巡檢今天沒有執行：只有這個頁面開著時偵測"];
-  if (runs.streak >= 3) return ["down", `伺服器巡檢中斷（連續 ${runs.streak} 次失敗${runs.err ? `：${runs.err}` : ""}）`];
+  if (runs.streak >= 3) return ["down", `伺服器巡檢中斷（連續 ${runs.streak} 次失敗${runs.err ? `：${runs.err}` : ""}${runs.lastOk ? `；最後成功 ${monTime(runs.lastOk)}` : ""}）`];
   if (now - runs.last > 20 * 60e3) return ["late", `伺服器巡檢延遲：最後一次 ${monTime(runs.last)}`];
+  if (runs.streak) return ["fail", `伺服器巡檢最近一次失敗（${runs.err || "報價拿不到"}）${runs.lastOk ? `，最後成功 ${monTime(runs.lastOk)}` : ""}`];
+  if (runs.badN) return ["partial", `伺服器巡檢 ${monTime(runs.last)}：${runs.badN} 檔報價有問題（${runs.badTxt || "資料不完整"}），這些沒有判斷`];
   return ["ok", `伺服器巡檢正常：最後一次 ${monTime(runs.last)}（約每 5–15 分鐘）`];
 }
 
@@ -123,7 +143,7 @@ async function monTick(now = Date.now()) {
     Object.assign(M, { okAt: Date.now(), err: null, fails: 0 });
   } catch (e) { M.err = e.message || "報價拿不到"; M.fails++; }
   const E = monE(today), Q = W.quotes;
-  M.staleN = all.filter(c => Q.get(c) && !monFresh(Q.get(c), today, now)).length; M.n = all.length;
+  M.audit = monAudit(Q, all, today, now); M.staleN = M.audit.badN; M.n = all.length; // 沒抓到、過期、不是今天的…都算，畫面上寫出檔數
   monData(E, today, M.fails >= 2, M.err || "", now); // 連續兩次失敗才記一件，恢復後自動關閉
   if (!M.err) {
     const up = monMerge(E, monScan(Q, { today, codes, plan: typeof getBriefSnapshot === "function" ? getBriefSnapshot(today) : null, prevPx: M.prevPx, names: W.names, now }), now);
@@ -143,13 +163,13 @@ async function monSrvPull(d, E) {
 function monLoop() { clearTimeout(W.monTimer); if (!W.monGcAt) { W.monGcAt = Date.now(); monGc(); } if (W.off) return; W.monTimer = setTimeout(() => monTick().finally(monLoop), MON_EVERY); }
 // 到價提醒觸發時記一件（通知已經由 checkAlerts 送出）
 function monAlertHit(c, title, msg) { const d = W.today || twDay(); if (monRule(monE(d), d, c, title, msg)) monSave(d); }
-function monState() { const M = W.mon || {}; return monStatus({ day: twDayState(), sess: mktSession(), hidden: monHidden(), err: M.fails ? M.err : null, staleN: M.staleN, lastOk: M.okAt }); }
+function monState() { const M = W.mon || {}; return monStatus({ day: twDayState(), sess: mktSession(), hidden: monHidden(), err: M.fails ? M.err : null, staleN: M.staleN, audit: M.err ? null : M.audit, lastOk: M.okAt }); }
 function monPage() {
   const d = W.today || twDay(), E = monE(d), L = Object.values(E).sort((a, b) => (a.state === "open") - (b.state === "open") || b.last - a.last).reverse(), [st, txt] = monState(), M = W.mon || {}, codes = monCodes();
-  const empty = { on: "今天目前沒有觸發事件（監控正常）。", loading: "第一次抓報價中…", paused: "監控暫停中，這段時間沒有偵測。", closed: "現在不在交易時段，沒有監控。", unknown: "還不能確認今天有沒有開盤，先不監控。", error: "報價來源失敗，現在沒有資料——不代表沒有事件。", stale: "部分報價過期，這些代號先不判斷。" }[st];
+  const empty = { on: "今天目前沒有觸發事件（監控正常）。", loading: "第一次抓報價中…", paused: "監控暫停中，這段時間沒有偵測。", closed: "現在不在交易時段，沒有監控。", unknown: "還不能確認今天有沒有開盤，先不監控。", error: "報價來源失敗，現在沒有資料——不代表沒有事件。", stale: "部分報價有問題（見上方），這些代號先不判斷——不代表沒有事件。" }[st];
   const row = e => `<li><button type="button" class="mon-ev ${e.sev}${e.state === "closed" ? " done" : ""}" data-mon="${monHash(e.id)}"><span class="mon-sev">${MON_SEV_TXT[e.sev]}</span><b>${esc(e.title)}</b><span class="note">${esc(e.msg)}</span><span class="note mon-t">${e.origin === "server" ? "伺服器・" : ""}${monTime(e.first)}${e.snaps.length > 1 ? `・更新 ${e.snaps.length - 1} 次` : ""}${e.state === "closed" ? "・已結束" : ""}</span></button></li>`;
   const h = `<section class="csec mon">
-    <div class="dh-status-bar"><div class="dh-sb-left"><span class="dh-badge mon-${st}">${{ on: "監控中", loading: "載入中", paused: "暫停", closed: "未開盤／休市", unknown: "交易日待確認", error: "來源失敗", stale: "資料過期" }[st]}</span><span class="note">${esc(txt)}</span></div></div>
+    <div class="dh-status-bar"><div class="dh-sb-left"><span class="dh-badge mon-${st}">${{ on: "監控中", loading: "載入中", paused: "暫停", closed: "未開盤／休市", unknown: "交易日待確認", error: "來源失敗", stale: "資料不完整" }[st]}</span><span class="note">${esc(txt)}</span></div></div>
     <h3>盤中監控 <span class="note">${d.slice(5).replace("-", "/")}</span></h3>
     <p class="note mon-srv">${esc(monSrvState(M.runs)[1])}</p>
     <p class="note">監控範圍：大盤＋自選 ${codes.filter(x => !x.hold).length} 檔＋台股庫存 ${codes.filter(x => x.hold).length} 檔，每 20 秒一次${M.okAt ? `・最後成功 ${monTime(M.okAt)}` : ""}${M.fails ? `・連續失敗 ${M.fails} 次` : ""}。只推「■ 警示」到這台裝置（同一檔 15 分鐘最多一則、每天最多 20 則）；到價、指標提醒照原本的方式通知，這裡一起記錄。</p>
