@@ -30,8 +30,8 @@ function mktSession(now = new Date()) {
 const TWHOL = { set: null, year: "", at: 0, failAt: 0, p: null, mark: null };
 const twIso = (now = new Date()) => new Date(+now + 8 * 3600e3).toISOString().slice(0, 10);
 function twHolSet(hol, now = new Date()) {
-  const year = twIso(now).slice(0, 4), L = Array.isArray(hol) ? hol : [];
-  if (!L.some(x => String(x?.date || "").startsWith(year))) return false; // 表裡沒有今年的日期：當成沒拿到，不是「今年沒有假日」
+  const year = twIso(now).slice(0, 4), L = (Array.isArray(hol) ? hol : []).filter(x => typeof x?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x.date)); // 日期格式不對的列不算
+  if (!L.some(x => x.date.startsWith(year))) return false; // 表裡沒有今年的日期：當成沒拿到，不是「今年沒有假日」
   Object.assign(TWHOL, { set: new Set(L.filter(x => x?.date && !/開始交易|最後交易/.test(`${x.name || ""}${x.note || ""}`)).map(x => x.date)), year, at: +now }); return true;
 }
 // 報價佐證：加權指數的報價日期是今天＝有開盤；開盤後一段時間還停在前一天（颱風假這類臨時休市）＝沒開盤。只記今天這一筆

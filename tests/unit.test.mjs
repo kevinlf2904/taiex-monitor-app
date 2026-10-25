@@ -633,8 +633,8 @@ test("財報事件回測：事件判斷、公布後才進場、超額報酬", ()
 });
 test("事件提醒設定寫進推播清單：只看庫存或加上自選；只勾早報也算", () => {
   const data = { "kline:watch:evalert": JSON.stringify({ rev: true, brief: true, scope: "hold" }), "kline:watch:hold": JSON.stringify({ 2330: { sh: 1 }, AAPL: { sh: 1 }, 9999: { sh: 1, demo: true } }), "kline:watch:groups": JSON.stringify([{ list: ["2317", "NVDA"] }]) };
-  assert.deepEqual(alertDoc(data, "1").ev, { on: ["rev", "brief"], codes: ["2330"], mine: [] });
-  assert.deepEqual(alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ pm3: true, scope: "all" }) }, "1").ev, { on: ["pm3"], codes: ["2330", "2317"], mine: [] });
+  assert.deepEqual(alertDoc(data, "1").ev, { on: ["rev", "brief"], codes: ["2330"], mine: [], mon: [] });
+  assert.deepEqual(alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ pm3: true, scope: "all" }) }, "1").ev, { on: ["pm3"], codes: ["2330", "2317"], mine: [], mon: [] });
   // ETF 換股、收盤重點也要寫進去（收盤重點看自選＋庫存全部，含美股）
   const cl = alertDoc({ ...data, "kline:watch:evalert": JSON.stringify({ etf: true, close: true }) }, "1").ev;
   assert.deepEqual(cl.on, ["etf", "close"]); assert.deepEqual(cl.mine, ["2330", "AAPL", "2317", "NVDA"]);
@@ -1787,4 +1787,229 @@ test("休市日判斷：前端 mktSession／twDayState 與伺服器 session 一�
   twDayMark("2026-10-27", "closed"); assert.equal(twDayState(at("2026-10-27", "10:00")), "closed"); assert.equal(mktSession(at("2026-10-27", "10:00")), "closed");
   // 7. 表上的休市日不會被報價佐證蓋掉（休市日不會有「今天」的加權報價）
   twHolSet(HOL, at("2026-10-27", "10:00")); twDayMark("2026-10-27", "trade"); assert.equal(twDayState(at("2026-10-27", "10:00")), "closed");
+});
+
+test("決策中心整理：下一交易日、開始交易日不算休市、只清過期的推演快照", () => {
+  const { findNextTradeDate, findLastTradeDate, sessionStatus, briefSnapGc } = engine().B;
+  const HOL = [{ date: "2026-10-26", name: "測試假日" }, { date: "2026-10-28", name: "國曆新年開始交易日" }];
+  assert.equal(findNextTradeDate("2026-10-23", []), "2026-10-26", "週五的下一交易日是週一");
+  assert.equal(findNextTradeDate("2026-10-24", HOL), "2026-10-27", "週一休市就跳到週二");
+  assert.equal(findNextTradeDate("2026-10-27", HOL), "2026-10-28", "「開始交易日」有開盤");
+  assert.equal(findLastTradeDate("2026-10-27", HOL), "2026-10-23");
+  const at = (d, hm) => new Date(`${d}T${hm}:00+08:00`).getTime();
+  assert.equal(sessionStatus(at("2026-10-28", "10:00"), { holidays: HOL }).session, "live", "開始交易日不是休市");
+  assert.equal(sessionStatus(at("2026-10-26", "10:00"), { holidays: HOL }).session, "closed");
+  // 快照清理：只刪鍵名格式完全符合、超過 20 天的；其他資料（筆記、自選、格式不符的鍵）都不動
+  const M = new Map([["kline:watch:brief:snap:2026-09-01", "{}"], ["kline:watch:brief:snap:2026-10-20", "{}"], ["kline:watch:brief:snap:2026-09-01x", "{}"], ["kline:watch:notes", "{}"], ["kline:watch:list", "[]"], ["other:brief:snap:2026-09-01", "{}"]]);
+  const ls = { get length() { return M.size; }, key: i => [...M.keys()][i], removeItem: k => M.delete(k) };
+  briefSnapGc.done = false; assert.equal(briefSnapGc(at("2026-10-25", "10:00"), ls), 1);
+  assert.deepEqual([...M.keys()].sort(), ["kline:watch:brief:snap:2026-09-01x", "kline:watch:brief:snap:2026-10-20", "kline:watch:list", "kline:watch:notes", "other:brief:snap:2026-09-01"]);
+  assert.equal(briefSnapGc(at("2026-10-25", "10:00"), ls), 0, "一次載入只清一次");
+});
+
+test("盤中監控 M1：偵測規則、同一件事升級不重開、資料過期不判斷、通知節流、只清自己的資料", () => {
+  const { monFresh, monScan, monMerge, monRule, monData, monShouldNotify, monHash, monGc, monStatus } = engine().M, today = "2026-10-26", now = Date.parse("2026-10-26T10:00:30+08:00");
+  const q = (code, price, prev, x = {}) => ({ code, price, prev, chgPct: +((price / prev - 1) * 100).toFixed(2), date: today, time: "10:00:00", ...x });
+  // 報價可不可以用：今天、有成交、不是估價、3 分鐘內
+  assert.equal(monFresh(q("2330", 100, 99), today, now), true);
+  assert.equal(monFresh(q("2330", 100, 99, { date: "2026-10-23" }), today, now), false, "前一天的報價");
+  assert.equal(monFresh(q("2330", 100, 99, { estimated: true }), today, now), false, "估價");
+  assert.equal(monFresh(q("2330", 100, 99, { time: "09:55:00" }), today, now), false, "超過 3 分鐘");
+  const Q = new Map([["T00", q("T00", 97.7, 100)], ["9999", q("9999", 92, 100)], ["2330", q("2330", 110, 100)], ["1101", q("1101", 101, 100)], ["0050", q("0050", 95, 100, { time: "09:50:00" })]]);
+  const codes = [{ c: "2330", hold: true }, { c: "9999", hold: false }, { c: "1101", hold: false }, { c: "0050", hold: false }];
+  const cand = monScan(Q, { today, codes, now, names: { 2330: "台積電" } }), by = Object.fromEntries(cand.map(x => [x.id, x]));
+  assert.deepEqual(Object.keys(by).sort(), ["2026-10-26:IDX:T00:dn", "2026-10-26:SYM:2330:up", "2026-10-26:SYM:9999:dn"], "1101 只漲 1%、0050 報價過期都不算");
+  assert.equal(by["2026-10-26:IDX:T00:dn"].level, 2); assert.equal(by["2026-10-26:IDX:T00:dn"].sev, "watch");
+  assert.match(by["2026-10-26:SYM:2330:up"].title, /庫存 台積電 漲停/); assert.equal(by["2026-10-26:SYM:2330:up"].sev, "alert");
+  assert.equal(by["2026-10-26:SYM:9999:dn"].level, 2, "跌 8%＝超過 7%"); assert.equal(by["2026-10-26:SYM:9999:dn"].sev, "alert", "個股超過 7% 是警示");
+  // 合併：新的開一件；同一件同等級不重複；升級更新同一件
+  const E = {}; assert.equal(monMerge(E, cand, now).length, 3); assert.equal(monMerge(E, cand, now + 20e3).length, 0, "同等級不重複");
+  Q.set("T00", q("T00", 96.5, 100)); const up = monMerge(E, monScan(Q, { today, codes, now }), now + 40e3);
+  assert.equal(up.length, 1); assert.equal(Object.keys(E).length, 3, "升級不開新事件"); assert.equal(E["2026-10-26:IDX:T00:dn"].level, 3); assert.equal(E["2026-10-26:IDX:T00:dn"].snaps.length, 2);
+  // 關鍵價位：穿越才算（上一輪在另一邊）
+  const plan = { tradeDate: today, keyLevels: { pressure: 23300, pivot: 23200, support: 23100 } };
+  assert.equal(monScan(new Map([["T00", q("T00", 23150, 23300)]]), { today, plan, prevPx: { T00: 23210 }, now }).some(x => x.id.endsWith("LEVEL:T00:pivot-dn")), true);
+  assert.equal(monScan(new Map([["T00", q("T00", 23150, 23300)]]), { today, plan, prevPx: { T00: 23160 }, now }).some(x => x.type === "LEVEL"), false, "沒有穿越");
+  assert.equal(monScan(new Map([["T00", q("T00", 23150, 23300)]]), { today, plan: { ...plan, tradeDate: "2026-10-23" }, prevPx: { T00: 23210 }, now }).some(x => x.type === "LEVEL"), false, "不拿別天的推演");
+  // 提醒與資料異常
+  assert.ok(monRule(E, today, "2330", "到價提醒：台積電漲到 110", "110", now)); assert.equal(monRule(E, today, "2330", "到價提醒：台積電漲到 110", "110", now), null, "同一個提醒只記一次");
+  monData(E, today, true, "證交所逾時", now); assert.equal(E["2026-10-26:DATA:src:fail"].state, "open"); monData(E, today, false, "", now + 1); assert.equal(E["2026-10-26:DATA:src:fail"].state, "closed");
+  // 通知：只推警示、同一檔 15 分鐘一則、一天最多 20 則
+  const e1 = E["2026-10-26:SYM:2330:up"]; assert.equal(monShouldNotify(E["2026-10-26:IDX:T00:dn"], E, now), true, "跌 3%＝警示");
+  assert.equal(monShouldNotify({ ...e1, sev: "watch" }, E, now), false);
+  e1.notified.push({ ch: "local", at: now, ok: true }); assert.equal(monShouldNotify({ ...e1, id: "x" }, E, now + 60e3), false, "15 分鐘內同一檔"); assert.equal(monShouldNotify({ ...e1, id: "x" }, E, now + 16 * 60e3), true);
+  const F = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [i, { code: String(i), notified: [{ ch: "local", at: now, ok: true }] }])); assert.equal(monShouldNotify({ code: "9", sev: "alert" }, F, now + 3600e3), false, "一天 20 則");
+  for (const x of Object.values(F)) x.notified[0].ch = "tg"; assert.equal(monShouldNotify({ code: "9", sev: "alert" }, F, now + 3600e3), true, "伺服器的 Telegram 推播不算這台的次數");
+  assert.match(monHash("a"), /^[0-9a-f]{8}$/); assert.notEqual(monHash("a"), monHash("b"));
+  // 狀態：七種文字都不同
+  const S = [{ day: "closed" }, { day: "unknown" }, { day: "trade", sess: "pre" }, { day: "trade", sess: "open", hidden: true }, { day: "trade", sess: "open", err: "x" }, { day: "trade", sess: "open", staleN: 2, lastOk: 1 }, { day: "trade", sess: "open" }, { day: "trade", sess: "open", lastOk: 1 }].map(o => monStatus(o)[0]);
+  assert.deepEqual(S, ["closed", "unknown", "closed", "paused", "error", "stale", "loading", "on"]);
+  // 清理：只刪 kline:watch:mon:v1:日期、超過 20 天的
+  const M = new Map([["kline:watch:mon:v1:2026-09-01", "{}"], ["kline:watch:mon:v1:2026-10-20", "{}"], ["kline:watch:mon:v2:2026-09-01", "{}"], ["kline:watch:alerts", "{}"], ["kline:watch:list", "[]"]]);
+  assert.equal(monGc(now, { get length() { return M.size; }, key: i => [...M.keys()][i], removeItem: k => M.delete(k) }), 1);
+  assert.deepEqual([...M.keys()].sort(), ["kline:watch:alerts", "kline:watch:list", "kline:watch:mon:v1:2026-10-20", "kline:watch:mon:v2:2026-09-01"]);
+});
+
+import { memKv, monNotify, runOnce, scrub } from "../scripts/monitor.mjs";
+import { monPublic, monRuns } from "../api/_lib/sync.js";
+// 伺服器巡檢的測試環境：記憶體 KV、假的 Telegram、假的報價（時間跟著這一輪的 now）、假的休市日表；全部不連網
+const J = x => JSON.parse(JSON.stringify(x)); // 沙盒（vm）裡建的陣列和這裡的原型不同，比對前先轉成一般資料
+const M2_HOL = [{ date: "2026-01-01", name: "開國紀念日" }, { date: "2026-10-09", name: "國慶日補假" }];
+const at8 = s => Date.parse(`${s}+08:00`);
+function m2World({ users: U, hol = M2_HOL, px: P } = {}) {
+  const users = U || { u1: { chat: "c1", ev: { on: ["mon"], mon: ["2330"] } }, u2: { chat: "c2", ev: { on: ["mon"], mon: ["9999"] } }, u3: { chat: "c3", ev: { on: ["close"], mon: [] } } };
+  const base = memKv(), W = { users, sent: [], qCalls: 0, hCalls: 0, cur: 0, px: P || { T00: 97.5, 2330: 110, 9999: 101 }, bad: new Set(), hol, quoteOf: null };
+  W.kv = async (cmd, k, ...a) => (cmd === "SMEMBERS" && k === "alerts" ? Object.keys(users) : cmd === "GET" && /^alert:/.test(k) ? JSON.stringify(users[k.slice(6)]) : base(cmd, k, ...a));
+  W.tg = async (m, b) => { if (W.bad.has(b.chat_id)) throw new Error("Forbidden: bot was blocked by the user"); W.sent.push(b.chat_id); };
+  W.q = c => { const p = W.px[c] ?? 100; return { code: c, name: "股" + c, price: p, prev: 100, chgPct: +((p / 100 - 1) * 100).toFixed(2), date: engine().T.twIso(new Date(W.cur)), time: engine().M.monTime(W.cur) }; };
+  W.quotes = async codes => { W.qCalls++; return codes.map(c => (W.quoteOf ? W.quoteOf(c) : W.q(c))).filter(Boolean); };
+  W.holidays = async () => { W.hCalls++; if (W.hol instanceof Error) throw W.hol; return W.hol; };
+  W.run = (now, o = {}) => { W.cur = now; return runOnce({ kv: W.kv, tg: W.tg, quotes: W.quotes, holidays: W.holidays, now, log: () => {}, ...o }); };
+  W.runs = async (d = "2026-10-26") => monRuns(await W.kv("HGETALL", `mon:${d}:runs`));
+  return W;
+}
+
+test("盤中監控 M2：推播範圍、重跑不重複、升級、只通知持有的人、Telegram 失敗後重試、來源失敗、公開資料不含使用者", async () => {
+  const t0 = at8("2026-10-26T10:00:30");
+  // 推播清單：盤中警示的範圍是庫存台股＋自選台股（範例庫存、美股不算）；沒勾就沒有
+  const doc = alertDoc({ "kline:watch:evalert": JSON.stringify({ mon: true }), "kline:watch:hold": JSON.stringify({ 2330: { sh: 1 }, 2454: { demo: true }, AAPL: { sh: 1 } }), "kline:watch:groups": JSON.stringify([{ list: ["9999", "TSLA"] }]) }, "c1");
+  assert.deepEqual(doc.ev.mon.sort(), ["2330", "9999"]); assert.equal(docHas(doc), true);
+  assert.deepEqual(alertDoc({ "kline:watch:hold": JSON.stringify({ 2330: { sh: 1 } }) }, "c1").ev.mon, []);
+  await assert.rejects(memKv()("SADD", "x"), /不支援/, "記憶體替身遇到沒寫的指令要丟錯，不能默默忽略");
+  const W = m2World();
+  // 第一輪：大盤跌 2.5%（注意，不推）、2330 漲停（警示，只推給 u1；u3 沒勾盤中警示）
+  let r = await W.run(t0);
+  assert.deepEqual(J(r.up.map(e => e.id).sort()), ["2026-10-26:IDX:T00:dn", "2026-10-26:SYM:2330:up"]); assert.deepEqual(W.sent, ["c1"]);
+  assert.match(r.up.find(e => e.code === "2330").title, /^股2330 漲停$/, "伺服器的標題不分庫存／自選");
+  // 同一事件重複巡檢（排程重送、重試）：不開新事件、不重複通知
+  r = await W.run(t0 + 60e3); assert.equal(r.up.length, 0); assert.deepEqual(W.sent, ["c1"]);
+  // 大盤升級到跌 3%（警示）：人人都收；同一件只升級
+  W.px.T00 = 96.8; r = await W.run(t0 + 120e3);
+  assert.deepEqual(J(r.up.map(e => e.id)), ["2026-10-26:IDX:T00:dn"]); assert.deepEqual([...W.sent].sort(), ["c1", "c1", "c2"]);
+  const E = monPublic(await W.kv("HGETALL", "mon:2026-10-26")); assert.equal(E.length, 2, "存起來的只有事件（上一輪價格不算）");
+  const ix = E.find(e => e.id.endsWith("IDX:T00:dn")); assert.equal(ix.level, 3); assert.equal(ix.snaps.length, 2); assert.deepEqual(ix.notified.map(n => [n.ch, n.ok, n.n]), [["tg", true, 2]]);
+  assert.ok(!/c1|c2|u1|u2/.test(JSON.stringify(E)), "公開的事件不含 chat id 或使用者");
+  assert.equal(await W.kv("TTL", "mon:2026-10-26"), 30 * 86400, "事件 30 天過期");
+  // Telegram 失敗：記在事件的 notified、不扣額度、不佔冷卻；下一輪自動重試，成功後不再送
+  W.bad.add("c2"); W.px[9999] = 91; r = await W.run(t0 + 30 * 60e3);
+  const e9 = r.up.find(x => x.code === "9999"); assert.equal(e9.sev, "alert"); assert.deepEqual(J(e9.notified.map(n => [n.ok, n.err])), [[false, "Forbidden: bot was blocked by the user"]]);
+  assert.equal(r.stat.retry, 1); assert.equal(await W.kv("GET", "moncnt:u2:2026-10-26"), "1", "失敗不扣額度（只有之前大盤那一則）"); assert.equal(await W.kv("GET", "moncd:u2:9999"), null, "失敗不佔冷卻");
+  W.bad.delete("c2"); r = await W.run(t0 + 31 * 60e3);
+  assert.equal(r.up.length, 0, "沒有新事件"); assert.equal(r.stat.ok, 1, "重試名單裡的那則送出去了"); assert.equal(W.sent.filter(c => c === "c2").length, 2);
+  assert.equal(await W.kv("GET", "moncnt:u2:2026-10-26"), "2"); assert.deepEqual(J(monPublic(await W.kv("HGETALL", "mon:2026-10-26")).find(e => e.code === "9999").notified.map(n => n.ok)), [false, true]);
+  r = await W.run(t0 + 32 * 60e3); assert.equal(W.sent.filter(c => c === "c2").length, 2, "送成功後不再重送"); assert.deepEqual(r.stat, {});
+  // 來源失敗：不產生事件，連續失敗次數往上加；成功後歸零
+  const fail = async () => { throw new Error("證交所逾時"); };
+  for (let i = 0; i < 3; i++) assert.equal((await W.run(t0 + (40 + i) * 60e3, { quotes: fail })).error, "證交所逾時");
+  let R = await W.runs(); assert.equal(R.streak, 3); assert.equal(R.err, "證交所逾時");
+  assert.equal(engine().M.monSrvState(R, t0 + 43 * 60e3)[0], "down"); assert.match(engine().M.monSrvState(R, t0 + 43 * 60e3)[1], /最後成功 10:32:30/);
+  await W.run(t0 + 45 * 60e3); R = await W.runs(); assert.equal(R.streak, 0); assert.equal(engine().M.monSrvState(R, t0 + 46 * 60e3)[0], "ok");
+  assert.equal(engine().M.monSrvState(R, t0 + 70 * 60e3)[0], "late"); assert.equal(engine().M.monSrvState(null)[0], "off");
+  // 網頁合併伺服器事件：沒有的加進來、等級高的升級、這台已有的不重複
+  const { monSrvMerge } = engine().M, L = { [ix.id]: { ...ix, level: 2, sev: "watch", origin: "client" } };
+  assert.equal(monSrvMerge(L, [...E, { id: "bad", sev: "evil" }]), 2); assert.equal(L[ix.id].level, 3); assert.equal(L[ix.id].origin, "client", "這台原本就有的保留來源");
+  assert.equal(Object.values(L).find(x => x.code === "2330").origin, "server"); assert.equal(monSrvMerge(L, E), 0, "重複合併沒有變動");
+});
+
+test("盤中監控 M2 通知：去重、15 分鐘冷卻、每天 20 則（算成功的）、失敗重試最多 3 次、並行只送一次、KV 出錯不送", async () => {
+  const d = "2026-10-26", e = { id: "x", code: "2330", level: 2, sev: "alert" };
+  let n = 0; const ok = async () => { n++; }, boom = async () => { n++; throw new Error("Telegram HTTP 502"); };
+  // 成功、同一件同等級不再送、注意等級不推
+  let kv = memKv(); assert.equal(await monNotify(kv, "h", e, d, ok), "ok"); assert.equal(await monNotify(kv, "h", e, d, ok), "dup"); assert.equal(n, 1);
+  assert.equal(await monNotify(kv, "h", { ...e, id: "w", sev: "watch" }, d, ok), "skip");
+  // 升級到更高等級：是新的一則，但同一檔 15 分鐘內只送一則；冷卻過了才送
+  assert.equal(await monNotify(kv, "h", { ...e, level: 3 }, d, ok), "cd"); assert.equal(await monNotify(kv, "h", { ...e, level: 3 }, d, ok), "dup", "被冷卻擋下的不會之後補送");
+  assert.equal(await monNotify(kv, "h", { ...e, id: "y" }, d, ok), "cd", "同一檔別的事件也擋"); assert.equal(await monNotify(kv, "h2", { ...e, id: "y" }, d, ok), "ok", "冷卻是每個人各自算");
+  assert.equal(await kv("TTL", "moncd:h:2330"), 900); await kv("DEL", "moncd:h:2330"); // 15 分鐘到了（記憶體 KV 不會自己過期）
+  assert.equal(await monNotify(kv, "h", { ...e, id: "z", level: 3 }, d, ok), "ok"); assert.equal(n, 3);
+  // 每天 20 則，算送成功的：失敗不扣額度；第 21 則擋下
+  kv = memKv(); n = 0; const many = i => ({ ...e, id: "q" + i, code: "c" + i });
+  for (let i = 0; i < 3; i++) assert.equal(await monNotify(kv, "h", many(100 + i), d, boom), "retry");
+  assert.equal(await kv("GET", "moncnt:h:2026-10-26"), "0", "失敗的都退回額度");
+  let okN = 0; for (let i = 0; i < 25; i++) if ((await monNotify(kv, "h", many(i), d, ok)) === "ok") okN++;
+  assert.equal(okN, 20); assert.equal(await kv("GET", "moncnt:h:2026-10-26"), "20", "滿了就退回，停在 20"); assert.equal(await monNotify(kv, "h", many(99), d, ok), "quota");
+  assert.equal(await kv("TTL", "moncnt:h:2026-10-26"), 2 * 86400); assert.equal(await kv("GET", "moncd:h:c99"), null, "額度滿了不佔冷卻");
+  // 失敗重試：最多 3 次，之後記成 fail 不再送；每次失敗都放掉冷卻與額度
+  kv = memKv(); n = 0;
+  assert.deepEqual([await monNotify(kv, "h", e, d, boom), await monNotify(kv, "h", e, d, boom), await monNotify(kv, "h", e, d, boom), await monNotify(kv, "h", e, d, ok)], ["retry", "retry", "fail", "dup"]);
+  assert.equal(n, 3, "重試不會無限送"); assert.equal(await kv("GET", "monsent:h:x:2"), "fail"); assert.equal(await kv("GET", "moncnt:h:2026-10-26"), "0"); assert.deepEqual(await kv("HGETALL", "monretry:h:2026-10-26"), [], "放棄後離開重試名單");
+  assert.equal(await monNotify(kv, "h", { ...e, id: "x2" }, d, ok), "ok", "失敗沒有佔住同一檔的冷卻");
+  // 並行：同一個人同一件事件同時處理 5 次，只送 1 次
+  kv = memKv(); n = 0; const slow = async () => { n++; await new Promise(r => setTimeout(r, 5)); };
+  assert.deepEqual((await Promise.all(Array.from({ length: 5 }, () => monNotify(kv, "h", e, d, slow)))).sort(), ["dup", "dup", "dup", "dup", "ok"]); assert.equal(n, 1);
+  // 兩次巡檢同時跑：每個人每件只收到一次
+  const W = m2World(); W.cur = at8("2026-10-26T10:00:30"); await Promise.all([W.run(W.cur), W.run(W.cur)]); assert.deepEqual(W.sent, ["c1"]);
+  // KV 出錯（逾時）：不送出；佔住的都放掉，修好後可以送
+  const flaky = (bad) => { const k = memKv(); return async (cmd, ...a) => { if (bad(cmd, a[0])) throw new Error("KV HTTP 504"); return k(cmd, ...a); }; };
+  n = 0; let down = true; kv = flaky((c, k) => down && c === "INCR");
+  assert.equal(await monNotify(kv, "h", e, d, ok), "kverr"); assert.equal(n, 0); assert.equal(await kv("GET", "moncd:h:2330"), null, "冷卻放掉"); assert.equal(await kv("GET", "monsent:h:x:2"), null, "處理鎖放掉");
+  down = false; assert.equal(await monNotify(kv, "h", e, d, ok), "ok"); assert.equal(n, 1);
+  kv = flaky(c => c === "SET"); assert.equal(await monNotify(kv, "h", e, d, ok), "kverr", "拿不到處理鎖就不送"); assert.equal(n, 1);
+  // 送出去之後才記錄失敗：不重送（不在重試名單）
+  kv = flaky((c, k) => c === "SET" && /^monsent/.test(k) && down); const k0 = kv; down = false; n = 0;
+  const kvAfter = async (cmd, k, ...a) => { if (cmd === "SET" && /^monsent/.test(k) && String(a[0]).startsWith("ok:")) throw new Error("KV HTTP 504"); return k0(cmd, k, ...a); };
+  assert.equal(await monNotify(kvAfter, "h", e, d, ok), "ok"); assert.equal(await monNotify(kvAfter, "h", e, d, ok), "dup"); assert.equal(n, 1);
+  // 錯誤訊息不帶 Bot Token
+  assert.equal(scrub(new Error("fetch https://api.telegram.org/bot123456:ABCdef_ghi-jkl/sendMessage failed")), "fetch https://api.telegram.org/bot***/sendMessage failed");
+});
+
+test("盤中監控 M2 交易日：和 P1 同一套休市判斷；休市、日表拿不到、不在盤中都不抓報價；加權報價不是今天的不算成功", async () => {
+  const W = m2World(), run = async (s, o) => { const q = W.qCalls; const r = await W.run(at8(s), o); return { ...r, q: W.qCalls - q }; };
+  // 正常交易日盤中：抓報價、記一次成功
+  let r = await run("2026-10-26T10:00:30"); assert.equal(r.q, 1); assert.equal(r.skipped, undefined); assert.ok((await W.runs()).lastOk);
+  // 開盤前、收盤後、週六、週日：連休市日表都不抓
+  const h0 = W.hCalls;
+  for (const [s, why] of [["2026-10-26T08:45:00", "session"], ["2026-10-26T13:40:00", "session"], ["2026-10-24T10:00:00", "weekend"], ["2026-10-25T10:00:00", "weekend"]]) { r = await run(s); assert.equal(r.skipped, why, s); assert.equal(r.q, 0, s); }
+  assert.equal(W.hCalls, h0, "非盤中不必抓休市日表");
+  // 平日國定休市日：不抓報價，記下略過原因
+  r = await run("2026-10-09T10:00:00"); assert.equal(r.skipped, "closed"); assert.equal(r.q, 0); assert.equal((await W.runs("2026-10-09")).skip, "closed");
+  assert.match(engine().M.monSrvState(await W.runs("2026-10-09"), at8("2026-10-09T10:01:00"))[1], /伺服器巡檢暫停：今天休市/);
+  // 休市日表不存在、拿不到、只有去年的（過期）、格式不對：交易日待確認，保守不巡檢
+  for (const hol of [null, [], new Error("HTTP 503"), [{ date: "2025-12-31", name: "去年" }], "壞掉的", [{ name: "沒有日期" }], [{ date: 20260101 }]]) {
+    W.hol = hol; r = await run("2026-10-27T10:00:00"); assert.equal(r.skipped, "unknown", JSON.stringify(String(hol))); assert.equal(r.q, 0);
+  }
+  assert.equal((await W.runs("2026-10-27")).skip, "unknown"); assert.match(engine().M.monSrvState(await W.runs("2026-10-27"), at8("2026-10-27T10:01:00"))[1], /交易日待確認/);
+  // 日表把「開始交易日」列進去：那天有開盤
+  W.hol = [...M2_HOL, { date: "2026-10-28", name: "國曆新年開始交易日" }]; r = await run("2026-10-28T10:00:00"); assert.equal(r.skipped, undefined); assert.equal(r.q, 1);
+  // 加權報價缺失：整輪失敗、不產生事件；加權報價不是今天的：當成休市，不算成功
+  W.hol = M2_HOL; W.quoteOf = c => (c === "T00" ? null : W.q(c)); r = await run("2026-10-29T10:00:00"); assert.match(r.error, /加權指數沒有報價/); assert.equal(r.up, undefined);
+  assert.equal((await W.runs("2026-10-29")).streak, 1); assert.equal((await W.runs("2026-10-29")).lastOk, 0);
+  W.quoteOf = c => ({ ...W.q(c), date: "2026-10-29" }); r = await run("2026-10-30T10:00:00"); assert.equal(r.skipped, "notoday"); assert.equal((await W.runs("2026-10-30")).lastOk, 0, "不算成功巡檢");
+  assert.deepEqual(monPublic(await W.kv("HGETALL", "mon:2026-10-30")), [], "沒有事件"); W.quoteOf = null;
+  // 和網頁（core.js）、伺服器報價 API（quote.js 的 session）判斷一致
+  const { T } = engine(), { session } = await import("../api/_lib/quote.js"), { holLoad, holState } = await import("../api/_lib/calendar.js");
+  Object.assign(T.TWHOL, { set: null, year: "", mark: null }); assert.equal(T.twHolSet(M2_HOL, new Date(at8("2026-10-26T10:00:00"))), true); assert.equal(holLoad(M2_HOL, at8("2026-10-26T10:00:00")), true);
+  for (const s of ["2026-10-08T10:00:00", "2026-10-09T10:00:00", "2026-10-09T08:40:00", "2026-10-10T10:00:00", "2026-10-12T08:45:00", "2026-10-12T09:00:00", "2026-10-12T13:35:00", "2026-10-12T13:36:00"]) {
+    const t = new Date(at8(s)), wd = t.getUTCDay();
+    assert.equal(T.mktSession(t), session(t), `網頁與伺服器的時段一致 ${s}`);
+    if (wd % 6) assert.equal(T.twDayState(t), holState(s.slice(0, 10)), `休市日一致 ${s}`);
+  }
+  Object.assign(T.TWHOL, { set: null, year: "", mark: null });
+});
+
+test("盤中監控 報價完整度：每一檔都要檢查；缺漏、過期、非今日、價格無效的不判斷也不通知；部分成功和整輪失敗分開", async () => {
+  const { monCheck, monAudit, monAuditTxt, monScan, monStatus } = engine().M, d = "2026-10-26", now = at8("2026-10-26T10:00:30");
+  const q = (x = {}) => ({ code: "2330", price: 110, prev: 100, chgPct: 10, date: d, time: "10:00:00", ...x });
+  const C = [[q(), "ok"], [null, "missing"], [q({ date: null }), "nodate"], [q({ time: null }), "notime"], [q({ time: "abc" }), "notime"], [q({ time: "09:56:00" }), "stale"], [q({ date: "2026-10-23" }), "notoday"],
+    [q({ price: null }), "price"], [q({ price: "110" }), "price"], [q({ price: NaN }), "price"], [q({ price: 0 }), "price"], [q({ price: -5 }), "price"], [q({ prev: 0 }), "price"], [q({ estimated: true }), "estimated"]];
+  for (const [x, want] of C) assert.equal(monCheck(x, d, now), want, JSON.stringify(x));
+  // 一輪的完整度：缺一檔、過期一檔
+  const Q = new Map([["T00", q({ code: "T00", price: 96, chgPct: -4 })], ["2330", q()], ["9999", q({ code: "9999", price: 90, chgPct: -10, time: "09:50:00" })]]);
+  const A = monAudit(Q, ["T00", "2330", "9999", "1101"], d, now); assert.deepEqual(J(A), { n: 4, ok: 2, badN: 2, bad: { stale: ["9999"], missing: ["1101"] }, t00: "ok" });
+  assert.equal(monAuditTxt(A), "超過 3 分鐘沒更新 1 檔、沒有報價 1 檔");
+  // 過期的 9999 跌 10% 也不判斷（不會變成警示或通知）
+  assert.deepEqual(J(monScan(Q, { today: d, codes: [{ c: "2330" }, { c: "9999" }, { c: "1101" }], now }).map(x => x.code)).sort(), ["2330", "T00"]);
+  // 狀態列：寫出受影響的檔數，不說「監控中」
+  const st = monStatus({ day: "trade", sess: "open", lastOk: 1, audit: A, staleN: 2 }); assert.equal(st[0], "stale"); assert.match(st[1], /2／4 檔報價有問題（超過 3 分鐘沒更新 1 檔、沒有報價 1 檔），這些先不判斷，不代表它們沒有事件/);
+  assert.match(monStatus({ day: "trade", sess: "open", lastOk: 1, audit: monAudit(new Map(), ["T00"], d, now) })[1], /加權指數報價沒有報價，大盤先不判斷/);
+  assert.equal(monStatus({ day: "trade", sess: "open", lastOk: 1, audit: monAudit(Q, ["T00", "2330"], d, now) })[0], "on", "全部有效才是監控中");
+  // 伺服器：一批失敗＝那批代號算缺漏（部分成功），其他照樣判斷；執行紀錄寫出檔數
+  const many = Array.from({ length: 45 }, (_, i) => String(3000 + i)), W = m2World({ users: { u1: { chat: "c1", ev: { on: ["mon"], mon: ["2330", ...many] } } } });
+  let call = 0; const quotes = async codes => { if (call++ === 1) throw new Error("證交所逾時"); return codes.map(W.q); };
+  const r = await W.run(now, { quotes }); assert.equal(r.audit.badN, 7, "第二批 7 檔（47 檔分成 40＋7）"); assert.deepEqual(J(r.up.map(e => e.code)).sort(), ["2330", "T00"]);
+  const R = await W.runs(); assert.equal(R.badN, 7); assert.equal(R.streak, 0); assert.ok(R.lastOk, "部分成功也記最後成功時間"); assert.match(R.badTxt, /沒有報價 7 檔/);
+  const S = engine().M.monSrvState(R, now + 60e3); assert.equal(S[0], "partial"); assert.match(S[1], /7 檔報價有問題/);
+  // 過期的報價重跑也不會變成事件或通知
+  const W2 = m2World(); W2.quoteOf = c => ({ ...W2.q(c), time: "09:00:00" }); assert.match((await W2.run(now)).error, /加權指數超過 3 分鐘沒更新/); assert.deepEqual(W2.sent, []);
+  W2.quoteOf = c => (c === "2330" ? { ...W2.q(c), time: "09:00:00" } : W2.q(c)); for (let i = 0; i < 3; i++) await W2.run(now + i * 60e3); assert.deepEqual(W2.sent, [], "2330 漲停但報價過期：不通知");
 });

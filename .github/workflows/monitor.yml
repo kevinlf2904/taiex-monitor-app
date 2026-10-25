@@ -1,0 +1,40 @@
+# 伺服器盤中巡檢（盤中監控 M2，scripts/monitor.mjs）：關掉網頁也偵測大盤與庫存、自選的警示，寫進 KV、推 Telegram 給勾了「盤中警示」的人。
+# 目前排程是關的（還沒接 Upstash＋Telegram）：只能手動執行，預設 dry＝只印出會產生的事件與訊息，不寫 KV、不送出。
+# 要啟用時：設定好 secrets（KV_REST_API_URL、KV_REST_API_TOKEN、TELEGRAM_BOT_TOKEN），把下面的 schedule 取消註解（交易時段每 5 分鐘；GitHub 常延遲幾分鐘）。
+# 要停用：GitHub → Actions → monitor → Disable workflow，或再把 schedule 註解掉；網頁偵測不到伺服器資料就自動只用頁面自己的偵測。
+name: monitor
+on:
+  # schedule:
+  #   - cron: "3-58/5 1-5 * * 1-5"   # UTC 01–05 時 ＝ 台北 09:03–13:58，每 5 分鐘（程式自己會略過 13:35 以後與休市日）
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "1＝只印出會產生的事件與訊息，不寫 KV、不送出（預設）；0＝真的執行（只有 main）"
+        default: "1"
+      force:
+        description: "1＝不管現在是不是盤中（只在 dry 有效，測試用）"
+        default: "0"
+permissions:
+  contents: read
+concurrency:
+  group: monitor-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # 手動執行預設 dry；排程（啟用後）在 main 上是真的執行
+      - if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.dry != '0') || github.ref != 'refs/heads/main' }}
+        run: node scripts/monitor.mjs --dry ${{ github.event.inputs.force == '1' && '--force --codes=2330,2317,2454' || '' }}
+      - name: scan
+        if: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.dry == '0') && github.ref == 'refs/heads/main' }}   # 只有 main 會寫 KV、發真的推播
+        env:
+          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: node scripts/monitor.mjs

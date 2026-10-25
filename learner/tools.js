@@ -286,12 +286,14 @@ function renderTools() {
   $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="工具">${TOOLS_VIEWS.map(([k, t]) => `<button data-tv="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</div>`;
   const r = toolsBody(v); $("#lx").innerHTML = r.h; return r.note;
 }
-// 盤後總結＋分享（原本在資金雷達「今日」）：用法人資金資料填固定句型，可分享成圖片或文字
-function sumFlowHtml() {
-  const M = typeof mfModel === "function" ? mfModel() : null;
-  // 只自動抓一次：抓完還是沒資料（證交所連不到）就說明，不然 loadMoney 畫完又回來抓，整頁一直重畫、按鈕按不到
+// 法人資金資料還沒有時：只自動抓一次，抓完還是沒資料（證交所連不到）就說明，不然 loadMoney 畫完又回來抓，整頁一直重畫、按鈕按不到
+function flowWaitNote() {
   const F = W.mf, wait = F?.loading || (F && !F.sumTry);
-  if (!M) { if (!W.off && F && !F.loading && !F.sumTry) { F.sumTry = true; setTimeout(() => loadMoney(10), 0); } return `<h4>盤後總結</h4><p class="note">${W.off ? "需要部署到網站才有資金資料。" : wait ? "載入法人資金資料…" : "法人資金資料暫時拿不到，稍後按「↻ 重新整理」再試。"}</p>`; }
+  if (!W.off && F && !F.loading && !F.sumTry) { F.sumTry = true; setTimeout(() => loadMoney(10), 0); }
+  return W.off ? "需要部署到網站才有資金資料。" : wait ? "載入法人資金資料…" : "法人資金資料暫時拿不到，稍後按「↻ 重新整理」再試。";
+}
+// 盤後總結＋分享（原本在資金雷達「今日」）：用法人資金資料填固定句型，可分享成圖片或文字；放在今日重點的資金雷達卡裡（brief.js 的 flowsDecisionHtml）
+function sumFlowHtml(M) {
   let sum = "";
   try { sum = flowSummary(M, typeof flowMood === "function" ? flowMood(M) : null, W.quotes.get("T00")?.chgPct); } catch { sum = "法人資金資料計算中…"; }
   const dStr = (M.dates && M.dates[M.T - 1]) ? M.dates[M.T - 1].slice(5).replace("-", "/") : "";
@@ -309,7 +311,6 @@ function sumBody() {
     <div class="tgrid"><div><h4>大盤</h4><ul class="tlist">${["T00", "O00", "TXF"].map(c => q(c) ? `<li>${esc(q(c).name || nameOf(c))} <b>${fmtP(q(c).price)}</b> <span class="${cls(q(c).chg)}">${q(c).chgPct >= 0 ? "+" : ""}${q(c).chgPct ?? "—"}%</span></li>` : "").join("")}</ul></div>
     <div><h4>自選漲幅前 5</h4><ul class="tlist">${mv.slice(0, 5).map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div>
     <div><h4>自選跌幅前 5</h4><ul class="tlist">${mv.slice(-5).reverse().map(row).join("") || "<li class='note'>等待報價…</li>"}</ul></div></div>
-    ${sumFlowHtml()}
     <h4>自選股今天觸發的技術訊號 ${S?.busy ? `<span class="note">掃描中…</span>` : ""}</h4><ul class="tlist">${(S?.sig || []).map(s => `<li><button class="linkbtn" data-tsel="${s.c}">${esc(nameOf(s.c))} ${s.c}</button>：${s.ev.map(esc).join("、")} <span class="note">${s.d}</span></li>`).join("") || `<li class="note">${S?.busy ? "…" : "沒有（掃描自選股最多 30 檔的日 K：KD／MACD 交叉、布林突破、20 日新高新低、爆量、鈍化、季線）"}</li>`}</ul>
     <h4>今天的指標提醒</h4><ul class="tlist">${(W.irLog ||= store.get("watch:irlog", []) || []).filter(x => x.d === toolsDay()).map(x => `<li>${x.t} ${esc(nameOf(x.code))} ${x.code}：${esc(x.msg)}</li>`).join("") || `<li class="note">沒有（在「提醒」設定條件）</li>`}</ul>
     <h4>國會新申報（最近 3 天）</h4><ul class="tlist">${cg.slice(0, 12).map(t => `<li>${esc(pName(t.pid))} ${t.k === "buy" ? "<b class='up'>買進</b>" : "<b class='down'>賣出</b>"} ${esc(t.ticker)} ${amtTxt(t.amount)} <span class="note">交易日 ${t.traded}</span></li>`).join("") || `<li class="note">沒有</li>`}</ul>`;
@@ -725,12 +726,13 @@ function insHtml() {
 /* ---------- 備份同步：匯出／匯入備份檔；有雲端儲存時用同步碼在 iPad、手機之間同步；綁定 Telegram 收收盤後提醒 ---------- */
 // 同步的內容：瀏覽器裡 kline: 開頭的設定與紀錄（自選、庫存、提醒、日記、模擬帳戶、錯題本…）；單筆超過 150KB 的多半是快取，不同步
 const SYNC_K = "kline-sync";
-const SYNC_SKIP = /^kline:watch:(ft:|errs$)/; // 台指期盤中報價暫存（每 5 秒變一次）、錯誤紀錄：只對這台裝置有用，不要同步
+const SYNC_SKIP = /^kline:watch:(ft:|errs$|brief:snap:|mon:)/; // 台指期盤中報價暫存（每 5 秒變一次）、錯誤紀錄、盤前推演快照、盤中監控事件（每天一筆，只對這台裝置有用）：不要同步
 const syncGet = () => { try { return JSON.parse(localStorage.getItem(SYNC_K) || "{}"); } catch { return {}; } };
 const syncSet = o => { try { localStorage.setItem(SYNC_K, JSON.stringify({ ...syncGet(), ...o })); } catch {} };
 function syncSnap() { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k?.startsWith("kline:") || SYNC_SKIP.test(k)) continue; const v = localStorage.getItem(k); if (v != null && v.length < 150000) o[k] = v; } } catch {} return o; }
 const syncHash = o => { let h = 0; const s = JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]])); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
-function syncApply(data) { let n = 0; try { for (const [k, v] of Object.entries(data || {})) if (k.startsWith("kline:") && typeof v === "string") { localStorage.setItem(k, v); n++; } } catch {} return n; }
+// 舊版雲端資料裡若有不同步的鍵（例如推演快照）也不寫回
+function syncApply(data) { let n = 0; try { for (const [k, v] of Object.entries(data || {})) if (k.startsWith("kline:") && !SYNC_SKIP.test(k) && typeof v === "string") { localStorage.setItem(k, v); n++; } } catch {} return n; }
 const syncNewId = () => { const a = new Uint8Array(18); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 async function syncTok(id) { const b = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id))); return [...b].map(x => x.toString(16).padStart(2, "0")).join("").slice(0, 24); }
 async function syncApi(op, extra = {}) { const S = syncGet(); const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, id: S.id, ...extra }), signal: tmo(20000) }).catch(e => { throw new Error(/Timeout|Abort/.test(e.name) ? "雲端連線逾時" : "連不上雲端"); }); return r.json(); }

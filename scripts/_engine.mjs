@@ -13,11 +13,13 @@ export function engine() {
   const c = { console, Math, Date, JSON, Map, Set, WeakMap, Array, Object, Number, String, isFinite, parseFloat, parseInt, setTimeout, clearTimeout, Promise };
   Object.assign(c, { window: c, document: stub, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, navigator: { userAgent: "" }, matchMedia: () => ({ matches: false, addEventListener() {} }), addEventListener() {}, requestAnimationFrame: () => 0, devicePixelRatio: 1, getComputedStyle: () => ({ getPropertyValue: () => "" }) });
   vm.createContext(c);
-  for (const f of ["core.js", "analysis.js", "quant.js", "tools.js", "brief.js"]) vm.runInContext(readFileSync(L(f), "utf8"), c, { filename: f });
+  for (const f of ["core.js", "analysis.js", "quant.js", "tools.js", "brief.js", "monitor.js"]) vm.runInContext(readFileSync(L(f), "utf8"), c, { filename: f });
   const g = n => vm.runInContext(n, c);
   ctx = { indicators: g("indicators"), COND: g("COND"), SCOND: g("SCOND"), condOf: g("condOf"), condName: g("condName"), condCheck: g("condCheck"), stratRun: g("stratRun"), STRAT_DEFS: g("STRAT_DEFS"), backtest: g("backtest"), agg: g("agg"), weekKey: g("weekKey"),
     S: { Signals: g("Signals"), detectPattern: g("detectPattern"), PATTERNS: g("PATTERNS"), CHART_PATTERNS: g("CHART_PATTERNS") }, // K 線型態、型態學、缺口（K線學堂的型態課）
-    B: Object.fromEntries(["evScan", "revOf", "briefParts", "briefText", "twDay", "macroBeta", "todayData", "closeText", "sessionStatus", "briefScenarios", "validatePlan", "marketSnapshot", "isValidSnapshot", "evaluateDataStatus", "getBriefSnapshot", "saveBriefSnapshot", "resolveTime", "resolveHolidays", "findLastTradeDate", "dailyBriefSummaryHtml", "coreMarketCardsHtml", "validateHtml", "verifyVolumeStatus"].map(n => [n, g(n)])), // 事件提醒、早報、決策中心（brief.js）
+    B: Object.fromEntries(["evScan", "revOf", "briefParts", "briefText", "twDay", "macroBeta", "todayData", "closeText", "sessionStatus", "briefScenarios", "validatePlan", "marketSnapshot", "isValidSnapshot", "evaluateDataStatus", "getBriefSnapshot", "saveBriefSnapshot", "resolveTime", "resolveHolidays", "findLastTradeDate", "dailyBriefSummaryHtml", "coreMarketCardsHtml", "validateHtml", "verifyVolumeStatus", "findNextTradeDate", "briefSnapGc"].map(n => [n, g(n)])),
+    M: Object.fromEntries(["monFresh", "monScan", "monMerge", "monRule", "monData", "monShouldNotify", "monHash", "monGc", "monStatus", "monSrvMerge", "monSrvState", "monTime", "monCheck", "monAudit", "monAuditTxt", "MON_BAD"].map(n => [n, g(n)])), // 事件提醒、早報、決策中心（brief.js）
+    T: Object.fromEntries(["TWHOL", "twHolSet", "twDayState", "mktSession", "twIso"].map(n => [n, g(n)])), // 交易日與時段（learner/core.js，P1）：伺服器巡檢和網頁用同一套
     Q: Object.fromEntries(["btMetrics", "regimes", "btBreakdown", "btVariants", "btAdvice", "adxCalc", "marketState", "stateAdvice", "atrSetup", "portRisk", "portPlan", "factorRaw", "factorScore", "factorBacktest", "btReportHtml", "stateHtml", "btReportText"].map(n => [n, g(n)])) };
   return ctx;
 }

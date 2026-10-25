@@ -26,6 +26,7 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-num: var(--font-song); /* 行情數字也用宋體，搭配 tabular-nums 讓數字對齊 */
   --radius: 4px;
+  --warn: var(--s1); /* 資料延遲、部分缺漏、待確認：琥珀色（跟著主題的短均線色），紅綠只留給漲跌 */
   --on-strong: var(--surface); --strong-line: var(--ink); --up-pill: var(--up); --down-pill: var(--down);
 }
 @media (prefers-color-scheme: dark) {
@@ -242,3 +243,105 @@ html[data-big] .linkbtn { padding-top: 4px; padding-bottom: 4px; }
   :is(.linkbtn, [data-sk], [data-strongk], .qmark, footer .ft-brand a, .bl-pro) { position: relative; }
   :is(.linkbtn, [data-sk], [data-strongk], .qmark, footer .ft-brand a, .bl-pro)::after { content: ""; position: absolute; inset: -9px -6px; }
 }
+
+/* ---------- 情報局「今日重點」決策中心（learner/brief.js 的 todayPage）：原本寫在 JS 裡的樣式，顏色改用主題色票 ---------- */
+.dh-status-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
+.dh-sb-left { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dh-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; color: var(--ink); background: var(--surface-3); border: 1px solid var(--line); }
+.dh-badge.live { border-color: var(--ink); }
+.dh-badge.closed { color: var(--muted); }
+.dh-badge.unknown { border-color: var(--warn); color: var(--warn); }
+.dh-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 500; background: var(--surface); border: 1px solid var(--line); }
+.dh-tag.status-official, .dh-tag.status-verified, .dh-tag.status-live { border-color: var(--ink); color: var(--ink); }
+.dh-tag.status-delayed, .dh-tag.status-partial { border-color: var(--warn); color: var(--warn); }
+.dh-tag.status-missing, .dh-tag.missing { background: var(--surface-2); color: var(--muted); }
+.dh-note-bar { padding: 6px 12px; background: var(--accent-soft); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; margin-bottom: 12px; }
+
+.dh-title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 14px; }
+.dh-title-row h3 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.dh-title-btns { display: flex; align-items: center; gap: 6px; }
+
+/* 核心市場卡 Grid */
+.dh-core-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.dh-core-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; }
+.dh-cc-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; margin-bottom: 4px; }
+.dh-cc-body { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin: 4px 0; }
+.dh-cc-val { font-size: 16px; font-weight: 500; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.dh-cc-chg { font-size: 12.5px; font-weight: 500; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.dh-cc-sub { font-size: 11px; color: var(--muted); }
+.dh-missing-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--surface-2); color: var(--muted); }
+
+/* 每日早報結構化結論 */
+.dh-brief-summary { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 8px 0 12px; }
+.dh-conclusion-box { margin-bottom: 10px; }
+.dh-cbox-title { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+.dh-cbox-lead { font-size: 13.5px; line-height: 1.6; margin: 0; font-weight: 500; }
+.dh-factor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 8px 0; }
+.dh-factor { padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.5; }
+.dh-factor.bull { background: color-mix(in srgb, var(--up) 7%, transparent); border-left: 3px solid var(--up); }
+.dh-factor.bear { background: color-mix(in srgb, var(--down) 7%, transparent); border-left: 3px solid var(--down); }
+.dh-fac-head { font-weight: 600; margin-bottom: 2px; }
+.dh-factor p { margin: 0; }
+.dh-brief-levels { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
+
+/* 通用決策中心卡片 */
+.dh-card { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); margin: 10px 0; font-size: 13px; line-height: 1.6; }
+.dh-card.val { border-color: var(--accent); background: var(--surface-2); }
+.dh-card.act { border-left: 3px solid var(--accent); }
+.dh-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+.dh-head b { font-size: 14px; }
+.dh-levels { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.dh-lvl { padding: 3px 8px; border-radius: 4px; font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.dh-lvl b { color: var(--ink); font-family: var(--font-num); font-variant-numeric: tabular-nums; } /* 壓力、分水嶺、支撐是推估價位不是漲跌：中性色＋文字標籤，不用紅綠 */
+.dh-lvl.piv { border-color: var(--ink); }
+.sc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 8px; margin-top: 8px; }
+.sc-card { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.sc-card.bull { border-left: 3px solid var(--up); }
+.sc-card.neutral { border-left: 3px solid var(--muted); }
+.sc-card.bear { border-left: 3px solid var(--down); }
+.sc-card h5 { margin: 0 0 4px; font-size: 12.5px; display: flex; justify-content: space-between; }
+.sc-card p { margin: 2px 0; font-size: 12px; }
+.sc-bias { font-size: 11px; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
+.sc-bias.bull { background: color-mix(in srgb, var(--up) 12%, transparent); color: var(--up); }
+.sc-bias.neutral { background: var(--surface); color: var(--muted); }
+.sc-bias.bear { background: color-mix(in srgb, var(--down) 12%, transparent); color: var(--down); }
+.dh-val-txt { margin: 6px 0 8px; font-size: 13.5px; font-weight: 500; }
+.dh-val-stats { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
+.dh-val-stats b { color: var(--ink); }
+
+/* 資金雷達樣式 */
+.dh-mood-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12.5px; }
+.dh-mood-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+.dh-mood-badge.bull { background: color-mix(in srgb, var(--up) 12%, transparent); color: var(--up); }
+.dh-mood-badge.bear { background: color-mix(in srgb, var(--down) 12%, transparent); color: var(--down); }
+.dh-mood-badge.neutral { background: var(--surface-2); color: var(--muted); }
+.dh-flow-groups { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.dh-fg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; }
+.dh-fg-title { color: var(--muted); min-width: 130px; }
+.dh-fg-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.dh-sec-pill { font-size: 11.5px; padding: 2px 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); }
+.dh-sec-pill.up b { color: var(--up); }
+.dh-sec-pill.down b { color: var(--down); }
+
+.dh-footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; color: var(--muted); }
+@media (max-width: 640px) {
+  .dh-status-bar { flex-direction: column; align-items: flex-start; }
+  .dh-core-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .dh-factor-grid { grid-template-columns: 1fr; }
+}
+  
+/* 今日市場：時段面板（沿用 .seg）、缺資料的核心卡縮小、細節收合 */
+.dh-phase { display: flex; width: 100%; margin: 14px 0 6px; } .dh-phase button { flex: 1; } .dh-now { font-size: 11px; color: var(--muted); }
+.dh-panel { min-height: 120px; }
+.dh-core-card.missing { padding: 6px 10px; align-self: start; order: 1; } /* 缺資料的排到後面、不撐高 */ .dh-core-card.missing .dh-cc-sub { display: none; } .dh-core-card.missing .dh-cc-val { font-size: 12px; }
+.dh-more { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.dh-more summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+
+/* ---------- 情報局「盤中監控」（learner/monitor.js）：事件卡沿用 .mcard 的扁平樣式；嚴重度用形狀＋文字，紅綠只留給漲跌 ---------- */
+.mon-list { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 8px; }
+.mon-ev { width: 100%; text-align: left; display: grid; gap: 2px; padding: 10px 12px; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.mon-ev b { font-size: 14px; } .mon-ev .note { font-size: 12px; } .mon-ev.done { opacity: .65; }
+.mon-ev.alert { border-left: 3px solid var(--ink); } .mon-ev.watch { border-left: 3px solid var(--warn); }
+.mon-sev { font-size: 11px; color: var(--muted); } .mon-ev.alert .mon-sev { color: var(--ink); font-weight: 500; } .mon-ev.watch .mon-sev { color: var(--warn); }
+.dh-badge.mon-on { border-color: var(--ink); } .dh-badge.mon-error, .dh-badge.mon-stale, .dh-badge.mon-unknown { border-color: var(--warn); color: var(--warn); } .dh-badge.mon-paused, .dh-badge.mon-closed { color: var(--muted); }
+.mon-empty { padding: 14px 0; }
