@@ -1559,7 +1559,7 @@ function todayPage() {
       <div class="dh-card">${briefBody(["昨晚美股"])}</div>`],
     ["mac", "總經儀表板", tdMacSum(), () => tdMacBody()],
     ["live", "盤中動態", `${alerts ? `■ 警示 ${alerts} 件・` : mon.length ? `事件 ${mon.length} 件・` : ""}${D.n ? `自選與庫存 ${D.up} 漲 ${D.dn} 跌` : "大盤、自選與訊號"}`, () => `${monLine()}${sumHead}`],
-    ["flow", "資金雷達", inS || outS ? [inS && `${inS.name}流入`, outS && `${outS.name}流出`].filter(Boolean).join("、") : "法人資金與板塊輪動", () => flowsDecisionHtml(M)] // 資料狀態只在內容說一次,
+    ["flow", "資金雷達", inS || outS ? [inS && `${inS.name}流入`, outS && `${outS.name}流出`].filter(Boolean).join("、") : "法人資金與板塊輪動", () => flowsDecisionHtml(M)], // 資料狀態只在內容說一次
     ["mine", "我的重點", mine.length ? mine.map(([k]) => k).join("・") : "庫存與自選今天沒有特別的事", () => mine.length ? `<ul class="tdlist">${mine.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul>` : `<p class="note">庫存與自選今天沒有大漲跌、除權息、法說會、ETF 換股或事件提醒。</p>`],
     ["post", "收盤驗證與下一步", val?.outcomeLabel || (pm ? "收盤後對照盤前推演" : "13:30 收盤後對照盤前推演"), () => `${validateHtml(val, vPlan)}${nextActionHtml(plan, val)}`]
   ];
