@@ -1437,7 +1437,7 @@ function todayText() {
 }
 
 // 今日市場的展開狀態：外部指定的時段（W.tdPh，例如 #radar/today、資金雷達原本的「今日」、今日重點卡的「看完整」）優先，否則只展開現在的時段
-const TD_OPEN = { pre: ["pre", "mac"], live: ["live"], post: ["post", "flow"], closed: ["pre", "mac"], flow: ["flow"], mine: ["mine"], mac: ["mac"] };
+const TD_OPEN = { pre: ["pre", "mac"], live: ["live"], post: ["live", "flow", "post"], closed: ["pre", "mac", "live"], flow: ["flow"], mine: ["mine"], mac: ["mac"] }; // 收盤後、休市日的「盤後整理」（大盤、自選與訊號）預設打開
 function tdOpenState(t, phDef) {
   const want = W.tdPh?.d === t ? W.tdPh.ph : null, ph = want || phDef;
   if (W.tdOpen?.d !== t || W.tdOpen.ph !== ph) W.tdOpen = { d: t, ph, s: Object.fromEntries((TD_OPEN[ph] || []).map(k => [k, true])) };
@@ -1546,8 +1546,8 @@ function todayPage() {
 
   // 下面的區塊固定照一天的順序排（盤前推演 → 總經 → 盤中 → 資金 → 我的重點 → 收盤驗證），一開始只展開「現在」那一塊；
   // 展開、收合記在記憶體（同一天），不存瀏覽器。區塊收合時不畫內容，展開才畫（toggle 事件裡重畫）
-  const phDef = { pre: "pre", live: "live", post: "post", closed: "pre" }[sess.session] || (sess.hm < "09:00" ? "pre" : pm ? "post" : "live");
-  const O = tdOpenState(t, phDef), sumHead = `<h4 class="tdsec">${{ live: "盤中", pre: "前一交易日盤後", closed: "最近交易日盤後", post: "盤後" }[sess.session] || (pm ? "盤後" : "盤中")}・大盤、自選與訊號</h4>${sumBody()}`;
+  const phDef = { pre: "pre", live: "live", post: "post", closed: "closed" }[sess.session] || (sess.hm < "09:00" ? "pre" : pm ? "post" : "live");
+  const O = tdOpenState(t, phDef), when = { live: "盤中", pre: "前一交易日盤後", closed: "最近交易日盤後", post: "盤後" }[sess.session] || (pm ? "盤後" : "盤中"), sumHead = `<h4 class="tdsec">${when}・大盤、自選與訊號</h4>${sumBody()}`;
   const mine = todayParts().filter(([k]) => k !== "盤勢"), mon = typeof monE === "function" ? Object.values(monE(W.today || t)) : [], alerts = mon.filter(e => e.sev === "alert" && e.state === "open").length;
   const hold = Object.keys(W.hold || {}).filter(c => !W.hold[c]?.demo), D = todayData({ mine: new Set([...hold, ...myCodes()]), pct: c => (isIdx(c) ? null : W.quotes.get(c)?.chgPct), cal: null, today: t });
   const kl = plan?.keyLevels, A = M?.secs && typeof flowAt === "function" ? (() => { try { return flowAt(M); } catch { return []; } })() : [];
@@ -1558,7 +1558,7 @@ function todayPage() {
       ${briefScenariosHtml(plan)}
       <div class="dh-card">${briefBody(["昨晚美股"])}</div>`],
     ["mac", "總經儀表板", tdMacSum(), () => tdMacBody()],
-    ["live", "盤中動態", `${alerts ? `■ 警示 ${alerts} 件・` : mon.length ? `事件 ${mon.length} 件・` : ""}${D.n ? `自選與庫存 ${D.up} 漲 ${D.dn} 跌` : "大盤、自選與訊號"}`, () => `${monLine()}${sumHead}`],
+    ["live", when === "盤中" ? "盤中動態" : when === "盤後" ? "盤後整理" : `${when}整理`, `${alerts ? `■ 警示 ${alerts} 件・` : mon.length ? `事件 ${mon.length} 件・` : ""}${D.n ? `自選與庫存 ${D.up} 漲 ${D.dn} 跌` : "大盤、自選與訊號"}`, () => `${monLine()}${sumHead}`],
     ["flow", "資金雷達", inS || outS ? [inS && `${inS.name}流入`, outS && `${outS.name}流出`].filter(Boolean).join("、") : "法人資金與板塊輪動", () => flowsDecisionHtml(M)], // 資料狀態只在內容說一次
     ["mine", "我的重點", mine.length ? mine.map(([k]) => k).join("・") : "庫存與自選今天沒有特別的事", () => mine.length ? `<ul class="tdlist">${mine.map(([k, v]) => `<li><span class="tdk">${k}</span><span class="tdv">${v}</span></li>`).join("")}</ul>` : `<p class="note">庫存與自選今天沒有大漲跌、除權息、法說會、ETF 換股或事件提醒。</p>`],
     ["post", "收盤驗證與下一步", val?.outcomeLabel || (pm ? "收盤後對照盤前推演" : "13:30 收盤後對照盤前推演"), () => `${validateHtml(val, vPlan)}${nextActionHtml(plan, val)}`]
@@ -1566,7 +1566,7 @@ function todayPage() {
   const now = { pre: "pre", live: "live", post: "post", closed: "pre" }[sess.session] || phDef, all = SEC.every(([k]) => O.s[k]);
   const secs = SEC.map(([k, name, sum, body]) => `<details class="dh-sec${k === now ? " now" : ""}" data-tdbox="${k}"${O.s[k] ? " open" : ""}><summary><span class="dh-sec-t"><b>${name}</b>${k === now ? `<span class="dh-now">・現在</span>` : ""}</span><span class="dh-sec-s note">${esc(sum)}</span></summary>${O.s[k] ? `<div class="dh-sec-b">${body()}</div>` : ""}</details>`).join("");
 
-  const h = `<section class="csec">
+  const h = `<section class="csec" data-nofold><!-- 區塊本來就能收合，不再被長內容自動收合整頁蓋掉 -->
     <!-- 摘要層：狀態與資料新鮮度、核心市場卡、今日結論（固定在上面） -->
     <div class="dh-status-bar">
       <div class="dh-sb-left">

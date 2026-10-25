@@ -14,7 +14,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   await p.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
   assert.match(await p.textContent('#lTabs [data-l="today"]'), /^今日市場$/);
   const CASES = [["2026-10-26T08:00:00+08:00", ["pre", "mac"], "pre", /盤前推演[\s\S]*(情境|推演)/], ["2026-10-26T10:00:00+08:00", ["live"], "live", /盤中・大盤、自選與訊號[\s\S]*自選漲幅前 5/],
-    ["2026-10-26T15:00:00+08:00", ["flow", "post"], "post", /資金雷達・板塊輪動與資金流向[\s\S]*下一交易日行動清單/], ["2026-10-25T10:00:00+08:00", ["pre", "mac"], "pre", /今天休市，下面是下一交易日 10\/26/]];
+    ["2026-10-26T15:00:00+08:00", ["live", "flow", "post"], "post", /盤後整理[\s\S]*盤後・大盤、自選與訊號[\s\S]*資金雷達・板塊輪動與資金流向[\s\S]*下一交易日行動清單/], ["2026-10-25T10:00:00+08:00", ["pre", "mac", "live"], "pre", /今天休市，下面是下一交易日 10\/26[\s\S]*最近交易日盤後整理[\s\S]*最近交易日盤後・大盤、自選與訊號/]];
   for (const [at, want, now, re] of CASES) {
     await p.clock.setFixedTime(new Date(at));
     await p.evaluate(() => { W.tdPh = null; setLt("today"); renderList(); });
@@ -25,11 +25,12 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
     assert.match(t, re, at); assert.match(t, /今日市場[\s\S]*重新整理/);
     assert.equal(await p.$$eval("#lx .dh-sec-b", L => L.length), want.length, "收合的區塊不畫內容");
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `沒有橫向溢出 ${at}`);
+    await p.waitForTimeout(300); assert.equal(await p.$$eval("#lx .fold-btn", L => L.length), 0, `不會被自動收合成「展開全部」 ${at}`);
   }
   // 點標題展開別的區塊：每秒重畫也不會收回去（同一天記在記憶體）
   await p.click('#lx details[data-tdbox="mine"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="mine"] .dh-sec-b'));
   await p.evaluate(() => { W.ticking = true; renderList(); W.ticking = false; renderList(); });
-  assert.deepEqual(await openOf(p), ["pre", "mac", "mine"]);
+  assert.deepEqual(await openOf(p), ["pre", "mac", "live", "mine"]);
   // 全部展開、全部收合
   await p.click("#lx [data-tdall]"); assert.equal((await openOf(p)).length, 6); assert.match(await p.textContent("#lx [data-tdall]"), /全部收合/);
   await p.click("#lx [data-tdall]"); assert.deepEqual(await openOf(p), []);
