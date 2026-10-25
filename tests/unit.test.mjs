@@ -1806,3 +1806,45 @@ test("決策中心整理：下一交易日、開始交易日不算休市、只�
   assert.deepEqual([...M.keys()].sort(), ["kline:watch:brief:snap:2026-09-01x", "kline:watch:brief:snap:2026-10-20", "kline:watch:list", "kline:watch:notes", "other:brief:snap:2026-09-01"]);
   assert.equal(briefSnapGc(at("2026-10-25", "10:00"), ls), 0, "一次載入只清一次");
 });
+
+test("盤中監控 M1：偵測規則、同一件事升級不重開、資料過期不判斷、通知節流、只清自己的資料", () => {
+  const { monFresh, monScan, monMerge, monRule, monData, monShouldNotify, monHash, monGc, monStatus } = engine().M, today = "2026-10-26", now = Date.parse("2026-10-26T10:00:30+08:00");
+  const q = (code, price, prev, x = {}) => ({ code, price, prev, chgPct: +((price / prev - 1) * 100).toFixed(2), date: today, time: "10:00:00", ...x });
+  // 報價可不可以用：今天、有成交、不是估價、3 分鐘內
+  assert.equal(monFresh(q("2330", 100, 99), today, now), true);
+  assert.equal(monFresh(q("2330", 100, 99, { date: "2026-10-23" }), today, now), false, "前一天的報價");
+  assert.equal(monFresh(q("2330", 100, 99, { estimated: true }), today, now), false, "估價");
+  assert.equal(monFresh(q("2330", 100, 99, { time: "09:55:00" }), today, now), false, "超過 3 分鐘");
+  const Q = new Map([["T00", q("T00", 97.7, 100)], ["9999", q("9999", 92, 100)], ["2330", q("2330", 110, 100)], ["1101", q("1101", 101, 100)], ["0050", q("0050", 95, 100, { time: "09:50:00" })]]);
+  const codes = [{ c: "2330", hold: true }, { c: "9999", hold: false }, { c: "1101", hold: false }, { c: "0050", hold: false }];
+  const cand = monScan(Q, { today, codes, now, names: { 2330: "台積電" } }), by = Object.fromEntries(cand.map(x => [x.id, x]));
+  assert.deepEqual(Object.keys(by).sort(), ["2026-10-26:IDX:T00:dn", "2026-10-26:SYM:2330:up", "2026-10-26:SYM:9999:dn"], "1101 只漲 1%、0050 報價過期都不算");
+  assert.equal(by["2026-10-26:IDX:T00:dn"].level, 2); assert.equal(by["2026-10-26:IDX:T00:dn"].sev, "watch");
+  assert.match(by["2026-10-26:SYM:2330:up"].title, /庫存 台積電 漲停/); assert.equal(by["2026-10-26:SYM:2330:up"].sev, "alert");
+  assert.equal(by["2026-10-26:SYM:9999:dn"].level, 2, "跌 8%＝超過 7%"); assert.equal(by["2026-10-26:SYM:9999:dn"].sev, "alert", "個股超過 7% 是警示");
+  // 合併：新的開一件；同一件同等級不重複；升級更新同一件
+  const E = {}; assert.equal(monMerge(E, cand, now).length, 3); assert.equal(monMerge(E, cand, now + 20e3).length, 0, "同等級不重複");
+  Q.set("T00", q("T00", 96.5, 100)); const up = monMerge(E, monScan(Q, { today, codes, now }), now + 40e3);
+  assert.equal(up.length, 1); assert.equal(Object.keys(E).length, 3, "升級不開新事件"); assert.equal(E["2026-10-26:IDX:T00:dn"].level, 3); assert.equal(E["2026-10-26:IDX:T00:dn"].snaps.length, 2);
+  // 關鍵價位：穿越才算（上一輪在另一邊）
+  const plan = { tradeDate: today, keyLevels: { pressure: 23300, pivot: 23200, support: 23100 } };
+  assert.equal(monScan(new Map([["T00", q("T00", 23150, 23300)]]), { today, plan, prevPx: { T00: 23210 }, now }).some(x => x.id.endsWith("LEVEL:T00:pivot-dn")), true);
+  assert.equal(monScan(new Map([["T00", q("T00", 23150, 23300)]]), { today, plan, prevPx: { T00: 23160 }, now }).some(x => x.type === "LEVEL"), false, "沒有穿越");
+  assert.equal(monScan(new Map([["T00", q("T00", 23150, 23300)]]), { today, plan: { ...plan, tradeDate: "2026-10-23" }, prevPx: { T00: 23210 }, now }).some(x => x.type === "LEVEL"), false, "不拿別天的推演");
+  // 提醒與資料異常
+  assert.ok(monRule(E, today, "2330", "到價提醒：台積電漲到 110", "110", now)); assert.equal(monRule(E, today, "2330", "到價提醒：台積電漲到 110", "110", now), null, "同一個提醒只記一次");
+  monData(E, today, true, "證交所逾時", now); assert.equal(E["2026-10-26:DATA:src:fail"].state, "open"); monData(E, today, false, "", now + 1); assert.equal(E["2026-10-26:DATA:src:fail"].state, "closed");
+  // 通知：只推警示、同一檔 15 分鐘一則、一天最多 20 則
+  const e1 = E["2026-10-26:SYM:2330:up"]; assert.equal(monShouldNotify(E["2026-10-26:IDX:T00:dn"], E, now), true, "跌 3%＝警示");
+  assert.equal(monShouldNotify({ ...e1, sev: "watch" }, E, now), false);
+  e1.notified.push({ ch: "local", at: now, ok: true }); assert.equal(monShouldNotify({ ...e1, id: "x" }, E, now + 60e3), false, "15 分鐘內同一檔"); assert.equal(monShouldNotify({ ...e1, id: "x" }, E, now + 16 * 60e3), true);
+  const F = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [i, { code: String(i), notified: [{ at: now, ok: true }] }])); assert.equal(monShouldNotify({ code: "9", sev: "alert" }, F, now + 3600e3), false, "一天 20 則");
+  assert.match(monHash("a"), /^[0-9a-f]{8}$/); assert.notEqual(monHash("a"), monHash("b"));
+  // 狀態：七種文字都不同
+  const S = [{ day: "closed" }, { day: "unknown" }, { day: "trade", sess: "pre" }, { day: "trade", sess: "open", hidden: true }, { day: "trade", sess: "open", err: "x" }, { day: "trade", sess: "open", staleN: 2, lastOk: 1 }, { day: "trade", sess: "open" }, { day: "trade", sess: "open", lastOk: 1 }].map(o => monStatus(o)[0]);
+  assert.deepEqual(S, ["closed", "unknown", "closed", "paused", "error", "stale", "loading", "on"]);
+  // 清理：只刪 kline:watch:mon:v1:日期、超過 20 天的
+  const M = new Map([["kline:watch:mon:v1:2026-09-01", "{}"], ["kline:watch:mon:v1:2026-10-20", "{}"], ["kline:watch:mon:v2:2026-09-01", "{}"], ["kline:watch:alerts", "{}"], ["kline:watch:list", "[]"]]);
+  assert.equal(monGc(now, { get length() { return M.size; }, key: i => [...M.keys()][i], removeItem: k => M.delete(k) }), 1);
+  assert.deepEqual([...M.keys()].sort(), ["kline:watch:alerts", "kline:watch:list", "kline:watch:mon:v1:2026-10-20", "kline:watch:mon:v2:2026-09-01"]);
+});

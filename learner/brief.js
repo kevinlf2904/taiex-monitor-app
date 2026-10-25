@@ -1433,6 +1433,12 @@ function todayText() {
   return txt;
 }
 
+// 今日市場「盤中」面板最上面一行：盤中監控今天的事件數（事件本體在盤中監控分頁，這裡只連過去）
+function monLine() {
+  if (typeof monE !== "function") return "";
+  const L = Object.values(monE(W.today || twDay())), open = L.filter(e => e.state === "open").length, [st, txt] = monState();
+  return `<p class="note dh-monline"><button type="button" class="linkbtn" data-l2mon>盤中監控：${L.length ? `今天 ${L.length} 件${open ? `（${open} 件進行中）` : ""}` : st === "on" ? "目前沒有事件" : esc(txt)} ›</button></p>`;
+}
 function todayPage() {
   const nowMs = Date.now();
   const t = twDay(), cn = typeof twClosedNote === "function" ? twClosedNote(W.quotes?.get?.("T00")?.date) : null, pm = tdAfter(nowMs), C = W.syncCfg;
@@ -1514,7 +1520,7 @@ function todayPage() {
       ${target !== t && plan ? `<p class="note">今天休市，下面是下一交易日 ${target.slice(5).replace("-", "/")}（週${WEEK[new Date(target + "T00:00:00Z").getUTCDay()]}）的盤前推演${tq?.date ? `，以 ${tq.date.slice(5).replace("-", "/")} 收盤推估` : ""}。</p>` : ""}
       ${briefScenariosHtml(plan)}
       <div class="dh-card">${briefBody()}</div>`,
-    live: `${sumHead}
+    live: `${monLine()}${sumHead}
       ${validateHtml(val, vPlan)}`,
     post: `${validateHtml(val, vPlan)}
       ${flowsDecisionHtml(M)}

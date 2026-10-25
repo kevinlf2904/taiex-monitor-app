@@ -4920,7 +4920,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#chatP
 /* ================= 頁籤 ================= */
 const TABS = ["intel", "watch", "learn", "lab", "challenge", "shot", "savings", "quiz", "draw"];
 // 情報局和看盤共用同一個看盤 iframe（mode=intel／watch 切換分頁組）；K線學堂是課程、判讀、練習的次導覽
-const SCHOOL = ["learn", "shot", "lab", "challenge", "quiz", "draw"], INTEL_RE = /^(intel|daily|today|radar|earnings|congress|supply|podcast)(\/[\w./-]*)?$/i;
+const SCHOOL = ["learn", "shot", "lab", "challenge", "quiz", "draw"], INTEL_RE = /^(intel|daily|today|monitor|radar|earnings|congress|supply|podcast)(\/[\w./-]*)?$/i;
 let CUR_TAB = "learn", INTEL_ROUTE = "";
 const inited = {};
 // 存股模擬器回報自己的高度，外框跟著調整（不用在 iframe 裡另外捲動）
