@@ -322,6 +322,10 @@ html[data-big] .linkbtn { padding-top: 4px; padding-bottom: 4px; }
 .dh-sec-pill { font-size: 11.5px; padding: 2px 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); }
 .dh-sec-pill.up b { color: var(--up); }
 .dh-sec-pill.down b { color: var(--down); }
+button.dh-sec-pill { cursor: pointer; font-family: inherit; color: inherit; line-height: 1.5; }
+button.dh-sec-pill:hover { border-color: var(--accent); }
+.dh-flow-go { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.dh-card.flows .mbar { margin: 4px 4px 2px; max-width: 420px; } .dh-card.flows .mlab { max-width: 428px; }
 
 .dh-footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; color: var(--muted); }
 @media (max-width: 640px) {

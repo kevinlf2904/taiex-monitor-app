@@ -1357,9 +1357,10 @@ function validateHtml(val, plan) {
   </div>`;
 }
 
+// 資金雷達卡（今日市場的盤後）：原本資金雷達的「今日」頁也併在這裡——法人情緒、今天與近 5 日法人買最多的板塊、大戶異常、雷達回放；板塊與個股都可以點
 function flowsDecisionHtml(M) {
   const head = d => `<div class="dh-head"><b>資金雷達・板塊輪動與資金流向</b><span class="note">${d || "板塊輪動與法人資金"}</span></div>`;
-  const go = `<div style="margin-top:8px"><button type="button" class="btn sm primary" data-tdgo="radar">前往資金雷達完整板塊與矩陣分析 ›</button></div>`;
+  const go = `<div class="dh-flow-go"><button type="button" class="btn sm primary" data-tdgo="radar">前往資金雷達完整板塊與矩陣分析 ›</button><button type="button" class="btn sm" data-tdgo="replay">▶ 主力資金雷達回放（近 20 個交易日）</button></div>`;
   // 資金資料這頁只出現在這一張卡（原本盤後總結在下面又寫一次）；還沒有資料時的說明和盤後總結共用 tools.js 的 flowWaitNote
   if (!M) return `<div class="dh-card">${head()}<p class="note">${typeof flowWaitNote === "function" ? flowWaitNote() : "載入法人資金資料…"}</p>${go}</div>`;
   let mood = null;
@@ -1368,28 +1369,28 @@ function flowsDecisionHtml(M) {
   try { A = M.secs && typeof flowAt === "function" ? flowAt(M) : []; } catch {}
   let S = [];
   try { S = M.stocks && typeof flowStocks === "function" ? flowStocks(M) : []; } catch {}
-  const buy = A.filter(x => x.net1 > 0).sort((a, b) => b.net1 - a.net1).slice(0, 3);
-  const sell = A.filter(x => x.net1 < 0).sort((a, b) => a.net1 - b.net1).slice(0, 3);
+  const top = (k, s) => A.filter(x => s * x[k] > 0).sort((a, b) => s * (b[k] - a[k])).slice(0, 3);
+  const buy = top("net1", 1), sell = top("net1", -1), buy5 = top("net5", 1);
+  const big = S.filter(x => /^\d{4}$/.test(x.code)), bb = big.reduce((m, x) => (!m || x.a1 > m.a1 ? x : m), null), bs = big.reduce((m, x) => (!m || x.a1 < m.a1 ? x : m), null);
   const odd = S.filter(x => x.mult >= 3 && Math.abs(x.a1) >= 3).length;
-  const L = x => `<span class="dh-sec-pill ${x.net1 > 0 ? 'up' : 'down'}">${esc(x.name)} <b>${briefFlowFmt(x.net1)}</b></span>`;
-
+  const L = (x, v = x.net1) => `<button type="button" class="dh-sec-pill ${v > 0 ? "up" : "down"}" data-tdsec="${esc(x.id)}">${esc(x.name)} <b>${briefFlowFmt(v)}</b></button>`;
+  const P = x => `<button type="button" class="dh-sec-pill ${x.a1 > 0 ? "up" : "down"}" data-sel="${esc(x.code)}">${esc(x.name)} <b>${briefFlowFmt(x.a1)}</b></button>`;
+  const row = (t, pills, none) => `<div class="dh-fg"><span class="dh-fg-title">${t}</span><div class="dh-fg-pills">${pills || `<span class="note">${none}</span>`}</div></div>`;
   return `<div class="dh-card flows">
     ${head(M.dates?.[M.T - 1]?.slice(5).replace("-", "/"))}
     ${mood ? `<div class="dh-mood-row">
-      <span class="dh-mood-badge ${mood.score >= 60 ? 'bull' : mood.score <= 40 ? 'bear' : 'neutral'}">法人情緒 ${mood.score} 分・${mood.label}</span>
+      <span class="dh-mood-badge ${mood.score >= 60 ? "bull" : mood.score <= 40 ? "bear" : "neutral"}">法人情緒 ${mood.score} 分・${mood.label}</span>
       <span class="note">上漲 ${mood.up} 家／下跌 ${mood.dn} 家（漲停 ${mood.lu || 0} / 跌停 ${mood.ld || 0}）</span>
-    </div>` : ""}
-    ${M.secs && M.stocks ? `<div class="dh-flow-groups">
-      <div class="dh-fg">
-        <span class="dh-fg-title">資金流入前三板塊：</span>
-        <div class="dh-fg-pills">${buy.length ? buy.map(L).join(" ") : "<span class='note'>無顯著流入</span>"}</div>
-      </div>
-      <div class="dh-fg">
-        <span class="dh-fg-title">資金流出前三板塊：</span>
-        <div class="dh-fg-pills">${sell.length ? sell.map(L).join(" ") : "<span class='note'>無顯著流出</span>"}</div>
-      </div>
     </div>
-    <p class="note" style="margin:6px 0">異常爆量個股（成交額逾前 4 日均量 3 倍且逾 3 億）：<b>${odd}</b> 檔</p>` : ""}
+    <div class="mbar" role="img" aria-label="法人情緒 ${mood.score} 分（0 恐慌、100 樂觀）"><i style="left:${mood.score}%"></i></div><div class="mlab"><span>恐慌</span><span>樂觀</span></div>
+    ${mood.parts ? `<details class="mkmore"><summary>情緒怎麼算的</summary><p class="note">${mood.parts.map(([k, v]) => `${k} ${v >= 0 ? "+" : ""}${v.toFixed(2)}`).join("、")}（各自換成 −1～1 後平均，再換成 0～100）。法人合計 ${briefFlowFmt(mood.net)}。</p></details>` : ""}` : ""}
+    ${M.secs && M.stocks ? `<div class="dh-flow-groups">
+      ${row("今天法人買最多的板塊：", buy.map(x => L(x)).join(" "), "無顯著流入")}
+      ${row("今天法人賣最多的板塊：", sell.map(x => L(x)).join(" "), "無顯著流出")}
+      ${row("近 5 日法人買超最多：", buy5.map(x => L(x, x.net5)).join(" "), "近 5 日沒有買超的板塊")}
+      ${row("大戶異常（法人單日買賣金額最大）：", [bb?.a1 > 0 ? P(bb) : "", bs?.a1 < 0 ? P(bs) : ""].join(" ").trim(), "沒有明顯的大額買賣")}
+    </div>
+    <p class="note" style="margin:6px 0">異常爆量個股（成交額逾前 4 日均量 3 倍且逾 3 億）：<b>${odd}</b> 檔${M.T < 10 ? `・目前只有 ${M.T} 個交易日，近 5 日與加速度要 10 天才準` : ""}</p>` : ""}
     ${typeof sumFlowHtml === "function" ? sumFlowHtml(M) : ""}
     ${go}
   </div>`;
@@ -1645,7 +1646,10 @@ document.addEventListener("click", async e => { const t = e.target;
   if (t.closest("[data-tgone-more]")) { closeSheet(); W.tv = "sync"; return setLt("tools"); } });
 document.addEventListener("change", e => { const k = e.target.dataset?.tgk; if (!k) return; EVA()[k] = e.target.checked; evaSave(); syncPush(true); renderToday(W.lt === "watch"); });
 document.addEventListener("click", e => { const g = e.target.closest("[data-tdgo]"); if (!g) return; const v = g.dataset.tdgo;
-  if (v === "mkt") { W.mkReg = "tw"; setLt("mkt"); } else if (v === "pod") setLt("pod"); else if (v === "brief") setLt("today"); else if (v === "radar") setLt("money"); });
+  if (v === "mkt") { W.mkReg = "tw"; setLt("mkt"); } else if (v === "pod") setLt("pod"); else if (v === "brief") setLt("today"); else if (v === "radar") { if (W.mf.view === "today" || W.mf.view === "sector") W.mf.view = "bubble"; setLt("money"); }
+  else if (v === "replay") { W.mf.view = "bubble"; W.mf.rp.t = null; W.mf.rp.u = null; setLt("money"); setTimeout(() => mfPlay(true), 60); } });
+// 今日市場資金雷達卡的板塊：打開資金雷達的板塊細節，返回鍵回到動能矩陣
+document.addEventListener("click", e => { const b = e.target.closest("[data-tdsec]"); if (!b || W.lt !== "today") return; W.mf.back = "bubble"; setLt("money"); secOpen(b.dataset.tdsec); });
 
 /* ---------- 筆記追蹤：W.notes = { 代號: [{ at, t, px }] }；目標價就是價格提醒（W.alerts） ---------- */
 const NT = () => (W.notes ||= store.get("watch:notes", {}) || {});
