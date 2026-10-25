@@ -1504,8 +1504,26 @@ function todayPage() {
   }) : null;
   const M = typeof mfModel === "function" ? mfModel() : null;
 
+  // 三個時段面板一次只畫一個（預設目前時段，記在記憶體，不存瀏覽器）：盤前＝早報與推演，盤中＝即時動態，盤後＝驗證、資金與明日觀察
+  const phDef = { pre: "pre", live: "live", post: "post", closed: "pre" }[sess.session] || (sess.hm < "09:00" ? "pre" : pm ? "post" : "live");
+  if (W.tdPh?.d !== t) W.tdPh = { d: t, ph: phDef };
+  const ph = W.tdPh.ph, PH = [["pre", "盤前"], ["live", "盤中"], ["post", "盤後"]];
+  const sumHead = `<h4 class="tdsec">${{ live: "盤中", pre: "前一交易日盤後", closed: "最近交易日盤後", post: "盤後" }[sess.session] || (pm ? "盤後" : "盤中")}・大盤、自選與訊號</h4>${sumBody()}`;
+  const panel = {
+    pre: `<h4 class="tdsec">盤前・昨晚美股與今天的行事曆</h4>
+      ${target !== t && plan ? `<p class="note">今天休市，下面是下一交易日 ${target.slice(5).replace("-", "/")}（週${WEEK[new Date(target + "T00:00:00Z").getUTCDay()]}）的盤前推演${tq?.date ? `，以 ${tq.date.slice(5).replace("-", "/")} 收盤推估` : ""}。</p>` : ""}
+      ${briefScenariosHtml(plan)}
+      <div class="dh-card">${briefBody()}</div>`,
+    live: `${sumHead}
+      ${validateHtml(val, vPlan)}`,
+    post: `${validateHtml(val, vPlan)}
+      ${flowsDecisionHtml(M)}
+      ${sumHead}
+      ${nextActionHtml(plan, val)}`
+  }[ph];
+
   const h = `<section class="csec">
-    <!-- 1. 市場狀態列 -->
+    <!-- 摘要層：狀態與資料新鮮度、核心市場卡、今日結論（固定在上面） -->
     <div class="dh-status-bar">
       <div class="dh-sb-left">
         <span class="dh-badge ${sess.session}">${sess.label}</span>
@@ -1517,10 +1535,8 @@ function todayPage() {
       </div>
     </div>
     ${sess.displayNote || cn ? `<div class="dh-note-bar note">📅 ${esc(sess.displayNote || cn[1])}</div>` : ""}
-
-    <!-- 標題與操作按鈕 -->
     <div class="dh-title-row">
-      <h3>今日重點 <span class="note">${t.slice(5).replace("-", "/")} 週${WEEK[new Date(t + "T00:00:00Z").getUTCDay()]}</span></h3>
+      <h3>今日市場</h3>
       <div class="dh-title-btns">
         <button class="btn sm" data-tx="tdre">↻ 重新整理</button>
         <button class="btn sm" data-tx="tdai">${ico("ai")}AI 整理</button>
@@ -1528,45 +1544,18 @@ function todayPage() {
       </div>
     </div>
     ${W.tdAI ? `<div class="caibox">${W.tdAI.loading ? "AI 整理中…" : W.tdAI.err ? "⚠︎ " + esc(W.tdAI.err) : esc(W.tdAI.text).replace(/\n/g, "<br>")}</div>` : ""}
-
-    <!-- 2. 核心市場卡 -->
     ${coreMarketCardsHtml(market, W.bf, sess, dataEval)}
+    ${dailyBriefSummaryHtml(W.bf, plan)}
 
-    <!-- 3. 每日早報（結論優先、結構化驅動/風險、美股與行事曆清單） -->
-    <div class="dh-sec-wrap">
-      <h4 class="tdsec">盤前・昨晚美股與今天的行事曆</h4>
-      ${dailyBriefSummaryHtml(W.bf, plan)}
-      <div class="dh-card">${briefBody()}</div>
-    </div>
+    <!-- 時段面板：盤前／盤中／盤後 -->
+    <div class="seg dh-phase" role="group" aria-label="時段">${PH.map(([k, n]) => `<button type="button" data-tdph="${k}" aria-pressed="${k === ph}">${n}${k === phDef ? `<span class="dh-now">・現在</span>` : ""}</button>`).join("")}</div>
+    <div class="dh-panel" data-ph="${ph}">${panel}</div>
 
-    <!-- 4. 今日重點驗證（早報情境與盤後驗證時序軸） -->
-    <div class="dh-sec-wrap">
-      ${validateHtml(val, vPlan)}
-      ${target !== t && plan ? `<p class="note">今天休市，下面是下一交易日 ${target.slice(5).replace("-", "/")}（週${WEEK[new Date(target + "T00:00:00Z").getUTCDay()]}）的盤前推演${tq?.date ? `，以 ${tq.date.slice(5).replace("-", "/")} 收盤推估` : ""}。</p>` : ""}
-      ${briefScenariosHtml(plan)}
-    </div>
-
-    <!-- 5. 資金雷達（板塊輪動與資金流向） -->
-    <div class="dh-sec-wrap">
-      ${flowsDecisionHtml(M)}
-    </div>
-
-    <!-- 6. 自選動態與技術訊號（包含加權、自選漲跌、技術訊號與盤後總結） -->
-    <div class="dh-sec-wrap">
-      <h4 class="tdsec">${{ live: "盤中", pre: "前一交易日盤後", closed: "最近交易日盤後", post: "盤後" }[sess.session] || (pm ? "盤後" : "盤中")}・大盤、自選與訊號</h4>
-      ${sumBody()}
-    </div>
-
-    <!-- 7. 下一交易日行動清單與紀律觀察 -->
-    <div class="dh-sec-wrap">
-      ${nextActionHtml(plan, val)}
-    </div>
-
-    <!-- 8. 資料來源、本機儲存限制與免責頁尾 -->
-    <footer class="dh-footer">
+    <!-- 細節：資料來源、本機儲存限制與免責（預設收起來） -->
+    <details class="dh-more"><summary>資料來源與說明</summary>
       <p class="note">資料來源：Yahoo Finance、期交所、證交所、公開資訊觀測站；盤前推演快照暫存於瀏覽器 LocalStorage，更換裝置或清除瀏覽紀錄時不會同步保留；所有指標由程式客觀計算，僅供研究參考，不構成證券投資顧問或個股買賣建議。</p>
-      ${C?.kv && C?.tg ? `<p class="note">想每天在手機收到：<button type="button" class="linkbtn" data-tgone>📲 推到 Telegram</button>（早上早報、收盤後重點）。</p>` : ""}
-    </footer>
+    </details>
+    ${C?.kv && C?.tg ? `<p class="note">想每天在手機收到：<button type="button" class="linkbtn" data-tgone>📲 推到 Telegram</button>（早上早報、收盤後重點）。</p>` : ""}
   </section>`;
   return { h, note: "整理自 Yahoo Finance、期交所、證交所、公開資訊觀測站、新聞標題與即時報價；盤前預判快照存於本機瀏覽器 LocalStorage，清除瀏覽紀錄或跨裝置時不會同步；只是摘要，不是買賣建議。" };
 }
@@ -1695,12 +1684,13 @@ $("#lx").addEventListener("submit", e => {
 });
 $("#lx").addEventListener("change", e => { const k = e.target.dataset?.eva; if (!k || W.lt !== "tools") return; EVA()[k] = e.target.checked; evaSave(); if (e.target.checked && !EV_PUSH.includes(k)) { try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch {} evStart(); } renderList(); });
 $("#lx").addEventListener("click", e => {
-  if (W.lt !== "tools" && W.lt !== "today") return; const b = e.target.closest("[data-ntdel],[data-ntclr],[data-mk='evscope'],[data-tx='tdre'],[data-tx='tdai'],[data-tx='tdtxt'],[data-tx='evnow']"); if (!b) return;
+  if (W.lt !== "tools" && W.lt !== "today") return; const b = e.target.closest("[data-ntdel],[data-ntclr],[data-mk='evscope'],[data-tx='tdre'],[data-tx='tdai'],[data-tx='tdtxt'],[data-tx='evnow'],[data-tdph]"); if (!b) return;
   const d = b.dataset;
   if (d.ntdel) { const [c, i] = d.ntdel.split(":"); NT()[c]?.splice(+i, 1); if (!NT()[c]?.length) delete NT()[c]; ntSave(); return renderList(); }
   if (d.ntclr) { if (!confirm(`清除 ${nameOf(d.ntclr)} ${d.ntclr} 的筆記和目標價？`)) return; delete NT()[d.ntclr]; ntSave(); delete W.alerts[d.ntclr]; store.set("watch:alerts", W.alerts); return renderList(); }
   if (d.mk === "evscope") { EVA().scope = d.v; evaSave(); return renderList(); }
   if (d.tx === "evnow") return evCheck();
+  if (d.tdph) { W.tdPh = { d: twDay(), ph: d.tdph }; return renderList(); } // 今日市場的時段面板
   if (d.tx === "tdre") { W.sum = null; W.dk = new Map(); W.tdAI = null; if (W.mf) W.mf.sumTry = false; return briefLoad(true); }
   if (d.tx === "tdtxt") { navigator.clipboard?.writeText(todayText()).then(() => toast("已複製", 1500), () => toast("複製失敗")); return; }
   if (d.tx === "tdai") { if (W.tdAI?.loading) return; W.tdAI = { loading: true }; renderList(); // 整理中不能重複按
