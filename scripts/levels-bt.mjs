@@ -81,6 +81,8 @@ const quant = (A, q) => { const S = [...A].sort((a, b) => a - b); return S[Math.
 const calib = (train, piv, scale, target = 0.3) => { const T = train.map(x => [x, piv(x), scale(x)]).filter(([, p, s]) => p != null && s > 0); if (T.length < 30) return null;
   return { up: quant(T.map(([x, p, s]) => (x.h - p) / s), 1 - target), dn: quant(T.map(([x, p, s]) => (p - x.l) / s), 1 - target) }; };
 // 每個方法：fit(訓練資料) → (x) => { pivot, band }；pivot 回 null 代表那天資料不夠，不算
+// 網頁用的倍數：用全部資料校準「目前分水嶺 ± k × 近 14 日平均波動」（壓力、支撐各約三成的日子碰到）；learner/brief.js 的 LV_K 照這個填
+export const prodK = days => calib(days, x => (x.futChg == null ? null : x.prev + x.futChg * 0.85), x => x.atr);
 export const METHODS = [
   ["昨收（什麼都不看）", () => x => ({ pivot: x.prev, band: band0(x) })],
   ["目前：昨收＋夜盤×0.85", () => x => ({ pivot: x.prev + (x.futChg ?? 0) * 0.85, band: band0(x) })],

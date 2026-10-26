@@ -55,6 +55,7 @@ if (process.argv[2] === "levels") {
   const D = L.buildDays(A, opt[0][0]), k = Math.floor(D.length * 0.6);
   console.log(`\n回測 ${D.length} 天：訓練期 ${D[0].d}～${D[k - 1].d}（${k} 天），測試期 ${D[k].d}～${D.at(-1).d}（${D.length - k} 天）`);
   console.log("欄位：天數｜分水嶺離收盤（點）｜離開盤（點）｜方向對（%）｜開盤那一邊收盤還在（%）｜收盤在支撐～壓力內（%）｜碰到壓力（%）｜碰到支撐（%）｜間距（點）");
+  const K = L.prodK(D); console.log(`網頁用的倍數（全部 ${D.length} 天校準）：壓力 ${K.up.toFixed(3)}、支撐 ${K.dn.toFixed(3)} × 近 14 日平均波動`);
   for (const r of L.evalMethods(D)) for (const [t, s] of [["訓練", r.train], ["測試", r.test]]) if (s) console.log(`${t}｜${r.name}｜${s.n}｜${s.mae}｜${s.gapMae}｜${s.dir}｜${s.keep}｜${s.inBand}｜${s.hitP}｜${s.hitS}｜${s.band}`);
   process.exit(0);
 }
