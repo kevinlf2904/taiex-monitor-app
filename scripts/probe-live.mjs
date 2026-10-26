@@ -44,6 +44,20 @@ if (process.argv[2] === "earnplus") {
   for (const s of ["NVDA", "TSLA", "NFLX"]) { try { const t = await (await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(s + " guidance when:30d")}&hl=en-US&gl=US&ceid=US:en`)).text(); console.log("財測新聞", s, (t.match(/<title>[^<]+<\/title>/g) || []).slice(1, 7).map(x => x.replace(/<\/?title>/g, "")).join(" ｜ ")); } catch (e) { console.log("財測新聞失敗", s, e.message); } }
   process.exit(0);
 }
+if (process.argv[2] === "levels") {
+  // 今日市場位置燈號的價位推估回測（scripts/levels-bt.mjs）：先確認夜盤掛在哪一天，再比較各種算法；只讀資料，不寫檔
+  const L = await import("./levels-bt.mjs"), A = await L.loadAll(), fd = Object.keys(A.fut).sort();
+  console.log(`加權 ${A.tw.length} 天（${A.tw[0]?.d}～${A.tw.at(-1)?.d}）、費半 ${A.sox.length}、那指 ${A.ixic.length}、ADR ${A.tsm.length}、台指期 ${fd.length} 天（${fd[0]}～${fd.at(-1)}）`);
+  const corr = D => { const P = D.filter(x => x.futChg != null), n = P.length, mx = P.reduce((s, x) => s + x.futChg, 0) / n, my = P.reduce((s, x) => s + (x.o - x.prev), 0) / n;
+    let a = 0, b = 0, c = 0; for (const x of P) { a += (x.futChg - mx) * (x.o - x.prev - my); b += (x.futChg - mx) ** 2; c += (x.o - x.prev - my) ** 2; } return [n, a / Math.sqrt(b * c)]; };
+  const opt = ["same", "prev"].map(k => [k, ...corr(L.buildDays(A, k))]).sort((x, y) => y[2] - x[2]);
+  for (const [k, n, r] of opt) console.log(`夜盤掛在${k === "same" ? "所屬交易日" : "前一天"}：${n} 天有夜盤漲跌，和加權開盤跳空的相關係數 ${r.toFixed(3)}`);
+  const D = L.buildDays(A, opt[0][0]), k = Math.floor(D.length * 0.6);
+  console.log(`\n回測 ${D.length} 天：訓練期 ${D[0].d}～${D[k - 1].d}（${k} 天），測試期 ${D[k].d}～${D.at(-1).d}（${D.length - k} 天）`);
+  console.log("欄位：天數｜分水嶺離收盤（點）｜離開盤（點）｜方向對（%）｜開盤那一邊收盤還在（%）｜收盤在支撐～壓力內（%）｜碰到壓力（%）｜碰到支撐（%）｜間距（點）");
+  for (const r of L.evalMethods(D)) for (const [t, s] of [["訓練", r.train], ["測試", r.test]]) if (s) console.log(`${t}｜${r.name}｜${s.n}｜${s.mae}｜${s.gapMae}｜${s.dir}｜${s.keep}｜${s.inBand}｜${s.hitP}｜${s.hitS}｜${s.band}`);
+  process.exit(0);
+}
 if (process.argv[2] === "fred") {
   // 總經數據排程（scripts/macro.mjs）同一套：FRED 官方介面＋CSV，看幾個數列拿得到、拿不到的原因（不印金鑰）
   const { buildMacro } = await import("../api/_lib/macro.js"), t0 = Date.now(), j = await buildMacro();
