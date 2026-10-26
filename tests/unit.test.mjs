@@ -11,6 +11,7 @@ import { appendDay, shards } from "../scripts/market-scan.mjs";
 import { evalDoc, evalFollow } from "../scripts/alerts-push.mjs";
 import { alertDoc, docHas } from "../api/_lib/sync.js";
 import { engine } from "../scripts/_engine.mjs";
+import { buildDays, futByDate, evalMethods, score } from "../scripts/levels-bt.mjs";
 
 test("內部人：上市中文欄位、上櫃英文欄位", () => {
   const a = normRow({ 出表日期: "1151013", 公司代號: "2884", 公司名稱: "玉山金", 申報人身分: "董事本人", 姓名: "王", "預定轉讓方式及股數-轉讓方式": "贈與", "目前持有股數-自有持股": "1105869", "目前持有股數-保留運用決定權信託股數": "0", "預定轉讓總股數-自有持股": "50000", "預定轉讓總股數-保留運用決定權信託股數": "0", 有效轉讓期間: "1151013~1151015" }, "上市");
@@ -2012,4 +2013,39 @@ test("盤中監控 報價完整度：每一檔都要檢查；缺漏、過期、�
   // 過期的報價重跑也不會變成事件或通知
   const W2 = m2World(); W2.quoteOf = c => ({ ...W2.q(c), time: "09:00:00" }); assert.match((await W2.run(now)).error, /加權指數超過 3 分鐘沒更新/); assert.deepEqual(W2.sent, []);
   W2.quoteOf = c => (c === "2330" ? { ...W2.q(c), time: "09:00:00" } : W2.q(c)); for (let i = 0; i < 3; i++) await W2.run(now + i * 60e3); assert.deepEqual(W2.sent, [], "2330 漲停但報價過期：不通知");
+});
+
+test("位置燈號回測：每天只用開盤前的資料、換月不相減、配係數只用訓練期", () => {
+  const tw = []; let p = 20000;
+  for (let i = 0; i < 80; i++) { const d = new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10), o = p + ((i * 37) % 9 - 4) * 15, c = o + ((i * 53) % 11 - 5) * 12; tw.push({ d, o, h: Math.max(o, c) + 30, l: Math.min(o, c) - 30, c }); p = c; }
+  const fut = {}; tw.forEach((b, i) => { fut[b.d] = { day: { c: b.c, contract: "202602" }, night: i ? { c: tw[i - 1].c + (b.o - tw[i - 1].c), contract: i === 40 ? "202603" : "202602" } : undefined }; });
+  const us = tw.map(b => ({ d: b.d, c: b.c / 10 })), A = { tw, sox: us, ixic: us, tsm: us, fut }, D = buildDays(A);
+  // 改掉某一天自己和之後的收盤、高低，那天的特徵（昨收、ATR、夜盤、美股）不能變
+  const i = 30, A2 = { ...A, tw: tw.map((b, k) => (k >= i + 15 ? { ...b, c: b.c + 999, h: b.h + 999, l: b.l - 999 } : b)) }, D2 = buildDays(A2);
+  const pick = x => ({ prev: x.prev, atr: x.atr, futChg: x.futChg, sox: x.sox });
+  assert.deepEqual(pick(D2[i]), pick(D[i]), "不偷看當天與未來");
+  assert.equal(D.find(x => x.d === tw[40].d).futChg, null, "換月那天夜盤和前一天日盤不是同一個合約，不相減");
+  assert.equal(D.find(x => x.d === tw[41].d).futChg, tw[41].o - tw[40].c, "夜盤漲跌＝夜盤收－前一天日盤收");
+  // 近月：同一天取成交量最大的月合約，跳過週合約
+  assert.deepEqual(futByDate([{ date: "2026-01-05", contract_date: "202601", trading_session: "position", close: 100, volume: 5 }, { date: "2026-01-05", contract_date: "202602", trading_session: "position", close: 101, volume: 9 }, { date: "2026-01-05", contract_date: "202601W2", trading_session: "position", close: 99, volume: 99 }])["2026-01-05"].day, { v: 9, c: 101, contract: "202602" });
+  // 測試期的成績不受測試期資料影響係數：把測試期收盤全改掉，訓練期配出來的方法在訓練期的成績不變
+  const R = evalMethods(D), D3 = D.map((x, k) => (k >= Math.floor(D.length * 0.6) ? { ...x, c: x.c + 500 } : x)), R3 = evalMethods(D3);
+  for (let k = 0; k < R.length; k++) assert.deepEqual(R3[k].train, R[k].train, R[k].name);
+  // 成績欄位
+  const s = score([{ prev: 100, o: 105, h: 112, l: 99, c: 108 }], () => ({ pivot: 104, band: 6 }));
+  assert.deepEqual(s, { n: 1, mae: 4, gapMae: 1, dir: 100, keep: 100, inBand: 100, hitP: 100, hitS: 0, band: 6 });
+});
+
+test("位置燈號：壓力、支撐用近 14 日平均波動 × 校準倍數；只用目標日以前的日 K；抓不到才用固定 0.6%", () => {
+  const B = engine().B, D = [];
+  for (let i = 0; i < 20; i++) D.push({ d: `2026-10-${String(i + 1).padStart(2, "0")}`, o: 20000, h: 20100, l: 19900, c: 20000 }); // 每天波幅 200
+  assert.equal(B.briefAtr14(D, "2026-10-21"), 200);
+  assert.equal(B.briefAtr14([...D, { d: "2026-10-21", o: 20000, h: 25000, l: 15000, c: 20000 }], "2026-10-21"), 200, "目標日當天（還沒發生）的 K 不算");
+  assert.equal(B.briefAtr14(D.slice(0, 10), "2026-10-21"), null, "不到 15 根不算");
+  const G = { us: { indices: [{ code: "^SOX", price: 5000, chgPct: 1 }, { code: "^IXIC", price: 18000, chgPct: 0.5 }] }, fut: { night: { price: 20100, chg: 100 } } };
+  const a = B.briefScenarios(G, "2026-10-27", 20000, { atr: 200 }), k = a.keyLevels;
+  assert.equal(k.pivot, 20090); assert.equal(k.pressure - k.pivot, Math.round(0.607 * 200)); assert.equal(k.pivot - k.support, Math.round(0.511 * 200));
+  assert.equal(JSON.stringify(a.band), JSON.stringify({ basis: "atr14", atr: 200, up: 0.607, dn: 0.511 }));
+  const f = B.briefScenarios(G, "2026-10-27", 20000);
+  assert.equal(f.keyLevels.pressure - f.keyLevels.pivot, 120); assert.equal(f.band.basis, "fixed");
 });

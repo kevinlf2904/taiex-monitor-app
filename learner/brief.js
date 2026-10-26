@@ -338,6 +338,14 @@ function sessionStatus(now = Date.now(), opts = {}) {
   }
 }
 
+// 壓力、支撐的倍數（× 加權近 14 日平均波動）：probe-live 的 levels 模式印出的「網頁用的倍數」，資料 2021-11～2026-10
+const LV_K = { up: 0.607, dn: 0.511 };
+// 加權近 14 日平均波動（真實波幅，ATR14）：只用 before 那天以前的日 K（開盤前就知道的）
+function briefAtr14(D, before) {
+  const B = (D || []).filter(b => b && b.d < before && b.h > 0 && b.l > 0 && b.c > 0).slice(-15); if (B.length < 15) return null;
+  let s = 0; for (let i = 1; i < 15; i++) s += Math.max(B[i].h - B[i].l, Math.abs(B[i].h - B[i - 1].c), Math.abs(B[i].l - B[i - 1].c));
+  return s / 14;
+}
 function briefScenarios(G, today, basePrice, meta = {}) {
   const targetDate = today || resolveTime().twDate;
   if (!basePrice || !isFinite(basePrice) || basePrice <= 0) {
@@ -394,9 +402,10 @@ function briefScenarios(G, today, basePrice, meta = {}) {
   const ref = basePrice;
   const shift = futChg != null ? Math.round(futChg * 0.85) : 0;
   const pivot = Math.round((ref + shift) / 10) * 10;
-  const delta = Math.max(80, Math.round(ref * 0.006));
-  const pressure = pivot + delta;
-  const support = pivot - delta;
+  // 間距：近 14 日平均波動 × 校準倍數（回測 scripts/levels-bt.mjs：過去約 5 年，壓力、支撐各約三成的日子盤中碰到）；拿不到日 K 才用舊的固定 0.6%
+  const atr = Number.isFinite(meta.atr) && meta.atr > 0 ? meta.atr : null, delta = Math.max(80, Math.round(ref * 0.006));
+  const pressure = pivot + (atr ? Math.round(LV_K.up * atr) : delta);
+  const support = pivot - (atr ? Math.round(LV_K.dn * atr) : delta);
 
   return {
     tradeDate: targetDate,
@@ -408,6 +417,7 @@ function briefScenarios(G, today, basePrice, meta = {}) {
     macroStatus,
     macroNote,
     keyLevels: { pressure, pivot, support },
+    band: atr ? { basis: "atr14", atr: Math.round(atr), up: LV_K.up, dn: LV_K.dn } : { basis: "fixed", pct: 0.6 },
     scenarios: {
       bull: {
         title: "多方推進情境",
@@ -1324,7 +1334,7 @@ function briefScenariosHtml(plan) {
       ${["bull", "neutral", "bear"].map(k => {
         const s = sc[k]; if (!s) return "";
         return `<div class="sc-card ${k}">
-          <h5><b>${esc(s.title)}</b><span class="sc-bias ${k}">${esc(s.bias)}</span></h5>
+          <h5><b>${esc(s.title)}</b><span class="sc-bias ${k}">${{ bull: "站上分水嶺時", neutral: "在區間內時", bear: "跌破分水嶺時" }[k]}</span></h5>
           <p><b>條件：</b>${esc(s.trigger)}</p>
           <p><b>目標：</b>${esc(s.target)}</p>
           <p class="note"><b>失效：</b>${esc(s.invalidation)}</p>
@@ -1530,19 +1540,31 @@ function tdIxChart(tq, kl, evs) {
     <div class="td-ix-t note"><span>09:00</span><span>10:30</span><span>12:00</span><span>13:30</span></div>
   </div>`;
 }
-// 最上面：相對分水嶺的位置（▲偏多／▼偏弱…，價位是早報推估）＋加權、開高低、離分水嶺幾點＋分時
-function tdHero(tq, kl, evs) {
+// 最上面：加權現在在推估價位的哪一段（只寫位置，不寫偏多偏空——那不是預測）＋開高低＋分時；「怎麼看」說明算法與回測
+function tdHero(tq, plan, evs) {
   if (!tdOk(tq?.price)) return "";
-  const px = tq.price, b = kl ? (px >= kl.pressure ? ["▲", "強勢", "up"] : px >= kl.pivot ? ["▲", "偏多", "up"] : px > kl.support ? ["▼", "偏弱", "down"] : ["▼", "弱勢", "down"]) : null;
+  const px = tq.price, kl = plan?.keyLevels, d = kl ? Math.round(px - kl.pivot) : null;
+  const pos = kl ? (px >= kl.pressure ? "壓力上方" : px >= kl.pivot ? "分水嶺上方" : px > kl.support ? "分水嶺下方" : "支撐下方") : null;
   const ohl = [["開", tq.open], ["高", tq.high], ["低", tq.low]].filter(([, v]) => tdOk(v) && v > 0);
   return `<div class="td-main">
     <div class="td-head">
-      ${b ? `<div class="td-sig ${b[2]}" role="img" aria-label="${b[1]}：加權在推估${px >= kl.pivot ? "分水嶺之上" : "分水嶺之下"}"><span>${b[0]}</span><b>${b[1]}</b></div>` : ""}
+      ${pos ? `<div class="td-pos" role="img" aria-label="加權在推估的${pos}，離分水嶺 ${d} 點"><span class="note">現在位置</span><b>${pos}</b><span class="num note">離分水嶺 ${d > 0 ? "+" : ""}${d.toLocaleString()}</span></div>` : ""}
       <div class="td-px"><div><span class="note">加權</span> <b class="num">${fmtP(px)}</b>${tdOk(tq.chg) ? ` <span class="num ${cls(tq.chg)}">${tq.chg > 0 ? "+" : ""}${fmtP(tq.chg)}</span>` : ""}${tdOk(tq.chgPct) ? ` <span class="num ${cls(tq.chgPct)}">${tdPctTxt(tq.chgPct)}</span>` : ""}</div>
-        <div class="note num">${ohl.map(([n, v]) => `${n} ${fmtP(v)}`).join("　")}${kl ? `${ohl.length ? "　" : ""}離分水嶺 <b class="${cls(px - kl.pivot)}">${px - kl.pivot > 0 ? "+" : ""}${Math.round(px - kl.pivot).toLocaleString()}</b>` : ""}</div></div>
+        ${ohl.length ? `<div class="note num">${ohl.map(([n, v]) => `${n} ${fmtP(v)}`).join("　")}</div>` : ""}</div>
     </div>
     ${tdIxChart(tq, kl, evs)}
+    ${kl ? tdHelp(plan) : ""}
   </div>`;
+}
+// 使用說明：價位怎麼算、準不準（回測數字來自 scripts/levels-bt.mjs，2024-11～2026-10 共 480 個交易日，沒參與調整的那一段）
+function tdHelp(plan) {
+  const kl = plan.keyLevels, f = plan.macroSignals?.futChg, b = plan.band || {}, n = v => Math.round(v).toLocaleString();
+  return `<details class="td-help"><summary>怎麼看這些價位？</summary><ul class="tlist">
+    <li><b>分水嶺 ${n(kl.pivot)}</b>：前一交易日收盤${tdOk(f) ? `，加上台指期夜盤漲跌 ${f > 0 ? "+" : ""}${n(f)} 點 × 0.85` : "（這天拿不到夜盤漲跌，就用收盤）"}。盤前算好就固定，盤中不會改。</li>
+    <li><b>壓力 ${n(kl.pressure)}、支撐 ${n(kl.support)}</b>：${b.basis === "atr14" ? `分水嶺往上 ${b.up} 倍、往下 ${b.dn} 倍的「加權近 14 日平均波動」（這天約 ${n(b.atr)} 點）。波動大時自動放寬；過去約五年，大約三成的日子盤中碰得到壓力，三成碰得到支撐。` : "分水嶺上下各 0.6%（這天沒抓到近 14 日的日 K，用舊的固定寬度）。"}</li>
+    <li><b>「分水嶺上方／下方」只說現在在哪裡，不是預測漲跌</b>：回測近兩年，開盤在分水嶺上方、收盤還留在上方的日子大約只有六成；分水嶺離當天收盤平均約 270 點。上方收跌、下方收漲都很常見。</li>
+    <li>也試過加入費半、那斯達克、台積電 ADR 或用更複雜的公式，都沒有比較準，所以維持這個簡單的算法。只是參考，不是買賣建議。</li>
+  </ul></details>`;
 }
 // 盤前推演：昨收 → 開盤 → 現在的實際路徑，再畫情境 A（往壓力）、B（往支撐）；下面是早報用到的美股與夜盤強弱
 function tdPreViz(plan, tq) {
@@ -1621,6 +1643,14 @@ function tdPostViz(tq, kl, val, pm) {
   return `<div class="td-tl"><div class="td-tl-bar"><i style="width:${(now / 270 * 100).toFixed(1)}%"></i></div><div class="td-ix-t note"><span>09:00</span><span>${pm ? "已收盤" : `還有 ${Math.floor((270 - now) / 60)} 小時 ${(270 - now) % 60} 分`}</span><span>13:30</span></div></div>
     ${kl && tdOk(px) ? `<div class="td-chk note">${[["站上分水嶺", px >= kl.pivot], ["突破壓力", px >= kl.pressure], ["守住支撐", px > kl.support]].map(([n, ok]) => `<span class="${ok ? "on" : ""}"><u></u>${n}</span>`).join("")}</div>` : ""}`;
 }
+// 加權近 14 日平均波動（推估壓力、支撐用）：同一個目標日只抓一次日 K（tools.js 的 dailyFresh，5 分鐘快取）
+function tdAtrFor(t) {
+  if (W.ixAtr?.t === t) return W.ixAtr;
+  if (typeof dailyFresh !== "function" || W.off) return (W.ixAtr = { t, state: "fail" });
+  W.ixAtr = { t, state: "loading" };
+  dailyFresh("T00").then(D => { const a = briefAtr14(D, t); W.ixAtr = a ? { t, state: "ok", atr: a } : { t, state: "fail" }; if (W.lt === "today") renderList(); });
+  return W.ixAtr;
+}
 function todayPage() {
   const nowMs = Date.now();
   const t = twDay(), cn = typeof twClosedNote === "function" ? twClosedNote(W.quotes?.get?.("T00")?.date) : null, pm = tdAfter(nowMs), C = W.syncCfg;
@@ -1675,8 +1705,9 @@ function todayPage() {
   const target = sess.session === "closed" ? findNextTradeDate(t, holL || []) || t : t;
   let plan = getBriefSnapshot(target);
   if (!plan && (target !== t || sess.session === "pre" || !pm)) {
-    plan = briefScenarios(W.bf, target, tq?.price);
-    if (plan) saveBriefSnapshot(target, plan);
+    const A = tdAtrFor(target); // 近 14 日平均波動還在抓：先畫、不存快照（快照存了就不改），抓到或確定抓不到才存
+    plan = briefScenarios(W.bf, target, tq?.price, { atr: A.atr });
+    if (plan && A.state !== "loading") saveBriefSnapshot(target, plan);
   }
   const vPlan = tq?.date ? (tq.date === target ? plan : getBriefSnapshot(tq.date)) : null;
   briefSnapGc();
@@ -1739,7 +1770,7 @@ function todayPage() {
     ${W.tdAI ? `<div class="caibox">${W.tdAI.loading ? "AI 整理中…" : W.tdAI.err ? "⚠︎ " + esc(W.tdAI.err) : esc(W.tdAI.text).replace(/\n/g, "<br>")}</div>` : ""}
     <!-- 盤勢：位置燈號、加權與分時（左）；漲跌家數、其他核心數字（右，手機在下面） -->
     <div class="td-hero">
-      ${tdHero(tq, kl, mon)}
+      ${tdHero(tq, plan, mon)}
       <div class="td-side">
         ${(() => { let mood = null; try { mood = M && typeof flowMood === "function" ? flowMood(M) : null; } catch {} return tdBreadth(mood, M?.dates?.[M.T - 1]?.slice(5).replace("-", "/")); })()}
         ${coreMarketCardsHtml(market, W.bf, sess, dataEval, { skip: tdOk(tq?.price) ? ["T00"] : [], more: true })}

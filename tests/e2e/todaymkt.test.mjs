@@ -71,7 +71,12 @@ test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心�
   await p.waitForSelector("#lx .dh-core-grid", { timeout: 15000 }); await p.waitForSelector("#lx .td-ix", { timeout: 15000 }); // 分時用大盤頁同一份走勢線（測試假資料 3 點）
   const r = await p.evaluate(() => { const top = s => document.querySelector(s)?.getBoundingClientRect().top; return { H: innerHeight, bar: top("#lx .dh-status-bar"), hero: top("#lx .td-main"), chart: top("#lx .td-ix"), grid: top("#lx .dh-core-grid"), miss: document.querySelectorAll("#lx .dh-core-card.missing").length, t00: document.querySelectorAll('#lx .td-side [data-dhcode="T00"]').length }; });
   assert.ok(r.bar < r.H && r.hero < r.H && r.chart < r.H && r.grid < r.H, `第一屏：${JSON.stringify(r)}`);
-  assert.equal(r.miss, 0, "今日市場的數字列不放「資料暫缺」"); assert.equal(r.t00, 0, "加權在最上面，數字列不重複");
+  assert.equal(r.miss, 0, "今日市場的數字列不放「資料暫缺」");
+  // 位置只寫事實（分水嶺上方／下方…），不寫偏多偏空；「怎麼看」說明算法、回測與「不是預測」
+  const hero = await p.evaluate(() => $("#lx .td-main").innerText);
+  assert.doesNotMatch(hero, /偏多|偏空|偏弱|強勢|弱勢|看多|看空/); assert.match(hero, /現在位置\s*(壓力上方|分水嶺上方|分水嶺下方|支撐下方)\s*離分水嶺/);
+  await p.click("#lx .td-help > summary"); const help = await p.evaluate(() => $("#lx .td-help").innerText);
+  assert.match(help, /分水嶺[\s\S]*夜盤[\s\S]*近 14 日平均波動[\s\S]*不是預測漲跌[\s\S]*不是買賣建議/); assert.equal(r.t00, 0, "加權在最上面，數字列不重複");
   // 三個按鈕是圖示，文字給讀螢幕的人；按鈕至少 44px
   assert.deepEqual(await p.$$eval("#lx .dh-status-bar [data-tx]", L => L.map(b => [b.textContent.trim(), b.getBoundingClientRect().height >= 44])), [["↻重新整理", true], ["AI 整理", true], ["複製文字", true]]);
   // 早報的文字結論收在「盤前推演」裡面，外層不再是一大段字

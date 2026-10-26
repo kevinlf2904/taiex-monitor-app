@@ -376,8 +376,8 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-hero { display: grid; gap: 12px; margin-bottom: 14px; }
 .td-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .td-head { display: flex; align-items: center; gap: 12px; }
-.td-sig { flex: none; width: 58px; height: 58px; border-radius: 50%; border: 2px solid currentColor; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
-.td-sig.up { color: var(--up); } .td-sig.down { color: var(--down); } .td-sig span { font-size: 15px; } .td-sig b { font-size: 13px; font-weight: 500; }
+.td-pos { flex: none; min-width: 92px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; line-height: 1.3; } /* 位置只寫事實、用中性色，不用紅綠暗示漲跌 */
+.td-pos b { font-size: 15px; font-weight: 500; color: var(--ink); } .td-pos .note { font-size: 11px; }
 .td-px { min-width: 0; } .td-px > div:first-child b { font-size: 24px; font-weight: 500; } .td-px .note { margin-top: 2px; }
 .td-ix, .td-sc { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 76px; grid-template-rows: auto auto; column-gap: 6px; }
 .td-ix-plot, .td-sc-plot { position: relative; height: 128px; }
@@ -443,3 +443,5 @@ u.conf { background: var(--up); } u.div { background: var(--down); } u.etf { bac
   .td-ix-plot, .td-ix .td-ix-lv { height: 168px; }
   .dh-secs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+.td-help { margin-top: 2px; } .td-help > summary { cursor: pointer; font-size: 12px; color: var(--muted); min-height: 32px; display: flex; align-items: center; } .td-help > summary:hover { color: var(--ink); }
+.td-help .tlist { font-size: 12.5px; line-height: 1.7; } .td-help .tlist li { padding: 4px 0; }
