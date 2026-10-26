@@ -2035,3 +2035,17 @@ test("位置燈號回測：每天只用開盤前的資料、換月不相減、�
   const s = score([{ prev: 100, o: 105, h: 112, l: 99, c: 108 }], () => ({ pivot: 104, band: 6 }));
   assert.deepEqual(s, { n: 1, mae: 4, gapMae: 1, dir: 100, keep: 100, inBand: 100, hitP: 100, hitS: 0, band: 6 });
 });
+
+test("位置燈號：壓力、支撐用近 14 日平均波動 × 校準倍數；只用目標日以前的日 K；抓不到才用固定 0.6%", () => {
+  const B = engine().B, D = [];
+  for (let i = 0; i < 20; i++) D.push({ d: `2026-10-${String(i + 1).padStart(2, "0")}`, o: 20000, h: 20100, l: 19900, c: 20000 }); // 每天波幅 200
+  assert.equal(B.briefAtr14(D, "2026-10-21"), 200);
+  assert.equal(B.briefAtr14([...D, { d: "2026-10-21", o: 20000, h: 25000, l: 15000, c: 20000 }], "2026-10-21"), 200, "目標日當天（還沒發生）的 K 不算");
+  assert.equal(B.briefAtr14(D.slice(0, 10), "2026-10-21"), null, "不到 15 根不算");
+  const G = { us: { indices: [{ code: "^SOX", price: 5000, chgPct: 1 }, { code: "^IXIC", price: 18000, chgPct: 0.5 }] }, fut: { night: { price: 20100, chg: 100 } } };
+  const a = B.briefScenarios(G, "2026-10-27", 20000, { atr: 200 }), k = a.keyLevels;
+  assert.equal(k.pivot, 20090); assert.equal(k.pressure - k.pivot, Math.round(0.607 * 200)); assert.equal(k.pivot - k.support, Math.round(0.511 * 200));
+  assert.equal(JSON.stringify(a.band), JSON.stringify({ basis: "atr14", atr: 200, up: 0.607, dn: 0.511 }));
+  const f = B.briefScenarios(G, "2026-10-27", 20000);
+  assert.equal(f.keyLevels.pressure - f.keyLevels.pivot, 120); assert.equal(f.band.basis, "fixed");
+});
