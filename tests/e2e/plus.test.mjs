@@ -29,14 +29,15 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   await p.route("**/api/usmarket", r => J(r, { ok: true, date: "2026-10-21", indices: [{ code: "^DJI", name: "道瓊工業", price: 42100, chgPct: 0.8 }, { code: "^SOX", name: "費城半導體", price: 6100, chgPct: -1.2 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 210, chgPct: 1.5 }], macro: [{ code: "^TNX", name: "10 年期公債殖利率", price: 4.2, chgPct: 0.3 }], sectors: [] }));
   await p.route(/\/api\/futures\?bars=0$/, r => J(r, { ok: true, quote: { price: 23000, chg: -50, chgPct: -0.22, session: "night" }, night: { price: 23000, chg: -50, chgPct: -0.22, time: "05:00" }, day: null }));
   await p.route("**/api/news**", r => J(r, { ok: true, items: [{ title: "台積電先進封裝擴產", source: "測試報", link: "https://example.com/a", at: Date.now() - 3600e3 }] }));
-  await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 500 } }; showList?.(); W.tdPh = { d: twDay(), ph: "pre" }; setLt("today"); }); // 早報在今日市場的「盤前」面板
+  await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 500 } }; showList?.(); W.tdPh = { d: twDay(), ph: "pre" }; setLt("today"); }); // 早報在今日市場的「盤前推演」＋「總經儀表板」（盤前兩塊都展開）
   await p.waitForFunction(() => /持股新消息/.test($("#lx").innerText), null, { timeout: 15000 });
   const t = await p.evaluate(() => $("#lx").innerText);
   for (const s of ["昨晚美股", "道瓊工業", "費城半導體", "台積電 ADR", "台指期", "夜盤 23,000", "除權息", "2330 除息 現金 4.5 元", "台積電先進封裝擴產", "今天要注意", "法說會"]) assert.ok(t.includes(s), `早報要有「${s}」`);
   assert.ok(t.indexOf("★ ") > 0 && t.indexOf("★ ") < t.indexOf("1101 除息"), "庫存的除權息排前面、有星號");
   assert.equal(await p.evaluate(() => W.lt), "today", "舊的「早報」分頁帶到情報局的「今日市場」");
-  assert.match(t, /盤前・昨晚美股/); await p.click('#lx [data-tdph="post"]');
-  assert.match(await p.evaluate(() => $("#lx").innerText), /(盤中|盤後)・大盤、自選與訊號/, "每日摘要在同一頁的「盤後」面板");
+  assert.match(t, /盤前推演[\s\S]*總經儀表板[\s\S]*昨晚美股/); assert.equal((t.match(/昨晚美股/g) || []).length, 1, "昨晚美股只在總經儀表板，盤前推演不再列一次");
+  await p.click('#lx details[data-tdbox="live"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="live"] .dh-sec-b'));
+  assert.match(await p.evaluate(() => $("#lx").innerText), /(盤中|盤後)・大盤、自選與訊號/, "每日摘要在同一頁的「盤中動態」");
   assert.equal(await p.$$eval("#lx [data-tx='tdai']", L => L.length), 1, "AI 整理只有一個");
   await p.click('[data-tx="tdai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
   assert.ok(await noOverflow(p));

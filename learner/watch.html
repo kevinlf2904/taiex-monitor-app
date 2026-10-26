@@ -1174,7 +1174,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.25-160</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.25-161</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1260,7 +1260,8 @@ const W = {
   mkReg: ["lst", "otc", "off", "us", "gl", "macro", "news", "poly"].includes(store.get("watch:mkReg", "tw")) ? store.get("watch:mkReg", "tw") : "tw", usHot: ["active", "gain", "loss"].includes(store.get("watch:usHot", "active")) ? store.get("watch:usHot", "active") : "active",
   mkM: ["tpex", "all"].includes(store.get("watch:mkM", "twse")) ? store.get("watch:mkM", "twse") : "twse", secM: store.get("watch:secM", "twse") === "tpex" ? "tpex" : "twse",
   mkHot: ["value", "gain", "surge", "volume"].includes(store.get("watch:mkHot", "value")) ? store.get("watch:mkHot", "value") : "value", worldR: store.get("watch:worldR", "us"), calWk: 0, calK: ["all", "conf", "ex"].includes(store.get("watch:calK", "all")) ? store.get("watch:calK", "all") : "all", calDay: null, warn: null, warnOpen: "punish", cal: null, futx: null,
-  mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: store.get("watch:mfv", "today"), viz: mfVizInit(), flowOn: store.get("watch:mfflow", true) !== false, full: null, q: "up", rk: "inst", side: "buy", win: "5", bw: store.get("watch:mfbw", "5") === "1" ? "1" : "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), bopv: store.get("watch:bopv", null) || {}, rp: { t: null, playing: false, speed: 1, set: "hot" }, zoom: { k: 1, vx: 0, vy: 0 } },
+  // 資金雷達原本的「今日」併進情報局「今日市場」盤後的資金雷達卡：存過 today 的人改看動能矩陣（不改寫存的值）
+  mf: { days: [], ind: null, tried: new Set(), loading: false, err: null, view: ((v) => (!v || v === "today" ? "bubble" : v))(store.get("watch:mfv", "bubble")), viz: mfVizInit(), flowOn: store.get("watch:mfflow", true) !== false, full: null, q: "up", rk: "inst", side: "buy", win: "5", bw: store.get("watch:mfbw", "5") === "1" ? "1" : "5", fx: "f", bop: Math.min(0.9, Math.max(0.1, +store.get("watch:bop", 0.45) || 0.45)), bopv: store.get("watch:bopv", null) || {}, rp: { t: null, playing: false, speed: 1, set: "hot" }, zoom: { k: 1, vx: 0, vy: 0 } },
   indS: { view: "themes", mk: "tw", sub: "chain", net: "ai-dc", ...(store.get("watch:inds", null) || {}), open: null, focus: null }, indQ: {},
   cmp: (store.get("watch:cmp", []) || []).filter(c => typeof c === "string").slice(0, 3), cmpData: {},
   daily: null, intra: null, intraAt: 0, mk: {}, info: null, hot: {}, timer: null, busy: false, stocks: null, lastOk: 0,
@@ -1887,13 +1888,13 @@ function renderList() {
   if (W.ticking && W.lt === "ind") { if (W.indLast) loadIndQuotes(W.indLast); return; } // 產業地圖（星系、圖解）每 5 秒整個重建很耗電：只重抓成員報價，有變動才重畫
   if (W.ticking && (W.lt === "money" || (W.lt === "screen" && W.scrG === "combo") || (W.lt === "hold" && (W.holdView === "risk" || W.holdView === "macro")))) return; // 資金分頁、條件組合、庫存風險與總經敏感度用收盤資料，自己載入完才重畫
   if (W.ticking && (W.lt === "pod" || W.lt === "cong" || W.lt === "tools")) return; // 名人分頁不用跟著報價重畫（會打斷正在播的音檔、正在輸入的表單） // 自動更新時，剛點下去的那一瞬間不重畫（點擊才不會落空）
-  const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details")].map(d => [sum(d), d.open]));
+  const sum = d => d.querySelector("summary")?.textContent.trim(), opened = new Map([...lx.querySelectorAll("details:not([data-tdbox])")].map(d => [sum(d), d.open])); // 今日市場的區塊自己記開合（W.tdOpen），不用摘要文字對
   // 換分頁時新內容常常先是一行「載入中」，頁面一變短瀏覽器就把捲動位置拉回最上面：重畫前先撐住原本的高度，內容夠高或 0.9 秒後再放開
   const xs = hsKeep(), hold = !W.ticking && !lx.hidden && lx.offsetHeight > 0;
   if (hold) { clearTimeout(W.lxHold); lx.style.minHeight = lx.offsetHeight + "px"; }
   // 某個分頁畫的時候出錯（資料格式不對、程式還沒載完）：不要留一片空白，說明並給「重試」，錯誤記到資料來源狀態
   try { renderList0(); } catch (e) { noteErr("畫面", e); lx.hidden = false; lx.innerHTML = `<p class="note err" style="padding:12px">⚠︎ 這個畫面暫時顯示不出來（${esc(e.message)}）。<button class="linkbtn" data-lxretry>重試</button></p>`; }
-  if (opened.size) for (const d of lx.querySelectorAll("details")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
+  if (opened.size) for (const d of lx.querySelectorAll("details:not([data-tdbox])")) { const k = sum(d); if (opened.has(k)) d.open = opened.get(k); }
   hsRestore(xs); hsFadeAll(); segAllMount();
   if (hold) { const r = document.createRange(); r.selectNodeContents(lx); const need = parseFloat(lx.style.minHeight) || 0;
     if (lx.hidden || r.getBoundingClientRect().height >= need - 40) lx.style.minHeight = ""; else W.lxHold = setTimeout(() => { lx.style.minHeight = ""; }, 900); }
@@ -2565,9 +2566,9 @@ function secMembers(M, S, k = "a5", n = 0) {
 function renderSector(M) {
   const F = W.mf; if (!M.secs.some(x => x.id === F.sec) && F.secq) { const m = secMatch(M, F.secq); if (m) F.sec = m.id; }
   const S = M.secs.find(x => x.id === F.sec), A = flowAt(M).find(x => x.id === F.sec), t = M.T - 1;
-  if (!S || !A) return `<div class="gback"><button class="btn sm" data-mv="${F.back || "today"}">‹ 返回</button></div><p class="note gnote">找不到這個板塊的資料。</p>`;
+  if (!S || !A) return `<div class="gback"><button class="btn sm" data-mv="${F.back || "bubble"}">‹ 返回</button></div><p class="note gnote">找不到這個板塊的資料。</p>`;
   const k = F.secSort, sortB = (key, t) => `<button data-mset="secSort" data-v="${key}" aria-pressed="${k === key}">${t}</button>`;
-  return `<div class="gback"><button class="btn sm" data-mv="${F.back || "today"}">‹ 返回</button><b>${esc(S.name)}</b><span class="note">${S.kind}・${S.mem.length} 檔</span>${INDT.has(S.id) ? `<button class="btn sm" data-iopen-ext="${esc(S.id)}">題材內頁 ›</button>` : ""}</div>
+  return `<div class="gback"><button class="btn sm" data-mv="${F.back || "bubble"}">‹ 返回</button><b>${esc(S.name)}</b><span class="note">${S.kind}・${S.mem.length} 檔</span>${INDT.has(S.id) ? `<button class="btn sm" data-iopen-ext="${esc(S.id)}">題材內頁 ›</button>` : ""}</div>
     <section class="mcard binfo" style="--qc:${FLOW_Q[A.q][2]}"><h3>${qDot(A.q)}${FLOW_Q[A.q][0]} <span class="note">${FLOW_Q[A.q][1]}</span></h3>
       <div class="bgrid"><span>今日法人淨額</span>${yiB(A.net1)}<span>近 5 日淨流入</span>${yiB(A.net5)}<span>加速度</span>${yiB(A.accel)}<span>近 5 日漲跌（平均）</span>${pctB(A.pct5)}<span>外資 5 日</span>${yiB(A.f5)}<span>投信 5 日</span>${yiB(A.tr5)}<span>今日買超家數</span><b>${A.buy1}／${A.n}</b></div></section>
     <section class="mcard"><h3>成分股 <span class="mkseg">${sortB("a5", "5 日金額")}${sortB("a1", "今日金額")}${sortB("pct1", "漲跌幅")}</span></h3>
@@ -3246,25 +3247,13 @@ async function mfShare(how) {
 const mfT0 = T => (T > 12 ? 9 : Math.min(5, Math.max(0, T - 1)));
 function renderMoney() {
   const F = W.mf, M = mfModel();
-  if (F.view === "replay") F.view = "bubble";
+  if (F.view === "replay" || F.view === "today") F.view = "bubble";
   if (F.full === "replay") F.full = "matrix";
-  let h = `<div class="seg scrseg" role="group" aria-label="資金">${[["today", "今日"], ["bubble", "動能矩陣"], ["rank", "排行"]].map(([k, t]) => `<button data-mv="${k}" aria-pressed="${F.view === k}">${t}</button>`).join("")}</div>`;
+  let h = `<div class="seg scrseg" role="group" aria-label="資金">${[["bubble", "動能矩陣"], ["rank", "排行"]].map(([k, t]) => `<button data-mv="${k}" aria-pressed="${F.view === k}">${t}</button>`).join("")}</div>`;
   if (!M) { $("#lx").innerHTML = h + `<p class="note gnote">${W.off ? "需要部署到網站才有資金資料。" : F.err && !F.loading ? `⚠︎ ${esc(F.err)}` : `載入最近的交易日資料…${F.prog ? `（${F.prog}）` : ""}<br>第一次要一天一天向證交所抓，大約 10～20 秒；之後會快很多。`}</p>`; return; }
   const T = M.T, A = flowAt(M), S = flowStocks(M), mood = flowMood(M), tq = W.quotes.get("T00"), more = T < 10 ? `<p class="note gnote">目前只有 ${T} 個交易日，加速度需要 10 天才準${F.loading ? "，載入中…" : ""}</p>` : "";
   if (F.view === "sector") h += renderSector(M);
-  else if (F.view === "today") {
-    const b1 = A.filter(x => x.net1 > 0).sort((a, b) => b.net1 - a.net1).slice(0, 3), b5 = A.filter(x => x.net5 > 0).sort((a, b) => b.net5 - a.net5).slice(0, 3);
-    const big = S.filter(x => /^\d{4}$/.test(x.code)), bb = big.slice().sort((a, b) => b.a1 - a.a1)[0], bs = big.slice().sort((a, b) => a.a1 - b.a1)[0];
-    const chip = (x, v, attr) => `<button class="mchip" ${attr}>${qDot(x.q || (v >= 0 ? "up" : "down"))}${esc(x.name)} ${yiB(v)}</button>`;
-    h += more + `<section class="mcard"><h3>今日重點（${M.dates[T - 1].slice(5).replace("-", "/")}）</h3>`
-      + (mood ? `<div class="mood"><b>今日情緒 <span style="color:${mood.score < 40 ? "#22a87a" : mood.score > 60 ? "#e8603c" : "#e2b23a"}">${mood.score} ${mood.label}</span></b><div class="mbar"><i style="left:${mood.score}%"></i></div><div class="mlab"><span>恐慌</span><span>樂觀</span></div>
-          <details class="mkmore"><summary>怎麼算的</summary><p class="note">${mood.parts.map(([k, v]) => `${k} ${v >= 0 ? "+" : ""}${v.toFixed(2)}`).join("、")}（各自換成 −1～1 後平均，再換成 0～100）。上漲 ${mood.up}、下跌 ${mood.dn}、漲停 ${mood.lu}、跌停 ${mood.ld}，法人合計 ${flowFmt(mood.net)}。</p></details></div>` : "")
-      + `<h4>法人買最多</h4><div class="mchips">${b1.map(x => chip(x, x.net1, `data-fsec="${esc(x.id)}"`)).join("") || '<span class="note">今天沒有買超的板塊</span>'}</div>`
-      + `<h4>大戶異常（法人單日買賣金額最大）</h4><div class="mchips">${bb && bb.a1 > 0 ? chip({ name: bb.name, q: "up" }, bb.a1, `data-sel="${bb.code}"`) : ""}${bs && bs.a1 < 0 ? chip({ name: bs.name, q: "down" }, bs.a1, `data-sel="${bs.code}"`) : ""}</div>`
-      + `<button class="mcard mlink" data-l2="tools:sum" style="margin:10px 0 0"><b>盤後總結與分享</b><span class="note">在情報局「今日市場」的盤後 ›</span></button></section>`
-      + `<section class="mcard"><h3>近 5 日法人買超最多</h3><div class="mchips">${b5.map(x => chip(x, x.net5, `data-fsec="${esc(x.id)}"`)).join("")}</div></section>`
-      + `<button class="mcard mlink" data-mv="replay"><b>主力資金雷達回放</b><span class="note">近 20 個交易日，資金怎麼移動 ›</span></button>`;
-  } else if (F.view === "bubble") {
+  else if (F.view === "bubble") {
     const D1 = F.bw === "1", wl = D1 ? "今日" : "近 5 日";
     const t0 = mfT0(T), uCur = F.rp.u != null ? Math.max(t0, Math.min(T - 1, F.rp.u)) : T - 1, tCur = Math.round(uCur), dtObj = new Date((M.dates[tCur] || "2026-01-01") + "T00:00:00Z");
     const dtLabel = M.dates[tCur] ? `${M.dates[tCur].slice(5).replace("-", "/")} 週${"日一二三四五六"[dtObj.getUTCDay()]}` : wl;
@@ -3556,7 +3545,7 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "money") return; const F 
   if (d.fsec) return secOpen(d.fsec);
   if (d.iopenExt) { W.indS.open = d.iopenExt; return setLt("ind"); }
   if (d.mshare) return mfShare(d.mshare);
-  if (d.l2) { W.tdPh = { d: twDay(), ph: "post" }; return setLt("today", true); } // 盤後總結在今日市場的「盤後」
+  if (d.l2 || d.mv === "today") { W.tdPh = { d: twDay(), ph: "post" }; return setLt("today", true); } // 盤後總結、原本的「今日」都在今日市場的「盤後」
   if (d.mv === "replay") { F.view = "bubble"; store.set("watch:mfv", "bubble"); F.rp.t = null; F.rp.u = null; renderMoney(); mfPlay(true); return; }
   if (d.mv) { F.view = d.mv; if (d.mv !== "bubble") { mfPlay(false); store.set("watch:mfv", d.mv); } else store.set("watch:mfv", "bubble"); }
   else if (d.mq) F.q = d.mq; else if (d.mrk) F.rk = d.mrk;
@@ -4515,7 +4504,7 @@ function renderMkt() {
 // 大盤的產業名稱（例如「塑膠工業」「電子零組件業」）和資金分頁的產業別（「塑膠」「電子零組件」）不完全一樣：模糊比對，資金資料還沒載入就等載入後再對
 const secMatch = (M, name) => { const n = String(name).replace(/(工業|類|業)$/, ""), L = (M?.secs || []).filter(x => x.kind === "產業");
   return L.find(x => x.name === n) || L.find(x => n.includes(x.name) || x.name.includes(n)) || null; };
-function mktSector(name) { const F = W.mf; F.back = "today"; F.view = "sector"; F.secq = name; F.secSort ||= "a5"; const S = secMatch(mfModel(), name); F.sec = S ? S.id : "ind:" + name; setLt("money"); }
+function mktSector(name) { const F = W.mf; F.back = "bubble"; F.view = "sector"; F.secq = name; F.secSort ||= "a5"; const S = secMatch(mfModel(), name); F.sec = S ? S.id : "ind:" + name; setLt("money"); }
 // 電子期、金融期：沒有個股頁，用卡片顯示日盤／夜盤報價
 function futInfo(cid) { const q = W.futx?.[cid]; if (!q) return toast("期貨報價還沒載入");
   const row = (k, v) => `<div><span>${k}</span><b>${v ?? "—"}</b></div>`;
@@ -4527,7 +4516,7 @@ $("#lx").addEventListener("click", e => { const b = e.target.closest("[data-mk]"
   if (k === "goRank") { setLt("rank"); return; }
   if (k === "goRankT") { W.rankType = v; store.set("watch:rank", v); setLt("rank"); loadHot("tw-rank"); return; }
   if (k === "goList") { W.scrG = "hot"; W.scrOpen = v; store.set("watch:scrg", "hot"); setLt("screen"); return; }
-  if (k === "goInst") { if (v === "money") { W.mf.view = "today"; setLt("money"); } else { W.rankType = v; store.set("watch:rank", v); setLt("rank"); loadHot("tw-rank"); } return; }
+  if (k === "goInst") { if (v === "money") { W.tdPh = { d: twDay(), ph: "post" }; setLt("today"); } else { W.rankType = v; store.set("watch:rank", v); setLt("rank"); loadHot("tw-rank"); } return; }
   if (k === "goSec") { mktSector(v); return; }
   if (k === "irtOpen") { W.indS.open = v; setLt("ind"); return; }
   if (k === "irtAll") { W.irtAll = !!v; renderList(); return; }
@@ -5904,7 +5893,7 @@ SHARE.bt = () => { const L = W.btLast; if (!L) return null; const M = btMetrics(
 const ROUTES = {
   daily: ["today", {}], today: ["today", {}], // #today 是別名，分享出去的網址仍用 #daily
   monitor: ["mon", {}], // #monitor、#monitor/事件短代號（打開那件事件）
-  radar: ["money", { today: "today", matrix: "bubble", rank: "rank", replay: "replay" }],
+  radar: ["money", { today: "today", matrix: "bubble", rank: "rank", replay: "replay" }], // #radar/today（舊的「今日」）帶到今日市場的盤後
   congress: ["cong", { us: "home", tw: "tw", "13f": "f13", insider: "ins", backtest: "bt" }],
   supply: ["ind", { themes: "themes", network: "network", diagrams: "gallery", news: "news", fav: "fav" }],
   podcast: ["pod", { latest: "home", rank: "rank", follow: "follow" }],
@@ -5913,6 +5902,7 @@ const ROUTES = {
 function applyRoute(r) {
   const [a, b, c] = String(r || "").replace(/^#/, "").split("/"), R = ROUTES[(a || "").toLowerCase()]; if (!R) return false;
   const [lt, subs] = R, sub = b ? subs[b.toLowerCase()] : null;
+  if (lt === "money" && sub === "today") { W.tdPh = { d: twDay(), ph: "post" }; if ($("#main").classList.contains("show-detail")) showList(false); if (W.lt !== "today") setLt("today"); else { renderList(); navPush(); } return true; }
   if (lt === "money" && sub) { W.mf.view = sub === "replay" ? "bubble" : sub; if (sub === "replay") setTimeout(() => mfPlay(true), 60); }
   if (lt === "cong") W.cv = sub || "home";
   if (lt === "mon" && b) setTimeout(() => monDetail(b), 300);
