@@ -31,7 +31,14 @@ jobs:
       # 眾議院的申報是 PDF，用 pdfjs 讀文字（只在排程裡安裝，網站本身不需要）
       - run: npm i --no-save --no-audit --no-fund pdfjs-dist@4.10.38
       - if: ${{ github.event.inputs.dump && github.event.inputs.dump != '0' }}
-        run: node scripts/congress.mjs --dump ${{ github.event.inputs.dump }}
+        env:
+          INPUT_DUMP: ${{ github.event.inputs.dump }}
+        run: |
+          D_VAL="5"
+          if [[ "$INPUT_DUMP" =~ ^[0-9]{1,3}$ ]]; then
+            D_VAL="$INPUT_DUMP"
+          fi
+          node scripts/congress.mjs --dump "$D_VAL"
       - if: ${{ (!github.event.inputs.dump || github.event.inputs.dump == '0') && !github.event.inputs.year }}
         run: node scripts/congress.mjs
       - if: ${{ (!github.event.inputs.dump || github.event.inputs.dump == '0') && github.event.inputs.year }}

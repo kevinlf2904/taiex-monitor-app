@@ -20,8 +20,8 @@ test("股息計算機", async () => {
 
 // 存股延伸：我的庫存股息、實拿股息試算、真實歷史回測、退休提領、月月配組合、通膨換算
 const J = (r, o) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o) });
-const ago = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
-const YIELD = { "0056": { price: 35, divs: [[ago(300), 1], [ago(210), 1], [ago(120), 1], [ago(30), 1]] }, "00878": { price: 20, divs: [[ago(330), 0.4], [ago(240), 0.4], [ago(150), 0.4], [ago(60), 0.4]] }, "2330": { price: 1000, divs: [[ago(280), 5], [ago(190), 5], [ago(100), 5], [ago(10), 5]] } };
+const monthAgo = m => { const d = new Date(); d.setDate(15); d.setMonth(d.getMonth() - m); return d.toISOString().slice(0, 10); };
+const YIELD = { "0056": { price: 35, divs: [[monthAgo(10), 1], [monthAgo(7), 1], [monthAgo(4), 1], [monthAgo(1), 1]] }, "00878": { price: 20, divs: [[monthAgo(11), 0.4], [monthAgo(8), 0.4], [monthAgo(5), 0.4], [monthAgo(2), 0.4]] }, "2330": { price: 1000, divs: [[monthAgo(10), 5], [monthAgo(7), 5], [monthAgo(4), 5], [monthAgo(1), 5]] } };
 for (const width of [390, 1280]) test(`存股延伸功能 ${width}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "savings.html", { width, touch: width < 500 });
   await p.route("**/api/yield**", r => { const cs = new URL(r.request().url()).searchParams.get("codes").split(","); J(r, { ok: true, rows: cs.filter(c => YIELD[c]).map(c => { const y = YIELD[c], cash12 = y.divs.reduce((a, d) => a + d[1], 0); return { code: c, cash12, n: 4, price: y.price, yield: +((cash12 / y.price) * 100).toFixed(2), divs: y.divs }; }) }); });

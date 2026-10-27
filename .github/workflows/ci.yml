@@ -2,10 +2,10 @@
 name: ci
 on:
   pull_request:
-    paths: ["learner/**", "api/**", "scripts/**", "tests/**", ".github/workflows/ci.yml", "AGENTS.md", "CLAUDE.md", ".agent/**"]
+    paths: ["learner/**", "api/**", "scripts/**", "tests/**", ".github/workflows/**", "AGENTS.md", "CLAUDE.md", ".agent/**"]
   push:
     branches: [main]
-    paths: ["learner/**.js", "learner/**.html", "learner/**.css", "api/**", "scripts/**", "tests/**"]
+    paths: ["learner/**.js", "learner/**.html", "learner/**.css", "api/**", "scripts/**", "tests/**", ".github/workflows/**"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,5 +23,5 @@ jobs:
           node-version: 22
       - run: npm i --no-save --no-audit --no-fund playwright@1.56.1
       - run: npx playwright install --with-deps chromium
-      - run: for f in learner/*.js scripts/*.mjs api/_lib/*.js; do node --check "$f" || exit 1; done
+      - run: for f in learner/*.js scripts/*.mjs api/*.js api/_lib/*.js; do node --check "$f" || exit 1; done
       - run: node tests/run.mjs

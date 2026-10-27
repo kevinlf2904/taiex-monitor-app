@@ -12,7 +12,10 @@ export const AI_LIMITS = { chat: [40, 1500], "chart-read": [10, 300], import: [1
 export const WEB_TRIES = 3;
 // Gemini 失敗時要不要改問 Claude（付費、比較貴）：預設不要，設 AI_CLAUDE_FALLBACK=1 才開，而且另外有全站每天上限（claude-fb）
 export const claudeFallbackOn = () => process.env.AI_CLAUDE_FALLBACK === "1";
-const mem = new Map();
+
+export const mem = new Map();
+const MAX_MEM = 5000;
+
 const ipOf = req => String(req.headers?.["x-forwarded-for"] || req.headers?.["x-real-ip"] || "").split(",")[0].trim() || "?";
 const envN = k => { const n = +process.env[k]; return Number.isFinite(n) && n > 0 ? n : null; };
 // 這個服務實際的上限；shared＝計數是全站共用（KV）還是只在這個執行個體（記憶體）
@@ -22,8 +25,46 @@ export function limitsOf(name, shared = true) {
   const perIp = cap(envN(`AI_HOURLY_PER_IP_${tag}`), envN("AI_HOURLY_PER_IP"), L[0]), perDay = cap(envN(`AI_DAILY_CAP_${tag}`), envN("AI_DAILY_CAP"), L[1]);
   return shared ? [perIp, perDay] : [Math.max(1, Math.ceil(perIp / 2)), Math.max(3, Math.ceil(perDay / 10))];
 }
-const memIncr = async k => { const n = (mem.get(k) || 0) + 1; mem.set(k, n); if (mem.size > 5000) mem.clear(); return n; };
+
+// 記憶體計數器：具備過期時間 (TTL) 與安全淘汰機制，容量滿時僅清除過期項或部分舊項，絕不清空整個 Map
+export const memIncr = async (k, ttl = 3600, now = Date.now()) => {
+  const exp = now + ttl * 1000;
+  const entry = mem.get(k);
+
+  if (entry) {
+    if (now >= entry.expireAt) {
+      entry.count = 1;
+      entry.expireAt = exp;
+    } else {
+      entry.count += 1;
+    }
+    return entry.count;
+  }
+
+  // 容量達到上限時的優雅淘汰策略
+  if (mem.size >= MAX_MEM) {
+    // 1. 僅清除已過期項目
+    for (const [key, val] of mem) {
+      if (now >= val.expireAt) mem.delete(key);
+    }
+    // 2. 若清除過期項目後仍達容量上限，淘汰最舊的 10% 項目，絕不清空所有有效資料
+    if (mem.size >= MAX_MEM) {
+      const iter = mem.keys();
+      const evictCount = Math.floor(MAX_MEM * 0.1);
+      for (let i = 0; i < evictCount && mem.size > 0; i++) {
+        const oldestKey = iter.next().value;
+        if (oldestKey !== undefined) mem.delete(oldestKey);
+        else break;
+      }
+    }
+  }
+
+  mem.set(k, { count: 1, expireAt: exp });
+  return 1;
+};
+
 const kvIncr = async (k, ttl) => { const n = await kv("INCR", k); if (n === 1) await kv("EXPIRE", k, ttl); return n; };
+
 // 回傳 null＝可以通過；字串＝要擋下來的原因
 export async function aiLimit(req, name, now = Date.now(), store = null) {
   if (!AI_LIMITS[name]) return null;
@@ -36,6 +77,16 @@ export async function aiLimit(req, name, now = Date.now(), store = null) {
     return null;
   };
   const shared = store || (kvOn() ? kvIncr : null);
-  if (shared) { try { return await check(shared, true); } catch { /* 計數器壞掉：改用記憶體的保守上限，不直接放行 */ } }
-  return check(memIncr, false);
+  if (shared) {
+    try {
+      return await check(shared, true);
+    } catch (e) {
+      if (process.env.AI_LIMIT_STRICT === "1") {
+        return "限流服務暫時異常，請稍後再試";
+      }
+      /* 計數器壞掉：可觀測警示並改用記憶體的保守上限，不直接放行 */
+      console.warn("[aiLimit] KV 限流服務異常，退回本機記憶體保守限制:", e?.message);
+    }
+  }
+  return check((k, ttl) => memIncr(k, ttl, now), false);
 }
