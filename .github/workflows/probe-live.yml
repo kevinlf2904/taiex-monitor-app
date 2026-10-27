@@ -17,14 +17,37 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+      - name: Validate inputs
+        env:
+          INPUT_N: ${{ github.event.inputs.n }}
+          INPUT_GAP: ${{ github.event.inputs.gap }}
+        run: |
+          N_VAL="${INPUT_N:-12}"
+          if ! [[ "$N_VAL" =~ ^[0-9]+$ ]] || [ "$N_VAL" -lt 1 ] || [ "$N_VAL" -gt 60 ]; then
+            echo "::error::Invalid n input '$N_VAL'. Must be an integer between 1 and 60."
+            exit 1
+          fi
+          GAP_VAL="${INPUT_GAP:-10}"
+          if ! [[ "$GAP_VAL" =~ ^[0-9]+$ ]] || [ "$GAP_VAL" -lt 1 ] || [ "$GAP_VAL" -gt 60 ]; then
+            echo "::error::Invalid gap input '$GAP_VAL'. Must be an integer between 1 and 60."
+            exit 1
+          fi
       - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm ci --omit=dev --ignore-scripts # yt 模式會載入 api/_lib（要用到套件）
-      - run: node scripts/probe-live.mjs ${{ github.event.inputs.n || 12 }} ${{ github.event.inputs.gap || 10 }}
-        env: # 只有 keys 模式會用到；只回報「有沒有設定、能不能用」，不印金鑰
+      - name: probe
+        env:
+          INPUT_N: ${{ github.event.inputs.n }}
+          INPUT_GAP: ${{ github.event.inputs.gap }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          N_VAL="12"
+          GAP_VAL="10"
+          if [[ "$INPUT_N" =~ ^[0-9]{1,3}$ ]]; then N_VAL="$INPUT_N"; fi
+          if [[ "$INPUT_GAP" =~ ^[0-9]{1,3}$ ]]; then GAP_VAL="$INPUT_GAP"; fi
+          node scripts/probe-live.mjs "$N_VAL" "$GAP_VAL"

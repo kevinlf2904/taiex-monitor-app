@@ -21,22 +21,100 @@ const TG = () => (process.env.TELEGRAM_BOT_TOKEN || "").trim();
 const MAX = 900 * 1024, KEEP = 400 * 86400; // 同步資料 400 天沒更新就自動刪掉（每次上傳都會重新計時）
 export const hashId = id => createHash("sha256").update(String(id)).digest("hex");
 export const bindTok = h => h.slice(0, 24);
-const ipOf = req => String(req.headers?.["x-forwarded-for"] || req.headers?.["x-real-ip"] || "").split(",")[0].trim() || "?";
-const okId = id => /^[A-Za-z0-9_-]{20,64}$/.test(String(id || ""));
+// 優先採用邊緣反向代理（如 Vercel Edge）提供的 x-real-ip，防止攻擊者藉由偽造 x-forwarded-for 標頭繞過限流
+export const ipOf = req => {
+  const h = req?.headers || {};
+  const realIp = String(h["x-real-ip"] || "").trim();
+  if (realIp && realIp !== "?") return realIp;
+  const fwd = String(h["x-forwarded-for"] || "").trim();
+  if (fwd) {
+    const parts = fwd.split(",").map(s => s.trim()).filter(Boolean);
+    return parts[0] || "?";
+  }
+  return req?.socket?.remoteAddress || "?";
+};
+export const okId = id => /^[A-Za-z0-9_-]{20,64}$/.test(String(id || ""));
 
 export const kvOn = () => !!(KV_URL() && KV_TOKEN());
 export async function kv(...cmd) {
   const r = await fetch(KV_URL(), { method: "POST", headers: { Authorization: `Bearer ${KV_TOKEN()}`, "Content-Type": "application/json" }, body: JSON.stringify(cmd), signal: AbortSignal.timeout(10000) });
   const j = await r.json().catch(() => null); if (!r.ok || j?.error) throw new Error(j?.error || `KV HTTP ${r.status}`); return j.result;
 }
+export function redactTelegramSecrets(str, token) {
+  if (!str) return "";
+  let s = String(str);
+  if (token) s = s.replaceAll(token, "[REDACTED_TOKEN]");
+  // 徹底過濾任何可能出現在 URL 或錯誤訊息中的 Telegram bot token (格式如 /bot123456:ABC-DEF...)
+  s = s.replace(/\/bot[0-9]+:[A-Za-z0-9_-]+/g, "/bot[REDACTED_TOKEN]");
+  return s;
+}
+
+export function sanitizeTelegramError(err, token) {
+  if (!err) return new Error("Unknown Telegram Error");
+  const rawMsg = err.message || String(err);
+  const safeMsg = redactTelegramSecrets(rawMsg, token);
+  const safeErr = new Error(safeMsg);
+
+  if (err.name) safeErr.name = redactTelegramSecrets(err.name, token);
+  if (err.code) safeErr.code = redactTelegramSecrets(err.code, token);
+  if (err.status) safeErr.status = err.status;
+  if (err.stack) safeErr.stack = redactTelegramSecrets(err.stack, token);
+
+  // 深度清洗 cause 鏈，確保原始未脫敏之物件絕不外流
+  if (err.cause) {
+    const rawCause = err.cause;
+    const causeMsg = redactTelegramSecrets(rawCause?.message || String(rawCause), token);
+    const cleanCause = new Error(causeMsg);
+    if (rawCause?.name) cleanCause.name = redactTelegramSecrets(rawCause.name, token);
+    if (rawCause?.code) cleanCause.code = redactTelegramSecrets(rawCause.code, token);
+    if (rawCause?.status) cleanCause.status = rawCause.status;
+    if (rawCause?.stack) cleanCause.stack = redactTelegramSecrets(rawCause.stack, token);
+    cleanCause.toJSON = () => ({
+      name: cleanCause.name,
+      message: cleanCause.message,
+      code: cleanCause.code
+    });
+    safeErr.cause = cleanCause;
+  }
+
+  // 避免 JSON 序列化洩漏
+  safeErr.toJSON = () => ({
+    name: safeErr.name,
+    message: safeErr.message,
+    code: safeErr.code,
+    status: safeErr.status,
+    cause: safeErr.cause ? (typeof safeErr.cause.toJSON === "function" ? safeErr.cause.toJSON() : safeErr.cause.message) : undefined
+  });
+
+  return safeErr;
+}
+
 export async function tg(method, body) {
-  const r = await fetch(`https://api.telegram.org/bot${TG()}/${method}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(10000) });
-  const j = await r.json().catch(() => null); if (!j?.ok) throw new Error(j?.description || `Telegram HTTP ${r.status}`); return j.result;
+  const token = TG();
+  if (!token) throw new Error("尚未設定 TELEGRAM_BOT_TOKEN");
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+      signal: AbortSignal.timeout(10000)
+    });
+    const j = await r.json().catch(() => null);
+    if (!j?.ok) {
+      const desc = j?.description ? redactTelegramSecrets(j.description, token) : `Telegram HTTP ${r.status}`;
+      const apiErr = new Error(desc);
+      apiErr.status = r.status;
+      throw apiErr;
+    }
+    return j.result;
+  } catch (err) {
+    throw sanitizeTelegramError(err, token);
+  }
 }
 let botName = null;
 // 提醒用的摘要：指標提醒、價格提醒、股票名稱、追蹤對象；有綁 Telegram 才放進 alerts 清單，收盤後的排程只讀這份
 export function alertDoc(data, chat) {
-  const g = k => { try { return JSON.parse(data?.[`kline:${k}`] ?? "null"); } catch { return null; } };
+  const g = k => { try { return JSON.parse(data?.[ `kline:${k}` ] ?? "null"); } catch { return null; } };
   const rules = (g("watch:irules") || []).filter(r => r?.on && r.code && r.cond).map(r => ({ code: r.code, cond: r.cond, p: r.p ?? null }));
   const price = Object.entries(g("watch:alerts") || {}).map(([code, a]) => ({ code, up: a?.up ?? null, dn: a?.dn ?? null })).filter(a => a.up || a.dn);
   // 追蹤：國會議員、13F 機構（情報局「大戶國會 → 我的追蹤」），加上庫存台股（內部人轉讓申報）
@@ -101,20 +179,48 @@ export default async function handler(req, res) {
   }
   if (!okId(b.id)) return res.status(400).json({ ok: false, error: "同步碼格式不對" });
   const h = hashId(b.id), key = `sync:${h}`;
+  const ipHash = hashId(ipOf(req)).slice(0, 16);
+  const hr = Math.floor(Date.now() / 3600e3);
   try {
     if (op === "push") {
       // 每個 IP 每小時最多上傳 30 次：避免被人用程式一直塞新的同步碼，把雲端空間塞滿
-      const rk = `sp:ip:${hashId(ipOf(req)).slice(0, 16)}:${Math.floor(Date.now() / 3600e3)}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 3600);
+      const rk = `sp:ip:${ipHash}:${hr}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 3600);
       if (n > 30) return res.status(429).json({ ok: false, error: "上傳太頻繁了，請一小時後再試" });
-      const data = b.data && typeof b.data === "object" ? b.data : null; if (!data) return res.status(400).json({ ok: false, error: "沒有資料" });
+      const data = b.data && typeof b.data === "object" && !Array.isArray(b.data) ? b.data : null; if (!data) return res.status(400).json({ ok: false, error: "沒有資料或資料格式不對" });
       const body = JSON.stringify({ at: Date.now(), dev: String(b.dev || "").slice(0, 40), data }); if (body.length > MAX) return res.status(413).json({ ok: false, error: `資料太大（${Math.round(body.length / 1024)}KB，上限 900KB）` });
       await kv("SET", key, body, "EX", KEEP);
       const chat = await kv("GET", `tg:${h}`);
       if (chat) { const doc = alertDoc(data, chat); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } else { await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); } }
       return res.status(200).json({ ok: true, at: Date.now(), tg: !!chat });
     }
-    if (op === "pull") { const v = await kv("GET", key); if (!v) return res.status(200).json({ ok: false, error: "雲端沒有這個同步碼的資料" }); const j = JSON.parse(v); return res.status(200).json({ ok: true, ...j, tg: !!(await kv("GET", `tg:${h}`)) }); }
+    if (op === "pull") {
+      // 1. IP 總下載頻率限制（每 IP 每小時最多 60 次）
+      const rk = `pl:ip:${ipHash}:${hr}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 3600);
+      if (n > 60) return res.status(429).json({ ok: false, error: "讀取太頻繁了，請一小時後再試" });
+
+      // 2. 暴力破解防護：每個 IP 失敗嘗試次數限制（每小時最多 15 次失敗）
+      const fk = `pl:fail:${ipHash}:${hr}`;
+      const failCount = +(await kv("GET", fk) || 0);
+      if (failCount >= 15) return res.status(429).json({ ok: false, error: "錯誤嘗試次數過多，請一小時後再試" });
+
+      const v = await kv("GET", key);
+      if (!v) {
+        const fn = await kv("INCR", fk); if (fn === 1) await kv("EXPIRE", fk, 3600);
+        return res.status(200).json({ ok: false, error: "雲端沒有這個同步碼的資料" });
+      }
+      let j;
+      try { j = JSON.parse(v); } catch { return res.status(200).json({ ok: false, error: "同步資料格式毀損" }); }
+      // 3. 過期檢查（KEEP 為 400 天）
+      if (j?.at && (Date.now() - j.at > KEEP * 1000)) {
+        return res.status(200).json({ ok: false, error: "同步資料已過期" });
+      }
+      return res.status(200).json({ ok: true, ...j, tg: !!(await kv("GET", `tg:${h}`)) });
+    }
     if (op === "tgbind") {
+      // 頻率限制：每個 IP 每小時最多嘗試 10 次
+      const rk = `tgb:ip:${ipHash}:${hr}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 3600);
+      if (n > 10) return res.status(429).json({ ok: false, error: "綁定嘗試太頻繁了，請稍後再試" });
+
       if (!hasTg) return res.status(200).json({ ok: false, error: "伺服器還沒設定 TELEGRAM_BOT_TOKEN" });
       const tok = bindTok(h), ups = await tg("getUpdates", { limit: 100, allowed_updates: ["message"] });
       const m = [...ups].reverse().find(u => String(u.message?.text || "").trim() === `/start ${tok}`);
@@ -124,8 +230,26 @@ export default async function handler(req, res) {
       const v = await kv("GET", key); if (v) { const doc = alertDoc(JSON.parse(v).data, String(chat)); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } }
       return res.status(200).json({ ok: true });
     }
-    if (op === "tgtest") { const chat = await kv("GET", `tg:${h}`); if (!chat) return res.status(200).json({ ok: false, error: "還沒綁定 Telegram" }); await tg("sendMessage", { chat_id: chat, text: "🔔 測試通知：K線看盤的提醒會像這樣送到這裡。" }); return res.status(200).json({ ok: true }); }
-    if (op === "tgoff") { await kv("DEL", `tg:${h}`); await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); return res.status(200).json({ ok: true }); }
+    if (op === "tgtest") {
+      // 頻率限制：每個同步碼每 10 分鐘最多發送 3 次測試訊息，避免濫發
+      const tenMin = Math.floor(Date.now() / 600e3);
+      const rk = `tgt:h:${h.slice(0, 16)}:${tenMin}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 600);
+      if (n > 3) return res.status(429).json({ ok: false, error: "測試訊息發送太頻繁，請稍後再試" });
+
+      const chat = await kv("GET", `tg:${h}`); if (!chat) return res.status(200).json({ ok: false, error: "還沒綁定 Telegram" });
+      await tg("sendMessage", { chat_id: chat, text: "🔔 測試通知：K線看盤的提醒會像這樣送到這裡。" });
+      return res.status(200).json({ ok: true });
+    }
+    if (op === "tgoff") {
+      // 頻率限制：每個 IP 每小時最多 15 次解除綁定
+      const rk = `tgo:ip:${ipHash}:${hr}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 3600);
+      if (n > 15) return res.status(429).json({ ok: false, error: "操作太頻繁，請稍後再試" });
+
+      await kv("DEL", `tg:${h}`); await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h);
+      return res.status(200).json({ ok: true });
+    }
     return res.status(400).json({ ok: false, error: "不認得的 op" });
-  } catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "雲端儲存或 Telegram 暫時連不到，請稍後再試", "sync") }); }
+  } catch (e) {
+    return res.status(200).json({ ok: false, error: userMsg(e, "雲端儲存或 Telegram 暫時連不到，請稍後再試", "sync") });
+  }
 }

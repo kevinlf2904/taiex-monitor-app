@@ -1288,68 +1288,7 @@ const isFut = c => c === "TXF";
 const isJK = c => /^(\d{4}[A-Z0-9]?\.T|\d{6}\.K[SQ])$/.test(c || ""); // 日股 6981.T、韓股 005930.KS／KQ（和美股一樣用 Yahoo 報價、K 線）
 const isUS = c => (/^\^?[A-Z][A-Z0-9]{0,5}([.-][A-Z]{1,3}|=[FX])?$/.test(c) || c === "DX-Y.NYB" || isJK(c)) && !isIdx(c); // 含 Yahoo 的期貨、匯率、加密貨幣（原物料外匯點進去看）
 const okCode = c => isTW(c) || isIdx(c) || isUS(c);
-const quoteTimestamp = globalThis.quoteTimestamp || (q => {
-  if (!q) return null;
-  const t = typeof q.time === "string" ? q.time.trim() : "";
-  const d = typeof q.date === "string" ? q.date.trim() : "";
-  if (t && /^\d{4}-\d{2}-\d{2}T/i.test(t)) {
-    const ms = Date.parse(t);
-    if (Number.isFinite(ms)) return ms;
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d) && t) {
-    if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(t)) {
-      const ms = Date.parse(t.includes("T") ? t : `${d}T${t}`);
-      if (Number.isFinite(ms)) return ms;
-    }
-    const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/);
-    if (m) {
-      const hh = m[1].padStart(2, "0"), mm = m[2], ss = (m[3] || "00").padStart(2, "0");
-      const ms = Date.parse(`${d}T${hh}:${mm}:${ss}+08:00`);
-      if (Number.isFinite(ms)) return ms;
-    }
-  }
-  return null;
-});
-const parseTimeToSec = globalThis.parseTimeToSec || (t => {
-  if (typeof t !== "string") return null;
-  const s = t.trim();
-  if (!s) return null;
-  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
-    const fullStr = /^\d{4}-\d{2}-\d{2}T/i.test(s) ? s : `1970-01-01T${s.includes("T") ? s.split("T")[1] : s}`;
-    const ms = Date.parse(fullStr);
-    if (Number.isFinite(ms)) {
-      const d = new Date(ms + 8 * 3600e3);
-      return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
-    }
-  }
-  const m = s.match(/^(?:.*T)?(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/i);
-  if (!m) return null;
-  const hh = Number(m[1]), mm = Number(m[2]), ss = Number(m[3] || 0);
-  if (!Number.isInteger(hh) || !Number.isInteger(mm) || !Number.isInteger(ss)) return null;
-  if (hh < 0 || hh > 24 || mm < 0 || mm > 59 || ss < 0 || ss > 59) return null;
-  if (hh === 24 && (mm !== 0 || ss !== 0)) return null;
-  return hh * 3600 + mm * 60 + ss;
-});
-const isQuoteStale = globalThis.isQuoteStale || ((incoming, existing) => {
-  if (!incoming || !existing) return false;
-  const tsIn = quoteTimestamp(incoming);
-  const tsEx = quoteTimestamp(existing);
-  if (tsIn !== null && tsEx !== null) return tsIn < tsEx;
-  if (tsEx !== null && tsIn === null) return true;
-  if (existing.date && incoming.date) {
-    if (incoming.date < existing.date) return true;
-    if (incoming.date > existing.date) return false;
-  } else if (existing.date && !incoming.date) {
-    return true;
-  } else if (!existing.date && incoming.date) {
-    return false;
-  }
-  const secIn = parseTimeToSec(incoming.time);
-  const secEx = parseTimeToSec(existing.time);
-  if (secEx !== null && secIn !== null) return secIn < secEx;
-  if (secEx !== null && secIn === null) return true;
-  return false;
-});
+// quoteTimestamp、parseTimeToSec、isQuoteStale 統一由 core.js 提供（單一共用實作來源，避免全域重複宣告）
 const cls = v => (v > 0 ? "up" : v < 0 ? "down" : "");
 const arrow = v => (v > 0 ? "▲" : v < 0 ? "▼" : "");
 const fmtVol = v => (v == null ? "—" : v >= 1e8 ? (v / 1e8).toFixed(2) + " 億" : v >= 1e4 ? (v / 1e4).toFixed(1) + " 萬" : Math.round(v).toLocaleString());
