@@ -2049,3 +2049,5 @@ test("位置燈號：壓力、支撐用近 14 日平均波動 × 校準倍數；
   const f = B.briefScenarios(G, "2026-10-27", 20000);
   assert.equal(f.keyLevels.pressure - f.keyLevels.pivot, 120); assert.equal(f.band.basis, "fixed");
 });
+
+import "./watch-hot.test.mjs";
