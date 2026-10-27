@@ -50,6 +50,390 @@ function twHolEnsure(now = Date.now()) {
   return (TWHOL.p = fetch("/api/calendar?hol=1", { signal: AbortSignal.timeout?.(12000) }).then(r => r.json()).then(j => { if (!(j?.holOk && twHolSet(j.hol))) { TWHOL.failAt = Date.now(); return false; } return true; })
     .catch(() => { TWHOL.failAt = Date.now(); return false; }).finally(() => { TWHOL.p = null; }));
 }
+function usIso(now = new Date()) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(now);
+  } catch {
+    return new Date(+now - 4 * 3600e3).toISOString().slice(0, 10);
+  }
+}
+
+/* ---------- 時間與報價新鮮度判定 (Phase C P0-1 & P0-2) ---------- */
+function quoteTimestamp(q) {
+  if (!q) return null;
+  const t = typeof q.time === "string" ? q.time.trim() : "";
+  const d = typeof q.date === "string" ? q.date.trim() : "";
+
+  // 1. 若 q.time 自帶完整 ISO 日期與時間 (例如 2026-10-27T01:35:00Z)
+  if (t && /^\d{4}-\d{2}-\d{2}T/i.test(t)) {
+    const ms = Date.parse(t);
+    if (Number.isFinite(ms)) return ms;
+  }
+
+  // 2. 若同時具備 YYYY-MM-DD 與時間字串
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d) && t) {
+    if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(t)) {
+      const ms = Date.parse(t.includes("T") ? t : `${d}T${t}`);
+      if (Number.isFinite(ms)) return ms;
+    }
+    const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/);
+    if (m) {
+      const hh = m[1].padStart(2, "0");
+      const mm = m[2];
+      const ss = (m[3] || "00").padStart(2, "0");
+      // 台股與標準報價以台北時區 (+08:00) 換算絕對 Epoch 毫秒
+      const ms = Date.parse(`${d}T${hh}:${mm}:${ss}+08:00`);
+      if (Number.isFinite(ms)) return ms;
+    }
+  }
+
+  return null;
+}
+
+function parseTimeToSec(t) {
+  if (typeof t !== "string") return null;
+  const s = t.trim();
+  if (!s) return null;
+
+  // 1. 帶有時區標記 (Z 或 +/-HH:mm)，依台北時區 (+08:00) 換算為當日秒數
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+    const fullStr = /^\d{4}-\d{2}-\d{2}T/i.test(s) ? s : `1970-01-01T${s.includes("T") ? s.split("T")[1] : s}`;
+    const ms = Date.parse(fullStr);
+    if (Number.isFinite(ms)) {
+      const d = new Date(ms + 8 * 3600e3);
+      return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
+    }
+  }
+
+  // 2. 純時間格式：9:35, 09:35, 9:35:00, 09:35:00, 或不帶時區之 ISO 時間
+  const m = s.match(/^(?:.*T)?(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/i);
+  if (!m) return null;
+  const hh = Number(m[1]), mm = Number(m[2]), ss = Number(m[3] || 0);
+  if (!Number.isInteger(hh) || !Number.isInteger(mm) || !Number.isInteger(ss)) return null;
+  if (hh < 0 || hh > 24 || mm < 0 || mm > 59 || ss < 0 || ss > 59) return null;
+  if (hh === 24 && (mm !== 0 || ss !== 0)) return null;
+  return hh * 3600 + mm * 60 + ss;
+}
+
+function isQuoteStale(incoming, existing) {
+  if (!incoming || !existing) return false;
+
+  // 0. Epoch 絕對時間戳比較（最嚴密，不受時區或跨午夜影響）
+  const tsIn = quoteTimestamp(incoming);
+  const tsEx = quoteTimestamp(existing);
+  if (tsIn !== null && tsEx !== null) {
+    return tsIn < tsEx;
+  }
+  if (tsEx !== null && tsIn === null) {
+    return true; // 原有報價有完整時間戳，新報價缺少或無效：保守拒絕
+  }
+
+  // 1. 日期比較：分開獨立處理
+  if (existing.date && incoming.date) {
+    if (incoming.date < existing.date) return true;
+    if (incoming.date > existing.date) return false;
+  } else if (existing.date && !incoming.date) {
+    return true; // 原有資料已有日期，新資料缺日期，保守拒絕覆蓋
+  } else if (!existing.date && incoming.date) {
+    return false;
+  }
+
+  // 2. 時間比較（同一日期或皆無日期）
+  const secIn = parseTimeToSec(incoming.time);
+  const secEx = parseTimeToSec(existing.time);
+
+  if (secEx !== null && secIn !== null) {
+    return secIn < secEx;
+  }
+  if (secEx !== null && secIn === null) {
+    return true; // 原有資料已有有效時間，新資料缺時間或時間格式無效，保守拒絕覆蓋
+  }
+  return false;
+}
+
+/* ---------- 市場資料更新狀態統一判定與標示 (Phase B) ----------
+   四種主要狀態：盤中即時 (live)、盤後待確認 (pending)、收盤確認 (confirmed)、資料延遲 (delayed)；未實作為 unavailable
+   結合資料來源、資料時間、交易日期、資料完整性、來源回應結果及適用的交易時段判斷 */
+function evalDataStatus(opts = {}) {
+  const {
+    type = "quote",
+    source = "",
+    dataDate = null,
+    sourceTime = null,
+    fetchedAt = null,
+    lastValidAt = null,
+    isSuccess = true,
+    isComplete = true,
+    err = null,
+    session = null,
+    dayState = null,
+    today = null,
+    now = new Date(),
+    estimated = false,
+    ttl = null,
+    coverage = null,
+    unimplemented = false,
+    usSession = null,
+    fsession = null,
+  } = opts;
+
+  const nowDate = now instanceof Date ? now : new Date(now);
+  const nowMs = +nowDate;
+  const isoToday = today || twIso(nowDate);
+  const curDayState = dayState || twDayState(nowDate);
+  const curSess = session || mktSession(nowDate);
+
+  const defaultTtls = {
+    index: 30000,
+    quote: 30000,
+    hot: 30000,
+    orders: 60000,
+    breadth: 60000,
+    futures: 30000,
+    us: 60000,
+    inst: 1800000,
+    margin: 3600000,
+    kline: 300000,
+    indicator: 300000,
+    other: 60000,
+  };
+  const effectiveTtl = typeof ttl === "number" && ttl > 0 ? ttl : (defaultTtls[type] || 60000);
+  const age = fetchedAt ? (nowMs - fetchedAt) : null;
+  const isExpired = age !== null && age > effectiveTtl;
+  const isDataComplete = isComplete !== false && (!coverage || !coverage.want || coverage.got >= coverage.want * 0.95);
+
+  if (unimplemented) {
+    return {
+      status: "unavailable",
+      text: "未提供",
+      note: "此項資料功能目前未提供",
+      date: dataDate,
+      source,
+      time: sourceTime,
+      isLive: false,
+      isDelayed: false,
+      isPending: false,
+      isConfirmed: false,
+    };
+  }
+
+  if (!isSuccess || err) {
+    return {
+      status: "delayed",
+      text: "資料延遲",
+      note: err ? "更新失敗（" + err + "）" : "來源資料回應異常",
+      date: dataDate,
+      source,
+      time: sourceTime,
+      lastValidAt: lastValidAt || fetchedAt,
+      isLive: false,
+      isDelayed: true,
+      isPending: false,
+      isConfirmed: false,
+    };
+  }
+
+  if (type === "us") {
+    const usS = usSession || "closed";
+    const usToday = today || usIso(nowDate);
+    if (usS === "open") {
+      if (dataDate && dataDate < usToday) {
+        return { status: "delayed", text: "資料延遲", note: "美股盤中尚未取得美東今日行情（停留於 " + dataDate + "）", date: dataDate, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      }
+      if (isExpired) {
+        return { status: "delayed", text: "資料延遲", note: "美股報價超過預期更新時間", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      }
+      return { status: "live", text: "美股盤中", note: "美東交易時段即時更新", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
+    }
+    if (usS === "pre") {
+      return { status: "pending", text: "盤前試撮", note: "美東盤前試撮階段", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+    }
+    if (estimated) {
+      return { status: "pending", text: "收盤估算", note: dataDate ? "美股 " + dataDate + " 盤後估算值" : "美股盤後估算值", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+    }
+    return { status: "confirmed", text: "收盤確認", note: dataDate ? "美股 " + dataDate + " 收盤確認" : "已收盤", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
+  }
+
+  if (type === "futures") {
+    const fs = fsession || (curSess === "open" ? "day" : "closed");
+    if (fs === "night") {
+      if (isExpired) {
+        return { status: "delayed", text: "資料延遲", note: "期貨夜盤報價延遲", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      }
+      return { status: "live", text: "夜盤即時", note: "期交所夜盤交易中", date: dataDate, source: source || "期交所", time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
+    }
+    if (fs === "day") {
+      if (isExpired) {
+        return { status: "delayed", text: "資料延遲", note: "期貨日盤報價延遲", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      }
+      return { status: "live", text: "盤中即時", note: "期交所日盤交易中", date: dataDate, source: source || "期交所", time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
+    }
+    if (estimated) {
+      return { status: "pending", text: "收盤估算", note: dataDate ? dataDate + " 期貨盤後估算值" : "期貨估算值", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+    }
+    return { status: "confirmed", text: "收盤確認", note: dataDate ? dataDate + " 期貨收盤確認" : "收盤確認", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
+  }
+
+  if (curDayState === "closed") {
+    if (estimated) {
+      return {
+        status: "pending",
+        text: "收盤估算",
+        note: dataDate ? "非交易日・" + dataDate + " 估算值" : "非交易日估算值",
+        date: dataDate,
+        source,
+        time: sourceTime,
+        isLive: false,
+        isDelayed: false,
+        isPending: true,
+        isConfirmed: false,
+      };
+    }
+    return {
+      status: "confirmed",
+      text: "收盤確認",
+      note: dataDate ? "非交易日・顯示 " + dataDate + " 收盤資料" : "非交易日收盤確認",
+      date: dataDate,
+      source,
+      time: sourceTime,
+      isLive: false,
+      isDelayed: false,
+      isPending: false,
+      isConfirmed: true,
+    };
+  }
+
+  if (curDayState === "unknown" && !dataDate) {
+    return {
+      status: "delayed",
+      text: "資料延遲",
+      note: "交易日曆待確認且無明確資料日期",
+      date: null,
+      source,
+      time: sourceTime,
+      isLive: false,
+      isDelayed: true,
+      isPending: false,
+      isConfirmed: false,
+    };
+  }
+
+  if (type === "inst" || type === "margin") {
+    const isTodayData = dataDate && dataDate === isoToday;
+    if (isTodayData && isDataComplete) {
+      if (estimated) {
+        return {
+          status: "pending",
+          text: "收盤估算",
+          note: dataDate + " 當日數據估算值，非官方公布確認",
+          date: dataDate,
+          source,
+          time: sourceTime,
+          isLive: false,
+          isDelayed: false,
+          isPending: true,
+          isConfirmed: false,
+        };
+      }
+      return {
+        status: "confirmed",
+        text: "收盤確認",
+        note: dataDate + " 當日數據已公布確認",
+        date: dataDate,
+        source,
+        time: sourceTime,
+        isLive: false,
+        isDelayed: false,
+        isPending: false,
+        isConfirmed: true,
+      };
+    }
+    const expectedHour = type === "margin" ? 21 : 15;
+    const tpHour = new Date(nowMs + 8 * 3600e3).getUTCHours();
+    const note = (curSess === "open" || curSess === "pre")
+      ? "等待今日盤後公布（目前為 " + (dataDate || "前一交易日") + "）"
+      : tpHour >= expectedHour
+        ? "今日官方發布待確認（目前為 " + (dataDate || "前一交易日") + "）"
+        : "等待今日盤後資料公布（預計 " + expectedHour + ":00 後）";
+    return {
+      status: "pending",
+      text: "盤後待確認",
+      note,
+      date: dataDate,
+      source,
+      time: sourceTime,
+      isLive: false,
+      isDelayed: false,
+      isPending: true,
+      isConfirmed: false,
+    };
+  }
+
+  if (curSess === "open") {
+    if (dataDate && dataDate < isoToday) {
+      return { status: "delayed", text: "資料延遲", note: "盤中尚未取得今日行情（停留於 " + dataDate + "）", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+    }
+    if (isExpired) {
+      return { status: "delayed", text: "資料延遲", note: "超過合理更新期限（已逾 " + Math.round(age / 1000) + " 秒）", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+    }
+    if (!isDataComplete) {
+      return { status: "delayed", text: "資料延遲", note: "資料不完整", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+    }
+    if (estimated || type === "kline" || type === "indicator") {
+      return { status: "live", text: "盤中估算", note: "依盤中即時資料估算，收盤確認最終值", date: dataDate || isoToday, source, time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
+    }
+    return { status: "live", text: "盤中即時", note: "盤中行情持續更新", date: dataDate || isoToday, source, time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
+  }
+
+  if (curSess === "pre") {
+    return { status: "pending", text: "試撮待開盤", note: "盤前試撮階段", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+  }
+
+  if (curSess === "closed") {
+    const isTodayData = dataDate && dataDate === isoToday;
+    if (isTodayData && isDataComplete) {
+      if (estimated || type === "indicator" || type === "kline") {
+        return {
+          status: "pending",
+          text: "收盤估算",
+          note: isoToday + " 盤後估算值，非官方收盤定格資料",
+          date: dataDate,
+          source,
+          time: sourceTime,
+          isLive: false,
+          isDelayed: false,
+          isPending: true,
+          isConfirmed: false,
+        };
+      }
+      return { status: "confirmed", text: "收盤確認", note: isoToday + " 當日收盤確認", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
+    }
+    return { status: "pending", text: "盤後待確認", note: "等待 " + isoToday + " 收盤資料確認", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+  }
+
+  if (estimated) {
+    return { status: "pending", text: "收盤估算", note: "估算值，非官方收盤定格資料", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+  }
+  return { status: "confirmed", text: "收盤確認", note: "", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
+}
+
+function mktStatusTag(statusObj, options = {}) {
+  if (!statusObj) return "";
+  const { status, text, note, date, time } = statusObj;
+  const showDate = options.showDate && date;
+  const showTime = options.showTime && time;
+  const extra = [showDate ? date.slice(5).replace("-", "/") : "", showTime ? time.slice(0, 5) : ""].filter(Boolean).join(" ");
+  return "<span class=\"mkt-tag " + status + "\" title=\"" + esc(note || text) + (extra ? " (" + extra + ")" : "") + "\"><i></i>" + text + (extra ? "<small>" + extra + "</small>" : "") + "</span>";
+}
+
+if (typeof globalThis !== "undefined") {
+  globalThis.evalDataStatus = evalDataStatus;
+  globalThis.mktStatusTag = mktStatusTag;
+  globalThis.quoteTimestamp = quoteTimestamp;
+  globalThis.parseTimeToSec = parseTimeToSec;
+  globalThis.isQuoteStale = isQuoteStale;
+  globalThis.usIso = usIso;
+}
 // 品牌（KLineLab K線情報局）：1:1 幾何 K 線圖標（空心 K 棒＋影線、上下都削 45 度的鈦金屬灰光束，兩者同寬對稱，合起來像字母 K）＋Space Grotesk 字標＋PRO 徽章
 const BRAND = { name: "KLineLab", zh: "K線情報局", tag: "將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機" };
 const brandIcon = (s = 32) => `<svg class="bl-ic" viewBox="0 0 512 512" width="${s}" height="${s}" aria-hidden="true"><defs><linearGradient id="blkc" gradientUnits="userSpaceOnUse" x1="0" y1="96" x2="0" y2="416"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#e4e4e7"/><stop offset="1" stop-color="#a1a1aa"/></linearGradient><linearGradient id="blti" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#71717a"/><stop offset=".5" stop-color="#a1a1aa"/><stop offset="1" stop-color="#f4f4f5"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#09090b"/><rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#27272a" stroke-width="8"/><path d="M180 100v68M180 344v68" stroke="url(#blkc)" stroke-width="20" stroke-linecap="round"/><rect x="146" y="178" width="68" height="156" rx="8" fill="none" stroke="url(#blkc)" stroke-width="20"/><path d="M288 188 376 100v312l-88-88z" fill="url(#blti)"/></svg>`;
