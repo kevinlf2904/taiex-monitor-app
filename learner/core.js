@@ -59,11 +59,54 @@ function usIso(now = new Date()) {
 }
 
 /* ---------- 時間與報價新鮮度判定 (Phase C P0-1 & P0-2) ---------- */
+function quoteTimestamp(q) {
+  if (!q) return null;
+  const t = typeof q.time === "string" ? q.time.trim() : "";
+  const d = typeof q.date === "string" ? q.date.trim() : "";
+
+  // 1. 若 q.time 自帶完整 ISO 日期與時間 (例如 2026-10-27T01:35:00Z)
+  if (t && /^\d{4}-\d{2}-\d{2}T/i.test(t)) {
+    const ms = Date.parse(t);
+    if (Number.isFinite(ms)) return ms;
+  }
+
+  // 2. 若同時具備 YYYY-MM-DD 與時間字串
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d) && t) {
+    if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(t)) {
+      const ms = Date.parse(t.includes("T") ? t : `${d}T${t}`);
+      if (Number.isFinite(ms)) return ms;
+    }
+    const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/);
+    if (m) {
+      const hh = m[1].padStart(2, "0");
+      const mm = m[2];
+      const ss = (m[3] || "00").padStart(2, "0");
+      // 台股與標準報價以台北時區 (+08:00) 換算絕對 Epoch 毫秒
+      const ms = Date.parse(`${d}T${hh}:${mm}:${ss}+08:00`);
+      if (Number.isFinite(ms)) return ms;
+    }
+  }
+
+  return null;
+}
+
 function parseTimeToSec(t) {
   if (typeof t !== "string") return null;
   const s = t.trim();
   if (!s) return null;
-  const m = s.match(/^(?:.*T)?(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i);
+
+  // 1. 帶有時區標記 (Z 或 +/-HH:mm)，依台北時區 (+08:00) 換算為當日秒數
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+    const fullStr = /^\d{4}-\d{2}-\d{2}T/i.test(s) ? s : `1970-01-01T${s.includes("T") ? s.split("T")[1] : s}`;
+    const ms = Date.parse(fullStr);
+    if (Number.isFinite(ms)) {
+      const d = new Date(ms + 8 * 3600e3);
+      return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
+    }
+  }
+
+  // 2. 純時間格式：9:35, 09:35, 9:35:00, 09:35:00, 或不帶時區之 ISO 時間
+  const m = s.match(/^(?:.*T)?(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/i);
   if (!m) return null;
   const hh = Number(m[1]), mm = Number(m[2]), ss = Number(m[3] || 0);
   if (!Number.isInteger(hh) || !Number.isInteger(mm) || !Number.isInteger(ss)) return null;
@@ -74,6 +117,16 @@ function parseTimeToSec(t) {
 
 function isQuoteStale(incoming, existing) {
   if (!incoming || !existing) return false;
+
+  // 0. Epoch 絕對時間戳比較（最嚴密，不受時區或跨午夜影響）
+  const tsIn = quoteTimestamp(incoming);
+  const tsEx = quoteTimestamp(existing);
+  if (tsIn !== null && tsEx !== null) {
+    return tsIn < tsEx;
+  }
+  if (tsEx !== null && tsIn === null) {
+    return true; // 原有報價有完整時間戳，新報價缺少或無效：保守拒絕
+  }
 
   // 1. 日期比較：分開獨立處理
   if (existing.date && incoming.date) {
@@ -376,6 +429,7 @@ function mktStatusTag(statusObj, options = {}) {
 if (typeof globalThis !== "undefined") {
   globalThis.evalDataStatus = evalDataStatus;
   globalThis.mktStatusTag = mktStatusTag;
+  globalThis.quoteTimestamp = quoteTimestamp;
   globalThis.parseTimeToSec = parseTimeToSec;
   globalThis.isQuoteStale = isQuoteStale;
   globalThis.usIso = usIso;

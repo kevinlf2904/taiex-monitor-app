@@ -23,6 +23,7 @@ const liveRefreshCode = extractBlock("function liveRefresh()", "// 大盤盤中�
 const liveTagCode = extractBlock("const liveTag =", "// 每秒只更新報價") + "\r\nthis.liveTag = liveTag;";
 
 const pollListCode = extractBlock("async function pollList()", "async function pollDetail()") + "\r\nthis.pollList = pollList;";
+const pollDetailCode = extractBlock("async function pollDetail()", "// 嵌在首頁、切到別的分頁時") + "\r\nthis.pollDetail = pollDetail;";
 const tagsHtmlCode = extractBlock("function tagsHtml(c, q, lim)", "$(\"#favBtn\")") + "\r\nthis.tagsHtml = tagsHtml;";
 
 function createHarness() {
@@ -126,6 +127,7 @@ function createHarness() {
     volRatio: () => null,
     streak: () => 0,
     intelData: () => [],
+    mergeDaily: () => {},
   };
 
   c.window = c;
@@ -145,6 +147,7 @@ function createHarness() {
   vm.runInContext(liveRefreshCode, c);
   vm.runInContext(liveTagCode, c);
   vm.runInContext(pollListCode, c);
+  vm.runInContext(pollDetailCode, c);
   vm.runInContext(tagsHtmlCode, c);
 
   return {
@@ -988,7 +991,9 @@ test("P0-1: parseTimeToSec 支援前導零/非前導零、秒數解析、ISO 格
   assert.equal(parse(" 09:35:00 "), 34500, "前後空白應被正確 trim");
   assert.equal(parse("10:30:00"), 37800);
   assert.equal(parse("13:30:00"), 48600);
-  assert.equal(parse("2026-10-27T09:35:00Z"), 34500, "ISO 格式時間應正確解析");
+  assert.equal(parse("2026-10-27T09:35:00+08:00"), 34500, "+08:00 台北 ISO 格式時間應為 34500");
+  assert.equal(parse("2026-10-27T01:35:00Z"), 34500, "UTC 01:35Z 對應台北 09:35 應為 34500");
+  assert.equal(parse("2026-10-27T09:35:00Z"), 63300, "UTC 09:35Z 對應台北 17:35 應為 63300");
 
   // 2. 前導零與非前導零比較結果完全一致
   assert.equal(parse("9:35"), parse("09:35:00"));
@@ -1229,4 +1234,97 @@ test("P0-1 & 跨時區: evalDataStatus 美股跨時區交易日判定，不依�
   assert.equal(st.status, "confirmed", "美股交易日為 10-26，在台北 10-27 上午美股已收盤，應為收盤確認，不可因台灣日期為 10-27 而被誤判延遲");
   assert.equal(st.isConfirmed, true);
   assert.equal(st.isDelayed, false);
+});
+test("P0-1 & 跨時區 ISO: parseTimeToSec、quoteTimestamp 與 isQuoteStale 支援帶時區 ISO 時間精確比對", () => {
+  const { ctx } = createHarness();
+  const parse = ctx.parseTimeToSec;
+  const isStale = ctx.isQuoteStale;
+
+  // 1. UTC 01:35:00Z 換算台北時間為 09:35:00 (34500 秒)
+  assert.equal(parse("2026-10-27T01:35:00Z"), 34500, "UTC 01:35 應正確換算為台北時間 09:35 (34500秒)");
+  assert.equal(parse("2026-10-27T09:35:00+08:00"), 34500, "+08:00 台北時間 09:35 應為 34500秒");
+  assert.equal(parse("2026-10-27T01:30:00Z"), 34200, "UTC 01:30 應為台北時間 09:30 (34200秒)");
+
+  // 2. 與本地牆鐘時間 (09:35:00) 的等價性
+  assert.equal(parse("2026-10-27T01:35:00Z"), parse("09:35:00"));
+  assert.equal(parse("2026-10-27T09:35:00+08:00"), parse("9:35"));
+
+  // 3. isQuoteStale 在 ISO 時間與本地時間混用情境下精確比對
+  const qExisting = { date: "2026-10-27", time: "09:35:00" };
+  const qOlderIso = { date: "2026-10-27", time: "2026-10-27T01:30:00Z" }; // 台北 09:30
+  const qSameIso = { date: "2026-10-27", time: "2026-10-27T01:35:00Z" };  // 台北 09:35
+  const qNewerIso = { date: "2026-10-27", time: "2026-10-27T01:40:00Z" }; // 台北 09:40
+
+  assert.equal(isStale(qOlderIso, qExisting), true, "ISO 01:30Z (09:30) 早於 09:35，應判定為過期");
+  assert.equal(isStale(qSameIso, qExisting), false, "ISO 01:35Z (09:35) 與 09:35 同時間，不應判定為過期");
+  assert.equal(isStale(qNewerIso, qExisting), false, "ISO 01:40Z (09:40) 晚於 09:35，為最新資料");
+});
+
+test("報價入口一致性: pollDetail() 嚴格檢查價格有效性與防舊資料覆蓋", async () => {
+  const { ctx, W, setGetJ } = createHarness();
+
+  W.sel = "2330";
+  // 初始：已有一筆當日 10:30 有效詳情報價
+  W.detailQ = { code: "2330", name: "台積電", price: 1060, chg: 25, chgPct: 2.42, date: "2026-10-27", time: "10:30:00" };
+
+  // 1. pollDetail 收到無效價格 (0, null, 負數, NaN, 字串) -> 拒絕覆蓋 W.detailQ
+  const invalidPrices = [0, -1, null, undefined, NaN, "invalid"];
+  for (const badPx of invalidPrices) {
+    setGetJ(async () => ({
+      ok: true,
+      source: "證交所 MIS",
+      quotes: [{ code: "2330", price: badPx, date: "2026-10-27", time: "10:35:00" }],
+    }));
+    await ctx.pollDetail();
+    assert.equal(W.detailQ.price, 1060, `pollDetail 收到價格 ${badPx} 時不得覆蓋原有有效價格`);
+    assert.equal(W.detailQ.time, "10:30:00", `pollDetail 收到價格 ${badPx} 時不得更新時間`);
+  }
+
+  // 2. pollDetail 收到同日較舊時間戳 (09:35:00) -> 拒絕覆蓋
+  setGetJ(async () => ({
+    ok: true,
+    source: "證交所 MIS",
+    quotes: [{ code: "2330", price: 1050, date: "2026-10-27", time: "09:35:00" }],
+  }));
+  await ctx.pollDetail();
+  assert.equal(W.detailQ.price, 1060, "pollDetail 收到較舊時間報價不得覆蓋最新報價");
+  assert.equal(W.detailQ.time, "10:30:00");
+
+  // 3. pollDetail 收到較舊 ISO 時間 (01:30:00Z = 09:30) -> 拒絕覆蓋
+  setGetJ(async () => ({
+    ok: true,
+    source: "證交所 MIS",
+    quotes: [{ code: "2330", price: 1050, date: "2026-10-27", time: "2026-10-27T01:30:00Z" }],
+  }));
+  await ctx.pollDetail();
+  assert.equal(W.detailQ.price, 1060, "pollDetail 收到較舊 ISO 時間報價不得覆蓋最新報價");
+
+  // 4. pollDetail 收到較新有效報價 (10:35:00, 1065) -> 正常更新
+  setGetJ(async () => ({
+    ok: true,
+    source: "證交所 MIS",
+    quotes: [{ code: "2330", price: 1065, chg: 30, chgPct: 2.9, date: "2026-10-27", time: "10:35:00" }],
+  }));
+  await ctx.pollDetail();
+  assert.equal(W.detailQ.price, 1065, "pollDetail 收到較新有效報價應成功更新");
+  assert.equal(W.detailQ.time, "10:35:00");
+});
+
+test("報價入口一致性: liveQuote() 支援帶時區 ISO 時間進行新鮮度比對與回退", () => {
+  const { ctx, W } = createHarness();
+
+  // 快照為 09:35:00 價格 1060
+  const raw = { code: "2330", name: "台積電", price: 1060, chg: 25, chgPct: 2.42, date: "2026-10-27", time: "09:35:00" };
+
+  // W.quotes 存有 ISO 01:30Z (09:30) 的較舊資料
+  W.quotes.set("2330", { code: "2330", price: 1050, date: "2026-10-27", time: "2026-10-27T01:30:00Z" });
+  const qOld = ctx.liveQuote(raw);
+  assert.equal(qOld.price, 1060, "W.quotes 的 ISO 時間早於快照時，應保留快照價格");
+  assert.equal(qOld.time, "09:35:00");
+
+  // W.quotes 存有 ISO 01:40Z (09:40) 的較新資料
+  W.quotes.set("2330", { code: "2330", price: 1070, date: "2026-10-27", time: "2026-10-27T01:40:00Z" });
+  const qNew = ctx.liveQuote(raw);
+  assert.equal(qNew.price, 1070, "W.quotes 的 ISO 時間晚於快照時，應採用最新即時價格");
+  assert.equal(qNew.isLive, true);
 });
