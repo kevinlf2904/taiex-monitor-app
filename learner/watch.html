@@ -1378,8 +1378,12 @@ function apiCachePut(url, t, ttl) {
 // 清單上看得到的代號（自選群組或台股熱門）＋指數：一次批次查（台股只用 MIS，不消耗富果額度；美股問 Yahoo）
 function visibleCodes() {
   const L = W.lt === "watch" ? curList() : W.lt === "tw" ? (W.hot.tw?.rows || []).map(r => r.code) : W.lt === "rank" ? (W.hot["rank:" + W.rankType]?.rows || []).slice(0, 30).map(r => r.code) : [];
-  const H = W.lt === "hold" ? Object.keys(W.hold).filter(c => mktOf(c) === W.holdMkt) : W.lt === "mkt" ? ["0050"] : [], E = W.lt === "etf" ? etfVisible() : [];
-  return [...new Set(["T00", "O00", ...H, ...E, ...L, ...Object.keys(W.alerts)])].slice(0, 40);
+  const mkHotRows = W.lt === "mkt" ? (W.mkHot === "surge" ? (W.scr?.lists || []).find(x => x.id === "surge")?.rows || [] : W.hot["rank:" + W.mkHot]?.rows || []) : [];
+  const mkHotCodes = mkHotRows.slice(0, 9).map(r => r?.code).filter(c => typeof c === "string" && isTW(c) && !isIdx(c));
+  const H = W.lt === "hold" ? Object.keys(W.hold).filter(c => mktOf(c) === W.holdMkt) : W.lt === "mkt" ? ["0050", ...mkHotCodes] : [], E = W.lt === "etf" ? etfVisible() : [];
+  const core = ["T00", "O00", ...H, ...E, ...L];
+  const alerts = Object.keys(W.alerts || {}).filter(c => !core.includes(c));
+  return [...new Set([...core, ...alerts])].slice(0, 40);
 }
 // 台指期近月（近全）：清單、頂部與大盤分頁用；交易中 2 秒、收盤 15 秒最多問一次
 // 台指期分時備案：伺服器拿不到分 K 時（例如夜盤），用這個瀏覽器輪詢到的報價自己組 1 分 K；同一盤的報價存在 localStorage 累積
@@ -1447,7 +1451,14 @@ function liveRefresh() {
   else if (W.lt === "mkt" && W.mkReg === "news") { if (age(W.mn) > 1800e3) loadMnews(true); }
   else if (W.lt === "mkt" && (W.mkReg === "otc" || W.mkReg === "lst")) { if (lazyOk("mkx")) otcLoad(); }
   else if (W.lt === "mkt" && W.mkReg === "off") { if (lazyOk("mkx")) offLoad(); }
-  else if (W.lt === "mkt" && open && age(W.mkt) > 10000 && !(W.mktLoading && Date.now() - W.mktLoading < 40000)) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
+  else if (W.lt === "mkt") {
+    if (open && age(W.mkt) > 10000 && !(W.mktLoading && Date.now() - W.mktLoading < 40000)) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
+    const curHot = W.hot["rank:" + W.mkHot];
+    const hotExp = !curHot || (curHot.err ? Date.now() - (curHot.errAt || 0) > MK_HOT_ERR_TTL : (!Array.isArray(curHot.rows) || Date.now() - (curHot.at || 0) > MK_HOT_TTL));
+    if (open && W.mkHot !== "surge" && hotExp) {
+      loadMkHot(W.mkHot);
+    }
+  }
   else if (W.lt === "tw" && open && age(W.hot.tw) > 15000) loadHot("tw");
   else if (W.lt === "rank" && open && !["foreign", "trust"].includes(W.rankType) && age(W.hot["rank:" + W.rankType]) > 15000) loadHot("tw-rank");
   else if (W.lt === "screen" && open && age(W.scr) > 60000 && !W.scrLoading) loadScreen(true);
@@ -2386,7 +2397,24 @@ async function runCScan() {
     S.done++; if (W.lt === "screen" && Date.now() - last > 400) { last = Date.now(); renderList(); } } };
   await Promise.all([worker(), worker(), worker(), worker()]); S.running = false; if (W.lt === "screen") renderList();
 }
-const mtile = r => `<button class="mtile ${cls(r.chgPct ?? r.chg)}" data-sel="${r.code}"><span>${esc(r.name || nameOf(r.code))}</span><b>${fmtP(r.price)}</b><small>${r.chgPct != null ? `${arrow(r.chgPct)}${Math.abs(r.chgPct).toFixed(2)}%` : ""}</small></button>`;
+function liveQuote(r) {
+  if (!r?.code) return r;
+  const q = W.quotes?.get?.(r.code);
+  if (q && typeof q.price === "number" && isFinite(q.price) && q.price > 0 && (!r.date || !q.date || q.date >= r.date)) {
+    return {
+      ...r,
+      name: q.name || r.name,
+      price: q.price,
+      chg: q.chg != null && isFinite(q.chg) ? q.chg : r.chg,
+      chgPct: q.chgPct != null && isFinite(q.chgPct) ? q.chgPct : r.chgPct,
+    };
+  }
+  return r;
+}
+const mtile = raw => {
+  const r = liveQuote(raw);
+  return `<button class="mtile ${cls(r.chgPct ?? r.chg)}" data-sel="${r.code}"><span>${esc(r.name || nameOf(r.code))}</span><b>${fmtP(r.price)}</b><small>${r.chgPct != null ? `${arrow(r.chgPct)}${Math.abs(r.chgPct).toFixed(2)}%` : ""}</small></button>`;
+};
 const scrRow = (r, i) => `<li><button data-sel="${r.code}"><span class="rk">${i + 1}</span><span class="nm">${esc(r.name || nameOf(r.code))}<small>${r.code}${r.note || r.why ? "・" + esc(r.note || r.why) : ""}</small></span><b class="${cls(r.chgPct)}">${fmtP(r.price)}<small>${r.chgPct != null ? (r.chgPct > 0 ? "+" : "") + r.chgPct + "%" : ""}</small></b></button></li>`;
 // 沒有 group 的舊格式清單依 id 歸類
 const scrGroup = L => L.group || { chips: "chips", trust3: "chips", yield: "fund", lowpe: "fund" }[L.id] || "hot";
@@ -4143,27 +4171,62 @@ async function loadMkt(force = false) {
   W.cal = cal.status === "fulfilled" ? cal.value : { err: cal.reason?.message };
   W.futx = { EXF: ex.value || W.futx?.EXF || null, FXF: fx.value || W.futx?.FXF || null };
   if (!W.scr) loadScreen(); // 熱門股的急拉股用選股清單
-  if (!W.hot["rank:" + W.mkHot] && W.mkHot !== "surge") loadMkHot();
+  if (W.mkHot !== "surge") loadMkHot(W.mkHot, force);
   renderList();
 }
 const spark = (a, up) => { if (!a?.length) return ""; const mn = Math.min(...a), mx = Math.max(...a), w = 90, h = 30; return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--${up ? "up" : "down"})" stroke-width="1.1" points="${a.map((v, i) => `${(i / Math.max(1, a.length - 1) * w).toFixed(1)},${(h - 2 - (mx > mn ? (v - mn) / (mx - mn) : 0.5) * (h - 4)).toFixed(1)}`).join(" ")}"/></svg>`; };
 const SEC_SHORT = { 塑膠: "塑膠", 電子零組件: "電零", 半導體: "半導", 油電燃氣: "油電", 通信網路: "通信", 紡織纖維: "紡織", 建材營造: "營建", 電腦及週邊: "電腦", 生技醫療: "生技", 金融保險: "金融", 化學: "化學", 鋼鐵: "鋼鐵", 橡膠: "橡膠", 汽車: "汽車", 航運: "航運", 觀光餐旅: "觀光", 貿易百貨: "貿百", 電機機械: "電機", 電器電纜: "電纜", 玻璃陶瓷: "玻陶", 造紙: "造紙", 食品: "食品", 水泥: "水泥", 電子通路: "通路", 資訊服務: "資服", 其他電子: "其他電", 光電: "光電", 綠能環保: "綠能", 數位雲端: "雲端", 運動休閒: "運動", 居家生活: "居家", 文化創意: "文創", 農業科技: "農科", 電子商務: "電商", 其他: "其他", 綜合: "綜合" };
 const secShort = n => SEC_SHORT[n] || SEC_SHORT[String(n).replace(/(工業|業|類)$/, "")] || String(n).slice(0, 2);
 const MK_HOT = [["value", "最多人看"], ["gain", "大盤強勢"], ["surge", "急拉股"], ["volume", "量大股"]];
+const MK_HOT_TTL = 30000;
+const MK_HOT_ERR_TTL = 15000;
 // 熱門股：台股（最多人看、大盤強勢、急拉股、量大股）、美股（最活躍、漲幅、跌幅）放在同一區；台股大盤、美股大盤都用這一區，預設看自己的市場
 function hotSec(sec, page) {
   const m = W.hotM?.[page] || page, tw = m === "tw"; let rows, err;
-  if (tw) { const t = W.mkHot; rows = t === "surge" ? (W.scr?.lists || []).find(L => L.id === "surge")?.rows || [] : W.hot["rank:" + t]?.rows || []; err = t === "surge" ? W.scr?.err : W.hot["rank:" + t]?.err;
-    if (t !== "surge" && !W.hot["rank:" + t] && !W.off && !W.mkHotBusy) { W.mkHotBusy = true; loadMkHot().finally(() => (W.mkHotBusy = false)); } }
+  if (tw) {
+    const t = W.mkHot, H = W.hot["rank:" + t];
+    rows = t === "surge" ? (W.scr?.lists || []).find(L => L.id === "surge")?.rows || [] : H?.rows || [];
+    err = t === "surge" ? W.scr?.err : H?.err;
+    const needLoad = t !== "surge" && !W.off && (!H || (H.err ? Date.now() - (H.errAt || 0) > MK_HOT_ERR_TTL : (!Array.isArray(H.rows) || Date.now() - (H.at || 0) > MK_HOT_TTL)));
+    if (needLoad) loadMkHot(t);
+  }
   else { const t = W.usHot || "active", H = W.hot["us:" + t]; rows = H?.rows || []; err = H?.err;
     if (!H && !W.off && !W.usHotBusy) { W.usHotBusy = true; W.usType = t; loadHot("us").finally(() => (W.usHotBusy = false)); } }
   const seg = mkSeg("hotM", `${page}:${m}`, [[`${page}:tw`, "台股"], [`${page}:us`, "美股"]]) + " " + (tw ? mkSeg("mkHot", W.mkHot, MK_HOT) : mkSeg("usHot", W.usHot || "active", [["active", "最活躍"], ["gain", "漲幅"], ["loss", "跌幅"]]));
   return sec("熱門股", rows.length ? `<div class="mtiles">${rows.slice(0, 9).map(mtile).join("")}</div>` : `<p class="note">${err ? "⚠︎ " + esc(err) : W.off ? "需要部署到網站才有資料。" : "載入中…"}</p>`, `<button class="linkbtn" data-hotgo="${m}">更多 ›</button>`, seg);
 }
-async function loadMkHot() {
-  const t = W.mkHot; if (t === "surge" || W.off) return renderList();
-  try { const j = await getJ(`/api/hot?market=tw&type=${t}`); W.hot["rank:" + t] = { ...j, at: Date.now() }; j.rows.forEach(r => { if (r.name) W.names[r.code] = r.name; }); } catch (e) { W.hot["rank:" + t] = { rows: [], err: e.message, at: Date.now() }; }
-  renderList();
+function loadMkHot(type = W.mkHot, force = false) {
+  const t = type || W.mkHot; if (!t || t === "surge" || W.off) return;
+  const key = "rank:" + t, cur = W.hot[key];
+  if (!force && cur) {
+    if (cur.err && Date.now() - (cur.errAt || 0) < MK_HOT_ERR_TTL) return;
+    if (!cur.err && Array.isArray(cur.rows) && (Date.now() - (cur.at || 0) < MK_HOT_TTL)) return;
+  }
+  const inflight = (W.mkHotInFlight ||= {});
+  if (!force && inflight[t]) return inflight[t];
+  const gen = ((W.mkHotGen ||= {})[t] = (W.mkHotGen[t] || 0) + 1);
+  const p = (async () => {
+    try {
+      const j = await getJ(`/api/hot?market=tw&type=${encodeURIComponent(t)}`);
+      if (W.mkHotGen[t] !== gen) return;
+      if (j && Array.isArray(j.rows)) {
+        W.hot[key] = { ...j, err: null, at: Date.now() };
+        j.rows.forEach(r => { if (r?.code && r.name) W.names[r.code] = r.name; });
+      }
+    } catch (e) {
+      if (W.mkHotGen[t] !== gen) return;
+      const prevRows = Array.isArray(cur?.rows) ? cur.rows : [];
+      W.hot[key] = { ...(cur || {}), rows: prevRows, err: e.message || "載入失敗", errAt: Date.now() };
+    } finally {
+      delete inflight[t];
+      if (W.lt === "mkt" && W.mkHot === t) {
+        renderList();
+        pollList().then(() => { if (W.lt === "mkt" && W.mkHot === t) renderList(); }).catch(() => {});
+      }
+    }
+  })();
+  inflight[t] = p;
+  return p;
 }
 // 選項裡的 ["|", "名稱"] 是分組標籤（子頁籤多的時候分段，比較好找）
 const mkSeg = (key, val, opts) => `<span class="mkseg">${opts.map(([k, t]) => (k === "|" ? `<span class="tgrp">${t}</span>` : `<button data-mk="${key}" data-v="${k}" aria-pressed="${k === val}">${t}</button>`)).join("")}</span>`;
@@ -4533,7 +4596,13 @@ $("#lx").addEventListener("click", e => { const b = e.target.closest("[data-mk]"
   if (k === "calDay") { W.calDay = W.calDay === v ? null : v; renderList(); return; }
   if (k === "calWk") W.calDay = null;
   W[k] = k === "calWk" ? +v : v; store.set("watch:" + k, W[k]);
-  if (k === "mkHot" && v !== "surge" && !W.hot["rank:" + v]) loadMkHot(); renderList(); });
+  if (k === "mkHot" && v !== "surge") {
+    const H = W.hot["rank:" + v];
+    const needLoad = !H || (H.err ? Date.now() - (H.errAt || 0) > MK_HOT_ERR_TTL : (!Array.isArray(H.rows) || Date.now() - (H.at || 0) > MK_HOT_TTL));
+    if (needLoad) loadMkHot(v);
+    else pollList().then(() => { if (W.lt === "mkt" && W.mkHot === v) renderList(); }).catch(() => {});
+  }
+  renderList(); });
 $("#lx").addEventListener("click", e => { const s = e.target.closest("[data-sel]"); if (s) select(s.dataset.sel); });
 podInit();
 sxInit();
