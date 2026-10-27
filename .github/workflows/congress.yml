@@ -23,6 +23,24 @@ jobs:
     timeout-minutes: 100
     steps:
       - uses: actions/checkout@v5
+      - name: Validate inputs
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          INPUT_DUMP: ${{ github.event.inputs.dump }}
+          INPUT_YEAR: ${{ github.event.inputs.year }}
+        run: |
+          DUMP="${INPUT_DUMP:-0}"
+          if ! [[ "$DUMP" =~ ^[0-9]+$ ]] || [ "$DUMP" -lt 0 ] || [ "$DUMP" -gt 50 ]; then
+            echo "::error::Invalid dump input '$DUMP'. Must be an integer between 0 and 50."
+            exit 1
+          fi
+          YEAR="${INPUT_YEAR}"
+          if [ -n "$YEAR" ]; then
+            if ! [[ "$YEAR" =~ ^[0-9]{4}$ ]] || [ "$YEAR" -lt 2012 ] || [ "$YEAR" -gt 2030 ]; then
+              echo "::error::Invalid year input '$YEAR'. Must be between 2012 and 2030."
+              exit 1
+            fi
+          fi
       - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
         run: git pull -q origin ${{ github.ref_name }}
       - uses: actions/setup-node@v5

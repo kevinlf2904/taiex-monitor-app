@@ -21,7 +21,18 @@ const TG = () => (process.env.TELEGRAM_BOT_TOKEN || "").trim();
 const MAX = 900 * 1024, KEEP = 400 * 86400; // 同步資料 400 天沒更新就自動刪掉（每次上傳都會重新計時）
 export const hashId = id => createHash("sha256").update(String(id)).digest("hex");
 export const bindTok = h => h.slice(0, 24);
-const ipOf = req => String(req.headers?.["x-forwarded-for"] || req.headers?.["x-real-ip"] || "").split(",")[0].trim() || "?";
+// 優先採用邊緣反向代理（如 Vercel Edge）提供的 x-real-ip，防止攻擊者藉由偽造 x-forwarded-for 標頭繞過限流
+export const ipOf = req => {
+  const h = req?.headers || {};
+  const realIp = String(h["x-real-ip"] || "").trim();
+  if (realIp && realIp !== "?") return realIp;
+  const fwd = String(h["x-forwarded-for"] || "").trim();
+  if (fwd) {
+    const parts = fwd.split(",").map(s => s.trim()).filter(Boolean);
+    return parts[0] || "?";
+  }
+  return req?.socket?.remoteAddress || "?";
+};
 export const okId = id => /^[A-Za-z0-9_-]{20,64}$/.test(String(id || ""));
 
 export const kvOn = () => !!(KV_URL() && KV_TOKEN());
@@ -29,17 +40,75 @@ export async function kv(...cmd) {
   const r = await fetch(KV_URL(), { method: "POST", headers: { Authorization: `Bearer ${KV_TOKEN()}`, "Content-Type": "application/json" }, body: JSON.stringify(cmd), signal: AbortSignal.timeout(10000) });
   const j = await r.json().catch(() => null); if (!r.ok || j?.error) throw new Error(j?.error || `KV HTTP ${r.status}`); return j.result;
 }
+export function redactTelegramSecrets(str, token) {
+  if (!str) return "";
+  let s = String(str);
+  if (token) s = s.replaceAll(token, "[REDACTED_TOKEN]");
+  // 徹底過濾任何可能出現在 URL 或錯誤訊息中的 Telegram bot token (格式如 /bot123456:ABC-DEF...)
+  s = s.replace(/\/bot[0-9]+:[A-Za-z0-9_-]+/g, "/bot[REDACTED_TOKEN]");
+  return s;
+}
+
+export function sanitizeTelegramError(err, token) {
+  if (!err) return new Error("Unknown Telegram Error");
+  const rawMsg = err.message || String(err);
+  const safeMsg = redactTelegramSecrets(rawMsg, token);
+  const safeErr = new Error(safeMsg);
+
+  if (err.name) safeErr.name = redactTelegramSecrets(err.name, token);
+  if (err.code) safeErr.code = redactTelegramSecrets(err.code, token);
+  if (err.status) safeErr.status = err.status;
+  if (err.stack) safeErr.stack = redactTelegramSecrets(err.stack, token);
+
+  // 深度清洗 cause 鏈，確保原始未脫敏之物件絕不外流
+  if (err.cause) {
+    const rawCause = err.cause;
+    const causeMsg = redactTelegramSecrets(rawCause?.message || String(rawCause), token);
+    const cleanCause = new Error(causeMsg);
+    if (rawCause?.name) cleanCause.name = redactTelegramSecrets(rawCause.name, token);
+    if (rawCause?.code) cleanCause.code = redactTelegramSecrets(rawCause.code, token);
+    if (rawCause?.status) cleanCause.status = rawCause.status;
+    if (rawCause?.stack) cleanCause.stack = redactTelegramSecrets(rawCause.stack, token);
+    cleanCause.toJSON = () => ({
+      name: cleanCause.name,
+      message: cleanCause.message,
+      code: cleanCause.code
+    });
+    safeErr.cause = cleanCause;
+  }
+
+  // 避免 JSON 序列化洩漏
+  safeErr.toJSON = () => ({
+    name: safeErr.name,
+    message: safeErr.message,
+    code: safeErr.code,
+    status: safeErr.status,
+    cause: safeErr.cause ? (typeof safeErr.cause.toJSON === "function" ? safeErr.cause.toJSON() : safeErr.cause.message) : undefined
+  });
+
+  return safeErr;
+}
+
 export async function tg(method, body) {
   const token = TG();
   if (!token) throw new Error("尚未設定 TELEGRAM_BOT_TOKEN");
   try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}), signal: AbortSignal.timeout(10000) });
-    const j = await r.json().catch(() => null); if (!j?.ok) throw new Error(j?.description || `Telegram HTTP ${r.status}`); return j.result;
+    const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+      signal: AbortSignal.timeout(10000)
+    });
+    const j = await r.json().catch(() => null);
+    if (!j?.ok) {
+      const desc = j?.description ? redactTelegramSecrets(j.description, token) : `Telegram HTTP ${r.status}`;
+      const apiErr = new Error(desc);
+      apiErr.status = r.status;
+      throw apiErr;
+    }
+    return j.result;
   } catch (err) {
-    const safeMsg = String(err?.message || "").replaceAll(token, "[REDACTED_TOKEN]");
-    const e = new Error(safeMsg);
-    e.cause = err;
-    throw e;
+    throw sanitizeTelegramError(err, token);
   }
 }
 let botName = null;

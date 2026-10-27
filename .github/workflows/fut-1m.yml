@@ -23,6 +23,22 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
+      - name: Validate inputs
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          INPUT_DUMP: ${{ github.event.inputs.dump }}
+          INPUT_BACKFILL: ${{ github.event.inputs.backfill }}
+        run: |
+          DUMP="${INPUT_DUMP:-0}"
+          if [[ "$DUMP" != "0" && "$DUMP" != "1" ]]; then
+            echo "::error::Invalid dump input '$DUMP'. Must be 0 or 1."
+            exit 1
+          fi
+          BF="${INPUT_BACKFILL:-0}"
+          if ! [[ "$BF" =~ ^[0-9]+$ ]] || [ "$BF" -lt 0 ] || [ "$BF" -gt 30 ]; then
+            echo "::error::Invalid backfill input '$BF'. Must be an integer between 0 and 30."
+            exit 1
+          fi
       - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
         run: git pull -q origin ${{ github.ref_name }}
       - uses: actions/setup-node@v5

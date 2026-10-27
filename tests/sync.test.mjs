@@ -1,7 +1,7 @@
 // 雲端同步與 Telegram API 深度測試 (Phase 3 P1/P2: 授權、頻率限制、暴力破解防護、過期資料與機密安全)
 import test from "node:test";
 import assert from "node:assert/strict";
-import handler, { tg, hashId, bindTok, okId } from "../api/_lib/sync.js";
+import handler, { tg, hashId, bindTok, okId, ipOf, sanitizeTelegramError, redactTelegramSecrets } from "../api/_lib/sync.js";
 
 // 建立模擬的 HTTP Request 與 Response 物件
 function mockHttp({ method = "POST", body = {}, query = {}, headers = {} } = {}) {
@@ -85,7 +85,6 @@ test("未授權/非 POST 方法或無效同步碼請求遭拒絕", async () => {
       method: "POST",
       body: { op: "pull", id: badId }
     });
-    // 設定假環境變數
     process.env.KV_REST_API_URL = "https://mock-kv.upstash.io";
     process.env.KV_REST_API_TOKEN = "mock_token";
     await handler(postBad.req, postBad.res);
@@ -210,7 +209,6 @@ test("暴力嘗試同步碼與高頻率 Telegram 操作受到嚴格限制", asyn
     assert.match(pullBlocked.data.error, /錯誤嘗試次數過多/);
 
     // 2. tgtest 高頻操作限制（每 10 分鐘最多 3 次）
-    // 預先設定已綁定
     counts.set(`tgt:h:${hashId(validId).slice(0, 16)}:${Math.floor(Date.now() / 600e3)}`, 3);
     const tgtestBlocked = mockHttp({ method: "POST", body: { op: "tgtest", id: validId } });
     await handler(tgtestBlocked.req, tgtestBlocked.res);
@@ -221,14 +219,19 @@ test("暴力嘗試同步碼與高頻率 Telegram 操作受到嚴格限制", asyn
   }
 });
 
-test("錯誤訊息與日誌絕不洩漏 Telegram Bot Token", async () => {
+test("錯誤鏈 (message, stack, cause, toJSON) 絕不洩漏 Telegram Bot Token", async () => {
   const secretToken = "123456789:ABCdefGHIjklMNO_secret_token";
   process.env.TELEGRAM_BOT_TOKEN = secretToken;
 
   const originalFetch = globalThis.fetch;
-  // 模擬 fetch 報錯（包含 Token 的完整 URL）
+
+  // 情境 1: 網路底層錯誤 (TypeError: fetch failed 包含 URL 與 cause 鏈)
   globalThis.fetch = async url => {
-    throw new TypeError(`fetch failed at ${url}`);
+    const rootErr = new TypeError(`getaddrinfo ENOTFOUND api.telegram.org at ${url}`);
+    const fetchErr = new TypeError(`fetch failed at ${url}`);
+    fetchErr.cause = rootErr;
+    fetchErr.stack = `TypeError: fetch failed at ${url}\n    at node:internal/deps/undici/undici:13123:13`;
+    throw fetchErr;
   };
 
   try {
@@ -237,13 +240,150 @@ test("錯誤訊息與日誌絕不洩漏 Telegram Bot Token", async () => {
         await tg("sendMessage", { chat_id: 12345 });
       },
       err => {
-        assert.ok(!err.message.includes(secretToken), "錯誤訊息中不得出現真實 Token");
+        // 1. 本體 message 與 stack 檢查
+        assert.ok(!err.message.includes(secretToken), "error.message 不得包含真實 Token");
         assert.ok(err.message.includes("[REDACTED_TOKEN]"), "Token 必須被遮蔽為 [REDACTED_TOKEN]");
+        if (err.stack) {
+          assert.ok(!err.stack.includes(secretToken), "error.stack 不得包含真實 Token");
+          assert.ok(err.stack.includes("[REDACTED_TOKEN]"), "error.stack 中的 Token 亦須被遮蔽");
+        }
+
+        // 2. 深度 cause 鏈檢查 (不可包含原始未脫敏物件)
+        assert.ok(err.cause, "必須保留安全的 cause 診斷資訊");
+        assert.ok(!err.cause.message.includes(secretToken), "cause.message 不得包含真實 Token");
+        assert.ok(err.cause.message.includes("[REDACTED_TOKEN]"), "cause.message 中的 Token 亦須被遮蔽");
+        if (err.cause.stack) {
+          assert.ok(!err.cause.stack.includes(secretToken), "cause.stack 不得包含真實 Token");
+        }
+
+        // 3. JSON 序列化檢查
+        const serialized = JSON.stringify(err);
+        assert.ok(!serialized.includes(secretToken), "JSON.stringify 輸出不得包含真實 Token");
+
+        // 4. 字串轉換檢查
+        const stringified = String(err);
+        assert.ok(!stringified.includes(secretToken), "String(err) 輸出不得包含真實 Token");
+        return true;
+      }
+    );
+
+    // 情境 2: Telegram API 回傳 4xx/5xx 與 API description 包含敏感字串
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({
+        ok: false,
+        error_code: 401,
+        description: `Unauthorized: bot token ${secretToken} is invalid`
+      })
+    });
+
+    await assert.rejects(
+      async () => {
+        await tg("getMe");
+      },
+      err => {
+        assert.ok(!err.message.includes(secretToken), "API 錯誤訊息不得洩漏 Token");
+        assert.ok(err.message.includes("[REDACTED_TOKEN]"), "Token 應替換為 [REDACTED_TOKEN]");
+        return true;
+      }
+    );
+
+    // 情境 3: Telegram API 回傳非 JSON 格式 (例如 502 Bad Gateway HTML)
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new SyntaxError("Unexpected token < in JSON at position 0");
+      }
+    });
+
+    await assert.rejects(
+      async () => {
+        await tg("getUpdates");
+      },
+      err => {
+        assert.ok(err.message.includes("Telegram HTTP 502"), "應回傳乾淨的 HTTP 狀態錯誤");
+        assert.ok(!err.message.includes(secretToken), "不得包含 Token");
         return true;
       }
     );
   } finally {
     globalThis.fetch = originalFetch;
     delete process.env.TELEGRAM_BOT_TOKEN;
+  }
+});
+
+test("IP 信任邊界：優先信任 x-real-ip，防止攻擊者藉由 x-forwarded-for 偽造 IP 繞過鎖定", async () => {
+  // 1. 偽造 x-forwarded-for 企圖繞過 IP 辨識
+  const spoofReq = {
+    headers: {
+      "x-forwarded-for": "100.100.100.100, 101.101.101.101",
+      "x-real-ip": "203.0.113.195"
+    }
+  };
+  assert.equal(ipOf(spoofReq), "203.0.113.195", "必須優先以 x-real-ip 作為判定來源");
+
+  // 2. 只有 x-forwarded-for 時正常回退
+  const fwdReq = {
+    headers: {
+      "x-forwarded-for": "198.51.100.55"
+    }
+  };
+  assert.equal(ipOf(fwdReq), "198.51.100.55");
+
+  // 3. 測試暴力嘗試防護在 x-real-ip 存在時不可被偽造標頭繞過
+  process.env.KV_REST_API_URL = "https://mock-kv.upstash.io";
+  process.env.KV_REST_API_TOKEN = "mock_token";
+
+  const originalFetch = globalThis.fetch;
+  const store = new Map();
+  globalThis.fetch = async (url, opts) => {
+    const cmd = JSON.parse(opts.body);
+    const op = cmd[0];
+    if (op === "INCR") {
+      const k = cmd[1];
+      const n = (store.get(k) || 0) + 1;
+      store.set(k, n);
+      return { ok: true, json: async () => ({ result: n }) };
+    }
+    if (op === "GET") {
+      const k = cmd[1];
+      return { ok: true, json: async () => ({ result: store.get(k) || null }) };
+    }
+    return { ok: true, json: async () => ({ result: 1 }) };
+  };
+
+  try {
+    const attackerRealIp = "198.51.100.99";
+    const validId = "valid_sync_token_ip_test99";
+
+    // 攻擊者嘗試 15 次失敗，每次隨機偽造 x-forwarded-for
+    for (let i = 0; i < 15; i++) {
+      const r = mockHttp({
+        method: "POST",
+        body: { op: "pull", id: validId },
+        headers: {
+          "x-real-ip": attackerRealIp,
+          "x-forwarded-for": `random.fake.ip.${i}`
+        }
+      });
+      await handler(r.req, r.res);
+    }
+
+    // 第 16 次嘗試：即便更換偽造的 x-forwarded-for，仍因真實 x-real-ip 已被鎖定而遭 429 阻擋
+    const blockedReq = mockHttp({
+      method: "POST",
+      body: { op: "pull", id: validId },
+      headers: {
+        "x-real-ip": attackerRealIp,
+        "x-forwarded-for": "another.fake.ip.999"
+      }
+    });
+    await handler(blockedReq.req, blockedReq.res);
+    assert.equal(blockedReq.status, 429, "更換偽造的 x-forwarded-for 不得繞過 IP 失敗鎖定");
+    assert.match(blockedReq.data.error, /錯誤嘗試次數過多/);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

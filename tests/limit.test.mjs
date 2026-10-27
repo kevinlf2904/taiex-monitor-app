@@ -1,9 +1,9 @@
-// AI 限流機制深度測試 (Phase 2 P1: 記憶體限流、容量淘汰、過期重置、併發與 KV 異常降級)
+// AI 限流機制深度測試 (Phase 2 P1: 記憶體限流、容量飽和 fail-closed、過期重置、防洪水攻擊繞過、併發與 KV 異常降級)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aiLimit, limitsOf, memIncr, mem, AI_LIMITS } from "../api/_lib/_limit.js";
+import { aiLimit, limitsOf, memIncr, mem, MAX_MEM, ipOf } from "../api/_lib/_limit.js";
 
-const req = ip => ({ headers: { "x-forwarded-for": `${ip}, 10.0.0.1` } });
+const req = (ip, headers = {}) => ({ headers: { "x-forwarded-for": `${ip}, 10.0.0.1`, ...headers } });
 
 test("同一使用者達到限制後會被拒絕，不同使用者不受影響", async () => {
   mem.clear();
@@ -40,7 +40,7 @@ test("過期計數可以正常重置", async () => {
   assert.equal(afterExpired, null, "跨小時後限流計數應自動重置並允許請求");
 });
 
-test("memIncr: 建立超過 5,000 個不同鍵時，淘汰過期與舊項，絕不清空所有有效限流資料", async () => {
+test("容量達上限時優先清理過期計數；無過期項時拒絕新 key (fail-closed)，且絕不抹除既有有效計數", async () => {
   mem.clear();
   const now = 1700000000000;
 
@@ -59,32 +59,71 @@ test("memIncr: 建立超過 5,000 個不同鍵時，淘汰過期與舊項，絕�
   // 3. 時間推進 15 秒（前 100 個已過期）
   const futureNow = now + 15000;
 
-  // 4. 新增第 5001 個鍵，應觸發過期清理
+  // 4. 新增第 5001 個鍵，應觸發過期清理並成功寫入新鍵
   await memIncr("newKey:1", 3600, futureNow);
 
   // 驗證過期項已被刪除，但有效項目完整保留
   assert.ok(!mem.has("exp:0"), "已過期的鍵應被清除");
   assert.ok(mem.has("active:0"), "未過期的有效限流資料不得被清除");
-  assert.ok(mem.has("active:4899"), "新加入的有效鍵必須存在");
+  assert.ok(mem.has("active:4899"), "未過期的有效鍵必須完整保留");
   assert.ok(mem.has("newKey:1"), "觸發清理後的新鍵必須存在");
   assert.ok(mem.size <= 5000, "Map 容量保持在健康範圍內");
 
-  // 5. 測試極端容量負載：在沒有任何過期項情況下填滿並超過 5,000 鍵
+  // 5. 測試容量飽和且無過期項目時：拒絕新增 key (fail-closed)，不得抹除有效計數
   mem.clear();
   for (let i = 0; i < 5000; i++) {
-    await memIncr(`persistent:${i}`, 3600, now);
+    await memIncr(`full:${i}`, 3600, now);
   }
   assert.equal(mem.size, 5000);
 
-  // 寫入額外 20 個鍵
-  for (let i = 0; i < 20; i++) {
-    await memIncr(`overflow:${i}`, 3600, now);
+  // 新增第 5001 個未過期鍵時，應拋出 CAPACITY_FULL 錯誤
+  await assert.rejects(
+    async () => {
+      await memIncr("overflow_new_key", 3600, now);
+    },
+    err => {
+      assert.equal(err.code, "CAPACITY_FULL");
+      return true;
+    }
+  );
+
+  // 既有有效鍵全部被保護，絕不被淘汰
+  assert.ok(mem.has("full:0"), "最舊的有效計數必須完整保留");
+  assert.ok(mem.has("full:4999"), "最新的有效計數必須完整保留");
+  assert.equal(mem.size, 5000, "Map 容量精確維持 5000");
+
+  // 透過 aiLimit 呼叫時，回傳友善且安全的繁忙訊息
+  const blockedMsg = await aiLimit(req("192.168.99.99"), "chat", now);
+  assert.equal(blockedMsg, "系統繁忙（限流容量已滿），請稍後再試");
+});
+
+test("持續建立大量不同 key (洪水攻擊) 時，既有使用者的限流計數不會被淘汰或繞過", async () => {
+  mem.clear();
+  const now = 1700000000000;
+  const victimIp = "192.168.1.88";
+
+  // 1. 受限使用者正常累加至 19 次（接近上限 20 次）
+  for (let i = 0; i < 19; i++) {
+    const res = await aiLimit(req(victimIp), "chat", now);
+    assert.equal(res, null);
   }
 
-  // 驗證最舊的項目被適度淘汰，但絕大部分有效資料與最新的資料都在，絕不是 mem.clear()
-  assert.ok(mem.size > 4000, `有效資料數量 (${mem.size}) 不應歸零，絕不可清空全部 Map`);
-  assert.ok(mem.has("overflow:19"), "最新寫入的計數必須存在");
-  assert.ok(mem.has(`persistent:4999`), "高序號有效計數必須保留");
+  // 2. 攻擊者試圖塞入大量偽造 key 填滿容量，企圖淘汰受限使用者的計數
+  for (let i = 0; i < 5000; i++) {
+    try {
+      await memIncr(`flood:${i}`, 3600, now);
+    } catch (e) {
+      if (e.code === "CAPACITY_FULL") break;
+    }
+  }
+
+  // 3. 驗證受限使用者的計數仍然被完整保留，並未被淘汰
+  const res20 = await aiLimit(req(victimIp), "chat", now);
+  assert.equal(res20, null, "第 20 次請求通過");
+
+  // 第 21 次請求應準確被限流阻擋，攻擊者無法藉由灌水洗掉計數來繞過限制
+  const res21 = await aiLimit(req(victimIp), "chat", now);
+  assert.match(res21, /使用太頻繁了（每小時最多 20 次）/);
 });
 
 test("併發請求不會因競態條件錯誤計算", async () => {
@@ -135,4 +174,30 @@ test("KV 服務異常時採取明確且可觀測的安全降級策略", async ()
   } finally {
     console.warn = originalWarn;
   }
+});
+
+test("IP 解析優先信任 x-real-ip，並防範 x-forwarded-for 偽造", () => {
+  // 1. 邊緣代理注入的 x-real-ip 優先於客戶端偽造的 x-forwarded-for
+  const spoofReq = {
+    headers: {
+      "x-forwarded-for": "1.2.3.4, 5.6.7.8",
+      "x-real-ip": "203.0.113.195"
+    }
+  };
+  assert.equal(ipOf(spoofReq), "203.0.113.195", "必須優先採用 x-real-ip");
+
+  // 2. 當無 x-real-ip 時，回退至 x-forwarded-for
+  const normalReq = {
+    headers: {
+      "x-forwarded-for": "198.51.100.22"
+    }
+  };
+  assert.equal(ipOf(normalReq), "198.51.100.22");
+
+  // 3. 無標頭時回退至 socket remoteAddress
+  const socketReq = {
+    headers: {},
+    socket: { remoteAddress: "127.0.0.1" }
+  };
+  assert.equal(ipOf(socketReq), "127.0.0.1");
 });

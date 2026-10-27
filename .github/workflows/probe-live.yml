@@ -17,6 +17,21 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+      - name: Validate inputs
+        env:
+          INPUT_N: ${{ github.event.inputs.n }}
+          INPUT_GAP: ${{ github.event.inputs.gap }}
+        run: |
+          N_VAL="${INPUT_N:-12}"
+          if ! [[ "$N_VAL" =~ ^[0-9]+$ ]] || [ "$N_VAL" -lt 1 ] || [ "$N_VAL" -gt 60 ]; then
+            echo "::error::Invalid n input '$N_VAL'. Must be an integer between 1 and 60."
+            exit 1
+          fi
+          GAP_VAL="${INPUT_GAP:-10}"
+          if ! [[ "$GAP_VAL" =~ ^[0-9]+$ ]] || [ "$GAP_VAL" -lt 1 ] || [ "$GAP_VAL" -gt 60 ]; then
+            echo "::error::Invalid gap input '$GAP_VAL'. Must be an integer between 1 and 60."
+            exit 1
+          fi
       - uses: actions/setup-node@v5
         with:
           node-version: 22
