@@ -2,6 +2,7 @@
 name: ci
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review] # draft PR（大檔上鎖用）不跑，轉成 ready for review 才跑
     paths: ["learner/**", "api/**", "scripts/**", "tests/**", ".github/workflows/**", "AGENTS.md", "CLAUDE.md", ".agent/**"]
   push:
     branches: [main]
@@ -14,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04 # ubuntu-latest 已換成 26.04，Playwright 1.56 不支援，裝不了 chromium
     timeout-minutes: 20
     steps:
