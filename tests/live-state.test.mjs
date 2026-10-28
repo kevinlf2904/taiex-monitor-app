@@ -1241,3 +1241,29 @@ test("Scenario 41: [第四輪可信度一致性驗證] OpenAPI 回退路徑與�
   assert.notEqual(resOpenApi.dataStatus, "confirmed", "OpenAPI 絕不可標記為 confirmed");
   assert.ok(resOpenApi.source.includes("OpenAPI"));
 });
+
+
+test("Scenario 42: 全市場 complete 必須達到 95% 覆蓋率，基準清單不得縮小分母", () => {
+  const today = "2026-10-28";
+  const makeRows = (tseCount, otcCount) => {
+    const rows = [];
+    for (let i = 0; i < tseCount; i++) rows.push({ code: String(1000 + i), name: `上市${i}`, market: "上市", price: 100, vol: 10, date: today });
+    for (let i = 0; i < otcCount; i++) rows.push({ code: String(3000 + i), name: `上櫃${i}`, market: "上櫃", price: 50, vol: 10, date: today });
+    return rows;
+  };
+
+  const belowThresholdRows = makeRows(800, 600);
+  const expectedCodes = new Set(belowThresholdRows.map(row => row.code));
+  const belowThreshold = validateMarketRows(belowThresholdRows, { expectedCodes, today });
+  assert.equal(belowThreshold.coverage.want, 1800, "基準清單不得取代全市場母體分母");
+  assert.equal(belowThreshold.coverage.ratio, +(1400 / 1800).toFixed(4));
+  assert.equal(belowThreshold.completeness, "partial", "1400 / 1800 未達 95%，不可標記 complete");
+  assert.equal(belowThreshold.coverage.benchmark.isBenchmarkComplete, false, "1400 檔基準清單也未達全市場 95% 門檻");
+
+  const atThresholdRows = makeRows(1000, 710);
+  const atThresholdCodes = new Set(atThresholdRows.map(row => row.code));
+  const atThreshold = validateMarketRows(atThresholdRows, { expectedCodes: atThresholdCodes, today });
+  assert.equal(atThreshold.coverage.ratio, 0.95);
+  assert.equal(atThreshold.coverage.benchmark.isBenchmarkComplete, true, "1710 檔基準清單達全市場 95% 門檻");
+  assert.equal(atThreshold.completeness, "complete", "1710 / 1800 恰達 95% 且雙市場日期一致時可標記 complete");
+});
