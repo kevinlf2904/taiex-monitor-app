@@ -1243,7 +1243,7 @@ test("Scenario 41: [第四輪可信度一致性驗證] OpenAPI 回退路徑與�
 });
 
 
-test("Scenario 37: 全市場 complete 必須達到 95% 覆蓋率，基準清單不得縮小分母", () => {
+test("Scenario 42: 全市場 complete 必須達到 95% 覆蓋率，基準清單不得縮小分母", () => {
   const today = "2026-10-28";
   const makeRows = (tseCount, otcCount) => {
     const rows = [];
