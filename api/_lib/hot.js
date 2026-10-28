@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     if (type === "rows") {
       const all = req.query?.codes === "all", want = new Set(String(req.query?.codes || "").split(",").map(c => c.trim()).filter(c => /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 400)), L = await marketRows();
       res.setHeader("Cache-Control", liveCache(L.live, 10));
-      return res.status(200).json({ ok: true, market, type, date: L.date, live: L.live, time: L.time, source: L.source, at: Date.now(), rows: L.rows.filter(r => (all ? /^\d{4}$/.test(r.code) : want.has(r.code))).map(r => [r.code, r.price, r.chgPct, r.value]) });
+      return res.status(200).json({ ok: true, market, type, date: L.date, live: L.live, time: L.time, source: L.source, completeness: L.completeness || null, dataStatus: L.dataStatus || null, coverage: L.coverage || null, at: Date.now(), rows: L.rows.filter(r => (all ? /^\d{4}$/.test(r.code) : want.has(r.code))).map(r => [r.code, r.price, r.chgPct, r.value]) });
     }
     if (!TW_TYPES[type]) return res.status(400).json({ ok: false, error: `type 要是 ${Object.keys(TW_TYPES).join("、")} 其中之一` });
     let rows, date, source, live = false, time = null;
@@ -69,6 +69,6 @@ export default async function handler(req, res) {
       rows = rows.slice(0, type === "etf" ? 200 : 30).map(({ date: _, ...x }) => x);
     }
     res.setHeader("Cache-Control", type === "foreign" || type === "trust" ? "s-maxage=600, stale-while-revalidate=1800" : liveCache(live, 20));
-    return res.status(200).json({ ok: true, market, type, label: TW_TYPES[type], date, live, time, source, rows });
+    return res.status(200).json({ ok: true, market, type, label: TW_TYPES[type], date, live, time, source, completeness: L?.completeness || null, dataStatus: L?.dataStatus || null, coverage: L?.coverage || null, rows });
   } catch (e) { return res.status(200).json({ ok: false, error: `拿不到${market === "us" ? "美股熱門" : TW_TYPES[type] || ""}資料（${e.message}）` }); }
 }

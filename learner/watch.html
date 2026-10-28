@@ -1587,7 +1587,12 @@ const liveTag = (J, closed) => {
     sourceTime: J.time,
     fetchedAt: J.at,
     isSuccess: !J.err,
-    isComplete: true,
+    isComplete: J.isComplete !== false,
+    completeness: J.completeness,
+    coverage: J.coverage,
+    dataStatus: J.dataStatus,
+    dateVerified: J.dateVerified,
+    dateConsistent: J.dateConsistent,
     session: W.session,
     today: W.today,
   });
@@ -4281,6 +4286,11 @@ function hotSec(sec, page) {
     isSuccess: !err,
     err,
     isComplete: Array.isArray(rows) && rows.length > 0,
+    completeness: curH?.completeness,
+    coverage: curH?.coverage,
+    dataStatus: curH?.dataStatus,
+    dateVerified: curH?.dateVerified,
+    dateConsistent: curH?.dateConsistent,
     ttl: MK_HOT_TTL,
     session: W.session,
     today: W.today,
@@ -4621,7 +4631,7 @@ function renderMkt() {
     h += sec("市場概況", `<div class="mkbox"><button data-mk="goList" data-v="limit"><span>漲停家數</span><b class="fill up">${B.limUp}</b></button><button data-mk="goList" data-v="limitDown"><span>跌停家數</span><b class="fill down">${B.limDn}</b></button><button data-mk="goRankT" data-v="gain"><span>上漲家數</span><b class="line up">${B.up}</b></button><button data-mk="goRankT" data-v="loss"><span>下跌家數</span><b class="line down">${B.down}</b></button>${(HL => HL ? `<div class="mkhl"><span>股價月新高</span><b class="up">${HL.hi}</b></div><div class="mkhl"><span>股價月新低</span><b class="down">${HL.lo}</b></div>` : "")(J.newHL?.[W.mkM])}</div>
       <div class="ratio"><span class="up" style="width:${B.up / tot * 100}%"></span><span class="flat" style="width:${B.flat / tot * 100}%"></span><span class="down" style="width:${B.down / tot * 100}%"></span></div>
       <details class="mkmore"><summary>漲跌幅分佈</summary><div class="hist">${B.buckets.map((x, i) => `<div><small>${x.n}</small><i class="${i < 5 ? "up" : i > 5 ? "down" : "flat"}" style="height:${(x.n / mx * 70).toFixed(0)}px"></i><span data-s="${x.label.replace(/%/g, "")}">${x.label}</span></div>`).join("")}</div></details>
-      <details class="mkmore"><summary>怎麼算的、多久更新</summary><p class="note">家數＝上市（或上櫃）所有股票＋ETF（不含權證、債券），和券商「整體市場」同一個口徑；漲停跌停用昨收算出的實際漲跌停價判斷（槓桿／反向 ETF 沒有漲跌停）；月新高低是收盤價創近 20 個交易日新高或新低。盤中資料來源：${esc(J.source || "")}，畫面每 10 秒更新一次（伺服器最多快取 10 秒）。</p></details>`, `${mktStatusTag(evalDataStatus({ type: "breadth", source: J.source || "證交所 MIS", dataDate: J.date, sourceTime: J.time, fetchedAt: W.mkt?.at, isSuccess: !J.err, isComplete: B && B.buckets && B.buckets.length > 0, coverage: J.coverage, session: W.session, today: W.today }))}・平盤 ${B.flat}・股票＋ETF${TT?.value ? `・成交 ${Math.round(TT.value).toLocaleString()} 億` : ""}${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠︎ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, [...MKT2, ["all", "全部"]]) : ""); }
+      <details class="mkmore"><summary>怎麼算的、多久更新</summary><p class="note">家數＝上市（或上櫃）所有股票＋ETF（不含權證、債券），和券商「整體市場」同一個口徑；漲停跌停用昨收算出的實際漲跌停價判斷（槓桿／反向 ETF 沒有漲跌停）；月新高低是收盤價創近 20 個交易日新高或新低。盤中資料來源：${esc(J.source || "")}，畫面每 10 秒更新一次（伺服器最多快取 10 秒）。</p></details>`, `${mktStatusTag(evalDataStatus({ type: "breadth", source: J.source || "證交所 MIS", dataDate: J.date, sourceTime: J.time, fetchedAt: W.mkt?.at, isSuccess: !J.err, isComplete: B && B.buckets && B.buckets.length > 0, coverage: J.coverage, completeness: J.completeness, dataStatus: J.dataStatus, dateVerified: J.dateVerified, dateConsistent: J.dateConsistent, session: W.session, today: W.today }))}・平盤 ${B.flat}・股票＋ETF${TT?.value ? `・成交 ${Math.round(TT.value).toLocaleString()} 億` : ""}${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠︎ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, [...MKT2, ["all", "全部"]]) : ""); }
   // 產業概況：漲最多、跌最多各 3 個（直條），其餘收在「更多」
   const S = J.sectorsBy?.[W.secM] || J.sectors;
   if (S?.length) { const top = [...S.slice(0, 3), ...S.slice(-3).filter(x => !S.slice(0, 3).includes(x))], mx = Math.max(0.5, ...top.map(x => Math.abs(x.pct || 0))), pre = W.secM === "tpex" ? "櫃" : "市";

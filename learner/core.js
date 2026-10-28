@@ -164,6 +164,11 @@ function evalDataStatus(opts = {}) {
     lastValidAt = null,
     isSuccess = true,
     isComplete = true,
+    completeness = null,
+    coverage = null,
+    dataStatus = null,
+    dateVerified = null,
+    dateConsistent = null,
     err = null,
     session = null,
     dayState = null,
@@ -171,7 +176,6 @@ function evalDataStatus(opts = {}) {
     now = new Date(),
     estimated = false,
     ttl = null,
-    coverage = null,
     unimplemented = false,
     usSession = null,
     fsession = null,
@@ -200,9 +204,47 @@ function evalDataStatus(opts = {}) {
   const effectiveTtl = typeof ttl === "number" && ttl > 0 ? ttl : (defaultTtls[type] || 60000);
   const age = fetchedAt ? (nowMs - fetchedAt) : null;
   const isExpired = age !== null && age > effectiveTtl;
-  const isDataComplete = isComplete !== false && (!coverage || !coverage.want || coverage.got >= coverage.want * 0.95);
+  const isCompletenessOk = completeness == null || (typeof completeness === "string" && completeness.trim() === "complete");
+  let isCoverageOk = true;
+  if (coverage != null) {
+    if (typeof coverage === "object" && !Array.isArray(coverage)) {
+      const hasGot = typeof coverage.got === "number" && Number.isFinite(coverage.got) && coverage.got >= 0;
+      const hasWant = typeof coverage.want === "number" && Number.isFinite(coverage.want) && coverage.want > 0;
+      isCoverageOk = Boolean(hasGot && hasWant && (coverage.got >= coverage.want * 0.95));
+    } else {
+      isCoverageOk = false;
+    }
+  }
+  const isDateVerifiedOk = dateVerified !== false;
+  const isDateConsistentOk = dateConsistent !== false;
+  const isDataStatusOk = dataStatus == null || dataStatus === "live" || dataStatus === "confirmed";
+  const isDataComplete = isComplete !== false && isCompletenessOk && isCoverageOk && isDateVerifiedOk && isDateConsistentOk && isDataStatusOk;
 
-  if (unimplemented) {
+  const getIncompleteNote = (defaultNote = "資料不完整") => {
+    if (dateVerified === false) return "資料日期未經來源確認";
+    if (dateConsistent === false) return "上市櫃資料日期不一致";
+    if (!isCompletenessOk) {
+      return (typeof completeness === "string" && completeness.trim()) ? ("資料不完整（" + completeness.trim() + "）") : "資料完整度未達標";
+    }
+    if (!isCoverageOk) {
+      if (coverage && typeof coverage.got === "number" && typeof coverage.want === "number") {
+        return "資料覆蓋率不足（" + coverage.got + "/" + coverage.want + "）";
+      }
+      return "資料覆蓋率異常";
+    }
+    if (dataStatus === "degraded") return "行情資料降級";
+    if (dataStatus === "partial") return "資料部分提供（partial）";
+    if (dataStatus === "stale") return "行情資料停滯（stale）";
+    if (dataStatus === "delayed") return "行情資料延遲";
+    if (dataStatus === "pending") return "行情資料待確認";
+    if (dataStatus != null && dataStatus !== "live" && dataStatus !== "confirmed") {
+      return (typeof dataStatus === "string" && dataStatus.trim()) ? ("行情狀態異常（" + dataStatus.trim() + "）") : "行情狀態未提供";
+    }
+    if (isComplete === false) return "資料標記為未完成";
+    return defaultNote;
+  };
+
+  if (unimplemented || dataStatus === "unavailable") {
     return {
       status: "unavailable",
       text: "未提供",
@@ -289,6 +331,20 @@ function evalDataStatus(opts = {}) {
         isConfirmed: false,
       };
     }
+    if (!isDataComplete) {
+      return {
+        status: "delayed",
+        text: "資料延遲",
+        note: "非交易日・" + getIncompleteNote("資料不完整"),
+        date: dataDate,
+        source,
+        time: sourceTime,
+        isLive: false,
+        isDelayed: true,
+        isPending: false,
+        isConfirmed: false,
+      };
+    }
     return {
       status: "confirmed",
       text: "收盤確認",
@@ -371,13 +427,14 @@ function evalDataStatus(opts = {}) {
 
   if (curSess === "open") {
     if (dataDate && dataDate < isoToday) {
-      return { status: "delayed", text: "資料延遲", note: "盤中尚未取得今日行情（停留於 " + dataDate + "）", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      const extraDegraded = (dataStatus === "degraded" || completeness === "degraded") ? "・行情資料降級" : "";
+      return { status: "delayed", text: "資料延遲", note: "盤中尚未取得今日行情（停留於 " + dataDate + "）" + extraDegraded, date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
     }
     if (isExpired) {
       return { status: "delayed", text: "資料延遲", note: "超過合理更新期限（已逾 " + Math.round(age / 1000) + " 秒）", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
     }
     if (!isDataComplete) {
-      return { status: "delayed", text: "資料延遲", note: "資料不完整", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      return { status: "delayed", text: "資料延遲", note: getIncompleteNote("資料不完整"), date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
     }
     if (estimated || type === "kline" || type === "indicator") {
       return { status: "live", text: "盤中估算", note: "依盤中即時資料估算，收盤確認最終值", date: dataDate || isoToday, source, time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
@@ -408,11 +465,15 @@ function evalDataStatus(opts = {}) {
       }
       return { status: "confirmed", text: "收盤確認", note: isoToday + " 當日收盤確認", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
     }
-    return { status: "pending", text: "盤後待確認", note: "等待 " + isoToday + " 收盤資料確認", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+    const note = (!isDataComplete && isTodayData) ? ("等待 " + isoToday + " 完整收盤（" + getIncompleteNote("資料不完整") + "）") : ("等待 " + isoToday + " 收盤資料確認");
+    return { status: "pending", text: "盤後待確認", note, date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
   }
 
   if (estimated) {
     return { status: "pending", text: "收盤估算", note: "估算值，非官方收盤定格資料", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+  }
+  if (!isDataComplete) {
+    return { status: "delayed", text: "資料延遲", note: getIncompleteNote("資料不完整"), date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
   }
   return { status: "confirmed", text: "收盤確認", note: "", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
 }

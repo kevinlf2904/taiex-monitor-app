@@ -14,6 +14,8 @@
 import { marketRows, liveCache } from "./_live.js";
 import { getJSON, num, rocDate, companies } from "./_tw.js";
 import { yahooBars, quoteFromMeta } from "./_yahoo.js";
+import { extractTwseRwdDate, isValidIsoDate } from "./daily.js";
+import { todayTaipei } from "./quote.js";
 
 const BUCKETS = [[">5%", 5, Infinity], ["3~5%", 3, 5], ["2~3%", 2, 3], ["1~2%", 1, 2], ["0~1%", 0, 1], ["0%", 0, 0], ["0~-1%", -1, 0], ["-1~-2%", -2, -1], ["-2~-3%", -3, -2], ["-3~-5%", -5, -3], ["<-5%", -Infinity, -5]];
 // 升降單位（股票、ETF 不同）與漲跌停價：昨收 ×1.1（×0.9）再依升降單位往內取
@@ -53,13 +55,132 @@ export function contributions(twse, info, taiexPrev) {
   const out = L.map(r => ({ code: r.code, name: r.name, chgPct: r.chgPct, pts: +((r.chg * r.sh) / S * taiexPrev).toFixed(2) })).sort((a, b) => b.pts - a.pts);
   return { pos: out.filter(x => x.pts > 0).slice(0, 10), neg: out.filter(x => x.pts < 0).slice(-10).reverse() };
 }
+const NON_SECTOR_RE = /報酬|槓桿|反向|兩倍|熊|牛/;
+
 // OpenAPI 的類股指數是「最近一個交易日收盤」，日期是民國年（1141007）
+// 先驗證數值有效性，再依明確順序去重，杜絕無效列佔用名稱排除後續有效列之缺陷
 export function parseMiIndex(rows) {
+  const seen = new Set();
   return (Array.isArray(rows) ? rows : []).map(r => {
-    const sign = String(r["漲跌"] ?? "").includes("-") ? -1 : 1, pts = num(r["漲跌點數"]), close = num(r["收盤指數"]);
-    return { name: String(r["指數"] ?? "").trim(), date: rocDate(r["日期"]), close, chg: pts != null ? sign * Math.abs(pts) : null, chgPct: num(r["漲跌百分比"]) != null ? sign * Math.abs(num(r["漲跌百分比"])) : null };
-  }).filter(x => x.name && x.close != null);
+    const rawName = String(r["指數"] ?? "").trim();
+    if (!rawName || NON_SECTOR_RE.test(rawName)) return null;
+
+    const close = num(r["收盤指數"]);
+    if (close == null) return null; // 先檢查數值有效性，無效者絕不佔用 seen
+
+    if (seen.has(rawName)) return null;
+    seen.add(rawName);
+
+    const sign = String(r["漲跌"] ?? "").includes("-") ? -1 : 1;
+    const pts = num(r["漲跌點數"]);
+    const pct = num(r["漲跌百分比"]);
+    const d = rocDate(r["日期"]);
+
+    return {
+      name: rawName,
+      date: d,
+      close,
+      chg: pts != null ? (pts === 0 ? 0 : sign * Math.abs(pts)) : null,
+      chgPct: pct != null ? (pct === 0 ? 0 : sign * Math.abs(pct)) : null
+    };
+  }).filter(Boolean);
 }
+
+// 網站每日收盤行情（type=IND）：指數名稱、收盤指數、漲跌(+/-)、漲跌點數、漲跌百分比
+export function parseMiIndexRwd(j) {
+  const d = extractTwseRwdDate(j);
+  const out = [];
+  const seen = new Set();
+  const tables = Array.isArray(j?.tables) ? j.tables : Array.isArray(j?.data) ? [j] : [];
+
+  for (const t of tables) {
+    if (!Array.isArray(t?.data)) continue;
+    if (t.title && /報酬/.test(t.title)) continue; // 排除報酬指數表
+
+    const f = (t.fields || []).map(x => String(x).replace(/\s/g, ""));
+    const iName = f.findIndex(x => /指數/.test(x));
+    const iClose = f.findIndex(x => /收盤/.test(x));
+    const iSign = f.findIndex(x => /漲跌\(\+\/-\)/.test(x));
+    const iPts = f.findIndex(x => /漲跌點數|^漲跌$/.test(x));
+    const iPct = f.findIndex(x => /百分比/.test(x));
+
+    for (const r of t.data) {
+      const name = String((iName >= 0 ? r[iName] : r[0]) ?? "").trim();
+      if (!name || NON_SECTOR_RE.test(name)) continue;
+
+      const close = num(iClose >= 0 ? r[iClose] : r[1]);
+      if (close == null) continue; // 先檢查收盤價有效性
+
+      if (seen.has(name)) continue;
+      seen.add(name);
+
+      const rawSign = String((iSign >= 0 ? r[iSign] : r[2]) ?? "");
+      const sign = rawSign.includes("-") ? -1 : rawSign.includes("+") ? 1 : 0;
+      const pts = num(iPts >= 0 ? r[iPts] : r[3]);
+      const pct = num(iPct >= 0 ? r[iPct] : r[4]);
+
+      const chg = pts != null ? (pts === 0 ? 0 : (sign !== 0 ? sign * Math.abs(pts) : pts)) : null;
+      const chgPct = pct != null ? (pct === 0 ? 0 : (sign !== 0 ? sign * Math.abs(pct) : pct)) : null;
+
+      out.push({ name, date: d, close, chg, chgPct });
+    }
+  }
+  return out;
+}
+
+const ESSENTIAL_INDICES = ["發行量加權股價指數", "電子工業類指數", "半導體類指數", "金融保險類指數", "航運類指數", "臺灣50指數"];
+
+function attachIndexMeta(rows, date, source, { reqDate = null, now = new Date() } = {}) {
+  const maxIso = todayTaipei(now);
+  const isDateValid = Boolean(date && isValidIsoDate(date, maxIso));
+  const isDateMatched = Boolean(isDateValid && (!reqDate || date === reqDate));
+  const names = new Set(rows.map(r => r.name));
+  const missing = ESSENTIAL_INDICES.filter(n => {
+    if (names.has(n)) return false;
+    if (n === "電子工業類指數" && (names.has("電子類指數") || names.has("電子工業類指數"))) return false;
+    return true;
+  });
+
+  rows.date = isDateValid ? date : null;
+  rows.sourceDate = isDateValid ? date : null;
+  rows.dateVerified = Boolean(isDateValid && isDateMatched);
+  rows.isComplete = missing.length === 0 && rows.dateVerified;
+  rows.missing = missing;
+  rows.source = source + (rows.dateVerified ? "" : "（日期未驗證或不符）");
+  return rows;
+}
+
+// 取得類股指數：OpenAPI 優先，若無資料或日期停滯則以 RWD 為備援
+export async function fetchMiIndex(targetDate = null, { getJson = getJSON, now = new Date() } = {}) {
+  let oapiRows = [];
+  try {
+    const j = await getJson("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX", {}, 12000);
+    oapiRows = parseMiIndex(j);
+  } catch {}
+
+  const oDate = oapiRows[0]?.date || null;
+  const maxIso = todayTaipei(now);
+  const isODateValid = Boolean(oDate && isValidIsoDate(oDate, maxIso));
+
+  if (oapiRows.length && isODateValid && (!targetDate || oDate === targetDate || oDate >= targetDate)) {
+    return attachIndexMeta(oapiRows, oDate, "證交所 OpenAPI", { reqDate: targetDate, now });
+  }
+
+  const probeDate = (targetDate || oDate || maxIso).replace(/-/g, "");
+  try {
+    const rwdJ = await getJson(`https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${probeDate}&type=IND&response=json`, {}, 15000);
+    const rwdRows = parseMiIndexRwd(rwdJ);
+    const rwdDate = rwdRows[0]?.date || null;
+    const isRwdDateValid = Boolean(rwdDate && isValidIsoDate(rwdDate, maxIso));
+
+    if (rwdRows.length && isRwdDateValid) {
+      return attachIndexMeta(rwdRows, rwdDate, "證交所 RWD", { reqDate: targetDate, now });
+    }
+  } catch {}
+
+  return attachIndexMeta(oapiRows, isODateValid ? oDate : null, "證交所 OpenAPI（降級）", { reqDate: targetDate, now });
+}
+
 // BFI82U：單位名稱、買進金額、賣出金額、買賣差額（元）→ 億元
 export function parseBfi82u(j) {
   if (!j || !/ok/i.test(j.stat || "") || !Array.isArray(j.data)) return null;
@@ -113,18 +234,22 @@ async function hilo(host) {
 }
 
 export default async function handler(req, res) {
-  const [a, b, info, mi, inst, us, world] = await Promise.allSettled([
+  const [a, b, info, inst, us, world] = await Promise.allSettled([
     marketRows(), hilo(req.headers?.host),
-    companies(), getJSON("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX").then(parseMiIndex), instLatest(), usIndices(), worldIndices(),
+    companies(), instLatest(), usIndices(), worldIndices(),
   ]);
-  const L = a.value, all = L?.rows || [], twse = all.filter(r => r.market === "上市"), tpex = all.filter(r => r.market === "上櫃"), I = info.value || new Map(), M = mi.value || [];
+  const L = a.value, all = L?.rows || [], twse = all.filter(r => r.market === "上市"), tpex = all.filter(r => r.market === "上櫃"), I = info.value || new Map();
+  const M = await fetchMiIndex(L?.date);
   if (!all.length && !(us.value || []).length) return res.status(200).json({ ok: false, error: `拿不到大盤資料（${a.reason?.message || "沒有資料"}）` });
   const taiex = M.find(x => /^發行量加權股價指數$/.test(x.name));
-  const pickIdx = ["電子類指數", "半導體類指數", "金融保險類指數", "航運類指數", "臺灣50指數", "櫃買指數"].map(n => M.find(x => x.name === n)).filter(Boolean);
+  const pickIdx = ["電子類指數", "半導體類指數", "金融保險類指數", "航運類指數", "臺灣50指數", "櫃買指數"].map(n => M.find(x => x.name === n || (n === "電子類指數" && x.name === "電子工業類指數"))).filter(Boolean);
   const stocks = all.filter(r => /^\d{4}$/.test(r.code));
   res.setHeader("Cache-Control", liveCache(L?.live, 10));
   return res.status(200).json({ ok: true, date: L?.date || all.find(x => x.date)?.date || null, live: !!L?.live, time: L?.time || null, note: L?.note || null, source: `${L?.source || "證交所、櫃買中心 OpenAPI"}；美股 Yahoo Finance`,
-    breadth: all.length ? breadth(all) : null, coverage: L?.coverage || null, newHL: newHiLo(all, b.value, L?.date || all.find(x => x.date)?.date),
+    breadth: all.length ? breadth(all) : null, coverage: L?.coverage || null,
+    completeness: L?.completeness || null, dataStatus: L?.dataStatus || null,
+    indicesVerified: M?.dateVerified ?? null, indicesComplete: M?.isComplete ?? null,
+    newHL: newHiLo(all, b.value, L?.date || all.find(x => x.date)?.date),
     sectors: I.size ? sectors(stocks, I) : null,
     // 上市、上櫃分開看（看盤頁可以切換）
     breadthBy: { twse: breadth(twse), tpex: breadth(tpex) },

@@ -128,6 +128,10 @@ function createHarness() {
     streak: () => 0,
     intelData: () => [],
     mergeDaily: () => {},
+    sec: (t, body, extra = "", seg = "") => `<section class="mk"><h3>${t}${extra ? `<span class="note">${extra}</span>` : ""}</h3>${seg ? `<div class="mksegrow">${seg}</div>` : ""}${body}</section>`,
+    mkSeg: (key, val, opts) => `<span class="mkseg">${opts.map(([k, t]) => (k === "|" ? `<span class="tgrp">${t}</span>` : `<button data-mk="${key}" data-v="${k}">${t}</button>`)).join("")}</span>`,
+    mtile: r => `<div class="mtile">${r?.code || ""}</div>`,
+    MK_HOT: [["value", "成交值"], ["vol", "成交量"]],
   };
 
   c.window = c;
@@ -1327,4 +1331,926 @@ test("報價入口一致性: liveQuote() 支援帶時區 ISO 時間進行新鮮�
   const qNew = ctx.liveQuote(raw);
   assert.equal(qNew.price, 1070, "W.quotes 的 ISO 時間晚於快照時，應採用最新即時價格");
   assert.equal(qNew.isLive, true);
+});
+
+// =========================================================================
+// Phase B v2.4 前端行情狀態透傳、覆蓋率與完整性判定回歸驗收
+// =========================================================================
+
+test("v2.4 情境 1: 完整行情資料在盤中正確顯示盤中即時，收盤後正確顯示收盤確認", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 盤中即時驗證
+  const livePayload = {
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    source: "證交所 MIS",
+    completeness: "complete",
+    coverage: { got: 1850, want: 1800 },
+    dateVerified: true,
+    dateConsistent: true,
+  };
+  const liveHtml = ctx.liveTag(livePayload);
+  assert.match(liveHtml, /class="livetag"/, "完整行情在盤中必須輸出 livetag 樣式");
+  assert.match(liveHtml, /盤中即時/, "完整行情在盤中必須包含「盤中即時」");
+  assert.match(liveHtml, /更新於/, "必須包含更新時間戳記");
+
+  // 收盤後確認驗證
+  W.session = "closed";
+  const closedPayload = {
+    type: "index",
+    dataDate: "2026-10-28",
+    source: "證交所 MI_INDEX",
+    session: "closed",
+    today: "2026-10-28",
+    completeness: "complete",
+    coverage: { got: 1850, want: 1800 },
+    dateVerified: true,
+    dateConsistent: true,
+  };
+  const closedSt = ctx.evalDataStatus(closedPayload);
+  assert.equal(closedSt.status, "confirmed");
+  assert.equal(closedSt.isConfirmed, true);
+  assert.equal(closedSt.isLive, false);
+  assert.equal(closedSt.text, "收盤確認");
+});
+
+test("v2.4 情境 2: J.completeness === 'partial' 時，liveTag() 絕不顯示盤中即時，轉為 delayed", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  const partialPayload = {
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    source: "證交所 MIS",
+    completeness: "partial",
+    coverage: { got: 1200, want: 1800 },
+    dateVerified: true,
+    dateConsistent: true,
+  };
+  const html = ctx.liveTag(partialPayload);
+  assert.doesNotMatch(html, /class="livetag"/, "partial 資料絕對不可輸出 livetag");
+  assert.doesNotMatch(html, /盤中即時/, "partial 資料絕對不可顯示盤中即時");
+  assert.match(html, /class="mkt-tag delayed"/, "partial 資料必須標示為 delayed");
+  assert.match(html, /資料不完整（partial）/, "提示必須精確包含 completeness 狀態說明");
+});
+
+test("v2.4 情境 3: J.completeness === 'degraded' 時，保留降級備註與狀態，不被視為正常即時", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  const degradedPayload = {
+    live: true,
+    date: "2026-10-22",
+    time: "13:30:00",
+    at: Date.now(),
+    source: "證交所 MI_INDEX",
+    completeness: "degraded",
+    dataStatus: "degraded",
+    coverage: { got: 1000, want: 1800 },
+  };
+  const html = ctx.liveTag(degradedPayload);
+  assert.doesNotMatch(html, /class="livetag"/);
+  assert.doesNotMatch(html, /盤中即時/);
+  assert.match(html, /class="mkt-tag delayed"/);
+  assert.match(html, /資料不完整（degraded）|行情資料降級/);
+});
+
+test("v2.4 情境 4: J.completeness === 'partial_tse_only' 或 'partial_otc_only' 時，不被視為完整", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 僅上市有資料
+  const tseOnlyHtml = ctx.liveTag({
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    completeness: "partial_tse_only",
+    coverage: { got: 1000, want: 1800 },
+  });
+  assert.doesNotMatch(tseOnlyHtml, /class="livetag"/);
+  assert.match(tseOnlyHtml, /class="mkt-tag delayed"/);
+  assert.match(tseOnlyHtml, /資料不完整（partial_tse_only）/);
+
+  // 僅上櫃有資料
+  const otcOnlyHtml = ctx.liveTag({
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    completeness: "partial_otc_only",
+    coverage: { got: 800, want: 1800 },
+  });
+  assert.doesNotMatch(otcOnlyHtml, /class="livetag"/);
+  assert.match(otcOnlyHtml, /class="mkt-tag delayed"/);
+  assert.match(otcOnlyHtml, /資料不完整（partial_otc_only）/);
+});
+
+test("v2.4 情境 5: 日期未驗證或日期不一致的行情，liveTag() 不得標示為即時", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 1. 日期未經來源確認
+  const unverifiedHtml = ctx.liveTag({
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    dateVerified: false,
+    completeness: "complete",
+  });
+  assert.doesNotMatch(unverifiedHtml, /class="livetag"/);
+  assert.match(unverifiedHtml, /class="mkt-tag delayed"/);
+  assert.match(unverifiedHtml, /資料日期未經來源確認/);
+
+  // 2. 上市櫃日期不一致
+  const inconsistentHtml = ctx.liveTag({
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    dateConsistent: false,
+    completeness: "complete",
+  });
+  assert.doesNotMatch(inconsistentHtml, /class="livetag"/);
+  assert.match(inconsistentHtml, /class="mkt-tag delayed"/);
+  assert.match(inconsistentHtml, /上市櫃資料日期不一致/);
+});
+
+test("v2.4 情境 6: coverage 不足（got < want * 0.95）時，降級為 delayed", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // got = 1600, want = 1800 (1600 < 1710 即 95%)
+  const lowCoverageHtml = ctx.liveTag({
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    completeness: "complete",
+    coverage: { got: 1600, want: 1800 },
+  });
+  assert.doesNotMatch(lowCoverageHtml, /class="livetag"/);
+  assert.match(lowCoverageHtml, /class="mkt-tag delayed"/);
+  assert.match(lowCoverageHtml, /資料覆蓋率不足/);
+  assert.match(lowCoverageHtml, /1600/);
+  assert.match(lowCoverageHtml, /1800/);
+});
+
+test("v2.4 情境 7: 舊版 API 未回傳 completeness / coverage 時的向後相容性", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 完全不帶 completeness 與 coverage 的舊版行情物件
+  const legacyPayload = {
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    source: "證交所 MIS",
+  };
+  assert.doesNotThrow(() => {
+    const html = ctx.liveTag(legacyPayload);
+    assert.match(html, /class="livetag"/);
+    assert.match(html, /盤中即時/);
+  }, "舊版 API 未提供完整性欄位時必須優雅相容且不拋錯");
+});
+
+test("v2.4 情境 8: /api/hot 排行標籤正確反映底層 curH 的 completeness 與 coverage", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+  W.lt = "mkt";
+  W.mkHot = "value";
+
+  // 1. 底層 hot 資料為 partial 且 coverage 不足
+  W.hot["rank:value"] = {
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    source: "富果行情快照",
+    completeness: "partial",
+    coverage: { got: 500, want: 1800 },
+    dataStatus: "partial",
+    rows: [{ code: "2330", name: "台積電", price: 1000, chgPct: 2.0 }],
+  };
+  const partialHotHtml = ctx.hotSec(ctx.sec, "tw");
+  assert.match(partialHotHtml, /class="mkt-tag delayed"/, "底層 partial 時熱門股標籤必須呈現 delayed");
+  assert.match(partialHotHtml, /資料不完整（partial）/, "熱門股標籤必須包含資料不完整提示");
+  assert.doesNotMatch(partialHotHtml, /class="mkt-tag live"/, "底層 partial 時熱門股標籤絕不可標記為 live");
+
+  // 2. 底層 hot 資料為 complete 且 coverage 達標
+  W.hot["rank:value"] = {
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    source: "富果行情快照",
+    completeness: "complete",
+    coverage: { got: 1820, want: 1800 },
+    dataStatus: "live",
+    rows: [{ code: "2330", name: "台積電", price: 1000, chgPct: 2.0 }],
+  };
+  const completeHotHtml = ctx.hotSec(ctx.sec, "tw");
+  assert.match(completeHotHtml, /class="mkt-tag live"/, "完整熱門股資料在盤中正確呈現 live 標籤");
+  assert.match(completeHotHtml, /盤中即時/);
+});
+
+test("v2.4 情境 9: 正常全市場資料不會被誤判為降級或延遲", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  const fullPayload = {
+    type: "quote",
+    dataDate: "2026-10-28",
+    sourceTime: "10:30:00",
+    fetchedAt: Date.now(),
+    source: "證交所 MIS",
+    completeness: "complete",
+    coverage: { got: 1820, want: 1800 },
+    dateVerified: true,
+    dateConsistent: true,
+    session: "open",
+    today: "2026-10-28",
+  };
+  const st = ctx.evalDataStatus(fullPayload);
+  assert.equal(st.status, "live");
+  assert.equal(st.isLive, true);
+  assert.equal(st.isDelayed, false);
+  assert.equal(st.isConfirmed, false);
+  assert.equal(st.text, "盤中即時");
+});
+
+test("v2.4 情境 10: 收盤後不完整資料不得誤判為收盤確認，應標記為盤後待確認並附帶不完整提示", () => {
+  const { ctx, W } = createHarness();
+  W.session = "closed";
+  W.today = "2026-10-28";
+
+  // 收盤時資料不完整 (例如僅 TSE，OTC 尚未出爐)
+  const closedIncomplete = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-28",
+    source: "證交所 MI_INDEX",
+    session: "closed",
+    today: "2026-10-28",
+    completeness: "partial_tse_only",
+    coverage: { got: 1000, want: 1800 },
+  });
+  assert.notEqual(closedIncomplete.status, "confirmed", "不完整收盤資料絕不可標記為 confirmed");
+  assert.equal(closedIncomplete.isConfirmed, false);
+  assert.equal(closedIncomplete.status, "pending");
+  assert.match(closedIncomplete.note, /等待 2026-10-28 完整收盤/);
+  assert.match(closedIncomplete.note, /partial_tse_only/);
+});
+
+// =========================================================================
+// Phase B v2.5 最終狀態機安全審查與邊界防禦深度測試
+// =========================================================================
+
+test("v2.5 P1-A: dataStatus: 'partial' 在 completeness 缺漏時，絕不標示為正常即時", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // completeness 缺漏，但後端給出 dataStatus: "partial"
+  const st = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-28",
+    sourceTime: "10:30:00",
+    fetchedAt: Date.now(),
+    source: "證交所 MIS",
+    dataStatus: "partial",
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(st.status, "delayed", "dataStatus 為 partial 時必須降級為 delayed");
+  assert.equal(st.isLive, false, "絕不可標示為即時");
+  assert.match(st.note, /partial/);
+
+  const html = ctx.liveTag({
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    dataStatus: "partial",
+  });
+  assert.doesNotMatch(html, /class="livetag"/);
+  assert.match(html, /class="mkt-tag delayed"/);
+});
+
+test("v2.5 P1-A: completeness: '' 空字串時採保守判定，絕不標示為完整", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  const st = ctx.evalDataStatus({
+    type: "quote",
+    dataDate: "2026-10-28",
+    sourceTime: "10:30:00",
+    fetchedAt: Date.now(),
+    completeness: "",
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(st.status, "delayed");
+  assert.equal(st.isLive, false);
+});
+
+test("v2.5 P1-A: completeness 與 dataStatus 矛盾時採保守判定 (complete vs degraded)", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // completeness 聲稱 complete，但 dataStatus 標示 degraded
+  const st = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-28",
+    completeness: "complete",
+    dataStatus: "degraded",
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(st.status, "delayed", "欄位矛盾時必須保守降級為 delayed");
+  assert.equal(st.isLive, false);
+  assert.match(st.note, /行情資料降級/);
+});
+
+test("v2.5 P1-A: completeness 與 dataStatus 矛盾時採保守判定 (partial vs live)", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // dataStatus 聲稱 live，但 completeness 為 partial
+  const st = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-28",
+    completeness: "partial",
+    dataStatus: "live",
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(st.status, "delayed");
+  assert.equal(st.isLive, false);
+  assert.match(st.note, /資料不完整（partial）/);
+});
+
+test("v2.5 P1-A: coverage 缺漏 got 或 want 時嚴格判定為異常，不得冒充達標", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 1. 只有 want，缺少 got
+  const st1 = ctx.evalDataStatus({
+    type: "quote",
+    dataDate: "2026-10-28",
+    coverage: { want: 1800 },
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(st1.status, "delayed", "coverage 缺少 got 必須拒絕");
+  assert.equal(st1.isLive, false);
+
+  // 2. 只有 got，缺少 want
+  const st2 = ctx.evalDataStatus({
+    type: "quote",
+    dataDate: "2026-10-28",
+    coverage: { got: 1800 },
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(st2.status, "delayed", "coverage 缺少 want 必須拒絕");
+  assert.equal(st2.isLive, false);
+});
+
+test("v2.5 P1-A: coverage got 或 want 為非數字/NaN/負數/字串時嚴格拒絕", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 1. 字串數值
+  const stStr = ctx.evalDataStatus({
+    type: "quote",
+    dataDate: "2026-10-28",
+    coverage: { got: "1850", want: 1800 },
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(stStr.status, "delayed");
+
+  // 2. NaN
+  const stNan = ctx.evalDataStatus({
+    type: "quote",
+    dataDate: "2026-10-28",
+    coverage: { got: NaN, want: 1800 },
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(stNan.status, "delayed");
+
+  // 3. want <= 0
+  const stZero = ctx.evalDataStatus({
+    type: "quote",
+    dataDate: "2026-10-28",
+    coverage: { got: 1850, want: 0 },
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(stZero.status, "delayed");
+
+  // 4. got < 0
+  const stNeg = ctx.evalDataStatus({
+    type: "quote",
+    dataDate: "2026-10-28",
+    coverage: { got: -5, want: 1800 },
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(stNeg.status, "delayed");
+});
+
+test("v2.5 P1-B: 單一核心狀態機統一判定驗證 (liveTag 與 hotSt 委託 evalDataStatus)", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 驗證 liveTag 對異常 dataStatus 自動委任核心判定為 delayed
+  const liveDelayedHtml = ctx.liveTag({
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    dataStatus: "stale",
+  });
+  assert.match(liveDelayedHtml, /class="mkt-tag delayed"/);
+  assert.match(liveDelayedHtml, /行情資料停滯/);
+
+  // 驗證 hotSt 透過 hotSec 自動委任核心判定
+  W.lt = "mkt";
+  W.mkHot = "value";
+  W.hot["rank:value"] = {
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    source: "富果行情快照",
+    dataStatus: "stale",
+    rows: [{ code: "2330", name: "台積電", price: 1000 }],
+  };
+  const hotHtml = ctx.hotSec(ctx.sec, "tw");
+  assert.match(hotHtml, /class="mkt-tag delayed"/);
+  assert.match(hotHtml, /行情資料停滯/);
+});
+
+test("v2.5 P1-D: 盤後待確認 dataStatus: 'pending' 在盤中時段絕不可標記為 live", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  const st = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-28",
+    dataStatus: "pending",
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(st.isLive, false, "dataStatus 為 pending 時不可標示為 live");
+  assert.equal(st.status, "delayed");
+});
+
+test("v2.5 P1-D: 收盤時段 dataStatus: 'pending' 絕不可標記為 confirmed", () => {
+  const { ctx, W } = createHarness();
+  W.session = "closed";
+  W.today = "2026-10-28";
+
+  const st = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-28",
+    completeness: "complete",
+    dataStatus: "pending",
+    session: "closed",
+    today: "2026-10-28",
+  });
+  assert.equal(st.isConfirmed, false, "dataStatus 為 pending 時收盤後不可確認");
+  assert.equal(st.status, "pending");
+  assert.match(st.note, /等待 2026-10-28 完整收盤/);
+});
+
+test("v2.5 回歸保證: 美股、期貨、ETF 及非交易日規則不受台股完整性強化干擾", () => {
+  const { ctx } = createHarness();
+
+  // 美股正常交易時段
+  const usSt = ctx.evalDataStatus({
+    type: "us",
+    source: "Yahoo Finance",
+    dataDate: "2026-10-28",
+    usSession: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(usSt.status, "live");
+  assert.equal(usSt.isLive, true);
+  assert.equal(usSt.text, "美股盤中");
+
+  // 期貨夜盤交易中
+  const futSt = ctx.evalDataStatus({
+    type: "futures",
+    source: "期交所",
+    dataDate: "2026-10-28",
+    fsession: "night",
+  });
+  assert.equal(futSt.status, "live");
+  assert.equal(futSt.isLive, true);
+  assert.equal(futSt.text, "夜盤即時");
+});
+
+// =========================================================================
+// Phase B v2.5.1 最終狀態機全列舉、邊界防禦與交易日曆安全驗收
+// =========================================================================
+
+test("v2.5.1 項目 A: dataStatus 全列舉邊界測試 (合法、已知非健康、未知、空字串、空白、null、缺欄位)", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  const baseOpts = {
+    type: "quote",
+    dataDate: "2026-10-28",
+    sourceTime: "10:30:00",
+    fetchedAt: Date.now(),
+    source: "證交所 MIS",
+    session: "open",
+    today: "2026-10-28",
+  };
+
+  // 1. 合法健康狀態: "live"
+  const stLive = ctx.evalDataStatus({ ...baseOpts, dataStatus: "live" });
+  assert.equal(stLive.status, "live");
+  assert.equal(stLive.isLive, true);
+
+  // 2. 舊 API 缺少 dataStatus (null / undefined): 保留向下相容
+  const stNull = ctx.evalDataStatus({ ...baseOpts, dataStatus: null });
+  assert.equal(stNull.status, "live", "null dataStatus 在符合其他所有條件時相容為 live");
+  const stUndef = ctx.evalDataStatus({ ...baseOpts });
+  assert.equal(stUndef.status, "live", "undefined dataStatus 在符合其他所有條件時相容為 live");
+
+  // 3. 已知非健康狀態: "partial", "degraded", "stale", "delayed", "pending"
+  for (const bad of ["partial", "degraded", "stale", "delayed", "pending"]) {
+    const stBad = ctx.evalDataStatus({ ...baseOpts, dataStatus: bad });
+    assert.equal(stBad.status, "delayed", `dataStatus: "${bad}" 必須降級為 delayed`);
+    assert.equal(stBad.isLive, false, `dataStatus: "${bad}" 絕不可為 live`);
+  }
+
+  // 4. 空字串與空白字串: 絕不可視為健康
+  const stEmpty = ctx.evalDataStatus({ ...baseOpts, dataStatus: "" });
+  assert.equal(stEmpty.status, "delayed", "dataStatus: '' 必須降級為 delayed");
+  assert.equal(stEmpty.isLive, false);
+
+  const stWhitespace = ctx.evalDataStatus({ ...baseOpts, dataStatus: "   " });
+  assert.equal(stWhitespace.status, "delayed", "空白 dataStatus 必須降級為 delayed");
+  assert.equal(stWhitespace.isLive, false);
+
+  // 5. 未知非空狀態 (如 "unknown", "broken", "malicious")
+  const stUnknown = ctx.evalDataStatus({ ...baseOpts, dataStatus: "unknown" });
+  assert.equal(stUnknown.status, "delayed", "未知 dataStatus 必須降級為 delayed");
+  assert.equal(stUnknown.isLive, false);
+  assert.match(stUnknown.note, /行情狀態異常（unknown）/);
+});
+
+test("v2.5.1 項目 B: completeness 多型別防禦測試 (字串、空白、數字、布林、物件、null、undefined)", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+  const base = { type: "quote", dataDate: "2026-10-28", session: "open", today: "2026-10-28" };
+
+  // 1. 合法完整: "complete"
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: "complete" }).status, "live");
+
+  // 2. 合法部分: "partial"
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: "partial" }).status, "delayed");
+
+  // 3. 空白字串: "" 與 "   "
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: "" }).status, "delayed");
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: "   " }).status, "delayed");
+
+  // 4. 非字串值: 數字、布林、陣列、物件
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: 1 }).status, "delayed");
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: true }).status, "delayed");
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: false }).status, "delayed");
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: ["complete"] }).status, "delayed");
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: { status: "complete" } }).status, "delayed");
+
+  // 5. null 與 undefined (舊 API 相容)
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: null }).status, "live");
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: undefined }).status, "live");
+});
+
+test("v2.5.1 項目 B: coverage 畸形結構與 got > want 邊界測試", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+  const base = { type: "quote", dataDate: "2026-10-28", session: "open", today: "2026-10-28" };
+
+  // 1. 合法達標: got: 1800, want: 1800 (100%)
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: { got: 1800, want: 1800 } }).status, "live");
+
+  // 2. got > want: 台股全市場實際檔數 (如 1850) 超過保守基準 (1800) 屬正常現象
+  const stMore = ctx.evalDataStatus({ ...base, coverage: { got: 1850, want: 1800 } });
+  assert.equal(stMore.status, "live", "got > want 必須視為達標 (1850/1800)");
+  assert.equal(stMore.isLive, true);
+
+  // 3. 非物件型別: 陣列、字串、數字、布林
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: [1800, 1800] }).status, "delayed", "coverage 為陣列必須拒絕");
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: "1800/1800" }).status, "delayed", "coverage 為字串必須拒絕");
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: 1800 }).status, "delayed", "coverage 為數字必須拒絕");
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: true }).status, "delayed", "coverage 為布林必須拒絕");
+
+  // 4. 數值異常: Infinity, NaN, 負數, 零
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: { got: Infinity, want: 1800 } }).status, "delayed");
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: { got: 1800, want: Infinity } }).status, "delayed");
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: { got: NaN, want: 1800 } }).status, "delayed");
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: { got: -10, want: 1800 } }).status, "delayed");
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: { got: 1800, want: 0 } }).status, "delayed");
+  assert.equal(ctx.evalDataStatus({ ...base, coverage: { got: 1800, want: -100 } }).status, "delayed");
+});
+
+test("v2.5.1 項目 C: 週末與國定假日收盤確認 vs 異常降級完整測試", () => {
+  const { ctx } = createHarness();
+  const sundayNow = new Date("2026-11-01T10:30:00+08:00"); // 週日 10:30
+
+  // 1. 週末顯示週五正常收盤 (健康收盤)
+  const stSunGood = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-30", // 週五收盤日
+    session: "closed",
+    dayState: "closed",
+    today: "2026-11-01",
+    now: sundayNow,
+    completeness: "complete",
+    coverage: { got: 1820, want: 1800 },
+    dateVerified: true,
+    dateConsistent: true,
+  });
+  assert.equal(stSunGood.status, "confirmed", "週末正常前營業日收盤必須為 confirmed");
+  assert.equal(stSunGood.isConfirmed, true);
+  assert.equal(stSunGood.isLive, false, "非交易日絕對不可標示為 live");
+  assert.match(stSunGood.note, /非交易日・顯示 2026-10-30 收盤資料/);
+
+  // 2. 週末收盤資料不完整 (如週五只有 TSE，OTC 缺失)
+  const stSunPartial = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-30",
+    session: "closed",
+    dayState: "closed",
+    today: "2026-11-01",
+    now: sundayNow,
+    completeness: "partial_tse_only",
+    coverage: { got: 1000, want: 1800 },
+  });
+  assert.equal(stSunPartial.status, "delayed", "週末資料不完整必須標示為 delayed，不可宣稱 confirmed");
+  assert.equal(stSunPartial.isConfirmed, false);
+  assert.match(stSunPartial.note, /非交易日・資料不完整（partial_tse_only）/);
+
+  // 3. 國定假日正常收盤
+  const holidayNow = new Date("2026-10-10T11:00:00+08:00"); // 雙十節
+  const stHolGood = ctx.evalDataStatus({
+    type: "quote",
+    dataDate: "2026-10-09", // 前一日收盤
+    session: "closed",
+    dayState: "closed",
+    today: "2026-10-10",
+    now: holidayNow,
+  });
+  assert.equal(stHolGood.status, "confirmed");
+  assert.equal(stHolGood.isConfirmed, true);
+  assert.equal(stHolGood.isLive, false);
+});
+
+test("v2.5.1 項目 C: 交易日收盤確認 vs 盤後待確認嚴格時間線測試", () => {
+  const { ctx } = createHarness();
+  const postCloseNow = new Date("2026-10-28T13:40:00+08:00"); // 13:40 剛收盤
+
+  // 1. 13:40 剛收盤，官方資料尚未公布 (資料日期仍為昨日 10-27)
+  const stWaiting = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-27",
+    session: "closed",
+    dayState: "trade",
+    today: "2026-10-28",
+    now: postCloseNow,
+  });
+  assert.equal(stWaiting.status, "pending", "尚未公布今日收盤必須為 pending");
+  assert.equal(stWaiting.isConfirmed, false);
+  assert.match(stWaiting.note, /等待 2026-10-28 收盤資料確認/);
+
+  // 2. 14:00 官方公布今日收盤，完整度確認
+  const stDone = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-28",
+    session: "closed",
+    dayState: "trade",
+    today: "2026-10-28",
+    completeness: "complete",
+    coverage: { got: 1820, want: 1800 },
+  });
+  assert.equal(stDone.status, "confirmed");
+  assert.equal(stDone.isConfirmed, true);
+  assert.equal(stDone.isLive, false);
+
+  // 3. 14:00 今日收盤但為估算值 (estimated: true)
+  const stEst = ctx.evalDataStatus({
+    type: "index",
+    dataDate: "2026-10-28",
+    session: "closed",
+    dayState: "trade",
+    today: "2026-10-28",
+    estimated: true,
+  });
+  assert.equal(stEst.status, "pending", "估算值絕不可為 confirmed");
+  assert.equal(stEst.isConfirmed, false);
+  assert.equal(stEst.text, "收盤估算");
+});
+
+// =========================================================================
+// Phase B v2.5.2 阻斷問題 A、B、C 深度驗證與回歸測試
+// =========================================================================
+
+test("v2.5.2 阻斷問題 A: 週末與休市日非健康行情絕不繞過檢查被標記為 confirmed", () => {
+  const { ctx, W } = createHarness();
+  W.dayState = "closed";
+  W.today = "2026-10-25"; // 週日
+
+  const baseWeekend = {
+    type: "index",
+    dataDate: "2026-10-23", // 週五收盤日
+    dayState: "closed",
+    session: "closed",
+    today: "2026-10-25",
+    source: "證交所 MIS",
+  };
+
+  // 1. 各種非健康 dataStatus 在週末不可標記為 confirmed
+  for (const badStatus of ["partial", "stale", "pending", "delayed", "unknown", "", "   "]) {
+    const st = ctx.evalDataStatus({ ...baseWeekend, dataStatus: badStatus });
+    assert.equal(st.status, "delayed", `週末 dataStatus=${badStatus} 必須為 delayed`);
+    assert.equal(st.isConfirmed, false, `週末 dataStatus=${badStatus} 絕不可為 confirmed`);
+    assert.equal(st.isLive, false);
+    assert.match(st.note, /非交易日/);
+  }
+
+  // 2. 日期未驗證 (dateVerified: false)
+  const stUnverified = ctx.evalDataStatus({ ...baseWeekend, dateVerified: false });
+  assert.equal(stUnverified.status, "delayed");
+  assert.equal(stUnverified.isConfirmed, false);
+  assert.match(stUnverified.note, /資料日期未經來源確認/);
+
+  // 3. 上市櫃日期不一致 (dateConsistent: false)
+  const stInconsistent = ctx.evalDataStatus({ ...baseWeekend, dateConsistent: false });
+  assert.equal(stInconsistent.status, "delayed");
+  assert.equal(stInconsistent.isConfirmed, false);
+  assert.match(stInconsistent.note, /上市櫃資料日期不一致/);
+
+  // 4. completeness 異常 (partial / degraded / 空白)
+  for (const badComp of ["partial", "degraded", "partial_tse_only", ""]) {
+    const stComp = ctx.evalDataStatus({ ...baseWeekend, completeness: badComp });
+    assert.equal(stComp.status, "delayed");
+    assert.equal(stComp.isConfirmed, false);
+  }
+
+  // 5. coverage 不足 (got 1000, want 2000)
+  const stCov = ctx.evalDataStatus({ ...baseWeekend, coverage: { got: 1000, want: 2000 } });
+  assert.equal(stCov.status, "delayed");
+  assert.equal(stCov.isConfirmed, false);
+  assert.match(stCov.note, /資料覆蓋率不足/);
+
+  // 6. isComplete: false 顯式未完成
+  const stIncomp = ctx.evalDataStatus({ ...baseWeekend, isComplete: false });
+  assert.equal(stIncomp.status, "delayed");
+  assert.equal(stIncomp.isConfirmed, false);
+
+  // 7. 正常健康週末資料：前一交易日資料完整收盤 -> 正確標記為 confirmed
+  const stHealthy = ctx.evalDataStatus({
+    ...baseWeekend,
+    completeness: "complete",
+    coverage: { got: 2000, want: 2000 },
+    dateVerified: true,
+    dateConsistent: true,
+    dataStatus: "confirmed",
+  });
+  assert.equal(stHealthy.status, "confirmed");
+  assert.equal(stHealthy.isConfirmed, true);
+  assert.equal(stHealthy.text, "收盤確認");
+  assert.equal(stHealthy.note, "非交易日・顯示 2026-10-23 收盤資料");
+});
+
+test("v2.5.2 阻斷問題 B: dataStatus: 'unavailable' 專屬處理與最高優先級", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 1. evalDataStatus 直接傳入 dataStatus: "unavailable"
+  const st1 = ctx.evalDataStatus({ dataStatus: "unavailable" });
+  assert.equal(st1.status, "unavailable");
+  assert.equal(st1.text, "未提供");
+  assert.equal(st1.note, "此項資料功能目前未提供");
+  assert.equal(st1.isLive, false);
+  assert.equal(st1.isConfirmed, false);
+  assert.equal(st1.isDelayed, false);
+  assert.equal(st1.isPending, false);
+
+  // 2. 優先級測試：即使在週末、收盤、或同時帶有 dateVerified: true、completeness: "complete"
+  const st2 = ctx.evalDataStatus({
+    dataStatus: "unavailable",
+    session: "closed",
+    dayState: "closed",
+    today: "2026-10-25",
+    dataDate: "2026-10-23",
+    dateVerified: true,
+    completeness: "complete",
+  });
+  assert.equal(st2.status, "unavailable");
+  assert.equal(st2.text, "未提供");
+  assert.equal(st2.isConfirmed, false);
+
+  // 3. liveTag() 渲染 unavailable 驗證
+  const htmlLive = ctx.liveTag({ dataStatus: "unavailable", live: false });
+  assert.match(htmlLive, /class="mkt-tag unavailable"/);
+  assert.match(htmlLive, /未提供/);
+  assert.match(htmlLive, /此項資料功能目前未提供/);
+
+  // 4. mktStatusTag() 渲染 unavailable 驗證
+  const htmlMkt = ctx.mktStatusTag(st1);
+  assert.equal(htmlMkt, '<span class="mkt-tag unavailable" title="此項資料功能目前未提供"><i></i>未提供</span>');
+});
+
+test("v2.5.2 阻斷問題 C: 舊版相容性與缺漏組合 8 項驗證", () => {
+  const { ctx, W } = createHarness();
+  const baseTrade = { session: "open", dayState: "trade", today: "2026-10-28" };
+
+  // 1. metadata 缺漏，但交易時段且日期為當日 -> 允許即時
+  const c1 = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-28" });
+  assert.equal(c1.status, "live");
+  assert.equal(c1.isLive, true);
+
+  // 2. metadata 缺漏，但資料日期已過期 -> 拒絕即時，標記延遲
+  const c2 = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-22" });
+  assert.equal(c2.status, "delayed");
+  assert.equal(c2.isLive, false);
+  assert.match(c2.note, /盤中尚未取得今日行情（停留於 2026-10-22）/);
+
+  // 3. dateVerified: false -> 拒絕即時
+  const c3 = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-28", dateVerified: false });
+  assert.equal(c3.status, "delayed");
+  assert.equal(c3.isLive, false);
+  assert.match(c3.note, /資料日期未經來源確認/);
+
+  // 4. dateConsistent: false -> 拒絕即時
+  const c4 = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-28", dateConsistent: false });
+  assert.equal(c4.status, "delayed");
+  assert.equal(c4.isLive, false);
+  assert.match(c4.note, /上市櫃資料日期不一致/);
+
+  // 5. isSuccess: false -> 拒絕即時
+  const c5 = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-28", isSuccess: false });
+  assert.equal(c5.status, "delayed");
+  assert.equal(c5.isLive, false);
+  assert.match(c5.note, /來源資料回應異常/);
+
+  // 6. dataStatus: ""、空白字串、未知字串 -> 拒絕即時
+  for (const badDs of ["", "   ", "unknown"]) {
+    const c6 = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-28", dataStatus: badDs });
+    assert.equal(c6.status, "delayed");
+    assert.equal(c6.isLive, false);
+  }
+
+  // 7. dataStatus: "live" 但 completeness 或 coverage 不合格 -> 拒絕即時
+  const c7a = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-28", dataStatus: "live", completeness: "partial" });
+  assert.equal(c7a.status, "delayed");
+  assert.equal(c7a.isLive, false);
+  assert.match(c7a.note, /資料不完整（partial）/);
+
+  const c7b = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-28", dataStatus: "live", coverage: { got: 1000, want: 1800 } });
+  assert.equal(c7b.status, "delayed");
+  assert.equal(c7b.isLive, false);
+  assert.match(c7b.note, /資料覆蓋率不足/);
+
+  // 8. dataStatus: "confirmed" 但日期未驗證或資料不完整 (收盤後) -> 拒絕收盤確認
+  const baseClosed = { session: "closed", dayState: "trade", today: "2026-10-28", dataDate: "2026-10-28", dataStatus: "confirmed" };
+  const c8a = ctx.evalDataStatus({ ...baseClosed, dateVerified: false });
+  assert.equal(c8a.status, "pending");
+  assert.equal(c8a.isConfirmed, false);
+
+  const c8b = ctx.evalDataStatus({ ...baseClosed, completeness: "degraded" });
+  assert.equal(c8b.status, "pending");
+  assert.equal(c8b.isConfirmed, false);
 });

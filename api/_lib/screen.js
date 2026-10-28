@@ -143,7 +143,7 @@ export default async function handler(req, res) {
   if (!quotes.length) return res.status(200).json({ ok: false, error: `拿不到選股資料（${a.reason?.message || "沒有資料"}）` });
   const st = quotes.filter(q => /^\d{4}$/.test(q.code));
   res.setHeader("Cache-Control", liveCache(L.live, 30));
-  return res.status(200).json({ ok: true, date: L.date || quotes.find(q => q.date)?.date || null, live: L.live, time: L.time, source: L.live ? `${L.source}；法人、財報為最近公布` : "證交所、櫃買中心 OpenAPI",
+  return res.status(200).json({ ok: true, date: L.date || quotes.find(q => q.date)?.date || null, live: L.live, time: L.time, source: L.live ? `${L.source}；法人、財報為最近公布` : "證交所、櫃買中心 OpenAPI", completeness: L?.completeness || null, dataStatus: L?.dataStatus || null, coverage: L?.coverage || null,
     ratio: { up: st.filter(q => q.chgPct > 0).length, down: st.filter(q => q.chgPct < 0).length, flat: st.filter(q => q.chgPct === 0).length },
     lists: [...hotLists(quotes, avg.value || []), ...buildLists({ quotes, t86: t.value || [], avg: avg.value || [], bw: bw.value || [] }),
       ...fundLists(quotes, { rev: rev.value || [], eps: eps.value || [], mg: mg.value || [], bw: bw.value || [] }), ...themeLists(quotes)] });
