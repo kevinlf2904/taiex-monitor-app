@@ -1552,7 +1552,7 @@ test("v2.4 情境 8: /api/hot 排行標籤正確反映底層 curH 的 completene
   assert.match(partialHotHtml, /資料不完整（partial）/, "熱門股標籤必須包含資料不完整提示");
   assert.doesNotMatch(partialHotHtml, /class="mkt-tag live"/, "底層 partial 時熱門股標籤絕不可標記為 live");
 
-  // 2. 底層 hot 資料為 complete 且 coverage 達標
+  // 2. 底層 hot 資料為 complete 且 coverage 達標，並包含完整日期驗證欄位
   W.hot["rank:value"] = {
     date: "2026-10-28",
     time: "10:30:00",
@@ -1561,6 +1561,8 @@ test("v2.4 情境 8: /api/hot 排行標籤正確反映底層 curH 的 completene
     completeness: "complete",
     coverage: { got: 1820, want: 1800 },
     dataStatus: "live",
+    dateVerified: true,
+    dateConsistent: true,
     rows: [{ code: "2330", name: "台積電", price: 1000, chgPct: 2.0 }],
   };
   const completeHotHtml = ctx.hotSec(ctx.sec, "tw");
@@ -1898,11 +1900,14 @@ test("v2.5.1 項目 A: dataStatus 全列舉邊界測試 (合法、已知非健�
   assert.equal(stLive.status, "live");
   assert.equal(stLive.isLive, true);
 
-  // 2. 舊 API 缺少 dataStatus (null / undefined): 保留向下相容
+  // 2. 缺少 dataStatus (null / undefined): 依 PR #165 嚴格政策，顯式 null 必須降級為 delayed
   const stNull = ctx.evalDataStatus({ ...baseOpts, dataStatus: null });
-  assert.equal(stNull.status, "live", "null dataStatus 在符合其他所有條件時相容為 live");
+  assert.equal(stNull.status, "delayed", "顯式 null dataStatus 絕不可視為 live，必須降級為 delayed");
+  assert.equal(stNull.isLive, false);
+  assert.match(stNull.note, /缺少 dataStatus/);
+
   const stUndef = ctx.evalDataStatus({ ...baseOpts });
-  assert.equal(stUndef.status, "live", "undefined dataStatus 在符合其他所有條件時相容為 live");
+  assert.equal(stUndef.status, "live", "undefined dataStatus 在非市場個股報價情境下相容為 live");
 
   // 3. 已知非健康狀態: "partial", "degraded", "stale", "delayed", "pending"
   for (const bad of ["partial", "degraded", "stale", "delayed", "pending"]) {
@@ -1950,9 +1955,13 @@ test("v2.5.1 項目 B: completeness 多型別防禦測試 (字串、空白、數
   assert.equal(ctx.evalDataStatus({ ...base, completeness: ["complete"] }).status, "delayed");
   assert.equal(ctx.evalDataStatus({ ...base, completeness: { status: "complete" } }).status, "delayed");
 
-  // 5. null 與 undefined (舊 API 相容)
-  assert.equal(ctx.evalDataStatus({ ...base, completeness: null }).status, "live");
-  assert.equal(ctx.evalDataStatus({ ...base, completeness: undefined }).status, "live");
+  // 5. null 與 undefined (嚴格缺失政策)
+  const stNullComp = ctx.evalDataStatus({ ...base, completeness: null });
+  assert.equal(stNullComp.status, "delayed", "顯式 null completeness 絕不可視為 live，必須降級為 delayed");
+  assert.equal(stNullComp.isLive, false);
+  assert.match(stNullComp.note, /缺少 completeness/);
+
+  assert.equal(ctx.evalDataStatus({ ...base, completeness: undefined }).status, "live", "個股報價未提供 completeness 欄位時相容為 live");
 });
 
 test("v2.5.1 項目 B: coverage 畸形結構與 got > want 邊界測試", () => {
@@ -2466,4 +2475,311 @@ test("Scenario 40: [第四輪可信度一致性驗證] 統一前端可信度函�
   assert.match(html, /const mktNoteText = getMktNoteText\(W\.mkt\);/);
   assert.match(html, /const hotHealthy = isHotHealthy\(H\);/);
   assert.match(html, /note = getHotNoteText\(H\);/);
+});
+
+
+// =========================================================================
+// PR #165 第五輪：台股行情欄位缺失矩陣、狀態契約與跨資產深度回歸測試
+// =========================================================================
+
+test("Scenario 41: [第五輪核心狀態機驗收] A. 台股行情欄位缺失矩陣深度測試", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  const validMarketBase = {
+    type: "breadth",
+    source: "證交所 MIS",
+    dataDate: "2026-10-28",
+    sourceTime: "10:30:00",
+    fetchedAt: Date.now(),
+    completeness: "complete",
+    coverage: { got: 1850, want: 1800 },
+    dateVerified: true,
+    dateConsistent: true,
+    dataStatus: "live",
+    session: "open",
+    today: "2026-10-28",
+  };
+
+  // 基準健康全市場資料確認
+  const healthy = ctx.evalDataStatus(validMarketBase);
+  assert.equal(healthy.status, "live");
+  assert.equal(healthy.isLive, true);
+
+  // 1. dataStatus 缺失、null、空字串、未知值
+  const stDsMissing = ctx.evalDataStatus({ ...validMarketBase, dataStatus: undefined, completeness: "partial" });
+  assert.equal(stDsMissing.status, "delayed");
+  assert.equal(stDsMissing.isLive, false);
+
+  const stDsNull = ctx.evalDataStatus({ ...validMarketBase, dataStatus: null });
+  assert.equal(stDsNull.status, "delayed");
+  assert.equal(stDsNull.isLive, false);
+  assert.match(stDsNull.note, /缺少 dataStatus/);
+
+  const stDsEmpty = ctx.evalDataStatus({ ...validMarketBase, dataStatus: "" });
+  assert.equal(stDsEmpty.status, "delayed");
+  assert.equal(stDsEmpty.isLive, false);
+
+  const stDsUnknown = ctx.evalDataStatus({ ...validMarketBase, dataStatus: "corrupt_state" });
+  assert.equal(stDsUnknown.status, "delayed");
+  assert.equal(stDsUnknown.isLive, false);
+  assert.match(stDsUnknown.note, /行情狀態異常（corrupt_state）/);
+
+  // 2. completeness 缺失、null、空字串、未知值
+  const stCompMissing = ctx.evalDataStatus({ ...validMarketBase, completeness: undefined });
+  assert.equal(stCompMissing.status, "delayed");
+  assert.equal(stCompMissing.isLive, false);
+  assert.match(stCompMissing.note, /資料未經完整驗證/);
+
+  const stCompNull = ctx.evalDataStatus({ ...validMarketBase, completeness: null });
+  assert.equal(stCompNull.status, "delayed");
+  assert.equal(stCompNull.isLive, false);
+  assert.match(stCompNull.note, /缺少 completeness/);
+
+  const stCompEmpty = ctx.evalDataStatus({ ...validMarketBase, completeness: "" });
+  assert.equal(stCompEmpty.status, "delayed");
+  assert.equal(stCompEmpty.isLive, false);
+
+  const stCompUnknown = ctx.evalDataStatus({ ...validMarketBase, completeness: "unknown_comp" });
+  assert.equal(stCompUnknown.status, "delayed");
+  assert.equal(stCompUnknown.isLive, false);
+  assert.match(stCompUnknown.note, /資料不完整（unknown_comp）/);
+
+  // 3. dateVerified 與 dateConsistent 分別缺失、null、false、true
+  // dateVerified 缺失
+  const stDvMissing = ctx.evalDataStatus({ ...validMarketBase, dateVerified: undefined });
+  assert.equal(stDvMissing.status, "delayed");
+  assert.equal(stDvMissing.isLive, false);
+  assert.match(stDvMissing.note, /資料未經完整驗證/);
+
+  // dateVerified null
+  const stDvNull = ctx.evalDataStatus({ ...validMarketBase, dateVerified: null });
+  assert.equal(stDvNull.status, "delayed");
+  assert.equal(stDvNull.isLive, false);
+  assert.match(stDvNull.note, /缺少 dateVerified/);
+
+  // dateVerified false
+  const stDvFalse = ctx.evalDataStatus({ ...validMarketBase, dateVerified: false });
+  assert.equal(stDvFalse.status, "delayed");
+  assert.equal(stDvFalse.isLive, false);
+  assert.match(stDvFalse.note, /資料日期未經來源確認/);
+
+  // dateConsistent 缺失
+  const stDcMissing = ctx.evalDataStatus({ ...validMarketBase, dateConsistent: undefined });
+  assert.equal(stDcMissing.status, "delayed");
+  assert.equal(stDcMissing.isLive, false);
+  assert.match(stDcMissing.note, /資料未經完整驗證/);
+
+  // dateConsistent null
+  const stDcNull = ctx.evalDataStatus({ ...validMarketBase, dateConsistent: null });
+  assert.equal(stDcNull.status, "delayed");
+  assert.equal(stDcNull.isLive, false);
+  assert.match(stDcNull.note, /缺少 dateConsistent/);
+
+  // dateConsistent false
+  const stDcFalse = ctx.evalDataStatus({ ...validMarketBase, dateConsistent: false });
+  assert.equal(stDcFalse.status, "delayed");
+  assert.equal(stDcFalse.isLive, false);
+  assert.match(stDcFalse.note, /上市櫃資料日期不一致/);
+
+  // 4. 同時缺少多個欄位 (如 dateVerified: false 且 dateConsistent: false)
+  const stMulti = ctx.evalDataStatus({ ...validMarketBase, dateVerified: false, dateConsistent: false });
+  assert.equal(stMulti.status, "delayed");
+  assert.equal(stMulti.isLive, false);
+  assert.match(stMulti.note, /資料日期未經來源確認/);
+
+  // 5. 收盤後不健全全市場資料：絕不得標記為 confirmed，必須為 pending 並附帶不完整原因
+  const stClosedIncomplete = ctx.evalDataStatus({
+    ...validMarketBase,
+    session: "closed",
+    completeness: "partial",
+    dataStatus: "partial",
+  });
+  assert.notEqual(stClosedIncomplete.status, "confirmed");
+  assert.equal(stClosedIncomplete.isConfirmed, false);
+  assert.equal(stClosedIncomplete.status, "pending");
+  assert.match(stClosedIncomplete.note, /等待 2026-10-28 完整收盤（資料不完整（partial））/);
+});
+
+test("Scenario 42: [第五輪核心狀態機驗收] B. 狀態契約與不可冒充 live/confirmed 驗證", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 1. 不健全資料 (degraded, partial, stale, delayed, pending) 絕不產生 live
+  for (const st of ["degraded", "partial", "stale", "delayed", "pending"]) {
+    const res = ctx.evalDataStatus({
+      type: "hot",
+      source: "富果行情快照",
+      dataDate: "2026-10-28",
+      dataStatus: st,
+      completeness: st === "partial" ? "partial" : "complete",
+      dateVerified: true,
+      dateConsistent: true,
+      session: "open",
+      today: "2026-10-28",
+    });
+    assert.notEqual(res.status, "live", `${st} 絕不可為 live`);
+    assert.equal(res.isLive, false);
+    assert.equal(res.status, "delayed");
+  }
+
+  // 2. dataStatus: unavailable 保持專屬狀態
+  const unavail = ctx.evalDataStatus({
+    type: "breadth",
+    dataStatus: "unavailable",
+    dateVerified: true,
+    dateConsistent: true,
+  });
+  assert.equal(unavail.status, "unavailable");
+  assert.equal(unavail.isUnavailable, undefined); // makeResult returns isLive, isDelayed, etc.
+  assert.equal(unavail.text, "未提供");
+  assert.match(unavail.note, /未提供/);
+
+  // 3. live、isLive、isConfirmed、isDelayed、提示文字彼此一致
+  const healthyObj = ctx.evalDataStatus({
+    type: "breadth",
+    source: "證交所 MIS",
+    dataDate: "2026-10-28",
+    dataStatus: "live",
+    completeness: "complete",
+    dateVerified: true,
+    dateConsistent: true,
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(healthyObj.status, "live");
+  assert.equal(healthyObj.isLive, true);
+  assert.equal(healthyObj.isConfirmed, false);
+  assert.equal(healthyObj.isDelayed, false);
+  assert.equal(healthyObj.text, "盤中即時");
+});
+
+test("Scenario 43: [第五輪核心狀態機驗收] C. 跨資產獨立性回歸 (美股、期貨、委買賣、融資券、三大法人、K線、個股)", () => {
+  const { ctx, W } = createHarness();
+  const testNow = new Date("2026-10-28T10:30:00+08:00");
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 1. 美股常規時段 (不因缺少台股 dateVerified/dateConsistent/completeness 誤降級)
+  const usRes = ctx.evalDataStatus({
+    type: "us",
+    usSession: "open",
+    dataDate: "2026-10-27",
+    now: testNow,
+    isSuccess: true,
+  });
+  assert.equal(usRes.status, "live");
+  assert.equal(usRes.isLive, true);
+  assert.equal(usRes.text, "美股盤中");
+
+  // 2. 台指期日盤
+  const futRes = ctx.evalDataStatus({
+    type: "futures",
+    fsession: "day",
+    dataDate: "2026-10-28",
+    now: testNow,
+    isSuccess: true,
+  });
+  assert.equal(futRes.status, "live");
+  assert.equal(futRes.isLive, true);
+  assert.equal(futRes.text, "盤中即時");
+
+  // 3. 委買委賣 (MI_5MINS)
+  const ordersRes = ctx.evalDataStatus({
+    type: "orders",
+    source: "證交所 MI_5MINS",
+    dataDate: "2026-10-28",
+    sourceTime: "10:30:00",
+    isSuccess: true,
+    isComplete: true,
+    session: "open",
+    today: "2026-10-28",
+    now: testNow,
+  });
+  assert.equal(ordersRes.status, "live");
+  assert.equal(ordersRes.isLive, true);
+
+  // 4. 融資融券 (MI_MARGN): 今日數據未出時等待盤後公布 (pending)，已出時收盤確認 (confirmed)
+  const marginPending = ctx.evalDataStatus({
+    type: "margin",
+    source: "證交所 MI_MARGN",
+    dataDate: "2026-10-27", // 昨日數據
+    isSuccess: true,
+    isComplete: true,
+    session: "open",
+    today: "2026-10-28",
+    now: testNow,
+  });
+  assert.equal(marginPending.status, "pending");
+  assert.equal(marginPending.text, "盤後待確認");
+
+  const marginConfirmed = ctx.evalDataStatus({
+    type: "margin",
+    source: "證交所 MI_MARGN",
+    dataDate: "2026-10-28", // 今日數據已公布
+    isSuccess: true,
+    isComplete: true,
+    session: "closed",
+    today: "2026-10-28",
+    now: testNow,
+  });
+  assert.equal(marginConfirmed.status, "confirmed");
+  assert.equal(marginConfirmed.text, "收盤確認");
+
+  // 5. 三大法人 (T86)
+  const instPending = ctx.evalDataStatus({
+    type: "inst",
+    source: "證交所 T86",
+    dataDate: "2026-10-27",
+    isSuccess: true,
+    isComplete: true,
+    session: "open",
+    today: "2026-10-28",
+    now: testNow,
+  });
+  assert.equal(instPending.status, "pending");
+  assert.equal(instPending.text, "盤後待確認");
+
+  const instConfirmed = ctx.evalDataStatus({
+    type: "inst",
+    source: "證交所 T86",
+    dataDate: "2026-10-28",
+    isSuccess: true,
+    isComplete: true,
+    session: "closed",
+    today: "2026-10-28",
+    now: testNow,
+  });
+  assert.equal(instConfirmed.status, "confirmed");
+  assert.equal(instConfirmed.text, "收盤確認");
+
+  // 6. 個股即時報價 (正常盤中個股不需跨市場 dateConsistent)
+  const quoteRes = ctx.evalDataStatus({
+    type: "quote",
+    source: "富果行情快照",
+    dataDate: "2026-10-28",
+    sourceTime: "10:30:00",
+    fetchedAt: Date.now(),
+    isSuccess: true,
+    isComplete: true,
+    session: "open",
+    today: "2026-10-28",
+    now: testNow,
+  });
+  assert.equal(quoteRes.status, "live");
+  assert.equal(quoteRes.isLive, true);
+
+  // 7. K 線與技術指標
+  const klineRes = ctx.evalDataStatus({
+    type: "kline",
+    dataDate: "2026-10-28",
+    isSuccess: true,
+    session: "open",
+    today: "2026-10-28",
+    now: testNow,
+  });
+  assert.equal(klineRes.status, "live");
+  assert.equal(klineRes.text, "盤中估算");
 });

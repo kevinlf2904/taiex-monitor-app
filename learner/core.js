@@ -204,7 +204,19 @@ function evalDataStatus(opts = {}) {
   const effectiveTtl = typeof ttl === "number" && ttl > 0 ? ttl : (defaultTtls[type] || 60000);
   const age = fetchedAt ? (nowMs - fetchedAt) : null;
   const isExpired = age !== null && age > effectiveTtl;
-  const isCompletenessOk = completeness == null || (typeof completeness === "string" && completeness.trim() === "complete");
+  // 判定是否為台股全市場行情 (PR #165 嚴格品質契約)
+  // 包含：全市場廣度 (breadth)、熱門排行 (hot)、全市場統計 (market)、或顯式標記 isMarket
+  const isMarketData = type === "breadth" || type === "hot" || type === "market" || Boolean(opts.isMarket);
+
+  // 1. 完整度 (completeness) 判定
+  let isCompletenessOk = true;
+  if (opts.completeness !== undefined) {
+    isCompletenessOk = typeof completeness === "string" && completeness.trim() === "complete";
+  } else if (isMarketData) {
+    isCompletenessOk = false;
+  }
+
+  // 2. 覆蓋率 (coverage) 判定
   let isCoverageOk = true;
   if (coverage != null) {
     if (typeof coverage === "object" && !Array.isArray(coverage)) {
@@ -215,16 +227,43 @@ function evalDataStatus(opts = {}) {
       isCoverageOk = false;
     }
   }
-  const isDateVerifiedOk = dateVerified !== false;
-  const isDateConsistentOk = dateConsistent !== false;
-  const isDataStatusOk = dataStatus == null || dataStatus === "live" || dataStatus === "confirmed";
+
+  // 3. 日期驗證 (dateVerified) 判定
+  let isDateVerifiedOk = true;
+  if (opts.dateVerified !== undefined) {
+    isDateVerifiedOk = (dateVerified === true);
+  } else if (isMarketData) {
+    isDateVerifiedOk = false;
+  }
+
+  // 4. 上市櫃一致性 (dateConsistent) 判定
+  let isDateConsistentOk = true;
+  if (opts.dateConsistent !== undefined) {
+    isDateConsistentOk = (dateConsistent === true);
+  } else if (isMarketData) {
+    isDateConsistentOk = false;
+  }
+
+  // 5. 行情狀態 (dataStatus) 判定
+  let isDataStatusOk = true;
+  if (opts.dataStatus !== undefined) {
+    isDataStatusOk = (dataStatus === "live" || dataStatus === "confirmed");
+  } else if (isMarketData) {
+    // 全市場資料若未帶 dataStatus，需向後相容 v2.4 完整驗證格式 (completeness, coverage, dateVerified, dateConsistent 全數具備且通過)
+    if (completeness === "complete" && isCoverageOk && dateVerified === true && dateConsistent === true) {
+      isDataStatusOk = true;
+    } else {
+      isDataStatusOk = false;
+    }
+  }
+
   const isDataComplete = isComplete !== false && isCompletenessOk && isCoverageOk && isDateVerifiedOk && isDateConsistentOk && isDataStatusOk;
 
   const getIncompleteNote = (defaultNote = "資料不完整") => {
     if (dateVerified === false) return "資料日期未經來源確認";
     if (dateConsistent === false) return "上市櫃資料日期不一致";
-    if (!isCompletenessOk) {
-      return (typeof completeness === "string" && completeness.trim()) ? ("資料不完整（" + completeness.trim() + "）") : "資料完整度未達標";
+    if (typeof completeness === "string" && completeness.trim() && completeness.trim() !== "complete") {
+      return "資料不完整（" + completeness.trim() + "）";
     }
     if (!isCoverageOk) {
       if (coverage && typeof coverage.got === "number" && typeof coverage.want === "number") {
@@ -240,6 +279,14 @@ function evalDataStatus(opts = {}) {
     if (dataStatus != null && dataStatus !== "live" && dataStatus !== "confirmed") {
       return (typeof dataStatus === "string" && dataStatus.trim()) ? ("行情狀態異常（" + dataStatus.trim() + "）") : "行情狀態未提供";
     }
+    if (opts.dataStatus === null) return "資料未經完整驗證（缺少 dataStatus）";
+    if (opts.completeness === null) return "資料未經完整驗證（缺少 completeness）";
+    if (opts.dateVerified === null) return "資料未經完整驗證（缺少 dateVerified）";
+    if (opts.dateConsistent === null) return "資料未經完整驗證（缺少 dateConsistent）";
+    if (isMarketData && (!isCompletenessOk || !isDateVerifiedOk || !isDateConsistentOk || !isDataStatusOk)) {
+      return "資料未經完整驗證";
+    }
+    if (!isCompletenessOk) return "資料完整度未達標";
     if (isComplete === false) return "資料標記為未完成";
     return defaultNote;
   };
@@ -477,6 +524,7 @@ function evalDataStatus(opts = {}) {
   }
   return { status: "confirmed", text: "收盤確認", note: "", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
 }
+
 
 function mktStatusTag(statusObj, options = {}) {
   if (!statusObj) return "";
