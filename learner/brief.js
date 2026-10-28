@@ -1760,10 +1760,10 @@ function todayPage() {
         ${alerts ? `<button type="button" class="dh-badge mon-alert" data-l2mon>■ 警示 ${alerts} 件 ›</button>` : ""}
       </div>
       <div class="dh-title-btns">
-        <button class="td-ib" data-tx="tdre" title="重新整理">↻<span class="td-vh">重新整理</span></button>
-        <button class="td-ib" data-tx="tdai" title="AI 整理">${ico("ai")}<span class="td-vh">AI 整理</span></button>
-        <button class="td-ib" data-tx="tdtxt" title="複製文字">${ico("copy")}<span class="td-vh">複製文字</span></button>
-        ${M ? `<button class="td-ib" data-mshare="share" title="分享今日盤面（圖片）">${ico("share")}<span class="td-vh">分享今日盤面</span></button>` : ""}
+        <button type="button" class="td-ib" data-tx="tdre" title="重新整理">↻<span class="td-vh">重新整理</span></button>
+        <button type="button" class="td-ib" data-tx="tdai" title="AI 整理">${ico("ai")}<span class="td-vh">AI 整理</span></button>
+        <button type="button" class="td-ib" data-tx="tdtxt" title="複製文字">${ico("copy")}<span class="td-vh">複製文字</span></button>
+        ${M ? `<button type="button" class="td-ib" data-mshare="share" title="分享今日盤面（圖片）">${ico("share")}<span class="td-vh">分享今日盤面</span></button>` : ""}
       </div>
     </div>
     ${sess.displayNote || cn ? `<div class="dh-note-bar note">📅 ${esc(sess.displayNote || cn[1])}</div>` : ""}

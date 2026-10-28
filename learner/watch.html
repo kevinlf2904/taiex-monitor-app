@@ -1022,6 +1022,7 @@ tr.on td { background: var(--surface-2); }
 /* 觸控裝置：小按鈕的可點範圍加大（文字連結用透明的外框撐大，不改版面） */
 @media (pointer: coarse) {
   .mkseg button { padding: 5px 11px; } .groups button, .ichip { padding: 6px 12px; }
+  #lx .dh-status-bar [data-tx], .td-page .dh-title-btns .td-ib, .td-ib { width: 44px; height: 44px; min-width: 44px; min-height: 44px; flex: 0 0 44px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 0; margin: 0; border: 0; border-radius: var(--radius); background: transparent; color: var(--muted); font: inherit; font-size: 17px; line-height: 1; cursor: pointer; }
 }
 </style>
 <link rel="stylesheet" href="minimal.css">
@@ -1587,7 +1588,12 @@ const liveTag = (J, closed) => {
     sourceTime: J.time,
     fetchedAt: J.at,
     isSuccess: !J.err,
-    isComplete: true,
+    isComplete: J.isComplete !== false,
+    completeness: J.completeness,
+    coverage: J.coverage,
+    dataStatus: J.dataStatus,
+    dateVerified: J.dateVerified,
+    dateConsistent: J.dateConsistent,
     session: W.session,
     today: W.today,
   });
@@ -2054,7 +2060,9 @@ function renderList0() {
     renderInd(); note = "台股、美股有即時報價；日股、韓股只列名稱。題材的平均漲跌是成員今天漲跌幅的簡單平均。";
   } else if (W.lt === "mkt") {
     $("#lTools").innerHTML = `<span class="note">${W.mkReg === "otc" ? "櫃買中心・每個交易日收盤後更新" : W.mkReg === "lst" ? "證交所・每個交易日收盤後更新" : W.mkReg === "off" ? "證交所、櫃買中心公告・約 15 分鐘更新" : W.mkReg === "gl" ? `原物料・外匯・利率${W.gl?.at ? `・更新於 ${new Date(W.gl.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span>${rfBtn("mktRefresh")}`;
-    renderMkt(); note = W.mkReg === "otc" || W.mkReg === "lst" || W.mkReg === "off" ? "" : W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${W.mkt.live ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布" : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計"}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : "";
+    const mktHealthy = isMarketHealthy(W.mkt);
+    const mktNoteText = getMktNoteText(W.mkt);
+    renderMkt(); note = W.mkReg === "otc" || W.mkReg === "lst" || W.mkReg === "off" ? "" : W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${mktNoteText}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : (W.mkt?.dataStatus === "unavailable" ? mktNoteText : "");
   } else if (W.lt === "etf") {
     note = renderEtf();
   } else if (W.lt === "earn") {
@@ -2087,7 +2095,8 @@ function renderList0() {
     $("#lTools").innerHTML = rankHub() + `<div class="seg" role="group" aria-label="排行" id="rankSeg">${RANKS.map(([k, t]) => `<button data-rank="${k}" aria-pressed="${W.rankType === k}">${t}</button>`).join("")}</div>`;
     $("#wl").innerHTML = H?.rows?.length ? (H.live && !chipRank ? liveRank(H.rows, W.rankType) : H.rows).map((r, i) => rowHtml(r.code, chipRank ? { name: r.name, ...(W.quotes.get(r.code) || {}) } : { ...r, ...(W.quotes.get(r.code) || {}) }, { rank: i + 1, star: true,
       metric: chipRank ? `${W.rankType === "foreign" ? "外資" : "投信"}買超 ${r[W.rankType].toLocaleString()} 張` : W.rankType === "value" ? `成交值 ${r.value?.toFixed(1)} 億` : W.rankType === "volume" ? `成交量 ${fmtVol(r.vol)} 張` : `${r.live ? "現價" : "收盤"} ${fmtP(r.price)}・${r.chgPct > 0 ? "+" : ""}${(+r.chgPct).toFixed(2)}%` })).join("") : `<li class="empty note">${H?.err ? "⚠︎ " + esc(H.err) : W.off ? "需要部署到網站才有排行。" : "載入中…"}</li>`;
-    note = H ? `${H.live ? "盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）" : H.date ? H.date.replace(/-/g, "/") + " 收盤後統計" : ""}${H.source ? "・" + H.source : ""}；右邊的價格是即時價` : "";
+    const hotHealthy = isHotHealthy(H);
+    note = getHotNoteText(H);
   }
   W.prevPx.clear();
   const ago = W.lastOk ? Math.round((Date.now() - W.lastOk) / 1000) : null;
@@ -4281,6 +4290,11 @@ function hotSec(sec, page) {
     isSuccess: !err,
     err,
     isComplete: Array.isArray(rows) && rows.length > 0,
+    completeness: curH?.completeness,
+    coverage: curH?.coverage,
+    dataStatus: curH?.dataStatus,
+    dateVerified: curH?.dateVerified,
+    dateConsistent: curH?.dateConsistent,
     ttl: MK_HOT_TTL,
     session: W.session,
     today: W.today,
@@ -4621,7 +4635,7 @@ function renderMkt() {
     h += sec("市場概況", `<div class="mkbox"><button data-mk="goList" data-v="limit"><span>漲停家數</span><b class="fill up">${B.limUp}</b></button><button data-mk="goList" data-v="limitDown"><span>跌停家數</span><b class="fill down">${B.limDn}</b></button><button data-mk="goRankT" data-v="gain"><span>上漲家數</span><b class="line up">${B.up}</b></button><button data-mk="goRankT" data-v="loss"><span>下跌家數</span><b class="line down">${B.down}</b></button>${(HL => HL ? `<div class="mkhl"><span>股價月新高</span><b class="up">${HL.hi}</b></div><div class="mkhl"><span>股價月新低</span><b class="down">${HL.lo}</b></div>` : "")(J.newHL?.[W.mkM])}</div>
       <div class="ratio"><span class="up" style="width:${B.up / tot * 100}%"></span><span class="flat" style="width:${B.flat / tot * 100}%"></span><span class="down" style="width:${B.down / tot * 100}%"></span></div>
       <details class="mkmore"><summary>漲跌幅分佈</summary><div class="hist">${B.buckets.map((x, i) => `<div><small>${x.n}</small><i class="${i < 5 ? "up" : i > 5 ? "down" : "flat"}" style="height:${(x.n / mx * 70).toFixed(0)}px"></i><span data-s="${x.label.replace(/%/g, "")}">${x.label}</span></div>`).join("")}</div></details>
-      <details class="mkmore"><summary>怎麼算的、多久更新</summary><p class="note">家數＝上市（或上櫃）所有股票＋ETF（不含權證、債券），和券商「整體市場」同一個口徑；漲停跌停用昨收算出的實際漲跌停價判斷（槓桿／反向 ETF 沒有漲跌停）；月新高低是收盤價創近 20 個交易日新高或新低。盤中資料來源：${esc(J.source || "")}，畫面每 10 秒更新一次（伺服器最多快取 10 秒）。</p></details>`, `${mktStatusTag(evalDataStatus({ type: "breadth", source: J.source || "證交所 MIS", dataDate: J.date, sourceTime: J.time, fetchedAt: W.mkt?.at, isSuccess: !J.err, isComplete: B && B.buckets && B.buckets.length > 0, coverage: J.coverage, session: W.session, today: W.today }))}・平盤 ${B.flat}・股票＋ETF${TT?.value ? `・成交 ${Math.round(TT.value).toLocaleString()} 億` : ""}${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠︎ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, [...MKT2, ["all", "全部"]]) : ""); }
+      <details class="mkmore"><summary>怎麼算的、多久更新</summary><p class="note">家數＝上市（或上櫃）所有股票＋ETF（不含權證、債券），和券商「整體市場」同一個口徑；漲停跌停用昨收算出的實際漲跌停價判斷（槓桿／反向 ETF 沒有漲跌停）；月新高低是收盤價創近 20 個交易日新高或新低。盤中資料來源：${esc(J.source || "")}，畫面每 10 秒更新一次（伺服器最多快取 10 秒）。</p></details>`, `${mktStatusTag(evalDataStatus({ type: "breadth", source: J.source || "證交所 MIS", dataDate: J.date, sourceTime: J.time, fetchedAt: W.mkt?.at, isSuccess: !J.err, isComplete: B && B.buckets && B.buckets.length > 0, coverage: J.coverage, completeness: J.completeness, dataStatus: J.dataStatus, dateVerified: J.dateVerified, dateConsistent: J.dateConsistent, session: W.session, today: W.today }))}・平盤 ${B.flat}・股票＋ETF${TT?.value ? `・成交 ${Math.round(TT.value).toLocaleString()} 億` : ""}${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠︎ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, [...MKT2, ["all", "全部"]]) : ""); }
   // 產業概況：漲最多、跌最多各 3 個（直條），其餘收在「更多」
   const S = J.sectorsBy?.[W.secM] || J.sectors;
   if (S?.length) { const top = [...S.slice(0, 3), ...S.slice(-3).filter(x => !S.slice(0, 3).includes(x))], mx = Math.max(0.5, ...top.map(x => Math.abs(x.pct || 0))), pre = W.secM === "tpex" ? "櫃" : "市";

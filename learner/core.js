@@ -164,6 +164,11 @@ function evalDataStatus(opts = {}) {
     lastValidAt = null,
     isSuccess = true,
     isComplete = true,
+    completeness = null,
+    coverage = null,
+    dataStatus = null,
+    dateVerified = null,
+    dateConsistent = null,
     err = null,
     session = null,
     dayState = null,
@@ -171,7 +176,6 @@ function evalDataStatus(opts = {}) {
     now = new Date(),
     estimated = false,
     ttl = null,
-    coverage = null,
     unimplemented = false,
     usSession = null,
     fsession = null,
@@ -200,9 +204,102 @@ function evalDataStatus(opts = {}) {
   const effectiveTtl = typeof ttl === "number" && ttl > 0 ? ttl : (defaultTtls[type] || 60000);
   const age = fetchedAt ? (nowMs - fetchedAt) : null;
   const isExpired = age !== null && age > effectiveTtl;
-  const isDataComplete = isComplete !== false && (!coverage || !coverage.want || coverage.got >= coverage.want * 0.95);
+  // 判定是否為台股全市場行情 (PR #165 嚴格品質契約)
+  // 包含：全市場廣度 (breadth)、熱門排行 (hot)、全市場統計 (market)、或顯式標記 isMarket
+  const isMarketData = type === "breadth" || type === "hot" || type === "market" || Boolean(opts.isMarket);
 
-  if (unimplemented) {
+  // 1. 完整度 (completeness) 判定
+  let isCompletenessOk = true;
+  if (opts.completeness !== undefined) {
+    isCompletenessOk = typeof completeness === "string" && completeness.trim() === "complete";
+  } else if (isMarketData) {
+    isCompletenessOk = false;
+  }
+
+  // 2. 覆蓋率 (coverage) 判定
+  let isCoverageOk = true;
+  if (coverage != null) {
+    if (typeof coverage === "object" && !Array.isArray(coverage)) {
+      const hasGot = typeof coverage.got === "number" && Number.isFinite(coverage.got) && coverage.got >= 0;
+      const hasWant = typeof coverage.want === "number" && Number.isFinite(coverage.want) && coverage.want > 0;
+      isCoverageOk = Boolean(hasGot && hasWant && (coverage.got >= coverage.want * 0.95));
+    } else {
+      isCoverageOk = false;
+    }
+  } else if (isMarketData) {
+    isCoverageOk = false;
+  }
+
+  // 3. 日期驗證 (dateVerified) 判定
+  let isDateVerifiedOk = true;
+  if (opts.dateVerified !== undefined) {
+    isDateVerifiedOk = (dateVerified === true);
+  } else if (isMarketData) {
+    isDateVerifiedOk = false;
+  }
+
+  // 4. 上市櫃一致性 (dateConsistent) 判定
+  let isDateConsistentOk = true;
+  if (opts.dateConsistent !== undefined) {
+    isDateConsistentOk = (dateConsistent === true);
+  } else if (isMarketData) {
+    isDateConsistentOk = false;
+  }
+
+  // 5. 行情狀態 (dataStatus) 判定
+  let isDataStatusOk = true;
+  if (opts.dataStatus !== undefined) {
+    isDataStatusOk = (dataStatus === "live" || dataStatus === "confirmed");
+  } else if (isMarketData) {
+    // 全市場資料若未帶 dataStatus，需向後相容 v2.4 完整驗證格式 (completeness, coverage, dateVerified, dateConsistent 全數具備且通過)
+    if (completeness === "complete" && isCoverageOk && dateVerified === true && dateConsistent === true) {
+      isDataStatusOk = true;
+    } else {
+      isDataStatusOk = false;
+    }
+  }
+
+  const isDataComplete = isComplete !== false && isCompletenessOk && isCoverageOk && isDateVerifiedOk && isDateConsistentOk && isDataStatusOk;
+
+  const getIncompleteNote = (defaultNote = "資料不完整") => {
+    if (dateVerified === false) return "資料日期未經來源確認";
+    if (dateConsistent === false) return "上市櫃資料日期不一致";
+    if (typeof completeness === "string" && completeness.trim() && completeness.trim() !== "complete") {
+      return "資料不完整（" + completeness.trim() + "）";
+    }
+    if (opts.coverage === null) return "資料未經完整驗證（缺少 coverage）";
+    if (coverage != null && !isCoverageOk) {
+      if (typeof coverage === "object" && !Array.isArray(coverage)) {
+        if (typeof coverage.got === "number" && typeof coverage.want === "number" && Number.isFinite(coverage.got) && Number.isFinite(coverage.want) && coverage.got >= 0 && coverage.want > 0) {
+          return "資料覆蓋率不足（" + coverage.got + "/" + coverage.want + "）";
+        }
+      }
+      return "資料覆蓋率異常";
+    }
+    if (dataStatus === "degraded") return "行情資料降級";
+    if (dataStatus === "partial") return "資料部分提供（partial）";
+    if (dataStatus === "stale") return "行情資料停滯（stale）";
+    if (dataStatus === "delayed") return "行情資料延遲";
+    if (dataStatus === "pending") return "行情資料待確認";
+    if (dataStatus != null && dataStatus !== "live" && dataStatus !== "confirmed") {
+      return (typeof dataStatus === "string" && dataStatus.trim()) ? ("行情狀態異常（" + dataStatus.trim() + "）") : "行情狀態未提供";
+    }
+    if (opts.dataStatus === null) return "資料未經完整驗證（缺少 dataStatus）";
+    if (opts.completeness === null) return "資料未經完整驗證（缺少 completeness）";
+    if (opts.dateVerified === null) return "資料未經完整驗證（缺少 dateVerified）";
+    if (opts.dateConsistent === null) return "資料未經完整驗證（缺少 dateConsistent）";
+    if (isMarketData && !isCoverageOk) {
+      return "資料覆蓋率未提供";
+    }
+    if (isMarketData && (!isCompletenessOk || !isDateVerifiedOk || !isDateConsistentOk || !isDataStatusOk)) {
+      return "資料未經完整驗證";
+    }
+    if (!isCompletenessOk) return "資料完整度未達標";
+    if (isComplete === false) return "資料標記為未完成";
+    return defaultNote;
+  };
+
+  if (unimplemented || dataStatus === "unavailable") {
     return {
       status: "unavailable",
       text: "未提供",
@@ -289,6 +386,20 @@ function evalDataStatus(opts = {}) {
         isConfirmed: false,
       };
     }
+    if (!isDataComplete) {
+      return {
+        status: "delayed",
+        text: "資料延遲",
+        note: "非交易日・" + getIncompleteNote("資料不完整"),
+        date: dataDate,
+        source,
+        time: sourceTime,
+        isLive: false,
+        isDelayed: true,
+        isPending: false,
+        isConfirmed: false,
+      };
+    }
     return {
       status: "confirmed",
       text: "收盤確認",
@@ -371,13 +482,14 @@ function evalDataStatus(opts = {}) {
 
   if (curSess === "open") {
     if (dataDate && dataDate < isoToday) {
-      return { status: "delayed", text: "資料延遲", note: "盤中尚未取得今日行情（停留於 " + dataDate + "）", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      const extraDegraded = (dataStatus === "degraded" || completeness === "degraded") ? "・行情資料降級" : "";
+      return { status: "delayed", text: "資料延遲", note: "盤中尚未取得今日行情（停留於 " + dataDate + "）" + extraDegraded, date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
     }
     if (isExpired) {
       return { status: "delayed", text: "資料延遲", note: "超過合理更新期限（已逾 " + Math.round(age / 1000) + " 秒）", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
     }
     if (!isDataComplete) {
-      return { status: "delayed", text: "資料延遲", note: "資料不完整", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      return { status: "delayed", text: "資料延遲", note: getIncompleteNote("資料不完整"), date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
     }
     if (estimated || type === "kline" || type === "indicator") {
       return { status: "live", text: "盤中估算", note: "依盤中即時資料估算，收盤確認最終值", date: dataDate || isoToday, source, time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
@@ -408,14 +520,19 @@ function evalDataStatus(opts = {}) {
       }
       return { status: "confirmed", text: "收盤確認", note: isoToday + " 當日收盤確認", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
     }
-    return { status: "pending", text: "盤後待確認", note: "等待 " + isoToday + " 收盤資料確認", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+    const note = (!isDataComplete && isTodayData) ? ("等待 " + isoToday + " 完整收盤（" + getIncompleteNote("資料不完整") + "）") : ("等待 " + isoToday + " 收盤資料確認");
+    return { status: "pending", text: "盤後待確認", note, date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
   }
 
   if (estimated) {
     return { status: "pending", text: "收盤估算", note: "估算值，非官方收盤定格資料", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
   }
+  if (!isDataComplete) {
+    return { status: "delayed", text: "資料延遲", note: getIncompleteNote("資料不完整"), date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+  }
   return { status: "confirmed", text: "收盤確認", note: "", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
 }
+
 
 function mktStatusTag(statusObj, options = {}) {
   if (!statusObj) return "";
@@ -426,6 +543,114 @@ function mktStatusTag(statusObj, options = {}) {
   return "<span class=\"mkt-tag " + status + "\" title=\"" + esc(note || text) + (extra ? " (" + extra + ")" : "") + "\"><i></i>" + text + (extra ? "<small>" + extra + "</small>" : "") + "</span>";
 }
 
+/* ---------- 市場可信度與即時附註判定純函式 (Phase B / PR #165) ----------
+   統一後端 API 與前端 UI 之可信度定義：
+   - live：僅代表來源更新時效，不代表品質已驗證。
+   - confirmed：僅允許符合既定收盤確認條件的資料。
+   - partial、degraded、delayed、pending、unavailable：前端絕不重新解讀為健全即時。
+   - dateConsistent === false 或 dateVerified === false：絕不顯示為完整可信即時或收盤確認。
+   - null、undefined、缺欄位：依向後相容政策降級提示，不假定資料完全健康。
+*/
+function isMarketHealthy(mkt) {
+  if (!mkt || typeof mkt !== "object") return false;
+  if (mkt.live !== true) return false;
+  if (mkt.dataStatus !== "live") return false;
+  if (mkt.completeness !== "complete") return false;
+  if (mkt.dateConsistent !== true) return false;
+  if (mkt.dateVerified !== true) return false;
+  return true;
+}
+
+function getMktNoteText(mkt) {
+  if (!mkt || typeof mkt !== "object" || mkt.dataStatus === "unavailable") {
+    return "行情功能暫未提供";
+  }
+
+  // 非即時行情（非交易日或已收盤）
+  if (!mkt.live) {
+    return "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計";
+  }
+
+  // 1. 完整且已驗證日期：維持原有即時提示
+  if (isMarketHealthy(mkt)) {
+    return "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 2. 上市有、上櫃無：提示僅上市即時，上櫃缺漏
+  if (mkt.completeness === "partial_tse_only") {
+    return "僅上市為盤中即時（上櫃缺漏，統計為部分涵蓋）；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 3. 上櫃有、上市無：提示僅上櫃即時，上市缺漏
+  if (mkt.completeness === "partial_otc_only") {
+    return "僅上櫃為盤中即時（上市缺漏，統計為部分涵蓋）；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 4. 上市櫃日期不一致（dateConsistent === false）：提示資料日期不一致，不應寫成「都是盤中即時」
+  if (mkt.dateConsistent === false) {
+    return "上市櫃資料日期不一致，部分資料更新中；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 5. 日期未驗證（dateVerified === false）：提示日期未驗證，不應寫成「都是盤中即時」
+  if (mkt.dateVerified === false) {
+    return "行情更新中，但資料日期尚未確認；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 6. degraded 或 delayed：提示為降級或延遲更新，不應寫成「都是盤中即時」
+  if (mkt.dataStatus === "delayed") {
+    return "部分行情為盤中即時（資料延遲更新）；法人買賣超是最近一次收盤後公布";
+  }
+  if (mkt.dataStatus === "degraded" || mkt.completeness === "degraded") {
+    return "部分行情為盤中即時（資料不完整或降級更新）；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 7. 新舊 API 相容情境（缺少部分欄位）：降級提示，不應假定資料完全健康
+  if (mkt.dataStatus == null || mkt.completeness == null || mkt.dateConsistent == null || mkt.dateVerified == null) {
+    return "部分行情為盤中即時（資料未經完整驗證）；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 通用備援降級提示
+  return "部分行情為盤中即時（資料不完整或降級更新）；法人買賣超是最近一次收盤後公布";
+}
+
+function isHotHealthy(H) {
+  if (!H || typeof H !== "object") return false;
+  if (H.live !== true) return false;
+  if (H.dataStatus !== "live") return false;
+  if (H.completeness !== "complete") return false;
+  if (H.dateConsistent !== true) return false;
+  if (H.dateVerified !== true) return false;
+  return true;
+}
+
+function getHotNoteText(H) {
+  if (!H || typeof H !== "object") return "";
+  if (H.dataStatus === "unavailable") return "行情功能暫未提供";
+
+  let prefix = "";
+  if (H.live) {
+    if (isHotHealthy(H)) {
+      prefix = "盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）";
+    } else if (H.completeness === "partial_tse_only") {
+      prefix = "盤中排行（僅上市即時，上櫃缺漏，依每秒報價排序）";
+    } else if (H.completeness === "partial_otc_only") {
+      prefix = "盤中排行（僅上櫃即時，上市缺漏，依每秒報價排序）";
+    } else if (H.dateConsistent === false) {
+      prefix = "盤中排行（資料日期不一致，依每秒報價排序）";
+    } else if (H.dateVerified === false) {
+      prefix = "盤中排行（資料日期未確認，依每秒報價排序）";
+    } else if (H.dataStatus === "delayed") {
+      prefix = "盤中排行（資料延遲更新，依每秒報價排序）";
+    } else {
+      prefix = "盤中排行（部分資料降級或不完整，依每秒報價排序）";
+    }
+  } else {
+    prefix = H.date ? `${H.date.replace(/-/g, "/")} 收盤後統計` : "收盤後統計";
+  }
+  const sourcePart = H.source ? `・${H.source}` : "";
+  return `${prefix}${sourcePart}；右邊的價格是即時價`;
+}
+
 if (typeof globalThis !== "undefined") {
   globalThis.evalDataStatus = evalDataStatus;
   globalThis.mktStatusTag = mktStatusTag;
@@ -433,6 +658,10 @@ if (typeof globalThis !== "undefined") {
   globalThis.parseTimeToSec = parseTimeToSec;
   globalThis.isQuoteStale = isQuoteStale;
   globalThis.usIso = usIso;
+  globalThis.isMarketHealthy = isMarketHealthy;
+  globalThis.getMktNoteText = getMktNoteText;
+  globalThis.isHotHealthy = isHotHealthy;
+  globalThis.getHotNoteText = getHotNoteText;
 }
 // 品牌（KLineLab K線情報局）：1:1 幾何 K 線圖標（空心 K 棒＋影線、上下都削 45 度的鈦金屬灰光束，兩者同寬對稱，合起來像字母 K）＋Space Grotesk 字標＋PRO 徽章
 const BRAND = { name: "KLineLab", zh: "K線情報局", tag: "將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機" };

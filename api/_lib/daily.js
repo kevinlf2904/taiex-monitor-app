@@ -1,11 +1,14 @@
-// 單日全市場資料：給 learner/watch.html「資金」分頁算板塊資金流向使用。
-// GET /api/daily?date=20261005 → { ok, date, rows: [[代號, 名稱, 收盤, 漲跌幅%, 外資張, 投信張, 自營商張, 成交張], ...], tpex }
-//   上市：證交所 T86（三大法人）＋ MI_INDEX（每日收盤行情）
-//   上櫃：櫃買中心三大法人與收盤行情（抓不到就只有上市，tpex: false）
-// GET /api/daily?meta=1 → { ok, ind: { 代號: 產業別 } }
-// 假日或還沒收盤沒有資料時回 { ok: true, empty: true }。過去的日期不會再變，CDN 快取 30 天，所以同一天只會向證交所問一次。
+import { getJSON, num, companies, rocDate } from "./_tw.js";
+import { todayTaipei } from "./quote.js";
 
-import { getJSON, num, companies } from "./_tw.js";
+export function isValidIsoDate(iso, maxIso = null) {
+  if (!iso || typeof iso !== "string" || !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(iso)) return false;
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return false;
+  if (maxIso && iso > maxIso) return false;
+  return true;
+}
 
 const keyIdx = (fields, ...res) => fields.findIndex(f => res.every(re => re.test(String(f).replace(/\s|<[^>]+>/g, ""))));
 const lots = v => { const n = num(v); return n == null ? 0 : Math.round(n / 1000); };
@@ -42,16 +45,147 @@ export function mergeDay(quotes, inst) {
   return rows;
 }
 const roc = d => `${+d.slice(0, 4) - 1911}/${d.slice(4, 6)}/${d.slice(6)}`, slash = d => `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6)}`;
-const tries = async urls => { for (const u of urls) { try { const j = await getJSON(u, 12000); if (pickTable(j, /代號/)) return j; } catch {} } return null; };
+const tries = async (urls, fetcher = getJSON) => { for (const u of urls) { try { const j = await fetcher(u, 12000); if (j && (pickTable(j, /代號/) || Array.isArray(j.aaData) || Array.isArray(j.tables) || j.reportDate || j.date)) return j; } catch {} } return null; };
 // 舊版櫃買 JSON 是 { aaData: [[...]] } 沒有欄位名稱：代號、名稱、收盤、漲跌、開、高、低、均價、成交股數
 const fixTpex = j => (j && !j.fields && !j.tables && Array.isArray(j.aaData) ? { fields: ["代號", "名稱", "收盤", "漲跌", "開盤", "最高", "最低", "均價", "成交股數"], data: j.aaData } : j);
 const tpexQuoteUrls = d => [`https://www.tpex.org.tw/www/zh-tw/afterTrading/otc?date=${slash(d)}&type=EW&response=json`, `https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&d=${roc(d)}&se=EW&o=json`];
+
+export function extractTwseRwdDate(j) {
+  if (!j) return null;
+  if (j.date) {
+    const d = rocDate(j.date);
+    if (d && isValidIsoDate(d)) return d;
+  }
+  const titles = [j.title, ...(Array.isArray(j.tables) ? j.tables.map(t => t?.title) : [])].filter(Boolean);
+  for (const t of titles) {
+    const m = String(t).match(/(\d{2,3})年(\d{1,2})月(\d{1,2})日/);
+    if (m) {
+      const y = +m[1] + 1911, mo = String(m[2]).padStart(2, "0"), da = String(m[3]).padStart(2, "0");
+      const d = `${y}-${mo}-${da}`;
+      if (isValidIsoDate(d)) return d;
+    }
+  }
+  return null;
+}
+
+export function extractTpexDate(j) {
+  if (!j) return null;
+  const raw = j.date || j.reportDate || j.Date || (Array.isArray(j.tables) ? j.tables[0]?.date : null);
+  if (raw) {
+    const d = rocDate(raw);
+    if (d && isValidIsoDate(d)) return d;
+  }
+  const titles = [j.title, ...(Array.isArray(j.tables) ? j.tables.map(t => t?.title) : [])].filter(Boolean);
+  for (const t of titles) {
+    const m = String(t).match(/(\d{2,3})年(\d{1,2})月(\d{1,2})日/);
+    if (m) {
+      const y = +m[1] + 1911, mo = String(m[2]).padStart(2, "0"), da = String(m[3]).padStart(2, "0");
+      const d = `${y}-${mo}-${da}`;
+      if (isValidIsoDate(d)) return d;
+    }
+  }
+  return null;
+}
+
 // 當天收盤行情（上市 MI_INDEX＋上櫃）：給 _live.js 收盤後用，回 Map(code → { name, p, pct, v, market })
-export async function closeToday(d) {
-  const [t, o] = await Promise.allSettled([getJSON(`https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${d}&type=ALLBUT0999&response=json`, 15000), tries(tpexQuoteUrls(d))]);
+// 分別驗證 tseDate 與 otcDate，區分 requestedDate、sourceDate、dateVerified、dateConsistent
+export async function closeToday(d, { fetchJson = getJSON, now = new Date() } = {}) {
+  const dStr = String(d || "").replace(/\D/g, "");
   const out = new Map();
-  for (const [c, q] of t.status === "fulfilled" ? parseQuotes(t.value) : []) out.set(c, { ...q, market: "上市" });
-  for (const [c, q] of o.status === "fulfilled" && o.value ? parseQuotes(fixTpex(o.value)) : []) if (!out.has(c)) out.set(c, { ...q, market: "上櫃" });
+  out.map = out;
+  const maxIso = todayTaipei(now);
+
+  if (!/^20\d{6}$/.test(dStr)) {
+    out.ok = false;
+    out.error = "無效的日期格式，需為 YYYYMMDD";
+    out.date = null;
+    out.requestedDate = null;
+    out.reqDate = null;
+    out.sourceDate = null;
+    out.dateVerified = false;
+    out.dateConsistent = false;
+    out.isSourceDateMatched = false;
+    return out;
+  }
+  const reqIso = `${dStr.slice(0, 4)}-${dStr.slice(4, 6)}-${dStr.slice(6)}`;
+  out.requestedDate = reqIso;
+  out.reqDate = reqIso;
+
+  if (!isValidIsoDate(reqIso, maxIso)) {
+    out.ok = false;
+    out.error = "無效的日曆日期或為未來日期";
+    out.date = null;
+    out.sourceDate = null;
+    out.dateVerified = false;
+    out.dateConsistent = false;
+    out.isSourceDateMatched = false;
+    return out;
+  }
+
+  const [t, o] = await Promise.allSettled([
+    fetchJson(`https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${dStr}&type=ALLBUT0999&response=json`, 15000),
+    tries(tpexQuoteUrls(dStr), fetchJson)
+  ]);
+
+  const tseVal = t.status === "fulfilled" ? t.value : null;
+  const isTseEmpty = !tseVal || /沒有符合條件/.test(String(tseVal.stat || ""));
+  const tseQuotes = isTseEmpty ? new Map() : parseQuotes(tseVal);
+  const tseDate = isTseEmpty ? null : extractTwseRwdDate(tseVal);
+  const tseDateValid = Boolean(tseDate && isValidIsoDate(tseDate, maxIso));
+
+  const otcVal = o.status === "fulfilled" && o.value ? o.value : null;
+  const isOtcEmpty = !otcVal || /沒有符合條件/.test(String(otcVal?.stat || ""));
+  const otcQuotes = isOtcEmpty ? new Map() : parseQuotes(fixTpex(otcVal));
+  const otcDate = isOtcEmpty ? null : extractTpexDate(otcVal);
+  const otcDateValid = Boolean(otcDate && isValidIsoDate(otcDate, maxIso));
+
+  for (const [c, q] of tseQuotes) out.set(c, { ...q, market: "上市" });
+  for (const [c, q] of otcQuotes) if (!out.has(c)) out.set(c, { ...q, market: "上櫃" });
+
+  const hasTse = tseQuotes.size > 0;
+  const hasOtc = otcQuotes.size > 0;
+
+  let actualDate = null;
+  let dateConsistent = false;
+  let dateVerified = false;
+
+  if (hasTse && hasOtc) {
+    if (tseDateValid && otcDateValid && tseDate === otcDate) {
+      dateConsistent = true;
+      dateVerified = true;
+      actualDate = tseDate;
+    } else {
+      // 兩市場皆有資料但日期不一致，或有市場日期未驗證：不可冒充一致！
+      dateConsistent = false;
+      dateVerified = false;
+      actualDate = null;
+    }
+  } else if (hasTse && !hasOtc) {
+    // 僅上市有資料
+    dateConsistent = false;
+    dateVerified = tseDateValid;
+    actualDate = tseDateValid ? tseDate : null;
+  } else if (!hasTse && hasOtc) {
+    // 僅上櫃有資料
+    dateConsistent = false;
+    dateVerified = otcDateValid;
+    actualDate = otcDateValid ? otcDate : null;
+  } else {
+    dateConsistent = false;
+    dateVerified = false;
+    actualDate = null;
+  }
+
+  out.ok = out.size > 0;
+  out.date = actualDate;
+  out.sourceDate = actualDate;
+  out.tseDate = tseDateValid ? tseDate : null;
+  out.otcDate = otcDateValid ? otcDate : null;
+  out.tseCount = tseQuotes.size;
+  out.otcCount = otcQuotes.size;
+  out.dateConsistent = dateConsistent;
+  out.dateVerified = dateVerified;
+  out.isSourceDateMatched = Boolean(dateVerified && actualDate && actualDate === reqIso);
   return out;
 }
 async function tpexDay(d) {

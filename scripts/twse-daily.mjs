@@ -79,10 +79,18 @@ export async function main({ get = oapi, getRwd = rwd, getMops = ym => mops(ym, 
   let n = 0;
   for (let i = 0; i < REV_KEEP; i++) { const ym = ymBack(cur, i), k = ymKey(ym), q = `date=${ym[0]}${String(ym[1]).padStart(2, "0")}01`;
     if (i >= 2 && have.has(k) && haveIx.has(k)) continue; if (n++ >= MONTH_NEW) break;
-    if (i || !vadd.size) for (const [d, o] of fmtRwd(await web(`afterTrading/FMTQIK?${q}`))) if (!vadd.has(d)) vadd.set(d, o);
-    if (!i && add.size) continue;
+    if (i || !vadd.size || i === 0) {
+      for (const [d, o] of fmtRwd(await web(`afterTrading/FMTQIK?${q}`))) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !o || o.e == null || o.a == null) continue;
+        const curV = vadd.get(d);
+        if (!curV || curV.e == null || i === 0) vadd.set(d, o);
+      }
+    }
+    const maxAddDate = [...add.keys()].sort().pop(), maxVaddDate = [...vadd.keys()].sort().pop();
+    const addNeedsCatchup = maxVaddDate && (!maxAddDate || maxAddDate < maxVaddDate);
+    if (!i && add.size && !addNeedsCatchup) continue;
     for (const path of [...new Set(LX.map(x => x[3]).filter(Boolean))]) for (const [d, o] of rwdMonth(await web(`${path}?${q}`), LX.filter(x => x[3] === path).map(x => [x[0], x[4]])))
-      for (const [c, v] of Object.entries(o)) if (at(d)[c] == null) at(d)[c] = v; }
+      for (const [c, v] of Object.entries(o)) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && v != null && at(d)[c] == null) at(d)[c] = v; }
   const vol = mergeRows(old.vol, vadd, ["d", "a", "b", "c", "e"]);
   // 類股指數：今天的 OpenAPI，加上往前補沒有的交易日（日期以量值的交易日為準）
   const scols = [...new Set([...(old.sec?.cols || []), ...Object.keys(mi.sec)])], sadd = new Map(); if (mi.d) sadd.set(mi.d, mi.sec);

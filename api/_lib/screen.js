@@ -127,11 +127,11 @@ export async function valuation() {
   return { ok: true, n: Object.keys(rows).length, rows };
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, { marketFetcher = marketRows } = {}) {
   if (req.query?.bw) { try { const j = await valuation(); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json(j); } catch (e) { return res.status(200).json({ ok: false, error: e.message }); } }
   const both = async (l, o, parse) => { const r = await Promise.allSettled([getJSON(l, 15000), getJSON(o, 15000)]); return r.flatMap(x => (x.status === "fulfilled" ? parse(x.value) : [])); };
   const [a, b, t, avg, bw, rev, eps, mg] = await Promise.allSettled([
-    marketRows(), null,
+    marketFetcher(), null,
     t86Days(3),
     getJSON("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL").then(parseAvg),
     getJSON("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL").then(parseBw),
@@ -143,7 +143,7 @@ export default async function handler(req, res) {
   if (!quotes.length) return res.status(200).json({ ok: false, error: `拿不到選股資料（${a.reason?.message || "沒有資料"}）` });
   const st = quotes.filter(q => /^\d{4}$/.test(q.code));
   res.setHeader("Cache-Control", liveCache(L.live, 30));
-  return res.status(200).json({ ok: true, date: L.date || quotes.find(q => q.date)?.date || null, live: L.live, time: L.time, source: L.live ? `${L.source}；法人、財報為最近公布` : "證交所、櫃買中心 OpenAPI",
+  return res.status(200).json({ ok: true, date: L.date || quotes.find(q => q.date)?.date || null, live: L.live, time: L.time, source: L.live ? `${L.source}；法人、財報為最近公布` : "證交所、櫃買中心 OpenAPI", completeness: L?.completeness || null, dataStatus: L?.dataStatus || null, coverage: L?.coverage || null, dateVerified: L?.dateVerified ?? null, dateConsistent: L?.dateConsistent ?? null,
     ratio: { up: st.filter(q => q.chgPct > 0).length, down: st.filter(q => q.chgPct < 0).length, flat: st.filter(q => q.chgPct === 0).length },
     lists: [...hotLists(quotes, avg.value || []), ...buildLists({ quotes, t86: t.value || [], avg: avg.value || [], bw: bw.value || [] }),
       ...fundLists(quotes, { rev: rev.value || [], eps: eps.value || [], mg: mg.value || [], bw: bw.value || [] }), ...themeLists(quotes)] });

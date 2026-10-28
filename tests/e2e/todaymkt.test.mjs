@@ -77,6 +77,33 @@ test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心�
   assert.doesNotMatch(hero, /偏多|偏空|偏弱|強勢|弱勢|看多|看空/); assert.match(hero, /現在位置\s*(壓力上方|分水嶺上方|分水嶺下方|支撐下方)\s*離分水嶺/);
   await p.click("#lx .td-help > summary"); const help = await p.evaluate(() => $("#lx .td-help").innerText);
   assert.match(help, /分水嶺[\s\S]*夜盤[\s\S]*近 14 日平均波動[\s\S]*不是預測漲跌[\s\S]*不是買賣建議/); assert.equal(r.t00, 0, "加權在最上面，數字列不重複");
+  const btnDiag = await p.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll("#lx .dh-status-bar [data-tx]"));
+    const bar = document.querySelector("#lx .dh-status-bar");
+    const sheets = Array.from(document.styleSheets).map(s => s.href ? s.href.split("/").pop() : "inline");
+    return {
+      sheets,
+      barRect: bar ? bar.getBoundingClientRect() : null,
+      btns: btns.map(b => {
+        const r = b.getBoundingClientRect();
+        const cs = window.getComputedStyle(b);
+        return {
+          text: b.textContent.trim(),
+          tagName: b.tagName,
+          height: r.height,
+          width: r.width,
+          top: r.top,
+          left: r.left,
+          computedHeight: cs.height,
+          computedMinHeight: cs.minHeight,
+          computedDisplay: cs.display,
+          computedFlex: cs.flex,
+          computedBoxSizing: cs.boxSizing,
+        };
+      })
+    };
+  });
+  console.log("::notice title=TodayMkt Diagnostic::" + JSON.stringify(btnDiag));
   // 三個按鈕是圖示，文字給讀螢幕的人；按鈕至少 44px
   assert.deepEqual(await p.$$eval("#lx .dh-status-bar [data-tx]", L => L.map(b => [b.textContent.trim(), b.getBoundingClientRect().height >= 44])), [["↻重新整理", true], ["AI 整理", true], ["複製文字", true]]);
   // 早報的文字結論收在「盤前推演」裡面，外層不再是一大段字
@@ -105,4 +132,44 @@ test("網址：#daily（原本的）和 #today（別名）都打開今日市場�
   assert.ok(at("money") < at("today") && at("today") < at("earn"), JSON.stringify(L)); assert.equal(L[at("today")][1], "今日市場");
   assert.deepEqual(await p.evaluate(() => store.get("watch:tabcfg")), { order: ["money", "today", "earn"], hide: ["pod"] }, "沒有改寫使用者的分頁設定");
   await ctx.close(); assert.deepEqual(errs, []);
+});
+
+
+test("手機首頁觸控尺寸與響應式排版回歸 (320px, 375px, 390px, 430px) 無溢位且按鈕 >= 44px", async () => {
+  for (const width of [320, 375, 390, 430]) {
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: true });
+    await p.clock.setFixedTime(new Date("2026-10-26T10:00:00+08:00"));
+    await p.evaluate(() => { setLt("today"); scrollTo(0, 0); $("#lx").scrollTop = 0; });
+    await p.waitForSelector("#lx .dh-core-grid", { timeout: 15000 });
+    await p.waitForSelector("#lx .td-ix", { timeout: 15000 });
+
+    const layout = await p.evaluate(() => {
+      const bar = document.querySelector("#lx .dh-status-bar");
+      const left = document.querySelector("#lx .dh-sb-left");
+      const titleBtns = document.querySelector("#lx .dh-title-btns");
+      const btns = Array.from(document.querySelectorAll("#lx .dh-status-bar [data-tx]"));
+
+      const barRect = bar ? bar.getBoundingClientRect() : null;
+      const leftRect = left ? left.getBoundingClientRect() : null;
+      const titleBtnsRect = titleBtns ? titleBtns.getBoundingClientRect() : null;
+
+      const overlaps = leftRect && titleBtnsRect ? !(leftRect.right <= titleBtnsRect.left || leftRect.left >= titleBtnsRect.right || leftRect.bottom <= titleBtnsRect.top || leftRect.top >= titleBtnsRect.bottom) : false;
+      const barOverflows = barRect ? barRect.right > window.innerWidth : false;
+
+      return {
+        barOverflows,
+        overlaps,
+        btns: btns.map(b => {
+          const r = b.getBoundingClientRect();
+          return [b.textContent.trim(), r.height >= 44, r.width >= 44];
+        })
+      };
+    });
+
+    assert.equal(layout.barOverflows, false, `視口 ${width}px 狀態列不溢出視窗`);
+    assert.equal(layout.overlaps, false, `視口 ${width}px 狀態列左側與按鈕群不重疊`);
+    assert.deepEqual(layout.btns, [["↻重新整理", true, true], ["AI 整理", true, true], ["複製文字", true, true]], `視口 ${width}px 按鈕觸控尺寸`);
+    await ctx.close();
+    assert.deepEqual(errs, []);
+  }
 });
