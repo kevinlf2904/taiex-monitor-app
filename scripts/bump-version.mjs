@@ -6,31 +6,86 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const RE = /\d{4}\.\d{2}\.\d{2}-\d+/;
+const VERSION_RE = /^(\d{4})\.(\d{2})\.(\d{2})-(\d+)$/;
+
 export const twToday = (ms = Date.now()) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
-export function nextVersion(cur, today) {
-  const m = String(cur || "").match(/^(\d{4}\.\d{2}\.\d{2})-(\d+)$/); if (!m) throw new Error(`version.json 的版本格式不對：${cur}`);
-  return `${today.replace(/-/g, ".")}-${+m[2] + 1}`;
+
+export function parseVersion(v) {
+  const m = String(v || "").match(VERSION_RE);
+  if (!m) throw new Error(`version.json 的版本格式不對：${v}`);
+  return { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]), num: Number(m[4]) };
 }
-// README：在第一個「### …（版本）」前面插入新的一節；已經有這個版本就不重複加
+
+export function compareVersion(a, b) {
+  const pa = parseVersion(a);
+  const pb = parseVersion(b);
+  const left = [pa.year, pa.month, pa.day, pa.num];
+  const right = [pb.year, pb.month, pb.day, pb.num];
+  for (let i = 0; i < left.length; i++) {
+    if (left[i] !== right[i]) return left[i] > right[i] ? 1 : -1;
+  }
+  return 0;
+}
+
+export function nextVersion(cur, today) {
+  const m = String(cur || "").match(/^((?:\d{4}\.\d{2}\.\d{2})-(\d+))$/);
+  if (!m) throw new Error(`version.json 的版本格式不對：${cur}`);
+  const currentNum = Number(m[2]);
+  return `${today.replace(/-/g, ".")}-${currentNum + 1}`;
+}
+
 export function addSection(md, title, ver, body = "") {
   if (md.includes(`（${ver}）`)) return md;
-  const i = md.search(/^### .*（\d{4}\.\d{2}\.\d{2}-\d+）\s*$/m); if (i < 0) throw new Error("README 找不到更新紀錄（### 標題（版本））");
-  return md.slice(0, i) + `### ${title}（${ver}）\n- ${body || "（待補：這次改了什麼）"}\n\n` + md.slice(i);
+
+  const matches = [...md.matchAll(/^###\s+.*?（(\d{4}\.\d{2}\.\d{2}-\d+)）\s*$/gm)];
+  if (!matches.length) throw new Error("README 找不到更新紀錄（### 標題（版本））");
+
+  let latestMatch = matches[0];
+  for (const match of matches.slice(1)) {
+    if (compareVersion(match[1], latestMatch[1]) > 0) latestMatch = match;
+  }
+
+  const section = `### ${title}（${ver}）\n- ${body || "（待補：這次改了什麼）"}\n\n`;
+  return md.slice(0, latestMatch.index) + section + md.slice(latestMatch.index);
 }
-// html 裡的舊版本號全部換掉；一個都沒找到代表版本號在別的地方，停下來不要亂改
-export function swap(text, from, to, file) { if (!text.includes(from)) throw new Error(`${file} 裡找不到目前的版本 ${from}`); return text.split(from).join(to); }
+
+export function swap(text, from, to, file) {
+  if (!text.includes(from)) throw new Error(`${file} 裡找不到目前的版本 ${from}`);
+  return text.split(from).join(to);
+}
+
+export function writeFileAtomically(filePath, content) {
+  const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tmp, content, "utf8");
+  fs.renameSync(tmp, filePath);
+}
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const [title, body] = process.argv.slice(2);
-  if (!title) { console.error('用法：node scripts/bump-version.mjs "標題" ["這次改了什麼"]'); process.exit(1); }
-  const f = p => path.join(ROOT, "learner", p), cur = JSON.parse(fs.readFileSync(f("version.json"), "utf8")).v, ver = nextVersion(cur, twToday());
-  const out = {
+  if (!title) {
+    console.error('用法：node scripts/bump-version.mjs "標題" ["這次改了什麼"]');
+    process.exit(1);
+  }
+
+  const learnerDir = path.join(ROOT, "learner");
+  const versionJsonPath = path.join(learnerDir, "version.json");
+  const indexPath = path.join(learnerDir, "index.html");
+  const watchPath = path.join(learnerDir, "watch.html");
+  const readmePath = path.join(learnerDir, "README.md");
+
+  const cur = JSON.parse(fs.readFileSync(versionJsonPath, "utf8")).v;
+  const ver = nextVersion(cur, twToday());
+
+  const outputs = {
     "version.json": JSON.stringify({ v: ver }) + "\n",
-    "index.html": swap(fs.readFileSync(f("index.html"), "utf8"), cur, ver, "index.html"),
-    "watch.html": swap(fs.readFileSync(f("watch.html"), "utf8"), cur, ver, "watch.html"),
-    "README.md": addSection(fs.readFileSync(f("README.md"), "utf8"), title, ver, body)
+    "index.html": swap(fs.readFileSync(indexPath, "utf8"), cur, ver, "index.html"),
+    "watch.html": swap(fs.readFileSync(watchPath, "utf8"), cur, ver, "watch.html"),
+    "README.md": addSection(fs.readFileSync(readmePath, "utf8"), title, ver, body),
   };
-  for (const [k, v] of Object.entries(out)) fs.writeFileSync(f(k), v); // 全部算好才寫，中途出錯不會只改一半
+
+  for (const [name, content] of Object.entries(outputs)) {
+    writeFileAtomically(path.join(learnerDir, name), content);
+  }
+
   console.log(`${cur} → ${ver}（index.html、watch.html、version.json、README.md）；接著跑 node tests/unit.test.mjs`);
 }
