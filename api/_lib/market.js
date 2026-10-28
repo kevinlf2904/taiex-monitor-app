@@ -233,9 +233,9 @@ async function hilo(host) {
   hiloMemo = { at: Date.now(), v }; return v;
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, { marketFetcher = marketRows } = {}) {
   const [a, b, info, inst, us, world] = await Promise.allSettled([
-    marketRows(), hilo(req.headers?.host),
+    marketFetcher(), hilo(req.headers?.host),
     companies(), instLatest(), usIndices(), worldIndices(),
   ]);
   const L = a.value, all = L?.rows || [], twse = all.filter(r => r.market === "上市"), tpex = all.filter(r => r.market === "上櫃"), I = info.value || new Map();

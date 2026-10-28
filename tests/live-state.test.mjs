@@ -46,16 +46,20 @@ test("Scenario 1: 盤前交易狀態與前一交易日收盤 (08:15 無 MIS，�
 test("Scenario 2: 盤中 MIS 成功回傳當日即時 (10:30 Session: open, date: today)", async () => {
   const now = new Date("2026-10-28T02:30:00Z"); // 台北時間 10:30
   const base = [];
-  for (let i = 1000; i < 1600; i++) {
-    base.push({ code: String(i), name: `股${i}`, market: "上市", date: "2026-10-27" });
+  for (let i = 1000; i < 2000; i++) {
+    base.push({ code: String(i), name: `市${i}`, market: "上市", date: "2026-10-27" });
+  }
+  for (let i = 3000; i < 3800; i++) {
+    base.push({ code: String(i), name: `櫃${i}`, market: "上櫃", date: "2026-10-27" });
   }
 
   const mockMis = async (chs) => chs.map(ch => {
     const code = ch.split("_")[1].split(".")[0];
+    const isTse = ch.startsWith("tse");
     return {
       c: code,
       n: `名稱${code}`,
-      ex: "tse",
+      ex: isTse ? "tse" : "otc",
       z: "100",
       y: "99",
       v: "1000",
@@ -80,14 +84,18 @@ test("Scenario 2: 盤中 MIS 成功回傳當日即時 (10:30 Session: open, date
 test("Scenario 3: prevDate === today 時仍可正常執行 MIS 取得當日即時", async () => {
   const now = new Date("2026-10-28T03:00:00Z"); // 台北時間 11:00
   const base = [];
-  for (let i = 1000; i < 1600; i++) {
-    base.push({ code: String(i), name: `股${i}`, market: "上市", date: "2026-10-28" });
+  for (let i = 1000; i < 2000; i++) {
+    base.push({ code: String(i), name: `市${i}`, market: "上市", date: "2026-10-28" });
+  }
+  for (let i = 3000; i < 3800; i++) {
+    base.push({ code: String(i), name: `櫃${i}`, market: "上櫃", date: "2026-10-28" });
   }
   let misCalled = false;
   const mockMis = async (chs) => {
     misCalled = true;
     return chs.map(ch => ({
       c: ch.split("_")[1].split(".")[0],
+      ex: ch.startsWith("tse") ? "tse" : "otc",
       z: "120",
       y: "115",
       v: "500",
@@ -875,4 +883,287 @@ test("Scenario 35: [P1-2 驗證] /api/market 與 /api/hot 頂層 JSON 完整回�
   assert.equal(resHot.statusCode, 200);
   assert.ok("dateVerified" in resHot.jsonPayload, "/api/hot 必須包含 dateVerified 頂層欄位");
   assert.ok("dateConsistent" in resHot.jsonPayload, "/api/hot 必須包含 dateConsistent 頂層欄位");
+});
+
+
+test("Scenario 36: [第三輪驗證] marketRows() Fugle 快照全情境 Mock 測試 (健全、部分、日期異常、降級)", async () => {
+  const now = new Date("2026-10-28T02:00:00Z"); // 盤中 10:00
+  const today = "2026-10-28";
+  const tsTodayMicros = new Date("2026-10-28T02:00:00Z").getTime() * 1000;
+  const tsYestMicros = new Date("2026-10-27T02:00:00Z").getTime() * 1000;
+
+  const makeFugleData = (start, count, market, ts) => {
+    const list = [];
+    for (let i = start; i < start + count; i++) {
+      list.push({
+        symbol: String(i),
+        name: `${market}${i}`,
+        closePrice: 100,
+        tradeVolume: 10,
+        tradeValue: 1000000,
+        lastUpdated: ts
+      });
+    }
+    return list;
+  };
+
+  // 1. 上市與上櫃完整且日期一致：live: true, dataStatus: 'live', completeness: 'complete'
+  const getFugleComplete = async (url) => {
+    if (url.includes("TSE")) return { data: makeFugleData(1000, 1000, "上市", tsTodayMicros) };
+    return { data: makeFugleData(3000, 800, "上櫃", tsTodayMicros) };
+  };
+  const resComplete = await marketRows({ now, today, fugleFetcher: getFugleComplete });
+  assert.equal(resComplete.live, true);
+  assert.equal(resComplete.dataStatus, "live");
+  assert.equal(resComplete.completeness, "complete");
+  assert.equal(resComplete.dateVerified, true);
+  assert.equal(resComplete.dateConsistent, true);
+  assert.equal(resComplete.coverage.got, 1800);
+
+  // 2. 只有上市資料（上櫃為空）：dataStatus 必須為 degraded，絕對不得為 live
+  const getFugleTseOnly = async (url) => {
+    if (url.includes("TSE")) return { data: makeFugleData(1000, 1000, "上市", tsTodayMicros) };
+    return { data: [] };
+  };
+  const resTseOnly = await marketRows({ now, today, fugleFetcher: getFugleTseOnly });
+  assert.equal(resTseOnly.live, true, "時效性仍為盤中即時");
+  assert.notEqual(resTseOnly.dataStatus, "live", "資料不完整時 dataStatus 絕對不可宣告為 live");
+  assert.notEqual(resTseOnly.dataStatus, "confirmed");
+  assert.equal(resTseOnly.dataStatus, "degraded");
+  assert.equal(resTseOnly.completeness, "partial_tse_only");
+  assert.equal(resTseOnly.dateConsistent, false);
+  assert.equal(resTseOnly.dateVerified, true);
+
+  // 3. 只有上櫃資料（上市為空）：dataStatus 絕對不得為 live
+  const getFugleOtcOnly = async (url) => {
+    if (url.includes("TSE")) return { data: [] };
+    return { data: makeFugleData(3000, 800, "上櫃", tsTodayMicros) };
+  };
+  const resOtcOnly = await marketRows({ now, today, fugleFetcher: getFugleOtcOnly });
+  assert.equal(resOtcOnly.live, true);
+  assert.notEqual(resOtcOnly.dataStatus, "live");
+  assert.equal(resOtcOnly.dataStatus, "degraded");
+  assert.equal(resOtcOnly.completeness, "partial_otc_only");
+  assert.equal(resOtcOnly.dateConsistent, false);
+
+  // 4. 部分資料缺日期（上市 500 檔缺 lastUpdated，有效 500 + 400 = 900 檔）
+  const getFugleMissingDate = async (url) => {
+    if (url.includes("TSE")) {
+      const good = makeFugleData(1000, 500, "上市", tsTodayMicros);
+      const nodate = makeFugleData(1500, 500, "上市", null);
+      return { data: [...good, ...nodate] };
+    }
+    return { data: makeFugleData(3000, 400, "上櫃", tsTodayMicros) };
+  };
+  const resMissingDate = await marketRows({ now, today, fugleFetcher: getFugleMissingDate });
+  assert.equal(resMissingDate.coverage.got, 900);
+  assert.equal(resMissingDate.completeness, "partial");
+  assert.notEqual(resMissingDate.dataStatus, "live", "總覆蓋率不足時不得為 live");
+  assert.equal(resMissingDate.dataStatus, "partial");
+
+  // 5. 資料日期為舊日期 (2026-10-27)
+  const getFugleYesterday = async () => ({
+    data: [
+      ...makeFugleData(1000, 1000, "上市", tsYestMicros),
+      ...makeFugleData(3000, 800, "上櫃", tsYestMicros)
+    ]
+  });
+  const resYesterday = await marketRows({ now, today, fugleFetcher: getFugleYesterday });
+  assert.equal(resYesterday.live, false, "非當日資料 live 必須為 false");
+  assert.equal(resYesterday.dataStatus, "delayed", "舊資料必須標示 delayed，絕對不可標示 confirmed");
+  assert.notEqual(resYesterday.dataStatus, "confirmed");
+  assert.equal(resYesterday.date, "2026-10-27");
+
+  // 6. 快照資料不足 (<500 檔) 拋錯或平順 fallback
+  const getFugleSmall = async () => ({ data: makeFugleData(1000, 50, "上市", tsTodayMicros) });
+  const prevMock = makeFugleData(1000, 1000, "上市", tsTodayMicros).map(r => ({ code: r.symbol, name: r.name, market: "上市", price: 100, vol: 10, date: today }));
+  const resFallback = await marketRows({ now, today, fugleFetcher: getFugleSmall, fetcher: async () => prevMock, rwdFetcher: async () => null });
+  assert.ok(resFallback.source.includes("OpenAPI") || resFallback.source.includes("MIS"), "快照不足 500 檔時應平順 fallback");
+});
+
+test("Scenario 37: [第三輪驗證] /api/screen 契約注入測試 (包含 dateVerified/dateConsistent 嚴格布林值驗證)", async () => {
+  const screenMod = await import("../api/_lib/screen.js");
+
+  function createMockRes() {
+    const r = {
+      statusCode: 200,
+      headers: {},
+      jsonPayload: null,
+      status(c) { r.statusCode = c; return r; },
+      setHeader(k, v) { r.headers[k] = v; return r; },
+      json(j) { r.jsonPayload = j; return r; }
+    };
+    return r;
+  }
+
+  // A. 模擬注入降級行情 (dateVerified: false, dateConsistent: false)
+  const degradedFetcher = async () => ({
+    rows: [{ code: "2330", name: "台積電", price: 1000, chgPct: 1.5, date: "2026-10-28" }],
+    date: "2026-10-28",
+    live: true,
+    time: "10:30:00",
+    source: "富果行情快照",
+    completeness: "degraded",
+    dataStatus: "degraded",
+    coverage: { got: 500, want: 1800 },
+    dateVerified: false,
+    dateConsistent: false
+  });
+  const resDegraded = createMockRes();
+  await screenMod.default({ query: {} }, resDegraded, { marketFetcher: degradedFetcher });
+  assert.equal(resDegraded.statusCode, 200);
+  assert.strictEqual(resDegraded.jsonPayload.dateVerified, false, "dateVerified: false 必須完整保留為 false");
+  assert.strictEqual(resDegraded.jsonPayload.dateConsistent, false, "dateConsistent: false 必須完整保留為 false");
+  assert.strictEqual(resDegraded.jsonPayload.dataStatus, "degraded");
+  assert.strictEqual(resDegraded.jsonPayload.completeness, "degraded");
+
+  // B. 模擬注入健康行情 (dateVerified: true, dateConsistent: true)
+  const healthyFetcher = async () => ({
+    rows: [{ code: "2330", name: "台積電", price: 1000, chgPct: 1.5, date: "2026-10-28" }],
+    date: "2026-10-28",
+    live: true,
+    time: "10:30:00",
+    source: "證交所 MIS",
+    completeness: "complete",
+    dataStatus: "live",
+    coverage: { got: 1800, want: 1800 },
+    dateVerified: true,
+    dateConsistent: true
+  });
+  const resHealthy = createMockRes();
+  await screenMod.default({ query: {} }, resHealthy, { marketFetcher: healthyFetcher });
+  assert.strictEqual(resHealthy.jsonPayload.dateVerified, true);
+  assert.strictEqual(resHealthy.jsonPayload.dateConsistent, true);
+  assert.strictEqual(resHealthy.jsonPayload.dataStatus, "live");
+  assert.strictEqual(resHealthy.jsonPayload.completeness, "complete");
+
+  // C. 模擬舊版未定義情境 (dateVerified: undefined)
+  const undefinedFetcher = async () => ({
+    rows: [{ code: "2330", name: "台積電", price: 1000, chgPct: 1.5, date: "2026-10-28" }],
+    date: "2026-10-28",
+    live: true
+  });
+  const resUndef = createMockRes();
+  await screenMod.default({ query: {} }, resUndef, { marketFetcher: undefinedFetcher });
+  assert.strictEqual(resUndef.jsonPayload.dateVerified, null, "未提供時安全回退至 null");
+  assert.strictEqual(resUndef.jsonPayload.dateConsistent, null, "未提供時安全回退至 null");
+});
+
+test("Scenario 38: [第三輪驗證] 反矛盾契約測試 (四來源路徑於降級情境嚴格禁止回傳 live 或 confirmed)", async () => {
+  const now = new Date("2026-10-28T02:00:00Z"); // 盤中
+  const today = "2026-10-28";
+  const prevMock = [];
+  for (let i = 1000; i < 2000; i++) prevMock.push({ code: String(i), name: `市${i}`, market: "上市", price: 100, vol: 10, date: today });
+  for (let i = 3000; i < 3800; i++) prevMock.push({ code: String(i), name: `櫃${i}`, market: "上櫃", price: 50, vol: 10, date: today });
+
+  // 1. MIS degraded 情境：只有上市今日資料（上櫃昨日被過濾）
+  const misInconsistent = async (chs) => chs.map(ch => ({
+    c: ch.split("_")[1].split(".")[0],
+    n: "名",
+    ex: ch.startsWith("tse") ? "tse" : "otc",
+    z: "100", y: "99", v: "1000",
+    d: ch.startsWith("tse") ? "20261028" : "20261027"
+  }));
+  const resMis = await marketRows({ now, today, fetcher: async () => prevMock, misFetcher: misInconsistent });
+  assert.notEqual(resMis.dataStatus, "live", "MIS 上市櫃日期不一致時 dataStatus 絕對不可為 live");
+  assert.notEqual(resMis.dataStatus, "confirmed");
+  assert.equal(resMis.dataStatus, "degraded");
+  assert.equal(resMis.live, true, "時效性旗標仍保留盤中即時輪詢");
+  assert.equal(resMis.dateConsistent, false);
+  assert.equal(resMis.completeness, "partial_tse_only");
+
+  // 2. Recent close degraded 情境：收盤日期為今日，但上市櫃不一致
+  const rwdDegraded = async () => {
+    const map = new Map();
+    for (let i = 1000; i < 1800; i++) map.set(String(i), { name: `市${i}`, market: "上市", p: 100, pct: 1.0, v: 100 });
+    map.date = today;
+    map.isSourceDateMatched = true;
+    map.dateVerified = true;
+    map.dateConsistent = false; // 不一致
+    return map;
+  };
+  const resRwd = await marketRows({ now: new Date("2026-10-28T08:00:00Z"), today, fetcher: async () => [], rwdFetcher: rwdDegraded });
+  assert.notEqual(resRwd.dataStatus, "confirmed", "RWD 上市櫃日期不一致時 dataStatus 絕對不可標記 confirmed");
+  assert.notEqual(resRwd.dataStatus, "live");
+  assert.equal(resRwd.dataStatus, "degraded");
+  assert.equal(resRwd.dateConsistent, false);
+
+  // 3. /api/market 與 /api/hot 透過注入 degraded marketFetcher 驗證頂層 JSON 絕不回傳矛盾狀態
+  const marketMod = await import("../api/_lib/market.js");
+  const hotMod = await import("../api/_lib/hot.js");
+  function createMockRes() {
+    const r = {
+      statusCode: 200,
+      jsonPayload: null,
+      status(c) { r.statusCode = c; return r; },
+      setHeader() { return r; },
+      json(j) { r.jsonPayload = j; return r; }
+    };
+    return r;
+  }
+
+  const degradedMktFetcher = async () => resMis;
+  const resMktJson = createMockRes();
+  await marketMod.default({ query: {}, headers: {} }, resMktJson, { marketFetcher: degradedMktFetcher });
+  assert.notEqual(resMktJson.jsonPayload.dataStatus, "live", "頂層 /api/market 在降級時 dataStatus 絕對不得為 live");
+  assert.notEqual(resMktJson.jsonPayload.dataStatus, "confirmed");
+  assert.strictEqual(resMktJson.jsonPayload.dataStatus, "degraded");
+  assert.strictEqual(resMktJson.jsonPayload.dateConsistent, false);
+  assert.strictEqual(resMktJson.jsonPayload.completeness, "partial_tse_only");
+
+  const resHotJson = createMockRes();
+  await hotMod.default({ query: { market: "tw", type: "value" } }, resHotJson, { marketFetcher: degradedMktFetcher });
+  assert.notEqual(resHotJson.jsonPayload.dataStatus, "live", "頂層 /api/hot 在降級時 dataStatus 絕對不得為 live");
+  assert.notEqual(resHotJson.jsonPayload.dataStatus, "confirmed");
+  assert.strictEqual(resHotJson.jsonPayload.dataStatus, "degraded");
+  assert.strictEqual(resHotJson.jsonPayload.dateConsistent, false);
+});
+
+test("Scenario 39: [第三輪驗證] Metadata 三態 (undefined, null, false, true) 邊界契約測試", async () => {
+  const marketMod = await import("../api/_lib/market.js");
+  function createMockRes() {
+    const r = {
+      statusCode: 200,
+      jsonPayload: null,
+      status(c) { r.statusCode = c; return r; },
+      setHeader() { return r; },
+      json(j) { r.jsonPayload = j; return r; }
+    };
+    return r;
+  }
+
+  const testState = async (val) => {
+    const fetcher = async () => ({
+      rows: [{ code: "2330", name: "台積電", price: 1000, market: "上市", date: "2026-10-28" }],
+      date: "2026-10-28",
+      live: true,
+      completeness: val === true ? "complete" : "degraded",
+      dataStatus: val === true ? "live" : "degraded",
+      dateVerified: val,
+      dateConsistent: val
+    });
+    const res = createMockRes();
+    await marketMod.default({ query: {}, headers: {} }, res, { marketFetcher: fetcher });
+    return res.jsonPayload;
+  };
+
+  // 1. 明確失敗 false
+  const rFalse = await testState(false);
+  assert.strictEqual(rFalse.dateVerified, false, "false 必須保持嚴格布林值 false");
+  assert.strictEqual(rFalse.dateConsistent, false, "false 必須保持嚴格布林值 false");
+
+  // 2. 明確成功 true
+  const rTrue = await testState(true);
+  assert.strictEqual(rTrue.dateVerified, true, "true 必須保持嚴格布林值 true");
+  assert.strictEqual(rTrue.dateConsistent, true, "true 必須保持嚴格布林值 true");
+
+  // 3. 明確未知 null
+  const rNull = await testState(null);
+  assert.strictEqual(rNull.dateVerified, null, "null 必須保持 null");
+  assert.strictEqual(rNull.dateConsistent, null, "null 必須保持 null");
+
+  // 4. 欄位缺失 undefined
+  const rUndef = await testState(undefined);
+  assert.strictEqual(rUndef.dateVerified, null, "undefined 序列化為 null 避免欄位遺失");
+  assert.strictEqual(rUndef.dateConsistent, null, "undefined 序列化為 null 避免欄位遺失");
 });

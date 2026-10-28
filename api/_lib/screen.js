@@ -127,11 +127,11 @@ export async function valuation() {
   return { ok: true, n: Object.keys(rows).length, rows };
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, { marketFetcher = marketRows } = {}) {
   if (req.query?.bw) { try { const j = await valuation(); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json(j); } catch (e) { return res.status(200).json({ ok: false, error: e.message }); } }
   const both = async (l, o, parse) => { const r = await Promise.allSettled([getJSON(l, 15000), getJSON(o, 15000)]); return r.flatMap(x => (x.status === "fulfilled" ? parse(x.value) : [])); };
   const [a, b, t, avg, bw, rev, eps, mg] = await Promise.allSettled([
-    marketRows(), null,
+    marketFetcher(), null,
     t86Days(3),
     getJSON("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL").then(parseAvg),
     getJSON("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL").then(parseBw),

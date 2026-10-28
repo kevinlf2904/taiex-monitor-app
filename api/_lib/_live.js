@@ -324,6 +324,20 @@ export async function fetchRecentClose(arg1 = todayTaipei(), arg2 = 7) {
   return null;
 }
 
+// 依時效性與資料品質嚴格映射 dataStatus，杜絕「不完整或日期未驗證卻宣告 live / confirmed」之矛盾
+export function deriveDataStatus({ isLiveSession, isToday, completeness, dateConsistent, dateVerified }) {
+  const isHealthy = completeness === "complete" && dateConsistent === true && dateVerified === true;
+  if (isLiveSession) {
+    if (isHealthy) return "live";
+    return (completeness === "degraded" || dateConsistent === false || dateVerified === false) ? "degraded" : "partial";
+  }
+  if (isToday) {
+    if (isHealthy) return "confirmed";
+    return (completeness === "degraded" || dateConsistent === false || dateVerified === false) ? "degraded" : "partial";
+  }
+  return "delayed";
+}
+
 export async function marketRows(opts = {}) {
   const {
     now = new Date(),
@@ -368,15 +382,23 @@ export async function marketRows(opts = {}) {
       const date = validation.primaryDate || null;
 
       if (validation.totalCount >= 500 && date && date <= today) {
+        const isLiveSession = date === today && sess === "open";
+        const dataStatus = deriveDataStatus({
+          isLiveSession,
+          isToday: date === today,
+          completeness: validation.completeness,
+          dateConsistent: validation.dateConsistent,
+          dateVerified: validation.dateVerified
+        });
         return done({
           rows: validation.validRows,
-          live: date === today && sess === "open",
+          live: isLiveSession,
           date,
           time: null,
           source: "富果行情快照（上市、上櫃）",
           note: null,
           coverage: validation.coverage,
-          dataStatus: (date === today && sess === "open") ? "live" : "confirmed",
+          dataStatus,
           completeness: validation.completeness,
           sourceDate: date,
           dateVerified: validation.dateVerified,
@@ -417,15 +439,23 @@ export async function marketRows(opts = {}) {
       const validation = validateMarketRows(todayRows, { expectedCodes, today, now });
 
       if (validation.totalCount >= 500 && validation.primaryDate === today) {
+        const isLiveSession = sess === "open";
+        const dataStatus = deriveDataStatus({
+          isLiveSession,
+          isToday: true,
+          completeness: validation.completeness,
+          dateConsistent: validation.dateConsistent,
+          dateVerified: validation.dateVerified
+        });
         return done({
           rows: validation.validRows,
           coverage: validation.coverage,
-          live: sess === "open",
+          live: isLiveSession,
           date: today,
           time: null,
           source: sess === "open" ? "證交所 MIS 即時行情（上市、上櫃）" : "證交所 MIS（今天收盤）",
           note: null,
-          dataStatus: sess === "open" ? "live" : "confirmed",
+          dataStatus,
           completeness: validation.completeness,
           sourceDate: today,
           dateVerified: validation.dateVerified,
@@ -452,6 +482,15 @@ export async function marketRows(opts = {}) {
       if (isFresher) {
         const rows = mapCloseToRows(recent.map, recent.date);
         const validation = validateMarketRows(rows, { expectedCodes, today, now });
+        const dateVerified = recent.dateVerified ?? validation.dateVerified;
+        const dateConsistent = recent.dateConsistent ?? validation.dateConsistent;
+        const dataStatus = deriveDataStatus({
+          isLiveSession: false,
+          isToday: recent.date === today,
+          completeness: validation.completeness,
+          dateConsistent,
+          dateVerified
+        });
 
         return done({
           rows: validation.validRows,
@@ -461,11 +500,11 @@ export async function marketRows(opts = {}) {
           source: recent.date === today ? "證交所、櫃買中心 今日收盤行情" : "證交所、櫃買中心 收盤行情",
           note: recent.date !== today && notes.length ? `今日即時暫未取得（${notes.join("；")}），顯示 ${recent.date} 收盤` : null,
           coverage: validation.coverage,
-          dataStatus: recent.date === today ? "confirmed" : "delayed",
+          dataStatus,
           completeness: validation.completeness,
           sourceDate: recent.sourceDate || recent.date,
-          dateVerified: recent.dateVerified ?? validation.dateVerified,
-          dateConsistent: recent.dateConsistent ?? validation.dateConsistent,
+          dateVerified,
+          dateConsistent,
           sourceCapabilities: { hasOhlc: false, hasValue: true }
         });
       }

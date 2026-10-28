@@ -41,7 +41,7 @@ async function t86Latest() {
 }
 const TW_TYPES = { value: "成交值", volume: "成交量", gain: "漲幅", loss: "跌幅", foreign: "外資買超", trust: "投信買超", etf: "ETF" };
 
-export default async function handler(req, res) {
+export default async function handler(req, res, { marketFetcher = marketRows } = {}) {
   const market = req.query?.market === "us" ? "us" : "tw", type = String(req.query?.type || (market === "us" ? "active" : "value"));
   try {
     if (market === "us") {
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, market, type, source: h.source, rows: h.rows.slice(0, 30) });
     }
     if (type === "rows") {
-      const all = req.query?.codes === "all", want = new Set(String(req.query?.codes || "").split(",").map(c => c.trim()).filter(c => /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 400)), L = await marketRows();
+      const all = req.query?.codes === "all", want = new Set(String(req.query?.codes || "").split(",").map(c => c.trim()).filter(c => /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 400)), L = await marketFetcher();
       res.setHeader("Cache-Control", liveCache(L.live, 10));
       return res.status(200).json({ ok: true, market, type, date: L.date, live: L.live, time: L.time, source: L.source, completeness: L.completeness || null, dataStatus: L.dataStatus || null, coverage: L.coverage || null, dateVerified: L.dateVerified ?? null, dateConsistent: L.dateConsistent ?? null, at: Date.now(), rows: L.rows.filter(r => (all ? /^\d{4}$/.test(r.code) : want.has(r.code))).map(r => [r.code, r.price, r.chgPct, r.value]) });
     }
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
       const t = await t86Latest(); if (!t) throw new Error("證交所三大法人資料暫時拿不到");
       rows = t.rows.sort((a, b) => b[type] - a[type]).slice(0, 30); date = t.date; source = "證交所 三大法人買賣超（上市）";
     } else {
-      L = await marketRows(); const all = L.rows.slice(); live = L.live;
+      L = await marketFetcher(); const all = L.rows.slice(); live = L.live;
       date = L.date || all.find(x => x.date)?.date || null; source = L.source; time = L.time;
       const liquid = all.filter(x => (x.vol || 0) >= 500); // 漲跌幅排行排除成交太少的
       rows = type === "etf" ? all.filter(x => /^00\d{2,4}[A-Z]?$/.test(x.code)).sort((x, y) => (y.value || 0) - (x.value || 0)) // ETF 排行：全部 ETF 依成交值（前端再依量、漲跌幅排序）
