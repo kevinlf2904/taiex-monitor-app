@@ -185,19 +185,27 @@ async function claudeJSON(prompt) {
 }
 
 // ---------- 音檔上傳到 Gemini Files（可續傳上傳的兩步驟：start → upload, finalize） ----------
-export async function uploadAudio(url, name, key, { dlMs = 30000, upMs = 40000 } = {}) {
-  const r = await safeFetch(url, { headers: UA, signal: AbortSignal.timeout(dlMs) });
+export function timeoutWithinDeadline(deadline, requestedMs, reserveMs = 0, now = Date.now()) {
+  return Math.max(0, Math.min(requestedMs, deadline - now - reserveMs));
+}
+const requireTimeout = (ms, stage) => { if (ms < 1000) throw new Error(`Podcast ${stage}時間不足，請稍後重試。`); return ms; };
+export async function uploadAudio(url, name, key, { dlMs = 30000, upMs = 40000, deadline = Date.now() + 55000 } = {}) {
+  // 留 15 秒給 Gemini 建立上傳工作階段，再保留至少 1 秒完成最後上傳；所有階段共用同一個路由截止時間。
+  const downloadMs = requireTimeout(timeoutWithinDeadline(deadline, dlMs, 16000), "下載");
+  const r = await safeFetch(url, { headers: UA, signal: AbortSignal.timeout(downloadMs) });
   if (!r.ok) throw new Error(`下載音檔失敗（HTTP ${r.status}）`);
   const len = +r.headers.get("content-length") || 0; if (len > MAX_AUDIO) throw new Error(`音檔太大（${Math.round(len / 1048576)}MB），改用節目說明整理。`);
   const buf = await readCapped(r, MAX_AUDIO).catch(e => { throw new Error(/太大/.test(e.message) ? "音檔太大，改用節目說明整理。" : e.message); });
   let mime = (r.headers.get("content-type") || "").split(";")[0].trim(); if (!/^audio\//.test(mime)) mime = /\.m4a(\?|$)/i.test(url) ? "audio/mp4" : "audio/mpeg";
-  return uploadBuf(buf, mime, name || "podcast", key, upMs);
+  return uploadBuf(buf, mime, name || "podcast", key, upMs, deadline);
 }
 // 檔案上傳到 Gemini（音檔、太大不能直接夾帶的 PDF）：回 { file, uri, mime, state, mb }
-export async function uploadBuf(buf, mime, name, key, upMs = 40000) {
-  const st = await fetch(`${GEMINI}/upload/v1beta/files`, { method: "POST", headers: { "x-goog-api-key": key, "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start", "X-Goog-Upload-Header-Content-Length": String(buf.length), "X-Goog-Upload-Header-Content-Type": mime, "Content-Type": "application/json" }, body: JSON.stringify({ file: { display_name: String(name).slice(0, 100) } }), signal: AbortSignal.timeout(15000) });
+export async function uploadBuf(buf, mime, name, key, upMs = 40000, deadline = Date.now() + 55000) {
+  const startMs = requireTimeout(timeoutWithinDeadline(deadline, 15000, 1000), "啟動上傳");
+  const st = await fetch(`${GEMINI}/upload/v1beta/files`, { method: "POST", headers: { "x-goog-api-key": key, "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start", "X-Goog-Upload-Header-Content-Length": String(buf.length), "X-Goog-Upload-Header-Content-Type": mime, "Content-Type": "application/json" }, body: JSON.stringify({ file: { display_name: String(name).slice(0, 100) } }), signal: AbortSignal.timeout(startMs) });
   const up = st.headers.get("x-goog-upload-url"); if (!st.ok || !up) throw new Error(`上傳到 Gemini 失敗（HTTP ${st.status}）`);
-  const fin = await fetch(up, { method: "POST", headers: { "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize" }, body: buf, signal: AbortSignal.timeout(upMs) });
+  const finalMs = requireTimeout(timeoutWithinDeadline(deadline, upMs, 1000), "傳送音檔");
+  const fin = await fetch(up, { method: "POST", headers: { "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize" }, body: buf, signal: AbortSignal.timeout(finalMs) });
   const j = await fin.json().catch(() => ({})); if (!fin.ok || !j.file?.uri) throw new Error(`上傳到 Gemini 失敗（HTTP ${fin.status}）`);
   return { file: j.file.name, uri: j.file.uri, mime, state: j.file.state || "PROCESSING", mb: +(buf.length / 1048576).toFixed(1) };
 }
@@ -262,7 +270,7 @@ export default async function handler(req, res) {
       if (b.act === "upload") {
         if (!gem) return res.status(200).json({ ok: false, error: "聽完整集需要在 Vercel 設定 GEMINI_API_KEY；現在可以先用節目說明整理。" });
         const url = safeUrl(b.audio); if (!url) return res.status(400).json({ ok: false, error: "音檔網址不正確" });
-        return res.status(200).json({ ok: true, ...(await uploadAudio(url, b.name, gem)) });
+        return res.status(200).json({ ok: true, ...(await uploadAudio(url, b.name, gem, { deadline: deadline - 1000 })) });
       }
       if (b.act === "sum") {
         const meta = { title: String(b.title || "").slice(0, 200), show: String(b.show || "").slice(0, 100), date: String(b.date || "").slice(0, 20), desc: String(b.desc || "").slice(0, 6000) };

@@ -250,12 +250,16 @@ test("總經影響方向、代號搜尋結果過濾", () => {
 });
 
 test("節目觀點摘要：新版格式有數字、風險、觀察重點，段落可以更長", async () => {
-  const { parseSum, PROMPT, SUM_VER } = await import("../api/_lib/podcast.js");
+  const { parseSum, PROMPT, SUM_VER, timeoutWithinDeadline } = await import("../api/_lib/podcast.js");
   assert.ok(SUM_VER >= 2); assert.match(PROMPT({ title: "t" }, "audio"), /facts[\s\S]*risks[\s\S]*watch/);
   const long = "很".repeat(400), j = parseSum(JSON.stringify({ tldr: "x", points: Array(10).fill("重點"), sections: Array(6).fill({ title: "小標", body: long }), facts: ["營收年增 30%"], risks: ["匯率"], watch: ["下週財報"], calls: [], topics: [] }));
   assert.equal(j.points.length, 10); assert.equal(j.sections.length, 6); assert.equal(j.sections[0].body.length, 400);
   assert.deepEqual([j.facts, j.risks, j.watch], [["營收年增 30%"], ["匯率"], ["下週財報"]]);
   assert.deepEqual(parseSum('{"tldr":"x"}').facts, [], "舊格式沒有新欄位也要能讀");
+  assert.equal(timeoutWithinDeadline(60000, 30000, 16000, 0), 30000, "下載不超過請求上限");
+  assert.equal(timeoutWithinDeadline(50000, 30000, 16000, 10000), 24000, "下載為後續上傳預留時間");
+  assert.equal(timeoutWithinDeadline(50000, 40000, 1000, 10000), 39000, "最後階段服從整體截止時間");
+  assert.equal(timeoutWithinDeadline(10000, 40000, 1000, 10000), 0, "截止時間已到時不再啟動新請求");
 });
 
 test("期交所 1 分 K：Field＋Ticks 陣列格式（日盤、跨午夜的夜盤）", async () => {
