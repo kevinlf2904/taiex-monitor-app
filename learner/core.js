@@ -487,6 +487,114 @@ function mktStatusTag(statusObj, options = {}) {
   return "<span class=\"mkt-tag " + status + "\" title=\"" + esc(note || text) + (extra ? " (" + extra + ")" : "") + "\"><i></i>" + text + (extra ? "<small>" + extra + "</small>" : "") + "</span>";
 }
 
+/* ---------- 市場可信度與即時附註判定純函式 (Phase B / PR #165) ----------
+   統一後端 API 與前端 UI 之可信度定義：
+   - live：僅代表來源更新時效，不代表品質已驗證。
+   - confirmed：僅允許符合既定收盤確認條件的資料。
+   - partial、degraded、delayed、pending、unavailable：前端絕不重新解讀為健全即時。
+   - dateConsistent === false 或 dateVerified === false：絕不顯示為完整可信即時或收盤確認。
+   - null、undefined、缺欄位：依向後相容政策降級提示，不假定資料完全健康。
+*/
+function isMarketHealthy(mkt) {
+  if (!mkt || typeof mkt !== "object") return false;
+  if (mkt.live !== true) return false;
+  if (mkt.dataStatus !== "live") return false;
+  if (mkt.completeness !== "complete") return false;
+  if (mkt.dateConsistent !== true) return false;
+  if (mkt.dateVerified !== true) return false;
+  return true;
+}
+
+function getMktNoteText(mkt) {
+  if (!mkt || typeof mkt !== "object" || mkt.dataStatus === "unavailable") {
+    return "行情功能暫未提供";
+  }
+
+  // 非即時行情（非交易日或已收盤）
+  if (!mkt.live) {
+    return "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計";
+  }
+
+  // 1. 完整且已驗證日期：維持原有即時提示
+  if (isMarketHealthy(mkt)) {
+    return "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 2. 上市有、上櫃無：提示僅上市即時，上櫃缺漏
+  if (mkt.completeness === "partial_tse_only") {
+    return "僅上市為盤中即時（上櫃缺漏，統計為部分涵蓋）；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 3. 上櫃有、上市無：提示僅上櫃即時，上市缺漏
+  if (mkt.completeness === "partial_otc_only") {
+    return "僅上櫃為盤中即時（上市缺漏，統計為部分涵蓋）；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 4. 上市櫃日期不一致（dateConsistent === false）：提示資料日期不一致，不應寫成「都是盤中即時」
+  if (mkt.dateConsistent === false) {
+    return "上市櫃資料日期不一致，部分資料更新中；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 5. 日期未驗證（dateVerified === false）：提示日期未驗證，不應寫成「都是盤中即時」
+  if (mkt.dateVerified === false) {
+    return "行情更新中，但資料日期尚未確認；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 6. degraded 或 delayed：提示為降級或延遲更新，不應寫成「都是盤中即時」
+  if (mkt.dataStatus === "delayed") {
+    return "部分行情為盤中即時（資料延遲更新）；法人買賣超是最近一次收盤後公布";
+  }
+  if (mkt.dataStatus === "degraded" || mkt.completeness === "degraded") {
+    return "部分行情為盤中即時（資料不完整或降級更新）；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 7. 新舊 API 相容情境（缺少部分欄位）：降級提示，不應假定資料完全健康
+  if (mkt.dataStatus == null || mkt.completeness == null || mkt.dateConsistent == null || mkt.dateVerified == null) {
+    return "部分行情為盤中即時（資料未經完整驗證）；法人買賣超是最近一次收盤後公布";
+  }
+
+  // 通用備援降級提示
+  return "部分行情為盤中即時（資料不完整或降級更新）；法人買賣超是最近一次收盤後公布";
+}
+
+function isHotHealthy(H) {
+  if (!H || typeof H !== "object") return false;
+  if (H.live !== true) return false;
+  if (H.dataStatus !== "live") return false;
+  if (H.completeness !== "complete") return false;
+  if (H.dateConsistent !== true) return false;
+  if (H.dateVerified !== true) return false;
+  return true;
+}
+
+function getHotNoteText(H) {
+  if (!H || typeof H !== "object") return "";
+  if (H.dataStatus === "unavailable") return "行情功能暫未提供";
+
+  let prefix = "";
+  if (H.live) {
+    if (isHotHealthy(H)) {
+      prefix = "盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）";
+    } else if (H.completeness === "partial_tse_only") {
+      prefix = "盤中排行（僅上市即時，上櫃缺漏，依每秒報價排序）";
+    } else if (H.completeness === "partial_otc_only") {
+      prefix = "盤中排行（僅上櫃即時，上市缺漏，依每秒報價排序）";
+    } else if (H.dateConsistent === false) {
+      prefix = "盤中排行（資料日期不一致，依每秒報價排序）";
+    } else if (H.dateVerified === false) {
+      prefix = "盤中排行（資料日期未確認，依每秒報價排序）";
+    } else if (H.dataStatus === "delayed") {
+      prefix = "盤中排行（資料延遲更新，依每秒報價排序）";
+    } else {
+      prefix = "盤中排行（部分資料降級或不完整，依每秒報價排序）";
+    }
+  } else {
+    prefix = H.date ? `${H.date.replace(/-/g, "/")} 收盤後統計` : "收盤後統計";
+  }
+  const sourcePart = H.source ? `・${H.source}` : "";
+  return `${prefix}${sourcePart}；右邊的價格是即時價`;
+}
+
 if (typeof globalThis !== "undefined") {
   globalThis.evalDataStatus = evalDataStatus;
   globalThis.mktStatusTag = mktStatusTag;
@@ -494,6 +602,10 @@ if (typeof globalThis !== "undefined") {
   globalThis.parseTimeToSec = parseTimeToSec;
   globalThis.isQuoteStale = isQuoteStale;
   globalThis.usIso = usIso;
+  globalThis.isMarketHealthy = isMarketHealthy;
+  globalThis.getMktNoteText = getMktNoteText;
+  globalThis.isHotHealthy = isHotHealthy;
+  globalThis.getHotNoteText = getHotNoteText;
 }
 // 品牌（KLineLab K線情報局）：1:1 幾何 K 線圖標（空心 K 棒＋影線、上下都削 45 度的鈦金屬灰光束，兩者同寬對稱，合起來像字母 K）＋Space Grotesk 字標＋PRO 徽章
 const BRAND = { name: "KLineLab", zh: "K線情報局", tag: "將複雜的台美股機構籌碼與供應鏈資金，化為一目了然突破訊號的量化研究終端機" };

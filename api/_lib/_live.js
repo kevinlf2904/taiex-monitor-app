@@ -314,8 +314,8 @@ export async function fetchRecentClose(arg1 = todayTaipei(), arg2 = 7) {
           tseCount: res?.tseCount,
           otcCount: res?.otcCount,
           isSourceDateMatched: true,
-          dateVerified: true,
-          dateConsistent: res?.dateConsistent ?? true
+          dateVerified: res?.dateVerified ?? true,
+          dateConsistent: res?.dateConsistent ?? null
         };
       }
     } catch {}
@@ -482,8 +482,8 @@ export async function marketRows(opts = {}) {
       if (isFresher) {
         const rows = mapCloseToRows(recent.map, recent.date);
         const validation = validateMarketRows(rows, { expectedCodes, today, now });
-        const dateVerified = recent.dateVerified ?? validation.dateVerified;
-        const dateConsistent = recent.dateConsistent ?? validation.dateConsistent;
+        const dateVerified = recent.dateVerified != null ? Boolean(recent.dateVerified && validation.dateVerified) : validation.dateVerified;
+        const dateConsistent = recent.dateConsistent != null ? Boolean(recent.dateConsistent && validation.dateConsistent) : validation.dateConsistent;
         const dataStatus = deriveDataStatus({
           isLiveSession: false,
           isToday: recent.date === today,

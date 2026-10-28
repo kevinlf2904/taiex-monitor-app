@@ -1167,3 +1167,77 @@ test("Scenario 39: [第三輪驗證] Metadata 三態 (undefined, null, false, tr
   assert.strictEqual(rUndef.dateVerified, null, "undefined 序列化為 null 避免欄位遺失");
   assert.strictEqual(rUndef.dateConsistent, null, "undefined 序列化為 null 避免欄位遺失");
 });
+
+test("Scenario 41: [第四輪可信度一致性驗證] OpenAPI 回退路徑與最近收盤路徑嚴格遵守可信度契約", async () => {
+  const nowIntraday = new Date("2026-10-28T02:30:00Z"); // 台北時間 10:30 (盤中)
+  const nowAfterHours = new Date("2026-10-28T07:00:00Z"); // 台北時間 15:00 (收盤後)
+
+  // 1. 盤中 MIS 失敗回退最近收盤：live 必須為 false，dataStatus 絕不可為 live 或 confirmed
+  const mockRwdYesterday = async () => {
+    const m = new Map();
+    for (let i = 1000; i < 1600; i++) {
+      m.set(String(i), { name: `市${i}`, market: "上市", p: 100, pct: 1.0, v: 200 });
+    }
+    m.date = "2026-10-27";
+    m.isSourceDateMatched = true;
+    m.dateVerified = true;
+    return m;
+  };
+
+  const resRecentClose = await marketRows({
+    now: nowIntraday,
+    today: "2026-10-28",
+    fetcher: async () => [{ code: "2330", name: "台積電", market: "上市", date: "2026-10-27" }],
+    misFetcher: async () => { throw new Error("MIS 503"); },
+    rwdFetcher: mockRwdYesterday
+  });
+
+  assert.equal(resRecentClose.live, false, "回退最近收盤時 live 必須為 false");
+  assert.equal(resRecentClose.dataStatus, "delayed", "盤中回退昨日收盤時 dataStatus 必須為 delayed");
+  assert.notEqual(resRecentClose.dataStatus, "live", "回退收盤絕對不得冒充 live");
+  assert.notEqual(resRecentClose.dataStatus, "confirmed", "盤中回退昨日收盤絕對不得標為 confirmed");
+
+  // 2. 收盤後 (15:00) 取得當日收盤，但僅上市無上櫃 (partial_tse_only)：dataStatus 絕不可為 confirmed
+  const mockRwdPartialToday = async () => {
+    const m = new Map();
+    for (let i = 1000; i < 1850; i++) {
+      m.set(String(i), { name: `市${i}`, market: "上市", p: 100, pct: 1.0, v: 200 });
+    }
+    m.date = "2026-10-28";
+    m.isSourceDateMatched = true;
+    m.dateVerified = true;
+    return m;
+  };
+
+  const resPartialToday = await marketRows({
+    now: nowAfterHours,
+    today: "2026-10-28",
+    fetcher: async () => [],
+    rwdFetcher: mockRwdPartialToday
+  });
+
+  assert.equal(resPartialToday.live, false);
+  assert.equal(resPartialToday.completeness, "partial_tse_only");
+  assert.equal(resPartialToday.dateConsistent, false);
+  assert.notEqual(resPartialToday.dataStatus, "confirmed", "不完整收盤資料絕對不可宣告 confirmed");
+  assert.equal(resPartialToday.dataStatus, "degraded", "跨市場缺失時 dataStatus 必須為 degraded");
+
+  // 3. OpenAPI 備援路徑：在任何情境下 live 均為 false，dataStatus 必為 delayed
+  const openApiRows = [];
+  for (let i = 1000; i < 2000; i++) openApiRows.push({ code: String(i), name: `市${i}`, market: "上市", date: "2026-10-27" });
+  for (let i = 3000; i < 3800; i++) openApiRows.push({ code: String(i), name: `櫃${i}`, market: "上櫃", date: "2026-10-27" });
+
+  const resOpenApi = await marketRows({
+    now: nowIntraday,
+    today: "2026-10-28",
+    fetcher: async () => openApiRows,
+    misFetcher: async () => { throw new Error("MIS 503"); },
+    rwdFetcher: async () => null // 強制跳過收盤探測
+  });
+
+  assert.equal(resOpenApi.live, false, "OpenAPI 回退路徑 live 必為 false");
+  assert.equal(resOpenApi.dataStatus, "delayed", "OpenAPI 回退路徑 dataStatus 必為 delayed");
+  assert.notEqual(resOpenApi.dataStatus, "live", "OpenAPI 絕不可標記為 live");
+  assert.notEqual(resOpenApi.dataStatus, "confirmed", "OpenAPI 絕不可標記為 confirmed");
+  assert.ok(resOpenApi.source.includes("OpenAPI"));
+});

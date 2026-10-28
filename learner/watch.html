@@ -2059,13 +2059,9 @@ function renderList0() {
     renderInd(); note = "台股、美股有即時報價；日股、韓股只列名稱。題材的平均漲跌是成員今天漲跌幅的簡單平均。";
   } else if (W.lt === "mkt") {
     $("#lTools").innerHTML = `<span class="note">${W.mkReg === "otc" ? "櫃買中心・每個交易日收盤後更新" : W.mkReg === "lst" ? "證交所・每個交易日收盤後更新" : W.mkReg === "off" ? "證交所、櫃買中心公告・約 15 分鐘更新" : W.mkReg === "gl" ? `原物料・外匯・利率${W.gl?.at ? `・更新於 ${new Date(W.gl.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span>${rfBtn("mktRefresh")}`;
-    const mktHealthy = W.mkt?.live && (W.mkt.dataStatus == null || W.mkt.dataStatus === "live") && (W.mkt.completeness == null || W.mkt.completeness === "complete") && W.mkt.dateConsistent !== false && W.mkt.dateVerified !== false;
-    const mktNoteText = mktHealthy
-      ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布"
-      : W.mkt?.live
-        ? (W.mkt.completeness === "partial_tse_only" ? "僅上市為盤中即時（上櫃缺漏，統計為部分涵蓋）；法人買賣超是最近一次收盤後公布" : "部分行情為盤中即時（資料不完整或降級更新）；法人買賣超是最近一次收盤後公布")
-        : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計";
-    renderMkt(); note = W.mkReg === "otc" || W.mkReg === "lst" || W.mkReg === "off" ? "" : W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${mktNoteText}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : "";
+    const mktHealthy = isMarketHealthy(W.mkt);
+    const mktNoteText = getMktNoteText(W.mkt);
+    renderMkt(); note = W.mkReg === "otc" || W.mkReg === "lst" || W.mkReg === "off" ? "" : W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${mktNoteText}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : (W.mkt?.dataStatus === "unavailable" ? mktNoteText : "");
   } else if (W.lt === "etf") {
     note = renderEtf();
   } else if (W.lt === "earn") {
@@ -2098,8 +2094,8 @@ function renderList0() {
     $("#lTools").innerHTML = rankHub() + `<div class="seg" role="group" aria-label="排行" id="rankSeg">${RANKS.map(([k, t]) => `<button data-rank="${k}" aria-pressed="${W.rankType === k}">${t}</button>`).join("")}</div>`;
     $("#wl").innerHTML = H?.rows?.length ? (H.live && !chipRank ? liveRank(H.rows, W.rankType) : H.rows).map((r, i) => rowHtml(r.code, chipRank ? { name: r.name, ...(W.quotes.get(r.code) || {}) } : { ...r, ...(W.quotes.get(r.code) || {}) }, { rank: i + 1, star: true,
       metric: chipRank ? `${W.rankType === "foreign" ? "外資" : "投信"}買超 ${r[W.rankType].toLocaleString()} 張` : W.rankType === "value" ? `成交值 ${r.value?.toFixed(1)} 億` : W.rankType === "volume" ? `成交量 ${fmtVol(r.vol)} 張` : `${r.live ? "現價" : "收盤"} ${fmtP(r.price)}・${r.chgPct > 0 ? "+" : ""}${(+r.chgPct).toFixed(2)}%` })).join("") : `<li class="empty note">${H?.err ? "⚠︎ " + esc(H.err) : W.off ? "需要部署到網站才有排行。" : "載入中…"}</li>`;
-    const hotHealthy = H && (H.dataStatus == null || H.dataStatus === "live") && (H.completeness == null || H.completeness === "complete") && H.dateConsistent !== false && H.dateVerified !== false;
-    note = H ? `${H.live ? (hotHealthy ? "盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）" : "盤中排行（部分資料降級或不完整，依每秒報價排序）") : H.date ? H.date.replace(/-/g, "/") + " 收盤後統計" : ""}${H.source ? "・" + H.source : ""}；右邊的價格是即時價` : "";
+    const hotHealthy = isHotHealthy(H);
+    note = getHotNoteText(H);
   }
   W.prevPx.clear();
   const ago = W.lastOk ? Math.round((Date.now() - W.lastOk) / 1000) : null;

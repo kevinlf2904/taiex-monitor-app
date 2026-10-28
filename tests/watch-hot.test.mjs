@@ -2316,86 +2316,154 @@ test("P1-2 前端端到端整合驗證: API 回傳之 dateVerified 與 dateConsi
   assert.match(closedSt.note, /資料日期未經來源確認|上市櫃資料日期不一致/);
 });
 
-test("Scenario 40: [第三輪驗證] 前端 UI 降級提示語測試 (watch.html lines 2062 & 2095 消除誤導)", () => {
-  const evalMktNote = (mktObj) => {
-    const W = { mkt: mktObj };
-    const mktHealthy = W.mkt?.live && (W.mkt.dataStatus == null || W.mkt.dataStatus === "live") && (W.mkt.completeness == null || W.mkt.completeness === "complete") && W.mkt.dateConsistent !== false && W.mkt.dateVerified !== false;
-    const mktNoteText = mktHealthy
-      ? "加權、櫃買、漲跌分佈、產業、貢獻點數都是盤中即時（每 30 秒自動更新）；法人買賣超是最近一次收盤後公布"
-      : W.mkt?.live
-        ? (W.mkt.completeness === "partial_tse_only" ? "僅上市為盤中即時（上櫃缺漏，統計為部分涵蓋）；法人買賣超是最近一次收盤後公布" : "部分行情為盤中即時（資料不完整或降級更新）；法人買賣超是最近一次收盤後公布")
-        : "加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計";
-    return { mktHealthy, mktNoteText };
-  };
+test("Scenario 40: [第四輪可信度一致性驗證] 統一前端可信度函式與 9 項完整情境附註測試", () => {
+  const { isMarketHealthy, getMktNoteText, isHotHealthy, getHotNoteText } = createHarness().ctx;
 
-  const evalHotNote = (hotObj) => {
-    const H = hotObj;
-    const hotHealthy = H && (H.dataStatus == null || H.dataStatus === "live") && (H.completeness == null || H.completeness === "complete") && H.dateConsistent !== false && H.dateVerified !== false;
-    const note = H ? `${H.live ? (hotHealthy ? "盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）" : "盤中排行（部分資料降級或不完整，依每秒報價排序）") : H.date ? H.date.replace(/-/g, "/") + " 收盤後統計" : ""}${H.source ? "・" + H.source : ""}；右邊的價格是即時價` : "";
-    return { hotHealthy, note };
-  };
-
-  // 1. 全健全即時行情: 提示包含「都是盤中即時」
-  const mkt1 = evalMktNote({ live: true, dataStatus: "live", completeness: "complete", dateConsistent: true, dateVerified: true });
-  assert.equal(mkt1.mktHealthy, true);
-  assert.match(mkt1.mktNoteText, /都是盤中即時/);
+  // 1. 完整且已驗證日期 (Healthy Live): 提示包含「都是盤中即時」
+  const mkt1 = { live: true, dataStatus: "live", completeness: "complete", dateConsistent: true, dateVerified: true };
+  assert.equal(isMarketHealthy(mkt1), true);
+  assert.match(getMktNoteText(mkt1), /都是盤中即時/);
 
   // 2. 僅上市完整、上櫃缺漏 (partial_tse_only): 提示「僅上市為盤中即時（上櫃缺漏，統計為部分涵蓋）」
-  const mkt2 = evalMktNote({ live: true, dataStatus: "live", completeness: "partial_tse_only", dateConsistent: false, dateVerified: true });
-  assert.equal(mkt2.mktHealthy, false);
-  assert.match(mkt2.mktNoteText, /僅上市為盤中即時（上櫃缺漏，統計為部分涵蓋）/);
-  assert.doesNotMatch(mkt2.mktNoteText, /都是盤中即時/);
+  const mkt2 = { live: true, dataStatus: "degraded", completeness: "partial_tse_only", dateConsistent: false, dateVerified: true };
+  assert.equal(isMarketHealthy(mkt2), false);
+  const note2 = getMktNoteText(mkt2);
+  assert.match(note2, /僅上市為盤中即時（上櫃缺漏，統計為部分涵蓋）/);
+  assert.doesNotMatch(note2, /都是盤中即時/);
 
-  // 3. 降級行情 (completeness: degraded): 提示「部分行情為盤中即時（資料不完整或降級更新）」
-  const mkt3 = evalMktNote({ live: true, dataStatus: "degraded", completeness: "degraded", dateConsistent: true, dateVerified: true });
-  assert.equal(mkt3.mktHealthy, false);
-  assert.match(mkt3.mktNoteText, /部分行情為盤中即時（資料不完整或降級更新）/);
-  assert.doesNotMatch(mkt3.mktNoteText, /都是盤中即時/);
+  // 3. 僅上櫃完整、上市缺漏 (partial_otc_only): 提示「僅上櫃為盤中即時（上市缺漏，統計為部分涵蓋）」
+  const mkt3 = { live: true, dataStatus: "degraded", completeness: "partial_otc_only", dateConsistent: false, dateVerified: true };
+  assert.equal(isMarketHealthy(mkt3), false);
+  const note3 = getMktNoteText(mkt3);
+  assert.match(note3, /僅上櫃為盤中即時（上市缺漏，統計為部分涵蓋）/);
+  assert.doesNotMatch(note3, /都是盤中即時/);
 
-  // 4. 跨市場日期不一致 (dateConsistent: false): 提示「部分行情為盤中即時（資料不完整或降級更新）」
-  const mkt4 = evalMktNote({ live: true, dataStatus: "degraded", completeness: "complete", dateConsistent: false, dateVerified: true });
-  assert.equal(mkt4.mktHealthy, false);
-  assert.match(mkt4.mktNoteText, /部分行情為盤中即時（資料不完整或降級更新）/);
-  assert.doesNotMatch(mkt4.mktNoteText, /都是盤中即時/);
+  // 4. 跨市場日期不一致 (dateConsistent: false): 提示「上市櫃資料日期不一致」
+  const mkt4 = { live: true, dataStatus: "degraded", completeness: "complete", dateConsistent: false, dateVerified: true };
+  assert.equal(isMarketHealthy(mkt4), false);
+  const note4 = getMktNoteText(mkt4);
+  assert.match(note4, /上市櫃資料日期不一致，部分資料更新中/);
+  assert.doesNotMatch(note4, /都是盤中即時/);
 
-  // 5. 日期未驗證 (dateVerified: false): 提示「部分行情為盤中即時（資料不完整或降級更新）」
-  const mkt5 = evalMktNote({ live: true, dataStatus: "delayed", completeness: "complete", dateConsistent: true, dateVerified: false });
-  assert.equal(mkt5.mktHealthy, false);
-  assert.match(mkt5.mktNoteText, /部分行情為盤中即時（資料不完整或降級更新）/);
-  assert.doesNotMatch(mkt5.mktNoteText, /都是盤中即時/);
+  // 5. 日期未驗證 (dateVerified: false): 提示「資料日期尚未確認」
+  const mkt5 = { live: true, dataStatus: "delayed", completeness: "complete", dateConsistent: true, dateVerified: false };
+  assert.equal(isMarketHealthy(mkt5), false);
+  const note5 = getMktNoteText(mkt5);
+  assert.match(note5, /行情更新中，但資料日期尚未確認/);
+  assert.doesNotMatch(note5, /都是盤中即時/);
 
-  // 6. 非即時行情 (live: false): 正確回到收盤後統計提示
-  const mkt6 = evalMktNote({ live: false, dataStatus: "confirmed", completeness: "complete", dateConsistent: true, dateVerified: true });
-  assert.equal(mkt6.mktHealthy, false);
-  assert.match(mkt6.mktNoteText, /加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計/);
+  // 6. degraded 或 delayed: 提示降級或延遲更新
+  const mkt6a = { live: true, dataStatus: "degraded", completeness: "degraded", dateConsistent: true, dateVerified: true };
+  assert.equal(isMarketHealthy(mkt6a), false);
+  const note6a = getMktNoteText(mkt6a);
+  assert.match(note6a, /部分行情為盤中即時（資料不完整或降級更新）/);
+  assert.doesNotMatch(note6a, /都是盤中即時/);
 
-  // 7. 熱門股健全排行: 標示「盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）」
-  const hot1 = evalHotNote({ live: true, dataStatus: "live", completeness: "complete", dateConsistent: true, dateVerified: true, source: "富果行情快照" });
-  assert.equal(hot1.hotHealthy, true);
-  assert.match(hot1.note, /^盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）/);
+  const mkt6b = { live: true, dataStatus: "delayed", completeness: "complete", dateConsistent: true, dateVerified: true };
+  assert.equal(isMarketHealthy(mkt6b), false);
+  const note6b = getMktNoteText(mkt6b);
+  assert.match(note6b, /部分行情為盤中即時（資料延遲更新）/);
+  assert.doesNotMatch(note6b, /都是盤中即時/);
 
-  // 8. 熱門股降級排行 (completeness: degraded / dateConsistent: false): 標示「盤中排行（部分資料降級或不完整，依每秒報價排序）」
-  const hot2 = evalHotNote({ live: true, dataStatus: "degraded", completeness: "degraded", dateConsistent: false, dateVerified: true, source: "富果行情快照" });
-  assert.equal(hot2.hotHealthy, false);
-  assert.match(hot2.note, /^盤中排行（部分資料降級或不完整，依每秒報價排序）/);
-  assert.doesNotMatch(hot2.note, /^盤中即時排行/);
+  // 7. 新舊 API 相容情境 (缺少欄位或 null/undefined): 嚴格降級，不可假定健康
+  const mktLegacy1 = { live: true, dataStatus: "live", completeness: "complete", dateConsistent: null, dateVerified: undefined };
+  assert.equal(isMarketHealthy(mktLegacy1), false);
+  assert.match(getMktNoteText(mktLegacy1), /部分行情為盤中即時（資料未經完整驗證）/);
+  assert.doesNotMatch(getMktNoteText(mktLegacy1), /都是盤中即時/);
 
-  // 9. 熱門股 dateVerified: false: 嚴格降級，絕不可稱即時排行
-  const hot3 = evalHotNote({ live: true, dataStatus: "delayed", completeness: "complete", dateConsistent: true, dateVerified: false, source: "富果行情快照" });
-  assert.equal(hot3.hotHealthy, false);
-  assert.match(hot3.note, /^盤中排行（部分資料降級或不完整，依每秒報價排序）/);
-  assert.doesNotMatch(hot3.note, /^盤中即時排行/);
+  const mktLegacy2 = { live: true, dataStatus: null, completeness: null, dateConsistent: true, dateVerified: true };
+  assert.equal(isMarketHealthy(mktLegacy2), false);
+  assert.match(getMktNoteText(mktLegacy2), /部分行情為盤中即時（資料未經完整驗證）/);
+  assert.doesNotMatch(getMktNoteText(mktLegacy2), /都是盤中即時/);
 
-  // 10. 三態邊界相容性 (dateVerified / dateConsistent: null 或 undefined): 向後相容支援
-  const mktLegacy = evalMktNote({ live: true, dataStatus: "live", completeness: "complete", dateConsistent: null, dateVerified: undefined });
-  assert.equal(mktLegacy.mktHealthy, true);
-  const hotLegacy = evalHotNote({ live: true, dataStatus: "live", completeness: "complete", dateConsistent: undefined, dateVerified: null });
-  assert.equal(hotLegacy.hotHealthy, true);
+  // 8. 非即時行情 (live: false): 正確回到收盤後統計提示
+  const mkt8 = { live: false, dataStatus: "confirmed", completeness: "complete", dateConsistent: true, dateVerified: true };
+  assert.equal(isMarketHealthy(mkt8), false);
+  assert.match(getMktNoteText(mkt8), /加權、櫃買為即時；漲跌分佈、產業、貢獻點數與法人是最近交易日收盤後的統計/);
 
-  // 11. 原始 watch.html 原始碼驗證: 確認誤導性即時判斷已徹底自原始碼中替換
-  assert.match(html, /const mktHealthy = W\.mkt\?\.live &&/);
-  assert.match(html, /僅上市為盤中即時（上櫃缺漏，統計為部分涵蓋）/);
-  assert.match(html, /部分行情為盤中即時（資料不完整或降級更新）/);
-  assert.match(html, /const hotHealthy = H &&/);
-  assert.match(html, /盤中排行（部分資料降級或不完整，依每秒報價排序）/);
+  // 9. 狀態為 unavailable: 正確顯示未提供
+  const mkt9 = { live: false, dataStatus: "unavailable" };
+  assert.equal(isMarketHealthy(mkt9), false);
+  assert.equal(getMktNoteText(mkt9), "行情功能暫未提供");
+
+  // ---------- 熱門股排行附註完整測試 ----------
+  // 10. 熱門股健全排行: 標示「盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）」
+  const hot1 = { live: true, dataStatus: "live", completeness: "complete", dateConsistent: true, dateVerified: true, source: "富果快照" };
+  assert.equal(isHotHealthy(hot1), true);
+  assert.match(getHotNoteText(hot1), /^盤中即時排行（依每秒報價重新排序，名單每 15 秒更新）/);
+
+  // 11. 熱門股僅上市 (partial_tse_only): 標示僅上市即時
+  const hot2 = { live: true, dataStatus: "degraded", completeness: "partial_tse_only", dateConsistent: false, dateVerified: true, source: "富果快照" };
+  assert.equal(isHotHealthy(hot2), false);
+  const hotNote2 = getHotNoteText(hot2);
+  assert.match(hotNote2, /^盤中排行（僅上市即時，上櫃缺漏，依每秒報價排序）/);
+  assert.doesNotMatch(hotNote2, /^盤中即時排行/);
+
+  // 12. 熱門股僅上櫃 (partial_otc_only): 標示僅上櫃即時
+  const hot3 = { live: true, dataStatus: "degraded", completeness: "partial_otc_only", dateConsistent: false, dateVerified: true, source: "富果快照" };
+  assert.equal(isHotHealthy(hot3), false);
+  const hotNote3 = getHotNoteText(hot3);
+  assert.match(hotNote3, /^盤中排行（僅上櫃即時，上市缺漏，依每秒報價排序）/);
+  assert.doesNotMatch(hotNote3, /^盤中即時排行/);
+
+  // 13. 熱門股日期不一致 (dateConsistent: false): 標示日期不一致
+  const hot4 = { live: true, dataStatus: "degraded", completeness: "complete", dateConsistent: false, dateVerified: true, source: "富果快照" };
+  assert.equal(isHotHealthy(hot4), false);
+  const hotNote4 = getHotNoteText(hot4);
+  assert.match(hotNote4, /^盤中排行（資料日期不一致，依每秒報價排序）/);
+  assert.doesNotMatch(hotNote4, /^盤中即時排行/);
+
+  // 14. 熱門股日期未確認 (dateVerified: false): 標示日期未確認
+  const hot5 = { live: true, dataStatus: "delayed", completeness: "complete", dateConsistent: true, dateVerified: false, source: "富果快照" };
+  assert.equal(isHotHealthy(hot5), false);
+  const hotNote5 = getHotNoteText(hot5);
+  assert.match(hotNote5, /^盤中排行（資料日期未確認，依每秒報價排序）/);
+  assert.doesNotMatch(hotNote5, /^盤中即時排行/);
+
+  // 15. 熱門股延遲 (dataStatus: delayed): 標示資料延遲更新
+  const hot6 = { live: true, dataStatus: "delayed", completeness: "complete", dateConsistent: true, dateVerified: true, source: "富果快照" };
+  assert.equal(isHotHealthy(hot6), false);
+  const hotNote6 = getHotNoteText(hot6);
+  assert.match(hotNote6, /^盤中排行（資料延遲更新，依每秒報價排序）/);
+  assert.doesNotMatch(hotNote6, /^盤中即時排行/);
+
+  // 16. 熱門股 legacy / 缺失欄位: 嚴格降級
+  const hotLegacy = { live: true, dataStatus: "live", completeness: "complete", dateConsistent: undefined, dateVerified: null, source: "富果快照" };
+  assert.equal(isHotHealthy(hotLegacy), false);
+  const hotNoteLegacy = getHotNoteText(hotLegacy);
+  assert.match(hotNoteLegacy, /^盤中排行（部分資料降級或不完整，依每秒報價排序）/);
+  assert.doesNotMatch(hotNoteLegacy, /^盤中即時排行/);
+
+  // 17. 熱門股非 live / 收盤後
+  const hotClosed = { live: false, date: "2026-10-28", source: "富果快照" };
+  assert.equal(isHotHealthy(hotClosed), false);
+  assert.match(getHotNoteText(hotClosed), /^2026\/10\/28 收盤後統計/);
+
+  // 18. 熱門股 unavailable
+  const hotUnavail = { live: false, dataStatus: "unavailable" };
+  assert.equal(isHotHealthy(hotUnavail), false);
+  assert.equal(getHotNoteText(hotUnavail), "行情功能暫未提供");
+
+  // ---------- 邊界與多型別防禦測試 ----------
+  // 19. null, undefined, 非物件, 未知 dataStatus
+  assert.equal(isMarketHealthy(null), false);
+  assert.equal(isMarketHealthy(undefined), false);
+  assert.equal(isMarketHealthy({}), false);
+  assert.equal(isMarketHealthy("invalid"), false);
+  assert.equal(isMarketHealthy({ live: true, dataStatus: "unknown_status" }), false);
+  assert.equal(getMktNoteText(null), "行情功能暫未提供");
+  assert.equal(getMktNoteText(undefined), "行情功能暫未提供");
+
+  assert.equal(isHotHealthy(null), false);
+  assert.equal(isHotHealthy(undefined), false);
+  assert.equal(isHotHealthy({}), false);
+  assert.equal(isHotHealthy(12345), false);
+  assert.equal(getHotNoteText(null), "");
+  assert.equal(getHotNoteText(undefined), "");
+
+  // 20. 原始 watch.html 原始碼呼叫端驗證
+  assert.match(html, /const mktHealthy = isMarketHealthy\(W\.mkt\);/);
+  assert.match(html, /const mktNoteText = getMktNoteText\(W\.mkt\);/);
+  assert.match(html, /const hotHealthy = isHotHealthy\(H\);/);
+  assert.match(html, /note = getHotNoteText\(H\);/);
 });
