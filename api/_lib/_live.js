@@ -138,7 +138,7 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
       got: matchedExpectedCount,
       want: expectedCodes.size,
       ratio: +(matchedExpectedCount / expectedCodes.size).toFixed(4),
-      isBenchmarkComplete: expectedCodes.size >= 1400
+      isBenchmarkComplete: expectedCodes.size >= Math.ceil(estimatedTotalWant * 0.95)
     };
   }
 
