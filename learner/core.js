@@ -226,6 +226,8 @@ function evalDataStatus(opts = {}) {
     } else {
       isCoverageOk = false;
     }
+  } else if (isMarketData) {
+    isCoverageOk = false;
   }
 
   // 3. 日期驗證 (dateVerified) 判定
@@ -265,9 +267,12 @@ function evalDataStatus(opts = {}) {
     if (typeof completeness === "string" && completeness.trim() && completeness.trim() !== "complete") {
       return "資料不完整（" + completeness.trim() + "）";
     }
-    if (!isCoverageOk) {
-      if (coverage && typeof coverage.got === "number" && typeof coverage.want === "number") {
-        return "資料覆蓋率不足（" + coverage.got + "/" + coverage.want + "）";
+    if (opts.coverage === null) return "資料未經完整驗證（缺少 coverage）";
+    if (coverage != null && !isCoverageOk) {
+      if (typeof coverage === "object" && !Array.isArray(coverage)) {
+        if (typeof coverage.got === "number" && typeof coverage.want === "number" && Number.isFinite(coverage.got) && Number.isFinite(coverage.want) && coverage.got >= 0 && coverage.want > 0) {
+          return "資料覆蓋率不足（" + coverage.got + "/" + coverage.want + "）";
+        }
       }
       return "資料覆蓋率異常";
     }
@@ -283,6 +288,9 @@ function evalDataStatus(opts = {}) {
     if (opts.completeness === null) return "資料未經完整驗證（缺少 completeness）";
     if (opts.dateVerified === null) return "資料未經完整驗證（缺少 dateVerified）";
     if (opts.dateConsistent === null) return "資料未經完整驗證（缺少 dateConsistent）";
+    if (isMarketData && !isCoverageOk) {
+      return "資料覆蓋率未提供";
+    }
     if (isMarketData && (!isCompletenessOk || !isDateVerifiedOk || !isDateConsistentOk || !isDataStatusOk)) {
       return "資料未經完整驗證";
     }

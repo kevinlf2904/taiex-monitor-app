@@ -106,3 +106,43 @@ test("網址：#daily（原本的）和 #today（別名）都打開今日市場�
   assert.deepEqual(await p.evaluate(() => store.get("watch:tabcfg")), { order: ["money", "today", "earn"], hide: ["pod"] }, "沒有改寫使用者的分頁設定");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+
+test("手機首頁觸控尺寸與響應式排版回歸 (320px, 375px, 390px, 430px) 無溢位且按鈕 >= 44px", async () => {
+  for (const width of [320, 375, 390, 430]) {
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: true });
+    await p.clock.setFixedTime(new Date("2026-10-26T10:00:00+08:00"));
+    await p.evaluate(() => { setLt("today"); scrollTo(0, 0); $("#lx").scrollTop = 0; });
+    await p.waitForSelector("#lx .dh-core-grid", { timeout: 15000 });
+    await p.waitForSelector("#lx .td-ix", { timeout: 15000 });
+
+    const layout = await p.evaluate(() => {
+      const bar = document.querySelector("#lx .dh-status-bar");
+      const left = document.querySelector("#lx .dh-sb-left");
+      const titleBtns = document.querySelector("#lx .dh-title-btns");
+      const btns = Array.from(document.querySelectorAll("#lx .dh-status-bar [data-tx]"));
+
+      const barRect = bar ? bar.getBoundingClientRect() : null;
+      const leftRect = left ? left.getBoundingClientRect() : null;
+      const titleBtnsRect = titleBtns ? titleBtns.getBoundingClientRect() : null;
+
+      const overlaps = leftRect && titleBtnsRect ? !(leftRect.right <= titleBtnsRect.left || leftRect.left >= titleBtnsRect.right || leftRect.bottom <= titleBtnsRect.top || leftRect.top >= titleBtnsRect.bottom) : false;
+      const barOverflows = barRect ? barRect.right > window.innerWidth : false;
+
+      return {
+        barOverflows,
+        overlaps,
+        btns: btns.map(b => {
+          const r = b.getBoundingClientRect();
+          return [b.textContent.trim(), r.height >= 44, r.width >= 44];
+        })
+      };
+    });
+
+    assert.equal(layout.barOverflows, false, `視口 ${width}px 狀態列不溢出視窗`);
+    assert.equal(layout.overlaps, false, `視口 ${width}px 狀態列左側與按鈕群不重疊`);
+    assert.deepEqual(layout.btns, [["↻重新整理", true, true], ["AI 整理", true, true], ["複製文字", true, true]], `視口 ${width}px 按鈕觸控尺寸`);
+    await ctx.close();
+    assert.deepEqual(errs, []);
+  }
+});

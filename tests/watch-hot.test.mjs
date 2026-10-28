@@ -2644,6 +2644,7 @@ test("Scenario 42: [第五輪核心狀態機驗收] B. 狀態契約與不可冒�
     dataDate: "2026-10-28",
     dataStatus: "live",
     completeness: "complete",
+    coverage: { got: 1850, want: 1800 },
     dateVerified: true,
     dateConsistent: true,
     session: "open",
@@ -2782,4 +2783,143 @@ test("Scenario 43: [第五輪核心狀態機驗收] C. 跨資產獨立性回歸 
   });
   assert.equal(klineRes.status, "live");
   assert.equal(klineRes.text, "盤中估算");
+});
+
+
+// =========================================================================
+// PR #165 第六輪：全市場 coverage 缺漏政策、畸形結構、狀態相容與特定診斷附註驗證
+// =========================================================================
+
+test("Scenario 44: [第六輪核心狀態機驗收] 全市場 Coverage 缺漏政策、畸形結構、狀態相容與特定診斷附註驗證", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  const baseMarket = {
+    type: "breadth",
+    source: "證交所 MIS",
+    dataDate: "2026-10-28",
+    sourceTime: "10:30:00",
+    fetchedAt: Date.now(),
+    completeness: "complete",
+    coverage: { got: 1850, want: 1800 },
+    dateVerified: true,
+    dateConsistent: true,
+    dataStatus: "live",
+    session: "open",
+    today: "2026-10-28",
+  };
+
+  // 1. 全市場資料 (breadth, hot, market, isMarket) 缺失 coverage (undefined) 絕不得預設通過，必須降級且註記「資料覆蓋率未提供」
+  const stUndefBreadth = ctx.evalDataStatus({ ...baseMarket, type: "breadth", coverage: undefined });
+  assert.equal(stUndefBreadth.status, "delayed");
+  assert.equal(stUndefBreadth.isLive, false);
+  assert.match(stUndefBreadth.note, /資料覆蓋率未提供/);
+
+  const stUndefHot = ctx.evalDataStatus({ ...baseMarket, type: "hot", coverage: undefined });
+  assert.equal(stUndefHot.status, "delayed");
+  assert.equal(stUndefHot.isLive, false);
+  assert.match(stUndefHot.note, /資料覆蓋率未提供/);
+
+  const stUndefMarket = ctx.evalDataStatus({ ...baseMarket, type: "market", coverage: undefined });
+  assert.equal(stUndefMarket.status, "delayed");
+  assert.equal(stUndefMarket.isLive, false);
+  assert.match(stUndefMarket.note, /資料覆蓋率未提供/);
+
+  const stUndefIsMkt = ctx.evalDataStatus({ ...baseMarket, type: "other", isMarket: true, coverage: undefined });
+  assert.equal(stUndefIsMkt.status, "delayed");
+  assert.equal(stUndefIsMkt.isLive, false);
+  assert.match(stUndefIsMkt.note, /資料覆蓋率未提供/);
+
+  // 2. 顯式 coverage: null 必須降級且註記「資料未經完整驗證（缺少 coverage）」
+  const stNullCov = ctx.evalDataStatus({ ...baseMarket, coverage: null });
+  assert.equal(stNullCov.status, "delayed");
+  assert.equal(stNullCov.isLive, false);
+  assert.match(stNullCov.note, /資料未經完整驗證（缺少 coverage）/);
+
+  // 3. 涵蓋率不足 (got < want * 0.95) 必須降級且註記「資料覆蓋率不足（got/want）」
+  const stLowCov = ctx.evalDataStatus({ ...baseMarket, coverage: { got: 1600, want: 1800 } });
+  assert.equal(stLowCov.status, "delayed");
+  assert.equal(stLowCov.isLive, false);
+  assert.equal(stLowCov.note, "資料覆蓋率不足（1600/1800）");
+
+  // 4. 畸形結構、非物件、缺少 got/want 或無效數值必須降級且註記「資料覆蓋率異常」
+  const malformedCases = [
+    { got: NaN, want: 1800 },
+    { got: -10, want: 1800 },
+    { got: 1800, want: 0 },
+    { got: 1800, want: -100 },
+    { got: Infinity, want: 1800 },
+    { got: 1800, want: Infinity },
+    {},
+    { got: "1800", want: 1800 },
+    { got: 1800, want: "1800" },
+    "invalid_coverage",
+    [1800, 1800],
+    true,
+  ];
+  for (const badCov of malformedCases) {
+    const res = ctx.evalDataStatus({ ...baseMarket, coverage: badCov });
+    assert.equal(res.status, "delayed", `畸形 coverage: ${JSON.stringify(badCov)}`);
+    assert.equal(res.isLive, false);
+    assert.match(res.note, /資料覆蓋率異常/, `附註應為覆蓋率異常: ${JSON.stringify(badCov)}`);
+  }
+
+  // 5. dataStatus 缺漏時的舊版相容性：
+  // 5a. 若 coverage 缺漏，絕不得藉由相容邏輯冒充 healthy (live/confirmed)
+  const legacyNoCov = ctx.evalDataStatus({
+    type: "breadth",
+    dataDate: "2026-10-28",
+    completeness: "complete",
+    dateVerified: true,
+    dateConsistent: true,
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(legacyNoCov.status, "delayed");
+  assert.equal(legacyNoCov.isLive, false);
+  assert.match(legacyNoCov.note, /資料覆蓋率未提供/);
+
+  // 5b. 若全數具備且通過 (completeness, coverage, dateVerified, dateConsistent)，舊版相容導出 live
+  const legacyFull = ctx.evalDataStatus({
+    type: "breadth",
+    dataDate: "2026-10-28",
+    completeness: "complete",
+    coverage: { got: 1850, want: 1800 },
+    dateVerified: true,
+    dateConsistent: true,
+    session: "open",
+    today: "2026-10-28",
+  });
+  assert.equal(legacyFull.status, "live");
+  assert.equal(legacyFull.isLive, true);
+
+  // 6. 收盤後 (session: 'closed') coverage 缺漏或異常絕不得標記為 confirmed
+  const closedNoCov = ctx.evalDataStatus({
+    type: "market",
+    dataDate: "2026-10-28",
+    completeness: "complete",
+    dateVerified: true,
+    dateConsistent: true,
+    session: "closed",
+    today: "2026-10-28",
+  });
+  assert.notEqual(closedNoCov.status, "confirmed");
+  assert.equal(closedNoCov.isConfirmed, false);
+
+  // 7. 跨資產獨立性保護：非全市場類型 (us, futures, orders, margin, inst, quote, kline, indicator) 不受全市場 coverage 政策干擾
+  const nonMarketTypes = ["us", "futures", "orders", "margin", "inst", "quote", "kline", "indicator"];
+  for (const t of nonMarketTypes) {
+    const assetRes = ctx.evalDataStatus({
+      type: t,
+      dataDate: "2026-10-28",
+      sourceTime: "10:30:00",
+      isSuccess: true,
+      session: "open",
+      usSession: "open",
+      today: "2026-10-28",
+    });
+    // 不會因缺少 coverage 被判定為 coverage 異常
+    assert.doesNotMatch(assetRes.note || "", /資料覆蓋率/);
+  }
 });
