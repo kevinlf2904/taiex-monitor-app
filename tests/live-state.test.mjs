@@ -675,3 +675,204 @@ test("Scenario 32: [問題F] 依賴注入自訂參數時，隔離快取不污染
   assert.equal(r1.rows[0].code, "2330");
   assert.equal(r2.rows[0].code, "2454", "注入自訂 fetcher 時不應被 memo 命中舊結果");
 });
+
+// =========================================================================
+// P1 缺失修復深度驗證套件：缺日期列排除、覆蓋率判定與日期 metadata 全鏈路傳遞
+// =========================================================================
+
+test("Scenario 33: [P1-1 驗證] validateMarketRows 嚴格排除缺日期資料列 (null, undefined, 空字串) 並計入 invalidCount", () => {
+  const today = "2026-10-28";
+  const makeRow = (i, m, d) => ({ code: String(1000 + i), name: `股${i}`, market: m, price: 100, vol: 50, date: d });
+
+  // A. 全部 1800 筆資料日期有效且一致 (上市 1000 檔 + 上櫃 800 檔)
+  const listA = [];
+  for (let i = 0; i < 1000; i++) listA.push(makeRow(i, "上市", today));
+  for (let i = 1000; i < 1800; i++) listA.push(makeRow(i, "上櫃", today));
+  const resA = validateMarketRows(listA, { today });
+  assert.equal(resA.validRows.length, 1800);
+  assert.equal(resA.invalidCount, 0);
+  assert.equal(resA.dateVerified, true);
+  assert.equal(resA.dateConsistent, true);
+  assert.equal(resA.completeness, "complete");
+  assert.equal(resA.coverage.got, 1800);
+  assert.equal(resA.coverage.want, 1800);
+
+  // B. 1800 筆中只有 1 筆缺少日期 (date: null)
+  const listB = [];
+  for (let i = 0; i < 999; i++) listB.push(makeRow(i, "上市", today));
+  listB.push(makeRow(999, "上市", null)); // 缺少日期
+  for (let i = 1000; i < 1800; i++) listB.push(makeRow(i, "上櫃", today));
+  const resB = validateMarketRows(listB, { today });
+  assert.equal(resB.invalidCount, 1, "缺少日期的資料列必須被計入 invalidCount");
+  assert.equal(resB.validRows.length, 1799, "有效資料列長度應為 1799，不得包含缺日期之列");
+  assert.equal(resB.validRows.some(r => r.code === "1999"), false, "代碼 1999 缺日期不得混入 validRows");
+  assert.equal(resB.dateVerified, true, "剩餘 1799 筆資料日期一致且經確認");
+  assert.equal(resB.completeness, "complete", "1799 筆仍大於雙市場門檻，完整度維持 complete");
+
+  // C. 多筆缺少日期 (上市 300 檔缺日期、上櫃 200 檔缺日期，有效剩 1300 檔 < 1400)
+  const listC = [];
+  for (let i = 0; i < 700; i++) listC.push(makeRow(i, "上市", today));
+  for (let i = 700; i < 1000; i++) listC.push(makeRow(i, "上市", undefined)); // 300 筆 undefined
+  for (let i = 1000; i < 1600; i++) listC.push(makeRow(i, "上櫃", today));
+  for (let i = 1600; i < 1800; i++) listC.push(makeRow(i, "上櫃", "")); // 200 筆空字串
+  const resC = validateMarketRows(listC, { today });
+  assert.equal(resC.invalidCount, 500, "500 筆缺日期或空字串均計入 invalidCount");
+  assert.equal(resC.validRows.length, 1300);
+  assert.equal(resC.completeness, "partial", "有效筆數 1300 低於全市場門檻 1400 時，completeness 降級為 partial");
+  assert.equal(resC.coverage.got, 1300);
+  assert.equal(resC.coverage.want, 1800);
+  assert.ok(resC.coverage.got < resC.coverage.want * 0.95, "覆蓋率不足 95%");
+
+  // D. 上市日期一致 (2026-10-28)，但上櫃日期不同 (2026-10-27)
+  const listD = [];
+  for (let i = 0; i < 1000; i++) listD.push(makeRow(i, "上市", "2026-10-28"));
+  for (let i = 1000; i < 1800; i++) listD.push(makeRow(i, "上櫃", "2026-10-27"));
+  const resD = validateMarketRows(listD, { today: "2026-10-28" });
+  assert.equal(resD.dateConsistent, false, "上市櫃日期不同時，dateConsistent 必須為 false");
+  assert.equal(resD.dateVerified, false, "上市櫃日期不一致時，不可將 dateVerified 標為 true");
+  assert.equal(resD.completeness, "degraded", "跨市場日期不一致時，完整度降級為 degraded");
+
+  // E. 異常日期 (未來日期、2026-02-30 非法日曆、空值、字串異常)
+  const listE = [
+    makeRow(1, "上市", "2099-12-31"),
+    makeRow(2, "上市", "2026-02-30"),
+    makeRow(3, "上市", ""),
+    makeRow(4, "上市", null),
+    makeRow(5, "上市", undefined),
+    makeRow(6, "上市", "INVALID_DATE"),
+    makeRow(7, "上市", "2026-10-28")
+  ];
+  const resE = validateMarketRows(listE, { today: "2026-10-28" });
+  assert.equal(resE.invalidCount, 6, "6 筆異常/缺日期均被判定為 invalid");
+  assert.equal(resE.validRows.length, 1, "僅代碼 1007 有效日期留存");
+  assert.equal(resE.validRows[0].code, "1007");
+
+  // F. 全部資料皆無日期
+  const listF = [makeRow(1, "上市", null), makeRow(2, "上櫃", undefined)];
+  const resF = validateMarketRows(listF, { today: "2026-10-28" });
+  assert.equal(resF.validRows.length, 0);
+  assert.equal(resF.completeness, "empty");
+  assert.equal(resF.dateVerified, false);
+  assert.equal(resF.dateConsistent, false);
+});
+
+test("Scenario 34: [P1-2 驗證] marketRows() 各來源路徑完整保留 dateConsistent 與 dateVerified", async () => {
+  const now = new Date("2026-10-28T02:00:00Z"); // 盤中 10:00
+  const today = "2026-10-28";
+
+  // 1. MIS 成功路徑：dateConsistent 必須為 true 且 dateVerified 必須為 true
+  const prevMock = [];
+  for (let i = 1000; i < 2000; i++) prevMock.push({ code: String(i), name: `上市${i}`, market: "上市", price: 100, vol: 10, date: today });
+  for (let i = 3000; i < 3800; i++) prevMock.push({ code: String(i), name: `上櫃${i}`, market: "上櫃", price: 50, vol: 10, date: today });
+  const misMock = async (chs) => chs.map(ch => {
+    const code = ch.split("_")[1].split(".")[0];
+    const isTse = ch.startsWith("tse");
+    return {
+      c: code,
+      n: `名稱${code}`,
+      ex: isTse ? "tse" : "otc",
+      z: "100",
+      y: "99",
+      v: "1000",
+      d: "20261028"
+    };
+  });
+
+  const resMis = await marketRows({ now, today, fetcher: async () => prevMock, misFetcher: misMock });
+  assert.equal(resMis.dateVerified, true, "MIS 成功時 dateVerified 必須為 true");
+  assert.equal(resMis.dateConsistent, true, "MIS 雙市場一致時 dateConsistent 必須為 true");
+  assert.equal(resMis.dataStatus, "live");
+
+  // 2. 最近收盤探測成功路徑：dateConsistent 與 dateVerified 必須完整傳遞
+  const rwdMock = async () => {
+    const m = new Map();
+    for (let i = 1000; i < 2000; i++) m.set(String(i), { name: `上市${i}`, market: "上市", p: 100, pct: 1.0, v: 100 });
+    for (let i = 3000; i < 3800; i++) m.set(String(i), { name: `上櫃${i}`, market: "上櫃", p: 50, pct: 0.5, v: 50 });
+    m.date = "2026-10-27";
+    m.isSourceDateMatched = true;
+    m.dateVerified = true;
+    m.dateConsistent = true;
+    return m;
+  };
+  const resClose = await marketRows({ now: new Date("2026-10-28T08:00:00Z"), today, fetcher: async () => [], rwdFetcher: rwdMock });
+  assert.equal(resClose.dateVerified, true);
+  assert.equal(resClose.dateConsistent, true);
+  assert.equal(resClose.dataStatus, "delayed"); // 非今日收盤，標記 delayed
+
+  // 3. 上市櫃日期不一致時：
+  // 3a. MIS 僅有上市為今日資料（上櫃日期不符被過濾）：dateConsistent 必須為 false，completeness 為 partial
+  const misInconsistent = async (chs) => chs.map(ch => {
+    const code = ch.split("_")[1].split(".")[0];
+    const isTse = ch.startsWith("tse");
+    return {
+      c: code,
+      n: `名稱${code}`,
+      ex: isTse ? "tse" : "otc",
+      z: "100",
+      y: "99",
+      v: "1000",
+      d: isTse ? "20261028" : "20261027"
+    };
+  });
+  const resInconsistent = await marketRows({ now, today, fetcher: async () => prevMock, misFetcher: misInconsistent });
+  assert.equal(resInconsistent.dateConsistent, false, "上市櫃日期不一致時，marketRows 回傳物件 dateConsistent 必須為 false");
+  assert.equal(resInconsistent.completeness, "partial_tse_only", "僅上市為今日資料時 completeness 為 partial_tse_only");
+
+  // 3b. OpenAPI 來源上市櫃跨市場日期不一致：dateConsistent 與 dateVerified 皆為 false，completeness 為 degraded
+  const inconsistentPrev = [];
+  for (let i = 1000; i < 2000; i++) inconsistentPrev.push({ code: String(i), name: `市${i}`, market: "上市", price: 100, vol: 10, date: "2026-10-28" });
+  for (let i = 3000; i < 3800; i++) inconsistentPrev.push({ code: String(i), name: `櫃${i}`, market: "上櫃", price: 50, vol: 10, date: "2026-10-27" });
+  const resInconsistentOpenApi = await marketRows({
+    now: new Date("2026-10-28T08:00:00Z"),
+    today,
+    fetcher: async () => inconsistentPrev,
+    rwdFetcher: async () => null
+  });
+  assert.equal(resInconsistentOpenApi.dateConsistent, false, "OpenAPI 跨市場日期不一致時 dateConsistent 必須為 false");
+  assert.equal(resInconsistentOpenApi.dateVerified, false, "OpenAPI 跨市場日期不一致時 dateVerified 必須為 false");
+  assert.equal(resInconsistentOpenApi.completeness, "degraded", "OpenAPI 跨市場日期不一致時 completeness 降級為 degraded");
+
+  // 4. OpenAPI 回退路徑：保留 dateConsistent 與 dateVerified
+  const resOpenApi = await marketRows({
+    now: new Date("2026-10-28T08:00:00Z"),
+    today,
+    fetcher: async () => prevMock,
+    rwdFetcher: async () => null // 強制跳過收盤探測回退到 OpenAPI
+  });
+  assert.equal(resOpenApi.dateConsistent, true, "OpenAPI 回退時應保留 dateConsistent");
+  assert.equal(resOpenApi.dateVerified, true, "OpenAPI 回退時應保留 dateVerified");
+});
+
+test("Scenario 35: [P1-2 驗證] /api/market 與 /api/hot 頂層 JSON 完整回傳 dateVerified 與 dateConsistent", async () => {
+  // 動態載入 market handler
+  const marketMod = await import("../api/_lib/market.js");
+  const hotMod = await import("../api/_lib/hot.js");
+
+  // 模擬 req, res 接收 JSON 結果
+  function createMockRes() {
+    const r = {
+      statusCode: 200,
+      headers: {},
+      jsonPayload: null,
+      status(c) { r.statusCode = c; return r; },
+      setHeader(k, v) { r.headers[k] = v; return r; },
+      json(j) { r.jsonPayload = j; return r; }
+    };
+    return r;
+  }
+
+  const resMarket = createMockRes();
+  await marketMod.default({ query: {}, headers: {} }, resMarket);
+  assert.equal(resMarket.statusCode, 200);
+  assert.ok("dateVerified" in resMarket.jsonPayload, "/api/market 必須包含 dateVerified 頂層欄位");
+  assert.ok("dateConsistent" in resMarket.jsonPayload, "/api/market 必須包含 dateConsistent 頂層欄位");
+  assert.ok("indicesVerified" in resMarket.jsonPayload, "indicesVerified 必須存在且獨立");
+  assert.ok("completeness" in resMarket.jsonPayload, "completeness 欄位必須存在");
+  assert.ok("coverage" in resMarket.jsonPayload, "coverage 欄位必須存在");
+
+  const resHot = createMockRes();
+  await hotMod.default({ query: { market: "tw", type: "value" } }, resHot);
+  assert.equal(resHot.statusCode, 200);
+  assert.ok("dateVerified" in resHot.jsonPayload, "/api/hot 必須包含 dateVerified 頂層欄位");
+  assert.ok("dateConsistent" in resHot.jsonPayload, "/api/hot 必須包含 dateConsistent 頂層欄位");
+});

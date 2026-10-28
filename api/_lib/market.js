@@ -248,6 +248,7 @@ export default async function handler(req, res) {
   return res.status(200).json({ ok: true, date: L?.date || all.find(x => x.date)?.date || null, live: !!L?.live, time: L?.time || null, note: L?.note || null, source: `${L?.source || "證交所、櫃買中心 OpenAPI"}；美股 Yahoo Finance`,
     breadth: all.length ? breadth(all) : null, coverage: L?.coverage || null,
     completeness: L?.completeness || null, dataStatus: L?.dataStatus || null,
+    dateVerified: L?.dateVerified ?? null, dateConsistent: L?.dateConsistent ?? null,
     indicesVerified: M?.dateVerified ?? null, indicesComplete: M?.isComplete ?? null,
     newHL: newHiLo(all, b.value, L?.date || all.find(x => x.date)?.date),
     sectors: I.size ? sectors(stocks, I) : null,

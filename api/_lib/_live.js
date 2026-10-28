@@ -47,7 +47,7 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
     const date = r.date;
     const isPriceValid = typeof price === "number" && Number.isFinite(price) && price > 0;
     const isVolValid = vol == null || (typeof vol === "number" && Number.isFinite(vol) && vol >= 0);
-    const isDateValid = !date || (isValidIsoDate(date, today));
+    const isDateValid = Boolean(date && isValidIsoDate(date, today));
 
     if (!isPriceValid || !isVolValid || !isDateValid) {
       invalidCount++;
@@ -380,6 +380,7 @@ export async function marketRows(opts = {}) {
           completeness: validation.completeness,
           sourceDate: date,
           dateVerified: validation.dateVerified,
+          dateConsistent: validation.dateConsistent,
           sourceCapabilities: { hasOhlc: true, hasValue: true }
         });
       }
@@ -428,6 +429,7 @@ export async function marketRows(opts = {}) {
           completeness: validation.completeness,
           sourceDate: today,
           dateVerified: validation.dateVerified,
+          dateConsistent: validation.dateConsistent,
           sourceCapabilities: { hasOhlc: true, hasValue: true }
         });
       }
@@ -463,6 +465,7 @@ export async function marketRows(opts = {}) {
           completeness: validation.completeness,
           sourceDate: recent.sourceDate || recent.date,
           dateVerified: recent.dateVerified ?? validation.dateVerified,
+          dateConsistent: recent.dateConsistent ?? validation.dateConsistent,
           sourceCapabilities: { hasOhlc: false, hasValue: true }
         });
       }
@@ -485,6 +488,7 @@ export async function marketRows(opts = {}) {
       completeness: validation.completeness,
       sourceDate: isPrevDateValid ? prevDate : null,
       dateVerified: Boolean(isPrevDateValid && validation.dateVerified),
+      dateConsistent: Boolean(isPrevDateValid && validation.dateConsistent),
       sourceCapabilities: { hasOhlc: true, hasValue: true },
       fallbackReason: notes.join("；") || "使用預設 OpenAPI"
     });

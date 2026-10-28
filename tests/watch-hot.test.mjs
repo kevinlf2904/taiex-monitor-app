@@ -2254,3 +2254,64 @@ test("v2.5.2 阻斷問題 C: 舊版相容性與缺漏組合 8 項驗證", () => 
   assert.equal(c8b.status, "pending");
   assert.equal(c8b.isConfirmed, false);
 });
+
+test("P1-2 前端端到端整合驗證: API 回傳之 dateVerified 與 dateConsistent 在 liveTag() 與 hotSt() 完整透傳並驅動降級", () => {
+  const { ctx, W } = createHarness();
+  W.session = "open";
+  W.today = "2026-10-28";
+
+  // 1. liveTag() 收到 dateConsistent: false (跨市場日期不一致)
+  const payloadInconsistent = {
+    live: true,
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    source: "證交所 MIS 即時行情（上市、上櫃）",
+    completeness: "complete",
+    coverage: { got: 1800, want: 1800 },
+    dateVerified: false,
+    dateConsistent: false
+  };
+  const liveTagHtml = ctx.liveTag(payloadInconsistent);
+  assert.doesNotMatch(liveTagHtml, /class="livetag"/, "dateConsistent: false 絕不可輸出 livetag");
+  assert.doesNotMatch(liveTagHtml, /盤中即時/, "dateConsistent: false 絕不可標示盤中即時");
+  assert.match(liveTagHtml, /class="mkt-tag delayed"/, "dateConsistent: false 必須降級為 delayed");
+  assert.match(liveTagHtml, /資料日期未經來源確認|上市櫃資料日期不一致/, "標籤說明文字必須包含日期未確認或不一致原因");
+
+  // 2. hotSec / hotSt 收到 dateVerified: false
+  W.lt = "mkt";
+  W.mkHot = "value";
+  W.hot["rank:value"] = {
+    date: "2026-10-28",
+    time: "10:30:00",
+    at: Date.now(),
+    source: "富果行情快照",
+    completeness: "complete",
+    coverage: { got: 1800, want: 1800 },
+    dateVerified: false,
+    dateConsistent: true,
+    rows: [{ code: "2330", name: "台積電", price: 1000 }]
+  };
+  const hotHtml = ctx.hotSec(ctx.sec, "tw");
+  assert.doesNotMatch(hotHtml, /class="livetag"/, "dateVerified: false 絕不可輸出 livetag");
+  assert.doesNotMatch(hotHtml, /盤中即時/, "dateVerified: false 絕不可標示盤中即時");
+  assert.match(hotHtml, /class="mkt-tag delayed"/, "dateVerified: false 必須降級為 delayed");
+  assert.match(hotHtml, /資料日期未經來源確認/, "hotSt 必須透傳 dateVerified 並呈現警示說明");
+
+  // 3. 收盤後 (closed) dateConsistent: false 絕不可為 confirmed
+  W.session = "closed";
+  const closedSt = ctx.evalDataStatus({
+    session: "closed",
+    dayState: "trade",
+    today: "2026-10-28",
+    dataDate: "2026-10-28",
+    dateVerified: false,
+    dateConsistent: false,
+    completeness: "complete",
+    coverage: { got: 1800, want: 1800 }
+  });
+  assert.notEqual(closedSt.status, "confirmed");
+  assert.equal(closedSt.isConfirmed, false);
+  assert.equal(closedSt.status, "pending");
+  assert.match(closedSt.note, /資料日期未經來源確認|上市櫃資料日期不一致/);
+});
