@@ -1258,8 +1258,12 @@ test("Scenario 42: 全市場 complete 必須達到 95% 覆蓋率，基準清單�
   assert.equal(belowThreshold.coverage.want, 1800, "基準清單不得取代全市場母體分母");
   assert.equal(belowThreshold.coverage.ratio, +(1400 / 1800).toFixed(4));
   assert.equal(belowThreshold.completeness, "partial", "1400 / 1800 未達 95%，不可標記 complete");
+  assert.equal(belowThreshold.coverage.benchmark.isBenchmarkComplete, false, "1400 檔基準清單也未達全市場 95% 門檻");
 
-  const atThreshold = validateMarketRows(makeRows(1000, 710), { today });
+  const atThresholdRows = makeRows(1000, 710);
+  const atThresholdCodes = new Set(atThresholdRows.map(row => row.code));
+  const atThreshold = validateMarketRows(atThresholdRows, { expectedCodes: atThresholdCodes, today });
   assert.equal(atThreshold.coverage.ratio, 0.95);
+  assert.equal(atThreshold.coverage.benchmark.isBenchmarkComplete, true, "1710 檔基準清單達全市場 95% 門檻");
   assert.equal(atThreshold.completeness, "complete", "1710 / 1800 恰達 95% 且雙市場日期一致時可標記 complete");
 });
