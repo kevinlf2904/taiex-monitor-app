@@ -344,7 +344,8 @@ test("AI 協作規則：AGENTS.md 與 Antigravity 規則檔一致，CLAUDE.md �
   const [a, g, c] = await Promise.all([rd("AGENTS.md"), rd(".agent/rules/klinelab.md"), rd("CLAUDE.md")]);
   assert.equal(g, a, "改了 AGENTS.md 要複製到 .agent/rules/klinelab.md");
   assert.match(c, /^@AGENTS\.md/m);
-  for (const k of ["learner/version.json", "gemini/", "claude/", "稽核", "驗證：", "pull_request_template.md", "密鑰", "draft PR", "鎖：", ".agent/workflows/merge.md"]) assert.ok(a.includes(k), `AGENTS.md 缺少「${k}」`);
+  for (const k of ["learner/version.json", "gemini/", "claude/", "codex/", "稽核", "驗證：", "pull_request_template.md", "密鑰", "draft PR", "鎖：", ".agent/workflows/merge.md", "scripts/bump-version.mjs", "不連外部網站", "learner/core.js", "每次收到指令都要自動做"]) assert.ok(a.includes(k), `AGENTS.md 缺少「${k}」`);
+  assert.match(await rd(".github/copilot-instructions.md"), /AGENTS\.md/, "Copilot 的說明要指向 AGENTS.md");
   const m = await rd(".agent/workflows/merge.md");
   assert.match(m, /^---\r?\ndescription: /, "Antigravity workflow 要有 description");
   for (const k of ["gemini/", "node tests/run.mjs", "merge", "version.json"]) assert.ok(m.includes(k), `merge.md 缺少「${k}」`);
@@ -2051,3 +2052,16 @@ test("位置燈號：壓力、支撐用近 14 日平均波動 × 校準倍數；
 });
 
 import "./watch-hot.test.mjs";
+
+test("改版本號腳本：日期用台北時間、號碼接著加 1、README 加一節、找不到舊版本就停", async () => {
+  const V = await import("../scripts/bump-version.mjs");
+  assert.equal(V.twToday(Date.parse("2026-10-28T17:00:00Z")), "2026-10-29", "台北已經過午夜");
+  assert.equal(V.nextVersion("2026.10.26-162", "2026-10-28"), "2026.10.28-163");
+  assert.throws(() => V.nextVersion("1.2.3", "2026-10-28"));
+  const md = "# 說明\n\n## 更新\n\n### 舊功能（2026.10.26-162）\n- 舊\n";
+  const out = V.addSection(md, "新功能", "2026.10.28-163", "改了 A");
+  assert.match(out, /### 新功能（2026\.10\.28-163）\n- 改了 A\n\n### 舊功能（2026\.10\.26-162）/);
+  assert.equal(V.addSection(out, "新功能", "2026.10.28-163"), out, "同一版不重複加");
+  assert.equal(V.swap('<p>版本 2026.10.26-162</p>', "2026.10.26-162", "2026.10.28-163", "x"), "<p>版本 2026.10.28-163</p>");
+  assert.throws(() => V.swap("<p>沒有版本</p>", "2026.10.26-162", "2026.10.28-163", "x"), /找不到目前的版本/);
+});

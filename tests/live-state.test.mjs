@@ -869,8 +869,13 @@ test("Scenario 35: [P1-2 驗證] /api/market 與 /api/hot 頂層 JSON 完整回�
     return r;
   }
 
+  // 測試不連外部網站（AGENTS.md）：大盤資料用注入的假資料，其他對外請求一律擋掉（handler 用 allSettled，擋掉的部分會略過）
+  const fake = async () => ({ rows: [{ code: "2330", name: "台積電", market: "上市", price: 1000, chg: 10, chgPct: 1, vol: 1000, value: 1e9, date: "2026-10-28" }, { code: "6488", name: "環球晶", market: "上櫃", price: 500, chg: -5, chgPct: -1, vol: 500, value: 2.5e8, date: "2026-10-28" }],
+    date: "2026-10-28", live: false, source: "測試", dateVerified: true, dateConsistent: true, completeness: "complete", dataStatus: "confirmed", coverage: null });
+  const realFetch = globalThis.fetch; globalThis.fetch = async () => { throw new Error("測試不連外部網站"); };
+  try {
   const resMarket = createMockRes();
-  await marketMod.default({ query: {}, headers: {} }, resMarket);
+  await marketMod.default({ query: {}, headers: {} }, resMarket, { marketFetcher: fake });
   assert.equal(resMarket.statusCode, 200);
   assert.ok("dateVerified" in resMarket.jsonPayload, "/api/market 必須包含 dateVerified 頂層欄位");
   assert.ok("dateConsistent" in resMarket.jsonPayload, "/api/market 必須包含 dateConsistent 頂層欄位");
@@ -879,10 +884,11 @@ test("Scenario 35: [P1-2 驗證] /api/market 與 /api/hot 頂層 JSON 完整回�
   assert.ok("coverage" in resMarket.jsonPayload, "coverage 欄位必須存在");
 
   const resHot = createMockRes();
-  await hotMod.default({ query: { market: "tw", type: "value" } }, resHot);
+  await hotMod.default({ query: { market: "tw", type: "value" } }, resHot, { marketFetcher: fake });
   assert.equal(resHot.statusCode, 200);
   assert.ok("dateVerified" in resHot.jsonPayload, "/api/hot 必須包含 dateVerified 頂層欄位");
   assert.ok("dateConsistent" in resHot.jsonPayload, "/api/hot 必須包含 dateConsistent 頂層欄位");
+  } finally { globalThis.fetch = realFetch; }
 });
 
 

@@ -2004,6 +2004,6 @@ if (typeof window !== "undefined" && !window.__chartEscInit) {
 if (typeof document !== "undefined" && typeof MutationObserver !== "undefined") {
   const iconOnly = b => !/[\p{Script=Han}A-Za-z0-9]/u.test(b.textContent || "");
   const fix = root => { for (const b of (root.querySelectorAll ? root.querySelectorAll("button:not([title])") : [])) { const a = b.getAttribute("aria-label"); if (a && iconOnly(b)) b.title = a; } };
-  let q = false; const later = () => { if (q) return; q = true; (window.requestIdleCallback || (f => setTimeout(f, 50)))(() => { q = false; fix(document); }); };
+  let q = false; const later = () => { if (q) return; q = true; (window.requestIdleCallback ? f => requestIdleCallback(f, { timeout: 120 }) : f => setTimeout(f, 50))(() => { q = false; fix(document); }); }; // 最多等 120ms：頁面忙的時候 idle 可能很久才來，按鈕會一直沒有 title
   addEventListener("DOMContentLoaded", () => { fix(document); new MutationObserver(later).observe(document.body, { childList: true, subtree: true }); });
 }
