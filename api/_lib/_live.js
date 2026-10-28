@@ -142,8 +142,8 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
     };
   }
 
-  // 既有相容 coverage 結構：若基準清單不足 1400 檔，不可將 want 縮小冒充 100% 全市場！
-  const effectiveWant = expectedCodes && expectedCodes.size >= 1400 ? expectedCodes.size : estimatedTotalWant;
+  // 全市場 coverage 的分母固定使用估計母體；基準清單只供 benchmark 比對，不能縮小全市場分母。
+  const effectiveWant = estimatedTotalWant;
   const effectiveRatio = +(totalCount / effectiveWant).toFixed(4);
 
   // 完整性狀態判定：complete 必須同時符合資料量、上市櫃雙市場門檻、日期一致且已驗證
@@ -151,7 +151,7 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
   if (totalCount === 0) {
     completeness = "empty";
   } else if (
-    totalCount >= 1400 &&
+    marketRatio >= 0.95 &&
     tseCount >= minTse &&
     otcCount >= minOtc &&
     dateConsistent &&
@@ -162,7 +162,7 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
     completeness = "partial_tse_only";
   } else if (otcCount >= minOtc && tseCount < 200) {
     completeness = "partial_otc_only";
-  } else if (tseCount > 0 && otcCount > 0 && (tseCount < minTse || otcCount < minOtc || totalCount < 1400)) {
+  } else if (tseCount > 0 && otcCount > 0 && (tseCount < minTse || otcCount < minOtc || marketRatio < 0.95)) {
     completeness = "partial";
   } else {
     completeness = "degraded";
