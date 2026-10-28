@@ -1022,6 +1022,7 @@ tr.on td { background: var(--surface-2); }
 /* 觸控裝置：小按鈕的可點範圍加大（文字連結用透明的外框撐大，不改版面） */
 @media (pointer: coarse) {
   .mkseg button { padding: 5px 11px; } .groups button, .ichip { padding: 6px 12px; }
+  #lx .dh-status-bar [data-tx], .td-page .dh-title-btns .td-ib, .td-ib { width: 44px; height: 44px; min-width: 44px; min-height: 44px; flex: 0 0 44px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 0; margin: 0; border: 0; border-radius: var(--radius); background: transparent; color: var(--muted); font: inherit; font-size: 17px; line-height: 1; cursor: pointer; }
 }
 </style>
 <link rel="stylesheet" href="minimal.css">
