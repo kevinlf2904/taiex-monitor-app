@@ -9,7 +9,7 @@
 - 純討論、規劃、審查不代表授權修改檔案、推送或合併。
 
 > ### 絕對禁令（開工前必讀）
-> 1. **不多頭開 PR**：預設只有 **Claude Code** 與 **Codex** 改程式、開 PR；其他工具要使用者明確指派才可以改程式或開分支。
+> 1. **不多頭開 PR**：預設只有 **Claude Code** 與 **Codex** 改程式、開 PR；**GitHub Copilot** 在使用者把 Issue 指派給它時可以開 PR（`copilot/…` 分支）；其他工具要使用者明確指派才可以改程式或開分支。
 > 2. **大檔先上鎖**：改 `learner/watch.html`、`learner/index.html`、`learner/core.js`、`learner/brief.js` 前，先開 draft PR，標題「鎖：檔名＋區塊」。
 > 3. **測試不連外部網站、不花錢**：測試一律用假資料或 mock，不呼叫證交所、Yahoo、FinMind 等外部網站，也不呼叫付費 AI API。
 > 4. **不手改排程資料**：`learner/data/` 是排程產物，要改資料行為就改產生它的 `scripts/*.mjs`。
@@ -43,7 +43,7 @@
 | Claude Code | Claude Pro | 主力開發、預設合併與發佈 | `claude/…` | `CLAUDE.md`（引用本文件） |
 | Codex | 免費 | 第二位開發者；有空時交叉審查 | `codex/…` | 本文件（自動讀取） |
 | Gemini Antigravity | Gemini Pro | 驗證為主，條件式備援開發 | 驗證不改分支；備援用 `gemini/…` | `.agent/rules/klinelab.md` |
-| GitHub Copilot | 免費 | 編輯器補全、大 PR 審查 | 不主動開 PR | `.github/copilot-instructions.md` |
+| GitHub Copilot | 免費 | 編輯器補全、大 PR 審查；被指派 Issue 時開 PR | `copilot/…`（coding agent 自動命名） | `.github/copilot-instructions.md` |
 | ChatGPT | 免費 | 需求拆解、獨立稽核 | 唯讀 | 開頭請它先讀本文件 |
 | 普通 Gemini | Gemini Pro | 超大檔案總覽、找重複功能 | 唯讀 | 開頭請它先讀本文件 |
 | 普通 Claude | Claude Pro | 困難的需求分析、架構取捨（省著用） | 唯讀 | 開頭請它先讀本文件 |
@@ -68,7 +68,13 @@
 ### 3. 原型與編輯器輔助（不獨立開 PR 改核心架構）
 
 - **v0**：探索介面樣板、手機版配置與互動方向。本專案是原生 HTML／JS（`watch.html`、`core.js`…），v0 產出的是 React／Tailwind，只拿來當視覺參考，不直接貼進專案；確認方向後交給主力實作者轉寫。
-- **GitHub Copilot**：免費版額度有限，平時只做編輯器內的補全；進階次數留給大型 PR 的程式碼審查（帳號要實際有這個功能）。沒有使用者指示，不啟動 coding agent 開 PR。
+- **GitHub Copilot**：平時做編輯器內的補全與大型 PR 的程式碼審查。使用者在 GitHub 把 Issue 指派給 Copilot（或在 PR 留言請它修改）時，coding agent 可以實作並開 PR：
+  - 分支由 coding agent 自動命名為 `copilot/…`，不能改成別的前綴；PR 一開始是 draft，做完才轉成 ready for review。
+  - 只接規格清楚、範圍小的 Issue（單一錯誤、補測試、文件）；不接大檔（`watch.html`、`index.html`、`core.js`、`brief.js`）跨區塊修改、策略與回測、安全相關的工作。
+  - 測試環境由 `.github/workflows/copilot-setup-steps.yml` 準備（跟 CI 同一版 Playwright），開 PR 前跑 `node tests/run.mjs`。
+  - 不改版本號、不合併；合併照「八、合併與發佈」由 Claude Code 處理。
+  - Copilot 開的 PR，CI 要使用者在 PR 上按「Approve and run workflows」才會跑。
+  - 帳號方案要實際有 coding agent 功能；沒有時只做補全與審查。
 
 ### 4. 規劃、審查與研究（唯讀，不改程式）
 
