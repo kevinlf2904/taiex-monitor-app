@@ -1,6 +1,6 @@
 # KLineLab K線情報局（taiex-monitor-app）共用工作規則
 
-本文件是所有 AI 協作者的共用規則。
+本文件是所有 AI 協作者的共用規則。TAIEX Monitor 與 KLineLab 是同一個專案（repo `taiex-monitor-app`），用同一套規則；它是原生 HTML／JS，不是 React，不為了套用通用建議而改架構或換圖表套件。
 
 - `.agent/rules/klinelab.md` 必須與本文件完全相同；`tests/unit.test.mjs` 會檢查一致性，改一個就要複製到另一個。
 - `CLAUDE.md` 引用本文件，另外只放 Claude Code 專用規則；`.github/copilot-instructions.md` 指向本文件。
@@ -41,7 +41,7 @@
 | 工具 | 方案 | 預設角色 | 分支／權限 | 規則從哪裡讀 |
 |---|---|---|---|---|
 | Claude Code | Claude Pro | 主力開發、預設合併與發佈 | `claude/…` | `CLAUDE.md`（引用本文件） |
-| Codex | 免費 | 第二位開發者 | `codex/…` | 本文件（自動讀取） |
+| Codex | 免費 | 第二位開發者；有空時交叉審查 | `codex/…` | 本文件（自動讀取） |
 | Gemini Antigravity | Gemini Pro | 驗證為主，條件式備援開發 | 驗證不改分支；備援用 `gemini/…` | `.agent/rules/klinelab.md` |
 | GitHub Copilot | 免費 | 編輯器補全、大 PR 審查 | 不主動開 PR | `.github/copilot-instructions.md` |
 | ChatGPT | 免費 | 需求拆解、獨立稽核 | 唯讀 | 開頭請它先讀本文件 |
@@ -56,7 +56,7 @@
 ### 1. 主力實作與開 PR
 
 - **Claude Code**：跨模組重構、API、安全、資料正確性、策略與回測；預設擔任唯一的合併與發佈協調者。
-- **Codex**：承接規格清楚的功能、單一錯誤修正、`scripts/*.mjs` 排程程式、重構與補測試；能獨立完成就直接開 PR。高風險修改一樣要照審查規則。
+- **Codex**：承接規格清楚的功能、單一錯誤修正、`scripts/*.mjs` 排程程式、重構與補測試；能獨立完成就直接開 PR。高風險修改一樣要照審查規則。沒有在實作時，可以交叉審查 Claude Code 的高風險 PR（策略、回測、安全）——不同公司的模型比較能抓到彼此的盲點；同一個 PR 不能既寫又審。
 
 ### 2. 驗證為主、條件式備援實作
 
@@ -140,7 +140,7 @@
 ### 審查安排
 
 - 自我檢查是必要步驟，但不等於獨立審查。
-- 審查者（預設 ChatGPT 稽核；大型 PR 可以加 Copilot）用獨立的工作階段直接讀差異與相關程式，不只看實作者的摘要。
+- 審查者（預設 ChatGPT 稽核；Claude Code 的高風險 PR 優先請 Codex 交叉審查；大型 PR 可以加 Copilot）用獨立的工作階段直接讀差異與相關程式，不只看實作者的摘要。實作者不能審自己的 PR。
 - 不因為工具是同一家公司就禁止互相審查，也不因為不同公司就當作沒有盲點。
 - 高風險修改至少一次獨立審查；低風險的文件、小修改由合併者精簡審查即可。
 - 協作規則、權限、安全或發佈政策的文件修改，不因為是 Markdown 就當成低風險。
