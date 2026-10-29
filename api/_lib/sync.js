@@ -4,7 +4,7 @@
 //   TELEGRAM_BOT_TOKEN（選用：用 @BotFather 建立機器人取得；收盤後的提醒推播用）
 // 沒設定時 cfg 會回 kv:false，網頁只提供「匯出／匯入備份檔」。
 // 同步碼由瀏覽器產生（亂數 24 字），伺服器只存它的 SHA-256；知道同步碼才讀寫得到資料，所以同步碼要像密碼一樣保管。
-// POST /api/sync { op: "push", id, data }   上傳（覆蓋）；data 是瀏覽器裡 kline: 開頭的設定與紀錄，最多 900KB
+// POST /api/sync { op: "push", id, data, base?, force? }   上傳（覆蓋）；data 是瀏覽器裡 kline: 開頭的設定與紀錄，最多 900KB；base＝這台上次同步時雲端的時間，雲端比它新就回 409 conflict（force: true 才覆蓋）
 // POST /api/sync { op: "pull", id }         下載
 // POST /api/sync { op: "tgbind", id }       找機器人收到的「/start 綁定碼」，記下 chat id 並回一則確認訊息
 // POST /api/sync { op: "tgtest", id }       送一則測試訊息
@@ -187,11 +187,14 @@ export default async function handler(req, res) {
       const rk = `sp:ip:${ipHash}:${hr}`, n = await kv("INCR", rk); if (n === 1) await kv("EXPIRE", rk, 3600);
       if (n > 30) return res.status(429).json({ ok: false, error: "上傳太頻繁了，請一小時後再試" });
       const data = b.data && typeof b.data === "object" && !Array.isArray(b.data) ? b.data : null; if (!data) return res.status(400).json({ ok: false, error: "沒有資料或資料格式不對" });
-      const body = JSON.stringify({ at: Date.now(), dev: String(b.dev || "").slice(0, 40), data }); if (body.length > MAX) return res.status(413).json({ ok: false, error: `資料太大（${Math.round(body.length / 1024)}KB，上限 900KB）` });
+      // 版本檢查：網頁帶 base（這台上次同步時雲端的時間）；雲端已經被別台裝置更新過（at > base）就不覆蓋，回 409 讓使用者選。force＝使用者確認要用這台蓋掉。舊版網頁沒帶 base 照舊直接覆蓋
+      const base = b.base == null ? null : Number(b.base);
+      if (base != null && Number.isFinite(base) && b.force !== true) { const cur = await kv("GET", key); let c = null; try { c = cur ? JSON.parse(cur) : null; } catch {} if (c && +c.at > base) return res.status(409).json({ ok: false, conflict: true, at: +c.at, dev: String(c.dev || ""), error: "雲端有另一台裝置比較新的資料" }); }
+      const at = Date.now(), body = JSON.stringify({ at, dev: String(b.dev || "").slice(0, 40), data }); if (body.length > MAX) return res.status(413).json({ ok: false, error: `資料太大（${Math.round(body.length / 1024)}KB，上限 900KB）` });
       await kv("SET", key, body, "EX", KEEP);
       const chat = await kv("GET", `tg:${h}`);
       if (chat) { const doc = alertDoc(data, chat); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } else { await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); } }
-      return res.status(200).json({ ok: true, at: Date.now(), tg: !!chat });
+      return res.status(200).json({ ok: true, at, tg: !!chat });
     }
     if (op === "pull") {
       // 1. IP 總下載頻率限制（每 IP 每小時最多 60 次）

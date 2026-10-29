@@ -387,3 +387,24 @@ test("IP 信任邊界：優先信任 x-real-ip，防止攻擊者藉由 x-forward
     globalThis.fetch = originalFetch;
   }
 });
+
+test("多裝置同步不互相蓋掉（稽核 F-06）：雲端比 base 新就回 409；force 才覆蓋；沒帶 base 的舊版照舊", async () => {
+  process.env.KV_REST_API_URL = "https://mock-kv.upstash.io";
+  process.env.KV_REST_API_TOKEN = "mock_token";
+  const originalFetch = globalThis.fetch, store = new Map(), id = "conflict_sync_token_abc_123", key = `sync:${hashId(id)}`;
+  globalThis.fetch = async (url, opts) => { const [op, k, v] = JSON.parse(opts.body); const R = result => ({ ok: true, json: async () => ({ result }) });
+    if (op === "INCR") return R(1); if (op === "GET") return R(store.get(k) ?? null); if (op === "SET") { store.set(k, v); return R("OK"); } return R(1); };
+  const push = async body => { const m = mockHttp({ body: { op: "push", id, data: { "kline:watch:x": "1" }, ...body } }); await handler(m.req, m.res); return m; };
+  try {
+    store.set(key, JSON.stringify({ at: 2000, dev: "iPhone", data: { "kline:watch:x": "iphone" } }));
+    const a = await push({ base: 1000, dev: "iPad" });
+    assert.equal(a.status, 409); assert.equal(a.data.conflict, true); assert.equal(a.data.at, 2000); assert.equal(a.data.dev, "iPhone");
+    assert.equal(JSON.parse(store.get(key)).data["kline:watch:x"], "iphone", "衝突時雲端資料不變");
+    const b = await push({ base: 2000 }); assert.equal(b.status, 200); assert.equal(b.data.ok, true, "base 等於雲端時間：可以上傳");
+    assert.equal(JSON.parse(store.get(key)).at, b.data.at, "回傳的 at 和存進雲端的一樣，下次當 base 才對得上");
+    store.set(key, JSON.stringify({ at: Date.now() + 1e6, dev: "iPhone", data: {} }));
+    const c = await push({ base: 1, force: true }); assert.equal(c.data.ok, true, "force：使用者確認後覆蓋");
+    store.set(key, JSON.stringify({ at: Date.now() + 1e6, dev: "iPhone", data: {} }));
+    const d = await push({}); assert.equal(d.data.ok, true, "舊版網頁沒帶 base：照舊直接覆蓋（相容）");
+  } finally { globalThis.fetch = originalFetch; }
+});
