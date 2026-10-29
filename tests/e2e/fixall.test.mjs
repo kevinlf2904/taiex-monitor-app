@@ -40,7 +40,7 @@ test("自選清單：報價全部拿不到時說原因、可以重試 390", asyn
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   const bad = r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: false, error: "證交所暫時連不到" }) });
   await ctx.route("**/api/quote**", bad);
-  await p.evaluate(() => { W.quotes.clear(); W.busy = 0; setLt("watch"); tick(); });
+  await p.evaluate(async () => { clearTimeout(W.timer); W.quotes.clear(); W.busy = 0; setLt("watch"); await tick(); W.quotes.clear(); renderList(); });
   await p.waitForSelector("#wl .wl-err", { timeout: 15000 });
   assert.match(await p.textContent("#wl .wl-err"), /報價暫時拿不到（[^）]*證交所暫時連不到[^）]*）[\s\S]*重試/);
   await ctx.unroute("**/api/quote**", bad);
