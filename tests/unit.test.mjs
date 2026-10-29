@@ -109,6 +109,7 @@ test("總經排程：只有幾個數列抓不到時沿用上一次的（標 stal
   assert.deepEqual(out.series.map(x => [x.id, x.last[0], !!x.stale]), [["CPIAUCSL", "2026-10-01", false], ["UNRATE", "2026-09-01", true]]);
   assert.deepEqual(out.kept, ["UNRATE"]);
   assert.equal(keepMissing(v, null), v, "沒有舊檔：照原樣");
+});
 test("盤後外資持股基準：這次 MI_QFIIS 沒抓到時沿用上一次，不把空的寫成今天的基準", async () => {
   const { frState } = await import("../scripts/market-after.mjs");
   const old = { fr: { 2330: 72.1 }, frDate: "2026-10-29", frPrev: { 2330: 72.0 } };
