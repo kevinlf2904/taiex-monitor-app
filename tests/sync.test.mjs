@@ -424,3 +424,62 @@ test("計數器的過期時間（稽核 F-11）：第一次 EXPIRE 失敗，之�
     assert.equal(expireCalls, before, "已經有過期時間就不再重設");
   } finally { globalThis.fetch = originalFetch; }
 });
+
+// P1-03：沒有 KV／Telegram 時要明確說「沒設定」或「暫時連不到」，不能回報成功；KV 恢復後自動恢復
+test("P1-03 同步：沒設定 KV 回 not_configured、KV 壞掉回 unavailable 且不是成功、KV 恢復後同一個請求就成功", async () => {
+  const save = { u: process.env.KV_REST_API_URL, t: process.env.KV_REST_API_TOKEN, uu: process.env.UPSTASH_REDIS_REST_URL, ut: process.env.UPSTASH_REDIS_REST_TOKEN, g: process.env.TELEGRAM_BOT_TOKEN };
+  const originalFetch = globalThis.fetch, id = "p103_sync_token_abcdefgh", push = async () => { const m = mockHttp({ body: { op: "push", id, data: { "kline:watch:x": "1" } } }); await handler(m.req, m.res); return m; };
+  try {
+    for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "TELEGRAM_BOT_TOKEN"]) delete process.env[k];
+    globalThis.fetch = async () => { throw new Error("沒設定時不該連外"); };
+    const cfg = mockHttp({ method: "GET", query: { op: "cfg" } }); await handler(cfg.req, cfg.res);
+    assert.deepEqual([cfg.data.kv, cfg.data.tg, cfg.data.limiter], [false, false, "per_instance"], "沒有 KV：限流只是每個執行個體各自計算");
+    const a = await push(); assert.deepEqual([a.data.ok, a.data.reason], [false, "not_configured"]);
+    // 有設定但 KV 連不到
+    process.env.KV_REST_API_URL = "https://mock-kv.upstash.io"; process.env.KV_REST_API_TOKEN = "mock_token";
+    let up = false; const store = new Map();
+    globalThis.fetch = async (url, opts) => { if (!up) return { ok: false, status: 503, json: async () => ({ error: "暫停服務" }) };
+      const [op, k, v] = JSON.parse(opts.body), R = result => ({ ok: true, json: async () => ({ result }) });
+      if (op === "INCR") return R(1); if (op === "GET") return R(store.get(k) ?? null); if (op === "SET") { store.set(k, v); return R("OK"); } return R(1); };
+    const b = await push(); assert.deepEqual([b.data.ok, b.data.reason], [false, "unavailable"], "KV 失敗不能回報成功"); assert.equal(store.size, 0);
+    up = true; const c = await push(); assert.equal(c.data.ok, true, "KV 恢復後不用重新部署就能用"); assert.ok(store.get(`sync:${hashId(id)}`));
+    const cfg2 = mockHttp({ method: "GET", query: { op: "cfg" } }); await handler(cfg2.req, cfg2.res); assert.equal(cfg2.data.limiter, "shared");
+    // Telegram 沒設定：測試訊息明確回 tg_not_configured，不是「暫時連不到」，也沒有呼叫 Telegram
+    store.set(`tg:${hashId(id)}`, "12345");
+    let tgCalled = false; const f0 = globalThis.fetch; globalThis.fetch = async (url, opts) => { if (String(url).includes("telegram")) tgCalled = true; return f0(url, opts); };
+    const t = mockHttp({ body: { op: "tgtest", id } }); await handler(t.req, t.res);
+    assert.deepEqual([t.data.ok, t.data.reason, tgCalled], [false, "tg_not_configured", false]);
+    const tb = mockHttp({ body: { op: "tgbind", id } }); await handler(tb.req, tb.res); assert.equal(tb.data.reason, "tg_not_configured");
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [k, v] of [["KV_REST_API_URL", save.u], ["KV_REST_API_TOKEN", save.t], ["UPSTASH_REDIS_REST_URL", save.uu], ["UPSTASH_REDIS_REST_TOKEN", save.ut], ["TELEGRAM_BOT_TOKEN", save.g]]) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+});
+
+test("P1-03 推播：送 Telegram 失敗時清掉「今天已送」記號，下次排程會重送；已送過的不重送", async () => {
+  const { markThenSend } = await import("../scripts/alerts-push.mjs");
+  const store = new Map(), K = async (op, k) => { if (op === "SET") { if (store.has(k)) return null; store.set(k, "1"); return "OK"; } if (op === "DEL") { store.delete(k); return 1; } };
+  await assert.rejects(markThenSend("close:h:2026-10-28", 172800, async () => { throw new Error("Telegram 暫時失敗"); }, K));
+  assert.equal(store.has("close:h:2026-10-28"), false, "失敗不能留下已送記號");
+  let n = 0; assert.equal(await markThenSend("close:h:2026-10-28", 172800, async () => { n++; }, K), true);
+  assert.equal(await markThenSend("close:h:2026-10-28", 172800, async () => { n++; }, K), false, "同一天第二次不重送");
+  assert.equal(n, 1);
+});
+
+test("P1-03 AI 限流：沒有 KV 用保守的記憶體上限（不是全站統一），KV 失敗也不放行，KV 恢復後改回共用計數", async () => {
+  const { aiLimit, limitsOf, mem } = await import("../api/_lib/_limit.js");
+  const save = { u: process.env.KV_REST_API_URL, t: process.env.KV_REST_API_TOKEN };
+  delete process.env.KV_REST_API_URL; delete process.env.KV_REST_API_TOKEN; mem.clear();
+  try {
+    const [perIp] = limitsOf("podcast", false), req = { headers: { "x-real-ip": "198.51.100.7" } }, now = Date.parse("2026-10-28T02:00:00Z");
+    assert.ok(perIp < limitsOf("podcast", true)[0], "記憶體模式的上限比共用模式低");
+    for (let i = 0; i < perIp; i++) assert.equal(await aiLimit(req, "podcast", now), null);
+    assert.match(await aiLimit(req, "podcast", now), /太頻繁/, "記憶體模式照樣擋");
+    // 共用計數壞掉：退回記憶體，不放行
+    const broken = async () => { throw new Error("KV down"); };
+    assert.match(await aiLimit(req, "podcast", now, broken), /太頻繁/);
+    // 共用計數恢復：用共用的計數
+    let n = 0; const ok = async () => ++n;
+    assert.equal(await aiLimit({ headers: { "x-real-ip": "198.51.100.8" } }, "podcast", now, ok), null); assert.ok(n >= 2, "有呼叫共用計數器");
+  } finally { mem.clear(); if (save.u === undefined) delete process.env.KV_REST_API_URL; else process.env.KV_REST_API_URL = save.u; if (save.t === undefined) delete process.env.KV_REST_API_TOKEN; else process.env.KV_REST_API_TOKEN = save.t; }
+});
