@@ -124,16 +124,17 @@ function marketState(D, o = {}) {
   return { c, d: D[n].d, f, s, trend, slope, adx: ad, mf: mf[n], ms: ms[n], atr: A[n], atrPct: now, volPct, vol, hv: qSd(qRet(C.slice(-21))) * Math.sqrt(o.ppy || QY), vr, udr, hasVol, sr };
 }
 // 適合的策略類型與現在該避免的事（規則對照，不是預測）；strat：可以直接套用到 K 線的策略代號
+// 目前狀態下「常見、可以拿去回測研究」的策略類型與容易出錯的做法：只描述規則類型，不寫買進、賣出、減碼這類指示
 function stateAdvice(S) {
   const fit = [], avoid = [], t = S.trend, strong = S.adx != null && S.adx >= 25, weak = S.adx != null && S.adx < 20;
-  if (t === "bull") { fit.push(["趨勢跟隨：均線多頭排列時拉回到月線附近買、跌破季線出場", "ma"], ["突破策略：創新高且量增時進場", "hlb"]); avoid.push("逆勢放空、只因為「漲多了」就賣光"); if (S.vol === "high") avoid.push("追在長紅 K 之後（波動大，回檔也大）"); }
-  else if (t === "bear") { fit.push(["空手或減碼，等反轉訊號（123 法則、2B 底）再進場", "r123"], ["反彈到季線附近減碼", null]); avoid.push("攤平向下買、把反彈當回升", "用超賣指標（RSI、KD 低檔）抄底"); }
-  else { fit.push(["區間操作：靠近支撐買、靠近壓力賣", null], ["擺盪指標：RSI、KD 低檔金叉、布林下軌", "kd"]); avoid.push("均線交叉類的趨勢策略（盤整時容易來回被巴）"); if (weak) avoid.push("在區間中間追價"); }
-  if (strong && t !== "range") fit.push([`ADX ${S.adx.toFixed(0)}：趨勢明確，順勢操作比猜轉折容易`, null]);
-  if (S.vol === "high") { fit.push(["部位縮小、停損放寬到 2～3 倍 ATR", null]); avoid.push("滿倉操作、停損設太近（會被正常波動洗掉）"); }
-  if (S.vol === "low") fit.push(["波動收斂：等帶量突破區間再跟（壓縮後常有大行情）", null]);
-  if (S.vr != null && S.vr < 0.6) avoid.push("在量縮時追突破（容易假突破）");
-  if (S.udr != null && S.udr < 0.8 && t === "bull") avoid.push("忽略量價背離：近 20 天下跌日的量比上漲日大");
+  if (t === "bull") { fit.push(["趨勢跟隨類：均線多頭排列、拉回月線、跌破季線出場這類規則", "ma"], ["突破類：創新高且量增的進場規則", "hlb"]); avoid.push("逆勢放空類、只因為「漲多了」就出場的規則"); if (S.vol === "high") avoid.push("追高後停損設太近的規則"); }
+  else if (t === "bear") { fit.push(["反轉確認類：等 123 法則、2B 底這類訊號出現再評估", "r123"], ["以季線當壓力參考的規則", null]); avoid.push("向下攤平類、把反彈當回升的規則", "只看超賣指標（RSI、KD 低檔）抄底的規則"); }
+  else { fit.push(["區間類：靠近支撐、壓力來回的規則", null], ["擺盪指標類：RSI、KD 低檔金叉、布林下軌", "kd"]); avoid.push("均線交叉類的趨勢策略（盤整時容易來回被巴）"); if (weak) avoid.push("在區間中段追價的規則"); }
+  if (strong && t !== "range") fit.push([`ADX ${S.adx.toFixed(0)}：趨勢明確，順勢類規則比猜轉折容易對上`, null]);
+  if (S.vol === "high") { fit.push(["波動偏高：回測時可試較小部位、2～3 倍 ATR 的停損", null]); avoid.push("滿倉、停損設太近的規則（容易被正常波動洗掉）"); }
+  if (S.vol === "low") fit.push(["波動收斂：帶量突破區間的規則（壓縮後常有大波動）", null]);
+  if (S.vr != null && S.vr < 0.6) avoid.push("量縮時追突破的規則（容易假突破）");
+  if (S.udr != null && S.udr < 0.8 && t === "bull") avoid.push("忽略量價背離的規則：近 20 天下跌日的量比上漲日大");
   return { fit, avoid };
 }
 

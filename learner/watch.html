@@ -2544,7 +2544,7 @@ function renderScreen() {
       + (open.rows.length ? `<ul class="slist" style="margin:0 12px">${open.rows.map(scrRow).join("")}</ul>` : `<p class="note gnote">${client && S?.running ? "掃描中…" : "目前沒有符合的股票"}</p>`);
     else {
       const tiles = L => `<div class="gtiles">${L.map(x => `<button class="gtile ${x.rows.length ? x.side || "" : "zero"}" data-so="${esc(x.id)}" title="${esc(x.desc || "")}"><span>${esc(x.title)}</span><b>${client && !S?.at ? "…" : x.rows.length}</b></button>`).join("")}</div>`;
-      if (g === "kline") h += `<p class="gsub up">看多</p>${tiles(Ls.filter(x => x.side === "bull"))}<p class="gsub down">看空</p>${tiles(Ls.filter(x => x.side === "bear"))}`;
+      if (g === "kline") h += `<p class="gsub up">上漲型態</p>${tiles(Ls.filter(x => x.side === "bull"))}<p class="gsub down">下跌型態</p>${tiles(Ls.filter(x => x.side === "bear"))}`;
       else h += Ls.length ? tiles(Ls) : `<p class="note gnote">沒有資料</p>`;
     }
   }
@@ -2566,7 +2566,7 @@ const Q_SCORE = { up: 85, rot: 65, watch: 45, down: 25 };
 function stockScore(c, D) {
   if (!D || D.length < 30) return null;
   const n = D.length - 1, I = indicators(D), it = readout(D, I, n), bull = it.filter(x => x.b > 0).length, bear = it.filter(x => x.b < 0).length, why = {};
-  const tech = Math.round(50 + 50 * (bull - bear) / (it.length || 1)); why.tech = `${bull} 項偏多、${bear} 項偏空（共 ${it.length} 項）`;
+  const tech = Math.round(50 + 50 * (bull - bear) / (it.length || 1)); why.tech = `${bull} 項向上、${bear} 項向下（共 ${it.length} 項）`;
   // 籌碼：近 5 日法人買賣超金額 ÷ 近 5 日成交金額
   let chips = 50; const M = W.mf.model, st = M?.stocks.get(c);
   if (st) { const t = M.T - 1; let a = 0, v = 0; for (let k = Math.max(0, t - 4); k <= t; k++) { a += st.amt[k] || 0; v += ((st.v[k] || 0) * (st.px[k] || 0)) / 1e5; }
@@ -4593,7 +4593,7 @@ function renderMacro(top) {
   let h = top + `<section class="mk"><h3>總經儀表<span class="note">${esc(J.source)}・${new Date(Date.parse(J.ts) + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}</span></h3>
     <div class="mcsig">${(J.signals || []).map(s => `<div class="lv${s.lv}"><span>${esc(s.k)}</span><b>${esc(s.v)}</b><small>${esc(s.t)}</small></div>`).join("")}</div>
     ${(() => { const S = J.signals || [], c = [0, 1, 2].map(k => S.filter(s => s.lv === k).length); if (!S.length) return "";
-      const tone = c[2] >= 3 ? ["偏空", "down", "警訊偏多，資金較容易轉向公債、防禦股；持股宜控制部位、留意停損。"] : c[2] + c[1] >= Math.ceil(S.length / 2) ? ["中性偏謹慎", "warn", "留意的項目不少，股市容易隨數據公布震盪；選股重於選市。"] : ["偏多", "up", "大部分指標正常，總經環境對股市（尤其企業獲利）相對友善。"];
+      const tone = c[2] >= 3 ? ["偏空", "down", "警訊偏多，歷史上這時資金較容易轉向公債、防禦股。"] : c[2] + c[1] >= Math.ceil(S.length / 2) ? ["中性偏謹慎", "warn", "留意的項目不少，股市容易隨數據公布震盪；選股重於選市。"] : ["偏多", "up", "大部分指標正常，總經環境對股市（尤其企業獲利）相對友善。"];
       return `<p class="mc-tone"><span>對股市的整體影響</span><b class="${tone[1]}">${tone[0]}</b>（正常 ${c[0]}・留意 ${c[1]}・警訊 ${c[2]}）${tone[2]}</p>`; })()}
     <p class="note">綠點：正常、黃點：留意、紅點：警訊。總經數據多半一個月公布一次，是看「大方向」用的，不適合拿來做短線。</p></section>`;
   // 現在的走向對股市的影響：挑出最近明顯上升或下降的數列，一句話說明
@@ -5874,13 +5874,13 @@ function renderAna() {
     olderMinute(c, +k).catch(() => { M.end = true; }).finally(() => { M.busy = false; if (W.sel === c) renderAna(); });
   }
   if (!D || D.length < 30) { $("#anaScore").innerHTML = `<span class="note">${D ? (W.mk[+k]?.busy ? "載入更早的分 K…" : "資料太少（至少要 30 根）") : "載入中…"}</span>`; $("#anaRo").innerHTML = ""; $("#anaGrid").innerHTML = ""; return; }
-  const I = indicators(D), items = readout(D, I, D.length - 1), bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length, sc = items.length ? (bull - bear) / items.length : 0;
-  const lab = sc > 0.35 ? ["偏多", "bull"] : sc > 0.1 ? ["略偏多", "bull"] : sc < -0.35 ? ["偏空", "bear"] : sc < -0.1 ? ["略偏空", "bear"] : ["中性", "flat"];
+  const I = indicators(D), items = readout(D, I, D.length - 1), bull = items.filter(x => x.b > 0).length, bear = items.filter(x => x.b < 0).length;
+  // 只列指標讀數的方向統計，不給「偏多／偏空」的綜合結論（避免看起來像買賣建議）
   const kn = { 1: "1 分 K", 5: "5 分 K", 15: "15 分 K", 60: "60 分 K", D: "日 K", W: "週 K", M: "月 K" }[k];
   $("#anaMtf").innerHTML = "DWM".includes(k) ? mtfHtml() : "";
-  $("#anaScore").innerHTML = `<b class="${lab[1] === "bull" ? "up" : lab[1] === "bear" ? "down" : ""}">${lab[0]}</b><span class="note">${bull} 項偏多、${bear} 項偏空、${items.length - bull - bear} 項中性</span><span class="meter" title="多空分數"><i style="left:calc(${(sc + 1) / 2 * 100}% - 2px)"></i></span>`;
+  $("#anaScore").innerHTML = `<span class="note">指標讀數：<b class="up">${bull}</b> 項向上、<b class="down">${bear}</b> 項向下、${items.length - bull - bear} 項中性（各項的算法見下方；只是目前讀數的統計，不是買賣建議）</span>`;
   renderReadout($("#anaRo"), items, true);
-  $("#anaGrid").innerHTML = `<div class="rohead"><b class="up">${bull}</b> 看好 <b class="down">${bear}</b> 看淡 <span class="note">${items.length - bull - bear} 中性</span></div>` + items.map(x => `<div class="rocard ${x.b > 0 ? "bull" : x.b < 0 ? "bear" : ""}"><b>${esc(x.k)}</b><span>${esc(String(x.t).split(/[，,；;（(]/)[0])}</span></div>`).join("");
+  $("#anaGrid").innerHTML = `<div class="rohead"><b class="up">${bull}</b> 向上 <b class="down">${bear}</b> 向下 <span class="note">${items.length - bull - bear} 中性</span></div>` + items.map(x => `<div class="rocard ${x.b > 0 ? "bull" : x.b < 0 ? "bear" : ""}"><b>${esc(x.k)}</b><span>${esc(String(x.t).split(/[，,；;（(]/)[0])}</span></div>`).join("");
   renderCost();
   $("#anaNote").textContent = `${kn}・最後一根 ${fmtKD(D[D.length - 1].d)}；只是指標的機械判讀，不是買賣建議`;
 }

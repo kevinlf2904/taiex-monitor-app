@@ -1,6 +1,6 @@
 // 選股：給 learner/watch.html 的「選股」分頁使用。都是最近一個交易日收盤後的資料，只供參考。
 // GET /api/screen → { ok, date, ratio: { up, down, flat }, lists: [{ id, title, desc, rows: [{ code, name, price, chgPct, note }] }] }
-//   short   短多：漲幅 ≥ 4%、成交值 ≥ 3 億，依漲幅排序
+//   short   單日大漲：漲幅 ≥ 4%、成交值 ≥ 3 億，依漲幅排序
 //   chips   籌碼多：外資＋投信合計買超且收紅，依買超張數排序（證交所 T86，上市）
 //   trust3  投信連買：最近 3 個交易日投信都買超
 //   month   站上月線：收盤高於月均價 3% 以上且今天收紅（證交所 STOCK_DAY_AVG_ALL，上市）
@@ -30,7 +30,7 @@ const row = (q, note) => ({ code: q.code, name: q.name, price: q.price, chgPct: 
 export function buildLists({ quotes, t86 = [], avg = [], bw = [] }) {
   const Q = new Map(quotes.map(q => [q.code, q])), liquid = q => (q?.vol || 0) >= 500, stock = c => /^\d{4}$/.test(c);
   const lists = [];
-  lists.push({ id: "short", title: "短多", desc: "漲幅 ≥ 4%、成交值 ≥ 3 億", rows: quotes.filter(q => stock(q.code) && q.chgPct >= 4 && (q.value || 0) >= 3).sort((a, b) => b.chgPct - a.chgPct).slice(0, 30).map(q => row(q, `成交值 ${q.value.toFixed(1)} 億`)) });
+  lists.push({ id: "short", title: "單日大漲", desc: "漲幅 ≥ 4%、成交值 ≥ 3 億", rows: quotes.filter(q => stock(q.code) && q.chgPct >= 4 && (q.value || 0) >= 3).sort((a, b) => b.chgPct - a.chgPct).slice(0, 30).map(q => row(q, `成交值 ${q.value.toFixed(1)} 億`)) });
   if (t86[0]) lists.push({ id: "chips", title: "籌碼多", desc: "外資＋投信買超、收紅（上市）", rows: t86[0].filter(r => r.foreign + r.trust > 0 && Q.get(r.code)?.chgPct > 0).sort((a, b) => (b.foreign + b.trust) - (a.foreign + a.trust)).slice(0, 30).map(r => row(Q.get(r.code), `外資 ${r.foreign.toLocaleString()}・投信 ${r.trust.toLocaleString()} 張`)) });
   if (t86.length >= 3) {
     const days = t86.slice(0, 3).map(rows => new Map(rows.map(r => [r.code, r.trust])));
