@@ -1973,10 +1973,18 @@ function openStylePicker(setTheme) {
 function chartFrameSync() {
   let f = null; try { f = window.frameElement; } catch {} if (!f) return;
   if (document.querySelector(".chart-fullscreen")) {
-    if (f.dataset.prevStyle === undefined) f.dataset.prevStyle = f.getAttribute("style") || "";
+    if (f.dataset.prevStyle === undefined) {
+      f.dataset.prevStyle = f.getAttribute("style") || "";
+      const scroller = pageScroller(); f.dataset.prevScrollX = String(scroller.scrollX); f.dataset.prevScrollY = String(scroller.scrollY);
+    }
     const t = "env(safe-area-inset-top, 0px)", r = "env(safe-area-inset-right, 0px)", b = "env(safe-area-inset-bottom, 0px)", l = "env(safe-area-inset-left, 0px)";
     f.style.cssText = `position:fixed !important;top:${t} !important;left:${l} !important;width:calc(100% - ${l} - ${r}) !important;height:calc(100vh - ${t} - ${b}) !important;height:calc(100dvh - ${t} - ${b}) !important;max-height:none !important;margin:0 !important;z-index:9999 !important;border:0 !important;background:var(--bg,#09090b) !important;`;
-  } else if (f.dataset.prevStyle !== undefined) { f.setAttribute("style", f.dataset.prevStyle); delete f.dataset.prevStyle; if (typeof postHeight === "function") postHeight(); }
+  } else if (f.dataset.prevStyle !== undefined) {
+    const scroller = pageScroller(), x = Number(f.dataset.prevScrollX), y = Number(f.dataset.prevScrollY), restoreScroll = Number.isFinite(x) && Number.isFinite(y);
+    f.setAttribute("style", f.dataset.prevStyle); delete f.dataset.prevStyle; delete f.dataset.prevScrollX; delete f.dataset.prevScrollY;
+    if (typeof postHeight === "function") postHeight();
+    if (restoreScroll) requestAnimationFrame(() => scroller.scrollTo(x, y));
+  }
 }
 // 放大中轉向、或手機網址列收合（高度變了但寬度沒變）：重畫放大的圖
 if (typeof window !== "undefined") addEventListener("resize", () => { for (const c of Chart.all || []) if (c.host.closest(".chart-fullscreen")) c.req(); });
