@@ -58,9 +58,139 @@ function usIso(now = new Date()) {
   }
 }
 
+/* ---------- 美股時區、夏令/冬令時與美股休市日曆判定 (Phase 4) ---------- */
+function usEasternParts(ms = Date.now()) {
+  const dObj = ms instanceof Date ? ms : new Date(ms);
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+      timeZoneName: "shortOffset",
+    }).formatToParts(dObj);
+    const map = {};
+    for (const p of parts) map[p.type] = p.value;
+    const h = map.hour === "24" ? "00" : map.hour;
+    const tzRaw = map.timeZoneName || "GMT-5";
+    const isEdt = tzRaw.includes("-4");
+    return {
+      date: `${map.year}-${map.month}-${map.day}`,
+      time: `${h}:${map.minute}:${map.second}`,
+      hour: Number(h),
+      minute: Number(map.minute),
+      tz: isEdt ? "EDT" : "EST",
+      isoOffset: isEdt ? "-04:00" : "-05:00",
+    };
+  } catch {
+    const d = new Date(+dObj - 4 * 3600e3).toISOString();
+    return {
+      date: d.slice(0, 10),
+      time: d.slice(11, 19),
+      hour: Number(d.slice(11, 13)),
+      minute: Number(d.slice(14, 16)),
+      tz: "ET",
+      isoOffset: "-04:00",
+    };
+  }
+}
+
+function usNthWeekday(year, month, weekday, n) {
+  if (n > 0) {
+    const first = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+    const diff = (weekday - first + 7) % 7;
+    return 1 + diff + (n - 1) * 7;
+  }
+  const lastDate = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const lastDay = new Date(Date.UTC(year, month - 1, lastDate)).getUTCDay();
+  const diff = (lastDay - weekday + 7) % 7;
+  return lastDate - diff;
+}
+
+function usGoodFriday(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const easterMonth = Math.floor((h + l - 7 * m + 114) / 31);
+  const easterDay = ((h + l - 7 * m + 114) % 31) + 1;
+  const gf = new Date(Date.UTC(year, easterMonth - 1, easterDay - 2));
+  return gf.toISOString().slice(0, 10);
+}
+
+function usObservedFixed(year, month, day) {
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  const wd = dt.getUTCDay();
+  if (wd === 6) dt.setUTCDate(dt.getUTCDate() - 1);
+  else if (wd === 0) dt.setUTCDate(dt.getUTCDate() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
+const US_HOL_CACHE = new Map();
+function usHolidaysForYear(year) {
+  if (US_HOL_CACHE.has(year)) return US_HOL_CACHE.get(year);
+  const fmt = (m, d) => `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const map = new Map();
+  map.set(usObservedFixed(year, 1, 1), "元旦休市");
+  map.set(fmt(1, usNthWeekday(year, 1, 1, 3)), "馬丁路德金恩紀念日");
+  map.set(fmt(2, usNthWeekday(year, 2, 1, 3)), "總統日休市");
+  map.set(usGoodFriday(year), "耶穌受難日休市");
+  map.set(fmt(5, usNthWeekday(year, 5, 1, -1)), "陣亡將士紀念日");
+  if (year >= 2022) map.set(usObservedFixed(year, 6, 19), "六月節休市");
+  map.set(usObservedFixed(year, 7, 4), "美國獨立紀念日");
+  map.set(fmt(9, usNthWeekday(year, 9, 1, 1)), "勞動節休市");
+  map.set(fmt(11, usNthWeekday(year, 11, 4, 4)), "感恩節休市");
+  map.set(usObservedFixed(year, 12, 25), "聖誕節休市");
+  const nextNy = usObservedFixed(year + 1, 1, 1);
+  if (nextNy.startsWith(String(year))) map.set(nextNy, "元旦補假休市");
+  US_HOL_CACHE.set(year, map);
+  return map;
+}
+
+function usHolidayName(dateStr) {
+  if (typeof dateStr !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+  const y = Number(dateStr.slice(0, 4));
+  return usHolidaysForYear(y).get(dateStr) || null;
+}
+
+function lastUsTradingDate(ms = Date.now()) {
+  const et = usEasternParts(ms);
+  const mins = et.hour * 60 + et.minute;
+  let cur = new Date(et.date + "T12:00:00Z");
+  if (mins < 570) {
+    cur.setUTCDate(cur.getUTCDate() - 1);
+  }
+  for (let i = 0; i < 10; i++) {
+    const iso = cur.toISOString().slice(0, 10);
+    const wd = cur.getUTCDay();
+    if (wd !== 0 && wd !== 6 && !usHolidayName(iso)) return iso;
+    cur.setUTCDate(cur.getUTCDate() - 1);
+  }
+  return et.date;
+}
+
+function fmtTwTime(ms) {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return "";
+  const d = new Date(ms + 8 * 3600e3).toISOString();
+  return `${d.slice(0, 10)} ${d.slice(11, 19)}`;
+}
+
 /* ---------- 時間與報價新鮮度判定 (Phase C P0-1 & P0-2) ---------- */
 function quoteTimestamp(q) {
   if (!q) return null;
+  if (typeof q.epochMs === "number" && Number.isFinite(q.epochMs) && q.epochMs > 0) return q.epochMs;
   const t = typeof q.time === "string" ? q.time.trim() : "";
   const d = typeof q.date === "string" ? q.date.trim() : "";
 
@@ -81,8 +211,9 @@ function quoteTimestamp(q) {
       const hh = m[1].padStart(2, "0");
       const mm = m[2];
       const ss = (m[3] || "00").padStart(2, "0");
-      // 台股與標準報價以台北時區 (+08:00) 換算絕對 Epoch 毫秒
-      const ms = Date.parse(`${d}T${hh}:${mm}:${ss}+08:00`);
+      // 若為美股 (q.us) 且未帶時區，使用該日期之美東時區偏移量 (-04:00 EDT / -05:00 EST)
+      const offset = q.us ? (usEasternParts(Date.parse(`${d}T12:00:00Z`))?.isoOffset || "-05:00") : "+08:00";
+      const ms = Date.parse(`${d}T${hh}:${mm}:${ss}${offset}`);
       if (Number.isFinite(ms)) return ms;
     }
   }
@@ -299,8 +430,30 @@ function evalDataStatus(opts = {}) {
     return defaultNote;
   };
 
-  if (unimplemented || dataStatus === "unavailable") {
+  const finishStatus = r => {
+    const inferredMode = opts.updateMode || (
+      type === "inst" || type === "margin" ? "after_close" :
+      type === "orders" ? "scheduled" :
+      r.isLive ? "live" :
+      type === "us" && (usSession === "open" || usSession === "pre" || usSession === "post") ? "live" :
+      "after_close"
+    );
+    const modeMap = { live: "即時更新", scheduled: "定時更新", after_close: "盤後公布", daily: "每日更新" };
     return {
+      ...r,
+      dataDate: r.date ?? dataDate ?? null,
+      sourceTime: r.time ?? sourceTime ?? null,
+      fetchedAt: fetchedAt ?? null,
+      updateMode: inferredMode,
+      updateModeText: modeMap[inferredMode] || inferredMode,
+      dataStatus: r.status,
+      isFallback: Boolean(opts.isFallback),
+      ttl: effectiveTtl,
+    };
+  };
+
+  if (unimplemented || dataStatus === "unavailable") {
+    return finishStatus({
       status: "unavailable",
       text: "未提供",
       note: "此項資料功能目前未提供",
@@ -311,11 +464,11 @@ function evalDataStatus(opts = {}) {
       isDelayed: false,
       isPending: false,
       isConfirmed: false,
-    };
+    });
   }
 
   if (!isSuccess || err) {
-    return {
+    return finishStatus({
       status: "delayed",
       text: "資料延遲",
       note: err ? "更新失敗（" + err + "）" : "來源資料回應異常",
@@ -327,53 +480,88 @@ function evalDataStatus(opts = {}) {
       isDelayed: true,
       isPending: false,
       isConfirmed: false,
-    };
+    });
   }
 
   if (type === "us") {
     const usS = usSession || "closed";
     const usToday = today || usIso(nowDate);
+    const usHol = opts.holiday || (usS === "holiday" ? (usHolidayName(usToday) || "美股休市") : null);
+    if (usHol || usS === "holiday") {
+      return finishStatus({
+        status: "holiday",
+        text: usHol || "美股休市",
+        note: dataDate ? "美股休市（" + (usHol || "休市") + "）・顯示 " + dataDate + " 收盤" : "美股休市",
+        date: dataDate || lastUsTradingDate(nowDate),
+        source: source || "Yahoo Finance",
+        time: sourceTime,
+        isLive: false,
+        isDelayed: false,
+        isPending: false,
+        isConfirmed: true,
+      });
+    }
+    if (opts.isStale === true || dataStatus === "stale") {
+      return finishStatus({
+        status: "stale",
+        text: "資料過期",
+        note: dataDate ? "美股資料日期落後（停留於 " + dataDate + "）" : "美股資料過期",
+        date: dataDate,
+        source: source || "Yahoo Finance",
+        time: sourceTime,
+        isLive: false,
+        isDelayed: true,
+        isPending: false,
+        isConfirmed: false,
+      });
+    }
     if (usS === "open") {
       if (dataDate && dataDate < usToday) {
-        return { status: "delayed", text: "資料延遲", note: "美股盤中尚未取得美東今日行情（停留於 " + dataDate + "）", date: dataDate, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+        return finishStatus({ status: "delayed", text: "資料延遲", note: "美股盤中尚未取得美東今日行情（停留於 " + dataDate + "）", date: dataDate, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false });
       }
       if (isExpired) {
-        return { status: "delayed", text: "資料延遲", note: "美股報價超過預期更新時間", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+        return finishStatus({ status: "delayed", text: "資料延遲", note: "美股報價超過預期更新時間", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false });
       }
-      return { status: "live", text: "美股盤中", note: "美東交易時段即時更新", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
+      return finishStatus({ status: "live", text: "美股盤中", note: "美東交易時段即時更新", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false });
     }
     if (usS === "pre") {
-      return { status: "pending", text: "盤前試撮", note: "美東盤前試撮階段", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+      return finishStatus({ status: "pending", text: "盤前試撮", note: "美東盤前試撮階段", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false });
+    }
+    if (usS === "post") {
+      return finishStatus({ status: "confirmed", text: "美股盤後", note: dataDate ? "美股 " + dataDate + " 正規盤收盤・盤後交易時段" : "美東盤後交易時段", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true });
+    }
+    if (opts.expectedDate && dataDate && dataDate < opts.expectedDate) {
+      return finishStatus({ status: "stale", text: "資料過期", note: "美股資料停留於 " + dataDate + "（應為 " + opts.expectedDate + "）", date: dataDate, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false });
     }
     if (estimated) {
-      return { status: "pending", text: "收盤估算", note: dataDate ? "美股 " + dataDate + " 盤後估算值" : "美股盤後估算值", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+      return finishStatus({ status: "pending", text: "收盤估算", note: dataDate ? "美股 " + dataDate + " 盤後估算值" : "美股盤後估算值", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false });
     }
-    return { status: "confirmed", text: "收盤確認", note: dataDate ? "美股 " + dataDate + " 收盤確認" : "已收盤", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
+    return finishStatus({ status: "confirmed", text: "收盤確認", note: dataDate ? "美股 " + dataDate + " 收盤確認" : "已收盤", date: dataDate || usToday, source: source || "Yahoo Finance", time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true });
   }
 
   if (type === "futures") {
     const fs = fsession || (curSess === "open" ? "day" : "closed");
     if (fs === "night") {
       if (isExpired) {
-        return { status: "delayed", text: "資料延遲", note: "期貨夜盤報價延遲", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+        return finishStatus({ status: "delayed", text: "資料延遲", note: "期貨夜盤報價延遲", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false });
       }
-      return { status: "live", text: "夜盤即時", note: "期交所夜盤交易中", date: dataDate, source: source || "期交所", time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
+      return finishStatus({ status: "live", text: "夜盤即時", note: "期交所夜盤交易中", date: dataDate, source: source || "期交所", time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false });
     }
     if (fs === "day") {
       if (isExpired) {
-        return { status: "delayed", text: "資料延遲", note: "期貨日盤報價延遲", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+        return finishStatus({ status: "delayed", text: "資料延遲", note: "期貨日盤報價延遲", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false });
       }
-      return { status: "live", text: "盤中即時", note: "期交所日盤交易中", date: dataDate, source: source || "期交所", time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
+      return finishStatus({ status: "live", text: "盤中即時", note: "期交所日盤交易中", date: dataDate, source: source || "期交所", time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false });
     }
     if (estimated) {
-      return { status: "pending", text: "收盤估算", note: dataDate ? dataDate + " 期貨盤後估算值" : "期貨估算值", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+      return finishStatus({ status: "pending", text: "收盤估算", note: dataDate ? dataDate + " 期貨盤後估算值" : "期貨估算值", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false });
     }
-    return { status: "confirmed", text: "收盤確認", note: dataDate ? dataDate + " 期貨收盤確認" : "收盤確認", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
+    return finishStatus({ status: "confirmed", text: "收盤確認", note: dataDate ? dataDate + " 期貨收盤確認" : "收盤確認", date: dataDate, source: source || "期交所", time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true });
   }
 
   if (curDayState === "closed") {
     if (estimated) {
-      return {
+      return finishStatus({
         status: "pending",
         text: "收盤估算",
         note: dataDate ? "非交易日・" + dataDate + " 估算值" : "非交易日估算值",
@@ -384,10 +572,10 @@ function evalDataStatus(opts = {}) {
         isDelayed: false,
         isPending: true,
         isConfirmed: false,
-      };
+      });
     }
     if (!isDataComplete) {
-      return {
+      return finishStatus({
         status: "delayed",
         text: "資料延遲",
         note: "非交易日・" + getIncompleteNote("資料不完整"),
@@ -398,9 +586,9 @@ function evalDataStatus(opts = {}) {
         isDelayed: true,
         isPending: false,
         isConfirmed: false,
-      };
+      });
     }
-    return {
+    return finishStatus({
       status: "confirmed",
       text: "收盤確認",
       note: dataDate ? "非交易日・顯示 " + dataDate + " 收盤資料" : "非交易日收盤確認",
@@ -411,11 +599,11 @@ function evalDataStatus(opts = {}) {
       isDelayed: false,
       isPending: false,
       isConfirmed: true,
-    };
+    });
   }
 
   if (curDayState === "unknown" && !dataDate) {
-    return {
+    return finishStatus({
       status: "delayed",
       text: "資料延遲",
       note: "交易日曆待確認且無明確資料日期",
@@ -426,14 +614,14 @@ function evalDataStatus(opts = {}) {
       isDelayed: true,
       isPending: false,
       isConfirmed: false,
-    };
+    });
   }
 
   if (type === "inst" || type === "margin") {
     const isTodayData = dataDate && dataDate === isoToday;
     if (isTodayData && isDataComplete) {
       if (estimated) {
-        return {
+        return finishStatus({
           status: "pending",
           text: "收盤估算",
           note: dataDate + " 當日數據估算值，非官方公布確認",
@@ -444,9 +632,9 @@ function evalDataStatus(opts = {}) {
           isDelayed: false,
           isPending: true,
           isConfirmed: false,
-        };
+        });
       }
-      return {
+      return finishStatus({
         status: "confirmed",
         text: "收盤確認",
         note: dataDate + " 當日數據已公布確認",
@@ -457,7 +645,7 @@ function evalDataStatus(opts = {}) {
         isDelayed: false,
         isPending: false,
         isConfirmed: true,
-      };
+      });
     }
     const expectedHour = type === "margin" ? 21 : 15;
     const tpHour = new Date(nowMs + 8 * 3600e3).getUTCHours();
@@ -466,7 +654,7 @@ function evalDataStatus(opts = {}) {
       : tpHour >= expectedHour
         ? "今日官方發布待確認（目前為 " + (dataDate || "前一交易日") + "）"
         : "等待今日盤後資料公布（預計 " + expectedHour + ":00 後）";
-    return {
+    return finishStatus({
       status: "pending",
       text: "盤後待確認",
       note,
@@ -477,35 +665,35 @@ function evalDataStatus(opts = {}) {
       isDelayed: false,
       isPending: true,
       isConfirmed: false,
-    };
+    });
   }
 
   if (curSess === "open") {
     if (dataDate && dataDate < isoToday) {
       const extraDegraded = (dataStatus === "degraded" || completeness === "degraded") ? "・行情資料降級" : "";
-      return { status: "delayed", text: "資料延遲", note: "盤中尚未取得今日行情（停留於 " + dataDate + "）" + extraDegraded, date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      return finishStatus({ status: "delayed", text: "資料延遲", note: "盤中尚未取得今日行情（停留於 " + dataDate + "）" + extraDegraded, date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false });
     }
     if (isExpired) {
-      return { status: "delayed", text: "資料延遲", note: "超過合理更新期限（已逾 " + Math.round(age / 1000) + " 秒）", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      return finishStatus({ status: "delayed", text: "資料延遲", note: "超過合理更新期限（已逾 " + Math.round(age / 1000) + " 秒）", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false });
     }
     if (!isDataComplete) {
-      return { status: "delayed", text: "資料延遲", note: getIncompleteNote("資料不完整"), date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+      return finishStatus({ status: "delayed", text: "資料延遲", note: getIncompleteNote("資料不完整"), date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false });
     }
     if (estimated || type === "kline" || type === "indicator") {
-      return { status: "live", text: "盤中估算", note: "依盤中即時資料估算，收盤確認最終值", date: dataDate || isoToday, source, time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
+      return finishStatus({ status: "live", text: "盤中估算", note: "依盤中即時資料估算，收盤確認最終值", date: dataDate || isoToday, source, time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false });
     }
-    return { status: "live", text: "盤中即時", note: "盤中行情持續更新", date: dataDate || isoToday, source, time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false };
+    return finishStatus({ status: "live", text: "盤中即時", note: "盤中行情持續更新", date: dataDate || isoToday, source, time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false });
   }
 
   if (curSess === "pre") {
-    return { status: "pending", text: "試撮待開盤", note: "盤前試撮階段", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+    return finishStatus({ status: "pending", text: "試撮待開盤", note: "盤前試撮階段", date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false });
   }
 
   if (curSess === "closed") {
     const isTodayData = dataDate && dataDate === isoToday;
     if (isTodayData && isDataComplete) {
       if (estimated || type === "indicator" || type === "kline") {
-        return {
+        return finishStatus({
           status: "pending",
           text: "收盤估算",
           note: isoToday + " 盤後估算值，非官方收盤定格資料",
@@ -516,21 +704,21 @@ function evalDataStatus(opts = {}) {
           isDelayed: false,
           isPending: true,
           isConfirmed: false,
-        };
+        });
       }
-      return { status: "confirmed", text: "收盤確認", note: isoToday + " 當日收盤確認", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
+      return finishStatus({ status: "confirmed", text: "收盤確認", note: isoToday + " 當日收盤確認", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true });
     }
     const note = (!isDataComplete && isTodayData) ? ("等待 " + isoToday + " 完整收盤（" + getIncompleteNote("資料不完整") + "）") : ("等待 " + isoToday + " 收盤資料確認");
-    return { status: "pending", text: "盤後待確認", note, date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+    return finishStatus({ status: "pending", text: "盤後待確認", note, date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false });
   }
 
   if (estimated) {
-    return { status: "pending", text: "收盤估算", note: "估算值，非官方收盤定格資料", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false };
+    return finishStatus({ status: "pending", text: "收盤估算", note: "估算值，非官方收盤定格資料", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: true, isConfirmed: false });
   }
   if (!isDataComplete) {
-    return { status: "delayed", text: "資料延遲", note: getIncompleteNote("資料不完整"), date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false };
+    return finishStatus({ status: "delayed", text: "資料延遲", note: getIncompleteNote("資料不完整"), date: dataDate, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false });
   }
-  return { status: "confirmed", text: "收盤確認", note: "", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true };
+  return finishStatus({ status: "confirmed", text: "收盤確認", note: "", date: dataDate, source, time: sourceTime, isLive: false, isDelayed: false, isPending: false, isConfirmed: true });
 }
 
 
@@ -541,6 +729,32 @@ function mktStatusTag(statusObj, options = {}) {
   const showTime = options.showTime && time;
   const extra = [showDate ? date.slice(5).replace("-", "/") : "", showTime ? time.slice(0, 5) : ""].filter(Boolean).join(" ");
   return "<span class=\"mkt-tag " + status + "\" title=\"" + esc(note || text) + (extra ? " (" + extra + ")" : "") + "\"><i></i>" + text + (extra ? "<small>" + extra + "</small>" : "") + "</span>";
+}
+
+/* ---------- 市場卡片統一資料透明展開區塊 (Phase 5 & Phase 8) ---------- */
+function mktDataInfoHtml(st, extra = {}) {
+  if (!st || typeof st !== "object") return "";
+  const src = extra.source || st.source || "官方／授權來源";
+  const dDate = extra.dataDate || st.dataDate || st.date || "未提供";
+  const sTime = extra.sourceTime || st.sourceTime || st.time || "來源未提供時間";
+  const fAt = extra.fetchedAt ?? st.fetchedAt;
+  const fAtStr = typeof fAt === "number" && fAt > 0 ? fmtTwTime(fAt) : (typeof fAt === "string" ? fAt : "未記錄");
+  const uMode = extra.updateModeText || st.updateModeText || (st.isLive ? "即時更新" : "盤後／定時");
+  const dStat = extra.statusText || st.text || st.dataStatus || st.status || "—";
+  const freq = extra.freq || (st.ttl ? `快取 TTL ${Math.round(st.ttl / 1000)} 秒` : "依時段排程");
+  const fb = (extra.isFallback ?? st.isFallback) ? "使用備援來源" : "主要來源";
+  const reason = extra.note || st.note || "";
+  return `<details class="mk-dinfo"><summary>資料資訊 · ${esc(dDate)} · ${esc(uMode)}</summary><div class="mk-dinfo-grid">` +
+    `<div><span>資料來源</span><b>${esc(src)}</b></div>` +
+    `<div><span>資料日期</span><b>${esc(dDate)}</b></div>` +
+    `<div><span>來源時間</span><b>${esc(sTime)}</b></div>` +
+    `<div><span>系統抓取</span><b>${esc(fAtStr)}</b></div>` +
+    `<div><span>更新類型</span><b>${esc(uMode)}</b></div>` +
+    `<div><span>資料狀態</span><b>${esc(dStat)}</b></div>` +
+    `<div><span>更新頻率</span><b>${esc(freq)}</b></div>` +
+    `<div><span>來源通道</span><b>${esc(fb)}</b></div>` +
+    (reason ? `<div class="mk-dinfo-note"><span>狀態說明</span><b>${esc(reason)}</b></div>` : "") +
+    `</div></details>`;
 }
 
 /* ---------- 市場可信度與即時附註判定純函式 (Phase B / PR #165) ----------
@@ -654,10 +868,15 @@ function getHotNoteText(H) {
 if (typeof globalThis !== "undefined") {
   globalThis.evalDataStatus = evalDataStatus;
   globalThis.mktStatusTag = mktStatusTag;
+  globalThis.mktDataInfoHtml = mktDataInfoHtml;
   globalThis.quoteTimestamp = quoteTimestamp;
   globalThis.parseTimeToSec = parseTimeToSec;
   globalThis.isQuoteStale = isQuoteStale;
   globalThis.usIso = usIso;
+  globalThis.usEasternParts = usEasternParts;
+  globalThis.usHolidayName = usHolidayName;
+  globalThis.lastUsTradingDate = lastUsTradingDate;
+  globalThis.fmtTwTime = fmtTwTime;
   globalThis.isMarketHealthy = isMarketHealthy;
   globalThis.getMktNoteText = getMktNoteText;
   globalThis.isHotHealthy = isHotHealthy;

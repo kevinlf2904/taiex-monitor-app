@@ -219,8 +219,14 @@ export async function misAll(base, fetcher = misFetch) {
   let k = 0; const worker = async () => { while (k < batches.length) await one(batches[k++]); };
   await Promise.all([worker(), worker(), worker(), worker()]);
   const by = new Map(base.map(r => [r.code, r]));
-  return out.filter(q => q.code && q.price != null && q.prev).map(q => { const o = by.get(q.code) || {};
+  let latestTime = null;
+  for (const q of out) {
+    if (q?.time && /^\d{2}:\d{2}:\d{2}$/.test(q.time) && (!latestTime || q.time > latestTime)) latestTime = q.time;
+  }
+  const rows = out.filter(q => q.code && q.price != null && q.prev).map(q => { const o = by.get(q.code) || {};
     return { code: q.code, name: q.name || o.name || "", market: o.market || q.market, price: q.price, chg: q.chg, chgPct: q.chgPct, vol: q.vol, value: q.vol != null ? +((q.vol * 1000 * q.price) / 1e8).toFixed(2) : null, o: q.open, h: q.high, l: q.low, date: q.date }; });
+  Object.defineProperty(rows, "latestTime", { value: latestTime, enumerable: false });
+  return rows;
 }
 
 let memo = null; // 函式執行個體快取：盤中 8 秒、收盤 30 秒
@@ -369,7 +375,19 @@ export async function marketRows(opts = {}) {
     sess = "closed";
   }
 
-  const done = v => { if (!isCustom) memo = { at: Date.now(), v }; return v; };
+  const fetchedAt = now.toISOString();
+  const done = v => {
+    const out = {
+      ...v,
+      dataDate: v.date || null,
+      sourceTime: v.time || null,
+      fetchedAt,
+      updateMode: v.live ? "live" : String(v.source || "").includes("OpenAPI") ? "daily" : "after_close",
+      isFallback: Boolean(!v.live && (v.note || String(v.source || "").includes("OpenAPI"))),
+    };
+    if (!isCustom) memo = { at: Date.now(), v: out };
+    return out;
+  };
 
   // 1. 富果快照（有金鑰而且方案支援，或傳入自訂 fugleFetcher）
   if (key || fugleFetcher) {
@@ -383,6 +401,14 @@ export async function marketRows(opts = {}) {
 
       if (validation.totalCount >= 500 && date && date <= today) {
         const isLiveSession = date === today && sess === "open";
+        let fTime = null;
+        for (const raw of [...(t?.data || []), ...(o?.data || [])]) {
+          const u = Number(raw?.lastUpdated);
+          if (u > 0) {
+            const tm = new Date(Math.floor(u / 1000) + 8 * 3600e3).toISOString().slice(11, 19);
+            if (!fTime || tm > fTime) fTime = tm;
+          }
+        }
         const dataStatus = deriveDataStatus({
           isLiveSession,
           isToday: date === today,
@@ -394,7 +420,7 @@ export async function marketRows(opts = {}) {
           rows: validation.validRows,
           live: isLiveSession,
           date,
-          time: null,
+          time: fTime,
           source: "富果行情快照（上市、上櫃）",
           note: null,
           coverage: validation.coverage,
@@ -452,7 +478,7 @@ export async function marketRows(opts = {}) {
           coverage: validation.coverage,
           live: isLiveSession,
           date: today,
-          time: null,
+          time: rows.latestTime || null,
           source: sess === "open" ? "證交所 MIS 即時行情（上市、上櫃）" : "證交所 MIS（今天收盤）",
           note: null,
           dataStatus,
