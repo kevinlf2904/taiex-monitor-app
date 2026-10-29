@@ -3744,7 +3744,7 @@ function indCard(t, fav) {
   const a = indAvg(t), n = indCodes(t).length, col = indCol(t);
   return `<article class="itheme" style="--ic:${col}"><div class="ith"><span class="iic">${indIcon(t)}</span><span class="itag">${MK_TAG[t.mk]}</span>
     <span class="iavg ${a ? cls(a.pct) : ""}" title="${a ? `${a.n} 檔的平均漲跌` : "沒有即時報價"}">${a ? `${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%` : "—"}</span>
-    <button class="ifav" data-ifav="${t.id}" aria-pressed="${fav.has(t.id)}" aria-label="收藏 ${esc(t.name)}">${fav.has(t.id) ? "♥" : "♡"}</button><span class="icnt">${n} 家公司</span></div>
+    <button class="ifav" data-ifav="${t.id}" aria-pressed="${fav.has(t.id)}" aria-label="收藏 ${esc(t.name)}" title="收藏 ${esc(t.name)}">${fav.has(t.id) ? "♥" : "♡"}</button><span class="icnt">${n} 家公司</span></div>
     <h3>${esc(t.cat)}<span>｜</span>${esc(t.name)}</h3><p>${esc(t.desc)}</p><button class="igo" data-iopen="${t.id}">探索供應鏈地圖 →</button></article>`;
 }
 // 題材總覽：依產業類別聚成幾座「群島」，圓環每一段是一個題材（顏色＝今日平均漲跌）
@@ -4103,7 +4103,7 @@ function renderInd0() {
   if (T) { // 題材內頁
     const a = indAvg(T);
     h += menu + `<div class="ihead" style="--ic:${indCol(T)}"><button class="btn sm" data-iopen="">‹ 返回</button><span class="iic">${indIcon(T)}</span><div><small>${esc(T.cat)}・${MK_TAG[T.mk]}</small><h2>${esc(T.name)}</h2></div>
-      ${scBtn("supply")}<button class="ifav" data-ifav="${T.id}" aria-pressed="${fav.has(T.id)}" aria-label="收藏">${fav.has(T.id) ? "♥" : "♡"}</button></div>
+      ${scBtn("supply")}<button class="ifav" data-ifav="${T.id}" aria-pressed="${fav.has(T.id)}" aria-label="收藏" title="收藏">${fav.has(T.id) ? "♥" : "♡"}</button></div>
       <p class="idesc">${esc(T.desc)}</p>${a ? `<p class="note gnote">今天平均 <b class="${cls(a.pct)}">${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%</b>（${a.n} 檔有報價）</p>` : ""}
       ${(F => F ? `<section class="iflow ifig"><h4>原理圖解${figItems(T).length ? "" : ` <button class="ilink" data-izoom="${T.id}">⤢ 放大</button>`}</h4><div class="izbtn figi">${figSvg(F.fig, { id: "d-" + T.id })}</div>${figCtl(T)}${F.fig.alt ? `<p class="note figalt">${esc(F.fig.alt)}</p>` : ""}</section>
         <section class="iseg ihow"><h4>原理說明 <span class="note">虛線底的名詞可以點，看解釋</span></h4>${figHowHtml(F, T)}</section>
