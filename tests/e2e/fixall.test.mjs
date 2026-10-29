@@ -50,6 +50,24 @@ test("自選清單：報價全部拿不到時說原因、可以重試 390", asyn
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+test("自選清單：報價先成功、後來一直失敗時，舊價格上方註明暫停更新與時間 390", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.clock.setFixedTime(new Date("2026-10-05T10:00:00+08:00")); // 測試報價的日期，盤中
+  await p.evaluate(async () => { clearTimeout(W.timer); Object.assign(TWHOL, { set: null, year: "", mark: null, failAt: Date.now() }); twHolSet([{ date: "2026-01-01", name: "開國紀念日" }]); setLt("watch"); W.busy = 0; await tick(); clearTimeout(W.timer); });
+  assert.equal(await p.evaluate(() => !!document.querySelector("#wl .wl-stale")), false, "剛更新成功：不提示");
+  const bad = r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: false, error: "證交所暫時連不到" }) });
+  await ctx.route("**/api/quote**", bad);
+  await p.clock.setFixedTime(new Date("2026-10-05T10:00:20+08:00"));
+  // 固定時鐘後 performance.now() 停在頁面剛載入（不到 800ms），Chart.busy() 會一直當成「剛觸碰過圖表」而不重畫：這個測試沒有碰圖表，直接當成沒在拖曳
+  await p.evaluate(async () => { Chart.busy = () => false; W.busy = 0; await tick(); clearTimeout(W.timer); });
+  await p.waitForSelector("#wl .wl-stale");
+  assert.match(await p.textContent("#wl .wl-stale"), /報價暫停更新（[^）]*證交所暫時連不到[^）]*），價格停在 10:00:0\d[\s\S]*重試/);
+  assert.equal(await p.evaluate(() => !!document.querySelector("#wl .wl-err")), false, "還有價格：不是「全部拿不到」");
+  await ctx.unroute("**/api/quote**", bad);
+  await p.click("#wl .wl-stale [data-wlretry]"); await p.waitForFunction(() => !document.querySelector("#wl .wl-stale"), null, { timeout: 15000 });
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 for (const width of [390, 1280]) test(`技術指標：一鍵組合、其餘收在「更多」 ${width}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await p.evaluate(() => { store.set("ind:watch2", ["ma5", "ma20", "ma60", "vol", "kd"]); store.set("ind:watch2:more", false); setLt("watch"); select("2330"); });
