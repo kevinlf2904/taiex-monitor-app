@@ -1,7 +1,7 @@
 // 雲端同步與 Telegram API 深度測試 (Phase 3 P1/P2: 授權、頻率限制、暴力破解防護、過期資料與機密安全)
 import test from "node:test";
 import assert from "node:assert/strict";
-import handler, { tg, hashId, bindTok, okId, ipOf, sanitizeTelegramError, redactTelegramSecrets } from "../api/_lib/sync.js";
+import handler, { tg, hashId, bindTok, okId, ipOf, sanitizeTelegramError, redactTelegramSecrets, incrTtl } from "../api/_lib/sync.js";
 
 // 建立模擬的 HTTP Request 與 Response 物件
 function mockHttp({ method = "POST", body = {}, query = {}, headers = {} } = {}) {
@@ -406,5 +406,21 @@ test("多裝置同步不互相蓋掉（稽核 F-06）：雲端比 base 新就回
     const c = await push({ base: 1, force: true }); assert.equal(c.data.ok, true, "force：使用者確認後覆蓋");
     store.set(key, JSON.stringify({ at: Date.now() + 1e6, dev: "iPhone", data: {} }));
     const d = await push({}); assert.equal(d.data.ok, true, "舊版網頁沒帶 base：照舊直接覆蓋（相容）");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("計數器的過期時間（稽核 F-11）：第一次 EXPIRE 失敗，之後會補上，不會變成永久封鎖", async () => {
+  process.env.KV_REST_API_URL = "https://mock-kv.upstash.io";
+  process.env.KV_REST_API_TOKEN = "mock_token";
+  const originalFetch = globalThis.fetch; let n = 0, ttl = -1, expireCalls = 0;
+  globalThis.fetch = async (url, opts) => { const [op] = JSON.parse(opts.body); const R = result => ({ ok: true, json: async () => ({ result }) });
+    if (op === "INCR") return R(++n); if (op === "TTL") return R(ttl);
+    if (op === "EXPIRE") { expireCalls++; if (expireCalls === 1) return { ok: false, status: 500, json: async () => ({ error: "暫時失敗" }) }; ttl = 3600; return R(1); } return R(1); };
+  try {
+    await assert.rejects(incrTtl("wl:ip:x", 3600), "第一次 EXPIRE 失敗會丟錯（呼叫的地方照舊處理）");
+    for (let i = 2; i <= 20; i++) await incrTtl("wl:ip:x", 3600);
+    assert.equal(ttl, 3600, "第 20 次檢查到沒有過期時間，補上");
+    const before = expireCalls; for (let i = 21; i <= 40; i++) await incrTtl("wl:ip:x", 3600);
+    assert.equal(expireCalls, before, "已經有過期時間就不再重設");
   } finally { globalThis.fetch = originalFetch; }
 });
