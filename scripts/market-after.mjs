@@ -54,7 +54,8 @@ export function buildRanks({ quotes, inst = new Map(), margin = new Map(), qfiis
   const base = [...quotes].map(([c, q]) => {
     const i = inst.get(c), g = margin.get(c), sh = shares.get(c)?.shares, fr = qfiis.get(c);
     const x = { c, n: q.name, m: q.market === "上櫃" ? "櫃" : "市", p: q.p, pct: q.pct, v: q.v };
-    if (i) { x.f = i[0]; x.t = i[1]; x.d = i[2]; x.a = i[0] + i[1] + i[2]; x.aAmt = yi(x.a * 1000 * q.p); x.fAmt = yi(i[0] * 1000 * q.p); x.tAmt = yi(i[1] * 1000 * q.p); x.dAmt = yi(i[2] * 1000 * q.p); }
+    // 法人欄位缺值（parseInst 回 null）就不放這個欄位，排行會自動略過；不把缺值加成 0 張
+    if (i) { const amt = v => (v == null ? null : yi(v * 1000 * q.p)); x.f = i[0]; x.t = i[1]; x.d = i[2]; x.a = i.every(v => v == null) ? null : i.reduce((s, v) => s + (v ?? 0), 0); x.aAmt = amt(x.a); x.fAmt = amt(i[0]); x.tAmt = amt(i[1]); x.dAmt = amt(i[2]); }
     if (g) { x.mb = g.m; x.mc = g.mChg; x.sb = g.s; x.sc = g.sChg; if (g.m >= 1000 && g.s != null) x.sr = +(g.s / g.m * 100).toFixed(2); }
     if (sh) x.cap = yi(sh * q.p);
     if (fr != null) { x.fr = fr; if (prevFr[c] != null) x.frc = +(fr - prevFr[c]).toFixed(2); }

@@ -2243,3 +2243,50 @@ test("美股大盤：權值股、類股 ETF 附盤後價（正規收盤另列）
     assert.match(urls.at(-1), /includePrePost=false/); assert.equal(sox.ext, undefined, "指數沒有盤後交易");
   } finally { globalThis.fetch = realFetch; }
 });
+
+test("P1-02 daily.js：缺值（null、空字串、--、非數字）不轉成 0，真正的 0 保留；下游金額與排行略過缺值", async () => {
+  const D = await import("../api/_lib/daily.js");
+  for (const v of [null, undefined, "", "--", "abc", " "]) assert.equal(D.lots(v), null, JSON.stringify(v));
+  assert.equal(D.lots("0"), 0); assert.equal(D.lots(0), 0); assert.equal(D.lots("1,234,000"), 1234); assert.equal(D.lots("-5,000"), -5);
+  // 法人：真正 0、缺值、部分缺值
+  const inst = D.parseInst({ fields: ["證券代號", "證券名稱", "外陸資買賣超股數(不含外資自營商)", "投信買賣超股數", "自營商買賣超股數"], data: [["2330", "台積電", "0", "0", "0"], ["2317", "鴻海", "--", "", "3,000"], ["2454", "聯發科", "12,000", "--", "-1,000"]] });
+  assert.deepEqual(inst.get("2330"), [0, 0, 0], "真正的 0 保留");
+  assert.deepEqual(inst.get("2317"), [null, null, 3]);
+  assert.deepEqual(inst.get("2454"), [12, null, -1]);
+  // 收盤：成交股數缺值、漲跌缺值、平盤 0
+  const q = D.parseQuotes({ fields: ["證券代號", "證券名稱", "成交股數", "收盤價", "漲跌(+/-)", "漲跌價差"], data: [["2330", "台積電", "0", "1000", " ", "0.00"], ["2317", "鴻海", "--", "200", "+", "2.00"], ["2454", "聯發科", "", "1500", "", "--"], ["1101", "台泥", "5,000", "--", "", "--"]] });
+  assert.deepEqual([q.get("2330").v, q.get("2330").pct], [0, 0], "成交量真正 0、平盤 0%");
+  assert.deepEqual([q.get("2317").v, q.get("2317").pct], [null, 1.01], "成交量缺值是 null");
+  assert.deepEqual([q.get("2454").v, q.get("2454").pct], [null, null], "漲跌缺值不寫成 0%");
+  assert.equal(q.has("1101"), false, "沒有收盤價的不列");
+  // 合併：法人資料裡沒有的股票是 null，不是 0 張
+  const rows = D.mergeDay(q, new Map([["2330", [0, 0, 0]]]));
+  assert.deepEqual(rows.find(r => r[0] === "2330").slice(4), [0, 0, 0, 0]);
+  assert.deepEqual(rows.find(r => r[0] === "2317").slice(4), [null, null, null, null]);
+  // 整份法人缺失：全部 null
+  assert.ok(D.mergeDay(q, new Map()).every(r => r[4] === null && r[5] === null && r[6] === null));
+  // 排程排行：缺值的欄位不放、不排進法人排行；真正 0 張照算
+  const { buildRanks } = await import("../scripts/market-after.mjs");
+  const quotes = new Map([["2330", { name: "台積電", p: 1000, pct: 1, v: 100, market: "上市" }], ["2317", { name: "鴻海", p: 200, pct: 1, v: null, market: "上市" }], ["2454", { name: "聯發科", p: 1500, pct: -1, v: 50, market: "上市" }]]);
+  const R = buildRanks({ quotes, inst: new Map([["2330", [5, 0, 0]], ["2317", [null, null, null]], ["2454", [12, null, -1]]]) });
+  const T0 = Object.fromEntries(R.flatMap(r => r.tabs).map(t => [t.id, t.rows])), tabs = new Proxy(T0, { get: (o, k) => o[k] || [] }); // 沒有資料的分頁不會輸出
+  assert.deepEqual(tabs.fb.map(x => x.c), ["2454", "2330"], "外資買超只列有資料的");
+  assert.ok(!tabs.ab.some(x => x.c === "2317") && !tabs.as.some(x => x.c === "2317"), "法人全缺的股票不當成 0 張出現");
+  assert.equal(tabs.ab.find(x => x.c === "2454").a, 11, "部分缺值：只加有的（12 + −1）");
+});
+
+test("P1-02 flows.js：法人缺值的股票金額是 null，板塊加總只算有資料的，畫面顯示 —", async () => {
+  const vm = await import("node:vm"), fs = await import("node:fs");
+  const c = { Math, Array, Map, Set, Object, Number, JSON, Infinity }; vm.createContext(c);
+  vm.runInContext(fs.readFileSync(new URL("../learner/flows.js", import.meta.url), "utf8"), c);
+  const g = n => vm.runInContext(n, c);
+  const days = [{ date: "2026-10-28", rows: [["2330", "台積電", 1000, 1, 10, 0, 0, 100], ["2317", "鴻海", 200, 2, null, null, null, null], ["2454", "聯發科", 1500, -1, 0, 0, 0, 0]] }];
+  const M = g("flowModel")(days, [{ id: "x", name: "測試", kind: "題材", codes: ["2330", "2317", "2454"] }]);
+  assert.equal(M.stocks.get("2317").amt[0], null, "缺值不是 0 億");
+  assert.equal(M.stocks.get("2317").v[0], null);
+  assert.equal(M.stocks.get("2454").amt[0], 0, "真正的 0 張是 0");
+  assert.equal(M.secs[0].net[0], 10 * 1000 / 1e5, "板塊只加有資料的");
+  const S = g("flowStocks")(M); assert.equal(S.find(x => x.code === "2317").mult, null);
+  assert.equal(g("flowFmt")(null), "—"); assert.equal(g("flowFmt")(NaN), "—"); assert.equal(g("flowFmt")(0), "+0.0億");
+  assert.ok(Number.isFinite(g("flowMood")(M).net), "情緒的淨買超不會變 NaN");
+});
