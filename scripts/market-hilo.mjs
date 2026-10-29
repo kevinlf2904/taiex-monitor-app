@@ -17,7 +17,8 @@ export async function main({ fetchDay = closeToday, now = Date.now(), gap = 2500
     const t = now - k * 864e5, d = ymd(t), wd = new Date(t + 8 * 3600e3).getUTCDay(); if (wd % 6 === 0) continue;
     let m = null;
     if (cache.has(d) && k > 1) m = cache.get(d); // 舊的日子不會再變，沿用；今天、昨天重抓
-    else { try { const x = await fetchDay(d); if (x.size > 500) m = Object.fromEntries([...x].map(([c, q]) => [c, q.p])); } catch (e) { console.log(d, e.message); } await sleep(gap); }
+    else { try { const x = await fetchDay(d); if (x.size > 500) m = Object.fromEntries([...x].map(([c, q]) => [c, q.p])); } catch (e) { console.log(d, e.message); } await sleep(gap);
+      if (!m && cache.has(d)) m = cache.get(d); } // 今天、昨天重抓失敗：沿用上次存的，不讓那天從序列裡消失
     if (m && Object.keys(m).length > 500) { days.push(d); maps.push(m); console.log(d, Object.keys(m).length); }
   }
   if (days.length < 6) throw new Error(`只拿到 ${days.length} 天，資料不夠`);
