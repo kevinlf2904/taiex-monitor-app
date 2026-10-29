@@ -1,7 +1,7 @@
 <!-- 交接用：開 PR 的 AI 照這個格式寫；Antigravity 驗證、ChatGPT 稽核都從這裡看。規則見 AGENTS.md。 -->
 
 ## 誰做的
-<!-- Claude Code／Gemini／Antigravity；分支 claude/…、gemini/… -->
+<!-- Claude Code／Codex／Antigravity；分支 claude/…、codex/…、gemini/…；有 Issue 寫 Closes #N -->
 
 ## 改了什麼
 <!-- 每個檔案改了什麼、為什麼改 -->
