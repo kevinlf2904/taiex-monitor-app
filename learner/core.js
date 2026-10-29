@@ -304,6 +304,25 @@ function isQuoteStale(incoming, existing) {
   return false;
 }
 
+/* ---------- 共同資料狀態契約 ----------
+   各模組原本的狀態詞（core 的 live／confirmed／delayed／pending、brief 的 official／verified／unverified／partial／stale、
+   伺服器 _live.js 的 degraded）保留給畫面文字，底層都對應到同一組 state，優先順序固定（越前面越嚴重，合併時取最嚴重的）：
+     unavailable 沒有資料 > unverified 證據不足（日期不一致、格式錯、未驗證）> stale 交易日期過舊 > partial 部分資料
+     > delayed 延遲（來源時間落後、抓取失敗）> pending 待確認（盤前、盤後待公布）> confirmed 收盤確認 > live 盤中即時
+   完整度（completeness）、新鮮度（state）、來源權威性（authority）是三件事，不互相代替；不認得的狀態當成 unverified，不當成正常 */
+const DATA_STATES = ["unavailable", "unverified", "stale", "partial", "delayed", "pending", "confirmed", "live"];
+const DATA_STATE_OF = { live: "live", confirmed: "confirmed", official: "confirmed", verified: "confirmed", holiday: "confirmed", pending: "pending", preview: "pending", delayed: "delayed", partial: "partial", stale: "stale",
+  unverified: "unverified", degraded: "unverified", corrupted: "unverified", date_mismatch: "unverified", insufficient: "unverified", missing: "unavailable", unavailable: "unavailable" };
+function canonDataState(s) { return DATA_STATES.includes(s) ? s : DATA_STATE_OF[s] || "unverified"; }
+function worseState(...xs) { return xs.filter(x => x != null).map(canonDataState).sort((a, b) => DATA_STATES.indexOf(a) - DATA_STATES.indexOf(b))[0] || "unavailable"; }
+// 來源權威性：證交所、櫃買、期交所（含 MIS）是官方；Yahoo、Google、鉅亨、FinMind、富果是第三方；其他未知（不能宣稱已驗證）
+function sourceAuthority(src) {
+  const s = String(src || "").toLowerCase();
+  if (/twse|tpex|mis|taifex|證交所|櫃買|期交所/.test(s)) return "official";
+  if (/yahoo|google|cnyes|鉅亨|finmind|fugle|富果|finnhub/.test(s)) return "third_party";
+  return "unknown";
+}
+
 /* ---------- 市場資料更新狀態統一判定與標示 (Phase B) ----------
    四種主要狀態：盤中即時 (live)、盤後待確認 (pending)、收盤確認 (confirmed)、資料延遲 (delayed)；未實作為 unavailable
    結合資料來源、資料時間、交易日期、資料完整性、來源回應結果及適用的交易時段判斷 */
@@ -474,6 +493,8 @@ function evalDataStatus(opts = {}) {
       updateMode: inferredMode,
       updateModeText: modeMap[inferredMode] || inferredMode,
       dataStatus: r.status,
+      state: canonDataState(r.status),
+      authority: sourceAuthority(r.source ?? source),
       isFallback: Boolean(opts.isFallback),
       ttl: effectiveTtl,
     };
@@ -904,6 +925,9 @@ function getHotNoteText(H) {
 if (typeof globalThis !== "undefined") {
   globalThis.evalDataStatus = evalDataStatus;
   globalThis.twSourceFresh = twSourceFresh;
+  globalThis.canonDataState = canonDataState;
+  globalThis.worseState = worseState;
+  globalThis.sourceAuthority = sourceAuthority;
   globalThis.mktStatusTag = mktStatusTag;
   globalThis.mktDataInfoHtml = mktDataInfoHtml;
   globalThis.quoteTimestamp = quoteTimestamp;
