@@ -18,17 +18,23 @@ export function diff(prev, cur, d) {
 }
 export function update(old, code, data, now = new Date()) {
   const rows = data.hold.rows.map(r => [r.code, r.name, r.pct, r.sh]), date = data.hold.date || now.toISOString().slice(0, 10);
+  if (shrunk(old?.rows, rows)) return null; // 這次的持股比上次少一半以上，多半是來源只回了一部分：不比對（不然會記一堆假的「剔除」），保留上次的
   if (old && old.date === date) return { ...old, name: data.info?.name || old.name }; // 同一天的資料，不重複比對
   const ev = old?.rows?.length ? diff(old.rows, rows, date) : [], cut = new Date(now.getTime() - 400 * 864e5).toISOString().slice(0, 10);
   return { code, name: data.info?.name || old?.name || code, date, rows, prev: old?.rows?.length ? { date: old.date, rows: old.rows } : old?.prev || null, ev: [...ev, ...(old?.ev || [])].filter(e => e.d >= cut).slice(0, 300), since: old?.since || date };
 }
+// 持股數比上次少一半以上（上次至少 10 檔）＝這次多半不完整
+export const shrunk = (prev, rows) => (prev?.length || 0) >= 10 && rows.length < prev.length / 2;
 export async function main() {
   const html = await readFile(WATCH, "utf8"), cats = html.slice(html.indexOf("const ETF_CATS"), html.indexOf("];", html.indexOf("const ETF_CATS")));
-  const tw = [...new Set([...cats.matchAll(/\["(00\d{2,4}[A-Z]?)", "/g)].map(m => m[1]))], codes = [...tw, ...US], index = { updated: new Date().toISOString(), codes: {} };
+  const tw = [...new Set([...cats.matchAll(/\["(00\d{2,4}[A-Z]?)", "/g)].map(m => m[1]))], codes = [...tw, ...US], oldIndex = await readFile(DIR + "index.json", "utf8").then(JSON.parse).catch(() => null);
+  // 從上一次的索引開始，這次抓到的才覆蓋：抓失敗的 ETF 不會從索引消失
+  const index = { updated: new Date().toISOString(), codes: Object.fromEntries(Object.entries(oldIndex?.codes || {}).filter(([c]) => codes.includes(c))) };
   await mkdir(DIR, { recursive: true }); let ok = 0, fail = [];
   for (const c of codes) {
     try { const data = await etfData(c, 20000); if (!data.ok || !data.hold?.rows?.length) { fail.push(c); continue; }
       const f = DIR + c + ".json", old = await readFile(f, "utf8").then(JSON.parse).catch(() => null), nu = update(old, c, data);
+      if (!nu) { fail.push(`${c}(持股比上次少一半以上，保留上次)`); continue; }
       await writeFile(f, JSON.stringify(nu)); index.codes[c] = { name: nu.name, date: nu.date, n: nu.rows.length, ev: nu.ev.length }; ok++;
       if (nu.ev.length && nu.ev[0].d === nu.date && old?.date !== nu.date) console.log(c, nu.name, "變動：", nu.ev.filter(e => e.d === nu.date).map(e => (e.t === "in" ? "+" : "-") + e.name).join(" "));
     } catch (e) { fail.push(`${c}(${e.message})`); }
