@@ -1534,15 +1534,16 @@ const irtThemes = () => W.irtThemes || (W.irtThemes = [...irtSegs().reduce((m, g
 async function loadIndRt(force = false) {
   if (W.off || W.irtBusy || (!force && W.irt && Date.now() - W.irt.at < 9000)) return;
   W.irtBusy = 1; await loadTic(); if (!irtSegs().length) { W.irtBusy = 0; return; }
-  try { const j = await getJ(`/api/hot?market=tw&type=rows&codes=all`, true); W.irt = { at: Date.now(), fetchedAt: j.at ?? null, live: j.live, date: j.date, time: j.time ?? null, srcKind: "market", source: j.source, q: new Map(j.rows.map(([c, p, pct, v]) => [c, { p, pct, v: v || 0 }])) }; }
+  try { const j = await getJ(`/api/hot?market=tw&type=rows&codes=all`, true); W.irt = { at: Date.now(), fetchedAt: j.at ?? null, live: j.live, date: j.date, time: j.time ?? null, srcKind: "market", source: j.source, q: new Map(j.rows.map(([c, p, pct, v]) => [c, { p, pct, v: v ?? null }])) }; }
   catch (e) { W.irt = { at: Date.now(), err: e.message, q: W.irt?.q || new Map() }; } finally { W.irtBusy = 0; }
   if (W.lt === "mkt" && W.mkReg !== "us" && !W.mktLoading) renderList();
 }
 function irtModel(level = "seg") {
   const Q = W.irt?.q; if (!Q?.size) return [];
   return (level === "theme" ? irtThemes() : irtSegs()).map(g => { const M = g.codes.map(c => ({ c, nm: g.names[c] || nameOf(c), ...Q.get(c) })).filter(x => x.pct != null); if (!M.length) return null;
-    const val = M.reduce((a, x) => a + x.v, 0), pct = val > 0 ? M.reduce((a, x) => a + x.pct * x.v, 0) / val : M.reduce((a, x) => a + x.pct, 0) / M.length, lead = M.slice().sort((a, b) => b.pct - a.pct)[0], lag = M.slice().sort((a, b) => a.pct - b.pct)[0];
-    return { ...g, n: M.length, up: M.filter(x => x.pct > 0).length, pct, val, flow: M.reduce((a, x) => a + (x.pct > 0 ? x.v : x.pct < 0 ? -x.v : 0), 0), lead, lag }; }).filter(Boolean);
+    // 成交金額缺值（null）的股票不加進權重，也不當成 0 億
+    const val = M.reduce((a, x) => a + (x.v ?? 0), 0), pct = val > 0 ? M.reduce((a, x) => a + x.pct * (x.v ?? 0), 0) / val : M.reduce((a, x) => a + x.pct, 0) / M.length, lead = M.slice().sort((a, b) => b.pct - a.pct)[0], lag = M.slice().sort((a, b) => a.pct - b.pct)[0];
+    return { ...g, n: M.length, up: M.filter(x => x.pct > 0).length, pct, val, flow: M.reduce((a, x) => a + (x.v == null ? 0 : x.pct > 0 ? x.v : x.pct < 0 ? -x.v : 0), 0), lead, lag }; }).filter(Boolean);
 }
 // 產業即時：橫向長條圖（漲紅往右、跌綠往左，以 0 為中線）；可切排序、細分產業／題材，預設只看前 12，展開看全部
 function irtHtml(sec) {
@@ -2667,14 +2668,14 @@ async function loadMoney(need = 10, force = false) {
 }
 const mfModel = () => { const F = W.mf; if (!F.model && F.days.length) F.model = flowModel(F.days, flowSectors(F.ind)); return F.model; };
 const qDot = q => `<i class="qdot" style="background:${FLOW_Q[q][2]}"></i>`;
-const yiB = v => `<b class="${cls(v)}">${flowFmt(v)}</b>`;
-const pctB = v => `<b class="${cls(v)}">${v >= 0 ? "+" : ""}${v.toFixed(1)}%</b>`;
+const yiB = v => `<b class="${cls(v)}">${flowFmt(v)}</b>`; // 沒有資料（法人缺值）顯示 —
+const pctB = v => (v == null ? `<b>—</b>` : `<b class="${cls(v)}">${v >= 0 ? "+" : ""}${v.toFixed(1)}%</b>`);
 // 點板塊（題材或產業別）：在資金分頁裡打開板塊內頁，列出成分股的法人資金
 function secOpen(id) { const F = W.mf; if (F.view !== "sector") F.back = F.view; F.view = "sector"; F.sec = id; F.secSort ||= "a5"; renderMoney(); goY(0); navPush(); }
 // 板塊成分股清單（板塊頁、動能矩陣點圓點後都用這個）：k＝排序（a5 近 5 日金額、a1 今日金額、pct1 漲跌幅），n＝最多幾檔
 function secMembers(M, S, k = "a5", n = 0) {
-  const t = M.T - 1, rows = S.mem.map(s => ({ code: s.code, name: s.name, pct1: s.pct[t] ?? 0, px: s.px[t], a1: s.amt[t] || 0, a5: winSum(s.amt, t, 5), f5: winSum(s.f, t, 5), tr5: winSum(s.tr, t, 5) }))
-    .sort((a, b) => (k === "pct1" ? b.pct1 - a.pct1 : k === "a1" ? b.a1 - a.a1 : b.a5 - a.a5));
+  const t = M.T - 1, rows = S.mem.map(s => ({ code: s.code, name: s.name, pct1: s.pct[t] ?? null, px: s.px[t], a1: s.amt[t] ?? null, a5: winSum(s.amt, t, 5), f5: winSum(s.f, t, 5), tr5: winSum(s.tr, t, 5) }))
+    .sort((a, b) => { const v = x => (k === "pct1" ? x.pct1 : k === "a1" ? x.a1 : x.a5) ?? -Infinity; return v(b) - v(a) || 0; }); // 缺值排最後
   return `<ol class="mlist">${(n ? rows.slice(0, n) : rows).map((x, i) => `<li><button data-sel="${x.code}"><span class="rk">${i + 1}</span><span></span><span class="nm">${esc(x.name)}<small>${x.code}・收 ${x.px ?? "—"}・外資 ${flowFmt(x.f5)}・投信 ${flowFmt(x.tr5)}</small></span>${pctB(x.pct1)}${yiB(k === "a1" ? x.a1 : x.a5)}</button>${wStar(x.code)}</li>`).join("")}</ol>`;
 }
 function renderSector(M) {
