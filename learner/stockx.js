@@ -65,7 +65,7 @@ function sxSignals() {
   if (m20[n] != null && m20[n - 5] != null) add("均線方向", m20[n] > m20[n - 5] ? 1 : -1, `20 日均線${m20[n] > m20[n - 5] ? "上揚" : "下彎"}`);
   const K = ind.kd.K[n], Dk = ind.kd.D[n]; if (K != null) add("KD", K > Dk ? 1 : -1, `K ${K.toFixed(0)} ${K > Dk ? ">" : "<"} D ${Dk.toFixed(0)}${K > 80 ? "（高檔）" : K < 20 ? "（低檔）" : ""}`);
   const osc = ind.macd.osc[n]; if (osc != null) add("MACD", osc > 0 ? 1 : -1, `柱狀體${osc > 0 ? "翻紅" : "翻綠"}（${osc.toFixed(2)}）`);
-  const vm = ind.vma[n], ch = c - D[n - 1].c; if (vm) add("量價", D[n].v > vm * 1.2 ? (ch >= 0 ? 1 : -1) : 0, `成交量 ${D[n].v > vm * 1.2 ? "放大" : "一般"}（20 日均量 ${sxN(vm)}），${ch >= 0 ? "收漲" : "收跌"}`);
+  const vm = ind.vma[n], ch = c - D[n - 1].c; if (vm && !D[n].vNa) add("量價", D[n].v > vm * 1.2 ? (ch >= 0 ? 1 : -1) : 0, `成交量 ${D[n].v > vm * 1.2 ? "放大" : "一般"}（20 日均量 ${sxN(vm)}），${ch >= 0 ? "收漲" : "收跌"}`);
   if (I?.inst?.length) { const s = sxSum(I.inst, "foreign", 5) + sxSum(I.inst, "trust", 5) + sxSum(I.inst, "dealer", 5); add("法人 5 日", s > 0 ? 1 : s < 0 ? -1 : 0, `三大法人 5 日合計 ${signed(s)} 張`); }
   if (I?.margin?.length > 5) { const M = I.margin, d = M.at(-1).marginBal - M.at(-6).marginBal, p = c - D[Math.max(0, n - 5)].c; add("融資", d > 0 && p < 0 ? -1 : d < 0 && p > 0 ? 1 : 0, `融資 5 日 ${signed(d)} 張${d > 0 && p < 0 ? "，股價跌融資增（籌碼凌亂）" : d < 0 && p > 0 ? "，股價漲融資減（籌碼安定）" : ""}`); }
   const score = Math.round((out.reduce((s, x) => s + x.v, 0) / (out.length || 1)) * 100);

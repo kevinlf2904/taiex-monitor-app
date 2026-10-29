@@ -81,6 +81,26 @@ test("價格行為策略：不偷看未來、符合定義", () => {
 });
 
 // 每一種技術線型策略都跑一次回測：訊號位置合法、不偷看未來、停損有效、加上手續費不會變好、報酬是有限數字
+test("缺成交量（vNa）：API 標記、均量跳過、週 K 整根標記、判讀不寫量縮", async () => {
+  const K = await import("../api/_lib/kline.js");
+  const sd = K.parseTwseStockDay({ stat: "OK", fields: ["日期", "成交股數", "開盤價", "最高價", "最低價", "收盤價"], data: [["115/10/05", "1,000,000", "10", "11", "9", "10"], ["115/10/06", "--", "10", "11", "9", "10"]], title: "115年10月 2330 台積電" });
+  assert.deepEqual(sd.rows.map(r => [r.v, !!r.vNa]), [[1000, false], [0, true]], "證交所成交股數是 -- 時標 vNa");
+  const y = K.parseYahoo({ chart: { result: [{ meta: { gmtoffset: 28800 }, timestamp: [1790000000, 1790086400], indicators: { quote: [{ open: [1, 1], high: [2, 2], low: [0.5, 0.5], close: [1.5, 1.5], volume: [5000, null] }] } }] } });
+  assert.deepEqual(y.rows.map(r => !!r.vNa), [false, true], "Yahoo volume 是 null 時標 vNa");
+  const amt = K.parseFmtqik({ stat: "OK", fields: ["日期", "成交金額"], data: [["115/10/05", "300,000,000,000"]] });
+  const ix = [{ d: "2026-10-05", v: 0, vNa: 1 }, { d: "2026-10-06", v: 0, vNa: 1 }]; ix.forEach(r => K.fillVol(r, amt));
+  assert.deepEqual(ix.map(r => [r.v, !!r.vNa]), [[3000, false], [0, true]], "加權指數：FMTQIK 還沒有的日子（例如今天收盤後）標 vNa，不是 0");
+  const E = engine(), D = series(7, 80);
+  assert.deepEqual(JSON.stringify(E.smaVol(D, 20)), JSON.stringify(E.indicators(D).vma), "全部有量時 vma 和原本 sma 一樣");
+  const plain = E.indicators(D).vma, M = D.map((x, i) => (i === 79 ? { ...x, v: 0, vNa: 1 } : x)), vm = E.indicators(M).vma;
+  assert.equal(vm[78], plain[78], "缺量之前的均量不變");
+  const ok = M.slice(60, 79).map(x => x.v); assert.ok(Math.abs(vm[79] - ok.reduce((s, v) => s + v, 0) / ok.length) < 1e-9, "最後一根沒有量：均量只用其他 19 天");
+  assert.ok(vm[79] > plain[79] * 0.9, `均量沒有被缺量拉低（${vm[79]} vs ${plain[79]}）`);
+  const half = D.map((x, i) => ((i >= 60 && i % 2) || i === 78 ? { ...x, v: 0, vNa: 1 } : x)); assert.equal(E.indicators(half).vma[79], null, "視窗內有量的不到一半就不算均量");
+  const W = E.agg(M, E.weekKey); assert.ok(W.at(-1).vNa, "那週有一天沒有量，週 K 整根標 vNa"); assert.ok(!W[0].vNa);
+  const ta = E.trendAnalysis(M, E.indicators(M)); assert.ok(!ta.some(x => x.k === "量能"), "最後一根沒有量：不寫「0.0 倍（量縮）」");
+  assert.ok(E.trendAnalysis(D, E.indicators(D)).some(x => x.k === "量能"), "有量時照常寫量能");
+});
 test("所有策略回測合理性", () => {
   const E = engine(), ids = Object.keys(E.STRAT_DEFS); let n = 0;
   assert.ok(ids.length > 20);

@@ -116,7 +116,8 @@ function marketState(D, o = {}) {
   const trend = c > ms[n] && mf[n] > ms[n] && slope > 0 ? "bull" : c < ms[n] && mf[n] < ms[n] && slope < 0 ? "bear" : "range";
   const A = atrCalc(D, 14), ap = A.map((v, i) => (v ? v / D[i].c : null)), hist = ap.slice(-250).filter(v => v != null), now = ap[n];
   const volPct = hist.length && now != null ? hist.filter(v => v <= now).length / hist.length : null, vol = volPct == null ? "mid" : volPct >= 0.8 ? "high" : volPct <= 0.2 ? "low" : "mid";
-  const V = D.map(x => x.v || 0), hasVol = V.slice(-20).some(v => v > 0), vL = qMean(V.slice(-s)), vr = hasVol && vL ? qMean(V.slice(-5)) / vL : null;
+  // 沒有量的日子（vNa）不算進量比的平均
+  const V = D.map(x => x.v || 0), Vk = D.map(x => (x.vNa ? null : x.v || 0)), okV = a => a.filter(v => v != null), hasVol = V.slice(-20).some(v => v > 0), vL = qMean(okV(Vk.slice(-s))), vr = hasVol && vL ? qMean(okV(Vk.slice(-5))) / vL : null;
   let up = 0, dn = 0, nu = 0, nd = 0; for (let i = Math.max(1, n - 19); i <= n; i++) { if (C[i] > C[i - 1]) { up += V[i]; nu++; } else if (C[i] < C[i - 1]) { dn += V[i]; nd++; } }
   const udr = hasVol && nu && nd && dn ? up / nu / (dn / nd) : null;
   let sr = []; try { sr = srLevels(D); } catch {}

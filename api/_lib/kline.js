@@ -38,12 +38,15 @@ async function getJSON(url) {
   return r.json();
 }
 
+// 成交量：來源沒給（null、"--"）時 v 記 0 並標 vNa: 1，前端的均量、量能判讀會跳過這根；不能當成真的沒有成交
+export const volOf = (n, unit = 1) => (n == null || !Number.isFinite(n) ? { v: 0, vNa: 1 } : { v: Math.round(n / unit) });
+export function fillVol(r, map) { const v = map.get(r.d); if (v == null) { r.v = 0; r.vNa = 1; } else { r.v = v; delete r.vNa; } }
 // 證交所 STOCK_DAY：fields 含 日期、成交股數、開盤價、最高價、最低價、收盤價
 export function parseTwseStockDay(j) {
   if (!j || !/ok/i.test(j.stat || "") || !Array.isArray(j.data)) return null;
   const f = j.fields || [], iD = col(f, "日期"), iV = col(f, "成交股數"), iO = col(f, "開盤"), iH = col(f, "最高"), iL = col(f, "最低"), iC = col(f, "收盤");
   const name = (String(j.title || "").match(/\d{4,6}[A-Z]?\s+(\S+)/) || [])[1] || "";
-  const rows = j.data.map((r) => ({ d: toISO(r[iD]), o: toNum(r[iO]), h: toNum(r[iH]), l: toNum(r[iL]), c: toNum(r[iC]), v: toNum(r[iV]) != null ? Math.round(toNum(r[iV]) / 1000) : 0 }))
+  const rows = j.data.map((r) => ({ d: toISO(r[iD]), o: toNum(r[iO]), h: toNum(r[iH]), l: toNum(r[iL]), c: toNum(r[iC]), ...volOf(toNum(r[iV]), 1000) }))
     .filter((r) => r.d && r.o && r.h && r.l && r.c); // 停牌日的價格是 "--"
   return { name, rows };
 }
@@ -53,7 +56,7 @@ export function parseTpex(j) {
   if (!t || !Array.isArray(t.data) || !t.data.length) return null;
   const f = t.fields || [], iD = col(f, "日期"), iV = col(f, "成交張數", "成交仟股"), iO = col(f, "開盤"), iH = col(f, "最高"), iL = col(f, "最低"), iC = col(f, "收盤");
   const name = j.name || (String(t.title || j.title || "").match(/\d{4,6}[A-Z]?\s*(\S+)/) || [])[1] || "";
-  const rows = t.data.map((r) => ({ d: toISO(r[iD]), o: toNum(r[iO]), h: toNum(r[iH]), l: toNum(r[iL]), c: toNum(r[iC]), v: toNum(r[iV]) ?? 0 }))
+  const rows = t.data.map((r) => ({ d: toISO(r[iD]), o: toNum(r[iO]), h: toNum(r[iH]), l: toNum(r[iL]), c: toNum(r[iC]), ...volOf(toNum(r[iV])) }))
     .filter((r) => r.d && r.o && r.h && r.l && r.c);
   return { name, rows };
 }
@@ -61,19 +64,19 @@ export function parseTpex(j) {
 export function parseTwseIndex(j) {
   if (!j || !/ok/i.test(j.stat || "") || !Array.isArray(j.data)) return null;
   const f = j.fields || [], iD = col(f, "日期"), iO = col(f, "開盤"), iH = col(f, "最高"), iL = col(f, "最低"), iC = col(f, "收盤");
-  return { name: "加權指數", rows: j.data.map((r) => ({ d: toISO(r[iD]), o: toNum(r[iO]), h: toNum(r[iH]), l: toNum(r[iL]), c: toNum(r[iC]), v: 0 })).filter((r) => r.d && r.c) };
+  return { name: "加權指數", rows: j.data.map((r) => ({ d: toISO(r[iD]), o: toNum(r[iO]), h: toNum(r[iH]), l: toNum(r[iL]), c: toNum(r[iC]), v: 0, vNa: 1 })).filter((r) => r.d && r.c) }; // 成交量之後用 FMTQIK 補
 }
 // FMTQIK：每日成交金額（元）→ 億元
 export function parseFmtqik(j) {
   if (!j || !/ok/i.test(j.stat || "") || !Array.isArray(j.data)) return new Map();
   const f = j.fields || [], iD = col(f, "日期"), iA = col(f, "成交金額");
-  return new Map(j.data.map((r) => [toISO(r[iD]), Math.round((toNum(r[iA]) || 0) / 1e8)]));
+  return new Map(j.data.filter((r) => toNum(r[iA]) != null).map((r) => [toISO(r[iD]), Math.round(toNum(r[iA]) / 1e8)]));
 }
 export function parseYahoo(j) {
   const r = j?.chart?.result?.[0], q = r?.indicators?.quote?.[0];
   if (!r || !q || !Array.isArray(r.timestamp)) return null;
   const tz = r.meta?.gmtoffset ?? 28800;
-  const rows = r.timestamp.map((t, k) => ({ d: new Date((t + tz) * 1000).toISOString().slice(0, 10), o: q.open[k], h: q.high[k], l: q.low[k], c: q.close[k], v: q.volume[k] != null ? Math.round(q.volume[k] / 1000) : 0 }))
+  const rows = r.timestamp.map((t, k) => ({ d: new Date((t + tz) * 1000).toISOString().slice(0, 10), o: q.open[k], h: q.high[k], l: q.low[k], c: q.close[k], ...volOf(q.volume[k], 1000) }))
     .filter((x) => x.o != null && x.h != null && x.l != null && x.c != null)
     .map((x) => ({ ...x, o: +x.o.toFixed(2), h: +x.h.toFixed(2), l: +x.l.toFixed(2), c: +x.c.toFixed(2) }));
   return { name: r.meta?.shortName || r.meta?.longName || "", rows };
@@ -108,16 +111,16 @@ async function fromTwseIndex(months, anchor) {
     if (p) rows.push(...p.rows);
     try { parseFmtqik(await getJSON(`https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=${ymd(m)}&response=json`)).forEach((v, d) => vol.set(d, v)); } catch {}
   }
-  rows.forEach((r) => { r.v = vol.get(r.d) || 0; });
+  rows.forEach((r) => fillVol(r, vol));
   return rows.length ? { name: "加權指數", rows, market: "指數", source: "證交所", unit: "億元" } : null;
 }
-// 加權指數從 Yahoo 拿到時，成交量換成證交所 FMTQIK 的成交金額（億元），和證交所來源的單位一致；拿不到的月份成交量記 0，不混用千股
+// 加權指數從 Yahoo 拿到時，成交量換成證交所 FMTQIK 的成交金額（億元），和證交所來源的單位一致；拿不到的日子標成沒有量（vNa），不混用千股
 async function fillTaiexAmount(r) {
   const months = [...new Set(r.rows.map(x => x.d.slice(0, 7)))], vol = new Map();
   for (let k = 0; k < months.length; k += 4) await Promise.all(months.slice(k, k + 4).map(async m => {
     try { parseFmtqik(await getJSON(`https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date=${m.replace("-", "")}01&response=json`)).forEach((v, d) => vol.set(d, v)); } catch {}
   }));
-  r.rows.forEach(x => { x.v = vol.get(x.d) || 0; });
+  r.rows.forEach(x => fillVol(x, vol));
   return { ...r, name: "加權指數", unit: "億元", source: vol.size ? "Yahoo Finance（成交金額：證交所）" : "Yahoo Finance" };
 }
 async function fromYahoo(sym, months, anchor) {

@@ -31,7 +31,7 @@ const COND = [
   ["rsigt", "RSI 高於", "數值", 70, (D, I, p) => { const v = I.rsi[D.length - 1]; return v != null && v > p ? `RSI ${fmtN(v)} > ${p}` : null; }],
   ["hi", "創 N 日新高（收盤）", "天數", 20, (D, I, p) => { const n = D.length - 1; return n >= p && D[n].c > Math.max(...D.slice(n - p, n).map(x => x.c)) ? `收盤 ${fmtP(D[n].c)} 創 ${p} 日新高` : null; }],
   ["lo", "創 N 日新低（收盤）", "天數", 20, (D, I, p) => { const n = D.length - 1; return n >= p && D[n].c < Math.min(...D.slice(n - p, n).map(x => x.c)) ? `收盤 ${fmtP(D[n].c)} 創 ${p} 日新低` : null; }],
-  ["vol", "爆量（N 倍 20 日均量）", "倍數", 2, (D, I, p) => { const n = D.length - 1, a = I.vma[n - 1]; return a && D[n].v > a * p ? `量 ${fmtVol(D[n].v)} 是均量的 ${(D[n].v / a).toFixed(1)} 倍` : null; }],
+  ["vol", "爆量（N 倍 20 日均量）", "倍數", 2, (D, I, p) => { const n = D.length - 1, a = I.vma[n - 1]; return a && !D[n].vNa && D[n].v > a * p ? `量 ${fmtVol(D[n].v)} 是均量的 ${(D[n].v / a).toFixed(1)} 倍` : null; }],
   ["dull", "KD 高檔鈍化（連 3 天 K≥80）", null, null, (D, I) => { const sp = dullSpans(I.kd.K, 80, 20, 3).pop(); return sp && sp.side > 0 && sp.ic === D.length - 1 ? "K 值連 3 天 ≥ 80" : null; }],
   ...Object.entries(STRAT_DEFS).map(([k, s]) => [`s:${k}`, `策略訊號：${s.name}`, null, null, (D, I) => { const sg = stratRun(k, D, I).filter(x => x.i === D.length - 1).pop(); return sg ? `${sg.side === "buy" ? "買進" : "賣出"}訊號：${sg.label || s.name}` : null; }]),
 ];
@@ -176,7 +176,7 @@ const SCOND = [
   ["chg5", "近 5 日漲幅至少（%）", "%", 5, (D, I, p) => { const n = D.length - 1, r = (D[n].c / D[n - 5].c - 1) * 100; return r >= p ? `5 日 ${r >= 0 ? "+" : ""}${r.toFixed(1)}%` : null; }],
   ["chg5n", "近 5 日跌幅至少（%）", "%", 5, (D, I, p) => { const n = D.length - 1, r = (D[n].c / D[n - 5].c - 1) * 100; return r <= -p ? `5 日 ${r.toFixed(1)}%` : null; }],
   ["nearhi", "收盤距 60 日高點在（%）以內", "%", 3, (D, I, p) => { const n = D.length - 1, h = Math.max(...D.slice(-60).map(x => x.h)), g = (1 - D[n].c / h) * 100; return g <= p ? `距 60 日高 ${g.toFixed(1)}%` : null; }],
-  ["volr", "今天量是 20 日均量的幾倍以上", "倍數", 1.5, (D, I, p) => { const n = D.length - 1, a = I.vma[n - 1]; return a && D[n].v >= a * p ? `量 ${(D[n].v / a).toFixed(1)} 倍` : null; }],
+  ["volr", "今天量是 20 日均量的幾倍以上", "倍數", 1.5, (D, I, p) => { const n = D.length - 1, a = I.vma[n - 1]; return a && !D[n].vNa && D[n].v >= a * p ? `量 ${(D[n].v / a).toFixed(1)} 倍` : null; }],
   ["minvol", "成交量至少（張）", "張", 500, (D, I, p) => (D[D.length - 1].v >= p ? `量 ${fmtVol(D[D.length - 1].v)} 張` : null)],
   ["yld", "殖利率至少（%）", "%", 4, null],
   ["big1k", "千張大戶持股週增加至少（百分點）", "百分點", 0.3, null],

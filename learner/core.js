@@ -913,7 +913,8 @@ if (typeof document !== "undefined") { if (document.readyState === "loading") do
 // 日 K 合成週 K、月 K：key(日期) 相同的併成一根，日期標示該週（月）最後一個交易日
 function agg(D, key) {
   const out = [];
-  for (const x of D) { const k = key(x.d), L = out[out.length - 1]; if (L && L.k === k) { L.h = Math.max(L.h, x.h); L.l = Math.min(L.l, x.l); L.c = x.c; L.v += x.v || 0; L.d = x.d; } else out.push({ k, d: x.d, o: x.o, h: x.h, l: x.l, c: x.c, v: x.v || 0 }); }
+  // 那週（月）有一天沒有量（vNa），合起來的量就不完整，整根標成沒有量
+  for (const x of D) { const k = key(x.d), L = out[out.length - 1]; if (L && L.k === k) { L.h = Math.max(L.h, x.h); L.l = Math.min(L.l, x.l); L.c = x.c; L.v += x.v || 0; L.d = x.d; if (x.vNa) L.vNa = 1; } else out.push({ k, d: x.d, o: x.o, h: x.h, l: x.l, c: x.c, v: x.v || 0, ...(x.vNa ? { vNa: 1 } : {}) }); }
   return out;
 }
 const weekKey = d => { const t = new Date(String(d).slice(0, 10) + "T00:00:00Z"), day = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - day); return t.toISOString().slice(0, 10); };
@@ -930,6 +931,13 @@ function cssVar(n) { const now = performance.now(); if (now - cssvAt > 1500) { C
 try { new MutationObserver(() => CSSV.clear()).observe(document.documentElement, { attributes: true }); } catch {}
 
 /* ================= 指標 ================= */
+// 成交量均線：來源沒給量的 K 棒（vNa）不算進平均，不然缺一天就把均量拉低、判成「量縮」；視窗內有量的不到一半就不算（null）。全部都有量時和 sma 完全一樣
+function smaVol(D, n) {
+  if (!D.some(x => x.vNa)) return sma(D.map(x => x.v || 0), n);
+  const o = Array(D.length).fill(null);
+  for (let i = n - 1; i < D.length; i++) { let s = 0, k = 0; for (let j = i - n + 1; j <= i; j++) if (!D[j].vNa) { s += D[j].v || 0; k++; } if (k >= Math.ceil(n / 2)) o[i] = s / k; }
+  return o;
+}
 function sma(a, n) { const o = Array(a.length).fill(null); let s = 0; for (let i = 0; i < a.length; i++) { s += a[i]; if (i >= n) s -= a[i - n]; if (i >= n - 1) o[i] = s / n; } return o; }
 function ema(a, n) { const o = Array(a.length).fill(null); const k = 2 / (n + 1); let e = null; for (let i = 0; i < a.length; i++) { if (a[i] == null) continue; e = e == null ? a[i] : a[i] * k + e * (1 - k); o[i] = e; } return o; }
 function rsiCalc(c, n = 14) {
@@ -1005,7 +1013,7 @@ function indicators(D) {
   return {
     c,
     ma: n => cache[n] || (cache[n] = sma(c, n)),
-    vma: sma(D.map(x => x.v || 0), 20), // 沒有量的 K 棒算 0，不然之後的均量都變成 NaN
+    vma: smaVol(D, 20), // 來源沒給量的 K 棒（vNa）不算進均量
     rsi: rsiCalc(c), kd: kdCalc(D), macd: macdCalc(c), boll: bollCalc(c), wr: wrCalc(D),
     get vwap() { return cache.vwap || (cache.vwap = vwapCalc(D)); },
     ...(() => { if (D[0].ov == null) return { io: null, io5: null }; const io = D.map(x => { const t = x.iv != null ? x.ov + x.iv : x.v; return t ? x.ov / t * 100 : 50; }); /* 外盤比＝外盤 ÷（外盤＋內盤），無法歸類的量不算進分母 */ return { io, io5: sma(io, 5) }; })(),

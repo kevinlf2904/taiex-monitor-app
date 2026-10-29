@@ -379,13 +379,13 @@ function extraPatterns(D, upto, z, recent = 0) {
 }
 // 缺口三種：突破缺口（離開整理區、帶量）、逃逸缺口（趨勢中段、又叫中繼／測量缺口）、竭盡缺口（漲跌一大段之後、很快被回補）
 function gapKinds(D, upto = D.length) {
-  const out = [], vma = sma(D.map(x => x.v || 0), 20);
+  const out = [], vma = smaVol(D, 20);
   for (let i = 21; i < upto; i++) {
     const p = D[i - 1], x = D[i], up = x.l > p.h, dn = x.h < p.l; if (!up && !dn) continue;
     const win = D.slice(i - 20, i), hi = Math.max(...win.map(y => y.h)), lo = Math.min(...win.map(y => y.l)), range = (hi - lo) / lo;
     const run = (p.c - D[i - 20].c) / D[i - 20].c * (up ? 1 : -1); // 缺口之前 20 天順方向走了多少
     let filled = null; for (let k = i + 1; k < Math.min(upto, i + 6); k++) if (up ? D[k].l <= p.h : D[k].h >= p.l) { filled = k; break; }
-    const vol = vma[i] ? x.v / vma[i] : 1;
+    const vol = !x.vNa && vma[i] ? x.v / vma[i] : 1; // 沒有量（vNa）當成一般量
     let kind;
     if (range < 0.12 && run < 0.06 && (up ? x.c > hi : x.c < lo)) kind = "突破缺口";
     else if (run >= 0.15 && filled != null) kind = "竭盡缺口";
@@ -704,7 +704,7 @@ function waveSignals(D) {
 // 逆時鐘曲線：橫軸 24 日均量、縱軸 24 日均價，連起來看量價關係；依兩者 5 天的變化分成八個階段
 const CCW_PHASES = [["陽轉", "量增價平", "buy"], ["買進", "量增價漲", "buy"], ["加碼", "量平價漲", "buy"], ["警戒", "量縮價漲", "sell"], ["陰轉", "量縮價平", "sell"], ["賣出", "量縮價跌", "sell"], ["觀望", "量平價跌", "sell"], ["止跌", "量增價跌", "buy"]];
 function ccwSeries(D, n = 24, look = 5) {
-  const pm = sma(D.map(x => x.c), n), vm = sma(D.map(x => x.v || 0), n), out = [];
+  const pm = sma(D.map(x => x.c), n), vm = smaVol(D, n), out = [];
   for (let i = 0; i < D.length; i++) {
     if (pm[i] == null || pm[i - look] == null || !vm[i - look]) { out.push(null); continue; }
     const dp = (pm[i] - pm[i - look]) / pm[i - look], dv = (vm[i] - vm[i - look]) / vm[i - look], P = Math.abs(dp) < 0.004 ? 0 : Math.sign(dp), V = Math.abs(dv) < 0.03 ? 0 : Math.sign(dv);
@@ -922,7 +922,7 @@ function fundSummary(j, D) {
    名稱沿用台股常見的叫法，但各家定義不一，這裡把條件寫死在 desc，畫面上照實顯示。 */
 const KPAT = (() => {
   const red = (D, i) => D[i].c > D[i].o, black = (D, i) => D[i].c < D[i].o, chg = (D, i) => D[i].c / D[i - 1].c - 1, body = (D, i) => Math.abs(D[i].c - D[i].o) / D[i - 1].c;
-  const hi = (D, a, b) => Math.max(...D.slice(a, b + 1).map(x => x.h)), lo = (D, a, b) => Math.min(...D.slice(a, b + 1).map(x => x.l)), avgV = (D, a, b) => D.slice(a, b + 1).reduce((s, x) => s + (x.v || 0), 0) / (b - a + 1);
+  const hi = (D, a, b) => Math.max(...D.slice(a, b + 1).map(x => x.h)), lo = (D, a, b) => Math.min(...D.slice(a, b + 1).map(x => x.l)), avgV = (D, a, b) => { let s = 0, k = 0; for (let i = a; i <= b; i++) if (!D[i].vNa) { s += D[i].v || 0; k++; } return k ? s / k : NaN; }; // 沒有量的日子（vNa）不算；全部沒有就不判斷
   const pc = v => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
   const cannon = (D, n, up) => body(D, n - 2) >= 0.01 && body(D, n) >= 0.01 && (up ? red(D, n - 2) && black(D, n - 1) && red(D, n) && D[n - 1].c >= Math.min(D[n - 2].o, D[n - 2].c) && D[n].c > D[n - 2].c
     : black(D, n - 2) && red(D, n - 1) && black(D, n) && D[n - 1].c <= Math.max(D[n - 2].o, D[n - 2].c) && D[n].c < D[n - 2].c);
@@ -992,7 +992,7 @@ function trendAnalysis(D, I, mode = "trend") {
   if (I.rsi[n] != null) add("RSI", `${I.rsi[n].toFixed(0)}（${I.rsi[n] > 70 ? "超買，短線容易拉回" : I.rsi[n] < 30 ? "超賣，短線容易反彈" : I.rsi[n] >= 50 ? "多方較強" : "空方較強"}）`, I.rsi[n] > 70 ? -1 : I.rsi[n] < 30 ? 1 : I.rsi[n] >= 50 ? 1 : -1, mode === "tech" ? "dir" : "ref");
   if (I.kd.K[n] != null) add("KD", `K ${I.kd.K[n].toFixed(0)}／D ${I.kd.D[n].toFixed(0)}，K ${I.kd.K[n] >= I.kd.D[n] ? "在 D 之上" : "在 D 之下"}`, I.kd.K[n] >= I.kd.D[n] ? 1 : -1, mode === "tech" ? "dir" : "ref");
   if (I.macd.osc[n] != null) add("MACD", `柱狀體${I.macd.osc[n] >= 0 ? "為正（紅）" : "為負（綠）"}且${Math.abs(I.macd.osc[n]) >= Math.abs(I.macd.osc[n - 1] ?? 0) ? "放大" : "縮小"}`, I.macd.osc[n] >= 0 ? 1 : -1, mode === "tech" ? "dir" : "ref");
-  if (D.some(x => x.v)) { const v20 = D.slice(Math.max(0, n - 20), n).reduce((s, x) => s + (x.v || 0), 0) / Math.min(20, n); if (v20) add("量能", `最後一根量是 20 日均量的 ${(D[n].v / v20).toFixed(1)} 倍${D[n].v > 1.5 * v20 ? "（放量）" : D[n].v < 0.6 * v20 ? "（量縮）" : ""}`, 0, "ref"); }
+  if (D.some(x => x.v) && !D[n].vNa) { const W20 = D.slice(Math.max(0, n - 20), n).filter(x => !x.vNa), v20 = W20.length ? W20.reduce((s, x) => s + (x.v || 0), 0) / W20.length : 0; if (v20) add("量能", `最後一根量是 20 日均量的 ${(D[n].v / v20).toFixed(1)} 倍${D[n].v > 1.5 * v20 ? "（放量）" : D[n].v < 0.6 * v20 ? "（量縮）" : ""}`, 0, "ref"); }
   const rets = D.slice(-121).map((x, k, a) => (k ? Math.log(x.c / a[k - 1].c) : null)).filter(v => v != null), mu = rets.reduce((s, v) => s + v, 0) / (rets.length || 1), sd = Math.sqrt(rets.reduce((s, v) => s + (v - mu) ** 2, 0) / (rets.length || 1));
   add("波動度", `近 ${rets.length} 根每日漲跌的標準差約 ${(sd * 100).toFixed(1)}%，決定模擬機率帶的寬度`, 0, "range");
   return out;
