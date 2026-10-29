@@ -40,10 +40,9 @@ test("自選清單：報價全部拿不到時說原因、可以重試 390", asyn
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   const bad = r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: false, error: "證交所暫時連不到" }) });
   await ctx.route("**/api/quote**", bad);
-  // 換成失敗回應之前送出的報價請求還沒回來時會把報價補回去：先停掉排程、等它們回來，再清空報價，讓產品自己用失敗的回應更新一次
-  await p.evaluate(() => clearTimeout(W.timer));
-  await p.waitForFunction(() => !W.busy && !W.fbusy, null, { timeout: 15000 });
-  await p.evaluate(async () => { clearTimeout(W.timer); W.quotes.clear(); setLt("watch"); await tick(); });
+  // 換成失敗回應後重新載入：之前送出的報價請求（自選、今日市場、盤中監控各自會抓）回來會把報價補回去，測不到「全部拿不到」；重新載入後每個請求都是失敗回應，由產品自己顯示原因
+  await p.reload(); await p.waitForFunction(() => typeof setLt === "function" && typeof W !== "undefined");
+  await p.evaluate(() => setLt("watch"));
   await p.waitForSelector("#wl .wl-err", { timeout: 15000 });
   assert.match(await p.textContent("#wl .wl-err"), /報價暫時拿不到（[^）]*證交所暫時連不到[^）]*）[\s\S]*重試/);
   await ctx.unroute("**/api/quote**", bad);
