@@ -2290,3 +2290,42 @@ test("P1-02 flows.js：法人缺值的股票金額是 null，板塊加總只算�
   assert.equal(g("flowFmt")(null), "—"); assert.equal(g("flowFmt")(NaN), "—"); assert.equal(g("flowFmt")(0), "+0.0億");
   assert.ok(Number.isFinite(g("flowMood")(M).net), "情緒的淨買超不會變 NaN");
 });
+
+test("P2-01 Podcast GET act=file：要有上傳時的憑證、檔名驗證、限流、404 與服務暫停（mock fetch，不呼叫 Gemini）", async () => {
+  const P = await import("../api/_lib/podcast.js"), L = await import("../api/_lib/_limit.js");
+  const save = { g: process.env.GEMINI_API_KEY, u: process.env.KV_REST_API_URL, t: process.env.KV_REST_API_TOKEN }, realFetch = globalThis.fetch, calls = [];
+  process.env.GEMINI_API_KEY = "test-only-fake-key"; delete process.env.KV_REST_API_URL; delete process.env.KV_REST_API_TOKEN; L.mem.clear();
+  let mode = "ok";
+  globalThis.fetch = async url => { url = String(url); calls.push(url); if (!url.startsWith("https://generativelanguage.googleapis.com/")) throw new Error("不該連其他網站：" + url);
+    if (mode === "down") throw new Error("fetch failed");
+    if (url.endsWith("/files/nope")) return { ok: false, status: 404, json: async () => ({}) };
+    return { ok: true, status: 200, json: async () => ({ state: "ACTIVE", uri: "https://generativelanguage.googleapis.com/v1beta/files/abc123", mimeType: "audio/mpeg" }) }; };
+  const call = async (query, ip = "198.51.100.20") => { let code = 200, body; await P.default({ method: "GET", query: { act: "file", ...query }, headers: { "x-real-ip": ip } }, { status: c => ((code = c), { json: b => (body = b) }), setHeader() {} }); return { code, body }; };
+  try {
+    const now = Date.now(), exp = now + P.FILE_TTL, tok = P.fileTok("files/abc123", exp, "test-only-fake-key");
+    const ok = await call({ name: "files/abc123", exp: String(exp), tok });
+    assert.deepEqual([ok.code, ok.body.ok, ok.body.state], [200, true, "ACTIVE"], "正常查詢");
+    assert.equal((await call({})).code, 400, "缺檔名");
+    for (const bad of ["files/../secret", "files/a/b", "files%2F..%2Fx", "../files/abc", "files/abc?x=1", "models/gemini", "files/" + "a".repeat(80)]) assert.equal((await call({ name: bad, exp: String(exp), tok })).code, 400, "非法檔名、路徑穿越：" + bad);
+    const n0 = calls.length;
+    assert.equal((await call({ name: "files/abc123" })).code, 403, "沒有憑證");
+    assert.equal((await call({ name: "files/abc123", exp: String(exp), tok: tok.slice(0, -2) + "xx" })).code, 403, "憑證錯");
+    assert.equal((await call({ name: "files/other9", exp: String(exp), tok })).code, 403, "拿 A 檔的憑證查 B 檔（別人的檔案）");
+    assert.equal((await call({ name: "files/abc123", exp: String(exp + 1000), tok })).code, 403, "改到期時間");
+    const old = now - 1000; assert.equal((await call({ name: "files/abc123", exp: String(old), tok: P.fileTok("files/abc123", old, "test-only-fake-key") })).code, 403, "過期");
+    assert.equal((await call({ name: "files/abc123", exp: String(exp), tok: P.fileTok("files/abc123", exp, "another-key") })).code, 403, "用別的金鑰簽的");
+    assert.equal(calls.length, n0, "沒有權限的請求不會打到 Gemini");
+    const nx = P.fileTok("files/nope", exp, "test-only-fake-key"), r404 = await call({ name: "files/nope", exp: String(exp), tok: nx });
+    assert.deepEqual([r404.body.ok, /找不到/.test(r404.body.error)], [false, true], "不存在的檔案");
+    mode = "down"; const rd = await call({ name: "files/abc123", exp: String(exp), tok });
+    assert.deepEqual([rd.code, rd.body.ok, /暫時連不到/.test(rd.body.error)], [200, false, true], "Gemini Files API 暫時不可用");
+    assert.doesNotMatch(JSON.stringify(rd.body), /test-only-fake-key/, "錯誤訊息不含金鑰");
+    // 超過限流（沒有 KV：記憶體上限是共用上限的一半）
+    mode = "ok"; const [perIp] = L.limitsOf("podcast-file", false); let last;
+    for (let i = 0; i <= perIp; i++) last = await call({ name: "files/abc123", exp: String(exp), tok }, "198.51.100.99");
+    assert.equal(last.code, 429, "同一個 IP 超過上限");
+  } finally {
+    globalThis.fetch = realFetch; L.mem.clear();
+    for (const [k, v] of [["GEMINI_API_KEY", save.g], ["KV_REST_API_URL", save.u], ["KV_REST_API_TOKEN", save.t]]) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+});
