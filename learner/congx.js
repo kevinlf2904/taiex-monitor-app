@@ -440,7 +440,7 @@ const cxOpenTw = c => { W.cv = `tw:s:${c}`; W.twoTab = "hold"; renderList(); goY
 
 // ---------- 美股個股頁（國會）：13F 機構這一季持有這檔的有哪些 ----------
 function cxF13Of(T) {
-  if (!W.f13) { f13Load(); return `<h4>13F 機構</h4><p class="note">載入中…</p>`; } if (W.f13.err) return "";
+  if (!W.f13) { f13Load(); return `<h4>13F 機構</h4>${skel("載入中…", 3)}`; } if (W.f13.err) return "";
   const L = []; for (const f of W.f13.funds || []) { const r = f.rows.find(x => x.ticker === T && !x.pc), s = r ? null : f.sold.find(x => x.ticker === T && !x.pc); if (r || s) L.push({ f, r: r || s, chg: r ? r.chg : "sold" }); }
   if (!L.length) return `<h4>13F 機構</h4><p class="note">最新一季 13F 裡，追蹤的機構都沒有持有 ${esc(T)}。</p>`;
   L.sort((a, b) => (b.r.value || 0) - (a.r.value || 0));

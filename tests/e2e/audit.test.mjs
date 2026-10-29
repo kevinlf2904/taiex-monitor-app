@@ -28,6 +28,26 @@ for (const width of [390, 1280]) test(`新手指引條：載入熱門自選範�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+test("新手指引第 3 步到庫存；空自選、★ 只看我的自選卻沒有股票時能一鍵載入範例（Gemini DEF-10）390", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true, onboard: true });
+  await p.waitForSelector("#onbBar:not([hidden]) .onb");
+  assert.match(await p.textContent("#onbBar"), /三步上手[\s\S]*③[\s\S]*庫存/);
+  await p.click('[data-onb="hold"]');
+  assert.deepEqual(await p.evaluate(() => [W.lt, store.get("watch:onbOff")]), ["hold", true]);
+  await p.waitForSelector('[data-hdemo="load"]'); // 第 3 步帶到庫存的「載入範例投資組合」
+  // 空群組：一鍵放入範例，只動目前群組
+  await p.evaluate(() => { W.groups = [{ name: "空的", list: [] }, { name: "別的", list: ["2603"] }]; W.gi = 0; saveGroups(); setLt("watch"); });
+  await p.click('#wl [data-onb="fill"]');
+  assert.deepEqual(await p.evaluate(() => [W.groups[0].list, W.groups[1].list]), [["2330", "2317", "2454", "NVDA", "AAPL"], ["2603"]]);
+  // ★ 只看我的自選、自選庫存都空：說明為什麼沒東西，並給載入範例
+  await p.evaluate(() => { W.groups = [{ name: "自選", list: [] }]; W.gi = 0; saveGroups(); W.hold = {}; W.mine = true; setLt("earn"); });
+  await p.waitForSelector(".mineempty [data-onb='fill']");
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  await p.click(".mineempty [data-onb='fill']");
+  assert.equal(await p.evaluate(() => W.groups[0].list.length), 5);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 test("新手指引條：按 ✕ 關掉就不再出現", async () => {
   const { ctx, p } = await open(B, S.url, "watch.html", { width: 390, touch: true, onboard: true });
   await p.waitForSelector("#onbBar:not([hidden])"); await p.click('[data-onb="x"]');

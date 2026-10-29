@@ -255,6 +255,7 @@ html[data-big] .linkbtn { padding-top: 4px; padding-bottom: 4px; }
 .dh-tag.status-official, .dh-tag.status-verified, .dh-tag.status-live { border-color: var(--ink); color: var(--ink); }
 .dh-tag.status-delayed, .dh-tag.status-partial { border-color: var(--warn); color: var(--warn); }
 .dh-tag.status-missing, .dh-tag.missing { background: var(--surface-2); color: var(--muted); }
+.dh-stale { padding: 6px 12px; border: 1px solid var(--warn); border-left-width: 4px; color: var(--warn); border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
 .dh-note-bar { padding: 6px 12px; background: var(--accent-soft); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; margin-bottom: 12px; }
 
 .dh-title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 14px; }
@@ -457,3 +458,6 @@ u.conf { background: var(--up); } u.div { background: var(--down); } u.etf { bac
 .mk-dinfo-note { grid-column: 1 / -1; }
 .mkt-tag.stale { color: var(--down); background: color-mix(in srgb, var(--down) 14%, transparent); }
 .mkt-tag.holiday { color: var(--muted); background: var(--surface-3); }
+/* ⓘ 統計口徑說明（core.js infoTip）：觸控也點得到（44px 太大會撐開標題列，用 padding 放大可點範圍） */
+.itip { display: inline-block; margin-left: 3px; padding: 2px 4px; font-size: 12px; line-height: 1; color: var(--muted); cursor: help; font-weight: 400; vertical-align: baseline; }
+.itip:hover, .itip:focus-visible { color: var(--ink); }

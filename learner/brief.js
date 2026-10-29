@@ -1563,6 +1563,12 @@ function tdHero(tq, plan, evs) {
     ${kl ? tdHelp(plan) : ""}
   </div>`;
 }
+// 盤後分析跟報價不是同一天（例：報價已是 10/29 收盤，資金雷達、盤後總結還是 10/28 的）：收盤後到盤後資料更新前，頂部提醒結論依據哪一天，避免拿前一天的結論看今天的盤
+// 盤中不提醒（盤後分析本來就是前一交易日的，區塊標題已寫日期）；兩邊有一邊沒有日期也不提醒
+function tdStaleNote(quoteDate, anaDate, session) {
+  if (!quoteDate || !anaDate || anaDate >= quoteDate || (session !== "post" && session !== "closed")) return "";
+  return `<div class="dh-stale" role="status">⚠️ 盤後分析更新中：目前結論依據 ${esc(anaDate)} 收盤資料，最新報價為 ${esc(quoteDate)}</div>`;
+}
 // 使用說明：價位怎麼算、準不準（回測數字來自 scripts/levels-bt.mjs，2024-11～2026-10 共 480 個交易日，沒參與調整的那一段）
 function tdHelp(plan) {
   const kl = plan.keyLevels, f = plan.macroSignals?.futChg, b = plan.band || {}, n = v => Math.round(v).toLocaleString();
@@ -1773,6 +1779,7 @@ function todayPage() {
         ${M ? `<button type="button" class="td-ib" data-mshare="share" title="分享今日盤面（圖片）">${ico("share")}<span class="td-vh">分享今日盤面</span></button>` : ""}
       </div>
     </div>
+    ${tdStaleNote(tq?.date, M?.dates?.[M.T - 1], sess.session === "unknown" && pm ? "post" : sess.session)}
     ${sess.displayNote || cn ? `<div class="dh-note-bar note">📅 ${esc(sess.displayNote || cn[1])}</div>` : ""}
     ${W.tdAI ? `<div class="caibox">${W.tdAI.loading ? "AI 整理中…" : W.tdAI.err ? "⚠︎ " + esc(W.tdAI.err) : esc(W.tdAI.text).replace(/\n/g, "<br>")}</div>` : ""}
     <!-- 盤勢：位置燈號、加權與分時（左）；漲跌家數、其他核心數字（右，手機在下面） -->
@@ -1949,9 +1956,13 @@ const ONB_DEMO = [{ name: "自選", list: ["2330", "2317", "2454", "2382", "3231
 function renderOnb() {
   const el = document.getElementById("onbBar"); if (!el) return;
   const show = !W.off && !store.get("watch:groups", null) && !store.get("watch:onbOff", false); el.hidden = !show; if (!show || el.firstChild) return;
-  el.innerHTML = `<div class="onb" role="note"><span>💡 初次使用？① 點任一股票代號，右邊會滑出個股抽屜（同業 PK、大戶與政治人物申報）　② <button type="button" class="linkbtn" data-onb="demo">✨ 一鍵載入台美股熱門自選範例</button>，立即體驗「★ 只看我的自選」過濾</span><button type="button" class="onb-x" data-onb="x" aria-label="關閉新手指引" title="關閉新手指引">✕</button></div>`;
+  el.innerHTML = `<div class="onb" role="note"><span>💡 初次使用？三步上手：① 點任一股票代號，右邊會滑出個股抽屜（同業 PK、大戶與政治人物申報）　② <button type="button" class="linkbtn" data-onb="demo">✨ 一鍵載入台美股熱門自選範例</button>，體驗「★ 只看我的自選」過濾　③ <button type="button" class="linkbtn" data-onb="hold">到「庫存」載入範例投資組合</button>，看含稅費的損益與風險分析</span><button type="button" class="onb-x" data-onb="x" aria-label="關閉新手指引" title="關閉新手指引">✕</button></div>`;
 }
+// 範例自選（空群組、★ 只看我的自選卻什麼都沒有時的「載入範例」）：只放進目前這個群組，不動其他群組
+const ONB_FILL = ["2330", "2317", "2454", "NVDA", "AAPL"];
 document.addEventListener("click", e => { const b = e.target.closest("[data-onb]"); if (!b) return;
+  if (b.dataset.onb === "fill") { const g = W.groups?.[W.gi]; if (!g) return; g.list = [...new Set([...g.list, ...ONB_FILL])]; saveGroups(); toast("已放入範例自選：台積電、鴻海、聯發科、輝達、蘋果（可以隨時移除）"); return renderList(); }
   store.set("watch:onbOff", true);
+  if (b.dataset.onb === "hold") { setLt("hold"); renderOnb(); return; }
   if (b.dataset.onb === "demo") { W.groups = ONB_DEMO.map(g => ({ ...g, list: [...g.list] })); W.gi = 0; saveGroups(); W.mine = true; store.set("watch:mine", true); toast("已載入熱門自選範例，並打開「★ 只看我的自選」"); setLt("earn"); }
   renderOnb(); renderList(); });
