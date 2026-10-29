@@ -220,9 +220,11 @@ export default async function handler(req, res) {
     // 證交所明確說「沒有符合條件的資料」才是休市，可以快取 30 天；其他空回應（維護中、只回一半）只快取 10 分鐘
     const holiday = /沒有符合條件/.test(String(q.value?.stat || "")) && /沒有符合條件/.test(String(i.value?.stat || ""));
     res.setHeader("Cache-Control", past && holiday ? "s-maxage=2592000" : "s-maxage=600");
-    return res.status(200).json({ ok: true, date: iso, empty: true });
+    // 有行情、法人還沒公布（今天收盤後到下午公布前）：不是休市，標 pending，前端之後會再問
+    return res.status(200).json({ ok: true, date: iso, empty: true, ...(quotes.size && !holiday ? { pending: "inst" } : {}) });
   }
   const tp = o.status === "fulfilled" ? o.value : [];
-  res.setHeader("Cache-Control", past ? "s-maxage=2592000, stale-while-revalidate=86400" : "s-maxage=600, stale-while-revalidate=1200");
-  return res.status(200).json({ ok: true, date: iso, rows: [...mergeDay(quotes, inst), ...tp], tpex: tp.length > 0, source: tp.length ? "證交所、櫃買中心" : "證交所（上櫃暫時拿不到）" });
+  // 上櫃抓不到：只快取 10 分鐘（原本過去的日子一律 30 天，少了上櫃的結果會留一個月）
+  res.setHeader("Cache-Control", past && tp.length ? "s-maxage=2592000, stale-while-revalidate=86400" : "s-maxage=600, stale-while-revalidate=1200");
+  return res.status(200).json({ ok: true, date: iso, rows: [...mergeDay(quotes, inst), ...tp], tpex: tp.length > 0, ...(tp.length ? {} : { partial: ["tpex"] }), source: tp.length ? "證交所、櫃買中心" : "證交所（上櫃暫時拿不到）" });
 }

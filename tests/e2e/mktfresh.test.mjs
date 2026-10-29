@@ -51,3 +51,14 @@ test("大盤：連不上伺服器時 sw.js 回的快取帶 swCachedAt，畫面�
   assert.doesNotMatch(s.tag, /盤中即時/); assert.match(s.tag, /延遲/);
   await ctx.close(); assert.deepEqual(errs.filter(e => !/Failed to load resource/.test(e)), []);
 });
+
+test("國際行情、大盤：有幾項拿不到時註明暫缺，不讓空白像沒有資料 390", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await ctx.route("**/api/global", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "Yahoo", at: "2026-10-15T00:00:00Z", failed: ["BZ=F"], groups: [{ id: "energy", name: "能源", rows: [{ code: "CL=F", name: "西德州原油 WTI", price: 96.2, chg: 2.3, chgPct: 2.4 }, { code: "BZ=F", name: "布蘭特原油", price: null }] }] }) }));
+  await p.evaluate(async () => { clearTimeout(W.timer); W.mkReg = "gl"; W.gl = null; setLt("mkt"); await loadGlobal(true); renderList(); });
+  await p.waitForSelector("#lx .gnote");
+  assert.match(await p.textContent("#lx .gnote"), /1 項暫時拿不到（顯示 —）/);
+  assert.equal(await p.evaluate(() => mktFailedNote({ failed: ["inst", "us"] })), "法人、美股指數暫時拿不到，稍後自動重試。");
+  assert.equal(await p.evaluate(() => mktFailedNote({ failed: [] })), "");
+  await ctx.close(); assert.deepEqual(errs, []);
+});

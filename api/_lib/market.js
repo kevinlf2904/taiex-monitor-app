@@ -283,9 +283,12 @@ export default async function handler(req, res, { marketFetcher = marketRows } =
   const mktDate = L?.date || all.find(x => x.date)?.date || null;
   const mktTime = L?.time || L?.sourceTime || null;
   const updateMode = L?.live ? "live" : L?.updateMode || "after_close";
-  res.setHeader("Cache-Control", liveCache(L?.live, 10));
+  // 附帶的資料（新高新低、產業、法人、美股、世界指數）抓失敗或是空的：列在 failed（前端註明暫缺），快取縮短，不讓缺一塊的結果留 5 分鐘
+  const failed = [["hilo", b, v => v], ["sectors", info, v => v?.size], ["inst", inst, v => v], ["us", us, v => v?.length], ["world", world, v => v?.length]].filter(([, r, has]) => r.status === "rejected" || !has(r.value)).map(([k]) => k);
+  res.setHeader("Cache-Control", failed.length && !L?.live ? "s-maxage=30, stale-while-revalidate=60" : liveCache(L?.live, 10));
   return res.status(200).json({
     ok: true,
+    failed,
     date: mktDate,
     dataDate: mktDate,
     live: !!L?.live,

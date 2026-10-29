@@ -1273,3 +1273,37 @@ test("Scenario 42: 全市場 complete 必須達到 95% 覆蓋率，基準清單�
   assert.equal(atThreshold.coverage.benchmark.isBenchmarkComplete, true, "1710 檔基準清單達全市場 95% 門檻");
   assert.equal(atThreshold.completeness, "complete", "1710 / 1800 恰達 95% 且雙市場日期一致時可標記 complete");
 });
+
+test("部分成功（稽核 F-04／F-05）：/api/market 列出抓失敗的附帶資料並縮短快取；/api/daily 缺上櫃不快取 30 天、法人未公布標 pending", async () => {
+  const mockRes = () => { const r = { statusCode: 200, headers: {}, body: null, status(c) { r.statusCode = c; return r; }, setHeader(k, v) { r.headers[k] = v; return r; }, json(j) { r.body = j; return r; } }; return r; };
+  const realFetch = globalThis.fetch;
+  try {
+    // 測試不連外部網站：大盤用注入的假資料，其他對外請求一律失敗 → 法人、美股、世界指數、產業、新高新低都拿不到
+    globalThis.fetch = async () => { throw new Error("測試不連外部網站"); };
+    const marketMod = await import("../api/_lib/market.js");
+    const fake = async () => ({ rows: [{ code: "2330", name: "台積電", market: "上市", price: 1000, chg: 10, chgPct: 1, vol: 1000, value: 1e9, date: "2026-10-28" }], date: "2026-10-28", live: false, source: "測試", dateVerified: true, dateConsistent: true, completeness: "complete", dataStatus: "confirmed", coverage: null });
+    const m = mockRes(); await marketMod.default({ query: {}, headers: {} }, m, { marketFetcher: fake });
+    assert.equal(m.body.ok, true);
+    assert.deepEqual([...m.body.failed].sort(), ["hilo", "inst", "sectors", "us", "world"].sort(), "抓失敗的附帶資料都要列出來");
+    assert.match(m.headers["Cache-Control"], /s-maxage=30\b/, "缺資料時收盤後只快取 30 秒（原本 300 秒）");
+
+    // /api/daily：證交所行情與法人有、上櫃抓不到（過去的日子）
+    const MI = { stat: "OK", tables: [{ fields: ["證券代號", "證券名稱", "成交股數", "收盤價", "漲跌(+/-)", "漲跌價差"], data: [["2330", "台積電", "1,000,000", "1000", "+", "10"]] }] };
+    const T86 = { stat: "OK", fields: ["證券代號", "證券名稱", "外陸資買賣超股數(不含外資自營商)", "投信買賣超股數", "自營商買賣超股數"], data: [["2330", "台積電", "1,000", "2,000", "3,000"]] };
+    const NONE = { stat: "很抱歉，沒有符合條件的資料!" };
+    const route = map => async u => { const s = String(u); for (const [k, v] of map) if (s.includes(k)) return { ok: true, status: 200, json: async () => v }; throw new Error("測試不連外部網站：" + s); };
+    const dailyMod = await import("../api/_lib/daily.js");
+    globalThis.fetch = route([["MI_INDEX", MI], ["T86", T86]]);
+    const d1 = mockRes(); await dailyMod.default({ query: { date: "20261005" } }, d1);
+    assert.equal(d1.body.rows.length, 1); assert.equal(d1.body.tpex, false); assert.deepEqual(d1.body.partial, ["tpex"]);
+    assert.doesNotMatch(d1.headers["Cache-Control"], /2592000/, "少了上櫃的結果不能快取 30 天");
+    // 行情有、法人還沒公布：不是休市，標 pending
+    globalThis.fetch = route([["MI_INDEX", MI], ["T86", NONE]]);
+    const d2 = mockRes(); await dailyMod.default({ query: { date: "20261005" } }, d2);
+    assert.equal(d2.body.empty, true); assert.equal(d2.body.pending, "inst"); assert.doesNotMatch(d2.headers["Cache-Control"], /2592000/);
+    // 真的休市：兩邊都說沒有資料 → 照舊快取 30 天、沒有 pending
+    globalThis.fetch = route([["MI_INDEX", NONE], ["T86", NONE]]);
+    const d3 = mockRes(); await dailyMod.default({ query: { date: "20261004" } }, d3);
+    assert.equal(d3.body.empty, true); assert.equal(d3.body.pending, undefined); assert.match(d3.headers["Cache-Control"], /2592000/);
+  } finally { globalThis.fetch = realFetch; }
+});
