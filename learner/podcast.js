@@ -192,7 +192,7 @@ async function podSum(key, mode) {
       const up = await podPost({ act: "upload", audio: e.audio, name: e.title });
       POD.job.step = `音檔 ${up.mb}MB 已上傳，等 AI 處理音檔…`; podRender();
       let st = up.state; const t0 = Date.now();
-      while (st !== "ACTIVE") { if (st === "FAILED" || Date.now() - t0 > 180000) throw new Error("AI 處理音檔失敗，可以改用節目說明整理。"); await podSleep(3000); st = (await getJ(`/api/podcast?act=file&name=${encodeURIComponent(up.file)}`, true)).state; }
+      while (st !== "ACTIVE") { if (st === "FAILED" || Date.now() - t0 > 180000) throw new Error("AI 處理音檔失敗，可以改用節目說明整理。"); await podSleep(3000); st = (await getJ(`/api/podcast?act=file&name=${encodeURIComponent(up.file)}&exp=${encodeURIComponent(up.exp ?? "")}&tok=${encodeURIComponent(up.tok ?? "")}`, true)).state; } // 上傳時拿到的查詢憑證
       POD.job.step = "AI 聽完整集、整理重點與觀點中（約 20～50 秒）…"; podRender();
       body = { ...body, uri: up.uri, mime: up.mime, file: up.file, desc: "" };
     } else if (mode === "video") { if (!e.video) throw new Error("這集沒有影片網址"); body = { ...body, video: e.video, desc: "" }; }
