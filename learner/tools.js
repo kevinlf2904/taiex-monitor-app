@@ -31,7 +31,7 @@ const COND = [
   ["rsigt", "RSI 高於", "數值", 70, (D, I, p) => { const v = I.rsi[D.length - 1]; return v != null && v > p ? `RSI ${fmtN(v)} > ${p}` : null; }],
   ["hi", "創 N 日新高（收盤）", "天數", 20, (D, I, p) => { const n = D.length - 1; return n >= p && D[n].c > Math.max(...D.slice(n - p, n).map(x => x.c)) ? `收盤 ${fmtP(D[n].c)} 創 ${p} 日新高` : null; }],
   ["lo", "創 N 日新低（收盤）", "天數", 20, (D, I, p) => { const n = D.length - 1; return n >= p && D[n].c < Math.min(...D.slice(n - p, n).map(x => x.c)) ? `收盤 ${fmtP(D[n].c)} 創 ${p} 日新低` : null; }],
-  ["vol", "爆量（N 倍 20 日均量）", "倍數", 2, (D, I, p) => { const n = D.length - 1, a = I.vma[n - 1]; return a && D[n].v > a * p ? `量 ${fmtVol(D[n].v)} 是均量的 ${(D[n].v / a).toFixed(1)} 倍` : null; }],
+  ["vol", "爆量（N 倍 20 日均量）", "倍數", 2, (D, I, p) => { const n = D.length - 1, a = I.vma[n - 1]; return a && !D[n].vNa && D[n].v > a * p ? `量 ${fmtVol(D[n].v)} 是均量的 ${(D[n].v / a).toFixed(1)} 倍` : null; }],
   ["dull", "KD 高檔鈍化（連 3 天 K≥80）", null, null, (D, I) => { const sp = dullSpans(I.kd.K, 80, 20, 3).pop(); return sp && sp.side > 0 && sp.ic === D.length - 1 ? "K 值連 3 天 ≥ 80" : null; }],
   ...Object.entries(STRAT_DEFS).map(([k, s]) => [`s:${k}`, `策略訊號：${s.name}`, null, null, (D, I) => { const sg = stratRun(k, D, I).filter(x => x.i === D.length - 1).pop(); return sg ? `${sg.side === "buy" ? "買進" : "賣出"}訊號：${sg.label || s.name}` : null; }]),
 ];
@@ -176,7 +176,7 @@ const SCOND = [
   ["chg5", "近 5 日漲幅至少（%）", "%", 5, (D, I, p) => { const n = D.length - 1, r = (D[n].c / D[n - 5].c - 1) * 100; return r >= p ? `5 日 ${r >= 0 ? "+" : ""}${r.toFixed(1)}%` : null; }],
   ["chg5n", "近 5 日跌幅至少（%）", "%", 5, (D, I, p) => { const n = D.length - 1, r = (D[n].c / D[n - 5].c - 1) * 100; return r <= -p ? `5 日 ${r.toFixed(1)}%` : null; }],
   ["nearhi", "收盤距 60 日高點在（%）以內", "%", 3, (D, I, p) => { const n = D.length - 1, h = Math.max(...D.slice(-60).map(x => x.h)), g = (1 - D[n].c / h) * 100; return g <= p ? `距 60 日高 ${g.toFixed(1)}%` : null; }],
-  ["volr", "今天量是 20 日均量的幾倍以上", "倍數", 1.5, (D, I, p) => { const n = D.length - 1, a = I.vma[n - 1]; return a && D[n].v >= a * p ? `量 ${(D[n].v / a).toFixed(1)} 倍` : null; }],
+  ["volr", "今天量是 20 日均量的幾倍以上", "倍數", 1.5, (D, I, p) => { const n = D.length - 1, a = I.vma[n - 1]; return a && !D[n].vNa && D[n].v >= a * p ? `量 ${(D[n].v / a).toFixed(1)} 倍` : null; }],
   ["minvol", "成交量至少（張）", "張", 500, (D, I, p) => (D[D.length - 1].v >= p ? `量 ${fmtVol(D[D.length - 1].v)} 張` : null)],
   ["yld", "殖利率至少（%）", "%", 4, null],
   ["big1k", "千張大戶持股週增加至少（百分點）", "百分點", 0.3, null],
@@ -733,32 +733,45 @@ const syncSet = o => { try { localStorage.setItem(SYNC_K, JSON.stringify({ ...sy
 function syncSnap() { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k?.startsWith("kline:") || SYNC_SKIP.test(k)) continue; const v = localStorage.getItem(k); if (v != null && v.length < 150000) o[k] = v; } } catch {} return o; }
 const syncHash = o => { let h = 0; const s = JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]])); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
 // 舊版雲端資料裡若有不同步的鍵（例如推演快照）也不寫回
-function syncApply(data) { let n = 0; try { for (const [k, v] of Object.entries(data || {})) if (k.startsWith("kline:") && !SYNC_SKIP.test(k) && typeof v === "string") { localStorage.setItem(k, v); n++; } } catch {} return n; }
+// 寫到一半失敗（儲存空間不夠）就把已經寫的改回原本的值，不留下新舊混在一起的資料；失敗時丟出錯誤，呼叫的地方不重新載入
+function syncApply(data) {
+  const E = Object.entries(data || {}).filter(([k, v]) => k.startsWith("kline:") && !SYNC_SKIP.test(k) && typeof v === "string"), old = E.map(([k]) => [k, localStorage.getItem(k)]);
+  try { for (const [k, v] of E) localStorage.setItem(k, v); return E.length; }
+  catch (e) {
+    for (const [k, v] of old) if (v == null) try { localStorage.removeItem(k); } catch {} // 先拿掉這次新增的，空出空間
+    for (const [k, v] of old) if (v != null) try { localStorage.setItem(k, v); } catch {}
+    throw new Error(/quota/i.test(`${e?.name} ${e?.message}`) ? "這台的儲存空間不夠，沒有寫入（資料維持原樣）" : "寫入失敗，這台的資料維持原樣");
+  }
+}
 const syncNewId = () => { const a = new Uint8Array(18); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 async function syncTok(id) { const b = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id))); return [...b].map(x => x.toString(16).padStart(2, "0")).join("").slice(0, 24); }
 async function syncApi(op, extra = {}) { const S = syncGet(); const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, id: S.id, ...extra }), signal: tmo(20000) }).catch(e => { throw new Error(/Timeout|Abort/.test(e.name) ? "雲端連線逾時" : "連不上雲端"); }); return r.json(); }
 async function syncCfg() { if (W.syncCfg) return W.syncCfg; try { W.syncCfg = await (await fetch("/api/sync?op=cfg", { signal: tmo(10000) })).json(); } catch { W.syncCfg = { kv: false }; } return W.syncCfg; }
-async function syncPush(quiet) {
+async function syncPush(quiet, force = false) {
   const S = syncGet(); if (!S.id) return; const data = syncSnap(), h = syncHash(data);
-  const j = await syncApi("push", { data, dev: navigator.userAgent.match(/iPad|iPhone|Android|Mac|Windows/)?.[0] || "" }).catch(e => ({ ok: false, error: e.message }));
-  if (j.ok) { syncSet({ at: j.at, hash: h, tg: j.tg }); if (!quiet) toast("已上傳到雲端"); } else if (!quiet) toast("上傳失敗：" + (j.error || "")); W.syncErr = j.ok ? null : j.error; if (W.lt === "tools" && W.tv === "sync") renderList();
+  // base：這台上次同步時雲端的時間；雲端被別台更新過就回 conflict，不蓋掉別台的改動（force＝使用者確認要用這台蓋掉）
+  const j = await syncApi("push", { data, dev: navigator.userAgent.match(/iPad|iPhone|Android|Mac|Windows/)?.[0] || "", base: S.at || 0, ...(force ? { force: true } : {}) }).catch(e => ({ ok: false, error: e.message }));
+  W.syncConflict = j.conflict ? { at: j.at, dev: j.dev } : null;
+  if (j.ok) { syncSet({ at: j.at, hash: h, tg: j.tg }); if (!quiet) toast("已上傳到雲端"); } else if (!quiet) toast(j.conflict ? "雲端有另一台裝置比較新的資料，沒有上傳；到「備份同步」選要用哪一份" : "上傳失敗：" + (j.error || "")); W.syncErr = j.ok ? null : j.error; if (W.lt === "tools" && W.tv === "sync") renderList();
 }
 async function syncPull(ask = true) {
   const j = await syncApi("pull").catch(e => ({ ok: false, error: e.message })); if (!j.ok) return toast("下載失敗：" + (j.error || ""));
   if (ask && !confirm(`用雲端的資料（${new Date(j.at + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}${j.dev ? "，" + j.dev : ""}）覆蓋這台裝置？`)) return;
-  const n = syncApply(j.data); syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast(`已下載 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600);
+  let n; try { n = syncApply(j.data); } catch (e) { return toast("下載失敗：" + e.message); }
+  W.syncConflict = null; syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast(`已下載 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600);
 }
 // 開網頁時：雲端比這台新、而且這台上次同步後沒改過 → 自動下載；之後每分鐘檢查，有改動就自動上傳
 async function syncBoot() {
   const S = syncGet(); if (!S.id || S.auto === false || W.off) return; const cfg = await syncCfg(); if (!cfg.kv) return;
-  try { const j = await syncApi("pull"); if (j.ok && j.at > (S.at || 0) && syncHash(syncSnap()) === S.hash) { syncApply(j.data); syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast("已從雲端同步最新資料，重新載入…"); return setTimeout(() => location.reload(), 800); } } catch {}
-  setInterval(() => { const T = syncGet(); if (T.id && T.auto !== false && document.visibilityState === "visible" && syncHash(syncSnap()) !== T.hash) syncPush(true); }, 60000);
+  try { const j = await syncApi("pull"); if (j.ok && j.at > (S.at || 0) && syncHash(syncSnap()) === S.hash) { try { syncApply(j.data); } catch (e) { W.syncErr = e.message; throw e; } syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast("已從雲端同步最新資料，重新載入…"); return setTimeout(() => location.reload(), 800); } } catch {}
+  // 有衝突（雲端比較新、這台也改過）就先不自動上傳，等使用者在「備份同步」選
+  setInterval(() => { const T = syncGet(); if (T.id && T.auto !== false && !W.syncConflict && document.visibilityState === "visible" && syncHash(syncSnap()) !== T.hash) syncPush(true); }, 60000);
 }
 function syncExport() { const blob = new Blob([JSON.stringify({ app: "kline-school", at: new Date().toISOString(), data: syncSnap() })], { type: "application/json" }), a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `K線學堂備份-${toolsDay()}.json`; a.click(); }
 async function syncImport(file) {
   try { const j = JSON.parse(await file.text()); if (j.app !== "kline-school" || !j.data) throw new Error("不是 KLineLab 的備份檔");
     if (!confirm(`用備份檔（${String(j.at).slice(0, 16).replace("T", " ")}，${Object.keys(j.data).length} 項）覆蓋這台裝置的設定與紀錄？`)) return;
-    toast(`已匯入 ${syncApply(j.data)} 項，重新載入…`); setTimeout(() => location.reload(), 600); } catch (e) { toast("匯入失敗：" + e.message); }
+    const n = syncApply(j.data); toast(`已匯入 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600); } catch (e) { toast("匯入失敗：" + e.message); }
 }
 function syncHtml() {
   const S = syncGet(), C = W.syncCfg; if (!C) syncCfg().then(() => W.lt === "tools" && W.tv === "sync" && renderList());
@@ -776,6 +789,8 @@ function syncHtml() {
   else h += `<div class="cokv three"><div><span>同步碼</span><b style="font-size:13px;word-break:break-all">${W.syShow ? esc(S.id) : "••••••••" + esc(S.id.slice(-4))}</b><small><button class="linkbtn" data-sy="show">${W.syShow ? "隱藏" : "顯示"}</button> <button class="linkbtn" data-sy="copy">複製</button></small></div>
       <div><span>上次同步</span><b>${S.at ? new Date(S.at + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ") : "—"}</b><small>${dirty ? "這台有新的改動" : "已是最新"}${W.syncErr ? "・⚠︎ " + esc(W.syncErr) : ""}</small></div>
       <div><span>自動同步</span><b><label class="note"><input type="checkbox" data-syauto ${S.auto !== false ? "checked" : ""}> 開</label></b><small>開網頁時下載、改動後自動上傳</small></div></div>
+    ${W.syncConflict ? `<p class="note err">⚠︎ 雲端有另一台裝置（${esc(W.syncConflict.dev || "其他裝置")}，${W.syncConflict.at ? new Date(W.syncConflict.at + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ") : "—"}）比較新的資料，這台也有改動。選一份保留：</p>
+    <div class="irform"><button class="btn sm primary" data-sy="pull">⬇ 用雲端的（蓋掉這台）</button><button class="btn sm" data-sy="force">⬆ 用這台的（蓋掉雲端）</button></div>` : ""}
     <div class="irform"><button class="btn sm primary" data-sy="push">⬆ 上傳到雲端</button><button class="btn sm" data-sy="pull">⬇ 從雲端下載</button><button class="linkbtn" data-sy="leave">這台停止同步</button></div>`;
   h += `<h4>Telegram 收盤提醒</h4>`;
   if (!C?.tg) h += `<p class="note">${C?.kv ? "網站還沒設定 Telegram 機器人。" : "需要先設定雲端儲存。"}設定好後，「指標提醒」與個股的價格提醒會在每個交易日收盤後（約 16:10）檢查，成立就傳到 Telegram，不用開著網頁。</p>`;
@@ -792,6 +807,7 @@ async function syncClick(d) {
   if (d.sy === "show") { W.syShow = !W.syShow; return renderList(); }
   if (d.sy === "copy") { try { await navigator.clipboard.writeText(syncGet().id); toast("已複製同步碼"); } catch { W.syShow = true; renderList(); toast("請手動複製"); } return; }
   if (d.sy === "push") return syncPush();
+  if (d.sy === "force") { if (confirm("用這台的資料蓋掉雲端？另一台裝置之後下載會拿到這台的版本，它上次沒下載的改動會不見。")) await syncPush(false, true); return renderList(); }
   if (d.sy === "pull") return syncPull(true);
   if (d.sy === "leave") { if (confirm("這台裝置停止同步（雲端資料不會刪除，之後輸入同步碼可以再加入）？")) { localStorage.removeItem(SYNC_K); renderList(); } return; }
   if (d.sy === "tgbind") { await syncPush(true); const j = await syncApi("tgbind"); if (j.ok) { syncSet({ tg: true }); await syncPush(true); toast("已綁定 Telegram"); } else toast(j.error || "綁定失敗"); return renderList(); }

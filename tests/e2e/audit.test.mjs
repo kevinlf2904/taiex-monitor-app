@@ -44,7 +44,8 @@ for (const width of [390, 1280]) test(`只有圖示的按鈕都有 aria-label �
   await p.evaluate(() => scrollTo(0, 2000)); await p.waitForTimeout(800);
   assert.deepEqual(await p.evaluate(iconBtns), [], "首頁（標題列、回到最上面、問題回報）");
   const w = await open(B, S.url, "watch.html", { width, touch: width < 500 });
-  for (const lt of ["watch", "money", "earn", "ind", "cong"]) { await w.p.evaluate(lt => setLt(lt), lt); await w.p.waitForTimeout(400); assert.deepEqual(await w.p.evaluate(iconBtns), [], `看盤 ${lt}`); }
+  // 資料回來會重畫，title 由 core.js 在頁面空閒時補上：等最多 2 秒讓畫面穩定，還有缺就是真的缺
+  for (const lt of ["watch", "money", "earn", "ind", "cong"]) { await w.p.evaluate(lt => setLt(lt), lt); await w.p.waitForTimeout(400); await w.p.waitForFunction(f => !new Function(`return (${f})()`)().length, iconBtns.toString(), { timeout: 2000 }).catch(() => {}); assert.deepEqual(await w.p.evaluate(iconBtns), [], `看盤 ${lt}`); }
   await ctx.close(); await w.ctx.close();
 });
 

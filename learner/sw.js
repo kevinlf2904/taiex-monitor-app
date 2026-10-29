@@ -9,6 +9,12 @@ self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(K => Pro
 const put = (req, res) => { if (res.ok && res.type === "basic") { const cp = res.clone(); caches.open(C).then(c => c.put(req, cp)); } return res; };
 async function trim() { const c = await caches.open(C), K = (await c.keys()).filter(r => new URL(r.url).pathname.startsWith("/api/")); for (const r of K.slice(0, Math.max(0, K.length - MAX_API))) await c.delete(r); }
 const fromCache = async (req, opt) => (await caches.match(req, opt)) || null;
+// 離線時回快取的 API：加上 swCachedAt（當時存起來的時間），頁面才知道這是舊資料、不會當成剛更新
+async function apiFromCache(req) {
+  const m = await fromCache(req); if (!m) return null;
+  try { const j = await m.clone().json(); if (j && typeof j === "object" && !Array.isArray(j)) return new Response(JSON.stringify({ ...j, swCachedAt: Date.parse(m.headers.get("date")) || 0 }), { headers: { "Content-Type": "application/json" } }); } catch {}
+  return m;
+}
 self.addEventListener("fetch", e => {
   const req = e.request, u = new URL(req.url);
   if (req.method !== "GET" || u.origin !== location.origin || u.pathname.startsWith("/_vercel/") || LIVE.test(u.pathname) || /version\.json$/.test(u.pathname) || req.cache === "no-store") return;
@@ -18,7 +24,7 @@ self.addEventListener("fetch", e => {
   }
   if (/\.(png|jpe?g|svg|webp|ico|woff2?)$/i.test(u.pathname)) { e.respondWith(fromCache(req).then(m => m || fetch(req).then(r => put(req, r)))); return; }
   const api = u.pathname.startsWith("/api/");
-  e.respondWith(fetch(req).then(r => { put(req, r); if (api && Math.random() < 0.05) trim(); return r; }).catch(async () => (await fromCache(req)) || (api ? new Response(JSON.stringify({ ok: false, error: "離線中，這份資料還沒有快取" }), { headers: { "Content-Type": "application/json" } }) : Response.error())));
+  e.respondWith(fetch(req).then(r => { put(req, r); if (api && Math.random() < 0.05) trim(); return r; }).catch(async () => (await (api ? apiFromCache(req) : fromCache(req))) || (api ? new Response(JSON.stringify({ ok: false, error: "離線中，這份資料還沒有快取" }), { headers: { "Content-Type": "application/json" } }) : Response.error())));
 });
 // 通知（事件提醒、到價提醒）：點通知回到網站
 self.addEventListener("notificationclick", e => { e.notification.close(); e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(L => (L[0] ? L[0].focus() : self.clients.openWindow("./")))); });

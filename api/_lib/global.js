@@ -19,6 +19,8 @@ export default async function handler(req, res) {
     return { id, name, ...(note ? { note } : {}), rows };
   }));
   if (!groups.some(g => g.rows.some(r => r.price != null))) return res.status(200).json({ ok: false, error: "暫時拿不到國際行情（Yahoo Finance），稍後再試。" });
-  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
-  return res.status(200).json({ ok: true, source: "Yahoo Finance（可能延遲 10～15 分鐘）", at: new Date().toISOString(), groups });
+  // 有幾項沒拿到（price: null）：列在 failed、快取縮短，不要讓少了幾項的結果被所有人看 5 分鐘
+  const failed = groups.flatMap(g => g.rows.filter(r => r.price == null).map(r => r.code));
+  res.setHeader("Cache-Control", failed.length ? "s-maxage=15, stale-while-revalidate=30" : "s-maxage=60, stale-while-revalidate=300");
+  return res.status(200).json({ ok: true, source: "Yahoo Finance（可能延遲 10～15 分鐘）", at: new Date().toISOString(), groups, failed });
 }

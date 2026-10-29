@@ -4,7 +4,7 @@
 // 上限可用環境變數調整，每個服務分開設：AI_HOURLY_PER_IP_CHAT、AI_DAILY_CAP_CHART_READ…（服務名稱大寫、- 換成 _）；
 // 舊的 AI_HOURLY_PER_IP、AI_DAILY_CAP 只能「調低」所有服務，不會把某個服務放寬到超過它自己的預設。
 import { createHash } from "node:crypto";
-import { kv, kvOn } from "./sync.js";
+import { kv, kvOn, incrTtl } from "./sync.js";
 
 // [每 IP 每小時, 全站每天]；claude-fb＝Gemini 失敗改問 Claude（AI_CLAUDE_FALLBACK=1 才會用到）另外算一份全站上限
 export const AI_LIMITS = { chat: [40, 1500], "chart-read": [10, 300], import: [10, 300], podcast: [6, 150], confai: [10, 200], "claude-fb": [5, 60] };
@@ -72,7 +72,7 @@ export const memIncr = async (k, ttl = 3600, now = Date.now(), max = MAX_MEM) =>
   return 1;
 };
 
-const kvIncr = async (k, ttl) => { const n = await kv("INCR", k); if (n === 1) await kv("EXPIRE", k, ttl); return n; };
+const kvIncr = incrTtl;
 
 // 回傳 null＝可以通過；字串＝要擋下來的原因
 export async function aiLimit(req, name, now = Date.now(), store = null) {

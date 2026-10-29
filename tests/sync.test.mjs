@@ -1,7 +1,7 @@
 // 雲端同步與 Telegram API 深度測試 (Phase 3 P1/P2: 授權、頻率限制、暴力破解防護、過期資料與機密安全)
 import test from "node:test";
 import assert from "node:assert/strict";
-import handler, { tg, hashId, bindTok, okId, ipOf, sanitizeTelegramError, redactTelegramSecrets } from "../api/_lib/sync.js";
+import handler, { tg, hashId, bindTok, okId, ipOf, sanitizeTelegramError, redactTelegramSecrets, incrTtl } from "../api/_lib/sync.js";
 
 // 建立模擬的 HTTP Request 與 Response 物件
 function mockHttp({ method = "POST", body = {}, query = {}, headers = {} } = {}) {
@@ -386,4 +386,41 @@ test("IP 信任邊界：優先信任 x-real-ip，防止攻擊者藉由 x-forward
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("多裝置同步不互相蓋掉（稽核 F-06）：雲端比 base 新就回 409；force 才覆蓋；沒帶 base 的舊版照舊", async () => {
+  process.env.KV_REST_API_URL = "https://mock-kv.upstash.io";
+  process.env.KV_REST_API_TOKEN = "mock_token";
+  const originalFetch = globalThis.fetch, store = new Map(), id = "conflict_sync_token_abc_123", key = `sync:${hashId(id)}`;
+  globalThis.fetch = async (url, opts) => { const [op, k, v] = JSON.parse(opts.body); const R = result => ({ ok: true, json: async () => ({ result }) });
+    if (op === "INCR") return R(1); if (op === "GET") return R(store.get(k) ?? null); if (op === "SET") { store.set(k, v); return R("OK"); } return R(1); };
+  const push = async body => { const m = mockHttp({ body: { op: "push", id, data: { "kline:watch:x": "1" }, ...body } }); await handler(m.req, m.res); return m; };
+  try {
+    store.set(key, JSON.stringify({ at: 2000, dev: "iPhone", data: { "kline:watch:x": "iphone" } }));
+    const a = await push({ base: 1000, dev: "iPad" });
+    assert.equal(a.status, 409); assert.equal(a.data.conflict, true); assert.equal(a.data.at, 2000); assert.equal(a.data.dev, "iPhone");
+    assert.equal(JSON.parse(store.get(key)).data["kline:watch:x"], "iphone", "衝突時雲端資料不變");
+    const b = await push({ base: 2000 }); assert.equal(b.status, 200); assert.equal(b.data.ok, true, "base 等於雲端時間：可以上傳");
+    assert.equal(JSON.parse(store.get(key)).at, b.data.at, "回傳的 at 和存進雲端的一樣，下次當 base 才對得上");
+    store.set(key, JSON.stringify({ at: Date.now() + 1e6, dev: "iPhone", data: {} }));
+    const c = await push({ base: 1, force: true }); assert.equal(c.data.ok, true, "force：使用者確認後覆蓋");
+    store.set(key, JSON.stringify({ at: Date.now() + 1e6, dev: "iPhone", data: {} }));
+    const d = await push({}); assert.equal(d.data.ok, true, "舊版網頁沒帶 base：照舊直接覆蓋（相容）");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("計數器的過期時間（稽核 F-11）：第一次 EXPIRE 失敗，之後會補上，不會變成永久封鎖", async () => {
+  process.env.KV_REST_API_URL = "https://mock-kv.upstash.io";
+  process.env.KV_REST_API_TOKEN = "mock_token";
+  const originalFetch = globalThis.fetch; let n = 0, ttl = -1, expireCalls = 0;
+  globalThis.fetch = async (url, opts) => { const [op] = JSON.parse(opts.body); const R = result => ({ ok: true, json: async () => ({ result }) });
+    if (op === "INCR") return R(++n); if (op === "TTL") return R(ttl);
+    if (op === "EXPIRE") { expireCalls++; if (expireCalls === 1) return { ok: false, status: 500, json: async () => ({ error: "暫時失敗" }) }; ttl = 3600; return R(1); } return R(1); };
+  try {
+    await assert.rejects(incrTtl("wl:ip:x", 3600), "第一次 EXPIRE 失敗會丟錯（呼叫的地方照舊處理）");
+    for (let i = 2; i <= 20; i++) await incrTtl("wl:ip:x", 3600);
+    assert.equal(ttl, 3600, "第 20 次檢查到沒有過期時間，補上");
+    const before = expireCalls; for (let i = 21; i <= 40; i++) await incrTtl("wl:ip:x", 3600);
+    assert.equal(expireCalls, before, "已經有過期時間就不再重設");
+  } finally { globalThis.fetch = originalFetch; }
 });

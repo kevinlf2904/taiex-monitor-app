@@ -1184,7 +1184,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.29-164</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.30-165</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1348,6 +1348,11 @@ function noteErr(where, e) {
 }
 addEventListener("error", e => noteErr(`程式 ${(e.filename || "").split("/").pop()}:${e.lineno || ""}`, e.message));
 addEventListener("unhandledrejection", e => noteErr("程式（非同步）", e.reason));
+// 大盤附帶的資料抓失敗時（/api/market 的 failed），註明哪幾塊暫缺，不讓空白看起來像「沒有資料」
+const MKT_FAILED = { hilo: "新高新低", sectors: "產業", inst: "法人", us: "美股指數", world: "世界指數" };
+const mktFailedNote = J => { const L = (J?.failed || []).map(k => MKT_FAILED[k]).filter(Boolean); return L.length ? `${L.join("、")}暫時拿不到，稍後自動重試。` : ""; };
+// 拿到資料的時間：離線快取（sw.js）回的舊資料帶 swCachedAt（當時存起來的時間），用它才會被判成過期；其他就是現在
+const gotAt = j => (j?.swCachedAt != null ? Math.max(1, +j.swCachedAt || 0) : Date.now());
 async function getJ(url, optional = false) {
   const ttl = apiTtl(url); if (ttl && !(W.fresh > Date.now())) { const hit = await apiCacheGet(url); if (hit) return hit; }
   const fail = m => { const p = String(url).split("?")[0]; if (!(W.off && /資料服務/.test(m))) noteErr(p, m); return new Error(m); }; // 本機沒有資料服務的不記
@@ -1500,7 +1505,7 @@ function liveRefresh() {
   else if (W.lt === "mkt" && (W.mkReg === "otc" || W.mkReg === "lst")) { if (lazyOk("mkx")) otcLoad(); }
   else if (W.lt === "mkt" && W.mkReg === "off") { if (lazyOk("mkx")) offLoad(); }
   else if (W.lt === "mkt") {
-    if (open && age(W.mkt) > 10000 && !(W.mktLoading && Date.now() - W.mktLoading < 40000)) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
+    if (open && age({ at: W.mkt?.tryAt ?? W.mkt?.at }) > 10000 && !(W.mktLoading && Date.now() - W.mktLoading < 40000)) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
     const curHot = W.hot["rank:" + W.mkHot];
     const hotExp = !curHot || (curHot.err ? Date.now() - (curHot.errAt || 0) > MK_HOT_ERR_TTL : (!Array.isArray(curHot.rows) || Date.now() - (curHot.at || 0) > MK_HOT_TTL));
     if (open && W.mkHot !== "surge" && hotExp) {
@@ -1565,8 +1570,9 @@ async function loadMktLive() {
   W.mktLoading = Date.now(); loadIxSpark(); loadIndRt(); const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
   // 期貨和大盤統計各自更新：其中一個慢或失敗，不會讓另一個也一直空著
   const futP = Promise.all([fut("EXF"), fut("FXF")]).then(([ex, fx]) => { W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; if (W.lt === "mkt" && !W.mktLoading) renderList(); });
-  try { const m = await getJ("/api/market"); W.mkt = { ...m, at: Date.now() }; }
-  catch (e) { if (W.mkt) W.mkt.at = Date.now(); else W.mkt = { err: e.message, at: Date.now() }; } finally { W.mktLoading = 0; }
+  // at＝這份資料是什麼時候拿到的（判斷過期用），tryAt＝最後一次去問的時間（排下一次更新用）；失敗只改 tryAt，畫面才會轉成「資料延遲」，不會一直寫「更新於 現在」
+  try { const m = await getJ("/api/market"); W.mkt = { ...m, at: gotAt(m), tryAt: Date.now() }; }
+  catch (e) { if (W.mkt && !W.mkt.err) Object.assign(W.mkt, { tryAt: Date.now(), lastErr: e.message }); else W.mkt = { err: e.message, at: Date.now(), tryAt: Date.now() }; } finally { W.mktLoading = 0; }
   await futP.catch(() => {});
   if (W.lt === "mkt") { W.ticking = true; try { renderList(); } finally { W.ticking = false; } }
 }
@@ -2062,7 +2068,7 @@ function renderList0() {
     $("#lTools").innerHTML = `<span class="note">${W.mkReg === "otc" ? "櫃買中心・每個交易日收盤後更新" : W.mkReg === "lst" ? "證交所・每個交易日收盤後更新" : W.mkReg === "off" ? "證交所、櫃買中心公告・約 15 分鐘更新" : W.mkReg === "gl" ? `原物料・外匯・利率${W.gl?.at ? `・更新於 ${new Date(W.gl.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span>${rfBtn("mktRefresh")}`;
     const mktHealthy = isMarketHealthy(W.mkt);
     const mktNoteText = getMktNoteText(W.mkt);
-    renderMkt(); note = W.mkReg === "otc" || W.mkReg === "lst" || W.mkReg === "off" ? "" : W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${mktNoteText}（貢獻點數為估算）。${W.mkt.note ? " " + W.mkt.note : ""}` : (W.mkt?.dataStatus === "unavailable" ? mktNoteText : "");
+    renderMkt(); note = W.mkReg === "otc" || W.mkReg === "lst" || W.mkReg === "off" ? "" : W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${mktNoteText}（貢獻點數為估算）。${mktFailedNote(W.mkt)}${W.mkt.note ? " " + W.mkt.note : ""}` : (W.mkt?.dataStatus === "unavailable" ? mktNoteText : "");
   } else if (W.lt === "etf") {
     note = renderEtf();
   } else if (W.lt === "earn") {
@@ -3738,7 +3744,7 @@ function indCard(t, fav) {
   const a = indAvg(t), n = indCodes(t).length, col = indCol(t);
   return `<article class="itheme" style="--ic:${col}"><div class="ith"><span class="iic">${indIcon(t)}</span><span class="itag">${MK_TAG[t.mk]}</span>
     <span class="iavg ${a ? cls(a.pct) : ""}" title="${a ? `${a.n} 檔的平均漲跌` : "沒有即時報價"}">${a ? `${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%` : "—"}</span>
-    <button class="ifav" data-ifav="${t.id}" aria-pressed="${fav.has(t.id)}" aria-label="收藏 ${esc(t.name)}">${fav.has(t.id) ? "♥" : "♡"}</button><span class="icnt">${n} 家公司</span></div>
+    <button class="ifav" data-ifav="${t.id}" aria-pressed="${fav.has(t.id)}" aria-label="收藏 ${esc(t.name)}" title="收藏 ${esc(t.name)}">${fav.has(t.id) ? "♥" : "♡"}</button><span class="icnt">${n} 家公司</span></div>
     <h3>${esc(t.cat)}<span>｜</span>${esc(t.name)}</h3><p>${esc(t.desc)}</p><button class="igo" data-iopen="${t.id}">探索供應鏈地圖 →</button></article>`;
 }
 // 題材總覽：依產業類別聚成幾座「群島」，圓環每一段是一個題材（顏色＝今日平均漲跌）
@@ -4097,7 +4103,7 @@ function renderInd0() {
   if (T) { // 題材內頁
     const a = indAvg(T);
     h += menu + `<div class="ihead" style="--ic:${indCol(T)}"><button class="btn sm" data-iopen="">‹ 返回</button><span class="iic">${indIcon(T)}</span><div><small>${esc(T.cat)}・${MK_TAG[T.mk]}</small><h2>${esc(T.name)}</h2></div>
-      ${scBtn("supply")}<button class="ifav" data-ifav="${T.id}" aria-pressed="${fav.has(T.id)}" aria-label="收藏">${fav.has(T.id) ? "♥" : "♡"}</button></div>
+      ${scBtn("supply")}<button class="ifav" data-ifav="${T.id}" aria-pressed="${fav.has(T.id)}" aria-label="收藏" title="收藏">${fav.has(T.id) ? "♥" : "♡"}</button></div>
       <p class="idesc">${esc(T.desc)}</p>${a ? `<p class="note gnote">今天平均 <b class="${cls(a.pct)}">${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%</b>（${a.n} 檔有報價）</p>` : ""}
       ${(F => F ? `<section class="iflow ifig"><h4>原理圖解${figItems(T).length ? "" : ` <button class="ilink" data-izoom="${T.id}">⤢ 放大</button>`}</h4><div class="izbtn figi">${figSvg(F.fig, { id: "d-" + T.id })}</div>${figCtl(T)}${F.fig.alt ? `<p class="note figalt">${esc(F.fig.alt)}</p>` : ""}</section>
         <section class="iseg ihow"><h4>原理說明 <span class="note">虛線底的名詞可以點，看解釋</span></h4>${figHowHtml(F, T)}</section>
@@ -4272,7 +4278,7 @@ async function loadMkt(force = false) {
   const exP = fut("EXF"), fxP = fut("FXF");
   Promise.all([exP, fxP]).then(([ex, fx]) => { W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; if (W.lt === "mkt") renderList(); }).catch(() => {});
   const [m, cal, ex, fx, wn] = await Promise.allSettled([getJ("/api/market"), W.cal && !force ? Promise.resolve(W.cal) : getJ("/api/calendar", true), exP, fxP, loadWarn(force)]);
-  W.mkt = m.status === "fulfilled" ? { ...m.value, at: Date.now() } : { err: m.reason?.message, at: Date.now() };
+  W.mkt = m.status === "fulfilled" ? { ...m.value, at: gotAt(m.value), tryAt: Date.now() } : { err: m.reason?.message, at: Date.now(), tryAt: Date.now() };
   W.cal = cal.status === "fulfilled" ? cal.value : { err: cal.reason?.message };
   W.futx = { EXF: ex.value || W.futx?.EXF || null, FXF: fx.value || W.futx?.FXF || null };
   if (!W.scr) loadScreen(); // 熱門股的急拉股用選股清單
@@ -4471,7 +4477,7 @@ function treemap(values, W, H) {
 // 國際：原物料、外匯、利率、航運、加密貨幣（/api/global）
 async function loadGlobal(force = false) {
   if (W.off || W.glLoading || (!force && W.gl && Date.now() - W.gl.at < 60000)) return;
-  W.glLoading = true; try { W.gl = { ...(await getJ("/api/global", true)), at: Date.now() }; } catch (e) { W.gl = { err: e.message, at: Date.now() }; } finally { W.glLoading = false; }
+  W.glLoading = true; try { const j = await getJ("/api/global", true); W.gl = { ...j, at: gotAt(j) }; } catch (e) { W.gl = { err: e.message, at: Date.now() }; } finally { W.glLoading = false; }
   if (W.lt === "mkt" && W.mkReg === "gl") renderList();
 }
 // 原物料、外匯、利率對股市的影響：[上漲時, 下跌時]（依歷史上常見的關係整理，不是預測）
@@ -4510,7 +4516,7 @@ function renderGlobal(top) {
   if (!J) { $("#lx").innerHTML = top + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有國際行情。</p>` : skel("載入國際行情…")); loadGlobal(); return; }
   if (J.err || !J.ok) { $("#lx").innerHTML = top + `<p class="note err" style="padding:12px">⚠︎ ${esc(J.err || J.error || "暫時拿不到國際行情")}</p>`; return; }
   const dp = (g, v) => (v == null ? "—" : v.toLocaleString(undefined, { maximumFractionDigits: g === "fx" ? (v < 10 ? 4 : v < 200 ? 3 : 2) : g === "rate" ? 3 : v < 10 ? 3 : 2 }));
-  let h = top + `<p class="note gnote">${esc(J.source || "")}・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}</p>`;
+  let h = top + `<p class="note gnote">${esc(J.source || "")}・更新於 ${new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19)}${J.failed?.length ? `・${J.failed.length} 項暫時拿不到（顯示 —）` : ""}</p>`;
   // 今天變動比較大的（利率 1.5% 以上、其他 2% 以上），先列出對股市可能的影響
   const imp = x => { const I = GL_IMPACT[x.code]; return I && x.chgPct != null && x.chgPct !== 0 ? I[x.chgPct > 0 ? 0 : 1] : null; }, big = J.groups.flatMap(g => g.rows.filter(x => imp(x) && Math.abs(x.chgPct) >= (g.id === "rate" ? 1.5 : 2)));
   if (big.length) h += `<section class="mk"><h3>今天變動較大，對股市可能的影響</h3><ul class="mc-imp">${big.map(x => `<li><b>${esc(x.name)} <span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chgPct).toFixed(2)}%</span></b><span>${esc(imp(x))}</span></li>`).join("")}</ul></section>`;
