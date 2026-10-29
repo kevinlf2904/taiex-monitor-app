@@ -120,6 +120,13 @@ test("盤後外資持股基準：這次 MI_QFIIS 沒抓到時沿用上一次，�
   assert.deepEqual([bad.fr, bad.frDate, bad.frPrev], [old.fr, old.frDate, old.frPrev], "存的基準維持上一次，不寫空的");
   assert.deepEqual(frState(ok, new Map([["2330", 72.6]]), "2026-10-30").prevFr, { 2330: 72.1 }, "同一天第二次跑（21:30）：還是和上一個交易日比");
 });
+test("漲跌家數排程：只拿到上市（上櫃還沒出來）時不算完整，不存成上櫃 0 漲 0 跌", async () => {
+  const { full, countDay } = await import("../scripts/market-breadth.mjs");
+  const tw = new Map([["2330", { market: "上市", pct: 1 }], ["2317", { market: "上市", pct: -1 }]]);
+  assert.equal(full(countDay(tw)), false, "只有上市：不完整");
+  tw.set("6488", { market: "上櫃", pct: 2 });
+  assert.equal(full(countDay(tw)), true, "上市、上櫃都有：完整");
+});
 test("所有策略回測合理性", () => {
   const E = engine(), ids = Object.keys(E.STRAT_DEFS); let n = 0;
   assert.ok(ids.length > 20);
@@ -277,6 +284,11 @@ test("ETF：MoneyDJ 基本資料、全部持股、月持股與產業、成分股
   const now = new Date("2026-10-17T00:00:00Z"), a = etfUpdate(null, "0050", d1, now), b = etfUpdate(a, "0050", d2, now), c = etfUpdate(b, "0050", d2, now);
   assert.equal(a.ev.length, 0); assert.deepEqual(b.ev.map(e => [e.t, e.name]), [["in", "奇鋐"], ["out", "台泥"]]); assert.equal(b.prev.date, "2026-10-15"); assert.equal(c.ev.length, 2);
   assert.equal(etfDiff([["2330", "台積電", 50, 1]], [["2330", "台積電", 50, 9]], "d").length, 0);
+  // 這次的持股比上次少一半以上（來源只回一部分）：不比對、回 null，不記一堆假的「剔除」
+  const many = { info: { name: "X" }, hold: { date: "2026-10-15", rows: Array.from({ length: 20 }, (_, i) => ({ code: String(1000 + i), name: "股" + i, pct: 5, sh: 1 })) } };
+  const few = { info: { name: "X" }, hold: { date: "2026-10-16", rows: many.hold.rows.slice(0, 5) } };
+  const big = etfUpdate(null, "0050", many, now); assert.equal(etfUpdate(big, "0050", few, now), null);
+  assert.equal(etfUpdate(a, "0050", { ...d2, hold: { ...d2.hold, rows: d2.hold.rows.slice(0, 1) } }, now).rows.length, 1, "上次不到 10 檔：照常比對（小型 ETF 正常變動）");
 });
 
 import { impactOf } from "../api/_lib/macro.js";
