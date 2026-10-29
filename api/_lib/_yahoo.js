@@ -11,10 +11,127 @@ export const isUS = c => (/^\^?[A-Z][A-Z0-9]{0,5}([.-][A-Z]{1,3}|=[FX])?$/.test(
 export const US_NAMES = {
   AAPL: "蘋果", MSFT: "微軟", NVDA: "輝達", AMZN: "亞馬遜", GOOGL: "Alphabet", META: "Meta", TSLA: "特斯拉", AVGO: "博通", TSM: "台積電 ADR", AMD: "超微",
   NFLX: "Netflix", PLTR: "Palantir", INTC: "英特爾", SPCX: "SpaceX", MU: "美光", QCOM: "高通", ARM: "安謀", SMCI: "美超微", COST: "好市多", JPM: "摩根大通", BRK_B: "波克夏",
-  SPY: "S&P 500 ETF", QQQ: "那斯達克 100 ETF", SOXX: "費半 ETF", TQQQ: "3 倍那斯達克", SOXL: "3 倍半導體", "^GSPC": "S&P 500", "^IXIC": "那斯達克", "^DJI": "道瓊", "^SOX": "費城半導體",
+  SPY: "S&P 500 ETF", QQQ: "那斯達克 100 ETF", SOXX: "費半 ETF", TQQQ: "3 倍那斯達克", SOXL: "3 倍半導體", "^GSPC": "S&P 500", "^IXIC": "那斯達克", "^DJI": "道瓊", "^SOX": "費城半導體", "^NDX": "NASDAQ-100", "^RUT": "羅素 2000", "^VIX": "VIX 波動率",
 };
 export const US_POPULAR = ["NVDA", "AAPL", "MSFT", "TSLA", "AMZN", "GOOGL", "META", "AVGO", "TSM", "AMD", "PLTR", "NFLX", "MU", "INTC", "QCOM", "ARM", "SMCI", "COST", "JPM", "SPY", "QQQ", "SOXX", "TQQQ", "SOXL"];
 export const usName = (sym, fallback) => US_NAMES[sym] || US_NAMES[sym.replace("-", "_")] || fallback || sym;
+
+// 美東時區（America/New_York）與夏令／冬令時間（EDT UTC-4／EST UTC-5）換算
+const ET_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/New_York",
+  year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", second: "2-digit",
+  hour12: false, weekday: "short", timeZoneName: "shortOffset",
+});
+export function usEasternParts(ms = Date.now()) {
+  const d = new Date(typeof ms === "number" ? ms : Date.parse(ms));
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = Object.fromEntries(ET_FMT.formatToParts(d).map(p => [p.type, p.value]));
+  const hh = parts.hour === "24" ? "00" : parts.hour;
+  const date = `${parts.year}-${parts.month}-${parts.day}`;
+  const time = `${hh}:${parts.minute}:${parts.second}`;
+  const hm = `${hh}:${parts.minute}`;
+  const isDST = (parts.timeZoneName || "").includes("-4");
+  const isWeekend = parts.weekday === "Sat" || parts.weekday === "Sun";
+  return {
+    date, time, hm,
+    year: +parts.year, month: +parts.month, day: +parts.day,
+    weekday: parts.weekday, isWeekend, isDST,
+    tzAbbr: isDST ? "EDT" : "EST",
+    utcOffsetSec: isDST ? -4 * 3600 : -5 * 3600,
+    isoOffset: isDST ? "-04:00" : "-05:00",
+  };
+}
+export function twTimeParts(ms = Date.now()) {
+  const t = typeof ms === "number" ? ms : Date.parse(ms);
+  if (Number.isNaN(t)) return null;
+  const iso = new Date(t + 8 * 3600e3).toISOString();
+  return { date: iso.slice(0, 10), time: iso.slice(11, 19), hm: iso.slice(11, 16) };
+}
+// 復活節與耶穌受難日（Good Friday，復活節前兩天）
+function goodFridayDate(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  const dt = new Date(Date.UTC(y, month - 1, day - 2));
+  return dt.toISOString().slice(0, 10);
+}
+function nthWeekdayOfMonth(y, m, dow, n) {
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const day = 1 + ((dow - first + 7) % 7) + (n - 1) * 7;
+  return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function lastWeekdayOfMonth(y, m, dow) {
+  const lastDt = new Date(Date.UTC(y, m, 0));
+  const diff = (lastDt.getUTCDay() - dow + 7) % 7;
+  const day = lastDt.getUTCDate() - diff;
+  return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function observedFixedHoliday(y, m, d) {
+  const dt = new Date(Date.UTC(y, m - 1, d)), wd = dt.getUTCDay();
+  if (wd === 6) dt.setUTCDate(dt.getUTCDate() - 1);
+  else if (wd === 0) dt.setUTCDate(dt.getUTCDate() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+const US_HOL_CACHE = new Map();
+function usHolidaysForYear(y) {
+  if (US_HOL_CACHE.has(y)) return US_HOL_CACHE.get(y);
+  const map = new Map();
+  const ny = observedFixedHoliday(y, 1, 1);
+  if (ny.startsWith(String(y))) map.set(ny, "美股休市（元旦）");
+  const nextNy = observedFixedHoliday(y + 1, 1, 1);
+  if (nextNy.startsWith(String(y))) map.set(nextNy, "美股休市（元旦補假）");
+  map.set(nthWeekdayOfMonth(y, 1, 1, 3), "美股休市（馬丁路德金恩紀念日）");
+  map.set(nthWeekdayOfMonth(y, 2, 1, 3), "美股休市（總統日）");
+  map.set(goodFridayDate(y), "美股休市（耶穌受難日）");
+  map.set(lastWeekdayOfMonth(y, 5, 1), "美股休市（陣亡將士紀念日）");
+  map.set(observedFixedHoliday(y, 6, 19), "美股休市（六月節）");
+  map.set(observedFixedHoliday(y, 7, 4), "美股休市（獨立紀念日）");
+  map.set(nthWeekdayOfMonth(y, 9, 1, 1), "美股休市（勞動節）");
+  map.set(nthWeekdayOfMonth(y, 11, 4, 4), "美股休市（感恩節）");
+  map.set(observedFixedHoliday(y, 12, 25), "美股休市（聖誕節）");
+  US_HOL_CACHE.set(y, map);
+  return map;
+}
+export function usHolidayName(dateStr) {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+  const y = +dateStr.slice(0, 4);
+  return usHolidaysForYear(y).get(dateStr) || null;
+}
+export function lastUsTradingDate(ms = Date.now()) {
+  const et = usEasternParts(ms);
+  if (!et) return { expectedDate: null, currentEtDate: null, currentEtTime: null, holiday: null, isWeekend: false, isDST: false, tzAbbr: "EST", utcOffsetSec: -18000, marketSession: "closed" };
+  const hol = usHolidayName(et.date);
+  let marketSession = "closed";
+  if (hol) marketSession = "holiday";
+  else if (et.isWeekend) marketSession = "closed";
+  else if (et.hm >= "09:30" && et.hm < "16:00") marketSession = "open";
+  else if (et.hm >= "04:00" && et.hm < "09:30") marketSession = "pre";
+  else if (et.hm >= "16:00" && et.hm < "20:00") marketSession = "post";
+
+  let cur = et.date;
+  if (et.isWeekend || hol || et.hm < "09:30") {
+    const dt = new Date(`${et.date}T12:00:00Z`);
+    for (let i = 0; i < 10; i++) {
+      dt.setUTCDate(dt.getUTCDate() - 1);
+      const cand = dt.toISOString().slice(0, 10), wd = dt.getUTCDay();
+      if (wd !== 0 && wd !== 6 && !usHolidayName(cand)) { cur = cand; break; }
+    }
+  }
+  return {
+    expectedDate: cur,
+    currentEtDate: et.date,
+    currentEtTime: et.time,
+    holiday: hol,
+    isWeekend: et.isWeekend,
+    isDST: et.isDST,
+    tzAbbr: et.tzAbbr,
+    utcOffsetSec: et.utcOffsetSec,
+    marketSession,
+  };
+}
 
 export async function getJSON(url, headers = {}, ms = 8000) {
   const r = await fetch(url, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(ms) });
@@ -25,20 +142,76 @@ const chartURL = (sym, q) => `https://query1.finance.yahoo.com/v8/finance/chart/
 // 交易時段（以交易所當地時間 HH:MM 表示）
 const localHM = (sec, off) => new Date((sec + off) * 1000).toISOString().slice(11, 16);
 export function sessionOf(meta, nowSec = Date.now() / 1000) {
-  const p = meta?.currentTradingPeriod, off = meta?.gmtoffset ?? 0;
-  if (!p?.regular) return { state: "closed", open: "09:30", close: "16:00" };
-  const r = p.regular, pre = p.pre;
-  const state = nowSec >= r.start && nowSec < r.end ? "open" : pre && nowSec >= pre.start && nowSec < pre.end ? "pre" : "closed";
-  return { state, open: localHM(r.start, off), close: localHM(r.end, off) };
+  const p = meta?.currentTradingPeriod, cal = lastUsTradingDate(nowSec * 1000);
+  const off = meta?.gmtoffset ?? cal.utcOffsetSec ?? -18000;
+  if (!p?.regular) {
+    return {
+      state: cal.marketSession === "holiday" ? "closed" : cal.marketSession,
+      subState: cal.marketSession,
+      holiday: cal.holiday || null,
+      tz: cal.tzAbbr,
+      open: "09:30",
+      close: "16:00",
+    };
+  }
+  const r = p.regular, pre = p.pre, post = p.post;
+  let state = "closed", subState = "closed";
+  if (nowSec >= r.start && nowSec < r.end) { state = "open"; subState = "open"; }
+  else if (pre && nowSec >= pre.start && nowSec < pre.end) { state = "pre"; subState = "pre"; }
+  else if (post && nowSec >= post.start && nowSec < post.end) { state = "post"; subState = "post"; }
+  else if (cal.holiday) { state = "closed"; subState = "holiday"; }
+  else if (cal.isWeekend) { state = "closed"; subState = "weekend"; }
+  return {
+    state,
+    subState,
+    holiday: cal.holiday || null,
+    tz: cal.tzAbbr,
+    open: localHM(r.start, off),
+    close: localHM(r.end, off),
+  };
 }
 // Yahoo chart 的 meta → 和 /api/quote 相同格式的報價
 export function quoteFromMeta(sym, meta, nowSec) {
-  const price = num(meta.regularMarketPrice), prev = num(meta.chartPreviousClose ?? meta.previousClose), off = meta.gmtoffset ?? 0, t = meta.regularMarketTime;
-  return { code: sym, name: usName(sym, meta.shortName || meta.longName), market: meta.exchangeName || meta.fullExchangeName || "美股", currency: meta.currency || "USD",
+  const nowMs = nowSec != null ? nowSec * 1000 : Date.now();
+  const cal = lastUsTradingDate(nowMs);
+  const isUsTz = !meta?.exchangeTimezoneName || meta.exchangeTimezoneName === "America/New_York" || meta.gmtoffset === -14400 || meta.gmtoffset === -18000;
+  const price = num(meta.regularMarketPrice), prev = num(meta.chartPreviousClose ?? meta.previousClose);
+  const t = meta.regularMarketTime, epochMs = t ? t * 1000 : null;
+  const etQuote = epochMs && isUsTz ? usEasternParts(epochMs) : null;
+  const off = meta.gmtoffset ?? (etQuote ? etQuote.utcOffsetSec : cal.utcOffsetSec ?? 0);
+  const time = t ? (etQuote ? etQuote.time : localHM(t, off) + ":" + new Date((t + off) * 1000).toISOString().slice(17, 19)) : null;
+  const date = t ? (etQuote ? etQuote.date : new Date((t + off) * 1000).toISOString().slice(0, 10)) : null;
+  const twQuote = epochMs ? twTimeParts(epochMs) : null;
+  const sess = sessionOf(meta, nowSec ?? Date.now() / 1000);
+  const isStale = Boolean(isUsTz && date && cal.expectedDate && date < cal.expectedDate);
+  let dataStatus = "confirmed";
+  if (price == null || !date) dataStatus = "unavailable";
+  else if (isStale) dataStatus = "stale";
+  else if (sess.state === "open") {
+    const ageSec = epochMs ? (nowMs - epochMs) / 1000 : null;
+    dataStatus = ageSec == null ? "delayed" : ageSec > 20 * 60 ? "stale" : ageSec > 180 ? "delayed" : "live";
+  } else if (sess.state === "pre") dataStatus = "pending";
+  else if (sess.subState === "holiday") dataStatus = "holiday";
+  const updateMode = sess.state === "open" || sess.state === "pre" || sess.state === "post" ? "scheduled" : "after_close";
+  return {
+    code: sym, name: usName(sym, meta.shortName || meta.longName), market: meta.exchangeName || meta.fullExchangeName || "美股", currency: meta.currency || "USD",
     price, prev, open: null, high: num(meta.regularMarketDayHigh), low: num(meta.regularMarketDayLow), vol: num(meta.regularMarketVolume),
     chg: price != null && prev ? +(price - prev).toFixed(2) : null, chgPct: price != null && prev ? +((price / prev - 1) * 100).toFixed(2) : null,
-    time: t ? localHM(t, off) + ":" + new Date((t + off) * 1000).toISOString().slice(17, 19) : null, date: t ? new Date((t + off) * 1000).toISOString().slice(0, 10) : null,
-    bids: [], asks: [], estimated: false, us: true, session: sessionOf(meta, nowSec) };
+    time, date,
+    dataDate: date,
+    sourceTime: time,
+    sourceTimeTW: twQuote?.time || null,
+    sourceDateTW: twQuote?.date || null,
+    epochMs,
+    tz: isUsTz ? (etQuote?.tzAbbr || cal.tzAbbr) : null,
+    source: "Yahoo Finance",
+    updateMode,
+    dataStatus,
+    isStale,
+    expectedDate: isUsTz ? cal.expectedDate : null,
+    holiday: isUsTz ? (cal.holiday || null) : null,
+    bids: [], asks: [], estimated: false, us: true, session: sess,
+  };
 }
 // 盤前、盤後：用含延長時段的 5 分 K，最後一根在正規時段之外時就是盤前或盤後價（和正規收盤比）
 export function extFrom(r, q) {
@@ -72,7 +245,7 @@ export async function yahooBars(sym, tf, { period1, period2, isIdx = false, shar
   const span = period1 && period2 ? `period1=${Math.floor(period1)}&period2=${Math.floor(period2)}` : "range=1d";
   return parseYahooBars(await getJSON(chartURL(sym, `${span}&interval=${TF_INTERVAL[tf] || "1m"}&includePrePost=false`)), isIdx, shares);
 }
-// 每種分 K 在 Yahoo 能往回查多久（天）、一次查幾天
+// 每種分 K 在 Yahoo 能往回查多久（天）、仁一次查幾天
 export const INTRADAY_LIMIT = { 1: { back: 29, chunk: 7 }, 5: { back: 59, chunk: 20 }, 15: { back: 59, chunk: 30 }, 30: { back: 59, chunk: 45 }, 60: { back: 729, chunk: 180 } };
 
 // 美股熱門：先試 Yahoo 的「最活躍」篩選，失敗時用內建的熱門清單

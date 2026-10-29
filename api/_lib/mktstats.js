@@ -25,8 +25,16 @@ async function recent(fn, days = 6) {
 export function parseMi5(j, d) {
   const t = pickTable(j, /委託買進筆數/, /成交金額/); if (!t?.data?.length) return null;
   const f = t.fields, r = t.data[t.data.length - 1], g = re => num(r[keyIdx(f, re)]);
-  return { date: dashed(d), time: String(r[keyIdx(f, /時間/)] ?? "").trim(), bidCnt: g(/委託買進筆數/), bidVol: g(/委託買進數量/), askCnt: g(/委託賣出筆數/), askVol: g(/委託賣出數量/),
-    dealCnt: g(/成交筆數/), dealVol: g(/成交數量/), dealAmt: g(/成交金額/) != null ? +(g(/成交金額/) / 100).toFixed(2) : null }; // 成交金額單位：百萬元 → 億
+  const date = dashed(d), time = String(r[keyIdx(f, /時間/)] ?? "").trim();
+  return {
+    date, time,
+    dataDate: date,
+    sourceTime: time || null,
+    source: "證交所 MI_5MINS",
+    updateMode: "scheduled",
+    bidCnt: g(/委託買進筆數/), bidVol: g(/委託買進數量/), askCnt: g(/委託賣出筆數/), askVol: g(/委託賣出數量/),
+    dealCnt: g(/成交筆數/), dealVol: g(/成交數量/), dealAmt: g(/成交金額/) != null ? +(g(/成交金額/) / 100).toFixed(2) : null, // 成交金額單位：百萬元 → 億
+  };
 }
 const orders = () => recent(async d => parseMi5(await getJSON(`https://www.twse.com.tw/rwd/zh/afterTrading/MI_5MINS?date=${d}&response=json`, 12000), d));
 
@@ -37,7 +45,15 @@ export function parseMargin(j, d) {
   const fin = row(/融資金額/), sh = row(/^融券/); if (!fin || !sh) return null;
   const fb = num(fin[iT]), fp = num(fin[iP]), sb = num(sh[iT]), sp = num(sh[iP]);
   if (fb == null || sb == null) return null;
-  return { date: dashed(d), finBal: +(fb / 1e5).toFixed(2), finChg: fp != null ? +((fb - fp) / 1e5).toFixed(2) : null, shortBal: sb, shortChg: sp != null ? sb - sp : null }; // 仟元 → 億
+  const date = dashed(d);
+  return {
+    date,
+    dataDate: date,
+    sourceTime: null,
+    source: "證交所 MI_MARGN",
+    updateMode: "after_close",
+    finBal: +(fb / 1e5).toFixed(2), finChg: fp != null ? +((fb - fp) / 1e5).toFixed(2) : null, shortBal: sb, shortChg: sp != null ? sb - sp : null, // 仟元 → 億
+  };
 }
 const margin = () => recent(async d => parseMargin(await getJSON(`https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=${d}&selectType=MS&response=json`, 12000), d));
 
@@ -61,7 +77,16 @@ export function parseFutRows(rows) {
   const rowsOut = ["外資", "投信", "自營商"].map(who => ({ who, tx: cur[who]?.tx ?? null, mtx: cur[who]?.mtx ?? null, txChg: prev?.[who]?.tx != null && cur[who]?.tx != null ? cur[who].tx - prev[who].tx : null, mtxChg: prev?.[who]?.mtx != null && cur[who]?.mtx != null ? cur[who].mtx - prev[who].mtx : null }));
   const sum = (o, p) => ["外資", "投信", "自營商"].reduce((s, w) => s + (o?.[w]?.[p] ?? 0), 0);
   const retail = { mtx: -sum(cur, "mtx"), mtxChg: prev ? -(sum(cur, "mtx") - sum(prev, "mtx")) : null };
-  return { date: dashed(date), rows: rowsOut, retail };
+  const isoDate = dashed(date);
+  return {
+    date: isoDate,
+    dataDate: isoDate,
+    sourceTime: null,
+    source: "期交所三大法人",
+    updateMode: "after_close",
+    rows: rowsOut,
+    retail,
+  };
 }
 export function csvRows(text) {
   const lines = String(text).replace(/\r/g, "").split("\n").filter(l => l.trim()); if (lines.length < 2) return [];
@@ -83,10 +108,17 @@ async function futures() {
 }
 
 export default async function handler(req, res) {
-  const [o, m, f] = await Promise.allSettled([orders(), margin(), futures()]);
-  const out = { ok: true, orders: o.value || null, margin: m.value || null, futures: f.value || null };
-  if (!out.orders && !out.margin && !out.futures) return res.status(200).json({ ok: false, error: "暫時拿不到證交所、期交所的統計資料" });
+  const fetchedAt = new Date().toISOString();
+  const today = tpNow().toISOString().slice(0, 10);
   const h = tpNow().getUTCHours() * 60 + tpNow().getUTCMinutes(), open = tpNow().getUTCDay() % 6 && h >= 540 && h <= 815;
+  const [o, m, f] = await Promise.allSettled([orders(), margin(), futures()]);
+  const tag = (v, isOrd = false) => {
+    if (!v) return null;
+    const dataStatus = v.date === today ? (isOrd && open ? "live" : "confirmed") : (isOrd && open ? "delayed" : "pending");
+    return { ...v, fetchedAt, dataStatus };
+  };
+  const out = { ok: true, fetchedAt, orders: tag(o.value, true), margin: tag(m.value, false), futures: tag(f.value, false) };
+  if (!out.orders && !out.margin && !out.futures) return res.status(200).json({ ok: false, error: "暫時拿不到證交所、期交所的統計資料" });
   res.setHeader("Cache-Control", open ? "s-maxage=60, stale-while-revalidate=120" : "s-maxage=600, stale-while-revalidate=1800");
   return res.status(200).json(out);
 }

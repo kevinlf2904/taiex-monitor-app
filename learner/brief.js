@@ -584,7 +584,7 @@ function evaluateDataStatus({ market = {}, G = {}, session = "post", tradeDate =
   }
 
   const inst = market.inst || G?.inst;
-  if (inst && typeof inst === "object") {
+  if (inst && typeof inst === "object" && session !== "live" && session !== "pre") {
     if (inst.date && inst.date !== marketDate) {
       return {
         dataStatus: "partial",
@@ -1163,13 +1163,20 @@ function coreMarketCardsHtml(market, G, sess, dataEval, opt = {}) {
     const chgStr = chg != null ? `${chg >= 0 ? "+" : ""}${fmtP(chg)}` : "";
     const chgDisplay = hasValidPct ? (chgStr ? `${chgStr} (${pctStr})` : pctStr) : pctStr;
 
-    return `<div class="dh-core-card" data-dhcode="${esc(code)}">
+    const dDate = obj.dataDate || obj.date || "";
+    const sTime = obj.sourceTime || obj.time || "";
+    const src = obj.source || (code.startsWith("^") || code === "TSM" ? "Yahoo Finance" : code === "TXF" ? "期交所" : "證交所／櫃買中心");
+    const uMode = obj.updateMode === "live" || sess.session === "live" ? "即時更新" : "盤後確認";
+    const subTxt = (dDate && sTime && sTime !== dDate) ? `${dDate.slice(5).replace("-", "/")} ${sTime.slice(0, 5)}` : (sTime || dDate || fallbackSub || "收盤定案");
+    const tip = `${title} (${code})｜資料日期：${dDate || "未提供"}｜來源時間：${sTime || "未提供"}｜來源：${src}｜類型：${uMode}`;
+
+    return `<div class="dh-core-card" data-dhcode="${esc(code)}" title="${esc(tip)}">
       <div class="dh-cc-head"><b>${esc(title)}</b><span class="note">${esc(code)}</span></div>
       <div class="dh-cc-body">
         <div class="dh-cc-val ${k}">${pStr}</div>
         <div class="dh-cc-chg ${k}">${esc(chgDisplay)}</div>
       </div>
-      <div class="dh-cc-sub note"><span>${esc(obj.time || obj.date || fallbackSub || "收盤定案")}</span>${opt.more ? sp(code, obj.spark) : ""}</div>
+      <div class="dh-cc-sub note"><span>${esc(subTxt)}</span>${opt.more ? sp(code, obj.spark) : ""}</div>
     </div>`;
   };
   const tw = opt.more && typeof tdGlRows === "function" && typeof W !== "undefined" ? tdGlRows().find(r => r.c === "TWD=X") : null;
@@ -1781,8 +1788,15 @@ function todayPage() {
     <div class="dh-secbar"><span class="note">外面看圖，點一塊看詳細文字</span><button type="button" class="linkbtn" data-tdall="${all ? "0" : "1"}">${all ? "全部收合" : "全部展開"}</button></div>
     <div class="dh-secs">${secs}</div>
 
-    <!-- 細節：資料來源、本機儲存限制與免責（預設收起來） -->
-    <details class="dh-more"><summary>資料來源與說明</summary>
+    <!-- 細節：資料來源、資料透明度明細、本機儲存限制與免責（預設收起來） -->
+    <details class="dh-more"><summary>資料資訊・來源與說明</summary>
+      <div class="mk-dinfo-grid">
+        <div><span>加權指數</span><b>${esc(tq?.date || "—")} ${esc(tq?.time || "")}（${esc(tq?.source || "證交所 MIS")}・${esc(dataEval.dataStatusLabel)}）</b></div>
+        <div><span>櫃買指數</span><b>${esc(oq?.date || "—")} ${esc(oq?.time || "")}（${esc(oq?.source || "櫃買中心")}）</b></div>
+        <div><span>台指期</span><b>${esc(fq?.date || "—")} ${esc(fq?.time || "")}（期交所）</b></div>
+        <div><span>美股主要指數</span><b>${esc(W.bf?.us?.date || "—")} ${esc(W.bf?.us?.sourceTime || "")}（Yahoo Finance）</b></div>
+        <div><span>關鍵價位模型</span><b>盤前快照推算（分水嶺／壓力／支撐屬模型推論，非官方即時行情）</b></div>
+      </div>
       <p class="note">資料來源：Yahoo Finance、期交所、證交所、公開資訊觀測站；盤前推演快照暫存於瀏覽器 LocalStorage，更換裝置或清除瀏覽紀錄時不會同步保留；所有指標由程式客觀計算，僅供研究參考，不構成證券投資顧問或個股買賣建議。</p>
     </details>
     ${C?.kv && C?.tg ? `<p class="note">想每天在手機收到：<button type="button" class="linkbtn" data-tgone>📲 推到 Telegram</button>（早上早報、收盤後重點）。</p>` : ""}

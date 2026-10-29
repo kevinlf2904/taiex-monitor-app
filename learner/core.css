@@ -446,3 +446,14 @@ u.conf { background: var(--up); } u.div { background: var(--down); } u.etf { bac
 }
 .td-help { margin-top: 2px; } .td-help > summary { cursor: pointer; font-size: 12px; color: var(--muted); min-height: 32px; display: flex; align-items: center; } .td-help > summary:hover { color: var(--ink); }
 .td-help .tlist { font-size: 12.5px; line-height: 1.7; } .td-help .tlist li { padding: 4px 0; }
+.ixcard > span .ixmeta { display: inline-block; margin-left: 4px; font-size: 10px; opacity: .75; font-weight: 400; }
+.mk-dinfo { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 6px; font-size: 11.5px; color: var(--muted); }
+.mk-dinfo > summary { cursor: pointer; user-select: none; min-height: 28px; display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.mk-dinfo > summary:hover { color: var(--ink); }
+.mk-dinfo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 12px; padding: 6px 0 2px; }
+.mk-dinfo-grid > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.mk-dinfo-grid > div > span { font-size: 10.5px; color: var(--muted); }
+.mk-dinfo-grid > div > b { font-size: 11.5px; font-weight: 400; color: var(--ink); overflow-wrap: anywhere; }
+.mk-dinfo-note { grid-column: 1 / -1; }
+.mkt-tag.stale { color: var(--down); background: color-mix(in srgb, var(--down) 14%, transparent); }
+.mkt-tag.holiday { color: var(--muted); background: var(--surface-3); }

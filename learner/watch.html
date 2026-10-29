@@ -1184,7 +1184,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.29-163</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.29-164</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -4225,26 +4225,44 @@ async function loadMktStats(force = false) {
   W.mksLoading = true; try { W.mks = { ...(await getJ("/api/mktstats", true)), at: Date.now() }; } catch (e) { W.mks = { err: e.message, at: Date.now() }; } finally { W.mksLoading = false; }
   if (W.lt === "mkt" && W.mkReg === "tw") { W.ticking = true; try { renderList(); } finally { W.ticking = false; } }
 }
-function mktStatsHtml(sec) {
+function mktOrderStatsHtml(sec) {
   const S = W.mks; if (!S) return ""; if (S.err || !S.ok) return sec("委買委賣・融資融券・期貨籌碼", `<p class="note">⚠︎ ${esc(S.err || S.error || "暫時拿不到")}</p>`);
-  const n = v => (v == null ? "—" : Math.round(v).toLocaleString()), wan = v => (v == null ? "—" : v >= 1e4 ? (v / 1e4).toFixed(v >= 1e6 ? 0 : 1) + " 萬" : Math.round(v).toLocaleString()), sg = (v, u = "", d = 0) => (v == null ? "—" : `<b class="${cls(v)}">${v > 0 ? "+" : ""}${d ? v.toFixed(d) : Math.round(v).toLocaleString()}${u}</b>`), md = d => (d ? d.slice(5).replace("-", "/") : "");
-  let h = "";
+  const wan = v => (v == null ? "—" : v >= 1e4 ? (v / 1e4).toFixed(v >= 1e6 ? 0 : 1) + " 萬" : Math.round(v).toLocaleString());
   const O = S.orders;
-  if (O) { const avB = O.bidCnt ? O.bidVol / O.bidCnt : null, avS = O.askCnt ? O.askVol / O.askCnt : null;
-    h += sec("委買委賣", `<table class="mkst"><thead><tr><th></th><th>張數</th><th>筆數</th><th>均張</th></tr></thead><tbody>
+  if (!O) return "";
+  const avB = O.bidCnt ? O.bidVol / O.bidCnt : null, avS = O.askCnt ? O.askVol / O.askCnt : null;
+  const ordSt = evalDataStatus({ type: "orders", source: O.source || "證交所 MI_5MINS", dataDate: O.dataDate || O.date, sourceTime: O.sourceTime || O.time, fetchedAt: S.fetchedAt || S.at, isSuccess: true, isComplete: O.bidVol != null, session: W.session, today: W.today });
+  const dinfo = typeof mktDataInfoHtml === "function" ? mktDataInfoHtml(ordSt, { freq: "盤中每 5 秒統計（每 60 秒重新整理）" }) : "";
+  return sec("委買委賣", `<table class="mkst"><thead><tr><th></th><th>張數</th><th>筆數</th><th>均張</th></tr></thead><tbody>
       <tr><td>總委買</td><td class="up">${wan(O.bidVol)}</td><td class="up">${wan(O.bidCnt)}</td><td>${avB != null ? avB.toFixed(2) : "—"}</td></tr>
       <tr><td>總委賣</td><td class="down">${wan(O.askVol)}</td><td class="down">${wan(O.askCnt)}</td><td>${avS != null ? avS.toFixed(2) : "—"}</td></tr>
       <tr><td>成交</td><td>${wan(O.dealVol)}</td><td>${wan(O.dealCnt)}</td><td>${O.dealCnt ? (O.dealVol / O.dealCnt).toFixed(2) : "—"}</td></tr></tbody></table>
-      <p class="note">委買÷委賣（張）${O.askVol ? (O.bidVol / O.askVol).toFixed(2) : "—"}・成交 ${O.dealAmt != null ? O.dealAmt.toLocaleString() + " 億" : "—"}。委買張數明顯多於委賣，代表掛單偏向買方（但大量掛單可能撤單，只是參考）。</p>`, `上市・${mktStatusTag(evalDataStatus({ type: "orders", source: "證交所 MI_5MINS", dataDate: O.date, sourceTime: O.time, isSuccess: true, isComplete: O.bidVol != null, session: W.session, today: W.today }), { showTime: true })}`); }
+      <p class="note">委買÷委賣（張）${O.askVol ? (O.bidVol / O.askVol).toFixed(2) : "—"}・成交 ${O.dealAmt != null ? O.dealAmt.toLocaleString() + " 億" : "—"}。委買張數明顯多於委賣，代表掛單偏向買方（但大量掛單可能撤單，只是參考）。</p>${dinfo}`, `上市・${mktStatusTag(ordSt, { showDate: true, showTime: true })}`);
+}
+function mktPostStatsHtml(sec) {
+  const S = W.mks; if (!S || S.err || !S.ok) return "";
+  const n = v => (v == null ? "—" : Math.round(v).toLocaleString()), sg = (v, u = "", d = 0) => (v == null ? "—" : `<b class="${cls(v)}">${v > 0 ? "+" : ""}${d ? v.toFixed(d) : Math.round(v).toLocaleString()}${u}</b>`);
+  let h = "";
   const M = S.margin;
-  if (M) h += sec("融資融券", `<ul class="mrows"><li><span>融資餘額</span><b>${M.finBal.toLocaleString()} 億</b><span>${sg(M.finChg, " 億", 2)}</span></li><li><span>融券餘額</span><b>${n(M.shortBal)} 張</b><span>${sg(M.shortChg, " 張")}</span></li></ul>
-    <p class="note">融資增加＝散戶借錢買股變多；融券增加＝放空變多。指數跌、融資卻大增，常被視為籌碼變亂。</p>`, `上市・${mktStatusTag(evalDataStatus({ type: "margin", source: "證交所 MI_MARGN", dataDate: M.date, isSuccess: true, isComplete: M.finBal != null, session: W.session, today: W.today }), { showDate: true })}`);
+  if (M) {
+    const mgSt = evalDataStatus({ type: "margin", source: M.source || "證交所 MI_MARGN", dataDate: M.dataDate || M.date, sourceTime: M.sourceTime, fetchedAt: S.fetchedAt || S.at, isSuccess: true, isComplete: M.finBal != null, session: W.session, today: W.today });
+    const dinfo = typeof mktDataInfoHtml === "function" ? mktDataInfoHtml(mgSt, { freq: "每個交易日盤後約 21:00 公布" }) : "";
+    h += sec("融資融券", `<ul class="mrows"><li><span>融資餘額</span><b>${M.finBal.toLocaleString()} 億</b><span>${sg(M.finChg, " 億", 2)}</span></li><li><span>融券餘額</span><b>${n(M.shortBal)} 張</b><span>${sg(M.shortChg, " 張")}</span></li></ul>
+    <p class="note">融資增加＝散戶借錢買股變多；融券增加＝放空變多。指數跌、融資卻大增，常被視為籌碼變亂。</p>${dinfo}`, `上市・${mktStatusTag(mgSt, { showDate: true })}`);
+  }
   const F = S.futures;
-  if (F) h += sec("期貨淨未平倉", `<table class="mkst"><thead><tr><th></th><th>台指期</th><th>增減</th><th>小台</th><th>增減</th></tr></thead><tbody>
+  if (F) {
+    const fuSt = evalDataStatus({ type: "inst", source: F.source || "期交所", dataDate: F.dataDate || F.date, sourceTime: F.sourceTime, fetchedAt: S.fetchedAt || S.at, isSuccess: true, isComplete: Array.isArray(F.rows) && F.rows.length > 0, session: W.session, today: W.today });
+    const dinfo = typeof mktDataInfoHtml === "function" ? mktDataInfoHtml(fuSt, { freq: "每個交易日盤後約 15:00 公布" }) : "";
+    h += sec("期貨淨未平倉", `<table class="mkst"><thead><tr><th></th><th>台指期</th><th>增減</th><th>小台</th><th>增減</th></tr></thead><tbody>
     ${F.rows.map(r => `<tr><td>${r.who}</td><td>${sg(r.tx)}</td><td>${sg(r.txChg)}</td><td>${sg(r.mtx)}</td><td>${sg(r.mtxChg)}</td></tr>`).join("")}
     <tr><td>散戶</td><td></td><td></td><td>${sg(F.retail.mtx)}</td><td>${sg(F.retail.mtxChg)}</td></tr></tbody></table>
-    <p class="note">淨未平倉＝多單減空單，正數偏多、負數偏空。散戶用「三大法人小台淨未平倉的相反數」估算；散戶大幅偏多常被當作反指標。</p>`, `口・${mktStatusTag(evalDataStatus({ type: "inst", source: "期交所", dataDate: F.date, isSuccess: true, isComplete: Array.isArray(F.rows) && F.rows.length > 0, session: W.session, today: W.today }), { showDate: true })}`);
+    <p class="note">淨未平倉＝多單減空單，正數偏多、負數偏空。散戶用「三大法人小台淨未平倉的相反數」估算；散戶大幅偏多常被當作反指標。</p>${dinfo}`, `口・${mktStatusTag(fuSt, { showDate: true })}`);
+  }
   return h;
+}
+function mktStatsHtml(sec) {
+  return mktOrderStatsHtml(sec) + mktPostStatsHtml(sec);
 }
 async function loadMkt(force = false) {
   if (W.off || (!force && W.mkt && Date.now() - W.mkt.at < 300000)) return renderList();
@@ -4365,10 +4383,33 @@ function renderUsMkt(top) {
   if (!J) { $("#lx").innerHTML = top + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有美股資料。</p>` : skel("載入美股大盤…")); loadUsMkt(); return; }
   if (J.err || !J.ok) { $("#lx").innerHTML = top + `<p class="note err" style="padding:12px">⚠︎ ${esc(J.err || J.error || "暫時拿不到美股資料")}</p>`; return; }
   const sel = x => (okCode(String(x.code).toUpperCase()) ? `data-sel="${esc(String(x.code).toUpperCase())}"` : "");
-  const card = x => `<button class="ixcard" ${sel(x)}><span>${esc(x.name)}</span><b class="${cls(x.chg)}">${x.price?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? "—"}</b><small class="${cls(x.chg)}">${pctTxt(x.chg, x.chgPct)}</small>${spark(x.spark, (x.chg ?? 0) >= 0)}</button>`;
-  const ST = { open: "盤中", pre: "盤前", closed: "已收盤" }[J.session] || "";
-  let h = top + `<p class="note gnote">美股${ST}・${J.date ? J.date.replace(/-/g, "/") : ""}（美東時間）・${esc(J.source || "")}</p>`;
+  const usSessLabel = { open: "盤中", pre: "盤前", post: "盤後", holiday: "休市", closed: "已收盤" };
+  const card = x => {
+    const xDate = x.dataDate || x.date || J.date || "";
+    const xTime = x.sourceTime || "";
+    const xTw = x.sourceTimeTW || "";
+    const xSess = usSessLabel[x.session || J.session] || "";
+    const tip = `${x.name} (${x.code})｜美東日期：${xDate || "—"} ${xTime} ${x.tz || ""}｜台北時間：${xTw || "—"}｜時段：${xSess}｜來源：${x.source || J.source || "Yahoo Finance"}`;
+    const subDate = xDate ? `<small class="note ixmeta">${esc(xDate.slice(5).replace("-", "/"))}${xTime ? " " + esc(xTime.slice(0, 5)) : ""}</small>` : "";
+    return `<button class="ixcard" ${sel(x)} title="${esc(tip)}"><span>${esc(x.name)}${subDate}</span><b class="${cls(x.chg)}">${x.price?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? "—"}</b><small class="${cls(x.chg)}">${pctTxt(x.chg, x.chgPct)}</small>${spark(x.spark, (x.chg ?? 0) >= 0)}</button>`;
+  };
+  const ST = J.holiday || usSessLabel[J.session] || "";
+  const usSt = evalDataStatus({
+    type: "us",
+    source: J.source || "Yahoo Finance",
+    dataDate: J.dataDate || J.date,
+    sourceTime: J.sourceTime,
+    fetchedAt: J.fetchedAt || J.at,
+    usSession: J.session,
+    holiday: J.holiday,
+    isStale: J.isStale,
+    expectedDate: J.expectedDate,
+    isSuccess: !J.err,
+  });
+  const twStamp = [J.sourceDateTW ? J.sourceDateTW.slice(5).replace("-", "/") : "", J.sourceTimeTW ? J.sourceTimeTW.slice(0, 5) : ""].filter(Boolean).join(" ");
+  let h = top + `<p class="note gnote">美股${ST}・${J.date ? J.date.replace(/-/g, "/") : ""}${J.sourceTime ? " " + esc(J.sourceTime.slice(0, 5)) : ""}（美東 ${esc(J.tz || "ET")}）${twStamp ? `・台北 ${esc(twStamp)}` : ""}・${esc(J.source || "")} ${mktStatusTag(usSt)}</p>`;
   h += `<div class="ixcards three us">${J.indices.map(card).join("")}</div>`;
+  h += typeof mktDataInfoHtml === "function" ? mktDataInfoHtml(usSt, { freq: "盤中每 30 秒自動更新（伺服器快取 60 秒）", note: twStamp ? `最後成交對應台北時間：${twStamp}；${usSt.note || ""}` : usSt.note }) : "";
   h += usWhyHtml(J);
   if (J.macro?.length) h += sec("期貨與宏觀", `<ul class="mrows us">${J.macro.map(x => `<li ${sel(x) ? sel(x) + ' role="button" tabindex="0"' : ""}><span>${esc(x.name)}</span><b class="${cls(x.chg)}">${x.price?.toLocaleString(undefined, { maximumFractionDigits: x.code === "^TNX" ? 3 : 2 }) ?? "—"}${x.code === "^TNX" ? "%" : ""}</b><span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chgPct ?? 0).toFixed(2)}%</span>${spark(x.spark, (x.chg ?? 0) >= 0)}</li>`).join("")}</ul>`, "期貨與加密貨幣不能開 K 線");
   if (J.sectors?.length) { const mx = Math.max(0.3, ...J.sectors.map(x => Math.abs(x.chgPct || 0)));
@@ -4602,8 +4643,21 @@ async function loadIxSpark(force = false) {
   if (W.lt === "mkt" && $("#mkCards")) $("#mkCards").innerHTML = mktCards();
 }
 function mktCards() {
-  const J = W.mkt, q = c => W.quotes.get(c), sp = c => tsSpark(W.ixSp?.[c]), card = (c, nm) => { const x = q(c); return `<button class="ixcard" data-sel="${c}"><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price != null ? x.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><small class="${cls(x?.chg)}">${pctTxt(x?.chg, x?.chgPct)}</small>${sp(c)}</button>`; };
-  const scard = (nm, x, sub, attr = "", c = "") => `<button class="ixcard" ${attr}><span>${nm}</span><b class="${cls(x?.chg)}">${x?.price ?? x?.close ?? "—"}</b><small class="${cls(x?.chg)}">${x ? pctTxt(x.chg, x.chgPct) : sub || ""}</small>${c ? sp(c) : ""}</button>`;
+  const J = W.mkt, q = c => W.quotes.get(c), sp = c => tsSpark(W.ixSp?.[c]);
+  const card = (c, nm) => {
+    const x = q(c);
+    const dStr = x?.date ? x.date.slice(5).replace("-", "/") : "";
+    const tStr = x?.time ? x.time.slice(0, 5) : "";
+    const meta = dStr || tStr ? `<small class="note ixmeta">${esc([dStr, tStr].filter(Boolean).join(" "))}</small>` : "";
+    const tip = x ? `${nm} (${c})｜資料日期：${x.date || "—"} ${x.time || ""}｜來源：${x.source || (c === "TXF" ? "期交所" : "證交所／櫃買中心")}` : nm;
+    return `<button class="ixcard" data-sel="${c}" title="${esc(tip)}"><span>${nm}${meta}</span><b class="${cls(x?.chg)}">${x?.price != null ? x.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}</b><small class="${cls(x?.chg)}">${pctTxt(x?.chg, x?.chgPct)}</small>${sp(c)}</button>`;
+  };
+  const scard = (nm, x, sub, attr = "", c = "") => {
+    const dStr = x?.date ? x.date.slice(5).replace("-", "/") : "";
+    const tStr = x?.time ? x.time.slice(0, 5) : "";
+    const meta = dStr || tStr ? `<small class="note ixmeta">${esc([dStr, tStr].filter(Boolean).join(" "))}</small>` : "";
+    return `<button class="ixcard" ${attr}><span>${nm}${meta}</span><b class="${cls(x?.chg)}">${x?.price ?? x?.close ?? "—"}</b><small class="${cls(x?.chg)}">${x ? pctTxt(x.chg, x.chgPct) : sub || ""}</small>${c ? sp(c) : ""}</button>`;
+  };
   const fq = q("TXF"), F = W.futx || {}, t50 = J?.indices?.find(x => /臺灣50|台灣50/.test(x.name));
   return `${card("T00", "加權指數")}${card("O00", "櫃買指數")}${card("TXF", fq?.session === "night" ? "台指近（夜盤）" : "台指近")}
     ${scard(F.EXF?.session === "night" ? "電指近（夜盤）" : "電指近", F.EXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="EXF"', "EXF")}${scard(F.FXF?.session === "night" ? "金指近（夜盤）" : "金指近", F.FXF, W.off ? "" : "—", 'data-mk="futInfo" data-v="FXF"', "FXF")}${(q("0050")?.price != null ? card("0050", "0050 台灣50") : scard("臺灣 50", t50 ? { price: t50.close.toLocaleString(), chg: t50.chg, chgPct: t50.chgPct } : null, t50?.date ? t50.date.slice(5).replace("-", "/") + " 收盤" : "收盤", 'data-sel="0050" title="看元大台灣50（0050）"', "0050"))}`;
@@ -4632,10 +4686,17 @@ function renderMkt() {
   // 市場概況：漲跌停、漲跌家數（上市／上櫃切換）
   const B = (W.mkM === "all" ? J.breadth : J.breadthBy?.[W.mkM]) || J.breadth, TT = J.totalsBy?.[W.mkM];
   if (B) { const mx = Math.max(1, ...B.buckets.map(x => x.n)), tot = B.up + B.down + B.flat || 1;
+    const bSt = evalDataStatus({ type: "breadth", source: J.source || "證交所 MIS", dataDate: J.dataDate || J.date, sourceTime: J.sourceTime || J.time, fetchedAt: J.fetchedAt || W.mkt?.at, isFallback: J.isFallback, isSuccess: !J.err, isComplete: B && B.buckets && B.buckets.length > 0, coverage: J.coverage, completeness: J.completeness, dataStatus: J.dataStatus, dateVerified: J.dateVerified, dateConsistent: J.dateConsistent, session: W.session, today: W.today });
+    const bInfo = typeof mktDataInfoHtml === "function" ? mktDataInfoHtml(bSt, { freq: "盤中每 10～30 秒自動更新" }) : "";
     h += sec("市場概況", `<div class="mkbox"><button data-mk="goList" data-v="limit"><span>漲停家數</span><b class="fill up">${B.limUp}</b></button><button data-mk="goList" data-v="limitDown"><span>跌停家數</span><b class="fill down">${B.limDn}</b></button><button data-mk="goRankT" data-v="gain"><span>上漲家數</span><b class="line up">${B.up}</b></button><button data-mk="goRankT" data-v="loss"><span>下跌家數</span><b class="line down">${B.down}</b></button>${(HL => HL ? `<div class="mkhl"><span>股價月新高</span><b class="up">${HL.hi}</b></div><div class="mkhl"><span>股價月新低</span><b class="down">${HL.lo}</b></div>` : "")(J.newHL?.[W.mkM])}</div>
       <div class="ratio"><span class="up" style="width:${B.up / tot * 100}%"></span><span class="flat" style="width:${B.flat / tot * 100}%"></span><span class="down" style="width:${B.down / tot * 100}%"></span></div>
       <details class="mkmore"><summary>漲跌幅分佈</summary><div class="hist">${B.buckets.map((x, i) => `<div><small>${x.n}</small><i class="${i < 5 ? "up" : i > 5 ? "down" : "flat"}" style="height:${(x.n / mx * 70).toFixed(0)}px"></i><span data-s="${x.label.replace(/%/g, "")}">${x.label}</span></div>`).join("")}</div></details>
-      <details class="mkmore"><summary>怎麼算的、多久更新</summary><p class="note">家數＝上市（或上櫃）所有股票＋ETF（不含權證、債券），和券商「整體市場」同一個口徑；漲停跌停用昨收算出的實際漲跌停價判斷（槓桿／反向 ETF 沒有漲跌停）；月新高低是收盤價創近 20 個交易日新高或新低。盤中資料來源：${esc(J.source || "")}，畫面每 10 秒更新一次（伺服器最多快取 10 秒）。</p></details>`, `${mktStatusTag(evalDataStatus({ type: "breadth", source: J.source || "證交所 MIS", dataDate: J.date, sourceTime: J.time, fetchedAt: W.mkt?.at, isSuccess: !J.err, isComplete: B && B.buckets && B.buckets.length > 0, coverage: J.coverage, completeness: J.completeness, dataStatus: J.dataStatus, dateVerified: J.dateVerified, dateConsistent: J.dateConsistent, session: W.session, today: W.today }))}・平盤 ${B.flat}・股票＋ETF${TT?.value ? `・成交 ${Math.round(TT.value).toLocaleString()} 億` : ""}${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠︎ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, [...MKT2, ["all", "全部"]]) : ""); }
+      <details class="mkmore"><summary>怎麼算的、多久更新</summary><p class="note">家數＝上市（或上櫃）所有股票＋ETF（不含權證、債券），和券商「整體市場」同一個口徑；漲停跌停用昨收算出的實際漲跌停價判斷（槓桿／反向 ETF 沒有漲跌停）；月新高低是收盤價創近 20 個交易日新高或新低。盤中資料來源：${esc(J.source || "")}，畫面每 10 秒更新一次（伺服器最多快取 10 秒）。</p></details>${bInfo}`, `${mktStatusTag(bSt, { showDate: true, showTime: true })}・平盤 ${B.flat}・股票＋ETF${TT?.value ? `・成交 ${Math.round(TT.value).toLocaleString()} 億` : ""}${J.coverage && J.coverage.want && J.coverage.got < J.coverage.want * 0.97 ? `・⚠︎ 只拿到 ${J.coverage.got}/${J.coverage.want} 檔` : ""}`, J.breadthBy ? mkSeg("mkM", W.mkM, [...MKT2, ["all", "全部"]]) : ""); }
+  // 盤中委買委賣（每 5 秒統計，放在盤中決策區）
+  h += mktOrderStatsHtml(sec);
+  // 加權指數貢獻點數（盤中即時與權值股拉抬／壓盤直接相關，放在盤中決策區）
+  const C = J.contrib;
+  if (C) h += sec("加權指數貢獻點數", `<div class="contrib"><div><h4 class="up">正貢獻</h4>${C.pos.slice(0, 6).map(x => `<button data-sel="${x.code}"><span>${esc(x.name)}<small>${x.code}</small></span><b class="up">+${x.pts.toFixed(2)}</b></button>`).join("")}</div><div><h4 class="down">負貢獻</h4>${C.neg.slice(0, 6).map(x => `<button data-sel="${x.code}"><span>${esc(x.name)}<small>${x.code}</small></span><b class="down">${x.pts.toFixed(2)}</b></button>`).join("")}</div></div>`, `${J.date ? J.date.slice(5).replace("-", "/") + "・" : ""}市值權重估算`);
   // 產業概況：漲最多、跌最多各 3 個（直條），其餘收在「更多」
   const S = J.sectorsBy?.[W.secM] || J.sectors;
   if (S?.length) { const top = [...S.slice(0, 3), ...S.slice(-3).filter(x => !S.slice(0, 3).includes(x))], mx = Math.max(0.5, ...top.map(x => Math.abs(x.pct || 0))), pre = W.secM === "tpex" ? "櫃" : "市";
@@ -4647,28 +4708,33 @@ function renderMkt() {
   if (S?.length) { const T = S.filter(x => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 18);
     if (T.length > 2) h += sec("產業熱力圖", `<div class="tmap">${treemap(T.map(x => x.value), 100, 100).map((r, i) => { const x = T[i], k = Math.min(1, Math.abs(x.pct || 0) / 5), big = r.w * r.h > 90;
       return `<button data-mk="goSec" data-v="${esc(x.name)}" style="left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%;background:color-mix(in srgb, var(--${(x.pct || 0) >= 0 ? "up" : "down"}) ${Math.round(18 + k * 70)}%, var(--surface-2))" title="${esc(x.name)} ${sgn(x.pct, 2)}%・${x.value.toFixed(0)} 億" aria-label="${esc(x.name)} ${sgn(x.pct, 2)}%">${r.w > 8 && r.h > 7 ? `<b>${esc(secShort(x.name))}</b>` : ""}${r.w > 11 && r.h > 13 ? `<span>${sgn(x.pct, 2)}%</span>${big && r.h > 19 ? `<small>${x.value.toFixed(0)}億</small>` : ""}` : ""}</button>`; }).join("")}</div>`, `面積＝成交金額・${W.secM === "tpex" ? "上櫃" : "上市"}`); }
-  h += irtHtml(sec); // 順序：市場概況 → 產業概況 → 產業熱力圖 → 產業即時
+  h += irtHtml(sec);
   h += hotSec(sec, "tw");
-  h += mktStatsHtml(sec);
+  // 國際指數（美股主要指數與亞歐股市：盤中與跨市場決策參考，放在盤後確認區上方）
+  const WG = J.world?.length ? J.world : J.us?.length ? [{ id: "us", name: "美國", rows: J.us }] : [];
+  if (WG.length) { const g = WG.find(x => x.id === W.worldR) || WG[0];
+    const gRow0 = g.rows[0] || {};
+    const wgSt = evalDataStatus({ type: "us", source: gRow0.source || "Yahoo Finance", dataDate: gRow0.dataDate || gRow0.date, sourceTime: gRow0.sourceTime, fetchedAt: J.fetchedAt || W.mkt?.at, usSession: gRow0.session || "closed", holiday: gRow0.holiday, isStale: gRow0.isStale });
+    const wgInfo = typeof mktDataInfoHtml === "function" ? mktDataInfoHtml(wgSt, { freq: "隨大盤每 60 秒更新" }) : "";
+    h += sec("國際指數", `<ul class="mrows us">${g.rows.map(x => `<li ${okCode(String(x.code || "").toUpperCase()) ? `data-sel="${esc(String(x.code).toUpperCase())}" role="button" tabindex="0"` : ""} title="${esc(`${x.name}｜資料日期：${x.dataDate || x.date || "—"} ${x.sourceTime || ""}`)}"><span>${esc(x.name)}${x.date ? ` <small class="note">${esc(x.date.slice(5).replace("-", "/"))}</small>` : ""}</span><b class="${cls(x.chg)}">${x.price?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? "—"}</b><span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chgPct ?? 0).toFixed(2)}%</span>${spark(x.spark, (x.chg ?? 0) >= 0)}</li>`).join("")}</ul>${wgInfo}`, gRow0.date ? `${gRow0.date.slice(5).replace("-", "/")}・Yahoo Finance` : "Yahoo Finance", mkSeg("worldR", g.id, WG.map(x => [x.id, x.name]))); }
+  // ---------- 以下為盤後確認區（三大法人買賣超、融資融券、期貨法人未平倉、收盤類股指數） ----------
   if (J.inst) {
     const instSt = evalDataStatus({
       type: "inst",
-      source: "證交所 T86",
-      dataDate: J.inst.date,
+      source: J.inst.source || "證交所 BFI82U",
+      dataDate: J.inst.dataDate || J.inst.date,
+      sourceTime: J.inst.sourceTime,
+      fetchedAt: J.fetchedAt || W.mkt?.at,
       isSuccess: true,
       isComplete: J.inst.foreign != null,
       session: W.session,
       today: W.today,
     });
-    h += sec("三大法人買賣超（上市）", `<ul class="mrows">${[["外資", J.inst.foreign, "foreign"], ["投信", J.inst.trust, "trust"], ["自營商", J.inst.dealer, "money"], ["合計", J.inst.total, "money"]].map(([k, v, go]) => `<li data-mk="goInst" data-v="${go}" role="button" tabindex="0"><span>${k}</span><b class="${cls(v)}">${sgn(v, 2)} 億</b><span></span></li>`).join("")}</ul>`, mktStatusTag(instSt, { showDate: true }));
+    const instInfo = typeof mktDataInfoHtml === "function" ? mktDataInfoHtml(instSt, { freq: "每個交易日盤後約 15:00～16:30 公布" }) : "";
+    h += sec("三大法人買賣超（上市）", `<ul class="mrows">${[["外資", J.inst.foreign, "foreign"], ["投信", J.inst.trust, "trust"], ["自營商", J.inst.dealer, "money"], ["合計", J.inst.total, "money"]].map(([k, v, go]) => `<li data-mk="goInst" data-v="${go}" role="button" tabindex="0"><span>${k}</span><b class="${cls(v)}">${sgn(v, 2)} 億</b><span></span></li>`).join("")}</ul>${instInfo}`, mktStatusTag(instSt, { showDate: true }));
   }
-  const C = J.contrib;
-  if (C) h += sec("加權指數貢獻點數", `<div class="contrib"><div><h4 class="up">正貢獻</h4>${C.pos.slice(0, 6).map(x => `<button data-sel="${x.code}"><span>${esc(x.name)}<small>${x.code}</small></span><b class="up">+${x.pts.toFixed(2)}</b></button>`).join("")}</div><div><h4 class="down">負貢獻</h4>${C.neg.slice(0, 6).map(x => `<button data-sel="${x.code}"><span>${esc(x.name)}<small>${x.code}</small></span><b class="down">${x.pts.toFixed(2)}</b></button>`).join("")}</div></div>`, "估算");
-  if (J.indices?.length) h += sec("類股指數", `<ul class="mrows">${J.indices.map(x => `<li data-mk="goSec" data-v="${esc(x.name.replace(/類指數$/, "").replace(/類$/, ""))}" role="button" tabindex="0"><span>${esc(x.name.replace(/類指數$/, ""))}</span><b>${x.close.toLocaleString()}</b><span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chg ?? 0).toFixed(2)}（${Math.abs(x.chgPct ?? 0).toFixed(2)}%）</span></li>`).join("")}</ul>`, J.indices[0]?.date && J.indices[0].date !== (W.today || J.date) ? `${J.indices[0].date.slice(5).replace("-", "/")} 收盤（證交所盤後公布）` : "收盤");
-  // 國際指數：依地區切換
-  const WG = J.world?.length ? J.world : J.us?.length ? [{ id: "us", name: "美國", rows: J.us }] : [];
-  if (WG.length) { const g = WG.find(x => x.id === W.worldR) || WG[0];
-    h += sec("國際指數", `<ul class="mrows us">${g.rows.map(x => `<li ${okCode(String(x.code || "").toUpperCase()) ? `data-sel="${esc(String(x.code).toUpperCase())}" role="button" tabindex="0"` : ""}><span>${esc(x.name)}</span><b class="${cls(x.chg)}">${x.price?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? "—"}</b><span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chgPct ?? 0).toFixed(2)}%</span>${spark(x.spark, (x.chg ?? 0) >= 0)}</li>`).join("")}</ul>`, g.rows[0]?.date ? g.rows[0].date.slice(5).replace("-", "/") : "", mkSeg("worldR", g.id, WG.map(x => [x.id, x.name]))); }
+  h += mktPostStatsHtml(sec);
+  if (J.indices?.length) h += sec("類股指數", `<ul class="mrows">${J.indices.map(x => `<li data-mk="goSec" data-v="${esc(x.name.replace(/類指數$/, "").replace(/類$/, ""))}" role="button" tabindex="0"><span>${esc(x.name.replace(/類指數$/, ""))}</span><b>${x.close.toLocaleString()}</b><span class="${cls(x.chg)}">${arrow(x.chg)}${Math.abs(x.chg ?? 0).toFixed(2)}（${Math.abs(x.chgPct ?? 0).toFixed(2)}%）</span></li>`).join("")}</ul>`, J.indices[0]?.date && J.indices[0].date !== (W.today || J.date) ? `${J.indices[0].date.slice(5).replace("-", "/")} 收盤（證交所盤後公布）` : "收盤（證交所盤後公布）");
   // 處置股與注意股
   { const WN = W.warn;
     if (WN && !WN.err) { const P = WN.punish || [], N = WN.notice || [], open = W.warnOpen;

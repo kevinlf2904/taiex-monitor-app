@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 大盤資料時效、統一透明度契約與決策中心重整（2026.10.29-164）
+- 修復美股夏令／冬令（EDT／EST）與跨日交易日判定、補齊台美股與盤後籌碼統一資料透明度欄位（dataDate／sourceTime／fetchedAt／source／updateMode／dataStatus）、新增可展開「資料資訊」抽屜，並將大盤頁重整為上方盤中決策區與下方盤後確認區。
+
 ### 手機捲動與圖表觸控修復（2026.10.29-163）
 - 圖表全螢幕退出時恢復外層捲動位置，補上按鈕與 Escape 回歸測試，並讓瀏覽器測試封鎖外部 HTTPS。
 

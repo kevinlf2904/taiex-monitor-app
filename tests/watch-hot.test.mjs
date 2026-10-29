@@ -2923,3 +2923,343 @@ test("Scenario 44: [第六輪核心狀態機驗收] 全市場 Coverage 缺漏政
     assert.doesNotMatch(assetRes.note || "", /資料覆蓋率/);
   }
 });
+
+// =========================================================================
+// Phase 9: 台股與美股 20 項時效、時區、DST、資料透明度與資訊架構重整測試
+// =========================================================================
+
+test("Phase 9 台股與美股 20 項時效、時區、DST、資料透明度契約與架構重整完整驗證", async () => {
+  const { ctx, W } = createHarness();
+  const yahoo = await import("../api/_lib/_yahoo.js");
+  const mktstats = await import("../api/_lib/mktstats.js");
+
+  // ---------- 台股 10 項測試 (TW 1~10) ----------
+  const twNowOpen = new Date("2026-10-28T10:30:00+08:00");
+  // TW-1: 正常交易日盤中：即時資料且為今日日期 → 顯示盤中即時 + updateMode: live
+  const tw1 = ctx.evalDataStatus({
+    type: "quote",
+    source: "證交所 MIS",
+    dataDate: "2026-10-28",
+    sourceTime: "10:30:00",
+    fetchedAt: +twNowOpen - 5000,
+    session: "open",
+    dayState: "trade",
+    today: "2026-10-28",
+    now: twNowOpen,
+  });
+  assert.equal(tw1.status, "live");
+  assert.equal(tw1.dataDate, "2026-10-28");
+  assert.equal(tw1.sourceTime, "10:30:00");
+  assert.equal(tw1.updateMode, "live");
+
+  // TW-2: 正常交易日盤中：資料日期仍是前一日 → 不得顯示盤中即時
+  const tw2 = ctx.evalDataStatus({
+    type: "quote",
+    source: "證交所 MIS",
+    dataDate: "2026-10-27",
+    sourceTime: "13:30:00",
+    fetchedAt: +twNowOpen - 2000,
+    session: "open",
+    dayState: "trade",
+    today: "2026-10-28",
+    now: twNowOpen,
+  });
+  assert.equal(tw2.status, "delayed");
+  assert.equal(tw2.isLive, false);
+
+  // TW-3: 正常交易日盤中：fetchedAt 新，但實際時間已超過 TTL → 顯示延遲
+  const tw3 = ctx.evalDataStatus({
+    type: "quote",
+    source: "證交所 MIS",
+    dataDate: "2026-10-28",
+    sourceTime: "10:00:00",
+    fetchedAt: +twNowOpen - 45000,
+    session: "open",
+    dayState: "trade",
+    today: "2026-10-28",
+    now: twNowOpen,
+  });
+  assert.equal(tw3.status, "delayed");
+  assert.equal(tw3.isDelayed, true);
+
+  // TW-4: 正常交易日收盤後：盤後資料未出 → 顯示盤後待確認，並保留前一交易日日期
+  const twNowAfterClose = new Date("2026-10-28T14:15:00+08:00");
+  const tw4 = ctx.evalDataStatus({
+    type: "inst",
+    source: "證交所 BFI82U",
+    dataDate: "2026-10-27",
+    fetchedAt: +twNowAfterClose - 10000,
+    session: "closed",
+    dayState: "trade",
+    today: "2026-10-28",
+    now: twNowAfterClose,
+  });
+  assert.equal(tw4.status, "pending");
+  assert.equal(tw4.text, "盤後待確認");
+  assert.equal(tw4.dataDate, "2026-10-27");
+  assert.equal(tw4.updateMode, "after_close");
+
+  // TW-5: 正常交易日收盤後：盤後資料已出且為今日日期 → 顯示收盤確認
+  const twNowEvening = new Date("2026-10-28T16:30:00+08:00");
+  const tw5 = ctx.evalDataStatus({
+    type: "inst",
+    source: "證交所 BFI82U",
+    dataDate: "2026-10-28",
+    fetchedAt: +twNowEvening - 10000,
+    session: "closed",
+    dayState: "trade",
+    today: "2026-10-28",
+    now: twNowEvening,
+  });
+  assert.equal(tw5.status, "confirmed");
+  assert.equal(tw5.text, "收盤確認");
+  assert.equal(tw5.dataDate, "2026-10-28");
+
+  // TW-6: 週末與國定假日：顯示休市與最近交易日日期，不得顯示盤中即時
+  const twNowSat = new Date("2026-10-31T10:30:00+08:00");
+  const tw6 = ctx.evalDataStatus({
+    type: "index",
+    source: "證交所 MIS",
+    dataDate: "2026-10-30",
+    session: "closed",
+    dayState: "closed",
+    today: "2026-10-31",
+    now: twNowSat,
+  });
+  assert.equal(tw6.status, "confirmed");
+  assert.equal(tw6.isLive, false);
+  assert.match(tw6.note, /2026-10-30/);
+
+  // TW-7: 臨時停市或休市日表未知：採取保守狀態，不誤判為即時
+  const tw7 = ctx.evalDataStatus({
+    type: "index",
+    source: "證交所 MIS",
+    dataDate: null,
+    session: "open",
+    dayState: "unknown",
+    today: "2026-10-28",
+    now: twNowOpen,
+  });
+  assert.equal(tw7.status, "delayed");
+  assert.equal(tw7.isLive, false);
+
+  // TW-8: 上市成功、上櫃失敗或相反：顯示部分資料，不偽裝全市場完整
+  const tw8 = ctx.evalDataStatus({
+    type: "breadth",
+    source: "證交所 MIS",
+    dataDate: "2026-10-28",
+    completeness: "partial_tse_only",
+    coverage: { got: 1000, want: 1850 },
+    dateVerified: true,
+    dateConsistent: false,
+    dataStatus: "partial",
+    session: "open",
+    today: "2026-10-28",
+    now: twNowOpen,
+  });
+  assert.equal(tw8.status, "delayed");
+  assert.equal(tw8.isLive, false);
+  assert.match(ctx.getMktNoteText({ live: true, completeness: "partial_tse_only", dataStatus: "partial" }), /僅上市為盤中即時/);
+
+  // TW-9: 新舊報價順序顛倒：舊時間不得覆蓋新時間 (含美股時區 quoteTimestamp 比對)
+  assert.equal(ctx.isQuoteStale(
+    { date: "2026-10-28", time: "09:45:00" },
+    { date: "2026-10-28", time: "10:15:00" }
+  ), true);
+
+  // TW-10: 無效價格（0、負數、null、NaN）：不得覆蓋既有有效報價
+  W.quotes.set("2330", { code: "2330", price: 1080, date: "2026-10-28", time: "10:10:00" });
+  const fallbackSnap = ctx.liveQuote({ code: "2330", price: 1050, date: "2026-10-28", time: "10:00:00" });
+  assert.equal(fallbackSnap.price, 1080);
+
+  // ---------- 美股 10 項測試 (US 1~10) ----------
+  // US-1: 美股正規盤中（EDT 夏令時 2026-10-27 14:30 UTC = 10:30 EDT = 22:30 台北）：顯示美股盤中即時、美東日期與台北更新時間
+  const usEdtOpenSec = Math.floor(Date.parse("2026-10-27T14:30:00Z") / 1000);
+  const metaEdtOpen = {
+    regularMarketPrice: 5850.25,
+    chartPreviousClose: 5800.0,
+    regularMarketTime: usEdtOpenSec - 15,
+    currentTradingPeriod: {
+      pre: { start: usEdtOpenSec - 5 * 3600, end: usEdtOpenSec - 3600 },
+      regular: { start: usEdtOpenSec - 3600, end: usEdtOpenSec + 5.5 * 3600 },
+      post: { start: usEdtOpenSec + 5.5 * 3600, end: usEdtOpenSec + 9.5 * 3600 },
+    },
+  };
+  const qUs1 = yahoo.quoteFromMeta("^GSPC", metaEdtOpen, usEdtOpenSec);
+  assert.equal(qUs1.dataDate, "2026-10-27");
+  assert.equal(qUs1.tz, "EDT");
+  assert.equal(qUs1.session.state, "open");
+  assert.equal(qUs1.dataStatus, "live");
+  assert.equal(qUs1.sourceDateTW, "2026-10-27");
+  assert.match(qUs1.sourceTimeTW, /^22:29:/);
+
+  // US-2: 美股正規盤中（EST 冬令時 2026-11-04 15:30 UTC = 10:30 EST = 23:30 台北）：時區換算正確（UTC-5）
+  const usEstOpenSec = Math.floor(Date.parse("2026-11-04T15:30:00Z") / 1000);
+  const metaEstOpen = {
+    regularMarketPrice: 5900.5,
+    chartPreviousClose: 5850.0,
+    regularMarketTime: usEstOpenSec - 10,
+    currentTradingPeriod: {
+      pre: { start: usEstOpenSec - 5 * 3600, end: usEstOpenSec - 3600 },
+      regular: { start: usEstOpenSec - 3600, end: usEstOpenSec + 5.5 * 3600 },
+      post: { start: usEstOpenSec + 5.5 * 3600, end: usEstOpenSec + 9.5 * 3600 },
+    },
+  };
+  const qUs2 = yahoo.quoteFromMeta("^GSPC", metaEstOpen, usEstOpenSec);
+  assert.equal(qUs2.dataDate, "2026-11-04");
+  assert.equal(qUs2.tz, "EST");
+  assert.equal(qUs2.session.state, "open");
+  assert.equal(qUs2.dataStatus, "live");
+  assert.equal(qUs2.sourceDateTW, "2026-11-04");
+  assert.match(qUs2.sourceTimeTW, /^23:29:/);
+
+  // US-3: 美股盤前：顯示盤前狀態，不把前一日收盤誤標成今日盤中
+  const usPreSec = Math.floor(Date.parse("2026-10-27T12:00:00Z") / 1000); // 08:00 EDT
+  const metaPre = {
+    regularMarketPrice: 5800.0,
+    chartPreviousClose: 5780.0,
+    regularMarketTime: Math.floor(Date.parse("2026-10-26T20:00:00Z") / 1000), // 10/26 16:00 EDT close
+    currentTradingPeriod: {
+      pre: { start: usPreSec - 3600, end: usPreSec + 5400 },
+      regular: { start: usPreSec + 5400, end: usPreSec + 5400 + 6.5 * 3600 },
+      post: { start: usPreSec + 5400 + 6.5 * 3600, end: usPreSec + 5400 + 10.5 * 3600 },
+    },
+  };
+  const qUs3 = yahoo.quoteFromMeta("^DJI", metaPre, usPreSec);
+  assert.equal(qUs3.session.state, "pre");
+  assert.equal(qUs3.dataDate, "2026-10-26");
+  assert.equal(qUs3.dataStatus, "pending");
+  const stUs3 = ctx.evalDataStatus({ type: "us", usSession: "pre", dataDate: qUs3.dataDate, now: new Date(usPreSec * 1000) });
+  assert.equal(stUs3.status, "pending");
+  assert.equal(stUs3.text, "盤前試撮");
+  assert.equal(stUs3.isLive, false);
+
+  // US-4: 美股盤後與已收盤：顯示美東交易日收盤確認
+  const usPostSec = Math.floor(Date.parse("2026-10-27T21:00:00Z") / 1000); // 17:00 EDT (post-market)
+  const metaPost = {
+    regularMarketPrice: 5820.0,
+    chartPreviousClose: 5800.0,
+    regularMarketTime: Math.floor(Date.parse("2026-10-27T20:00:00Z") / 1000), // 16:00 EDT close
+    currentTradingPeriod: {
+      pre: { start: usPostSec - 13 * 3600, end: usPostSec - 7.5 * 3600 },
+      regular: { start: usPostSec - 7.5 * 3600, end: usPostSec - 3600 },
+      post: { start: usPostSec - 3600, end: usPostSec + 3 * 3600 },
+    },
+  };
+  const qUs4 = yahoo.quoteFromMeta("^IXIC", metaPost, usPostSec);
+  assert.equal(qUs4.session.state, "post");
+  assert.equal(qUs4.dataDate, "2026-10-27");
+  assert.equal(qUs4.dataStatus, "confirmed");
+  const stUs4 = ctx.evalDataStatus({ type: "us", usSession: "post", dataDate: "2026-10-27", now: new Date(usPostSec * 1000) });
+  assert.equal(stUs4.status, "confirmed");
+  assert.equal(stUs4.text, "美股盤後");
+
+  // US-5: 台灣週二早上看美股週一收盤：不得因台灣日期是週二就把週一美股收盤誤判成延遲或錯誤
+  const twTueMorningMs = Date.parse("2026-10-27T08:30:00+08:00"); // 2026-10-26 20:30 EDT (Mon night closed)
+  const expectedUsMon = yahoo.lastUsTradingDate(twTueMorningMs);
+  assert.equal(expectedUsMon.expectedDate, "2026-10-26");
+  assert.equal(ctx.lastUsTradingDate(twTueMorningMs), "2026-10-26");
+  const stUs5 = ctx.evalDataStatus({
+    type: "us",
+    usSession: "closed",
+    dataDate: "2026-10-26",
+    expectedDate: expectedUsMon.expectedDate,
+    now: new Date(twTueMorningMs),
+  });
+  assert.equal(stUs5.status, "confirmed");
+  assert.equal(stUs5.isDelayed, false);
+
+  // US-6: 美股週末與美國假日（如感恩節 2026-11-26）：顯示休市與最近交易日（2026-11-25）
+  assert.equal(yahoo.usHolidayName("2026-11-26"), "美股休市（感恩節）");
+  assert.equal(ctx.usHolidayName("2026-11-26"), "感恩節休市");
+  const thanksgivingMs = Date.parse("2026-11-26T16:00:00Z"); // 11:00 EST on Thanksgiving
+  assert.equal(yahoo.lastUsTradingDate(thanksgivingMs).expectedDate, "2026-11-25");
+  assert.equal(ctx.lastUsTradingDate(thanksgivingMs), "2026-11-25");
+  const stUs6 = ctx.evalDataStatus({
+    type: "us",
+    usSession: "holiday",
+    holiday: "感恩節休市",
+    dataDate: "2026-11-25",
+    now: new Date(thanksgivingMs),
+  });
+  assert.equal(stUs6.status, "holiday");
+  assert.equal(stUs6.text, "感恩節休市");
+  assert.match(stUs6.note, /2026-11-25/);
+
+  // US-7: 上游回傳舊快取（例如美股已開盤或已收盤，但 regularMarketTime 仍是前一個交易日）：標示延遲或過期
+  const qUs7OpenStale = yahoo.quoteFromMeta("^SOX", {
+    ...metaEdtOpen,
+    regularMarketTime: Math.floor(Date.parse("2026-10-26T20:00:00Z") / 1000), // 停留於 10/26
+  }, usEdtOpenSec);
+  assert.equal(qUs7OpenStale.dataStatus, "stale");
+  assert.equal(qUs7OpenStale.isStale, true);
+
+  const usClosedWedSec = Math.floor(Date.parse("2026-10-29T01:00:00Z") / 1000); // 2026-10-28 21:00 EDT (Wed night after close)
+  const qUs7ClosedStale = yahoo.quoteFromMeta("^SOX", {
+    regularMarketPrice: 5100,
+    chartPreviousClose: 5000,
+    regularMarketTime: Math.floor(Date.parse("2026-10-27T20:00:00Z") / 1000), // 停留於週二 10/27，應為週三 10/28
+  }, usClosedWedSec);
+  assert.equal(qUs7ClosedStale.expectedDate, "2026-10-28");
+  assert.equal(qUs7ClosedStale.isStale, true);
+  assert.equal(qUs7ClosedStale.dataStatus, "stale");
+
+  // US-8: 缺少 regularMarketTime：不得用系統當下時間冒充來源時間
+  const qUs8NoTime = yahoo.quoteFromMeta("^DJI", {
+    regularMarketPrice: 42000,
+    chartPreviousClose: 41900,
+  }, usEdtOpenSec);
+  assert.equal(qUs8NoTime.dataDate, null);
+  assert.equal(qUs8NoTime.sourceTime, null);
+  assert.equal(qUs8NoTime.dataStatus, "unavailable");
+
+  // US-9: 多個美股指數日期不一致：不得用單一頂層日期掩蓋個別指數過期
+  const idxFresh = yahoo.quoteFromMeta("^GSPC", metaEdtOpen, usEdtOpenSec);
+  const idxStale = qUs7OpenStale;
+  assert.equal(idxFresh.dataDate, "2026-10-27");
+  assert.equal(idxStale.dataDate, "2026-10-26");
+  assert.notEqual(idxFresh.dataStatus, idxStale.dataStatus);
+
+  // US-10: Yahoo Finance / 備援來源失敗：顯示真實錯誤或最後有效資料＋延遲標記
+  const stUs10 = ctx.evalDataStatus({
+    type: "us",
+    source: "Yahoo Finance",
+    dataDate: "2026-10-27",
+    isSuccess: false,
+    err: "Upstream 503",
+    lastValidAt: Date.now() - 120000,
+  });
+  assert.equal(stUs10.status, "delayed");
+  assert.match(stUs10.note, /Upstream 503/);
+
+  // ---------- Phase 5 & 8: mktDataInfoHtml 與 mktstats 欄位驗證 ----------
+  const infoHtml = ctx.mktDataInfoHtml(tw1, { freq: "每 10 秒更新" });
+  assert.match(infoHtml, /class="mk-dinfo"/);
+  assert.match(infoHtml, /資料來源/);
+  assert.match(infoHtml, /證交所 MIS/);
+  assert.match(infoHtml, /2026-10-28/);
+  assert.match(infoHtml, /10:30:00/);
+  assert.match(infoHtml, /即時更新/);
+
+  const mi5 = mktstats.parseMi5({
+    stat: "OK",
+    fields: ["時間", "委託買進筆數", "委託買進數量", "委託賣出筆數", "委託賣出數量", "成交筆數", "成交數量", "成交金額"],
+    data: [["13:30:00", "10,000,000", "500,000", "12,000,000", "600,000", "8,000,000", "400,000", "350,000"]],
+  }, "20261028");
+  assert.equal(mi5.dataDate, "2026-10-28");
+  assert.equal(mi5.sourceTime, "13:30:00");
+  assert.equal(mi5.updateMode, "scheduled");
+
+  // ---------- Phase 7: watch.html 盤中決策區在上方、盤後確認區在下方之結構驗證 ----------
+  const posOrder = html.indexOf("h += mktOrderStatsHtml(sec);");
+  const posContrib = html.indexOf('sec("加權指數貢獻點數"');
+  const posWorld = html.indexOf('sec("國際指數"');
+  const posInst = html.indexOf('sec("三大法人買賣超（上市）"');
+  const posPostStats = html.indexOf("h += mktPostStatsHtml(sec);");
+  const posSectorClose = html.indexOf('sec("類股指數"');
+  assert.ok(posOrder > 0 && posContrib > posOrder, "盤中委買委賣與貢獻點數應位於盤中決策區");
+  assert.ok(posWorld > posContrib, "國際指數應位於盤後確認區之前");
+  assert.ok(posInst > posWorld, "三大法人買賣超應移至盤後確認區（國際指數之後）");
+  assert.ok(posPostStats > posInst, "融資融券與期貨法人未平倉應位於盤後確認區");
+  assert.ok(posSectorClose > posPostStats, "收盤類股指數應位於盤後確認區下方");
+});

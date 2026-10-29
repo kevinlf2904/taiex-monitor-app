@@ -39,16 +39,18 @@ export function parseMis(m) {
   let price = num(m.z), estimated = false;
   if (price == null) { price = num(m.pz) ?? (bids[0] && asks[0] ? +((bids[0].p + asks[0].p) / 2).toFixed(2) : bids[0]?.p ?? asks[0]?.p ?? null); estimated = price != null; }
   const d = String(m.d || ""), date = /^\d{8}$/.test(d) ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}` : null;
+  const time = m.t || null;
   return { code, name: m.n || (INDEX[code]?.name ?? ""), market: m.ex === "otc" ? "上櫃" : "上市", price, prev, open: num(m.o), high: num(m.h), low: num(m.l), vol: isIdx ? null : num(m.v),
-    chg: price != null && prev ? +(price - prev).toFixed(2) : null, chgPct: price != null && prev ? +((price / prev - 1) * 100).toFixed(2) : null, time: m.t || null, date, bids, asks, estimated };
+    chg: price != null && prev ? +(price - prev).toFixed(2) : null, chgPct: price != null && prev ? +((price / prev - 1) * 100).toFixed(2) : null, time, date, dataDate: date, sourceTime: time, bids, asks, estimated };
 }
 // 富果 intraday/quote
 export function parseFugle(j, code) {
   const bids = (j.bids || []).map(x => ({ p: num(x.price), v: num(x.size) })).filter(x => x.p), asks = (j.asks || []).map(x => ({ p: num(x.price), v: num(x.size) })).filter(x => x.p);
   const price = num(j.lastPrice ?? j.closePrice), prev = num(j.previousClose ?? j.referencePrice), ts = j.lastUpdated ? new Date(Number(j.lastUpdated) / 1000) : null;
   const time = ts ? new Date(ts.getTime() + 8 * 3600e3).toISOString().slice(11, 19) : null;
+  const date = j.date || null;
   return { code, name: j.name || INDEX[code]?.name || "", market: j.market === "OTC" || j.exchange === "TPEx" ? "上櫃" : "上市", price, prev, open: num(j.openPrice), high: num(j.highPrice), low: num(j.lowPrice),
-    vol: INDEX[code] ? null : num(j.total?.tradeVolume), chg: num(j.change), chgPct: num(j.changePercent), time, date: j.date || null, bids: bids.slice(0, 5), asks: asks.slice(0, 5), estimated: false };
+    vol: INDEX[code] ? null : num(j.total?.tradeVolume), chg: num(j.change), chgPct: num(j.changePercent), time, date, dataDate: date, sourceTime: time, bids: bids.slice(0, 5), asks: asks.slice(0, 5), estimated: false };
 }
 
 async function getJSON(url, headers = {}) {
@@ -132,7 +134,10 @@ export default async function handler(req, res) {
     if (hitU && Date.now() - hitU.at < 15000) return res.status(200).json(hitU.body);
     const quotes = await usQuotes();
     if (!quotes.length) return res.status(200).json({ ok: false, session: session(), error: "暫時拿不到美股報價（Yahoo Finance），稍後再試。" });
-    const body = { ok: true, source: quotes.some(q => q.src === "Finnhub") ? "Yahoo Finance（部分備援：Finnhub）" : "Yahoo Finance", session: session(), today: todayTaipei(), time: new Date().toISOString(), quotes, missing: us.filter(c => !quotes.some(q => q.code === c)) };
+    const nowIso = new Date().toISOString();
+    const srcName = quotes.some(q => q.src === "Finnhub") ? "Yahoo Finance（部分備援：Finnhub）" : "Yahoo Finance";
+    const enriched = quotes.map(q => ({ ...q, dataDate: q.dataDate || q.date || null, sourceTime: q.sourceTime || q.time || null, fetchedAt: nowIso, source: q.src || "Yahoo Finance", updateMode: q.updateMode || "scheduled" }));
+    const body = { ok: true, source: srcName, session: session(), today: todayTaipei(), time: nowIso, fetchedAt: nowIso, updateMode: "scheduled", quotes: enriched, missing: us.filter(c => !quotes.some(q => q.code === c)) };
     cache.set("us:" + us.join(","), { at: Date.now(), body }); res.setHeader("Cache-Control", "s-maxage=15, stale-while-revalidate=60");
     return res.status(200).json(body);
   }
@@ -145,7 +150,17 @@ export default async function handler(req, res) {
       const quotes = await run();
       if (quotes.length) {
         const uq = await usP; quotes.push(...uq);
-        const body = { ok: true, source, backup: errors.length ? errors.join("；") : undefined, session: sess, today: todayTaipei(), time: new Date().toISOString(), quotes, missing: all.filter(c => !quotes.some(q => q.code === c)) };
+        const nowIso = new Date().toISOString(), isFallback = errors.length > 0, today = todayTaipei();
+        const enriched = quotes.map(q => ({
+          ...q,
+          dataDate: q.dataDate || q.date || null,
+          sourceTime: q.sourceTime ?? q.time ?? null,
+          fetchedAt: nowIso,
+          source: q.us ? (q.src || "Yahoo Finance") : source,
+          updateMode: q.us ? (q.updateMode || "scheduled") : (sess === "open" || sess === "pre" ? "live" : "after_close"),
+          isFallback: Boolean(isFallback || q.delayed),
+        }));
+        const body = { ok: true, source, backup: isFallback ? errors.join("；") : undefined, isFallback, session: sess, today, time: nowIso, fetchedAt: nowIso, updateMode: sess === "open" || sess === "pre" ? "live" : "after_close", quotes: enriched, missing: all.filter(c => !quotes.some(q => q.code === c)) };
         cache.set(key, { at: Date.now(), body });
         // 盤中只快取幾秒；收盤後快取久一點
         res.setHeader("Cache-Control", sess === "closed" ? "s-maxage=120, stale-while-revalidate=600" : "s-maxage=1, stale-while-revalidate=2"); // 盤中每秒更新

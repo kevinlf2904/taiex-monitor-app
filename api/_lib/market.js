@@ -188,10 +188,25 @@ export function parseBfi82u(j) {
   return { foreign: +pick(/外資/).toFixed(2), trust: +pick(/投信/).toFixed(2), dealer: +pick(/^自營商/).toFixed(2), total: +(j.data.filter(r => /合計/.test(String(r[0]))).reduce((s, r) => s + (num(r[3]) || 0), 0) / 1e8).toFixed(2) };
 }
 const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-async function instLatest() {
-  const d = new Date(Date.now() + 8 * 3600e3);
+async function instLatest(fetchedAt = new Date().toISOString()) {
+  const d = new Date(Date.now() + 8 * 3600e3), today = d.toISOString().slice(0, 10);
   for (let k = 0; k < 7; k++) {
-    try { const r = parseBfi82u(await getJSON(`https://www.twse.com.tw/rwd/zh/fund/BFI82U?type=day&dayDate=${ymd(d)}&response=json`)); if (r) return { date: `${ymd(d).slice(0, 4)}-${ymd(d).slice(4, 6)}-${ymd(d).slice(6)}`, ...r }; } catch {}
+    try {
+      const r = parseBfi82u(await getJSON(`https://www.twse.com.tw/rwd/zh/fund/BFI82U?type=day&dayDate=${ymd(d)}&response=json`));
+      if (r) {
+        const date = `${ymd(d).slice(0, 4)}-${ymd(d).slice(4, 6)}-${ymd(d).slice(6)}`;
+        return {
+          date,
+          dataDate: date,
+          sourceTime: null,
+          fetchedAt,
+          source: "證交所 BFI82U",
+          updateMode: "after_close",
+          dataStatus: date === today ? "confirmed" : "pending",
+          ...r,
+        };
+      }
+    } catch {}
     d.setDate(d.getDate() - 1);
   }
   return null;
@@ -201,7 +216,27 @@ const US_IDX = [["^DJI", "道瓊工業"], ["^IXIC", "那斯達克"], ["^GSPC", "
 export const WORLD_IDX = [["us", "美國", [["^IXIC", "那斯達克"], ["^SOX", "費城半導體"], ["^NDX", "NASDAQ-100"], ["^DJI", "道瓊工業"], ["^GSPC", "S&P 500"], ["^VIX", "VIX 恐慌指數"]]],
   ["jp", "日本", [["^N225", "日經 225"]]], ["kr", "韓國", [["^KS11", "韓國綜合"]]], ["hk", "香港", [["^HSI", "恆生指數"]]],
   ["cn", "中國", [["000001.SS", "上證指數"], ["399001.SZ", "深證成指"]]], ["eu", "歐洲", [["^GDAXI", "德國 DAX"], ["^FTSE", "英國富時 100"], ["^STOXX50E", "歐洲 STOXX 50"]]]];
-async function idxQuote([s, name]) { const p = await yahooBars(s, 5, { isIdx: true }); const q = quoteFromMeta(s, p.meta); return { code: s, name, price: q.price, chg: q.chg, chgPct: q.chgPct, date: q.date, prev: q.prev, spark: p.bars.map(b => b.c) }; }
+async function idxQuote([s, name]) {
+  const p = await yahooBars(s, 5, { isIdx: true });
+  const q = quoteFromMeta(s, p.meta);
+  return {
+    code: s, name, price: q.price, chg: q.chg, chgPct: q.chgPct, date: q.date, time: q.time, prev: q.prev,
+    dataDate: q.dataDate || q.date || null,
+    sourceTime: q.sourceTime || q.time || null,
+    sourceTimeTW: q.sourceTimeTW || null,
+    sourceDateTW: q.sourceDateTW || null,
+    epochMs: q.epochMs || null,
+    tz: q.tz || null,
+    session: q.session?.state || "closed",
+    subState: q.session?.subState || "closed",
+    holiday: q.holiday || null,
+    source: "Yahoo Finance",
+    updateMode: q.updateMode || "scheduled",
+    dataStatus: q.dataStatus || "confirmed",
+    isStale: !!q.isStale,
+    spark: p.bars.map(b => b.c),
+  };
+}
 async function usIndices() {
   const r = await Promise.allSettled(US_IDX.map(idxQuote));
   return r.filter(x => x.status === "fulfilled").map(x => x.value);
@@ -234,9 +269,10 @@ async function hilo(host) {
 }
 
 export default async function handler(req, res, { marketFetcher = marketRows } = {}) {
+  const fetchedAt = new Date().toISOString();
   const [a, b, info, inst, us, world] = await Promise.allSettled([
     marketFetcher(), hilo(req.headers?.host),
-    companies(), instLatest(), usIndices(), worldIndices(),
+    companies(), instLatest(fetchedAt), usIndices(), worldIndices(),
   ]);
   const L = a.value, all = L?.rows || [], twse = all.filter(r => r.market === "上市"), tpex = all.filter(r => r.market === "上櫃"), I = info.value || new Map();
   const M = await fetchMiIndex(L?.date);
@@ -244,13 +280,32 @@ export default async function handler(req, res, { marketFetcher = marketRows } =
   const taiex = M.find(x => /^發行量加權股價指數$/.test(x.name));
   const pickIdx = ["電子類指數", "半導體類指數", "金融保險類指數", "航運類指數", "臺灣50指數", "櫃買指數"].map(n => M.find(x => x.name === n || (n === "電子類指數" && x.name === "電子工業類指數"))).filter(Boolean);
   const stocks = all.filter(r => /^\d{4}$/.test(r.code));
+  const mktDate = L?.date || all.find(x => x.date)?.date || null;
+  const mktTime = L?.time || L?.sourceTime || null;
+  const updateMode = L?.live ? "live" : L?.updateMode || "after_close";
   res.setHeader("Cache-Control", liveCache(L?.live, 10));
-  return res.status(200).json({ ok: true, date: L?.date || all.find(x => x.date)?.date || null, live: !!L?.live, time: L?.time || null, note: L?.note || null, source: `${L?.source || "證交所、櫃買中心 OpenAPI"}；美股 Yahoo Finance`,
-    breadth: all.length ? breadth(all) : null, coverage: L?.coverage || null,
-    completeness: L?.completeness || null, dataStatus: L?.dataStatus || null,
-    dateVerified: L?.dateVerified ?? null, dateConsistent: L?.dateConsistent ?? null,
-    indicesVerified: M?.dateVerified ?? null, indicesComplete: M?.isComplete ?? null,
-    newHL: newHiLo(all, b.value, L?.date || all.find(x => x.date)?.date),
+  return res.status(200).json({
+    ok: true,
+    date: mktDate,
+    dataDate: mktDate,
+    live: !!L?.live,
+    time: mktTime,
+    sourceTime: mktTime,
+    fetchedAt: L?.fetchedAt || fetchedAt,
+    updateMode,
+    isFallback: !!L?.isFallback,
+    note: L?.note || null,
+    source: `${L?.source || "證交所、櫃買中心 OpenAPI"}；美股 Yahoo Finance`,
+    breadth: all.length ? breadth(all) : null,
+    coverage: L?.coverage || null,
+    completeness: L?.completeness || null,
+    dataStatus: L?.dataStatus || null,
+    dateVerified: L?.dateVerified ?? null,
+    dateConsistent: L?.dateConsistent ?? null,
+    indicesVerified: M?.dateVerified ?? null,
+    indicesComplete: M?.isComplete ?? null,
+    indicesSource: M?.source || "證交所 MI_INDEX",
+    newHL: newHiLo(all, b.value, mktDate),
     sectors: I.size ? sectors(stocks, I) : null,
     // 上市、上櫃分開看（看盤頁可以切換）
     breadthBy: { twse: breadth(twse), tpex: breadth(tpex) },
@@ -258,5 +313,8 @@ export default async function handler(req, res, { marketFetcher = marketRows } =
     sectorsBy: I.size ? { twse: sectors(twse.filter(r => /^\d{4}$/.test(r.code)), I), tpex: sectors(tpex.filter(r => /^\d{4}$/.test(r.code)), I) } : null,
     world: world.value || [],
     contrib: I.size && taiex ? contributions(twse, I, taiex.close - (taiex.chg || 0)) : null,
-    inst: inst.value || null, indices: pickIdx, us: us.value || [] });
+    inst: inst.value || null,
+    indices: pickIdx,
+    us: us.value || [],
+  });
 }
