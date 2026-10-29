@@ -63,7 +63,7 @@ export function parseYahooBars(j, isIdx = false, shares = false) {
   const r = j?.chart?.result?.[0], q = r?.indicators?.quote?.[0];
   if (!r || !q || !Array.isArray(r.timestamp)) return null;
   const off = r.meta?.gmtoffset ?? 0;
-  const bars = r.timestamp.map((t, k) => { const iso = new Date((t + off) * 1000).toISOString(); return { d: iso.slice(0, 10), t: iso.slice(11, 16), o: q.open[k], h: q.high[k], l: q.low[k], c: q.close[k], v: isIdx || q.volume[k] == null ? 0 : shares ? q.volume[k] : Math.round(q.volume[k] / 1000) }; })
+  const bars = r.timestamp.map((t, k) => { const iso = new Date((t + off) * 1000).toISOString(); return { d: iso.slice(0, 10), t: iso.slice(11, 16), o: q.open[k], h: q.high[k], l: q.low[k], c: q.close[k], v: isIdx ? null : q.volume[k] == null ? 0 : shares ? q.volume[k] : Math.round(q.volume[k] / 1000) }; })
     .filter(b => b.o != null && b.h != null && b.l != null && b.c != null)
     .map(b => ({ ...b, o: +b.o.toFixed(2), h: +b.h.toFixed(2), l: +b.l.toFixed(2), c: +b.c.toFixed(2) }));
   return { bars, meta: r.meta, prev: num(r.meta?.chartPreviousClose ?? r.meta?.previousClose), session: sessionOf(r.meta) };

@@ -2069,3 +2069,84 @@ test("改版本號腳本：日期用台北時間、號碼接著加 1、README �
   assert.equal(V.swap('<p>版本 2026.10.26-162</p>', "2026.10.26-162", "2026.10.28-163", "x"), "<p>版本 2026.10.28-163</p>");
   assert.throws(() => V.swap("<p>沒有版本</p>", "2026.10.26-162", "2026.10.28-163", "x"), /找不到目前的版本/);
 });
+
+// ---------- 大盤分 K 成交量：指數沒有可靠的量就是 null（缺失），不能當成真的 0；個股的量（張）維持原樣。全部用固定的假資料，不呼叫外部網站 ----------
+import * as IDV from "../api/_lib/intraday.js";
+import idvHandler from "../api/_lib/intraday.js";
+import { parseYahooBars as idvYahooBars } from "../api/_lib/_yahoo.js";
+
+// 假的 Yahoo 1 分 K 回應：從台北 09:00 起連續 n 根，量是 vol(k)（股），價格只是測試用的假數字
+const idvYahoo = (day, n, vol, { shortName = "TEST" } = {}) => {
+  const t0 = Date.parse(`${day}T09:00:00+08:00`) / 1000, ts = Array.from({ length: n }, (_, k) => t0 + k * 60);
+  return { chart: { result: [{ meta: { gmtoffset: 28800, chartPreviousClose: 100, shortName, exchangeTimezoneName: "Asia/Taipei" }, timestamp: ts, indicators: { quote: [{ open: ts.map((_, k) => 100 + k), high: ts.map((_, k) => 101 + k), low: ts.map((_, k) => 99 + k), close: ts.map((_, k) => 100.5 + k), volume: ts.map((_, k) => vol(k)) }] } }] } };
+};
+const idvSlot = (i, tf) => Math.floor(i / tf) * tf; // 第 i 根 1 分 K（09:00 起算）落在哪個分桶
+
+test("分 K 成交量：Yahoo 指數的量（欄位全 0、或有數字）都不是可靠的量，一律 null，OHLC 與時間照舊", () => {
+  for (const vol of [() => 0, k => 123456 + k, () => null]) {
+    const p = IDV.parseYahooIntraday(idvYahoo("2026-10-05", 5, vol), true);
+    assert.equal(p.bars.length, 5);
+    assert.ok(p.bars.every(b => b.v === null), "指數的量必須是 null，不是 0");
+    assert.deepEqual(p.bars.map(b => [b.t, b.o, b.h, b.l, b.c]), [0, 1, 2, 3, 4].map(k => [`09:0${k}`, 100 + k, 101 + k, 99 + k, 100.5 + k]));
+    assert.equal(p.date, "2026-10-05"); assert.equal(p.prev, 100);
+  }
+});
+test("分 K 成交量：個股的 Yahoo 量維持原本的處理（股 ÷ 1000 四捨五入成張、缺值為 0）", () => {
+  const p = IDV.parseYahooIntraday(idvYahoo("2026-10-05", 4, k => [5000000, null, 1500, 0][k]), false);
+  assert.deepEqual(p.bars.map(b => b.v), [5000, 0, 2, 0]);
+});
+test("分 K 成交量：富果指數的量缺失、null、不合法、0 或負數都是 null，有效的正數照原值保留；個股維持 num(volume) || 0", () => {
+  const row = (volume, k = 0) => ({ date: `2026-10-05T09:0${k}:00.000+08:00`, open: 10, high: 11, low: 9, close: 10.5, ...(volume === undefined ? {} : { volume }) });
+  const idx = IDV.parseFugleCandles({ date: "2026-10-05", data: [row(undefined, 0), row(null, 1), row("abc", 2), row(0, 3), row(-5, 4), row(321, 5)] }, true);
+  assert.deepEqual(idx.bars.map(b => b.v), [null, null, null, null, null, 321]);
+  const stk = IDV.parseFugleCandles({ date: "2026-10-05", data: [row(undefined, 0), row(null, 1), row("abc", 2), row(0, 3), row(7, 4)] });
+  assert.deepEqual(stk.bars.map(b => b.v), [0, 0, 0, 0, 7]);
+  assert.ok(idx.bars.every(b => b.o === 10 && b.h === 11 && b.l === 9 && b.c === 10.5), "價格不受影響");
+});
+test("分 K 成交量：1 分 K 的量依原規則加總成 5、15、30、60 分 K（以獨立算式驗證分桶總和）", () => {
+  const N = 60, one = IDV.parseYahooIntraday(idvYahoo("2026-10-05", N, k => (k + 1) * 1000 * 3), false).bars.map(b => ({ d: "2026-10-05", ...b }));
+  assert.deepEqual(one.map(b => b.v), Array.from({ length: N }, (_, k) => (k + 1) * 3));
+  for (const tf of [5, 15, 30, 60]) {
+    const out = IDV.aggregate(one, tf), want = new Map();
+    one.forEach((b, i) => want.set(idvSlot(i, tf), (want.get(idvSlot(i, tf)) || 0) + b.v));
+    assert.equal(out.length, N / tf);
+    assert.deepEqual(out.map(b => b.v), [...want.values()]);
+    assert.equal(out.reduce((s, b) => s + b.v, 0), one.reduce((s, b) => s + b.v, 0), `${tf} 分合計等於 1 分合計`);
+    out.forEach((b, j) => { const i0 = j * tf; assert.equal(b.o, one[i0].o); assert.equal(b.c, one[i0 + tf - 1].c); assert.equal(b.h, Math.max(...one.slice(i0, i0 + tf).map(x => x.h))); assert.equal(b.l, Math.min(...one.slice(i0, i0 + tf).map(x => x.l))); });
+  }
+});
+test("分 K 成交量：指數 null 的 1 分 K 合成 5、15、30、60 分 K 後仍是 null（不變成 0），OHLC 與分桶不變；桶內有一根缺值就整桶缺值", () => {
+  const one = IDV.parseYahooIntraday(idvYahoo("2026-10-05", 60, () => 0), true).bars.map(b => ({ d: "2026-10-05", ...b }));
+  for (const tf of [5, 15, 30, 60]) {
+    const out = IDV.aggregate(one, tf);
+    assert.equal(out.length, 60 / tf); assert.ok(out.every(b => b.v === null));
+    assert.deepEqual(out.map(b => b.t), Array.from({ length: 60 / tf }, (_, j) => `${String(9 + Math.floor(j * tf / 60)).padStart(2, "0")}:${String((j * tf) % 60).padStart(2, "0")}`));
+  }
+  const mixed = [{ d: "x", t: "09:00", o: 1, h: 2, l: 0, c: 1, v: 5 }, { d: "x", t: "09:01", o: 1, h: 3, l: 1, c: 2, v: null }, { d: "x", t: "09:05", o: 2, h: 2, l: 2, c: 2, v: 4 }];
+  const out = IDV.aggregate(mixed, 5);
+  assert.deepEqual(out.map(b => [b.t, b.v]), [["09:00", null], ["09:05", 4]], "有缺值的桶不能只加有值的那幾根冒充完整的量");
+});
+test("分 K 成交量：歷史（parseYahooBars）與即時（parseYahooIntraday）使用相同口徑", () => {
+  for (const [isIdx, vol] of [[true, k => (k + 1) * 1000], [true, () => 0], [false, k => (k + 1) * 1000], [false, k => (k ? null : 2500)]]) {
+    const j = idvYahoo("2026-10-05", 6, vol), live = IDV.parseYahooIntraday(j, isIdx).bars, hist = idvYahooBars(j, isIdx).bars;
+    assert.deepEqual(hist.map(b => [b.d, b.t, b.o, b.h, b.l, b.c, b.v]), live.map(b => [b.d, b.t, b.o, b.h, b.l, b.c, b.v]));
+  }
+  assert.deepEqual(idvYahooBars(idvYahoo("2026-10-05", 3, k => (k + 1) * 1000), false, true).bars.map(b => b.v), [1000, 2000, 3000], "shares 模式（美股千股用）維持原值");
+});
+test("分 K 成交量：/api/intraday 的指數即時與往前載入都回價格 K 線、量是 null；個股照常有量（mock fetch）", async () => {
+  const realFetch = globalThis.fetch, key = process.env.FUGLE_API_KEY, today = new Date(Date.now() + 8 * 3600e3), ymd = d => d.toISOString().slice(0, 10);
+  const yesterday = ymd(new Date(today.getTime() - 86400e3)), before = ymd(today); delete process.env.FUGLE_API_KEY;
+  const calls = [];
+  globalThis.fetch = async url => { url = String(url); calls.push(url); if (!url.includes("query1.finance.yahoo.com")) throw new Error("不該呼叫其他網站：" + url); return { ok: true, status: 200, json: async () => idvYahoo(yesterday, 10, k => (k + 1) * 1000) }; };
+  const call = async query => { let body, hdr = {}; await idvHandler({ query }, { setHeader: (k, v) => (hdr[k] = v), status: () => ({ json: b => (body = JSON.parse(JSON.stringify(b))) }) }); return body; };
+  try {
+    const live = await call({ code: "t00", tf: "5" });
+    assert.equal(live.ok, true); assert.equal(live.bars.length, 2); assert.deepEqual(live.bars.map(b => b.t), ["09:00", "09:05"]);
+    assert.ok(live.bars.every(b => b.v === null && b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0), "JSON 序列化後量仍是 null、價格仍在");
+    const hist = await call({ code: "t00", tf: "5", before });
+    assert.equal(hist.ok, true); assert.ok(hist.bars.length === 10 && hist.bars.every(b => b.v === null && b.c > 0), "往前載入的歷史分 K 與即時一致");
+    const stock = await call({ code: "2330", tf: "5" });
+    assert.deepEqual(stock.bars.map(b => b.v), [1 + 2 + 3 + 4 + 5, 6 + 7 + 8 + 9 + 10]);
+    assert.ok(calls.length >= 3);
+  } finally { globalThis.fetch = realFetch; if (key === undefined) delete process.env.FUGLE_API_KEY; else process.env.FUGLE_API_KEY = key; }
+});

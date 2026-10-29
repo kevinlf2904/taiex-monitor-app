@@ -4,7 +4,7 @@
 // 有設定 FUGLE_API_KEY 時用富果 intraday/candles（1 分 K），否則改用 Yahoo Finance 1 分 K（可能有延遲）。
 // GET /api/intraday?code=2330&tf=5&before=2026-10-01   往前載入那一天以前的分 K（Yahoo；1 分 K 約一個月內、5／15／30 分約兩個月、60 分約兩年）
 // 美股（英文代號）一律用 Yahoo，時間是美東當地時間，量的單位是千股。
-// 當天的資料一律先抓 1 分 K，再在伺服器端合成需要的週期。回傳 { ok, source, date, tf, prev, bars: [{ t: "09:05", o, h, l, c, v, a? }] }（a 是富果提供的當日均價），v 單位：張（指數為 0）。
+// 當天的資料一律先抓 1 分 K，再在伺服器端合成需要的週期。回傳 { ok, source, date, tf, prev, bars: [{ t: "09:05", o, h, l, c, v, a? }] }（a 是富果提供的當日均價），v 單位：張；指數（t00、o00）沒有可靠的分 K 成交量（Yahoo 的 ^TWII 欄位全是 0、^TWOII 沒資料），v 一律是 null（不是 0），前端看到 null 就不畫量。
 
 import { isUS, usName, yahooBars, INTRADAY_LIMIT } from "./_yahoo.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
@@ -30,20 +30,21 @@ export function aggregate(bars, tf, open = 540) {
   for (const b of bars) {
     const [h, m] = b.t.split(":").map(Number), mins = h * 60 + m, slot = Math.floor((mins - open) / tf) * tf + open;
     const t = `${String(Math.floor(slot / 60)).padStart(2, "0")}:${String(slot % 60).padStart(2, "0")}`, last = out[out.length - 1];
-    if (last && last.t === t && last.d === b.d) { last.h = Math.max(last.h, b.h); last.l = Math.min(last.l, b.l); last.c = b.c; last.v += b.v; if (b.a != null) last.a = b.a; }
+    if (last && last.t === t && last.d === b.d) { last.h = Math.max(last.h, b.h); last.l = Math.min(last.l, b.l); last.c = b.c; last.v = last.v == null || b.v == null ? null : last.v + b.v; if (b.a != null) last.a = b.a; }
     else out.push({ ...b, t });
   }
   return out;
 }
-export function parseFugleCandles(j) {
-  const bars = (j?.data || []).map(x => ({ d: String(x.date).slice(0, 10), t: hhmm(x.date), o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close), v: num(x.volume) || 0, ...(num(x.average) ? { a: num(x.average) } : {}) }))
+// 指數沒有量時 v 是 null（缺失），不能當成真的 0；個股維持原本的 num(volume) || 0
+export function parseFugleCandles(j, isIdx = false) {
+  const bars = (j?.data || []).map(x => ({ d: String(x.date).slice(0, 10), t: hhmm(x.date), o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close), v: isIdx ? (num(x.volume) > 0 ? num(x.volume) : null) : num(x.volume) || 0, ...(num(x.average) ? { a: num(x.average) } : {}) }))
     .filter(b => b.o && b.h && b.l && b.c).sort((a, b) => a.t.localeCompare(b.t));
   return { date: j?.date || null, bars };
 }
 export function parseYahooIntraday(j, isIdx) {
   const r = j?.chart?.result?.[0], q = r?.indicators?.quote?.[0];
   if (!r || !q || !Array.isArray(r.timestamp)) return null;
-  const bars = r.timestamp.map((t, k) => ({ d: new Date(t * 1000 + 8 * 3600e3).toISOString().slice(0, 10), t: hhmm(t), o: q.open[k], h: q.high[k], l: q.low[k], c: q.close[k], v: isIdx || q.volume[k] == null ? 0 : Math.round(q.volume[k] / 1000) }))
+  const bars = r.timestamp.map((t, k) => ({ d: new Date(t * 1000 + 8 * 3600e3).toISOString().slice(0, 10), t: hhmm(t), o: q.open[k], h: q.high[k], l: q.low[k], c: q.close[k], v: isIdx ? null : q.volume[k] == null ? 0 : Math.round(q.volume[k] / 1000) }))
     .filter(b => b.o != null && b.h != null && b.l != null && b.c != null && b.t >= "09:00" && b.t <= "13:30")
     .map(b => ({ ...b, o: +b.o.toFixed(2), h: +b.h.toFixed(2), l: +b.l.toFixed(2), c: +b.c.toFixed(2) }));
   const ts = r.timestamp[r.timestamp.length - 1];
@@ -57,7 +58,7 @@ async function getJSON(url, headers = {}) {
 }
 async function fromFugle(code, key) {
   const sym = INDEX[code]?.fugle || code, h = { "X-API-KEY": key };
-  const p = parseFugleCandles(await getJSON(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/candles/${encodeURIComponent(sym)}?timeframe=1`, h));
+  const p = parseFugleCandles(await getJSON(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/candles/${encodeURIComponent(sym)}?timeframe=1`, h), !!INDEX[code]);
   if (!p.bars.length) return null;
   let prev = null, name = "";
   try { const q = await getJSON(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/${encodeURIComponent(sym)}`, h); prev = num(q.previousClose ?? q.referencePrice); name = q.name || ""; } catch {}
