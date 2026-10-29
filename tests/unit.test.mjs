@@ -2111,6 +2111,18 @@ test("分 K 成交量：Yahoo 指數的量（欄位全 0、或有數字）都不
     assert.equal(p.date, "2026-10-05"); assert.equal(p.prev, 100);
   }
 });
+test("分 K、台指期的缺量（稽核 F-03 後續）：來源沒給量標 vNa，真的 0 不標；日盤沒給量整天標 vNa", async () => {
+  const row = (volume, k = 0) => ({ date: `2026-10-05T09:0${k}:00.000+08:00`, open: 10, high: 11, low: 9, close: 10.5, ...(volume === undefined ? {} : { volume }) });
+  const stk = IDV.parseFugleCandles({ date: "2026-10-05", data: [row(undefined, 0), row(0, 1), row(7, 2)] });
+  assert.deepEqual(stk.bars.map(b => [b.v, !!b.vNa]), [[0, true], [0, false], [7, false]], "個股：缺量欄位標 vNa；那一分鐘沒成交（0）不標");
+  const idx = IDV.parseFugleCandles({ date: "2026-10-05", data: [row(null, 0), row(321, 1)] }, true);
+  assert.deepEqual(idx.bars.map(b => [b.v, !!b.vNa]), [[null, true], [321, false]], "指數：沒有量照舊是 null，另外標 vNa");
+  assert.deepEqual(IDV.parseYahooIntraday(idvYahoo("2026-10-05", 2, k => [null, 3000][k]), false).bars.map(b => !!b.vNa), [true, false]);
+  const F = await import("../api/_lib/futures.js");
+  const R = F.fromFinmindRows([{ date: "2026-10-05", contract_date: "202610", trading_session: "position", open: 1, max: 2, min: 1, close: 2, volume: null }, { date: "2026-10-06", contract_date: "202610", trading_session: "position", open: 1, max: 2, min: 1, close: 2, volume: 500 }]);
+  assert.deepEqual(R.map(r => !!r.vNa), [true, false]);
+  assert.deepEqual(F.nearFullDaily(R).map(r => [r.d, !!r.vNa]), [["2026-10-05", true], ["2026-10-06", false]], "日盤沒給量：那天的日 K 標 vNa");
+});
 test("分 K 成交量：個股的 Yahoo 量維持原本的處理（股 ÷ 1000 四捨五入成張、缺值為 0）", () => {
   const p = IDV.parseYahooIntraday(idvYahoo("2026-10-05", 4, k => [5000000, null, 1500, 0][k]), false);
   assert.deepEqual(p.bars.map(b => b.v), [5000, 0, 2, 0]);

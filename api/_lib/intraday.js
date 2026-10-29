@@ -35,16 +35,16 @@ export function aggregate(bars, tf, open = 540) {
   }
   return out;
 }
-// 指數沒有量時 v 是 null（缺失），不能當成真的 0；個股維持原本的 num(volume) || 0
+// 指數沒有量時 v 是 null（缺失），不能當成真的 0；個股那一分鐘沒成交是 0，來源沒給量欄位時 v 記 0 並標 vNa: 1（前端均量跳過，和日 K 一樣）
 export function parseFugleCandles(j, isIdx = false) {
-  const bars = (j?.data || []).map(x => ({ d: String(x.date).slice(0, 10), t: hhmm(x.date), o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close), v: isIdx ? (num(x.volume) > 0 ? num(x.volume) : null) : num(x.volume) || 0, ...(num(x.average) ? { a: num(x.average) } : {}) }))
+  const bars = (j?.data || []).map(x => ({ d: String(x.date).slice(0, 10), t: hhmm(x.date), o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close), ...(isIdx ? (num(x.volume) > 0 ? { v: num(x.volume) } : { v: null, vNa: 1 }) : num(x.volume) == null ? { v: 0, vNa: 1 } : { v: num(x.volume) }), ...(num(x.average) ? { a: num(x.average) } : {}) }))
     .filter(b => b.o && b.h && b.l && b.c).sort((a, b) => a.t.localeCompare(b.t));
   return { date: j?.date || null, bars };
 }
 export function parseYahooIntraday(j, isIdx) {
   const r = j?.chart?.result?.[0], q = r?.indicators?.quote?.[0];
   if (!r || !q || !Array.isArray(r.timestamp)) return null;
-  const bars = r.timestamp.map((t, k) => ({ d: new Date(t * 1000 + 8 * 3600e3).toISOString().slice(0, 10), t: hhmm(t), o: q.open[k], h: q.high[k], l: q.low[k], c: q.close[k], v: isIdx ? null : q.volume[k] == null ? 0 : Math.round(q.volume[k] / 1000) }))
+  const bars = r.timestamp.map((t, k) => ({ d: new Date(t * 1000 + 8 * 3600e3).toISOString().slice(0, 10), t: hhmm(t), o: q.open[k], h: q.high[k], l: q.low[k], c: q.close[k], ...(isIdx ? { v: null, vNa: 1 } : q.volume[k] == null ? { v: 0, vNa: 1 } : { v: Math.round(q.volume[k] / 1000) }) }))
     .filter(b => b.o != null && b.h != null && b.l != null && b.c != null && b.t >= "09:00" && b.t <= "13:30")
     .map(b => ({ ...b, o: +b.o.toFixed(2), h: +b.h.toFixed(2), l: +b.l.toFixed(2), c: +b.c.toFixed(2) }));
   const ts = r.timestamp[r.timestamp.length - 1];

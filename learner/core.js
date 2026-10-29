@@ -333,7 +333,9 @@ function evalDataStatus(opts = {}) {
     other: 60000,
   };
   const effectiveTtl = typeof ttl === "number" && ttl > 0 ? ttl : (defaultTtls[type] || 60000);
-  const age = fetchedAt ? (nowMs - fetchedAt) : null;
+  // 過期用「瀏覽器拿到資料的時間」（毫秒）判斷；呼叫的地方傳伺服器的 ISO 字串時先轉成毫秒（原本字串相減是 NaN，永遠不會過期）
+  const fetchedMs = typeof fetchedAt === "string" ? Date.parse(fetchedAt) : fetchedAt;
+  const age = Number.isFinite(fetchedMs) && fetchedMs ? (nowMs - fetchedMs) : null;
   const isExpired = age !== null && age > effectiveTtl;
   // 判定是否為台股全市場行情 (PR #165 嚴格品質契約)
   // 包含：全市場廣度 (breadth)、熱門排行 (hot)、全市場統計 (market)、或顯式標記 isMarket

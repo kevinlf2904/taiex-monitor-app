@@ -7,6 +7,8 @@
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const num = v => { if (v == null || v === "" || v === "-") return null; const n = parseFloat(String(v).replace(/[,\s+]/g, "")); return Number.isFinite(n) ? n : null; };
+// 成交量：來源沒給時 v 記 0 並標 vNa: 1（前端均量跳過；和日 K、分 K 一樣），真的 0 照記 0
+const volv = n => (n == null ? { v: 0, vNa: 1 } : { v: n });
 const tpe = (ms = Date.now()) => new Date(ms + 8 * 3600e3); // 用 UTC 欄位讀台北時間
 const iso = d => d.toISOString().slice(0, 10);
 export const MONTHS = "ABCDEFGHIJKL";
@@ -39,7 +41,7 @@ export function parseFugleQuote(j, session) {
     time: at ? hms(at) : null, date: at ? iso(tpe(at)) : j.date || null, at };
 }
 export function parseFugleCandles(j, session) {
-  return (j?.data || []).map(x => { const at = toMs(x.date ?? x.time); return at ? { at, d: iso(tpe(at)), t: hms(at).slice(0, 5), o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close), v: num(x.volume) || 0, s: session } : null; })
+  return (j?.data || []).map(x => { const at = toMs(x.date ?? x.time); return at ? { at, d: iso(tpe(at)), t: hms(at).slice(0, 5), o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close), ...volv(num(x.volume)), s: session } : null; })
     .filter(b => b && b.o != null && b.c != null).sort((a, b) => a.at - b.at);
 }
 // 期交所行情網站 getQuoteList：MarketType 0 日盤、1 夜盤
@@ -92,17 +94,17 @@ export function parseTaifexChart(j, session, date) {
       mm -= 1; if (mm < 0) { mm = 59; hh = (hh + 23) % 24; }
       const tt = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`, c = num(r[ix("C")]); if (c == null) return null;
       const d = session === "night" && hh < 15 ? iso(new Date(Date.parse(date + "T00:00:00Z") + 864e5)) : date;
-      return { at: Date.parse(`${d}T${tt}:00+08:00`), d, t: tt, o: num(r[ix("O")]) ?? c, h: num(r[ix("H")]) ?? c, l: num(r[ix("L")]) ?? c, c, v: num(r[ix("V")]) || 0, s: session }; })
+      return { at: Date.parse(`${d}T${tt}:00+08:00`), d, t: tt, o: num(r[ix("O")]) ?? c, h: num(r[ix("H")]) ?? c, l: num(r[ix("L")]) ?? c, c, ...volv(num(r[ix("V")])), s: session }; })
       .filter(Boolean).sort((a, b) => a.at - b.at);
   }
   const arr = (() => { const st = [j?.RtData, j]; for (const o of st) { if (Array.isArray(o)) return o; if (o && typeof o === "object") for (const v of Object.values(o)) if (Array.isArray(v) && v.length && typeof v[0] === "object") return v; } return []; })();
   const k = (o, re) => Object.keys(o).find(x => re.test(x));
   return arr.map(x => { const kt = k(x, /time/i), kc = k(x, /close|last|price/i); if (!kt || !kc) return null;
     const t = String(x[kt]).replace(/\D/g, "").padStart(6, "0").slice(0, 4), hh = +t.slice(0, 2), mm = +t.slice(2, 4); if (!(hh < 24 && mm < 60)) return null;
-    const c = num(x[kc]), o = num(x[k(x, /open/i)]) ?? c, h = num(x[k(x, /high/i)]) ?? c, l = num(x[k(x, /low/i)]) ?? c, v = num(x[k(x, /vol|qty/i)]) || 0;
+    const c = num(x[kc]), o = num(x[k(x, /open/i)]) ?? c, h = num(x[k(x, /high/i)]) ?? c, l = num(x[k(x, /low/i)]) ?? c, v = num(x[k(x, /vol|qty/i)]);
     const d = session === "night" && hh < 15 ? iso(new Date(Date.parse(date + "T00:00:00Z") + 864e5)) : date;
     const at = Date.parse(`${d}T${t.slice(0, 2)}:${t.slice(2, 4)}:00+08:00`);
-    return c != null ? { at, d, t: `${t.slice(0, 2)}:${t.slice(2, 4)}`, o, h, l, c, v, s: session } : null; }).filter(Boolean).sort((a, b) => a.at - b.at);
+    return c != null ? { at, d, t: `${t.slice(0, 2)}:${t.slice(2, 4)}`, o, h, l, c, ...volv(v), s: session } : null; }).filter(Boolean).sort((a, b) => a.at - b.at);
 }
 async function taifexBars(q, session) {
   if (!q?.sid) return [];
@@ -134,14 +136,14 @@ export function nearFullDaily(rows) {
     const near = L.filter(r => r.session === "day").map(r => r.contract).sort()[0] || L.map(r => r.contract).sort()[0];
     const day = L.find(r => r.contract === near && r.session === "day"), night = L.find(r => r.contract === near && r.session === "night" && r.v > 0);
     const xs = [night, day].filter(Boolean); if (!xs.length) continue;
-    out.push({ d, o: (night || day).o, h: Math.max(...xs.map(x => x.h)), l: Math.min(...xs.map(x => x.l)), c: (day || night).c, v: xs.reduce((s, x) => s + (x.v || 0), 0), contract: near });
+    out.push({ d, o: (night || day).o, h: Math.max(...xs.map(x => x.h)), l: Math.min(...xs.map(x => x.l)), c: (day || night).c, v: xs.reduce((s, x) => s + (x.v || 0), 0), ...(day?.vNa ? { vNa: 1 } : {}), contract: near }); // 日盤沒給量：整天的量不完整
   }
   return out;
 }
 // FinMind TaiwanFuturesDaily（trading_session：position＝一般、after_market＝盤後）
-export const fromFinmindRows = rows => (rows || []).map(r => ({ date: r.date, contract: String(r.contract_date || "").trim(), session: r.trading_session === "after_market" ? "night" : "day", o: num(r.open), h: num(r.max), l: num(r.min), c: num(r.close), v: num(r.volume) || 0 }));
+export const fromFinmindRows = rows => (rows || []).map(r => ({ date: r.date, contract: String(r.contract_date || "").trim(), session: r.trading_session === "after_market" ? "night" : "day", o: num(r.open), h: num(r.max), l: num(r.min), c: num(r.close), ...volv(num(r.volume)) }));
 // 期交所 futDataDown CSV（交易日期,契約,到期月份(週別),開盤價,最高價,最低價,收盤價,…,成交量,…,交易時段）
-export const fromTaifexCsv = rows => (rows || []).map(r => { const k = re => Object.keys(r).find(x => re.test(x)); return { date: String(r[k(/交易日期/)] || "").replace(/\//g, "-"), contract: String(r[k(/到期月份/)] || "").trim(), session: /盤後/.test(r[k(/交易時段/)] || "") ? "night" : "day", o: num(r[k(/開盤價/)]), h: num(r[k(/最高價/)]), l: num(r[k(/最低價/)]), c: num(r[k(/收盤價/)]), v: num(r[k(/^成交量/)]) || 0 }; });
+export const fromTaifexCsv = rows => (rows || []).map(r => { const k = re => Object.keys(r).find(x => re.test(x)); return { date: String(r[k(/交易日期/)] || "").replace(/\//g, "-"), contract: String(r[k(/到期月份/)] || "").trim(), session: /盤後/.test(r[k(/交易時段/)] || "") ? "night" : "day", o: num(r[k(/開盤價/)]), h: num(r[k(/最高價/)]), l: num(r[k(/最低價/)]), c: num(r[k(/收盤價/)]), ...volv(num(r[k(/^成交量/)])) }; });
 const FM_ID = { TXF: "TX", EXF: "TE", FXF: "TF" };
 // before（YYYY-MM-DD）：只要這天以前的（看盤 K 線往左拉、載入更早的資料）
 async function dailyHistory(cid, months, before = null) {
