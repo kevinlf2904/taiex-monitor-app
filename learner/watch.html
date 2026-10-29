@@ -1540,7 +1540,7 @@ const irtThemes = () => W.irtThemes || (W.irtThemes = [...irtSegs().reduce((m, g
 async function loadIndRt(force = false) {
   if (W.off || W.irtBusy || (!force && W.irt && Date.now() - W.irt.at < 9000)) return;
   W.irtBusy = 1; await loadTic(); if (!irtSegs().length) { W.irtBusy = 0; return; }
-  try { const j = await getJ(`/api/hot?market=tw&type=rows&codes=all`, true); W.irt = { at: Date.now(), live: j.live, date: j.date, source: j.source, q: new Map(j.rows.map(([c, p, pct, v]) => [c, { p, pct, v: v || 0 }])) }; }
+  try { const j = await getJ(`/api/hot?market=tw&type=rows&codes=all`, true); W.irt = { at: Date.now(), fetchedAt: j.at ?? null, live: j.live, date: j.date, time: j.time ?? null, srcKind: "market", source: j.source, q: new Map(j.rows.map(([c, p, pct, v]) => [c, { p, pct, v: v || 0 }])) }; }
   catch (e) { W.irt = { at: Date.now(), err: e.message, q: W.irt?.q || new Map() }; } finally { W.irtBusy = 0; }
   if (W.lt === "mkt" && W.mkReg !== "us" && !W.mktLoading) renderList();
 }
@@ -1570,7 +1570,7 @@ function irtHtml(sec) {
     <ol class="irb">${shown.map(row).join("")}</ol>
     ${S.length > N ? `<button type="button" class="btn sm irb-more" data-mk="irtAll" data-v="${all ? "" : "1"}">${all ? "收合 ▴" : `看全部 ${S.length} 個 ▾`}</button>` : ""}
     <p class="note">${irtOff() ? `分類：<a href="https://ic.tpex.org.tw/" target="_blank" rel="noopener">櫃買中心 產業價值鏈資訊平台</a>（${irtThemes().length} 個產業、${irtSegs().length} 個上中下游細分產業，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔上市櫃公司，${W.tic.updated ? new Date(W.tic.updated).toISOString().slice(0, 10).replace(/-/g, "/") + " 更新" : "每週更新"}；同一家公司可能出現在好幾個細分產業）` : `分類：供應鏈題材（${irtSegs().length} 個細分產業、${irtThemes().length} 個題材，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔）`}；漲跌是成分股的成交金額加權平均；點一列看成分股。行情：${esc(W.irt?.source || "")}</p>`,
-    liveTag({ live: W.irt?.live, at: W.irt?.at, date: W.irt?.date }, "收盤"), mkSeg("irtK", k, [["gain", "漲幅"], ["loss", "跌幅"], ["flow", "資金流向"], ["value", "成交金額"]]) + " " + mkSeg("irtL", lv, [["seg", "細分產業"], ["theme", U]]));
+    liveTag({ live: W.irt?.live, at: W.irt?.at, fetchedAt: W.irt?.fetchedAt, date: W.irt?.date, time: W.irt?.time, srcKind: "market" }, "收盤"), mkSeg("irtK", k, [["gain", "漲幅"], ["loss", "跌幅"], ["flow", "資金流向"], ["value", "成交金額"]]) + " " + mkSeg("irtL", lv, [["seg", "細分產業"], ["theme", U]]));
 }
 async function loadMktLive() {
   W.mktLoading = Date.now(); loadIxSpark(); loadIndRt(); const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
@@ -1590,15 +1590,18 @@ function twClosedNote(d, now = Date.now()) {
   if (hm < "09:00") return ["尚未開盤", `尚未開盤・顯示 ${last} 收盤`];
   return ["今日無交易", `今天沒有成交資料（休市或暫停交易，例如颱風假）・顯示最近交易日 ${last} 收盤`];
 }
-// 「盤中即時・更新於 10:31:05」或「10/06 收盤後」
+// 「盤中即時・來源 10:31:05」或「10/06 收盤後」
+// J.at 是瀏覽器收到（或 sw.js 存快取）的時間＝receivedAt；J.fetchedAt 是伺服器抓的時間；J.sourceTime／J.time 是來源自己的更新時間
 const liveTag = (J, closed) => {
   if (!J) return "";
   const st = evalDataStatus({
     type: J.type || (J.live ? "quote" : "index"),
+    srcKind: J.srcKind || (J.coverage ? "market" : undefined),
     source: J.source || "",
     dataDate: J.date,
-    sourceTime: J.time,
-    fetchedAt: J.at,
+    sourceTime: J.sourceTime ?? J.time ?? null,
+    fetchedAt: J.fetchedAt ?? null,
+    receivedAt: J.at,
     isSuccess: !J.err,
     isComplete: J.isComplete !== false,
     completeness: J.completeness,
@@ -1609,7 +1612,7 @@ const liveTag = (J, closed) => {
     session: W.session,
     today: W.today,
   });
-  if (st.isLive) return `<span class="livetag" title="台北時間（UTC+8）"><i></i>${st.text}・更新於 ${new Date((J.at || Date.now()) + 8 * 3600e3).toISOString().slice(11, 19)}</span>`;
+  if (st.isLive) return `<span class="livetag" title="來源更新時間（台北 UTC+8）；瀏覽器收到：${J.at ? new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19) : "—"}"><i></i>${st.text}・更新於 ${esc(String(st.sourceTime || "").slice(0, 8))}</span>`;
   return mktStatusTag(st, { showDate: true });
 };
 // 每秒只更新報價（自選、庫存、熱門清單與個股頁），每 5 秒做一次完整更新（分時、逐筆、各分頁資料）
