@@ -101,6 +101,25 @@ test("缺成交量（vNa）：API 標記、均量跳過、週 K 整根標記、�
   const ta = E.trendAnalysis(M, E.indicators(M)); assert.ok(!ta.some(x => x.k === "量能"), "最後一根沒有量：不寫「0.0 倍（量縮）」");
   assert.ok(E.trendAnalysis(D, E.indicators(D)).some(x => x.k === "量能"), "有量時照常寫量能");
 });
+test("總經排程：只有幾個數列抓不到時沿用上一次的（標 stale），不讓它們消失", async () => {
+  const { keepMissing } = await import("../scripts/macro.mjs");
+  const old = { series: [{ id: "CPIAUCSL", last: ["2026-09-01", 3] }, { id: "UNRATE", last: ["2026-09-01", 4.4] }] };
+  const v = { ok: true, series: [{ id: "CPIAUCSL", last: ["2026-10-01", 2.9] }], notes: ["失業率：HTTP 500"] };
+  const out = keepMissing(v, old);
+  assert.deepEqual(out.series.map(x => [x.id, x.last[0], !!x.stale]), [["CPIAUCSL", "2026-10-01", false], ["UNRATE", "2026-09-01", true]]);
+  assert.deepEqual(out.kept, ["UNRATE"]);
+  assert.equal(keepMissing(v, null), v, "沒有舊檔：照原樣");
+});
+test("盤後外資持股基準：這次 MI_QFIIS 沒抓到時沿用上一次，不把空的寫成今天的基準", async () => {
+  const { frState } = await import("../scripts/market-after.mjs");
+  const old = { fr: { 2330: 72.1 }, frDate: "2026-10-29", frPrev: { 2330: 72.0 } };
+  const ok = frState(old, new Map([["2330", 72.5]]), "2026-10-30");
+  assert.deepEqual(ok, { prevFr: { 2330: 72.1 }, fr: { 2330: 72.5 }, frDate: "2026-10-30", frPrev: { 2330: 72.1 } }, "正常：今天的當新基準，增減和上一個交易日比");
+  const bad = frState(old, new Map(), "2026-10-30");
+  assert.deepEqual(bad.prevFr, { 2330: 72.1 }, "這次沒抓到：增減照樣和上一個交易日比");
+  assert.deepEqual([bad.fr, bad.frDate, bad.frPrev], [old.fr, old.frDate, old.frPrev], "存的基準維持上一次，不寫空的");
+  assert.deepEqual(frState(ok, new Map([["2330", 72.6]]), "2026-10-30").prevFr, { 2330: 72.1 }, "同一天第二次跑（21:30）：還是和上一個交易日比");
+});
 test("所有策略回測合理性", () => {
   const E = engine(), ids = Object.keys(E.STRAT_DEFS); let n = 0;
   assert.ok(ids.length > 20);
