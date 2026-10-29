@@ -15,6 +15,7 @@ export const days = (from, to) => { const out = [], d = new Date(from + "T00:00:
 const J = (r, o) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o) });
 // 所有假資料掛在 context 上（後註冊的路由優先）
 export async function mock(ctx) {
+  await ctx.route("https://**/*", r => r.abort()); // 測試一律離線；字型、連結或意外請求都不可連到外部服務
   const K = days("2024-06-05", "2026-10-05");
   await ctx.route("**/api/**", r => J(r, { ok: false, error: "mock" }));
   await ctx.route("**/api/quote**", r => { const codes = (new URL(r.request().url()).searchParams.get("codes") || "").split(",").filter(Boolean); J(r, { ok: true, source: "t", session: "open", today: "2026-10-05", quotes: codes.map((c, i) => ({ code: c, name: "股" + c, price: 100 + i, prev: 99, open: 99, high: 101, low: 98, vol: 2000, chg: (i % 3) - 1, chgPct: (i % 5) - 2, date: "2026-10-05", time: "10:30:05", market: "上市", bids: [], asks: [] })) }); });

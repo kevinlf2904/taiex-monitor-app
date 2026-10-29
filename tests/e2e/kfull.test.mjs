@@ -15,7 +15,7 @@ test("K 線放大：首頁裡直拿、橫拿、轉向都塞得進螢幕，縮小
   await watchFrame(p); const F = () => p.frames().find(x => x.url().includes("watch.html"));
   await F().evaluate(() => select("2330")); await p.waitForTimeout(800); await F().evaluate(() => setDtab("tech"));
   await F().waitForFunction(() => typeof kChart !== "undefined" && kChart?.D?.length, null, { timeout: 15000 });
-  await p.evaluate(() => scrollTo(0, 500)); const h0 = await p.evaluate(() => document.querySelector("#watchFrame").offsetHeight);
+  await p.evaluate(() => scrollTo(0, 500)); const scrollBefore = await p.evaluate(() => scrollY), h0 = await p.evaluate(() => document.querySelector("#watchFrame").offsetHeight);
   await F().evaluate(() => kChart.bar.querySelector("[data-z=expand]").click()); await p.waitForTimeout(400);
   assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector("#watchFrame")).position), "fixed", "iframe 固定在螢幕上");
   for (const [w, h] of [[390, 844], [844, 390], [390, 844]]) {
@@ -27,11 +27,14 @@ test("K 線放大：首頁裡直拿、橫拿、轉向都塞得進螢幕，縮小
   assert.deepEqual(await p.evaluate(() => [".top", ".tabs"].map(s => getComputedStyle(document.querySelector(s)).visibility)), ["hidden", "hidden"]);
   await F().evaluate(() => kChart.bar.querySelector("[data-z=expand]").click()); await p.waitForTimeout(500);
   assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector("#watchFrame")).position), "static", "縮小後還原");
+  assert.ok(Math.abs(await p.evaluate(() => scrollY) - scrollBefore) <= 1, "縮小後還原到放大前的首頁捲動位置");
   assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector(".top")).visibility), "visible", "縮小後頂部列回來");
   assert.ok(await p.evaluate(h0 => Math.abs(document.querySelector("#watchFrame").offsetHeight - h0) < 400, h0), "iframe 高度回到內容高度");
   // Esc 也能縮小並還原 iframe
+  await p.evaluate(() => scrollTo(0, 650)); const escScrollBefore = await p.evaluate(() => scrollY);
   await F().evaluate(() => kChart.bar.querySelector("[data-z=expand]").click()); await p.waitForTimeout(300); await F().evaluate(() => dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
   await p.waitForTimeout(300); assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector("#watchFrame")).position), "static", "Esc 縮小後還原");
+  assert.ok(Math.abs(await p.evaluate(() => scrollY) - escScrollBefore) <= 1, "Esc 縮小後還原到放大前的首頁捲動位置");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
