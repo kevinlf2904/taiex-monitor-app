@@ -78,7 +78,10 @@ test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心�
   await p.click("#lx .td-help > summary"); const help = await p.evaluate(() => $("#lx .td-help").innerText);
   assert.match(help, /分水嶺[\s\S]*夜盤[\s\S]*近 14 日平均波動[\s\S]*不是預測漲跌[\s\S]*不是買賣建議/); assert.equal(r.t00, 0, "加權在最上面，數字列不重複");
   // 三個按鈕是圖示，文字給讀螢幕的人；按鈕至少 44px
-  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#lx .dh-status-bar [data-tx]")].map(b => [b.textContent.trim(), b.getBoundingClientRect().height >= 44])), [["↻重新整理", true], ["AI 整理", true], ["複製文字", true]]);
+  // 字型載入完才量；失敗時把實際尺寸與樣式寫進訊息（CI 日誌只看得到斷言訊息）
+  await p.evaluate(() => document.fonts.ready);
+  const btns = await p.evaluate(() => [...document.querySelectorAll("#lx .dh-status-bar [data-tx]")].map(b => { const r = b.getBoundingClientRect(), cs = getComputedStyle(b); return { t: b.textContent.trim(), h: r.height, w: r.width, css: `${cs.display} ${cs.height}/${cs.minHeight} ${cs.boxSizing}`, vis: !!b.offsetParent }; }));
+  assert.deepEqual(btns.map(b => [b.t, b.h >= 44]), [["↻重新整理", true], ["AI 整理", true], ["複製文字", true]], `按鈕尺寸：${JSON.stringify(btns)}`);
   // 早報的文字結論收在「盤前推演」裡面，外層不再是一大段字
   assert.equal(await p.evaluate(() => [...document.querySelectorAll("#lx .dh-brief-summary")].filter(e => !e.closest("details[data-tdbox]")).length), 0);
   // 每一塊外層是圖：盤中（監控時間軸＋自選熱度格）、我的重點（7 個交易日）、收盤驗證（交易時間進度）；圖在 summary 裡，收著也看得到
