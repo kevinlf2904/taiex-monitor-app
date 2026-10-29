@@ -1348,6 +1348,8 @@ function noteErr(where, e) {
 }
 addEventListener("error", e => noteErr(`程式 ${(e.filename || "").split("/").pop()}:${e.lineno || ""}`, e.message));
 addEventListener("unhandledrejection", e => noteErr("程式（非同步）", e.reason));
+// 拿到資料的時間：離線快取（sw.js）回的舊資料帶 swCachedAt（當時存起來的時間），用它才會被判成過期；其他就是現在
+const gotAt = j => (j?.swCachedAt != null ? Math.max(1, +j.swCachedAt || 0) : Date.now());
 async function getJ(url, optional = false) {
   const ttl = apiTtl(url); if (ttl && !(W.fresh > Date.now())) { const hit = await apiCacheGet(url); if (hit) return hit; }
   const fail = m => { const p = String(url).split("?")[0]; if (!(W.off && /資料服務/.test(m))) noteErr(p, m); return new Error(m); }; // 本機沒有資料服務的不記
@@ -1500,7 +1502,7 @@ function liveRefresh() {
   else if (W.lt === "mkt" && (W.mkReg === "otc" || W.mkReg === "lst")) { if (lazyOk("mkx")) otcLoad(); }
   else if (W.lt === "mkt" && W.mkReg === "off") { if (lazyOk("mkx")) offLoad(); }
   else if (W.lt === "mkt") {
-    if (open && age(W.mkt) > 10000 && !(W.mktLoading && Date.now() - W.mktLoading < 40000)) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
+    if (open && age({ at: W.mkt?.tryAt ?? W.mkt?.at }) > 10000 && !(W.mktLoading && Date.now() - W.mktLoading < 40000)) { loadMktLive(); if (age(W.mks) > 60000) loadMktStats(true); }
     const curHot = W.hot["rank:" + W.mkHot];
     const hotExp = !curHot || (curHot.err ? Date.now() - (curHot.errAt || 0) > MK_HOT_ERR_TTL : (!Array.isArray(curHot.rows) || Date.now() - (curHot.at || 0) > MK_HOT_TTL));
     if (open && W.mkHot !== "surge" && hotExp) {
@@ -1565,8 +1567,9 @@ async function loadMktLive() {
   W.mktLoading = Date.now(); loadIxSpark(); loadIndRt(); const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
   // 期貨和大盤統計各自更新：其中一個慢或失敗，不會讓另一個也一直空著
   const futP = Promise.all([fut("EXF"), fut("FXF")]).then(([ex, fx]) => { W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; if (W.lt === "mkt" && !W.mktLoading) renderList(); });
-  try { const m = await getJ("/api/market"); W.mkt = { ...m, at: Date.now() }; }
-  catch (e) { if (W.mkt) W.mkt.at = Date.now(); else W.mkt = { err: e.message, at: Date.now() }; } finally { W.mktLoading = 0; }
+  // at＝這份資料是什麼時候拿到的（判斷過期用），tryAt＝最後一次去問的時間（排下一次更新用）；失敗只改 tryAt，畫面才會轉成「資料延遲」，不會一直寫「更新於 現在」
+  try { const m = await getJ("/api/market"); W.mkt = { ...m, at: gotAt(m), tryAt: Date.now() }; }
+  catch (e) { if (W.mkt && !W.mkt.err) Object.assign(W.mkt, { tryAt: Date.now(), lastErr: e.message }); else W.mkt = { err: e.message, at: Date.now(), tryAt: Date.now() }; } finally { W.mktLoading = 0; }
   await futP.catch(() => {});
   if (W.lt === "mkt") { W.ticking = true; try { renderList(); } finally { W.ticking = false; } }
 }
@@ -4272,7 +4275,7 @@ async function loadMkt(force = false) {
   const exP = fut("EXF"), fxP = fut("FXF");
   Promise.all([exP, fxP]).then(([ex, fx]) => { W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; if (W.lt === "mkt") renderList(); }).catch(() => {});
   const [m, cal, ex, fx, wn] = await Promise.allSettled([getJ("/api/market"), W.cal && !force ? Promise.resolve(W.cal) : getJ("/api/calendar", true), exP, fxP, loadWarn(force)]);
-  W.mkt = m.status === "fulfilled" ? { ...m.value, at: Date.now() } : { err: m.reason?.message, at: Date.now() };
+  W.mkt = m.status === "fulfilled" ? { ...m.value, at: gotAt(m.value), tryAt: Date.now() } : { err: m.reason?.message, at: Date.now(), tryAt: Date.now() };
   W.cal = cal.status === "fulfilled" ? cal.value : { err: cal.reason?.message };
   W.futx = { EXF: ex.value || W.futx?.EXF || null, FXF: fx.value || W.futx?.FXF || null };
   if (!W.scr) loadScreen(); // 熱門股的急拉股用選股清單
