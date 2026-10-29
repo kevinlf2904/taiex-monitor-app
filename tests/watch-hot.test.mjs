@@ -3263,3 +3263,12 @@ test("Phase 9 台股與美股 20 項時效、時區、DST、資料透明度契�
   assert.ok(posPostStats > posInst, "融資融券與期貨法人未平倉應位於盤後確認區");
   assert.ok(posSectorClose > posPostStats, "收盤類股指數應位於盤後確認區下方");
 });
+
+test("evalDataStatus：fetchedAt 是伺服器的 ISO 字串時也能判斷過期（原本字串相減是 NaN，永遠不會過期）", () => {
+  const { ctx } = createHarness();
+  const now = new Date("2026-10-27T10:30:00+08:00"), base = { type: "quote", source: "證交所 MIS", dataDate: "2026-10-27", session: "open", dayState: "trade", today: "2026-10-27", now };
+  assert.equal(ctx.evalDataStatus({ ...base, fetchedAt: new Date(+now - 5000).toISOString() }).status, "live", "5 秒前：盤中即時");
+  const old = ctx.evalDataStatus({ ...base, fetchedAt: new Date(+now - 120000).toISOString() });
+  assert.notEqual(old.status, "live", "2 分鐘前：不能再是盤中即時"); assert.equal(old.isLive, false);
+  assert.equal(ctx.evalDataStatus({ ...base, fetchedAt: "不是時間" }).status, "live", "解析不了的字串當成沒有時間（和原本一樣不判過期）");
+});
