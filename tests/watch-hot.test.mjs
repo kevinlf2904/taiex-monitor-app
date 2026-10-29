@@ -3292,3 +3292,40 @@ test("evalDataStatus：fetchedAt 是伺服器的 ISO 字串時也能判斷過期
   assert.notEqual(old.status, "live", "2 分鐘前：不能再是盤中即時"); assert.equal(old.isLive, false);
   assert.equal(ctx.evalDataStatus({ ...base, fetchedAt: "不是時間" }).status, "live", "解析不了的字串當成沒有時間（和原本一樣不判過期）");
 });
+
+// P2-02：同一份加權資料在 core（evalDataStatus）、brief（決策中心 evaluateDataStatus）、watch（liveTag）三處的共同狀態不矛盾
+import { engine as briefEngine } from "../scripts/_engine.mjs";
+test("P2-02 共同資料狀態契約：core、brief、watch 對同一筆加權資料的 state 一致，brief 不比 core 樂觀", () => {
+  const B = briefEngine().B;
+  const scenarios = [
+    { name: "盤中、來源時間新", now: "2026-10-28T10:30:05+08:00", sess: "live", cs: "open", day: "trade", today: "2026-10-28", tq: { date: "2026-10-28", time: "10:30:00", source: "證交所 MIS" }, want: "live" },
+    { name: "盤中、來源時間 20 分鐘前", now: "2026-10-28T10:50:00+08:00", sess: "live", cs: "open", day: "trade", today: "2026-10-28", tq: { date: "2026-10-28", time: "10:30:00", source: "證交所 MIS" }, want: "delayed" },
+    { name: "盤中、沒有來源時間", now: "2026-10-28T10:30:05+08:00", sess: "live", cs: "open", day: "trade", today: "2026-10-28", tq: { date: "2026-10-28", source: "證交所 MIS" }, want: "delayed" },
+    { name: "收盤後官方", now: "2026-10-28T16:00:00+08:00", sess: "post", cs: "closed", day: "trade", today: "2026-10-28", tq: { date: "2026-10-28", time: "13:30:00", source: "證交所 MIS" }, inst: { date: "2026-10-28", foreign: 10 }, want: "confirmed" },
+    { name: "休市日顯示最近交易日", now: "2026-10-31T10:00:00+08:00", sess: "closed", cs: "closed", day: "closed", today: "2026-10-31", last: "2026-10-30", tq: { date: "2026-10-30", time: "13:30:00", source: "證交所 MIS" }, want: "confirmed" },
+  ];
+  for (const S of scenarios) {
+    const now = new Date(S.now), taiex = { price: 23000, close: 23000, high: 23100, low: 22900, chgPct: 0.5, vol: 3000, ...S.tq };
+    const { ctx, W } = createHarness({ now }); W.session = S.cs; W.today = S.today;
+    const core = ctx.evalDataStatus({ type: "index", source: taiex.source, dataDate: taiex.date, sourceTime: taiex.time ?? null, session: S.cs, dayState: S.day, today: S.today, now });
+    const brief = B.evaluateDataStatus({ market: { taiex, inst: S.inst }, session: S.sess, tradeDate: S.today, lastTradeDate: S.last || null, now: +now });
+    const tag = ctx.liveTag({ type: "index", live: S.cs === "open", at: +now, date: taiex.date, time: taiex.time, source: taiex.source });
+    assert.equal(core.state, S.want, `${S.name}：core`);
+    assert.equal(brief.state, S.want, `${S.name}：brief（dataStatus=${brief.dataStatus}）`);
+    assert.equal(/class="livetag"/.test(tag), S.want === "live", `${S.name}：watch 只有 state=live 才顯示盤中即時`);
+    assert.notEqual(brief.state === "live" && core.state !== "live", true, "brief 不能比 core 樂觀");
+  }
+  // 法人還沒公布：brief 是待確認，不比 core（指數收盤確認）好；第三方來源不宣稱已驗證
+  const post = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-28", time: "13:30:00", source: "twse" } }, session: "post", tradeDate: "2026-10-28", now: Date.parse("2026-10-28T14:00:00+08:00") });
+  assert.deepEqual([post.state, post.authority], ["pending", "official"]);
+  const yh = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-28", time: "13:30:00", source: "Yahoo Finance" }, inst: { date: "2026-10-28", foreign: 1 } }, session: "post", tradeDate: "2026-10-28", now: Date.parse("2026-10-28T16:00:00+08:00") });
+  assert.deepEqual([yh.authority, yh.sourceVerified], ["third_party", false], "第三方來源不能宣稱已驗證");
+  const noInstDate = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-28", time: "13:30:00", source: "twse" }, inst: { foreign: 1 } }, session: "post", tradeDate: "2026-10-28", now: Date.parse("2026-10-28T16:00:00+08:00") });
+  assert.notEqual(noInstDate.dataStatus, "official", "法人沒有日期不宣稱官方定案"); assert.equal(noInstDate.state, "partial");
+  assert.equal(typeof B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-28", source: "twse" } }, session: "post", tradeDate: "2026-10-28" }).sourceVerified, "boolean", "sourceVerified 一律是布林");
+  // 優先順序：合併時取最嚴重的；不認得的狀態當成未驗證
+  const { ctx } = createHarness();
+  assert.equal(ctx.worseState("live", "confirmed", "delayed"), "delayed");
+  assert.equal(ctx.worseState("partial", "stale"), "stale");
+  assert.equal(ctx.canonDataState("degraded"), "unverified"); assert.equal(ctx.canonDataState("whatever"), "unverified"); assert.equal(ctx.canonDataState("official"), "confirmed");
+});
