@@ -119,6 +119,13 @@ async function histDay(d) {
   return { d: dash(d), inst, margin: mg ? { finBal: mg.finBal, finChg: mg.finChg, shortBal: mg.shortBal, shortChg: mg.shortChg } : null };
 }
 
+// 外資持股比率的比較基準：prevFr＝拿來算這次「增減」的上一次（不同日期）；這次 MI_QFIIS 沒抓到（空的）就沿用上一次存的，
+// 不把空的寫進去當成今天的基準（不然下一個交易日的「持股比率增減」整天空白）
+export function frState(old, qfiis, date) {
+  const prevFr = old?.frDate && old.frDate !== date ? old.fr || {} : old?.frPrev || {};
+  if (!qfiis?.size) return { prevFr, fr: old?.fr || {}, frDate: old?.frDate || null, frPrev: old?.frPrev || {} };
+  return { prevFr, fr: Object.fromEntries(qfiis), frDate: date, frPrev: prevFr };
+}
 export async function main({ now = Date.now(), gap = 2500 } = {}) {
   const old = await readFile(OUT, "utf8").then(JSON.parse).catch(() => null);
   // 1. 歷史：補齊近 60 個交易日，今天和昨天重抓（盤後資料可能晚公布）
@@ -136,10 +143,10 @@ export async function main({ now = Date.now(), gap = 2500 } = {}) {
   if (!day) throw new Error("拿不到最近交易日的收盤資料");
   const [co, revL, revO, bwL] = await Promise.allSettled([companies(), getJSON("https://openapi.twse.com.tw/v1/opendata/t187ap05_L", 20000), getJSON("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O", 20000), getJSON("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL", 20000)]);
   // 外資持股比率增減：和上一次（不同日期）的比
-  const prevFr = old?.frDate && old.frDate !== dash(date) ? old.fr || {} : old?.frPrev || {};
+  const { prevFr, fr, frDate, frPrev } = frState(old, day.qfiis, dash(date));
   const ranks = buildRanks({ ...day, prevFr, shares: co.value || new Map(), rev: [...parseRevenue(revL.value), ...parseRevenue(revO.value)], bw: parseBw(bwL.value) });
   const out = { updated: new Date(now).toISOString(), date: dash(date), hist: [...hist.values()].sort((a, b) => a.d.localeCompare(b.d)).slice(-60), ranks,
-    fr: Object.fromEntries(day.qfiis), frDate: dash(date), frPrev: prevFr };
+    fr, frDate, frPrev };
   await mkdir(fileURLToPath(new URL("../learner/data/market/", import.meta.url)), { recursive: true });
   await writeFile(OUT, JSON.stringify(out));
   return out;
