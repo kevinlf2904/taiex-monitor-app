@@ -2044,7 +2044,9 @@ function renderList0() {
     const editRow = (c, k) => `<li><div class="row" style="cursor:default"><span class="nm">${esc(nameOf(c))}<span class="cd">${c}</span></span><span></span><span class="edit-ctl"><button data-mv="${k}" data-d="-1" aria-label="上移" ${k ? "" : "disabled"}>↑</button><button data-mv="${k}" data-d="1" aria-label="下移" ${k < L.length - 1 ? "" : "disabled"}>↓</button><button data-rm="${c}" aria-label="移除 ${esc(nameOf(c))}">✕</button></span></div></li>`;
     // 報價全部拿不到（伺服器或資料來源出錯）：清單上方直接說原因和重試，不要只剩一排「—」讓人以為還在載入
     const qErr = !W.editing && !W.off && W.err && L.some(x => x.c) && L.every(x => !x.c || W.quotes.get(x.c)?.price == null) ? `<li class="empty note err wl-err">⚠︎ 報價暫時拿不到（${esc(W.err)}）。<button type="button" class="btn sm" data-wlretry>重試</button></li>` : "";
-    $("#wl").innerHTML = qErr + (L.length ? L.map(({ h, c, q }, k) => (h ? `<li class="sec-h">${h}</li>` : W.editing ? editRow(c, k) : rowHtml(c, q))).join("")
+    // 報價先成功、後來一直失敗（盤中超過 15 秒沒更新）：清單照舊顯示最後的價格，但上方註明暫停更新與時間，不讓舊價格看起來像即時
+    const qStale = !qErr && !W.editing && !W.off && W.err && anyOpen() && W.lastOk && Date.now() - W.lastOk > 15000 && L.some(x => x.c && W.quotes.get(x.c)?.price != null) ? `<li class="empty note err wl-stale">⚠︎ 報價暫停更新（${esc(W.err)}），價格停在 ${new Date(W.lastOk + 8 * 3600e3).toISOString().slice(11, 19)}。<button type="button" class="btn sm" data-wlretry>重試</button></li>` : "";
+    $("#wl").innerHTML = qErr + qStale + (L.length ? L.map(({ h, c, q }, k) => (h ? `<li class="sec-h">${h}</li>` : W.editing ? editRow(c, k) : rowHtml(c, q))).join("")
       : `<li class="empty note">這個群組還沒有股票。在上面輸入代號或名稱加入，或從「台股熱門」「美股熱門」「排行」按 ☆ 加入（台股、美股會自動放進各自的群組）。</li>`);
     note = `${curList().length} 檔・${anyOpen() ? "盤中每秒自動更新" : "收盤後每 5 分鐘確認一次"}`;
   } else if (W.lt === "hold") {
