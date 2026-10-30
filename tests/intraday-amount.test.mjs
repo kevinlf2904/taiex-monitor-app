@@ -105,3 +105,13 @@ test("個股單位不受影響：個股仍是「張」、不換算", async () =>
   assert.equal(stk.body.unit, "張"); assert.deepEqual(stk.body.bars.map(b => b.v), [100, 101], "個股的量照原值（張），不換算");
   assert.equal(stk.body.amountNa, undefined);
 });
+
+test("收盤集合競價 13:25～13:29 成交金額是 0：60 分 K 最後一小時仍有金額（0 不當成缺值）", async () => {
+  // 13:00～13:30 共 31 根：13:25～13:29 是 0，13:30 是集合競價成交（富果 10/30 實際就是這樣）
+  const data = Array.from({ length: 31 }, (_, k) => ({ date: `${DAY}T13:${String(k).padStart(2, "0")}:00.000+08:00`, open: 45000, high: 45010, low: 44990, close: 45005, volume: k >= 25 && k <= 29 ? 0 : k === 30 ? 818e8 : 25e8 }));
+  const { body } = await call({ code: "t00", tf: "60" }, url => (url.includes("/candles/") ? ok({ date: DAY, data }) : ok({ previousClose: 44900 })));
+  assert.equal(body.bars.length, 1); assert.equal(body.bars[0].t, "13:00");
+  assert.equal(body.bars[0].v, 25 * 25 + 818, "25 根各 25 億＋收盤 818 億");
+  const five = await call({ code: "t00", tf: "5" }, url => (url.includes("/candles/") ? ok({ date: DAY, data }) : ok({ previousClose: 44900 })));
+  assert.deepEqual(five.body.bars.slice(-2).map(b => [b.t, b.v]), [["13:25", 0], ["13:30", 818]]);
+});

@@ -36,10 +36,11 @@ export function aggregate(bars, tf, open = 540) {
   return out;
 }
 // 指數（IX0001、IX0043）的 volume 是那一分鐘的成交金額（元，不是累計；整天加總和證交所 MI_5MINS 的成交金額一致），輸出時換成億元（toYi）；
-// 富果有給正數就照用；沒給、0 或不合法都是 null（缺失，不能當成 0；收盤前集合競價那幾分鐘也會是 null）。
+// 富果有給（≥ 0）就照用：0 是真的 0（13:25～13:29 收盤集合競價沒有成交，金額都算在 13:30 那根；當成缺值的話 60 分 K 最後一小時整根變 null）；
+// 沒給、不合法或負數才是 null（缺失，不能當成 0）。
 // 個股那一分鐘沒成交是 0，來源沒給量欄位時 v 記 0 並標 vNa: 1（前端均量跳過，和日 K 一樣）
 export function parseFugleCandles(j, isIdx = false) {
-  const bars = (j?.data || []).map(x => ({ d: String(x.date).slice(0, 10), t: hhmm(x.date), o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close), ...(isIdx ? (num(x.volume) > 0 ? { v: num(x.volume) } : { v: null, vNa: 1 }) : num(x.volume) == null ? { v: 0, vNa: 1 } : { v: num(x.volume) }), ...(num(x.average) && !isIdx ? { a: num(x.average) } : {}) }))
+  const bars = (j?.data || []).map(x => ({ d: String(x.date).slice(0, 10), t: hhmm(x.date), o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close), ...(isIdx ? (num(x.volume) != null && num(x.volume) >= 0 ? { v: num(x.volume) } : { v: null, vNa: 1 }) : num(x.volume) == null ? { v: 0, vNa: 1 } : { v: num(x.volume) }), ...(num(x.average) && !isIdx ? { a: num(x.average) } : {}) }))
     .filter(b => b.o && b.h && b.l && b.c).sort((a, b) => a.t.localeCompare(b.t));
   return { date: j?.date || null, bars };
 }
