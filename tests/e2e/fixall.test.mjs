@@ -111,8 +111,12 @@ for (const width of [390, 1280]) test(`今日重點（早報＋每日摘要）�
   assert.equal(await p.evaluate(() => document.querySelector('#lx details[data-tdbox="mine"]').open), true, "看完整＝我的重點");
   const planText = async () => { if (!(await p.evaluate(() => document.querySelector('#lx details[data-tdbox="plan"]').open))) await p.click('#lx details[data-tdbox="plan"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="plan"] .dh-sec-b')); return p.evaluate(() => document.querySelector('#lx details[data-tdbox="plan"] .dh-sec-b').innerText); };
   const plan = await planText();
+  await p.waitForSelector('#lx details[data-tdbox="mine"] .dh-sec-b');
+  const mine = await p.evaluate(() => document.querySelector('#lx details[data-tdbox="mine"] .dh-sec-b').innerText);
   assert.match(plan, /盤前推演[\s\S]*(情境|推演)/);
-  assert.match(plan, /盤中監控[\s\S]*自選漲幅前 5[\s\S]*技術訊號/);
+  assert.match(plan, /盤中監控/);
+  assert.doesNotMatch(plan, /自選漲幅前 5|技術訊號/, "交易情境不再混入持倉／自選摘要");
+  assert.match(mine, /自選／庫存漲幅前 5[\s\S]*持倉／自選技術訊號/, "自選排行與技術訊號歸入我的持股與自選");
   for (const k of ["tdre", "tdai", "tdtxt"]) assert.equal(await p.$$eval(`#lx [data-tx="${k}"]`, L => L.length), 1, `${k} 只有一個`);
   assert.match(await p.evaluate(() => todayText()), /今日重點[\s\S]*【盤勢與自選】[\s\S]*不是買賣建議/, "複製的文字包含早報和盤勢兩部分");
   // 法人資金資料抓不到（測試的 /api/daily 沒資料）：只抓一次就說明，不會畫完又回去抓、整頁一直重畫

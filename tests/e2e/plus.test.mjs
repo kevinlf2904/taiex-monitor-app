@@ -37,11 +37,18 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   assert.equal(await p.evaluate(() => W.lt), "today", "舊的「早報」分頁帶到情報局的「今日市場」");
   assert.match(t, /國際市場與總經[\s\S]*昨晚美股[\s\S]*盤前推演/); assert.equal((t.match(/昨晚美股/g) || []).length, 1, "昨晚美股只在總經儀表板，盤前推演不再列一次");
   await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="plan"] .td-plan-live'));
+  const expand = async key => {
+    if (!(await p.evaluate(k => document.querySelector('#lx details[data-tdbox="' + k + '"]')?.open, key))) await p.click('#lx details[data-tdbox="' + key + '"] > summary');
+    await p.waitForFunction(k => !!document.querySelector('#lx details[data-tdbox="' + k + '"] .dh-sec-b'), key);
+  };
+  await expand("flow"); await expand("mine"); await expand("mac"); await expand("plan");
+  const flowBody = await p.evaluate(() => $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "");
   const mineBody = await p.evaluate(() => $('#lx details[data-tdbox="mine"] .dh-sec-b')?.innerText || "");
-  assert.match(await p.evaluate(() => $("#lx").innerText), /盤後總結[\s\S]*自選漲幅前 5/, "盤後資金摘要在資金區、自選排行在持股區");
+  const planBody = await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || "");
+  assert.match(flowBody, /盤後總結/, "盤後階段的摘要歸入資金區");
   assert.match(mineBody, /自選／庫存漲幅前 5[\s\S]*自選／庫存跌幅前 5/, "持倉與自選排行歸入個人區");
   assert.match(await p.evaluate(() => $('#lx details[data-tdbox="mac"] .dh-sec-b')?.innerText || ""), /美股資料日期[\s\S]*來源時間/, "國際行情就近顯示日期與來源時間");
-  assert.doesNotMatch(await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || ""), /自選漲幅前 5|盤後總結/, "交易情境只呈現盤前／盤中／盤後時間序列");
+  assert.doesNotMatch(planBody, /自選漲幅前 5|盤後總結/, "交易情境只呈現盤前／盤中／盤後時間序列");
   assert.equal(await p.$$eval("#lx [data-tx='tdai']", L => L.length), 1, "AI 整理只有一個");
   await p.click('[data-tx="tdai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
   assert.ok(await noOverflow(p));

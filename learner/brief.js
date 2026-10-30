@@ -1816,7 +1816,7 @@ function todayPage() {
     const summary = flowAfter
       ? M && typeof sumFlowHtml === "function"
         ? sumFlowHtml(M)
-        : '<div class="dh-card td-flow-summary"><h4>盤後總結</h4><p class="note">法人資金資料尚未取得，暫不產生盤後結論。</p></div>'
+        : '<div class="dh-card td-flow-summary"><h4>盤後總結</h4><p class="note">法人資料尚未取得，暫不產生盤後結論。</p></div>'
       : "";
     return summary + flowsDecisionHtml(M);
   };

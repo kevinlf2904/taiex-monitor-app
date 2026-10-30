@@ -14,7 +14,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   await p.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
   assert.match(await p.textContent('#lTabs [data-l="today"]'), /^今日市場$/);
   const CASES = [["2026-10-26T08:00:00+08:00", ["mac", "plan"], "plan", /盤前推演[\s\S]*(情境|推演)/], ["2026-10-26T10:00:00+08:00", ["plan"], "plan", /自選漲 \d+ 跌 \d+[\s\S]*盤中監控/],
-    ["2026-10-26T15:00:00+08:00", ["flow", "plan"], "plan", /市場資金流向[\s\S]*盤後總結[\s\S]*交易情境[\s\S]*盤後整理[\s\S]*下一交易日行動清單/], ["2026-10-25T10:00:00+08:00", ["mac", "plan"], "plan", /今天休市，下面是下一交易日 10\/26[\s\S]*最近交易日盤後整理[\s\S]*最近交易日事件回顧/]];
+    ["2026-10-26T15:00:00+08:00", ["flow", "plan"], "plan", /市場資金流向[\s\S]*盤後總結[\s\S]*盤前情境・盤中確認・盤後驗證[\s\S]*盤後整理[\s\S]*下一交易日行動清單/], ["2026-10-25T10:00:00+08:00", ["mac", "plan"], "plan", /今天休市，下面是下一交易日 10\/26[\s\S]*最近交易日盤後整理[\s\S]*最近交易日事件回顧/]];
   for (const [at, want, now, re] of CASES) {
     await p.clock.setFixedTime(new Date(at));
     await p.evaluate(() => { W.tdPh = null; setLt("today"); renderList(); });
