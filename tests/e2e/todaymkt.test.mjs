@@ -13,13 +13,13 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await p.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
   assert.match(await p.textContent('#lTabs [data-l="today"]'), /^今日市場$/);
-  const CASES = [["2026-10-26T08:00:00+08:00", ["pre", "mac"], "pre", /盤前推演[\s\S]*(情境|推演)/], ["2026-10-26T10:00:00+08:00", ["live"], "live", /盤中・大盤、自選與訊號[\s\S]*自選漲幅前 5/],
-    ["2026-10-26T15:00:00+08:00", ["live", "flow", "sum", "post"], "post", /盤後整理[\s\S]*盤後・大盤、自選與訊號[\s\S]*資金雷達・板塊輪動與資金流向[\s\S]*下一交易日行動清單/], ["2026-10-25T10:00:00+08:00", ["pre", "mac", "live"], "pre", /今天休市，下面是下一交易日 10\/26[\s\S]*最近交易日盤後整理[\s\S]*最近交易日盤後・大盤、自選與訊號/]];
+  const CASES = [["2026-10-26T08:00:00+08:00", ["mac", "plan"], "plan", /盤前推演[\s\S]*(情境|推演)/], ["2026-10-26T10:00:00+08:00", ["plan"], "plan", /盤中・大盤、自選與訊號[\s\S]*自選漲幅前 5/],
+    ["2026-10-26T15:00:00+08:00", ["flow", "plan"], "plan", /資金雷達・板塊輪動與資金流向[\s\S]*盤後整理[\s\S]*盤後・大盤、自選與訊號[\s\S]*下一交易日行動清單/], ["2026-10-25T10:00:00+08:00", ["mac", "plan"], "plan", /今天休市，下面是下一交易日 10\/26[\s\S]*最近交易日盤後整理[\s\S]*最近交易日盤後・大盤、自選與訊號/]];
   for (const [at, want, now, re] of CASES) {
     await p.clock.setFixedTime(new Date(at));
     await p.evaluate(() => { W.tdPh = null; setLt("today"); renderList(); });
     await p.waitForFunction(() => !!document.querySelector("#lx details.dh-sec"), null, { timeout: 15000 });
-    assert.deepEqual(await p.$$eval("#lx details.dh-sec", L => L.map(d => d.dataset.tdbox)), ["pre", "mac", "live", "flow", "sum", "mine", "post"], "順序固定");
+    assert.deepEqual(await p.$$eval("#lx details.dh-sec", L => L.map(d => d.dataset.tdbox)), ["flow", "mac", "mine", "plan"], "順序固定");
     assert.deepEqual(await openOf(p), want, at); assert.equal(await nowOf(p), now, `「現在」標在目前時段 ${at}`);
     const t = await p.evaluate(() => $("#lx").innerText);
     assert.match(t, re, at); assert.match(t, /今日市場[\s\S]*重新整理/);
@@ -30,9 +30,9 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   // 點標題展開別的區塊：每秒重畫也不會收回去（同一天記在記憶體）
   await p.click('#lx details[data-tdbox="mine"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="mine"] .dh-sec-b'));
   await p.evaluate(() => { W.ticking = true; renderList(); W.ticking = false; renderList(); });
-  assert.deepEqual(await openOf(p), ["pre", "mac", "live", "mine"]);
+  assert.deepEqual(await openOf(p), ["mac", "mine", "plan"]);
   // 全部展開、全部收合
-  await p.click("#lx [data-tdall]"); assert.equal((await openOf(p)).length, 7); assert.match(await p.textContent("#lx [data-tdall]"), /全部收合/);
+  await p.click("#lx [data-tdall]"); assert.equal((await openOf(p)).length, 4); assert.match(await p.textContent("#lx [data-tdall]"), /全部收合/);
   await p.click("#lx [data-tdall]"); assert.deepEqual(await openOf(p), []);
   assert.equal(await p.evaluate(() => Object.keys(localStorage).some(k => /tdPh|tdph|tdOpen|tdsec/i.test(k))), false, "展開狀態不存進瀏覽器");
   // 資料來源收起來
@@ -48,7 +48,7 @@ test("總經儀表板：昨晚美股只在這裡（核心卡已有的費半、�
   const m = await p.evaluate(() => document.querySelector('#lx details[data-tdbox="mac"]').innerText);
   assert.match(m, /道瓊 \+0\.5%・美債 4\.21%・台幣 31\.20/, "摘要用核心卡沒有的數字"); assert.match(m, /昨晚美股[\s\S]*道瓊工業[\s\S]*美國 10 年期/); assert.match(m, /美元／台幣[\s\S]*原油/);
   assert.doesNotMatch(m, /費城半導體|那斯達克|台積電 ADR/, "核心卡已經有的不重複");
-  assert.equal(await p.evaluate(() => (document.querySelector('#lx details[data-tdbox="pre"]').innerText.match(/昨晚美股/g) || []).length), 0, "盤前推演不再列昨晚美股");
+  assert.equal(await p.evaluate(() => (document.querySelector('#lx details[data-tdbox="plan"] .td-plan-pre').innerText.match(/昨晚美股/g) || []).length), 0, "盤前推演不再列昨晚美股");
   await p.click('#lx [data-tdgo="mkt:gl"]'); await p.waitForFunction(() => W.lt === "mkt" && W.mkReg === "gl");
   await ctx.close(); assert.deepEqual(errs, []);
 });
@@ -85,11 +85,12 @@ test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心�
   // 早報的文字結論收在「盤前推演」裡面，外層不再是一大段字
   assert.equal(await p.evaluate(() => [...document.querySelectorAll("#lx .dh-brief-summary")].filter(e => !e.closest("details[data-tdbox]")).length), 0);
   // 每一塊外層是圖：盤中（監控時間軸＋自選熱度格）、我的重點（7 個交易日）、收盤驗證（交易時間進度）；圖在 summary 裡，收著也看得到
-  const V = await p.evaluate(() => ({ heat: document.querySelectorAll('#lx details[data-tdbox="live"] > summary .td-heat span').length, tl: !!document.querySelector('#lx details[data-tdbox="live"] > summary .td-tl'),
-    cal: document.querySelectorAll('#lx details[data-tdbox="mine"] > summary .td-cal > span').length, post: !!document.querySelector('#lx details[data-tdbox="post"] > summary .td-tl'), pre: !!document.querySelector('#lx details[data-tdbox="pre"] > summary .td-sc') }));
+  const V = await p.evaluate(() => ({ heat: document.querySelectorAll('#lx details[data-tdbox="plan"] > summary .td-heat span').length, tl: !!document.querySelector('#lx details[data-tdbox="plan"] > summary .td-tl'),
+    cal: document.querySelectorAll('#lx details[data-tdbox="mine"] > summary .td-cal > span').length, post: !!document.querySelector('#lx details[data-tdbox="plan"] .td-plan-post .td-tl'), pre: !!document.querySelector('#lx details[data-tdbox="plan"] .td-plan-pre .td-sc') }));
   assert.ok(V.heat > 0 && V.tl && V.post && V.pre, JSON.stringify(V)); assert.equal(V.cal, 7, "7 個交易日");
-  await p.click('#lx details[data-tdbox="pre"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="pre"] .dh-sec-b'));
-  assert.match(await p.evaluate(() => $('#lx details[data-tdbox="pre"] .dh-sec-b').innerText), /上漲|下跌|資料不足/);
+  await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="plan"] .dh-sec-b'));
+  assert.match(await p.evaluate(() => $('#lx details[data-tdbox="plan"] .td-plan-pre').innerText), /上漲|下跌|資料不足/);
+  assert.match(await p.textContent("#lx .td-market-summary"), /今日市場摘要[\\s\\S]*加權/);
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
