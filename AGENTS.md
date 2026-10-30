@@ -4,7 +4,7 @@
 
 ## 核心限制
 - 純討論、規劃、審查不代表授權改檔、推送、合併、部署或花費。
-- 只有 Claude Code、Codex、Gemini Antigravity 可改程式；ChatGPT、Copilot、普通 Claude／Gemini、NotebookLM、Perplexity、v0、Gemini Spark、Siri 均唯讀。v0 的 React 僅供視覺參考。
+- 只有 Claude Code、Codex、Gemini Antigravity 可改程式；ChatGPT、Copilot、普通 Claude／Gemini、NotebookLM、Perplexity、v0、Gemini Spark、Siri 原則上唯讀。v0 的 React 僅供視覺參考。**例外：Issue #187 依使用者 2026-10-30 明確授權，由 ChatGPT 擔任唯一實作者，只能在 `chatgpt/today-market-ia-187` 分支修改該 Issue 範圍內的 `learner/brief.js`、必要 CSS／測試並建立 Draft PR；不得推 main、合併、部署或碰 API、資料源、排程、密鑰及正式環境設定。此例外不適用其他任務。**
 - 一個任務只設一位實作者；不得直接推 main 或推送其他工具的分支。接手他人分支須先獲使用者同意並在 PR 說明。
 - 同一時間只允許一位合併者；若有人正在合併或升版本，先等待。
 - 修改 `learner/watch.html`、`learner/index.html`、`learner/core.js`、`learner/brief.js` 前，先檢查同區塊 draft PR；沒有才建立鎖定用 draft PR，標題「鎖：檔名＋區塊」。完成後轉 ready；合併、關閉或交接時解除鎖定。
@@ -20,7 +20,7 @@
 | Claude Code | 主力開發、預設合併者 | `claude/…` |
 | Codex | 第二開發者；Claude 額度不足時接手；可交叉審查 Claude 高風險 PR | `codex/…` |
 | Gemini Antigravity | 預設驗證者；Claude 額度不足時可接手開發／合併 | `gemini/…` |
-| ChatGPT | 需求拆解、PR 獨立稽核 | 唯讀 |
+| ChatGPT | 需求拆解、PR 獨立稽核；僅 Issue #187 有使用者授權的實作例外 | 其他任務唯讀；#187 限指定分支／檔案／Draft PR |
 | GitHub Copilot | 編輯器補全、大型 PR 審查 | 不開 PR |
 | 其他 AI（普通 Claude／Gemini、NotebookLM、Perplexity、v0、Gemini Spark、Siri） | 討論、附來源查資料、總覽、樣板參考 | 唯讀 |
 
