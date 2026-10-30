@@ -28,6 +28,15 @@ const tagsHtmlCode = extractBlock("function tagsHtml(c, q, lim)", "$(\"#favBtn\"
 
 // 固定時鐘：盤中即時要看來源時間（sourceTime）是否夠新，測試要用和 fixture 一致的「現在」，不能用跑測試當下的真實時間
 const fixedDate = ms => class extends Date { constructor(...a) { super(...(a.length ? a : [ms])); } static now() { return ms; } };
+// 預設時鐘跟隨每個測試設定的 W.today，避免 CI 真實日期（尤其週末）污染固定日期情境。
+const fixtureDate = W => {
+  const startedAt = Date.now();
+  const now = () => Date.parse(`${W.today}T10:30:00+08:00`) + (Date.now() - startedAt);
+  return class extends Date {
+    constructor(...a) { super(...(a.length ? a : [now()])); }
+    static now() { return now(); }
+  };
+};
 function createHarness({ now = null } = {}) {
   const W = {
     lt: "mkt",
@@ -69,7 +78,7 @@ function createHarness({ now = null } = {}) {
   const c = {
     console,
     Math,
-    Date: now ? fixedDate(+now) : Date,
+    Date: now ? fixedDate(+now) : fixtureDate(W),
     JSON,
     Map,
     Set,
