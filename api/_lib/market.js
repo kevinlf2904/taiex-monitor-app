@@ -301,7 +301,7 @@ export default async function handler(req, res, { marketFetcher = marketRows } =
     lastGoodAt: L?.lastGoodAt || null,
     fallbackReason: L?.fallbackReason || null,
     sourceState: L?.sourceState || null,
-    misStats: L?.misStats ? { batches: L.misStats.batches, failedBatches: L.misStats.failedBatches, retries: L.misStats.retries, received: L.misStats.received, requested: L.misStats.requested, errors: L.misStats.errors } : null,
+    misStats: L?.misStats ? { batches: L.misStats.batches, okBatches: L.misStats.okBatches, partialBatches: L.misStats.partialBatches, failedBatches: L.misStats.failedBatches, retries: L.misStats.retries, requests: L.misStats.requests, received: L.misStats.received, requested: L.misStats.requested, missing: L.misStats.missing, timedOut: L.misStats.timedOut, errors: L.misStats.errors } : null,
     note: L?.note || null,
     source: `${L?.source || "證交所、櫃買中心 OpenAPI"}；美股 Yahoo Finance`,
     breadth: all.length ? breadth(all) : null,

@@ -143,3 +143,19 @@ marketRows()：同一個執行個體同時的請求共用一次（singleFlight�
 - 個股報價的 Yahoo 備援本來就標 `delayed`、`isFallback`。
 - 分時 K 的 Yahoo 來源沒有修改。
 - 整體時間：最壞情況 OpenAPI 12 秒＋MIS 15 秒（最後一個請求可能再 5～10 秒）＋收盤探測，仍在 60 秒內，但大盤回應最慢可能 30 秒以上。
+
+## 四、第二輪審查修復（HEAD 772e16e 之後）
+
+| 編號 | 問題 | 修法 |
+|---|---|---|
+| P1-1 | 完整度分母是估計母體 1000＋800，實際上市櫃約 2300 檔，漏幾百檔仍是 complete／live | `validateMarketRows`：基準清單（前一交易日 OpenAPI，≥ 1710 檔）可用時，complete 還要對基準清單全市場、上市、上櫃各自 ≥ 95%；marketRows 傳 `Map(代碼→市場)` |
+| P2-1 | 期限只在開始前檢查，期限後回來的資料照收；單次 misFetch 最多 3 個請求各自逾時 | `misFetch` 加 `deadline`，每個請求（含換 cookie）逾時取「單次上限」和「剩餘時間」較小的；期限已過不發請求；misAll 期限後回來的資料不收；/api/quote 同樣套用 |
+| P2-2 | 沿用的最後有效資料本來就 partial／degraded，卻被標成較輕的 delayed | `keepLast` 狀態取「原本狀態」和 delayed／stale 較嚴重的 |
+| P2-3 | 持續 429／503 一輪約 207 次請求 | 每輪最多「批數 × 2 ＋ 4」次；連續 2 次 429 開斷路器（照 Retry-After，沒有就 15 秒，最多 60 秒），整輪停止；單一 429 仍會重試 |
+| P3-1 | 拆半重複計數、部分批次算成功 | 每個原始批次只算一次：ok（≥ 95%）／partial／failed，另有 `missing`、`requests`；頁尾說明改看 `missing` |
+| P3-2 | /api/quote 3.5 秒期限被突破 | 同 P2-1 |
+| P3-4 | 單一批次連續逾時就讓斷路器打開 | 網路錯誤門檻 3 → 5 次 |
+
+新增測試（`tests/market-retry.test.mjs` 第 26～36 項）用接近真實的母體（上市 1350＋上櫃 900）。在 772e16e 上有 8 項失敗，修復後全部通過。
+
+**仍待確認：** 95% 門檻還沒用真實盤中 MIS 回傳率驗證（審查時已經收盤）。開盤初期若有大量股票沒有任何報價，狀態可能偏向 partial（標示偏保守，不會誤標即時）。下一個交易日請用唯讀的 `probe-live.yml` 或預覽網址，看 `/api/market` 的 `coverage.benchmark` 與 `misStats.missing`。

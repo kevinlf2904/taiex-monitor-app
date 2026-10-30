@@ -142,7 +142,17 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
       ratio: +(matchedExpectedCount / expectedCodes.size).toFixed(4),
       isBenchmarkComplete: expectedCodes.size >= Math.ceil(estimatedTotalWant * 0.95)
     };
+    // 基準清單是 Map（代碼 → 上市／上櫃）時，上市、上櫃各自比對
+    if (expectedCodes instanceof Map) {
+      const want = { tse: 0, otc: 0 }, got = { tse: 0, otc: 0 };
+      for (const [code, mk] of expectedCodes) { const k = mk === "上櫃" ? "otc" : "tse"; want[k]++; if (validByCode.has(code)) got[k]++; }
+      benchmark.tseRatio = want.tse ? +(got.tse / want.tse).toFixed(4) : null;
+      benchmark.otcRatio = want.otc ? +(got.otc / want.otc).toFixed(4) : null;
+    }
   }
+  // 基準清單夠完整時，complete 還要對基準清單達到 95%：估計母體（1000＋800）比實際上市櫃（約 2300 檔）少，
+  // 只看估計母體的話，漏掉幾百檔仍會被算成 complete（PR #183 第二輪審查 P1-1）
+  const benchOk = !benchmark?.isBenchmarkComplete || (benchmark.ratio >= 0.95 && (benchmark.tseRatio ?? 1) >= 0.95 && (benchmark.otcRatio ?? 1) >= 0.95);
 
   // 全市場 coverage 的分母固定使用估計母體；基準清單只供 benchmark 比對，不能縮小全市場分母。
   const effectiveWant = estimatedTotalWant;
@@ -160,14 +170,15 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
     tseCount >= minTse &&
     otcCount >= minOtc &&
     dateConsistent &&
-    dateVerified
+    dateVerified &&
+    benchOk
   ) {
     completeness = "complete";
   } else if (tseCount >= minTse && otcCount < 200) {
     completeness = "partial_tse_only";
   } else if (otcCount >= minOtc && tseCount < 200) {
     completeness = "partial_otc_only";
-  } else if (tseCount > 0 && otcCount > 0 && (tseCount < minTse || otcCount < minOtc || marketRatio < 0.95 || tseMarketRatio < 0.95 || otcMarketRatio < 0.95)) {
+  } else if (tseCount > 0 && otcCount > 0 && (tseCount < minTse || otcCount < minOtc || marketRatio < 0.95 || tseMarketRatio < 0.95 || otcMarketRatio < 0.95 || !benchOk)) {
     completeness = "partial";
   } else {
     completeness = "degraded";
@@ -213,24 +224,31 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
 
 // MIS 一次查很多檔（每批 100 檔、同時 4 批），盤中與收盤後當天都有當天的價（收盤後 z 就是收盤價）
 // 每批遇到暫時性錯誤（429、5xx、逾時、200 但沒資料或缺一大半）有限次重試（_retry.js），還是不行才拆成兩半再試一次；
-// 遇到 403（被拒）整批停止，不再對 MIS 發請求；整體有時間上限（預設 15 秒；Vercel 函式上限 60 秒，前面有 OpenAPI 清單、後面還有收盤備援要跑）。
-// 回傳的 rows 帶不列舉的 stats：{ batches, okBatches, failedBatches, requested, received, retries, aborted, timedOut, errors }
-export const MIS_ALL = { budgetMs: 15000, attempts: 3, baseMs: 250, maxMs: 2000, minShare: 0.5 };
+// 遇到 403（被拒）或斷路器開著（例如連續 429）整輪停止，不再對 MIS 發請求。
+// 時間：整體 15 秒（Vercel 函式上限 60 秒，前面有 OpenAPI 清單、後面還有收盤備援要跑）；每個請求的逾時也算在剩下的時間裡，期限過後才回來的資料不收。
+// 請求數：一輪最多「批數 × 2 ＋ 4」次，持續 5xx 時不會打出幾百次請求。
+// 回傳的 rows 帶不列舉的 stats：{ batches, okBatches, partialBatches, failedBatches, requested, received, missing, requests, retries, aborted, timedOut, capped, errors }
+//   每個原始批次只算一次（拆半的兩半合起來算）；okBatches＝拿到 ≥ 95%，partialBatches＝有拿到但不到 95%，failedBatches＝完全沒拿到
+export const MIS_ALL = { budgetMs: 15000, attempts: 3, baseMs: 250, maxMs: 2000, minShare: 0.5, okShare: 0.95 };
 export async function misAll(base, fetcher = misFetch, opts = {}) {
   const { budgetMs = MIS_ALL.budgetMs, attempts = MIS_ALL.attempts, baseMs = MIS_ALL.baseMs, maxMs = MIS_ALL.maxMs, now = Date.now, sleep, rand } = opts;
   const list = base.filter(r => isStockOrEtf(r.code)), out = [], B = 100;
   const batches = []; for (let i = 0; i < list.length; i += B) batches.push(list.slice(i, i + B));
   const ch = r => `${r.market === "上櫃" ? "otc" : "tse"}_${r.code}.tw`;
-  const deadline = now() + budgetMs;
-  const stats = { batches: batches.length, okBatches: 0, failedBatches: 0, requested: list.length, received: 0, retries: 0, aborted: false, timedOut: false, errors: [] };
+  const deadline = now() + budgetMs, maxRequests = opts.maxRequests ?? batches.length * 2 + 4;
+  const stats = { batches: batches.length, okBatches: 0, partialBatches: 0, failedBatches: 0, requested: list.length, received: 0, missing: 0, requests: 0, retries: 0, aborted: false, timedOut: false, capped: false, errors: [] };
   const note = e => { const k = errKind(e); if (stats.errors.length < 5 && !stats.errors.includes(k)) stats.errors.push(k); return k; };
+  // 查一批（可能拆半），回傳拿到的筆數；統計由最外層的原始批次記
   const one = async (bt, depth = 0) => {
-    if (stats.aborted) return;
-    if (now() >= deadline) { stats.timedOut = true; stats.failedBatches++; return; }
+    if (stats.aborted) return 0;
+    if (now() >= deadline) { stats.timedOut = true; return 0; }
     let best = [];
     try {
       await withRetry(async () => {
-        const got = await fetcher(bt.map(ch));
+        if (stats.requests >= maxRequests) { stats.capped = true; throw retryErr("circuit", "這一輪 MIS 請求數到上限"); }
+        stats.requests++;
+        const got = await fetcher(bt.map(ch), { deadline });
+        if (now() > deadline) { stats.timedOut = true; throw retryErr("timeout", "超過整體時間上限才回來，不收"); }
         if (!Array.isArray(got)) throw retryErr("bad_json", "MIS 回應格式不對");
         const parsed = got.map(parseMis).filter(q => q.code);
         if (parsed.length > best.length) best = parsed;
@@ -239,16 +257,23 @@ export async function misAll(base, fetcher = misFetch, opts = {}) {
       }, { attempts, baseMs, maxMs, deadline, now, sleep, rand, onRetry: e => { stats.retries++; note(e); } });
     } catch (e) {
       const k = note(e);
-      if (k === "fatal" || k === "circuit") stats.aborted = true; // 被拒或斷路器開著：其他批次也不用再問
-      else if (!best.length && depth < 1 && bt.length > 1 && now() < deadline) { // 一直失敗：拆成兩半再試一次（可能是某一檔讓整批出錯）
-        const h = Math.ceil(bt.length / 2); await one(bt.slice(0, h), depth + 1); await one(bt.slice(h), depth + 1); return;
+      if (k === "fatal" || (k === "circuit" && !stats.capped)) stats.aborted = true; // 被拒或斷路器開著：其他批次也不用再問
+      else if (!best.length && depth < 1 && bt.length > 1 && now() < deadline && !stats.capped) { // 一直失敗：拆成兩半再試一次（可能是某一檔讓整批出錯）
+        const h = Math.ceil(bt.length / 2);
+        return (await one(bt.slice(0, h), depth + 1)) + (await one(bt.slice(h), depth + 1));
       }
     }
-    if (best.length) { out.push(...best); stats.okBatches++; stats.received += best.length; } else stats.failedBatches++;
+    out.push(...best);
+    return best.length;
   };
-  let k = 0; const worker = async () => { while (k < batches.length && !stats.aborted) await one(batches[k++]); };
+  const top = async bt => {
+    const got = await one(bt);
+    stats.received += got; stats.missing += Math.max(0, bt.length - got);
+    if (!got) stats.failedBatches++; else if (got < bt.length * MIS_ALL.okShare) stats.partialBatches++; else stats.okBatches++;
+  };
+  let k = 0; const worker = async () => { while (k < batches.length && !stats.aborted) await top(batches[k++]); };
   await Promise.all([worker(), worker(), worker(), worker()]);
-  if (k < batches.length) stats.failedBatches += batches.length - k; // 中途停止：沒問到的批次也算失敗
+  for (; k < batches.length; k++) { stats.failedBatches++; stats.missing += batches[k].length; } // 中途停止：沒問到的批次也算失敗
   const by = new Map(base.map(r => [r.code, r]));
   let latestTime = null;
   const latestByDate = {}; // 每個交易日各自最新的來源時間：沒成交的股票會帶前一天的日期與時間，不能拿來當今天的更新時間
@@ -266,6 +291,11 @@ export async function misAll(base, fetcher = misFetch, opts = {}) {
   return rows;
 }
 
+// MIS 少了哪些：「少 120 檔（2/23 批失敗、1 批不完整：timeout）」
+const misMiss = st => [`少 ${st.missing} 檔`, st.failedBatches ? `${st.failedBatches}/${st.batches} 批失敗` : "", st.partialBatches ? `${st.partialBatches} 批不完整` : ""].filter(Boolean).join("、") + (st.errors?.length ? `：${st.errors.join("、")}` : "");
+// 狀態嚴重度（越前面越嚴重，和前端 DATA_STATES 同一個順序；degraded 對應 unverified）
+const SEVERITY = ["unavailable", "degraded", "stale", "partial", "delayed", "pending", "confirmed", "live"];
+const worse = (a, b) => (SEVERITY.indexOf(a) < SEVERITY.indexOf(b) ? a : b);
 let memo = null; // 函式執行個體快取：即時或盤中 8 秒、收盤後 30 秒（盤中拿到的是備援，也只留 8 秒，才會很快再問 MIS）
 // 今天最後一筆有效的盤中全市場資料（MIS 或富果快照）：MIS 暫時失敗時先用它（標延遲或停滯），不直接退回昨天收盤
 const prodStore = { lastGood: null };
@@ -447,7 +477,7 @@ async function buildMarketRows(opts, isCustom, store) {
     const out = {
       ...lg,
       live: false,
-      dataStatus: fresh.state === "fresh" ? "delayed" : "stale",
+      dataStatus: worse(lg.dataStatus || "delayed", fresh.state === "fresh" ? "delayed" : "stale"), // 本來就不完整的資料，沿用時不能變成比較輕的 delayed
       sourceState: fresh.state,
       sourceAgeSec: fresh.ageMs != null ? Math.round(fresh.ageMs / 1000) : null,
       isFallback: true,
@@ -531,7 +561,7 @@ async function buildMarketRows(opts, isCustom, store) {
   let prev = [];
   try { prev = await getPrev(); } catch {}
   const prevDate = prev.find(r => r.date)?.date || null;
-  const expectedCodes = new Set(prev.filter(r => isStockOrEtf(r.code)).map(r => r.code));
+  const expectedCodes = new Map(prev.filter(r => isStockOrEtf(r.code)).map(r => [r.code, r.market])); // 代碼 → 上市／上櫃（給基準清單分市場比對）
 
   // 2. 盤中即時：交易時段（平日 09:00~13:35 且 session 為 open）由 MIS 查詢全市場
   // 修正：不可因 prevDate === today 跳過 MIS，盤中無論 prevDate 為何都應嘗試取最新即時資料
@@ -573,7 +603,7 @@ async function buildMarketRows(opts, isCustom, store) {
           date: today,
           time: rows.latestByDate?.[today] || null,
           source: sess === "open" ? "證交所 MIS 即時行情（上市、上櫃）" : "證交所 MIS（今天收盤）",
-          note: null,
+          note: validation.completeness !== "complete" && misStats?.missing ? `MIS 這次不完整（${misMiss(misStats)}），漲跌家數等統計可能少算` : null,
           dataStatus,
           completeness: validation.completeness,
           sourceDate: today,
@@ -582,7 +612,7 @@ async function buildMarketRows(opts, isCustom, store) {
           sourceCapabilities: { hasOhlc: true, hasValue: true }
         });
       }
-      notes.push(misStats?.failedBatches ? `MIS 只拿到 ${todayRows.length} 檔今天的行情（${misStats.failedBatches}/${misStats.batches} 批失敗${misStats.errors.length ? "：" + misStats.errors.join("、") : ""}）` : "MIS 資料不足或非今日行情");
+      notes.push(misStats?.missing ? `MIS 只拿到 ${todayRows.length} 檔今天的行情（${misMiss(misStats)}）` : "MIS 資料不足或非今日行情");
     } catch (e) { notes.push(`MIS 拿不到（${e.message}）`); }
     // 盤中 MIS 失敗：先用今天最後一筆有效資料，比昨天收盤接近現在
     const lg = sess === "open" ? lastGoodToday() : null;

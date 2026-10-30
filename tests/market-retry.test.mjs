@@ -244,3 +244,107 @@ test("分時 K：合成 5 分 K 不重複、不跨日合併、成交量加總正
   assert.deepEqual(out.map(b => `${b.d} ${b.t} ${b.v}`), ["2026-10-27 13:25 5", "2026-10-28 09:00 6", "2026-10-28 09:05 4"]);
   assert.equal(new Set(out.map(b => b.d + b.t)).size, out.length, "沒有重複的時間");
 });
+
+// ---------- 第二輪審查（P1-1、P2-1～3、P3）：用接近真實的母體（上市 1350＋上櫃 900，約等於實際上市櫃檔數） ----------
+const REAL = [
+  ...Array.from({ length: 1350 }, (_, i) => ({ code: String(1100 + i), name: `市${i}`, market: "上市", price: 100, vol: 10, date: YDAY })),
+  ...Array.from({ length: 900 }, (_, i) => ({ code: String(5100 + i), name: `櫃${i}`, market: "上櫃", price: 50, vol: 10, date: YDAY })),
+];
+const bidx = chs => Math.floor(REAL.findIndex(b => chs[0] === `${b.market === "上櫃" ? "otc" : "tse"}_${b.code}.tw`) / 100);
+const realRun = (misFetcher, o = {}) => marketRows(opts({ now: at("10:30"), fetcher: async () => REAL, misFetcher, store: {}, ...o }));
+const e503 = () => httpErr(503);
+
+test("P1-1：1 批持續只回 30%（上市少 70 檔）→ 不算 complete、不是 live", async () => {
+  const r = await realRun(async chs => (bidx(chs) === 3 ? fakeMis()(chs.slice(0, 30)) : fakeMis()(chs)));
+  assert.equal(r.rows.length, 2180); assert.notEqual(r.completeness, "complete"); assert.notEqual(r.dataStatus, "live");
+  assert.ok(r.coverage.benchmark.tseRatio < 0.95, JSON.stringify(r.coverage.benchmark));
+  assert.equal(r.misStats.partialBatches, 1); assert.equal(r.misStats.missing, 70); assert.match(r.note, /少 70 檔/);
+});
+
+test("P1-1：多批持續只回 40% → partial", async () => {
+  const r = await realRun(async chs => ([1, 4, 15, 18].includes(bidx(chs)) ? fakeMis()(chs.slice(0, 40)) : fakeMis()(chs)));
+  assert.equal(r.completeness, "partial"); assert.equal(r.dataStatus, "partial"); assert.equal(r.misStats.partialBatches, 4); assert.equal(r.misStats.missing, 240);
+});
+
+test("P1-1：部分批次重試後成功 → live／complete；重試耗盡 → partial", async () => {
+  const seen = new Map();
+  const ok = await realRun(async chs => { const b = bidx(chs), n = (seen.get(b) || 0) + 1; seen.set(b, n); if ([2, 5, 9].includes(b) && n === 1) throw e503(); return fakeMis()(chs); });
+  assert.equal(ok.completeness, "complete"); assert.equal(ok.dataStatus, "live"); assert.equal(ok.misStats.okBatches, 23); assert.equal(ok.misStats.retries, 3);
+  const bad = await realRun(async chs => { const b = bidx(chs); if (b === 2 || b === 5 || b === 9 || (b === -1 && chs.length === 50)) throw e503(); return fakeMis()(chs); });
+  assert.notEqual(bad.completeness, "complete"); assert.notEqual(bad.dataStatus, "live");
+  assert.equal(bad.misStats.failedBatches, 3, "拆半的兩半合起來算一批"); assert.equal(bad.misStats.okBatches + bad.misStats.partialBatches + bad.misStats.failedBatches, 23);
+});
+
+test("P1-1：部分批次成功後遭遇 403 → 不完整、不是 live；有今天完整資料時沿用它", async () => {
+  let n = 0;
+  const f = async chs => { if (++n > 6) throw httpErr(403); return fakeMis()(chs); };
+  const r = await realRun(f);
+  assert.notEqual(r.completeness, "complete"); assert.notEqual(r.dataStatus, "live"); assert.equal(r.misStats.aborted, true);
+  const store = {};
+  await realRun(fakeMis(), { store }); n = 0;
+  const kept = await realRun(f, { now: at("10:31"), store });
+  assert.equal(kept.isLastGood, true); assert.equal(kept.completeness, "complete"); assert.equal(kept.dataStatus, "delayed");
+});
+
+test("P1-1：基準清單完整取得時仍是 complete（不誤殺正常情況）；基準清單太小時不套用", async () => {
+  assert.equal((await realRun(fakeMis())).completeness, "complete");
+  const small = BASE.slice(0, 1500); // 基準清單只有 1500 檔（< 1710）：不夠當母體，不拿來判斷
+  const r = await marketRows(opts({ now: at("10:30"), fetcher: async () => small, misFetcher: fakeMis(), store: {} }));
+  assert.equal(r.coverage.benchmark.isBenchmarkComplete, false);
+});
+
+test("P2-1：期限過後才回來的資料不收，總時間不超過期限加一次請求", async () => {
+  const t0 = Date.now();
+  const rows = await misAll(REAL, async chs => { await new Promise(r => setTimeout(r, 600)); return fakeMis()(chs); }, { budgetMs: 1000, sleep: noSleep });
+  const took = Date.now() - t0;
+  assert.equal(rows.length, 400, "同時的 4 批在 600ms 回來照收；第二輪 1200ms 才回來，超過期限不收"); assert.equal(rows.stats.timedOut, true);
+  assert.ok(took < 1000 + 600 + 300, `花了 ${took}ms`);
+});
+
+test("P2-1：misFetch 每個請求的逾時算在剩下的時間裡，換 cookie 也一樣，不會超過期限", async () => {
+  misReset(); const t0 = Date.now(); let n = 0;
+  const hang = (u, o) => new Promise((res, rej) => { n++; if (n === 1) return res(res403()); o.signal.addEventListener("abort", () => rej(Object.assign(new Error("timeout"), { name: "TimeoutError" }))); });
+  const res403 = () => ({ ok: false, status: 403, headers: { get: () => "" }, json: async () => ({}) });
+  const ka = setInterval(() => {}, 50);
+  await assert.rejects(misFetch(["tse_1.tw"], { fetchImpl: hang, timeoutMs: 5000, deadline: Date.now() + 400 }));
+  clearInterval(ka);
+  assert.ok(Date.now() - t0 < 900, `花了 ${Date.now() - t0}ms，期限 400ms`);
+  await assert.rejects(misFetch(["tse_1.tw"], { fetchImpl: async () => res(200, { msgArray: [] }), deadline: Date.now() - 1 }), e => errKind(e) === "timeout", "期限已過不發請求");
+  misReset();
+});
+
+test("P2-2：沿用的最後有效資料本來就 partial，狀態維持 partial，不變成較輕的 delayed", async () => {
+  const store = {};
+  const p0 = await realRun(async chs => ([1, 4, 15, 18].includes(bidx(chs)) ? fakeMis()(chs.slice(0, 40)) : fakeMis()(chs)), { store });
+  assert.equal(p0.dataStatus, "partial"); assert.equal(store.lastGood.dataStatus, "partial");
+  const r = await realRun(async () => { throw e503(); }, { now: at("10:31"), store });
+  assert.equal(r.isLastGood, true); assert.equal(r.dataStatus, "partial");
+  const old = await realRun(async () => { throw e503(); }, { now: at("10:45"), store });
+  assert.equal(old.dataStatus, "stale", "超過 6 分鐘：停滯比 partial 更嚴重");
+});
+
+test("P2-3：持續 503 一輪請求數有上限；連續 429 開斷路器、整輪停止", async () => {
+  let calls = 0;
+  const r = await misAll(REAL, async () => { calls++; throw e503(); }, { sleep: noSleep });
+  assert.ok(calls <= 23 * 2 + 4, `請求數 ${calls}`); assert.equal(r.stats.capped, true); assert.equal(r.stats.failedBatches, 23);
+  misReset(); let n = 0;
+  const rate = async () => { n++; return res(429, {}); };
+  const r2 = await misAll(REAL, chs => misFetch(chs, { fetchImpl: rate }), { sleep: noSleep });
+  assert.ok(n <= MIS.rateTrip + 4, `429 只打 ${n} 次就停`); assert.equal(r2.stats.aborted, true); assert.ok(r2.stats.errors.includes("circuit"));
+  misReset();
+});
+
+test("P2-3：單一 429 仍會重試（不是一次就停）", async () => {
+  misReset(); let n = 0;
+  const once = async u => (++n === 1 ? res(429, {}) : res(200, { msgArray: [misRow("tse_2330.tw")] }));
+  const rows = await misAll([{ code: "2330", market: "上市" }], chs => misFetch(chs, { fetchImpl: once }), { sleep: noSleep });
+  assert.equal(rows.length, 1); assert.equal(rows.stats.retries, 1);
+  misReset();
+});
+
+test("P3-4：單一批次連續逾時 3 次不會開斷路器（門檻 5 次）", async () => {
+  misReset(); const to = async () => { throw Object.assign(new Error("t"), { name: "TimeoutError" }); };
+  for (let i = 0; i < 3; i++) await assert.rejects(misFetch(["a"], { fetchImpl: to }), e => errKind(e) === "timeout");
+  assert.equal((await misFetch(["tse_2330.tw"], { fetchImpl: async () => res(200, { msgArray: [misRow("tse_2330.tw")] }) })).length, 1);
+  misReset();
+});
