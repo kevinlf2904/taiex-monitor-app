@@ -102,7 +102,8 @@ test("合併重複功能：盤後、籌碼動向併進排行，盤後總結＋�
     assert.match(await p.evaluate(() => $("#lx").innerText), /盤後總結[\s\S]*測試盤後總結/);
     assert.equal(await p.evaluate(() => document.querySelectorAll('#lx [data-mshare]').length), 4);
     assert.equal(await p.evaluate(() => document.querySelectorAll('#lx .dh-status-bar [data-mshare="share"]').length), 1, "分享今日盤面在工具列");
-    assert.match(await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b').innerText), /測試盤後總結/);
+    assert.match(await p.evaluate(() => $('#lx details[data-tdbox="flow"] .dh-sec-b').innerText), /測試盤後總結/);
+    assert.doesNotMatch(await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b').innerText), /盤後總結|測試盤後總結/, "交易情境不再混入法人盤後摘要");
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "橫向溢出");
     // 個股總覽：多空研判不再是獨立子頁
     assert.ok(await p.evaluate(() => !DSUB.ovw.some(x => x[0] === "ls") && DSUB.ovw[0][0] === "state"));

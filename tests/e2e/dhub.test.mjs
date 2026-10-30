@@ -23,7 +23,9 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`週末：�
   // 全部展開：資金卡只有一張、資金資料的狀態只說一次、週末不寫「盤中」
   await p.click("#lx [data-tdall]"); await p.waitForFunction(() => document.querySelectorAll("#lx details.dh-sec[open] .dh-sec-b").length === 4); const t2 = await p.evaluate(() => $("#lx").innerText), cnt = re => (t2.match(re) || []).length;
   assert.equal(cnt(/資金雷達・板塊輪動與資金流向/g), 1); assert.equal(cnt(/法人資金資料/g), 1, "資金資料的狀態只說一次");
-  assert.match(t2, /最近交易日盤後・大盤、自選與訊號/, "週末不寫「盤中」");
+  assert.match(t2, /最近交易日盤後整理/, "週末交易情境明確標示最近交易日盤後整理");
+  assert.match(t2, /最近交易日事件回顧/, "週末事件時間軸標示為歷史回顧");
+  assert.doesNotMatch(t2, /盤中監控/, "週末不把最近交易日事件誤標為盤中監控");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
