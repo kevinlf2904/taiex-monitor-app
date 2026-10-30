@@ -58,7 +58,7 @@ test("個股分 K 仍是「量（張）」，數字不換算 1280", async () => 
 
 test("加權當日分 K：API 延遲超過 20 秒仍能完成載入與繪圖", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
-  await ctx.route(/\\/api\\/intraday\\?(?!.*spark=1)/, async r => {
+  await ctx.route(/\/api\/intraday\?(?!.*spark=1)/, async r => {
     const u = new URL(r.request().url()), code = (u.searchParams.get("code") || "").toUpperCase();
     if (u.searchParams.has("before")) return r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, bars: [], end: true, unit: "億元" }) });
     if (code !== "T00") return r.fallback();
