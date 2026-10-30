@@ -1578,10 +1578,16 @@ async function loadMktLive() {
   // 期貨和大盤統計各自更新：其中一個慢或失敗，不會讓另一個也一直空著
   const futP = Promise.all([fut("EXF"), fut("FXF")]).then(([ex, fx]) => { W.futx = { EXF: ex || W.futx?.EXF || null, FXF: fx || W.futx?.FXF || null }; if (W.lt === "mkt" && !W.mktLoading) renderList(); });
   // at＝這份資料是什麼時候拿到的（判斷過期用），tryAt＝最後一次去問的時間（排下一次更新用）；失敗只改 tryAt，畫面才會轉成「資料延遲」，不會一直寫「更新於 現在」
-  try { const m = await getJ("/api/market"); W.mkt = { ...m, at: gotAt(m), tryAt: Date.now() }; }
+  // 新回應的資料比畫面上的舊（例如另一個伺服器執行個體 MIS 失敗、回前一天收盤或較早的快照）：保留畫面上的資料，只記下原因，不讓舊資料蓋掉新資料
+  try { const m = await getJ("/api/market"); if (mktOlder(m, W.mkt)) Object.assign(W.mkt, { tryAt: Date.now(), lastErr: `這次拿到 ${m.date || "?"} ${m.time || ""} 的資料，比畫面上的舊，先保留畫面上的資料` }); else W.mkt = { ...m, at: gotAt(m), tryAt: Date.now() }; }
   catch (e) { if (W.mkt && !W.mkt.err) Object.assign(W.mkt, { tryAt: Date.now(), lastErr: e.message }); else W.mkt = { err: e.message, at: Date.now(), tryAt: Date.now() }; } finally { W.mktLoading = 0; }
   await futP.catch(() => {});
   if (W.lt === "mkt") { W.ticking = true; try { renderList(); } finally { W.ticking = false; } }
+}
+// 大盤回應是不是比畫面上的舊：先比資料日期；兩邊都有來源時間才比時間（收盤資料沒有時間，不能因此擋掉當天的收盤確認）
+function mktOlder(m, cur) {
+  if (!m?.ok || !m.date || !cur || cur.err || !cur.date) return false;
+  return isQuoteStale({ date: m.date, time: m.time || null }, { date: cur.date, time: m.time ? cur.time || null : null });
 }
 // 台股今天沒有開盤時的說明（週末、證交所公布的休市日、颱風假這類臨時休市）：報價日期 d 不是今天才回傳；[短的狀態, 完整說明]
 function twClosedNote(d, now = Date.now()) {
@@ -2080,7 +2086,7 @@ function renderList0() {
     $("#lTools").innerHTML = `<span class="note">${W.mkReg === "otc" ? "櫃買中心・每個交易日收盤後更新" : W.mkReg === "lst" ? "證交所・每個交易日收盤後更新" : W.mkReg === "off" ? "證交所、櫃買中心公告・約 15 分鐘更新" : W.mkReg === "gl" ? `原物料・外匯・利率${W.gl?.at ? `・更新於 ${new Date(W.gl.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkReg === "us" ? `美股大盤${W.usm?.at ? `・更新於 ${new Date(W.usm.at + 8 * 3600e3).toISOString().slice(11, 19)}` : ""}` : W.mkt?.date ? (W.mkt.live ? liveTag(W.mkt) : `個股統計：${liveTag(W.mkt, "收盤後")}`) : "大盤總覽"}</span>${rfBtn("mktRefresh")}`;
     const mktHealthy = isMarketHealthy(W.mkt);
     const mktNoteText = getMktNoteText(W.mkt);
-    renderMkt(); note = W.mkReg === "otc" || W.mkReg === "lst" || W.mkReg === "off" ? "" : W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${mktNoteText}（貢獻點數為估算）。${mktFailedNote(W.mkt)}${W.mkt.note ? " " + W.mkt.note : ""}` : (W.mkt?.dataStatus === "unavailable" ? mktNoteText : "");
+    renderMkt(); note = W.mkReg === "otc" || W.mkReg === "lst" || W.mkReg === "off" ? "" : W.mkReg === "gl" ? "國際原物料、外匯、利率來自 Yahoo Finance（可能延遲 10～15 分鐘），每分鐘自動更新；外匯是 1 美元可以換多少；BDI、SCFI 沒有免費即時資料，用追蹤運價的 ETF 參考。" : W.mkt?.source ? `資料：${W.mkt.source}。${mktNoteText}（貢獻點數為估算）。${mktFailedNote(W.mkt)}${W.mkt.note ? " " + W.mkt.note : ""}${W.mkt.lastErr ? `（最近一次更新沒成功：${W.mkt.lastErr}）` : ""}` : (W.mkt?.dataStatus === "unavailable" ? mktNoteText : "");
   } else if (W.lt === "etf") {
     note = renderEtf();
   } else if (W.lt === "earn") {

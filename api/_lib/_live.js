@@ -11,6 +11,7 @@ import { closeToday, isValidIsoDate } from "./daily.js";
 import { holWarm, holState } from "./calendar.js";
 import { getJSON as _getJ, num as n } from "./_tw.js";
 import { sourceFresh, SRC_LAG } from "./_fresh.js";
+import { withRetry, retryErr, errKind, singleFlight } from "./_retry.js";
 const getJSON = (url, headers = {}, ms = 12000) => _getJ(url, headers, ms);
 
 // 富果快照格式：{ data: [{ symbol, name, closePrice, change, changePercent, tradeVolume, tradeValue, openPrice, highPrice, lowPrice, lastUpdated }, ...] }
@@ -211,17 +212,43 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
 }
 
 // MIS 一次查很多檔（每批 100 檔、同時 4 批），盤中與收盤後當天都有當天的價（收盤後 z 就是收盤價）
-// 某一批失敗時拆成兩半再試一次（之前失敗會整批 100 檔默默不見，漲跌家數、產業漲跌就會少算）
-export async function misAll(base, fetcher = misFetch) {
+// 每批遇到暫時性錯誤（429、5xx、逾時、200 但沒資料或缺一大半）有限次重試（_retry.js），還是不行才拆成兩半再試一次；
+// 遇到 403（被拒）整批停止，不再對 MIS 發請求；整體有時間上限（預設 15 秒；Vercel 函式上限 60 秒，前面有 OpenAPI 清單、後面還有收盤備援要跑）。
+// 回傳的 rows 帶不列舉的 stats：{ batches, okBatches, failedBatches, requested, received, retries, aborted, timedOut, errors }
+export const MIS_ALL = { budgetMs: 15000, attempts: 3, baseMs: 250, maxMs: 2000, minShare: 0.5 };
+export async function misAll(base, fetcher = misFetch, opts = {}) {
+  const { budgetMs = MIS_ALL.budgetMs, attempts = MIS_ALL.attempts, baseMs = MIS_ALL.baseMs, maxMs = MIS_ALL.maxMs, now = Date.now, sleep, rand } = opts;
   const list = base.filter(r => isStockOrEtf(r.code)), out = [], B = 100;
   const batches = []; for (let i = 0; i < list.length; i += B) batches.push(list.slice(i, i + B));
   const ch = r => `${r.market === "上櫃" ? "otc" : "tse"}_${r.code}.tw`;
+  const deadline = now() + budgetMs;
+  const stats = { batches: batches.length, okBatches: 0, failedBatches: 0, requested: list.length, received: 0, retries: 0, aborted: false, timedOut: false, errors: [] };
+  const note = e => { const k = errKind(e); if (stats.errors.length < 5 && !stats.errors.includes(k)) stats.errors.push(k); return k; };
   const one = async (bt, depth = 0) => {
-    try { out.push(...(await fetcher(bt.map(ch))).map(parseMis)); }
-    catch { if (depth < 2 && bt.length > 1) { const h = Math.ceil(bt.length / 2); await one(bt.slice(0, h), depth + 1); await one(bt.slice(h), depth + 1); } }
+    if (stats.aborted) return;
+    if (now() >= deadline) { stats.timedOut = true; stats.failedBatches++; return; }
+    let best = [];
+    try {
+      await withRetry(async () => {
+        const got = await fetcher(bt.map(ch));
+        if (!Array.isArray(got)) throw retryErr("bad_json", "MIS 回應格式不對");
+        const parsed = got.map(parseMis).filter(q => q.code);
+        if (parsed.length > best.length) best = parsed;
+        if (!parsed.length) throw retryErr("empty", "MIS 這批沒有資料");
+        if (parsed.length < bt.length * MIS_ALL.minShare) throw retryErr("incomplete", `MIS 這批只回 ${parsed.length}/${bt.length} 檔`);
+      }, { attempts, baseMs, maxMs, deadline, now, sleep, rand, onRetry: e => { stats.retries++; note(e); } });
+    } catch (e) {
+      const k = note(e);
+      if (k === "fatal" || k === "circuit") stats.aborted = true; // 被拒或斷路器開著：其他批次也不用再問
+      else if (!best.length && depth < 1 && bt.length > 1 && now() < deadline) { // 一直失敗：拆成兩半再試一次（可能是某一檔讓整批出錯）
+        const h = Math.ceil(bt.length / 2); await one(bt.slice(0, h), depth + 1); await one(bt.slice(h), depth + 1); return;
+      }
+    }
+    if (best.length) { out.push(...best); stats.okBatches++; stats.received += best.length; } else stats.failedBatches++;
   };
-  let k = 0; const worker = async () => { while (k < batches.length) await one(batches[k++]); };
+  let k = 0; const worker = async () => { while (k < batches.length && !stats.aborted) await one(batches[k++]); };
   await Promise.all([worker(), worker(), worker(), worker()]);
+  if (k < batches.length) stats.failedBatches += batches.length - k; // 中途停止：沒問到的批次也算失敗
   const by = new Map(base.map(r => [r.code, r]));
   let latestTime = null;
   const latestByDate = {}; // 每個交易日各自最新的來源時間：沒成交的股票會帶前一天的日期與時間，不能拿來當今天的更新時間
@@ -235,10 +262,14 @@ export async function misAll(base, fetcher = misFetch) {
     return { code: q.code, name: q.name || o.name || "", market: o.market || q.market, price: q.price, chg: q.chg, chgPct: q.chgPct, vol: q.vol, value: q.vol != null ? +((q.vol * 1000 * q.price) / 1e8).toFixed(2) : null, o: q.open, h: q.high, l: q.low, date: q.date }; });
   Object.defineProperty(rows, "latestTime", { value: latestTime, enumerable: false });
   Object.defineProperty(rows, "latestByDate", { value: latestByDate, enumerable: false });
+  Object.defineProperty(rows, "stats", { value: stats, enumerable: false });
   return rows;
 }
 
-let memo = null; // 函式執行個體快取：盤中 8 秒、收盤 30 秒
+let memo = null; // 函式執行個體快取：即時或盤中 8 秒、收盤後 30 秒（盤中拿到的是備援，也只留 8 秒，才會很快再問 MIS）
+// 今天最後一筆有效的盤中全市場資料（MIS 或富果快照）：MIS 暫時失敗時先用它（標延遲或停滯），不直接退回昨天收盤
+const prodStore = { lastGood: null };
+export const KEEP_COMPLETE_MS = 120000; // 新拿到的只是部分資料時，2 分鐘內的完整資料優先（部分資料不覆蓋完整資料）
 const ymd = iso => iso.replace(/-/g, "");
 
 // 收盤行情 Map 轉統一格式列
@@ -357,6 +388,16 @@ export function deriveDataStatus({ isLiveSession, isToday, completeness, dateCon
 }
 
 export async function marketRows(opts = {}) {
+  // 自訂時鐘、自訂休市判定或自訂查詢器時，嚴格隔離快取，絕不污染正式環境快取
+  const isCustom = Boolean(opts.fetcher || opts.fugleFetcher || opts.misFetcher || (opts.rwdFetcher && opts.rwdFetcher !== closeToday) || opts.isHoliday != null || opts.now != null || opts.today != null || opts.store);
+  if (isCustom) return buildMarketRows(opts, true, opts.store || null);
+  if (memo && Date.now() - memo.at < (memo.v?.live || memo.sess === "open" ? 8000 : 30000)) return memo.v;
+  // 同一個執行個體同時進來的請求（大盤、熱門、選股）共用同一次查詢，不各自打一輪全市場 MIS
+  return sharedBuild(opts);
+}
+const sharedBuild = singleFlight(opts => buildMarketRows(opts, false, prodStore));
+
+async function buildMarketRows(opts, isCustom, store) {
   const {
     now = new Date(),
     today = todayTaipei(now),
@@ -368,10 +409,6 @@ export async function marketRows(opts = {}) {
   } = opts;
 
   holWarm(); // 休市日表：session() 要靠它認出平日的國定假日
-
-  // 自訂時鐘、自訂休市判定或自訂查詢器時，嚴格隔離快取，絕不污染正式環境快取
-  const isCustom = Boolean(fetcher || fugleFetcher || misFetcher || rwdFetcher !== closeToday || isHoliday != null || opts.now != null || opts.today != null);
-  if (!isCustom && memo && Date.now() - memo.at < (memo.v?.live ? 8000 : 30000)) return memo.v;
 
   const key = (process.env.FUGLE_API_KEY || "").trim();
   const notes = [];
@@ -397,8 +434,37 @@ export async function marketRows(opts = {}) {
       updateMode: v.live ? "live" : String(v.source || "").includes("OpenAPI") ? "daily" : "after_close",
       isFallback: Boolean(!v.live && (v.note || String(v.source || "").includes("OpenAPI"))),
     };
-    if (!isCustom) memo = { at: Date.now(), v: out };
+    if (!isCustom) memo = { at: Date.now(), sess, v: out };
+    // 今天的盤中全市場資料記成最後有效資料（部分資料不蓋掉 2 分鐘內的完整資料，見 keepOrNew）
+    if (store && v.intraday && out.dataDate === today && out.rows?.length >= 500) store.lastGood = out;
     return out;
+  };
+  // 回傳最後一筆有效資料：數字不變，live 一律 false；來源時間還在門檻內標 delayed，超過標 stale；fetchedAt 保留當初抓的時間
+  const lastGoodToday = () => (store?.lastGood?.dataDate === today && store.lastGood.rows?.length >= 500 ? store.lastGood : null);
+  const keepLast = (lg, reason) => {
+    const fresh = sourceFresh({ dataDate: lg.dataDate, sourceTime: lg.sourceTime, now, maxLagMs: SRC_LAG.market });
+    const at = lg.sourceTime || String(lg.fetchedAt || "").slice(11, 19);
+    const out = {
+      ...lg,
+      live: false,
+      dataStatus: fresh.state === "fresh" ? "delayed" : "stale",
+      sourceState: fresh.state,
+      sourceAgeSec: fresh.ageMs != null ? Math.round(fresh.ageMs / 1000) : null,
+      isFallback: true,
+      isLastGood: true,
+      lastGoodAt: lg.fetchedAt,
+      note: `${reason}，暫時沿用今天 ${at} 的最後一筆有效資料`,
+      fallbackReason: reason
+    };
+    if (!isCustom) memo = { at: Date.now(), sess, v: out };
+    return out;
+  };
+  // 新拿到的盤中資料不完整、而 2 分鐘內有完整的：沿用完整的（標延遲），不讓部分資料蓋掉
+  const keepOrNew = v => {
+    const lg = lastGoodToday();
+    if (v.completeness !== "complete" && lg?.completeness === "complete" && now - Date.parse(lg.fetchedAt) <= KEEP_COMPLETE_MS)
+      return keepLast(lg, `最新一次只拿到部分資料（${v.coverage?.got ?? v.rows.length}/${v.coverage?.want ?? "?"} 檔）`);
+    return done(v);
   };
 
   // 1. 富果快照（有金鑰而且方案支援，或傳入自訂 fugleFetcher）
@@ -430,7 +496,8 @@ export async function marketRows(opts = {}) {
           dateVerified: validation.dateVerified,
           sourceState: fresh.state
         });
-        return done({
+        return (date === today ? keepOrNew : done)({
+          intraday: date === today && sess === "open",
           rows: validation.validRows,
           live: isLiveSession,
           sourceAgeSec: fresh.ageMs != null ? Math.round(fresh.ageMs / 1000) : null,
@@ -472,11 +539,15 @@ export async function marketRows(opts = {}) {
   const minutes = tp.getUTCHours() * 60 + tp.getUTCMinutes();
   const isTradingDay = tp.getUTCDay() % 6 !== 0 && !checkHoliday(today);
   const isTradingHours = isTradingDay && minutes >= 9 * 60 && minutes <= 13 * 60 + 35;
-  const canTryMis = prev.length > 0 && (sess === "open" || isTradingHours);
+  // 要查哪些股票：OpenAPI 清單拿不到時，用今天最後有效資料的股票清單（以前清單一失敗就整個不問 MIS）
+  const misBase = prev.length ? prev : lastGoodToday()?.rows || [];
+  const canTryMis = misBase.length > 0 && (sess === "open" || isTradingHours);
+  let misStats = null;
 
   if (canTryMis) {
     try {
-      const rows = await misAll(prev, misFetcher || misFetch);
+      const rows = await misAll(misBase, misFetcher || misFetch, opts.misOpts);
+      misStats = rows.stats || null;
       const todayRows = rows.filter(r => r.date === today);
       const validation = validateMarketRows(todayRows, { expectedCodes, today, now });
 
@@ -491,7 +562,9 @@ export async function marketRows(opts = {}) {
           dateVerified: validation.dateVerified,
           sourceState: fresh.state
         });
-        return done({
+        return keepOrNew({
+          intraday: isLiveSession,
+          misStats,
           rows: validation.validRows,
           coverage: validation.coverage,
           live: isLiveSession,
@@ -509,8 +582,11 @@ export async function marketRows(opts = {}) {
           sourceCapabilities: { hasOhlc: true, hasValue: true }
         });
       }
-      notes.push("MIS 資料不足或非今日行情");
+      notes.push(misStats?.failedBatches ? `MIS 只拿到 ${todayRows.length} 檔今天的行情（${misStats.failedBatches}/${misStats.batches} 批失敗${misStats.errors.length ? "：" + misStats.errors.join("、") : ""}）` : "MIS 資料不足或非今日行情");
     } catch (e) { notes.push(`MIS 拿不到（${e.message}）`); }
+    // 盤中 MIS 失敗：先用今天最後一筆有效資料，比昨天收盤接近現在
+    const lg = sess === "open" ? lastGoodToday() : null;
+    if (lg) return keepLast(lg, notes.join("；"));
   }
 
   // 3. 收盤或非盤中備援：若 OpenAPI 已停滯（prevDate < today），或當前非交易時間 MIS 無法提供當日即時
@@ -530,7 +606,8 @@ export async function marketRows(opts = {}) {
         const validation = validateMarketRows(rows, { expectedCodes, today, now });
         const dateVerified = recent.dateVerified != null ? Boolean(recent.dateVerified && validation.dateVerified) : validation.dateVerified;
         const dateConsistent = recent.dateConsistent != null ? Boolean(recent.dateConsistent && validation.dateConsistent) : validation.dateConsistent;
-        const dataStatus = deriveDataStatus({
+        // 盤中卻只能顯示前一個交易日的收盤：交易日期過舊，標 stale（比 delayed 嚴重），不讓人以為只是慢幾秒
+        const dataStatus = sess === "open" && recent.date !== today ? "stale" : deriveDataStatus({
           isLiveSession: false,
           isToday: recent.date === today,
           completeness: validation.completeness,
@@ -545,6 +622,8 @@ export async function marketRows(opts = {}) {
           time: null,
           source: recent.date === today ? "證交所、櫃買中心 今日收盤行情" : "證交所、櫃買中心 收盤行情",
           note: recent.date !== today && notes.length ? `今日即時暫未取得（${notes.join("；")}），顯示 ${recent.date} 收盤` : null,
+          fallbackReason: recent.date !== today && notes.length ? notes.join("；") : undefined,
+          misStats: misStats || undefined,
           coverage: validation.coverage,
           dataStatus,
           completeness: validation.completeness,
@@ -569,7 +648,8 @@ export async function marketRows(opts = {}) {
       source: "證交所、櫃買中心 OpenAPI",
       note: notes.length ? `即時與最近收盤暫時拿不到（${notes.join("；")}），顯示 ${prevDate || "前次"} 資料` : null,
       coverage: validation.coverage,
-      dataStatus: "delayed",
+      dataStatus: sess === "open" && prevDate !== today ? "stale" : "delayed",
+      misStats: misStats || undefined,
       completeness: validation.completeness,
       sourceDate: isPrevDateValid ? prevDate : null,
       dateVerified: Boolean(isPrevDateValid && validation.dateVerified),
