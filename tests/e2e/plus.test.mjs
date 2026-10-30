@@ -6,7 +6,7 @@ import { chromium, serve, open } from "./_harness.mjs";
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
 const J = (r, o) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o) });
-const TODAY = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+const TODAY = "2026-10-30"; // 固定週五，避免 CI 在週末時被判定為休市
 const nextWd = d => { const t = new Date(d + "T00:00:00Z"); do t.setUTCDate(t.getUTCDate() + 1); while (t.getUTCDay() % 6 === 0); return t.toISOString().slice(0, 10); };
 // [代號, 名稱, 產業, 市場, 當月營收(億), 月增%, 年增%, 累計年增%, EPS, 季營收(億), 稅後淨利(億), 毛利率, 營益率, 淨利率]
 const ROWS = [["2330", "台積電", "半導體業", "上市", 3300, 5.1, 36.2, 38.4, 15.2, 9300, 3980, 59.1, 49.5, 42.7], ["2317", "鴻海", "其他電子業", "上市", 7800, -3.2, 12.1, 18.0, 3.1, 18000, 430, 6.2, 2.9, 2.4],
