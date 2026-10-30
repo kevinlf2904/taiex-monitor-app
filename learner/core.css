@@ -335,6 +335,20 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
   .dh-factor-grid { grid-template-columns: 1fr; }
 }
   
+/* 今日市場資訊架構：總覽摘要與合併後的階段內容 */
+.td-market-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; padding: 7px 10px; margin: 0 0 10px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 7px; background: var(--surface-2); line-height: 1.45; }
+.td-ms-label { color: var(--muted); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.td-ms-item { min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
+.td-ms-meta { flex-basis: 100%; color: var(--muted); font-size: 10.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.td-plan-stage { min-width: 0; padding: 3px 0 12px; }
+.td-plan-stage + .td-plan-stage { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.td-plan-head { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+@media (max-width: 420px) {
+  .td-market-summary { gap: 3px 8px; padding: 6px 8px; }
+  .td-ms-item { font-size: 11.5px; }
+  .td-ms-meta { font-size: 10px; }
+}
+
 /* 今日市場：時段面板（沿用 .seg）、缺資料的核心卡縮小、細節收合 */
 /* 今日市場的收合區塊：固定順序，現在的時段預設展開；摘要一行，展開才畫內容 */
 .dh-secbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 6px; }
