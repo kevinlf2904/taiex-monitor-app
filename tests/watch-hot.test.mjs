@@ -374,7 +374,7 @@ test("loadMkHot: TTL 快取控制、in-flight 請求共用、競態覆蓋防護�
   assert.equal(fetchCount, countBeforeCooldown, "錯誤冷卻時間 (15s) 內不應反覆發出請求");
 
   // 冷卻過後重試
-  W.hot["rank:volume"].errAt = Date.now() - 16000;
+  W.hot["rank:volume"].errAt = ctx.Date.now() - 16000;
   setGetJ(async () => {
     fetchCount++;
     return { rows: [{ code: "2330", name: "台積電-重試成功", price: 1200 }] };
@@ -439,36 +439,36 @@ test("loadMkHot 競態深度驗證: 舊請求最後完成時不得清除新請�
 
 test("loadMkHot 異常回應路徑: HTTP 失敗、JSON 解析失敗、格式錯誤（非物件、rows 缺失、rows 非陣列）與合法空陣列", async () => {
   const { ctx, W, setGetJ } = createHarness();
-  W.hot["rank:value"] = { at: Date.now() - 35000, rows: [{ code: "2330", price: 1000 }] };
+  W.hot["rank:value"] = { at: ctx.Date.now() - 35000, rows: [{ code: "2330", price: 1000 }] };
 
   // 1. 回應不是預期物件 (例如 null、字串、數字)
   setGetJ(async () => null);
   await ctx.loadMkHot("value", true);
   assert.ok(W.hot["rank:value"].err, "null 回應應被捕捉為格式錯誤");
   assert.equal(W.hot["rank:value"].rows.length, 1, "錯誤時應保留既有有效資料");
-  assert.ok(Date.now() - W.hot["rank:value"].errAt < 1000, "應記錄 errAt 時間以供冷卻");
+  assert.ok(ctx.Date.now() - W.hot["rank:value"].errAt < 1000, "應記錄 errAt 時間以供冷卻");
 
   // 2. rows 缺失
-  W.hot["rank:value"].errAt = Date.now() - 20000;
+  W.hot["rank:value"].errAt = ctx.Date.now() - 20000;
   setGetJ(async () => ({ ok: true, somethingElse: 123 }));
   await ctx.loadMkHot("value", true);
   assert.ok(W.hot["rank:value"].err, "缺少 rows 應被捕捉為格式錯誤");
 
   // 3. rows 不是陣列
-  W.hot["rank:value"].errAt = Date.now() - 20000;
+  W.hot["rank:value"].errAt = ctx.Date.now() - 20000;
   setGetJ(async () => ({ ok: true, rows: "not-an-array" }));
   await ctx.loadMkHot("value", true);
   assert.ok(W.hot["rank:value"].err, "rows 非陣列應被捕捉為格式錯誤");
 
   // 4. 合法空陣列（例如無符合股票）
-  W.hot["rank:value"].errAt = Date.now() - 20000;
+  W.hot["rank:value"].errAt = ctx.Date.now() - 20000;
   setGetJ(async () => ({ ok: true, rows: [] }));
   await ctx.loadMkHot("value", true);
   assert.equal(W.hot["rank:value"].err, null, "合法空陣列不應視為錯誤");
   assert.equal(W.hot["rank:value"].rows.length, 0, "合法空陣列成功寫入");
 
   // 5. 陣列內包含無效格式元素（過濾保護）
-  W.hot["rank:value"].errAt = Date.now() - 20000;
+  W.hot["rank:value"].errAt = ctx.Date.now() - 20000;
   setGetJ(async () => ({
     ok: true,
     rows: [null, "invalid", { code: "2330", name: "台積電", price: 1050 }],
@@ -489,18 +489,18 @@ test("liveRefresh: 大盤盤中熱門股過期或出錯時自動重刷，未過�
   W.mkHot = "value";
 
   // 快取新鮮時不刷新
-  W.hot["rank:value"] = { at: Date.now(), rows: [{ code: "2330" }] };
+  W.hot["rank:value"] = { at: ctx.Date.now(), rows: [{ code: "2330" }] };
   ctx.liveRefresh();
   assert.equal(loadedType, null, "熱門股未過期時 liveRefresh 不應重抓");
 
   // 快取過期 (> 30s) 時觸發重刷
-  W.hot["rank:value"].at = Date.now() - 35000;
+  W.hot["rank:value"].at = ctx.Date.now() - 35000;
   ctx.liveRefresh();
   assert.equal(loadedType, "value", "熱門股超過 30 秒過期時 liveRefresh 應自動重抓");
 
   // 錯誤狀態超過 15 秒冷卻時重試
   loadedType = null;
-  W.hot["rank:value"] = { at: Date.now() - 40000, err: "Failed", errAt: Date.now() - 16000, rows: [] };
+  W.hot["rank:value"] = { at: ctx.Date.now() - 40000, err: "Failed", errAt: ctx.Date.now() - 16000, rows: [] };
   ctx.liveRefresh();
   assert.equal(loadedType, "value", "熱門股錯誤超過冷卻期時 liveRefresh 應自動重試");
 
