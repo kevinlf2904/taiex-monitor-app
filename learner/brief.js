@@ -1811,10 +1811,10 @@ function todayPage() {
   const viz = f => { try { return f() || ""; } catch (e) { console.warn("today viz", e); return ""; } };
   const secs = SEC.map(([k, name, sum, body, v]) => {
     const g = viz(v), opened = O.s[k] ? " open" : "";
-    const bodyHtml = O.s[k] ? '<div class="dh-sec-b">' + body() + '</div>' : "";
+    const bodyHtml = O.s[k] ? '<div class="dh-sec-b" id="td-body-' + k + '">' + body() + '</div>' : "";
     const titleHtml = '<span class="dh-sec-t"><b>' + name + '</b>' + (k === "plan" ? '<span class="dh-now">・目前階段</span>' : "") + '</span>';
     const visualHtml = g ? '<span class="dh-sec-v">' + g + '</span>' : "";
-    return `<details class="dh-sec dh-sec-${k}${k === "plan" ? " now" : ""}" id="td-sec-${k}" data-tdbox="${k}"${opened}><summary aria-controls="td-body-${k}">${titleHtml}<span class="dh-sec-s note">${esc(sum)}</span>${visualHtml}</summary><div class="dh-sec-b" id="td-body-${k}">${O.s[k] ? body() : ""}</div></details>`;
+    return `<details class="dh-sec dh-sec-${k}${k === "plan" ? " now" : ""}" id="td-sec-${k}" data-tdbox="${k}"${opened}><summary aria-controls="td-body-${k}">${titleHtml}<span class="dh-sec-s note">${esc(sum)}</span>${visualHtml}</summary>${bodyHtml}</details>`;
   }).join("");
 
   const alertButton = alerts ? '<button type="button" class="dh-badge mon-alert" data-l2mon>■ 警示 ' + alerts + ' 件 ›</button>' : "";
