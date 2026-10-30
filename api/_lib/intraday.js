@@ -87,8 +87,6 @@ export async function fromYahoo(code, { fetchImpl = fetch } = {}) {
 
 const ymd = sec => new Date(sec * 1000).toISOString().slice(0, 10);
 const toMin = t => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
-const ymd = sec => new Date(sec * 1000).toISOString().slice(0, 10);
-const toMin = t => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
 
 const HISTORY_START_DATE = "2023-05-23";
 const HISTORY_CHUNK_DAYS = 30;
