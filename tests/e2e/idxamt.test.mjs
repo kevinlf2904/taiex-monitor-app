@@ -13,10 +13,10 @@ const route = (ctx, body) => ctx.route(/\/api\/intraday\?(?!.*spark=1)/, r => {
   if (u.searchParams.get("before")) return r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, bars: [], end: true, unit: "億元" }) });
   r.fulfill({ contentType: "application/json", body: JSON.stringify(body(u.searchParams.get("code"))) });
 });
-const openMinute = async (p, code) => {
+const openMinute = async (p, code, timeout = 15000) => {
   await p.evaluate(c => { select(c); }, code); await p.waitForTimeout(600); await p.evaluate(() => setDtab("tech"));
   await p.evaluate(() => document.querySelector('#kSeg [data-k="5"]').click());
-  await p.waitForFunction(() => typeof kChart !== "undefined" && kChart?.D?.length && kChart.D[0].d.includes(" "), null, { timeout: 15000 });
+  await p.waitForFunction(() => typeof kChart !== "undefined" && kChart?.D?.length && kChart.D[0].d.includes(" "), null, { timeout });
   return p.evaluate(() => ({ n: kChart.D.length, v0: kChart.D[0].v, label: kChart.o.volLabel, name: kChart.o.volName || "量", msg: kChart.o.volMsg || null, noVol: !!kChart.o.noVol, fmt: kChart.o.volFmt ? kChart.o.volFmt(1050.76) : null, overflow: document.documentElement.scrollWidth > innerWidth + 1 }));
 };
 
@@ -53,4 +53,29 @@ test("個股分 K 仍是「量（張）」，數字不換算 1280", async () => 
   assert.equal(r.label, "量（張）"); assert.equal(r.name, "量"); assert.equal(r.v0, 10 + 11 + 12 + 13 + 14); assert.equal(r.msg, null);
   assert.equal(await p.evaluate(() => tsData().amt), false);
   await ctx.close(); assert.deepEqual(errs, []);
+});
+
+
+test("加權當日分 K：API 延遲超過 20 秒仍能完成載入與繪圖", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  await ctx.route(/\\/api\\/intraday\\?(?!.*spark=1)/, async r => {
+    const u = new URL(r.request().url()), code = (u.searchParams.get("code") || "").toUpperCase();
+    if (u.searchParams.has("before")) return r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, bars: [], end: true, unit: "億元" }) });
+    if (code !== "T00") return r.fallback();
+    await new Promise(resolve => setTimeout(resolve, 21000));
+    return r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, code: "T00", source: "富果（mock）", date: DAY, tf: 1, prev: 100, unit: "億元", amountNa: false, session: { open: "09:00", close: "13:30" }, bars: bars(30, k => 100 + k) }) });
+  });
+  const limits = await p.evaluate(() => ({
+    index: requestTimeoutMs("/api/intraday?code=T00&tf=1"),
+    otc: requestTimeoutMs("/api/intraday?code=O00&tf=1"),
+    history: requestTimeoutMs("/api/intraday?code=T00&tf=1&before=2026-10-01"),
+    stock: requestTimeoutMs("/api/intraday?code=2330&tf=1"),
+    quote: requestTimeoutMs("/api/quote?codes=T00")
+  }));
+  assert.deepEqual(limits, { index: 35000, otc: 35000, history: 20000, stock: 20000, quote: 20000 });
+  const r = await openMinute(p, "T00", 40000);
+  assert.equal(r.n, 6); assert.equal(r.v0, 100 + 101 + 102 + 103 + 104);
+  assert.equal(r.label, "成交金額（億元）"); assert.equal(r.noVol, false); assert.equal(r.msg, null);
+  assert.equal(r.overflow, false); assert.deepEqual(errs, []);
+  await ctx.close();
 });
