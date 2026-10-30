@@ -25,7 +25,7 @@
 | P1-03 KV／同步／Telegram | 程式部分已修 | `8794b24` | 分清「沒設定／暫時壞掉／正常」；推播失敗不再擋住重送；基礎設施要使用者手動設定（第 3 節） |
 | P2-01 Podcast GET 安全 | 已修 | `aa92e2f` | `act=file` 要帶上傳時發的憑證；每 IP 限流；檔名白名單 |
 | P2-02 狀態契約 | 已修 | `ba34ba4` | core、brief、watch 共用同一組 state 和來源權威性 |
-| P2-03 上市櫃完整度 | **規格待確認** | `1fbfdb2` | 只補測試，沒改判斷邏輯；兩個方案見第 4 節 |
+| P2-03 上市櫃完整度 | 已修（方案 B） | `1fbfdb2`＋後續提交 | 使用者 2026-10-30 選方案 B：上市、上櫃各自要達 95% 才算完整 |
 | PR #181 | 已審查 | — | 實際內容見第 5 節 |
 
 ## 2. 各項細節
@@ -245,7 +245,17 @@
 
 **尚未做**：伺服器 `_live.js` 的 dataStatus 詞彙沒有改名（degraded 等），由前端 `canonDataState` 對應。
 
-### P2-03 上市櫃完整度（`1fbfdb2`，規格待確認，**行為未改**）
+### P2-03 上市櫃完整度（使用者 2026-10-30 選定方案 B，已修）
+
+**修改**：`validateMarketRows` 的 complete 多了兩個條件，上市 ≥ 950／1000、上櫃 ≥ 760／800（各自 95%）；不符合時是 partial。
+
+**測試**：
+- 原本的 todo 改成正式測試：上櫃 90%、上市 90%、兩邊剛好 95%、各差一檔。
+- Scenario 42 原本用「上市 1000＋上櫃 710」當作剛好完整（舊規則）。現在改成 950＋760，另外斷言 1000＋710 是 partial。
+
+**影響**：櫃買 MIS 偶發缺批時，盤中會比較常顯示「資料延遲」。用到 complete 的資金雷達、選股、熱門股都會跟著變。
+
+以下是選定前的分析，保留作為紀錄：
 
 **現行規則**：complete 要同時符合：
 
@@ -287,7 +297,7 @@
 |---|---|---|
 | 基準（修改前，HEAD 8a96b82） | `PW=/opt/node22/lib/node_modules/playwright node tests/run.mjs` | 485／485 通過 |
 | 單元 | `node tests/unit.test.mjs` | 153 通過、0 失敗 |
-| 狀態（伺服器） | `node tests/live-state.test.mjs` | 49 通過、0 失敗、1 todo（P2-03 待確認） |
+| 狀態（伺服器） | `node tests/live-state.test.mjs` | 50 通過、0 失敗（P2-03 方案 B 後） |
 | 前端狀態 | `node tests/watch-hot.test.mjs` | 70 通過、0 失敗 |
 | 同步／限流 | `node tests/sync.test.mjs` | 11 通過、0 失敗 |
 | 完整測試（修改後，HEAD 1fbfdb2，含 e2e 瀏覽器測試） | `PW=/opt/node22/lib/node_modules/playwright node tests/run.mjs` | 505 項：504 通過、0 失敗、1 todo（P2-03），結束碼 0 |
@@ -339,14 +349,13 @@
    - 選股綜合評分排行的去投顧化或改名（例如改成「指標統計」而不是評分排序）。
    - 課程與總經用詞需要法律審查。
    - P2-01 `act=sum` 的憑證驗證。
-   - P2-03 規格選擇。
 
 ## 6. 部署前檢查清單
 
 - [ ] 使用者授權推送本機 6 個提交，並決定是併入 #181 還是另開 PR。
 - [ ] 更新鎖 PR 的修改邊界，或另開 PR。
 - [ ] 獨立審查 P1-01、P2-02（狀態判斷）與 P2-01（安全）。
-- [ ] P2-03 選定規格。
+- [x] P2-03 選定規格（方案 B）。
 - [ ] Vercel：連接 Upstash（Production／Preview）、設定 `TELEGRAM_BOT_TOKEN`，重新部署；GitHub secrets 同步。
 - [ ] 預覽網址實測：盤中「盤中即時／資料延遲」標籤是否合理（注意 13:25～13:30 集合競價）；資金雷達缺值顯示 —；Podcast 整集整理流程（上傳 → 輪詢 → 整理）。
 - [ ] 合併前跑 `node scripts/bump-version.mjs`（影響網站）與完整測試；CI `test` 綠燈。

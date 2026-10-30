@@ -148,11 +148,14 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
   const effectiveRatio = +(totalCount / effectiveWant).toFixed(4);
 
   // 完整性狀態判定：complete 必須同時符合資料量、上市櫃雙市場門檻、日期一致且已驗證
+  // 上市、上櫃要「各自」達到估計母體的 95%（P2-03 方案 B）：全市場 95% 會掩蓋單一市場缺 10% 以上的情況
   let completeness = "empty";
   if (totalCount === 0) {
     completeness = "empty";
   } else if (
     marketRatio >= 0.95 &&
+    tseMarketRatio >= 0.95 &&
+    otcMarketRatio >= 0.95 &&
     tseCount >= minTse &&
     otcCount >= minOtc &&
     dateConsistent &&
@@ -163,7 +166,7 @@ export function validateMarketRows(rows, { expectedCodes = null, minTse = 800, m
     completeness = "partial_tse_only";
   } else if (otcCount >= minOtc && tseCount < 200) {
     completeness = "partial_otc_only";
-  } else if (tseCount > 0 && otcCount > 0 && (tseCount < minTse || otcCount < minOtc || marketRatio < 0.95)) {
+  } else if (tseCount > 0 && otcCount > 0 && (tseCount < minTse || otcCount < minOtc || marketRatio < 0.95 || tseMarketRatio < 0.95 || otcMarketRatio < 0.95)) {
     completeness = "partial";
   } else {
     completeness = "degraded";

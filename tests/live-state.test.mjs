@@ -1269,12 +1269,15 @@ test("Scenario 42: 全市場 complete 必須達到 95% 覆蓋率，基準清單�
   assert.equal(belowThreshold.completeness, "partial", "1400 / 1800 未達 95%，不可標記 complete");
   assert.equal(belowThreshold.coverage.benchmark.isBenchmarkComplete, false, "1400 檔基準清單也未達全市場 95% 門檻");
 
-  const atThresholdRows = makeRows(1000, 710);
+  // 方案 B：上市、上櫃各自也要 95%（950／1000、760／800），合計 1710 剛好是全市場 95%
+  const lopsided = validateMarketRows(makeRows(1000, 710), { today });
+  assert.equal(lopsided.coverage.ratio, 0.95); assert.equal(lopsided.completeness, "partial", "全市場剛好 95% 但上櫃只有 710／800：不算完整（P2-03 方案 B）");
+  const atThresholdRows = makeRows(950, 760);
   const atThresholdCodes = new Set(atThresholdRows.map(row => row.code));
   const atThreshold = validateMarketRows(atThresholdRows, { expectedCodes: atThresholdCodes, today });
   assert.equal(atThreshold.coverage.ratio, 0.95);
   assert.equal(atThreshold.coverage.benchmark.isBenchmarkComplete, true, "1710 檔基準清單達全市場 95% 門檻");
-  assert.equal(atThreshold.completeness, "complete", "1710 / 1800 恰達 95% 且雙市場日期一致時可標記 complete");
+  assert.equal(atThreshold.completeness, "complete", "1710 / 1800 恰達 95%、上市櫃各自 95% 且雙市場日期一致時可標記 complete");
 });
 
 test("部分成功（稽核 F-04／F-05）：/api/market 列出抓失敗的附帶資料並縮短快取；/api/daily 缺上櫃不快取 30 天、法人未公布標 pending", async () => {
@@ -1414,8 +1417,8 @@ test("P1-01 前端 evalDataStatus：瀏覽器剛收到（receivedAt＝現在）�
 });
 
 // ==========================================
-// P2-03：上市櫃完整度（只記錄現行規則；「上市櫃是否要各自達 95%」規格待確認，不改判斷邏輯）
-// 現行：complete＝全市場 ≥ 95%（估計母體 上市 1000＋上櫃 800）且 上市 ≥ 800 檔、上櫃 ≥ 600 檔、日期一致且驗證
+// P2-03：上市櫃完整度（方案 B，使用者 2026-10-30 選定）：上市、上櫃要各自達估計母體（上市 1000、上櫃 800）的 95%，
+// 加上全市場 ≥ 95%、上市 ≥ 800 檔、上櫃 ≥ 600 檔、日期一致且驗證，才是 complete
 // ==========================================
 const mkRows = (tse, otc, date = "2026-10-28") => [...Array.from({ length: tse }, (_, i) => ({ code: String(1000 + i), market: "上市", price: 10, vol: 1, date })), ...Array.from({ length: otc }, (_, i) => ({ code: String(5000 + i), market: "上櫃", price: 10, vol: 1, date }))];
 const cmp = (tse, otc) => validateMarketRows(mkRows(tse, otc), { today: "2026-10-28" });
@@ -1433,8 +1436,10 @@ test("P2-03 完整度：上市櫃都完整、只有一邊、兩邊都不足、�
   // 部分 API 失敗（MIS 某批 100 檔失敗）：其他批照算，少的會反映在覆蓋率
   assert.equal(cmp(1000, 700).completeness, "partial", "上櫃少 100 檔：1700/1800 < 95%");
 });
-test("P2-03 規格待確認：全市場 ≥ 95% 但單一市場只有約 90%（目前判成 complete）", { todo: "上市櫃是否要各自達 95%，等使用者決定（見 INTEGRATED_REPAIR_REPORT.md）" }, () => {
-  assert.equal(cmp(1000, 720).completeness, "complete", "現況：上櫃 720/800＝90%，全市場 1720/1800＝95.6% → complete");
-  assert.equal(cmp(900, 820).completeness, "complete", "現況：上市 900/1000＝90%，全市場 95.6% → complete");
-  assert.equal(cmp(1000, 720).completeness, "partial", "若改成各自 95%：這裡應該是 partial（目前不成立）");
+test("P2-03 方案 B：全市場 ≥ 95% 但單一市場只有約 90% 時不算完整", () => {
+  assert.equal(cmp(1000, 720).completeness, "partial", "上櫃 720/800＝90%（全市場 95.6%）→ partial");
+  assert.equal(cmp(900, 820).completeness, "partial", "上市 900/1000＝90%（全市場 95.6%）→ partial");
+  assert.equal(cmp(950, 760).completeness, "complete", "兩邊剛好 95% → complete");
+  assert.equal(cmp(949, 800).completeness, "partial", "上市差一檔到 95% → partial");
+  assert.equal(cmp(1000, 759).completeness, "partial", "上櫃差一檔到 95% → partial");
 });
