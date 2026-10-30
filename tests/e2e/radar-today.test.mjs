@@ -37,7 +37,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   assert.ok(V.bars >= 2, "近 5 日板塊長條");
   assert.match(V.preview, /近 5 日法人累積淨流向[\s\S]*半導體[\s\S]*金融[\s\S]*散熱/);
   assert.doesNotMatch(V.preview, /大戶異常|法人情緒|漲跌家數/, "收合摘要只呈現近 5 日輪動，不重複展開內容");
-  assert.match(V.body, /盤後總結/); assert.match(V.body, /法人情緒 64 分/); assert.match(V.body, /漲跌家數[\s\S]*600[\s\S]*300/);
+  assert.match(V.body, /盤後總結/); assert.match(V.body, /法人情緒 64 分/); assert.match(V.body, /上漲 600 家／下跌 300 家/);
   assert.doesNotMatch(V.plan, /盤後總結/, "法人盤後總結不混進交易情境");
   assert.match(V.body, /大戶異常（法人單日買賣金額最大）[\s\S]*台積電[\s\S]*長榮/);
   // 收合預覽的近 5 日輪動與展開內容的當日買賣分工；大戶異常只在展開內容
