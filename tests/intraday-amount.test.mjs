@@ -18,7 +18,7 @@ async function call(query, route, { key = "test-key" } = {}) {
   if (key) process.env.FUGLE_API_KEY = key; else delete process.env.FUGLE_API_KEY;
   const fetchImpl = async (url, options = {}) => {
     url = String(url); calls.push(url);
-    if (!/api\\.fugle\\.tw|query1\\.finance\\.yahoo\\.com/.test(url)) throw new Error("不該連到其他網站：" + url);
+    if (!/api\.fugle\.tw|query1\.finance\.yahoo\.com/.test(url)) throw new Error("不該連到其他網站：" + url);
     return route(url, options);
   };
   globalThis.fetch = fetchImpl; // _yahoo.js 歷史請求使用 global fetch；在此一併 mock，確保不連外。
