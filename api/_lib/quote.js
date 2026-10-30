@@ -10,6 +10,7 @@
 import { isUS, yahooQuote, getJSON as yGet, quoteFromMeta } from "./_yahoo.js";
 import { finnhubQuote } from "./_finnhub.js";
 import { holState, holWarm } from "./calendar.js";
+import { withRetry, retryErr, errKind } from "./_retry.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json", "Accept-Language": "zh-TW" };
 const INDEX = { T00: { mis: "tse_t00.tw", fugle: "IX0001", name: "加權指數" }, O00: { mis: "otc_o00.tw", fugle: "IX0043", name: "櫃買指數" } };
 const ALIAS = { TAIEX: "T00", "加權": "T00", "加權指數": "T00", "大盤": "T00", TWII: "T00", "櫃買": "O00", "櫃買指數": "O00", TPEX: "O00" };
@@ -53,34 +54,52 @@ export function parseFugle(j, code) {
     vol: INDEX[code] ? null : num(j.total?.tradeVolume), chg: num(j.change), chgPct: num(j.changePercent), time, date, dataDate: date, sourceTime: time, bids: bids.slice(0, 5), asks: asks.slice(0, 5), estimated: false };
 }
 
-async function getJSON(url, headers = {}) {
-  const r = await fetch(url, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(6000) });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+async function getJSON(url, headers = {}, ms = 6000, fetchImpl = fetch) {
+  const r = await fetchImpl(url, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(ms) });
+  if (!r.ok) { const e = new Error(`HTTP ${r.status}`); e.status = r.status; const ra = +r.headers?.get?.("retry-after"); if (ra > 0) e.retryAfterMs = ra * 1000; throw e; }
   return r.json();
 }
-// MIS 連不上（例如證交所擋住雲端主機的連線，錯誤是 fetch failed 或逾時）時，30 秒內不再等它逾時，
-// 所有用到 MIS 的地方（報價、大盤、熱門、選股）都直接改用備援，畫面不會一直「載入中」
-let misDownUntil = 0;
-const netErr = e => !/^HTTP /.test(e?.message || "");
-export async function misFetch(chs) {
-  if (Date.now() < misDownUntil) throw new Error("連不上（30 秒後再試）");
-  try { return await misFetchRaw(chs); } catch (e) { if (netErr(e)) misDownUntil = Date.now() + 30000; throw e; }
-}
-async function misFetchRaw(chs) {
-  const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${chs.join("|")}&json=1&delay=0&_=${Date.now()}`;
-  let j = null;
-  try { j = await getJSON(url, misCookie ? { Cookie: misCookie } : {}); } catch {}
-  if (!j || !Array.isArray(j.msgArray)) {
-    // 有時候要先拿到 MIS 首頁的 session cookie 才查得到
-    try { const r = await fetch("https://mis.twse.com.tw/stock/index.jsp", { headers: UA, signal: AbortSignal.timeout(6000) }); misCookie = (r.headers.get("set-cookie") || "").split(";")[0]; } catch {}
-    j = await getJSON(url, misCookie ? { Cookie: misCookie } : {});
+// MIS 斷路器（所有用到 MIS 的地方共用：報價、大盤、熱門、選股；開著時直接改用備援，畫面不會一直「載入中」）：
+//   連續 5 次網路錯誤或逾時 → 30 秒；被拒絕（403 等）→ 60 秒；連續 2 次 429（限流）→ 照 Retry-After，沒給就 15 秒（最多 60 秒）
+// 以前一次逾時就關 30 秒：全市場 4 批同時查時，一批逾時會讓其他批次全部失敗，大盤就只剩部分資料
+let misDownUntil = 0, misNetFails = 0, misRateFails = 0;
+export const MIS = { timeoutMs: 5000, netTrip: 5, netDownMs: 30000, denyDownMs: 60000, rateTrip: 2, rateDownMs: 15000, rateMaxMs: 60000 };
+export function misReset() { misDownUntil = 0; misNetFails = 0; misRateFails = 0; misCookie = ""; } // 測試用
+// deadline：這次查詢（含換 cookie）最晚要在什麼時候結束；每個請求的逾時取「單次上限」和「剩下的時間」比較短的那個，不會超過期限
+export async function misFetch(chs, { fetchImpl = fetch, now = Date.now, timeoutMs = MIS.timeoutMs, deadline = Infinity } = {}) {
+  if (now() < misDownUntil) throw retryErr("circuit", "連不上（稍後再試）");
+  // 自己的整體期限到了（overDeadline）不算 MIS 的錯，不累計斷路器
+  const left = () => { const ms = Math.min(timeoutMs, deadline - now()); if (ms <= 0) throw Object.assign(retryErr("timeout", "超過整體時間上限"), { overDeadline: true }); return ms; };
+  try { const out = await misFetchRaw(chs, fetchImpl, left); misNetFails = 0; misRateFails = 0; return out; }
+  catch (e) {
+    const k = errKind(e);
+    if (k === "fatal") misDownUntil = now() + MIS.denyDownMs;
+    else if (k === "rate") { if (++misRateFails >= MIS.rateTrip) { misDownUntil = now() + Math.min(MIS.rateMaxMs, e.retryAfterMs || MIS.rateDownMs); misRateFails = 0; } }
+    else if ((k === "network" || k === "timeout") && !e.overDeadline) { if (++misNetFails >= MIS.netTrip) { misDownUntil = now() + MIS.netDownMs; misNetFails = 0; } }
+    throw e;
   }
-  return Array.isArray(j?.msgArray) ? j.msgArray : [];
+}
+// 一次查詢：HTTP 錯誤帶狀態碼丟出（交給重試分類）；回應不是 { msgArray: [...] } 或第一次被拒（403）時，先拿 MIS 首頁的 session cookie 再查一次
+async function misFetchRaw(chs, fetchImpl = fetch, left = () => MIS.timeoutMs) {
+  const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${chs.join("|")}&json=1&delay=0&_=${Date.now()}`;
+  const get = () => getJSON(url, misCookie ? { Cookie: misCookie } : {}, left(), fetchImpl);
+  let j = null;
+  try { j = await get(); }
+  catch (e) { if (e?.status !== 403 && errKind(e) !== "bad_json") throw e; }
+  if (!Array.isArray(j?.msgArray)) {
+    try { const r = await fetchImpl("https://mis.twse.com.tw/stock/index.jsp", { headers: UA, signal: AbortSignal.timeout(left()) }); misCookie = (r.headers?.get?.("set-cookie") || "").split(";")[0]; } catch {}
+    j = await get();
+  }
+  if (!Array.isArray(j?.msgArray)) throw retryErr("bad_json", "MIS 回應格式不對（沒有 msgArray）");
+  return j.msgArray;
 }
 async function fromMis(codes) {
   // 不知道是上市還是上櫃，兩個都問，有資料的那個就是
   const chs = codes.flatMap(c => (INDEX[c] ? [INDEX[c].mis] : [`tse_${c}.tw`, `otc_${c}.tw`]));
-  const rows = (await misFetch(chs)).map(parseMis).filter(q => q.code && (q.price != null || q.prev != null));
+  // 暫時性錯誤（429、5xx、逾時、空回應）最多再試 1 次、整體 3.5 秒內（每個請求的逾時也算在 3.5 秒裡）；403 不重試，直接改用備援
+  const deadline = Date.now() + 3500;
+  const rows = (await withRetry(async () => { const r = await misFetch(chs, { timeoutMs: 3000, deadline }); if (!r.length) throw retryErr("empty", "MIS 沒有資料"); return r; }, { attempts: 2, deadline }))
+    .map(parseMis).filter(q => q.code && (q.price != null || q.prev != null));
   return codes.map(c => rows.find(q => q.code === c)).filter(Boolean);
 }
 // Yahoo Finance 備援：加權 ^TWII、櫃買 ^TWOII，個股先試上市 .TW 再試上櫃 .TWO（Yahoo 的台股報價可能延遲幾分鐘）

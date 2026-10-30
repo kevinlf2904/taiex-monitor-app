@@ -145,7 +145,8 @@ test("Scenario 4: 盤中 MIS 失敗時平順降級至最近收盤", async () => 
 
   assert.equal(res.live, false, "降級至收盤時 live 應為 false");
   assert.equal(res.date, "2026-10-27");
-  assert.equal(res.dataStatus, "delayed");
+  // 盤中顯示前一交易日收盤：交易日期過舊，標 stale（比 delayed 嚴重），不能只標「延遲」
+  assert.equal(res.dataStatus, "stale");
   assert.ok(res.note && res.note.includes("今日即時暫未取得"));
 });
 
@@ -1202,7 +1203,7 @@ test("Scenario 41: [第四輪可信度一致性驗證] OpenAPI 回退路徑與�
   });
 
   assert.equal(resRecentClose.live, false, "回退最近收盤時 live 必須為 false");
-  assert.equal(resRecentClose.dataStatus, "delayed", "盤中回退昨日收盤時 dataStatus 必須為 delayed");
+  assert.equal(resRecentClose.dataStatus, "stale", "盤中回退昨日收盤時 dataStatus 必須為 stale（交易日期過舊）");
   assert.notEqual(resRecentClose.dataStatus, "live", "回退收盤絕對不得冒充 live");
   assert.notEqual(resRecentClose.dataStatus, "confirmed", "盤中回退昨日收盤絕對不得標為 confirmed");
 
@@ -1245,7 +1246,11 @@ test("Scenario 41: [第四輪可信度一致性驗證] OpenAPI 回退路徑與�
   });
 
   assert.equal(resOpenApi.live, false, "OpenAPI 回退路徑 live 必為 false");
-  assert.equal(resOpenApi.dataStatus, "delayed", "OpenAPI 回退路徑 dataStatus 必為 delayed");
+  assert.equal(resOpenApi.dataStatus, "stale", "盤中 OpenAPI 回退（前一交易日）dataStatus 必為 stale（交易日期過舊）");
+  // 非盤中（收盤後）OpenAPI 回退維持 delayed
+  const resOpenApiAfter = await marketRows({ now: nowAfterHours, today: "2026-10-28", fetcher: async () => openApiRows, rwdFetcher: async () => null });
+  assert.equal(resOpenApiAfter.live, false);
+  assert.equal(resOpenApiAfter.dataStatus, "delayed", "收盤後 OpenAPI 回退路徑 dataStatus 必為 delayed");
   assert.notEqual(resOpenApi.dataStatus, "live", "OpenAPI 絕不可標記為 live");
   assert.notEqual(resOpenApi.dataStatus, "confirmed", "OpenAPI 絕不可標記為 confirmed");
   assert.ok(resOpenApi.source.includes("OpenAPI"));
