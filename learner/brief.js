@@ -1726,7 +1726,7 @@ function todayPage() {
   const md = M?.dates?.[M.T - 1] || null;
   const expectedDate = sess.session === "closed" ? (sess.lastTradeDate || tq?.date || null) : t;
   const quoteAligned = !!(tq?.date && expectedDate && tq.date === expectedDate);
-  const invalidQuoteStates = ["missing", "insufficient", "corrupted", "date_mismatch", "unavailable"];
+  const invalidQuoteStates = ["missing", "insufficient", "corrupted", "date_mismatch", "stale", "unavailable"];
   const quoteUsable = quoteAligned && tdOk(tq?.price) && tq.price > 0 && tdOk(tq?.chgPct) && !invalidQuoteStates.includes(dataEval.dataStatus);
   const fundsAligned = quoteUsable && !!(md && tq?.date && md === tq.date);
   let mood = null, A = [];
