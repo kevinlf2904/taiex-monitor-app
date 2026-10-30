@@ -445,7 +445,25 @@ function briefScenarios(G, today, basePrice, meta = {}) {
   };
 }
 
-function evaluateDataStatus({ market = {}, G = {}, session = "post", tradeDate = null }) {
+// 決策中心的資料狀態：dataStatus／dataStatusLabel 是這一頁自己的詞；state 是共同契約（core.js canonDataState），
+// 取「core.js 對加權本身的判斷」和「這一頁另外要求的條件（法人日期、高低點…）」裡比較差的那個，所以不會比看盤頁樂觀
+// lastTradeDate：休市日顯示最近交易日收盤時用來確認那一天真的是最近交易日（是的話是收盤確認，不是過期）
+function evaluateDataStatus(args = {}) {
+  const r = evaluateDataStatusRaw(args), tq = args.market?.taiex, src = tq?.source;
+  if (typeof canonDataState !== "function") return r;
+  const sess = args.session || "post", authority = sourceAuthority(src);
+  let own = canonDataState(r.dataStatus);
+  if (r.dataStatus === "stale" && sess === "closed" && args.lastTradeDate && r.marketDate === args.lastTradeDate) own = "confirmed"; // 休市日顯示最近交易日收盤
+  if (r.completeness === "awaiting_inst") own = "pending"; // 指數已收盤、法人還沒公布
+  let core = null;
+  if (tq && r.marketDate && typeof evalDataStatus === "function") {
+    const c = evalDataStatus({ type: "index", source: src || "", dataDate: r.marketDate, sourceTime: tq.sourceTime ?? tq.time ?? null, session: sess === "live" ? "open" : sess === "pre" ? "pre" : "closed", dayState: sess === "closed" ? "closed" : "trade", today: args.tradeDate || r.marketDate, now: args.now ?? Date.now(), estimated: !!tq.estimated });
+    core = c.state;
+    if (r.dataStatus === "live" && c.state !== "live") return { ...r, dataStatus: "delayed", dataStatusLabel: "延遲資料", reason: c.note || "來源更新時間無法確認是即時", state: worseState(own, c.state), authority, sourceVerified: authority === "official" };
+  }
+  return { ...r, state: core ? worseState(own, core) : own, authority, sourceVerified: r.sourceVerified === true && authority === "official" };
+}
+function evaluateDataStatusRaw({ market = {}, G = {}, session = "post", tradeDate = null }) {
   const taiex = market?.taiex;
   if (!taiex || typeof taiex !== "object") {
     return {
@@ -535,7 +553,7 @@ function evaluateDataStatus({ market = {}, G = {}, session = "post", tradeDate =
   const rawSrc = String(taiex.source || "").toLowerCase();
   const isOfficialSource = officialSources.some(s => rawSrc.includes(s));
   const isThirdParty = /yahoo|google|cnyes|finmind/.test(rawSrc);
-  const sourceVerified = isOfficialSource || isThirdParty;
+  const sourceVerified = isOfficialSource; // 只有官方來源算驗證過；第三方來源可以用，但不能宣稱已驗證
 
   if (tradeDate && marketDate !== tradeDate) {
     if (session === "closed") {
@@ -619,16 +637,19 @@ function evaluateDataStatus({ market = {}, G = {}, session = "post", tradeDate =
   // session === "post"
   const hasInst = Boolean(inst && (inst.foreign != null || inst.total != null || inst.trust != null));
   if (hasInst) {
+    if (isOfficialSource && inst.date !== marketDate) { // 法人沒有日期：不能確認是同一天的籌碼，不宣稱官方定案
+      return { dataStatus: "partial", dataStatusLabel: "法人日期待確認", reason: "三大法人資料沒有日期，無法確認與指數是同一交易日", marketDate, sourceVerified: true, sourceType: taiex.source || "unknown", completeness: "inst_date_unknown" };
+    }
     if (isOfficialSource) {
       return { dataStatus: "official", dataStatusLabel: "官方收盤", reason: "加權指數與三大法人籌碼已正式定案", marketDate, sourceVerified: true, sourceType: "twse_official", completeness: "official_complete" };
     } else if (isThirdParty) {
-      return { dataStatus: "verified", dataStatusLabel: "收盤定案", reason: "第三方完整收盤資料（非直接官方源）", marketDate, sourceVerified: true, sourceType: taiex.source, completeness: "third_party_complete" };
+      return { dataStatus: "verified", dataStatusLabel: "收盤（第三方來源）", reason: "第三方完整收盤資料（非直接官方源，未經官方確認）", marketDate, sourceVerified: false, sourceType: taiex.source, completeness: "third_party_complete" };
     } else {
       return { dataStatus: "unverified", dataStatusLabel: "未驗證來源", reason: "資料來源尚未確認官方授信", marketDate, sourceVerified: false, sourceType: taiex.source || "unknown", completeness: "unverified" };
     }
   }
 
-  return { dataStatus: "partial", dataStatusLabel: "部分正式", reason: "指數已收盤，法人籌碼資料結算中", marketDate, sourceVerified: taiex.source || "unknown", completeness: "awaiting_inst" };
+  return { dataStatus: "partial", dataStatusLabel: "部分正式", reason: "指數已收盤，法人籌碼資料結算中", marketDate, sourceVerified: isOfficialSource, sourceType: taiex.source || "unknown", completeness: "awaiting_inst" };
 }
 
 function verifyVolumeStatus(actual, plan) {
@@ -1705,7 +1726,9 @@ function todayPage() {
     market,
     G: W.bf || {},
     session: sess.session,
-    tradeDate: t
+    tradeDate: t,
+    lastTradeDate: sess.lastTradeDate || null,
+    now: nowMs
   });
 
   // 週末、休市日：盤前推演以下一個交易日為目標（以最近交易日收盤推估）；盤後驗證對照「報價那一天」的快照，不拿休市日的推演去比

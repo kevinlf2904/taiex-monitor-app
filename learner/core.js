@@ -187,6 +187,28 @@ function fmtTwTime(ms) {
   return `${d.slice(0, 10)} ${d.slice(11, 19)}`;
 }
 
+/* ---------- 來源時間新鮮度：和伺服器 api/_lib/_fresh.js 同一套規則 ----------
+   dataDate（交易日）、sourceTime（來源更新時間，台北）、fetchedAt（伺服器抓取）、receivedAt（瀏覽器收到）四種時間不互相替代；
+   判斷即時看 sourceTime，瀏覽器剛收到或伺服器剛抓都不算來源有更新 */
+const TW_SRC_LAG = { index: 180e3, market: 360e3, hot: 360e3, breadth: 360e3, quote: null };
+function twSourceFresh({ dataDate, sourceTime, now = Date.now(), maxLagMs = null } = {}) {
+  const nowMs = +now;
+  if (!dataDate || !sourceTime) return { state: "missing", ageMs: null, at: null };
+  let at = null;
+  if (typeof dataDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dataDate) && typeof sourceTime === "string" && /^\d{2}:\d{2}(:\d{2})?$/.test(sourceTime)) {
+    const [h, m, sec = "00"] = sourceTime.split(":");
+    if (+h <= 23 && +m <= 59 && +sec <= 59) {
+      const ms = Date.parse(dataDate + "T" + h + ":" + m + ":" + sec + "+08:00");
+      if (Number.isFinite(ms) && new Date(ms + 8 * 3600e3).toISOString().slice(0, 10) === dataDate) at = ms;
+    }
+  }
+  if (at == null) return { state: "invalid", ageMs: null, at: null };
+  const ageMs = nowMs - at;
+  if (ageMs < -60e3) return { state: "future", ageMs, at };
+  if (maxLagMs != null && ageMs > maxLagMs) return { state: "old", ageMs, at };
+  return { state: "fresh", ageMs, at };
+}
+
 /* ---------- 時間與報價新鮮度判定 (Phase C P0-1 & P0-2) ---------- */
 function quoteTimestamp(q) {
   if (!q) return null;
@@ -282,6 +304,25 @@ function isQuoteStale(incoming, existing) {
   return false;
 }
 
+/* ---------- 共同資料狀態契約 ----------
+   各模組原本的狀態詞（core 的 live／confirmed／delayed／pending、brief 的 official／verified／unverified／partial／stale、
+   伺服器 _live.js 的 degraded）保留給畫面文字，底層都對應到同一組 state，優先順序固定（越前面越嚴重，合併時取最嚴重的）：
+     unavailable 沒有資料 > unverified 證據不足（日期不一致、格式錯、未驗證）> stale 交易日期過舊 > partial 部分資料
+     > delayed 延遲（來源時間落後、抓取失敗）> pending 待確認（盤前、盤後待公布）> confirmed 收盤確認 > live 盤中即時
+   完整度（completeness）、新鮮度（state）、來源權威性（authority）是三件事，不互相代替；不認得的狀態當成 unverified，不當成正常 */
+const DATA_STATES = ["unavailable", "unverified", "stale", "partial", "delayed", "pending", "confirmed", "live"];
+const DATA_STATE_OF = { live: "live", confirmed: "confirmed", official: "confirmed", verified: "confirmed", holiday: "confirmed", pending: "pending", preview: "pending", delayed: "delayed", partial: "partial", stale: "stale",
+  unverified: "unverified", degraded: "unverified", corrupted: "unverified", date_mismatch: "unverified", insufficient: "unverified", missing: "unavailable", unavailable: "unavailable" };
+function canonDataState(s) { return DATA_STATES.includes(s) ? s : DATA_STATE_OF[s] || "unverified"; }
+function worseState(...xs) { return xs.filter(x => x != null).map(canonDataState).sort((a, b) => DATA_STATES.indexOf(a) - DATA_STATES.indexOf(b))[0] || "unavailable"; }
+// 來源權威性：證交所、櫃買、期交所（含 MIS）是官方；Yahoo、Google、鉅亨、FinMind、富果是第三方；其他未知（不能宣稱已驗證）
+function sourceAuthority(src) {
+  const s = String(src || "").toLowerCase();
+  if (/twse|tpex|mis|taifex|證交所|櫃買|期交所/.test(s)) return "official";
+  if (/yahoo|google|cnyes|鉅亨|finmind|fugle|富果|finnhub/.test(s)) return "third_party";
+  return "unknown";
+}
+
 /* ---------- 市場資料更新狀態統一判定與標示 (Phase B) ----------
    四種主要狀態：盤中即時 (live)、盤後待確認 (pending)、收盤確認 (confirmed)、資料延遲 (delayed)；未實作為 unavailable
    結合資料來源、資料時間、交易日期、資料完整性、來源回應結果及適用的交易時段判斷 */
@@ -292,6 +333,7 @@ function evalDataStatus(opts = {}) {
     dataDate = null,
     sourceTime = null,
     fetchedAt = null,
+    receivedAt = null,
     lastValidAt = null,
     isSuccess = true,
     isComplete = true,
@@ -333,8 +375,9 @@ function evalDataStatus(opts = {}) {
     other: 60000,
   };
   const effectiveTtl = typeof ttl === "number" && ttl > 0 ? ttl : (defaultTtls[type] || 60000);
-  // 過期用「瀏覽器拿到資料的時間」（毫秒）判斷；呼叫的地方傳伺服器的 ISO 字串時先轉成毫秒（原本字串相減是 NaN，永遠不會過期）
-  const fetchedMs = typeof fetchedAt === "string" ? Date.parse(fetchedAt) : fetchedAt;
+  // 多久沒重新拿到資料：優先用瀏覽器收到的時間 receivedAt，沒給才用 fetchedAt（舊呼叫端傳的是瀏覽器時間）；ISO 字串先轉成毫秒
+  // 這只判斷「前端有沒有在更新」，來源資料新不新另外看 sourceTime（下面 srcFresh），receivedAt 再新也不會讓舊資料變即時
+  const recvRaw = receivedAt ?? fetchedAt, fetchedMs = typeof recvRaw === "string" ? Date.parse(recvRaw) : recvRaw;
   const age = Number.isFinite(fetchedMs) && fetchedMs ? (nowMs - fetchedMs) : null;
   const isExpired = age !== null && age > effectiveTtl;
   // 判定是否為台股全市場行情 (PR #165 嚴格品質契約)
@@ -446,9 +489,12 @@ function evalDataStatus(opts = {}) {
       dataDate: r.date ?? dataDate ?? null,
       sourceTime: r.time ?? sourceTime ?? null,
       fetchedAt: fetchedAt ?? null,
+      receivedAt: receivedAt ?? null,
       updateMode: inferredMode,
       updateModeText: modeMap[inferredMode] || inferredMode,
       dataStatus: r.status,
+      state: canonDataState(r.status),
+      authority: sourceAuthority(r.source ?? source),
       isFallback: Boolean(opts.isFallback),
       ttl: effectiveTtl,
     };
@@ -681,6 +727,15 @@ function evalDataStatus(opts = {}) {
     if (!isDataComplete) {
       return finishStatus({ status: "delayed", text: "資料延遲", note: getIncompleteNote("資料不完整"), date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false });
     }
+    // 即時行情類：要有來源時間證明是新的（個股的時間是最後成交時間，只檢查有沒有、合不合理，不算落後多久）
+    if (!estimated && Object.prototype.hasOwnProperty.call(TW_SRC_LAG, type)) {
+      const lag = opts.maxSourceLagMs !== undefined ? opts.maxSourceLagMs : TW_SRC_LAG[opts.srcKind || type];
+      const sf = twSourceFresh({ dataDate: dataDate || null, sourceTime, now: nowMs, maxLagMs: lag });
+      if (sf.state !== "fresh") {
+        const why = { missing: "來源未提供更新時間，無法確認是即時資料", invalid: "來源時間格式異常（" + sourceTime + "）", future: "來源時間晚於現在（" + sourceTime + "），時間待確認", old: "來源最後更新 " + sourceTime + "（已落後 " + Math.round((sf.ageMs || 0) / 60000) + " 分鐘）" }[sf.state];
+        return finishStatus({ status: "delayed", text: "資料延遲", note: why, date: dataDate || isoToday, source, time: sourceTime, isLive: false, isDelayed: true, isPending: false, isConfirmed: false, sourceState: sf.state });
+      }
+    }
     if (estimated || type === "kline" || type === "indicator") {
       return finishStatus({ status: "live", text: "盤中估算", note: "依盤中即時資料估算，收盤確認最終值", date: dataDate || isoToday, source, time: sourceTime, isLive: true, isDelayed: false, isPending: false, isConfirmed: false });
     }
@@ -869,6 +924,10 @@ function getHotNoteText(H) {
 
 if (typeof globalThis !== "undefined") {
   globalThis.evalDataStatus = evalDataStatus;
+  globalThis.twSourceFresh = twSourceFresh;
+  globalThis.canonDataState = canonDataState;
+  globalThis.worseState = worseState;
+  globalThis.sourceAuthority = sourceAuthority;
   globalThis.mktStatusTag = mktStatusTag;
   globalThis.mktDataInfoHtml = mktDataInfoHtml;
   globalThis.quoteTimestamp = quoteTimestamp;

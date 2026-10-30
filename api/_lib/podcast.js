@@ -5,14 +5,15 @@
 // GET  /api/podcast?feed=<RSS 網址>&n=30    讀節目的 RSS，回傳 { show, eps: [{ guid, title, date, desc, audio, mime, bytes, dur, link, img }] }
 // GET  /api/podcast?act=cfg                 目前能不能用 AI 整理（有 GEMINI_API_KEY 才能「聽完整集」，只有 ANTHROPIC_API_KEY 時只能讀節目說明）
 // POST /api/podcast { act: "upload", audio, name }          下載單集音檔、上傳到 Gemini Files（48 小時後自動刪除），回傳 { file, uri, mime, state }
-// GET  /api/podcast?act=file&name=files/xxx                 查上傳的音檔處理好了沒（state: PROCESSING／ACTIVE／FAILED）
+// GET  /api/podcast?act=file&name=files/xxx&exp=…&tok=…     查上傳的音檔處理好了沒（state: PROCESSING／ACTIVE／FAILED）；exp、tok 是上傳時回傳的查詢憑證，沒有就 403（只有上傳的人查得到）
 // POST /api/podcast { act: "sum", uri?, mime?, video?, title, show, date, desc }
 //      有 uri：Gemini 聽音檔整理；有 video（YouTube 影片網址）：Gemini 直接看影片整理；都沒有：用節目說明（show notes）整理。回傳 { tldr, points, sections, facts, risks, watch, calls, topics, mode, model }
 //      calls：主持人明確看多／看空的個股或 ETF [{ code, name, market: "TW"|"US", dir: "bull"|"bear", quote }]
 // 金鑰只放在 Vercel 環境變數（GEMINI_API_KEY／ANTHROPIC_API_KEY），不會出現在前端。整理結果只存在使用者的瀏覽器。
 
 import { GEMINI_FALLBACKS } from "./chat.js";
-import { WEB_TRIES } from "./_limit.js";
+import { WEB_TRIES, aiLimit } from "./_limit.js";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { userMsg } from "./_err.js";
 import http from "node:http";
 import https from "node:https";
@@ -260,6 +261,16 @@ export async function itunes(q) {
 
 // 給排程整理（scripts/podcast-sync.mjs）用：查上傳的音檔處理好了沒、刪掉
 export async function fileState(name, key) { const r = await fetch(`${GEMINI}/v1beta/${name}`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(10000) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`HTTP ${r.status}`); return j.state; }
+// 上傳音檔的查詢憑證：上傳時發給這個瀏覽器，查狀態時要帶回來，別人猜到檔名也查不到（不回 uri）。
+// 用伺服器 Gemini 金鑰導出的子密鑰簽章（HMAC-SHA256，金鑰本身不外流），不用另外設定環境變數；48 小時後失效（和 Gemini 自動刪檔同時間）
+export const FILE_TTL = 48 * 3600e3;
+const FILE_RE = /^files\/[a-z0-9-]{1,64}$/i;
+export function fileTok(file, exp, key) { const k = createHmac("sha256", String(key)).update("klinelab:podcast-file:v1").digest(); return createHmac("sha256", k).update(`${file}|${exp}`).digest("base64url"); }
+export function fileTokOk(file, exp, tok, key, now = Date.now()) {
+  if (!key || !FILE_RE.test(String(file || "")) || !/^\d{10,16}$/.test(String(exp || "")) || typeof tok !== "string" || !/^[A-Za-z0-9_-]{20,64}$/.test(tok)) return false;
+  if (+exp < now || +exp > now + FILE_TTL + 60e3) return false;
+  const a = Buffer.from(fileTok(file, +exp, key)), b = Buffer.from(tok); return a.length === b.length && timingSafeEqual(a, b);
+}
 export const fileDelete = (name, key) => fetch(`${GEMINI}/v1beta/${name}`, { method: "DELETE", headers: { "x-goog-api-key": key } }).catch(() => {});
 
 export default async function handler(req, res) {
@@ -270,7 +281,8 @@ export default async function handler(req, res) {
       if (b.act === "upload") {
         if (!gem) return res.status(200).json({ ok: false, error: "聽完整集需要在 Vercel 設定 GEMINI_API_KEY；現在可以先用節目說明整理。" });
         const url = safeUrl(b.audio); if (!url) return res.status(400).json({ ok: false, error: "音檔網址不正確" });
-        return res.status(200).json({ ok: true, ...(await uploadAudio(url, b.name, gem, { deadline: deadline - 1000 })) });
+        const up = await uploadAudio(url, b.name, gem, { deadline: deadline - 1000 }), exp = Date.now() + FILE_TTL;
+        return res.status(200).json({ ok: true, ...up, exp, tok: fileTok(up.file, exp, gem) });
       }
       if (b.act === "sum") {
         const meta = { title: String(b.title || "").slice(0, 200), show: String(b.show || "").slice(0, 100), date: String(b.date || "").slice(0, 20), desc: String(b.desc || "").slice(0, 6000) };
@@ -291,9 +303,13 @@ export default async function handler(req, res) {
     if (q.act === "cfg") return res.status(200).json({ ok: true, audio: !!gem, notes: !!gem || claude, provider: gem ? "gemini" : claude ? "claude" : null });
     if (q.act === "file") {
       if (!gem) return res.status(200).json({ ok: false, error: "沒有 GEMINI_API_KEY" });
-      const name = String(q.name || ""); if (!/^files\/[a-z0-9-]+$/i.test(name)) return res.status(400).json({ ok: false, error: "檔名不正確" });
-      const r = await fetch(`${GEMINI}/v1beta/${name}`, { headers: { "x-goog-api-key": gem }, signal: AbortSignal.timeout(10000) }), j = await r.json().catch(() => ({}));
-      if (!r.ok) return res.status(200).json({ ok: false, error: `查不到上傳的音檔（HTTP ${r.status}）` });
+      const name = String(q.name || ""); if (!FILE_RE.test(name)) return res.status(400).json({ ok: false, error: "檔名不正確" }); // 只收 files/英數與 -，擋路徑穿越（../、%2F、?）
+      const why = await aiLimit(req, "podcast-file"); if (why) return res.status(429).json({ ok: false, error: why }); // 每 IP 限流（輪詢狀態用，不花 AI 費用，但不能讓人一直打 Gemini）
+      if (!fileTokOk(name, q.exp, q.tok, gem)) return res.status(403).json({ ok: false, error: "沒有權限查這個檔案（只有上傳的人能查，或憑證已過期）" });
+      let r; try { r = await fetch(`${GEMINI}/v1beta/${name}`, { headers: { "x-goog-api-key": gem }, signal: AbortSignal.timeout(10000) }); } catch { return res.status(200).json({ ok: false, error: "AI 檔案服務暫時連不到，稍後再試" }); }
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 404) return res.status(200).json({ ok: false, error: "找不到這個檔案（可能已過期刪除）" });
+      if (!r.ok) return res.status(200).json({ ok: false, error: `AI 檔案服務暫時有問題（HTTP ${r.status}）` });
       return res.status(200).json({ ok: true, state: j.state, uri: j.uri, mime: j.mimeType });
     }
     if (q.q) {
