@@ -1726,8 +1726,9 @@ function todayPage() {
   const md = M?.dates?.[M.T - 1] || null;
   const expectedDate = sess.session === "closed" ? (sess.lastTradeDate || tq?.date || null) : t;
   const quoteAligned = !!(tq?.date && expectedDate && tq.date === expectedDate);
-  const quoteUsable = quoteAligned && tdOk(tq?.chgPct) && ["live", "delayed", "confirmed"].includes(dataEval.dataStatus);
-  const fundsAligned = !!(md && tq?.date && md === tq.date);
+  const invalidQuoteStates = ["missing", "insufficient", "corrupted", "date_mismatch", "unavailable"];
+  const quoteUsable = quoteAligned && tdOk(tq?.price) && tq.price > 0 && tdOk(tq?.chgPct) && !invalidQuoteStates.includes(dataEval.dataStatus);
+  const fundsAligned = quoteUsable && !!(md && tq?.date && md === tq.date);
   let mood = null, A = [];
   try { mood = M && typeof flowMood === "function" ? flowMood(M) : null; } catch {}
   try { A = M?.secs && typeof flowAt === "function" ? flowAt(M) : []; } catch {}
@@ -1737,11 +1738,12 @@ function todayPage() {
   // 摘要只顯示與最新有效加權報價同日的廣度和法人資料；不同日期不混算、不補 0
   const quoteText = quoteUsable
     ? `加權${tq.chgPct > 0 ? "上漲" : tq.chgPct < 0 ? "下跌" : "平盤"} ${tdPctTxt(tq.chgPct)}`
-    : tq?.date ? `最新加權報價 ${tq.date}，尚未對齊 ${expectedDate || "本交易日"}` : "加權行情尚未取得";
+    : quoteAligned && tq?.date ? `加權行情資料不完整（${dataEval.dataStatusLabel || dataEval.dataStatus}），暫不判定`
+      : tq?.date ? `最新加權報價 ${tq.date}，尚未對齊目標交易日 ${expectedDate || "本交易日"}` : "加權行情尚未取得";
   const breadthText = fundsAligned && mood && tdOk(mood.up) && tdOk(mood.dn)
     ? `市場廣度：漲 ${mood.up}／跌 ${mood.dn} 家` : "市場廣度尚無同日有效資料";
   const fundText = fundsAligned
-    ? [inS && `流入 ${inS.name}`, outS && `流出 ${outS.name}`].filter(Boolean).join("・") || "當日法人板塊尚無明顯淨流入／流出"
+    ? A.length ? [inS && `流入 ${inS.name}`, outS && `流出 ${outS.name}`].filter(Boolean).join("・") || "當日沒有可判定的板塊淨流向" : "當日板塊資料不足，暫不判定"
     : "法人資金尚無同日有效資料";
   const summaryHtml = `<div class="td-market-summary" role="status" aria-label="今日市場摘要">
     <b class="td-ms-label">今日市場摘要</b>
@@ -1777,11 +1779,12 @@ function todayPage() {
   const targetNote = target !== t && plan
     ? '<p class="note">今天休市，下面是下一交易日 ' + target.slice(5).replace("-", "/") + '（週' + WEEK[new Date(target + "T00:00:00Z").getUTCDay()] + '）的盤前推演' + (tq?.date ? '，以 ' + tq.date.slice(5).replace("-", "/") + ' 收盤推估' : "") + '。</p>'
     : "";
+  const planLiveHeading = sess.session === "post" ? "盤後整理" : sess.session === "closed" ? "最近交易日盤後整理" : sess.session === "pre" ? "前一交易日盤後整理" : "盤中";
   const planBody = () =>
     '<section class="td-plan-stage td-plan-pre"><h4 class="td-plan-head">盤前推演</h4>' +
       targetNote + tdPreViz(plan, tq) + briefScenariosHtml(plan) + dailyBriefSummaryHtml(W.bf, plan) +
       '<div class="dh-card">' + briefBody(["昨晚美股"]) + '</div></section>' +
-    '<section class="td-plan-stage td-plan-live"><h4 class="td-plan-head">' + when + '・盤中動態與市場訊號</h4>' +
+    '<section class="td-plan-stage td-plan-live"><h4 class="td-plan-head">' + planLiveHeading + '</h4>' +
       tdLiveViz(mon, hold, pm || sess.session === "closed") + monLine() + sumHead + '</section>' +
     '<section class="td-plan-stage td-plan-post"><h4 class="td-plan-head">收盤驗證與下一步</h4>' +
       tdPostViz(tq, kl, val, pm || sess.session === "closed") + validateHtml(val, vPlan) + nextActionHtml(plan, val) + '</section>';
