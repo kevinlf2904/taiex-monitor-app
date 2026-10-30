@@ -25,15 +25,22 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   await p.evaluate(() => { W.tdPh = { d: twDay(), ph: "post" }; setLt("today"); renderList(); });
   await p.waitForSelector("#lx .dh-card.flows", { timeout: 15000 });
   const t = await p.evaluate(() => $("#lx .dh-card.flows").innerText);
+  const flowSection = await p.evaluate(() => $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "");
   assert.match(t, /法人情緒 64 分・偏樂觀/); assert.match(t, /情緒怎麼算的/);
   assert.match(t, /今天法人買最多的板塊：\s*半導體[\s\S]*散熱/); assert.match(t, /今天法人賣最多的板塊：\s*航運[\s\S]*金融/);
-  assert.match(t, /近 5 日法人買超最多：\s*半導體[\s\S]*金融[\s\S]*散熱/); assert.match(t, /大戶異常（法人單日買賣金額最大）：\s*台積電[\s\S]*長榮/);
-  assert.match(t, /主力資金雷達回放/); assert.doesNotMatch(t, /盤後總結/, "盤後總結獨立一塊，不在資金雷達卡裡");
-  // 盤後總結：外層是計分板（加權、漲跌家數、情緒、異常個股）與今天法人買賣最多的板塊，點開才是句子
-  const V = await p.evaluate(() => ({ kpi: [...document.querySelectorAll('#lx details[data-tdbox="sum"] > summary .td-kpi > div')].map(e => e.innerText.replace(/\s+/g, " ")), bars: document.querySelectorAll('#lx details[data-tdbox="sum"] > summary .td-bars > div').length, body: $('#lx details[data-tdbox="sum"] .dh-sec-b')?.innerText || "" }));
-  assert.ok(V.kpi.some(x => /漲／跌家數 600／300/.test(x)) && V.kpi.some(x => /法人情緒 64/.test(x)), JSON.stringify(V.kpi)); assert.ok(V.bars >= 2, "板塊長條"); assert.match(V.body, /盤後總結/);
-  // 資金雷達外層：近 5 日與大戶異常（和盤後總結不重複）
-  assert.match(await p.evaluate(() => $('#lx details[data-tdbox="flow"] > summary').innerText), /近 5 日法人買賣超[\s\S]*大戶異常[\s\S]*台積電/);
+  assert.doesNotMatch(t, /近 5 日法人買超最多/, "展開內容不重複收合摘要的近 5 日流向");
+  assert.match(t, /大戶異常（法人單日買賣金額最大）：\s*台積電[\s\S]*長榮/);
+  assert.match(t, /主力資金雷達回放/);
+  assert.match(flowSection, /盤後總結/, "盤後總結整合在市場資金流向，而不是擠進資金雷達卡本體");
+  // 盤後計分板與資金摘要同屬資金區：交易情境不重複法人 KPI
+  const V = await p.evaluate(() => ({ preview: $('#lx details[data-tdbox="flow"] > summary .dh-sec-v')?.innerText || "", bars: document.querySelectorAll('#lx details[data-tdbox="flow"] > summary .dh-sec-v .td-bars > div').length, body: $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "", plan: $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || "" }));
+  assert.ok(V.bars >= 2, "近 5 日板塊長條");
+  assert.match(V.preview, /近 5 日法人累積淨流向[\s\S]*半導體[\s\S]*金融[\s\S]*散熱/);
+  assert.doesNotMatch(V.preview, /大戶異常|法人情緒|漲跌家數/, "收合摘要只呈現近 5 日輪動，不重複展開內容");
+  assert.match(V.body, /盤後總結/); assert.match(V.body, /法人情緒 64 分/); assert.match(V.body, /上漲 600 家／下跌 300 家/);
+  assert.doesNotMatch(V.plan, /盤後總結/, "法人盤後總結不混進交易情境");
+  assert.match(V.body, /大戶異常（法人單日買賣金額最大）[\s\S]*台積電[\s\S]*長榮/);
+  // 收合預覽的近 5 日輪動與展開內容的當日買賣分工；大戶異常只在展開內容
   assert.equal(await p.$$eval("#lx .dh-card.flows .mbar", L => L.length), 1, "情緒刻度");
   assert.equal(await p.$$eval("#lx", L => (L[0].innerText.match(/資金雷達・板塊輪動與資金流向/g) || []).length), 1, "資金卡只有一張");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
@@ -66,7 +73,7 @@ test("舊的「今日」：存過的設定改看動能矩陣（不改寫）、#r
   await p.reload(); await p.waitForFunction(() => typeof W !== "undefined" && typeof setLt === "function");
   assert.equal(await p.evaluate(() => W.mf.view), "bubble"); assert.equal(await p.evaluate(() => localStorage.getItem("kline:watch:mfv")), JSON.stringify("today"), "沒有改寫使用者存的值");
   await p.evaluate(() => applyRoute("radar/today")); await p.waitForFunction(() => W.lt === "today");
-  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#lx details.dh-sec[open]")].map(d => d.dataset.tdbox)), ["live", "flow", "sum", "post"], "展開盤後整理、資金雷達、盤後總結與收盤驗證");
+  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#lx details.dh-sec[open]")].map(d => d.dataset.tdbox)), ["flow", "plan"], "舊的盤後入口展開資金流向與整合後的交易情境");
   await p.evaluate(() => { setLt("money"); W.tdPh = null; }); await p.evaluate(() => { const b = document.createElement("button"); b.dataset.mv = "today"; $("#lx").append(b); b.click(); });
   await p.waitForFunction(() => W.lt === "today" && W.tdPh?.ph === "post");
   await ctx.close(); assert.deepEqual(errs, []);
