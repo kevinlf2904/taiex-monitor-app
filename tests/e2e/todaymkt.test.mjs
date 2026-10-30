@@ -146,6 +146,11 @@ test("手機首頁觸控尺寸與響應式排版回歸 (320px, 375px, 390px, 430
     assert.equal(layout.barOverflows, false, `視口 ${width}px 狀態列不溢出視窗`);
     assert.equal(layout.overlaps, false, `視口 ${width}px 狀態列左側與按鈕群不重疊`);
     assert.deepEqual(layout.btns, [["↻重新整理", true, true], ["AI 整理", true, true], ["複製文字", true, true]], `視口 ${width}px 按鈕觸控尺寸`);
+    const jumps = await p.evaluate(() => [...document.querySelectorAll("#lx .td-quicknav [data-tdjump]")].map(b => { const r = b.getBoundingClientRect(); return [b.dataset.tdjump, r.height >= 44, r.width >= 44]; }));
+    assert.deepEqual(jumps, [["flow", true, true], ["mac", true, true], ["mine", true, true], ["plan", true, true]], `視口 ${width}px 快速導覽觸控尺寸`);
+    await p.click('#lx [data-tdjump="mine"]');
+    await p.waitForFunction(() => document.querySelector('#lx details[data-tdbox="mine"]')?.open && !!document.querySelector('#lx details[data-tdbox="mine"] .dh-sec-b'));
+    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `視口 ${width}px 快速導覽沒有造成橫向溢出`);
     await ctx.close();
     assert.deepEqual(errs, []);
   }
