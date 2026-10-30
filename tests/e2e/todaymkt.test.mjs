@@ -1,4 +1,4 @@
-// 今日市場：分頁改名、#daily／#today 都能直達、固定順序的收合區塊（預設展開現在的時段）、休市預設盤前、總經不重複、自訂分頁順序不受影響、手機第一屏看得到結論
+// 今日市場：分頁改名、#daily／#today 都能直達、四個資訊區的固定順序與時段預設展開、休市預設盤前、總經不重複、自訂分頁順序不受影響、手機第一屏看得到結論
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium, serve, open, watchFrame } from "./_harness.mjs";
@@ -84,13 +84,13 @@ test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心�
   assert.deepEqual(btns.map(b => [b.t, b.h >= 44]), [["↻重新整理", true], ["AI 整理", true], ["複製文字", true]], `按鈕尺寸：${JSON.stringify(btns)}`);
   // 早報的文字結論收在「盤前推演」裡面，外層不再是一大段字
   assert.equal(await p.evaluate(() => [...document.querySelectorAll("#lx .dh-brief-summary")].filter(e => !e.closest("details[data-tdbox]")).length), 0);
-  // 每一塊外層是圖：盤中（監控時間軸＋自選熱度格）、我的重點（7 個交易日）、收盤驗證（交易時間進度）；圖在 summary 裡，收著也看得到
+  // 保留盤中監控圖、7 個交易日行事曆與盤前／盤後驗證圖；目前階段圖在區塊摘要，其他階段圖在展開內容內
   const V = await p.evaluate(() => ({ heat: document.querySelectorAll('#lx details[data-tdbox="plan"] > summary .td-heat span').length, tl: !!document.querySelector('#lx details[data-tdbox="plan"] > summary .td-tl'),
     cal: document.querySelectorAll('#lx details[data-tdbox="mine"] > summary .td-cal > span').length, post: !!document.querySelector('#lx details[data-tdbox="plan"] .td-plan-post .td-tl'), pre: !!document.querySelector('#lx details[data-tdbox="plan"] .td-plan-pre .td-sc') }));
   assert.ok(V.heat > 0 && V.tl && V.post && V.pre, JSON.stringify(V)); assert.equal(V.cal, 7, "7 個交易日");
   await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="plan"] .dh-sec-b'));
   assert.match(await p.evaluate(() => $('#lx details[data-tdbox="plan"] .td-plan-pre').innerText), /上漲|下跌|資料不足/);
-  assert.match(await p.textContent("#lx .td-market-summary"), /今日市場摘要[\\s\\S]*加權/);
+  assert.match(await p.textContent("#lx .td-market-summary"), /今日市場摘要/); assert.match(await p.textContent("#lx .td-market-summary"), /加權/);
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
