@@ -341,7 +341,7 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-ms-item { display: flex; align-items: center; min-width: 0; min-height: 40px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); font-size: 12px; overflow-wrap: anywhere; }
 .td-ms-meta { grid-column: 1 / -1; color: var(--muted); font-size: 10.5px; line-height: 1.45; overflow-wrap: anywhere; }
 .td-quicknav { display: flex; gap: 7px; min-width: 0; margin: 2px 0 8px; padding: 2px 0 5px; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin; }
-.td-jump { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 0 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.td-jump { flex: 1 1 0; min-width: 44px; min-height: 44px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; text-align: center; }
 .td-jump:hover, .td-jump:focus-visible { border-color: var(--accent); background: var(--surface-2); outline-offset: 2px; }
 .td-page .dh-sec { min-width: 0; scroll-margin-top: 14px; }
 .td-page .dh-sec > summary { min-height: 56px; padding: 10px 13px; row-gap: 4px; }
