@@ -191,7 +191,11 @@ test("Fugle 歷史資料起始日 2023-05-23：最後 chunk 包含起始日並�
 });
 test("Fugle 歷史 429 有限重試一次，成功後不呼叫 Yahoo", async () => {
   let n = 0, yahooCalls = 0;
-  const { body, fugle } = await call({ code: "t00", tf: "5", before: "2026-10-31" }, () => (++n === 1 ? fail(429) : ok(historyFixture([{ d: "2026-10-30" }])), { yahooBarsImpl: async () => { yahooCalls++; return null; } });
+  const { body, fugle } = await call(
+    { code: "t00", tf: "5", before: "2026-10-31" },
+    () => (++n === 1 ? fail(429) : ok(historyFixture([{ d: "2026-10-30" }]))),
+    { yahooBarsImpl: async () => { yahooCalls++; return null; } },
+  );
   assert.equal(fugle, 2); assert.equal(body.source, "Fugle Historical Candles"); assert.equal(yahooCalls, 0);
 });
 test("Fugle 歷史 5xx／timeout 有限重試後改用 Yahoo 價格備援，成交金額為 null", async () => {
