@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review] # draft PR（大檔上鎖用）不跑，轉成 ready for review 才跑
     paths: ["learner/**", "api/**", "scripts/**", "tests/**", ".github/workflows/**", "AGENTS.md", "CLAUDE.md", ".agent/**", ".claude/settings.json", "vercel.json", "package.json", "package-lock.json"] # 轉址設定、相依套件改了也要測
   push:
-    branches: [main]
+    branches: [main, "claude/fix-index-history-190"]
     paths: ["learner/**.js", "learner/**.html", "learner/**.css", "api/**", "scripts/**", "tests/**", ".github/workflows/**", "vercel.json", "package.json", "package-lock.json"]
   workflow_dispatch:
 permissions:
@@ -26,4 +26,7 @@ jobs:
       - run: npm i --no-save --no-audit --no-fund playwright@1.56.1
       - run: npx playwright install --with-deps chromium
       - run: for f in learner/*.js scripts/*.mjs api/*.js api/_lib/*.js; do node --check "$f" || exit 1; done
-      - run: node tests/run.mjs
+      - name: Run focused intraday mock tests
+        run: node --test tests/intraday-amount.test.mjs
+      - name: Run full test suite
+        run: node tests/run.mjs
