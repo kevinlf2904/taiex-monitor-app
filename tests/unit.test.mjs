@@ -2169,10 +2169,10 @@ test("分 K 成交量：個股的 Yahoo 量維持原本的處理（股 ÷ 1000 �
   const p = IDV.parseYahooIntraday(idvYahoo("2026-10-05", 4, k => [5000000, null, 1500, 0][k]), false);
   assert.deepEqual(p.bars.map(b => b.v), [5000, 0, 2, 0]);
 });
-test("分 K 成交量：富果指數的量缺失、null、不合法、0 或負數都是 null，有效的正數照原值保留；個股維持 num(volume) || 0", () => {
+test("分 K 成交量：富果指數的量缺失、null、不合法或負數都是 null；0（收盤集合競價沒有成交的分鐘）和正數照原值保留；個股維持 num(volume) || 0", () => {
   const row = (volume, k = 0) => ({ date: `2026-10-05T09:0${k}:00.000+08:00`, open: 10, high: 11, low: 9, close: 10.5, ...(volume === undefined ? {} : { volume }) });
   const idx = IDV.parseFugleCandles({ date: "2026-10-05", data: [row(undefined, 0), row(null, 1), row("abc", 2), row(0, 3), row(-5, 4), row(321, 5)] }, true);
-  assert.deepEqual(idx.bars.map(b => b.v), [null, null, null, null, null, 321]);
+  assert.deepEqual(idx.bars.map(b => b.v), [null, null, null, 0, null, 321]);
   const stk = IDV.parseFugleCandles({ date: "2026-10-05", data: [row(undefined, 0), row(null, 1), row("abc", 2), row(0, 3), row(7, 4)] });
   assert.deepEqual(stk.bars.map(b => b.v), [0, 0, 0, 0, 7]);
   assert.ok(idx.bars.every(b => b.o === 10 && b.h === 11 && b.l === 9 && b.c === 10.5), "價格不受影響");

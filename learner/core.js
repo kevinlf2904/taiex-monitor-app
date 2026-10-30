@@ -1975,6 +1975,8 @@ class Chart {
     this.line(I.vma, vis, X, v => volTop + volH - v / vmax * (volH - 4), col.muted, 1);
     ctx.restore();
     ctx.fillStyle = col.muted; ctx.textAlign = "left"; ctx.font = `11px ${cssVar("--font-body")}`; ctx.fillText(o.volLabel || "量（張）", L + pw + 6, volTop + 6); ctx.font = `11px ${cssVar("--font-num")}`;
+    // o.volMsg：整段都沒有可靠的量（例如指數改用 Yahoo、沒有成交金額）時，量能區留著並寫出原因，不默默藏起來
+    if (o.volMsg) { ctx.textAlign = "center"; ctx.font = `12px ${cssVar("--font-body")}`; ctx.fillText(o.volMsg, L + pw / 2, volTop + volH / 2); ctx.textAlign = "left"; }
     ctx.strokeStyle = col.line; ctx.beginPath(); ctx.moveTo(L, volTop - gap / 2); ctx.lineTo(L + pw, volTop - gap / 2); ctx.stroke();
     }
 
@@ -2139,7 +2141,8 @@ class Chart {
       `<span><b>開</b>${fmtP(k.o)}</span>`, `<span><b>高</b>${fmtP(k.h)}</span>`, `<span><b>低</b>${fmtP(k.l)}</span>`,
       `<span class="${cls}"><b>收</b>${fmtP(k.c)} ${prev ? fmtPct(ch) : ""}</span>`,
       ];
-    if (!o.noVol) parts.push(`<span><b>量</b>${o.volLabel ? Math.round(k.v) : k.v.toLocaleString()}</span>`);
+    // o.volFmt：量的顯示格式（例如指數的成交金額「1,050.8 億」）；o.volName：「量」或「金額」；來源沒給量（null／vNa）顯示 —
+    if (!o.noVol) parts.push(`<span><b>${o.volName || "量"}</b>${k.v == null || k.vNa ? "—" : o.volFmt ? o.volFmt(k.v) : o.volLabel ? Math.round(k.v) : k.v.toLocaleString()}</span>`);
     mas.forEach(m => parts.push(`<span style="color:${m.c}"><b style="color:inherit">MA${m.n}</b>${fmtP(m.a[i])}</span>`));
     (this.sigs || []).filter(g => g.i === i).forEach(g => parts.push(`<span class="${g.side === "buy" ? "up" : "down"}"><b style="color:inherit">${g.side === "buy" ? "○ 偏多" : "○ 偏空"}</b>${g.label}</span>`));
     if (o.vwap) parts.push(`<span style="color:${this.lcss("vwap", 0, "vwap")}"><b style="color:inherit">VWAP</b>${fmtP(I.vwap[i])}</span>`);

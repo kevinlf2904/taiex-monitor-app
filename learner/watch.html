@@ -1187,7 +1187,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.30-170</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.30-171</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -5301,10 +5301,12 @@ function tsData() {
   const hist = W.tsDays > 1 && W.tsHist?.code === W.sel ? W.tsHist.bars.filter(b => b.d < day) : [];
   const all = [...hist, ...j.bars.filter(b => !b.d || b.d === day).map(b => ({ ...b, d: day }))];
   const dl = [...new Set(all.map(b => b.d))].slice(-W.tsDays);
-  const days = dl.map(d => { let sv = 0, spv = 0; return { d, pts: all.filter(b => b.d === d && toMin(b.t) >= o && toMin(b.t) <= cl).map(b => { sv += b.v; spv += b.c * b.v; return { d, m: toMin(b.t), t: b.t, c: b.c, v: b.v, a: b.a ?? (sv ? spv / sv : null) }; }) }; }).filter(x => x.pts.length);
+  // 加權、櫃買的量是成交金額（億元）：畫量能柱，但不算均價（成交金額加權的指數點數沒有意義）
+  const amt = W.sel === "T00" || W.sel === "O00";
+  const days = dl.map(d => { let sv = 0, spv = 0; return { d, pts: all.filter(b => b.d === d && toMin(b.t) >= o && toMin(b.t) <= cl).map(b => { if (!amt && b.v != null) { sv += b.v; spv += b.c * b.v; } return { d, m: toMin(b.t), t: b.t, c: b.c, v: b.v ?? null, a: amt ? null : b.a ?? (sv ? spv / sv : null) }; }) }; }).filter(x => x.pts.length);
   days.forEach((x, k) => x.pts.forEach(p => (p.g = k * (cl - o) + p.m - o)));
   const pts = days.flatMap(x => x.pts);
-  return { days, pts, day, prev: j.prev ?? W.detailQ?.prev ?? pts[0].c, isIdx: !pts.some(p => p.v), o, cl, us: isUS(W.sel), cdp: W.cdp ? cdpLevels(day) : null };
+  return { days, pts, day, prev: j.prev ?? W.detailQ?.prev ?? pts[0].c, isIdx: amt || !pts.some(p => p.v), amt, amtNa: amt && !pts.some(p => p.v != null), o, cl, us: isUS(W.sel), cdp: W.cdp ? cdpLevels(day) : null };
 }
 // CDP：用前一個交易日的最高、最低、收盤算出今天的壓力與支撐
 function cdpLevels(day) {
@@ -5318,7 +5320,7 @@ function drawTs() {
   const d = tsData(), dpr = devicePixelRatio || 1, narrow = Wd < 560, isFull = !!host.closest(".chart-fullscreen"), axH = 18;
   // 全螢幕：主圖＋成交量一起塞進畫面（手機橫拿、螢幕矮時成交量跟著縮小，不會被擠到畫面外）
   const avail = isFull ? window.innerHeight - Math.min(window.innerHeight * 0.45, Math.max(0, cv.getBoundingClientRect().top)) - 8 : 0;
-  const volH = !d || d.isIdx ? 0 : isFull ? Math.max(40, Math.min(88, Math.round(avail * 0.18))) : (narrow ? 65 : 85), mainH = isFull ? Math.max(120, Math.round(avail - (volH ? volH + 8 : 0) - axH - 8)) : (narrow ? 280 : 380), H = mainH + (volH ? volH + 8 : 0) + axH + 8;
+  const volH = !d || (d.isIdx && !d.amt) ? 0 : isFull ? Math.max(40, Math.min(88, Math.round(avail * 0.18))) : (narrow ? 65 : 85), mainH = isFull ? Math.max(120, Math.round(avail - (volH ? volH + 8 : 0) - axH - 8)) : (narrow ? 280 : 380), H = mainH + (volH ? volH + 8 : 0) + axH + 8;
   cv.width = Wd * dpr; cv.height = H * dpr; cv.style.height = H + "px";
   const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, Wd, H);
   const col = k => cssVar(k), L = narrow ? 50 : 60, R = narrow ? 44 : 54, pw = Wd - L - R, top = 8;
@@ -5366,9 +5368,11 @@ function drawTs() {
     ctx.font = `11px ${col("--font-num")}`; }
   ctx.globalAlpha = 1; ctx.fillStyle = col("--muted"); ctx.beginPath(); ctx.arc(X(last.g), Y(last.c), 2.5, 0, Math.PI * 2); ctx.fill();
   if (volH) {
-    const vt = top + mainH + 8, vmax = Math.max(1, ...pts.map(p => p.v)), bw = Math.max(1, pw / total * 0.7);
-    pts.forEach((p, i) => { const h = p.v / vmax * (volH - 2); ctx.fillStyle = i && p.c < pts[i - 1].c ? col("--down") : col("--up"); ctx.globalAlpha = 0.6; ctx.fillRect(X(p.g) - bw / 2, vt + volH - h, bw, h); });
-    ctx.globalAlpha = 1; ctx.fillStyle = col("--muted"); ctx.textAlign = "left"; ctx.fillText(fmtVol(vmax), L + pw + 6, vt + 6);
+    const vt = top + mainH + 8, vs = pts.map(p => p.v).filter(v => v != null), vmax = d.amt ? Math.max(0.01, ...vs) : Math.max(1, ...vs), bw = Math.max(1, pw / total * 0.7);
+    pts.forEach((p, i) => { if (p.v == null) return; const h = p.v / vmax * (volH - 2); ctx.fillStyle = i && p.c < pts[i - 1].c ? col("--down") : col("--up"); ctx.globalAlpha = 0.6; ctx.fillRect(X(p.g) - bw / 2, vt + volH - h, bw, h); });
+    ctx.globalAlpha = 1; ctx.fillStyle = col("--muted"); ctx.textAlign = "left";
+    if (d.amtNa) { ctx.textAlign = "center"; ctx.fillText(`成交金額暫缺（${W.intra?.source || "來源"}沒有提供）`, L + pw / 2, vt + volH / 2); ctx.textAlign = "left"; }
+    else ctx.fillText(d.amt ? amtFmt(vmax) : fmtVol(vmax), L + pw + 6, vt + 6);
   }
   const hv = TS.hover != null ? pts.reduce((b, p) => (Math.abs(p.g - TS.hover) < Math.abs(b.g - TS.hover) ? p : b), pts[0]) : null, P = hv || last;
   if (hv) { ctx.strokeStyle = col("--muted"); ctx.globalAlpha = 0.8; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(X(hv.g), top); ctx.lineTo(X(hv.g), H - axH - 6); ctx.moveTo(L, Y(hv.c)); ctx.lineTo(L + pw, Y(hv.c)); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
@@ -5378,7 +5382,7 @@ function drawTs() {
     ctx.font = `500 10.5px ${col("--font-num")}`; const tw = ctx.measureText(t).width + 8, tx = Math.min(L + pw + 2, Wd - tw - 1); ctx.fillStyle = col("--accent"); ctx.fillRect(tx, yy - 9, tw, 18); ctx.fillStyle = col("--surface"); ctx.textAlign = "left"; ctx.fillText(t, tx + 4, yy); ctx.font = `11px ${col("--font-num")}`; }
   TS.geo = { L, pw, total };
   const ch = P.c / prev - 1;
-  $("#tsLeg").innerHTML = `<span><b>${d.fut ? (P.s === "night" ? "夜盤 " : "日盤 ") : ""}${days.length > 1 ? P.d.slice(5).replace("-", "/") + " " : ""}${P.t}</b></span><span class="${cls(ch)}"><b>價</b>${fp(P.c)}（${ch >= 0 ? "+" : ""}${(ch * 100).toFixed(2)}%）</span>${P.a != null && !d.isIdx ? `<span style="color:var(--s1)"><b style="color:inherit">均價</b>${fp(P.a)}</span>` : ""}${d.isIdx ? "" : `<span><b>量</b>${fmtVol(P.v)} ${d.us ? "千股" : d.fut ? "口" : "張"}</span>`}<span><b>${d.fut ? "參考價" : "昨收"}</b>${fp(prev)}</span>`;
+  $("#tsLeg").innerHTML = `<span><b>${d.fut ? (P.s === "night" ? "夜盤 " : "日盤 ") : ""}${days.length > 1 ? P.d.slice(5).replace("-", "/") + " " : ""}${P.t}</b></span><span class="${cls(ch)}"><b>價</b>${fp(P.c)}（${ch >= 0 ? "+" : ""}${(ch * 100).toFixed(2)}%）</span>${P.a != null && !d.isIdx ? `<span style="color:var(--s1)"><b style="color:inherit">均價</b>${fp(P.a)}</span>` : ""}${d.amt ? `<span><b>金額</b>${P.v == null ? "—" : amtFmt(P.v)}</span>` : d.isIdx ? "" : `<span><b>量</b>${fmtVol(P.v)} ${d.us ? "千股" : d.fut ? "口" : "張"}</span>`}<span><b>${d.fut ? "參考價" : "昨收"}</b>${fp(prev)}</span>`;
   if (d.fut) { const fo = pts[0].o, fh = Math.max(...pts.map(p => p.h)), fl = Math.min(...pts.map(p => p.l)), fv = pts.reduce((s, p) => s + (p.v || 0), 0);
     $("#tsNote").textContent = `${d.full ? `近全 ${d.tday ? d.tday.slice(5).replace("-", "/") + " " : ""}（前一晚夜盤＋日盤）・開 ${fp(fo)} 高 ${fp(fh)} 低 ${fp(fl)} 總量 ${fv.toLocaleString()} 口` : d.blocks[0]?.s === "night" ? "本盤：夜盤 15:00–05:00" : "本盤：日盤 08:45–13:45"}・${W.quotes.get("TXF")?.symbol || ""}・${W.intra.source || ""}`; return; }
   const wantDays = W.tsDays > 1 && days.length < W.tsDays ? (W.tsHist?.code === W.sel ? (W.tsHist.err ? `・前幾天載入失敗：${W.tsHist.err}` : "") : "・載入前幾天中…") : "";
@@ -5456,7 +5460,7 @@ function renderFlow() {
   const fp = v => fmtPx(v, c), noFlow = !isTW(c) ? (isIdx(c) ? "指數沒有逐筆成交" : "美股沒有提供逐筆成交") : W.off ? "需要部署到網站" : !F ? "載入中…" : !F.ok ? F.error : "";
   if (W.ftab === "ticks") {
     if (F?.ok && F.trades?.length) { box.innerHTML = `<div class="fscroll"><table class="ticks"><thead><tr><th>時間</th><th>成交價</th><th>單量（張）</th></tr></thead><tbody>${F.trades.map(t => `<tr><td>${t.t}</td><td class="${prev ? cls(t.p - prev) : ""}">${fp(t.p)}</td><td class="${t.s > 0 ? "up" : t.s < 0 ? "down" : ""}">${t.v.toLocaleString()}</td></tr>`).join("")}</tbody></table></div>`; note.textContent = `最近 ${F.trades.length} 筆・單量紅色是外盤（主動買）、綠色是內盤（主動賣）・${F.source}`; }
-    else { const B = todayBars().slice().reverse().slice(0, 120); box.innerHTML = B.length ? `<div class="fscroll"><table class="ticks"><thead><tr><th>時間</th><th>收盤</th><th>量（${isUS(c) ? "千股" : "張"}）</th></tr></thead><tbody>${B.map(b => `<tr><td>${b.t}</td><td class="${prev ? cls(b.c - prev) : ""}">${fp(b.c)}</td><td>${b.v.toLocaleString()}</td></tr>`).join("")}</tbody></table></div>` : `<p class="note" style="padding:12px">還沒有資料。</p>`; note.textContent = `每分鐘彙總${noFlow && noFlow !== "載入中…" ? `（沒有逐筆：${noFlow}）` : ""}`; }
+    else { const B = todayBars().slice().reverse().slice(0, 120); box.innerHTML = B.length ? `<div class="fscroll"><table class="ticks"><thead><tr><th>時間</th><th>收盤</th><th>${c === "T00" || c === "O00" ? "成交金額（億元）" : `量（${isUS(c) ? "千股" : "張"}）`}</th></tr></thead><tbody>${B.map(b => `<tr><td>${b.t}</td><td class="${prev ? cls(b.c - prev) : ""}">${fp(b.c)}</td><td>${b.v == null ? "—" : b.v.toLocaleString()}</td></tr>`).join("")}</tbody></table></div>` : `<p class="note" style="padding:12px">還沒有資料。</p>`; note.textContent = `每分鐘彙總${noFlow && noFlow !== "載入中…" ? `（沒有逐筆：${noFlow}）` : ""}`; }
   } else if (W.ftab === "vbp") {
     let rows = F?.ok && F.vbp?.length ? F.vbp : null, split = !!rows?.some(r => r.b != null);
     if (!rows) { const m = new Map(); todayBars().forEach(b => m.set(b.c, (m.get(b.c) || 0) + b.v)); rows = [...m].map(([p, v]) => ({ p, v })).sort((a, b) => b.p - a.p); }
@@ -5626,9 +5630,10 @@ function minuteSeries(tf) {
   // 台指期：前幾盤的 1 分 K 來自排程存檔（data/fut1m），接在目前這一盤前面一起分組
   const cur = W.intra?.bars || [], fk = cur[0] ? `${cur[0].d} ${cur[0].t}` : "9999", old = isFut(W.sel) ? (W.futOld?.bars || []).filter(b => `${b.d} ${b.t}` < fk) : [];
   for (const b of [...old, ...cur]) { const o2 = b.s === "night" ? 900 : b.s === "day" ? 525 : o, rel = (toMin(b.t) - o2 + 1440) % 1440, sl = (Math.floor(rel / tf) * tf + o2) % 1440, t = `${String(Math.floor(sl / 60)).padStart(2, "0")}:${String(sl % 60).padStart(2, "0")}`, d = b.d || W.intra.date, L = today[today.length - 1];
-    if (L && L.t === t && L.dd === d) { L.h = Math.max(L.h, b.h); L.l = Math.min(L.l, b.l); L.c = b.c; L.v += b.v; } else today.push({ dd: d, t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }); }
-  const firstToday = today[0]?.dd;
-  return [...(M.older || []).filter(b => !firstToday || b.d < firstToday).map(b => ({ d: `${b.d} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v })), ...today.map(b => ({ d: `${b.dd} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }))];
+    // 量：來源沒給（null，例如 Yahoo 的指數）就維持 null 並標 vNa，桶內有一根缺值整桶就缺值（和伺服器 aggregate 一樣），不能 null＋null 變成 0
+    if (L && L.t === t && L.dd === d) { L.h = Math.max(L.h, b.h); L.l = Math.min(L.l, b.l); L.c = b.c; L.v = L.v == null || b.v == null ? null : L.v + b.v; if (b.vNa || b.v == null) L.vNa = 1; } else today.push({ dd: d, t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v ?? null, ...(b.vNa || b.v == null ? { vNa: 1 } : {}) }); }
+  const firstToday = today[0]?.dd, na = b => (b.vNa || b.v == null ? { vNa: 1 } : {});
+  return [...(M.older || []).filter(b => !firstToday || b.d < firstToday).map(b => ({ d: `${b.d} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v ?? null, ...na(b) })), ...today.map(b => ({ d: `${b.dd} ${b.t}`, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v, ...na(b) }))];
 }
 function kSeries(k = W.k) {
   if (k === "D") return W.daily?.data || null;
@@ -5692,6 +5697,17 @@ $("#cmpForm").addEventListener("submit", e => { e.preventDefault(); addCmp($("#c
 $(".cmp").addEventListener("click", e => { const q = e.target.closest("[data-cq]"), x = e.target.closest("[data-cx]");
   if (q) addCmp(q.dataset.cq); else if (x) { W.cmp.splice(+x.dataset.cx, 1); store.set("watch:cmp", W.cmp); renderCmp(); drawK(); } });
 renderCmp();
+// 量能區的單位與顯示：加權、櫃買分 K 的量是成交金額（億元，富果才有）；個股張、美股千股、期貨口。
+// 指數分 K 整段都沒有成交金額（例如富果失敗改用 Yahoo）時不藏量能區，寫出「成交金額暫缺」和來源，價格 K 線照畫
+function amtFmt(v) { return (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(v >= 10 ? 1 : 2)) + " 億"; }
+function kVolOpts(D, minute = minuteK()) {
+  const idxAmt = minute && (W.sel === "T00" || W.sel === "O00");
+  if (idxAmt) {
+    const has = D.some(x => x.v != null && !x.vNa);
+    return { noVol: !dBar.has("vol"), volLabel: "成交金額（億元）", volName: "金額", volFmt: amtFmt, ...(has ? {} : { volMsg: `成交金額暫缺（${W.intra?.source || "來源"}沒有提供${W.intra?.date ? "・" + W.intra.date.replace(/-/g, "/") : ""}）` }) };
+  }
+  return { noVol: !dBar.has("vol") || !D.some(x => x.v), volLabel: `量（${isUS(W.sel) ? "千股" : isFut(W.sel) ? "口" : "張"}）` };
+}
 function drawK(fresh = false, shift = 0) {
   document.querySelectorAll("#kSeg [data-k]").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === W.k));
   if (W.dtab !== "tech") return;
@@ -5713,7 +5729,7 @@ function drawK(fresh = false, shift = 0) {
   const old = kChart.view;
   if (shift && old && !fresh) kChart.shiftBy(shift); // 前面多了 shift 根：畫之前先把位置（含正在拖曳的手勢）一起移過去
   Chart.keepView = !fresh;
-  try { kChart.set(D, { I, ...mainOpts(dBar), subs: [...subsFrom(dBar), ...chipSubs(D)], noVol: !dBar.has("vol") || !D.some(x => x.v), volLabel: `量（${isUS(W.sel) ? "千股" : isFut(W.sel) ? "口" : "張"}）`, fmtD: fmtKD, markers: [...sigs, ...exitMk, ...ex.markers], compare: compareOpt(), shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
+  try { kChart.set(D, { I, ...mainOpts(dBar), subs: [...subsFrom(dBar), ...chipSubs(D)], ...kVolOpts(D, minute), fmtD: fmtKD, markers: [...sigs, ...exitMk, ...ex.markers], compare: compareOpt(), shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
   finally { Chart.keepView = false; }
   const want = W.k === "M" ? (isMobile() ? 36 : 48) : isMobile() ? 60 : 100, N = D.length, w = Math.min(N, want);
   if (fresh || (shift && !old)) kChart.view = N > w ? kChart.clampView(N - w, w) : null;
