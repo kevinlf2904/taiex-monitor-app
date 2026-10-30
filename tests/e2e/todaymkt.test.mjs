@@ -58,7 +58,7 @@ test("盤中監控有進行中的警示：狀態列顯示「■ 警示 N 件」�
   await p.clock.setFixedTime(new Date("2026-10-26T10:00:00+08:00"));
   await p.evaluate(() => { const d = W.today || twDay(); W.monE = { d, E: { [d + ":SYM:2330:up"]: { id: d + ":SYM:2330:up", type: "SYM", code: "2330", dir: "up", level: 3, sev: "alert", title: "台積電 漲停", msg: "x", first: Date.now(), last: Date.now(), state: "open", snaps: [], notified: [] } } }; W.tdPh = null; setLt("today"); renderList(); });
   await p.waitForSelector("#lx .dh-status-bar [data-l2mon]");
-  assert.match(await p.textContent("#lx .dh-status-bar [data-l2mon]"), /■ 警示 1 件/); assert.match(await p.textContent('#lx details[data-tdbox="live"] summary'), /■ 警示 1 件/);
+  assert.match(await p.textContent("#lx .dh-status-bar [data-l2mon]"), /■ 警示 1 件/); assert.match(await p.textContent('#lx details[data-tdbox="plan"] summary'), /■ 警示 1 件/);
   await p.click("#lx .dh-status-bar [data-l2mon]"); await p.waitForFunction(() => W.lt === "mon");
   await p.evaluate(() => clearTimeout(W.monTimer));
   await ctx.close(); assert.deepEqual(errs, []);
