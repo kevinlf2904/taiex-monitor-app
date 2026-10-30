@@ -1513,7 +1513,12 @@ function tdMacSum() {
 function tdMacBody() {
   if (!W.gl && !W.glLoading && typeof loadGlobal === "function" && !W.off) loadGlobal().then(() => { if (W.gl && W.lt === "today") renderList(); }); // 載入中不重複觸發（loadGlobal 載入中會直接結束，重畫又呼叫它會變成無限迴圈）
   const P = tdUs(), R = tdGlRows(), U = W.bf?.us || {};
-  const usMeta = `<p class="note td-mac-meta">美股資料日期：${esc(U.date || "未提供")}・來源時間：${esc(U.sourceTime || "未提供")}（Yahoo Finance）</p>`;
+  const usStatus = ({ live: "盤中行情（供應商可能延遲 15 分鐘）", confirmed: "收盤確認", partial: "資料不完整", stale: "過期資料", holiday: "休市資料", unavailable: "無資料" })[U.dataStatus] || "狀態未提供";
+  const usUpdate = ({ scheduled: "定時更新", after_close: "盤後更新" })[U.updateMode] || "更新方式未提供";
+  const usDate = U.dataDate || U.date || "未提供";
+  const usTime = U.sourceTime || "未提供";
+  const usZone = U.tz ? `（${esc(U.tz)}）` : "";
+  const usMeta = `<p class="note td-mac-meta">美股資料日期：${esc(usDate)}・美東來源時間：${esc(usTime)}${usZone}・資料狀態：${esc(usStatus)}・更新方式：${esc(usUpdate)}・來源：${esc(U.source || "Yahoo Finance")}</p>`;
   return `${usMeta}
     ${P.length ? `<div class="bfgrid">${P.map(bfSecHtml).join("")}</div>` : `<p class="note">${W.off ? "需要部署到網站才有美股資料。" : W.bf?.busy ? "載入昨晚美股…" : "暫時沒有昨晚美股的資料。"}</p>`}
     ${R.length ? `<div class="dh-mac">${R.map(r => `<div><span class="note">${r.n}</span><b class="num">${(+r.px).toLocaleString(undefined, { maximumFractionDigits: r.c === "TWD=X" ? 3 : 2 })}</b>${r.pct != null ? `<span class="num ${cls(r.pct)}">${sgn(r.pct, 2)}%</span>` : ""}</div>`).join("")}</div>` : ""}
@@ -1697,6 +1702,17 @@ function tdMineViz(t, mine) {
 }
 // 我的持股與自選：保留舊盤後摘要中的個股排行、技術訊號與提醒，但只納入個人關注標的
 function tdMineExtras(t, hold) {
+  if (!W.sum && !W.sumBuildPending && !W.off && typeof sumBuild === "function") {
+    W.sumBuildPending = true;
+    setTimeout(() => {
+      if (W.sum || W.off || typeof sumBuild !== "function") { W.sumBuildPending = false; return; }
+      sumBuild().catch(e => {
+        if (W.sum) W.sum.busy = false;
+        console.warn("today mine signals", e);
+        if (W.lt === "today") renderList();
+      }).finally(() => { W.sumBuildPending = false; });
+    }, 0);
+  }
   const codes = [...new Set([...hold, ...myCodes()])], mine = new Set(codes), held = new Set(hold);
   const quotes = codes.map(c => ({ c, q: W.quotes?.get?.(c) })).filter(x => tdOk(x.q?.chgPct));
   const up = quotes.slice().sort((a, b) => b.q.chgPct - a.q.chgPct).slice(0, 5);
@@ -1815,7 +1831,7 @@ function todayPage() {
   const flowBody = () => {
     const summary = flowAfter
       ? M && typeof sumFlowHtml === "function"
-        ? sumFlowHtml(M)
+        ? sumFlowHtml(M, fundsAligned && tdOk(tq?.chgPct) ? tq.chgPct : null)
         : '<div class="dh-card td-flow-summary"><h4>盤後總結</h4><p class="note">法人資料尚未取得，暫不產生盤後結論。</p></div>'
       : "";
     return summary + flowsDecisionHtml(M);

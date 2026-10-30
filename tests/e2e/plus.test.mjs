@@ -28,7 +28,7 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   const today = await p.evaluate(() => twDay());
   await p.clock.setFixedTime(new Date(today + "T08:00:00+08:00"));
   await fund(p);
-  await p.route("**/api/usmarket", r => J(r, { ok: true, date: "2026-10-21", indices: [{ code: "^DJI", name: "道瓊工業", price: 42100, chgPct: 0.8 }, { code: "^SOX", name: "費城半導體", price: 6100, chgPct: -1.2 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 210, chgPct: 1.5 }], macro: [{ code: "^TNX", name: "10 年期公債殖利率", price: 4.2, chgPct: 0.3 }], sectors: [] }));
+  await p.route("**/api/usmarket", r => J(r, { ok: true, date: "2026-10-21", dataDate: "2026-10-21", sourceTime: "2026-10-21 16:00", tz: "EDT", source: "Yahoo Finance", dataStatus: "stale", updateMode: "after_close", indices: [{ code: "^DJI", name: "道瓊工業", price: 42100, chgPct: 0.8 }, { code: "^SOX", name: "費城半導體", price: 6100, chgPct: -1.2 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 210, chgPct: 1.5 }], macro: [{ code: "^TNX", name: "10 年期公債殖利率", price: 4.2, chgPct: 0.3 }], sectors: [] }));
   await p.route(/\/api\/futures\?bars=0$/, r => J(r, { ok: true, quote: { price: 23000, chg: -50, chgPct: -0.22, session: "night" }, night: { price: 23000, chg: -50, chgPct: -0.22, time: "05:00" }, day: null }));
   await p.route("**/api/news**", r => J(r, { ok: true, items: [{ title: "台積電先進封裝擴產", source: "測試報", link: "https://example.com/a", at: Date.now() - 3600e3 }] }));
   await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 500 } }; showList?.(); W.tdPh = { d: twDay(), ph: "pre" }; setLt("today"); }); // 早報在今日市場的「國際市場與總經」＋「交易情境」（盤前階段）
@@ -49,7 +49,7 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   const planBody = await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || "");
   assert.doesNotMatch(flowBody, /盤後總結/, "盤前階段不提前顯示盤後法人摘要");
   assert.match(mineBody, /自選／庫存漲幅前 5[\s\S]*自選／庫存跌幅前 5/, "持倉與自選排行歸入個人區");
-  assert.match(await p.evaluate(() => $('#lx details[data-tdbox="mac"] .dh-sec-b')?.innerText || ""), /美股資料日期[\s\S]*來源時間/, "國際行情就近顯示日期與來源時間");
+  assert.match(await p.evaluate(() => $('#lx details[data-tdbox="mac"] .dh-sec-b')?.innerText || ""), /美股資料日期[\s\S]*美東來源時間[\s\S]*資料狀態：過期資料[\s\S]*更新方式：盤後更新[\s\S]*來源：Yahoo Finance/, "國際行情就近顯示日期、來源時間、狀態與更新方式");
   assert.doesNotMatch(planBody, /自選漲幅前 5|盤後總結/, "交易情境只呈現盤前／盤中／盤後時間序列");
   assert.equal(await p.$$eval("#lx [data-tx='tdai']", L => L.length), 1, "AI 整理只有一個");
   await p.click('[data-tx="tdai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));

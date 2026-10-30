@@ -294,9 +294,9 @@ function flowWaitNote() {
 }
 // 盤後總結（原本在資金雷達「今日」）：用法人資金資料填固定句型；今日市場「盤後總結」那一塊點開後的文字（外層的圖是 brief.js 的 tdSumViz）。
 // 分享成圖片的主按鈕在今日市場最上面的工具列，這裡是其他分享方式
-function sumFlowHtml(M) {
+function sumFlowHtml(M, marketPct = null) {
   let sum = "";
-  try { sum = flowSummary(M, typeof flowMood === "function" ? flowMood(M) : null, W.quotes.get("T00")?.chgPct); } catch { sum = "法人資金資料計算中…"; }
+  try { sum = flowSummary(M, typeof flowMood === "function" ? flowMood(M) : null, typeof marketPct === "number" && Number.isFinite(marketPct) ? marketPct : null); } catch { sum = "法人資金資料計算中…"; }
   const dStr = (M.dates && M.dates[M.T - 1]) ? M.dates[M.T - 1].slice(5).replace("-", "/") : "";
   return `<h4>盤後總結 ${dStr ? `<span class="note">${dStr}</span>` : ""}</h4><p class="msum">${esc(sum)}</p>
       <p class="note">分享今日盤面：圖片在最上面工具列的 ${typeof ico === "function" ? ico("share") : "分享"}；文字可以傳到</p><div class="mshares"><button data-mshare="line">LINE</button><button data-mshare="threads">Threads</button><button data-mshare="copy">複製圖</button></div>`;
