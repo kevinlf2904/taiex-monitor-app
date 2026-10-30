@@ -10,7 +10,6 @@ import { session, todayTaipei, misFetch, parseMis } from "./quote.js";
 import { closeToday, isValidIsoDate } from "./daily.js";
 import { holWarm, holState } from "./calendar.js";
 import { getJSON as _getJ, num as n } from "./_tw.js";
-import { sourceFresh, SRC_LAG } from "./_fresh.js";
 const getJSON = (url, headers = {}, ms = 12000) => _getJ(url, headers, ms);
 
 // 富果快照格式：{ data: [{ symbol, name, closePrice, change, changePercent, tradeVolume, tradeValue, openPrice, highPrice, lowPrice, lastUpdated }, ...] }
@@ -221,17 +220,12 @@ export async function misAll(base, fetcher = misFetch) {
   await Promise.all([worker(), worker(), worker(), worker()]);
   const by = new Map(base.map(r => [r.code, r]));
   let latestTime = null;
-  const latestByDate = {}; // 每個交易日各自最新的來源時間：沒成交的股票會帶前一天的日期與時間，不能拿來當今天的更新時間
   for (const q of out) {
-    if (q?.time && /^\d{2}:\d{2}:\d{2}$/.test(q.time)) {
-      if (!latestTime || q.time > latestTime) latestTime = q.time;
-      if (q.date && (!latestByDate[q.date] || q.time > latestByDate[q.date])) latestByDate[q.date] = q.time;
-    }
+    if (q?.time && /^\d{2}:\d{2}:\d{2}$/.test(q.time) && (!latestTime || q.time > latestTime)) latestTime = q.time;
   }
   const rows = out.filter(q => q.code && q.price != null && q.prev).map(q => { const o = by.get(q.code) || {};
     return { code: q.code, name: q.name || o.name || "", market: o.market || q.market, price: q.price, chg: q.chg, chgPct: q.chgPct, vol: q.vol, value: q.vol != null ? +((q.vol * 1000 * q.price) / 1e8).toFixed(2) : null, o: q.open, h: q.high, l: q.low, date: q.date }; });
   Object.defineProperty(rows, "latestTime", { value: latestTime, enumerable: false });
-  Object.defineProperty(rows, "latestByDate", { value: latestByDate, enumerable: false });
   return rows;
 }
 
@@ -337,14 +331,11 @@ export async function fetchRecentClose(arg1 = todayTaipei(), arg2 = 7) {
 }
 
 // 依時效性與資料品質嚴格映射 dataStatus，杜絕「不完整或日期未驗證卻宣告 live / confirmed」之矛盾
-// 盤中要宣告 live，還要有來源自己的更新時間證明資料是新的（sourceState，見 _fresh.js）：
-// 沒給或來源沒時間 → delayed；來源時間落後超過門檻 → delayed；未來時間或格式錯 → degraded。完整度不等於新鮮度，兩個都要過
-export function deriveDataStatus({ isLiveSession, isToday, completeness, dateConsistent, dateVerified, sourceState = "missing" }) {
+export function deriveDataStatus({ isLiveSession, isToday, completeness, dateConsistent, dateVerified }) {
   const isHealthy = completeness === "complete" && dateConsistent === true && dateVerified === true;
   if (isLiveSession) {
-    if (!isHealthy) return (completeness === "degraded" || dateConsistent === false || dateVerified === false) ? "degraded" : "partial";
-    if (sourceState === "fresh") return "live";
-    return sourceState === "future" || sourceState === "invalid" ? "degraded" : "delayed";
+    if (isHealthy) return "live";
+    return (completeness === "degraded" || dateConsistent === false || dateVerified === false) ? "degraded" : "partial";
   }
   if (isToday) {
     if (isHealthy) return "confirmed";
@@ -414,24 +405,20 @@ export async function marketRows(opts = {}) {
         for (const raw of [...(t?.data || []), ...(o?.data || [])]) {
           const u = Number(raw?.lastUpdated);
           if (u > 0) {
-            const iso = new Date(Math.floor(u / 1000) + 8 * 3600e3).toISOString(), tm = iso.slice(11, 19);
-            if (iso.slice(0, 10) === date && (!fTime || tm > fTime)) fTime = tm; // 只看這份行情那一天的更新時間
+            const tm = new Date(Math.floor(u / 1000) + 8 * 3600e3).toISOString().slice(11, 19);
+            if (!fTime || tm > fTime) fTime = tm;
           }
         }
-        const fresh = sourceFresh({ dataDate: date, sourceTime: fTime, now, maxLagMs: SRC_LAG.market });
         const dataStatus = deriveDataStatus({
           isLiveSession,
           isToday: date === today,
           completeness: validation.completeness,
           dateConsistent: validation.dateConsistent,
-          dateVerified: validation.dateVerified,
-          sourceState: fresh.state
+          dateVerified: validation.dateVerified
         });
         return done({
           rows: validation.validRows,
           live: isLiveSession,
-          sourceAgeSec: fresh.ageMs != null ? Math.round(fresh.ageMs / 1000) : null,
-          sourceState: fresh.state,
           date,
           time: fTime,
           source: "富果行情快照（上市、上櫃）",
@@ -479,23 +466,19 @@ export async function marketRows(opts = {}) {
 
       if (validation.totalCount >= 500 && validation.primaryDate === today) {
         const isLiveSession = sess === "open";
-        const fresh = sourceFresh({ dataDate: today, sourceTime: rows.latestByDate?.[today] || null, now, maxLagMs: SRC_LAG.market });
         const dataStatus = deriveDataStatus({
           isLiveSession,
           isToday: true,
           completeness: validation.completeness,
           dateConsistent: validation.dateConsistent,
-          dateVerified: validation.dateVerified,
-          sourceState: fresh.state
+          dateVerified: validation.dateVerified
         });
         return done({
           rows: validation.validRows,
           coverage: validation.coverage,
           live: isLiveSession,
-          sourceAgeSec: fresh.ageMs != null ? Math.round(fresh.ageMs / 1000) : null,
-          sourceState: fresh.state,
           date: today,
-          time: rows.latestByDate?.[today] || null,
+          time: rows.latestTime || null,
           source: sess === "open" ? "證交所 MIS 即時行情（上市、上櫃）" : "證交所 MIS（今天收盤）",
           note: null,
           dataStatus,

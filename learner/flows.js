@@ -3,12 +3,10 @@
    - 板塊：產業地圖的台股題材（industry.js）＋證交所／櫃買中心的產業別。一檔股票可能同時屬於好幾個題材，每個題材都會算到它。
    - 四象限：橫軸是近 5 日淨流入，縱軸是「加速度」＝ 近 5 日 − 前 5 日。
        強勢突破區：淨流入且加速；高檔調節區：淨流入但放緩；主力吸籌區：淨流出但放緩（賣壓減輕、有人承接）；量縮整理區：淨流出且加速。
-   days：[{ date, rows: [[代號, 名稱, 收盤, 漲跌%, 外資張, 投信張, 自營商張, 成交張], ...] }]，由舊到新。
-   法人或成交張數拿不到時是 null（/api/daily 不把缺值寫成 0）：個股那天的金額也是 null，板塊加總只加有資料的股票，不當成買賣超 0。 */
+   days：[{ date, rows: [[代號, 名稱, 收盤, 漲跌%, 外資張, 投信張, 自營商張, 成交張], ...] }]，由舊到新。 */
 const FLOW_Q = { up: ["強勢突破區", "淨流入且加速", "#e8603c"], rot: ["高檔調節區", "淨流入但放緩", "#e2b23a"], watch: ["主力吸籌區", "淨流出但放緩", "#9aa3ad"], down: ["量縮整理區", "淨流出且加速", "#22a87a"] };
 const flowQuad = (net5, accel) => (net5 > 0 ? (accel > 0 ? "up" : "rot") : accel > 0 ? "watch" : "down");
-const amtOf = (lots, px) => (lots == null || px == null ? null : (lots * px) / 1e5); // 張 × 收盤價 → 億元；沒有資料回 null
-const sumN = (...v) => (v.every(x => x == null) ? null : v.reduce((a, x) => a + (x ?? 0), 0)); // 全部缺值才是 null，部分缺值只加有的
+const amtOf = (lots, px) => (lots * px) / 1e5; // 張 × 收盤價 → 億元
 
 // 板塊清單：題材（產業地圖台股）＋產業別（ind: { 代號: 產業別 }）
 function flowSectors(ind) {
@@ -21,10 +19,10 @@ function flowSectors(ind) {
 function flowModel(days, sectors) {
   const T = days.length, stocks = new Map();
   days.forEach((d, t) => { for (const [c, nm, px, pct, f, tr, dl, v] of d.rows) {
-    let s = stocks.get(c); if (!s) stocks.set(c, (s = { code: c, name: nm, px: Array(T).fill(null), pct: Array(T).fill(null), amt: Array(T).fill(null), f: Array(T).fill(null), tr: Array(T).fill(null), lots: Array(T).fill(null), v: Array(T).fill(null) }));
-    const L = sumN(f, tr, dl); s.name = nm || s.name; s.px[t] = px; s.pct[t] = pct; s.amt[t] = amtOf(L, px); s.f[t] = amtOf(f, px); s.tr[t] = amtOf(tr, px); s.lots[t] = L; s.v[t] = v ?? null; } });
+    let s = stocks.get(c); if (!s) stocks.set(c, (s = { code: c, name: nm, px: Array(T).fill(null), pct: Array(T).fill(null), amt: Array(T).fill(0), f: Array(T).fill(0), tr: Array(T).fill(0), lots: Array(T).fill(0), v: Array(T).fill(0) }));
+    s.name = nm || s.name; s.px[t] = px; s.pct[t] = pct; s.amt[t] = amtOf(f + tr + dl, px); s.f[t] = amtOf(f, px); s.tr[t] = amtOf(tr, px); s.lots[t] = f + tr + dl; s.v[t] = v || 0; } });
   const secs = sectors.map(S => { const mem = S.codes.map(c => stocks.get(c)).filter(Boolean); if (!mem.length) return null;
-    const sum = k => Array.from({ length: T }, (_, t) => mem.reduce((a, s) => a + (s[k][t] ?? 0), 0)); // 缺值的股票不計入
+    const sum = k => Array.from({ length: T }, (_, t) => mem.reduce((a, s) => a + s[k][t], 0));
     const pct = Array.from({ length: T }, (_, t) => { const v = mem.map(s => s.pct[t]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; });
     return { ...S, mem, net: sum("amt"), f: sum("f"), tr: sum("tr"), pct }; }).filter(Boolean);
   return { dates: days.map(d => d.date), T, stocks, secs };
@@ -46,7 +44,7 @@ function flowStocks(M, t = M.T - 1) {
   const out = [];
   for (const s of M.stocks.values()) { if (s.px[t] == null) continue;
     const a1 = s.amt[t], prior = [1, 2, 3, 4].map(k => Math.abs(s.amt[t - k] || 0)), avg = prior.reduce((a, b) => a + b, 0) / 4;
-    out.push({ code: s.code, name: s.name, px: s.px[t], pct1: s.pct[t], a1, a5: winSum(s.amt, t, 5), f1: s.f[t], tr1: s.tr[t], pct5: winPct(s.pct, t, 5), mult: a1 != null && avg > 0.05 ? Math.abs(a1) / avg : null, v: s.v[t] }); }
+    out.push({ code: s.code, name: s.name, px: s.px[t], pct1: s.pct[t], a1, a5: winSum(s.amt, t, 5), f1: s.f[t], tr1: s.tr[t], pct5: winPct(s.pct, t, 5), mult: avg > 0.05 ? Math.abs(a1) / avg : null, v: s.v[t] }); }
   return out;
 }
 // 今日情緒（0 恐慌 ～ 100 樂觀）：上漲家數比、平均漲跌、漲跌停、法人淨買超，各換成 −1～1 再平均
@@ -54,12 +52,12 @@ function flowMood(M, t = M.T - 1) {
   const st = [...M.stocks.values()].filter(s => /^\d{4}$/.test(s.code) && s.pct[t] != null);
   if (!st.length) return null;
   const up = st.filter(s => s.pct[t] > 0).length, dn = st.filter(s => s.pct[t] < 0).length, lu = st.filter(s => s.pct[t] >= 9.5).length, ld = st.filter(s => s.pct[t] <= -9.5).length;
-  const avg = st.reduce((a, s) => a + s.pct[t], 0) / st.length, net = st.reduce((a, s) => a + (s.amt[t] ?? 0), 0); // 法人缺值的股票不計入淨買超
+  const avg = st.reduce((a, s) => a + s.pct[t], 0) / st.length, net = st.reduce((a, s) => a + s.amt[t], 0);
   const parts = [["上漲家數比", (up - dn) / Math.max(1, up + dn)], ["平均漲跌", Math.tanh(avg / 1.5)], ["漲跌停", (lu - ld) / (lu + ld + 5)], ["法人淨買超", Math.tanh(net / 300)]];
   const score = Math.round(50 + 50 * parts.reduce((a, p) => a + p[1], 0) / parts.length);
   return { score, label: score < 20 ? "極度恐慌" : score < 40 ? "偏恐慌" : score <= 60 ? "中性" : score <= 80 ? "偏樂觀" : "極度樂觀", up, dn, lu, ld, avg, net, parts };
 }
-const flowFmt = v => (v == null || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)}億`);
+const flowFmt = v => `${v >= 0 ? "+" : ""}${Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)}億`;
 // 盤後總結：把數字填進固定句型（不用 AI，不會亂編）
 function flowSummary(M, mood, mkPct) {
   const A = flowAt(M), buy = A.filter(x => x.net1 > 0).sort((a, b) => b.net1 - a.net1).slice(0, 3), sell = A.filter(x => x.net1 < 0).sort((a, b) => a.net1 - b.net1).slice(0, 3);

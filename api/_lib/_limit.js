@@ -7,8 +7,7 @@ import { createHash } from "node:crypto";
 import { kv, kvOn, incrTtl } from "./sync.js";
 
 // [每 IP 每小時, 全站每天]；claude-fb＝Gemini 失敗改問 Claude（AI_CLAUDE_FALLBACK=1 才會用到）另外算一份全站上限
-// podcast-file＝查上傳音檔處理好了沒（GET，每 3 秒輪詢、最多 3 分鐘，不花 AI 費用但會打 Gemini Files API）
-export const AI_LIMITS = { chat: [40, 1500], "chart-read": [10, 300], import: [10, 300], podcast: [6, 150], confai: [10, 200], "claude-fb": [5, 60], "podcast-file": [240, 20000] };
+export const AI_LIMITS = { chat: [40, 1500], "chart-read": [10, 300], import: [10, 300], podcast: [6, 150], confai: [10, 200], "claude-fb": [5, 60] };
 // 網站上一次請求最多打幾次 Gemini（模型忙線時換備用模型重試）：每一次都算錢，所以有上限；排程不受這個限制
 export const WEB_TRIES = 3;
 // Gemini 失敗時要不要改問 Claude（付費、比較貴）：預設不要，設 AI_CLAUDE_FALLBACK=1 才開，而且另外有全站每天上限（claude-fb）

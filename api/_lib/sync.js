@@ -160,8 +160,7 @@ export default async function handler(req, res) {
   const hasKv = !!(KV_URL() && KV_TOKEN()), hasTg = !!TG();
   if (op === "cfg") {
     if (hasTg && !botName) { try { botName = (await tg("getMe")).username; } catch {} }
-    // limiter：AI 限流是全站共用（KV）還是每個執行個體各自計算（沒有 KV，_limit.js 退回記憶體保守上限，不能當成全站統一配額）；只回狀態，不回任何設定值
-    return res.status(200).json({ ok: true, kv: hasKv, tg: hasTg && hasKv, bot: botName, limiter: hasKv ? "shared" : "per_instance" });
+    return res.status(200).json({ ok: true, kv: hasKv, tg: hasTg && hasKv, bot: botName });
   }
   if (op === "mon") { // 伺服器盤中巡檢的事件（公開的行情事件，不含任何使用者資料）
     const date = String(q.date || ""); if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ ok: false, error: "日期格式不對" });
@@ -172,8 +171,7 @@ export default async function handler(req, res) {
     catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "雲端儲存暫時連不到", "sync") }); }
   }
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "請用 POST" });
-  // reason：not_configured＝伺服器沒設定（要管理者到 Vercel 設定）；unavailable＝有設定但暫時連不到（稍後重試會恢復）
-  if (!hasKv) return res.status(200).json({ ok: false, reason: "not_configured", error: "伺服器還沒設定雲端儲存（Upstash Redis），目前只能用匯出／匯入備份檔。" });
+  if (!hasKv) return res.status(200).json({ ok: false, error: "伺服器還沒設定雲端儲存（Upstash Redis），目前只能用匯出／匯入備份檔。" });
   if (op === "waitlist") {
     const w = waitlistEntry(b.email, b.plan); if (!w) return res.status(400).json({ ok: false, error: "Email 格式不對" });
     try { const rk = `wl:ip:${hashId(ipOf(req)).slice(0, 16)}`, n = await incrTtl(rk, 3600);
@@ -228,7 +226,7 @@ export default async function handler(req, res) {
       const rk = `tgb:ip:${ipHash}:${hr}`, n = await incrTtl(rk, 3600);
       if (n > 10) return res.status(429).json({ ok: false, error: "綁定嘗試太頻繁了，請稍後再試" });
 
-      if (!hasTg) return res.status(200).json({ ok: false, reason: "tg_not_configured", error: "伺服器還沒設定 Telegram 推播" });
+      if (!hasTg) return res.status(200).json({ ok: false, error: "伺服器還沒設定 TELEGRAM_BOT_TOKEN" });
       const tok = bindTok(h), ups = await tg("getUpdates", { limit: 100, allowed_updates: ["message"] });
       const m = [...ups].reverse().find(u => String(u.message?.text || "").trim() === `/start ${tok}`);
       if (!m) return res.status(200).json({ ok: false, error: "還沒收到綁定訊息：請先點連結開啟機器人並按「開始（Start）」，再回來按完成綁定。" });
@@ -242,7 +240,6 @@ export default async function handler(req, res) {
       const tenMin = Math.floor(Date.now() / 600e3);
       const rk = `tgt:h:${h.slice(0, 16)}:${tenMin}`, n = await incrTtl(rk, 600);
       if (n > 3) return res.status(429).json({ ok: false, error: "測試訊息發送太頻繁，請稍後再試" });
-      if (!hasTg) return res.status(200).json({ ok: false, reason: "tg_not_configured", error: "伺服器還沒設定 Telegram 推播" }); // 沒設定就明說，不要回「暫時連不到」
 
       const chat = await kv("GET", `tg:${h}`); if (!chat) return res.status(200).json({ ok: false, error: "還沒綁定 Telegram" });
       await tg("sendMessage", { chat_id: chat, text: "🔔 測試通知：K線看盤的提醒會像這樣送到這裡。" });
@@ -258,6 +255,6 @@ export default async function handler(req, res) {
     }
     return res.status(400).json({ ok: false, error: "不認得的 op" });
   } catch (e) {
-    return res.status(200).json({ ok: false, reason: "unavailable", error: userMsg(e, "雲端儲存或 Telegram 暫時連不到，請稍後再試", "sync") });
+    return res.status(200).json({ ok: false, error: userMsg(e, "雲端儲存或 Telegram 暫時連不到，請稍後再試", "sync") });
   }
 }

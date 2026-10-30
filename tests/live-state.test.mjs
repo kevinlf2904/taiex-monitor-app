@@ -63,8 +63,7 @@ test("Scenario 2: 盤中 MIS 成功回傳當日即時 (10:30 Session: open, date
       z: "100",
       y: "99",
       v: "1000",
-      d: "20261028",
-      t: "10:29:58" // MIS 一定會帶最後成交時間 t
+      d: "20261028"
     };
   });
 
@@ -100,8 +99,7 @@ test("Scenario 3: prevDate === today 時仍可正常執行 MIS 取得當日即�
       z: "120",
       y: "115",
       v: "500",
-      d: "20261028",
-      t: "10:59:50" // MIS 一定會帶最後成交時間 t
+      d: "20261028"
     }));
   };
 
@@ -784,8 +782,7 @@ test("Scenario 34: [P1-2 驗證] marketRows() 各來源路徑完整保留 dateCo
       z: "100",
       y: "99",
       v: "1000",
-      d: "20261028",
-      t: "09:59:55" // MIS 一定會帶最後成交時間 t
+      d: "20261028"
     };
   });
 
@@ -1309,132 +1306,4 @@ test("部分成功（稽核 F-04／F-05）：/api/market 列出抓失敗的附�
     const d3 = mockRes(); await dailyMod.default({ query: { date: "20261004" } }, d3);
     assert.equal(d3.body.empty, true); assert.equal(d3.body.pending, undefined); assert.match(d3.headers["Cache-Control"], /2592000/);
   } finally { globalThis.fetch = realFetch; }
-});
-
-// ==========================================
-// P1-01：行情新鮮度要看來源時間（sourceTime），不是伺服器或瀏覽器收到的時間
-// ==========================================
-import { sourceAt, sourceFresh, SRC_LAG } from "../api/_lib/_fresh.js";
-import { deriveDataStatus } from "../api/_lib/_live.js";
-import vm from "node:vm";
-import fs from "node:fs";
-
-// 前端 core.js 的同一套規則（twSourceFresh、evalDataStatus）載進沙盒
-const coreCtx = (() => { const c = { console, Math, Date, JSON, Map, Set, Array, Object, Number, String, isFinite, parseFloat, parseInt, RegExp, Error, Symbol, Intl, globalThis: null, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, document: { addEventListener() {}, querySelectorAll: () => [], querySelector: () => null, getElementById: () => null, documentElement: { classList: { toggle() {}, add() {}, remove() {} }, dataset: {}, style: {} } }, addEventListener() {}, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, matchMedia: () => ({ matches: false, addEventListener() {} }), navigator: {}, location: { search: "", hash: "", href: "" } };
-  c.globalThis = c; c.window = c; vm.createContext(c); vm.runInContext(fs.readFileSync(new URL("../learner/core.js", import.meta.url), "utf8"), c); return c; })();
-const T = iso => new Date(iso);
-
-test("P1-01 sourceAt：台北時間與 UTC 換算、跨午夜、無效日期時間", () => {
-  assert.equal(sourceAt("2026-10-28", "10:30:00"), Date.parse("2026-10-28T02:30:00Z"), "台北 10:30 = UTC 02:30");
-  assert.equal(sourceAt("2026-10-28", "00:00:05"), Date.parse("2026-10-27T16:00:05Z"), "台北凌晨是 UTC 前一天");
-  assert.equal(sourceAt("2026-10-28", "10:30"), Date.parse("2026-10-28T02:30:00Z"), "可省略秒");
-  for (const [d, t] of [["2026-02-30", "10:00:00"], ["2026-10-28", "25:00:00"], ["2026-10-28", "10:61:00"], ["2026-10-28", "abc"], ["20261028", "10:00:00"], ["2026-10-28", "2026-10-28T10:00:00Z"]]) assert.equal(sourceAt(d, t), null, `${d} ${t}`);
-});
-
-test("P1-01 sourceFresh：最新、過舊、缺時間、無效、未來、跨午夜；前後端結果一致", () => {
-  const now = T("2026-10-28T10:30:05+08:00");
-  const cases = [
-    [{ dataDate: "2026-10-28", sourceTime: "10:30:00", maxLagMs: SRC_LAG.market }, "fresh"],
-    [{ dataDate: "2026-10-28", sourceTime: "10:15:00", maxLagMs: SRC_LAG.market }, "old"],
-    [{ dataDate: "2026-10-27", sourceTime: "13:30:00", maxLagMs: SRC_LAG.market }, "old"], // 前一交易日
-    [{ dataDate: "2026-10-28", sourceTime: null, maxLagMs: SRC_LAG.market }, "missing"],
-    [{ dataDate: null, sourceTime: "10:30:00", maxLagMs: SRC_LAG.market }, "missing"],
-    [{ dataDate: "2026-10-28", sourceTime: "99:00:00", maxLagMs: SRC_LAG.market }, "invalid"],
-    [{ dataDate: "2026-10-28", sourceTime: "10:40:00", maxLagMs: SRC_LAG.market }, "future"],
-    [{ dataDate: "2026-10-28", sourceTime: "10:30:30", maxLagMs: SRC_LAG.market }, "fresh"], // 時鐘差 25 秒內不算未來
-    [{ dataDate: "2026-10-28", sourceTime: "09:00:00", maxLagMs: SRC_LAG.quote }, "fresh"], // 個股是最後成交時間，不判斷落後
-  ];
-  for (const [inp, want] of cases) {
-    assert.equal(sourceFresh({ ...inp, now }).state, want, JSON.stringify(inp));
-    assert.equal(coreCtx.twSourceFresh({ ...inp, now }).state, want, "前端 twSourceFresh 結果要一樣：" + JSON.stringify(inp));
-  }
-  // 跨午夜：23:59:50 的資料在隔天 00:00:05 只落後 15 秒
-  assert.equal(sourceFresh({ dataDate: "2026-10-28", sourceTime: "23:59:50", now: T("2026-10-29T00:00:05+08:00"), maxLagMs: 60e3 }).state, "fresh");
-  assert.equal(sourceFresh({ dataDate: "2026-10-28", sourceTime: "23:59:50", now: T("2026-10-29T00:10:00+08:00"), maxLagMs: 60e3 }).state, "old");
-  assert.deepEqual(JSON.parse(vm.runInContext("JSON.stringify(TW_SRC_LAG)", coreCtx)), SRC_LAG, "前後端的延遲門檻一樣");
-});
-
-test("P1-01 deriveDataStatus：盤中要有新的來源時間才是 live；盤後確認不會變成即時", () => {
-  const healthy = { completeness: "complete", dateConsistent: true, dateVerified: true };
-  assert.equal(deriveDataStatus({ isLiveSession: true, isToday: true, ...healthy, sourceState: "fresh" }), "live");
-  assert.equal(deriveDataStatus({ isLiveSession: true, isToday: true, ...healthy, sourceState: "old" }), "delayed", "日期是今天但來源時間過舊");
-  assert.equal(deriveDataStatus({ isLiveSession: true, isToday: true, ...healthy, sourceState: "missing" }), "delayed", "沒有來源時間不能假裝即時");
-  assert.equal(deriveDataStatus({ isLiveSession: true, isToday: true, ...healthy }), "delayed", "呼叫端沒給來源時間證據＝沒有證據");
-  assert.equal(deriveDataStatus({ isLiveSession: true, isToday: true, ...healthy, sourceState: "future" }), "degraded");
-  assert.equal(deriveDataStatus({ isLiveSession: true, isToday: true, ...healthy, sourceState: "invalid" }), "degraded");
-  assert.equal(deriveDataStatus({ isLiveSession: true, isToday: true, completeness: "partial", dateConsistent: true, dateVerified: true, sourceState: "fresh" }), "partial", "新鮮但不完整仍然不是 live");
-  assert.equal(deriveDataStatus({ isLiveSession: false, isToday: true, ...healthy, sourceState: "fresh" }), "confirmed", "盤後是收盤確認，不是即時");
-  assert.equal(deriveDataStatus({ isLiveSession: false, isToday: false, ...healthy, sourceState: "fresh" }), "delayed");
-});
-
-// 盤中 MIS：來源時間 t 決定是不是 live
-const misBase = date => { const b = []; for (let i = 1000; i < 2000; i++) b.push({ code: String(i), name: `上市${i}`, market: "上市", price: 100, vol: 10, date }); for (let i = 3000; i < 3800; i++) b.push({ code: String(i), name: `上櫃${i}`, market: "上櫃", price: 50, vol: 10, date }); return b; };
-const misMock = (t, d = "20261028", f = () => ({})) => async chs => chs.map(ch => { const code = ch.split("_")[1].split(".")[0]; return { c: code, n: `名${code}`, ex: ch.startsWith("tse") ? "tse" : "otc", z: "100", y: "99", v: "1000", d, ...(t ? { t } : {}), ...f(code) }; });
-test("P1-01 marketRows（MIS 盤中）：來源時間新→live；過舊、缺時間→delayed；未來時間→degraded", async () => {
-  const now = T("2026-10-28T10:30:05+08:00"), today = "2026-10-28", fetcher = async () => misBase(today);
-  const fresh = await marketRows({ now, today, fetcher, misFetcher: misMock("10:30:00") });
-  assert.deepEqual([fresh.live, fresh.dataStatus, fresh.sourceTime, fresh.sourceState, fresh.sourceAgeSec], [true, "live", "10:30:00", "fresh", 5]);
-  const old = await marketRows({ now, today, fetcher, misFetcher: misMock("10:10:00") });
-  assert.equal(old.dataStatus, "delayed", "當日但 20 分鐘沒更新"); assert.equal(old.sourceState, "old");
-  const none = await marketRows({ now, today, fetcher, misFetcher: misMock(null) });
-  assert.equal(none.dataStatus, "delayed", "來源沒有時間"); assert.equal(none.sourceState, "missing");
-  const fut = await marketRows({ now, today, fetcher, misFetcher: misMock("11:30:00") });
-  assert.equal(fut.dataStatus, "degraded", "未來時間"); assert.equal(fut.sourceState, "future");
-  // 沒成交的股票帶前一天的日期與 13:30 的時間：不能拿來當今天的更新時間
-  const mixed = await marketRows({ now, today, fetcher, misFetcher: misMock("10:29:59", "20261028", code => (code === "1000" ? { d: "20261027", t: "13:30:00" } : {})) });
-  assert.equal(mixed.sourceTime, "10:29:59"); assert.equal(mixed.dataStatus, "live");
-});
-
-test("P1-01 marketRows（富果快照）：lastUpdated 過舊時不是 live；fetchedAt 是伺服器時間、不能代替來源時間", async () => {
-  const now = T("2026-10-28T10:30:05+08:00"), today = "2026-10-28";
-  const mk = (ms, start, n, mkt) => Array.from({ length: n }, (_, k) => ({ symbol: String(start + k), name: `${mkt}${k}`, closePrice: 100, tradeVolume: 10, tradeValue: 1e6, lastUpdated: ms * 1000 }));
-  const F = ms => async url => ({ data: url.includes("TSE") ? mk(ms, 1000, 1000, "上市") : mk(ms, 3000, 800, "上櫃") });
-  const ok = await marketRows({ now, today, fugleFetcher: F(+now - 3000) });
-  assert.equal(ok.dataStatus, "live"); assert.equal(ok.fetchedAt, now.toISOString());
-  const stale = await marketRows({ now, today, fugleFetcher: F(+now - 30 * 60e3) });
-  assert.equal(stale.dataStatus, "delayed", "富果快照 30 分鐘前的資料，伺服器剛抓也不是即時"); assert.equal(stale.fetchedAt, now.toISOString()); assert.equal(stale.sourceTime, "10:00:05");
-});
-
-test("P1-01 前端 evalDataStatus：瀏覽器剛收到（receivedAt＝現在）也不能讓過期資料變成 live；舊快取重新取得一樣是舊的", () => {
-  const now = T("2026-10-28T10:30:05+08:00"), base = { type: "breadth", srcKind: "market", dataDate: "2026-10-28", completeness: "complete", coverage: { got: 1800, want: 1800 }, dateVerified: true, dateConsistent: true, dataStatus: "live", session: "open", dayState: "trade", today: "2026-10-28", now };
-  const fresh = coreCtx.evalDataStatus({ ...base, sourceTime: "10:30:00", receivedAt: +now, fetchedAt: "2026-10-28T02:30:01Z" });
-  assert.equal(fresh.status, "live"); assert.equal(fresh.receivedAt, +now); assert.equal(fresh.fetchedAt, "2026-10-28T02:30:01Z", "四種時間各自保留");
-  const stale = coreCtx.evalDataStatus({ ...base, sourceTime: "10:05:00", receivedAt: +now });
-  assert.equal(stale.status, "delayed"); assert.match(stale.note, /來源最後更新 10:05:00/);
-  // 同一份回應（來源 10:30:00），過了 20 分鐘再重新收到一次（快取）：receivedAt 是新的，但來源時間舊了
-  const later = T("2026-10-28T10:50:00+08:00");
-  assert.equal(coreCtx.evalDataStatus({ ...base, now: later, sourceTime: "10:30:00", receivedAt: +later }).status, "delayed");
-  assert.equal(coreCtx.evalDataStatus({ ...base, sourceTime: "10:40:00", receivedAt: +now }).status, "delayed", "未來時間");
-  assert.equal(coreCtx.evalDataStatus({ ...base, sourceTime: "bad", receivedAt: +now }).status, "delayed", "無效時間");
-  assert.equal(coreCtx.evalDataStatus({ ...base, sourceTime: null, receivedAt: +now }).status, "delayed", "無來源時間");
-  // 前一交易日、週末、收盤後：都不會是 live
-  assert.equal(coreCtx.evalDataStatus({ ...base, dataDate: "2026-10-27", sourceTime: "13:30:00", receivedAt: +now }).status, "delayed");
-  assert.notEqual(coreCtx.evalDataStatus({ ...base, sourceTime: "10:30:00", session: "closed", dayState: "closed", today: "2026-10-31", now: T("2026-10-31T10:30:05+08:00"), receivedAt: Date.parse("2026-10-31T02:30:05Z") }).status, "live", "週六");
-  assert.equal(coreCtx.evalDataStatus({ ...base, sourceTime: "13:30:00", session: "closed", now: T("2026-10-28T14:30:00+08:00"), receivedAt: Date.parse("2026-10-28T06:30:00Z") }).status, "confirmed", "收盤後是確認，不是即時");
-});
-
-// ==========================================
-// P2-03：上市櫃完整度（只記錄現行規則；「上市櫃是否要各自達 95%」規格待確認，不改判斷邏輯）
-// 現行：complete＝全市場 ≥ 95%（估計母體 上市 1000＋上櫃 800）且 上市 ≥ 800 檔、上櫃 ≥ 600 檔、日期一致且驗證
-// ==========================================
-const mkRows = (tse, otc, date = "2026-10-28") => [...Array.from({ length: tse }, (_, i) => ({ code: String(1000 + i), market: "上市", price: 10, vol: 1, date })), ...Array.from({ length: otc }, (_, i) => ({ code: String(5000 + i), market: "上櫃", price: 10, vol: 1, date }))];
-const cmp = (tse, otc) => validateMarketRows(mkRows(tse, otc), { today: "2026-10-28" });
-test("P2-03 完整度：上市櫃都完整、只有一邊、兩邊都不足、筆數不足、部分 API 失敗", () => {
-  assert.equal(cmp(1000, 800).completeness, "complete", "上市櫃都完整");
-  assert.equal(cmp(1000, 0).completeness, "partial_tse_only", "上市完整、上櫃整批失敗");
-  assert.equal(cmp(0, 800).completeness, "partial_otc_only", "上櫃完整、上市整批失敗");
-  assert.equal(cmp(1000, 500).completeness, "partial", "上櫃低於 600 檔");
-  assert.equal(cmp(700, 800).completeness, "partial", "上市低於 800 檔");
-  assert.equal(cmp(700, 500).completeness, "partial", "兩個市場都不足");
-  assert.equal(cmp(100, 100).completeness, "partial", "筆數遠低於門檻");
-  assert.equal(cmp(0, 0).completeness, "empty");
-  const r = cmp(1000, 600); assert.equal(r.completeness, "partial", "上櫃剛好 600 檔，但全市場 1600/1800 < 95%");
-  assert.deepEqual([r.coverage.tseRatio, r.coverage.otcRatio], [1, 0.75], "回傳各市場自己的覆蓋率，前端可分開顯示");
-  // 部分 API 失敗（MIS 某批 100 檔失敗）：其他批照算，少的會反映在覆蓋率
-  assert.equal(cmp(1000, 700).completeness, "partial", "上櫃少 100 檔：1700/1800 < 95%");
-});
-test("P2-03 規格待確認：全市場 ≥ 95% 但單一市場只有約 90%（目前判成 complete）", { todo: "上市櫃是否要各自達 95%，等使用者決定（見 INTEGRATED_REPAIR_REPORT.md）" }, () => {
-  assert.equal(cmp(1000, 720).completeness, "complete", "現況：上櫃 720/800＝90%，全市場 1720/1800＝95.6% → complete");
-  assert.equal(cmp(900, 820).completeness, "complete", "現況：上市 900/1000＝90%，全市場 95.6% → complete");
-  assert.equal(cmp(1000, 720).completeness, "partial", "若改成各自 95%：這裡應該是 partial（目前不成立）");
 });

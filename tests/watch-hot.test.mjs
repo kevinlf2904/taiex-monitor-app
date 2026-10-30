@@ -26,9 +26,7 @@ const pollListCode = extractBlock("async function pollList()", "async function p
 const pollDetailCode = extractBlock("async function pollDetail()", "// 嵌在首頁、切到別的分頁時") + "\r\nthis.pollDetail = pollDetail;";
 const tagsHtmlCode = extractBlock("function tagsHtml(c, q, lim)", "$(\"#favBtn\")") + "\r\nthis.tagsHtml = tagsHtml;";
 
-// 固定時鐘：盤中即時要看來源時間（sourceTime）是否夠新，測試要用和 fixture 一致的「現在」，不能用跑測試當下的真實時間
-const fixedDate = ms => class extends Date { constructor(...a) { super(...(a.length ? a : [ms])); } static now() { return ms; } };
-function createHarness({ now = null } = {}) {
+function createHarness() {
   const W = {
     lt: "mkt",
     mkHot: "value",
@@ -69,7 +67,7 @@ function createHarness({ now = null } = {}) {
   const c = {
     console,
     Math,
-    Date: now ? fixedDate(+now) : Date,
+    Date,
     JSON,
     Map,
     Set,
@@ -514,7 +512,6 @@ test("evalDataStatus: 交易時段內最新且有效資料標示為盤中即時�
     type: "quote",
     source: "證交所 MIS",
     dataDate: "2026-10-27",
-    sourceTime: "10:29:58",
     fetchedAt: +testNow - 5000,
     session: "open",
     dayState: "trade",
@@ -524,9 +521,6 @@ test("evalDataStatus: 交易時段內最新且有效資料標示為盤中即時�
   assert.equal(st1.status, "live");
   assert.equal(st1.text, "盤中即時");
   assert.ok(st1.isLive);
-  // 同一筆資料但來源沒有時間：瀏覽器剛收到也不能算盤中即時
-  const st1n = ctx.evalDataStatus({ type: "quote", source: "證交所 MIS", dataDate: "2026-10-27", fetchedAt: +testNow - 5000, session: "open", dayState: "trade", today: "2026-10-27", now: testNow });
-  assert.equal(st1n.status, "delayed"); assert.match(st1n.note, /來源未提供更新時間/);
 
   // 指標與估算數據應標記為「盤中估算」
   const st2 = ctx.evalDataStatus({
@@ -788,20 +782,14 @@ test("mktStatusTag 與 liveTag: 正確產生無障礙文字、自適應樣式與
   assert.match(html, /10:30<\/small>/);
   assert.match(html, /title="盤中行情持續更新 \(10:30\)"/);
 
-  // liveTag 整合驗證（固定時鐘 10:30:20，來源時間 10:30:15）
-  const t = createHarness({ now: new Date("2026-10-27T10:30:20+08:00") }).ctx;
-  const liveHtml = t.liveTag({
+  // liveTag 向下相容整合驗證
+  const liveHtml = ctx.liveTag({
     live: true,
-    at: Date.parse("2026-10-27T10:30:20+08:00"),
+    at: Date.now(),
     date: "2026-10-27",
-    time: "10:30:15",
   });
   assert.match(liveHtml, /class="livetag"/);
   assert.match(liveHtml, /盤中即時/);
-  assert.match(liveHtml, /更新於 10:30:15/, "顯示來源時間，不是瀏覽器收到的時間");
-  // 沒有來源時間：瀏覽器剛收到（at＝現在）也不能顯示盤中即時
-  const noSrc = t.liveTag({ live: true, at: Date.parse("2026-10-27T10:30:20+08:00"), date: "2026-10-27" });
-  assert.doesNotMatch(noSrc, /class="livetag"/); assert.match(noSrc, /資料延遲/);
 });
 
 
@@ -1350,7 +1338,7 @@ test("報價入口一致性: liveQuote() 支援帶時區 ISO 時間進行新鮮�
 // =========================================================================
 
 test("v2.4 情境 1: 完整行情資料在盤中正確顯示盤中即時，收盤後正確顯示收盤確認", () => {
-  const { ctx, W } = createHarness({ now: new Date("2026-10-28T10:30:05+08:00") }); // 和來源時間 10:30:00 一致的「現在」
+  const { ctx, W } = createHarness();
   W.session = "open";
   W.today = "2026-10-28";
 
@@ -1359,7 +1347,7 @@ test("v2.4 情境 1: 完整行情資料在盤中正確顯示盤中即時，收�
     live: true,
     date: "2026-10-28",
     time: "10:30:00",
-    at: Date.parse("2026-10-28T10:30:05+08:00"),
+    at: Date.now(),
     source: "證交所 MIS",
     completeness: "complete",
     coverage: { got: 1850, want: 1800 },
@@ -1542,7 +1530,7 @@ test("v2.4 情境 7: 舊版 API 未回傳 completeness / coverage 時的向後�
 });
 
 test("v2.4 情境 8: /api/hot 排行標籤正確反映底層 curH 的 completeness 與 coverage", () => {
-  const { ctx, W } = createHarness({ now: new Date("2026-10-28T10:30:05+08:00") }); // 固定時鐘，和來源時間 10:30:00 一致
+  const { ctx, W } = createHarness();
   W.session = "open";
   W.today = "2026-10-28";
   W.lt = "mkt";
@@ -1945,10 +1933,10 @@ test("v2.5.1 項目 A: dataStatus 全列舉邊界測試 (合法、已知非健�
 });
 
 test("v2.5.1 項目 B: completeness 多型別防禦測試 (字串、空白、數字、布林、物件、null、undefined)", () => {
-  const { ctx, W } = createHarness({ now: new Date("2026-10-28T10:30:05+08:00") }); // 固定時鐘，和來源時間 10:30:00 一致
+  const { ctx, W } = createHarness();
   W.session = "open";
   W.today = "2026-10-28";
-  const base = { type: "quote", dataDate: "2026-10-28", sourceTime: "10:30:00", session: "open", today: "2026-10-28" };
+  const base = { type: "quote", dataDate: "2026-10-28", session: "open", today: "2026-10-28" };
 
   // 1. 合法完整: "complete"
   assert.equal(ctx.evalDataStatus({ ...base, completeness: "complete" }).status, "live");
@@ -1977,10 +1965,10 @@ test("v2.5.1 項目 B: completeness 多型別防禦測試 (字串、空白、數
 });
 
 test("v2.5.1 項目 B: coverage 畸形結構與 got > want 邊界測試", () => {
-  const { ctx, W } = createHarness({ now: new Date("2026-10-28T10:30:05+08:00") }); // 固定時鐘，和來源時間 10:30:00 一致
+  const { ctx, W } = createHarness();
   W.session = "open";
   W.today = "2026-10-28";
-  const base = { type: "quote", dataDate: "2026-10-28", sourceTime: "10:30:00", session: "open", today: "2026-10-28" };
+  const base = { type: "quote", dataDate: "2026-10-28", session: "open", today: "2026-10-28" };
 
   // 1. 合法達標: got: 1800, want: 1800 (100%)
   assert.equal(ctx.evalDataStatus({ ...base, coverage: { got: 1800, want: 1800 } }).status, "live");
@@ -2215,16 +2203,13 @@ test("v2.5.2 阻斷問題 B: dataStatus: 'unavailable' 專屬處理與最高優�
 });
 
 test("v2.5.2 阻斷問題 C: 舊版相容性與缺漏組合 8 項驗證", () => {
-  const { ctx, W } = createHarness({ now: new Date("2026-10-28T10:30:05+08:00") }); // 固定時鐘，和來源時間 10:30:00 一致
+  const { ctx, W } = createHarness();
   const baseTrade = { session: "open", dayState: "trade", today: "2026-10-28" };
 
-  // 1. metadata 缺漏、日期為當日、有來源時間 -> 允許即時
-  const c1 = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-28", sourceTime: "10:30:00" });
+  // 1. metadata 缺漏，但交易時段且日期為當日 -> 允許即時
+  const c1 = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-28" });
   assert.equal(c1.status, "live");
   assert.equal(c1.isLive, true);
-  // 1b. 只有日期是今天、沒有來源時間 -> 不能直接認定是即時（P1-01：日期是今天不等於資料是新的）
-  const c1b = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-28" });
-  assert.equal(c1b.status, "delayed"); assert.equal(c1b.isLive, false); assert.match(c1b.note, /來源未提供更新時間/);
 
   // 2. metadata 缺漏，但資料日期已過期 -> 拒絕即時，標記延遲
   const c2 = ctx.evalDataStatus({ ...baseTrade, dataDate: "2026-10-22" });
@@ -2498,7 +2483,7 @@ test("Scenario 40: [第四輪可信度一致性驗證] 統一前端可信度函�
 // =========================================================================
 
 test("Scenario 41: [第五輪核心狀態機驗收] A. 台股行情欄位缺失矩陣深度測試", () => {
-  const { ctx, W } = createHarness({ now: new Date("2026-10-28T10:30:05+08:00") }); // 固定時鐘，和來源時間 10:30:00 一致
+  const { ctx, W } = createHarness();
   W.session = "open";
   W.today = "2026-10-28";
 
@@ -2618,7 +2603,7 @@ test("Scenario 41: [第五輪核心狀態機驗收] A. 台股行情欄位缺失�
 });
 
 test("Scenario 42: [第五輪核心狀態機驗收] B. 狀態契約與不可冒充 live/confirmed 驗證", () => {
-  const { ctx, W } = createHarness({ now: new Date("2026-10-28T10:30:05+08:00") }); // 固定時鐘，和來源時間 10:30:00 一致
+  const { ctx, W } = createHarness();
   W.session = "open";
   W.today = "2026-10-28";
 
@@ -2657,7 +2642,6 @@ test("Scenario 42: [第五輪核心狀態機驗收] B. 狀態契約與不可冒�
     type: "breadth",
     source: "證交所 MIS",
     dataDate: "2026-10-28",
-    sourceTime: "10:30:00",
     dataStatus: "live",
     completeness: "complete",
     coverage: { got: 1850, want: 1800 },
@@ -2807,7 +2791,7 @@ test("Scenario 43: [第五輪核心狀態機驗收] C. 跨資產獨立性回歸 
 // =========================================================================
 
 test("Scenario 44: [第六輪核心狀態機驗收] 全市場 Coverage 缺漏政策、畸形結構、狀態相容與特定診斷附註驗證", () => {
-  const { ctx, W } = createHarness({ now: new Date("2026-10-28T10:30:05+08:00") }); // 固定時鐘，和來源時間 10:30:00 一致
+  const { ctx, W } = createHarness();
   W.session = "open";
   W.today = "2026-10-28";
 
@@ -2900,7 +2884,6 @@ test("Scenario 44: [第六輪核心狀態機驗收] 全市場 Coverage 缺漏政
   const legacyFull = ctx.evalDataStatus({
     type: "breadth",
     dataDate: "2026-10-28",
-    sourceTime: "10:30:00",
     completeness: "complete",
     coverage: { got: 1850, want: 1800 },
     dateVerified: true,
@@ -2910,9 +2893,6 @@ test("Scenario 44: [第六輪核心狀態機驗收] 全市場 Coverage 缺漏政
   });
   assert.equal(legacyFull.status, "live");
   assert.equal(legacyFull.isLive, true);
-  // 5c. 同樣完整但沒有來源時間：完整度不等於新鮮度，不得導出 live
-  const legacyNoSrc = ctx.evalDataStatus({ type: "breadth", dataDate: "2026-10-28", completeness: "complete", coverage: { got: 1850, want: 1800 }, dateVerified: true, dateConsistent: true, session: "open", today: "2026-10-28" });
-  assert.equal(legacyNoSrc.status, "delayed"); assert.equal(legacyNoSrc.isLive, false);
 
   // 6. 收盤後 (session: 'closed') coverage 缺漏或異常絕不得標記為 confirmed
   const closedNoCov = ctx.evalDataStatus({
@@ -3286,46 +3266,9 @@ test("Phase 9 台股與美股 20 項時效、時區、DST、資料透明度契�
 
 test("evalDataStatus：fetchedAt 是伺服器的 ISO 字串時也能判斷過期（原本字串相減是 NaN，永遠不會過期）", () => {
   const { ctx } = createHarness();
-  const now = new Date("2026-10-27T10:30:00+08:00"), base = { type: "quote", source: "證交所 MIS", dataDate: "2026-10-27", sourceTime: "10:29:58", session: "open", dayState: "trade", today: "2026-10-27", now };
+  const now = new Date("2026-10-27T10:30:00+08:00"), base = { type: "quote", source: "證交所 MIS", dataDate: "2026-10-27", session: "open", dayState: "trade", today: "2026-10-27", now };
   assert.equal(ctx.evalDataStatus({ ...base, fetchedAt: new Date(+now - 5000).toISOString() }).status, "live", "5 秒前：盤中即時");
   const old = ctx.evalDataStatus({ ...base, fetchedAt: new Date(+now - 120000).toISOString() });
   assert.notEqual(old.status, "live", "2 分鐘前：不能再是盤中即時"); assert.equal(old.isLive, false);
   assert.equal(ctx.evalDataStatus({ ...base, fetchedAt: "不是時間" }).status, "live", "解析不了的字串當成沒有時間（和原本一樣不判過期）");
-});
-
-// P2-02：同一份加權資料在 core（evalDataStatus）、brief（決策中心 evaluateDataStatus）、watch（liveTag）三處的共同狀態不矛盾
-import { engine as briefEngine } from "../scripts/_engine.mjs";
-test("P2-02 共同資料狀態契約：core、brief、watch 對同一筆加權資料的 state 一致，brief 不比 core 樂觀", () => {
-  const B = briefEngine().B;
-  const scenarios = [
-    { name: "盤中、來源時間新", now: "2026-10-28T10:30:05+08:00", sess: "live", cs: "open", day: "trade", today: "2026-10-28", tq: { date: "2026-10-28", time: "10:30:00", source: "證交所 MIS" }, want: "live" },
-    { name: "盤中、來源時間 20 分鐘前", now: "2026-10-28T10:50:00+08:00", sess: "live", cs: "open", day: "trade", today: "2026-10-28", tq: { date: "2026-10-28", time: "10:30:00", source: "證交所 MIS" }, want: "delayed" },
-    { name: "盤中、沒有來源時間", now: "2026-10-28T10:30:05+08:00", sess: "live", cs: "open", day: "trade", today: "2026-10-28", tq: { date: "2026-10-28", source: "證交所 MIS" }, want: "delayed" },
-    { name: "收盤後官方", now: "2026-10-28T16:00:00+08:00", sess: "post", cs: "closed", day: "trade", today: "2026-10-28", tq: { date: "2026-10-28", time: "13:30:00", source: "證交所 MIS" }, inst: { date: "2026-10-28", foreign: 10 }, want: "confirmed" },
-    { name: "休市日顯示最近交易日", now: "2026-10-31T10:00:00+08:00", sess: "closed", cs: "closed", day: "closed", today: "2026-10-31", last: "2026-10-30", tq: { date: "2026-10-30", time: "13:30:00", source: "證交所 MIS" }, want: "confirmed" },
-  ];
-  for (const S of scenarios) {
-    const now = new Date(S.now), taiex = { price: 23000, close: 23000, high: 23100, low: 22900, chgPct: 0.5, vol: 3000, ...S.tq };
-    const { ctx, W } = createHarness({ now }); W.session = S.cs; W.today = S.today;
-    const core = ctx.evalDataStatus({ type: "index", source: taiex.source, dataDate: taiex.date, sourceTime: taiex.time ?? null, session: S.cs, dayState: S.day, today: S.today, now });
-    const brief = B.evaluateDataStatus({ market: { taiex, inst: S.inst }, session: S.sess, tradeDate: S.today, lastTradeDate: S.last || null, now: +now });
-    const tag = ctx.liveTag({ type: "index", live: S.cs === "open", at: +now, date: taiex.date, time: taiex.time, source: taiex.source });
-    assert.equal(core.state, S.want, `${S.name}：core`);
-    assert.equal(brief.state, S.want, `${S.name}：brief（dataStatus=${brief.dataStatus}）`);
-    assert.equal(/class="livetag"/.test(tag), S.want === "live", `${S.name}：watch 只有 state=live 才顯示盤中即時`);
-    assert.notEqual(brief.state === "live" && core.state !== "live", true, "brief 不能比 core 樂觀");
-  }
-  // 法人還沒公布：brief 是待確認，不比 core（指數收盤確認）好；第三方來源不宣稱已驗證
-  const post = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-28", time: "13:30:00", source: "twse" } }, session: "post", tradeDate: "2026-10-28", now: Date.parse("2026-10-28T14:00:00+08:00") });
-  assert.deepEqual([post.state, post.authority], ["pending", "official"]);
-  const yh = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-28", time: "13:30:00", source: "Yahoo Finance" }, inst: { date: "2026-10-28", foreign: 1 } }, session: "post", tradeDate: "2026-10-28", now: Date.parse("2026-10-28T16:00:00+08:00") });
-  assert.deepEqual([yh.authority, yh.sourceVerified], ["third_party", false], "第三方來源不能宣稱已驗證");
-  const noInstDate = B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-28", time: "13:30:00", source: "twse" }, inst: { foreign: 1 } }, session: "post", tradeDate: "2026-10-28", now: Date.parse("2026-10-28T16:00:00+08:00") });
-  assert.notEqual(noInstDate.dataStatus, "official", "法人沒有日期不宣稱官方定案"); assert.equal(noInstDate.state, "partial");
-  assert.equal(typeof B.evaluateDataStatus({ market: { taiex: { price: 23000, high: 23100, low: 22900, chgPct: 0.5, date: "2026-10-28", source: "twse" } }, session: "post", tradeDate: "2026-10-28" }).sourceVerified, "boolean", "sourceVerified 一律是布林");
-  // 優先順序：合併時取最嚴重的；不認得的狀態當成未驗證
-  const { ctx } = createHarness();
-  assert.equal(ctx.worseState("live", "confirmed", "delayed"), "delayed");
-  assert.equal(ctx.worseState("partial", "stale"), "stale");
-  assert.equal(ctx.canonDataState("degraded"), "unverified"); assert.equal(ctx.canonDataState("whatever"), "unverified"); assert.equal(ctx.canonDataState("official"), "confirmed");
 });

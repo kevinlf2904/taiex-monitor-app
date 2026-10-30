@@ -11,8 +11,7 @@ export function isValidIsoDate(iso, maxIso = null) {
 }
 
 const keyIdx = (fields, ...res) => fields.findIndex(f => res.every(re => re.test(String(f).replace(/\s|<[^>]+>/g, ""))));
-// 股 → 張；缺值（null、空字串、--、不是數字）回 null，不當成 0（真正的 0 保留 0）
-export const lots = v => { const n = num(v); return n == null ? null : Math.round(n / 1000); };
+const lots = v => { const n = num(v); return n == null ? 0 : Math.round(n / 1000); };
 const isCode = c => /^(\d{4}|00\d{2,4}[A-Z]?)$/.test(c);
 // rwd 的回應有兩種：{ fields, data } 或 { tables: [{ fields, data }] }；挑出含有指定欄位的那一張表
 export function pickTable(j, ...res) {
@@ -35,16 +34,14 @@ export function parseQuotes(j) {
   const out = new Map();
   for (const r of t.data) {
     const c = String(r[iC] ?? "").trim(), p = num(r[iP]); if (!isCode(c) || !(p > 0)) continue;
-    // 漲跌價差拿不到（--、空白）時漲跌幅是 null，不寫成 0%（平盤的 0.00 照常是 0）
-    const raw = String(r[iD] ?? ""), sgn = iS >= 0 ? (/-/.test(String(r[iS])) ? -1 : 1) : /^\s*-/.test(raw) ? -1 : 1, dn = num(raw.trim().replace(/^[+-](?=\d)/, "")), d = dn == null ? null : Math.abs(dn) * sgn, prev = d == null ? null : p - d;
-    out.set(c, { name: String(r[iN] ?? "").trim(), p, pct: prev > 0 ? +((d / prev) * 100).toFixed(2) : null, v: lots(r[iV]) });
+    const raw = String(r[iD] ?? ""), sgn = iS >= 0 ? (/-/.test(String(r[iS])) ? -1 : 1) : /^\s*-/.test(raw) ? -1 : 1, d = Math.abs(num(raw.replace(/^[+-]/, "")) || 0) * sgn, prev = p - d;
+    out.set(c, { name: String(r[iN] ?? "").trim(), p, pct: prev > 0 ? +((d / prev) * 100).toFixed(2) : 0, v: lots(r[iV]) });
   }
   return out;
 }
 export function mergeDay(quotes, inst) {
   const rows = [];
-  // 法人資料裡沒有這檔：外資、投信、自營商都是 null（沒有資料），不是買賣超 0 張
-  for (const [c, q] of quotes) { const i = inst.get(c) || [null, null, null]; rows.push([c, q.name, q.p, q.pct, i[0], i[1], i[2], q.v]); }
+  for (const [c, q] of quotes) { const i = inst.get(c) || [0, 0, 0]; rows.push([c, q.name, q.p, q.pct, i[0], i[1], i[2], q.v]); }
   return rows;
 }
 const roc = d => `${+d.slice(0, 4) - 1911}/${d.slice(4, 6)}/${d.slice(6)}`, slash = d => `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6)}`;
