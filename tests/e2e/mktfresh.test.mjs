@@ -62,3 +62,22 @@ test("國際行情、大盤：有幾項拿不到時註明暫缺，不讓空白�
   assert.equal(await p.evaluate(() => mktFailedNote({ failed: [] })), "");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("大盤：新回應比畫面上的舊（前一天收盤、較早的快照）不蓋掉畫面資料；收盤確認沒有時間照常更新 1280", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  let body = MKT;
+  await ctx.route("**/api/market", r => r.fulfill({ contentType: "application/json", body: JSON.stringify(body) }));
+  await p.clock.setFixedTime(new Date("2026-10-05T10:00:05+08:00")); await setHol(p);
+  const load = () => p.evaluate(async () => { clearTimeout(W.timer); W.session = "open"; await loadMktLive(); return { date: W.mkt.date, time: W.mkt.time, lastErr: W.mkt.lastErr || null }; });
+  assert.deepEqual(await load(), { date: "2026-10-05", time: "10:00:00", lastErr: null });
+  body = { ...MKT, date: "2026-10-02", dataDate: "2026-10-02", live: false, time: null, sourceTime: null, dataStatus: "stale", note: "今日即時暫未取得" };
+  const a = await load();
+  assert.equal(a.date, "2026-10-05", "前一天的收盤不蓋掉今天的盤中資料"); assert.match(a.lastErr, /比畫面上的舊/);
+  body = { ...MKT, time: "09:58:00", sourceTime: "09:58:00", live: false, dataStatus: "delayed", isLastGood: true };
+  assert.equal((await load()).time, "10:00:00", "同一天較早的快照不蓋掉較新的");
+  body = { ...MKT, time: "10:00:30", sourceTime: "10:00:30" };
+  assert.deepEqual(await load(), { date: "2026-10-05", time: "10:00:30", lastErr: null }, "較新的照常更新、原因清掉");
+  body = { ...MKT, live: false, time: null, sourceTime: null, dataStatus: "confirmed", source: "證交所、櫃買中心 今日收盤行情" };
+  assert.equal((await load()).time, null, "當天收盤確認沒有來源時間，也要能更新");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
