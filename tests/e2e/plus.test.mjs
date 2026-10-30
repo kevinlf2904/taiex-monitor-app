@@ -25,6 +25,8 @@ const noOverflow = p => p.evaluate(() => document.documentElement.scrollWidth <=
 
 for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台指期夜盤、除權息、持股新消息、AI 整理 ${width}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  const today = await p.evaluate(() => twDay());
+  await p.clock.setFixedTime(new Date(today + "T08:00:00+08:00"));
   await fund(p);
   await p.route("**/api/usmarket", r => J(r, { ok: true, date: "2026-10-21", indices: [{ code: "^DJI", name: "道瓊工業", price: 42100, chgPct: 0.8 }, { code: "^SOX", name: "費城半導體", price: 6100, chgPct: -1.2 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 210, chgPct: 1.5 }], macro: [{ code: "^TNX", name: "10 年期公債殖利率", price: 4.2, chgPct: 0.3 }], sectors: [] }));
   await p.route(/\/api\/futures\?bars=0$/, r => J(r, { ok: true, quote: { price: 23000, chg: -50, chgPct: -0.22, session: "night" }, night: { price: 23000, chg: -50, chgPct: -0.22, time: "05:00" }, day: null }));
@@ -45,7 +47,7 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   const flowBody = await p.evaluate(() => $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "");
   const mineBody = await p.evaluate(() => $('#lx details[data-tdbox="mine"] .dh-sec-b')?.innerText || "");
   const planBody = await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || "");
-  assert.match(flowBody, /盤後總結/, "盤後階段的摘要歸入資金區");
+  assert.doesNotMatch(flowBody, /盤後總結/, "盤前階段不提前顯示盤後法人摘要");
   assert.match(mineBody, /自選／庫存漲幅前 5[\s\S]*自選／庫存跌幅前 5/, "持倉與自選排行歸入個人區");
   assert.match(await p.evaluate(() => $('#lx details[data-tdbox="mac"] .dh-sec-b')?.innerText || ""), /美股資料日期[\s\S]*來源時間/, "國際行情就近顯示日期與來源時間");
   assert.doesNotMatch(planBody, /自選漲幅前 5|盤後總結/, "交易情境只呈現盤前／盤中／盤後時間序列");

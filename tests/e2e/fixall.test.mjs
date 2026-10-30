@@ -100,6 +100,8 @@ test("外層浮動返回：看盤、情報局不疊，學堂裡照常 390", asyn
 
 for (const width of [390, 1280]) test(`今日重點（早報＋每日摘要）在情報局；今日重點卡「看完整」直接過去 ${width}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  const today = await p.evaluate(() => twDay());
+  await p.clock.setFixedTime(new Date(today + "T10:00:00+08:00"));
   assert.equal(await p.evaluate(() => TOOLS_VIEWS.some(x => ["today", "brief", "sum"].includes(x[0]))), false, "工具裡不再有早報、每日摘要");
   assert.equal(await p.evaluate(() => INTEL_LT[0]), "today", "情報局第一個分頁");
   await p.evaluate(() => { W.td = { at: Date.now() }; W.hold = { 1234: { sh: 1000, cost: 50 } }; W.quotes.set("1234", { ...(W.quotes.get("1234") || {}), chgPct: -4.2 }); setLt("watch"); renderList(); });
