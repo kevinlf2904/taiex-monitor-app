@@ -24,9 +24,7 @@ async function fund(p) {
 const noOverflow = p => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台指期夜盤、除權息、持股新消息、AI 整理 ${width}`, async () => {
-  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
-  const today = await p.evaluate(() => twDay());
-  await p.clock.setFixedTime(new Date(today + "T08:00:00+08:00"));
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500, time: new Date(TODAY + "T08:00:00+08:00") });
   await fund(p);
   await p.route("**/api/usmarket", r => J(r, { ok: true, date: "2026-10-21", dataDate: "2026-10-21", sourceTime: "2026-10-21 16:00", tz: "EDT", source: "Yahoo Finance", dataStatus: "stale", updateMode: "after_close", indices: [{ code: "^DJI", name: "道瓊工業", price: 42100, chgPct: 0.8 }, { code: "^SOX", name: "費城半導體", price: 6100, chgPct: -1.2 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 210, chgPct: 1.5 }], macro: [{ code: "^TNX", name: "10 年期公債殖利率", price: 4.2, chgPct: 0.3 }], sectors: [] }));
   await p.route(/\/api\/futures\?bars=0$/, r => J(r, { ok: true, quote: { price: 23000, chg: -50, chgPct: -0.22, session: "night" }, night: { price: 23000, chg: -50, chgPct: -0.22, time: "05:00" }, day: null }));
