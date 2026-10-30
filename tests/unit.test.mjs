@@ -400,6 +400,10 @@ test("AI 協作規則：AGENTS.md 與 Antigravity 規則檔一致，CLAUDE.md �
   assert.equal(g, a, "改了 AGENTS.md 要複製到 .agent/rules/klinelab.md");
   assert.match(c, /^@AGENTS\.md/m);
   for (const k of ["learner/version.json", "gemini/", "claude/", "codex/", "稽核", "驗證：", "pull_request_template.md", "密鑰", "draft PR", "鎖：", ".agent/workflows/merge.md", "scripts/bump-version.mjs", "不連外部網站", "learner/core.js", "每次收到指令都要自動做"]) assert.ok(a.includes(k), `AGENTS.md 缺少「${k}」`);
+  // AGENTS.md 只放每次都要遵守的規則，細節搬到 docs/agents-detail.md（減少每次對話載入的內容）：常駐檔要指向細節檔，細節檔要有二～八節
+  assert.ok(a.includes("docs/agents-detail.md"), "AGENTS.md 要指向 docs/agents-detail.md");
+  const dt = await rd("docs/agents-detail.md");
+  for (const k of ["## 二、誰做什麼", "## 三、開工", "### 大檔先上鎖", "## 四、測試", "## 五、PR 與審查", "## 六、合併", "### 版本號", "YYYY.MM.DD-N", "## 七、資料、權限與費用", "## 八、交接與回報"]) assert.ok(dt.includes(k), `docs/agents-detail.md 缺少「${k}」`);
   assert.match(await rd(".github/copilot-instructions.md"), /AGENTS\.md/, "Copilot 的說明要指向 AGENTS.md");
   const m = await rd(".agent/workflows/merge.md");
   assert.match(m, /^---\r?\ndescription: /, "Antigravity workflow 要有 description");
