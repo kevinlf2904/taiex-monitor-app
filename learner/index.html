@@ -910,8 +910,8 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <nav class="wtabs" id="watchTabs" aria-label="看盤分頁（捲動時固定）" hidden></nav>
   </section>
 
-  <!-- 存股與槓桿模擬器：獨立頁面 savings.html，嵌在這裡（第一次切到這個分頁才載入） -->
-  <section id="view-savings" role="tabpanel" hidden>
+  <!-- 存股與槓桿模擬器：獨立頁面 savings.html，嵌在這裡（第一次切到這個分頁才載入）；data-nofold：嵌入的頁面不能被長內容收合切掉（收合看不到 iframe 裡的表單） -->
+  <section id="view-savings" role="tabpanel" data-nofold hidden>
     <div class="sav-head">
       <div><div class="eyebrow">LONG-TERM</div><h2>存股模擬</h2><p class="note" style="margin:6px 0 0;max-width:70ch">技術分析看的是進出時機；存股看的是長期累積。比較定期定額、核心衛星和借錢槓桿三種做法，看複利、里程碑與追繳風險。</p></div>
       <a class="btn" href="savings.html" target="_blank" rel="noopener">在新分頁開啟 ↗</a>
