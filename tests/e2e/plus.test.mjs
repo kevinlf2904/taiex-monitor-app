@@ -24,14 +24,12 @@ async function fund(p) {
 const noOverflow = p => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台指期夜盤、除權息、持股新消息、AI 整理 ${width}`, async () => {
-  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
-  const today = await p.evaluate(() => twDay());
-  await p.clock.setFixedTime(new Date(today + "T08:00:00+08:00"));
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500, time: new Date(TODAY + "T08:00:00+08:00") });
   await fund(p);
   await p.route("**/api/usmarket", r => J(r, { ok: true, date: "2026-10-21", dataDate: "2026-10-21", sourceTime: "2026-10-21 16:00", tz: "EDT", source: "Yahoo Finance", dataStatus: "stale", updateMode: "after_close", indices: [{ code: "^DJI", name: "道瓊工業", price: 42100, chgPct: 0.8 }, { code: "^SOX", name: "費城半導體", price: 6100, chgPct: -1.2 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 210, chgPct: 1.5 }], macro: [{ code: "^TNX", name: "10 年期公債殖利率", price: 4.2, chgPct: 0.3 }], sectors: [] }));
   await p.route(/\/api\/futures\?bars=0$/, r => J(r, { ok: true, quote: { price: 23000, chg: -50, chgPct: -0.22, session: "night" }, night: { price: 23000, chg: -50, chgPct: -0.22, time: "05:00" }, day: null }));
   await p.route("**/api/news**", r => J(r, { ok: true, items: [{ title: "台積電先進封裝擴產", source: "測試報", link: "https://example.com/a", at: Date.now() - 3600e3 }] }));
-  await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 500 } }; showList?.(); W.tdPh = { d: twDay(), ph: "pre" }; setLt("today"); }); // 早報在今日市場的「國際市場與總經」＋「交易情境」（盤前階段）
+  await p.evaluate(() => { W.cal = { hol: [] }; W.hold = { 2330: { sh: 1000, cost: 500 } }; showList?.(); W.tdPh = { d: twDay(), ph: "pre" }; setLt("today"); renderList(); }); // 早報在今日市場的「國際市場與總經」＋「交易情境」（盤前階段）
   await p.waitForFunction(() => /持股新消息/.test($("#lx").innerText), null, { timeout: 15000 });
   const t = await p.evaluate(() => $("#lx").innerText);
   for (const s of ["昨晚美股", "道瓊工業", "費城半導體", "台積電 ADR", "台指期", "夜盤 23,000", "除權息", "2330 除息 現金 4.5 元", "台積電先進封裝擴產", "今天要注意", "法說會"]) assert.ok(t.includes(s), `早報要有「${s}」`);
