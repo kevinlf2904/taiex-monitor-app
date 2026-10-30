@@ -1187,7 +1187,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.30-167</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.10.30-168</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1540,15 +1540,16 @@ const irtThemes = () => W.irtThemes || (W.irtThemes = [...irtSegs().reduce((m, g
 async function loadIndRt(force = false) {
   if (W.off || W.irtBusy || (!force && W.irt && Date.now() - W.irt.at < 9000)) return;
   W.irtBusy = 1; await loadTic(); if (!irtSegs().length) { W.irtBusy = 0; return; }
-  try { const j = await getJ(`/api/hot?market=tw&type=rows&codes=all`, true); W.irt = { at: Date.now(), live: j.live, date: j.date, source: j.source, q: new Map(j.rows.map(([c, p, pct, v]) => [c, { p, pct, v: v || 0 }])) }; }
+  try { const j = await getJ(`/api/hot?market=tw&type=rows&codes=all`, true); W.irt = { at: Date.now(), fetchedAt: j.at ?? null, live: j.live, date: j.date, time: j.time ?? null, srcKind: "market", source: j.source, q: new Map(j.rows.map(([c, p, pct, v]) => [c, { p, pct, v: v ?? null }])) }; }
   catch (e) { W.irt = { at: Date.now(), err: e.message, q: W.irt?.q || new Map() }; } finally { W.irtBusy = 0; }
   if (W.lt === "mkt" && W.mkReg !== "us" && !W.mktLoading) renderList();
 }
 function irtModel(level = "seg") {
   const Q = W.irt?.q; if (!Q?.size) return [];
   return (level === "theme" ? irtThemes() : irtSegs()).map(g => { const M = g.codes.map(c => ({ c, nm: g.names[c] || nameOf(c), ...Q.get(c) })).filter(x => x.pct != null); if (!M.length) return null;
-    const val = M.reduce((a, x) => a + x.v, 0), pct = val > 0 ? M.reduce((a, x) => a + x.pct * x.v, 0) / val : M.reduce((a, x) => a + x.pct, 0) / M.length, lead = M.slice().sort((a, b) => b.pct - a.pct)[0], lag = M.slice().sort((a, b) => a.pct - b.pct)[0];
-    return { ...g, n: M.length, up: M.filter(x => x.pct > 0).length, pct, val, flow: M.reduce((a, x) => a + (x.pct > 0 ? x.v : x.pct < 0 ? -x.v : 0), 0), lead, lag }; }).filter(Boolean);
+    // 成交金額缺值（null）的股票不加進權重，也不當成 0 億
+    const val = M.reduce((a, x) => a + (x.v ?? 0), 0), pct = val > 0 ? M.reduce((a, x) => a + x.pct * (x.v ?? 0), 0) / val : M.reduce((a, x) => a + x.pct, 0) / M.length, lead = M.slice().sort((a, b) => b.pct - a.pct)[0], lag = M.slice().sort((a, b) => a.pct - b.pct)[0];
+    return { ...g, n: M.length, up: M.filter(x => x.pct > 0).length, pct, val, flow: M.reduce((a, x) => a + (x.v == null ? 0 : x.pct > 0 ? x.v : x.pct < 0 ? -x.v : 0), 0), lead, lag }; }).filter(Boolean);
 }
 // 產業即時：橫向長條圖（漲紅往右、跌綠往左，以 0 為中線）；可切排序、細分產業／題材，預設只看前 12，展開看全部
 function irtHtml(sec) {
@@ -1570,7 +1571,7 @@ function irtHtml(sec) {
     <ol class="irb">${shown.map(row).join("")}</ol>
     ${S.length > N ? `<button type="button" class="btn sm irb-more" data-mk="irtAll" data-v="${all ? "" : "1"}">${all ? "收合 ▴" : `看全部 ${S.length} 個 ▾`}</button>` : ""}
     <p class="note">${irtOff() ? `分類：<a href="https://ic.tpex.org.tw/" target="_blank" rel="noopener">櫃買中心 產業價值鏈資訊平台</a>（${irtThemes().length} 個產業、${irtSegs().length} 個上中下游細分產業，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔上市櫃公司，${W.tic.updated ? new Date(W.tic.updated).toISOString().slice(0, 10).replace(/-/g, "/") + " 更新" : "每週更新"}；同一家公司可能出現在好幾個細分產業）` : `分類：供應鏈題材（${irtSegs().length} 個細分產業、${irtThemes().length} 個題材，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔）`}；漲跌是成分股的成交金額加權平均；點一列看成分股。行情：${esc(W.irt?.source || "")}</p>`,
-    liveTag({ live: W.irt?.live, at: W.irt?.at, date: W.irt?.date }, "收盤"), mkSeg("irtK", k, [["gain", "漲幅"], ["loss", "跌幅"], ["flow", "資金流向"], ["value", "成交金額"]]) + " " + mkSeg("irtL", lv, [["seg", "細分產業"], ["theme", U]]));
+    liveTag({ live: W.irt?.live, at: W.irt?.at, fetchedAt: W.irt?.fetchedAt, date: W.irt?.date, time: W.irt?.time, srcKind: "market" }, "收盤"), mkSeg("irtK", k, [["gain", "漲幅"], ["loss", "跌幅"], ["flow", "資金流向"], ["value", "成交金額"]]) + " " + mkSeg("irtL", lv, [["seg", "細分產業"], ["theme", U]]));
 }
 async function loadMktLive() {
   W.mktLoading = Date.now(); loadIxSpark(); loadIndRt(); const fut = c => getJ(`/api/futures?cid=${c}&bars=0`, true).then(j => j.quote).catch(() => null);
@@ -1590,15 +1591,18 @@ function twClosedNote(d, now = Date.now()) {
   if (hm < "09:00") return ["尚未開盤", `尚未開盤・顯示 ${last} 收盤`];
   return ["今日無交易", `今天沒有成交資料（休市或暫停交易，例如颱風假）・顯示最近交易日 ${last} 收盤`];
 }
-// 「盤中即時・更新於 10:31:05」或「10/06 收盤後」
+// 「盤中即時・來源 10:31:05」或「10/06 收盤後」
+// J.at 是瀏覽器收到（或 sw.js 存快取）的時間＝receivedAt；J.fetchedAt 是伺服器抓的時間；J.sourceTime／J.time 是來源自己的更新時間
 const liveTag = (J, closed) => {
   if (!J) return "";
   const st = evalDataStatus({
     type: J.type || (J.live ? "quote" : "index"),
+    srcKind: J.srcKind || (J.coverage ? "market" : undefined),
     source: J.source || "",
     dataDate: J.date,
-    sourceTime: J.time,
-    fetchedAt: J.at,
+    sourceTime: J.sourceTime ?? J.time ?? null,
+    fetchedAt: J.fetchedAt ?? null,
+    receivedAt: J.at,
     isSuccess: !J.err,
     isComplete: J.isComplete !== false,
     completeness: J.completeness,
@@ -1609,7 +1613,7 @@ const liveTag = (J, closed) => {
     session: W.session,
     today: W.today,
   });
-  if (st.isLive) return `<span class="livetag" title="台北時間（UTC+8）"><i></i>${st.text}・更新於 ${new Date((J.at || Date.now()) + 8 * 3600e3).toISOString().slice(11, 19)}</span>`;
+  if (st.isLive) return `<span class="livetag" title="來源更新時間（台北 UTC+8）；瀏覽器收到：${J.at ? new Date(J.at + 8 * 3600e3).toISOString().slice(11, 19) : "—"}"><i></i>${st.text}・更新於 ${esc(String(st.sourceTime || "").slice(0, 8))}</span>`;
   return mktStatusTag(st, { showDate: true });
 };
 // 每秒只更新報價（自選、庫存、熱門清單與個股頁），每 5 秒做一次完整更新（分時、逐筆、各分頁資料）
@@ -2672,14 +2676,14 @@ async function loadMoney(need = 10, force = false) {
 }
 const mfModel = () => { const F = W.mf; if (!F.model && F.days.length) F.model = flowModel(F.days, flowSectors(F.ind)); return F.model; };
 const qDot = q => `<i class="qdot" style="background:${FLOW_Q[q][2]}"></i>`;
-const yiB = v => `<b class="${cls(v)}">${flowFmt(v)}</b>`;
-const pctB = v => `<b class="${cls(v)}">${v >= 0 ? "+" : ""}${v.toFixed(1)}%</b>`;
+const yiB = v => `<b class="${cls(v)}">${flowFmt(v)}</b>`; // 沒有資料（法人缺值）顯示 —
+const pctB = v => (v == null ? `<b>—</b>` : `<b class="${cls(v)}">${v >= 0 ? "+" : ""}${v.toFixed(1)}%</b>`);
 // 點板塊（題材或產業別）：在資金分頁裡打開板塊內頁，列出成分股的法人資金
 function secOpen(id) { const F = W.mf; if (F.view !== "sector") F.back = F.view; F.view = "sector"; F.sec = id; F.secSort ||= "a5"; renderMoney(); goY(0); navPush(); }
 // 板塊成分股清單（板塊頁、動能矩陣點圓點後都用這個）：k＝排序（a5 近 5 日金額、a1 今日金額、pct1 漲跌幅），n＝最多幾檔
 function secMembers(M, S, k = "a5", n = 0) {
-  const t = M.T - 1, rows = S.mem.map(s => ({ code: s.code, name: s.name, pct1: s.pct[t] ?? 0, px: s.px[t], a1: s.amt[t] || 0, a5: winSum(s.amt, t, 5), f5: winSum(s.f, t, 5), tr5: winSum(s.tr, t, 5) }))
-    .sort((a, b) => (k === "pct1" ? b.pct1 - a.pct1 : k === "a1" ? b.a1 - a.a1 : b.a5 - a.a5));
+  const t = M.T - 1, rows = S.mem.map(s => ({ code: s.code, name: s.name, pct1: s.pct[t] ?? null, px: s.px[t], a1: s.amt[t] ?? null, a5: winSum(s.amt, t, 5), f5: winSum(s.f, t, 5), tr5: winSum(s.tr, t, 5) }))
+    .sort((a, b) => { const v = x => (k === "pct1" ? x.pct1 : k === "a1" ? x.a1 : x.a5) ?? -Infinity; return v(b) - v(a) || 0; }); // 缺值排最後
   return `<ol class="mlist">${(n ? rows.slice(0, n) : rows).map((x, i) => `<li><button data-sel="${x.code}"><span class="rk">${i + 1}</span><span></span><span class="nm">${esc(x.name)}<small>${x.code}・收 ${x.px ?? "—"}・外資 ${flowFmt(x.f5)}・投信 ${flowFmt(x.tr5)}</small></span>${pctB(x.pct1)}${yiB(k === "a1" ? x.a1 : x.a5)}</button>${wStar(x.code)}</li>`).join("")}</ol>`;
 }
 function renderSector(M) {

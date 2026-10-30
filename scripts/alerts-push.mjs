@@ -56,6 +56,13 @@ export async function evDataOf(E, cal) {
   return { rev, pm: (await readData("earn-hist.json"))?.pm || null, conf: cal?.conf || [], etf };
 }
 
+// 先記「今天送過」再送（NX：兩個排程同時跑也只送一次）；送失敗就刪掉記號再丟出錯誤，下一次排程才會重送，不會被當成已送
+// 回傳 true＝這次送出、false＝之前已經送過
+export async function markThenSend(key, ttl, send, K = kv) {
+  if (!(await K("SET", key, "1", "NX", "EX", ttl))) return false;
+  try { await send(); return true; } catch (e) { await K("DEL", key).catch(() => {}); throw e; }
+}
+
 export async function main() {
   // 沒設定就略過（推播是附加功能，不能讓整個資料排程失敗）。chat id 來自每個人在網頁上的綁定，所以不需要 TELEGRAM_CHAT_ID
   if (!(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) || !process.env.TELEGRAM_BOT_TOKEN) { console.log("::warning::沒有設定雲端儲存（KV_REST_API_URL）或 TELEGRAM_BOT_TOKEN，略過推播"); return; }
@@ -71,26 +78,29 @@ export async function main() {
   const FD = { cong: await readData("congress.json"), f13: await readData("f13.json"), ins: await readData("insider.json") }, since = new Date(Date.parse(date) - 4 * 864e5).toISOString().slice(0, 10);
   const evOn = docs.some(([, d]) => d.ev?.on?.some(k => k !== "brief" && k !== "mon")), CAL = evOn ? await callApi(import("../api/_lib/calendar.js")) : null, ED = evOn ? await evDataOf(E, CAL) : null;
   const pctOf = c => { const D = dailyOf(c); return D?.length > 1 && D.at(-2).c ? (D.at(-1).c / D.at(-2).c - 1) * 100 : null; };
-  let sent = 0;
+  let sent = 0, failed = 0;
   for (const [h, d] of docs) {
     if (!d.chat) continue;
     // 收盤重點（今日重點卡的內容）：同一天只送一次
     if (closeOn(d) && ED) { const t = E.B.closeText(E.B.todayData({ mine: new Set(d.ev.mine), pct: pctOf, cal: CAL?.ok ? CAL : null, etf: ED.etf, today: E.B.twDay() }), d.names || {});
       if (t && DRY) console.log(h.slice(0, 8), t);
-      else if (t) { try { if (await kv("SET", `close:${h}:${date}`, "1", "NX", "EX", 172800)) { await tg("sendMessage", { chat_id: d.chat, text: t + "\n\n以收盤後資料整理，不是買賣建議。" }); sent++; } } catch (e) { console.log("::warning::收盤重點送出失敗", h.slice(0, 8), e.message); } } }
+      else if (t) { try { if (await markThenSend(`close:${h}:${date}`, 172800, () => tg("sendMessage", { chat_id: d.chat, text: t + "\n\n以收盤後資料整理，不是買賣建議。" }))) sent++; } catch (e) { failed++; console.log("::warning::收盤重點送出失敗", h.slice(0, 8), e.message); } } }
     let msgs = []; try { msgs = evalDoc(d, dailyOf, E); } catch (e) { console.log("::warning::檢查條件失敗", h.slice(0, 8), e.message); }
     // 指標、價格提醒同一天只送一次；追蹤的新申報每一筆只送一次
     if (msgs.length && !DRY) { try { if (!(await kv("SET", `sent:${h}:${date}`, "1", "NX", "EX", 172800))) msgs = []; } catch (e) { console.log("::warning::KV 寫入失敗", e.message); msgs = []; } }
     const fol = [];
     const ev = ED && d.ev?.codes?.length ? E.B.evScan(d.ev.codes, { ...ED, names: d.names }, E.B.twDay()).filter(x => d.ev.on.includes(x.kind)).map(x => ({ k: "e:" + x.k, m: x.m })) : [];
-    for (const x of [...evalFollow(d, FD, since), ...ev]) { if (DRY) { fol.push(x.m); continue; } try { if (await kv("SET", `seenf:${h}:${x.k}`, "1", "NX", "EX", x.k.startsWith("e:") ? 10368000 : 3456000)) fol.push(x.m); /* 事件記 120 天：同一季的三率三升不會再推 */ } catch {} }
+    const folKeys = [];
+    for (const x of [...evalFollow(d, FD, since), ...ev]) { if (DRY) { fol.push(x.m); continue; } try { if (await kv("SET", `seenf:${h}:${x.k}`, "1", "NX", "EX", x.k.startsWith("e:") ? 10368000 : 3456000)) { fol.push(x.m); folKeys.push(x.k); } /* 事件記 120 天：同一季的三率三升不會再推 */ } catch {} }
     if (!msgs.length && !fol.length) continue;
     const text = `🔔 K線看盤收盤提醒（${date}）\n` + [...msgs, ...fol.slice(0, 20)].map(m => "• " + m).join("\n") + (fol.length > 20 ? `\n…另有 ${fol.length - 20} 則追蹤申報` : "") + "\n\n以收盤後日 K 與公開申報整理，不是買賣建議。";
     if (DRY) { console.log(h.slice(0, 8), text); continue; }
-    try { await tg("sendMessage", { chat_id: d.chat, text }); sent++; } catch (e) { console.log("::warning::Telegram 送出失敗", h.slice(0, 8), e.message); }
+    // 送失敗：刪掉今天的「已送」記號，下一次排程重送（追蹤申報的 seenf 記號也一起刪，否則那幾則永遠不會再送）
+    try { await tg("sendMessage", { chat_id: d.chat, text }); sent++; } catch (e) { console.log("::warning::Telegram 送出失敗", h.slice(0, 8), e.message); failed++;
+      if (msgs.length) await kv("DEL", `sent:${h}:${date}`).catch(() => {}); for (const x of folKeys) await kv("DEL", `seenf:${h}:${x}`).catch(() => {}); }
     await sleep(100);
   }
-  console.log("送出", sent, "則");
+  console.log("送出", sent, "則", failed ? `，失敗 ${failed} 則（已清掉記號，下次排程重送）` : "");
 }
 // 任何錯誤（KV 連不上、Telegram 掛掉…）都只印 warning、以成功結束：推播失敗不影響全市場資料已經上傳
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch(e => { console.log("::warning::Telegram 推播這次沒有完成：" + e.message); process.exitCode = 0; });
