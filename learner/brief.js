@@ -1407,7 +1407,7 @@ function validateHtml(val, plan) {
 function flowsDecisionHtml(M) {
   const head = d => `<div class="dh-head"><b>資金雷達・板塊輪動與資金流向</b><span class="note">${d || "板塊輪動與法人資金"}</span></div>`;
   const go = `<div class="dh-flow-go"><button type="button" class="btn sm primary" data-tdgo="radar">前往資金雷達完整板塊與矩陣分析 ›</button><button type="button" class="btn sm" data-tdgo="replay">▶ 主力資金雷達回放（近 20 個交易日）</button></div>`;
-  // 資金資料這頁只出現在這一張卡（原本盤後總結在下面又寫一次）；還沒有資料時的說明和盤後總結共用 tools.js 的 flowWaitNote
+  // 展開內容負責當日法人情緒、買賣板塊與異常個股；近 5 日累積輪動只放在區塊收合摘要
   if (!M) return `<div class="dh-card">${head()}<p class="note">${typeof flowWaitNote === "function" ? flowWaitNote() : "載入法人資金資料…"}</p>${go}</div>`;
   let mood = null;
   try { mood = typeof flowMood === "function" ? flowMood(M) : null; } catch {}
@@ -1780,6 +1780,8 @@ function todayPage() {
       if (dir > 0 && dn > up) return "市場結構：指數上漲、個股偏弱，走勢背離";
       if (dir < 0 && dn > up) return "市場結構：指數與多數個股同步偏弱";
       if (dir < 0 && up > dn) return "市場結構：指數下跌、個股相對抗跌，走勢背離";
+      if (dir === 0 && up > dn) return "市場結構：指數平盤、上漲家數領先";
+      if (dir === 0 && dn > up) return "市場結構：指數平盤、下跌家數領先";
       return "市場結構：漲跌家數接近，個股方向分歧";
     })()
     : "市場結構尚無同日有效資料";
