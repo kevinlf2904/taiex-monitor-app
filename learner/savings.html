@@ -295,7 +295,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
         </div>
       </details>
 
-      <details open>
+      <details data-adv>
         <summary>核心衛星（B）<small id="sum-cs"></small></summary>
         <div class="gbody">
           <div class="field"><label for="cs-core" class="lbl">核心</label><select id="cs-core"></select></div>
@@ -309,7 +309,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
         </div>
       </details>
 
-      <details open>
+      <details data-adv>
         <summary>借款結構（C）<small id="sum-l"></small></summary>
         <div class="gbody">
           <div class="field"><div class="top"><label for="credit">信貸金額</label></div><input type="range" id="credit" min="0" max="5000000" step="10000" value="1000000" data-scale="10000" data-unit="萬"></div>
@@ -842,7 +842,7 @@ document.querySelectorAll("#scenchips .chip").forEach(c=>c.addEventListener("cli
 document.querySelectorAll("#rebchips .chip").forEach(c=>c.addEventListener("click",()=>{G.reb=c.dataset.reb;renderAll()}));
 $("openall").addEventListener("click",()=>document.querySelectorAll("#console details").forEach(d=>d.open=true));
 $("closeall").addEventListener("click",()=>document.querySelectorAll("#console details").forEach(d=>d.open=false));
-// 控制台各區塊的展開／收合記在這個瀏覽器（kline:savopen）；第一次用：手機只開第一區，電腦全開
+// 控制台各區塊的展開／收合記在這個瀏覽器（kline:savopen）；第一次用：手機只開第一區，電腦全開，但核心衛星（B）、借款結構（C）的進階參數預設收起（data-adv）
 {const DS=[...document.querySelectorAll("#console details")];let O=null;try{O=JSON.parse(localStorage.getItem("kline:savopen")||"null")}catch(e){}
 if(Array.isArray(O)&&O.length===DS.length)DS.forEach((d,i)=>{d.open=!!O[i]});else if(window.matchMedia&&matchMedia("(max-width:900px)").matches)DS.forEach((d,i)=>{if(i>0)d.open=false});
 DS.forEach(d=>d.addEventListener("toggle",()=>{try{localStorage.setItem("kline:savopen",JSON.stringify(DS.map(x=>x.open)))}catch(e){}}));}

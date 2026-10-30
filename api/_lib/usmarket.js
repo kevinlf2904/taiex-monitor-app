@@ -6,18 +6,19 @@
 //   megas    權值股（蘋果、微軟、輝達…）
 // 資料：Yahoo Finance（可能延遲 15 分鐘），時間是美東時間。盤中快取 30 秒、收盤後 5 分鐘。
 
-import { yahooBars, quoteFromMeta, lastUsTradingDate } from "./_yahoo.js";
+import { yahooBars, quoteFromMeta, lastUsTradingDate, extFrom } from "./_yahoo.js";
 
 export const US_IDX = [["^DJI", "道瓊工業"], ["^IXIC", "那斯達克"], ["^GSPC", "S&P 500"], ["^SOX", "費城半導體"], ["^NDX", "NASDAQ-100"], ["^RUT", "羅素 2000"], ["^VIX", "VIX 恐慌指數"]];
 export const US_MACRO = [["ES=F", "S&P 期貨"], ["NQ=F", "那斯達克期貨"], ["YM=F", "道瓊期貨"], ["^TNX", "10 年期公債殖利率"], ["DX-Y.NYB", "美元指數"], ["GC=F", "黃金"], ["CL=F", "原油 WTI"], ["BTC-USD", "比特幣"]];
 export const US_SECTORS = [["XLK", "科技"], ["SMH", "半導體"], ["XLC", "通訊服務"], ["XLY", "非必需消費"], ["XLF", "金融"], ["XLV", "醫療保健"], ["XLI", "工業"], ["XLE", "能源"], ["XLB", "原物料"], ["XLP", "必需消費"], ["XLU", "公用事業"], ["XLRE", "房地產"]];
 export const US_MEGAS = [["AAPL", "蘋果"], ["MSFT", "微軟"], ["NVDA", "輝達"], ["GOOGL", "Alphabet"], ["AMZN", "亞馬遜"], ["META", "Meta"], ["TSLA", "特斯拉"], ["AVGO", "博通"], ["TSM", "台積電 ADR"], ["BRK-B", "波克夏"]];
 
-// 一檔：當日 5 分 K（拿走勢線），報價用 meta
+// 一檔：當日 5 分 K（拿走勢線），報價用 meta；個股、ETF 另外附盤前／盤後價 ext（指數沒有延長時段，不抓）
 export async function usItem([sym, name], spark = true) {
-  const p = await yahooBars(sym, 5, { isIdx: sym.startsWith("^") });
+  const isIdx = sym.startsWith("^"), pp = !isIdx && !spark;
+  const p = await yahooBars(sym, 5, { isIdx, prePost: pp });
   if (!p?.meta) throw new Error("沒有資料");
-  const q = quoteFromMeta(sym, p.meta);
+  const q = quoteFromMeta(sym, p.meta), ext = pp ? extFrom(p.r, q) : null;
   return {
     code: sym,
     name,
@@ -44,6 +45,7 @@ export async function usItem([sym, name], spark = true) {
     isStale: !!q.isStale,
     expectedDate: q.expectedDate || null,
     spark: spark ? p.bars.map(b => b.c).filter(v => v != null) : undefined,
+    ...(ext ? { ext } : {}),
   };
 }
 const settle = async (list, spark) => (await Promise.allSettled(list.map(x => usItem(x, spark)))).filter(r => r.status === "fulfilled").map(r => r.value);

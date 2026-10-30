@@ -3,6 +3,7 @@
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 export const num = v => (v == null || v === "" ? null : Number.isFinite(+v) ? +v : null);
+const pos = v => (num(v) > 0 ? num(v) : null); // 價格欄位：上游偶爾回 0（例：道瓊的最高、最低），當成沒有資料
 // 美股或其他 Yahoo 代號（不是台股數字代號）
 // 美股代號，也接受 Yahoo 的期貨（CL=F）、匯率（TWD=X）、加密貨幣（BTC-USD）、利率指數（^TNX）與美元指數（DX-Y.NYB），原物料外匯頁點進去才查得到
 // 「用 Yahoo 查的代號」：美股、指數、期貨匯率，加上日股（6981.T）、韓股（005930.KS／KQ）
@@ -195,7 +196,7 @@ export function quoteFromMeta(sym, meta, nowSec) {
   const updateMode = sess.state === "open" || sess.state === "pre" || sess.state === "post" ? "scheduled" : "after_close";
   return {
     code: sym, name: usName(sym, meta.shortName || meta.longName), market: meta.exchangeName || meta.fullExchangeName || "美股", currency: meta.currency || "USD",
-    price, prev, open: null, high: num(meta.regularMarketDayHigh), low: num(meta.regularMarketDayLow), vol: num(meta.regularMarketVolume),
+    price, prev, open: null, high: pos(meta.regularMarketDayHigh), low: pos(meta.regularMarketDayLow), vol: num(meta.regularMarketVolume),
     chg: price != null && prev ? +(price - prev).toFixed(2) : null, chgPct: price != null && prev ? +((price / prev - 1) * 100).toFixed(2) : null,
     time, date,
     dataDate: date,
@@ -226,7 +227,7 @@ export async function yahooQuote(sym) {
   const j = await getJSON(chartURL(sym, "range=1d&interval=5m&includePrePost=true"));
   const r = j?.chart?.result?.[0]; if (!r?.meta) throw new Error("沒有資料");
   const q = quoteFromMeta(sym, r.meta), o = r.indicators?.quote?.[0], ts = r.timestamp || [], reg = r.meta.currentTradingPeriod?.regular;
-  if (o?.open?.length) { let k = reg && ts.length ? ts.findIndex(t => t >= reg.start && t < reg.end) : -1; if (k < 0) k = o.open.length - 1; if (o.open[k] != null) q.open = num(+(+o.open[k]).toFixed(2)); }
+  if (o?.open?.length) { let k = reg && ts.length ? ts.findIndex(t => t >= reg.start && t < reg.end) : -1; if (k < 0) k = o.open.length - 1; if (o.open[k] != null) q.open = pos(+(+o.open[k]).toFixed(2)); }
   const ext = extFrom(r, q); if (ext) q.ext = ext;
   return q;
 }
@@ -241,9 +242,12 @@ export function parseYahooBars(j, isIdx = false, shares = false) {
     .map(b => ({ ...b, o: +b.o.toFixed(2), h: +b.h.toFixed(2), l: +b.l.toFixed(2), c: +b.c.toFixed(2) }));
   return { bars, meta: r.meta, prev: num(r.meta?.chartPreviousClose ?? r.meta?.previousClose), session: sessionOf(r.meta) };
 }
-export async function yahooBars(sym, tf, { period1, period2, isIdx = false, shares = false } = {}) {
+// prePost：含盤前盤後的 K，另外回傳原始結果 r（給 extFrom 算盤前、盤後價）
+export async function yahooBars(sym, tf, { period1, period2, isIdx = false, shares = false, prePost = false } = {}) {
   const span = period1 && period2 ? `period1=${Math.floor(period1)}&period2=${Math.floor(period2)}` : "range=1d";
-  return parseYahooBars(await getJSON(chartURL(sym, `${span}&interval=${TF_INTERVAL[tf] || "1m"}&includePrePost=false`)), isIdx, shares);
+  const j = await getJSON(chartURL(sym, `${span}&interval=${TF_INTERVAL[tf] || "1m"}&includePrePost=${prePost}`)), P = parseYahooBars(j, isIdx, shares);
+  if (P && prePost) P.r = j.chart.result[0];
+  return P;
 }
 // 每種分 K 在 Yahoo 能往回查多久（天）、仁一次查幾天
 export const INTRADAY_LIMIT = { 1: { back: 29, chunk: 7 }, 5: { back: 59, chunk: 20 }, 15: { back: 59, chunk: 30 }, 30: { back: 59, chunk: 45 }, 60: { back: 729, chunk: 180 } };

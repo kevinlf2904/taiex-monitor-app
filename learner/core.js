@@ -492,6 +492,7 @@ function evalDataStatus(opts = {}) {
       receivedAt: receivedAt ?? null,
       updateMode: inferredMode,
       updateModeText: modeMap[inferredMode] || inferredMode,
+      tzLabel: type === "us" ? "美東時間" : "台北時間 UTC+8", // 來源時間是哪個時區（美股是美東，其餘是台北）
       dataStatus: r.status,
       state: canonDataState(r.status),
       authority: sourceAuthority(r.source ?? source),
@@ -788,6 +789,14 @@ function mktStatusTag(statusObj, options = {}) {
   return "<span class=\"mkt-tag " + status + "\" title=\"" + esc(note || text) + (extra ? " (" + extra + ")" : "") + "\"><i></i>" + text + (extra ? "<small>" + extra + "</small>" : "") + "</span>";
 }
 
+// 統計口徑說明（ⓘ）：手機不能 hover，點一下由 watch.html 用提示框顯示全文；放在按鈕裡也不會觸發外層的點擊
+const ITIP = {
+  value: "成交金額：上市（或上櫃）普通股＋ETF 在 09:00–13:30 一般交易時段的整股成交，不含盤後定價、零股與鉅額交易，所以會比券商「含盤後總成交」少一些。",
+  inst: "三大法人買賣超（證交所 BFI82U，上市，億元）：外資＝外資及陸資＋外資自營商（有些媒體只算前者，數字會不同）；自營商＝自行買賣＋避險。每個交易日約 15:00～16:30 公布，公布前顯示前一交易日。",
+  vol: "成交量：集中市場整股成交張數（1 張＝1,000 股），不含零股與鉅額交易，所以會比總成交股數少一點；盤中即時累計。",
+};
+function infoTip(k, text = ITIP[k]) { return text ? `<span class="itip" role="button" tabindex="0" data-itip="${esc(text)}" title="${esc(text)}" aria-label="口徑說明：${esc(text)}">ⓘ</span>` : ""; }
+
 /* ---------- 市場卡片統一資料透明展開區塊 (Phase 5 & Phase 8) ---------- */
 function mktDataInfoHtml(st, extra = {}) {
   if (!st || typeof st !== "object") return "";
@@ -795,7 +804,7 @@ function mktDataInfoHtml(st, extra = {}) {
   const dDate = extra.dataDate || st.dataDate || st.date || "未提供";
   const sTime = extra.sourceTime || st.sourceTime || st.time || "來源未提供時間";
   const fAt = extra.fetchedAt ?? st.fetchedAt;
-  const fAtStr = typeof fAt === "number" && fAt > 0 ? fmtTwTime(fAt) : (typeof fAt === "string" ? fAt : "未記錄");
+  const fAtStr = typeof fAt === "number" && fAt > 0 ? fmtTwTime(fAt) + "（台北 UTC+8）" : (typeof fAt === "string" ? fAt : "未記錄");
   const uMode = extra.updateModeText || st.updateModeText || (st.isLive ? "即時更新" : "盤後／定時");
   const dStat = extra.statusText || st.text || st.dataStatus || st.status || "—";
   const freq = extra.freq || (st.ttl ? `快取 TTL ${Math.round(st.ttl / 1000)} 秒` : "依時段排程");
@@ -804,7 +813,7 @@ function mktDataInfoHtml(st, extra = {}) {
   return `<details class="mk-dinfo"><summary>資料資訊 · ${esc(dDate)} · ${esc(uMode)}</summary><div class="mk-dinfo-grid">` +
     `<div><span>資料來源</span><b>${esc(src)}</b></div>` +
     `<div><span>資料日期</span><b>${esc(dDate)}</b></div>` +
-    `<div><span>來源時間</span><b>${esc(sTime)}</b></div>` +
+    `<div><span>來源時間</span><b>${esc(sTime)}${st.tzLabel && /\d:\d/.test(sTime) ? `（${esc(extra.tzLabel || st.tzLabel)}）` : ""}</b></div>` +
     `<div><span>系統抓取</span><b>${esc(fAtStr)}</b></div>` +
     `<div><span>更新類型</span><b>${esc(uMode)}</b></div>` +
     `<div><span>資料狀態</span><b>${esc(dStat)}</b></div>` +
@@ -938,6 +947,7 @@ if (typeof globalThis !== "undefined") {
   globalThis.usHolidayName = usHolidayName;
   globalThis.lastUsTradingDate = lastUsTradingDate;
   globalThis.fmtTwTime = fmtTwTime;
+  globalThis.infoTip = infoTip;
   globalThis.isMarketHealthy = isMarketHealthy;
   globalThis.getMktNoteText = getMktNoteText;
   globalThis.isHotHealthy = isHotHealthy;

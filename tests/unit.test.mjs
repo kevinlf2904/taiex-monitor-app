@@ -1846,6 +1846,17 @@ test("休市日判斷：前端 mktSession／twDayState 與伺服器 session 一�
   twHolSet(HOL, at("2026-10-27", "10:00")); twDayMark("2026-10-27", "trade"); assert.equal(twDayState(at("2026-10-27", "10:00")), "closed");
 });
 
+test("決策中心：盤後分析跟報價不同一天時提醒結論依據哪一天（Gemini DEF-02）", () => {
+  const { tdStaleNote } = engine().B;
+  assert.match(tdStaleNote("2026-10-29", "2026-10-28", "post"), /盤後分析更新中：目前結論依據 2026-10-28 收盤資料，最新報價為 2026-10-29/);
+  assert.match(tdStaleNote("2026-10-29", "2026-10-28", "closed"), /盤後分析更新中/, "週末打開也要提醒");
+  assert.equal(tdStaleNote("2026-10-29", "2026-10-29", "post"), "", "同一天不提醒");
+  assert.equal(tdStaleNote("2026-10-29", "2026-10-28", "live"), "", "盤中的盤後分析本來就是前一天的");
+  assert.equal(tdStaleNote("2026-10-29", "2026-10-28", "pre"), "");
+  assert.equal(tdStaleNote(null, "2026-10-28", "post"), "", "沒有報價日期不亂提醒");
+  assert.equal(tdStaleNote("2026-10-29", undefined, "post"), "");
+});
+
 test("決策中心整理：下一交易日、開始交易日不算休市、只清過期的推演快照", () => {
   const { findNextTradeDate, findLastTradeDate, sessionStatus, briefSnapGc } = engine().B;
   const HOL = [{ date: "2026-10-26", name: "測試假日" }, { date: "2026-10-28", name: "國曆新年開始交易日" }];
@@ -2212,6 +2223,25 @@ test("分 K 成交量：/api/intraday 的指數即時與往前載入都回價格
     assert.deepEqual(stock.bars.map(b => b.v), [1 + 2 + 3 + 4 + 5, 6 + 7 + 8 + 9 + 10]);
     assert.ok(calls.length >= 3);
   } finally { globalThis.fetch = realFetch; if (key === undefined) delete process.env.FUGLE_API_KEY; else process.env.FUGLE_API_KEY = key; }
+});
+
+test("美股大盤：權值股、類股 ETF 附盤後價（正規收盤另列），指數不抓延長時段（mock fetch，Gemini DEF-05）", async () => {
+  const { usItem } = await import("../api/_lib/usmarket.js");
+  const realFetch = globalThis.fetch, urls = [];
+  const start = Date.parse("2026-10-28T13:30:00Z") / 1000, end = Date.parse("2026-10-28T20:00:00Z") / 1000;
+  const ts = [start, end - 300, end + 3600]; // 開盤、收盤前、盤後一小時
+  const body = { chart: { result: [{ meta: { regularMarketPrice: 200, chartPreviousClose: 196, regularMarketDayHigh: 0, regularMarketDayLow: 195, regularMarketTime: end, gmtoffset: -14400, exchangeTimezoneName: "America/New_York", currentTradingPeriod: { regular: { start, end, gmtoffset: -14400 } } },
+    timestamp: ts, indicators: { quote: [{ open: [196, 199, 197], high: [201, 201, 197], low: [195, 198, 196], close: [199, 200, 196], volume: [1000, 1000, 1000] }] } }] } };
+  globalThis.fetch = async url => { url = String(url); urls.push(url); if (!url.startsWith("https://query1.finance.yahoo.com/")) throw new Error("不該呼叫其他網站：" + url); return { ok: true, status: 200, json: async () => body }; };
+  try {
+    const smh = await usItem(["SMH", "半導體"], false);
+    assert.match(urls.at(-1), /includePrePost=true/);
+    assert.equal(smh.price, 200, "主價格仍是正規盤收盤");
+    assert.deepEqual([smh.high, smh.low], [null, 195], "上游回 0 的最高價當成沒有資料（畫面顯示 —）");
+    assert.deepEqual([smh.ext.label, smh.ext.price, smh.ext.chgPct], ["盤後", 196, -2]);
+    const sox = await usItem(["^SOX", "費城半導體"], true);
+    assert.match(urls.at(-1), /includePrePost=false/); assert.equal(sox.ext, undefined, "指數沒有盤後交易");
+  } finally { globalThis.fetch = realFetch; }
 });
 
 test("P1-02 daily.js：缺值（null、空字串、--、非數字）不轉成 0，真正的 0 保留；下游金額與排行略過缺值", async () => {

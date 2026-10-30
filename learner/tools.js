@@ -14,7 +14,7 @@ const myCodes = () => [...new Set(W.groups.flatMap(g => g.list))].filter(c => !i
 // ★ 只看我的自選：財報、法說會、節目共識、大戶國會共用同一個開關（W.mine，記在 watch:mine），範圍是自選＋庫存
 const mineCodes = () => new Set([...myCodes(), ...Object.keys(W.hold || {})]);
 const mineF = () => { if (!W.mine) return () => true; const S = mineCodes(); return c => S.has(String(c || "").toUpperCase()); };
-const mineBtn = () => `<button type="button" class="ichip minebtn" data-mine aria-pressed="${!!W.mine}" title="財報、法說會、節目共識、大戶國會都只列自選與庫存的股票">★ 只看我的自選</button>`;
+const mineBtn = () => `<button type="button" class="ichip minebtn" data-mine aria-pressed="${!!W.mine}" title="財報、法說會、節目共識、大戶國會都只列自選與庫存的股票">★ 只看我的自選</button>${W.mine && !mineCodes().size ? `<span class="note mineempty">自選和庫存都是空的，所以下面沒有東西。<button type="button" class="linkbtn" data-onb="fill">✨ 載入範例自選（2330／2317／2454／NVDA／AAPL）</button></span>` : ""}`;
 
 /* ---------- 指標條件 ---------- */
 // [id, 名稱, 參數名稱（沒有就 null）, 預設參數, 判斷(D, I, p) → 最後一根成立就回傳說明]
@@ -623,7 +623,7 @@ function f13RankHtml(F) {
     <p class="note">市值加權的持股報酬（持股不動的估計），和 SPY 同期比；季中買賣、放空、現金都看不到。</p>`;
 }
 function f13Html(arg) {
-  let F = W.f13; if (!F) { f13Load(); return `<p class="note" style="padding:16px">載入中…</p>`; }
+  let F = W.f13; if (!F) { f13Load(); return skel("載入 13F 機構持股…", 6); }
   if (F.err || !F.funds?.length) return `<p class="note" style="padding:16px">⚠︎ 13F 資料還沒有（${esc(F.err || "沒有資料")}）。資料由每天的排程從 SEC EDGAR 整理。</p>`;
   const sh = n => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "K" : n), tk = r => esc(r.ticker || r.name), nm = r => `${esc(r.name)}${r.pc ? `（${r.pc === "PUT" ? "賣權" : "買權"}）` : ""}`;
   if (arg) {
@@ -702,7 +702,7 @@ function insBtHtml() {
     <p class="note">資料從排程開始累積（最多約 3 年），樣本很少時結果不穩定；申報不等於已經賣出。</p>`;
 }
 function insHtml() {
-  const I = W.ins; if (!I) { insLoad(); return `<p class="note">載入中…</p>`; }
+  const I = W.ins; if (!I) { insLoad(); return skel("載入內部人申報…", 6); }
   if (I.err || !I.rows?.length) return `<p class="note">⚠︎ 內部人申報資料還沒有（${esc(I.err || "沒有資料")}）。資料由每個交易日的排程從證交所、櫃買中心整理。</p>`;
   const mine = mineCodes(), f = W.mine ? "mine" : W.insF || "mine", q = (W.insQ || "").trim().toUpperCase(), view = ["rank", "feed", "bt", "heat"].includes(W.insv) ? W.insv : "rank";
   const none = !W.mine && f === "mine" && !q && !I.rows.some(r => mine.has(r.code)); // 自選、庫存都沒有申報：直接看全部（開著「★ 只看我的自選」就不換）
@@ -844,7 +844,7 @@ function chipxHtml() {
   const tb = (head, rows) => `<div class="ctbl"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows || `<tr><td colspan="${head.length}" class="note">還沒有資料</td></tr>`}</tbody></table></div>`;
   return `<section class="csec"><h3>籌碼動向 <span class="note">${X?.date ? "資料日 " + X.date : ""}</span></h3>
     <h4>千張大戶持股週變化 ${T?.date ? `<span class="note">集保 ${T.date}</span>` : ""}</h4>
-    ${T?.up ? `<div class="tgrid"><div>${tb(["增加最多", "週變化", "千張%"], T.up.slice(0, 15).map(r => `<tr><td>${a(r[0])}</td><td class="up">+${r[1]}</td><td>${r[2]}%</td></tr>`).join(""))}</div><div>${tb(["減少最多", "週變化", "千張%"], T.down.slice(0, 15).map(r => `<tr><td>${a(r[0])}</td><td class="down">${r[1]}</td><td>${r[2]}%</td></tr>`).join(""))}</div></div>` : `<p class="note">${esc(T ? T.err || "還沒有排行（集保每週公布一次，累積兩週後才算得出週變化）" : "載入中…")}</p>`}
+    ${T?.up ? `<div class="tgrid"><div>${tb(["增加最多", "週變化", "千張%"], T.up.slice(0, 15).map(r => `<tr><td>${a(r[0])}</td><td class="up">+${r[1]}</td><td>${r[2]}%</td></tr>`).join(""))}</div><div>${tb(["減少最多", "週變化", "千張%"], T.down.slice(0, 15).map(r => `<tr><td>${a(r[0])}</td><td class="down">${r[1]}</td><td>${r[2]}%</td></tr>`).join(""))}</div></div>` : T ? `<p class="note">${esc(T.err || "還沒有排行（集保每週公布一次，累積兩週後才算得出週變化）")}</p>` : skel("載入千張大戶排行…", 6)}
     <p class="note">千張大戶＝持有 1000 張以上的股東，週變化是持股比例的百分點；大戶比例上升、散戶下降常被當成籌碼集中的跡象，但也可能只是集保帳戶移轉。</p>
     <h4>選擇權 Put/Call 比（臺指選擇權）</h4>${tb(["日期", "成交量 P/C", "未平倉 P/C"], pcr.map(r => `<tr><td>${r[0]}</td><td>${r[1] ?? "—"}%</td><td><b>${r[2] ?? "—"}%</b></td></tr>`).join(""))}
     <p class="note">未平倉 Put/Call 比＞100% 代表賣權（看跌保護）未平倉比買權多；常見的解讀是比例偏高時市場有支撐、偏低時過熱，但只是情緒參考。</p>
@@ -976,7 +976,7 @@ function twoVal(p) { // 最近一次申報的持股市值（有代號、有收�
   return { rows, total: rows.reduce((a, x) => a + (x.v || 0), 0), n: rows.length };
 }
 function twoHtml(arg = "") {
-  const X = W.two; if (!X) { twoLoad(); return `<p class="note" style="padding:16px">載入中…</p>`; }
+  const X = W.two; if (!X) { twoLoad(); return skel("載入政治人物申報…", 6); }
   if (X.err || !X.decl?.length) return `<p class="note" style="padding:16px">⚠︎ 台灣政治人物申報資料還沒有（${esc(X.err || "沒有資料")}）。資料由排程從監察院廉政專刊整理，每週更新。</p>`;
   twoPxLoad();
   const mf = mineF(), [kind, id] = arg.split(/:(.*)/s), P = twoPeople().filter(p => !W.mine || kind === "p" || p.hold.some(h => mf(h.code))); // ★ 只看我的自選：只列持有自選或庫存股票的人
