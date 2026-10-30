@@ -92,8 +92,8 @@ test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心�
   assert.match(await p.evaluate(() => $('#lx details[data-tdbox="plan"] .td-plan-pre').innerText), /上漲|下跌|資料不足/);
   const marketSummary = await p.textContent("#lx .td-market-summary");
   assert.match(marketSummary, /今日市場摘要/); assert.match(marketSummary, /加權/);
-  assert.match(marketSummary, /市場結構：/);
-  assert.doesNotMatch(marketSummary, /漲\\s*\\d+\\s*／\\s*跌\\s*\\d+\\s*家/, "摘要不重複列出法人情緒卡中的漲跌家數");
+  assert.match(marketSummary, /市場結構/);
+  assert.doesNotMatch(marketSummary, /漲\s*\d+\s*／\s*跌\s*\d+\s*家/, "摘要不重複列出法人情緒卡中的漲跌家數");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
