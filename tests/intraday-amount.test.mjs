@@ -1,7 +1,7 @@
 // 加權（T00）、櫃買（O00）分 K 的價格與成交金額（api/_lib/intraday.js）：全部用假 fetch，不連富果、Yahoo
 import test from "node:test";
 import assert from "node:assert/strict";
-import handler, { aggregate, parseFugleCandles, toYi, hhmm } from "../api/_lib/intraday.js";
+import handler, { aggregate, parseFugleCandles, parseFugleHistoryCandles, toYi, hhmm } from "../api/_lib/intraday.js";
 
 const DAY = "2026-10-30";
 const noSleep = async () => {};
@@ -14,12 +14,22 @@ const fail = status => ({ ok: false, status, headers: { get: () => null }, json:
 
 // 呼叫 /api/intraday；route(url) 回傳假回應；記錄每個網址被打幾次
 async function call(query, route, { key = "test-key" } = {}) {
-  const old = process.env.FUGLE_API_KEY, calls = [];
+  const old = process.env.FUGLE_API_KEY, oldFetch = globalThis.fetch, calls = [], responseHeaders = {};
   if (key) process.env.FUGLE_API_KEY = key; else delete process.env.FUGLE_API_KEY;
-  const fetchImpl = async url => { url = String(url); calls.push(url); if (!/api\.fugle\.tw|query1\.finance\.yahoo\.com/.test(url)) throw new Error("不該連到其他網站：" + url); return route(url); };
-  let body; try { await handler({ query }, { setHeader() {}, status: () => ({ json: b => (body = JSON.parse(JSON.stringify(b))) }) }, { fetchImpl, sleep: noSleep }); }
-  finally { if (old === undefined) delete process.env.FUGLE_API_KEY; else process.env.FUGLE_API_KEY = old; }
-  return { body, calls, fugle: calls.filter(u => u.includes("/candles/")).length };
+  const fetchImpl = async (url, options = {}) => {
+    url = String(url); calls.push(url);
+    if (!/api\\.fugle\\.tw|query1\\.finance\\.yahoo\\.com/.test(url)) throw new Error("不該連到其他網站：" + url);
+    return route(url, options);
+  };
+  globalThis.fetch = fetchImpl; // _yahoo.js 歷史請求使用 global fetch；在此一併 mock，確保不連外。
+  let body;
+  try {
+    await handler({ query }, { setHeader: (k, v) => { responseHeaders[k] = v; }, status: () => ({ json: b => (body = JSON.parse(JSON.stringify(b))) }) }, { fetchImpl, sleep: noSleep });
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (old === undefined) delete process.env.FUGLE_API_KEY; else process.env.FUGLE_API_KEY = old;
+  }
+  return { body, calls, responseHeaders, fugle: calls.filter(u => u.includes("/candles/")).length };
 }
 const VOL = k => 1e10 + k * 1e8; // 每分鐘 100 億元起，每分鐘多 1 億
 const fugleOk = (sym, n = 10) => url => (url.includes(`/candles/${sym}`) ? ok(fugleCandles(n, VOL)) : url.includes("/quote/") ? ok({ previousClose: 44900, name: "加權指數" }) : fail(404));
@@ -114,4 +124,151 @@ test("收盤集合競價 13:25～13:29 成交金額是 0：60 分 K 最後一小
   assert.equal(body.bars[0].v, 25 * 25 + 818, "25 根各 25 億＋收盤 818 億");
   const five = await call({ code: "t00", tf: "5" }, url => (url.includes("/candles/") ? ok({ date: DAY, data }) : ok({ previousClose: 44900 })));
   assert.deepEqual(five.body.bars.slice(-2).map(b => [b.t, b.v]), [["13:25", 0], ["13:30", 818]]);
+});
+
+const histRow = (day, time, volume) => ({
+  date: `${day}T${time}:00.000+08:00`, open: 45000, high: 45010, low: 44990, close: 45005, volume,
+});
+const histBody = data => ({ symbol: "IX0001", timeframe: "1", sort: "asc", data });
+const yahooHistory = (day = "2026-10-29") => {
+  const t0 = Date.parse(`${day}T09:00:00+08:00`) / 1000, ts = [t0, t0 + 60];
+  return { chart: { result: [{
+    meta: { gmtoffset: 28800, chartPreviousClose: 44900, shortName: "TSEC" }, timestamp: ts,
+    indicators: { quote: [{ open: [45000, 45001], high: [45010, 45011], low: [44990, 44991], close: [45005, 45006], volume: [2000, 3000] }] },
+  }] } };
+};
+const yahooUsHistory = (day = "2026-10-29") => {
+  const t0 = Date.parse(`${day}T13:30:00Z`) / 1000, ts = [t0, t0 + 60];
+  return { chart: { result: [{
+    meta: { gmtoffset: -14400, chartPreviousClose: 220, shortName: "Apple Inc." }, timestamp: ts,
+    indicators: { quote: [{ open: [220, 221], high: [221, 222], low: [219, 220], close: [220.5, 221.5], volume: [2000, 3000] }] },
+  }] } };
+};
+
+test("Fugle 歷史指數分 K：T00/O00 對應 IX0001/IX0043，五種 timeframe、區間、欄位與億元單位正確", async () => {
+  for (const [code, symbol] of [["t00", "IX0001"], ["o00", "IX0043"]]) {
+    for (const tf of [1, 5, 15, 30, 60]) {
+      const { body, calls } = await call({ code, tf: String(tf), before: DAY }, (url, options) => {
+        assert.ok(url.includes(`/historical/candles/${symbol}?`));
+        assert.equal(options.headers["X-API-KEY"], "test-key");
+        return ok(histBody([histRow("2026-10-29", "09:00", 100e8)]));
+      });
+      const q = new URL(calls[0]).searchParams;
+      assert.equal(q.get("timeframe"), String(tf));
+      assert.equal(q.get("from"), "2026-09-30"); assert.equal(q.get("to"), "2026-10-29");
+      assert.ok(Date.parse(q.get("to")) - Date.parse(q.get("from")) < 365 * 86400e3, "每次查詢必須小於一年");
+      assert.equal(q.get("fields"), "open,high,low,close,volume"); assert.equal(q.get("sort"), "asc");
+      assert.equal(body.ok, true); assert.equal(body.source, "富果 Historical Candles");
+      assert.equal(body.unit, "億元"); assert.equal(body.amountNa, false);
+      assert.equal(body.bars[0].v, 100); assert.equal(body.bars[0].d, "2026-10-29");
+    }
+  }
+});
+
+test("Fugle 歷史資料依完整日期與時間排序；各週期 K 棒不跨日重組、不重複累加 volume", async () => {
+  const data = [
+    histRow("2026-10-29", "09:01", 300e8),
+    histRow("2026-10-28", "09:00", 100e8),
+    histRow("2026-10-29", "09:00", 200e8),
+  ];
+  const { body } = await call({ code: "t00", tf: "5", before: DAY }, url => ok(histBody(data)));
+  assert.deepEqual(body.bars.map(b => [b.d, b.t, b.v]), [
+    ["2026-10-28", "09:00", 100], ["2026-10-29", "09:00", 200], ["2026-10-29", "09:01", 300],
+  ]);
+  assert.equal(parseFugleHistoryCandles(histBody(data)).length, 3);
+});
+
+test("Fugle 歷史成交金額保留零與缺值語意：0 是 0，缺 volume 是 null", async () => {
+  const { body } = await call({ code: "o00", tf: "1", before: DAY }, url => ok(histBody([
+    histRow("2026-10-29", "09:00", 0), { ...histRow("2026-10-29", "09:01", null), volume: undefined },
+  ])));
+  assert.equal(body.bars[0].v, 0); assert.equal(body.bars[1].v, null);
+  assert.equal(body.amountNa, false);
+});
+
+test("Fugle 404 空 chunk 不當成歷史終點：empty:true、no-store，next 往前推進", async () => {
+  const first = await call({ code: "t00", tf: "1", before: DAY }, url => fail(404));
+  assert.equal(first.body.ok, true); assert.deepEqual(first.body.bars, []);
+  assert.equal(first.body.empty, true); assert.equal(first.body.end, false);
+  assert.equal(first.body.next, "2026-09-30");
+  assert.equal(first.responseHeaders["Cache-Control"], "no-store");
+  assert.equal(first.calls.length, 1, "Fugle 404 應視為空 chunk，不要再用 Yahoo 覆蓋游標");
+  const next = await call({ code: "t00", tf: "1", before: first.body.next }, url => ok(histBody([histRow("2026-09-29", "09:00", 50e8)])));
+  assert.equal(next.body.bars[0].d, "2026-09-29");
+  assert.equal(next.body.next, "2026-08-31");
+});
+
+test("Fugle 分頁游標採相鄰日期區間：相鄰頁面不重疊、不漏掉日期", async () => {
+  const a = await call({ code: "t00", tf: "1", before: DAY }, url => ok(histBody([
+    histRow("2026-10-29", "09:00", 1e8), histRow("2026-10-01", "09:00", 2e8),
+  ])));
+  const b = await call({ code: "t00", tf: "1", before: a.body.next }, url => {
+    const q = new URL(url).searchParams;
+    assert.equal(q.get("to"), "2026-09-29"); assert.equal(q.get("from"), "2026-08-31");
+    return ok(histBody([histRow("2026-09-29", "09:00", 3e8)]));
+  });
+  const dates = [...b.body.bars, ...a.body.bars].map(x => x.d);
+  assert.deepEqual(dates, ["2026-09-29", "2026-10-01", "2026-10-29"]);
+  assert.equal(new Set(dates).size, dates.length);
+});
+
+test("只有抵達 2023-05-23 邊界才回報 Fugle 歷史終點", async () => {
+  const boundary = await call({ code: "t00", tf: "1", before: "2023-05-24" }, url => fail(404));
+  assert.equal(new URL(boundary.calls[0]).searchParams.get("from"), "2023-05-23");
+  assert.equal(boundary.body.end, true); assert.equal(boundary.body.next, "2023-05-23");
+  const earlier = await call({ code: "t00", tf: "1", before: "2023-05-23" }, () => { throw new Error("不應呼叫 API"); });
+  assert.equal(earlier.body.end, true); assert.equal(earlier.calls.length, 0);
+});
+
+test("Fugle 歷史 429／5xx 最多重試一次，成功後採用 Fugle 資料", async () => {
+  for (const status of [429, 503]) {
+    let attempts = 0;
+    const { body, fugle } = await call({ code: "t00", tf: "1", before: DAY }, url => {
+      if (url.includes("/historical/candles/") && ++attempts === 1) return fail(status);
+      return ok(histBody([histRow("2026-10-29", "09:00", 80e8)]));
+    });
+    assert.equal(fugle, 2); assert.equal(body.source, "富果 Historical Candles"); assert.equal(body.bars[0].v, 80);
+  }
+});
+
+test("Fugle 歷史 401／403 不重試，改用 Yahoo 價格備援且成交金額保持 null", async () => {
+  for (const status of [401, 403]) {
+    const { body, fugle } = await call({ code: "t00", tf: "1", before: DAY }, url => {
+      if (url.includes("/historical/candles/")) return fail(status);
+      if (url.includes("query1.finance.yahoo.com")) return ok(yahooHistory());
+      throw new Error("不預期的 fallback URL");
+    });
+    assert.equal(fugle, 1); assert.match(body.source, /Yahoo Finance.*價格備援/);
+    assert.equal(body.amountNa, true); assert.ok(body.bars.length > 0);
+    assert.ok(body.bars.every(b => b.v === null && b.c != null));
+  }
+});
+
+test("Fugle 歷史逾時重試一次後改用 Yahoo；Yahoo 僅提供價格，成交金額不假造", async () => {
+  const { body, fugle } = await call({ code: "o00", tf: "1", before: DAY }, url => {
+    if (url.includes("/historical/candles/")) throw Object.assign(new Error("mock timeout"), { name: "TimeoutError" });
+    if (url.includes("query1.finance.yahoo.com")) return ok(yahooHistory());
+    throw new Error("不預期的 fallback URL");
+  });
+  assert.equal(fugle, 2); assert.match(body.source, /Yahoo Finance/);
+  assert.equal(body.amountNa, true); assert.ok(body.bars.every(b => b.v === null && b.c != null));
+});
+
+test("沒有 FUGLE_API_KEY 時，指數歷史退回 Yahoo 價格，成交金額 null 且來源明確", async () => {
+  const { body, calls, fugle } = await call({ code: "t00", tf: "1", before: DAY }, url => ok(yahooHistory()), { key: "" });
+  assert.equal(fugle, 0); assert.ok(calls.every(u => u.includes("yahoo")));
+  assert.match(body.source, /Yahoo Finance.*價格備援/); assert.equal(body.amountNa, true);
+  assert.ok(body.bars.every(b => b.v === null));
+});
+
+test("個股歷史仍使用原有 Yahoo 路徑及「張」單位，不受指數 Fugle 歷史修改影響", async () => {
+  const { body, fugle } = await call({ code: "2330", tf: "1", before: DAY }, url => ok(yahooHistory()));
+  assert.equal(fugle, 0); assert.equal(body.unit, "張"); assert.equal(body.source, "Yahoo Finance");
+  assert.deepEqual(body.bars.map(b => b.v), [2, 3]); assert.equal(body.amountNa, undefined);
+});
+
+test("美股歷史仍使用原有 Yahoo 東部時區與「千股」單位", async () => {
+  const { body, fugle } = await call({ code: "AAPL", tf: "1", before: DAY }, url => ok(yahooUsHistory()));
+  assert.equal(fugle, 0); assert.equal(body.unit, "千股"); assert.equal(body.source, "Yahoo Finance");
+  assert.deepEqual(body.bars.map(b => [b.d, b.t, b.v]), [["2026-10-29", "09:30", 2], ["2026-10-29", "09:31", 3]]);
 });

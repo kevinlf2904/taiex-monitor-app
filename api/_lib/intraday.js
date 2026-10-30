@@ -2,9 +2,9 @@
 // GET /api/intraday?code=2330&tf=5    tf = 1、5、15、30、60（分鐘）；code 可以是 t00（加權指數）、o00（櫃買指數）
 // GET /api/intraday?code=t00&spark=1  只回當天每分鐘收盤 spark: [["09:00", 價], …]（大盤卡片的走勢線用，資料量小）
 // 有設定 FUGLE_API_KEY 時用富果 intraday/candles（1 分 K），否則改用 Yahoo Finance 1 分 K（可能有延遲）。
-// GET /api/intraday?code=2330&tf=5&before=2026-10-01   往前載入那一天以前的分 K（Yahoo；1 分 K 約一個月內、5／15／30 分約兩個月、60 分約兩年）
+// GET /api/intraday?code=2330&tf=5&before=2026-10-01   往前載入那一天以前的分 K（指數優先 Fugle Historical Candles；Yahoo 為價格備援）
 // 美股（英文代號）一律用 Yahoo，時間是美東當地時間，量的單位是千股。
-// 當天的資料一律先抓 1 分 K，再在伺服器端合成需要的週期。回傳 { ok, source, date, tf, prev, bars: [{ t: "09:05", o, h, l, c, v, a? }] }（a 是富果提供的當日均價），v 單位：張；指數（t00、o00）沒有可靠的分 K 成交量（Yahoo 的 ^TWII 欄位全是 0、^TWOII 沒資料），v 一律是 null（不是 0），前端看到 null 就不畫量。
+// 當天的資料一律先抓 1 分 K，再在伺服器端合成需要的週期。當日指數 Yahoo 成交量不可用、v 為 null；歷史指數分 K 使用 Fugle Historical Candles 的 volume（成交金額）。
 
 import { isUS, usName, yahooBars, INTRADAY_LIMIT } from "./_yahoo.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
@@ -44,6 +44,18 @@ export function parseFugleCandles(j, isIdx = false) {
     .filter(b => b.o && b.h && b.l && b.c).sort((a, b) => a.t.localeCompare(b.t));
   return { date: j?.date || null, bars };
 }
+
+// Fugle Historical Candles：日期由完整 ISO 時間排序；指數分 K volume 是成交金額（元）。
+export function parseFugleHistoryCandles(j) {
+  return (j?.data || []).map(x => ({
+    d: String(x.date || "").slice(0, 10), t: hhmm(x.date),
+    o: num(x.open), h: num(x.high), l: num(x.low), c: num(x.close),
+    ...(num(x.volume) != null && num(x.volume) >= 0 ? { v: num(x.volume) } : { v: null, vNa: 1 }),
+  }))
+    .filter(b => /^\d{4}-\d{2}-\d{2}$/.test(b.d) && b.o != null && b.h != null && b.l != null && b.c != null)
+    .sort((a, b) => a.d.localeCompare(b.d) || a.t.localeCompare(b.t));
+}
+
 export function parseYahooIntraday(j, isIdx) {
   const r = j?.chart?.result?.[0], q = r?.indicators?.quote?.[0];
   if (!r || !q || !Array.isArray(r.timestamp)) return null;
@@ -88,7 +100,43 @@ export async function fromYahoo(code, { fetchImpl = fetch } = {}) {
 const ymd = sec => new Date(sec * 1000).toISOString().slice(0, 10);
 const toMin = t => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
 // 往前載入：一律問 Yahoo（富果的盤中 API 只有當天）
-async function history(code, tf, before) {
+const INDEX_HISTORY_START = "2023-05-23";
+const INDEX_HISTORY_CHUNK_DAYS = 30;
+const shiftDate = (date, days) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400e3).toISOString().slice(0, 10);
+
+// 指數歷史分 K 優先使用 Fugle Historical Candles；一頁 30 個日曆日，from/to 均含端點。
+async function fugleIndexHistory(code, tf, before, key, { fetchImpl = fetch, sleep } = {}) {
+  const to = shiftDate(before, -1);
+  if (to < INDEX_HISTORY_START) return { bars: [], end: true, next: INDEX_HISTORY_START, source: "富果 Historical Candles", amountNa: true };
+  const candidateFrom = shiftDate(to, -(INDEX_HISTORY_CHUNK_DAYS - 1));
+  const from = candidateFrom < INDEX_HISTORY_START ? INDEX_HISTORY_START : candidateFrom;
+  const sym = INDEX[code].fugle;
+  const query = new URLSearchParams({
+    timeframe: String(tf), from, to,
+    fields: "open,high,low,close,volume", sort: "asc",
+  });
+  const url = `https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/${encodeURIComponent(sym)}?${query}`;
+  try {
+    const j = await getJSONRetry(url, { "X-API-KEY": key }, { fetchImpl, sleep });
+    const raw = parseFugleHistoryCandles(j).filter(b => b.d >= from && b.d <= to && b.d < before && toMin(b.t) >= 540 && toMin(b.t) <= 810);
+    const bars = raw.map(b => ({ ...b, v: toYi(b.v) }));
+    return {
+      bars, end: from === INDEX_HISTORY_START, next: from, prev: null,
+      name: INDEX[code].name, source: "富果 Historical Candles",
+      amountNa: !raw.some(b => b.v != null), empty: bars.length === 0,
+    };
+  } catch (e) {
+    // Fugle 404 代表這個日期 chunk 無資料（可能是連續休市／無行情），不能直接當成歷史終點。
+    if (e.status === 404) return {
+      bars: [], end: from === INDEX_HISTORY_START, next: from, prev: null,
+      name: INDEX[code].name, source: "富果 Historical Candles", amountNa: true, empty: true,
+    };
+    return { bars: [], error: e.message, end: false, next: from };
+  }
+}
+
+// 個股／美股維持原有 Yahoo 歷史路徑及既有回溯限制。
+async function historyYahoo(code, tf, before) {
   const us = isUS(code), lim = INTRADAY_LIMIT[tf] || INTRADAY_LIMIT[1], now = Date.now() / 1000, earliest = now - lim.back * 86400;
   const period2 = Date.parse(`${before}T00:00:00${us ? "-04:00" : "+08:00"}`) / 1000;
   if (!Number.isFinite(period2) || period2 <= earliest + 3600) return { bars: [], end: true, next: before };
@@ -107,6 +155,21 @@ async function history(code, tf, before) {
   }
   return { ...(last || {}), bars: last?.bars || [], end: period1 <= earliest + 1, next: ymd(period1 + (us ? -4 : 8) * 3600) };
 }
+
+async function history(code, tf, before, opts = {}) {
+  if (!INDEX[code]) return historyYahoo(code, tf, before);
+  const key = (process.env.FUGLE_API_KEY || "").trim();
+  if (key) {
+    const h = await fugleIndexHistory(code, tf, before, key, opts);
+    if (!h.error) return h;
+  }
+  // 沒有金鑰或 Fugle 歷史服務暫時不可用時，Yahoo 只備援價格；指數成交金額維持 null，不能用 0 代替。
+  const y = await historyYahoo(code, tf, before);
+  return {
+    ...y, source: "Yahoo Finance（價格備援；成交金額暫缺）", amountNa: true,
+    bars: (y.bars || []).map(b => ({ ...b, v: null, vNa: 1 })),
+  };
+}
 async function usToday(code, tf) {
   const p = await yahooBars(code, 1);
   if (!p || !p.bars.length) return null;
@@ -121,10 +184,17 @@ export default async function handler(req, res, { fetchImpl = fetch, sleep } = {
   if (!code) return res.status(400).json({ ok: false, error: "請給股票代號，例如 ?code=2330&tf=5（t00 是加權指數，美股用英文代號）。" });
   const before = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query?.before || "")) ? String(req.query.before) : null, us = isUS(code);
   if (before) {
-    const h = await history(code, tf, before);
-    if (h.error && !h.bars.length && !h.end) return res.status(200).json({ ok: false, error: `拿不到更早的分 K（${h.error}）` });
-    res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=86400");
-    return res.status(200).json({ ok: true, code, tf, source: "Yahoo Finance", bars: h.bars, end: h.end, next: h.next, prev: h.prev ?? null, session: h.session || null, unit: us ? "千股" : INDEX[code] ? "億元" : "張" });
+    const h = await history(code, tf, before, { fetchImpl, sleep });
+    if (h.error && !h.bars.length && !h.end) { res.setHeader("Cache-Control", "no-store"); return res.status(200).json({ ok: false, error: `拿不到更早的分 K（${h.error}）` }); }
+    const empty = !h.bars.length;
+    res.setHeader("Cache-Control", empty ? "no-store" : "s-maxage=3600, stale-while-revalidate=86400");
+    return res.status(200).json({
+      ok: true, code, tf, source: h.source || "Yahoo Finance", bars: h.bars,
+      end: h.end, next: h.next, prev: h.prev ?? null, session: h.session || null,
+      unit: us ? "千股" : INDEX[code] ? "億元" : "張",
+      ...(empty ? { empty: true } : {}),
+      ...(INDEX[code] ? { amountNa: h.amountNa ?? !h.bars.some(b => b.v != null) } : {}),
+    });
   }
   if (us) {
     try {
