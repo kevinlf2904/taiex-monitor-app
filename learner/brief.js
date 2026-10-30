@@ -1416,7 +1416,7 @@ function flowsDecisionHtml(M) {
   let S = [];
   try { S = M.stocks && typeof flowStocks === "function" ? flowStocks(M) : []; } catch {}
   const top = (k, s) => A.filter(x => s * x[k] > 0).sort((a, b) => s * (b[k] - a[k])).slice(0, 3);
-  const buy = top("net1", 1), sell = top("net1", -1), buy5 = top("net5", 1);
+  const buy = top("net1", 1), sell = top("net1", -1);
   const big = S.filter(x => /^\d{4}$/.test(x.code)), bb = big.reduce((m, x) => (!m || x.a1 > m.a1 ? x : m), null), bs = big.reduce((m, x) => (!m || x.a1 < m.a1 ? x : m), null);
   const odd = S.filter(x => x.mult >= 3 && Math.abs(x.a1) >= 3).length;
   const L = (x, v = x.net1) => `<button type="button" class="dh-sec-pill ${v > 0 ? "up" : "down"}" data-tdsec="${esc(x.id)}">${esc(x.name)} <b>${briefFlowFmt(v)}</b></button>`;
@@ -1433,7 +1433,6 @@ function flowsDecisionHtml(M) {
     ${M.secs && M.stocks ? `<div class="dh-flow-groups">
       ${row("今天法人買最多的板塊：", buy.map(x => L(x)).join(" "), "無顯著流入")}
       ${row("今天法人賣最多的板塊：", sell.map(x => L(x)).join(" "), "無顯著流出")}
-      ${row("近 5 日法人買超最多：", buy5.map(x => L(x, x.net5)).join(" "), "近 5 日沒有買超的板塊")}
       ${row("大戶異常（法人單日買賣金額最大）：", [bb?.a1 > 0 ? P(bb) : "", bs?.a1 < 0 ? P(bs) : ""].join(" ").trim(), "沒有明顯的大額買賣")}
     </div>
     <p class="note" style="margin:6px 0">異常爆量個股（成交額逾前 4 日均量 3 倍且逾 3 億）：<b>${odd}</b> 檔${M.T < 10 ? `・目前只有 ${M.T} 個交易日，近 5 日與加速度要 10 天才準` : ""}</p>` : ""}
@@ -1664,29 +1663,14 @@ function tdLiveViz(evs, hold, pm, period = "盤中監控") {
   const heat = L.length ? `<div class="td-heat">${L.map(([c, v]) => `<span class="${v >= 0 ? "up" : "down"}${H.has(c) ? " own" : ""}" style="--a:${(Math.min(Math.abs(v) / 5, 1) * 0.75 + 0.12).toFixed(2)}"><em>${esc(nameOf(c) || c)}</em><b class="num">${tdPctTxt(v)}</b></span>`).join("")}</div>` : "";
   return tl + heat;
 }
-// 資金雷達：近 5 日法人買超最多 3 個、賣超最多 2 個板塊＋大戶異常（今天的情緒與板塊在「盤後總結」）
+// 資金區收合摘要：只呈現近 5 日累積輪動；當日流向、法人情緒與異常個股留在展開內容
 function tdFlowViz(M) {
   if (!M) return "";
-  let A = [], S = []; try { A = M.secs && typeof flowAt === "function" ? flowAt(M) : []; } catch {} try { S = M.stocks && typeof flowStocks === "function" ? flowStocks(M) : []; } catch {}
-  const top = s => A.filter(x => tdOk(x.net5) && s * x.net5 > 0).sort((a, b) => s * (b.net5 - a.net5));
-  const R = [...top(1).slice(0, 3), ...top(-1).slice(0, 2).reverse()].map(x => [x.name, x.net5, briefFlowFmt(x.net5)]);
-  const big = S.filter(x => /^\d{4}$/.test(x.code) && tdOk(x.a1)), bb = big.reduce((m, x) => (!m || x.a1 > m.a1 ? x : m), null), bs = big.reduce((m, x) => (!m || x.a1 < m.a1 ? x : m), null);
-  const bg = [bb?.a1 > 0 && `<span class="up">▲ ${esc(bb.name)} ${briefFlowFmt(bb.a1)}</span>`, bs?.a1 < 0 && `<span class="down">▼ ${esc(bs.name)} ${briefFlowFmt(bs.a1)}</span>`].filter(Boolean);
-  return R.length || bg.length ? `${R.length ? `<div class="td-cap note">近 5 日法人買賣超（板塊）</div>${tdBars(R)}` : ""}${bg.length ? `<div class="td-big note">大戶異常 ${bg.join("")}</div>` : ""}` : "";
-}
-// 盤後總結：當天的計分板——加權、漲跌家數、法人情緒、異常個股＋今天法人買賣最多的板塊（文字與分享選項在點開後）
-function tdSumViz(M, tq) {
-  if (!M) return "";
-  let mood = null, A = [], S = []; try { mood = typeof flowMood === "function" ? flowMood(M) : null; } catch {} try { A = M.secs && typeof flowAt === "function" ? flowAt(M) : []; } catch {} try { S = M.stocks && typeof flowStocks === "function" ? flowStocks(M) : []; } catch {}
-  const d = M.dates?.[M.T - 1], ix = tq?.date === d && tdOk(tq?.chgPct) ? tq.chgPct : null, odd = S.filter(x => x.mult >= 3 && Math.abs(x.a1) >= 3).length;
-  const g = mood && tdOk(mood.score) ? (() => { const a = Math.PI * (1 - mood.score / 100), x = 30 + 24 * Math.cos(a), y = 30 - 24 * Math.sin(a); return `<svg viewBox="0 0 60 34" aria-hidden="true"><path class="bg" d="M6 30A24 24 0 0 1 54 30"/><path class="${mood.score >= 50 ? "up" : "down"}" d="M6 30A24 24 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)}"/></svg>`; })() : "";
-  const K = [ix != null && [`加權`, `<b class="num ${cls(ix)}">${tdPctTxt(ix)}</b>`, ""],
-    mood && tdOk(mood.up) && [`漲／跌家數`, `<b class="num"><span class="up">${mood.up}</span>／<span class="down">${mood.dn}</span></b>`, mood.lu || mood.ld ? `漲停 ${mood.lu || 0}・跌停 ${mood.ld || 0}` : ""],
-    mood && tdOk(mood.score) && [`法人情緒`, `<span class="td-gauge">${g}<b class="num">${mood.score}</b></span>`, esc(mood.label)],
-    S.length && [`異常個股`, `<b class="num">${odd}</b>`, "法人金額放大 3 倍"]].filter(Boolean);
-  const top = s => A.filter(x => tdOk(x.net1) && s * x.net1 > 0).sort((a, b) => s * (b.net1 - a.net1));
-  const R = [...top(1).slice(0, 3), ...top(-1).slice(0, 3).reverse()].map(x => [x.name, x.net1, briefFlowFmt(x.net1)]);
-  return K.length || R.length ? `${K.length ? `<div class="td-kpi">${K.map(([n, v, sub]) => `<div><span class="note">${n}</span>${v}${sub ? `<small class="note">${sub}</small>` : ""}</div>`).join("")}</div>` : ""}${R.length ? `<div class="td-cap note">今天法人買賣最多的板塊</div>${tdBars(R)}` : ""}` : "";
+  let A = [];
+  try { A = M.secs && typeof flowAt === "function" ? flowAt(M) : []; } catch {}
+  const top = s => A.filter(x => tdOk(x.net5) && s * x.net5 > 0).sort((a, b) => s * (b.net5 - a.net5)).slice(0, s > 0 ? 3 : 2);
+  const R = [...top(1), ...top(-1).reverse()].map(x => [x.name, x.net5, briefFlowFmt(x.net5)]);
+  return R.length ? `<div class="td-cap note">近 5 日法人累積淨流向（與當日買賣分開）</div>${tdBars(R)}` : "";
 }
 // 我的重點：接下來 7 個交易日的小行事曆，點是庫存、自選的法說會、除權息、ETF 換股、事件提醒
 function tdMineViz(t, mine) {
@@ -1789,8 +1773,16 @@ function todayPage() {
     ? `加權${tq.chgPct > 0 ? "上漲" : tq.chgPct < 0 ? "下跌" : "平盤"} ${tdPctTxt(tq.chgPct)}`
     : quoteAligned && tq?.date ? `加權行情資料不完整（${dataEval.dataStatusLabel || dataEval.dataStatus}），暫不判定`
       : tq?.date ? `最新加權報價 ${tq.date}，尚未對齊目標交易日 ${expectedDate || "本交易日"}` : "加權行情尚未取得";
-  const breadthText = fundsAligned && mood && tdOk(mood.up) && tdOk(mood.dn)
-    ? `市場廣度：漲 ${mood.up}／跌 ${mood.dn} 家` : "市場廣度尚無同日有效資料";
+  const breadthText = fundsAligned && mood && tdOk(mood.up) && tdOk(mood.dn) && quoteUsable
+    ? (() => {
+      const up = mood.up, dn = mood.dn, dir = Math.sign(tq.chgPct);
+      if (dir > 0 && up > dn) return "市場結構：指數與多數個股同步偏強";
+      if (dir > 0 && dn > up) return "市場結構：指數上漲、個股偏弱，走勢背離";
+      if (dir < 0 && dn > up) return "市場結構：指數與多數個股同步偏弱";
+      if (dir < 0 && up > dn) return "市場結構：指數下跌、個股相對抗跌，走勢背離";
+      return "市場結構：漲跌家數接近，個股方向分歧";
+    })()
+    : "市場結構尚無同日有效資料";
   const summaryHtml = `<div class="td-market-summary" role="status" aria-label="今日市場摘要">
     <b class="td-ms-label">今日市場摘要</b>
     <span class="td-ms-item td-ms-index">${esc(quoteText)}</span>
@@ -1831,12 +1823,12 @@ function todayPage() {
   const flowBody = () => {
     const summary = flowAfter
       ? M && typeof sumFlowHtml === "function"
-        ? sumFlowHtml(M, fundsAligned && tdOk(tq?.chgPct) ? tq.chgPct : null)
+        ? sumFlowHtml(M, null)
         : '<div class="dh-card td-flow-summary"><h4>盤後總結</h4><p class="note">法人資料尚未取得，暫不產生盤後結論。</p></div>'
       : "";
     return summary + flowsDecisionHtml(M);
   };
-  const flowViz = () => [flowAfter ? tdSumViz(M, tq) : "", tdFlowViz(M)].filter(Boolean).join("");
+  const flowViz = () => tdFlowViz(M);
   const planBody = () =>
     '<section class="td-plan-stage td-plan-pre"><h4 class="td-plan-head">盤前推演</h4>' +
       targetNote + tdPreViz(plan, tq) + briefScenariosHtml(plan) + dailyBriefSummaryHtml(W.bf, plan) +
