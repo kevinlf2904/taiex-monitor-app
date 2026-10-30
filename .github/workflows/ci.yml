@@ -3,7 +3,7 @@ name: ci
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review] # draft PR（大檔上鎖用）不跑，轉成 ready for review 才跑
-    paths: ["learner/**", "api/**", "scripts/**", "tests/**", ".github/workflows/**", "AGENTS.md", "CLAUDE.md", ".agent/**", "vercel.json", "package.json", "package-lock.json"] # 轉址設定、相依套件改了也要測
+    paths: ["learner/**", "api/**", "scripts/**", "tests/**", ".github/workflows/**", "AGENTS.md", "CLAUDE.md", ".agent/**", ".claude/settings.json", "vercel.json", "package.json", "package-lock.json"] # 轉址設定、相依套件改了也要測
   push:
     branches: [main]
     paths: ["learner/**.js", "learner/**.html", "learner/**.css", "api/**", "scripts/**", "tests/**", ".github/workflows/**", "vercel.json", "package.json", "package-lock.json"]
