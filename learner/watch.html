@@ -1359,10 +1359,16 @@ const MKT_FAILED = { hilo: "新高新低", sectors: "產業", inst: "法人", us
 const mktFailedNote = J => { const L = (J?.failed || []).map(k => MKT_FAILED[k]).filter(Boolean); return L.length ? `${L.join("、")}暫時拿不到，稍後自動重試。` : ""; };
 // 拿到資料的時間：離線快取（sw.js）回的舊資料帶 swCachedAt（當時存起來的時間），用它才會被判成過期；其他就是現在
 const gotAt = j => (j?.swCachedAt != null ? Math.max(1, +j.swCachedAt || 0) : Date.now());
+// 指數當日分 K 會經過 Fugle candles（可能重試）及昨收／Yahoo 備援；留出比其他 API 更長的瀏覽器等待時間，避免前端先於 Vercel function 中止。
+function requestTimeoutMs(url) {
+  const fallback = W.tmo || window.W_TMO || 20000, u = String(url), q = new URLSearchParams(u.includes("?") ? u.slice(u.indexOf("?") + 1) : "");
+  const indexToday = /^\/api\/intraday\?/.test(u) && !q.has("before") && /^(T00|O00)$/i.test(q.get("code") || "");
+  return indexToday ? Math.max(35000, Number(fallback) || 20000) : fallback;
+}
 async function getJ(url, optional = false) {
   const ttl = apiTtl(url); if (ttl && !(W.fresh > Date.now())) { const hit = await apiCacheGet(url); if (hit) return hit; }
   const fail = m => { const p = String(url).split("?")[0]; if (!(W.off && /資料服務/.test(m))) noteErr(p, m); return new Error(m); }; // 本機沒有資料服務的不記
-  let r; try { r = await fetch(url, { signal: tmo(W.tmo || window.W_TMO || 20000) }); } catch (e) { throw fail(e?.name === "TimeoutError" || e?.name === "AbortError" ? "伺服器太久沒回應" : "連不到伺服器（網路中斷？）"); }
+  let r; try { r = await fetch(url, { signal: tmo(requestTimeoutMs(url)) }); } catch (e) { throw fail(e?.name === "TimeoutError" || e?.name === "AbortError" ? "伺服器太久沒回應" : "連不到伺服器（網路中斷？）"); }
   const t = await r.text().catch(() => ""); let j = null; try { j = JSON.parse(t); } catch {}
   if (!j) { if (r.status === 404 && !optional) W.off = true; throw fail(r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}`); }
   if (!j.ok) throw fail(j.error || "拿不到資料");
