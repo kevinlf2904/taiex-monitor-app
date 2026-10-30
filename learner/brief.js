@@ -1743,7 +1743,7 @@ function todayPage() {
   const breadthText = fundsAligned && mood && tdOk(mood.up) && tdOk(mood.dn)
     ? `市場廣度：漲 ${mood.up}／跌 ${mood.dn} 家` : "市場廣度尚無同日有效資料";
   const fundText = fundsAligned
-    ? A.length ? [inS && `流入 ${inS.name}`, outS && `流出 ${outS.name}`].filter(Boolean).join("・") || "當日沒有可判定的板塊淨流向" : "當日板塊資料不足，暫不判定"
+    ? (A.length ? [inS && `流入 ${inS.name}`, outS && `流出 ${outS.name}`].filter(Boolean).join("・") || "當日沒有可判定的板塊淨流向" : "當日板塊資料不足，暫不判定")
     : "法人資金尚無同日有效資料";
   const summaryHtml = `<div class="td-market-summary" role="status" aria-label="今日市場摘要">
     <b class="td-ms-label">今日市場摘要</b>
@@ -1764,7 +1764,7 @@ function todayPage() {
   const D = todayData({ mine: new Set([...hold, ...myCodes()]), pct: c => (isIdx(c) ? null : W.quotes.get(c)?.chgPct), cal: null, today: t });
   const kl = plan?.keyLevels;
   const flowCaption = fundsAligned
-    ? [inS && `流入 ${inS.name}`, outS && `流出 ${outS.name}`].filter(Boolean).join("・") || `${md.slice(5).replace("-", "/")}・法人資料已更新`
+    ? A.length ? [inS && `流入 ${inS.name}`, outS && `流出 ${outS.name}`].filter(Boolean).join("・") || "當日沒有可判定的板塊淨流向" : "法人日期已對齊，但板塊資料不足"
     : md ? `法人資料 ${md}，與目前報價日期未對齊` : "等待同日法人資金資料";
   const alertPrefix = alerts ? "■ 警示 " + alerts + " 件・" : mon.length ? "事件 " + mon.length + " 件・" : "";
   const planCaption = sess.session === "pre"
