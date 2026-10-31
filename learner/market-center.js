@@ -143,6 +143,9 @@
   }
 
   function renderGlobal(page, W) {
+    if (W && !W.gl && !W.glLoading && typeof loadGlobal === "function" && !W.off) {
+      loadGlobal().then(() => { if (W.lt === "today") renderList(); });
+    }
     const U = W && W.bf && W.bf.us || {};
     const rows = []
       .concat(Array.isArray(U.indices) ? U.indices : [])
@@ -192,7 +195,9 @@
 
   function renderTechnical(page, W) {
     const detail = page.querySelector("#td-sec-plan");
-    const caption = detail && detail.querySelector(".dh-sec-s") ? detail.querySelector(".dh-sec-s").textContent : "";
+    const caption = detail
+      ? [detail.querySelector(".dh-sec-s")?.textContent, detail.querySelector(".dh-sec-b")?.textContent].filter(Boolean).join(" ")
+      : "";
     const levels = [
       { key: "pressure", label: "壓力", value: parseLevel(caption, "壓力"), desc: "突破後觀察是否站穩" },
       { key: "pivot", label: "多空分水嶺", value: parseLevel(caption, "分水嶺"), desc: "盤勢位置的判讀基準" },
