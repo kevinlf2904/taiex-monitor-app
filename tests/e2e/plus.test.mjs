@@ -5,6 +5,11 @@ import { chromium, serve, open } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
+const selectWorkspace = async (p, id) => {
+  await p.click(`#lx [data-mc-tab="${id}"]`);
+  await p.waitForFunction(key => document.querySelector(`#lx [data-mc-tab="${key}"]`)?.getAttribute("aria-pressed") === "true", id);
+};
+
 const J = (r, o) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o) });
 const TODAY = "2026-10-30"; // 固定週五，避免 CI 在週末時被判定為休市
 const nextWd = d => { const t = new Date(d + "T00:00:00Z"); do t.setUTCDate(t.getUTCDate() + 1); while (t.getUTCDay() % 6 === 0); return t.toISOString().slice(0, 10); };
@@ -30,27 +35,40 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   await p.route(/\/api\/futures\?bars=0$/, r => J(r, { ok: true, quote: { price: 23000, chg: -50, chgPct: -0.22, session: "night" }, night: { price: 23000, chg: -50, chgPct: -0.22, time: "05:00" }, day: null }));
   await p.route("**/api/news**", r => J(r, { ok: true, items: [{ title: "台積電先進封裝擴產", source: "測試報", link: "https://example.com/a", at: Date.now() - 3600e3 }] }));
   await p.evaluate(() => { W.cal = { hol: [] }; W.hold = { 2330: { sh: 1000, cost: 500 } }; showList?.(); W.tdPh = { d: twDay(), ph: "pre" }; setLt("today"); renderList(); }); // 早報在今日市場的「國際市場與總經」＋「交易情境」（盤前階段）
+  await selectWorkspace(p, "technical");
   await p.waitForFunction(() => /持股新消息/.test($("#lx").innerText), null, { timeout: 15000 });
-  const t = await p.evaluate(() => $("#lx").innerText);
+  const planText = await p.evaluate(() => $("#lx").innerText);
+  await selectWorkspace(p, "global");
+  const globalText = await p.evaluate(() => $("#lx").innerText);
+  await selectWorkspace(p, "overview");
+  const overviewText = await p.evaluate(() => $("#lx").innerText);
+  const t = overviewText + "\\n" + globalText + "\\n" + planText;
   for (const s of ["昨晚美股", "道瓊工業", "費城半導體", "台積電 ADR", "台指期", "夜盤 23,000", "除權息", "2330 除息 現金 4.5 元", "台積電先進封裝擴產", "今天要注意", "法說會"]) assert.ok(t.includes(s), `早報要有「${s}」`);
   assert.ok(t.indexOf("★ ") > 0 && t.indexOf("★ ") < t.indexOf("1101 除息"), "庫存的除權息排前面、有星號");
   assert.equal(await p.evaluate(() => W.lt), "today", "舊的「早報」分頁帶到情報局的「今日市場」");
-  assert.match(t, /國際市場與總經[\s\S]*昨晚美股[\s\S]*盤前推演/); assert.equal((t.match(/昨晚美股/g) || []).length, 1, "昨晚美股只在總經儀表板，盤前推演不再列一次");
+  assert.match(globalText, /國際市場與總經[\s\S]*昨晚美股/); assert.match(planText, /盤前推演/); assert.equal((globalText.match(/昨晚美股/g) || []).length, 1, "昨晚美股只在總經儀表板");
   await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="plan"] .td-plan-live'));
   const expand = async key => {
+    const workspace = { flow: "capital", mine: "overview", mac: "global", plan: "technical" }[key];
+    await selectWorkspace(p, workspace);
     if (!(await p.evaluate(k => document.querySelector('#lx details[data-tdbox="' + k + '"]')?.open, key))) await p.click('#lx details[data-tdbox="' + key + '"] > summary');
     await p.waitForFunction(k => !!document.querySelector('#lx details[data-tdbox="' + k + '"] .dh-sec-b'), key);
   };
-  await expand("flow"); await expand("mine"); await expand("mac"); await expand("plan");
-  const flowBody = await p.evaluate(() => $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "");
-  const mineBody = await p.evaluate(() => $('#lx details[data-tdbox="mine"] .dh-sec-b')?.innerText || "");
-  const planBody = await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || "");
+  await expand("flow"); const flowBody = await p.evaluate(() => $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "");
+  await expand("mine"); const mineBody = await p.evaluate(() => $('#lx details[data-tdbox="mine"] .dh-sec-b')?.innerText || "");
+  await expand("mac"); const macBody = await p.evaluate(() => $('#lx details[data-tdbox="mac"] .dh-sec-b')?.innerText || "");
+  await expand("plan"); const planBody = await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || "");
   assert.doesNotMatch(flowBody, /盤後總結/, "盤前階段不提前顯示盤後法人摘要");
   assert.match(mineBody, /自選／庫存漲幅前 5[\s\S]*自選／庫存跌幅前 5/, "持倉與自選排行歸入個人區");
-  assert.match(await p.evaluate(() => $('#lx details[data-tdbox="mac"] .dh-sec-b')?.innerText || ""), /美股資料日期[\s\S]*美東來源時間[\s\S]*資料狀態：過期資料[\s\S]*更新方式：盤後更新[\s\S]*來源：Yahoo Finance/, "國際行情就近顯示日期、來源時間、狀態與更新方式");
+  assert.match(macBody, /美股資料日期[\s\S]*美東來源時間[\s\S]*資料狀態：過期資料[\s\S]*更新方式：盤後更新[\s\S]*來源：Yahoo Finance/, "國際行情就近顯示日期、來源時間、狀態與更新方式");
   assert.doesNotMatch(planBody, /自選漲幅前 5|盤後總結/, "交易情境只呈現盤前／盤中／盤後時間序列");
   assert.equal(await p.$$eval("#lx [data-tx='tdai']", L => L.length), 1, "AI 整理只有一個");
-  await p.click('[data-tx="tdai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
+  await selectWorkspace(p, "overview");
+  await p.click('[data-tx="tdai"]');
+  // 不手動切頁：點擊 AI 整理本身就應帶到結果所在的 AI 研究工作區。
+  await p.waitForFunction(() => document.querySelector('#lx [data-mc-tab="research"]')?.getAttribute("aria-pressed") === "true");
+  await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
+  assert.equal(await p.evaluate(() => document.querySelector("#lx .mc-ai-panel")?.hidden), false, "AI 回覆所在面板必須可見");
   assert.ok(await noOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });

@@ -53,3 +53,25 @@ test("vercel-ignore：只改 learner/data/ 才略過部署；其他檔、判斷�
   let n = 0; const deepen = a => { if (a[0] === "fetch") return ""; if (++n === 1) throw new Error("bad object"); return "learner/data/x.json"; };
   assert.equal(decide({ prev: "a", git: deepen }).skip, true, "淺層 clone：往前多抓歷史後比得出來");
 });
+
+
+const MARKET_CENTER_SRC = await readFile(new URL("../learner/market-center.js", import.meta.url), "utf8");
+test("今日市場決策中心：五工作區定義穩定，無效工作區回到總覽", () => {
+  const window = {};
+  vm.runInNewContext(MARKET_CENTER_SRC, { window });
+  const api = window.KLMarketCenter;
+  assert.ok(api, "模組應在 window 暴露整合 API");
+  assert.deepEqual(Array.from(api.workspaces, x => x.id), ["overview", "capital", "global", "research", "technical"]);
+  assert.equal(api.normalizeWorkspace("capital"), "capital");
+  assert.equal(api.normalizeWorkspace("unknown"), "overview");
+  const W = {};
+  const state = api.ensureState(W);
+  assert.equal(state.workspace, "overview");
+  assert.equal(state.selectedSector, null);
+  assert.equal(state.selectedStock, null);
+  assert.equal(state.analysisDate, null);
+  assert.equal(api.ensureState(W), state, "重複初始化應沿用同一份執行期狀態");
+  W.marketCenter.workspace = "not-a-workspace";
+  assert.equal(api.ensureState(W).workspace, "overview");
+  assert.equal(W.store, undefined, "整合狀態不得自行寫入既有使用者儲存層");
+});

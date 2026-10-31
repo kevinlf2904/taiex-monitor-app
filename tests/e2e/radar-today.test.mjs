@@ -5,6 +5,11 @@ import { chromium, serve, open, watchFrame } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
+const selectWorkspace = async (p, id) => {
+  await p.click(`#lx [data-mc-tab="${id}"]`);
+  await p.waitForFunction(key => document.querySelector(`#lx [data-mc-tab="${key}"]`)?.getAttribute("aria-pressed") === "true", id);
+};
+
 
 // 假的法人資金資料（和 matrix-zoom、us 測試一樣直接換掉 flowAt、flowStocks、flowMood）
 const fake = p => p.evaluate(() => {
@@ -23,6 +28,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   await p.clock.setFixedTime(new Date("2026-10-26T15:00:00+08:00"));
   await p.evaluate(t => { document.documentElement.dataset.theme = t; }, theme); await fake(p);
   await p.evaluate(() => { W.tdPh = { d: twDay(), ph: "post" }; setLt("today"); renderList(); });
+  await selectWorkspace(p, "capital");
   await p.waitForSelector("#lx .dh-card.flows", { timeout: 15000 });
   const t = await p.evaluate(() => $("#lx .dh-card.flows").innerText);
   const flowSection = await p.evaluate(() => $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "");
@@ -33,13 +39,16 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   assert.match(t, /主力資金雷達回放/);
   assert.match(flowSection, /盤後總結/, "盤後總結整合在市場資金流向，而不是擠進資金雷達卡本體");
   // 盤後計分板與資金摘要同屬資金區：交易情境不重複法人 KPI
-  const V = await p.evaluate(() => ({ preview: $('#lx details[data-tdbox="flow"] > summary .dh-sec-v')?.innerText || "", bars: document.querySelectorAll('#lx details[data-tdbox="flow"] > summary .dh-sec-v .td-bars-list > div').length, body: $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "", plan: $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || "" }));
+  const V = await p.evaluate(() => ({ preview: $('#lx details[data-tdbox="flow"] > summary .dh-sec-v')?.innerText || "", bars: document.querySelectorAll('#lx details[data-tdbox="flow"] > summary .dh-sec-v .td-bars-list > div').length, body: $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "" }));
+  await selectWorkspace(p, "technical");
+  const planBody = await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || "");
+  await selectWorkspace(p, "capital");
   assert.ok(V.bars >= 2, "近 5 日板塊長條");
   assert.match(V.preview, /近 5 日法人累積淨流向[\s\S]*資料截至 2026-10-26[\s\S]*半導體[\s\S]*金融[\s\S]*散熱/);
   assert.match(V.preview, /法人淨流出[\s\S]*0[\s\S]*法人淨流入/, "正負長條標示 0 軸與資金方向");
   assert.doesNotMatch(V.preview, /大戶異常|法人情緒|漲跌家數/, "收合摘要只呈現近 5 日輪動，不重複展開內容");
   assert.match(V.body, /盤後總結/); assert.match(V.body, /法人情緒 64 分/); assert.match(V.body, /上漲 600 家／下跌 300 家/);
-  assert.doesNotMatch(V.plan, /盤後總結/, "法人盤後總結不混進交易情境");
+  assert.doesNotMatch(planBody, /盤後總結/, "法人盤後總結不混進交易情境");
   assert.match(V.body, /大戶異常（法人單日買賣金額最大）[\s\S]*台積電[\s\S]*長榮/);
   // 收合預覽的近 5 日輪動與展開內容的當日買賣分工；大戶異常只在展開內容
   assert.equal(await p.$$eval("#lx .dh-card.flows .mbar", L => L.length), 1, "情緒刻度");
@@ -56,14 +65,14 @@ test("卡片裡的板塊、個股、回放、前往資金雷達都能點；板�
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.clock.setFixedTime(new Date("2026-10-26T15:00:00+08:00")); await fake(p);
   const post = () => p.evaluate(() => { W.tdPh = { d: twDay(), ph: "post" }; setLt("today"); renderList(); });
-  await post(); await p.waitForSelector("#lx [data-tdsec]");
+  await post(); await selectWorkspace(p, "capital"); await p.waitForSelector("#lx [data-tdsec]");
   await p.click('#lx [data-tdsec="s1"]'); await p.waitForFunction(() => W.lt === "money" && W.mf.view === "sector" && W.mf.sec === "s1");
   assert.match(await p.evaluate(() => $("#lx .gback").innerText), /返回[\s\S]*半導體/);
   await p.click("#lx .gback [data-mv]"); await p.waitForFunction(() => W.mf.view === "bubble");
-  await post(); await p.waitForSelector('#lx [data-tdgo="replay"]'); await p.click('#lx [data-tdgo="replay"]');
+  await post(); await selectWorkspace(p, "capital"); await p.waitForSelector('#lx [data-tdgo="replay"]'); await p.click('#lx [data-tdgo="replay"]');
   await p.waitForFunction(() => W.lt === "money" && W.mf.view === "bubble");
   await p.evaluate(() => mfPlay(false));
-  await post(); await p.waitForSelector('#lx .dh-card.flows [data-sel="2330"]'); await p.click('#lx .dh-card.flows [data-sel="2330"]');
+  await post(); await selectWorkspace(p, "capital"); await p.waitForSelector('#lx .dh-card.flows [data-sel="2330"]'); await p.click('#lx .dh-card.flows [data-sel="2330"]');
   await p.waitForFunction(() => W.sel === "2330");
   await ctx.close(); assert.deepEqual(errs, []);
 });

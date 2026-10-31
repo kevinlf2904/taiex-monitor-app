@@ -1243,6 +1243,7 @@ tr.on td { background: var(--surface-2); }
 <script src="macrox.js"></script>
 <script src="congx.js"></script>
 <script src="brief.js"></script>
+<script src="market-center.js"></script>
 <script src="monitor.js"></script>
 <script src="figx.js"></script>
 <script src="relx.js"></script>
@@ -2104,7 +2105,7 @@ function renderList0() {
     note = renderCong();
   } else if (W.lt === "today") { // 情報局「今日市場」（原「今日重點」）：早報＋每日摘要整成一頁（brief.js 的 todayPage）
     // 自動更新時內容沒變就不重畫（不然每次報價更新整頁重建，按鈕會在手指按下去時被換掉）
-    const r = todayPage(), lx = $("#lx"); if (!(W.ticking && lx.dataset.v === "today" && lx._h === r.h)) { $("#lTools").innerHTML = ""; lx.innerHTML = r.h; lx._h = r.h; lx.dataset.v = "today"; } note = r.note;
+    const r = todayPage(), lx = $("#lx"); if (!(W.ticking && lx.dataset.v === "today" && lx._h === r.h)) { $("#lTools").innerHTML = ""; lx.innerHTML = r.h; lx._h = r.h; lx.dataset.v = "today"; window.KLMarketCenter?.enhance(lx, W); } note = r.note;
   } else if (W.lt === "tools") {
     note = renderTools();
   } else if (W.lt === "mon") { // 情報局「盤中監控」（monitor.js）
