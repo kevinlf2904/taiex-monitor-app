@@ -74,6 +74,22 @@ test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心�
   assert.equal(r.miss, 0, "今日市場的數字列不放「資料暫缺」");
   // 位置只寫事實（分水嶺上方／下方…），不寫偏多偏空；「怎麼看」說明算法、回測與「不是預測」
   const hero = await p.evaluate(() => $("#lx .td-main").innerText);
+  const chartInfo = await p.evaluate(() => ({
+    title: document.querySelector("#lx .td-chart-head")?.innerText || "",
+    meta: document.querySelector("#lx .td-chart-meta")?.innerText || "",
+    yTicks: document.querySelectorAll("#lx .td-ix-y span").length,
+    grid: document.querySelectorAll("#lx .td-ix-grid line").length,
+    stats: document.querySelectorAll("#lx .td-ix-stats .td-ix-stat").length,
+    note: document.querySelector("#lx .td-ix-note")?.innerText || "",
+    legend: document.querySelector("#lx .td-ix-legend")?.innerText || ""
+  }));
+  assert.match(chartInfo.title, /加權分時/);
+  assert.match(chartInfo.meta, /資料日期[\s\S]*2026-10-05[\s\S]*來源時間[\s\S]*10:30:05[\s\S]*狀態/);
+  assert.equal(chartInfo.yTicks, 5, "縱軸有五個價格刻度");
+  assert.equal(chartInfo.grid, 5, "走勢圖有對應的水平網格");
+  assert.equal(chartInfo.stats, 4, "開盤、最高、最低、昨收四項數據");
+  assert.match(chartInfo.note, /橫軸[\s\S]*縱軸[\s\S]*點數/);
+  assert.match(chartInfo.legend, /分時路徑[\s\S]*昨收基準[\s\S]*壓力/);
   assert.doesNotMatch(hero, /偏多|偏空|偏弱|強勢|弱勢|看多|看空/); assert.match(hero, /現在位置\s*(壓力上方|分水嶺上方|分水嶺下方|支撐下方)\s*離分水嶺/);
   await p.click("#lx .td-help > summary"); const help = await p.evaluate(() => $("#lx .td-help").innerText);
   assert.match(help, /分水嶺[\s\S]*夜盤[\s\S]*近 14 日平均波動[\s\S]*不是預測漲跌[\s\S]*不是買賣建議/); assert.equal(r.t00, 0, "加權在最上面，數字列不重複");
@@ -94,6 +110,39 @@ test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心�
   assert.match(marketSummary, /今日市場摘要/); assert.match(marketSummary, /加權/);
   assert.match(marketSummary, /市場結構/);
   assert.doesNotMatch(marketSummary, /漲\s*\d+\s*／\s*跌\s*\d+\s*家/, "摘要不重複列出法人情緒卡中的漲跌家數");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("市場廣度：完整顯示上漲／平盤／下跌樣本、比例與資料日期 390", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.clock.setFixedTime(new Date("2026-10-05T10:30:00+08:00"));
+  await p.evaluate(() => {
+    const d = twDay();
+    W.quotes.set("T00", { code: "T00", name: "加權指數", price: 100, prev: 99, open: 99, high: 101, low: 98, chg: 1, chgPct: 1.01, vol: 1000, date: d, time: "10:30:05", source: "證交所 MIS" });
+    const M = { T: 1, dates: [d], secs: [], stocks: new Map() };
+    window.mfModel = () => M;
+    window.flowAt = () => [];
+    window.flowMood = () => ({ up: 6, dn: 3, flat: 2, total: 11, lu: 1, ld: 0, avg: 0.65, score: 65, label: "偏樂觀" });
+    W.ixSp = { ...(W.ixSp || {}), T00: { pts: [["09:00", 99], ["10:00", 100], ["10:30", 100.5]], prev: 99, win: [540, 810] } };
+    W.tdPh = null; setLt("today"); renderList();
+  });
+  await p.waitForSelector("#lx .td-breadth");
+  const r = await p.evaluate(() => {
+    const el = document.querySelector("#lx .td-breadth");
+    return {
+      text: el?.innerText || "",
+      label: el?.getAttribute("aria-label") || "",
+      segments: [...(el?.querySelectorAll(".td-bb i") || [])].map(x => x.className),
+      widths: [...(el?.querySelectorAll(".td-bb i") || [])].map(x => x.style.width)
+    };
+  });
+  assert.match(r.text, /資料日期：2026-10-05/);
+  assert.match(r.text, /有效個股 11 檔/);
+  assert.match(r.text, /漲 6・54\.5%/); assert.match(r.text, /平 2・18\.2%/); assert.match(r.text, /跌 3・27\.3%/);
+  assert.match(r.text, /漲停 1・跌停 0/); assert.match(r.text, /個股平均漲跌 \+0\.65%/);
+  assert.match(r.label, /上漲 6 家、平盤 2 家、下跌 3 家，共 11 家/);
+  assert.deepEqual(r.segments, ["up", "flat", "down"]);
+  assert.deepEqual(r.widths, ["54.5%", "18.2%", "27.3%"]);
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
