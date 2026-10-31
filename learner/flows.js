@@ -53,11 +53,11 @@ function flowStocks(M, t = M.T - 1) {
 function flowMood(M, t = M.T - 1) {
   const st = [...M.stocks.values()].filter(s => /^\d{4}$/.test(s.code) && s.pct[t] != null);
   if (!st.length) return null;
-  const up = st.filter(s => s.pct[t] > 0).length, dn = st.filter(s => s.pct[t] < 0).length, lu = st.filter(s => s.pct[t] >= 9.5).length, ld = st.filter(s => s.pct[t] <= -9.5).length;
+  const up = st.filter(s => s.pct[t] > 0).length, dn = st.filter(s => s.pct[t] < 0).length, flat = st.length - up - dn, lu = st.filter(s => s.pct[t] >= 9.5).length, ld = st.filter(s => s.pct[t] <= -9.5).length;
   const avg = st.reduce((a, s) => a + s.pct[t], 0) / st.length, net = st.reduce((a, s) => a + (s.amt[t] ?? 0), 0); // 法人缺值的股票不計入淨買超
   const parts = [["上漲家數比", (up - dn) / Math.max(1, up + dn)], ["平均漲跌", Math.tanh(avg / 1.5)], ["漲跌停", (lu - ld) / (lu + ld + 5)], ["法人淨買超", Math.tanh(net / 300)]];
   const score = Math.round(50 + 50 * parts.reduce((a, p) => a + p[1], 0) / parts.length);
-  return { score, label: score < 20 ? "極度恐慌" : score < 40 ? "偏恐慌" : score <= 60 ? "中性" : score <= 80 ? "偏樂觀" : "極度樂觀", up, dn, lu, ld, avg, net, parts };
+  return { score, label: score < 20 ? "極度恐慌" : score < 40 ? "偏恐慌" : score <= 60 ? "中性" : score <= 80 ? "偏樂觀" : "極度樂觀", up, dn, flat, total: st.length, lu, ld, avg, net, parts };
 }
 const flowFmt = v => (v == null || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)}億`);
 // 盤後總結：把數字填進固定句型（不用 AI，不會亂編）

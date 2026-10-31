@@ -33,9 +33,10 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   assert.match(t, /主力資金雷達回放/);
   assert.match(flowSection, /盤後總結/, "盤後總結整合在市場資金流向，而不是擠進資金雷達卡本體");
   // 盤後計分板與資金摘要同屬資金區：交易情境不重複法人 KPI
-  const V = await p.evaluate(() => ({ preview: $('#lx details[data-tdbox="flow"] > summary .dh-sec-v')?.innerText || "", bars: document.querySelectorAll('#lx details[data-tdbox="flow"] > summary .dh-sec-v .td-bars > div').length, body: $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "", plan: $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || "" }));
+  const V = await p.evaluate(() => ({ preview: $('#lx details[data-tdbox="flow"] > summary .dh-sec-v')?.innerText || "", bars: document.querySelectorAll('#lx details[data-tdbox="flow"] > summary .dh-sec-v .td-bars-list > div').length, body: $('#lx details[data-tdbox="flow"] .dh-sec-b')?.innerText || "", plan: $('#lx details[data-tdbox="plan"] .dh-sec-b')?.innerText || "" }));
   assert.ok(V.bars >= 2, "近 5 日板塊長條");
-  assert.match(V.preview, /近 5 日法人累積淨流向[\s\S]*半導體[\s\S]*金融[\s\S]*散熱/);
+  assert.match(V.preview, /近 5 日法人累積淨流向[\s\S]*資料截至 2026-10-26[\s\S]*半導體[\s\S]*金融[\s\S]*散熱/);
+  assert.match(V.preview, /法人淨流出[\s\S]*0[\s\S]*法人淨流入/, "正負長條標示 0 軸與資金方向");
   assert.doesNotMatch(V.preview, /大戶異常|法人情緒|漲跌家數/, "收合摘要只呈現近 5 日輪動，不重複展開內容");
   assert.match(V.body, /盤後總結/); assert.match(V.body, /法人情緒 64 分/); assert.match(V.body, /上漲 600 家／下跌 300 家/);
   assert.doesNotMatch(V.plan, /盤後總結/, "法人盤後總結不混進交易情境");
