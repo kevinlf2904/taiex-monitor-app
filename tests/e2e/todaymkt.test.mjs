@@ -5,6 +5,11 @@ import { chromium, serve, open, watchFrame } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
+const selectWorkspace = async (p, id) => {
+  await p.click(`#lx [data-mc-tab="${id}"]`);
+  await p.waitForFunction(key => document.querySelector(`#lx [data-mc-tab="${key}"]`)?.getAttribute("aria-pressed") === "true", id);
+};
+
 
 const openOf = p => p.evaluate(() => [...document.querySelectorAll("#lx details.dh-sec[open]")].map(d => d.dataset.tdbox));
 const nowOf = p => p.evaluate(() => document.querySelector("#lx details.dh-sec.now")?.dataset.tdbox);
@@ -14,20 +19,30 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   await p.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
   assert.match(await p.textContent('#lTabs [data-l="today"]'), /^今日市場$/);
   const CASES = [["2026-10-26T08:00:00+08:00", ["mac", "plan"], "plan", /盤前推演[\s\S]*(情境|推演)/], ["2026-10-26T10:00:00+08:00", ["plan"], "plan", /自選漲 \d+ 跌 \d+[\s\S]*盤中監控/],
-    ["2026-10-26T15:00:00+08:00", ["flow", "plan"], "plan", /市場資金流向[\s\S]*盤後總結[\s\S]*盤前情境・盤中確認・盤後驗證[\s\S]*盤後整理[\s\S]*下一交易日行動清單/], ["2026-10-25T10:00:00+08:00", ["mac", "plan"], "plan", /今天休市，下面是下一交易日 10\/26[\s\S]*最近交易日盤後整理[\s\S]*最近交易日事件回顧/]];
+    ["2026-10-26T15:00:00+08:00", ["flow", "plan"], "plan", /盤前情境・盤中確認・盤後驗證[\s\S]*盤後整理[\s\S]*下一交易日行動清單/], ["2026-10-25T10:00:00+08:00", ["mac", "plan"], "plan", /今天休市，下面是下一交易日 10\/26[\s\S]*最近交易日盤後整理/]];
   for (const [at, want, now, re] of CASES) {
     await p.clock.setFixedTime(new Date(at));
     await p.evaluate(() => { W.tdPh = null; setLt("today"); renderList(); });
     await p.waitForFunction(() => !!document.querySelector("#lx details.dh-sec"), null, { timeout: 15000 });
     assert.deepEqual(await p.$$eval("#lx details.dh-sec", L => L.map(d => d.dataset.tdbox)), ["flow", "mac", "mine", "plan"], "順序固定");
     assert.deepEqual(await openOf(p), want, at); assert.equal(await nowOf(p), now, `「現在」標在目前時段 ${at}`);
-    const t = await p.evaluate(() => $("#lx").innerText);
-    assert.match(t, re, at); assert.match(t, /今日市場[\s\S]*重新整理/);
+    await selectWorkspace(p, "technical");
+    const technicalText = await p.evaluate(() => $("#lx").innerText);
+    assert.match(technicalText, re, at); assert.match(technicalText, /今日市場[\s\S]*重新整理/);
+    if (want.includes("flow")) {
+      await selectWorkspace(p, "capital");
+      assert.match(await p.evaluate(() => $("#lx").innerText), /市場資金流向[\s\S]*盤後總結/);
+    }
+    if (want.includes("mac") && at.startsWith("2026-10-25")) {
+      await selectWorkspace(p, "global");
+      assert.match(await p.evaluate(() => $("#lx").innerText), /最近交易日事件回顧/);
+    }
     assert.equal(await p.$$eval("#lx .dh-sec-b", L => L.length), want.length, "收合的區塊不畫內容");
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `沒有橫向溢出 ${at}`);
     await p.waitForTimeout(300); assert.equal(await p.$$eval("#lx .fold-btn", L => L.length), 0, `不會被自動收合成「展開全部」 ${at}`);
   }
   // 點標題展開別的區塊：每秒重畫也不會收回去（同一天記在記憶體）
+  await selectWorkspace(p, "overview");
   await p.click('#lx details[data-tdbox="mine"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="mine"] .dh-sec-b'));
   await p.evaluate(() => { W.ticking = true; renderList(); W.ticking = false; renderList(); });
   assert.deepEqual(await openOf(p), ["mac", "mine", "plan"]);
@@ -44,11 +59,14 @@ test("總經儀表板：昨晚美股只在這裡（核心卡已有的費半、�
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.clock.setFixedTime(new Date("2026-10-26T08:00:00+08:00"));
   await p.evaluate(() => { W.bf = { at: Date.now(), us: { ok: true, date: "2026-10-25", indices: [{ code: "^DJI", name: "道瓊工業", price: 42000, chgPct: 0.5 }, { code: "^SOX", name: "費城半導體", price: 5800, chgPct: 1.6 }, { code: "^IXIC", name: "那斯達克", price: 18000, chgPct: 0.9 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 190, chgPct: 2 }], macro: [{ code: "^TNX", name: "美國 10 年期公債殖利率", price: 4.21, chgPct: -0.5 }] } }; W.tdPh = null; setLt("today"); renderList(); });
+  await selectWorkspace(p, "global");
   await p.waitForFunction(() => /台幣/.test(document.querySelector('#lx details[data-tdbox="mac"]')?.innerText || ""), null, { timeout: 15000 });
   const m = await p.evaluate(() => document.querySelector('#lx details[data-tdbox="mac"]').innerText);
   assert.match(m, /道瓊 \+0\.5%・美債 4\.21%・台幣 31\.20/, "摘要用核心卡沒有的數字"); assert.match(m, /昨晚美股[\s\S]*道瓊工業[\s\S]*美國 10 年期/); assert.match(m, /美元／台幣[\s\S]*原油/);
   assert.doesNotMatch(m, /費城半導體|那斯達克|台積電 ADR/, "核心卡已經有的不重複");
+  await selectWorkspace(p, "technical");
   assert.equal(await p.evaluate(() => (document.querySelector('#lx details[data-tdbox="plan"] .td-plan-pre').innerText.match(/昨晚美股/g) || []).length), 0, "盤前推演不再列昨晚美股");
+  await selectWorkspace(p, "global");
   await p.click('#lx [data-tdgo="mkt:gl"]'); await p.waitForFunction(() => W.lt === "mkt" && W.mkReg === "gl");
   await ctx.close(); assert.deepEqual(errs, []);
 });
@@ -201,9 +219,10 @@ test("手機首頁觸控尺寸與響應式排版回歸 (320px, 375px, 390px, 430
     assert.equal(layout.barOverflows, false, `視口 ${width}px 狀態列不溢出視窗`);
     assert.equal(layout.overlaps, false, `視口 ${width}px 狀態列左側與按鈕群不重疊`);
     assert.deepEqual(layout.btns, [["↻重新整理", true, true], ["AI 整理", true, true], ["複製文字", true, true]], `視口 ${width}px 按鈕觸控尺寸`);
-    const jumps = await p.evaluate(() => [...document.querySelectorAll("#lx .td-quicknav [data-tdjump]")].map(b => { const r = b.getBoundingClientRect(); return [b.dataset.tdjump, r.height >= 44, r.width >= 44]; }));
-    assert.deepEqual(jumps, [["flow", true, true], ["mac", true, true], ["mine", true, true], ["plan", true, true]], `視口 ${width}px 快速導覽觸控尺寸`);
-    await p.click('#lx [data-tdjump="mine"]');
+    const jumps = await p.evaluate(() => [...document.querySelectorAll("#lx .mc-nav [data-mc-tab]")].map(b => { const r = b.getBoundingClientRect(); return [b.dataset.mcTab, r.height >= 44, r.width >= 44]; }));
+    assert.deepEqual(jumps, [["overview", true, true], ["capital", true, true], ["global", true, true], ["research", true, true], ["technical", true, true]], `視口 ${width}px 工作區導覽觸控尺寸`);
+    await p.click('#lx [data-mc-tab="overview"]');
+    await p.click('#lx details[data-tdbox="mine"] > summary');
     await p.waitForFunction(() => document.querySelector('#lx details[data-tdbox="mine"]')?.open && !!document.querySelector('#lx details[data-tdbox="mine"] .dh-sec-b'));
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `視口 ${width}px 快速導覽沒有造成橫向溢出`);
     await ctx.close();

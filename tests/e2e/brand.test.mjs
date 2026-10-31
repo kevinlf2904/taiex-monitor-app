@@ -5,6 +5,11 @@ import { chromium, serve, open } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
+const selectWorkspace = async (p, id) => {
+  await p.click(`#lx [data-mc-tab="${id}"]`);
+  await p.waitForFunction(key => document.querySelector(`#lx [data-mc-tab="${key}"]`)?.getAttribute("aria-pressed") === "true", id);
+};
+
 const DISC = "不構成任何證券投資顧問或個股買賣建議";
 
 test("首頁：品牌、碳黑配色、Hero 可收起、頁尾免責聲明", async () => {
@@ -99,10 +104,12 @@ test("合併重複功能：盤後、籌碼動向併進排行，盤後總結＋�
     await p.evaluate(() => { W.tv = "chipx"; setLt("tools"); }); await p.waitForTimeout(300); assert.equal(await p.evaluate(() => [W.lt, afView()].join()), "after,chipx");
     // 盤後總結＋分享：整合在「交易情境」區塊的盤後階段；分享圖片在最上面工具列
     await p.evaluate(() => { W.mf.model = { T: 1, dates: ["2026-10-16"] }; window.flowMood = () => null; window.flowSummary = () => "測試盤後總結"; W.tdPh = { d: twDay(), ph: "post" }; setLt("today"); });
+    await selectWorkspace(p, "capital");
     assert.match(await p.evaluate(() => $("#lx").innerText), /盤後總結[\s\S]*測試盤後總結/);
     assert.equal(await p.evaluate(() => document.querySelectorAll('#lx [data-mshare]').length), 4);
     assert.equal(await p.evaluate(() => document.querySelectorAll('#lx .dh-status-bar [data-mshare="share"]').length), 1, "分享今日盤面在工具列");
     assert.match(await p.evaluate(() => $('#lx details[data-tdbox="flow"] .dh-sec-b').innerText), /測試盤後總結/);
+    await selectWorkspace(p, "technical");
     assert.doesNotMatch(await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b').innerText), /盤後總結|測試盤後總結/, "交易情境不再混入法人盤後摘要");
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "橫向溢出");
     // 個股總覽：多空研判不再是獨立子頁

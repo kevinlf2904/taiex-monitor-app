@@ -33,7 +33,7 @@
     style.id = "kl-market-center-style";
     style.textContent = [
       ".mc-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:14px 0 8px}",
-      ".mc-tab{min-width:0;min-height:40px;padding:8px 7px;border:1px solid var(--line);border-radius:5px;background:var(--surface-2);color:var(--muted);font:inherit;font-size:13px;line-height:1.25;cursor:pointer}",
+      ".mc-tab{min-width:0;min-height:44px;padding:8px 7px;border:1px solid var(--line);border-radius:5px;background:var(--surface-2);color:var(--muted);font:inherit;font-size:13px;line-height:1.25;cursor:pointer}",
       ".mc-tab[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--ink);font-weight:600}",
       ".mc-heading{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:12px 0 8px}",
       ".mc-heading h4{margin:0;font-size:16px;font-weight:650;color:var(--ink)}",
@@ -43,7 +43,7 @@
       ".mc-ai-panel>p{margin:0 0 10px;color:var(--muted);font-size:12.5px}",
       ".mc-ai-panel .caibox{margin-top:10px}",
       ".td-page [data-mc-section][hidden],.td-page [data-mc-workspace][hidden]{display:none!important}",
-      "@media(max-width:640px){.mc-nav{display:flex;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;padding:0 0 4px;scrollbar-width:none}.mc-nav::-webkit-scrollbar{display:none}.mc-tab{flex:0 0 auto;min-width:86px;min-height:42px;padding:9px 12px}.mc-heading{align-items:flex-start;flex-direction:column;gap:3px}}"
+      "@media(max-width:640px){.mc-nav{display:flex;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;padding:0 0 4px;scrollbar-width:none}.mc-nav::-webkit-scrollbar{display:none}.mc-tab{flex:0 0 auto;min-width:86px;min-height:44px;padding:9px 12px}.mc-heading{align-items:flex-start;flex-direction:column;gap:3px}}"
     ].join("\n");
     (doc.head || doc.documentElement).appendChild(style);
   }
@@ -86,7 +86,9 @@
       nav.innerHTML = WORKSPACES.map(item =>
         '<button type="button" class="mc-tab" data-mc-tab="' + item.id + '" aria-pressed="false">' + item.label + "</button>"
       ).join("");
-      if (hero) page.insertBefore(nav, hero);
+      const mobile = page.ownerDocument.defaultView?.matchMedia?.("(max-width: 640px)")?.matches;
+      if (hero && mobile) hero.after(nav);
+      else if (hero) page.insertBefore(nav, hero);
       else if (status) status.after(nav);
     }
 

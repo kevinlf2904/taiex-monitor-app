@@ -5,6 +5,11 @@ import { chromium, serve, open, watchFrame } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
+const selectWorkspace = async (p, id) => {
+  await p.click(`#lx [data-mc-tab="${id}"]`);
+  await p.waitForFunction(key => document.querySelector(`#lx [data-mc-tab="${key}"]`)?.getAttribute("aria-pressed") === "true", id);
+};
+
 
 for (const width of [390, 1280]) test(`個股頁：漲跌停取到升降單位、休市標示、K 線與報價對不上時不硬接 ${width}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
@@ -109,8 +114,9 @@ for (const width of [390, 1280]) test(`今日重點（早報＋每日摘要）�
   assert.match(t, /今日市場[\s\S]*重新整理[\s\S]*AI 整理[\s\S]*複製文字/);
   // 今日重點卡「看完整」打開「我的持股」；盤前、盤中、盤後集中在「交易情境」區塊
   assert.equal(await p.evaluate(() => document.querySelector('#lx details[data-tdbox="mine"]').open), true, "看完整＝我的重點");
-  const planText = async () => { if (!(await p.evaluate(() => document.querySelector('#lx details[data-tdbox="plan"]').open))) await p.click('#lx details[data-tdbox="plan"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="plan"] .dh-sec-b')); return p.evaluate(() => document.querySelector('#lx details[data-tdbox="plan"] .dh-sec-b').innerText); };
+  const planText = async () => { await selectWorkspace(p, "technical"); if (!(await p.evaluate(() => document.querySelector('#lx details[data-tdbox="plan"]').open))) await p.click('#lx details[data-tdbox="plan"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="plan"] .dh-sec-b')); return p.evaluate(() => document.querySelector('#lx details[data-tdbox="plan"] .dh-sec-b').innerText); };
   const plan = await planText();
+  await selectWorkspace(p, "overview");
   await p.waitForSelector('#lx details[data-tdbox="mine"] .dh-sec-b');
   const mine = await p.evaluate(() => document.querySelector('#lx details[data-tdbox="mine"] .dh-sec-b').innerText);
   assert.match(plan, /盤前推演[\s\S]*(情境|推演)/);
@@ -122,7 +128,9 @@ for (const width of [390, 1280]) test(`今日重點（早報＋每日摘要）�
   // 法人資金資料抓不到（測試的 /api/daily 沒資料）：只抓一次就說明，不會畫完又回去抓、整頁一直重畫
   const n0 = await p.evaluate(() => { window.__rl = 0; const o = renderList; window.renderList = function () { window.__rl++; return o.apply(this, arguments); }; return 0; });
   await p.waitForTimeout(1500); assert.ok(await p.evaluate(() => window.__rl) < 5 + n0, "今日重點沒有一直重畫");
-  await p.click('#lx [data-tx="tdai"]'); await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
+  await p.click('#lx [data-tx="tdai"]');
+  await selectWorkspace(p, "research");
+  await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
   // 舊的分頁記錄（工具 → 早報、每日摘要、今日重點）都帶到情報局的今日重點
   for (const old of ["brief", "sum", "today"]) { await p.evaluate(o => { setLt("watch"); W.tv = o; setLt("tools"); }, old); await p.waitForTimeout(200); assert.equal(await p.evaluate(() => W.lt), "today", old); }
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
