@@ -6,6 +6,7 @@
 <title>存股與槓桿模擬器｜KLineLab</title>
 <!-- 存股與槓桿模擬器：可以單獨開啟，也嵌在 K線學堂的「存股模擬」分頁（?embed=1）。
      主題跟著 K線學堂（localStorage 的 kline:theme，或父頁面用 postMessage 通知）。 -->
+<script src="datasrc.js"></script><!-- 排程資料從 GitHub 讀最新版，要在其他程式之前 -->
 <script>
 (() => {
   const q = new URLSearchParams(location.search), d = document.documentElement;

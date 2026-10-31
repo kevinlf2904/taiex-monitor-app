@@ -2,6 +2,7 @@
   "regions": [
     "hnd1"
   ],
+  "ignoreCommand": "node scripts/vercel-ignore.mjs",
   "redirects": [
     {
       "source": "/",

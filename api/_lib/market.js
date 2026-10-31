@@ -260,11 +260,13 @@ export function newHiLo(rows, H, today) {
   }
   return { ...by, all: { hi: by.twse.hi + by.tpex.hi, lo: by.twse.lo + by.tpex.lo }, days: idx.length };
 }
+export const DATA_RAW = "https://raw.githubusercontent.com/kevinlf2904/taiex-monitor-app/main/learner/data/";
 let hiloMemo = null;
 async function hilo(host) {
   if (hiloMemo && Date.now() - hiloMemo.at < 600000) return hiloMemo.v;
-  const base = process.env.SITE_URL || (host ? `https://${host}` : null); if (!base) return null;
-  const v = await getJSON(`${base.replace(/\/$/, "")}/learner/data/market/hilo.json`).catch(() => null);
+  // 先讀 GitHub main 上最新的排程資料（資料更新不再觸發部署，網站上那份可能是舊的），拿不到才讀網站上部署的那份
+  const base = process.env.SITE_URL || (host ? `https://${host}` : null);
+  const v = await getJSON(`${DATA_RAW}market/hilo.json`).catch(() => null) || (base ? await getJSON(`${base.replace(/\/$/, "")}/learner/data/market/hilo.json`).catch(() => null) : null);
   hiloMemo = { at: Date.now(), v }; return v;
 }
 
