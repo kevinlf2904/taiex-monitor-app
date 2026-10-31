@@ -85,6 +85,9 @@ test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心�
   }));
   assert.match(chartInfo.title, /加權分時/);
   assert.match(chartInfo.meta, /資料日期[\s\S]*2026-10-05[\s\S]*來源時間[\s\S]*10:30:05[\s\S]*狀態/);
+  // 報價沒帶來源時寫「來源未提供」，不擅自標成證交所 MIS（可能是 Yahoo 備援）
+  const noSrc = await p.evaluate(() => { const q = W.quotes.get("T00"); if (q) W.quotes.set("T00", { ...q, source: "" }); renderList(); return document.querySelector("#lx .td-chart-meta")?.innerText || ""; });
+  assert.match(noSrc, /來源未提供/); assert.doesNotMatch(noSrc, /來源 證交所 MIS/);
   assert.equal(chartInfo.yTicks, 5, "縱軸有五個價格刻度");
   assert.equal(chartInfo.grid, 5, "走勢圖有對應的水平網格");
   assert.equal(chartInfo.stats, 4, "開盤、最高、最低、昨收四項數據");

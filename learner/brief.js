@@ -1611,7 +1611,7 @@ function tdIxChart(tq, kl, evs, dataEval) {
   const qMeta = [
     tq?.date ? `資料日期 ${tq.date}` : "資料日期未提供",
     (tq?.sourceTime || tq?.time) ? `來源時間 ${tq.sourceTime || tq.time}` : "來源時間未提供",
-    `來源 ${tq?.source || "證交所 MIS"}`,
+    tq?.source ? `來源 ${tq.source}` : "來源未提供",
     `狀態 ${dataEval?.dataStatusLabel || "未確認"}`
   ].join("・");
   const stat = (name, value, sub = "") => `<div class="td-ix-stat"><span class="note">${name}</span><b class="num">${fmtP(value)}</b>${sub ? `<small class="note">${esc(sub)}</small>` : ""}</div>`;
