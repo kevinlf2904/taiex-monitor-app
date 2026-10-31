@@ -112,7 +112,7 @@ for (const width of [390, 1280]) test("今日市場 V2：工作區視覺層級�
   );
   assert.match(oilMeta, /日期未提供/, "非美股市場不可借用美股日期");
   assert.doesNotMatch(oilMeta, /2026-10-23/, "原油未提供日期時不得套用美股交易日");
-  const internationalGroups = await p.$eval('#lx .mc-global-group[data-mc-global-kind="international"]', groups =>
+  const internationalGroups = await p.$$eval('#lx .mc-global-group[data-mc-global-kind="international"]', groups =>
     groups.map(group => ({ id: group.dataset.mcGlobalGroup, count: group.querySelectorAll(".mc-global-card").length })));
   assert.equal(internationalGroups.length, 7, "國際市場應完整呈現 API 定義的 7 個分類");
   assert.equal(internationalGroups.reduce((sum, group) => sum + group.count, 0), 34, "不得因顯示上限截斷 34 個國際市場標的");
