@@ -33,13 +33,13 @@
   function readFlow(W) {
     let model = null, sectors = [], mood = null;
     try {
-      if (typeof window.mfModel === "function") model = window.mfModel();
+      if (typeof mfModel === "function") model = mfModel();
     } catch {}
     if (!model && W && W.mfModel && typeof W.mfModel === "object") model = W.mfModel;
     if (!model || !model.secs || !model.stocks || !model.T) return { model: null, sectors: [], mood: null, date: null };
 
-    try { if (typeof window.flowAt === "function") sectors = window.flowAt(model) || []; } catch {}
-    try { if (typeof window.flowMood === "function") mood = window.flowMood(model) || null; } catch {}
+    try { if (typeof flowAt === "function") sectors = flowAt(model) || []; } catch {}
+    try { if (typeof flowMood === "function") mood = flowMood(model) || null; } catch {}
     const date = Array.isArray(model.dates) ? model.dates[model.T - 1] : null;
     const stocks = model.stocks instanceof Map ? Array.from(model.stocks.values()) : Object.values(model.stocks || {});
     const hasAmount = stocks.some(stock => Array.isArray(stock.amt) && stock.amt[model.T - 1] != null);
