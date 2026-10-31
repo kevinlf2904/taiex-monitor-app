@@ -130,45 +130,168 @@
     if (detail) detail.dataset.mcSection = "capital";
   }
 
-  function renderGlobal(page, W) {
-    if (W && !W.gl && !W.glLoading && typeof loadGlobal === "function" && !W.off) {
-      loadGlobal().then(() => { if (W.lt === "today") renderList(); });
+
+  const GLOBAL_REFRESH_MS = 60_000;
+  const GLOBAL_REFRESH_POLL_MS = 15_000;
+  const GLOBAL_STATUS_LABELS = {
+    live: "供應商盤中報價（可能延遲）",
+    delayed: "來源更新延遲",
+    pending: "資料待確認",
+    confirmed: "來源資料已回報",
+    stale: "來源資料過期",
+    partial: "資料不完整",
+    holiday: "市場休市",
+    unavailable: "無有效報價"
+  };
+  const GLOBAL_UPDATE_LABELS = { scheduled: "定時更新", after_close: "盤後更新" };
+
+  function globalTimeLabel(value) {
+    const ms = typeof value === "number" ? value : Date.parse(value || "");
+    if (!Number.isFinite(ms)) return "未提供";
+    const local = new Date(ms + 8 * 3600e3).toISOString();
+    return local.slice(0, 10) + " " + local.slice(11, 19) + "（台北時間）";
+  }
+
+  function globalRowHtml(item, options = {}) {
+    const code = item && item.code || "";
+    const price = item && (item.price ?? item.close);
+    const missing = price == null || (options.failedCodes && options.failedCodes.has(code));
+    const statusKey = missing ? "unavailable" : item?.dataStatus || options.statusFallback || "";
+    const statusLabel = GLOBAL_STATUS_LABELS[statusKey] || "狀態未提供";
+    const date = item?.dataDate || item?.date || options.dateFallback || "市場日期未提供";
+    const time = item?.sourceTime || item?.time || options.timeFallback || "來源時間未提供";
+    const zone = item?.tz ? "（" + item.tz + "）" : "";
+    const source = item?.source || options.sourceFallback || "來源未提供";
+    const updateMode = item?.updateMode || options.updateFallback || "";
+    const updateLabel = GLOBAL_UPDATE_LABELS[updateMode] || (updateMode ? "更新方式未提供" : "");
+    const tone = ["stale", "partial", "delayed", "unavailable"].includes(statusKey) ? "warn" : "neutral";
+    const change = item?.chgPct;
+    return '<article class="mc-global-card" data-mc-code="' + escapeHtml(code) + '">' +
+      '<div class="mc-global-name"><b>' + escapeHtml(item?.name || code || "未命名") + '</b><span>' + escapeHtml(code) + '</span></div>' +
+      '<div class="mc-global-price">' + escapeHtml(numberFmt(price, 3)) + '</div>' +
+      '<div class="mc-global-change ' + (isNum(change) ? (change > 0 ? "up" : change < 0 ? "down" : "flat") : "flat") + '">' +
+        escapeHtml(isNum(change) ? signed(change) + "%" : "漲跌幅未提供") + '</div>' +
+      '<div class="mc-global-meta">' + escapeHtml("資料日期 " + date + " · 來源時間 " + time + zone) + '</div>' +
+      '<div class="mc-global-source">' + escapeHtml("來源：" + source) + '</div>' +
+      '<div class="mc-global-status ' + tone + '"><span>' + escapeHtml(statusLabel) + '</span>' +
+        (updateLabel ? '<small>' + escapeHtml(updateLabel) + '</small>' : '') + '</div>' +
+    '</article>';
+  }
+
+  function globalGroupHtml(id, title, rows, options = {}) {
+    const cards = rows.length
+      ? '<div class="mc-global-grid">' + rows.map(item => globalRowHtml(item, options)).join("") + '</div>'
+      : '<p class="mc-empty">目前沒有可顯示的資料。</p>';
+    const note = options.note ? '<small>' + escapeHtml(options.note) + '</small>' : "";
+    return '<details class="mc-global-group" data-mc-global-group="' + escapeHtml(id) +
+      '" data-mc-global-kind="' + escapeHtml(options.kind || "international") + '"' + (options.open ? " open" : "") + '>' +
+      '<summary><span class="mc-global-group-title"><b>' + escapeHtml(title) + '</b>' + note + '</span>' +
+      '<span class="mc-global-group-count">' + rows.length + ' 項</span></summary>' +
+      '<div class="mc-global-group-body">' + cards + '</div></details>';
+  }
+
+  function refreshGlobalIfNeeded(W) {
+    const state = ensureState(W);
+    if (!state || !W || W.lt !== "today" || state.workspace !== "global" || W.off ||
+        document.visibilityState === "hidden" || W.glLoading || typeof loadGlobal !== "function") return false;
+    const now = Date.now();
+    const sourceAt = Date.parse(W.gl?.sourceFetchedAt || "");
+    const localAt = Number(W.gl?.at);
+    const freshnessAt = Number.isFinite(sourceAt) && sourceAt > 0 ? sourceAt :
+      (Number.isFinite(localAt) ? localAt : 0);
+    const stale = !W.gl?.ok || !freshnessAt || now - freshnessAt >= GLOBAL_REFRESH_MS;
+    const lastAttempt = Number(state.globalRefreshAttemptAt) || 0;
+    if (!stale || now - lastAttempt < GLOBAL_REFRESH_MS) return false;
+
+    state.globalRefreshAttemptAt = now;
+    const job = loadGlobal(true);
+    if (typeof renderList === "function") renderList();
+    Promise.resolve(job).then(() => {
+      if (W.lt === "today" && state.workspace === "global" && typeof renderList === "function") renderList();
+    }).catch(() => {});
+    return true;
+  }
+
+  function syncGlobalRefreshTimer(W, active) {
+    const state = ensureState(W);
+    if (!state) return;
+    if (active && !state.globalRefreshTimer) {
+      state.globalRefreshTimer = setInterval(() => refreshGlobalIfNeeded(runtimeRef), GLOBAL_REFRESH_POLL_MS);
+      state.globalRefreshVisibilityHandler = () => {
+        if (document.visibilityState === "visible") refreshGlobalIfNeeded(runtimeRef);
+      };
+      document.addEventListener("visibilitychange", state.globalRefreshVisibilityHandler);
+    } else if (!active && state.globalRefreshTimer) {
+      clearInterval(state.globalRefreshTimer);
+      state.globalRefreshTimer = null;
+      if (state.globalRefreshVisibilityHandler) {
+        document.removeEventListener("visibilitychange", state.globalRefreshVisibilityHandler);
+        state.globalRefreshVisibilityHandler = null;
+      }
     }
+  }
+
+  function renderGlobal(page, W) {
     const U = W && W.bf && W.bf.us || {};
-    const rows = []
-      .concat(Array.isArray(U.indices) ? U.indices : [])
-      .concat(Array.isArray(U.macro) ? U.macro : [])
-      .concat(Array.isArray(U.megas) ? U.megas : []);
-    const extra = W && W.gl && W.gl.ok && Array.isArray(W.gl.groups)
-      ? W.gl.groups.flatMap(group => Array.isArray(group.rows) ? group.rows : []) : [];
-    const usCodes = new Set(rows.filter(item => item && item.code).map(item => item.code));
-    const byCode = new Map();
-    rows.concat(extra).forEach(item => {
-      if (item && item.code && !byCode.has(item.code)) byCode.set(item.code, item);
-    });
-    const cards = Array.from(byCode.values()).slice(0, 15).map(item => {
-      const price = item.price ?? item.close;
-      const change = item.chgPct;
-      const tone = isNum(change) ? (change > 0 ? "up" : change < 0 ? "down" : "flat") : "flat";
-      const isUsRow = usCodes.has(item.code);
-      const date = item.dataDate || item.date || (isUsRow ? U.dataDate || U.date : null) || "日期未提供";
-      const time = item.sourceTime || item.time || (isUsRow ? U.sourceTime : null) || "來源時間未提供";
-      const zone = item.tz ? "（" + item.tz + "）" : "";
-      const source = item.source || (isUsRow ? U.source : null) || "來源未提供";
-      return '<article class="mc-global-card"><div class="mc-global-name"><b>' + escapeHtml(item.name || item.code) + '</b><span>' + escapeHtml(item.code) + '</span></div>' +
-        '<div class="mc-global-price">' + escapeHtml(numberFmt(price, 3)) + '</div>' +
-        '<div class="mc-global-change ' + tone + '">' + escapeHtml(isNum(change) ? signed(change) + "%" : "漲跌幅未提供") + '</div>' +
-        '<div class="mc-global-meta">' + escapeHtml(date) + ' · ' + escapeHtml(time + zone) + '</div>' +
-        '<div class="mc-global-source">' + escapeHtml(source) + '</div></article>';
-    }).join("");
-    const stateLabels = { live: "供應商盤中報價（可能延遲）", confirmed: "收盤確認", partial: "資料不完整", stale: "過期資料", holiday: "休市資料", unavailable: "無資料" };
-    const updateLabels = { scheduled: "定時更新", after_close: "盤後更新" };
-    const status = stateLabels[U.dataStatus] || "狀態未提供";
-    const update = updateLabels[U.updateMode] || "更新方式未提供";
-    const panelHtml = '<div class="mc-panel-head"><div><span class="mc-eyebrow">GLOBAL MARKETS</span><h4>全球市場矩陣</h4></div><span class="mc-status-chip">' + escapeHtml(status) + '</span></div>' +
-      '<div class="mc-global-summary"><span>資料日期 <b>' + escapeHtml(U.dataDate || U.date || "未提供") + '</b></span><span>來源時間 <b>' + escapeHtml(U.sourceTime || "未提供") + (U.tz ? "（" + escapeHtml(U.tz) + "）" : "") + '</b></span><span>更新方式 <b>' + escapeHtml(update) + '</b></span><span>來源 <b>' + escapeHtml(U.source || "Yahoo Finance") + '</b></span></div>' +
-      (cards ? '<div class="mc-global-grid">' + cards + '</div>' : '<p class="mc-empty">全球市場資料尚未取得；不以其他市場或其他日期的價格代填。</p>') +
-      '<p class="mc-data-note">美股行情使用其自身交易日期與來源時間；供應商盤中報價可能延遲，並非交易所逐筆即時。</p>';
+    const usGroups = [
+      { id: "us-indices", name: "美股主要指數", rows: Array.isArray(U.indices) ? U.indices : [], note: "指數與波動率", open: true },
+      { id: "us-macro", name: "美股期貨與總經", rows: Array.isArray(U.macro) ? U.macro : [], note: "期貨、利率、美元與總經商品" },
+      { id: "us-megas", name: "美股大型權值股", rows: Array.isArray(U.megas) ? U.megas : [], note: "大型公司與台積電 ADR" }
+    ];
+    const failedCodes = new Set(Array.isArray(W?.gl?.failed) ? W.gl.failed : []);
+    const sourceGroups = W && W.gl && W.gl.ok && Array.isArray(W.gl.groups) ? W.gl.groups : [];
+    const allGlobalRows = sourceGroups.flatMap(group => Array.isArray(group.rows) ? group.rows : []);
+    const validCount = allGlobalRows.filter(item => item && item.price != null).length;
+    const failedCount = new Set([...failedCodes, ...allGlobalRows.filter(item => !item || item.price == null).map(item => item?.code).filter(Boolean)]).size;
+    const totalCount = allGlobalRows.length;
+    const apiMs = Date.parse(W?.gl?.sourceFetchedAt || "");
+    const apiAge = Number.isFinite(apiMs) && apiMs > 0 ? Date.now() - apiMs : Infinity;
+    let apiStatus = "尚未載入（開啟此工作區後自動載入）";
+    if (W?.glLoading) apiStatus = "國際行情更新中";
+    else if (W?.gl?.refreshError) apiStatus = "更新失敗，保留上次有效資料";
+    else if (W?.gl?.err || W?.gl?.ok === false) apiStatus = "國際行情暫時不可用";
+    else if (W?.gl?.ok) {
+      if (apiAge >= GLOBAL_REFRESH_MS) apiStatus = "API 回應已超過 60 秒";
+      else if (failedCount) apiStatus = "部分標的缺值 " + validCount + "/" + totalCount;
+      else apiStatus = "API 回應成功 " + validCount + "/" + totalCount;
+    }
+    const usStatus = GLOBAL_STATUS_LABELS[U.dataStatus] || "狀態未提供";
+    const usUpdate = GLOBAL_UPDATE_LABELS[U.updateMode] || "更新方式未提供";
+    const usDate = U.dataDate || U.date || "未提供";
+    const usTime = U.sourceTime || "未提供";
+    const usMeta = '<span>美股資料日期 <b>' + escapeHtml(usDate) + '</b></span>' +
+      '<span>美股來源時間 <b>' + escapeHtml(usTime + (U.tz ? "（" + U.tz + "）" : "")) + '</b></span>' +
+      '<span>美股狀態 <b>' + escapeHtml(usStatus) + '</b></span>' +
+      '<span>美股更新方式 <b>' + escapeHtml(usUpdate) + '</b></span>' +
+      '<span>美股來源 <b>' + escapeHtml(U.source || "Yahoo Finance") + '</b></span>';
+    const globalMeta = '<span>國際 API 狀態 <b>' + escapeHtml(apiStatus) + '</b></span>' +
+      '<span>API 回應時間 <b>' + escapeHtml(globalTimeLabel(W?.gl?.sourceFetchedAt)) + '</b></span>' +
+      '<span>前端取得／快取時間 <b>' + escapeHtml(globalTimeLabel(W?.gl?.at)) + '</b></span>' +
+      '<span>國際行情來源 <b>' + escapeHtml(W?.gl?.source || "Yahoo Finance") + '</b></span>';
+    const usGroupsHtml = usGroups.filter(group => group.rows.length).map(group => globalGroupHtml(
+      group.id, group.name, group.rows, {
+        kind: "us", note: group.note, open: !!group.open,
+        statusFallback: U.dataStatus, dateFallback: U.dataDate || U.date,
+        timeFallback: U.sourceTime, sourceFallback: U.source, updateFallback: U.updateMode
+      }
+    )).join("");
+    const globalGroupsHtml = sourceGroups.map(group => globalGroupHtml(
+      group.id, group.name, Array.isArray(group.rows) ? group.rows : [], {
+        kind: "international", note: group.note, open: group.id === "energy" || group.id === "fx",
+        failedCodes, sourceFallback: W?.gl?.source
+      }
+    )).join("");
+    const emptyText = W?.glLoading ? "國際行情載入中…" :
+      W?.gl?.refreshError ? "更新失敗；暫時保留上一筆有效資料，請留意資料日期。" :
+      W?.gl?.err ? "目前無法取得國際行情：" + W.gl.err :
+      "尚未取得國際行情。切換到全球總經工作區後，系統會自動載入。";
+    const contents = usGroupsHtml + globalGroupsHtml;
+    const panelHtml = '<div class="mc-panel-head"><div><span class="mc-eyebrow">GLOBAL MARKETS</span><h4>全球市場矩陣</h4></div>' +
+      '<span class="mc-status-chip">' + escapeHtml(apiStatus) + '</span></div>' +
+      '<div class="mc-global-summary">' + usMeta + globalMeta + '</div>' +
+      (contents ? '<div class="mc-global-groups">' + contents + '</div>' : '<p class="mc-empty">' + escapeHtml(emptyText) + '</p>') +
+      (W?.gl?.refreshError ? '<p class="mc-data-note">最近一次更新失敗：' + escapeHtml(W.gl.refreshError) + '</p>' : '') +
+      '<p class="mc-data-note">API 回應時間與前端取得／快取時間不是市場交易時間；每個標的的日期、來源時間與狀態以該標的回傳值為準。未提供的欄位不借用其他市場資料補入。供應商盤中報價可能延遲，並非交易所逐筆即時。</p>';
     const panel = ensurePanel(page, ".mc-global-panel", "mc-panel mc-global-panel", "global", panelHtml);
     const sectionBar = page.querySelector(".dh-secbar");
     if (sectionBar) sectionBar.before(panel);
@@ -281,6 +404,20 @@
       ".mc-global-change{margin-top:2px;font:650 12px var(--font-num,monospace)}",
       ".mc-global-meta{margin-top:10px;font-size:10px;color:var(--muted);line-height:1.5}",
       ".mc-global-source{margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+      ".mc-global-groups{display:grid;grid-template-columns:minmax(0,1fr);gap:11px}",
+      ".mc-global-group{min-width:0;border:1px solid var(--mc-border);border-radius:10px;background:var(--mc-card);overflow:hidden}",
+      ".mc-global-group>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:46px;padding:10px 13px;list-style:none;cursor:pointer;background:var(--mc-soft)}",
+      ".mc-global-group>summary::-webkit-details-marker{display:none}",
+      ".mc-global-group>summary:after{content:'＋';flex:none;color:var(--muted);font-size:13px}",
+      ".mc-global-group[open]>summary:after{content:'－'}",
+      ".mc-global-group-title{display:flex;flex-direction:column;gap:3px;min-width:0}",
+      ".mc-global-group-title b{font-size:13px;color:var(--ink)}.mc-global-group-title small{font-size:10px;color:var(--muted)}",
+      ".mc-global-group-count{flex:none;color:var(--muted);font-size:11px}",
+      ".mc-global-group-body{padding:12px}",
+      ".mc-global-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}",
+      ".mc-global-status{display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:10px;line-height:1.4}",
+      ".mc-global-status small{color:var(--muted)}",
+      ".mc-global-status.warn{color:var(--down)}.mc-global-status.neutral{color:var(--muted)}",
       ".mc-tech-current{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:9px;background:var(--mc-soft)}",
       ".mc-tech-current span,.mc-tech-current small{font-size:11px;color:var(--muted)}",
       ".mc-tech-current b{font:750 22px var(--font-num,monospace);color:var(--ink)}",
@@ -295,6 +432,7 @@
       ".td-page .dh-sec>summary{min-height:58px;padding:14px 16px;gap:12px}",
       ".td-page .dh-sec-b{padding:0 16px 16px}",
       ".td-page [data-mc-section][hidden]{display:none!important}",
+      "@media(max-width:900px){.mc-global-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}",
       "@media(max-width:760px){.td-page .td-hero{grid-template-columns:minmax(0,1fr)}.mc-overview-grid{grid-template-columns:minmax(0,1fr)}.mc-global-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-flow-columns{grid-template-columns:minmax(0,1fr);gap:12px}.mc-heading{align-items:flex-start;flex-direction:column;gap:4px}}",
       "@media(max-width:430px){.mc-tab{flex:0 0 auto;min-width:90px;padding:9px 12px}.mc-panel{padding:13px}.td-page .td-main,.td-page .td-side{padding:10px}.td-page .td-main{gap:8px}.mc-core-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:6px}.mc-core-grid .dh-core-card{padding:6px 5px}.mc-flow-row{grid-template-columns:minmax(82px,1fr) minmax(45px,1fr) minmax(50px,.7fr);gap:7px}.mc-tech-ladder{grid-template-columns:minmax(0,1fr)}.mc-level-row{display:grid;grid-template-columns:1fr auto;align-items:center}.mc-level-row small{grid-column:1/-1}.mc-global-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-global-price{font-size:17px}}"
     ].join("\n");
@@ -322,11 +460,13 @@
   }
 
   let stateRef = null;
+  let runtimeRef = null;
 
   function enhance(host, W) {
     const page = host && host.matches && host.matches(".td-page") ? host : host && host.querySelector ? host.querySelector(".td-page") : null;
     const state = ensureState(W);
     if (!page || !state || !page.querySelector(".dh-status-bar")) return false;
+    runtimeRef = W;
     installStyles(page.ownerDocument);
 
     page.querySelector(".td-quicknav")?.remove();
@@ -389,6 +529,8 @@
     }
 
     applyWorkspace(page, state, state.workspace);
+    syncGlobalRefreshTimer(W, state.workspace === "global");
+    refreshGlobalIfNeeded(W);
     if (!window.__klMarketCenterClickBound) {
       window.__klMarketCenterClickBound = true;
       // Capture phase: the existing AI handler redraws #lx and may detach the button before bubbling.
@@ -411,6 +553,8 @@
         if (!currentPage || !stateRef) return;
         event.preventDefault();
         applyWorkspace(currentPage, stateRef, button.dataset.mcTab);
+        syncGlobalRefreshTimer(runtimeRef, button.dataset.mcTab === "global");
+        if (button.dataset.mcTab === "global") refreshGlobalIfNeeded(runtimeRef);
       }, true);
     }
     stateRef = state;

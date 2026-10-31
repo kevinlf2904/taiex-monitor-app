@@ -1510,7 +1510,7 @@ function tdMacSum() {
   return L.length ? L.join("・") : "昨晚美股、利率、匯率、原物料";
 }
 function tdMacBody() {
-  if (!W.gl && !W.glLoading && typeof loadGlobal === "function" && !W.off) loadGlobal().then(() => { if (W.gl && W.lt === "today") renderList(); }); // 載入中不重複觸發（loadGlobal 載入中會直接結束，重畫又呼叫它會變成無限迴圈）
+  // 國際行情由 V2「全球總經」工作區按需載入；不在今日市場初次渲染時額外抓取。
   const P = tdUs(), R = tdGlRows(), U = W.bf?.us || {};
   const usStatus = ({ live: "盤中行情（供應商可能延遲 15 分鐘）", confirmed: "收盤確認", partial: "資料不完整", stale: "過期資料", holiday: "休市資料", unavailable: "無資料" })[U.dataStatus] || "狀態未提供";
   const usUpdate = ({ scheduled: "定時更新", after_close: "盤後更新" })[U.updateMode] || "更新方式未提供";
