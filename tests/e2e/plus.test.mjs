@@ -65,8 +65,10 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   assert.equal(await p.$$eval("#lx [data-tx='tdai']", L => L.length), 1, "AI 整理只有一個");
   await selectWorkspace(p, "overview");
   await p.click('[data-tx="tdai"]');
-  await selectWorkspace(p, "research");
+  // 不手動切頁：點擊 AI 整理本身就應帶到結果所在的 AI 研究工作區。
+  await p.waitForFunction(() => document.querySelector('#lx [data-mc-tab="research"]')?.getAttribute("aria-pressed") === "true");
   await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
+  assert.equal(await p.evaluate(() => document.querySelector("#lx .mc-ai-panel")?.hidden), false, "AI 回覆所在面板必須可見");
   assert.ok(await noOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });

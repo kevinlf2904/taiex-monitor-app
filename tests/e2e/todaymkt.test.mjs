@@ -65,6 +65,8 @@ test("總經儀表板：昨晚美股只在這裡（核心卡已有的費半、�
   const m = await p.evaluate(() => document.querySelector('#lx details[data-tdbox="mac"]').innerText);
   assert.match(m, /道瓊 \+0\.5%・美債 4\.21%・台幣 31\.20/, "摘要用核心卡沒有的數字"); assert.match(m, /昨晚美股[\s\S]*道瓊工業[\s\S]*美國 10 年期/); assert.match(m, /美元／台幣[\s\S]*原油/);
   assert.doesNotMatch(m, /費城半導體|那斯達克|台積電 ADR/, "核心卡已經有的不重複");
+  const allWorkspaceText = await p.evaluate(() => [...document.querySelectorAll("#lx [data-mc-section]")].map(el => el.textContent || "").join("\\n"));
+  assert.equal((allWorkspaceText.match(/昨晚美股/g) || []).length, 1, "昨晚美股在所有工作區合計只出現一次");
   await selectWorkspace(p, "technical");
   assert.equal(await p.evaluate(() => (document.querySelector('#lx details[data-tdbox="plan"] .td-plan-pre').innerText.match(/昨晚美股/g) || []).length), 0, "盤前推演不再列昨晚美股");
   await selectWorkspace(p, "global");

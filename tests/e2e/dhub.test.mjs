@@ -29,8 +29,10 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`週末：�
   // 全部展開：資金卡只有一張、資金資料的狀態只說一次、週末不寫「盤中」
   await p.click("#lx [data-tdall]"); await p.waitForFunction(() => document.querySelectorAll("#lx details.dh-sec[open] .dh-sec-b").length === 4);
   await selectWorkspace(p, "capital");
-  const capitalText = await p.evaluate(() => $("#lx").innerText), cnt = re => (capitalText.match(re) || []).length;
-  assert.equal(cnt(/資金雷達・板塊輪動與資金流向/g), 1); assert.equal(cnt(/法人資金資料/g), 1, "資金資料的狀態只說一次");
+  // 隱藏工作區仍屬於同一頁；以所有工作區的 DOM 文字計數，避免切頁後漏抓重複內容。
+  const allWorkspaceText = await p.evaluate(() => [...document.querySelectorAll("#lx [data-mc-section]")].map(el => el.textContent || "").join("\\n"));
+  const cnt = re => (allWorkspaceText.match(re) || []).length;
+  assert.equal(cnt(/資金雷達・板塊輪動與資金流向/g), 1); assert.equal(cnt(/法人資金資料/g), 1, "所有工作區的資金資料狀態只出現一次");
   await selectWorkspace(p, "technical");
   const t2 = await p.evaluate(() => $("#lx").innerText);
   assert.match(t2, /最近交易日盤後整理/, "週末交易情境明確標示最近交易日盤後整理");

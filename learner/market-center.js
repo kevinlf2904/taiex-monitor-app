@@ -132,8 +132,21 @@
     if (!window.__klMarketCenterClickBound) {
       window.__klMarketCenterClickBound = true;
       document.addEventListener("click", event => {
-        const button = event.target.closest && event.target.closest("[data-mc-tab]");
-        if (!button) return;
+        const target = event.target;
+        const button = target.closest && target.closest("[data-mc-tab]");
+        if (!button) {
+          // AI 摘要會寫進 research 工作區；由其他工作區啟動時先切到結果所在位置。
+          const aiTrigger = target.closest && target.closest('[data-tx="tdai"]');
+          // tdai 的既有處理器會先重畫 #lx，舊 .td-page 會被移除；因此延後後須重新取得新頁面。
+          const aiHost = aiTrigger && document.getElementById("lx");
+          if (aiHost && stateRef) {
+            queueMicrotask(() => {
+              const currentPage = aiHost.querySelector(".td-page");
+              if (currentPage && stateRef) applyWorkspace(currentPage, stateRef, "research");
+            });
+          }
+          return;
+        }
         const currentPage = button.closest(".td-page");
         if (!currentPage || !stateRef) return;
         event.preventDefault();
