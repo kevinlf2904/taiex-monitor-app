@@ -67,7 +67,10 @@ for (const width of [390, 1280]) test("今日市場 V2：工作區視覺層級�
   assert.match(await p.textContent("#lx .mc-global-panel"), /2026-10-23/);
   assert.match(await p.textContent("#lx .mc-global-panel"), /盤後更新/);
   assert.match(await p.textContent("#lx .mc-global-panel"), /費城半導體/);
-  const oilMeta = await p.$eval("#lx .mc-global-card", cards => cards.find(card => card.querySelector(".mc-global-name span")?.textContent.trim() === "CL=F")?.querySelector(".mc-global-meta")?.textContent || "");
+  const oilMeta = await p.$$eval("#lx .mc-global-card", cards =>
+    cards.find(card => card.querySelector(".mc-global-name span")?.textContent.trim() === "CL=F")
+      ?.querySelector(".mc-global-meta")?.textContent || ""
+  );
   assert.match(oilMeta, /日期未提供/, "非美股市場不可借用美股日期");
   assert.doesNotMatch(oilMeta, /2026-10-23/, "原油未提供日期時不得套用美股交易日");
   await selectWorkspace(p, "technical");
