@@ -70,6 +70,7 @@ test("今日市場決策中心：五工作區定義穩定，無效工作區回�
   assert.equal(state.selectedSector, null);
   assert.equal(state.selectedStock, null);
   assert.equal(state.analysisDate, null);
+  assert.equal(api.ensureState(W), state, "重複初始化應沿用同一份執行期狀態");
   W.marketCenter.workspace = "not-a-workspace";
   assert.equal(api.ensureState(W).workspace, "overview");
   assert.equal(W.store, undefined, "整合狀態不得自行寫入既有使用者儲存層");
