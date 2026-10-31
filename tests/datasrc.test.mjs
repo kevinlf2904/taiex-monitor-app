@@ -61,7 +61,7 @@ test("今日市場決策中心：五工作區定義穩定，無效工作區回�
   vm.runInNewContext(MARKET_CENTER_SRC, { window });
   const api = window.KLMarketCenter;
   assert.ok(api, "模組應在 window 暴露整合 API");
-  assert.deepEqual(api.workspaces.map(x => x.id), ["overview", "capital", "global", "research", "technical"]);
+  assert.deepEqual(Array.from(api.workspaces, x => x.id), ["overview", "capital", "global", "research", "technical"]);
   assert.equal(api.normalizeWorkspace("capital"), "capital");
   assert.equal(api.normalizeWorkspace("unknown"), "overview");
   const W = {};
