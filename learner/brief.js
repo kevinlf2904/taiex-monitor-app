@@ -1552,40 +1552,92 @@ const tdOk = v => typeof v === "number" && isFinite(v);
 const tdMin = s => { const [h, m] = String(s).split(":").map(Number); return h * 60 + m; }; // "09:05" → 545
 const tdMinOf = ms => { const t = new Date(ms + 8 * 3600e3); return t.getUTCHours() * 60 + t.getUTCMinutes(); };
 const tdPctTxt = v => `${v > 0 ? "+" : ""}${(+v).toFixed(2)}%`;
-// 正負長條（中線在中間）：rows = [[名稱, 長度用的值, 顯示文字?]]
-function tdBars(rows) {
+// 正負長條：明確標出 0 軸與方向；長度只比較同一張圖內的相對大小
+function tdBars(rows, axis = {}) {
   rows = rows.filter(r => tdOk(r[1])); if (!rows.length) return "";
   const m = Math.max(...rows.map(r => Math.abs(r[1]))) || 1;
-  return `<div class="td-bars">${rows.map(([n, v, t]) => { const w = Math.abs(v) / m * 50; return `<div><span class="note">${esc(n)}</span><span class="td-bar"><i class="${v >= 0 ? "up" : "down"}" style="left:${(v >= 0 ? 50 : 50 - w).toFixed(1)}%;width:${Math.max(w, 1).toFixed(1)}%"></i></span><b class="num ${cls(v)}">${esc(t ?? tdPctTxt(v))}</b></div>`; }).join("")}</div>`;
+  const left = axis.left || "負向", right = axis.right || "正向";
+  const note = axis.note || "左右長度依本圖最大絕對值縮放；不同圖表之間不可直接比較長度。";
+  const list = rows.map(([n, v, t]) => {
+    const w = Math.abs(v) / m * 50;
+    return `<div><span class="note" title="${esc(n)}">${esc(n)}</span><span class="td-bar"><i class="${v >= 0 ? "up" : "down"}" style="left:${(v >= 0 ? 50 : 50 - w).toFixed(1)}%;width:${Math.max(w, 1).toFixed(1)}%"></i></span><b class="num ${cls(v)}">${esc(t ?? tdPctTxt(v))}</b></div>`;
+  }).join("");
+  return `<div class="td-bars" role="img" aria-label="${esc(left)}至${esc(right)}的正負比較，共 ${rows.length} 項">
+    <div class="td-bar-axis note"><span>${esc(left)}</span><b>0</b><span>${esc(right)}</span></div>
+    <div class="td-bars-list">${list}</div>
+    <p class="td-bar-note note">${esc(note)}</p>
+  </div>`;
 }
-// 漲跌家數條
+// 市場廣度：上漲／平盤／下跌三段式呈現，樣本數與比例都以同一批有效個股計算
 function tdBreadth(mood, d) {
-  if (!mood || !tdOk(mood.up) || !tdOk(mood.dn) || mood.up + mood.dn <= 0) return "";
-  const t = mood.up + mood.dn;
-  return `<div class="td-breadth" role="img" aria-label="上漲 ${mood.up} 家、下跌 ${mood.dn} 家"><div class="td-bb"><i class="up" style="width:${(mood.up / t * 100).toFixed(1)}%"></i><i class="down" style="width:${(mood.dn / t * 100).toFixed(1)}%"></i></div>
-    <div class="td-bl note"><span class="up">漲 ${mood.up}${mood.lu ? `・漲停 ${mood.lu}` : ""}</span><span>${d ? `${d} 上市櫃家數` : "上市櫃家數"}</span><span class="down">跌 ${mood.dn}${mood.ld ? `・跌停 ${mood.ld}` : ""}</span></div></div>`;
+  if (!mood || !tdOk(mood.up) || !tdOk(mood.dn)) return "";
+  const flat = tdOk(mood.flat) ? Math.max(0, mood.flat) : 0;
+  const total = tdOk(mood.total) && mood.total > 0 ? mood.total : mood.up + mood.dn + flat;
+  const sum = mood.up + mood.dn + flat;
+  if (!sum) return "";
+  const pct = n => (n / sum * 100).toFixed(1);
+  const limits = tdOk(mood.lu) && tdOk(mood.ld) ? `漲停 ${mood.lu}・跌停 ${mood.ld}` : "";
+  const avg = tdOk(mood.avg) ? `個股平均漲跌 ${mood.avg > 0 ? "+" : ""}${mood.avg.toFixed(2)}%` : "";
+  return `<div class="td-breadth" role="img" aria-label="市場廣度：上漲 ${mood.up} 家、平盤 ${flat} 家、下跌 ${mood.dn} 家，共 ${total} 家">
+    <div class="td-breadth-head"><b>市場廣度</b><span class="note">資料日期：${esc(d || "未提供")}</span></div>
+    <div class="td-breadth-total note">有效個股 ${total} 檔（含平盤）</div>
+    <div class="td-bb"><i class="up" style="width:${(mood.up / sum * 100).toFixed(1)}%"></i><i class="flat" style="width:${(flat / sum * 100).toFixed(1)}%"></i><i class="down" style="width:${(mood.dn / sum * 100).toFixed(1)}%"></i></div>
+    <div class="td-breadth-legend note">
+      <span class="up"><i></i>漲 ${mood.up}・${pct(mood.up)}%</span>
+      <span class="flat"><i></i>平 ${flat}・${pct(flat)}%</span>
+      <span class="down"><i></i>跌 ${mood.dn}・${pct(mood.dn)}%</span>
+    </div>
+    <div class="td-breadth-foot note">${[limits, avg].filter(Boolean).map(esc).join("・")}</div>
+  </div>`;
 }
 // 同一欄的價位標籤太近會疊在一起：由上往下排，間距至少 gap%
 const tdSpread = (L, gap = 13) => { const S = [...L].sort((a, b) => a.y - b.y); for (let i = 1; i < S.length; i++) S[i].y = Math.max(S[i].y, S[i - 1].y + gap); return S; };
-// 加權分時：今天的走勢線＋壓力／分水嶺／支撐／昨收＋最高最低＋盤中監控事件的時間點（W.ixSp 是大盤頁走勢線的同一份資料）
-function tdIxChart(tq, kl, evs) {
+// 加權分時：補齊縱軸、基準線、日內高低點與來源資訊；只畫 API 已提供的價位點，不虛構分鐘成交量
+function tdIxChart(tq, kl, evs, dataEval) {
   const S = W.ixSp?.T00;
-  if (!S?.pts?.length && typeof loadIxSpark === "function" && !W.off && !W.ixSpBusy) loadIxSpark().then(() => { if (W.lt === "today" && W.ixSp?.T00) renderList(); }); // 抓不到或剛抓過不重畫，不會一直重抓
+  if (!S?.pts?.length && typeof loadIxSpark === "function" && !W.off && !W.ixSpBusy) loadIxSpark().then(() => { if (W.lt === "today" && W.ixSp?.T00) renderList(); });
   const P = (S?.pts || []).map(([t, c]) => [tdMin(t) - 540, c]).filter(([x, c]) => x >= 0 && x <= 270 && tdOk(c));
   if (P.length < 2) return "";
   const prev = tdOk(S.prev) ? S.prev : tq?.prev, L = kl ? [["壓力", kl.pressure, "up"], ["分水嶺", kl.pivot, "piv"], ["支撐", kl.support, "down"]] : [];
   if (tdOk(prev)) L.push(["昨收", prev, "prev"]);
   const vs = [...P.map(p => p[1]), ...L.map(l => l[1])], lo = Math.min(...vs), hi = Math.max(...vs), pad = (hi - lo) * 0.1 || 1;
-  const Y = v => (hi + pad - v) / (hi - lo + 2 * pad) * 100, X = x => x / 270 * 100, f = v => v.toFixed(2);
+  const span = hi - lo + 2 * pad, Y = v => (hi + pad - v) / span * 100, X = x => x / 270 * 100, f = v => v.toFixed(2);
   const last = P.at(-1), hp = P.reduce((m, p) => (p[1] > m[1] ? p : m)), lp = P.reduce((m, p) => (p[1] < m[1] ? p : m));
   const ev = (evs || []).filter(e => tdOk(e.first)).map(e => [tdMinOf(e.first) - 540, e]).filter(([x]) => x >= 0 && x <= 270);
   const lab = tdSpread(L.map(([n, v, k]) => ({ n, v, k, y: Y(v) })));
-  return `<div class="td-ix" role="img" aria-label="加權指數今天的分時走勢，最新 ${fmtP(last[1])}">
+  const ticks = [0, 25, 50, 75, 100].map(y => ({ y, v: hi + pad - span * y / 100 }));
+  const timeAt = x => `${String(Math.floor((540 + x) / 60)).padStart(2, "0")}:${String((540 + x) % 60).padStart(2, "0")}`;
+  const trendClass = last[1] >= (prev ?? P[0][1]) ? "up" : "down";
+  const qMeta = [
+    tq?.date ? `資料日期 ${tq.date}` : "資料日期未提供",
+    (tq?.sourceTime || tq?.time) ? `來源時間 ${tq.sourceTime || tq.time}` : "來源時間未提供",
+    `來源 ${tq?.source || "證交所 MIS"}`,
+    `狀態 ${dataEval?.dataStatusLabel || "未確認"}`
+  ].join("・");
+  const stat = (name, value, sub = "") => `<div class="td-ix-stat"><span class="note">${name}</span><b class="num">${fmtP(value)}</b>${sub ? `<small class="note">${esc(sub)}</small>` : ""}</div>`;
+  const openValue = tdOk(tq?.open) ? tq.open : P[0][1], openName = tdOk(tq?.open) ? "開盤" : "首筆";
+  const stats = [
+    stat(openName, openValue),
+    stat("日內最高", hp[1], timeAt(hp[0])),
+    stat("日內最低", lp[1], timeAt(lp[0])),
+    tdOk(prev) ? stat("昨收基準", prev) : ""
+  ].filter(Boolean).join("");
+  const ticksHtml = ticks.map(t => `<span style="top:${t.y}%">${fmtP(t.v)}</span>`).join("");
+  const areaPoints = `${P.map(([x, c]) => `${f(X(x))},${f(Y(c))}`).join(" ")} ${f(X(last[0]))},100 ${f(X(P[0][0]))},100`;
+  return `<div class="td-chart-head"><b>加權分時</b><span class="td-chart-meta note">${esc(qMeta)}</span></div>
+  <div class="td-ix" role="img" aria-label="加權指數分時走勢；圖中標示昨收、盤前關鍵價位、日內最高與最低；走勢最後一筆 ${timeAt(last[0])}、價格 ${fmtP(last[1])}">
+    <div class="td-ix-y">${ticksHtml}</div>
     <div class="td-ix-plot"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="td-ix-fill-up" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--up)" stop-opacity=".18"/><stop offset="1" stop-color="var(--up)" stop-opacity="0"/></linearGradient>
+        <linearGradient id="td-ix-fill-down" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--down)" stop-opacity=".18"/><stop offset="1" stop-color="var(--down)" stop-opacity="0"/></linearGradient>
+      </defs>
+      <g class="td-ix-grid">${ticks.map(t => `<line x1="0" x2="100" y1="${t.y}" y2="${t.y}"/>`).join("")}</g>
       <rect class="rest" x="${f(X(last[0]))}" y="0" width="${f(100 - X(last[0]))}" height="100"/>
       ${L.map(([, v, k]) => `<line class="lv ${k}" x1="0" x2="100" y1="${f(Y(v))}" y2="${f(Y(v))}"/>`).join("")}
       ${ev.map(([x, e]) => `<line class="ev ${esc(e.sev)}" x1="${f(X(x))}" x2="${f(X(x))}" y1="0" y2="100"/>`).join("")}
-      <polyline class="${last[1] >= (prev ?? P[0][1]) ? "up" : "down"}" points="${P.map(([x, c]) => `${f(X(x))},${f(Y(c))}`).join(" ")}"/>
+      <polygon class="area ${trendClass}" points="${areaPoints}"/>
+      <polyline class="${trendClass}" points="${P.map(([x, c]) => `${f(X(x))},${f(Y(c))}`).join(" ")}"/>
     </svg>
       ${ev.map(([x, e]) => `<i class="dot ev ${esc(e.sev)}" style="left:${f(X(x))}%;top:0" title="${esc(e.title)}"></i>`).join("")}
       <i class="dot hi" style="left:${f(X(hp[0]))}%;top:${f(Y(hp[1]))}%"></i><span class="td-hl" style="left:${f(Math.min(X(hp[0]), 82))}%;top:${f(Y(hp[1]))}%">高 ${fmtP(hp[1])}</span>
@@ -1594,10 +1646,13 @@ function tdIxChart(tq, kl, evs) {
     </div>
     <div class="td-ix-lv">${lab.map(l => `<span class="${l.k}" style="top:${f(Math.min(l.y, 96))}%">${l.n} <b class="num">${fmtP(l.v)}</b></span>`).join("")}</div>
     <div class="td-ix-t note"><span>09:00</span><span>10:30</span><span>12:00</span><span>13:30</span></div>
-  </div>`;
+  </div>
+  <div class="td-ix-stats">${stats}</div>
+  <div class="td-ix-legend note"><span><i class="line ${trendClass}"></i>分時路徑</span><span><i class="line prev"></i>昨收基準</span><span><i class="line level"></i>壓力／分水嶺／支撐</span><span>最後一筆 ${timeAt(last[0])}${ev.length ? `・事件標記 ${ev.length} 件` : ""}</span><span>日內高低差 ${fmtP(hp[1] - lp[1])} 點</span></div>
+  <p class="td-ix-note note">橫軸為 09:00–13:30，縱軸為指數點數；灰底代表最後一筆資料之後尚無走勢點。此圖只畫來源提供的價格點，不以推估值補成交量。</p>`;
 }
 // 最上面：加權現在在推估價位的哪一段（只寫位置，不寫偏多偏空——那不是預測）＋開高低＋分時；「怎麼看」說明算法與回測
-function tdHero(tq, plan, evs) {
+function tdHero(tq, plan, evs, dataEval) {
   if (!tdOk(tq?.price)) return "";
   const px = tq.price, kl = plan?.keyLevels, d = kl ? Math.round(px - kl.pivot) : null;
   const pos = kl ? (px >= kl.pressure ? "壓力上方" : px >= kl.pivot ? "分水嶺上方" : px > kl.support ? "分水嶺下方" : "支撐下方") : null;
@@ -1608,7 +1663,7 @@ function tdHero(tq, plan, evs) {
       <div class="td-px"><div><span class="note">加權</span> <b class="num">${fmtP(px)}</b>${tdOk(tq.chg) ? ` <span class="num ${cls(tq.chg)}">${tq.chg > 0 ? "+" : ""}${fmtP(tq.chg)}</span>` : ""}${tdOk(tq.chgPct) ? ` <span class="num ${cls(tq.chgPct)}">${tdPctTxt(tq.chgPct)}</span>` : ""}</div>
         ${ohl.length ? `<div class="note num">${ohl.map(([n, v]) => `${n} ${fmtP(v)}`).join("　")}</div>` : ""}</div>
     </div>
-    ${tdIxChart(tq, kl, evs)}
+    ${tdIxChart(tq, kl, evs, dataEval)}
     ${kl ? tdHelp(plan) : ""}
   </div>`;
 }
@@ -1644,7 +1699,7 @@ function tdPreViz(plan, tq) {
     </svg>${pts.map(([t, v], i) => `<i class="dot${i === n - 1 ? " now" : ""}" style="left:${f(X(i))}%;top:${f(Y(v))}%"></i><span class="td-sc-x note" style="left:${f(X(i))}%">${t}</span>`).join("")}</div>
     <div class="td-ix-lv">${lab.map(l => `<span class="${l.k}" style="top:${f(Math.min(l.y, 94))}%">${l.n}</span>`).join("")}</div>
   </div>`;
-  const dr = tdBars([["費半", ms.sox], ["那斯達克", ms.ixic], ["台積電 ADR", ms.tsm], ["台指期夜盤", tdOk(ms.futChg) && ref ? ms.futChg / ref * 100 : null, tdOk(ms.futChg) ? `${ms.futChg > 0 ? "+" : ""}${Math.round(ms.futChg)} 點` : null]]);
+  const dr = tdBars([["費半", ms.sox], ["那斯達克", ms.ixic], ["台積電 ADR", ms.tsm], ["台指期夜盤", tdOk(ms.futChg) && ref ? ms.futChg / ref * 100 : null, tdOk(ms.futChg) ? `${ms.futChg > 0 ? "+" : ""}${Math.round(ms.futChg)} 點` : null]], { left: "相對走弱", right: "相對走強", note: "比較各市場自身漲跌幅；台指期數值另以點數顯示。" });
   return sc + (dr ? `<div class="td-cap note">早報用到的美股與夜盤</div>${dr}` : "");
 }
 // 總經：美股指數、利率、美元（早報）＋台幣、原油、黃金（原物料外匯）；費半、那斯達克、台積電 ADR 在上面的數字列
@@ -1652,7 +1707,7 @@ function tdMacViz() {
   const us = W.bf?.us?.ok ? [...(W.bf.us.indices || []), ...(W.bf.us.macro || [])].filter(x => !TD_CORE.has(x.code)) : [];
   const nm = { "^DJI": "道瓊", "^GSPC": "S&P 500", "^TNX": "美 10 年債", "DX-Y.NYB": "美元指數", "^VIX": "VIX", "^RUT": "羅素 2000", "^NDX": "NASDAQ-100" };
   const R = [...us.map(x => [nm[x.code] || x.name || x.code, x.chgPct, x.code === "^TNX" && tdOk(x.price) ? `${(+x.price).toFixed(2)}%` : null]), ...tdGlRows().map(r => [r.n, r.pct, r.c === "TWD=X" ? (+r.px).toFixed(2) : null])];
-  return tdBars(R.filter(r => tdOk(r[1])).slice(0, 9));
+  return `<div class="td-cap note">國際市場變動（各市場自身漲跌幅）</div>` + tdBars(R.filter(r => tdOk(r[1])).slice(0, 9), { left: "下跌", right: "上漲", note: "各市場／商品以自身漲跌幅比較；不同資產不可加總。" });
 }
 // 盤中（盤後）：今天盤中監控事件的時間軸＋自選與庫存的熱度格（顏色深淺是漲跌幅，框起來的是庫存）
 function tdLiveViz(evs, hold, pm, period = "盤中監控") {
@@ -1670,7 +1725,8 @@ function tdFlowViz(M) {
   try { A = M.secs && typeof flowAt === "function" ? flowAt(M) : []; } catch {}
   const top = s => A.filter(x => tdOk(x.net5) && s * x.net5 > 0).sort((a, b) => s * (b.net5 - a.net5)).slice(0, s > 0 ? 3 : 2);
   const R = [...top(1), ...top(-1).reverse()].map(x => [x.name, x.net5, briefFlowFmt(x.net5)]);
-  return R.length ? `<div class="td-cap note">近 5 日法人累積淨流向（與當日買賣分開）</div>${tdBars(R)}` : "";
+  const lastDate = M.dates?.at(-1);
+  return R.length ? `<div class="td-cap note">近 5 日法人累積淨流向（與當日買賣分開）${lastDate ? `・資料截至 ${esc(lastDate)}` : ""}</div>${tdBars(R, { left: "法人淨流出", right: "法人淨流入", note: "長條以各板塊近 5 日累積淨額比較，僅表示相對大小，不是市場占比。" })}` : "";
 }
 // 我的重點：接下來 7 個交易日的小行事曆，點是庫存、自選的法說會、除權息、ETF 換股、事件提醒
 function tdMineViz(t, mine) {
@@ -1891,9 +1947,9 @@ function todayPage() {
     ${summaryHtml}
     ${aiHtml}
     <div class="td-hero">
-      ${tdHero(tq, plan, mon)}
+      ${tdHero(tq, plan, mon, dataEval)}
       <div class="td-side">
-        ${tdBreadth(fundsAligned ? mood : null, md?.slice(5).replace("-", "/"))}
+        ${tdBreadth(fundsAligned ? mood : null, md)}
         ${coreMarketCardsHtml(market, W.bf, sess, dataEval, { skip: tdOk(tq?.price) ? ["T00"] : [], more: true })}
       </div>
     </div>
