@@ -6,7 +6,7 @@ import { chromium, serve, open } from "./_harness.mjs";
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
 const J = (r, o) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o) });
-const TODAY = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+const TODAY = "2026-10-30"; // 固定週五，避免 CI 在週末時被判定為休市
 const nextWd = d => { const t = new Date(d + "T00:00:00Z"); do t.setUTCDate(t.getUTCDate() + 1); while (t.getUTCDay() % 6 === 0); return t.toISOString().slice(0, 10); };
 // [代號, 名稱, 產業, 市場, 當月營收(億), 月增%, 年增%, 累計年增%, EPS, 季營收(億), 稅後淨利(億), 毛利率, 營益率, 淨利率]
 const ROWS = [["2330", "台積電", "半導體業", "上市", 3300, 5.1, 36.2, 38.4, 15.2, 9300, 3980, 59.1, 49.5, 42.7], ["2317", "鴻海", "其他電子業", "上市", 7800, -3.2, 12.1, 18.0, 3.1, 18000, 430, 6.2, 2.9, 2.4],
@@ -24,14 +24,12 @@ async function fund(p) {
 const noOverflow = p => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台指期夜盤、除權息、持股新消息、AI 整理 ${width}`, async () => {
-  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
-  const today = await p.evaluate(() => twDay());
-  await p.clock.setFixedTime(new Date(today + "T08:00:00+08:00"));
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500, time: new Date(TODAY + "T08:00:00+08:00") });
   await fund(p);
   await p.route("**/api/usmarket", r => J(r, { ok: true, date: "2026-10-21", dataDate: "2026-10-21", sourceTime: "2026-10-21 16:00", tz: "EDT", source: "Yahoo Finance", dataStatus: "stale", updateMode: "after_close", indices: [{ code: "^DJI", name: "道瓊工業", price: 42100, chgPct: 0.8 }, { code: "^SOX", name: "費城半導體", price: 6100, chgPct: -1.2 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 210, chgPct: 1.5 }], macro: [{ code: "^TNX", name: "10 年期公債殖利率", price: 4.2, chgPct: 0.3 }], sectors: [] }));
   await p.route(/\/api\/futures\?bars=0$/, r => J(r, { ok: true, quote: { price: 23000, chg: -50, chgPct: -0.22, session: "night" }, night: { price: 23000, chg: -50, chgPct: -0.22, time: "05:00" }, day: null }));
   await p.route("**/api/news**", r => J(r, { ok: true, items: [{ title: "台積電先進封裝擴產", source: "測試報", link: "https://example.com/a", at: Date.now() - 3600e3 }] }));
-  await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 500 } }; showList?.(); W.tdPh = { d: twDay(), ph: "pre" }; setLt("today"); }); // 早報在今日市場的「國際市場與總經」＋「交易情境」（盤前階段）
+  await p.evaluate(() => { W.cal = { hol: [] }; W.hold = { 2330: { sh: 1000, cost: 500 } }; showList?.(); W.tdPh = { d: twDay(), ph: "pre" }; setLt("today"); renderList(); }); // 早報在今日市場的「國際市場與總經」＋「交易情境」（盤前階段）
   await p.waitForFunction(() => /持股新消息/.test($("#lx").innerText), null, { timeout: 15000 });
   const t = await p.evaluate(() => $("#lx").innerText);
   for (const s of ["昨晚美股", "道瓊工業", "費城半導體", "台積電 ADR", "台指期", "夜盤 23,000", "除權息", "2330 除息 現金 4.5 元", "台積電先進封裝擴產", "今天要注意", "法說會"]) assert.ok(t.includes(s), `早報要有「${s}」`);
