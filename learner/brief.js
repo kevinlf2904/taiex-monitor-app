@@ -1570,7 +1570,7 @@ function tdBars(rows, axis = {}) {
 }
 // 市場廣度：上漲／平盤／下跌三段式呈現，樣本數與比例都以同一批有效個股計算
 function tdBreadth(mood, d) {
-  if (!mood || !tdOk(mood.up) || !tdOk(mood.dn) || mood.up + mood.dn <= 0) return "";
+  if (!mood || !tdOk(mood.up) || !tdOk(mood.dn)) return "";
   const flat = tdOk(mood.flat) ? Math.max(0, mood.flat) : 0;
   const total = tdOk(mood.total) && mood.total > 0 ? mood.total : mood.up + mood.dn + flat;
   const sum = mood.up + mood.dn + flat;
@@ -1647,8 +1647,8 @@ function tdIxChart(tq, kl, evs, dataEval) {
     <div class="td-ix-lv">${lab.map(l => `<span class="${l.k}" style="top:${f(Math.min(l.y, 96))}%">${l.n} <b class="num">${fmtP(l.v)}</b></span>`).join("")}</div>
     <div class="td-ix-t note"><span>09:00</span><span>10:30</span><span>12:00</span><span>13:30</span></div>
   </div>
-  <div class="td-ix-stats">${stats}<div class="td-ix-stat"><span class="note">日內高低差</span><b class="num">${fmtP(hp[1] - lp[1])}</b><small class="note">點</small></div></div>
-  <div class="td-ix-legend note"><span><i class="line ${trendClass}"></i>分時路徑</span><span><i class="line prev"></i>昨收基準</span><span><i class="line level"></i>壓力／分水嶺／支撐</span><span>最後一筆 ${timeAt(last[0])}${ev.length ? `・事件標記 ${ev.length} 件` : ""}</span></div>
+  <div class="td-ix-stats">${stats}</div>
+  <div class="td-ix-legend note"><span><i class="line ${trendClass}"></i>分時路徑</span><span><i class="line prev"></i>昨收基準</span><span><i class="line level"></i>壓力／分水嶺／支撐</span><span>最後一筆 ${timeAt(last[0])}${ev.length ? `・事件標記 ${ev.length} 件` : ""}</span><span>日內高低差 ${fmtP(hp[1] - lp[1])} 點</span></div>
   <p class="td-ix-note note">橫軸為 09:00–13:30，縱軸為指數點數；灰底代表最後一筆資料之後尚無走勢點。此圖只畫來源提供的價格點，不以推估值補成交量。</p>`;
 }
 // 最上面：加權現在在推估價位的哪一段（只寫位置，不寫偏多偏空——那不是預測）＋開高低＋分時；「怎麼看」說明算法與回測
