@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 排程資料改從 GitHub 讀（2026.10.31-173）
+- learner/data 的排程資料改讀 GitHub main 最新版（讀不到就用網站上的那份）；只改 learner/data 的提交不再觸發 Vercel 部署，減少部署次數
+
 ### 今日市場資訊圖表（2026.10.31-172）
 - 加權分時圖加價格刻度、網格、開高低昨收與資料日期／來源／狀態；市場廣度改上漲／平盤／下跌三段比例；國際行情與法人長條標 0 軸與方向；補記 #188 今日市場資訊架構整合、#189 大盤分 K 等待時間放寬
 
