@@ -484,7 +484,7 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-bars-list { display: flex; flex-direction: column; gap: 4px; }
 .td-bars-list > div { font-size: 11.5px; line-height: 1.3; }
 .td-bars-list > div > span.note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.td-bars b { font-weight: 400; text-align: right; white-space: nowrap; }
+.td-bars-list b { font-weight: 400; text-align: right; white-space: nowrap; }
 .td-bar { position: relative; height: 8px; }
 .td-bar::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line); }
 .td-bar i { position: absolute; top: 0; bottom: 0; border-radius: 2px; opacity: .85; }
