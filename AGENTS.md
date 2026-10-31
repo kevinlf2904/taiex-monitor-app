@@ -4,7 +4,7 @@
 
 ## 核心限制
 - 純討論、規劃、審查不代表授權改檔、推送、合併、部署或花費。
-- 只有 Claude Code、Codex、Gemini Antigravity 可改程式；ChatGPT、Copilot、普通 Claude／Gemini、NotebookLM、Perplexity、v0、Gemini Spark、Siri 原則上唯讀。v0 的 React 僅供視覺參考。**例外：Issue #187 依使用者 2026-10-30 明確授權，由 ChatGPT 擔任唯一實作者，只能在 `chatgpt/today-market-ia-187` 分支修改該 Issue 範圍內的 `learner/brief.js`、必要 CSS／測試並建立 Draft PR；不得推 main、合併、部署或碰 API、資料源、排程、密鑰及正式環境設定。此例外不適用其他任務。**
+- 只有 Claude Code、Codex、Gemini Antigravity、ChatGPT 可改程式；Copilot、普通 Claude／Gemini、NotebookLM、Perplexity、v0、Gemini Spark、Siri 均唯讀。v0 的 React 僅供視覺參考。
 - 一個任務只設一位實作者；不得直接推 main 或推送其他工具的分支。接手他人分支須先獲使用者同意並在 PR 說明。
 - 同一時間只允許一位合併者；若有人正在合併或升版本，先等待。
 - 修改 `learner/watch.html`、`learner/index.html`、`learner/core.js`、`learner/brief.js` 前，先檢查同區塊 draft PR；沒有才建立鎖定用 draft PR，標題「鎖：檔名＋區塊」。完成後轉 ready；合併、關閉或交接時解除鎖定。
@@ -20,11 +20,11 @@
 | Claude Code | 主力開發、預設合併者 | `claude/…` |
 | Codex | 第二開發者；Claude 額度不足時接手；可交叉審查 Claude 高風險 PR | `codex/…` |
 | Gemini Antigravity | 預設驗證者；Claude 額度不足時可接手開發／合併 | `gemini/…` |
-| ChatGPT | 需求拆解、PR 獨立稽核；僅 Issue #187 有使用者授權的實作例外 | 其他任務唯讀；#187 限指定分支／檔案／Draft PR |
+| ChatGPT | 需求拆解、PR 獨立稽核；Claude 額度不足時由使用者指定接手開發 | `chatgpt/…` |
 | GitHub Copilot | 編輯器補全、大型 PR 審查 | 不開 PR |
 | 其他 AI（普通 Claude／Gemini、NotebookLM、Perplexity、v0、Gemini Spark、Siri） | 討論、附來源查資料、總覽、樣板參考 | 唯讀 |
 
-- Claude 額度不足時，須由使用者指定 Codex 或 Antigravity 接手。接手者可依本規則開發及開 PR；只有使用者明確說「直接幫我合併」才可合併。工具無法合併時，推分支、開 PR、CI 通過後請使用者在 GitHub 選 **Create a merge commit**。
+- Claude 額度不足時，須由使用者指定 Codex、Antigravity 或 ChatGPT 接手。接手者可依本規則開發及開 PR；只有使用者明確說「直接幫我合併」才可合併。工具無法合併時，推分支、開 PR、CI 通過後請使用者在 GitHub 選 **Create a merge commit**。
 - Antigravity 驗證時，使用 PR 預覽與真實資料操作 390px 手機、1280px 桌面；截圖留證並在 PR 留言以「驗證：」開頭，只回報問題、不改他人分支。
 - 普通 Claude 與 Claude Code 共用額度，僅用於困難問題。
 
@@ -32,7 +32,8 @@
 1. 先讀本文件、相關程式及測試；檢查開啟中的 PR／Issue，避免重複工作。
 2. `git fetch origin main`，將最新 main 合入自己的分支；新任務從最新 main 開分支。排程每天可能更新 main；不得改寫他人歷史或覆蓋未提交修改。
 3. 一個 PR 只處理一件事；有 Issue 才寫 `Closes #N`，不得虛構編號；無關問題另開 Issue。
-4. 大檔鎖定規則見「核心限制」。
+4. 在分支上改完、本機測試通過後再一次推送，不要每改一點就推：每次推送都會產生一次 Vercel 預覽部署（免費方案每天上限 100 次）。修 CI 或審查意見也盡量一次推完。
+5. 大檔鎖定規則見「核心限制」。
 
 ## 測試與品質
 - 先跑涵蓋修改的最小測試，再跑完整測試。不得為繞過失敗而自行升級 Playwright／套件。
@@ -48,7 +49,7 @@
 
 ## PR 與審查
 - 依 `.github/pull_request_template.md` 填寫實作者、變更、未完成項目、測試及驗證重點。
-- 作者不得審自己的 PR。策略、回測、安全、權限、協作規則等高風險變更須獨立審查：Claude Code 開發優先由 Codex 審；Codex／Antigravity 開發由 Claude Code 或 ChatGPT 審。低風險小改由合併者簡要審查。
+- 作者不得審自己的 PR。策略、回測、安全、權限、協作規則等高風險變更須獨立審查：Claude Code 開發優先由 Codex 審；Codex／Antigravity 開發由 Claude Code 或 ChatGPT 審；ChatGPT 開發由 Claude Code 或 Codex 審。低風險小改由合併者簡要審查。
 - 審查結論用「可以合併／修改後再合併／不建議合併」；逐項列 P0–P3、檔案／行號、問題、重現方式及建議。其他 AI 意見只是待驗證線索；逐項判斷成立與否。P0／P1 修復後才能合併。
 
 ## 合併流程
