@@ -57,29 +57,6 @@
     return panel;
   }
 
-  function quoteMeta(q, fallbackDate, fallbackMode) {
-    const date = q && (q.dataDate || q.date) || fallbackDate || "日期未提供";
-    const time = q && (q.sourceTime || q.time) || "來源時間未提供";
-    const source = q && q.source || "來源未提供";
-    const mode = q && (q.updateModeText || q.updateMode) || fallbackMode || "更新方式未提供";
-    return { date, time, source, mode };
-  }
-
-  function quoteCard(title, code, q, fallbackDate, fallbackMode) {
-    const price = q && (q.price ?? q.close);
-    const change = q && q.chgPct;
-    const meta = quoteMeta(q, fallbackDate, fallbackMode);
-    const state = q && q.date && q.date === todayTW() ? "今日資料" : "最近交易日";
-    const tone = isNum(change) ? (change > 0 ? "up" : change < 0 ? "down" : "flat") : "flat";
-    return '<article class="mc-market-card">' +
-      '<div class="mc-market-card-head"><b>' + escapeHtml(title) + '</b><span>' + escapeHtml(code) + '</span></div>' +
-      '<div class="mc-market-card-value ' + tone + '">' + escapeHtml(numberFmt(price, 2)) + '</div>' +
-      '<div class="mc-market-card-change ' + tone + '">' + escapeHtml(isNum(change) ? signed(change) + "%" : "漲跌幅未提供") + '</div>' +
-      '<div class="mc-market-card-meta">' + escapeHtml(meta.date) + ' · ' + escapeHtml(meta.time) + '</div>' +
-      '<div class="mc-market-card-foot"><span>' + escapeHtml(state) + '</span><span>' + escapeHtml(meta.source) + '</span></div>' +
-    '</article>';
-  }
-
   function flowMoney(value) {
     return isNum(value) ? (value > 0 ? "+" : "") + (Math.abs(value) >= 100 ? Math.round(value) : value.toFixed(1)) + " 億" : "—";
   }
@@ -111,6 +88,17 @@
     if (!breadthMount || !breadthMount.children.length) {
       breadthMount.innerHTML = '<p class="mc-empty">市場廣度資料尚未與最新加權行情對齊；不以其他交易日資料補入。</p>';
     }
+    // 手機第一屏優先呈現核心市場數字：將核心卡移到加權報價與分時圖之間。
+    const side = hero && hero.querySelector(".td-side");
+    const coreGrid = side && side.querySelector(".dh-core-grid");
+    const main = hero && hero.querySelector(".td-main");
+    const chart = main && main.querySelector(".td-ix");
+    if (coreGrid && main) {
+      coreGrid.classList.add("mc-core-grid");
+      if (chart) chart.before(coreGrid);
+      else main.appendChild(coreGrid);
+    }
+    if (side && !side.children.length) side.remove();
     const sectorMount = panel.querySelector(".mc-overview-sector");
     const list = flow.sectors.filter(x => isNum(x.net1) && x.net1 !== 0).sort((a, b) => Math.abs(b.net1) - Math.abs(a.net1)).slice(0, 6);
     const max = Math.max(1, ...list.map(x => Math.abs(x.net1)));
@@ -153,6 +141,7 @@
       .concat(Array.isArray(U.megas) ? U.megas : []);
     const extra = W && W.gl && W.gl.ok && Array.isArray(W.gl.groups)
       ? W.gl.groups.flatMap(group => Array.isArray(group.rows) ? group.rows : []) : [];
+    const usCodes = new Set(rows.filter(item => item && item.code).map(item => item.code));
     const byCode = new Map();
     rows.concat(extra).forEach(item => {
       if (item && item.code && !byCode.has(item.code)) byCode.set(item.code, item);
@@ -161,10 +150,11 @@
       const price = item.price ?? item.close;
       const change = item.chgPct;
       const tone = isNum(change) ? (change > 0 ? "up" : change < 0 ? "down" : "flat") : "flat";
-      const date = item.dataDate || item.date || U.dataDate || U.date || "日期未提供";
-      const time = item.sourceTime || item.time || U.sourceTime || "來源時間未提供";
+      const isUsRow = usCodes.has(item.code);
+      const date = item.dataDate || item.date || (isUsRow ? U.dataDate || U.date : null) || "日期未提供";
+      const time = item.sourceTime || item.time || (isUsRow ? U.sourceTime : null) || "來源時間未提供";
       const zone = item.tz ? "（" + item.tz + "）" : "";
-      const source = item.source || U.source || "來源未提供";
+      const source = item.source || (isUsRow ? U.source : null) || "來源未提供";
       return '<article class="mc-global-card"><div class="mc-global-name"><b>' + escapeHtml(item.name || item.code) + '</b><span>' + escapeHtml(item.code) + '</span></div>' +
         '<div class="mc-global-price">' + escapeHtml(numberFmt(price, 3)) + '</div>' +
         '<div class="mc-global-change ' + tone + '">' + escapeHtml(isNum(change) ? signed(change) + "%" : "漲跌幅未提供") + '</div>' +
@@ -186,22 +176,33 @@
     if (detail) detail.dataset.mcSection = "global";
   }
 
-  function parseLevel(caption, label) {
-    const match = String(caption || "").match(new RegExp(label + "\\s+([0-9,]+)"));
-    if (!match) return null;
-    const value = Number(match[1].replace(/,/g, ""));
-    return Number.isFinite(value) && value > 0 ? value : null;
+  function readTechnicalLevels(W) {
+    try {
+      const today = typeof twDay === "function" ? twDay() : todayTW();
+      const holidays = W?.cal?.hol || (typeof TWHOL !== "undefined" && TWHOL.set ? [...TWHOL.set].map(date => ({ date })) : []);
+      const quote = getQuote(W, "T00");
+      const session = typeof sessionStatus === "function"
+        ? sessionStatus(Date.now(), { holidays, lastTradeDate: quote?.date })
+        : null;
+      const target = session?.session === "closed" && typeof findNextTradeDate === "function"
+        ? findNextTradeDate(today, holidays) || today
+        : today;
+      const snapshot = typeof getBriefSnapshot === "function" ? getBriefSnapshot(target) : null;
+      const levels = snapshot?.keyLevels;
+      if (!levels || !["pressure", "pivot", "support"].every(key => isNum(levels[key]) && levels[key] > 0)) return null;
+      if (levels.pressure <= levels.pivot || levels.pivot <= levels.support) return null;
+      return levels;
+    } catch {
+      return null;
+    }
   }
 
   function renderTechnical(page, W) {
-    const detail = page.querySelector("#td-sec-plan");
-    const caption = detail
-      ? [detail.querySelector(".dh-sec-s")?.textContent, detail.querySelector(".dh-sec-b")?.textContent].filter(Boolean).join(" ")
-      : "";
+    const levelsData = readTechnicalLevels(W);
     const levels = [
-      { key: "pressure", label: "壓力", value: parseLevel(caption, "壓力"), desc: "突破後觀察是否站穩" },
-      { key: "pivot", label: "多空分水嶺", value: parseLevel(caption, "分水嶺"), desc: "盤勢位置的判讀基準" },
-      { key: "support", label: "支撐", value: parseLevel(caption, "支撐"), desc: "跌破後重新評估風險" }
+      { key: "pressure", label: "壓力", value: levelsData?.pressure ?? null, desc: "突破後觀察是否站穩" },
+      { key: "pivot", label: "多空分水嶺", value: levelsData?.pivot ?? null, desc: "盤勢位置的判讀基準" },
+      { key: "support", label: "支撐", value: levelsData?.support ?? null, desc: "跌破後重新評估風險" }
     ];
     const q = getQuote(W, "T00");
     const position = page.querySelector(".td-pos");
@@ -240,12 +241,14 @@
       ".mc-eyebrow{font-size:10px;letter-spacing:.14em;font-weight:700;color:var(--muted)}",
       ".mc-date{font-size:11px;color:var(--muted);white-space:nowrap}",
       ".mc-status-chip,.mc-model-tag{display:inline-flex;align-items:center;min-height:24px;padding:3px 9px;border:1px solid var(--mc-border);border-radius:999px;background:var(--mc-soft);color:var(--muted);font-size:11px;line-height:1.35}",
-      ".td-page .td-hero{display:grid!important;grid-template-columns:minmax(0,1.45fr) minmax(270px,.9fr);gap:14px;align-items:stretch;margin:0 0 14px}",
+      ".td-page .td-hero{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(270px,.9fr);gap:14px;align-items:stretch;margin:0 0 14px}",
       ".td-page .td-main,.td-page .td-side{min-width:0;padding:16px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
       ".td-page .td-side{display:flex;flex-direction:column;gap:12px}",
       ".td-page .td-side .td-breadth{display:none}",
-      ".td-page .td-ix{min-height:180px}",
-      ".td-page .td-ix-plot{min-height:180px}",
+      ".mc-core-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:0;margin:8px 0 0;border-top:1px solid var(--line)}",
+      ".mc-core-grid .dh-core-card{background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:8px 8px 8px 0}",
+      ".mc-core-grid .dh-cc-head .note{display:none}.mc-core-grid .dh-cc-head b{font-size:12px;font-weight:400;color:var(--muted)}",
+      ".mc-core-grid .dh-cc-sub{display:flex;align-items:center;justify-content:space-between;gap:4px}.mc-core-grid .dh-cc-sub span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mc-core-grid .dh-cc-sub .spark{flex:none;width:36px;height:14px}",
       ".mc-overview-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin:0 0 14px}",
       ".mc-overview-grid .td-breadth{margin:0;padding:0;border:0;background:transparent}",
       ".mc-overview-grid .td-breadth-head{margin-bottom:5px}",
@@ -293,7 +296,7 @@
       ".td-page .dh-sec-b{padding:0 16px 16px}",
       ".td-page [data-mc-section][hidden]{display:none!important}",
       "@media(max-width:760px){.td-page .td-hero{grid-template-columns:minmax(0,1fr)}.mc-overview-grid{grid-template-columns:minmax(0,1fr)}.mc-global-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-flow-columns{grid-template-columns:minmax(0,1fr);gap:12px}.mc-heading{align-items:flex-start;flex-direction:column;gap:4px}}",
-      "@media(max-width:430px){.mc-tab{flex:0 0 auto;min-width:90px;padding:9px 12px}.mc-panel{padding:13px}.td-page .td-main,.td-page .td-side{padding:12px}.mc-flow-row{grid-template-columns:minmax(82px,1fr) minmax(45px,1fr) minmax(50px,.7fr);gap:7px}.mc-tech-ladder{grid-template-columns:minmax(0,1fr)}.mc-level-row{display:grid;grid-template-columns:1fr auto;align-items:center}.mc-level-row small{grid-column:1/-1}.mc-global-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-global-price{font-size:17px}}"
+      "@media(max-width:430px){.mc-tab{flex:0 0 auto;min-width:90px;padding:9px 12px}.mc-panel{padding:13px}.td-page .td-main,.td-page .td-side{padding:10px}.td-page .td-main{gap:8px}.mc-core-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:6px}.mc-core-grid .dh-core-card{padding:6px 5px}.mc-flow-row{grid-template-columns:minmax(82px,1fr) minmax(45px,1fr) minmax(50px,.7fr);gap:7px}.mc-tech-ladder{grid-template-columns:minmax(0,1fr)}.mc-level-row{display:grid;grid-template-columns:1fr auto;align-items:center}.mc-level-row small{grid-column:1/-1}.mc-global-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-global-price{font-size:17px}}"
     ].join("\n");
     (doc.head || doc.documentElement).appendChild(style);
   }
@@ -388,6 +391,7 @@
     applyWorkspace(page, state, state.workspace);
     if (!window.__klMarketCenterClickBound) {
       window.__klMarketCenterClickBound = true;
+      // Capture phase: the existing AI handler redraws #lx and may detach the button before bubbling.
       document.addEventListener("click", event => {
         const target = event.target;
         const button = target.closest && target.closest("[data-mc-tab]");
@@ -397,7 +401,8 @@
           if (aiHost && stateRef) {
             queueMicrotask(() => {
               const currentPage = aiHost.querySelector(".td-page");
-              if (currentPage && stateRef) applyWorkspace(currentPage, stateRef, "research");
+              const currentState = stateRef;
+              if (currentPage && currentState) applyWorkspace(currentPage, currentState, "research");
             });
           }
           return;
@@ -406,7 +411,7 @@
         if (!currentPage || !stateRef) return;
         event.preventDefault();
         applyWorkspace(currentPage, stateRef, button.dataset.mcTab);
-      });
+      }, true);
     }
     stateRef = state;
     return true;
