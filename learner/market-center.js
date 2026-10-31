@@ -216,7 +216,14 @@
     const state = ensureState(W);
     if (!state) return;
     if (active && !state.globalRefreshTimer) {
-      state.globalRefreshTimer = setInterval(() => refreshGlobalIfNeeded(runtimeRef), GLOBAL_REFRESH_POLL_MS);
+      state.globalRefreshTimer = setInterval(() => {
+        const current = runtimeRef;
+        if (!current || current.lt !== "today" || current.marketCenter?.workspace !== "global") {
+          syncGlobalRefreshTimer(current, false);
+          return;
+        }
+        refreshGlobalIfNeeded(current);
+      }, GLOBAL_REFRESH_POLL_MS);
       state.globalRefreshVisibilityHandler = () => {
         if (document.visibilityState === "visible") refreshGlobalIfNeeded(runtimeRef);
       };

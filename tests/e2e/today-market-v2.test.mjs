@@ -15,7 +15,8 @@ const GLOBAL_TEST_GROUPS = [
 const makeGlobalFixture = () => ({
   ok: true,
   source: "Yahoo Finance（可能延遲 10～15 分鐘）",
-  at: "2026-10-26T02:30:00.000Z",
+  sourceFetchedAt: "2026-10-26T02:30:00.000Z",
+  at: Date.parse("2026-10-26T02:30:00.000Z"),
   failed: [],
   groups: GLOBAL_TEST_GROUPS.map((group, groupIndex) => ({
     id: group.id,
