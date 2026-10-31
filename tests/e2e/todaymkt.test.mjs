@@ -34,7 +34,8 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
       assert.match(await p.evaluate(() => $("#lx").innerText), /市場資金流向[\s\S]*盤後總結/);
     }
     if (want.includes("mac") && at.startsWith("2026-10-25")) {
-      await selectWorkspace(p, "global");
+      // 休市時的最近交易日事件回顧屬於技術攻防的交易情境，不在全球總經區。
+      await selectWorkspace(p, "technical");
       assert.match(await p.evaluate(() => $("#lx").innerText), /最近交易日事件回顧/);
     }
     assert.equal(await p.$$eval("#lx .dh-sec-b", L => L.length), want.length, "收合的區塊不畫內容");

@@ -40,7 +40,9 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   const planText = await p.evaluate(() => $("#lx").innerText);
   await selectWorkspace(p, "global");
   const globalText = await p.evaluate(() => $("#lx").innerText);
-  const t = globalText + "\\n" + planText;
+  await selectWorkspace(p, "overview");
+  const overviewText = await p.evaluate(() => $("#lx").innerText);
+  const t = overviewText + "\\n" + globalText + "\\n" + planText;
   for (const s of ["昨晚美股", "道瓊工業", "費城半導體", "台積電 ADR", "台指期", "夜盤 23,000", "除權息", "2330 除息 現金 4.5 元", "台積電先進封裝擴產", "今天要注意", "法說會"]) assert.ok(t.includes(s), `早報要有「${s}」`);
   assert.ok(t.indexOf("★ ") > 0 && t.indexOf("★ ") < t.indexOf("1101 除息"), "庫存的除權息排前面、有星號");
   assert.equal(await p.evaluate(() => W.lt), "today", "舊的「早報」分頁帶到情報局的「今日市場」");
