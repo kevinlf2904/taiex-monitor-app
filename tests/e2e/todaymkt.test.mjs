@@ -120,7 +120,7 @@ test("市場廣度：完整顯示上漲／平盤／下跌樣本、比例與資�
     const d = twDay();
     W.quotes.set("T00", { code: "T00", name: "加權指數", price: 100, prev: 99, open: 99, high: 101, low: 98, chg: 1, chgPct: 1.01, vol: 1000, date: d, time: "10:30:05", source: "證交所 MIS" });
     const M = { T: 1, dates: [d], secs: [], stocks: new Map() };
-    window.mfModel = () => M;
+    W.mf.model = M; // mfModel 是 watch.html 的 const，改 window.mfModel 不會生效；直接放進它回傳的 W.mf.model
     window.flowAt = () => [];
     window.flowMood = () => ({ up: 6, dn: 3, flat: 2, total: 11, lu: 1, ld: 0, avg: 0.65, score: 65, label: "偏樂觀" });
     W.ixSp = { ...(W.ixSp || {}), T00: { pts: [["09:00", 99], ["10:00", 100], ["10:30", 100.5]], prev: 99, win: [540, 810] } };
