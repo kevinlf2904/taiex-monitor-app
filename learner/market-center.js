@@ -241,7 +241,7 @@
       ".mc-eyebrow{font-size:10px;letter-spacing:.14em;font-weight:700;color:var(--muted)}",
       ".mc-date{font-size:11px;color:var(--muted);white-space:nowrap}",
       ".mc-status-chip,.mc-model-tag{display:inline-flex;align-items:center;min-height:24px;padding:3px 9px;border:1px solid var(--mc-border);border-radius:999px;background:var(--mc-soft);color:var(--muted);font-size:11px;line-height:1.35}",
-      ".td-page .td-hero{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(270px,.9fr);gap:14px;align-items:stretch;margin:0 0 14px}",
+      ".td-page .td-hero{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:stretch;margin:0 0 14px}",
       ".td-page .td-main,.td-page .td-side{min-width:0;padding:16px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
       ".td-page .td-side{display:flex;flex-direction:column;gap:12px}",
       ".td-page .td-side .td-breadth{display:none}",
