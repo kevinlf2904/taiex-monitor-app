@@ -88,7 +88,7 @@ for (const width of [390, 1280]) test("今日市場 V2：工作區視覺層級�
 
   await p.waitForSelector("#lx .mc-overview-grid", { timeout: 15000 });
   assert.equal(await p.$eval("#lx .mc-nav [data-mc-tab]", buttons => buttons.length), 5);
-  assert.equal(await p.getAttribute("#lx .mc-nav", "role"), "tablist");
+  assert.equal(await p.locator("#lx .mc-nav").getAttribute("role"), "tablist");
   assert.equal(await p.$eval('#lx .mc-nav [role="tab"][aria-selected="true"]', tabs => tabs.length), 1);
   assert.equal(await p.$eval("#detail", drawer => drawer.hasAttribute("data-mc-section")), false,
     "今日市場不得把看盤頁的個股抽屜註冊為工作區內容");
