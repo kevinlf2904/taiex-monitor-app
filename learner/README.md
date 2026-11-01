@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 今日市場 V2.1：全球市場完整分類與自動更新（2026.11.01-174）
+- 完整呈現既有 API 的 34 個國際市場標的與 7 個分類，逐項標示資料日期、來源時間及狀態；API 回應時間與前端取得／快取時間分開顯示。國際行情只在開啟全球總經工作區時載入，停留期間每 15 秒檢查一次，來源回應超過 60 秒才觸發刷新，更新失敗保留最後有效資料。
+
 ### 排程資料改從 GitHub 讀（2026.10.31-173）
 - learner/data 的排程資料改讀 GitHub main 最新版（讀不到就用網站上的那份）；只改 learner/data 的提交不再觸發 Vercel 部署，減少部署次數
 
