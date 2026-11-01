@@ -87,9 +87,9 @@ for (const width of [390, 1280]) test("今日市場 V2：工作區視覺層級�
   }, makeGlobalFixture());
 
   await p.waitForSelector("#lx .mc-overview-grid", { timeout: 15000 });
-  assert.equal(await p.$eval("#lx .mc-nav [data-mc-tab]", buttons => buttons.length), 5);
+  assert.equal(await p.$$eval("#lx .mc-nav [data-mc-tab]", buttons => buttons.length), 5);
   assert.equal(await p.locator("#lx .mc-nav").getAttribute("role"), "tablist");
-  assert.equal(await p.$eval('#lx .mc-nav [role="tab"][aria-selected="true"]', tabs => tabs.length), 1);
+  assert.equal(await p.$$eval('#lx .mc-nav [role="tab"][aria-selected="true"]', tabs => tabs.length), 1);
   assert.equal(await p.$eval("#detail", drawer => drawer.hasAttribute("data-mc-section")), false,
     "今日市場不得把看盤頁的個股抽屜註冊為工作區內容");
   const dateAlignment = await p.evaluate(() => window.KLMarketCenter.flowAlignment(
@@ -128,7 +128,7 @@ for (const width of [390, 1280]) test("今日市場 V2：工作區視覺層級�
   assert.match(await p.textContent("#lx .mc-global-panel"), /費城半導體/);
   assert.equal(await p.$("#lx #td-sec-mac"), null,
     "完整全球矩陣已取代舊總經明細，不能重複顯示美股與國際行情");
-  assert.equal(await p.$eval("#lx .mc-global-shortcuts [data-tdgo]", buttons => buttons.length), 4,
+  assert.equal(await p.$$eval("#lx .mc-global-shortcuts [data-tdgo]", buttons => buttons.length), 4,
     "整併後仍需保留前往既有市場工具的快捷入口");
   const oilMeta = await p.$$eval("#lx .mc-global-card", cards =>
     cards.find(card => card.querySelector(".mc-global-name span")?.textContent.trim() === "CL=F")
