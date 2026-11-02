@@ -5,6 +5,7 @@
 // 籌碼集中度＝前 15 大買超分點的買超合計－前 15 大賣超分點的賣超合計，除以區間成交量。家數差＝買超家數－賣超家數。
 // 來源：FinMind TaiwanStockTradingDailyReport（整理自證交所買賣日報表）。這個資料集要 FinMind「贊助會員」的
 // FINMIND_TOKEN 才能用；沒有權限時回 { ok: false, needSponsor: true }，頁面會說明，不會編數字。
+import { userMsg } from "./_err.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const BASE = "https://api.finmindtrade.com/api/v4";
 const ymd = d => d.toISOString().slice(0, 10);
@@ -76,7 +77,7 @@ export default async function handler(req, res) {
     }
   } catch (e) {
     if (e instanceof NeedSponsor) return res.status(200).json({ ok: false, needSponsor: true, error: `FinMind 回覆：${e.message}。券商分點要贊助會員才能用。` });
-    if (!days.length) return res.status(200).json({ ok: false, error: e.message });
+    if (!days.length) return res.status(200).json({ ok: false, error: userMsg(e, "券商分點資料暫時拿不到，請稍後再試", "broker") });
   }
   if (!days.length) return res.status(200).json({ ok: false, error: `找不到 ${code} 的分點資料` });
   days.sort((a, b) => a.d.localeCompare(b.d));
