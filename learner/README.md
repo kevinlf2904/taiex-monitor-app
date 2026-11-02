@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 今日市場小修（2026.11.03-181）
+- 全球行情 CDN 快取延遲不再誤報「超過 60 秒」、工作區分頁無障礙屬性修正、合併重複樣式
+
 ### 深度掃描修正（2026.11.02-180）
 - esc 轉單引號、外部連結只放行 http(s)、三支 API 錯誤訊息不外露內部資訊、申報測試更穩定（Issue #205）
 
