@@ -221,3 +221,26 @@ test("今日市場 V2.1：全球行情按需載入，過期後自動刷新且避
   await ctx.close();
   assert.deepEqual(errs, []);
 });
+
+test("今日市場 AI 研究：工作區內就有「開始 AI 整理」，成功、失敗都留在研究區並可重試", async () => {
+  for (const width of [390, 1280]) {
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 600 });
+    await p.evaluate(() => { W.tdPh = null; W.tdAI = null; setLt("today"); renderList(); });
+    await p.click('#lx [data-mc-tab="research"]');
+    assert.equal(await p.textContent("#lx .mc-ai-run"), "開始 AI 整理", width + "：研究區要有明顯的開始按鈕");
+    assert.match(await p.textContent("#lx .mc-ai-panel"), /尚未產生 AI 摘要/);
+    await p.click("#lx .mc-ai-run");
+    await p.waitForFunction(() => /測試回覆/.test(document.querySelector("#lx .mc-ai-panel .caibox")?.textContent || ""));
+    assert.equal(await p.textContent("#lx .mc-ai-run"), "重新整理");
+    assert.equal(await p.evaluate(() => W.marketCenter.workspace), "research", "整理完仍停在 AI 研究");
+    await p.evaluate(() => { window.aiChat = () => Promise.reject(new Error("伺服器尚未設定 GEMINI_API_KEY")); });
+    await p.click("#lx .mc-ai-run");
+    await p.waitForFunction(() => /⚠︎/.test(document.querySelector("#lx .mc-ai-panel .caibox")?.textContent || ""));
+    assert.match(await p.textContent("#lx .mc-ai-panel .caibox"), /GEMINI_API_KEY/, "失敗原因要顯示在研究區");
+    assert.equal(await p.textContent("#lx .mc-ai-run"), "重試 AI 整理");
+    const sw = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    assert.ok(sw <= 1, width + "：不可水平溢位");
+    await ctx.close();
+    assert.deepEqual(errs, []);
+  }
+});
