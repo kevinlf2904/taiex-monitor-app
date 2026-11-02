@@ -86,6 +86,9 @@
     };
   }
 
+  // 晶片文字：有日期寫「日期 · 狀態」，沒日期只寫狀態（狀態本身就是「法人日期未提供」，不能再重複一次）
+  const flowChip = (flow, alignment) => flow && flow.date ? flow.date + " · " + alignment.label : alignment.label;
+
   function flowRow(item, max) {
     const value = item.net1;
     if (!isNum(value)) return "";
@@ -102,10 +105,9 @@
   function renderOverview(page, W, flow) {
     const hero = page.querySelector(".td-hero");
     const alignment = flowAlignment(W, flow);
-    const gridHtml = '<div class="mc-panel-head"><div><span class="mc-eyebrow">MARKET BREADTH</span><h4>市場廣度</h4></div><span class="mc-date">' +
-      escapeHtml(flow.date || "資料日期未提供") + '</span></div><div class="mc-breadth-mount"></div>';
+    const gridHtml = '<div class="mc-panel-head"><div><span class="mc-eyebrow">MARKET BREADTH</span><h4>市場廣度</h4></div></div><div class="mc-breadth-mount"></div>';
     const sectorHtml = '<div class="mc-panel-head"><div><span class="mc-eyebrow">SECTOR MOMENTUM</span><h4>族群資金強弱</h4></div><span class="mc-date ' +
-      alignment.tone + '">' + escapeHtml((flow.date || "法人日期未提供") + " · " + alignment.label) + '</span></div><div class="mc-overview-sector"></div>';
+      alignment.tone + '">' + escapeHtml(flowChip(flow, alignment)) + '</span></div><div class="mc-overview-sector"></div>';
     const panel = ensurePanel(page, ".mc-overview-grid", "mc-overview-grid", "overview",
       '<section class="mc-panel mc-breadth-panel">' + gridHtml + '</section><section class="mc-panel mc-overview-sector-panel">' + sectorHtml + '</section>');
     const breadthMount = panel.querySelector(".mc-breadth-mount");
@@ -128,7 +130,7 @@
     const sectorMount = panel.querySelector(".mc-overview-sector");
     const list = (flow.sectors || []).filter(x => isNum(x.net1) && x.net1 !== 0).sort((a, b) => Math.abs(b.net1) - Math.abs(a.net1)).slice(0, 6);
     const max = Math.max(1, ...list.map(x => Math.abs(x.net1)));
-    const alignmentNote = '<p class="mc-flow-alignment ' + alignment.tone + '" role="status">' + escapeHtml(alignment.note) + '</p>';
+    const alignmentNote = alignment.tone === "ok" ? "" : '<p class="mc-flow-alignment ' + alignment.tone + '" role="status">' + escapeHtml(alignment.note) + '</p>';
     sectorMount.innerHTML = list.length
       ? list.map(x => flowRow(x, max)).join("") + alignmentNote + '<p class="mc-data-note">依現有法人張數與收盤價估算；不同題材可能重複包含同一檔股票。</p>'
       : '<p class="mc-empty">尚無可比較的板塊法人金額，待資料完整後顯示。</p>' + alignmentNote;
@@ -143,15 +145,14 @@
     const negative = (flow.sectors || []).filter(x => isNum(x.net1) && x.net1 < 0).sort((a, b) => a.net1 - b.net1).slice(0, 5);
     const max = Math.max(1, ...positive.concat(negative).map(x => Math.abs(x.net1)));
     const html = '<div class="mc-panel-head"><div><span class="mc-eyebrow">INSTITUTIONAL FLOW</span><h4>法人資金流向排行</h4></div><span class="mc-date ' + alignment.tone + '">' +
-      escapeHtml((flow.date || "法人日期未提供") + " · " + alignment.label) + '</span></div>' +
-      '<p class="mc-flow-alignment ' + alignment.tone + '" role="status">' + escapeHtml(alignment.note) + '</p>' +
+      escapeHtml(flowChip(flow, alignment)) + '</span></div>' +
+      (alignment.tone === "ok" ? "" : '<p class="mc-flow-alignment ' + alignment.tone + '" role="status">' + escapeHtml(alignment.note) + '</p>') +
       '<div class="mc-flow-columns"><div><h5 class="up">資金流入</h5>' +
       (positive.length ? positive.map(x => flowRow(x, max)).join("") : '<p class="mc-empty">目前沒有可確認的淨流入板塊。</p>') +
       '</div><div><h5 class="down">資金流出</h5>' +
       (negative.length ? negative.map(x => flowRow(x, max)).join("") : '<p class="mc-empty">目前沒有可確認的淨流出板塊。</p>') +
       '</div></div>' +
-      '<div class="mc-flow-foot"><span>資料日期：' + escapeHtml(flow.date || "未提供") + '</span><span>單位：億元（估算）</span></div>' +
-      '<p class="mc-data-note">估算方式：三大法人買賣超張數 × 1,000 股 × 收盤價 ÷ 1 億。不是逐筆成交金額；缺值不代表零買賣超。</p>';
+      '<p class="mc-data-note">單位：億元（估算）。估算方式：三大法人買賣超張數 × 1,000 股 × 收盤價 ÷ 1 億。不是逐筆成交金額；缺值不代表零買賣超。</p>';
     const panel = ensurePanel(page, ".mc-capital-panel", "mc-panel mc-capital-panel", "capital", html);
     const sectionBar = page.querySelector(".dh-secbar");
     if (sectionBar) sectionBar.before(panel);
@@ -403,7 +404,8 @@
       ".mc-heading h4{margin:0;font-size:20px;font-weight:750;letter-spacing:.01em;color:var(--ink)}",
       ".mc-heading p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}",
       ".mc-panel{min-width:0;padding:16px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
-      ".mc-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}",
+      ".mc-panel-head{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;margin-bottom:14px}",
+      ".td-page .dh-secs{grid-template-columns:minmax(0,1fr)}",
       ".mc-panel-head h4{margin:3px 0 0;font-size:16px;font-weight:700;color:var(--ink)}",
       ".mc-eyebrow{font-size:10px;letter-spacing:.14em;font-weight:700;color:var(--muted)}",
       ".mc-date{font-size:11px;color:var(--muted);white-space:nowrap}",
@@ -441,7 +443,8 @@
       ".mc-data-note{margin:12px 0 0;color:var(--muted);font-size:11px;line-height:1.6}",
       ".mc-empty{margin:8px 0;padding:12px;border:1px dashed var(--mc-border);border-radius:8px;color:var(--muted);font-size:12px;line-height:1.6}",
       ".mc-global-summary{padding:0 0 13px;border:0}",
-      ".mc-global-summary span{display:inline-flex;gap:5px;align-items:baseline}",
+      ".mc-global-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 16px}",
+      ".mc-global-summary span{display:flex;gap:5px;align-items:baseline;flex-wrap:wrap;min-width:0;overflow-wrap:anywhere}",
       ".mc-global-summary b{color:var(--ink);font-weight:600}",
       ".mc-global-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}",
       ".mc-global-card{min-width:0;padding:12px;border:1px solid var(--mc-border);border-radius:9px;background:var(--mc-soft)}",
@@ -472,7 +475,7 @@
       ".mc-tech-ladder{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px}",
       ".mc-level-row{display:flex;flex-direction:column;gap:5px;min-width:0;padding:12px;border:1px solid var(--mc-border);border-radius:9px;background:var(--mc-soft)}",
       ".mc-level-row span{font-size:11px;color:var(--muted)}.mc-level-row b{font:700 16px var(--font-num,monospace);color:var(--ink)}.mc-level-row small{font-size:10px;color:var(--muted);line-height:1.4}",
-      ".mc-level-row.pressure{border-top:3px solid var(--down)}.mc-level-row.pivot{border-top:3px solid var(--accent)}.mc-level-row.support{border-top:3px solid var(--up)}",
+      ".mc-level-row.pressure,.mc-level-row.support{border-top:3px solid var(--muted)}.mc-level-row.pivot{border-top:3px solid var(--accent)}",
       ".mc-tech-position{margin-top:10px;font-size:12px;color:var(--muted)}",
       ".mc-ai-panel{padding:18px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
       ".mc-ai-panel h4{margin:0 0 6px;font-size:17px}.mc-ai-panel>p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}.mc-ai-panel .caibox{margin-top:12px}",
