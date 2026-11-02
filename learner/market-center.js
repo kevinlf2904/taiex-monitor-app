@@ -587,8 +587,8 @@
       research = page.ownerDocument.createElement("section");
       research.className = "mc-ai-panel";
       research.dataset.mcSection = "research";
-      // 工作區裡直接放「開始 AI 整理」：原本只有狀態列的小圖示按鈕，切到這裡看不出要按哪裡（data-tx="tdai" 由 brief.js 的 #lx 點擊處理）
-      research.innerHTML = '<div class="mc-panel-head"><div><h4>AI 市場研究</h4></div><button type="button" class="mc-ai-run" data-tx="tdai"></button></div>' +
+      // 工作區裡直接放「開始 AI 整理」：原本只有狀態列的小圖示按鈕，切到這裡看不出要按哪裡；按下時轉按狀態列那顆 AI 整理（data-tx="tdai"，由 brief.js 處理），全頁仍只有一個 AI 觸發點
+      research.innerHTML = '<div class="mc-panel-head"><div><h4>AI 市場研究</h4></div><button type="button" class="mc-ai-run" data-mc-ai></button></div>' +
         '<p>依今日行情、法人、自選與事件資料整理重點。請同時檢查原始來源、資料日期與反證；摘要不等同完整研究報告。</p><div class="mc-ai-content"></div>';
       const bar = page.querySelector(".dh-secbar");
       if (bar) bar.before(research);
@@ -635,6 +635,12 @@
       // Capture phase: the existing AI handler redraws #lx and may detach the button before bubbling.
       document.addEventListener("click", event => {
         const target = event.target;
+        const aiRun = target.closest && target.closest("[data-mc-ai]");
+        if (aiRun) {
+          event.preventDefault();
+          if (!aiRun.disabled) aiRun.closest(".td-page")?.querySelector('[data-tx="tdai"]')?.click();
+          return;
+        }
         const button = target.closest && target.closest("[data-mc-tab]");
         if (!button) {
           const aiTrigger = target.closest && target.closest('[data-tx="tdai"]');
