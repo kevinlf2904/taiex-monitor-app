@@ -208,10 +208,13 @@ test("今日市場 V2.1：全球行情按需載入，過期後自動刷新且避
     setLt("today");
     renderList();
   });
-  assert.equal(globalHits, 0, "停留在市場總覽時不應先抓全球行情");
-  await selectWorkspace(p, "global");
+  // 總覽的「美元／台幣」卡片也讀國際行情：停在總覽就要抓一次（只一次），切到全球總經時資料還新，不再重抓
   await p.waitForFunction(() => W.gl?.ok === true && !W.glLoading);
-  assert.equal(globalHits, 1, "開啟全球總經時只發出一次初始請求");
+  assert.equal(globalHits, 1, "市場總覽只發出一次初始請求");
+  await p.evaluate(() => renderList());
+  assert.equal(globalHits, 1, "總覽重畫不重複請求");
+  await selectWorkspace(p, "global");
+  assert.equal(globalHits, 1, "開啟全球總經時資料仍新，不重複請求");
   await p.evaluate(() => {
     W.gl.sourceFetchedAt = "2026-10-26T02:28:00.000Z";
     W.marketCenter.globalRefreshAttemptAt = Date.now() - 60_000;
@@ -243,4 +246,24 @@ test("今日市場 AI 研究：工作區內就有「開始 AI 整理」，成功
     await ctx.close();
     assert.deepEqual(errs, []);
   }
+});
+
+test("今日市場總覽：沒切過全球總經也會補抓國際行情，美元／台幣卡片有值；警示用琥珀色不用漲跌色", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  let hits = 0;
+  await ctx.route("**/api/global", r => { hits++; r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, at: new Date().toISOString(), groups: [{ id: "fx", name: "外匯", rows: [{ code: "TWD=X", name: "美元台幣", price: 32.1, chgPct: 0.1, dataStatus: "stale" }] }] }) }); });
+  await p.evaluate(() => { W.gl = undefined; W.tdPh = null; setLt("today"); renderList(); });
+  await p.waitForFunction(() => [...document.querySelectorAll("#lx .dh-core-card")].some(c => /美元／台幣[\s\S]*32\.1/.test(c.textContent)));
+  assert.equal(hits, 1);
+  await p.evaluate(() => renderList());
+  assert.equal(hits, 1, "資料還新時重畫不重複抓");
+  await p.click('#lx [data-mc-tab="global"]');
+  await p.waitForSelector('#lx .mc-global-card[data-mc-code="TWD=X"] .mc-global-status.warn');
+  const C = await p.evaluate(() => {
+    const probe = document.createElement("i"); probe.style.color = "var(--warn)"; document.body.appendChild(probe);
+    const warn = getComputedStyle(probe).color; probe.remove();
+    return { status: getComputedStyle(document.querySelector('#lx .mc-global-card[data-mc-code="TWD=X"] .mc-global-status.warn')).color, warn };
+  });
+  assert.equal(C.status, C.warn, "過期狀態用 --warn");
+  await ctx.close(); assert.deepEqual(errs, []);
 });
