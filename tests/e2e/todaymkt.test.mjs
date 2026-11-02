@@ -1,4 +1,4 @@
-// 今日市場：分頁改名、#daily／#today 都能直達、四個資訊區的固定順序與時段預設展開、休市預設盤前、總經不重複、自訂分頁順序不受影響、手機第一屏看得到結論
+// 今日市場：分頁改名、#daily／#today 都能直達、三個交易區塊的固定順序與時段預設展開、全球矩陣獨立、自訂分頁順序不受影響、手機第一屏看得到結論
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium, serve, open, watchFrame } from "./_harness.mjs";
@@ -18,13 +18,13 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await p.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
   assert.match(await p.textContent('#lTabs [data-l="today"]'), /^今日市場$/);
-  const CASES = [["2026-10-26T08:00:00+08:00", ["mac", "plan"], "plan", /盤前推演[\s\S]*(情境|推演)/], ["2026-10-26T10:00:00+08:00", ["plan"], "plan", /自選漲 \d+ 跌 \d+[\s\S]*盤中監控/],
-    ["2026-10-26T15:00:00+08:00", ["flow", "plan"], "plan", /盤前情境・盤中確認・盤後驗證[\s\S]*盤後整理[\s\S]*下一交易日行動清單/], ["2026-10-25T10:00:00+08:00", ["mac", "plan"], "plan", /今天休市，下面是下一交易日 10\/26[\s\S]*最近交易日盤後整理/]];
+  const CASES = [["2026-10-26T08:00:00+08:00", ["plan"], "plan", /盤前推演[\s\S]*(情境|推演)/], ["2026-10-26T10:00:00+08:00", ["plan"], "plan", /自選漲 \d+ 跌 \d+[\s\S]*盤中監控/],
+    ["2026-10-26T15:00:00+08:00", ["flow", "plan"], "plan", /盤前情境・盤中確認・盤後驗證[\s\S]*盤後整理[\s\S]*下一交易日行動清單/], ["2026-10-25T10:00:00+08:00", ["plan"], "plan", /今天休市，下面是下一交易日 10\/26[\s\S]*最近交易日盤後整理/]];
   for (const [at, want, now, re] of CASES) {
     await p.clock.setFixedTime(new Date(at));
     await p.evaluate(() => { W.tdPh = null; setLt("today"); renderList(); });
     await p.waitForFunction(() => !!document.querySelector("#lx details.dh-sec"), null, { timeout: 15000 });
-    assert.deepEqual(await p.$$eval("#lx details.dh-sec", L => L.map(d => d.dataset.tdbox)), ["flow", "mac", "mine", "plan"], "順序固定");
+    assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#lx details.dh-sec")].map(d => d.dataset.tdbox)), ["flow", "mine", "plan"], "交易區塊順序固定；全球矩陣不再佔用舊 mac 摺疊區");
     assert.deepEqual(await openOf(p), want, at); assert.equal(await nowOf(p), now, `「現在」標在目前時段 ${at}`);
     await selectWorkspace(p, "technical");
     const technicalText = await p.evaluate(() => $("#lx").innerText);
@@ -33,11 +33,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
       await selectWorkspace(p, "capital");
       assert.match(await p.evaluate(() => $("#lx").innerText), /市場資金流向[\s\S]*盤後總結/);
     }
-    if (want.includes("mac") && at.startsWith("2026-10-25")) {
-      // 休市時的最近交易日事件回顧屬於技術攻防的交易情境，不在全球總經區。
-      await selectWorkspace(p, "technical");
-      assert.match(await p.evaluate(() => $("#lx").innerText), /最近交易日事件回顧/);
-    }
+    if (at.startsWith("2026-10-25")) assert.match(technicalText, /最近交易日事件回顧/, "休市時最近交易日事件回顧保留在交易情境");
     assert.equal(await p.$$eval("#lx .dh-sec-b", L => L.length), want.length, "收合的區塊不畫內容");
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `沒有橫向溢出 ${at}`);
     await p.waitForTimeout(300); assert.equal(await p.$$eval("#lx .fold-btn", L => L.length), 0, `不會被自動收合成「展開全部」 ${at}`);
@@ -46,9 +42,9 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   await selectWorkspace(p, "overview");
   await p.click('#lx details[data-tdbox="mine"] > summary'); await p.waitForFunction(() => !!document.querySelector('#lx details[data-tdbox="mine"] .dh-sec-b'));
   await p.evaluate(() => { W.ticking = true; renderList(); W.ticking = false; renderList(); });
-  assert.deepEqual(await openOf(p), ["mac", "mine", "plan"]);
+  assert.deepEqual(await openOf(p), ["mine", "plan"]);
   // 全部展開、全部收合
-  await p.click("#lx [data-tdall]"); assert.equal((await openOf(p)).length, 4); assert.match(await p.textContent("#lx [data-tdall]"), /全部收合/);
+  await p.click("#lx [data-tdall]"); assert.equal((await openOf(p)).length, 3); assert.match(await p.textContent("#lx [data-tdall]"), /全部收合/);
   await p.click("#lx [data-tdall]"); assert.deepEqual(await openOf(p), []);
   assert.equal(await p.evaluate(() => Object.keys(localStorage).some(k => /tdPh|tdph|tdOpen|tdsec/i.test(k))), false, "展開狀態不存進瀏覽器");
   // 資料來源收起來
@@ -56,24 +52,46 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
-test("總經儀表板：昨晚美股只在這裡（核心卡已有的費半、那斯達克、台積電 ADR 不再列）；原物料外匯補台幣、原油；連到大盤子頁 390", async () => {
+test("全球總經工作區：美股與國際市場日期、來源狀態及延伸連結", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.clock.setFixedTime(new Date("2026-10-26T08:00:00+08:00"));
-  await p.evaluate(() => { W.bf = { at: Date.now(), us: { ok: true, date: "2026-10-25", indices: [{ code: "^DJI", name: "道瓊工業", price: 42000, chgPct: 0.5 }, { code: "^SOX", name: "費城半導體", price: 5800, chgPct: 1.6 }, { code: "^IXIC", name: "那斯達克", price: 18000, chgPct: 0.9 }], megas: [{ code: "TSM", name: "台積電 ADR", price: 190, chgPct: 2 }], macro: [{ code: "^TNX", name: "美國 10 年期公債殖利率", price: 4.21, chgPct: -0.5 }] } }; W.tdPh = null; setLt("today"); renderList(); });
+  await p.evaluate(() => {
+    W.bf = { at: Date.now(), us: {
+      ok: true, date: "2026-10-23", dataDate: "2026-10-23", sourceTime: "16:00",
+      tz: "美東", source: "Yahoo Finance", dataStatus: "confirmed", updateMode: "after_close",
+      indices: [
+        { code: "^DJI", name: "道瓊工業", price: 42000, chgPct: 0.5 },
+        { code: "^SOX", name: "費城半導體", price: 5800, chgPct: 1.6 },
+        { code: "^IXIC", name: "那斯達克", price: 18000, chgPct: 0.9 }
+      ],
+      megas: [{ code: "TSM", name: "台積電 ADR", price: 190, chgPct: 2 }],
+      macro: [{ code: "^TNX", name: "美國 10 年期公債殖利率", price: 4.21, chgPct: -0.5 }]
+    } };
+    W.tdPh = null;
+    setLt("today");
+    renderList();
+  });
   await selectWorkspace(p, "global");
-  await p.waitForFunction(() => /台幣/.test(document.querySelector('#lx details[data-tdbox="mac"]')?.innerText || ""), null, { timeout: 15000 });
-  const m = await p.evaluate(() => document.querySelector('#lx details[data-tdbox="mac"]').innerText);
-  assert.match(m, /道瓊 \+0\.5%・美債 4\.21%・台幣 31\.20/, "摘要用核心卡沒有的數字"); assert.match(m, /昨晚美股[\s\S]*道瓊工業[\s\S]*美國 10 年期/); assert.match(m, /美元／台幣[\s\S]*原油/);
-  assert.doesNotMatch(m, /費城半導體|那斯達克|台積電 ADR/, "核心卡已經有的不重複");
+  await p.waitForFunction(() => /台幣/.test(document.querySelector("#lx .mc-global-panel")?.innerText || ""), null, { timeout: 15000 });
+  const matrix = await p.evaluate(() => document.querySelector("#lx .mc-global-panel")?.innerText || "");
+  assert.match(matrix, /全球市場矩陣/);
+  assert.match(matrix, /美股資料日期[\s\S]*2026-10-23[\s\S]*美股來源時間[\s\S]*16:00/);
+  assert.match(matrix, /道瓊工業[\s\S]*42000/);
+  assert.match(matrix, /美國 10 年期公債殖利率[\s\S]*4.21/);
+  assert.match(matrix, /美元指數|台幣/);
+  assert.match(matrix, /西德州原油 WTI[\s\S]*96.2/);
+  assert.equal(await p.$("#lx #td-sec-mac"), null, "整合後不再保留舊總經摘要，避免重複行情");
+  assert.ok(await p.$$eval("#lx .mc-global-card[data-mc-code]", cards => cards.length > 0));
   const allWorkspaceText = await p.evaluate(() => [...document.querySelectorAll("#lx [data-mc-section]")].map(el => el.textContent || "").join("\\n"));
-  assert.equal((allWorkspaceText.match(/昨晚美股/g) || []).length, 1, "昨晚美股在所有工作區合計只出現一次");
+  assert.equal((allWorkspaceText.match(/全球市場矩陣/g) || []).length, 1, "全球矩陣只掛載一次");
   await selectWorkspace(p, "technical");
-  assert.equal(await p.evaluate(() => (document.querySelector('#lx details[data-tdbox="plan"] .td-plan-pre').innerText.match(/昨晚美股/g) || []).length), 0, "盤前推演不再列昨晚美股");
+  assert.equal(await p.evaluate(() => (document.querySelector('#lx details[data-tdbox="plan"] .td-plan-pre').innerText.match(/昨晚美股/g) || []).length), 0, "盤前推演不重複列昨晚美股");
   await selectWorkspace(p, "global");
-  await p.click('#lx [data-tdgo="mkt:gl"]'); await p.waitForFunction(() => W.lt === "mkt" && W.mkReg === "gl");
-  await ctx.close(); assert.deepEqual(errs, []);
+  await p.click('#lx [data-tdgo="mkt:gl"]');
+  await p.waitForFunction(() => W.lt === "mkt" && W.mkReg === "gl");
+  await ctx.close();
+  assert.deepEqual(errs, []);
 });
-
 test("盤中監控有進行中的警示：狀態列顯示「■ 警示 N 件」，點了到盤中監控 390", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.clock.setFixedTime(new Date("2026-10-26T10:00:00+08:00"));

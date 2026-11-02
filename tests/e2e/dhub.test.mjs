@@ -27,7 +27,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`週末：�
   assert.equal(C.lvl, C.ink, "壓力、分水嶺、支撐用中性色"); assert.ok(!/37, 99, 235|5, 150, 105|124, 58, 237|99, 102, 241/.test(C.badgeBg), `徽章不是寫死的藍綠紫：${C.badgeBg}`); assert.ok(C.num, "價位用行情數字字型");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
   // 全部展開：資金卡只有一張、資金資料的狀態只說一次、週末不寫「盤中」
-  await p.click("#lx [data-tdall]"); await p.waitForFunction(() => document.querySelectorAll("#lx details.dh-sec[open] .dh-sec-b").length === 4);
+  await p.click("#lx [data-tdall]"); await p.waitForFunction(() => document.querySelectorAll("#lx details.dh-sec[open] .dh-sec-b").length === 3);
   await selectWorkspace(p, "capital");
   // 隱藏工作區仍屬於同一頁；以所有工作區的 DOM 文字計數，避免切頁後漏抓重複內容。
   const allWorkspaceText = await p.evaluate(() => [...document.querySelectorAll("#lx [data-mc-section]")].map(el => el.textContent || "").join("\\n"));
