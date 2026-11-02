@@ -73,6 +73,8 @@ test("全球總經工作區：美股與國際市場日期、來源狀態及延�
   });
   await selectWorkspace(p, "global");
   await p.waitForFunction(() => /台幣/.test(document.querySelector("#lx .mc-global-panel")?.innerText || ""), null, { timeout: 15000 });
+  // 美股期貨與總經群組預設收合；先展開再驗證其內的殖利率標的。
+  await p.click('#lx details[data-mc-global-group="us-macro"] > summary');
   const matrix = await p.evaluate(() => document.querySelector("#lx .mc-global-panel")?.innerText || "");
   assert.match(matrix, /全球市場矩陣/);
   assert.match(matrix, /美股資料日期[\s\S]*2026-10-23[\s\S]*美股來源時間[\s\S]*16:00/);
