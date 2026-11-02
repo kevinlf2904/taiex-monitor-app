@@ -157,6 +157,35 @@ test("手機第一屏：狀態列、位置燈號與加權、分時圖、核心�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+test("市場廣度：盤中法人資料還是前一天時，改用 /api/market 同日即時漲跌家數；不同日不補 390", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.clock.setFixedTime(new Date("2026-10-05T10:30:00+08:00"));
+  let hits = 0, mktDate = "2026-10-05";
+  await ctx.route("**/api/market", r => { hits++; r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, date: mktDate, time: "10:29:50", live: true, source: "證交所 MIS；美股 Yahoo Finance", breadth: { up: 500, down: 300, flat: 200, limUp: 12, limDn: 3 } }) }); });
+  const show = () => p.evaluate(() => {
+    W.quotes.set("T00", { code: "T00", name: "加權指數", price: 100, prev: 99, open: 99, high: 101, low: 98, chg: 1, chgPct: 1.01, vol: 1000, date: twDay(), time: "10:30:05", source: "證交所 MIS" });
+    W.mf.model = { T: 1, dates: ["2026-10-02"], secs: [], stocks: new Map() }; // 法人模型停在前一個交易日
+    window.flowAt = () => []; window.flowMood = () => ({ up: 6, dn: 3, flat: 2, total: 11 });
+    W.mkt = null; if (W.marketCenter) W.marketCenter.liveBreadthAt = 0; W.tdPh = null; setLt("today"); renderList();
+  });
+  await show();
+  await p.waitForSelector("#lx .mc-breadth-mount .mc-live-breadth");
+  const t = await p.textContent("#lx .mc-breadth-mount");
+  assert.match(t, /資料時間：2026-10-05 10:29:50（盤中）/);
+  assert.match(t, /上市櫃股票＋ETF 1000 檔/);
+  assert.match(t, /漲 500・50\.0%/); assert.match(t, /平 200・20\.0%/); assert.match(t, /跌 300・30\.0%/);
+  assert.match(t, /漲停 12・跌停 3/); assert.match(t, /來源：證交所 MIS/);
+  assert.doesNotMatch(t, /Yahoo/, "來源只列台股部分");
+  assert.equal(hits, 1);
+  await p.evaluate(() => renderList());
+  assert.equal(hits, 1, "同一分鐘重畫不重複抓");
+  mktDate = "2026-10-02"; // 大盤統計日期和加權報價不同日：不顯示
+  await show();
+  await p.waitForFunction(() => /不以其他交易日資料補入/.test(document.querySelector("#lx .mc-breadth-mount")?.textContent || ""));
+  assert.equal(await p.$("#lx .mc-live-breadth"), null);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 test("市場廣度：完整顯示上漲／平盤／下跌樣本、比例與資料日期 390", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.clock.setFixedTime(new Date("2026-10-05T10:30:00+08:00"));
