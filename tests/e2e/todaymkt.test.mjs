@@ -76,7 +76,7 @@ test("全球總經工作區：美股與國際市場日期、來源狀態及延�
   const matrix = await p.evaluate(() => document.querySelector("#lx .mc-global-panel")?.innerText || "");
   assert.match(matrix, /全球市場矩陣/);
   assert.match(matrix, /美股資料日期[\s\S]*2026-10-23[\s\S]*美股來源時間[\s\S]*16:00/);
-  assert.match(matrix, /道瓊工業[\s\S]*42000/);
+  assert.match(matrix, /道瓊工業[\s\S]*42,000/);
   assert.match(matrix, /美國 10 年期公債殖利率[\s\S]*4.21/);
   assert.match(matrix, /美元指數|台幣/);
   assert.match(matrix, /西德州原油 WTI[\s\S]*96.2/);

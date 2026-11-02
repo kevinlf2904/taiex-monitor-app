@@ -93,6 +93,7 @@ test("手機：在清單、分頁列上往上滑，整頁都要能捲動（不�
 test("合併重複功能：盤後、籌碼動向併進排行，盤後總結＋分享在工具，多空研判併進市場狀態", async () => {
   for (const width of [390, 1280]) {
     const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+    await p.clock.setFixedTime(new Date("2026-10-30T16:00:00+08:00"));
     assert.doesNotMatch(await p.evaluate(() => $("#lTabs").innerText), /盤後/);
     await p.evaluate(() => setLt("rank")); assert.match(await p.evaluate(() => $("#rkHub").innerText), /盤後資料/);
     await p.click('#rkHub [data-l="after"]'); await p.waitForTimeout(300);
@@ -103,7 +104,7 @@ test("合併重複功能：盤後、籌碼動向併進排行，盤後總結＋�
     // 舊的「工具 → 籌碼動向」會自動帶到新位置
     await p.evaluate(() => { W.tv = "chipx"; setLt("tools"); }); await p.waitForTimeout(300); assert.equal(await p.evaluate(() => [W.lt, afView()].join()), "after,chipx");
     // 盤後總結＋分享：整合在「交易情境」區塊的盤後階段；分享圖片在最上面工具列
-    await p.evaluate(() => { W.mf.model = { T: 1, dates: ["2026-10-16"] }; window.flowMood = () => null; window.flowSummary = () => "測試盤後總結"; W.tdPh = { d: twDay(), ph: "post" }; setLt("today"); });
+    await p.evaluate(() => { W.mf.model = { T: 1, dates: ["2026-10-16"], secs: [], stocks: new Map() }; window.flowMood = () => null; window.flowSummary = () => "測試盤後總結"; W.tdPh = { d: twDay(), ph: "post" }; setLt("today"); });
     await selectWorkspace(p, "capital");
     assert.match(await p.evaluate(() => $("#lx").innerText), /盤後總結[\s\S]*測試盤後總結/);
     assert.equal(await p.evaluate(() => document.querySelectorAll('#lx [data-mshare]').length), 4);
