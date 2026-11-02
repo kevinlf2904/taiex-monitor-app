@@ -153,7 +153,7 @@
       <div class="mm-bars">${tot.map((v, i) => `<div><i style="height:${Math.round((v / mx) * 100)}%" class="${v ? "" : "zero"}"></i><b>${v ? tick(v) : "—"}</b><small>${MON[i]}</small></div>`).join("")}</div>
       <div class="tablewrap"><table class="tbl mm-tbl"><thead><tr><th class="l">ETF</th><th>股數</th>${MON.map(m => `<th>${m}</th>`).join("")}</tr></thead><tbody>
       ${rows.map(x => `<tr><td class="l">${esc(nm[x.c] || "")} ${x.c}${x.r?.yield != null ? `<br><small class="hint">殖利率 ${x.r.yield}%</small>` : ""}</td><td>${x.cash ? fmt(x.sh) : "—"}</td>${x.cash ? x.cash.map(v => `<td>${v ? tick(v) : ""}</td>`).join("") : `<td colspan="12" class="l">抓不到配息資料</td>`}</tr>`).join("")}</tbody></table></div>
-      ${sug.length ? `<h4 style="margin:10px 0 4px;font-size:14px">可以補空月份的 ETF（殖利率 3% 以上，依殖利率排序）</h4><ul class="mm-sug">${sug.map(([m, L]) => `<li><b>${m} 月</b>${L.length ? L.map(r => `<button type="button" class="chip" data-mmadd="${r.code}">${esc(r.name)} ${r.code}・${r.yield}%</button>`).join("") : '<span class="hint">找不到</span>'}</li>`).join("")}</ul>` : ""}
+      ${sug.length ? `<h3 style="margin:10px 0 4px;font-size:14px">可以補空月份的 ETF（殖利率 3% 以上，依殖利率排序）</h3><ul class="mm-sug">${sug.map(([m, L]) => `<li><b>${m} 月</b>${L.length ? L.map(r => `<button type="button" class="chip" data-mmadd="${r.code}">${esc(r.name)} ${r.code}・${r.yield}%</button>`).join("") : '<span class="hint">找不到</span>'}</li>`).join("")}</ul>` : ""}
       <p class="hint">用近 12 個月的除息月份與金額推估，以目前股價換算股數（整股）。實際配息金額每次都會變動。</p>`;
   }
   $("mm-go").addEventListener("click", monRun);
