@@ -24,7 +24,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
     await p.clock.setFixedTime(new Date(at));
     await p.evaluate(() => { W.tdPh = null; setLt("today"); renderList(); });
     await p.waitForFunction(() => !!document.querySelector("#lx details.dh-sec"), null, { timeout: 15000 });
-    assert.deepEqual(await p.$eval("#lx details.dh-sec", L => L.map(d => d.dataset.tdbox)), ["flow", "mine", "plan"], "交易區塊順序固定；全球矩陣不再佔用舊 mac 摺疊區");
+    assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#lx details.dh-sec")].map(d => d.dataset.tdbox)), ["flow", "mine", "plan"], "交易區塊順序固定；全球矩陣不再佔用舊 mac 摺疊區");
     assert.deepEqual(await openOf(p), want, at); assert.equal(await nowOf(p), now, `「現在」標在目前時段 ${at}`);
     await selectWorkspace(p, "technical");
     const technicalText = await p.evaluate(() => $("#lx").innerText);
