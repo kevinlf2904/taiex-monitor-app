@@ -141,7 +141,7 @@ test("首頁：情報局的第一個分頁是今日重點，網址 #daily 直接
   const { ctx, p, errs } = await open(B, S.url, "index.html#daily", { width: 390, touch: true });
   const f = await watchFrame(p);
   assert.equal(await p.evaluate(() => CUR_TAB), "intel");
-  await f.waitForFunction(() => W.lt === "today"); await f.evaluate(() => { W.tdPh = { d: twDay(), ph: "pre" }; renderList(); }); assert.match(await f.textContent("#lx"), /今日市場[\s\S]*國際市場與總經[\s\S]*昨晚美股[\s\S]*盤前推演/);
+  await f.waitForFunction(() => W.lt === "today"); await f.evaluate(() => { W.tdPh = { d: twDay(), ph: "pre" }; renderList(); }); assert.match(await f.textContent("#lx"), /今日市場[\s\S]*全球市場矩陣[\s\S]*盤前推演/); assert.ok(await f.$("#lx .mc-global-panel"), "今日市場已掛載整合後的全球市場矩陣");
   assert.equal(await f.evaluate(() => [...document.querySelectorAll("#lTabs [data-l]")].map(b => b.dataset.l).filter(inMode)[0]), "today", "情報局分頁列第一個");
   await ctx.close(); assert.deepEqual(errs, []);
 });
