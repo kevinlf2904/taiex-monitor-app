@@ -405,11 +405,18 @@
       const target = session?.session === "closed" && typeof findNextTradeDate === "function"
         ? findNextTradeDate(today, holidays) || today
         : today;
+      const valid = lv => !!lv && ["pressure", "pivot", "support"].every(key => isNum(lv[key]) && lv[key] > 0) && lv.pressure > lv.pivot && lv.pivot > lv.support;
       const snapshot = typeof getBriefSnapshot === "function" ? getBriefSnapshot(target) : null;
-      const levels = snapshot?.keyLevels;
-      if (!levels || !["pressure", "pivot", "support"].every(key => isNum(levels[key]) && levels[key] > 0)) return null;
-      if (levels.pressure <= levels.pivot || levels.pivot <= levels.support) return null;
-      return levels;
+      if (valid(snapshot?.keyLevels)) return { ...snapshot.keyLevels, forDate: target, estimate: false };
+      // 平日收盤後（session 為 post）第一次打開、沒有今天的盤前快照：brief.js 不會事後補做今天的盤前推演（會用到收盤後資料）。
+      // 改顯示「下一交易日」的預估位階：用目前收盤價與資料即時推算、不存快照，隔天盤前 brief.js 會依最新美股重新推演並存檔。
+      if (session?.session !== "post" || typeof briefScenarios !== "function" || typeof findNextTradeDate !== "function" || !isNum(quote?.price)) return null;
+      if (quote?.date && String(quote.date).slice(0, 10) !== today) return null; // 報價不是今天的收盤：不推算
+      const next = findNextTradeDate(today, holidays);
+      if (!next) return null;
+      const atr = typeof tdAtrFor === "function" ? tdAtrFor(next) : null;
+      const plan = briefScenarios(W?.bf || {}, next, quote.price, { atr: atr?.atr });
+      return valid(plan?.keyLevels) ? { ...plan.keyLevels, forDate: next, estimate: true } : null;
     } catch {
       return null;
     }
@@ -432,7 +439,8 @@
       '<div class="mc-tech-current"><span>目前加權報價</span><b>' + escapeHtml(priceText) + '</b><small>' +
       escapeHtml(q && q.date ? q.date : "行情日期未提供") + ' · ' + escapeHtml(q && (q.sourceTime || q.time) || "來源時間未提供") + '</small></div>' +
       '<div class="mc-tech-ladder">' + levelHtml + '</div>' +
-      '<div class="mc-tech-position">' + escapeHtml(position ? position.textContent.replace(/\s+/g, " ").trim() : "目前位置尚未取得") + '</div>' +
+      (levelsData?.estimate ? '<p class="mc-flow-alignment" role="status">' + escapeHtml("今天已收盤：顯示下一交易日 " + String(levelsData.forDate).slice(5).replace("-", "/") + " 的預估位階（以今日收盤推算，明天盤前會依最新美股重新推演）。") + '</p>' :
+        '<div class="mc-tech-position">' + escapeHtml(position ? position.textContent.replace(/\s+/g, " ").trim() : "目前位置尚未取得") + '</div>') +
       '<p class="mc-data-note">壓力、分水嶺與支撐是盤前推演模型價位；請與當日實際報價及量能確認，不是即時成交價或保證支撐。</p>';
     const panel = ensurePanel(page, ".mc-tech-panel", "mc-panel mc-tech-panel", "technical", html);
     const sectionBar = page.querySelector(".dh-secbar");

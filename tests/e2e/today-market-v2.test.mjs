@@ -267,3 +267,35 @@ test("今日市場總覽：沒切過全球總經也會補抓國際行情，美�
   assert.equal(C.status, C.warn, "過期狀態用 --warn");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("技術攻防：平日收盤後沒有今天的盤前快照，改顯示下一交易日預估位階且不存快照；有快照就照舊", async () => {
+  for (const width of [390, 1280]) {
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 600, time: new Date("2026-10-26T15:00:00+08:00") });
+    const setup = snap => p.evaluate(snap => {
+      W.cal = { hol: [] };
+      W.quotes.set("T00", { code: "T00", name: "加權指數", price: 100, prev: 99, chg: 1, chgPct: 1.01, high: 101, low: 98, vol: 1000, date: "2026-10-26", time: "13:30:00", source: "證交所 MIS" });
+      window.__saved = []; window.__asked = [];
+      window.getBriefSnapshot = d => (snap && d === "2026-10-26" ? { keyLevels: { pressure: 130, pivot: 120, support: 115 } } : null);
+      window.saveBriefSnapshot = (d, plan) => window.__saved.push(d);
+      window.tdAtrFor = t => ({ t, state: "ok", atr: 2 });
+      window.briefScenarios = (G, d, base) => { window.__asked.push([d, base]); return { tradeDate: d, keyLevels: { pressure: 110, pivot: 100, support: 90 } }; };
+      W.tdPh = null; setLt("today"); renderList();
+    }, snap);
+    await setup(false);
+    await selectWorkspace(p, "technical");
+    let t = await p.textContent("#lx .mc-tech-panel");
+    assert.match(t, /110 點[\s\S]*100 點[\s\S]*90 點/, width + "：收盤後要有位階數字，不是待更新");
+    assert.match(t, /下一交易日 10\/27 的預估位階/);
+    assert.doesNotMatch(t, /待更新/);
+    assert.ok(await p.evaluate(() => window.__asked.some(([d, base]) => d === "2026-10-27" && base === 100)), "用今日收盤推算下一交易日");
+    assert.ok(!(await p.evaluate(() => window.__saved.includes("2026-10-27"))), "預估不存快照，隔天盤前才用最新美股重新推演");
+    await setup(true);
+    await selectWorkspace(p, "technical");
+    t = await p.textContent("#lx .mc-tech-panel");
+    assert.match(t, /130 點[\s\S]*120 點[\s\S]*115 點/, "有今天的盤前快照就照舊顯示");
+    assert.doesNotMatch(t, /預估位階/);
+    const sw = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    assert.ok(sw <= 1, width + "：不可水平溢位");
+    await ctx.close(); assert.deepEqual(errs, []);
+  }
+});
