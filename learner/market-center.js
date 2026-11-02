@@ -138,6 +138,20 @@
     }).catch(() => {});
   }
 
+  // 總覽的「美元／台幣」核心卡與總經摘要也讀國際行情（W.gl）：全球工作區改成按需載入後，總覽要自己補抓，
+  // 否則沒切過全球總經就一直空著。沒有資料或超過 5 分鐘才抓，同一分鐘只問一次。
+  const OVERVIEW_GLOBAL_MS = 5 * 60_000;
+  function refreshOverviewGlobal(W, state) {
+    if (!W || !state || W.lt !== "today" || W.off || state.workspace !== "overview" || W.glLoading || typeof loadGlobal !== "function") return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    const now = Date.now(), at = Number(W.gl?.at) || 0;
+    if ((W.gl?.ok && now - at < OVERVIEW_GLOBAL_MS) || now - (state.overviewGlobalAt || 0) < LIVE_BREADTH_MS) return;
+    state.overviewGlobalAt = now;
+    Promise.resolve(loadGlobal(true)).then(() => {
+      if (W.lt === "today" && typeof renderList === "function") renderList();
+    }).catch(() => {});
+  }
+
   function renderOverview(page, W, flow) {
     const hero = page.querySelector(".td-hero");
     const alignment = flowAlignment(W, flow);
@@ -446,7 +460,7 @@
       ".mc-panel-head h4{margin:3px 0 0;font-size:16px;font-weight:700;color:var(--ink)}",
       ".mc-eyebrow{font-size:10px;letter-spacing:.14em;font-weight:700;color:var(--muted)}",
       ".mc-date{font-size:11px;color:var(--muted);white-space:nowrap}",
-      ".mc-date.warn,.mc-flow-alignment.warn{color:var(--down)}.mc-date.ok,.mc-flow-alignment.ok{color:var(--muted)}",
+      ".mc-date.warn,.mc-flow-alignment.warn{color:var(--warn)}.mc-date.ok,.mc-flow-alignment.ok{color:var(--muted)}",
       ".mc-flow-alignment{margin:8px 0;color:var(--muted);font-size:11px;line-height:1.55}",
       ".mc-global-shortcuts{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--mc-border)}",
       ".mc-global-shortcuts>span{color:var(--muted);font-size:11px;font-weight:650}",
@@ -505,7 +519,7 @@
       ".mc-global-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}",
       ".mc-global-status{display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:10px;line-height:1.4}",
       ".mc-global-status small{color:var(--muted)}",
-      ".mc-global-status.warn{color:var(--down)}.mc-global-status.neutral{color:var(--muted)}",
+      ".mc-global-status.warn{color:var(--warn)}.mc-global-status.neutral{color:var(--muted)}",
       ".mc-tech-current{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:9px;background:var(--mc-soft)}",
       ".mc-tech-current span,.mc-tech-current small{font-size:11px;color:var(--muted)}",
       ".mc-tech-current b{font:750 22px var(--font-num,monospace);color:var(--ink)}",
@@ -613,6 +627,7 @@
     assign("#td-sec-plan", "technical");
 
     refreshLiveBreadth(W, state);
+    refreshOverviewGlobal(W, state);
     const flow = readFlow(W);
     renderOverview(page, W, flow);
     renderCapital(page, W, flow);
