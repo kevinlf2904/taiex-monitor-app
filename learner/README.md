@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 技術攻防收盤後顯示預估位階（2026.11.02-179）
+- 平日收盤後沒有今天的盤前快照時，技術攻防改顯示下一交易日預估位階（不存快照），不再全是待更新
+
 ### AI 整理恢復可用（2026.11.02-178）
 - Gemini 舊型號下架時自動改用可用型號、額度用完照實顯示；今日市場 AI 整理優先用每日額度多的 3.1 Flash Lite
 - 各用途用最適合的型號（`api/_lib/_gemini.js` 的 `GEMINI_ORDER`）：問問題 3.8→3.6→3 Flash；AI 整理 3.1 Flash Lite；節目／新聞／法說會摘要 3.5 Flash Lite；截圖匯入 3.6／3 Flash
