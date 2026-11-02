@@ -4662,7 +4662,7 @@ function renderPoly(top) {
   // 24 小時機率變化最大的事件：市場預期正在改變，最可能影響股市
   const mv = L.map(e => ({ e, m: e.markets.slice().sort((a, b) => Math.abs(b.d1 || 0) - Math.abs(a.d1 || 0))[0] })).filter(x => Math.abs(x.m?.d1 || 0) >= 0.03).sort((a, b) => Math.abs(b.m.d1) - Math.abs(a.m.d1)).slice(0, 5);
   if (mv.length) h += `<section class="mk"><h3>機率變化最大（24 小時）<span class="note">市場預期正在改變的事件</span></h3><ul class="mc-imp">${mv.map(({ e, m }) => `<li><b>${esc(e.title)}：${esc(m.label || m.q)} ${pct(m.yes)} ${d1(m.d1)}</b><span>${esc(PM_IMPACT[e.cat] || "")}</span></li>`).join("")}</ul></section>`;
-  h += L.slice(0, 40).map(e => `<section class="mk pm"><h3><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title)}</a><span class="note">${esc(e.cat)}・24 小時成交 ${usd(e.vol24)}・總成交 ${usd(e.vol)}${e.end ? `・${e.end.slice(5).replace("-", "/")} 結算` : ""}</span></h3>
+  h += L.slice(0, 40).map(e => `<section class="mk pm"><h3><a href="${esc(safeUrl(e.url))}" target="_blank" rel="noopener">${esc(e.title)}</a><span class="note">${esc(e.cat)}・24 小時成交 ${usd(e.vol24)}・總成交 ${usd(e.vol)}${e.end ? `・${e.end.slice(5).replace("-", "/")} 結算` : ""}</span></h3>
     <ul class="pmrows">${e.markets.map(m => `<li><span>${esc(m.label || m.q)}</span><i style="--w:${Math.round((m.yes || 0) * 100)}%"></i><b>${pct(m.yes)}</b>${d1(m.d1)}</li>`).join("")}</ul>
     ${PM_IMPACT[e.cat] ? `<p class="mn-imp pm-imp"><span>對股市</span>${esc(PM_IMPACT[e.cat])}</p>` : ""}</section>`).join("") || `<p class="note" style="padding:12px">這個分類目前沒有事件</p>`;
   $("#lx").innerHTML = h + `<p class="note" style="padding:4px 12px 12px">Polymarket 是用加密貨幣下注的預測市場，題目與選項是英文原文；▲▼ 是 24 小時內機率的變化（百分點）。機率是市場共識，不是預測保證；台灣不能下注，這裡只當參考指標。</p>`;
@@ -4940,7 +4940,7 @@ function renderCong() {
       ${congAIHtml("stock:" + T)}<div class="chartbox" id="congChart"></div><p class="note">人物標記對應交易日期，標在當天的收盤價，<strong>不是實際成交價</strong>（申報只有日期和金額區間）。</p>
       ${cxF13Of(T)}
       <h4>交易紀錄</h4>${rkList(all.map(t => { const p = C.people?.[t.pid] || {}; return { no: t.traded.slice(5).replace("-", "/"), attr: `data-cv="person:${esc(t.pid)}"`, mono: rkMono(rkInit(pName(t.pid)), RK_C[p.chamber] || RK_C.眾議院), name: `${esc(pName(t.pid))} <span class="${t.k === "buy" ? "up" : t.k === "sell" ? "down" : ""}">${t.k === "buy" ? "買進" : t.k === "sell" ? "賣出" + (t.partial ? "（部分）" : "") : "交換"}</span>`, sub: `${esc(p.chamber || "")}・${t.filed.replace(/-/g, "/")} 申報（隔 ${congDays(t.traded, t.filed)} 天）${t.owner !== "本人" ? "・" + esc(t.owner) : ""}${t.assetType !== "股票" ? "・" + esc(t.assetType) : ""}`, val: amtTxt(t.amount), vsub: t.doc ? "有原始文件" : "" }; }))}
-      <p class="note">原始文件：${all.filter(t => t.doc).slice(0, 8).map(t => `<a href="${esc(t.doc)}" target="_blank" rel="noopener">${t.filed}</a>`).join("、") || "—"}</p></section>`;
+      <p class="note">原始文件：${all.filter(t => t.doc).slice(0, 8).map(t => `<a href="${esc(safeUrl(t.doc))}" target="_blank" rel="noopener">${t.filed}</a>`).join("、") || "—"}</p></section>`;
   } else if (v === "person") {
     const pid = arg, p = C.people?.[pid] || { name: pid }, L = (C.trades || []).filter(t => t.pid === pid).sort((a, b) => b.traded.localeCompare(a.traded));
     const own = [...L.reduce((m, t) => m.set(t.owner, (m.get(t.owner) || 0) + 1), new Map())].map(([k, n]) => `${k} ${n} 筆`).join("、");

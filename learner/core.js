@@ -16,7 +16,11 @@ function twLimits(prev, etf = false) { const t = p => (etf ? (p < 50 ? 0.01 : 0.
 function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
 function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
 function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// 單引號也要轉：有些屬性用單引號包（例如 data-links='…'），內容含 ' 會讓屬性提早結束
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// 外部資料（新聞、RSS、申報、法說會）的連結：只放行 http(s) 與站內相對路徑，javascript:、data: 等一律換成 #。
+// 檢查前先去掉空白與控制字元（瀏覽器解析網址時會忽略 java\tscript: 裡的 tab），輸出仍要再經 esc()
+const safeUrl = u => { const s = String(u ?? "").trim(), k = s.replace(/[\u0000-\u0020]/g, ""); return /^[a-z][a-z0-9+.-]*:/i.test(k) && !/^https?:/i.test(k) ? "#" : s; };
 // 台股交易時段（台北時間週一到週五：08:30–09:00 試撮 pre、09:00–13:35 盤中 open、其餘 closed）；證交所公布的平日休市日也是 closed
 function mktSession(now = new Date()) {
   const t = new Date(now.getTime() + 8 * 3600e3), day = t.getUTCDay(), m = t.getUTCHours() * 60 + t.getUTCMinutes();

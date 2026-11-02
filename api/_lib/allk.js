@@ -1,6 +1,7 @@
 // 全市場日 K（最近 130 個交易日，約 1800 檔）：給 learner/watch.html「條件選股」「相對強弱」選「全市場」時使用。
 // GET /api/allk?s=0..9   → 代號第一碼是 s 的那一份；GET /api/allk?s=meta → 更新時間、日期、檔數
 // 資料由排程 scripts/market-scan.mjs 每個交易日收盤後產生，放在 GitHub Release「market-data」（不進 git）；這裡代為讀取並讓 CDN 快取。
+import { userMsg } from "./_err.js";
 const REPO = (process.env.GITHUB_REPO || "kevinlf2904/taiex-monitor-app").trim();
 export default async function handler(req, res) {
   const s = String(req.query?.s ?? "");
@@ -12,5 +13,5 @@ export default async function handler(req, res) {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=86400");
     return res.status(200).send(body);
-  } catch (e) { return res.status(200).json({ ok: false, error: e.message }); }
+  } catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "全市場資料暫時拿不到，請稍後再試", "allk") }); } // 中文訊息照給，其他（含內部網址）只記 log
 }

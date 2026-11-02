@@ -52,6 +52,8 @@ test("申報歷史：國會全部期間與月份、內部人期間、台灣政�
   assert.match(await p.evaluate(() => $(".tw-sums").innerText), /全部期間/);
   const mons = await p.evaluate(() => [...document.querySelectorAll('#lx [data-rkset^="cmon:"]')].map(b => b.dataset.rkset));
   assert.ok(mons.length > 2, "要能按月份往前翻");
+  // 手機寬度時按鈕可能落在底部固定的快捷列（#qbar）後面：先捲到畫面中間再點（不用 force，仍檢查可點擊）
+  await p.$eval(`#lx [data-rkset="${mons.at(-1)}"]`, el => el.scrollIntoView({ block: "center" }));
   await p.click(`#lx [data-rkset="${mons.at(-1)}"]`); await p.waitForTimeout(200);
   assert.match(await p.evaluate(() => $("#lx h4").innerText), /公開的交易/);
   // 台灣政治人物：有兩次申報的人可以切換

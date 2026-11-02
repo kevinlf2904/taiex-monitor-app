@@ -11,6 +11,7 @@
 // 指標：月營收年增／年減、月營收雙增、累計營收年增、毛利率、營益率、累計 EPS、虧損、股價淨值比 < 1（t187ap05、t187ap14、t187ap17，上市＋上櫃）
 
 import { parseT86 } from "./hot.js";
+import { userMsg } from "./_err.js";
 import { marketRows, liveCache } from "./_live.js";
 import { getJSON, num } from "./_tw.js";
 import { CONCEPTS } from "./_concepts.js";
@@ -128,7 +129,7 @@ export async function valuation() {
 }
 
 export default async function handler(req, res, { marketFetcher = marketRows } = {}) {
-  if (req.query?.bw) { try { const j = await valuation(); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json(j); } catch (e) { return res.status(200).json({ ok: false, error: e.message }); } }
+  if (req.query?.bw) { try { const j = await valuation(); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); return res.status(200).json(j); } catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "估值資料暫時拿不到，請稍後再試", "screen") }); } }
   const both = async (l, o, parse) => { const r = await Promise.allSettled([getJSON(l, 15000), getJSON(o, 15000)]); return r.flatMap(x => (x.status === "fulfilled" ? parse(x.value) : [])); };
   const [a, b, t, avg, bw, rev, eps, mg] = await Promise.allSettled([
     marketFetcher(), null,

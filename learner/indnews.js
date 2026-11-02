@@ -25,7 +25,7 @@ async function inewsLoad() {
 }
 const inewsChip = id => { const T = INDT.get(id); return T ? `<button class="inchip" data-iopen="${T.id}" style="--ic:${indCol(T)}">${esc(T.name)}</button>` : ""; };
 const inewsItem = x => `<li class="initem"><div class="inmeta"><span>${esc(x.date.slice(5).replace("-", "/"))}</span><span>${esc(x.source || "")}</span></div>
-  <a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.title)}</b></a>${x.summary ? `<p>${esc(x.summary)}</p>` : ""}
+  <a href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener noreferrer"><b>${esc(x.title)}</b></a>${x.summary ? `<p>${esc(x.summary)}</p>` : ""}
   <div class="inchips">${(x.themes || []).map(inewsChip).join("")}</div></li>`;
 // 「產業新聞」頁
 function inewsView() {
