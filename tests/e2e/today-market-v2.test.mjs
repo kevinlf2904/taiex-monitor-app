@@ -47,7 +47,7 @@ test.after(async () => { await B.close(); S.close(); });
 
 const selectWorkspace = async (page, id) => {
   await page.click('#lx [data-mc-tab="' + id + '"]');
-  await page.waitForFunction(key => document.querySelector('#lx [data-mc-tab="' + key + '"]')?.getAttribute("aria-pressed") === "true", id);
+  await page.waitForFunction(key => document.querySelector('#lx [data-mc-tab="' + key + '"]')?.getAttribute("aria-selected") === "true", id);
 };
 
 for (const width of [390, 1280]) test("今日市場 V2：工作區視覺層級與資料標示 " + width, async () => {
@@ -176,7 +176,7 @@ for (const width of [390, 1280]) test("今日市場 V2：工作區視覺層級�
   await selectWorkspace(p, "overview");
   await p.evaluate(() => { window.aiChat = () => new Promise(() => {}); });
   await p.click('#lx [data-tx="tdai"]');
-  await p.waitForFunction(() => document.querySelector('#lx [data-mc-tab="research"]')?.getAttribute("aria-pressed") === "true");
+  await p.waitForFunction(() => document.querySelector('#lx [data-mc-tab="research"]')?.getAttribute("aria-selected") === "true");
   assert.equal(await p.evaluate(() => document.querySelector("#lx .mc-ai-panel")?.hidden), false, "按 AI 整理後必須自動切換到 AI 研究");
   assert.ok(await p.$("#lx .mc-ai-panel .caibox"), "AI 整理結果必須留在可見的 AI 研究區");
   await ctx.close();
@@ -298,4 +298,22 @@ test("技術攻防：平日收盤後沒有今天的盤前快照，改顯示下�
     assert.ok(sw <= 1, width + "：不可水平溢位");
     await ctx.close(); assert.deepEqual(errs, []);
   }
+});
+
+test("全球總經：CDN 快取造成的 1～6 分鐘延遲不算未更新，超過 7 分鐘才提示；工作區分頁只用 aria-selected", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true, time: new Date("2026-10-26T10:30:00+08:00") });
+  const status = minutesAgo => p.evaluate(m => {
+    const at = new Date(Date.now() - m * 60000).toISOString();
+    W.gl = { ok: true, source: "Yahoo Finance", sourceFetchedAt: at, at: Date.now(), failed: [], groups: [{ id: "fx", name: "外匯", rows: [{ code: "TWD=X", name: "美元台幣", price: 32, chgPct: 0.1 }] }] };
+    W.marketCenter = { ...(W.marketCenter || {}), workspace: "global", globalRefreshAttemptAt: Date.now() }; // 這次不重抓，只看狀態文字
+    W.tdPh = null; setLt("today"); renderList();
+    return document.querySelector("#lx .mc-global-panel .mc-status-chip")?.textContent;
+  }, minutesAgo);
+  assert.equal(await status(3), "API 回應成功 1/1", "CDN 快取內的延遲不提示");
+  assert.equal(await status(10), "國際行情已 10 分鐘未更新");
+  const tabs = await p.$$eval("#lx .mc-tab", L => L.map(b => [b.getAttribute("role"), b.hasAttribute("aria-pressed"), b.getAttribute("aria-selected")]));
+  assert.equal(tabs.length, 5);
+  assert.ok(tabs.every(([role, pressed]) => role === "tab" && !pressed), "分頁不該有 aria-pressed");
+  assert.deepEqual(tabs.map(t => t[2]), ["false", "false", "true", "false", "false"]);
+  await ctx.close(); assert.deepEqual(errs, []);
 });

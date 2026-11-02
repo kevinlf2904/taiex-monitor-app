@@ -214,6 +214,7 @@
 
   const GLOBAL_REFRESH_MS = 60_000;
   const GLOBAL_REFRESH_POLL_MS = 15_000;
+  const GLOBAL_STALE_MS = 7 * 60_000; // CDN 快取 60 秒＋stale-while-revalidate 300 秒，再加 1 分鐘緩衝
   const GLOBAL_STATUS_LABELS = {
     live: "供應商盤中報價（可能延遲）",
     delayed: "來源更新延遲",
@@ -339,7 +340,8 @@
     else if (W?.gl?.refreshError) apiStatus = "更新失敗，保留上次有效資料";
     else if (W?.gl?.err || W?.gl?.ok === false) apiStatus = "國際行情暫時不可用";
     else if (W?.gl?.ok) {
-      if (apiAge >= GLOBAL_REFRESH_MS) apiStatus = "API 回應已超過 60 秒";
+      // 伺服器讓 CDN 快取國際行情（s-maxage 60 秒＋最多 300 秒舊資料先頂著），API 回應時間晚 1～6 分鐘是正常的；超過這段才算真的沒更新
+      if (apiAge >= GLOBAL_STALE_MS) apiStatus = "國際行情已 " + Math.floor(apiAge / 60000) + " 分鐘未更新";
       else if (failedCount) apiStatus = "部分標的缺值 " + validCount + "/" + totalCount;
       else apiStatus = "API 回應成功 " + validCount + "/" + totalCount;
     }
@@ -457,7 +459,7 @@
       ".mc-nav{display:flex;gap:8px;max-width:100%;min-width:0;margin:16px 0 10px;padding:0 0 5px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;scroll-snap-type:x proximity;scroll-padding-inline:8px}",
       ".mc-nav::-webkit-scrollbar{display:none}",
       ".mc-tab{position:relative;flex:1 0 auto;min-width:100px;min-height:46px;padding:10px 16px;border:1px solid var(--mc-border);border-radius:8px;background:var(--mc-soft);color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer;scroll-snap-align:start;transition:background .16s,border-color .16s,color .16s}",
-      ".mc-tab[aria-selected=true],.mc-tab[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}",
+      ".mc-tab[aria-selected=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}",
       ".mc-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}",
       ".mc-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:8px 0 14px}",
       ".mc-heading h4{margin:0;font-size:20px;font-weight:750;letter-spacing:.01em;color:var(--ink)}",
@@ -498,14 +500,11 @@
       ".mc-flow-value{text-align:right;white-space:nowrap;font:600 12px var(--font-num,monospace)}",
       ".mc-flow-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}",
       ".mc-flow-columns h5{margin:0 0 9px;font-size:12px}",
-      ".mc-flow-foot,.mc-global-summary{display:flex;gap:8px 18px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--mc-border);color:var(--muted);font-size:11px}",
       ".mc-data-note{margin:12px 0 0;color:var(--muted);font-size:11px;line-height:1.6}",
       ".mc-empty{margin:8px 0;padding:12px;border:1px dashed var(--mc-border);border-radius:8px;color:var(--muted);font-size:12px;line-height:1.6}",
-      ".mc-global-summary{padding:0 0 13px;border:0}",
-      ".mc-global-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 16px}",
+      ".mc-global-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 16px;padding:0 0 13px;color:var(--muted);font-size:11px}",
       ".mc-global-summary span{display:flex;gap:5px;align-items:baseline;flex-wrap:wrap;min-width:0;overflow-wrap:anywhere}",
       ".mc-global-summary b{color:var(--ink);font-weight:600}",
-      ".mc-global-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}",
       ".mc-global-card{min-width:0;padding:12px;border:1px solid var(--mc-border);border-radius:9px;background:var(--mc-soft)}",
       ".mc-global-name{display:flex;justify-content:space-between;gap:6px;align-items:baseline}",
       ".mc-global-name b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
@@ -555,7 +554,6 @@
     const active = WORKSPACES.find(item => item.id === state.workspace) || WORKSPACES[0];
     page.querySelectorAll("[data-mc-tab]").forEach(button => {
       const selected = button.dataset.mcTab === active.id;
-      button.setAttribute("aria-pressed", String(selected));
       button.setAttribute("aria-selected", String(selected));
       button.tabIndex = selected ? 0 : -1;
     });
@@ -606,7 +604,7 @@
       nav.setAttribute("aria-orientation", "horizontal");
       nav.innerHTML = WORKSPACES.map(item =>
         '<button type="button" class="mc-tab" role="tab" data-mc-tab="' + item.id +
-        '" aria-selected="false" aria-pressed="false" tabindex="-1">' + item.label + "</button>"
+        '" aria-selected="false" tabindex="-1">' + item.label + "</button>"
       ).join("");
     }
     nav.setAttribute("role", "tablist");

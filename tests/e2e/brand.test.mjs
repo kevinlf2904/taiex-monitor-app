@@ -7,7 +7,7 @@ const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
 const selectWorkspace = async (p, id) => {
   await p.click(`#lx [data-mc-tab="${id}"]`);
-  await p.waitForFunction(key => document.querySelector(`#lx [data-mc-tab="${key}"]`)?.getAttribute("aria-pressed") === "true", id);
+  await p.waitForFunction(key => document.querySelector(`#lx [data-mc-tab="${key}"]`)?.getAttribute("aria-selected") === "true", id);
 };
 
 const DISC = "不構成任何證券投資顧問或個股買賣建議";
