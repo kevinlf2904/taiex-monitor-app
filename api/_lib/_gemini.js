@@ -8,6 +8,29 @@ const LIST_TTL = 6 * 3600e3;
 let cache = null; // { at, names: Set<string>, flash: string[] }
 
 const BAD = /image|tts|audio|live|embed|thinking|exp|computer|robotics|native/i;
+
+// 各用途依序試的型號（免費方案額度：Flash Lite 每天 500 次、每分鐘 15 次；Flash 每天 20 次、每分鐘 5 次）。
+// 原則：量大、常按的用 Lite；要求品質的用 Flash；排程和網站各用一個 Lite，彼此不搶額度。
+//   chat   右下角「問問題」：品質優先，三個 Flash（共 60 次／天）用完再換 Lite
+//   today  今日市場 AI 整理：一天可能按很多次 → 3.1 Flash Lite 為主
+//   batch  排程與網站上的摘要（節目、總經新聞、產業新聞、法說會簡報）：量大、內容長 → 3.5 Flash Lite 為主
+//   vision 截圖匯入（讀表格）：要準 → Flash 為主
+// 名稱不必完全一樣：「gemini-3.6-flash」也會配到清單裡的「gemini-3.6-flash-001」「gemini-3.6-flash-preview-…」；查不到的自動略過。
+export const GEMINI_ORDER = Object.freeze({
+  chat: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3-flash", "gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"],
+  today: ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.6-flash", "gemini-3-flash"],
+  batch: ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3-flash"],
+  vision: ["gemini-3.6-flash", "gemini-3-flash", "gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite"],
+});
+
+// 想要的名稱 → 清單裡實際的名稱：完全一樣優先；否則找「名稱-…」開頭的（正式版優先於預覽版），不把 Lite 配給一般 Flash
+export function resolveName(want, names) {
+  if (names.has(want)) return want;
+  const lite = /-lite\b/.test(want);
+  const hits = [...names].filter(n => n.startsWith(want + "-") && !BAD.test(n) && (lite || !/-lite\b/.test(n.slice(want.length))));
+  hits.sort((a, b) => (/-preview/.test(a) - /-preview/.test(b)) || a.length - b.length || a.localeCompare(b));
+  return hits[0] || null;
+}
 const FLASH = /^gemini-(\d+(?:\.\d+)?)-flash(-lite)?(?:-preview(?:-[\w-]+)?)?$/;
 const ALIAS = /^gemini-flash(-lite)?-latest$/;
 
@@ -50,7 +73,7 @@ export async function geminiModels(key, wanted, opts) {
   const want = [...new Set(wanted.filter(Boolean))];
   const L = key ? await listModels(key, opts) : null;
   if (!L) return want;
-  const merged = [...new Set([...want.filter(m => L.names.has(m)), ...L.flash])].slice(0, 6);
+  const merged = [...new Set([...want.map(m => resolveName(m, L.names)).filter(Boolean), ...L.flash])].slice(0, 6);
   return merged.length ? merged : want;
 }
 export const _resetGeminiCache = () => { cache = null; };

@@ -7,7 +7,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { aiLimit, WEB_TRIES, claudeFallbackOn } from "./_limit.js";
 import { userMsg } from "./_err.js";
-import { geminiModels } from "./_gemini.js";
+import { geminiModels, GEMINI_ORDER } from "./_gemini.js";
 
 const PROMPT = `這是台股或美股券商 App 的庫存（持股）畫面截圖。請把畫面上「每一檔持股」的數字讀出來，只輸出 JSON。
 規則：
@@ -43,7 +43,7 @@ export function parseImages(images) {
 const extractJSON = t => { const m = String(t || "").match(/\{[\s\S]*\}/); if (!m) return null; try { return JSON.parse(m[0]); } catch { return null; } };
 
 async function viaGemini(imgs, key, deadline = Date.now() + 52000) {
-  const models = await geminiModels(key, [process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"]); // 已下架的型號先濾掉（_gemini.js）
+  const models = await geminiModels(key, GEMINI_ORDER.vision); // 讀截圖表格要準：Flash 為主（_gemini.js）
   const body = JSON.stringify({ contents: [{ role: "user", parts: [...imgs.map(i => ({ inline_data: { mime_type: i.mime, data: i.data } })), { text: PROMPT }] }],
     generationConfig: { temperature: 0, maxOutputTokens: 8192, responseMimeType: "application/json", responseSchema: SCHEMA } });
   let last = null, calls = 0;

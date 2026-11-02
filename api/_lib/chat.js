@@ -2,14 +2,14 @@
 // 在 Vercel 專案設定其中一個環境變數：
 //   GEMINI_API_KEY    → 用 Google Gemini 回答（有免費額度，到 Google AI Studio 申請）；兩個都設時優先用它
 //   ANTHROPIC_API_KEY → 用 Claude 回答（依用量付費）
-//   GEMINI_MODEL      → 選填，指定 Gemini 模型（預設 gemini-flash-latest；型號下架時自動改用列出模型查到的可用 Flash 型號，見 _gemini.js）
+//   GEMINI_MODEL      → 選填，「問問題」優先用的 Gemini 型號；其他用途（AI 整理、摘要、截圖匯入）的順序見 _gemini.js 的 GEMINI_ORDER
 // 系統提示固定在伺服器端；前端只送對話內容與「目前畫面」的摘要，長度都有上限。
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { kv, kvOn } from "./sync.js";
 import { aiLimit, WEB_TRIES, claudeFallbackOn } from "./_limit.js";
-import { geminiModels } from "./_gemini.js";
+import { geminiModels, GEMINI_ORDER } from "./_gemini.js";
 
 const SYSTEM = `你是「K線學堂」裡的技術分析助教，對象是想學台股技術分析的初學者。請用繁體中文、口語但精確地回答。
 - 優先回答使用者的問題；用得到時，引用「目前畫面」提供的數據（課程、指標讀數、截圖或個股的判讀結果），並說明你看的是哪個數字。
@@ -19,15 +19,14 @@ const SYSTEM = `你是「K線學堂」裡的技術分析助教，對象是想學
 - 不知道或畫面上沒有的資訊就直說，不要捏造數字。`;
 
 const GEMINI_DEFAULT = "gemini-flash-latest";
-// 前端送 model: "lite"（今日市場的 AI 整理）：先用每日額度多的 Flash Lite（免費方案 3.1 Flash Lite 每天 500 次，Flash 只有 20 次），不行再用一般 Flash
-export const GEMINI_LITE = ["gemini-3.1-flash-lite", "gemini-flash-lite-latest"];
+// 前端送 model: "lite"（今日市場的 AI 整理）→ 用途 today（3.1 Flash Lite 為主）；其他「問 AI」→ 用途 chat（Flash 為主）。各用途的型號順序見 _gemini.js 的 GEMINI_ORDER
 // Gemini REST API：角色是 user / model，系統提示放在 systemInstruction
 // 503（模型過載）、500、429（太忙）時：同一個模型等一下重試一次，再換下一個備用模型
-export const GEMINI_FALLBACKS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-lite-latest"];
 const retryable = s => s === 503 || s === 500 || s === 502 || s === 504 || s === 429;
-export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL, { wait = ms => new Promise(r => setTimeout(r, ms)), deadline = Date.now() + 50000, tries = WEB_TRIES, listOpts, prefer = [] } = {}) {
+export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL, { wait = ms => new Promise(r => setTimeout(r, ms)), deadline = Date.now() + 50000, tries = WEB_TRIES, listOpts, use = "chat" } = {}) {
   // 寫死的型號可能已下架：先用列出模型（免費）過濾掉不存在的、補上目前可用的 Flash 型號
-  const models = await geminiModels(key, [...prefer, model || GEMINI_DEFAULT, GEMINI_DEFAULT, ...GEMINI_FALLBACKS], listOpts);
+  // model（GEMINI_MODEL）只在「問問題」時排第一；AI 整理固定用 Lite 為主，避免設定的型號把每日 20 次的 Flash 額度用光
+  const models = await geminiModels(key, [...(use === "chat" && model ? [model] : []), ...(GEMINI_ORDER[use] || GEMINI_ORDER.chat), GEMINI_DEFAULT], listOpts);
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: turns.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
@@ -100,7 +99,7 @@ export default async function handler(req, res) {
   const t0 = Date.now(), left = () => 57000 - (Date.now() - t0); // 整個請求要在 60 秒內回完（超過 Vercel 會回非 JSON 的 504）
   if (geminiKey) {
     try {
-      const r = await askGemini(SYSTEM + ctx, turns, geminiKey, lite ? GEMINI_LITE[0] : undefined, lite ? { prefer: GEMINI_LITE } : undefined);
+      const r = await askGemini(SYSTEM + ctx, turns, geminiKey, undefined, { use: lite ? "today" : "chat" });
       if (!r.ok && !r.blocked && retryable(r.status) && process.env.ANTHROPIC_API_KEY && claudeFallbackOn() && left() > 20000 && !(await aiLimit(req, "claude-fb"))) return askClaude(); // Gemini 忙線改問 Claude：要開 AI_CLAUDE_FALLBACK，而且有自己的全站上限
       if (r.ok && ck && !r.truncated) await cachePut(ck, { text: r.text, provider: "gemini", model: r.model });
       return res.status(200).json(r.ok ? { ok: true, text: r.text, truncated: r.truncated, provider: "gemini", model: r.model } : { ok: false, error: geminiError(r), provider: "gemini" });

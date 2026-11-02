@@ -11,8 +11,7 @@
 //      calls：主持人明確看多／看空的個股或 ETF [{ code, name, market: "TW"|"US", dir: "bull"|"bear", quote }]
 // 金鑰只放在 Vercel 環境變數（GEMINI_API_KEY／ANTHROPIC_API_KEY），不會出現在前端。整理結果只存在使用者的瀏覽器。
 
-import { GEMINI_FALLBACKS } from "./chat.js";
-import { geminiModels } from "./_gemini.js";
+import { geminiModels, GEMINI_ORDER } from "./_gemini.js";
 import { WEB_TRIES, aiLimit } from "./_limit.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { userMsg } from "./_err.js";
@@ -163,7 +162,8 @@ export function parseSum(text) {
 }
 
 export async function geminiJSON(parts, key, deadline, extra = {}, first = null, tries = Infinity) { // first：這個用途先試的型號（例如讀簡報用較快的 lite）；tries：最多呼叫幾次（網站上 WEB_TRIES，排程不限）
-  const models = await geminiModels(key, [...(first ? [first] : []), process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-latest", ...GEMINI_FALLBACKS]); // 已下架的型號先濾掉（_gemini.js）
+  // 摘要（節目、總經／產業新聞、法說會）量大又長：3.5 Flash Lite 為主（每天 500 次、每分鐘 25 萬 token），和網站 AI 整理用的 3.1 Flash Lite 分開，不互搶額度
+  const models = await geminiModels(key, [...(first ? [first] : []), ...GEMINI_ORDER.batch]);
   const body = JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.3, maxOutputTokens: 16384, ...extra } });
   let last = null, calls = 0;
   for (const m of models) {
