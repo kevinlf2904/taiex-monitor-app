@@ -940,7 +940,7 @@ body { font-family: var(--font-body); background: linear-gradient(180deg, #14141
 .ichip, .groups button { border: 1px solid var(--line); background: var(--grad-btn); font-weight: 500; }
 .ichip[aria-pressed="true"], .groups button[aria-pressed="true"] { background: var(--grad-strong); color: var(--on-strong); border-color: var(--strong-line); font-weight: 500; }
 input.code, select.sel, input[type="number"] { border: 1px solid var(--line); background: var(--surface-3); }
-input.code:focus, select.sel:focus { border-color: var(--ink); outline: none; }
+input.code:focus, select.sel:focus { border-color: var(--ink); } /* 不再拿掉 outline：鍵盤操作時用 core.css 的 :focus-visible 焦點框 */
 /* 清單列 */
 .wl li { border-bottom-color: color-mix(in srgb, var(--line) 75%, transparent); }
 .row { padding: 11px 14px; }
