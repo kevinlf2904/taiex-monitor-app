@@ -529,6 +529,7 @@
       ".mc-level-row.pressure,.mc-level-row.support{border-top:3px solid var(--muted)}.mc-level-row.pivot{border-top:3px solid var(--accent)}",
       ".mc-tech-position{margin-top:10px;font-size:12px;color:var(--muted)}",
       ".mc-ai-panel{padding:18px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
+      ".mc-ai-run{flex:none;min-height:36px;padding:7px 14px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft);color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}.mc-ai-run:disabled{opacity:.6;cursor:wait}.mc-ai-run:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.mc-ai-panel .mc-panel-head{margin-bottom:8px}",
       ".mc-ai-panel h4{margin:0 0 6px;font-size:17px}.mc-ai-panel>p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}.mc-ai-panel .caibox{margin-top:12px}",
       ".td-page .dh-sec{margin:0 0 12px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);overflow:hidden}",
       ".td-page .dh-sec>summary{min-height:58px;padding:14px 16px;gap:12px}",
@@ -639,7 +640,9 @@
       research = page.ownerDocument.createElement("section");
       research.className = "mc-ai-panel";
       research.dataset.mcSection = "research";
-      research.innerHTML = '<h4>AI 市場研究</h4><p>沿用既有 AI 整理結果。請同時檢查原始來源、資料日期與反證；摘要不等同完整研究報告。</p><div class="mc-ai-content"></div>';
+      // 工作區裡直接放「開始 AI 整理」：原本只有狀態列的小圖示按鈕，切到這裡看不出要按哪裡；按下時轉按狀態列那顆 AI 整理（data-tx="tdai"，由 brief.js 處理），全頁仍只有一個 AI 觸發點
+      research.innerHTML = '<div class="mc-panel-head"><div><h4>AI 市場研究</h4></div><button type="button" class="mc-ai-run" data-mc-ai></button></div>' +
+        '<p>依今日行情、法人、自選與事件資料整理重點。請同時檢查原始來源、資料日期與反證；摘要不等同完整研究報告。</p><div class="mc-ai-content"></div>';
       const bar = page.querySelector(".dh-secbar");
       if (bar) bar.before(research);
       else if (hero) hero.after(research);
@@ -648,7 +651,13 @@
     const aiContent = research.querySelector(".mc-ai-content");
     if (aiBox && aiContent && aiBox.parentElement !== aiContent) aiContent.appendChild(aiBox);
     if (!aiBox && aiContent && !aiContent.textContent.trim()) {
-      aiContent.textContent = "尚未產生 AI 摘要。可使用頁面上方的「AI 整理」功能；資料不足時應保留不確定性。";
+      aiContent.innerHTML = '<p class="mc-empty">尚未產生 AI 摘要。按右上「開始 AI 整理」，約 10～30 秒；資料不足時會保留不確定性。</p>';
+    }
+    const aiRun = research.querySelector(".mc-ai-run");
+    if (aiRun) {
+      const ai = W && W.tdAI;
+      aiRun.disabled = !!(ai && ai.loading);
+      aiRun.textContent = ai && ai.loading ? "AI 整理中…" : ai && ai.err ? "重試 AI 整理" : ai && ai.text ? "重新整理" : "開始 AI 整理";
     }
 
     const panelTargets = {
@@ -679,6 +688,12 @@
       // Capture phase: the existing AI handler redraws #lx and may detach the button before bubbling.
       document.addEventListener("click", event => {
         const target = event.target;
+        const aiRun = target.closest && target.closest("[data-mc-ai]");
+        if (aiRun) {
+          event.preventDefault();
+          if (!aiRun.disabled) aiRun.closest(".td-page")?.querySelector('[data-tx="tdai"]')?.click();
+          return;
+        }
         const button = target.closest && target.closest("[data-mc-tab]");
         if (!button) {
           const aiTrigger = target.closest && target.closest('[data-tx="tdai"]');
