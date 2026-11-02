@@ -2,13 +2,14 @@
 // 在 Vercel 專案設定其中一個環境變數：
 //   GEMINI_API_KEY    → 用 Google Gemini 回答（有免費額度，到 Google AI Studio 申請）；兩個都設時優先用它
 //   ANTHROPIC_API_KEY → 用 Claude 回答（依用量付費）
-//   GEMINI_MODEL      → 選填，指定 Gemini 模型（預設 gemini-flash-latest，找不到時改用 gemini-2.5-flash）
+//   GEMINI_MODEL      → 選填，指定 Gemini 模型（預設 gemini-flash-latest；型號下架時自動改用列出模型查到的可用 Flash 型號，見 _gemini.js）
 // 系統提示固定在伺服器端；前端只送對話內容與「目前畫面」的摘要，長度都有上限。
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { kv, kvOn } from "./sync.js";
 import { aiLimit, WEB_TRIES, claudeFallbackOn } from "./_limit.js";
+import { geminiModels } from "./_gemini.js";
 
 const SYSTEM = `你是「K線學堂」裡的技術分析助教，對象是想學台股技術分析的初學者。請用繁體中文、口語但精確地回答。
 - 優先回答使用者的問題；用得到時，引用「目前畫面」提供的數據（課程、指標讀數、截圖或個股的判讀結果），並說明你看的是哪個數字。
@@ -22,18 +23,21 @@ const GEMINI_DEFAULT = "gemini-flash-latest";
 // 503（模型過載）、500、429（太忙）時：同一個模型等一下重試一次，再換下一個備用模型
 export const GEMINI_FALLBACKS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-lite-latest"];
 const retryable = s => s === 503 || s === 500 || s === 502 || s === 504 || s === 429;
-export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL, { wait = ms => new Promise(r => setTimeout(r, ms)), deadline = Date.now() + 50000, tries = WEB_TRIES } = {}) {
-  const models = [...new Set([model || GEMINI_DEFAULT, GEMINI_DEFAULT, ...GEMINI_FALLBACKS])];
+export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL, { wait = ms => new Promise(r => setTimeout(r, ms)), deadline = Date.now() + 50000, tries = WEB_TRIES, listOpts } = {}) {
+  // 寫死的型號可能已下架：先用列出模型（免費）過濾掉不存在的、補上目前可用的 Flash 型號
+  const models = await geminiModels(key, [model || GEMINI_DEFAULT, GEMINI_DEFAULT, ...GEMINI_FALLBACKS], listOpts);
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: turns.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
     generationConfig: { maxOutputTokens: 4096, temperature: 0.6 },
   });
-  let last = null, calls = 0;
+  // limited：途中有型號回 429（每日／每分鐘額度用完）。最後回報以它為準，不要被後面已下架型號的 404 蓋掉、誤報成「找不到模型」
+  let last = null, calls = 0, limited = null;
+  const fail = st => ({ ok: false, status: limited ? 429 : st, message: limited?.message ?? last?.message ?? "" });
   for (const m of models) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const left = deadline - Date.now(); if (left < 3000) return { ok: false, status: last?.status || 504, message: last?.message || "逾時" };
-      if (calls++ >= tries) return { ok: false, status: last?.status || 503, message: last?.message || "" }; // 每一次呼叫都算錢：忙線時最多重試到 tries 次
+      const left = deadline - Date.now(); if (left < 3000) return { ok: false, status: limited ? 429 : last?.status || 504, message: last?.message || "逾時" };
+      if (calls++ >= tries) return fail(last?.status || 503); // 每一次呼叫都算錢：忙線時最多重試到 tries 次
       let r, j;
       try {
         r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
@@ -42,7 +46,7 @@ export async function askGemini(system, turns, key, model = process.env.GEMINI_M
         j = await r.json().catch(() => ({}));
       } catch (e) { last = { status: 504, message: e.message }; break; } // 逾時或連線錯誤：直接換下一個模型
       if (r.status === 404) { last = { status: 404, message: j?.error?.message || "" }; break; } // 模型名稱不存在（舊模型下架），換下一個
-      if (retryable(r.status)) { last = { status: r.status, message: j?.error?.message || "" }; if (attempt === 0 && r.status !== 429) await wait(900 + Math.random() * 900); else break; continue; } // 等一下（加一點隨機，避免大家同時重試）
+      if (retryable(r.status)) { last = { status: r.status, message: j?.error?.message || "" }; if (r.status === 429) limited = last; if (attempt === 0 && r.status !== 429) await wait(900 + Math.random() * 900); else break; continue; } // 等一下（加一點隨機，避免大家同時重試）
       if (!r.ok) return { ok: false, status: r.status, message: j?.error?.message || "" };
       const c = j.candidates?.[0];
       if (!c) return { ok: false, blocked: true, message: j.promptFeedback?.blockReason || "" };
@@ -51,14 +55,14 @@ export async function askGemini(system, turns, key, model = process.env.GEMINI_M
       return { ok: true, text, truncated: c.finishReason === "MAX_TOKENS", model: m };
     }
   }
-  return { ok: false, status: last?.status || 404, message: last?.message || "找不到可用的 Gemini 模型" };
+  return limited ? fail(429) : { ok: false, status: last?.status || 404, message: last?.message || "找不到可用的 Gemini 模型" };
 }
 function geminiError(r) {
   if (r.blocked) return "這個問題無法回答，換個方式問問看。";
   if (r.status === 429) return "Gemini 免費額度暫時用完或問得太頻繁，請等一下再試（免費方案有每分鐘、每天的次數上限）。";
   if (r.status === 400 && /api key/i.test(r.message)) return "GEMINI_API_KEY 無效，請檢查 Vercel 的環境變數。";
   if (r.status === 403) return "GEMINI_API_KEY 沒有權限，請確認金鑰是在 Google AI Studio 建立的。";
-  if (r.status === 404) return "找不到可用的 Gemini 模型，請在 Vercel 設定 GEMINI_MODEL（例如 gemini-2.5-flash）。";
+  if (r.status === 404) return "找不到可用的 Gemini 模型（Google 可能已停用舊型號），請在 Vercel 設定 GEMINI_MODEL 為 Google AI Studio 目前列出的 Flash 型號。";
   if (r.status === 503 || r.status === 500 || r.status === 502) return `Gemini 目前太忙（${r.status}，Google 那邊的模型暫時過載），已經自動重試並換過備用模型都不行，請過一兩分鐘再問一次。`;
   if (r.status === 504) return "Gemini 回應逾時，請再試一次。";
   return `Gemini 服務暫時無法使用（${r.status ?? "連線錯誤"}）`;

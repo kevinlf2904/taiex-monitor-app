@@ -12,6 +12,7 @@
 // 金鑰只放在 Vercel 環境變數（GEMINI_API_KEY／ANTHROPIC_API_KEY），不會出現在前端。整理結果只存在使用者的瀏覽器。
 
 import { GEMINI_FALLBACKS } from "./chat.js";
+import { geminiModels } from "./_gemini.js";
 import { WEB_TRIES, aiLimit } from "./_limit.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { userMsg } from "./_err.js";
@@ -162,7 +163,7 @@ export function parseSum(text) {
 }
 
 export async function geminiJSON(parts, key, deadline, extra = {}, first = null, tries = Infinity) { // first：這個用途先試的型號（例如讀簡報用較快的 lite）；tries：最多呼叫幾次（網站上 WEB_TRIES，排程不限）
-  const models = [...new Set([...(first ? [first] : []), process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-latest", ...GEMINI_FALLBACKS])];
+  const models = await geminiModels(key, [...(first ? [first] : []), process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-latest", ...GEMINI_FALLBACKS]); // 已下架的型號先濾掉（_gemini.js）
   const body = JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.3, maxOutputTokens: 16384, ...extra } });
   let last = null, calls = 0;
   for (const m of models) {
