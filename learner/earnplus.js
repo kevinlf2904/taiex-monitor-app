@@ -84,7 +84,7 @@ function epConf(c) {
       ${(p => (p ? epCmpHtml(c, f, p, R) : ""))(epPrev(L, f, c))}
       <p class="note">AI 只根據公司${doc}整理，可能有誤，數字請以${doc}為準；不是投資建議。</p></div>`;
   return `<h4>${us ? "財報新聞稿重點" : "法說會重點"}<span class="note">${f ? `${f.date.replace(/-/g, "/")} 的${doc}` : ""}</span></h4>${next ? `<p class="note">下一場：${next.date.slice(5).replace("-", "/")} ${esc(next.time || "")}</p>` : ""}${sum}
-    <ul class="epconf">${L.slice(0, 4).map(x => `<li><b>${x.date.slice(5).replace("-", "/")}</b> ${esc(x.note || "")}${x.url ? ` <a href="${esc(x.url)}" target="_blank" rel="noopener">SEC 原文</a>` : x.file ? ` <a href="${pdf(x.file)}" target="_blank" rel="noopener">簡報</a>` : ""}${x.en ? ` <a href="${pdf(x.en)}" target="_blank" rel="noopener">英文</a>` : ""}</li>`).join("")}</ul>`;
+    <ul class="epconf">${L.slice(0, 4).map(x => `<li><b>${x.date.slice(5).replace("-", "/")}</b> ${esc(x.note || "")}${x.url ? ` <a href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener">SEC 原文</a>` : x.file ? ` <a href="${pdf(x.file)}" target="_blank" rel="noopener">簡報</a>` : ""}${x.en ? ` <a href="${pdf(x.en)}" target="_blank" rel="noopener">英文</a>` : ""}</li>`).join("")}</ul>`;
 }
 $("#lx").addEventListener("click", e => {
   if (W.lt !== "earn") return; const a = e.target.closest("[data-epconf]"), b = e.target.closest("[data-epsum]");
