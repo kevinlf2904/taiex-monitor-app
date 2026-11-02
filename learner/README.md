@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### AI 整理恢復可用（2026.11.02-178）
+- Gemini 舊型號下架時自動改用可用型號、額度用完照實顯示；今日市場 AI 整理優先用每日額度多的 3.1 Flash Lite
+
 ### 今日市場 AI 研究可直接整理（2026.11.02-177）
 - AI 研究區加「開始 AI 整理」按鈕，整理中／失敗／重試狀態與錯誤原因都在研究區顯示
 
