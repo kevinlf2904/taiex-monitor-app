@@ -72,3 +72,17 @@ test("問 AI：預設型號每日額度用完（429）時改用查到的其他 F
     }
   } finally { globalThis.fetch = real; }
 });
+
+test("問 AI：AI 整理送 model: lite 時先用 3.1 Flash Lite；沒有這個型號就用 Lite 別名", async () => {
+  const { askGemini, GEMINI_LITE } = await import("../api/_lib/chat.js");
+  const real = globalThis.fetch;
+  try {
+    for (const [models, first] of [[["gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"], "gemini-3.1-flash-lite"], [["gemini-flash-latest", "gemini-flash-lite-latest"], "gemini-flash-lite-latest"]]) {
+      _resetGeminiCache();
+      const asked = [];
+      globalThis.fetch = async url => { asked.push(String(url).match(/models\/([^:]+):/)[1]); return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: "ok" }] } }] }) }; };
+      const r = await askGemini("s", [{ role: "user", content: "q" }], "k", GEMINI_LITE[0], { prefer: GEMINI_LITE, listOpts: { fetchImpl: async () => ({ ok: true, json: async () => ({ models: models.map(n => M(n)) }) }), now: 1 } });
+      assert.equal(r.model, first); assert.deepEqual(asked, [first]);
+    }
+  } finally { globalThis.fetch = real; }
+});

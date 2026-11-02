@@ -56,6 +56,10 @@ test("台股大盤「今天為什麼漲跌」：盤勢頭條、台灣總經摘�
   await p.waitForFunction(() => W.mkt && !W.mkt.err);
   await p.click('#lx .mkwhy [data-qai="why:tw"]'); await p.waitForFunction(() => /測試回覆/.test(document.querySelector("#lx .mkwhy")?.innerText || ""));
   assert.match(asked, /半導體業 -3\.20%/); assert.match(asked, /外資 -320\.50 億/); assert.match(asked, /台股重挫400點/);
+  assert.equal(JSON.parse(asked).model, undefined, "其他「問 AI」照伺服器預設型號，不送 lite");
+  await p.evaluate(() => { W.tdPh = null; W.tdAI = null; setLt("today"); renderList(); });
+  await p.click('#lx [data-tx="tdai"]'); await p.waitForFunction(() => W.tdAI?.text === "測試回覆");
+  assert.equal(JSON.parse(asked).model, "lite", "今日市場 AI 整理請伺服器先用 Flash Lite（每日額度多）");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "不橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });

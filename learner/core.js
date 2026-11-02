@@ -992,8 +992,9 @@ const weekKey = d => { const t = new Date(String(d).slice(0, 10) + "T00:00:00Z")
 // 問網站的 AI（/api/chat）：context 是畫面上的資料、q 是問題；回傳文字，失敗丟出錯誤（各頁的「問 AI」都用這個）
 // 連線逾時：網路卡住時 fetch 不會自己結束，按鈕會一直停在「載入中」（舊版 Safari 沒有 AbortSignal.timeout）
 const tmo = ms => { try { return AbortSignal.timeout(ms); } catch { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; } };
-async function aiChat(context, q) {
-  const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ context, messages: [{ role: "user", content: q }] }), signal: tmo(65000) }).catch(e => { throw new Error(e.name === "TimeoutError" || e.name === "AbortError" ? "AI 回答太久，請再試一次" : "連不上 AI 服務"); });
+// opt.model＝"lite"：請伺服器先用每日額度多的 Flash Lite（今日市場的 AI 整理用）；不給就照伺服器預設
+async function aiChat(context, q, opt = {}) {
+  const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ context, messages: [{ role: "user", content: q }], ...(opt.model ? { model: opt.model } : {}) }), signal: tmo(65000) }).catch(e => { throw new Error(e.name === "TimeoutError" || e.name === "AbortError" ? "AI 回答太久，請再試一次" : "連不上 AI 服務"); });
   const k = await r.json().catch(() => null); if (!k?.ok) throw new Error(k?.error || (r.status === 404 ? "需要部署到網站才能使用" : `AI 沒有回答（${r.status}）`)); return k.text;
 }
 // CSS 變數讀取會觸發樣式計算，K 線每一格要讀幾十次（手機滑動時很明顯）：快取起來，主題、配色、字型改變（html 的屬性變動）時清掉

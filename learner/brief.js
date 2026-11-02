@@ -2113,7 +2113,7 @@ $("#lx").addEventListener("click", e => {
   if (d.tx === "tdre") { W.sum = null; W.dk = new Map(); W.tdAI = null; if (W.mf) W.mf.sumTry = false; return briefLoad(true); }
   if (d.tx === "tdtxt") { navigator.clipboard?.writeText(todayText()).then(() => toast("已複製", 1500), () => toast("複製失敗")); return; }
   if (d.tx === "tdai") { if (W.tdAI?.loading) return; W.tdAI = { loading: true }; renderList(); // 整理中不能重複按
-    aiChat(todayText(), `請用繁體中文、白話，整理成 6 句以內的今日重點：${tdAfter() ? "今天大盤和我的自選怎麼走、觸發了哪些訊號、明天要留意的事" : "昨晚美股和台指期夜盤代表今天開盤可能的氣氛、今天要注意的事件、和我的持股有關的消息"}。只根據上面的資料，不要編造數字，最後提醒這不是買賣建議。`)
+    aiChat(todayText(), `請用繁體中文、白話，整理成 6 句以內的今日重點：${tdAfter() ? "今天大盤和我的自選怎麼走、觸發了哪些訊號、明天要留意的事" : "昨晚美股和台指期夜盤代表今天開盤可能的氣氛、今天要注意的事件、和我的持股有關的消息"}。只根據上面的資料，不要編造數字，最後提醒這不是買賣建議。`, { model: "lite" }) // 每天可能按很多次：用每日額度多的 Flash Lite
       .then(t => { W.tdAI = { text: t }; }, err => { W.tdAI = { err: err.message }; }).finally(() => renderList()); }
 });
 
