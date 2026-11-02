@@ -102,6 +102,42 @@
     '</div>';
   }
 
+  // 盤中市場廣度：今日市場原本只用法人模型算漲跌家數，但法人資料盤後才有今天，整個交易時段都是空的。
+  // 法人模型的廣度還沒對齊時，改用 /api/market 的即時漲跌家數（上市櫃股票＋ETF）；日期必須和加權報價同日，不同日不補。
+  const LIVE_BREADTH_MS = 60_000;
+  function liveBreadthHtml(W) {
+    const m = W && W.mkt, b = m && m.breadth, quoteDate = getQuote(W, "T00")?.date;
+    if (!b || !m.date || !quoteDate || String(m.date).slice(0, 10) !== String(quoteDate).slice(0, 10)) return "";
+    const up = b.up, dn = b.down, flat = isNum(b.flat) ? Math.max(0, b.flat) : 0;
+    if (!isNum(up) || !isNum(dn)) return "";
+    const sum = up + dn + flat;
+    if (!sum) return "";
+    const pct = n => (n / sum * 100).toFixed(1);
+    const when = String(m.date).slice(0, 10) + (m.time ? " " + m.time : "") + (m.live ? "（盤中）" : "");
+    const limits = isNum(b.limUp) && isNum(b.limDn) ? "漲停 " + b.limUp + "・跌停 " + b.limDn : "";
+    const source = String(m.source || "證交所、櫃買中心").split("；")[0];
+    return '<div class="td-breadth mc-live-breadth" role="img" aria-label="' + escapeHtml("市場廣度：上漲 " + up + " 家、平盤 " + flat + " 家、下跌 " + dn + " 家，共 " + sum + " 家") + '">' +
+      '<div class="td-breadth-head"><b>市場廣度</b><span class="note">' + escapeHtml("資料時間：" + when) + '</span></div>' +
+      '<div class="td-breadth-total note">' + escapeHtml("上市櫃股票＋ETF " + sum + " 檔（含平盤）") + '</div>' +
+      '<div class="td-bb"><i class="up" style="width:' + pct(up) + '%"></i><i class="flat" style="width:' + pct(flat) + '%"></i><i class="down" style="width:' + pct(dn) + '%"></i></div>' +
+      '<div class="td-breadth-legend note"><span class="up"><i></i>' + escapeHtml("漲 " + up + "・" + pct(up) + "%") + '</span><span class="flat"><i></i>' +
+        escapeHtml("平 " + flat + "・" + pct(flat) + "%") + '</span><span class="down"><i></i>' + escapeHtml("跌 " + dn + "・" + pct(dn) + "%") + '</span></div>' +
+      '<div class="td-breadth-foot note">' + escapeHtml([limits, "來源：" + source].filter(Boolean).join("・")) + '</div></div>';
+  }
+  // 今日市場停在總覽時，大盤統計（W.mkt）沒有或超過 60 秒就補抓一次；同一分鐘只問一次，抓完重畫
+  function refreshLiveBreadth(W, state) {
+    if (!W || !state || W.lt !== "today" || W.off || state.workspace !== "overview" || typeof getJ !== "function") return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    const now = Date.now(), last = Number(W.mkt?.tryAt ?? W.mkt?.at) || 0;
+    if (now - last < LIVE_BREADTH_MS || now - (state.liveBreadthAt || 0) < LIVE_BREADTH_MS || (W.mktLoading && now - W.mktLoading < 40000)) return;
+    state.liveBreadthAt = now;
+    getJ("/api/market").then(m => {
+      if (typeof mktOlder === "function" && W.mkt && mktOlder(m, W.mkt)) return;
+      W.mkt = { ...m, at: typeof gotAt === "function" ? gotAt(m) : Date.now(), tryAt: Date.now() };
+      if (W.lt === "today" && typeof renderList === "function") renderList();
+    }).catch(() => {});
+  }
+
   function renderOverview(page, W, flow) {
     const hero = page.querySelector(".td-hero");
     const alignment = flowAlignment(W, flow);
@@ -113,8 +149,9 @@
     const breadthMount = panel.querySelector(".mc-breadth-mount");
     const breadth = hero && hero.querySelector(".td-breadth");
     if (breadth && breadthMount && breadth.parentElement !== breadthMount) breadthMount.appendChild(breadth);
-    if (!breadthMount || !breadthMount.children.length) {
-      breadthMount.innerHTML = '<p class="mc-empty">市場廣度資料尚未與最新加權行情對齊；不以其他交易日資料補入。</p>';
+    if (breadthMount && !breadthMount.children.length) {
+      breadthMount.innerHTML = liveBreadthHtml(W) ||
+        '<p class="mc-empty">' + (!W || !W.mkt ? "市場廣度載入中…" : W.mkt.err ? "市場廣度暫時無法取得，稍後自動重試。" : "市場廣度資料尚未與最新加權行情同日；不以其他交易日資料補入。") + '</p>';
     }
     // 手機第一屏優先呈現核心市場數字：將核心卡移到加權報價與分時圖之間。
     const side = hero && hero.querySelector(".td-side");
@@ -575,6 +612,7 @@
     assign("#td-sec-mac", "global");
     assign("#td-sec-plan", "technical");
 
+    refreshLiveBreadth(W, state);
     const flow = readFlow(W);
     renderOverview(page, W, flow);
     renderCapital(page, W, flow);
