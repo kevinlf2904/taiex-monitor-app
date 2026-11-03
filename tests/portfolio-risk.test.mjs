@@ -1,0 +1,21 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {analyzePortfolioRisk,PORTFOLIO_RISK_VERSION} from "../learner/portfolio-risk.js";
+function series(fn,n=100,start="2026-01-01"){const a=[];let d=new Date(start+"T00:00:00Z");for(let i=0;i<n;i++){a.push({date:d.toISOString().slice(0,10),adjustedClose:fn(i)});d.setUTCDate(d.getUTCDate()+1);}return a;}
+const benchmark=series(i=>100*(1+.001*i+.0005*Math.sin(i)));
+const base=()=>({market:"tw",benchmark,holdings:[
+ {symbol:"2330",marketValue:70000,daily:series(i=>80*(1+.0015*i+.0008*Math.sin(i)))},
+ {symbol:"2317",marketValue:30000,daily:series(i=>100*(1+.0008*i+.0004*Math.sin(i*.7)))}
+]});
+test("正常資料輸出風險指標與覆蓋率",()=>{const r=analyzePortfolioRisk(base());assert.equal(r.schemaVersion,PORTFOLIO_RISK_VERSION);assert.equal(r.status,"ready");assert.equal(r.coverage.includedHoldings,2);assert.equal(r.coverage.observations,99);assert.ok(Number.isFinite(r.metrics.beta));assert.ok(Math.abs(r.metrics.rows.reduce((s,x)=>s+x.weight,0)-1)<1e-12);assert.ok(r.metrics.valueAtRisk>=0);assert.equal(r.methodology.analysisType,"current_weights_historical_scenario");assert.ok(r.metrics.worst20TradingDays);});
+test("缺少現價不以成本基礎替代並明確排除",()=>{const x=base();x.holdings.push({symbol:"2603",marketValue:null,daily:series(i=>50+i)});const r=analyzePortfolioRisk(x);assert.equal(r.status,"partial");assert.equal(r.coverage.includedHoldings,2);assert.equal(r.excluded[0].reason,"invalid_market_value");});
+test("歷史不足持股排除且回報覆蓋率",()=>{const x=base();x.holdings.push({symbol:"2882",marketValue:1000,daily:series(i=>20+i,20)});const r=analyzePortfolioRisk(x);assert.equal(r.status,"partial");assert.equal(r.coverage.excludedHoldings,1);assert.equal(r.excluded[0].reason,"insufficient_history");});
+test("共同日期不足不輸出風險指標",()=>{const x=base();x.holdings[1].daily=series(i=>100+i,100,"2026-05-01");const r=analyzePortfolioRisk(x);assert.equal(r.status,"invalid");assert.equal(r.metrics,null);assert.ok(r.issues.some(v=>v.code==="insufficient_common_history"));});
+test("重複日期、非法日期與無效價格均標記",()=>{const x=base();x.holdings[0].daily.push(x.holdings[0].daily[0],{date:"2026-02-30",adjustedClose:10},{date:"2026-04-01",adjustedClose:0},{date:"2026-04-02",adjustedClose:Infinity});const r=analyzePortfolioRisk(x);assert.equal(r.status,"partial");assert.ok(r.issues.some(v=>v.code==="duplicate_dates"));assert.ok(r.issues.some(v=>v.code==="invalid_observations"));});
+test("缺少交易日不補值並回報共同日期差異",()=>{const x=base();x.holdings[1].daily.splice(45,1);const r=analyzePortfolioRisk(x);assert.equal(r.status,"partial");assert.ok(r.issues.some(v=>v.code==="non_common_observations"));assert.ok(r.coverage.dataCoverage.every(v=>v.unionPrices>v.commonPrices));});
+test("異常單日漲跌發出警示但保留觀測",()=>{const x=base();x.holdings[0].daily[40].adjustedClose*=2;const r=analyzePortfolioRisk(x);assert.equal(r.status,"partial");assert.ok(r.issues.some(v=>v.code==="extreme_return_observation"));});
+test("asOf 排除未來資料",()=>{const x=base();x.asOf="2026-03-01";const r=analyzePortfolioRisk(x);assert.ok(r.asOf<=x.asOf);assert.ok(r.issues.some(v=>v.code==="future_observations_excluded"));});
+test("零波動資產相關性為 null 而非零",()=>{const x=base();x.holdings[1].daily=series(()=>100);const r=analyzePortfolioRisk(x);assert.equal(r.metrics.rows.find(v=>v.symbol==="2317").annualizedVolatility,0);assert.equal(r.metrics.rows.find(v=>v.symbol==="2317").riskContribution,0);assert.equal(r.metrics.pairs[0].correlation,null);});
+test("輸入、參數及基準歷史不足時回傳 invalid",()=>{assert.equal(analyzePortfolioRisk(null).status,"invalid");const x=base();x.window=2;assert.equal(analyzePortfolioRisk(x).status,"invalid");const y=base();y.benchmark=series(i=>100+i,20);assert.equal(analyzePortfolioRisk(y).status,"invalid");});
+test("市場隔離及重複代號明確排除",()=>{const x=base();x.holdings[0].market="us";x.holdings.push({...x.holdings[1]});const r=analyzePortfolioRisk(x);assert.equal(r.metrics.rows.length,1);assert.ok(r.excluded.some(v=>v.reason==="market_mismatch"));assert.ok(r.excluded.some(v=>v.reason==="duplicate_symbol"));});
+test("市值加總溢位不產生非有限權重",()=>{const x=base();x.holdings.forEach(v=>v.marketValue=1e308);const r=analyzePortfolioRisk(x);assert.equal(r.status,"invalid");assert.equal(r.metrics,null);assert.ok(r.issues.some(v=>v.code==="invalid_total_market_value"));});
