@@ -30,7 +30,8 @@ const compound = a => a.reduce((p, x) => p * (1 + x), 1) - 1;
 const currencyFor = m => m === "tw" ? "TWD" : m === "us" ? "USD" : null;
 function invalid(input, code, extra = []) {
   const hs = Array.isArray(input?.holdings) ? input.holdings : [];
-  const totalMV = hs.reduce((s, h) => s + (pos(h?.marketValue) ? h.marketValue : 0), 0);
+  const rawTotalMV = hs.reduce((s, h) => s + (pos(h?.marketValue) ? h.marketValue : 0), 0);
+  const totalMV = Number.isFinite(rawTotalMV) ? rawTotalMV : null;
   const excluded = hs.map(h => ({ symbol: typeof h?.symbol === "string" ? h.symbol.trim().toUpperCase() || null : null, reason: code }));
   return {
     schemaVersion: PORTFOLIO_RISK_VERSION, status: "invalid", market: input?.market ?? null,
@@ -38,7 +39,7 @@ function invalid(input, code, extra = []) {
     coverage: { totalHoldings: hs.length, includedHoldings: 0, excludedHoldings: hs.length,
       includedSymbols: 0, excludedSymbols: new Set(excluded.map(x => x.symbol)).size,
       sourcePositionRows: hs.length, totalMarketValue: totalMV, includedMarketValue: 0,
-      excludedMarketValue: totalMV, marketValueCoverage: totalMV > 0 ? 0 : null,
+      excludedMarketValue: totalMV, marketValueCoverage: totalMV !== null && totalMV > 0 ? 0 : null,
       unvaluedHoldings: hs.filter(h => !pos(h?.marketValue)).length, observations: 0 },
     excluded, issues: [{ code, severity: "error" }, ...extra]
   };
