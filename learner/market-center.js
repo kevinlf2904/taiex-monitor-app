@@ -753,7 +753,38 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     return true;
   }
 
+  // 給 AI 市場研究的資料摘要：把其他四個工作區（總覽、資金、全球、技術）的數字整理成文字，每一段都寫資料日期／時間；
+  // 沒有資料就寫「未取得」，讓 AI 知道缺什麼，不要自己補。只讀已經載入的資料，不另外抓。
+  function researchText(W) {
+    const L = [], q = getQuote(W, "T00"), o = getQuote(W, "O00"), pct = v => (isNum(v) ? signed(v, 2) + "%" : "—");
+    const qd = q && q.date ? String(q.date).slice(0, 10) : null;
+    L.push("【資料時間】現在 " + new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ") + "（台北）");
+    L.push("【加權與櫃買】" + (q && isNum(q.price) ? "加權 " + numberFmt(q.price) + "（" + pct(q.chgPct) + "，" + (qd || "日期未提供") + " " + (q.time || "") + "，" + (q.source || "來源未提供") + "）" : "加權報價未取得") +
+      (o && isNum(o.price) ? "；櫃買 " + numberFmt(o.price) + "（" + pct(o.chgPct) + "）" : ""));
+    const m = W && W.mkt, b = m && m.breadth;
+    if (b && isNum(b.up) && isNum(b.down) && m.date && qd && String(m.date).slice(0, 10) === qd) {
+      L.push("【市場廣度】" + String(m.date).slice(0, 10) + (m.time ? " " + m.time : "") + (m.live ? "（盤中）" : "") + "：上漲 " + b.up + "、平盤 " + (isNum(b.flat) ? b.flat : "—") + "、下跌 " + b.down + " 家" + (isNum(b.limUp) && isNum(b.limDn) ? "；漲停 " + b.limUp + "、跌停 " + b.limDn : ""));
+    } else L.push("【市場廣度】今天的資料未取得");
+    const flow = readFlow(W), al = flowAlignment(W, flow);
+    if (flow.date && flow.sectors.length) {
+      const top = (arr, sign) => arr.filter(x => isNum(x.net1) && x.net1 * sign > 0).sort((a, b) => (b.net1 - a.net1) * sign).slice(0, 3).map(x => (x.name || "未命名") + " " + signed(x.net1, 1) + " 億").join("、") || "無";
+      L.push("【法人資金流向】資料日期 " + flow.date + "（" + al.label + "，單位億元，買賣超張數×收盤價估算）：流入 " + top(flow.sectors, 1) + "；流出 " + top(flow.sectors, -1));
+    } else L.push("【法人資金流向】" + (al.label || "未取得"));
+    const lv = readTechnicalLevels(W);
+    if (lv) {
+      const px = q && isNum(q.price) ? q.price : null, pos = px == null ? "" : px > lv.pressure ? "，加權在壓力之上" : px >= lv.pivot ? "，加權在分水嶺與壓力之間" : px >= lv.support ? "，加權在支撐與分水嶺之間" : "，加權跌破支撐";
+      L.push("【技術攻防】" + lv.forDate + (lv.estimate ? "（收盤後推估的下一交易日位階）" : "（盤前推演位階）") + "：壓力 " + numberFmt(lv.pressure, 0) + "、多空分水嶺 " + numberFmt(lv.pivot, 0) + "、支撐 " + numberFmt(lv.support, 0) + pos);
+    } else L.push("【技術攻防】位階未取得");
+    const U = W && W.bf && W.bf.us || {}, rows = (Array.isArray(U.indices) ? U.indices : []).concat(Array.isArray(U.macro) ? U.macro : []).filter(x => x && isNum(x.chgPct)).slice(0, 8);
+    L.push("【美股與總經】" + (rows.length ? "資料日期 " + (U.dataDate || U.date || "未提供") + "（" + (GLOBAL_STATUS_LABELS[U.dataStatus] || "狀態未提供") + "）：" + rows.map(x => (x.name || x.code) + " " + pct(x.chgPct)).join("、") : "未取得"));
+    const G = W && W.gl && W.gl.ok && Array.isArray(W.gl.groups) ? W.gl.groups.flatMap(g => Array.isArray(g.rows) ? g.rows : []) : [];
+    const pick = ["TWD=X", "CL=F", "GC=F", "^VIX"].map(c => G.find(x => x && x.code === c && isNum(x.price))).filter(Boolean);
+    if (pick.length) L.push("【匯率原物料】" + pick.map(x => (x.name || x.code) + " " + numberFmt(x.price) + "（" + pct(x.chgPct) + "）").join("、"));
+    return L.join("\n");
+  }
+
   window.KLMarketCenter = Object.freeze({
+    researchText,
     workspaces: WORKSPACES,
     normalizeWorkspace,
     ensureState,
