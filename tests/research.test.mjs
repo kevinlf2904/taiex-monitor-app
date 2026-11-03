@@ -94,16 +94,37 @@ test("9 AI 回應格式錯誤：不是 JSON 就回報格式錯誤，畫面只顯
   assert.equal(R.parseReport("```json\n" + JSON.stringify(good) + "\n```", s).ok, true, "包在 ```json 裡也能解析");
 });
 
-test("10 AI 輸出不存在的數字：對不上資料的數字標「未能對照資料」；四捨五入、千分位、正負號可以", () => {
+test("10 AI 輸出數字驗證：日期、時間、股票代號排除；行情數字保留；負數不再被無條件放行", () => {
   const s = R.buildSnapshot(base());
   const p = R.parseReport(JSON.stringify({ ...good, bear: [{ text: "下跌家數 1,580 家、外資賣超 999 億", refs: ["tw.breadth.down"] }] }), s);
   assert.equal(p.report.bear[0].unverified, true); assert.deepEqual([...p.report.bear[0].badNums], [999]);
   assert.ok(p.issues.some(i => i.type === "number"));
   const ok = R.parseReport(JSON.stringify(good), s);
-  assert.equal(ok.report.bull[0].unverified, false); assert.equal(ok.report.summary.unverified, false, "43615.89、2.9（負號拿掉）對得上");
-  assert.equal(R.numberOk(310, [-310.4]), true, "四捨五入到整數"); assert.equal(R.numberOk(3, []), true, "小整數不檢查");
+  assert.equal(ok.report.bull[0].unverified, false); assert.equal(ok.report.summary.unverified, false, "43615.89、2.9（保留正負號後取絕對值比對）對得上");
+  assert.equal(R.numberOk(310, [-310.4]), true, "四捨五入到整數");
+  assert.equal(R.numberOk(-500, [500]), true, "負數可與資料的絕對值比對");
+  assert.equal(R.numberOk(-1200, [1200]), true, "較大的負整數不被錯誤豁免");
+  assert.equal(R.numberOk(-500, []), false, "無資料依據的負數不可豁免");
+  assert.equal(R.numberOk(-2, []), false, "負的小整數不可套用正數 1～10 豁免");
+  assert.equal(R.numberOk(3, []), true, "正的小整數維持豁免");
   assert.deepEqual([...R.numbersIn("2026-11-03 11:30 費半 ^SOX 下跌 3.4%")], [3.4], "日期、時間、代號不算數字");
+  assert.deepEqual([...R.numbersIn("台積電 2330、聯發科（2454）、ETF 0050、台泥 1101、2330.TW、代號 2454、2026 年")], [], "股票代號及年份不算行情數字");
+  assert.deepEqual([...R.numbersIn("成交量 2330 張、指數上漲 2330 點、外資賣超 2330 億")], [2330, 2330, 2330], "四位數行情數字仍須核對");
+  assert.deepEqual([...R.numbersIn("大盤下跌 -2.3%")], [-2.3], "保留負號");
   assert.match(R.renderReport(p, s, {}), /⚠︎ 未能對照資料（999）/);
+});
+
+test("10A 引用方向驗證：引用存在但買賣超或漲跌方向相反，該段落必須標未驗證", () => {
+  const s = R.buildSnapshot(base());
+  const p = R.parseReport(JSON.stringify({
+    ...good,
+    bull: [{ text: "半導體法人買超 310.4 億", refs: ["tw.flow.out1.net1"] }],
+    bear: [{ text: "加權上漲 2.9%", refs: ["tw.T00.chg"] }]
+  }), s);
+  assert.equal(p.report.bull[0].unverified, true, "負淨額不能支持買超");
+  assert.equal(p.report.bear[0].unverified, true, "負漲跌幅不能支持上漲");
+  assert.equal(p.issues.filter(i => i.type === "direction").length, 2);
+  assert.equal(R.parseReport(JSON.stringify(good), s).issues.some(i => i.type === "direction"), false, "方向一致的既有報告不應誤報");
 });
 
 test("11 AI 引用不存在的來源：不存在的編號移除並記錄；沒有任何有效引用的那一點標未驗證", () => {
