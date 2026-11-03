@@ -253,10 +253,10 @@
     h += sec("未知事項", unknowns.length ? "<ul>" + unknowns.map(u => "<li>" + esc(u) + "</li>").join("") + "</ul>" : '<p class="note">無</p>');
     h += factsHtml(snap);
     const issues = (P.issues || []).filter(x => x && x.type);
-    const badRef = issues.filter(x => x.type === "ref").length, badNum = issues.filter(x => x.type === "number").length;
+    const badRef = issues.filter(x => x.type === "ref").length, badNum = issues.filter(x => x.type === "number").length, badDirection = issues.filter(x => x.type === "direction").length;
     const hm = at => new Date(at + 8 * 3600e3).toISOString().slice(11, 16);
     h += '<p class="note rs-meta">' + [M.at ? "AI 整理於 " + hm(M.at) : "", M.model ? "模型 " + esc(M.model) : "", M.cached ? "沿用快取" : "",
-      badRef ? "有 " + badRef + " 處引用了不存在的資料編號（已移除）" : "", badNum ? "有 " + badNum + " 處數字對不上資料（已標 ⚠︎）" : "", "AI 可能出錯，數字以客觀數據為準，不是買賣建議"].filter(Boolean).join("・") + "</p>";
+      badRef ? "有 " + badRef + " 處引用了不存在的資料編號（已移除）" : "", badNum ? "有 " + badNum + " 處數字對不上資料（已標 ⚠︎）" : "", badDirection ? "有 " + badDirection + " 處敘述方向與引用資料不一致（已標 ⚠︎）" : "", "AI 可能出錯，數字以客觀數據為準，不是買賣建議"].filter(Boolean).join("・") + "</p>";
     return '<div class="rs-report">' + h + "</div>";
   }
 
