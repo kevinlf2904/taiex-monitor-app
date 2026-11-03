@@ -130,7 +130,8 @@ for (const width of [390, 1280]) test(`今日重點（早報＋每日摘要）�
   await p.waitForTimeout(1500); assert.ok(await p.evaluate(() => window.__rl) < 5 + n0, "今日重點沒有一直重畫");
   await p.click('#lx [data-tx="tdai"]');
   await selectWorkspace(p, "research");
-  await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
+  // AI 研究室：結果（研究報告；測試假資料日期舊時是「資料不足」）留在研究區
+  await p.waitForFunction(() => !!$("#lx .mc-ai-panel .caibox .rs-report"));
   // 舊的分頁記錄（工具 → 早報、每日摘要、今日重點）都帶到情報局的今日重點
   for (const old of ["brief", "sum", "today"]) { await p.evaluate(o => { setLt("watch"); W.tv = o; setLt("tools"); }, old); await p.waitForTimeout(200); assert.equal(await p.evaluate(() => W.lt), "today", old); }
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");

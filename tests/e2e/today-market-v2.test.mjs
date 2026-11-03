@@ -43,6 +43,8 @@ const makeGlobalFixture = () => ({
 });
 
 const S = await serve(), B = await (await chromium()).launch();
+// AI 研究室只在資料夠新時才呼叫 AI：測試假資料的日期是舊的，在研究取資料的那一刻放今天的報價、廣度、匯率（背景輪詢會換掉 W 的資料）
+const seedResearch = () => { const o = window.KLMarketCenter, d = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); window.KLMarketCenter = Object.freeze({ ...o, researchInput: W => { for (const c of ["T00", "O00"]) W.quotes.set(c, { ...W.quotes.get(c), date: d, time: "10:00:00", source: "富果", updateMode: "live" }); W.gl = { ok: true, sourceFetchedAt: new Date().toISOString(), groups: [{ rows: [{ code: "TWD=X", name: "美元／台幣", price: 32.6, chgPct: 0.5 }] }] }; W.mkt = { date: d, time: "10:00", live: true, breadth: { up: 300, down: 600, flat: 50 } }; return o.researchInput(W); } }); };
 test.after(async () => { await B.close(); S.close(); });
 
 const selectWorkspace = async (page, id) => {
@@ -228,7 +230,9 @@ test("今日市場 V2.1：全球行情按需載入，過期後自動刷新且避
 test("今日市場 AI 研究：工作區內就有「開始 AI 整理」，成功、失敗都留在研究區並可重試", async () => {
   for (const width of [390, 1280]) {
     const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 600 });
-    await p.evaluate(() => { W.tdPh = null; W.tdAI = null; setLt("today"); renderList(); });
+    // AI 研究室只在資料夠新時才呼叫 AI：在研究取資料時放今天的報價、廣度、匯率（測試假資料的日期是舊的）；AI 回 JSON 研究報告
+    let fail = false; await ctx.route("**/api/chat", r => r.fulfill({ contentType: "application/json", body: fail ? JSON.stringify({ ok: false, error: "伺服器尚未設定 GEMINI_API_KEY" }) : JSON.stringify({ ok: true, text: JSON.stringify({ status: "ok", summary: "測試回覆", bull: [{ text: "測試多方", refs: ["tw.T00.price"] }], bear: [{ text: "測試空方", refs: ["tw.T00.chg"] }], scenarios: [{ type: "bull", trigger: "a", refs: ["tw.T00.price"] }, { type: "neutral", trigger: "b", refs: ["tw.T00.price"] }, { type: "bear", trigger: "c", refs: ["tw.T00.price"] }], risks: [], unknowns: [], conclusion: { text: "如果…則…", refs: ["tw.T00.price"] } }) }) }));
+    await p.evaluate(seedResearch); await p.evaluate(() => { try { sessionStorage.clear(); } catch {} W.tdPh = null; W.tdAI = null; setLt("today"); renderList(); });
     await p.click('#lx [data-mc-tab="research"]');
     assert.equal(await p.textContent("#lx .mc-ai-run"), "開始 AI 整理", width + "：研究區要有明顯的開始按鈕");
     assert.match(await p.textContent("#lx .mc-ai-panel"), /尚未產生 AI 摘要/);
@@ -236,7 +240,7 @@ test("今日市場 AI 研究：工作區內就有「開始 AI 整理」，成功
     await p.waitForFunction(() => /測試回覆/.test(document.querySelector("#lx .mc-ai-panel .caibox")?.textContent || ""));
     assert.equal(await p.textContent("#lx .mc-ai-run"), "重新整理");
     assert.equal(await p.evaluate(() => W.marketCenter.workspace), "research", "整理完仍停在 AI 研究");
-    await p.evaluate(() => { window.aiChat = () => Promise.reject(new Error("伺服器尚未設定 GEMINI_API_KEY")); });
+    fail = true;
     await p.click("#lx .mc-ai-run");
     await p.waitForFunction(() => /⚠︎/.test(document.querySelector("#lx .mc-ai-panel .caibox")?.textContent || ""));
     assert.match(await p.textContent("#lx .mc-ai-panel .caibox"), /GEMINI_API_KEY/, "失敗原因要顯示在研究區");

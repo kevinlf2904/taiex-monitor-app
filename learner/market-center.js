@@ -547,6 +547,11 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       ".mc-ai-panel{padding:18px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
       ".mc-ai-run{flex:none;min-height:36px;padding:7px 14px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft);color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}.mc-ai-run:disabled{opacity:.6;cursor:wait}.mc-ai-run:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.mc-ai-panel .mc-panel-head{margin-bottom:8px}",
       ".mc-ai-panel h4{margin:0 0 6px;font-size:17px}.mc-ai-panel>p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}.mc-ai-panel .caibox{margin-top:12px}",
+      ".rs-report{display:grid;gap:12px}.rs-sec h5{margin:0 0 6px;font-size:14px;color:var(--ink)}.rs-sec ul{margin:0;padding-left:18px}.rs-sec li{margin:3px 0}.rs-sum{margin:0;font-size:14px;line-height:1.7}",
+      ".rs-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.rs-two>.rs-sec:first-child h5{color:var(--up)}.rs-two>.rs-sec:last-child h5{color:var(--down)}@media(max-width:640px){.rs-two{grid-template-columns:1fr}}",
+      ".rs-cite{display:block;color:var(--muted);font-size:11.5px}.rs-flag{color:var(--warn,var(--muted));font-size:12px}.rs-unv{opacity:.85}.rs-err{margin:0;color:var(--warn,var(--muted))}",
+      ".rs-sc{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}@media(max-width:640px){.rs-sc{grid-template-columns:1fr}}.rs-sc-c{padding:8px 10px;border:1px solid var(--line);border-radius:8px}.rs-sc-c b{display:block;margin-bottom:4px}.rs-sc-c p{margin:2px 0;font-size:12.5px}.rs-sc-c p span{color:var(--muted);margin-right:6px}",
+      ".rs-facts summary{cursor:pointer;font-size:13px;color:var(--muted)}.rs-tbl{display:grid;gap:2px;margin-top:6px}.rs-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:2px 8px;padding:4px 0;border-bottom:1px solid var(--line);font-size:12.5px}.rs-v{text-align:right;font-variant-numeric:tabular-nums}.rs-m{grid-column:1/-1;color:var(--muted);font-size:11px}.rs-meta{margin:0;font-size:11.5px}.mc-ai-panel .cai-l+.cai-l{margin-top:4px}.mc-ai-panel .cai-sec:not(:first-child){margin-top:12px}.mc-ai-panel .cai-li{position:relative;padding-left:14px}.mc-ai-panel .cai-li::before{content:'・';position:absolute;left:0;color:var(--muted)}.mc-ai-panel .cai-h{color:var(--ink)}.mc-ai-panel .cai-inf{color:var(--muted)}.mc-ai-panel .cai-meta{margin:8px 0 0;font-size:12px}.mc-ai-panel .cai-old{margin:4px 0 0;color:var(--warn,var(--muted));font-size:12px}",
       ".td-page .dh-sec{margin:0 0 12px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);overflow:hidden}",
       ".td-page .dh-sec>summary{min-height:58px;padding:14px 16px;gap:12px}",
       ".td-page .dh-sec-b{padding:0 16px 16px}",
@@ -660,7 +665,7 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       research.dataset.mcSection = "research";
       // 工作區裡直接放「開始 AI 整理」：原本只有狀態列的小圖示按鈕，切到這裡看不出要按哪裡；按下時轉按狀態列那顆 AI 整理（data-tx="tdai"，由 brief.js 處理），全頁仍只有一個 AI 觸發點
       research.innerHTML = '<div class="mc-panel-head"><div><h4>AI 市場研究</h4></div><button type="button" class="mc-ai-run" data-mc-ai></button></div>' +
-        '<p>依今日行情、法人、自選與事件資料整理重點。請同時檢查原始來源、資料日期與反證；摘要不等同完整研究報告。</p><div class="mc-ai-content"></div>' +
+        '<p>依今日行情、市場廣度、法人、技術攻防與全球資料，整理多空論點、情境推演與風險；每一點都標出依據的資料與日期，資料不足時不硬下結論。客觀數據由程式直接列出，不經 AI。</p><div class="mc-ai-content"></div>' +
         '<p class="mc-data-note">AI 暫時不能用（額度用完、離線）時，可以先看「技術攻防」的位階與「市場總覽」的市場廣度、族群資金，這些不需要 AI。</p>';
       const bar = page.querySelector(".dh-secbar");
       if (bar) bar.before(research);
@@ -676,7 +681,7 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     if (aiRun) {
       const ai = W && W.tdAI;
       aiRun.disabled = !!(ai && ai.loading);
-      aiRun.textContent = ai && ai.loading ? "AI 整理中…" : ai && ai.err ? "重試 AI 整理" : ai && ai.text ? "重新整理" : "開始 AI 整理";
+      aiRun.textContent = ai && ai.loading ? "AI 整理中…" : ai && (ai.err || (ai.parsed && ai.parsed.ok === false)) ? "重試 AI 整理" : ai && (ai.text || ai.parsed) ? "重新整理" : "開始 AI 整理";
     }
 
     const panelTargets = {
@@ -753,7 +758,34 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     return true;
   }
 
+  // AI 研究室的原始資料：只收集已經載入的資料（不另外抓），交給 research.js 的 buildSnapshot 正規化（來源、交易日、狀態、信心）。
+  // 預期交易日：盤前看前一交易日收盤是正常的（不算過期）；盤中、收盤後要是今天；休市看最近交易日
+  function researchInput(W) {
+    const today = typeof twDay === "function" ? twDay() : todayTW();
+    const holidays = W?.cal?.hol || (typeof TWHOL !== "undefined" && TWHOL.set ? [...TWHOL.set].map(date => ({ date })) : []);
+    const tq = getQuote(W, "T00");
+    let sess = null; try { sess = typeof sessionStatus === "function" ? sessionStatus(Date.now(), { holidays, lastTradeDate: tq?.date }) : null; } catch {}
+    const prev = typeof findLastTradeDate === "function" ? findLastTradeDate(today, holidays) : null, ph = sess?.session || "unknown";
+    const expectedDate = ph === "pre" ? prev : ph === "closed" ? (sess?.lastTradeDate || prev) : today;
+    const flow = readFlow(W), al = flowAlignment(W, flow), U = W && W.bf && W.bf.us || {};
+    const G = W && W.gl && W.gl.ok && Array.isArray(W.gl.groups) ? W.gl.groups.flatMap(g => Array.isArray(g.rows) ? g.rows : []) : [];
+    const mn = W && W.mn && Array.isArray(W.mn.days) ? W.mn.days[0] : null;
+    return {
+      now: Date.now(), session: ph === "live" ? "open" : ph, expectedDate,
+      quotes: { T00: tq, O00: getQuote(W, "O00") },
+      breadth: W && W.mkt ? { date: W.mkt.date, time: W.mkt.time, live: !!W.mkt.live, breadth: W.mkt.breadth, source: String(W.mkt.source || "").split("；")[0] || null } : null,
+      flow: flow.date ? { date: flow.date, mood: flow.mood, sectors: flow.sectors, label: al.label } : { label: al.label },
+      levels: readTechnicalLevels(W),
+      us: { rows: (Array.isArray(U.indices) ? U.indices : []).concat(Array.isArray(U.macro) ? U.macro : []), dataStatus: U.dataStatus, dataDate: U.dataDate || U.date, sourceTime: U.sourceTime, source: U.source },
+      global: { rows: ["TWD=X", "CL=F", "GC=F", "^VIX"].map(c => G.find(x => x && x.code === c)).filter(Boolean), fetchedAt: W?.gl?.sourceFetchedAt || null },
+      news: mn,
+      // 自選：目前群組裡漲跌幅最大的 6 檔（只用已有的報價，不另外抓）
+      watch: (() => { const L = Array.isArray(W?.groups?.[W.gi]?.list) ? W.groups[W.gi].list : []; return L.map(c => getQuote(W, c)).filter(x => x && isNum(x.chgPct) && x.code !== "T00" && x.code !== "O00").sort((a, b) => Math.abs(b.chgPct) - Math.abs(a.chgPct)).slice(0, 6); })()
+    };
+  }
+
   window.KLMarketCenter = Object.freeze({
+    researchInput,
     workspaces: WORKSPACES,
     normalizeWorkspace,
     ensureState,
