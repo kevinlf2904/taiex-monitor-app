@@ -98,6 +98,11 @@ function group(holdings, market, currency, asOf, issues) {
       continue;
     }
     const first = parsed[0].prices;
+    if (first.size < 31) {
+      excluded.push(...rows.map(() => ({ symbol, reason: "insufficient_history" })));
+      issues.push({ code: "insufficient_history", severity: "warning", subject: symbol, availablePrices: first.size });
+      continue;
+    }
     const same = parsed.every(p => p.prices.size === first.size && [...first].every(([d, v]) => p.prices.get(d) === v));
     if (!same) {
       excluded.push(...rows.map(() => ({ symbol, reason: "conflicting_duplicate_symbol_series" })));
