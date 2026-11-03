@@ -541,3 +541,15 @@ u.conf { background: var(--up); } u.div { background: var(--down); } u.etf { bac
 /* ⓘ 統計口徑說明（core.js infoTip）：觸控也點得到（44px 太大會撐開標題列，用 padding 放大可點範圍） */
 .itip { display: inline-block; margin-left: 3px; padding: 2px 4px; font-size: 12px; line-height: 1; color: var(--muted); cursor: help; font-weight: 400; vertical-align: baseline; }
 .itip:hover, .itip:focus-visible { color: var(--ink); }
+
+/* 觸控熱區（UI/UX 稽核方案 A）：手機上這幾顆小按鈕外觀不變，用透明 ::after 把點擊範圍往外擴到約 44px 高；
+   左右只擴到和鄰居間距的一半，不會點到隔壁按鈕（::after 從邊框內算起，所以上下多 1px）。只在觸控螢幕或窄螢幕生效，桌面滑鼠操作不受影響 */
+@media (pointer: coarse), (max-width: 760px) {
+  #themeBtn, #fontBtn, #gsTop, #mktChip, #backBtn, #menuBtn { position: relative; }
+  #themeBtn::after, #fontBtn::after, #gsTop::after, #mktChip::after, #backBtn::after, #menuBtn::after { content: ""; position: absolute; }
+  #themeBtn::after, #fontBtn::after { inset: -8px -2px; }  /* 30×30 → 34×44（左右間距只有 4px） */
+  #gsTop::after { inset: -7px -2px; }                      /* 24×32 → 28×44 */
+  #mktChip::after { inset: -10px -2px; }                    /* 高 26 → 44 */
+  #backBtn::after { inset: -8px -5px -8px -4px; }          /* 77×31 → 86×45（右邊間距 10px） */
+  #menuBtn::after { inset: -6px -4px; }                    /* 34×34 → 42×44（左邊間距 8px） */
+}

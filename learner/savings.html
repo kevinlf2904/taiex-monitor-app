@@ -12,6 +12,7 @@
   const q = new URLSearchParams(location.search), d = document.documentElement;
   if (q.has("embed")) d.dataset.embed = "1";
   try { const t = q.get("theme") || JSON.parse(localStorage.getItem("kline:theme") || '"dark"'); if (t === "dark" || t === "light") d.dataset.theme = t; } catch { d.dataset.theme = "dark"; }
+  try { if ((q.get("font") || JSON.parse(localStorage.getItem("kline:font") || '"sans"')) === "song") d.dataset.font = "song"; } catch {} // 和看盤、情報局同一個字型設定
 })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -110,7 +111,7 @@ main{display:grid;gap:22px;min-width:0}
 .kv span{font-size:11.5px;color:var(--muted)} .kv b{font-family:var(--f-num);font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}
 .neg{color:var(--bad)!important} .pos{color:var(--ok)!important}
 .chart{position:relative}
-.chart h4{margin:0 0 6px;font-size:14px;font-weight:500}
+.chart h3,.chart h4{margin:0 0 6px;font-size:14px;font-weight:500}
 .chart svg{width:100%;height:auto;display:block;touch-action:pan-y;cursor:crosshair}
 .chart text{font-family:var(--f-num);font-size:10px;fill:var(--muted)}
 .tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:8px 10px;font-size:12px;box-shadow:0 8px 20px -10px rgba(0,0,0,.35);min-width:160px;z-index:3}
@@ -192,8 +193,9 @@ main{display:grid;gap:22px;min-width:0}
 .badge{font-size:11px;font-weight:500;padding:1px 8px;border-radius:3px;background:var(--accent);color:var(--panel)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
-/* 和看盤、學堂一致：宋體、小圓角、黑白灰漸層 */
-:root{--f-display:"SimSun","宋体","Songti TC","STSong","PMingLiU","新細明體","Noto Serif TC",serif;--f-body:var(--f-display);--f-num:var(--f-display)}
+/* 字型跟著全站設定：預設黑體，設定裡改成宋體時（html[data-font="song"]，存在 kline:font）才用宋體；小圓角、黑白灰漸層 */
+:root{--f-display:"Noto Sans TC","PingFang TC","Heiti TC","Microsoft JhengHei",system-ui,sans-serif;--f-body:var(--f-display);--f-num:var(--f-display)}
+:root[data-font="song"]{--f-display:"SimSun","宋体","Songti TC","STSong","PMingLiU","新細明體","Noto Serif TC",serif}
 body{font-variant-numeric:tabular-nums;letter-spacing:.02em}
 </style>
 <style>
@@ -360,7 +362,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
 
       <section class="sec" id="sec-chart">
         <div class="chart panel" id="w-master">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h4 style="margin:0">淨值走勢總覽</h4><label class="toggle" style="font-size:12.5px"><input type="checkbox" id="logscale"> 對數刻度</label></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">淨值走勢總覽</h3><label class="toggle" style="font-size:12.5px"><input type="checkbox" id="logscale"> 對數刻度</label></div>
           <svg id="c-master" viewBox="0 0 760 300" role="img" aria-label="三種做法的淨值走勢"></svg>
           <div class="legend" id="masterlegend"></div>
         </div>
@@ -371,7 +373,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
         <div class="tablewrap"><table class="tbl" style="min-width:720px">
           <thead id="ms-head"></thead><tbody id="ms-body"></tbody>
         </table></div>
-        <div class="chart panel" id="w-ms"><h4>里程碑時間軸</h4><svg id="c-ms" viewBox="0 0 760 200" role="img" aria-label="里程碑時間軸"></svg>
+        <div class="chart panel" id="w-ms"><h3>里程碑時間軸</h3><svg id="c-ms" viewBox="0 0 760 200" role="img" aria-label="里程碑時間軸"></svg>
           <div class="legend" id="ms-legend"></div></div>
       </section>
 
@@ -388,14 +390,14 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
             <div><span>崩盤時淨值</span><b id="s-nw"></b></div>
             <div><span>每月固定支出</span><b id="s-mo"></b></div>
           </div>
-          <div class="chart" id="w-c1"><h4>維持率 vs. 跌幅</h4><svg id="c1" viewBox="0 0 380 210" role="img" aria-label="維持率曲線"></svg></div>
-          <div class="chart" id="w-c2"><h4>淨值 vs. 跌幅</h4><svg id="c2" viewBox="0 0 380 210" role="img" aria-label="淨值曲線"></svg></div>
+          <div class="chart" id="w-c1"><h3>維持率 vs. 跌幅</h3><svg id="c1" viewBox="0 0 380 210" role="img" aria-label="維持率曲線"></svg></div>
+          <div class="chart" id="w-c2"><h3>淨值 vs. 跌幅</h3><svg id="c2" viewBox="0 0 380 210" role="img" aria-label="淨值曲線"></svg></div>
         </div>
         <div class="panel" style="display:grid;gap:12px;align-content:start">
           <div class="sec-h"><h2 class="h2">核心衛星比例</h2></div>
           <p class="lead" id="cs-lead"></p>
           <div class="tablewrap"><table class="tbl" style="min-width:420px"><thead><tr><th class="l">衛星比例</th><th>期末淨值</th><th>年化</th><th>最大帳面虧損</th></tr></thead><tbody id="cs-scan"></tbody></table></div>
-          <div class="chart" id="w-scan"><h4>期末淨值（依衛星比例）</h4><svg id="c-scan" viewBox="0 0 380 200" role="img" aria-label="比例掃描"></svg></div>
+          <div class="chart" id="w-scan"><h3>期末淨值（依衛星比例）</h3><svg id="c-scan" viewBox="0 0 380 200" role="img" aria-label="比例掃描"></svg></div>
         </div>
       </section>
 
@@ -405,7 +407,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
           <thead><tr><th class="l">比較</th><th class="l">標的</th><th>年化</th><th>崩盤</th><th id="th-norm">每年照年化</th><th id="th-crash">開局崩盤</th><th>差距</th><th></th></tr></thead>
           <tbody id="etfbody"></tbody>
         </table></div>
-        <div class="chart panel" id="w-cmp"><h4 id="cmp-h">標的比較</h4><svg id="c-cmp" viewBox="0 0 760 260" role="img" aria-label="標的比較"></svg><div class="legend" id="cmplegend"></div></div>
+        <div class="chart panel" id="w-cmp"><h3 id="cmp-h">標的比較</h3><svg id="c-cmp" viewBox="0 0 760 260" role="img" aria-label="標的比較"></svg><div class="legend" id="cmplegend"></div></div>
       </section>
 
       <section class="sec" id="sec-div">
@@ -869,6 +871,8 @@ if(_added){try{$("g-asset").value=G.main}catch(e){}save();try{history.replaceSta
   const wrap = document.querySelector(".wrap"), send = () => { const h = Math.ceil(wrap.getBoundingClientRect().bottom + scrollY); if (h !== last) { last = h; parent.postMessage({ type: "savings-height", h }, "*"); } };
   new ResizeObserver(send).observe(wrap); addEventListener("load", send); send();
   addEventListener("message", e => { if (e.source === parent && e.data && e.data.type === "kline-theme" && (e.data.theme === "dark" || e.data.theme === "light")) { document.documentElement.dataset.theme = e.data.theme; renderAll(); } });
+  // 外層（情報局）按字型鈕：跟著換黑體／宋體（圖表文字也重畫）
+  addEventListener("message", e => { if (e.source === parent && e.data && e.data.type === "kline-font" && (e.data.font === "song" || e.data.font === "sans")) { if (e.data.font === "song") document.documentElement.dataset.font = "song"; else delete document.documentElement.dataset.font; renderAll(); } });
 })();
 </script>
 <script>

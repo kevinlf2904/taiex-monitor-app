@@ -282,6 +282,8 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
 /* 輸入框：只留一條底線 */
 :root :is(input.code, select.sel, input[type="number"], input[type="text"], input[type="search"], select, textarea) { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
 :root :is(input.code, select.sel, input, select, textarea):focus { box-shadow: none; border-bottom-color: var(--gold); }
+/* 鍵盤操作（Tab）時要看得到焦點：只有底線變色太難察覺，加上清楚的外框（文字輸入框依瀏覽器規則點擊時也會顯示；按鈕、選單用滑鼠點時不顯示） */
+:root :is(input.code, select.sel, input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 漲跌幅：不用色塊，直接用紅綠字 */
 :root .row .pc, :root .row .pc.up, :root .row .pc.down { background: transparent; }
 :root .row .pc.up { color: var(--up); } :root .row .pc.down { color: var(--down); } :root .row .pc { color: var(--muted); }

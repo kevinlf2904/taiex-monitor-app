@@ -153,7 +153,7 @@
       <div class="mm-bars">${tot.map((v, i) => `<div><i style="height:${Math.round((v / mx) * 100)}%" class="${v ? "" : "zero"}"></i><b>${v ? tick(v) : "—"}</b><small>${MON[i]}</small></div>`).join("")}</div>
       <div class="tablewrap"><table class="tbl mm-tbl"><thead><tr><th class="l">ETF</th><th>股數</th>${MON.map(m => `<th>${m}</th>`).join("")}</tr></thead><tbody>
       ${rows.map(x => `<tr><td class="l">${esc(nm[x.c] || "")} ${x.c}${x.r?.yield != null ? `<br><small class="hint">殖利率 ${x.r.yield}%</small>` : ""}</td><td>${x.cash ? fmt(x.sh) : "—"}</td>${x.cash ? x.cash.map(v => `<td>${v ? tick(v) : ""}</td>`).join("") : `<td colspan="12" class="l">抓不到配息資料</td>`}</tr>`).join("")}</tbody></table></div>
-      ${sug.length ? `<h4 style="margin:10px 0 4px;font-size:14px">可以補空月份的 ETF（殖利率 3% 以上，依殖利率排序）</h4><ul class="mm-sug">${sug.map(([m, L]) => `<li><b>${m} 月</b>${L.length ? L.map(r => `<button type="button" class="chip" data-mmadd="${r.code}">${esc(r.name)} ${r.code}・${r.yield}%</button>`).join("") : '<span class="hint">找不到</span>'}</li>`).join("")}</ul>` : ""}
+      ${sug.length ? `<h3 style="margin:10px 0 4px;font-size:14px">可以補空月份的 ETF（殖利率 3% 以上，依殖利率排序）</h3><ul class="mm-sug">${sug.map(([m, L]) => `<li><b>${m} 月</b>${L.length ? L.map(r => `<button type="button" class="chip" data-mmadd="${r.code}">${esc(r.name)} ${r.code}・${r.yield}%</button>`).join("") : '<span class="hint">找不到</span>'}</li>`).join("")}</ul>` : ""}
       <p class="hint">用近 12 個月的除息月份與金額推估，以目前股價換算股數（整股）。實際配息金額每次都會變動。</p>`;
   }
   $("mm-go").addEventListener("click", monRun);
@@ -175,7 +175,7 @@
   const GROUPS = [["模擬三種做法", [["sim", "總覽與走勢", "三種做法的期末淨值、年化、部位", ["sec-sum", "sec-pos", "sec-ledger", "sec-chart"]], ["ms", "存錢里程碑", "第幾年存到 100 萬、500 萬…", ["sec-ms"]], ["risk", "壓力測試與配置", "崩盤時會不會被追繳、核心衛星比例", ["sec-risk"]], ["etf", "標的比較", "不同 ETF 用同樣條件比", ["sec-etf"]]]],
     ["存股工具", [["div", "股息計算機", "每年領多少、含息與不含息報酬", ["sec-div"]], ["hold", "我的庫存股息", "讀看盤庫存，算每月領多少", ["sec-hold"]], ["tax", "實拿股息試算", "健保、稅、手續費扣完拿多少", ["sec-tax"]], ["hist", "真實歷史回測", "真實股價定期定額到今天", ["sec-hist"]], ["ret", "退休提領試算", "每年領生活費能撐多久", ["sec-ret"]], ["mon", "月月配組合", "每個月都有股息的 ETF 組合", ["sec-mon"]], ["dca", "定期定額熱門", "大家最常定期定額買的股票、ETF", ["sec-dca"]]]]];
   const ALL = GROUPS.flatMap(([, L]) => L), CONSOLE = new Set(["sim", "ms", "risk", "etf"]), lay = document.querySelector(".layout");
-  lay?.insertAdjacentHTML("beforebegin", `<nav class="sx-menu" aria-label="存股模擬選單">${GROUPS.map(([t, L]) => `<div class="sx-mg"><h3>${t}</h3><div class="sx-mi">${L.map(([k, n, d]) => `<button type="button" data-sxg="${k}"><b>${n}</b><small>${d}</small></button>`).join("")}</div></div>`).join("")}</nav>`);
+  lay?.insertAdjacentHTML("beforebegin", `<nav class="sx-menu" aria-label="存股模擬選單">${GROUPS.map(([t, L]) => `<div class="sx-mg"><h2>${t}</h2><div class="sx-mi">${L.map(([k, n, d]) => `<button type="button" data-sxg="${k}"><b>${n}</b><small>${d}</small></button>`).join("")}</div></div>`).join("")}</nav>`);
   document.querySelector("nav.jump")?.setAttribute("hidden", "");
   function sxGo(k, scroll) {
     const g = ALL.find(x => x[0] === k) || ALL[0], on = new Set(g[3]); S.grp = g[0]; save();
@@ -202,7 +202,7 @@
   const fromHash = () => { const id = location.hash.slice(1), g = ALL.find(x => x[3].includes(id)); return g?.[0]; };
   sxGo(fromHash() || S.grp || "sim"); addEventListener("hashchange", () => { const k = fromHash(); if (k) sxGo(k); });
 
-  const css = document.createElement("style"); css.textContent = `.sx-menu{display:grid;gap:10px;margin:14px 0 4px}.sx-mg h3{margin:0 0 6px;font-size:12.5px;font-weight:500;color:var(--muted);letter-spacing:.04em}
+  const css = document.createElement("style"); css.textContent = `.sx-menu{display:grid;gap:10px;margin:14px 0 4px}.sx-mg h2{margin:0 0 6px;font-size:12.5px;font-weight:500;color:var(--muted);letter-spacing:.04em}
 .sx-mi{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}.sx-mi button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);cursor:pointer;min-width:0}
 .sx-mi button b{font-size:14px;font-weight:500}.sx-mi button small{font-size:11.5px;color:var(--muted);line-height:1.4}.sx-mi button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 .sec[hidden],section[hidden]{display:none!important}.layout.sx-noconsole{grid-template-columns:1fr}.layout.sx-noconsole>.console{display:none}
