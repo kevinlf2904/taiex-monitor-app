@@ -11,7 +11,7 @@
 import { isUS, usName } from "./_yahoo.js";
 import { session } from "./quote.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
-const INDEX_CODES = new Set(["TAIEX", "TWII", "^TWII", "加權", "加權指數", "大盤", "0000", "IX0001"]);
+const INDEX_CODES = new Set(["TAIEX", "TWII", "^TWII", "加權", "加權指數", "大盤", "0000", "IX0001", "T00"]); // T00：和 /api/intraday、/api/quote 一樣的加權代號
 // 櫃買指數：Yahoo ^TWOII（成交量單位是千股，和加權的成交金額不同）
 const OTC_CODES = new Set(["櫃買", "櫃買指數", "OTC", "TPEX", "^TWOII", "TWOII", "O00"]);
 

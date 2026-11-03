@@ -1191,7 +1191,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.03-185</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.03-186</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -4463,7 +4463,7 @@ function renderUsMkt(top) {
   h += hotSec(sec, "us");
   $("#lx").innerHTML = h;
 }
-// 大盤為什麼漲跌（美股大盤、台股大盤共用）：最大漲跌的指數＋最新盤勢頭條（/api/news）＋交易時段每小時整理的總經消息（data/macro-news.json），可以請 AI 根據這些整理原因
+// 大盤為什麼漲跌（美股大盤、台股大盤共用）：最大漲跌的指數＋最新盤勢頭條（/api/news）＋排程定時整理的總經消息（data/macro-news.json），可以請 AI 根據這些整理原因
 const WHY = { us: { q: "美股 道瓊 那斯達克 收盤", name: "美股", next: "對明天台股可能的影響（哪些族群要留意）" }, tw: { q: "台股 加權指數 盤勢", name: "台股", next: "接下來幾天要留意的族群與風險" } };
 async function loadWhyNews(m, force = false) {
   const N = (W.whyN ||= {}), X = N[m]; if (W.off || X?.busy || (!force && X?.at && Date.now() - X.at < 600e3)) return; N[m] = { ...X, busy: true };
@@ -4487,7 +4487,7 @@ function whyHtml(m, ix, info = []) {
     ${S?.head ? `<p class="mn-sum">${aiTag(D.at)}<b>${esc(S.head)}</b>${S.impact ? `<br><small class="note">可能影響：${esc(S.impact)}</small>` : ""}</p>` : ""}
     ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener"><span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">${!NW || NW.busy ? "載入最新頭條…" : NW.err ? "⚠︎ " + esc(NW.err) : "還沒有相關頭條"}</p>`}
     ${qAiBlock({ key, R: W.qai[key] }, `${ico("ai")}AI 整理漲跌原因`)}
-    <p class="note">頭條即時從 Google 新聞抓；總經消息在台股、美股交易時段每小時整理一次（大盤 → 總經消息）。</p></section>`;
+    <p class="note">頭條即時從 Google 新聞抓；總經消息由排程定時整理（GitHub 排程常會延遲，實際大約 2～6 小時一次；整理時間標在摘要旁，詳見大盤 → 總經消息）。</p></section>`;
 }
 const usWhyHtml = J => whyHtml("us", J.indices || [], [J.sectors?.length ? "類股 ETF：" + [...J.sectors].sort((a, b) => (a.chgPct ?? 0) - (b.chgPct ?? 0)).map(x => `${x.name} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : "",
   J.macro?.length ? "期貨與宏觀：" + J.macro.map(x => `${x.name} ${x.price ?? "—"}（${sgn(x.chgPct ?? 0, 2)}%）`).join("、") : "", J.megas?.length ? "權值股：" + J.megas.map(x => `${x.name || x.code} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : ""]);
@@ -4618,7 +4618,7 @@ function renderMnews(top) {
       ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener">${x.topic ? `<em>${esc(x.topic)}</em>` : ""}<span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">今天沒有抓到相關新聞。</p>`}</section>`; };
   $("#lx").innerHTML = top + `<div class="mn-days mkseg">${J.days.slice(0, 10).map(d => `<button type="button" data-mk="mnDay" data-v="${d.date}" aria-pressed="${d === D}">${d.date.slice(5).replace("-", "/")}</button>`).join("")}</div>
     <p class="note gnote">${J.live ? "排程整理的檔案還沒產生，先顯示即時頭條（沒有 AI 摘要）" : `整理於 ${hm(D.at)}${D.by ? "・AI 摘要只根據新聞標題，數字請點原文確認" : "・這次沒有 AI 摘要，只列出分類好的標題"}`}</p>`
-    + (typeof mxNewsHtml === "function" ? mxNewsHtml(J) : "") + side("tw", "台灣總經") + side("us", "美國總經") + (D.world ? side("world", "世界總經（歐、日、中國、原物料）") : "") + `<p class="note" style="padding:4px 12px 12px">來源：Google 新聞搜尋（每小時整理一次）。只整理標題與連結，內容以原網站為準；不構成投資建議。</p>`;
+    + (typeof mxNewsHtml === "function" ? mxNewsHtml(J) : "") + side("tw", "台灣總經") + side("us", "美國總經") + (D.world ? side("world", "世界總經（歐、日、中國、原物料）") : "") + `<p class="note" style="padding:4px 12px 12px">來源：Google 新聞搜尋（排程定時整理，實際大約 2～6 小時一次）。只整理標題與連結，內容以原網站為準；不構成投資建議。</p>`;
 }
 async function loadPoly(force = false) {
   if (W.off || W.pmLoading || (!force && W.pm && Date.now() - W.pm.at < 300000)) return;
@@ -5757,6 +5757,8 @@ function drawK(fresh = false, shift = 0) {
   // 停損、停利、移動停利、到期的出場點也標在圖上；回測期間外的訊號畫淡
   const exitMk = (bt?.trades || []).filter(t => t.why && !["訊號", "期末"].includes(t.why)).map(t => ({ i: t.xi, side: "sell", label: t.why }));
   if (win && (win.a > 0 || win.b < D.length - 1)) sigs.forEach(g => { if (g.i < win.a || g.i > win.b) g.dim = true; });
+  // 最後一根還沒收盤：這一根上的訊號會隨盤中價格出現或消失，畫淡並註明「盤中未定」
+  if (D.at(-1)?.live) sigs.forEach(g => { if (g.i === D.length - 1) { g.dim = true; g.label = (g.label || (g.side === "buy" ? "買" : "賣")) + "（盤中未定）"; } });
   const old = kChart.view;
   if (shift && old && !fresh) kChart.shiftBy(shift); // 前面多了 shift 根：畫之前先把位置（含正在拖曳的手勢）一起移過去
   Chart.keepView = !fresh;
@@ -5900,8 +5902,17 @@ function mergeDaily(q, redraw = true) {
   const pc = (last.d === q.date ? D[D.length - 2] : last)?.c;
   if (isTW(q.code) && !isIdx(q.code) && pc && q.prev && Math.abs(q.prev / pc - 1) > 0.11) { if (W.kOdd !== q.code) { W.kOdd = q.code; if (W.sel === q.code) renderDetailHead(); } return; }
   if (W.kOdd === q.code) W.kOdd = null;
-  const v = q.vol != null ? (isUS(q.code) ? Math.round(q.vol / 1000) : q.vol) : last.d === q.date ? last.v : 0;
-  const bar = { d: q.date, o: open, h: Math.max(q.high ?? q.price, q.price), l: Math.min(q.low ?? q.price, q.price), c: q.price, v };
+  // 指數報價沒有量（vol 是 null）：加權用今天分時的成交金額加總（億元，和日 K 的證交所成交金額同單位）；櫃買日 K 是千股、單位對不上，
+  // 拿不到就標「沒有量」（vNa），不能記成 0（0 會把均量拉低、量能寫成「0.0 倍量縮」）
+  let v, vNa = 0;
+  if (q.vol != null) v = isUS(q.code) ? Math.round(q.vol / 1000) : q.vol;
+  else if (q.code === "T00" && W.intra?.code === "T00" && !W.intra.amountNa && W.intra.bars?.length) { const B = todayBars().filter(b => (b.d || W.intra.date) === q.date && b.v != null); if (B.length) v = +B.reduce((s, b) => s + b.v, 0).toFixed(2); else vNa = 1; }
+  else if (last.d === q.date && !last.vNa) v = last.v;
+  else vNa = 1;
+  if (vNa) v = 0;
+  // 盤中（還沒收盤）的這一根：標 live，圖上這一根的訊號標成「盤中未定」，收盤後的報價再併進來就拿掉
+  const live = isUS(q.code) ? q.session?.state === "open" : mktSession() === "open" && twDayState() === "trade";
+  const bar = { d: q.date, o: open, h: Math.max(q.high ?? q.price, q.price), l: Math.min(q.low ?? q.price, q.price), c: q.price, v, vNa: vNa || undefined, live: live || undefined };
   const same = last.d === q.date && last.o === bar.o && last.h === bar.h && last.l === bar.l && last.c === bar.c && last.v === bar.v; // 沒有新成交就不用重畫
   if (last.d === q.date) D[D.length - 1] = { ...last, ...bar }; else D.push(bar);
   if (redraw && !same && !minuteK() && W.dtab === "tech") kLive();

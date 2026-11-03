@@ -69,7 +69,8 @@ h1 { font: 600 clamp(28px, 5vw, 48px)/1.15 "Space Grotesk", var(--font-display);
     </section>
     <p class="note">灰色項目是規劃中的功能。</p>
     <section class="wl" id="waitlist"><h2>收更新通知</h2><p class="note">留下 Email，有重要更新時通知你。只用來通知，不會分享給第三方。</p>
-      <form id="wlForm"><input type="email" id="wlEmail" required placeholder="you@example.com" autocomplete="email" aria-label="Email"><input type="hidden" id="wlPlan" value="beta"><button class="pbtn pri" type="submit">送出</button><p class="msg note" id="wlMsg" role="status"></p></form></section>
+      <details class="note wl-pdpa"><summary>個人資料告知</summary><p>蒐集目的：寄送 KLineLab 的重要更新通知。蒐集項目：Email、登記時選的方案、登記時間。保存期限：登記後最多 1 年，到期自動刪除。利用方式：只用於上述通知，不提供給第三方，也不用於廣告。你的權利：隨時可以在下面輸入同一個 Email 按「取消通知」刪除；不提供 Email 只是收不到通知，網站其他功能都能照常使用。</p></details>
+      <form id="wlForm"><input type="email" id="wlEmail" required placeholder="you@example.com" autocomplete="email" aria-label="Email"><input type="hidden" id="wlPlan" value="beta"><button class="pbtn pri" type="submit">送出</button><button class="pbtn" type="button" id="wlDel">取消通知</button><p class="msg note" id="wlMsg" role="status"></p></form></section>
     <section class="faq" aria-label="常見問題">
       <details><summary>資料從哪裡來？</summary><p>13F 來自美國證管會 SEC EDGAR、國會議員交易來自眾議院與參議院的官方申報、台股內部人與借券來自證交所與櫃買中心、台灣政治人物持股來自監察院廉政專刊。部分盤後公開數據取自政府資料開放平臺（依政府資料開放授權條款第1版使用）；盤中報價取自交易所公開行情與第三方行情服務，可能延遲。</p></details>
       <details><summary>回測結果可以直接拿來下單嗎？</summary><p>不行。回測是用過去的資料模擬，含手續費與稅，但不代表未來。平台不提供個股買賣建議。</p></details>
@@ -90,6 +91,15 @@ $("#wlForm").addEventListener("submit", async e => {
   try { const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "waitlist", email: $("#wlEmail").value, plan: $("#wlPlan").value }) });
     const j = await r.json().catch(() => null); if (!j?.ok) throw new Error(j?.error || (r.status === 404 ? "需要部署到網站才能登記" : `伺服器回應 ${r.status}`));
     msg.textContent = "已登記，有重要更新時會通知你。"; store.set("proWait", { at: Date.now(), plan: $("#wlPlan").value }); e.target.reset(); }
+  catch (err) { msg.textContent = "⚠︎ " + err.message; }
+  btn.disabled = false;
+});
+// 取消通知：刪掉這個 Email（名單裡本來沒有也一樣回成功）
+$("#wlDel").addEventListener("click", async e => {
+  const f = $("#wlForm"), msg = $("#wlMsg"), btn = e.currentTarget; if (!f.reportValidity()) return; btn.disabled = true; msg.textContent = "處理中…";
+  try { const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "waitlist", email: $("#wlEmail").value, remove: true }) });
+    const j = await r.json().catch(() => null); if (!j?.ok) throw new Error(j?.error || (r.status === 404 ? "需要部署到網站才能取消" : `伺服器回應 ${r.status}`));
+    msg.textContent = "已取消，這個 Email 不會再收到通知。"; store.set("proWait", null); f.reset(); }
   catch (err) { msg.textContent = "⚠︎ " + err.message; }
   btn.disabled = false;
 });
