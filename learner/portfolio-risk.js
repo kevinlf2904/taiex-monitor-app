@@ -30,17 +30,20 @@ const compound = a => a.reduce((p, x) => p * (1 + x), 1) - 1;
 const currencyFor = m => m === "tw" ? "TWD" : m === "us" ? "USD" : null;
 function invalid(input, code, extra = []) {
   const hs = Array.isArray(input?.holdings) ? input.holdings : [];
-  const rawTotalMV = hs.reduce((s, h) => s + (pos(h?.marketValue) ? h.marketValue : 0), 0);
+  const currency = currencyFor(input?.market);
+  const inScope = hs.filter(h => h?.market === input?.market && h?.currency === currency);
+  const rawTotalMV = inScope.reduce((s, h) => s + (pos(h?.marketValue) ? h.marketValue : 0), 0);
   const totalMV = Number.isFinite(rawTotalMV) ? rawTotalMV : null;
   const excluded = hs.map(h => ({ symbol: typeof h?.symbol === "string" ? h.symbol.trim().toUpperCase() || null : null, reason: code }));
   return {
     schemaVersion: PORTFOLIO_RISK_VERSION, status: "invalid", market: input?.market ?? null,
     requestedAsOf: input?.asOf ?? null, effectiveAsOf: null, asOf: null, methodology: null, metrics: null,
-    coverage: { totalHoldings: hs.length, includedHoldings: 0, excludedHoldings: hs.length,
-      includedSymbols: 0, excludedSymbols: new Set(excluded.map(x => x.symbol)).size,
+    coverage: { totalHoldings: hs.length, inScopeHoldings: inScope.length, outOfScopeHoldings: hs.length - inScope.length,
+      includedHoldings: 0, excludedHoldings: hs.length,
+      includedSymbols: 0, excludedSymbols: new Set(excluded.map(x => x.symbol).filter(Boolean)).size,
       sourcePositionRows: hs.length, totalMarketValue: totalMV, includedMarketValue: 0,
       excludedMarketValue: totalMV, marketValueCoverage: totalMV !== null && totalMV > 0 ? 0 : null,
-      unvaluedHoldings: hs.filter(h => !pos(h?.marketValue)).length, observations: 0 },
+      unvaluedHoldings: inScope.filter(h => !pos(h?.marketValue)).length, observations: 0 },
     excluded, issues: [{ code, severity: "error" }, ...extra]
   };
 }
@@ -132,7 +135,8 @@ export function analyzePortfolioRisk(input) {
   const grouped = group(input.holdings, input.market, currency, asOf, issues);
   const excluded = [...grouped.excluded];
   let candidates = [...grouped.candidates];
-  const totalMV = input.holdings.reduce((s, h) => s + (pos(h?.marketValue) ? h.marketValue : 0), 0);
+  const inScopeHoldings = input.holdings.filter(h => h?.market === input.market && h?.currency === currency);
+  const totalMV = inScopeHoldings.reduce((s, h) => s + (pos(h?.marketValue) ? h.marketValue : 0), 0);
   if (!Number.isFinite(totalMV)) return invalid(input, "total_market_value_overflow", issues);
   if (!candidates.length) return invalid(input, "no_eligible_holdings", issues);
   if (asOf) {
@@ -246,16 +250,18 @@ export function analyzePortfolioRisk(input) {
     schemaVersion: PORTFOLIO_RISK_VERSION, status, market: input.market,
     requestedAsOf: asOf, effectiveAsOf: dates[dates.length - 1], asOf: dates[dates.length - 1],
     methodology: { analysisType: "current_weights_historical_scenario", returnType: "adjusted_close",
-      weightMode: "current_market_value_within_included_subportfolio", riskScope: "included_holdings_only",
+      weightMode: "current_market_value_within_included_subportfolio", riskScope: "included_holdings_within_target_market_slice",
       sessionCalendar: "benchmark_series_authoritative", missingSessionPolicy: "exclude_incomplete_holding",
       varMethod: "historical_simulation_linear_interpolated_quantile", confidenceLevel: confidence,
       varMinimumExpectedTailObservations: 5, holdingPeriodDays: 1, annualizationDays: 252,
       benchmarkShock: shock, extremeReturnThreshold: limit },
-    coverage: { totalHoldings: input.holdings.length, includedHoldings: candidates.reduce((s, c) => s + c.sourceRows, 0),
+    coverage: { totalHoldings: input.holdings.length, inScopeHoldings: inScopeHoldings.length,
+      outOfScopeHoldings: input.holdings.length - inScopeHoldings.length,
+      includedHoldings: candidates.reduce((s, c) => s + c.sourceRows, 0),
       excludedHoldings: excluded.length, includedSymbols: candidates.length,
       excludedSymbols: new Set(excluded.map(x => x.symbol)).size, sourcePositionRows: input.holdings.length,
       totalMarketValue: totalMV, includedMarketValue: includedMV, excludedMarketValue: Math.max(0, totalMV - includedMV),
-      marketValueCoverage: coverage, unvaluedHoldings: input.holdings.filter(h => !pos(h?.marketValue)).length,
+      marketValueCoverage: coverage, unvaluedHoldings: inScopeHoldings.filter(h => !pos(h?.marketValue)).length,
       observations: pr.length, benchmarkSessions: dates.length, from: dates[0], to: dates[dates.length - 1] },
     metrics: { totalMarketValue: totalMV, includedMarketValue: includedMV,
       annualizedVolatility: pv === null ? null : Math.sqrt(pv * 252), beta: portfolioBeta,
