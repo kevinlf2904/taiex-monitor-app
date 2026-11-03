@@ -111,6 +111,7 @@ main{display:grid;gap:22px;min-width:0}
 .kv span{font-size:11.5px;color:var(--muted)} .kv b{font-family:var(--f-num);font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}
 .neg{color:var(--bad)!important} .pos{color:var(--ok)!important}
 .chart{position:relative}
+.sav-home{display:inline-block;margin:0 0 6px;font-size:13px;color:var(--muted);text-decoration:none}.sav-home:hover{color:var(--ink)}:root[data-embed="1"] .sav-home{display:none}
 .chart h3,.chart h4{margin:0 0 6px;font-size:14px;font-weight:500}
 .chart svg{width:100%;height:auto;display:block;touch-action:pan-y;cursor:crosshair}
 .chart text{font-family:var(--f-num);font-size:10px;fill:var(--muted)}
@@ -233,6 +234,7 @@ input.num:focus,select:focus,.arow input:focus,.mrow input:focus{outline:none;bo
 <body>
 <div class="wrap">
   <header>
+    <a class="sav-home" href="./#savings">← 回 KLineLab 主站</a><!-- 直接開這個網址時才看得到；嵌在主站的存股分頁裡（?embed=1）會藏起來 -->
     <h1>存股與槓桿模擬器</h1>
     <p>左邊設定，右邊看結果。用同樣的本金和每月投入，比較 <b style="color:var(--sA)">A 定期定額</b>、<b style="color:var(--sB)">B 核心衛星</b>、<b style="color:var(--sC)">C 借錢槓桿</b>。所有數字都能自訂，設定會記在這個瀏覽器裡。</p>
   </header>

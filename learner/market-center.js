@@ -65,6 +65,13 @@
   function flowAlignment(W, flow) {
     const quoteDate = getQuote(W, "T00")?.date || null;
     const flowDate = flow?.date || null;
+    // 法人資料（資金雷達的模型）還沒載完時 date 也是空的：說「載入中」，不要說成「來源沒給日期」（盤前看起來像資料壞了）
+    const mf = W && W.mf;
+    if (!flowDate && mf && !W.off && (mf.loading || !mf.sumTry)) return {
+      tone: "unknown", label: "法人資料載入中",
+      note: "正在載入最近交易日的法人資料，完成後會標示資料日期並與加權行情核對。",
+      quoteDate, flowDate
+    };
     if (!flowDate) return {
       tone: "unknown", label: "法人日期未提供",
       note: "法人資料日期未提供，暫不判定是否與加權行情同日。",
@@ -87,6 +94,7 @@
   }
 
   // 晶片文字：有日期寫「日期 · 狀態」，沒日期只寫狀態（狀態本身就是「法人日期未提供」，不能再重複一次）
+const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); // core.js 的 ⓘ 說明（點或滑過顯示）
   const flowChip = (flow, alignment) => flow && flow.date ? flow.date + " · " + alignment.label : alignment.label;
 
   function flowRow(item, max) {
@@ -155,7 +163,7 @@
   function renderOverview(page, W, flow) {
     const hero = page.querySelector(".td-hero");
     const alignment = flowAlignment(W, flow);
-    const gridHtml = '<div class="mc-panel-head"><div><span class="mc-eyebrow">MARKET BREADTH</span><h4>市場廣度</h4></div></div><div class="mc-breadth-mount"></div>';
+    const gridHtml = '<div class="mc-panel-head"><div><span class="mc-eyebrow">MARKET BREADTH</span><h4>市場廣度' + tip("上漲、平盤、下跌各有幾檔。指數漲但多數個股跌（或反過來）時，代表漲跌集中在少數權值股。") + '</h4></div></div><div class="mc-breadth-mount"></div>';
     const sectorHtml = '<div class="mc-panel-head"><div><span class="mc-eyebrow">SECTOR MOMENTUM</span><h4>族群資金強弱</h4></div><span class="mc-date ' +
       alignment.tone + '">' + escapeHtml(flowChip(flow, alignment)) + '</span></div><div class="mc-overview-sector"></div>';
     const panel = ensurePanel(page, ".mc-overview-grid", "mc-overview-grid", "overview",
@@ -195,7 +203,7 @@
     const positive = (flow.sectors || []).filter(x => isNum(x.net1) && x.net1 > 0).sort((a, b) => b.net1 - a.net1).slice(0, 5);
     const negative = (flow.sectors || []).filter(x => isNum(x.net1) && x.net1 < 0).sort((a, b) => a.net1 - b.net1).slice(0, 5);
     const max = Math.max(1, ...positive.concat(negative).map(x => Math.abs(x.net1)));
-    const html = '<div class="mc-panel-head"><div><span class="mc-eyebrow">INSTITUTIONAL FLOW</span><h4>法人資金流向排行</h4></div><span class="mc-date ' + alignment.tone + '">' +
+    const html = '<div class="mc-panel-head"><div><span class="mc-eyebrow">INSTITUTIONAL FLOW</span><h4>法人資金流向排行' + tip("外資、投信、自營商的買賣超張數，乘上收盤價換算成金額後依板塊加總；是估算，不是逐筆成交金額。") + '</h4></div><span class="mc-date ' + alignment.tone + '">' +
       escapeHtml(flowChip(flow, alignment)) + '</span></div>' +
       (alignment.tone === "ok" ? "" : '<p class="mc-flow-alignment ' + alignment.tone + '" role="status">' + escapeHtml(alignment.note) + '</p>') +
       '<div class="mc-flow-columns"><div><h5 class="up">資金流入</h5>' +
@@ -428,21 +436,22 @@
     const levelsData = readTechnicalLevels(W);
     const levels = [
       { key: "pressure", label: "壓力", value: levelsData?.pressure ?? null, desc: "突破後觀察是否站穩" },
-      { key: "pivot", label: "多空分水嶺", value: levelsData?.pivot ?? null, desc: "盤勢位置的判讀基準" },
+      { key: "pivot", label: "多空分水嶺", value: levelsData?.pivot ?? null, desc: "盤勢位置的判讀基準", tip: "模型推估的多空分界：報價在它上方偏多、下方偏空。是盤前推演的參考價，不是支撐或保證。" },
       { key: "support", label: "支撐", value: levelsData?.support ?? null, desc: "跌破後重新評估風險" }
     ];
     const q = getQuote(W, "T00");
     const position = page.querySelector(".td-pos");
     const priceText = isNum(q && q.price) ? numberFmt(q.price, 0) : "—";
-    const levelHtml = levels.map(level => '<div class="mc-level-row ' + level.key + '"><span>' + escapeHtml(level.label) +
+    const levelHtml = levels.map(level => '<div class="mc-level-row ' + level.key + '"><span>' + escapeHtml(level.label) + (level.tip ? tip(level.tip) : "") +
       '</span><b>' + escapeHtml(level.value == null ? "待更新" : numberFmt(level.value, 0) + " 點") + '</b><small>' +
       escapeHtml(level.desc) + '</small></div>').join("");
     const html = '<div class="mc-panel-head"><div><span class="mc-eyebrow">TECHNICAL MAP</span><h4>關鍵位階與攻防</h4></div><span class="mc-model-tag">模型推估</span></div>' +
       '<div class="mc-tech-current"><span>目前加權報價</span><b>' + escapeHtml(priceText) + '</b><small>' +
       escapeHtml(q && q.date ? q.date : "行情日期未提供") + ' · ' + escapeHtml(q && (q.sourceTime || q.time) || "來源時間未提供") + '</small></div>' +
+      // 收盤後的「下一交易日預估」說明放在位階上方（先知道這組數字是什麼，再看數字）
+      (levelsData?.estimate ? '<p class="mc-flow-alignment mc-tech-est" role="status">' + escapeHtml("今天已收盤：下方是下一交易日 " + String(levelsData.forDate).slice(5).replace("-", "/") + " 的預估位階（以今日收盤推算，明天盤前會依最新美股重新推演）。") + '</p>' : '') +
       '<div class="mc-tech-ladder">' + levelHtml + '</div>' +
-      (levelsData?.estimate ? '<p class="mc-flow-alignment" role="status">' + escapeHtml("今天已收盤：顯示下一交易日 " + String(levelsData.forDate).slice(5).replace("-", "/") + " 的預估位階（以今日收盤推算，明天盤前會依最新美股重新推演）。") + '</p>' :
-        '<div class="mc-tech-position">' + escapeHtml(position ? position.textContent.replace(/\s+/g, " ").trim() : "目前位置尚未取得") + '</div>') +
+      (levelsData?.estimate ? '' : '<div class="mc-tech-position">' + escapeHtml(position ? position.textContent.replace(/\s+/g, " ").trim() : "目前位置尚未取得") + '</div>') +
       '<p class="mc-data-note">壓力、分水嶺與支撐是盤前推演模型價位；請與當日實際報價及量能確認，不是即時成交價或保證支撐。</p>';
     const panel = ensurePanel(page, ".mc-tech-panel", "mc-panel mc-tech-panel", "technical", html);
     const sectionBar = page.querySelector(".dh-secbar");
@@ -634,6 +643,9 @@
     assign("#td-sec-plan", "technical");
 
     refreshLiveBreadth(W, state);
+    if ((state.workspace === "overview" || state.workspace === "capital") && W.mf && !W.off && !W.mf.loading && !W.mf.sumTry && !W.mf.days?.length && typeof loadMoney === "function") {
+      W.mf.sumTry = true; setTimeout(() => loadMoney(10), 0); // 載完 loadMoney 會在今日市場重畫
+    }
     refreshOverviewGlobal(W, state);
     const flow = readFlow(W);
     renderOverview(page, W, flow);
@@ -648,7 +660,8 @@
       research.dataset.mcSection = "research";
       // 工作區裡直接放「開始 AI 整理」：原本只有狀態列的小圖示按鈕，切到這裡看不出要按哪裡；按下時轉按狀態列那顆 AI 整理（data-tx="tdai"，由 brief.js 處理），全頁仍只有一個 AI 觸發點
       research.innerHTML = '<div class="mc-panel-head"><div><h4>AI 市場研究</h4></div><button type="button" class="mc-ai-run" data-mc-ai></button></div>' +
-        '<p>依今日行情、法人、自選與事件資料整理重點。請同時檢查原始來源、資料日期與反證；摘要不等同完整研究報告。</p><div class="mc-ai-content"></div>';
+        '<p>依今日行情、法人、自選與事件資料整理重點。請同時檢查原始來源、資料日期與反證；摘要不等同完整研究報告。</p><div class="mc-ai-content"></div>' +
+        '<p class="mc-data-note">AI 暫時不能用（額度用完、離線）時，可以先看「技術攻防」的位階與「市場總覽」的市場廣度、族群資金，這些不需要 AI。</p>';
       const bar = page.querySelector(".dh-secbar");
       if (bar) bar.before(research);
       else if (hero) hero.after(research);
