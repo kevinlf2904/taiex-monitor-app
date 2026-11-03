@@ -67,7 +67,8 @@ for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台�
   await p.click('[data-tx="tdai"]');
   // 不手動切頁：點擊 AI 整理本身就應帶到結果所在的 AI 研究工作區。
   await p.waitForFunction(() => document.querySelector('#lx [data-mc-tab="research"]')?.getAttribute("aria-selected") === "true");
-  await p.waitForFunction(() => /測試回覆/.test($("#lx .caibox")?.innerText || ""));
+  // AI 研究室：結果（研究報告；測試假資料日期舊時是「資料不足」，不呼叫 AI）留在研究區
+  await p.waitForFunction(() => !!$("#lx .mc-ai-panel .caibox .rs-report"));
   assert.equal(await p.evaluate(() => document.querySelector("#lx .mc-ai-panel")?.hidden), false, "AI 回覆所在面板必須可見");
   assert.ok(await noOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
