@@ -546,7 +546,12 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       ".mc-tech-position{margin-top:10px;font-size:12px;color:var(--muted)}",
       ".mc-ai-panel{padding:18px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
       ".mc-ai-run{flex:none;min-height:36px;padding:7px 14px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft);color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}.mc-ai-run:disabled{opacity:.6;cursor:wait}.mc-ai-run:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.mc-ai-panel .mc-panel-head{margin-bottom:8px}",
-      ".mc-ai-panel h4{margin:0 0 6px;font-size:17px}.mc-ai-panel>p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}.mc-ai-panel .caibox{margin-top:12px}.mc-ai-panel .cai-l+.cai-l{margin-top:4px}.mc-ai-panel .cai-sec:not(:first-child){margin-top:12px}.mc-ai-panel .cai-li{position:relative;padding-left:14px}.mc-ai-panel .cai-li::before{content:'・';position:absolute;left:0;color:var(--muted)}.mc-ai-panel .cai-h{color:var(--ink)}.mc-ai-panel .cai-inf{color:var(--muted)}.mc-ai-panel .cai-meta{margin:8px 0 0;font-size:12px}.mc-ai-panel .cai-old{margin:4px 0 0;color:var(--warn,var(--muted));font-size:12px}",
+      ".mc-ai-panel h4{margin:0 0 6px;font-size:17px}.mc-ai-panel>p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}.mc-ai-panel .caibox{margin-top:12px}",
+      ".rs-report{display:grid;gap:12px}.rs-sec h5{margin:0 0 6px;font-size:14px;color:var(--ink)}.rs-sec ul{margin:0;padding-left:18px}.rs-sec li{margin:3px 0}.rs-sum{margin:0;font-size:14px;line-height:1.7}",
+      ".rs-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.rs-two>.rs-sec:first-child h5{color:var(--up)}.rs-two>.rs-sec:last-child h5{color:var(--down)}@media(max-width:640px){.rs-two{grid-template-columns:1fr}}",
+      ".rs-cite{display:block;color:var(--muted);font-size:11.5px}.rs-flag{color:var(--warn,var(--muted));font-size:12px}.rs-unv{opacity:.85}.rs-err{margin:0;color:var(--warn,var(--muted))}",
+      ".rs-sc{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}@media(max-width:640px){.rs-sc{grid-template-columns:1fr}}.rs-sc-c{padding:8px 10px;border:1px solid var(--line);border-radius:8px}.rs-sc-c b{display:block;margin-bottom:4px}.rs-sc-c p{margin:2px 0;font-size:12.5px}.rs-sc-c p span{color:var(--muted);margin-right:6px}",
+      ".rs-facts summary{cursor:pointer;font-size:13px;color:var(--muted)}.rs-tbl{display:grid;gap:2px;margin-top:6px}.rs-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:2px 8px;padding:4px 0;border-bottom:1px solid var(--line);font-size:12.5px}.rs-v{text-align:right;font-variant-numeric:tabular-nums}.rs-m{grid-column:1/-1;color:var(--muted);font-size:11px}.rs-meta{margin:0;font-size:11.5px}.mc-ai-panel .cai-l+.cai-l{margin-top:4px}.mc-ai-panel .cai-sec:not(:first-child){margin-top:12px}.mc-ai-panel .cai-li{position:relative;padding-left:14px}.mc-ai-panel .cai-li::before{content:'・';position:absolute;left:0;color:var(--muted)}.mc-ai-panel .cai-h{color:var(--ink)}.mc-ai-panel .cai-inf{color:var(--muted)}.mc-ai-panel .cai-meta{margin:8px 0 0;font-size:12px}.mc-ai-panel .cai-old{margin:4px 0 0;color:var(--warn,var(--muted));font-size:12px}",
       ".td-page .dh-sec{margin:0 0 12px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);overflow:hidden}",
       ".td-page .dh-sec>summary{min-height:58px;padding:14px 16px;gap:12px}",
       ".td-page .dh-sec-b{padding:0 16px 16px}",
@@ -660,7 +665,7 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       research.dataset.mcSection = "research";
       // 工作區裡直接放「開始 AI 整理」：原本只有狀態列的小圖示按鈕，切到這裡看不出要按哪裡；按下時轉按狀態列那顆 AI 整理（data-tx="tdai"，由 brief.js 處理），全頁仍只有一個 AI 觸發點
       research.innerHTML = '<div class="mc-panel-head"><div><h4>AI 市場研究</h4></div><button type="button" class="mc-ai-run" data-mc-ai></button></div>' +
-        '<p>依今日行情、法人、自選與事件資料整理重點。請同時檢查原始來源、資料日期與反證；摘要不等同完整研究報告。</p><div class="mc-ai-content"></div>' +
+        '<p>依今日行情、市場廣度、法人、技術攻防與全球資料，整理多空論點、情境推演與風險；每一點都標出依據的資料與日期，資料不足時不硬下結論。客觀數據由程式直接列出，不經 AI。</p><div class="mc-ai-content"></div>' +
         '<p class="mc-data-note">AI 暫時不能用（額度用完、離線）時，可以先看「技術攻防」的位階與「市場總覽」的市場廣度、族群資金，這些不需要 AI。</p>';
       const bar = page.querySelector(".dh-secbar");
       if (bar) bar.before(research);
@@ -676,7 +681,7 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     if (aiRun) {
       const ai = W && W.tdAI;
       aiRun.disabled = !!(ai && ai.loading);
-      aiRun.textContent = ai && ai.loading ? "AI 整理中…" : ai && ai.err ? "重試 AI 整理" : ai && ai.text ? "重新整理" : "開始 AI 整理";
+      aiRun.textContent = ai && ai.loading ? "AI 整理中…" : ai && (ai.err || (ai.parsed && ai.parsed.ok === false)) ? "重試 AI 整理" : ai && (ai.text || ai.parsed) ? "重新整理" : "開始 AI 整理";
     }
 
     const panelTargets = {
@@ -753,57 +758,32 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     return true;
   }
 
-  // 給 AI 市場研究的資料摘要：把其他四個工作區（總覽、資金、全球、技術）的數字整理成文字，每一段都寫資料日期／時間；
-  // 沒有資料就寫「未取得」，讓 AI 知道缺什麼，不要自己補。只讀已經載入的資料，不另外抓。
-  function researchText(W) {
-    const L = [], q = getQuote(W, "T00"), o = getQuote(W, "O00"), pct = v => (isNum(v) ? signed(v, 2) + "%" : "—");
-    const qd = q && q.date ? String(q.date).slice(0, 10) : null;
-    L.push("【資料時間】現在 " + new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ") + "（台北）");
-    L.push("【加權與櫃買】" + (q && isNum(q.price) ? "加權 " + numberFmt(q.price) + "（" + pct(q.chgPct) + "，" + (qd || "日期未提供") + " " + (q.time || "") + "，" + (q.source || "來源未提供") + "）" : "加權報價未取得") +
-      (o && isNum(o.price) ? "；櫃買 " + numberFmt(o.price) + "（" + pct(o.chgPct) + "）" : ""));
-    const m = W && W.mkt, b = m && m.breadth;
-    if (b && isNum(b.up) && isNum(b.down) && m.date && qd && String(m.date).slice(0, 10) === qd) {
-      L.push("【市場廣度】" + String(m.date).slice(0, 10) + (m.time ? " " + m.time : "") + (m.live ? "（盤中）" : "") + "：上漲 " + b.up + "、平盤 " + (isNum(b.flat) ? b.flat : "—") + "、下跌 " + b.down + " 家" + (isNum(b.limUp) && isNum(b.limDn) ? "；漲停 " + b.limUp + "、跌停 " + b.limDn : ""));
-    } else {
-      // 沒有今天的即時廣度：改用法人資料那天的漲跌家數（只算 4 碼個股），標出日期
-      const md0 = readFlow(W);
-      L.push("【市場廣度】" + (md0.mood && md0.date ? "今天的即時資料未取得；" + md0.date + "（法人資料日）上市櫃個股上漲 " + md0.mood.up + "、下跌 " + md0.mood.dn + " 家，漲停 " + (md0.mood.lu || 0) + "、跌停 " + (md0.mood.ld || 0) : "今天的資料未取得"));
-    }
-    const flow = readFlow(W), al = flowAlignment(W, flow);
-    if (flow.date && flow.sectors.length) {
-      // 每個板塊：今天法人淨額、外資、投信、板塊平均漲跌、近 5 日淨額（看是一天的事還是連續）、成分股中法人買最多的一檔
-      const one = x => (x.name || "未命名") + " " + signed(x.net1, 1) + " 億（外資 " + signed(x.f1, 1) + "、投信 " + signed(x.tr1, 1) + "；板塊 " + pct(x.pct1) + "；近5日 " + signed(x.net5, 1) + " 億" + (x.top ? "；買最多 " + x.top : "") + "）";
-      const top = (arr, sign) => arr.filter(x => isNum(x.net1) && x.net1 * sign > 0).sort((a, b) => (b.net1 - a.net1) * sign).slice(0, 5).map(one).join("、") || "無";
-      const md = flow.mood;
-      L.push("【法人資金流向】資料日期 " + flow.date + "（" + al.label + "，單位億元，買賣超張數×收盤價估算）" +
-        (md ? "：法人情緒 " + md.score + " 分（" + md.label + "），上市櫃個股平均 " + pct(md.avg) + "，法人合計淨買超 " + signed(md.net, 0) + " 億" : ""));
-      L.push("　流入前五：" + top(flow.sectors, 1));
-      L.push("　流出前五：" + top(flow.sectors, -1));
-      const turn = flow.sectors.filter(x => isNum(x.net1) && isNum(x.prev1) && x.net1 * x.prev1 < 0 && Math.abs(x.net1) >= 5).sort((a, b) => Math.abs(b.net1) - Math.abs(a.net1)).slice(0, 3);
-      if (turn.length) L.push("　今天轉向（昨天相反）：" + turn.map(x => (x.name || "未命名") + "（昨 " + signed(x.prev1, 1) + " → 今 " + signed(x.net1, 1) + " 億）").join("、"));
-    } else L.push("【法人資金流向】" + (al.label || "未取得"));
-    const lv = readTechnicalLevels(W);
-    if (lv) {
-      const px = q && isNum(q.price) ? q.price : null, pos = px == null ? "" : px > lv.pressure ? "，加權在壓力之上" : px >= lv.pivot ? "，加權在分水嶺與壓力之間" : px >= lv.support ? "，加權在支撐與分水嶺之間" : "，加權跌破支撐";
-      L.push("【技術攻防】" + lv.forDate + (lv.estimate ? "（收盤後推估的下一交易日位階）" : "（盤前推演位階）") + "：壓力 " + numberFmt(lv.pressure, 0) + "、多空分水嶺 " + numberFmt(lv.pivot, 0) + "、支撐 " + numberFmt(lv.support, 0) + pos);
-    } else L.push("【技術攻防】位階未取得");
-    const U = W && W.bf && W.bf.us || {}, rows = (Array.isArray(U.indices) ? U.indices : []).concat(Array.isArray(U.macro) ? U.macro : []).filter(x => x && isNum(x.chgPct)).slice(0, 8);
-    L.push("【美股與總經】" + (rows.length ? "資料日期 " + (U.dataDate || U.date || "未提供") + "（" + (GLOBAL_STATUS_LABELS[U.dataStatus] || "狀態未提供") + "）：" + rows.map(x => (x.name || x.code) + " " + pct(x.chgPct)).join("、") : "未取得"));
+  // AI 研究室的原始資料：只收集已經載入的資料（不另外抓），交給 research.js 的 buildSnapshot 正規化（來源、交易日、狀態、信心）。
+  // 預期交易日：盤前看前一交易日收盤是正常的（不算過期）；盤中、收盤後要是今天；休市看最近交易日
+  function researchInput(W) {
+    const today = typeof twDay === "function" ? twDay() : todayTW();
+    const holidays = W?.cal?.hol || (typeof TWHOL !== "undefined" && TWHOL.set ? [...TWHOL.set].map(date => ({ date })) : []);
+    const tq = getQuote(W, "T00");
+    let sess = null; try { sess = typeof sessionStatus === "function" ? sessionStatus(Date.now(), { holidays, lastTradeDate: tq?.date }) : null; } catch {}
+    const prev = typeof findLastTradeDate === "function" ? findLastTradeDate(today, holidays) : null, ph = sess?.session || "unknown";
+    const expectedDate = ph === "pre" ? prev : ph === "closed" ? (sess?.lastTradeDate || prev) : today;
+    const flow = readFlow(W), al = flowAlignment(W, flow), U = W && W.bf && W.bf.us || {};
     const G = W && W.gl && W.gl.ok && Array.isArray(W.gl.groups) ? W.gl.groups.flatMap(g => Array.isArray(g.rows) ? g.rows : []) : [];
-    const pick = ["TWD=X", "CL=F", "GC=F", "^VIX"].map(c => G.find(x => x && x.code === c && isNum(x.price))).filter(Boolean);
-    if (pick.length) L.push("【匯率原物料】" + pick.map(x => (x.name || x.code) + " " + numberFmt(x.price) + "（" + pct(x.chgPct) + "）").join("、"));
-    // 總經消息（排程整理的新聞摘要，data/macro-news.json）：只放最新一天的台灣、美國、世界摘要，標日期與「新聞摘要」，不是行情
     const mn = W && W.mn && Array.isArray(W.mn.days) ? W.mn.days[0] : null;
-    if (mn) {
-      const sec = (k, n) => { const s = mn[k] && mn[k].sum; return s && s.head ? n + "：" + s.head + (Array.isArray(s.points) && s.points.length ? "（" + s.points.slice(0, 3).join("；") + "）" : "") + (s.impact ? "可能影響：" + s.impact : "") : ""; };
-      const T = [sec("tw", "台灣"), sec("us", "美國"), sec("world", "世界")].filter(Boolean);
-      L.push("【總經新聞摘要】" + (T.length ? (mn.date || "日期未提供") + "（AI 依新聞標題整理，不是行情）：" + T.join("｜") : "未取得"));
-    } else L.push("【總經新聞摘要】未取得");
-    return L.join("\n");
+    return {
+      now: Date.now(), session: ph === "live" ? "open" : ph, expectedDate,
+      quotes: { T00: tq, O00: getQuote(W, "O00") },
+      breadth: W && W.mkt ? { date: W.mkt.date, time: W.mkt.time, live: !!W.mkt.live, breadth: W.mkt.breadth, source: String(W.mkt.source || "").split("；")[0] || null } : null,
+      flow: flow.date ? { date: flow.date, mood: flow.mood, sectors: flow.sectors, label: al.label } : { label: al.label },
+      levels: readTechnicalLevels(W),
+      us: { rows: (Array.isArray(U.indices) ? U.indices : []).concat(Array.isArray(U.macro) ? U.macro : []), dataStatus: U.dataStatus, dataDate: U.dataDate || U.date, sourceTime: U.sourceTime, source: U.source },
+      global: { rows: ["TWD=X", "CL=F", "GC=F", "^VIX"].map(c => G.find(x => x && x.code === c)).filter(Boolean), fetchedAt: W?.gl?.sourceFetchedAt || null },
+      news: mn
+    };
   }
 
   window.KLMarketCenter = Object.freeze({
-    researchText,
+    researchInput,
     workspaces: WORKSPACES,
     normalizeWorkspace,
     ensureState,

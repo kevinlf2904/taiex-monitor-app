@@ -1,35 +1,66 @@
-// AI 市場研究：送給 AI 的資料包含四個工作區的摘要（附日期）、固定格式的提問；結果標整理時間、推論分開標示、
-// 同一天切換或重畫不用重新整理（sessionStorage），換日不還原；盤中超過 30 分鐘提醒重新整理
+// AI 研究室（今日市場「AI 研究」）：送出研究模式、只送編號資料表；回來的 JSON 畫成多空、情境、未知事項與客觀數據；
+// 資料不足時不呼叫 AI；Gemini 429 顯示原因；手機（390）與桌面（1280）版面；同一天重畫還原、盤中 30 分鐘提醒、換日不還原
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium, serve, open } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
-const REPLY = "【結論】推論：盤勢偏空震盪，主要是外資賣超。\n【大盤與廣度】\n- 加權 -2.9%（2026-10-26）。\n- 下跌家數多。\n【風險與反證】櫃買跌幅較大。\n【接下來觀察】守不守得住支撐。\n【資料限制】無";
+const REPORT = { status: "ok", summary: "推論：盤勢偏弱。", bull: [{ text: "航運法人買超（估算）", refs: ["tw.T00.price"] }, { text: "櫃買跌幅較小", refs: ["tw.O00.chg"] }],
+  bear: [{ text: "加權下跌", refs: ["tw.T00.chg"] }, { text: "外資賣超 999 億", refs: ["tw.T00.chg"] }], sectors: [{ text: "資金流向未取得時不寫", refs: ["made.up"] }], levels: [],
+  scenarios: [{ type: "bull", trigger: "站回分水嶺", watch: "廣度", invalidation: "跌破支撐", refs: ["tw.T00.price"] }, { type: "neutral", trigger: "區間整理", refs: ["tw.T00.price"] }, { type: "bear", trigger: "跌破支撐", refs: ["tw.T00.price"] }],
+  risks: [{ text: "美股續跌", refs: ["tw.T00.chg"] }], unknowns: ["今天法人"], conclusion: { text: "如果站回分水嶺，則轉為中性。", refs: ["tw.T00.price"] } };
+// 測試環境沒有法人、美股資料：補一點假的全球與廣度資料，讓資料類別夠 2 類（gate 通過）
+// 背景輪詢會換掉 W 的報價、國際行情：在「研究取資料的那一刻」才放進去（包一層 researchInput）
+const seed = () => { const o = window.KLMarketCenter; window.KLMarketCenter = Object.freeze({ ...o, researchInput: W => {
+  for (const c of ["T00", "O00"]) W.quotes.set(c, { ...W.quotes.get(c), date: "2026-10-26", time: "10:00:00", source: "富果", updateMode: "live" });
+  W.gl = { ok: true, sourceFetchedAt: new Date().toISOString(), groups: [{ rows: [{ code: "TWD=X", name: "美元／台幣", price: 32.6, chgPct: 0.5 }] }] };
+  W.mkt = { date: "2026-10-26", time: "10:00", live: true, breadth: { up: 300, down: 600, flat: 50 } }; return o.researchInput(W); } }); };
 
-test("AI 市場研究：送出的資料有四個工作區的摘要與日期，提問是固定格式；結果分段、標整理時間與推論", async () => {
-  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true, time: new Date("2026-10-26T10:00:00+08:00") });
-  let body = null;
-  await ctx.route("**/api/chat", r => { body = JSON.parse(r.request().postData() || "{}"); r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, text: REPLY }) }); });
-  await p.evaluate(() => { try { sessionStorage.clear(); } catch {} W.tdPh = null; W.tdAI = null; setLt("today"); renderList(); });
+async function run(p, ctx, reply) {
+  const sent = [];
+  await ctx.route("**/api/chat", r => { sent.push(JSON.parse(r.request().postData() || "{}")); r.fulfill({ contentType: "application/json", body: JSON.stringify(reply) }); });
+  await p.evaluate(seed); await p.evaluate(() => { try { sessionStorage.clear(); } catch {} W.tdPh = null; W.tdAI = null; setLt("today"); renderList(); });
   await p.click('#lx [data-tx="tdai"]');
-  await p.waitForFunction(() => /AI 整理於/.test(document.querySelector("#lx .mc-ai-panel .caibox")?.textContent || ""));
-  for (const k of ["【資料時間】", "【加權與櫃買】", "【市場廣度】", "【法人資金流向】", "【技術攻防】", "【美股與總經】", "【總經新聞摘要】", "KLineLab 今日重點"]) assert.ok(body.context.includes(k), "資料有 " + k);
-  assert.ok(body.context.indexOf("【資料時間】") < body.context.indexOf("KLineLab 今日重點"), "四個工作區的摘要放在前面（伺服器只收前 6000 字）");
-  const q = body.messages[0].content; for (const k of ["【結論】", "【大盤與廣度】", "【法人與族群資金】", "【全球連動】", "【總經與消息面】", "【技術位階】", "【自選與持股】", "【風險與反證】", "【接下來觀察】", "【資料限制】", "推論：", "盤中", "600～900 字"]) assert.ok(q.includes(k), "提問有 " + k);
-  assert.equal(body.model, "lite");
-  const r = await p.evaluate(() => { const b = document.querySelector("#lx .mc-ai-panel .caibox"); return { h: b.querySelectorAll(".cai-h").length, li: b.querySelectorAll(".cai-li").length, inf: b.querySelectorAll(".cai-inf").length, meta: b.querySelector(".cai-meta")?.textContent, old: !!b.querySelector(".cai-old") }; });
-  assert.equal(r.h, 5); assert.equal(r.li, 2); assert.equal(r.inf, 1); assert.match(r.meta, /AI 整理於 10:00/); assert.equal(r.old, false);
+  await p.waitForFunction(() => !W.tdAI?.loading && /AI|資料不足|⚠︎/.test(document.querySelector("#lx .mc-ai-panel .caibox")?.textContent || ""), null, { timeout: 20000 });
+  return sent;
+}
+
+test("AI 研究室：研究模式只送編號資料表；報告分多空、情境、未知事項；不存在的編號與數字標出來；客觀數據由程式列出", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280, time: new Date("2026-10-26T10:00:00+08:00") });
+  const sent = await run(p, ctx, { ok: true, text: JSON.stringify(REPORT), model: "gemini-3.1-flash-lite" });
+  assert.equal(sent.length, 1); assert.equal(sent[0].purpose, "research"); assert.equal(sent[0].model, "lite");
+  assert.match(sent[0].context, /^資料表（編號/); assert.match(sent[0].context, /tw\.T00\.price \| 加權指數/);
+  const r = await p.evaluate(() => { const b = document.querySelector("#lx .mc-ai-panel .rs-report"), t = b?.textContent || "";
+    return { secs: [...b.querySelectorAll(".rs-sec h5")].map(h => h.textContent), sc: b.querySelectorAll(".rs-sc-c").length, flag: /未能對照資料（999）/.test(t), ref: /引用了不存在的資料編號/.test(t), facts: !!b.querySelector(".rs-facts .rs-row"), model: /gemini-3\.1-flash-lite/.test(t), two: getComputedStyle(b.querySelector(".rs-two")).gridTemplateColumns.split(" ").length }; });
+  for (const k of ["研究摘要", "多方論點", "空方論點", "情境推演", "風險與反證", "研究結論（條件式）", "未知事項"]) assert.ok(r.secs.includes(k), "有 " + k + "：" + r.secs);
+  assert.equal(r.sc, 3); assert.equal(r.flag, true); assert.equal(r.ref, true); assert.equal(r.facts, true); assert.equal(r.model, true);
+  assert.equal(r.two, 2, "桌面：多空左右並排");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
-test("AI 市場研究：同一天重畫會還原上次結果；盤中超過 30 分鐘提醒重新整理；換日不還原", async () => {
-  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280, time: new Date("2026-10-26T10:40:00+08:00") });
-  await p.evaluate(r => { sessionStorage.setItem("kline:mcai:v1", JSON.stringify({ text: r, at: Date.parse("2026-10-26T10:00:00+08:00"), d: "2026-10-26", basis: "2026-10-26 10:00:00" })); W.tdPh = null; W.tdAI = null; setLt("today"); renderList(); }, REPLY);
-  const a = await p.evaluate(() => { const b = document.querySelector("#lx .mc-ai-panel .caibox"); return { ok: /盤勢偏空震盪/.test(b?.textContent || ""), old: !!b?.querySelector(".cai-old"), btn: document.querySelector("#lx [data-mc-ai]")?.textContent }; });
-  assert.deepEqual(a, { ok: true, old: true, btn: "重新整理" });
-  await p.evaluate(() => { const x = JSON.parse(sessionStorage.getItem("kline:mcai:v1")); x.d = "2026-10-23"; sessionStorage.setItem("kline:mcai:v1", JSON.stringify(x)); W.tdAI = null; renderList(); });
-  assert.equal(await p.evaluate(() => /盤勢偏空震盪/.test(document.querySelector("#lx .mc-ai-panel")?.textContent || "")), false, "換日不還原");
+test("AI 研究室：手機 390 版面不溢出、多空與情境改成單欄；同一天重畫還原，盤中超過 30 分鐘提醒，換日不還原", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true, time: new Date("2026-10-26T10:00:00+08:00") });
+  await run(p, ctx, { ok: true, text: JSON.stringify(REPORT) });
+  const r = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, two: getComputedStyle(document.querySelector("#lx .rs-two")).gridTemplateColumns.split(" ").length, sc: getComputedStyle(document.querySelector("#lx .rs-sc")).gridTemplateColumns.split(" ").length }));
+  assert.ok(r.sw <= 391, "沒有水平溢出：" + r.sw); assert.equal(r.two, 1); assert.equal(r.sc, 1);
+  await p.evaluate(() => { const x = JSON.parse(sessionStorage.getItem("kline:mcai:v2")); x.at -= 31 * 60e3; sessionStorage.setItem("kline:mcai:v2", JSON.stringify(x)); W.tdAI = null; renderList(); });
+  assert.deepEqual(await p.evaluate(() => [!!document.querySelector("#lx .rs-report"), !!document.querySelector("#lx .cai-old"), document.querySelector("#lx [data-mc-ai]")?.textContent]), [true, true, "重新整理"]);
+  await p.evaluate(() => { const x = JSON.parse(sessionStorage.getItem("kline:mcai:v2")); x.d = "2026-10-23"; sessionStorage.setItem("kline:mcai:v2", JSON.stringify(x)); W.tdAI = null; renderList(); });
+  assert.equal(await p.evaluate(() => !!document.querySelector("#lx .rs-report")), false, "換日不還原");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("AI 研究室：資料不足時不呼叫 AI，只列未知事項與客觀數據；Gemini 429 顯示額度用完", async () => {
+  let { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280, time: new Date("2026-10-26T10:00:00+08:00") });
+  const calls = []; await ctx.route("**/api/chat", r => { calls.push(1); r.fulfill({ contentType: "application/json", body: '{"ok":true,"text":"{}"}' }); });
+  await p.evaluate(() => { W.gl = null; W.mkt = null; W.tdPh = null; W.tdAI = null; setLt("today"); renderList(); });
+  await p.click('#lx [data-tx="tdai"]'); await p.waitForFunction(() => /資料不足/.test(document.querySelector("#lx .mc-ai-panel .caibox")?.textContent || ""), null, { timeout: 20000 });
+  assert.equal(calls.length, 0, "沒有呼叫 AI");
+  assert.match(await p.textContent("#lx .mc-ai-panel .caibox"), /先不產生研究報告.*未知事項|未知事項.*先不產生研究報告/s);
+  await ctx.close(); assert.deepEqual(errs, []);
+  ({ ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280, time: new Date("2026-10-26T10:00:00+08:00") }));
+  await run(p, ctx, { ok: false, error: "Gemini 免費額度暫時用完或問得太頻繁，請等一下再試。", provider: "gemini" });
+  const t = await p.textContent("#lx .mc-ai-panel .caibox"); assert.match(t, /額度暫時用完/); assert.match(t, /客觀數據/, "失敗時仍列客觀數據");
   await ctx.close(); assert.deepEqual(errs, []);
 });

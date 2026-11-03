@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { chromium, serve, open } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
+// AI 研究室只在資料夠新時才呼叫 AI：在研究取資料的那一刻放今天的報價、廣度、匯率（測試假資料的日期是舊的）
+const seedResearch = () => { const o = window.KLMarketCenter, d = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); window.KLMarketCenter = Object.freeze({ ...o, researchInput: W => { for (const c of ["T00", "O00"]) W.quotes.set(c, { ...W.quotes.get(c), date: d, time: "10:00:00", source: "富果", updateMode: "live" }); W.gl = { ok: true, sourceFetchedAt: new Date().toISOString(), groups: [{ rows: [{ code: "TWD=X", name: "美元／台幣", price: 32.6, chgPct: 0.5 }] }] }; W.mkt = { date: d, time: "10:00", live: true, breadth: { up: 300, down: 600, flat: 50 } }; return o.researchInput(W); } }); };
 test.after(async () => { await B.close(); S.close(); });
 
 for (const width of [390, 1280]) test(`更新鍵有反應、會重抓 ${width}`, async () => {
@@ -58,8 +60,9 @@ test("台股大盤「今天為什麼漲跌」：盤勢頭條、台灣總經摘�
   assert.match(asked, /半導體業 -3\.20%/); assert.match(asked, /外資 -320\.50 億/); assert.match(asked, /台股重挫400點/);
   assert.equal(JSON.parse(asked).model, undefined, "其他「問 AI」照伺服器預設型號，不送 lite");
   await p.evaluate(() => { W.tdPh = null; W.tdAI = null; setLt("today"); renderList(); });
-  await p.click('#lx [data-tx="tdai"]'); await p.waitForFunction(() => W.tdAI?.text === "測試回覆");
+  await p.evaluate(seedResearch); await p.click('#lx [data-tx="tdai"]'); await p.waitForFunction(() => W.tdAI?.parsed);
   assert.equal(JSON.parse(asked).model, "lite", "今日市場 AI 整理請伺服器先用 Flash Lite（每日額度多）");
+  assert.equal(JSON.parse(asked).purpose, "research", "AI 研究室用研究模式（研究用系統提示、JSON 輸出）");
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "不橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });

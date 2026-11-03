@@ -23,14 +23,21 @@ const GEMINI_DEFAULT = "gemini-flash-latest";
 // Gemini REST API：角色是 user / model，系統提示放在 systemInstruction
 // 503（模型過載）、500、429（太忙）時：同一個模型等一下重試一次，再換下一個備用模型
 const retryable = s => s === 503 || s === 500 || s === 502 || s === 504 || s === 429;
-export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL, { wait = ms => new Promise(r => setTimeout(r, ms)), deadline = Date.now() + 50000, tries = WEB_TRIES, listOpts, use = "chat" } = {}) {
+// AI 研究室（今日市場「AI 研究」）：前端只送編號過的資料表，要求 JSON；系統提示和一般問答分開（一般問答限 300 字、助教口吻，不適合研究報告）
+export const SYSTEM_RESEARCH = `你是 KLineLab 的市場研究助理，替使用者整理台股的研究報告。
+- 只能使用「目前畫面」資料表裡的資料，數字必須逐字取自資料表；不知道的寫進 unknowns，不要猜。
+- 多方、空方論點分開寫；估算或模型推估的資料要說明是估算；新聞摘要只當消息面參考，不能當數字依據。
+- 不提供買賣建議、目標價或保證；結論要是條件式。
+- 只輸出 JSON。`;
+export const RESEARCH_GEN = Object.freeze({ maxOutputTokens: 3072, temperature: 0.2, responseMimeType: "application/json" });
+export async function askGemini(system, turns, key, model = process.env.GEMINI_MODEL, { wait = ms => new Promise(r => setTimeout(r, ms)), deadline = Date.now() + 50000, tries = WEB_TRIES, listOpts, use = "chat", gen = null } = {}) {
   // 寫死的型號可能已下架：先用列出模型（免費）過濾掉不存在的、補上目前可用的 Flash 型號
   // model（GEMINI_MODEL）只在「問問題」時排第一；AI 整理固定用 Lite 為主，避免設定的型號把每日 20 次的 Flash 額度用光
   const models = await geminiModels(key, [...(use === "chat" && model ? [model] : []), ...(GEMINI_ORDER[use] || GEMINI_ORDER.chat), GEMINI_DEFAULT], listOpts);
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: turns.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
-    generationConfig: { maxOutputTokens: 4096, temperature: 0.6 },
+    generationConfig: gen || { maxOutputTokens: 4096, temperature: 0.6 },
   });
   // limited：途中有型號回 429（每日／每分鐘額度用完）。最後回報以它為準，不要被後面已下架型號的 404 蓋掉、誤報成「找不到模型」
   let last = null, calls = 0, limited = null;
@@ -87,25 +94,27 @@ export default async function handler(req, res) {
   if (!geminiKey && !process.env.ANTHROPIC_API_KEY) return res.status(200).json({ ok: false, error: "伺服器尚未設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY），無法使用對話功能。" });
 
   const { messages, context } = req.body || {};
-  const lite = req.body?.model === "lite";
+  const lite = req.body?.model === "lite", research = req.body?.purpose === "research", SYS = research ? SYSTEM_RESEARCH : SYSTEM;
   if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ ok: false, error: "沒有訊息" });
   const turns = messages.slice(-12).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content || "").slice(0, 4000) })).filter((m) => m.content);
   while (turns.length && turns[0].role !== "user") turns.shift();
   if (!turns.length || turns[turns.length - 1].role !== "user") return res.status(400).json({ ok: false, error: "最後一則必須是使用者的問題" });
   const ctx = typeof context === "string" && context ? `\n\n目前畫面（由頁面自動產生，可能有誤）：\n${context.slice(0, 6000)}` : "";
 
-  const ck = req.body?.nocache ? null : cacheKey(SYSTEM + ctx, turns), hit = ck && (await cacheGet(ck));
+  const ck = req.body?.nocache ? null : cacheKey(SYS + ctx, turns), hit = ck && (await cacheGet(ck));
   if (hit?.text) return res.status(200).json({ ...hit, ok: true, cached: true });
   const t0 = Date.now(), left = () => 57000 - (Date.now() - t0); // 整個請求要在 60 秒內回完（超過 Vercel 會回非 JSON 的 504）
   if (geminiKey) {
     try {
-      const r = await askGemini(SYSTEM + ctx, turns, geminiKey, undefined, { use: lite ? "today" : "chat" });
-      if (!r.ok && !r.blocked && retryable(r.status) && process.env.ANTHROPIC_API_KEY && claudeFallbackOn() && left() > 20000 && !(await aiLimit(req, "claude-fb"))) return askClaude(); // Gemini 忙線改問 Claude：要開 AI_CLAUDE_FALLBACK，而且有自己的全站上限
+      // 研究用 Flash Lite 為主（today 順序）、JSON 輸出、低溫度；不改問 Claude（研究報告較長，Claude 較貴，額度留給一般問答）
+      const r = await askGemini(SYS + ctx, turns, geminiKey, undefined, { use: lite || research ? "today" : "chat", gen: research ? RESEARCH_GEN : null });
+      if (!r.ok && !r.blocked && !research && retryable(r.status) && process.env.ANTHROPIC_API_KEY && claudeFallbackOn() && left() > 20000 && !(await aiLimit(req, "claude-fb"))) return askClaude(); // Gemini 忙線改問 Claude：要開 AI_CLAUDE_FALLBACK，而且有自己的全站上限
       if (r.ok && ck && !r.truncated) await cachePut(ck, { text: r.text, provider: "gemini", model: r.model });
       return res.status(200).json(r.ok ? { ok: true, text: r.text, truncated: r.truncated, provider: "gemini", model: r.model } : { ok: false, error: geminiError(r), provider: "gemini" });
     } catch { return res.status(200).json({ ok: false, error: "連不到 Gemini 服務，請稍後再試。" }); }
   }
 
+  if (research) return res.status(200).json({ ok: false, error: "AI 研究需要伺服器設定 GEMINI_API_KEY。" }); // 研究不改用 Claude（成本）
   return askClaude();
   async function askClaude() {
   const client = new Anthropic({ timeout: Math.max(10000, left()), maxRetries: 0 });
@@ -116,7 +125,7 @@ export default async function handler(req, res) {
       output_config: { effort: "low" },
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
-      system: SYSTEM + ctx,
+      system: SYS + ctx,
       messages: turns,
     });
     if (msg.stop_reason === "refusal") return res.status(200).json({ ok: false, error: "這個問題無法回答，換個方式問問看。" });
