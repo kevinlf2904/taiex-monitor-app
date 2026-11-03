@@ -449,12 +449,15 @@ function briefScenarios(G, today, basePrice, meta = {}) {
 // 取「core.js 對加權本身的判斷」和「這一頁另外要求的條件（法人日期、高低點…）」裡比較差的那個，所以不會比看盤頁樂觀
 // lastTradeDate：休市日顯示最近交易日收盤時用來確認那一天真的是最近交易日（是的話是收盤確認，不是過期）
 function evaluateDataStatus(args = {}) {
-  const r = evaluateDataStatusRaw(args), tq = args.market?.taiex, src = tq?.source;
+  let r = evaluateDataStatusRaw(args); const tq = args.market?.taiex, src = tq?.source;
   if (typeof canonDataState !== "function") return r;
   const sess = args.session || "post", authority = sourceAuthority(src);
   let own = canonDataState(r.dataStatus);
   if (r.dataStatus === "stale" && sess === "closed" && args.lastTradeDate && r.marketDate === args.lastTradeDate) own = "confirmed"; // 休市日顯示最近交易日收盤
   if (r.completeness === "awaiting_inst") own = "pending"; // 指數已收盤、法人還沒公布
+  // 盤前看到的是前一交易日收盤：這是正常的，不叫「過期資料」；只改顯示文字，dataStatus／state 不變（要比前一交易日更舊才是真的過期）
+  const prevTd = sess === "pre" && r.dataStatus === "stale" && args.tradeDate ? findLastTradeDate(args.tradeDate, args.holidays || null) : null;
+  if (prevTd && r.marketDate === prevTd) r = { ...r, dataStatusLabel: "前一交易日收盤", reason: `盤前顯示前一交易日（${r.marketDate}）收盤行情，開盤後更新` };
   let core = null;
   if (tq && r.marketDate && typeof evalDataStatus === "function") {
     const c = evalDataStatus({ type: "index", source: src || "", dataDate: r.marketDate, sourceTime: tq.sourceTime ?? tq.time ?? null, session: sess === "live" ? "open" : sess === "pre" ? "pre" : "closed", dayState: sess === "closed" ? "closed" : "trade", today: args.tradeDate || r.marketDate, now: args.now ?? Date.now(), estimated: !!tq.estimated });
@@ -1095,7 +1098,8 @@ function marketSnapshot({
     market,
     G,
     session: sess.session,
-    tradeDate: targetTradeDate
+    tradeDate: targetTradeDate,
+    holidays
   });
 
   const meta = {
@@ -1798,7 +1802,7 @@ function todayPage() {
     otc: oq ? { code: "O00", name: "櫃買指數", price: oq.price, chg: oq.chg, chgPct: oq.chgPct, date: oq.date } : null,
     futures: fq ? { code: "TXF", name: "台指期", price: fq.price, chg: fq.chg, chgPct: fq.chgPct, date: fq.date } : null
   };
-  const dataEval = evaluateDataStatus({ market, G: W.bf || {}, session: sess.session, tradeDate: t, lastTradeDate: sess.lastTradeDate || null, now: nowMs });
+  const dataEval = evaluateDataStatus({ market, G: W.bf || {}, session: sess.session, tradeDate: t, lastTradeDate: sess.lastTradeDate || null, holidays: holL, now: nowMs });
 
   // 休市日以下一交易日為推演目標；驗證只對照報價日的原始快照
   const target = sess.session === "closed" ? findNextTradeDate(t, holL || []) || t : t;
@@ -1828,6 +1832,7 @@ function todayPage() {
   const quoteText = quoteUsable
     ? `加權${tq.chgPct > 0 ? "上漲" : tq.chgPct < 0 ? "下跌" : "平盤"} ${tdPctTxt(tq.chgPct)}`
     : quoteAligned && tq?.date ? `加權行情資料不完整（${dataEval.dataStatusLabel || dataEval.dataStatus}），暫不判定`
+      : tq?.date && dataEval.dataStatusLabel === "前一交易日收盤" && tdOk(tq?.chgPct) ? `前一交易日（${tq.date}）加權${tq.chgPct > 0 ? "上漲" : tq.chgPct < 0 ? "下跌" : "平盤"} ${tdPctTxt(tq.chgPct)}，開盤後更新`
       : tq?.date ? `最新加權報價 ${tq.date}，尚未對齊目標交易日 ${expectedDate || "本交易日"}` : "加權行情尚未取得";
   const breadthText = fundsAligned && mood && tdOk(mood.up) && tdOk(mood.dn) && quoteUsable
     ? (() => {

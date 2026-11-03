@@ -2103,7 +2103,7 @@ class Chart {
       if (yLine != null) { hline(yLine); tag(yLine, fmtP(px)); }
       if (sp) { hline(hy); const v = sp.inv(hy); if (isFinite(v)) tag(hy, sp.fmt(v)); }
     }
-    this.canvas.setAttribute("aria-label", `K線圖，共 ${vis} 個交易日，最後收盤 ${fmtP(D[vis - 1].c)}`);
+    this.canvas.setAttribute("aria-label", `${this.o.ariaName ? this.o.ariaName + " " : ""}K線圖，共 ${vis} 個交易日，最後收盤 ${fmtP(D[vis - 1].c)}${D[vis - 1].d ? `（${D[vis - 1].d}）` : ""}`); // ariaName：讀螢幕時先念出是哪一檔
     this.renderLegend(hi_ ?? vis - 1, mas);
     if (this.onHover) this.onHover(hi_ ?? vis - 1);
     if (this.onRange) this.onRange(this.range, this);
@@ -2212,9 +2212,13 @@ function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)), f = raw / 
    只在網站上（http/https）、最上層頁面註冊；嵌在首頁的看盤頁在同一個範圍裡，一起被照顧到。沒有網路時畫面下方顯示「離線中」，連回來就收起。 */
 if (typeof window !== "undefined" && window.top === window && /^https?:$/.test(location.protocol)) {
   if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
-  const netBar = () => { let b = document.getElementById("netBar"); if (navigator.onLine) return b?.remove(); if (b || !document.body) return;
-    b = document.createElement("div"); b.id = "netBar"; b.setAttribute("role", "status"); b.textContent = "離線中：顯示上次載入的資料，連上網路後會自動更新";
-    b.style.cssText = "position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9998;padding:7px 14px;border-radius:99px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);font-size:13px;max-width:calc(100vw - 32px);text-align:center";
+  // 可以按 × 收起：這次離線期間不再跳出，連回網路後重新計算
+  let netHid = false;
+  const netBar = () => { let b = document.getElementById("netBar"); if (navigator.onLine) { netHid = false; return b?.remove(); } if (b || netHid || !document.body) return;
+    b = document.createElement("div"); b.id = "netBar"; b.setAttribute("role", "status");
+    b.innerHTML = `<span>離線中：顯示上次載入的資料，連上網路後會自動更新</span><button type="button" aria-label="關閉離線提示" style="margin-left:8px;border:0;background:none;color:var(--muted);font-size:16px;line-height:1;padding:4px 6px;min-width:32px;min-height:32px;cursor:pointer">×</button>`;
+    b.querySelector("button").addEventListener("click", () => { netHid = true; b.remove(); });
+    b.style.cssText = "position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9998;padding:3px 6px 3px 14px;border-radius:99px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);font-size:13px;max-width:calc(100vw - 32px);text-align:center;display:flex;align-items:center";
     document.body.appendChild(b); };
   // 只有持續離線 3 秒還是離線才顯示：切換分頁、網路短暫抖動時 navigator.onLine 會一下 false 一下 true，不要一直跳
   // 只看 navigator.onLine（讀快取、靜態 JSON 備援都不算離線）；online 立刻收起；回到頁面（切回 App、從背景回來、bfcache 還原）時重新判斷，不會留著舊的提示

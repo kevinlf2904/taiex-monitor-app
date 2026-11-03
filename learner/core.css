@@ -26,6 +26,7 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-num: var(--font-song); /* 行情數字也用宋體，搭配 tabular-nums 讓數字對齊 */
   --radius: 4px;
+  --level: var(--muted); /* 壓力、分水嶺、支撐等推估價位：中性色，不用漲跌的紅綠（推估不是行情） */
   --warn: var(--s1); /* 資料延遲、部分缺漏、待確認：琥珀色（跟著主題的短均線色），紅綠只留給漲跌 */
   --on-strong: var(--surface); --strong-line: var(--ink); --up-pill: var(--up); --down-pill: var(--down);
 }
@@ -445,7 +446,7 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-ix-note { margin: -3px 0 0; font-size: 10px; line-height: 1.45; }
 :is(.td-ix, .td-sc) :is(line, polyline) { vector-effect: non-scaling-stroke; fill: none; }
 :is(.td-ix, .td-sc) polyline { stroke-width: 1.6; stroke-linejoin: round; } :is(.td-ix, .td-sc) polyline.up { stroke: var(--up); } :is(.td-ix, .td-sc) polyline.down { stroke: var(--down); }
-:is(.td-ix, .td-sc) .lv { stroke-width: 1; stroke-dasharray: 3 3; } .lv.up { stroke: var(--up); } .lv.down { stroke: var(--down); } .lv.piv { stroke: var(--ink); opacity: .7; } .lv.prev { stroke: var(--muted); stroke-dasharray: 1 3; }
+:is(.td-ix, .td-sc) .lv { stroke-width: 1; stroke-dasharray: 3 3; } .lv.up, .lv.down { stroke: var(--level); } .lv.up { stroke-dasharray: 6 3; } .lv.down { stroke-dasharray: 2 3; } /* 壓力長虛線、支撐短虛線，用線型區分而不是紅綠 */ .lv.piv { stroke: var(--ink); opacity: .7; } .lv.prev { stroke: var(--muted); stroke-dasharray: 1 3; }
 .td-ix .rest { fill: var(--ink); opacity: .035; } .td-ix line.ev { stroke-width: 1; stroke: var(--muted); opacity: .5; } .td-ix line.ev.alert { stroke: var(--up); }
 .td-sc .sa, .td-sc .sb { stroke-width: 1.3; stroke-dasharray: 4 3; opacity: .45; } .td-sc .sa { stroke: var(--up); } .td-sc .sb { stroke: var(--down); } .td-sc .on { opacity: 1; stroke-width: 1.6; }
 :is(.td-ix, .td-sc) .dot { position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--muted); }
@@ -454,7 +455,7 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-hl { position: absolute; transform: translate(4px, -120%); font-size: 10.5px; color: var(--up); white-space: nowrap; pointer-events: none; } .td-hl.lo { color: var(--down); transform: translate(4px, 20%); }
 .td-ix-lv { position: relative; } .td-ix .td-ix-lv { height: 128px; } .td-sc .td-ix-lv { height: 96px; }
 .td-ix-lv span { position: absolute; left: 0; right: 0; transform: translateY(-50%); font-size: 10.5px; line-height: 1.2; white-space: nowrap; color: var(--muted); }
-.td-ix-lv .up { color: var(--up); } .td-ix-lv .down { color: var(--down); } .td-ix-lv .piv { color: var(--ink); } .td-ix-lv b { font-weight: 400; }
+.td-ix-lv .up, .td-ix-lv .down { color: var(--level); } /* 位階標籤：中性色，文字本身寫著「壓力」「支撐」 */ .td-ix-lv .piv { color: var(--ink); } .td-ix-lv b { font-weight: 400; }
 .td-ix-t { grid-column: 1; display: flex; justify-content: space-between; font-size: 10.5px; margin-top: 3px; }
 .td-sc-x { position: absolute; top: calc(100% + 4px); transform: translateX(-50%); font-size: 10.5px; white-space: nowrap; } .td-sc-x:first-of-type { transform: none; }
 .td-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -552,4 +553,12 @@ u.conf { background: var(--up); } u.div { background: var(--down); } u.etf { bac
   #mktChip::after { inset: -10px -2px; }                    /* 高 26 → 44 */
   #backBtn::after { inset: -8px -5px -8px -4px; }          /* 77×31 → 86×45（右邊間距 10px） */
   #menuBtn::after { inset: -6px -4px; }                    /* 34×34 → 42×44（左邊間距 8px） */
+  /* 圖表縮放列（−、＋、全部、放大、對應…，高 29）與副圖訊號開關（金叉死叉、只看重點，高 19） */
+  .zoombar { overflow: visible; } /* 原本 hidden 是為了圓角，會把擴大的點擊範圍裁掉：改由頭尾按鈕自己帶圓角 */
+  .zoombar button { position: relative; } .zoombar button:first-child { border-radius: 4px 0 0 4px; } .zoombar button:last-child { border-radius: 0 4px 4px 0; }
+  /* 縮放列下面 3px 就是訊號開關那一列，兩列都要 44px 就得留空間：縮放鈕加高到 38、訊號列往下讓 12px（只在觸控／窄螢幕） */
+  .zoombar button { min-height: 38px; }
+  .zoombar button::after { content: ""; position: absolute; inset: -4px -2px; }          /* 38 → 46（下緣 2px 讓給訊號列） */
+  .sigbar { margin-top: 12px; row-gap: 10px; }
+  [data-sk]::after, [data-strongk]::after { inset: -12px -3px; }                          /* 高 19 → 43（原本 -9px 只到 37） */
 }
