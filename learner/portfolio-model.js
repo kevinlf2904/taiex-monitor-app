@@ -37,7 +37,6 @@ export function normalizePortfolioHoldings(raw, { source = "legacy_watch_hold" }
     const symbol = symbolOf(key);
     if (!symbol) { issues.push({ code: "invalid_symbol", severity: "error", message: "股票代號格式不正確，已略過此筆。" }); continue; }
     if (seen.has(symbol)) { issues.push({ code: "duplicate_symbol", severity: "error", symbol, message: "正規化後出現重複股票代號，已略過後續資料。" }); continue; }
-    seen.add(symbol);
     const row = raw[key];
     if (!isRecord(row)) { issues.push({ code: "invalid_row", severity: "error", symbol, message: "庫存項目格式不正確，已略過此筆。" }); continue; }
     const shares = positive(row.sh), averageCost = positive(row.cost);
@@ -46,11 +45,13 @@ export function normalizePortfolioHoldings(raw, { source = "legacy_watch_hold" }
       issues.push({ code: "invalid_position_values", severity: "error", symbol, message: "股數、平均成本與成本基礎都必須是有限且大於 0 的數值，已略過此筆。" });
       continue;
     }
+    // Reserve the symbol only after the row passes position validation; a malformed earlier row must not block a later valid one.
+    seen.add(symbol);
     let openedAt = null;
     if (row.d == null || row.d === "") missingDateCount++;
     else if (validDate(row.d)) openedAt = row.d;
     else { invalidDateCount++; issues.push({ code: "invalid_opened_at", severity: "warning", symbol, message: "建倉日期無效，已保留持股但不採用日期。" }); }
-    items.push({ symbol, market: marketOf(symbol), shares, averageCost, costBasis, openedAt });
+    items.push({ symbol, market: marketOf(symbol), marketSource: "symbol_heuristic", shares, averageCost, costBasis, openedAt });
   }
   const rejectedCount = keys.length - items.length, hasErrors = issues.some(x => x.severity === "error");
   const status = items.length === 0 ? (hasErrors ? "invalid" : "empty") : (hasErrors ? "partial" : "ready");
