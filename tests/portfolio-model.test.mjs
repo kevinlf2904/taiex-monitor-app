@@ -9,6 +9,7 @@ test("投資組合契約：正規化台股／美股與成本基礎，不修改�
   assert.deepEqual(result.items.map(x => [x.symbol, x.market]), [["2330", "tw"], ["00631L", "tw"], ["AAPL", "us"]]);
   assert.equal(result.items[0].costBasis, 820000); assert.equal(result.items[1].costBasis, 37); assert.equal(result.items[2].shares, 3.5);
   assert.deepEqual(result.quality.marketCounts, { tw: 2, us: 1 }); assert.equal(result.quality.acceptedCount, 3);
+  assert.ok(result.items.every(x => x.marketSource === "symbol_heuristic"), "市場分類必須明確標記為代號啟發式判斷");
   assert.equal(JSON.stringify(raw), before, "adapter 不可改寫呼叫端資料");
 });
 
