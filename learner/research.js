@@ -145,15 +145,47 @@
       "7. 如果資料不足以判斷，status 填 \"insufficient\"，unknowns 寫缺什麼，其他欄位可以留空陣列。";
   }
 
-  // 數字檢查：AI 文字裡的數字要能在資料表裡找到（允許四捨五入、正負號、千分位）；日期、時間、小整數（1～10）、常見週期不算
+  // 數字檢查：保留正負號；排除有明確股票代號語境的數字，避免把 2330／0050 誤判成行情數字。
+  // 不可一律排除四位數：成交量 2330 張、指數上漲 2330 點仍須對照資料。
   const SAFE = new Set([20, 60, 120, 240]);
+  const STOCK_CODES = new Set(["1101", "1216", "1301", "1303", "2002", "2303", "2308", "2317", "2330", "2345", "2357", "2379", "2382", "2395", "2408", "2454", "2603", "2615", "2881", "2882", "2884", "2891", "3008", "3711", "4904", "5274", "6505", "6669", "6770", "8046", "0050", "0056", "00878", "00919", "00929", "00935", "00940", "009816"]);
   function numbersIn(text) {
-    const t = String(text || "").replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/g, " ").replace(/\b\d{1,2}[/]\d{1,2}\b/g, " ").replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, " ").replace(/[A-Za-z][\w.^=]*\d[\w.^=]*/g, " ");
-    return (t.match(/\d[\d,]*(\.\d+)?/g) || []).map(s => +s.replace(/,/g, "")).filter(n => Number.isFinite(n));
+    const t = String(text || "")
+      .replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/g, " ")
+      .replace(/\b\d{1,2}[/]\d{1,2}\b/g, " ")
+      .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, " ")
+      .replace(/\b(?:19|20)\d{2}\s*年/g, " ")
+      .replace(/\b\d{4,6}\.(?:TW|TWO)\b/gi, " ")
+      .replace(/(?:代號|股票代碼|股票代號|代碼|股號|ticker|symbol)\s*[:：#]?\s*\d{4,6}\b/gi, " ")
+      .replace(/\b\d{4,6}\s*(?:代號|股票代碼|股票代號|股號)/g, " ")
+      .replace(/[A-Za-z][\w.^=]*\d[\w.^=]*/g, " ");
+    const masked = t.replace(/\b\d{4,6}\b/g, code => STOCK_CODES.has(code) ? " " : code);
+    return (masked.match(/-?\d[\d,]*(\.\d+)?/g) || []).map(s => +s.replace(/,/g, "")).filter(n => Number.isFinite(n));
   }
   function numberOk(n, vals) {
-    if ((Number.isInteger(n) && n <= 10) || SAFE.has(n)) return true;
-    return vals.some(v => { const a = Math.abs(v); return Math.abs(n - a) <= Math.max(0.051, a * 0.0005) || Math.abs(n - Math.round(a)) < 1e-9 || Math.abs(n - +a.toFixed(1)) < 1e-9; });
+    const a = Math.abs(n);
+    if ((Number.isInteger(n) && n >= 0 && n <= 10) || SAFE.has(a)) return true;
+    return vals.some(v => { const b = Math.abs(v); return Math.abs(a - b) <= Math.max(0.051, b * 0.0005) || Math.abs(a - Math.round(b)) < 1e-9 || Math.abs(a - +b.toFixed(1)) < 1e-9; });
+  }
+
+  // 引用存在不代表敘述方向正確：只在資料本身有明確正負號時檢查買賣超與漲跌方向。
+  function directionIssues(text, refs, snap) {
+    const out = [], t = String(text || "");
+    const buy = /買超|淨買超|買進|資金流入/.test(t), sell = /賣超|淨賣超|賣出|資金流出/.test(t);
+    const up = /上漲|走高|收紅|漲幅|上揚/.test(t), down = /下跌|走低|收黑|跌幅|下挫/.test(t);
+    for (const id of refs) {
+      const r = snap.records.find(x => x.id === id);
+      if (!r || !isNum(r.value) || r.value === 0) continue;
+      const flow = /^tw\.flow\./.test(id);
+      const change = /(?:\.chg|\.pct1)$/.test(id);
+      if (flow && ((buy && r.value < 0) || (sell && r.value > 0))) {
+        out.push({ ref: id, claim: buy ? "買超" : "賣超", actual: r.value < 0 ? "賣超" : "買超" });
+      }
+      if (change && ((up && r.value < 0) || (down && r.value > 0))) {
+        out.push({ ref: id, claim: up ? "上漲" : "下跌", actual: r.value < 0 ? "下跌" : "上漲" });
+      }
+    }
+    return out;
   }
 
   // 檢查 AI 回傳：解析 JSON → 欄位齊不齊 → 引用編號存在嗎 → 數字對得上嗎。問題記在 issues，有問題的那一點標「未驗證」，不默默刪掉
@@ -170,12 +202,14 @@
       const refs = (Array.isArray(o.refs) ? o.refs : []).map(String), bad = refs.filter(r => !ids.has(r)), good = refs.filter(r => ids.has(r));
       if (bad.length) issues.push({ type: "ref", where, refs: bad });
       const nums = numbersIn(txt).filter(n => !numberOk(n, vals)); if (nums.length) issues.push({ type: "number", where, nums });
-      return { ...o, refs: good, unverified: !!(nums.length || (!good.length && where !== "unknowns")), badRefs: bad, badNums: nums };
+      const badDirection = directionIssues(txt, good, snap);
+      if (badDirection.length) issues.push({ type: "direction", where, conflicts: badDirection });
+      return { ...o, refs: good, unverified: !!(nums.length || badDirection.length || (!good.length && where !== "unknowns")), badRefs: bad, badNums: nums, badDirection };
     };
     const list = (k, max) => (Array.isArray(j[k]) ? j[k] : []).slice(0, max).map(x => item(x, k)).filter(Boolean);
     const report = { summary: item({ text: String(j.summary || ""), refs: j.summaryRefs || [] }, "summary"), bull: list("bull", 4), bear: list("bear", 4), sectors: list("sectors", 4), levels: list("levels", 4), watchlist: list("watchlist", 6),
       scenarios: list("scenarios", 3), risks: list("risks", 4), unknowns: (Array.isArray(j.unknowns) ? j.unknowns : []).map(String).slice(0, 8), conclusion: item(j.conclusion || {}, "conclusion") };
-    report.summary.unverified = report.summary.badNums.length > 0; // 摘要不強制附編號，只檢查數字
+    report.summary.unverified = report.summary.badNums.length > 0 || report.summary.badDirection.length > 0; // 摘要不強制附編號，但檢查數字與引用方向
     const missing = ["bull", "bear", "scenarios"].filter(k => !report[k].length); if (missing.length) issues.push({ type: "missing", where: missing.join("、") });
     const types = report.scenarios.map(s => s.type); if (!["bull", "neutral", "bear"].every(t => types.includes(t))) issues.push({ type: "scenario", where: "scenarios" });
     if (!report.conclusion || !report.conclusion.text) issues.push({ type: "missing", where: "conclusion" });
