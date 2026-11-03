@@ -1,9 +1,12 @@
-# 總經消息：每小時整理一次（美股盤中大漲大跌時，一小時內就看得到原因）
+# 總經消息：台股盤前到收盤、美股盤中每小時整理一次（大漲大跌時，一小時內就看得到原因）；其他時段、週末放慢，省 Actions 與部署次數
 # 抓 Google 新聞的總經標題、分類，有 GEMINI_API_KEY（或網站 /api/chat 可用）時加 AI 摘要，寫進 learner/data/macro-news.json
 name: macro-news
 on:
   schedule:
-    - cron: "47 * * * *"
+    - cron: "47 23 * * 0-4"           # 台北週一到週五 07:47（盤前）
+    - cron: "47 0-6,13-21 * * 1-5"    # 台北 08:47–14:47（台股）、21:47–隔天 05:47（美股盤中）每小時
+    - cron: "47 9,11 * * 1-5"         # 台北 17:47、19:47（盤後）
+    - cron: "47 3,9,15,21 * * 0,6"    # 週末每 6 小時
   workflow_dispatch:
 permissions:
   contents: write

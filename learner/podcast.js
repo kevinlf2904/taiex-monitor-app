@@ -260,7 +260,7 @@ function podSumBtns(key, e) {
 // 還沒整理好的單集顯示什麼：自動整理中／排隊中／排程會處理
 function podWaitText(feed) {
   if (POD.cfg && !POD.cfg.notes && !(POD.srv?.shows || []).some(s => s.feed === feed)) return "伺服器沒有設定 AI 金鑰，無法自動整理";
-  return (POD.srv?.shows || []).some(s => s.feed === feed) ? `AI 自動整理中（大約每小時一批${POD.srv?.pending ? `，還有 ${POD.srv.pending} 集排隊` : ""}）` : "排隊中，稍後自動整理";
+  return (POD.srv?.shows || []).some(s => s.feed === feed) ? `AI 自動整理中（大約每 3 小時一批${POD.srv?.pending ? `，還有 ${POD.srv.pending} 集排隊` : ""}）` : "排隊中，稍後自動整理";
 }
 function podHome() {
   const F = podFollows(), S = podSums();
@@ -274,7 +274,7 @@ function podHome() {
       ${m ? `<p class="ptl">${esc(m.tldr)}</p>${m.topics?.length ? `<p class="note ptopic">討論議題：<span>${esc(m.topics[0])}</span></p>` : ""}<p class="note">筆記 ${chars.toLocaleString()} 字・${m.calls.filter(c => c.code).length} 個觀點</p>`
         : `<p class="note ptl">${esc((e.desc || "").replace(/\s+/g, " ").slice(0, 70))}${(e.desc || "").length > 70 ? "…" : ""}</p>${podJobHtml(key) || `<p class="note">${podWaitText(s.feed)}</p>`}`}
     </div></article>`; }).join("");
-  const upd = POD.srv?.updated ? `<p class="note">重點與觀點大約每小時自動整理・最近更新 ${new Date(Date.parse(POD.srv.updated) + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/")}${POD.job?.busy ? "・正在整理新單集…" : ""}</p>` : POD.job?.busy ? `<p class="note">正在自動整理新單集…</p>` : "";
+  const upd = POD.srv?.updated ? `<p class="note">重點與觀點大約每 3 小時自動整理・最近更新 ${new Date(Date.parse(POD.srv.updated) + 8 * 3600e3).toISOString().slice(5, 16).replace("T", " ").replace("-", "/")}${POD.job?.busy ? "・正在整理新單集…" : ""}</p>` : POD.job?.busy ? `<p class="note">正在自動整理新單集…</p>` : "";
   return `<h2 class="ph2">最新筆記</h2>${upd}${av}${cards || podEmpty(POD.busy ? "載入單集中…" : "這些節目最近沒有新單集。")}`;
 }
 const podChars = m => [m.points, (m.sections || []).map(x => x?.body), m.facts, m.risks, m.watch].map(a => (a || []).join("")).join("").length;

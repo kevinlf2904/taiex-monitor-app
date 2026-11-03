@@ -4453,7 +4453,7 @@ function renderUsMkt(top) {
   h += hotSec(sec, "us");
   $("#lx").innerHTML = h;
 }
-// 大盤為什麼漲跌（美股大盤、台股大盤共用）：最大漲跌的指數＋最新盤勢頭條（/api/news）＋每小時整理的總經消息（data/macro-news.json），可以請 AI 根據這些整理原因
+// 大盤為什麼漲跌（美股大盤、台股大盤共用）：最大漲跌的指數＋最新盤勢頭條（/api/news）＋交易時段每小時整理的總經消息（data/macro-news.json），可以請 AI 根據這些整理原因
 const WHY = { us: { q: "美股 道瓊 那斯達克 收盤", name: "美股", next: "對明天台股可能的影響（哪些族群要留意）" }, tw: { q: "台股 加權指數 盤勢", name: "台股", next: "接下來幾天要留意的族群與風險" } };
 async function loadWhyNews(m, force = false) {
   const N = (W.whyN ||= {}), X = N[m]; if (W.off || X?.busy || (!force && X?.at && Date.now() - X.at < 600e3)) return; N[m] = { ...X, busy: true };
@@ -4477,7 +4477,7 @@ function whyHtml(m, ix, info = []) {
     ${S?.head ? `<p class="mn-sum">${aiTag(D.at)}<b>${esc(S.head)}</b>${S.impact ? `<br><small class="note">可能影響：${esc(S.impact)}</small>` : ""}</p>` : ""}
     ${L.length ? `<ul class="mn-list">${L.map(x => `<li><a href="${esc(x.link)}" target="_blank" rel="noopener"><span>${esc(x.title)}</span></a><small class="note">${esc(x.source || "")}・${hm(x.at)}</small></li>`).join("")}</ul>` : `<p class="note">${!NW || NW.busy ? "載入最新頭條…" : NW.err ? "⚠︎ " + esc(NW.err) : "還沒有相關頭條"}</p>`}
     ${qAiBlock({ key, R: W.qai[key] }, `${ico("ai")}AI 整理漲跌原因`)}
-    <p class="note">頭條即時從 Google 新聞抓；總經消息每小時整理一次（大盤 → 總經消息）。</p></section>`;
+    <p class="note">頭條即時從 Google 新聞抓；總經消息在台股、美股交易時段每小時整理一次（大盤 → 總經消息）。</p></section>`;
 }
 const usWhyHtml = J => whyHtml("us", J.indices || [], [J.sectors?.length ? "類股 ETF：" + [...J.sectors].sort((a, b) => (a.chgPct ?? 0) - (b.chgPct ?? 0)).map(x => `${x.name} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : "",
   J.macro?.length ? "期貨與宏觀：" + J.macro.map(x => `${x.name} ${x.price ?? "—"}（${sgn(x.chgPct ?? 0, 2)}%）`).join("、") : "", J.megas?.length ? "權值股：" + J.megas.map(x => `${x.name || x.code} ${sgn(x.chgPct ?? 0, 2)}%`).join("、") : ""]);
