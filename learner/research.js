@@ -141,19 +141,54 @@
       '"risks":[{"text":"可能推翻結論的資料或事件","refs":[]}],"unknowns":["尚未取得或無法驗證的資訊"],"conclusion":{"text":"條件式結論（如果…則…）","refs":[]}}\n' +
       "規則：1. 每一點都要在 refs 填資料表裡的編號，數字只能用資料表裡出現的，不要自己計算新數字（距離價位的點數已經算好在 calc 開頭的編號）。" +
       "2. 多方、空方各 2～4 點，分開寫，不能只用技術指標推測。3. 標示估算的資料（法人金額、模型價位）要說是估算或推估，不能說成官方數據；新聞摘要只能當消息面參考。" +
-      "4. 資料日不同的不要說成同一天，要寫出日期。5. 情境推演一定要有 bull、neutral、bear 三種。6. 結論要是條件式，不要確定性預測，不要買賣建議或目標價。" +
+      "4. 資料日不同的不要說成同一天，要寫出日期。法人淨額正值代表買超、負值代表賣超；漲跌幅正值代表上漲、負值代表下跌，敘述方向必須和引用資料一致。5. 情境推演一定要有 bull、neutral、bear 三種。6. 結論要是條件式，不要確定性預測，不要買賣建議或目標價。" +
       "7. 如果資料不足以判斷，status 填 \"insufficient\"，unknowns 寫缺什麼，其他欄位可以留空陣列。";
   }
 
-  // 數字檢查：AI 文字裡的數字要能在資料表裡找到（允許四捨五入、正負號、千分位）；日期、時間、小整數（1～10）、常見週期不算
+  // 數字檢查：保留正負號；排除有明確股票代號語境的數字，避免把 2330／0050 誤判成行情數字。
+  // 不可一律排除四位數：成交量 2330 張、指數上漲 2330 點仍須對照資料。
   const SAFE = new Set([20, 60, 120, 240]);
+  const STOCK_CODE_PAIRS = [["台積電", "2330"], ["聯發科", "2454"], ["台泥", "1101"], ["鴻海", "2317"], ["廣達", "2382"], ["長榮", "2603"], ["陽明", "2609"], ["元大台灣50", "0050"], ["台灣50", "0050"]];
   function numbersIn(text) {
-    const t = String(text || "").replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/g, " ").replace(/\b\d{1,2}[/]\d{1,2}\b/g, " ").replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, " ").replace(/[A-Za-z][\w.^=]*\d[\w.^=]*/g, " ");
-    return (t.match(/\d[\d,]*(\.\d+)?/g) || []).map(s => +s.replace(/,/g, "")).filter(n => Number.isFinite(n));
+    const t = String(text || "")
+      .replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/g, " ")
+      .replace(/\b\d{1,2}[/]\d{1,2}\b/g, " ")
+      .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, " ")
+      .replace(/\b(?:19|20)\d{2}\s*年/g, " ")
+      .replace(/\b\d{4,6}\.(?:TW|TWO)\b/gi, " ")
+      .replace(/\bETF\s*\d{4,6}\b/gi, " ")
+      .replace(/(?:代號|股票代碼|股票代號|代碼|股號|ticker|symbol)\s*[:：#]?\s*\d{4,6}\b/gi, " ")
+      .replace(/\b\d{4,6}\s*(?:代號|股票代碼|股票代號|股號)/g, " ")
+      .replace(/[A-Za-z][\w.^=]*\d[\w.^=]*/g, " ");
+    let masked = t;
+    for (const [name, code] of STOCK_CODE_PAIRS) masked = masked.replace(new RegExp(name + "\\s*[（(]?\\s*" + code + "\\s*[）)]?", "g"), " ");
+    return (masked.match(/-?\d[\d,]*(\.\d+)?/g) || []).map(s => +s.replace(/,/g, "")).filter(n => Number.isFinite(n));
   }
   function numberOk(n, vals) {
-    if ((Number.isInteger(n) && n <= 10) || SAFE.has(n)) return true;
-    return vals.some(v => { const a = Math.abs(v); return Math.abs(n - a) <= Math.max(0.051, a * 0.0005) || Math.abs(n - Math.round(a)) < 1e-9 || Math.abs(n - +a.toFixed(1)) < 1e-9; });
+    const a = Math.abs(n);
+    if ((Number.isInteger(n) && n >= 0 && n <= 10) || SAFE.has(n)) return true;
+    return vals.some(v => { const b = Math.abs(v); return Math.abs(a - b) <= Math.max(0.051, b * 0.0005) || Math.abs(a - Math.round(b)) < 1e-9 || Math.abs(a - +b.toFixed(1)) < 1e-9; });
+  }
+
+  // 引用存在不代表敘述方向正確：只在資料本身有明確正負號時檢查買賣超與漲跌方向。
+  function directionIssues(text, refs, snap) {
+    const out = [], t = String(text || "");
+    const hasBuy = /買超|淨買超|買進|資金流入/.test(t), hasSell = /賣超|淨賣超|賣出|資金流出/.test(t);
+    const hasUp = /上漲|走高|收紅|漲幅|上揚/.test(t), hasDown = /下跌|走低|收黑|跌幅|下挫/.test(t);
+    const buy = hasBuy && !hasSell, sell = hasSell && !hasBuy, up = hasUp && !hasDown, down = hasDown && !hasUp;
+    for (const id of refs) {
+      const r = snap.records.find(x => x.id === id);
+      if (!r || !isNum(r.value) || r.value === 0) continue;
+      const flow = /^tw\.flow\.(?:net|(?:in|out)\d+\.net[15]?)$/.test(id);
+      const change = /(?:\.chg|\.pct1)$/.test(id);
+      if (flow && ((buy && r.value < 0) || (sell && r.value > 0))) {
+        out.push({ ref: id, claim: buy ? "買超" : "賣超", actual: r.value < 0 ? "賣超" : "買超" });
+      }
+      if (change && ((up && r.value < 0) || (down && r.value > 0))) {
+        out.push({ ref: id, claim: up ? "上漲" : "下跌", actual: r.value < 0 ? "下跌" : "上漲" });
+      }
+    }
+    return out;
   }
 
   // 檢查 AI 回傳：解析 JSON → 欄位齊不齊 → 引用編號存在嗎 → 數字對得上嗎。問題記在 issues，有問題的那一點標「未驗證」，不默默刪掉
@@ -170,12 +205,14 @@
       const refs = (Array.isArray(o.refs) ? o.refs : []).map(String), bad = refs.filter(r => !ids.has(r)), good = refs.filter(r => ids.has(r));
       if (bad.length) issues.push({ type: "ref", where, refs: bad });
       const nums = numbersIn(txt).filter(n => !numberOk(n, vals)); if (nums.length) issues.push({ type: "number", where, nums });
-      return { ...o, refs: good, unverified: !!(nums.length || (!good.length && where !== "unknowns")), badRefs: bad, badNums: nums };
+      const badDirection = directionIssues(txt, good, snap);
+      if (badDirection.length) issues.push({ type: "direction", where, conflicts: badDirection });
+      return { ...o, refs: good, unverified: !!(nums.length || badDirection.length || (!good.length && where !== "unknowns")), badRefs: bad, badNums: nums, badDirection };
     };
     const list = (k, max) => (Array.isArray(j[k]) ? j[k] : []).slice(0, max).map(x => item(x, k)).filter(Boolean);
     const report = { summary: item({ text: String(j.summary || ""), refs: j.summaryRefs || [] }, "summary"), bull: list("bull", 4), bear: list("bear", 4), sectors: list("sectors", 4), levels: list("levels", 4), watchlist: list("watchlist", 6),
       scenarios: list("scenarios", 3), risks: list("risks", 4), unknowns: (Array.isArray(j.unknowns) ? j.unknowns : []).map(String).slice(0, 8), conclusion: item(j.conclusion || {}, "conclusion") };
-    report.summary.unverified = report.summary.badNums.length > 0; // 摘要不強制附編號，只檢查數字
+    report.summary.unverified = report.summary.badNums.length > 0 || report.summary.badDirection.length > 0; // 摘要不強制附編號，但檢查數字與引用方向
     const missing = ["bull", "bear", "scenarios"].filter(k => !report[k].length); if (missing.length) issues.push({ type: "missing", where: missing.join("、") });
     const types = report.scenarios.map(s => s.type); if (!["bull", "neutral", "bear"].every(t => types.includes(t))) issues.push({ type: "scenario", where: "scenarios" });
     if (!report.conclusion || !report.conclusion.text) issues.push({ type: "missing", where: "conclusion" });
@@ -216,10 +253,10 @@
     h += sec("未知事項", unknowns.length ? "<ul>" + unknowns.map(u => "<li>" + esc(u) + "</li>").join("") + "</ul>" : '<p class="note">無</p>');
     h += factsHtml(snap);
     const issues = (P.issues || []).filter(x => x && x.type);
-    const badRef = issues.filter(x => x.type === "ref").length, badNum = issues.filter(x => x.type === "number").length;
+    const badRef = issues.filter(x => x.type === "ref").length, badNum = issues.filter(x => x.type === "number").length, badDirection = issues.filter(x => x.type === "direction").length;
     const hm = at => new Date(at + 8 * 3600e3).toISOString().slice(11, 16);
     h += '<p class="note rs-meta">' + [M.at ? "AI 整理於 " + hm(M.at) : "", M.model ? "模型 " + esc(M.model) : "", M.cached ? "沿用快取" : "",
-      badRef ? "有 " + badRef + " 處引用了不存在的資料編號（已移除）" : "", badNum ? "有 " + badNum + " 處數字對不上資料（已標 ⚠︎）" : "", "AI 可能出錯，數字以客觀數據為準，不是買賣建議"].filter(Boolean).join("・") + "</p>";
+      badRef ? "有 " + badRef + " 處引用了不存在的資料編號（已移除）" : "", badNum ? "有 " + badNum + " 處數字對不上資料（已標 ⚠︎）" : "", badDirection ? "有 " + badDirection + " 處敘述方向與引用資料不一致（已標 ⚠︎）" : "", "AI 可能出錯，數字以客觀數據為準，不是買賣建議"].filter(Boolean).join("・") + "</p>";
     return '<div class="rs-report">' + h + "</div>";
   }
 
