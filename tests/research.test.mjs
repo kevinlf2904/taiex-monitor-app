@@ -105,7 +105,7 @@ test("10 AI 輸出數字驗證：日期、時間、股票代號排除；行情�
   assert.equal(R.numberOk(-500, [500]), true, "負數可與資料的絕對值比對");
   assert.equal(R.numberOk(-1200, [1200]), true, "較大的負整數不被錯誤豁免");
   assert.equal(R.numberOk(-500, []), false, "無資料依據的負數不可豁免");
-  assert.equal(R.numberOk(-2, []), false, "負的小整數不可套用正數 1～10 豁免");
+  assert.equal(R.numberOk(-2, []), false, "負的小整數不可套用正數 1～10 豁免");\n  assert.equal(R.numberOk(-20, []), false, "負數不可套用常見週期豁免");
   assert.equal(R.numberOk(3, []), true, "正的小整數維持豁免");
   assert.deepEqual([...R.numbersIn("2026-11-03 11:30 費半 ^SOX 下跌 3.4%")], [3.4], "日期、時間、代號不算數字");
   assert.deepEqual([...R.numbersIn("台積電 2330、台積電(2330)、聯發科（2454）、ETF 0050、台泥 1101、2330.TW、代號 2454、2026 年")], [], "股票代號及年份不算行情數字");
