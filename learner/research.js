@@ -148,7 +148,7 @@
   // 數字檢查：保留正負號；排除有明確股票代號語境的數字，避免把 2330／0050 誤判成行情數字。
   // 不可一律排除四位數：成交量 2330 張、指數上漲 2330 點仍須對照資料。
   const SAFE = new Set([20, 60, 120, 240]);
-  const STOCK_CODES = new Set(["1101", "1216", "1301", "1303", "2002", "2303", "2308", "2317", "2330", "2345", "2357", "2379", "2382", "2395", "2408", "2454", "2603", "2615", "2881", "2882", "2884", "2891", "3008", "3711", "4904", "5274", "6505", "6669", "6770", "8046", "0050", "0056", "00878", "00919", "00929", "00935", "00940", "009816"]);
+  const STOCK_CODE_PAIRS = [["台積電", "2330"], ["聯發科", "2454"], ["台泥", "1101"], ["鴻海", "2317"], ["廣達", "2382"], ["長榮", "2603"], ["陽明", "2609"], ["元大台灣50", "0050"], ["台灣50", "0050"]];
   function numbersIn(text) {
     const t = String(text || "")
       .replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/g, " ")
@@ -159,7 +159,8 @@
       .replace(/(?:代號|股票代碼|股票代號|代碼|股號|ticker|symbol)\s*[:：#]?\s*\d{4,6}\b/gi, " ")
       .replace(/\b\d{4,6}\s*(?:代號|股票代碼|股票代號|股號)/g, " ")
       .replace(/[A-Za-z][\w.^=]*\d[\w.^=]*/g, " ");
-    const masked = t.replace(/\b\d{4,6}\b/g, code => STOCK_CODES.has(code) ? " " : code);
+    let masked = t;
+    for (const [name, code] of STOCK_CODE_PAIRS) masked = masked.replace(new RegExp(name + "\\s*[（(]?\\s*" + code + "\\s*[）)]?", "g"), " ");
     return (masked.match(/-?\d[\d,]*(\.\d+)?/g) || []).map(s => +s.replace(/,/g, "")).filter(n => Number.isFinite(n));
   }
   function numberOk(n, vals) {
@@ -171,8 +172,9 @@
   // 引用存在不代表敘述方向正確：只在資料本身有明確正負號時檢查買賣超與漲跌方向。
   function directionIssues(text, refs, snap) {
     const out = [], t = String(text || "");
-    const buy = /買超|淨買超|買進|資金流入/.test(t), sell = /賣超|淨賣超|賣出|資金流出/.test(t);
-    const up = /上漲|走高|收紅|漲幅|上揚/.test(t), down = /下跌|走低|收黑|跌幅|下挫/.test(t);
+    const hasBuy = /買超|淨買超|買進|資金流入/.test(t), hasSell = /賣超|淨賣超|賣出|資金流出/.test(t);
+    const hasUp = /上漲|走高|收紅|漲幅|上揚/.test(t), hasDown = /下跌|走低|收黑|跌幅|下挫/.test(t);
+    const buy = hasBuy && !hasSell, sell = hasSell && !hasBuy, up = hasUp && !hasDown, down = hasDown && !hasUp;
     for (const id of refs) {
       const r = snap.records.find(x => x.id === id);
       if (!r || !isNum(r.value) || r.value === 0) continue;
