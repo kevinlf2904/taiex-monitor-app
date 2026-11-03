@@ -156,6 +156,7 @@
       .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, " ")
       .replace(/\b(?:19|20)\d{2}\s*年/g, " ")
       .replace(/\b\d{4,6}\.(?:TW|TWO)\b/gi, " ")
+      .replace(/\bETF\s*\d{4,6}\b/gi, " ")
       .replace(/(?:代號|股票代碼|股票代號|代碼|股號|ticker|symbol)\s*[:：#]?\s*\d{4,6}\b/gi, " ")
       .replace(/\b\d{4,6}\s*(?:代號|股票代碼|股票代號|股號)/g, " ")
       .replace(/[A-Za-z][\w.^=]*\d[\w.^=]*/g, " ");
