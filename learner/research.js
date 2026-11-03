@@ -179,7 +179,7 @@
     for (const id of refs) {
       const r = snap.records.find(x => x.id === id);
       if (!r || !isNum(r.value) || r.value === 0) continue;
-      const flow = /^tw\.flow\./.test(id);
+      const flow = /^tw\.flow\.(?:net|(?:in|out)\d+\.net[15]?)$/.test(id);
       const change = /(?:\.chg|\.pct1)$/.test(id);
       if (flow && ((buy && r.value < 0) || (sell && r.value > 0))) {
         out.push({ ref: id, claim: buy ? "買超" : "賣超", actual: r.value < 0 ? "賣超" : "買超" });
