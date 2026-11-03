@@ -197,6 +197,12 @@ test("品牌合規：候補名單 email 檢查、產業資料沒有人工個股�
   for (const f of ["industry.js", "industry-pack.js", "industry-figs.js", ...readdirSync(new URL("../learner/indpacks/", import.meta.url)).map(x => "indpacks/" + x)])
     assert.doesNotMatch(L(f), /\["[0-9A-Z.^=\-]+", ?"[^"]*", ?"[^"]+"\]/, `${f} 還有個股短評`);
 });
+test("更新通知名單：超過 1 年或時間讀不到的 email 會被清掉，其他保留", async () => {
+  const { waitlistExpired, WL_KEEP_MS } = await import("../api/_lib/sync.js"), now = Date.parse("2026-11-03T00:00:00Z");
+  const raw = ["new@a.co", JSON.stringify({ at: now - 86400e3 }), "old@a.co", JSON.stringify({ at: now - WL_KEEP_MS - 1 }), "bad@a.co", "not json", "noat@a.co", "{}"];
+  assert.deepEqual(waitlistExpired(raw, now).sort(), ["bad@a.co", "noat@a.co", "old@a.co"]);
+  assert.deepEqual(waitlistExpired({ "x@a.co": JSON.stringify({ at: now }) }, now), []);
+});
 test("總經：FRED CSV、年增率、薩姆規則", async () => {
   const { parseCsv, transform, sahm } = await import("../api/_lib/macro.js");
   const R = parseCsv("observation_date,CPIAUCSL\n2024-01-01,300\n2024-02-01,.\n2024-03-01,\n" + Array.from({ length: 13 }, (_, i) => `${2025 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}-01,${310 + i}`).join("\n"));

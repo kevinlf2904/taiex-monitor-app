@@ -149,6 +149,12 @@ export function monRuns(raw) {
   return { last: n("last"), lastOk: n("lastOk"), ok: n("ok"), fail: n("fail"), streak: n("streak"), err: s("err"), badN: n("badN"), badTxt: s("badTxt"), skip: ["closed", "unknown", "notoday"].includes(r.skip) ? r.skip : "", skipAt: n("skipAt") };
 }
 
+// 更新通知名單的保存期限：登記後最多 365 天，到期刪除（新增登記時順便清，見 waitlistExpired）
+export const WL_KEEP_MS = 365 * 86400e3;
+// 名單裡已經超過保存期限的 email（raw 是 HGETALL 的結果；at 讀不到的也算過期，不留來路不明的資料）
+export function waitlistExpired(raw, now = Date.now()) {
+  return Object.entries(hashObj(raw)).filter(([, v]) => { try { const at = +JSON.parse(v).at; return !(at > 0) || now - at > WL_KEEP_MS; } catch { return true; } }).map(([k]) => k);
+}
 // 候補名單的一筆：email 轉小寫並檢查格式，方案只收 pro／team
 export function waitlistEntry(email, plan, now = Date.now()) {
   const e = String(email || "").trim().toLowerCase(); if (e.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) return null;
@@ -178,7 +184,12 @@ export default async function handler(req, res) {
     const w = waitlistEntry(b.email, b.plan); if (!w) return res.status(400).json({ ok: false, error: "Email 格式不對" });
     try { const rk = `wl:ip:${hashId(ipOf(req)).slice(0, 16)}`, n = await incrTtl(rk, 3600);
       if (n > 5) return res.status(429).json({ ok: false, error: "太多次了，請一小時後再試" });
-      await kv("HSET", "waitlist", w.email, w.doc); return res.status(200).json({ ok: true }); }
+      // remove：取消通知，刪掉這個 email（不論原本有沒有登記都回成功，不透露名單裡有誰）
+      if (b.remove) { await kv("HDEL", "waitlist", w.email); return res.status(200).json({ ok: true, removed: true }); }
+      await kv("HSET", "waitlist", w.email, w.doc);
+      // 大約每 20 次登記清一次過期資料（名單很小，HGETALL 一次就好）
+      if (Math.random() < 0.05) { try { const old = waitlistExpired(await kv("HGETALL", "waitlist")); if (old.length) await kv("HDEL", "waitlist", ...old); } catch {} }
+      return res.status(200).json({ ok: true }); }
     catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "雲端儲存暫時連不到，請稍後再試", "sync") }); }
   }
   if (!okId(b.id)) return res.status(400).json({ ok: false, error: "同步碼格式不對" });
