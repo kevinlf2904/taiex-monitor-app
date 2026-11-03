@@ -166,7 +166,7 @@
   }
   function numberOk(n, vals) {
     const a = Math.abs(n);
-    if ((Number.isInteger(n) && n >= 0 && n <= 10) || SAFE.has(a)) return true;
+    if ((Number.isInteger(n) && n >= 0 && n <= 10) || SAFE.has(n)) return true;
     return vals.some(v => { const b = Math.abs(v); return Math.abs(a - b) <= Math.max(0.051, b * 0.0005) || Math.abs(a - Math.round(b)) < 1e-9 || Math.abs(a - +b.toFixed(1)) < 1e-9; });
   }
 
