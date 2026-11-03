@@ -668,6 +668,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
         <div class="deep-foot"><button class="btn" id="deepPrev">← 上一部分</button><span class="note" id="deepPos"></span><button class="btn" id="deepNext">下一部分 →</button></div>
       </section>
       <div class="keys" id="lessonKeys"></div>
+      <p class="note lesson-lab">學完想自己動手？<button type="button" class="btn sm" id="lessonLab">去圖表實驗室試試 →</button></p>
       <div class="lesson-nav">
         <button class="btn" id="lessonPrev">← 上一課</button>
         <button class="btn primary" id="lessonNext">完成本課，下一課 →</button>
@@ -683,6 +684,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     </div>
     <div class="lab">
       <div style="display:flex; flex-direction:column; gap:18px; min-width:0">
+        <p class="note lab-srcnote" id="labSrcNote" style="margin:0 0 -10px"></p>
         <div class="panel chartbox" id="labChart"></div>
         <div class="panel bt" id="btPanel"></div>
         <div class="panel bt" id="advPanel"></div>
@@ -937,7 +939,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.11.03-183</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.11.03-184</span></footer>
 
 <script src="datasrc.js"></script><!-- 排程資料從 GitHub 讀最新版，要在其他程式之前 -->
 <script src="core.js"></script>
@@ -2765,6 +2767,8 @@ const labUsesReal = () => lab.src === "real" && !!REAL.cur;
 function labData() {
   if (labUsesReal()) { lab.D = REAL.cur.data.map(x => ({ ...x, v: x.v || 0 })); $("#labSeed").textContent = `${realName(REAL.cur)}・${lab.D.length} 個交易日・${REAL.cur.source}`; }
   else { lab.D = genSeries(lab.seed, +$("#labLen").value); $("#labSeed").textContent = lab.src === "real" ? "還沒載入真實個股，先顯示模擬走勢" : `走勢編號 #${lab.seed}`; }
+  // 圖的正上方標出資料來源（手機上切換鈕在圖下面，看圖時要知道這是模擬還是真實）
+  $("#labSrcNote").textContent = labUsesReal() ? `真實個股：${realName(REAL.cur)}（${REAL.cur.source}）` : `模擬走勢（電腦隨機產生，不是真實股價）・#${lab.seed}`;
   lab.I = indicators(lab.D); lab.skip = new Set();
 }
 function setLabSrc(src) {
@@ -4978,6 +4982,7 @@ $(".tabs").addEventListener("click", e => { const b = e.target.closest("button[d
   // 已經在看盤時再點一次「看盤」：從個股頁回到看盤清單（像 App 的分頁鍵）
   if ((b.dataset.tab === "watch" || b.dataset.tab === "intel") && CUR_TAB === b.dataset.tab) { try { $("#watchFrame").contentWindow.postMessage({ type: "watch-home" }, "*"); } catch {} return; }
   goTab(b.dataset.tab); });
+$("#lessonLab").addEventListener("click", () => goTab("lab")); // 課程最後：直接到圖表實驗室，用同樣的指標自己試
 $("#schoolNav").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) goTab(b.dataset.tab); });
 
 // 看盤分頁（watch.html?embed=1）：回報高度、從看盤跳到個股判讀、從判讀跳回看盤
