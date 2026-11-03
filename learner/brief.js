@@ -1457,6 +1457,41 @@ function nextActionHtml(plan, val) {
   </div>`;
 }
 
+/* ---------- AI 市場研究（今日市場「AI 研究」工作區）----------
+   資料：先放四個工作區的數字摘要（market-center.js 的 researchText，每段附資料日期），再放今日重點全文；伺服器只收前 6000 字，重要的放前面。
+   結果：固定格式（結論、依據、風險與反證、接下來觀察、資料限制），標整理時間與依據的行情時間；盤中超過 30 分鐘提醒重新整理。
+   保存：sessionStorage「kline:mcai:v1」（只存這個分頁、關掉就清；只存當天的一份，換日不還原），切換分頁、重畫不用重新整理花額度。 */
+const TD_AI_KEY = "kline:mcai:v1", TD_AI_STALE = 30 * 60e3;
+function tdAiContext() {
+  const r = typeof KLMarketCenter !== "undefined" && KLMarketCenter.researchText ? (() => { try { return KLMarketCenter.researchText(W); } catch { return ""; } })() : "";
+  return (r ? r + "\n\n" : "") + todayText();
+}
+function tdAiPrompt() {
+  const ph = tdAfter() ? "現在是收盤後：重點放在今天大盤怎麼走、法人與族群資金、明天要注意什麼"
+    : typeof mktSession === "function" && mktSession() === "open" ? "現在是盤中：重點放在目前盤勢、市場廣度、和技術攻防價位的相對位置"
+      : "現在是盤前：重點放在昨晚美股、利率匯率代表今天開盤可能的氣氛，以及今天要注意的事件";
+  return `請用繁體中文、白話整理今日市場研究，${ph}。依下面格式，總共 350 字以內：
+【結論】一句話：偏多、偏空或震盪，加上最主要的原因。
+【依據】最多 3 點，每點都寫出資料裡的數字和它的資料日期。
+【風險與反證】最多 2 點：哪些資料和結論相反，或什麼情況會讓結論失效。
+【接下來觀察】最多 2 點，盡量用技術攻防的價位（壓力、多空分水嶺、支撐）；資料有提到我的自選或持股就帶一句。
+【資料限制】列出標示「未取得」、或日期和今天不一致的資料；都齊全就寫「無」。
+規則：只用上面資料裡的數字，不要自己補數字或新聞；不同日期的資料不要說成同一天；推論的句子開頭加「推論：」；不要給買賣建議或目標價。`;
+}
+function tdAiSave(x) { try { sessionStorage.setItem(TD_AI_KEY, JSON.stringify({ text: x.text, at: x.at, d: x.d, basis: x.basis })); } catch {} }
+function tdAiLoad(day) { try { const x = JSON.parse(sessionStorage.getItem(TD_AI_KEY) || "null"); return x?.text && x.d === day ? x : null; } catch { return null; } }
+function tdAiHtml(x, session) {
+  const hm = at => new Date(at + 8 * 3600e3).toISOString().slice(11, 16);
+  const body = esc(x.text).split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+    const m = l.match(/^【([^】]{1,8})】(.*)$/);
+    const line = (m ? `<b class="cai-h">【${m[1]}】</b>${m[2]}` : l).replace(/推論：/g, '<span class="cai-inf">推論：</span>');
+    return `<div class="cai-l">${line}</div>`;
+  }).join("");
+  const old = x.at && session === "live" && Date.now() - x.at > TD_AI_STALE;
+  const meta = x.at ? `<p class="note cai-meta">AI 整理於 ${hm(x.at)}${x.basis ? `・依據加權 ${esc(x.basis)} 的資料` : ""}・AI 可能出錯，數字以各工作區為準，不是買賣建議。</p>` : "";
+  return body + meta + (old ? `<p class="note cai-old" role="status">已經整理超過 30 分鐘，盤勢可能已經變了，建議按「重新整理」。</p>` : "");
+}
+
 function todayText() {
   const t = twDay(), P = briefP();
   const plan = getBriefSnapshot(t);
@@ -1929,7 +1964,8 @@ function todayPage() {
   const shareButton = M ? '<button type="button" class="td-ib" data-mshare="share" title="分享今日盤面（圖片）">' + ico("share") + '<span class="td-vh">分享今日盤面</span></button>' : "";
   const staleHtml = tdStaleNote(tq?.date, md, sess.session === "unknown" && pm ? "post" : sess.session);
   const dateNoteHtml = sess.displayNote || cn ? '<div class="dh-note-bar note">📅 ' + esc(sess.displayNote || cn[1]) + '</div>' : "";
-  const aiHtml = W.tdAI ? '<div class="caibox">' + (W.tdAI.loading ? "AI 整理中…" : W.tdAI.err ? "⚠︎ " + esc(W.tdAI.err) : esc(W.tdAI.text).replace(/\n/g, "<br>")) + '</div>' : "";
+  if (!W.tdAI) W.tdAI = tdAiLoad(t);
+  const aiHtml = W.tdAI ? '<div class="caibox">' + (W.tdAI.loading ? "AI 整理中…（約 10～30 秒）" : W.tdAI.err ? "⚠︎ " + esc(W.tdAI.err) : tdAiHtml(W.tdAI, sess.session)) + '</div>' : "";
   const tgHtml = C?.kv && C?.tg ? '<p class="note">想每天在手機收到：<button type="button" class="linkbtn" data-tgone>📲 推到 Telegram</button>（早上早報、收盤後重點）。</p>' : "";
   const h = `<section class="csec td-page" data-nofold>
     <h3 class="td-vh">今日市場</h3>
@@ -2117,9 +2153,10 @@ $("#lx").addEventListener("click", e => {
   if (d.tx === "evnow") return evCheck();
   if (d.tx === "tdre") { W.sum = null; W.dk = new Map(); W.tdAI = null; if (W.mf) W.mf.sumTry = false; return briefLoad(true); }
   if (d.tx === "tdtxt") { navigator.clipboard?.writeText(todayText()).then(() => toast("已複製", 1500), () => toast("複製失敗")); return; }
-  if (d.tx === "tdai") { if (W.tdAI?.loading) return; W.tdAI = { loading: true }; renderList(); // 整理中不能重複按
-    aiChat(todayText(), `請用繁體中文、白話，整理成 6 句以內的今日重點：${tdAfter() ? "今天大盤和我的自選怎麼走、觸發了哪些訊號、明天要留意的事" : "昨晚美股和台指期夜盤代表今天開盤可能的氣氛、今天要注意的事件、和我的持股有關的消息"}。只根據上面的資料，不要編造數字，最後提醒這不是買賣建議。`, { model: "lite" }) // 每天可能按很多次：用每日額度多的 Flash Lite
-      .then(t => { W.tdAI = { text: t }; }, err => { W.tdAI = { err: err.message }; }).finally(() => renderList()); }
+  if (d.tx === "tdai") { if (W.tdAI?.loading) return; const tq = W.quotes?.get?.("T00"), basis = tq?.date ? `${tq.date} ${tq.time || ""}`.trim() : null, day = twDay();
+    W.tdAI = { loading: true }; renderList(); // 整理中不能重複按
+    aiChat(tdAiContext(), tdAiPrompt(), { model: "lite" }) // 每天可能按很多次：用每日額度多的 Flash Lite
+      .then(t => { W.tdAI = { text: t, at: Date.now(), d: day, basis }; tdAiSave(W.tdAI); }, err => { W.tdAI = { err: err.message }; }).finally(() => renderList()); }
 });
 
 /* ---------- 新手 30 秒上手指引：還沒自己編過自選（watch:groups 沒存過）、也沒按過 ✕ 才顯示；所有分頁最上面一條，單色、可關閉 ---------- */

@@ -546,7 +546,7 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       ".mc-tech-position{margin-top:10px;font-size:12px;color:var(--muted)}",
       ".mc-ai-panel{padding:18px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
       ".mc-ai-run{flex:none;min-height:36px;padding:7px 14px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft);color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}.mc-ai-run:disabled{opacity:.6;cursor:wait}.mc-ai-run:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.mc-ai-panel .mc-panel-head{margin-bottom:8px}",
-      ".mc-ai-panel h4{margin:0 0 6px;font-size:17px}.mc-ai-panel>p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}.mc-ai-panel .caibox{margin-top:12px}",
+      ".mc-ai-panel h4{margin:0 0 6px;font-size:17px}.mc-ai-panel>p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}.mc-ai-panel .caibox{margin-top:12px}.mc-ai-panel .cai-l+.cai-l{margin-top:4px}.mc-ai-panel .cai-h{color:var(--ink)}.mc-ai-panel .cai-inf{color:var(--muted)}.mc-ai-panel .cai-meta{margin:8px 0 0;font-size:12px}.mc-ai-panel .cai-old{margin:4px 0 0;color:var(--warn,var(--muted));font-size:12px}",
       ".td-page .dh-sec{margin:0 0 12px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);overflow:hidden}",
       ".td-page .dh-sec>summary{min-height:58px;padding:14px 16px;gap:12px}",
       ".td-page .dh-sec-b{padding:0 16px 16px}",
