@@ -103,6 +103,12 @@
     ["tw", "us", "world"].forEach(k => { const s = N && N[k] && N[k].sum; if (s && s.head) push({ id: "news." + k, label: { tw: "台灣", us: "美國", world: "世界" }[k] + "總經新聞摘要", value: String(s.head).slice(0, 80) + (Array.isArray(s.points) && s.points[0] ? "；" + String(s.points[0]).slice(0, 80) : ""), market: k === "tw" ? "TW" : k === "us" ? "US" : "GLOBAL", source: "Google 新聞標題（AI 整理，非行情）", tradeDate: N.date, dataStatus: "after_hours", confidence: "low", kind: "news" }); });
     if (!N || !N.date) gaps.push("總經新聞摘要：未取得");
 
+    // 自選：台股用同一套報價狀態，美股看報價自己的時段；只放漲跌幅（名稱、代號、資料日）
+    (Array.isArray(I.watch) ? I.watch : []).slice(0, 6).forEach(x => {
+      const us = !/^\d{4,6}[A-Z]?$/.test(String(x.code)), st = us ? (x.session && x.session.state === "open" ? "delayed" : "after_hours") : twQuoteStatus(x, expected, session);
+      push({ id: "watch." + x.code + ".chg", label: "自選 " + (x.name || x.code) + "（" + x.code + "）漲跌幅", value: isNum(x.chgPct) ? +x.chgPct.toFixed(2) : null, unit: "%", symbol: x.code, market: us ? "US" : "TW", source: x.source || "來源未提供", tradeDate: x.date, tz: us ? "America/New_York" : "Asia/Taipei", dataStatus: st, confidence: st === "realtime" || st === "after_hours" ? "high" : "medium", kind: "watch" });
+    });
+
     return { version: VERSION, generatedAt: now, session, expectedDate: expected, records: R, gaps: [...new Set(gaps)], warnings: warn };
   }
 
@@ -125,12 +131,12 @@
     return out.length > MAX_CONTEXT ? out.slice(0, MAX_CONTEXT) : out;
   }
 
-  const SECTIONS = ["summary", "bull", "bear", "sectors", "levels", "scenarios", "risks", "unknowns", "conclusion"];
+  const SECTIONS = ["summary", "bull", "bear", "sectors", "levels", "watchlist", "scenarios", "risks", "unknowns", "conclusion"];
   function prompt(snap) {
     const ph = snap.session === "open" ? "盤中" : snap.session === "post" ? "收盤後" : snap.session === "pre" ? "盤前" : "休市或時段未確認";
     return "現在是台股" + ph + "。請只根據資料表寫研究報告，用繁體中文，只輸出一個 JSON 物件，不要有其他文字。格式：\n" +
       '{"status":"ok","summary":"兩三句的研究摘要","bull":[{"text":"支持上漲的證據","refs":["資料編號"]}],"bear":[{"text":"支持下跌的證據","refs":[]}],' +
-      '"sectors":[{"text":"強勢或弱勢族群與法人資金變化","refs":[]}],"levels":[{"text":"關鍵價位說明","refs":[]}],' +
+      '"sectors":[{"text":"強勢或弱勢族群與法人資金變化","refs":[]}],"levels":[{"text":"關鍵價位說明","refs":[]}],"watchlist":[{"text":"資料表有 watch 開頭的自選股才寫，沒有就給空陣列","refs":[]}],' +
       '"scenarios":[{"type":"bull","trigger":"觸發條件","watch":"觀察指標","invalidation":"失效條件","refs":[]},{"type":"neutral",…},{"type":"bear",…}],' +
       '"risks":[{"text":"可能推翻結論的資料或事件","refs":[]}],"unknowns":["尚未取得或無法驗證的資訊"],"conclusion":{"text":"條件式結論（如果…則…）","refs":[]}}\n' +
       "規則：1. 每一點都要在 refs 填資料表裡的編號，數字只能用資料表裡出現的，不要自己計算新數字（距離價位的點數已經算好在 calc 開頭的編號）。" +
@@ -167,7 +173,7 @@
       return { ...o, refs: good, unverified: !!(nums.length || (!good.length && where !== "unknowns")), badRefs: bad, badNums: nums };
     };
     const list = (k, max) => (Array.isArray(j[k]) ? j[k] : []).slice(0, max).map(x => item(x, k)).filter(Boolean);
-    const report = { summary: item({ text: String(j.summary || ""), refs: j.summaryRefs || [] }, "summary"), bull: list("bull", 4), bear: list("bear", 4), sectors: list("sectors", 4), levels: list("levels", 4),
+    const report = { summary: item({ text: String(j.summary || ""), refs: j.summaryRefs || [] }, "summary"), bull: list("bull", 4), bear: list("bear", 4), sectors: list("sectors", 4), levels: list("levels", 4), watchlist: list("watchlist", 6),
       scenarios: list("scenarios", 3), risks: list("risks", 4), unknowns: (Array.isArray(j.unknowns) ? j.unknowns : []).map(String).slice(0, 8), conclusion: item(j.conclusion || {}, "conclusion") };
     report.summary.unverified = report.summary.badNums.length > 0; // 摘要不強制附編號，只檢查數字
     const missing = ["bull", "bear", "scenarios"].filter(k => !report[k].length); if (missing.length) issues.push({ type: "missing", where: missing.join("、") });
@@ -201,7 +207,7 @@
     else {
       if (R.summary && R.summary.text) h += sec("研究摘要", '<p class="rs-sum">' + esc(R.summary.text) + (R.summary.unverified ? ' <span class="rs-flag">⚠︎ 未能對照資料</span>' : "") + "</p>");
       h += '<div class="rs-two">' + sec("多方論點", ul(R.bull) || '<p class="note">沒有足夠證據</p>') + sec("空方論點", ul(R.bear) || '<p class="note">沒有足夠證據</p>') + "</div>";
-      h += sec("產業與資金變化", ul(R.sectors)) + sec("關鍵價位（模型推估，非實際報價）", ul(R.levels));
+      h += sec("產業與資金變化", ul(R.sectors)) + sec("關鍵價位（模型推估，非實際報價）", ul(R.levels)) + sec("自選與持股", ul(R.watchlist));
       if (R.scenarios && R.scenarios.length) h += sec("情境推演", '<div class="rs-sc">' + R.scenarios.map(s => '<div class="rs-sc-c ' + esc(s.type) + (s.unverified ? " rs-unv" : "") + '"><b>' + (SC[s.type] || esc(s.type)) + "</b>" +
         [["觸發", s.trigger], ["觀察", s.watch], ["失效", s.invalidation]].filter(x => x[1]).map(x => "<p><span>" + x[0] + "</span>" + esc(x[1]) + "</p>").join("") + "</div>").join("") + "</div>");
       h += sec("風險與反證", ul(R.risks));

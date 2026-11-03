@@ -116,6 +116,13 @@ test("11 AI 引用不存在的來源：不存在的編號移除並記錄；沒�
   assert.ok(miss.issues.some(i => i.type === "scenario"), "情境少了中性、偏空要記錄");
 });
 
+test("自選：取漲跌幅最大的幾檔，台股照報價狀態、美股看自己的時段；報告有「自選與持股」段落", () => {
+  const s = R.buildSnapshot(base({ watch: [q({ code: "2330", name: "台積電", chgPct: -3.59 }), { code: "NVDA", name: "輝達", chgPct: -1.26, date: "2026-11-02", source: "Yahoo Finance", session: { state: "closed" } }] }));
+  assert.equal(get(s, "watch.2330.chg").dataStatus, "realtime"); assert.equal(get(s, "watch.NVDA.chg").market, "US"); assert.equal(get(s, "watch.NVDA.chg").dataStatus, "after_hours");
+  const p = R.parseReport(JSON.stringify({ ...good, watchlist: [{ text: "台積電下跌 3.59%", refs: ["watch.2330.chg"] }] }), s);
+  assert.equal(p.report.watchlist[0].unverified, false); assert.match(R.renderReport(p, s, {}), /自選與持股/);
+});
+
 test("AI 回報資料不足：status insufficient 時不顯示結論，只列未知事項", () => {
   const s = R.buildSnapshot(base()), p = R.parseReport('{"status":"insufficient","unknowns":["缺今天法人"]}', s);
   assert.equal(p.insufficient, true); const h = R.renderReport(p, s, {});

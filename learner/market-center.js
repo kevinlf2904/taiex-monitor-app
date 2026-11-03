@@ -778,7 +778,9 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       levels: readTechnicalLevels(W),
       us: { rows: (Array.isArray(U.indices) ? U.indices : []).concat(Array.isArray(U.macro) ? U.macro : []), dataStatus: U.dataStatus, dataDate: U.dataDate || U.date, sourceTime: U.sourceTime, source: U.source },
       global: { rows: ["TWD=X", "CL=F", "GC=F", "^VIX"].map(c => G.find(x => x && x.code === c)).filter(Boolean), fetchedAt: W?.gl?.sourceFetchedAt || null },
-      news: mn
+      news: mn,
+      // 自選：目前群組裡漲跌幅最大的 6 檔（只用已有的報價，不另外抓）
+      watch: (() => { const L = Array.isArray(W?.groups?.[W.gi]?.list) ? W.groups[W.gi].list : []; return L.map(c => getQuote(W, c)).filter(x => x && isNum(x.chgPct) && x.code !== "T00" && x.code !== "O00").sort((a, b) => Math.abs(b.chgPct) - Math.abs(a.chgPct)).slice(0, 6); })()
     };
   }
 
