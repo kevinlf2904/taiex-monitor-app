@@ -269,7 +269,11 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 /* 搜尋個股（任何分頁、個股頁都能叫出來）；個股頁上方的分頁跳轉列 */
 .gsearch { position: absolute; left: 0; right: 0; top: 0; z-index: 70; min-height: 100vh; background: var(--bg); padding: 10px 12px 24px; }
 .gs-bar { display: flex; gap: 8px; position: sticky; top: 0; background: var(--bg); padding: 4px 0 8px; }
-.gs-bar input { flex: 1; min-width: 0; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.gs-in { flex: 1; min-width: 0; position: relative; display: flex; }
+.gs-clear { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; border-radius: 8px; }
+.gs-clear:hover { color: var(--ink); }
+.gsearch { padding-bottom: calc(24px + var(--gs-kb, 0px)); } /* 手機鍵盤打開時下面多留鍵盤的高度，最後幾筆結果捲得到鍵盤上面 */
+.gs-bar input { flex: 1; min-width: 0; padding-right: 40px !important; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
 .gs-list { list-style: none; margin: 0; padding: 0; max-width: 720px; }
 .gs-list li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
 .gs-list [data-gs] { flex: 1; display: flex; gap: 10px; align-items: baseline; padding: 12px 4px; background: none; border: 0; color: var(--ink); text-align: left; font: inherit; cursor: pointer; min-width: 0; }
@@ -1043,7 +1047,7 @@ tr.on td { background: var(--surface-2); }
 
 <div class="dbg" id="dbg" hidden></div>
 <div class="gsearch" id="gsearch" hidden role="dialog" aria-label="搜尋個股">
-  <form class="gs-bar" id="gsForm" autocomplete="off"><input id="gsInput" placeholder="代號或名稱：2330、台積、0050、NVDA" inputmode="search" enterkeyhint="search" aria-label="搜尋個股（代號或名稱）"><button type="button" class="btn sm" data-gsclose>取消</button></form>
+  <form class="gs-bar" id="gsForm" autocomplete="off"><span class="gs-in"><input id="gsInput" placeholder="代號或名稱：2330、台積、0050、NVDA" inputmode="search" enterkeyhint="search" aria-label="搜尋個股（代號或名稱）"><button type="button" class="gs-clear" id="gsClear" aria-label="清除搜尋文字" hidden>×</button></span><button type="button" class="btn sm" data-gsclose>取消</button></form>
   <p class="note gs-hint" id="gsHint"></p>
   <ul class="gs-list" id="gsList" role="listbox"></ul>
 </div>
@@ -1205,6 +1209,7 @@ tr.on td { background: var(--surface-2); }
     <button data-m="alerts"><svg class="ico" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin-right:.32em" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>價格提醒清單</button>
     <button data-m="port"><svg class="ico" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin-right:.32em" aria-hidden="true"><rect x="3.5" y="7.5" width="17" height="12" rx="2"/><path d="M9 7.5V5.5h6v2M3.5 12.5h17"/></svg>持股總覽</button>
     <button data-m="fund"><svg class="ico" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.16em;margin-right:.32em" aria-hidden="true"><path d="M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-3"/></svg>基本面</button>
+    <button data-m="sync" title="換手機、iPad 時把自選、庫存一起帶過去">☁︎ 備份與雲端同步（換裝置用）</button>
     <button data-m="theme">◐ 深色／淺色</button>
     <button data-m="style"><span class="mic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1 0 1.6-.7 1.6-1.5 0-.9-.8-1.3-.8-2.1 0-.9.7-1.6 1.6-1.6h1.9a4.2 4.2 0 0 0 4.2-4.2c0-4.3-3.8-7.6-8.5-7.6z"/><circle cx="7.6" cy="11" r="1"/><circle cx="10.4" cy="7.4" r="1"/><circle cx="14.8" cy="7.6" r="1"/></svg></span>版面風格</button>
     <button data-m="font">Aa 字體：黑體／宋體</button>
@@ -1689,7 +1694,7 @@ function gsRender() {
 }
 // 搜尋面板也算一頁：打開時記一筆，按「返回」（App 或瀏覽器的返回）就關掉，不會一直蓋在看盤上
 function gsOpen(q = "", add = false) {
-  W.gsAdd = add; $("#gsHint").dataset.mode = add ? "add" : ""; const box = $("#gsearch"); if (box.hidden) { box.hidden = false; navPush(); } W.gsK = 0; $("#gsInput").value = q; goY(0);
+  W.gsAdd = add; $("#gsHint").dataset.mode = add ? "add" : ""; const box = $("#gsearch"); if (box.hidden) { box.hidden = false; navPush(); } W.gsK = 0; $("#gsInput").value = q; $("#gsClear").hidden = !q; goY(0);
   loadStocks().then(gsRender); gsRender(); setTimeout(() => $("#gsInput").focus(), 30);
 }
 function gsHide() { $("#gsearch").hidden = true; $("#gsInput").blur(); }
@@ -1701,6 +1706,11 @@ function gsGo(c) {
   gsHide(); W.navList = null; navPush("replace"); select(c); kick(); // 用個股頁取代搜尋那一筆：返回時回到搜尋之前的地方
 }
 $("#gsInput").addEventListener("input", () => { W.gsK = 0; gsRender(); });
+// 清除鈕：有字才出現；按了清空、留在輸入框繼續打
+{ const sync = () => { $("#gsClear").hidden = !$("#gsInput").value; }; $("#gsInput").addEventListener("input", sync); new MutationObserver(sync).observe($("#gsearch"), { attributes: true, attributeFilter: ["hidden"] });
+  $("#gsClear").addEventListener("click", () => { $("#gsInput").value = ""; sync(); W.gsK = 0; gsRender(); $("#gsInput").focus(); });
+  // 鍵盤高度（visualViewport 比整個視窗矮的部分）：給搜尋頁底部留空間
+  const vv = window.visualViewport; if (vv) { const kb = () => { const h = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); $("#gsearch").style.setProperty("--gs-kb", h > 80 ? h + "px" : "0px"); }; vv.addEventListener("resize", kb); vv.addEventListener("scroll", kb); } }
 $("#gsInput").addEventListener("keydown", e => { const n = $("#gsList").children.length; if (!n) return;
   if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); W.gsK = ((W.gsK || 0) + (e.key === "ArrowDown" ? 1 : -1) + n) % n; gsRender(); }
   else if (e.key === "Escape") gsClose(); });
@@ -3387,7 +3397,7 @@ function renderMoney() {
   if (F.view === "replay" || F.view === "today") F.view = "bubble";
   if (F.full === "replay") F.full = "matrix";
   let h = `<div class="seg scrseg" role="group" aria-label="資金">${[["bubble", "動能矩陣"], ["rank", "排行"]].map(([k, t]) => `<button data-mv="${k}" aria-pressed="${F.view === k}">${t}</button>`).join("")}</div>`;
-  if (!M) { $("#lx").innerHTML = h + `<p class="note gnote">${W.off ? "需要部署到網站才有資金資料。" : F.err && !F.loading ? `⚠︎ ${esc(F.err)}` : `載入最近的交易日資料…${F.prog ? `（${F.prog}）` : ""}<br>第一次要一天一天向證交所抓，大約 10～20 秒；之後會快很多。`}</p>`; return; }
+  if (!M) { $("#lx").innerHTML = h + `<p class="note gnote">${W.off ? "需要部署到網站才有資金資料。" : F.err && !F.loading ? `⚠︎ 法人資料載入失敗：${esc(F.err)}<br><button class="btn sm" data-gx="mfRefresh">重新載入</button>` : !F.loading && F.tried.size ? `找不到最近交易日的法人資料（證交所可能還沒公布，或正在維護）。<br><button class="btn sm" data-gx="mfRefresh">重新載入</button>` : `載入最近的交易日資料…${F.prog ? `（${F.prog}）` : ""}<br>第一次要一天一天向證交所抓，大約 10～20 秒；之後會快很多。`}</p>`; return; }
   const T = M.T, A = flowAt(M), S = flowStocks(M), mood = flowMood(M), tq = W.quotes.get("T00"), more = T < 10 ? `<p class="note gnote">目前只有 ${T} 個交易日，加速度需要 10 天才準${F.loading ? "，載入中…" : ""}</p>` : "";
   if (F.view === "sector") h += renderSector(M);
   else if (F.view === "bubble") {
@@ -5337,6 +5347,7 @@ function cdpLevels(day) {
 function drawTs() {
   document.querySelectorAll("#tsSeg [data-ts]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.ts === W.tsDays)); document.querySelectorAll("#tsSeg [data-fts]").forEach(b => b.setAttribute("aria-pressed", b.dataset.fts === (W.futTs === "cur" ? "cur" : "all"))); $("#cdpBtn").setAttribute("aria-pressed", W.cdp);
   const cv = $("#tsCanvas"), host = $("#tsBox"), Wd = host.clientWidth; if (!Wd) return;
+  { const q = W.quotes?.get?.(W.sel); cv.setAttribute("aria-label", `${nameOf(W.sel) || W.sel || ""} 當日分時走勢${q?.price != null ? `，現價 ${q.price}${q.chgPct != null ? `，${q.chgPct >= 0 ? "漲" : "跌"} ${Math.abs(q.chgPct).toFixed(2)}%` : ""}` : ""}`.trim()); } // 讀螢幕時念出是哪一檔、現在多少
   const d = tsData(), dpr = devicePixelRatio || 1, narrow = Wd < 560, isFull = !!host.closest(".chart-fullscreen"), axH = 18;
   // 全螢幕：主圖＋成交量一起塞進畫面（手機橫拿、螢幕矮時成交量跟著縮小，不會被擠到畫面外）
   const avail = isFull ? window.innerHeight - Math.min(window.innerHeight * 0.45, Math.max(0, cv.getBoundingClientRect().top)) - 8 : 0;
@@ -5749,7 +5760,7 @@ function drawK(fresh = false, shift = 0) {
   const old = kChart.view;
   if (shift && old && !fresh) kChart.shiftBy(shift); // 前面多了 shift 根：畫之前先把位置（含正在拖曳的手勢）一起移過去
   Chart.keepView = !fresh;
-  try { kChart.set(D, { I, ...mainOpts(dBar), subs: [...subsFrom(dBar), ...chipSubs(D)], ...kVolOpts(D, minute), fmtD: fmtKD, markers: [...sigs, ...exitMk, ...ex.markers], compare: compareOpt(), shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
+  try { kChart.set(D, { I, ariaName: `${nameOf(W.sel) || ""} ${W.sel && W.sel !== nameOf(W.sel) ? W.sel : ""}`.trim(), ...mainOpts(dBar), subs: [...subsFrom(dBar), ...chipSubs(D)], ...kVolOpts(D, minute), fmtD: fmtKD, markers: [...sigs, ...exitMk, ...ex.markers], compare: compareOpt(), shapes: ex.shapes, zones: ex.zones, hlines: ex.hlines }); }
   finally { Chart.keepView = false; }
   const want = W.k === "M" ? (isMobile() ? 36 : 48) : isMobile() ? 60 : 100, N = D.length, w = Math.min(N, want);
   if (fresh || (shift && !old)) kChart.view = N > w ? kChart.clampView(N - w, w) : null;
@@ -6168,11 +6179,17 @@ function goTab(t) {
   setDtab(t);
 }
 $("#qbar").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (!b) return; const q = b.dataset.q; if (q === "list") { showList(); goY(0); } else if (q === "menu") openSheet(); else goTab(q); });
-function openSheet(extra = "", menu = true) { $("#sheet .menu").hidden = $("#sheetTitle").hidden = !menu; $("#sheetExtra").innerHTML = extra; $("#sheet").hidden = $("#sheetBg").hidden = false; place($("#sheet")); $("#sheet").querySelector("button,a").focus(); }
-function closeSheet() { $("#sheet").hidden = $("#sheetBg").hidden = true; }
+function openSheet(extra = "", menu = true) { $("#sheet .menu").hidden = $("#sheetTitle").hidden = !menu; $("#sheetExtra").innerHTML = extra; $("#sheet").hidden = $("#sheetBg").hidden = false; place($("#sheet")); W.sheetRet ||= document.activeElement; $("#sheet").querySelector("button,a").focus(); }
+// 關掉選單時焦點回到打開它的按鈕（鍵盤、讀螢幕的人不會掉回頁面最上面）；那個按鈕已經不在畫面上就不動
+function closeSheet() { $("#sheet").hidden = $("#sheetBg").hidden = true; const r = W.sheetRet; W.sheetRet = null; if (r?.isConnected && r.offsetParent && r !== document.body) try { r.focus({ preventScroll: true }); } catch {} }
 $("#menuBtn").addEventListener("click", () => openSheet());
 $("#sheetBg").addEventListener("click", closeSheet);
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+// 選單打開時 Tab 只在選單裡繞（aria-modal 對話框），不會跑到後面的頁面
+$("#sheet").addEventListener("keydown", e => {
+  if (e.key !== "Tab") return; const f = [...$("#sheet").querySelectorAll("button,a[href],input,select,textarea,[tabindex]:not([tabindex='-1'])")].filter(x => !x.disabled && x.offsetParent); if (!f.length) return;
+  const a = f[0], z = f[f.length - 1]; if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+});
 // 上一檔／下一檔：按鈕、鍵盤 ←／→（沒有在輸入時）、在報價區左右滑
 $("#secQuote").addEventListener("click", e => { const b = e.target.closest("[data-dnav]"); if (b) dNavGo(+b.dataset.dnav); });
 document.addEventListener("keydown", e => { if (!W.sel || !$("#main").classList.contains("show-detail") && isMobile() || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "") || e.metaKey || e.ctrlKey || e.altKey || !$("#sheet").hidden) return; if (e.key === "ArrowLeft" || e.key === "ArrowRight") { if ($("#dNav").hidden) return; e.preventDefault(); dNavGo(e.key === "ArrowLeft" ? -1 : 1); } });
@@ -6193,6 +6210,7 @@ $("#sheet").addEventListener("click", e => {
   else if (m === "theme") { const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; applyTheme(t); store.set("theme", t); }
   else if (m === "alerts") $("#sheetExtra").innerHTML = alertsHtml();
   else if (m === "port") { closeSheet(); showList(); setLt("hold"); }
+  else if (m === "sync") { closeSheet(); showList(); W.tv = "sync"; setLt("tools"); } // 工具 → 備份同步
   else if (m === "fund") { closeSheet(); goTab(isTW(W.sel) ? "fund" : "trend"); }
   else if (m === "install") $("#sheetExtra").innerHTML = `<h3>加入主畫面</h3><p class="note" style="font-size:14px;line-height:1.7">iPhone／iPad：Safari 下方分享按鈕 →「加入主畫面」。Android：Chrome 選單 →「安裝應用程式」。之後從主畫面打開會全螢幕顯示，價格提醒也能跳系統通知。</p>`;
   else if (m.startsWith("open:")) { closeSheet(); select(m.slice(5)); }
