@@ -6,7 +6,7 @@ import { chromium, serve, open } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
-const REPLY = "【結論】推論：盤勢偏空震盪，主要是外資賣超。\n【依據】加權 -2.9%（2026-10-26）。\n【風險與反證】櫃買跌幅較大。\n【接下來觀察】守不守得住支撐。\n【資料限制】無";
+const REPLY = "【結論】推論：盤勢偏空震盪，主要是外資賣超。\n【大盤與廣度】\n- 加權 -2.9%（2026-10-26）。\n- 下跌家數多。\n【風險與反證】櫃買跌幅較大。\n【接下來觀察】守不守得住支撐。\n【資料限制】無";
 
 test("AI 市場研究：送出的資料有四個工作區的摘要與日期，提問是固定格式；結果分段、標整理時間與推論", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true, time: new Date("2026-10-26T10:00:00+08:00") });
@@ -15,12 +15,12 @@ test("AI 市場研究：送出的資料有四個工作區的摘要與日期，�
   await p.evaluate(() => { try { sessionStorage.clear(); } catch {} W.tdPh = null; W.tdAI = null; setLt("today"); renderList(); });
   await p.click('#lx [data-tx="tdai"]');
   await p.waitForFunction(() => /AI 整理於/.test(document.querySelector("#lx .mc-ai-panel .caibox")?.textContent || ""));
-  for (const k of ["【資料時間】", "【加權與櫃買】", "【市場廣度】", "【法人資金流向】", "【技術攻防】", "【美股與總經】", "KLineLab 今日重點"]) assert.ok(body.context.includes(k), "資料有 " + k);
+  for (const k of ["【資料時間】", "【加權與櫃買】", "【市場廣度】", "【法人資金流向】", "【技術攻防】", "【美股與總經】", "【總經新聞摘要】", "KLineLab 今日重點"]) assert.ok(body.context.includes(k), "資料有 " + k);
   assert.ok(body.context.indexOf("【資料時間】") < body.context.indexOf("KLineLab 今日重點"), "四個工作區的摘要放在前面（伺服器只收前 6000 字）");
-  const q = body.messages[0].content; for (const k of ["【結論】", "【依據】", "【風險與反證】", "【接下來觀察】", "【資料限制】", "推論：", "盤中"]) assert.ok(q.includes(k), "提問有 " + k);
+  const q = body.messages[0].content; for (const k of ["【結論】", "【大盤與廣度】", "【法人與族群資金】", "【全球連動】", "【總經與消息面】", "【技術位階】", "【自選與持股】", "【風險與反證】", "【接下來觀察】", "【資料限制】", "推論：", "盤中", "600～900 字"]) assert.ok(q.includes(k), "提問有 " + k);
   assert.equal(body.model, "lite");
-  const r = await p.evaluate(() => { const b = document.querySelector("#lx .mc-ai-panel .caibox"); return { h: b.querySelectorAll(".cai-h").length, inf: b.querySelectorAll(".cai-inf").length, meta: b.querySelector(".cai-meta")?.textContent, old: !!b.querySelector(".cai-old") }; });
-  assert.equal(r.h, 5); assert.equal(r.inf, 1); assert.match(r.meta, /AI 整理於 10:00/); assert.equal(r.old, false);
+  const r = await p.evaluate(() => { const b = document.querySelector("#lx .mc-ai-panel .caibox"); return { h: b.querySelectorAll(".cai-h").length, li: b.querySelectorAll(".cai-li").length, inf: b.querySelectorAll(".cai-inf").length, meta: b.querySelector(".cai-meta")?.textContent, old: !!b.querySelector(".cai-old") }; });
+  assert.equal(r.h, 5); assert.equal(r.li, 2); assert.equal(r.inf, 1); assert.match(r.meta, /AI 整理於 10:00/); assert.equal(r.old, false);
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

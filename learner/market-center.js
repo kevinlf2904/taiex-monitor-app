@@ -546,7 +546,7 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       ".mc-tech-position{margin-top:10px;font-size:12px;color:var(--muted)}",
       ".mc-ai-panel{padding:18px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
       ".mc-ai-run{flex:none;min-height:36px;padding:7px 14px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft);color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}.mc-ai-run:disabled{opacity:.6;cursor:wait}.mc-ai-run:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.mc-ai-panel .mc-panel-head{margin-bottom:8px}",
-      ".mc-ai-panel h4{margin:0 0 6px;font-size:17px}.mc-ai-panel>p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}.mc-ai-panel .caibox{margin-top:12px}.mc-ai-panel .cai-l+.cai-l{margin-top:4px}.mc-ai-panel .cai-h{color:var(--ink)}.mc-ai-panel .cai-inf{color:var(--muted)}.mc-ai-panel .cai-meta{margin:8px 0 0;font-size:12px}.mc-ai-panel .cai-old{margin:4px 0 0;color:var(--warn,var(--muted));font-size:12px}",
+      ".mc-ai-panel h4{margin:0 0 6px;font-size:17px}.mc-ai-panel>p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}.mc-ai-panel .caibox{margin-top:12px}.mc-ai-panel .cai-l+.cai-l{margin-top:4px}.mc-ai-panel .cai-sec:not(:first-child){margin-top:12px}.mc-ai-panel .cai-li{position:relative;padding-left:14px}.mc-ai-panel .cai-li::before{content:'・';position:absolute;left:0;color:var(--muted)}.mc-ai-panel .cai-h{color:var(--ink)}.mc-ai-panel .cai-inf{color:var(--muted)}.mc-ai-panel .cai-meta{margin:8px 0 0;font-size:12px}.mc-ai-panel .cai-old{margin:4px 0 0;color:var(--warn,var(--muted));font-size:12px}",
       ".td-page .dh-sec{margin:0 0 12px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);overflow:hidden}",
       ".td-page .dh-sec>summary{min-height:58px;padding:14px 16px;gap:12px}",
       ".td-page .dh-sec-b{padding:0 16px 16px}",
@@ -764,11 +764,23 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     const m = W && W.mkt, b = m && m.breadth;
     if (b && isNum(b.up) && isNum(b.down) && m.date && qd && String(m.date).slice(0, 10) === qd) {
       L.push("【市場廣度】" + String(m.date).slice(0, 10) + (m.time ? " " + m.time : "") + (m.live ? "（盤中）" : "") + "：上漲 " + b.up + "、平盤 " + (isNum(b.flat) ? b.flat : "—") + "、下跌 " + b.down + " 家" + (isNum(b.limUp) && isNum(b.limDn) ? "；漲停 " + b.limUp + "、跌停 " + b.limDn : ""));
-    } else L.push("【市場廣度】今天的資料未取得");
+    } else {
+      // 沒有今天的即時廣度：改用法人資料那天的漲跌家數（只算 4 碼個股），標出日期
+      const md0 = readFlow(W);
+      L.push("【市場廣度】" + (md0.mood && md0.date ? "今天的即時資料未取得；" + md0.date + "（法人資料日）上市櫃個股上漲 " + md0.mood.up + "、下跌 " + md0.mood.dn + " 家，漲停 " + (md0.mood.lu || 0) + "、跌停 " + (md0.mood.ld || 0) : "今天的資料未取得"));
+    }
     const flow = readFlow(W), al = flowAlignment(W, flow);
     if (flow.date && flow.sectors.length) {
-      const top = (arr, sign) => arr.filter(x => isNum(x.net1) && x.net1 * sign > 0).sort((a, b) => (b.net1 - a.net1) * sign).slice(0, 3).map(x => (x.name || "未命名") + " " + signed(x.net1, 1) + " 億").join("、") || "無";
-      L.push("【法人資金流向】資料日期 " + flow.date + "（" + al.label + "，單位億元，買賣超張數×收盤價估算）：流入 " + top(flow.sectors, 1) + "；流出 " + top(flow.sectors, -1));
+      // 每個板塊：今天法人淨額、外資、投信、板塊平均漲跌、近 5 日淨額（看是一天的事還是連續）、成分股中法人買最多的一檔
+      const one = x => (x.name || "未命名") + " " + signed(x.net1, 1) + " 億（外資 " + signed(x.f1, 1) + "、投信 " + signed(x.tr1, 1) + "；板塊 " + pct(x.pct1) + "；近5日 " + signed(x.net5, 1) + " 億" + (x.top ? "；買最多 " + x.top : "") + "）";
+      const top = (arr, sign) => arr.filter(x => isNum(x.net1) && x.net1 * sign > 0).sort((a, b) => (b.net1 - a.net1) * sign).slice(0, 5).map(one).join("、") || "無";
+      const md = flow.mood;
+      L.push("【法人資金流向】資料日期 " + flow.date + "（" + al.label + "，單位億元，買賣超張數×收盤價估算）" +
+        (md ? "：法人情緒 " + md.score + " 分（" + md.label + "），上市櫃個股平均 " + pct(md.avg) + "，法人合計淨買超 " + signed(md.net, 0) + " 億" : ""));
+      L.push("　流入前五：" + top(flow.sectors, 1));
+      L.push("　流出前五：" + top(flow.sectors, -1));
+      const turn = flow.sectors.filter(x => isNum(x.net1) && isNum(x.prev1) && x.net1 * x.prev1 < 0 && Math.abs(x.net1) >= 5).sort((a, b) => Math.abs(b.net1) - Math.abs(a.net1)).slice(0, 3);
+      if (turn.length) L.push("　今天轉向（昨天相反）：" + turn.map(x => (x.name || "未命名") + "（昨 " + signed(x.prev1, 1) + " → 今 " + signed(x.net1, 1) + " 億）").join("、"));
     } else L.push("【法人資金流向】" + (al.label || "未取得"));
     const lv = readTechnicalLevels(W);
     if (lv) {
@@ -780,6 +792,13 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     const G = W && W.gl && W.gl.ok && Array.isArray(W.gl.groups) ? W.gl.groups.flatMap(g => Array.isArray(g.rows) ? g.rows : []) : [];
     const pick = ["TWD=X", "CL=F", "GC=F", "^VIX"].map(c => G.find(x => x && x.code === c && isNum(x.price))).filter(Boolean);
     if (pick.length) L.push("【匯率原物料】" + pick.map(x => (x.name || x.code) + " " + numberFmt(x.price) + "（" + pct(x.chgPct) + "）").join("、"));
+    // 總經消息（排程整理的新聞摘要，data/macro-news.json）：只放最新一天的台灣、美國、世界摘要，標日期與「新聞摘要」，不是行情
+    const mn = W && W.mn && Array.isArray(W.mn.days) ? W.mn.days[0] : null;
+    if (mn) {
+      const sec = (k, n) => { const s = mn[k] && mn[k].sum; return s && s.head ? n + "：" + s.head + (Array.isArray(s.points) && s.points.length ? "（" + s.points.slice(0, 3).join("；") + "）" : "") + (s.impact ? "可能影響：" + s.impact : "") : ""; };
+      const T = [sec("tw", "台灣"), sec("us", "美國"), sec("world", "世界")].filter(Boolean);
+      L.push("【總經新聞摘要】" + (T.length ? (mn.date || "日期未提供") + "（AI 依新聞標題整理，不是行情）：" + T.join("｜") : "未取得"));
+    } else L.push("【總經新聞摘要】未取得");
     return L.join("\n");
   }
 

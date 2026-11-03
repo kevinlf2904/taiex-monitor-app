@@ -1470,22 +1470,27 @@ function tdAiPrompt() {
   const ph = tdAfter() ? "現在是收盤後：重點放在今天大盤怎麼走、法人與族群資金、明天要注意什麼"
     : typeof mktSession === "function" && mktSession() === "open" ? "現在是盤中：重點放在目前盤勢、市場廣度、和技術攻防價位的相對位置"
       : "現在是盤前：重點放在昨晚美股、利率匯率代表今天開盤可能的氣氛，以及今天要注意的事件";
-  return `請用繁體中文、白話整理今日市場研究，${ph}。依下面格式，總共 350 字以內：
-【結論】一句話：偏多、偏空或震盪，加上最主要的原因。
-【依據】最多 3 點，每點都寫出資料裡的數字和它的資料日期。
-【風險與反證】最多 2 點：哪些資料和結論相反，或什麼情況會讓結論失效。
-【接下來觀察】最多 2 點，盡量用技術攻防的價位（壓力、多空分水嶺、支撐）；資料有提到我的自選或持股就帶一句。
-【資料限制】列出標示「未取得」、或日期和今天不一致的資料；都齊全就寫「無」。
-規則：只用上面資料裡的數字，不要自己補數字或新聞；不同日期的資料不要說成同一天；推論的句子開頭加「推論：」；不要給買賣建議或目標價。`;
+  return `請用繁體中文、白話整理今日市場研究，${ph}。依下面格式分段，每段用「-」條列，總共 600～900 字；資料是「未取得」的段落寫一句「資料未取得」就好，不要硬寫：
+【結論】兩三句：偏多、偏空或震盪，最主要的原因，以及和前一天比是轉強還是轉弱。
+【大盤與廣度】加權、櫃買漲跌與兩者強弱差異；上漲／下跌家數、漲跌停家數代表的是普漲、普跌還是權值股撐盤。
+【法人與族群資金】法人情緒與合計買賣超；流入、流出前幾名族群各寫金額，說明是外資還是投信主導、是一天的事還是近 5 日連續；有「今天轉向」的族群要特別點出。
+【全球連動】美股主要指數、費半、美債殖利率、美元與台幣、原油黃金，挑和台股最相關的 3～4 項說明可能的影響。
+【總經與消息面】依總經新聞摘要整理 2～3 點，並標明是新聞摘要不是行情。
+【技術位階】加權現在在壓力、多空分水嶺、支撐的哪一段，離最近的價位多少點。
+【自選與持股】資料有提到我的自選或持股就逐一帶一句，沒有就略過這段。
+【風險與反證】2～3 點：哪些資料和結論相反，或什麼情況會讓結論失效（盡量用具體價位或數字）。
+【接下來觀察】3 點，寫出具體要看的價位、族群或數據。
+【資料限制】列出標示「未取得」、或資料日期和今天不一致的項目；都齊全就寫「無」。
+規則：只用上面資料裡的數字，不要自己補數字、新聞或公司消息；每個數字都要能在資料裡找到；不同日期的資料要寫清楚日期，不要說成同一天；推論的句子開頭加「推論：」；不要給買賣建議、目標價或進出場點。`;
 }
 function tdAiSave(x) { try { sessionStorage.setItem(TD_AI_KEY, JSON.stringify({ text: x.text, at: x.at, d: x.d, basis: x.basis })); } catch {} }
 function tdAiLoad(day) { try { const x = JSON.parse(sessionStorage.getItem(TD_AI_KEY) || "null"); return x?.text && x.d === day ? x : null; } catch { return null; } }
 function tdAiHtml(x, session) {
   const hm = at => new Date(at + 8 * 3600e3).toISOString().slice(11, 16);
   const body = esc(x.text).split("\n").map(l => l.trim()).filter(Boolean).map(l => {
-    const m = l.match(/^【([^】]{1,8})】(.*)$/);
-    const line = (m ? `<b class="cai-h">【${m[1]}】</b>${m[2]}` : l).replace(/推論：/g, '<span class="cai-inf">推論：</span>');
-    return `<div class="cai-l">${line}</div>`;
+    const m = l.match(/^【([^】]{1,10})】(.*)$/);
+    const li = !m && /^[-•・]\s*/.test(l), line = (m ? `<b class="cai-h">【${m[1]}】</b>${m[2]}` : li ? l.replace(/^[-•・]\s*/, "") : l).replace(/推論：/g, '<span class="cai-inf">推論：</span>');
+    return `<div class="cai-l${m ? " cai-sec" : li ? " cai-li" : ""}">${line}</div>`;
   }).join("");
   const old = x.at && session === "live" && Date.now() - x.at > TD_AI_STALE;
   const meta = x.at ? `<p class="note cai-meta">AI 整理於 ${hm(x.at)}${x.basis ? `・依據加權 ${esc(x.basis)} 的資料` : ""}・AI 可能出錯，數字以各工作區為準，不是買賣建議。</p>` : "";
@@ -2155,7 +2160,9 @@ $("#lx").addEventListener("click", e => {
   if (d.tx === "tdtxt") { navigator.clipboard?.writeText(todayText()).then(() => toast("已複製", 1500), () => toast("複製失敗")); return; }
   if (d.tx === "tdai") { if (W.tdAI?.loading) return; const tq = W.quotes?.get?.("T00"), basis = tq?.date ? `${tq.date} ${tq.time || ""}`.trim() : null, day = twDay();
     W.tdAI = { loading: true }; renderList(); // 整理中不能重複按
-    aiChat(tdAiContext(), tdAiPrompt(), { model: "lite" }) // 每天可能按很多次：用每日額度多的 Flash Lite
+    // 總經新聞摘要（靜態檔，十分鐘內抓過就不再抓）、法人資料還沒載入就先補，最多等 8 秒，拿不到就照現有資料整理（資料限制會寫出來）
+    const prep = [typeof loadMnews === "function" && !W.mn ? loadMnews() : null, typeof loadMoney === "function" && W.mf && !W.mf.days?.length && !W.mf.loading ? loadMoney(10) : null].filter(Boolean);
+    Promise.race([Promise.allSettled(prep), new Promise(r => setTimeout(r, 8000))]).then(() => aiChat(tdAiContext(), tdAiPrompt(), { model: "lite" })) // 每天可能按很多次：用每日額度多的 Flash Lite
       .then(t => { W.tdAI = { text: t, at: Date.now(), d: day, basis }; tdAiSave(W.tdAI); }, err => { W.tdAI = { err: err.message }; }).finally(() => renderList()); }
 });
 
