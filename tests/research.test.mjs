@@ -108,7 +108,7 @@ test("10 AI 輸出數字驗證：日期、時間、股票代號排除；行情�
   assert.equal(R.numberOk(-2, []), false, "負的小整數不可套用正數 1～10 豁免");
   assert.equal(R.numberOk(3, []), true, "正的小整數維持豁免");
   assert.deepEqual([...R.numbersIn("2026-11-03 11:30 費半 ^SOX 下跌 3.4%")], [3.4], "日期、時間、代號不算數字");
-  assert.deepEqual([...R.numbersIn("台積電 2330、聯發科（2454）、ETF 0050、台泥 1101、2330.TW、代號 2454、2026 年")], [], "股票代號及年份不算行情數字");
+  assert.deepEqual([...R.numbersIn("台積電 2330、台積電(2330)、聯發科（2454）、ETF 0050、台泥 1101、2330.TW、代號 2454、2026 年")], [], "股票代號及年份不算行情數字");
   assert.deepEqual([...R.numbersIn("成交量 2330 張、指數上漲 2330 點、外資賣超 2330 億")], [2330, 2330, 2330], "四位數行情數字仍須核對");
   assert.deepEqual([...R.numbersIn("大盤下跌 -2.3%")], [-2.3], "保留負號");
   assert.match(R.renderReport(p, s, {}), /⚠︎ 未能對照資料（999）/);
