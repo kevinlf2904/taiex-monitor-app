@@ -62,3 +62,13 @@ test("投資組合契約：不存在的 key、錯誤 JSON、讀取例外都不�
   const failed = readLegacyHoldings({ getItem() { throw new Error("denied"); } });
   assert.equal(failed.status, "invalid"); assert.equal(failed.issues[0].code, "storage_read_failed");
 });
+
+test("投資組合契約：無效的首筆資料不得阻擋後續同代號的有效資料", () => {
+  const result = normalizePortfolioHoldings({
+    AAPL: { sh: 0, cost: 100 },
+    aapl: { sh: 2, cost: 100 }
+  });
+  assert.equal(result.status, "partial");
+  assert.deepEqual(result.items.map(x => [x.symbol, x.shares]), [["AAPL", 2]]);
+  assert.deepEqual(result.issues.map(x => x.code), ["invalid_position_values"]);
+});
