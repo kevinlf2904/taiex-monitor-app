@@ -6,6 +6,9 @@
 // GET /api/kline?code=2382&months=6
 // GET /api/kline?code=2382&months=12&before=2025-10-01   往前載入更早的資料（看盤的 K 線往左拉到底時用；這時先問 Yahoo，一次就拿得到）
 // 回傳 { ok, code, name, market, source, unit, data: [{ d: "2026-09-01", o, h, l, c, v }] }，v 的單位見 unit。
+// 加 &adj=1：每根多一個 ac（除權息、減資、分割還原後的收盤價，最後一根＝原始收盤價），並附 adj: { ok, source, basis, events, skipped, suspect }。
+//   上市、上櫃個股用證交所、櫃買中心的官方參考價（含配股、減資），美股用 Yahoo 的除息與分割；suspect＝還原後仍超過漲跌幅限制的日子（可能沒還原到）。
+//   報酬、波動、風險用 ac；K 線圖仍用原始的 o/h/l/c。指數不還原（加權是價格指數）；拿不到事件時 adj.ok=false、不給 ac。
 
 // HTTP 標頭只能用 ASCII（中文會讓 fetch 直接丟出 ByteString 錯誤）
 import { isUS, usName } from "./_yahoo.js";
@@ -82,6 +85,105 @@ export function parseYahoo(j) {
   return { name: r.meta?.shortName || r.meta?.longName || "", rows };
 }
 
+// Yahoo 除息、分割事件（chart API 加 events=div,split）→ [{ d, kind: "div", amt } | { d, kind: "split", r }]，日期換成交易所當地日期；
+// r＝一股變成幾股（0050 2025 年一拆四 → 4）。Yahoo 的配息金額已經依分割調整過。
+export function parseYahooEvents(j) {
+  const r = j?.chart?.result?.[0]; if (!r) return null;
+  const tz = r.meta?.gmtoffset ?? 28800, day = t => new Date((t + tz) * 1000).toISOString().slice(0, 10), ev = [];
+  for (const x of Object.values(r.events?.dividends || {})) { const a = +x?.amount, t = +x?.date; if (Number.isFinite(a) && a > 0 && Number.isFinite(t)) ev.push({ d: day(t), kind: "div", amt: a }); }
+  for (const x of Object.values(r.events?.splits || {})) { const n = +x?.numerator, dn = +x?.denominator, t = +x?.date; if (n > 0 && dn > 0 && n !== dn && Number.isFinite(t)) ev.push({ d: day(t), kind: "split", r: n / dn }); }
+  return ev.sort((a, b) => a.d.localeCompare(b.d) || a.kind.localeCompare(b.kind));
+}
+// 官方參考價：上市＝證交所 TWT49U「除權除息計算結果表」、TWTAUU「減資恢復買賣參考價格」；上櫃＝櫃買中心 exDailyQ「除權除息計算結果」、revivt「減資恢復買賣參考價」
+// → [{ d, kind: "ref", f, why }]。
+// f＝參考價 ÷ 前一天收盤：現金股息、配股（除權）、減資都包含在內，比用股息金額自己算更完整。欄位名稱用關鍵字找；民國或西元日期都可以
+export function parseRefPrices(j, code, why) {
+  let rows = [];
+  if (Array.isArray(j?.data) && Array.isArray(j?.fields)) rows = j.data.map(r => Object.fromEntries(j.fields.map((k, i) => [String(k).replace(/\s/g, ""), r[i]])));
+  else if (Array.isArray(j?.tables)) { for (const t of j.tables) { const x = parseRefPrices(t, code, why); if (x.length) return x; } return []; }
+  else if (Array.isArray(j)) rows = j;
+  if (!rows.length) return [];
+  const ks = Object.keys(rows[0]), K = re => ks.find(k => re.test(String(k).replace(/\s/g, "")));
+  const kD = K(/資料日期|恢復買賣日期|除權息日期|^日期$/), kC = K(/股票代號|證券代號|^代號$/), kP = K(/前收盤|最後交易日之收盤/), kR = K(/除權息參考價|恢復買賣參考價|恢復買賣開始日參考價/) || K(/參考價/);
+  if (!kD || !kC || !kP || !kR) return [];
+  const out = [];
+  for (const r of rows) {
+    if (String(r[kC] ?? "").trim().toUpperCase() !== code) continue;
+    const ds = String(r[kD]).trim(), m7 = ds.match(/^(\d{3})(\d{2})(\d{2})$/), d = m7 ? `${+m7[1] + 1911}-${m7[2]}-${m7[3]}` : toISO(ds.replace(/年|月/g, "/").replace(/日/, "")), prev = toNum(r[kP]), ref = toNum(r[kR]);
+    if (d && prev > 0 && ref > 0 && Math.abs(ref / prev - 1) > 1e-6 && ref / prev > 0.05 && ref / prev < 20) out.push({ d, kind: "ref", f: ref / prev, why });
+  }
+  return out;
+}
+// 還原收盤價 ac：rows 依日期由舊到新。splitAdjusted＝rows 的價格已經依分割調整（Yahoo 的 close 是），證交所、櫃買的原始價格不是。
+// 1. 分割：除權日以前的價格除以 r。2. 除息：除息日 e 的因子 f＝1 − 股息 ÷ 前一個交易日收盤，e 以前的價格都乘上 f。
+// 最後一根 ac＝原始收盤價；只處理期間內的事件（期間外的只會讓整段乘上同一個常數，不影響報酬）。因子不合理（股息超過前收盤一半）就略過並列在 skipped。
+export function adjustRows(rows, ev, splitAdjusted = false, opts = {}) {
+  const n = rows.length, events = [], skipped = [];
+  if (!n || !Array.isArray(ev)) return { rows: rows.map(x => ({ ...x })), events, skipped, suspect: [] };
+  const first = rows[0].d, last = rows[n - 1].d, inside = e => e.d > first && e.d <= last;
+  // 官方參考價（kind: "ref"）只用在原始價格上；同一天有官方資料時，Yahoo 的除息與分割就不再用（避免配股被 Yahoo 記成分割而重複計算）
+  // 「落在哪一根」：事件日不是交易日（例如颱風休市）時算在下一個交易日；官方與 Yahoo 的日期可能差一天（2002 2024 年官方 07-25、Yahoo 07-26），所以用落在哪一根來去重複
+  const rowOf = d => { let lo = 0, hi = n - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (rows[m].d < d) lo = m + 1; else hi = m; } return lo; };
+  const refs = splitAdjusted ? [] : ev.filter(e => e.kind === "ref" && inside(e)), refRows = new Set(refs.map(e => rowOf(e.d)));
+  const splits = ev.filter(e => e.kind === "split" && inside(e) && !refRows.has(rowOf(e.d))), divs = ev.filter(e => (e.kind === "div" && inside(e) && !refRows.has(rowOf(e.d))) || refs.includes(e));
+  const cs = rows.map(x => { let c = x.c; if (!splitAdjusted) for (const e of splits) if (x.d < e.d) c /= e.r; return c; });
+  splits.forEach(e => events.push({ d: e.d, kind: "split", r: e.r, f: +(1 / e.r).toFixed(6), applied: !splitAdjusted }));
+  const fac = new Array(n).fill(1); let F = 1, k = divs.length - 1;
+  for (let i = n - 1; i >= 0; i--) {
+    fac[i] = F;
+    // 除息日落在 (前一根, 這一根]：從前一根開始往前都要乘上因子（除息日不是交易日時，算在下一個交易日）
+    while (k >= 0 && i > 0 && divs[k].d > rows[i - 1].d && divs[k].d <= rows[i].d) {
+      const e = divs[k];
+      if (e.kind === "ref") { F *= e.f; events.push({ d: rows[i].d, kind: "ref", why: e.why, f: +e.f.toFixed(6) }); k--; continue; }
+      const prev = cs[i - 1], f = prev > 0 ? 1 - e.amt / prev : NaN;
+      if (f > 0.5 && f < 1) { F *= f; events.push({ d: rows[i].d, kind: "div", amt: e.amt, f: +f.toFixed(6) }); } else skipped.push({ d: e.d, kind: "div", amt: e.amt, why: "bad_factor" });
+      k--;
+    }
+  }
+  const out = rows.map((x, i) => ({ ...x, ac: +(cs[i] * fac[i]).toFixed(4) }));
+  // 還原後仍有超過漲跌幅限制的單日（台股 10%）：多半是沒還原到的配股、減資或資料錯誤，列出來讓畫面提醒（風險計算會拿掉這些日子）
+  const lim = opts.limit ?? 0.105, suspect = [];
+  for (let i = 1; i < n; i++) { const r = out[i].ac / out[i - 1].ac - 1; if (Math.abs(r) > lim) suspect.push({ d: out[i].d, r: +r.toFixed(4) }); }
+  return { rows: out, events: events.sort((a, b) => a.d.localeCompare(b.d)), skipped, suspect };
+}
+const ymdOf = d => d.replace(/-/g, "");
+// 官方參考價（除權息＋減資），期間＝這段日 K；除權息那份拿不到就整個不用（回 null），改用 Yahoo
+export async function officialRefs(code, from, to, otc = false) {
+  try {
+    const [a, b] = otc
+      ? await Promise.all([getJSON(`https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate=${from.replace(/-/g, "/")}&endDate=${to.replace(/-/g, "/")}&response=json`), getJSON(`https://www.tpex.org.tw/www/zh-tw/bulletin/revivt?startDate=${from.replace(/-/g, "/")}&endDate=${to.replace(/-/g, "/")}&response=json`).catch(() => null)])
+      : await Promise.all([getJSON(`https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate=${ymdOf(from)}&endDate=${ymdOf(to)}&response=json`), getJSON(`https://www.twse.com.tw/rwd/zh/reducation/TWTAUU?startDate=${ymdOf(from)}&endDate=${ymdOf(to)}&response=json`).catch(() => null)]);
+    // 正常回應：證交所有 stat（期間內沒有事件時是「沒有符合條件的資料」）；櫃買中心有 tables
+    if (!a || typeof a !== "object" || (otc ? !Array.isArray(a.tables) : typeof a.stat !== "string")) return null;
+    return [...parseRefPrices(a, code, "除權息"), ...(b && typeof b === "object" ? parseRefPrices(b, code, "減資") : [])];
+  } catch { return null; }
+}
+// 從「原始價格 ÷ Yahoo 價格」找分割：Yahoo 的價格已經依分割調整，比值在分割日會從 r 跳回 1（0050 一拆四：4 → 1）。
+// Yahoo 的事件清單有時沒有分割（實測 0050 2025-06-18 就沒有），所以不能只靠事件。比值變動超過 15% 才算，回傳 [{ d, kind: "split", r, inferred: true }]
+export function inferSplits(rawRows, yRows) {
+  const Y = new Map((yRows || []).map(x => [x.d, x.c])), q = [];
+  for (const x of rawRows || []) { const y = Y.get(x.d); if (y > 0 && x.c > 0) q.push([x.d, x.c / y]); }
+  const out = [];
+  // 和「上一個穩定的比值」比，新比值要在之後最多 3 天都維持（差不到 3%）：Yahoo 單日錯價、以及錯價隔天恢復都不會被當成分割
+  const holds = i => q.slice(i + 1, i + 4).every(([, v]) => Math.abs(v / q[i][1] - 1) < 0.03);
+  let base = q.length ? q[0][1] : null;
+  for (let i = 1; i < q.length; i++) { const r = base / q[i][1]; if (Math.abs(r - 1) > 0.15 && holds(i)) { const nice = [2, 3, 4, 5, 10, 20, 0.5, 0.25, 0.2, 0.1].find(v => Math.abs(r / v - 1) < 0.03); out.push({ d: q[i][0], kind: "split", r: nice || +r.toFixed(4), inferred: true }); base = q[i][1]; }
+    else if (Math.abs(q[i][1] / base - 1) < 0.03 || holds(i)) base = q[i][1]; } // 小幅、持續的變動（例如 Yahoo 把配股記成分割）跟著更新基準
+  return out;
+}
+async function adjOf(sym, data, splitAdjusted, code, tw) {
+  const p1 = Math.floor(Date.parse(data[0].d + "T00:00:00Z") / 1000) - 7 * 86400, p2 = Math.floor(Date.parse(data[data.length - 1].d + "T00:00:00Z") / 1000) + 3 * 86400;
+  const useOfficial = !splitAdjusted && !!tw;
+  const [yj, refs] = await Promise.all([getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?period1=${p1}&period2=${p2}&interval=1d&events=div%2Csplit`).catch(() => null),
+    useOfficial ? officialRefs(code, data[0].d, data[data.length - 1].d, tw === "上櫃") : null]);
+  let y = yj ? parseYahooEvents(yj) : null;
+  // 原始價格：用和 Yahoo 價格的比值補上事件清單沒有的分割（同一天已有 Yahoo 分割就不重複）
+  if (y && !splitAdjusted) { const have = new Set(y.filter(e => e.kind === "split").map(e => e.d)); y = [...y, ...inferSplits(data, parseYahoo(yj)?.rows).filter(e => !have.has(e.d))]; }
+  if (!y && !refs) throw new Error("沒有除權息資料");
+  const A = adjustRows(data, [...(y || []), ...(refs || [])], splitAdjusted, { limit: /\.TWO?$/.test(sym) ? 0.105 : 0.5 });
+  return { ...A, basis: refs ? "official" : "yahoo", source: refs ? `${tw === "上櫃" ? "櫃買中心" : "證交所"}除權息與減資參考價＋Yahoo Finance（分割）` : "Yahoo Finance（除息、分割）", officialFailed: useOfficial && !refs };
+}
+
 async function fromTwse(code, months, anchor) {
   let name = "", rows = [];
   for (const [k, m] of monthsBack(months, anchor).entries()) {
@@ -155,8 +257,15 @@ export default async function handler(req, res) {
       if (r && r.rows.length >= (before ? 1 : 5)) {
         const seen = new Set(), data = r.rows.filter((x) => !seen.has(x.d) && seen.add(x.d) && (!before || x.d < before)).sort((a, b) => a.d.localeCompare(b.d));
         if (before && !data.length) continue;
+        let adj;
+        if (req.query?.adj === "1" && !before) {
+          if (isIndex || isOtc) adj = { ok: false, why: "index", note: "指數不還原（價格指數）" };
+          else try { const ySym = us ? raw : `${raw}${r.market === "上櫃" ? ".TWO" : ".TW"}`, A = await adjOf(ySym, data, /^Yahoo/.test(r.source), raw, !us && (r.market === "上市" || r.market === "上櫃") ? r.market : null);
+            data.splice(0, data.length, ...A.rows); adj = { ok: true, source: A.source, basis: A.basis, events: A.events, skipped: A.skipped, suspect: A.suspect, ...(A.officialFailed ? { officialFailed: true } : {}) };
+          } catch (e) { adj = { ok: false, why: "fetch_failed", note: `拿不到除權息資料（${e.message}），用原始價格` }; }
+        }
         res.setHeader("Cache-Control", before ? "s-maxage=86400, stale-while-revalidate=604800" : session() === "closed" ? "s-maxage=1800, stale-while-revalidate=3600" : "s-maxage=60, stale-while-revalidate=120");
-        return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : isOtc ? "OTC" : raw, us, name: r.name, market: r.market, source: r.source, unit: r.unit, data });
+        return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : isOtc ? "OTC" : raw, us, name: r.name, market: r.market, source: r.source, unit: r.unit, data, ...(adj ? { adj } : {}) });
       }
     } catch (e) { errors.push(e.message); }
   }
