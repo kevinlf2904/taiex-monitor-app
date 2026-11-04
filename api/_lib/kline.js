@@ -7,7 +7,7 @@
 // GET /api/kline?code=2382&months=12&before=2025-10-01   往前載入更早的資料（看盤的 K 線往左拉到底時用；這時先問 Yahoo，一次就拿得到）
 // 回傳 { ok, code, name, market, source, unit, data: [{ d: "2026-09-01", o, h, l, c, v }] }，v 的單位見 unit。
 // 加 &adj=1：每根多一個 ac（除權息、減資、分割還原後的收盤價，最後一根＝原始收盤價），並附 adj: { ok, source, basis, events, skipped, suspect }。
-//   上市個股用證交所官方參考價（含配股、減資），上櫃與美股用 Yahoo 的除息與分割；suspect＝還原後仍超過漲跌幅限制的日子（可能沒還原到）。
+//   上市、上櫃個股用證交所、櫃買中心的官方參考價（含配股、減資），美股用 Yahoo 的除息與分割；suspect＝還原後仍超過漲跌幅限制的日子（可能沒還原到）。
 //   報酬、波動、風險用 ac；K 線圖仍用原始的 o/h/l/c。指數不還原（加權是價格指數）；拿不到事件時 adj.ok=false、不給 ac。
 
 // HTTP 標頭只能用 ASCII（中文會讓 fetch 直接丟出 ByteString 錯誤）
@@ -94,7 +94,8 @@ export function parseYahooEvents(j) {
   for (const x of Object.values(r.events?.splits || {})) { const n = +x?.numerator, dn = +x?.denominator, t = +x?.date; if (n > 0 && dn > 0 && n !== dn && Number.isFinite(t)) ev.push({ d: day(t), kind: "split", r: n / dn }); }
   return ev.sort((a, b) => a.d.localeCompare(b.d) || a.kind.localeCompare(b.kind));
 }
-// 官方參考價（上市）：證交所 TWT49U「除權除息計算結果表」、TWTAUU「減資恢復買賣參考價格」→ [{ d, kind: "ref", f, why }]。
+// 官方參考價：上市＝證交所 TWT49U「除權除息計算結果表」、TWTAUU「減資恢復買賣參考價格」；上櫃＝櫃買中心 exDailyQ「除權除息計算結果」、revivt「減資恢復買賣參考價」
+// → [{ d, kind: "ref", f, why }]。
 // f＝參考價 ÷ 前一天收盤：現金股息、配股（除權）、減資都包含在內，比用股息金額自己算更完整。欄位名稱用關鍵字找；民國或西元日期都可以
 export function parseRefPrices(j, code, why) {
   let rows = [];
@@ -103,12 +104,12 @@ export function parseRefPrices(j, code, why) {
   else if (Array.isArray(j)) rows = j;
   if (!rows.length) return [];
   const ks = Object.keys(rows[0]), K = re => ks.find(k => re.test(String(k).replace(/\s/g, "")));
-  const kD = K(/資料日期|恢復買賣日期|除權息日期|^日期$/), kC = K(/股票代號|證券代號|^代號$/), kP = K(/前收盤/), kR = K(/除權息參考價|恢復買賣參考價/) || K(/參考價/);
+  const kD = K(/資料日期|恢復買賣日期|除權息日期|^日期$/), kC = K(/股票代號|證券代號|^代號$/), kP = K(/前收盤|最後交易日之收盤/), kR = K(/除權息參考價|恢復買賣參考價|恢復買賣開始日參考價/) || K(/參考價/);
   if (!kD || !kC || !kP || !kR) return [];
   const out = [];
   for (const r of rows) {
     if (String(r[kC] ?? "").trim().toUpperCase() !== code) continue;
-    const d = toISO(String(r[kD]).replace(/年|月/g, "/").replace(/日/, "")), prev = toNum(r[kP]), ref = toNum(r[kR]);
+    const ds = String(r[kD]).trim(), m7 = ds.match(/^(\d{3})(\d{2})(\d{2})$/), d = m7 ? `${+m7[1] + 1911}-${m7[2]}-${m7[3]}` : toISO(ds.replace(/年|月/g, "/").replace(/日/, "")), prev = toNum(r[kP]), ref = toNum(r[kR]);
     if (d && prev > 0 && ref > 0 && Math.abs(ref / prev - 1) > 1e-6 && ref / prev > 0.05 && ref / prev < 20) out.push({ d, kind: "ref", f: ref / prev, why });
   }
   return out;
@@ -144,23 +145,25 @@ export function adjustRows(rows, ev, splitAdjusted = false, opts = {}) {
   return { rows: out, events: events.sort((a, b) => a.d.localeCompare(b.d)), skipped, suspect };
 }
 const ymdOf = d => d.replace(/-/g, "");
-// 上市個股的官方參考價（除權息＋減資），期間＝這段日 K；任一個失敗就整個不用（回 null），改用 Yahoo
-export async function officialRefs(code, from, to) {
+// 官方參考價（除權息＋減資），期間＝這段日 K；除權息那份拿不到就整個不用（回 null），改用 Yahoo
+export async function officialRefs(code, from, to, otc = false) {
   try {
-    const q = `startDate=${ymdOf(from)}&endDate=${ymdOf(to)}&response=json`;
-    const [a, b] = await Promise.all([getJSON(`https://www.twse.com.tw/rwd/zh/exRight/TWT49U?${q}`), getJSON(`https://www.twse.com.tw/rwd/zh/reducation/TWTAUU?${q}`)]);
-    if (!a || typeof a !== "object" || typeof a.stat !== "string") return null; // 證交所沒有正常回應（期間內沒有事件時 stat 是「沒有符合條件的資料」，仍算正常）
-    return [...parseRefPrices(a, code, "除權息"), ...(b && (Array.isArray(b.data) || Array.isArray(b.tables)) ? parseRefPrices(b, code, "減資") : [])];
+    const [a, b] = otc
+      ? await Promise.all([getJSON(`https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate=${from.replace(/-/g, "/")}&endDate=${to.replace(/-/g, "/")}&response=json`), getJSON(`https://www.tpex.org.tw/www/zh-tw/bulletin/revivt?startDate=${from.replace(/-/g, "/")}&endDate=${to.replace(/-/g, "/")}&response=json`).catch(() => null)])
+      : await Promise.all([getJSON(`https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate=${ymdOf(from)}&endDate=${ymdOf(to)}&response=json`), getJSON(`https://www.twse.com.tw/rwd/zh/reducation/TWTAUU?startDate=${ymdOf(from)}&endDate=${ymdOf(to)}&response=json`).catch(() => null)]);
+    // 正常回應：證交所有 stat（期間內沒有事件時是「沒有符合條件的資料」）；櫃買中心有 tables
+    if (!a || typeof a !== "object" || (otc ? !Array.isArray(a.tables) : typeof a.stat !== "string")) return null;
+    return [...parseRefPrices(a, code, "除權息"), ...(b && typeof b === "object" ? parseRefPrices(b, code, "減資") : [])];
   } catch { return null; }
 }
-async function adjOf(sym, data, splitAdjusted, code, listed) {
+async function adjOf(sym, data, splitAdjusted, code, tw) {
   const p1 = Math.floor(Date.parse(data[0].d + "T00:00:00Z") / 1000) - 7 * 86400, p2 = Math.floor(Date.parse(data[data.length - 1].d + "T00:00:00Z") / 1000) + 3 * 86400;
-  const useOfficial = !splitAdjusted && listed;
+  const useOfficial = !splitAdjusted && !!tw;
   const [y, refs] = await Promise.all([getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?period1=${p1}&period2=${p2}&interval=1d&events=div%2Csplit`).then(parseYahooEvents).catch(() => null),
-    useOfficial ? officialRefs(code, data[0].d, data[data.length - 1].d) : null]);
+    useOfficial ? officialRefs(code, data[0].d, data[data.length - 1].d, tw === "上櫃") : null]);
   if (!y && !refs) throw new Error("沒有除權息資料");
   const A = adjustRows(data, [...(y || []), ...(refs || [])], splitAdjusted, { limit: /\.TWO?$/.test(sym) ? 0.105 : 0.5 });
-  return { ...A, basis: refs ? "official" : "yahoo", source: refs ? "證交所除權息與減資參考價＋Yahoo Finance（分割）" : "Yahoo Finance（除息、分割）", officialFailed: useOfficial && !refs };
+  return { ...A, basis: refs ? "official" : "yahoo", source: refs ? `${tw === "上櫃" ? "櫃買中心" : "證交所"}除權息與減資參考價＋Yahoo Finance（分割）` : "Yahoo Finance（除息、分割）", officialFailed: useOfficial && !refs };
 }
 
 async function fromTwse(code, months, anchor) {
@@ -239,7 +242,7 @@ export default async function handler(req, res) {
         let adj;
         if (req.query?.adj === "1" && !before) {
           if (isIndex || isOtc) adj = { ok: false, why: "index", note: "指數不還原（價格指數）" };
-          else try { const ySym = us ? raw : `${raw}${r.market === "上櫃" ? ".TWO" : ".TW"}`, A = await adjOf(ySym, data, /^Yahoo/.test(r.source), raw, !us && r.market === "上市");
+          else try { const ySym = us ? raw : `${raw}${r.market === "上櫃" ? ".TWO" : ".TW"}`, A = await adjOf(ySym, data, /^Yahoo/.test(r.source), raw, !us && (r.market === "上市" || r.market === "上櫃") ? r.market : null);
             data.splice(0, data.length, ...A.rows); adj = { ok: true, source: A.source, basis: A.basis, events: A.events, skipped: A.skipped, suspect: A.suspect, ...(A.officialFailed ? { officialFailed: true } : {}) };
           } catch (e) { adj = { ok: false, why: "fetch_failed", note: `拿不到除權息資料（${e.message}），用原始價格` }; }
         }
