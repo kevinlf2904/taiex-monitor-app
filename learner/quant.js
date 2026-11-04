@@ -173,25 +173,94 @@ function macroBeta(D, F, { kind = "pct", lag = 0, win = 120 } = {}) {
 
 /* ---------- 6. 投資組合風險 ---------- */
 // items：[{ c, mv, D }]（同一個市場的持股，日 K）；bench：大盤日 K。用最近 win 個共同交易日的日報酬
+// 投資組合風險 v2（併入 GPT PR #219／#220 的資料品質檢查，並修正審查發現的問題）：
+// - 交易日曆：有比較基準就用基準的日期；沒有就用「至少一半持股都有」的日期。期間取最近 win 個報酬。
+// - 持股在期間內缺任何一天 → 整檔不納入（不把跨兩天的漲跌當成一天）；同一天兩個不同價格、期間內有無效價格也不納入。期間外的壞資料不影響。
+// - 歷史比期間短的持股不納入，不會把整個組合的期間縮短；只有不納入的市值超過一半時，才改用能涵蓋它們的較短期間（至少 30 天）並標示。
+// - 單日漲跌超過合理範圍（台股 10.5%、其他 50%）多半是除權、減資、分割或資料錯誤：那一天從所有序列一起拿掉並標示，不把整檔排除（不會因此低估風險）。
+// - 風險值（VaR）用線性內插的分位數，尾端樣本少於 5 筆不計算；另算期望損失（ES）＝最差那 5% 日子的平均。
+// - 回傳 excluded（不納入的持股與原因）、issues（資料品質提醒）、cov（市值覆蓋率）、status（ready／partial）；金額都只算納入的部分。
+const PR_MIN = 31;
+const prLimit = c => (/^\d{4,6}[A-Z]?$/.test(String(c || "")) ? 0.105 : 0.5);
+function prSeries(D) { // 日 K → 日期 → 收盤；記下無效價格與「同一天兩個不同價格」的日期
+  const m = new Map(), bad = new Set(), clash = new Set();
+  for (const b of Array.isArray(D) ? D : []) {
+    const d = qD10(b?.d), c = b?.c; if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+    if (!(typeof c === "number" && Number.isFinite(c) && c > 0)) { bad.add(d); continue; }
+    if (m.has(d)) { if (m.get(d) !== c) clash.add(d); } else m.set(d, c);
+  }
+  return { m, bad, clash, first: [...m.keys()].sort()[0] || null };
+}
 function portRisk(items, bench, win = 120) {
-  const ok = items.filter(x => x.mv > 0 && x.D?.length > 30); if (!ok.length) return null;
-  const map = D => new Map(D.map(b => [qD10(b.d), b.c])), M = ok.map(x => map(x.D)), B = bench?.length ? map(bench) : null;
-  const dates = [...M[0].keys()].filter(d => M.every(m => m.has(d)) && (!B || B.has(d))).sort().slice(-(win + 1));
-  if (dates.length < 30) return { short: true, n: dates.length };
-  const ret = m => dates.slice(1).map((d, i) => m.get(d) / m.get(dates[i]) - 1), R = M.map(ret), Rb = B ? ret(B) : null;
-  const tot = ok.reduce((s, x) => s + x.mv, 0), w = ok.map(x => x.mv / tot), Rp = R[0].map((_, t) => R.reduce((s, r, k) => s + w[k] * r[t], 0)), vp = qSd(Rp) ** 2;
+  const all = Array.isArray(items) ? items : [], issues = [], excluded = [], valued = [];
+  const okMv = v => typeof v === "number" && Number.isFinite(v) && v > 0, mvAll = all.reduce((s, x) => s + (okMv(x?.mv) ? x.mv : 0), 0);
+  for (const x of all) {
+    if (!okMv(x?.mv)) { excluded.push({ c: x?.c, why: "no_value" }); continue; }
+    const s = prSeries(x.D); if (s.m.size < PR_MIN) { excluded.push({ c: x.c, mv: x.mv, why: "short_history", days: s.m.size }); continue; }
+    if (x.mvEst) issues.push({ k: "cost_as_value", c: x.c });
+    valued.push({ ...x, s });
+  }
+  if (!valued.length) return { short: true, n: 0, excluded, issues };
+  const bs = bench?.length ? prSeries(bench) : null, B = bs && bs.m.size >= PR_MIN && !bs.clash.size ? bs.m : null;
+  if (bench?.length && !B) issues.push({ k: "bench_invalid" });
+  let cal;
+  if (B) cal = [...B.keys()].sort();
+  else { const cnt = new Map(); valued.forEach(v => v.s.m.forEach((_, d) => cnt.set(d, (cnt.get(d) || 0) + 1))); cal = [...cnt].filter(([, k]) => k * 2 >= valued.length).map(([d]) => d).sort(); }
+  // 最後一天有一半以上持股沒有（基準和個股來源不同，盤中常常只有基準有今天）：日曆往前退一天，最多退 3 天；只有少數幾檔落後的，那幾檔不納入
+  let trimmed = 0; while (trimmed < 3 && cal.length && valued.filter(v => !v.s.m.has(cal[cal.length - 1])).length * 2 >= valued.length) { cal = cal.slice(0, -1); trimmed++; }
+  if (cal.length < PR_MIN) return { short: true, n: cal.length, excluded, issues };
+  const pick = ws => { // 這個期間能完整涵蓋的持股；不能的記下原因
+    const dates = cal.slice(-(ws + 1)), d0 = dates[0], inc = [], out = [];
+    for (const v of valued) {
+      const clash = dates.filter(d => v.s.clash.has(d)), miss = clash.length ? [] : dates.filter(d => !v.s.m.has(d));
+      if (clash.length) out.push({ c: v.c, mv: v.mv, why: "conflict", dates: clash.slice(0, 5) });
+      else if (!miss.length) inc.push(v);
+      else if (v.s.first > d0) out.push({ c: v.c, mv: v.mv, why: "short_history", days: dates.filter(d => d >= v.s.first).length });
+      else out.push({ c: v.c, mv: v.mv, why: miss.some(d => v.s.bad.has(d)) ? "bad_price" : "missing_days", count: miss.length, dates: miss.slice(0, 5) });
+    }
+    return { dates, inc, out, cov: inc.reduce((t, v) => t + v.mv, 0) / mvAll };
+  };
+  const full = Math.min(win, cal.length - 1);
+  let P = pick(full);
+  if (P.cov < 0.5) { // 歷史短的持股市值占一半以上：改用能涵蓋它們的較短期間
+    const sh = P.out.filter(o => o.why === "short_history"), ws = sh.length ? Math.min(...sh.map(o => o.days)) - 1 : 0;
+    if (ws >= 30 && ws < full) { const Q = pick(ws); if (Q.cov > P.cov) { issues.push({ k: "window_shortened", n: ws, full }); P = Q; } }
+  }
+  excluded.push(...P.out);
+  const dates = P.dates, inc = P.inc;
+  if (!inc.length) return { short: true, n: dates.length - 1, excluded, issues };
+  if (B) { // 基準缺日：期間內一半以上納入持股都有、基準卻沒有的日期（那幾天的漲跌會被併進隔天）
+    const lo = dates[0], hi = dates[dates.length - 1], cnt = new Map();
+    inc.forEach(v => v.s.m.forEach((_, d) => { if (d > lo && d < hi && !B.has(d)) cnt.set(d, (cnt.get(d) || 0) + 1); }));
+    const gaps = [...cnt].filter(([, k]) => k * 2 >= inc.length).map(([d]) => d).sort();
+    if (gaps.length) issues.push({ k: "bench_gap", count: gaps.length, dates: gaps.slice(0, 5) });
+  }
+  const ret = m => dates.slice(1).map((d, i) => m.get(d) / m.get(dates[i]) - 1);
+  let R = inc.map(v => ret(v.s.m)), Rb = B ? ret(B) : null;
+  const keep = R[0].map(() => true);
+  inc.forEach((v, k) => R[k].forEach((r, i) => { if (Math.abs(r) >= prLimit(v.c)) { keep[i] = false; issues.push({ k: "extreme_day", c: v.c, d: dates[i + 1], r }); } }));
+  if (Rb) Rb.forEach((r, i) => { if (Math.abs(r) >= 0.2) { keep[i] = false; issues.push({ k: "extreme_day", c: "bench", d: dates[i + 1], r }); } });
+  const from = dates.slice(0, -1).filter((_, i) => keep[i]), to = dates.slice(1).filter((_, i) => keep[i]);
+  R = R.map(a => a.filter((_, i) => keep[i])); if (Rb) Rb = Rb.filter((_, i) => keep[i]);
+  const n = R[0].length; if (n < 30) return { short: true, n, excluded, issues };
+  inc.forEach((v, k) => { let run = 0, top = 0; R[k].forEach(r => { run = r === 0 ? run + 1 : 0; top = Math.max(top, run); }); if (top >= 5) issues.push({ k: "possible_halt", c: v.c, days: top }); });
+  const tot = inc.reduce((s, v) => s + v.mv, 0), w = inc.map(v => v.mv / tot), Rp = Array.from({ length: n }, (_, t) => R.reduce((s, r, k) => s + w[k] * r[t], 0)), vp = qSd(Rp) ** 2;
   const beta = (a, b) => { const v = qSd(b) ** 2; return v > 0 ? qCov(a, b) / v : null; };
-  const rows = ok.map((x, k) => ({ c: x.c, mv: x.mv, w: w[k], vol: qSd(R[k]) * Math.sqrt(QY), beta: Rb ? beta(R[k], Rb) : null, ctr: vp > 0 ? (w[k] * qCov(R[k], Rp)) / vp : w[k] })).sort((a, b) => b.w - a.w);
+  const rows = inc.map((v, k) => ({ c: v.c, mv: v.mv, w: w[k], vol: qSd(R[k]) * Math.sqrt(QY), beta: Rb ? beta(R[k], Rb) : null, ctr: vp > 0 ? (w[k] * qCov(R[k], Rp)) / vp : w[k] })).sort((a, b) => b.w - a.w);
   const C = R.map(a => R.map(b => qCorr(a, b))), pairs = [];
-  for (let i = 0; i < ok.length; i++) for (let j = i + 1; j < ok.length; j++) pairs.push({ a: ok[i].c, b: ok[j].c, r: C[i][j] });
+  for (let i = 0; i < inc.length; i++) for (let j = i + 1; j < inc.length; j++) pairs.push({ a: inc[i].c, b: inc[j].c, r: C[i][j] });
   pairs.sort((a, b) => b.r - a.r);
   const off = pairs.length ? qMean(pairs.map(p => p.r)) : null, hhi = w.reduce((s, v) => s + v * v, 0), pBeta = Rb ? beta(Rp, Rb) : null;
   // 歷史壓力：這段期間大盤最差的連續 20 個交易日，組合同期表現
-  let worst = null; if (Rb && Rb.length > 20) for (let i = 0; i + 20 <= Rb.length; i++) { const b = Rb.slice(i, i + 20).reduce((p, v) => p * (1 + v), 1) - 1; if (!worst || b < worst.b) worst = { b, p: Rp.slice(i, i + 20).reduce((p, v) => p * (1 + v), 1) - 1, from: dates[i], to: dates[i + 20] }; }
-  const srt = [...Rp].sort((a, b) => a - b);
-  return { n: dates.length - 1, from: dates[0], to: dates[dates.length - 1], tot, rows, codes: ok.map(x => x.c), C, pairs, avgCorr: off, hhi, effN: 1 / hhi, top: rows[0],
-    vol: Math.sqrt(vp * QY), beta: pBeta, var95: srt[Math.floor(srt.length * 0.05)] ?? null, worst, stress: pBeta != null ? pBeta * -0.2 : null,
-    stressRows: rows.map(r => ({ c: r.c, loss: r.mv * (r.beta ?? 1) * -0.2 })) };
+  let worst = null; if (Rb && Rb.length > 20) for (let i = 0; i + 20 <= Rb.length; i++) { const b = Rb.slice(i, i + 20).reduce((p, v) => p * (1 + v), 1) - 1; if (!worst || b < worst.b) worst = { b, p: Rp.slice(i, i + 20).reduce((p, v) => p * (1 + v), 1) - 1, from: from[i], to: to[i + 19] }; }
+  const srt = [...Rp].sort((a, b) => a - b), q = (n - 1) * 0.05, ql = Math.floor(q);
+  const var95 = n * 0.05 >= 5 ? srt[ql] + (srt[ql + 1] - srt[ql]) * (q - ql) : null, es95 = var95 == null ? null : qMean(srt.filter(v => v <= var95));
+  if (var95 == null) issues.push({ k: "var_sample", n });
+  const cov = { ratio: mvAll > 0 ? tot / mvAll : null, mvAll, mvInc: tot, incN: inc.length, allN: all.length };
+  if (cov.ratio != null && cov.ratio < 0.8) issues.push({ k: "low_coverage", ratio: cov.ratio });
+  return { n, from: dates[0], to: dates[dates.length - 1], tot, rows, codes: inc.map(v => v.c), C, pairs, avgCorr: off, hhi, effN: 1 / hhi, top: rows[0],
+    vol: Math.sqrt(vp * QY), beta: pBeta, var95, es95, worst, stress: pBeta != null ? pBeta * -0.2 : null,
+    stressRows: rows.map(r => ({ c: r.c, loss: r.mv * (r.beta ?? 1) * -0.2 })), excluded, issues, cov, trimmed, status: excluded.length || issues.length ? "partial" : "ready" };
 }
 // 依風險承受度：單一持股上限、目標 Beta；超過就建議減碼，Beta 太高就試算反向 ETF 的避險金額
 const RISK_TOL = { low: ["保守", 0.15, 0.6], mid: ["穩健", 0.25, 0.85], high: ["積極", 0.4, 1.1] };

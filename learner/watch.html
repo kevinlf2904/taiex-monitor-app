@@ -1191,7 +1191,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.03-187</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.04-188</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2189,7 +2189,7 @@ function renderPort() {
 /* ---------- 庫存：今日損益、累積損益、市值、持股佔比 ---------- */
 const PIE = ["#4e9af1", "#f0a43a", "#e0566b", "#3cc6a8", "#9a9aa6"];
 function holdRows(m) {
-  return Object.entries(W.hold).filter(([c, h]) => h.sh && h.cost && mktOf(c) === m).map(([c, h]) => {
+  return Object.entries(W.hold).filter(([c, h]) => +h?.sh > 0 && +h?.cost > 0 && Number.isFinite(+h.sh) && Number.isFinite(+h.cost) && mktOf(c) === m).map(([c, h]) => { // 股數、成本要是大於 0 的數字（壞資料略過，不改動存檔）
     const q = W.quotes.get(c) || (c === W.sel ? W.detailQ : null), p = holdPnL(c, q), cost = h.sh * h.cost;
     return { c, h, q, cost, mv: p?.mv ?? null, pnl: p?.pnl ?? null, pct: p?.pct ?? null, day: p?.day ?? null, dayPct: p?.day != null && p.mv - p.day ? p.day / (p.mv - p.day) * 100 : null, chgPct: q?.chgPct ?? null };
   });
@@ -2439,8 +2439,23 @@ function renderHoldRisk() {
   const codes = R.map(r => r.c).sort(); holdRiskLoad(m, codes);
   const H = W.hrisk?.key === m + ":" + codes.join(",") ? W.hrisk : null;
   if (!H || H.busy) { $("#lx").innerHTML = `<p class="note" style="padding:12px">${W.off ? "需要部署到網站才有資料。" : `載入 ${codes.length} 檔持股與大盤的日 K…`}</p>`; return; }
-  const P = portRisk(R.map(r => ({ c: r.c, mv: r.mv ?? r.cost, D: H.D[r.c] })), H.bench), bn = us ? "S&P 500（SPY）" : "加權指數";
-  if (!P || P.short) { $("#lx").innerHTML = `<p class="note" style="padding:12px">${P?.short ? `持股共同的交易日只有 ${P.n} 天，太少算不出相關性（新上市或資料缺漏）。` : "日 K 載入失敗，稍後再試。"}</p>`; return; }
+  // 沒有報價時暫用成本當市值，並在畫面標示（mvEst）
+  const P = portRisk(R.map(r => ({ c: r.c, mv: r.mv ?? r.cost, mvEst: r.mv == null, D: H.D[r.c] })), H.bench), bn = us ? "S&P 500（SPY）" : "加權指數";
+  const WHY = { no_value: "沒有市值", short_history: "上市或有資料的日子不夠", missing_days: "期間內缺交易日資料", bad_price: "期間內有無效價格", conflict: "同一天有兩個不同價格" };
+  const exTxt = L => L.map(e => `${esc(nameOf(e.c))}（${WHY[e.why] || e.why}）`).join("、");
+  if (!P || P.short) { $("#lx").innerHTML = `<p class="note" style="padding:12px">${P?.short ? `能一起計算的交易日只有 ${P.n} 天，太少算不出相關性（新上市或資料缺漏）。${P.excluded?.length ? `未納入：${exTxt(P.excluded)}。` : ""}` : "日 K 載入失敗，稍後再試。"}</p>`; return; }
+  // 資料品質提醒：哪些持股沒算進來、期間是否縮短、基準缺日、異常單日、可能停牌、用成本代替市值
+  const IQ = [];
+  if (P.excluded.length) IQ.push(`未納入計算：${exTxt(P.excluded)}；納入的市值占 ${(P.cov.ratio * 100).toFixed(0)}%，下面的數字只代表納入的部分。`);
+  for (const x of P.issues) {
+    if (x.k === "window_shortened") IQ.push(`主要持股上市不到 ${x.full} 個交易日，期間縮短為 ${x.n} 天，統計比較不穩定。`);
+    else if (x.k === "bench_gap") IQ.push(`比較基準在期間內缺 ${x.count} 天資料（${x.dates.map(d => d.slice(5)).join("、")}），Beta 可能有偏差。`);
+    else if (x.k === "possible_halt") IQ.push(`${esc(nameOf(x.c))} 連續 ${x.days} 天價格不變，可能停牌，波動會被低估。`);
+    else if (x.k === "cost_as_value") IQ.push(`${esc(nameOf(x.c))} 暫時沒有報價，用成本當市值計算權重。`);
+    else if (x.k === "var_sample") IQ.push(`期間只有 ${x.n} 天，風險值與期望損失樣本不足，不計算。`);
+  }
+  const ext = P.issues.filter(x => x.k === "extreme_day");
+  if (ext.length) IQ.push(`拿掉 ${ext.length} 個異常單日漲跌（${ext.slice(0, 3).map(x => `${x.c === "bench" ? "基準" : esc(nameOf(x.c))} ${x.d.slice(5)} ${qP(x.r)}`).join("、")}${ext.length > 3 ? "…" : ""}）：多半是除權、減資或資料錯誤，不當成真的波動。`);
   const tol = W.hrTol, plan = portPlan(P, tol), [hc, hn] = HEDGE[m], n = P.rows.length, nm = c => `${esc(nameOf(c))}<small class="note"> ${c}</small>`;
   const weak = [];
   if (P.top.w > 0.3) weak.push(`${nameOf(P.top.c)} 一檔就佔 ${(P.top.w * 100).toFixed(0)}%，它一跌整個組合就跟著跌`);
@@ -2450,16 +2465,18 @@ function renderHoldRisk() {
   if (P.beta != null && P.beta > 1.15) weak.push(`組合 Beta ${P.beta.toFixed(2)}，比大盤更敏感：大盤跌 10% 時約跌 ${(P.beta * 10).toFixed(0)}%`);
   const ak = "hrisk:" + m;
   QAI[ak] = { done: renderList, ctx: () => [`我的${us ? "美股" : "台股"}庫存（${P.from}～${P.to}，${P.n} 個交易日的日報酬，比較基準 ${bn}）：`, ...P.rows.map(r => `${nameOf(r.c)} ${r.c}：佔 ${(r.w * 100).toFixed(1)}%、年化波動 ${(r.vol * 100).toFixed(0)}%、Beta ${r.beta == null ? "—" : r.beta.toFixed(2)}、風險貢獻 ${(r.ctr * 100).toFixed(0)}%`),
-      `組合：年化波動 ${(P.vol * 100).toFixed(1)}%、Beta ${P.beta?.toFixed(2) ?? "—"}、平均相關 ${P.avgCorr?.toFixed(2) ?? "—"}、有效檔數 ${P.effN.toFixed(1)}、單日 95% VaR ${(P.var95 * 100).toFixed(2)}%`,
+      `組合：年化波動 ${(P.vol * 100).toFixed(1)}%、Beta ${P.beta?.toFixed(2) ?? "—"}、平均相關 ${P.avgCorr?.toFixed(2) ?? "—"}、有效檔數 ${P.effN.toFixed(1)}、單日 95% VaR ${P.var95 == null ? "樣本不足" : (P.var95 * 100).toFixed(2) + "%"}、期望損失 ${P.es95 == null ? "樣本不足" : (P.es95 * 100).toFixed(2) + "%"}`,
+      P.excluded.length || P.cov.ratio < 1 ? `只算了納入的持股（市值占 ${(P.cov.ratio * 100).toFixed(0)}%），未納入：${P.excluded.map(e => `${nameOf(e.c)}（${WHY[e.why] || e.why}）`).join("、")}` : "",
       `相關最高的組合：${P.pairs.slice(0, 5).map(p => `${nameOf(p.a)}×${nameOf(p.b)} ${p.r.toFixed(2)}`).join("、") || "—"}`, P.worst ? `期間大盤最差 20 日（${P.worst.from}～${P.worst.to}）跌 ${(P.worst.b * 100).toFixed(1)}%，組合同期 ${(P.worst.p * 100).toFixed(1)}%` : "",
       `風險承受度：${RISK_TOL[tol][0]}（單一持股上限 ${RISK_TOL[tol][1] * 100}%、目標 Beta ${RISK_TOL[tol][2]}）`].join("\n"),
     q: `請只根據上面的數字分析我的投資組合：1) 組合中的弱點 2) 過度曝險的部位 3) 標的之間隱藏的相關性。再依我的風險承受度提出再平衡方向，並說明如果大盤下跌 20%，可以怎麼準備（例如分批減碼、保留現金、用反向 ETF ${hc} 避險的比例與缺點）。用繁體中文、條列，不要推薦買進特定個股。` };
   const heat = n <= 10 && n > 1 ? `<h4 class="qx-h">相關係數表 <span class="note">1＝完全同步、0＝沒關係、負的＝反向；0.7 以上的格子加深</span></h4><div class="qx-tbl"><table class="qx-heat"><thead><tr><th></th>${P.codes.map(c => `<th>${esc(nameOf(c)).slice(0, 4)}</th>`).join("")}</tr></thead><tbody>${P.codes.map((a, i) => `<tr><td>${esc(nameOf(a)).slice(0, 6)}</td>${P.C[i].map((v, j) => `<td class="c" style="background:${i === j ? "var(--surface-3)" : `color-mix(in srgb, var(--accent) ${Math.round(Math.max(0, v) * 70)}%, transparent)`}">${i === j ? "—" : v.toFixed(2)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : "";
   $("#lx").innerHTML = `<div class="hrisk">
     <p class="note">用最近 ${P.n} 個交易日（${P.from}～${P.to}）的日報酬計算，權重是目前市值；比較基準 ${bn}。是過去的統計，不代表未來。</p>
+    ${IQ.length ? `<ul class="qx-list tight hr-iq" role="status">${IQ.map(t => `<li><b>ⓘ</b><span>${t}</span></li>`).join("")}</ul>` : ""}
     ${qCards([["組合年化波動", `${(P.vol * 100).toFixed(1)}%`, "一年大約的上下擺動幅度"], ["Beta", P.beta == null ? "—" : P.beta.toFixed(2), P.beta == null ? "" : `大盤漲跌 1%，組合約 ${P.beta.toFixed(2)}%`],
-      ["大盤跌 20% 試算", P.stress == null ? "—" : qP(P.stress), P.stress == null ? "" : `約 ${money(P.tot * P.stress)}`, "down"], ["有效持股數", P.effN.toFixed(1), `實際 ${n} 檔・最大一檔 ${(P.top.w * 100).toFixed(0)}%`],
-      ["平均相關係數", P.avgCorr == null ? "—" : P.avgCorr.toFixed(2), P.avgCorr == null ? "只有一檔" : P.avgCorr > 0.55 ? "偏高，分散效果有限" : "還算分散"], ["單日 95% 風險值", qP(P.var95, 2), "20 天裡大約有 1 天會跌超過這個幅度", "down"],
+      ["大盤跌 20% 試算", P.stress == null ? "—" : qP(P.stress), P.stress == null ? "" : `約 ${money(P.tot * P.stress)}${P.cov.ratio < 1 ? "（納入部分）" : ""}`, "down"], ["有效持股數", P.effN.toFixed(1), `實際 ${n} 檔・最大一檔 ${(P.top.w * 100).toFixed(0)}%`],
+      ["平均相關係數", P.avgCorr == null ? "—" : P.avgCorr.toFixed(2), P.avgCorr == null ? "只有一檔" : P.avgCorr > 0.55 ? "偏高，分散效果有限" : "還算分散"], ["單日 95% 風險值", qP(P.var95, 2), P.var95 == null ? "樣本不足，不計算" : "20 天裡大約有 1 天會跌超過這個幅度", "down"], ["期望損失（ES）", qP(P.es95, 2), P.es95 == null ? "樣本不足，不計算" : "最差的那 5% 日子平均跌多少", "down"],
       ...(P.worst ? [["期間最差 20 日", qP(P.worst.p), `大盤同期 ${qP(P.worst.b)}（${P.worst.from.slice(5)}～${P.worst.to.slice(5)}）`, qC(P.worst.p)]] : [])])}
     <h4 class="qx-h">組合的弱點</h4><ul class="qx-list tight">${weak.map(t => `<li><b>⚠︎</b><span>${esc(t)}</span></li>`).join("") || `<li><b>✓</b><span>沒有明顯的集中或同步風險。</span></li>`}</ul>
     <h4 class="qx-h">每一檔的風險 <span class="note">風險貢獻＝這檔對組合波動的佔比；遠大於資金佔比的就是過度曝險</span></h4>
@@ -2469,7 +2486,7 @@ function renderHoldRisk() {
     <h4 class="qx-h">再平衡與避險試算 <span class="seg sm" role="group">${Object.entries(RISK_TOL).map(([k, [t]]) => `<button data-hrtol="${k}" aria-pressed="${tol === k}">${t}</button>`).join("")}</span></h4>
     <ul class="qx-list"><li><b>單一持股上限</b><span>${(plan.cap * 100).toFixed(0)}%：${plan.trims.length ? plan.trims.map(t => `${esc(nameOf(t.c))} 佔 ${(t.w * 100).toFixed(0)}%，約減 ${money(t.cut)}`).join("；") : "目前都沒有超過"}</span></li>
       <li><b>目標 Beta</b><span>${plan.tb}：${plan.hedge > 0 ? `組合 Beta ${P.beta.toFixed(2)} 偏高，若用反向 ETF ${hc}（${hn}）避險，約需 ${money(plan.hedge)}；大盤跌 20% 時預估損失從 ${qP(P.stress)} 降到約 ${qP(plan.after)}` : "目前的 Beta 在範圍內，不需要額外避險"}</span></li>
-      <li><b>下跌 20% 的準備</b><span>先決定能承受的最大虧損（例如總資金的 10%），${P.stress != null ? `目前試算會虧 ${money(-P.tot * P.stress)}；` : ""}超過就分批減碼高 Beta、高風險貢獻的持股，或保留現金；反向 ETF 每天重新平衡，長期持有會有耗損，只適合短期避險。</span></li></ul>
+      <li><b>下跌 20% 的準備</b><span>先決定能承受的最大虧損（例如總資金的 10%），${P.stress != null ? `目前試算會虧 ${money(-P.tot * P.stress)}${P.cov.ratio < 1 ? "（只算納入的持股）" : ""}；` : ""}超過就分批減碼高 Beta、高風險貢獻的持股，或保留現金；反向 ETF 每天重新平衡，長期持有會有耗損，只適合短期避險。</span></li></ul>
     ${qAiBlock({ key: ak, R: W.qai[ak] }, `${ico("ai")}AI 分析我的組合`)}
     <p class="note">試算假設每檔跟大盤的關係（Beta）不變；真的崩盤時相關性通常會變高，實際跌幅可能更大。不是投資建議。</p></div>`;
 }
