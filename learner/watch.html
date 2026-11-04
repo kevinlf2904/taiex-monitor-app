@@ -2457,6 +2457,9 @@ function renderHoldRisk() {
   }
   const noAdj = P.codes.filter(c => H.adj?.[c] && !H.adj[c].ok);
   if (noAdj.length) IQ.push(`${noAdj.map(c => esc(nameOf(c))).join("、")} 拿不到除權息資料，用原始價格計算：除息日會被當成下跌。`);
+  // 有還原，但有事件沒處理（skipped）、還原後仍有超過漲跌幅的單日（suspect），或上市股拿不到官方參考價只用 Yahoo（配股、減資可能沒還原）
+  const adjQ = P.codes.map(c => [c, H.adj?.[c]]).filter(([, a]) => a?.ok && (a.skipped?.length || a.suspect?.length || a.officialFailed));
+  for (const [c, a] of adjQ) IQ.push(`${esc(nameOf(c))}：${[a.skipped?.length ? `${a.skipped.length} 個除權息事件資料不合理，沒有還原（${a.skipped.map(x => x.d.slice(5)).join("、")}）` : "", a.suspect?.length ? `還原後仍有 ${a.suspect.length} 天漲跌超過限制（${a.suspect.slice(0, 3).map(x => `${x.d.slice(5)} ${qP(x.r)}`).join("、")}），可能是沒還原到的配股或減資，這些日子不列入計算` : "", a.officialFailed ? "拿不到證交所的除權息參考價，改用 Yahoo，配股、減資可能沒有還原" : ""].filter(Boolean).join("；")}。`);
   const ext = P.issues.filter(x => x.k === "extreme_day");
   if (ext.length) IQ.push(`拿掉 ${ext.length} 個異常單日漲跌（${ext.slice(0, 3).map(x => `${x.c === "bench" ? "基準" : esc(nameOf(x.c))} ${x.d.slice(5)} ${qP(x.r)}`).join("、")}${ext.length > 3 ? "…" : ""}）：多半是除權、減資或資料錯誤，不當成真的波動。`);
   const tol = W.hrTol, plan = portPlan(P, tol), [hc, hn] = HEDGE[m], n = P.rows.length, nm = c => `${esc(nameOf(c))}<small class="note"> ${c}</small>`;

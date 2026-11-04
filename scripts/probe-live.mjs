@@ -11,6 +11,44 @@ async function raw(url, n = 600) {
   const t0 = Date.now(); try { const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "*/*", Referer: "https://mis.twse.com.tw/stock/index.jsp" }, signal: AbortSignal.timeout(20000) }); const t = await r.text();
     console.log(`\n### ${url}\n${r.status} ${Date.now() - t0}ms ${t.length} bytes\n${t.slice(0, n)}`); return t; } catch (e) { console.log(`\n### ${url}\n錯誤 ${e.message}`); }
 }
+if (process.argv[2] === "adj") {
+  // 還原股價驗收（B0-1）：近 3 年報酬，本專案的算法 vs. FinMind 還原股價、Yahoo adjclose；目標差距 < 0.5 個百分點。
+  // A＝Yahoo 價格＋Yahoo 事件（上櫃、美股、證交所失敗時的路線）；B＝FinMind 原始價格＋證交所官方參考價＋Yahoo 分割（上市的正式路線）
+  // 也列出兩條路線和 FinMind 每天報酬差超過 1% 的日子（找沒還原到的配股、減資）。只讀，不寫任何東西
+  const K = await import("../api/_lib/kline.js");
+  const tk = (process.env.FINMIND_TOKEN || "").trim(), FH = tk ? { Authorization: `Bearer ${tk}` } : {};
+  const J = async (u, h = {}) => { const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json", ...h }, signal: AbortSignal.timeout(30000) }); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); };
+  const now = Date.now(), from = new Date(now - 3 * 365.25 * 864e5).toISOString().slice(0, 10), to = new Date(now).toISOString().slice(0, 10);
+  const pp = v => (v * 100).toFixed(2) + "%", ret = (a, k = "ac") => a[a.length - 1][k] / a[0][k] - 1;
+  // 證交所官方參考價：一年一年查，印出第一次的欄位確認格式
+  const refsOf = async code => { const out = []; for (let y = +from.slice(0, 4); y <= +to.slice(0, 4); y++) { const a = `${Math.max(+from.replace(/-/g, ""), y * 10000 + 101)}`, b = `${Math.min(+to.replace(/-/g, ""), y * 10000 + 1231)}`;
+    for (const [u, why] of [[`https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate=${a}&endDate=${b}&response=json`, "除權息"], [`https://www.twse.com.tw/rwd/zh/reducation/TWTAUU?startDate=${a}&endDate=${b}&response=json`, "減資"]]) {
+      try { const j = await J(u); if (!refsOf.shown?.[why]) { (refsOf.shown ||= {})[why] = 1; console.log(`[格式] ${why} stat=${j.stat} fields=${JSON.stringify(j.fields)} 第一列=${JSON.stringify(j.data?.[0])}`); } out.push(...K.parseRefPrices(j, code, why)); } catch (e) { console.log(`[錯誤] ${why} ${y}`, e.message); return null; }
+      await new Promise(r => setTimeout(r, 400)); } } return out; };
+  for (const [c, ysym, listed] of [["0050", "0050.TW", 1], ["0056", "0056.TW", 1], ["2330", "2330.TW", 1], ["2317", "2317.TW", 1], ["2002", "2002.TW", 1], ["2353", "2353.TW", 1], ["8299", "8299.TWO", 0]]) {
+    console.log(`\n### ${c}（${from}～${to}）`);
+    try {
+      const yj = await J(`https://query1.finance.yahoo.com/v8/finance/chart/${ysym}?period1=${Math.floor(Date.parse(from) / 1000)}&period2=${Math.floor(now / 1000)}&interval=1d&events=div%2Csplit`);
+      const yr = K.parseYahoo(yj).rows, yev = K.parseYahooEvents(yj) || [], res = yj.chart.result[0], adjc = res.indicators?.adjclose?.[0]?.adjclose || [];
+      const yAdj = res.timestamp.map((t, i) => ({ d: new Date((t + (res.meta.gmtoffset ?? 28800)) * 1000).toISOString().slice(0, 10), ac: adjc[i] })).filter(x => x.ac > 0);
+      const A = K.adjustRows(yr, yev, true);
+      const fa = await J(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPriceAdj&data_id=${c}&start_date=${from}`, FH), fr = await J(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${c}&start_date=${from}`, FH);
+      const FA = (fa.data || []).filter(x => x.close > 0).map(x => ({ d: x.date, ac: x.close })), FR = (fr.data || []).filter(x => x.close > 0).map(x => ({ d: x.date, c: x.close }));
+      console.log("Yahoo 事件", yev.length, JSON.stringify(yev.filter(e => e.kind === "split")), "；FinMind 還原", FA.length, "天，原始", FR.length, "天");
+      let B = null;
+      if (listed && FR.length) { const refs = await refsOf(c); if (refs) { console.log("官方參考價", refs.length, "筆", JSON.stringify(refs.slice(0, 3))); B = K.adjustRows(FR, [...yev, ...refs], false); } }
+      const rFA = FA.length ? ret(FA) : null, rY = yAdj.length ? ret(yAdj) : null, rA = ret(A.rows), rB = B ? ret(B.rows) : null;
+      console.log(`報酬：A（Yahoo）${pp(rA)}、B（官方）${rB == null ? "—" : pp(rB)}、FinMind 還原 ${rFA == null ? "—" : pp(rFA)}、Yahoo adjclose ${rY == null ? "—" : pp(rY)}`);
+      for (const [nm, v] of [["A", rA], ["B", rB]]) if (v != null && rFA != null) console.log(`  ${nm} vs FinMind 差 ${((v - rFA) * 100).toFixed(2)} 個百分點 → ${Math.abs(v - rFA) < 0.005 ? "通過" : "未通過"}`);
+      const fm = new Map(FA.map((x, i) => [x.d, i ? x.ac / FA[i - 1].ac - 1 : null]));
+      for (const [nm, X] of [["A", A], ["B", B]]) { if (!X) continue; const bad = X.rows.map((x, i) => [x.d, i ? x.ac / X.rows[i - 1].ac - 1 : null]).filter(([d, r]) => r != null && fm.get(d) != null && Math.abs(r - fm.get(d)) > 0.01);
+        console.log(`  ${nm} 每日報酬和 FinMind 差 >1% 的日子：${bad.length} 天 ${bad.slice(0, 8).map(([d, r]) => `${d} ${pp(r)} vs ${pp(fm.get(d))}`).join("；")}；可疑日 ${JSON.stringify(X.suspect.slice(0, 5))}`); }
+    } catch (e) { console.log("錯誤", e.message); }
+  }
+  // 上櫃官方參考價的候選網址：只印原始回應開頭，確認有沒有可用的資料
+  for (const u of ["https://www.tpex.org.tw/openapi/v1/tpex_exright_daily", "https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?response=json", "https://www.tpex.org.tw/openapi/v1/tpex_cap_reduction"]) await raw(u, 400);
+  process.exit(0);
+}
 if (process.argv[2] === "confai") {
   // 法說會重點：找台積電、鴻海最近的法說會簡報，AI 讀簡報（需要 GEMINI_API_KEY）
   const C = await import("../api/_lib/confai.js");

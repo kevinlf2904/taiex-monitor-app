@@ -16,13 +16,17 @@ test("庫存風險：持股改用還原價（0050 一拆四不再像跌 75%）�
       data: D.map((d, i) => { const ac = 47 * (1 + Math.sin(i / 5) * 0.03), c = i < 60 ? ac * 4 : ac; return { d, o: c, h: c, l: c, c: +c.toFixed(2), ac: +ac.toFixed(4), v: 1000 }; }) }) }); });
     await ctx.route("**/api/kline?code=2317**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, code: "2317", name: "鴻海", market: "上市", source: "證交所", adj: { ok: false, why: "fetch_failed" },
       data: D.map((d, i) => ({ d, o: 100, h: 101, l: 99, c: 100 + Math.cos(i / 4) * 3, v: 1000 })) }) }));
-    await p.evaluate(() => { W.hold = { "0050": { sh: 1000, cost: 40 }, 2317: { sh: 1000, cost: 90 } }; W.holdMkt = "tw"; W.holdView = "risk"; setLt("hold"); });
+    await ctx.route("**/api/kline?code=2454**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, code: "2454", name: "聯發科", market: "上市", source: "證交所",
+      adj: { ok: true, source: "t", basis: "yahoo", officialFailed: true, events: [], skipped: [{ d: D[20], kind: "div", amt: 999, why: "bad_factor" }], suspect: [{ d: D[90], r: -0.3 }] },
+      data: D.map((d, i) => ({ d, o: 100, h: 101, l: 99, c: 100 + Math.sin(i / 3) * 2, ac: 100 + Math.sin(i / 3) * 2, v: 1000 })) }) }));
+    await p.evaluate(() => { W.hold = { "0050": { sh: 1000, cost: 40 }, 2317: { sh: 1000, cost: 90 }, 2454: { sh: 10, cost: 900 } }; W.holdMkt = "tw"; W.holdView = "risk"; setLt("hold"); });
     await p.waitForSelector(".hrisk", { timeout: 20000 });
     const t = await p.evaluate(() => $("#lx").innerText);
     assert.ok(urls.some(u => /adj=1/.test(u)), "持股日 K 要求還原價");
     assert.match(t, /持股用除息、分割還原後的價格/); assert.match(t, /2317 拿不到除權息資料，用原始價格計算/);
     assert.doesNotMatch(t, /異常單日.*0050/s, "分割那天不再被當成異常單日");
     assert.match(t, /價格指數，不含股息/);
+    assert.match(t, /2454：1 個除權息事件資料不合理，沒有還原.*還原後仍有 1 天漲跌超過限制.*拿不到證交所的除權息參考價，改用 Yahoo/s, "部分沒還原的事件也要寫出來");
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
     await ctx.close(); assert.deepEqual(errs, []);
   }
