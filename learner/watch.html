@@ -718,6 +718,38 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .mlist li:has(> .wstar) { display: flex; align-items: stretch; } .mlist li:has(> .wstar) > button:first-child { flex: 1; min-width: 0; } .mlist .wstar { width: auto; display: block; border-top: 1px solid var(--line); border-radius: 0; padding: 0 8px; } .bmem-h { margin: 10px 0 2px; font-size: 13.5px; font-weight: 500; }
 .d-intel { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; } .ibadge { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 3px; padding: 3px 10px; font: inherit; font-size: 12.5px; line-height: 1.5; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ibadge:hover { border-color: var(--ink); } .ibadge i { font-style: normal; color: var(--muted); margin-right: 7px; padding-right: 7px; border-right: 1px solid var(--line); } /* 徽章一律單色：分類小字＋內容，不用表情符號和彩色框 */
 .hempty { padding: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; } .hempty .note { margin: 0; }
+/* 庫存「交易紀錄」（ledger-ui.js） */
+.lgintro, .lgprev, .lgform { margin: 8px 12px; padding: 10px 12px; border-radius: 6px; background: var(--surface-2); }
+.lgintro .btn, .lgprev .btn { margin: 4px 6px 4px 0; }
+.lgbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 12px; }
+.lgprev .lgbar, .lgform .lgbar { margin: 8px 0 0; }
+.lgmsg { margin: 4px 12px; }
+.lgprev table, .lghist table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.lgprev th, .lgprev td, .lghist th, .lghist td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.lghist { overflow-x: auto; padding: 0 12px 8px; }
+.lgcurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; margin: 8px 12px; }
+.lgcur { padding: 8px 12px; border-radius: 6px; background: var(--surface-2); }
+.lgcur h4 { margin: 0 0 4px; font-size: 13px; }
+.lgcur dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-size: 13px; }
+.lgcur dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.lgh { margin: 12px 12px 4px; font-size: 13px; }
+.lglist { list-style: none; margin: 0; padding: 0; }
+.lgprow { display: grid; grid-template-columns: minmax(0, 1.3fr) 1fr 1.2fr 1fr; gap: 8px; width: 100%; text-align: left; }
+.lgprow > span { min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.lgtx { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) minmax(0, 1fr) auto; gap: 4px 8px; align-items: start; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.lgtx > span { min-width: 0; overflow-wrap: anywhere; }
+.lgtx small { display: block; }
+.lgwarn { color: var(--s1, #d9822b); }
+.lgtx.err { background: color-mix(in srgb, var(--s1, #d9822b) 10%, transparent); }
+.lgact { display: flex; gap: 4px; }
+.lgiss { grid-column: 1 / -1; margin: 0; padding-left: 1.2em; font-size: 12px; }
+.lgform { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.lgform h4, .lgform .wide, .lgform .lgbar, .lgform .lgiss { grid-column: 1 / -1; margin: 0; }
+.lgform label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; min-width: 0; }
+.lgform label.chk { flex-direction: row; align-items: center; }
+.lgform input, .lgform select { min-width: 0; width: 100%; }
+.lgform label.chk input { width: auto; }
+@media (max-width: 560px) { .lgtx { grid-template-columns: 5.6em minmax(0, 1fr); } .lgtx > span:nth-child(3) { grid-column: 2; } .lgact { grid-column: 1 / -1; justify-content: flex-end; } .lgprow { grid-template-columns: minmax(0, 1fr) 1fr; } }
 .hdemo { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 8px 12px; padding: 8px 12px; border-radius: 6px; background: var(--accent-soft, var(--surface-2)); font-size: 13px; }
 .hdq { margin: 8px 12px; padding: 8px 12px; border: 1px solid var(--warn, var(--line)); border-radius: 8px; font-size: 13px; }
 .hdq summary { cursor: pointer; color: var(--warn, var(--ink)); font-weight: 600; }
@@ -1194,7 +1226,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.05-191</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.05-192</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1342,10 +1374,11 @@ async function rfRun(k, f) {
   finally { W.rfBusy = null; renderList(); }
 }
 // 只有幾個分頁用到的程式等用到才載入（看盤頁一打開少載、少解析約 200KB）：
+//   ledger＝庫存「交易紀錄」（ledger.js 計算、ledger-ui.js 畫面）
 //   earn＝財報（也給庫存「總經敏感度」、選股「條件組合」、事件提醒用）、mkx＝大盤的上市／櫃買／官方公告、oapi＝工具「官方資料」
 //   congx.js（大戶國會）的小工具（cxQ、cxRow…）很多分頁都在用，照常一開始就載入
 // 打開頁面幾秒、閒下來後也會在背景先載好，之後切分頁不用等；同一組只載一次，照順序載（後面的檔會用到前面的）。
-const LAZY = { earn: ["earn.js", "earnx.js", "earnplus.js", "finrep.js", "fundx.js"], mkx: ["tpex.js", "official.js"], oapi: ["oapi.js"] }, LZ = {};
+const LAZY = { earn: ["earn.js", "earnx.js", "earnplus.js", "finrep.js", "fundx.js"], mkx: ["tpex.js", "official.js"], oapi: ["oapi.js"], ledger: ["ledger.js", "ledger-ui.js"] }, LZ = {};
 function lazy(g) {
   return (LZ[g] ||= LAZY[g].reduce((p, f) => p.then(() => new Promise((ok, no) => { const s = document.createElement("script"); s.src = f; s.onload = ok; s.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(s); })), Promise.resolve())
     .then(() => { LZ[g].done = true; }, e => { delete LZ[g]; noteErr("載入程式", e); throw e; }));
@@ -2088,11 +2121,11 @@ function renderList0() {
       : `<li class="empty note">這個群組還沒有股票。在上面輸入代號或名稱加入，或從「台股熱門」「美股熱門」「排行」按 ☆ 加入（台股、美股會自動放進各自的群組）。<br><button type="button" class="btn sm" data-onb="fill">✨ 一鍵載入範例自選（2330／2317／2454／NVDA／AAPL）</button></li>`);
     note = `${curList().length} 檔・${anyOpen() ? "盤中每秒自動更新" : "收盤後每 5 分鐘確認一次"}`;
   } else if (W.lt === "hold") {
-    $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"], ["risk", "風險"], ["macro", "總經敏感度"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
+    $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"], ["risk", "風險"], ["macro", "總經敏感度"], ["tx", "交易紀錄"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
       <div class="imp-btns"><button class="btn sm primary" data-imp="edit">${ico("pen")}編輯庫存</button><button class="btn sm" data-imp="shot">${ico("cam")}截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
     const tw = W.holdMkt === "tw";
     if (tw) loadHoldDivs();
-    if (W.holdView === "ana") renderHoldAna(); else if (W.holdView === "risk") renderHoldRisk(); else if (W.holdView === "macro") lazyRun("earn", () => renderHoldMacro()); else renderHold();
+    if (W.holdView === "ana") renderHoldAna(); else if (W.holdView === "risk") renderHoldRisk(); else if (W.holdView === "macro") lazyRun("earn", () => renderHoldMacro()); else if (W.holdView === "tx") lazyRun("ledger", () => renderLedger()); else renderHold();
     note = `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
   } else if (W.lt === "screen") {
     $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? liveTag(W.scr, "收盤後資料") : "選股"}・僅供參考，不是買賣建議</span>${rfBtn("scrRefresh")}`;
