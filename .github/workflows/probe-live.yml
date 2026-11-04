@@ -9,6 +9,9 @@ on:
       gap:
         description: "間隔秒數"
         default: "10"
+      mode:
+        description: "檢查模式（留空＝一般即時性檢查；例如 adj＝還原股價驗收）"
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -21,7 +24,12 @@ jobs:
         env:
           INPUT_N: ${{ github.event.inputs.n }}
           INPUT_GAP: ${{ github.event.inputs.gap }}
+          INPUT_MODE: ${{ github.event.inputs.mode }}
         run: |
+          if ! [[ "${INPUT_MODE:-}" =~ ^[a-z0-9]{0,20}$ ]]; then
+            echo "::error::Invalid mode input. Use lowercase letters and digits only."
+            exit 1
+          fi
           N_VAL="${INPUT_N:-12}"
           if ! [[ "$N_VAL" =~ ^[0-9]+$ ]] || [ "$N_VAL" -lt 1 ] || [ "$N_VAL" -gt 60 ]; then
             echo "::error::Invalid n input '$N_VAL'. Must be an integer between 1 and 60."
@@ -45,7 +53,9 @@ jobs:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          INPUT_MODE: ${{ github.event.inputs.mode }}
         run: |
+          if [[ "$INPUT_MODE" =~ ^[a-z0-9]{1,20}$ ]]; then node scripts/probe-live.mjs "$INPUT_MODE"; exit $?; fi
           N_VAL="12"
           GAP_VAL="10"
           if [[ "$INPUT_N" =~ ^[0-9]{1,3}$ ]]; then N_VAL="$INPUT_N"; fi
