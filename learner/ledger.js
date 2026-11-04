@@ -5,18 +5,19 @@
 (function (root) {
   "use strict";
   const VERSION = 1, STORE_KEY = "kline:pf:v1", LEGACY_KEY = "kline:watch:hold";
-  // 交易類型：買、賣、現金股息、配股（除權，拿到股票）、拆股／合股（ratio：一股變幾股，合股小於 1）、轉入、轉出、入金、出金、另計費用、其他公司行動
-  const TYPES = ["buy", "sell", "dividend", "stock_dividend", "split", "transfer_in", "transfer_out", "deposit", "withdraw", "fee", "other"];
-  const TYPE_LABEL = { buy: "買進", sell: "賣出", dividend: "現金股息", stock_dividend: "配股（除權）", split: "拆股／合股", transfer_in: "股票轉入", transfer_out: "股票轉出", deposit: "入金", withdraw: "出金", fee: "費用", other: "其他公司行動" };
-  const NEEDS_SYMBOL = new Set(["buy", "sell", "dividend", "stock_dividend", "split", "transfer_in", "transfer_out", "other"]);
+  // 交易類型：買、賣、現金股息、配股（除權，拿到股票）、拆股／合股（ratio：一股變幾股，合股小於 1）、零股現金結算（合股後不足一股的部分換成現金）、
+  // 轉入、轉出、入金、出金、另計費用、其他公司行動
+  const TYPES = ["buy", "sell", "dividend", "stock_dividend", "split", "fraction_cash", "transfer_in", "transfer_out", "deposit", "withdraw", "fee", "other"];
+  const TYPE_LABEL = { buy: "買進", sell: "賣出", dividend: "現金股息", stock_dividend: "配股（除權）", split: "拆股／合股", fraction_cash: "零股現金結算", transfer_in: "股票轉入", transfer_out: "股票轉出", deposit: "入金", withdraw: "出金", fee: "費用", other: "其他公司行動" };
+  const NEEDS_SYMBOL = new Set(["buy", "sell", "dividend", "stock_dividend", "split", "fraction_cash", "transfer_in", "transfer_out"]); // other：只有金額（例如現金補償）時可以不填代號
   const CORP_FIRST = new Set(["split", "stock_dividend", "other"]); // 同一天：公司行動（除權日開盤就生效）排在當天的買賣前面
   const CURRENCY = { tw: "TWD", us: "USD" };
   const METHODS = { avg: "加權平均成本", fifo: "先進先出（FIFO）" };
   // 預設費用規則：只是預設值，可整份換掉；每一項都有來源與日期。計算一律從 rules 讀，不在下面的程式裡寫費率
   const DEFAULT_RULES = {
-    tw: { commission: 0.001425, discount: 1, minFee: 20, round: "floor", taxStock: 0.003, taxEtf: 0.001, taxDayTrade: 0.0015, dividendTax: 0,
-      source: "證交所手續費上限 0.1425%、證券交易稅條例（股票 0.3%、ETF 0.1%、現股當沖 0.15%）；最低手續費 20 元是多數券商的做法，各券商不同", asOf: "2026-11-01" },
-    us: { commission: 0, discount: 1, minFee: 0, round: "cent", secFee: 0, dividendTax: 0.3,
+    tw: { commission: 0.001425, discount: 1, discountBuy: null, discountSell: null, minFee: 20, round: "floor", taxStock: 0.003, taxEtf: 0.001, taxBondEtf: 0, taxDayTrade: 0.0015, dividendTax: 0,
+      source: "證交所手續費上限 0.1425%、證券交易稅條例（股票 0.3%、ETF 0.1%、現股當沖 0.15%）；債券 ETF 證交稅停徵（到期日以法令公告為準，請自行確認）；最低手續費 20 元是多數券商的做法，各券商不同；買賣可設不同折扣（discountBuy、discountSell）", asOf: "2026-11-01" },
+    us: { commission: 0, discount: 1, discountBuy: null, discountSell: null, minFee: 0, round: "cent", secFee: 0, dividendTax: 0.3,
       source: "多數美國券商零佣金；台灣居民美股股息預扣 30%；SEC 規費費率常變動，預設 0，請依券商對帳單", asOf: "2026-11-01" }
   };
   const isNum = v => typeof v === "number" && Number.isFinite(v);
@@ -29,11 +30,14 @@
   function estimateCosts(t, rules = DEFAULT_RULES) {
     const R = rules && rules[t.market]; if (!R || !(t.type === "buy" || t.type === "sell")) return { fee: 0, tax: 0 };
     const gross = t.shares * t.price, rd = v => (R.round === "floor" ? Math.floor(v + EPS) : r2(v));
-    let fee = gross * (R.commission || 0) * (R.discount ?? 1); if (gross > 0) fee = Math.max(fee, R.minFee || 0); fee = rd(fee);
+    const disc = (t.type === "buy" ? R.discountBuy : R.discountSell) ?? R.discount ?? 1;
+    let fee = gross * (R.commission || 0) * disc; if (gross > 0) fee = Math.max(fee, R.minFee || 0); fee = rd(fee);
     let tax = 0;
-    if (t.type === "sell") tax = t.market === "tw" ? rd(gross * (t.dayTrade ? R.taxDayTrade : t.assetType === "etf" ? R.taxEtf : R.taxStock)) : rd(gross * (R.secFee || 0));
+    if (t.type === "sell") tax = t.market === "tw" ? rd(gross * (t.dayTrade ? R.taxDayTrade : t.assetType === "bond_etf" ? (R.taxBondEtf ?? R.taxEtf) : t.assetType === "etf" ? R.taxEtf : R.taxStock)) : rd(gross * (R.secFee || 0));
     return { fee, tax };
   }
+  // 實際費用和規則估算的差距（使用者填了實際手續費、稅時，看看券商收的和預設規則差多少）
+  function feeDiff(t, rules = DEFAULT_RULES) { if (!t || !(t.type === "buy" || t.type === "sell") || !isNum(t.fee) || !isNum(t.tax)) return null; const e = estimateCosts(t, rules); return { estFee: e.fee, estTax: e.tax, fee: t.fee, tax: t.tax, diffFee: r2(t.fee - e.fee), diffTax: r2(t.tax - e.tax) }; }
 
   // 一筆交易的格式檢查（不看前後文）：回傳 { tx（整理後）, errors, warnings }
   function checkTx(raw, opts = {}) {
@@ -54,17 +58,20 @@
     else if (market && CURRENCY[market] !== currency) E("currency_mismatch", `${market === "tw" ? "台股" : "美股"}的幣別應該是 ${CURRENCY[market]}`);
     const shares = num(raw.shares), price = num(raw.price), amount = num(raw.amount), ratio = num(raw.ratio);
     let fee = num(raw.fee), tax = num(raw.tax);
-    const needShares = ["buy", "sell", "stock_dividend", "transfer_in", "transfer_out"].includes(type);
+    const needShares = ["buy", "sell", "stock_dividend", "fraction_cash", "transfer_in", "transfer_out"].includes(type);
     if (needShares && !(isNum(shares) && shares > 0)) E("invalid_shares", "股數要大於 0");
-    if (needShares && isNum(shares) && shares > 0 && market === "tw" && !Number.isInteger(shares)) E("fractional_shares", "台股股數要是整數");
+    if (needShares && type !== "fraction_cash" && isNum(shares) && shares > 0 && market === "tw" && !Number.isInteger(shares)) E("fractional_shares", "台股股數要是整數");
+    if (type === "fraction_cash" && !(isNum(amount) && amount >= 0)) E("invalid_amount", "零股結算要填拿到的現金（沒有就填 0）");
     if ((type === "buy" || type === "sell") && !(isNum(price) && price > 0)) E("invalid_price", "成交價格要大於 0");
     if (type === "transfer_in" && !(isNum(price) && price >= 0)) E("invalid_price", "轉入要填每股成本（可以是 0）");
     if (["dividend", "deposit", "withdraw", "fee"].includes(type) && !(isNum(amount) && amount > 0)) E("invalid_amount", "金額要大於 0");
     if (type === "split" && !(isNum(ratio) && ratio > 0 && ratio !== 1)) E("invalid_ratio", "拆股／合股比例要大於 0 且不是 1（一拆四填 4，五合一填 0.2）");
     if (type === "other" && !(isNum(shares) || isNum(amount))) E("invalid_other", "其他公司行動至少要填股數變動或金額");
+    if (type === "other" && isNum(shares) && !symbol) E("invalid_symbol", "有股數變動的公司行動要填股票代號");
+    if (type === "stock_dividend" && raw.ratio != null && !(isNum(ratio) && ratio > 0)) E("invalid_ratio", "配股率要大於 0（每股配幾股，例如配 1 元股票股利＝0.1）");
     for (const [k, v] of [["fee", fee], ["tax", tax]]) if (Number.isNaN(v) || (isNum(v) && v < 0)) E("invalid_" + k, (k === "fee" ? "手續費" : "交易稅") + "不能是負數");
     const tx = { v: VERSION, id, date, type, symbol, market, currency, shares: isNum(shares) ? shares : null, price: isNum(price) ? price : null, amount: isNum(amount) ? amount : null, ratio: isNum(ratio) ? ratio : null,
-      fee: isNum(fee) ? fee : null, tax: isNum(tax) ? tax : null, feeEstimated: false, assetType: raw.assetType === "etf" || raw.assetType === "stock" ? raw.assetType : null, dayTrade: !!raw.dayTrade,
+      fee: isNum(fee) ? fee : null, tax: isNum(tax) ? tax : null, feeEstimated: false, assetType: ["etf", "stock", "bond_etf"].includes(raw.assetType) ? raw.assetType : null, dayTrade: !!raw.dayTrade,
       ref: typeof raw.ref === "string" && raw.ref ? raw.ref : null, note: typeof raw.note === "string" ? raw.note.slice(0, 500) : "", source: typeof raw.source === "string" && raw.source ? raw.source.slice(0, 40) : "manual" };
     // 沒填手續費／稅：依規則估算並標示「估算」（填 0 代表真的是 0，不會被估算覆蓋）
     if (!errors.length && (type === "buy" || type === "sell") && (tx.fee === null || tx.tax === null)) {
@@ -93,11 +100,18 @@
       const s = [t.date, t.type, t.symbol, t.shares, t.price, t.amount, t.ratio, r.raw.fee ?? "", r.raw.tax ?? ""].join("|");
       if (sig.has(s)) r.warnings.push({ code: "possible_duplicate", message: "和另一筆交易內容完全一樣，請確認不是重複輸入" }); else sig.set(s, r);
     }
-    // 另計費用（fee）掛在某筆買賣上（ref），而那筆已經有手續費 → 重複計算
-    for (const r of rows) { const t = r.tx; if (!t || t.type !== "fee" || !t.ref) continue; const o = ids.get(t.ref);
-      if (!o || !o.tx) r.errors.push({ code: "ref_not_found", message: "這筆費用對應的交易找不到" });
-      else if ((o.tx.type === "buy" || o.tx.type === "sell") && o.tx.fee > 0 && !o.tx.feeEstimated) r.errors.push({ code: "duplicate_fee", message: "對應的交易已經有手續費，不能再另外記一次" });
-      else if ((o.tx.type === "buy" || o.tx.type === "sell") && o.tx.feeEstimated) { o.tx.fee = 0; o.tx.tax = 0; o.warnings = o.warnings.filter(w => w.code !== "fee_estimated"); } } // 費用另外記了，原交易就不要再估算
+    // 另計費用（fee）掛在某筆交易上（ref）：
+    //   對應的買賣已經有手續費 → 重複計算，擋下；原交易的手續費是估算的 → 不再估算。
+    //   對應買賣的費用併進那筆交易（買進算進成本、賣出從已實現損益扣），和日期先後無關；其他交易的費用記在那一檔
+    for (const r of rows) { const t = r.tx; if (!t || t.type !== "fee" || !t.ref || r.errors.length) continue; const o = ids.get(t.ref);
+      if (!o || !o.tx || o.errors.length) { r.errors.push({ code: "ref_not_found", message: "這筆費用對應的交易找不到，或那筆交易有錯誤" }); continue; }
+      if (o.tx.currency !== t.currency) { r.errors.push({ code: "currency_mismatch", message: "費用的幣別和對應的交易不同" }); continue; }
+      const trade = o.tx.type === "buy" || o.tx.type === "sell";
+      if (trade && (o.tx.fee > 0 || o.tx.tax > 0) && !o.tx.feeEstimated) { r.errors.push({ code: "duplicate_fee", message: "對應的交易已經有手續費或交易稅，不能再另外記一次" }); continue; }
+      if (trade && o.tx.feeEstimated) { o.tx.fee = 0; o.tx.tax = 0; o.tx.feeEstimated = false; o.warnings = o.warnings.filter(w => w.code !== "fee_estimated"); }
+      if (trade) { if (o.extraFee) { r.errors.push({ code: "duplicate_fee", message: "這筆交易已經有另一筆另計費用" }); continue; } o.extraFee = t.amount; o.tx.fee += t.amount; r.mergedInto = o.tx.id; }
+      else r.feeSymbol = o.tx.symbol;
+      if (t.date !== o.tx.date) r.warnings.push({ code: "fee_date_differs", message: `費用日期和對應的交易（${o.tx.date}）不同` }); }
     // 同一個代號只能有一個市場、一個幣別
     const symMkt = new Map();
     for (const r of rows) { const t = r.tx; if (!t || !t.symbol || r.errors.length) continue; const k = symMkt.get(t.symbol);
@@ -106,7 +120,7 @@
       const ca = CORP_FIRST.has(a.tx?.type) ? 0 : 1, cb = CORP_FIRST.has(b.tx?.type) ? 0 : 1; return ca - cb || a.i - b.i; });
     const pos = new Map(), cash = {}, totals = {};
     const C = cur => (cash[cur] ||= { balance: 0, deposits: 0, withdrawals: 0, tracked: false }), T = cur => (totals[cur] ||= { realizedPnl: 0, dividends: 0, fees: 0, taxes: 0, bought: 0, sold: 0 });
-    const posOf = t => { let p = pos.get(t.symbol); if (!p) pos.set(t.symbol, p = { symbol: t.symbol, market: t.market, currency: t.currency, shares: 0, costBasis: 0, lots: [], realizedPnl: 0, dividends: 0, fees: 0, taxes: 0, firstDate: t.date, history: [] }); return p; };
+    const posOf = (t, sym = t.symbol) => { let p = pos.get(sym); if (!p) pos.set(sym, p = { symbol: sym, market: t.market, currency: t.currency, shares: 0, costBasis: 0, lots: [], realizedPnl: 0, dividends: 0, fees: 0, taxes: 0, firstDate: t.date, history: [], fraction: 0 }); return p; };
     const snap = (p, t, extra = {}) => p.history.push({ date: t.date, id: t.id, type: t.type, shares: p.shares, costBasis: r2(p.costBasis), avgCost: p.shares > EPS ? p.costBasis / p.shares : null, ...extra });
     // 從部位拿掉 n 股，回傳拿掉的成本（加權平均：按比例；FIFO：從最早的批次）
     const take = (p, n) => {
@@ -118,7 +132,8 @@
     const add = (p, n, cost, t) => { p.shares += n; p.costBasis += cost; if (method === "fifo") p.lots.push({ date: t.date, id: t.id, shares: n, cost }); };
     for (const r of order) {
       const t = r.tx; if (!t || r.errors.length) continue;
-      const cur = t.currency, p = t.symbol ? posOf(t) : null;
+      if (r.mergedInto) { r.applied = true; continue; } // 已經併進對應的買賣（成本或已實現損益裡）
+      const cur = t.currency, p = t.symbol ? posOf(t) : r.feeSymbol ? posOf(t, r.feeSymbol) : null;
       if (t.type === "buy") { const cost = t.shares * t.price + t.fee + t.tax; add(p, t.shares, cost, t); p.fees += t.fee; p.taxes += t.tax; C(cur).balance -= cost; const S = T(cur); S.fees += t.fee; S.taxes += t.tax; S.bought += t.shares * t.price; snap(p, t); }
       else if (t.type === "sell") {
         if (t.shares > p.shares + EPS) { r.errors.push({ code: "oversell", message: `賣出 ${t.shares} 股，但當時只持有 ${+p.shares.toFixed(6)} 股` }); continue; }
@@ -127,12 +142,21 @@
       }
       else if (t.type === "dividend") { const net = t.amount - t.tax; p.dividends += net; p.taxes += t.tax; C(cur).balance += net; const S = T(cur); S.dividends += net; S.taxes += t.tax;
         if (p.shares < EPS) r.warnings.push({ code: "dividend_without_position", message: "領股息時沒有持股（賣出後才發放的話可以忽略）" }); snap(p, t, { dividend: r2(net) }); }
-      else if (t.type === "stock_dividend") { if (p.shares < EPS) r.warnings.push({ code: "stock_dividend_without_position", message: "配股時沒有持股" }); add(p, t.shares, 0, t); snap(p, t); } // 配股成本 0，平均成本下降
+      else if (t.type === "stock_dividend") { // 配股成本 0，平均成本下降；有填配股率時和持股核對（台股不足一股的部分通常發現金，所以用無條件捨去比較）
+        if (p.shares < EPS) r.warnings.push({ code: "stock_dividend_without_position", message: "配股時沒有持股" });
+        else if (isNum(t.ratio)) { const exp = p.shares * t.ratio, lo = t.market === "tw" ? Math.floor(exp + EPS) : exp; if (Math.abs(t.shares - lo) > Math.max(1, lo * 0.001) && Math.abs(t.shares - exp) > 1e-6) r.warnings.push({ code: "stock_dividend_mismatch", message: `依配股率應該約 ${+lo.toFixed(4)} 股，填的是 ${t.shares} 股，請對照券商入帳` }); }
+        add(p, t.shares, 0, t); snap(p, t); }
       else if (t.type === "split") {
         if (p.shares < EPS) { r.warnings.push({ code: "split_without_position", message: "拆股／合股時沒有持股，不影響" }); continue; }
         p.shares *= t.ratio; p.lots.forEach(L => { L.shares *= t.ratio; });
-        if (t.market === "tw" && Math.abs(p.shares - Math.round(p.shares)) > 1e-6) r.warnings.push({ code: "fractional_after_split", message: "合股後有不足一股的部分，券商通常會退回現金，請另外記一筆" });
+        const frac = p.shares - Math.floor(p.shares + 1e-9);
+        if (t.market === "tw" && frac > 1e-6) { p.fraction = frac; r.warnings.push({ code: "fractional_after_split", message: `合股後有 ${+frac.toFixed(6)} 股不足一股，要再記一筆「零股現金結算」；結算前這部分標為待確認` }); }
         snap(p, t);
+      }
+      else if (t.type === "fraction_cash") { // 零股換現金：拿掉這些股數的成本，拿到的現金和成本的差是已實現損益
+        if (t.shares > p.shares + EPS) { r.errors.push({ code: "oversell", message: `結算 ${t.shares} 股，但當時只持有 ${+p.shares.toFixed(6)} 股` }); continue; }
+        const net = t.amount - t.fee - t.tax, cost = take(p, t.shares), pnl = net - cost; p.realizedPnl += pnl; p.fees += t.fee; p.taxes += t.tax; C(cur).balance += net;
+        const S = T(cur); S.realizedPnl += pnl; S.fees += t.fee; S.taxes += t.tax; p.fraction = Math.max(0, p.fraction - t.shares); if (p.fraction < 1e-6) p.fraction = 0; snap(p, t, { realized: r2(pnl) });
       }
       else if (t.type === "transfer_in") { add(p, t.shares, t.shares * t.price + t.fee, t); p.fees += t.fee; T(cur).fees += t.fee; snap(p, t); } // 外部轉入：不動現金，成本用填的每股成本
       else if (t.type === "transfer_out") {
@@ -141,7 +165,8 @@
       }
       else if (t.type === "deposit") { const c = C(cur); c.balance += t.amount; c.deposits += t.amount; c.tracked = true; }
       else if (t.type === "withdraw") { const c = C(cur); c.balance -= t.amount; c.withdrawals += t.amount; c.tracked = true; }
-      else if (t.type === "fee") { C(cur).balance -= t.amount; T(cur).fees += t.amount; if (p) { p.fees += t.amount; } else if (t.ref && ids.get(t.ref)?.tx?.symbol) { const q = pos.get(ids.get(t.ref).tx.symbol); if (q) q.fees += t.amount; } }
+      else if (t.type === "fee") { C(cur).balance -= t.amount; T(cur).fees += t.amount; if (p) p.fees += t.amount; }
+      else if (t.type === "other" && !p) { if (isNum(t.amount)) C(cur).balance += t.amount; r.warnings.push({ code: "other_action", message: "其他公司行動（只有金額）：只記現金，請確認" }); } // 純現金，沒有對應的持股
       else if (t.type === "other") {
         if (isNum(t.shares) && t.shares < 0 && -t.shares > p.shares + EPS) { r.errors.push({ code: "oversell", message: "股數減少超過持有數量" }); continue; }
         if (isNum(t.shares) && t.shares > 0) add(p, t.shares, 0, t); else if (isNum(t.shares) && t.shares < 0) take(p, -t.shares);
@@ -154,13 +179,15 @@
     const positions = [...pos.values()].map(p => { const price = priceOf(p.symbol), mv = price != null && p.shares > EPS ? p.shares * price : p.shares > EPS ? null : 0;
       return { symbol: p.symbol, market: p.market, currency: p.currency, shares: +p.shares.toFixed(6), costBasis: r2(p.costBasis), avgCost: p.shares > EPS ? p.costBasis / p.shares : null,
         lastPrice: price, marketValue: mv == null ? null : r2(mv), unrealizedPnl: mv == null ? null : r2(mv - p.costBasis), realizedPnl: r2(p.realizedPnl), dividends: r2(p.dividends), fees: r2(p.fees), taxes: r2(p.taxes),
-        open: p.shares > EPS, lots: method === "fifo" ? p.lots.map(L => ({ date: L.date, id: L.id, shares: +L.shares.toFixed(6), cost: r2(L.cost) })) : null, firstDate: p.firstDate, history: p.history }; })
+        open: p.shares > EPS, pending: p.fraction > 1e-6 ? [{ code: "fraction_unsettled", shares: +p.fraction.toFixed(6), message: "合股後不足一股的部分還沒結算，股數與成本是暫時的" }] : [], lots: method === "fifo" ? p.lots.map(L => ({ date: L.date, id: L.id, shares: +L.shares.toFixed(6), cost: r2(L.cost) })) : null, firstDate: p.firstDate, history: p.history }; })
       .sort((a, b) => (b.open - a.open) || a.symbol.localeCompare(b.symbol));
     for (const S of Object.values(totals)) for (const k of Object.keys(S)) S[k] = r2(S[k]);
     for (const c of Object.values(cash)) { c.balance = r2(c.balance); c.deposits = r2(c.deposits); c.withdrawals = r2(c.withdrawals); }
     const txs = rows.map(r => ({ index: r.i, id: r.tx?.id ?? null, tx: r.tx, applied: !!r.applied, errors: r.errors, warnings: r.warnings }));
     const bad = txs.filter(x => x.errors.length).length;
-    return { v: VERSION, method, methodLabel: METHODS[method], status: !txs.length ? "empty" : bad ? "has_errors" : "ok", errorCount: bad, positions, cash, totals, txs };
+    const pend = positions.filter(p => p.pending.length).length;
+    return { v: VERSION, method, methodLabel: METHODS[method], status: !txs.length ? "empty" : bad ? "has_errors" : pend ? "needs_confirm" : "ok", errorCount: bad, pendingCount: pend, positions, cash, totals,
+      txs: txs.map(x => (rows[x.index].mergedInto ? { ...x, mergedInto: rows[x.index].mergedInto } : x)) };
   }
 
   // 新增交易前的檢查：把 tx 加進現有交易後重算，回傳這筆的錯誤與提醒（不改動傳進來的陣列）
@@ -222,5 +249,5 @@
     return { ok: L.errorCount === 0, code: L.errorCount ? "has_errors" : "ok", errors: L.txs.filter(x => x.errors.length).map(x => ({ index: x.index, id: x.id, errors: x.errors })), ledger: L };
   }
 
-  root.KLLedger = Object.freeze({ VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, checkTx, buildLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore });
+  root.KLLedger = Object.freeze({ VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore });
 })(typeof window !== "undefined" ? window : globalThis);
