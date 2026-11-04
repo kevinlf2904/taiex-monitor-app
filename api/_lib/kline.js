@@ -156,11 +156,27 @@ export async function officialRefs(code, from, to, otc = false) {
     return [...parseRefPrices(a, code, "除權息"), ...(b && typeof b === "object" ? parseRefPrices(b, code, "減資") : [])];
   } catch { return null; }
 }
+// 從「原始價格 ÷ Yahoo 價格」找分割：Yahoo 的價格已經依分割調整，比值在分割日會從 r 跳回 1（0050 一拆四：4 → 1）。
+// Yahoo 的事件清單有時沒有分割（實測 0050 2025-06-18 就沒有），所以不能只靠事件。比值變動超過 15% 才算，回傳 [{ d, kind: "split", r, inferred: true }]
+export function inferSplits(rawRows, yRows) {
+  const Y = new Map((yRows || []).map(x => [x.d, x.c])), q = [];
+  for (const x of rawRows || []) { const y = Y.get(x.d); if (y > 0 && x.c > 0) q.push([x.d, x.c / y]); }
+  const out = [];
+  // 和「上一個穩定的比值」比，新比值要在之後最多 3 天都維持（差不到 3%）：Yahoo 單日錯價、以及錯價隔天恢復都不會被當成分割
+  const holds = i => q.slice(i + 1, i + 4).every(([, v]) => Math.abs(v / q[i][1] - 1) < 0.03);
+  let base = q.length ? q[0][1] : null;
+  for (let i = 1; i < q.length; i++) { const r = base / q[i][1]; if (Math.abs(r - 1) > 0.15 && holds(i)) { const nice = [2, 3, 4, 5, 10, 20, 0.5, 0.25, 0.2, 0.1].find(v => Math.abs(r / v - 1) < 0.03); out.push({ d: q[i][0], kind: "split", r: nice || +r.toFixed(4), inferred: true }); base = q[i][1]; }
+    else if (Math.abs(q[i][1] / base - 1) < 0.03 || holds(i)) base = q[i][1]; } // 小幅、持續的變動（例如 Yahoo 把配股記成分割）跟著更新基準
+  return out;
+}
 async function adjOf(sym, data, splitAdjusted, code, tw) {
   const p1 = Math.floor(Date.parse(data[0].d + "T00:00:00Z") / 1000) - 7 * 86400, p2 = Math.floor(Date.parse(data[data.length - 1].d + "T00:00:00Z") / 1000) + 3 * 86400;
   const useOfficial = !splitAdjusted && !!tw;
-  const [y, refs] = await Promise.all([getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?period1=${p1}&period2=${p2}&interval=1d&events=div%2Csplit`).then(parseYahooEvents).catch(() => null),
+  const [yj, refs] = await Promise.all([getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?period1=${p1}&period2=${p2}&interval=1d&events=div%2Csplit`).catch(() => null),
     useOfficial ? officialRefs(code, data[0].d, data[data.length - 1].d, tw === "上櫃") : null]);
+  let y = yj ? parseYahooEvents(yj) : null;
+  // 原始價格：用和 Yahoo 價格的比值補上事件清單沒有的分割（同一天已有 Yahoo 分割就不重複）
+  if (y && !splitAdjusted) { const have = new Set(y.filter(e => e.kind === "split").map(e => e.d)); y = [...y, ...inferSplits(data, parseYahoo(yj)?.rows).filter(e => !have.has(e.d))]; }
   if (!y && !refs) throw new Error("沒有除權息資料");
   const A = adjustRows(data, [...(y || []), ...(refs || [])], splitAdjusted, { limit: /\.TWO?$/.test(sym) ? 0.105 : 0.5 });
   return { ...A, basis: refs ? "official" : "yahoo", source: refs ? `${tw === "上櫃" ? "櫃買中心" : "證交所"}除權息與減資參考價＋Yahoo Finance（分割）` : "Yahoo Finance（除息、分割）", officialFailed: useOfficial && !refs };

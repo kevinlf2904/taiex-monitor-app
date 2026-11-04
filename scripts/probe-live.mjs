@@ -35,7 +35,10 @@ if (process.argv[2] === "adj") {
       const A = K.adjustRows(yr, yev, true), { R, src } = await rawOf(c, otc);
       let refs = []; for (let y = +from.slice(0, 4); y <= +to.slice(0, 4); y++) { const x = await K.officialRefs(c, y === +from.slice(0, 4) ? from : `${y}-01-01`, y === +to.slice(0, 4) ? to : `${y}-12-31`, !!otc); if (x == null) { console.log("官方參考價失敗", y); refs = null; break; } refs.push(...x); await wait(400); }
       console.log(`Yahoo 事件 ${yev.length}（分割 ${JSON.stringify(yev.filter(e => e.kind === "split"))}）；官方參考價 ${refs ? refs.length : "失敗"} 筆 ${JSON.stringify((refs || []).slice(0, 4).map(e => [e.d, e.why, +e.f.toFixed(4)]))}；原始價 ${src} ${R.length} 天`);
-      const B = R.length && refs ? K.adjustRows(R, [...yev, ...refs], false) : null;
+      const inf = K.inferSplits(R, yr); if (inf.length) console.log("由價格比值找到的分割", JSON.stringify(inf));
+      const B = R.length && refs ? K.adjustRows(R, [...yev, ...inf.filter(e => !yev.some(x => x.kind === "split" && x.d === e.d)), ...refs], false) : null;
+      if (c === "2002" && B) { const win = d => d >= "2024-07-19" && d <= "2024-07-31", YC = new Map(yr.map(x => [x.d, x.c])), YAm = new Map(YA.map(x => [x.d, x.ac]));
+        console.log("  2002 颱風前後：", B.rows.filter(x => win(x.d)).map(x => `${x.d} 原始 ${x.c} 還原 ${x.ac}｜Yahoo ${YC.get(x.d) ?? "—"} adj ${YAm.get(x.d)?.toFixed(3) ?? "—"}`).join("；"), "｜Yahoo 列", yr.filter(x => win(x.d)).map(x => x.d).join(","), "｜Yahoo 事件", JSON.stringify(yev.filter(e => e.d >= "2024-07-01" && e.d <= "2024-08-31"))); }
       const rY = ret(YA), rA = ret(A.rows), rB = B ? ret(B.rows) : null;
       console.log(`報酬：Yahoo adjclose ${pp(rY)}｜A（Yahoo 事件）${pp(rA)} 差 ${((rA - rY) * 100).toFixed(2)} 個百分點 → ${Math.abs(rA - rY) < 0.005 ? "通過" : "未通過"}｜B（官方）${rB == null ? "—" : `${pp(rB)} 差 ${((rB - rY) * 100).toFixed(2)} 個百分點 → ${Math.abs(rB - rY) < 0.005 ? "通過" : "未通過"}`}｜原始價 ${R.length ? pp(R[R.length - 1].c / R[0].c - 1) : "—"}`);
       if (B) { const ym = new Map(YA.map((x, i) => [x.d, i ? x.ac / YA[i - 1].ac - 1 : null])); const bad = B.rows.map((x, i) => [x.d, i ? x.ac / B.rows[i - 1].ac - 1 : null]).filter(([d, r]) => r != null && ym.get(d) != null && Math.abs(r - ym.get(d)) > 0.01);

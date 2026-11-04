@@ -1,7 +1,7 @@
 // 還原股價（api/_lib/kline.js 的 parseYahooEvents、adjustRows）：除息、分割（0050 一拆四）、除息日不是交易日、不合理股息、Yahoo 已調整分割的價格。固定假資料，不連外部服務。
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseYahooEvents, adjustRows, parseRefPrices } from "../api/_lib/kline.js";
+import { parseYahooEvents, adjustRows, parseRefPrices, inferSplits } from "../api/_lib/kline.js";
 
 const ts = d => Date.parse(d + "T01:00:00Z") / 1000 - 28800 + 3600; // 台北當天早上
 const R = (pairs) => pairs.map(([d, c]) => ({ d, o: c, h: c, l: c, c, v: 1 }));
@@ -86,4 +86,14 @@ test("櫃買中心格式（probe 實際回應的欄位）：exDailyQ 除權息�
   assert.deepEqual(parseRefPrices(ex, "6788", "除權息"), [{ d: "2025-06-02", kind: "ref", f: 215 / 225, why: "除權息" }]);
   const rv = { tables: [{ fields: ["恢復買賣日期", "股票代號", "名稱", "最後交易日之收盤價格", "減資恢復買賣開始日參考價格", "漲停價格", "跌停價格", "開始交易基準價", "除權參考價"], data: [["1140113", "2740", "天蔥", "21.55", "39.18", "43.05", "35.30", "39.20", "0.00"]] }] };
   assert.deepEqual(parseRefPrices(rv, "2740", "減資"), [{ d: "2025-01-13", kind: "ref", f: 39.18 / 21.55, why: "減資" }]);
+});
+
+test("Yahoo 事件清單沒有分割時（實測 0050 2025-06-18）：用原始價 ÷ Yahoo 價的比值找出分割；配股前後比值不變就不算", () => {
+  const raw = R([["2025-06-16", 188], ["2025-06-17", 190], ["2025-06-18", 47.5], ["2025-06-19", 48]]), y = R([["2025-06-16", 47], ["2025-06-17", 47.5], ["2025-06-18", 47.5], ["2025-06-19", 48]]);
+  const S = inferSplits(raw, y); assert.deepEqual(S, [{ d: "2025-06-18", kind: "split", r: 4, inferred: true }]);
+  const A = adjustRows(raw, S); assert.ok(near(A.rows[0].ac, 47)); assert.deepEqual(A.suspect, []);
+  assert.deepEqual(inferSplits(R([["2026-07-15", 200], ["2026-07-16", 172]]), R([["2026-07-15", 200], ["2026-07-16", 172]])), [], "兩邊都是原始價（除權息）比值不變");
+  assert.deepEqual(inferSplits(raw, []), []);
+  const glitch = R([["2026-01-05", 100], ["2026-01-06", 100], ["2026-01-07", 100], ["2026-01-08", 100]]), yg = R([["2026-01-05", 100], ["2026-01-06", 60], ["2026-01-07", 100], ["2026-01-08", 100]]);
+  assert.deepEqual(inferSplits(glitch, yg), [], "Yahoo 單日錯價不算分割");
 });
