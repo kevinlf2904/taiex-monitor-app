@@ -80,3 +80,8 @@ test("不改動原始資料；空的、錯誤的根節點", () => {
   assert.equal(P.normalizeHoldings({}, opts).status, "empty");
   assert.equal(P.normalizeHoldings(null, opts).status, "invalid"); assert.equal(P.normalizeHoldings([], opts).status, "invalid");
 });
+
+test("報價有價格但沒有日期：不能當成正常，標「有提醒」並說明無法確認是否最新", () => {
+  const it = P.normalizeHoldings({ 2330: { sh: 1000, cost: 820 } }, { ...opts, quotes: new Map([["2330", { price: 1100 }]]) }).items[0];
+  assert.equal(it.status, "warning"); assert.ok(it.issues.some(x => x.code === "unknown_freshness")); assert.equal(it.priceDate, null);
+});

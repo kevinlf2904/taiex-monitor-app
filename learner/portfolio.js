@@ -1,7 +1,7 @@
 /* 投資組合資料基礎（第 1 階段）：把庫存（舊版 kline:watch:hold）整理成統一格式，並逐筆標出資料狀態。純函式，不寫入任何存檔。
    延續 GPT PR #218 的檢查邏輯，修正它的問題：讀對存檔位置（kline:watch:hold）、範例持股要標出來、市場與資產類型先查股票清單（/api/stocks），查不到才依代號推測並標示「推測」。
    一筆持倉：代號、名稱、市場、幣別、資產類型、股數、平均成本、總成本、最新價格、最新市值、未實現損益與報酬率、價格日期與時間、資料狀態。
-   資料狀態：valid（正常）、warning（可以用但有提醒）、incomplete（缺價格，算不出市值）、stale（價格比應有交易日舊）、invalid（股數或成本不對，不能用）。
+   資料狀態：valid（正常）、warning（可以用但有提醒，例如報價沒有日期）、incomplete（缺價格，算不出市值）、stale（價格比應有交易日舊）、invalid（股數或成本不對，不能用）。
    新的存檔位置 kline:pf:v1 只先定義；目前不寫入、不搬移、不刪除舊資料（要搬移時另外經使用者同意，見 docs/portfolio/DATA_CONTRACT.md）。
    瀏覽器裡是 window.KLPortfolio；測試用 node 的 vm 載入。 */
 (function (root) {
@@ -57,6 +57,7 @@
       else {
         const e = k.market && exp[k.market];
         if ((e && priceDate && priceDate < e) || (q && q.isStale === true)) status = "stale";
+        else if (!priceDate) warn.push(["unknown_freshness", "報價沒有日期，無法確認是不是最新價格"]);
         if (price / avgCost > 50 || price / avgCost < 0.02) warn.push(["price_far_from_cost", "現價和成本差距超過 50 倍，可能是股票分割、減資或成本輸入錯誤"]);
       }
       if (status === "valid" && warn.length) status = "warning";

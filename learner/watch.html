@@ -2205,18 +2205,21 @@ function holdDataCheck(m) {
   if (!W.stocks && !W.dqTried) { W.dqTried = true; loadStocks().then(() => { if (W.lt === "hold") renderList(); }).catch(() => {}); } // 股票清單用來確認市場（上市／上櫃）
   const r = KLPortfolio.normalizeHoldings(W.hold, { master: W.stocks, quotes: W.quotes, names: W.names, expectedDate: { tw: W.quotes.get("T00")?.date?.slice(0, 10) || null } });
   const quiet = new Set(["market_inferred", "demo"]); // 美股市場本來就只能推測、範例持股上面已經有說明：不另外提醒
-  const L = r.items.filter(i => (i.market ? i.market === m : m === "tw") && i.status !== "valid" && !(i.status === "warning" && i.issues.every(x => quiet.has(x.code))));
-  if (!L.length) return "";
+  const need = i => i.status !== "valid" && !(i.status === "warning" && i.issues.every(x => quiet.has(x.code)));
+  // 看不出市場的不歸到台股或美股，兩個分頁都另外列出來；資料錯誤（代號壞掉）的也一樣
+  const L = r.items.filter(i => i.market === m && need(i)), U = r.items.filter(i => !i.market && need(i));
+  if (!L.length && !U.length) return "";
   const lab = KLPortfolio.STATUS_LABEL;
-  return `<details class="hdq"><summary>⚠︎ 資料檢查：${L.length} 筆持倉需要注意</summary><ul>${L.map(i => `<li><b>${esc(i.name || nameOf(i.symbol) || i.symbol)}</b> <small class="note">${esc(i.symbol)}</small>・${lab[i.status]}：${esc(i.issues.filter(x => !quiet.has(x.code)).map(x => x.message).join("；"))}</li>`).join("")}</ul><p class="note">${L.some(i => i.status === "invalid") ? "資料錯誤的持倉不會算進損益與風險；按上面的「編輯庫存」修正。" : "缺價格或價格過期的持倉，市值可能不是最新的。"}</p></details>`;
+  const li = i => `<li><b>${esc(i.name || nameOf(i.symbol) || i.symbol)}</b> <small class="note">${esc(i.symbol)}</small>・${lab[i.status]}：${esc(i.issues.filter(x => !quiet.has(x.code)).map(x => x.message).join("；"))}</li>`;
+  return `<details class="hdq"><summary>⚠︎ 資料檢查：${L.length + U.length} 筆持倉需要注意</summary><ul>${L.map(li).join("")}</ul>${U.length ? `<p class="note">看不出是台股還是美股（下面的庫存表暫時放在台股，請確認代號）：</p><ul>${U.map(li).join("")}</ul>` : ""}<p class="note">${[...L, ...U].some(i => i.status === "invalid") ? "資料錯誤的持倉不會算進損益與風險；按上面的「編輯庫存」修正。" : "缺價格或價格過期的持倉，市值可能不是最新的。"}</p></details>`;
 }
 function renderHold() {
   const m = W.holdMkt, R = holdRows(m), us = m === "us", money = v => (v == null ? "—" : (us ? "US$" : "") + (us ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : Math.round(v).toLocaleString()));
-  if (!R.length) { const none = !Object.keys(W.hold).length; $("#lx").innerHTML = `<div class="hempty"><p class="note">還沒有${us ? "美股" : "台股"}持股。按上面的「編輯庫存」一格一格填代號、股數與成本，或用「截圖匯入」上傳券商 App 的庫存截圖。</p>
+  if (!R.length) { const none = !Object.keys(W.hold).length; $("#lx").innerHTML = (none ? "" : holdDataCheck(m)) + `<div class="hempty"><p class="note">還沒有${us ? "美股" : "台股"}持股。按上面的「編輯庫存」一格一格填代號、股數與成本，或用「截圖匯入」上傳券商 App 的庫存截圖。</p>
     ${none ? `<button type="button" class="btn primary" data-hdemo="load">✨ 載入範例投資組合體驗</button><p class="note">放入台股、美股各幾檔範例部位，可以先看看損益、配息、風險分析長什麼樣子；之後一鍵清除。</p>` : ""}</div>`; $("#wl").innerHTML = ""; return; }
   const demo = W.hold[Object.keys(W.hold)[0]]?.demo ? `<div class="hdemo"><span>✨ 目前是範例投資組合（不是你的真實持股）</span><button type="button" class="btn sm" data-hdemo="clear">清除範例</button></div>` : "";
   const ok = R.filter(r => r.mv != null);
-  if (!ok.length) { $("#lx").innerHTML = (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有報價。</p>` : skel("等待報價…")); }
+  if (!ok.length) { $("#lx").innerHTML = demo + holdDataCheck(m) + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有報價。</p>` : skel("等待報價…")); }
   const P = new Map(ok.map(r => [r.c, holdPnL(r.c, r.q)])), sum = k => ok.reduce((s, r) => s + (P.get(r.c)?.[k] || 0), 0);
   const mv = sum("mv"), hc = sum("hc"), pnl = sum("pnl"), day = sum("day"), pct = hc > 0 ? pnl / hc : 0, divGot = ok.reduce((s, r) => s + (P.get(r.c)?.divGot || 0), 0), divYr = ok.reduce((s, r) => s + (P.get(r.c)?.divYr || 0), 0);
   // 環：藍色是成本，綠（跌）或紅（漲）是報酬佔成本的比例

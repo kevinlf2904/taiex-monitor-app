@@ -23,3 +23,20 @@ test("庫存資料檢查：有問題的持倉列出原因，存檔不被改動",
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });
+
+test("全部持股都還沒有報價：資料檢查仍然出現並列出缺價格；看不出市場的另外列出", async () => {
+  for (const width of [390, 1280]) {
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+    await ctx.route("**/api/quote**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", quotes: [] }) }));
+    const r = await p.evaluate(async () => {
+      W.quotes.clear(); W.hold = { 2330: { sh: 1000, cost: 90 }, 2317: { sh: 100, cost: 100 }, "AB_CD": { sh: 1, cost: 1 } };
+      W.holdMkt = "tw"; W.holdView = "pnl"; setLt("hold"); W.quotes.clear();
+      await new Promise(res => setTimeout(res, 1500)); W.quotes.clear(); renderList();
+      return { text: document.querySelector("#lx .hdq")?.textContent || "", sw: document.documentElement.scrollWidth - innerWidth };
+    });
+    assert.match(r.text, /資料檢查：3 筆持倉需要注意/, width + "：" + r.text);
+    assert.match(r.text, /2330.*缺價格/s); assert.match(r.text, /看不出是台股還是美股.*AB_CD/s);
+    assert.ok(r.sw <= 1, "沒有水平溢出");
+    await ctx.close(); assert.deepEqual(errs, []);
+  }
+});
