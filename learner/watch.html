@@ -719,6 +719,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .d-intel { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; } .ibadge { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 3px; padding: 3px 10px; font: inherit; font-size: 12.5px; line-height: 1.5; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ibadge:hover { border-color: var(--ink); } .ibadge i { font-style: normal; color: var(--muted); margin-right: 7px; padding-right: 7px; border-right: 1px solid var(--line); } /* 徽章一律單色：分類小字＋內容，不用表情符號和彩色框 */
 .hempty { padding: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; } .hempty .note { margin: 0; }
 .hdemo { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 8px 12px; padding: 8px 12px; border-radius: 6px; background: var(--accent-soft, var(--surface-2)); font-size: 13px; }
+.hdq { margin: 8px 12px; padding: 8px 12px; border: 1px solid var(--warn, var(--line)); border-radius: 8px; font-size: 13px; }
+.hdq summary { cursor: pointer; color: var(--warn, var(--ink)); font-weight: 600; }
+.hdq ul { margin: 6px 0 4px; padding-left: 18px; } .hdq li { margin: 3px 0; line-height: 1.6; } .hdq .note { margin: 4px 0 0; }
 .mlist .rk { color: var(--muted); font: 12px var(--font-num); min-width: 1.4em; text-align: right; } .mrk { margin: 8px 12px 0; } .mdesc { margin: 8px 12px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 4px; font-size: 13px; color: var(--muted); }
 .mrp-sum { text-align: center; font-size: 14px; line-height: 1.7; margin: 8px 12px; } .mrp-date { text-align: center; font: 500 20px var(--font-body); margin: 4px 0; } .mrp-range { width: calc(100% - 24px); margin: 4px 12px; } .mrp-ctl { display: flex; justify-content: center; gap: 8px; margin: 6px 12px 12px; }
 .iai .iaitxt { font-size: 14px; line-height: 1.75; }
@@ -1240,6 +1243,7 @@ tr.on td { background: var(--surface-2); }
 <script src="flows.js"></script>
 <script src="podcast.js"></script>
 <script src="quant.js"></script>
+<script src="portfolio.js"></script>
 <script src="tschart.js"></script>
 <script src="stockx.js"></script>
 <script src="after.js"></script>
@@ -2195,6 +2199,17 @@ function holdRows(m) {
   });
 }
 const sgn = (v, d = 0) => (v == null ? "—" : `${v > 0 ? "+" : ""}${d ? v.toFixed(d) : Math.round(v).toLocaleString()}`);
+// 庫存資料檢查（portfolio.js）：缺價格、價格過期、資料錯誤、成本或日期有問題的持倉列出來，不默默略過；只讀，不改動存檔
+function holdDataCheck(m) {
+  if (typeof KLPortfolio === "undefined") return "";
+  if (!W.stocks && !W.dqTried) { W.dqTried = true; loadStocks().then(() => { if (W.lt === "hold") renderList(); }).catch(() => {}); } // 股票清單用來確認市場（上市／上櫃）
+  const r = KLPortfolio.normalizeHoldings(W.hold, { master: W.stocks, quotes: W.quotes, names: W.names, expectedDate: { tw: W.quotes.get("T00")?.date?.slice(0, 10) || null } });
+  const quiet = new Set(["market_inferred", "demo"]); // 美股市場本來就只能推測、範例持股上面已經有說明：不另外提醒
+  const L = r.items.filter(i => (i.market ? i.market === m : m === "tw") && i.status !== "valid" && !(i.status === "warning" && i.issues.every(x => quiet.has(x.code))));
+  if (!L.length) return "";
+  const lab = KLPortfolio.STATUS_LABEL;
+  return `<details class="hdq"><summary>⚠︎ 資料檢查：${L.length} 筆持倉需要注意</summary><ul>${L.map(i => `<li><b>${esc(i.name || nameOf(i.symbol) || i.symbol)}</b> <small class="note">${esc(i.symbol)}</small>・${lab[i.status]}：${esc(i.issues.filter(x => !quiet.has(x.code)).map(x => x.message).join("；"))}</li>`).join("")}</ul><p class="note">${L.some(i => i.status === "invalid") ? "資料錯誤的持倉不會算進損益與風險；按上面的「編輯庫存」修正。" : "缺價格或價格過期的持倉，市值可能不是最新的。"}</p></details>`;
+}
 function renderHold() {
   const m = W.holdMkt, R = holdRows(m), us = m === "us", money = v => (v == null ? "—" : (us ? "US$" : "") + (us ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : Math.round(v).toLocaleString()));
   if (!R.length) { const none = !Object.keys(W.hold).length; $("#lx").innerHTML = `<div class="hempty"><p class="note">還沒有${us ? "美股" : "台股"}持股。按上面的「編輯庫存」一格一格填代號、股數與成本，或用「截圖匯入」上傳券商 App 的庫存截圖。</p>
@@ -2207,7 +2222,7 @@ function renderHold() {
   // 環：藍色是成本，綠（跌）或紅（漲）是報酬佔成本的比例
   const deg = Math.min(360, Math.abs(pct) * 360), ring = `conic-gradient(var(--${pnl >= 0 ? "up" : "down"}) 0deg ${deg}deg, var(--accent) ${deg}deg 360deg)`;
   const seg = (k, opts) => `<div class="seg yh-seg" role="group">${opts.map(([v, t]) => `<button data-hset="${k}" data-v="${v}" aria-pressed="${String(!!W[k]) === v}">${t}</button>`).join("")}</div>`;
-  if (ok.length) $("#lx").innerHTML = demo + `<div class="yh-top"><div class="yh-ring" style="background:${ring}"><span>股票報酬<b class="${cls(pnl)}">${sgn(pct * 100, 2)}%</b></span></div>
+  if (ok.length) $("#lx").innerHTML = demo + holdDataCheck(m) + `<div class="yh-top"><div class="yh-ring" style="background:${ring}"><span>股票報酬<b class="${cls(pnl)}">${sgn(pct * 100, 2)}%</b></span></div>
     <div class="yh-sum">${us ? "" : seg("hdiv", [["true", "含息"], ["false", "不含息"]])}
       <dl><dt>股票市值</dt><dd>${money(mv)}</dd><dt><i class="sq acc"></i>總成本</dt><dd>${money(hc)}</dd><dt><i class="sq ${pnl >= 0 ? "up" : "down"}"></i>報酬</dt><dd class="${cls(pnl)}">${sgn(pnl)}</dd><dt>今日損益</dt><dd class="${cls(day)}">${sgn(day)}</dd></dl></div></div>
     ${us ? "" : `<div class="yh-bar"><span>已領股息 <b>${divGot ? Math.round(divGot).toLocaleString() : "—"}</b></span><span>一年約可領 <b>${divYr ? Math.round(divYr).toLocaleString() : "—"}</b></span>
