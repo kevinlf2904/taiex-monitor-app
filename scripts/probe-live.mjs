@@ -39,8 +39,11 @@ if (process.argv[2] === "adj") {
       const B = R.length && refs ? K.adjustRows(R, [...yev, ...inf.filter(e => !yev.some(x => x.kind === "split" && x.d === e.d)), ...refs], false) : null;
       if (c === "2002" && B) { const win = d => d >= "2024-07-19" && d <= "2024-07-31", YC = new Map(yr.map(x => [x.d, x.c])), YAm = new Map(YA.map(x => [x.d, x.ac]));
         console.log("  2002 颱風前後：", B.rows.filter(x => win(x.d)).map(x => `${x.d} 原始 ${x.c} 還原 ${x.ac}｜Yahoo ${YC.get(x.d) ?? "—"} adj ${YAm.get(x.d)?.toFixed(3) ?? "—"}`).join("；"), "｜Yahoo 列", yr.filter(x => win(x.d)).map(x => x.d).join(","), "｜Yahoo 事件", JSON.stringify(yev.filter(e => e.d >= "2024-07-01" && e.d <= "2024-08-31"))); }
-      const rY = ret(YA), rA = ret(A.rows), rB = B ? ret(B.rows) : null;
-      console.log(`報酬：Yahoo adjclose ${pp(rY)}｜A（Yahoo 事件）${pp(rA)} 差 ${((rA - rY) * 100).toFixed(2)} 個百分點 → ${Math.abs(rA - rY) < 0.005 ? "通過" : "未通過"}｜B（官方）${rB == null ? "—" : `${pp(rB)} 差 ${((rB - rY) * 100).toFixed(2)} 個百分點 → ${Math.abs(rB - rY) < 0.005 ? "通過" : "未通過"}`}｜原始價 ${R.length ? pp(R[R.length - 1].c / R[0].c - 1) : "—"}`);
+      // 報酬只算三邊都有的日期（第一天到最後一天要一樣，不然 Yahoo 多一根今天的價格就會差很多）
+      const has = (a, d) => a.some(x => x.d === d), common = YA.map(x => x.d).filter(d => has(A.rows, d) && (!B || has(B.rows, d))), d0 = common[0], d1 = common[common.length - 1];
+      const cut = a => a.filter(x => x.d >= d0 && x.d <= d1 && common.includes(x.d)); console.log(`  比較期間 ${d0}～${d1}，共同 ${common.length} 天`);
+      const rY = ret(cut(YA)), rA = ret(cut(A.rows)), rB = B ? ret(cut(B.rows)) : null;
+      console.log(`報酬：Yahoo adjclose ${pp(rY)}｜A（Yahoo 事件）${pp(rA)} 差 ${((rA - rY) * 100).toFixed(2)} 個百分點 → ${Math.abs(rA - rY) < 0.005 ? "通過" : "未通過"}｜B（官方）${rB == null ? "—" : `${pp(rB)} 差 ${((rB - rY) * 100).toFixed(2)} 個百分點 → ${Math.abs(rB - rY) < 0.005 ? "通過" : "未通過"}`}｜原始價 ${R.length ? pp(ret(cut(R), "c")) : "—"}`);
       if (B) { const ym = new Map(YA.map((x, i) => [x.d, i ? x.ac / YA[i - 1].ac - 1 : null])); const bad = B.rows.map((x, i) => [x.d, i ? x.ac / B.rows[i - 1].ac - 1 : null]).filter(([d, r]) => r != null && ym.get(d) != null && Math.abs(r - ym.get(d)) > 0.01);
         console.log(`  B 和 Yahoo 每日報酬差 >1%：${bad.length} 天 ${bad.slice(0, 8).map(([d, r]) => `${d} ${pp(r)} vs ${pp(ym.get(d))}`).join("；")}；B 可疑日 ${JSON.stringify(B.suspect.slice(0, 5))}`); }
     } catch (e) { console.log("錯誤", e.message); }

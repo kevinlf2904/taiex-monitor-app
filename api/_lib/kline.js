@@ -122,8 +122,10 @@ export function adjustRows(rows, ev, splitAdjusted = false, opts = {}) {
   if (!n || !Array.isArray(ev)) return { rows: rows.map(x => ({ ...x })), events, skipped, suspect: [] };
   const first = rows[0].d, last = rows[n - 1].d, inside = e => e.d > first && e.d <= last;
   // 官方參考價（kind: "ref"）只用在原始價格上；同一天有官方資料時，Yahoo 的除息與分割就不再用（避免配股被 Yahoo 記成分割而重複計算）
-  const refs = splitAdjusted ? [] : ev.filter(e => e.kind === "ref" && inside(e)), refDays = new Set(refs.map(e => e.d));
-  const splits = ev.filter(e => e.kind === "split" && inside(e) && !refDays.has(e.d)), divs = ev.filter(e => (e.kind === "div" && inside(e) && !refDays.has(e.d)) || refs.includes(e));
+  // 「落在哪一根」：事件日不是交易日（例如颱風休市）時算在下一個交易日；官方與 Yahoo 的日期可能差一天（2002 2024 年官方 07-25、Yahoo 07-26），所以用落在哪一根來去重複
+  const rowOf = d => { let lo = 0, hi = n - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (rows[m].d < d) lo = m + 1; else hi = m; } return lo; };
+  const refs = splitAdjusted ? [] : ev.filter(e => e.kind === "ref" && inside(e)), refRows = new Set(refs.map(e => rowOf(e.d)));
+  const splits = ev.filter(e => e.kind === "split" && inside(e) && !refRows.has(rowOf(e.d))), divs = ev.filter(e => (e.kind === "div" && inside(e) && !refRows.has(rowOf(e.d))) || refs.includes(e));
   const cs = rows.map(x => { let c = x.c; if (!splitAdjusted) for (const e of splits) if (x.d < e.d) c /= e.r; return c; });
   splits.forEach(e => events.push({ d: e.d, kind: "split", r: e.r, f: +(1 / e.r).toFixed(6), applied: !splitAdjusted }));
   const fac = new Array(n).fill(1); let F = 1, k = divs.length - 1;
