@@ -119,7 +119,8 @@
         : { value: mwrAnn, period: mwrPeriod, annualized: mwrAnn != null, status: reasons.length ? "estimated" : "ok", reasons };
       // 比較基準：同一段期間
       let bench = null;
-      if (BB && first && last) { const b0 = BB.at(first.d), b1 = BB.at(last.d); if (b0 && b1) bench = { name: opts.benchName?.[cur] || null, ret: b1.c / b0.c - 1, excess: twr == null ? null : twr - (b1.c / b0.c - 1), from: b0.d, to: b1.d, priceIndex: cur === "TWD" }; }
+      // 起點用第一天之前最後一個收盤（組合第一天的報酬是從買進價算起，基準也要從前一天收盤算），沒有更早的才用當天
+      if (BB && first && last) { const b0 = BB.a.filter(x => x.d < first.d).at(-1) || BB.at(first.d), b1 = BB.at(last.d); if (b0 && b1) bench = { name: opts.benchName?.[cur] || null, ret: b1.c / b0.c - 1, excess: twr == null ? null : twr - (b1.c / b0.c - 1), from: b0.d, to: b1.d, priceIndex: cur === "TWD" }; }
       // 損益（由交易引擎）：總投入＝買進＋轉入的金額；總損益＝已實現＋未實現＋股息（手續費、稅已經在成本與已實現裡，不重複扣）
       const Tt = L.totals[cur] || {}, mvNow = P.reduce((s, p) => { const sh = p.shares; if (sh <= EPS) return s; const px = priceAt(p.symbol, asOf); return s + sh * (px ? px.c : (lastTradePx(p.symbol, asOf) || 0)); }, 0);
       const costNow = P.reduce((s, p) => s + p.costBasis, 0), unreal = mvNow - costNow;

@@ -100,3 +100,8 @@ test("台幣美元分開；有錯誤的交易不算進去並回報；空的回 e
   assert.ok(near(R.byCurrency.USD.twr, 0.1)); assert.equal(R.byCurrency.TWD.pnl.invested, 1000);
   assert.equal(K.buildPerf([], {}).status, "empty");
 });
+
+test("比較基準的起點：第一天之前的收盤（組合第一天從買進價算起，基準也從前一天收盤算）", () => {
+  const R = K.buildPerf([tw({ date: "2026-01-06", type: "buy", shares: 1, price: 100 })], { prices: { 2330: S([["2026-01-06", 100], ["2026-01-07", 110]]) }, bench: { TWD: S([["2026-01-05", 1000], ["2026-01-06", 1020], ["2026-01-07", 1050]]) } }).byCurrency.TWD;
+  assert.ok(near(R.bench.ret, 0.05)); assert.equal(R.bench.from, "2026-01-05");
+});
