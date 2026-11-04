@@ -17,7 +17,7 @@ if (process.argv[2] === "adj") {
   // 也列出兩條路線和 FinMind 每天報酬差超過 1% 的日子（找沒還原到的配股、減資）。只讀，不寫任何東西
   const K = await import("../api/_lib/kline.js");
   const tk = (process.env.FINMIND_TOKEN || "").trim(), FH = tk ? { Authorization: `Bearer ${tk}` } : {};
-  const J = async (u, h = {}) => { const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json", ...h }, signal: AbortSignal.timeout(30000) }); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); };
+  const J = async (u, h = {}) => { const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json", ...h }, signal: AbortSignal.timeout(30000) }); if (!r.ok) throw new Error(`HTTP ${r.status}（${new URL(u).host}）${(await r.text().catch(() => "")).slice(0, 160)}`); return r.json(); };
   const now = Date.now(), from = new Date(now - 3 * 365.25 * 864e5).toISOString().slice(0, 10), to = new Date(now).toISOString().slice(0, 10);
   const pp = v => (v * 100).toFixed(2) + "%", ret = (a, k = "ac") => a[a.length - 1][k] / a[0][k] - 1;
   // 證交所官方參考價：一年一年查，印出第一次的欄位確認格式
@@ -46,7 +46,8 @@ if (process.argv[2] === "adj") {
     } catch (e) { console.log("錯誤", e.message); }
   }
   // 上櫃官方參考價的候選網址：只印原始回應開頭，確認有沒有可用的資料
-  for (const u of ["https://www.tpex.org.tw/openapi/v1/tpex_exright_daily", "https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?response=json", "https://www.tpex.org.tw/openapi/v1/tpex_cap_reduction"]) await raw(u, 400);
+  for (const u of ["https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate=2025/06/01&endDate=2025/08/31&response=json", "https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate=114/06/01&endDate=114/08/31&response=json",
+    "https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?date=2025/07/01&response=json", "https://www.tpex.org.tw/www/zh-tw/bulletin/revivt?startDate=2025/01/01&endDate=2025/12/31&response=json"]) await raw(u, 700);
   process.exit(0);
 }
 if (process.argv[2] === "confai") {
