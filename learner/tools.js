@@ -10,6 +10,16 @@ async function dailyFresh(c) {
   const p = getJ(`/api/kline?code=${encodeURIComponent(c === "T00" ? "加權" : c === "O00" ? "櫃買" : c)}&months=6`).then(j => j.data || null).catch(() => null);
   M.set(c, { at: Date.now(), p }); return p;
 }
+// 還原日 K（6 個月）：收盤 c 換成除息、分割還原後的 ac，原始收盤留在 raw；報酬、波動、風險用這個，K 線圖仍用 dailyFresh 的原始價。
+// 回傳 { D, adj }：adj.ok=false（指數、拿不到除權息資料）時 D 是原始價格。5 分鐘內重複用
+async function dailyAdj(c) {
+  const M = (W.dka ||= new Map()), h = M.get(c); if (h && Date.now() - h.at < 300000) return h.p;
+  const p = getJ(`/api/kline?code=${encodeURIComponent(c === "T00" ? "加權" : c === "O00" ? "櫃買" : c)}&months=6&adj=1`).then(j => {
+    const ok = !!j.adj?.ok, D = Array.isArray(j.data) ? j.data.map(x => ok && x.ac > 0 ? { ...x, c: x.ac, raw: x.c } : x) : null;
+    return D ? { D, adj: j.adj || { ok: false, why: "none" } } : null;
+  }).catch(() => null);
+  M.set(c, { at: Date.now(), p }); return p;
+}
 const myCodes = () => [...new Set(W.groups.flatMap(g => g.list))].filter(c => !isIdx(c));
 // ★ 只看我的自選：財報、法說會、節目共識、大戶國會共用同一個開關（W.mine，記在 watch:mine），範圍是自選＋庫存
 const mineCodes = () => new Set([...myCodes(), ...Object.keys(W.hold || {})]);

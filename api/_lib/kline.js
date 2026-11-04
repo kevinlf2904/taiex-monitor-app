@@ -6,6 +6,8 @@
 // GET /api/kline?code=2382&months=6
 // GET /api/kline?code=2382&months=12&before=2025-10-01   往前載入更早的資料（看盤的 K 線往左拉到底時用；這時先問 Yahoo，一次就拿得到）
 // 回傳 { ok, code, name, market, source, unit, data: [{ d: "2026-09-01", o, h, l, c, v }] }，v 的單位見 unit。
+// 加 &adj=1：每根多一個 ac（除息、分割還原後的收盤價，最後一根＝原始收盤價），並附 adj: { ok, source, events, skipped }。
+//   報酬、波動、風險用 ac；K 線圖仍用原始的 o/h/l/c。指數不還原（加權是價格指數）；拿不到事件時 adj.ok=false、不給 ac。
 
 // HTTP 標頭只能用 ASCII（中文會讓 fetch 直接丟出 ByteString 錯誤）
 import { isUS, usName } from "./_yahoo.js";
@@ -82,6 +84,44 @@ export function parseYahoo(j) {
   return { name: r.meta?.shortName || r.meta?.longName || "", rows };
 }
 
+// Yahoo 除息、分割事件（chart API 加 events=div,split）→ [{ d, kind: "div", amt } | { d, kind: "split", r }]，日期換成交易所當地日期；
+// r＝一股變成幾股（0050 2025 年一拆四 → 4）。Yahoo 的配息金額已經依分割調整過。
+export function parseYahooEvents(j) {
+  const r = j?.chart?.result?.[0]; if (!r) return null;
+  const tz = r.meta?.gmtoffset ?? 28800, day = t => new Date((t + tz) * 1000).toISOString().slice(0, 10), ev = [];
+  for (const x of Object.values(r.events?.dividends || {})) { const a = +x?.amount, t = +x?.date; if (Number.isFinite(a) && a > 0 && Number.isFinite(t)) ev.push({ d: day(t), kind: "div", amt: a }); }
+  for (const x of Object.values(r.events?.splits || {})) { const n = +x?.numerator, dn = +x?.denominator, t = +x?.date; if (n > 0 && dn > 0 && n !== dn && Number.isFinite(t)) ev.push({ d: day(t), kind: "split", r: n / dn }); }
+  return ev.sort((a, b) => a.d.localeCompare(b.d) || a.kind.localeCompare(b.kind));
+}
+// 還原收盤價 ac：rows 依日期由舊到新。splitAdjusted＝rows 的價格已經依分割調整（Yahoo 的 close 是），證交所、櫃買的原始價格不是。
+// 1. 分割：除權日以前的價格除以 r。2. 除息：除息日 e 的因子 f＝1 − 股息 ÷ 前一個交易日收盤，e 以前的價格都乘上 f。
+// 最後一根 ac＝原始收盤價；只處理期間內的事件（期間外的只會讓整段乘上同一個常數，不影響報酬）。因子不合理（股息超過前收盤一半）就略過並列在 skipped。
+export function adjustRows(rows, ev, splitAdjusted = false) {
+  const n = rows.length, events = [], skipped = [];
+  if (!n || !Array.isArray(ev)) return { rows: rows.map(x => ({ ...x })), events, skipped };
+  const first = rows[0].d, last = rows[n - 1].d, inside = e => e.d > first && e.d <= last;
+  const splits = ev.filter(e => e.kind === "split" && inside(e)), divs = ev.filter(e => e.kind === "div" && inside(e));
+  const cs = rows.map(x => { let c = x.c; if (!splitAdjusted) for (const e of splits) if (x.d < e.d) c /= e.r; return c; });
+  splits.forEach(e => events.push({ d: e.d, kind: "split", r: e.r, f: +(1 / e.r).toFixed(6), applied: !splitAdjusted }));
+  const fac = new Array(n).fill(1); let F = 1, k = divs.length - 1;
+  for (let i = n - 1; i >= 0; i--) {
+    fac[i] = F;
+    // 除息日落在 (前一根, 這一根]：從前一根開始往前都要乘上因子（除息日不是交易日時，算在下一個交易日）
+    while (k >= 0 && i > 0 && divs[k].d > rows[i - 1].d && divs[k].d <= rows[i].d) {
+      const prev = cs[i - 1], f = prev > 0 ? 1 - divs[k].amt / prev : NaN;
+      if (f > 0.5 && f < 1) { F *= f; events.push({ d: rows[i].d, kind: "div", amt: divs[k].amt, f: +f.toFixed(6) }); } else skipped.push({ d: divs[k].d, kind: "div", amt: divs[k].amt, why: "bad_factor" });
+      k--;
+    }
+  }
+  return { rows: rows.map((x, i) => ({ ...x, ac: +(cs[i] * fac[i]).toFixed(4) })), events: events.sort((a, b) => a.d.localeCompare(b.d)), skipped };
+}
+async function adjOf(sym, data, splitAdjusted) {
+  const p1 = Math.floor(Date.parse(data[0].d + "T00:00:00Z") / 1000) - 7 * 86400, p2 = Math.floor(Date.parse(data[data.length - 1].d + "T00:00:00Z") / 1000) + 3 * 86400;
+  const ev = parseYahooEvents(await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?period1=${p1}&period2=${p2}&interval=1d&events=div%2Csplit`));
+  if (!ev) throw new Error("沒有除權息資料");
+  return adjustRows(data, ev, splitAdjusted);
+}
+
 async function fromTwse(code, months, anchor) {
   let name = "", rows = [];
   for (const [k, m] of monthsBack(months, anchor).entries()) {
@@ -155,8 +195,15 @@ export default async function handler(req, res) {
       if (r && r.rows.length >= (before ? 1 : 5)) {
         const seen = new Set(), data = r.rows.filter((x) => !seen.has(x.d) && seen.add(x.d) && (!before || x.d < before)).sort((a, b) => a.d.localeCompare(b.d));
         if (before && !data.length) continue;
+        let adj;
+        if (req.query?.adj === "1" && !before) {
+          if (isIndex || isOtc) adj = { ok: false, why: "index", note: "指數不還原（價格指數）" };
+          else try { const ySym = us ? raw : `${raw}${r.market === "上櫃" ? ".TWO" : ".TW"}`, A = await adjOf(ySym, data, /^Yahoo/.test(r.source));
+            data.splice(0, data.length, ...A.rows); adj = { ok: true, source: "Yahoo Finance（除息、分割）", events: A.events, skipped: A.skipped };
+          } catch (e) { adj = { ok: false, why: "fetch_failed", note: `拿不到除權息資料（${e.message}），用原始價格` }; }
+        }
         res.setHeader("Cache-Control", before ? "s-maxage=86400, stale-while-revalidate=604800" : session() === "closed" ? "s-maxage=1800, stale-while-revalidate=3600" : "s-maxage=60, stale-while-revalidate=120");
-        return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : isOtc ? "OTC" : raw, us, name: r.name, market: r.market, source: r.source, unit: r.unit, data });
+        return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : isOtc ? "OTC" : raw, us, name: r.name, market: r.market, source: r.source, unit: r.unit, data, ...(adj ? { adj } : {}) });
       }
     } catch (e) { errors.push(e.message); }
   }
