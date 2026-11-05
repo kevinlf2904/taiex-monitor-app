@@ -75,3 +75,17 @@ test("「÷ 累計投入」的分母：所有投入（買進）換成台幣的�
   R = X.combine(P.buildPerf([us({ id: "a", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), us({ id: "b", date: "2026-01-06", type: "sell", shares: 10, price: 120 }), us({ id: "c", date: "2026-01-07", type: "buy", shares: 10, price: 110 })], { prices: px }), fx);
   assert.equal(R.pnl.invested, 63000); assert.equal(R.pnl.total, 10 * 20 * 30 + 10 * 20 * 30); assert.ok(near(R.pnl.totalPct, 12000 / 63000));
 });
+
+test("累計投入是逐筆投入的加總，不受同日淨額抵銷：同日買賣、同日台美交易、多次投入與賣出", () => {
+  const px = { NVDA: S([["2026-01-05", 100], ["2026-01-06", 100], ["2026-01-07", 100]]), 2330: S([["2026-01-05", 100], ["2026-01-06", 100], ["2026-01-07", 100]]) }, fx = S([["2026-01-05", 30], ["2026-01-06", 31], ["2026-01-07", 32]]);
+  // 同一天買 10,000、賣 8,000（台股）：分母要加 10,000，不是淨額 2,000
+  let R = X.combine(P.buildPerf([tw({ id: "a", date: "2026-01-05", type: "buy", shares: 100, price: 100 }), us({ id: "u", date: "2026-01-05", type: "buy", shares: 1, price: 100 }),
+    tw({ id: "b", date: "2026-01-06", type: "buy", shares: 100, price: 100 }), tw({ id: "c", date: "2026-01-06", type: "sell", shares: 80, price: 100 })], { prices: px }), fx);
+  assert.equal(R.pnl.invested, 10000 + 100 * 30 + 10000, "1/5 台股 10,000＋美股 100 美元×30；1/6 同日買 10,000 不被賣出抵銷");
+  // 同一天台股賣出、美股買進（換算後金額相近）：美股投入照算
+  R = X.combine(P.buildPerf([tw({ id: "a", date: "2026-01-05", type: "buy", shares: 100, price: 100 }), tw({ id: "s", date: "2026-01-07", type: "sell", shares: 32, price: 100 }), us({ id: "u", date: "2026-01-07", type: "buy", shares: 1, price: 100 })], { prices: px }), fx);
+  assert.equal(R.pnl.invested, 10000 + 100 * 32, "台股賣 3,200 不抵銷美股投入 100×32");
+  // 多次投入（不同日、不同匯率）與部分賣出
+  R = X.combine(P.buildPerf([us({ id: "a", date: "2026-01-05", type: "buy", shares: 1, price: 100 }), us({ id: "b", date: "2026-01-06", type: "buy", shares: 2, price: 100 }), us({ id: "c", date: "2026-01-07", type: "sell", shares: 1, price: 100 })], { prices: px }), fx);
+  assert.equal(R.pnl.invested, 100 * 30 + 200 * 31); assert.ok(near(R.pnl.totalPct, R.pnl.total / R.pnl.invested));
+});

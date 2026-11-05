@@ -52,7 +52,10 @@
     const mwr = multi ? { value: null, period: null, status: "unavailable", reasons: ["multiple_solutions", ...reasons] }
       : XP.status !== "ok" && XA?.status !== "ok" ? { value: null, period: null, status: "unavailable", reasons: ["no_solution", ...reasons] }
       : { value: XA?.status === "ok" ? XA.roots[0] : null, period: XP.status === "ok" ? XP.roots[0] : null, annualized: XA?.status === "ok", status: reasons.length ? "estimated" : "ok", reasons };
-    const total = sum.twPnl + sum.usLocal + sum.usFx, invested = flows.filter(f => f.f > 0).reduce((s, f) => s + f.f, 0);
+    // 累計投入：逐筆的投入（買進、轉入）各自用那一天的匯率換成台幣再加總；不能用每天合併後的淨現金流（同一天的買賣、台美交易會互相抵銷）
+    const rateAt = d => { const q = FX.at(d); return q ? q.c : FX.a[0].c; };
+    const gross = (S, cur) => (S?.flows || []).filter(f => f.f > 0).reduce((s, f) => s + f.f * (cur === "USD" ? rateAt(f.d) : 1), 0);
+    const total = sum.twPnl + sum.usLocal + sum.usFx, invested = gross(TW, "TWD") + gross(US, "USD");
     const fxNow = FX.at(last.d);
     return {
       v: VERSION, status: reasons.length ? "estimated" : "ok", base: "TWD", from: first ? first.d : null, to: last ? last.d : null, spanDays,
