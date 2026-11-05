@@ -162,6 +162,24 @@ test("P1-5：價格停在超過 7 天前 → 結果標「估算」並說明，�
   assert.ok(K.REASON_LABEL.stale_prices);
 });
 
+test("P2 補強：股票轉出要把市價與成本差額計入已實現損益及個股歸因", () => {
+  const T = [tw({ id: "b", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ id: "o", date: "2026-01-06", type: "transfer_out", shares: 10 })];
+  const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 120]]) } }).byCurrency.TWD;
+  assert.equal(C.pnl.transferOutPnl, 200);
+  assert.equal(C.pnl.realized, 200);
+  assert.equal(C.pnl.total, 200);
+  assert.equal(C.attribution.bySymbol.find(x => x.symbol === "2330").pnl, 200);
+});
+
+test("P2 補強：轉出完全沒有市價時以成本估算並標記，不得當成零元流出", () => {
+  const T = [tw({ id: "b", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ id: "o", date: "2026-01-06", type: "transfer_out", shares: 10 })];
+  const C = K.buildPerf(T, { prices: {} }).byCurrency.TWD;
+  assert.equal(C.pnl.returned, 1000);
+  assert.equal(C.mwr.status, "estimated");
+  assert.ok(C.mwr.reasons.includes("transfer_out_no_price"));
+  assert.ok(C.issues.some(x => x.k === "transfer_out_no_price" && x.fallback === "cost"));
+});
+
 test("P2：轉出那天沒有收盤價、用之前的收盤 → 標估算並記下用的是哪天的價格；其他公司行動現金計入總損益並標示", () => {
   const T = [tw({ date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ date: "2026-01-08", type: "transfer_out", shares: 5 }), tw({ date: "2026-01-09", type: "other", amount: 50 })];
   const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 102], ["2026-01-09", 104]]) } }).byCurrency.TWD;
