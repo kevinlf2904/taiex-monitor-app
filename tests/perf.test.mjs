@@ -105,3 +105,52 @@ test("比較基準的起點：第一天之前的收盤（組合第一天從買�
   const R = K.buildPerf([tw({ date: "2026-01-06", type: "buy", shares: 1, price: 100 })], { prices: { 2330: S([["2026-01-06", 100], ["2026-01-07", 110]]) }, bench: { TWD: S([["2026-01-05", 1000], ["2026-01-06", 1020], ["2026-01-07", 1050]]) } }).byCurrency.TWD;
   assert.ok(near(R.bench.ret, 0.05)); assert.equal(R.bench.from, "2026-01-05");
 });
+
+// ===== ChatGPT 審查（#230）回歸測試 =====
+test("P1-1：交易引擎有待確認部位（合股零股未結算）→ 績效狀態是 needs_confirm，不是 ok", () => {
+  const T = [tw({ date: "2025-01-02", type: "buy", shares: 1001, price: 10 }), tw({ date: "2025-02-03", type: "split", ratio: 0.1 })];
+  const R = K.buildPerf(T, { prices: { 2330: S([["2025-01-02", 10], ["2025-02-03", 100], ["2025-02-04", 101]]) } });
+  assert.equal(R.status, "needs_confirm"); assert.equal(R.pendingCount, 1);
+  const C = R.byCurrency.TWD; assert.equal(C.status, "needs_confirm"); assert.ok(C.issues.some(x => x.k === "pending" && x.codes[0] === "2330")); assert.ok(C.mwr.reasons.includes("pending_confirm")); assert.notEqual(C.mwr.status, "ok");
+});
+
+test("P1-2：股息的另計匯費：股息 1,000、匯費 10 → 淨 990；總損益、個股歸因、現金流都扣一次，不重複", () => {
+  const T = [tw({ id: "b", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ id: "dv", date: "2026-01-06", type: "dividend", amount: 1000 }), tw({ id: "fx", symbol: null, date: "2026-01-06", type: "fee", amount: 10, ref: "dv" })];
+  const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 100]]) } }).byCurrency.TWD;
+  assert.equal(C.pnl.total, 990); assert.equal(C.pnl.extraFees, 10); assert.equal(C.attribution.bySymbol[0].pnl, 990); assert.equal(C.attribution.unattributed, 0);
+  assert.equal(C.pnl.returned, 1000); assert.equal(C.pnl.invested, 1000 + 10, "匯費是另外付出的錢");
+  assert.ok(near(C.twr, (1000 + 1000 - 10) / 1000 - 1), "第二天：(市值 1000 −淨現金流(10−1000))/1000 −1 = 99%");
+  const U = K.buildPerf([...T, tw({ id: "g", symbol: null, date: "2026-01-06", type: "fee", amount: 5 })], { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 100]]) } }).byCurrency.TWD;
+  assert.equal(U.pnl.total, 985); assert.equal(U.attribution.unattributed, -5); assert.ok(near(U.attribution.bySymbol.reduce((s, x) => s + x.pnl, 0) + U.attribution.unattributed, U.pnl.total), "每一檔＋未歸屬＝總損益");
+});
+
+test("P1-3：XIRR 有多個解（10%、20%、30% 都讓 NPV＝0）→ 不任選一個，標 multiple / 無法計算", () => {
+  // (x−1/1.1)(x−1/1.2)(x−1/1.3) 展開，x＝1/(1+r)，係數當成第 0～3 年的現金流
+  const a = 1 / 1.1, b = 1 / 1.2, c = 1 / 1.3, k = 1e6, cf = [-a * b * c, a * b + a * c + b * c, -(a + b + c), 1].map(v => v * k);
+  const F = ["2020-01-01", "2020-12-31", "2021-12-31", "2022-12-31"].map((d, i) => ({ d, cf: cf[i] }));
+  const X = K.xirrInfo(F); assert.equal(X.status, "multiple"); assert.equal(X.roots.length, 3);
+  [0.1, 0.2, 0.3].forEach((r, i) => assert.ok(Math.abs(X.roots[i] - r) < 0.01, `${X.roots[i]} ≈ ${r}`));
+  assert.equal(K.xirr(F), null, "多解時 xirr 不回傳任何一個");
+  assert.equal(K.xirrInfo([{ d: "2025-01-01", cf: -100 }, { d: "2026-01-01", cf: 110 }]).status, "ok");
+});
+
+test("P1-4：已出清的部位，價格資料延伸超過一年也不年化（用實際有投資的期間）", () => {
+  const T = [tw({ date: "2025-01-02", type: "buy", shares: 10, price: 100 }), tw({ date: "2025-03-03", type: "sell", shares: 10, price: 110 })];
+  const C = K.buildPerf(T, { prices: { 2330: S([["2025-01-02", 100], ["2025-03-03", 110], ["2026-06-01", 200]]) } }).byCurrency.TWD;
+  assert.equal(C.activeTo, "2025-03-03"); assert.ok(C.spanDays < 365); assert.equal(C.annualizable, false); assert.equal(C.twrAnn, null); assert.equal(C.mwr.annualized, false); assert.equal(C.mwr.value, null);
+  assert.ok(near(C.twr, 0.1)); assert.ok(near(C.mwr.period, 0.1, 1e-7));
+});
+
+test("P1-5：價格停在超過 7 天前 → 結果標「估算」並說明，不會顯示 ok", () => {
+  const C = K.buildPerf([tw({ date: "2026-01-05", type: "buy", shares: 10, price: 100 })], { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 101]]) }, asOf: "2026-01-30", bench: { TWD: S([["2026-01-05", 1], ["2026-01-30", 1]]) } }).byCurrency.TWD;
+  assert.ok(C.issues.some(x => x.k === "stale_prices" && x.maxDays > 7)); assert.equal(C.mwr.status, "estimated"); assert.ok(C.mwr.reasons.includes("stale_prices")); assert.equal(C.status, "estimated");
+  assert.ok(K.REASON_LABEL.stale_prices);
+});
+
+test("P2：轉出那天沒有收盤價、用之前的收盤 → 標估算並記下用的是哪天的價格；其他公司行動現金計入總損益並標示", () => {
+  const T = [tw({ date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ date: "2026-01-08", type: "transfer_out", shares: 5 }), tw({ date: "2026-01-09", type: "other", amount: 50 })];
+  const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 102], ["2026-01-09", 104]]) } }).byCurrency.TWD;
+  assert.ok(C.issues.some(x => x.k === "transfer_out_prev_price" && x.priceDate === "2026-01-06")); assert.ok(C.mwr.reasons.includes("transfer_out_prev_price"));
+  assert.equal(C.pnl.otherCash, 50); assert.ok(C.mwr.reasons.includes("other_action"));
+  assert.ok(near(C.attribution.bySymbol.reduce((s, x) => s + x.pnl, 0) + C.attribution.unattributed, C.pnl.total));
+});
