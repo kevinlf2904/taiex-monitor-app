@@ -21,6 +21,7 @@ test("融資：新增帳戶、維持率、壓力測試、試算聲明；壞資�
     await p.click("#mgForm button[type=submit]");
     await p.waitForSelector(".mgcard", { timeout: 20000 });
     t = await p.evaluate(() => $("#lx").innerText);
+    assert.match(t, /擔保品（價格、日期、來源）/); assert.match(t, /2330[\s\S]*報價/);
     for (const k of ["我的融資", "自己填的", "維持率", "再跌多少會追繳", "壓力測試", "全部跌 30%", "連三根跌停", "門檻來源：測試券商"]) assert.match(t, new RegExp(k), width + "：" + k);
     const st = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:margin:v1"))); assert.equal(st.v, 1); assert.equal(st.accounts[0].loan, 60000); assert.equal(st.accounts[0].rules.call, 1.3);
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
@@ -28,4 +29,17 @@ test("融資：新增帳戶、維持率、壓力測試、試算聲明；壞資�
     await p.click("[data-lg=mgdel]"); assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:margin:v1")).accounts.length), 0);
     await ctx.close(); assert.deepEqual(errs, []);
   }
+});
+
+test("融資：沒有擔保品不能存；只有手填價格時標「含估算」並顯示價格來源與日期", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await ctx.route("**/api/quote**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, quotes: [] }) }));
+  await p.evaluate(() => { localStorage.removeItem("kline:pf:margin:v1"); W.lg = { view: "margin" }; W.lgMg = null; W.holdView = "tx"; setLt("hold"); });
+  await p.waitForSelector("[data-lg=mgadd]", { timeout: 30000 }); await p.click("[data-lg=mgadd]");
+  await p.fill("#mgForm [name=loan]", "50000"); await p.click("#mgForm button[type=submit]");
+  let t = await p.evaluate(() => $("#lx").innerText); assert.match(t, /至少要有一檔股票擔保品或現金擔保/); assert.equal(await p.evaluate(() => localStorage.getItem("kline:pf:margin:v1")), null);
+  await p.fill("#mgForm [name=collateral]", "2330 1000 90"); await p.click("#mgForm button[type=submit]");
+  await p.waitForSelector(".mgcard", { timeout: 20000 }); t = await p.evaluate(() => $(".mgcard").innerText);
+  assert.match(t, /含估算/); assert.match(t, /你填的價格/); assert.match(t, /有擔保品沒有現價，用你填的價格/);
+  await ctx.close(); assert.deepEqual(errs, []);
 });

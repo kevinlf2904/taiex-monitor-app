@@ -34,10 +34,14 @@
       return { symbol: String(c.symbol || "").toUpperCase(), shares: sh, price: px, priceDate: live ? q.date || null : c.priceDate || null, priceSource: live ? "quote" : manual ? "user" : null, value: px != null ? sh * px : null, haircut: isNum(c.haircut) ? c.haircut : null };
     });
     const noPx = col.filter(c => c.price == null), userPx = col.filter(c => c.priceSource === "user");
+    // 價格日期超過 5 天（停牌、報價失敗後退回很久以前手填的價格）：結果標估算
+    const stale = today ? col.filter(c => c.price != null && c.priceDate && (Date.parse(today) - Date.parse(c.priceDate)) / DAY > 5) : [];
+    if (stale.length) issues.push({ k: "stale_price", codes: stale.map(c => c.symbol) });
+    if (!col.some(c => c.shares > 0) && !cashC) issues.push({ k: "no_collateral" });
     if (noPx.length) issues.push({ k: "no_price", codes: noPx.map(c => c.symbol) });
     if (userPx.length) issues.push({ k: "user_price", codes: userPx.map(c => c.symbol) });
     const valued = col.filter(c => c.value != null), mv = valued.reduce((s, c) => s + c.value, 0) + cashC;
-    const complete = !noPx.length && !!loan, ratio = loan && mv > EPS ? mv / loan : null;
+    const complete = !noPx.length && !!loan && (col.some(c => c.shares > 0) || cashC > 0), ratio = loan && mv > EPS ? mv / loan : null;
     // 利息：從開始日到今天（簡單利息，年 365 天）
     const days = acct.startDate && today ? Math.max(0, Math.round((Date.parse(today) - Date.parse(acct.startDate)) / DAY)) : null;
     const interest = loan && isNum(acct.rate) && days != null ? loan * acct.rate * days / 365 : null;
@@ -56,7 +60,8 @@
     // 單一擔保品連續三根跌停（約 −27.1%），其他不動：找出影響最大的那一檔
     const single = valued.map(c => { const m = mv - c.value * LIMIT3, r = loan ? m / loan : null; return { symbol: c.symbol, weight: mv > EPS ? r4(c.value / mv) : null, value: r2(m), ratio: r == null ? null : r4(r), state: state(r), need: need(r) }; }).sort((a, b) => (a.ratio ?? Infinity) - (b.ratio ?? Infinity));
     const source = ["broker", "user", "estimate"].includes(acct.source) ? acct.source : "user";
-    return { status: complete ? "ok" : loan ? "incomplete" : "invalid", source, official: false, id: acct.id || null, name: acct.name || null, type, currency: acct.currency || "TWD",
+    // 狀態：沒有借款＝invalid；缺擔保品或有擔保品沒有價格＝incomplete；用手填價格或價格過期＝estimated；其餘 ok
+    return { status: !loan ? "invalid" : !complete ? "incomplete" : userPx.length || stale.length ? "estimated" : "ok", source, official: false, id: acct.id || null, name: acct.name || null, type, currency: acct.currency || "TWD",
       rules: { call: R.call ?? null, topUpTo: R.topUpTo ?? null, liquidate: R.liquidate ?? null, maxLtv: R.maxLtv ?? null, source: R.source || null, asOf: R.asOf || null, isDefault: usedDefault },
       loan: loan == null ? null : r2(loan), collateralValue: r2(mv), cashCollateral: r2(cashC), collateral: col.map(c => ({ ...c, value: c.value == null ? null : r2(c.value), weight: c.value != null && mv > EPS ? r4(c.value / mv) : null })),
       ratio: ratio == null ? null : r4(ratio), state: state(ratio), need: need(ratio), interest: interest == null ? null : r2(interest), days, available: available == null ? null : r2(available),
@@ -72,6 +77,7 @@
       if (!a || typeof a !== "object") return errors.push({ i, code: "invalid_account" });
       if (!a.id || ids.has(a.id)) errors.push({ i, code: "duplicate_or_missing_id" }); ids.add(a.id);
       if (!(isNum(a.loan) && a.loan > 0)) errors.push({ i, code: "invalid_loan" });
+      if (!(Array.isArray(a.collateral) && a.collateral.length) && !(isNum(a.cashCollateral) && a.cashCollateral > 0)) errors.push({ i, code: "no_collateral" });
       if (a.rate != null && !(isNum(a.rate) && a.rate >= 0 && a.rate < 1)) errors.push({ i, code: "invalid_rate" });
       for (const k of ["call", "topUpTo", "liquidate", "maxLtv"]) { const v = a.rules?.[k]; if (v != null && !(isNum(v) && v > 0 && v < 10)) errors.push({ i, code: "invalid_rule_" + k }); }
       if (a.rules?.call != null && a.rules?.topUpTo != null && a.rules.topUpTo < a.rules.call) errors.push({ i, code: "topup_below_call" });
@@ -80,7 +86,7 @@
     return { ok: !errors.length, errors };
   }
   const ISSUE_LABEL = { default_rules: "門檻用的是預設值（常見規定），請改成你券商或合約的條件", no_loan: "沒有填借款金額", no_price: "有擔保品沒有價格，沒算進市值",
-    user_price: "有擔保品沒有現價，用你填的價格", term_expired: "借款已經超過期限", term_soon: "借款快到期了" };
+    user_price: "有擔保品沒有現價，用你填的價格", stale_price: "有擔保品的價格超過 5 天沒更新（停牌或報價失敗），結果是估算", no_collateral: "沒有任何擔保品（股票或現金），算不出維持率", term_expired: "借款已經超過期限", term_soon: "借款快到期了" };
   const SOURCE_LABEL = { broker: "券商資料", user: "自己填的", estimate: "系統估算" };
   root.KLMargin = Object.freeze({ VERSION, DEFAULT_RULES, SHOCKS, LIMIT3, analyze, validateStore, ISSUE_LABEL, SOURCE_LABEL });
 })(typeof window !== "undefined" ? window : globalThis);

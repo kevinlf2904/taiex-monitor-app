@@ -347,14 +347,20 @@ function renderMargin() {
 function mgCard(R, a) {
   const pc = v => (v == null ? "—" : (v * 100).toFixed(1) + "%"), money = v => lgMoney(v, R.currency), tile = (k, v, sub = "", c = "") => `<div class="pftile"><span>${k}</span><b class="${c}">${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
   const st = R.state ? `<span class="pfbadge mg-${R.state}">${MG_STATE[R.state]}</span>` : "", src = `<span class="pfbadge">${KLMargin.SOURCE_LABEL[R.source]}</span>`;
+  const done = R.status === "estimated" ? `<span class="pfbadge">含估算</span>` : R.status === "incomplete" ? `<span class="pfbadge mg-call">資料不完整</span>` : "";
+  const PS = { quote: "報價", user: "你填的價格" };
+  const colTable = R.collateral.length ? `<h5 class="pfh">擔保品<small class="note">（價格、日期、來源）</small></h5><table class="altable mgtable mgcol"><thead><tr><th>代號</th><th>股數</th><th>價格</th><th>價格日期</th><th>來源</th><th>市值</th><th>占比</th></tr></thead><tbody>
+    ${R.collateral.map(c => `<tr><td>${esc(nameOf(c.symbol))}<small class="note"> ${esc(c.symbol)}</small></td><td>${lgN(c.shares)}</td><td>${c.price == null ? "—" : lgN(c.price)}</td><td>${esc(c.priceDate || "—")}</td><td>${c.priceSource ? PS[c.priceSource] : "沒有價格，沒算進市值"}</td><td>${c.value == null ? "—" : money(c.value)}</td><td>${pc(c.weight)}</td></tr>`).join("")}
+    ${R.cashCollateral ? `<tr><td>現金擔保</td><td></td><td></td><td></td><td>你填的</td><td>${money(R.cashCollateral)}</td><td>${pc(R.collateralValue ? R.cashCollateral / R.collateralValue : null)}</td></tr>` : ""}</tbody></table>` : "";
   const iss = R.issues.map(x => esc(KLMargin.ISSUE_LABEL[x.k] || x.k) + (x.codes ? `：${x.codes.map(esc).join("、")}` : "")).join("；");
   const needTxt = n => (n ? `補現金 ${money(n.cash)} 或還款 ${money(n.repay)}` : "—");
-  return `<section class="pfcard mgcard"><h4>${esc(R.name || "借款帳戶")}<small class="note"> ${MG_TYPE[R.type]}</small>${src}${st}</h4>
+  return `<section class="pfcard mgcard"><h4>${esc(R.name || "借款帳戶")}<small class="note"> ${MG_TYPE[R.type]}</small>${src}${st}${done}</h4>
     <div class="pftiles">${[tile("維持率", pc(R.ratio), R.rules.call ? `追繳線 ${pc(R.rules.call)}${R.rules.liquidate ? `・處分線 ${pc(R.rules.liquidate)}` : ""}` : "沒有設定追繳線"),
       tile("借款", money(R.loan), R.interest != null ? `已計利息約 ${money(R.interest)}（${R.days} 天）` : ""), tile("擔保品市值", money(R.collateralValue), R.cashCollateral ? `含現金 ${money(R.cashCollateral)}` : ""),
       tile("再跌多少會追繳", R.dropToCall == null ? "—" : R.dropToCall <= 0 ? "已低於追繳線" : pc(R.dropToCall), R.dropToLiquidate != null ? `跌 ${pc(R.dropToLiquidate)} 會被處分` : ""),
       tile("可用額度（試算）", R.available == null ? "—" : money(R.available), R.rules.maxLtv ? `成數 ${pc(R.rules.maxLtv)}` : "沒有設定成數")].join("")}</div>
     ${R.need ? `<p class="note lgwarn">⚠︎ 目前低於追繳線：試算要${needTxt(R.need)}才回到 ${pc(R.rules.topUpTo || R.rules.call)}。</p>` : ""}${iss ? `<p class="note lgwarn">⚠︎ ${iss}。</p>` : ""}
+    ${colTable}
     <h5 class="pfh">壓力測試<small class="note">（股票擔保品同時下跌，現金不跌）</small></h5>
     <table class="altable mgtable"><thead><tr><th>情境</th><th>擔保品市值</th><th>維持率</th><th>狀態</th><th>要補</th></tr></thead><tbody>
       ${R.stress.map(x => `<tr><td>全部跌 ${(-x.shock * 100).toFixed(0)}%</td><td>${money(x.value)}</td><td>${pc(x.ratio)}</td><td>${x.state ? MG_STATE[x.state] : "—"}</td><td>${needTxt(x.need)}</td></tr>`).join("")}
@@ -378,7 +384,7 @@ function mgFormHtml(F) {
     ${F.err ? `<ul class="lgiss">${F.err.map(e => `<li class="lgwarn">✕ ${esc(e)}</li>`).join("")}</ul>` : ""}
     <div class="lgbar"><button type="submit" class="btn primary">${F.id ? "儲存修改" : "加入"}</button><button type="button" class="btn" data-lg="mgclose">取消</button></div></form>`;
 }
-const MG_ERR = { invalid_loan: "借款金額要大於 0", invalid_rate: "年利率要在 0～100% 之間", topup_below_call: "「補足到」不能低於追繳線", invalid_collateral: "擔保品格式：代號 股數 [價格]，股數要大於 0", duplicate_or_missing_id: "帳戶編號重複" };
+const MG_ERR = { no_collateral: "至少要有一檔股票擔保品或現金擔保", invalid_loan: "借款金額要大於 0", invalid_rate: "年利率要在 0～100% 之間", topup_below_call: "「補足到」不能低於追繳線", invalid_collateral: "擔保品格式：代號 股數 [價格]，股數要大於 0", duplicate_or_missing_id: "帳戶編號重複" };
 function mgSubmit(e) {
   e.preventDefault(); const L = W.lg, F = L.mgForm, fd = new FormData(e.target), n = k => { const t = String(fd.get(k) ?? "").trim().replace(/,/g, ""); return t === "" ? null : Number(t); }, pct = k => (n(k) == null ? null : n(k) / 100);
   const lines = String(fd.get("collateral") || "").split(/\n/).map(l => l.trim()).filter(Boolean);

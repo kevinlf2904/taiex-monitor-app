@@ -48,3 +48,15 @@ test("斷頭線、期限；存檔檢查擋下壞資料", () => {
   assert.deepEqual(J(bad.errors.map(e => e.code)), ["invalid_loan", "duplicate_or_missing_id", "invalid_rate", "duplicate_or_missing_id", "topup_below_call"]);
   assert.equal(M.validateStore({ v: 2, accounts: [] }).code, "unsupported_version");
 });
+
+test("審查修正：沒有任何擔保品 → incomplete 並說明、存檔擋下；用手填價格 → estimated；價格超過 5 天 → estimated 並列出代號", () => {
+  const E = M.analyze(acct({ collateral: [], cashCollateral: 0 }), PX, "2026-11-04");
+  assert.equal(E.status, "incomplete"); assert.ok(E.issues.some(x => x.k === "no_collateral")); assert.equal(E.ratio, null);
+  assert.ok(M.validateStore({ v: 1, accounts: [acct({ collateral: [] })] }).errors.some(e => e.code === "no_collateral"));
+  assert.equal(M.validateStore({ v: 1, accounts: [acct({ collateral: [], cashCollateral: 1000 })] }).ok, true, "只有現金擔保也可以");
+  const U = M.analyze(acct({ collateral: [{ symbol: "2330", shares: 1000, price: 700, priceDate: "2026-11-03" }] }), {}, "2026-11-04");
+  assert.equal(U.status, "estimated"); assert.equal(U.collateral[0].priceSource, "user"); assert.equal(U.collateral[0].priceDate, "2026-11-03");
+  const O = M.analyze(acct(), { 2330: { price: 700, date: "2026-10-20" }, 2317: { price: 150, date: "2026-11-04" } }, "2026-11-04");
+  assert.equal(O.status, "estimated"); assert.ok(O.issues.some(x => x.k === "stale_price" && x.codes.join() === "2330"));
+  assert.equal(M.analyze(acct(), PX, "2026-11-04").status, "ok");
+});
