@@ -134,6 +134,14 @@ test("P1-3：XIRR 有多個解（10%、20%、30% 都讓 NPV＝0）→ 不任選�
   assert.equal(K.xirrInfo([{ d: "2025-01-01", cf: -100 }, { d: "2026-01-01", cf: 110 }]).status, "ok");
 });
 
+test("P1-3 補強：XIRR 偶數重根／切線根不能被網格漏掉後誤報唯一解", () => {
+  // NPV = -100 + 220/(1+r) - 121/(1+r)^2，r=10% 是切線根，不會穿越 0。
+  const F = [{ d: "2025-01-01", cf: -100 }, { d: "2026-01-01", cf: 220 }, { d: "2027-01-01", cf: -121 }];
+  const X = K.xirrInfo(F);
+  assert.equal(X.status, "ambiguous");
+  assert.equal(K.xirr(F), null);
+});
+
 test("P1-4：已出清的部位，價格資料延伸超過一年也不年化（用實際有投資的期間）", () => {
   const T = [tw({ date: "2025-01-02", type: "buy", shares: 10, price: 100 }), tw({ date: "2025-03-03", type: "sell", shares: 10, price: 110 })];
   const C = K.buildPerf(T, { prices: { 2330: S([["2025-01-02", 100], ["2025-03-03", 110], ["2026-06-01", 200]]) } }).byCurrency.TWD;
