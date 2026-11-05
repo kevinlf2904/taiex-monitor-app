@@ -204,7 +204,7 @@ function pfCard(C, range) {
   const tile = (k, v, sub = "", c = "") => `<div class="pftile"><span>${k}</span><b class="${c}">${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
   const tiles = [
     tile("總損益", lgSgn(P.total, cur), `總報酬率 ${pfPct(P.totalPct)}`, cls(P.total)),
-    tile("時間加權報酬", pfPct(C.twr), C.annualizable ? `年化 ${pfPct(C.twrAnn)}` : "未滿一年，不年化", cls(C.twr)),
+    tile("時間加權報酬", pfPct(C.twr), C.twr == null ? "資料不足，無法計算" : C.annualizable ? `年化 ${pfPct(C.twrAnn)}` : "未滿一年，不年化", cls(C.twr)),
     tile("資金加權報酬" + est, m.status === "unavailable" ? "—" : m.annualized ? pfPct(m.value) : pfPct(m.period), m.status === "unavailable" ? (m.reasons?.includes("multiple_solutions") ? "無法確認是否為唯一解，不顯示" : "現金流算不出來") : m.annualized ? "年化（XIRR）" : "整段期間，未年化", cls(m.annualized ? m.value : m.period)),
     tile("最大回撤", D ? pfPct(D.dd) : "—", D?.peak ? (D.recovered ? `${D.trough.slice(5)} 谷底，${D.recoveryDays} 天後回到前高` : `${D.peak.slice(5)} 前高，尚未回到`) : "期間內沒有回撤"),
     tile("相對比較基準", B ? pfPct(B.excess) : "—", B ? `${esc(B.name || "")} ${pfPct(B.ret)}` : "沒有比較基準資料", B ? cls(B.excess) : "")
@@ -223,6 +223,7 @@ function pfCard(C, range) {
 }
 // 淨值走勢（組合 vs 比較基準，同一起點＝100）＋回撤；一張圖一個軸
 function pfCharts(C, range) {
+  if (!C.series.length) return `<p class="note" style="padding:8px 0">資料不足，無法計算走勢。</p>`;
   const all = C.series.filter(x => x.v > 0 || x.flow !== 0); if (all.length < 2) return `<p class="note" style="padding:8px 0">交易日太少，還畫不出走勢。</p>`;
   const end = all.at(-1).d, back = { "3m": 92, "6m": 183, "1y": 366 }[range], from = back ? new Date(Date.parse(end) - back * 864e5).toISOString().slice(0, 10) : all[0].d;
   // 起點：範圍前一天的收盤；「全部」或範圍從第一天開始時，用第一天開盤前（淨值 1、第一筆投入前），這樣圖上的報酬和上面的數字一致
