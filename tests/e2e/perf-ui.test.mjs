@@ -69,3 +69,19 @@ test("績效狀態：合股零股未結算 → 頁面寫出「待確認」；另
   assert.match(t, /待確認：有部位合股後的零股還沒結算/); assert.match(t, /零股還沒結算/); assert.match(t, /其中另計費用/); assert.match(t, /沒有對應到個股的費用或現金：-5/);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("績效狀態：「資料不足」（零成本部位轉出又沒有價格）、「無法計算」（現金流證明不了唯一解）都清楚標示，不顯示看起來有效的數字", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  // 9999：沒有任何價格；9998：固定價格，現金流 −100、+230、−140、最後市值 5（唯一解證明不了）
+  await ctx.route("**/api/kline?code=9999**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: false, error: "mock" }) }));
+  await ctx.route("**/api/kline?code=9998**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, code: "9998", data: [["2026-03-02", 100], ["2026-03-03", 230], ["2026-03-04", 140], ["2026-03-05", 5]].map(([d, c]) => ({ d, o: c, h: c, l: c, c, v: 1 })) }) }));
+  const run = async tx => { await p.evaluate(t => { store.set("pf:v1", { v: 1, method: "avg", transactions: t, at: "x" }); W.lg = { view: "perf" }; W.lgPx = null; W.holdView = "tx"; setLt("hold"); renderList(); }, tx); await p.waitForFunction(() => document.querySelector(".pfcard") || /沒有可以計算/.test($("#lx").innerText), null, { timeout: 30000 }).catch(async e => { throw new Error(e.message + " | " + await p.evaluate(() => $("#lx").innerText.slice(0, 300))); }); return p.evaluate(() => $("#lx").innerText); };
+  let t = await run([{ id: "s", v: 1, date: "2026-03-02", type: "stock_dividend", symbol: "9999", market: "tw", currency: "TWD", shares: 10 }, { id: "o", v: 1, date: "2026-03-03", type: "transfer_out", symbol: "9999", market: "tw", currency: "TWD", shares: 10 }]);
+  assert.match(t, /資料不足，無法計算/); assert.doesNotMatch(t, /時間加權報酬\s*\n?\s*[+-]\d/, "時間加權報酬不顯示數字"); assert.doesNotMatch(t, /期間內沒有回撤|-0\b|^～/m, "沒有資料時不能寫「沒有回撤」或 −0");
+  t = await run([{ id: "a", v: 1, date: "2026-03-02", type: "buy", symbol: "9998", market: "tw", currency: "TWD", shares: 1, price: 100, fee: 0, tax: 0 },
+    { id: "b", v: 1, date: "2026-03-03", type: "sell", symbol: "9998", market: "tw", currency: "TWD", shares: 1, price: 230, fee: 0, tax: 0 },
+    { id: "c", v: 1, date: "2026-03-04", type: "buy", symbol: "9998", market: "tw", currency: "TWD", shares: 1, price: 140, fee: 0, tax: 0 }]);
+  assert.match(t, /資金加權報酬無法計算/); assert.match(t, /無法計算/);
+  const mw = await p.evaluate(() => [...document.querySelectorAll(".pftile")].find(x => /資金加權報酬/.test(x.innerText))?.querySelector("b")?.textContent); assert.equal(mw, "—", "資金加權報酬不顯示數字");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
