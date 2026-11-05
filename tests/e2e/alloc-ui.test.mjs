@@ -26,3 +26,14 @@ test("配置：分布、ETF 穿透、重複持有、資料日期", async () => {
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });
+
+test("配置：ETF 沒有成分股資料時，卡片標「含估算」、警告寫出哪一檔、表格標未穿透", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await ctx.route("**/api/etf?code=00878**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, code: "00878", info: {}, hold: { date: null, rows: [] } }) }));
+  await p.evaluate(tx => { store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "alloc" }; W.lgAl = null; W.holdView = "tx"; setLt("hold"); },
+    [{ id: "a", v: 1, date: "2025-06-02", type: "buy", symbol: "00878", market: "tw", currency: "TWD", shares: 1000, price: 20, fee: 0, tax: 0 }, { id: "b", v: 1, date: "2025-06-02", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 10, price: 100, fee: 0, tax: 0 }]);
+  await p.waitForSelector(".alcard", { timeout: 30000 });
+  const t = await p.evaluate(() => $("#lx").innerText);
+  assert.match(t, /含估算/); assert.match(t, /有 ETF 拿不到成分股資料，沒有穿透：[^\n]*00878/); assert.match(t, /00878（ETF，沒有成分股資料，未穿透）/);
+  await ctx.close(); assert.deepEqual(errs, []);
+});

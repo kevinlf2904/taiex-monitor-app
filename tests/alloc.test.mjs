@@ -54,3 +54,10 @@ test("市值用成本估算的持股要標示；空的回 empty", () => {
   const R = A.build([tw("2330", 100, { valueEstimated: true })], {}); assert.equal(R.status, "estimated"); assert.ok(R.issues.some(x => x.k === "value_estimated"));
   assert.equal(A.build([], {}).status, "empty");
 });
+
+test("ETF 有報價但完全沒有成分股資料：狀態是「含估算」、列出沒穿透的 ETF、曝險保留 ETF 本身並標未穿透", () => {
+  const R = A.build([tw("00878", 600), tw("2330", 400, { industry: "半導體業" })], { etf: {} });
+  assert.equal(R.status, "estimated"); assert.ok(R.issues.some(x => x.k === "etf_no_holdings" && x.codes[0] === "00878"));
+  const e = R.lookThrough.exposure.find(x => x.code === "00878"); assert.ok(near(e.w, 0.6)); assert.equal(e.notLookedThrough, true); assert.equal(e.viaEtf, 0, "不把 ETF 當成分股明細");
+  assert.equal(R.lookThrough.exposure.find(x => x.code === "2330").notLookedThrough, undefined);
+});

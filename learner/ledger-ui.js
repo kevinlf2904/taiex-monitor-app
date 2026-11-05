@@ -341,7 +341,7 @@ function renderAlloc(S) {
   const pos = open.map(p => { const q = X.px.get(p.symbol); return { symbol: p.symbol, name: q?.name || nameOf(p.symbol), market: p.market, currency: p.currency, value: q ? p.shares * q.price : p.costBasis, valueEstimated: !q, assetType: lgIsEtf(p.symbol) ? "etf" : "stock", industry: ind.get(p.symbol) || null }; });
   const cash = {}; for (const [c, v] of Object.entries(L.cash || {})) if (v.tracked && v.balance > 0) cash[c] = v.balance;
   const R = KLAlloc.build(pos, { fx: X.fx, cash, etf: X.etf, asOf: lgToday(), names: Object.fromEntries(pos.map(p => [p.symbol, p.name])) });
-  const issues = (R.issues || []).map(x => `<li>${esc(KLAlloc.ISSUE_LABEL[x.k] || x.k)}${x.codes ? `：${x.codes.map(c => esc(nameOf(c))).join("、")}` : x.list ? `：${x.list.map(l => `${esc(l.etf)}${l.date ? " " + l.date : ""}${l.covered != null ? ` 揭露 ${l.covered}%` : ""}`).join("、")}` : x.dates ? `：${x.dates.map(d => `${esc(d.etf)} ${d.date || "—"}`).join("、")}` : ""}</li>`).join("");
+  const issues = (R.issues || []).map(x => `<li>${esc(KLAlloc.ISSUE_LABEL[x.k] || x.k)}${x.codes ? `：${x.codes.map(c => (nameOf(c) && nameOf(c) !== c ? `${esc(nameOf(c))} ${esc(c)}` : esc(c))).join("、")}` : x.list ? `：${x.list.map(l => `${esc(l.etf)}${l.date ? " " + l.date : ""}${l.covered != null ? ` 揭露 ${l.covered}%` : ""}`).join("、")}` : x.dates ? `：${x.dates.map(d => `${esc(d.etf)} ${d.date || "—"}`).join("、")}` : ""}</li>`).join("");
   const body = R.status === "no_fx" ? Object.values(R.byCurrency).map(C => alSection(C, `${C.base === "USD" ? "美股（美元）" : "台股（台幣）"}`)).join("") : alSection(R, "全部資產（台幣計價）");
   $("#lx").innerHTML = head + `<div class="lgbar"><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button>${R.fx ? `<small class="note">美元兌台幣 ${R.fx.rate.toFixed(3)}（${esc(R.fx.date || "")}，Yahoo TWD=X 收盤）</small>` : ""}</div>`
     + (issues ? `<ul class="note lgwarn alissues">${issues}</ul>` : "") + body
@@ -360,8 +360,8 @@ function alSection(R, title) {
     tile("最大單一持股", C.top ? alPct(C.top.w) : "—", C.top ? esc(nameOf(C.top.symbol)) : ""), tile("前五大合計", alPct(C.top5)),
     tile("有效檔數", C.effN ? C.effN.toFixed(1) : "—", "權重越集中，數字越小"), tile("現金比重", alPct(R.cashShare))].join("");
   const top = R.top10.map(h => ({ group: h.symbol, w: h.w, h }));
-  const lt = LT && LT.top.length && LT.exposure.some(e => e.viaEtf > 0) ? `<h5 class="pfh">ETF 穿透後的實際持股<small class="note">（直接持有＋透過 ETF）</small></h5>
-    <table class="altable"><thead><tr><th>股票</th><th>合計</th><th>直接</th><th>透過 ETF</th></tr></thead><tbody>${LT.top.map(e => `<tr><td>${esc(e.name || nameOf(e.code))}<small class="note"> ${esc(e.code)}</small></td><td><b>${alPct(e.w)}</b></td><td>${e.direct ? alPct(e.direct) : "—"}</td><td>${e.viaEtf ? alPct(e.viaEtf) : "—"}</td></tr>`).join("")}</tbody></table>
+  const lt = LT && LT.top.length && LT.exposure.some(e => e.viaEtf > 0 || e.notLookedThrough) ? `<h5 class="pfh">ETF 穿透後的實際持股<small class="note">（直接持有＋透過 ETF）</small></h5>
+    <table class="altable"><thead><tr><th>股票</th><th>合計</th><th>直接</th><th>透過 ETF</th></tr></thead><tbody>${LT.top.map(e => `<tr><td>${esc(e.name || nameOf(e.code))}<small class="note"> ${esc(e.code)}${e.notLookedThrough ? "（ETF，沒有成分股資料，未穿透）" : ""}</small></td><td><b>${alPct(e.w)}</b></td><td>${e.direct ? alPct(e.direct) : "—"}</td><td>${e.viaEtf ? alPct(e.viaEtf) : "—"}</td></tr>`).join("")}</tbody></table>
     ${LT.dupDirect.length ? `<p class="note">重複持有（直接買了，ETF 裡也有）：${LT.dupDirect.slice(0, 6).map(d => `${esc(d.name || d.code)}（直接 ${alPct(d.direct)}＋ETF ${alPct(d.viaEtf)}）`).join("、")}</p>` : ""}
     ${LT.pairs.length ? `<p class="note">ETF 重疊度：${LT.pairs.slice(0, 5).map(p => `${esc(p.a)} × ${esc(p.b)} ${p.overlap.toFixed(1)}%${p.sameDate ? "" : "（資料日期不同）"}`).join("、")}</p>` : ""}
     <p class="note">成分股資料日期：${LT.dates.map(d => `${esc(d.etf)} ${d.date || "—"}（揭露 ${d.covered}%）`).join("、")}</p>` : "";

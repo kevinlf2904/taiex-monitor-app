@@ -59,7 +59,7 @@
     issues.push(...look.issues);
     const industryLT = look.industry.length ? look.industry : null;
     concentration.industryHhi = r4(hhi((industryLT || byIndustry).filter(g => g.group !== "unknown" && g.group !== "現金" && g.group !== "其他（未揭露）").map(g => g.w)));
-    return { base, total: r2(total), cash: r2(cashB), cashShare: r4(cashB / total), holdings, top10: holdings.slice(0, 10), byMarket, byType, byCurrency, byIndustry, byIndustryLookThrough: industryLT, concentration, lookThrough: look, issues, estimated: issues.some(x => ["value_estimated", "etf_dates_differ", "etf_holdings_stale", "etf_partial"].includes(x.k)) };
+    return { base, total: r2(total), cash: r2(cashB), cashShare: r4(cashB / total), holdings, top10: holdings.slice(0, 10), byMarket, byType, byCurrency, byIndustry, byIndustryLookThrough: industryLT, concentration, lookThrough: look, issues, estimated: issues.some(x => ["value_estimated", "etf_no_holdings", "etf_dates_differ", "etf_holdings_stale", "etf_partial"].includes(x.k)) }; // 有 ETF 沒穿透也算「含估算」
   }
 
   function lookThrough(items, opts, total) {
@@ -69,7 +69,7 @@
     for (const x of items) {
       if (x.assetType !== "etf") { add(x.symbol, x.name, x.w, null); const k = indName(x.industry) || "unknown"; ind.set(k, (ind.get(k) || 0) + x.w); continue; }
       const H = E[x.symbol];
-      if (!H || !Array.isArray(H.rows) || !H.rows.length) { noData.push(x.symbol); add(x.symbol, x.name, x.w, null); ind.set("ETF（沒有成分股資料）", (ind.get("ETF（沒有成分股資料）") || 0) + x.w); continue; }
+      if (!H || !Array.isArray(H.rows) || !H.rows.length) { noData.push(x.symbol); add(x.symbol, x.name, x.w, null); exp.get(x.symbol).notLooked = true; /* 保留 ETF 本身的曝險，標「未穿透」 */ ind.set("ETF（沒有成分股資料）", (ind.get("ETF（沒有成分股資料）") || 0) + x.w); continue; }
       const rows = H.rows.filter(r => isNum(r.pct) && r.pct > 0), covered = Math.min(100, rows.reduce((s, r) => s + r.pct, 0));
       for (const r of rows) add(r.code ? String(r.code).toUpperCase() : null, r.name, x.w * r.pct / 100, x.symbol);
       if (covered < 99.5) { add(null, "其他（未揭露）", x.w * (100 - covered) / 100, x.symbol); }
@@ -82,7 +82,7 @@
     const partial = dates.filter(d => d.covered < 90); if (partial.length) issues.push({ k: "etf_partial", list: partial.map(d => ({ etf: d.etf, covered: d.covered })) });
     const ds = [...new Set(dates.map(d => d.date).filter(Boolean))]; if (ds.length > 1) issues.push({ k: "etf_dates_differ", dates: dates.map(d => ({ etf: d.etf, date: d.date })) });
     if (asOf) { const old = dates.filter(d => d.date && (Date.parse(asOf) - Date.parse(d.date)) / DAY > 45); if (old.length) issues.push({ k: "etf_holdings_stale", list: old.map(d => ({ etf: d.etf, date: d.date })) }); }
-    const exposure = [...exp.values()].map(o => ({ code: o.code, name: o.name, direct: r4(o.direct), viaEtf: r4(o.viaEtf), w: r4(o.direct + o.viaEtf), via: o.via })).sort((a, b) => b.w - a.w);
+    const exposure = [...exp.values()].map(o => ({ code: o.code, name: o.name, direct: r4(o.direct), viaEtf: r4(o.viaEtf), w: r4(o.direct + o.viaEtf), via: o.via, ...(o.notLooked ? { notLookedThrough: true } : {}) })).sort((a, b) => b.w - a.w);
     // 重複持股：ETF 兩兩重疊度（共同成分股占比取小的加總）；ETF 成分股裡有直接持有的股票
     const pairs = [];
     for (let i = 0; i < etfs.length; i++) for (let j = i + 1; j < etfs.length; j++) {
