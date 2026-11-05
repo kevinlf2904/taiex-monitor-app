@@ -168,7 +168,7 @@ test("P1-4 補強：價格歷史晚於首次投入時，MWR 年化仍依完整�
   assert.ok(C.mwr.reasons.includes("history_truncated"));
   assert.equal(C.mwr.annualized, true);
   assert.ok(near(C.mwr.value, 0.1, 1e-6));
-  assert.equal(C.annualizable, false, "TWR 仍只從可用價格起算");
+  assert.equal(C.annualizable, true, "以交易成本代替缺失的初始價格後，TWR 期間也從首次投入日起算");
 });
 
 test("P2 補強：股票轉出要把市價與成本差額計入已實現損益及個股歸因", () => {
