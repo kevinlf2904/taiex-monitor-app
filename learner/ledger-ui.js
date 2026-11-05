@@ -154,9 +154,11 @@ document.addEventListener("submit", e => {
    畫面：重點數字、淨值走勢 vs 比較基準（同一起點＝100）、回撤（另一張圖，不用雙軸）、月報酬表、歸因排行、估算原因與計算口徑。
    日期範圍：3 個月／6 個月／1 年／全部；圖上滑鼠或手指移動顯示當天數值。 */
 const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="交易紀錄、績效或配置">${[["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "tx") === k}">${t}</button>`).join("")}</div>`;
+// 績效（perf.js）與匯率合併（fx.js）用到時才載入，照順序（fx.js 要用到 perf.js）
 function lgPerfLib() {
-  if (typeof KLPerf !== "undefined") return Promise.resolve();
-  return (W.lgPerfP ||= new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "perf.js"; sc.onload = ok; sc.onerror = () => { W.lgPerfP = null; no(new Error("perf.js 載入失敗")); }; document.body.appendChild(sc); }));
+  if (typeof KLPerf !== "undefined" && typeof KLFx !== "undefined") return Promise.resolve();
+  const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
+  return (W.lgPerfP ||= (typeof KLPerf !== "undefined" ? Promise.resolve() : one("perf.js")).then(() => (typeof KLFx !== "undefined" ? null : one("fx.js"))).catch(e => { W.lgPerfP = null; throw e; }));
 }
 // 價格：同一組代號 10 分鐘內重複用；單一檔失敗不影響其他檔（引擎會標「沒有價格」）
 function lgPerfData(S) {
@@ -165,11 +167,12 @@ function lgPerfData(S) {
   if (X && X.key === key && (X.busy || Date.now() - X.at < 600000)) return X;
   W.lgPx = { key, busy: true, at: Date.now(), n: syms.length };
   const kl = (c, q = "") => getJ(`/api/kline?code=${encodeURIComponent(c)}&months=24${q}`).catch(() => null);
-  Promise.all([Promise.all(syms.map(c => kl(c))), curs.includes("TWD") ? kl("加權") : null, curs.includes("USD") ? kl("SPY", "&adj=1") : null]).then(([A, tw, us]) => {
+  // 有美股時另外抓美元兌台幣（Yahoo TWD=X 日收盤，市場中間價），用來換成台幣合併
+  Promise.all([Promise.all(syms.map(c => kl(c))), curs.includes("TWD") ? kl("加權") : null, curs.includes("USD") ? kl("SPY", "&adj=1") : null, curs.includes("USD") ? kl("TWD=X") : null]).then(([A, tw, us, fx]) => {
     const prices = {}; syms.forEach((c, i) => { if (A[i]?.data?.length) prices[c] = A[i].data.map(x => ({ d: String(x.d).slice(0, 10), c: x.c })); });
     const bench = {}; if (tw?.data?.length) bench.TWD = tw.data.map(x => ({ d: String(x.d).slice(0, 10), c: x.c }));
     if (us?.data?.length) bench.USD = us.data.map(x => ({ d: String(x.d).slice(0, 10), c: us.adj?.ok && x.ac > 0 ? x.ac : x.c }));
-    W.lgPx = { key, busy: false, at: Date.now(), prices, bench, usAdj: !!us?.adj?.ok };
+    W.lgPx = { key, busy: false, at: Date.now(), prices, bench, usAdj: !!us?.adj?.ok, fx: fx?.data?.length ? fx.data.map(x => ({ d: String(x.d).slice(0, 10), c: x.c })) : [] };
     if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "perf") renderList();
   });
   return W.lgPx;
@@ -178,7 +181,7 @@ const pfPct = (v, d = 2) => (v == null || !Number.isFinite(v) ? "—" : `${v > 0
 function renderPerf(S) {
   const L = W.lg, head = lgViewSeg();
   if (W.off) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">需要部署到網站才有價格資料。</p>`);
-  if (typeof KLPerf === "undefined") { $("#lx").innerHTML = head + skel("載入績效模組…"); lgPerfLib().then(() => renderList(), e => { $("#lx").innerHTML = head + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; }); return; }
+  if (typeof KLPerf === "undefined" || typeof KLFx === "undefined") { $("#lx").innerHTML = head + skel("載入績效模組…"); lgPerfLib().then(() => renderList(), e => { $("#lx").innerHTML = head + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; }); return; }
   if (!S.transactions.length) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">還沒有交易，沒有績效可以算。</p>`);
   const X = lgPerfData(S);
   if (X.busy) return ($("#lx").innerHTML = head + skel(`載入 ${X.n} 檔持股與比較基準的日 K…`));
@@ -186,7 +189,7 @@ function renderPerf(S) {
   const R = KLPerf.buildPerf(S.transactions, { method: S.method, today: lgToday(), prices: X.prices, bench: X.bench, benchName: { TWD: "加權指數（價格指數，不含股息）", USD: X.usAdj ? "S&P 500（SPY，含息還原）" : "S&P 500（SPY，不含息）" },
     classify: c => ({ assetType: /^00\d{2,4}[A-Z]?$/.test(c) || ["SPY", "QQQ", "VOO", "VTI", "SOXX", "TQQQ", "SOXL", "DIA", "IWM", "IVV", "VT", "SMH", "XLK", "SCHD", "VYM", "BND", "TLT", "GLD"].includes(c) ? "etf" : "stock", industry: master.get(c) || null }) });
   const range = L.pfRange || "all", rg = `<div class="seg pfrange" role="group" aria-label="日期範圍">${[["3m", "3 個月"], ["6m", "6 個月"], ["1y", "1 年"], ["all", "全部"]].map(([k, t]) => `<button type="button" data-lg="range" data-v="${k}" aria-pressed="${range === k}">${t}</button>`).join("")}</div>`;
-  const cards = Object.values(R.byCurrency).map(C => pfCard(C, range)).join("");
+  const cards = (R.byCurrency.USD ? pfFxCard(KLFx.combine(R, X.fx || [], { fxSource: "Yahoo Finance TWD=X 日收盤" })) : "") + Object.values(R.byCurrency).map(C => pfCard(C, range)).join("");
   $("#lx").innerHTML = head + `<div class="lgbar">${rg}<button type="button" class="btn sm" data-lg="pfreload">重新載入價格</button></div>`
     + (R.ledgerErrors ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">✕ 有 ${R.ledgerErrors} 筆交易有錯誤，沒有算進績效；請到「交易紀錄」修改。下面的數字不完整。</p>` : "")
     + (R.status === "needs_confirm" ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">⚠︎ 待確認：有部位合股後的零股還沒結算，股數與成本是暫時的，下面的績效也是暫時的。請到「交易紀錄」新增「零股現金結算」。</p>` : "")
@@ -194,6 +197,7 @@ function renderPerf(S) {
     + `<details class="pfbasis"><summary>計算口徑</summary><ul>
       <li>範圍是證券部位（股票、ETF 的市值），不含現金。買進付出的錢算投入；賣出拿回的錢、領到的股息算拿回。</li>
       <li>價格用原始收盤價；股息已經當成現金流，不再用還原價重複計算。台幣、美元分開算，不相加。</li>
+      <li>「÷ 累計投入」＝總損益 ÷ 所有買進、轉入的金額加總（不扣掉賣出、股息拿回的錢，也不管投入的時間點），只是損益的相對大小，不是投資報酬率。要看報酬率請看時間加權或資金加權報酬。</li>
       <li>時間加權報酬（TWR）：不受投入時點影響，用來和大盤比。資金加權報酬：考慮投入時點與金額；滿一年才年化，未滿一年只給整段期間的值。</li>
       <li>最大回撤：用 TWR 淨值算從前高跌了多少；恢復天數是谷底到第一次回到前高。</li>
       <li>價格最多抓 24 個月，更早的交易會標「估算」。過去績效不代表未來。</li></ul></details>`;
@@ -204,7 +208,7 @@ function pfCard(C, range) {
   const cst = C.status === "needs_confirm" ? `<span class="pfbadge">待確認</span>` : C.status === "estimated" ? `<span class="pfbadge">含估算</span>` : "";
   const tile = (k, v, sub = "", c = "") => `<div class="pftile"><span>${k}</span><b class="${c}">${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
   const tiles = [
-    tile("總損益", lgSgn(P.total, cur), `總報酬率 ${pfPct(P.totalPct)}`, cls(P.total)),
+    tile("總損益", lgSgn(P.total, cur), `÷ 累計投入 ${pfPct(P.totalPct)}（不扣賣出、不看時點）`, cls(P.total)),
     tile("時間加權報酬", pfPct(C.twr), C.twr == null ? "資料不足，無法計算" : C.annualizable ? `年化 ${pfPct(C.twrAnn)}` : "未滿一年，不年化", cls(C.twr)),
     tile("資金加權報酬" + est, m.status === "unavailable" ? "—" : m.annualized ? pfPct(m.value) : pfPct(m.period), m.status === "unavailable" ? (m.reasons?.includes("multiple_solutions") ? "無法確認是否為唯一解，不顯示" : "現金流算不出來") : m.annualized ? "年化（XIRR）" : "整段期間，未年化", cls(m.annualized ? m.value : m.period)),
     tile("最大回撤", D ? pfPct(D.dd) : "—", !D ? "資料不足，無法計算" : D.peak ? (D.recovered ? `${D.trough.slice(5)} 谷底，${D.recoveryDays} 天後回到前高` : `${D.peak.slice(5)} 前高，尚未回到`) : "期間內沒有回撤"),
@@ -380,3 +384,21 @@ function alSection(R, title) {
 .alissues{margin:4px 12px;padding-left:1.2em}`;
   document.head.appendChild(st);
 })();
+// 合併（台幣計價）：美股部位每天用當天匯率換成台幣，和台股部位加總；損益拆成台股、美股股價與股息、匯率三塊（加總＝合併總損益）
+function pfFxCard(F) {
+  const head = `<section class="pfcard pffx"><h4>合併（台幣計價）`;
+  if (F.status === "unavailable") return `${head}<span class="pfbadge">無法計算</span></h4><p class="note lgwarn">⚠︎ ${(F.reasons || []).map(r => esc(KLFx.REASON_LABEL[r] || r)).join("；")}。台股、美股的績效分開看下面。</p></section>`;
+  const P = F.pnl, m = F.mwr, est = m.status === "estimated" ? `<span class="pfbadge">估算</span>` : m.status === "unavailable" ? `<span class="pfbadge">無法計算</span>` : "";
+  const tile = (k, v, sub = "", c = "") => `<div class="pftile"><span>${k}</span><b class="${c}">${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+  const reasons = F.reasons.length ? `<p class="note lgwarn pfreasons">⚠︎ 含估算：${F.reasons.map(r => esc(KLFx.REASON_LABEL[r] || KLPerf.REASON_LABEL[r] || r)).join("；")}。</p>` : "";
+  return `${head}${F.status !== "ok" ? `<span class="pfbadge">含估算</span>` : ""}<small class="note"> ${F.from || ""}～${F.to || ""}</small></h4>
+    <div class="pftiles">${[
+      tile("總市值", lgMoney(F.marketValue, "TWD"), `美元部位占 ${F.usdShare == null ? "—" : (F.usdShare * 100).toFixed(0) + "%"}`),
+      tile("總損益", lgSgn(P.total, "TWD"), `÷ 累計投入 ${pfPct(P.totalPct)}（不扣賣出、不看時點）`, cls(P.total)),
+      tile("時間加權報酬", pfPct(F.twr), F.annualizable ? `年化 ${pfPct(F.twrAnn)}` : "未滿一年，不年化", cls(F.twr)),
+      tile("資金加權報酬" + est, m.status === "unavailable" ? "—" : m.annualized ? pfPct(m.value) : pfPct(m.period), m.status === "unavailable" ? "現金流證明不了唯一解或算不出來" : m.annualized ? "年化（XIRR）" : "整段期間，未年化", cls(m.annualized ? m.value : m.period)),
+      tile("匯率影響", lgSgn(P.usFx, "TWD"), F.fx.change == null ? "" : `美元兌台幣 ${F.fx.first?.toFixed(2)} → ${F.fx.rate?.toFixed(2)}（${pfPct(F.fx.change)}）`, cls(P.usFx))].join("")}</div>${reasons}
+    <dl class="pfpnl"><dt>台股損益</dt><dd class="${cls(P.twStocks)}">${lgSgn(P.twStocks, "TWD")}</dd><dt>美股股價與股息（換成台幣）</dt><dd class="${cls(P.usPrice)}">${lgSgn(P.usPrice, "TWD")}</dd>
+      <dt>匯率影響</dt><dd class="${cls(P.usFx)}">${lgSgn(P.usFx, "TWD")}</dd><dt>合計</dt><dd class="${cls(P.total)}"><b>${lgSgn(P.total, "TWD")}</b></dd></dl>
+    <p class="note">匯率：${F.fx.rate == null ? "—" : F.fx.rate.toFixed(3)}（${esc(F.fx.date || "")}，${esc(F.fx.source || "")}；是市場中間價，不是銀行實際買賣匯率，換匯成本沒有算進去）。美股每天的市值與現金流都用當天匯率換算。</p></section>`;
+}

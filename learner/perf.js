@@ -182,7 +182,9 @@
         twr, twrAnn, annualizable: !missingTransferOutValue && spanDays >= 365, mwr, bench,
         monthly: missingTransferOutValue ? [] : periodReturns(val, ym), quarterly: missingTransferOutValue ? [] : periodReturns(val, yq), yearly: missingTransferOutValue ? [] : periodReturns(val, yy),
         maxDrawdown: !missingTransferOutValue && val.length ? drawdown(days.filter(x => x.v > EPS || x.r != null).map(x => ({ d: x.d, i: x.i }))) : null,
-        pnl, attribution, series: missingTransferOutValue ? [] : series, issues, estimated: reasons
+        pnl, attribution, series: missingTransferOutValue ? [] : series, issues, estimated: reasons,
+        // 逐筆現金流（不做同日淨額）：f > 0 是投入（買進、轉入、另計費用），f < 0 是拿回；給合併換匯時逐筆用當天匯率換算
+        flows: flows.map(f => ({ d: f.d, f: r2(f.f) }))
       };
     }
     if (!Object.keys(out.byCurrency).length) out.status = "empty";
