@@ -168,6 +168,8 @@ test("P2 補強：股票轉出要把市價與成本差額計入已實現損益�
   assert.equal(C.pnl.transferOutPnl, 200);
   assert.equal(C.pnl.realized, 200);
   assert.equal(C.pnl.total, 200);
+  assert.equal(C.pnl.returned, 1200);
+  assert.ok(near(C.pnl.totalPct, 0.2));
   assert.equal(C.attribution.bySymbol.find(x => x.symbol === "2330").pnl, 200);
 });
 
