@@ -175,8 +175,9 @@ test("P2 補強：股票轉出要把市價與成本差額計入已實現損益�
   const T = [tw({ id: "b", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ id: "o", date: "2026-01-06", type: "transfer_out", shares: 10 })];
   const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 120]]) } }).byCurrency.TWD;
   assert.equal(C.pnl.transferOutPnl, 200);
-  assert.equal(C.pnl.realized, 200);
+  assert.equal(C.pnl.realized, 0, "已實現只放交易引擎的部分，轉出損益另外列（ChatGPT #230 P2-1：避免重複）");
   assert.equal(C.pnl.total, 200);
+  const P = C.pnl; assert.ok(near(P.realized + P.unrealized + P.dividends - P.extraFees + P.otherCash + P.transferOutPnl, P.total), "完整對帳式");
   assert.equal(C.pnl.returned, 1200);
   assert.ok(near(C.pnl.totalPct, 0.2));
   assert.equal(C.attribution.bySymbol.find(x => x.symbol === "2330").pnl, 200);
@@ -212,4 +213,28 @@ test("一般投資組合：買、領股息、再買、部分賣出（現金流�
   const F = [{ d: "2024-01-02", cf: -100000 }, { d: "2024-07-15", cf: 2000 }, { d: "2024-09-02", cf: -50000 }, { d: "2025-01-15", cf: 2500 }, { d: "2025-03-03", cf: 40000 }, { d: "2025-07-15", cf: 1800 }, { d: "2026-01-02", cf: 140000 }];
   const X = K.xirrInfo(F); assert.equal(X.status, "ok"); assert.equal(X.roots.length, 1);
   const r = X.roots[0], npv = F.reduce((s, f) => s + f.cf / Math.pow(1 + r, (Date.parse(f.d) - Date.parse(F[0].d)) / 864e5 / 365), 0); assert.ok(Math.abs(npv) < 1e-4);
+});
+
+// ===== ChatGPT 第三輪（#230）回歸測試 =====
+test("P1：兩個根只差 3e-10（網格分不開）→ 不能回唯一解；用 Laguerre 上限證明不了就回 ambiguous", () => {
+  const rates = [0.4784474505164886, 0.4784474508231863, 0.5], [a, b, c] = rates.map(r => 1 / (1 + r)), cf = [-a * b * c, a * b + a * c + b * c, -(a + b + c), 1];
+  const F = ["2020-01-01", "2020-12-31", "2021-12-31", "2022-12-31"].map((d, i) => ({ d, cf: cf[i] }));
+  const X = K.xirrInfo(F); assert.notEqual(X.status, "ok"); assert.ok(["multiple", "ambiguous"].includes(X.status)); assert.equal(K.xirr(F), null);
+});
+
+test("唯一性上限：一般組合（上限 1）→ ok；虧損（報酬率 < 0 的唯一根）→ ok；投入後全部虧光再投入的怪現金流 → 證明不了就不給數字", () => {
+  assert.equal(K.xirrInfo([{ d: "2025-01-01", cf: -1000 }, { d: "2026-01-01", cf: 500 }]).status, "ok");
+  assert.ok(near(K.xirr([{ d: "2025-01-01", cf: -1000 }, { d: "2026-01-01", cf: 500 }]), -0.5, 1e-7));
+  assert.equal(K.xirrInfo([{ d: "2025-01-01", cf: -100 }, { d: "2025-06-01", cf: 230 }, { d: "2025-09-01", cf: -140 }, { d: "2026-01-01", cf: 5 }]).status !== "ok", true);
+});
+
+test("P2-1：對帳式「已實現＋未實現＋股息−另計費用＋其他公司行動＋轉出損益＝總損益」在混合情境成立，轉出損益不重複", () => {
+  const T = [tw({ id: "b", date: "2026-01-05", type: "buy", shares: 20, price: 100 }), tw({ id: "s", date: "2026-01-06", type: "sell", shares: 5, price: 110 }),
+    tw({ id: "d", date: "2026-01-07", type: "dividend", amount: 30 }), tw({ id: "f", symbol: null, date: "2026-01-07", type: "fee", amount: 3, ref: "d" }),
+    tw({ id: "o", date: "2026-01-08", type: "transfer_out", shares: 5 }), tw({ id: "x", date: "2026-01-09", type: "other", amount: 7 })];
+  const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 110], ["2026-01-07", 105], ["2026-01-08", 120], ["2026-01-09", 118]]) } }).byCurrency.TWD, P = C.pnl;
+  // 手算：賣出 5×(110−100)＝50；轉出 5×(120−100)＝100；未實現 10×(118−100)＝180；股息 30、匯費 3、公司行動 7 → 總 364
+  assert.equal(P.realized, 50); assert.equal(P.transferOutPnl, 100); assert.equal(P.unrealized, 180); assert.equal(P.total, 364);
+  assert.ok(near(P.realized + P.unrealized + P.dividends - P.extraFees + P.otherCash + P.transferOutPnl, P.total));
+  assert.ok(near(C.attribution.bySymbol.reduce((s, x) => s + x.pnl, 0) + C.attribution.unattributed, P.total));
 });

@@ -21,8 +21,8 @@
     return { a, at, first: a.length ? a[0].d : null };
   }
   // 內部報酬率：flows [{ d, cf }]，cf 以投資人角度（投入為負、拿回為正）。unitDays＝365 是年化（XIRR）；傳整段期間的天數，就是「整段期間」的資金加權報酬（不年化）。
-  // 在 −100%～+1,000,000%（對數間距 4000 點）掃描所有變號的地方各自求根，另外找 |NPV| 幾乎碰到 0 的谷底（切線根、很接近的兩個根）。
-  // 一個根：status "ok"；沒有根："none"；超過一個根（現金流正負來回好幾次時會發生）："multiple"——不任選一個
+  // 在 −100%～+1,000,000%（對數間距 4000 點）掃描所有變號的地方各自求根；唯一性用 Laguerre 部分和符號規則算出的「根的個數上限」證明。
+  // 回傳：ok（證明唯一）、multiple（找到兩個以上）、ambiguous（無法證明唯一）、none（沒有根）——後三種都不給數字
   function xirrInfo(flows, unitDays = 365) {
     // 同一天的現金流先淨額合併，不讓輸入順序造成假的正負反轉
     const byDate = new Map();
@@ -37,15 +37,15 @@
       const pv = k ? vals[k - 1] : NaN; if (!isNum(pv) || pv * v >= 0) continue;
       let lo = grid[k - 1], hi = r, flo = pv; for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2, fm = npv(m); if (!isNum(fm)) break; if (flo * fm <= 0) hi = m; else { lo = m; flo = fm; } if (hi - lo < 1e-13) break; } roots.push((lo + hi) / 2); }
     const uniq = roots.sort((x, y) => x - y).filter((x, i, A) => !i || Math.abs(x - A[i - 1]) > 1e-7);
-    // 切線根（NPV 碰到 0 但不穿過，例如 −100、+220、−121 在 10% 是重根）掃描變號找不到：
-    // 找 |NPV| 的谷底（前後同號、比兩邊都小），在兩旁之間用三分法細找最小值；最小值幾乎是 0 就是切線根或兩個很接近的根 → 不能說唯一
-    let tangent = false;
-    for (let k = 1; k < N && !tangent; k++) { const v = vals[k], pv = vals[k - 1], nv = vals[k + 1];
-      if (!isNum(v) || !isNum(pv) || !isNum(nv) || pv * v <= 0 || v * nv <= 0 || Math.abs(v) > Math.abs(pv) || Math.abs(v) > Math.abs(nv)) continue;
-      let lo = grid[k - 1], hi = grid[k + 1]; for (let i = 0; i < 200 && hi - lo > 1e-14; i++) { const m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3; if (Math.abs(npv(m1)) < Math.abs(npv(m2))) hi = m2; else lo = m1; }
-      if (Math.abs(npv((lo + hi) / 2)) < 1e-9 * scale) tangent = true; }
-    // 一個根：ok；兩個以上：multiple；有切線根：ambiguous；沒有根：none——都不任選一個
-    const status = uniq.length > 1 ? "multiple" : tangent ? "ambiguous" : uniq.length === 1 ? "ok" : "none";
+    // 根的個數上限（Laguerre 部分和符號規則，指數可以是小數）：令 x＝1/(1+r)，NPV＝Σ c_k·x^t_k。
+    //   x 在 (0,1)（報酬率 > 0）的根，最多＝依時間順序累加 c 的部分和變號次數；
+    //   x > 1（報酬率 < 0）的根，最多＝從最後一筆往前累加的部分和變號次數；報酬率剛好 0 是根 ⇔ 全部加總＝0。
+    // 上限 ≤ 1 而且掃描找到一個根 → 數學上保證唯一，才回 ok。上限 > 1 時，有限網格找到一個根不能證明沒有漏掉
+    //（例如兩個根相差 3e-10，或碰到 0 但不穿過的切線根），一律回 ambiguous，不給數字
+    const signs = arr => { let n = 0, last = 0; for (const v of arr) { const sg = Math.abs(v) <= 1e-12 * scale ? 0 : Math.sign(v); if (!sg) continue; if (last && sg !== last) n++; last = sg; } return n; };
+    let acc = 0; const fwd = F.map(f => (acc += f.cf)); acc = 0; const bwd = [...F].reverse().map(f => (acc += f.cf));
+    const bound = signs(fwd) + signs(bwd) + (Math.abs(fwd[fwd.length - 1]) <= 1e-12 * scale ? 1 : 0);
+    const status = uniq.length > 1 ? "multiple" : bound <= 1 ? (uniq.length === 1 ? "ok" : "none") : "ambiguous";
     return { status, roots: uniq };
   }
   const xirr = (flows, unitDays = 365) => { const X = xirrInfo(flows, unitDays); return X.status === "ok" ? X.roots[0] : null; };
@@ -165,9 +165,9 @@
       const Tt = L.totals[cur] || {}, mvNow = P.reduce((s, p) => { const sh = p.shares; if (sh <= EPS) return s; const px = priceAt(p.symbol, asOf); return s + sh * (px ? px.c : (lastTradePx(p.symbol, asOf) || 0)); }, 0);
       const costNow = P.reduce((s, p) => s + p.costBasis, 0), unreal = mvNow - costNow;
       const inflow = flows.filter(f => f.f > 0).reduce((s, f) => s + f.f, 0), outflow = -flows.filter(f => f.f < 0).reduce((s, f) => s + f.f, 0);
-      // 總損益＝已實現＋未實現＋股息（稅後）−另計費用＋其他公司行動現金。買賣的手續費、稅已經在成本與已實現裡，不重複扣
+      // 總損益＝已實現（交易引擎）＋轉出損益＋未實現＋股息（稅後）−另計費用＋其他公司行動現金（各項分開列，不重複）。買賣的手續費、稅已經在成本與已實現裡，不重複扣
       const total = missingTransferOutValue ? null : (Tt.realizedPnl || 0) + extra.transferOutPnl + unreal + (Tt.dividends || 0) - extra.fees + extra.other;
-      const pnl = { invested: r2(inflow), returned: r2(outflow), netInvested: r2(inflow - outflow), marketValue: r2(mvNow), costBasis: r2(costNow), unrealized: r2(unreal), realized: r2((Tt.realizedPnl || 0) + extra.transferOutPnl), transferOutPnl: r2(extra.transferOutPnl), dividends: r2(Tt.dividends || 0), fees: r2(Tt.fees || 0), taxes: r2(Tt.taxes || 0), extraFees: r2(extra.fees), otherCash: r2(extra.other), total: total == null ? null : r2(total), totalPct: total != null && inflow > EPS ? total / inflow : null };
+      const pnl = { invested: r2(inflow), returned: r2(outflow), netInvested: r2(inflow - outflow), marketValue: r2(mvNow), costBasis: r2(costNow), unrealized: r2(unreal), realized: r2(Tt.realizedPnl || 0), transferOutPnl: r2(extra.transferOutPnl), dividends: r2(Tt.dividends || 0), fees: r2(Tt.fees || 0), taxes: r2(Tt.taxes || 0), extraFees: r2(extra.fees), otherCash: r2(extra.other), total: total == null ? null : r2(total), totalPct: total != null && inflow > EPS ? total / inflow : null };
       // 歸因：每一檔的損益（已實現＋未實現＋股息）與占總損益的比例；依資產類型、產業加總；股息、費稅另外列；匯率還沒有
       const bySymbol = missingTransferOutValue ? [] : P.map(p => { const px = priceAt(p.symbol, asOf), mv = p.shares > EPS ? p.shares * (px ? px.c : (lastTradePx(p.symbol, asOf) || 0)) : 0, u = mv - p.costBasis, ex = extra.bySym.get(p.symbol) || 0, t = p.realizedPnl + u + p.dividends + ex, k = cls(p.symbol) || {};
         return { symbol: p.symbol, assetType: k.assetType || null, industry: k.industry || null, realized: r2(p.realizedPnl), unrealized: r2(u), dividends: r2(p.dividends), extra: r2(ex), fees: r2(p.fees), taxes: r2(p.taxes), pnl: r2(t), share: Math.abs(total) > EPS ? t / total : null }; })
