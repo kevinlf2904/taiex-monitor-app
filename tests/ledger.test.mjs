@@ -172,3 +172,25 @@ test("費用規則：買賣不同折扣、現股當沖、債券 ETF、實際費�
   assert.deepEqual(J(L.feeDiff({ type: "sell", market: "tw", shares: 1000, price: 100, fee: 40, tax: 300 })), { estFee: 142, estTax: 300, fee: 40, tax: 300, diffFee: -102, diffTax: 0 });
   assert.equal(L.feeDiff({ type: "dividend" }), null);
 });
+
+test("CSV 匯出：中文欄名、依日期排序、有 BOM；含逗號、引號的備註正確跳脫；開頭是 = + - @ 的文字前面加 ' 防止被當成公式", () => {
+  const csv = L.toCSV([tw({ id: "b", date: "2026-02-01", type: "sell", shares: 1, price: 10, note: '=HYPERLINK("x")' }), tw({ id: "a", date: "2026-01-01", type: "buy", shares: 2, price: 9.5, note: "台積電, 第一筆 \"試算\"" })]);
+  const lines = csv.replace(/^\ufeff/, "").trim().split("\r\n");
+  assert.equal(csv[0], "\ufeff"); assert.equal(lines[0], "日期,類型,代號,市場,幣別,股數,價格,金額,比例,手續費,交易稅,備註,來源,編號");
+  assert.ok(lines[1].startsWith("2026-01-01,買進,2330,tw,TWD,2,9.5,")); assert.ok(lines[1].includes('"台積電, 第一筆 ""試算"""'));
+  assert.ok(lines[2].includes(`"'=HYPERLINK(""x"")"`), lines[2]);
+  assert.equal(L.toCSV([]).replace(/\r\n$/, ""), "\ufeff日期,類型,代號,市場,幣別,股數,價格,金額,比例,手續費,交易稅,備註,來源,編號");
+});
+
+test("備份檔檢查：交易紀錄能套用、版本對才通過；壞資料、壞 JSON、不認得的投資組合鍵都整份不通過；摘要有筆數與日期範圍", () => {
+  const good = JSON.stringify({ v: 1, method: "avg", transactions: [tw({ id: "a", date: "2026-01-02", type: "buy", shares: 10, price: 100 }), tw({ id: "b", date: "2026-03-02", type: "sell", shares: 5, price: 110 })] });
+  let C = L.checkBackup({ "kline:pf:v1": good, "kline:watch:hold": "{}" }, { today: "2026-11-05" });
+  assert.equal(C.ok, true); assert.deepEqual(J(C.items[0].summary), { transactions: 2, from: "2026-01-02", to: "2026-03-02", method: "avg" }); assert.equal(C.items.length, 1, "不是投資組合的鍵不檢查");
+  C = L.checkBackup({ "kline:pf:v1": JSON.stringify({ v: 1, method: "avg", transactions: [tw({ id: "s", date: "2026-01-02", type: "sell", shares: 10, price: 100 })] }) }, { today: "2026-11-05" });
+  assert.equal(C.ok, false); assert.match(C.items[0].problems[0], /1 筆交易有錯誤/);
+  assert.equal(L.checkBackup({ "kline:pf:v1": "{壞" }).ok, false);
+  assert.match(L.checkBackup({ "kline:pf:v1": JSON.stringify({ v: 9, method: "avg", transactions: [] }) }).items[0].problems[0], /版本 9 不支援/);
+  assert.equal(L.checkBackup({ "kline:pf:v9": "{}" }).ok, false, "不認得的投資組合資料不匯入");
+  assert.equal(L.checkBackup({ "kline:pf:margin:v1": JSON.stringify({ v: 1, accounts: [] }) }).ok, true);
+  assert.equal(L.checkBackup({ "kline:pf:margin:v1": JSON.stringify({ v: 2 }) }).ok, false);
+});

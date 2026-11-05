@@ -740,7 +740,10 @@ const SYNC_K = "kline-sync";
 const SYNC_SKIP = /^kline:watch:(ft:|errs$|brief:snap:|mon:)/; // 台指期盤中報價暫存（每 5 秒變一次）、錯誤紀錄、盤前推演快照、盤中監控事件（每天一筆，只對這台裝置有用）：不要同步
 const syncGet = () => { try { return JSON.parse(localStorage.getItem(SYNC_K) || "{}"); } catch { return {}; } };
 const syncSet = o => { try { localStorage.setItem(SYNC_K, JSON.stringify({ ...syncGet(), ...o })); } catch {} };
-function syncSnap() { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k?.startsWith("kline:") || SYNC_SKIP.test(k)) continue; const v = localStorage.getItem(k); if (v != null && v.length < 150000) o[k] = v; } } catch {} return o; }
+// full＝true（備份檔）：投資組合資料（kline:pf: 開頭，交易紀錄、融資帳戶）不管多大都要帶，不能因為超過 150KB 就默默漏掉
+function syncSnap(full = false) { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k?.startsWith("kline:") || SYNC_SKIP.test(k)) continue; const v = localStorage.getItem(k); if (v != null && (v.length < 150000 || (full && k.startsWith("kline:pf:")))) o[k] = v; } } catch {} return o; }
+// 雲端同步因為太大沒帶到的投資組合資料（要在畫面提醒，不能默默不同步）
+function syncBigPf() { const L = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k?.startsWith("kline:pf:") && (localStorage.getItem(k) || "").length >= 150000) L.push(k); } } catch {} return L; }
 const syncHash = o => { let h = 0; const s = JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]])); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
 // 舊版雲端資料裡若有不同步的鍵（例如推演快照）也不寫回
 // 寫到一半失敗（儲存空間不夠）就把已經寫的改回原本的值，不留下新舊混在一起的資料；失敗時丟出錯誤，呼叫的地方不重新載入
@@ -777,20 +780,32 @@ async function syncBoot() {
   // 有衝突（雲端比較新、這台也改過）就先不自動上傳，等使用者在「備份同步」選
   setInterval(() => { const T = syncGet(); if (T.id && T.auto !== false && !W.syncConflict && document.visibilityState === "visible" && syncHash(syncSnap()) !== T.hash) syncPush(true); }, 60000);
 }
-function syncExport() { const blob = new Blob([JSON.stringify({ app: "kline-school", at: new Date().toISOString(), data: syncSnap() })], { type: "application/json" }), a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `K線學堂備份-${toolsDay()}.json`; a.click(); }
+// 備份檔格式版本 v：2＝投資組合資料一定會帶（v1 沒有這個欄位，也能匯入）
+function syncExport() { const blob = new Blob([JSON.stringify({ app: "kline-school", v: 2, at: new Date().toISOString(), data: syncSnap(true) })], { type: "application/json" }), a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `K線學堂備份-${toolsDay()}.json`; a.click(); }
 async function syncImport(file) {
-  try { const j = JSON.parse(await file.text()); if (j.app !== "kline-school" || !j.data) throw new Error("不是 KLineLab 的備份檔");
-    if (!confirm(`用備份檔（${String(j.at).slice(0, 16).replace("T", " ")}，${Object.keys(j.data).length} 項）覆蓋這台裝置的設定與紀錄？`)) return;
+  try { const j = JSON.parse(await file.text()); if (j.app !== "kline-school" || !j.data || typeof j.data !== "object") throw new Error("不是 KLineLab 的備份檔");
+    if (j.v != null && !(j.v === 1 || j.v === 2)) throw new Error(`備份檔版本 ${j.v} 比這個網站新，請先更新網頁`);
+    // 有投資組合資料：先檢查（交易紀錄每一筆都要能套用、融資帳戶格式要對）；有任何問題整份都不匯入，這台的資料維持原樣
+    const pfKeys = Object.keys(j.data).filter(k => k.startsWith("kline:pf:")); let pfTxt = "";
+    if (pfKeys.length) {
+      if (typeof KLLedger === "undefined" && typeof lazy === "function") await lazy("ledger");
+      const C = KLLedger.checkBackup(j.data, { today: toolsDay(), margin: typeof KLMargin !== "undefined" ? KLMargin : null });
+      if (!C.ok) throw new Error("備份檔裡的投資組合資料有問題，沒有匯入（這台的資料維持原樣）：" + C.items.filter(x => !x.ok).map(x => `${x.label}：${x.problems.join("；")}`).join("；"));
+      const cur = (() => { try { return JSON.parse(localStorage.getItem("kline:pf:v1") || "null"); } catch { return null; } })();
+      pfTxt = "\n\n投資組合：" + C.items.map(x => x.key === "kline:pf:v1" ? `交易紀錄 ${x.summary.transactions} 筆（${x.summary.from || "—"}～${x.summary.to || "—"}）${cur ? `，會取代這台現在的 ${(cur.transactions || []).length} 筆` : ""}` : `${x.label} ${x.summary?.accounts ?? ""} 個`).join("；");
+    }
+    if (!confirm(`用備份檔（${String(j.at).slice(0, 16).replace("T", " ")}，${Object.keys(j.data).length} 項）覆蓋這台裝置的設定與紀錄？${pfTxt}\n\n備份檔裡沒有的項目會保留；寫入失敗會自動改回原本的資料。`)) return;
     const n = syncApply(j.data); toast(`已匯入 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600); } catch (e) { toast("匯入失敗：" + e.message); }
 }
 function syncHtml() {
   const S = syncGet(), C = W.syncCfg; if (!C) syncCfg().then(() => W.lt === "tools" && W.tv === "sync" && renderList());
   if (S.id && C?.tg && !W.syncTok) syncTok(S.id).then(t => { W.syncTok = t; if (W.lt === "tools" && W.tv === "sync") renderList(); });
-  const n = Object.keys(syncSnap()).length, dirty = S.id && syncHash(syncSnap()) !== S.hash;
+  const n = Object.keys(syncSnap()).length, dirty = S.id && syncHash(syncSnap()) !== S.hash, big = syncBigPf();
   let h = `<section class="csec"><h3>備份與同步</h3>
     <h4>備份檔</h4><p class="note">把這台裝置的自選、庫存、提醒、交易日記、模擬帳戶、錯題本、線型設定（共 ${n} 項）存成一個檔案，換裝置或清除瀏覽器資料後可以匯入。</p>
     <div class="irform"><button class="btn sm primary" data-sy="export">⬇ 匯出備份檔</button><label class="btn sm">⬆ 匯入備份檔<input type="file" accept="application/json,.json" data-syfile hidden></label></div>
-    <p class="note">匯入只收這裡匯出的 .json 備份檔；匯入後，檔案裡有的項目會蓋掉這台裝置現在的設定（沒有的項目保留）。不確定的話，先按「匯出備份檔」留一份。</p>
+    ${big.length ? `<p class="note err">⚠︎ 交易紀錄或融資資料超過 150KB，雲端同步不會帶到（${big.map(k => esc(k.replace("kline:", ""))).join("、")}）；請用備份檔保存。</p>` : ""}
+    <p class="note">匯入只收這裡匯出的 .json 備份檔；投資組合資料（交易紀錄、融資）會先檢查，有問題就整份不匯入；匯入後，檔案裡有的項目會蓋掉這台裝置現在的設定（沒有的項目保留）。不確定的話，先按「匯出備份檔」留一份。</p>
     <h4>雲端同步</h4>`;
   if (!C) h += `<p class="note">檢查中…</p>`;
   else if (!C.kv) h += `<p class="note">網站的雲端同步暫時還不能使用，目前只能用上面的備份檔。${DEBUG ? "（除錯：Vercel 專案的 Storage 加上 Upstash for Redis，重新部署後就能用同步碼）" : ""}</p>`;
