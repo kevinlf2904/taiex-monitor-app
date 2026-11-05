@@ -149,7 +149,7 @@
       const xf = flows.filter(f => f.d <= asOf).map(f => ({ d: f.d, cf: -f.f })); if (last && last.v > EPS) xf.push({ d: last.d, cf: last.v });
       // 滿一年：年化 XIRR；未滿一年：只給整段期間的資金加權報酬（不年化，短期年化會誇大到沒有意義）
       const reasons = [...est], xSpan = xf.length > 1 ? Math.max(1, Math.round((dnum(xf[xf.length - 1].d) - dnum(xf[0].d)) / DAY)) : 1;
-      const XA = spanDays >= 365 ? xirrInfo(xf) : null, XP = xirrInfo(xf, xSpan), multi = ["multiple", "ambiguous"].includes(XP.status) || ["multiple", "ambiguous"].includes(XA?.status);
+      const XA = xSpan >= 365 ? xirrInfo(xf) : null, XP = xirrInfo(xf, xSpan), multi = ["multiple", "ambiguous"].includes(XP.status) || ["multiple", "ambiguous"].includes(XA?.status);
       const mwrAnn = XA?.status === "ok" ? XA.roots[0] : null, mwrPeriod = XP.status === "ok" ? XP.roots[0] : null;
       const mwr = multi ? { value: null, period: null, status: "unavailable", reasons: ["multiple_solutions", ...reasons], roots: XP.roots.length > 1 ? XP.roots : XA.roots }
         : mwrAnn == null && mwrPeriod == null ? { value: null, period: null, status: "unavailable", reasons: ["no_solution", ...reasons] }
