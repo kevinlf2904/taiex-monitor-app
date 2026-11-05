@@ -134,6 +134,21 @@ test("P1-3：XIRR 有多個解（10%、20%、30% 都讓 NPV＝0）→ 不任選�
   assert.equal(K.xirrInfo([{ d: "2025-01-01", cf: -100 }, { d: "2026-01-01", cf: 110 }]).status, "ok");
 });
 
+test("P1-3 補強：XIRR 偶數重根／切線根不能被網格漏掉後誤報唯一解", () => {
+  // NPV = -100 + 220/(1+r) - 121/(1+r)^2，r=10% 是切線根，不會穿越 0。
+  const F = [{ d: "2025-01-01", cf: -100 }, { d: "2026-01-01", cf: 220 }, { d: "2027-01-01", cf: -121 }];
+  const X = K.xirrInfo(F);
+  assert.equal(X.status, "ambiguous");
+  assert.equal(K.xirr(F), null);
+});
+
+test("XIRR：同一天的正負現金流先淨額合併，不因輸入順序誤判多重解", () => {
+  const F = [{ d: "2025-01-01", cf: 50 }, { d: "2025-01-01", cf: -100 }, { d: "2026-01-01", cf: 110 }];
+  const X = K.xirrInfo(F);
+  assert.equal(X.status, "ok");
+  assert.ok(near(X.roots[0], 1.2, 1e-6));
+});
+
 test("P1-4：已出清的部位，價格資料延伸超過一年也不年化（用實際有投資的期間）", () => {
   const T = [tw({ date: "2025-01-02", type: "buy", shares: 10, price: 100 }), tw({ date: "2025-03-03", type: "sell", shares: 10, price: 110 })];
   const C = K.buildPerf(T, { prices: { 2330: S([["2025-01-02", 100], ["2025-03-03", 110], ["2026-06-01", 200]]) } }).byCurrency.TWD;
@@ -147,10 +162,54 @@ test("P1-5：價格停在超過 7 天前 → 結果標「估算」並說明，�
   assert.ok(K.REASON_LABEL.stale_prices);
 });
 
+test("P1-4 補強：價格歷史晚於首次投入時，MWR 年化仍依完整現金流跨度判斷", () => {
+  const T = [tw({ date: "2025-01-05", type: "transfer_in", shares: 10, price: 100 })];
+  const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 110]]) }, asOf: "2026-01-05" }).byCurrency.TWD;
+  assert.ok(C.mwr.reasons.includes("history_truncated"));
+  assert.equal(C.mwr.annualized, true);
+  assert.ok(near(C.mwr.value, 0.1, 1e-6));
+  assert.equal(C.annualizable, true, "以交易成本代替缺失的初始價格後，TWR 期間也從首次投入日起算");
+});
+
+test("P2 補強：股票轉出要把市價與成本差額計入已實現損益及個股歸因", () => {
+  const T = [tw({ id: "b", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ id: "o", date: "2026-01-06", type: "transfer_out", shares: 10 })];
+  const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 120]]) } }).byCurrency.TWD;
+  assert.equal(C.pnl.transferOutPnl, 200);
+  assert.equal(C.pnl.realized, 200);
+  assert.equal(C.pnl.total, 200);
+  assert.equal(C.pnl.returned, 1200);
+  assert.ok(near(C.pnl.totalPct, 0.2));
+  assert.equal(C.attribution.bySymbol.find(x => x.symbol === "2330").pnl, 200);
+});
+
+test("P2 補強：轉出完全沒有市價時以成本估算並標記，不得當成零元流出", () => {
+  const T = [tw({ id: "b", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ id: "o", date: "2026-01-06", type: "transfer_out", shares: 10 })];
+  const C = K.buildPerf(T, { prices: {} }).byCurrency.TWD;
+  assert.equal(C.pnl.returned, 1000);
+  assert.equal(C.mwr.status, "estimated");
+  assert.ok(C.mwr.reasons.includes("transfer_out_no_price"));
+  assert.ok(C.issues.some(x => x.k === "transfer_out_no_price" && x.fallback === "cost"));
+});
+
+test("轉出零成本部位又沒有市價時，不可把零成本當成零元市值", () => {
+  const T = [tw({ id: "s", date: "2026-01-05", type: "stock_dividend", shares: 10, price: 0 }), tw({ id: "o", date: "2026-01-06", type: "transfer_out", shares: 10 })];
+  const C = K.buildPerf(T, { prices: {} }).byCurrency.TWD;
+  assert.equal(C.pnl.total, null);
+  assert.equal(C.mwr.status, "unavailable");
+  assert.equal(C.twr, null);
+  assert.ok(C.issues.some(x => x.k === "transfer_out_no_price" && x.fallback === "unavailable"));
+});
+
 test("P2：轉出那天沒有收盤價、用之前的收盤 → 標估算並記下用的是哪天的價格；其他公司行動現金計入總損益並標示", () => {
   const T = [tw({ date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ date: "2026-01-08", type: "transfer_out", shares: 5 }), tw({ date: "2026-01-09", type: "other", amount: 50 })];
   const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 102], ["2026-01-09", 104]]) } }).byCurrency.TWD;
   assert.ok(C.issues.some(x => x.k === "transfer_out_prev_price" && x.priceDate === "2026-01-06")); assert.ok(C.mwr.reasons.includes("transfer_out_prev_price"));
   assert.equal(C.pnl.otherCash, 50); assert.ok(C.mwr.reasons.includes("other_action"));
   assert.ok(near(C.attribution.bySymbol.reduce((s, x) => s + x.pnl, 0) + C.attribution.unattributed, C.pnl.total));
+});
+
+test("一般投資組合：買、領股息、再買、部分賣出（現金流正負來回好幾次）仍然算得出唯一的資金加權報酬，不會一律標無法計算", () => {
+  const F = [{ d: "2024-01-02", cf: -100000 }, { d: "2024-07-15", cf: 2000 }, { d: "2024-09-02", cf: -50000 }, { d: "2025-01-15", cf: 2500 }, { d: "2025-03-03", cf: 40000 }, { d: "2025-07-15", cf: 1800 }, { d: "2026-01-02", cf: 140000 }];
+  const X = K.xirrInfo(F); assert.equal(X.status, "ok"); assert.equal(X.roots.length, 1);
+  const r = X.roots[0], npv = F.reduce((s, f) => s + f.cf / Math.pow(1 + r, (Date.parse(f.d) - Date.parse(F[0].d)) / 864e5 / 365), 0); assert.ok(Math.abs(npv) < 1e-4);
 });
