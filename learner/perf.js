@@ -113,7 +113,8 @@
       flows.sort((a, b) => a.d.localeCompare(b.d));
       const syms = P.map(p => p.symbol), start = flows.length ? flows[0].d : T[0].date;
       const lastPx = syms.map(s => books[s]?.a.at(-1)?.d).filter(Boolean).sort().at(-1) || null;
-      const asOf = opts.asOf || lastPx || start;
+      // 算到哪一天：最後一個價格日和最後一筆現金流取較晚的（沒有價格時，才不會把之後的轉出、賣出截掉）
+      const lastFlow = flows.length ? flows[flows.length - 1].d : start, asOf = opts.asOf || [lastPx, lastFlow].filter(Boolean).sort().at(-1);
       const missing = syms.filter(s => !books[s] || !books[s].a.length);
       if (missing.length) issues.push({ k: "no_prices", codes: missing });
       const trunc = syms.filter(s => books[s]?.first && books[s].first > (P.find(p => p.symbol === s).firstDate || start));
