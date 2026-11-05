@@ -187,7 +187,8 @@ function renderPerf(S) {
   const range = L.pfRange || "all", rg = `<div class="seg pfrange" role="group" aria-label="日期範圍">${[["3m", "3 個月"], ["6m", "6 個月"], ["1y", "1 年"], ["all", "全部"]].map(([k, t]) => `<button type="button" data-lg="range" data-v="${k}" aria-pressed="${range === k}">${t}</button>`).join("")}</div>`;
   const cards = Object.values(R.byCurrency).map(C => pfCard(C, range)).join("");
   $("#lx").innerHTML = head + `<div class="lgbar">${rg}<button type="button" class="btn sm" data-lg="pfreload">重新載入價格</button></div>`
-    + (R.ledgerErrors ? `<p class="note lgwarn" style="margin:4px 12px">✕ 有 ${R.ledgerErrors} 筆交易有錯誤，沒有算進績效；請到「交易紀錄」修改。</p>` : "")
+    + (R.ledgerErrors ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">✕ 有 ${R.ledgerErrors} 筆交易有錯誤，沒有算進績效；請到「交易紀錄」修改。下面的數字不完整。</p>` : "")
+    + (R.status === "needs_confirm" ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">⚠︎ 待確認：有部位合股後的零股還沒結算，股數與成本是暫時的，下面的績效也是暫時的。請到「交易紀錄」新增「零股現金結算」。</p>` : "")
     + (cards || `<p class="note" style="padding:12px">沒有可以計算的持股。</p>`)
     + `<details class="pfbasis"><summary>計算口徑</summary><ul>
       <li>範圍是證券部位（股票、ETF 的市值），不含現金。買進付出的錢算投入；賣出拿回的錢、領到的股息算拿回。</li>
@@ -199,25 +200,26 @@ function renderPerf(S) {
 function pfCard(C, range) {
   const cur = C.currency, P = C.pnl, m = C.mwr, B = C.bench, D = C.maxDrawdown;
   const est = m.status === "estimated" ? `<span class="pfbadge">估算</span>` : m.status === "unavailable" ? `<span class="pfbadge">無法計算</span>` : "";
+  const cst = C.status === "needs_confirm" ? `<span class="pfbadge">待確認</span>` : C.status === "estimated" ? `<span class="pfbadge">含估算</span>` : "";
   const tile = (k, v, sub = "", c = "") => `<div class="pftile"><span>${k}</span><b class="${c}">${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
   const tiles = [
     tile("總損益", lgSgn(P.total, cur), `總報酬率 ${pfPct(P.totalPct)}`, cls(P.total)),
     tile("時間加權報酬", pfPct(C.twr), C.annualizable ? `年化 ${pfPct(C.twrAnn)}` : "未滿一年，不年化", cls(C.twr)),
-    tile("資金加權報酬" + est, m.status === "unavailable" ? "—" : m.annualized ? pfPct(m.value) : pfPct(m.period), m.status === "unavailable" ? "現金流算不出唯一解" : m.annualized ? "年化（XIRR）" : "整段期間，未年化", cls(m.annualized ? m.value : m.period)),
+    tile("資金加權報酬" + est, m.status === "unavailable" ? "—" : m.annualized ? pfPct(m.value) : pfPct(m.period), m.status === "unavailable" ? (m.reasons?.includes("multiple_solutions") ? "有不只一個解，不顯示" : "現金流算不出來") : m.annualized ? "年化（XIRR）" : "整段期間，未年化", cls(m.annualized ? m.value : m.period)),
     tile("最大回撤", D ? pfPct(D.dd) : "—", D?.peak ? (D.recovered ? `${D.trough.slice(5)} 谷底，${D.recoveryDays} 天後回到前高` : `${D.peak.slice(5)} 前高，尚未回到`) : "期間內沒有回撤"),
     tile("相對比較基準", B ? pfPct(B.excess) : "—", B ? `${esc(B.name || "")} ${pfPct(B.ret)}` : "沒有比較基準資料", B ? cls(B.excess) : "")
   ].join("");
-  const reasons = m.reasons?.length && m.status !== "ok" ? `<p class="note lgwarn">⚠︎ 資金加權報酬是估算：${m.reasons.map(r => esc(KLPerf.REASON_LABEL[r] || r)).join("；")}。</p>` : "";
-  const ISS = { no_prices: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 拿不到價格`, history_truncated: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 的價格只抓得到最近 24 個月`, price_fallback: x => `${x.days} 天沒有收盤價，用交易價格代替`, stale_prices: x => `有價格停在 ${x.maxDays} 天前（可能停牌或資料缺漏）` };
+  const reasons = m.reasons?.length && m.status !== "ok" ? `<p class="note lgwarn pfreasons">⚠︎ ${m.status === "unavailable" ? "資金加權報酬無法計算" : "資金加權報酬是估算"}：${m.reasons.map(r => esc(KLPerf.REASON_LABEL[r] || r)).join("；")}。</p>` : "";
+  const ISS = { pending: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 合股後的零股還沒結算`, transfer_out_prev_price: x => `${esc(nameOf(x.code))} ${x.d} 轉出用 ${x.priceDate} 的收盤價`, no_prices: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 拿不到價格`, history_truncated: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 的價格只抓得到最近 24 個月`, price_fallback: x => `${x.days} 天沒有收盤價，用交易價格代替`, stale_prices: x => `有價格停在 ${x.maxDays} 天前（可能停牌或資料缺漏）` };
   const iss = C.issues.length ? `<p class="note">資料提醒：${C.issues.map(x => (ISS[x.k] ? ISS[x.k](x) : esc(x.k))).join("；")}。</p>` : "";
-  return `<section class="pfcard"><h4>${cur === "USD" ? "美股（美元）" : "台股（台幣）"}<small class="note"> ${C.from || ""}～${C.to || ""}・資料到 ${esc(C.asOf || "")}</small></h4>
+  return `<section class="pfcard"><h4>${cur === "USD" ? "美股（美元）" : "台股（台幣）"}${cst}<small class="note"> ${C.from || ""}～${C.to || ""}・資料到 ${esc(C.asOf || "")}</small></h4>
     <div class="pftiles">${tiles}</div>${reasons}${iss}
     ${pfCharts(C, range)}
     ${pfMonthly(C)}
     ${pfAttr(C)}
     <dl class="pfpnl"><dt>總投入</dt><dd>${lgMoney(P.invested, cur)}</dd><dt>拿回（賣出＋股息）</dt><dd>${lgMoney(P.returned, cur)}</dd><dt>目前市值</dt><dd>${lgMoney(P.marketValue, cur)}</dd>
       <dt>已實現損益</dt><dd class="${cls(P.realized)}">${lgSgn(P.realized, cur)}</dd><dt>未實現損益</dt><dd class="${cls(P.unrealized)}">${lgSgn(P.unrealized, cur)}</dd><dt>股息（稅後）</dt><dd>${lgMoney(P.dividends, cur)}</dd>
-      <dt>手續費＋稅</dt><dd>${lgMoney(P.fees + P.taxes, cur)}</dd></dl></section>`;
+      <dt>手續費＋稅</dt><dd>${lgMoney(P.fees + P.taxes, cur)}</dd>${P.extraFees ? `<dt>其中另計費用</dt><dd>${lgMoney(P.extraFees, cur)}</dd>` : ""}${P.otherCash ? `<dt>其他公司行動現金</dt><dd>${lgSgn(P.otherCash, cur)}</dd>` : ""}</dl></section>`;
 }
 // 淨值走勢（組合 vs 比較基準，同一起點＝100）＋回撤；一張圖一個軸
 function pfCharts(C, range) {
@@ -259,17 +261,18 @@ function pfAttr(C) {
   if (!top.length) return "";
   const TY = { stock: "個股", etf: "ETF", unknown: "未分類" };
   return `<h5 class="pfh">誰賺誰賠<small class="note">（已實現＋未實現＋股息）</small></h5><ul class="pfattr">${top.map(x => `<li><span class="nm">${esc(nameOf(x.symbol))}<small class="note"> ${esc(x.symbol)}</small></span><span class="pfbar"><i class="${x.pnl >= 0 ? "up" : "dn"}" style="width:${(Math.abs(x.pnl) / mx * 50).toFixed(1)}%"></i></span><b class="${cls(x.pnl)}">${lgSgn(x.pnl, cur)}</b></li>`).join("")}</ul>
-    <p class="note">依類型：${A.byType.map(g => `${TY[g.group] || esc(g.group)} ${lgSgn(g.pnl, cur)}`).join("、")}${A.byIndustry.some(g => g.group !== "unknown") ? `；依產業：${A.byIndustry.slice(0, 5).map(g => `${g.group === "unknown" ? "未分類" : esc(g.group)} ${lgSgn(g.pnl, cur)}`).join("、")}` : ""}；股息 ${lgMoney(A.dividends, cur)}、手續費與稅 ${lgSgn(A.feesAndTaxes, cur)}；匯率影響：${esc(A.fxNote)}。</p>`;
+    ${A.unattributed ? `<p class="note">沒有對應到個股的費用或現金：${lgSgn(A.unattributed, cur)}（和上面各檔加總＝總損益）</p>` : ""}<p class="note">依類型：${A.byType.map(g => `${TY[g.group] || esc(g.group)} ${lgSgn(g.pnl, cur)}`).join("、")}${A.byIndustry.some(g => g.group !== "unknown") ? `；依產業：${A.byIndustry.slice(0, 5).map(g => `${g.group === "unknown" ? "未分類" : esc(g.group)} ${lgSgn(g.pnl, cur)}`).join("、")}` : ""}；股息 ${lgMoney(A.dividends, cur)}、手續費與稅 ${lgSgn(A.feesAndTaxes, cur)}；匯率影響：${esc(A.fxNote)}。</p>`;
 }
-// 圖上的十字線與提示：滑鼠或手指在圖上移動，顯示最近那一天的數值
-document.addEventListener("pointermove", e => {
+// 圖上的十字線與提示：滑鼠移動、手指點一下或左右拖曳，顯示最近那一天的數值（圖設 touch-action: pan-y，上下滑仍然捲動頁面）
+function pfTip(e) {
   const plot = e.target.closest?.(".pfplot"); if (!plot) return; const box = plot.closest(".pfchart"), D = W.lgPf?.[box?.dataset.pf]; if (!D) return;
   const r = plot.getBoundingClientRect(), i = Math.max(0, Math.min(D.pts.length - 1, Math.round((e.clientX - r.left) / r.width * (D.pts.length - 1)))), x = D.pts[i];
   box.querySelectorAll(".pfx").forEach(el => { el.hidden = false; el.style.left = (i / (D.pts.length - 1) * 100) + "%"; });
   box.querySelectorAll(".pftip").forEach(el => { el.hidden = true; });
   const tip = plot.querySelector(".pftip"); tip.hidden = false; tip.style.left = Math.min(r.width - 150, Math.max(0, e.clientX - r.left + 8)) + "px";
-  tip.innerHTML = `<b>${x.d}</b><br>我的組合 ${x.p.toFixed(2)}（${pfPct(x.p / 100 - 1)}）${x.b != null ? `<br>比較基準 ${x.b.toFixed(2)}（${pfPct(x.b / 100 - 1)}）` : ""}<br>回撤 ${pfPct(x.dd)}<br>市值 ${lgMoney(x.v, D.cur)}`;
-});
+  tip.innerHTML = `<b>${esc(x.d)}</b><br>我的組合 ${x.p.toFixed(2)}（${pfPct(x.p / 100 - 1)}）${x.b != null ? `<br>比較基準 ${x.b.toFixed(2)}（${pfPct(x.b / 100 - 1)}）` : ""}<br>回撤 ${pfPct(x.dd)}<br>市值 ${lgMoney(x.v, D.cur)}`;
+}
+document.addEventListener("pointermove", pfTip); document.addEventListener("pointerdown", pfTip);
 document.addEventListener("pointerleave", e => { const box = e.target.closest?.(".pfchart"); if (!box) return; box.querySelectorAll(".pfx,.pftip").forEach(el => { el.hidden = true; }); }, true);
 // 績效頁的樣式（放在這裡，不用改 watch.html）；顏色用網站的變數，深色模式自動跟著變
 (function () {
