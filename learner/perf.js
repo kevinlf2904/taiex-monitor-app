@@ -21,7 +21,7 @@
     return { a, at, first: a.length ? a[0].d : null };
   }
   // 內部報酬率：flows [{ d, cf }]，cf 以投資人角度（投入為負、拿回為正）。unitDays＝365 是年化（XIRR）；傳整段期間的天數，就是「整段期間」的資金加權報酬（不年化）。
-  // 不只看兩端：在 −100%～+1,000,000% 之間（對數間距）掃 4000 個點找出所有變號的地方，每一個再用二分法求根。
+  // 在合理區間掃描變號區間；多次正負反轉時，有限網格不能證明根唯一，採保守 ambiguous，避免把漏掉的切線根誤報成唯一解。
   // 一個根：status "ok"；沒有根："none"；超過一個根（現金流正負來回好幾次時會發生）："multiple"——不任選一個
   function xirrInfo(flows, unitDays = 365) {
     // Same-day cash flows must be netted before checking sign changes; otherwise their
