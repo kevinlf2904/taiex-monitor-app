@@ -34,6 +34,7 @@ function renderLedger() {
   const S = lgLoad();
   if (!S) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
   if (L.view === "perf") return renderPerf(S);
+  if (L.view === "alloc") return renderAlloc(S);
   const quotes = new Map([...W.quotes].map(([c, q]) => [c, q?.price]).filter(([, p]) => p > 0));
   const R = KLLedger.buildLedger(S.transactions, { method: S.method, today: lgToday(), prices: quotes });
   const cur = ["TWD", "USD"].filter(c => R.totals[c] || R.cash[c]);
@@ -118,7 +119,7 @@ document.addEventListener("click", e => {
   else if (a === "close") L.form = null;
   else if (a === "view") { L.view = b.dataset.v; L.form = null; }
   else if (a === "range") L.pfRange = b.dataset.v;
-  else if (a === "pfreload") { W.lgPx = null; }
+  else if (a === "pfreload") { W.lgPx = null; W.lgAl = null; }
   else if (a === "pos") L.open = L.open === b.dataset.c ? null : b.dataset.c;
   else if (a === "edit") { const t = lgLoad()?.transactions.find(x => x.id === b.dataset.id); if (t) L.form = { id: t.id, orig: t, type: t.type, v: { ...t } }; }
   else if (a === "method") { const S = lgLoad(); if (S && confirm(`整本帳改用「${S.method === "fifo" ? "加權平均成本" : "先進先出（FIFO）"}」重新計算？已實現損益會跟著改變。`)) { const v = lgSave({ ...S, method: S.method === "fifo" ? "avg" : "fifo" }); L.msg = v.ok ? "已改用新的成本算法重新計算。" : "改不了：資料檢查沒有通過。"; } }
@@ -152,7 +153,7 @@ document.addEventListener("submit", e => {
    價格：每一檔 /api/kline 原始收盤（最多 24 個月；股息已經是現金流，不用還原價）；比較基準：台幣＝加權指數（價格指數，不含股息）、美元＝SPY 還原價（含息）。
    畫面：重點數字、淨值走勢 vs 比較基準（同一起點＝100）、回撤（另一張圖，不用雙軸）、月報酬表、歸因排行、估算原因與計算口徑。
    日期範圍：3 個月／6 個月／1 年／全部；圖上滑鼠或手指移動顯示當天數值。 */
-const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="交易紀錄或績效">${[["tx", "交易紀錄"], ["perf", "績效"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "tx") === k}">${t}</button>`).join("")}</div>`;
+const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="交易紀錄、績效或配置">${[["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "tx") === k}">${t}</button>`).join("")}</div>`;
 function lgPerfLib() {
   if (typeof KLPerf !== "undefined") return Promise.resolve();
   return (W.lgPerfP ||= new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "perf.js"; sc.onload = ok; sc.onerror = () => { W.lgPerfP = null; no(new Error("perf.js 載入失敗")); }; document.body.appendChild(sc); }));
@@ -302,5 +303,80 @@ document.addEventListener("pointerleave", e => { const box = e.target.closest?.(
 .pfattr b{font-variant-numeric:tabular-nums;text-align:right}
 .pfpnl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:12px 0 0;font-size:13px}.pfpnl dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
 .pfbasis{margin:4px 12px 16px;font-size:12px}.pfbasis ul{padding-left:1.2em;margin:4px 0}`;
+  document.head.appendChild(st);
+})();
+
+/* ================= 配置（投資組合第 6 階段）：alloc.js 算，這裡畫 =================
+   持股：交易紀錄裡還持有的部位；市值用 /api/quote 現價，沒有現價用成本（標估算）；美元用 TWD=X 最新收盤換成台幣；有記入出金時現金也算進總資產。
+   ETF 穿透：每一檔 ETF 用 /api/etf 的全部持股與產業分布（各自有資料日期）。產業：股票清單（上市櫃產業別）；美股沒有產業資料就是「未分類」。 */
+function lgAllocLib() {
+  if (typeof KLAlloc !== "undefined") return Promise.resolve();
+  return (W.lgAllocP ||= new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "alloc.js"; sc.onload = ok; sc.onerror = () => { W.lgAllocP = null; no(new Error("alloc.js 載入失敗")); }; document.body.appendChild(sc); }));
+}
+const LG_US_ETF = new Set(["SPY", "QQQ", "VOO", "VTI", "SOXX", "TQQQ", "SOXL", "DIA", "IWM", "IVV", "VT", "SMH", "XLK", "SCHD", "VYM", "VEA", "VWO", "BND", "TLT", "IEF", "GLD", "ARKK"]);
+const lgIsEtf = c => /^00\d{2,4}[A-Z]?$/.test(c) || LG_US_ETF.has(c);
+function lgAllocData(P) {
+  const syms = P.map(p => p.symbol).sort(), etfs = syms.filter(lgIsEtf), key = syms.join(","), X = W.lgAl;
+  if (X && X.key === key && (X.busy || Date.now() - X.at < 600000)) return X;
+  W.lgAl = { key, busy: true, at: Date.now(), n: syms.length };
+  if (!W.stocks && typeof loadStocks === "function") loadStocks().catch(() => {});
+  Promise.all([syms.length ? getJ(`/api/quote?codes=${syms.map(encodeURIComponent).join(",")}`).catch(() => null) : null,
+    P.some(p => p.currency === "USD") ? getJ(`/api/kline?code=${encodeURIComponent("TWD=X")}&months=1`).catch(() => null) : null,
+    Promise.all(etfs.map(c => getJ(`/api/etf?code=${encodeURIComponent(c)}`).catch(() => null)))]).then(([q, fx, E]) => {
+    const px = new Map((q?.quotes || []).filter(x => x && x.price > 0).map(x => [String(x.code).toUpperCase(), x])), last = fx?.data?.length ? fx.data[fx.data.length - 1] : null;
+    const etf = {}; etfs.forEach((c, i) => { const j = E[i]; if (j?.hold?.rows?.length) etf[c] = { date: j.hold.date || null, rows: j.hold.rows.map(r => ({ code: r.code || null, name: r.name || null, pct: r.pct })), ind: j.ind?.rows?.length ? { date: j.ind.date || null, rows: j.ind.rows } : null }; });
+    W.lgAl = { key, busy: false, at: Date.now(), px, fx: last ? { rate: last.c, date: String(last.d).slice(0, 10) } : null, etf };
+    if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "alloc") renderList();
+  });
+  return W.lgAl;
+}
+function renderAlloc(S) {
+  const head = lgViewSeg();
+  if (W.off) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">需要部署到網站才有價格資料。</p>`);
+  if (typeof KLAlloc === "undefined") { $("#lx").innerHTML = head + skel("載入配置模組…"); lgAllocLib().then(() => renderList(), e => { $("#lx").innerHTML = head + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; }); return; }
+  const L = KLLedger.buildLedger(S.transactions, { method: S.method, today: lgToday() }), open = L.positions.filter(p => p.open);
+  if (!open.length) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">目前沒有持股，沒有配置可以看。</p>`);
+  const X = lgAllocData(open); if (X.busy) return ($("#lx").innerHTML = head + skel(`載入 ${X.n} 檔的報價${open.some(p => lgIsEtf(p.symbol)) ? "與 ETF 成分股" : ""}…`));
+  const ind = new Map((Array.isArray(W.stocks) ? W.stocks : []).map(r => [String(r[0]).toUpperCase(), r[3] || null]));
+  const pos = open.map(p => { const q = X.px.get(p.symbol); return { symbol: p.symbol, name: q?.name || nameOf(p.symbol), market: p.market, currency: p.currency, value: q ? p.shares * q.price : p.costBasis, valueEstimated: !q, assetType: lgIsEtf(p.symbol) ? "etf" : "stock", industry: ind.get(p.symbol) || null }; });
+  const cash = {}; for (const [c, v] of Object.entries(L.cash || {})) if (v.tracked && v.balance > 0) cash[c] = v.balance;
+  const R = KLAlloc.build(pos, { fx: X.fx, cash, etf: X.etf, asOf: lgToday(), names: Object.fromEntries(pos.map(p => [p.symbol, p.name])) });
+  const issues = (R.issues || []).map(x => `<li>${esc(KLAlloc.ISSUE_LABEL[x.k] || x.k)}${x.codes ? `：${x.codes.map(c => esc(nameOf(c))).join("、")}` : x.list ? `：${x.list.map(l => `${esc(l.etf)}${l.date ? " " + l.date : ""}${l.covered != null ? ` 揭露 ${l.covered}%` : ""}`).join("、")}` : x.dates ? `：${x.dates.map(d => `${esc(d.etf)} ${d.date || "—"}`).join("、")}` : ""}</li>`).join("");
+  const body = R.status === "no_fx" ? Object.values(R.byCurrency).map(C => alSection(C, `${C.base === "USD" ? "美股（美元）" : "台股（台幣）"}`)).join("") : alSection(R, "全部資產（台幣計價）");
+  $("#lx").innerHTML = head + `<div class="lgbar"><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button>${R.fx ? `<small class="note">美元兌台幣 ${R.fx.rate.toFixed(3)}（${esc(R.fx.date || "")}，Yahoo TWD=X 收盤）</small>` : ""}</div>`
+    + (issues ? `<ul class="note lgwarn alissues">${issues}</ul>` : "") + body
+    + `<details class="pfbasis"><summary>計算口徑</summary><ul><li>權重＝市值 ÷ 總資產（台幣計價；美元用最新匯率換算）。有記入金、出金時，現金也算進總資產。</li>
+      <li>沒有現價的持股用成本估算市值，並標示。美股沒有產業資料，歸「未分類」。</li>
+      <li>ETF 穿透：ETF 權重 × 成分股占比＝透過 ETF 持有的曝險；只揭露部分成分股時，剩下的歸「其他（未揭露）」。各 ETF 的成分股日期可能不同，會分開列出。</li>
+      <li>重疊度：兩檔 ETF 共同成分股的占比取小的加總。有效檔數＝1 ÷ 權重平方和（不含現金）。市值規模、投資策略的分類還沒有資料。</li></ul></details>`;
+}
+const AL_MKT = { tw: "台股", us: "美股", cash: "現金" }, AL_TYPE = { stock: "個股", etf: "ETF", cash: "現金" };
+const alPct = w => (w == null ? "—" : (w * 100).toFixed(1) + "%");
+const alBars = (rows, label = g => esc(g)) => `<ul class="albars">${rows.map(r => `<li><span class="nm">${label(r.group)}</span><span class="albar"><i style="width:${Math.max(0.5, r.w * 100).toFixed(1)}%"></i></span><b>${alPct(r.w)}</b></li>`).join("")}</ul>`;
+function alSection(R, title) {
+  const C = R.concentration, LT = R.lookThrough, cur = R.base;
+  const tile = (k, v, sub = "") => `<div class="pftile"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+  const tiles = [tile("總資產", lgMoney(R.total, cur), R.cash ? `含現金 ${lgMoney(R.cash, cur)}` : "不含現金（沒有記入出金）"),
+    tile("最大單一持股", C.top ? alPct(C.top.w) : "—", C.top ? esc(nameOf(C.top.symbol)) : ""), tile("前五大合計", alPct(C.top5)),
+    tile("有效檔數", C.effN ? C.effN.toFixed(1) : "—", "權重越集中，數字越小"), tile("現金比重", alPct(R.cashShare))].join("");
+  const top = R.top10.map(h => ({ group: h.symbol, w: h.w, h }));
+  const lt = LT && LT.top.length && LT.exposure.some(e => e.viaEtf > 0) ? `<h5 class="pfh">ETF 穿透後的實際持股<small class="note">（直接持有＋透過 ETF）</small></h5>
+    <table class="altable"><thead><tr><th>股票</th><th>合計</th><th>直接</th><th>透過 ETF</th></tr></thead><tbody>${LT.top.map(e => `<tr><td>${esc(e.name || nameOf(e.code))}<small class="note"> ${esc(e.code)}</small></td><td><b>${alPct(e.w)}</b></td><td>${e.direct ? alPct(e.direct) : "—"}</td><td>${e.viaEtf ? alPct(e.viaEtf) : "—"}</td></tr>`).join("")}</tbody></table>
+    ${LT.dupDirect.length ? `<p class="note">重複持有（直接買了，ETF 裡也有）：${LT.dupDirect.slice(0, 6).map(d => `${esc(d.name || d.code)}（直接 ${alPct(d.direct)}＋ETF ${alPct(d.viaEtf)}）`).join("、")}</p>` : ""}
+    ${LT.pairs.length ? `<p class="note">ETF 重疊度：${LT.pairs.slice(0, 5).map(p => `${esc(p.a)} × ${esc(p.b)} ${p.overlap.toFixed(1)}%${p.sameDate ? "" : "（資料日期不同）"}`).join("、")}</p>` : ""}
+    <p class="note">成分股資料日期：${LT.dates.map(d => `${esc(d.etf)} ${d.date || "—"}（揭露 ${d.covered}%）`).join("、")}</p>` : "";
+  return `<section class="pfcard alcard"><h4>${title}${R.estimated ? `<span class="pfbadge">含估算</span>` : ""}</h4><div class="pftiles">${tiles}</div>
+    <h5 class="pfh">前十大持股</h5>${alBars(top, g => `${esc(nameOf(g))}<small class="note"> ${esc(g)}</small>`)}
+    <div class="algrid"><div><h5 class="pfh">市場</h5>${alBars(R.byMarket, g => AL_MKT[g] || esc(g))}</div><div><h5 class="pfh">類型</h5>${alBars(R.byType, g => AL_TYPE[g] || esc(g))}</div>
+      <div><h5 class="pfh">幣別</h5>${alBars(R.byCurrency)}</div><div><h5 class="pfh">產業前五大${R.byIndustryLookThrough ? "（ETF 穿透後）" : ""}</h5>${alBars((R.byIndustryLookThrough || R.byIndustry).slice(0, 5), g => (g === "unknown" ? "未分類" : esc(g)))}</div></div>
+    ${lt}</section>`;
+}
+(function () {
+  if (document.getElementById("alcss")) return; const st = document.createElement("style"); st.id = "alcss";
+  st.textContent = `.albars{list-style:none;margin:0;padding:0}.albars li{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.4fr) 3.6em;gap:8px;align-items:center;padding:2px 0;font-size:12px}
+.albars .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.albar{height:8px;border-radius:4px;background:var(--surface)}.albar i{display:block;height:100%;border-radius:4px;background:var(--accent)}
+.albars b{text-align:right;font-variant-numeric:tabular-nums}.algrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 16px}
+.altable{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}.altable th,.altable td{padding:3px 4px;text-align:right;border-bottom:1px solid var(--line)}.altable th:first-child,.altable td:first-child{text-align:left}
+.alissues{margin:4px 12px;padding-left:1.2em}`;
   document.head.appendChild(st);
 })();
