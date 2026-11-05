@@ -39,3 +39,22 @@ test("交易紀錄匯出 CSV", async () => {
   assert.match(await p.evaluate(() => $("#lx").innerText), /已匯出 1 筆交易（CSV）/);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("融資資料匯入：沒開過融資頁（KLMargin 還沒載入）也用完整檢查——壞帳戶整份拒絕、資料不變；正確的帳戶可以匯入", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.evaluate(() => { localStorage.setItem("kline:pf:margin:v1", JSON.stringify({ v: 1, accounts: [{ id: "keep", name: "原本的", type: "margin", source: "user", loan: 1000, collateral: [{ symbol: "2330", shares: 10 }] }] })); W.tv = "sync"; setLt("tools"); });
+  await p.waitForSelector('#lx [data-sy="export"]', { timeout: 20000 });
+  assert.equal(await p.evaluate(() => typeof KLMargin), "undefined", "還沒載入融資模組");
+  const before = await p.evaluate(() => [localStorage.getItem("kline:pf:margin:v1"), localStorage.getItem("kline:watch:groups")]);
+  const pack = accounts => Buffer.from(JSON.stringify({ app: "kline-school", v: 2, at: "2026-11-05T00:00:00Z", data: { "kline:watch:groups": JSON.stringify([{ name: "被蓋掉", list: [] }]), "kline:pf:margin:v1": JSON.stringify({ v: 1, accounts }) } }));
+  for (const bad of [[{ id: "x", loan: -5, collateral: [{ symbol: "2330", shares: 1 }] }], [{ id: "y", loan: 5000, collateral: [] }], [{ id: "z", loan: 5000, rate: 3, collateral: [{ symbol: "2330", shares: 1 }] }]]) {
+    await p.evaluate(() => { document.querySelectorAll(".toast").forEach(t => t.remove()); });
+    await p.setInputFiles("#lx input[data-syfile]", { name: "bad.json", mimeType: "application/json", buffer: pack(bad) });
+    await p.waitForFunction(() => /投資組合資料有問題，沒有匯入[\s\S]*融資帳戶/.test(document.body.innerText), null, { timeout: 15000 });
+    assert.deepEqual(await p.evaluate(() => [localStorage.getItem("kline:pf:margin:v1"), localStorage.getItem("kline:watch:groups")]), before, JSON.stringify(bad) + "：資料維持原樣");
+  }
+  // 正確的帳戶：匯入成功（會重新載入頁面）
+  await p.setInputFiles("#lx input[data-syfile]", { name: "good.json", mimeType: "application/json", buffer: pack([{ id: "ok", name: "新的", type: "margin", source: "broker", loan: 2000, rate: 0.06, collateral: [{ symbol: "2330", shares: 10 }] }]) });
+  await p.waitForFunction(() => JSON.parse(localStorage.getItem("kline:pf:margin:v1") || "{}").accounts?.[0]?.id === "ok", null, { timeout: 15000 });
+  await ctx.close(); assert.deepEqual(errs, []);
+});

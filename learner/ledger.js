@@ -269,8 +269,10 @@
           summary: { transactions: tx.length, from: ds[0] || null, to: ds[ds.length - 1] || null, method: p.v?.method || null } });
       } else if (key === "kline:pf:margin:v1") {
         const p = parse(raw); if (!p.ok) { items.push({ key, label: "融資帳戶", ok: false, problems: ["不是正確的 JSON"] }); continue; }
+        // 一定要用融資模組的完整檢查（借款、利率、擔保品、門檻…）；沒有檢查程式就不接受，不降級成只看版本
         const M = opts.margin; let ok = p.v && p.v.v === 1 && Array.isArray(p.v.accounts), problems = ok ? [] : ["格式或版本不對"];
-        if (ok && M && typeof M.validateStore === "function") { const r = M.validateStore(p.v); if (!r.ok) { ok = false; problems = [`${r.errors.length} 個帳戶資料不對`]; } }
+        if (ok && !(M && typeof M.validateStore === "function")) { ok = false; problems = ["沒有融資資料的檢查程式，為了安全不匯入"]; }
+        else if (ok) { const r = M.validateStore(p.v); if (!r.ok) { ok = false; problems = [`${new Set(r.errors.map(e => e.i)).size} 個帳戶資料不對（例如：${r.errors[0].code}）`]; } }
         items.push({ key, label: "融資帳戶", ok, problems, summary: { accounts: Array.isArray(p.v?.accounts) ? p.v.accounts.length : 0 } });
       } else if (key.startsWith("kline:pf:")) items.push({ key, label: key, ok: false, problems: ["不認得的投資組合資料（可能是比較新的版本），為了安全不匯入"] });
     }

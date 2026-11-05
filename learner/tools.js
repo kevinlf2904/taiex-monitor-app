@@ -789,6 +789,8 @@ async function syncImport(file) {
     const pfKeys = Object.keys(j.data).filter(k => k.startsWith("kline:pf:")); let pfTxt = "";
     if (pfKeys.length) {
       if (typeof KLLedger === "undefined" && typeof lazy === "function") await lazy("ledger");
+      // 有融資資料：先載入融資模組（使用者可能從沒開過融資頁），用它的完整檢查；載不到就整份不匯入
+      if (pfKeys.some(k => k.startsWith("kline:pf:margin:")) && typeof KLMargin === "undefined") await new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "margin.js"; sc.onload = ok; sc.onerror = () => no(new Error("載入融資資料的檢查程式失敗，沒有匯入（這台的資料維持原樣）")); document.body.appendChild(sc); });
       const C = KLLedger.checkBackup(j.data, { today: toolsDay(), margin: typeof KLMargin !== "undefined" ? KLMargin : null });
       if (!C.ok) throw new Error("備份檔裡的投資組合資料有問題，沒有匯入（這台的資料維持原樣）：" + C.items.filter(x => !x.ok).map(x => `${x.label}：${x.problems.join("；")}`).join("；"));
       const cur = (() => { try { return JSON.parse(localStorage.getItem("kline:pf:v1") || "null"); } catch { return null; } })();

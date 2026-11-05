@@ -191,6 +191,10 @@ test("備份檔檢查：交易紀錄能套用、版本對才通過；壞資料�
   assert.equal(L.checkBackup({ "kline:pf:v1": "{壞" }).ok, false);
   assert.match(L.checkBackup({ "kline:pf:v1": JSON.stringify({ v: 9, method: "avg", transactions: [] }) }).items[0].problems[0], /版本 9 不支援/);
   assert.equal(L.checkBackup({ "kline:pf:v9": "{}" }).ok, false, "不認得的投資組合資料不匯入");
-  assert.equal(L.checkBackup({ "kline:pf:margin:v1": JSON.stringify({ v: 1, accounts: [] }) }).ok, true);
-  assert.equal(L.checkBackup({ "kline:pf:margin:v1": JSON.stringify({ v: 2 }) }).ok, false);
+  const M = { validateStore: s => ({ ok: s.accounts.every(a => a.loan > 0), errors: s.accounts.map((a, i) => ({ i, code: "invalid_loan" })).filter((_, i) => !(s.accounts[i].loan > 0)) }) };
+  assert.equal(L.checkBackup({ "kline:pf:margin:v1": JSON.stringify({ v: 1, accounts: [{ loan: 1 }] }) }, { margin: M }).ok, true);
+  assert.equal(L.checkBackup({ "kline:pf:margin:v1": JSON.stringify({ v: 1, accounts: [{ loan: -1 }] }) }, { margin: M }).ok, false, "用融資模組的完整檢查");
+  const noM = L.checkBackup({ "kline:pf:margin:v1": JSON.stringify({ v: 1, accounts: [] }) });
+  assert.equal(noM.ok, false, "沒有融資檢查程式就不接受，不降級"); assert.match(noM.items[0].problems[0], /沒有融資資料的檢查程式/);
+  assert.equal(L.checkBackup({ "kline:pf:margin:v1": JSON.stringify({ v: 2 }) }, { margin: M }).ok, false);
 });
