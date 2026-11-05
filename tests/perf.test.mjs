@@ -192,7 +192,7 @@ test("P2 補強：轉出完全沒有市價時以成本估算並標記，不得�
 });
 
 test("轉出零成本部位又沒有市價時，不可把零成本當成零元市值", () => {
-  const T = [tw({ id: "s", date: "2026-01-05", type: "stock_dividend", shares: 10, price: 0 })];
+  const T = [tw({ id: "s", date: "2026-01-05", type: "stock_dividend", shares: 10, price: 0 }), tw({ id: "o", date: "2026-01-06", type: "transfer_out", shares: 10 })];
   const C = K.buildPerf(T, { prices: {} }).byCurrency.TWD;
   assert.equal(C.pnl.total, null);
   assert.equal(C.mwr.status, "unavailable");
