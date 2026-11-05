@@ -166,7 +166,7 @@
       const total = missingTransferOutValue ? null : (Tt.realizedPnl || 0) + extra.transferOutPnl + unreal + (Tt.dividends || 0) - extra.fees + extra.other;
       const pnl = { invested: r2(inflow), returned: r2(outflow), netInvested: r2(inflow - outflow), marketValue: r2(mvNow), costBasis: r2(costNow), unrealized: r2(unreal), realized: r2((Tt.realizedPnl || 0) + extra.transferOutPnl), transferOutPnl: r2(extra.transferOutPnl), dividends: r2(Tt.dividends || 0), fees: r2(Tt.fees || 0), taxes: r2(Tt.taxes || 0), extraFees: r2(extra.fees), otherCash: r2(extra.other), total: total == null ? null : r2(total), totalPct: total != null && inflow > EPS ? total / inflow : null };
       // 歸因：每一檔的損益（已實現＋未實現＋股息）與占總損益的比例；依資產類型、產業加總；股息、費稅另外列；匯率還沒有
-      const bySymbol = P.map(p => { const px = priceAt(p.symbol, asOf), mv = p.shares > EPS ? p.shares * (px ? px.c : (lastTradePx(p.symbol, asOf) || 0)) : 0, u = mv - p.costBasis, ex = extra.bySym.get(p.symbol) || 0, t = p.realizedPnl + u + p.dividends + ex, k = cls(p.symbol) || {};
+      const bySymbol = missingTransferOutValue ? [] : P.map(p => { const px = priceAt(p.symbol, asOf), mv = p.shares > EPS ? p.shares * (px ? px.c : (lastTradePx(p.symbol, asOf) || 0)) : 0, u = mv - p.costBasis, ex = extra.bySym.get(p.symbol) || 0, t = p.realizedPnl + u + p.dividends + ex, k = cls(p.symbol) || {};
         return { symbol: p.symbol, assetType: k.assetType || null, industry: k.industry || null, realized: r2(p.realizedPnl), unrealized: r2(u), dividends: r2(p.dividends), extra: r2(ex), fees: r2(p.fees), taxes: r2(p.taxes), pnl: r2(t), share: Math.abs(total) > EPS ? t / total : null }; })
         .sort((a, b) => b.pnl - a.pnl);
       const group = key => { const m = new Map(); for (const x of bySymbol) { const g = x[key] || "unknown"; m.set(g, (m.get(g) || 0) + x.pnl); } return [...m].map(([g, v]) => ({ group: g, pnl: r2(v), share: Math.abs(total) > EPS ? v / total : null })).sort((a, b) => b.pnl - a.pnl); };
@@ -176,7 +176,7 @@
       const series = days.map(x => ({ d: x.d, v: x.v, flow: x.flow, index: +x.i.toFixed(8) }));
       out.byCurrency[cur] = {
         currency: cur, from: first ? first.d : null, to: last ? last.d : null, activeTo: active ? active.d : null, spanDays, asOf, status: pend.length ? "needs_confirm" : reasons.length ? "estimated" : "ok",
-        twr, twrAnn, annualizable: spanDays >= 365, mwr, bench,
+        twr, twrAnn, annualizable: !missingTransferOutValue && spanDays >= 365, mwr, bench,
         monthly: missingTransferOutValue ? [] : periodReturns(val, ym), quarterly: missingTransferOutValue ? [] : periodReturns(val, yq), yearly: missingTransferOutValue ? [] : periodReturns(val, yy),
         maxDrawdown: !missingTransferOutValue && val.length ? drawdown(days.filter(x => x.v > EPS || x.r != null).map(x => ({ d: x.d, i: x.i }))) : null,
         pnl, attribution, series: missingTransferOutValue ? [] : series, issues, estimated: reasons
