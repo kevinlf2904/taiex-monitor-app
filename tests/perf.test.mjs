@@ -169,3 +169,9 @@ test("P2：轉出那天沒有收盤價、用之前的收盤 → 標估算並記�
   assert.equal(C.pnl.otherCash, 50); assert.ok(C.mwr.reasons.includes("other_action"));
   assert.ok(near(C.attribution.bySymbol.reduce((s, x) => s + x.pnl, 0) + C.attribution.unattributed, C.pnl.total));
 });
+
+test("一般投資組合：買、領股息、再買、部分賣出（現金流正負來回好幾次）仍然算得出唯一的資金加權報酬，不會一律標無法計算", () => {
+  const F = [{ d: "2024-01-02", cf: -100000 }, { d: "2024-07-15", cf: 2000 }, { d: "2024-09-02", cf: -50000 }, { d: "2025-01-15", cf: 2500 }, { d: "2025-03-03", cf: 40000 }, { d: "2025-07-15", cf: 1800 }, { d: "2026-01-02", cf: 140000 }];
+  const X = K.xirrInfo(F); assert.equal(X.status, "ok"); assert.equal(X.roots.length, 1);
+  const r = X.roots[0], npv = F.reduce((s, f) => s + f.cf / Math.pow(1 + r, (Date.parse(f.d) - Date.parse(F[0].d)) / 864e5 / 365), 0); assert.ok(Math.abs(npv) < 1e-4);
+});

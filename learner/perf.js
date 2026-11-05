@@ -21,29 +21,31 @@
     return { a, at, first: a.length ? a[0].d : null };
   }
   // 內部報酬率：flows [{ d, cf }]，cf 以投資人角度（投入為負、拿回為正）。unitDays＝365 是年化（XIRR）；傳整段期間的天數，就是「整段期間」的資金加權報酬（不年化）。
-  // 在合理區間掃描變號區間；多次正負反轉時，有限網格不能證明根唯一，採保守 ambiguous，避免把漏掉的切線根誤報成唯一解。
+  // 在 −100%～+1,000,000%（對數間距 4000 點）掃描所有變號的地方各自求根，另外找 |NPV| 幾乎碰到 0 的谷底（切線根、很接近的兩個根）。
   // 一個根：status "ok"；沒有根："none"；超過一個根（現金流正負來回好幾次時會發生）："multiple"——不任選一個
   function xirrInfo(flows, unitDays = 365) {
-    // Same-day cash flows must be netted before checking sign changes; otherwise their
-    // input order can create artificial sign reversals and false ambiguity.
+    // 同一天的現金流先淨額合併，不讓輸入順序造成假的正負反轉
     const byDate = new Map();
     for (const f of Array.isArray(flows) ? flows : []) if (f && typeof f.d === "string" && isNum(f.cf)) byDate.set(f.d, (byDate.get(f.d) || 0) + f.cf);
     const F = [...byDate].map(([d, cf]) => ({ d, cf })).filter(f => Math.abs(f.cf) > EPS).sort((a, b) => a.d.localeCompare(b.d));
     if (F.length < 2 || !F.some(f => f.cf > 0) || !F.some(f => f.cf < 0)) return { status: "none", roots: [] };
-    let signChanges = 0, lastSign = 0;
-    for (const f of F) { const sign = Math.sign(f.cf); if (lastSign && sign !== lastSign) signChanges++; lastSign = sign; }
-    const t0 = dnum(F[0].d), npv = r => F.reduce((s, f) => s + f.cf / Math.pow(1 + r, (dnum(f.d) - t0) / DAY / unitDays), 0);
+    const t0 = dnum(F[0].d), npv = r => F.reduce((s, f) => s + f.cf / Math.pow(1 + r, (dnum(f.d) - t0) / DAY / unitDays), 0), scale = F.reduce((s, f) => s + Math.abs(f.cf), 0);
     const N = 4000, a = Math.log(1e-12), b = Math.log(1e6 + 1), grid = Array.from({ length: N + 1 }, (_, k) => -1 + Math.exp(a + (b - a) * k / N));
-    const roots = []; let pr = null, pv = null;
-    for (const r of grid) { const v = npv(r); if (!isNum(v)) { pr = null; continue; }
-      if (Math.abs(v) < 1e-12) { if (!roots.some(x => Math.abs(x - r) < 1e-9)) roots.push(r); }
-      else if (pr != null && pv * v < 0) { let lo = pr, hi = r, flo = pv; for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2, fm = npv(m); if (!isNum(fm)) break; if (flo * fm <= 0) hi = m; else { lo = m; flo = fm; } if (hi - lo < 1e-13) break; } roots.push((lo + hi) / 2); }
-      pr = r; pv = v; }
+    const vals = grid.map(npv), roots = [];
+    for (let k = 0; k <= N; k++) { const r = grid[k], v = vals[k]; if (!isNum(v)) continue;
+      if (Math.abs(v) < 1e-12 * scale) { roots.push(r); continue; }
+      const pv = k ? vals[k - 1] : NaN; if (!isNum(pv) || pv * v >= 0) continue;
+      let lo = grid[k - 1], hi = r, flo = pv; for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2, fm = npv(m); if (!isNum(fm)) break; if (flo * fm <= 0) hi = m; else { lo = m; flo = fm; } if (hi - lo < 1e-13) break; } roots.push((lo + hi) / 2); }
     const uniq = roots.sort((x, y) => x - y).filter((x, i, A) => !i || Math.abs(x - A[i - 1]) > 1e-7);
-    // A finite grid can miss an even-multiplicity (tangent) root or two very close roots.
-    // With multiple cash-flow sign reversals, do not claim uniqueness unless the scan
-    // actually finds multiple roots; conservatively mark the result ambiguous otherwise.
-    const status = uniq.length > 1 ? "multiple" : signChanges > 1 ? "ambiguous" : uniq.length === 1 ? "ok" : "none";
+    // 切線根（NPV 碰到 0 但不穿過，例如 −100、+220、−121 在 10% 是重根）掃描變號找不到：
+    // 找 |NPV| 的谷底（前後同號、比兩邊都小），在兩旁之間用三分法細找最小值；最小值幾乎是 0 就是切線根或兩個很接近的根 → 不能說唯一
+    let tangent = false;
+    for (let k = 1; k < N && !tangent; k++) { const v = vals[k], pv = vals[k - 1], nv = vals[k + 1];
+      if (!isNum(v) || !isNum(pv) || !isNum(nv) || pv * v <= 0 || v * nv <= 0 || Math.abs(v) > Math.abs(pv) || Math.abs(v) > Math.abs(nv)) continue;
+      let lo = grid[k - 1], hi = grid[k + 1]; for (let i = 0; i < 200 && hi - lo > 1e-14; i++) { const m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3; if (Math.abs(npv(m1)) < Math.abs(npv(m2))) hi = m2; else lo = m1; }
+      if (Math.abs(npv((lo + hi) / 2)) < 1e-9 * scale) tangent = true; }
+    // 一個根：ok；兩個以上：multiple；有切線根：ambiguous；沒有根：none——都不任選一個
+    const status = uniq.length > 1 ? "multiple" : tangent ? "ambiguous" : uniq.length === 1 ? "ok" : "none";
     return { status, roots: uniq };
   }
   const xirr = (flows, unitDays = 365) => { const X = xirrInfo(flows, unitDays); return X.status === "ok" ? X.roots[0] : null; };
