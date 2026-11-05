@@ -176,7 +176,7 @@
     return out;
   }
   const REASON_LABEL = { legacy_transfer: "有從舊庫存轉入的部位（成本是當時記的平均成本，買進日期與金額不一定準）", transfer_at_cost: "股票轉入那天沒有市價，用成本當投入金額", transfer_out_no_price: "股票轉出那天沒有價格", history_truncated: "價格歷史比第一筆交易晚開始，前面一段只能用交易價格估", price_fallback: "有些日子沒有收盤價，用最近一筆交易的價格代替", no_solution: "現金流算不出報酬率（例如只有投入、沒有市值）",
-    multiple_solutions: "現金流正負來回好幾次，資金加權報酬有不只一個解，無法決定用哪一個", pending_confirm: "有部位合股後的零股還沒結算，股數與成本是暫時的",
+    multiple_solutions: "現金流正負多次反轉，可能有多重解或無法確認唯一解，因此不任選一個", pending_confirm: "有部位合股後的零股還沒結算，股數與成本是暫時的",
     stale_prices: "有價格停在超過 7 天前（可能停牌或資料缺漏），市值可能不是最新", transfer_out_prev_price: "股票轉出那天沒有收盤價，用之前的收盤價計算", other_action: "有其他公司行動的現金，計入總損益與報酬，請確認性質" };
   root.KLPerf = Object.freeze({ VERSION, buildPerf, xirr, xirrInfo, drawdown, periodReturns, priceBook, REASON_LABEL });
 })(typeof window !== "undefined" ? window : globalThis);
