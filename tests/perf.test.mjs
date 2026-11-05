@@ -162,6 +162,15 @@ test("P1-5：價格停在超過 7 天前 → 結果標「估算」並說明，�
   assert.ok(K.REASON_LABEL.stale_prices);
 });
 
+test("P1-4 補強：價格歷史晚於首次投入時，MWR 年化仍依完整現金流跨度判斷", () => {
+  const T = [tw({ date: "2025-01-05", type: "transfer_in", shares: 10, price: 100 })];
+  const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 110]]) }, asOf: "2026-01-05" }).byCurrency.TWD;
+  assert.ok(C.mwr.reasons.includes("history_truncated"));
+  assert.equal(C.mwr.annualized, true);
+  assert.ok(near(C.mwr.value, 0.1, 1e-6));
+  assert.equal(C.annualizable, false, "TWR 仍只從可用價格起算");
+});
+
 test("P2 補強：股票轉出要把市價與成本差額計入已實現損益及個股歸因", () => {
   const T = [tw({ id: "b", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ id: "o", date: "2026-01-06", type: "transfer_out", shares: 10 })];
   const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 120]]) } }).byCurrency.TWD;
