@@ -21,10 +21,17 @@
     return { a, at, first: a.length ? a[0].d : null };
   }
   // 內部報酬率：flows [{ d, cf }]，cf 以投資人角度（投入為負、拿回為正）。unitDays＝365 是年化（XIRR）；傳整段期間的天數，就是「整段期間」的資金加權報酬（不年化）。
-  // 不只看兩端：在 −100%～+1,000,000% 之間（對數間距）掃 4000 個點找出所有變號的地方，每一個再用二分法求根。
+  // 在合理區間掃描變號區間；多次正負反轉時，有限網格不能證明根唯一，採保守 ambiguous，避免把漏掉的切線根誤報成唯一解。
   // 一個根：status "ok"；沒有根："none"；超過一個根（現金流正負來回好幾次時會發生）："multiple"——不任選一個
   function xirrInfo(flows, unitDays = 365) {
-    const F = flows.filter(f => isNum(f.cf) && Math.abs(f.cf) > EPS); if (F.length < 2 || !F.some(f => f.cf > 0) || !F.some(f => f.cf < 0)) return { status: "none", roots: [] };
+    // Same-day cash flows must be netted before checking sign changes; otherwise their
+    // input order can create artificial sign reversals and false ambiguity.
+    const byDate = new Map();
+    for (const f of Array.isArray(flows) ? flows : []) if (f && typeof f.d === "string" && isNum(f.cf)) byDate.set(f.d, (byDate.get(f.d) || 0) + f.cf);
+    const F = [...byDate].map(([d, cf]) => ({ d, cf })).filter(f => Math.abs(f.cf) > EPS).sort((a, b) => a.d.localeCompare(b.d));
+    if (F.length < 2 || !F.some(f => f.cf > 0) || !F.some(f => f.cf < 0)) return { status: "none", roots: [] };
+    let signChanges = 0, lastSign = 0;
+    for (const f of F) { const sign = Math.sign(f.cf); if (lastSign && sign !== lastSign) signChanges++; lastSign = sign; }
     const t0 = dnum(F[0].d), npv = r => F.reduce((s, f) => s + f.cf / Math.pow(1 + r, (dnum(f.d) - t0) / DAY / unitDays), 0);
     const N = 4000, a = Math.log(1e-12), b = Math.log(1e6 + 1), grid = Array.from({ length: N + 1 }, (_, k) => -1 + Math.exp(a + (b - a) * k / N));
     const roots = []; let pr = null, pv = null;
@@ -33,7 +40,11 @@
       else if (pr != null && pv * v < 0) { let lo = pr, hi = r, flo = pv; for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2, fm = npv(m); if (!isNum(fm)) break; if (flo * fm <= 0) hi = m; else { lo = m; flo = fm; } if (hi - lo < 1e-13) break; } roots.push((lo + hi) / 2); }
       pr = r; pv = v; }
     const uniq = roots.sort((x, y) => x - y).filter((x, i, A) => !i || Math.abs(x - A[i - 1]) > 1e-7);
-    return { status: uniq.length === 1 ? "ok" : uniq.length ? "multiple" : "none", roots: uniq };
+    // A finite grid can miss an even-multiplicity (tangent) root or two very close roots.
+    // With multiple cash-flow sign reversals, do not claim uniqueness unless the scan
+    // actually finds multiple roots; conservatively mark the result ambiguous otherwise.
+    const status = uniq.length > 1 ? "multiple" : signChanges > 1 ? "ambiguous" : uniq.length === 1 ? "ok" : "none";
+    return { status, roots: uniq };
   }
   const xirr = (flows, unitDays = 365) => { const X = xirrInfo(flows, unitDays); return X.status === "ok" ? X.roots[0] : null; };
   // 期間報酬：把每日報酬依月、季、年連乘
@@ -128,7 +139,7 @@
       const xf = flows.filter(f => f.d <= asOf).map(f => ({ d: f.d, cf: -f.f })); if (last && last.v > EPS) xf.push({ d: last.d, cf: last.v });
       // 滿一年：年化 XIRR；未滿一年：只給整段期間的資金加權報酬（不年化，短期年化會誇大到沒有意義）
       const reasons = [...est], xSpan = xf.length > 1 ? Math.max(1, Math.round((dnum(xf[xf.length - 1].d) - dnum(xf[0].d)) / DAY)) : 1;
-      const XA = spanDays >= 365 ? xirrInfo(xf) : null, XP = xirrInfo(xf, xSpan), multi = XP.status === "multiple" || XA?.status === "multiple";
+      const XA = spanDays >= 365 ? xirrInfo(xf) : null, XP = xirrInfo(xf, xSpan), multi = ["multiple", "ambiguous"].includes(XP.status) || ["multiple", "ambiguous"].includes(XA?.status);
       const mwrAnn = XA?.status === "ok" ? XA.roots[0] : null, mwrPeriod = XP.status === "ok" ? XP.roots[0] : null;
       const mwr = multi ? { value: null, period: null, status: "unavailable", reasons: ["multiple_solutions", ...reasons], roots: XP.roots.length > 1 ? XP.roots : XA.roots }
         : mwrAnn == null && mwrPeriod == null ? { value: null, period: null, status: "unavailable", reasons: ["no_solution", ...reasons] }
