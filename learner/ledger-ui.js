@@ -205,7 +205,7 @@ function pfCard(C, range) {
   const tiles = [
     tile("總損益", lgSgn(P.total, cur), `總報酬率 ${pfPct(P.totalPct)}`, cls(P.total)),
     tile("時間加權報酬", pfPct(C.twr), C.annualizable ? `年化 ${pfPct(C.twrAnn)}` : "未滿一年，不年化", cls(C.twr)),
-    tile("資金加權報酬" + est, m.status === "unavailable" ? "—" : m.annualized ? pfPct(m.value) : pfPct(m.period), m.status === "unavailable" ? (m.reasons?.includes("multiple_solutions") ? "有不只一個解，不顯示" : "現金流算不出來") : m.annualized ? "年化（XIRR）" : "整段期間，未年化", cls(m.annualized ? m.value : m.period)),
+    tile("資金加權報酬" + est, m.status === "unavailable" ? "—" : m.annualized ? pfPct(m.value) : pfPct(m.period), m.status === "unavailable" ? (m.reasons?.includes("multiple_solutions") ? "無法確認是否為唯一解，不顯示" : "現金流算不出來") : m.annualized ? "年化（XIRR）" : "整段期間，未年化", cls(m.annualized ? m.value : m.period)),
     tile("最大回撤", D ? pfPct(D.dd) : "—", D?.peak ? (D.recovered ? `${D.trough.slice(5)} 谷底，${D.recoveryDays} 天後回到前高` : `${D.peak.slice(5)} 前高，尚未回到`) : "期間內沒有回撤"),
     tile("相對比較基準", B ? pfPct(B.excess) : "—", B ? `${esc(B.name || "")} ${pfPct(B.ret)}` : "沒有比較基準資料", B ? cls(B.excess) : "")
   ].join("");
@@ -260,7 +260,7 @@ function pfAttr(C) {
   const A = C.attribution, cur = C.currency, top = A.bySymbol.filter(x => Math.abs(x.pnl) > 0.004).slice(0, 12), mx = Math.max(1, ...top.map(x => Math.abs(x.pnl)));
   if (!top.length) return "";
   const TY = { stock: "個股", etf: "ETF", unknown: "未分類" };
-  return `<h5 class="pfh">誰賺誰賠<small class="note">（已實現＋未實現＋股息）</small></h5><ul class="pfattr">${top.map(x => `<li><span class="nm">${esc(nameOf(x.symbol))}<small class="note"> ${esc(x.symbol)}</small></span><span class="pfbar"><i class="${x.pnl >= 0 ? "up" : "dn"}" style="width:${(Math.abs(x.pnl) / mx * 50).toFixed(1)}%"></i></span><b class="${cls(x.pnl)}">${lgSgn(x.pnl, cur)}</b></li>`).join("")}</ul>
+  return `<h5 class="pfh">誰賺誰賠<small class="note">（已實現＋未實現＋股息＋另計費用／公司行動）</small></h5><ul class="pfattr">${top.map(x => `<li><span class="nm">${esc(nameOf(x.symbol))}<small class="note"> ${esc(x.symbol)}</small></span><span class="pfbar"><i class="${x.pnl >= 0 ? "up" : "dn"}" style="width:${(Math.abs(x.pnl) / mx * 50).toFixed(1)}%"></i></span><b class="${cls(x.pnl)}">${lgSgn(x.pnl, cur)}</b></li>`).join("")}</ul>
     ${A.unattributed ? `<p class="note">沒有對應到個股的費用或現金：${lgSgn(A.unattributed, cur)}（和上面各檔加總＝總損益）</p>` : ""}<p class="note">依類型：${A.byType.map(g => `${TY[g.group] || esc(g.group)} ${lgSgn(g.pnl, cur)}`).join("、")}${A.byIndustry.some(g => g.group !== "unknown") ? `；依產業：${A.byIndustry.slice(0, 5).map(g => `${g.group === "unknown" ? "未分類" : esc(g.group)} ${lgSgn(g.pnl, cur)}`).join("、")}` : ""}；股息 ${lgMoney(A.dividends, cur)}、手續費與稅 ${lgSgn(A.feesAndTaxes, cur)}；匯率影響：${esc(A.fxNote)}。</p>`;
 }
 // 圖上的十字線與提示：滑鼠移動、手指點一下或左右拖曳，顯示最近那一天的數值（圖設 touch-action: pan-y，上下滑仍然捲動頁面）
