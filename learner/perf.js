@@ -82,7 +82,7 @@
       const P = L.positions.filter(p => p.currency === cur), issues = [], est = new Set();
       const pend = P.filter(p => p.pending?.length); if (pend.length) { issues.push({ k: "pending", codes: pend.map(p => p.symbol) }); est.add("pending_confirm"); }
       // 另計費用（沒有併進買賣的，例如股息匯費）與其他公司行動的現金：要同時進入現金流與總損益，才能對帳
-      const extra = { fees: 0, other: 0, bySym: new Map(), unattributed: 0 }, addSym = (sym, v) => { if (sym) extra.bySym.set(sym, (extra.bySym.get(sym) || 0) + v); else extra.unattributed += v; };
+      const extra = { fees: 0, other: 0, transferOutPnl: 0, bySym: new Map(), unattributed: 0 }, addSym = (sym, v) => { if (sym) extra.bySym.set(sym, (extra.bySym.get(sym) || 0) + v); else extra.unattributed += v; };
       const priceAt = (sym, d) => books[sym]?.at(d) || null;
       // 持股（每一檔在每一天的股數）：用交易引擎的 history（已處理賣超、拆股、配股、零股），同一天取最後一筆
       const H = new Map(P.map(p => [p.symbol, p.history.map(h => [h.date, h.shares])]));
@@ -96,7 +96,17 @@
         else if (t.type === "dividend") flows.push({ d: t.date, f: -(t.amount - t.tax) });
         else if (t.type === "fraction_cash") flows.push({ d: t.date, f: -(t.amount - t.fee - t.tax) });
         else if (t.type === "transfer_in") { const v = mkt(t.shares); if (v == null) { est.add("transfer_at_cost"); flows.push({ d: t.date, f: t.shares * t.price + t.fee, atCost: true }); } else flows.push({ d: t.date, f: v + t.fee }); if (t.source === "legacy") est.add("legacy_transfer"); }
-        else if (t.type === "transfer_out") { let v = mkt(t.shares); if (v == null && px) { v = t.shares * px.c; est.add("transfer_out_prev_price"); issues.push({ k: "transfer_out_prev_price", d: t.date, priceDate: px.d, code: t.symbol }); } if (v == null) est.add("transfer_out_no_price"); flows.push({ d: t.date, f: -(v ?? 0) }); }
+        else if (t.type === "transfer_out") {
+          const pos = P.find(p => p.symbol === t.symbol), hist = pos?.history || [], hi = hist.findIndex(h => h.id === t.id && h.type === "transfer_out");
+          const transferCost = hi > 0 ? Math.max(0, (hist[hi - 1].costBasis || 0) - (hist[hi].costBasis || 0)) : null;
+          let v = mkt(t.shares);
+          if (v == null && px) { v = t.shares * px.c; est.add("transfer_out_prev_price"); issues.push({ k: "transfer_out_prev_price", d: t.date, priceDate: px.d, code: t.symbol }); }
+          if (v == null && isNum(t.price) && t.price > 0) { v = t.shares * t.price; est.add("transfer_out_user_price"); issues.push({ k: "transfer_out_user_price", d: t.date, code: t.symbol }); }
+          if (v == null && transferCost > EPS) { v = transferCost; est.add("transfer_out_no_price"); issues.push({ k: "transfer_out_no_price", d: t.date, code: t.symbol, fallback: "cost" }); }
+          if (v == null) { est.add("transfer_out_no_price"); issues.push({ k: "transfer_out_no_price", d: t.date, code: t.symbol, fallback: "unavailable" }); }
+          else if (transferCost != null) { const gain = v - transferCost; extra.transferOutPnl += gain; addSym(t.symbol, gain); }
+          flows.push({ d: t.date, f: -(v ?? 0) });
+        }
         else if (t.type === "fee") { flows.push({ d: t.date, f: t.amount }); extra.fees += t.amount; addSym(t.symbol || (t.ref ? refSym.get(t.ref) : null), -t.amount); }
         else if (t.type === "other" && isNum(t.amount)) { flows.push({ d: t.date, f: -t.amount }); extra.other += t.amount; addSym(t.symbol, t.amount); est.add("other_action"); }
       }
@@ -132,16 +142,16 @@
       }
       if (fallbackDays) issues.push({ k: "price_fallback", days: fallbackDays });
       if (staleMax > 7) { issues.push({ k: "stale_prices", maxDays: staleMax }); est.add("stale_prices"); }
-      const val = days.filter(x => x.r != null), first = days.find(x => x.v > EPS), last = days.at(-1);
+      const val = days.filter(x => x.r != null), first = days.find(x => x.v > EPS), last = days.at(-1), missingTransferOutValue = issues.some(x => x.k === "transfer_out_no_price" && x.fallback === "unavailable");
       // 年化用「實際有投資的期間」：從第一天到最後一天還有市值或現金流的日子；出清後價格資料再長，也不會被算成投資滿一年
       const active = [...days].reverse().find(x => x.v > EPS || Math.abs(x.flow) > EPS) || last;
-      const twr = val.length ? days.at(-1).i - 1 : null, spanDays = first && active ? Math.round((dnum(active.d) - dnum(first.d)) / DAY) : 0;
-      const twrAnn = twr != null && spanDays >= 365 ? Math.pow(1 + twr, 365 / spanDays) - 1 : null;
+      const twr = !missingTransferOutValue && val.length ? days.at(-1).i - 1 : null, spanDays = first && active ? Math.round((dnum(active.d) - dnum(first.d)) / DAY) : 0;
+      const twrAnn = !missingTransferOutValue && twr != null && spanDays >= 365 ? Math.pow(1 + twr, 365 / spanDays) - 1 : null;
       // 資金加權（XIRR）：投資人角度，投入為負、拿回為正，最後一天的市值當成拿回
       const xf = flows.filter(f => f.d <= asOf).map(f => ({ d: f.d, cf: -f.f })); if (last && last.v > EPS) xf.push({ d: last.d, cf: last.v });
       // 滿一年：年化 XIRR；未滿一年：只給整段期間的資金加權報酬（不年化，短期年化會誇大到沒有意義）
       const reasons = [...est], xSpan = xf.length > 1 ? Math.max(1, Math.round((dnum(xf[xf.length - 1].d) - dnum(xf[0].d)) / DAY)) : 1;
-      const XA = spanDays >= 365 ? xirrInfo(xf) : null, XP = xirrInfo(xf, xSpan), multi = ["multiple", "ambiguous"].includes(XP.status) || ["multiple", "ambiguous"].includes(XA?.status);
+      const XA = xSpan >= 365 ? xirrInfo(xf) : null, XP = xirrInfo(xf, xSpan), multi = ["multiple", "ambiguous"].includes(XP.status) || ["multiple", "ambiguous"].includes(XA?.status);
       const mwrAnn = XA?.status === "ok" ? XA.roots[0] : null, mwrPeriod = XP.status === "ok" ? XP.roots[0] : null;
       const mwr = multi ? { value: null, period: null, status: "unavailable", reasons: ["multiple_solutions", ...reasons], roots: XP.roots.length > 1 ? XP.roots : XA.roots }
         : mwrAnn == null && mwrPeriod == null ? { value: null, period: null, status: "unavailable", reasons: ["no_solution", ...reasons] }
@@ -155,10 +165,10 @@
       const costNow = P.reduce((s, p) => s + p.costBasis, 0), unreal = mvNow - costNow;
       const inflow = flows.filter(f => f.f > 0).reduce((s, f) => s + f.f, 0), outflow = -flows.filter(f => f.f < 0).reduce((s, f) => s + f.f, 0);
       // 總損益＝已實現＋未實現＋股息（稅後）−另計費用＋其他公司行動現金。買賣的手續費、稅已經在成本與已實現裡，不重複扣
-      const total = (Tt.realizedPnl || 0) + unreal + (Tt.dividends || 0) - extra.fees + extra.other;
-      const pnl = { invested: r2(inflow), returned: r2(outflow), netInvested: r2(inflow - outflow), marketValue: r2(mvNow), costBasis: r2(costNow), unrealized: r2(unreal), realized: r2(Tt.realizedPnl || 0), dividends: r2(Tt.dividends || 0), fees: r2(Tt.fees || 0), taxes: r2(Tt.taxes || 0), extraFees: r2(extra.fees), otherCash: r2(extra.other), total: r2(total), totalPct: inflow > EPS ? total / inflow : null };
+      const total = missingTransferOutValue ? null : (Tt.realizedPnl || 0) + extra.transferOutPnl + unreal + (Tt.dividends || 0) - extra.fees + extra.other;
+      const pnl = { invested: r2(inflow), returned: r2(outflow), netInvested: r2(inflow - outflow), marketValue: r2(mvNow), costBasis: r2(costNow), unrealized: r2(unreal), realized: r2((Tt.realizedPnl || 0) + extra.transferOutPnl), transferOutPnl: r2(extra.transferOutPnl), dividends: r2(Tt.dividends || 0), fees: r2(Tt.fees || 0), taxes: r2(Tt.taxes || 0), extraFees: r2(extra.fees), otherCash: r2(extra.other), total: total == null ? null : r2(total), totalPct: total != null && inflow > EPS ? total / inflow : null };
       // 歸因：每一檔的損益（已實現＋未實現＋股息）與占總損益的比例；依資產類型、產業加總；股息、費稅另外列；匯率還沒有
-      const bySymbol = P.map(p => { const px = priceAt(p.symbol, asOf), mv = p.shares > EPS ? p.shares * (px ? px.c : (lastTradePx(p.symbol, asOf) || 0)) : 0, u = mv - p.costBasis, ex = extra.bySym.get(p.symbol) || 0, t = p.realizedPnl + u + p.dividends + ex, k = cls(p.symbol) || {};
+      const bySymbol = missingTransferOutValue ? [] : P.map(p => { const px = priceAt(p.symbol, asOf), mv = p.shares > EPS ? p.shares * (px ? px.c : (lastTradePx(p.symbol, asOf) || 0)) : 0, u = mv - p.costBasis, ex = extra.bySym.get(p.symbol) || 0, t = p.realizedPnl + u + p.dividends + ex, k = cls(p.symbol) || {};
         return { symbol: p.symbol, assetType: k.assetType || null, industry: k.industry || null, realized: r2(p.realizedPnl), unrealized: r2(u), dividends: r2(p.dividends), extra: r2(ex), fees: r2(p.fees), taxes: r2(p.taxes), pnl: r2(t), share: Math.abs(total) > EPS ? t / total : null }; })
         .sort((a, b) => b.pnl - a.pnl);
       const group = key => { const m = new Map(); for (const x of bySymbol) { const g = x[key] || "unknown"; m.set(g, (m.get(g) || 0) + x.pnl); } return [...m].map(([g, v]) => ({ group: g, pnl: r2(v), share: Math.abs(total) > EPS ? v / total : null })).sort((a, b) => b.pnl - a.pnl); };
@@ -168,10 +178,10 @@
       const series = days.map(x => ({ d: x.d, v: x.v, flow: x.flow, index: +x.i.toFixed(8) }));
       out.byCurrency[cur] = {
         currency: cur, from: first ? first.d : null, to: last ? last.d : null, activeTo: active ? active.d : null, spanDays, asOf, status: pend.length ? "needs_confirm" : reasons.length ? "estimated" : "ok",
-        twr, twrAnn, annualizable: spanDays >= 365, mwr, bench,
-        monthly: periodReturns(val, ym), quarterly: periodReturns(val, yq), yearly: periodReturns(val, yy),
-        maxDrawdown: val.length ? drawdown(days.filter(x => x.v > EPS || x.r != null).map(x => ({ d: x.d, i: x.i }))) : null,
-        pnl, attribution, series, issues, estimated: reasons
+        twr, twrAnn, annualizable: !missingTransferOutValue && spanDays >= 365, mwr, bench,
+        monthly: missingTransferOutValue ? [] : periodReturns(val, ym), quarterly: missingTransferOutValue ? [] : periodReturns(val, yq), yearly: missingTransferOutValue ? [] : periodReturns(val, yy),
+        maxDrawdown: !missingTransferOutValue && val.length ? drawdown(days.filter(x => x.v > EPS || x.r != null).map(x => ({ d: x.d, i: x.i }))) : null,
+        pnl, attribution, series: missingTransferOutValue ? [] : series, issues, estimated: reasons
       };
     }
     if (!Object.keys(out.byCurrency).length) out.status = "empty";
@@ -179,6 +189,6 @@
   }
   const REASON_LABEL = { legacy_transfer: "有從舊庫存轉入的部位（成本是當時記的平均成本，買進日期與金額不一定準）", transfer_at_cost: "股票轉入那天沒有市價，用成本當投入金額", transfer_out_no_price: "股票轉出那天沒有價格", history_truncated: "價格歷史比第一筆交易晚開始，前面一段只能用交易價格估", price_fallback: "有些日子沒有收盤價，用最近一筆交易的價格代替", no_solution: "現金流算不出報酬率（例如只有投入、沒有市值）",
     multiple_solutions: "現金流正負多次反轉，可能有多重解或無法確認唯一解，因此不任選一個", pending_confirm: "有部位合股後的零股還沒結算，股數與成本是暫時的",
-    stale_prices: "有價格停在超過 7 天前（可能停牌或資料缺漏），市值可能不是最新", transfer_out_prev_price: "股票轉出那天沒有收盤價，用之前的收盤價計算", other_action: "有其他公司行動的現金，計入總損益與報酬，請確認性質" };
+    stale_prices: "有價格停在超過 7 天前（可能停牌或資料缺漏），市值可能不是最新", transfer_out_prev_price: "股票轉出那天沒有收盤價，用之前的收盤價計算", transfer_out_user_price: "股票轉出沒有收盤價，改用手動填寫的價格估算", transfer_out_no_price: "股票轉出沒有可用市價，改用轉出成本估算；若連成本也無法確認，績效停止計算", other_action: "有其他公司行動的現金，計入總損益與報酬，請確認性質" };
   root.KLPerf = Object.freeze({ VERSION, buildPerf, xirr, xirrInfo, drawdown, periodReturns, priceBook, REASON_LABEL });
 })(typeof window !== "undefined" ? window : globalThis);
