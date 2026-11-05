@@ -100,7 +100,7 @@
           let v = mkt(t.shares);
           if (v == null && px) { v = t.shares * px.c; est.add("transfer_out_prev_price"); issues.push({ k: "transfer_out_prev_price", d: t.date, priceDate: px.d, code: t.symbol }); }
           if (v == null && isNum(t.price) && t.price > 0) { v = t.shares * t.price; est.add("transfer_out_user_price"); issues.push({ k: "transfer_out_user_price", d: t.date, code: t.symbol }); }
-          if (v == null && transferCost != null) { v = transferCost; est.add("transfer_out_no_price"); issues.push({ k: "transfer_out_no_price", d: t.date, code: t.symbol, fallback: "cost" }); }
+          if (v == null && transferCost > EPS) { v = transferCost; est.add("transfer_out_no_price"); issues.push({ k: "transfer_out_no_price", d: t.date, code: t.symbol, fallback: "cost" }); }
           if (v == null) { est.add("transfer_out_no_price"); issues.push({ k: "transfer_out_no_price", d: t.date, code: t.symbol, fallback: "unavailable" }); }
           else if (transferCost != null) { const gain = v - transferCost; extra.transferOutPnl += gain; addSym(t.symbol, gain); }
           flows.push({ d: t.date, f: -(v ?? 0) });
