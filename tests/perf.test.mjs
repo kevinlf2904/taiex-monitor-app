@@ -191,6 +191,15 @@ test("P2 補強：轉出完全沒有市價時以成本估算並標記，不得�
   assert.ok(C.issues.some(x => x.k === "transfer_out_no_price" && x.fallback === "cost"));
 });
 
+test("轉出零成本部位又沒有市價時，不可把零成本當成零元市值", () => {
+  const T = [tw({ id: "s", date: "2026-01-05", type: "stock_dividend", shares: 10, price: 0 })];
+  const C = K.buildPerf(T, { prices: {} }).byCurrency.TWD;
+  assert.equal(C.pnl.total, null);
+  assert.equal(C.mwr.status, "unavailable");
+  assert.equal(C.twr, null);
+  assert.ok(C.issues.some(x => x.k === "transfer_out_no_price" && x.fallback === "unavailable"));
+});
+
 test("P2：轉出那天沒有收盤價、用之前的收盤 → 標估算並記下用的是哪天的價格；其他公司行動現金計入總損益並標示", () => {
   const T = [tw({ date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ date: "2026-01-08", type: "transfer_out", shares: 5 }), tw({ date: "2026-01-09", type: "other", amount: 50 })];
   const C = K.buildPerf(T, { prices: { 2330: S([["2026-01-05", 100], ["2026-01-06", 102], ["2026-01-09", 104]]) } }).byCurrency.TWD;
