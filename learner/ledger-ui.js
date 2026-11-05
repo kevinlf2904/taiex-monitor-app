@@ -32,8 +32,10 @@ function renderLedger() {
   const L = (W.lg ||= { open: null, form: null, prev: null, msg: "" });
   $("#wl").innerHTML = "";
   const S = lgLoad();
+  if (L.view === "margin") return renderMargin(); // 融資不需要交易紀錄
   if (!S) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
   if (L.view === "perf") return renderPerf(S);
+  if (L.view === "margin") return renderMargin();
   if (L.view === "alloc") return renderAlloc(S);
   const quotes = new Map([...W.quotes].map(([c, q]) => [c, q?.price]).filter(([, p]) => p > 0));
   const R = KLLedger.buildLedger(S.transactions, { method: S.method, today: lgToday(), prices: quotes });
@@ -119,7 +121,11 @@ document.addEventListener("click", e => {
   else if (a === "close") L.form = null;
   else if (a === "view") { L.view = b.dataset.v; L.form = null; }
   else if (a === "range") L.pfRange = b.dataset.v;
-  else if (a === "pfreload") { W.lgPx = null; W.lgAl = null; }
+  else if (a === "pfreload") { W.lgPx = null; W.lgAl = null; W.lgMg = null; }
+  else if (a === "mgadd") L.mgForm = { v: {} };
+  else if (a === "mgclose") L.mgForm = null;
+  else if (a === "mgedit") { const A = mgLoad().accounts.find(x => x.id === b.dataset.id); if (A) L.mgForm = { id: A.id, v: A }; }
+  else if (a === "mgdel") { const S2 = mgLoad(), A = S2.accounts.find(x => x.id === b.dataset.id); if (A && confirm(`刪除「${A.name || "帳戶"}」的融資資料？（只刪這個試算，不影響券商）`)) { const r = mgSave({ ...S2, accounts: S2.accounts.filter(x => x.id !== A.id) }); L.msg = r.ok ? "已刪除。" : "刪除失敗：資料檢查沒有通過。"; } }
   else if (a === "pos") L.open = L.open === b.dataset.c ? null : b.dataset.c;
   else if (a === "edit") { const t = lgLoad()?.transactions.find(x => x.id === b.dataset.id); if (t) L.form = { id: t.id, orig: t, type: t.type, v: { ...t } }; }
   else if (a === "method") { const S = lgLoad(); if (S && confirm(`整本帳改用「${S.method === "fifo" ? "加權平均成本" : "先進先出（FIFO）"}」重新計算？已實現損益會跟著改變。`)) { const v = lgSave({ ...S, method: S.method === "fifo" ? "avg" : "fifo" }); L.msg = v.ok ? "已改用新的成本算法重新計算。" : "改不了：資料檢查沒有通過。"; } }
@@ -135,6 +141,7 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => { if (e.target.id !== "lgType" || !W.lg?.form) return; const form = e.target.form, fd = new FormData(form), v = {}; for (const [k, x] of fd) v[k] = x; W.lg.form = { ...W.lg.form, type: e.target.value, v, err: null }; renderList(); });
 document.addEventListener("submit", e => {
+  if (e.target.id === "mgForm") return mgSubmit(e);
   if (e.target.id !== "lgForm") return; e.preventDefault();
   const L = W.lg, F = L.form, S = lgLoad(); if (!F || !S) return;
   const tx = lgFromForm(e.target, F), list = F.id ? S.transactions.map(t => (t.id === F.id ? tx : t)) : [...S.transactions, tx];
@@ -153,7 +160,7 @@ document.addEventListener("submit", e => {
    價格：每一檔 /api/kline 原始收盤（最多 24 個月；股息已經是現金流，不用還原價）；比較基準：台幣＝加權指數（價格指數，不含股息）、美元＝SPY 還原價（含息）。
    畫面：重點數字、淨值走勢 vs 比較基準（同一起點＝100）、回撤（另一張圖，不用雙軸）、月報酬表、歸因排行、估算原因與計算口徑。
    日期範圍：3 個月／6 個月／1 年／全部；圖上滑鼠或手指移動顯示當天數值。 */
-const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="交易紀錄、績效或配置">${[["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "tx") === k}">${t}</button>`).join("")}</div>`;
+const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="交易紀錄、績效、配置或融資">${[["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"], ["margin", "融資"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "tx") === k}">${t}</button>`).join("")}</div>`;
 // 績效（perf.js）與匯率合併（fx.js）用到時才載入，照順序（fx.js 要用到 perf.js）
 function lgPerfLib() {
   if (typeof KLPerf !== "undefined" && typeof KLFx !== "undefined") return Promise.resolve();
@@ -310,6 +317,98 @@ document.addEventListener("pointerleave", e => { const box = e.target.closest?.(
   document.head.appendChild(st);
 })();
 
+/* ================= 融資與擔保品（投資組合第 7 階段）：margin.js 算，這裡畫 =================
+   存檔：kline:pf:margin:v1 → { v: 1, accounts: [...] }（和交易紀錄分開；寫入前跑 KLMargin.validateStore，不通過不寫）。
+   結果一律是「試算」：每個帳戶標資料來源（券商資料／自己填的／系統估算），門檻寫出來源與日期，畫面寫明不是券商正式追繳通知或可借額度。 */
+const MG_KEY = "pf:margin:v1", mgLoad = () => { const s = store.get(MG_KEY, null); return s && s.v === 1 && Array.isArray(s.accounts) ? s : { v: 1, accounts: [] }; };
+function mgSave(s) { const v = KLMargin.validateStore(s); if (v.ok) store.set(MG_KEY, s); return v; }
+function mgLib() {
+  if (typeof KLMargin !== "undefined") return Promise.resolve();
+  return (W.lgMgP ||= new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "margin.js"; sc.onload = ok; sc.onerror = () => { W.lgMgP = null; no(new Error("margin.js 載入失敗")); }; document.body.appendChild(sc); }));
+}
+function mgPrices(syms) {
+  const key = syms.slice().sort().join(","), X = W.lgMg; if (!syms.length) return { busy: false, px: {} };
+  if (X && X.key === key && (X.busy || Date.now() - X.at < 300000)) return X;
+  W.lgMg = { key, busy: true, at: Date.now() };
+  getJ(`/api/quote?codes=${syms.map(encodeURIComponent).join(",")}`).catch(() => null).then(q => {
+    const px = {}; for (const x of q?.quotes || []) if (x && x.price > 0) px[String(x.code).toUpperCase()] = { price: x.price, date: x.date || null, name: x.name || null };
+    W.lgMg = { key, busy: false, at: Date.now(), px }; if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "margin") renderList();
+  });
+  return W.lgMg;
+}
+const MG_TYPE = { margin: "融資（證券金融）", pledge: "不限用途借貸（股票質押）", other: "其他借款" }, MG_STATE = { ok: "正常", near: "接近追繳線", call: "低於追繳線", liquidate: "低於處分線" };
+function renderMargin() {
+  const head = lgViewSeg(), L = W.lg;
+  if (typeof KLMargin === "undefined") { $("#lx").innerHTML = head + skel("載入融資模組…"); mgLib().then(() => renderList(), e => { $("#lx").innerHTML = head + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; }); return; }
+  const S = mgLoad(), syms = [...new Set(S.accounts.flatMap(a => (a.collateral || []).map(c => String(c.symbol).toUpperCase())))], X = W.off ? { busy: false, px: {} } : mgPrices(syms);
+  const warn = `<p class="note lgwarn mgnote">⚠︎ 這裡都是<b>試算</b>：用你填的借款、門檻與目前報價計算，不是券商的正式追繳通知或可借額度；實際以券商通知與合約為準。</p>`;
+  const form = L.mgForm ? mgFormHtml(L.mgForm) : "";
+  if (X.busy) return ($("#lx").innerHTML = head + skel("載入擔保品報價…"));
+  const cards = S.accounts.map(a => mgCard(KLMargin.analyze(a, X.px, lgToday()), a)).join("");
+  $("#lx").innerHTML = head + `<div class="lgbar"><button type="button" class="btn sm primary" data-lg="mgadd">＋ 新增融資／借款帳戶</button><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button></div>`
+    + (L.msg ? `<p class="note lgmsg" role="status">${esc(L.msg)}</p>` : "") + warn + form
+    + (cards || `<p class="note" style="padding:12px">還沒有融資或借款資料。按「新增」填入借款金額、擔保品與券商的門檻，就能看維持率與下跌時的風險。</p>`);
+}
+function mgCard(R, a) {
+  const pc = v => (v == null ? "—" : (v * 100).toFixed(1) + "%"), money = v => lgMoney(v, R.currency), tile = (k, v, sub = "", c = "") => `<div class="pftile"><span>${k}</span><b class="${c}">${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+  const st = R.state ? `<span class="pfbadge mg-${R.state}">${MG_STATE[R.state]}</span>` : "", src = `<span class="pfbadge">${KLMargin.SOURCE_LABEL[R.source]}</span>`;
+  const done = R.status === "estimated" ? `<span class="pfbadge">含估算</span>` : R.status === "incomplete" ? `<span class="pfbadge mg-call">資料不完整</span>` : "";
+  const PS = { quote: "報價", user: "你填的價格" };
+  const colTable = R.collateral.length ? `<h5 class="pfh">擔保品<small class="note">（價格、日期、來源）</small></h5><table class="altable mgtable mgcol"><thead><tr><th>代號</th><th>股數</th><th>價格</th><th>價格日期</th><th>來源</th><th>市值</th><th>占比</th></tr></thead><tbody>
+    ${R.collateral.map(c => `<tr><td>${esc(nameOf(c.symbol))}<small class="note"> ${esc(c.symbol)}</small></td><td>${lgN(c.shares)}</td><td>${c.price == null ? "—" : lgN(c.price)}</td><td>${esc(c.priceDate || "—")}</td><td>${c.priceSource ? PS[c.priceSource] : "沒有價格，沒算進市值"}</td><td>${c.value == null ? "—" : money(c.value)}</td><td>${pc(c.weight)}</td></tr>`).join("")}
+    ${R.cashCollateral ? `<tr><td>現金擔保</td><td></td><td></td><td></td><td>你填的</td><td>${money(R.cashCollateral)}</td><td>${pc(R.collateralValue ? R.cashCollateral / R.collateralValue : null)}</td></tr>` : ""}</tbody></table>` : "";
+  const iss = R.issues.map(x => esc(KLMargin.ISSUE_LABEL[x.k] || x.k) + (x.codes ? `：${x.codes.map(esc).join("、")}` : "")).join("；");
+  const needTxt = n => (n ? `補現金 ${money(n.cash)} 或還款 ${money(n.repay)}` : "—");
+  return `<section class="pfcard mgcard"><h4>${esc(R.name || "借款帳戶")}<small class="note"> ${MG_TYPE[R.type]}</small>${src}${st}${done}</h4>
+    <div class="pftiles">${[tile("維持率", pc(R.ratio), R.rules.call ? `追繳線 ${pc(R.rules.call)}${R.rules.liquidate ? `・處分線 ${pc(R.rules.liquidate)}` : ""}` : "沒有設定追繳線"),
+      tile("借款", money(R.loan), R.interest != null ? `已計利息約 ${money(R.interest)}（${R.days} 天）` : ""), tile("擔保品市值", money(R.collateralValue), R.cashCollateral ? `含現金 ${money(R.cashCollateral)}` : ""),
+      tile("再跌多少會追繳", R.dropToCall == null ? "—" : R.dropToCall <= 0 ? "已低於追繳線" : pc(R.dropToCall), R.dropToLiquidate != null ? `跌 ${pc(R.dropToLiquidate)} 會被處分` : ""),
+      tile("可用額度（試算）", R.available == null ? "—" : money(R.available), R.rules.maxLtv ? `成數 ${pc(R.rules.maxLtv)}` : "沒有設定成數")].join("")}</div>
+    ${R.need ? `<p class="note lgwarn">⚠︎ 目前低於追繳線：試算要${needTxt(R.need)}才回到 ${pc(R.rules.topUpTo || R.rules.call)}。</p>` : ""}${iss ? `<p class="note lgwarn">⚠︎ ${iss}。</p>` : ""}
+    ${colTable}
+    <h5 class="pfh">壓力測試<small class="note">（股票擔保品同時下跌，現金不跌）</small></h5>
+    <table class="altable mgtable"><thead><tr><th>情境</th><th>擔保品市值</th><th>維持率</th><th>狀態</th><th>要補</th></tr></thead><tbody>
+      ${R.stress.map(x => `<tr><td>全部跌 ${(-x.shock * 100).toFixed(0)}%</td><td>${money(x.value)}</td><td>${pc(x.ratio)}</td><td>${x.state ? MG_STATE[x.state] : "—"}</td><td>${needTxt(x.need)}</td></tr>`).join("")}
+      ${R.singleLimitDown.slice(0, 3).map(x => `<tr><td>${esc(nameOf(x.symbol))} 連三根跌停（約 −27%）</td><td>${money(x.value)}</td><td>${pc(x.ratio)}</td><td>${x.state ? MG_STATE[x.state] : "—"}</td><td>${needTxt(x.need)}</td></tr>`).join("")}</tbody></table>
+    ${R.riskiest ? `<p class="note">風險最大的擔保品：${esc(nameOf(R.riskiest.symbol))}（占擔保品 ${pc(R.riskiest.weight)}）。</p>` : ""}
+    <p class="note">門檻來源：${esc(R.rules.source || "未填")}${R.rules.asOf ? `（${esc(R.rules.asOf)}）` : ""}${R.rules.isDefault ? "；<b>目前是預設值，請改成你的券商條件</b>" : ""}。資料更新：${esc(a.updatedAt || "—")}。</p>
+    <div class="lgbar"><button type="button" class="btn sm" data-lg="mgedit" data-id="${esc(a.id)}">修改</button><button type="button" class="btn sm" data-lg="mgdel" data-id="${esc(a.id)}">刪除</button></div></section>`;
+}
+function mgFormHtml(F) {
+  const v = F.v || {}, r = v.rules || {}, pc = x => (x == null ? "" : +(x * 100).toFixed(2));
+  const col = (v.collateral || []).map(c => `${c.symbol} ${c.shares}${c.price ? " " + c.price : ""}`).join("\n");
+  const inp = (n, l, val, extra = "") => `<label>${l}<input name="${n}" value="${esc(val ?? "")}" ${extra}></label>`;
+  return `<form class="lgform" id="mgForm"><h4>${F.id ? "修改借款帳戶" : "新增借款帳戶"}</h4>
+    ${inp("name", "名稱", v.name || "", 'maxlength="30"')}
+    <label>類型<select name="type">${Object.entries(MG_TYPE).map(([k, t]) => `<option value="${k}" ${v.type === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    <label>資料來源<select name="source">${Object.entries({ broker: "券商資料（對帳單、App）", user: "自己估的", estimate: "系統估算" }).map(([k, t]) => `<option value="${k}" ${(v.source || "user") === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    ${inp("loan", "借款（融資）金額", v.loan, 'inputmode="decimal"')}${inp("rate", "年利率 %", pc(v.rate), 'inputmode="decimal"')}${inp("startDate", "開始日", v.startDate || "", 'type="date"')}${inp("termDays", "期限（天，可空白）", v.termDays, 'inputmode="numeric"')}
+    ${inp("call", "追繳線 %（空白＝預設）", pc(r.call), 'inputmode="decimal"')}${inp("topUpTo", "補足到 %", pc(r.topUpTo), 'inputmode="decimal"')}${inp("liquidate", "處分線 %（可空白）", pc(r.liquidate), 'inputmode="decimal"')}${inp("maxLtv", "最高成數 %（可空白）", pc(r.maxLtv), 'inputmode="decimal"')}
+    ${inp("ruleSource", "門檻來源（例如券商名稱、合約）", r.source || "", 'maxlength="60"')}${inp("cashCollateral", "現金擔保（可空白）", v.cashCollateral, 'inputmode="decimal"')}
+    <label class="wide">擔保品（一行一檔：代號 股數 [價格]；沒有報價時才用你填的價格）<textarea name="collateral" rows="4">${esc(col)}</textarea></label>
+    ${F.err ? `<ul class="lgiss">${F.err.map(e => `<li class="lgwarn">✕ ${esc(e)}</li>`).join("")}</ul>` : ""}
+    <div class="lgbar"><button type="submit" class="btn primary">${F.id ? "儲存修改" : "加入"}</button><button type="button" class="btn" data-lg="mgclose">取消</button></div></form>`;
+}
+const MG_ERR = { no_collateral: "至少要有一檔股票擔保品或現金擔保", invalid_loan: "借款金額要大於 0", invalid_rate: "年利率要在 0～100% 之間", topup_below_call: "「補足到」不能低於追繳線", invalid_collateral: "擔保品格式：代號 股數 [價格]，股數要大於 0", duplicate_or_missing_id: "帳戶編號重複" };
+function mgSubmit(e) {
+  e.preventDefault(); const L = W.lg, F = L.mgForm, fd = new FormData(e.target), n = k => { const t = String(fd.get(k) ?? "").trim().replace(/,/g, ""); return t === "" ? null : Number(t); }, pct = k => (n(k) == null ? null : n(k) / 100);
+  const lines = String(fd.get("collateral") || "").split(/\n/).map(l => l.trim()).filter(Boolean);
+  const collateral = lines.map(l => { const [c, sh, px] = l.split(/[\s,，]+/); return { symbol: String(c || "").toUpperCase(), shares: Number(sh), ...(px ? { price: Number(px) } : {}) }; });
+  const rules = { call: pct("call"), topUpTo: pct("topUpTo"), liquidate: pct("liquidate"), maxLtv: pct("maxLtv"), source: String(fd.get("ruleSource") || "").trim() || null, asOf: lgToday() };
+  for (const k of ["call", "topUpTo", "liquidate", "maxLtv"]) if (rules[k] == null) delete rules[k];
+  const acct = { id: F.id || (crypto.randomUUID ? crypto.randomUUID() : "mg-" + Date.now()), name: String(fd.get("name") || "").trim() || "借款帳戶", type: fd.get("type"), source: fd.get("source"), currency: "TWD",
+    loan: n("loan"), rate: pct("rate"), startDate: fd.get("startDate") || null, termDays: n("termDays"), cashCollateral: n("cashCollateral"), rules: Object.keys(rules).some(k => !["source", "asOf"].includes(k)) || rules.source ? rules : undefined, collateral, updatedAt: lgToday() };
+  const S = mgLoad(), next = { ...S, accounts: F.id ? S.accounts.map(x => (x.id === F.id ? acct : x)) : [...S.accounts, acct] }, v = mgSave(next);
+  if (!v.ok) { L.mgForm = { ...F, v: acct, err: [...new Set(v.errors.map(x => MG_ERR[x.code] || x.code))] }; return renderList(); }
+  L.mgForm = null; L.msg = F.id ? "已儲存。" : "已加入。"; W.lgMg = null; renderList();
+}
+(function () {
+  if (document.getElementById("mgcss")) return; const st = document.createElement("style"); st.id = "mgcss";
+  st.textContent = `.mgnote{margin:4px 12px}.mgtable td:first-child{text-align:left}.mgtable{min-width:520px}.mgtable th,.mgtable td{white-space:nowrap}.mgcard .altable{display:block;overflow-x:auto}.pfbadge.mg-call,.pfbadge.mg-liquidate{background:color-mix(in srgb,var(--s1,#d98a0b) 20%,transparent)}
+.altable{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}.altable th,.altable td{padding:3px 4px;text-align:right;border-bottom:1px solid var(--line)}.altable th:first-child{text-align:left}
+#mgForm textarea{width:100%;min-width:0;font:inherit}`;
+  document.head.appendChild(st);
+})();
 /* ================= 配置（投資組合第 6 階段）：alloc.js 算，這裡畫 =================
    持股：交易紀錄裡還持有的部位；市值用 /api/quote 現價，沒有現價用成本（標估算）；美元用 TWD=X 最新收盤換成台幣；有記入出金時現金也算進總資產。
    ETF 穿透：每一檔 ETF 用 /api/etf 的全部持股與產業分布（各自有資料日期）。產業：股票清單（上市櫃產業別）；美股沒有產業資料就是「未分類」。 */
