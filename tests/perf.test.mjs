@@ -238,3 +238,9 @@ test("P2-1：對帳式「已實現＋未實現＋股息−另計費用＋其他�
   assert.ok(near(P.realized + P.unrealized + P.dividends - P.extraFees + P.otherCash + P.transferOutPnl, P.total));
   assert.ok(near(C.attribution.bySymbol.reduce((s, x) => s + x.pnl, 0) + C.attribution.unattributed, P.total));
 });
+
+test("未滿一年、唯一解證明不了：buildPerf 不會出錯，資金加權報酬標無法計算", () => {
+  const T = [tw({ id: "a", date: "2026-03-02", type: "buy", shares: 1, price: 100 }), tw({ id: "b", date: "2026-03-03", type: "sell", shares: 1, price: 230 }), tw({ id: "c", date: "2026-03-04", type: "buy", shares: 1, price: 140 })];
+  const C = K.buildPerf(T, { prices: { 2330: S([["2026-03-02", 100], ["2026-03-03", 230], ["2026-03-04", 140], ["2026-03-05", 5]]) } }).byCurrency.TWD;
+  assert.equal(C.mwr.status, "unavailable"); assert.equal(C.mwr.value, null); assert.equal(C.mwr.period, null); assert.ok(C.mwr.reasons.includes("multiple_solutions") || C.mwr.reasons.includes("no_solution"));
+});

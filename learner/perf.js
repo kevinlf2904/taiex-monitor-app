@@ -154,7 +154,7 @@
       const reasons = [...est], xSpan = xf.length > 1 ? Math.max(1, Math.round((dnum(xf[xf.length - 1].d) - dnum(xf[0].d)) / DAY)) : 1;
       const XA = xSpan >= 365 ? xirrInfo(xf) : null, XP = xirrInfo(xf, xSpan), multi = ["multiple", "ambiguous"].includes(XP.status) || ["multiple", "ambiguous"].includes(XA?.status);
       const mwrAnn = XA?.status === "ok" ? XA.roots[0] : null, mwrPeriod = XP.status === "ok" ? XP.roots[0] : null;
-      const mwr = multi ? { value: null, period: null, status: "unavailable", reasons: ["multiple_solutions", ...reasons], roots: XP.roots.length > 1 ? XP.roots : XA.roots }
+      const mwr = multi ? { value: null, period: null, status: "unavailable", reasons: ["multiple_solutions", ...reasons], roots: XP.roots.length > 1 ? XP.roots : (XA?.roots || XP.roots) } // 未滿一年時沒有年化結果（XA 是 null）
         : mwrAnn == null && mwrPeriod == null ? { value: null, period: null, status: "unavailable", reasons: ["no_solution", ...reasons] }
         : { value: mwrAnn, period: mwrPeriod, annualized: mwrAnn != null, status: reasons.length ? "estimated" : "ok", reasons };
       // 比較基準：同一段期間
