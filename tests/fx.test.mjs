@@ -65,3 +65,13 @@ test("美股部位資料不足（零成本轉出又沒有價格）→ 合併也�
   const R = P.buildPerf([us({ id: "s", date: "2026-01-05", type: "stock_dividend", shares: 1 }), us({ id: "o", date: "2026-01-06", type: "transfer_out", shares: 1 })], { prices: {} });
   const C = X.combine(R, S([["2026-01-05", 30]])); assert.equal(C.status, "unavailable"); assert.deepEqual([...C.reasons], ["sleeve_unavailable"]);
 });
+
+test("「÷ 累計投入」的分母：所有投入（買進）換成台幣的加總，不扣賣出；部分賣出、出清再買、反覆投入都照這個定義", () => {
+  const px = { NVDA: S([["2026-01-05", 100], ["2026-01-06", 120], ["2026-01-07", 110], ["2026-01-08", 130]]) }, fx = S([["2026-01-05", 30], ["2026-01-06", 30], ["2026-01-07", 30], ["2026-01-08", 30]]);
+  // 部分賣出：買 10 @100（投入 30000）、賣 5 @120（拿回 18000）→ 分母仍是 30000
+  let R = X.combine(P.buildPerf([us({ id: "a", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), us({ id: "b", date: "2026-01-06", type: "sell", shares: 5, price: 120 })], { prices: px }), fx);
+  assert.equal(R.pnl.invested, 30000); assert.ok(near(R.pnl.totalPct, R.pnl.total / 30000)); assert.equal(R.pnl.total, 5 * 20 * 30 + 5 * 30 * 30);
+  // 出清再買：買 10 @100、賣 10 @120、再買 10 @110 → 分母＝30000＋33000
+  R = X.combine(P.buildPerf([us({ id: "a", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), us({ id: "b", date: "2026-01-06", type: "sell", shares: 10, price: 120 }), us({ id: "c", date: "2026-01-07", type: "buy", shares: 10, price: 110 })], { prices: px }), fx);
+  assert.equal(R.pnl.invested, 63000); assert.equal(R.pnl.total, 10 * 20 * 30 + 10 * 20 * 30); assert.ok(near(R.pnl.totalPct, 12000 / 63000));
+});
