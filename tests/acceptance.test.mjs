@@ -80,9 +80,30 @@ test("交叉驗證：時間加權報酬（TWR）、資金加權報酬（XIRR）�
   // 獨立 XIRR（年化，二分法）：買進是付出、賣出是拿回、最後一天的市值當成拿回
   const cf = T.map(t => ({ t: DN(t.date), v: (t.type === "buy" ? -1 : 1) * t.shares * t.price })); cf.push({ t: DN(D[D.length - 1]), v: sh * at(D[D.length - 1]) });
   const npv = x => cf.reduce((s, c) => s + c.v / Math.pow(1 + x, (c.t - cf[0].t) / 365), 0);
-  let lo = -0.99, hi = 10; for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; (npv(lo) * npv(m) <= 0) ? (hi = m) : (lo = m); }
-  assert.equal(R.mwr.status === "ok" || R.mwr.status === "estimated", true, "XIRR 有唯一解：" + R.mwr.status);
-  near(R.mwr.value, (lo + hi) / 2, 1e-6, "XIRR（年化）");
+  // 唯一性：在 −99%～+1000% 之間用 4,000 個點（對數間隔）掃 NPV 的正負號，只能變號一次；範圍外兩端也確認沒有根（NPV 已經同號且遠離 0）
+  const grid = Array.from({ length: 4001 }, (_, i) => -0.99 + (Math.pow(10, (i / 4000) * Math.log10(11.99)) - 1)), sg = grid.map(x => Math.sign(npv(x)));
+  const flips = sg.reduce((n, s, i) => n + (i && s && sg[i - 1] && s !== sg[i - 1] ? 1 : 0), 0);
+  assert.equal(flips, 1, "NPV 在搜尋範圍內只變號一次（唯一解）：" + flips);
+  let lo = -0.99, hi = 10; assert.ok(npv(lo) * npv(hi) < 0, "二分法的兩端 NPV 異號（根確實夾在中間）");
+  for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; (npv(lo) * npv(m) <= 0) ? (hi = m) : (lo = m); }
+  const root = (lo + hi) / 2, scale = cf.reduce((s, c) => s + Math.abs(c.v), 0);
+  assert.ok(Math.abs(npv(root)) / scale < 1e-9, "根代回去 NPV 接近 0（相對誤差 < 1e-9）：" + npv(root));
+  assert.ok(R.mwr.status === "ok" || R.mwr.status === "estimated", "程式也判定有唯一解：" + R.mwr.status);
+  near(R.mwr.value, root, 1e-6, "XIRR（年化）");
+});
+
+test("交叉驗證：XIRR 多解／無解時，獨立掃描和程式的判斷一致，程式不給數字", () => {
+  const scan = cf => { const t0 = Date.parse(cf[0].d), npv = x => cf.reduce((s, c) => s + c.cf / Math.pow(1 + x, (Date.parse(c.d) - t0) / 864e5 / 365), 0);
+    const g = Array.from({ length: 4001 }, (_, i) => -0.99 + (Math.pow(10, (i / 4000) * Math.log10(11.99)) - 1)), sg = g.map(x => Math.sign(npv(x)));
+    const roots = []; for (let i = 1; i < g.length; i++) if (sg[i] && sg[i - 1] && sg[i] !== sg[i - 1]) roots.push((g[i] + g[i - 1]) / 2); return roots; };
+  // 兩個解：−100、+230、−132（相隔一年）→ (1+r) = 1.1 或 1.2
+  const M = [["2021-01-01", -100], ["2022-01-01", 230], ["2023-01-01", -132]].map(([d, cf]) => ({ d, cf }));
+  const r = scan(M); assert.equal(r.length, 2, "獨立掃描找到兩個根"); near(r[0], 0.1, 0.005, "根 1"); near(r[1], 0.2, 0.005, "根 2");
+  const X = PF.xirrInfo(M); assert.notEqual(X.status, "ok", "程式不當成唯一解"); assert.equal(PF.xirr(M), null, "多解時不給任何一個數字");
+  // 無解：全部是付出（沒有拿回）→ NPV 不會變號
+  const N = [["2021-01-01", -100], ["2022-01-01", -50]].map(([d, cf]) => ({ d, cf }));
+  assert.equal(scan(N).length, 0, "獨立掃描沒有根"); assert.notEqual(PF.xirrInfo(N).status, "ok"); assert.equal(PF.xirr(N), null);
+  // 多於兩個解的情況（10%、20%、30%）見 tests/perf.test.mjs「P1-3」
 });
 
 test("交叉驗證：除息當天，股息當成拿回的現金，TWR 不因除息掉價而變成虧損", () => {
