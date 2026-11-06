@@ -27,6 +27,11 @@ for (const width of [768, 834]) test(`平板 ${width}：各分頁不溢出、按
     assert.deepEqual(await overlaps(p), [], `${width} ${v}：按鈕不重疊`);
     const small = await p.evaluate(() => [...document.querySelectorAll("#lx button, #lx [role=button]")].filter(e => e.offsetParent && e.getBoundingClientRect().height < 43.5).map(e => e.innerText.trim().slice(0, 10)));
     assert.deepEqual(small, [], `${width} ${v}：觸控裝置上可以點的東西至少 44px 高`);
+    if (v === "tx") {
+      assert.ok(await p.evaluate(() => [...document.querySelectorAll("#lx .lgtx .lgd")].every(e => e.getBoundingClientRect().height < parseFloat(getComputedStyle(e).lineHeight || "20") * 1.5 + 2)), `${width}：交易清單的日期不折成兩行`);
+      const note = await p.evaluate(() => $("#note")?.innerText || document.body.innerText);
+      assert.match(note, /投資組合的資料（交易紀錄、融資帳戶）只記在這個瀏覽器/); assert.doesNotMatch(note, /要在「編輯庫存」填買進日期/, "交易紀錄頁不顯示舊庫存的說明");
+    }
   }
   await ctx.close(); assert.deepEqual(errs, []);
 });

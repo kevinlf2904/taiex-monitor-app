@@ -736,8 +736,9 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .lglist { list-style: none; margin: 0; padding: 0; }
 .lgprow { display: grid; grid-template-columns: minmax(0, 1.3fr) 1fr 1.2fr 1fr; gap: 8px; width: 100%; text-align: left; }
 .lgprow > span { min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
-.lgtx { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) minmax(0, 1fr) auto; gap: 4px 8px; align-items: start; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.lgtx { display: grid; grid-template-columns: max-content minmax(0, 1fr) minmax(0, 1fr) auto; gap: 4px 8px; align-items: start; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .lgtx > span { min-width: 0; overflow-wrap: anywhere; }
+.lgtx > .lgd { white-space: nowrap; overflow-wrap: normal; font-variant-numeric: tabular-nums; } /* 日期不折成兩行 */
 .lgtx small { display: block; }
 .lgwarn { color: var(--s1, #d9822b); }
 .lgtx.err { background: color-mix(in srgb, var(--s1, #d9822b) 10%, transparent); }
@@ -749,7 +750,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .lgform label.chk { flex-direction: row; align-items: center; }
 .lgform input, .lgform select { min-width: 0; width: 100%; }
 .lgform label.chk input { width: auto; }
-@media (max-width: 560px) { .lgtx { grid-template-columns: 5.6em minmax(0, 1fr); } .lgtx > span:nth-child(3) { grid-column: 2; } .lgact { grid-column: 1 / -1; justify-content: flex-end; } .lgprow { grid-template-columns: minmax(0, 1fr) 1fr; } }
+@media (max-width: 560px) { .lgtx { grid-template-columns: max-content minmax(0, 1fr); } .lgtx > span:nth-child(3) { grid-column: 2; } .lgact { grid-column: 1 / -1; justify-content: flex-end; } .lgprow { grid-template-columns: minmax(0, 1fr) 1fr; } }
 .hdemo { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 8px 12px; padding: 8px 12px; border-radius: 6px; background: var(--accent-soft, var(--surface-2)); font-size: 13px; }
 .hdq { margin: 8px 12px; padding: 8px 12px; border: 1px solid var(--warn, var(--line)); border-radius: 8px; font-size: 13px; }
 .hdq summary { cursor: pointer; color: var(--warn, var(--ink)); font-weight: 600; }
@@ -2128,7 +2129,7 @@ function renderList0() {
     const tw = W.holdMkt === "tw";
     if (tw) loadHoldDivs();
     if (W.holdView === "ana") renderHoldAna(); else if (W.holdView === "risk") renderHoldRisk(); else if (W.holdView === "macro") lazyRun("earn", () => renderHoldMacro()); else if (W.holdView === "tx") lazyRun("ledger", () => renderLedger()); else renderHold();
-    note = W.holdLg && W.holdView !== "tx" ? `持股來自交易紀錄：成本含交易紀錄裡實際的買進手續費與稅${tw && W.hfee ? `；賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，最低 20 元）與證交稅照設定估算` : ""}；${W.hdiv ? "含交易紀錄裡記的已領股息" : "不含股息"}。舊庫存保留沒動。資料只記在這個瀏覽器。` : `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
+    note = W.holdView === "tx" ? `投資組合的資料（交易紀錄、融資帳戶）只記在這個瀏覽器，不會上傳；換手機或清除瀏覽資料前，請到「工具 → 備份同步」匯出備份檔。` : W.holdLg ? `持股來自交易紀錄：成本含交易紀錄裡實際的買進手續費與稅${tw && W.hfee ? `；賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，最低 20 元）與證交稅照設定估算` : ""}；${W.hdiv ? "含交易紀錄裡記的已領股息" : "不含股息"}。舊庫存保留沒動。資料只記在這個瀏覽器。` : `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
   } else if (W.lt === "screen") {
     $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? liveTag(W.scr, "收盤後資料") : "選股"}・僅供參考，不是買賣建議</span>${rfBtn("scrRefresh")}`;
     renderScreen(); note = W.scr?.source ? `資料：${W.scr.source}。「K線」「技術」兩類是在瀏覽器裡掃描自選、庫存、台股熱門與今天熱門清單的日 K；「題材」是常見代表股的參考名單。` : "";
