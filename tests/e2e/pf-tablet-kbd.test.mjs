@@ -70,10 +70,15 @@ for (const width of [390, 1280]) test(`交易清單日期與資料說明 ${width
   assert.ok(g.length && g.every(x => x.oneLine), `${width}：日期一行`); assert.ok(g.every(x => x.inside), `${width}：日期沒有超出畫面`); assert.ok(g.every(x => x.clear), `${width}：日期沒有壓到修改／刪除`);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${width}：沒有水平溢出`);
   assert.match(await p.evaluate(() => document.body.innerText), /這台裝置沒有開雲端同步，不會上傳/);
-  // 開了雲端同步（有同步碼）：要說會一起同步，不能說不會上傳
-  await p.evaluate(() => { localStorage.setItem("kline-sync", JSON.stringify({ id: "TEST-ONLY-NOT-A-REAL-CODE" })); renderList(); });
-  const t = await p.evaluate(() => document.body.innerText);
-  assert.match(t, /這台裝置有開雲端同步，會一起同步/); assert.doesNotMatch(t, /不會上傳/);
+  // 有同步碼時依實際狀態：自動同步關閉、雲端服務不能用、正常（寫最近一次成功同步的時間）；都不能說「不會上傳」也不能斷言已經同步
+  const T = async (sync, cfg) => { await p.evaluate(([s, c]) => { localStorage.setItem("kline-sync", JSON.stringify(s)); W.syncCfg = c; W.syncErr = null; renderList(); }, [sync, cfg]); return p.evaluate(() => document.body.innerText); };
+  const ID = "TEST-ONLY-NOT-A-REAL-CODE";
+  let t = await T({ id: ID, auto: false }, null); assert.match(t, /自動同步已關閉，要到「工具 → 備份同步」手動上傳才會同步/); assert.doesNotMatch(t, /會一起同步|不會上傳/);
+  t = await T({ id: ID, auto: true }, { kv: false }); assert.match(t, /雲端同步服務目前無法使用，資料不會同步/); assert.doesNotMatch(t, /會一起同步/);
+  t = await T({ id: ID, auto: true, at: 0 }, { kv: true }); assert.match(t, /雲端服務正常時會一起同步/); assert.match(t, /還沒有成功同步過/); assert.doesNotMatch(t, /不會上傳/);
+  t = await T({ id: ID, auto: true, at: Date.parse("2026-11-05T06:30:00Z") }, { kv: true }); assert.match(t, /最近一次成功同步：11-05 14:30/);
+  await p.evaluate(() => { W.syncErr = "測試"; renderList(); }); assert.match(await p.evaluate(() => document.body.innerText), /最近一次同步失敗/);
+  await p.evaluate(() => { W.syncCfg = null; W.syncErr = null; });
   await p.evaluate(() => localStorage.removeItem("kline-sync"));
   await ctx.close(); assert.deepEqual(errs, []);
 });
