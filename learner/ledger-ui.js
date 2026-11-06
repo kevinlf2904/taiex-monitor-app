@@ -122,7 +122,7 @@ document.addEventListener("click", e => {
   else if (a === "close") L.form = null;
   else if (a === "view") { L.view = b.dataset.v; L.form = null; }
   else if (a === "range") L.pfRange = b.dataset.v;
-  else if (a === "pfreload") { W.lgPx = null; W.lgAl = null; W.lgMg = null; }
+  else if (a === "pfreload") { W.fresh = Date.now() + 15000; pfExpire(); } // 重新抓（不用本機快取），但先留著上一次的資料：抓失敗時才有東西可以沿用
   else if (a === "mgadd") L.mgForm = { v: {} };
   else if (a === "mgclose") L.mgForm = null;
   else if (a === "mgedit") { const A = mgLoad().accounts.find(x => x.id === b.dataset.id); if (A) L.mgForm = { id: A.id, v: A }; }
@@ -170,19 +170,41 @@ function lgPerfLib() {
   return (W.lgPerfP ||= (typeof KLPerf !== "undefined" ? Promise.resolve() : one("perf.js")).then(() => (typeof KLFx !== "undefined" ? null : one("fx.js"))).catch(e => { W.lgPerfP = null; throw e; }));
 }
 // 價格：同一組代號 10 分鐘內重複用；單一檔失敗不影響其他檔（引擎會標「沒有價格」）
+// 資料來源與更新標示（第 9 階段，pfsrc.js）：抓失敗時 3 秒後自動重試一次，之後要按「重新載入」；平常 10 分鐘內共用
+const pfTtl = X => (X.failed && !X.retried ? 3000 : 600000);
+const pfExpire = (ks = ["lgPx", "lgAl", "lgMg"]) => ks.forEach(k => { if (W[k] && !W[k].busy && !W[k].refreshing) W[k] = { ...W[k], at: 0, failed: false, retried: false }; });
+// 取得時間：API 沒給就用收到的時間；沿用的資料記著當初是幾點拿到的（連續失敗也不會變成「現在」）
+const pfStamp = (meta, prev) => { if (meta.ok && !meta.fetchedAt) meta.fetchedAt = new Date().toISOString(); meta.keptAt = prev?.meta ? (prev.meta.ok ? prev.meta.fetchedAt : prev.meta.keptAt) || null : null; };
+const pfRetryLater = X => { if (X.failed && !X.retried) setTimeout(() => { if (W.lt === "hold" && W.holdView === "tx") renderList(); }, 3100); };
+function pfSrcLib() {
+  if (typeof KLPfSrc !== "undefined") return Promise.resolve();
+  return (W.lgSrcP ||= new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "pfsrc.js"; sc.onload = ok; sc.onerror = () => { W.lgSrcP = null; no(new Error("pfsrc.js 載入失敗")); }; document.body.appendChild(sc); }));
+}
+// 一行資料狀態：label＝哪一種資料（報價／日 K）；calc＝計算時間另外寫，不和行情時間混在一起
+function pfSrcHtml(meta, label, calc = true) {
+  if (!meta || typeof KLPfSrc === "undefined") return "";
+  const D = KLPfSrc.describe(meta, { name: c => nameOf(c) }), icon = { ok: "ⓘ", warn: "⚠︎", error: "✕" }[D.level];
+  const now = new Date(Date.now() + 8 * 3600e3).toISOString().slice(11, 16);
+  return `<p class="note pfsrc pfsrc-${D.level}" role="status">${icon} ${esc(label)}：${D.parts.map(esc).join("・")}${calc ? `。計算時間 ${now}` : ""}${D.level !== "ok" ? ` <button type="button" class="linkbtn" data-lg="pfreload">重新載入</button>` : ""}</p>`;
+}
 function lgPerfData(S) {
   const syms = [...new Set(S.transactions.map(t => String(t.symbol || "").toUpperCase()).filter(Boolean))].sort(), curs = [...new Set(S.transactions.map(t => t.currency).filter(Boolean))];
   const key = syms.join(",") + "|" + curs.join(","), X = W.lgPx;
-  if (X && X.key === key && (X.busy || Date.now() - X.at < 600000)) return X;
-  W.lgPx = { key, busy: true, at: Date.now(), n: syms.length };
+  if (X && X.key === key && (X.busy || X.refreshing || Date.now() - X.at < pfTtl(X))) return X;
+  const prev = X && X.prices ? X : null;
+  W.lgPx = prev && prev.key === key ? { ...prev, refreshing: true } : { key, busy: true, at: Date.now(), n: syms.length };
   const kl = (c, q = "") => getJ(`/api/kline?code=${encodeURIComponent(c)}&months=24${q}`).catch(() => null);
   // 有美股時另外抓美元兌台幣（Yahoo TWD=X 日收盤，市場中間價），用來換成台幣合併
-  Promise.all([Promise.all(syms.map(c => kl(c))), curs.includes("TWD") ? kl("加權") : null, curs.includes("USD") ? kl("SPY", "&adj=1") : null, curs.includes("USD") ? kl("TWD=X") : null]).then(([A, tw, us, fx]) => {
-    const prices = {}; syms.forEach((c, i) => { if (A[i]?.data?.length) prices[c] = A[i].data.map(x => ({ d: String(x.d).slice(0, 10), c: x.c })); });
-    const bench = {}; if (tw?.data?.length) bench.TWD = tw.data.map(x => ({ d: String(x.d).slice(0, 10), c: x.c }));
-    if (us?.data?.length) bench.USD = us.data.map(x => ({ d: String(x.d).slice(0, 10), c: us.adj?.ok && x.ac > 0 ? x.ac : x.c }));
-    W.lgPx = { key, busy: false, at: Date.now(), prices, bench, usAdj: !!us?.adj?.ok, fx: fx?.data?.length ? fx.data.map(x => ({ d: String(x.d).slice(0, 10), c: x.c })) : [] };
-    if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "perf") renderList();
+  Promise.all([Promise.all(syms.map(c => kl(c))), curs.includes("TWD") ? kl("加權") : null, curs.includes("USD") ? kl("SPY", "&adj=1") : null, curs.includes("USD") ? kl("TWD=X") : null, pfSrcLib()]).then(([A, tw, us, fx]) => {
+    const fresh = {}; syms.forEach((c, i) => { if (A[i]?.data?.length) fresh[c] = A[i].data.map(x => ({ d: String(x.d).slice(0, 10), c: x.c })); });
+    // 這次沒拿到的代號、基準、匯率沿用上一次的，不讓好資料被失敗蓋掉
+    const meta = KLPfSrc.klineMeta(Object.fromEntries(syms.map((c, i) => [c, A[i]])), syms, { today: lgToday(), now: new Date().toISOString() });
+    const K = KLPfSrc.keepLast(prev?.prices, fresh, syms); meta.kept = K.kept; pfStamp(meta, prev);
+    const bench = {}; if (tw?.data?.length) bench.TWD = tw.data.map(x => ({ d: String(x.d).slice(0, 10), c: x.c })); else if (prev?.bench?.TWD) bench.TWD = prev.bench.TWD;
+    if (us?.data?.length) bench.USD = us.data.map(x => ({ d: String(x.d).slice(0, 10), c: us.adj?.ok && x.ac > 0 ? x.ac : x.c })); else if (prev?.bench?.USD) bench.USD = prev.bench.USD;
+    const fxs = fx?.data?.length ? fx.data.map(x => ({ d: String(x.d).slice(0, 10), c: x.c })) : prev?.fx || [];
+    W.lgPx = { key, busy: false, at: Date.now(), prices: K.data, bench, usAdj: us ? !!us?.adj?.ok : !!prev?.usAdj, fx: fxs, meta, failed: !meta.ok, retried: !!(prev?.failed && prev.key === key) };
+    pfRetryLater(W.lgPx); if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "perf") renderList();
   });
   return W.lgPx;
 }
@@ -199,7 +221,7 @@ function renderPerf(S) {
     classify: c => ({ assetType: /^00\d{2,4}[A-Z]?$/.test(c) || ["SPY", "QQQ", "VOO", "VTI", "SOXX", "TQQQ", "SOXL", "DIA", "IWM", "IVV", "VT", "SMH", "XLK", "SCHD", "VYM", "BND", "TLT", "GLD"].includes(c) ? "etf" : "stock", industry: master.get(c) || null }) });
   const range = L.pfRange || "all", rg = `<div class="seg pfrange" role="group" aria-label="日期範圍">${[["3m", "3 個月"], ["6m", "6 個月"], ["1y", "1 年"], ["all", "全部"]].map(([k, t]) => `<button type="button" data-lg="range" data-v="${k}" aria-pressed="${range === k}">${t}</button>`).join("")}</div>`;
   const cards = (R.byCurrency.USD ? pfFxCard(KLFx.combine(R, X.fx || [], { fxSource: "Yahoo Finance TWD=X 日收盤" })) : "") + Object.values(R.byCurrency).map(C => pfCard(C, range)).join("");
-  $("#lx").innerHTML = head + `<div class="lgbar">${rg}<button type="button" class="btn sm" data-lg="pfreload">重新載入價格</button></div>`
+  $("#lx").innerHTML = head + `<div class="lgbar">${rg}<button type="button" class="btn sm" data-lg="pfreload">重新載入價格</button></div>` + pfSrcHtml(X.meta, "日 K")
     + (R.ledgerErrors ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">✕ 有 ${R.ledgerErrors} 筆交易有錯誤，沒有算進績效；請到「交易紀錄」修改。下面的數字不完整。</p>` : "")
     + (R.status === "needs_confirm" ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">⚠︎ 待確認：有部位合股後的零股還沒結算，股數與成本是暫時的，下面的績效也是暫時的。請到「交易紀錄」新增「零股現金結算」。</p>` : "")
     + (cards || `<p class="note" style="padding:12px">沒有可以計算的持股。</p>`)
@@ -292,7 +314,7 @@ document.addEventListener("pointerleave", e => { const box = e.target.closest?.(
 // 績效頁的樣式（放在這裡，不用改 watch.html）；顏色用網站的變數，深色模式自動跟著變
 (function () {
   if (document.getElementById("pfcss")) return; const st = document.createElement("style"); st.id = "pfcss";
-  st.textContent = `@media (pointer:coarse){.lgview button{min-height:44px}}.lgview{margin:8px 12px 0}.pfrange{flex-wrap:wrap}
+  st.textContent = `@media (pointer:coarse){.lgview button{min-height:44px}.pfsrc .linkbtn{min-height:44px}}.pfsrc{margin:4px 12px;font-size:12px;overflow-wrap:anywhere}#lx .pfsrc-warn,#lx .pfsrc-error{color:var(--s1,#d98a0b)}.hmcard .pfsrc{margin:6px 0 0}.lgview{margin:8px 12px 0}.pfrange{flex-wrap:wrap}
 .pfcard{margin:8px 12px 16px;padding:10px 12px;border-radius:6px;background:var(--surface-2)}.pfcard h4{margin:0 0 8px;font-size:14px}
 .pftiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px}
 .pftile{display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:6px;background:var(--surface);min-width:0}.pftile span{font-size:12px;color:var(--muted)}
@@ -330,11 +352,14 @@ function mgLib() {
 }
 function mgPrices(syms) {
   const key = syms.slice().sort().join(","), X = W.lgMg; if (!syms.length) return { busy: false, px: {} };
-  if (X && X.key === key && (X.busy || Date.now() - X.at < 300000)) return X;
-  W.lgMg = { key, busy: true, at: Date.now() };
-  getJ(`/api/quote?codes=${syms.map(encodeURIComponent).join(",")}`).catch(() => null).then(q => {
-    const px = {}; for (const x of q?.quotes || []) if (x && x.price > 0) px[String(x.code).toUpperCase()] = { price: x.price, date: x.date || null, name: x.name || null };
-    W.lgMg = { key, busy: false, at: Date.now(), px }; if (W.lt === "hold" && W.holdView === "tx" && ["margin", "home", undefined].includes(W.lg?.view)) renderList();
+  if (X && X.key === key && (X.busy || X.refreshing || Date.now() - X.at < (X.failed && !X.retried ? 3000 : 300000))) return X;
+  const prev = X && X.px ? X : null;
+  W.lgMg = prev && prev.key === key ? { ...prev, refreshing: true } : { key, busy: true, at: Date.now() };
+  Promise.all([getJ(`/api/quote?codes=${syms.map(encodeURIComponent).join(",")}`).catch(() => null), pfSrcLib()]).then(([q]) => {
+    const px = {}; for (const x of q?.quotes || []) if (x && x.price > 0) px[String(x.code).toUpperCase()] = { price: x.price, date: x.dataDate || x.date || null, name: x.name || null };
+    const meta = KLPfSrc.quoteMeta(q, syms, { today: lgToday() }), K = KLPfSrc.keepLast(prev?.px, px, syms); meta.kept = K.kept; pfStamp(meta, prev);
+    W.lgMg = { key, busy: false, at: Date.now(), px: K.data, meta, failed: !meta.ok, retried: !!(prev?.failed && prev.key === key) };
+    pfRetryLater(W.lgMg); if (W.lt === "hold" && W.holdView === "tx" && ["margin", "home", undefined].includes(W.lg?.view)) renderList();
   });
   return W.lgMg;
 }
@@ -347,7 +372,7 @@ function renderMargin() {
   const form = L.mgForm ? mgFormHtml(L.mgForm) : "";
   if (X.busy) return ($("#lx").innerHTML = head + skel("載入擔保品報價…"));
   const cards = S.accounts.map(a => mgCard(KLMargin.analyze(a, X.px, lgToday()), a)).join("");
-  $("#lx").innerHTML = head + `<div class="lgbar"><button type="button" class="btn sm primary" data-lg="mgadd">＋ 新增融資／借款帳戶</button><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button></div>`
+  $("#lx").innerHTML = head + `<div class="lgbar"><button type="button" class="btn sm primary" data-lg="mgadd">＋ 新增融資／借款帳戶</button><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button></div>` + (syms.length ? pfSrcHtml(X.meta, "擔保品報價") : "")
     + (L.msg ? `<p class="note lgmsg" role="status">${esc(L.msg)}</p>` : "") + warn + form
     + (cards || `<p class="note" style="padding:12px">還沒有融資或借款資料。按「新增」填入借款金額、擔保品與券商的門檻，就能看維持率與下跌時的風險。</p>`);
 }
@@ -402,7 +427,7 @@ function mgSubmit(e) {
     loan: n("loan"), rate: pct("rate"), startDate: fd.get("startDate") || null, termDays: n("termDays"), cashCollateral: n("cashCollateral"), rules: Object.keys(rules).some(k => !["source", "asOf"].includes(k)) || rules.source ? rules : undefined, collateral, updatedAt: lgToday() };
   const S = mgLoad(), next = { ...S, accounts: F.id ? S.accounts.map(x => (x.id === F.id ? acct : x)) : [...S.accounts, acct] }, v = mgSave(next);
   if (!v.ok) { L.mgForm = { ...F, v: acct, err: [...new Set(v.errors.map(x => MG_ERR[x.code] || x.code))] }; return renderList(); }
-  L.mgForm = null; L.msg = F.id ? "已儲存。" : "已加入。"; W.lgMg = null; renderList();
+  L.mgForm = null; L.msg = F.id ? "已儲存。" : "已加入。"; pfExpire(["lgMg"]); renderList();
 }
 (function () {
   if (document.getElementById("mgcss")) return; const st = document.createElement("style"); st.id = "mgcss";
@@ -422,16 +447,20 @@ const LG_US_ETF = new Set(["SPY", "QQQ", "VOO", "VTI", "SOXX", "TQQQ", "SOXL", "
 const lgIsEtf = c => /^00\d{2,4}[A-Z]?$/.test(c) || LG_US_ETF.has(c);
 function lgAllocData(P) {
   const syms = P.map(p => p.symbol).sort(), etfs = syms.filter(lgIsEtf), key = syms.join(","), X = W.lgAl;
-  if (X && X.key === key && (X.busy || Date.now() - X.at < 600000)) return X;
-  W.lgAl = { key, busy: true, at: Date.now(), n: syms.length };
+  if (X && X.key === key && (X.busy || X.refreshing || Date.now() - X.at < pfTtl(X))) return X;
+  const prev = X && X.px ? X : null; // 上一次的資料：代號組合變了也沿用相同代號的報價
+  W.lgAl = prev && prev.key === key ? { ...prev, refreshing: true } : { key, busy: true, at: Date.now(), n: syms.length };
   if (!W.stocks && typeof loadStocks === "function") loadStocks().catch(() => {});
   Promise.all([syms.length ? getJ(`/api/quote?codes=${syms.map(encodeURIComponent).join(",")}`).catch(() => null) : null,
     P.some(p => p.currency === "USD") ? getJ(`/api/kline?code=${encodeURIComponent("TWD=X")}&months=1`).catch(() => null) : null,
-    Promise.all(etfs.map(c => getJ(`/api/etf?code=${encodeURIComponent(c)}`).catch(() => null)))]).then(([q, fx, E]) => {
-    const px = new Map((q?.quotes || []).filter(x => x && x.price > 0).map(x => [String(x.code).toUpperCase(), x])), last = fx?.data?.length ? fx.data[fx.data.length - 1] : null;
-    const etf = {}; etfs.forEach((c, i) => { const j = E[i]; if (j?.hold?.rows?.length) etf[c] = { date: j.hold.date || null, rows: j.hold.rows.map(r => ({ code: r.code || null, name: r.name || null, pct: r.pct })), ind: j.ind?.rows?.length ? { date: j.ind.date || null, rows: j.ind.rows } : null }; });
-    W.lgAl = { key, busy: false, at: Date.now(), px, fx: last ? { rate: last.c, date: String(last.d).slice(0, 10) } : null, etf };
-    if (W.lt === "hold" && W.holdView === "tx" && ["alloc", "home", undefined].includes(W.lg?.view)) renderList(); // 配置與總覽共用
+    Promise.all(etfs.map(c => getJ(`/api/etf?code=${encodeURIComponent(c)}`).catch(() => null))), pfSrcLib()]).then(([q, fx, E]) => {
+    const fresh = new Map((q?.quotes || []).filter(x => x && x.price > 0).map(x => [String(x.code).toUpperCase(), x])), last = fx?.data?.length ? fx.data[fx.data.length - 1] : null;
+    const meta = KLPfSrc.quoteMeta(q, syms, { today: lgToday() }), K = KLPfSrc.keepLast(prev?.px, fresh, syms); meta.kept = K.kept; pfStamp(meta, prev);
+    const etf = {}; etfs.forEach((c, i) => { const j = E[i]; if (j?.hold?.rows?.length) etf[c] = { date: j.hold.date || null, rows: j.hold.rows.map(r => ({ code: r.code || null, name: r.name || null, pct: r.pct })), ind: j.ind?.rows?.length ? { date: j.ind.date || null, rows: j.ind.rows } : null }; else if (prev?.etf?.[c]) etf[c] = prev.etf[c]; });
+    // 匯率：這次沒拿到就沿用上一次的並標示
+    const fxv = last ? { rate: last.c, date: String(last.d).slice(0, 10) } : prev?.fx ? { ...prev.fx, kept: true } : null;
+    W.lgAl = { key, busy: false, at: Date.now(), px: K.data, fx: fxv, etf, meta, failed: !meta.ok, retried: !!(prev?.failed && prev.key === key) };
+    pfRetryLater(W.lgAl); if (W.lt === "hold" && W.holdView === "tx" && ["alloc", "home", undefined].includes(W.lg?.view)) renderList(); // 配置與總覽共用
   });
   return W.lgAl;
 }
@@ -448,7 +477,7 @@ function renderAlloc(S) {
   const R = KLAlloc.build(pos, { fx: X.fx, cash, etf: X.etf, asOf: lgToday(), names: Object.fromEntries(pos.map(p => [p.symbol, p.name])) });
   const issues = (R.issues || []).map(x => `<li>${esc(KLAlloc.ISSUE_LABEL[x.k] || x.k)}${x.codes ? `：${x.codes.map(c => (nameOf(c) && nameOf(c) !== c ? `${esc(nameOf(c))} ${esc(c)}` : esc(c))).join("、")}` : x.list ? `：${x.list.map(l => `${esc(l.etf)}${l.date ? " " + l.date : ""}${l.covered != null ? ` 揭露 ${l.covered}%` : ""}`).join("、")}` : x.dates ? `：${x.dates.map(d => `${esc(d.etf)} ${d.date || "—"}`).join("、")}` : ""}</li>`).join("");
   const body = R.status === "no_fx" ? Object.values(R.byCurrency).map(C => alSection(C, `${C.base === "USD" ? "美股（美元）" : "台股（台幣）"}`)).join("") : alSection(R, "全部資產（台幣計價）");
-  $("#lx").innerHTML = head + `<div class="lgbar"><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button>${R.fx ? `<small class="note">美元兌台幣 ${R.fx.rate.toFixed(3)}（${esc(R.fx.date || "")}，Yahoo TWD=X 收盤）</small>` : ""}</div>`
+  $("#lx").innerHTML = head + `<div class="lgbar"><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button>${R.fx ? `<small class="note">美元兌台幣 ${R.fx.rate.toFixed(3)}（${esc(R.fx.date || "")}，Yahoo TWD=X 收盤${X.fx?.kept ? "，這次沒拿到，沿用上一次的" : ""}）</small>` : ""}</div>` + pfSrcHtml(X.meta, "報價")
     + (issues ? `<ul class="note lgwarn alissues">${issues}</ul>` : "") + body
     + `<details class="pfbasis"><summary>計算口徑</summary><ul><li>權重＝市值 ÷ 總資產（台幣計價；美元用最新匯率換算）。有記入金、出金時，現金也算進總資產。</li>
       <li>沒有現價的持股用成本估算市值，並標示。美股沒有產業資料，歸「未分類」。</li>
