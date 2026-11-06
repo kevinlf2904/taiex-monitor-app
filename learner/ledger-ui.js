@@ -234,7 +234,7 @@ function lgPerfData(S) {
     if (us?.data?.length) bench.USD = us.data.map(x => ({ d: String(x.d).slice(0, 10), c: us.adj?.ok && x.ac > 0 ? x.ac : x.c })); else if (prev?.bench?.USD) bench.USD = prev.bench.USD;
     const fxs = fx?.data?.length ? fx.data.map(x => ({ d: String(x.d).slice(0, 10), c: x.c })) : prev?.fx || [];
     W.lgPx = { key, busy: false, at: Date.now(), tok, prices: pfKeep(prev?.prices, fresh, syms), bench, usAdj: us ? !!us?.adj?.ok : !!prev?.usAdj, fx: fxs, items, meta, failed: !cur.ok, retried: retry };
-    pfRetryLater(W.lgPx); if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "perf") renderList();
+    pfRetryLater(W.lgPx); if (W.lt === "hold" && W.holdView === "tx" && ["perf", "home", undefined].includes(W.lg?.view)) renderList(); // 績效與總覽的走勢共用
   });
   return W.lgPx;
 }
