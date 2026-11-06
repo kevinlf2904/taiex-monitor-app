@@ -16,7 +16,8 @@ test("資料狀態：各頁都有；報價失敗時沿用上一次的、可以�
   for (const width of [390, 1280]) {
     const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
     await p.evaluate(tx => { store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); store.set("pf:margin:v1", { v: 1, accounts: [{ id: "m", name: "融資", type: "margin", source: "user", loan: 10000, collateral: [{ symbol: "2330", shares: 100 }] }] }); W.lg = null; W.lgAl = null; W.lgMg = null; W.lgPx = null; W.holdView = "tx"; setLt("hold"); }, TX);
-    await p.waitForSelector(".hmcard .pfsrc", { timeout: 30000 });
+    // 總覽先畫持股報價，融資模組與擔保品報價晚一點到再重畫：等兩行都出現
+    await p.waitForFunction(() => document.querySelectorAll(".hmcard .pfsrc").length >= 2, null, { timeout: 30000 });
     let t = await txt(p);
     assert.match(t, /報價：來源 t/); assert.match(t, /行情日期 2026-10-05/); assert.match(t, /2 檔都有/); assert.match(t, /融資擔保品報價/);
     // 報價服務壞掉：按重新載入 → 畫面還在、標示沿用、數字沒有變成空的
