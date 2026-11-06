@@ -30,6 +30,8 @@
     if (!resp || !resp.ok) return { ok: false, error: (resp && resp.error) || null, items: {} };
     const at = resp.fetchedAt || resp.time || now || null, cachedAt = resp.swCachedAt != null ? new Date(+resp.swCachedAt).toISOString() : null, items = {};
     for (const q of resp.quotes || []) if (q && q.price > 0) items[up(q.code)] = { d: d10(q.dataDate || q.date), source: q.source || resp.source || null, mode: q.updateMode || resp.updateMode || null, fallback: !!(q.isFallback || resp.isFallback), at, cachedAt };
+    // 伺服器說成功、但一檔有效報價都沒有：當成這次失敗（不寫取得時間、會自動重試），不是「剛更新」
+    if (!Object.keys(items).length) return { ok: false, error: "伺服器有回應，但沒有任何有效報價", items: {} };
     return { ok: true, at, items };
   }
   // 日 K：代號 → /api/kline 的回應（失敗時 null）

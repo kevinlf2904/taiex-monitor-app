@@ -75,3 +75,13 @@ test("價格表沿用、備援、離線快取、日 K", () => {
   assert.deepEqual(J(K.missing), ["2454"]); assert.match(S.describe(K).parts.join(), /日收盤/);
   const F = S.klineItems({ 2330: null }, "x"); assert.equal(F.ok, false); assert.match(S.describe(S.summarize("kline", F, {}, ["2330"], cal)).parts[0], /這次拿不到日 K/);
 });
+
+test("伺服器回 ok:true 但沒有任何有效報價：當成這次失敗，不寫取得時間、沿用上一次的", () => {
+  const codes = ["2330"], a = step({ ok: true, fetchedAt: "2026-11-05T02:00:00Z", quotes: [q("2330")] }, null, codes, "x");
+  for (const resp of [{ ok: true, fetchedAt: "2026-11-05T02:10:00Z", quotes: [] }, { ok: true, quotes: [{ code: "2330", price: 0 }, null] }]) {
+    const cur = S.quoteItems(resp, "x"); assert.equal(cur.ok, false); assert.match(cur.error, /沒有任何有效報價/);
+    const b = step(resp, a.items, codes, "x"); assert.equal(b.meta.ok, false); assert.equal(b.meta.fetchedAt, null, "沒有拿到新資料就沒有這次的取得時間");
+    assert.deepEqual(J(b.meta.kept), [{ code: "2330", at: "2026-11-05T02:00:00Z" }]);
+    const D = S.describe(b.meta); assert.equal(D.level, "error"); assert.equal(D.parts[0], "這次拿不到報價（伺服器有回應，但沒有任何有效報價）");
+  }
+});

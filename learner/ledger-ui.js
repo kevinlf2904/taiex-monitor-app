@@ -378,7 +378,7 @@ function mgPrices(syms) {
   Promise.all([getJ(`/api/quote?codes=${syms.map(encodeURIComponent).join(",")}`).catch(() => null), pfSrcSafe()]).then(([q]) => {
     if (W.lgMg?.tok !== tok) return;
     const px = {}; for (const x of q?.quotes || []) if (x && x.price > 0) px[String(x.code).toUpperCase()] = { price: x.price, date: x.dataDate || x.date || null, name: x.name || null };
-    const cur = typeof KLPfSrc !== "undefined" ? KLPfSrc.quoteItems(q, new Date().toISOString()) : { ok: !!q?.ok, items: {} }, { items, meta } = pfMeta("quote", cur, prev?.items, syms);
+    const cur = typeof KLPfSrc !== "undefined" ? KLPfSrc.quoteItems(q, new Date().toISOString()) : { ok: !!q?.ok && (q.quotes || []).some(x => x && x.price > 0), items: {} }, { items, meta } = pfMeta("quote", cur, prev?.items, syms);
     W.lgMg = { key, busy: false, at: Date.now(), tok, px: pfKeep(prev?.px, px, syms), items, meta, failed: !cur.ok, retried: retry };
     pfRetryLater(W.lgMg); if (W.lt === "hold" && W.holdView === "tx" && ["margin", "home", undefined].includes(W.lg?.view)) renderList();
   });
@@ -476,7 +476,7 @@ function lgAllocData(P) {
     Promise.all(etfs.map(c => getJ(`/api/etf?code=${encodeURIComponent(c)}`).catch(() => null))), pfSrcSafe()]).then(([q, fx, E]) => {
     if (W.lgAl?.tok !== tok) return;
     const fresh = new Map((q?.quotes || []).filter(x => x && x.price > 0).map(x => [String(x.code).toUpperCase(), x])), last = fx?.data?.length ? fx.data[fx.data.length - 1] : null;
-    const cur = typeof KLPfSrc !== "undefined" ? KLPfSrc.quoteItems(q, new Date().toISOString()) : { ok: !!q?.ok, items: {} }, { items, meta } = pfMeta("quote", cur, prev?.items, syms);
+    const cur = typeof KLPfSrc !== "undefined" ? KLPfSrc.quoteItems(q, new Date().toISOString()) : { ok: !!q?.ok && (q.quotes || []).some(x => x && x.price > 0), items: {} }, { items, meta } = pfMeta("quote", cur, prev?.items, syms);
     const etf = {}; etfs.forEach((c, i) => { const j = E[i]; if (j?.hold?.rows?.length) etf[c] = { date: j.hold.date || null, rows: j.hold.rows.map(r => ({ code: r.code || null, name: r.name || null, pct: r.pct })), ind: j.ind?.rows?.length ? { date: j.ind.date || null, rows: j.ind.rows } : null }; else if (prev?.etf?.[c]) etf[c] = prev.etf[c]; });
     // 匯率：這次沒拿到就沿用上一次的並標示
     const fxv = last ? { rate: last.c, date: String(last.d).slice(0, 10) } : prev?.fx ? { ...prev.fx, kept: true } : null;
