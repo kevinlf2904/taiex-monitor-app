@@ -8,7 +8,7 @@ const ctx = {}; vm.createContext(ctx);
 for (const f of ["ledger.js", "overview.js"]) vm.runInContext(readFileSync(new URL("../learner/" + f, import.meta.url), "utf8"), ctx);
 const { KLLedger: LG, KLOverview: O } = ctx, J = x => JSON.parse(JSON.stringify(x)), near = (a, b, t = 1e-6) => Math.abs(a - b) < t;
 let n = 0; const tw = o => ({ id: "t" + ++n, market: "tw", currency: "TWD", symbol: "2330", fee: 0, tax: 0, ...o }), us = o => ({ id: "u" + ++n, market: "us", currency: "USD", symbol: "NVDA", fee: 0, tax: 0, ...o });
-const run = (txs, quotes, o = {}) => O.summarize(LG.buildLedger(txs), new Map(Object.entries(quotes)), { today: "2026-11-05", txs, ...o });
+const run = (txs, quotes, o = {}) => O.summarize(LG.buildLedger(txs), new Map(Object.entries(quotes)), { today: "2026-11-05", ...o });
 
 test("總資產換台幣、現金比例、市場分布；累積損益＝已實現＋未實現＋股息", () => {
   const T = [tw({ symbol: null, date: "2026-01-02", type: "deposit", amount: 300000 }), tw({ date: "2026-01-05", type: "buy", shares: 1000, price: 100 }), us({ date: "2026-01-05", type: "buy", shares: 10, price: 100 }),
@@ -50,4 +50,26 @@ test("風險警示：單一持股 > 30%、前五大 > 80%、融資接近或低�
 test("累積損益扣掉另計費用（例如股息匯費）", () => {
   const R = run([tw({ id: "b", date: "2026-01-05", type: "buy", shares: 10, price: 100 }), tw({ id: "d", date: "2026-02-05", type: "dividend", amount: 100 }), tw({ id: "f", symbol: null, date: "2026-02-05", type: "fee", amount: 10, ref: "d" })], { 2330: { price: 100, prev: 100, date: "2026-11-05" } });
   assert.equal(R.cumulative.byCurrency.TWD, 90);
+});
+
+test("今日損益只用今天的行情：沒有日期的報價不算；今天賣光的，報價不是今天的也不算", () => {
+  const R = run([tw({ date: "2026-01-05", type: "buy", shares: 100, price: 100 })], { 2330: { price: 110, prev: 100 } });
+  assert.equal(R.today, null, "報價沒有日期，不能當成今天的行情"); assert.ok(R.issues.some(x => x.k === "stale_quote" && x.codes.includes("2330")));
+  const S = run([tw({ date: "2026-01-05", type: "buy", shares: 100, price: 100 }), tw({ date: "2026-11-05", type: "sell", shares: 100, price: 105 })], { 2330: { price: 99, prev: 90, date: "2026-11-04" } });
+  assert.equal(S.today, null, "今天賣光但報價是昨天的：昨收是前天的，不能拿來算"); assert.ok(S.issues.some(x => x.k === "stale_quote" && x.codes.includes("2330")));
+  const D = run([tw({ date: "2026-01-05", type: "buy", shares: 100, price: 100 })], { 2330: { price: 110, prev: 100, dataDate: "2026-11-05" } });
+  assert.equal(D.today.pnl, 1000, "dataDate 也算行情日期");
+});
+
+test("今日損益只用帳本實際套用的交易：賣超（帳本判定錯誤）不算", () => {
+  const T = [tw({ date: "2026-01-05", type: "buy", shares: 100, price: 100 }), tw({ date: "2026-11-05", type: "sell", shares: 500, price: 130 })];
+  const L = LG.buildLedger(T); assert.ok(L.txs.some(x => x.tx.date === "2026-11-05" && (!x.applied || x.errors.length)), "前提：帳本不套用賣超");
+  const R = run(T, { 2330: { price: 120, prev: 118, date: "2026-11-05" } });
+  assert.equal(R.today.pnl, 200, "只算昨收持有的 100×(120−118)，不把錯誤的賣出算進來");
+});
+
+test("負現金（買進多於入金）要從總資產扣掉並標示；占比不超過 100%", () => {
+  const R = run([tw({ symbol: null, date: "2026-01-02", type: "deposit", amount: 50000 }), tw({ date: "2026-01-05", type: "buy", shares: 1000, price: 100 })], { 2330: { price: 100, prev: 100, date: "2026-11-05" } });
+  assert.equal(R.stocks, 100000); assert.equal(R.cash, -50000); assert.equal(R.total, 50000, "淨資產＝股票 100,000 − 50,000");
+  assert.equal(R.cashShare, 0); assert.equal(R.top[0].w, 1, "占比用正的資產當分母"); assert.ok(R.issues.some(x => x.k === "cash_negative")); assert.ok(O.ISSUE_LABEL.cash_negative);
 });

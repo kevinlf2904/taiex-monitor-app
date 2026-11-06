@@ -291,7 +291,7 @@ document.addEventListener("pointerleave", e => { const box = e.target.closest?.(
 // 績效頁的樣式（放在這裡，不用改 watch.html）；顏色用網站的變數，深色模式自動跟著變
 (function () {
   if (document.getElementById("pfcss")) return; const st = document.createElement("style"); st.id = "pfcss";
-  st.textContent = `.lgview{margin:8px 12px 0}.pfrange{flex-wrap:wrap}
+  st.textContent = `@media (pointer:coarse){.lgview button{min-height:44px}}.lgview{margin:8px 12px 0}.pfrange{flex-wrap:wrap}
 .pfcard{margin:8px 12px 16px;padding:10px 12px;border-radius:6px;background:var(--surface-2)}.pfcard h4{margin:0 0 8px;font-size:14px}
 .pftiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px}
 .pftile{display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:6px;background:var(--surface);min-width:0}.pftile span{font-size:12px;color:var(--muted)}

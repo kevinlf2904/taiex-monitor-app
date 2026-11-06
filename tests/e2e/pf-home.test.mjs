@@ -20,7 +20,8 @@ test("總覽：預設分頁、重點數字、風險、分布、主要持倉、�
     assert.match(t, /美元兌台幣 32\.000/); assert.match(t, /單一持股占比偏高/, "2330 占比超過 30%");
     assert.equal(await p.evaluate(() => document.querySelector('[data-lg=view][data-v=home]').getAttribute("aria-pressed")), "true", "總覽是預設分頁");
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
-    await p.click('.hmcard .lgbar [data-v="alloc"]'); await p.waitForSelector(".alcard", { timeout: 30000 });
+    if (width < 500) { const h = await p.evaluate(() => Math.min(...[...document.querySelectorAll(".lgview button, .hmcard .lgbar .btn, .hmalerts .linkbtn, .hmrow")].map(e => e.getBoundingClientRect().height))); assert.ok(h >= 43.5, "手機上可點的按鈕至少 44px 高：" + h); }
+    await p.click('.hmcard .pftile[data-v="alloc"]'); await p.waitForSelector(".alcard", { timeout: 30000 });
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });
