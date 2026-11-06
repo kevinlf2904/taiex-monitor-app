@@ -28,9 +28,15 @@ const lgMoney = (v, cur) => { if (v == null) return "—"; const x = cur === "US
 const lgSgn = (v, cur) => (v == null ? "—" : (v > 0 ? "+" : "") + lgMoney(v, cur));
 const lgN = v => (v == null ? "—" : (+v).toLocaleString(undefined, { maximumFractionDigits: 4 }));
 
+// 交易紀錄、績效的市場切換：全部／台股／美股（W.lg.mkt，只在這次開啟有效、不存檔）；總覽、配置、融資本來就是看整個投資組合
+const LG_MKT = [["all", "全部"], ["tw", "台股"], ["us", "美股"]];
+const lgMktSel = () => W.lg?.mkt || "all";
+const lgCurOk = c => { const m = lgMktSel(); return m === "all" || (m === "us" ? c === "USD" : c !== "USD"); };
+const lgMktSeg = () => `<div class="seg lgmkt" role="group" aria-label="市場">${LG_MKT.map(([k, t]) => `<button type="button" data-lg="mkt" data-v="${k}" aria-pressed="${lgMktSel() === k}">${t}</button>`).join("")}</div>`;
 function renderLedger() {
   const L = (W.lg ||= { open: null, form: null, prev: null, msg: "" });
   $("#wl").innerHTML = "";
+  const hs = $("#holdSeg"); if (hs) hs.hidden = true; // 上方舊庫存的台股／美股切換對交易紀錄沒有作用：藏起來，改用各頁自己的「全部／台股／美股」
   const S = lgLoad();
   if (L.view === "margin") return renderMargin(); // 融資不需要交易紀錄
   if (!S) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
@@ -40,8 +46,8 @@ function renderLedger() {
   if (L.view === "alloc") return renderAlloc(S);
   const quotes = new Map([...W.quotes].map(([c, q]) => [c, q?.price]).filter(([, p]) => p > 0));
   const R = KLLedger.buildLedger(S.transactions, { method: S.method, today: lgToday(), prices: quotes });
-  const cur = ["TWD", "USD"].filter(c => R.totals[c] || R.cash[c]);
-  const open = R.positions.filter(p => p.open), closed = R.positions.filter(p => !p.open);
+  const cur = ["TWD", "USD"].filter(c => (R.totals[c] || R.cash[c]) && lgCurOk(c));
+  const open = R.positions.filter(p => p.open && lgCurOk(p.currency)), closed = R.positions.filter(p => !p.open && lgCurOk(p.currency));
   const curBox = c => { const T = R.totals[c] || {}, C = R.cash[c], P = open.filter(p => p.currency === c), miss = P.filter(p => p.marketValue == null).length, un = P.reduce((s, p) => s + (p.unrealizedPnl || 0), 0);
     return `<div class="lgcur"><h4>${c === "USD" ? "美股（美元）" : "台股（台幣）"}</h4><dl>
       <dt>未實現損益</dt><dd class="${cls(un)}">${!P.length ? "—" : miss === P.length ? `—<small class="note">（還沒有報價）</small>` : lgSgn(un, c) + (miss ? `<small class="note">（${miss} 檔缺價格，沒算進來）</small>` : "")}</dd>
@@ -62,16 +68,18 @@ function renderLedger() {
     const iss = [...x.errors.map(e => `<li class="lgwarn">✕ ${esc(e.message)}</li>`), ...x.warnings.filter(w => w.code !== "fee_estimated").map(w => `<li>⚠︎ ${esc(w.message)}</li>`)].join("");
     return `<li class="lgtx${x.errors.length ? " err" : ""}"><span class="lgd">${esc(t.date || "")}</span><span><b>${KLLedger.TYPE_LABEL[d] || esc(d)}</b> ${t.symbol ? `${esc(nameOf(t.symbol))} <small class="note">${esc(t.symbol)}</small>` : ""}${x.mergedInto ? `<small class="note">（併入對應交易）</small>` : ""}</span>
       <span>${what}${fee}</span><span class="lgact"><button type="button" class="btn sm" data-lg="edit" data-id="${esc(x.id)}">修改</button><button type="button" class="btn sm" data-lg="del" data-id="${esc(x.id)}">刪除</button></span>${iss ? `<ul class="lgiss">${iss}</ul>` : ""}</li>`; };
-  const txs = R.txs.slice().sort((a, b) => String(b.tx?.date).localeCompare(String(a.tx?.date)) || b.index - a.index);
-  $("#lx").innerHTML = lgViewSeg() + `<div class="lgbar"><span>成本算法：<b>${R.methodLabel}</b></span><button type="button" class="btn sm" data-lg="method">改用${S.method === "fifo" ? "加權平均" : "先進先出"}</button><button type="button" class="btn sm primary" data-lg="add">＋ 新增交易</button><button type="button" class="btn sm" data-lg="csv">⬇ 匯出 CSV</button></div>
+  // 錯誤、待確認的提醒不分市場都顯示（不能因為切換就藏起來）；清單只列選到的市場
+  const txs = R.txs.filter(x => lgCurOk(x.tx?.currency || "TWD")).sort((a, b) => String(b.tx?.date).localeCompare(String(a.tx?.date)) || b.index - a.index);
+  const mk = lgMktSel() === "all" ? "" : `，只顯示${lgMktSel() === "us" ? "美股" : "台股"}；全部 ${R.txs.length} 筆`;
+  $("#lx").innerHTML = lgViewSeg() + `<div class="lgbar">${lgMktSeg()}<span>成本算法：<b>${R.methodLabel}</b></span><button type="button" class="btn sm" data-lg="method">改用${S.method === "fifo" ? "加權平均" : "先進先出"}</button><button type="button" class="btn sm primary" data-lg="add">＋ 新增交易</button><button type="button" class="btn sm" data-lg="csv">⬇ 匯出 CSV</button></div>
     ${L.msg ? `<p class="note lgmsg" role="status">${esc(L.msg)}</p>` : ""}
     ${bad.length ? `<p class="note lgwarn">✕ ${bad.length} 筆交易有錯誤，沒有算進去（下面標紅色的），請修改或刪除。</p>` : ""}${pend.length ? `<p class="note lgwarn">⚠︎ ${pend.map(p => esc(nameOf(p.symbol))).join("、")} 合股後有不足一股的部分還沒結算，股數與成本是暫時的；請新增一筆「零股現金結算」。</p>` : ""}
     ${L.form ? lgFormHtml(L.form, S) : ""}
-    <div class="lgcurs">${cur.map(curBox).join("") || `<p class="note">還沒有交易。</p>`}</div>
+    <div class="lgcurs">${cur.map(curBox).join("") || `<p class="note">${lgMktSel() === "all" ? "還沒有交易。" : `沒有${lgMktSel() === "us" ? "美股" : "台股"}的交易。`}</p>`}</div>
     <p class="note">台幣和美元分開計算，不相加。未實現損益用目前報價；費用標「估算」的是依預設費率算的，實際以券商對帳單為準。${S.migratedFrom ? `由舊庫存建立於 ${esc(String(S.at || "").slice(0, 10))}；舊庫存資料仍保留。` : ""}</p>
     ${open.length ? `<h4 class="lgh">持有中（${open.length} 檔）</h4><ul class="lglist">${open.map(posRow).join("")}</ul>` : ""}
     ${closed.length ? `<h4 class="lgh">已出清（${closed.length} 檔）</h4><ul class="lglist">${closed.map(posRow).join("")}</ul>` : ""}
-    <h4 class="lgh">交易紀錄（${txs.length} 筆）</h4><ul class="lglist lgtxs">${txs.map(txRow).join("") || `<li class="note">還沒有交易。</li>`}</ul>`;
+    <h4 class="lgh">交易紀錄（${txs.length} 筆${mk}）</h4><ul class="lglist lgtxs">${txs.map(txRow).join("") || `<li class="note">還沒有交易。</li>`}</ul>`;
 }
 function lgIntroHtml() {
   const n = Object.keys(W.hold || {}).length;
@@ -122,6 +130,7 @@ document.addEventListener("click", e => {
   else if (a === "close") L.form = null;
   else if (a === "view") { L.view = b.dataset.v; L.form = null; }
   else if (a === "range") L.pfRange = b.dataset.v;
+  else if (a === "mkt") L.mkt = b.dataset.v;
   else if (a === "pfreload") { W.fresh = Date.now() + 15000; pfExpire(); } // 重新抓（不用本機快取），但先留著上一次的資料：抓失敗時才有東西可以沿用
   else if (a === "mgadd") L.mgForm = { v: {} };
   else if (a === "mgclose") L.mgForm = null;
@@ -241,11 +250,12 @@ function renderPerf(S) {
   const R = KLPerf.buildPerf(S.transactions, { method: S.method, today: lgToday(), prices: X.prices, bench: X.bench, benchName: { TWD: "加權指數（價格指數，不含股息）", USD: X.usAdj ? "S&P 500（SPY，含息還原）" : "S&P 500（SPY，不含息）" },
     classify: c => ({ assetType: /^00\d{2,4}[A-Z]?$/.test(c) || ["SPY", "QQQ", "VOO", "VTI", "SOXX", "TQQQ", "SOXL", "DIA", "IWM", "IVV", "VT", "SMH", "XLK", "SCHD", "VYM", "BND", "TLT", "GLD"].includes(c) ? "etf" : "stock", industry: master.get(c) || null }) });
   const range = L.pfRange || "all", rg = `<div class="seg pfrange" role="group" aria-label="日期範圍">${[["3m", "3 個月"], ["6m", "6 個月"], ["1y", "1 年"], ["all", "全部"]].map(([k, t]) => `<button type="button" data-lg="range" data-v="${k}" aria-pressed="${range === k}">${t}</button>`).join("")}</div>`;
-  const cards = (R.byCurrency.USD ? pfFxCard(KLFx.combine(R, X.fx || [], { fxSource: "Yahoo Finance TWD=X 日收盤" })) : "") + Object.values(R.byCurrency).map(C => pfCard(C, range)).join("");
-  $("#lx").innerHTML = head + `<div class="lgbar">${rg}<button type="button" class="btn sm" data-lg="pfreload">重新載入價格</button></div>` + pfSrcHtml(X.meta, "日 K")
+  // 台幣合併（含匯率拆解）只在「全部」顯示；台股／美股各看自己的幣別
+  const cards = (R.byCurrency.USD && lgMktSel() === "all" ? pfFxCard(KLFx.combine(R, X.fx || [], { fxSource: "Yahoo Finance TWD=X 日收盤" })) : "") + Object.values(R.byCurrency).filter(C => lgCurOk(C.currency)).map(C => pfCard(C, range)).join("");
+  $("#lx").innerHTML = head + `<div class="lgbar">${lgMktSeg()}${rg}<button type="button" class="btn sm" data-lg="pfreload">重新載入價格</button></div>` + pfSrcHtml(X.meta, "日 K")
     + (R.ledgerErrors ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">✕ 有 ${R.ledgerErrors} 筆交易有錯誤，沒有算進績效；請到「交易紀錄」修改。下面的數字不完整。</p>` : "")
     + (R.status === "needs_confirm" ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">⚠︎ 待確認：有部位合股後的零股還沒結算，股數與成本是暫時的，下面的績效也是暫時的。請到「交易紀錄」新增「零股現金結算」。</p>` : "")
-    + (cards || `<p class="note" style="padding:12px">沒有可以計算的持股。</p>`)
+    + (cards || `<p class="note" style="padding:12px">${lgMktSel() === "all" ? "沒有可以計算的持股。" : `沒有${lgMktSel() === "us" ? "美股" : "台股"}的部位。`}</p>`)
     + `<details class="pfbasis"><summary>計算口徑</summary><ul>
       <li>範圍是證券部位（股票、ETF 的市值），不含現金。買進付出的錢算投入；賣出拿回的錢、領到的股息算拿回。</li>
       <li>價格用原始收盤價；股息已經當成現金流，不再用還原價重複計算。台幣、美元分開算，不相加。</li>
