@@ -17,3 +17,9 @@
 ## 編輯
 - 交易紀錄模式下，「編輯庫存」「截圖匯入」「載入範例」、個股面板的持股設定改成提示「到交易紀錄新增買賣」，不改舊庫存。
 - 每個庫存分頁上方顯示：「持股來自交易紀錄（N 筆交易）」與「改看舊庫存」（只在這次開啟有效，不存檔）。
+
+## 實作位置與測試
+- `learner/watch.html`：`holdFromLedger`、`holdSrcApply`（依交易紀錄的存檔時間、算法、筆數快取，不每秒重算）、`holdSrcBar`、`holdLgBlock`；`holdPnL` 依 `h.lg` 調整；啟動時套用一次，庫存分頁每次重畫前確認。
+- `learner/core.js`：`store.set` 支援 `store.lock`（回傳 false 就不寫），並回傳是否寫入。
+- `learner/ledger-ui.js`：`lgSave` 存檔時更新 `at` 並通知庫存重算。
+- 測試：`tests/e2e/hold-source.test.mjs`（交易紀錄模式、舊庫存不動、切換、交易紀錄改了跟著變、只有美股、沒有交易紀錄照舊）。

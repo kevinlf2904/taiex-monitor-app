@@ -5,7 +5,9 @@
 const $ = (s, r = document) => r.querySelector(s);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("kline:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem("kline:" + k, JSON.stringify(v)); } catch {} },
+  // lock(k, v)：頁面可以設定的保護，回傳 false 就不寫（例如看盤頁用交易紀錄算持股時，不讓算出來的持股寫回舊庫存）
+  set(k, v) { if (store.lock && store.lock(k, v) === false) return false; try { localStorage.setItem("kline:" + k, JSON.stringify(v)); return true; } catch { return false; } },
+  lock: null,
 };
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 // 台股升降單位（檔位）
