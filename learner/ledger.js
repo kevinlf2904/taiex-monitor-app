@@ -249,5 +249,34 @@
     return { ok: L.errorCount === 0, code: L.errorCount ? "has_errors" : "ok", errors: L.txs.filter(x => x.errors.length).map(x => ({ index: x.index, id: x.id, errors: x.errors })), ledger: L };
   }
 
-  root.KLLedger = Object.freeze({ VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore });
+  // CSV 匯出（給 Excel、Numbers）：開頭加 BOM 讓 Excel 認得 UTF-8；文字欄位開頭是 = + - @ 時前面加 ' ，避免被試算表當成公式執行（CSV 注入）
+  const CSV_COLS = [["date", "日期"], ["type", "類型"], ["symbol", "代號"], ["market", "市場"], ["currency", "幣別"], ["shares", "股數"], ["price", "價格"], ["amount", "金額"], ["ratio", "比例"], ["fee", "手續費"], ["tax", "交易稅"], ["note", "備註"], ["source", "來源"], ["id", "編號"]];
+  function toCSV(transactions) {
+    const cell = (k, v) => { if (v == null) return ""; let t = k === "type" ? (TYPE_LABEL[v] || String(v)) : String(v); if (typeof v === "string" && /^[=+\-@\t\r]/.test(t)) t = "'" + t; return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+    const rows = (Array.isArray(transactions) ? transactions : []).slice().sort((a, b) => String(a?.date).localeCompare(String(b?.date)));
+    return "\ufeff" + [CSV_COLS.map(c => c[1]).join(","), ...rows.map(t => CSV_COLS.map(([k]) => cell(k, t?.[k])).join(","))].join("\r\n") + "\r\n";
+  }
+  // 備份檔裡的投資組合資料檢查（匯入前用）：data＝{ 存檔鍵: JSON 字串 }。交易紀錄跑 validateStore；融資帳戶檢查格式與版本（有 KLMargin 時跑它的 validateStore）。
+  // 回傳 { ok, items: [{ key, label, ok, problems, summary }] }；任何一項不通過，整份都不要匯入
+  function checkBackup(data, opts = {}) {
+    const items = [], parse = v => { try { return { ok: true, v: JSON.parse(v) }; } catch { return { ok: false }; } };
+    for (const [key, raw] of Object.entries(data || {})) {
+      if (key === STORE_KEY) {
+        const p = parse(raw); if (!p.ok) { items.push({ key, label: "交易紀錄", ok: false, problems: ["不是正確的 JSON"] }); continue; }
+        const v = validateStore(p.v, { today: opts.today });
+        const tx = Array.isArray(p.v?.transactions) ? p.v.transactions : [], ds = tx.map(t => t?.date).filter(Boolean).sort();
+        items.push({ key, label: "交易紀錄", ok: v.ok, problems: v.ok ? [] : [v.code === "has_errors" ? `${v.errors.length} 筆交易有錯誤（例如：${v.errors[0].errors[0].message}）` : v.code === "unsupported_version" ? `版本 ${p.v?.v} 不支援（這版只認得 ${VERSION}）` : v.code],
+          summary: { transactions: tx.length, from: ds[0] || null, to: ds[ds.length - 1] || null, method: p.v?.method || null } });
+      } else if (key === "kline:pf:margin:v1") {
+        const p = parse(raw); if (!p.ok) { items.push({ key, label: "融資帳戶", ok: false, problems: ["不是正確的 JSON"] }); continue; }
+        // 一定要用融資模組的完整檢查（借款、利率、擔保品、門檻…）；沒有檢查程式就不接受，不降級成只看版本
+        const M = opts.margin; let ok = p.v && p.v.v === 1 && Array.isArray(p.v.accounts), problems = ok ? [] : ["格式或版本不對"];
+        if (ok && !(M && typeof M.validateStore === "function")) { ok = false; problems = ["沒有融資資料的檢查程式，為了安全不匯入"]; }
+        else if (ok) { const r = M.validateStore(p.v); if (!r.ok) { ok = false; problems = [`${new Set(r.errors.map(e => e.i)).size} 個帳戶資料不對（例如：${r.errors[0].code}）`]; } }
+        items.push({ key, label: "融資帳戶", ok, problems, summary: { accounts: Array.isArray(p.v?.accounts) ? p.v.accounts.length : 0 } });
+      } else if (key.startsWith("kline:pf:")) items.push({ key, label: key, ok: false, problems: ["不認得的投資組合資料（可能是比較新的版本），為了安全不匯入"] });
+    }
+    return { ok: items.every(x => x.ok), items };
+  }
+  root.KLLedger = Object.freeze({ toCSV, checkBackup, VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore });
 })(typeof window !== "undefined" ? window : globalThis);
