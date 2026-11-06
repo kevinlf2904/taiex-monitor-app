@@ -30,7 +30,7 @@ for (const width of [768, 834]) test(`平板 ${width}：各分頁不溢出、按
     if (v === "tx") {
       assert.ok(await p.evaluate(() => [...document.querySelectorAll("#lx .lgtx .lgd")].every(e => e.getBoundingClientRect().height < parseFloat(getComputedStyle(e).lineHeight || "20") * 1.5 + 2)), `${width}：交易清單的日期不折成兩行`);
       const note = await p.evaluate(() => $("#note")?.innerText || document.body.innerText);
-      assert.match(note, /投資組合的資料（交易紀錄、融資帳戶）只記在這個瀏覽器/); assert.doesNotMatch(note, /要在「編輯庫存」填買進日期/, "交易紀錄頁不顯示舊庫存的說明");
+      assert.match(note, /投資組合的資料（交易紀錄、融資帳戶）只存在這個瀏覽器；這台裝置沒有開雲端同步，不會上傳/); assert.doesNotMatch(note, /要在「編輯庫存」填買進日期/, "交易紀錄頁不顯示舊庫存的說明");
     }
   }
   await ctx.close(); assert.deepEqual(errs, []);
@@ -57,5 +57,23 @@ test("鍵盤：Tab 到分頁按 Enter 切換；總覽的卡片、持倉可以用
   assert.ok(await tabTo(() => document.activeElement?.matches?.(".hmrow")), "Tab 走得到持倉列");
   const code = await p.evaluate(() => document.activeElement.dataset.sel); await p.keyboard.press(" ");
   await p.waitForFunction(c => W.sel === c, code, { timeout: 10000 });
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+// 手機與桌面：交易日期不折行、不溢出、不壓到「修改／刪除」；交易紀錄頁的說明依雲端同步有沒有開而不同（不能說「不會上傳」卻其實會同步）
+for (const width of [390, 1280]) test(`交易清單日期與資料說明 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  await p.evaluate(tx => { localStorage.removeItem("kline-sync"); store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "tx" }; W.holdView = "tx"; setLt("hold"); }, TX);
+  await p.waitForSelector("#lx .lgtx .lgd", { timeout: 30000 });
+  const g = await p.evaluate(() => [...document.querySelectorAll("#lx .lgtx")].map(li => { const d = li.querySelector(".lgd").getBoundingClientRect(), b = li.querySelector(".lgact")?.getBoundingClientRect(), lh = parseFloat(getComputedStyle(li.querySelector(".lgd")).lineHeight) || 20;
+    return { oneLine: d.height < lh * 1.5 + 2, inside: d.right <= innerWidth + 1, clear: !b || d.right <= b.left + 1 || d.bottom <= b.top + 1 }; }));
+  assert.ok(g.length && g.every(x => x.oneLine), `${width}：日期一行`); assert.ok(g.every(x => x.inside), `${width}：日期沒有超出畫面`); assert.ok(g.every(x => x.clear), `${width}：日期沒有壓到修改／刪除`);
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${width}：沒有水平溢出`);
+  assert.match(await p.evaluate(() => document.body.innerText), /這台裝置沒有開雲端同步，不會上傳/);
+  // 開了雲端同步（有同步碼）：要說會一起同步，不能說不會上傳
+  await p.evaluate(() => { localStorage.setItem("kline-sync", JSON.stringify({ id: "TEST-ONLY-NOT-A-REAL-CODE" })); renderList(); });
+  const t = await p.evaluate(() => document.body.innerText);
+  assert.match(t, /這台裝置有開雲端同步，會一起同步/); assert.doesNotMatch(t, /不會上傳/);
+  await p.evaluate(() => localStorage.removeItem("kline-sync"));
   await ctx.close(); assert.deepEqual(errs, []);
 });

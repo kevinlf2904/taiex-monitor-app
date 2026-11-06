@@ -2129,7 +2129,10 @@ function renderList0() {
     const tw = W.holdMkt === "tw";
     if (tw) loadHoldDivs();
     if (W.holdView === "ana") renderHoldAna(); else if (W.holdView === "risk") renderHoldRisk(); else if (W.holdView === "macro") lazyRun("earn", () => renderHoldMacro()); else if (W.holdView === "tx") lazyRun("ledger", () => renderLedger()); else renderHold();
-    note = W.holdView === "tx" ? `投資組合的資料（交易紀錄、融資帳戶）只記在這個瀏覽器，不會上傳；換手機或清除瀏覽資料前，請到「工具 → 備份同步」匯出備份檔。` : W.holdLg ? `持股來自交易紀錄：成本含交易紀錄裡實際的買進手續費與稅${tw && W.hfee ? `；賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，最低 20 元）與證交稅照設定估算` : ""}；${W.hdiv ? "含交易紀錄裡記的已領股息" : "不含股息"}。舊庫存保留沒動。資料只記在這個瀏覽器。` : `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
+    // 交易紀錄頁的說明：有沒有開雲端同步（kline-sync 有同步碼）說法不同，和交易紀錄介紹頁「有開雲端同步的話會一起同步」一致
+    note = W.holdView === "tx" ? (() => { let on = false; try { on = !!JSON.parse(localStorage.getItem("kline-sync") || "{}").id; } catch {}
+      return on ? `投資組合的資料（交易紀錄、融資帳戶）存在這個瀏覽器；這台裝置有開雲端同步，會一起同步（單項超過 150KB 的不會同步，「工具 → 備份同步」會提醒）。換手機或清除瀏覽資料前，建議也到「工具 → 備份同步」匯出備份檔。`
+        : `投資組合的資料（交易紀錄、融資帳戶）只存在這個瀏覽器；這台裝置沒有開雲端同步，不會上傳。換手機或清除瀏覽資料前，請到「工具 → 備份同步」匯出備份檔，或開啟雲端同步。`; })() : W.holdLg ? `持股來自交易紀錄：成本含交易紀錄裡實際的買進手續費與稅${tw && W.hfee ? `；賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，最低 20 元）與證交稅照設定估算` : ""}；${W.hdiv ? "含交易紀錄裡記的已領股息" : "不含股息"}。舊庫存保留沒動。資料只記在這個瀏覽器。` : `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
   } else if (W.lt === "screen") {
     $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? liveTag(W.scr, "收盤後資料") : "選股"}・僅供參考，不是買賣建議</span>${rfBtn("scrRefresh")}`;
     renderScreen(); note = W.scr?.source ? `資料：${W.scr.source}。「K線」「技術」兩類是在瀏覽器裡掃描自選、庫存、台股熱門與今天熱門清單的日 K；「題材」是常見代表股的參考名單。` : "";
