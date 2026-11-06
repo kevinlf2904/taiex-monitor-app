@@ -50,8 +50,9 @@ test("連續部分失敗：沿用的那檔標的是當初真正取得的時間�
   // 之後只拿得到 2330（兩次）
   await ctx.route("**/api/quote**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", quotes: [{ code: "2330", price: 120, prev: 119, date: "2026-10-05" }] }) }));
   for (let i = 0; i < 2; i++) {
-    await p.waitForTimeout(1100); await p.click('.hmcard [data-lg="pfreload"]');
-    await p.waitForFunction(n => W.lgAl && !W.lgAl.refreshing && W.lgAl.tok === n, await p.evaluate(() => W.lgTok), { timeout: 15000 });
+    await p.waitForTimeout(1100); const t0 = await p.evaluate(() => Date.now()); await p.click('.hmcard [data-lg="pfreload"]');
+    // 等這一次的報價回來（W.lgTok 是各資料共用的請求編號，總覽的走勢也會用到，不能拿來等）
+    await p.waitForFunction(t => W.lgAl && !W.lgAl.refreshing && !W.lgAl.busy && W.lgAl.at >= t, t0, { timeout: 15000 });
   }
   const st = await p.evaluate(() => ({ at: W.lgAl.items["2317"].at, kept: W.lgAl.meta.kept, now: W.lgAl.meta.fetchedAt, px: W.lgAl.px.get("2317")?.price }));
   assert.equal(st.at, first, "2317 的取得時間還是第一次的"); assert.deepEqual(st.kept.map(k => k.code), ["2317"]); assert.ok(st.now > first, "這次的取得時間比較新"); assert.ok(st.px > 0, "2317 的價格沿用");
