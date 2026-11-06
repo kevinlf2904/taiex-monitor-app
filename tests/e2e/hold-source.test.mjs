@@ -36,6 +36,10 @@ test("有交易紀錄：庫存改用交易紀錄；舊庫存不動；可以切�
     // 交易紀錄有新交易 → 庫存跟著變（存檔時間改了）
     await p.evaluate(tx => { localStorage.setItem("kline:pf:v1", JSON.stringify({ v: 1, method: "avg", transactions: [...tx, { id: "c", v: 1, date: "2026-04-01", type: "buy", symbol: "2454", market: "tw", currency: "TWD", shares: 10, price: 1000, fee: 0, tax: 0 }], at: "2026-11-02T00:00:00Z" })); renderList(); }, TX);
     await p.waitForFunction(() => /股2454/.test($("#wl").innerText), null, { timeout: 15000 });
+    // 修改一筆交易（筆數、建立時間 at 都沒變）也要跟著變；at 是建立時間，存檔不改它
+    await p.evaluate(() => { const S = JSON.parse(localStorage.getItem("kline:pf:v1")); S.transactions[0].shares = 200; localStorage.setItem("kline:pf:v1", JSON.stringify(S)); renderList(); });
+    await p.waitForFunction(() => W.hold["2317"]?.sh === 200, null, { timeout: 15000 });
+    assert.equal(JSON.parse(await p.evaluate(() => localStorage.getItem("kline:pf:v1"))).at, "2026-11-02T00:00:00Z");
     assert.deepEqual(JSON.parse(await p.evaluate(() => localStorage.getItem("kline:watch:hold"))), OLD, "全程舊庫存不變");
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
     await ctx.close(); assert.deepEqual(errs, []);

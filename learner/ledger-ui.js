@@ -15,8 +15,7 @@ const lgLoad = () => { const s = store.get(LG_KEY, null); return s && typeof s =
 function lgSave(s) {
   const v = KLLedger.validateStore(s, { today: lgToday() });
   if (!v.ok) return v;
-  // at＝最後存檔時間：庫存各分頁用它判斷交易紀錄有沒有改（修改一筆交易時筆數不變）
-  store.set(LG_KEY, { ...s, at: new Date().toISOString() }); if (typeof holdSrcApply === "function") holdSrcApply(); return v; // 庫存各分頁的持股跟著更新
+  store.set(LG_KEY, s); if (typeof holdSrcApply === "function") holdSrcApply(); return v; // 庫存各分頁的持股跟著更新（at 是建立時間，不改）
 }
 const LG_FIELDS = { // 每種交易要填的欄位
   buy: ["symbol", "shares", "price", "fee", "tax"], sell: ["symbol", "shares", "price", "fee", "tax", "dayTrade"], dividend: ["symbol", "amount", "tax"],
