@@ -37,6 +37,10 @@ test("交易紀錄匯出 CSV", async () => {
   const csv = readFileSync(await dl.path(), "utf8");
   assert.match(await p.evaluate(() => window.__dlName), /^交易紀錄-\d{4}-\d{2}-\d{2}\.csv$/); assert.ok(csv.startsWith("﻿日期,類型,代號")); assert.match(csv, /2026-01-05,買進,2330,tw,TWD,10,100,/);
   assert.match(await p.evaluate(() => $("#lx").innerText), /已匯出 1 筆交易（CSV）/);
+  // 沒有交易：不下載空檔，提示一句
+  await p.evaluate(() => { localStorage.setItem("kline:pf:v1", JSON.stringify({ v: 1, method: "avg", transactions: [], at: "x" })); window.__dlName = null; renderList(); });
+  await p.click("[data-lg=csv]"); await p.waitForFunction(() => /還沒有交易，沒有東西可以匯出/.test($("#lx").innerText), null, { timeout: 10000 });
+  assert.equal(await p.evaluate(() => window.__dlName), null, "沒有觸發下載");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
