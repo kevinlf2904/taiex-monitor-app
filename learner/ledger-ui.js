@@ -34,6 +34,7 @@ function renderLedger() {
   const S = lgLoad();
   if (L.view === "margin") return renderMargin(); // 融資不需要交易紀錄
   if (!S) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
+  if (!L.view || L.view === "home") return renderHome(S); // 總覽（預設）：畫面在 pf-home.js，用到時才載入
   if (L.view === "perf") return renderPerf(S);
   if (L.view === "margin") return renderMargin();
   if (L.view === "alloc") return renderAlloc(S);
@@ -115,8 +116,8 @@ document.addEventListener("click", e => {
   if (a === "preview") L.prev = KLLedger.previewMigration(W.hold || {}, { today: lgToday(), now: new Date().toISOString() });
   else if (a === "cancel") L.prev = null;
   else if (a === "commit") { const P = L.prev; if (!P?.store) return; const s = { ...P.store, method: $("#lgMethod")?.value === "fifo" ? "fifo" : "avg" };
-    const v = lgSave(s); if (!v.ok) { L.prev = null; L.msg = "建立失敗：資料檢查沒有通過，沒有寫入。"; } else { L.prev = null; L.msg = `已建立交易紀錄（${s.transactions.length} 筆）。舊的庫存資料仍保留。`; } }
-  else if (a === "blank") { const v = lgSave({ v: 1, method: "avg", transactions: [], at: new Date().toISOString() }); if (v.ok) L.msg = "已建立空白的交易紀錄。"; }
+    const v = lgSave(s); if (!v.ok) { L.prev = null; L.msg = "建立失敗：資料檢查沒有通過，沒有寫入。"; } else { L.prev = null; L.view = "tx"; L.msg = `已建立交易紀錄（${s.transactions.length} 筆）。舊的庫存資料仍保留。`; } }
+  else if (a === "blank") { const v = lgSave({ v: 1, method: "avg", transactions: [], at: new Date().toISOString() }); if (v.ok) { L.view = "tx"; L.msg = "已建立空白的交易紀錄。"; } }
   else if (a === "add") L.form = { type: "buy", v: { date: lgToday() } };
   else if (a === "close") L.form = null;
   else if (a === "view") { L.view = b.dataset.v; L.form = null; }
@@ -161,7 +162,7 @@ document.addEventListener("submit", e => {
    價格：每一檔 /api/kline 原始收盤（最多 24 個月；股息已經是現金流，不用還原價）；比較基準：台幣＝加權指數（價格指數，不含股息）、美元＝SPY 還原價（含息）。
    畫面：重點數字、淨值走勢 vs 比較基準（同一起點＝100）、回撤（另一張圖，不用雙軸）、月報酬表、歸因排行、估算原因與計算口徑。
    日期範圍：3 個月／6 個月／1 年／全部；圖上滑鼠或手指移動顯示當天數值。 */
-const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="交易紀錄、績效、配置或融資">${[["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"], ["margin", "融資"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "tx") === k}">${t}</button>`).join("")}</div>`;
+const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="總覽、交易紀錄、績效、配置或融資">${[["home", "總覽"], ["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"], ["margin", "融資"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "home") === k}">${t}</button>`).join("")}</div>`;
 // 績效（perf.js）與匯率合併（fx.js）用到時才載入，照順序（fx.js 要用到 perf.js）
 function lgPerfLib() {
   if (typeof KLPerf !== "undefined" && typeof KLFx !== "undefined") return Promise.resolve();
@@ -291,7 +292,7 @@ document.addEventListener("pointerleave", e => { const box = e.target.closest?.(
 // 績效頁的樣式（放在這裡，不用改 watch.html）；顏色用網站的變數，深色模式自動跟著變
 (function () {
   if (document.getElementById("pfcss")) return; const st = document.createElement("style"); st.id = "pfcss";
-  st.textContent = `.lgview{margin:8px 12px 0}.pfrange{flex-wrap:wrap}
+  st.textContent = `@media (pointer:coarse){.lgview button{min-height:44px}}.lgview{margin:8px 12px 0}.pfrange{flex-wrap:wrap}
 .pfcard{margin:8px 12px 16px;padding:10px 12px;border-radius:6px;background:var(--surface-2)}.pfcard h4{margin:0 0 8px;font-size:14px}
 .pftiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px}
 .pftile{display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:6px;background:var(--surface);min-width:0}.pftile span{font-size:12px;color:var(--muted)}
@@ -333,7 +334,7 @@ function mgPrices(syms) {
   W.lgMg = { key, busy: true, at: Date.now() };
   getJ(`/api/quote?codes=${syms.map(encodeURIComponent).join(",")}`).catch(() => null).then(q => {
     const px = {}; for (const x of q?.quotes || []) if (x && x.price > 0) px[String(x.code).toUpperCase()] = { price: x.price, date: x.date || null, name: x.name || null };
-    W.lgMg = { key, busy: false, at: Date.now(), px }; if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "margin") renderList();
+    W.lgMg = { key, busy: false, at: Date.now(), px }; if (W.lt === "hold" && W.holdView === "tx" && ["margin", "home", undefined].includes(W.lg?.view)) renderList();
   });
   return W.lgMg;
 }
@@ -430,7 +431,7 @@ function lgAllocData(P) {
     const px = new Map((q?.quotes || []).filter(x => x && x.price > 0).map(x => [String(x.code).toUpperCase(), x])), last = fx?.data?.length ? fx.data[fx.data.length - 1] : null;
     const etf = {}; etfs.forEach((c, i) => { const j = E[i]; if (j?.hold?.rows?.length) etf[c] = { date: j.hold.date || null, rows: j.hold.rows.map(r => ({ code: r.code || null, name: r.name || null, pct: r.pct })), ind: j.ind?.rows?.length ? { date: j.ind.date || null, rows: j.ind.rows } : null }; });
     W.lgAl = { key, busy: false, at: Date.now(), px, fx: last ? { rate: last.c, date: String(last.d).slice(0, 10) } : null, etf };
-    if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "alloc") renderList();
+    if (W.lt === "hold" && W.holdView === "tx" && ["alloc", "home", undefined].includes(W.lg?.view)) renderList(); // 配置與總覽共用
   });
   return W.lgAl;
 }
@@ -501,4 +502,12 @@ function pfFxCard(F) {
     <dl class="pfpnl"><dt>台股損益</dt><dd class="${cls(P.twStocks)}">${lgSgn(P.twStocks, "TWD")}</dd><dt>美股股價與股息（換成台幣）</dt><dd class="${cls(P.usPrice)}">${lgSgn(P.usPrice, "TWD")}</dd>
       <dt>匯率影響</dt><dd class="${cls(P.usFx)}">${lgSgn(P.usFx, "TWD")}</dd><dt>合計</dt><dd class="${cls(P.total)}"><b>${lgSgn(P.total, "TWD")}</b></dd></dl>
     <p class="note">匯率：${F.fx.rate == null ? "—" : F.fx.rate.toFixed(3)}（${esc(F.fx.date || "")}，${esc(F.fx.source || "")}；是市場中間價，不是銀行實際買賣匯率，換匯成本沒有算進去）。美股每天的市值與現金流都用當天匯率換算。</p></section>`;
+}
+
+// 總覽（第 8 階段）：畫面與計算在 pf-home.js、overview.js，用到時才依序載入
+function renderHome(S) {
+  if (typeof renderHomeView === "function" && typeof KLOverview !== "undefined") return renderHomeView(S);
+  $("#lx").innerHTML = lgViewSeg() + skel("載入總覽…");
+  const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
+  (W.lgHomeP ||= one("overview.js").then(() => one("pf-home.js")).catch(e => { W.lgHomeP = null; throw e; })).then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
 }
