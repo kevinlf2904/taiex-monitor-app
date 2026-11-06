@@ -1226,7 +1226,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.06-200</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.06-201</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2020,9 +2020,10 @@ async function loadHoldDivs(force = false) {
 // 報酬＝市值－賣出手續費－證交稅－持有成本；損益平衡點＝持有成本 ÷（股數 ×（1－賣出手續費率－稅率））
 function holdPnL(c, q) {
   const h = W.hold[c]; if (!h || !h.sh || !h.cost || q?.price == null) return null; const mv = h.sh * q.price, buy = h.sh * h.cost, us = isUS(c);
-  const fr = W.hfee && !us ? 0.001425 * W.hdisc : 0, tr = W.hfee && !us ? taxOf(c) ?? 0.003 : 0, bf = fr ? Math.max(20, Math.round(buy * fr)) : 0, sf = fr ? Math.max(20, Math.round(mv * fr)) : 0, tax = Math.round(mv * tr);
-  const dvAll = us ? null : holdDiv(c, h), dv = W.hdiv ? dvAll?.got || 0 : 0, hc = buy + bf - dv, pnl = mv - sf - tax - hc;
-  return { mv, pnl, pct: hc > 0 ? (pnl / hc) * 100 : null, day: q.chg != null ? h.sh * q.chg : null, fee: bf + sf, tax, dv, divGot: dvAll?.got ?? null, divYr: dvAll?.yr ?? null, hc, avg: hc / h.sh, be: hc / (h.sh * (1 - fr - tr)) };
+  // 交易紀錄的持股（h.lg）：成本已含實際的買進手續費與稅，不再估；股息用帳本記到的已領股息（美股也有）
+  const fr = W.hfee && !us ? 0.001425 * W.hdisc : 0, tr = W.hfee && !us ? taxOf(c) ?? 0.003 : 0, bf = fr && !h.lg ? Math.max(20, Math.round(buy * fr)) : 0, sf = fr ? Math.max(20, Math.round(mv * fr)) : 0, tax = Math.round(mv * tr);
+  const dvAll = us && !h.lg ? null : holdDiv(c, h), got = h.lg ? h.dv || 0 : dvAll?.got, dv = W.hdiv ? got || 0 : 0, hc = buy + bf - dv, pnl = mv - sf - tax - hc;
+  return { mv, pnl, pct: hc > 0 ? (pnl / hc) * 100 : null, day: q.chg != null ? h.sh * q.chg : null, fee: bf + sf, tax, dv, divGot: got ?? null, divYr: dvAll?.yr ?? null, hc, avg: hc / h.sh, be: hc / (h.sh * (1 - fr - tr)) };
 }
 function rowHtml(c, q, { rank, metric, star } = {}) {
   q = q || {}; const nm = esc(q.name || nameOf(c)), al = W.alerts[c] && (W.alerts[c].up || W.alerts[c].dn), lo = q.low, hi = q.high, rng = lo != null && hi != null && hi > lo && q.price != null;
@@ -2121,12 +2122,13 @@ function renderList0() {
       : `<li class="empty note">這個群組還沒有股票。在上面輸入代號或名稱加入，或從「台股熱門」「美股熱門」「排行」按 ☆ 加入（台股、美股會自動放進各自的群組）。<br><button type="button" class="btn sm" data-onb="fill">✨ 一鍵載入範例自選（2330／2317／2454／NVDA／AAPL）</button></li>`);
     note = `${curList().length} 檔・${anyOpen() ? "盤中每秒自動更新" : "收盤後每 5 分鐘確認一次"}`;
   } else if (W.lt === "hold") {
+    holdSrcApply(); // 交易紀錄有改（新增交易、匯入備份）就換成新的持股
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"], ["risk", "風險"], ["macro", "總經敏感度"], ["tx", "交易紀錄"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
-      <div class="imp-btns"><button class="btn sm primary" data-imp="edit">${ico("pen")}編輯庫存</button><button class="btn sm" data-imp="shot">${ico("cam")}截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
+      ${W.holdView === "tx" ? "" : holdSrcBar()}<div class="imp-btns"${W.holdLg ? " hidden" : ""}><button class="btn sm primary" data-imp="edit">${ico("pen")}編輯庫存</button><button class="btn sm" data-imp="shot">${ico("cam")}截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
     const tw = W.holdMkt === "tw";
     if (tw) loadHoldDivs();
     if (W.holdView === "ana") renderHoldAna(); else if (W.holdView === "risk") renderHoldRisk(); else if (W.holdView === "macro") lazyRun("earn", () => renderHoldMacro()); else if (W.holdView === "tx") lazyRun("ledger", () => renderLedger()); else renderHold();
-    note = `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
+    note = W.holdLg && W.holdView !== "tx" ? `持股來自交易紀錄：成本含交易紀錄裡實際的買進手續費與稅${tw && W.hfee ? `；賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，最低 20 元）與證交稅照設定估算` : ""}；${W.hdiv ? "含交易紀錄裡記的已領股息" : "不含股息"}。舊庫存保留沒動。資料只記在這個瀏覽器。` : `${tw ? (W.hfee ? `損益已扣買進、賣出手續費（0.1425%${W.hdisc < 1 ? " × " + W.hdisc * 10 + " 折" : ""}，每筆最低 20 元）與證交稅（股票 0.3%、ETF 0.1%、債券 ETF 免）` : "損益未扣手續費與證交稅") + "；" + (W.hdiv ? "含已領股息（要在「編輯庫存」填買進日期才算得出來）" : "不含股息") + "。" : "美股損益未扣手續費。"}持股只記在這個瀏覽器。`;
   } else if (W.lt === "screen") {
     $("#lTools").innerHTML = `<span class="note">${W.scr?.date ? liveTag(W.scr, "收盤後資料") : "選股"}・僅供參考，不是買賣建議</span>${rfBtn("scrRefresh")}`;
     renderScreen(); note = W.scr?.source ? `資料：${W.scr.source}。「K線」「技術」兩類是在瀏覽器裡掃描自選、庫存、台股熱門與今天熱門清單的日 K；「題材」是常見代表股的參考名單。` : "";
@@ -2202,7 +2204,8 @@ $("#listPane").addEventListener("click", e => {
   else if (gx && gx.dataset.gx === "mfRefresh") rfRun("mfRefresh", () => { W.mf.days = W.mf.days.filter(d => d.date < W.today); W.mf.tried = new Set(); return loadMoney(10, true); });
   else if (t.closest("[data-hrtol]")) { W.hrTol = t.closest("[data-hrtol]").dataset.hrtol; store.set("watch:hrtol", W.hrTol); renderList(); }
   else if (t.closest("[data-hv]")) { W.holdView = t.closest("[data-hv]").dataset.hv; store.set("watch:hv", W.holdView); renderList(); }
-  else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a === "shot") $("#impFile").click(); else if (a === "edit") openHoldEdit(); else if (a === "text") openImport("text"); else exportHold(); }
+  else if (t.closest("[data-hsrc]")) { const v = t.closest("[data-hsrc]").dataset.hsrc; if (v === "tx") { W.holdView = "tx"; store.set("watch:hv", "tx"); } else { W.hsrcLegacy = v === "legacy"; holdSrcApply(); } renderList(); }
+  else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a !== "export" && holdLgBlock()) return; if (a === "shot") $("#impFile").click(); else if (a === "edit") openHoldEdit(); else if (a === "text") openImport("text"); else exportHold(); }
   else if (gx) { const a = gx.dataset.gx; if (a === "edit") W.editing = true; else if (a === "done") W.editing = false; else if (a === "rename") { const nm = prompt("群組名稱", W.groups[W.gi].name); if (nm) W.groups[W.gi].name = nm.slice(0, 12); } else if (a === "delete" && W.groups.length > 1 && confirm(`刪除群組「${W.groups[W.gi].name}」？`)) { W.groups.splice(W.gi, 1); W.gi = 0; W.editing = false; } saveGroups(); renderList(); }
   else if (so) { W.sort = so.dataset.sort; store.set("watch:sort", W.sort); renderList(); }
   else if (t.closest("[data-etf]")) { W.etfCat = t.closest("[data-etf]").dataset.etf; store.set("watch:etf", W.etfCat); W.etfUsAt = 0; renderList(); pollList().then(renderList).catch(() => {}); }
@@ -2225,6 +2228,41 @@ function renderPort() {
 
 /* ---------- 庫存：今日損益、累積損益、市值、持股佔比 ---------- */
 const PIE = ["#4e9af1", "#f0a43a", "#e0566b", "#3cc6a8", "#9a9aa6"];
+/* 庫存資料來源（docs/portfolio/HOLD_SOURCE.md）：有交易紀錄（kline:pf:v1 至少一筆）時，持股改由交易紀錄算（ledger.js），
+   在記憶體裡換成舊格式 { 代號: { sh, cost, d, dv, lg } } 放進 W.hold，庫存各分頁、個股面板、晨報、提醒都讀同一份。
+   舊庫存（kline:watch:hold）放在 W.holdOwn，只讀不動；store.lock 擋下這段時間任何寫回 watch:hold 的動作。
+   W.hsrcLegacy：這次開啟改看舊庫存（不存檔）。 */
+W.holdOwn = W.hold;
+store.lock = k => !(k === "watch:hold" && W.holdLg);
+function holdFromLedger(S) {
+  const L = KLLedger.buildLedger(S.transactions, { method: S.method, today: twIso() }), H = {}, divs = {};
+  for (const x of L.txs || []) if (x.applied && !(x.errors || []).length && x.tx?.type === "dividend") (divs[String(x.tx.symbol || "").toUpperCase()] ||= []).push([x.tx.date, (+x.tx.amount || 0) - (+x.tx.tax || 0)]);
+  for (const p of L.positions) if (p.open && p.shares > 0 && p.costBasis > 0) {
+    // 這段持有的建倉日：最後一次從 0 股變成有股票的那天（中間全部賣光過就從重新買進算起）
+    const hs = p.history || []; let d = p.firstDate || null; for (let i = 1; i < hs.length; i++) if (hs[i - 1].shares <= 1e-9 && hs[i].shares > 0) d = hs[i].date;
+    H[p.symbol] = { sh: p.shares, cost: p.costBasis / p.shares, ...(d ? { d } : {}), dv: Math.round((divs[p.symbol] || []).filter(([x]) => !d || x >= d).reduce((a, [, v]) => a + v, 0) * 100) / 100, lg: true };
+  }
+  return { H, errors: L.errorCount || 0 };
+}
+// 依目前的交易紀錄決定持股來源；交易紀錄的模組還沒載入就先載入再套用
+function holdSrcApply() {
+  let raw = null; try { raw = localStorage.getItem("kline:pf:v1"); } catch {}
+  const S = store.get("pf:v1", null), has = Array.isArray(S?.transactions) && S.transactions.length > 0;
+  if (!has || W.hsrcLegacy) { if (W.holdLg) { W.hold = W.holdOwn; W.holdLg = null; } return false; }
+  if (typeof KLLedger === "undefined") { if (!W.hsrcP) W.hsrcP = lazy("ledger").then(() => { W.hsrcP = null; if (holdSrcApply()) { W.hdivs = W.hdivs || {}; renderList(); } }, () => { W.hsrcP = null; }); return false; }
+  // 存檔內容一模一樣（整串文字比較，修改一筆交易也算有改）而且同一天就不重算：庫存分頁盤中每秒重畫
+  const key = `${twIso()}|${raw}`; if (W.holdLg?.key === key) return true;
+  try { const r = holdFromLedger(S); W.hold = r.H; W.holdLg = { key, n: S.transactions.length, errors: r.errors }; return true; }
+  catch { W.hold = W.holdOwn; W.holdLg = null; return false; }
+}
+// 庫存分頁上方：資料來自哪裡＋切換（交易紀錄模式不能編輯舊庫存）
+function holdSrcBar() {
+  const S = store.get("pf:v1", null), has = Array.isArray(S?.transactions) && S.transactions.length > 0;
+  if (W.holdLg) return `<span class="note hsrc">持股來自<b>交易紀錄</b>（${W.holdLg.n} 筆交易${W.holdLg.errors ? `，${W.holdLg.errors} 筆有錯誤沒算進來` : ""}）</span><button class="btn sm" data-hsrc="tx">到交易紀錄新增買賣</button><button class="btn sm" data-hsrc="legacy">改看舊庫存</button>`;
+  return has && W.hsrcLegacy ? `<span class="note hsrc">目前看的是<b>舊庫存</b>（不是交易紀錄）</span><button class="btn sm" data-hsrc="ledger">改看交易紀錄</button>` : "";
+}
+// 交易紀錄模式下要改持股：提示到交易紀錄，不改舊庫存
+const holdLgBlock = () => { if (!W.holdLg) return false; toast("持股來自交易紀錄：請到「庫存 → 交易紀錄」新增買賣（舊庫存不會被改動）", 3500); return true; };
 function holdRows(m) {
   return Object.entries(W.hold).filter(([c, h]) => +h?.sh > 0 && +h?.cost > 0 && Number.isFinite(+h.sh) && Number.isFinite(+h.cost) && mktOf(c) === m).map(([c, h]) => { // 股數、成本要是大於 0 的數字（壞資料略過，不改動存檔）
     const q = W.quotes.get(c) || (c === W.sel ? W.detailQ : null), p = holdPnL(c, q), cost = h.sh * h.cost;
@@ -2248,8 +2286,8 @@ function holdDataCheck(m) {
 }
 function renderHold() {
   const m = W.holdMkt, R = holdRows(m), us = m === "us", money = v => (v == null ? "—" : (us ? "US$" : "") + (us ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : Math.round(v).toLocaleString()));
-  if (!R.length) { const none = !Object.keys(W.hold).length; $("#lx").innerHTML = (none ? "" : holdDataCheck(m)) + `<div class="hempty"><p class="note">還沒有${us ? "美股" : "台股"}持股。按上面的「編輯庫存」一格一格填代號、股數與成本，或用「截圖匯入」上傳券商 App 的庫存截圖。</p>
-    ${none ? `<button type="button" class="btn primary" data-hdemo="load">✨ 載入範例投資組合體驗</button><p class="note">放入台股、美股各幾檔範例部位，可以先看看損益、配息、風險分析長什麼樣子；之後一鍵清除。</p>` : ""}</div>`; $("#wl").innerHTML = ""; return; }
+  if (!R.length) { const none = !Object.keys(W.hold).length; $("#lx").innerHTML = (none ? "" : holdDataCheck(m)) + `<div class="hempty"><p class="note">${W.holdLg ? `交易紀錄裡目前沒有${us ? "美股" : "台股"}持股。到「交易紀錄」新增買進，這裡就會出現。` : `還沒有${us ? "美股" : "台股"}持股。按上面的「編輯庫存」一格一格填代號、股數與成本，或用「截圖匯入」上傳券商 App 的庫存截圖。`}</p>
+    ${none && !W.holdLg ? `<button type="button" class="btn primary" data-hdemo="load">✨ 載入範例投資組合體驗</button><p class="note">放入台股、美股各幾檔範例部位，可以先看看損益、配息、風險分析長什麼樣子；之後一鍵清除。</p>` : ""}</div>`; $("#wl").innerHTML = ""; return; }
   const demo = W.hold[Object.keys(W.hold)[0]]?.demo ? `<div class="hdemo"><span>✨ 目前是範例投資組合（不是你的真實持股）</span><button type="button" class="btn sm" data-hdemo="clear">清除範例</button></div>` : "";
   const ok = R.filter(r => r.mv != null);
   if (!ok.length) { $("#lx").innerHTML = demo + holdDataCheck(m) + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有報價。</p>` : skel("等待報價…")); }
@@ -2379,7 +2417,7 @@ $("#impSheet").addEventListener("click", e => {
   else if (t.closest("[data-gadd]")) { imp.rows.push({ code: "", sh: null, cost: null, on: true }); openImport(imp.edit ? "edit" : "review"); const ins = $("#impBody").querySelectorAll("input.code"); ins[ins.length - 1]?.focus(); }
   else if (t.closest("[data-gdel]")) { imp.rows.splice(+t.closest("[data-gdel]").dataset.gdel, 1); openImport(imp.edit ? "edit" : "review"); }
   else if (t.closest("[data-im]")) { imp.mode = t.closest("[data-im]").dataset.im; openImport(imp.edit ? "edit" : "review"); }
-  else if (t.closest("[data-imp2]")) { const k = t.closest("[data-imp2]").dataset.imp2; if (k === "shot") $("#impFile").click(); else openImport("text"); }
+  else if (t.closest("[data-imp2]")) { if (holdLgBlock()) return; const k = t.closest("[data-imp2]").dataset.imp2; if (k === "shot") $("#impFile").click(); else openImport("text"); }
   else if (t.id === "impParse") { const rows = parseHoldText($("#impText").value); if (!rows.length) { toast("沒有讀到資料，格式例如：2330 1000 650"); return; } if (imp.edit) { const cur = imp.rows.filter(r => r.code || r.sh); rows.forEach(n => { const k = cur.findIndex(r => n.code && r.code === n.code); if (k >= 0) cur[k] = n; else cur.push(n); }); openImport("edit", cur); } else { imp.mode = "merge"; openImport("review", rows); } }
   else if (t.id === "impSave") saveImport();
 });
@@ -2411,7 +2449,7 @@ async function saveImport() {
 // 截圖：先在手機上縮小（最長邊 1600px、JPEG），再交給 /api/import
 const shrink = file => new Promise((res, rej) => { const img = new Image(), url = URL.createObjectURL(file); img.onload = () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c.toDataURL("image/jpeg", 0.85)); }; img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("讀不到圖片")); }; img.src = url; });
 $("#impFile").addEventListener("change", async e => {
-  const files = [...e.target.files].slice(0, 4); e.target.value = ""; if (!files.length) return;
+  const files = [...e.target.files].slice(0, 4); e.target.value = ""; if (!files.length || holdLgBlock()) return;
   const keep = !$("#impSheet").hidden && imp.rows.length ? imp.rows : [];
   openImport("busy", `正在讀取 ${files.length} 張截圖…（AI 讀圖約需 10～30 秒）`);
   try {
@@ -5315,15 +5353,15 @@ function tagsHtml(c, q, lim) {
 }
 $("#favBtn").addEventListener("click", () => { const c = W.sel; if (!c) return; if (W.groups.some(g => g.list.includes(c))) { W.groups.forEach(g => (g.list = g.list.filter(x => x !== c))); toast("已移出自選", 1500); } else addToast(c, addTo(c)); saveGroups(); renderList(); renderDetailHead(); kick(); });
 $("#holdBtn").addEventListener("click", () => { $("#holdBox").hidden = !$("#holdBox").hidden; $("#alertBox").hidden = true; if (!$("#holdBox").hidden) $("#hSh").focus(); });
-$("#hSave").addEventListener("click", () => { const sh = Math.round(+$("#hSh").value), cost = +$("#hCost").value; if (!(sh > 0 && cost > 0)) { $("#hNote").textContent = "請填股數與平均成本"; return; } const d = $("#hDate").value; for (const k of Object.keys(W.hold)) if (W.hold[k].demo) delete W.hold[k]; /* 記了真的持股就把範例清掉 */ W.hold[W.sel] = { sh, cost, ...(/^\d{4}-\d{2}-\d{2}$/.test(d) ? { d } : {}) }; store.set("watch:hold", W.hold); if (W.hdivs) delete W.hdivs[W.sel]; if (!W.groups.some(g => g.list.includes(W.sel))) { addTo(W.sel); } $("#hNote").textContent = "已儲存"; renderDetailHead(); renderList(); });
+$("#hSave").addEventListener("click", () => { if (W.holdLg) { $("#hNote").textContent = "持股來自交易紀錄：請到「庫存 → 交易紀錄」新增買賣。"; return; } const sh = Math.round(+$("#hSh").value), cost = +$("#hCost").value; if (!(sh > 0 && cost > 0)) { $("#hNote").textContent = "請填股數與平均成本"; return; } const d = $("#hDate").value; for (const k of Object.keys(W.hold)) if (W.hold[k].demo) delete W.hold[k]; /* 記了真的持股就把範例清掉 */ W.hold[W.sel] = { sh, cost, ...(/^\d{4}-\d{2}-\d{2}$/.test(d) ? { d } : {}) }; store.set("watch:hold", W.hold); if (W.hdivs) delete W.hdivs[W.sel]; if (!W.groups.some(g => g.list.includes(W.sel))) { addTo(W.sel); } $("#hNote").textContent = "已儲存"; renderDetailHead(); renderList(); });
 // 範例投資組合：新訪客一鍵看庫存、損益、風險分析的樣子（標記 demo，清除時只刪範例）
 const HOLD_DEMO = { "2330": { sh: 1000, cost: 820, d: "2025-03-10" }, "0050": { sh: 3000, cost: 150, d: "2024-11-05" }, "2317": { sh: 2000, cost: 160, d: "2025-06-02" }, "2454": { sh: 200, cost: 1150, d: "2025-01-15" }, "2884": { sh: 5000, cost: 26, d: "2024-08-20" },
   AAPL: { sh: 20, cost: 190, d: "2025-02-03" }, NVDA: { sh: 30, cost: 120, d: "2025-04-08" }, VOO: { sh: 10, cost: 480, d: "2025-01-02" } };
-document.addEventListener("click", e => { const b = e.target.closest("[data-hdemo]"); if (!b) return;
+document.addEventListener("click", e => { const b = e.target.closest("[data-hdemo]"); if (!b || holdLgBlock()) return;
   if (b.dataset.hdemo === "load") { if (Object.keys(W.hold).length) return; for (const [c, h] of Object.entries(HOLD_DEMO)) W.hold[c] = { ...h, demo: true }; toast("已載入範例投資組合，可以切台股／美股、看風險分析", 2500); }
   else { for (const c of Object.keys(W.hold)) if (W.hold[c].demo) delete W.hold[c]; toast("已清除範例", 1500); }
   store.set("watch:hold", W.hold); renderList(); kick(); });
-$("#hClear").addEventListener("click", () => { delete W.hold[W.sel]; store.set("watch:hold", W.hold); $("#hNote").textContent = "已清除"; renderDetailHead(); renderList(); });
+$("#hClear").addEventListener("click", () => { if (W.holdLg) { $("#hNote").textContent = "持股來自交易紀錄：請到「庫存 → 交易紀錄」新增買賣。"; return; } delete W.hold[W.sel]; store.set("watch:hold", W.hold); $("#hNote").textContent = "已清除"; renderDetailHead(); renderList(); });
 function renderBook() {
   const c = W.sel, q = W.detailQ || W.quotes.get(c), B = q?.bids || [], A = q?.asks || [];
   if (!B.length && !A.length) { $("#book").innerHTML = `<p class="note" style="margin:0;padding:12px">${W.off ? "需要部署到網站才有五檔。" : isFut(c) ? "台指期沒有提供五檔。" : isIdx(c) ? "指數沒有五檔。" : isUS(c) ? "美股沒有提供五檔。" : "目前沒有五檔資料（收盤後或試撮前）。"}</p>`; $("#bookNote").textContent = ""; return; }
@@ -6393,6 +6431,7 @@ if (ROUTES[h0.split("/")[0].toLowerCase()]) setTimeout(() => applyRoute(location
 else if (okCode(h0)) select(h0, "none");
 else if (!isMobile()) { const c = W.last && okCode(W.last) ? W.last : curList()[0]; if (c) select(c, "none"); }
 else setQ("list");
+holdSrcApply(); // 有交易紀錄就改用交易紀錄的持股（ledger.js 還沒載入時，載入後會重畫）
 setLt(W.lt);
 if (wideMode() && !okCode(h0)) showList(false); // 一打開就在全寬分頁：不自動跳出個股抽屜
 renderAll();
