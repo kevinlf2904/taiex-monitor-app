@@ -760,12 +760,14 @@ const syncNewId = () => { const a = new Uint8Array(18); crypto.getRandomValues(a
 async function syncTok(id) { const b = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id))); return [...b].map(x => x.toString(16).padStart(2, "0")).join("").slice(0, 24); }
 async function syncApi(op, extra = {}) { const S = syncGet(); const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, id: S.id, ...extra }), signal: tmo(20000) }).catch(e => { throw new Error(/Timeout|Abort/.test(e.name) ? "雲端連線逾時" : "連不上雲端"); }); return r.json(); }
 async function syncCfg() { if (W.syncCfg) return W.syncCfg; try { W.syncCfg = await (await fetch("/api/sync?op=cfg", { signal: tmo(10000) })).json(); } catch { W.syncCfg = { kv: false }; } return W.syncCfg; }
+// 同步結果有變（成功／失敗／雲端服務不能用）：同步頁和交易紀錄頁（底下的資料說明）跟著重畫
+const syncShow = () => { if ((W.lt === "tools" && W.tv === "sync") || (W.lt === "hold" && W.holdView === "tx")) renderList(); };
 async function syncPush(quiet, force = false) {
   const S = syncGet(); if (!S.id) return; const data = syncSnap(), h = syncHash(data);
   // base：這台上次同步時雲端的時間；雲端被別台更新過就回 conflict，不蓋掉別台的改動（force＝使用者確認要用這台蓋掉）
   const j = await syncApi("push", { data, dev: navigator.userAgent.match(/iPad|iPhone|Android|Mac|Windows/)?.[0] || "", base: S.at || 0, ...(force ? { force: true } : {}) }).catch(e => ({ ok: false, error: e.message }));
   W.syncConflict = j.conflict ? { at: j.at, dev: j.dev } : null;
-  if (j.ok) { syncSet({ at: j.at, hash: h, tg: j.tg }); if (!quiet) toast("已上傳到雲端"); } else if (!quiet) toast(j.conflict ? "雲端有另一台裝置比較新的資料，沒有上傳；到「備份同步」選要用哪一份" : "上傳失敗：" + (j.error || "")); W.syncErr = j.ok ? null : j.error; if (W.lt === "tools" && W.tv === "sync") renderList();
+  if (j.ok) { syncSet({ at: j.at, hash: h, tg: j.tg }); if (!quiet) toast("已上傳到雲端"); } else if (!quiet) toast(j.conflict ? "雲端有另一台裝置比較新的資料，沒有上傳；到「備份同步」選要用哪一份" : "上傳失敗：" + (j.error || "")); W.syncErr = j.ok ? null : j.error || (j.conflict ? "雲端有另一台裝置比較新的資料，沒有上傳" : "上傳失敗"); syncShow();
 }
 async function syncPull(ask = true) {
   const j = await syncApi("pull").catch(e => ({ ok: false, error: e.message })); if (!j.ok) return toast("下載失敗：" + (j.error || ""));
@@ -775,8 +777,10 @@ async function syncPull(ask = true) {
 }
 // 開網頁時：雲端比這台新、而且這台上次同步後沒改過 → 自動下載；之後每分鐘檢查，有改動就自動上傳
 async function syncBoot() {
-  const S = syncGet(); if (!S.id || S.auto === false || W.off) return; const cfg = await syncCfg(); if (!cfg.kv) return;
-  try { const j = await syncApi("pull"); if (j.ok && j.at > (S.at || 0) && syncHash(syncSnap()) === S.hash) { try { syncApply(j.data); } catch (e) { W.syncErr = e.message; throw e; } syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast("已從雲端同步最新資料，重新載入…"); return setTimeout(() => location.reload(), 800); } } catch {}
+  const S = syncGet(); if (!S.id || S.auto === false || W.off) return; const cfg = await syncCfg(); if (!cfg.kv) return syncShow(); // 雲端服務不能用：交易紀錄頁的說明要改
+  try { const j = await syncApi("pull");
+    // 下載失敗（伺服器回 ok:false）要記下來，畫面才不會繼續顯示之前的成功；成功連上就清掉舊的錯誤
+    if (!j.ok) { W.syncErr = j.error || "下載失敗"; syncShow(); } else if (W.syncErr) { W.syncErr = null; syncShow(); } if (j.ok && j.at > (S.at || 0) && syncHash(syncSnap()) === S.hash) { try { syncApply(j.data); } catch (e) { W.syncErr = e.message; throw e; } syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast("已從雲端同步最新資料，重新載入…"); return setTimeout(() => location.reload(), 800); } } catch (e) { W.syncErr = e?.message || "連不上雲端"; syncShow(); } // 連線失敗也要記下來
   // 有衝突（雲端比較新、這台也改過）就先不自動上傳，等使用者在「備份同步」選
   setInterval(() => { const T = syncGet(); if (T.id && T.auto !== false && !W.syncConflict && document.visibilityState === "visible" && syncHash(syncSnap()) !== T.hash) syncPush(true); }, 60000);
 }
