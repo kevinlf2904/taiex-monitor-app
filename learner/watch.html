@@ -448,6 +448,8 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 #toTop { position: fixed; right: 14px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--grad-btn); color: var(--ink); font-size: 18px; box-shadow: 0 4px 14px rgba(0,0,0,.3); cursor: pointer; }
 @media (min-width: 901px) { #toTop { bottom: 24px; } }
 #navBack { position: fixed; left: 14px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 40; height: 38px; padding: 0 16px; border-radius: 999px; border: 0; background: color-mix(in srgb, var(--ink) 14%, var(--bg)); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+/* 返回按鈕浮在左下角：出現時清單與內容底部多留一個按鈕的高度，捲到最下面時內容不會被它蓋住 */
+body.navback-on .w-main, body.navback-on .w-list { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 901px) { #navBack { bottom: 24px; } }
 .flowread { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; min-height: 26px; padding: 4px 12px; font-size: 13px; font-family: var(--font-num); }
 .flowread small { margin-left: 4px; font-size: 11.5px; } .flowread .linkbtn { margin-left: auto; }
@@ -2085,7 +2087,7 @@ function hsRestore(M) {
     const er = e.getBoundingClientRect(), ar = a.getBoundingClientRect(); if (ar.left < er.left) e.scrollLeft -= er.left - ar.left + 16; else if (ar.right > er.right) e.scrollLeft += ar.right - er.right + 16; });
 }
 // 平板橫向、電腦：大盤、選股、資金、產業這些內容多的分頁用全寬；點個股時，個股頁從右邊滑出（抽屜），不會把內容擠成一條
-const WIDE_TABS = ["mkt", "screen", "ind", "today", "mon", "money", "earn", "pod", "after", "cong", "tools"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
+const WIDE_TABS = ["mkt", "screen", "ind", "today", "mon", "money", "earn", "pod", "after", "cong", "tools"], wideMode = () => (WIDE_TABS.includes(W.lt) || (W.lt === "hold" && W.holdView === "tx")) && !isMobile(); // 投資組合（庫存 → 交易紀錄：總覽、績效、配置、融資）在桌面也用全寬，圖表、表格才展得開
 function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); placeDrawer(); if (EMBED) requestAnimationFrame(postTabs); }
 // 嵌在 K線學堂裡時 iframe 和整頁一樣高，固定在 iframe 右側的抽屜會從 iframe 最上面一路拉到最下面：使用者往下捲過之後打開個股，
 // 內容在畫面外、抽屜本身也捲不動。所以抽屜改成貼齊使用者目前看得到的那一段，外層捲動或視窗大小改變時跟著移動。
@@ -2123,6 +2125,7 @@ function renderList0() {
       : `<li class="empty note">這個群組還沒有股票。在上面輸入代號或名稱加入，或從「台股熱門」「美股熱門」「排行」按 ☆ 加入（台股、美股會自動放進各自的群組）。<br><button type="button" class="btn sm" data-onb="fill">✨ 一鍵載入範例自選（2330／2317／2454／NVDA／AAPL）</button></li>`);
     note = `${curList().length} 檔・${anyOpen() ? "盤中每秒自動更新" : "收盤後每 5 分鐘確認一次"}`;
   } else if (W.lt === "hold") {
+    if ($("#main").classList.contains("wide") !== wideMode()) syncLayout(); // 庫存的分頁換到／離開交易紀錄：全寬與雙欄跟著切換
     holdSrcApply(); // 交易紀錄有改（新增交易、匯入備份）就換成新的持股
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"], ["risk", "風險"], ["macro", "總經敏感度"], ["tx", "交易紀錄"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
       ${W.holdView === "tx" ? "" : holdSrcBar()}<div class="imp-btns"${W.holdLg ? " hidden" : ""}><button class="btn sm primary" data-imp="edit">${ico("pen")}編輯庫存</button><button class="btn sm" data-imp="shot">${ico("cam")}截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
@@ -5234,6 +5237,7 @@ function navBackUi() {
   const d = history.state?.d || 0; if (EMBED) return post({ type: "watch-nav", d });
   let b = $("#navBack"); if (!b && d) { b = document.createElement("button"); b.id = "navBack"; b.type = "button"; b.textContent = "‹ 返回"; b.setAttribute("aria-label", "回上一頁"); b.addEventListener("click", () => history.back()); document.body.appendChild(b); }
   if (b) b.hidden = !d;
+  document.body.classList.toggle("navback-on", !!d); // 返回按鈕出現時，內容底部多留空間（見 CSS），最後幾行才不會被按鈕蓋住
 }
 addEventListener("popstate", e => { const st = e.state; if (st?.nav) return navApply(st.nav, st.y);
   const h = location.hash.slice(1).toUpperCase(); if (okCode(h)) select(h, "none"); else showList(false); });
