@@ -63,4 +63,5 @@ document.addEventListener("click", e => {
 .fold-t { max-height: var(--fold-h, 8em); overflow: hidden; -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent); mask-image: linear-gradient(180deg, #000 60%, transparent); }
 .fold-x { display: none !important; }
 .fold-btn { display: block; margin: 2px 12px 10px; padding: 4px 0; border: 0; background: none; color: var(--muted); font: 500 12.5px var(--font-body, inherit); cursor: pointer; text-align: left; }
+@media (pointer: coarse) { .fold-btn { min-height: 44px; } } /* 觸控裝置：「展開全部／收合」至少 44px 高，好按 */
 .fold-btn:hover { color: var(--ink); } .fold-btn[aria-expanded="true"] { color: var(--muted); }`; document.head.appendChild(css); }

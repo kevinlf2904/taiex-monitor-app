@@ -28,7 +28,7 @@ test("全部／台股／美股：交易紀錄與績效", async () => {
     t = await lx(p); assert.match(t, /台股（台幣）/); assert.doesNotMatch(t, /美股（美元）|合併（台幣計價）/);
     await p.click("[data-lg=mkt][data-v=all]"); await p.waitForSelector(".pffx", { timeout: 30000 });
     t = await lx(p); assert.match(t, /台股（台幣）/); assert.match(t, /美股（美元）/); assert.match(t, /合併（台幣計價）/);
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
+    assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, width + "：沒有水平溢出");
     // 總覽、配置沒有市場切換（看整個投資組合）
     await p.click("[data-lg=view][data-v=home]"); await p.waitForSelector(".hmcard", { timeout: 30000 }); assert.equal(await p.$(".lgmkt"), null);
     await ctx.close(); assert.deepEqual(errs, []);

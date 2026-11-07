@@ -23,7 +23,7 @@ test("總覽：預設分頁、重點數字、風險、分布、主要持倉、�
     assert.match(tr[0], /持股市值走勢：\d{4}-\d\d-\d\d/); assert.match(tr[1], /美股用每天的美元兌台幣匯率換算/); assert.match(tr[1], /不等於報酬/);
     assert.match(t, /美元兌台幣 32\.000/); assert.match(t, /單一持股占比偏高/, "2330 占比超過 30%");
     assert.equal(await p.evaluate(() => document.querySelector('[data-lg=view][data-v=home]').getAttribute("aria-pressed")), "true", "總覽是預設分頁");
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
+    assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, width + "：沒有水平溢出");
     if (width < 500) { const h = await p.evaluate(() => Math.min(...[...document.querySelectorAll(".lgview button, .hmcard .lgbar .btn, .hmalerts .linkbtn, .hmrow")].map(e => e.getBoundingClientRect().height))); assert.ok(h >= 43.5, "手機上可點的按鈕至少 44px 高：" + h); }
     await p.click('.hmcard .pftile[data-v="alloc"]'); await p.waitForSelector(".alcard", { timeout: 30000 });
     await ctx.close(); assert.deepEqual(errs, []);

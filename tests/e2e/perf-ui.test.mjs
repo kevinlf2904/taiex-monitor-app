@@ -30,7 +30,7 @@ test("績效頁：重點數字、走勢、回撤、月報酬、歸因、估算�
     t = await p.evaluate(() => document.querySelector(".pftip:not([hidden])")?.innerText || ""); assert.match(t, /我的組合[\s\S]*回撤[\s\S]*市值/);
     // 切回交易紀錄
     await p.click('[data-lg=view][data-v="tx"]'); await p.waitForSelector("[data-lg=add]");
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
+    assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, width + "：沒有水平溢出");
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });

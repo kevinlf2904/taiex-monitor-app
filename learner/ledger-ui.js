@@ -412,9 +412,9 @@ function mgCard(R, a) {
   const st = R.state ? `<span class="pfbadge mg-${R.state}">${MG_STATE[R.state]}</span>` : "", src = `<span class="pfbadge">${KLMargin.SOURCE_LABEL[R.source]}</span>`;
   const done = R.status === "estimated" ? `<span class="pfbadge">含估算</span>` : R.status === "incomplete" ? `<span class="pfbadge mg-call">資料不完整</span>` : "";
   const PS = { quote: "報價", user: "你填的價格" };
-  const colTable = R.collateral.length ? `<h5 class="pfh">擔保品<small class="note">（價格、日期、來源）</small></h5><table class="altable mgtable mgcol"><thead><tr><th>代號</th><th>股數</th><th>價格</th><th>價格日期</th><th>來源</th><th>市值</th><th>占比</th></tr></thead><tbody>
+  const colTable = R.collateral.length ? `<h5 class="pfh">擔保品<small class="note">（價格、日期、來源）</small></h5><div class="mgscroll"><table class="altable mgtable mgwrapped mgcol"><thead><tr><th>代號</th><th>股數</th><th>價格</th><th>價格日期</th><th>來源</th><th>市值</th><th>占比</th></tr></thead><tbody>
     ${R.collateral.map(c => `<tr><td>${esc(nameOf(c.symbol))}<small class="note"> ${esc(c.symbol)}</small></td><td>${lgN(c.shares)}</td><td>${c.price == null ? "—" : lgN(c.price)}</td><td>${esc(c.priceDate || "—")}</td><td>${c.priceSource ? PS[c.priceSource] : "沒有價格，沒算進市值"}</td><td>${c.value == null ? "—" : money(c.value)}</td><td>${pc(c.weight)}</td></tr>`).join("")}
-    ${R.cashCollateral ? `<tr><td>現金擔保</td><td></td><td></td><td></td><td>你填的</td><td>${money(R.cashCollateral)}</td><td>${pc(R.collateralValue ? R.cashCollateral / R.collateralValue : null)}</td></tr>` : ""}</tbody></table>` : "";
+    ${R.cashCollateral ? `<tr><td>現金擔保</td><td></td><td></td><td></td><td>你填的</td><td>${money(R.cashCollateral)}</td><td>${pc(R.collateralValue ? R.cashCollateral / R.collateralValue : null)}</td></tr>` : ""}</tbody></table></div>` : "";
   const iss = R.issues.map(x => esc(KLMargin.ISSUE_LABEL[x.k] || x.k) + (x.codes ? `：${x.codes.map(esc).join("、")}` : "")).join("；");
   const needTxt = n => (n ? `補現金 ${money(n.cash)} 或還款 ${money(n.repay)}` : "—");
   return `<section class="pfcard mgcard"><h4>${esc(R.name || "借款帳戶")}<small class="note"> ${MG_TYPE[R.type]}</small>${src}${st}${done}</h4>
@@ -425,9 +425,9 @@ function mgCard(R, a) {
     ${R.need ? `<p class="note lgwarn">⚠︎ 目前低於追繳線：試算要${needTxt(R.need)}才回到 ${pc(R.rules.topUpTo || R.rules.call)}。</p>` : ""}${iss ? `<p class="note lgwarn">⚠︎ ${iss}。</p>` : ""}
     ${colTable}
     <h5 class="pfh">壓力測試<small class="note">（股票擔保品同時下跌，現金不跌）</small></h5>
-    <table class="altable mgtable"><thead><tr><th>情境</th><th>擔保品市值</th><th>維持率</th><th>狀態</th><th>要補</th></tr></thead><tbody>
+    <div class="mgscroll"><table class="altable mgtable mgwrapped"><thead><tr><th>情境</th><th>擔保品市值</th><th>維持率</th><th>狀態</th><th>要補</th></tr></thead><tbody>
       ${R.stress.map(x => `<tr><td>全部跌 ${(-x.shock * 100).toFixed(0)}%</td><td>${money(x.value)}</td><td>${pc(x.ratio)}</td><td>${x.state ? MG_STATE[x.state] : "—"}</td><td>${needTxt(x.need)}</td></tr>`).join("")}
-      ${R.singleLimitDown.slice(0, 3).map(x => `<tr><td>${esc(nameOf(x.symbol))} 連三根跌停（約 −27%）</td><td>${money(x.value)}</td><td>${pc(x.ratio)}</td><td>${x.state ? MG_STATE[x.state] : "—"}</td><td>${needTxt(x.need)}</td></tr>`).join("")}</tbody></table>
+      ${R.singleLimitDown.slice(0, 3).map(x => `<tr><td>${esc(nameOf(x.symbol))} 連三根跌停（約 −27%）</td><td>${money(x.value)}</td><td>${pc(x.ratio)}</td><td>${x.state ? MG_STATE[x.state] : "—"}</td><td>${needTxt(x.need)}</td></tr>`).join("")}</tbody></table></div>
     ${R.riskiest ? `<p class="note">風險最大的擔保品：${esc(nameOf(R.riskiest.symbol))}（占擔保品 ${pc(R.riskiest.weight)}）。</p>` : ""}
     <p class="note">門檻來源：${esc(R.rules.source || "未填")}${R.rules.asOf ? `（${esc(R.rules.asOf)}）` : ""}${R.rules.isDefault ? "；<b>目前是預設值，請改成你的券商條件</b>" : ""}。資料更新：${esc(a.updatedAt || "—")}。</p>
     <div class="lgbar"><button type="button" class="btn sm" data-lg="mgedit" data-id="${esc(a.id)}">修改</button><button type="button" class="btn sm" data-lg="mgdel" data-id="${esc(a.id)}">刪除</button></div></section>`;
@@ -462,7 +462,7 @@ function mgSubmit(e) {
 }
 (function () {
   if (document.getElementById("mgcss")) return; const st = document.createElement("style"); st.id = "mgcss";
-  st.textContent = `.mgnote{margin:4px 12px}.mgtable td:first-child{text-align:left}.mgtable{min-width:520px}.mgtable th,.mgtable td{white-space:nowrap}.mgcard .altable{display:block;overflow-x:auto}.pfbadge.mg-call,.pfbadge.mg-liquidate{background:color-mix(in srgb,var(--s1,#d98a0b) 20%,transparent)}
+  st.textContent = `.mgnote{margin:4px 12px}.mgtable td:first-child{text-align:left}.mgtable{min-width:520px}.mgtable th,.mgtable td{white-space:nowrap}.mgscroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}/* 手機上表格比畫面寬：只有表格自己左右滑，不撐開整頁 */.pfbadge.mg-call,.pfbadge.mg-liquidate{background:color-mix(in srgb,var(--s1,#d98a0b) 20%,transparent)}
 .altable{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}.altable th,.altable td{padding:3px 4px;text-align:right;border-bottom:1px solid var(--line)}.altable th:first-child{text-align:left}
 #mgForm textarea{width:100%;min-width:0;font:inherit}`;
   document.head.appendChild(st);
