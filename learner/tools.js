@@ -772,7 +772,7 @@ async function syncPush(quiet, force = false) {
 async function syncPull(ask = true) {
   const j = await syncApi("pull").catch(e => ({ ok: false, error: e.message })); if (!j.ok) { W.syncErr = j.error || "下載失敗"; syncShow(); return toast("下載失敗：" + (j.error || "")); } // 交易紀錄頁的說明也要顯示失敗
   if (ask && !confirm(`用雲端的資料（${new Date(j.at + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}${j.dev ? "，" + j.dev : ""}）覆蓋這台裝置？`)) return;
-  let n; try { n = syncApply(j.data); } catch (e) { return toast("下載失敗：" + e.message); }
+  let n; try { n = syncApply(j.data); } catch (e) { W.syncErr = e.message; syncShow(); return toast("下載失敗：" + e.message); } // 下載到了但寫不進這台（例如空間不夠）也是同步失敗
   W.syncConflict = null; syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast(`已下載 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600);
 }
 // 開網頁時：雲端比這台新、而且這台上次同步後沒改過 → 自動下載；之後每分鐘檢查，有改動就自動上傳
