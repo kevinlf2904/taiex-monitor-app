@@ -73,3 +73,9 @@ test("負現金（買進多於入金）要從總資產扣掉並標示；占比�
   assert.equal(R.stocks, 100000); assert.equal(R.cash, -50000); assert.equal(R.total, 50000, "淨資產＝股票 100,000 − 50,000");
   assert.equal(R.cashShare, 0); assert.equal(R.top[0].w, 1, "占比用正的資產當分母"); assert.ok(R.issues.some(x => x.k === "cash_negative")); assert.ok(O.ISSUE_LABEL.cash_negative);
 });
+
+test("有記入金、現金剛好是 0：標示有追蹤現金（cashTracked），不是「沒有記入出金」", () => {
+  const R = run([tw({ symbol: null, date: "2026-01-02", type: "deposit", amount: 10000 }), tw({ date: "2026-01-05", type: "buy", shares: 100, price: 100 })], { 2330: { price: 100, prev: 100, date: "2026-11-05" } });
+  assert.equal(R.cash, 0); assert.equal(R.cashTracked, true);
+  assert.equal(run([tw({ date: "2026-01-05", type: "buy", shares: 1, price: 1 })], {}).cashTracked, false, "沒有入金出金紀錄：不追蹤現金");
+});
