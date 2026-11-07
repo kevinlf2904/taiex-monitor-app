@@ -74,7 +74,7 @@
     if (mvUsdNoFx > EPS) issues.push({ k: "no_fx" });
     if (!cumOk) issues.push({ k: "cum_no_fx" });
     const times = rows.map(r => r.priceDate && r.priceTime ? `${String(r.priceDate).slice(0, 10)} ${r.priceTime}` : r.priceDate).filter(Boolean).sort();
-    return { v: VERSION, base: "TWD", total: r2(total), stocks: r2(mv), cash: r2(cashB), cashShare: cashB > EPS && gross > EPS ? r4(cashB / gross) : 0, usdNotConverted: r2(mvUsdNoFx),
+    return { v: VERSION, base: "TWD", total: r2(total), stocks: r2(mv), cash: r2(cashB), cashTracked: Object.entries(L?.cash || {}).some(([c, v]) => v.tracked && conv(c) != null), cashShare: cashB > EPS && gross > EPS ? r4(cashB / gross) : 0, usdNotConverted: r2(mvUsdNoFx),
       today: dayKnown || soldOut ? { pnl: r2(day), pct: dayBase > EPS ? day / dayBase : null, counted: dayKnown, of: open.length } : null,
       cumulative: { base: cumOk ? r2(cumBase) : null, byCurrency: cum, atCurrentFx: !!(cum.USD != null && fx) }, cost: r2(cost),
       marketShare, top: rows.slice(0, 5), positions: rows.length, alerts, issues,
