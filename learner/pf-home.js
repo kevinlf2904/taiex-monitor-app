@@ -43,7 +43,7 @@ function renderHomeView(S) {
     tile("總資產（台幣）", lgMoney(R.total, "TWD"), R.usdNotConverted ? `另有美股 US$${R.usdNotConverted.toLocaleString()} 沒有匯率，沒算進來` : `股票 ${lgMoney(R.stocks, "TWD")}${R.cash > 0 ? `＋現金 ${lgMoney(R.cash, "TWD")}` : R.cash < 0 ? `－負現金 ${lgMoney(-R.cash, "TWD")}` : ""}`, "", "alloc"),
     tile("今日損益", T ? lgSgn(T.pnl, "TWD") : "—", T ? `${pct(T.pct)}・${T.counted}/${T.of} 檔有今天報價` : "還沒有今天的報價", T ? cls(T.pnl) : ""),
     tile("累積損益", C.base == null ? "—" : lgSgn(C.base, "TWD"), C.base == null ? "沒有匯率，只能分開看" : C.atCurrentFx ? "美元用目前匯率換算；匯率拆解看績效" : "已實現＋未實現＋股息", C.base == null ? "" : cls(C.base), "perf"),
-    tile("現金比例", w(R.cashShare), R.cash < 0 ? "現金是負的，可能漏記入金" : R.cash ? "交易紀錄裡的入金扣掉買賣" : "沒有記入出金，現金不計", "")].join("");
+    tile("現金比例", w(R.cashShare), R.cash < 0 ? "現金是負的，可能漏記入金" : R.cashTracked ? "交易紀錄裡的入金扣掉買賣" : "沒有記入出金，現金不計", "")].join("");
   const LV = { high: "⛔", warn: "⚠︎", info: "ⓘ" };
   const alertTxt = a => a.k === "single_concentration" ? `${esc(nameOf(a.symbol))} 一檔占 ${w(a.w)}` : a.k === "top5_concentration" ? `前五大合計 ${w(a.w)}` : a.k === "margin" ? `${esc(a.name || "融資")} 維持率 ${w(a.ratio)}（${{ near: "接近追繳線", call: "低於追繳線", liquidate: "低於處分線" }[a.state]}，試算）` : a.codes ? a.codes.map(c => esc(nameOf(c))).join("、") : "";
   const goOf = a => (a.k === "margin" ? "margin" : a.k.endsWith("concentration") ? "alloc" : "tx");
