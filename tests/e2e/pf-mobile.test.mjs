@@ -34,6 +34,16 @@ test("總覽不被自動收折：持股多、畫面矮也看得到走勢圖", as
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+for (const [v, sel] of [["alloc", ".alcard"], ["perf", ".pfcard"], ["margin", ".mgcard"]]) test(`${v} 卡片不被自動收折（手機、畫面矮）`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await p.setViewportSize({ width: 390, height: 640 });
+  await ctx.route("**/api/kline?code=TWD%3DX**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, data: [{ d: "2026-10-05", o: 32, h: 32, l: 32, c: 32, v: 0 }] }) }));
+  await setup(p, v); await p.waitForSelector(`#lx ${sel}`, { timeout: 30000 }); await p.waitForTimeout(1000);
+  const r = await p.evaluate(sel => { const cs = [...document.querySelectorAll(`#lx ${sel}`)]; return { tall: cs.some(c => c.getBoundingClientRect().height > innerHeight * 1.3), folded: cs.some(c => /\bfold-/.test(c.className) || c.nextElementSibling?.matches(".fold-btn")) }; }, sel);
+  assert.ok(r.tall, "前提：卡片比畫面高 1.3 倍以上"); assert.equal(r.folded, false, `${v} 卡片沒有被收折`);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 test("觸控裝置：「展開全部」按鈕至少 44px 高", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   // 用網站自己產生按鈕的函式（foldx.js 的 foldBtn），放進頁面量實際高度
