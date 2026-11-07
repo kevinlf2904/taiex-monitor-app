@@ -54,3 +54,13 @@ test("雲端服務不能用（kv:false）：開網頁後交易紀錄頁自己改
   assert.doesNotMatch(await body(p), /雲端服務正常時會一起同步/);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("手動下載失敗（工具 → 備份同步按「下載」）：交易紀錄頁也顯示同步失敗", async () => {
+  let pullFail = false;
+  const { ctx, p, errs } = await page({ ok: true, kv: true }, (r, b) => b.op === "pull" ? (pullFail ? ok({ ok: false, error: "暫停服務" }) : ok({ ok: true, at: 1, data: {} }))(r) : ok({ ok: true, at: 2 })(r));
+  await p.waitForTimeout(2500); assert.doesNotMatch(await body(p), /最近一次同步失敗/);
+  pullFail = true; await p.evaluate(() => syncPull(false));
+  await p.waitForFunction(() => /最近一次同步失敗/.test(document.body.innerText), null, { timeout: 10000 });
+  assert.equal(await p.evaluate(() => W.syncErr), "暫停服務");
+  await ctx.close(); assert.deepEqual(errs, []);
+});

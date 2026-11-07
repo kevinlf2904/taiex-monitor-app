@@ -770,7 +770,7 @@ async function syncPush(quiet, force = false) {
   if (j.ok) { syncSet({ at: j.at, hash: h, tg: j.tg }); if (!quiet) toast("已上傳到雲端"); } else if (!quiet) toast(j.conflict ? "雲端有另一台裝置比較新的資料，沒有上傳；到「備份同步」選要用哪一份" : "上傳失敗：" + (j.error || "")); W.syncErr = j.ok ? null : j.error || (j.conflict ? "雲端有另一台裝置比較新的資料，沒有上傳" : "上傳失敗"); syncShow();
 }
 async function syncPull(ask = true) {
-  const j = await syncApi("pull").catch(e => ({ ok: false, error: e.message })); if (!j.ok) return toast("下載失敗：" + (j.error || ""));
+  const j = await syncApi("pull").catch(e => ({ ok: false, error: e.message })); if (!j.ok) { W.syncErr = j.error || "下載失敗"; syncShow(); return toast("下載失敗：" + (j.error || "")); } // 交易紀錄頁的說明也要顯示失敗
   if (ask && !confirm(`用雲端的資料（${new Date(j.at + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}${j.dev ? "，" + j.dev : ""}）覆蓋這台裝置？`)) return;
   let n; try { n = syncApply(j.data); } catch (e) { return toast("下載失敗：" + e.message); }
   W.syncConflict = null; syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast(`已下載 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600);
