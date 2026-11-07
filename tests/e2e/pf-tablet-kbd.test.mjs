@@ -27,6 +27,11 @@ for (const width of [768, 834]) test(`平板 ${width}：各分頁不溢出、按
     assert.deepEqual(await overlaps(p), [], `${width} ${v}：按鈕不重疊`);
     const small = await p.evaluate(() => [...document.querySelectorAll("#lx button, #lx [role=button]")].filter(e => e.offsetParent && e.getBoundingClientRect().height < 43.5).map(e => e.innerText.trim().slice(0, 10)));
     assert.deepEqual(small, [], `${width} ${v}：觸控裝置上可以點的東西至少 44px 高`);
+    if (v === "tx") {
+      assert.ok(await p.evaluate(() => [...document.querySelectorAll("#lx .lgtx .lgd")].every(e => e.getBoundingClientRect().height < parseFloat(getComputedStyle(e).lineHeight || "20") * 1.5 + 2)), `${width}：交易清單的日期不折成兩行`);
+      const note = await p.evaluate(() => $("#note")?.innerText || document.body.innerText);
+      assert.match(note, /投資組合的資料（交易紀錄、融資帳戶）只存在這個瀏覽器；這台裝置沒有開雲端同步，不會上傳/); assert.doesNotMatch(note, /要在「編輯庫存」填買進日期/, "交易紀錄頁不顯示舊庫存的說明");
+    }
   }
   await ctx.close(); assert.deepEqual(errs, []);
 });
@@ -52,5 +57,28 @@ test("鍵盤：Tab 到分頁按 Enter 切換；總覽的卡片、持倉可以用
   assert.ok(await tabTo(() => document.activeElement?.matches?.(".hmrow")), "Tab 走得到持倉列");
   const code = await p.evaluate(() => document.activeElement.dataset.sel); await p.keyboard.press(" ");
   await p.waitForFunction(c => W.sel === c, code, { timeout: 10000 });
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+// 手機與桌面：交易日期不折行、不溢出、不壓到「修改／刪除」；交易紀錄頁的說明依雲端同步有沒有開而不同（不能說「不會上傳」卻其實會同步）
+for (const width of [390, 1280]) test(`交易清單日期與資料說明 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  await p.evaluate(tx => { localStorage.removeItem("kline-sync"); store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "tx" }; W.holdView = "tx"; setLt("hold"); }, TX);
+  await p.waitForSelector("#lx .lgtx .lgd", { timeout: 30000 });
+  const g = await p.evaluate(() => [...document.querySelectorAll("#lx .lgtx")].map(li => { const d = li.querySelector(".lgd").getBoundingClientRect(), b = li.querySelector(".lgact")?.getBoundingClientRect(), lh = parseFloat(getComputedStyle(li.querySelector(".lgd")).lineHeight) || 20;
+    return { oneLine: d.height < lh * 1.5 + 2, inside: d.right <= innerWidth + 1, clear: !b || d.right <= b.left + 1 || d.bottom <= b.top + 1 }; }));
+  assert.ok(g.length && g.every(x => x.oneLine), `${width}：日期一行`); assert.ok(g.every(x => x.inside), `${width}：日期沒有超出畫面`); assert.ok(g.every(x => x.clear), `${width}：日期沒有壓到修改／刪除`);
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${width}：沒有水平溢出`);
+  assert.match(await p.evaluate(() => document.body.innerText), /這台裝置沒有開雲端同步，不會上傳/);
+  // 有同步碼時依實際狀態：自動同步關閉、雲端服務不能用、正常（寫最近一次成功同步的時間）；都不能說「不會上傳」也不能斷言已經同步
+  const T = async (sync, cfg) => { await p.evaluate(([s, c]) => { localStorage.setItem("kline-sync", JSON.stringify(s)); W.syncCfg = c; W.syncErr = null; renderList(); }, [sync, cfg]); return p.evaluate(() => document.body.innerText); };
+  const ID = "TEST-ONLY-NOT-A-REAL-CODE";
+  let t = await T({ id: ID, auto: false }, null); assert.match(t, /自動同步已關閉，要到「工具 → 備份同步」手動上傳才會同步/); assert.doesNotMatch(t, /會一起同步|不會上傳/);
+  t = await T({ id: ID, auto: true }, { kv: false }); assert.match(t, /雲端同步服務目前無法使用，資料不會同步/); assert.doesNotMatch(t, /會一起同步/);
+  t = await T({ id: ID, auto: true, at: 0 }, { kv: true }); assert.match(t, /雲端服務正常時會一起同步/); assert.match(t, /還沒有成功同步過/); assert.doesNotMatch(t, /不會上傳/);
+  t = await T({ id: ID, auto: true, at: Date.parse("2026-11-05T06:30:00Z") }, { kv: true }); assert.match(t, /最近一次成功同步：11-05 14:30/);
+  await p.evaluate(() => { W.syncErr = "測試"; renderList(); }); assert.match(await p.evaluate(() => document.body.innerText), /最近一次同步失敗/);
+  await p.evaluate(() => { W.syncCfg = null; W.syncErr = null; });
+  await p.evaluate(() => localStorage.removeItem("kline-sync"));
   await ctx.close(); assert.deepEqual(errs, []);
 });
