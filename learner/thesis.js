@@ -9,7 +9,8 @@
   const STATUS_LABEL = { hold: "論點成立", watch: "觀察中", weak: "論點動搖", broken: "論點失效" };
   const KIND_LABEL = { exdiv: "除權息", conf: "法說會", earn_us: "財報（美股）", review: "論點檢視" };
   const LIM = { text: 2000, item: 300, list: 20, log: 200, items: 500 };
-  const isDate = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v + "T00:00:00Z"));
+  // 日期要真的存在：解析後轉回字串要一模一樣（2 月 30 日之類 JS 會自動進位成 3 月，要擋掉）
+  const isDate = v => { if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false; const t = Date.parse(v + "T00:00:00Z"); return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === v; };
   const up = c => String(c || "").trim().toUpperCase();
   const isCode = c => /^[0-9A-Z][0-9A-Z.\-]{0,11}$/.test(c);
   const dn = d => Date.parse(d + "T00:00:00Z");
@@ -109,5 +110,5 @@
       S.written++; S.byStatus[it.status || "hold"]++; if (isDate(it.review) && isDate(today) && it.review <= today) S.due++; }
     return S;
   }
-  root.KLThesis = Object.freeze({ VERSION, STORE_KEY, STATUS, STATUS_LABEL, KIND_LABEL, LIM, checkItem, validateStore, fromForm, addLog, catalysts, summary, addDays, levels, LEVEL_LABEL, levelFrom, kpis, matchWatch });
+  root.KLThesis = Object.freeze({ VERSION, STORE_KEY, STATUS, STATUS_LABEL, KIND_LABEL, LIM, isDate, checkItem, validateStore, fromForm, addLog, catalysts, summary, addDays, levels, LEVEL_LABEL, levelFrom, kpis, matchWatch });
 })(typeof window !== "undefined" ? window : globalThis);
