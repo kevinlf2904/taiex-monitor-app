@@ -448,6 +448,14 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 #toTop { position: fixed; right: 14px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--grad-btn); color: var(--ink); font-size: 18px; box-shadow: 0 4px 14px rgba(0,0,0,.3); cursor: pointer; }
 @media (min-width: 901px) { #toTop { bottom: 24px; } }
 #navBack { position: fixed; left: 14px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 40; height: 38px; padding: 0 16px; border-radius: 999px; border: 0; background: color-mix(in srgb, var(--ink) 14%, var(--bg)); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+/* 返回按鈕浮在左下角：出現時，整頁最底部（頁尾後面）多留一個按鈕的高度，捲到最下面時頁尾的版本號等內容不會被它蓋住；
+   手機原本就留了底部分頁列的 62px，再加上去。桌面雙欄的清單欄自己捲動，清單欄底部也要留。
+   往下捲時按鈕先滑出畫面（nb-away），往上捲或捲到底再出現，捲動中途不擋住內容。 */
+body.navback-on { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 900px) { body.navback-on { padding-bottom: calc(62px + 56px + env(safe-area-inset-bottom, 0px)); } }
+@media (min-width: 901px) { body.navback-on .w-main:not(.wide) .w-list { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); } }
+#navBack { transition: transform .2s ease, opacity .2s ease; } #navBack.nb-away { transform: translateY(160%); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { #navBack { transition: none; } }
 @media (min-width: 901px) { #navBack { bottom: 24px; } }
 .flowread { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; min-height: 26px; padding: 4px 12px; font-size: 13px; font-family: var(--font-num); }
 .flowread small { margin-left: 4px; font-size: 11.5px; } .flowread .linkbtn { margin-left: auto; }
@@ -1227,7 +1235,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.08-209</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.08-210</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2085,7 +2093,7 @@ function hsRestore(M) {
     const er = e.getBoundingClientRect(), ar = a.getBoundingClientRect(); if (ar.left < er.left) e.scrollLeft -= er.left - ar.left + 16; else if (ar.right > er.right) e.scrollLeft += ar.right - er.right + 16; });
 }
 // 平板橫向、電腦：大盤、選股、資金、產業這些內容多的分頁用全寬；點個股時，個股頁從右邊滑出（抽屜），不會把內容擠成一條
-const WIDE_TABS = ["mkt", "screen", "ind", "today", "mon", "money", "earn", "pod", "after", "cong", "tools"], wideMode = () => WIDE_TABS.includes(W.lt) && !isMobile();
+const WIDE_TABS = ["mkt", "screen", "ind", "today", "mon", "money", "earn", "pod", "after", "cong", "tools"], wideMode = () => (WIDE_TABS.includes(W.lt) || (W.lt === "hold" && W.holdView === "tx")) && !isMobile(); // 投資組合（庫存 → 交易紀錄：總覽、績效、配置、融資）在桌面也用全寬，圖表、表格才展得開
 function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); placeDrawer(); if (EMBED) requestAnimationFrame(postTabs); }
 // 嵌在 K線學堂裡時 iframe 和整頁一樣高，固定在 iframe 右側的抽屜會從 iframe 最上面一路拉到最下面：使用者往下捲過之後打開個股，
 // 內容在畫面外、抽屜本身也捲不動。所以抽屜改成貼齊使用者目前看得到的那一段，外層捲動或視窗大小改變時跟著移動。
@@ -2123,6 +2131,7 @@ function renderList0() {
       : `<li class="empty note">這個群組還沒有股票。在上面輸入代號或名稱加入，或從「台股熱門」「美股熱門」「排行」按 ☆ 加入（台股、美股會自動放進各自的群組）。<br><button type="button" class="btn sm" data-onb="fill">✨ 一鍵載入範例自選（2330／2317／2454／NVDA／AAPL）</button></li>`);
     note = `${curList().length} 檔・${anyOpen() ? "盤中每秒自動更新" : "收盤後每 5 分鐘確認一次"}`;
   } else if (W.lt === "hold") {
+    if ($("#main").classList.contains("wide") !== wideMode()) syncLayout(); // 庫存的分頁換到／離開交易紀錄：全寬與雙欄跟著切換
     holdSrcApply(); // 交易紀錄有改（新增交易、匯入備份）就換成新的持股
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div><div class="seg" role="group" aria-label="檢視" id="hvSeg">${[["pnl", "即時損益"], ["ana", "持股分析"], ["risk", "風險"], ["macro", "總經敏感度"], ["tx", "交易紀錄"]].map(([k, t]) => `<button data-hv="${k}" aria-pressed="${W.holdView === k}">${t}</button>`).join("")}</div>
       ${W.holdView === "tx" ? "" : holdSrcBar()}<div class="imp-btns"${W.holdLg ? " hidden" : ""}><button class="btn sm primary" data-imp="edit">${ico("pen")}編輯庫存</button><button class="btn sm" data-imp="shot">${ico("cam")}截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>`;
@@ -5233,8 +5242,18 @@ function navApply(s, y) {
 function navBackUi() {
   const d = history.state?.d || 0; if (EMBED) return post({ type: "watch-nav", d });
   let b = $("#navBack"); if (!b && d) { b = document.createElement("button"); b.id = "navBack"; b.type = "button"; b.textContent = "‹ 返回"; b.setAttribute("aria-label", "回上一頁"); b.addEventListener("click", () => history.back()); document.body.appendChild(b); }
-  if (b) b.hidden = !d;
+  if (b) { b.hidden = !d; if (d) b.classList.remove("nb-away"); } // 剛出現時一定看得到
+  document.body.classList.toggle("navback-on", !!d); // 返回按鈕出現時，內容底部多留空間（見 CSS），最後幾行才不會被按鈕蓋住
 }
+// 「‹ 返回」往下捲時先藏起來（不擋住內容），往上捲或捲到底時再出現；整頁和桌面清單欄各自記上次的位置
+const navBackLast = new WeakMap();
+function navBackScroll(el, cur, max) {
+  const b = $("#navBack"); if (!b || b.hidden) return;
+  const y = navBackLast.get(el) ?? cur, bottom = cur >= max - 8; navBackLast.set(el, cur);
+  if (bottom || cur < y - 4 || cur < 40) b.classList.remove("nb-away"); else if (cur > y + 4 && document.activeElement !== b) b.classList.add("nb-away");
+}
+addEventListener("scroll", () => navBackScroll(document, scrollY, document.documentElement.scrollHeight - innerHeight), { passive: true });
+document.addEventListener("scroll", e => { const t = e.target; if (t instanceof Element && t.matches(".w-list")) navBackScroll(t, t.scrollTop, t.scrollHeight - t.clientHeight); }, { passive: true, capture: true });
 addEventListener("popstate", e => { const st = e.state; if (st?.nav) return navApply(st.nav, st.y);
   const h = location.hash.slice(1).toUpperCase(); if (okCode(h)) select(h, "none"); else showList(false); });
 addEventListener("scroll", navOnScroll, { passive: true }); if (EMBED) try { parent.addEventListener("scroll", navOnScroll, { passive: true }); } catch {}
