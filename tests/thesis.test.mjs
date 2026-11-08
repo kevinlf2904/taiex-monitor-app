@@ -20,7 +20,7 @@ test("存檔檢查：正確的通過；格式、狀態、日期、長度不對�
 
 test("表單整理：多行拆成清單、去空行；狀態不對沿用原本的；檢視紀錄最新在前並更新狀態與下次檢視日", () => {
   const it = T.fromForm({ reason: "  先進製程  ", watch: "毛利率\n\n 海外廠進度 ", kill: "失去大客戶", status: "watch", review: "2026-12-01" }, {}, "t");
-  assert.deepEqual(J(it), { reason: "先進製程", watch: ["毛利率", "海外廠進度"], kill: ["失去大客戶"], status: "watch", review: "2026-12-01", log: [], at: "t" });
+  assert.deepEqual(J(it), { reason: "先進製程", watch: ["毛利率", "海外廠進度"], kill: ["失去大客戶"], status: "watch", review: "2026-12-01", log: [], at: "t", stop: null, take: null });
   assert.equal(T.fromForm({ status: "亂填", review: "不是日期" }, { status: "weak" }).status, "weak"); assert.equal(T.fromForm({ review: "不是日期" }).review, null);
   const a = T.addLog(it, { d: "2026-11-08", status: "weak", note: "毛利率下滑" }, 90), b = T.addLog(a, { d: "2026-11-09", note: "再看一季" });
   assert.equal(a.status, "weak"); assert.equal(a.review, "2027-02-06", "11-08 往後 90 天"); assert.equal(b.log[0].d, "2026-11-09"); assert.equal(b.log.length, 2); assert.equal(b.status, "weak", "沒給狀態就不改");
@@ -42,4 +42,29 @@ test("近期事件：只列持股、只列期間內；除權息、法說會、�
 test("摘要：寫了幾檔、該檢視幾檔、各狀態；沒寫的列出來", () => {
   const S = T.summary({ v: 1, items: { 2330: { reason: "x", status: "weak", review: "2026-11-01" }, 2454: { watch: ["a"] }, 2317: {} } }, ["2330", "2454", "2317", "NVDA"], "2026-11-08");
   assert.equal(S.total, 4); assert.equal(S.written, 2); assert.equal(S.due, 1); assert.equal(S.byStatus.weak, 1); assert.equal(S.byStatus.hold, 1); assert.deepEqual(J(S.missing), ["2317", "NVDA"]);
+});
+
+test("停損／停利：表單整理（百分比自動變號、空白不設、沒給欄位沿用原本的）、存檔檢查、價位與狀態", () => {
+  assert.deepEqual(J(T.levelFrom("10", "pct", "stop")), { mode: "pct", v: -10 }, "停損打 10 當 −10%");
+  assert.deepEqual(J(T.levelFrom("-20", "pct", "take")), { mode: "pct", v: 20 });
+  assert.deepEqual(J(T.levelFrom(" 550 ", "price", "stop")), { mode: "price", v: 550 });
+  for (const [v, m, k] of [["", "price", "stop"], ["abc", "price", "stop"], ["0", "pct", "stop"], ["-5", "price", "take"], ["100", "pct", "stop"], ["1001", "pct", "take"]]) assert.equal(T.levelFrom(v, m, k), null, `${v} ${m} ${k}`);
+  const prev = { reason: "x", stop: { mode: "price", v: 500 } };
+  assert.deepEqual(J(T.fromForm({ reason: "x" }, prev).stop), { mode: "price", v: 500 }, "表單沒有這個欄位：沿用");
+  assert.equal(T.fromForm({ reason: "x", stop: "" }, prev).stop, null, "清空：不設");
+  assert.deepEqual(J(T.fromForm({ stop: "8", stopMode: "pct", take: "700" }).take), { mode: "price", v: 700 });
+  assert.equal(T.validateStore({ v: 1, items: { 2330: { stop: { mode: "pct", v: -8 }, take: { mode: "price", v: 700 } } } }).ok, true);
+  const bad = T.validateStore({ v: 1, items: { 2330: { stop: { mode: "pct", v: 8 }, take: { mode: "x", v: 1 } } } });
+  assert.deepEqual(J(bad.errors[0].errors).sort(), ["invalid_stop", "invalid_take"], "百分比停損要是負的；模式不對");
+  const it = { stop: { mode: "pct", v: -10 }, take: { mode: "price", v: 700 } };
+  const a = T.levels(it, { avgCost: 600, price: 620 });
+  assert.equal(a.stopPrice, 540); assert.equal(a.takePrice, 700); assert.equal(a.state, "ok"); assert.equal(a.toStop, -0.129); assert.equal(a.toTake, 0.129);
+  assert.equal(T.levels(it, { avgCost: 600, price: 540 }).state, "stop_hit", "等於停損價算跌破");
+  assert.equal(T.levels(it, { avgCost: 600, price: 710 }).state, "take_hit");
+  assert.equal(T.levels(it, { avgCost: 600, price: 560 }).state, "near_stop");
+  assert.equal(T.levels(it, { avgCost: 600, price: 680 }).state, "near_take");
+  assert.equal(T.levels(it, { avgCost: 600, price: null }).state, "no_price");
+  assert.equal(T.levels({}, { avgCost: 600, price: 620 }).state, "none");
+  assert.equal(T.levels({ stop: { mode: "pct", v: -10 } }, { avgCost: null, price: 620 }).state, "no_cost", "百分比但沒成本：不硬算");
+  assert.ok(Object.keys(T.LEVEL_LABEL).length >= 8);
 });
