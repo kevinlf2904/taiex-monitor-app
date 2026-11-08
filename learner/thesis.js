@@ -103,11 +103,11 @@
   }
   const matchWatch = t => { const s = String(t || ""); const d = KPI.find(x => x[4].test(s)); return d ? d[0] : null; };
   // 簡易估值（第 5 批）：price＝現價；pe／pb／dy＝目前本益比、淨值比、殖利率（證交所、櫃買中心每日公布）；peers＝同產業其他公司的本益比；hist＝這檔過去的本益比（每天一筆）
-  // 近四季 EPS 用 現價 ÷ 本益比 反推；情境價＝EPS × 歷史本益比的 20%／50%／80% 分位（和個股頁的本益比色帶同一種算法）。虧損（本益比沒有或 ≤ 0）不算。
+  // 近四季 EPS 用 現價 ÷ 本益比 反推；情境價＝EPS × 歷史本益比的 20%／50%／80% 分位（和個股頁的本益比色帶同一種算法）。本益比沒有資料（missing）或不是正數（nonpos）都不算；不在這裡判斷「虧損」（缺值不一定是虧損）。
   function valuation({ price = null, pe = null, pb = null, dy = null, peers = [], hist = [] } = {}) {
     const pos = v => typeof v === "number" && Number.isFinite(v) && v > 0, r2 = v => Math.round(v * 100) / 100, r4 = v => Math.round(v * 1e4) / 1e4;
     const qt = (a, p) => a[Math.min(a.length - 1, Math.floor(p * a.length))];
-    const out = { pe: pos(pe) ? pe : null, pb: pos(pb) ? pb : null, dy: typeof dy === "number" && Number.isFinite(dy) && dy >= 0 ? dy : null, loss: !pos(pe), eps: null, ind: null, band: null, scen: [] };
+    const out = { pe: pos(pe) ? pe : null, pb: pos(pb) ? pb : null, dy: typeof dy === "number" && Number.isFinite(dy) && dy >= 0 ? dy : null, peState: pos(pe) ? "ok" : typeof pe === "number" && Number.isFinite(pe) ? "nonpos" : "missing", eps: null, ind: null, band: null, scen: [] };
     if (pos(price) && out.pe) out.eps = r2(price / out.pe);
     const P = (peers || []).filter(pos).sort((a, b) => a - b);
     if (P.length >= 3) { const med = P.length % 2 ? P[(P.length - 1) / 2] : (P[P.length / 2 - 1] + P[P.length / 2]) / 2; out.ind = { median: r2(med), n: P.length, vs: out.pe ? r4(out.pe / med - 1) : null, price: out.eps ? r2(out.eps * med) : null }; }

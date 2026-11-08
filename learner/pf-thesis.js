@@ -40,19 +40,28 @@ function thEarn() {
   if (!W.thET) W.thET = setTimeout(() => { W.thET = null; if (thEarnView()) renderList(); }, Math.max(1e3, 60e3 - age + 500));
   return { fail: true, msg: D?.err || D?.error || "" };
 }
-// 全市場本益比、淨值比、殖利率：和選股「條件組合」共用；失敗 1 分鐘內不重抓
+// 全市場本益比、淨值比、殖利率（/api/screen?bw=1）：自己記有資料／載入中／失敗三種狀態，失敗不當成「沒有資料」；1 分鐘後自動重抓。
+// 選股的 mfValLoad 失敗時會把 W.mfVal 設成 {}，所以只有「有內容」的 W.mfVal 才共用；這裡成功了也順便填給它
 function thBw() {
-  if (W.off || typeof mfValLoad !== "function") return null;
-  if (W.mfVal) return { rows: W.mfVal };
-  if (!W.thVB && !(Date.now() - (W.thVF || 0) < 60e3)) { W.thVB = true;
-    mfValLoad().catch(() => {}).finally(() => { W.thVB = false; W.thVF = Date.now(); if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "thesis") renderList(); }); }
-  return W.thVB ? { busy: true } : null;
+  if (W.off) return null;
+  if (W.mfVal && Object.keys(W.mfVal).length) return { rows: W.mfVal };
+  const X = W.thBwD; if (X?.rows || X?.busy) return X;
+  const age = X ? Date.now() - X.at : Infinity;
+  if (age >= 60e3) {
+    W.thBwD = { busy: true };
+    getJ("/api/screen?bw=1", true).then(j => { if (!j?.rows || !Object.keys(j.rows).length) throw new Error("沒有資料"); W.thBwD = { rows: j.rows, at: Date.now() }; if (!(W.mfVal && Object.keys(W.mfVal).length)) W.mfVal = j.rows; })
+      .catch(e => { W.thBwD = { fail: true, msg: e.message || "", at: Date.now() }; }).finally(() => { if (thEarnView()) renderList(); });
+    return W.thBwD;
+  }
+  if (!W.thBT) W.thBT = setTimeout(() => { W.thBT = null; if (thEarnView()) renderList(); }, Math.max(1e3, 60e3 - age + 500));
+  return X;
 }
-// 一檔的歷史本益比（按了才查）
+// 一檔的歷史本益比（按了才查）。getJ 遇到 ok:false 會丟錯誤 → 失敗狀態；有回應但沒有本益比 → none；記下有效資料的起訖日期
 function thHist(c) {
   const V = (W.thVal ||= {}); if (V[c]?.busy || V[c]?.per) return; V[c] = { busy: true };
-  getJ(`/api/stockinfo?code=${encodeURIComponent(c)}`).then(j => { V[c] = { per: (j?.per || []).map(x => x.pe), from: j?.per?.[0]?.d || null }; }).catch(e => { V[c] = { err: e.message || "查不到" }; })
-    .finally(() => { if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "thesis") renderList(); });
+  getJ(`/api/stockinfo?code=${encodeURIComponent(c)}`).then(j => { const L = (j?.per || []).filter(x => x && x.pe > 0 && x.d);
+    V[c] = L.length ? { per: L.map(x => x.pe), from: L[0].d, to: L[L.length - 1].d } : { none: true }; }).catch(e => { V[c] = { err: e.message || "查不到" }; })
+    .finally(() => { if (thEarnView()) renderList(); });
 }
 const TH_EVERY = [["", "不改"], ["30", "30 天後"], ["90", "90 天後（一季）"], ["180", "180 天後"]];
 function renderThesisView(S) {
@@ -100,17 +109,21 @@ function renderThesisView(S) {
     const vRow = (() => {
       if (!/^\d/.test(c) || !BW) return "";
       if (BW.busy) return `<p class="note thval">載入估值資料…</p>`;
+      if (BW.fail) return `<p class="note thval lgwarn">估值資料這次拿不到${BW.msg ? `（${esc(BW.msg)}）` : ""}，1 分鐘後自動再試。</p>`;
       const b = BW.rows?.[c]; if (!b) return `<p class="note thval">這檔沒有本益比資料（ETF 或資料還沒公布）。</p>`;
       const ind = ERow.get(c)?.[2], peers = ind ? [...ERow.values()].filter(r => r[2] === ind && String(r[0]) !== c).map(r => BW.rows[r[0]]?.[0]) : [];
       const H = W.thVal?.[c], V = KLThesis.valuation({ price: LV.get(c).price, pe: b[0], pb: b[1], dy: b[2], peers, hist: H?.per || [] }), n2 = v => (v == null ? "—" : String(+v.toFixed(2)));
       const pc = v => `${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
-      let h = `<div class="thval"><span class="note">估值</span><span>本益比 <b>${V.loss ? "虧損" : n2(V.pe)}</b>${V.ind ? `<small class="note">（${esc(ind)}中位數 ${n2(V.ind.median)}，${V.ind.n} 家）</small>` : ""}</span><span>淨值比 <b>${n2(V.pb)}</b></span><span>殖利率 <b>${V.dy == null ? "—" : V.dy + "%"}</b></span></div>`;
-      if (V.loss) return h + `<p class="note thval">虧損時本益比沒有意義，不算情境價；可以改看淨值比。</p>`;
+      const epsQ = ERow.get(c)?.[8], lossQ = typeof epsQ === "number" && epsQ < 0;
+      let h = `<div class="thval"><span class="note">估值</span><span>本益比 <b>${V.peState === "ok" ? n2(V.pe) : V.peState === "missing" ? "無資料" : "—"}</b>${V.ind ? `<small class="note">（${esc(ind)}中位數 ${n2(V.ind.median)}，${V.ind.n} 家）</small>` : ""}</span><span>淨值比 <b>${n2(V.pb)}</b></span><span>殖利率 <b>${V.dy == null ? "—" : V.dy + "%"}</b></span></div>`;
+      if (V.peState !== "ok") return h + `<p class="note thval">${V.peState === "missing" ? "這檔目前沒有本益比資料" : "本益比不是正數"}${lossQ ? "（財報表顯示本季 EPS 為負）" : ""}，不算情境價；可以改看淨值比。</p>`;
       if (!H) return h + `<div class="lgbar thval"><button type="button" class="btn sm" data-th="val" data-c="${esc(c)}">看歷史區間與情境價</button></div>`;
       if (H.busy) return h + `<p class="note thval">查這檔過去的本益比…</p>`;
-      if (H.err) return h + `<p class="note thval lgwarn">歷史本益比這次拿不到（${esc(H.err)}）。</p>`;
-      if (!V.band) return h + `<p class="note thval">歷史本益比資料不到 60 天，不算區間。</p>`;
-      return h + `<p class="note thval">近 ${Math.round(V.band.n / 245) || 1} 年本益比 20%～80% 落在 ${n2(V.band.lo)}～${n2(V.band.hi)}，目前在 ${V.band.pct}% 的位置（越低相對越便宜）。</p>`
+      if (H.err) return h + `<p class="note thval lgwarn">歷史本益比這次拿不到（${esc(H.err)}）。</p><div class="lgbar thval"><button type="button" class="btn sm" data-th="val" data-c="${esc(c)}">再查一次</button></div>`;
+      if (H.none) return h + `<p class="note thval">查得到這檔，但沒有歷史本益比資料，不算區間。</p>`;
+      const span = `${esc(H.from.replace(/-/g, "/"))}～${esc(H.to.replace(/-/g, "/"))}，${H.per.length} 筆`;
+      if (!V.band) return h + `<p class="note thval">歷史本益比只有 ${span}，不到 60 筆，不算區間。</p>`;
+      return h + `<p class="note thval">${span}的本益比，20%～80% 落在 ${n2(V.band.lo)}～${n2(V.band.hi)}，目前在 ${V.band.pct}% 的位置（越低相對越便宜）。</p>`
         + (V.scen.length ? `<ul class="thscen">${V.scen.map(x => `<li><span>${KLThesis.SCEN_LABEL[x.k]}（本益比 ${n2(x.pe)}）</span><b>${n2(x.price)}</b><small class="${x.chg >= 0 ? "up" : "down"}">${pc(x.chg)}</small></li>`).join("")}</ul>
           <p class="note thval">情境價＝近四季 EPS（${n2(V.eps)}，用現價 ÷ 本益比反推）× 歷史本益比分位${V.ind?.price ? `；用同產業中位數算是 ${n2(V.ind.price)}` : ""}。只是粗估：沒算成長、利率與產業變化，不是目標價或投資建議。</p>` : "");
     })();
@@ -154,7 +167,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-th]"); if (!b || typeof KLThesis === "undefined") return;
   const L = (W.lg ||= {}), a = b.dataset.th; L.thMsg = "";
   if (a === "alert") { thAlert(b.dataset.c); return; }
-  if (a === "val") { thHist(b.dataset.c); renderList(); return; }
+  if (a === "val") { if (W.thVal?.[b.dataset.c]?.err) delete W.thVal[b.dataset.c]; thHist(b.dataset.c); renderList(); return; }
   if (a === "edit") { L.thEdit = b.dataset.c; L.thLog = null; } else if (a === "log") { L.thLog = b.dataset.c; L.thEdit = null; } else if (a === "close") { L.thEdit = L.thLog = null; }
   renderList();
 });
