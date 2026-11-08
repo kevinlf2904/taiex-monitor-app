@@ -54,3 +54,26 @@ test("雲端服務不能用（kv:false）：開網頁後交易紀錄頁自己改
   assert.doesNotMatch(await body(p), /雲端服務正常時會一起同步/);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("手動下載失敗（工具 → 備份同步按「下載」）：交易紀錄頁也顯示同步失敗", async () => {
+  let pullFail = false;
+  const { ctx, p, errs } = await page({ ok: true, kv: true }, (r, b) => b.op === "pull" ? (pullFail ? ok({ ok: false, error: "暫停服務" }) : ok({ ok: true, at: 1, data: {} }))(r) : ok({ ok: true, at: 2 })(r));
+  await p.waitForTimeout(2500); assert.doesNotMatch(await body(p), /最近一次同步失敗/);
+  pullFail = true; await p.evaluate(() => syncPull(false));
+  await p.waitForFunction(() => /最近一次同步失敗/.test(document.body.innerText), null, { timeout: 10000 });
+  assert.equal(await p.evaluate(() => W.syncErr), "暫停服務");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("手動下載：資料拿到了但寫不進這台（儲存空間不夠）→ 交易紀錄頁顯示同步失敗，這台資料維持原樣", async () => {
+  const { ctx, p, errs } = await page({ ok: true, kv: true }, (r, b) => b.op === "pull" ? ok({ ok: true, at: 5, data: { "kline:watch:zz-quota-test": "x", "kline:pf:v1": JSON.stringify({ v: 1, method: "avg", transactions: [], at: "cloud" }) } })(r) : ok({ ok: true, at: 6 })(r));
+  await p.waitForTimeout(2500); assert.doesNotMatch(await body(p), /最近一次同步失敗/);
+  const before = await p.evaluate(() => localStorage.getItem("kline:pf:v1"));
+  // 模擬空間不夠：寫雲端拿來的那一項時丟出 QuotaExceededError
+  await p.evaluate(() => { const o = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === "kline:watch:zz-quota-test") { const e = new Error("exceeded the quota"); e.name = "QuotaExceededError"; throw e; } return o.call(this, k, v); }; });
+  await p.evaluate(() => syncPull(false));
+  await p.waitForFunction(() => /最近一次同步失敗/.test(document.body.innerText), null, { timeout: 10000 });
+  assert.match(await p.evaluate(() => W.syncErr), /儲存空間不夠/);
+  assert.equal(await p.evaluate(() => localStorage.getItem("kline:pf:v1")), before, "交易紀錄維持原樣（沒有被雲端的蓋掉一半）");
+  await ctx.close(); assert.deepEqual(errs, []);
+});

@@ -22,7 +22,7 @@ test("配置：分布、ETF 穿透、重複持有、資料日期", async () => {
     // 權重加總：市場分布三格加起來 100%
     const m = await p.evaluate(() => [...document.querySelectorAll(".alcard .algrid > div:first-child .albars b")].map(b => parseFloat(b.textContent)));
     assert.ok(Math.abs(m.reduce((s, x) => s + x, 0) - 100) < 0.3, JSON.stringify(m));
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
+    assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, width + "：沒有水平溢出");
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });

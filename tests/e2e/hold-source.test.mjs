@@ -41,7 +41,7 @@ test("有交易紀錄：庫存改用交易紀錄；舊庫存不動；可以切�
     await p.waitForFunction(() => W.hold["2317"]?.sh === 200, null, { timeout: 15000 });
     assert.equal(JSON.parse(await p.evaluate(() => localStorage.getItem("kline:pf:v1"))).at, "2026-11-02T00:00:00Z");
     assert.deepEqual(JSON.parse(await p.evaluate(() => localStorage.getItem("kline:watch:hold"))), OLD, "全程舊庫存不變");
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
+    assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, width + "：沒有水平溢出");
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });

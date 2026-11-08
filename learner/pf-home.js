@@ -51,7 +51,7 @@ function renderHomeView(S) {
   const top = R.top.length ? `<ul class="hmtop">${R.top.map(r => `<li><button type="button" class="row hmrow" data-sel="${esc(r.symbol)}"><span class="nm">${esc(nameOf(r.symbol))}<small class="note"> ${esc(r.symbol)}</small></span><span>${w(r.w)}</span><span>${r.valueBase == null ? "—" : lgMoney(r.valueBase, "TWD")}${r.estimated ? "<small class=\"note\">（成本估算）</small>" : ""}</span><span class="${cls(r.chgPct)}">${r.chgPct == null ? "—" : (r.chgPct > 0 ? "+" : "") + r.chgPct.toFixed(2) + "%"}</span></button></li>`).join("")}</ul>` : `<p class="note">目前沒有持股。</p>`;
   const upd = `報價 ${R.updated.quotesFrom ? (R.updated.quotesFrom === R.updated.quotesTo ? esc(R.updated.quotesFrom) : `${esc(R.updated.quotesFrom)}～${esc(R.updated.quotesTo)}`) : "—"}${R.updated.fx ? `・美元兌台幣 ${R.updated.fx.rate.toFixed(3)}（${esc(R.updated.fx.date || "")}，Yahoo 收盤中間價${X.fx?.kept ? "；這次沒拿到，沿用上一次的" : ""}）` : ""}・計算時間 ${new Date(Date.now() + 8 * 3600e3).toISOString().slice(11, 16)}`;
   const iss = R.issues.filter(x => KLOverview.ISSUE_LABEL[x.k]).map(x => esc(KLOverview.ISSUE_LABEL[x.k])).join("；");
-  $("#lx").innerHTML = head + `<section class="pfcard hmcard"><h4>投資組合總覽</h4><div class="pftiles">${tiles}</div>${iss ? `<p class="note lgwarn">⚠︎ ${iss}。</p>` : ""}
+  $("#lx").innerHTML = head + `<section class="pfcard hmcard" data-nofold><h4>投資組合總覽</h4><div class="pftiles">${tiles}</div>${iss ? `<p class="note lgwarn">⚠︎ ${iss}。</p>` : ""}
     <h5 class="pfh">風險狀態</h5>${alerts}
     <div class="algrid"><div><h5 class="pfh">市場分布</h5>${R.marketShare.length ? alBars(R.marketShare, g => HM_MKT[g] || esc(g)) : `<p class="note">—</p>`}</div>
       <div><h5 class="pfh">主要持倉<small class="note">（前五大，點一下看個股）</small></h5>${top}</div></div>

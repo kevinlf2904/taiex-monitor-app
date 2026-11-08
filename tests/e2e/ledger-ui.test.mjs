@@ -43,7 +43,7 @@ test("交易紀錄：預覽 → 確認建立 → 新增賣出（賣超擋下）�
     assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")).transactions.length), 2);
     // 展開成本變化
     await p.click('[data-lg=pos][data-c="2330"]'); t = await p.evaluate(() => $("#lx").innerText); assert.match(t, /平均成本/);
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
+    assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, width + "：沒有水平溢出");
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });
