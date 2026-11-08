@@ -53,6 +53,6 @@ document.addEventListener("submit", e => {
 (function () {
   if (document.getElementById("rbcss")) return; const st = document.createElement("style"); st.id = "rbcss";
   st.textContent = `.rblist{list-style:none;margin:8px 0 0;padding:0}.rblist li{padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}.rbh{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.rbw{font-variant-numeric:tabular-nums;white-space:nowrap}.rba{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;margin-top:2px}.rbtable{width:100%}
-.rbform .rbtable{min-width:0}.rbform input{width:6.5em;font:inherit}.rbband{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;margin:8px 0}`;
+.rbform .rbtable{min-width:0}.rbform input{width:6.5em;font:inherit}.rbband{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;margin:8px 0}@media (pointer:coarse){.btn[data-rb],.rbform .btn{min-height:44px}}`;
   document.head.appendChild(st);
 })();
