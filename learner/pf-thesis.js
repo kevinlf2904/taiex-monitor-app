@@ -86,7 +86,7 @@ document.addEventListener("submit", e => {
   if (!["thForm", "thLogForm"].includes(e.target.id)) return; e.preventDefault();
   const L = (W.lg ||= {}), c = e.target.dataset.c, v = Object.fromEntries(new FormData(e.target)), st = thLoad(), prev = st.items[c] || {};
   const it = e.target.id === "thForm" ? KLThesis.fromForm(v, prev, new Date().toISOString())
-    : (/^\d{4}-\d{2}-\d{2}$/.test(v.d) ? KLThesis.addLog(prev, { d: v.d, status: v.status, note: v.note }, v.every ? +v.every : null) : null);
+    : (KLThesis.isDate(v.d) ? KLThesis.addLog(prev, { d: v.d, status: v.status, note: v.note }, v.every ? +v.every : null) : null);
   if (!it) { toast("日期不對"); return; }
   const r = thSave({ ...st, items: { ...st.items, [c]: it } });
   if (!r.ok) { toast("沒有儲存：資料檢查沒有通過（字數太多或格式不對）"); return; }

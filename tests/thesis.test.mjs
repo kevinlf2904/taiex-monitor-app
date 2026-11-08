@@ -43,3 +43,11 @@ test("摘要：寫了幾檔、該檢視幾檔、各狀態；沒寫的列出來",
   const S = T.summary({ v: 1, items: { 2330: { reason: "x", status: "weak", review: "2026-11-01" }, 2454: { watch: ["a"] }, 2317: {} } }, ["2330", "2454", "2317", "NVDA"], "2026-11-08");
   assert.equal(S.total, 4); assert.equal(S.written, 2); assert.equal(S.due, 1); assert.equal(S.byStatus.weak, 1); assert.equal(S.byStatus.hold, 1); assert.deepEqual(J(S.missing), ["2317", "NVDA"]);
 });
+
+test("日期要真的存在：閏年 2/29 可以、2/30、4/31、平年 2/29、13 月都擋；備份匯入也擋", () => {
+  for (const d of ["2028-02-29", "2026-01-31", "2026-04-30", "2026-12-31"]) assert.equal(T.isDate(d), true, d);
+  for (const d of ["2026-02-29", "2026-02-30", "2026-02-31", "2026-04-31", "2026-06-31", "2026-13-01", "2026-00-10", "2026-01-00", "2026-1-1", "", null]) assert.equal(T.isDate(d), false, String(d));
+  const bad = T.validateStore({ v: 1, items: { 2330: { review: "2026-02-31", log: [{ d: "2026-04-31", note: "x" }] } } });
+  assert.deepEqual(J(bad.errors[0].errors).sort(), ["invalid_log", "invalid_review"]);
+  assert.deepEqual(J(T.catalysts({ codes: ["2330"], store: { items: { 2330: { review: "2026-02-31" } } }, today: "2026-02-01" })), [], "不存在的檢視日不列");
+});
