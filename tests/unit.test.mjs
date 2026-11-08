@@ -410,6 +410,9 @@ test("AI 協作規則：AGENTS.md 與 Antigravity 規則檔一致，CLAUDE.md �
   const m = await rd(".agent/workflows/merge.md");
   assert.match(m, /^---\r?\ndescription: /, "Antigravity workflow 要有 description");
   for (const k of ["gemini/", "node tests/run.mjs", "merge", "version.json"]) assert.ok(m.includes(k), `merge.md 缺少「${k}」`);
+  // 單元測試檔都要登記在 tests/run.mjs（E2E 由 tests/e2e/ 自動載入），不然 CI 永遠跑不到
+  const { readdirSync } = await import("node:fs"), run = await rd("tests/run.mjs");
+  for (const f of readdirSync(new URL("./", import.meta.url)).filter(f => f.endsWith(".test.mjs"))) assert.ok(run.includes("${dir}" + f), `tests/${f} 沒有登記在 tests/run.mjs`);
   const pt = await rd(".github/pull_request_template.md");
   for (const k of ["誰做的", "改了什麼", "還沒做完", "測試"]) assert.ok(pt.includes(k), `PR 範本缺少「${k}」`);
 });

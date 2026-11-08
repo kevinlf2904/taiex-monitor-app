@@ -42,6 +42,8 @@ function renderLedger() {
   if (!S) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
   if (!L.view || L.view === "home") return renderHome(S); // 總覽（預設）：畫面在 pf-home.js，用到時才載入
   if (L.view === "thesis") return renderThesis(S); // 投資論點與近期事件：thesis.js＋pf-thesis.js，用到時才載入
+  if (L.view === "report") return renderReport(S); // 可列印的投資組合報告：report.js＋pf-report.js（＋論點狀態用 thesis.js），用到時才載入
+  if (L.view === "div") return renderDiv(S); // 股利現金流：divcal.js＋pf-divcal.js，用到時才載入
   if (L.view === "perf") return renderPerf(S);
   if (L.view === "margin") return renderMargin();
   if (L.view === "alloc") return renderAlloc(S);
@@ -172,7 +174,7 @@ document.addEventListener("submit", e => {
    價格：每一檔 /api/kline 原始收盤（最多 24 個月；股息已經是現金流，不用還原價）；比較基準：台幣＝加權指數（價格指數，不含股息）、美元＝SPY 還原價（含息）。
    畫面：重點數字、淨值走勢 vs 比較基準（同一起點＝100）、回撤（另一張圖，不用雙軸）、月報酬表、歸因排行、估算原因與計算口徑。
    日期範圍：3 個月／6 個月／1 年／全部；圖上滑鼠或手指移動顯示當天數值。 */
-const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="總覽、交易紀錄、績效、配置、融資或論點">${[["home", "總覽"], ["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"], ["margin", "融資"], ["thesis", "論點"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "home") === k}">${t}</button>`).join("")}</div>`;
+const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="總覽、交易紀錄、績效、配置、股利、融資或論點">${[["home", "總覽"], ["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"], ["div", "股利"], ["margin", "融資"], ["thesis", "論點"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "home") === k}">${t}</button>`).join("")}</div>`;
 // 績效（perf.js）與匯率合併（fx.js）用到時才載入，照順序（fx.js 要用到 perf.js）
 function lgPerfLib() {
   if (typeof KLPerf !== "undefined" && typeof KLFx !== "undefined") return Promise.resolve();
@@ -346,7 +348,7 @@ document.addEventListener("pointerleave", e => { const box = e.target.closest?.(
 // 績效頁的樣式（放在這裡，不用改 watch.html）；顏色用網站的變數，深色模式自動跟著變
 (function () {
   if (document.getElementById("pfcss")) return; const st = document.createElement("style"); st.id = "pfcss";
-  st.textContent = `:root[data-theme="light"] #lx :is(.lgwarn,.pfsrc-warn,.pfsrc-error,.pfbadge,.hm-high .linkbtn,.hm-warn .linkbtn){color:#8a5300;border-color:#8a5300}@media (pointer:coarse){.lgview button,.btn[data-lg],.seg button[data-lg]{min-height:44px}.pfsrc .linkbtn{min-height:44px}}.pfsrc{margin:4px 12px;font-size:12px;overflow-wrap:anywhere}#lx .pfsrc-warn,#lx .pfsrc-error{color:var(--s1,#d98a0b)}.hmcard .pfsrc{margin:6px 0 0}.lgview{margin:8px 12px 0}.pfrange{flex-wrap:wrap}
+  st.textContent = `:root[data-theme="light"] #lx :is(.lgwarn,.pfsrc-warn,.pfsrc-error,.pfbadge,.hm-high .linkbtn,.hm-warn .linkbtn){color:#8a5300;border-color:#8a5300}@media (pointer:coarse){.lgview button,.btn[data-lg],.seg button[data-lg]{min-height:44px}.pfsrc .linkbtn{min-height:44px}}.pfsrc{margin:4px 12px;font-size:12px;overflow-wrap:anywhere}#lx .pfsrc-warn,#lx .pfsrc-error{color:var(--s1,#d98a0b)}.hmcard .pfsrc{margin:6px 0 0}.lgview{margin:8px 12px 0}@media (max-width:520px){.seg.lgview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}.seg.lgview button{padding:5px 4px;border-left:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}.seg.lgview button:nth-child(4n){border-right:0}}.pfrange{flex-wrap:wrap}
 .pfcard{margin:8px 12px 16px;padding:10px 12px;border-radius:6px;background:var(--surface-2)}.pfcard h4{margin:0 0 8px;font-size:14px}
 .pftiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px}
 .pftile{display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:6px;background:var(--surface);min-width:0}.pftile span{font-size:12px;color:var(--muted)}
@@ -492,7 +494,7 @@ function lgAllocData(P) {
     // 匯率：這次沒拿到就沿用上一次的並標示
     const fxv = last ? { rate: last.c, date: String(last.d).slice(0, 10) } : prev?.fx ? { ...prev.fx, kept: true } : null;
     W.lgAl = { key, busy: false, at: Date.now(), tok, px: pfKeep(prev?.px, fresh, syms), fx: fxv, etf, items, meta, failed: syms.length ? !cur.ok : false, retried: retry };
-    pfRetryLater(W.lgAl); if (W.lt === "hold" && W.holdView === "tx" && ["alloc", "home", "thesis", undefined].includes(W.lg?.view)) renderList(); // 配置、總覽、論點（停損停利）共用
+    pfRetryLater(W.lgAl); if (W.lt === "hold" && W.holdView === "tx" && ["alloc", "home", "thesis", "report", undefined].includes(W.lg?.view)) renderList(); // 配置、總覽、論點（停損停利）、報告共用
   });
   return W.lgAl;
 }
@@ -581,6 +583,20 @@ function renderThesis(S) {
   $("#lx").innerHTML = lgViewSeg() + skel("載入投資論點…");
   const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
   (W.lgThP ||= (typeof KLThesis !== "undefined" ? Promise.resolve() : one("thesis.js")).then(() => one("pf-thesis.js")).catch(e => { W.lgThP = null; throw e; })).then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
+}
+function renderReport(S) {
+  if (typeof renderReportView === "function" && typeof KLReport !== "undefined" && typeof KLOverview !== "undefined" && typeof KLThesis !== "undefined") return renderReportView(S);
+  $("#lx").innerHTML = lgViewSeg() + skel("載入報告…");
+  const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
+  const need = [["KLOverview", "overview.js"], ["KLThesis", "thesis.js"], ["KLReport", "report.js"]].filter(([g]) => typeof window[g] === "undefined").map(([, f]) => f);
+  (W.lgRpP ||= need.reduce((p, f) => p.then(() => one(f)), Promise.resolve()).then(() => (typeof renderReportView === "function" ? null : one("pf-report.js"))).catch(e => { W.lgRpP = null; throw e; }))
+    .then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
+}
+function renderDiv(S) {
+  if (typeof renderDivView === "function" && typeof KLDivCal !== "undefined") return renderDivView(S);
+  $("#lx").innerHTML = lgViewSeg() + skel("載入股利現金流…");
+  const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
+  (W.lgDvP ||= (typeof KLDivCal !== "undefined" ? Promise.resolve() : one("divcal.js")).then(() => one("pf-divcal.js")).catch(e => { W.lgDvP = null; throw e; })).then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
 }
 function renderHome(S) {
   if (typeof renderHomeView === "function" && typeof KLOverview !== "undefined") return renderHomeView(S);
