@@ -276,6 +276,12 @@
         if (ok && !(M && typeof M.validateStore === "function")) { ok = false; problems = ["沒有融資資料的檢查程式，為了安全不匯入"]; }
         else if (ok) { const r = M.validateStore(p.v); if (!r.ok) { ok = false; problems = [`${new Set(r.errors.map(e => e.i)).size} 個帳戶資料不對（例如：${r.errors[0].code}）`]; } }
         items.push({ key, label: "融資帳戶", ok, problems, summary: { accounts: Array.isArray(p.v?.accounts) ? p.v.accounts.length : 0 } });
+      } else if (key === "kline:pf:targets:v1") {
+        // 目標配置：用再平衡模組的完整檢查；沒有檢查程式就不接受
+        const p = parse(raw); if (!p.ok) { items.push({ key, label: "目標配置", ok: false, problems: ["不是正確的 JSON"] }); continue; }
+        const Rb = opts.rebal; let ok = !!(Rb && typeof Rb.validateStore === "function"), problems = ok ? [] : ["沒有目標配置的檢查程式，為了安全不匯入"];
+        if (ok) { const r = Rb.validateStore(p.v); if (!r.ok) { ok = false; problems = [`目標配置資料不對（${r.errors[0]?.code || r.code} ${r.errors[0]?.error || ""}）`]; } }
+        items.push({ key, label: "目標配置", ok, problems, summary: { items: p.v && p.v.targets && typeof p.v.targets === "object" ? Object.keys(p.v.targets).length : 0 } });
       } else if (key === "kline:pf:thesis:v1") {
         // 投資論點：一樣要用論點模組的完整檢查；沒有檢查程式就不接受
         const p = parse(raw); if (!p.ok) { items.push({ key, label: "投資論點", ok: false, problems: ["不是正確的 JSON"] }); continue; }
