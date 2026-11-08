@@ -9,5 +9,6 @@
 - 「直接幫我合併」的步驟見 AGENTS.md「合併流程」。GitHub GraphQL 在這個環境不能用，開 PR／合併改用 REST：`gh api repos/kevinlf2904/taiex-monitor-app/pulls …`。
 - 讀大檔（`learner/watch.html`、`index.html`、`core.js`、`brief.js`）先用 grep 找行號，一次讀 200 行以內，不整檔讀。
 - 不讀 `node_modules/`、`*.lock`、`package-lock.json`、Playwright 報表與快照；`learner/data/` 的大檔只用 grep 或 node 取需要的片段。
+- 看差異先用 `git diff --stat` 確認範圍，需要時再 `git diff <檔案>`；不要一次輸出整份 diff。
 - 回覆精簡：改了什麼、測試結果、是否推送／開 PR／合併、還沒做的事；不貼沒改的程式。回報時機與「一定立即回報」的情況見 AGENTS.md「交接與回報」。
 - 等 CI 時用背景指令輪詢同一 head SHA 的 check run，不要反覆手動查；等待用的迴圈不要用 `pgrep -f` 比對會出現在自己指令列裡的字串。
