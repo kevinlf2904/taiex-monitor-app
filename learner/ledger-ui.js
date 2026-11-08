@@ -502,6 +502,10 @@ function rbLib() {
   const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
   return (W.lgRbP ||= (typeof KLRebal !== "undefined" ? Promise.resolve() : one("rebal.js")).then(() => one("pf-rebal.js")).then(() => { if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "alloc") renderList(); }).catch(e => { W.lgRbP = null; }));
 }
+function stLib() {
+  const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
+  return (W.lgStP ||= (typeof KLStress !== "undefined" ? Promise.resolve() : one("stress.js")).then(() => one("pf-stress.js")).then(() => { if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "alloc") renderList(); }).catch(e => { W.lgStP = null; }));
+}
 function renderAlloc(S) {
   const head = lgViewSeg();
   if (W.off) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">需要部署到網站才有價格資料。</p>`);
@@ -518,6 +522,7 @@ function renderAlloc(S) {
   $("#lx").innerHTML = head + `<div class="lgbar"><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button>${R.fx ? `<small class="note">美元兌台幣 ${R.fx.rate.toFixed(3)}（${esc(R.fx.date || "")}，Yahoo TWD=X 收盤${X.fx?.kept ? "，這次沒拿到，沿用上一次的" : ""}）</small>` : ""}</div>` + pfSrcHtml(X.meta, "報價")
     + (issues ? `<ul class="note lgwarn alissues">${issues}</ul>` : "") + body
     + (typeof rbSectionHtml === "function" && typeof KLRebal !== "undefined" ? rbSectionHtml(open, X, L.cash) : (rbLib(), `<p class="note" style="padding:0 12px">載入再平衡試算…</p>`)) // 目標配置與再平衡（rebal.js＋pf-rebal.js，用到時才載入）
+    + (typeof stSectionHtml === "function" && typeof KLStress !== "undefined" ? stSectionHtml(open, X, L.cash) : (stLib(), `<p class="note" style="padding:0 12px">載入壓力情境…</p>`)) // 壓力情境（stress.js＋pf-stress.js，用到時才載入）
     + `<details class="pfbasis"><summary>計算口徑</summary><ul><li>權重＝市值 ÷ 總資產（台幣計價；美元用最新匯率換算）。有記入金、出金時，現金也算進總資產。</li>
       <li>沒有現價的持股用成本估算市值，並標示。美股沒有產業資料，歸「未分類」。</li>
       <li>ETF 穿透：ETF 權重 × 成分股占比＝透過 ETF 持有的曝險；只揭露部分成分股時，剩下的歸「其他（未揭露）」。各 ETF 的成分股日期可能不同，會分開列出。</li>
