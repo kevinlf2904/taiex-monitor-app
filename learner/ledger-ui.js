@@ -42,6 +42,7 @@ function renderLedger() {
   if (!S) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
   if (!L.view || L.view === "home") return renderHome(S); // 總覽（預設）：畫面在 pf-home.js，用到時才載入
   if (L.view === "thesis") return renderThesis(S); // 投資論點與近期事件：thesis.js＋pf-thesis.js，用到時才載入
+  if (L.view === "report") return renderReport(S); // 可列印的投資組合報告：report.js＋pf-report.js（＋論點狀態用 thesis.js），用到時才載入
   if (L.view === "perf") return renderPerf(S);
   if (L.view === "margin") return renderMargin();
   if (L.view === "alloc") return renderAlloc(S);
@@ -492,7 +493,7 @@ function lgAllocData(P) {
     // 匯率：這次沒拿到就沿用上一次的並標示
     const fxv = last ? { rate: last.c, date: String(last.d).slice(0, 10) } : prev?.fx ? { ...prev.fx, kept: true } : null;
     W.lgAl = { key, busy: false, at: Date.now(), tok, px: pfKeep(prev?.px, fresh, syms), fx: fxv, etf, items, meta, failed: syms.length ? !cur.ok : false, retried: retry };
-    pfRetryLater(W.lgAl); if (W.lt === "hold" && W.holdView === "tx" && ["alloc", "home", "thesis", undefined].includes(W.lg?.view)) renderList(); // 配置、總覽、論點（停損停利）共用
+    pfRetryLater(W.lgAl); if (W.lt === "hold" && W.holdView === "tx" && ["alloc", "home", "thesis", "report", undefined].includes(W.lg?.view)) renderList(); // 配置、總覽、論點（停損停利）、報告共用
   });
   return W.lgAl;
 }
@@ -576,6 +577,14 @@ function renderThesis(S) {
   $("#lx").innerHTML = lgViewSeg() + skel("載入投資論點…");
   const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
   (W.lgThP ||= (typeof KLThesis !== "undefined" ? Promise.resolve() : one("thesis.js")).then(() => one("pf-thesis.js")).catch(e => { W.lgThP = null; throw e; })).then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
+}
+function renderReport(S) {
+  if (typeof renderReportView === "function" && typeof KLReport !== "undefined" && typeof KLOverview !== "undefined" && typeof KLThesis !== "undefined") return renderReportView(S);
+  $("#lx").innerHTML = lgViewSeg() + skel("載入報告…");
+  const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
+  const need = [["KLOverview", "overview.js"], ["KLThesis", "thesis.js"], ["KLReport", "report.js"]].filter(([g]) => typeof window[g] === "undefined").map(([, f]) => f);
+  (W.lgRpP ||= need.reduce((p, f) => p.then(() => one(f)), Promise.resolve()).then(() => (typeof renderReportView === "function" ? null : one("pf-report.js"))).catch(e => { W.lgRpP = null; throw e; }))
+    .then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
 }
 function renderHome(S) {
   if (typeof renderHomeView === "function" && typeof KLOverview !== "undefined") return renderHomeView(S);
