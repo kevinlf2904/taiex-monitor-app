@@ -67,4 +67,10 @@ test("停損／停利：表單整理（百分比自動變號、空白不設、�
   assert.equal(T.levels({}, { avgCost: 600, price: 620 }).state, "none");
   assert.equal(T.levels({ stop: { mode: "pct", v: -10 } }, { avgCost: null, price: 620 }).state, "no_cost", "百分比但沒成本：不硬算");
   assert.ok(Object.keys(T.LEVEL_LABEL).length >= 8);
+test("日期要真的存在：閏年 2/29 可以、2/30、4/31、平年 2/29、13 月都擋；備份匯入也擋", () => {
+  for (const d of ["2028-02-29", "2026-01-31", "2026-04-30", "2026-12-31"]) assert.equal(T.isDate(d), true, d);
+  for (const d of ["2026-02-29", "2026-02-30", "2026-02-31", "2026-04-31", "2026-06-31", "2026-13-01", "2026-00-10", "2026-01-00", "2026-1-1", "", null]) assert.equal(T.isDate(d), false, String(d));
+  const bad = T.validateStore({ v: 1, items: { 2330: { review: "2026-02-31", log: [{ d: "2026-04-31", note: "x" }] } } });
+  assert.deepEqual(J(bad.errors[0].errors).sort(), ["invalid_log", "invalid_review"]);
+  assert.deepEqual(J(T.catalysts({ codes: ["2330"], store: { items: { 2330: { review: "2026-02-31" } } }, today: "2026-02-01" })), [], "不存在的檢視日不列");
 });
