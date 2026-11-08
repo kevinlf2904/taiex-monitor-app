@@ -795,10 +795,12 @@ async function syncImport(file) {
       if (typeof KLLedger === "undefined" && typeof lazy === "function") await lazy("ledger");
       // 有融資資料：先載入融資模組（使用者可能從沒開過融資頁），用它的完整檢查；載不到就整份不匯入
       if (pfKeys.some(k => k.startsWith("kline:pf:margin:")) && typeof KLMargin === "undefined") await new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "margin.js"; sc.onload = ok; sc.onerror = () => no(new Error("載入融資資料的檢查程式失敗，沒有匯入（這台的資料維持原樣）")); document.body.appendChild(sc); });
-      const C = KLLedger.checkBackup(j.data, { today: toolsDay(), margin: typeof KLMargin !== "undefined" ? KLMargin : null });
+      // 有投資論點：先載入論點模組，用它的完整檢查；載不到就整份不匯入
+      if (pfKeys.includes("kline:pf:thesis:v1") && typeof KLThesis === "undefined") await new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "thesis.js"; sc.onload = ok; sc.onerror = () => no(new Error("載入投資論點的檢查程式失敗，沒有匯入（這台的資料維持原樣）")); document.body.appendChild(sc); });
+      const C = KLLedger.checkBackup(j.data, { today: toolsDay(), margin: typeof KLMargin !== "undefined" ? KLMargin : null, thesis: typeof KLThesis !== "undefined" ? KLThesis : null });
       if (!C.ok) throw new Error("備份檔裡的投資組合資料有問題，沒有匯入（這台的資料維持原樣）：" + C.items.filter(x => !x.ok).map(x => `${x.label}：${x.problems.join("；")}`).join("；"));
       const cur = (() => { try { return JSON.parse(localStorage.getItem("kline:pf:v1") || "null"); } catch { return null; } })();
-      pfTxt = "\n\n投資組合：" + C.items.map(x => x.key === "kline:pf:v1" ? `交易紀錄 ${x.summary.transactions} 筆（${x.summary.from || "—"}～${x.summary.to || "—"}）${cur ? `，會取代這台現在的 ${(cur.transactions || []).length} 筆` : ""}` : `${x.label} ${x.summary?.accounts ?? ""} 個`).join("；");
+      pfTxt = "\n\n投資組合：" + C.items.map(x => x.key === "kline:pf:v1" ? `交易紀錄 ${x.summary.transactions} 筆（${x.summary.from || "—"}～${x.summary.to || "—"}）${cur ? `，會取代這台現在的 ${(cur.transactions || []).length} 筆` : ""}` : x.key === "kline:pf:thesis:v1" ? `${x.label} ${x.summary?.items ?? 0} 檔` : `${x.label} ${x.summary?.accounts ?? ""} 個`).join("；");
     }
     if (!confirm(`用備份檔（${String(j.at).slice(0, 16).replace("T", " ")}，${Object.keys(j.data).length} 項）覆蓋這台裝置的設定與紀錄？${pfTxt}\n\n備份檔裡沒有的項目會保留；寫入失敗會自動改回原本的資料。`)) return;
     const n = syncApply(j.data); toast(`已匯入 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600); } catch (e) { toast("匯入失敗：" + e.message); }
