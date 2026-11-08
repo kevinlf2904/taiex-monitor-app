@@ -188,6 +188,6 @@ document.addEventListener("submit", e => {
 .thlvin{display:grid;grid-template-columns:minmax(4.5em,1fr) minmax(0,max-content);gap:6px}.thform .thlvin select{width:auto;max-width:100%}
 .thform{display:grid;gap:8px}.thform label{display:grid;gap:4px;font-size:13px}.thform textarea,.thform input,.thform select{width:100%;min-width:0;box-sizing:border-box;font:inherit}.throw{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 @media (max-width:560px){.thev li{grid-template-columns:max-content minmax(0,1fr) auto}.thev li>.note{grid-column:2/-1}}
-@media (pointer:coarse){.thev .linkbtn,.thcard .thh .linkbtn{min-height:44px}}`;
+@media (pointer:coarse){.thev .linkbtn,.thcard .thh .linkbtn,.btn[data-th],.thform .btn{min-height:44px}}`;
   document.head.appendChild(st);
 })();

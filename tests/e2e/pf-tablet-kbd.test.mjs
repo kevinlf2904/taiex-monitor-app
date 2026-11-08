@@ -9,7 +9,7 @@ const TX = [{ id: "d", v: 1, date: "2026-01-02", type: "deposit", market: "tw", 
   { id: "a", v: 1, date: "2026-01-05", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 90, fee: 0, tax: 0 },
   { id: "b", v: 1, date: "2026-01-05", type: "buy", symbol: "NVDA", market: "us", currency: "USD", shares: 10, price: 100, fee: 0, tax: 0 }];
 const MG = { v: 1, accounts: [{ id: "m", name: "融資", type: "margin", source: "user", loan: 10000, collateral: [{ symbol: "2330", shares: 100 }] }] };
-const VIEWS = [["home", ".hmcard"], ["tx", ".lgcurs"], ["perf", ".pfcard"], ["alloc", ".alcard"], ["margin", ".pfsrc"]];
+const VIEWS = [["home", ".hmcard"], ["tx", ".lgcurs"], ["perf", ".pfcard"], ["alloc", ".alcard"], ["margin", ".pfsrc"], ["thesis", ".thsum"]];
 // 同一列可以點的東西互相重疊（寬度太窄被擠在一起）
 const overlaps = p => p.evaluate(() => { const els = [...document.querySelectorAll("#lx button, #lx [role=button], #lx a")].filter(e => e.offsetParent && e.getClientRects().length), out = [];
   const R = els.map(e => e.getBoundingClientRect());
