@@ -13,6 +13,7 @@ async function page(width) {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await ctx.route("**/api/calendar**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: [{ date: day(12), code: "2330", name: "台積電", kind: "除息", cash: 5 }, { date: day(5), code: "9999", kind: "除息" }], conf: [{ date: day(7), code: "2330", time: "14:00", place: "台北" }], hol: [] }) }));
   await ctx.route("**/data/us-earn.json*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, at: new Date().toISOString(), rows: [[day(10), "NVDA", "NVIDIA", 4000, null, 1.2, null, "盤後", "Q3"], [day(10), "AAPL", "Apple", 3000, null, 2, null, "盤後", "Q4"]] }) }));
+  await ctx.route("**/api/oapi?earn=1*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, ym: "11510", yq: "115Q3", rows: [["2330", "台積電", "半導體業", "上市", 3000, -5.2, 12.34, 30, 15.2, 8000, 3000, 59.14, 49.5, 43.1], ["2454", "聯發科", "半導體業", "上市", 500, 1, -8, 2, 20, 1500, 300, 48, 20, 18]] }) }));
   await p.evaluate(tx => { localStorage.removeItem("kline:pf:thesis:v1"); W.cal = null; W.thD = null; /* 開頁時大盤可能已經用預設的假資料載入過行事曆 */ store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "thesis" }; W.holdView = "tx"; setLt("hold"); }, TX);
   await p.waitForSelector("#lx .thev, #lx .thsum", { timeout: 30000 });
   await p.waitForFunction(() => /近期事件/.test($("#lx").innerText) && !/載入持股的除權息/.test($("#lx").innerText), null, { timeout: 30000 });
@@ -83,6 +84,22 @@ test("停損／停利：百分比相對成本、接近與觸及的狀態、設�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+for (const width of [390, 1280]) test(`財報指標 ${width}：台股帶入最新指標、要觀察的項目旁邊標目前數字；美股不顯示`, async () => {
+  const { ctx, p, errs } = await page(width);
+  await p.click('[data-th=edit][data-c="2330"]'); await p.waitForSelector("#thForm");
+  await p.fill("#thForm [name=reason]", "製程"); await p.fill("#thForm [name=watch]", "毛利率維持 55% 以上\n海外廠進度\n累計營收年增");
+  await p.click("#thForm button[type=submit]"); await p.waitForFunction(() => !document.querySelector("#thForm"), null, { timeout: 10000 });
+  await p.waitForFunction(() => document.querySelector("#lx .thkpi b"), null, { timeout: 30000 });
+  const card = c => p.evaluate(c => [...document.querySelectorAll("#lx .thcard")].find(x => x.querySelector(`[data-sel="${c}"]`)).innerText, c);
+  const t = await card("2330");
+  assert.match(t, /最新財報（營收 2026 年 10 月・季報 2026 年第 3 季）/); assert.match(t, /月營收年增 \+12\.3%/); assert.match(t, /EPS 15\.2/); assert.match(t, /營益率 49\.5%/);
+  const W2 = await p.evaluate(() => [...[...document.querySelectorAll("#lx .thcard")].find(x => x.querySelector('[data-sel="2330"]')).querySelectorAll(".thgrid li")].map(li => li.innerText));
+  assert.deepEqual(W2, ["毛利率維持 55% 以上 目前 59.1%", "海外廠進度", "累計營收年增 目前 +30.0%"], "對到的才標");
+  assert.doesNotMatch(await card("NVDA"), /最新財報|財報指標/, "美股不顯示");
+  assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width), "沒有水平溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 test("停損／停利沒有報價：兩邊都寫進到價提醒、原本的單邊提醒確認後整個換掉；報價回來後每邊只通知一次", async () => {
   const { ctx, p, errs } = await page(390);
   await ctx.route("**/api/quote**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", quotes: [] }) })); // 之後的報價都拿不到
@@ -100,6 +117,24 @@ test("停損／停利沒有報價：兩邊都寫進到價提醒、原本的單�
   assert.deepEqual(await p.evaluate(() => [W.alerts.NVDA?.dn ?? null, W.alerts.NVDA?.up]), [null, 130]);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+for (const [kind, fail] of [["連不上", r => r.fulfill({ status: 500, body: "x" })], ["ok:false", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: false, error: "來源維護中" }) })]])
+  test(`財報指標第一次${kind}：標「拿不到」（不是「不在資料裡」），節流時間到了重抓成功就換成數字`, async () => {
+    const { ctx, p, errs } = await page(390);
+    await p.waitForFunction(() => document.querySelector("#lx .thkpi b"), null, { timeout: 30000 }); // 開頁那次先載完
+    let n = 0; const bad = r => { n++; return fail(r); };
+    await ctx.route("**/api/oapi?earn=1*", bad); // 後註冊的先用：先失敗
+    await p.evaluate(() => { W.fresh = Date.now() + 36e5; /* 不用快取，真的去問 */ ER().data = null; W.thEF = 0; renderList(); });
+    await p.waitForFunction(() => /財報指標這次拿不到/.test($("#lx").innerText), null, { timeout: 30000 });
+    const t = await p.evaluate(() => $("#lx").innerText);
+    assert.doesNotMatch(t, /不在月營收／季報資料裡/, "來源失敗不能說成這檔沒資料"); assert.match(t, /1 分鐘後自動再試/);
+    const n1 = n; await p.evaluate(() => renderList()); await p.waitForTimeout(300); assert.equal(n, n1, "1 分鐘內重畫不重抓");
+    await ctx.unroute("**/api/oapi?earn=1*", bad);
+    await p.evaluate(() => { W.thEF = Date.now() - 61e3; ER().data.at = Date.now() - 61e3; renderList(); }); // 假裝 1 分鐘過了
+    await p.waitForFunction(() => document.querySelector("#lx .thkpi b"), null, { timeout: 30000 });
+    assert.match(await p.evaluate(() => $("#lx").innerText), /月營收年增 \+12\.3%/); assert.doesNotMatch(await p.evaluate(() => $("#lx").innerText), /財報指標這次拿不到/);
+    await ctx.close(); assert.deepEqual(errs, []);
+  });
 
 test("存檔前檢查擋下太長的內容；備份匯入要用論點模組檢查（沒有檢查程式不匯入）", async () => {
   const { ctx, p, errs } = await page(1280);

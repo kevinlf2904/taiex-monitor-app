@@ -41,11 +41,13 @@ test("鍵盤：Tab 到分頁按 Enter 切換；總覽的卡片、持倉可以用
   await ctx.route("**/api/kline?code=TWD%3DX**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, data: [{ d: "2026-10-05", o: 32, h: 32, l: 32, c: 32, v: 0 }] }) }));
   await p.evaluate(tx => { store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = null; W.holdView = "tx"; setLt("hold"); }, TX);
   await p.waitForSelector(".hmcard", { timeout: 30000 });
+  // 等總覽的報價載完：載完會整個重畫，焦點會掉回 body（之前在 CI 偶爾因此量不到焦點外框）
+  await p.waitForFunction(() => W.lgPx && !W.lgPx.busy && !W.lgPx.refreshing, null, { timeout: 30000 });
   // 用 Tab 走到「績效」分頁（最多按 80 次），Enter 切過去
   const tabTo = async (pred, max = 80) => { for (let i = 0; i < max; i++) { await p.keyboard.press("Tab"); if (await p.evaluate(pred)) return true; } return false; };
   assert.ok(await tabTo(() => document.activeElement?.matches?.("[data-lg=view][data-v=perf]")), "Tab 走得到「績效」分頁");
-  const ring = await p.evaluate(() => { const s = getComputedStyle(document.activeElement); return s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0 || s.boxShadow !== "none"; });
-  assert.ok(ring, "有焦點外框");
+  const ring = await p.evaluate(() => { const e = document.activeElement; if (!e?.matches?.("[data-lg=view][data-v=perf]")) return "焦點不在績效分頁：" + (e?.tagName || ""); const s = getComputedStyle(e); return s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0 || s.boxShadow !== "none"; });
+  assert.equal(ring, true, "有焦點外框");
   await p.keyboard.press("Enter"); await p.waitForSelector(".pfcard, .pfsrc", { timeout: 30000 });
   assert.equal(await p.evaluate(() => W.lg.view), "perf");
   // 回總覽：Tab 到「總資產」卡片，按 Enter 到配置
