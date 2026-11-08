@@ -2,6 +2,8 @@
    不用 AI、不送資料到任何外部服務；論點只存在這個瀏覽器（kline:pf:thesis:v1），雲端同步、備份檔會一起帶。
    事件資料：除權息與法說會用 /api/calendar（證交所、櫃買中心公開資料，和大盤的行事曆同一份）；美股財報用 data/us-earn.json（排程整理的 Nasdaq 公開行事曆），讀不到再問 /api/usearn。
    停損／停利（第 3 批）：每檔可設價格或「相對成本的百分比」，用配置頁同一份報價（lgAllocData）算距離與狀態；可一鍵寫進既有的到價提醒（watch:alerts，覆蓋前先確認）。
+   財報指標（第 4 批）：台股持股帶入最新的月營收年增、累計年增、EPS、毛利率、營益率、淨利率（/api/oapi?earn=1，和情報局「財報」同一份，earn.js 的 ER／erLoad），
+   「要觀察的」項目寫到這些指標時，旁邊直接顯示目前數字。美股沒有這份資料，不顯示。
    用到 watch.html 的 W、$、esc、nameOf、store、getJ、skel、toast、renderList；ledger-ui.js 的 lgViewSeg、lgToday、lgAllocData；ledger.js 的 KLLedger；thesis.js 的 KLThesis。 */
 const TH_KEY = "pf:thesis:v1"; // store 會加上 kline: 前綴
 const thLoad = () => { const s = store.get(TH_KEY, null); return s && s.v === 1 && s.items && typeof s.items === "object" ? s : { v: 1, items: {} }; };
@@ -22,6 +24,14 @@ function thData() {
   });
   return W.thD;
 }
+// 台股財報表：和財報頁共用（lazy 載入 earn.js）；失敗 1 分鐘內不重抓，避免重畫時一直重試
+function thEarn() {
+  if (W.off) return null;
+  if (typeof ER === "function" && ER().data) return ER().data;
+  if (!W.thEB && !(Date.now() - (W.thEF || 0) < 60e3)) { W.thEB = true;
+    lazy("earn").then(() => erLoad()).catch(() => {}).finally(() => { W.thEB = false; W.thEF = Date.now(); if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "thesis") renderList(); }); }
+  return W.thEB ? { busy: true } : null;
+}
 const TH_EVERY = [["", "不改"], ["30", "30 天後"], ["90", "90 天後（一季）"], ["180", "180 天後"]];
 function renderThesisView(S) {
   const head = lgViewSeg(), L = W.lg, today = lgToday();
@@ -31,6 +41,8 @@ function renderThesisView(S) {
   // 停損停利：有設的才抓報價（和配置頁共用）；每檔的價位與狀態
   const anyLv = codes.some(c => st.items[c]?.stop || st.items[c]?.take), Q = anyLv && !W.off ? lgAllocData(open) : null, pos = new Map(open.map(p => [p.symbol, p]));
   const LV = new Map(codes.map(c => { const price = Q?.px?.get(c)?.price ?? null; return [c, { ...KLThesis.levels(st.items[c], { avgCost: pos.get(c).avgCost, price }), price }]; }));
+  const tw = codes.filter(c => /^\d/.test(c)), ED = tw.length ? thEarn() : null, ERow = new Map((ED?.rows || []).map(r => [String(r[0]), r]));
+  const per = ED?.rows ? [typeof erYm === "function" ? erYm(ED.ym) : "", typeof erYq === "function" ? erYq(ED.yq) : ""] : ["", ""];
   W.thLv = LV; const cnt = k => [...LV.values()].filter(x => k.includes(x.state)).length;
   const tile = (k, v, sub = "") => `<div class="pftile"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
   const tiles = tile("已寫論點", `${Sm.written}/${Sm.total}`, Sm.missing.length ? `還沒寫：${Sm.missing.slice(0, 4).map(c => esc(nameOf(c))).join("、")}${Sm.missing.length > 4 ? " 等" : ""}` : "每檔持股都寫了")
@@ -57,8 +69,14 @@ function renderThesisView(S) {
       + (it.take ? `<span>停利 ${px(lv.takePrice)}${pc(lv.toTake)}${it.take.mode === "pct" ? `<small class="note">＝成本 +${it.take.v}%</small>` : ""}</span>` : "")
       + (Q?.busy && lv.state === "no_price" ? `<small class="note">載入報價…</small>` : "") + `</p>`;
     const ul = a => (a?.length ? `<ul>${a.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="note">—</p>`);
+    // 財報指標：台股才有；要觀察的項目對到指標就在旁邊標目前數字
+    const K = /^\d/.test(c) && ERow.has(c) ? KLThesis.kpis(ERow.get(c)) : null, KM = new Map((K || []).map(x => [x.k, x]));
+    const kv = x => `<b class="${x.bad ? "down" : ""}">${esc(x.text)}</b>`;
+    const ulW = a => (a?.length ? `<ul>${a.map(x => { const m = KM.get(KLThesis.matchWatch(x)); return `<li>${esc(x)}${m && m.v != null ? ` <small class="thkv">目前 ${kv(m)}</small>` : ""}</li>`; }).join("")}</ul>` : `<p class="note">—</p>`);
+    const kRow = !/^\d/.test(c) ? "" : K ? `<div class="thkpi"><span class="note">最新財報${per[0] || per[1] ? `（營收 ${esc(per[0])}・季報 ${esc(per[1])}）` : ""}</span>${K.map(x => `<span>${esc(x.label)} ${kv(x)}</span>`).join("")}</div>`
+      : ED?.busy ? `<p class="note thkpi">載入財報指標…</p>` : ED?.rows ? `<p class="note thkpi">這檔不在月營收／季報資料裡（ETF、新上市或興櫃）。</p>` : ED ? `<p class="note thkpi lgwarn">財報指標這次拿不到。</p>` : "";
     return `<section class="pfcard thcard" data-nofold><div class="thh"><button type="button" class="linkbtn" data-sel="${esc(c)}"><b>${esc(nameOf(c))}</b> <small class="note">${esc(c)}</small></button>${has ? `<span class="thst thst-${s}">${SL[s]}</span>` : ""}${it.review ? `<span class="note${due ? " lgwarn" : ""}">下次檢視 ${esc(it.review)}${due ? "（到期）" : ""}</span>` : ""}</div>`
-      + lvRow + (has ? `<div class="thgrid"><div><h5 class="pfh">為什麼買</h5><p>${esc(it.reason || "—")}</p></div><div><h5 class="pfh">要觀察的</h5>${ul(it.watch)}</div><div><h5 class="pfh">什麼情況代表論點不成立</h5>${ul(it.kill)}</div></div>`
+      + lvRow + kRow + (has ? `<div class="thgrid"><div><h5 class="pfh">為什麼買</h5><p>${esc(it.reason || "—")}</p></div><div><h5 class="pfh">要觀察的</h5>${ulW(it.watch)}</div><div><h5 class="pfh">什麼情況代表論點不成立</h5>${ul(it.kill)}</div></div>`
         + (it.log?.length ? `<p class="note thlast">最近檢視 ${esc(it.log[0].d)}${it.log[0].status ? `・${SL[it.log[0].status]}` : ""}：${esc(it.log[0].note || "—")}${it.log.length > 1 ? `（共 ${it.log.length} 筆）` : ""}</p>` : "")
         : `<p class="note">還沒寫這檔的投資論點。</p>`)
       + `<div class="lgbar"><button type="button" class="btn sm${has ? "" : " primary"}" data-th="edit" data-c="${esc(c)}">${has ? "修改論點" : "寫論點"}</button>${has ? `<button type="button" class="btn sm" data-th="log" data-c="${esc(c)}">加檢視紀錄</button>` : ""}${lv.stopPrice != null || lv.takePrice != null ? `<button type="button" class="btn sm" data-th="alert" data-c="${esc(c)}">設成到價提醒</button>` : ""}</div></section>`;
@@ -128,6 +146,7 @@ document.addEventListener("submit", e => {
 :root[data-theme="light"] #lx .thst-weak,:root[data-theme="light"] #lx .thst-broken{color:#8a5300}
 .thgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 16px}.thgrid p,.thgrid ul{margin:0;font-size:13px;overflow-wrap:anywhere}.thgrid ul{padding-left:1.2em}.thlast{margin:6px 0 0}
 .thlv{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin:0 0 6px;font-size:13px;font-variant-numeric:tabular-nums}.thlv-stop_hit,.thlv-near_stop{color:var(--down);border-color:currentColor}.thlv-take_hit,.thlv-near_take{color:var(--up);border-color:currentColor}
+.thkpi{display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline;margin:0 0 8px;font-size:13px;font-variant-numeric:tabular-nums}.thkpi>.note{flex-basis:100%}.thkv{white-space:nowrap}
 .thlvin{display:grid;grid-template-columns:minmax(4.5em,1fr) minmax(0,max-content);gap:6px}.thform .thlvin select{width:auto;max-width:100%}
 .thform{display:grid;gap:8px}.thform label{display:grid;gap:4px;font-size:13px}.thform textarea,.thform input,.thform select{width:100%;min-width:0;box-sizing:border-box;font:inherit}.throw{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 @media (max-width:560px){.thev li{grid-template-columns:max-content minmax(0,1fr) auto}.thev li>.note{grid-column:2/-1}}

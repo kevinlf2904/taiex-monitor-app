@@ -68,3 +68,10 @@ test("停損／停利：表單整理（百分比自動變號、空白不設、�
   assert.equal(T.levels({ stop: { mode: "pct", v: -10 } }, { avgCost: null, price: 620 }).state, "no_cost", "百分比但沒成本：不硬算");
   assert.ok(Object.keys(T.LEVEL_LABEL).length >= 8);
 });
+
+test("財報指標：從財報表的一列取出六個指標（缺值顯示 —、衰退或虧損標出來）；要觀察的項目用關鍵字對到指標", () => {
+  const K = T.kpis(["2330", "台積電", "半導體業", "上市", 3000, -5.2, -3.04, 30, -0.5, 8000, 3000, 59.14, null, 43.1]);
+  assert.deepEqual(J(K.map(x => [x.k, x.text, x.bad])), [["yoy", "-3.0%", true], ["cum", "+30.0%", false], ["eps", "-0.5", true], ["gm", "59.1%", false], ["om", "—", false], ["nm", "43.1%", false]]);
+  assert.deepEqual(J(T.kpis(null)), []); assert.equal(T.kpis(["x", "", "", "", 1, 1, "壞", 1, 1, 1, 1, 1, 1, 1])[0].v, null, "不是數字當成沒有");
+  assert.deepEqual(J(["毛利率連兩季", "累計營收年增", "月營收年增率", "EPS 成長", "海外廠進度", "營業利益率", "淨利率", "eps"].map(T.matchWatch)), ["gm", "cum", "yoy", "eps", null, "om", "nm", "eps"]);
+});

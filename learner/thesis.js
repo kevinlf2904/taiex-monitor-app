@@ -88,6 +88,19 @@
       : toStop != null && -toStop * 100 <= near ? "near_stop" : toTake != null && toTake * 100 <= near ? "near_take" : "ok";
     return { state, stopPrice: Math.round(stopPrice * 100) / 100 || null, takePrice: Math.round(takePrice * 100) / 100 || null, toStop, toTake };
   }
+  // 財報指標（第 4 批）：/api/oapi?earn=1 的一列 [代號, 名稱, 產業, 市場, 當月營收(億), 月增%, 年增%, 累計年增%, EPS, 季營收(億), 稅後淨利(億), 毛利率, 營益率, 淨利率]
+  // 「要觀察的」每一項用關鍵字對到一個指標（累計營收要比營收先比對）；對不到就不帶
+  const KPI = [["cum", "累計營收年增", 7, "pct", /累計/], ["gm", "毛利率", 11, "rate", /毛利/], ["om", "營益率", 12, "rate", /營益|營業利益/], ["nm", "淨利率", 13, "rate", /淨利率|純益率/],
+    ["eps", "EPS", 8, "num", /EPS|每股盈餘/i], ["yoy", "月營收年增", 6, "pct", /營收/]];
+  const KPI_ORDER = ["yoy", "cum", "eps", "gm", "om", "nm"];
+  const fmtKpi = (t, v) => (v == null ? "—" : t === "pct" ? `${v > 0 ? "+" : ""}${v.toFixed(1)}%` : t === "rate" ? `${v.toFixed(1)}%` : String(+v.toFixed(2)));
+  function kpis(row) {
+    if (!Array.isArray(row)) return [];
+    const num = v => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    return KPI_ORDER.map(k => { const d = KPI.find(x => x[0] === k), v = num(row[d[2]]);
+      return { k, label: d[1], v, text: fmtKpi(d[3], v), period: k === "yoy" || k === "cum" ? "month" : "quarter", bad: v != null && ((k === "yoy" || k === "cum" || k === "eps") ? v < 0 : false) }; });
+  }
+  const matchWatch = t => { const s = String(t || ""); const d = KPI.find(x => x[4].test(s)); return d ? d[0] : null; };
   const LEVEL_LABEL = { stop_hit: "已跌破停損", take_hit: "已漲過停利", near_stop: "接近停損", near_take: "接近停利", ok: "還沒觸及", none: "沒設停損停利", no_price: "沒有報價", no_cost: "沒有成本，百分比算不出價位" };
   // 摘要：幾檔有寫論點、幾檔該檢視、各狀態幾檔（只算目前持有的）
   function summary(store, codes, today) {
@@ -96,5 +109,5 @@
       S.written++; S.byStatus[it.status || "hold"]++; if (isDate(it.review) && isDate(today) && it.review <= today) S.due++; }
     return S;
   }
-  root.KLThesis = Object.freeze({ VERSION, STORE_KEY, STATUS, STATUS_LABEL, KIND_LABEL, LIM, checkItem, validateStore, fromForm, addLog, catalysts, summary, addDays, levels, LEVEL_LABEL, levelFrom });
+  root.KLThesis = Object.freeze({ VERSION, STORE_KEY, STATUS, STATUS_LABEL, KIND_LABEL, LIM, checkItem, validateStore, fromForm, addLog, catalysts, summary, addDays, levels, LEVEL_LABEL, levelFrom, kpis, matchWatch });
 })(typeof window !== "undefined" ? window : globalThis);

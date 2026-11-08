@@ -13,6 +13,7 @@ async function page(width) {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await ctx.route("**/api/calendar**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: [{ date: day(12), code: "2330", name: "台積電", kind: "除息", cash: 5 }, { date: day(5), code: "9999", kind: "除息" }], conf: [{ date: day(7), code: "2330", time: "14:00", place: "台北" }], hol: [] }) }));
   await ctx.route("**/data/us-earn.json*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, at: new Date().toISOString(), rows: [[day(10), "NVDA", "NVIDIA", 4000, null, 1.2, null, "盤後", "Q3"], [day(10), "AAPL", "Apple", 3000, null, 2, null, "盤後", "Q4"]] }) }));
+  await ctx.route("**/api/oapi?earn=1*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, ym: "11510", yq: "115Q3", rows: [["2330", "台積電", "半導體業", "上市", 3000, -5.2, 12.34, 30, 15.2, 8000, 3000, 59.14, 49.5, 43.1], ["2454", "聯發科", "半導體業", "上市", 500, 1, -8, 2, 20, 1500, 300, 48, 20, 18]] }) }));
   await p.evaluate(tx => { localStorage.removeItem("kline:pf:thesis:v1"); W.cal = null; W.thD = null; /* 開頁時大盤可能已經用預設的假資料載入過行事曆 */ store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "thesis" }; W.holdView = "tx"; setLt("hold"); }, TX);
   await p.waitForSelector("#lx .thev, #lx .thsum", { timeout: 30000 });
   await p.waitForFunction(() => /近期事件/.test($("#lx").innerText) && !/載入持股的除權息/.test($("#lx").innerText), null, { timeout: 30000 });
@@ -80,6 +81,22 @@ test("停損／停利：百分比相對成本、接近與觸及的狀態、設�
   assert.match(msg, /漲到 150/); const a = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:watch:alerts")).NVDA);
   assert.equal(a.up, 120); assert.equal(a.dn, 97);
   assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, 390), "沒有水平溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+for (const width of [390, 1280]) test(`財報指標 ${width}：台股帶入最新指標、要觀察的項目旁邊標目前數字；美股不顯示`, async () => {
+  const { ctx, p, errs } = await page(width);
+  await p.click('[data-th=edit][data-c="2330"]'); await p.waitForSelector("#thForm");
+  await p.fill("#thForm [name=reason]", "製程"); await p.fill("#thForm [name=watch]", "毛利率維持 55% 以上\n海外廠進度\n累計營收年增");
+  await p.click("#thForm button[type=submit]"); await p.waitForFunction(() => !document.querySelector("#thForm"), null, { timeout: 10000 });
+  await p.waitForFunction(() => document.querySelector("#lx .thkpi b"), null, { timeout: 30000 });
+  const card = c => p.evaluate(c => [...document.querySelectorAll("#lx .thcard")].find(x => x.querySelector(`[data-sel="${c}"]`)).innerText, c);
+  const t = await card("2330");
+  assert.match(t, /最新財報（營收 2026 年 10 月・季報 2026 年第 3 季）/); assert.match(t, /月營收年增 \+12\.3%/); assert.match(t, /EPS 15\.2/); assert.match(t, /營益率 49\.5%/);
+  const W2 = await p.evaluate(() => [...[...document.querySelectorAll("#lx .thcard")].find(x => x.querySelector('[data-sel="2330"]')).querySelectorAll(".thgrid li")].map(li => li.innerText));
+  assert.deepEqual(W2, ["毛利率維持 55% 以上 目前 59.1%", "海外廠進度", "累計營收年增 目前 +30.0%"], "對到的才標");
+  assert.doesNotMatch(await card("NVDA"), /最新財報|財報指標/, "美股不顯示");
+  assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width), "沒有水平溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
