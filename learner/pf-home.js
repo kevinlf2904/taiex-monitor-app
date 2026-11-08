@@ -58,7 +58,7 @@ function renderHomeView(S) {
     <h5 class="pfh">持股市值走勢</h5>${hmTrend(hmTrendData(S))}
     ${pfSrcHtml(X.meta, "報價", false)}${mgMeta ? pfSrcHtml(mgMeta, "融資擔保品報價", false) : ""}
     <p class="note hmupd">資料時間：${upd}。報價的時間是行情時間，不是計算時間。</p>
-    <div class="lgbar"><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button></div></section>`;
+    <div class="lgbar"><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button><button type="button" class="btn sm" data-lg="view" data-v="report">報告（可列印）</button></div></section>`;
 }
 document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".hmgo")) { e.preventDefault(); e.target.click(); } });
 (function () {
