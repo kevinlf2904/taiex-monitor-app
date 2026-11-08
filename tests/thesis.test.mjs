@@ -75,3 +75,16 @@ test("財報指標：從財報表的一列取出六個指標（缺值顯示 —�
   assert.deepEqual(J(T.kpis(null)), []); assert.equal(T.kpis(["x", "", "", "", 1, 1, "壞", 1, 1, 1, 1, 1, 1, 1])[0].v, null, "不是數字當成沒有");
   assert.deepEqual(J(["毛利率連兩季", "累計營收年增", "月營收年增率", "EPS 成長", "海外廠進度", "營業利益率", "淨利率", "eps"].map(T.matchWatch)), ["gm", "cum", "yoy", "eps", null, "om", "nm", "eps"]);
 });
+
+test("簡易估值：反推 EPS、同產業本益比中位數、歷史本益比分位與情境價；虧損或資料不夠不硬算", () => {
+  const hist = Array.from({ length: 100 }, (_, i) => 10 + i * 0.1); // 10.0～19.9
+  const V = T.valuation({ price: 600, pe: 20, pb: 5, dy: 2.1, peers: [10, 30, 15, 0, null, 25], hist });
+  assert.equal(V.eps, 30); assert.equal(V.loss, false);
+  assert.deepEqual(J(V.ind), { median: 20, n: 4, vs: 0, price: 600 }, "0 和空的不算；偶數取中間兩個平均");
+  assert.equal(V.band.lo, 12); assert.equal(V.band.mid, 15); assert.equal(V.band.hi, 18); assert.equal(V.band.pct, 100);
+  assert.deepEqual(J(V.scen.map(x => [x.k, x.price, x.chg])), [["bear", 360, -0.4], ["base", 450, -0.25], ["bull", 540, -0.1]]);
+  const L = T.valuation({ price: 50, pe: 0, pb: 0.8, peers: [10, 12], hist });
+  assert.equal(L.loss, true); assert.equal(L.eps, null); assert.equal(L.ind, null, "同業不到 3 家"); assert.deepEqual(J(L.scen), [], "虧損：沒有情境價"); assert.equal(L.band.pct, null);
+  assert.equal(T.valuation({ price: 600, pe: 20, hist: hist.slice(0, 59) }).band, null, "歷史不到 60 天");
+  assert.equal(T.SCEN_LABEL.bear, "悲觀");
+});

@@ -13,7 +13,10 @@ async function page(width) {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await ctx.route("**/api/calendar**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: [{ date: day(12), code: "2330", name: "台積電", kind: "除息", cash: 5 }, { date: day(5), code: "9999", kind: "除息" }], conf: [{ date: day(7), code: "2330", time: "14:00", place: "台北" }], hol: [] }) }));
   await ctx.route("**/data/us-earn.json*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, at: new Date().toISOString(), rows: [[day(10), "NVDA", "NVIDIA", 4000, null, 1.2, null, "盤後", "Q3"], [day(10), "AAPL", "Apple", 3000, null, 2, null, "盤後", "Q4"]] }) }));
-  await ctx.route("**/api/oapi?earn=1*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, ym: "11510", yq: "115Q3", rows: [["2330", "台積電", "半導體業", "上市", 3000, -5.2, 12.34, 30, 15.2, 8000, 3000, 59.14, 49.5, 43.1], ["2454", "聯發科", "半導體業", "上市", 500, 1, -8, 2, 20, 1500, 300, 48, 20, 18]] }) }));
+  await ctx.route("**/api/oapi?earn=1*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, ym: "11510", yq: "115Q3", rows: [["2330", "台積電", "半導體業", "上市", 3000, -5.2, 12.34, 30, 15.2, 8000, 3000, 59.14, 49.5, 43.1], ["2454", "聯發科", "半導體業", "上市", 500, 1, -8, 2, 20, 1500, 300, 48, 20, 18],
+    ["2303", "聯電", "半導體業", "上市", 200, 1, 1, 1, 1, 600, 100, 30, 20, 15], ["3711", "日月光", "半導體業", "上市", 500, 1, 1, 1, 2, 1500, 200, 16, 8, 6], ["2317", "鴻海", "其他電子業", "上市", 6000, 1, 1, 1, 3, 1e4, 400, 6, 3, 2]] }) }));
+  await ctx.route("**/api/screen?bw=1*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: { 2330: [20, 5, 2.1], 2454: [18, 4, 3], 2303: [12, 1.5, 5], 3711: [25, 3, 2], 2317: [99, 1, 1] } }) }));
+  await ctx.route("**/api/stockinfo?code=2330*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, code: "2330", per: Array.from({ length: 100 }, (_, i) => ({ d: `2026-0${1 + Math.floor(i / 30)}-${String(1 + i % 28).padStart(2, "0")}`, pe: +(10 + i * 0.1).toFixed(1) })), revenue: [], fin: [], inst: [], margin: [], short: [] }) }));
   await p.evaluate(tx => { localStorage.removeItem("kline:pf:thesis:v1"); W.cal = null; W.thD = null; /* 開頁時大盤可能已經用預設的假資料載入過行事曆 */ store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "thesis" }; W.holdView = "tx"; setLt("hold"); }, TX);
   await p.waitForSelector("#lx .thev, #lx .thsum", { timeout: 30000 });
   await p.waitForFunction(() => /近期事件/.test($("#lx").innerText) && !/載入持股的除權息/.test($("#lx").innerText), null, { timeout: 30000 });
@@ -96,6 +99,24 @@ for (const width of [390, 1280]) test(`財報指標 ${width}：台股帶入最�
   const W2 = await p.evaluate(() => [...[...document.querySelectorAll("#lx .thcard")].find(x => x.querySelector('[data-sel="2330"]')).querySelectorAll(".thgrid li")].map(li => li.innerText));
   assert.deepEqual(W2, ["毛利率維持 55% 以上 目前 59.1%", "海外廠進度", "累計營收年增 目前 +30.0%"], "對到的才標");
   assert.doesNotMatch(await card("NVDA"), /最新財報|財報指標/, "美股不顯示");
+  assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width), "沒有水平溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+for (const width of [390, 1280]) test(`簡易估值 ${width}：本益比、淨值比、殖利率、同產業中位數；按了才查歷史區間，情境價和公式一致；美股不顯示`, async () => {
+  const { ctx, p, errs } = await page(width); // 假報價 2330＝100、本益比 20 → EPS 5；同業 18、12、25 → 中位數 18；歷史 10.0～19.9 → 12／15／18
+  const card = c => p.evaluate(c => [...document.querySelectorAll("#lx .thcard")].find(x => x.querySelector(`[data-sel="${c}"]`)).innerText, c);
+  await p.waitForFunction(() => document.querySelector('#lx [data-th=val][data-c="2330"]'), null, { timeout: 30000 });
+  let t = await card("2330");
+  assert.match(t, /本益比 20（半導體業中位數 18，3 家）/); assert.match(t, /淨值比 5/); assert.match(t, /殖利率 2\.1%/);
+  assert.equal(await p.evaluate(() => W.thVal?.["2330"] ?? null), null, "還沒按：不查歷史");
+  await p.click('[data-th=val][data-c="2330"]'); await p.waitForFunction(() => document.querySelector("#lx .thscen"), null, { timeout: 30000 });
+  t = await card("2330");
+  assert.match(t, /20%～80% 落在 12～18，目前在 100% 的位置/);
+  const sc = await p.evaluate(() => [...document.querySelectorAll("#lx .thscen li")].map(li => li.innerText.replace(/\s+/g, " ")));
+  assert.deepEqual(sc, ["悲觀（本益比 12） 60 -40.0%", "中性（本益比 15） 75 -25.0%", "樂觀（本益比 18） 90 -10.0%"]);
+  assert.match(t, /近四季 EPS（5，用現價 ÷ 本益比反推）.*同產業中位數算是 90/); assert.match(t, /不是目標價或投資建議/);
+  assert.doesNotMatch(await card("NVDA"), /本益比|估值/, "美股不顯示");
   assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width), "沒有水平溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
