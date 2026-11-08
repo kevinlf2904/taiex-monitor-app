@@ -118,6 +118,24 @@ test("停損／停利沒有報價：兩邊都寫進到價提醒、原本的單�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+for (const [kind, fail] of [["連不上", r => r.fulfill({ status: 500, body: "x" })], ["ok:false", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: false, error: "來源維護中" }) })]])
+  test(`財報指標第一次${kind}：標「拿不到」（不是「不在資料裡」），節流時間到了重抓成功就換成數字`, async () => {
+    const { ctx, p, errs } = await page(390);
+    await p.waitForFunction(() => document.querySelector("#lx .thkpi b"), null, { timeout: 30000 }); // 開頁那次先載完
+    let n = 0; const bad = r => { n++; return fail(r); };
+    await ctx.route("**/api/oapi?earn=1*", bad); // 後註冊的先用：先失敗
+    await p.evaluate(() => { W.fresh = Date.now() + 36e5; /* 不用快取，真的去問 */ ER().data = null; W.thEF = 0; renderList(); });
+    await p.waitForFunction(() => /財報指標這次拿不到/.test($("#lx").innerText), null, { timeout: 30000 });
+    const t = await p.evaluate(() => $("#lx").innerText);
+    assert.doesNotMatch(t, /不在月營收／季報資料裡/, "來源失敗不能說成這檔沒資料"); assert.match(t, /1 分鐘後自動再試/);
+    const n1 = n; await p.evaluate(() => renderList()); await p.waitForTimeout(300); assert.equal(n, n1, "1 分鐘內重畫不重抓");
+    await ctx.unroute("**/api/oapi?earn=1*", bad);
+    await p.evaluate(() => { W.thEF = Date.now() - 61e3; ER().data.at = Date.now() - 61e3; renderList(); }); // 假裝 1 分鐘過了
+    await p.waitForFunction(() => document.querySelector("#lx .thkpi b"), null, { timeout: 30000 });
+    assert.match(await p.evaluate(() => $("#lx").innerText), /月營收年增 \+12\.3%/); assert.doesNotMatch(await p.evaluate(() => $("#lx").innerText), /財報指標這次拿不到/);
+    await ctx.close(); assert.deepEqual(errs, []);
+  });
+
 test("存檔前檢查擋下太長的內容；備份匯入要用論點模組檢查（沒有檢查程式不匯入）", async () => {
   const { ctx, p, errs } = await page(1280);
   await p.click('[data-th=edit][data-c="2330"]'); await p.waitForSelector("#thForm");

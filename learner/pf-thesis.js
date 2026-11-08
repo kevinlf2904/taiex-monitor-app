@@ -24,13 +24,19 @@ function thData() {
   });
   return W.thD;
 }
-// 台股財報表：和財報頁共用（lazy 載入 earn.js）；失敗 1 分鐘內不重抓，避免重畫時一直重試
+// 台股財報表：和財報頁共用（lazy 載入 earn.js）。分成三種狀態：有資料（rows）、載入中（busy）、失敗（fail：連不上、ok:false、沒有 rows）。
+// 失敗後 1 分鐘內不重抓（避免重畫時一直重試），1 分鐘到了自己重畫一次、強制重抓
+const thEarnView = () => W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "thesis";
 function thEarn() {
   if (W.off) return null;
-  if (typeof ER === "function" && ER().data) return ER().data;
-  if (!W.thEB && !(Date.now() - (W.thEF || 0) < 60e3)) { W.thEB = true;
-    lazy("earn").then(() => erLoad()).catch(() => {}).finally(() => { W.thEB = false; W.thEF = Date.now(); if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "thesis") renderList(); }); }
-  return W.thEB ? { busy: true } : null;
+  const D = typeof ER === "function" ? ER().data : null;
+  if (D?.rows) return D;
+  const age = Math.min(Date.now() - (W.thEF || 0), D ? Date.now() - D.at : Infinity);
+  if (!W.thEB && age >= 60e3) { W.thEB = true;
+    lazy("earn").then(() => erLoad(true)).catch(() => {}).finally(() => { W.thEB = false; W.thEF = Date.now(); if (thEarnView()) renderList(); }); }
+  if (W.thEB) return { busy: true };
+  if (!W.thET) W.thET = setTimeout(() => { W.thET = null; if (thEarnView()) renderList(); }, Math.max(1e3, 60e3 - age + 500));
+  return { fail: true, msg: D?.err || D?.error || "" };
 }
 const TH_EVERY = [["", "不改"], ["30", "30 天後"], ["90", "90 天後（一季）"], ["180", "180 天後"]];
 function renderThesisView(S) {
@@ -74,7 +80,7 @@ function renderThesisView(S) {
     const kv = x => `<b class="${x.bad ? "down" : ""}">${esc(x.text)}</b>`;
     const ulW = a => (a?.length ? `<ul>${a.map(x => { const m = KM.get(KLThesis.matchWatch(x)); return `<li>${esc(x)}${m && m.v != null ? ` <small class="thkv">目前 ${kv(m)}</small>` : ""}</li>`; }).join("")}</ul>` : `<p class="note">—</p>`);
     const kRow = !/^\d/.test(c) ? "" : K ? `<div class="thkpi"><span class="note">最新財報${per[0] || per[1] ? `（營收 ${esc(per[0])}・季報 ${esc(per[1])}）` : ""}</span>${K.map(x => `<span>${esc(x.label)} ${kv(x)}</span>`).join("")}</div>`
-      : ED?.busy ? `<p class="note thkpi">載入財報指標…</p>` : ED?.rows ? `<p class="note thkpi">這檔不在月營收／季報資料裡（ETF、新上市或興櫃）。</p>` : ED ? `<p class="note thkpi lgwarn">財報指標這次拿不到。</p>` : "";
+      : ED?.busy ? `<p class="note thkpi">載入財報指標…</p>` : ED?.rows ? `<p class="note thkpi">這檔不在月營收／季報資料裡（ETF、新上市或興櫃）。</p>` : ED?.fail ? `<p class="note thkpi lgwarn">財報指標這次拿不到${ED.msg ? `（${esc(ED.msg)}）` : ""}，1 分鐘後自動再試。</p>` : "";
     return `<section class="pfcard thcard" data-nofold><div class="thh"><button type="button" class="linkbtn" data-sel="${esc(c)}"><b>${esc(nameOf(c))}</b> <small class="note">${esc(c)}</small></button>${has ? `<span class="thst thst-${s}">${SL[s]}</span>` : ""}${it.review ? `<span class="note${due ? " lgwarn" : ""}">下次檢視 ${esc(it.review)}${due ? "（到期）" : ""}</span>` : ""}</div>`
       + lvRow + kRow + (has ? `<div class="thgrid"><div><h5 class="pfh">為什麼買</h5><p>${esc(it.reason || "—")}</p></div><div><h5 class="pfh">要觀察的</h5>${ulW(it.watch)}</div><div><h5 class="pfh">什麼情況代表論點不成立</h5>${ul(it.kill)}</div></div>`
         + (it.log?.length ? `<p class="note thlast">最近檢視 ${esc(it.log[0].d)}${it.log[0].status ? `・${SL[it.log[0].status]}` : ""}：${esc(it.log[0].note || "—")}${it.log.length > 1 ? `（共 ${it.log.length} 筆）` : ""}</p>` : "")
