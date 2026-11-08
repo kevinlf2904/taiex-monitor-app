@@ -121,6 +121,42 @@ for (const width of [390, 1280]) test(`簡易估值 ${width}：本益比、淨�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+test("停損／停利沒有報價：兩邊都寫進到價提醒、原本的單邊提醒確認後整個換掉；報價回來後每邊只通知一次", async () => {
+  const { ctx, p, errs } = await page(390);
+  await ctx.route("**/api/quote**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", quotes: [] }) })); // 之後的報價都拿不到
+  await p.evaluate(() => { localStorage.setItem("kline:pf:thesis:v1", JSON.stringify({ v: 1, items: { NVDA: { reason: "GPU", stop: { mode: "price", v: 90 }, take: { mode: "price", v: 130 } } } }));
+    W.lgAl = null; W.alerts.NVDA = { up: 150, dn: null, name: "NVIDIA" }; renderList(); });
+  await p.waitForFunction(() => [...document.querySelectorAll("#lx .thcard")].some(x => x.querySelector('[data-sel="NVDA"]') && /沒有報價/.test(x.innerText)), null, { timeout: 30000 });
+  let msg = ""; p.removeAllListeners("dialog"); p.once("dialog", d => { msg = d.message(); d.accept(); });
+  await p.click('[data-th=alert][data-c="NVDA"]'); await p.waitForFunction(() => /已設 .*的到價提醒/.test($("#lx").innerText), null, { timeout: 10000 });
+  assert.match(msg, /漲到 150/, "原本有提醒：先確認");
+  const a = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:watch:alerts")).NVDA);
+  assert.deepEqual([a.up, a.dn], [130, 90], "沒有報價：兩邊都寫，原本的 150 被換掉");
+  // 報價回來：跌到 88 → 停損提醒觸發一次就清掉；停利還在；再檢查一次不會重複通知
+  const n = await p.evaluate(() => { let k = 0; const o = window.notify; window.notify = () => { k++; }; W.quotes.set("NVDA", { code: "NVDA", price: 88, us: true, date: W.today }); checkAlerts(); checkAlerts(); window.notify = o; return k; });
+  assert.equal(n, 1, "只通知一次");
+  assert.deepEqual(await p.evaluate(() => [W.alerts.NVDA?.dn ?? null, W.alerts.NVDA?.up]), [null, 130]);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+for (const [kind, fail] of [["連不上", r => r.fulfill({ status: 500, body: "x" })], ["ok:false", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: false, error: "來源維護中" }) })]])
+  test(`財報指標第一次${kind}：標「拿不到」（不是「不在資料裡」），節流時間到了重抓成功就換成數字`, async () => {
+    const { ctx, p, errs } = await page(390);
+    await p.waitForFunction(() => document.querySelector("#lx .thkpi b"), null, { timeout: 30000 }); // 開頁那次先載完
+    let n = 0; const bad = r => { n++; return fail(r); };
+    await ctx.route("**/api/oapi?earn=1*", bad); // 後註冊的先用：先失敗
+    await p.evaluate(() => { W.fresh = Date.now() + 36e5; /* 不用快取，真的去問 */ ER().data = null; W.thEF = 0; renderList(); });
+    await p.waitForFunction(() => /財報指標這次拿不到/.test($("#lx").innerText), null, { timeout: 30000 });
+    const t = await p.evaluate(() => $("#lx").innerText);
+    assert.doesNotMatch(t, /不在月營收／季報資料裡/, "來源失敗不能說成這檔沒資料"); assert.match(t, /1 分鐘後自動再試/);
+    const n1 = n; await p.evaluate(() => renderList()); await p.waitForTimeout(300); assert.equal(n, n1, "1 分鐘內重畫不重抓");
+    await ctx.unroute("**/api/oapi?earn=1*", bad);
+    await p.evaluate(() => { W.thEF = Date.now() - 61e3; ER().data.at = Date.now() - 61e3; renderList(); }); // 假裝 1 分鐘過了
+    await p.waitForFunction(() => document.querySelector("#lx .thkpi b"), null, { timeout: 30000 });
+    assert.match(await p.evaluate(() => $("#lx").innerText), /月營收年增 \+12\.3%/); assert.doesNotMatch(await p.evaluate(() => $("#lx").innerText), /財報指標這次拿不到/);
+    await ctx.close(); assert.deepEqual(errs, []);
+  });
+
 test("存檔前檢查擋下太長的內容；備份匯入要用論點模組檢查（沒有檢查程式不匯入）", async () => {
   const { ctx, p, errs } = await page(1280);
   await p.click('[data-th=edit][data-c="2330"]'); await p.waitForSelector("#thForm");

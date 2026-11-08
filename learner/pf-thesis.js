@@ -26,13 +26,19 @@ function thData() {
   });
   return W.thD;
 }
-// 台股財報表：和財報頁共用（lazy 載入 earn.js）；失敗 1 分鐘內不重抓，避免重畫時一直重試
+// 台股財報表：和財報頁共用（lazy 載入 earn.js）。分成三種狀態：有資料（rows）、載入中（busy）、失敗（fail：連不上、ok:false、沒有 rows）。
+// 失敗後 1 分鐘內不重抓（避免重畫時一直重試），1 分鐘到了自己重畫一次、強制重抓
+const thEarnView = () => W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "thesis";
 function thEarn() {
   if (W.off) return null;
-  if (typeof ER === "function" && ER().data) return ER().data;
-  if (!W.thEB && !(Date.now() - (W.thEF || 0) < 60e3)) { W.thEB = true;
-    lazy("earn").then(() => erLoad()).catch(() => {}).finally(() => { W.thEB = false; W.thEF = Date.now(); if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "thesis") renderList(); }); }
-  return W.thEB ? { busy: true } : null;
+  const D = typeof ER === "function" ? ER().data : null;
+  if (D?.rows) return D;
+  const age = Math.min(Date.now() - (W.thEF || 0), D ? Date.now() - D.at : Infinity);
+  if (!W.thEB && age >= 60e3) { W.thEB = true;
+    lazy("earn").then(() => erLoad(true)).catch(() => {}).finally(() => { W.thEB = false; W.thEF = Date.now(); if (thEarnView()) renderList(); }); }
+  if (W.thEB) return { busy: true };
+  if (!W.thET) W.thET = setTimeout(() => { W.thET = null; if (thEarnView()) renderList(); }, Math.max(1e3, 60e3 - age + 500));
+  return { fail: true, msg: D?.err || D?.error || "" };
 }
 // 全市場本益比、淨值比、殖利率：和選股「條件組合」共用；失敗 1 分鐘內不重抓
 function thBw() {
@@ -109,7 +115,7 @@ function renderThesisView(S) {
           <p class="note thval">情境價＝近四季 EPS（${n2(V.eps)}，用現價 ÷ 本益比反推）× 歷史本益比分位${V.ind?.price ? `；用同產業中位數算是 ${n2(V.ind.price)}` : ""}。只是粗估：沒算成長、利率與產業變化，不是目標價或投資建議。</p>` : "");
     })();
     const kRow = !/^\d/.test(c) ? "" : K ? `<div class="thkpi"><span class="note">最新財報${per[0] || per[1] ? `（營收 ${esc(per[0])}・季報 ${esc(per[1])}）` : ""}</span>${K.map(x => `<span>${esc(x.label)} ${kv(x)}</span>`).join("")}</div>`
-      : ED?.busy ? `<p class="note thkpi">載入財報指標…</p>` : ED?.rows ? `<p class="note thkpi">這檔不在月營收／季報資料裡（ETF、新上市或興櫃）。</p>` : ED ? `<p class="note thkpi lgwarn">財報指標這次拿不到。</p>` : "";
+      : ED?.busy ? `<p class="note thkpi">載入財報指標…</p>` : ED?.rows ? `<p class="note thkpi">這檔不在月營收／季報資料裡（ETF、新上市或興櫃）。</p>` : ED?.fail ? `<p class="note thkpi lgwarn">財報指標這次拿不到${ED.msg ? `（${esc(ED.msg)}）` : ""}，1 分鐘後自動再試。</p>` : "";
     return `<section class="pfcard thcard" data-nofold><div class="thh"><button type="button" class="linkbtn" data-sel="${esc(c)}"><b>${esc(nameOf(c))}</b> <small class="note">${esc(c)}</small></button>${has ? `<span class="thst thst-${s}">${SL[s]}</span>` : ""}${it.review ? `<span class="note${due ? " lgwarn" : ""}">下次檢視 ${esc(it.review)}${due ? "（到期）" : ""}</span>` : ""}</div>`
       + lvRow + kRow + vRow + (has ? `<div class="thgrid"><div><h5 class="pfh">為什麼買</h5><p>${esc(it.reason || "—")}</p></div><div><h5 class="pfh">要觀察的</h5>${ulW(it.watch)}</div><div><h5 class="pfh">什麼情況代表論點不成立</h5>${ul(it.kill)}</div></div>`
         + (it.log?.length ? `<p class="note thlast">最近檢視 ${esc(it.log[0].d)}${it.log[0].status ? `・${SL[it.log[0].status]}` : ""}：${esc(it.log[0].note || "—")}${it.log.length > 1 ? `（共 ${it.log.length} 筆）` : ""}</p>` : "")
@@ -167,7 +173,7 @@ document.addEventListener("submit", e => {
   if (!["thForm", "thLogForm"].includes(e.target.id)) return; e.preventDefault();
   const L = (W.lg ||= {}), c = e.target.dataset.c, v = Object.fromEntries(new FormData(e.target)), st = thLoad(), prev = st.items[c] || {};
   const it = e.target.id === "thForm" ? KLThesis.fromForm(v, prev, new Date().toISOString())
-    : (/^\d{4}-\d{2}-\d{2}$/.test(v.d) ? KLThesis.addLog(prev, { d: v.d, status: v.status, note: v.note }, v.every ? +v.every : null) : null);
+    : (KLThesis.isDate(v.d) ? KLThesis.addLog(prev, { d: v.d, status: v.status, note: v.note }, v.every ? +v.every : null) : null);
   if (!it) { toast("日期不對"); return; }
   const r = thSave({ ...st, items: { ...st.items, [c]: it } });
   if (!r.ok) { toast("沒有儲存：資料檢查沒有通過（字數太多或格式不對）"); return; }

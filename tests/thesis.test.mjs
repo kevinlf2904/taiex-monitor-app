@@ -88,3 +88,23 @@ test("簡易估值：反推 EPS、同產業本益比中位數、歷史本益比�
   assert.equal(T.valuation({ price: 600, pe: 20, hist: hist.slice(0, 59) }).band, null, "歷史不到 60 天");
   assert.equal(T.SCEN_LABEL.bear, "悲觀");
 });
+
+test("日期要真的存在：閏年 2/29 可以、2/30、4/31、平年 2/29、13 月都擋；備份匯入也擋", () => {
+  for (const d of ["2028-02-29", "2026-01-31", "2026-04-30", "2026-12-31"]) assert.equal(T.isDate(d), true, d);
+  for (const d of ["2026-02-29", "2026-02-30", "2026-02-31", "2026-04-31", "2026-06-31", "2026-13-01", "2026-00-10", "2026-01-00", "2026-1-1", "", null]) assert.equal(T.isDate(d), false, String(d));
+  const bad = T.validateStore({ v: 1, items: { 2330: { review: "2026-02-31", log: [{ d: "2026-04-31", note: "x" }] } } });
+  assert.deepEqual(J(bad.errors[0].errors).sort(), ["invalid_log", "invalid_review"]);
+  assert.deepEqual(J(T.catalysts({ codes: ["2330"], store: { items: { 2330: { review: "2026-02-31" } } }, today: "2026-02-01" })), [], "不存在的檢視日不列");
+});
+
+test("停損／停利邊界：價格與百分比混用、一邊已觸及、沒有成本只算價格那邊、舊版論點（沒有停損停利欄位）照常可用", () => {
+  const mix = { stop: { mode: "price", v: 90 }, take: { mode: "pct", v: 50 } };
+  const a = T.levels(mix, { avgCost: 100, price: 120 }); assert.equal(a.stopPrice, 90); assert.equal(a.takePrice, 150); assert.equal(a.state, "ok");
+  const b = T.levels(mix, { avgCost: 100, price: 85 }); assert.equal(b.state, "stop_hit"); assert.equal(b.takePrice, 150, "一邊觸及，另一邊價位照算");
+  const c = T.levels({ stop: { mode: "pct", v: -10 }, take: { mode: "price", v: 700 } }, { avgCost: null, price: 680 });
+  assert.equal(c.stopPrice, null); assert.equal(c.takePrice, 700); assert.equal(c.state, "near_take", "沒有成本：百分比那邊不算，價格那邊照算");
+  const old = { reason: "舊的", watch: ["a"], status: "hold", review: "2026-12-01", log: [] };
+  assert.equal(T.validateStore({ v: 1, items: { 2330: old } }).ok, true, "舊版資料（沒有 stop／take）照常通過");
+  assert.equal(T.levels(old, { avgCost: 100, price: 100 }).state, "none");
+  const f = T.fromForm({ reason: "改了" }, old); assert.equal(f.stop, null); assert.equal(f.take, null); assert.equal(f.reason, "改了");
+});
