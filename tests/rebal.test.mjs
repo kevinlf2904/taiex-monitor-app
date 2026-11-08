@@ -16,7 +16,7 @@ test("偏離超過容許範圍：算出買賣股數、費用、調整後現金",
   assert.equal(P.total, 200000);
   const a = row(P, "2330"), b = row(P, "NVDA");
   // 2330 目前 50%、目標 40% → 要減 20,000 → 賣 200 股；手續費 20,000×0.1425%＝28.5 → 28（無條件捨去）、證交稅 0.3%＝60
-  assert.equal(a.action, "sell"); assert.equal(a.tradeShares, 200); assert.equal(a.fee, 28); assert.equal(a.tax, 60); assert.equal(a.weightAfter, 0.4); assert.equal(a.lots, 0); assert.equal(a.odd, 200);
+  assert.equal(a.action, "sell"); assert.equal(a.tradeShares, 200); assert.equal(a.fee, 28); assert.equal(a.tax, 60); assert.equal(a.weightAfter, 0.4002, "80,000 ÷ 調整後總資產 199,912（扣掉費稅 88）"); assert.equal(a.lots, 0); assert.equal(a.odd, 200);
   // NVDA 目前 15%、目標 20%（差 5 > 4）→ 要加 10,000 → 10,000 ÷（100×30）＝3.33 → 買 3 股＝US$300＝9,000；美股預設零佣金
   assert.equal(b.action, "buy"); assert.equal(b.tradeShares, 3); assert.equal(b.grossBase, 9000); assert.equal(b.costBase, 0);
   assert.equal(P.cashAfter, 70000 + (20000 - 88) - 9000, "70,000 ＋ 賣出淨得 19,912 − 買進 9,000"); assert.equal(P.fees, 88); assert.equal(P.turnover, 29000);
@@ -52,4 +52,25 @@ test("存檔檢查", () => {
   assert.equal(R.validateStore({ v: 2, targets: {} }).code, "unsupported_version");
   const bad = R.validateStore({ v: 1, targets: { "壞 代號": 1, NVDA: 120, AAPL: -1 }, band: 99 });
   assert.equal(bad.ok, false); assert.deepEqual(J(bad.errors.map(e => e.error)).sort(), ["invalid_band", "invalid_code", "invalid_weight", "invalid_weight"]);
+});
+
+test("調整後比重：扣掉費稅、用調整後總資產當分母；多檔同時買賣、最低手續費、賣出交易稅、現金變負，持股＋現金加起來都是 100%", () => {
+  const POS3 = [...POS, { symbol: "0050", market: "tw", currency: "TWD", shares: 100, price: 150, assetType: "etf" }]; // 15,000
+  const sum = P => P.rows.reduce((s, r) => s + r.valueAfter, 0) + P.cashAfter;
+  const P = R.plan({ positions: POS3, fx: 30, cash: 70000, targets: { 2330: 30, NVDA: 25, "0050": 15 }, band: 0, costs });
+  assert.equal(P.total, 215000); assert.ok(P.rows.filter(r => r.action === "buy" || r.action === "sell").length === 3, "三檔都要動");
+  assert.ok(Math.abs(P.totalAfter - (P.total - P.fees)) < 0.02, "調整後總資產＝原總資產 − 費稅"); assert.ok(Math.abs(sum(P) - P.totalAfter) < 0.02);
+  const W = P.rows.reduce((s, r) => s + r.weightAfter, 0) + P.cashWeightAfter; assert.ok(Math.abs(W - 1) < 0.0005, `加起來 ${W}`);
+  const e = row(P, "0050"); // 目標 32,250、目前 15,000 → 買 115 股＝17,250；手續費 24.58 → 24（最低 20 不影響）
+  assert.equal(e.action, "buy"); assert.equal(e.tradeShares, 115); assert.equal(e.fee, 24); assert.equal(e.tax, 0);
+  const t = row(P, "2330"); // 目標 64,500 → 賣 355 股＝35,500；證交稅 0.3%＝106、手續費 50
+  assert.equal(t.tradeShares, 355); assert.equal(t.tax, 106); assert.equal(t.fee, 50);
+  // 小額：最低手續費 20 元
+  const M = R.plan({ positions: [{ symbol: "2330", market: "tw", currency: "TWD", shares: 1, price: 100 }], cash: 900, targets: { 2330: 50 }, band: 0, costs });
+  assert.equal(row(M, "2330").tradeShares, 4); assert.equal(row(M, "2330").fee, 20, "400 元的 0.1425% 不到 1 元 → 最低 20"); assert.equal(M.cashAfter, 900 - 400 - 20); assert.equal(M.totalAfter, 980);
+  assert.equal(row(M, "2330").weightAfter, 0.5102, "500 ÷ 980");
+  // 現金變負：比重仍加起來 100%（現金那格是負的）
+  const N = R.plan({ positions: POS, fx: 30, cash: 0, targets: { NVDA: 50 }, band: 0, costs });
+  assert.ok(N.cashAfter < 0 && N.cashWeightAfter < 0); assert.ok(Math.abs(N.rows.reduce((s, r) => s + r.weightAfter, 0) + N.cashWeightAfter - 1) < 0.0005);
+  assert.equal(row(N, "2330").weightAfter, row(N, "2330").valueAfter / N.totalAfter > 0 ? Math.round(100000 / N.totalAfter * 1e4) / 1e4 : null, "沒設目標的也用調整後總資產算");
 });

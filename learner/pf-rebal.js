@@ -33,7 +33,7 @@ function rbSectionHtml(open, X, cashB) {
       <div class="lgbar"><button type="button" class="btn sm" data-rb="edit">修改目標</button></div>`;
   }
   return `<section class="pfcard rbcard" data-nofold><h4>目標配置與再平衡<small class="note">（試算）</small></h4>${L.rbMsg ? `<p class="note lgmsg" role="status">${esc(L.rbMsg)}</p>` : ""}${body}
-    <p class="note">用目前報價與匯率試算，股數取整數（台股可買零股；美股不假設券商支援碎股），費用依「交易紀錄」的費用規則估算。實際成交價會不同，也沒算市場衝擊；只是幫你看偏離多少，不是投資建議。目標只存在這個瀏覽器，有開雲端同步時會一起同步，備份檔也會帶。</p></section>`;
+    <p class="note">用目前報價與匯率試算，股數取整數（台股可買零股；美股不假設券商支援碎股），費用依「交易紀錄」的費用規則估算；「調整後」比重已經把費稅從現金扣掉，用調整後的總資產算。實際成交價會不同，也沒算市場衝擊；只是幫你看偏離多少，不是投資建議。目標只存在這個瀏覽器，有開雲端同步時會一起同步，備份檔也會帶。</p></section>`;
 }
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-rb]"); if (!b || typeof KLRebal === "undefined") return;
