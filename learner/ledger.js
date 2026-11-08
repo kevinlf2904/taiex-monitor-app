@@ -74,6 +74,8 @@
       fee: isNum(fee) ? fee : null, tax: isNum(tax) ? tax : null, feeEstimated: false, assetType: ["etf", "stock", "bond_etf"].includes(raw.assetType) ? raw.assetType : null, dayTrade: !!raw.dayTrade,
       ref: typeof raw.ref === "string" && raw.ref ? raw.ref : null, note: typeof raw.note === "string" ? raw.note.slice(0, 500) : "", source: typeof raw.source === "string" && raw.source ? raw.source.slice(0, 40) : "manual" };
     // 沒填手續費／稅：依規則估算並標示「估算」（填 0 代表真的是 0，不會被估算覆蓋）
+    // 買進不收交易稅（台股證交稅、美股 SEC 費都只在賣出）：空白直接記 0，不算「估算」、不用再確認
+    if (!errors.length && type === "buy" && tx.tax === null) tx.tax = 0;
     if (!errors.length && (type === "buy" || type === "sell") && (tx.fee === null || tx.tax === null)) {
       if (!tx.assetType) tx.assetType = market === "tw" && /^00\d{2,4}[A-Z]?$/.test(symbol) ? "etf" : "stock";
       const est = estimateCosts(tx, opts.rules || DEFAULT_RULES);

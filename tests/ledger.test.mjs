@@ -198,3 +198,14 @@ test("備份檔檢查：交易紀錄能套用、版本對才通過；壞資料�
   assert.equal(noM.ok, false, "沒有融資檢查程式就不接受，不降級"); assert.match(noM.items[0].problems[0], /沒有融資資料的檢查程式/);
   assert.equal(L.checkBackup({ "kline:pf:margin:v1": JSON.stringify({ v: 2 }) }, { margin: M }).ok, false);
 });
+
+test("買進沒填交易稅：直接記 0、不算估算、不提醒（買進不收交易稅）；手續費沒填才估算；賣出照常估算稅", () => {
+  const w = x => x.warnings.map(v => v.code);
+  const R = L.buildLedger([tw({ date: "2026-01-05", type: "buy", shares: 1000, price: 100, fee: 20, tax: null }), us({ date: "2026-01-05", type: "buy", shares: 10, price: 100, fee: 1, tax: null })], { method: "avg" });
+  for (const x of R.txs) { assert.equal(x.tx.tax, 0); assert.equal(!!x.tx.feeEstimated, false); assert.deepEqual(J(w(x)), [], "不跳「依費用規則估算」"); }
+  assert.equal(pos(R).costBasis, 100020, "成本＝100,000＋手續費 20（稅 0）");
+  const E = L.buildLedger([tw({ date: "2026-01-05", type: "buy", shares: 1000, price: 100, fee: null, tax: null })], { method: "avg" }).txs[0];
+  assert.equal(E.tx.feeEstimated, true); assert.ok(w(E).includes("fee_estimated"), "手續費沒填：照樣估算並提醒"); assert.equal(E.tx.tax, 0);
+  const S = L.buildLedger([tw({ date: "2026-01-05", type: "buy", shares: 1000, price: 100 }), tw({ date: "2026-01-06", type: "sell", shares: 1000, price: 100, fee: 20, tax: null })], { method: "avg" }).txs[1];
+  assert.equal(S.tx.tax, 300, "賣出沒填稅：依證交稅 0.3% 估算"); assert.ok(w(S).includes("fee_estimated"));
+});

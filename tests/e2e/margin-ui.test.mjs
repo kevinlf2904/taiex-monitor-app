@@ -24,7 +24,7 @@ test("融資：新增帳戶、維持率、壓力測試、試算聲明；壞資�
     assert.match(t, /擔保品（價格、日期、來源）/); assert.match(t, /2330[\s\S]*報價/);
     for (const k of ["我的融資", "自己填的", "維持率", "再跌多少會追繳", "壓力測試", "全部跌 30%", "連三根跌停", "門檻來源：測試券商"]) assert.match(t, new RegExp(k), width + "：" + k);
     const st = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:margin:v1"))); assert.equal(st.v, 1); assert.equal(st.accounts[0].loan, 60000); assert.equal(st.accounts[0].rules.call, 1.3);
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
+    assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, width + "：沒有水平溢出");
     // 刪除（harness 自動按確定）
     await p.click("[data-lg=mgdel]"); assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:margin:v1")).accounts.length), 0);
     await ctx.close(); assert.deepEqual(errs, []);

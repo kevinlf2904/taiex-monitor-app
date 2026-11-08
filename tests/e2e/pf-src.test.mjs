@@ -37,7 +37,7 @@ test("資料狀態：各頁都有；報價失敗時沿用上一次的、可以�
       await p.click(`[data-lg=view][data-v=${v}]`); await p.waitForFunction(r => new RegExp(r).test([...document.querySelectorAll("#lx .pfsrc")].map(e => e.innerText).join()), re.source, { timeout: 30000 });
       assert.match(await txt(p), /計算時間 \d\d:\d\d/, v + "：計算時間和行情時間分開寫");
     }
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
+    assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, width + "：沒有水平溢出");
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });

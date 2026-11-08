@@ -249,7 +249,7 @@ function renderPerf(S) {
   const master = new Map((Array.isArray(W.stocks) ? W.stocks : []).map(r => [String(r[0]).toUpperCase(), r[3] || null]));
   const R = KLPerf.buildPerf(S.transactions, { method: S.method, today: lgToday(), prices: X.prices, bench: X.bench, benchName: { TWD: "加權指數（價格指數，不含股息）", USD: X.usAdj ? "S&P 500（SPY，含息還原）" : "S&P 500（SPY，不含息）" },
     classify: c => ({ assetType: /^00\d{2,4}[A-Z]?$/.test(c) || ["SPY", "QQQ", "VOO", "VTI", "SOXX", "TQQQ", "SOXL", "DIA", "IWM", "IVV", "VT", "SMH", "XLK", "SCHD", "VYM", "BND", "TLT", "GLD"].includes(c) ? "etf" : "stock", industry: master.get(c) || null }) });
-  const range = L.pfRange || "all", rg = `<div class="seg pfrange" role="group" aria-label="日期範圍">${[["3m", "3 個月"], ["6m", "6 個月"], ["1y", "1 年"], ["all", "全部"]].map(([k, t]) => `<button type="button" data-lg="range" data-v="${k}" aria-pressed="${range === k}">${t}</button>`).join("")}</div>`;
+  const range = L.pfRange || "all", rg = `<div class="seg pfrange" role="group" aria-label="日期範圍">${[["3m", "3 個月"], ["6m", "6 個月"], ["1y", "1 年"], ["all", "全期間"]].map(([k, t]) => `<button type="button" data-lg="range" data-v="${k}" aria-pressed="${range === k}">${t}</button>`).join("")}</div>`;
   // 台幣合併（含匯率拆解）只在「全部」顯示；台股／美股各看自己的幣別
   const cards = (R.byCurrency.USD && lgMktSel() === "all" ? pfFxCard(KLFx.combine(R, X.fx || [], { fxSource: "Yahoo Finance TWD=X 日收盤" })) : "") + Object.values(R.byCurrency).filter(C => lgCurOk(C.currency)).map(C => pfCard(C, range)).join("");
   $("#lx").innerHTML = head + `<div class="lgbar">${lgMktSeg()}${rg}<button type="button" class="btn sm" data-lg="pfreload">重新載入價格</button></div>` + pfSrcHtml(X.meta, "日 K")
@@ -279,7 +279,7 @@ function pfCard(C, range) {
   const reasons = m.reasons?.length && m.status !== "ok" ? `<p class="note lgwarn pfreasons">⚠︎ ${m.status === "unavailable" ? "資金加權報酬無法計算" : "資金加權報酬是估算"}：${m.reasons.map(r => esc(KLPerf.REASON_LABEL[r] || r)).join("；")}。</p>` : "";
   const ISS = { pending: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 合股後的零股還沒結算`, transfer_out_prev_price: x => `${esc(nameOf(x.code))} ${x.d} 轉出用 ${x.priceDate} 的收盤價`, transfer_out_user_price: x => `${esc(nameOf(x.code))} ${x.d} 轉出使用手動填寫的價格`, transfer_out_no_price: x => `${esc(nameOf(x.code))} ${x.d} 轉出沒有市價，依成本估算或停止績效計算`, no_prices: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 拿不到價格`, history_truncated: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 的價格只抓得到最近 24 個月`, price_fallback: x => `${x.days} 天沒有收盤價，用交易價格代替`, stale_prices: x => `有價格停在 ${x.maxDays} 天前（可能停牌或資料缺漏）` };
   const iss = C.issues.length ? `<p class="note">資料提醒：${C.issues.map(x => (ISS[x.k] ? ISS[x.k](x) : esc(x.k))).join("；")}。</p>` : "";
-  return `<section class="pfcard"><h4>${cur === "USD" ? "美股（美元）" : "台股（台幣）"}${cst}<small class="note"> ${C.from ? `${C.from}～${C.to}・` : ""}資料到 ${esc(C.asOf || "")}</small></h4>
+  return `<section class="pfcard" data-nofold><h4>${cur === "USD" ? "美股（美元）" : "台股（台幣）"}${cst}<small class="note"> ${C.from ? `${C.from}～${C.to}・` : ""}資料到 ${esc(C.asOf || "")}</small></h4>
     <div class="pftiles">${tiles}</div>${reasons}${iss}
     ${pfCharts(C, range)}
     ${pfMonthly(C)}
@@ -412,12 +412,12 @@ function mgCard(R, a) {
   const st = R.state ? `<span class="pfbadge mg-${R.state}">${MG_STATE[R.state]}</span>` : "", src = `<span class="pfbadge">${KLMargin.SOURCE_LABEL[R.source]}</span>`;
   const done = R.status === "estimated" ? `<span class="pfbadge">含估算</span>` : R.status === "incomplete" ? `<span class="pfbadge mg-call">資料不完整</span>` : "";
   const PS = { quote: "報價", user: "你填的價格" };
-  const colTable = R.collateral.length ? `<h5 class="pfh">擔保品<small class="note">（價格、日期、來源）</small></h5><table class="altable mgtable mgcol"><thead><tr><th>代號</th><th>股數</th><th>價格</th><th>價格日期</th><th>來源</th><th>市值</th><th>占比</th></tr></thead><tbody>
+  const colTable = R.collateral.length ? `<h5 class="pfh">擔保品<small class="note">（價格、日期、來源）</small></h5><div class="mgscroll"><table class="altable mgtable mgwrapped mgcol"><thead><tr><th>代號</th><th>股數</th><th>價格</th><th>價格日期</th><th>來源</th><th>市值</th><th>占比</th></tr></thead><tbody>
     ${R.collateral.map(c => `<tr><td>${esc(nameOf(c.symbol))}<small class="note"> ${esc(c.symbol)}</small></td><td>${lgN(c.shares)}</td><td>${c.price == null ? "—" : lgN(c.price)}</td><td>${esc(c.priceDate || "—")}</td><td>${c.priceSource ? PS[c.priceSource] : "沒有價格，沒算進市值"}</td><td>${c.value == null ? "—" : money(c.value)}</td><td>${pc(c.weight)}</td></tr>`).join("")}
-    ${R.cashCollateral ? `<tr><td>現金擔保</td><td></td><td></td><td></td><td>你填的</td><td>${money(R.cashCollateral)}</td><td>${pc(R.collateralValue ? R.cashCollateral / R.collateralValue : null)}</td></tr>` : ""}</tbody></table>` : "";
+    ${R.cashCollateral ? `<tr><td>現金擔保</td><td></td><td></td><td></td><td>你填的</td><td>${money(R.cashCollateral)}</td><td>${pc(R.collateralValue ? R.cashCollateral / R.collateralValue : null)}</td></tr>` : ""}</tbody></table></div>` : "";
   const iss = R.issues.map(x => esc(KLMargin.ISSUE_LABEL[x.k] || x.k) + (x.codes ? `：${x.codes.map(esc).join("、")}` : "")).join("；");
   const needTxt = n => (n ? `補現金 ${money(n.cash)} 或還款 ${money(n.repay)}` : "—");
-  return `<section class="pfcard mgcard"><h4>${esc(R.name || "借款帳戶")}<small class="note"> ${MG_TYPE[R.type]}</small>${src}${st}${done}</h4>
+  return `<section class="pfcard mgcard" data-nofold><h4>${esc(R.name || "借款帳戶")}<small class="note"> ${MG_TYPE[R.type]}</small>${src}${st}${done}</h4>
     <div class="pftiles">${[tile("維持率", pc(R.ratio), R.rules.call ? `追繳線 ${pc(R.rules.call)}${R.rules.liquidate ? `・處分線 ${pc(R.rules.liquidate)}` : ""}` : "沒有設定追繳線"),
       tile("借款", money(R.loan), R.interest != null ? `已計利息約 ${money(R.interest)}（${R.days} 天）` : ""), tile("擔保品市值", money(R.collateralValue), R.cashCollateral ? `含現金 ${money(R.cashCollateral)}` : ""),
       tile("再跌多少會追繳", R.dropToCall == null ? "—" : R.dropToCall <= 0 ? "已低於追繳線" : pc(R.dropToCall), R.dropToLiquidate != null ? `跌 ${pc(R.dropToLiquidate)} 會被處分` : ""),
@@ -425,9 +425,9 @@ function mgCard(R, a) {
     ${R.need ? `<p class="note lgwarn">⚠︎ 目前低於追繳線：試算要${needTxt(R.need)}才回到 ${pc(R.rules.topUpTo || R.rules.call)}。</p>` : ""}${iss ? `<p class="note lgwarn">⚠︎ ${iss}。</p>` : ""}
     ${colTable}
     <h5 class="pfh">壓力測試<small class="note">（股票擔保品同時下跌，現金不跌）</small></h5>
-    <table class="altable mgtable"><thead><tr><th>情境</th><th>擔保品市值</th><th>維持率</th><th>狀態</th><th>要補</th></tr></thead><tbody>
+    <div class="mgscroll"><table class="altable mgtable mgwrapped"><thead><tr><th>情境</th><th>擔保品市值</th><th>維持率</th><th>狀態</th><th>要補</th></tr></thead><tbody>
       ${R.stress.map(x => `<tr><td>全部跌 ${(-x.shock * 100).toFixed(0)}%</td><td>${money(x.value)}</td><td>${pc(x.ratio)}</td><td>${x.state ? MG_STATE[x.state] : "—"}</td><td>${needTxt(x.need)}</td></tr>`).join("")}
-      ${R.singleLimitDown.slice(0, 3).map(x => `<tr><td>${esc(nameOf(x.symbol))} 連三根跌停（約 −27%）</td><td>${money(x.value)}</td><td>${pc(x.ratio)}</td><td>${x.state ? MG_STATE[x.state] : "—"}</td><td>${needTxt(x.need)}</td></tr>`).join("")}</tbody></table>
+      ${R.singleLimitDown.slice(0, 3).map(x => `<tr><td>${esc(nameOf(x.symbol))} 連三根跌停（約 −27%）</td><td>${money(x.value)}</td><td>${pc(x.ratio)}</td><td>${x.state ? MG_STATE[x.state] : "—"}</td><td>${needTxt(x.need)}</td></tr>`).join("")}</tbody></table></div>
     ${R.riskiest ? `<p class="note">風險最大的擔保品：${esc(nameOf(R.riskiest.symbol))}（占擔保品 ${pc(R.riskiest.weight)}）。</p>` : ""}
     <p class="note">門檻來源：${esc(R.rules.source || "未填")}${R.rules.asOf ? `（${esc(R.rules.asOf)}）` : ""}${R.rules.isDefault ? "；<b>目前是預設值，請改成你的券商條件</b>" : ""}。資料更新：${esc(a.updatedAt || "—")}。</p>
     <div class="lgbar"><button type="button" class="btn sm" data-lg="mgedit" data-id="${esc(a.id)}">修改</button><button type="button" class="btn sm" data-lg="mgdel" data-id="${esc(a.id)}">刪除</button></div></section>`;
@@ -462,7 +462,7 @@ function mgSubmit(e) {
 }
 (function () {
   if (document.getElementById("mgcss")) return; const st = document.createElement("style"); st.id = "mgcss";
-  st.textContent = `.mgnote{margin:4px 12px}.mgtable td:first-child{text-align:left}.mgtable{min-width:520px}.mgtable th,.mgtable td{white-space:nowrap}.mgcard .altable{display:block;overflow-x:auto}.pfbadge.mg-call,.pfbadge.mg-liquidate{background:color-mix(in srgb,var(--s1,#d98a0b) 20%,transparent)}
+  st.textContent = `.mgnote{margin:4px 12px}.mgtable td:first-child{text-align:left}.mgtable{min-width:520px}.mgtable th,.mgtable td{white-space:nowrap}.mgscroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}/* 手機上表格比畫面寬：只有表格自己左右滑，不撐開整頁 */.pfbadge.mg-call,.pfbadge.mg-liquidate{background:color-mix(in srgb,var(--s1,#d98a0b) 20%,transparent)}
 .altable{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}.altable th,.altable td{padding:3px 4px;text-align:right;border-bottom:1px solid var(--line)}.altable th:first-child{text-align:left}
 #mgForm textarea{width:100%;min-width:0;font:inherit}`;
   document.head.appendChild(st);
@@ -530,7 +530,7 @@ function alSection(R, title) {
     ${LT.dupDirect.length ? `<p class="note">重複持有（直接買了，ETF 裡也有）：${LT.dupDirect.slice(0, 6).map(d => `${esc(d.name || d.code)}（直接 ${alPct(d.direct)}＋ETF ${alPct(d.viaEtf)}）`).join("、")}</p>` : ""}
     ${LT.pairs.length ? `<p class="note">ETF 重疊度：${LT.pairs.slice(0, 5).map(p => `${esc(p.a)} × ${esc(p.b)} ${p.overlap.toFixed(1)}%${p.sameDate ? "" : "（資料日期不同）"}`).join("、")}</p>` : ""}
     <p class="note">成分股資料日期：${LT.dates.map(d => `${esc(d.etf)} ${d.date || "—"}（揭露 ${d.covered}%）`).join("、")}</p>` : "";
-  return `<section class="pfcard alcard"><h4>${title}${R.estimated ? `<span class="pfbadge">含估算</span>` : ""}</h4><div class="pftiles">${tiles}</div>
+  return `<section class="pfcard alcard" data-nofold><h4>${title}${R.estimated ? `<span class="pfbadge">含估算</span>` : ""}</h4><div class="pftiles">${tiles}</div>
     <h5 class="pfh">前十大持股</h5>${alBars(top, g => `${esc(nameOf(g))}<small class="note"> ${esc(g)}</small>`)}
     <div class="algrid"><div><h5 class="pfh">市場</h5>${alBars(R.byMarket, g => AL_MKT[g] || esc(g))}</div><div><h5 class="pfh">類型</h5>${alBars(R.byType, g => AL_TYPE[g] || esc(g))}</div>
       <div><h5 class="pfh">幣別</h5>${alBars(R.byCurrency)}</div><div><h5 class="pfh">產業前五大${R.byIndustryLookThrough ? "（ETF 穿透後）" : ""}</h5>${alBars((R.byIndustryLookThrough || R.byIndustry).slice(0, 5), g => (g === "unknown" ? "未分類" : esc(g)))}</div></div>
@@ -547,7 +547,7 @@ function alSection(R, title) {
 })();
 // 合併（台幣計價）：美股部位每天用當天匯率換成台幣，和台股部位加總；損益拆成台股、美股股價與股息、匯率三塊（加總＝合併總損益）
 function pfFxCard(F) {
-  const head = `<section class="pfcard pffx"><h4>合併（台幣計價）`;
+  const head = `<section class="pfcard pffx" data-nofold><h4>合併（台幣計價）`;
   if (F.status === "unavailable") return `${head}<span class="pfbadge">無法計算</span></h4><p class="note lgwarn">⚠︎ ${(F.reasons || []).map(r => esc(KLFx.REASON_LABEL[r] || r)).join("；")}。台股、美股的績效分開看下面。</p></section>`;
   const P = F.pnl, m = F.mwr, est = m.status === "estimated" ? `<span class="pfbadge">估算</span>` : m.status === "unavailable" ? `<span class="pfbadge">無法計算</span>` : "";
   const tile = (k, v, sub = "", c = "") => `<div class="pftile"><span>${k}</span><b class="${c}">${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;

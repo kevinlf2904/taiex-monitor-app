@@ -22,7 +22,7 @@ for (const width of [768, 834]) test(`平板 ${width}：各分頁不溢出、按
   await p.evaluate(([tx, mg]) => { store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); store.set("pf:margin:v1", mg); W.lg = null; W.holdView = "tx"; setLt("hold"); }, [TX, MG]);
   for (const [v, sel] of VIEWS) {
     await p.evaluate(v => { W.lg.view = v; renderList(); }, v); await p.waitForSelector(`#lx ${sel}`, { timeout: 30000 });
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${width} ${v}：沒有水平溢出`);
+    assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, `${width} ${v}：沒有水平溢出`);
     assert.ok(await p.evaluate(() => [...document.querySelectorAll("#lx *")].every(e => e.getBoundingClientRect().right <= innerWidth + 1 || getComputedStyle(e.parentElement).overflowX !== "visible")), `${width} ${v}：內容沒有超出畫面`);
     assert.deepEqual(await overlaps(p), [], `${width} ${v}：按鈕不重疊`);
     const small = await p.evaluate(() => [...document.querySelectorAll("#lx button, #lx [role=button]")].filter(e => e.offsetParent && e.getBoundingClientRect().height < 43.5).map(e => e.innerText.trim().slice(0, 10)));
@@ -68,7 +68,7 @@ for (const width of [390, 1280]) test(`交易清單日期與資料說明 ${width
   const g = await p.evaluate(() => [...document.querySelectorAll("#lx .lgtx")].map(li => { const d = li.querySelector(".lgd").getBoundingClientRect(), b = li.querySelector(".lgact")?.getBoundingClientRect(), lh = parseFloat(getComputedStyle(li.querySelector(".lgd")).lineHeight) || 20;
     return { oneLine: d.height < lh * 1.5 + 2, inside: d.right <= innerWidth + 1, clear: !b || d.right <= b.left + 1 || d.bottom <= b.top + 1 }; }));
   assert.ok(g.length && g.every(x => x.oneLine), `${width}：日期一行`); assert.ok(g.every(x => x.inside), `${width}：日期沒有超出畫面`); assert.ok(g.every(x => x.clear), `${width}：日期沒有壓到修改／刪除`);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${width}：沒有水平溢出`);
+  assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, `${width}：沒有水平溢出`);
   assert.match(await p.evaluate(() => document.body.innerText), /這台裝置沒有開雲端同步，不會上傳/);
   // 有同步碼時依實際狀態：自動同步關閉、雲端服務不能用、正常（寫最近一次成功同步的時間）；都不能說「不會上傳」也不能斷言已經同步
   const T = async (sync, cfg) => { await p.evaluate(([s, c]) => { localStorage.setItem("kline-sync", JSON.stringify(s)); W.syncCfg = c; W.syncErr = null; renderList(); }, [sync, cfg]); return p.evaluate(() => document.body.innerText); };
