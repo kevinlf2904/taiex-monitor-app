@@ -492,7 +492,7 @@ function lgAllocData(P) {
     // 匯率：這次沒拿到就沿用上一次的並標示
     const fxv = last ? { rate: last.c, date: String(last.d).slice(0, 10) } : prev?.fx ? { ...prev.fx, kept: true } : null;
     W.lgAl = { key, busy: false, at: Date.now(), tok, px: pfKeep(prev?.px, fresh, syms), fx: fxv, etf, items, meta, failed: syms.length ? !cur.ok : false, retried: retry };
-    pfRetryLater(W.lgAl); if (W.lt === "hold" && W.holdView === "tx" && ["alloc", "home", undefined].includes(W.lg?.view)) renderList(); // 配置與總覽共用
+    pfRetryLater(W.lgAl); if (W.lt === "hold" && W.holdView === "tx" && ["alloc", "home", "thesis", undefined].includes(W.lg?.view)) renderList(); // 配置、總覽、論點（停損停利）共用
   });
   return W.lgAl;
 }

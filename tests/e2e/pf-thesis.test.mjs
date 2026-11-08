@@ -52,6 +52,55 @@ for (const width of [390, 1280]) test(`論點分頁 ${width}：近期事件、�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+test("停損／停利：百分比相對成本、接近與觸及的狀態、設成到價提醒（已觸及的那邊不寫、原本有提醒先確認）", async () => {
+  const { ctx, p, errs } = await page(390); // 假報價：2330＝100（成本 900，已跌破）、NVDA＝101（成本 100）
+  await p.click('[data-th=edit][data-c="NVDA"]'); await p.waitForSelector("#thForm");
+  await p.fill("#thForm [name=reason]", "GPU"); await p.fill("#thForm [name=stop]", "3"); await p.selectOption("#thForm [name=stopMode]", "pct"); await p.fill("#thForm [name=take]", "120");
+  await p.click("#thForm button[type=submit]"); await p.waitForFunction(() => !document.querySelector("#thForm"), null, { timeout: 10000 });
+  assert.deepEqual(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:thesis:v1")).items.NVDA.stop), { mode: "pct", v: -3 }, "停損打 3 存成 −3%");
+  await p.click('[data-th=edit][data-c="NVDA"]'); await p.waitForSelector("#thForm");
+  assert.ok(await p.evaluate(() => ["stop", "take"].every(n => document.querySelector(`#thForm [name=${n}]`).getBoundingClientRect().width >= 60)), "數字欄位夠寬（不被單位選單擠掉）");
+  assert.equal(await p.evaluate(() => $("#thForm [name=stop]").value), "3"); await p.click("#thForm [data-th=close]");
+  await p.click('[data-th=edit][data-c="2330"]'); await p.waitForSelector("#thForm");
+  await p.fill("#thForm [name=reason]", "製程"); await p.fill("#thForm [name=stop]", "10"); await p.selectOption("#thForm [name=stopMode]", "pct");
+  await p.click("#thForm button[type=submit]"); await p.waitForFunction(() => !document.querySelector("#thForm"), null, { timeout: 10000 });
+  await p.waitForFunction(() => /接近停損/.test($("#lx").innerText) && /已跌破停損/.test($("#lx").innerText), null, { timeout: 30000 });
+  const card = c => p.evaluate(c => [...document.querySelectorAll("#lx .thcard")].find(x => x.querySelector(`[data-sel="${c}"]`)).innerText, c);
+  assert.match(await card("NVDA"), /停損 97 美元（-4.0%）＝成本 -3%/); assert.match(await card("NVDA"), /停利 120 美元（\+18.8%）/);
+  assert.match(await card("2330"), /已跌破停損\s*停損 810＝成本 -10%/, "已觸及：不顯示距離"); assert.match(await lx(p), /觸及停損／停利\s*1／0/);
+  // 2330 已跌破：不設提醒
+  await p.click('[data-th=alert][data-c="2330"]'); await p.waitForFunction(() => /現價已經超過停損或停利/.test($("#lx").innerText));
+  assert.equal(await p.evaluate(() => W.alerts["2330"] ?? null), null);
+  // NVDA 原本有提醒：先確認；取消不改，確定才換
+  await p.evaluate(() => { W.alerts.NVDA = { up: 150, dn: null, name: "NVIDIA" }; });
+  p.removeAllListeners("dialog"); p.once("dialog", d => d.dismiss()); await p.click('[data-th=alert][data-c="NVDA"]'); await p.waitForTimeout(200);
+  assert.deepEqual(await p.evaluate(() => W.alerts.NVDA.up), 150, "取消：不改");
+  let msg = ""; p.once("dialog", d => { msg = d.message(); d.accept(); }); await p.click('[data-th=alert][data-c="NVDA"]');
+  await p.waitForFunction(() => /已設 .*的到價提醒/.test($("#lx").innerText));
+  assert.match(msg, /漲到 150/); const a = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:watch:alerts")).NVDA);
+  assert.equal(a.up, 120); assert.equal(a.dn, 97);
+  assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, 390), "沒有水平溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("停損／停利沒有報價：兩邊都寫進到價提醒、原本的單邊提醒確認後整個換掉；報價回來後每邊只通知一次", async () => {
+  const { ctx, p, errs } = await page(390);
+  await ctx.route("**/api/quote**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", quotes: [] }) })); // 之後的報價都拿不到
+  await p.evaluate(() => { localStorage.setItem("kline:pf:thesis:v1", JSON.stringify({ v: 1, items: { NVDA: { reason: "GPU", stop: { mode: "price", v: 90 }, take: { mode: "price", v: 130 } } } }));
+    W.lgAl = null; W.alerts.NVDA = { up: 150, dn: null, name: "NVIDIA" }; renderList(); });
+  await p.waitForFunction(() => [...document.querySelectorAll("#lx .thcard")].some(x => x.querySelector('[data-sel="NVDA"]') && /沒有報價/.test(x.innerText)), null, { timeout: 30000 });
+  let msg = ""; p.removeAllListeners("dialog"); p.once("dialog", d => { msg = d.message(); d.accept(); });
+  await p.click('[data-th=alert][data-c="NVDA"]'); await p.waitForFunction(() => /已設 .*的到價提醒/.test($("#lx").innerText), null, { timeout: 10000 });
+  assert.match(msg, /漲到 150/, "原本有提醒：先確認");
+  const a = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:watch:alerts")).NVDA);
+  assert.deepEqual([a.up, a.dn], [130, 90], "沒有報價：兩邊都寫，原本的 150 被換掉");
+  // 報價回來：跌到 88 → 停損提醒觸發一次就清掉；停利還在；再檢查一次不會重複通知
+  const n = await p.evaluate(() => { let k = 0; const o = window.notify; window.notify = () => { k++; }; W.quotes.set("NVDA", { code: "NVDA", price: 88, us: true, date: W.today }); checkAlerts(); checkAlerts(); window.notify = o; return k; });
+  assert.equal(n, 1, "只通知一次");
+  assert.deepEqual(await p.evaluate(() => [W.alerts.NVDA?.dn ?? null, W.alerts.NVDA?.up]), [null, 130]);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 test("存檔前檢查擋下太長的內容；備份匯入要用論點模組檢查（沒有檢查程式不匯入）", async () => {
   const { ctx, p, errs } = await page(1280);
   await p.click('[data-th=edit][data-c="2330"]'); await p.waitForSelector("#thForm");

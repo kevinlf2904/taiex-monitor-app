@@ -1,7 +1,8 @@
 /* 投資組合「論點」分頁（投資研究第 1 批）：KLThesis 算，這裡畫。每檔持股的投資論點（為什麼買、觀察什麼、什麼情況不成立、下次檢視）＋持股的近期事件。
    不用 AI、不送資料到任何外部服務；論點只存在這個瀏覽器（kline:pf:thesis:v1），雲端同步、備份檔會一起帶。
    事件資料：除權息與法說會用 /api/calendar（證交所、櫃買中心公開資料，和大盤的行事曆同一份）；美股財報用 data/us-earn.json（排程整理的 Nasdaq 公開行事曆），讀不到再問 /api/usearn。
-   用到 watch.html 的 W、$、esc、nameOf、store、getJ、skel、toast、renderList；ledger-ui.js 的 lgViewSeg、lgToday；ledger.js 的 KLLedger；thesis.js 的 KLThesis。 */
+   停損／停利（第 3 批）：每檔可設價格或「相對成本的百分比」，用配置頁同一份報價（lgAllocData）算距離與狀態；可一鍵寫進既有的到價提醒（watch:alerts，覆蓋前先確認）。
+   用到 watch.html 的 W、$、esc、nameOf、store、getJ、skel、toast、renderList；ledger-ui.js 的 lgViewSeg、lgToday、lgAllocData；ledger.js 的 KLLedger；thesis.js 的 KLThesis。 */
 const TH_KEY = "pf:thesis:v1"; // store 會加上 kline: 前綴
 const thLoad = () => { const s = store.get(TH_KEY, null); return s && s.v === 1 && s.items && typeof s.items === "object" ? s : { v: 1, items: {} }; };
 // 寫入前一定檢查；有錯誤就不寫
@@ -24,12 +25,17 @@ function thData() {
 const TH_EVERY = [["", "不改"], ["30", "30 天後"], ["90", "90 天後（一季）"], ["180", "180 天後"]];
 function renderThesisView(S) {
   const head = lgViewSeg(), L = W.lg, today = lgToday();
-  const led = KLLedger.buildLedger(S.transactions, { method: S.method, today }), codes = led.positions.filter(p => p.open).map(p => p.symbol);
+  const led = KLLedger.buildLedger(S.transactions, { method: S.method, today }), open = led.positions.filter(p => p.open), codes = open.map(p => p.symbol);
   if (!codes.length) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">目前沒有持股。到「交易紀錄」新增買進後，就可以替每檔持股寫投資論點。</p>`);
   const st = thLoad(), Sm = KLThesis.summary(st, codes, today), X = W.off ? { busy: false } : thData(), SL = KLThesis.STATUS_LABEL;
+  // 停損停利：有設的才抓報價（和配置頁共用）；每檔的價位與狀態
+  const anyLv = codes.some(c => st.items[c]?.stop || st.items[c]?.take), Q = anyLv && !W.off ? lgAllocData(open) : null, pos = new Map(open.map(p => [p.symbol, p]));
+  const LV = new Map(codes.map(c => { const price = Q?.px?.get(c)?.price ?? null; return [c, { ...KLThesis.levels(st.items[c], { avgCost: pos.get(c).avgCost, price }), price }]; }));
+  W.thLv = LV; const cnt = k => [...LV.values()].filter(x => k.includes(x.state)).length;
   const tile = (k, v, sub = "") => `<div class="pftile"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
   const tiles = tile("已寫論點", `${Sm.written}/${Sm.total}`, Sm.missing.length ? `還沒寫：${Sm.missing.slice(0, 4).map(c => esc(nameOf(c))).join("、")}${Sm.missing.length > 4 ? " 等" : ""}` : "每檔持股都寫了")
-    + tile("該檢視", String(Sm.due), Sm.due ? "檢視日已到或已過" : "沒有到期的") + tile("論點動搖／失效", `${Sm.byStatus.weak}／${Sm.byStatus.broken}`, "照你自己記的狀態");
+    + tile("該檢視", String(Sm.due), Sm.due ? "檢視日已到或已過" : "沒有到期的") + tile("論點動搖／失效", `${Sm.byStatus.weak}／${Sm.byStatus.broken}`, "照你自己記的狀態")
+    + (anyLv ? tile("觸及停損／停利", `${cnt(["stop_hit"])}／${cnt(["take_hit"])}`, Q?.busy ? "載入報價…" : `接近的 ${cnt(["near_stop", "near_take"])} 檔（差 5% 以內）`) : "");
   // 近期事件
   let ev;
   if (X.busy) ev = `<p class="note">載入持股的除權息、法說會、財報日期…</p>`;
@@ -45,12 +51,17 @@ function renderThesisView(S) {
     const it = st.items[c] || {}, has = !!(it.reason || it.watch?.length || it.kill?.length), s = it.status || "hold", due = it.review && it.review <= today;
     if (L.thEdit === c) return thForm(c, it);
     if (L.thLog === c) return thLogForm(c, it);
+    const lv = LV.get(c), cur = pos.get(c).currency, px = v => (v == null ? "—" : `${+v.toFixed(2)}${cur === "USD" ? " 美元" : ""}`), pc = v => (v == null || lv.state.endsWith("_hit") ? "" : `（${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}%）`); // 已觸及就不顯示距離
+    const lvRow = lv.state === "none" ? "" : `<p class="thlv"><span class="thst thlv-${lv.state}">${esc(KLThesis.LEVEL_LABEL[lv.state])}</span>`
+      + (it.stop ? `<span>停損 ${px(lv.stopPrice)}${pc(lv.toStop)}${it.stop.mode === "pct" ? `<small class="note">＝成本 ${it.stop.v}%</small>` : ""}</span>` : "")
+      + (it.take ? `<span>停利 ${px(lv.takePrice)}${pc(lv.toTake)}${it.take.mode === "pct" ? `<small class="note">＝成本 +${it.take.v}%</small>` : ""}</span>` : "")
+      + (Q?.busy && lv.state === "no_price" ? `<small class="note">載入報價…</small>` : "") + `</p>`;
     const ul = a => (a?.length ? `<ul>${a.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="note">—</p>`);
     return `<section class="pfcard thcard" data-nofold><div class="thh"><button type="button" class="linkbtn" data-sel="${esc(c)}"><b>${esc(nameOf(c))}</b> <small class="note">${esc(c)}</small></button>${has ? `<span class="thst thst-${s}">${SL[s]}</span>` : ""}${it.review ? `<span class="note${due ? " lgwarn" : ""}">下次檢視 ${esc(it.review)}${due ? "（到期）" : ""}</span>` : ""}</div>`
-      + (has ? `<div class="thgrid"><div><h5 class="pfh">為什麼買</h5><p>${esc(it.reason || "—")}</p></div><div><h5 class="pfh">要觀察的</h5>${ul(it.watch)}</div><div><h5 class="pfh">什麼情況代表論點不成立</h5>${ul(it.kill)}</div></div>`
+      + lvRow + (has ? `<div class="thgrid"><div><h5 class="pfh">為什麼買</h5><p>${esc(it.reason || "—")}</p></div><div><h5 class="pfh">要觀察的</h5>${ul(it.watch)}</div><div><h5 class="pfh">什麼情況代表論點不成立</h5>${ul(it.kill)}</div></div>`
         + (it.log?.length ? `<p class="note thlast">最近檢視 ${esc(it.log[0].d)}${it.log[0].status ? `・${SL[it.log[0].status]}` : ""}：${esc(it.log[0].note || "—")}${it.log.length > 1 ? `（共 ${it.log.length} 筆）` : ""}</p>` : "")
         : `<p class="note">還沒寫這檔的投資論點。</p>`)
-      + `<div class="lgbar"><button type="button" class="btn sm${has ? "" : " primary"}" data-th="edit" data-c="${esc(c)}">${has ? "修改論點" : "寫論點"}</button>${has ? `<button type="button" class="btn sm" data-th="log" data-c="${esc(c)}">加檢視紀錄</button>` : ""}</div></section>`;
+      + `<div class="lgbar"><button type="button" class="btn sm${has ? "" : " primary"}" data-th="edit" data-c="${esc(c)}">${has ? "修改論點" : "寫論點"}</button>${has ? `<button type="button" class="btn sm" data-th="log" data-c="${esc(c)}">加檢視紀錄</button>` : ""}${lv.stopPrice != null || lv.takePrice != null ? `<button type="button" class="btn sm" data-th="alert" data-c="${esc(c)}">設成到價提醒</button>` : ""}</div></section>`;
   };
   $("#lx").innerHTML = head + `<section class="pfcard thsum" data-nofold><h4>投資論點與近期事件</h4><div class="pftiles">${tiles}</div>
       ${L.thMsg ? `<p class="note lgmsg" role="status">${esc(L.thMsg)}</p>` : ""}<h5 class="pfh">近期事件（60 天內）</h5>${ev}
@@ -65,6 +76,10 @@ function thForm(c, it) {
     <label>什麼情況代表論點不成立（一行一項）${ta("kill", (it.kill || []).join("\n"), "例如：毛利率連兩季低於 50%、失去主要客戶")}</label>
     <div class="throw"><label>目前狀態<select name="status">${KLThesis.STATUS.map(s => `<option value="${s}" ${s === (it.status || "hold") ? "selected" : ""}>${SL[s]}</option>`).join("")}</select></label>
     <label>下次檢視<input type="date" name="review" value="${esc(it.review || KLThesis.addDays(lgToday(), 90))}"></label></div>
+    <div class="throw">${["stop", "take"].map(k => { const x = it[k], pct = x?.mode === "pct";
+      return `<label>${k === "stop" ? "停損" : "停利"}<span class="thlvin"><input type="number" inputmode="decimal" step="any" min="0" name="${k}" value="${x ? Math.abs(x.v) : ""}" placeholder="不設">
+      <select name="${k}Mode" aria-label="${k === "stop" ? "停損" : "停利"}的單位"><option value="price" ${pct ? "" : "selected"}>價格</option><option value="pct" ${pct ? "selected" : ""}>${k === "stop" ? "成本跌 %" : "成本漲 %"}</option></select></span></label>`; }).join("")}</div>
+    <p class="note">停損停利是你自己的紀錄：只在這裡顯示距離，不會自動下單；要通知可以按卡片上的「設成到價提醒」。百分比是相對平均成本。</p>
     <div class="lgbar"><button type="submit" class="btn primary">儲存</button><button type="button" class="btn" data-th="close">取消</button></div></form></section>`;
 }
 function thLogForm(c, it) {
@@ -79,9 +94,21 @@ function thLogForm(c, it) {
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-th]"); if (!b || typeof KLThesis === "undefined") return;
   const L = (W.lg ||= {}), a = b.dataset.th; L.thMsg = "";
+  if (a === "alert") { thAlert(b.dataset.c); return; }
   if (a === "edit") { L.thEdit = b.dataset.c; L.thLog = null; } else if (a === "log") { L.thLog = b.dataset.c; L.thEdit = null; } else if (a === "close") { L.thEdit = L.thLog = null; }
   renderList();
 });
+// 把停損停利寫進到價提醒（watch:alerts，和個股頁的「價格提醒」同一份）：已經觸及的那一邊不寫；原本有提醒先確認
+function thAlert(c) {
+  const L = (W.lg ||= {}), lv = W.thLv?.get(c); if (!lv) return;
+  const now = lv.price > 0 ? lv.price : null, r2 = v => Math.round(v * 100) / 100;
+  const dn = lv.stopPrice != null && (now == null || lv.stopPrice < now) ? r2(lv.stopPrice) : null, up = lv.takePrice != null && (now == null || lv.takePrice > now) ? r2(lv.takePrice) : null;
+  if (dn == null && up == null) { L.thMsg = `${nameOf(c)} 的現價已經超過停損或停利，沒有設提醒。`; renderList(); return; }
+  const old = W.alerts?.[c], t = a => [a.up ? `漲到 ${a.up}` : "", a.dn ? `跌到 ${a.dn}` : ""].filter(Boolean).join("、");
+  if (old && (old.up || old.dn) && !confirm(`${nameOf(c)} 已經有到價提醒（${t(old)}），要換成停損停利（${t({ up, dn })}）嗎？`)) return;
+  W.alerts[c] = { up, dn, name: nameOf(c) }; store.set("watch:alerts", W.alerts);
+  L.thMsg = `已設 ${nameOf(c)} 的到價提醒：${t({ up, dn })}。報價更新時觸發。`; renderList();
+}
 document.addEventListener("submit", e => {
   if (!["thForm", "thLogForm"].includes(e.target.id)) return; e.preventDefault();
   const L = (W.lg ||= {}), c = e.target.dataset.c, v = Object.fromEntries(new FormData(e.target)), st = thLoad(), prev = st.items[c] || {};
@@ -100,8 +127,10 @@ document.addEventListener("submit", e => {
 .thh{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;margin-bottom:6px}.thst{font-size:11px;padding:0 6px;border-radius:3px;border:1px solid var(--line)}.thst-weak,.thst-broken{color:var(--s1,#d98a0b);border-color:currentColor}
 :root[data-theme="light"] #lx .thst-weak,:root[data-theme="light"] #lx .thst-broken{color:#8a5300}
 .thgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 16px}.thgrid p,.thgrid ul{margin:0;font-size:13px;overflow-wrap:anywhere}.thgrid ul{padding-left:1.2em}.thlast{margin:6px 0 0}
+.thlv{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin:0 0 6px;font-size:13px;font-variant-numeric:tabular-nums}.thlv-stop_hit,.thlv-near_stop{color:var(--down);border-color:currentColor}.thlv-take_hit,.thlv-near_take{color:var(--up);border-color:currentColor}
+.thlvin{display:grid;grid-template-columns:minmax(4.5em,1fr) minmax(0,max-content);gap:6px}.thform .thlvin select{width:auto;max-width:100%}
 .thform{display:grid;gap:8px}.thform label{display:grid;gap:4px;font-size:13px}.thform textarea,.thform input,.thform select{width:100%;min-width:0;box-sizing:border-box;font:inherit}.throw{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 @media (max-width:560px){.thev li{grid-template-columns:max-content minmax(0,1fr) auto}.thev li>.note{grid-column:2/-1}}
-@media (pointer:coarse){.thev .linkbtn,.thcard .thh .linkbtn{min-height:44px}}`;
+@media (pointer:coarse){.thev .linkbtn,.thcard .thh .linkbtn,.btn[data-th],.thform .btn{min-height:44px}}`;
   document.head.appendChild(st);
 })();

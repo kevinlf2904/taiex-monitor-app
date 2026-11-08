@@ -16,6 +16,9 @@
   const dn = d => Date.parse(d + "T00:00:00Z");
   const addDays = (d, n) => new Date(dn(d) + n * DAY).toISOString().slice(0, 10);
 
+  // 停損／停利：{ mode: "price"（價格）| "pct"（相對平均成本的百分比）, v }。停損的百分比要是負的（例如 −10）、停利要是正的
+  const okLevel = (x, k) => !!x && typeof x === "object" && (x.mode === "price" ? typeof x.v === "number" && x.v > 0 && x.v < 1e7
+    : x.mode === "pct" && typeof x.v === "number" && Number.isFinite(x.v) && (k === "stop" ? x.v < 0 && x.v > -100 : x.v > 0 && x.v <= 1000));
   // 一檔的論點：檢查格式，回傳錯誤代碼（空陣列＝沒問題）
   function checkItem(code, it) {
     const E = [], str = (v, n) => v == null || (typeof v === "string" && v.length <= n), list = v => v == null || (Array.isArray(v) && v.length <= LIM.list && v.every(x => typeof x === "string" && x.length <= LIM.item));
@@ -26,6 +29,7 @@
     if (!list(it.kill)) E.push("invalid_kill");
     if (it.status != null && !STATUS.includes(it.status)) E.push("invalid_status");
     if (it.review != null && !isDate(it.review)) E.push("invalid_review");
+    for (const k of ["stop", "take"]) if (it[k] != null && !okLevel(it[k], k)) E.push("invalid_" + k);
     if (it.log != null && !(Array.isArray(it.log) && it.log.length <= LIM.log && it.log.every(x => x && isDate(x.d) && (x.status == null || STATUS.includes(x.status)) && str(x.note, LIM.text)))) E.push("invalid_log");
     return E;
   }
@@ -40,8 +44,15 @@
   }
   // 從表單文字整理成一筆論點：多行文字拆成清單（去掉空行、前後空白）
   const lines = t => String(t || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean).slice(0, LIM.list).map(x => x.slice(0, LIM.item));
+  // 表單的停損／停利：空白＝不設；價格要大於 0；百分比停損自動變成負的、停利變成正的（使用者常打 10 表示 −10%）
+  function levelFrom(val, mode, k) {
+    const t = String(val ?? "").trim(); if (!t) return null; const n = Number(t); if (!Number.isFinite(n) || n === 0) return null;
+    if (mode === "pct") { const v = k === "stop" ? -Math.abs(n) : Math.abs(n); return okLevel({ mode, v }, k) ? { mode, v } : null; }
+    return n > 0 && okLevel({ mode: "price", v: n }, k) ? { mode: "price", v: n } : null;
+  }
   function fromForm(v, prev = {}, now = null) {
-    return { ...prev, reason: String(v.reason || "").trim().slice(0, LIM.text), watch: lines(v.watch), kill: lines(v.kill), status: STATUS.includes(v.status) ? v.status : prev.status || "hold", review: isDate(v.review) ? v.review : null, log: Array.isArray(prev.log) ? prev.log : [], ...(now ? { at: now } : {}) };
+    const lv = k => (v[k] === undefined ? prev[k] ?? null : levelFrom(v[k], v[k + "Mode"] === "pct" ? "pct" : "price", k));
+    return { ...prev, stop: lv("stop"), take: lv("take"), reason: String(v.reason || "").trim().slice(0, LIM.text), watch: lines(v.watch), kill: lines(v.kill), status: STATUS.includes(v.status) ? v.status : prev.status || "hold", review: isDate(v.review) ? v.review : null, log: Array.isArray(prev.log) ? prev.log : [], ...(now ? { at: now } : {}) };
   }
   // 加一筆檢視紀錄（最新的在前面），同時更新目前狀態；下次檢視日往後排 every 天（沒給就不動）
   function addLog(it, { d, status, note }, every = null) {
@@ -66,6 +77,19 @@
     const seen = new Set(), uniq = out.filter(e => { const k = `${e.date}|${e.code}|${e.kind}`; if (seen.has(k)) return false; seen.add(k); return true; });
     return uniq.sort((a, b) => (b.overdue ? 1 : 0) - (a.overdue ? 1 : 0) || a.date.localeCompare(b.date) || a.code.localeCompare(b.code)).map(e => ({ ...e, name: name(e.code), label: KIND_LABEL[e.kind] }));
   }
+  // 停損／停利檢查：avgCost＝平均成本、price＝現價（原幣）。回傳兩個價位、離現價多遠（現價要再跌／漲多少 %）、狀態
+  // 狀態：stop_hit（跌破停損）、take_hit（漲過停利）、near_stop／near_take（差 near % 以內）、ok、none（沒設）、no_price、no_cost（用百分比但沒有成本）
+  function levels(it, { avgCost = null, price = null, near = 5 } = {}) {
+    const lp = x => (!x ? null : x.mode === "price" ? x.v : typeof avgCost === "number" && avgCost > 0 ? avgCost * (1 + x.v / 100) : null);
+    const stopPrice = lp(it && it.stop), takePrice = lp(it && it.take), r4 = v => Math.round(v * 1e4) / 1e4;
+    if (stopPrice == null && takePrice == null) return { state: it && (it.stop || it.take) ? "no_cost" : "none", stopPrice: null, takePrice: null };
+    if (!(typeof price === "number" && price > 0)) return { state: "no_price", stopPrice, takePrice };
+    const toStop = stopPrice == null ? null : r4(stopPrice / price - 1), toTake = takePrice == null ? null : r4(takePrice / price - 1);
+    const state = stopPrice != null && price <= stopPrice ? "stop_hit" : takePrice != null && price >= takePrice ? "take_hit"
+      : toStop != null && -toStop * 100 <= near ? "near_stop" : toTake != null && toTake * 100 <= near ? "near_take" : "ok";
+    return { state, stopPrice: Math.round(stopPrice * 100) / 100 || null, takePrice: Math.round(takePrice * 100) / 100 || null, toStop, toTake };
+  }
+  const LEVEL_LABEL = { stop_hit: "已跌破停損", take_hit: "已漲過停利", near_stop: "接近停損", near_take: "接近停利", ok: "還沒觸及", none: "沒設停損停利", no_price: "沒有報價", no_cost: "沒有成本，百分比算不出價位" };
   // 摘要：幾檔有寫論點、幾檔該檢視、各狀態幾檔（只算目前持有的）
   function summary(store, codes, today) {
     const items = (store && store.items) || {}, S = { total: codes.length, written: 0, due: 0, byStatus: { hold: 0, watch: 0, weak: 0, broken: 0 }, missing: [] };
@@ -73,5 +97,5 @@
       S.written++; S.byStatus[it.status || "hold"]++; if (isDate(it.review) && isDate(today) && it.review <= today) S.due++; }
     return S;
   }
-  root.KLThesis = Object.freeze({ VERSION, STORE_KEY, STATUS, STATUS_LABEL, KIND_LABEL, LIM, isDate, checkItem, validateStore, fromForm, addLog, catalysts, summary, addDays });
+  root.KLThesis = Object.freeze({ VERSION, STORE_KEY, STATUS, STATUS_LABEL, KIND_LABEL, LIM, isDate, checkItem, validateStore, fromForm, addLog, catalysts, summary, addDays, levels, LEVEL_LABEL, levelFrom });
 })(typeof window !== "undefined" ? window : globalThis);
