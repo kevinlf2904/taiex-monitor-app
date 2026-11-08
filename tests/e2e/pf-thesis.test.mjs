@@ -13,7 +13,10 @@ async function page(width) {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await ctx.route("**/api/calendar**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: [{ date: day(12), code: "2330", name: "台積電", kind: "除息", cash: 5 }, { date: day(5), code: "9999", kind: "除息" }], conf: [{ date: day(7), code: "2330", time: "14:00", place: "台北" }], hol: [] }) }));
   await ctx.route("**/data/us-earn.json*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, at: new Date().toISOString(), rows: [[day(10), "NVDA", "NVIDIA", 4000, null, 1.2, null, "盤後", "Q3"], [day(10), "AAPL", "Apple", 3000, null, 2, null, "盤後", "Q4"]] }) }));
-  await ctx.route("**/api/oapi?earn=1*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, ym: "11510", yq: "115Q3", rows: [["2330", "台積電", "半導體業", "上市", 3000, -5.2, 12.34, 30, 15.2, 8000, 3000, 59.14, 49.5, 43.1], ["2454", "聯發科", "半導體業", "上市", 500, 1, -8, 2, 20, 1500, 300, 48, 20, 18]] }) }));
+  await ctx.route("**/api/oapi?earn=1*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, ym: "11510", yq: "115Q3", rows: [["2330", "台積電", "半導體業", "上市", 3000, -5.2, 12.34, 30, 15.2, 8000, 3000, 59.14, 49.5, 43.1], ["2454", "聯發科", "半導體業", "上市", 500, 1, -8, 2, 20, 1500, 300, 48, 20, 18],
+    ["2303", "聯電", "半導體業", "上市", 200, 1, 1, 1, 1, 600, 100, 30, 20, 15], ["3711", "日月光", "半導體業", "上市", 500, 1, 1, 1, 2, 1500, 200, 16, 8, 6], ["2317", "鴻海", "其他電子業", "上市", 6000, 1, 1, 1, 3, 1e4, 400, 6, 3, 2]] }) }));
+  await ctx.route("**/api/screen?bw=1*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: { 2330: [20, 5, 2.1], 2454: [18, 4, 3], 2303: [12, 1.5, 5], 3711: [25, 3, 2], 2317: [99, 1, 1] } }) }));
+  await ctx.route("**/api/stockinfo?code=2330*", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, code: "2330", per: Array.from({ length: 100 }, (_, i) => ({ d: `2026-0${1 + Math.floor(i / 30)}-${String(1 + i % 28).padStart(2, "0")}`, pe: +(10 + i * 0.1).toFixed(1) })), revenue: [], fin: [], inst: [], margin: [], short: [] }) }));
   await p.evaluate(tx => { localStorage.removeItem("kline:pf:thesis:v1"); W.cal = null; W.thD = null; /* 開頁時大盤可能已經用預設的假資料載入過行事曆 */ store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "thesis" }; W.holdView = "tx"; setLt("hold"); }, TX);
   await p.waitForSelector("#lx .thev, #lx .thsum", { timeout: 30000 });
   await p.waitForFunction(() => /近期事件/.test($("#lx").innerText) && !/載入持股的除權息/.test($("#lx").innerText), null, { timeout: 30000 });
@@ -100,6 +103,24 @@ for (const width of [390, 1280]) test(`財報指標 ${width}：台股帶入最�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
+for (const width of [390, 1280]) test(`簡易估值 ${width}：本益比、淨值比、殖利率、同產業中位數；按了才查歷史區間，情境價和公式一致；美股不顯示`, async () => {
+  const { ctx, p, errs } = await page(width); // 假報價 2330＝100、本益比 20 → EPS 5；同業 18、12、25 → 中位數 18；歷史 10.0～19.9 → 12／15／18
+  const card = c => p.evaluate(c => [...document.querySelectorAll("#lx .thcard")].find(x => x.querySelector(`[data-sel="${c}"]`)).innerText, c);
+  await p.waitForFunction(() => document.querySelector('#lx [data-th=val][data-c="2330"]'), null, { timeout: 30000 });
+  let t = await card("2330");
+  assert.match(t, /本益比 20（半導體業中位數 18，3 家）/); assert.match(t, /淨值比 5/); assert.match(t, /殖利率 2\.1%/);
+  assert.equal(await p.evaluate(() => W.thVal?.["2330"] ?? null), null, "還沒按：不查歷史");
+  await p.click('[data-th=val][data-c="2330"]'); await p.waitForFunction(() => document.querySelector("#lx .thscen"), null, { timeout: 30000 });
+  t = await card("2330");
+  assert.match(t, /2026\/01\/01～2026\/04\/16，100 筆的本益比，20%～80% 落在 12～18，目前在 100% 的位置/, "期間用實際起訖日期與筆數，不用筆數換算年數");
+  const sc = await p.evaluate(() => [...document.querySelectorAll("#lx .thscen li")].map(li => li.innerText.replace(/\s+/g, " ")));
+  assert.deepEqual(sc, ["悲觀（本益比 12） 60 -40.0%", "中性（本益比 15） 75 -25.0%", "樂觀（本益比 18） 90 -10.0%"]);
+  assert.match(t, /近四季 EPS（5，用現價 ÷ 本益比反推）.*同產業中位數算是 90/); assert.match(t, /不是目標價或投資建議/);
+  assert.doesNotMatch(await card("NVDA"), /本益比|估值/, "美股不顯示");
+  assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width), "沒有水平溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 test("停損／停利沒有報價：兩邊都寫進到價提醒、原本的單邊提醒確認後整個換掉；報價回來後每邊只通知一次", async () => {
   const { ctx, p, errs } = await page(390);
   await ctx.route("**/api/quote**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", quotes: [] }) })); // 之後的報價都拿不到
@@ -135,6 +156,31 @@ for (const [kind, fail] of [["連不上", r => r.fulfill({ status: 500, body: "x
     assert.match(await p.evaluate(() => $("#lx").innerText), /月營收年增 \+12\.3%/); assert.doesNotMatch(await p.evaluate(() => $("#lx").innerText), /財報指標這次拿不到/);
     await ctx.close(); assert.deepEqual(errs, []);
   });
+
+test("估值資料狀態：全市場估值失敗標「拿不到」（不是這檔沒資料）且 1 分鐘後重抓成功；歷史本益比 ok:false 標拿不到可再查；本益比缺值不說成虧損", async () => {
+  const { ctx, p, errs } = await page(390);
+  const card = c => p.evaluate(c => [...document.querySelectorAll("#lx .thcard")].find(x => x.querySelector(`[data-sel="${c}"]`)).innerText, c);
+  await p.waitForFunction(() => document.querySelector('#lx [data-th=val][data-c="2330"]'), null, { timeout: 30000 }); // 開頁那次先載完
+  const bad = r => r.fulfill({ status: 500, body: "x" });
+  await ctx.route("**/api/screen?bw=1*", bad);
+  await p.evaluate(() => { W.fresh = Date.now() + 36e5; W.mfVal = {}; /* 模擬選股那邊失敗留下的空物件 */ W.thBwD = null; renderList(); });
+  await p.waitForFunction(() => /估值資料這次拿不到/.test($("#lx").innerText), null, { timeout: 30000 });
+  assert.doesNotMatch(await card("2330"), /沒有本益比資料/, "來源失敗不能說成這檔沒資料");
+  await ctx.unroute("**/api/screen?bw=1*", bad);
+  await p.evaluate(() => { W.thBwD.at = Date.now() - 61e3; renderList(); });
+  await p.waitForFunction(() => /本益比 20/.test($("#lx").innerText), null, { timeout: 30000 });
+  // 歷史本益比 ok:false
+  const no = r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: false, error: "查不到這檔" }) });
+  await ctx.route("**/api/stockinfo?code=2330*", no);
+  await p.click('[data-th=val][data-c="2330"]'); await p.waitForFunction(() => /歷史本益比這次拿不到（查不到這檔）/.test($("#lx").innerText), null, { timeout: 30000 });
+  assert.doesNotMatch(await card("2330"), /不到 60 筆/, "查詢失敗不能說成資料不足");
+  await ctx.unroute("**/api/stockinfo?code=2330*", no);
+  await p.click('#lx [data-th=val][data-c="2330"]'); await p.waitForSelector("#lx .thscen", { timeout: 30000 }); // 再查一次成功
+  // 本益比缺值
+  await p.evaluate(() => { W.thBwD = { rows: { ...W.thBwD.rows, 2330: [null, 5, 0] }, at: Date.now() }; W.mfVal = W.thBwD.rows; renderList(); });
+  const t = await card("2330"); assert.match(t, /本益比 無資料/); assert.match(t, /這檔目前沒有本益比資料，不算情境價/); assert.doesNotMatch(t, /虧損/);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
 
 test("存檔前檢查擋下太長的內容；備份匯入要用論點模組檢查（沒有檢查程式不匯入）", async () => {
   const { ctx, p, errs } = await page(1280);

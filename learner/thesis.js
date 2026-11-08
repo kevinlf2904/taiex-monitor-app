@@ -102,6 +102,23 @@
       return { k, label: d[1], v, text: fmtKpi(d[3], v), period: k === "yoy" || k === "cum" ? "month" : "quarter", bad: v != null && ((k === "yoy" || k === "cum" || k === "eps") ? v < 0 : false) }; });
   }
   const matchWatch = t => { const s = String(t || ""); const d = KPI.find(x => x[4].test(s)); return d ? d[0] : null; };
+  // 簡易估值（第 5 批）：price＝現價；pe／pb／dy＝目前本益比、淨值比、殖利率（證交所、櫃買中心每日公布）；peers＝同產業其他公司的本益比；hist＝這檔過去的本益比（每天一筆）
+  // 近四季 EPS 用 現價 ÷ 本益比 反推；情境價＝EPS × 歷史本益比的 20%／50%／80% 分位（和個股頁的本益比色帶同一種算法）。本益比沒有資料（missing）或不是正數（nonpos）都不算；不在這裡判斷「虧損」（缺值不一定是虧損）。
+  function valuation({ price = null, pe = null, pb = null, dy = null, peers = [], hist = [] } = {}) {
+    const pos = v => typeof v === "number" && Number.isFinite(v) && v > 0, r2 = v => Math.round(v * 100) / 100, r4 = v => Math.round(v * 1e4) / 1e4;
+    const qt = (a, p) => a[Math.min(a.length - 1, Math.floor(p * a.length))];
+    const out = { pe: pos(pe) ? pe : null, pb: pos(pb) ? pb : null, dy: typeof dy === "number" && Number.isFinite(dy) && dy >= 0 ? dy : null, peState: pos(pe) ? "ok" : typeof pe === "number" && Number.isFinite(pe) ? "nonpos" : "missing", eps: null, ind: null, band: null, scen: [] };
+    if (pos(price) && out.pe) out.eps = r2(price / out.pe);
+    const P = (peers || []).filter(pos).sort((a, b) => a - b);
+    if (P.length >= 3) { const med = P.length % 2 ? P[(P.length - 1) / 2] : (P[P.length / 2 - 1] + P[P.length / 2]) / 2; out.ind = { median: r2(med), n: P.length, vs: out.pe ? r4(out.pe / med - 1) : null, price: out.eps ? r2(out.eps * med) : null }; }
+    const H = (hist || []).filter(pos), S = H.slice().sort((a, b) => a - b), cur = out.pe;
+    if (S.length >= 60) {
+      out.band = { lo: qt(S, 0.2), mid: qt(S, 0.5), hi: qt(S, 0.8), n: S.length, pct: cur ? Math.round(S.filter(v => v <= cur).length / S.length * 100) : null };
+      if (out.eps && pos(price)) out.scen = [["bear", out.band.lo], ["base", out.band.mid], ["bull", out.band.hi]].map(([k, m]) => ({ k, pe: m, price: r2(out.eps * m), chg: r4(out.eps * m / price - 1) }));
+    }
+    return out;
+  }
+  const SCEN_LABEL = { bear: "悲觀", base: "中性", bull: "樂觀" };
   const LEVEL_LABEL = { stop_hit: "已跌破停損", take_hit: "已漲過停利", near_stop: "接近停損", near_take: "接近停利", ok: "還沒觸及", none: "沒設停損停利", no_price: "沒有報價", no_cost: "沒有成本，百分比算不出價位" };
   // 摘要：幾檔有寫論點、幾檔該檢視、各狀態幾檔（只算目前持有的）
   function summary(store, codes, today) {
@@ -110,5 +127,5 @@
       S.written++; S.byStatus[it.status || "hold"]++; if (isDate(it.review) && isDate(today) && it.review <= today) S.due++; }
     return S;
   }
-  root.KLThesis = Object.freeze({ VERSION, STORE_KEY, STATUS, STATUS_LABEL, KIND_LABEL, LIM, isDate, checkItem, validateStore, fromForm, addLog, catalysts, summary, addDays, levels, LEVEL_LABEL, levelFrom, kpis, matchWatch });
+  root.KLThesis = Object.freeze({ VERSION, STORE_KEY, STATUS, STATUS_LABEL, KIND_LABEL, LIM, isDate, checkItem, validateStore, fromForm, addLog, catalysts, summary, addDays, levels, LEVEL_LABEL, levelFrom, kpis, matchWatch, valuation, SCEN_LABEL });
 })(typeof window !== "undefined" ? window : globalThis);

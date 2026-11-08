@@ -76,6 +76,20 @@ test("財報指標：從財報表的一列取出六個指標（缺值顯示 —�
   assert.deepEqual(J(["毛利率連兩季", "累計營收年增", "月營收年增率", "EPS 成長", "海外廠進度", "營業利益率", "淨利率", "eps"].map(T.matchWatch)), ["gm", "cum", "yoy", "eps", null, "om", "nm", "eps"]);
 });
 
+test("簡易估值：反推 EPS、同產業本益比中位數、歷史本益比分位與情境價；虧損或資料不夠不硬算", () => {
+  const hist = Array.from({ length: 100 }, (_, i) => 10 + i * 0.1); // 10.0～19.9
+  const V = T.valuation({ price: 600, pe: 20, pb: 5, dy: 2.1, peers: [10, 30, 15, 0, null, 25], hist });
+  assert.equal(V.eps, 30); assert.equal(V.peState, "ok");
+  assert.deepEqual(J(V.ind), { median: 20, n: 4, vs: 0, price: 600 }, "0 和空的不算；偶數取中間兩個平均");
+  assert.equal(V.band.lo, 12); assert.equal(V.band.mid, 15); assert.equal(V.band.hi, 18); assert.equal(V.band.pct, 100);
+  assert.deepEqual(J(V.scen.map(x => [x.k, x.price, x.chg])), [["bear", 360, -0.4], ["base", 450, -0.25], ["bull", 540, -0.1]]);
+  const L = T.valuation({ price: 50, pe: 0, pb: 0.8, peers: [10, 12], hist });
+  assert.equal(L.peState, "nonpos", "0 不是正數"); assert.equal(L.eps, null);
+  assert.equal(T.valuation({ price: 50, pe: null }).peState, "missing", "沒有本益比：缺值，不說成虧損"); assert.equal(T.valuation({ price: 50 }).peState, "missing"); assert.equal(T.valuation({ pe: -3 }).peState, "nonpos"); assert.equal(L.ind, null, "同業不到 3 家"); assert.deepEqual(J(L.scen), [], "本益比不是正數：沒有情境價"); assert.equal(L.band.pct, null);
+  assert.equal(T.valuation({ price: 600, pe: 20, hist: hist.slice(0, 59) }).band, null, "歷史不到 60 天");
+  assert.equal(T.SCEN_LABEL.bear, "悲觀");
+});
+
 test("日期要真的存在：閏年 2/29 可以、2/30、4/31、平年 2/29、13 月都擋；備份匯入也擋", () => {
   for (const d of ["2028-02-29", "2026-01-31", "2026-04-30", "2026-12-31"]) assert.equal(T.isDate(d), true, d);
   for (const d of ["2026-02-29", "2026-02-30", "2026-02-31", "2026-04-31", "2026-06-31", "2026-13-01", "2026-00-10", "2026-01-00", "2026-1-1", "", null]) assert.equal(T.isDate(d), false, String(d));
