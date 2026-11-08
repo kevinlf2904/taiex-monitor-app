@@ -32,12 +32,13 @@
 1. 先讀本文件、相關程式及測試；檢查開啟中的 PR／Issue，避免重複工作。
 2. `git fetch origin main`，將最新 main 合入自己的分支；新任務從最新 main 開分支。排程每天可能更新 main；不得改寫他人歷史或覆蓋未提交修改。
 3. 一個 PR 只處理一件事；有 Issue 才寫 `Closes #N`，不得虛構編號；無關問題另開 Issue。
-4. 在分支上改完、本機測試通過後再一次推送，不要每改一點就推：每次推送都會產生一次 Vercel 預覽部署（免費方案每天上限 100 次）。修 CI 或審查意見也盡量一次推完。
+4. 在分支上改完、本機相關測試通過後再一次推送，不要每改一點就推：Git 推送可能觸發 Vercel 預覽部署及建置用量，實際規則與額度以 Vercel 官方文件及目前方案為準。修 CI 或審查意見也盡量一次推完。不得為了節省額度自行關閉 Preview 或修改部署設定。
 5. 大檔鎖定規則見「核心限制」。
 
 ## 測試與品質
-- 先跑涵蓋修改的最小測試，再跑完整測試。不得為繞過失敗而自行升級 Playwright／套件。
-- 完整測試：`node tests/run.mjs`（含瀏覽器 console 錯誤）。新環境可執行 `npm i --no-save playwright@1.56.1 && npx playwright install chromium`；Playwright 在其他位置時用 `PW=<安裝路徑> node tests/run.mjs`。
+- 本機只跑涵蓋修改的單元測試與直接相關的 `tests/e2e/*.test.mjs`（`node --test --test-concurrency=1 <檔案…>`）；改到共用檔（`learner/watch.html`、`learner/ledger-ui.js`、`learner/core.js`、`learner/tools.js`、`learner/sw.js`、`learner/core.css`）時，另跑 `tests/e2e/pf-mobile.test.mjs`、`tests/e2e/pf-tablet-kbd.test.mjs`。不得為繞過失敗而自行升級 Playwright／套件。
+- 完整測試：`node tests/run.mjs`（含瀏覽器 console 錯誤）。`scripts/test-summary.mjs` 也是跑完整測試（只是輸出較短），不是局部測試。合併門檻是同一 PR 最新 head SHA 的 CI `test`：check run 的 `head_sha` 與 PR 的 `head.sha` 完全相同，且 `status` 為 completed、`conclusion` 為 success；cancelled、skipped、未觸發、進行中或舊 SHA 的結果都不算。CI 失敗時才在本機重現失敗項目，修好後集中推送。
+- 新增的單元測試檔必須登記在 `tests/run.mjs`（E2E 由 `tests/e2e/` 自動載入）。不會觸發 CI 的修改（例如只改 `docs/**`、PR 範本）要用 `workflow_dispatch` 對 PR 分支手動跑一次，並確認執行紀錄的 `head_sha` 等於 PR 的 `head.sha`。新環境可執行 `npm i --no-save playwright@1.56.1 && npx playwright install chromium`；Playwright 在其他位置時用 `PW=<安裝路徑> node tests/run.mjs`。
 - 修改類型的最低要求：
   - 文件：檢查 diff；修改 `AGENTS.md` 後執行 `node scripts/sync-rules.mjs` 及 `node tests/unit.test.mjs`。
   - 介面：相關測試＋Antigravity 驗證 390／1280；桌面模擬不等於實機 iOS。
@@ -45,27 +46,38 @@
   - 策略／回測／績效：測未來資料洩漏、停損、手續費滑價、缺值；補可重現測試並安排獨立審查。沿用 unit test 中「所有策略回測合理性」「價格行為策略」檢查。
   - 其他程式：合併前須有完整 `node tests/run.mjs` 結果（本機或同一提交 CI）。
 - 未執行的測試須標示「未執行」及原因，不得宣稱通過；未檢查介面／回測，不得宣稱畫面／策略正確。
-- 每次收到指令都要自動做：檢查改動頁面在手機與桌面是否溢出、重疊或跳動；操作流程、預設值、載入提示及設定記憶是否合理；有重複功能則合併，無關項目另開 Issue。僅回報實際檢查項目。
+- 每次收到指令都要自動做：依修改類型檢查實際受影響範圍。介面／CSS／版面：手機與桌面是否溢出、重疊或跳動，操作流程、預設值、載入提示及設定記憶是否合理；API／資料／排程：成功、失敗、缺資料、邊界；策略／回測／績效：照上面的嚴格要求；文件：檢查 diff 與內容；純測試修改：確認測試有效且會被 CI 執行。有重複功能則合併，無關項目另開 Issue。不得為省額度省略實際受影響範圍的必要測試。僅回報實際檢查項目。
 
 ## PR 與審查
 - 依 `.github/pull_request_template.md` 填寫實作者、變更、未完成項目、測試及驗證重點。
 - 作者不得審自己的 PR。策略、回測、安全、權限、協作規則等高風險變更須獨立審查：Claude Code 開發優先由 Codex 審；Codex／Antigravity 開發由 Claude Code 或 ChatGPT 審；ChatGPT 開發由 Claude Code 或 Codex 審。低風險小改由合併者簡要審查。
 - 審查結論用「可以合併／修改後再合併／不建議合併」；逐項列 P0–P3、檔案／行號、問題、重現方式及建議。其他 AI 意見只是待驗證線索；逐項判斷成立與否。P0／P1 修復後才能合併。
+- 審查意見（GPT、Antigravity 等）整批處理：逐項判斷是否成立、分類 P0–P3，有效的整批修好後集中推送一次，在 PR 集中回覆一次，逐項寫明採納（附修正 commit）、不採納（附理由）或另開 Issue（附編號）。P2／P3 也要有明確處置。
+- 例外：P0（安全、密鑰、資料遺失）收到就處理並立即回報使用者。有未修的 P0／P1 時，暫停同一功能、共用檔案、資料路徑或受影響範圍的 PR 合併；確認是全站性風險才擴大暫停範圍。
 
 ## 合併流程
-開 PR 不代表獲准合併；須有使用者明確授權（例如「直接幫我合併」）。Antigravity 的指令版在 `.agent/workflows/merge.md`，步驟相同。
+開 PR 不代表獲准合併；須有使用者明確授權（例如「直接幫我合併」），下方「低風險例外」除外。Antigravity 的指令版在 `.agent/workflows/merge.md`，步驟相同。
 1. 確認沒有其他合併者或版本更新正在進行；`git fetch origin main` 並合入最新 main，解決衝突。
 2. 影響網站時，合併前執行 `node scripts/bump-version.mjs "標題" "這次改了什麼"`，再跑 `node tests/unit.test.mjs`；純文件／測試不升版。
-3. 完整測試 `node tests/run.mjs` 通過後推分支、開 PR；原有鎖定 draft PR 轉 ready 並改正式標題。
-4. 等 CI 的 `test` 通過；失敗須修復，不跳過或刪測試。CI 受阻不算通過。
-5. 使用 **merge**，不可 squash／rebase。所有分支提交均已進 main 後，才重設分支到最新 main。
+3. 本機相關測試通過後推分支、開 PR；原有鎖定 draft PR 轉 ready 並改正式標題。
+4. 等同一 head SHA 的 CI `test` 成功（判定方式見「測試與品質」）；失敗須修復，不跳過或刪測試。CI 受阻不算通過。
+5. 使用 **merge**，不可 squash／rebase，並鎖定剛才確認 CI 的 head SHA（GitHub API 的 `sha`／`expectedHeadSha`）。所有分支提交均已進 main、工作目錄乾淨後，才重設分支到最新 main。
 6. 回報 PR、版本、測試、推送／合併狀態；PR 合併不代表部署成功。
+
+### 低風險例外
+使用者於 2026-11-08 授權：符合下列全部條件的 PR，合併者可以不再等使用者說「合併」，合併後回報 PR、合併的 SHA 與 CI 連結。
+- 範圍依 diff 的檔案路徑判定，只要有一個檔案不在範圍內就不適用：`docs/**`；一般 `*.md`（不含 `AGENTS.md`、`CLAUDE.md`、`.agent/**`、`.github/**`）；`tests/**` 中只新增測試或在不放寬斷言下修正不穩定測試；`learner/core.css`、`learner/minimal.css` 且 diff 只有 CSS 規則。HTML／JS 裡的 CSS 字串不算。
+- 不適用：策略、回測、績效計算；安全與權限；正式資料寫入、`learner/data/**`、localStorage 鍵；協作規則（含本節）；部署設定、`vercel.json`、`.github/workflows/**`；`api/**`、`scripts/**`、`package*.json`；任何刪除測試或放寬斷言的修改。
+- 條件：(1) 至少一則非作者的審查結論為「可以合併」；(2) 改 CSS 時另有 Antigravity 390／1280 驗證，不以實作者自己的截圖取代；(3) 同一 head SHA 的 CI `test` 成功；(4) 沒有未處理的審查意見，P0／P1 均已修復；(5) 沒有其他合併者或版本更新正在進行；(6) 照上面的合併流程用 merge。
 
 ### 版本號
 格式 `YYYY.MM.DD-N`，日期採合併當天台北時間，N 接續現有號碼、不每日歸零。腳本會同步更新 `learner/index.html`、`learner/watch.html`、`learner/version.json`，並在 `learner/README.md` 最新紀錄前加 `### 標題（版本）`。若版本衝突，改用 main 上這些檔案再重跑 bump-version。
 
 ## 交接與回報
 交接記錄在 Issue／PR，不依賴 AI 記憶：目標、分支、PR、commit、完成／未完成事項、測試及下一步；額度用完先推送現有成果再交接。回覆簡短且誠實，說明改動或僅討論、檢查結果、未執行項目及推送／PR／合併狀態。程式風格遵循周邊命名、註解及寫法。
+- 不必每完成一小步就回報；在出錯、需要使用者決定或整批完成時回報，只列修改內容、測試結果、CI 狀態、PR、是否推送或合併，不重貼使用者已看過的輸出，不列沒有實際執行的檢查。
+- 以下情況一定立即回報：安全或密鑰疑慮；可能造成使用者資料遺失或覆蓋；main 的 CI 失敗、合併失敗或衝突無法解決；需要授權（付費、部署、權限、資料寫入）；偏離原本計畫或規則（例如被系統擋下）；審查者提出 P0／P1。
+- 一個大階段完成後，提醒使用者開新對話，並提供一句可直接貼上的接續說明。
 
 ## 同步規則
 `.agent/rules/klinelab.md` 必須與本文件完全一致；修改後執行 `node scripts/sync-rules.mjs`。`CLAUDE.md` 引用本文件並只保留 Claude Code 專用設定；`.github/copilot-instructions.md` 指向本文件。
