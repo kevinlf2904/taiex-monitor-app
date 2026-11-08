@@ -282,6 +282,12 @@
         const Rb = opts.rebal; let ok = !!(Rb && typeof Rb.validateStore === "function"), problems = ok ? [] : ["沒有目標配置的檢查程式，為了安全不匯入"];
         if (ok) { const r = Rb.validateStore(p.v); if (!r.ok) { ok = false; problems = [`目標配置資料不對（${r.errors[0]?.code || r.code} ${r.errors[0]?.error || ""}）`]; } }
         items.push({ key, label: "目標配置", ok, problems, summary: { items: p.v && p.v.targets && typeof p.v.targets === "object" ? Object.keys(p.v.targets).length : 0 } });
+      } else if (key === "kline:pf:thesis:v1") {
+        // 投資論點：一樣要用論點模組的完整檢查；沒有檢查程式就不接受
+        const p = parse(raw); if (!p.ok) { items.push({ key, label: "投資論點", ok: false, problems: ["不是正確的 JSON"] }); continue; }
+        const Th = opts.thesis; let ok = !!(Th && typeof Th.validateStore === "function"), problems = ok ? [] : ["沒有投資論點的檢查程式，為了安全不匯入"];
+        if (ok) { const r = Th.validateStore(p.v); if (!r.ok) { ok = false; problems = [r.errors.length ? `${r.errors.length} 檔的論點資料不對（例如：${r.errors[0].code} ${r.errors[0].errors[0]}）` : `格式或版本不對（${r.code}）`]; } }
+        items.push({ key, label: "投資論點", ok, problems, summary: { items: p.v && p.v.items && typeof p.v.items === "object" ? Object.keys(p.v.items).length : 0 } });
       } else if (key.startsWith("kline:pf:")) items.push({ key, label: key, ok: false, problems: ["不認得的投資組合資料（可能是比較新的版本），為了安全不匯入"] });
     }
     return { ok: items.every(x => x.ok), items };

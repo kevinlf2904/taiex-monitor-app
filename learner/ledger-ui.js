@@ -41,6 +41,7 @@ function renderLedger() {
   if (L.view === "margin") return renderMargin(); // 融資不需要交易紀錄
   if (!S) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
   if (!L.view || L.view === "home") return renderHome(S); // 總覽（預設）：畫面在 pf-home.js，用到時才載入
+  if (L.view === "thesis") return renderThesis(S); // 投資論點與近期事件：thesis.js＋pf-thesis.js，用到時才載入
   if (L.view === "perf") return renderPerf(S);
   if (L.view === "margin") return renderMargin();
   if (L.view === "alloc") return renderAlloc(S);
@@ -171,7 +172,7 @@ document.addEventListener("submit", e => {
    價格：每一檔 /api/kline 原始收盤（最多 24 個月；股息已經是現金流，不用還原價）；比較基準：台幣＝加權指數（價格指數，不含股息）、美元＝SPY 還原價（含息）。
    畫面：重點數字、淨值走勢 vs 比較基準（同一起點＝100）、回撤（另一張圖，不用雙軸）、月報酬表、歸因排行、估算原因與計算口徑。
    日期範圍：3 個月／6 個月／1 年／全部；圖上滑鼠或手指移動顯示當天數值。 */
-const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="總覽、交易紀錄、績效、配置或融資">${[["home", "總覽"], ["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"], ["margin", "融資"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "home") === k}">${t}</button>`).join("")}</div>`;
+const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="總覽、交易紀錄、績效、配置、融資或論點">${[["home", "總覽"], ["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"], ["margin", "融資"], ["thesis", "論點"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "home") === k}">${t}</button>`).join("")}</div>`;
 // 績效（perf.js）與匯率合併（fx.js）用到時才載入，照順序（fx.js 要用到 perf.js）
 function lgPerfLib() {
   if (typeof KLPerf !== "undefined" && typeof KLFx !== "undefined") return Promise.resolve();
@@ -570,6 +571,12 @@ function pfFxCard(F) {
 }
 
 // 總覽（第 8 階段）：畫面與計算在 pf-home.js、overview.js，用到時才依序載入
+function renderThesis(S) {
+  if (typeof renderThesisView === "function" && typeof KLThesis !== "undefined") return renderThesisView(S);
+  $("#lx").innerHTML = lgViewSeg() + skel("載入投資論點…");
+  const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
+  (W.lgThP ||= (typeof KLThesis !== "undefined" ? Promise.resolve() : one("thesis.js")).then(() => one("pf-thesis.js")).catch(e => { W.lgThP = null; throw e; })).then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
+}
 function renderHome(S) {
   if (typeof renderHomeView === "function" && typeof KLOverview !== "undefined") return renderHomeView(S);
   $("#lx").innerHTML = lgViewSeg() + skel("載入總覽…");
