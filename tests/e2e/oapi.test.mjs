@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -31,7 +31,7 @@ for (const width of [1280, 390]) {
     await p.waitForFunction(() => document.querySelectorAll(".oatbl tbody tr").length === 1);
     assert.ok(seen.some(s => s.includes("code=2330") && s.includes("src=twse")), "查詢帶上代號與市場");
     assert.equal(await p.textContent('.oatbl [data-tsel="2330"]'), "2330", "代號可以點進個股");
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "頁面沒有橫向溢出（表格在自己的框裡捲）");
+    assert.ok(await noHOverflow(p), "頁面沒有橫向溢出（表格在自己的框裡捲）");
     assert.deepEqual(await p.evaluate(() => store.get("watch:oa").sel), ["上市", "/opendata/t187ap45_L"], "記住上次看的資料集");
     if (width < 500) { await p.click("[data-oaback]"); await p.waitForSelector("#oaList .oalist"); assert.ok(await p.locator("#oaList").isVisible()); }
     await ctx.close();

@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -28,7 +28,7 @@ for (const width of [390, 1280]) test(`個股財報分析：台股、美股，CS
   const f = await csvOf(p, '#sxBox [data-frdl="2454"]');
   assert.equal(f.name, "2454-financials.csv"); assert.equal(f.txt.charCodeAt(0), 0xfeff, "有 BOM，Excel 中文不亂碼");
   for (const k of ["單季損益", "資產負債（季底）", "現金流（單季）", "月營收", "股利", "2025Q4"]) assert.ok(f.txt.includes(k), `CSV 缺少 ${k}`);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   // 美股
   await p.evaluate(() => { select("AAPL"); setDtab("fin"); setDsub("fana"); });
   await p.waitForFunction(() => /財報優於預期/.test($("#sxBox").innerText), null, { timeout: 15000 });
@@ -49,6 +49,6 @@ test("情報局「財報」：展開台股公司後按「財報分析與下載�
   assert.ok(!seen.some(u => u.includes("/api/company")), "按了才抓財報");
   await p.click('.ertr [data-frco="2330"]'); await p.waitForFunction(() => /ROE/.test(document.querySelector(".ertr")?.innerText || ""));
   const f = await csvOf(p, '.ertr [data-frdl="2330"]'); assert.ok(f.txt.includes("單季損益") && f.txt.includes("月營收"), "CSV 也帶到走勢圖的月營收");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });

@@ -1,11 +1,11 @@
 // 量化分析（learner/quant.js）在畫面上的用法：市場狀態、回測完整報告、庫存風險、多因子排行、交易日記規則、新聞影響、實驗室報告
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
-const clean = async p => { const t = await p.evaluate(() => document.body.innerText); assert.doesNotMatch(t, /NaN|undefined|Infinity%/, "畫面有 NaN／undefined"); assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "橫向溢出"); };
+const clean = async p => { const t = await p.evaluate(() => document.body.innerText); assert.doesNotMatch(t, /NaN|undefined|Infinity%/, "畫面有 NaN／undefined"); assert.ok(await noHOverflow(p), "橫向溢出"); };
 
 test("個股市場狀態：日線、週線、ATR 參考設定、部位大小、AI、套用策略", async () => {
   for (const width of [390, 1280]) {

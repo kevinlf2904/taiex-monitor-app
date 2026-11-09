@@ -1,7 +1,7 @@
 // 庫存風險用還原價：持股的日 K 要求 adj=1，用 ac（除息、分割還原）算報酬；有還原的寫出「用還原後的價格」，拿不到的寫出哪幾檔用原始價格；K 線圖不受影響
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -27,7 +27,7 @@ test("庫存風險：持股改用還原價（0050 一拆四不再像跌 75%）�
     assert.doesNotMatch(t, /異常單日.*0050/s, "分割那天不再被當成異常單日");
     assert.match(t, /價格指數，不含股息/);
     assert.match(t, /2454：1 個除權息事件資料不合理，沒有還原.*還原後仍有 1 天漲跌超過限制.*拿不到證交所的除權息參考價，改用 Yahoo/s, "部分沒還原的事件也要寫出來");
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
+    assert.ok(await noHOverflow(p), width + "：沒有水平溢出");
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });

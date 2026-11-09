@@ -1,7 +1,7 @@
 // 這一版新增的 9 項：早報、事件提醒、筆記追蹤、選股條件組合、財報事件回測、估值地圖、總經敏感度、大按鈕模式、離線快取
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -26,7 +26,7 @@ async function fund(p) {
   await p.route(/\/api\/daily\?date=/, r => { const d = new URL(r.request().url()).searchParams.get("date"); J(r, { ok: true, date: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`, rows: [["2330", "台積電", 1000, 1.2, 500, 300, 10, 20000], ["3105", "穩懋", 150, 2, -100, -50, 0, 3000], ["1101", "台泥", 30, 0.5, 20, -10, 5, 5000]] }); });
   await p.route("**/api/calendar**", r => J(r, { ok: true, rows: [{ date: TODAY, code: "2330", name: "台積電", kind: "除息", cash: 4.5 }, { date: TODAY, code: "1101", name: "台泥", kind: "除息", cash: 1 }], conf: [{ date: nextWd(TODAY), time: "14:00", code: "2330", name: "台積電", place: "台北" }], hol: [] }));
 }
-const noOverflow = p => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+const noOverflow = noHOverflow;
 
 for (const width of [390, 1280]) test(`工具「早報」：昨晚美股、台指期夜盤、除權息、持股新消息、AI 整理 ${width}`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500, time: new Date(TODAY + "T08:00:00+08:00") });
@@ -165,7 +165,7 @@ test("大按鈕模式：首頁和看盤一起換，手機不會撐破畫面", as
   const f = await (await p.waitForSelector("#watchFrame")).contentFrame(); await f.waitForFunction(() => typeof W !== "undefined");
   assert.equal(await f.evaluate(() => document.documentElement.dataset.big), "1", "看盤頁一打開就是大按鈕");
   const h = await f.evaluate(() => getComputedStyle(document.querySelector("#lTabs button[data-l]")).minHeight); assert.equal(h, "40px");
-  assert.ok(await noOverflow(p)); assert.ok(await f.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noOverflow(p)); assert.ok(await noHOverflow(f));
   await f.evaluate(() => applyBig(false)); await p.waitForFunction(() => !document.documentElement.dataset.big);
   await ctx.close(); assert.deepEqual(errs, []);
 });

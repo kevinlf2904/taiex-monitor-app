@@ -1,7 +1,7 @@
 // 大盤 → 官方公告：每個分頁都畫得出來、篩選與搜尋、個股徽章、節目頁的異常推介提醒、存股的定期定額熱門、行事曆休市日
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 import { officialPack } from "../../api/_lib/official.js";
 
 const S = await serve(), B = await (await chromium()).launch();
@@ -34,7 +34,7 @@ for (const width of [1280, 390]) test(`官方公告 ${width}`, async () => {
   await p.reload(); await p.waitForTimeout(800); // 假資料要在開頁前掛好（電腦版開頁時個股徽章就會抓一次）
   await p.evaluate(() => setLt("mkt")); await p.waitForTimeout(500);
   await p.click('#lx [data-mk="mkReg"][data-v="off"]'); await p.waitForSelector("#lx .offbox");
-  const wide = () => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), txt = () => p.evaluate(() => $("#lx .offbox").innerText);
+  const wide = () => noHOverflow(p), txt = () => p.evaluate(() => $("#lx .offbox").innerText);
   assert.match(await txt(), /上市櫃每日重大訊息[\s\S]*台積電[\s\S]*公告董事會決議股利[\s\S]*澄清媒體報導/);
   // 搜尋：打字就篩
   await p.fill('#lx [data-cxq="offQ"]', "1101"); await p.waitForFunction(() => W.offQ === "1101");
@@ -62,7 +62,7 @@ test("存股：定期定額熱門、點回測帶到真實歷史回測", async ()
   await ctx.route(/\/api\/oapi\?src=twse&p=\/ETFReport\/ETFRank/, r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: [{ No: "1", STOCKsSecurityCode: "2330", STOCKsName: "台積電", STOCKsNumberofTradingAccounts: "232850", ETFsSecurityCode: "0050", ETFsName: "元大台灣50", ETFsNumberofTradingAccounts: "1275993" }] }) }));
   await p.$eval('[data-sxg="dca"]', b => b.click()); await p.waitForSelector("#dca-out .dca-l");
   assert.match(await p.evaluate(() => document.getElementById("dca-out").innerText), /元大台灣50[\s\S]*1,275,993 戶[\s\S]*台積電/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await p.$eval('[data-dcabt="0050"]', b => b.click()); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => [document.getElementById("hs-code").value, document.getElementById("sec-hist").hidden].join()), "0050,false");
   await ctx.close(); assert.deepEqual(errs, []);

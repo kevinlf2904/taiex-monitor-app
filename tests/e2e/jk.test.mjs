@@ -1,7 +1,7 @@
 // 日股、韓股：產業地圖的 6981.T、005930.KS 這類代號可以抓報價、開個股頁；首頁「回到最上面」按鈕；嵌入的看盤頁自己不捲動
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open, watchFrame } from "./_harness.mjs";
+import { chromium, serve, open, watchFrame, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -14,7 +14,7 @@ test("日股、韓股報價與個股頁", async () => {
   await p.waitForFunction(() => W.quotes.get("6981.T")?.price != null, null, { timeout: 15000 });
   assert.ok(seen.some(u => u.includes("6981.T")), "產業地圖的日股有去抓報價");
   await p.evaluate(() => select("005930.KS")); await p.waitForFunction(() => W.sel === "005930.KS");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

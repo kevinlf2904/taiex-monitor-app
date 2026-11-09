@@ -1,7 +1,7 @@
 // Gemini Spark 使用者稽核（DEF-05、06、12）：口徑說明 ⓘ、開高低 0 顯示 —、電腦版抽屜寬版、存股進階參數收合
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -10,7 +10,7 @@ test("個股成交量旁的 ⓘ：點了顯示口徑說明，不觸發外層點�
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.evaluate(() => { select("2330"); });
   await p.waitForSelector("#dKv .itip");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await p.click("#dKv .itip");
   await p.waitForSelector("#toast:not([hidden])");
   assert.match(await p.textContent("#toast"), /整股成交張數[\s\S]*不含零股/);

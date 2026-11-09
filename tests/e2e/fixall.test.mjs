@@ -1,7 +1,7 @@
 // 全站稽核修正：漲跌停依升降單位、休市日標示、自選拿不到報價時說原因、K 線與報價對不上不硬接、指標一鍵組合與「更多」、外層浮動返回只在學堂存股出現
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open, watchFrame } from "./_harness.mjs";
+import { chromium, serve, open, watchFrame, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -25,7 +25,7 @@ for (const width of [390, 1280]) test(`個股頁：漲跌停取到升降單位�
   assert.equal(await p.evaluate(() => W.daily.data.length === W.kn && W.daily.data.at(-1).d !== "2099-01-02"), true, "沒有硬接一根 −90% 的 K 棒");
   await p.evaluate(() => { W.detailQ = { ...W.detailQ, prev: 49, price: 50 }; renderDetailHead(); });
   assert.match(await p.textContent("#dTags"), /K 線與報價待確認/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -84,7 +84,7 @@ for (const width of [390, 1280]) test(`技術指標：一鍵組合、其餘收�
   assert.match(await p.textContent("#klIndSum"), /MACD/, "摘要跟著更新");
   assert.ok((await chips()).includes("MACD"), "開著的指標就算在「更多」裡也照樣列出");
   await p.click("#dIbar [data-more]"); assert.ok((await chips()).length >= 30, "展開更多");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -134,7 +134,7 @@ for (const width of [390, 1280]) test(`今日重點（早報＋每日摘要）�
   await p.waitForFunction(() => !!$("#lx .mc-ai-panel .caibox .rs-report"));
   // 舊的分頁記錄（工具 → 早報、每日摘要、今日重點）都帶到情報局的今日重點
   for (const old of ["brief", "sum", "today"]) { await p.evaluate(o => { setLt("watch"); W.tv = o; setLt("tools"); }, old); await p.waitForTimeout(200); assert.equal(await p.evaluate(() => W.lt), "today", old); }
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

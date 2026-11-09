@@ -1,7 +1,7 @@
 // 大盤 → 櫃買、上市（同一套畫面）：指數、量值、產業營收熱圖、創新高、董監、權證、暫停預告、興櫃、黃金、可轉債每個分頁都畫得出來，手機不橫向溢出
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 import { IX_COLS } from "../../scripts/tpex-daily.mjs";
 import { LX_COLS } from "../../scripts/twse-daily.mjs";
 
@@ -35,7 +35,7 @@ for (const width of [1280, 390]) test(`櫃買圖表 ${width}`, async () => {
   await ctx.route("**/data/tpex.json", r => r.fulfill({ contentType: "application/json", body: JSON.stringify(FIX) }));
   await p.evaluate(() => setLt("mkt")); await p.waitForTimeout(500);
   await p.click('#lx [data-mk="mkReg"][data-v="otc"]'); await p.waitForSelector("#lx .otcbox .tschart");
-  const wide = () => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+  const wide = () => noHOverflow(p);
   assert.match(await p.evaluate(() => $("#lx").innerText), /櫃買指數 vs 報酬指數[\s\S]*股息再投入[\s\S]*主題指數比較[\s\S]*富櫃 50[\s\S]*勞工就業 88/);
   await p.click('#lx [data-mk="otcTr"][data-v="r"]'); await p.click('#lx [data-mk="otcRng"][data-v="20"]');
   assert.equal(await p.evaluate(() => W.otc.tr + W.otc.rng), "r20"); assert.ok(await wide(), "指數"); await shot("ix");
@@ -78,7 +78,7 @@ for (const width of [1280, 390]) test(`上市圖表 ${width}`, async () => {
   await ctx.route("**/data/twse.json", r => r.fulfill({ contentType: "application/json", body: JSON.stringify(FIXL) }));
   await p.evaluate(() => setLt("mkt")); await p.waitForTimeout(500);
   await p.click('#lx [data-mk="mkReg"][data-v="lst"]'); await p.waitForSelector("#lx .otcbox .tschart");
-  const wide = () => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+  const wide = () => noHOverflow(p);
   assert.match(await p.evaluate(() => $("#lx").innerText), /加權指數 vs 報酬指數[\s\S]*主題指數比較[\s\S]*台灣 50[\s\S]*高股息/);
   assert.equal(await p.evaluate(() => document.querySelectorAll('#lx [data-mk="otcV"][data-v="esb"], #lx [data-mk="otcV"][data-v="gold"]').length), 0, "興櫃、黃金是櫃買才有");
   await shot("ix");

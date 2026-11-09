@@ -1,7 +1,7 @@
 // ETF 個股頁：「ETF」分頁（基本資料、成分股、成分股變動），沒有營收、財報、健檢這些個股才有的子頁
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -26,6 +26,6 @@ for (const width of [390, 1280]) test(`ETF 分頁 ${width}`, async () => {
   assert.equal(await p.evaluate(() => $('#dTabs [data-t="fin"]').hidden), false);
   await p.evaluate(() => select("2330")); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => $('#dTabs [data-t="fin"]').textContent), "財務");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });

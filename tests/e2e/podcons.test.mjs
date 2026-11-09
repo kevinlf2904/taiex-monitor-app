@@ -1,7 +1,7 @@
 // 節目 → 共識與分歧：多個節目一起看多／看空、意見分歧、熱度上升；同一個節目講很多次只算一次
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -18,7 +18,7 @@ for (const width of [390, 1280]) test(`節目：共識與分歧 ${width}`, async
   await p.click('#podSeg [data-pv="cons"]'); await p.waitForSelector(".pod [data-pcw]");
   assert.match(await p.textContent(".pod"), /多個節目一起看多[\s\S]*多個節目一起看空[\s\S]*意見分歧[\s\S]*熱度上升/);
   await p.click('.pod [data-pcw="7"]'); assert.equal(await p.evaluate(() => store.get("pod:prefs").cw), 7); assert.doesNotMatch(await p.textContent(".pod"), /熱度上升/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

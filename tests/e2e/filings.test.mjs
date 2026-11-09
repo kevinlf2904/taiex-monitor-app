@@ -1,7 +1,7 @@
 // 申報：美國國會「誰買了什麼、賺賠多少」與台灣政治人物持股損益
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -40,7 +40,7 @@ test("台灣政治人物：持股市值排行、分類、億萬、個人頁", as
   await p.click(".tw-rank li button"); await p.waitForSelector(".tw-p .tw-top");
   assert.match(await p.evaluate(() => $(".tw-p").innerText), /股票市值[\s\S]*張[\s\S]*持股[\s\S]*變動紀錄/);
   await p.click('[data-twtab="chg"]'); await p.waitForTimeout(150); assert.match(await p.evaluate(() => $(".tw-p").innerText), /差額/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -68,6 +68,6 @@ test("申報歷史：國會全部期間與月份、內部人期間、台灣政�
   await p.evaluate(() => { W.cv = "tw:p:王小明"; renderList(); }); await p.waitForSelector(".tw-p");
   const n = await p.evaluate(() => document.querySelectorAll('[data-rkset^="twoDi:"]').length);
   if (n > 1) { await p.click('[data-rkset="twoDi:1"]'); await p.waitForTimeout(200); assert.match(await p.evaluate(() => $(".tw-tabs").innerText), /持股（/); }
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });

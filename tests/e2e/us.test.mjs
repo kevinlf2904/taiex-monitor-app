@@ -1,7 +1,7 @@
 // 這一版新增：美股個股「財務」分頁（公司與指標、營收與獲利、分析師與財報）、台股大盤卡片的分時走勢線、動能矩陣「今日」
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -18,7 +18,7 @@ for (const width of [390, 1280]) test(`美股個股財務分頁、大盤走勢�
   assert.match(await p.evaluate(() => $("#sxBox").innerText), /2026Q2[\s\S]*94B/);
   await p.click('#sxNav [data-dsub="usana"]'); await p.waitForTimeout(200);
   assert.match(await p.evaluate(() => $("#sxBox").innerText), /43 位分析師[\s\S]*強力買進 12/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   // 美股指數、台股個股不受影響
   await p.evaluate(() => select("2330")); await p.waitForTimeout(200);
   assert.equal(await p.evaluate(() => $('#dTabs [data-t="fin"]').textContent), "財務");
@@ -36,6 +36,6 @@ for (const width of [390, 1280]) test(`美股個股財務分頁、大盤走勢�
   assert.equal(await p.evaluate(() => store.get("watch:mfbw")), "1");
   await p.click('#mfb [data-mbs="s0"]'); await p.waitForTimeout(200);
   assert.match(await p.evaluate(() => $("#lx .binfo").innerText), /今日淨流入[\s\S]*前一日/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });

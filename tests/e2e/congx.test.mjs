@@ -1,7 +1,7 @@
 // 大戶國會延伸：大戶共識榜、我的追蹤（☆ 追蹤、新申報）、申報延遲、勝率卡、13F 主題熱圖
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -85,6 +85,6 @@ for (const width of [390, 1280]) test(`大戶國會延伸功能 ${width}`, async
   await p.click('#lx [data-rkset="tdccV:heat"]');
   await p.waitForSelector(".cxheat");
   assert.match(await lx(), /各產業千張大戶本週增減動向/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
