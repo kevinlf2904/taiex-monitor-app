@@ -43,6 +43,8 @@ test("大盤：連不上伺服器時 sw.js 回的快取帶 swCachedAt，畫面�
   const cachedAt = Date.parse("2026-10-05T01:30:00Z"); // 09:30 存的
   await p.evaluate(async b => { const c = await caches.open("klinelab-v1"); await c.put("/api/market", new Response(JSON.stringify(b), { headers: { "Content-Type": "application/json", Date: new Date(Date.parse("2026-10-05T01:30:00Z")).toUTCString() } })); }, MKT);
   S2.close();
+  // 較新的 Playwright（本機 1.63）context.route 也會攔 service worker 自己發的請求：_harness 的 **/api/** 假資料會讓 sw.js 以為連得上、還用假資料蓋掉快取（#236）。這裡讓它真的連不上，舊版（CI 1.56）不攔 sw 請求、本來就連不上，兩邊結果一致
+  await ctx.route("**/api/market", r => r.abort("connectionrefused"));
   assert.equal(await p.evaluate(async () => (await (await fetch("/api/market")).json()).swCachedAt), cachedAt, "連不上時回快取，標上存起來的時間");
   await p.clock.setFixedTime(new Date("2026-10-05T10:00:00+08:00")); await setHol(p);
   await p.evaluate(async () => { clearTimeout(W.timer); W.session = "open"; await loadMktLive(); });
