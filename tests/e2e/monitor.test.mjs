@@ -1,7 +1,7 @@
 // 盤中監控 M1（P4）：分頁位置、網址、自選＋庫存分批抓報價、事件升級不重開、過期不判斷、來源失敗與休市的狀態、事件詳情、不同步
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open, watchFrame } from "./_harness.mjs";
+import { chromium, serve, open, watchFrame, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -36,7 +36,7 @@ for (const width of [390, 1280]) test(`盤中監控：分批抓自選＋庫存�
   const t = await p.evaluate(() => $("#lx").innerText); assert.match(t, /^監控中[\s\S]*盤中監控[\s\S]*■ 警示/, "狀態列在最上面（和今日市場一樣）"); assert.match(t, /大盤＋自選 \d+ 檔＋台股庫存 1 檔/);
   await p.click("#lx .mon-ev"); await p.waitForFunction(() => !$("#sheet").hidden && /當時的報價/.test($("#sheetExtra").innerText));
   assert.match(await p.evaluate(() => routeOf()), /^monitor\/[0-9a-f]{8}$/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   // 不雲端同步
   assert.equal(await p.evaluate(() => Object.keys(syncSnap()).some(k => k.includes(":mon:"))), false);
   await p.evaluate(() => clearTimeout(W.monTimer));
@@ -92,7 +92,7 @@ test("伺服器巡檢（M2）：網頁合併伺服器事件、標「伺服器」
   assert.match(await p.evaluate(() => $("#lx").innerText), /伺服器巡檢 09:55:00：2 檔報價有問題（沒有報價 2 檔），這些沒有判斷/);
   runs.cur = { ...runs.cur, skip: "unknown", skipAt: at + 60e3 }; await p.evaluate(() => { W.mon.srvAt = 0; return monTick(); });
   assert.match(await p.evaluate(() => $("#lx").innerText), /伺服器巡檢暫停：休市日表拿不到，交易日待確認/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await p.evaluate(() => clearTimeout(W.monTimer));
   await ctx.close(); assert.deepEqual(errs, []);
 });

@@ -1,7 +1,7 @@
 // KLineLab 品牌與合規：配色、Hero、Pro 候補名單、免責聲明、去識別化（沒有潮汐／泡泡字眼、供應鏈個股說明由程式產生）；節目頭像失敗時用徽章
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -25,7 +25,7 @@ test("首頁：品牌、碳黑配色、Hero 可收起、頁尾免責聲明", asy
     assert.doesNotMatch(hero, /突破訊號|全部來自政府公開資料/, "不誇大、不寫成交易訊號");
     assert.ok(await p.evaluate(() => !!document.querySelector('#hero a[href="pro.html"]')));
     assert.match(await p.evaluate(() => document.querySelector("footer").innerText), new RegExp(DISC));
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "橫向溢出");
+    assert.ok(await noHOverflow(p), "橫向溢出");
     await p.click("#heroX"); assert.ok(await p.evaluate(() => $("#hero").hidden && store.get("heroHide", false)));
     await p.reload(); await p.waitForTimeout(600); assert.ok(await p.evaluate(() => $("#hero").hidden), "收起要記住");
     await p.evaluate(() => goTab("intel")); assert.ok(await p.evaluate(() => $("#hero").hidden), "收起後切回情報局也不再出現");
@@ -43,7 +43,7 @@ test("公開測試版 (Beta) 頁：沒有價格方案、收更新通知、免責
   await p.waitForFunction(() => /已登記/.test($("#wlMsg").textContent));
   assert.deepEqual(sent, { op: "waitlist", email: "me@example.com", plan: "beta" });
   assert.match(await p.evaluate(() => $("#disc").textContent), new RegExp(DISC));
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -112,7 +112,7 @@ test("合併重複功能：盤後、籌碼動向併進排行，盤後總結＋�
     assert.match(await p.evaluate(() => $('#lx details[data-tdbox="flow"] .dh-sec-b').innerText), /測試盤後總結/);
     await selectWorkspace(p, "technical");
     assert.doesNotMatch(await p.evaluate(() => $('#lx details[data-tdbox="plan"] .dh-sec-b').innerText), /盤後總結|測試盤後總結/, "交易情境不再混入法人盤後摘要");
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "橫向溢出");
+    assert.ok(await noHOverflow(p), "橫向溢出");
     // 個股總覽：多空研判不再是獨立子頁
     assert.ok(await p.evaluate(() => !DSUB.ovw.some(x => x[0] === "ls") && DSUB.ovw[0][0] === "state"));
     await ctx.close(); assert.deepEqual(errs, []);

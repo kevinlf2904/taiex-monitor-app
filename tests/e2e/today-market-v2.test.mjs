@@ -1,7 +1,7 @@
 // 今日市場 V2：五工作區皆有對應視覺內容；來源日期與更新狀態可辨識；手機與桌面無水平溢位。
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, hOverflow } from "./_harness.mjs";
 
 const GLOBAL_TEST_GROUPS = [
   { id: "energy", name: "能源", codes: ["CL=F", "BZ=F", "NG=F", "HO=F", "RB=F"] },
@@ -165,14 +165,14 @@ for (const width of [390, 1280]) test("今日市場 V2：工作區視覺層級�
   assert.equal(await p.evaluate(() => document.querySelector("#lx .mc-ai-panel")?.hidden), false);
   assert.equal(await p.evaluate(() => document.querySelector("#lx .dh-secs")?.hidden), true);
 
-  const layout = await p.evaluate(() => ({
-    width: innerWidth,
+  const layout = await p.evaluate(w => ({
+    width: Math.min(innerWidth, w), // 和設定的螢幕寬度比（#249）
     scrollWidth: document.documentElement.scrollWidth,
     navButtons: [...document.querySelectorAll("#lx .mc-tab")].map(button => {
       const rect = button.getBoundingClientRect();
       return { height: rect.height, width: rect.width };
     })
-  }));
+  }), width);
   assert.ok(layout.scrollWidth <= layout.width + 1, "V2 工作區不可造成水平溢位：" + JSON.stringify(layout));
   assert.ok(layout.navButtons.every(button => button.height >= 44 && button.width >= 44), "工作區按鈕須有足夠觸控尺寸");
   await selectWorkspace(p, "overview");
@@ -245,7 +245,7 @@ test("今日市場 AI 研究：工作區內就有「開始 AI 整理」，成功
     await p.waitForFunction(() => /⚠︎/.test(document.querySelector("#lx .mc-ai-panel .caibox")?.textContent || ""));
     assert.match(await p.textContent("#lx .mc-ai-panel .caibox"), /GEMINI_API_KEY/, "失敗原因要顯示在研究區");
     assert.equal(await p.textContent("#lx .mc-ai-run"), "重試 AI 整理");
-    const sw = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    const sw = await hOverflow(p);
     assert.ok(sw <= 1, width + "：不可水平溢位");
     await ctx.close();
     assert.deepEqual(errs, []);
@@ -298,7 +298,7 @@ test("技術攻防：平日收盤後沒有今天的盤前快照，改顯示下�
     t = await p.textContent("#lx .mc-tech-panel");
     assert.match(t, /130 點[\s\S]*120 點[\s\S]*115 點/, "有今天的盤前快照就照舊顯示");
     assert.doesNotMatch(t, /預估位階/);
-    const sw = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    const sw = await hOverflow(p);
     assert.ok(sw <= 1, width + "：不可水平溢位");
     await ctx.close(); assert.deepEqual(errs, []);
   }

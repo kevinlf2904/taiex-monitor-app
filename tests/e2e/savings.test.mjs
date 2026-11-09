@@ -1,7 +1,7 @@
 // 存股模擬：股息計算機（含息再投入、含息領出、不含息）
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -14,7 +14,7 @@ test("股息計算機", async () => {
   assert.ok(Math.abs(r.px - 0.03) < 1e-4); assert.ok(r.re > 0.079 && r.re < 0.083 && Math.abs(r.re - r.out) < 2e-3);
   await p.click('[data-sxg="div"]'); assert.equal(await p.isVisible("#sec-sum"), false, "選單一次只看一個功能"); assert.equal(await p.isVisible("#console"), false, "股息計算機不用左邊控制台");
   await p.fill("#dc-y", "6"); await p.click('[data-dm="px"]'); assert.match(await p.evaluate(() => document.getElementById("dc-kpis").innerText), /不含息[\s\S]*3\.00%/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -46,6 +46,6 @@ for (const width of [390, 1280]) test(`存股延伸功能 ${width}`, async () =>
   t = await p.textContent("#mm-out"); assert.match(t, /8 \/ 12/); assert.ok(await p.locator('[data-mmadd="00919"]').count() >= 1, "推薦補空月份");
   // 通膨換算
   await p.click('[data-sxg="sim"]'); assert.ok(await p.isVisible("#console") || (await p.evaluate(() => innerWidth)) > 0, "模擬三種做法有控制台"); await p.check("#if-on"); assert.ok(await p.locator("#kpis .if-note").count() >= 1); assert.match(await p.textContent("#kpis"), /約等於今天的/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });

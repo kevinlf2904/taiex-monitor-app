@@ -1,7 +1,7 @@
 // 資金雷達的「今日」併進情報局「今日市場」盤後的資金雷達卡：資金雷達只剩動能矩陣、排行；舊的「今日」設定、網址、按鈕都帶到今日市場盤後；卡片裡的板塊、個股、回放都能點
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open, watchFrame } from "./_harness.mjs";
+import { chromium, serve, open, watchFrame, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -53,7 +53,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
   // 收合預覽的近 5 日輪動與展開內容的當日買賣分工；大戶異常只在展開內容
   assert.equal(await p.$$eval("#lx .dh-card.flows .mbar", L => L.length), 1, "情緒刻度");
   assert.equal(await p.$$eval("#lx", L => (L[0].innerText.match(/資金雷達・板塊輪動與資金流向/g) || []).length), 1, "資金卡只有一張");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   // 資金雷達只剩動能矩陣、排行
   await p.evaluate(() => setLt("money")); await p.waitForSelector("#lx .scrseg");
   assert.deepEqual(await p.$$eval("#lx .scrseg [data-mv]", L => L.map(b => b.textContent.trim())), ["動能矩陣", "排行"]);

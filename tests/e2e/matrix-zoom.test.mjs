@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -159,7 +159,7 @@ for (const width of [1280, 390]) {
     await p.waitForSelector('.bwrap[data-viz="bubble"]', { timeout: 3000 });
 
     // 9. 驗證無橫向溢出
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "無橫向溢出");
+    assert.ok(await noHOverflow(p), "無橫向溢出");
 
     await ctx.close();
     assert.deepEqual(errs, []);

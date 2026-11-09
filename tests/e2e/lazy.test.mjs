@@ -1,7 +1,7 @@
 // 分頁用到才載入的程式：還沒載好就打開財報、大盤的上市／櫃買／官方公告、工具官方資料、選股條件組合、庫存總經敏感度，都會先顯示「載入中」再畫出來，不會出錯
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -18,7 +18,7 @@ for (const width of [390, 1280]) test(`分頁程式延後載入：打開就自�
     assert.ok(await p.evaluate(g => lazyOk(g), g), `${g} 載好了`);
   }
   assert.ok((await loaded()).filter(f => f === "earn.js").length === 1, "同一個檔只載一次");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -24,7 +24,7 @@ for (const width of [1280, 390]) {
     await p.waitForSelector("#sxBox .tstip:not([hidden])");
     const tip = await p.textContent("#sxBox .tstip");
     assert.match(tip, /2026-0\d-\d\d/); assert.ok(tip.includes("融資餘額") && tip.includes("%"), tip);
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+    assert.ok(await noHOverflow(p), "沒有橫向溢出");
     // 法人與基金：外資持股改成連到走勢圖（不重複放數字表）
     await p.evaluate(() => setDsub("inst")); await p.waitForSelector('[data-sxgo="mgfr"]'); await p.click('[data-sxgo="mgfr"]');
     await p.waitForSelector("#sxBox .tschart"); assert.equal(await p.evaluate(() => W.dsub.chips), "mgfr");
@@ -52,7 +52,7 @@ test("盤後「外資持股」：類股比率、前 20 名長條圖，上市／�
   await p.click('[data-affrm="上櫃"]'); await p.waitForFunction(() => document.querySelector(".after").textContent.includes("光電業"));
   t = await p.textContent(".after"); assert.ok(t.includes("16.62%") && t.includes("大拓-KY"), "上櫃");
   assert.equal(await p.evaluate(() => store.get("watch:affrm")), "上櫃", "記住上市／上櫃");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await p.evaluate(() => { W.afView = "margin"; renderList(); });
   await p.waitForSelector(".after .tschart");
   assert.ok((await p.textContent(".after .tschart")).includes("融券餘額"));

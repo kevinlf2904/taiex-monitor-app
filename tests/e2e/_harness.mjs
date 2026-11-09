@@ -81,3 +81,7 @@ export async function open(browser, base, file, { width = 1180, touch = false, s
   if (lazy) await p.evaluate(() => typeof LAZY === "object" && Promise.all(Object.keys(LAZY).map(lazy))).catch(() => {}); // 分頁用到才載的程式（watch.html 的 lazy）先載好，測試直接呼叫裡面的函式也不會找不到
   return { ctx, p, errs, ...m };
 }
+// 頁面水平溢出多少 px：和設定的螢幕寬度比，不能用 innerWidth。手機模擬（isMobile）時內容一撐寬，layout viewport 跟著變寬，innerWidth 也變大，舊寫法永遠不會失敗（#249）
+// t 可以是 page 或 frame；frame 另外取 iframe 本身寬度（innerWidth）和螢幕寬度較小者
+export async function hOverflow(t) { const pg = typeof t.page === "function" ? t.page() : t, w = pg.viewportSize().width; return t.evaluate(w => document.documentElement.scrollWidth - Math.min(innerWidth, w), w); }
+export const noHOverflow = async t => (await hOverflow(t)) <= 1;

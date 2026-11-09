@@ -1,7 +1,7 @@
 // 手機上很長的子頁籤：「▾ 全部 N 項」用網格一次列出、點了切過去；估值地圖全螢幕；K線學堂課程搜尋；Telegram 還沒設定時一般訪客看不到管理者說明
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -26,7 +26,7 @@ test("手機子頁籤「▾ 全部」、估值地圖縮放 390", async () => {
   assert.ok(await p.$$eval("#fxmap .blab", L => L.length) >= 1, "大的圓裡面有名稱");
   await p.click('[data-fxz="in"]'); assert.equal(await p.textContent(".fxwrap .mf-zval"), "140%"); assert.notEqual(await p.getAttribute("#fxmap", "viewBox"), "0 0 360 360");
   await p.dblclick("#fxmap", { position: { x: 30, y: 60 } }); assert.equal(await p.getAttribute("#fxmap", "viewBox"), "0.00 0.00 360.00 360.00", "雙擊還原");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -47,7 +47,7 @@ for (const width of [390, 1280]) test(`K線學堂課程搜尋 ${width}`, async (
   assert.ok(T.length > 0 && T.length < n0, `只列相關的課：${T.length}/${n0}`);
   await p.fill("#lessonSearch", "zzzz不存在"); assert.match(await p.textContent("#lessonList"), /找不到「zzzz不存在」/);
   await p.fill("#lessonSearch", ""); assert.equal(await p.$$eval("#lessonList button", L => L.length), n0);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

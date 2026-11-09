@@ -1,7 +1,7 @@
 // 供應鏈：生態群島無框、題材內頁保留上排選單、產業圖解互動（每段詳細說明、名詞解釋、依漲跌上色、找公司、考考自己）
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -43,7 +43,7 @@ for (const width of [390, 1280]) test(`產業圖解互動、群島無框、內�
   await p.click(".iquiz [data-fqn]"); assert.equal(await p.$(".iqres"), null);
   // 上排選單離開內頁
   await p.click('#lx [data-iview="themes"]'); assert.deepEqual(await p.evaluate(() => [W.indS.open, W.indS.view]), [null, "themes"]);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

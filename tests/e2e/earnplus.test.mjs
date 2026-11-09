@@ -1,7 +1,7 @@
 // 財報第二批：體質（存貨、應收、自由現金流）、股利預估、法說會重點（AI 讀簡報）、公布前後股價習慣、美股財測
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -50,7 +50,7 @@ for (const width of [390, 1280]) test(`財報第二批：體質、股利預估�
   await p.click('.ertr [data-exk="kl:2330"]'); await p.waitForFunction(() => /公布前 5 日平均/.test(document.querySelector(".ertr")?.innerText || ""), null, { timeout: 15000 });
   assert.match(await p.textContent(".ertr"), /公布後 5 日平均波動/);
   if (process.env.SHOT) { await p.evaluate(() => document.querySelectorAll(".fold-s").forEach(x => x.classList.remove("fold-s"))); for (const s of ["epbox", "epsum"]) await p.locator(".ertr ." + s).screenshot({ path: `${process.env.SHOT}/earnplus-${s}-${width}.png` }); }
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "不橫向溢出");
+  assert.ok(await noHOverflow(p), "不橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

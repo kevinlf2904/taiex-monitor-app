@@ -1,11 +1,11 @@
 // 供應鏈「關聯」：連動熱圖（點格子）、意外的連動、領先落後、題材強弱、客戶視角、總經驅動、替代技術；題材內頁的「關聯題材」
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
-const noOverflow = p => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+const noOverflow = noHOverflow;
 // 假的題材連動資料：tw-cowos 和 tw-bank 扣掉大盤後高度相關（產業網絡裡沒連在一起）→ 要出現在「意外的連動」
 const IDS = ["tw-foundry", "tw-cowos", "tw-hbm", "tw-odm", "us-gpu", "us-cloud", "tw-bank", "us-dcreit"], N = IDS.length;
 const tri = (i, j) => (i * (2 * N - i - 1)) / 2 + (j - i - 1), c = Array(N * (N - 1) / 2).fill(40), x = Array(N * (N - 1) / 2).fill(10);

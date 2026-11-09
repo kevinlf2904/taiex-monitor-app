@@ -1,7 +1,7 @@
 // K線學堂：型態課與錯題本下面列出「今天收盤出現這個型態」的真實個股（排程 data/pattern-today.json）；點一檔就用它的真實 K 線當範例圖
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -20,7 +20,7 @@ for (const width of [390, 1280]) test(`今日符合型態的個股 ${width}`, as
   await p.click('#lessonGallery [data-pat="hammer"]');
   await p.click('#lessonToday [data-ptcode="2317"]');
   assert.deepEqual(await p.evaluate(() => [lessonSrc, lessonCode, lessonView.pat]), ["real", "2317", "hammer"], "範例圖換成鴻海的真實 K 線，選好錘子線");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   // 錯題本：題目講到錘子線，測驗結果頁列出今天出現錘子線的個股
   await p.evaluate(() => { const i = QUESTIONS.findIndex(q => /錘子線/.test(q.q + q.e)); store.set("wrongQ", { [i]: { n: 1, at: "2026-10-23", box: 1, due: "2099-01-01" } }); switchTab("quiz"); quiz = { order: [0], k: 1, score: 1 }; quizRender(); });
   await p.waitForSelector("#quiz .ptoday .ptchip");

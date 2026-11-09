@@ -1,7 +1,7 @@
 // 這一版的 UX 串聯：分享圖卡在 iframe 裡也看得到預覽、全域搜尋、以股查人、隨處加自選、個股情報徽章、矩陣成分股、範例投資組合、畫線磁吸
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -24,7 +24,7 @@ for (const width of [390, 1280]) test(`首頁：全域搜尋、分享圖卡預�
   assert.equal(await f.evaluate(() => !!document.querySelector(".sc-modal")), false, "不是畫在 iframe 裡");
   await p.click('.sc-modal [data-sca="x"]'); assert.equal(await p.evaluate(() => !!document.querySelector(".sc-modal")), false);
   assert.match(await p.evaluate(() => $("#schoolNav").innerText), /AI 截圖診斷/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -61,7 +61,7 @@ for (const width of [390, 1280]) test(`看盤：以股查人、☆ 自選、情�
   await p.evaluate(() => { setLt("watch"); select(curList()[0]); });
   const bg = await p.evaluate(() => getComputedStyle(document.querySelector('#wl .row[aria-current="true"]')).backgroundColor);
   assert.notEqual(bg, "rgba(0, 0, 0, 0)");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -90,7 +90,7 @@ for (const width of [390, 1280]) test(`大盤：產業即時（細分產業漲�
   assert.ok(await p.evaluate(() => document.querySelectorAll("#lx .irb-mem [data-sel]").length >= 3));
   await p.click("#lx .irb-mem [data-sel]"); await p.waitForTimeout(300);
   assert.ok(await p.evaluate(() => !!W.sel));
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -192,7 +192,7 @@ test("原理圖解互動：點編號看那一段與公司、上一段／下一�
   await p.evaluate(() => document.querySelector('.izoom .fbadge[data-n="2"]').dispatchEvent(new MouseEvent("click", { bubbles: true })));
   assert.ok((await p.textContent(".izoom .figstep")).includes(items[1]));
   await p.click('.izoom [data-z="x"]');
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close();
   assert.deepEqual(errs, []);
 });

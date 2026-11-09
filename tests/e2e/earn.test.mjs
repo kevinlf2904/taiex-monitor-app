@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -40,7 +40,7 @@ for (const width of [1280, 390]) {
     await p.click('[data-erindset=""]'); await p.click('[data-ermk="上市"]'); await p.click('[data-erv="ind"]');
     assert.deepEqual(await p.evaluate(() => { const x = store.get("watch:er"); return { view: x.view, rk: x.rk, mk: x.mk, min: x.min, reg: x.reg }; }), { view: "ind", rk: { rev: "yoy" }, mk: "上市", min: true, reg: "tw" }, "記住上次的設定");
     assert.ok(await p.evaluate(() => routeOf()) === "earnings/industry", "網址路由");
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+    assert.ok(await noHOverflow(p), "沒有橫向溢出");
     // 點公司展開營收、EPS 走勢圖（有查價線），再點「看個股」才進個股
     await p.click('[data-erv="eps"]'); await p.click(".erlist li button[data-ertr]"); await p.waitForSelector(".ertr .tsbox svg");
     const tt = await p.textContent(".ertr"); assert.ok(tt.includes("月營收") && tt.includes("季 EPS"), tt.slice(0, 80));
@@ -69,7 +69,7 @@ test("情報局「財報 → 美股」：最近公布、即將公布、優於／
   await p.click('[data-erv="miss"]'); await p.click('.erlist button[data-ertr="TSLA"]'); await p.waitForSelector(".ertr .tsbox svg");
   assert.ok((await p.textContent(".ertr")).includes("EPS 實際 vs 預估"));
   assert.equal(await p.evaluate(() => store.get("watch:er").reg), "us", "記住看美股");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close();
   assert.deepEqual(errs, []);
 });
@@ -100,13 +100,13 @@ for (const width of [1280, 390]) test(`財報進階：行事曆、連續成長�
   assert.match(await T("cmp"), /同業比較[\s\S]*台積電[\s\S]*毛利率季變化/);
   await p.fill("[data-excmp] input", "1101 1102"); await p.click("[data-excmp] button"); assert.deepEqual(await p.evaluate(() => ER().cmp), ["1101", "1102"]);
   assert.match(await T("learn"), /三率三升[\s\S]*本益比/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   // 個股展開：整體看法、估值位置、月營收公布後股價反應
   await T("streak"); await p.click('[data-exk="xs:s"]'); await p.click('.erlist button[data-ertr="2330"]'); await p.waitForSelector(".excomp");
   assert.match(await p.textContent(".excomp"), /整體看法[\s\S]*基本面偏強[\s\S]*連續 18 個月年增[\s\S]*估值位置[\s\S]*本益比/);
   await p.click('.excomp [data-exk="kl:2330"]'); await p.waitForFunction(() => /年增月|資料不夠/.test(document.querySelector(".excomp")?.textContent || "")); // 法說會會自動載入（這裡沒 mock 會出現 ⚠︎），所以不能只等 ⚠︎
   assert.match(await p.textContent(".excomp"), /年增月 5 日/); if (process.env.SHOT) await (await p.$(".excomp")).screenshot({ path: `${process.env.SHOT}/earn-comp-${width}.png` });
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "展開後沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "展開後沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -125,7 +125,7 @@ test("美股財報進階：財報週對應台股供應鏈、營收驚喜、整�
   assert.match(await p.textContent(".erlist"), /雙優/);
   await p.click('.erlist button[data-ertr="TSLA"]'); await p.waitForSelector(".excomp");
   assert.match(await p.textContent(".excomp"), /歷史驚喜紀錄[\s\S]*優於預期/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -143,6 +143,6 @@ for (const width of [390, 1280]) test(`個股財務：同業 PK 小表 (${width}
   const row = k => p.$$eval(".pktbl tbody tr", (L, k) => { const r = L.find(x => x.cells[0].textContent === k); return [...r.cells].slice(1).map(c => [c.textContent, c.classList.contains("exbest")]); }, k);
   assert.deepEqual(await row("本益比"), [["24.5", false], ["18.2", true], ["—", false]], "虧損沒有本益比；越低越好");
   assert.deepEqual((await row("毛利率")).map(x => x[1]), [true, false, false]);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });

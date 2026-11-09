@@ -1,7 +1,7 @@
 // 庫存風險 v2：有持股資料不夠時，畫面寫出哪幾檔沒算進來、原因和納入市值占比；風險值旁邊有期望損失（ES）；手機不溢出
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -17,7 +17,7 @@ test("庫存風險：資料不夠的持股不納入並說明原因、納入市�
     assert.match(t, /未納入計算：.*6919|未納入計算：.*康霈/s, width + "：寫出沒算進來的持股");
     assert.match(t, /上市或有資料的日子不夠/); assert.match(t, /納入的市值占 \d+%/); assert.match(t, /期望損失（ES）/);
     assert.doesNotMatch(t, /9999/, "股數是負的壞資料不列入");
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), width + "：沒有水平溢出");
+    assert.ok(await noHOverflow(p), width + "：沒有水平溢出");
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });

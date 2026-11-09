@@ -1,7 +1,7 @@
 // 今日市場：分頁改名、#daily／#today 都能直達、三個交易區塊的固定順序與時段預設展開、全球矩陣獨立、自訂分頁順序不受影響、手機第一屏看得到結論
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open, watchFrame } from "./_harness.mjs";
+import { chromium, serve, open, watchFrame, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -35,7 +35,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`今日市�
     }
     if (at.startsWith("2026-10-25")) assert.match(technicalText, /最近交易日事件回顧/, "休市時最近交易日事件回顧保留在交易情境");
     assert.equal(await p.$$eval("#lx .dh-sec-b", L => L.length), want.length, "收合的區塊不畫內容");
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `沒有橫向溢出 ${at}`);
+    assert.ok(await noHOverflow(p), `沒有橫向溢出 ${at}`);
     await p.waitForTimeout(300); assert.equal(await p.$$eval("#lx .fold-btn", L => L.length), 0, `不會被自動收合成「展開全部」 ${at}`);
   }
   // 點標題展開別的區塊：每秒重畫也不會收回去（同一天記在記憶體）
@@ -245,7 +245,7 @@ test("手機首頁觸控尺寸與響應式排版回歸 (320px, 375px, 390px, 430
     await p.waitForSelector("#lx .dh-core-grid", { timeout: 15000 });
     await p.waitForSelector("#lx .td-ix", { timeout: 15000 });
 
-    const layout = await p.evaluate(() => {
+    const layout = await p.evaluate(w => {
       const bar = document.querySelector("#lx .dh-status-bar");
       const left = document.querySelector("#lx .dh-sb-left");
       const titleBtns = document.querySelector("#lx .dh-title-btns");
@@ -256,7 +256,7 @@ test("手機首頁觸控尺寸與響應式排版回歸 (320px, 375px, 390px, 430
       const titleBtnsRect = titleBtns ? titleBtns.getBoundingClientRect() : null;
 
       const overlaps = leftRect && titleBtnsRect ? !(leftRect.right <= titleBtnsRect.left || leftRect.left >= titleBtnsRect.right || leftRect.bottom <= titleBtnsRect.top || leftRect.top >= titleBtnsRect.bottom) : false;
-      const barOverflows = barRect ? barRect.right > window.innerWidth : false;
+      const barOverflows = barRect ? barRect.right > Math.min(innerWidth, w) : false; // 和設定的螢幕寬度比（#249）
 
       return {
         barOverflows,
@@ -266,7 +266,7 @@ test("手機首頁觸控尺寸與響應式排版回歸 (320px, 375px, 390px, 430
           return [b.textContent.trim(), r.height >= 44, r.width >= 44];
         })
       };
-    });
+    }, width);
 
     assert.equal(layout.barOverflows, false, `視口 ${width}px 狀態列不溢出視窗`);
     assert.equal(layout.overlaps, false, `視口 ${width}px 狀態列左側與按鈕群不重疊`);
@@ -276,7 +276,7 @@ test("手機首頁觸控尺寸與響應式排版回歸 (320px, 375px, 390px, 430
     await p.click('#lx [data-mc-tab="overview"]');
     await p.click('#lx details[data-tdbox="mine"] > summary');
     await p.waitForFunction(() => document.querySelector('#lx details[data-tdbox="mine"]')?.open && !!document.querySelector('#lx details[data-tdbox="mine"] .dh-sec-b'));
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `視口 ${width}px 快速導覽沒有造成橫向溢出`);
+    assert.ok(await noHOverflow(p), `視口 ${width}px 快速導覽沒有造成橫向溢出`);
     await ctx.close();
     assert.deepEqual(errs, []);
   }

@@ -1,7 +1,7 @@
 // 頂部導覽：情報局／看盤／K線學堂／存股；情報局與看盤共用看盤 iframe（mode 切換）；社群貼文用的網址路由
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -16,7 +16,7 @@ test("頂部只剩情報局、看盤、K線學堂、存股；學堂的課程與�
     await p.click('#schoolNav [data-tab="quiz"]'); assert.ok(await p.evaluate(() => !$("#view-quiz").hidden && $("#tab-btn-school").getAttribute("aria-selected") === "true"));
     await p.click("#tab-btn-savings"); await p.click("#tab-btn-school"); assert.ok(await p.evaluate(() => !$("#view-quiz").hidden), "回到學堂時打開上次的子頁");
     assert.ok(await p.evaluate(() => $("#socialBtn").hidden), "社群帳號還沒開，按鈕先藏著");
-    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "橫向溢出");
+    assert.ok(await noHOverflow(p), "橫向溢出");
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });

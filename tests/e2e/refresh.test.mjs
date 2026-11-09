@@ -1,7 +1,7 @@
 // 清單上方的「↻ 更新」：按下後顯示「更新中…」、好了跳「已更新」，而且真的重抓（不拿本機快取裡 30 分鐘前存的官方公告）
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 // AI 研究室只在資料夠新時才呼叫 AI：在研究取資料的那一刻放今天的報價、廣度、匯率（測試假資料的日期是舊的）
@@ -39,7 +39,7 @@ for (const width of [390, 1280]) test(`美股大盤「今天為什麼跌」：�
   assert.match(t, /美股今天為什麼跌？/); assert.match(t, /那斯達克 -3\.00%/); assert.match(t, /通膨高於預期，降息延後/); assert.match(t, /CPI高於預期 美股大跌/);
   await p.click('#lx .mkwhy [data-qai="why:us"]'); await p.waitForFunction(() => /測試回覆/.test(document.querySelector("#lx .mkwhy")?.innerText || ""));
   if (process.env.SHOT) await p.locator("#lx .mkwhy").screenshot({ path: `${process.env.SHOT}/uswhy-${width}.png` });
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "不橫向溢出");
+  assert.ok(await noHOverflow(p), "不橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -63,6 +63,6 @@ test("台股大盤「今天為什麼漲跌」：盤勢頭條、台灣總經摘�
   await p.evaluate(seedResearch); await p.click('#lx [data-tx="tdai"]'); await p.waitForFunction(() => W.tdAI?.parsed);
   assert.equal(JSON.parse(asked).model, "lite", "今日市場 AI 整理請伺服器先用 Flash Lite（每日額度多）");
   assert.equal(JSON.parse(asked).purpose, "research", "AI 研究室用研究模式（研究用系統提示、JSON 輸出）");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "不橫向溢出");
+  assert.ok(await noHOverflow(p), "不橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });

@@ -1,7 +1,7 @@
 // 決策中心整理（P2）：休市日推演下一交易日、資金卡只有一張、狀態說明只有一條、顏色用主題色票、推演快照不同步
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -25,7 +25,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`週末：�
   assert.equal(await p.$$eval("#lx style", L => L.length), 0, "樣式在 core.css，不在 JS 裡");
   const C = await p.evaluate(() => { const g = s => getComputedStyle(document.querySelector(s)), ink = getComputedStyle(document.body).color; return { ink, lvl: g("#lx .dh-lvl b").color, badgeBg: g("#lx .dh-badge").backgroundColor, num: g("#lx .dh-lvl b").fontFamily === getComputedStyle(document.querySelector(".num") || document.body).fontFamily || /Song|宋|Serif|PMingLiU/i.test(g("#lx .dh-lvl b").fontFamily) }; });
   assert.equal(C.lvl, C.ink, "壓力、分水嶺、支撐用中性色"); assert.ok(!/37, 99, 235|5, 150, 105|124, 58, 237|99, 102, 241/.test(C.badgeBg), `徽章不是寫死的藍綠紫：${C.badgeBg}`); assert.ok(C.num, "價位用行情數字字型");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   // 全部展開：資金卡只有一張、資金資料的狀態只說一次、週末不寫「盤中」
   await p.click("#lx [data-tdall]"); await p.waitForFunction(() => document.querySelectorAll("#lx details.dh-sec[open] .dh-sec-b").length === 3);
   await selectWorkspace(p, "capital");
@@ -38,7 +38,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]]) test(`週末：�
   assert.match(t2, /最近交易日盤後整理/, "週末交易情境明確標示最近交易日盤後整理");
   assert.match(t2, /最近交易日事件回顧/, "週末事件時間軸標示為歷史回顧");
   assert.doesNotMatch(t2, /盤中監控/, "週末不把最近交易日事件誤標為盤中監控");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

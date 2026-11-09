@@ -1,7 +1,7 @@
 // 庫存（照券商 App）：含息／不含息、扣費稅、持有成本、均價、損益平衡點、展開明細
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -22,7 +22,7 @@ test("庫存費稅與股息", async () => {
   await p.click('#wl [data-hx="2330"]'); await p.waitForTimeout(200);
   assert.match(await p.evaluate(() => $(".yh-det").innerText), /持有成本[\s\S]*損益平衡點/);
   await p.click('.yh-det [data-sel="2330"]'); await p.waitForTimeout(400); assert.equal(await p.evaluate(() => W.sel), "2330");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.ok(await noHOverflow(p));
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

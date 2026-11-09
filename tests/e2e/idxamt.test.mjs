@@ -1,7 +1,7 @@
 // 加權、櫃買分 K：成交金額（億元）量能區、分時圖金額；沒有成交金額時價格照畫、量能區寫「暫缺」；個股仍是張（390、1280）
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -17,7 +17,7 @@ const openMinute = async (p, code, timeout = 15000) => {
   await p.evaluate(c => { select(c); }, code); await p.waitForTimeout(600); await p.evaluate(() => setDtab("tech"));
   await p.evaluate(() => document.querySelector('#kSeg [data-k="5"]').click());
   await p.waitForFunction(() => typeof kChart !== "undefined" && kChart?.D?.length && kChart.D[0].d.includes(" "), null, { timeout });
-  return p.evaluate(() => ({ n: kChart.D.length, v0: kChart.D[0].v, label: kChart.o.volLabel, name: kChart.o.volName || "量", msg: kChart.o.volMsg || null, noVol: !!kChart.o.noVol, fmt: kChart.o.volFmt ? kChart.o.volFmt(1050.76) : null, overflow: document.documentElement.scrollWidth > innerWidth + 1 }));
+  return { ...await p.evaluate(() => ({ n: kChart.D.length, v0: kChart.D[0].v, label: kChart.o.volLabel, name: kChart.o.volName || "量", msg: kChart.o.volMsg || null, noVol: !!kChart.o.noVol, fmt: kChart.o.volFmt ? kChart.o.volFmt(1050.76) : null })), overflow: !await noHOverflow(p) };
 };
 
 for (const [w, opt] of [[390, { width: 390, touch: true }], [1280, { width: 1280 }]]) {

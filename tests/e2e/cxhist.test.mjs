@@ -1,7 +1,7 @@
 // 大戶國會：千張大戶點得進去、台股個股頁（千張大戶走勢＋集保網站補更早週次、內部人、政治人物）、期間選擇、國會年份檔、查個股
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -37,7 +37,7 @@ for (const width of [390, 1280]) test(`大戶國會：千張大戶、台股個�
   await p.click('#lx [data-rkset="cxTdW:13"]'); assert.equal(await p.evaluate(() => store.get("watch:cxTdW")), "13", "期間記住");
   assert.ok(await p.evaluate(() => document.querySelectorAll("#lx details.tw-more tbody tr").length) <= 6, "一季只列一季內的週次");
   assert.equal(tdccCalls.length, 1, "同一檔不重複查集保網站");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "台股個股頁沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "台股個股頁沒有橫向溢出");
 
   // 千張大戶期間：4 週用排程算好的排行；自訂兩個週次讀全部分片現算
   await p.evaluate(() => { W.cv = "tdcc"; renderList(); });
@@ -70,6 +70,6 @@ for (const width of [390, 1280]) test(`大戶國會：千張大戶、台股個�
   // 內部人分頁點股票也先到台股個股頁
   await p.evaluate(() => { W.cv = "ins"; W.insF = "all"; W.insW = 0; W.insv = "feed"; renderList(); }); await p.waitForSelector('#lx [data-tsel="2330"]');
   await p.click('#lx [data-tsel="2330"]'); assert.equal(await p.evaluate(() => [W.lt, W.cv].join()), "cong,tw:s:2330");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });

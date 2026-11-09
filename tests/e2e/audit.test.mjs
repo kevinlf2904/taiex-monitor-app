@@ -1,7 +1,7 @@
 // 稽核收尾：離線提示只在真的斷網時出現、新手 30 秒上手指引條、只有圖示的按鈕都有 aria-label 與 title
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, noHOverflow } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -20,7 +20,7 @@ for (const width of [390, 1280]) test(`新手指引條：載入熱門自選範�
   const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width, touch: width < 500, onboard: true });
   await p.waitForSelector("#onbBar:not([hidden]) .onb");
   assert.match(await p.textContent("#onbBar"), /初次使用[\s\S]*個股抽屜[\s\S]*一鍵載入台美股熱門自選範例[\s\S]*只看我的自選/);
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await p.click('[data-onb="demo"]');
   assert.deepEqual(await p.evaluate(() => [W.groups[0].list.includes("2330"), W.groups[1].list.includes("NVDA"), W.mine, W.lt, store.get("watch:onbOff")]), [true, true, true, "earn", true]);
   assert.equal(await p.isHidden("#onbBar"), true, "載入後收起");
@@ -42,7 +42,7 @@ test("新手指引第 3 步到庫存；空自選、★ 只看我的自選卻沒�
   // ★ 只看我的自選、自選庫存都空：說明為什麼沒東西，並給載入範例
   await p.evaluate(() => { W.groups = [{ name: "自選", list: [] }]; W.gi = 0; saveGroups(); W.hold = {}; W.mine = true; setLt("earn"); });
   await p.waitForSelector(".mineempty [data-onb='fill']");
-  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "沒有橫向溢出");
+  assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await p.click(".mineempty [data-onb='fill']");
   assert.equal(await p.evaluate(() => W.groups[0].list.length), 5);
   await ctx.close(); assert.deepEqual(errs, []);
