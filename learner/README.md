@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### T86 三大法人欄位（2026.11.12-229）
+- T86 欄位改精確比對，缺值回 null。
+
 ### 量能指標缺量（2026.11.12-228）
 - OBV／VR／MFI 遇到缺量的 K 棒不再當成 0 量。
 
