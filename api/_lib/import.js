@@ -2,10 +2,10 @@
 // POST /api/import  { images: ["data:image/jpeg;base64,...", ...] }（最多 4 張，頁面會先縮小）
 // 回傳 { ok, rows: [{ name, code, shares, avgCost, price, chgPct, todayPnl, totalPnl, totalPnlPct, marketValue }] }
 // 截圖上沒有的欄位是 null；股數與成本若沒寫，由頁面用「總損益與報酬率」或「市值與股價」推算，再讓使用者確認。
-// 用 GEMINI_API_KEY（Gemini 會看圖）；沒有時用 ANTHROPIC_API_KEY。
+// 用 GEMINI_API_KEY（Gemini 會看圖）；沒有時用 ANTHROPIC_API_KEY（要另外設 AI_CLAUDE_ENABLED=1 總開關，預設關閉）。
 
 import Anthropic from "@anthropic-ai/sdk";
-import { aiLimit, WEB_TRIES, claudeFallbackOn } from "./_limit.js";
+import { aiLimit, WEB_TRIES, claudeFallbackOn, claudeUsable } from "./_limit.js";
 import { userMsg } from "./_err.js";
 import { geminiModels, GEMINI_ORDER } from "./_gemini.js";
 
@@ -76,8 +76,8 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "只接受 POST" });
   const imgs = parseImages(req.body?.images);
   if (!imgs.length) return res.status(400).json({ ok: false, error: "請上傳庫存畫面的截圖（JPG／PNG）" });
-  const gk = (process.env.GEMINI_API_KEY || "").trim(), ck = process.env.ANTHROPIC_API_KEY;
-  if (!gk && !ck) return res.status(200).json({ ok: false, error: "截圖匯入需要 AI 讀圖：請在 Vercel 設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY）。也可以改用「文字匯入」。" });
+  const gk = (process.env.GEMINI_API_KEY || "").trim(), ck = claudeUsable() ? process.env.ANTHROPIC_API_KEY : "";
+  if (!gk && !ck) return res.status(200).json({ ok: false, error: "截圖匯入需要 AI 讀圖：伺服器尚未設定 GEMINI_API_KEY。也可以改用「文字匯入」。" });
   const t0 = Date.now();
   try {
     let r = gk ? await viaGemini(imgs, gk, t0 + 52000) : null;

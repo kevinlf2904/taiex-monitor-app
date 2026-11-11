@@ -201,3 +201,39 @@ test("IP 解析優先信任 x-real-ip，並防範 x-forwarded-for 偽造", () =>
   };
   assert.equal(ipOf(socketReq), "127.0.0.1");
 });
+
+// NEW-01（#262／#264 A1）：嚴格模式原本只在「有 KV 但 KV 出錯」時生效；完全沒設定 KV 時直接退回記憶體計數，等於沒開
+test("嚴格模式（AI_LIMIT_STRICT=1）且沒有設定 KV：一律拒絕，不退回記憶體計數；沒開嚴格模式時照舊", async () => {
+  const KEYS = ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "AI_LIMIT_STRICT"];
+  const saved = Object.fromEntries(KEYS.map(k => [k, process.env[k]])), warn = console.warn;
+  let warned = 0; console.warn = () => { warned++; };
+  try {
+    for (const k of KEYS) delete process.env[k]; // 真的沒有 KV：不傳假的 store，走 kvOn() 的判斷
+    mem.clear();
+    const t = Date.parse("2026-11-11T02:00:00Z");
+    // 沒開嚴格模式：照舊用記憶體的保守上限，第一次放行
+    assert.equal(await aiLimit(req("10.9.0.1"), "chat", t), null);
+    const before = mem.size;
+    process.env.AI_LIMIT_STRICT = "1";
+    for (const name of ["chat", "chart-read", "import", "podcast", "confai", "claude-fb", "podcast-file"]) {
+      const r = await aiLimit(req("10.9.0.2"), name, t);
+      assert.equal(r, "限流服務尚未設定，暫時無法使用 AI 功能", name);
+    }
+    assert.equal(mem.size, before, "被拒絕的請求不寫記憶體計數");
+    assert.ok(warned >= 7, "每次拒絕都要有可觀測的警示日誌");
+    assert.equal(await aiLimit(req("10.9.0.2"), "不存在的服務", t), null, "不在限流清單裡的名稱不受影響");
+    // 只有其中一個 KV 變數也算沒設定
+    process.env.KV_REST_API_URL = "https://example.invalid";
+    assert.equal(await aiLimit(req("10.9.0.3"), "chat", t), "限流服務尚未設定，暫時無法使用 AI 功能");
+    // "1" 以外的值不算開啟
+    delete process.env.KV_REST_API_URL; process.env.AI_LIMIT_STRICT = "0";
+    assert.equal(await aiLimit(req("10.9.0.4"), "chat", t), null);
+    // 有共用計數器（測試用的 store）時嚴格模式不擋正常請求
+    process.env.AI_LIMIT_STRICT = "1";
+    const counts = new Map(), store = async k => { counts.set(k, (counts.get(k) || 0) + 1); return counts.get(k); };
+    assert.equal(await aiLimit(req("10.9.0.5"), "chat", t, store), null);
+  } finally {
+    console.warn = warn; mem.clear();
+    for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+  }
+});
