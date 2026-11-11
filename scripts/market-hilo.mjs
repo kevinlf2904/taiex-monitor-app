@@ -3,21 +3,21 @@
 // 用「不含今天的前 20 個交易日」的最高／最低收盤，判斷今天（盤中即時）是不是創月新高、月新低。
 import { writeFile, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { closeToday } from "../api/_lib/daily.js";
+import { closeToday, closeDayOk } from "../api/_lib/daily.js";
 
 const OUT = fileURLToPath(new URL("../learner/data/market/hilo.json", import.meta.url));
 const N = 21, sleep = ms => new Promise(r => setTimeout(r, ms));
 const ymd = t => new Date(t + 8 * 3600e3).toISOString().slice(0, 10).replace(/-/g, "");
 
-export async function main({ fetchDay = closeToday, now = Date.now(), gap = 2500 } = {}) {
-  const old = await readFile(OUT, "utf8").then(JSON.parse).catch(() => null);
+export async function main({ fetchDay = closeToday, now = Date.now(), gap = 2500, out: OUT_FILE = OUT } = {}) { // out：測試時寫到暫存檔，不動 learner/data/
+  const old = await readFile(OUT_FILE, "utf8").then(JSON.parse).catch(() => null);
   const cache = new Map((old?.days || []).map((d, i) => [d, Object.fromEntries(Object.entries(old.closes || {}).filter(([, a]) => a[i] != null).map(([c, a]) => [c, a[i]]))]));
   const days = [], maps = [];
   for (let k = 0; days.length < N && k < 45; k++) {
     const t = now - k * 864e5, d = ymd(t), wd = new Date(t + 8 * 3600e3).getUTCDay(); if (wd % 6 === 0) continue;
     let m = null;
     if (cache.has(d) && k > 1) m = cache.get(d); // 舊的日子不會再變，沿用；今天、昨天重抓
-    else { try { const x = await fetchDay(d); if (x.size > 500) m = Object.fromEntries([...x].map(([c, q]) => [c, q.p])); } catch (e) { console.log(d, e.message); } await sleep(gap);
+    else { try { const x = await fetchDay(d), g = closeDayOk(x, d); if (x.size > 500 && g.ok) m = Object.fromEntries([...x].map(([c, q]) => [c, q.p])); else if (x.size > 500) console.log(d, "不存：" + g.why); } catch (e) { console.log(d, e.message); } // 來源日期不是這一天（休市日櫃買回前一天的資料）不存 await sleep(gap);
       if (!m && cache.has(d)) m = cache.get(d); } // 今天、昨天重抓失敗：沿用上次存的，不讓那天從序列裡消失
     if (m && Object.keys(m).length > 500) { days.push(d); maps.push(m); console.log(d, Object.keys(m).length); }
   }
@@ -26,7 +26,7 @@ export async function main({ fetchDay = closeToday, now = Date.now(), gap = 2500
   const codes = [...new Set(maps.flatMap(m => Object.keys(m)))].sort();
   const closes = Object.fromEntries(codes.map(c => [c, maps.map(m => m[c] ?? null)]));
   const out = { updated: new Date(now).toISOString(), days, closes, cols: maps };
-  await writeFile(OUT, JSON.stringify({ updated: out.updated, days, closes }));
+  await writeFile(OUT_FILE, JSON.stringify({ updated: out.updated, days, closes }));
   return out;
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("ok", o.days.length, "天", Object.keys(o.closes).length, "檔")).catch(e => { console.error(e); process.exit(1); });

@@ -1,6 +1,7 @@
 // 呼叫次數限制：會花錢的 AI 服務（對話、讀圖、匯入、節目摘要、法說會重點）每個 IP 每小時、全站每天各有上限，避免被人用程式一直打、燒掉 API 費用。
 // 有 Upstash Redis（KV_REST_API_URL）時存在 KV，所有 serverless 執行個體共用。
 // 沒有 KV（或 KV 暫時壞掉）時改用記憶體計數：每個執行個體各算各的、冷啟動就歸零，全站上限擋不住，所以改用保守的上限（每 IP 一半、每天十分之一），不會直接放行。
+// AI_LIMIT_STRICT=1（嚴格模式）：沒有 KV、或 KV 壞掉時一律拒絕，不退回記憶體計數（寧可 AI 功能暫停，也不讓全站上限失效）。
 // 上限可用環境變數調整，每個服務分開設：AI_HOURLY_PER_IP_CHAT、AI_DAILY_CAP_CHART_READ…（服務名稱大寫、- 換成 _）；
 // 舊的 AI_HOURLY_PER_IP、AI_DAILY_CAP 只能「調低」所有服務，不會把某個服務放寬到超過它自己的預設。
 import { createHash } from "node:crypto";
@@ -11,8 +12,13 @@ import { kv, kvOn, incrTtl } from "./sync.js";
 export const AI_LIMITS = { chat: [40, 1500], "chart-read": [10, 300], import: [10, 300], podcast: [6, 150], confai: [10, 200], "claude-fb": [5, 60], "podcast-file": [240, 20000] };
 // 網站上一次請求最多打幾次 Gemini（模型忙線時換備用模型重試）：每一次都算錢，所以有上限；排程不受這個限制
 export const WEB_TRIES = 3;
-// Gemini 失敗時要不要改問 Claude（付費、比較貴）：預設不要，設 AI_CLAUDE_FALLBACK=1 才開，而且另外有全站每天上限（claude-fb）
-export const claudeFallbackOn = () => process.env.AI_CLAUDE_FALLBACK === "1";
+// Gemini 失敗時要不要改問 Claude（付費、比較貴）：預設不要，要 AI_CLAUDE_ENABLED=1 ＋ AI_CLAUDE_FALLBACK=1 才開，而且另外有全站每天上限（claude-fb）
+// Claude 總開關（付費）：AI_CLAUDE_ENABLED=1 才允許任何路徑呼叫 Claude；預設關閉。網站主要靠 Gemini，沒設這個，即使有 ANTHROPIC_API_KEY 也不會用 Claude
+// （問問題、截圖匯入、節目摘要、K 線截圖解讀都一樣）。要把 Anthropic 金鑰拿掉時什麼都不用改。
+export const claudeEnabled = () => process.env.AI_CLAUDE_ENABLED === "1";
+export const claudeUsable = () => claudeEnabled() && !!(process.env.ANTHROPIC_API_KEY || "").trim();
+// 「Gemini 失敗改問 Claude」要兩個都開：總開關＋AI_CLAUDE_FALLBACK=1
+export const claudeFallbackOn = () => claudeEnabled() && process.env.AI_CLAUDE_FALLBACK === "1";
 
 export const mem = new Map();
 export const MAX_MEM = 5000;
@@ -87,6 +93,11 @@ export async function aiLimit(req, name, now = Date.now(), store = null) {
     return null;
   };
   const shared = store || (kvOn() ? kvIncr : null);
+  // 嚴格模式（AI_LIMIT_STRICT=1）要的是「全站共用的上限一定有效」：沒有設定 KV 時記憶體計數是每個執行個體各算各的，擋不住全站用量，所以直接拒絕，不退回記憶體計數
+  if (!shared && process.env.AI_LIMIT_STRICT === "1") {
+    console.warn("[aiLimit] AI_LIMIT_STRICT=1 但沒有設定 KV，拒絕請求 (fail-closed):", name);
+    return "限流服務尚未設定，暫時無法使用 AI 功能";
+  }
   if (shared) {
     try {
       return await check(shared, true);

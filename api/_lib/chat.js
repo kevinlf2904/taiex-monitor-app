@@ -1,14 +1,14 @@
 // 「問問題」對話框：給 learner/ 右下角的對話框使用（部署在網站上時；在 Claude 裡開啟則改用頁面的 sample 能力）。
 // 在 Vercel 專案設定其中一個環境變數：
 //   GEMINI_API_KEY    → 用 Google Gemini 回答（有免費額度，到 Google AI Studio 申請）；兩個都設時優先用它
-//   ANTHROPIC_API_KEY → 用 Claude 回答（依用量付費）
+//   ANTHROPIC_API_KEY → 用 Claude 回答（依用量付費）；另外要設 AI_CLAUDE_ENABLED=1 才會真的用（總開關，預設關閉）
 //   GEMINI_MODEL      → 選填，「問問題」優先用的 Gemini 型號；其他用途（AI 整理、摘要、截圖匯入）的順序見 _gemini.js 的 GEMINI_ORDER
 // 系統提示固定在伺服器端；前端只送對話內容與「目前畫面」的摘要，長度都有上限。
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { kv, kvOn } from "./sync.js";
-import { aiLimit, WEB_TRIES, claudeFallbackOn } from "./_limit.js";
+import { aiLimit, WEB_TRIES, claudeFallbackOn, claudeUsable } from "./_limit.js";
 import { geminiModels, GEMINI_ORDER } from "./_gemini.js";
 
 const SYSTEM = `你是「K線學堂」裡的技術分析助教，對象是想學台股技術分析的初學者。請用繁體中文、口語但精確地回答。
@@ -91,11 +91,11 @@ export default async function handler(req, res) {
   const geminiKey = (process.env.GEMINI_API_KEY || "").trim();
   // GET：只回報目前接的是哪個 AI（不呼叫模型、不花額度），給對話框顯示用
   if (req.method === "GET") {
-    const provider = geminiKey ? "gemini" : process.env.ANTHROPIC_API_KEY ? "claude" : null;
+    const provider = geminiKey ? "gemini" : claudeUsable() ? "claude" : null;
     return res.status(200).json({ ok: true, provider, model: provider === "gemini" ? process.env.GEMINI_MODEL || GEMINI_DEFAULT : provider === "claude" ? "claude-opus-5-5" : null });
   }
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "只接受 GET 或 POST" });
-  if (!geminiKey && !process.env.ANTHROPIC_API_KEY) return res.status(200).json({ ok: false, error: "伺服器尚未設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY），無法使用對話功能。" });
+  if (!geminiKey && !claudeUsable()) return res.status(200).json({ ok: false, error: "伺服器尚未設定 GEMINI_API_KEY，無法使用對話功能。" });
 
   const { messages, context } = req.body || {};
   const lite = req.body?.model === "lite", research = req.body?.purpose === "research", SYS = research ? SYSTEM_RESEARCH : SYSTEM;
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     try {
       // 研究用 Flash Lite 為主（today 順序）、JSON 輸出、低溫度；不改問 Claude（研究報告較長，Claude 較貴，額度留給一般問答）
       const r = await askGemini(SYS, turns, geminiKey, undefined, { use: lite || research ? "today" : "chat", gen: research ? RESEARCH_GEN : null });
-      if (!r.ok && !r.blocked && !research && retryable(r.status) && process.env.ANTHROPIC_API_KEY && claudeFallbackOn() && left() > 20000 && !(await aiLimit(req, "claude-fb"))) return askClaude(); // Gemini 忙線改問 Claude：要開 AI_CLAUDE_FALLBACK，而且有自己的全站上限
+      if (!r.ok && !r.blocked && !research && retryable(r.status) && claudeUsable() && claudeFallbackOn() && left() > 20000 && !(await aiLimit(req, "claude-fb"))) return askClaude(); // Gemini 忙線改問 Claude：要開 AI_CLAUDE_FALLBACK，而且有自己的全站上限
       if (r.ok && ck && !r.truncated) await cachePut(ck, { text: r.text, provider: "gemini", model: r.model });
       return res.status(200).json(r.ok ? { ok: true, text: r.text, truncated: r.truncated, provider: "gemini", model: r.model } : { ok: false, error: geminiError(r), provider: "gemini" });
     } catch { return res.status(200).json({ ok: false, error: "連不到 Gemini 服務，請稍後再試。" }); }
