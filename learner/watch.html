@@ -712,7 +712,7 @@ body.navback-on { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 .foot-disc { margin: 4px 16px 12px; } :root[data-embed="1"] .foot-disc { display: none; } .hotmini h3 { display: flex; align-items: baseline; gap: 8px; }
 .ctags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; } .ctg { font-style: normal; font-size: 11px; line-height: 1.5; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); } .ctg.up { color: var(--up); border-color: color-mix(in srgb, var(--up) 40%, transparent); } .ctg.down { color: var(--down); border-color: color-mix(in srgb, var(--down) 40%, transparent); } .ctg.warn { color: var(--ink); }
 .bopr { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); } .bopr input { flex: 1; max-width: 220px; accent-color: var(--ink); } .bopr b { font: 500 12px var(--font-num); color: var(--ink); min-width: 3em; } .bax-t { font: 10px var(--font-body); fill: var(--muted); }
-.bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.bgrid { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13.5px; margin: 6px 0 10px; } .iflowbox { max-width: 440px; } .iflowq { margin: 0 0 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .bgrid span { color: var(--muted); } .bgrid b { text-align: right; } .binfo { border-left: 3px solid var(--qc); } .bbtns { display: flex; gap: 8px; flex-wrap: wrap; }
 /* 圈圈內部標籤：極細微小、因應球體動態縮放、絕對不超出球體、自動換行、無描邊半透明 */
 .blab { pointer-events: none; }
 .blab text { stroke: none !important; }
@@ -1235,7 +1235,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.12-230</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.12-231</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2825,7 +2825,7 @@ async function loadMoney(need = 10, force = false) {
     if (W.lt === "money" && (F.view === "replay" || (F.view === "bubble" && F.rp.playing)) && document.getElementById("mfb")) { const el = document.querySelector(".mrp-load"); if (el) el.textContent = `正在載入更早的資料（${F.prog}）…`; }
     else if (W.lt === "money" || (W.lt === "screen" && W.scrG === "score")) renderList();
   }
-  F.loading = false; if (F.rp) F.rp.fl = null; if (W.lt === "money" || W.lt === "screen" || W.lt === "today") { mfModel(); renderList(); }
+  F.loading = false; if (F.rp) F.rp.fl = null; if (W.lt === "money" || W.lt === "screen" || W.lt === "today" || (W.lt === "ind" && W.indS?.open)) { mfModel(); renderList(); }
 }
 const mfModel = () => { const F = W.mf; if (!F.model && F.days.length) F.model = flowModel(F.days, flowSectors(F.ind)); return F.model; };
 const qDot = q => `<i class="qdot" style="background:${FLOW_Q[q][2]}"></i>`;
@@ -4260,6 +4260,24 @@ function indZoom(id) {
   document.addEventListener("keydown", esc_); document.body.appendChild(ov); set(); ov.querySelector('[data-z="x"]').focus();
 }
 // 供應鏈頁很多地方直接呼叫 renderInd（報價回來、資料載入完），也要和 renderList 一樣保住橫向選單列的捲動位置，不然滑到右邊的選單會跳回最左邊
+// 題材內頁的「法人資金」：資金雷達同一份模型（flows.js），只有台股題材有；金額是這個題材代表股的合計，不是整個產業（docs/industry-taxonomy.md）
+// 還沒載過法人資料時自動載一次（和資金雷達共用 W.mf）；拿不到就說拿不到，不顯示成 0
+function indFlowHtml(T) {
+  if (T.mk !== "tw" || W.off) return "";
+  const F = W.mf, M = mfModel(), box = h => `<section class="mcard iflowbox" data-iflowbox>${h}</section>`;
+  if (!M || (F.loading && M.T < 10)) {
+    if (!F.loading && !F.indFlowTried) { F.indFlowTried = true; setTimeout(() => loadMoney(10), 0); }
+    const busy = F.loading || !F.tried.size && !F.err; // 還在抓，或剛排進去還沒開始
+    return box(`<h3>法人資金</h3><p class="note">${busy ? `載入中…${F.prog ? `（${esc(F.prog)}）` : ""}` : F.err ? `⚠︎ 拿不到法人資料（${esc(F.err)}）。` : "目前沒有法人資料。"}</p>`);
+  }
+  const S = (M.secs || []).find(x => x.id === T.id), A = S && flowAt(M).find(x => x.id === T.id), day = String(M.dates[M.T - 1] || "").slice(5).replace("-", "/");
+  if (!A) return box(`<h3>法人資金</h3><p class="note">這個題材的代表股在 ${day} 沒有法人資料。</p>`);
+  return box(`<h3>法人資金 <span class="note">代表股 ${A.n} 檔合計・${day}</span></h3>
+    ${M.T >= 10 ? `<p class="iflowq">${qDot(A.q)}<b>${FLOW_Q[A.q][0]}</b> <span class="note">${FLOW_Q[A.q][1]}</span></p>` : ""}
+    <div class="bgrid"><span>今日法人淨額</span>${yiB(A.net1)}<span>近 5 日淨流入</span>${yiB(A.net5)}<span>外資 5 日</span>${yiB(A.f5)}<span>投信 5 日</span>${yiB(A.tr5)}<span>今日買超家數</span><b>${A.buy1}／${A.n}</b>${A.top ? `<span>近 5 日買超最多</span><b>${esc(A.top)}</b>` : ""}</div>
+    <button class="btn sm" data-iflow="${esc(T.id)}">到資金雷達看成分股 ›</button>
+    <p class="note">金額＝法人買賣超張數 × 收盤價（億元），只算這一頁列出的代表股，不是整個產業；同一檔股票會算進好幾個題材，不同題材的金額不能相加。${M.T < 10 ? `目前只有 ${M.T} 個交易日的資料。` : ""}</p>`);
+}
 function renderInd() { const xs = hsKeep(); renderInd0(); hsRestore(xs); }
 function renderInd0() {
   if (!indFigsLoad.done) indFigsLoad();
@@ -4271,7 +4289,7 @@ function renderInd0() {
     const a = indAvg(T);
     h += menu + `<div class="ihead" style="--ic:${indCol(T)}"><button class="btn sm" data-iopen="">‹ 返回</button><span class="iic">${indIcon(T)}</span><div><small>${esc(T.cat)}・${MK_TAG[T.mk]}</small><h2>${esc(T.name)}</h2></div>
       ${scBtn("supply")}<button class="ifav" data-ifav="${T.id}" aria-pressed="${fav.has(T.id)}" aria-label="收藏" title="收藏">${fav.has(T.id) ? "♥" : "♡"}</button></div>
-      <p class="idesc">${esc(T.desc)}</p>${a ? `<p class="note gnote">今天平均 <b class="${cls(a.pct)}">${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%</b>（${a.n} 檔有報價）</p>` : ""}
+      <p class="idesc">${esc(T.desc)}</p>${a ? `<p class="note gnote">今天平均 <b class="${cls(a.pct)}">${a.pct >= 0 ? "+" : ""}${a.pct.toFixed(2)}%</b>（${a.n} 檔有報價）</p>` : ""}${indFlowHtml(T)}
       ${(F => F ? `<section class="iflow ifig"><h4>原理圖解${figItems(T).length ? "" : ` <button class="ilink" data-izoom="${T.id}">⤢ 放大</button>`}</h4><div class="izbtn figi">${figSvg(F.fig, { id: "d-" + T.id })}</div>${figCtl(T)}${F.fig.alt ? `<p class="note figalt">${esc(F.fig.alt)}</p>` : ""}</section>
         <section class="iseg ihow"><h4>原理說明 <span class="note">虛線底的名詞可以點，看解釋</span></h4>${figHowHtml(F, T)}</section>
         ${F.trends?.length ? `<section class="iseg itrend"><h4>產業趨勢</h4><div class="itrends">${F.trends.map((x, i) => `<div class="itrc"><span>${i + 1}</span><p>${figGl(x, T)}</p></div>`).join("")}</div></section>` : ""}${figQuiz(T)}` : "")(indFig(T))}
@@ -4348,7 +4366,8 @@ $("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const z = 
   const fb = e.target.closest(".ifig"); if (fb) { const T = INDT.get(W.indS.open); if (T && figClick(e, fb, T)) return; }
   if (e.target.closest(".iquiz")) { const T = INDT.get(W.indS.open); if (T && figQuizClick(e, T)) return; }
   const x = e.target.closest("[data-iexp]"); if (x) { const X = (W.indS.exp ||= {}); X[x.dataset.iexp] = !X[x.dataset.iexp]; renderInd(); } });
-$("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const S = W.indS, gf = e.target.closest("[data-igcat],[data-igmk]"); if (gf) { if (gf.dataset.igcat != null) S.gcat = gf.dataset.igcat || null; else S.gmk = gf.dataset.igmk || null; return renderInd(); }
+$("#lx").addEventListener("click", e => { if (W.lt !== "ind") return; const S = W.indS, gf = e.target.closest("[data-igcat],[data-igmk]");
+  const fl = e.target.closest("[data-iflow]"); if (fl) { const F = W.mf; F.back = "bubble"; F.view = "sector"; F.sec = fl.dataset.iflow; F.secq = null; F.secSort ||= "a5"; return setLt("money"); } // 題材內頁 → 資金雷達這個題材的板塊細節 if (gf) { if (gf.dataset.igcat != null) S.gcat = gf.dataset.igcat || null; else S.gmk = gf.dataset.igmk || null; return renderInd(); }
   const go = e.target.closest("[data-gxo]"); if (go) { const [k, v] = go.dataset.gxo.split(":"); S.gxo = { ...gxOpt(), [k]: v }; go.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === go)));
     if (W.gx) W.gx.pin = W.gx.hover = null; document.querySelector(".gcard")?.setAttribute("hidden", ""); if (W.gxS) W.gxS.redraw = true; store.set("watch:inds", { view: S.view, mk: S.mk, sub: S.sub, net: S.net, isl: S.isl, nstyle: S.nstyle, gxo: S.gxo }); return; }
   const b = e.target.closest("[data-iview],[data-imk],[data-isub],[data-iopen],[data-ifav],[data-inet],[data-ifocus],[data-iisl],[data-instyle]"); if (!b) return;
