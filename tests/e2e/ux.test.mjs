@@ -86,6 +86,14 @@ for (const width of [390, 1280]) test(`大盤：產業即時（細分產業漲�
   assert.deepEqual(await p.evaluate(() => [store.get("watch:irtK"), store.get("watch:irtL")]), ["flow", "theme"]);
   // 官方產業價值鏈：產業層級的名稱、點一列展開成分股
   assert.match(await p.evaluate(() => $("#lx").innerText), /櫃買中心 產業價值鏈資訊平台[\s\S]*3 個產業、18 個上中下游細分產業/);
+  assert.doesNotMatch(await p.evaluate(() => $("#lx").innerText), /沿用舊資料|這次沒有資料/, "資料齊全時不顯示");
+  // 抓取器部分產業沒更新到：說明寫出哪些產業沿用哪一天的資料、哪些這次沒有
+  await p.evaluate(() => { W.tic = { ...W.tic, industries: W.tic.industries.map((I, k) => (k === 1 ? { ...I, stale: true, asOf: "2026-10-11T01:40:00.000Z" } : I)), missing: [{ id: "X000", name: "測試缺少<b>" }] }; W.irtSegs = W.irtThemes = null; renderList(); });
+  await p.waitForFunction(() => /沿用舊資料/.test($("#lx").innerText));
+  const note = await p.evaluate(() => $("#lx").innerText);
+  assert.match(note, /2026\/10\/18 更新/); assert.match(note, /1 個產業這次沒更新到，沿用舊資料：印刷電路板（2026\/10\/11）/);
+  assert.match(note, /1 個產業這次沒有資料：測試缺少<b>/, "名稱有跳脫");
+  assert.ok(await noHOverflow(p));
   await p.click("#lx .irb li button"); await p.waitForTimeout(200);
   assert.ok(await p.evaluate(() => document.querySelectorAll("#lx .irb-mem [data-sel]").length >= 3));
   await p.click("#lx .irb-mem [data-sel]"); await p.waitForTimeout(300);

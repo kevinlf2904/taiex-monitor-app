@@ -1235,7 +1235,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.12-231</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.12-232</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1592,6 +1592,13 @@ const irtSegs = () => W.irtSegs || (W.irtSegs = W.tic?.industries?.length
   ? W.tic.industries.flatMap(I => I.segs.map(g => ({ id: `${I.id}:${g.id}`, tid: I.id, theme: `${I.name}${g.stage ? "・" + g.stage : ""}`, name: g.name, codes: g.codes.map(c => c[0]), names: Object.fromEntries(g.codes) })))
   : (typeof INDUSTRY_MAP !== "undefined" ? INDUSTRY_MAP.themes : []).filter(t => t.mk === "tw").flatMap(t => t.segs.map((g, j) => ({ id: `${t.id}:${j}`, tid: t.id, theme: t.name, name: g.n, codes: [...new Set(g.c.map(x => x[0]))], names: Object.fromEntries(g.c) }))));
 const irtOff = () => !!W.tic?.industries?.length, irtUnit = () => (irtOff() ? "產業" : "題材");
+// 櫃買抓取器某些產業抓不到時會沿用上一份（stale、asOf）或整個沒有（missing）：說明裡寫出來，不讓舊資料看起來像這次更新的
+const ticDay = t => { const d = new Date(t); return isNaN(d) ? "" : d.toISOString().slice(0, 10).replace(/-/g, "/"); };
+function ticStaleNote() {
+  const st = (W.tic?.industries || []).filter(I => I.stale), ms = Array.isArray(W.tic?.missing) ? W.tic.missing : [];
+  return (st.length ? `。其中 ${st.length} 個產業這次沒更新到，沿用舊資料：${st.map(I => `${esc(I.name)}（${ticDay(I.asOf) || "日期不明"}）`).join("、")}` : "")
+    + (ms.length ? `。${ms.length} 個產業這次沒有資料：${ms.map(I => esc(I.name)).join("、")}` : "");
+}
 async function loadTic() { if (W.tic !== undefined) return; W.tic = null; try { const r = await fetch("data/tpex-ic.json", { cache: "no-cache" }); if (r.ok) { W.tic = await r.json(); W.irtSegs = W.irtThemes = null; } } catch {} }
 // 上一層（產業或題材）：同一層的細分產業合併（代號去重）
 const irtThemes = () => W.irtThemes || (W.irtThemes = [...irtSegs().reduce((m, g) => { const t = m.get(g.tid) || m.set(g.tid, { id: g.tid, tid: g.tid, theme: `${irtSegs().filter(x => x.tid === g.tid).length} 個細分產業`, name: irtOff() ? W.tic.industries.find(I => I.id === g.tid)?.name || g.theme : g.theme, codes: [], names: {} }).get(g.tid);
@@ -1629,7 +1636,7 @@ function irtHtml(sec) {
   return sec("產業即時", `<p class="note irb-sum">${L.length} 個${lv === "theme" ? U : "細分產業"}：<b class="up">${up} 漲</b>・<b class="down">${L.length - up} 跌（或平）</b>${k === "flow" ? "・資金流向＝上漲股成交金額算流入、下跌股算流出（估算）" : ""}</p>
     <ol class="irb">${shown.map(row).join("")}</ol>
     ${S.length > N ? `<button type="button" class="btn sm irb-more" data-mk="irtAll" data-v="${all ? "" : "1"}">${all ? "收合 ▴" : `看全部 ${S.length} 個 ▾`}</button>` : ""}
-    <p class="note">${irtOff() ? `分類：<a href="https://ic.tpex.org.tw/" target="_blank" rel="noopener">櫃買中心 產業價值鏈資訊平台</a>（${irtThemes().length} 個產業、${irtSegs().length} 個上中下游細分產業，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔上市櫃公司，${W.tic.updated ? new Date(W.tic.updated).toISOString().slice(0, 10).replace(/-/g, "/") + " 更新" : "每週更新"}；同一家公司可能出現在好幾個細分產業）` : `分類：供應鏈題材（${irtSegs().length} 個細分產業、${irtThemes().length} 個題材，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔）`}；漲跌是成分股的成交金額加權平均；點一列看成分股。行情：${esc(W.irt?.source || "")}</p>`,
+    <p class="note">${irtOff() ? `分類：<a href="https://ic.tpex.org.tw/" target="_blank" rel="noopener">櫃買中心 產業價值鏈資訊平台</a>（${irtThemes().length} 個產業、${irtSegs().length} 個上中下游細分產業，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔上市櫃公司，${W.tic.updated ? ticDay(W.tic.updated) + " 更新" : "每週更新"}；同一家公司可能出現在好幾個細分產業）${ticStaleNote()}` : `分類：供應鏈題材（${irtSegs().length} 個細分產業、${irtThemes().length} 個題材，共 ${new Set(irtSegs().flatMap(g => g.codes)).size} 檔）`}；漲跌是成分股的成交金額加權平均；點一列看成分股。行情：${esc(W.irt?.source || "")}</p>`,
     liveTag({ live: W.irt?.live, at: W.irt?.at, fetchedAt: W.irt?.fetchedAt, date: W.irt?.date, time: W.irt?.time, srcKind: "market" }, "收盤"), mkSeg("irtK", k, [["gain", "漲幅"], ["loss", "跌幅"], ["flow", "資金流向"], ["value", "成交金額"]]) + " " + mkSeg("irtL", lv, [["seg", "細分產業"], ["theme", U]]));
 }
 async function loadMktLive() {
