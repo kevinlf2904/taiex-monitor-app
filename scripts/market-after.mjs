@@ -6,7 +6,7 @@
 import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { getJSON, num, companies } from "../api/_lib/_tw.js";
-import { closeToday, parseInst, pickTable } from "../api/_lib/daily.js";
+import { closeToday, closeDayOk, parseInst, pickTable } from "../api/_lib/daily.js";
 import { parseBfi82u } from "../api/_lib/market.js";
 import { parseMargin } from "../api/_lib/mktstats.js";
 import { parseRevenue, parseBw } from "../api/_lib/screen.js";
@@ -97,8 +97,9 @@ export function buildRanks({ quotes, inst = new Map(), margin = new Map(), qfiis
   return ranks.filter(r => r.tabs.length);
 }
 
-async function dayData(d, gap) {
-  const quotes = await closeToday(d); if (quotes.size < 500) return null;
+export async function dayData(d, gap, fetchDay = closeToday) {
+  const quotes = await fetchDay(d); if (quotes.size < 500) return null;
+  const g = closeDayOk(quotes, d); if (!g.ok) { console.log(d, "不用這一天：" + g.why); return null; } // 來源日期不是這一天（休市日櫃買回前一天的資料）：往前找上一個交易日
   await sleep(gap);
   const inst = new Map();
   try { for (const [c, v] of parseInst(await getJSON(`https://www.twse.com.tw/rwd/zh/fund/T86?date=${d}&selectType=ALLBUT0999&response=json`, 15000))) inst.set(c, v); } catch (e) { console.log("T86", e.message); }
