@@ -7,6 +7,7 @@
 //   情報局「財報」用，上市、上櫃的月營收（t187ap05）、季 EPS（t187ap14）、營益分析（t187ap17）合成一張表。
 // 只連固定的兩個網域、路徑只允許英數字與 _ /，不會被拿去連別的網站。同一份資料在這台機器上 15 分鐘內重複用。
 
+import { errText } from "./_err.js";
 import { getJSON } from "./_tw.js";
 import { OFFICIAL_SETS, officialPack } from "./official.js";
 
@@ -116,7 +117,7 @@ export default async function handler(req, res) {
   const src = String(q.src || ""), path = String(q.p || "");
   if (!Object.hasOwn(BASE, src) || !PATH_RE.test(path)) return res.status(400).json({ ok: false, error: "資料集參數不對" });
   let rows;
-  try { rows = await rowsOf(src, path); } catch (e) { return res.status(200).json({ ok: false, error: `${src === "twse" ? "證交所" : "櫃買中心"}暫時連不到（${e.message}）` }); }
+  try { rows = await rowsOf(src, path); } catch (e) { return res.status(200).json({ ok: false, error: `${src === "twse" ? "證交所" : "櫃買中心"}暫時連不到（${errText(e)}）` }); }
   const out = filterRows(rows, { code, q: q.q ? String(q.q).slice(0, 40) : "" }), lim = Math.max(1, Math.min(MAX, +q.limit || 500));
   res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=7200");
   return res.status(200).json({ ok: true, src, path, total: out.length, all: rows.length, cols: rows[0] ? Object.keys(rows[0]) : [], codeKey: codeKey(rows[0]), rows: out.slice(0, lim), more: out.length > lim });

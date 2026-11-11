@@ -6,6 +6,7 @@
 // 美股（英文代號）一律用 Yahoo，時間是美東當地時間，量的單位是千股。
 // 當天的資料一律先抓 1 分 K，再在伺服器端合成需要的週期。回傳 { ok, source, date, tf, prev, bars: [{ t: "09:05", o, h, l, c, v, a? }] }（a 是富果提供的當日均價），v 單位：張；指數（t00、o00）沒有可靠的分 K 成交量（Yahoo 的 ^TWII 欄位全是 0、^TWOII 沒資料），v 一律是 null（不是 0），前端看到 null 就不畫量。
 
+import { errText } from "./_err.js";
 import { isUS, usName, yahooBars, INTRADAY_LIMIT } from "./_yahoo.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const INDEX = { T00: { fugle: "IX0001", yahoo: "^TWII", name: "加權指數" }, O00: { fugle: "IX0043", yahoo: "^TWOII", name: "櫃買指數" } };
@@ -167,7 +168,7 @@ async function indexHistory(code, tf, before, { fetchImpl = fetch, sleep, yahooB
     };
     return { ...base, error: `${reason}；Yahoo Finance 備援沒有可用價格資料`, source: "Yahoo Finance（歷史價格備援；成交金額暫缺）" };
   } catch (e) {
-    return { ...base, error: `${reason}；Yahoo Finance 備援失敗（${e.message}）`, source: "Yahoo Finance（歷史價格備援；成交金額暫缺）" };
+    return { ...base, error: `${reason}；Yahoo Finance 備援失敗（${errText(e)}）`, source: "Yahoo Finance（歷史價格備援；成交金額暫缺）" };
   }
 }
 
@@ -187,7 +188,7 @@ async function yahooHistory(code, tf, before, yahooBarsImpl = yahooBars) {
       const bars = p.bars.filter(b => b.d < before && toMin(b.t) >= o && toMin(b.t) <= c);
       last = { bars, prev: p.prev, name: us ? usName(code, p.meta?.shortName) : "", session: us ? p.session : null };
       if (bars.length) break;
-    } catch (e) { last = last || { error: e.message }; }
+    } catch (e) { last = last || { error: errText(e) }; }
   }
   return { ...(last || {}), bars: last?.bars || [], end: period1 <= earliest + 1, next: ymd(period1 + (us ? -4 : 8) * 3600) };
 }
@@ -224,7 +225,7 @@ export default async function handler(req, res, { fetchImpl = fetch, sleep, yaho
     try {
       const p = await usToday(code, tf);
       if (p) { res.setHeader("Cache-Control", "s-maxage=30, stale-while-revalidate=120"); return res.status(200).json({ ok: true, code, tf, ...p }); }
-    } catch (e) { return res.status(200).json({ ok: false, error: `拿不到 ${code} 的分 K（${e.message}）` }); }
+    } catch (e) { return res.status(200).json({ ok: false, error: `拿不到 ${code} 的分 K（${errText(e)}）` }); }
     return res.status(200).json({ ok: false, error: `拿不到 ${code} 的分 K` });
   }
   const key = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
@@ -240,7 +241,7 @@ export default async function handler(req, res, { fetchImpl = fetch, sleep, yaho
         return res.status(200).json({ ok: true, code, name: p.name || INDEX[code]?.name || "", source: p.source, date: p.date, tf, prev: p.prev ?? null, bars: out, unit: idx ? "億元" : "張", ...(idx ? { amountNa: !out.some(b => b.v != null) } : {}), session: { open: "09:00", close: "13:30" } });
       }
       errors.push(`${name}: 沒有資料`);
-    } catch (e) { errors.push(`${name}: ${e.message}`); }
+    } catch (e) { errors.push(`${name}: ${errText(e)}`); }
   }
   return res.status(200).json({ ok: false, error: `拿不到 ${code} 的盤中分 K（${errors.join("；")}）。${key ? "" : "設定富果 API 金鑰（FUGLE_API_KEY）會比較穩定。"}` });
 }

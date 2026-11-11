@@ -11,7 +11,7 @@
 // 指標：月營收年增／年減、月營收雙增、累計營收年增、毛利率、營益率、累計 EPS、虧損、股價淨值比 < 1（t187ap05、t187ap14、t187ap17，上市＋上櫃）
 
 import { parseT86 } from "./hot.js";
-import { userMsg } from "./_err.js";
+import { userMsg, errText } from "./_err.js";
 import { marketRows, liveCache } from "./_live.js";
 import { getJSON, num } from "./_tw.js";
 import { CONCEPTS } from "./_concepts.js";
@@ -124,7 +124,7 @@ export const parseBw = rows => (Array.isArray(rows) ? rows : []).map(r => ({ cod
 export async function valuation() {
   const r = await Promise.allSettled([getJSON("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL", 15000), getJSON("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis", 15000)]);
   const rows = {}; for (const x of r) if (x.status === "fulfilled") for (const b of parseBw(x.value)) if (/^\d{4}[A-Z]?$/.test(b.code)) rows[b.code] = [b.pe, b.pb, b.dy];
-  if (!Object.keys(rows).length) throw new Error(r.map(x => x.reason?.message).filter(Boolean).join("；") || "證交所、櫃買中心都沒有回應");
+  if (!Object.keys(rows).length) throw new Error(r.map(x => x.reason && errText(x.reason)).filter(Boolean).join("；") || "證交所、櫃買中心都沒有回應");
   return { ok: true, n: Object.keys(rows).length, rows };
 }
 
@@ -141,7 +141,7 @@ export default async function handler(req, res, { marketFetcher = marketRows } =
     both("https://openapi.twse.com.tw/v1/opendata/t187ap17_L", "https://www.tpex.org.tw/openapi/v1/mopsfin_187ap17_O" /* 櫃買的資料集名稱本來就少一個 t */, parseMargins),
   ]);
   const L = a.value, quotes = L?.rows || [];
-  if (!quotes.length) return res.status(200).json({ ok: false, error: `拿不到選股資料（${a.reason?.message || "沒有資料"}）` });
+  if (!quotes.length) return res.status(200).json({ ok: false, error: `拿不到選股資料（${a.reason ? errText(a.reason) : "沒有資料"}）` });
   const st = quotes.filter(q => /^\d{4}$/.test(q.code));
   res.setHeader("Cache-Control", liveCache(L.live, 30));
   return res.status(200).json({ ok: true, date: L.date || quotes.find(q => q.date)?.date || null, live: L.live, time: L.time, source: L.live ? `${L.source}；法人、財報為最近公布` : "證交所、櫃買中心 OpenAPI", completeness: L?.completeness || null, dataStatus: L?.dataStatus || null, coverage: L?.coverage || null, dateVerified: L?.dateVerified ?? null, dateConsistent: L?.dateConsistent ?? null,

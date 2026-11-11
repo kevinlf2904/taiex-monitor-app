@@ -1,6 +1,7 @@
 // 總經數據：美國聯準會聖路易分行 FRED，給 learner/watch.html「大盤 → 總經」使用。有 FRED_API_KEY 時走官方介面（api.stlouisfed.org，不會被雲端主機擋），沒有或失敗時改用公開 CSV（不需要金鑰）。
 // GET /api/macro → { ok, at, series: [{ id, name, group, unit, freq, how, note, last: [日期, 值], prev, chg1y, data: [[日期, 值]...] }], signals: [...] }
 // 數值轉換：yoy＝年增率（%）、diff＝和上一期的差（非農新增就業）、lvl＝原始數值。快取 6 小時（資料一個月才更新一次）。
+import { errText } from "./_err.js";
 const SERIES = [
   // [FRED 代號, 名稱, 分組, 單位, 轉換, 說明, 上升時對股市, 下降時對股市]
   ["CPIAUCSL", "CPI 年增率", "通膨", "%", "yoy", "消費者物價。通膨越高，聯準會越難降息，對股市（尤其高本益比的科技股）不利。", "通膨升溫 → 降息延後、利率偏高，成長股（科技、AI）評價承壓，台股電子權值跟著波動", "通膨降溫 → 降息空間變大，有利成長股與債券"],
@@ -84,7 +85,7 @@ export async function buildMacro(timeout = 15000) {
   const key = (process.env.FRED_API_KEY || "").trim(), got = await pool(SERIES, 6, ([id]) => fredSeries(id, since, timeout, key));
   const series = [], notes = []; let unRaw = null, viaApi = 0;
   SERIES.forEach(([id, name, group, unit, how, note, up, down], k) => {
-    const g = got[k]; if (g.status !== "fulfilled" || !g.value.rows.length) { notes.push(`${name}：${g.reason?.message || "沒有資料"}`); return; }
+    const g = got[k]; if (g.status !== "fulfilled" || !g.value.rows.length) { notes.push(`${name}：${g.reason ? errText(g.reason) : "沒有資料"}`); return; }
     if (g.value.via === "api") viaApi++; if (id === "UNRATE") unRaw = g.value.rows;
     let rows = transform(g.value.rows, how); if (!rows.length) return; const daily = rows.length > 400; if (daily) rows = thin(rows);
     const last = rows[rows.length - 1], prev = rows[rows.length - 2] || null, y1 = rows.filter(r => Date.parse(r[0]) <= Date.parse(last[0]) - 360 * 864e5).pop() || null;
