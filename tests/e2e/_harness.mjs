@@ -69,14 +69,15 @@ export async function mock(ctx) {
 // 首頁裡的看盤 iframe：等它的程式都載入（setLt、select 定義好）才回傳；CI 機器慢時 iframe 出現了但程式還沒跑完，直接呼叫會 ReferenceError
 export async function watchFrame(p) { for (let i = 0; i < 150; i++) { const f = p.frames().find(f => /watch\.html/.test(f.url())); if (f && await f.evaluate(() => typeof setLt === "function" && typeof select === "function" && typeof W !== "undefined").catch(() => false)) { await f.evaluate(() => Promise.all(Object.keys(LAZY).map(lazy))).catch(() => {}); return f; } await p.waitForTimeout(100); } throw new Error("看盤頁沒有載入"); }
 // onboard：顯示新手指引條（預設關掉，其他測試的版面不受影響；要測指引條時傳 true）
-export async function open(browser, base, file, { width = 1180, touch = false, sw = false, lazy = true, onboard = false, time = null } = {}) {
+// time：固定頁面時鐘（Date.now 不會前進）；time＋tick：只把時鐘設到那個時間、之後照常往前走（用 Date.now() 比較經過幾秒的功能，例如失敗後 3 秒自動重試，不能用固定時鐘）
+export async function open(browser, base, file, { width = 1180, touch = false, sw = false, lazy = true, onboard = false, time = null, tick = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height: 1000 }, hasTouch: touch, isMobile: touch, serviceWorkers: sw ? "allow" : "block" }), errs = [];
   if (!onboard) await ctx.addInitScript(() => { try { localStorage.setItem("kline:watch:onbOff", "true"); } catch {} });
   // 情報局預設打開「今日重點」（會順便抓財報、行事曆）：其他測試照舊從資金雷達開始，避免在測試設好假資料前就先抓過；要測今日重點的自己切過去
   await ctx.addInitScript(() => { try { if (!localStorage.getItem("kline:watch:lt:intel")) localStorage.setItem("kline:watch:lt:intel", '"money"'); } catch {} });
   const m = await mock(ctx), p = await ctx.newPage(); p.on("pageerror", e => errs.push(`${width} ${e.message}`)); p.on("dialog", d => d.accept());
   // 必須在首次導覽前固定頁面時鐘，否則應用程式已先用 CI 當下日期初始化行情狀態。
-  if (time) await p.clock.setFixedTime(time);
+  if (time) await (tick ? p.clock.setSystemTime(time) : p.clock.setFixedTime(time));
   await p.goto(`${base}/learner/${file}`); await p.waitForTimeout(600);
   if (lazy) await p.evaluate(() => typeof LAZY === "object" && Promise.all(Object.keys(LAZY).map(lazy))).catch(() => {}); // 分頁用到才載的程式（watch.html 的 lazy）先載好，測試直接呼叫裡面的函式也不會找不到
   return { ctx, p, errs, ...m };
