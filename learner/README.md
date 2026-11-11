@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 雲端同步上傳加鎖（2026.11.12-225）
+- 版本檢查的上傳先拿鎖，兩台同時上傳不再互蓋。
+
 ### 盤中逐筆成交分頁（2026.11.12-224）
 - 分頁去重、換日不沿用舊暫存、抓不完不標完整。
 
