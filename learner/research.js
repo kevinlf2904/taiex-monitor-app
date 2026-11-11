@@ -12,6 +12,7 @@
   const isNum = v => typeof v === "number" && Number.isFinite(v);
   const day = v => (v ? String(v).slice(0, 10) : null);
   const MAX_CONTEXT = 5000; // 伺服器收 6000 字，留空間給提問
+  const TAIL_MAX = 1500, OMIT_NOTE_MAX = 40; // 超過上限時，警語（缺漏與過期、注意）最多保留 1500 字；「已省略 N 筆」的說明最多 40 字
 
   // 一筆研究資料：缺欄位一律給明確的預設（null／false／low），不補數字
   function rec(o) {
@@ -125,10 +126,17 @@
   function contextText(snap) {
     const fmt = v => (typeof v === "string" ? v : isNum(v) ? String(v) : "—");
     const lines = snap.records.filter(r => r.dataStatus !== "unavailable").map(r => [r.id, r.label, fmt(r.value) + (r.unit ? " " + r.unit : ""), (r.tradeDate || "日期未提供") + (r.market === "US" ? "（美東）" : ""), STATUS_LABEL[r.dataStatus] + (r.isEstimated ? "・估算" : ""), "信心" + CONF[r.confidence], r.source, r.note].filter(Boolean).join(" | "));
-    let out = "資料表（編號 | 名稱 | 數值 | 資料日 | 狀態 | 信心 | 來源 | 備註）：\n" + lines.join("\n");
-    out += "\n缺漏與過期：" + (snap.gaps.length ? snap.gaps.join("；") : "無");
-    if (snap.warnings.length) out += "\n注意：" + snap.warnings.join("；");
-    return out.length > MAX_CONTEXT ? out.slice(0, MAX_CONTEXT) : out;
+    const head = "資料表（編號 | 名稱 | 數值 | 資料日 | 狀態 | 信心 | 來源 | 備註）：\n";
+    let tail = "\n缺漏與過期：" + (snap.gaps.length ? snap.gaps.join("；") : "無");
+    if (snap.warnings.length) tail += "\n注意：" + snap.warnings.join("；");
+    const full = head + lines.join("\n") + tail;
+    if (full.length <= MAX_CONTEXT) return full; // 沒超過：內容和以前完全一樣（同樣的資料才能命中伺服器快取）
+    // 超過上限：先保住「缺漏與過期」「注意」（資料過期、日期不一致的警語，AI 要靠它判斷資料能不能用），資料行從後面往前省略並註明省了幾筆（#262 FIN-02）
+    if (tail.length > TAIL_MAX) tail = tail.slice(0, TAIL_MAX);
+    const room = MAX_CONTEXT - head.length - tail.length - OMIT_NOTE_MAX, kept = []; let used = 0;
+    for (const l of lines) { const add = l.length + (kept.length ? 1 : 0); if (used + add > room) break; kept.push(l); used += add; }
+    const omitted = lines.length - kept.length;
+    return head + kept.join("\n") + (omitted ? "\n（資料表過長，最後 " + omitted + " 筆資料已省略）" : "") + tail;
   }
 
   const SECTIONS = ["summary", "bull", "bear", "sectors", "levels", "watchlist", "scenarios", "risks", "unknowns", "conclusion"];
