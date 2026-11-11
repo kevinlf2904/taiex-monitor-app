@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### T86 三大法人欄位（2026.11.11-223）
+- T86 欄位改精確比對，缺值回 null。
+
 ### Claude 總開關（2026.11.11-222）
 - 新增 AI_CLAUDE_ENABLED（預設關閉）；要使用 Claude 須在 Vercel 設定此變數。
 
