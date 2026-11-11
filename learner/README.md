@@ -561,7 +561,7 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 ### 全站稽核修正：AI 費用防護、資料正確性、新手入口、今日重點整合（2026.10.24-156）
 API 費用與安全
 - AI 次數上限：沒有 Upstash（KV）或 KV 暫時壞掉時改用記憶體的保守上限（每 IP 一半、每天十分之一），不再直接放行；上限每個服務分開設（`AI_HOURLY_PER_IP_CHAT`、`AI_DAILY_CAP_CHART_READ`…），舊的 `AI_HOURLY_PER_IP`、`AI_DAILY_CAP` 只能調低。
-- 網站上一次請求最多打 3 次 Gemini（忙線換備用模型也算）；Gemini 失敗改問 Claude 預設關閉，要設 `AI_CLAUDE_FALLBACK=1`，而且另有全站每天上限。排程不受影響。
+- 網站上一次請求最多打 3 次 Gemini（忙線換備用模型也算）；Claude（付費）有總開關：`AI_CLAUDE_ENABLED=1` 才會用到，預設關閉——沒開時，即使設了 `ANTHROPIC_API_KEY`，問問題、截圖匯入、節目摘要、K 線截圖解讀都不會呼叫 Claude（沒有 Gemini 金鑰時這些功能會回「尚未設定」）。Gemini 失敗改問 Claude 要總開關＋`AI_CLAUDE_FALLBACK=1` 兩個都開，而且另有全站每天上限。排程不受影響。
 - 法說會兩季比較的快取鍵加上比較內容的雜湊（送假的整理結果不會被存起來給所有人看）；匯入截圖整個請求控制在 55 秒內；同步上傳每 IP 每小時 30 次、資料 400 天沒更新自動刪；`/api/status` 多帶參數就轉回標準網址、60 秒內回上次結果；AI、同步的錯誤訊息不帶外部服務原文（`api/_lib/_err.js`）。
 - 節目 RSS／音檔：連線用剛檢查過的 IP（擋 DNS rebinding）；刪 Gemini 音檔只刪這次請求自己的；`api/_lib` 裡沒有作用的 `config` 拿掉；日誌濾掉 Vercel 執行環境的 `DEP0169` 警告。
 
