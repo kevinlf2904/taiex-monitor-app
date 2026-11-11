@@ -1,5 +1,5 @@
 // 櫃買中心「產業價值鏈資訊平台」（ic.tpex.org.tw）：官方的產業 → 上中下游細分產業 → 公司清單。
-// 大盤「產業即時」與資金雷達用它當細分產業（比證交所 30 多個大類細很多）。每週由 .github/workflows/tpex-ic.yml 更新。
+// 大盤「產業即時」用它當細分產業（比證交所 30 多個大類細很多）；資金雷達不用這份（用供應鏈題材＋官方產業別，見 docs/industry-taxonomy.md）。每週由 .github/workflows/tpex-ic.yml 更新。
 // 輸出 learner/data/tpex-ic.json：{ updated, source, industries: [{ id, name, segs: [{ id, name, stage, codes: [[代號, 名稱], …] }] }] }
 //   只收上市、上櫃公司（興櫃、外國企業沒有即時行情，不收）。
 //   --dump  只印出抓到的數量，不寫檔
