@@ -23,11 +23,16 @@ export function parseTpexAll(rows) {
     .filter(x => isStockOrEtf(x.code) && x.price > 0);
 }
 // 證交所 T86：三大法人買賣超（股 → 張）
+// 欄位名稱要「整個一樣」才算：真實表頭有 19 欄，「外資自營商買賣超股數」「自營商買賣超股數(自行買賣)」都包含「自營商買賣超股數」這幾個字，
+// 用「包含」比對會把自營商欄誤配到外資自營商（#262 FIN-03）。來源沒給、或是 "--" 的欄位是 null，不是 0（和 api/_lib/daily.js 的 parseInst 一致）。
+const lot = v => { const n = num(v); return n == null ? null : Math.round(n / 1000); };
 export function parseT86(j) {
   if (!j || !/ok/i.test(j.stat || "") || !Array.isArray(j.data)) return null;
-  const f = (j.fields || []).map(x => String(x).replace(/\s/g, "")), at = (...ks) => f.findIndex(x => ks.every(k => x.includes(k)));
-  const iC = at("證券代號"), iN = at("證券名稱"), iF = at("外陸資買賣超股數", "不含"), iF2 = at("外資買賣超股數"), iT = at("投信買賣超股數"), iD = at("自營商買賣超股數"), iA = at("三大法人買賣超股數");
-  return j.data.map(r => ({ code: String(r[iC]).trim(), name: String(r[iN]).trim(), market: "上市", foreign: Math.round((num(r[iF >= 0 ? iF : iF2]) || 0) / 1000), trust: Math.round((num(r[iT]) || 0) / 1000), dealer: Math.round((num(r[iD]) || 0) / 1000), total: Math.round((num(r[iA]) || 0) / 1000) }))
+  const f = (j.fields || []).map(x => String(x).replace(/\s/g, "")), exact = (...ks) => f.findIndex(x => ks.includes(x));
+  const iC = exact("證券代號"), iN = exact("證券名稱"), iF = exact("外陸資買賣超股數(不含外資自營商)", "外陸資買賣超股數", "外資買賣超股數"), iT = exact("投信買賣超股數"), iD = exact("自營商買賣超股數"), iA = exact("三大法人買賣超股數");
+  if (iC < 0) return null; // 表頭認不得：不要用錯的欄位硬算
+  const at = (r, i) => (i >= 0 ? lot(r[i]) : null);
+  return j.data.map(r => ({ code: String(r[iC]).trim(), name: iN >= 0 ? String(r[iN]).trim() : "", market: "上市", foreign: at(r, iF), trust: at(r, iT), dealer: at(r, iD), total: at(r, iA) }))
     .filter(x => isStockOrEtf(x.code));
 }
 const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
@@ -58,7 +63,7 @@ export default async function handler(req, res, { marketFetcher = marketRows } =
     let rows, date, source, live = false, time = null, L = null;
     if (type === "foreign" || type === "trust") {
       const t = await t86Latest(); if (!t) throw new Error("證交所三大法人資料暫時拿不到");
-      rows = t.rows.sort((a, b) => b[type] - a[type]).slice(0, 30); date = t.date; source = "證交所 三大法人買賣超（上市）";
+      rows = t.rows.filter(r => r[type] != null).sort((a, b) => b[type] - a[type]).slice(0, 30); // 沒有這一欄資料的不排進去 date = t.date; source = "證交所 三大法人買賣超（上市）";
     } else {
       L = await marketFetcher(); const all = L.rows.slice(); live = L.live;
       date = L.date || all.find(x => x.date)?.date || null; source = L.source; time = L.time;

@@ -32,7 +32,7 @@ export function buildLists({ quotes, t86 = [], avg = [], bw = [] }) {
   const Q = new Map(quotes.map(q => [q.code, q])), liquid = q => (q?.vol || 0) >= 500, stock = c => /^\d{4}$/.test(c);
   const lists = [];
   lists.push({ id: "short", title: "單日大漲", desc: "漲幅 ≥ 4%、成交值 ≥ 3 億", rows: quotes.filter(q => stock(q.code) && q.chgPct >= 4 && (q.value || 0) >= 3).sort((a, b) => b.chgPct - a.chgPct).slice(0, 30).map(q => row(q, `成交值 ${q.value.toFixed(1)} 億`)) });
-  if (t86[0]) lists.push({ id: "chips", title: "籌碼多", desc: "外資＋投信買超、收紅（上市）", rows: t86[0].filter(r => r.foreign + r.trust > 0 && Q.get(r.code)?.chgPct > 0).sort((a, b) => (b.foreign + b.trust) - (a.foreign + a.trust)).slice(0, 30).map(r => row(Q.get(r.code), `外資 ${r.foreign.toLocaleString()}・投信 ${r.trust.toLocaleString()} 張`)) });
+  if (t86[0]) lists.push({ id: "chips", title: "籌碼多", desc: "外資＋投信買超、收紅（上市）", rows: t86[0].filter(r => r.foreign != null && r.trust != null && r.foreign + r.trust > 0 && Q.get(r.code)?.chgPct > 0).sort((a, b) => (b.foreign + b.trust) - (a.foreign + a.trust)).slice(0, 30).map(r => row(Q.get(r.code), `外資 ${r.foreign.toLocaleString()}・投信 ${r.trust.toLocaleString()} 張`)) });
   if (t86.length >= 3) {
     const days = t86.slice(0, 3).map(rows => new Map(rows.map(r => [r.code, r.trust])));
     const codes = [...days[0].keys()].filter(c => days.every(m => (m.get(c) || 0) > 0) && Q.get(c));
