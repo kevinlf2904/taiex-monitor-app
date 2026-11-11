@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 量能指標缺量（2026.11.12-228）
+- OBV／VR／MFI 遇到缺量的 K 棒不再當成 0 量。
+
 ### API 錯誤說明（2026.11.12-227）
 - 上游英文原文不再回給前端。
 
