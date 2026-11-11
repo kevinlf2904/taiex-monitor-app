@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 圖表解讀改用 Gemini（2026.11.12-230）
+- K 線截圖的「請 AI 解讀」「讓 AI 讀出數字」改由 Gemini 看圖；Claude 只在打開 AI_CLAUDE_ENABLED 時才使用。
+
 ### T86 三大法人欄位（2026.11.12-229）
 - T86 欄位改精確比對，缺值回 null。
 

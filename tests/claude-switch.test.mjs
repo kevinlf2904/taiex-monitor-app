@@ -1,5 +1,5 @@
 // Claude 總開關（#262 NEW-02、#264 A2）：AI_CLAUDE_ENABLED=1 才允許任何路徑呼叫 Claude（付費），預設關閉。
-// 網站主要靠 Gemini；只有 ANTHROPIC_API_KEY、沒開總開關時，問問題、截圖匯入、節目摘要、K 線截圖解讀都不能偷偷用 Claude。
+// 網站主要靠 Gemini；只有 ANTHROPIC_API_KEY、沒開總開關時，問問題、截圖匯入、節目摘要、K 線截圖解讀都不能偷偷用 Claude（這四個都是 Gemini 優先）。
 // 全部用假的 fetch 記錄「有沒有打到 api.anthropic.com」，不連外、不呼叫付費 AI。
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -85,11 +85,43 @@ test("節目摘要 /api/podcast：只靠節目說明整理（沒有 Gemini 金�
   r = await withEnv({ ANTHROPIC_API_KEY: "k", AI_CLAUDE_ENABLED: "1" }, () => call(M, { method: "GET", query: { act: "cfg" } })); assert.equal(r.out.notes, true); assert.equal(r.out.provider, "claude");
 });
 
-test("K 線截圖解讀 /api/chart-read（只用 Claude）：沒開總開關就不呼叫，開了才用", async () => {
+test("K 線截圖解讀 /api/chart-read：有 Gemini 金鑰就用 Gemini；Claude 只在總開關打開時才用", async () => {
   const M = await cr(), body = { image: "AAAA", mediaType: "image/png" };
-  let r = await withEnv({ ANTHROPIC_API_KEY: "k" }, () => call(M, { method: "POST", body }));
-  assert.equal(r.out.ok, false); assert.match(r.out.error, /沒有開放/); assert.equal(r.calls.claude, 0);
-  r = await withEnv({ ANTHROPIC_API_KEY: "k", GEMINI_API_KEY: "g" }, () => call(M, { method: "POST", body })); assert.equal(r.calls.claude, 0, "有 Gemini 金鑰也一樣：這個功能只用 Claude，沒開就是沒開");
-  r = await withEnv({ AI_CLAUDE_ENABLED: "1" }, () => call(M, { method: "POST", body })); assert.equal(r.out.ok, false); assert.match(r.out.error, /ANTHROPIC_API_KEY/); assert.equal(r.calls.claude, 0, "開了但沒有金鑰");
-  r = await withEnv({ ANTHROPIC_API_KEY: "k", AI_CLAUDE_ENABLED: "1" }, () => call(M, { method: "POST", body })); assert.equal(r.calls.claude, 1); assert.equal(r.out.ok, true);
+  let r = await withEnv({}, () => call(M, { method: "POST", body }));
+  assert.equal(r.out.ok, false); assert.match(r.out.error, /GEMINI_API_KEY/); assert.deepEqual([r.calls.gemini, r.calls.claude], [0, 0], "兩把金鑰都沒有：不呼叫任何 AI");
+  r = await withEnv({ GEMINI_API_KEY: "g" }, () => call(M, { method: "POST", body }));
+  assert.equal(r.out.ok, true); assert.equal(r.out.text, "gemini 回答"); assert.deepEqual([r.calls.gemini, r.calls.claude], [1, 0], "只有 Gemini：用 Gemini");
+  r = await withEnv({ GEMINI_API_KEY: "g", ANTHROPIC_API_KEY: "k", AI_CLAUDE_ENABLED: "1" }, () => call(M, { method: "POST", body }));
+  assert.deepEqual([r.calls.gemini, r.calls.claude], [1, 0], "兩把都有、開關也開：還是先用 Gemini");
+  r = await withEnv({ ANTHROPIC_API_KEY: "k" }, () => call(M, { method: "POST", body }));
+  assert.equal(r.out.ok, false); assert.equal(r.calls.claude, 0, "只有 Anthropic 金鑰、沒開總開關：不用 Claude");
+  r = await withEnv({ ANTHROPIC_API_KEY: "k", AI_CLAUDE_ENABLED: "1" }, () => call(M, { method: "POST", body }));
+  assert.equal(r.out.ok, true); assert.equal(r.calls.claude, 1, "沒有 Gemini 金鑰、開了總開關：用 Claude");
+  r = await withEnv({ GEMINI_API_KEY: "g", ANTHROPIC_API_KEY: "k", AI_CLAUDE_ENABLED: "1" }, () => call(M, { method: "POST", body }), { gemini: "429" });
+  assert.equal(r.out.ok, false); assert.match(r.out.error, /額度/); assert.equal(r.calls.claude, 0, "Gemini 失敗、沒開 AI_CLAUDE_FALLBACK：不改問 Claude");
+  assert.ok(r.calls.gemini >= 1 && r.calls.gemini <= 3, "Gemini 最多試 3 次");
+  r = await withEnv({ GEMINI_API_KEY: "g", ANTHROPIC_API_KEY: "k", AI_CLAUDE_ENABLED: "1", AI_CLAUDE_FALLBACK: "1" }, () => call(M, { method: "POST", body }), { gemini: "429" });
+  assert.equal(r.calls.claude, 1, "Gemini 失敗、備援開著：改問 Claude");
+});
+
+test("K 線截圖解讀：讀數字要 JSON、解說是純文字；圖片格式不對或太大不呼叫 AI", async () => {
+  const M = await cr(), real = globalThis.fetch, sent = [];
+  const saved = process.env.GEMINI_API_KEY; process.env.GEMINI_API_KEY = "g";
+  globalThis.fetch = async (url, init) => {
+    const u = String(url?.url || url);
+    if (/\/v1beta\/models\?/.test(u)) return new Response("{}", { status: 404 });
+    sent.push(JSON.parse(init.body));
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"close":100}' }] }, finishReason: "MAX_TOKENS" }] }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    let out = await call(M, { method: "POST", body: { image: "AAAA", mediaType: "image/jpeg", task: "numbers" } });
+    assert.equal(out.ok, true); assert.equal(out.truncated, true, "MAX_TOKENS 要標截斷");
+    assert.equal(sent[0].generationConfig.responseMimeType, "application/json"); assert.match(sent[0].contents[0].parts[1].text, /印出來的數字/);
+    assert.equal(sent[0].contents[0].parts[0].inline_data.mime_type, "image/jpeg");
+    out = await call(M, { method: "POST", body: { image: "AAAA", mediaType: "image/jpeg", context: "程式辨識：收盤 100" } });
+    assert.equal(sent[1].generationConfig.responseMimeType, undefined, "解說不要求 JSON"); assert.match(sent[1].contents[0].parts[1].text, /技術分析老師[\s\S]*程式辨識：收盤 100/);
+    out = await call(M, { method: "POST", body: { image: "AAAA", mediaType: "image/bmp" } }); assert.equal(out.ok, false);
+    out = await call(M, { method: "POST", body: { image: "", mediaType: "image/png" } }); assert.equal(out.ok, false);
+    assert.equal(sent.length, 2, "格式不對、沒有圖片都不呼叫 AI");
+  } finally { globalThis.fetch = real; if (saved === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = saved; }
 });
