@@ -30,7 +30,7 @@ export function aggregate(bars, tf, open = 540) {
   for (const b of bars) {
     const [h, m] = b.t.split(":").map(Number), mins = h * 60 + m, slot = Math.floor((mins - open) / tf) * tf + open;
     const t = `${String(Math.floor(slot / 60)).padStart(2, "0")}:${String(slot % 60).padStart(2, "0")}`, last = out[out.length - 1];
-    if (last && last.t === t && last.d === b.d) { last.h = Math.max(last.h, b.h); last.l = Math.min(last.l, b.l); last.c = b.c; last.v = last.v == null || b.v == null ? null : last.v + b.v; if (b.a != null) last.a = b.a; }
+    if (last && last.t === t && last.d === b.d) { last.h = Math.max(last.h, b.h); last.l = Math.min(last.l, b.l); last.c = b.c; last.v = last.v == null || b.v == null ? null : last.v + b.v; if (b.vNa) last.vNa = 1; /* 其中任何一分鐘來源沒給量：合成的這根也標沒有完整的量，前端的均量才會跳過（個股沒給量時 v 是 0 加 vNa，不標的話會被當成真的 0 量，#262 NEW-04） */ if (b.a != null) last.a = b.a; }
     else out.push({ ...b, t });
   }
   return out;
