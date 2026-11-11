@@ -251,3 +251,14 @@ test("合成 N 分 K：桶裡任何一分鐘缺量（vNa），合成的那根也
   // 1 分 K 不合成：原樣
   assert.equal(aggregate(bars, 1), bars);
 });
+test("美股歷史分 K：before 的美東午夜依夏令（-04:00）／冬令（-05:00）換算，游標日期也跟著時區（FIN-07）", async () => {
+  // tf=60 可回溯 729 天；日期用 2026 年，涵蓋冬令、夏令與兩個換時日（3/8 開始、11/1 結束，換時在美東 02:00）
+  const cases = [["2026-01-15", "-05:00"], ["2026-07-15", "-04:00"], ["2026-03-08", "-05:00"], ["2026-03-09", "-04:00"], ["2026-11-01", "-04:00"], ["2026-11-02", "-05:00"]];
+  for (const [before, off] of cases) {
+    let got = null;
+    const { body } = await call({ code: "AAPL", tf: "60", before }, () => fail(404), { key: "", yahooBarsImpl: async (sym, tf, o) => { got = o; return null; } });
+    assert.equal(got.period2, Date.parse(`${before}T00:00:00${off}`) / 1000, before);
+    // 游標是 period1 在美東當地的日期（period2 往前 180 天）
+    assert.equal(body.next, new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(got.period1 * 1000), before);
+  }
+});

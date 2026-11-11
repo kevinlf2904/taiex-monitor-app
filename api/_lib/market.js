@@ -183,10 +183,16 @@ export async function fetchMiIndex(targetDate = null, { getJson = getJSON, now =
 }
 
 // BFI82U：單位名稱、買進金額、賣出金額、買賣差額（元）→ 億元
+// 單位名稱要「整個一樣」才算（#262 FIN-08）：用「包含」比對時，「外資自營商」同時含「外資」和「自營商」，只靠規則順序才沒有重複計算。
+// 外資＝外資及陸資(不含外資自營商)＋外資自營商（learner/core.js 的 inst 說明同一個口徑）；自營商＝自行買賣＋避險；合計照來源。
+// 某一類一列都找不到時是 null（不是 0），四類都找不到就當成格式不認得、回 null。
+const BFI_ROWS = { foreign: ["外資及陸資(不含外資自營商)", "外資自營商", "外資及陸資"], trust: ["投信"], dealer: ["自營商(自行買賣)", "自營商(避險)", "自營商"], total: ["合計"] };
 export function parseBfi82u(j) {
   if (!j || !/ok/i.test(j.stat || "") || !Array.isArray(j.data)) return null;
-  const pick = re => j.data.filter(r => re.test(String(r[0]))).reduce((s, r) => s + (num(r[3]) || 0), 0) / 1e8;
-  return { foreign: +pick(/外資/).toFixed(2), trust: +pick(/投信/).toFixed(2), dealer: +pick(/^自營商/).toFixed(2), total: +(j.data.filter(r => /合計/.test(String(r[0]))).reduce((s, r) => s + (num(r[3]) || 0), 0) / 1e8).toFixed(2) };
+  const name = r => String(r?.[0] ?? "").replace(/\s/g, "").replace(/（/g, "(").replace(/）/g, ")");
+  const pick = names => { const rows = j.data.filter(r => names.includes(name(r))); return rows.length ? +(rows.reduce((s, r) => s + (num(r[3]) || 0), 0) / 1e8).toFixed(2) : null; };
+  const out = Object.fromEntries(Object.entries(BFI_ROWS).map(([k, names]) => [k, pick(names)]));
+  return Object.values(out).some(v => v != null) ? out : null;
 }
 const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 async function instLatest(fetchedAt = new Date().toISOString()) {
