@@ -74,5 +74,6 @@ test("存股頁：直接開網址時有「← 回主站」，嵌在主站裡（e
   await ctx.close();
   ({ ctx, p } = await open(B, S.url, "demo-matrix.html", { width: 390, touch: true })); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => document.querySelector('header a[href="./#radar"]')?.textContent.includes("回 KLineLab 主站")), true);
+  assert.equal(await p.evaluate(() => document.querySelector('meta[name="robots"]')?.content), "noindex", "展示頁不給搜尋引擎收錄（#262 FE-03）");
   await ctx.close();
 });

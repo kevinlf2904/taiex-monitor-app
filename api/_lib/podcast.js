@@ -65,12 +65,23 @@ export async function safeFetch(raw, opts = {}, { hops = 5, lookup = null, get =
   }
   throw new Error("網址跳轉太多次");
 }
-// 讀回應內容，超過上限就中止（不先把整個檔案讀進記憶體才發現太大）
+// 讀回應內容，超過上限就中止（不先把整個檔案讀進記憶體才發現太大）。
+// 記憶體（#262 SEC-09）：來源有給 Content-Length 時先配一塊剛好的空間、邊讀邊放進去，尖峰只有檔案本身一份；
+// 沒給或實際比宣稱的長，才改成分段收集再合併。分段直接引用讀到的資料，不再各自複製一份。
 export async function readCapped(r, max) {
   if (!r.body?.getReader) { const b = Buffer.from(await r.arrayBuffer()); if (b.length > max) throw new Error("檔案太大"); return b; }
-  const rd = r.body.getReader(), parts = []; let n = 0;
-  for (;;) { const { done, value } = await rd.read(); if (done) break; n += value.length; if (n > max) { try { await rd.cancel(); } catch {} throw new Error("檔案太大"); } parts.push(value); }
-  return Buffer.concat(parts.map(p => Buffer.from(p)));
+  const rd = r.body.getReader(), len = +r.headers?.get?.("content-length") || 0, parts = [];
+  const tooBig = async () => { try { await rd.cancel(); } catch {} return new Error("檔案太大"); };
+  if (len > max) throw await tooBig();
+  let buf = len > 0 ? Buffer.allocUnsafe(len) : null, n = 0;
+  for (;;) {
+    const { done, value } = await rd.read(); if (done) break;
+    if (n + value.length > max) throw await tooBig();
+    if (buf && n + value.length <= buf.length) buf.set(value, n);
+    else { if (buf) { parts.push(buf.subarray(0, n)); buf = null; } parts.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength)); }
+    n += value.length;
+  }
+  return buf ? buf.subarray(0, n) : Buffer.concat(parts, n);
 }
 const httpOnly = u => (/^https?:\/\//i.test(String(u || "").trim()) ? String(u).trim() : "");
 
