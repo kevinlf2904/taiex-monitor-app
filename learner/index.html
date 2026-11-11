@@ -832,7 +832,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
           <button class="btn" id="shotSample">載入範例截圖</button>
         </div>
         <div class="nums">
-          <div class="row" style="justify-content:space-between"><h3>圖上的實際數字 <span class="note" style="letter-spacing:0; font-weight:400">選填，填越多重建越準</span></h3><div class="row"><button class="btn" id="numsAi" hidden>讓 Claude 讀出數字</button><button class="btn" id="numsClear">清除</button></div></div>
+          <div class="row" style="justify-content:space-between"><h3>圖上的實際數字 <span class="note" style="letter-spacing:0; font-weight:400">選填，填越多重建越準</span></h3><div class="row"><button class="btn" id="numsAi" hidden>讓 AI 讀出數字</button><button class="btn" id="numsClear">清除</button></div></div>
           <div class="nums-grid">
             <label class="wide">名稱 <input type="text" id="numName" placeholder="例 加權指數" autocomplete="off"></label>
             <label>圖上標示的最高 <input type="number" id="shotHi" step="any" placeholder="例 612"></label>
@@ -877,8 +877,8 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
         <div class="rpanel" data-rp="chips" role="tabpanel" hidden><div id="chipsPanel" class="shot-summary"></div></div>
         <div class="rpanel" data-rp="fund" role="tabpanel" hidden><div id="fundPanel" class="shot-summary"></div></div>
         <div class="rpanel ai" data-rp="ai" role="tabpanel" hidden>
-          <div class="row" style="justify-content:space-between"><h3 style="margin:0">請 Claude 看圖解說</h3><div class="row"><button class="btn primary" id="aiAsk">請 Claude 解讀</button><button class="btn" id="aiStop" hidden>停止</button></div></div>
-          <p class="note" style="margin:0" id="aiNote">Claude 會直接看你的截圖，連圖上的文字、指標設定一起解讀，並用教學的方式說明。這會把截圖送出。</p>
+          <div class="row" style="justify-content:space-between"><h3 style="margin:0">請 AI 看圖解說</h3><div class="row"><button class="btn primary" id="aiAsk">請 AI 解讀</button><button class="btn" id="aiStop" hidden>停止</button></div></div>
+          <p class="note" style="margin:0" id="aiNote">AI 會直接看你的截圖，連圖上的文字、指標設定一起解讀，並用教學的方式說明。這會把截圖送出。</p>
           <div class="ai-out" id="aiOut" hidden></div>
         </div>
       </div>
@@ -4340,7 +4340,7 @@ document.querySelectorAll("[data-src]").forEach(b => b.addEventListener("click",
 
 /* ---------- 圖上的實際數字 ----------
    看盤軟體會印出資料列（開高低收）、最高最低價標籤、均線數值；這些是精確值，比從像素換算的準。
-   使用者手動填，或讓 Claude 讀出來；用來校正價格、取代那根 K 棒的讀值，並顯示在重建圖與模擬裡。 */
+   使用者手動填，或讓 AI 讀出來；用來校正價格、取代那根 K 棒的讀值，並顯示在重建圖與模擬裡。 */
 const fmtX = v => String(Math.round(v * 100) / 100); // 圖上數字照原樣顯示（不像 fmtP 會依價位四捨五入）
 const NUM_IDS = ["numName", "shotHi", "shotLo", "shotDate", "numOff", "numO", "numH", "numL", "numC"];
 function readNums() {
@@ -4353,7 +4353,7 @@ function renderNums() {
   const N = shot.nums || readNums(), extra = shot.numsExtra || [];
   $(".nums").classList.toggle("filled", !!(N.name || N.hi || N.lo || N.hasRow || N.date));
   $("#numsChips").hidden = !extra.length;
-  $("#numsChips").innerHTML = extra.length ? `<span class="note">Claude 讀到的其他數字：</span>` + extra.map(x => `<span class="nchip">${esc(x.label)}<b>${esc(String(x.value))}</b></span>`).join("") : "";
+  $("#numsChips").innerHTML = extra.length ? `<span class="note">AI 讀到的其他數字：</span>` + extra.map(x => `<span class="nchip">${esc(x.label)}<b>${esc(String(x.value))}</b></span>`).join("") : "";
   const el = $("#numsStrip"), D = shot.D;
   if (shot.src === "real" && REAL.cur && D) {
     const R = REAL.cur, l = D[D.length - 1], p = D[D.length - 2], ch = p ? l.c / p.c - 1 : 0, cls = ch > 0 ? "up" : ch < 0 ? "down" : "";
@@ -4672,9 +4672,9 @@ $(".rtabs").addEventListener("click", e => {
 $("#smcSummary").addEventListener("click", e => { const b = e.target.closest("[data-lesson]"); if (b) { switchTab("learn"); showLesson(+b.dataset.lesson); } });
 $("#shotSummary").addEventListener("click", e => { const b = e.target.closest("[data-lesson]"); if (b) { switchTab("learn"); showLesson(+b.dataset.lesson); } });
 
-/* ---------- 請 Claude 解讀 ----------
+/* ---------- 請 AI 解讀 ----------
    在 Claude 裡開啟時用頁面的 sample 能力（以檢視者自己的帳號）；
-   部署在網站上時呼叫 /api/chart-read（伺服器端需設定 ANTHROPIC_API_KEY）。 */
+   部署在網站上時呼叫 /api/chart-read（伺服器端用 GEMINI_API_KEY，Gemini 看圖）。 */
 const AI_PROMPT = `你是一位耐心的台股技術分析老師。使用者上傳了一張看盤軟體的 K 線截圖，想學習怎麼讀圖。請用繁體中文、以教學口吻解說。
 
 請依序使用以下標題（每個標題獨立一行，以「## 」開頭），每段 2–5 句或條列：
@@ -4698,7 +4698,7 @@ let aiMode = null, aiSample = null, aiCtl = null, aiChecked = false;
   } else if (/^https?:$/.test(location.protocol)) aiMode = "api";
   aiChecked = true; aiUpdate();
 })();
-// 讓 Claude 只讀「印在圖上的數字」，回傳 JSON；不推算、不預測
+// 讓 AI 只讀「印在圖上的數字」，回傳 JSON；不推算、不預測
 const NUMS_PROMPT = `這是一張看盤軟體的 K 線截圖。請只讀出圖上「印出來的數字」，看不到或不確定就填 null，絕對不要估計或用刻度推算。
 只回傳一個 JSON 物件，不要任何其他文字：
 {"name": 商品名稱（含代號）,
@@ -4709,7 +4709,7 @@ const NUMS_PROMPT = `這是一張看盤軟體的 K 線截圖。請只讀出圖�
  "indicators": [{"label": 名稱（例如 "MA5"、"布林上"、"SAR"、"K"、"DIF"、"成交量"）, "value": 數字}]（圖例上印出的數值，最多 12 個）}`;
 async function aiReadNums() {
   const btn = $("#numsAi"), note = $("#numsNote"), old = btn.textContent;
-  btn.disabled = true; btn.textContent = "Claude 讀取中…"; note.classList.remove("err");
+  btn.disabled = true; btn.textContent = "AI 讀取中…"; note.classList.remove("err");
   try {
     let text;
     if (aiMode === "sample") text = (await aiSample(NUMS_PROMPT, { images: shot.file })).text;
@@ -4730,10 +4730,10 @@ async function aiReadNums() {
     }
     $("#shotDate").value = /^\d{4}-\d{2}-\d{2}$/.test(dt) ? dt : "";
     shot.numsExtra = (Array.isArray(j.indicators) ? j.indicators : []).filter(x => x && typeof x.label === "string" && x.value != null).slice(0, 12).map(x => ({ label: x.label.slice(0, 16), value: String(x.value).slice(0, 16) }));
-    note.textContent = `Claude 讀到的數字已經填入上面的欄位${j.rowFromRight == null && (j.open || j.close) ? "；看不出資料列是哪一根，先當作最後一根，必要時請修改「倒數第幾根」" : ""}。請對照截圖確認，填錯的直接改。`;
+    note.textContent = `AI 讀到的數字已經填入上面的欄位${j.rowFromRight == null && (j.open || j.close) ? "；看不出資料列是哪一根，先當作最後一根，必要時請修改「倒數第幾根」" : ""}。請對照截圖確認，填錯的直接改。`;
     shotRun();
   } catch (e) {
-    note.textContent = AI_ERR[e?.code] || (e instanceof SyntaxError ? "Claude 的回覆不是預期的格式，請再試一次或手動填寫。" : e?.message) || "讀取失敗，請手動填寫。"; note.classList.add("err");
+    note.textContent = AI_ERR[e?.code] || (e instanceof SyntaxError ? "AI 的回覆不是預期的格式，請再試一次或手動填寫。" : e?.message) || "讀取失敗，請手動填寫。"; note.classList.add("err");
     if (["not_granted", "sampling_disabled", "images_unavailable"].includes(e?.code)) aiMode = null;
   } finally { btn.textContent = old; aiUpdate(); }
 }
@@ -4743,9 +4743,9 @@ function aiUpdate() {
   const nb = $("#numsAi"); nb.hidden = !aiMode; if (!nb.textContent.includes("中")) nb.disabled = !shot.file;
   const ask = $("#aiAsk");
   if (!aiChecked) { ask.disabled = true; ask.textContent = "檢查中…"; return; }
-  ask.textContent = "請 Claude 解讀";
+  ask.textContent = "請 AI 解讀";
   ask.disabled = !aiMode || !shot.file;
-  if (!aiMode) $("#aiNote").textContent = "這個環境無法呼叫 Claude。把網站部署到 Vercel 並設定 ANTHROPIC_API_KEY，或在 Claude 裡開啟這個頁面，就能使用這個功能。上面的程式判讀不受影響。";
+  if (!aiMode) $("#aiNote").textContent = "這個環境無法使用 AI 解讀。把網站部署到 Vercel 並設定 GEMINI_API_KEY，或在 Claude 裡開啟這個頁面，就能使用這個功能。上面的程式判讀不受影響。";
 }
 // 簡單的 Markdown（標題、粗體、行內程式碼、項目與編號清單）→ HTML，內容一律先跳脫
 function mdToHtml(md) {
@@ -4771,13 +4771,13 @@ function toJpegBase64(img, max = 1568) {
 const AI_ERR = {
   cancelled: "已停止。", not_granted: "沒有允許這個頁面使用 Claude，所以無法解讀。", sampling_disabled: "這個帳號目前無法使用 Claude 解讀。",
   rate_limited: "使用太頻繁或已達用量上限，請稍後再試。", image_rejected: "這張圖片無法送出，請換一張 PNG 或 JPG。",
-  refused: "Claude 無法解讀這張圖片。", session_expired: "請重新登入 Claude 後再試。", images_unavailable: "這個環境無法傳送圖片。",
+  refused: "AI 無法解讀這張圖片。", session_expired: "請重新登入 Claude 後再試。", images_unavailable: "這個環境無法傳送圖片。",
 };
 $("#aiStop").addEventListener("click", () => aiCtl?.abort());
 $("#aiAsk").addEventListener("click", async () => {
   if (!shot.file || !aiMode) return;
   const out = $("#aiOut"), ask = $("#aiAsk"), stop = $("#aiStop");
-  out.hidden = false; out.textContent = "Claude 正在看圖…通常需要 10 到 60 秒。";
+  out.hidden = false; out.textContent = "AI 正在看圖…通常需要 10 到 60 秒。";
   ask.disabled = true; stop.hidden = false; aiCtl = new AbortController();
   const ctxText = shot.D ? `\n\n參考資料：程式在瀏覽器中自動辨識的結果如下，可能有誤，請以圖片為準。\n${shot.ctx}` : "";
   try {
