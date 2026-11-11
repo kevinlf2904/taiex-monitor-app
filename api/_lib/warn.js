@@ -2,6 +2,7 @@
 // GET /api/warn → { ok, punish: [{ code, name, market, period, reason, measure }], notice: [{ code, name, market, reason }] }
 // 來源：證交所 OpenAPI announcement/punish（處置）、announcement/notice（注意）；櫃買中心對應的公開資料。欄位名稱用關鍵字找。
 
+import { errText } from "./_err.js";
 import { getJSON } from "./_tw.js";
 
 const keyOf = (r, re) => Object.keys(r).find(k => re.test(String(k).replace(/\s/g, "")));
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
   ];
   const got = await Promise.allSettled(src.map(([k, m, u]) => getJSON(u, 12000).then(j => parseWarn(j, m, k))));
   const out = { punish: [], notice: [] }, errors = [];
-  got.forEach((g, i) => { const [k, m] = src[i]; if (g.status === "fulfilled") out[k].push(...g.value); else errors.push(`${m}${k === "punish" ? "處置" : "注意"}：${g.reason?.message}`); });
+  got.forEach((g, i) => { const [k, m] = src[i]; if (g.status === "fulfilled") out[k].push(...g.value); else errors.push(`${m}${k === "punish" ? "處置" : "注意"}：${errText(g.reason)}`); });
   if (!out.punish.length && !out.notice.length && errors.length === src.length) return res.status(200).json({ ok: false, error: `拿不到處置與注意股（${errors[0]}）` });
   res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=7200");
   return res.status(200).json({ ok: true, source: "證交所、櫃買中心公告", ...out, errors });

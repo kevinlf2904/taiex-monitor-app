@@ -1,6 +1,7 @@
 // 預測市場：Polymarket 公開 API（gamma-api，不需要金鑰）裡會影響股市的賭盤，給 learner/watch.html「大盤 → 預測市場」使用。
 // GET /api/poly → { ok, at, events: [{ id, title, url, cat, vol, vol24, end, markets: [{ q, label, yes, d1 }] }] }
 // 依標籤抓成交量最大的進行中事件，再用關鍵字分類（聯準會、經濟數據、關稅貿易、地緣政治、美股、加密貨幣…），快取 5 分鐘。
+import { errText } from "./_err.js";
 const GAMMA = "https://gamma-api.polymarket.com/events";
 const TAGS = ["fed-rates", "economy", "finance", "business", "tariffs", "geopolitics", "stocks", "crypto", "china", "taiwan", "politics"];
 // [分類, 關鍵字]：第一個符合的分類；都不符合的事件不列（運動、娛樂…）
@@ -30,7 +31,7 @@ export default async function handler(req, res) {
   const got = await Promise.allSettled(TAGS.map(async t => { const r = await fetch(`${GAMMA}?active=true&closed=false&archived=false&limit=40&order=volume24hr&ascending=false&tag_slug=${t}`, { headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)" }, signal: AbortSignal.timeout(12000) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }));
   const seen = new Set(), events = [];
   for (const g of got) if (g.status === "fulfilled" && Array.isArray(g.value)) for (const e of g.value) { if (seen.has(String(e.id))) continue; seen.add(String(e.id)); const x = normEvent(e); if (x && x.vol >= 50000) events.push(x); }
-  if (!events.length) return res.status(200).json({ ok: false, error: `暫時拿不到 Polymarket 資料（${got.map(g => g.reason?.message).filter(Boolean)[0] || "沒有符合的事件"}）` });
+  if (!events.length) return res.status(200).json({ ok: false, error: `暫時拿不到 Polymarket 資料（${got.map(g => g.reason && errText(g.reason)).filter(Boolean)[0] || "沒有符合的事件"}）` });
   events.sort((a, b) => b.vol24 - a.vol24);
   const v = { ok: true, at: new Date().toISOString(), source: "Polymarket（gamma-api 公開資料）", events: events.slice(0, 80) };
   memo = { at: Date.now(), v };

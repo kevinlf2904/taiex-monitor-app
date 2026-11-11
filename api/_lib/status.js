@@ -2,6 +2,7 @@
 // GET /api/status
 // GET /api/status?bench=1  美股報價速度比較：Yahoo 與 Finnhub 各抓 3 次 AAPL、NVDA，回報花多少毫秒與報價時間（Yahoo 是美東時間、Finnhub 是 UTC；不含金鑰）
 // 常見問題：在 Vercel 加了環境變數，但沒有勾 Production（或 Preview），或加完沒有重新部署 → 執行時讀不到。
+import { errText } from "./_err.js";
 
 const KEYS = ["FUGLE_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "FINMIND_TOKEN", "FRED_API_KEY", "FINNHUB_API_KEY"];
 export function envReport(env = process.env) {
@@ -16,7 +17,7 @@ async function pingFugle(key) {
     const r = await fetch("https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/2330", { headers: { "X-API-KEY": key.trim() }, signal: AbortSignal.timeout(6000) });
     if (r.ok) return { ok: true };
     return { ok: false, status: r.status, hint: r.status === 401 || r.status === 403 ? "金鑰無效或沒有權限，請到富果開發者網站確認金鑰" : r.status === 429 ? "超過富果免費方案每分鐘的次數上限，稍等再試" : `富果回應 ${r.status}` };
-  } catch (e) { return { ok: false, hint: `連不到富果（${e.message}）` }; }
+  } catch (e) { return { ok: false, hint: `連不到富果（${errText(e)}）` }; }
 }
 
 // FRED、Finnhub：用最小的一次請求確認金鑰有效（金鑰放在網址或標頭，回報只有狀態碼與提示，不含金鑰）

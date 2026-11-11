@@ -1,3 +1,4 @@
+import { errText } from "./_err.js";
 import { getJSON, num, companies, rocDate } from "./_tw.js";
 import { todayTaipei } from "./quote.js";
 
@@ -221,7 +222,7 @@ export default async function handler(req, res) {
   if (req.query?.meta) {
     try { const m = await companies(), ind = {}; for (const [c, x] of m) if (x.ind) ind[c] = x.ind;
       res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate=604800"); return res.status(200).json({ ok: true, ind }); }
-    catch (e) { return res.status(200).json({ ok: false, error: `拿不到產業別（${e.message}）` }); }
+    catch (e) { return res.status(200).json({ ok: false, error: `拿不到產業別（${errText(e)}）` }); }
   }
   const d = String(req.query?.date || "").replace(/\D/g, "");
   if (!/^20\d{6}$/.test(d)) return res.status(400).json({ ok: false, error: "date 要是 YYYYMMDD" });
@@ -236,7 +237,7 @@ export default async function handler(req, res) {
   const iso = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`, past = d < today;
   if (!quotes.size || !inst.size) {
     // 證交所連不上時不要被當成假日快取起來
-    if (q.status === "rejected" || i.status === "rejected") return res.status(200).json({ ok: false, error: `證交所資料暫時拿不到（${(q.reason || i.reason)?.message}）` });
+    if (q.status === "rejected" || i.status === "rejected") return res.status(200).json({ ok: false, error: `證交所資料暫時拿不到（${errText(q.reason || i.reason)}）` });
     // 證交所明確說「沒有符合條件的資料」才是休市，可以快取 30 天；其他空回應（維護中、只回一半）只快取 10 分鐘
     const holiday = /沒有符合條件/.test(String(q.value?.stat || "")) && /沒有符合條件/.test(String(i.value?.stat || ""));
     res.setHeader("Cache-Control", past && holiday ? "s-maxage=2592000" : "s-maxage=600");

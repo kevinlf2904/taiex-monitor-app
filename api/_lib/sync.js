@@ -203,10 +203,17 @@ export default async function handler(req, res) {
       if (n > 30) return res.status(429).json({ ok: false, error: "上傳太頻繁了，請一小時後再試" });
       const data = b.data && typeof b.data === "object" && !Array.isArray(b.data) ? b.data : null; if (!data) return res.status(400).json({ ok: false, error: "沒有資料或資料格式不對" });
       // 版本檢查：網頁帶 base（這台上次同步時雲端的時間）；雲端已經被別台裝置更新過（at > base）就不覆蓋，回 409 讓使用者選。force＝使用者確認要用這台蓋掉。舊版網頁沒帶 base 照舊直接覆蓋
-      const base = b.base == null ? null : Number(b.base);
-      if (base != null && Number.isFinite(base) && b.force !== true) { const cur = await kv("GET", key); let c = null; try { c = cur ? JSON.parse(cur) : null; } catch {} if (c && +c.at > base) return res.status(409).json({ ok: false, conflict: true, at: +c.at, dev: String(c.dev || ""), error: "雲端有另一台裝置比較新的資料" }); }
-      const at = Date.now(), body = JSON.stringify({ at, dev: String(b.dev || "").slice(0, 40), data }); if (body.length > MAX) return res.status(413).json({ ok: false, error: `資料太大（${Math.round(body.length / 1024)}KB，上限 900KB）` });
-      await kv("SET", key, body, "EX", KEEP);
+      // 「檢查再寫入」不是原子操作：兩台同時上傳、都看到雲端還是 base，會兩個都通過檢查、後寫的悄悄蓋掉先寫的（#262 SEC-05）。
+      // 要做版本檢查的上傳先拿一把短暫的鎖（SET NX，10 秒後自動失效）；拿不到就回 409 busy（另一台正在上傳），稍後重試時就會看到對方寫入後的新版本而回 conflict。
+      const base = b.base == null ? null : Number(b.base), versioned = base != null && Number.isFinite(base) && b.force !== true;
+      const dev = String(b.dev || "").slice(0, 40), mkBody = at => JSON.stringify({ at, dev, data });
+      const size = mkBody(Date.now()).length; if (size > MAX) return res.status(413).json({ ok: false, error: `資料太大（${Math.round(size / 1024)}KB，上限 900KB）` });
+      const lockKey = `sync:lock:${h}`, lockTok = `${Date.now()}:${Math.random().toString(36).slice(2)}`; let locked = false, at;
+      if (versioned) { locked = (await kv("SET", lockKey, lockTok, "NX", "EX", 10)) === "OK"; if (!locked) return res.status(409).json({ ok: false, busy: true, error: "另一台裝置正在上傳，請幾秒後再試" }); }
+      try {
+        if (versioned) { const cur = await kv("GET", key); let c = null; try { c = cur ? JSON.parse(cur) : null; } catch {} if (c && +c.at > base) return res.status(409).json({ ok: false, conflict: true, at: +c.at, dev: String(c.dev || ""), error: "雲端有另一台裝置比較新的資料" }); }
+        at = Date.now(); await kv("SET", key, mkBody(at), "EX", KEEP);
+      } finally { if (locked) { try { if ((await kv("GET", lockKey)) === lockTok) await kv("DEL", lockKey); } catch { /* 鎖 10 秒後自己失效 */ } } }
       const chat = await kv("GET", `tg:${h}`);
       if (chat) { const doc = alertDoc(data, chat); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } else { await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); } }
       return res.status(200).json({ ok: true, at, tg: !!chat });

@@ -483,3 +483,38 @@ test("P1-03 AI 限流：沒有 KV 用保守的記憶體上限（不是全站統�
     assert.equal(await aiLimit({ headers: { "x-real-ip": "198.51.100.8" } }, "podcast", now, ok), null); assert.ok(n >= 2, "有呼叫共用計數器");
   } finally { mem.clear(); if (save.u === undefined) delete process.env.KV_REST_API_URL; else process.env.KV_REST_API_URL = save.u; if (save.t === undefined) delete process.env.KV_REST_API_TOKEN; else process.env.KV_REST_API_TOKEN = save.t; }
 });
+
+// SEC-05（#262、#264 D2）：「檢查雲端版本 → 寫入」不是原子操作。兩台裝置同時上傳、都看到雲端還是 base，會兩個都通過檢查，後寫的悄悄蓋掉先寫的，
+// 而且兩邊都收到 ok。現在要做版本檢查的上傳先拿一把短暫的鎖（SET NX EX）：同時只有一台能檢查並寫入，另一台拿到 409 busy，重試時會看到新版本而回 conflict。
+test("並行上傳（SEC-05）：兩台同時帶同一個 base 上傳，只有一台成功，另一台 409 busy；重試時看到對方的新版本回 conflict；force 與舊版（沒帶 base）不受影響", async () => {
+  process.env.KV_REST_API_URL = "https://mock-kv.upstash.io"; process.env.KV_REST_API_TOKEN = "mock_token";
+  const originalFetch = globalThis.fetch, store = new Map(), id = "race_sync_token_abcdef_1234", key = `sync:${hashId(id)}`, lockKey = `sync:lock:${hashId(id)}`, tick = () => new Promise(r => setTimeout(r, 1));
+  // 會讓出執行權的 KV（每個指令前後各 tick 一次，才會真的交錯）；SET 遵守 NX
+  globalThis.fetch = async (url, opts) => { await tick(); const [op, k, v, ...rest] = JSON.parse(opts.body); const R = result => ({ ok: true, json: async () => ({ result }) }); let out;
+    if (op === "INCR") out = R(1); else if (op === "GET") out = R(store.get(k) ?? null);
+    else if (op === "SET") { if (rest.includes("NX") && store.has(k)) out = R(null); else { store.set(k, v); out = R("OK"); } }
+    else if (op === "DEL") { store.delete(k); out = R(1); } else out = R(1);
+    await tick(); return out; };
+  const push = async body => { const m = mockHttp({ body: { op: "push", id, ...body } }); await handler(m.req, m.res); return m; };
+  try {
+    store.set(key, JSON.stringify({ at: 1000, dev: "old", data: { "kline:watch:x": "base" } }));
+    const [a, b] = await Promise.all([push({ base: 1000, dev: "iPhone", data: { "kline:watch:x": "iphone" } }), push({ base: 1000, dev: "iPad", data: { "kline:watch:x": "ipad" } })]);
+    const oks = [a, b].filter(m => m.data.ok), busy = [a, b].filter(m => m.data.busy);
+    assert.equal(oks.length, 1, "只有一台上傳成功（沒有鎖時兩台都會回 ok、其中一台的資料被悄悄蓋掉）：" + JSON.stringify([a.data, b.data]));
+    assert.equal(busy.length, 1); assert.equal(busy[0].status, 409); assert.match(busy[0].data.error, /另一台裝置正在上傳/);
+    const winner = JSON.parse(store.get(key)); assert.equal(winner.dev, oks[0] === a ? "iPhone" : "iPad", "雲端是成功那台的資料");
+    assert.equal(store.has(lockKey), false, "鎖用完就放掉");
+    // 輸的那台稍後重試（還是帶舊的 base）：這次看到對方的新版本，回 conflict 讓使用者選，不是悄悄蓋掉
+    const retry = await push({ base: 1000, dev: busy[0] === a ? "iPhone" : "iPad", data: { "kline:watch:x": "retry" } });
+    assert.equal(retry.status, 409); assert.equal(retry.data.conflict, true); assert.equal(retry.data.at, winner.at);
+    // 帶了新的 base 就能上傳
+    const ok2 = await push({ base: winner.at, dev: "iPad", data: { "kline:watch:x": "second" } }); assert.equal(ok2.data.ok, true);
+    // force、舊版沒帶 base：不做版本檢查，不用鎖，行為照舊
+    assert.equal((await push({ base: 1, force: true, data: { "kline:watch:x": "f" } })).data.ok, true);
+    assert.equal((await push({ data: { "kline:watch:x": "legacy" } })).data.ok, true);
+    // 鎖被別人佔著（10 秒內）時：回 busy；鎖不是自己的就不放（不會把別人的鎖刪掉）
+    store.set(lockKey, "someone-else"); const held = await push({ base: winner.at, data: { "kline:watch:x": "z" } }); assert.equal(held.data.busy, true); assert.equal(store.get(lockKey), "someone-else", "別人的鎖不能被刪");
+    // 太大的資料：不會去拿鎖
+    store.delete(lockKey); const big = await push({ base: 1, data: { "kline:watch:x": "x".repeat(950 * 1024) } }); assert.equal(big.status, 413); assert.equal(store.has(lockKey), false);
+  } finally { globalThis.fetch = originalFetch; }
+});

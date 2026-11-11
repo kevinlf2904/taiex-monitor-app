@@ -1131,10 +1131,11 @@ function arbrCalc(D, n = 26) {
   return { ar, br };
 }
 // OBV 能量潮：收漲加上當天成交量、收跌減掉，累計起來
-function obvCalc(D) { let s = 0; return D.map((x, i) => (i ? (s += x.c > D[i - 1].c ? x.v || 0 : x.c < D[i - 1].c ? -(x.v || 0) : 0) : (s = 0))); }
+// 來源沒給量的 K 棒（vNa）：漲跌那天的量未知，OBV 那一格是 null（不是當成 0 量），累計值不加（#262 FIN-04）；平盤那天本來就不加量，不受影響
+function obvCalc(D) { let s = 0; return D.map((x, i) => { if (!i) return (s = 0); const d = x.c > D[i - 1].c ? 1 : x.c < D[i - 1].c ? -1 : 0; if (d && x.vNa) return null; return (s += d * (x.v || 0)); }); }
 // VR 成交量比率：n 日內（上漲日的量＋平盤日量的一半）÷（下跌日的量＋平盤日量的一半）× 100
 function vrCalc(D, n = 26) {
-  return D.map((_, i) => { if (i < n) return null; let u = 0, d = 0, f = 0; for (let k = i - n + 1; k <= i; k++) { const v = D[k].v || 0; if (D[k].c > D[k - 1].c) u += v; else if (D[k].c < D[k - 1].c) d += v; else f += v; } return d + f / 2 ? ((u + f / 2) / (d + f / 2)) * 100 : null; });
+  return D.map((_, i) => { if (i < n) return null; let u = 0, d = 0, f = 0; for (let k = i - n + 1; k <= i; k++) { if (D[k].vNa) return null; /* 視窗裡有一根沒給量：這格算不出來 */ const v = D[k].v || 0; if (D[k].c > D[k - 1].c) u += v; else if (D[k].c < D[k - 1].c) d += v; else f += v; } return d + f / 2 ? ((u + f / 2) / (d + f / 2)) * 100 : null; });
 }
 // 大盤寬度：ADR 漲跌比（n 日上漲家數合計 ÷ 下跌家數合計）、OBOS 超買超賣（n 日（上漲−下跌）家數合計）、ADL 騰落線（每天上漲−下跌家數一路累計）
 function breadthCalc(D, n = 10) {
@@ -1301,7 +1302,7 @@ function cciCalc(D, n = 20) { const tp = D.map(x => (x.h + x.l + x.c) / 3), m = 
   return tp.map((v, i) => { if (m[i] == null) return null; let md = 0; for (let k = i - n + 1; k <= i; k++) md += Math.abs(tp[k] - m[i]); md /= n; return md ? (v - m[i]) / (0.015 * md) : 0; }); }
 // MFI 資金流量指標（14）：把成交量加進 RSI，0～100，80 以上超買、20 以下超賣
 function mfiCalc(D, n = 14) { const tp = D.map(x => (x.h + x.l + x.c) / 3);
-  return D.map((_, i) => { if (i < n) return null; let p = 0, q = 0; for (let k = i - n + 1; k <= i; k++) { const f = tp[k] * (D[k].v || 0); if (tp[k] > tp[k - 1]) p += f; else if (tp[k] < tp[k - 1]) q += f; } return q ? 100 - 100 / (1 + p / q) : p ? 100 : 50; }); }
+  return D.map((_, i) => { if (i < n) return null; let p = 0, q = 0; for (let k = i - n + 1; k <= i; k++) { if (D[k].vNa && tp[k] !== tp[k - 1]) return null; /* 視窗裡有一根漲跌的沒給量：算不出來（平盤那天不計量，不受影響） */ const f = tp[k] * (D[k].v || 0); if (tp[k] > tp[k - 1]) p += f; else if (tp[k] < tp[k - 1]) q += f; } return q ? 100 - 100 / (1 + p / q) : p ? 100 : 50; }); }
 // TRIX（12）：收盤取三次 EMA 後的每日變化率（%），濾掉短線雜訊；訊號線是 9 日平均
 function trixCalc(c, n = 12) { const e = ema(ema(ema(c, n), n), n); return e.map((v, i) => (i >= 3 * n - 2 && e[i - 1] ? (v / e[i - 1] - 1) * 100 : null)); }
 // 拋物線 SAR（Wilder，加速因子 0.02 起、每創新高低加 0.02、最多 0.2）：跟著趨勢移動的停損點，價格穿越就翻轉
