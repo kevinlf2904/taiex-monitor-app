@@ -95,19 +95,11 @@ function btFails(B) {
 }
 
 /* ---------- 4. 市場狀態 ---------- */
-// ADX（Wilder 平滑）：25 以上趨勢明確、20 以下沒有方向
+// ADX（Wilder 平滑）：25 以上趨勢明確、20 以下沒有方向。
+// 直接用 core.js 的 dmiCalc（DMI 副圖、訊號用的同一份公式，#262 ARCH-01），不再各自維護一份；資料少於 2n+1 根時全部是 null（原本的規則）。
+// 一般資料兩者逐位元相同；只有開頭連續 n 根以上「完全沒有波動」（高＝低＝前收）時，dmiCalc 會等到有波動才開始算，不把那段當成 DX＝0。
 function adxCalc(D, n = 14) {
-  const o = Array(D.length).fill(null); if (D.length < 2 * n + 1) return o;
-  let tr = 0, pd = 0, nd = 0, adx = null; const dx = [];
-  for (let i = 1; i < D.length; i++) {
-    const up = D[i].h - D[i - 1].h, dw = D[i - 1].l - D[i].l, t = Math.max(D[i].h - D[i].l, Math.abs(D[i].h - D[i - 1].c), Math.abs(D[i].l - D[i - 1].c));
-    const p = up > dw && up > 0 ? up : 0, m = dw > up && dw > 0 ? dw : 0;
-    if (i <= n) { tr += t; pd += p; nd += m; if (i < n) continue; } else { tr = tr - tr / n + t; pd = pd - pd / n + p; nd = nd - nd / n + m; }
-    const pdi = tr ? (100 * pd) / tr : 0, ndi = tr ? (100 * nd) / tr : 0, x = pdi + ndi ? (100 * Math.abs(pdi - ndi)) / (pdi + ndi) : 0;
-    if (adx == null) { dx.push(x); if (dx.length === n) adx = qMean(dx); } else adx = (adx * (n - 1) + x) / n;
-    if (adx != null) o[i] = adx;
-  }
-  return o;
+  return D.length < 2 * n + 1 ? Array(D.length).fill(null) : dmiCalc(D, n).adx;
 }
 // o.fast／o.slow：日線 20／60、週線 10／30
 function marketState(D, o = {}) {
