@@ -804,6 +804,10 @@ test("題材連動：週報酬、相關係數、領先落後、上三角索引�
   assert.deepEqual(R.ids, ["a", "b"]); assert.equal(R.lead[0][0], "a"); assert.equal(R.lead[0][1], "b"); assert.equal(R.c.length, 1);
   assert.equal(themeRet([new Map([["d", 0.1]]), new Map([["d", 0.3]])]).get("d"), 0.2);
   const { execFileSync } = await import("node:child_process"); execFileSync("node", [(await import("node:url")).fileURLToPath(new URL("../scripts/check-indpack.mjs", import.meta.url))], { stdio: "pipe" }); // 有 ✗ 會丟錯
+  // --report：分類盤點只是清單，不讓檢查失敗；數字會跟著排程資料變，只檢查各段都有印出來
+  const rep = execFileSync("node", [(await import("node:url")).fileURLToPath(new URL("../scripts/check-indpack.mjs", import.meta.url)), "--report"], { encoding: "utf8" });
+  for (const k of ["== 分類盤點 ==", /題材 \d+ 個（tw \d+/, /產業網絡 \d+ 張，引用 \d+ 個題材/, /圖解產業鏈比代表股多出的台股代號：\d+ 個題材/, "櫃買產業價值鏈", "月營收名冊"]) assert.match(rep, typeof k === "string" ? new RegExp(k) : k);
+  assert.doesNotMatch(rep, /^✗/m);
 });
 test("YouTube：頻道影片 RSS、搜尋結果、頻道網址解析，影片交給 Gemini 看", async () => {
   const P = await import("../api/_lib/podcast.js");
