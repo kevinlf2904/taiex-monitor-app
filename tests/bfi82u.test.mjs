@@ -31,6 +31,15 @@ test("某一類找不到是 null，不是 0；全部都不認得回 null", () =>
   assert.equal(parseBfi82u({ stat: "OK", data: [row("其他", 1e8)] }), null);
   assert.equal(parseBfi82u({ stat: "很抱歉，沒有符合條件的資料!", data: [] }), null);
 });
+test("明細與舊版彙總列同時出現：明細優先，不重複加總（列的順序不影響）", () => {
+  const mixed = [...REAL.data, row("外資及陸資", 22e8), row("自營商", -2e8)];
+  assert.deepEqual(parseBfi82u({ ...REAL, data: mixed }), { foreign: 22, trust: 5, dealer: -2, total: 25 });
+  assert.deepEqual(parseBfi82u({ ...REAL, data: [...mixed].reverse() }), { foreign: 22, trust: 5, dealer: -2, total: 25 });
+});
+test("只有一類有明細：該類用明細，另一類沒明細才用彙總列", () => {
+  const data = [row("外資及陸資(不含外資自營商)", 20e8), row("外資自營商", 2e8), row("外資及陸資", 99e8), row("自營商", 1e8), row("投信", 5e8), row("合計", 28e8)];
+  assert.deepEqual(parseBfi82u({ stat: "OK", data }), { foreign: 22, trust: 5, dealer: 1, total: 28 });
+});
 test("舊版單位名稱（外資及陸資、自營商，沒有括號說明）仍可解析", () => {
   const r = parseBfi82u({ stat: "OK", data: [row("自營商", 1e8), row("投信", 2e8), row("外資及陸資", 3e8), row("合計", 6e8)] });
   assert.deepEqual(r, { foreign: 3, trust: 2, dealer: 1, total: 6 });
