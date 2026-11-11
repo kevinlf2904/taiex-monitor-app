@@ -175,7 +175,7 @@ function fakeGoogle(status = 200, text = '{"status":"ok"}') {
 }
 async function callChat(body, g) {
   const { default: handler } = await import("../api/_lib/chat.js"), { _resetGeminiCache } = await import("../api/_lib/_gemini.js"); _resetGeminiCache();
-  const env = { ...process.env }; Object.assign(process.env, { GEMINI_API_KEY: "test", ANTHROPIC_API_KEY: "test", AI_CLAUDE_FALLBACK: "1" }); delete process.env.KV_REST_API_URL; delete process.env.UPSTASH_REDIS_REST_URL;
+  const env = { ...process.env }; Object.assign(process.env, { GEMINI_API_KEY: "test", ANTHROPIC_API_KEY: "test", AI_CLAUDE_ENABLED: "1", AI_CLAUDE_FALLBACK: "1" }); // 總開關也開：才是在驗證「研究模式即使 Claude 全開也不改問 Claude」（#264 A2） delete process.env.KV_REST_API_URL; delete process.env.UPSTASH_REDIS_REST_URL;
   const real = globalThis.fetch; globalThis.fetch = g.fetchImpl; let out = null;
   const res = { status() { return this; }, setHeader() {}, json(v) { out = v; return this; } };
   try { await handler({ method: "POST", body, headers: {} }, res); } finally { globalThis.fetch = real; process.env = env; }

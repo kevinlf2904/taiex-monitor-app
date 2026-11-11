@@ -12,8 +12,13 @@ import { kv, kvOn, incrTtl } from "./sync.js";
 export const AI_LIMITS = { chat: [40, 1500], "chart-read": [10, 300], import: [10, 300], podcast: [6, 150], confai: [10, 200], "claude-fb": [5, 60], "podcast-file": [240, 20000] };
 // 網站上一次請求最多打幾次 Gemini（模型忙線時換備用模型重試）：每一次都算錢，所以有上限；排程不受這個限制
 export const WEB_TRIES = 3;
-// Gemini 失敗時要不要改問 Claude（付費、比較貴）：預設不要，設 AI_CLAUDE_FALLBACK=1 才開，而且另外有全站每天上限（claude-fb）
-export const claudeFallbackOn = () => process.env.AI_CLAUDE_FALLBACK === "1";
+// Gemini 失敗時要不要改問 Claude（付費、比較貴）：預設不要，要 AI_CLAUDE_ENABLED=1 ＋ AI_CLAUDE_FALLBACK=1 才開，而且另外有全站每天上限（claude-fb）
+// Claude 總開關（付費）：AI_CLAUDE_ENABLED=1 才允許任何路徑呼叫 Claude；預設關閉。網站主要靠 Gemini，沒設這個，即使有 ANTHROPIC_API_KEY 也不會用 Claude
+// （問問題、截圖匯入、節目摘要、K 線截圖解讀都一樣）。要把 Anthropic 金鑰拿掉時什麼都不用改。
+export const claudeEnabled = () => process.env.AI_CLAUDE_ENABLED === "1";
+export const claudeUsable = () => claudeEnabled() && !!(process.env.ANTHROPIC_API_KEY || "").trim();
+// 「Gemini 失敗改問 Claude」要兩個都開：總開關＋AI_CLAUDE_FALLBACK=1
+export const claudeFallbackOn = () => claudeEnabled() && process.env.AI_CLAUDE_FALLBACK === "1";
 
 export const mem = new Map();
 export const MAX_MEM = 5000;
