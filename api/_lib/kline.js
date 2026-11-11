@@ -11,6 +11,7 @@
 //   報酬、波動、風險用 ac；K 線圖仍用原始的 o/h/l/c。指數不還原（加權是價格指數）；拿不到事件時 adj.ok=false、不給 ac。
 
 // HTTP 標頭只能用 ASCII（中文會讓 fetch 直接丟出 ByteString 錯誤）
+import { errText } from "./_err.js";
 import { isUS, usName } from "./_yahoo.js";
 import { session } from "./quote.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
@@ -262,12 +263,12 @@ export default async function handler(req, res) {
           if (isIndex || isOtc) adj = { ok: false, why: "index", note: "指數不還原（價格指數）" };
           else try { const ySym = us ? raw : `${raw}${r.market === "上櫃" ? ".TWO" : ".TW"}`, A = await adjOf(ySym, data, /^Yahoo/.test(r.source), raw, !us && (r.market === "上市" || r.market === "上櫃") ? r.market : null);
             data.splice(0, data.length, ...A.rows); adj = { ok: true, source: A.source, basis: A.basis, events: A.events, skipped: A.skipped, suspect: A.suspect, ...(A.officialFailed ? { officialFailed: true } : {}) };
-          } catch (e) { adj = { ok: false, why: "fetch_failed", note: `拿不到除權息資料（${e.message}），用原始價格` }; }
+          } catch (e) { adj = { ok: false, why: "fetch_failed", note: `拿不到除權息資料（${errText(e)}），用原始價格` }; }
         }
         res.setHeader("Cache-Control", before ? "s-maxage=86400, stale-while-revalidate=604800" : session() === "closed" ? "s-maxage=1800, stale-while-revalidate=3600" : "s-maxage=60, stale-while-revalidate=120");
         return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : isOtc ? "OTC" : raw, us, name: r.name, market: r.market, source: r.source, unit: r.unit, data, ...(adj ? { adj } : {}) });
       }
-    } catch (e) { errors.push(e.message); }
+    } catch (e) { errors.push(errText(e)); }
   }
   // 只有每個來源都正常回應（沒有錯誤）卻沒有更早的資料，才告訴頁面「到底了」；連線失敗時讓頁面之後還能再拉
   if (before && !errors.length) return res.status(200).json({ ok: true, code: isIndex ? "TAIEX" : isOtc ? "OTC" : raw, data: [], end: true, note: `${before} 以前沒有更早的資料了。` });

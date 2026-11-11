@@ -77,7 +77,7 @@
     // 買進不收交易稅（台股證交稅、美股 SEC 費都只在賣出）：空白直接記 0，不算「估算」、不用再確認
     if (!errors.length && type === "buy" && tx.tax === null) tx.tax = 0;
     if (!errors.length && (type === "buy" || type === "sell") && (tx.fee === null || tx.tax === null)) {
-      if (!tx.assetType) tx.assetType = market === "tw" && /^00\d{2,4}[A-Z]?$/.test(symbol) ? "etf" : "stock";
+      if (!tx.assetType) tx.assetType = market === "tw" && /^00\d{2,4}B$/.test(symbol) ? "bond_etf" : market === "tw" && /^00\d{2,4}[A-Z]?$/.test(symbol) ? "etf" : "stock"; // 00679B 這類尾碼 B 的是債券 ETF：證交稅 0（和 analysis.js 的 taxOf 同一條規則，#262 NEW-05）
       const est = estimateCosts(tx, opts.rules || DEFAULT_RULES);
       if (tx.fee === null) tx.fee = est.fee; if (tx.tax === null) tx.tax = est.tax; tx.feeEstimated = true;
       Wn("fee_estimated", "手續費或交易稅沒填，依費用規則估算");

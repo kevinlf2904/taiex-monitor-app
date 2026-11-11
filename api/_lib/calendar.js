@@ -4,6 +4,7 @@
 // 法說會：公開資訊觀測站「法人說明會一覽表」（本月與下個月，上市＋上櫃），回在 conf：[{ date, time, code, name, place, note, market }]
 // 休市日：證交所「有價證券集中交易市場開（休）市日期」，回在 hol：[{ date, name, note }]
 
+import { errText } from "./_err.js";
 import { getJSON, num } from "./_tw.js";
 
 const keyOf = (r, re) => Object.keys(r).find(k => re.test(String(k).replace(/\s/g, "")));
@@ -83,7 +84,7 @@ export default async function handler(req, res) {
   const [got, cf, hol] = await Promise.all([Promise.allSettled(tries.map(([m, u]) => getJSON(u, 12000).then(j => parseCalendar(j, m)))), confList().catch(() => []),
     getJSON(HOL_URL, 12000).then(parseHoliday).catch(() => [])]);
   const seen = new Set(), rows = [], errors = [];
-  got.forEach((g, i) => { if (g.status !== "fulfilled") { errors.push(`${tries[i][0]}：${g.reason?.message}`); return; }
+  got.forEach((g, i) => { if (g.status !== "fulfilled") { errors.push(`${tries[i][0]}：${errText(g.reason)}`); return; }
     for (const r of g.value) { const k = r.date + r.code; if (!seen.has(k)) { seen.add(k); rows.push(r); } } });
   if (!rows.length && !cf.length) return res.status(200).json({ ok: false, error: `拿不到除權息預告（${errors.join("；") || "沒有資料"}）` });
   rows.sort((a, b) => a.date.localeCompare(b.date) || a.code.localeCompare(b.code));

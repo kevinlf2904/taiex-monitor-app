@@ -2,6 +2,7 @@
 // GET /api/usearn → { ok, at, from, to, rows: [[日期, 代號, 名稱, 市值(十億美元), 實際EPS, 預估EPS, 驚喜%, 時段, 財報季, 去年同期EPS]] }
 // 來源：Nasdaq 公開財報行事曆（每天一頁，過去的日子有實際 EPS 與驚喜%，未來的日子有預估與去年同期）。只留市值 50 億美元以上的公司。
 // 排程（scripts/us-earn.mjs）每天整理兩次存成 learner/data/us-earn.json，網站讀不到檔案時才即時問這裡。
+import { errText } from "./_err.js";
 import { usName } from "./_yahoo.js";
 
 const H = { "User-Agent": "Mozilla/5.0", Accept: "application/json", Origin: "https://www.nasdaq.com", Referer: "https://www.nasdaq.com/" };
@@ -19,7 +20,7 @@ export async function buildUsEarn(ms = 15000, back = 14, ahead = 14) {
   const out = [], errs = []; let k = 0;
   await Promise.all(Array.from({ length: 5 }, async () => { while (k < days.length) { const day = days[k++];
     try { const r = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${day}`, { headers: H, signal: AbortSignal.timeout(ms) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); const j = await r.json(); out.push(...parseDay(day, j?.data?.rows)); }
-    catch (e) { errs.push(`${day} ${e.message}`); } } }));
+    catch (e) { errs.push(`${day} ${errText(e)}`); } } }));
   if (!out.length) return { ok: false, error: `拿不到美股財報行事曆（${errs[0] || "沒有資料"}）` };
   out.sort((a, b) => a[0].localeCompare(b[0]) || b[3] - a[3]);
   return { ok: true, source: "Nasdaq 財報行事曆", at: new Date().toISOString(), from: days[0], to: days.at(-1), rows: out, errors: errs.length };

@@ -3,6 +3,7 @@
 //                            month: { date, rows: [{ name, code, sh, pct, chg }] }, ind: { date, rows: [{ name, pct }] } }
 // 來源：MoneyDJ 理財網 ETF 頁面（基本資料 Basic0004、全部持股 Basic0007b、月持股明細與產業分布 Basic0007a），台股與美股 ETF 都有。
 // 成分股變動（納入、剔除）需要前後兩次的持股，由排程 scripts/etf-holdings.mjs 每天存一份比對（learner/data/etf-hold/<代號>.json）。
+import { errText } from "./_err.js";
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "text/html" };
 const BASE = "https://www.moneydj.com/ETF/X/Basic/";
@@ -66,5 +67,5 @@ export default async function handler(req, res) {
     const body = await etfData(code);
     if (body.ok) { cache.set(code, { at: Date.now(), body }); res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400"); }
     return res.status(200).json(body);
-  } catch (e) { return res.status(200).json({ ok: false, code, error: `拿不到 ETF 資料（${e.message}）` }); }
+  } catch (e) { return res.status(200).json({ ok: false, code, error: `拿不到 ETF 資料（${errText(e)}）` }); }
 }

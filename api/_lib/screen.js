@@ -11,7 +11,7 @@
 // 指標：月營收年增／年減、月營收雙增、累計營收年增、毛利率、營益率、累計 EPS、虧損、股價淨值比 < 1（t187ap05、t187ap14、t187ap17，上市＋上櫃）
 
 import { parseT86 } from "./hot.js";
-import { userMsg } from "./_err.js";
+import { userMsg, errText } from "./_err.js";
 import { marketRows, liveCache } from "./_live.js";
 import { getJSON, num } from "./_tw.js";
 import { CONCEPTS } from "./_concepts.js";
@@ -32,7 +32,7 @@ export function buildLists({ quotes, t86 = [], avg = [], bw = [] }) {
   const Q = new Map(quotes.map(q => [q.code, q])), liquid = q => (q?.vol || 0) >= 500, stock = c => /^\d{4}$/.test(c);
   const lists = [];
   lists.push({ id: "short", title: "單日大漲", desc: "漲幅 ≥ 4%、成交值 ≥ 3 億", rows: quotes.filter(q => stock(q.code) && q.chgPct >= 4 && (q.value || 0) >= 3).sort((a, b) => b.chgPct - a.chgPct).slice(0, 30).map(q => row(q, `成交值 ${q.value.toFixed(1)} 億`)) });
-  if (t86[0]) lists.push({ id: "chips", title: "籌碼多", desc: "外資＋投信買超、收紅（上市）", rows: t86[0].filter(r => r.foreign + r.trust > 0 && Q.get(r.code)?.chgPct > 0).sort((a, b) => (b.foreign + b.trust) - (a.foreign + a.trust)).slice(0, 30).map(r => row(Q.get(r.code), `外資 ${r.foreign.toLocaleString()}・投信 ${r.trust.toLocaleString()} 張`)) });
+  if (t86[0]) lists.push({ id: "chips", title: "籌碼多", desc: "外資＋投信買超、收紅（上市）", rows: t86[0].filter(r => r.foreign != null && r.trust != null && r.foreign + r.trust > 0 && Q.get(r.code)?.chgPct > 0).sort((a, b) => (b.foreign + b.trust) - (a.foreign + a.trust)).slice(0, 30).map(r => row(Q.get(r.code), `外資 ${r.foreign.toLocaleString()}・投信 ${r.trust.toLocaleString()} 張`)) });
   if (t86.length >= 3) {
     const days = t86.slice(0, 3).map(rows => new Map(rows.map(r => [r.code, r.trust])));
     const codes = [...days[0].keys()].filter(c => days.every(m => (m.get(c) || 0) > 0) && Q.get(c));
@@ -124,7 +124,7 @@ export const parseBw = rows => (Array.isArray(rows) ? rows : []).map(r => ({ cod
 export async function valuation() {
   const r = await Promise.allSettled([getJSON("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL", 15000), getJSON("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis", 15000)]);
   const rows = {}; for (const x of r) if (x.status === "fulfilled") for (const b of parseBw(x.value)) if (/^\d{4}[A-Z]?$/.test(b.code)) rows[b.code] = [b.pe, b.pb, b.dy];
-  if (!Object.keys(rows).length) throw new Error(r.map(x => x.reason?.message).filter(Boolean).join("；") || "證交所、櫃買中心都沒有回應");
+  if (!Object.keys(rows).length) throw new Error(r.map(x => x.reason && errText(x.reason)).filter(Boolean).join("；") || "證交所、櫃買中心都沒有回應");
   return { ok: true, n: Object.keys(rows).length, rows };
 }
 
@@ -141,7 +141,7 @@ export default async function handler(req, res, { marketFetcher = marketRows } =
     both("https://openapi.twse.com.tw/v1/opendata/t187ap17_L", "https://www.tpex.org.tw/openapi/v1/mopsfin_187ap17_O" /* 櫃買的資料集名稱本來就少一個 t */, parseMargins),
   ]);
   const L = a.value, quotes = L?.rows || [];
-  if (!quotes.length) return res.status(200).json({ ok: false, error: `拿不到選股資料（${a.reason?.message || "沒有資料"}）` });
+  if (!quotes.length) return res.status(200).json({ ok: false, error: `拿不到選股資料（${a.reason ? errText(a.reason) : "沒有資料"}）` });
   const st = quotes.filter(q => /^\d{4}$/.test(q.code));
   res.setHeader("Cache-Control", liveCache(L.live, 30));
   return res.status(200).json({ ok: true, date: L.date || quotes.find(q => q.date)?.date || null, live: L.live, time: L.time, source: L.live ? `${L.source}；法人、財報為最近公布` : "證交所、櫃買中心 OpenAPI", completeness: L?.completeness || null, dataStatus: L?.dataStatus || null, coverage: L?.coverage || null, dateVerified: L?.dateVerified ?? null, dateConsistent: L?.dateConsistent ?? null,
