@@ -68,6 +68,7 @@ export async function safeFetch(raw, opts = {}, { hops = 5, lookup = null, get =
 // 讀回應內容，超過上限就中止（不先把整個檔案讀進記憶體才發現太大）。
 // 記憶體（#262 SEC-09）：來源有給 Content-Length 時先配一塊剛好的空間、邊讀邊放進去，尖峰只有檔案本身一份；
 // 沒給或實際比宣稱的長，才改成分段收集再合併。分段直接引用讀到的資料，不再各自複製一份。
+// 實際比宣稱的短時，複製出剛好大小的一份再回傳：subarray 只是同一塊空間的檢視，直接回傳會讓整塊預配空間一直留著。
 export async function readCapped(r, max) {
   if (!r.body?.getReader) { const b = Buffer.from(await r.arrayBuffer()); if (b.length > max) throw new Error("檔案太大"); return b; }
   const rd = r.body.getReader(), len = +r.headers?.get?.("content-length") || 0, parts = [];
@@ -81,7 +82,8 @@ export async function readCapped(r, max) {
     else { if (buf) { parts.push(buf.subarray(0, n)); buf = null; } parts.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength)); }
     n += value.length;
   }
-  return buf ? buf.subarray(0, n) : Buffer.concat(parts, n);
+  if (!buf) return Buffer.concat(parts, n);
+  return n === buf.length ? buf : Buffer.from(buf.subarray(0, n));
 }
 const httpOnly = u => (/^https?:\/\//i.test(String(u || "").trim()) ? String(u).trim() : "");
 

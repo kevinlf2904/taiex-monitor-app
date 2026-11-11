@@ -31,6 +31,19 @@ test("Content-Length 比實際長：只回實際讀到的部分", async () => {
   const { r } = fake(["abc"], 10);
   const b = await readCapped(r, 100); assert.equal(b.length, 3); assert.equal(b.toString(), "abc");
 });
+test("Content-Length 宣稱很大、實際很少：回傳的 Buffer 不留著整塊預配空間", async () => {
+  const big = 4 * 1048576; // 大於 Buffer 共用池，預配一定是獨立的一塊
+  const { r } = fake(["abc"], big);
+  const b = await readCapped(r, 8 * 1048576);
+  assert.equal(b.toString(), "abc");
+  assert.ok(b.buffer.byteLength < 65536, `底層空間 ${b.buffer.byteLength} bytes，應只剩實際內容大小`);
+});
+test("Content-Length 正確：直接回傳預配空間，不多複製一份", async () => {
+  const len = 1048576, half = "x".repeat(len / 2);
+  const { r } = fake([half, half], len);
+  const b = await readCapped(r, 2 * len);
+  assert.equal(b.length, len); assert.equal(b.byteOffset, 0); assert.equal(b.buffer.byteLength, len);
+});
 test("Content-Length 已超過上限：一段都不讀就中止並取消", async () => {
   const { r, st } = fake(["x".repeat(10)], 2000);
   await assert.rejects(readCapped(r, 1000), /太大/);
