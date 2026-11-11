@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 盤中逐筆成交分頁（2026.11.12-224）
+- 分頁去重、換日不沿用舊暫存、抓不完不標完整。
+
 ### 帳本債券 ETF（2026.11.12-223）
 - 沒填稅時把債券 ETF（尾碼 B）歸成 bond_etf，證交稅 0。
 
