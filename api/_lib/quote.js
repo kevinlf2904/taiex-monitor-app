@@ -7,6 +7,7 @@
 // 回傳 { ok, source, session: "pre"|"open"|"closed", time, quotes: [{ code, name, market, price, prev, open, high, low, vol, chg, chgPct, time, date, bids:[{p,v}], asks:[{p,v}], estimated }] }
 // 張數單位：張；指數沒有成交量（vol 為 null）。
 
+import { errText } from "./_err.js";
 import { isUS, yahooQuote, getJSON as yGet, quoteFromMeta } from "./_yahoo.js";
 import { finnhubQuote } from "./_finnhub.js";
 import { holState, holWarm } from "./calendar.js";
@@ -186,7 +187,7 @@ export default async function handler(req, res) {
         return res.status(200).json(body);
       }
       errors.push(`${source}: 沒有資料`);
-    } catch (e) { errors.push(`${source}: ${e.message}`); }
+    } catch (e) { errors.push(`${source}: ${errText(e)}`); }
   }
   return res.status(200).json({ ok: false, session: sess, error: `暫時拿不到即時報價（${errors.join("；")}）。證交所可能暫時擋住了太頻繁的查詢，稍等一下會自動恢復。` });
 }

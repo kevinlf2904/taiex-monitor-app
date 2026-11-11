@@ -4,6 +4,7 @@
 // GET /api/hot?market=tw&type=rows&codes=2330,2454,…  指定代號的即時精簡行情 rows: [[代號, 價, 漲跌%, 成交金額（億）], …]（大盤「產業即時」用，最多 400 檔；codes=all 回全部上市櫃普通股）
 // 台股成交值／量、漲跌幅排行用 _live.js（盤中是富果行情快照，沒有金鑰時是前一個交易日收盤）；法人買賣超是證交所 T86（收盤後公布，只有上市）。
 
+import { errText } from "./_err.js";
 import { usHot } from "./_yahoo.js";
 import { marketRows, liveCache } from "./_live.js";
 import { num, getJSON, rocDate } from "./_tw.js";
@@ -70,5 +71,5 @@ export default async function handler(req, res, { marketFetcher = marketRows } =
     }
     res.setHeader("Cache-Control", type === "foreign" || type === "trust" ? "s-maxage=600, stale-while-revalidate=1800" : liveCache(live, 20));
     return res.status(200).json({ ok: true, market, type, label: TW_TYPES[type], date, live, time, source, completeness: L?.completeness || null, dataStatus: L?.dataStatus || null, coverage: L?.coverage || null, dateVerified: L?.dateVerified ?? null, dateConsistent: L?.dateConsistent ?? null, rows });
-  } catch (e) { return res.status(200).json({ ok: false, error: `拿不到${market === "us" ? "美股熱門" : TW_TYPES[type] || ""}資料（${e.message}）` }); }
+  } catch (e) { return res.status(200).json({ ok: false, error: `拿不到${market === "us" ? "美股熱門" : TW_TYPES[type] || ""}資料（${errText(e)}）` }); }
 }

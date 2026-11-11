@@ -4,6 +4,7 @@
 // 逐筆成交的買賣方向：成交價 ≥ 委賣價 → 外盤（主動買）；≤ 委買價 → 內盤（主動賣）；兩者之間用前一筆價格判斷（上漲算買、下跌算賣）。
 // 大戶／散戶用「單筆成交金額」分：每分鐘的買賣量依金額分成 4 級（<100 萬、100–300 萬、300–1000 萬、≥1000 萬），由頁面依使用者選的門檻加總。
 // 回傳 { ok, date, from, complete, trades: [最近 80 筆], minutes: [{ t, b: [4 級買量], s: [4 級賣量] }], vbp: [{ p, v, b, s }], unit: "張" }
+import { errText } from "./_err.js";
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const num = v => (v == null || v === "" ? null : Number.isFinite(+v) ? +v : null);
@@ -106,5 +107,5 @@ export default async function handler(req, res) {
       complete: tr.value.complete, from: T[0]?.t || null, count: T.length,
       trades: T.slice(-80).reverse().map(({ t, price, size, side }) => ({ t, p: price, v: size, s: side })),
       minutes: summarize(T), money: moneyByBucket(T), vbp: vo.status === "fulfilled" ? parseVolumes(vo.value) : null });
-  } catch (e) { return res.status(200).json({ ok: false, error: `拿不到 ${code} 的逐筆成交（${e.message}）` }); }
+  } catch (e) { return res.status(200).json({ ok: false, error: `拿不到 ${code} 的逐筆成交（${errText(e)}）` }); }
 }

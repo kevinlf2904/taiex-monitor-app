@@ -4,6 +4,7 @@
 //   Finnhub（FINNHUB_API_KEY，每分鐘 60 次）：profile2 公司資料、metric 關鍵指標、recommendation 分析師評等、earnings 近四季 EPS 實際 vs 預估
 //   SEC EDGAR（免金鑰）：company_tickers 找 CIK，companyconcept 拿 10-Q／10-K 申報的營收、淨利（單季與年度）
 // 每一塊各自抓，某一塊失敗不影響其他塊（errors 會寫是哪一塊）。金額單位：美元（頁面再換成億）。
+import { errText } from "./_err.js";
 import { finnhubOn, finnhubOk } from "./_finnhub.js";
 
 const FH = "https://finnhub.io/api/v1", fhKey = () => (process.env.FINNHUB_API_KEY || "").trim();
@@ -67,7 +68,7 @@ async function secFin(sym) {
 export default async function handler(req, res) {
   const sym = String(req.query?.code || "").trim().toUpperCase();
   if (!finnhubOk(sym)) return res.status(400).json({ ok: false, error: "請給美股代號，例如 ?code=AAPL" });
-  const errors = [], on = finnhubOn(), e = (k, p) => p.catch(err => { errors.push(`${k}：${err.message}`); return null; });
+  const errors = [], on = finnhubOn(), e = (k, p) => p.catch(err => { errors.push(`${k}：${errText(err)}`); return null; });
   const [pr, me, rc, ea, fin] = await Promise.all([
     on ? e("公司資料", fh(`/stock/profile2?symbol=${encodeURIComponent(sym)}`).then(parseProfile)) : null,
     on ? e("關鍵指標", fh(`/stock/metric?symbol=${encodeURIComponent(sym)}&metric=all`).then(parseMetric)) : null,

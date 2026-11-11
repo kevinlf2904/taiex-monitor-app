@@ -4,6 +4,7 @@
 // GET /api/futures?bars=spark → 報價＋目前這一盤每分鐘收盤 spark: [["08:45", 價], …]（大盤卡片的走勢線用）
 // 近月合約：每月第三個星期三結算，結算日 13:30 以後改看下個月。代號 TXF＋月份字母（A＝1 月…L＝12 月）＋年份個位數，例如 2026 年 10 月 → TXFJ6。
 // 有 FUGLE_API_KEY 時用富果期貨 API（含 1 分 K）；沒有或失敗時用期交所行情網站（只有報價）。
+import { errText } from "./_err.js";
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const num = v => { if (v == null || v === "" || v === "-") return null; const n = parseFloat(String(v).replace(/[,\s+]/g, "")); return Number.isFinite(n) ? n : null; };
@@ -153,7 +154,7 @@ async function dailyHistory(cid, months, before = null) {
     const r = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanFuturesDaily&data_id=${FM_ID[cid]}&start_date=${start}${before ? `&end_date=${iso(new Date(endT))}` : ""}`, { headers: { ...UA, ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(15000) });
     const j = await r.json(); const d = nearFullDaily(fromFinmindRows(j?.data)).filter(x => !before || x.d < before); if (d.length > (before ? 0 : 20)) return { data: d, source: "FinMind（期交所每日行情）" };
     errors.push(`FinMind：${j?.msg || "沒有資料"}`);
-  } catch (e) { errors.push(`FinMind：${e.message}`); }
+  } catch (e) { errors.push(`FinMind：${errText(e)}`); }
   try { // 期交所：一次查一個月，最近 6 個月
     const { csvRows } = await import("./mktstats.js"), t = tpe(), rows = [];
     await Promise.all(Array.from({ length: Math.min(6, months) }, async (_, k) => {
@@ -163,7 +164,7 @@ async function dailyHistory(cid, months, before = null) {
     const seen = new Set(), d = nearFullDaily(rows.filter(r => { const k = r.date + r.contract + r.session; return !seen.has(k) && seen.add(k); })).filter(x => !before || x.d < before);
     if (d.length > (before ? 0 : 5)) return { data: d, source: "期交所每日行情" };
     errors.push("期交所：沒有資料");
-  } catch (e) { errors.push(`期交所：${e.message}`); }
+  } catch (e) { errors.push(`期交所：${errText(e)}`); }
   throw new Error(errors.join("；"));
 }
 
@@ -178,8 +179,8 @@ export default async function handler(req, res) {
   }
   const nm = nearMonth(Date.now(), cid), sess = sessionOf(), withBars = String(req.query?.bars ?? "1") !== "0", sparkOnly = req.query?.bars === "spark", key = (process.env.FUGLE_API_KEY || "").trim(), errors = [];
   let r = null;
-  if (key) { try { r = await fromFugle(nm.code, key, withBars); } catch (e) { errors.push(`富果：${e.message}`); } }
-  if (!r || (withBars && !r.bars.length)) { try { const t = await fromTaifex(nm.code, cid, withBars); r = r ? { ...r, bars: t.bars.length ? t.bars : r.bars } : t; } catch (e) { errors.push(`期交所：${e.message}`); } }
+  if (key) { try { r = await fromFugle(nm.code, key, withBars); } catch (e) { errors.push(`富果：${errText(e)}`); } }
+  if (!r || (withBars && !r.bars.length)) { try { const t = await fromTaifex(nm.code, cid, withBars); r = r ? { ...r, bars: t.bars.length ? t.bars : r.bars } : t; } catch (e) { errors.push(`期交所：${errText(e)}`); } }
   if (!r) return res.status(200).json({ ok: false, error: `拿不到${fname}報價（${errors.join("；")}）` });
   const cur = pickCurrent(r.day, r.night, sess);
   res.setHeader("Cache-Control", `s-maxage=${sess === "closed" ? 60 : withBars ? 5 : 1}, stale-while-revalidate=${sess === "closed" ? 30 : 2}`);

@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### API 錯誤說明（2026.11.12-227）
+- 上游英文原文不再回給前端。
+
 ### AI 問答畫面內容隔離（2026.11.12-226）
 - 畫面內容改放使用者訊息並用標記框起，不再接在系統提示後面。
 
