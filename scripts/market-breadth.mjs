@@ -3,7 +3,7 @@
 // 格式：{ updated, cols: ["d", "上市漲", "上市跌", "上櫃漲", "上櫃跌"], rows: [["2026-10-08", 520, 410, 400, 380], ...]（舊到新）}
 import { writeFile, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { closeToday } from "../api/_lib/daily.js";
+import { closeToday, closeDayOk } from "../api/_lib/daily.js";
 
 const OUT = fileURLToPath(new URL("../learner/data/market/breadth.json", import.meta.url));
 const KEEP = 260, MAX_NEW = 70, sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -17,22 +17,22 @@ export function countDay(m) {
 }
 // 上市、上櫃都有漲跌家數才算完整：只拿到上市（上櫃還沒出來）時不存，之後再重抓，不把上櫃記成 0 漲 0 跌
 export const full = n => n.tw[0] + n.tw[1] > 0 && n.otc[0] + n.otc[1] > 0;
-export async function main({ fetchDay = closeToday, now = Date.now(), gap = 2500 } = {}) {
-  const old = await readFile(OUT, "utf8").then(JSON.parse).catch(() => null);
+export async function main({ fetchDay = closeToday, now = Date.now(), gap = 2500, out: OUT_FILE = OUT } = {}) { // out：測試時寫到暫存檔，不動 learner/data/
+  const old = await readFile(OUT_FILE, "utf8").then(JSON.parse).catch(() => null);
   const have = new Map((old?.rows || []).map(r => [r[0], r])), holes = new Map((old?.holes || []).map(h => (Array.isArray(h) ? h : [h, 1]))); // holes：沒有資料的平日 → 問到幾次空的；連續兩次都空才當成休市（颱風假、國定假日），不再問
   let fetched = 0, wdays = 0;
   for (let k = 0; wdays < KEEP && fetched < MAX_NEW; k++) {
     const t = now - k * 864e5, d = ymd(t), wd = new Date(t + 8 * 3600e3).getUTCDay(); if (wd % 6 === 0) continue;
     wdays++;
     if ((have.has(d) || (holes.get(d) || 0) >= 2) && k > 1) continue; // 今天、昨天重抓（櫃買資料比較晚出來）
-    try { const m = await fetchDay(d.replace(/-/g, "")); if (m.size > 500 && full(countDay(m))) { const n = countDay(m); have.set(d, [d, n.tw[0], n.tw[1], n.otc[0], n.otc[1]]); holes.delete(d); console.log(d, n); } else if (k > 1 && m.size === 0) holes.set(d, (holes.get(d) || 0) + 1); }
+    try { const m = await fetchDay(d.replace(/-/g, "")), g = closeDayOk(m, d); if (m.size > 500 && !g.ok) { console.log(d, "不存：" + g.why); if (k > 1) holes.set(d, (holes.get(d) || 0) + 1); } /* 來源日期不是這一天（休市日櫃買回前一天的資料）：不存；過去的日子和「沒有資料」一樣，連續兩次才當成休市 */ else if (m.size > 500 && full(countDay(m))) { const n = countDay(m); have.set(d, [d, n.tw[0], n.tw[1], n.otc[0], n.otc[1]]); holes.delete(d); console.log(d, n); } else if (k > 1 && m.size === 0) holes.set(d, (holes.get(d) || 0) + 1); }
     catch (e) { console.log(d, e.message); }
     fetched++; await sleep(gap);
   }
   const rows = [...have.values()].sort((a, b) => a[0].localeCompare(b[0])).slice(-KEEP);
   if (rows.length < 5) throw new Error(`只拿到 ${rows.length} 天，資料不夠`);
   const out = { updated: new Date(now).toISOString(), cols: ["d", "上市漲", "上市跌", "上櫃漲", "上櫃跌"], rows, holes: [...holes].filter(([d]) => d >= rows[0][0]).sort((a, b) => a[0].localeCompare(b[0])) };
-  await writeFile(OUT, JSON.stringify(out));
+  await writeFile(OUT_FILE, JSON.stringify(out));
   return out;
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(o => console.log("ok", o.rows.length, "天")).catch(e => { console.error(e); process.exit(1); });

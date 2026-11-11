@@ -231,3 +231,23 @@ test("個股及美股歷史仍走 Yahoo，原有成交量單位維持不變", as
     { yahooBarsImpl: async () => ({ bars: [{ d: "2026-10-29", t: "09:30", o: 250, h: 251, l: 249, c: 250.5, v: 123 }], prev: 249, meta: {}, session: { open: "09:30", close: "16:00" } }) });
   assert.equal(us.calls.length, 0); assert.equal(us.body.unit, "千股"); assert.equal(us.body.bars[0].v, 123);
 });
+
+// NEW-04／FIN-05（#262、#264 C4）：個股 1 分 K 沒給量時是 { v: 0, vNa: 1 }；合成 5／15／30／60 分 K 時只有「桶裡第一根」的 vNa 會留下（用展開複製），
+// 後面幾根的 vNa 被丟掉，合成的那根會被前端當成真的量（均量被拉低、被判成「量縮」）。
+test("合成 N 分 K：桶裡任何一分鐘缺量（vNa），合成的那根也標 vNa，不論缺的是第幾根；沒有缺量的不加", () => {
+  const z = (t, v, extra = {}) => ({ d: DAY, t, o: 1, h: 1, l: 1, c: 1, v, ...extra });
+  const NA = { vNa: 1 };
+  // 桶 09:00：缺的是第一根；桶 09:05：缺的是第三根（原本會丟掉）；桶 09:10：沒有缺；桶 09:15：整桶都缺
+  const bars = [z("09:00", 0, NA), z("09:01", 10), z("09:05", 20), z("09:06", 30), z("09:07", 0, NA), z("09:10", 40), z("09:11", 50), z("09:15", 0, NA), z("09:16", 0, NA)];
+  const out = aggregate(bars, 5), by = Object.fromEntries(out.map(b => [b.t, b]));
+  assert.equal(by["09:00"].vNa, 1, "第一根缺量");
+  assert.equal(by["09:05"].vNa, 1, "第三根缺量（修正前會遺失）");
+  assert.equal(by["09:10"].vNa, undefined, "沒有缺量：不加標記");
+  assert.equal(by["09:15"].vNa, 1);
+  assert.deepEqual([by["09:00"].v, by["09:05"].v, by["09:10"].v], [10, 50, 90], "量照舊是有給的相加（缺的算 0），只是標記不完整");
+  // 指數：缺量是 null（不是 0），照舊整桶 null；標記一樣留著
+  const idx = aggregate([z("09:00", 5e9), z("09:01", null, NA), z("09:02", 1e9)], 5);
+  assert.equal(idx[0].v, null); assert.equal(idx[0].vNa, 1);
+  // 1 分 K 不合成：原樣
+  assert.equal(aggregate(bars, 1), bars);
+});
