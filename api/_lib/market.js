@@ -11,6 +11,7 @@
 //   breadthBy、sectorsBy  上市、上櫃分開的漲跌家數與產業漲跌
 //   world    國際指數，依地區分組（美國、日本、韓國、香港、中國、歐洲）
 
+import { errText } from "./_err.js";
 import { marketRows, liveCache } from "./_live.js";
 import { getJSON, num, rocDate, companies } from "./_tw.js";
 import { yahooBars, quoteFromMeta } from "./_yahoo.js";
@@ -278,7 +279,7 @@ export default async function handler(req, res, { marketFetcher = marketRows } =
   ]);
   const L = a.value, all = L?.rows || [], twse = all.filter(r => r.market === "上市"), tpex = all.filter(r => r.market === "上櫃"), I = info.value || new Map();
   const M = await fetchMiIndex(L?.date);
-  if (!all.length && !(us.value || []).length) return res.status(200).json({ ok: false, error: `拿不到大盤資料（${a.reason?.message || "沒有資料"}）` });
+  if (!all.length && !(us.value || []).length) return res.status(200).json({ ok: false, error: `拿不到大盤資料（${a.reason ? errText(a.reason) : "沒有資料"}）` });
   const taiex = M.find(x => /^發行量加權股價指數$/.test(x.name));
   const pickIdx = ["電子類指數", "半導體類指數", "金融保險類指數", "航運類指數", "臺灣50指數", "櫃買指數"].map(n => M.find(x => x.name === n || (n === "電子類指數" && x.name === "電子工業類指數"))).filter(Boolean);
   const stocks = all.filter(r => /^\d{4}$/.test(r.code));

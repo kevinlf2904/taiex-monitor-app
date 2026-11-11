@@ -2,6 +2,7 @@
 // GET /api/stocks → { ok, list: [["2330", "台積電", "上市", "半導體"], ...] }（第 4 欄是產業別，拿不到時省略）
 // 來源：證交所 OpenAPI（上市，含 ETF）、櫃買中心 OpenAPI（上櫃）。清單一天更新一次就夠，快取一天。
 
+import { errText } from "./_err.js";
 import { companies, getJSON } from "./_tw.js";
 const clean = s => String(s ?? "").trim();
 export function parseTwse(rows) { return (Array.isArray(rows) ? rows : []).map(r => [clean(r.Code), clean(r.Name), "上市"]).filter(([c, n]) => /^\d{4,6}[A-Z]?$/.test(c) && n); }
@@ -15,7 +16,7 @@ export default async function handler(req, res) {
   ]);
   const seen = new Set(), I = info.value || new Map();
   const list = [...(a.value || []), ...(b.value || [])].filter(([c]) => !seen.has(c) && seen.add(c)).map(r => (I.get(r[0])?.ind ? [...r, I.get(r[0]).ind] : r));
-  if (!list.length) return res.status(200).json({ ok: false, error: `拿不到股票清單（${[a.reason?.message, b.reason?.message].filter(Boolean).join("；")}）` });
+  if (!list.length) return res.status(200).json({ ok: false, error: `拿不到股票清單（${[a.reason && errText(a.reason), b.reason && errText(b.reason)].filter(Boolean).join("；")}）` });
   res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate=604800");
   return res.status(200).json({ ok: true, count: list.length, list });
 }

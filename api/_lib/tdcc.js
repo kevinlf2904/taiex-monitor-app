@@ -3,6 +3,7 @@
 // 來源：集保結算所「集保戶股權分散表查詢」（www.tdcc.com.tw/portal/zh/smWeb/qryStock），網站只保留最近一年的週次。
 // 每週要送一次表單：先打開查詢頁拿 SYNCHRONIZER_TOKEN 與 cookie，每次回應會帶下一次要用的 token。開幾條連線同時查，一年約 51 週幾秒內查完。
 // 欄位和排程（scripts/tdcc.mjs）存的 learner/data/tdcc/*.json 一樣，網頁可以直接接在排程累積的資料前面。
+import { errText } from "./_err.js";
 
 const URL0 = "https://www.tdcc.com.tw/portal/zh/smWeb/qryStock", UA = "Mozilla/5.0 (compatible; kline-school-learner)";
 const strip = s => String(s).replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim(), num = s => { const v = +String(s ?? "").replace(/[,\s]/g, ""); return Number.isFinite(v) ? v : null; };
@@ -55,5 +56,5 @@ export default async function handler(req, res) {
     if (!rows.length) return res.status(200).json({ ok: false, error: `集保查不到 ${code} 在這段期間的股權分散（網站只保留最近一年）`, dates });
     res.setHeader("Cache-Control", "s-maxage=43200, stale-while-revalidate=86400");
     return res.status(200).json({ ok: true, code, source: "集保結算所 集保戶股權分散表查詢", rows, dates, dist });
-  } catch (e) { return res.status(200).json({ ok: false, error: `集保網站暫時查不到（${e.message}）` }); }
+  } catch (e) { return res.status(200).json({ ok: false, error: `集保網站暫時查不到（${errText(e)}）` }); }
 }

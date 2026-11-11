@@ -10,6 +10,7 @@
 //   foreign  外資持股比例（每日）
 //   profile  董事長、總經理、成立／上市日期、資本額、產業、網址、地址
 // 金額單位：元（頁面再換成億）。
+import { errText } from "./_err.js";
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -144,7 +145,7 @@ export default async function handler(req, res) {
     ["foreign", () => finmind("TaiwanStockShareholding", code, daysAgo(200)).then(parseForeign)],
   ];
   const prof = profileOf(code);
-  for (const [k, run] of jobs) { try { out[k] = await run(); } catch (e) { out.errors.push(`${k}: ${e.message}`); } await sleep(100); }
+  for (const [k, run] of jobs) { try { out[k] = await run(); } catch (e) { out.errors.push(`${k}: ${errText(e)}`); } await sleep(100); }
   out.profile = await prof;
   if (!out.income.length && !out.balance.length && !out.dividend.length && !out.profile) return res.status(200).json({ ok: false, error: `找不到 ${code} 的公司資料（${out.errors[0] || "沒有資料"}）。可能是資料來源暫時忙碌或已達每小時次數上限，可在 Vercel 設定 FINMIND_TOKEN 提高上限。` });
   res.setHeader("Cache-Control", "s-maxage=43200, stale-while-revalidate=86400");

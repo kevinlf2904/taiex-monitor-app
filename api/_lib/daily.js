@@ -1,3 +1,4 @@
+import { errText } from "./_err.js";
 import { getJSON, num, companies, rocDate } from "./_tw.js";
 import { todayTaipei } from "./quote.js";
 
@@ -191,6 +192,23 @@ export async function closeToday(d, { fetchJson = getJSON, now = new Date() } = 
   out.isSourceDateMatched = Boolean(dateVerified && actualDate && actualDate === reqIso);
   return out;
 }
+// 排程（scripts/market-hilo、market-after、market-breadth）存檔前的把關：closeToday(d) 拿到的是不是「d 那一天」的行情。
+// 櫃買的來源在休市日（國定假日、颱風假）或資料還沒更新時會回前一個交易日的資料，只看筆數會把舊價當成當天存進去（#262 NEW-03）。
+//   1. 來源日期已驗證而且等於要求的日期 → 可以用
+//   2. 任何一個市場的來源日期不是要求的日期 → 不能用
+//   3. 來源沒有給日期（格式變了、讀不到）→ 至少要有上市資料才用：證交所的網址帶日期、休市日是空的；只有上櫃時無法分辨是不是舊資料
+// 回傳 { ok, why }；m 也接受沒有附帶日期欄位的 Map（測試、舊呼叫端）
+export function closeDayOk(m, d) {
+  const s = String(d || "").replace(/\D/g, ""), req = /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}` : null;
+  if (!m || typeof m.size !== "number" || !m.size) return { ok: false, why: "沒有資料" };
+  if (!req) return { ok: false, why: "日期格式不對" };
+  if (m.isSourceDateMatched === true) return { ok: true, why: "來源日期相符" };
+  const bad = [["上市", m.tseDate], ["上櫃", m.otcDate], ["來源", m.sourceDate]].find(([, x]) => x && x !== req);
+  if (bad) return { ok: false, why: `${bad[0]}資料日期是 ${bad[1]}，不是 ${req}` };
+  let tse = 0; for (const q of m.values()) if (q?.market !== "上櫃") tse++;
+  if (!tse) return { ok: false, why: "只有上櫃資料而且來源沒有日期，無法確認是不是當天的" };
+  return { ok: true, why: "來源沒有日期，以有上市資料為準" };
+}
 async function tpexDay(d) {
   const [qj, ij] = await Promise.all([
     tries(tpexQuoteUrls(d)),
@@ -204,7 +222,7 @@ export default async function handler(req, res) {
   if (req.query?.meta) {
     try { const m = await companies(), ind = {}; for (const [c, x] of m) if (x.ind) ind[c] = x.ind;
       res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate=604800"); return res.status(200).json({ ok: true, ind }); }
-    catch (e) { return res.status(200).json({ ok: false, error: `拿不到產業別（${e.message}）` }); }
+    catch (e) { return res.status(200).json({ ok: false, error: `拿不到產業別（${errText(e)}）` }); }
   }
   const d = String(req.query?.date || "").replace(/\D/g, "");
   if (!/^20\d{6}$/.test(d)) return res.status(400).json({ ok: false, error: "date 要是 YYYYMMDD" });
@@ -219,7 +237,7 @@ export default async function handler(req, res) {
   const iso = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`, past = d < today;
   if (!quotes.size || !inst.size) {
     // 證交所連不上時不要被當成假日快取起來
-    if (q.status === "rejected" || i.status === "rejected") return res.status(200).json({ ok: false, error: `證交所資料暫時拿不到（${(q.reason || i.reason)?.message}）` });
+    if (q.status === "rejected" || i.status === "rejected") return res.status(200).json({ ok: false, error: `證交所資料暫時拿不到（${errText(q.reason || i.reason)}）` });
     // 證交所明確說「沒有符合條件的資料」才是休市，可以快取 30 天；其他空回應（維護中、只回一半）只快取 10 分鐘
     const holiday = /沒有符合條件/.test(String(q.value?.stat || "")) && /沒有符合條件/.test(String(i.value?.stat || ""));
     res.setHeader("Cache-Control", past && holiday ? "s-maxage=2592000" : "s-maxage=600");

@@ -175,7 +175,7 @@ function fakeGoogle(status = 200, text = '{"status":"ok"}') {
 }
 async function callChat(body, g) {
   const { default: handler } = await import("../api/_lib/chat.js"), { _resetGeminiCache } = await import("../api/_lib/_gemini.js"); _resetGeminiCache();
-  const env = { ...process.env }; Object.assign(process.env, { GEMINI_API_KEY: "test", ANTHROPIC_API_KEY: "test", AI_CLAUDE_FALLBACK: "1" }); delete process.env.KV_REST_API_URL; delete process.env.UPSTASH_REDIS_REST_URL;
+  const env = { ...process.env }; Object.assign(process.env, { GEMINI_API_KEY: "test", ANTHROPIC_API_KEY: "test", AI_CLAUDE_ENABLED: "1", AI_CLAUDE_FALLBACK: "1" }); // 總開關也開：才是在驗證「研究模式即使 Claude 全開也不改問 Claude」（#264 A2） delete process.env.KV_REST_API_URL; delete process.env.UPSTASH_REDIS_REST_URL;
   const real = globalThis.fetch; globalThis.fetch = g.fetchImpl; let out = null;
   const res = { status() { return this; }, setHeader() {}, json(v) { out = v; return this; } };
   try { await handler({ method: "POST", body, headers: {} }, res); } finally { globalThis.fetch = real; process.env = env; }
@@ -195,4 +195,24 @@ test("8 Gemini 429：研究模式回報額度用完，不改問 Claude（成本�
   const g = fakeGoogle(429), r = await callChat({ context: "x", messages: [{ role: "user", content: "q" }], model: "lite", purpose: "research" }, g);
   assert.equal(r.ok, false); assert.match(r.error, /額度/); assert.equal(r.provider, "gemini", "沒有改問 Claude");
   assert.ok(g.asked.length <= 3);
+});
+
+// FIN-02（#262、#264 C3）：資料表超過上限時，「缺漏與過期」「注意」要先保住；原本是整段從尾端切，警語在最後面所以最先被切掉
+test("15 資料表太長被截斷時：缺漏與過期、注意（日期不同日的警語）仍然完整，資料行從後面省略並註明省了幾筆；沒超過時內容和以前一樣", () => {
+  const long = base({ breadth: { date: "2026-11-02", live: false, breadth: { up: 900, down: 700, flat: 100 } }, flow: { ...base().flow, sectors: Array.from({ length: 200 }, (_, i) => ({ name: "族群" + i, net1: i - 100, f1: 1, tr1: 1, net5: 1, pct1: 1 })) } });
+  const s = R.buildSnapshot(long), c = R.contextText(s);
+  assert.ok(s.warnings.length && s.gaps.length >= 0, "前提：有警語");
+  assert.ok(c.length <= 5000, "上限 5000 字：" + c.length);
+  assert.match(c, /注意：法人資料日 2026-11-02，和加權（2026-11-03）不同日/, "警語完整保留");
+  assert.ok(c.includes("缺漏與過期：" + (s.gaps.length ? s.gaps.join("；") : "無")), "缺漏與過期完整保留");
+  assert.match(c, /（資料表過長，最後 \d+ 筆資料已省略）/, "註明省略了幾筆");
+  assert.ok(c.trimEnd().endsWith(s.warnings.join("；")), "警語在最後");
+  assert.match(c, /^資料表（編號/, "資料表開頭還在");
+  assert.ok(c.includes("tw.T00.price"), "前面的資料行還在（從後面省略）");
+  // 警語自己太長：也不超過上限，而且還留得住資料
+  const huge = { ...s, warnings: Array.from({ length: 400 }, (_, i) => "警語" + i + "：" + "x".repeat(30)) }, ch = R.contextText(huge);
+  assert.ok(ch.length <= 5000, "警語很長時也不超過上限：" + ch.length); assert.ok(ch.includes("tw.T00.price"));
+  // 沒超過上限：內容不變（和以前一樣，不多任何字）
+  const small = R.contextText(R.buildSnapshot(base()));
+  assert.ok(small.length < 5000 && !/已省略/.test(small)); assert.match(small, /\n缺漏與過期：/);
 });

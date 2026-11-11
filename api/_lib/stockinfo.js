@@ -4,6 +4,7 @@
 // 不設定也能用（匿名有每小時次數上限）；在 Vercel 設定 FINMIND_TOKEN（finmindtrade.com 免費註冊）可提高上限。
 // 本益比、殖利率在 FinMind 失敗時，改抓證交所 BWIBBU（上市股）。
 // 回傳的張數一律以「張」（1000 股）為單位。
+import { errText } from "./_err.js";
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -105,7 +106,7 @@ export default async function handler(req, res) {
     ["fin", () => finmind("TaiwanStockFinancialStatements", code, daysAgo(365 * 3)).then(parseFin)],
   ];
   for (const [k, run] of jobs) {
-    try { out[k] = await run(); } catch (e) { out.errors.push(`${k}: ${e.message}`); }
+    try { out[k] = await run(); } catch (e) { out.errors.push(`${k}: ${errText(e)}`); }
     await sleep(120);
   }
   // 本益比備援：證交所 BWIBBU（最近 3 個月）
@@ -119,7 +120,7 @@ export default async function handler(req, res) {
       }
       out.per.sort((a, b) => a.d.localeCompare(b.d));
       if (out.per.length) out.perSource = "證交所";
-    } catch (e) { out.errors.push(`per(TWSE): ${e.message}`); }
+    } catch (e) { out.errors.push(`per(TWSE): ${errText(e)}`); }
   }
   const any = out.inst.length || out.margin.length || out.per.length || out.revenue.length || out.fin.length;
   if (!any) return res.status(200).json({ ok: false, error: `找不到 ${code} 的籌碼與財報資料。可能是資料來源暫時無法連線或已達每小時次數上限（可在 Vercel 設定 FINMIND_TOKEN 提高上限）。（${out.errors[0] || "沒有資料"}）` });

@@ -1,8 +1,9 @@
 // 截圖判讀：把 K 線截圖交給 Claude 看圖解說（給 learner/ 的「請 Claude 解讀」按鈕使用）。
-// 需要在 Vercel 專案設定環境變數 ANTHROPIC_API_KEY。
+// 需要在 Vercel 專案設定環境變數 ANTHROPIC_API_KEY，並設 AI_CLAUDE_ENABLED=1（Claude 總開關，預設關閉；這個功能只用 Claude）。
 // 提示詞固定寫在伺服器端，前端只能送圖片與程式辨識的摘要，避免這個端點被拿去問任意問題。
 
 import Anthropic from "@anthropic-ai/sdk";
+import { claudeEnabled } from "./_limit.js";
 
 const PROMPT = `你是一位耐心的台股技術分析老師。使用者上傳了一張看盤軟體的 K 線截圖，想學習怎麼讀圖。請用繁體中文、以教學口吻解說。
 
@@ -35,6 +36,7 @@ const MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "只接受 POST" });
+  if (!claudeEnabled()) return res.status(200).json({ ok: false, error: "Claude 解讀目前沒有開放。" });
   if (!process.env.ANTHROPIC_API_KEY) return res.status(200).json({ ok: false, error: "伺服器尚未設定 ANTHROPIC_API_KEY，無法使用 Claude 解讀。" });
 
   const { image, mediaType, context, task } = req.body || {};

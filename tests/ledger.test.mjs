@@ -209,3 +209,17 @@ test("買進沒填交易稅：直接記 0、不算估算、不提醒（買進不
   const S = L.buildLedger([tw({ date: "2026-01-05", type: "buy", shares: 1000, price: 100 }), tw({ date: "2026-01-06", type: "sell", shares: 1000, price: 100, fee: 20, tax: null })], { method: "avg" }).txs[1];
   assert.equal(S.tx.tax, 300, "賣出沒填稅：依證交稅 0.3% 估算"); assert.ok(w(S).includes("fee_estimated"));
 });
+
+// NEW-05（#262、#264 C5）：沒填交易稅時依代號推斷資產類型；尾碼 B 的債券 ETF（例如 00679B）原本被歸成一般 ETF，會多估 0.1% 的證交稅
+test("沒填稅時依代號推斷：債券 ETF（尾碼 B）0%、一般 ETF 0.1%、股票 0.3%；填了的不被覆蓋；已指定資產類型的不被改", () => {
+  const sell = (symbol, o = {}) => L.checkTx({ id: "t-" + symbol, type: "sell", market: "tw", currency: "TWD", date: "2026-03-02", symbol, shares: 1000, price: 100, fee: 20, ...o });
+  const t1 = sell("00679B"), t2 = sell("00937B"), t3 = sell("0050"), t4 = sell("00878"), t5 = sell("2330"), t6 = sell("00403A");
+  assert.deepEqual([t1.tx.assetType, t1.tx.tax], ["bond_etf", 0]); assert.deepEqual([t2.tx.assetType, t2.tx.tax], ["bond_etf", 0]);
+  assert.deepEqual([t3.tx.assetType, t3.tx.tax], ["etf", 100], "一般 ETF 0.1%"); assert.deepEqual([t4.tx.assetType, t4.tx.tax], ["etf", 100]);
+  assert.deepEqual([t5.tx.assetType, t5.tx.tax], ["stock", 300], "股票 0.3%");
+  assert.deepEqual([t6.tx.assetType, t6.tx.tax], ["etf", 100], "尾碼 A 的主動式 ETF（00403A）不是債券 ETF：一般 ETF 稅率");
+  assert.equal(t1.tx.feeEstimated, true);
+  assert.equal(sell("00679B", { tax: 50 }).tx.tax, 50, "使用者填了稅：不被估算覆蓋");
+  assert.equal(sell("00679B", { assetType: "etf" }).tx.tax, 100, "使用者指定資產類型：照指定");
+  assert.equal(L.checkTx({ id: "t-bnd", type: "sell", market: "us", currency: "USD", date: "2026-03-02", symbol: "BND", shares: 10, price: 70, fee: 0 }).tx.assetType, "stock", "美股不套用台股代號規則");
+});
