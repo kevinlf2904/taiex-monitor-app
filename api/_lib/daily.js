@@ -192,6 +192,23 @@ export async function closeToday(d, { fetchJson = getJSON, now = new Date() } = 
   out.isSourceDateMatched = Boolean(dateVerified && actualDate && actualDate === reqIso);
   return out;
 }
+// 排程（scripts/market-hilo、market-after、market-breadth）存檔前的把關：closeToday(d) 拿到的是不是「d 那一天」的行情。
+// 櫃買的來源在休市日（國定假日、颱風假）或資料還沒更新時會回前一個交易日的資料，只看筆數會把舊價當成當天存進去（#262 NEW-03）。
+//   1. 來源日期已驗證而且等於要求的日期 → 可以用
+//   2. 任何一個市場的來源日期不是要求的日期 → 不能用
+//   3. 來源沒有給日期（格式變了、讀不到）→ 至少要有上市資料才用：證交所的網址帶日期、休市日是空的；只有上櫃時無法分辨是不是舊資料
+// 回傳 { ok, why }；m 也接受沒有附帶日期欄位的 Map（測試、舊呼叫端）
+export function closeDayOk(m, d) {
+  const s = String(d || "").replace(/\D/g, ""), req = /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}` : null;
+  if (!m || typeof m.size !== "number" || !m.size) return { ok: false, why: "沒有資料" };
+  if (!req) return { ok: false, why: "日期格式不對" };
+  if (m.isSourceDateMatched === true) return { ok: true, why: "來源日期相符" };
+  const bad = [["上市", m.tseDate], ["上櫃", m.otcDate], ["來源", m.sourceDate]].find(([, x]) => x && x !== req);
+  if (bad) return { ok: false, why: `${bad[0]}資料日期是 ${bad[1]}，不是 ${req}` };
+  let tse = 0; for (const q of m.values()) if (q?.market !== "上櫃") tse++;
+  if (!tse) return { ok: false, why: "只有上櫃資料而且來源沒有日期，無法確認是不是當天的" };
+  return { ok: true, why: "來源沒有日期，以有上市資料為準" };
+}
 async function tpexDay(d) {
   const [qj, ij] = await Promise.all([
     tries(tpexQuoteUrls(d)),
