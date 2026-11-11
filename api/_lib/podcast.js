@@ -12,7 +12,7 @@
 // 金鑰只放在 Vercel 環境變數（GEMINI_API_KEY／ANTHROPIC_API_KEY），不會出現在前端。整理結果只存在使用者的瀏覽器。
 
 import { geminiModels, GEMINI_ORDER } from "./_gemini.js";
-import { WEB_TRIES, aiLimit } from "./_limit.js";
+import { WEB_TRIES, aiLimit, claudeUsable } from "./_limit.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { userMsg } from "./_err.js";
 import http from "node:http";
@@ -180,6 +180,7 @@ export async function geminiJSON(parts, key, deadline, extra = {}, first = null,
   throw new Error(last || "Gemini 沒有回應");
 }
 async function claudeJSON(prompt) {
+  if (!claudeUsable()) throw new Error("Claude 沒有啟用"); // 總開關沒開就不呼叫（付費）
   const { default: Anthropic } = await import("@anthropic-ai/sdk"); // 用到才載入（排程、探測只用 Gemini，不用裝這個套件）
   const client = new Anthropic({ timeout: 50000, maxRetries: 0 }); // 要在 Vercel 的 60 秒內回完
   const msg = await client.beta.messages.create({ model: "claude-opus-5-5", max_tokens: 12000, output_config: { effort: "low" }, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", messages: [{ role: "user", content: prompt }] });
@@ -275,7 +276,7 @@ export function fileTokOk(file, exp, tok, key, now = Date.now()) {
 export const fileDelete = (name, key) => fetch(`${GEMINI}/v1beta/${name}`, { method: "DELETE", headers: { "x-goog-api-key": key } }).catch(() => {});
 
 export default async function handler(req, res) {
-  const q = req.query || {}, gem = (process.env.GEMINI_API_KEY || "").trim(), claude = !!process.env.ANTHROPIC_API_KEY;
+  const q = req.query || {}, gem = (process.env.GEMINI_API_KEY || "").trim(), claude = claudeUsable(); // Claude 要總開關 AI_CLAUDE_ENABLED=1 才算（預設關閉）
   try {
     if (req.method === "POST") {
       const b = req.body || {}, deadline = Date.now() + 55000;
@@ -294,7 +295,7 @@ export default async function handler(req, res) {
         if (gem && video) out = await geminiJSON(ytParts(video, PROMPT(meta, mode)), gem, deadline, YT_CFG, null, WEB_TRIES);
         else if (gem) out = await geminiJSON([...(uri ? [{ fileData: { mimeType: String(b.mime || "audio/mpeg"), fileUri: uri } }] : []), { text: PROMPT(meta, mode) }], gem, deadline, {}, null, WEB_TRIES);
         else if (claude && mode === "notes") out = await claudeJSON(PROMPT(meta, mode));
-        else return res.status(200).json({ ok: false, error: "伺服器沒有設定 GEMINI_API_KEY（或 ANTHROPIC_API_KEY），無法用 AI 整理。" });
+        else return res.status(200).json({ ok: false, error: "伺服器沒有設定 GEMINI_API_KEY，無法用 AI 整理。" });
         if (uri && b.file && /^files\/[a-z0-9-]+$/i.test(b.file) && uri.endsWith("/" + b.file)) await fetch(`${GEMINI}/v1beta/${b.file}`, { method: "DELETE", headers: { "x-goog-api-key": gem }, signal: AbortSignal.timeout(5000) }).catch(() => {}); // 整理完就刪掉音檔（等它刪完，回應送出後函式可能就被凍結）
         const sum = parseSum(out.text); if (!sum) return res.status(200).json({ ok: false, error: "AI 回傳的格式不對，請再試一次。" });
         return res.status(200).json({ ok: true, ...sum, mode, model: out.model });
