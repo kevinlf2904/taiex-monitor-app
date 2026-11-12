@@ -1,7 +1,8 @@
 // 檢查產業圖解原始檔（learner/indpacks/*.js）：欄位齊全、編號圓點對得上產業鏈、代號格式、圖元不超出畫布、文字大概不互相重疊。
 //   node scripts/check-indpack.mjs                    檢查全部（只有 INDUSTRY_PACK.push 的新題材做完整檢查）
 //   node scripts/check-indpack.mjs learner/indpacks/q14.js [--svg 輸出資料夾]   只檢查指定檔；--svg 會把每張圖存成 SVG（深色底）方便看
-// 錯誤（✗）會讓程式失敗；提醒（△）是文字可能太擠，請自己看圖確認。
+//   node scripts/check-indpack.mjs --report           另外印出「分類盤點」：題材、產業網絡、櫃買價值鏈、官方產業別之間對不上的地方（只是清單，不算錯誤）
+// 錯誤（✗）會讓程式失敗；提醒（△）是文字可能太擠，請自己看圖確認。分類的規則見 docs/industry-taxonomy.md。
 import fs from "node:fs"; import vm from "node:vm"; import path from "node:path"; import { fileURLToPath } from "node:url";
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../learner");
 const args = process.argv.slice(2), svgAt = args.indexOf("--svg"), svgDir = svgAt >= 0 ? args[svgAt + 1] : "";
@@ -98,5 +99,44 @@ for (const f of files) {
   E.forEach(s => console.log("  ✗ " + s)); Wn.forEach(s => console.log("  △ " + s)); nErr += E.length; nWarn += Wn.length;
 }
 function INDT_chain(id) { return old.themes.find(t => t.id === id)?.chain || []; }
+// 全部題材（industry.js ＋ indpacks）都要有圖解；產業網絡引用的題材 id 都要存在（檢查全部時才做）
+const themes = [...old.themes, ...ctx.INDUSTRY_PACK.filter(t => !old.themes.some(x => x.id === t.id))];
+if (!only.length) {
+  const E = [];
+  for (const t of themes) if (!(t.fig || ctx.INDUSTRY_FIGS[t.id]?.fig)?.items?.length) E.push(`${t.id}: 沒有圖解（INDUSTRY_FIGS 或題材的 fig）`);
+  for (const n of old.networks || []) for (const [layer, list] of n.layers || []) for (const id of list) if (!ids.has(id)) E.push(`產業網絡「${n.name}」的「${layer}」引用了不存在的題材 ${id}`);
+  E.forEach(s => console.log("✗ " + s)); nErr += E.length;
+}
+// 分類盤點（--report）：只列出來給人查，不算錯誤。learner/data 的檔案是排程產物，沒有就略過那一項。
+if (args.includes("--report") && !only.length) {
+  const json = f => { try { return JSON.parse(fs.readFileSync(path.join(dir, "data", f), "utf8")); } catch { return null; } };
+  const twT = themes.filter(t => t.mk === "tw"), rep = new Map(); // 台股代表股：代號 → { 名稱, 所在題材 }
+  for (const t of twT) for (const g of t.segs || []) for (const [c, n] of g.c || []) if (/^\d{4}$/.test(c)) { const x = rep.get(c) || rep.set(c, { n, t: new Set() }).get(c); x.t.add(t.id); }
+  const show = (L, max = 60) => (L.length ? L.slice(0, max).join("、") + (L.length > max ? `…（共 ${L.length} 個）` : "") : "無");
+  const by = {}; for (const t of themes) by[t.mk] = (by[t.mk] || 0) + 1;
+  console.log(`\n== 分類盤點 ==\n題材 ${themes.length} 個（${Object.entries(by).map(([k, n]) => `${k} ${n}`).join("、")}）；台股代表股 ${rep.size} 檔（四碼代號，資金雷達的題材板塊用這份）`);
+  const inNet = new Set((old.networks || []).flatMap(n => (n.layers || []).flatMap(l => l[1])));
+  console.log(`產業網絡 ${(old.networks || []).length} 張，引用 ${inNet.size} 個題材；沒放進任何網絡的題材：${show(themes.filter(t => !inNet.has(t.id)).map(t => `${t.id} ${t.name}`))}`);
+  let exN = 0; const exC = new Set(), exT = new Set(); // 圖解產業鏈裡、不在題材代表股裡的台股代號
+  for (const t of twT) { const own = new Set((t.segs || []).flatMap(g => (g.c || []).map(x => x[0]))), ch = t.chain || ctx.INDUSTRY_FIGS[t.id]?.chain || [];
+    for (const c of new Set(ch.flatMap(g => (g.items || []).flatMap(i => (i.c || []).map(x => x[0]))))) if (/^\d{4}$/.test(c) && !own.has(c)) { exN++; exC.add(c); exT.add(t.id); } }
+  console.log(`圖解產業鏈比代表股多出的台股代號：${exT.size} 個題材、${exN} 筆、${exC.size} 檔（上下游或客戶，不算進資金雷達）`);
+  const tic = json("tpex-ic.json");
+  if (!tic?.industries?.length) console.log("櫃買產業價值鏈：沒有 learner/data/tpex-ic.json，略過");
+  else { const C = new Set(tic.industries.flatMap(I => I.segs.flatMap(g => g.codes.map(c => c[0])))), miss = [...rep].filter(([c]) => !C.has(c));
+    console.log(`櫃買產業價值鏈（${String(tic.updated).slice(0, 10)}）：${tic.industries.length} 個產業、${tic.industries.reduce((a, I) => a + I.segs.length, 0)} 個細分產業、${C.size} 檔；代表股有 ${rep.size - miss.length} 檔在裡面`);
+    console.log(`  不在裡面的代表股（-KY 等外國企業本來就不收）：${show(miss.map(([c, x]) => `${c} ${x.n}`))}`); }
+  const rv = [json("twse-rev.json"), json("tpex-rev.json")];
+  if (!rv[0] || !rv[1]) console.log("月營收名冊：沒有 learner/data/twse-rev.json 或 tpex-rev.json，略過");
+  else { const R = { ...rv[0], ...rv[1] }, last = c => Object.keys(R[c]?.[2] || {}).sort().at(-1) || "", newest = Object.keys(R).map(last).sort().at(-1) || "";
+    const [ny, nm] = newest.split("-").map(Number), cut = new Date(Date.UTC(ny, nm - 3, 1)).toISOString().slice(0, 7), stale = c => last(c) < cut; // 最近 3 個月都沒有月營收
+    const gone = [...rep].filter(([c, x]) => stale(c) && !/-KY$/.test(x.n)), ky = [...rep].filter(([c, x]) => !R[c] && /-KY$/.test(x.n));
+    console.log(`月營收名冊（最新 ${newest}，${Object.keys(R).length} 檔，不含 -KY）：`);
+    console.log(`  沒有近期月營收的代表股（可能已下市、合併或改名，請對照證交所／櫃買中心公司名冊）：${show(gone.map(([c, x]) => `${c} ${x.n}〔${[...x.t].join(" ")}〕`))}`);
+    console.log(`  -KY 代表股 ${ky.length} 檔（名冊不收，這裡查不到是否下市）`);
+    console.log(`  名稱和名冊不同的代表股：${show([...rep].filter(([c, x]) => R[c] && R[c][0] !== x.n).map(([c, x]) => `${c} ${x.n}→${R[c][0]}`))}`);
+    const ind = {}; for (const [c] of rep) if (R[c]) ind[R[c][1]] = (ind[R[c][1]] || 0) + 1;
+    console.log(`  代表股的官方產業別分佈（一檔只屬於一類）：${Object.entries(ind).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join("、")}`); }
+}
 console.log(nErr ? `共 ${nErr} 個錯誤、${nWarn} 個提醒` : `沒有錯誤${nWarn ? `（${nWarn} 個提醒）` : ""}`);
 process.exit(nErr ? 1 : 0);

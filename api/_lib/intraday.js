@@ -7,7 +7,7 @@
 // 當天的資料一律先抓 1 分 K，再在伺服器端合成需要的週期。回傳 { ok, source, date, tf, prev, bars: [{ t: "09:05", o, h, l, c, v, a? }] }（a 是富果提供的當日均價），v 單位：張；指數（t00、o00）沒有可靠的分 K 成交量（Yahoo 的 ^TWII 欄位全是 0、^TWOII 沒資料），v 一律是 null（不是 0），前端看到 null 就不畫量。
 
 import { errText } from "./_err.js";
-import { isUS, usName, yahooBars, INTRADAY_LIMIT } from "./_yahoo.js";
+import { isUS, usName, yahooBars, INTRADAY_LIMIT, usEasternParts } from "./_yahoo.js";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; kline-school-learner)", Accept: "application/json" };
 const INDEX = { T00: { fugle: "IX0001", yahoo: "^TWII", name: "加權指數" }, O00: { fugle: "IX0043", yahoo: "^TWOII", name: "櫃買指數" } };
 const ALIAS = { TAIEX: "T00", "加權": "T00", "加權指數": "T00", "大盤": "T00", TWII: "T00", "櫃買": "O00", "櫃買指數": "O00", TWOII: "O00" };
@@ -175,7 +175,8 @@ async function indexHistory(code, tf, before, { fetchImpl = fetch, sleep, yahooB
 // 個股及美股歷史維持原本 Yahoo 行為與資料單位。
 async function yahooHistory(code, tf, before, yahooBarsImpl = yahooBars) {
   const us = isUS(code), lim = INTRADAY_LIMIT[tf] || INTRADAY_LIMIT[1], now = Date.now() / 1000, earliest = now - lim.back * 86400;
-  const period2 = Date.parse(`${before}T00:00:00${us ? "-04:00" : "+08:00"}`) / 1000;
+  // 美股用 before 那天美東午夜的時區（夏令 -04:00、冬令 -05:00）；05:00Z 是美東 00:00／01:00，都在 02:00 換時之前
+  const period2 = Date.parse(`${before}T00:00:00${us ? (usEasternParts(Date.parse(`${before}T05:00:00Z`))?.isoOffset || "-05:00") : "+08:00"}`) / 1000;
   if (!Number.isFinite(period2) || period2 <= earliest + 3600) return { bars: [], end: true, next: before };
   const period1 = Math.max(earliest, period2 - lim.chunk * 86400), isIdx = false;
   const syms = us ? [code] : [`${code}.TW`, `${code}.TWO`];
@@ -190,7 +191,7 @@ async function yahooHistory(code, tf, before, yahooBarsImpl = yahooBars) {
       if (bars.length) break;
     } catch (e) { last = last || { error: errText(e) }; }
   }
-  return { ...(last || {}), bars: last?.bars || [], end: period1 <= earliest + 1, next: ymd(period1 + (us ? -4 : 8) * 3600) };
+  return { ...(last || {}), bars: last?.bars || [], end: period1 <= earliest + 1, next: ymd(period1 + (us ? (usEasternParts(period1 * 1000)?.utcOffsetSec ?? -5 * 3600) : 8 * 3600)) };
 }
 async function history(code, tf, before, opts = {}) {
   return INDEX[code] ? indexHistory(code, tf, before, opts) : yahooHistory(code, tf, before, opts.yahooBarsImpl || yahooBars);
