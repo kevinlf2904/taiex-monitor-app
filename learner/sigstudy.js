@@ -70,10 +70,11 @@ function sgHtml() {
   const J = W.sig; if (!J && !W.sigBusy) setTimeout(sgLoad, 0);
   if (!J?.defs) return `<p class="note gnote">${W.off ? "需要部署到網站才有回測資料。" : J?.err ? "還沒有回測資料：每個交易日收盤後由排程用全市場日 K 計算，第一次跑完後就會出現。" : "載入中…"}</p>`;
   const N = J.ns || SIG_NS, n = N.includes(+store.get("watch:sign", 0)) ? +store.get("watch:sign", 0) : N[N.length - 1], last = N[N.length - 1], id = store.get("watch:sigid", ""), T = J.defs.find(x => x.id === id);
-  const key = x => { const s = x.stats?.[n]; return sgEnough(J, s) ? [1, s.ex ?? -9] : [0, s?.n || 0]; };
+  // 排序看「型態準不準」：看多依贏大盤由高到低；看空的數字越低越準，所以反過來（獨立審查 R1）
+  const key = x => { const s = x.stats?.[n]; return sgEnough(J, s) ? [1, s.ex == null ? -9 : x.side === "bear" ? -s.ex : s.ex] : [0, s?.n || 0]; };
   const L = [...J.defs].sort((a, b) => { const A = key(a), B = key(b); return B[0] - A[0] || B[1] - A[1]; });
   const bins = ["< −20%", "−20～−15", "−15～−10", "−10～−5", "−5～0", "0～5", "5～10", "10～15", "15～20", "≥ 20%"], hm = Math.max(1, ...(T?.hist || []));
-  return `<p class="note gnote">${esc(J.from)}～${esc(J.to)}・${J.stocks} 檔上市櫃普通股。把過去每一次條件成立找出來：收盤後才知道訊號，所以一律隔天開盤買進、持有 ${n} 個交易日後收盤賣出，已扣手續費與證交稅（來回 ${((J.cost ?? SIG_COST) * 100).toFixed(3)}%）。贏大盤＝和同一天開盤買進全市場每一檔（等權平均、同樣扣成本）比。</p>
+  return `<p class="note gnote">${esc(J.from)}～${esc(J.to)}・${J.stocks} 檔上市櫃普通股。把過去每一次條件成立找出來：收盤後才知道訊號，所以一律隔天開盤買進、持有 ${n} 個交易日後收盤賣出，已扣手續費與證交稅（來回 ${((J.cost ?? SIG_COST) * 100).toFixed(3)}%）。贏大盤＝和同一天開盤等權買進全市場每一檔、持有到同一天賣出（同樣扣成本）比。排行依型態準不準：看多的贏大盤越高越前面，看空的越低越前面。</p>
     <div class="seg scrseg" role="group" aria-label="持有天數">${N.map(k => `<button data-sgn="${k}" aria-pressed="${k === n}">持有 ${k} 天</button>`).join("")}</div>
     <div class="ctbl sgwrap"><table class="evtbl sgtbl"><thead><tr><th>條件</th><th>樣本</th><th>平均報酬</th><th>上漲機率</th><th>贏大盤（平均）</th><th>贏大盤機率</th></tr></thead><tbody>
       ${L.map(x => { const s = x.stats?.[n], ok = sgEnough(J, s);
@@ -85,5 +86,5 @@ function sgHtml() {
       <h4>${last} 天報酬分佈</h4><div class="evhist">${(T.hist || []).map((v, i) => `<div title="${bins[i]}：${v} 筆"><i class="${i < 5 ? "dn" : "upb"}" style="height:${(v / hm * 100).toFixed(0)}%"></i><small>${bins[i].replace("%", "")}</small></div>`).join("")}</div>
       ${T.recent?.length ? `<h4>最近出現的訊號</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>訊號日</th>${N.map(k => `<th>${k} 天</th>`).join("")}</tr></thead><tbody>
         ${T.recent.slice(0, 20).map(r => `<tr><td><button class="linkbtn" data-sel="${esc(r[0])}">${esc(r[1] || r[0])} ${esc(r[0])}</button></td><td>${esc(String(r[2]).slice(5).replace("-", "/"))}</td>${N.map((k, i) => `<td class="${cls(r[3 + i])}">${r[3 + i] == null ? `<span class="note">進行中</span>` : qP(r[3 + i])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : ""}</section>` : `<p class="note gnote">點條件名稱看三種持有天數、報酬分佈與最近出現的股票。</p>`}
-    <p class="note gnote">所有數字都是「買進後持有」的結果：看空的型態，上漲機率與贏大盤的數字越低，代表型態越準。只有最近約一年的資料，等於只看過一種行情；已下市的股票不在裡面；樣本少於 ${J.minN || SIG_MIN_N} 筆的不列機率。過去表現不代表未來，不是投資建議。</p>`;
+    <p class="note gnote">所有數字都是「買進後持有」的結果：看空的型態，上漲機率與贏大盤的數字越低，代表型態越準。只有最近約一年的資料，等於只看過一種行情；已下市的股票不在裡面；樣本少於 ${J.minN || SIG_MIN_N} 筆的不列機率。樣本數是訊號次數，不是互不相干的交易次數：同一檔相隔 ${SIG_GAP} 天以上就會再算一次，持有期間可能重疊，同一段行情也會讓很多檔同時出現訊號。過去表現不代表未來，不是投資建議。</p>`;
 }
