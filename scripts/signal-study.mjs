@@ -9,7 +9,7 @@
 // 限制（網頁上也會寫）：只有約一年的資料、只有現在還在上市櫃的股票（倖存者偏差）。沒有日 K 快取或算不出樣本時保留舊檔。
 // 輸出：{ updated, from, to, stocks, ns, cost, minN, defs: [{ id, group, side, name, desc, stats: { 5|10|20: { n, avg, med, p25, p75, win, ex, exWin } | null }, hist: [10 格], recent: [[代號, 名稱, 訊號日, r5, r10, r20]] }] }
 //   --dry  只印統計，不寫檔
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, rename, unlink } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { engine } from "./_engine.mjs";
 
@@ -35,7 +35,7 @@ export async function main({ cache = process.env.SIG_CACHE || L(".cache/allk.jso
   const t = Date.now(), R = build(H); if (!R) { console.log("::warning::算不出任何訊號樣本，訊號回測保留舊檔"); return null; }
   const last = R.ns.at(-1);
   console.log(`訊號回測完成（${R.from}～${R.to}・${R.stocks} 檔・${Math.round((Date.now() - t) / 1000)} 秒）：`, R.defs.map(x => `${x.name} ${x.stats[last]?.n ?? 0} 筆`).join("、"));
-  if (!dry) await writeFile(out, JSON.stringify(R));
+  if (!dry) { const tmp = out + ".tmp"; try { await writeFile(tmp, JSON.stringify(R)); await rename(tmp, out); } catch (e) { await unlink(tmp).catch(() => {}); throw e; } } // 先寫暫存檔再換名，中斷時不會留下壞掉的 JSON
   return R;
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch(e => { console.log("::warning::訊號回測這次沒有更新：" + e.message); });
