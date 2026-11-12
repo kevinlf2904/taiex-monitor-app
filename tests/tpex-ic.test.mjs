@@ -63,6 +63,19 @@ test("沒有舊檔、舊檔壞掉、舊檔沒有那個產業：抓不到的放�
   }
 });
 
+test("舊檔是合法 JSON 但紀錄壞掉：不拋錯、不沿用壞資料，抓不到的放進 missing；好的紀錄照常沿用", () => {
+  const bad = [null, "字串", 42, [], {}, { id: 7, segs: [seg("B1", "9002")] }, { id: "B" }, { id: "B", segs: "x" }, { id: "B", segs: [] }, { id: "B", segs: [null] },
+    { id: "B", segs: [{ id: "B1", name: "段", codes: [] }] }, { id: "B", segs: [{ id: "B1", name: "段", codes: [["9002"]] }] }, { id: "B", segs: [{ id: "B1", codes: [["9002", "x"]] }] },
+    { id: "B", segs: [{ id: "B1", name: "段", codes: [[9002, "x"]] }] }];
+  for (const b of bad) {
+    const r = mergeWithPrev(inds.slice(0, 2), [ind("A", "半導體", "1000")], { updated: OLD, industries: [b] }, NOW);
+    assert.deepEqual(r.industries.map(I => I.id), ["A"], JSON.stringify(b)); assert.deepEqual(r.missing, [{ id: "B", name: "電動車" }], JSON.stringify(b));
+  }
+  // 壞紀錄和好紀錄混在一起：好的照常沿用
+  const r = mergeWithPrev(inds, [ind("A", "半導體", "1000")], { updated: OLD, industries: [null, "x", ind("B", "電動車", "9002"), { id: "C", segs: [null] }] }, NOW);
+  assert.deepEqual(r.industries.map(I => [I.id, !!I.stale]), [["A", false], ["B", true]]); assert.deepEqual(r.missing, [{ id: "C", name: "生技" }]);
+});
+
 test("首頁上已經沒有的產業：不從舊檔帶回來；名稱用首頁現在的名稱", () => {
   const prev = { updated: OLD, industries: [ind("A", "半導體", "9001"), ind("Z", "已移除", "9009")] };
   const r = mergeWithPrev([{ id: "A", name: "半導體業" }, { id: "B", name: "電動車" }], [ind("B", "電動車", "1001")], prev, NOW);
