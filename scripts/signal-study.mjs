@@ -34,7 +34,8 @@ export function build(H, E = engine(), now = new Date()) {
 export async function main({ cache = process.env.SIG_CACHE || L(".cache/allk.json"), out = L("learner/data/signal-study.json"), dry = process.argv.includes("--dry") } = {}) {
   let H; try { H = JSON.parse(await readFile(cache, "utf8")); } catch { console.log("::warning::沒有全市場日 K 快取，訊號回測保留舊檔"); return null; }
   const t = Date.now(), R = build(H); if (!R) { console.log("::warning::算不出任何訊號樣本，訊號回測保留舊檔"); return null; }
-  const last = R.ns.at(-1);
+  const last = R.ns.at(-1), none = R.defs.filter(x => !x.stats[R.ns[0]]?.n).map(x => x.name);
+  if (none.length) console.log(`::warning::這些條件全市場一筆樣本都沒有（條件可能在排程裡出錯，sigScan 會把錯誤當成不成立）：${none.join("、")}`);
   console.log(`訊號回測完成（${R.from}～${R.to}・${R.stocks} 檔・${Math.round((Date.now() - t) / 1000)} 秒）：`, R.defs.map(x => `${x.name} ${x.stats[last]?.n ?? 0} 筆`).join("、"));
   if (!dry) { const tmp = out + ".tmp"; try { await writeFile(tmp, JSON.stringify(R)); await rename(tmp, out); } catch (e) { await unlink(tmp).catch(() => {}); throw e; } } // 先寫暫存檔再換名，中斷時不會留下壞掉的 JSON
   return R;

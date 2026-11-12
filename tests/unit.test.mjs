@@ -46,6 +46,10 @@ test("Node 沙盒載入網站的指標與提醒條件", () => {
   assert.ok(E.COND.length > 20); assert.ok(E.indicators(D).kd.K.length === 120);
   const out = evalDoc({ names: { "2330": "台積電" }, rules: [{ code: "2330", cond: "rsigt", p: 1 }], price: [{ code: "2330", up: 50 }] }, c => (c === "2330" ? D : null), E);
   assert.equal(out.length, 2); assert.match(out[0], /台積電 2330：RSI/);
+  // 爆量提醒：只組出要推播的文字、不送出（排程引擎之前沒有 fmtVol，這條規則永遠不成立）
+  const V = Array.from({ length: 40 }, (_, i) => ({ d: `2026-03-${String(1 + i).padStart(2, "0")}`, o: 100, h: 101, l: 99, c: 100, v: i === 39 ? 5000 : 1000 }));
+  assert.deepEqual(evalDoc({ names: { "2330": "台積電" }, rules: [{ code: "2330", cond: "vol", p: 2 }] }, () => V, E), ["台積電 2330：爆量（2 倍 20 日均量） → 量 5,000 是均量的 5.0 倍"]);
+  assert.deepEqual(evalDoc({ rules: [{ code: "2330", cond: "vol", p: 6 }] }, () => V, E), [], "沒到倍數不推播");
 });
 test("Telegram 追蹤推播：追蹤的議員、13F 機構新申報與庫存股內部人轉讓", () => {
   const doc = alertDoc({ "kline:watch:follow": JSON.stringify({ cong: { "h-x": "X" }, f13: { "001": "巴菲特" }, tw: {} }), "kline:watch:hold": JSON.stringify({ "2330": { sh: 1000 }, AAPL: { sh: 1 } }) }, "1");
