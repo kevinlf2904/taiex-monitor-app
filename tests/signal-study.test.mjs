@@ -55,13 +55,19 @@ test("訊號回測：贏大盤的基準和個股同一個視窗、同樣扣成�
   const gap = flat(100, i => ({ o: 100 + i * 2 + 1, h: 100 + i * 2 + 3, l: 100 + i * 2, c: 100 + i * 2 + 2 })); // 每天跳空開高再走高
   const R = plain(G.sigStudy([{ c: "1111", n: "甲", bars: gap }, { c: "2222", n: "乙", bars: gap.map(x => ({ ...x })) }], always, noInd));
   for (const n of [5, 10, 20]) { assert.equal(R[0].stats[n].ex, 0, `${n} 天`); assert.equal(R[0].stats[n].exWin, 0); }
-  // 手算：甲每天開平盤、收漲 1%，乙不動 → 大盤每天盤中 +0.5%；持有 5 天：甲贏 1.01^5 − 1.005^5、乙輸 1.005^5 − 1（成本兩邊都扣，抵銷）
+  // 手算：甲每天開平盤、收漲 1%，乙不動。基準是「同一天開盤等權買進兩檔、持有到出場」＝(1.01^5 + 1)/2 − 1，
+  // 不是每天再平衡的 1.005^5 − 1（兩檔走勢差很多，兩種算法才分得出來——獨立審查 R1）
   let p = 100; const A = flat(100, () => { const o = p; p = p * 1.01; return { o, h: p, l: o, c: p }; });
   const M = G.sigMarket([A, flat(100)]), b5 = G.sigBench(M, A, 60, 5);
-  assert.ok(Math.abs(b5 - (1.005 ** 5 - 1 - G.SIG_COST)) < 1e-9, "基準：第 61 根開盤買、第 65 根收盤賣，扣成本");
+  assert.ok(Math.abs(b5 - ((1.01 ** 5 + 1) / 2 - 1 - G.SIG_COST)) < 1e-9, "基準：第 61 根開盤等權買兩檔、第 65 根收盤賣，扣成本");
+  assert.ok(Math.abs(b5 - (1.005 ** 5 - 1 - G.SIG_COST)) > 1e-4, "不是每天再平衡的指數");
+  // 視窗內有一檔一字漲停買不到或沒有那天的資料 → 那一檔不算進基準
+  const lock = flat(100, k => (k === 61 ? { o: 110, h: 110, l: 110, c: 110 } : k > 61 ? { o: 110, h: 111, l: 109, c: 110 } : {}));
+  assert.ok(Math.abs(G.sigBench(G.sigMarket([A, lock]), A, 60, 5) - (1.01 ** 5 - 1 - G.SIG_COST)) < 1e-9, "買不到的不算");
+  assert.ok(Math.abs(G.sigBench(G.sigMarket([A, flat(30)]), A, 60, 5) - (1.01 ** 5 - 1 - G.SIG_COST)) < 1e-9, "沒有那天的不算");
   assert.equal(G.sigBench(M, A, 98, 5), null, "後面資料不夠");
   const S = plain(G.sigStudy([{ c: "1111", n: "甲", bars: A }, { c: "2222", n: "乙", bars: flat(100) }], always, noInd))[0].stats[5];
-  assert.equal(S.ex, Math.round(((1.01 ** 5 + 1) / 2 - 1.005 ** 5) * 1e4) / 1e4); assert.equal(S.exWin, 0.5);
+  assert.equal(S.ex, 0, "只有兩檔、每天都成立：平均剛好等於買進持有的等權基準"); assert.equal(S.exWin, 0.5);
 });
 test("訊號回測：真實條件接得上（COND、KPAT）", () => {
   let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647; let p = 100;
