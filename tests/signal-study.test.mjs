@@ -58,3 +58,39 @@ test("訊號回測：真實條件接得上（COND、KPAT）", () => {
   assert.equal(R.length, 2); assert.ok(R[0].stats[5]?.n > 0, "200 根亂數走勢一定有 MACD 金叉"); assert.equal(R[1].side, K.side);
   for (const x of R) for (const n of [5, 10, 20]) assert.ok(x.stats[n] === null || x.stats[n].n > 0);
 });
+
+/* ---------- scripts/signal-study.mjs ---------- */
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { sigDefs, build, main } from "../scripts/signal-study.mjs";
+
+const walk = (seed, n = 200) => { let s = seed, p = 100; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  return Array.from({ length: n }, (_, i) => { const o = p; p = Math.max(5, p * (1 + (rnd() - 0.49) * 0.06)); return { d: day(i), o: +o.toFixed(2), h: +(Math.max(o, p) * 1.01).toFixed(2), l: +(Math.min(o, p) * 0.99).toFixed(2), c: +p.toFixed(2), v: 1000 + Math.round(rnd() * 3000) }; }); };
+test("訊號回測腳本：條件清單 27 個、id 不重複、沒有策略訊號", () => {
+  const L = sigDefs(), ids = L.map(x => x.id);
+  assert.equal(L.length, 27); assert.equal(new Set(ids).size, 27); assert.ok(!ids.some(k => k.startsWith("c:s:")));
+  assert.equal(ids.filter(k => k.startsWith("k:")).length, 13); assert.ok(L.filter(x => x.group === "kline").every(x => x.side === "bull" || x.side === "bear"));
+  assert.ok(L.every(x => x.name && typeof x.hit === "function")); assert.equal(L.find(x => x.id === "c:maup").name, "收盤站上均線 20 天", "有參數的條件名稱帶預設參數"); assert.equal(L.find(x => x.id === "c:hi").name, "創 20 日新高（收盤）"); assert.equal(L.find(x => x.id === "c:rsilt").name, "RSI 低於 30");
+});
+test("訊號回測腳本：build 只算四碼普通股，輸出格式照規格", () => {
+  const H = { date: day(199), s: { 2330: { n: "台積電", b: walk(11) }, "0050": { n: "元大台灣50", b: walk(12) }, "00878": { n: "國泰永續高股息", b: walk(13) }, "030001": { n: "權證", b: walk(14) } } };
+  const out = plain(build(H, E, new Date("2026-11-12T08:30:00Z")));
+  assert.equal(out.stocks, 1); assert.deepEqual(out.ns, [5, 10, 20]); assert.equal(out.cost, 0.00585); assert.equal(out.minN, 30); assert.equal(out.defs.length, 27);
+  assert.equal(out.updated, "2026-11-12T08:30:00.000Z"); assert.equal(out.from, day(0)); assert.equal(out.to, day(199));
+  assert.ok(out.defs.every(x => !("hit" in x) && x.hist.length === 10 && Object.keys(x.stats).join() === "5,10,20"));
+  assert.ok(out.defs.flatMap(x => x.recent).every(r => r[0] === "2330" && r[1] === "台積電"));
+});
+test("訊號回測腳本：沒有樣本回傳 null；沒有快取或沒有樣本時保留舊檔", async () => {
+  assert.equal(build({ s: { 2330: { n: "台積電", b: walk(11, 30) } } }), null); assert.equal(build({ s: {} }), null); assert.equal(build(null), null);
+  const dir = mkdtempSync(join(tmpdir(), "sig-")), out = join(dir, "signal-study.json"), cache = join(dir, "allk.json");
+  try {
+    writeFileSync(out, '{"old":1}');
+    assert.equal(await main({ cache: join(dir, "沒有.json"), out }), null); assert.equal(readFileSync(out, "utf8"), '{"old":1}');
+    writeFileSync(cache, JSON.stringify({ s: { 2330: { n: "台積電", b: walk(11, 30) } } }));
+    assert.equal(await main({ cache, out }), null); assert.equal(readFileSync(out, "utf8"), '{"old":1}');
+    writeFileSync(cache, "{ 壞掉的 JSON"); assert.equal(await main({ cache, out }), null); assert.equal(readFileSync(out, "utf8"), '{"old":1}');
+    writeFileSync(cache, JSON.stringify({ s: { 2330: { n: "台積電", b: walk(11) } } }));
+    const R = await main({ cache, out }); assert.equal(R.stocks, 1); assert.equal(JSON.parse(readFileSync(out, "utf8")).defs.length, 27);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
