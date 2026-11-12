@@ -4918,7 +4918,7 @@ $("#chatClear").addEventListener("click", () => { chat.ctl?.abort(); chat.msgs =
 $("#chatStop").addEventListener("click", () => chat.ctl?.abort());
 $("#chatForm").addEventListener("submit", e => { e.preventDefault(); chatAsk($("#chatInput").value); });
 $("#chatInput").addEventListener("input", chatAutosize);
-$("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatAsk($("#chatInput").value); } });
+$("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (e.isComposing || e.keyCode === 229) return; chatAsk($("#chatInput").value); } }); // 輸入法選字中不送出；舊版 Safari 選字的 Enter isComposing 已是 false，要另看 keyCode 229
 $("#chatSugg").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (b) chatAsk(b.dataset.q); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#chatPanel").hidden) chatOpen(false); });
 

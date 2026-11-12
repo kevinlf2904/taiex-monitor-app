@@ -942,7 +942,7 @@ if(_added){try{$("g-asset").value=G.main}catch(e){}save();try{history.replaceSta
   [...dcFields, "dc-nhi"].forEach(id => $(id).addEventListener("input", render));
   $("dc-code").addEventListener("input", saveDc);
   $("dc-mode").addEventListener("click", e => { const b = e.target.closest("[data-dm]"); if (b) { DC.mode = b.dataset.dm; render(); } });
-  $("dc-fetch").addEventListener("click", fetchReal); $("dc-code").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); fetchReal(); } });
+  $("dc-fetch").addEventListener("click", fetchReal); $("dc-code").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); if (e.isComposing || e.keyCode === 229) return; fetchReal(); } });
   window.dcSim = sim; render();
 })();
 </script>
