@@ -123,3 +123,14 @@ test("訊號回測腳本：沒有樣本回傳 null；沒有快取或沒有樣本
     writeFileSync(cache, JSON.stringify({ s: { 2330: { n: "台積電", b: walk(11) } } })); r = cli({ SIG_CACHE: cache }); assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, /訊號回測完成/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("訊號回測排程：步驟排在 Telegram 提醒之後，失敗不擋別人", () => {
+  const y = readFileSync(new URL("../.github/workflows/market-scan.yml", import.meta.url), "utf8"), at = k => y.indexOf(k);
+  assert.ok(at("node scripts/signal-study.mjs") > 0); assert.ok(at("node scripts/signal-study.mjs") > at("node scripts/alerts-push.mjs"), "要幾分鐘的計算不能把收盤提醒往後推");
+  assert.ok(y.indexOf("commit-data.sh \"選股：更新訊號回測\" learner/data/signal-study.json") > at("node scripts/signal-study.mjs"));
+  const step = y.slice(at("- name: signal study"), at("- name: commit signal study")); assert.match(step, /continue-on-error: true/); assert.match(step, /timeout-minutes: 15/);
+  // 失敗看得出來、失敗不 commit：腳本沒更新會非零結束（上面的腳本測試），這一步有 id，commit 只在 outcome 是 success 時跑
+  assert.match(step, /id: sigstudy/); const cm = y.slice(at("- name: commit signal study"), at("- name: commit signal study") + 400);
+  assert.match(cm, /if: \$\{\{[^}]*steps\.sigstudy\.outcome == 'success'[^}]*\}\}/);
+  assert.ok(at("- name: commit signal study") > at("- name: commit pattern today"), "前面的資料各自 commit，不受訊號回測影響");
+});
