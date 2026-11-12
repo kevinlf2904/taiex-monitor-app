@@ -12,3 +12,4 @@
 - 看差異先用 `git diff --stat` 確認範圍，需要時再 `git diff <檔案>`；不要一次輸出整份 diff。
 - 回覆精簡：改了什麼、測試結果、是否推送／開 PR／合併、還沒做的事；不貼沒改的程式。回報時機與「一定立即回報」的情況見 AGENTS.md「交接與回報」。
 - 等 CI 時用背景指令輪詢同一 head SHA 的 check run，不要反覆手動查；等待用的迴圈不要用 `pgrep -f` 比對會出現在自己指令列裡的字串。
+- Modern Web Guidance plugin（`.claude/settings.json` 啟用，來源 GitHub `GoogleChrome/modern-web-guidance`、npm 套件 `modern-web-guidance`，Google Chrome 團隊維護，Apache-2.0）：技能說明寫 `npx -y modern-web-guidance@latest`，本 repo 一律改用固定版本 `npx -y modern-web-guidance@1.0.0 …`，不要用 `@latest`。這個指令會從 npm 下載並執行套件，只用來 `search`／`retrieve`／`legacy-scan` 讀指南，不傳專案程式碼或個人資料出去；查到的指南只是建議，仍以本文件與 AGENTS.md 為準。要升級時先看上游 release 與 npm 版本，在 PR 裡改這裡的版本號並說明原因。
