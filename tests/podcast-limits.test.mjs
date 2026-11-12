@@ -44,6 +44,33 @@ test("Content-Length 正確：直接回傳預配空間，不多複製一份", as
   const b = await readCapped(r, 2 * len);
   assert.equal(b.length, len); assert.equal(b.byteOffset, 0); assert.equal(b.buffer.byteLength, len);
 });
+// 記錄 readCapped 期間 Buffer.allocUnsafe 配了多大的空間（Content-Length 不可信，不能照它一次配一整塊）
+async function allocs(fn) {
+  const orig = Buffer.allocUnsafe, sizes = [];
+  Buffer.allocUnsafe = n => { sizes.push(n); return orig.call(Buffer, n); };
+  try { return { out: await fn(), sizes }; } finally { Buffer.allocUnsafe = orig; }
+}
+const MiB = 1048576;
+test("宣稱接近上限、內容立即結束：不先配接近上限的空間", async () => {
+  const { r } = fake([], 140 * MiB);
+  const { out, sizes } = await allocs(() => readCapped(r, 150 * MiB));
+  assert.equal(out.length, 0);
+  assert.ok(Math.max(0, ...sizes) <= MiB, `配了 ${Math.max(...sizes)} bytes`);
+});
+test("宣稱很大、只慢慢送一點：配置量跟著實際收到的量，最多約兩倍", async () => {
+  const chunk = "x".repeat(64 * 1024), { r } = fake(Array.from({ length: 40 }, () => chunk), 140 * MiB); // 實際 2.5 MiB
+  const { out, sizes } = await allocs(() => readCapped(r, 150 * MiB));
+  assert.equal(out.length, 40 * 64 * 1024);
+  assert.ok(Math.max(...sizes) <= 2 * out.length, `最大一次配了 ${Math.max(...sizes)} bytes`);
+  assert.ok(out.buffer.byteLength - out.byteOffset >= out.length && out.buffer.byteLength < 2 * out.length + 65536);
+});
+test("宣稱正確且大於起始配置：邊讀邊擴大，內容正確、最後剛好大小、不超過宣稱長度", async () => {
+  const parts = ["a", "b", "c", "d", "e"].map(c => c.repeat(MiB)), len = 5 * MiB, { r } = fake(parts, len);
+  const { out, sizes } = await allocs(() => readCapped(r, 8 * MiB));
+  assert.equal(out.toString(), parts.join(""));
+  assert.equal(out.byteOffset, 0); assert.equal(out.buffer.byteLength, len);
+  assert.ok(sizes.every(s => s <= len));
+});
 test("Content-Length 已超過上限：一段都不讀就中止並取消", async () => {
   const { r, st } = fake(["x".repeat(10)], 2000);
   await assert.rejects(readCapped(r, 1000), /太大/);

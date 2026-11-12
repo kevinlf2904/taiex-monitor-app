@@ -66,21 +66,26 @@ export async function safeFetch(raw, opts = {}, { hops = 5, lookup = null, get =
   throw new Error("網址跳轉太多次");
 }
 // 讀回應內容，超過上限就中止（不先把整個檔案讀進記憶體才發現太大）。
-// 記憶體（#262 SEC-09）：來源有給 Content-Length 時先配一塊剛好的空間、邊讀邊放進去，尖峰只有檔案本身一份；
-// 沒給或實際比宣稱的長，才改成分段收集再合併。分段直接引用讀到的資料，不再各自複製一份。
-// 實際比宣稱的短時，複製出剛好大小的一份再回傳：subarray 只是同一塊空間的檢視，直接回傳會讓整塊預配空間一直留著。
+// 記憶體（#262 SEC-09）：來源有給 Content-Length 時邊讀邊放進同一塊空間，讀完就是剛好大小的一份，不用最後再合併複製。
+// Content-Length 是對方說的、不可信（#281 審查）：一開始最多只配 READ_INIT，之後不夠才加倍擴大、且不超過宣稱的長度，
+// 所以配置量最多約是實際收到的兩倍（擴大當下新舊兩塊並存，尖峰約三倍），不會因為對方宣稱很大就先配一整塊。
+// 沒給長度或實際比宣稱的長，改成分段收集再合併；分段直接引用讀到的資料，不再各自複製一份。
+// 實際比宣稱的短時，複製出剛好大小的一份再回傳：subarray 只是同一塊空間的檢視，直接回傳會讓整塊空間一直留著。
+const READ_INIT = 1048576;
 export async function readCapped(r, max) {
   if (!r.body?.getReader) { const b = Buffer.from(await r.arrayBuffer()); if (b.length > max) throw new Error("檔案太大"); return b; }
   const rd = r.body.getReader(), len = +r.headers?.get?.("content-length") || 0, parts = [];
   const tooBig = async () => { try { await rd.cancel(); } catch {} return new Error("檔案太大"); };
   if (len > max) throw await tooBig();
-  let buf = len > 0 ? Buffer.allocUnsafe(len) : null, n = 0;
+  let buf = len > 0 ? Buffer.allocUnsafe(Math.min(len, READ_INIT)) : null, n = 0;
   for (;;) {
     const { done, value } = await rd.read(); if (done) break;
-    if (n + value.length > max) throw await tooBig();
-    if (buf && n + value.length <= buf.length) buf.set(value, n);
+    const end = n + value.length;
+    if (end > max) throw await tooBig();
+    if (buf && end > buf.length && end <= len) { const nb = Buffer.allocUnsafe(Math.min(len, Math.max(buf.length * 2, end))); buf.copy(nb, 0, 0, n); buf = nb; }
+    if (buf && end <= buf.length) buf.set(value, n);
     else { if (buf) { parts.push(buf.subarray(0, n)); buf = null; } parts.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength)); }
-    n += value.length;
+    n = end;
   }
   if (!buf) return Buffer.concat(parts, n);
   return n === buf.length ? buf : Buffer.from(buf.subarray(0, n));
