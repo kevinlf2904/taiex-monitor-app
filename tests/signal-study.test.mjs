@@ -3,6 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { engine } from "../scripts/_engine.mjs";
+import { spawnSync } from "node:child_process";
 
 const E = engine(), G = E.G || {}, plain = v => JSON.parse(JSON.stringify(v)); // 沙盒（vm）裡產生的物件換成一般物件再比
 const day = i => new Date(Date.UTC(2026, 0, 1) + i * 864e5).toISOString().slice(0, 10);
@@ -25,8 +26,12 @@ test("訊號回測：一字漲停買不到、價格異常不算", () => {
 test("訊號回測：缺值不算、不產生 NaN", () => {
   for (const f of [i => (i === 6 ? { o: null } : {}), i => (i === 10 ? { c: 0 } : {}), i => (i === 8 ? { c: null } : {}), i => (i === 5 ? { c: null } : {})])
     assert.equal(G.sigForward(flat(12, f), 5, 5), null);
-  const R = plain(G.sigStudy([{ c: "1111", n: "缺", bars: flat(100, i => (i % 7 === 0 ? { o: null, c: null } : {})) }], always, noInd));
-  assert.ok(!JSON.stringify(R).includes("NaN")); for (const n of [5, 10, 20]) assert.ok(R[0].stats[n] === null || Number.isFinite(R[0].stats[n].avg));
+  const raw = G.sigStudy([{ c: "1111", n: "缺", bars: flat(100, i => (i % 7 === 0 ? { o: null, c: null } : {})) }], always, noInd), R = plain(raw);
+  // 直接走過原始物件檢查每一個數字（JSON.stringify 會把 NaN／Infinity 變成 null，用字串找不到——審查意見）
+  const bad = [], finite = (o, k) => { if (typeof o === "number") { if (!Number.isFinite(o)) bad.push(k); } else if (o && typeof o === "object") for (const [j, v] of Object.entries(o)) finite(v, `${k}.${j}`); };
+  finite(raw, "R"); assert.deepEqual(bad, [], "沒有 NaN／Infinity"); assert.ok(R[0].stats[5]?.n > 0, "缺值之外的樣本照算");
+  finite({ x: NaN, y: [1, Infinity] }, "t"); assert.deepEqual(bad, ["t.x", "t.y.1"], "檢查本身抓得到"); bad.length = 0;
+  for (const n of [5, 10, 20]) assert.ok(R[0].stats[n] === null || Number.isFinite(R[0].stats[n].avg));
 });
 test("訊號回測：不偷看未來（改掉訊號日之後的 K 棒，訊號不變）", () => {
   const mk = tail => flat(100, i => (i === 70 ? { c: 108, h: 109 } : i > 70 ? tail(i) : {}));
@@ -111,5 +116,10 @@ test("訊號回測腳本：沒有樣本回傳 null；沒有快取或沒有樣本
     writeFileSync(cache, "{ 壞掉的 JSON"); assert.equal(await main({ cache, out }), null); assert.equal(readFileSync(out, "utf8"), '{"old":1}');
     writeFileSync(cache, JSON.stringify({ s: { 2330: { n: "台積電", b: walk(11) } } }));
     const R = await main({ cache, out }); assert.equal(R.stocks, 1); assert.equal(JSON.parse(readFileSync(out, "utf8")).defs.length, 27);
+    // 直接執行（workflow 的用法）：沒有快取 → 結束碼 1、印 ::warning::，workflow 才分得出這次沒更新
+    const cli = env => spawnSync(process.execPath, [new URL("../scripts/signal-study.mjs", import.meta.url).pathname, "--dry"], { env: { ...process.env, ...env }, encoding: "utf8" });
+    let r = cli({ SIG_CACHE: join(dir, "沒有.json") }); assert.equal(r.status, 1); assert.match(r.stdout, /::warning::沒有全市場日 K 快取/);
+    writeFileSync(cache, "{ 壞掉的 JSON"); r = cli({ SIG_CACHE: cache }); assert.equal(r.status, 1);
+    writeFileSync(cache, JSON.stringify({ s: { 2330: { n: "台積電", b: walk(11) } } })); r = cli({ SIG_CACHE: cache }); assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, /訊號回測完成/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
