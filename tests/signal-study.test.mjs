@@ -46,9 +46,22 @@ test("訊號回測：sigStudy 的統計、分佈、最近案例；不到 61 根�
   const R = plain(G.sigStudy([{ c: "1111", n: "漲", bars: up }, { c: "2222", n: "跌", bars: dn }], always, noInd));
   const s5 = R[0].stats[5]; assert.equal(s5.n, 14, "每檔 60～90 共 7 次（95 那次後面不夠 5 根）"); assert.equal(s5.win, 0.5); assert.equal(R[0].stats[20].n, 8);
   assert.equal(R[0].hist.length, 10); assert.equal(R[0].hist.reduce((a, b) => a + b, 0), R[0].stats[20].n); assert.equal(R[0].recent[0].length, 6);
-  assert.ok(s5.exWin === 0.5 && Math.abs(s5.ex) < 0.02, "一漲一跌，贏大盤的機率一半");
+  assert.equal(s5.exWin, 0.5, "一漲一跌，贏大盤的機率一半");
   const S = plain(G.sigStudy([{ c: "3333", n: "短", bars: flat(50) }, { c: "4444", n: "空", bars: null }], always, noInd));
   assert.deepEqual(S[0].stats, { 5: null, 10: null, 20: null }); assert.deepEqual(S[0].recent, []);
+});
+test("訊號回測：贏大盤的基準和個股同一個視窗、同樣扣成本", () => {
+  // 全部股票走勢一樣 → 每一筆都和大盤一樣，贏大盤剛好是 0（基準沒扣成本或視窗差一根都不會是 0）
+  const gap = flat(100, i => ({ o: 100 + i * 2 + 1, h: 100 + i * 2 + 3, l: 100 + i * 2, c: 100 + i * 2 + 2 })); // 每天跳空開高再走高
+  const R = plain(G.sigStudy([{ c: "1111", n: "甲", bars: gap }, { c: "2222", n: "乙", bars: gap.map(x => ({ ...x })) }], always, noInd));
+  for (const n of [5, 10, 20]) { assert.equal(R[0].stats[n].ex, 0, `${n} 天`); assert.equal(R[0].stats[n].exWin, 0); }
+  // 手算：甲每天開平盤、收漲 1%，乙不動 → 大盤每天盤中 +0.5%；持有 5 天：甲贏 1.01^5 − 1.005^5、乙輸 1.005^5 − 1（成本兩邊都扣，抵銷）
+  let p = 100; const A = flat(100, () => { const o = p; p = p * 1.01; return { o, h: p, l: o, c: p }; });
+  const M = G.sigMarket([A, flat(100)]), b5 = G.sigBench(M, A, 60, 5);
+  assert.ok(Math.abs(b5 - (1.005 ** 5 - 1 - G.SIG_COST)) < 1e-9, "基準：第 61 根開盤買、第 65 根收盤賣，扣成本");
+  assert.equal(G.sigBench(M, A, 98, 5), null, "後面資料不夠");
+  const S = plain(G.sigStudy([{ c: "1111", n: "甲", bars: A }, { c: "2222", n: "乙", bars: flat(100) }], always, noInd))[0].stats[5];
+  assert.equal(S.ex, Math.round(((1.01 ** 5 + 1) / 2 - 1.005 ** 5) * 1e4) / 1e4); assert.equal(S.exWin, 0.5);
 });
 test("訊號回測：真實條件接得上（COND、KPAT）", () => {
   let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647; let p = 100;

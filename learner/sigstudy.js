@@ -23,23 +23,29 @@ function sigScan(D, defs, ind, { warm = SIG_WARM, gap = SIG_GAP, minLots = SIG_M
   }
   return out;
 }
-// 全市場等權指數（每天所有股票的平均漲跌連乘）：Map 日期 → 淨值，算「贏大盤」用
+// 全市場等權大盤：Map 日期 → { v: 收盤對收盤的平均漲跌連乘出來的淨值, o: 當天「開盤到收盤」的平均漲跌 }，算「贏大盤」用
 function sigMarket(all) {
   const R = new Map();
-  for (const b of all) for (let i = 1; i < (b?.length || 0); i++) { const p = b[i - 1].c, c = b[i].c; if (!(p > 0) || !(c > 0)) continue; const r = c / p - 1; if (Math.abs(r) > 0.5) continue; const x = R.get(b[i].d) || [0, 0]; x[0] += r; x[1]++; R.set(b[i].d, x); }
-  const M = new Map(); let v = 1; for (const d of [...R.keys()].sort()) { const [s, n] = R.get(d); v *= 1 + s / n; M.set(d, v); }
+  for (const b of all) for (let i = 1; i < (b?.length || 0); i++) { const p = b[i - 1]?.c, x = b[i], c = x?.c; if (!(p > 0) || !(c > 0)) continue; const r = c / p - 1; if (Math.abs(r) > 0.5) continue;
+    const t = R.get(x.d) || [0, 0, 0, 0]; t[0] += r; t[1]++; if (x.o > 0) { t[2] += c / x.o - 1; t[3]++; } R.set(x.d, t); }
+  const M = new Map(); let v = 1; for (const d of [...R.keys()].sort()) { const [s, n, so, no] = R.get(d); v *= 1 + s / n; M.set(d, { v, o: no ? so / no : 0 }); }
   return M;
+}
+// 大盤在同一個視窗的報酬：和個股一樣第 i+1 根開盤買（當天只算開盤到收盤）、第 i+n 根收盤賣，也扣同樣的成本；沒有那天的大盤資料回傳 null
+function sigBench(M, D, i, n, cost = SIG_COST) {
+  const a = M.get(D[i + 1]?.d), b = M.get(D[i + n]?.d);
+  return a && b ? (1 + a.o) * (b.v / a.v) - 1 - cost : null;
 }
 function sigStat(A) {
   if (!A.length) return null; const s = [...A].sort((a, b) => a - b), q = p => s[Math.min(s.length - 1, Math.floor(p * s.length))];
-  return { n: A.length, avg: sigR4(A.reduce((x, y) => x + y, 0) / A.length), med: sigR4(q(0.5)), p25: sigR4(q(0.25)), p75: sigR4(q(0.75)), win: sigR4(A.filter(x => x > 0).length / A.length) };
+  return { n: A.length, avg: sigR4(A.reduce((x, y) => x + y, 0) / A.length), med: sigR4(q(0.5)), p25: sigR4(q(0.25)), p75: sigR4(q(0.75)), win: sigR4(A.filter(x => x > 1e-9).length / A.length) }; // 1e-9：浮點誤差不算贏
 }
 // stocks: [{ c, n, bars }]、defs: [{ id, group, side, name, desc, hit }] → 每個條件的統計
 function sigStudy(stocks, defs, ind, { ns = SIG_NS, cost = SIG_COST, warm = SIG_WARM, gap = SIG_GAP, minLots = SIG_MIN_LOTS } = {}) {
   const M = sigMarket(stocks.map(s => s.bars)), T = Object.fromEntries(defs.map(f => [f.id, { r: Object.fromEntries(ns.map(n => [n, []])), x: Object.fromEntries(ns.map(n => [n, []])), list: [] }]));
   for (const s of stocks) { const D = s.bars; if (!D || D.length <= warm) continue;
     for (const { id, i } of sigScan(D, defs, ind, { warm, gap, minLots })) { const rec = [s.c, s.n, D[i].d];
-      for (const n of ns) { const r = sigForward(D, i, n, cost); rec.push(sigR4(r)); if (r == null) continue; T[id].r[n].push(r); const m0 = M.get(D[i].d), m1 = M.get(D[i + n].d); if (m0 && m1) T[id].x[n].push(r - (m1 / m0 - 1)); }
+      for (const n of ns) { const r = sigForward(D, i, n, cost); rec.push(sigR4(r)); if (r == null) continue; T[id].r[n].push(r); const m = sigBench(M, D, i, n, cost); if (m != null) T[id].x[n].push(r - m); }
       T[id].list.push(rec); } }
   const nL = ns[ns.length - 1], bins = [-0.2, -0.15, -0.1, -0.05, 0, 0.05, 0.1, 0.15, 0.2];
   return defs.map(f => { const t = T[f.id];
