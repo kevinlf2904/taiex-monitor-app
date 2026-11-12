@@ -107,3 +107,10 @@ test("訊號回測腳本：沒有樣本回傳 null；沒有快取或沒有樣本
     const R = await main({ cache, out }); assert.equal(R.stocks, 1); assert.equal(JSON.parse(readFileSync(out, "utf8")).defs.length, 27);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("訊號回測排程：步驟排在 Telegram 提醒之後，失敗不擋別人", () => {
+  const y = readFileSync(new URL("../.github/workflows/market-scan.yml", import.meta.url), "utf8"), at = k => y.indexOf(k);
+  assert.ok(at("node scripts/signal-study.mjs") > 0); assert.ok(at("node scripts/signal-study.mjs") > at("node scripts/alerts-push.mjs"), "要幾分鐘的計算不能把收盤提醒往後推");
+  assert.ok(y.indexOf("commit-data.sh \"選股：更新訊號回測\" learner/data/signal-study.json") > at("node scripts/signal-study.mjs"));
+  const step = y.slice(at("- name: signal study"), at("- name: commit signal study")); assert.match(step, /continue-on-error: true/); assert.match(step, /timeout-minutes: 15/);
+});
