@@ -82,6 +82,16 @@ test("訊號回測：真實條件接得上（COND、KPAT）", () => {
   assert.equal(R.length, 2); assert.ok(R[0].stats[5]?.n > 0, "200 根亂數走勢一定有 MACD 金叉"); assert.equal(R[1].side, K.side);
   for (const x of R) for (const n of [5, 10, 20]) assert.ok(x.stats[n] === null || x.stats[n].n > 0);
 });
+test("訊號回測：每個條件在排程引擎裡都不會丟錯（sigScan 會把錯誤吞成不成立，只能在這裡抓）", () => {
+  let s = 11; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647; let p = 100;
+  const D = Array.from({ length: 160 }, (_, i) => { const o = p; p = Math.max(5, p * (1 + (rnd() - 0.5) * 0.08)); return { d: day(i), o, h: Math.max(o, p) * 1.02, l: Math.min(o, p) * 0.98, c: p, v: i % 9 === 0 ? 9000 : 1000 }; });
+  const err = [];
+  for (const f of sigDefs(E)) for (let i = 40; i < D.length; i++) { const P = D.slice(0, i + 1); try { f.hit(P, E.indicators(P)); } catch (e) { err.push(`${f.id}：${e.message}`); break; } }
+  assert.deepEqual(err, []);
+  // 爆量：之前排程裡沒有 fmtVol，每次都丟錯 → 全市場 0 筆；Telegram 提醒（condCheck）的爆量規則也永遠不成立
+  const V = flat(40, i => (i === 39 ? { v: 5000 } : {}));
+  assert.match(E.condCheck({ cond: "vol" }, V), /是均量的 5\.0 倍/); assert.equal(E.condCheck({ cond: "vol" }, flat(40)), null);
+});
 
 /* ---------- scripts/signal-study.mjs ---------- */
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";

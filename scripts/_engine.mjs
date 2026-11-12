@@ -13,6 +13,8 @@ export function engine() {
   const c = { console, Math, Date, JSON, Map, Set, WeakMap, Array, Object, Number, String, isFinite, parseFloat, parseInt, setTimeout, clearTimeout, Promise };
   Object.assign(c, { window: c, document: stub, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, navigator: { userAgent: "" }, matchMedia: () => ({ matches: false, addEventListener() {} }), addEventListener() {}, requestAnimationFrame: () => 0, devicePixelRatio: 1, getComputedStyle: () => ({ getPropertyValue: () => "" }) });
   vm.createContext(c);
+  // tools.js 的條件文字會用到 watch.html 才有的 fmtVol（「爆量」）：直接從 watch.html 拿同一行，不另寫一份（少了它，爆量條件在排程裡每次都丟錯、被當成不成立）
+  const fv = readFileSync(L("watch.html"), "utf8").match(/^const fmtVol = .*;$/m); if (!fv) throw new Error("watch.html 找不到 fmtVol"); vm.runInContext(fv[0], c, { filename: "watch.html#fmtVol" });
   for (const f of ["core.js", "analysis.js", "quant.js", "tools.js", "brief.js", "monitor.js", "sigstudy.js"]) vm.runInContext(readFileSync(L(f), "utf8"), c, { filename: f });
   const g = n => vm.runInContext(n, c);
   ctx = { indicators: g("indicators"), COND: g("COND"), SCOND: g("SCOND"), condOf: g("condOf"), condName: g("condName"), condCheck: g("condCheck"), stratRun: g("stratRun"), STRAT_DEFS: g("STRAT_DEFS"), backtest: g("backtest"), agg: g("agg"), weekKey: g("weekKey"), smaVol: g("smaVol"), trendAnalysis: g("trendAnalysis"),
