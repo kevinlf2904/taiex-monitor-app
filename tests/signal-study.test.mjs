@@ -129,4 +129,8 @@ test("訊號回測排程：步驟排在 Telegram 提醒之後，失敗不擋別�
   assert.ok(at("node scripts/signal-study.mjs") > 0); assert.ok(at("node scripts/signal-study.mjs") > at("node scripts/alerts-push.mjs"), "要幾分鐘的計算不能把收盤提醒往後推");
   assert.ok(y.indexOf("commit-data.sh \"選股：更新訊號回測\" learner/data/signal-study.json") > at("node scripts/signal-study.mjs"));
   const step = y.slice(at("- name: signal study"), at("- name: commit signal study")); assert.match(step, /continue-on-error: true/); assert.match(step, /timeout-minutes: 15/);
+  // 失敗看得出來、失敗不 commit：腳本沒更新會非零結束（上面的腳本測試），這一步有 id，commit 只在 outcome 是 success 時跑
+  assert.match(step, /id: sigstudy/); const cm = y.slice(at("- name: commit signal study"), at("- name: commit signal study") + 400);
+  assert.match(cm, /if: \$\{\{[^}]*steps\.sigstudy\.outcome == 'success'[^}]*\}\}/);
+  assert.ok(at("- name: commit signal study") > at("- name: commit pattern today"), "前面的資料各自 commit，不受訊號回測影響");
 });

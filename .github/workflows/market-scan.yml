@@ -75,14 +75,16 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: node scripts/alerts-push.mjs
       # 訊號回測（技術條件、K 線組合成立之後 5／10／20 天的報酬與勝率）：同一份全市場日 K 快取，寫回 learner/data/signal-study.json
-      # 每一天都要重算指標，全市場大約要 6～7 分鐘，所以排在最後（Telegram 提醒之後），不拖慢推播；失敗只是警告
+      # 每一天都要重算指標，全市場大約要 6～7 分鐘，所以排在最後（Telegram 提醒之後），不拖慢推播
+      # 沒更新（沒有快取、算不出樣本、錯誤、逾時）時這一步顯示失敗（continue-on-error：整個排程照樣完成），下一步只在這一步成功時才 commit
       - name: signal study
+        id: sigstudy
         if: ${{ github.event.inputs.dry != '1' }}
         continue-on-error: true
         timeout-minutes: 15
         run: node scripts/signal-study.mjs
       - name: commit signal study
-        if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' }}
+        if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' && steps.sigstudy.outcome == 'success' }}
         env:
           COMMIT_NAME: signal-study
         run: bash scripts/commit-data.sh "選股：更新訊號回測" learner/data/signal-study.json
