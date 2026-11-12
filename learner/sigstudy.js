@@ -23,18 +23,18 @@ function sigScan(D, defs, ind, { warm = SIG_WARM, gap = SIG_GAP, minLots = SIG_M
   }
   return out;
 }
-// 全市場等權大盤：Map 日期 → { v: 收盤對收盤的平均漲跌連乘出來的淨值, o: 當天「開盤到收盤」的平均漲跌 }，算「贏大盤」用
+// 全市場等權大盤（買進持有，不是每天再平衡）：同一天開盤等權買進當時每一檔、持有到同一天收盤賣出，扣同樣的成本。
+// 回傳 { S: [{ b, j: Map 日期 → 第幾根 }], memo }，sigBench 依「進場日｜出場日」算一次後記住（全市場約 260 天 × 3 種天數）
 function sigMarket(all) {
-  const R = new Map();
-  for (const b of all) for (let i = 1; i < (b?.length || 0); i++) { const p = b[i - 1]?.c, x = b[i], c = x?.c; if (!(p > 0) || !(c > 0)) continue; const r = c / p - 1; if (Math.abs(r) > 0.5) continue;
-    const t = R.get(x.d) || [0, 0, 0, 0]; t[0] += r; t[1]++; if (x.o > 0) { t[2] += c / x.o - 1; t[3]++; } R.set(x.d, t); }
-  const M = new Map(); let v = 1; for (const d of [...R.keys()].sort()) { const [s, n, so, no] = R.get(d); v *= 1 + s / n; M.set(d, { v, o: no ? so / no : 0 }); }
-  return M;
+  return { S: all.filter(b => b?.length > 1).map(b => ({ b, j: new Map(b.map((x, k) => [x?.d, k])) })), memo: new Map() };
 }
-// 大盤在同一個視窗的報酬：和個股一樣第 i+1 根開盤買（當天只算開盤到收盤）、第 i+n 根收盤賣，也扣同樣的成本；沒有那天的大盤資料回傳 null
+// 大盤在同一個視窗的報酬：每一檔都用 sigForward 的規則（一字漲停買不到、未還原的減資／分割不算），找不到那兩天的股票不算；沒有任何一檔回傳 null
 function sigBench(M, D, i, n, cost = SIG_COST) {
-  const a = M.get(D[i + 1]?.d), b = M.get(D[i + n]?.d);
-  return a && b ? (1 + a.o) * (b.v / a.v) - 1 - cost : null;
+  const da = D[i + 1]?.d, db = D[i + n]?.d; if (!da || !db) return null;
+  const k = da + "|" + db; if (!M.memo.has(k)) { let s = 0, c = 0;
+    for (const { b, j } of M.S) { const a = j.get(da), z = j.get(db); if (!(a >= 1) || !(z >= a)) continue; const r = sigForward(b, a - 1, z - a + 1, 0); if (r != null) { s += r; c++; } }
+    M.memo.set(k, c ? s / c : null); }
+  const m = M.memo.get(k); return m == null ? null : m - cost;
 }
 function sigStat(A) {
   if (!A.length) return null; const s = [...A].sort((a, b) => a - b), q = p => s[Math.min(s.length - 1, Math.floor(p * s.length))];
