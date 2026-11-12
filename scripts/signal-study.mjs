@@ -9,6 +9,7 @@
 // 限制（網頁上也會寫）：只有約一年的資料、只有現在還在上市櫃的股票（倖存者偏差）。沒有日 K 快取或算不出樣本時保留舊檔。
 // 輸出：{ updated, from, to, stocks, ns, cost, minN, defs: [{ id, group, side, name, desc, stats: { 5|10|20: { n, avg, med, p25, p75, win, ex, exWin } | null }, hist: [10 格], recent: [[代號, 名稱, 訊號日, r5, r10, r20]] }] }
 //   --dry  只印統計，不寫檔
+// 結束碼：有算出結果是 0；沒有快取、算不出樣本或執行錯誤是 1（保留舊檔），workflow 靠它決定要不要 commit
 import { readFile, writeFile, rename, unlink } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { engine } from "./_engine.mjs";
@@ -38,4 +39,4 @@ export async function main({ cache = process.env.SIG_CACHE || L(".cache/allk.jso
   if (!dry) { const tmp = out + ".tmp"; try { await writeFile(tmp, JSON.stringify(R)); await rename(tmp, out); } catch (e) { await unlink(tmp).catch(() => {}); throw e; } } // 先寫暫存檔再換名，中斷時不會留下壞掉的 JSON
   return R;
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch(e => { console.log("::warning::訊號回測這次沒有更新：" + e.message); });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().then(R => { if (!R) process.exitCode = 1; }, e => { console.log("::warning::訊號回測這次沒有更新：" + e.message); process.exitCode = 1; }); // 沒更新就非零結束：workflow 的 step 會顯示失敗、也不會 commit
