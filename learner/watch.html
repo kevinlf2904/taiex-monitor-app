@@ -891,6 +891,7 @@ body.navback-on { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 .gtiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin: 8px 12px; }
 .gtile { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); cursor: pointer; padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 78px; font: inherit; text-align: center; }
 .gtile span { flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px 6px; font-size: 13.5px; font-weight: 500; line-height: 1.3; }
+.gtile .sgbadge { display: block; padding: 0 4px 5px; font-size: 10.5px; line-height: 1.25; color: var(--muted); } .sgwrap { margin: 8px 12px 0; } .sgtbl tr.on { background: var(--surface-2); } .sgdetail { margin-top: 10px; }
 .gtile b { background: var(--grad-strong); color: var(--on-strong); font: 500 16px var(--font-num); padding: 4px 0; } .gtile.bear b { background: var(--down); color: #fff; } .gtile.bull b { background: var(--up); color: #fff; } .gtile.zero b { background: var(--line); color: var(--muted); }
 .gsub { margin: 10px 14px 0; font-size: 13px; font-weight: 500; color: var(--muted); } .gnote { margin: 6px 14px; }
 .gback { display: flex; align-items: baseline; gap: 8px; margin: 8px 12px; } .gback b { font-size: 15px; } .gback .note { flex: 1; min-width: 0; }
@@ -1235,7 +1236,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.12-232</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.12-233</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1387,7 +1388,7 @@ async function rfRun(k, f) {
 //   earn＝財報（也給庫存「總經敏感度」、選股「條件組合」、事件提醒用）、mkx＝大盤的上市／櫃買／官方公告、oapi＝工具「官方資料」
 //   congx.js（大戶國會）的小工具（cxQ、cxRow…）很多分頁都在用，照常一開始就載入
 // 打開頁面幾秒、閒下來後也會在背景先載好，之後切分頁不用等；同一組只載一次，照順序載（後面的檔會用到前面的）。
-const LAZY = { earn: ["earn.js", "earnx.js", "earnplus.js", "finrep.js", "fundx.js"], mkx: ["tpex.js", "official.js"], oapi: ["oapi.js"], ledger: ["ledger.js", "ledger-ui.js"] }, LZ = {};
+const LAZY = { earn: ["earn.js", "earnx.js", "earnplus.js", "finrep.js", "fundx.js"], mkx: ["tpex.js", "official.js"], oapi: ["oapi.js"], ledger: ["ledger.js", "ledger-ui.js"], sig: ["sigstudy.js"] }, LZ = {};
 function lazy(g) {
   return (LZ[g] ||= LAZY[g].reduce((p, f) => p.then(() => new Promise((ok, no) => { const s = document.createElement("script"); s.src = f; s.onload = ok; s.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(s); })), Promise.resolve())
     .then(() => { LZ[g].done = true; }, e => { delete LZ[g]; noteErr("載入程式", e); throw e; }));
@@ -2631,7 +2632,7 @@ function scanHit(k, D) {
 // 客戶端掃描：K 線組合（analysis.js 的 KPAT）與技術條件，抓一次日 K 就把所有條件都算完
 const CSCANS = [...KPAT.map(k => ({ id: "k:" + k.id, group: "kline", side: k.side, title: k.name, desc: k.desc, hit: D => k.hit(D) })),
   ...SCANS.map(([k, t, d]) => ({ id: "s:" + k, group: "tech", title: t, desc: d, hit: D => scanHit(k, D) }))];
-const SCR_GROUPS = [["smart", "總覽"], ["combo", "條件組合"], ["custom", "自訂條件"], ["score", "評分"], ["rs", "相對強弱"], ["hot", "熱門"], ["kline", "K線"], ["tech", "技術"], ["fund", "基本"], ["theme", "題材"], ["chips", "籌碼"]];
+const SCR_GROUPS = [["smart", "總覽"], ["combo", "條件組合"], ["custom", "自訂條件"], ["score", "評分"], ["rs", "相對強弱"], ["sig", "訊號回測"], ["hot", "熱門"], ["kline", "K線"], ["tech", "技術"], ["fund", "基本"], ["theme", "題材"], ["chips", "籌碼"]];
 if (!SCR_GROUPS.some(g => g[0] === W.scrG)) W.scrG = "smart";
 function scanUniverse() {
   const fromScr = (W.scr?.lists || []).filter(L => scrGroup(L) === "hot").flatMap(L => L.rows.slice(0, 15).map(r => r.code));
@@ -2683,6 +2684,7 @@ function renderScreen() {
   if (J?.ratio) { const t = J.ratio.up + J.ratio.down || 1, u = Math.round(J.ratio.up / t * 100); h += `<div class="adr"><b>漲跌家數比</b><div><span class="up">${u}%</span><span class="adrbar"><i style="width:${u}%"></i></span><span class="down">${100 - u}%</span></div></div>`; }
   h += `<div class="seg scrseg" role="group" aria-label="選股分類">${SCR_GROUPS.map(([k, t]) => `<button data-sg="${k}" aria-pressed="${k === g}">${t}</button>`).join("")}</div>`;
   if (g === "combo") { if (!lazyOk("earn")) { $("#lx").innerHTML = h + LZ_WAIT; lazy("earn").then(renderList); return; } $("#lx").innerHTML = h + cbHtml(); return; } // 財報＋籌碼條件組合（fundx.js）
+  if (g === "sig") { if (!lazyOk("sig")) { $("#lx").innerHTML = h + LZ_WAIT; lazy("sig").then(renderList, () => {}); return; } $("#lx").innerHTML = h + sgHtml(); return; } // 訊號回測：條件成立後的歷史報酬與勝率（sigstudy.js）
   if (g === "custom" || g === "rs") { const r = toolsBody(g === "custom" ? "scan" : "rs"); $("#lx").innerHTML = h + r.h + (r.note ? `<p class="note gnote">${r.note}</p>` : ""); return; } // 自訂條件選股、相對強弱（程式在 tools.js）
   const client = g === "kline" || g === "tech", S = W.cscan;
   if (g === "score") { // 綜合評分排行（規則計分）或多因子排行（tools.js 的 mfHtml）
@@ -2715,7 +2717,8 @@ function renderScreen() {
     if (open) h += `<div class="gback"><button class="btn sm" data-so="">‹ 返回</button><b>${esc(open.title)}</b><span class="note">${esc(open.desc || "")}</span></div>`
       + (open.rows.length ? `<ul class="slist" style="margin:0 12px">${open.rows.map(scrRow).join("")}</ul>` : `<p class="note gnote">${client && S?.running ? "掃描中…" : "目前沒有符合的股票"}</p>`);
     else {
-      const tiles = L => `<div class="gtiles">${L.map(x => `<button class="gtile ${x.rows.length ? x.side || "" : "zero"}" data-so="${esc(x.id)}" title="${esc(x.desc || "")}"><span>${esc(x.title)}</span><b>${client && !S?.at ? "…" : x.rows.length}</b></button>`).join("")}</div>`;
+      const tiles = L => `<div class="gtiles">${L.map(x => `<button class="gtile ${x.rows.length ? x.side || "" : "zero"}" data-so="${esc(x.id)}" title="${esc(x.desc || "")}"><span>${esc(x.title)}</span>${g === "kline" && lazyOk("sig") ? sgBadge(x.id) : ""}<b>${client && !S?.at ? "…" : x.rows.length}</b></button>`).join("")}</div>`;
+      if (g === "kline" && !lazyOk("sig") && !W.sigLz) { W.sigLz = true; lazy("sig").then(() => { if (W.lt === "screen" && W.scrG === "kline") renderList(); }, () => { W.sigLz = false; }); } // 格子上的歷史勝率（sigstudy.js 的 sgBadge）
       if (g === "kline") h += `<p class="gsub up">上漲型態</p>${tiles(Ls.filter(x => x.side === "bull"))}<p class="gsub down">下跌型態</p>${tiles(Ls.filter(x => x.side === "bear"))}`;
       else h += Ls.length ? tiles(Ls) : `<p class="note gnote">沒有資料</p>`;
     }
@@ -2725,6 +2728,8 @@ function renderScreen() {
 }
 $("#lx").addEventListener("click", e => { const so = e.target.closest("[data-so]"), sg = e.target.closest("[data-sg]"), gx = e.target.closest('[data-gx="rescan"]');
   const sd = e.target.closest("[data-sdir]"); if (sd) { W.scoreDir = sd.dataset.sdir; renderList(); return; }
+  const gn = e.target.closest("[data-sgn]"); if (gn) { store.set("watch:sign", +gn.dataset.sgn); renderList(); return; }
+  const gi = e.target.closest("button[data-sgid]"); if (gi) { store.set("watch:sigid", store.get("watch:sigid", "") === gi.dataset.sgid ? "" : gi.dataset.sgid); renderList(); return; }
   const sm = e.target.closest("[data-scm]"); if (sm) { W.scoreMode = sm.dataset.scm; store.set("watch:scm", W.scoreMode); renderList(); return; }
   const sj = e.target.closest("[data-sj]"); if (sj) { W.scrG = sj.dataset.sj; W.scrOpen = sj.dataset.v; store.set("watch:scrg", W.scrG); renderList(); return; }
   if (sg) { W.scrG = sg.dataset.sg; W.scrOpen = null; store.set("watch:scrg", W.scrG); renderList(); }
