@@ -1,6 +1,6 @@
 # 全市場日 K＋收盤後 Telegram 提醒：每個交易日收盤後更新上市櫃全部股票的日 K（scripts/market-scan.mjs），
 # 上傳到 GitHub Release「market-data」給網站的「全市場」選股使用；接著算財報事件回測（scripts/event-study.mjs），
-# 題材股價連動（scripts/theme-corr.mjs）、今日符合型態的個股（scripts/pattern-today.mjs），再檢查雲端同步使用者的提醒並推播（scripts/alerts-push.mjs）。
+# 訊號回測（scripts/signal-study.mjs）、題材股價連動（scripts/theme-corr.mjs）、今日符合型態的個股（scripts/pattern-today.mjs），再檢查雲端同步使用者的提醒並推播（scripts/alerts-push.mjs）。
 name: market-scan
 on:
   schedule:
@@ -50,6 +50,18 @@ jobs:
         env:
           COMMIT_NAME: event-study
         run: bash scripts/commit-data.sh "財報：更新事件回測" learner/data/event-study.json
+      # 訊號回測（技術條件、K 線組合成立之後 5／10／20 天的報酬與勝率）：同一份全市場日 K 快取，寫回 learner/data/signal-study.json
+      # 每一天都要重算指標，全市場大約要幾分鐘；失敗只是警告，不擋後面的步驟
+      - name: signal study
+        if: ${{ github.event.inputs.dry != '1' }}
+        continue-on-error: true
+        timeout-minutes: 25
+        run: node scripts/signal-study.mjs
+      - name: commit signal study
+        if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' }}
+        env:
+          COMMIT_NAME: signal-study
+        run: bash scripts/commit-data.sh "選股：更新訊號回測" learner/data/signal-study.json
       # 題材股價連動（供應鏈「關聯」）：全市場日 K 快取＋Yahoo 美日韓日 K（.cache/yk.json 一起快取），寫回 learner/data/theme-corr.json
       - if: ${{ github.event.inputs.dry != '1' }}
         run: node scripts/theme-corr.mjs
