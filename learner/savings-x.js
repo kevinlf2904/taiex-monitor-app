@@ -118,7 +118,7 @@
       ${lineSvg([{ name: "市值（含息）", color: "var(--accent)", pts: va }, ...(vp.length ? [{ name: "市值（不含息）", color: "#8b8b8b", pts: vp }] : []), { name: "累積投入", color: "var(--muted)", pts: vi, dash: 1, w: 1.2 }], { fx: t => String(+A[0][0].slice(0, 4) + Math.round(t)), fy: tick })}
       <p class="hint">月底收盤價買進，不含手續費與稅。最大跌幅用月線計算，會比日線的跌幅小一些。過去的報酬不代表未來。</p>`;
   }
-  $("hs-go").addEventListener("click", histRun); $("hs-code").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); histRun(); } });
+  $("hs-go").addEventListener("click", histRun); $("hs-code").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); if (e.isComposing || e.keyCode === 229) return; histRun(); } });
 
   /* ---------- 退休提領試算 ---------- */
   function retRun() {
