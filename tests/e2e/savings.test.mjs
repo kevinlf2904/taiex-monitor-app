@@ -49,3 +49,22 @@ for (const width of [390, 1280]) test(`存股延伸功能 ${width}`, async () =>
   assert.ok(await noHOverflow(p), "沒有橫向溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// 代號欄按 Enter：輸入法選字中（isComposing／keyCode 229）不能送出，一般 Enter 照常送出
+test("代號欄 Enter 不打斷輸入法選字", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "savings.html", { width: 390 });
+  await p.route("**/api/**", r => r.fulfill({ status: 503, contentType: "application/json", body: '{"ok":false}' }));
+  const r = await p.evaluate(() => {
+    const key = (el, o = {}) => { const e = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: !!o.comp }); if (o.k229) Object.defineProperty(e, "keyCode", { value: 229 }); el.dispatchEvent(e); };
+    const dc = document.getElementById("dc-code"), dcOut = document.getElementById("dc-real"), hs = document.getElementById("hs-code"), hsOut = document.getElementById("hs-out"), o = {};
+    dc.value = ""; dcOut.textContent = "";
+    key(dc, { comp: true }); o.dcComp = dcOut.textContent; key(dc, { k229: true }); o.dc229 = dcOut.textContent; key(dc); o.dcEnter = dcOut.textContent;
+    hs.value = "0050"; const before = hsOut.innerText;
+    key(hs, { comp: true }); o.hsComp = hsOut.innerText === before; key(hs, { k229: true }); o.hs229 = hsOut.innerText === before; key(hs); o.hsEnter = /抓 0050/.test(hsOut.innerText);
+    return o;
+  });
+  assert.equal(r.dcComp, "", "選字中按 Enter 不送出（股息計算機代號）"); assert.equal(r.dc229, "", "Safari 的 keyCode 229 也要擋");
+  assert.equal(r.dcEnter, "請先填代號", "一般 Enter 照常送出");
+  assert.ok(r.hsComp && r.hs229, "選字中按 Enter 不送出（歷史回測代號）"); assert.ok(r.hsEnter, "一般 Enter 照常開始回測");
+  await ctx.close(); assert.deepEqual(errs.filter(e => !/503|Failed to load resource/.test(e)), []);
+});
