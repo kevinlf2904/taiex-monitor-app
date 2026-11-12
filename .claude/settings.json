@@ -7,5 +7,16 @@
       "Read(./test-results/**)",
       "Read(./playwright-report/**)"
     ]
+  },
+  "extraKnownMarketplaces": {
+    "googlechrome": {
+      "source": {
+        "source": "github",
+        "repo": "GoogleChrome/modern-web-guidance"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "modern-web-guidance@googlechrome": true
   }
 }
