@@ -46,11 +46,13 @@ export function parseIndustry(html) {
 // 這次抓到的（fresh，依首頁順序）＋上一份檔案（prev）→ 要寫出的內容。inds 是首頁的產業清單；首頁上已經沒有的產業不沿用
 export function mergeWithPrev(inds, fresh, prev, now = new Date().toISOString()) {
   const F = new Map(fresh.map(I => [I.id, I])), P = new Map((Array.isArray(prev?.industries) ? prev.industries : []).map(I => [I.id, I]));
-  const limit = Date.parse(now) - STALE_DAYS * 864e5, industries = [], missing = [];
+  const T = Date.parse(now), limit = T - STALE_DAYS * 864e5, industries = [], missing = [];
+  // asOf 讀不到日期、比 STALE_DAYS 舊、或比這次執行還晚（舊檔時間寫錯、時鐘偏差；容許 1 天）都不沿用
+  const usable = t => Number.isFinite(t) && t >= limit && t <= T + 864e5;
   for (const { id, name } of inds) {
     if (F.has(id)) { industries.push(F.get(id)); continue; }
     const old = P.get(id), asOf = old && (old.stale ? old.asOf : prev.updated);
-    if (old && Array.isArray(old.segs) && old.segs.length && Date.parse(asOf) >= limit) industries.push({ ...old, name, stale: true, asOf });
+    if (old && Array.isArray(old.segs) && old.segs.length && usable(Date.parse(asOf))) industries.push({ ...old, name, stale: true, asOf });
     else missing.push({ id, name });
   }
   return { updated: now, source: "櫃買中心 產業價值鏈資訊平台 ic.tpex.org.tw", industries, ...(missing.length ? { missing } : {}) };

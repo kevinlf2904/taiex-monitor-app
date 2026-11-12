@@ -43,6 +43,19 @@ test(`沿用超過 ${STALE_DAYS} 天就不再沿用，放進 missing`, () => {
   assert.equal(mergeWithPrev(inds.slice(0, 2), [ind("A", "半導體", "1000")], { updated: ok, industries: [ind("B", "電動車", "9002")] }, NOW).industries[1].stale, true);
 });
 
+test("舊檔的時間讀不到、或比這次執行還晚：不沿用，放進 missing（避免時間錯誤讓舊資料一直被當成可用）", () => {
+  for (const updated of [undefined, "", "不是日期", "2026-13-40", new Date(Date.parse(NOW) + 2 * 864e5).toISOString()]) {
+    const r = mergeWithPrev(inds.slice(0, 2), [ind("A", "半導體", "1000")], { updated, industries: [ind("B", "電動車", "9002")] }, NOW);
+    assert.deepEqual(r.industries.map(I => I.id), ["A"], String(updated)); assert.deepEqual(r.missing, [{ id: "B", name: "電動車" }]);
+  }
+  // 已經是 stale 的產業，asOf 壞掉也一樣
+  const r = mergeWithPrev(inds.slice(0, 2), [ind("A", "半導體", "1000")], { updated: OLD, industries: [{ ...ind("B", "電動車", "9002"), stale: true, asOf: "壞掉" }] }, NOW);
+  assert.deepEqual(r.missing, [{ id: "B", name: "電動車" }]);
+  // 容許 1 天內的時鐘偏差
+  const near = new Date(Date.parse(NOW) + 3600e3).toISOString();
+  assert.equal(mergeWithPrev(inds.slice(0, 2), [ind("A", "半導體", "1000")], { updated: near, industries: [ind("B", "電動車", "9002")] }, NOW).industries[1].stale, true);
+});
+
 test("沒有舊檔、舊檔壞掉、舊檔沒有那個產業：抓不到的放進 missing，不編造資料", () => {
   for (const prev of [null, {}, { updated: OLD, industries: "壞掉" }, { updated: OLD, industries: [ind("A", "半導體", "9001")] }, { updated: OLD, industries: [{ id: "B", name: "電動車", segs: [] }] }]) {
     const r = mergeWithPrev(inds.slice(0, 2), [ind("A", "半導體", "1000")], prev, NOW);
