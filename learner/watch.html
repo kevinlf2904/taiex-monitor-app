@@ -460,7 +460,8 @@ body.navback-on { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 .flowread { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; min-height: 26px; padding: 4px 12px; font-size: 13px; font-family: var(--font-num); }
 .flowread small { margin-left: 4px; font-size: 11.5px; } .flowread .linkbtn { margin-left: auto; }
 .imp-btns { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; }
-#hvSeg, #hsubSeg { display: flex; width: 100%; } @media (min-width: 901px) { #hvSeg { flex-wrap: wrap; overflow: visible; } } /* 桌面的窄清單欄放不下 7 個主分頁：換行，不靠橫向捲動（滑鼠不好捲）；手機維持橫向捲動＋「▾ 全部」 */ @media (pointer: coarse) { #hvSeg button, #hsubSeg button { min-height: 44px; } }
+#hvSeg, #hsubSeg { display: flex; width: 100%; } @media (min-width: 901px) { #hvSeg { flex-wrap: wrap; overflow: visible; } } /* 桌面的窄清單欄放不下 7 個主分頁：換行，不靠橫向捲動（滑鼠不好捲）；手機維持橫向捲動＋「▾ 全部」 */ @media (pointer: coarse) { #hvSeg button, #hsubSeg button, #lx .hrisk .btn, #lx .hrisk [data-hrtol] { min-height: 44px; } }
+.qx-go { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 6px; }
 .sheet.imp { z-index: 43; } #impBg { z-index: 42; }
 @media (min-width: 901px) { .sheet.imp { width: 520px; } }
 .imp-ta { width: 100%; box-sizing: border-box; font: 14px var(--font-num); background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
@@ -1239,7 +1240,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.13-236</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.14-237</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2232,6 +2233,7 @@ $("#listPane").addEventListener("click", e => {
   else if (gx && gx.dataset.gx === "scrRefresh") rfRun("scrRefresh", () => loadScreen(true));
   else if (gx && gx.dataset.gx === "mfRefresh") rfRun("mfRefresh", () => { W.mf.days = W.mf.days.filter(d => d.date < W.today); W.mf.tried = new Set(); return loadMoney(10, true); });
   else if (t.closest("[data-hrtol]")) { W.hrTol = t.closest("[data-hrtol]").dataset.hrtol; store.set("watch:hrtol", W.hrTol); renderList(); }
+  else if (t.closest("[data-hralloc]")) { holdGo("alloc"); }
   else if (t.closest("#lTools [data-nav]")) { const n = t.closest("[data-nav]").dataset.nav, G = HOLD_NAV.find(g => g[0] === n); holdGo(G?.[2] ? G[2][0][0] : n); }
   else if (t.closest("[data-hsrc]")) { const v = t.closest("[data-hsrc]").dataset.hsrc; if (v === "tx") return holdGo("tx"); W.hsrcLegacy = v === "legacy"; holdSrcApply(); renderList(); }
   else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a !== "export" && holdLgBlock()) return; if (a === "shot") $("#impFile").click(); else if (a === "edit") openHoldEdit(); else if (a === "text") openImport("text"); else exportHold(); }
@@ -2618,10 +2620,11 @@ function renderHoldRisk() {
     <div class="qx-tbl"><table><thead><tr><th>持股</th><th>資金佔比</th><th>風險貢獻</th><th>年化波動</th><th>Beta</th><th>大盤跌 20%</th></tr></thead><tbody>${P.rows.map((r, i) => `<tr><td><button class="linkbtn" data-sel="${r.c}">${nm(r.c)}</button></td><td>${(r.w * 100).toFixed(1)}%</td><td class="${r.ctr > r.w * 1.4 ? "down" : ""}">${(r.ctr * 100).toFixed(1)}%</td><td>${(r.vol * 100).toFixed(0)}%</td><td>${r.beta == null ? "—" : r.beta.toFixed(2)}</td><td class="down">${money(P.stressRows[i].loss)}</td></tr>`).join("")}</tbody></table></div>
     ${P.pairs.length ? `<h4 class="qx-h">隱藏的相關性 <span class="note">相關係數最高的幾組</span></h4><ul class="qx-list tight">${P.pairs.slice(0, 4).map(p => `<li><b>${p.r.toFixed(2)}</b><span>${esc(nameOf(p.a))} × ${esc(nameOf(p.b))}${p.r >= 0.7 ? "：幾乎同進同出，等於加碼同一個方向" : p.r >= 0.5 ? "：有一定程度同步" : ""}</span></li>`).join("")}</ul>` : ""}
     ${heat}
-    <h4 class="qx-h">再平衡與避險試算 <span class="seg sm" role="group">${Object.entries(RISK_TOL).map(([k, [t]]) => `<button data-hrtol="${k}" aria-pressed="${tol === k}">${t}</button>`).join("")}</span></h4>
+    <h4 class="qx-h">集中與 Beta 避險試算 <span class="seg sm" role="group">${Object.entries(RISK_TOL).map(([k, [t]]) => `<button data-hrtol="${k}" aria-pressed="${tol === k}">${t}</button>`).join("")}</span></h4>
     <ul class="qx-list"><li><b>單一持股上限</b><span>${(plan.cap * 100).toFixed(0)}%：${plan.trims.length ? plan.trims.map(t => `${esc(nameOf(t.c))} 佔 ${(t.w * 100).toFixed(0)}%，約減 ${money(t.cut)}`).join("；") : "目前都沒有超過"}</span></li>
       <li><b>目標 Beta</b><span>${plan.tb}：${plan.hedge > 0 ? `組合 Beta ${P.beta.toFixed(2)} 偏高，若用反向 ETF ${hc}（${hn}）避險，約需 ${money(plan.hedge)}；大盤跌 20% 時預估損失從 ${qP(P.stress)} 降到約 ${qP(plan.after)}` : "目前的 Beta 在範圍內，不需要額外避險"}</span></li>
       <li><b>下跌 20% 的準備</b><span>先決定能承受的最大虧損（例如總資金的 10%），${P.stress != null ? `目前試算會虧 ${money(-P.tot * P.stress)}${P.cov.ratio < 1 ? "（只算納入的持股）" : ""}；` : ""}超過就分批減碼高 Beta、高風險貢獻的持股，或保留現金；反向 ETF 每天重新平衡，長期持有會有耗損，只適合短期避險。</span></li></ul>
+    <div class="qx-go"><button type="button" class="btn sm" data-hralloc>到「配置」試算實際買賣再平衡 ›</button><span class="note">含目標比重、股數、手續費與稅</span></div>
     ${qAiBlock({ key: ak, R: W.qai[ak] }, `${ico("ai")}AI 分析我的組合`)}
     <p class="note">試算假設每檔跟大盤的關係（Beta）不變；真的崩盤時相關性通常會變高，實際跌幅可能更大。不是投資建議。</p></div>`;
 }

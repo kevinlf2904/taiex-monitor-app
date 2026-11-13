@@ -74,3 +74,95 @@ test("調整後比重：扣掉費稅、用調整後總資產當分母；多檔�
   assert.ok(N.cashAfter < 0 && N.cashWeightAfter < 0); assert.ok(Math.abs(N.rows.reduce((s, r) => s + r.weightAfter, 0) + N.cashWeightAfter - 1) < 0.0005);
   assert.equal(row(N, "2330").weightAfter, row(N, "2330").valueAfter / N.totalAfter > 0 ? Math.round(100000 / N.totalAfter * 1e4) / 1e4 : null, "沒設目標的也用調整後總資產算");
 });
+
+test("未知現金（cash === null）、債券 ETF 零稅與手續費折扣（discount）", () => {
+  const P = R.plan({ positions: POS, fx: 30, cash: null, targets: { 2330: 50, NVDA: 50 }, band: 1, costs });
+  assert.equal(P.cashKnown, false);
+  assert.equal(P.cash, null);
+  assert.equal(P.cashAfter, null);
+  assert.equal(P.cashWeightAfter, null);
+  assert.equal(P.stocks, 130000);
+  assert.equal(P.total, 130000);
+  assert.equal(P.netCashDelta, Math.round((P.sell - P.buy) * 100) / 100);
+  assert.ok(P.issues.some(x => x.k === "no_cash"));
+  assert.ok(!P.issues.some(x => x.k === "cash_short"), "未知現金不能當 0 誤報現金不夠");
+
+  // 未知現金時忽略已存的 CASH 目標，不產生 100% 加總誤報
+  const I = R.plan({ positions: POS, fx: 30, cash: null, targets: { 2330: 50, NVDA: 20, CASH: 30 }, band: 1, costs });
+  assert.equal(I.cashKnown, false);
+  assert.equal(I.cashTarget, null);
+  assert.ok(I.issues.some(x => x.k === "cash_target_ignored"));
+  assert.ok(!I.issues.some(x => x.k === "sum"));
+  assert.ok(!I.issues.some(x => x.k === "cash_short"));
+
+  // 未知現金但股票目標合計超過 100% → 報 over，不報 cash_short
+  const O = R.plan({ positions: POS, fx: 30, cash: null, targets: { NVDA: 40 }, band: 1, costs });
+  assert.ok(O.issues.some(x => x.k === "over" && x.sum > 100));
+  assert.ok(!O.issues.some(x => x.k === "cash_short"));
+
+  // 真正記了 0 元現金（cash: 0）：cashKnown 為 true，負數仍報 cash_short 且 netCashDelta === cashAfter
+  const Z = R.plan({ positions: POS, fx: 30, cash: 0, targets: { NVDA: 50 }, band: 0, costs });
+  assert.equal(Z.cashKnown, true);
+  assert.equal(Z.cash, 0);
+  assert.ok(Z.cashAfter < 0);
+  assert.equal(Z.netCashDelta, Z.cashAfter);
+  assert.ok(Z.issues.some(x => x.k === "cash_short"));
+
+  // 債券 ETF（bond_etf）賣出證交稅為 0，券商折扣套用（0.28 折）
+  const discRules = { ...LG.DEFAULT_RULES, tw: { ...LG.DEFAULT_RULES.tw, discount: 0.28 } };
+  const bondPos = [{ symbol: "00679B", market: "tw", currency: "TWD", shares: 4000, price: 30, assetType: "bond_etf" }, { symbol: "2330", market: "tw", currency: "TWD", shares: 100, price: 800, assetType: "stock" }];
+  const B = R.plan({ positions: bondPos, fx: null, cash: null, targets: { "00679B": 0, "2330": 100 }, band: 1, costs: t => LG.estimateCosts(t, discRules) });
+  const br = row(B, "00679B"), tr = row(B, "2330");
+  assert.equal(br.action, "sell");
+  assert.equal(br.tradeShares, 4000);
+  assert.equal(br.tax, 0, "債券 ETF 證交稅為 0");
+  assert.equal(br.fee, Math.floor(120000 * 0.001425 * 0.28 + 1e-9), "手續費依折扣計算");
+  assert.equal(tr.action, "buy");
+  assert.equal(tr.fee, Math.floor(tr.grossBase * 0.001425 * 0.28 + 1e-9));
+});
+
+test("目標基準（basis）：total 與 holdings 切換時不給錯誤買賣建議，僅顯示偏離", () => {
+  // validateStore 支援選填 basis（total | holdings），不合法的值擋下
+  assert.equal(R.validateStore({ v: 1, basis: "total", targets: { 2330: 50, CASH: 20 }, band: 5 }).ok, true);
+  assert.equal(R.validateStore({ v: 1, basis: "holdings", targets: { 2330: 100 }, band: 5 }).ok, true);
+  assert.equal(R.validateStore({ v: 1, basis: "invalid_mode", targets: { 2330: 50 }, band: 5 }).errors[0]?.error, "invalid_basis");
+
+  // Claude 審查 P1 重現案例：0050 1000 股 @100、2330 100 股 @1000、目標 {0050: 40, 2330: 30, CASH: 30}、band 5
+  const pos = [
+    { symbol: "0050", market: "tw", currency: "TWD", shares: 1000, price: 100, assetType: "etf" },
+    { symbol: "2330", market: "tw", currency: "TWD", shares: 100, price: 1000, assetType: "stock" }
+  ];
+  // 1) 現金已知（85,714 → 總資產 285,714，0050 佔 35%、2330 佔 35%）：僅 2330 賣 14 股
+  const K = R.plan({ positions: pos, cash: 85714, targets: { "0050": 40, 2330: 30, CASH: 30 }, targetBasis: "total", band: 5, costs });
+  assert.equal(K.basisMismatch, false);
+  assert.equal(row(K, "0050").action, "hold");
+  assert.equal(row(K, "2330").action, "sell");
+  assert.equal(row(K, "2330").tradeShares, 14);
+
+  // 2) 切到現金未知（cash: null）：basis: "total" 與目前 holdings 模式不符 → 不得建議賣出 0050 200 股／2330 40 股
+  const M1 = R.plan({ positions: pos, cash: null, targets: { "0050": 40, 2330: 30, CASH: 30 }, targetBasis: "total", band: 5, costs });
+  assert.equal(M1.basisMismatch, true);
+  assert.equal(M1.status, "estimated");
+  assert.ok(M1.issues.some(x => x.k === "basis_mismatch"));
+  assert.ok(M1.issues.some(x => x.k === "cash_target_ignored"));
+  assert.equal(M1.buy, 0);
+  assert.equal(M1.sell, 0);
+  assert.equal(M1.fees, 0);
+  assert.equal(M1.netCashDelta, 0);
+  assert.ok(M1.rows.every(r => r.action === "hold" && r.reason === "basis_mismatch" && r.tradeShares == null));
+  assert.equal(row(M1, "0050").diff, -0.1);
+  assert.equal(row(M1, "2330").diff, -0.2);
+
+  // 2b) 舊格式未存 basis 但含 CASH 目標 → 亦推斷原基準為 total，切到 cash: null 一樣阻擋誤賣
+  const M1b = R.plan({ positions: pos, cash: null, targets: { "0050": 40, 2330: 30, CASH: 30 }, band: 5, costs });
+  assert.equal(M1b.basisMismatch, true);
+  assert.equal(M1b.sell, 0);
+
+  // 3) 反方向：在舊庫存模式存 holdings 目標 {0050: 60, 2330: 40}，切回有現金的帳本（cash: 85714）→ 不得建議把現金全買光
+  const M2 = R.plan({ positions: pos, cash: 85714, targets: { "0050": 60, 2330: 40 }, targetBasis: "holdings", band: 5, costs });
+  assert.equal(M2.basisMismatch, true);
+  assert.ok(M2.issues.some(x => x.k === "basis_mismatch"));
+  assert.equal(M2.buy, 0);
+  assert.equal(M2.sell, 0);
+  assert.ok(M2.rows.every(r => r.action === "hold" && r.reason === "basis_mismatch"));
+});
