@@ -141,3 +141,51 @@ test("交易紀錄邊界：追蹤美元現金缺匯率不清為 0，00679B 賣�
   assert.match(rbTxt, new RegExp(`費用與稅（估算）\\s*\\$?${ledgerCheck.fees.toLocaleString()}`), "畫面費用不含 00679B 交易稅");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("審查 P2：已選舊庫存且舊庫存為空時顯示舊庫存空狀態，不退回交易帳本", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  await p.evaluate(() => {
+    store.set("watch:hold", {});
+    store.set("pf:v1", { v: 1, method: "avg", transactions: [{ id: "b1", v: 1, date: "2026-01-05", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 90, fee: 0, tax: 0 }], at: "x" });
+    W.hold = {}; W.holdOwn = {}; W.holdLg = true; W.hsrcLegacy = true;
+    W.lg = { view: "alloc" }; W.lgAl = null; W.holdView = "tx"; setLt("hold");
+  });
+  await p.waitForSelector('#lx [data-lg="hsrcLedger"]', { timeout: 20000 });
+  const txt = await p.evaluate(() => $("#lx").innerText);
+  assert.match(txt, /目前看的是舊庫存/);
+  assert.match(txt, /目前沒有持股，沒有配置可以看/);
+  assert.doesNotMatch(txt, /全部資產（台幣計價）/);
+  assert.doesNotMatch(txt, /台積電|2330/);
+  await p.click('#lx [data-lg="hsrcLedger"]');
+  await p.waitForSelector("#lx .alcard", { timeout: 30000 });
+  const backTxt = await p.evaluate(() => $("#lx").innerText);
+  assert.match(backTxt, /全部資產（台幣計價）/);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("審查 P2：現金未知時儲存其他目標不刪除既有 CASH 目標；按清除才刪除", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  await p.evaluate(() => {
+    localStorage.setItem("kline:pf:targets:v1", JSON.stringify({ v: 1, targets: { 2330: 50, CASH: 20 }, band: 5 }));
+    const H = { 2330: { sh: 1000, cost: 90 } };
+    store.set("watch:hold", H); W.hold = H; W.holdOwn = H; W.lg = { view: "alloc" }; W.lgAl = null; W.holdView = "tx"; setLt("hold");
+  });
+  await p.waitForSelector("#lx .rbcard .rblist", { timeout: 30000 });
+  const initTxt = await p.evaluate(() => $(".rbcard").innerText);
+  assert.match(initTxt, /現金未知，已存的現金目標本次不套用/);
+  await p.click('[data-rb="edit"]');
+  await p.fill('#rbForm input[name="t_2330"]', "60");
+  await p.click('#rbForm button[type="submit"]');
+  await p.waitForSelector("#lx .rbcard .rblist", { timeout: 20000 });
+  const saved = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:targets:v1") || "{}"));
+  assert.equal(saved.targets["2330"], 60);
+  assert.equal(saved.targets.CASH, 20, "現金未知模式下儲存其他目標不得刪掉既有 CASH 目標");
+  const afterTxt = await p.evaluate(() => $(".rbcard").innerText);
+  assert.match(afterTxt, /現金未知，已存的現金目標本次不套用/);
+  await p.click('[data-rb="edit"]');
+  await p.click('[data-rb="clear"]');
+  await p.waitForSelector('#lx .rbcard [data-rb="edit"]', { timeout: 20000 });
+  const cleared = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:targets:v1") || "{}"));
+  assert.deepEqual(cleared.targets, {});
+  await ctx.close(); assert.deepEqual(errs, []);
+});

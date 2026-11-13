@@ -42,7 +42,7 @@ function renderLedger() {
   if (L.view === "alloc") {
     if (hasTx && !W.hsrcLegacy) return renderAlloc(S);
     const leg = lgLegacyOpen();
-    if (leg.open.length || leg.skipped.length) return renderAllocLegacy(leg, hasTx);
+    if ((hasTx && W.hsrcLegacy) || leg.open.length || leg.skipped.length) return renderAllocLegacy(leg, hasTx);
   }
   if (!S) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
   if (!L.view || L.view === "home") return renderHome(S); // 總覽（預設）：畫面在 pf-home.js，用到時才載入

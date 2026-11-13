@@ -55,8 +55,9 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("submit", e => {
   if (e.target.id !== "rbForm") return; e.preventDefault();
-  const L = (W.lg ||= {}), v = Object.fromEntries(new FormData(e.target)), targets = {};
+  const L = (W.lg ||= {}), v = Object.fromEntries(new FormData(e.target)), targets = {}, prev = rbLoad();
   for (const [k, x] of Object.entries(v)) if (k.startsWith("t_") && String(x).trim() !== "") targets[k.slice(2)] = +x;
+  if (!e.target.querySelector('[name="t_CASH"]') && prev.targets?.[KLRebal.CASH] != null) targets[KLRebal.CASH] = prev.targets[KLRebal.CASH]; // 現金未知時欄位於編輯表單停用，保留既有現金目標不被清除
   const r = rbSave({ v: 1, targets, band: String(v.band).trim() === "" ? 5 : +v.band });
   if (!r.ok) { toast("沒有儲存：目標要是 0～100 的數字，容許範圍 0～50"); return; }
   L.rbEdit = false; L.rbMsg = "已儲存目標配置。"; renderList();
