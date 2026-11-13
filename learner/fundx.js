@@ -230,7 +230,7 @@ function renderHoldMacro() {
       ${S.rows.map(r => `<tr><td><button class="linkbtn" data-sel="${r.c}">${esc(nameOf(r.c))}<small class="note"> ${r.c}</small></button></td><td>${(w(r.c) * 100).toFixed(1)}%</td>${r.b.map(cell).join("")}</tr>`).join("")}
       <tr class="tot"><td><b>整個組合</b></td><td>100%</td>${port.map(p => (p ? `<td class="${cls(p.e)}"><b>${qP(p.e, 2)}</b></td>` : `<td class="note">—</td>`)).join("")}</tr></tbody></table></div>
     ${scen.length ? `<h4 class="qx-h">情境試算</h4><ul class="qx-list tight">${scen.map(([t, e]) => `<li><b class="${cls(e)}">${qP(e, 1)}</b><span>${t}：組合約 ${money(tot * e)}</span></li>`).join("")}</ul>` : ""}
-    <h4 class="qx-h">每個因子為什麼重要</h4><ul class="qx-list tight">${MACRO_F.map(f => `<li><b>${f[1]}</b><span>${f[6]}</span></li>`).join("")}</ul>
+    <h4 class="qx-h">每個因子為什麼重要</h4><ul class="qx-list">${MACRO_F.map(f => `<li><b>${f[1]}</b><span>${f[6]}</span></li>`).join("")}</ul>
     <p class="note">${S.ok.every(Boolean) ? "" : "有些因子的資料暫時拿不到，那一欄會是空的。"}這是線性的估計：真的大跌時相關性通常會變高，實際影響可能更大。不是投資建議。</p></div>`;
 }
 

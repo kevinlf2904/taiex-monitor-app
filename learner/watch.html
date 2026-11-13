@@ -1034,6 +1034,8 @@ input.code:focus, select.sel:focus { border-color: var(--ink); } /* 不再拿掉
   .w-main.wide .d-grid { grid-template-columns: minmax(0, 1fr); } /* 抽屜裡分時與五檔上下排，圖表才夠寬 */
   .dbg { position: fixed; inset: 0; z-index: 44; background: rgba(8, 10, 14, .42); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); animation: fadeIn .25s; }
   .w-main.wide .lx { max-width: none; }
+  /* 庫存「風險」「總經敏感度」全寬時的排版（只限這兩頁，不動 K線學堂共用的 .qx-*）：指標卡一排最多 4 張；說明文字、清單不拉滿整頁 */
+  .w-main.wide .hrisk { max-width: 988px; } .w-main.wide .hrisk .qx-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @keyframes drawerIn { from { transform: translateX(48px); opacity: 0; } }
 @keyframes fadeIn { from { opacity: 0; } }
@@ -1067,6 +1069,7 @@ tr.on td { background: var(--surface-2); }
 .fxrank li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } .fxrank b { margin-left: auto; }
 .mstbl td { background: color-mix(in srgb, var(--surface-2) calc(var(--ms, 0) * 100%), transparent); } .mstbl td small { display: block; } .mstbl tr.tot td { border-top: 1px solid var(--line); }
 .msum { margin: 8px 0; line-height: 1.6; }
+.msens .qx-list.tight li { grid-template-columns: 3.8em 1fr; } /* 情境試算的「-2.2%」比 ⚠︎ 寬，共用的 2.6em 會和後面的字黏在一起 */
 /* 橫向捲動的按鈕列：左右還有內容時邊緣淡出，提示可以滑（hsFade 依捲動位置加上 hs-l／hs-r） */
 .hs-l { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px); mask-image: linear-gradient(90deg, transparent 0, #000 18px); }
 .hs-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); }
@@ -1236,7 +1239,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.13-235</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.13-236</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -2101,7 +2104,7 @@ function hsRestore(M) {
     const er = e.getBoundingClientRect(), ar = a.getBoundingClientRect(); if (ar.left < er.left) e.scrollLeft -= er.left - ar.left + 16; else if (ar.right > er.right) e.scrollLeft += ar.right - er.right + 16; });
 }
 // 平板橫向、電腦：大盤、選股、資金、產業這些內容多的分頁用全寬；點個股時，個股頁從右邊滑出（抽屜），不會把內容擠成一條
-const WIDE_TABS = ["mkt", "screen", "ind", "today", "mon", "money", "earn", "pod", "after", "cong", "tools"], wideMode = () => (WIDE_TABS.includes(W.lt) || (W.lt === "hold" && W.holdView === "tx")) && !isMobile(); // 投資組合（庫存 → 交易紀錄：總覽、績效、配置、融資）在桌面也用全寬，圖表、表格才展得開
+const WIDE_TABS = ["mkt", "screen", "ind", "today", "mon", "money", "earn", "pod", "after", "cong", "tools"], HOLD_WIDE = new Set(["tx", "risk", "macro"]), holdWide = () => W.lt === "hold" && HOLD_WIDE.has(W.holdView), wideMode = () => (WIDE_TABS.includes(W.lt) || holdWide()) && !isMobile(); // 投資組合（庫存 → 交易紀錄：總覽、績效、配置、融資）在桌面也用全寬，圖表、表格才展得開
 function syncLayout() { const m = $("#main"), w = wideMode(); m.classList.toggle("wide", w); $("#dbg").hidden = !(w && m.classList.contains("show-detail")); placeDrawer(); if (EMBED) requestAnimationFrame(postTabs); }
 // 嵌在 K線學堂裡時 iframe 和整頁一樣高，固定在 iframe 右側的抽屜會從 iframe 最上面一路拉到最下面：使用者往下捲過之後打開個股，
 // 內容在畫面外、抽屜本身也捲不動。所以抽屜改成貼齊使用者目前看得到的那一段，外層捲動或視窗大小改變時跟著移動。
@@ -2122,7 +2125,7 @@ function renderList0() {
   syncLayout();
   document.querySelectorAll("#lTabs [data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === ltTab()));
   const watch = W.lt === "watch"; renderOnb(); renderToday(watch);
-  $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", ...WIDE_TABS].includes(W.lt); $("#wl").hidden = WIDE_TABS.includes(W.lt); // 全寬分頁共用同一份清單
+  $("#groups").hidden = !watch; $("#searchBox").hidden = !watch; $("#lx").hidden = !["hold", ...WIDE_TABS].includes(W.lt); $("#wl").hidden = WIDE_TABS.includes(W.lt) || holdWide(); // 庫存的交易紀錄那一組、風險、總經敏感度不用清單區（以「哪一頁」為準，不看螢幕寬度）。 全寬分頁共用同一份清單
   $("#groups").innerHTML = W.groups.map((g, i) => `<button data-g="${i}" aria-pressed="${i === W.gi}">${esc(g.name)} <span class="note">${g.list.length}</span></button>`).join("") + `<button data-g="new" title="新增群組">＋ 群組</button>`;
   const n = $("#wlNote"); n.className = "note w-note"; let note = "";
   if (watch) {
