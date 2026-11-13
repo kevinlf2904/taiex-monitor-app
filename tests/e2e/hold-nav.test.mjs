@@ -12,7 +12,7 @@ const TX = [{ id: "d", v: 1, date: "2026-01-02", type: "deposit", market: "tw", 
 const MAIN = ["總覽", "持股", "績效", "配置與風險", "股利", "論點", "交易紀錄"];
 const GROUP = { pnl: "stock", ana: "stock", alloc: "allocrisk", risk: "allocrisk", macro: "allocrisk", margin: "allocrisk" };
 const PAGES = ["home", "pnl", "ana", "perf", "alloc", "risk", "macro", "margin", "div", "thesis", "tx"];
-const NEED_LEDGER = ["home", "perf", "alloc", "div", "thesis", "tx"];
+const NEED_LEDGER = ["home", "perf", "div", "thesis", "tx"];
 // 每一頁「內容是對的那一頁」的判斷：頁面自己的標記元素，或內部狀態（原本的畫面由這兩個狀態決定）
 const MARK = { home: ".hmcard", perf: ".pfcard", alloc: ".alcard", tx: "[data-lg=add]", margin: "[data-lg=mgadd]", ana: "#wl .hhead.ana", thesis: "#lx .thev, #lx .thsum",
   pnl: "#lx .yh-sum", risk: "#lx .hrisk:not(.msens)", macro: "#lx .hrisk.msens", div: "#lx .dvbars" };
@@ -56,6 +56,7 @@ for (const width of [390, 1280]) {
     for (const page of PAGES) {
       await holdGo(p, page);
       if (NEED_LEDGER.includes(page)) { await p.waitForSelector("#lx .lgintro", { timeout: 30000 }); assert.match(await p.evaluate(() => $("#lx").innerText), /從現有庫存建立/, page); }
+      else if (page === "alloc") { await p.waitForSelector("#lx .alcard", { timeout: 30000 }); await p.waitForSelector("#lx .rbcard", { timeout: 30000 }); assert.equal(await p.evaluate(() => !!document.querySelector("#lx .lgintro")), false, "alloc：有舊庫存時直接顯示配置與再平衡"); }
       else { await p.waitForTimeout(150); assert.equal(await p.evaluate(() => !!document.querySelector("#lx .lgintro")), false, page + "：不需要交易紀錄"); }
       assert.ok(["pnl", "ana", "risk", "macro", "tx"].includes(JSON.parse((await snap()).hv)), page + "：watch:hv 的值仍是原本那幾種");
     }

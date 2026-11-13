@@ -46,17 +46,22 @@ test("策略回測的完整報告：指標、行情拆解、改善試算、AI", 
   await clean(p); await ctx.close(); assert.deepEqual(errs, []);
 });
 
-test("庫存風險：相關係數、Beta、壓力測試、再平衡", async () => {
+test("庫存風險：相關係數、Beta、壓力測試、集中與 Beta 避險試算與前往配置再平衡", async () => {
   for (const width of [390, 1280]) {
     const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
     await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 90 }, 2317: { sh: 3000, cost: 100 }, 2454: { sh: 200, cost: 100 }, "0050": { sh: 500, cost: 80 } }; W.holdMkt = "tw"; W.holdView = "risk"; setLt("hold"); });
     await p.waitForSelector(".hrisk", { timeout: 20000 });
     const t = await p.evaluate(() => $("#lx").innerText);
-    assert.match(t, /組合年化波動[\s\S]*Beta[\s\S]*大盤跌 20% 試算/); assert.match(t, /每一檔的風險/); assert.match(t, /相關係數表/); assert.match(t, /再平衡與避險試算/);
+    assert.match(t, /組合年化波動[\s\S]*Beta[\s\S]*大盤跌 20% 試算/); assert.match(t, /每一檔的風險/); assert.match(t, /相關係數表/); assert.match(t, /集中與 Beta 避險試算/);
+    assert.doesNotMatch(t, /再平衡與避險試算/, "風險頁不再叫「再平衡與避險試算」");
     await p.click('[data-hrtol="low"]'); await p.waitForTimeout(150); assert.equal(await p.evaluate(() => W.hrTol), "low");
     assert.match(await p.evaluate(() => $("#lx").innerText), /單一持股上限\s*15%/);
     await p.click('#lx [data-qai="hrisk:tw"]'); await p.waitForSelector("#lx .qx-aitxt");
-    await clean(p); await ctx.close(); assert.deepEqual(errs, []);
+    if (width < 500) assert.ok((await p.evaluate(() => document.querySelector("[data-hralloc]")?.getBoundingClientRect().height || 0)) >= 43.5, "觸控鈕至少 44px");
+    await clean(p);
+    await p.click("[data-hralloc]"); await p.waitForSelector("#lx .rbcard", { timeout: 30000 });
+    assert.deepEqual(await p.evaluate(() => [W.holdView, W.lg?.view]), ["tx", "alloc"], "點按鈕切到配置頁的再平衡");
+    await ctx.close(); assert.deepEqual(errs, []);
   }
 });
 
