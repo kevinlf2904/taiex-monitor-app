@@ -119,3 +119,24 @@ test("390：風險、總經敏感度維持手機版面（不是全寬模式）�
   assert.ok(mc.h <= mc.lh * 3 + 2, "因子名稱最多折 3 行：" + mc.h);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// #299 審查補測：點背景關抽屜；只有一檔、切到沒有持股的美股時版面仍是全寬；盤中每秒更新時背景的風險／總經頁不重畫（開著抽屜看盤不閃）
+test("1280：風險、總經敏感度點背景關抽屜；切到沒有持股的美股仍是全寬；盤中每秒更新不重畫背景", async () => {
+  const { ctx, p, errs } = await start(1280);
+  for (const page of ["risk", "macro"]) {
+    await holdGo(p, page); await p.waitForSelector(MARK[page], { timeout: 30000 });
+    await p.click(`${MARK[page]} table [data-sel="2330"]`); await p.waitForFunction(() => $("#main").classList.contains("show-detail") && !$("#dbg").hidden);
+    // 盤中：fastTick 每秒呼叫 renderList（W.ticking＝true）；風險、總經頁用收盤資料，背景不該被整頁換掉
+    const same = await p.evaluate(() => { const el = $("#lx").firstElementChild; W.lastPtr = 0; /* lastPtr 歸零：不然「剛點過 0.9 秒內不重畫」那條會先擋住，測不到這一條 */ W.ticking = true; try { renderList(); } finally { W.ticking = false; } return $("#lx").firstElementChild === el; });
+    assert.equal(same, true, page + "：盤中每秒更新不重畫背景");
+    await p.mouse.click(40, 600); await p.waitForFunction(() => !$("#main").classList.contains("show-detail") && $("#dbg").hidden);
+    assert.equal(await p.evaluate(() => W.holdView), page, page + "：點背景關掉抽屜後還在同一頁");
+    // 假資料只有台股一檔：切到美股（沒有持股）時顯示提示，版面仍是全寬、清單區收起、不溢出
+    await p.click('#holdSeg [data-hm="us"]'); await p.waitForFunction(() => W.holdMkt === "us");
+    assert.match(await p.evaluate(() => $("#lx").innerText), /還沒有美股持股/, page + "：美股沒有持股的提示");
+    assert.deepEqual(await p.evaluate(() => [$("#main").classList.contains("wide"), $("#wl").hidden]), [true, true], page + "：美股也是全寬");
+    assert.ok(await noHOverflow(p), page + "：美股不溢出");
+    await p.click('#holdSeg [data-hm="tw"]'); await p.waitForFunction(() => W.holdMkt === "tw");
+  }
+  await ctx.close(); assert.deepEqual(errs, []);
+});
