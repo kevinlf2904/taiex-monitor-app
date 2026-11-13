@@ -31,7 +31,7 @@ for (const width of [390, 1280]) test(`報告 ${width}：從總覽打開、明�
   const printed = await p.evaluate(() => { let n = 0; const o = window.print; window.print = () => { n++; }; document.querySelector("[data-rpt=print]").click(); window.print = o; return n; });
   assert.equal(printed, 1);
   await p.emulateMedia({ media: "print" });
-  const vis = await p.evaluate(() => [getComputedStyle(document.querySelector("#lx .rpt")).visibility, getComputedStyle(document.querySelector("#lx .lgview")).visibility, getComputedStyle(document.querySelector("[data-rpt=print]")).visibility]);
+  const vis = await p.evaluate(() => [getComputedStyle(document.querySelector("#lx .rpt")).visibility, getComputedStyle(document.querySelector("#hvSeg")).visibility, getComputedStyle(document.querySelector("[data-rpt=print]")).visibility]);
   assert.deepEqual(vis, ["visible", "hidden", "hidden"], "列印時：報告看得到，分頁按鈕與列印按鈕不印");
   await p.emulateMedia({ media: "screen" });
   await p.evaluate(() => document.querySelector('#lx .rptbar [data-v=home]').click()); await p.waitForSelector("#lx .hmcard", { timeout: 30000 });

@@ -174,7 +174,7 @@ document.addEventListener("submit", e => {
    價格：每一檔 /api/kline 原始收盤（最多 24 個月；股息已經是現金流，不用還原價）；比較基準：台幣＝加權指數（價格指數，不含股息）、美元＝SPY 還原價（含息）。
    畫面：重點數字、淨值走勢 vs 比較基準（同一起點＝100）、回撤（另一張圖，不用雙軸）、月報酬表、歸因排行、估算原因與計算口徑。
    日期範圍：3 個月／6 個月／1 年／全部；圖上滑鼠或手指移動顯示當天數值。 */
-const lgViewSeg = () => `<div class="seg lgview" role="group" aria-label="總覽、交易紀錄、績效、配置、股利、融資或論點">${[["home", "總覽"], ["tx", "交易紀錄"], ["perf", "績效"], ["alloc", "配置"], ["div", "股利"], ["margin", "融資"], ["thesis", "論點"]].map(([k, t]) => `<button type="button" data-lg="view" data-v="${k}" aria-pressed="${(W.lg?.view || "home") === k}">${t}</button>`).join("")}</div>`;
+const lgViewSeg = () => ""; // 分頁列搬到庫存上方的主分頁（watch.html 的 HOLD_NAV），這裡不再畫第二排；各頁仍會呼叫，所以留著
 // 績效（perf.js）與匯率合併（fx.js）用到時才載入，照順序（fx.js 要用到 perf.js）
 function lgPerfLib() {
   if (typeof KLPerf !== "undefined" && typeof KLFx !== "undefined") return Promise.resolve();

@@ -3,7 +3,7 @@
 // 晚回來的舊請求不覆蓋新資料；pfsrc.js 載入失敗時數字照樣顯示。固定假資料、手機與桌面
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chromium, serve, open } from "./_harness.mjs";
+import { chromium, serve, open, holdGo } from "./_harness.mjs";
 
 const S = await serve(), B = await (await chromium()).launch();
 test.after(async () => { await B.close(); S.close(); });
@@ -35,7 +35,7 @@ test("資料狀態：各頁都有；報價失敗時沿用上一次的、可以�
     await ctx.unroute("**/api/quote**");
     // 配置、績效、融資頁也有資料狀態
     for (const [v, sel, re] of [["alloc", ".alcard", /報價：/], ["perf", ".pfcard", /日 K：/], ["margin", ".mgcard, .mgacct, .pfsrc", /擔保品報價：/]]) {
-      await p.click(`[data-lg=view][data-v=${v}]`); await p.waitForFunction(r => new RegExp(r).test([...document.querySelectorAll("#lx .pfsrc")].map(e => e.innerText).join()), re.source, { timeout: 30000 });
+      await holdGo(p, v); await p.waitForFunction(r => new RegExp(r).test([...document.querySelectorAll("#lx .pfsrc")].map(e => e.innerText).join()), re.source, { timeout: 30000 });
       assert.match(await txt(p), /計算時間 \d\d:\d\d/, v + "：計算時間和行情時間分開寫");
     }
     assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width) /* 和設定的螢幕寬度比：手機模擬時 innerWidth 會跟著內容一起變寬，比它永遠不會失敗 */, width + "：沒有水平溢出");

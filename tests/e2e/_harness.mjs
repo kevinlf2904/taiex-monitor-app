@@ -86,3 +86,11 @@ export async function open(browser, base, file, { width = 1180, touch = false, s
 // t 可以是 page 或 frame；frame 另外取 iframe 本身寬度（innerWidth）和螢幕寬度較小者
 export async function hOverflow(t) { const pg = typeof t.page === "function" ? t.page() : t, w = pg.viewportSize().width; return t.evaluate(w => document.documentElement.scrollWidth - Math.min(innerWidth, w), w); }
 export const noHOverflow = async t => (await hOverflow(t)) <= 1;
+// 庫存分頁導覽（一排主分頁 #hvSeg；「持股」「配置與風險」另有子分頁 #hsubSeg）。page：home｜pnl｜ana｜perf｜alloc｜risk｜macro｜margin｜div｜thesis｜tx
+const HOLD_GROUP = { pnl: "stock", ana: "stock", alloc: "allocrisk", risk: "allocrisk", macro: "allocrisk", margin: "allocrisk" };
+export async function holdGo(p, page) {
+  const g = HOLD_GROUP[page] || page;
+  await p.click(`#hvSeg [data-nav="${g}"]`);
+  if (HOLD_GROUP[page]) await p.click(`#hsubSeg [data-nav="${page}"]`);
+  await p.waitForFunction(([g, page, sub]) => document.querySelector(`#hvSeg [data-nav="${g}"]`)?.getAttribute("aria-pressed") === "true" && (!sub || document.querySelector(`#hsubSeg [data-nav="${page}"]`)?.getAttribute("aria-pressed") === "true"), [g, page, !!HOLD_GROUP[page]]);
+}
