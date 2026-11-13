@@ -2141,7 +2141,7 @@ function renderList0() {
   } else if (W.lt === "hold") {
     if ($("#main").classList.contains("wide") !== wideMode()) syncLayout(); // 庫存的分頁換到／離開交易紀錄：全寬與雙欄跟著切換
     holdSrcApply(); // 交易紀錄有改（新增交易、匯入備份）就換成新的持股
-    const hp = holdPage(), hg = HOLD_NAV.find(g => g[0] === hp || g[2]?.some(s => s[0] === hp)), hbtn = (nav, page, t, on) => `<button type="button" data-nav="${nav}" ${HOLD_OWN.has(page) ? `data-hv="${page}"` : `data-hv="tx" data-lg="view" data-v="${page}"`} aria-pressed="${on}">${t}</button>`;
+    const hp = holdPage(), hg = HOLD_NAV.find(g => g[0] === hp || g[2]?.some(s => s[0] === hp)) || HOLD_NAV[0], hbtn = (nav, page, t, on) => `<button type="button" data-nav="${nav}" ${HOLD_OWN.has(page) ? `data-hv="${page}"` : `data-hv="tx" data-lg="view" data-v="${page}"`} aria-pressed="${on}">${t}</button>`;
     $("#lTools").innerHTML = `<div class="seg" role="group" aria-label="庫存分頁" id="hvSeg">${HOLD_NAV.map(([g, t, sub]) => hbtn(g, sub ? sub[0][0] : g, t, g === hg[0])).join("")}</div>${hg[2] ? `<div class="seg" role="group" aria-label="${hg[1]}" id="hsubSeg">${hg[2].map(([k, t]) => hbtn(k, k, t, k === hp)).join("")}</div>` : ""}<div class="seg" role="group" aria-label="市場" id="holdSeg">${[["tw", "台股"], ["us", "美股"]].map(([k, t]) => `<button data-hm="${k}" aria-pressed="${W.holdMkt === k}">${t}</button>`).join("")}</div>
       ${W.holdView === "tx" ? "" : holdSrcBar()}${hg[0] === "stock" ? `<div class="imp-btns"${W.holdLg ? " hidden" : ""}><button class="btn sm primary" data-imp="edit">${ico("pen")}編輯庫存</button><button class="btn sm" data-imp="shot">${ico("cam")}截圖匯入</button><button class="btn sm" data-imp="export">⬇ 匯出</button></div>` : ""}`;
     const tw = W.holdMkt === "tw";
