@@ -53,7 +53,7 @@ test("備份：目標配置帶進備份檔；匯入用再平衡模組檢查，�
 for (const width of [390, 1280]) test(`只有舊庫存 ${width}：配置與再平衡可用，現金未知不誤報、00679B 零稅與券商折扣對齊、不改動存檔`, async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
   await ctx.route("**/api/kline?code=TWD%3DX**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, data: [{ d: "2026-10-05", o: 32, h: 32, l: 32, c: 32, v: 0 }] }) }));
-  const HOLD = { 2330: { sh: 1000, cost: 500 }, "00679B": { sh: 4000, cost: 30 }, NVDA: { sh: 10, cost: 100, demo: true } };
+  const HOLD = { 2330: { sh: 1000, cost: 500 }, "00679B": { sh: 4000, cost: 30 }, NVDA: { sh: 10, cost: 100 }, "9958": { sh: 100, cost: 100, demo: true } };
   await p.evaluate(h => {
     localStorage.removeItem("kline:pf:v1"); localStorage.removeItem("kline:pf:targets:v1");
     store.set("watch:hold", h); store.set("watch:hdisc", 0.28); W.hold = h; W.holdOwn = h; W.hdisc = 0.28;
@@ -64,7 +64,8 @@ for (const width of [390, 1280]) test(`只有舊庫存 ${width}：配置與再�
   const beforeHold = await p.evaluate(() => localStorage.getItem("kline:watch:hold"));
   const txt0 = await p.evaluate(() => $("#lx").innerText);
   assert.equal(await p.evaluate(() => !!document.querySelector("#lx .lgintro")), false, "不擋在建立交易紀錄畫面");
-  assert.match(txt0, /舊庫存/); assert.match(txt0, /現金未知/); assert.match(txt0, /範例持股/);
+  assert.match(txt0, /舊庫存/); assert.match(txt0, /現金未知/); assert.match(txt0, /已略過 1 筆範例持股/);
+  assert.doesNotMatch(txt0, /9958/);
 
   await p.click("#lx .rbcard [data-rb=edit]"); await p.waitForSelector("#rbForm");
   assert.equal(await p.evaluate(() => !!document.querySelector('#rbForm tbody tr:last-child input[disabled]')), true, "未知現金不可填現金目標");
@@ -77,14 +78,16 @@ for (const width of [390, 1280]) test(`只有舊庫存 ${width}：配置與再�
       { symbol: "00679B", market: "tw", currency: "TWD", shares: 4000, price: X.px.get("00679B").price, assetType: "bond_etf" },
       { symbol: "NVDA", market: "us", currency: "USD", shares: 10, price: X.px.get("NVDA").price, assetType: "stock" }];
     const rules = { ...KLLedger.DEFAULT_RULES, tw: { ...KLLedger.DEFAULT_RULES.tw, discount: 0.28 } };
-    const P = KLRebal.plan({ positions: pos, fx, cash: null, targets: { 2330: 50, "00679B": 10, NVDA: 40 }, band: 1, costs: t => KLLedger.estimateCosts(t, rules) });
-    return { P, rbText: $(".rbcard").innerText, pf: localStorage.getItem("kline:pf:v1"), hold: localStorage.getItem("kline:watch:hold"), br: P.rows.find(x => x.symbol === "00679B") };
+    const P = KLRebal.plan({ positions: pos, fx, cash: null, targets: { 2330: 50, "00679B": 10, NVDA: 40 }, targetBasis: "holdings", band: 1, costs: t => KLLedger.estimateCosts(t, rules) });
+    return { P, rbText: $(".rbcard").innerText, pf: localStorage.getItem("kline:pf:v1"), hold: localStorage.getItem("kline:watch:hold"), br: P.rows.find(x => x.symbol === "00679B"), st: JSON.parse(localStorage.getItem("kline:pf:targets:v1") || "{}") };
   });
+  assert.equal(r.st.basis, "holdings");
   assert.equal(r.br.action, "sell"); assert.equal(r.br.tax, 0, "00679B 賣出證交稅應為 0");
   assert.equal(r.P.cashKnown, false);
   assert.match(r.rbText, /預估淨現金變動/);
   assert.doesNotMatch(r.rbText, /調整後現金/);
   assert.doesNotMatch(r.rbText, /現金不夠/);
+  assert.doesNotMatch(r.rbText, /9958/, "範例持股不進入再平衡列表");
   for (const x of r.P.rows) if (x.action === "buy" || x.action === "sell") assert.match(r.rbText, new RegExp(`${x.action === "buy" ? "買進" : "賣出"} ${x.tradeShares.toLocaleString()} 股`));
   assert.equal(r.pf, null, "不偷建交易紀錄"); assert.equal(r.hold, beforeHold, "不改動舊庫存");
   assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width), "沒有水平溢出");
@@ -102,13 +105,15 @@ test("舊庫存邊界：全空導引、缺報價與無效資料明確警告", as
     r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", today: "2026-10-05", quotes: codes.map((c, i) => ({ code: c, name: "股" + c, price: 100 + i, prev: 99, date: "2026-10-05", time: "10:30:05" })) }) }); });
   await p.evaluate(() => {
     localStorage.setItem("kline:pf:targets:v1", JSON.stringify({ v: 1, targets: { 2330: 50, 2454: 50 }, band: 1 }));
-    const H = { 2330: { sh: 1000, cost: 90 }, 2454: { sh: 500, cost: 100 }, BAD1: { sh: 10, cost: 0 } };
+    const H = { 2330: { sh: 1000, cost: 90 }, 2454: { sh: 500, cost: 100 }, BAD1: { sh: 10, cost: 0 }, TXF: { sh: 1, cost: 20000 } };
     store.set("watch:hold", H); W.hold = H; W.holdOwn = H; W.lg = { view: "alloc" }; W.lgAl = null; W.holdView = "tx"; setLt("hold");
   });
   await p.waitForSelector("#lx .rbcard .rblist", { timeout: 30000 });
   const badTxt = await p.evaluate(() => $("#lx").innerText);
-  assert.match(badTxt, /略過 1 筆無法算入的舊庫存/); assert.match(badTxt, /BAD1/);
+  assert.match(badTxt, /略過 2 筆無法算入的舊庫存/); assert.match(badTxt, /BAD1/);
+  assert.match(badTxt, /TXF（期貨不納入配置與再平衡）/);
   assert.match(badTxt, /沒有報價.*2454/);
+  assert.ok(!(await p.evaluate(() => $("#lx .rbcard .rblist").innerText)).includes("TXF"), "期貨不應進入再平衡清單");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
@@ -187,5 +192,70 @@ test("審查 P2：現金未知時儲存其他目標不刪除既有 CASH 目標�
   await p.waitForSelector('#lx .rbcard [data-rb="edit"]', { timeout: 20000 });
   const cleared = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:targets:v1") || "{}"));
   assert.deepEqual(cleared.targets, {});
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("審查 P1／P3：total 與 holdings 目標基準切換不誤買賣；全範例／期貨顯示略過空狀態", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  await ctx.route("**/api/quote**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, quotes: [
+    { code: "0050", name: "元大台灣50", price: 200 },
+    { code: "2330", name: "台積電", price: 1000 }
+  ] }) }));
+  await ctx.route("**/api/etf**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true }) }));
+  await p.evaluate(() => {
+    localStorage.removeItem("kline:pf:targets:v1");
+    const H = { "0050": { sh: 1000, cost: 200 }, "2330": { sh: 100, cost: 1000 } };
+    store.set("watch:hold", H); W.hold = H; W.holdOwn = H;
+    store.set("pf:v1", { v: 1, method: "avg", transactions: [
+      { id: "d1", v: 1, date: "2026-01-02", type: "deposit", market: "tw", currency: "TWD", amount: 385714 },
+      { id: "b1", v: 1, date: "2026-01-05", type: "buy", symbol: "0050", market: "tw", currency: "TWD", shares: 1000, price: 200, fee: 0, tax: 0 },
+      { id: "b2", v: 1, date: "2026-01-06", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 100, price: 1000, fee: 0, tax: 0 }
+    ], at: "x" });
+    W.lg = { view: "alloc" }; W.lgAl = null; W.holdView = "tx"; setLt("hold");
+  });
+  await p.waitForSelector('#lx .rbcard [data-rb="edit"]', { timeout: 30000 });
+  await p.click('#lx .rbcard [data-rb="edit"]'); await p.waitForSelector("#rbForm");
+  await p.fill('#rbForm [name="t_0050"]', "40"); await p.fill('#rbForm [name="t_2330"]', "30"); await p.fill('#rbForm [name="t_CASH"]', "30"); await p.fill("#rbForm [name=band]", "2");
+  await p.click("#rbForm button[type=submit]");
+  await p.waitForSelector("#lx .rbcard .rblist", { timeout: 20000 });
+  const savedTotal = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:targets:v1") || "{}"));
+  assert.equal(savedTotal.basis, "total");
+
+  // 切換到舊庫存（無現金）：total 目標不得在 holdings 基準下給出買賣股數
+  await p.evaluate(() => { W.hsrcLegacy = true; W.lgAl = null; renderList(); });
+  await p.waitForSelector("#lx .rbcard .rblist", { timeout: 30000 });
+  const totalToHold = await p.evaluate(() => ({ card: $("#lx .rbcard").innerText, list: $("#lx .rbcard .rblist").innerText }));
+  assert.match(totalToHold.card, /總資產（含現金）/);
+  assert.match(totalToHold.card, /現金未知，已存的現金目標本次不套用/);
+  assert.doesNotMatch(totalToHold.list, /買進|賣出|調整後/);
+  assert.equal(await p.evaluate(() => $("#lx .rbcard .pftiles") === null), true, "基準不一致時不顯示買賣試算彙總卡");
+
+  // 在舊庫存重新確認儲存 → basis 改為 "holdings"，之後切回交易帳本（有現金）不得拿全部現金去買
+  await p.click('#lx .rbcard [data-rb="edit"]'); await p.waitForSelector("#rbForm");
+  assert.match(await p.evaluate(() => $("#rbForm").innerText), /原本的目標基準/);
+  await p.fill('#rbForm [name="t_0050"]', "60"); await p.fill('#rbForm [name="t_2330"]', "40");
+  await p.click("#rbForm button[type=submit]");
+  await p.waitForSelector("#lx .rbcard .pftiles", { timeout: 20000 });
+  const savedHold = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:targets:v1") || "{}"));
+  assert.equal(savedHold.basis, "holdings");
+  assert.equal(savedHold.targets.CASH, 30);
+
+  await p.click('#lx [data-lg="hsrcLedger"]');
+  await p.waitForSelector("#lx .rbcard .rblist", { timeout: 30000 });
+  const holdToTotal = await p.evaluate(() => ({ card: $("#lx .rbcard").innerText, list: $("#lx .rbcard .rblist").innerText }));
+  assert.match(holdToTotal.card, /僅納入持股合計/);
+  assert.doesNotMatch(holdToTotal.list, /買進|賣出|調整後/);
+  assert.equal(await p.evaluate(() => $("#lx .rbcard .pftiles") === null), true, "切回總資產時同樣攔截 holdings 目標");
+
+  // 全範例＋期貨舊庫存：都應略過並顯示可理解的空狀態，不留殘留
+  await p.evaluate(() => {
+    const H = { "9958": { sh: 100, cost: 100, demo: true }, TXF: { sh: 1, cost: 20000 } };
+    store.set("watch:hold", H); W.hold = H; W.holdOwn = H; W.holdLg = true; W.hsrcLegacy = true; W.lgAl = null; renderList();
+  });
+  await p.waitForSelector("#lx .alissues", { timeout: 20000 });
+  const emptyTxt = await p.evaluate(() => $("#lx").innerText);
+  assert.match(emptyTxt, /已略過 1 筆範例持股（不是真實部位）；如不需要請到「持股 → 編輯庫存」移除/);
+  assert.match(emptyTxt, /略過 1 筆無法算入的舊庫存：.*TXF（期貨不納入配置與再平衡）/);
+  assert.match(emptyTxt, /目前沒有可納入計算的持股/);
   await ctx.close(); assert.deepEqual(errs, []);
 });

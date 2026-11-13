@@ -14,15 +14,20 @@ function rbSectionHtml(open, X, cashB, meta = {}) {
   const positions = open.map(p => ({ symbol: p.symbol, market: p.market, currency: p.currency, shares: p.shares, price: X.px.get(p.symbol)?.price ?? null, assetType: p.assetType || assetOf(p) }));
   const disc = Number(W?.hdisc) > 0 && Number(W.hdisc) <= 1 ? Number(W.hdisc) : 1;
   const rbRules = KLLedger.DEFAULT_RULES ? { ...KLLedger.DEFAULT_RULES, tw: { ...KLLedger.DEFAULT_RULES.tw, discount: disc } } : undefined;
-  const P = KLRebal.plan({ positions, fx, cash, targets: st.targets, band: st.band ?? 5, costs: t => KLLedger.estimateCosts(t, rbRules) });
+  const P = KLRebal.plan({ positions, fx, cash, targets: st.targets, targetBasis: st.basis || null, band: st.band ?? 5, costs: t => KLLedger.estimateCosts(t, rbRules) });
+  const BASIS_LABEL = { total: "總資產（含現金）", holdings: "僅納入持股合計（不含現金）" };
   const pct = v => (v == null ? "—" : (v * 100).toFixed(1) + "%"), has = Object.keys(st.targets).length > 0, AL = KLRebal.ACTION_LABEL;
-  const issItems = (P.issues || []).map(x => `<li>${esc(KLRebal.ISSUE_LABEL[x.k] || x.k)}${x.codes ? `：${x.codes.map(c => esc(nameOf(c))).join("、")}` : ""}${x.sum != null ? `（${x.sum}%）` : ""}${x.need != null ? `（還差 ${lgMoney(x.need, "TWD")}）` : ""}</li>`);
+  const issText = x => x.k === "basis_mismatch"
+    ? `已存目標是依「${BASIS_LABEL[x.saved] || x.saved}」設定，與目前的「${BASIS_LABEL[x.expected] || x.expected}」不同；這次暫停計算買賣股數，請按「修改目標」重新確認。`
+    : `${KLRebal.ISSUE_LABEL[x.k] || x.k}${x.codes ? `：${x.codes.map(c => nameOf(c)).join("、")}` : ""}${x.sum != null ? `（${x.sum}%）` : ""}${x.need != null ? `（還差 ${lgMoney(x.need, "TWD")}）` : ""}`;
+  const issItems = (P.issues || []).map(x => `<li>${esc(issText(x))}</li>`);
   if (cashNeedFx) issItems.unshift(`<li>現金含美元（${lgMoney(cashB.USD.balance, "USD")}），但缺少匯率，這次現金未納入試算。</li>`);
   const issHtml = issItems.length ? `<ul class="note lgwarn alissues">${issItems.join("")}</ul>` : "";
   let body;
   if (L.rbEdit) {
     const inp = (k, v) => `<input type="number" inputmode="decimal" min="0" max="100" step="0.1" name="t_${esc(k)}" value="${v ?? ""}" aria-label="${esc(k === "CASH" ? "現金" : nameOf(k))} 目標百分比" placeholder="不設">`;
-    body = `<form id="rbForm" class="rbform"><p class="note">${P.cashKnown ? "每檔填目標占總資產的百分比；空白＝不設目標（這檔維持原樣，不買不賣）。現金可以不填，會是調整後剩下的。" : "目前現金未知（未納入試算），每檔填目標占「目前納入持股合計」的百分比（非完整總資產）；空白＝這檔維持原樣。"}</p>
+    const basisWarn = P.basisMismatch ? `<strong class="lgwarn">注意：原本的目標基準是「${esc(BASIS_LABEL[P.targetBasis] || P.targetBasis)}」，這次儲存後會改依目前的「${esc(BASIS_LABEL[P.basis] || P.basis)}」重新計算。</strong><br>` : "";
+    body = `<form id="rbForm" class="rbform"><p class="note">${basisWarn}${P.cashKnown ? "每檔填目標占總資產的百分比；空白＝不設目標（這檔維持原樣，不買不賣）。現金可以不填，會是調整後剩下的。" : "目前現金未知（未納入試算），每檔填目標占「目前納入持股合計」的百分比（非完整總資產）；空白＝這檔維持原樣。"}</p>
       <table class="altable rbtable"><thead><tr><th>持股</th><th>目前</th><th>目標 %</th></tr></thead><tbody>
       ${P.rows.map(r => `<tr><td>${esc(nameOf(r.symbol))} <small class="note">${esc(r.symbol)}</small></td><td>${pct(r.weight)}</td><td>${inp(r.symbol, st.targets[r.symbol])}</td></tr>`).join("")}
       <tr><td>現金</td><td>${P.cashKnown && P.total ? pct(P.cash / P.total) : "未知（未納入）"}</td><td>${P.cashKnown ? inp("CASH", st.targets.CASH) : `<input type="number" disabled placeholder="現金未知" aria-label="現金 目標百分比（現金未知時無法設定）">`}</td></tr></tbody></table>
@@ -32,19 +37,20 @@ function rbSectionHtml(open, X, cashB, meta = {}) {
   else if (P.status === "invalid") body = `${issHtml}<p class="note">沒有可以計算的資產（納入的持股都缺報價或匯率，且沒有已知現金）。</p><div class="lgbar"><button type="button" class="btn sm" data-rb="edit">修改目標</button></div>`;
   else {
     const act = r => r.action === "buy" || r.action === "sell" ? `<b class="${r.action === "buy" ? "up" : "down"}">${AL[r.action]} ${r.tradeShares.toLocaleString()} 股</b>${r.lots ? `<small class="note">（${r.lots} 張${r.odd ? `＋${r.odd} 股` : ""}）</small>` : ""}<small class="note">約 ${lgMoney(r.grossBase, "TWD")}${r.costBase ? `・費稅 ${lgMoney(r.costBase, "TWD")}` : ""}</small>`
+      : r.reason === "basis_mismatch" ? `<span class="note">偏離 ${(r.diff * 100 >= 0 ? "+" : "")}${(r.diff * 100).toFixed(1)} 個百分點（基準不同・請按「修改目標」重新確認，暫停計算股數）</span>`
       : `<span class="note">${AL[r.action]}${r.reason === "within_band" ? "（在容許範圍內）" : r.reason === "less_than_one_share" ? "（差不到一股）" : ""}</span>`;
     const cashTile = P.cashKnown
       ? `<div class="pftile"><span>調整後現金</span><b class="${P.cashAfter < 0 ? "lgwarn" : ""}">${lgMoney(P.cashAfter, "TWD")}</b><small>${pct(P.cashWeightAfter)}${P.cashTarget != null ? `・目標 ${pct(P.cashTarget)}` : ""}</small></div>`
       : `<div class="pftile"><span>預估淨現金變動</span><b class="${P.netCashDelta < -0.5 ? "lgwarn" : P.netCashDelta > 0.5 ? "up" : ""}">${P.netCashDelta > 0 ? "+" : ""}${lgMoney(P.netCashDelta, "TWD")}</b><small>${P.netCashDelta < -0.5 ? `現金未知・約需另備 ${lgMoney(-P.netCashDelta, "TWD")}` : P.netCashDelta > 0.5 ? "現金未知・賣出後約釋出" : "現金未知・未納入"}</small></div>`;
-    body = `<div class="pftiles"><div class="pftile"><span>要買進</span><b>${lgMoney(P.buy, "TWD")}</b></div><div class="pftile"><span>要賣出（扣費稅）</span><b>${lgMoney(P.sell, "TWD")}</b></div>
-      <div class="pftile"><span>費用與稅（估算）</span><b>${lgMoney(P.fees, "TWD")}</b></div>${cashTile}</div>
-      ${issHtml}
+    const tiles = P.basisMismatch ? "" : `<div class="pftiles"><div class="pftile"><span>要買進</span><b>${lgMoney(P.buy, "TWD")}</b></div><div class="pftile"><span>要賣出（扣費稅）</span><b>${lgMoney(P.sell, "TWD")}</b></div>
+      <div class="pftile"><span>費用與稅（估算）</span><b>${lgMoney(P.fees, "TWD")}</b></div>${cashTile}</div>`;
+    body = `${tiles}${issHtml}
       <ul class="rblist">${P.rows.map(r => `<li><div class="rbh"><span><b>${esc(nameOf(r.symbol))}</b> <small class="note">${esc(r.symbol)}</small></span><span class="rbw">目前 ${pct(r.weight)} → 目標 ${pct(r.target)}</span></div>
         <div class="rba">${act(r)}${r.weightAfter != null ? `<small class="note">調整後 ${pct(r.weightAfter)}${P.cashKnown ? "" : "（不含未知現金）"}</small>` : ""}</div></li>`).join("")}</ul>
       <div class="lgbar"><button type="button" class="btn sm" data-rb="edit">修改目標</button></div>`;
   }
   return `<section class="pfcard rbcard" data-nofold><h4>目標配置與再平衡<small class="note">（試算${meta.legacy ? "・舊庫存" : ""}）</small></h4>${L.rbMsg ? `<p class="note lgmsg" role="status">${esc(L.rbMsg)}</p>` : ""}${body}
-    <p class="note">用目前報價與匯率試算，股數取整數（台股可買零股；美股不假設券商支援碎股），費用依「交易紀錄」的費用規則估算${disc < 1 ? `（台股手續費 ${+(disc * 10).toFixed(2)} 折；債券 ETF 證交稅 0）` : "（債券 ETF 證交稅 0）"}；${P.cashKnown ? "「調整後」比重已經把費稅從現金扣掉，用調整後的總資產算。" : "因現金未知，比重僅按已納入持股合計（含本次淨現金流出入）推算，非完整總資產。"}實際成交價會不同，也沒算市場衝擊；只是幫你看偏離多少，不是投資建議。目標只存在這個瀏覽器，有開雲端同步時會一起同步，備份檔也會帶。</p></section>`;
+    <p class="note">用目前報價與匯率試算，股數取整數（台股可買零股；美股不假設券商支援碎股），費用依「交易紀錄」的費用規則估算並套用持股頁「手續費折扣」設定${disc < 1 ? `（台股手續費 ${+(disc * 10).toFixed(2)} 折；債券 ETF 證交稅 0；註：交易紀錄內未填費用的自動估算目前仍用預設費率）` : "（債券 ETF 證交稅 0；註：交易紀錄內未填費用的自動估算亦用預設費率）"}；${P.cashKnown ? "「調整後」比重已經把費稅從現金扣掉，用調整後的總資產算。" : "因現金未知，比重僅按已納入持股合計（含本次淨現金流出入）推算，非完整總資產。"}實際成交價會不同，也沒算市場衝擊；只是幫你看偏離多少，不是投資建議。目標只存在這個瀏覽器，有開雲端同步時會一起同步，備份檔也會帶。</p></section>`;
 }
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-rb]"); if (!b || typeof KLRebal === "undefined") return;
@@ -57,8 +63,9 @@ document.addEventListener("submit", e => {
   if (e.target.id !== "rbForm") return; e.preventDefault();
   const L = (W.lg ||= {}), v = Object.fromEntries(new FormData(e.target)), targets = {}, prev = rbLoad();
   for (const [k, x] of Object.entries(v)) if (k.startsWith("t_") && String(x).trim() !== "") targets[k.slice(2)] = +x;
-  if (!e.target.querySelector('[name="t_CASH"]') && prev.targets?.[KLRebal.CASH] != null) targets[KLRebal.CASH] = prev.targets[KLRebal.CASH]; // 現金未知時欄位於編輯表單停用，保留既有現金目標不被清除
-  const r = rbSave({ v: 1, targets, band: String(v.band).trim() === "" ? 5 : +v.band });
+  const hasCash = !!e.target.querySelector('[name="t_CASH"]');
+  if (!hasCash && prev.targets?.[KLRebal.CASH] != null) targets[KLRebal.CASH] = prev.targets[KLRebal.CASH]; // 現金未知時欄位於編輯表單停用，保留既有現金目標不被清除
+  const r = rbSave({ v: 1, basis: hasCash ? "total" : "holdings", targets, band: String(v.band).trim() === "" ? 5 : +v.band });
   if (!r.ok) { toast("沒有儲存：目標要是 0～100 的數字，容許範圍 0～50"); return; }
   L.rbEdit = false; L.rbMsg = "已儲存目標配置。"; renderList();
 });

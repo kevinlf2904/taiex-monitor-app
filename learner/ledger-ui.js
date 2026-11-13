@@ -494,8 +494,9 @@ function lgLegacyOpen() {
   for (const it of R.items) {
     if (it.status === "invalid") { skipped.push({ symbol: it.symbol, msg: it.issues?.[0]?.message || "資料格式不對" }); continue; }
     if (!it.market || !it.currency) { skipped.push({ symbol: it.symbol, msg: "看不出市場，無法換算" }); continue; }
-    if (it.isDemo) demoCount++;
-    open.push({ symbol: it.symbol, name: it.name, market: it.market, currency: it.currency, shares: it.shares, costBasis: it.costBasis, assetType: lgAssetType(it.symbol, it.market), industry: it.industry, demo: it.isDemo });
+    if (it.isDemo) { demoCount++; continue; }
+    if (it.assetType === "future") { skipped.push({ symbol: it.symbol, msg: "期貨不納入配置與再平衡" }); continue; }
+    open.push({ symbol: it.symbol, name: it.name, market: it.market, currency: it.currency, shares: it.shares, costBasis: it.costBasis, assetType: lgAssetType(it.symbol, it.market), industry: it.industry });
   }
   return { open, skipped, demoCount };
 }
@@ -538,10 +539,10 @@ function renderAllocBody(open, cashB, meta = {}) {
   const head = lgViewSeg();
   const banner = meta.legacy ? `<div class="lgbar" style="padding-bottom:0"><span class="note lgwarn">目前看的是<b>舊庫存</b>（${meta.hasTx ? "這次切換檢視" : "沒有交易紀錄"}，<b>現金未知，未納入計算</b>；配置基準僅含納入持股）。</span><button type="button" class="btn sm" data-lg="view" data-v="tx">到交易紀錄建立完整帳本</button>${meta.hasTx ? `<button type="button" class="btn sm" data-lg="hsrcLedger">改回交易紀錄</button>` : ""}</div>` : "";
   const extraIssues = [
-    ...(meta.demoCount > 0 ? [`<li>含 ${meta.demoCount} 筆範例持股（不是真實部位）；如不需要請到「持股 → 編輯庫存」移除。</li>`] : []),
+    ...(meta.demoCount > 0 ? [`<li>已略過 ${meta.demoCount} 筆範例持股（不是真實部位）；如不需要請到「持股 → 編輯庫存」移除。</li>`] : []),
     ...(meta.skipped?.length ? [`<li>略過 ${meta.skipped.length} 筆無法算入的舊庫存：${meta.skipped.map(x => `${esc(nameOf(x.symbol) || x.symbol)} ${esc(x.symbol)}（${esc(x.msg)}）`).join("、")}。</li>`] : [])
   ];
-  if (!open.length) return ($("#lx").innerHTML = head + banner + (extraIssues.length ? `<ul class="note lgwarn alissues">${extraIssues.join("")}</ul>` : `<p class="note" style="padding:12px">目前沒有持股，沒有配置可以看。</p>`));
+  if (!open.length) return ($("#lx").innerHTML = head + banner + (extraIssues.length ? `<ul class="note lgwarn alissues">${extraIssues.join("")}</ul><p class="note" style="padding:12px">目前沒有可納入計算的持股。</p>` : `<p class="note" style="padding:12px">目前沒有持股，沒有配置可以看。</p>`));
   if (W.off) return ($("#lx").innerHTML = head + banner + `<p class="note" style="padding:12px">需要部署到網站才有價格資料。</p>`);
   if (typeof KLAlloc === "undefined") { $("#lx").innerHTML = head + skel("載入配置模組…"); lgAllocLib().then(() => renderList(), e => { $("#lx").innerHTML = head + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; }); return; }
   const X = lgAllocData(open, { needFx: !!(cashB?.USD?.tracked && cashB.USD.balance) });
@@ -559,7 +560,8 @@ function renderAllocBody(open, cashB, meta = {}) {
     + `<details class="pfbasis"><summary>計算口徑</summary><ul><li>權重＝市值 ÷ ${hasCash ? "總資產" : "納入持股合計"}（台幣計價；美元用最新匯率換算）。${hasCash ? "有記入金、出金時，現金也算進總資產。" : "目前沒有現金紀錄，現金未知、未納入計算。"}</li>
       <li>沒有現價的持股用成本估算市值，並標示。美股沒有產業資料，歸「未分類」。</li>
       <li>ETF 穿透：ETF 權重 × 成分股占比＝透過 ETF 持有的曝險；只揭露部分成分股時，剩下的歸「其他（未揭露）」。各 ETF 的成分股日期可能不同，會分開列出。</li>
-      <li>重疊度：兩檔 ETF 共同成分股的占比取小的加總。有效檔數＝1 ÷ 權重平方和（不含現金）。市值規模、投資策略的分類還沒有資料。</li></ul></details>`;
+      <li>重疊度：兩檔 ETF 共同成分股的占比取小的加總。有效檔數＝1 ÷ 權重平方和（不含現金）。市值規模、投資策略的分類還沒有資料。</li>
+      <li>費用估算口徑：再平衡試算會套用持股頁「手續費折扣」（<code>watch:hdisc</code>）與債券 ETF 免稅；交易紀錄新增時若留空未填費用，目前仍以預設費率估算。</li></ul></details>`;
 }
 const AL_MKT = { tw: "台股", us: "美股", cash: "現金" }, AL_TYPE = { stock: "個股", etf: "ETF", cash: "現金" };
 const alPct = w => (w == null ? "—" : (w * 100).toFixed(1) + "%");
