@@ -14,7 +14,8 @@ const GROUP = { pnl: "stock", ana: "stock", alloc: "allocrisk", risk: "allocrisk
 const PAGES = ["home", "pnl", "ana", "perf", "alloc", "risk", "macro", "margin", "div", "thesis", "tx"];
 const NEED_LEDGER = ["home", "perf", "alloc", "div", "thesis", "tx"];
 // 每一頁「內容是對的那一頁」的判斷：頁面自己的標記元素，或內部狀態（原本的畫面由這兩個狀態決定）
-const MARK = { home: ".hmcard", perf: ".pfcard", alloc: ".alcard", tx: "[data-lg=add]", margin: "[data-lg=mgadd]", ana: "#wl .hhead.ana", thesis: "#lx .thev, #lx .thsum" };
+const MARK = { home: ".hmcard", perf: ".pfcard", alloc: ".alcard", tx: "[data-lg=add]", margin: "[data-lg=mgadd]", ana: "#wl .hhead.ana", thesis: "#lx .thev, #lx .thsum",
+  pnl: "#lx .yh-sum", risk: "#lx .hrisk:not(.msens)", macro: "#lx .hrisk.msens", div: "#lx .dvbars" };
 const STATE = { pnl: ["pnl"], ana: ["ana"], risk: ["risk"], macro: ["macro"], home: ["tx", "home"], perf: ["tx", "perf"], alloc: ["tx", "alloc"], margin: ["tx", "margin"], div: ["tx", "div"], thesis: ["tx", "thesis"], tx: ["tx", "tx"] };
 const state = p => p.evaluate(() => W.holdView === "tx" ? ["tx", W.lg?.view || "home"] : [W.holdView]);
 const pressed = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel + ' button[aria-pressed="true"]')].map(b => b.innerText.trim()), sel);
@@ -25,8 +26,11 @@ for (const width of [390, 1280]) {
   test(`${width}：只有一排主分頁；11 個頁面都到得了，選取狀態與內容正確；子分頁只在自己的群組出現`, async () => {
     const { ctx, p, errs } = await start(width);
     assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll("#hvSeg button[data-nav]")].map(b => b.innerText.trim())), MAIN); // 手機上分頁列另有現成的「▾ 全部」展開鈕，不算主分頁
+    // 桌面：一開始在雙欄的「持股」而且已經選了個股（個股頁開著）；切到全寬頁面時不能變成抽屜彈出來蓋住畫面
+    if (width > 900) assert.deepEqual(await p.evaluate(() => [$("#main").classList.contains("show-detail"), !!W.sel, wideMode()]), [true, true, false], "前提：雙欄、個股頁開著");
     for (const page of PAGES) {
       await holdGo(p, page);
+      if (width > 900 && page === "home") assert.deepEqual(await p.evaluate(() => [wideMode(), $("#main").classList.contains("show-detail"), $("#dbg").hidden]), [true, false, true], "持股 → 總覽：全寬、抽屜關著、沒有背景遮罩");
       assert.deepEqual(await state(p), STATE[page], page + "：內部狀態");
       if (MARK[page]) await p.waitForSelector(MARK[page], { timeout: 30000 });
       assert.equal(await p.evaluate(() => document.querySelectorAll(".lgview").length), 0, page + "：沒有第二排主分頁");
