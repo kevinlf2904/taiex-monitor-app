@@ -38,11 +38,12 @@
     }
     if (noPrice.length) issues.push({ k: "no_price", codes: noPrice });
     if (noFx.length) issues.push({ k: "no_fx", codes: noFx });
-    const cashV = isNum(cash) ? cash : 0, stocks = rows.reduce((s, r) => s + r.value, 0), total = stocks + cashV;
-    if (!(total > EPS)) return { v: VERSION, status: "invalid", reason: "no_assets", rows: [], issues };
-    // 目標加總：有設目標的＋沒設目標的持股目前比重＋現金目標（有設的話）
+    const cashKnown = isNum(cash), cashV = cashKnown ? cash : 0, stocks = rows.reduce((s, r) => s + r.value, 0), total = stocks + cashV;
+    if (!(total > EPS)) return { v: VERSION, status: "invalid", reason: "no_assets", cashKnown, rows: [], issues };
+    // 目標加總：有設目標的＋沒設目標的持股目前比重＋現金目標（只在現金已知時套用）
     const managed = rows.filter(r => r.target != null), unmanagedW = rows.filter(r => r.target == null).reduce((s, r) => s + r.value / total * 100, 0);
-    const setSum = managed.reduce((s, r) => s + r.target, 0), cashT = T[CASH] ?? null, sum = setSum + unmanagedW + (cashT ?? 0);
+    const rawCashT = T[CASH] ?? null, cashT = cashKnown ? rawCashT : null, setSum = managed.reduce((s, r) => s + r.target, 0), sum = setSum + unmanagedW + (cashT ?? 0);
+    if (!cashKnown && rawCashT != null) issues.push({ k: "cash_target_ignored", target: rawCashT });
     if (cashT != null && Math.abs(sum - 100) > 0.5) issues.push({ k: "sum", sum: r2(sum) });
     if (cashT == null && setSum + unmanagedW > 100 + 0.5) issues.push({ k: "over", sum: r2(setSum + unmanagedW) });
     const C = typeof costs === "function" ? costs : () => ({ fee: 0, tax: 0 });
@@ -61,16 +62,18 @@
       return { ...base, valueAfter: r.value + n * unit, diff: r4(diffW / 100), diffValue: r2(diffV), action: type, tradeShares: sh, lots: r.market === "tw" ? Math.floor(sh / 1000) : null, odd: r.market === "tw" ? sh % 1000 : null,
         gross: r2(gross), grossBase: r2(grossB), fee: r2(c.fee || 0), tax: r2(c.tax || 0), costBase: r2(cost) };
     }).sort((a, b) => Math.abs(b.diffValue || 0) - Math.abs(a.diffValue || 0));
-    // 調整後：持股照現價算市值，費稅從現金扣；總資產＝調整後持股市值＋調整後現金（＝原總資產 − 費稅），每檔（含沒動的）和現金都用它當分母，加起來是 100%
-    const cashAfter = cashV - buy + sell, totalAfter = out.reduce((s, r) => s + r.valueAfter, 0) + cashAfter;
+    // 調整後：持股照現價算市值，費稅從現金變動扣；總資產／試算基準＝調整後持股市值＋調整後現金（或淨現金變動＝原基準 − 費稅），每檔都用它當分母
+    const netCashDelta = sell - buy, cashAfter = cashKnown ? cashV + netCashDelta : null, totalAfter = out.reduce((s, r) => s + r.valueAfter, 0) + (cashKnown ? cashAfter : netCashDelta);
     for (const r of out) { r.weightAfter = totalAfter > EPS ? r4(r.valueAfter / totalAfter) : null; r.valueAfter = r2(r.valueAfter); }
-    if (cashAfter < -0.5) issues.push({ k: "cash_short", need: r2(-cashAfter) });
-    if (!isNum(cash)) issues.push({ k: "no_cash" });
-    return { v: VERSION, status: issues.some(x => ["no_price", "no_fx", "sum", "over", "cash_short", "no_cash"].includes(x.k)) ? "estimated" : "ok", total: r2(total), stocks: r2(stocks), cash: r2(cashV),
-      band, rows: out, buy: r2(buy), sell: r2(sell), fees: r2(fees), turnover: r2(turnover), turnoverPct: r4(turnover / total), cashAfter: r2(cashAfter), cashTarget: cashT == null ? null : r4(cashT / 100),
-      totalAfter: r2(totalAfter), cashWeightAfter: totalAfter > EPS ? r4(cashAfter / totalAfter) : null, targetSum: r2(sum), issues };
+    if (cashKnown && cashAfter < -0.5) issues.push({ k: "cash_short", need: r2(-cashAfter) });
+    if (!cashKnown) issues.push({ k: "no_cash" });
+    return { v: VERSION, status: issues.some(x => ["no_price", "no_fx", "sum", "over", "cash_short", "no_cash", "cash_target_ignored"].includes(x.k)) ? "estimated" : "ok",
+      cashKnown, total: r2(total), stocks: r2(stocks), cash: cashKnown ? r2(cashV) : null,
+      band, rows: out, buy: r2(buy), sell: r2(sell), fees: r2(fees), turnover: r2(turnover), turnoverPct: r4(turnover / total),
+      cashAfter: cashKnown ? r2(cashAfter) : null, netCashDelta: r2(netCashDelta), cashTarget: cashT == null ? null : r4(cashT / 100),
+      totalAfter: r2(totalAfter), cashWeightAfter: cashKnown && totalAfter > EPS ? r4(cashAfter / totalAfter) : null, targetSum: r2(sum), issues };
   }
-  const ISSUE_LABEL = { no_price: "有持股沒有報價，沒算進來", no_fx: "沒有匯率，美股沒算進來", sum: "目標加總不是 100%", over: "目標加總超過 100%（現金會變負數）", cash_short: "現金不夠：照這樣調整要先賣其他持股或入金", no_cash: "交易紀錄沒有記入金，現金當成 0" };
+  const ISSUE_LABEL = { no_price: "有持股沒有報價，沒算進來", no_fx: "沒有匯率，美股沒算進來", sum: "目標加總不是 100%", over: "目標加總超過 100%（超出可調整水位）", cash_short: "現金不夠：照這樣調整要先賣其他持股或入金", no_cash: "現金未知（未納入計算，試算基準僅含已納入持股合計，非完整總資產）", cash_target_ignored: "現金未知，已存的現金目標本次不套用" };
   const ACTION_LABEL = { buy: "買進", sell: "賣出", hold: "不用動", keep: "沒設目標" };
   root.KLRebal = Object.freeze({ VERSION, STORE_KEY, CASH, validateStore, plan, ISSUE_LABEL, ACTION_LABEL });
 })(typeof window !== "undefined" ? window : globalThis);

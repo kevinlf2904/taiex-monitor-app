@@ -91,13 +91,29 @@ for (const width of [390, 1280]) test(`只有舊庫存 ${width}：配置與再�
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
-test("交易紀錄與舊庫存邊界：追蹤美元現金缺匯率不清為 0；00679B 零稅；全空舊庫存顯示導引", async () => {
+test("舊庫存邊界：全空導引、缺報價與無效資料明確警告", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
   // 1) 全空舊庫存 + 無交易紀錄 → 維持導引畫面
   await p.evaluate(() => { localStorage.removeItem("kline:pf:v1"); store.set("watch:hold", {}); W.hold = {}; W.holdOwn = {}; W.lg = { view: "alloc" }; W.lgAl = null; W.holdView = "tx"; setLt("hold"); });
   await p.waitForSelector("#lx .lgintro", { timeout: 20000 });
 
-  // 2) 有交易紀錄、有追蹤美元現金但 TWD=X 壞掉（fx === null）→ 現金不清成 0、提示美元缺匯率；00679B 賣出稅 0
+  // 2) 舊庫存含缺報價（2454）與無效資料（BAD1 cost:0）→ 明確警告，不默默略過或假設 0
+  await ctx.route("**/api/quote**", r => { const codes = (new URL(r.request().url()).searchParams.get("codes") || "").split(",").filter(Boolean).filter(c => c !== "2454");
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", today: "2026-10-05", quotes: codes.map((c, i) => ({ code: c, name: "股" + c, price: 100 + i, prev: 99, date: "2026-10-05", time: "10:30:05" })) }) }); });
+  await p.evaluate(() => {
+    localStorage.setItem("kline:pf:targets:v1", JSON.stringify({ v: 1, targets: { 2330: 50, 2454: 50 }, band: 1 }));
+    const H = { 2330: { sh: 1000, cost: 90 }, 2454: { sh: 500, cost: 100 }, BAD1: { sh: 10, cost: 0 } };
+    store.set("watch:hold", H); W.hold = H; W.holdOwn = H; W.lg = { view: "alloc" }; W.lgAl = null; W.holdView = "tx"; setLt("hold");
+  });
+  await p.waitForSelector("#lx .rbcard .rblist", { timeout: 30000 });
+  const badTxt = await p.evaluate(() => $("#lx").innerText);
+  assert.match(badTxt, /略過 1 筆無法算入的舊庫存/); assert.match(badTxt, /BAD1/);
+  assert.match(badTxt, /沒有報價.*2454/);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("交易紀錄邊界：追蹤美元現金缺匯率不清為 0，00679B 賣出證交稅 0", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
   await ctx.route("**/api/kline?code=TWD%3DX**", r => r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false }) }));
   const TX_USD_CASH = [
     { id: "d1", v: 1, date: "2026-01-02", type: "deposit", market: "tw", currency: "TWD", amount: 100000 },
@@ -106,13 +122,22 @@ test("交易紀錄與舊庫存邊界：追蹤美元現金缺匯率不清為 0；
     { id: "b2", v: 1, date: "2026-01-05", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 90, fee: 0, tax: 0 }
   ];
   await p.evaluate(tx => {
-    store.set("kline:pf:targets:v1", { v: 1, targets: { "00679B": 10, "2330": 90 }, band: 1 });
+    localStorage.setItem("kline:pf:targets:v1", JSON.stringify({ v: 1, targets: { "00679B": 10, "2330": 90 }, band: 1 }));
     store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" });
-    W.lg = { view: "alloc" }; W.lgAl = null; W.holdView = "tx"; setLt("hold");
+    W.hdisc = 1; W.lg = { view: "alloc" }; W.lgAl = null; W.holdView = "tx"; setLt("hold");
   }, TX_USD_CASH);
   await p.waitForSelector("#lx .rbcard .rblist", { timeout: 30000 });
   const rbTxt = await p.evaluate(() => $(".rbcard").innerText);
   assert.match(rbTxt, /預估淨現金變動/, "美元現金缺匯率時不拿 0 當總現金");
   assert.match(rbTxt, /缺少匯率/);
+  // 驗證交易紀錄模式下 00679B 賣出稅為 0 且與畫面顯示費用一致（若誤當一般 ETF 會多出 0.1% 證交稅）
+  const ledgerCheck = await p.evaluate(() => {
+    const X = W.lgAl, p0 = X.px.get("00679B").price, p1 = X.px.get("2330").price;
+    const pos = [{ symbol: "00679B", market: "tw", currency: "TWD", shares: 3000, price: p0, assetType: "bond_etf" }, { symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: p1, assetType: "stock" }];
+    const P = KLRebal.plan({ positions: pos, fx: null, cash: null, targets: { "00679B": 10, "2330": 90 }, band: 1, costs: t => KLLedger.estimateCosts(t) });
+    return { tax: P.rows.find(r => r.symbol === "00679B")?.tax, fees: P.fees };
+  });
+  assert.equal(ledgerCheck.tax, 0);
+  assert.match(rbTxt, new RegExp(`費用與稅（估算）\\s*\\$?${ledgerCheck.fees.toLocaleString()}`), "畫面費用不含 00679B 交易稅");
   await ctx.close(); assert.deepEqual(errs, []);
 });

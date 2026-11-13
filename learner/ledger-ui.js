@@ -37,8 +37,13 @@ function renderLedger() {
   const L = (W.lg ||= { open: null, form: null, prev: null, msg: "" });
   $("#wl").innerHTML = "";
   const hs = $("#holdSeg"); if (hs) hs.hidden = true; // 上方舊庫存的台股／美股切換對交易紀錄沒有作用：藏起來，改用各頁自己的「全部／台股／美股」
-  const S = lgLoad();
+  const S = lgLoad(), hasTx = !!(S && Array.isArray(S.transactions) && S.transactions.length);
   if (L.view === "margin") return renderMargin(); // 融資不需要交易紀錄
+  if (L.view === "alloc") {
+    if (hasTx && !W.hsrcLegacy) return renderAlloc(S);
+    const leg = lgLegacyOpen();
+    if (leg.open.length || leg.skipped.length) return renderAllocLegacy(leg, hasTx);
+  }
   if (!S) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
   if (!L.view || L.view === "home") return renderHome(S); // 總覽（預設）：畫面在 pf-home.js，用到時才載入
   if (L.view === "thesis") return renderThesis(S); // 投資論點與近期事件：thesis.js＋pf-thesis.js，用到時才載入
@@ -132,6 +137,7 @@ document.addEventListener("click", e => {
   else if (a === "add") L.form = { type: "buy", v: { date: lgToday() } };
   else if (a === "close") L.form = null;
   else if (a === "view") { L.view = b.dataset.v; L.form = null; }
+  else if (a === "hsrcLedger") { W.hsrcLegacy = false; if (typeof holdSrcApply === "function") holdSrcApply(); }
   else if (a === "range") L.pfRange = b.dataset.v;
   else if (a === "mkt") L.mkt = b.dataset.v;
   else if (a === "pfreload") { W.fresh = Date.now() + 15000; pfExpire(); } // 重新抓（不用本機快取），但先留著上一次的資料：抓失敗時才有東西可以沿用
@@ -479,13 +485,27 @@ function lgAllocLib() {
 }
 const LG_US_ETF = new Set(["SPY", "QQQ", "VOO", "VTI", "SOXX", "TQQQ", "SOXL", "DIA", "IWM", "IVV", "VT", "SMH", "XLK", "SCHD", "VYM", "VEA", "VWO", "BND", "TLT", "IEF", "GLD", "ARKK"]);
 const lgIsEtf = c => /^00\d{2,4}[A-Z]?$/.test(c) || LG_US_ETF.has(c);
-function lgAllocData(P) {
-  const syms = P.map(p => p.symbol).sort(), etfs = syms.filter(lgIsEtf), key = syms.join(","), X = W.lgAl;
-  if (X && X.key === key && (X.busy || X.refreshing || Date.now() - X.at < pfTtl(X))) return X;
+const lgAssetType = (c, m = "tw") => { const s = String(c || "").trim().toUpperCase(); return m === "tw" && /^00\d{2,4}B$/.test(s) ? "bond_etf" : lgIsEtf(s) ? "etf" : "stock"; };
+function lgLegacyOpen() {
+  const raw = W.holdLg ? (W.holdOwn || {}) : (W.hold || W.holdOwn || {});
+  if (typeof KLPortfolio === "undefined") return { open: [], skipped: [], demoCount: 0 };
+  const R = KLPortfolio.normalizeHoldings(raw, { master: W.stocks, names: W.names }), open = [], skipped = [];
+  let demoCount = 0;
+  for (const it of R.items) {
+    if (it.status === "invalid") { skipped.push({ symbol: it.symbol, msg: it.issues?.[0]?.message || "資料格式不對" }); continue; }
+    if (!it.market || !it.currency) { skipped.push({ symbol: it.symbol, msg: "看不出市場，無法換算" }); continue; }
+    if (it.isDemo) demoCount++;
+    open.push({ symbol: it.symbol, name: it.name, market: it.market, currency: it.currency, shares: it.shares, costBasis: it.costBasis, assetType: lgAssetType(it.symbol, it.market), industry: it.industry, demo: it.isDemo });
+  }
+  return { open, skipped, demoCount };
+}
+function lgAllocData(P, opts = {}) {
+  const syms = P.map(p => p.symbol).sort(), etfs = syms.filter(lgIsEtf), key = syms.join(","), needFx = P.some(p => p.currency === "USD") || !!opts?.needFx, X = W.lgAl;
+  if (X && X.key === key && (!needFx || X.hadFxReq) && (X.busy || X.refreshing || Date.now() - X.at < pfTtl(X))) return X;
   const { prev, tok, retry } = pfBegin("lgAl", key, syms.length); // 上一次的資料：代號組合變了也沿用相同代號的報價
   if (!W.stocks && typeof loadStocks === "function") loadStocks().catch(() => {});
   Promise.all([syms.length ? getJ(`/api/quote?codes=${syms.map(encodeURIComponent).join(",")}`).catch(() => null) : null,
-    P.some(p => p.currency === "USD") ? getJ(`/api/kline?code=${encodeURIComponent("TWD=X")}&months=1`).catch(() => null) : null,
+    needFx ? getJ(`/api/kline?code=${encodeURIComponent("TWD=X")}&months=1`).catch(() => null) : null,
     Promise.all(etfs.map(c => getJ(`/api/etf?code=${encodeURIComponent(c)}`).catch(() => null))), pfSrcSafe()]).then(([q, fx, E]) => {
     if (W.lgAl?.tok !== tok) return;
     const fresh = new Map((q?.quotes || []).filter(x => x && x.price > 0).map(x => [String(x.code).toUpperCase(), x])), last = fx?.data?.length ? fx.data[fx.data.length - 1] : null;
@@ -493,7 +513,7 @@ function lgAllocData(P) {
     const etf = {}; etfs.forEach((c, i) => { const j = E[i]; if (j?.hold?.rows?.length) etf[c] = { date: j.hold.date || null, rows: j.hold.rows.map(r => ({ code: r.code || null, name: r.name || null, pct: r.pct })), ind: j.ind?.rows?.length ? { date: j.ind.date || null, rows: j.ind.rows } : null }; else if (prev?.etf?.[c]) etf[c] = prev.etf[c]; });
     // 匯率：這次沒拿到就沿用上一次的並標示
     const fxv = last ? { rate: last.c, date: String(last.d).slice(0, 10) } : prev?.fx ? { ...prev.fx, kept: true } : null;
-    W.lgAl = { key, busy: false, at: Date.now(), tok, px: pfKeep(prev?.px, fresh, syms), fx: fxv, etf, items, meta, failed: syms.length ? !cur.ok : false, retried: retry };
+    W.lgAl = { key, hadFxReq: needFx, busy: false, at: Date.now(), tok, px: pfKeep(prev?.px, fresh, syms), fx: fxv, etf, items, meta, failed: syms.length ? !cur.ok : false, retried: retry };
     pfRetryLater(W.lgAl); if (W.lt === "hold" && W.holdView === "tx" && ["alloc", "home", "thesis", "report", undefined].includes(W.lg?.view)) renderList(); // 配置、總覽、論點（停損停利）、報告共用
   });
   return W.lgAl;
@@ -507,23 +527,36 @@ function stLib() {
   return (W.lgStP ||= (typeof KLStress !== "undefined" ? Promise.resolve() : one("stress.js")).then(() => one("pf-stress.js")).then(() => { if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "alloc") renderList(); }).catch(e => { W.lgStP = null; }));
 }
 function renderAlloc(S) {
-  const head = lgViewSeg();
-  if (W.off) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">需要部署到網站才有價格資料。</p>`);
-  if (typeof KLAlloc === "undefined") { $("#lx").innerHTML = head + skel("載入配置模組…"); lgAllocLib().then(() => renderList(), e => { $("#lx").innerHTML = head + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; }); return; }
   const L = KLLedger.buildLedger(S.transactions, { method: S.method, today: lgToday() }), open = L.positions.filter(p => p.open);
-  if (!open.length) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">目前沒有持股，沒有配置可以看。</p>`);
-  const X = lgAllocData(open); if (X.busy) return ($("#lx").innerHTML = head + skel(`載入 ${X.n} 檔的報價${open.some(p => lgIsEtf(p.symbol)) ? "與 ETF 成分股" : ""}…`));
+  if (!open.length) return ($("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">目前沒有持股，沒有配置可以看。</p>`);
+  return renderAllocBody(open, L.cash, { legacy: false });
+}
+function renderAllocLegacy(leg, hasTx) {
+  return renderAllocBody(leg.open, {}, { legacy: true, hasTx, skipped: leg.skipped, demoCount: leg.demoCount });
+}
+function renderAllocBody(open, cashB, meta = {}) {
+  const head = lgViewSeg();
+  const banner = meta.legacy ? `<div class="lgbar" style="padding-bottom:0"><span class="note lgwarn">目前看的是<b>舊庫存</b>（${meta.hasTx ? "這次切換檢視" : "沒有交易紀錄"}，<b>現金未知，未納入計算</b>；配置基準僅含納入持股）。</span><button type="button" class="btn sm" data-lg="view" data-v="tx">到交易紀錄建立完整帳本</button>${meta.hasTx ? `<button type="button" class="btn sm" data-lg="hsrcLedger">改回交易紀錄</button>` : ""}</div>` : "";
+  const extraIssues = [
+    ...(meta.demoCount > 0 ? [`<li>含 ${meta.demoCount} 筆範例持股（不是真實部位）；如不需要請到「持股 → 編輯庫存」移除。</li>`] : []),
+    ...(meta.skipped?.length ? [`<li>略過 ${meta.skipped.length} 筆無法算入的舊庫存：${meta.skipped.map(x => `${esc(nameOf(x.symbol) || x.symbol)} ${esc(x.symbol)}（${esc(x.msg)}）`).join("、")}。</li>`] : [])
+  ];
+  if (!open.length) return ($("#lx").innerHTML = head + banner + (extraIssues.length ? `<ul class="note lgwarn alissues">${extraIssues.join("")}</ul>` : `<p class="note" style="padding:12px">目前沒有持股，沒有配置可以看。</p>`));
+  if (W.off) return ($("#lx").innerHTML = head + banner + `<p class="note" style="padding:12px">需要部署到網站才有價格資料。</p>`);
+  if (typeof KLAlloc === "undefined") { $("#lx").innerHTML = head + skel("載入配置模組…"); lgAllocLib().then(() => renderList(), e => { $("#lx").innerHTML = head + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; }); return; }
+  const X = lgAllocData(open, { needFx: !!(cashB?.USD?.tracked && cashB.USD.balance) });
+  if (X.busy) return ($("#lx").innerHTML = head + banner + skel(`載入 ${X.n} 檔的報價${open.some(p => lgIsEtf(p.symbol)) ? "與 ETF 成分股" : ""}…`));
   const ind = new Map((Array.isArray(W.stocks) ? W.stocks : []).map(r => [String(r[0]).toUpperCase(), r[3] || null]));
-  const pos = open.map(p => { const q = X.px.get(p.symbol); return { symbol: p.symbol, name: q?.name || nameOf(p.symbol), market: p.market, currency: p.currency, value: q ? p.shares * q.price : p.costBasis, valueEstimated: !q, assetType: lgIsEtf(p.symbol) ? "etf" : "stock", industry: ind.get(p.symbol) || null }; });
-  const cash = {}; for (const [c, v] of Object.entries(L.cash || {})) if (v.tracked && v.balance > 0) cash[c] = v.balance;
+  const pos = open.map(p => { const q = X.px.get(p.symbol); return { symbol: p.symbol, name: q?.name || p.name || nameOf(p.symbol), market: p.market, currency: p.currency, value: q ? p.shares * q.price : p.costBasis, valueEstimated: !q, assetType: lgIsEtf(p.symbol) ? "etf" : "stock", industry: p.industry || ind.get(p.symbol) || null }; });
+  const cash = {}, hasCash = Object.values(cashB || {}).some(v => v.tracked); for (const [c, v] of Object.entries(cashB || {})) if (v.tracked && v.balance > 0) cash[c] = v.balance;
   const R = KLAlloc.build(pos, { fx: X.fx, cash, etf: X.etf, asOf: lgToday(), names: Object.fromEntries(pos.map(p => [p.symbol, p.name])) });
-  const issues = (R.issues || []).map(x => `<li>${esc(KLAlloc.ISSUE_LABEL[x.k] || x.k)}${x.codes ? `：${x.codes.map(c => (nameOf(c) && nameOf(c) !== c ? `${esc(nameOf(c))} ${esc(c)}` : esc(c))).join("、")}` : x.list ? `：${x.list.map(l => `${esc(l.etf)}${l.date ? " " + l.date : ""}${l.covered != null ? ` 揭露 ${l.covered}%` : ""}`).join("、")}` : x.dates ? `：${x.dates.map(d => `${esc(d.etf)} ${d.date || "—"}`).join("、")}` : ""}</li>`).join("");
-  const body = R.status === "no_fx" ? Object.values(R.byCurrency).map(C => alSection(C, `${C.base === "USD" ? "美股（美元）" : "台股（台幣）"}`)).join("") : alSection(R, "全部資產（台幣計價）");
-  $("#lx").innerHTML = head + `<div class="lgbar"><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button>${R.fx ? `<small class="note">美元兌台幣 ${R.fx.rate.toFixed(3)}（${esc(R.fx.date || "")}，Yahoo TWD=X 收盤${X.fx?.kept ? "，這次沒拿到，沿用上一次的" : ""}）</small>` : ""}</div>` + pfSrcHtml(X.meta, "報價")
+  const issues = extraIssues.concat((R.issues || []).map(x => `<li>${esc(KLAlloc.ISSUE_LABEL[x.k] || x.k)}${x.codes ? `：${x.codes.map(c => (nameOf(c) && nameOf(c) !== c ? `${esc(nameOf(c))} ${esc(c)}` : esc(c))).join("、")}` : x.list ? `：${x.list.map(l => `${esc(l.etf)}${l.date ? " " + l.date : ""}${l.covered != null ? ` 揭露 ${l.covered}%` : ""}`).join("、")}` : x.dates ? `：${x.dates.map(d => `${esc(d.etf)} ${d.date || "—"}`).join("、")}` : ""}</li>`)).join("");
+  const body = R.status === "no_fx" ? Object.values(R.byCurrency).map(C => alSection(C, `${C.base === "USD" ? "美股（美元）" : "台股（台幣）"}`, meta)).join("") : alSection(R, meta.legacy ? "全部納入持股（台幣計價・現金未知）" : "全部資產（台幣計價）", meta);
+  $("#lx").innerHTML = head + banner + `<div class="lgbar"><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button>${R.fx ? `<small class="note">美元兌台幣 ${R.fx.rate.toFixed(3)}（${esc(R.fx.date || "")}，Yahoo TWD=X 收盤${X.fx?.kept ? "，這次沒拿到，沿用上一次的" : ""}）</small>` : ""}</div>` + pfSrcHtml(X.meta, "報價")
     + (issues ? `<ul class="note lgwarn alissues">${issues}</ul>` : "") + body
-    + (typeof rbSectionHtml === "function" && typeof KLRebal !== "undefined" ? rbSectionHtml(open, X, L.cash) : (rbLib(), `<p class="note" style="padding:0 12px">載入再平衡試算…</p>`)) // 目標配置與再平衡（rebal.js＋pf-rebal.js，用到時才載入）
-    + (typeof stSectionHtml === "function" && typeof KLStress !== "undefined" ? stSectionHtml(open, X, L.cash) : (stLib(), `<p class="note" style="padding:0 12px">載入壓力情境…</p>`)) // 壓力情境（stress.js＋pf-stress.js，用到時才載入）
-    + `<details class="pfbasis"><summary>計算口徑</summary><ul><li>權重＝市值 ÷ 總資產（台幣計價；美元用最新匯率換算）。有記入金、出金時，現金也算進總資產。</li>
+    + (typeof rbSectionHtml === "function" && typeof KLRebal !== "undefined" ? rbSectionHtml(open, X, cashB, meta) : (rbLib(), `<p class="note" style="padding:0 12px">載入再平衡試算…</p>`)) // 目標配置與再平衡（rebal.js＋pf-rebal.js，用到時才載入）
+    + (typeof stSectionHtml === "function" && typeof KLStress !== "undefined" ? stSectionHtml(open, X, cashB) : (stLib(), `<p class="note" style="padding:0 12px">載入壓力情境…</p>`)) // 壓力情境（stress.js＋pf-stress.js，用到時才載入）
+    + `<details class="pfbasis"><summary>計算口徑</summary><ul><li>權重＝市值 ÷ ${hasCash ? "總資產" : "納入持股合計"}（台幣計價；美元用最新匯率換算）。${hasCash ? "有記入金、出金時，現金也算進總資產。" : "目前沒有現金紀錄，現金未知、未納入計算。"}</li>
       <li>沒有現價的持股用成本估算市值，並標示。美股沒有產業資料，歸「未分類」。</li>
       <li>ETF 穿透：ETF 權重 × 成分股占比＝透過 ETF 持有的曝險；只揭露部分成分股時，剩下的歸「其他（未揭露）」。各 ETF 的成分股日期可能不同，會分開列出。</li>
       <li>重疊度：兩檔 ETF 共同成分股的占比取小的加總。有效檔數＝1 ÷ 權重平方和（不含現金）。市值規模、投資策略的分類還沒有資料。</li></ul></details>`;
@@ -531,12 +564,12 @@ function renderAlloc(S) {
 const AL_MKT = { tw: "台股", us: "美股", cash: "現金" }, AL_TYPE = { stock: "個股", etf: "ETF", cash: "現金" };
 const alPct = w => (w == null ? "—" : (w * 100).toFixed(1) + "%");
 const alBars = (rows, label = g => esc(g)) => `<ul class="albars">${rows.map(r => `<li><span class="nm">${label(r.group)}</span><span class="albar"><i style="width:${Math.max(0.5, r.w * 100).toFixed(1)}%"></i></span><b>${alPct(r.w)}</b></li>`).join("")}</ul>`;
-function alSection(R, title) {
+function alSection(R, title, meta = {}) {
   const C = R.concentration, LT = R.lookThrough, cur = R.base;
   const tile = (k, v, sub = "") => `<div class="pftile"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
-  const tiles = [tile("總資產", lgMoney(R.total, cur), R.cash ? `含現金 ${lgMoney(R.cash, cur)}` : "不含現金（沒有記入出金）"),
+  const tiles = [tile(meta.legacy ? "納入持股市值" : "總資產", lgMoney(R.total, cur), R.cash ? `含現金 ${lgMoney(R.cash, cur)}` : meta.legacy ? "現金未知（未納入）" : "不含現金（沒有記入出金）"),
     tile("最大單一持股", C.top ? alPct(C.top.w) : "—", C.top ? esc(nameOf(C.top.symbol)) : ""), tile("前五大合計", alPct(C.top5)),
-    tile("有效檔數", C.effN ? C.effN.toFixed(1) : "—", "權重越集中，數字越小"), tile("現金比重", alPct(R.cashShare))].join("");
+    tile("有效檔數", C.effN ? C.effN.toFixed(1) : "—", "權重越集中，數字越小"), tile("現金比重", meta.legacy ? "未知（未納入）" : alPct(R.cashShare))].join("");
   const top = R.top10.map(h => ({ group: h.symbol, w: h.w, h }));
   const lt = LT && LT.top.length && LT.exposure.some(e => e.viaEtf > 0 || e.notLookedThrough) ? `<h5 class="pfh">ETF 穿透後的實際持股<small class="note">（直接持有＋透過 ETF）</small></h5>
     <table class="altable"><thead><tr><th>股票</th><th>合計</th><th>直接</th><th>透過 ETF</th></tr></thead><tbody>${LT.top.map(e => `<tr><td>${esc(e.name || nameOf(e.code))}<small class="note"> ${esc(e.code)}${e.notLookedThrough ? "（ETF，沒有成分股資料，未穿透）" : ""}</small></td><td><b>${alPct(e.w)}</b></td><td>${e.direct ? alPct(e.direct) : "—"}</td><td>${e.viaEtf ? alPct(e.viaEtf) : "—"}</td></tr>`).join("")}</tbody></table>
