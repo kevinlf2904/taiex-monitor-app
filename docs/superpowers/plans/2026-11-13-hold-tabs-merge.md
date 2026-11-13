@@ -43,7 +43,7 @@
 - Create: `tests/e2e/hold-nav.test.mjs`
 
 **Interfaces — Produces:**
-- `export async function holdGo(p, page)`：`page` 是 `home｜pnl｜ana｜perf｜alloc｜risk｜macro｜margin｜div｜thesis｜tx` 之一。先點主分頁 `#hvSeg [data-nav="<group>"]`，該頁是子分頁時再點 `#hsubSeg [data-nav="<page>"]`，等 `#hvSeg`／`#hsubSeg` 的 `aria-pressed` 反映後回傳。群組：`pnl、ana → stock`；`alloc、risk、macro、margin → risk`；其餘 group＝page。
+- `export async function holdGo(p, page)`：`page` 是 `home｜pnl｜ana｜perf｜alloc｜risk｜macro｜margin｜div｜thesis｜tx` 之一。先點主分頁 `#hvSeg [data-nav="<group>"]`，該頁是子分頁時再點 `#hsubSeg [data-nav="<page>"]`，等 `#hvSeg`／`#hsubSeg` 的 `aria-pressed` 反映後回傳。群組：`pnl、ana → stock`；`alloc、risk、macro、margin → allocrisk`；其餘 group＝page。
 
 - [ ] **寫測試**（照 `tests/e2e/pf-home.test.mjs` 的開頁與假資料方式；各跑 390 與 1280）：
   - `一排主分頁`：`#hvSeg button` 的文字依序為 `總覽、持股、績效、配置與風險、股利、論點、交易紀錄`；`document.querySelectorAll(".lgview").length === 0`。
@@ -67,7 +67,7 @@
 
 **Interfaces — Produces（`watch.html`，全域）：**
 - `HOLD_NAV`：`[group, 標題, 子分頁?]` 的陣列：
-  `["home","總覽"]`、`["stock","持股",[["pnl","損益"],["ana","屬性分析"]]]`、`["perf","績效"]`、`["risk","配置與風險",[["alloc","配置"],["risk","風險"],["macro","總經敏感度"],["margin","融資"]]]`、`["div","股利"]`、`["thesis","論點"]`、`["tx","交易紀錄"]`。
+  `["home","總覽"]`、`["stock","持股",[["pnl","損益"],["ana","屬性分析"]]]`、`["perf","績效"]`、`["allocrisk","配置與風險",[["alloc","配置"],["risk","風險"],["macro","總經敏感度"],["margin","融資"]]]`、`["div","股利"]`、`["thesis","論點"]`、`["tx","交易紀錄"]`。
 - `holdPage() → string`：`W.holdView !== "tx"` 時回 `W.holdView`；否則回 `W.lg?.view || "home"`，其中 `report` 視為 `home`。
 - `holdGo(page)`：`pnl｜ana｜risk｜macro` → `W.holdView = page`；其餘 → `W.holdView = "tx"`，`(W.lg ||= { open: null, form: null, prev: null, msg: "" }).view = page`、`W.lg.form = null`。接著 `store.set("watch:hv", W.holdView)`、`renderList()`。點主分頁時落在該群組的第一個子分頁。
 
