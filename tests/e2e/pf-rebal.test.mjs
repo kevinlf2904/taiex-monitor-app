@@ -79,11 +79,15 @@ for (const width of [390, 1280]) test(`只有舊庫存 ${width}：配置與再�
       { symbol: "NVDA", market: "us", currency: "USD", shares: 10, price: X.px.get("NVDA").price, assetType: "stock" }];
     const rules = { ...KLLedger.DEFAULT_RULES, tw: { ...KLLedger.DEFAULT_RULES.tw, discount: 0.28 } };
     const P = KLRebal.plan({ positions: pos, fx, cash: null, targets: { 2330: 50, "00679B": 10, NVDA: 40 }, targetBasis: "holdings", band: 1, costs: t => KLLedger.estimateCosts(t, rules) });
-    return { P, rbText: $(".rbcard").innerText, pf: localStorage.getItem("kline:pf:v1"), hold: localStorage.getItem("kline:watch:hold"), br: P.rows.find(x => x.symbol === "00679B"), st: JSON.parse(localStorage.getItem("kline:pf:targets:v1") || "{}") };
+    const bondLiText = [...document.querySelectorAll("#lx .rbcard .rblist li")].find(li => li.innerText.includes("00679B"))?.innerText || "";
+    return { P, rbText: $(".rbcard").innerText, bondLiText, pf: localStorage.getItem("kline:pf:v1"), hold: localStorage.getItem("kline:watch:hold"), br: P.rows.find(x => x.symbol === "00679B"), st: JSON.parse(localStorage.getItem("kline:pf:targets:v1") || "{}") };
   });
   assert.equal(r.st.basis, "holdings");
   assert.equal(r.br.action, "sell"); assert.equal(r.br.tax, 0, "00679B 賣出證交稅應為 0");
   assert.equal(r.P.cashKnown, false);
+  assert.match(r.rbText, new RegExp(`費用與稅（估算）\\s*\\$?${r.P.fees.toLocaleString()}`), "舊庫存畫面費用與 00679B 零稅試算一致");
+  assert.match(r.bondLiText, new RegExp(`費稅 ${r.br.costBase.toLocaleString()}(\\s|$)`), "00679B 單列僅含手續費不含 0.1% 證交稅");
+  assert.doesNotMatch(txt0, /bond_etf/, "配置類型統計（KLAlloc）維持 ETF 分類而不顯示未翻譯的 bond_etf");
   assert.match(r.rbText, /預估淨現金變動/);
   assert.doesNotMatch(r.rbText, /調整後現金/);
   assert.doesNotMatch(r.rbText, /現金不夠/);
