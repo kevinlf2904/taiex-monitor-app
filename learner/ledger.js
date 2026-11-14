@@ -292,5 +292,167 @@
     }
     return { ok: items.every(x => x.ok), items };
   }
-  root.KLLedger = Object.freeze({ toCSV, checkBackup, VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore });
+
+  const defaultToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const inferMkt = (sym, fn) => { const m = typeof fn === "function" ? fn(sym) : (/^\d{4,6}[A-Z]?$/.test(sym) ? "tw" : /^[A-Z][A-Z0-9]{0,5}([.-][A-Z]{1,3})?$/.test(sym) ? "us" : null); return m === "tw" || m === "us" ? m : null; };
+  const cleanNum = v => { if (v === null || v === undefined || (typeof v === "string" && !v.trim())) return null; const s = typeof v === "string" ? v.trim().replace(/,/g, "") : v; const n = typeof s === "number" || typeof s === "string" ? Number(s) : NaN; return Number.isFinite(n) ? n : NaN; };
+
+  // 選項 1（持股截圖 → 股票轉入 transfer_in）：先比對現有帳本（kline:pf:v1）未平倉部位；
+  // 同一代號若目前已有持股，預設不勾選（on: false）並標示帳本已有股數，以免重複計算；未持有的預設勾選。不改動傳入資料。
+  function prepareHoldingsImport(rows, existingTxs = [], opts = {}) {
+    const today = validDate(opts.today) ? opts.today : defaultToday();
+    const existingArr = Array.isArray(existingTxs) ? existingTxs : [];
+    const base = buildLedger(existingArr, { method: opts.method, today, rules: opts.rules });
+    const openMap = new Map(base.positions.filter(p => p.open && p.shares > EPS).map(p => [p.symbol, p]));
+    const items = (Array.isArray(rows) ? rows : []).map((raw, i) => {
+      const sym = symbolOf(raw?.symbol ?? raw?.code);
+      const shares = cleanNum(raw?.shares ?? raw?.sh);
+      const cost = cleanNum(raw?.avgCost ?? raw?.price ?? raw?.cost);
+      const dRaw = raw?.date ?? raw?.d;
+      const dStr = typeof dRaw === "string" ? dRaw.trim() : "";
+      const dateAssumed = !dStr ? "today" : null;
+      const date = dStr || today;
+      const market = (raw?.market === "tw" || raw?.market === "us") ? raw.market : (sym ? inferMkt(sym, opts.market) : null);
+      const currency = market ? CURRENCY[market] : null;
+      const existingPos = sym ? openMap.get(sym) || null : null;
+      const duplicateOpen = !!existingPos;
+      const existingShares = existingPos ? existingPos.shares : 0;
+      const skipReason = duplicateOpen ? `帳本已有 ${+existingShares.toFixed(6)} 股，預設略過以免重複` : null;
+      const on = typeof raw?.on === "boolean" ? raw.on : !duplicateOpen;
+      const id = typeof raw?.id === "string" && raw.id.trim() ? raw.id.trim() : (opts.idPrefix ? `${opts.idPrefix}${i + 1}` : makeTx({}).id);
+      const note = typeof raw?.note === "string" && raw.note.trim() ? raw.note.trim().slice(0, 500) : "截圖匯入庫存：股票轉入";
+      const tx = {
+        v: VERSION, id, date, type: "transfer_in", symbol: sym, market, currency,
+        shares: isNum(shares) ? shares : Number.isNaN(shares) ? raw?.shares ?? raw?.sh : null,
+        price: isNum(cost) ? cost : Number.isNaN(cost) ? raw?.avgCost ?? raw?.price ?? raw?.cost : null,
+        fee: 0, tax: 0, note,
+        source: typeof raw?.source === "string" && raw.source.trim() ? raw.source.trim().slice(0, 40) : "import"
+      };
+      return { index: i, raw, on, duplicateOpen, existingShares, skipReason, dateAssumed, symbol: sym, name: typeof raw?.name === "string" ? raw.name.trim() : "", shares: tx.shares, price: tx.price, date, market, currency, how: typeof raw?.how === "string" ? raw.how : "", errors: [], warnings: [], tx };
+    });
+    const enabled = items.filter(it => it.on);
+    const combined = buildLedger([...existingArr, ...enabled.map(it => it.tx)], { method: opts.method, today, rules: opts.rules });
+    const byId = new Map(combined.txs.slice(existingArr.length).map(x => [x.id, x]));
+    const newErrors = [];
+    for (let k = 0; k < existingArr.length; k++) {
+      const bef = base.txs[k]?.errors?.length || 0, aft = combined.txs[k]?.errors || [];
+      if (aft.length > bef) newErrors.push({ id: combined.txs[k].id, errors: aft });
+    }
+    let errorCount = newErrors.length;
+    const duplicates = [];
+    for (const it of items) {
+      const res = it.on ? byId.get(it.tx.id) : checkTx(it.tx, { today, rules: opts.rules });
+      it.errors = res?.errors ? res.errors.slice() : [];
+      it.warnings = res?.warnings ? res.warnings.slice() : [];
+      if (it.on && it.errors.length) errorCount++;
+      if (it.on && it.warnings.some(w => w.code === "possible_duplicate")) duplicates.push(it);
+    }
+    return {
+      ok: enabled.length > 0 && errorCount === 0,
+      canSaveEmpty: enabled.length === 0,
+      items,
+      transactions: enabled.map(it => it.tx),
+      existingOpenCount: items.filter(it => it.duplicateOpen).length,
+      selectedCount: enabled.length,
+      errorCount,
+      newErrors,
+      duplicates,
+      storeErrorCount: combined.errorCount
+    };
+  }
+
+  // 選項 2（成交明細／對帳單截圖 → buy／sell）：保留空白 fee/tax 為 null（觸發估算，explicit 0 維持 0），
+  // 若明細按最新在上（降冪）或同一天賣在前買在後造成假賣超，模擬時正規化為時間由舊到新（並依該順序存檔）再檢核實際賣超與重複。
+  function prepareTradesImport(rows, existingTxs = [], opts = {}) {
+    const today = validDate(opts.today) ? opts.today : defaultToday();
+    const existingArr = Array.isArray(existingTxs) ? existingTxs : [];
+    const base = buildLedger(existingArr, { method: opts.method, today, rules: opts.rules });
+    const existingCore = new Set(existingArr.map(t => {
+      const sym = symbolOf(t?.symbol), sh = cleanNum(t?.shares), px = cleanNum(t?.price);
+      return t && (t.type === "buy" || t.type === "sell") && validDate(t.date) && sym && isNum(sh) && isNum(px)
+        ? [t.date, t.type, sym, sh, px].join("|") : null;
+    }).filter(Boolean));
+    const items = (Array.isArray(rows) ? rows : []).map((raw, i) => {
+      const on = raw?.on !== false;
+      const side = raw?.type === "buy" || raw?.side === "buy" ? "buy" : raw?.type === "sell" || raw?.side === "sell" ? "sell" : null;
+      const sym = symbolOf(raw?.symbol ?? raw?.code);
+      const market = (raw?.market === "tw" || raw?.market === "us") ? raw.market : (sym ? inferMkt(sym, opts.market) : null);
+      const currency = market ? CURRENCY[market] : null;
+      const dRaw = raw?.date;
+      const date = dRaw == null ? today : typeof dRaw === "string" ? dRaw.trim() : "";
+      const dateAssumed = dRaw == null ? (raw?.dateAssumed || "today") : (raw?.dateAssumed === "year" || raw?.dateAssumed === "today" ? raw.dateAssumed : null);
+      const shares = cleanNum(raw?.shares ?? raw?.sh);
+      const price = cleanNum(raw?.price);
+      const fee = cleanNum(raw?.fee);
+      const tax = cleanNum(raw?.tax);
+      const assetType = ["etf", "stock", "bond_etf"].includes(raw?.assetType) ? raw.assetType : null;
+      const dayTrade = !!raw?.dayTrade;
+      const note = typeof raw?.note === "string" ? raw.note.trim().slice(0, 500) : "";
+      const source = typeof raw?.source === "string" && raw.source.trim() ? raw.source.trim().slice(0, 40) : "import";
+      const id = typeof raw?.id === "string" && raw.id.trim() ? raw.id.trim() : (opts.idPrefix ? `${opts.idPrefix}${i + 1}` : makeTx({}).id);
+      const tx = {
+        v: VERSION, id, date, type: side, symbol: sym, market, currency,
+        shares: isNum(shares) ? shares : Number.isNaN(shares) ? raw?.shares ?? raw?.sh : null,
+        price: isNum(price) ? price : Number.isNaN(price) ? raw?.price : null,
+        fee: fee === null ? null : (isNum(fee) ? fee : raw?.fee),
+        tax: tax === null ? null : (isNum(tax) ? tax : raw?.tax),
+        ...(assetType ? { assetType } : {}),
+        ...(dayTrade ? { dayTrade: true } : {}),
+        note, source
+      };
+      return { index: i, raw, on, dateAssumed, type: side, symbol: sym, name: typeof raw?.name === "string" ? raw.name.trim() : "", shares: tx.shares, price: tx.price, fee: tx.fee, tax: tx.tax, dayTrade, date, market, currency, errors: [], warnings: [], tx, computed: null };
+    });
+    const enabled = items.filter(it => it.on);
+    let hasDesc = false, hasAsc = false, prevD = null;
+    for (const it of enabled) {
+      if (!validDate(it.date)) continue;
+      if (prevD) { if (prevD > it.date) hasDesc = true; else if (prevD < it.date) hasAsc = true; }
+      prevD = it.date;
+    }
+    const sim = seq => buildLedger([...existingArr, ...seq.map(it => it.tx)], { method: opts.method, today, rules: opts.rules });
+    const countBatchErrors = (seq, res) => res.txs.slice(existingArr.length).reduce((s, x) => s + (x.errors.length ? 1 : 0), 0)
+      + res.txs.slice(0, existingArr.length).filter((x, k) => x.errors.length > (base.txs[k]?.errors?.length || 0)).length;
+    let ordered = (hasDesc && !hasAsc) ? enabled.slice().reverse() : enabled.slice();
+    let combined = sim(ordered);
+    if (!hasAsc && enabled.length > 1 && combined.txs.slice(existingArr.length).some(x => x.errors.some(e => e.code === "oversell"))) {
+      const alt = ordered.slice().reverse(), altComb = sim(alt);
+      if (countBatchErrors(alt, altComb) < countBatchErrors(ordered, combined)) { ordered = alt; combined = altComb; }
+    }
+    const byId = new Map(combined.txs.slice(existingArr.length).map(x => [x.id, x]));
+    const newErrors = [];
+    for (let k = 0; k < existingArr.length; k++) {
+      const bef = base.txs[k]?.errors?.length || 0, aft = combined.txs[k]?.errors || [];
+      if (aft.length > bef) newErrors.push({ id: combined.txs[k].id, date: combined.txs[k].tx?.date || "", symbol: combined.txs[k].tx?.symbol || "", type: combined.txs[k].tx?.type || "", errors: aft });
+    }
+    let errorCount = newErrors.length, feeEstimatedCount = 0;
+    const duplicates = [];
+    for (const it of items) {
+      const res = it.on ? byId.get(it.tx.id) : checkTx(it.tx, { today, rules: opts.rules });
+      it.errors = res?.errors ? res.errors.slice() : [];
+      it.warnings = res?.warnings ? res.warnings.slice() : [];
+      it.computed = res?.tx || null;
+      if (it.on) {
+        if ((it.tx.fee == null || it.tx.tax == null) && it.symbol && isNum(it.shares) && isNum(it.price) && existingCore.has([it.date, it.type, it.symbol, it.shares, it.price].join("|")) && !it.warnings.some(w => w.code === "possible_duplicate")) {
+          it.warnings.push({ code: "possible_duplicate", message: "帳本裡同一天已有相同代號、方向、股數與價格的交易，請確認不是重複匯入" });
+        }
+        if (it.errors.length) errorCount++;
+        if (it.computed?.feeEstimated) feeEstimatedCount++;
+        if (it.warnings.some(w => w.code === "possible_duplicate")) duplicates.push(it);
+      }
+    }
+    return {
+      ok: enabled.length > 0 && errorCount === 0,
+      canSaveEmpty: enabled.length === 0,
+      items,
+      transactions: ordered.map(it => it.tx),
+      selectedCount: enabled.length,
+      errorCount,
+      newErrors,
+      duplicates,
+      feeEstimatedCount,
+      storeErrorCount: combined.errorCount
+    };
+  }
+
+  root.KLLedger = Object.freeze({ toCSV, checkBackup, VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore, prepareHoldingsImport, prepareTradesImport });
 })(typeof window !== "undefined" ? window : globalThis);
