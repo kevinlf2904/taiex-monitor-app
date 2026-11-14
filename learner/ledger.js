@@ -458,9 +458,10 @@
       let timeDisjoint = false;
       if (allTimed) {
         timeDisjoint = true;
+        const fifoMode = opts.method === "fifo";
         for (let a = 0; a < grp.length && timeDisjoint; a++) {
           for (let b = a + 1; b < grp.length; b++) {
-            if (grp[a].type !== grp[b].type) {
+            if (fifoMode || grp[a].type !== grp[b].type) {
               const ta = timeMeta.get(grp[a]), tb = timeMeta.get(grp[b]);
               if (!(ta.hi < tb.lo || tb.hi < ta.lo)) { timeDisjoint = false; break; }
             }
@@ -518,16 +519,23 @@
     for (const [k, idxs] of byDaySym) {
       if (idxs.length < 2) continue;
       const grp = idxs.map(i => ordered[i]);
-      if (!(grp.some(it => it.type === "buy") && grp.some(it => it.type === "sell"))) continue;
+      const buyCount = grp.filter(it => it.type === "buy").length;
+      const sellCount = grp.filter(it => it.type === "sell").length;
+      const mixedSides = buyCount > 0 && sellCount > 0;
+      const affectsFifo = opts.method === "fifo" && (buyCount > 1 || sellCount > 1);
+      if (!mixedSides && !affectsFifo) continue;
       if (verifiableGroups.has(k)) continue;
       if (grp.some(it => it.errors.some(e => e.code === "oversell"))) sameDayOversell = true;
       if (grp.some(it => it.errors.length > 0)) continue;
-      const alt = ordered.slice();
-      for (let m = 0; m < idxs.length; m++) alt[idxs[m]] = ordered[idxs[idxs.length - 1 - m]];
-      const altComb = sim(alt);
-      const altById = new Map(altComb.txs.slice(existingArr.length).map(x => [x.id, x]));
-      const affectsOversell = grp.some(it => altById.get(it.tx.id)?.errors?.some(e => e.code === "oversell"));
-      ambiguousSameDay.push({ date: grp[0].date, symbol: grp[0].symbol, rowIndices: grp.map(it => it.index), affectsOversell });
+      let affectsOversell = false;
+      if (mixedSides) {
+        const alt = ordered.slice();
+        for (let m = 0; m < idxs.length; m++) alt[idxs[m]] = ordered[idxs[idxs.length - 1 - m]];
+        const altComb = sim(alt);
+        const altById = new Map(altComb.txs.slice(existingArr.length).map(x => [x.id, x]));
+        affectsOversell = grp.some(it => altById.get(it.tx.id)?.errors?.some(e => e.code === "oversell"));
+      }
+      ambiguousSameDay.push({ date: grp[0].date, symbol: grp[0].symbol, rowIndices: grp.map(it => it.index), affectsOversell, affectsFifo, mixedSides });
     }
     const needsOrderConfirm = ambiguousSameDay.length > 0 && opts.orderConfirmed !== true;
 

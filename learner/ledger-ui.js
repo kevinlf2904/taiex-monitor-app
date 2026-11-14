@@ -766,7 +766,7 @@ function lgMapTradeRow(raw) {
     dateAssumed,
     altDate: typeof raw?.altDate === "string" ? raw.altDate.trim() : "",
     rawDate: typeof raw?.rawDate === "string" ? raw.rawDate.trim() : "",
-    time: typeof raw?.time === "string" ? raw.time.trim() : "",
+    time: typeof raw?.time === "string" ? raw.time.trim() : (raw?.timeInvalid === true && typeof raw?.rawTime === "string" ? raw.rawTime.trim() : ""),
     side, code: res.code, badSym: res.badSym, name: res.name,
     shares: sh != null && Number.isFinite(sh) ? sh : null,
     price: px != null && Number.isFinite(px) ? px : null,
@@ -1129,7 +1129,7 @@ function lgSyncImportUI(opts = {}) {
   const amb = P.ambiguousSameDay || [];
   const orderSig = isHold ? "" : amb.map(g => `${g.date}|${g.symbol}|` + g.rowIndices.map(idx => {
     const rr = S.rows[idx];
-    return [rr?._uid, rr?.side, rr?.shares, rr?.price, rr?.time].join(":");
+    return [rr?._uid, rr?.side, rr?.shares, rr?.price, rr?.time, g.affectsFifo ? "fifo" : ""].join(":");
   }).join(",")).join(";");
   if (S.orderSig !== orderSig) {
     S.orderSig = orderSig;
@@ -1139,8 +1139,16 @@ function lgSyncImportUI(opts = {}) {
   if (ordWrap && ordEl && ordTxt) {
     ordWrap.hidden = amb.length === 0;
     if (amb.length > 0) {
-      const syms = amb.map(g => `${g.date} ${g.symbol}${g.affectsOversell ? "（顛倒將賣超）" : ""}`).join("、");
-      ordTxt.textContent = `${syms} 在同一天有買進與賣出且未附時間（或同分鐘重疊）。請用 ↑↓／反轉按鈕確認上方由早到晚排列正確，或補填成交時間；確認目前順序正確請勾選後再匯入。`;
+      const syms = amb.map(g => {
+        const reasons = [];
+        if (g.affectsOversell) reasons.push("顛倒將賣超");
+        if (g.affectsFifo) reasons.push("FIFO 批次先後影響成本／損益");
+        return `${g.date} ${g.symbol}${reasons.length ? "（" + reasons.join("；") + "）" : ""}`;
+      }).join("、");
+      const reason = amb.some(g => g.affectsFifo)
+        ? "同日交易順序缺乏可驗證時間／序號，FIFO 批次先後可能改變成本與已實現損益"
+        : "同日買賣未附可驗證時間（或同分鐘重疊）";
+      ordTxt.textContent = `${syms}：${reason}。請用 ↑↓／反轉按鈕確認列序，或補填成交時間；確認目前順序正確請勾選後再匯入。`;
       if (ordEl.checked !== S.orderOk) ordEl.checked = S.orderOk;
       if (S.orderOk) ordEl.setAttribute("aria-invalid", "false");
     } else {
@@ -1172,9 +1180,6 @@ function lgSyncImportUI(opts = {}) {
     if (P.newErrors?.length) {
       const msgs = P.newErrors.map(x => `${x.date || ""} ${x.symbol || ""}：${x.errors?.[0]?.message || "出錯"}`).join("；");
       globalErr.textContent = `⚠︎ 匯入後會讓帳本既有的交易出錯（${msgs}），請調整日期或股數。`;
-      globalErr.hidden = false;
-    } else if (P.sameDayOversell) {
-      globalErr.textContent = "⚠︎ 同天有多筆買賣且未附成交時間，按目前順序會先賣後買導致賣超；請補填「成交時間」，或用 ↑↓／「⇅ 反轉列表順序」調整成先買後賣。";
       globalErr.hidden = false;
     } else {
       globalErr.textContent = "";
@@ -1579,7 +1584,10 @@ async function lgSaveImport() {
       S.busy = false;
       lgSyncImportUI();
       // 先顯示提示再捲動：#impLive 出現會推動版面，反過來會讓捲好的位置又偏掉
-      impSetLive("⚠︎ 偵測到同日買賣未附成交時間，請確認由早到晚順序（或補填時間）後再匯入。", "err");
+      const fifoOrder = P.ambiguousSameDay?.some(g => g.affectsFifo);
+       impSetLive(fifoOrder
+         ? "⚠︎ FIFO 模式下，同日多筆同方向交易的批次順序會影響成本與損益；請確認列序或補填成交時間後再匯入。"
+         : "⚠︎ 偵測到同日買賣未附成交時間，請確認由早到晚順序（或補填時間）後再匯入。", "err");
       const ordEl = $("#lgImpOrderOk");
       if (ordEl) {
         ordEl.setAttribute("aria-invalid", "true");

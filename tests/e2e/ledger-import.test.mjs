@@ -407,8 +407,11 @@ for (const width of [390, 1280]) {
     if (touch) {
       const dfixBox = await p.locator('#lgImpTbody tr[data-row="5"] [data-lgimp-dflip]').boundingBox();
       const mvBox = await p.locator('#lgImpTbody tr[data-row="0"] [data-lgimp-mv="1"]').boundingBox();
+      const timeCell = await p.locator('#lgImpTbody tr[data-row="0"] td:nth-child(2)').boundingBox();
       assert.ok(dfixBox && dfixBox.height >= 43.5, `${width} 改日/月按鈕觸控高度 ${dfixBox?.height} >= 44`);
       assert.ok(mvBox && mvBox.width >= 43.5 && mvBox.height >= 43.5, `${width} ↑↓調序鈕觸控尺寸 ${mvBox?.width}x${mvBox?.height} >= 44`);
+      assert.ok(timeCell && mvBox.x >= timeCell.x && mvBox.x + mvBox.width <= timeCell.x + timeCell.width + 1,
+        `${width} 下移「↓」按鈕完整位於第 2 欄內，不得裁切`);
     }
 
     // 選項 2 橫向捲動第 1 欄（匯入勾選）保持 sticky

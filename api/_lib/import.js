@@ -156,6 +156,8 @@ export function cleanTradeRows(rows, opts = {}) {
   return (Array.isArray(rows) ? rows : []).map(r => {
     const pd = parseTradeDate(r?.date, opts.today);
     const time = cleanTime(r?.time, r?.date);
+    const rawTimeText = r?.time == null ? "" : halfWidth(r.time);
+    const timeInvalid = !!rawTimeText && !cleanTimeOne(rawTimeText);
     const side = cleanSide(r?.side ?? r?.type);
     const code = cleanCode(r?.code ?? r?.symbol);
     const name = String(r?.name ?? "").trim().slice(0, 30);
@@ -170,7 +172,9 @@ export function cleanTradeRows(rows, opts = {}) {
       date: pd.date, dateAssumed: pd.dateAssumed,
       ...(pd.altDate ? { altDate: pd.altDate } : {}),
       ...(pd.rawDate ? { rawDate: pd.rawDate } : {}),
-      time, side, name, code, shares, price, fee, tax, dayTrade, note,
+      time,
+      ...(timeInvalid ? { timeInvalid: true, rawTime: rawTimeText.slice(0, 40) } : {}),
+      side, name, code, shares, price, fee, tax, dayTrade, note,
     };
   }).filter(r => (r.name || r.code) && (r.shares != null || r.price != null));
 }

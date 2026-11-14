@@ -104,6 +104,12 @@ test("cleanTradeRows：買賣方向、時間擷取、歧義/無效日期保留�
   assert.equal(rows[3].dateAssumed, "mdy"); assert.equal(rows[3].altDate, "2026-06-05"); assert.equal(rows[3].rawDate, "05/06/2026"); assert.equal(rows[3].time, null);
   assert.equal(rows[4].side, null, "不明確的方向標成 null 給使用者選");
   assert.equal(rows[4].date, ""); assert.equal(rows[4].dateAssumed, "invalid"); assert.equal(rows[4].rawDate, "2026/02/30");
+  const invalidTime = cleanTradeRows([
+    { date: "2026-05-12", time: "25:99", side: "買進", name: "台積電", code: "2330", shares: 100, price: 900 }
+  ], { today: "2026-05-15" })[0];
+  assert.equal(invalidTime.time, null, "無效時間不可被正規化成空白有效時間");
+  assert.equal(invalidTime.timeInvalid, true);
+  assert.equal(invalidTime.rawTime, "25:99", "保留 OCR 原始時間供 UI 修正");
   // cleanRows 向後相容
   assert.equal(cleanRows([{ name: "台積電", code: "2330.TW", shares: 1000 }])[0].code, "2330");
 });
@@ -340,6 +346,27 @@ test("prepareTradesImport（高風險對抗案例）：無時間/同分鐘重疊
   assert.equal(twoBuys.ok, true);
   assert.deepEqual(J(twoBuys.ambiguousSameDay), []);
   assert.equal(twoBuys.needsOrderConfirm, false);
+
+  const fifoTwoBuys = L.prepareTradesImport([
+    { date: "2026-05-12", side: "buy", code: "2454", shares: 500, price: 1050 },
+    { date: "2026-05-12", side: "buy", code: "2454", shares: 500, price: 1060 },
+  ], [], { today: "2026-05-15", method: "fifo" });
+  assert.equal(fifoTwoBuys.ok, false, "FIFO 同日多筆買進會改變批次先後，無可靠順序時必須確認");
+  assert.equal(fifoTwoBuys.needsOrderConfirm, true);
+  assert.equal(fifoTwoBuys.ambiguousSameDay.length, 1);
+  assert.equal(fifoTwoBuys.ambiguousSameDay[0].affectsFifo, true);
+  assert.equal(fifoTwoBuys.ambiguousSameDay[0].mixedSides, false);
+  const fifoTwoBuysConfirmed = L.prepareTradesImport([
+    { date: "2026-05-12", side: "buy", code: "2454", shares: 500, price: 1050 },
+    { date: "2026-05-12", side: "buy", code: "2454", shares: 500, price: 1060 },
+  ], [], { today: "2026-05-15", method: "fifo", orderConfirmed: true });
+  assert.equal(fifoTwoBuysConfirmed.ok, true);
+  const fifoTimedBuys = L.prepareTradesImport([
+    { date: "2026-05-12", time: "09:05", side: "buy", code: "2454", shares: 500, price: 1050 },
+    { date: "2026-05-12", time: "09:10", side: "buy", code: "2454", shares: 500, price: 1060 },
+  ], [], { today: "2026-05-15", method: "fifo" });
+  assert.equal(fifoTimedBuys.ok, true, "FIFO 同方向交易有不重疊成交時間可自動排序");
+  assert.equal(fifoTimedBuys.needsOrderConfirm, false);
 
   // 7. 歧義 mdy、無效日期與無效時間皆阻擋
   const mdyErr = L.prepareTradesImport([{ date: "2026-05-06", dateAssumed: "mdy", altDate: "2026-06-05", rawDate: "05/06/2026", side: "buy", code: "2330", shares: 100, price: 900 }], [], { today: "2026-05-15" });
