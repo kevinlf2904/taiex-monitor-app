@@ -244,6 +244,40 @@ for (const width of [390, 1280]) {
     assert.equal(rowChecks[1].checked, false);
     assert.equal(rowChecks[2].checked, true, "2317 已出清不在帳本未平倉中，預設勾選");
 
+    if (touch) {
+      const openBox = await p.locator("#lgImpIncOpenWrap").boundingBox();
+      assert.ok(openBox && openBox.height >= 43.5, `${width} #lgImpIncOpenWrap 觸控目標高度 ${openBox?.height} >= 44`);
+    }
+
+    // 表格橫向捲動時第 1 欄固定且維持不透明底色，不被後方文字透視重疊
+    const holdSticky = await p.evaluate(() => {
+      const wrap = $("#impSheet .hg-wrap");
+      wrap.scrollLeft = 220;
+      const wRect = wrap.getBoundingClientRect();
+      const th1 = wrap.querySelector("thead th:first-child");
+      const td1 = wrap.querySelector("tbody tr:first-child td:first-child");
+      const td2 = wrap.querySelector("tbody tr:first-child td:nth-child(2)");
+      const out = {
+        canScroll: wrap.scrollWidth > wrap.clientWidth,
+        thSticky: getComputedStyle(th1).position === "sticky",
+        tdSticky: getComputedStyle(td1).position === "sticky",
+        thLeftDiff: Math.abs(th1.getBoundingClientRect().left - wRect.left),
+        tdLeftDiff: Math.abs(td1.getBoundingClientRect().left - wRect.left),
+        td2ScrolledPast: td2.getBoundingClientRect().left < td1.getBoundingClientRect().right - 10,
+        tdOpacity: getComputedStyle(td1).opacity,
+        tdBg: getComputedStyle(td1).backgroundColor,
+      };
+      wrap.scrollLeft = 0;
+      return out;
+    });
+    assert.equal(holdSticky.thSticky && holdSticky.tdSticky, true, "選項 1 表格第 1 欄設為 sticky");
+    assert.equal(holdSticky.tdOpacity, "1", "略過列第 1 欄保持不透明，防止背面文字透視");
+    assert.ok(!/rgba\([^)]*,\s*0(?:\.0+)?\s*\)|transparent/.test(holdSticky.tdBg), "第 1 欄具不透明背景：" + holdSticky.tdBg);
+    if (holdSticky.canScroll) {
+      assert.ok(holdSticky.thLeftDiff <= 2 && holdSticky.tdLeftDiff <= 2, "橫向捲動後第 1 欄貼齊容器左緣");
+      assert.equal(holdSticky.td2ScrolledPast, true, "第 2 欄確實向左捲過第 1 欄後方");
+    }
+
     // 切換全選既有部位「包含帳本已有部位」與 tri-state indeterminate
     await p.check("#lgImpIncOpen");
     assert.equal(await p.evaluate(() => [0, 1].map(i => document.querySelector(`#lgImpTbody tr[data-row="${i}"] [data-lgimp-k="on"]`).checked).every(Boolean)), true);
@@ -281,7 +315,7 @@ for (const width of [390, 1280]) {
     assert.deepEqual(errs, []);
   });
 
-  test(`${width}：選項 2 成交對帳單、假設日期標籤、分批不合併、費稅 0 vs 估算、當沖、賣超與重複確認、輕觸關閉與焦點鎖定`, async () => {
+  test(`${width}：選項 2 成交對帳單、歧義/無效日期修正、時間檢核、手動調序與確認、賣超與重複確認、scrollIntoView、固欄與焦點鎖定`, async () => {
     const touch = width < 500;
     let shotSeq = 0;
     const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch });
@@ -294,11 +328,13 @@ for (const width of [390, 1280]) {
           ok: true,
           mode: "trades",
           rows: [
-            { date: "2026-05-12", dateAssumed: "year", side: "sell", name: "聯發科", code: "2454", shares: 1000, price: 1100, fee: null, tax: null, dayTrade: true },
-            { date: "2026-05-12", dateAssumed: "year", side: "buy", name: "聯發科", code: "2454", shares: 500, price: 1050, fee: 0, tax: null, dayTrade: false },
-            { date: "2026-05-12", dateAssumed: "year", side: "buy", name: "聯發科", code: "2454", shares: 500, price: 1050, fee: 0, tax: null, dayTrade: false },
-            { date: "2026-10-05", dateAssumed: "today", side: "buy", name: "蘋果", code: "AAPL", shares: 2, price: 200, fee: null, tax: 0, dayTrade: false },
-            { date: "2026-05-01", dateAssumed: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 880, fee: null, tax: null, dayTrade: false },
+            { date: "2026-05-12", dateAssumed: "year", time: null, side: "sell", name: "聯發科", code: "2454", shares: 1000, price: 1100, fee: null, tax: null, dayTrade: true },
+            { date: "2026-05-12", dateAssumed: "year", time: null, side: "buy", name: "聯發科", code: "2454", shares: 500, price: 1050, fee: 0, tax: null, dayTrade: false },
+            { date: "2026-05-12", dateAssumed: "year", time: null, side: "buy", name: "聯發科", code: "2454", shares: 500, price: 1050, fee: 0, tax: null, dayTrade: false },
+            { date: "2026-10-05", dateAssumed: "today", time: null, side: "buy", name: "蘋果", code: "AAPL", shares: 2, price: 200, fee: null, tax: 0, dayTrade: false },
+            { date: "2026-05-01", dateAssumed: null, time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 880, fee: null, tax: null, dayTrade: false },
+            { date: "2026-05-06", dateAssumed: "mdy", altDate: "2026-06-05", rawDate: "05/06/2026", time: null, side: "buy", name: "輝達", code: "NVDA", shares: 1, price: 120, fee: 0, tax: 0, dayTrade: false },
+            { date: "", dateAssumed: "invalid", rawDate: "2026/02/30", time: null, side: "buy", name: "元大台灣50", code: "0050", shares: 1000, price: 180, fee: 0, tax: 0, dayTrade: false },
           ],
         },
       };
@@ -331,23 +367,25 @@ for (const width of [390, 1280]) {
     await p.click("[data-lgimp-back]");
     await p.waitForSelector('[data-lgimp-pick="trades"]');
 
-    // 第二次上傳取得成交對帳單 5 筆
+    // 第二次上傳取得成交對帳單 7 筆（含歧義斜線日期與無效日期列）
     await pickFileVia(p, '[data-lgimp-pick="trades"]');
     await p.waitForSelector("#lgImpForm");
-    assert.equal(await p.evaluate(() => document.querySelectorAll("#lgImpTbody tr").length), 5, "同天同價分批成交兩筆 2454 皆保留不合併");
+    assert.equal(await p.evaluate(() => document.querySelectorAll("#lgImpTbody tr").length), 7, "同天同價分批成交兩筆 2454 皆保留不合併");
     assert.ok(await noHOverflow(p), `${width} 選項 2 檢視沒有水平溢出`);
 
-    // 確認假設日期標籤與費稅估算顯示
+    // 確認假設／歧義／無效日期標籤、費稅、當沖與粗指標觸控目標
     const initUI = await p.evaluate(() => [...document.querySelectorAll("#lgImpTbody tr")].map(tr => ({
+      uid: tr.dataset.uid,
       dtag: tr.querySelector("[data-lgimp-dtag]").hidden ? "" : tr.querySelector("[data-lgimp-dtag]").textContent,
+      dwrapOpen: !tr.querySelector("[data-lgimp-dwrap]").hidden,
+      dateInv: tr.querySelector('[data-lgimp-k="date"]').getAttribute("aria-invalid"),
+      dateErr: tr.querySelector(`#lgie-${tr.dataset.uid}-date`).textContent,
       meta: tr.querySelector("[data-lgimp-meta]").textContent,
       dtDisabled: tr.querySelector('[data-lgimp-k="dayTrade"]').disabled,
       dtChecked: tr.querySelector('[data-lgimp-k="dayTrade"]').checked,
       warn: tr.querySelector("[data-lgimp-warn]").hidden ? "" : tr.querySelector("[data-lgimp-warn]").textContent,
     })));
     assert.equal(initUI[0].dtag, "年份待確認（請核對）");
-    assert.match(initUI[0].meta, /手續費估/);
-    assert.match(initUI[0].meta, /稅估/);
     assert.equal(initUI[0].dtDisabled, false);
     assert.equal(initUI[0].dtChecked, true);
 
@@ -357,6 +395,51 @@ for (const width of [390, 1280]) {
 
     assert.equal(initUI[3].dtag, "未含日期，已帶入今天");
     assert.match(initUI[4].warn, /重複匯入/);
+
+    assert.equal(initUI[5].dtag, "日期格式待確認（月/日或日/月）");
+    assert.equal(initUI[5].dwrapOpen, true);
+    assert.equal(initUI[5].dateInv, "true");
+
+    assert.equal(initUI[6].dtag, "截圖日期無效（2026/02/30）");
+    assert.equal(initUI[6].dateInv, "true");
+    assert.match(initUI[6].dateErr, /無法辨識截圖日期「2026\/02\/30」，請手動修正為 YYYY-MM-DD/);
+
+    if (touch) {
+      const dfixBox = await p.locator('#lgImpTbody tr[data-row="5"] [data-lgimp-dflip]').boundingBox();
+      const mvBox = await p.locator('#lgImpTbody tr[data-row="0"] [data-lgimp-mv="1"]').boundingBox();
+      assert.ok(dfixBox && dfixBox.height >= 43.5, `${width} 改日/月按鈕觸控高度 ${dfixBox?.height} >= 44`);
+      assert.ok(mvBox && mvBox.width >= 43.5 && mvBox.height >= 43.5, `${width} ↑↓調序鈕觸控尺寸 ${mvBox?.width}x${mvBox?.height} >= 44`);
+    }
+
+    // 選項 2 橫向捲動第 1 欄（匯入勾選）保持 sticky
+    const trSticky = await p.evaluate(() => {
+      const wrap = $("#impSheet .hg-wrap");
+      wrap.scrollLeft = 260;
+      const wRect = wrap.getBoundingClientRect();
+      const th1 = wrap.querySelector("thead th:first-child");
+      const td1 = wrap.querySelector("tbody tr:first-child td:first-child");
+      const td2 = wrap.querySelector("tbody tr:first-child td:nth-child(2)");
+      const out = {
+        thLeftDiff: Math.abs(th1.getBoundingClientRect().left - wRect.left),
+        tdLeftDiff: Math.abs(td1.getBoundingClientRect().left - wRect.left),
+        td2ScrolledPast: td2.getBoundingClientRect().left < td1.getBoundingClientRect().right - 10,
+      };
+      wrap.scrollLeft = 0;
+      return out;
+    });
+    assert.ok(trSticky.thLeftDiff <= 2 && trSticky.tdLeftDiff <= 2 && trSticky.td2ScrolledPast, "選項 2 橫向捲動時第 1 欄固定且不被第 2 欄覆蓋");
+
+    // 點選第 5 列「改日/月 2026-06-05」確認歧義斜線日期 → 錯誤消除、保留為 2026-06-05
+    await p.click('#lgImpTbody tr[data-row="5"] [data-lgimp-dflip]');
+    assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="5"] [data-lgimp-k="date"]').value), "2026-06-05");
+    assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="5"] [data-lgimp-dwrap]').hidden), true);
+    assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="5"] [data-lgimp-k="date"]').getAttribute("aria-invalid")), "false");
+
+    // 修正第 6 列無效日期後錯誤消除，接著刪除第 6 列測試列
+    await p.fill('#lgImpTbody tr[data-row="6"] [data-lgimp-k="date"]', "2026-05-11");
+    assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="6"] [data-lgimp-k="date"]').getAttribute("aria-invalid")), "false");
+    await p.click('#lgImpTbody tr[data-row="6"] [data-lgimp-del]');
+    await p.waitForFunction(() => document.querySelectorAll("#lgImpTbody tr").length === 6);
 
     // 切換方向：賣出 → 買進 → 賣出（現沖狀態重置再重啟）
     await p.selectOption('#lgImpTbody tr[data-row="0"] [data-lgimp-k="side"]', "buy");
@@ -375,24 +458,66 @@ for (const width of [390, 1280]) {
     await p.fill('#lgImpTbody tr[data-row="3"] [data-lgimp-k="date"]', "2026-05-14");
     assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="3"] [data-lgimp-k="date"]').getAttribute("aria-invalid")), "false");
 
+    // 成交時間驗證：填錯格式「25:99」失焦標錯、清空恢復
+    const sellUid = initUI[0].uid;
+    await p.fill(`#lgImpTbody tr[data-uid="${sellUid}"] [data-lgimp-k="time"]`, "25:99");
+    await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"] [data-lgimp-k="time"]`).blur(), sellUid);
+    assert.equal(await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"] [data-lgimp-k="time"]`).getAttribute("aria-invalid"), sellUid), "true");
+    await p.fill(`#lgImpTbody tr[data-uid="${sellUid}"] [data-lgimp-k="time"]`, "");
+    assert.equal(await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"] [data-lgimp-k="time"]`).getAttribute("aria-invalid"), sellUid), "false");
+
+    // 無時間且先賣後買（2454 sell 在前）→ 絕不自動反轉！送出擋下賣超並顯示 #lgImpGlobalErr
+    await p.click("#lgImpSave");
+    await p.waitForFunction(() => !$("#lgImpGlobalErr").hidden && /未附成交時間/.test($("#lgImpGlobalErr").textContent));
+    assert.equal(await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"] [data-lgimp-k="shares"]`).getAttribute("aria-invalid"), sellUid), "true");
+
+    // 單列上下移按鈕測試（下移後再上移）
+    await p.click(`#lgImpTbody tr[data-uid="${sellUid}"] [data-lgimp-mv="1"]`);
+    assert.equal(await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"]`).dataset.row, sellUid), "1");
+    await p.click(`#lgImpTbody tr[data-uid="${sellUid}"] [data-lgimp-mv="-1"]`);
+    assert.equal(await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"]`).dataset.row, sellUid), "0");
+
+    // 點擊「⇅ 反轉列表順序」使 2454 先買後賣 → 賣超與全域錯誤解除、賣出列顯示手續費／稅估算、且出現同日順序確認框
+    await p.click("[data-lgimp-rev]");
+    assert.equal(await p.evaluate(() => $("#lgImpGlobalErr").hidden), true);
+    const sellMeta = await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"] [data-lgimp-meta]`).textContent, sellUid);
+    assert.match(sellMeta, /手續費估/);
+    assert.match(sellMeta, /稅估/);
+    assert.equal(await p.evaluate(() => $("#lgImpOrderWrap").hidden), false, "無時間的同日買賣需明確確認順序");
+
+    // 若將同日 2454 三筆都填寫不重疊時間，順序確認框自動隱藏；清除後再顯示並重設 orderOk
+    const buyUids = [initUI[1].uid, initUI[2].uid];
+    await p.fill(`#lgImpTbody tr[data-uid="${buyUids[0]}"] [data-lgimp-k="time"]`, "09:05");
+    await p.fill(`#lgImpTbody tr[data-uid="${buyUids[1]}"] [data-lgimp-k="time"]`, "09:10");
+    await p.fill(`#lgImpTbody tr[data-uid="${sellUid}"] [data-lgimp-k="time"]`, "10:15");
+    assert.equal(await p.evaluate(() => $("#lgImpOrderWrap").hidden), true);
+    await p.fill(`#lgImpTbody tr[data-uid="${buyUids[0]}"] [data-lgimp-k="time"]`, "");
+    await p.fill(`#lgImpTbody tr[data-uid="${buyUids[1]}"] [data-lgimp-k="time"]`, "");
+    await p.fill(`#lgImpTbody tr[data-uid="${sellUid}"] [data-lgimp-k="time"]`, "");
+    assert.equal(await p.evaluate(() => $("#lgImpOrderWrap").hidden), false);
+    if (touch) {
+      const ordBox = await p.locator("#lgImpOrderWrap").boundingBox();
+      assert.ok(ordBox && ordBox.height >= 43.5, `${width} #lgImpOrderWrap 觸控高度 ${ordBox?.height} >= 44`);
+    }
+
     // 按「＋ 新增一列」填入賣超（賣 5000 股 2330）→ 送出被擋下，確認焦點與打字不重建 DOM
     await p.click("[data-lgimp-add]");
-    await p.waitForFunction(() => document.querySelectorAll("#lgImpTbody tr").length === 6);
-    assert.equal(await p.evaluate(() => document.activeElement?.closest("tr")?.dataset?.row), "5");
-    await p.fill('#lgImpTbody tr[data-row="5"] [data-lgimp-k="date"]', "2026-05-13");
-    await p.selectOption('#lgImpTbody tr[data-row="5"] [data-lgimp-k="side"]', "sell");
-    const oversellCodeSel = '#lgImpTbody tr[data-row="5"] [data-lgimp-k="code"]';
+    await p.waitForFunction(() => document.querySelectorAll("#lgImpTbody tr").length === 7);
+    assert.equal(await p.evaluate(() => document.activeElement?.closest("tr")?.dataset?.row), "6");
+    await p.fill('#lgImpTbody tr[data-row="6"] [data-lgimp-k="date"]', "2026-05-13");
+    await p.selectOption('#lgImpTbody tr[data-row="6"] [data-lgimp-k="side"]', "sell");
+    const oversellCodeSel = '#lgImpTbody tr[data-row="6"] [data-lgimp-k="code"]';
     const inpBefore = await p.evaluateHandle(sel => document.querySelector(sel), oversellCodeSel);
     await p.focus(oversellCodeSel);
     await p.keyboard.type("2330");
     assert.equal(await p.evaluate(([sel, prev]) => document.querySelector(sel) === prev && document.activeElement === prev, [oversellCodeSel, inpBefore]), true, "輸入代號不重建 DOM、焦點不跑掉");
     await inpBefore.dispose();
-    await p.fill('#lgImpTbody tr[data-row="5"] [data-lgimp-k="shares"]', "5000");
-    await p.fill('#lgImpTbody tr[data-row="5"] [data-lgimp-k="price"]', "920");
+    await p.fill('#lgImpTbody tr[data-row="6"] [data-lgimp-k="shares"]', "5000");
+    await p.fill('#lgImpTbody tr[data-row="6"] [data-lgimp-k="price"]', "920");
 
     // IME 組字按 Enter 不可觸發送出
     const imeBlocked = await p.evaluate(() => {
-      const inp = document.querySelector('#lgImpTbody tr[data-row="5"] [data-lgimp-k="price"]');
+      const inp = document.querySelector('#lgImpTbody tr[data-row="6"] [data-lgimp-k="price"]');
       const ev = new KeyboardEvent("keydown", { key: "Enter", isComposing: true, cancelable: true, bubbles: true });
       inp.dispatchEvent(ev);
       return ev.defaultPrevented;
@@ -402,17 +527,42 @@ for (const width of [390, 1280]) {
     // 送出賣超 → 擋下並標註錯誤
     await p.click("#lgImpSave");
     await p.waitForFunction(() => /賣超|出錯/.test($("#impLive")?.textContent || ""));
-    assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="5"] [data-lgimp-k="shares"]')?.getAttribute("aria-invalid")), "true");
+    assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="6"] [data-lgimp-k="shares"]')?.getAttribute("aria-invalid")), "true");
     // 刪除這列賣超測試列
-    await p.click('#lgImpTbody tr[data-row="5"] [data-lgimp-del]');
-    await p.waitForFunction(() => document.querySelectorAll("#lgImpTbody tr").length === 5);
+    await p.click('#lgImpTbody tr[data-row="6"] [data-lgimp-del]');
+    await p.waitForFunction(() => document.querySelectorAll("#lgImpTbody tr").length === 6);
 
-    // 偵測可能重複交易時未勾選 #lgImpDup → 擋下並聚焦 #lgImpDup
+    // 未勾選 #lgImpOrderOk 送出 → 擋下、捲動進可視範圍並聚焦 #lgImpOrderOk
+    await p.click("#lgImpSave");
+    await p.waitForFunction(() => /同日買賣未附成交時間/.test($("#impLive")?.textContent || ""));
+    assert.equal(await p.evaluate(() => document.activeElement?.id), "lgImpOrderOk");
+    assert.equal(await p.evaluate(() => $("#lgImpOrderOk").getAttribute("aria-invalid")), "true");
+    const ordVis = await p.evaluate(() => {
+      const mid = $("#impSheet .lgimp-mid").getBoundingClientRect();
+      const wrap = $("#lgImpOrderWrap").getBoundingClientRect();
+      return {
+        inMid: wrap.top >= mid.top - 2 && wrap.bottom <= mid.bottom + 2,
+        inVp: wrap.top >= 0 && wrap.bottom <= window.innerHeight + 2,
+      };
+    });
+    assert.equal(ordVis.inMid && ordVis.inVp, true, `${width} 驗證失敗時 #lgImpOrderWrap 自動捲動進入視窗`);
+    await p.check("#lgImpOrderOk");
+
+    // 偵測可能重複交易時未勾選 #lgImpDup → 擋下、捲動進可視範圍並聚焦 #lgImpDup
     assert.equal(await p.evaluate(() => $("#lgImpDupWrap").hidden), false);
     await p.click("#lgImpSave");
     await p.waitForFunction(() => /重複/.test($("#impLive")?.textContent || ""));
     assert.equal(await p.evaluate(() => document.activeElement?.id), "lgImpDup");
     assert.equal(await p.evaluate(() => $("#lgImpDup").getAttribute("aria-invalid")), "true");
+    const dupVis = await p.evaluate(() => {
+      const mid = $("#impSheet .lgimp-mid").getBoundingClientRect();
+      const wrap = $("#lgImpDupWrap").getBoundingClientRect();
+      return {
+        inMid: wrap.top >= mid.top - 2 && wrap.bottom <= mid.bottom + 2,
+        inVp: wrap.top >= 0 && wrap.bottom <= window.innerHeight + 2,
+      };
+    });
+    assert.equal(dupVis.inMid && dupVis.inVp, true, `${width} 驗證失敗時 #lgImpDupWrap 自動捲動進入視窗`);
 
     // 對話框操作安全網：從內部拖曳到背景不誤關；Tab 焦點鎖定在對話框內
     const box = await p.locator("#impTitle").boundingBox();
@@ -439,13 +589,13 @@ for (const width of [390, 1280]) {
     // 勾選確認不是重複匯入 → 送出儲存
     await p.check("#lgImpDup");
     await p.click("#lgImpSave");
-    await p.waitForFunction(() => $("#impSheet").hidden && /已匯入 5 筆成交交易/.test($("#lx").innerText));
+    await p.waitForFunction(() => $("#impSheet").hidden && /已匯入 6 筆成交交易/.test($("#lx").innerText));
 
     const saved = await p.evaluate(() => ({
       pf: JSON.parse(localStorage.getItem("kline:pf:v1")),
       hold: JSON.parse(localStorage.getItem("kline:watch:hold")),
     }));
-    // 順序依時間由舊到新（2026-05-01 → 05-12 兩筆 2454 買進在前、賣出在後 → 05-14 AAPL）
+    // 順序依日期由舊到新（2026-05-01 → 05-12 兩筆 2454 買進在前、賣出在後 → 05-14 AAPL → 06-05 NVDA）
     const appended = saved.pf.transactions.slice(1);
     assert.deepEqual(appended.map(t => [t.date, t.type, t.symbol, t.shares, t.fee, !!t.dayTrade]), [
       ["2026-05-01", "buy", "2330", 1000, null, false],
@@ -453,6 +603,7 @@ for (const width of [390, 1280]) {
       ["2026-05-12", "buy", "2454", 500, 0, false],
       ["2026-05-12", "sell", "2454", 1000, null, true],
       ["2026-05-14", "buy", "AAPL", 2, null, false],
+      ["2026-06-05", "buy", "NVDA", 1, 0, false],
     ]);
     assert.deepEqual(saved.hold, OLD_HOLD, "選項 2 寫入後舊庫存完全不動");
 

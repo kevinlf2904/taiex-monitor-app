@@ -390,7 +390,7 @@ document.addEventListener("pointerleave", e => { const box = e.target.closest?.(
 #impSheet .hgrid td small[data-lgimp-meta]{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
 #impSheet .hgrid th .pfsr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);clip:rect(0 0 0 0);white-space:nowrap}
 #impSheet progress{width:100%;height:8px;margin:6px 0;accent-color:var(--accent)}
-@media (pointer:coarse){#impSheet .lgimp-method select{min-height:44px}#impSheet .lgimp-sub{min-height:36px}}`;
+@media (pointer:coarse){#impSheet .lgimp-method select{min-height:44px}#impSheet .lgimp-sub:not(#lgImpIncOpenWrap){min-height:36px}#impSheet #lgImpIncOpenWrap{min-height:44px;align-items:center}}`;
   document.head.appendChild(st);
 })();
 
@@ -656,7 +656,7 @@ function renderHome(S) {
 /* ================= 交易紀錄截圖匯入（選項 1 持股轉入 ＋ 選項 2 成交明細對帳單） ================= */
 let _lgImpUid = 0;
 function lgImpState() {
-  return (W.lgImp ||= { step: "choose", kind: null, rows: [], method: lgLoad()?.method || "avg", busy: false, dupOk: false, dupSig: "", blurred: new Set(), edited: new Set(), saveTok: 0 });
+  return (W.lgImp ||= { step: "choose", kind: null, rows: [], method: lgLoad()?.method || "avg", busy: false, dupOk: false, dupSig: "", orderOk: false, orderSig: "", blurred: new Set(), edited: new Set(), saveTok: 0 });
 }
 const lgImpHalf = s => String(s ?? "").replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/／/g, "/").replace(/－/g, "-").trim();
 const normImpCode = s => lgImpHalf(s).toUpperCase().replace(/\s+/g, "").replace(/^(\d{4,6}[A-Z]?)\.(?:TW|TWO)$/, "$1");
@@ -757,11 +757,16 @@ function lgMapTradeRow(raw) {
   const px = raw?.price != null ? +raw.price : null;
   const fee = raw?.fee === 0 ? 0 : (raw?.fee != null && Number.isFinite(+raw.fee) ? +raw.fee : null);
   const tax = raw?.tax === 0 ? 0 : (raw?.tax != null && Number.isFinite(+raw.tax) ? +raw.tax : null);
+  const da = raw?.dateAssumed;
+  const dateAssumed = da === "year" || da === "today" || da === "mdy" || da === "invalid" ? da : null;
   return {
     _uid: ++_lgImpUid,
     on: raw?.on !== false,
-    date: typeof raw?.date === "string" ? raw.date.trim() : lgToday(),
-    dateAssumed: raw?.dateAssumed === "year" || raw?.dateAssumed === "today" ? raw.dateAssumed : null,
+    date: typeof raw?.date === "string" ? raw.date.trim() : (dateAssumed === "invalid" ? "" : lgToday()),
+    dateAssumed,
+    altDate: typeof raw?.altDate === "string" ? raw.altDate.trim() : "",
+    rawDate: typeof raw?.rawDate === "string" ? raw.rawDate.trim() : "",
+    time: typeof raw?.time === "string" ? raw.time.trim() : "",
     side, code: res.code, badSym: res.badSym, name: res.name,
     shares: sh != null && Number.isFinite(sh) ? sh : null,
     price: px != null && Number.isFinite(px) ? px : null,
@@ -775,10 +780,11 @@ function lgNewBlankRow(kind) {
   if (kind === "holdings") {
     return { _uid: ++_lgImpUid, on: true, code: "", badSym: "", name: "", sh: null, cost: null, d: lgToday(), dTouched: true, how: "", verifyErr: null, _fresh: true, _lookingUp: false, _lookupSeq: 0 };
   }
-  return { _uid: ++_lgImpUid, on: true, date: lgToday(), dateAssumed: null, side: "buy", code: "", badSym: "", name: "", shares: null, price: null, fee: null, tax: null, dayTrade: false, note: "", verifyErr: null, _fresh: true, _lookingUp: false, _lookupSeq: 0 };
+  return { _uid: ++_lgImpUid, on: true, date: lgToday(), dateAssumed: null, altDate: "", rawDate: "", time: "", side: "buy", code: "", badSym: "", name: "", shares: null, price: null, fee: null, tax: null, dayTrade: false, note: "", verifyErr: null, _fresh: true, _lookingUp: false, _lookupSeq: 0 };
 }
 function lgImpErrField(kind, code) {
-  if (code === "invalid_date" || code === "future_date" || code === "date_too_old") return kind === "holdings" ? "d" : "date";
+  if (code === "invalid_date" || code === "future_date" || code === "date_too_old" || code === "unconfirmed_date_format") return kind === "holdings" ? "d" : "date";
+  if (code === "invalid_time") return "time";
   if (code === "invalid_type") return "side";
   if (["invalid_symbol", "invalid_market", "invalid_currency", "currency_mismatch", "currency_conflict", "verify_symbol"].includes(code)) return "code";
   if (["invalid_shares", "fractional_shares", "oversell", "over_transfer"].includes(code)) return kind === "holdings" ? "sh" : "shares";
@@ -789,6 +795,9 @@ function lgImpErrField(kind, code) {
 }
 function lgImpErrMsg(err, r) {
   if (!err) return "";
+  if (err.code === "invalid_date" && r?.dateAssumed === "invalid") {
+    return r.rawDate ? `無法辨識截圖日期「${r.rawDate}」，請手動修正為 YYYY-MM-DD` : "無法辨識截圖日期，請手動修正為 YYYY-MM-DD";
+  }
   if (err.code === "invalid_symbol") return r.name && !r.code && !r.badSym ? `找不到「${r.name}」的代號，請輸入台股或美股代號` : "請輸入台股或美股代號（例如 2330、NVDA）";
   if (err.code === "invalid_market") return "僅支援台股與美股（例如 2330、NVDA，不支援指數、期貨或海外市場）";
   if (err.code === "invalid_type") return "請選擇買進或賣出";
@@ -821,6 +830,9 @@ function lgPrepare(S, opts = {}) {
         on: r.on !== false,
         date: r.date ?? "",
         dateAssumed: r.dateAssumed || null,
+        ...(r.altDate ? { altDate: r.altDate } : {}),
+        ...(r.rawDate ? { rawDate: r.rawDate } : {}),
+        time: r.time || "",
         side: r.side || "",
         symbol: sym,
         name: r.name,
@@ -834,7 +846,7 @@ function lgPrepare(S, opts = {}) {
         source: "import"
       };
     });
-    P = KLLedger.prepareTradesImport(mapped, existingTxs, { method, today, market: mktFn, ...(idPrefix ? { idPrefix } : {}) });
+    P = KLLedger.prepareTradesImport(mapped, existingTxs, { method, today, market: mktFn, orderConfirmed: S.orderOk === true, ...(idPrefix ? { idPrefix } : {}) });
   }
   let extraErr = 0;
   for (const it of P.items) {
@@ -846,7 +858,7 @@ function lgPrepare(S, opts = {}) {
   }
   if (extraErr > 0) {
     P.errorCount += extraErr;
-    P.ok = P.selectedCount > 0 && P.errorCount === 0;
+    P.ok = P.selectedCount > 0 && P.errorCount === 0 && !P.needsOrderConfirm;
   }
   return P;
 }
@@ -874,12 +886,12 @@ function lgImpChooseHtml() {
       </button>
       <button type="button" class="lgimp-card" data-lgimp-pick="trades">
         <strong>2. 成交明細／對帳單截圖</strong>
-        <small>匯入為「買進／賣出」，保留分批成交紀錄；空白費用依預設規則估算（0 元維持 0），自動依時間排序並擋下賣超。</small>
+        <small>匯入為「買進／賣出」，保留分批成交紀錄；空白費用依預設規則估算（0 元維持 0），有成交時間時依時間排序，無時間的同日買賣需由你確認順序，並擋下賣超與異常日期。</small>
       </button>
     </div>
     <div class="row2"><button type="button" class="btn sm" data-ic="close">取消</button></div>`;
 }
-function lgImpRowHtml(r, i, kind, item, today) {
+function lgImpRowHtml(r, i, kind, item, today, total = 1) {
   const uid = r._uid;
   const codeVal = r.code || r.badSym || r.name || "";
   const dupWarn = (item?.warnings || []).filter(w => w.code !== "fee_estimated").map(w => w.message).join("；");
@@ -901,7 +913,12 @@ function lgImpRowHtml(r, i, kind, item, today) {
       <td><button type="button" class="hg-del" data-lgimp-del="${uid}" aria-label="刪除第 ${i + 1} 列">✕</button></td>
     </tr>`;
   }
-  const dTagText = r.dateAssumed === "year" ? "年份待確認（請核對）" : r.dateAssumed === "today" ? "未含日期，已帶入今天" : "";
+  const dTagText = r.dateAssumed === "year" ? "年份待確認（請核對）"
+    : r.dateAssumed === "today" ? "未含日期，已帶入今天"
+    : r.dateAssumed === "mdy" ? "日期格式待確認（月/日或日/月）"
+    : r.dateAssumed === "invalid" ? `截圖日期無效（${r.rawDate || "格式錯誤"}）`
+    : "";
+  const showDfix = r.dateAssumed === "mdy" && !!r.altDate;
   const est = item?.on && !item?.errors?.length && (r.side === "buy" || r.side === "sell") && item?.computed?.feeEstimated
     ? [r.fee == null ? `手續費估 ${lgN(item.computed.fee)}` : "", r.side === "sell" && r.tax == null ? `稅估 ${lgN(item.computed.tax)}` : ""].filter(Boolean).join("・")
     : "";
@@ -910,7 +927,17 @@ function lgImpRowHtml(r, i, kind, item, today) {
     <td><input type="checkbox" data-lgimp-uid="${uid}" data-lgimp-k="on" aria-label="匯入第 ${i + 1} 列" ${item?.on ? "checked" : ""}></td>
     <td><input type="date" data-lgimp-uid="${uid}" data-lgimp-k="date" value="${esc(r.date ?? "")}" max="${today}" aria-label="成交日期" aria-invalid="false">
       <small data-lgimp-dtag="${uid}" class="lgimp-tag"${dTagText ? "" : " hidden"}>${esc(dTagText)}</small>
-      <small id="lgie-${uid}-date" class="lgimp-err" hidden></small></td>
+      <div data-lgimp-dwrap="${uid}" class="lgimp-dfix"${showDfix ? "" : " hidden"}>
+        <button type="button" data-lgimp-dok="${uid}">採月/日 ${esc(r.date)}</button>
+        <button type="button" class="alt" data-lgimp-dflip="${uid}">改日/月 ${esc(r.altDate || "")}</button>
+      </div>
+      <small id="lgie-${uid}-date" class="lgimp-err" hidden></small>
+      <div class="lgimp-trow">
+        <input class="lgimp-time" type="text" data-lgimp-uid="${uid}" data-lgimp-k="time" value="${esc(r.time || "")}" placeholder="時間 09:05" autocomplete="off" inputmode="numeric" aria-label="成交時間" aria-invalid="false">
+        <button type="button" class="lgimp-mv" data-lgimp-mv="-1" data-lgimp-uid="${uid}" aria-label="上移第 ${i + 1} 列"${i === 0 ? " disabled" : ""}>↑</button>
+        <button type="button" class="lgimp-mv" data-lgimp-mv="1" data-lgimp-uid="${uid}" aria-label="下移第 ${i + 1} 列"${i >= total - 1 ? " disabled" : ""}>↓</button>
+      </div>
+      <small id="lgie-${uid}-time" class="lgimp-err" hidden></small></td>
     <td><select data-lgimp-uid="${uid}" data-lgimp-k="side" aria-label="方向" aria-invalid="false">
         <option value=""${!r.side ? " selected" : ""}>請選擇</option>
         <option value="buy"${r.side === "buy" ? " selected" : ""}>買進</option>
@@ -938,11 +965,11 @@ function lgImpReviewHtml(S, P) {
   const isHold = S.kind === "holdings", today = lgToday(), existing = lgLoad();
   const intro = isHold
     ? "核對後將匯入為交易紀錄的「股票轉入」（手續費與稅為 0）。帳本目前已經持有的股票預設不勾選，以免重複計算；未勾選的列不會寫入。"
-    : "核對每一筆成交明細（依日期由舊到新排序套用）。同天分批成交都會保留；手續費／稅填 0 維持 0，空白則依預設費率估算。";
+    : "核對每一筆成交明細（依日期與成交時間由舊到新套用；同日買賣未附時間時須確認順序，可用 ↑↓ 或「反轉列表順序」調整）。手續費／稅填 0 維持 0，空白則依預設費率估算。";
   const cols = isHold
     ? `<th scope="col">匯入</th><th scope="col">代號／名稱</th><th scope="col">股數<small>美股可填小數</small></th><th scope="col">每股成本</th><th scope="col">轉入日期<small>空白預設今天</small></th><th scope="col"><span class="pfsr">刪除</span></th>`
-    : `<th scope="col">匯入</th><th scope="col">成交日期</th><th scope="col">方向<small>賣出可勾當沖</small></th><th scope="col">代號／名稱</th><th scope="col">股數</th><th scope="col">單價</th><th scope="col">手續費<small>空白＝估算</small></th><th scope="col">交易稅<small>空白＝估算</small></th><th scope="col">備註</th><th scope="col"><span class="pfsr">刪除</span></th>`;
-  const rowsHtml = S.rows.map((r, i) => lgImpRowHtml(r, i, S.kind, P.items[i], today)).join("");
+    : `<th scope="col">匯入</th><th scope="col">成交日期／時間</th><th scope="col">方向<small>賣出可勾當沖</small></th><th scope="col">代號／名稱</th><th scope="col">股數</th><th scope="col">單價</th><th scope="col">手續費<small>空白＝估算</small></th><th scope="col">交易稅<small>空白＝估算</small></th><th scope="col">備註</th><th scope="col"><span class="pfsr">刪除</span></th>`;
+  const rowsHtml = S.rows.map((r, i) => lgImpRowHtml(r, i, S.kind, P.items[i], today, S.rows.length)).join("");
   return `<form class="lgimp-form" id="lgImpForm" novalidate>
     <p class="note lgimp-intro">${intro}</p>
     <div class="lgimp-mid">
@@ -957,9 +984,11 @@ function lgImpReviewHtml(S, P) {
         <button type="button" class="btn sm" data-lgimp-add>＋ 新增一列</button>
         <button type="button" class="btn sm" data-lgimp-shot>＋ 再加截圖</button>
         <button type="button" class="btn sm" data-lgimp-back>改選匯入類型</button>
+        ${!isHold ? `<button type="button" class="btn sm" data-lgimp-rev${S.rows.length < 2 ? " disabled" : ""}>⇅ 反轉列表順序</button>` : ""}
       </div>
       ${!existing ? `<label class="lgimp-method">成本算法 <select id="lgImpMethod" data-lgimp-method><option value="avg"${S.method === "avg" ? " selected" : ""}>加權平均成本</option><option value="fifo"${S.method === "fifo" ? " selected" : ""}>先進先出（FIFO）</option></select></label>` : ""}
       ${isHold ? `<label class="lgimp-sub" style="white-space:normal" id="lgImpIncOpenWrap"><input type="checkbox" id="lgImpIncOpen" data-lgimp-open> <span id="lgImpIncOpenLbl">包含帳本已有部位（0 檔）</span></label>` : ""}
+      ${!isHold ? `<label class="lgimp-order" id="lgImpOrderWrap" hidden><input type="checkbox" id="lgImpOrderOk" data-lgimp-orderok> <span id="lgImpOrderTxt"></span></label>` : ""}
       <label class="lgimp-dup" id="lgImpDupWrap" hidden><input type="checkbox" id="lgImpDup" data-lgimp-dup> <span id="lgImpDupTxt"></span></label>
     </div>
     <div class="lgimp-foot">
@@ -971,7 +1000,7 @@ function lgImpReviewHtml(S, P) {
 function lgSyncImportUI(opts = {}) {
   const S = lgImpState(), form = $("#lgImpForm");
   if (!form || S.step !== "review") return null;
-  const P = lgPrepare(S), today = lgToday(), isHold = S.kind === "holdings", ae = document.activeElement;
+  const P = lgPrepare(S), isHold = S.kind === "holdings", ae = document.activeElement;
   let visibleErrCount = 0;
   for (let i = 0; i < S.rows.length; i++) {
     const r = S.rows[i], item = P.items[i], tr = form.querySelector(`tr[data-uid="${r._uid}"]`);
@@ -981,7 +1010,7 @@ function lgSyncImportUI(opts = {}) {
     if (delBtn) delBtn.setAttribute("aria-label", `刪除第 ${i + 1} 列`);
     const fieldErrs = item ? lgImpFieldErrors(S.kind, item.errors) : new Map();
     const rowShownErrs = [];
-    const fields = isHold ? ["code", "sh", "cost", "d"] : ["date", "side", "code", "shares", "price", "fee", "tax"];
+    const fields = isHold ? ["code", "sh", "cost", "d"] : ["date", "time", "side", "code", "shares", "price", "fee", "tax"];
     for (const k of fields) {
       const inp = tr.querySelector(`[data-lgimp-k="${k}"]`), errEl = document.getElementById(`lgie-${r._uid}-${k}`);
       const eObj = item?.on && S.blurred.has(`${r._uid}:${k}`) ? fieldErrs.get(k) : null;
@@ -1020,10 +1049,27 @@ function lgSyncImportUI(opts = {}) {
       }
       const dTag = tr.querySelector(`[data-lgimp-dtag="${r._uid}"]`);
       if (dTag) {
-        const t = r.dateAssumed === "year" ? "年份待確認（請核對）" : r.dateAssumed === "today" ? "未含日期，已帶入今天" : "";
+        const t = r.dateAssumed === "year" ? "年份待確認（請核對）"
+          : r.dateAssumed === "today" ? "未含日期，已帶入今天"
+          : r.dateAssumed === "mdy" ? "日期格式待確認（月/日或日/月）"
+          : r.dateAssumed === "invalid" ? `截圖日期無效（${r.rawDate || "格式錯誤"}）`
+          : "";
         dTag.textContent = t;
         dTag.hidden = !t;
       }
+      const dWrap = tr.querySelector(`[data-lgimp-dwrap="${r._uid}"]`);
+      if (dWrap) {
+        const showDfix = r.dateAssumed === "mdy" && !!r.altDate;
+        dWrap.hidden = !showDfix;
+        if (showDfix) {
+          const okBtn = dWrap.querySelector("[data-lgimp-dok]"), flipBtn = dWrap.querySelector("[data-lgimp-dflip]");
+          if (okBtn) okBtn.textContent = `採月/日 ${r.date}`;
+          if (flipBtn) flipBtn.textContent = `改日/月 ${r.altDate}`;
+        }
+      }
+      const upBtn = tr.querySelector('[data-lgimp-mv="-1"]'), dnBtn = tr.querySelector('[data-lgimp-mv="1"]');
+      if (upBtn) { upBtn.disabled = i === 0; upBtn.setAttribute("aria-label", `上移第 ${i + 1} 列`); }
+      if (dnBtn) { dnBtn.disabled = i >= S.rows.length - 1; dnBtn.setAttribute("aria-label", `下移第 ${i + 1} 列`); }
       const wTag = tr.querySelector(`[data-lgimp-warn="${r._uid}"]`);
       if (wTag) {
         const w = (item?.warnings || []).filter(x => x.code !== "fee_estimated").map(x => x.message).join("；");
@@ -1069,6 +1115,8 @@ function lgSyncImportUI(opts = {}) {
     tr.classList.toggle("warn", hasWarn);
     tr.classList.toggle("skip-existing", isHold && !item?.on && !!item?.duplicateOpen);
   }
+  const revBtn = form.querySelector("[data-lgimp-rev]");
+  if (revBtn) revBtn.disabled = S.rows.length < 2;
   const incOpenEl = $("#lgImpIncOpen"), incOpenLbl = $("#lgImpIncOpenLbl");
   if (incOpenEl && isHold) {
     const openItems = P.items.filter(it => it.duplicateOpen);
@@ -1077,6 +1125,28 @@ function lgSyncImportUI(opts = {}) {
     incOpenEl.checked = nOpen > 0 && nChk === nOpen;
     incOpenEl.indeterminate = nOpen > 0 && nChk > 0 && nChk < nOpen;
     if (incOpenLbl) incOpenLbl.textContent = `包含帳本已有部位（${nOpen} 檔）`;
+  }
+  const amb = P.ambiguousSameDay || [];
+  const orderSig = isHold ? "" : amb.map(g => `${g.date}|${g.symbol}|` + g.rowIndices.map(idx => {
+    const rr = S.rows[idx];
+    return [rr?._uid, rr?.side, rr?.shares, rr?.price, rr?.time].join(":");
+  }).join(",")).join(";");
+  if (S.orderSig !== orderSig) {
+    S.orderSig = orderSig;
+    S.orderOk = false;
+  }
+  const ordWrap = $("#lgImpOrderWrap"), ordEl = $("#lgImpOrderOk"), ordTxt = $("#lgImpOrderTxt");
+  if (ordWrap && ordEl && ordTxt) {
+    ordWrap.hidden = amb.length === 0;
+    if (amb.length > 0) {
+      const syms = amb.map(g => `${g.date} ${g.symbol}${g.affectsOversell ? "（顛倒將賣超）" : ""}`).join("、");
+      ordTxt.textContent = `${syms} 在同一天有買進與賣出且未附時間（或同分鐘重疊）。請用 ↑↓／反轉按鈕確認上方由早到晚排列正確，或補填成交時間；確認目前順序正確請勾選後再匯入。`;
+      if (ordEl.checked !== S.orderOk) ordEl.checked = S.orderOk;
+      if (S.orderOk) ordEl.setAttribute("aria-invalid", "false");
+    } else {
+      ordEl.checked = false;
+      ordEl.setAttribute("aria-invalid", "false");
+    }
   }
   const dupWrap = $("#lgImpDupWrap"), dupEl = $("#lgImpDup"), dupTxt = $("#lgImpDupTxt");
   const dupSig = (P.duplicates || []).map(it => [it.tx.date, it.tx.type, it.tx.symbol, it.tx.shares, it.tx.price].join("|")).sort().join(";");
@@ -1103,6 +1173,9 @@ function lgSyncImportUI(opts = {}) {
       const msgs = P.newErrors.map(x => `${x.date || ""} ${x.symbol || ""}：${x.errors?.[0]?.message || "出錯"}`).join("；");
       globalErr.textContent = `⚠︎ 匯入後會讓帳本既有的交易出錯（${msgs}），請調整日期或股數。`;
       globalErr.hidden = false;
+    } else if (P.sameDayOversell) {
+      globalErr.textContent = "⚠︎ 同天有多筆買賣且未附成交時間，按目前順序會先賣後買導致賣超；請補填「成交時間」，或用 ↑↓／「⇅ 反轉列表順序」調整成先買後賣。";
+      globalErr.hidden = false;
     } else {
       globalErr.textContent = "";
       globalErr.hidden = true;
@@ -1115,7 +1188,7 @@ function lgSyncImportUI(opts = {}) {
     if (isHold) {
       sumEl.textContent = `共讀取 ${S.rows.length} 列，將匯入 ${P.selectedCount} 筆「股票轉入」${P.existingOpenCount ? `（帳本已有 ${P.existingOpenCount} 檔，預設略過）` : ""}，手續費與稅為 0；不會改動舊庫存。${mNote}`;
     } else {
-      sumEl.textContent = `共 ${S.rows.length} 列，將匯入 ${P.selectedCount} 筆成交交易（依時間由舊到新排序套用）${P.feeEstimatedCount ? `；${P.feeEstimatedCount} 筆空白費用依預設費率估算` : ""}。${mNote}`;
+      sumEl.textContent = `共 ${S.rows.length} 列，將匯入 ${P.selectedCount} 筆成交交易（依日期／時間排序，無時間之同日交易依目前列序套用）${P.feeEstimatedCount ? `；${P.feeEstimatedCount} 筆空白費用依預設費率估算` : ""}。${mNote}`;
     }
   }
   const saveBtn = $("#lgImpSave");
@@ -1136,7 +1209,7 @@ function lgSyncImportUI(opts = {}) {
 }
 function lgOpenImport() {
   if (typeof loadStocks === "function") loadStocks().catch(() => {});
-  const S = (W.lgImp = { step: "choose", kind: null, rows: [], method: lgLoad()?.method || "avg", busy: false, dupOk: false, dupSig: "", blurred: new Set(), edited: new Set(), saveTok: (W.lgImp?.saveTok || 0) + 1 });
+  const S = (W.lgImp = { step: "choose", kind: null, rows: [], method: lgLoad()?.method || "avg", busy: false, dupOk: false, dupSig: "", orderOk: false, orderSig: "", blurred: new Set(), edited: new Set(), saveTok: (W.lgImp?.saveTok || 0) + 1 });
   impSetLive("");
   showImpDialog("截圖匯入到交易紀錄", lgImpChooseHtml(), { wide: false, scope: "ledger", focus: '[data-lgimp-pick="holdings"]', forceFocus: true });
   return S;
@@ -1179,7 +1252,9 @@ function lgOnImportRows(rows, mode) {
   impSetLive("");
   showImpDialog(kind === "trades" ? "核對成交明細匯入" : "核對庫存轉入", lgImpReviewHtml(S, P), { wide: true, scope: "ledger", focus: false });
   lgSyncImportUI();
-  ($('#impBody [aria-invalid="true"]') || $('#impBody input.code') || $('#lgImpSave'))?.focus?.({ preventScroll: true });
+  const initFocus = $('#impBody [aria-invalid="true"]') || $('#impBody input.code') || $('#lgImpSave');
+  try { initFocus?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); } catch {}
+  initFocus?.focus?.({ preventScroll: true });
 }
 function lgOnImportErr(msg) {
   const S = lgImpState();
@@ -1229,7 +1304,9 @@ function lgOnImportInput(e) {
   } else if (k === "d") {
     if (t.value) { r.d = t.value; r.dTouched = true; } else { r.d = ""; r.dTouched = false; }
   } else if (k === "date") {
-    r.date = t.value; r.dateAssumed = null;
+    r.date = t.value; r.dateAssumed = null; r.altDate = ""; r.rawDate = "";
+  } else if (k === "time") {
+    r.time = t.value;
   } else if (k === "note") {
     r.note = String(t.value || "").trim();
   } else if (["sh", "cost", "shares", "price", "fee", "tax"].includes(k)) {
@@ -1241,6 +1318,7 @@ function lgOnImportChange(e) {
   const S = lgImpState(), t = e.target;
   if (S.step !== "review") return;
   if (t.matches("[data-lgimp-method]")) { S.method = t.value === "fifo" ? "fifo" : "avg"; lgSyncImportUI(); return; }
+  if (t.matches("[data-lgimp-orderok]")) { S.orderOk = !!t.checked; if (S.orderOk && !$("#impLive")?.hidden) impSetLive(""); lgSyncImportUI(); return; }
   if (t.matches("[data-lgimp-dup]")) { S.dupOk = !!t.checked; if (S.dupOk && !$("#impLive")?.hidden) impSetLive(""); lgSyncImportUI(); return; }
   if (t.matches("[data-lgimp-open]")) {
     const P = lgPrepare(S), want = !!t.checked;
@@ -1272,7 +1350,7 @@ function lgOnImportChange(e) {
     lgSyncImportUI({ announceRow: uid, announceKey: "side" });
     return;
   }
-  if (k === "date" || k === "d") {
+  if (k === "date" || k === "d" || k === "time") {
     r._fresh = false;
     S.edited.add(`${uid}:${k}`);
     S.blurred.add(`${uid}:${k}`);
@@ -1309,12 +1387,14 @@ function lgOnImportChange(e) {
 }
 function lgOnImportBlur(e) {
   const S = lgImpState(), t = e.target;
-  if (S.step !== "review" || $("#impSheet")?.hidden || e.relatedTarget?.closest?.("button")) return;
+  if (S.step !== "review" || $("#impSheet")?.hidden || e.relatedTarget?.closest?.("#lgImpSave,[data-lgimp-del],[data-ic],[data-lgimp-dok],[data-lgimp-dflip],[data-lgimp-mv],[data-lgimp-rev]")) return;
   const uid = t.dataset?.lgimpUid, k = t.dataset?.lgimpK;
   if (!uid || !k) return;
   if (S.edited.has(`${uid}:${k}`) || S.blurred.has(`${uid}:${k}`)) {
+    // 錯誤早已顯示且沒改過：不再重複播報（#impLive 重新出現會把表格往下推，手機上點「改日/月」「↑↓」會點空）
+    const already = S.blurred.has(`${uid}:${k}`);
     S.blurred.add(`${uid}:${k}`);
-    lgSyncImportUI({ announceRow: uid, announceKey: k });
+    lgSyncImportUI(already ? {} : { announceRow: uid, announceKey: k });
   }
 }
 function lgOnImportClick(e) {
@@ -1323,14 +1403,14 @@ function lgOnImportClick(e) {
   if (pick) { S.kind = pick.dataset.lgimpPick === "trades" ? "trades" : "holdings"; $("#impFile")?.click(); return; }
   if (t.closest("[data-lgimp-retry]")) { $("#impFile")?.click(); return; }
   if (t.closest("[data-lgimp-back]")) {
-    S.step = "choose"; S.rows = []; S.dupOk = false; S.dupSig = ""; S.blurred.clear(); S.edited.clear();
+    S.step = "choose"; S.rows = []; S.dupOk = false; S.dupSig = ""; S.orderOk = false; S.orderSig = ""; S.blurred.clear(); S.edited.clear();
     impSetLive("");
     showImpDialog("截圖匯入到交易紀錄", lgImpChooseHtml(), { wide: false, scope: "ledger", focus: '[data-lgimp-pick="holdings"]', forceFocus: true });
     return;
   }
   if (t.closest("[data-lgimp-blank]")) {
     const kind = S.kind || "trades";
-    S.kind = kind; S.step = "review"; S.busy = false; S.dupOk = false; S.dupSig = ""; S.blurred.clear(); S.edited.clear();
+    S.kind = kind; S.step = "review"; S.busy = false; S.dupOk = false; S.dupSig = ""; S.orderOk = false; S.orderSig = ""; S.blurred.clear(); S.edited.clear();
     S.rows = [lgNewBlankRow(kind)];
     const P = lgPrepare(S);
     impSetLive("");
@@ -1339,6 +1419,53 @@ function lgOnImportClick(e) {
     return;
   }
   if (t.closest("[data-lgimp-shot]")) { $("#impFile")?.click(); return; }
+  if (t.closest("[data-lgimp-rev]") && S.step === "review" && S.kind === "trades" && S.rows.length > 1) {
+    S.rows.reverse();
+    const tbody = $("#lgImpTbody");
+    if (tbody) {
+      const byUid = new Map([...tbody.querySelectorAll("tr[data-uid]")].map(tr => [tr.dataset.uid, tr]));
+      for (const r of S.rows) {
+        const rowEl = byUid.get(String(r._uid));
+        if (rowEl) tbody.appendChild(rowEl);
+      }
+    }
+    lgSyncImportUI();
+    return;
+  }
+  const dok = t.closest("[data-lgimp-dok]"), dflip = t.closest("[data-lgimp-dflip]");
+  if ((dok || dflip) && S.step === "review") {
+    const uid = (dok || dflip).dataset[dok ? "lgimpDok" : "lgimpDflip"];
+    const r = S.rows.find(x => String(x._uid) === String(uid));
+    if (!r) return;
+    if (dflip && r.altDate) r.date = r.altDate;
+    r.dateAssumed = null; r.altDate = ""; r.rawDate = ""; r._fresh = false;
+    S.edited.add(`${uid}:date`);
+    S.blurred.add(`${uid}:date`);
+    const inp = $("#lgImpTbody")?.querySelector(`tr[data-uid="${uid}"] [data-lgimp-k="date"]`);
+    if (inp && inp.value !== r.date) inp.value = r.date;
+    lgSyncImportUI({ announceRow: uid, announceKey: "date" });
+    try { inp?.focus({ preventScroll: true }); } catch {}
+    return;
+  }
+  const mv = t.closest("[data-lgimp-mv]");
+  if (mv && S.step === "review" && S.kind === "trades") {
+    const uid = mv.dataset.lgimpUid, dir = +mv.dataset.lgimpMv;
+    const idx = S.rows.findIndex(x => String(x._uid) === String(uid)), targetIdx = idx + dir;
+    if (idx < 0 || targetIdx < 0 || targetIdx >= S.rows.length) return;
+    [S.rows[idx], S.rows[targetIdx]] = [S.rows[targetIdx], S.rows[idx]];
+    const tbody = $("#lgImpTbody");
+    const tr = tbody?.querySelector(`tr[data-uid="${uid}"]`);
+    const targetTr = tbody?.querySelector(`tr[data-uid="${S.rows[idx]._uid}"]`);
+    if (tr && targetTr) {
+      if (dir < 0) targetTr.before(tr);
+      else targetTr.after(tr);
+    }
+    lgSyncImportUI();
+    const keep = tr?.querySelector(`[data-lgimp-mv="${dir}"]`);
+    const fb = keep && !keep.disabled ? keep : tr?.querySelector(`[data-lgimp-mv="${-dir}"]`);
+    try { fb?.focus({ preventScroll: true }); } catch {}
+    return;
+  }
   if (t.closest("[data-lgimp-add]")) {
     if (S.step !== "review") return;
     const r = lgNewBlankRow(S.kind);
@@ -1346,7 +1473,7 @@ function lgOnImportClick(e) {
     S.rows.push(r);
     const tbody = $("#lgImpTbody");
     if (tbody) {
-      tbody.insertAdjacentHTML("beforeend", lgImpRowHtml(r, idx, S.kind, null, lgToday()));
+      tbody.insertAdjacentHTML("beforeend", lgImpRowHtml(r, idx, S.kind, null, lgToday(), S.rows.length));
       lgSyncImportUI();
       tbody.querySelector(`tr[data-uid="${r._uid}"] input[data-lgimp-k="code"]`)?.focus();
     }
@@ -1405,7 +1532,7 @@ async function lgSaveImport() {
       }
     }
     let P = lgPrepare(S);
-    if (!P.ok || P.errorCount > 0) {
+    if (P.errorCount > 0 || P.selectedCount === 0) {
       S.busy = false;
       for (const it of P.items) {
         const r = S.rows[it.index];
@@ -1413,9 +1540,15 @@ async function lgSaveImport() {
         for (const e of it.errors) S.blurred.add(`${r._uid}:${lgImpErrField(S.kind, e.code)}`);
       }
       lgSyncImportUI();
-      const firstErr = P.newErrors?.length ? "匯入後會讓帳本既有的交易出錯，請先調整。" : "有欄位格式或數字不對（例如賣超或缺少代號），請修正標記的欄位後再試。";
+      const firstErr = P.newErrors?.length
+        ? "匯入後會讓帳本既有的交易出錯，請先調整。"
+        : P.sameDayOversell
+          ? "同天有多筆買賣未附成交時間，按目前順序會先賣後買造成賣超；請補填時間，或用 ↑↓／反轉按鈕調整順序。"
+          : "有欄位格式或數字不對（例如賣超、異常日期或缺少代號），請修正標記的欄位後再試。";
       impSetLive("⚠︎ " + firstErr, "err");
-      try { $('#lgImpForm [aria-invalid="true"]')?.focus({ preventScroll: true }); } catch {}
+      const firstInv = $('#lgImpForm [aria-invalid="true"]');
+      try { firstInv?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); } catch {}
+      try { firstInv?.focus({ preventScroll: true }); } catch {}
       return;
     }
     if (!W.off && typeof verifyCodes === "function") {
@@ -1435,20 +1568,36 @@ async function lgSaveImport() {
           }
           lgSyncImportUI();
           impSetLive(`⚠︎ 查不到代號：${[...wrong].join("、")}，請修正後再匯入。`, "err");
-          try { $('#lgImpForm [aria-invalid="true"]')?.focus({ preventScroll: true }); } catch {}
+          const firstInv = $('#lgImpForm [aria-invalid="true"]');
+          try { firstInv?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); } catch {}
+          try { firstInv?.focus({ preventScroll: true }); } catch {}
           return;
         }
       }
     }
+    if (P.needsOrderConfirm) {
+      S.busy = false;
+      lgSyncImportUI();
+      // 先顯示提示再捲動：#impLive 出現會推動版面，反過來會讓捲好的位置又偏掉
+      impSetLive("⚠︎ 偵測到同日買賣未附成交時間，請確認由早到晚順序（或補填時間）後再匯入。", "err");
+      const ordEl = $("#lgImpOrderOk");
+      if (ordEl) {
+        ordEl.setAttribute("aria-invalid", "true");
+        try { (ordEl.closest("label") || ordEl).scrollIntoView?.({ block: "nearest" }); } catch {}
+        try { ordEl.focus({ preventScroll: true }); } catch {}
+      }
+      return;
+    }
     if (P.duplicates?.length > 0 && !S.dupOk) {
       S.busy = false;
       lgSyncImportUI();
+      impSetLive("⚠︎ 偵測到可能與帳本重複的交易，請先勾選確認後再匯入。", "err");
       const dupEl = $("#lgImpDup");
       if (dupEl) {
         dupEl.setAttribute("aria-invalid", "true");
+        try { (dupEl.closest("label") || dupEl).scrollIntoView?.({ block: "nearest" }); } catch {}
         try { dupEl.focus({ preventScroll: true }); } catch {}
       }
-      impSetLive("⚠︎ 偵測到可能與帳本重複的交易，請先勾選確認後再匯入。", "err");
       return;
     }
     const finalP = lgPrepare(S, { finalIds: true });

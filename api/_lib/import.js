@@ -1,7 +1,7 @@
 // 庫存／交易明細截圖匯入：把券商 App「庫存／即時損益／持股分析」或「成交明細／對帳單」的截圖交給 AI 讀出每一列數字。
 // POST /api/import  { images: ["data:image/jpeg;base64,...", ...], mode?: "holdings" | "trades" }（最多 4 張，頁面會先縮小）
 // mode 省略或 "holdings"：回傳 { ok, mode: "holdings", rows: [{ name, code, shares, avgCost, price, chgPct, todayPnl, totalPnl, totalPnlPct, marketValue }] }
-// mode === "trades"：回傳 { ok, mode: "trades", rows: [{ date, dateAssumed, side, name, code, shares, price, fee, tax, dayTrade, note }] }（相同日期／同價分批不自動合併去重）
+// mode === "trades"：回傳 { ok, mode: "trades", rows: [{ date, dateAssumed, time, side, name, code, shares, price, fee, tax, dayTrade, note }] }（相同日期／同價分批不自動合併去重）
 // 截圖上沒有的欄位是 null；用 GEMINI_API_KEY（Gemini 會看圖）；沒有時用 ANTHROPIC_API_KEY（要另外設 AI_CLAUDE_ENABLED=1 總開關，預設關閉）。
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -31,6 +31,7 @@ const TRADES_PROMPT = `這是台股或美股券商 App 的「成交明細／成�
 - 每一筆成交輸出一列；即使同一天、同一檔股票有多筆同價格分批成交，也要分別保留每一列，不要合併也不要去重。
 - 欄位對應：
   · date：成交日期（照畫面抄，例如 YYYY-MM-DD、YYYY/MM/DD、民國年 115/05/12 或 MM/DD；畫面上真的沒寫日期填 null）
+  · time：成交時間（例如 09:05:12 或 09:05；畫面上沒寫時間填 null）
   · side：買賣方向，買進填 "buy"，賣出填 "sell"（無法判斷填 null）
   · name：股票或 ETF 名稱
   · code：股票代號（台股 4～6 碼數字，可能帶一個英文字母如 00403A；美股英文代號如 NVDA、BRK-B；有 .TW／.TWO 後綴可去掉或保留；沒寫填 null）
@@ -46,7 +47,7 @@ const TRADES_PROMPT = `這是台股或美股券商 App 的「成交明細／成�
 const TRADES_SCHEMA = {
   type: "OBJECT",
   properties: { rows: { type: "ARRAY", items: { type: "OBJECT", properties: {
-    date: { type: "STRING", nullable: true }, side: { type: "STRING", nullable: true }, name: { type: "STRING", nullable: true }, code: { type: "STRING", nullable: true },
+    date: { type: "STRING", nullable: true }, time: { type: "STRING", nullable: true }, side: { type: "STRING", nullable: true }, name: { type: "STRING", nullable: true }, code: { type: "STRING", nullable: true },
     shares: { type: "NUMBER", nullable: true }, price: { type: "NUMBER", nullable: true }, fee: { type: "NUMBER", nullable: true }, tax: { type: "NUMBER", nullable: true },
     dayTrade: { type: "BOOLEAN", nullable: true }, note: { type: "STRING", nullable: true },
   }, required: [] } } },
@@ -55,7 +56,7 @@ const TRADES_SCHEMA = {
 
 const FIELDS = ["shares", "avgCost", "price", "chgPct", "todayPnl", "totalPnl", "totalPnlPct", "marketValue"];
 const numOrNull = v => { if (v == null || v === "") return null; const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[,\s%+]/g, "")); return Number.isFinite(n) ? n : null; };
-const halfWidth = s => String(s ?? "").replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/／/g, "/").replace(/－/g, "-").trim();
+const halfWidth = s => String(s ?? "").replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/／/g, "/").replace(/－/g, "-").replace(/：/g, ":").trim();
 const cleanCode = raw => {
   const s = halfWidth(raw).toUpperCase().replace(/\s+/g, "").replace(/^(\d{4,6}[A-Z]?)\.(?:TW|TWO)$/, "$1");
   return /^(\d{4,6}[A-Z]?|[A-Z][A-Z0-9.-]{0,6})$/.test(s) ? s : null;
@@ -67,32 +68,30 @@ const validCal = (y, m, d) => {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 };
 const fmtCal = (y, m, d) => `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+const parseAmbigSlash = (a, b, y, raw) => {
+  const ab = validCal(y, a, b), ba = validCal(y, b, a);
+  if (!ab && !ba) return { date: "", dateAssumed: "invalid", rawDate: raw };
+  if (ab && ba && a !== b) return { date: fmtCal(y, a, b), dateAssumed: "mdy", altDate: fmtCal(y, b, a), rawDate: raw };
+  return { date: fmtCal(y, ab ? a : b, ab ? b : a), dateAssumed: null };
+};
 
 export function parseTradeDate(raw, today = taipeiToday()) {
   const refToday = typeof today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(today) && validCal(+today.slice(0, 4), +today.slice(5, 7), +today.slice(8, 10)) ? today : taipeiToday();
   const s = halfWidth(raw);
   if (!s) return { date: refToday, dateAssumed: "today" };
   let m = s.match(/^(?:西元\s*)?(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?(?:$|[\sT(（].*)/);
-  if (m) return validCal(+m[1], +m[2], +m[3]) ? { date: fmtCal(+m[1], +m[2], +m[3]), dateAssumed: null } : { date: refToday, dateAssumed: "today" };
+  if (m) return validCal(+m[1], +m[2], +m[3]) ? { date: fmtCal(+m[1], +m[2], +m[3]), dateAssumed: null } : { date: "", dateAssumed: "invalid", rawDate: s };
   m = s.match(/^(\d{4})(\d{2})(\d{2})(?:$|[\sT(（].*)/);
-  if (m) return validCal(+m[1], +m[2], +m[3]) ? { date: fmtCal(+m[1], +m[2], +m[3]), dateAssumed: null } : { date: refToday, dateAssumed: "today" };
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:$|[\sT(（].*)/);
-  if (m) {
-    const a = +m[1], b = +m[2], y = +m[3];
-    if (validCal(y, a, b)) return { date: fmtCal(y, a, b), dateAssumed: null };
-    if (validCal(y, b, a)) return { date: fmtCal(y, b, a), dateAssumed: null };
-    return { date: refToday, dateAssumed: "today" };
-  }
+  if (m) return validCal(+m[1], +m[2], +m[3]) ? { date: fmtCal(+m[1], +m[2], +m[3]), dateAssumed: null } : { date: "", dateAssumed: "invalid", rawDate: s };
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})(?:$|[\sT(（].*)/);
+  if (m) return parseAmbigSlash(+m[1], +m[2], +m[3], s);
   m = s.match(/^(民國\s*)?(\d{2,3})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?(?:$|[\sT(（].*)/);
   if (m && (m[1] || s.includes("年") || +m[2] >= 79)) {
     const y = +m[2] + 1911;
-    return validCal(y, +m[3], +m[4]) ? { date: fmtCal(y, +m[3], +m[4]), dateAssumed: null } : { date: refToday, dateAssumed: "today" };
+    return validCal(y, +m[3], +m[4]) ? { date: fmtCal(y, +m[3], +m[4]), dateAssumed: null } : { date: "", dateAssumed: "invalid", rawDate: s };
   }
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})(?:$|[\sT(（].*)/);
-  if (m && +m[3] >= 20 && +m[3] <= 78) {
-    const y = 2000 + +m[3];
-    return validCal(y, +m[1], +m[2]) ? { date: fmtCal(y, +m[1], +m[2]), dateAssumed: null } : { date: refToday, dateAssumed: "today" };
-  }
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})(?:$|[\sT(（].*)/);
+  if (m && +m[3] >= 20 && +m[3] <= 78) return parseAmbigSlash(+m[1], +m[2], 2000 + +m[3], s);
   m = s.match(/^(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?(?:$|\s+(?!\d+[\/\-.月]).*|[T(（].*)/);
   if (m) {
     const mo = +m[1], d = +m[2], yr = +refToday.slice(0, 4);
@@ -104,10 +103,28 @@ export function parseTradeDate(raw, today = taipeiToday()) {
       const prev = fmtCal(yr - 1, mo, d);
       if (prev <= refToday) return { date: prev, dateAssumed: "year" };
     }
-    return { date: refToday, dateAssumed: "today" };
+    return { date: "", dateAssumed: "invalid", rawDate: s };
   }
-  return { date: refToday, dateAssumed: "today" };
+  return { date: "", dateAssumed: "invalid", rawDate: s };
 }
+
+const cleanTimeOne = raw => {
+  const s = halfWidth(raw);
+  if (!s) return null;
+  const m = s.match(/(?:^|[\sT])(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:\s*(AM|PM))?(?:$|[\s)）])/i);
+  if (!m) return null;
+  let hh = +m[1];
+  const mm = +m[2], ss = m[3] != null ? +m[3] : null, ap = m[4] ? m[4].toUpperCase() : null;
+  if (ap) {
+    if (hh < 1 || hh > 12) return null;
+    if (ap === "PM" && hh < 12) hh += 12;
+    else if (ap === "AM" && hh === 12) hh = 0;
+  } else if (hh < 0 || hh > 23) return null;
+  if (mm < 0 || mm > 59 || (ss != null && (ss < 0 || ss > 59))) return null;
+  const p2 = n => String(n).padStart(2, "0");
+  return ss != null ? `${p2(hh)}:${p2(mm)}:${p2(ss)}` : `${p2(hh)}:${p2(mm)}`;
+};
+const cleanTime = (rawTime, rawDate) => cleanTimeOne(rawTime) ?? (rawTime == null || String(rawTime).trim() === "" ? cleanTimeOne(rawDate) : null);
 
 const cleanSide = raw => {
   const t = halfWidth(raw).toLowerCase().replace(/\s+/g, "");
@@ -137,7 +154,8 @@ export function cleanRows(rows) {
 }
 export function cleanTradeRows(rows, opts = {}) {
   return (Array.isArray(rows) ? rows : []).map(r => {
-    const { date, dateAssumed } = parseTradeDate(r?.date, opts.today);
+    const pd = parseTradeDate(r?.date, opts.today);
+    const time = cleanTime(r?.time, r?.date);
     const side = cleanSide(r?.side ?? r?.type);
     const code = cleanCode(r?.code ?? r?.symbol);
     const name = String(r?.name ?? "").trim().slice(0, 30);
@@ -148,7 +166,12 @@ export function cleanTradeRows(rows, opts = {}) {
     const tax = nonNegOrNull(r?.tax);
     const dayTrade = Boolean(r?.dayTrade === true || /^(true|1|yes|y|是)$/i.test(String(r?.dayTrade ?? "").trim()) || /沖/.test(String(r?.side ?? "")));
     const note = r?.note == null ? "" : String(r.note).trim().slice(0, 200);
-    return { date, dateAssumed, side, name, code, shares, price, fee, tax, dayTrade, note };
+    return {
+      date: pd.date, dateAssumed: pd.dateAssumed,
+      ...(pd.altDate ? { altDate: pd.altDate } : {}),
+      ...(pd.rawDate ? { rawDate: pd.rawDate } : {}),
+      time, side, name, code, shares, price, fee, tax, dayTrade, note,
+    };
   }).filter(r => (r.name || r.code) && (r.shares != null || r.price != null));
 }
 export function parseImages(images) {
@@ -159,12 +182,12 @@ const extractJSON = t => { const m = String(t || "").match(/\{[\s\S]*\}/); if (!
 const MODES = {
   holdings: {
     prompt: PROMPT, schema: SCHEMA, claudeSuffix: "\n只輸出 {\"rows\":[...]} 這個 JSON，不要其他文字。", clean: rows => cleanRows(rows),
-    errEmptyInput: "請上傳庫存畫面的截圖（JPG／PNG）", errNoKey: "截圖匯入需要 AI 讀圖：伺服器尚未設定 GEMINI_API_KEY。也可以改用「文字匯入」。",
+    errEmptyInput: "請上傳庫存畫面的截圖（JPG／PNG）", errNoKey: "截圖匯入需要 AI 讀圖：伺服器尚未設定 GEMINI_API_KEY，請改用下方其他匯入方式。",
     err422: "沒有讀出持股表格，請確認截圖是庫存或即時損益的畫面。", errEmpty: "截圖裡沒有讀到持股，請換一張清楚一點的庫存畫面。",
   },
   trades: {
     prompt: TRADES_PROMPT, schema: TRADES_SCHEMA, claudeSuffix: "\n只輸出 {\"rows\":[...]} 這個 JSON，不要其他文字。", clean: (rows, opts) => cleanTradeRows(rows, opts),
-    errEmptyInput: "請上傳成交明細／對帳單畫面的截圖（JPG／PNG）", errNoKey: "截圖匯入需要 AI 讀圖：伺服器尚未設定 GEMINI_API_KEY。也可以到「交易紀錄」手動輸入。",
+    errEmptyInput: "請上傳成交明細／對帳單畫面的截圖（JPG／PNG）", errNoKey: "截圖匯入需要 AI 讀圖：伺服器尚未設定 GEMINI_API_KEY。也可以改用「手動表格輸入」。",
     err422: "沒有讀出成交明細表格，請確認截圖是委託回報、成交回報或對帳單畫面。", errEmpty: "截圖裡沒有讀到成交明細，請換一張清楚一點的成交回報或對帳單畫面。",
   },
 };

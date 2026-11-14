@@ -50,7 +50,7 @@ const callApi = async (req) => {
   return { status: code, out };
 };
 
-test("parseTradeDate：完整日期、民國年、缺年份自動補今年或跨年回推、缺日期與壞日期回傳今天", () => {
+test("parseTradeDate：完整日期、民國年、缺年份回推、歧義月/日標示 mdy、無效日期不退回今天", () => {
   assert.deepEqual(parseTradeDate("2026-05-12", "2026-05-15"), { date: "2026-05-12", dateAssumed: null });
   assert.deepEqual(parseTradeDate("2026/5/2 09:05:12", "2026-05-15"), { date: "2026-05-02", dateAssumed: null });
   assert.deepEqual(parseTradeDate("2026.05.12(一)", "2026-05-15"), { date: "2026-05-12", dateAssumed: null });
@@ -58,7 +58,13 @@ test("parseTradeDate：完整日期、民國年、缺年份自動補今年或跨
   assert.deepEqual(parseTradeDate("20260512", "2026-05-15"), { date: "2026-05-12", dateAssumed: null });
   assert.deepEqual(parseTradeDate("115/05/12 13:15", "2026-05-15"), { date: "2026-05-12", dateAssumed: null });
   assert.deepEqual(parseTradeDate("民國114年12月5日", "2026-05-15"), { date: "2025-12-05", dateAssumed: null });
-  assert.deepEqual(parseTradeDate("05/12/2026", "2026-05-15"), { date: "2026-05-12", dateAssumed: null });
+  // 美式/歐式斜線日期：月/日與日/月皆合法時標記 mdy；唯一解不標示
+  assert.deepEqual(parseTradeDate("05/12/2026", "2026-05-15"), { date: "2026-05-12", dateAssumed: "mdy", altDate: "2026-12-05", rawDate: "05/12/2026" });
+  assert.deepEqual(parseTradeDate("05/06/26", "2026-05-15"), { date: "2026-05-06", dateAssumed: "mdy", altDate: "2026-06-05", rawDate: "05/06/26" });
+  assert.deepEqual(parseTradeDate("25/05/2026", "2026-05-15"), { date: "2026-05-25", dateAssumed: null });
+  assert.deepEqual(parseTradeDate("05/25/2026", "2026-05-15"), { date: "2026-05-25", dateAssumed: null });
+  assert.deepEqual(parseTradeDate("05/05/2026", "2026-05-15"), { date: "2026-05-05", dateAssumed: null });
+  assert.deepEqual(parseTradeDate("25/05/26", "2026-05-15"), { date: "2026-05-25", dateAssumed: null });
   // 缺年份
   assert.deepEqual(parseTradeDate("05/12 09:05:12", "2026-05-15"), { date: "2026-05-12", dateAssumed: "year" });
   assert.deepEqual(parseTradeDate("５／２", "2026-05-15"), { date: "2026-05-02", dateAssumed: "year" });
@@ -66,34 +72,43 @@ test("parseTradeDate：完整日期、民國年、缺年份自動補今年或跨
   // 跨年回推與閏年 2/29
   assert.deepEqual(parseTradeDate("12/28", "2026-01-10"), { date: "2025-12-28", dateAssumed: "year" });
   assert.deepEqual(parseTradeDate("02/29", "2025-01-10"), { date: "2024-02-29", dateAssumed: "year" });
-  // 缺日期或不存在日期
+  // 僅空白缺日期才帶入今天
   assert.deepEqual(parseTradeDate(null, "2026-05-15"), { date: "2026-05-15", dateAssumed: "today" });
   assert.deepEqual(parseTradeDate("", "2026-05-15"), { date: "2026-05-15", dateAssumed: "today" });
-  assert.deepEqual(parseTradeDate("2026/02/30", "2026-05-15"), { date: "2026-05-15", dateAssumed: "today" });
-  assert.deepEqual(parseTradeDate("02/30", "2026-05-15"), { date: "2026-05-15", dateAssumed: "today" });
+  assert.deepEqual(parseTradeDate("   ", "2026-05-15"), { date: "2026-05-15", dateAssumed: "today" });
+  // 壞日曆日或無法辨識字串：回傳 invalid，絕不靜默退回今天
+  assert.deepEqual(parseTradeDate("2026/02/30", "2026-05-15"), { date: "", dateAssumed: "invalid", rawDate: "2026/02/30" });
+  assert.deepEqual(parseTradeDate("02/30", "2026-05-15"), { date: "", dateAssumed: "invalid", rawDate: "02/30" });
+  assert.deepEqual(parseTradeDate("2026-13-40", "2026-05-15"), { date: "", dateAssumed: "invalid", rawDate: "2026-13-40" });
+  assert.deepEqual(parseTradeDate("20260230", "2026-05-15"), { date: "", dateAssumed: "invalid", rawDate: "20260230" });
+  assert.deepEqual(parseTradeDate("115/02/30", "2026-05-15"), { date: "", dateAssumed: "invalid", rawDate: "115/02/30" });
+  assert.deepEqual(parseTradeDate("31/02/2026", "2026-05-15"), { date: "", dateAssumed: "invalid", rawDate: "31/02/2026" });
+  assert.deepEqual(parseTradeDate("abc", "2026-05-15"), { date: "", dateAssumed: "invalid", rawDate: "abc" });
 });
 
-test("cleanTradeRows：買賣方向、.TW/.TWO 清理、張轉股、0 與空白費稅區分、不合併同天同價分批成交", () => {
+test("cleanTradeRows：買賣方向、時間擷取、歧義/無效日期保留中繼、.TW/.TWO 清理、0 與空白費稅區分、不合併同天同價分批成交", () => {
   const rows = cleanTradeRows([
-    { date: "05/12", side: "現股買進", name: "台積電", code: "2330.TW", shares: "2張", price: "900", fee: 0, tax: null },
-    { date: "05/12", side: "BUY", name: "台積電", code: "2330", shares: "2張", price: 900, fee: 0, tax: "" }, // 同天同價第二筆：不得去重
-    { date: "115/05/12", side: "現沖賣", name: "環球晶", code: "6488.TWO", shares: "1,000股", price: 500, fee: null, tax: null },
-    { date: "2026-05-10", side: "sld", name: "波克夏B", code: "brk.b", shares: 5, price: 420, fee: 0, tax: 0, note: "partial fill" },
+    { date: "05/12 09:05:12", side: "現股買進", name: "台積電", code: "2330.TW", shares: "2張", price: "900", fee: 0, tax: null },
+    { date: "05/12", time: "1:30 PM", side: "BUY", name: "台積電", code: "2330", shares: "2張", price: 900, fee: 0, tax: "" }, // 同天同價第二筆：不得去重
+    { date: "115/05/12 １３：１５", side: "現沖賣", name: "環球晶", code: "6488.TWO", shares: "1,000股", price: 500, fee: null, tax: null },
+    { date: "05/06/2026", side: "sld", name: "波克夏B", code: "brk.b", shares: 5, price: 420, fee: 0, tax: 0, note: "partial fill" },
     { date: "2026-05-10", side: "買進", name: "撤銷單", code: "2317", shares: 0, price: null }, // 股數 0 且無價：略過
-    { date: "2026-05-10", side: "買賣", name: "無法辨識方向", code: "0050", shares: 1000, price: 150 },
+    { date: "2026/02/30", side: "買賣", name: "無法辨識方向與日期", code: "0050", shares: 1000, price: 150 },
   ], { today: "2026-05-15" });
 
   assert.equal(rows.length, 5, "同天同價兩筆皆保留，撤銷單被過濾");
-  assert.deepEqual(rows[0], { date: "2026-05-12", dateAssumed: "year", side: "buy", name: "台積電", code: "2330", shares: 2000, price: 900, fee: 0, tax: null, dayTrade: false, note: "" });
-  assert.deepEqual(rows[1], { date: "2026-05-12", dateAssumed: "year", side: "buy", name: "台積電", code: "2330", shares: 2000, price: 900, fee: 0, tax: null, dayTrade: false, note: "" });
-  assert.deepEqual(rows[2], { date: "2026-05-12", dateAssumed: null, side: "sell", name: "環球晶", code: "6488", shares: 1000, price: 500, fee: null, tax: null, dayTrade: true, note: "" });
+  assert.deepEqual(rows[0], { date: "2026-05-12", dateAssumed: "year", time: "09:05:12", side: "buy", name: "台積電", code: "2330", shares: 2000, price: 900, fee: 0, tax: null, dayTrade: false, note: "" });
+  assert.deepEqual(rows[1], { date: "2026-05-12", dateAssumed: "year", time: "13:30", side: "buy", name: "台積電", code: "2330", shares: 2000, price: 900, fee: 0, tax: null, dayTrade: false, note: "" });
+  assert.deepEqual(rows[2], { date: "2026-05-12", dateAssumed: null, time: "13:15", side: "sell", name: "環球晶", code: "6488", shares: 1000, price: 500, fee: null, tax: null, dayTrade: true, note: "" });
   assert.equal(rows[3].code, "BRK.B"); assert.equal(rows[3].side, "sell"); assert.equal(rows[3].fee, 0); assert.equal(rows[3].tax, 0);
+  assert.equal(rows[3].dateAssumed, "mdy"); assert.equal(rows[3].altDate, "2026-06-05"); assert.equal(rows[3].rawDate, "05/06/2026"); assert.equal(rows[3].time, null);
   assert.equal(rows[4].side, null, "不明確的方向標成 null 給使用者選");
+  assert.equal(rows[4].date, ""); assert.equal(rows[4].dateAssumed, "invalid"); assert.equal(rows[4].rawDate, "2026/02/30");
   // cleanRows 向後相容
   assert.equal(cleanRows([{ name: "台積電", code: "2330.TW", shares: 1000 }])[0].code, "2330");
 });
 
-test("POST /api/import：mode=trades、mode 預設 holdings、不合法 mode 回 400、Claude 開關規則一致", async () => {
+test("POST /api/import：mode=trades、mode 預設 holdings、無金鑰文案不含文字匯入誤導、不合法 mode 回 400、Claude 開關規則一致", async () => {
   const img = "data:image/png;base64,AAAA";
   // 不支援的模式 → 400，不呼叫 AI
   const bad = await withMockAI({ GEMINI_API_KEY: "g" }, async sent => {
@@ -102,18 +117,20 @@ test("POST /api/import：mode=trades、mode 預設 holdings、不合法 mode 回
   });
   assert.equal(bad.r.status, 400); assert.equal(bad.r.out.ok, false); assert.equal(bad.sent.gemini.length, 0);
 
-  // mode=trades 使用 Gemini 成交明細 prompt，並保留分批重複列
+  // mode=trades 使用 Gemini 成交明細 prompt，並保留分批重複列與 time / mdy
   const tr = await withMockAI({ GEMINI_API_KEY: "g" }, async sent => {
     const r = await callApi({ method: "POST", body: { images: [img], mode: "trades" } });
     return { r, sent };
   }, { rows: [
-    { date: "2026-05-10", side: "買進", name: "台積電", code: "2330", shares: 500, price: 900, fee: 0 },
-    { date: "2026-05-10", side: "買進", name: "台積電", code: "2330", shares: 500, price: 900, fee: null },
+    { date: "2026-05-10", time: "09:05:12", side: "買進", name: "台積電", code: "2330", shares: 500, price: 900, fee: 0 },
+    { date: "05/10/2026", time: "09:15:00", side: "買進", name: "台積電", code: "2330", shares: 500, price: 900, fee: null },
   ] });
   assert.equal(tr.r.status, 200); assert.equal(tr.r.out.ok, true); assert.equal(tr.r.out.mode, "trades");
   assert.equal(tr.r.out.rows.length, 2);
   assert.match(tr.sent.gemini[0].contents[0].parts[1].text, /成交明細/);
+  assert.equal(tr.r.out.rows[0].time, "09:05:12");
   assert.equal(tr.r.out.rows[0].fee, 0); assert.equal(tr.r.out.rows[1].fee, null);
+  assert.equal(tr.r.out.rows[1].dateAssumed, "mdy"); assert.equal(tr.r.out.rows[1].altDate, "2026-10-05");
 
   // 省略 mode：保持舊 holdings 行為
   const hd = await withMockAI({ GEMINI_API_KEY: "g" }, async sent => {
@@ -123,12 +140,19 @@ test("POST /api/import：mode=trades、mode 預設 holdings、不合法 mode 回
   assert.equal(hd.r.out.ok, true); assert.equal(hd.r.out.mode, "holdings");
   assert.match(hd.sent.gemini[0].contents[0].parts[1].text, /庫存（持股）/);
 
-  // 沒開 AI_CLAUDE_ENABLED 時 mode=trades 也不會打 Claude
+  // 沒設 GEMINI_API_KEY 且沒開 AI_CLAUDE_ENABLED：兩種 mode 都不得提到「文字匯入」以免誤導交易紀錄入口
+  const noKeyHold = await withMockAI({}, () => callApi({ method: "POST", body: { images: [img], mode: "holdings" } }));
+  assert.equal(noKeyHold.out.ok, false);
+  assert.doesNotMatch(noKeyHold.out.error, /文字匯入/);
+  assert.match(noKeyHold.out.error, /其他匯入方式/);
+
   const noCl = await withMockAI({ ANTHROPIC_API_KEY: "k" }, async sent => {
     const r = await callApi({ method: "POST", body: { images: [img], mode: "trades" } });
     return { r, sent };
   });
   assert.equal(noCl.r.out.ok, false); assert.equal(noCl.sent.claude.length, 0);
+  assert.doesNotMatch(noCl.r.out.error, /文字匯入/);
+  assert.match(noCl.r.out.error, /手動表格輸入/);
 
   // 空成交列：給成交明細專屬訊息
   const emp = await withMockAI({ GEMINI_API_KEY: "g" }, () => callApi({ method: "POST", body: { images: [img], mode: "trades" } }), { rows: [] });
@@ -173,22 +197,24 @@ test("prepareHoldingsImport（選項 1）：帳本已持有部位預設不勾選
   assert.equal(noCost.ok, false); assert.equal(noCost.items[0].errors[0].code, "invalid_price");
 });
 
-test("prepareTradesImport（選項 2）：降冪對帳單排序、費稅 0 vs 空白估算、當沖稅率、擋賣超與提醒重複", () => {
+test("prepareTradesImport（選項 2）：有時間跨區間才排序、費稅 0 vs 空白估算、當沖稅率、擋賣超與提醒重複", () => {
   const existing = [
     { v: 1, id: "t0", date: "2026-05-01", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 880, fee: 1254, tax: 0, note: "", source: "manual" },
   ];
-  // 券商最新在上的降冪明細（賣在前、買在後）
-  const descRows = [
-    { date: "2026-05-12", dateAssumed: "year", side: "sell", code: "2454", shares: 1000, price: 1100, fee: null, tax: null, dayTrade: true },
-    { date: "2026-05-12", dateAssumed: "year", side: "buy", code: "2454", shares: 1000, price: 1050, fee: 0, tax: null },
+  // 券商最新在上的降冪明細，且附可驗證成交時間（09:05 買進、10:15 賣出）→ 允許重排成先買後賣
+  const descTimed = [
+    { date: "2026-05-12", time: "10:15", dateAssumed: "year", side: "sell", code: "2454", shares: 1000, price: 1100, fee: null, tax: null, dayTrade: true },
+    { date: "2026-05-12", time: "09:05", dateAssumed: "year", side: "buy", code: "2454", shares: 1000, price: 1050, fee: 0, tax: null },
     { date: "2026-05-10", side: "buy", code: "NVDA", shares: 2, price: 120, fee: 0, tax: 0 },
   ];
-  const P = L.prepareTradesImport(descRows, existing, { today: "2026-05-15", idPrefix: "tr-" });
-  assert.equal(P.ok, true, "降冪對帳單正規化後同一天先買後賣不誤判賣超");
-  assert.deepEqual(P.transactions.map(t => [t.date, t.type, t.symbol]), [
-    ["2026-05-10", "buy", "NVDA"],
-    ["2026-05-12", "buy", "2454"],
-    ["2026-05-12", "sell", "2454"],
+  const P = L.prepareTradesImport(descTimed, existing, { today: "2026-05-15", idPrefix: "tr-" });
+  assert.equal(P.ok, true, "有明確互不重疊時間的降冪對帳單排序後不誤判賣超");
+  assert.equal(P.needsOrderConfirm, false);
+  assert.deepEqual(J(P.ambiguousSameDay), []);
+  assert.deepEqual(P.transactions.map(t => [t.date, t.time ?? null, t.type, t.symbol]), [
+    ["2026-05-10", null, "buy", "NVDA"],
+    ["2026-05-12", "09:05", "buy", "2454"],
+    ["2026-05-12", "10:15", "sell", "2454"],
   ]);
   // 2454 sell: fee/tax 空白 → 估算且當沖稅 0.15%
   assert.equal(P.items[0].tx.fee, null); assert.equal(P.items[0].tx.tax, null);
@@ -200,6 +226,15 @@ test("prepareTradesImport（選項 2）：降冪對帳單排序、費稅 0 vs �
   // NVDA buy: fee=0, tax=0
   assert.equal(P.items[2].computed.fee, 0); assert.equal(P.items[2].computed.feeEstimated, false);
   assert.equal(L.validateStore({ v: 1, method: "avg", transactions: [...existing, ...P.transactions] }, { today: "2026-05-15" }).ok, true);
+
+  // 有時間但真的先賣後買（09:05 賣、10:15 買）：絕不翻轉，直接擋賣超
+  const trueShortTimed = [
+    { date: "2026-05-12", time: "09:05", side: "sell", code: "2454", shares: 1000, price: 1100 },
+    { date: "2026-05-12", time: "10:15", side: "buy", code: "2454", shares: 1000, price: 1050 },
+  ];
+  const stRes = L.prepareTradesImport(trueShortTimed, existing, { today: "2026-05-15" });
+  assert.equal(stRes.ok, false);
+  assert.equal(stRes.items[0].errors[0].code, "oversell");
 
   // 真實賣超：擋下
   const over = L.prepareTradesImport([{ date: "2026-05-12", side: "sell", code: "2330", shares: 2000, price: 920 }], existing, { today: "2026-05-15" });
@@ -213,3 +248,110 @@ test("prepareTradesImport（選項 2）：降冪對帳單排序、費稅 0 vs �
   const clash = L.prepareTradesImport([{ date: "2026-05-12", side: "buy", code: "2330", market: "us", shares: 10, price: 30 }], existing, { today: "2026-05-15" });
   assert.equal(clash.ok, false); assert.equal(clash.items[0].errors[0].code, "currency_conflict");
 });
+
+test("prepareTradesImport（高風險對抗案例）：無時間/同分鐘重疊之同日買賣不盲目反轉、序號排序、mdy/無效日期/無效時間皆擋下", () => {
+  // 1. 期初持股 0，無時間且「先賣後買」：絕不盲翻，擋賣超＋標示 sameDayOversell（即使 orderConfirmed: true 也不放行）
+  const noTimeSellFirst = [
+    { date: "2026-05-12", side: "sell", code: "2454", shares: 100, price: 1100 },
+    { date: "2026-05-12", side: "buy", code: "2454", shares: 100, price: 1050 },
+  ];
+  const r1 = L.prepareTradesImport(noTimeSellFirst, [], { today: "2026-05-15", orderConfirmed: true });
+  assert.equal(r1.ok, false);
+  assert.equal(r1.errorCount, 1);
+  assert.equal(r1.sameDayOversell, true);
+  assert.equal(r1.items[0].errors[0].code, "oversell");
+
+  // 2. 期初持股 0，無時間且「先買後賣」：回報 ambiguousSameDay (affectsOversell: true)，未確認前 needsOrderConfirm 擋下；勾選確認後放行
+  const noTimeBuyFirst = [
+    { date: "2026-05-12", side: "buy", code: "2454", shares: 100, price: 1050 },
+    { date: "2026-05-12", side: "sell", code: "2454", shares: 100, price: 1100 },
+  ];
+  const r2a = L.prepareTradesImport(noTimeBuyFirst, [], { today: "2026-05-15" });
+  assert.equal(r2a.ok, false);
+  assert.equal(r2a.errorCount, 0);
+  assert.equal(r2a.needsOrderConfirm, true);
+  assert.equal(r2a.ambiguousSameDay.length, 1);
+  assert.equal(r2a.ambiguousSameDay[0].affectsOversell, true);
+  const r2b = L.prepareTradesImport(noTimeBuyFirst, [], { today: "2026-05-15", orderConfirmed: true });
+  assert.equal(r2b.ok, true);
+  assert.equal(r2b.needsOrderConfirm, false);
+
+  // 3. 期初持股 100，無時間賣 100＋買 100（會影響 FIFO／平均成本基準）：兩種順序都需要 orderConfirmed；若賣 200 買 100 仍直接擋賣超
+  const init100 = [{ v: 1, id: "init100", date: "2026-05-01", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 100, price: 800, fee: 0, tax: 0, source: "manual" }];
+  const r3a = L.prepareTradesImport([
+    { date: "2026-05-12", side: "sell", code: "2330", shares: 100, price: 900 },
+    { date: "2026-05-12", side: "buy", code: "2330", shares: 100, price: 850 },
+  ], init100, { today: "2026-05-15", method: "fifo" });
+  assert.equal(r3a.ok, false);
+  assert.equal(r3a.needsOrderConfirm, true);
+  assert.equal(r3a.ambiguousSameDay.length, 1);
+  assert.equal(r3a.ambiguousSameDay[0].affectsOversell, false);
+  assert.equal(L.prepareTradesImport([
+    { date: "2026-05-12", side: "sell", code: "2330", shares: 100, price: 900 },
+    { date: "2026-05-12", side: "buy", code: "2330", shares: 100, price: 850 },
+  ], init100, { today: "2026-05-15", method: "fifo", orderConfirmed: true }).ok, true);
+
+  const r3Over = L.prepareTradesImport([
+    { date: "2026-05-12", side: "sell", code: "2330", shares: 200, price: 900 },
+    { date: "2026-05-12", side: "buy", code: "2330", shares: 100, price: 850 },
+  ], init100, { today: "2026-05-15", orderConfirmed: true });
+  assert.equal(r3Over.ok, false);
+  assert.equal(r3Over.sameDayOversell, true);
+  assert.equal(r3Over.items[0].errors[0].code, "oversell");
+
+  // 4. 只有分到分鐘、且落於同一分鐘內（09:05 vs 09:05 或 09:05:10）：區間重疊 → 不重排，依歧義或賣超處理
+  const sameMinOverlap = L.prepareTradesImport([
+    { date: "2026-05-12", time: "09:05:10", side: "sell", code: "2454", shares: 100, price: 1100 },
+    { date: "2026-05-12", time: "09:05", side: "buy", code: "2454", shares: 100, price: 1050 },
+  ], [], { today: "2026-05-15" });
+  assert.equal(sameMinOverlap.ok, false);
+  assert.equal(sameMinOverlap.sameDayOversell, true);
+  assert.equal(sameMinOverlap.items[0].errors[0].code, "oversell");
+
+  const sameMinBuyFirst = L.prepareTradesImport([
+    { date: "2026-05-12", time: "09:05", side: "buy", code: "2454", shares: 100, price: 1050 },
+    { date: "2026-05-12", time: "09:05", side: "sell", code: "2454", shares: 100, price: 1100 },
+  ], [], { today: "2026-05-15" });
+  assert.equal(sameMinBuyFirst.ok, false);
+  assert.equal(sameMinBuyFirst.needsOrderConfirm, true);
+
+  // 同分鐘但兩筆都精確到秒且時間不同（09:05:05 買、09:05:10 賣）：互不重疊，可安全排序
+  const secDisjoint = L.prepareTradesImport([
+    { date: "2026-05-12", time: "09:05:10", side: "sell", code: "2454", shares: 100, price: 1100 },
+    { date: "2026-05-12", time: "09:05:05", side: "buy", code: "2454", shares: 100, price: 1050 },
+  ], [], { today: "2026-05-15" });
+  assert.equal(secDisjoint.ok, true);
+  assert.equal(secDisjoint.needsOrderConfirm, false);
+  assert.deepEqual(secDisjoint.transactions.map(t => t.type), ["buy", "sell"]);
+
+  // 5. 同分鐘無秒但提供不重複 seq 序號：可驗證排序
+  const seqOk = L.prepareTradesImport([
+    { date: "2026-05-12", time: "09:05", seq: 2, side: "sell", code: "2454", shares: 100, price: 1100 },
+    { date: "2026-05-12", time: "09:05", seq: 1, side: "buy", code: "2454", shares: 100, price: 1050 },
+  ], [], { today: "2026-05-15" });
+  assert.equal(seqOk.ok, true);
+  assert.equal(seqOk.needsOrderConfirm, false);
+
+  // 6. 同日同方向多筆買進（無買賣混合）：無需順序確認
+  const twoBuys = L.prepareTradesImport([
+    { date: "2026-05-12", side: "buy", code: "2454", shares: 500, price: 1050 },
+    { date: "2026-05-12", side: "buy", code: "2454", shares: 500, price: 1060 },
+  ], [], { today: "2026-05-15" });
+  assert.equal(twoBuys.ok, true);
+  assert.deepEqual(J(twoBuys.ambiguousSameDay), []);
+  assert.equal(twoBuys.needsOrderConfirm, false);
+
+  // 7. 歧義 mdy、無效日期與無效時間皆阻擋
+  const mdyErr = L.prepareTradesImport([{ date: "2026-05-06", dateAssumed: "mdy", altDate: "2026-06-05", rawDate: "05/06/2026", side: "buy", code: "2330", shares: 100, price: 900 }], [], { today: "2026-05-15" });
+  assert.equal(mdyErr.ok, false);
+  assert.equal(mdyErr.items[0].errors[0].code, "unconfirmed_date_format");
+
+  const badDateErr = L.prepareTradesImport([{ date: "", dateAssumed: "invalid", rawDate: "2026/02/30", side: "buy", code: "2330", shares: 100, price: 900 }], [], { today: "2026-05-15" });
+  assert.equal(badDateErr.ok, false);
+  assert.equal(badDateErr.items[0].errors[0].code, "invalid_date");
+
+  const badTimeErr = L.prepareTradesImport([{ date: "2026-05-12", time: "25:99", side: "buy", code: "2330", shares: 100, price: 900 }], [], { today: "2026-05-15" });
+  assert.equal(badTimeErr.ok, false);
+  assert.equal(badTimeErr.items[0].errors[0].code, "invalid_time");
+});
+
