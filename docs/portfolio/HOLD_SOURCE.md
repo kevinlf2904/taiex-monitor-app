@@ -15,14 +15,15 @@
 - 股息：「含股息」時用帳本記到的已領股息，不再用除息資料推估。
 
 ## 編輯
-- 交易紀錄模式下，「編輯庫存」「截圖匯入」「載入範例」、個股面板的持股設定改成提示「到交易紀錄新增買賣」，不改舊庫存。
+- 交易紀錄模式下，「編輯庫存」（`[data-imp="edit"]`）、「截圖匯入（舊庫存）」（`[data-imp="shot"]`）、「載入範例」、個股面板的持股設定仍改成提示「到交易紀錄新增買賣」，**完全不改動舊庫存 `kline:watch:hold`**。
+- 同時在提示條（`holdSrcBar`）新增 `[data-hsrc="tx-imp"]`「截圖匯入」快捷按鈕：點一下直接切換到「交易紀錄」分頁並開啟交易紀錄截圖匯入視窗，確認後寫入 `kline:pf:v1`。
 - 每個庫存分頁上方顯示：「持股來自交易紀錄（N 筆交易）」與「改看舊庫存」（只在這次開啟有效，不存檔）。
 
 ## 實作位置與測試
-- `learner/watch.html`：`holdFromLedger`、`holdSrcApply`（存檔內容一模一樣就不重算，不每秒重算）、`holdSrcBar`、`holdLgBlock`；`holdPnL` 依 `h.lg` 調整；啟動時套用一次，庫存分頁每次重畫前確認。
+- `learner/watch.html`：`holdFromLedger`、`holdSrcApply`（存檔內容一模一樣就不重算，不每秒重算）、`holdSrcBar`（含 `[data-hsrc="tx-imp"]`）、`holdLgBlock`；`holdPnL` 依 `h.lg` 調整；啟動時套用一次，庫存分頁每次重畫前確認。
 - `learner/core.js`：`store.set` 支援 `store.lock`（回傳 false 就不寫），並回傳是否寫入。
-- `learner/ledger-ui.js`：`lgSave` 存檔後通知庫存重算（`at` 是建立時間，不改）。
-- 測試：`tests/e2e/hold-source.test.mjs`（交易紀錄模式、舊庫存不動、切換、交易紀錄改了跟著變、只有美股、沒有交易紀錄照舊）。
+- `learner/ledger-ui.js`：`lgSave` 存檔後通知庫存重算（`at` 是建立時間，不改）；`lgOpenImport` 等函式負責匯入持股或對帳單到 `kline:pf:v1`。
+- 測試：`tests/e2e/hold-source.test.mjs`、`tests/e2e/ledger-import.test.mjs`（交易紀錄模式、舊庫存不動、切換、交易紀錄改了跟著變、只有美股、沒有交易紀錄照舊、截圖匯入快捷開啟）。
 
 ## 交易紀錄的台股／美股切換（第 8 階段後半之二）
 - 「交易紀錄」「績效」上方有「全部／台股／美股」：篩選各幣別小計、持有中／已出清、交易清單（依幣別：台幣＝台股、美元＝美股）與績效卡片。

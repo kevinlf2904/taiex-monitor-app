@@ -462,8 +462,12 @@ body.navback-on { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 .imp-btns { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; }
 #hvSeg, #hsubSeg { display: flex; width: 100%; } @media (min-width: 901px) { #hvSeg { flex-wrap: wrap; overflow: visible; } } /* 桌面的窄清單欄放不下 7 個主分頁：換行，不靠橫向捲動（滑鼠不好捲）；手機維持橫向捲動＋「▾ 全部」 */ @media (pointer: coarse) { #hvSeg button, #hsubSeg button, #lx .hrisk .btn, #lx .hrisk [data-hrtol] { min-height: 44px; } }
 .qx-go { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 6px; }
-.sheet.imp { z-index: 43; } #impBg { z-index: 42; }
-@media (min-width: 901px) { .sheet.imp { width: 520px; } }
+.sheet.imp { z-index: 47; overscroll-behavior: contain; } #impBg { z-index: 46; }
+.sheet.imp:not([hidden]) { display: flex; flex-direction: column; overflow: hidden; }
+.sheet.imp > :is(.grab, .hg-hdr, .imp-live) { flex: none; }
+#impBody { overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1 1 auto; }
+.sheet.imp.wide #impBody { display: flex; flex-direction: column; overflow: hidden; }
+@media (min-width: 901px) { .sheet.imp { width: 520px; } .sheet.imp.wide { width: min(980px, calc(100vw - 48px)); } }
 .imp-ta { width: 100%; box-sizing: border-box; font: 14px var(--font-num); background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
 .imp-list { display: grid; gap: 8px; max-height: 50vh; overflow-y: auto; }
 .imp-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; align-items: center; border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
@@ -950,13 +954,75 @@ body.navback-on { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 .stlist { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; } .stlist li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 4px; background: var(--surface-2); font-size: 13.5px; }
 .stlist li span { font-family: var(--font-num); font-size: 12.5px; } .stlist li small { color: var(--muted); font-size: 12px; } .stlist li.bad { box-shadow: inset 3px 0 #e0566b; } .stlist li.ok { box-shadow: inset 3px 0 #3cc6a8; } .stlist li.warn { box-shadow: inset 3px 0 var(--s1); }
 .howto { font-size: 13.5px; line-height: 1.7; background: var(--surface-2); border-radius: 4px; padding: 8px 12px; } .howto ol { margin: 4px 0 0; padding-left: 20px; } .howto code { font-size: 12.5px; }
-.hg-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--line); border-radius: 4px; }
-.hgrid { width: 100%; border-collapse: collapse; font-size: 13px; } .hgrid th { position: sticky; top: 0; background: var(--surface-2); color: var(--muted); font-weight: 500; text-align: left; padding: 6px 6px; font-size: 12px; z-index: 1; } .hgrid th small { display: block; font-size: 10.5px; }
-.hgrid { min-width: 560px; } .hgrid input[type="number"] { min-width: 84px; } .hgrid input[type="date"] { min-width: 138px; } .hgrid input.code { min-width: 120px; }
-.hgrid td { padding: 5px 4px; border-top: 1px solid var(--line); vertical-align: top; } .hgrid td:first-child { width: 40%; } .hgrid td:last-child { width: 32px; text-align: center; }
-.hgrid input { width: 100%; box-sizing: border-box; font: 15px var(--font-num); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 6px 6px; min-height: 36px; }
-.hgrid input:focus { outline: 2px solid var(--accent); outline-offset: -1px; } .hgrid td small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hgrid tr.bad input { border-color: color-mix(in srgb, var(--down) 70%, transparent); } .hg-del { border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 8px 4px; }
+.hg-hdr { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 6px; }
+.hg-hdr h3 { margin: 0; font-size: 14px; color: var(--muted); letter-spacing: .06em; }
+#impSheet .hg-x { border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); border-radius: 4px; min-width: 32px; min-height: 32px; padding: 0 8px; font-size: 16px; line-height: 1; cursor: pointer; display: grid; place-items: center; flex: none; }
+#impSheet .hg-x:hover { color: var(--ink); border-color: var(--accent); }
+.imp-live { margin: 0 0 8px; }
+.imp-live.err, .imp-live.warn { color: var(--s1, #d97706); padding: 6px 10px; border-radius: 4px; background: color-mix(in srgb, var(--s1, #d97706) 10%, transparent); border: 1px solid color-mix(in srgb, var(--s1, #d97706) 45%, transparent); }
+.hg-wrap { max-height: 52vh; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 4px; }
+.sheet.imp.wide .hg-wrap { max-height: min(36vh, 360px); }
+@media (min-width: 901px) { .sheet.imp.wide .hg-wrap { max-height: min(44vh, 420px); } }
+.sheet.imp .lgimp-form { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.sheet.imp .lgimp-intro { margin: 0 0 6px; flex: none; }
+.sheet.imp .lgimp-mid { overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1 1 auto; padding-bottom: 4px; }
+.sheet.imp .lgimp-foot { flex: none; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 6px; background: var(--surface); }
+.hgrid { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; } .hgrid.lgimp-h, .hgrid.lgimp-t { border-collapse: separate; border-spacing: 0; } .hgrid.lgimp-h { min-width: 680px; } .hgrid.lgimp-t { min-width: 920px; }
+.hgrid th { position: sticky; top: 0; background: var(--surface-2); color: var(--muted); font-weight: 500; text-align: left; padding: 6px 6px; font-size: 12px; z-index: 2; } .hgrid th small { display: block; font-size: 10.5px; font-weight: 400; }
+.hgrid input[type="number"] { min-width: 78px; } .hgrid input[data-lgimp-k="fee"], .hgrid input[data-lgimp-k="tax"] { min-width: 102px; } .hgrid input[type="date"] { min-width: 142px; } .hgrid input.code { min-width: 120px; } .hgrid select { min-width: 74px; } .hgrid input.lgimp-note { min-width: 120px; }
+.hgrid td { padding: 5px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+.hgrid:not(.lgimp-h):not(.lgimp-t) td:first-child { width: 40%; }
+.hgrid:is(.lgimp-h, .lgimp-t) th:first-child,
+.hgrid:is(.lgimp-h, .lgimp-t) td:first-child { position: sticky; left: 0; width: 44px; min-width: 44px; text-align: center; vertical-align: top; padding-top: 10px; white-space: nowrap; box-shadow: inset -1px 0 0 var(--line); }
+.hgrid:is(.lgimp-h, .lgimp-t) th:first-child { top: 0; z-index: 3; background: var(--surface-2); padding-top: 6px; }
+.hgrid:is(.lgimp-h, .lgimp-t) td:first-child { z-index: 1; background: var(--surface); }
+.hgrid.lgimp-t th:nth-child(2), .hgrid.lgimp-t td:nth-child(2) { min-width: 210px; width: 224px; }
+.hgrid td:last-child { width: 34px; text-align: center; vertical-align: middle; }
+#impSheet .hgrid :is(input, select) { box-sizing: border-box; font: 16px/1.3 var(--font-num); font-size: max(1rem, 1em); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 6px; min-height: 36px; }
+#impSheet .hgrid :is(input, select):not(.lgimp-time, [type="checkbox"]) { width: 100%; }
+#impSheet .hgrid input[type="checkbox"] { width: 24px; height: 24px; min-width: 24px; min-height: 24px; padding: 0; accent-color: var(--accent); cursor: pointer; vertical-align: middle; }
+#impSheet .hgrid :is(input, select):focus { border-color: var(--accent); outline: none; }
+#impSheet .hgrid :is(input, select):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hgrid td small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hgrid td small.lgimp-err, .hgrid td small.lgimp-tag { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+#impSheet .lgimp-dfix { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+#impSheet .lgimp-dfix button { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 4px; padding: 3px 7px; min-height: 28px; font: inherit; font-size: 11.5px; line-height: 1.25; cursor: pointer; white-space: nowrap; }
+#impSheet .lgimp-dfix button.alt { border-color: var(--s1, #d97706); }
+#impSheet .lgimp-trow { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+#impSheet .hgrid input.lgimp-time { flex: 1 1 88px; min-width: 82px; }
+#impSheet .lgimp-mv { flex: none; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 4px; min-width: 28px; min-height: 36px; padding: 0 6px; font: inherit; font-size: 13px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+#impSheet .lgimp-mv:disabled { opacity: .4; cursor: not-allowed; }
+.hgrid tr.bad td { background: color-mix(in srgb, var(--s1, #d97706) 6%, transparent); }
+.hgrid:is(.lgimp-h, .lgimp-t) tr.bad td:first-child { background: color-mix(in srgb, var(--s1, #d97706) 6%, var(--surface)); }
+#impSheet .hgrid:not(.lgimp-h):not(.lgimp-t) tr.bad :is(input, select):not([type="checkbox"]),
+#impSheet .hgrid :is(input, select)[aria-invalid="true"] { border: 1.5px solid var(--s1, #d97706); background: color-mix(in srgb, var(--s1, #d97706) 8%, var(--surface)); }
+.hg-del { border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 8px 4px; min-width: 32px; min-height: 32px; }
+#impSheet .lgimp-cards { display: grid; gap: 10px; margin: 10px 0; }
+@media (min-width: 600px) { #impSheet .lgimp-cards { grid-template-columns: 1fr 1fr; } }
+#impSheet .lgimp-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--ink); cursor: pointer; font: inherit; }
+#impSheet .lgimp-card:hover { border-color: var(--accent); background: var(--surface-3); }
+#impSheet .lgimp-card strong { font-size: 14.5px; font-weight: 500; }
+#impSheet .lgimp-card small { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.lgimp-sub { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); margin-top: 4px; cursor: pointer; white-space: nowrap; min-height: 24px; }
+#impSheet .lgimp-sub input[type="checkbox"] { width: 16px; height: 16px; min-width: 16px; min-height: 16px; }
+.lgimp-sum { margin: 0 0 6px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+#impSheet .lgimp-tag { display: inline-block; margin-top: 3px; font-size: 11px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--s1, #d97706); color: var(--s1, #d97706); background: color-mix(in srgb, var(--s1, #d97706) 10%, transparent); }
+#impSheet .lgimp-tag.ok { border-color: var(--line); color: var(--muted); background: var(--surface-2); }
+#impSheet .lgimp-err { display: block; margin-top: 3px; font-size: 11.5px; color: var(--s1, #d97706); line-height: 1.4; }
+.hgrid:not(.lgimp-h):not(.lgimp-t) tr.skip-existing { opacity: .78; }
+.hgrid:is(.lgimp-h, .lgimp-t) tr.skip-existing > td:not(:first-child) { opacity: .78; }
+.hgrid tr.warn td { background: color-mix(in srgb, var(--s1, #d97706) 7%, transparent); }
+.hgrid:is(.lgimp-h, .lgimp-t) tr.warn td:first-child { background: color-mix(in srgb, var(--s1, #d97706) 7%, var(--surface)); }
+#impSheet .lgimp-dup, #impSheet .lgimp-order { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; padding: 8px 10px; border: 1px solid var(--s1, #d97706); border-radius: 4px; background: color-mix(in srgb, var(--s1, #d97706) 10%, transparent); font-size: 12.5px; line-height: 1.5; color: var(--ink); cursor: pointer; }
+#impSheet :is(.lgimp-dup, .lgimp-order) input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--accent); }
+#impSheet :is(.lgimp-dup, .lgimp-order):has([aria-invalid="true"]) { border-width: 2px; }
+#impSheet .lgimp-msg { margin: 0 0 8px; padding: 8px 10px; border-radius: 4px; font-size: 12.5px; line-height: 1.5; }
+#impSheet .lgimp-msg.err { border: 1px solid var(--s1, #d97706); background: color-mix(in srgb, var(--s1, #d97706) 10%, transparent); color: var(--s1, #d97706); }
+:root[data-theme="light"] #impSheet :is(.imp-live.err, .imp-live.warn, .lgimp-tag:not(.ok), .lgimp-err, .lgimp-msg.err) { color: #8a5300; border-color: #8a5300; }
+:root[data-theme="light"] #impSheet :is(.lgimp-dup, .lgimp-order, .lgimp-dfix button.alt),
+:root[data-theme="light"] #impSheet .hgrid :is(input, select)[aria-invalid="true"],
+:root[data-theme="light"] #impSheet .hgrid:not(.lgimp-h):not(.lgimp-t) tr.bad :is(input, select):not([type="checkbox"]) { border-color: #8a5300; }
+@media (pointer: coarse) { #impSheet :is(.hg-x, .hg-del, .lgimp-mv) { min-width: 44px; min-height: 44px; } #impSheet :is(.btn, .seg button, select, .lgimp-dfix button) { min-height: 44px; } #impSheet .lgimp-dup, #impSheet .lgimp-order, #impSheet #lgImpIncOpenWrap { min-height: 44px; align-items: center; } }
 .cosec { padding: 10px 14px 12px; border-top: 1px solid var(--line); } .cosec:first-child { border-top: 0; } .cosec h3 { margin: 0 0 8px; font-size: 15px; display: flex; gap: 8px; align-items: baseline; } .cosec h3 .note { font-weight: 400; font-size: 12px; }
 .codl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13.5px; } .codl dt { color: var(--muted); } .codl dd { margin: 0; overflow-wrap: anywhere; } .codl a { color: var(--accent); }
 .cokv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .cokv.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } @media (min-width: 700px) { .cokv { grid-template-columns: repeat(4, minmax(0, 1fr)); } .cokv.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -1272,7 +1338,8 @@ tr.on td { background: var(--surface-2); }
 <div class="sheet-bg" id="impBg" hidden></div>
 <div class="sheet panel imp" id="impSheet" role="dialog" aria-modal="true" aria-labelledby="impTitle" hidden>
   <div class="grab" aria-hidden="true"></div>
-  <h3 id="impTitle">匯入庫存</h3>
+  <div class="hg-hdr"><h3 id="impTitle">匯入庫存</h3><button type="button" class="hg-x" data-ic="close" aria-label="關閉">✕</button></div>
+  <p id="impLive" class="note imp-live" role="status" aria-live="polite" hidden></p>
   <div id="impBody"></div>
 </div>
 <input type="file" id="impFile" accept="image/*" multiple hidden>
@@ -2235,8 +2302,8 @@ $("#listPane").addEventListener("click", e => {
   else if (t.closest("[data-hrtol]")) { W.hrTol = t.closest("[data-hrtol]").dataset.hrtol; store.set("watch:hrtol", W.hrTol); renderList(); }
   else if (t.closest("[data-hralloc]")) { holdGo("alloc"); }
   else if (t.closest("#lTools [data-nav]")) { const n = t.closest("[data-nav]").dataset.nav, G = HOLD_NAV.find(g => g[0] === n); holdGo(G?.[2] ? G[2][0][0] : n); }
-  else if (t.closest("[data-hsrc]")) { const v = t.closest("[data-hsrc]").dataset.hsrc; if (v === "tx") return holdGo("tx"); W.hsrcLegacy = v === "legacy"; holdSrcApply(); renderList(); }
-  else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a !== "export" && holdLgBlock()) return; if (a === "shot") $("#impFile").click(); else if (a === "edit") openHoldEdit(); else if (a === "text") openImport("text"); else exportHold(); }
+  else if (t.closest("[data-hsrc]")) { const v = t.closest("[data-hsrc]").dataset.hsrc; if (v === "tx") return holdGo("tx"); if (v === "tx-imp") { holdGo("tx"); lazy("ledger").then(() => typeof lgOpenImport === "function" && lgOpenImport()).catch(err => toast("載入匯入模組失敗：" + err.message)); return; } W.hsrcLegacy = v === "legacy"; holdSrcApply(); renderList(); }
+  else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a !== "export" && holdLgBlock()) return; if (a === "shot") { imp.scope = "hold"; $("#impFile").click(); } else if (a === "edit") openHoldEdit(); else if (a === "text") openImport("text"); else exportHold(); }
   else if (gx) { const a = gx.dataset.gx; if (a === "edit") W.editing = true; else if (a === "done") W.editing = false; else if (a === "rename") { const nm = prompt("群組名稱", W.groups[W.gi].name); if (nm) W.groups[W.gi].name = nm.slice(0, 12); } else if (a === "delete" && W.groups.length > 1 && confirm(`刪除群組「${W.groups[W.gi].name}」？`)) { W.groups.splice(W.gi, 1); W.gi = 0; W.editing = false; } saveGroups(); renderList(); }
   else if (so) { W.sort = so.dataset.sort; store.set("watch:sort", W.sort); renderList(); }
   else if (t.closest("[data-etf]")) { W.etfCat = t.closest("[data-etf]").dataset.etf; store.set("watch:etf", W.etfCat); W.etfUsAt = 0; renderList(); pollList().then(renderList).catch(() => {}); }
@@ -2300,8 +2367,8 @@ function holdSrcApply() {
 // 庫存分頁上方：資料來自哪裡＋切換（交易紀錄模式不能編輯舊庫存）
 function holdSrcBar() {
   const S = store.get("pf:v1", null), has = Array.isArray(S?.transactions) && S.transactions.length > 0;
-  if (W.holdLg) return `<span class="note hsrc">持股來自<b>交易紀錄</b>（${W.holdLg.n} 筆交易${W.holdLg.errors ? `，${W.holdLg.errors} 筆有錯誤沒算進來` : ""}）</span><button class="btn sm" data-hsrc="tx">到交易紀錄新增買賣</button><button class="btn sm" data-hsrc="legacy">改看舊庫存</button>`;
-  return has && W.hsrcLegacy ? `<span class="note hsrc">目前看的是<b>舊庫存</b>（不是交易紀錄）</span><button class="btn sm" data-hsrc="ledger">改看交易紀錄</button>` : "";
+  if (W.holdLg) return `<span class="note hsrc">持股來自<b>交易紀錄</b>（${W.holdLg.n} 筆交易${W.holdLg.errors ? `，${W.holdLg.errors} 筆有錯誤沒算進來` : ""}）</span><button type="button" class="btn sm" data-hsrc="tx">到交易紀錄新增買賣</button><button type="button" class="btn sm" data-hsrc="tx-imp">${ico("cam")}截圖匯入</button><button type="button" class="btn sm" data-hsrc="legacy">改看舊庫存</button>`;
+  return has && W.hsrcLegacy ? `<span class="note hsrc">目前看的是<b>舊庫存</b>（不是交易紀錄）</span><button type="button" class="btn sm" data-hsrc="ledger">改看交易紀錄</button>` : "";
 }
 // 交易紀錄模式下要改持股：提示到交易紀錄，不改舊庫存
 const holdLgBlock = () => { if (!W.holdLg) return false; toast("持股來自交易紀錄：請到「庫存 → 交易紀錄」新增買賣（舊庫存不會被改動）", 3500); return true; };
@@ -2362,7 +2429,7 @@ function renderHold() {
 }
 
 /* ---------- 庫存匯入：截圖（AI 讀圖）、文字；匯出 ---------- */
-const imp = { rows: [], mode: "merge" };
+const imp = { rows: [], mode: "merge", scope: "hold", reqId: 0 };
 // 美股中文／英文名稱 → 代號（券商 App 截圖、手打中文名稱用）；找不到的再問 /api/symbol（Yahoo 奇摩股市的搜尋）
 const US_ZH = [["NVDA", "輝達", "NVIDIA"], ["AAPL", "蘋果", "Apple"], ["MSFT", "微軟", "Microsoft"], ["TSLA", "特斯拉", "Tesla"], ["AMZN", "亞馬遜", "Amazon"], ["GOOGL", "谷歌", "Google", "Alphabet"], ["GOOG", "谷歌C"], ["META", "臉書", "Meta", "Facebook"],
   ["TSM", "台積電ADR", "台積電 ADR", "TSMC"], ["AMD", "超微", "Advanced Micro Devices"], ["AVGO", "博通", "Broadcom"], ["INTC", "英特爾", "Intel"], ["MU", "美光", "Micron"], ["QCOM", "高通", "Qualcomm"], ["ARM", "安謀", "Arm"], ["SMCI", "美超微", "Super Micro"],
@@ -2409,24 +2476,82 @@ function deriveRow(r) {
   if (sh) sh = roundSh(sh); if (cost) cost = +cost.toFixed(cost >= 100 ? 1 : 2);
   return { code, name: r.name || (code ? nameOf(code) : ""), sh: sh > 0 ? sh : null, cost: cost > 0 ? cost : null, how, on: true };
 }
+let _impInert = [];
+function impSetInert(on) {
+  if (on) {
+    if (_impInert.length) return;
+    for (const el of document.body.children) {
+      if (el.id === "impSheet" || el.id === "impBg" || el.id === "impFile" || el.id === "toast" || el.tagName === "SCRIPT" || el.tagName === "STYLE") continue;
+      if (!el.inert) { el.inert = true; _impInert.push(el); }
+    }
+  } else {
+    for (const el of _impInert) el.inert = false;
+    _impInert = [];
+  }
+}
+function impSetLive(msg = "", level = "") {
+  const el = $("#impLive"); if (!el) return;
+  el.textContent = msg || "";
+  el.hidden = !msg;
+  el.className = "note imp-live" + (level ? " " + level : "");
+}
+function showImpDialog(title, html, { wide = false, focus = null, forceFocus = false, scope = "hold" } = {}) {
+  const sh = $("#impSheet"), wasHidden = sh.hidden;
+  if (wasHidden) {
+    const ae = document.activeElement;
+    if (ae && ae !== document.body && !sh.contains(ae)) W.impRet = ae;
+  }
+  imp.scope = scope;
+  $("#impTitle").textContent = title;
+  $("#impBody").innerHTML = html;
+  sh.classList.toggle("wide", !!wide);
+  sh.hidden = $("#impBg").hidden = false;
+  impSetInert(true);
+  place(sh);
+  if (focus !== false && (wasHidden || forceFocus)) {
+    const target = (typeof focus === "string" ? sh.querySelector(focus) : focus) || sh.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])');
+    target?.focus?.({ preventScroll: true });
+  }
+}
 function openImport(kind, rows) {
   if (rows) imp.rows = rows;
-  const body = $("#impBody");
-  if (kind === "text") body.innerHTML = `<p class="note">每行一檔：<b>代號或名稱、股數、平均成本</b>，用空白或逗號分開；股數可以寫「2張」。例如：<br><code>2330 1000 650</code>　<code>健策,10,3908</code>　<code>0050 3張 150</code></p><textarea id="impText" rows="7" class="imp-ta" placeholder="2330 1000 650"></textarea><div class="row2"><button class="btn primary sm" id="impParse" type="button">放進表格</button><button class="btn sm" data-ic="close" type="button">取消</button></div>`;
-  else if (kind === "busy") body.innerHTML = `<p class="note">${rows}</p>`;
-  else if (kind === "err") body.innerHTML = `<p class="note err">⚠︎ ${esc(rows)}</p><div class="row2"><button class="btn sm" data-imp2="text" type="button">改用文字匯入</button><button class="btn sm" data-ic="close" type="button">關閉</button></div>`;
-  else {
+  if (kind === "text") {
+    impSetLive("");
+    showImpDialog("文字匯入庫存", `<p class="note">每行一檔：<b>代號或名稱、股數、平均成本</b>，用空白或逗號分開；股數可以寫「2張」。例如：<br><code>2330 1000 650</code>　<code>健策,10,3908</code>　<code>0050 3張 150</code></p><textarea id="impText" rows="7" class="imp-ta" placeholder="2330 1000 650"></textarea><div class="row2"><button class="btn primary sm" id="impParse" type="button">放進表格</button><button class="btn sm" data-ic="close" type="button">取消</button></div>`, { wide: false, scope: "hold", focus: "#impText", forceFocus: true });
+  } else if (kind === "busy") {
+    impSetLive(String(rows || ""), "");
+    showImpDialog("匯入庫存", `<p class="note">${esc(rows)}</p>`, { wide: false, scope: "hold" });
+  } else if (kind === "err") {
+    impSetLive("");
+    showImpDialog("匯入庫存", `<p class="note err">⚠︎ ${esc(rows)}</p><div class="row2"><button class="btn sm" data-imp2="text" type="button">改用文字匯入</button><button class="btn sm" data-ic="close" type="button">關閉</button></div>`, { wide: false, scope: "hold", focus: '[data-imp2="text"]', forceFocus: true });
+  } else {
+    impSetLive("");
     const R = imp.rows, edit = kind === "edit" || imp.edit; imp.edit = edit;
-    $("#impTitle").textContent = edit ? "編輯庫存" : "匯入庫存";
-    body.innerHTML = `<p class="note">${edit ? "直接修改每一格；按 ✕ 刪除一檔，按「＋ 新增一列」加一檔。代號可以輸入名稱（例如「台積電」），離開格子後會自動換成代號。" : "確認每一檔的代號、股數與平均成本（可以直接修改）。推算值可能和券商略有差異（券商的損益通常已扣預估手續費與稅）。"}</p>
-      <div class="hg-wrap"><table class="hgrid"><thead><tr><th>代號／名稱</th><th>股數<small>1 張＝1000 股</small></th><th>平均成本</th><th>買進日期<small>選填，算已領股息</small></th><th></th></tr></thead><tbody>${R.map((r, i) => gridRow(r, i)).join("")}</tbody></table></div>
+    const html = `<p class="note">${edit ? "直接修改每一格；按 ✕ 刪除一檔，按「＋ 新增一列」加一檔。代號可以輸入名稱（例如「台積電」），離開格子後會自動換成代號。" : "確認每一檔的代號、股數與平均成本（可以直接修改）。推算值可能和券商略有差異（券商的損益通常已扣預估手續費與稅）。"}</p>
+      <div class="hg-wrap" tabindex="0" role="region" aria-labelledby="impTitle"><table class="hgrid"><thead><tr><th scope="col">代號／名稱</th><th scope="col">股數<small>1 張＝1000 股</small></th><th scope="col">平均成本</th><th scope="col">買進日期<small>選填，算已領股息</small></th><th scope="col"><span class="note">刪除</span></th></tr></thead><tbody>${R.map((r, i) => gridRow(r, i)).join("")}</tbody></table></div>
       <div class="row2" style="margin:8px 0"><button class="btn sm" data-gadd type="button">＋ 新增一列</button>${edit ? "" : `<button class="btn sm" data-imp2="shot" type="button">＋ 再加截圖</button>`}<button class="btn sm" data-imp2="text" type="button">貼上文字</button></div>
-      ${edit ? "" : `<div class="seg" role="group" aria-label="匯入方式" style="margin:0 0 8px">${[["merge", "合併（同代號覆蓋）"], ["replace", "取代全部庫存"]].map(([k, t]) => `<button data-im="${k}" aria-pressed="${imp.mode === k}">${t}</button>`).join("")}</div>`}
+      ${edit ? "" : `<div class="seg" role="group" aria-label="匯入方式" style="margin:0 0 8px">${[["merge", "合併（同代號覆蓋）"], ["replace", "取代全部庫存"]].map(([k, t]) => `<button type="button" data-im="${k}" aria-pressed="${imp.mode === k}">${t}</button>`).join("")}</div>`}
       <div class="row2"><button class="btn primary sm" id="impSave" type="button">${edit ? "儲存" : `匯入 ${R.filter(r => r.code || r.sh).length} 檔`}</button><button class="btn sm" data-ic="close" type="button">取消</button></div>`;
+    showImpDialog(edit ? "編輯庫存" : "匯入庫存", html, { wide: false, scope: "hold", focus: "#impBody input.code" });
   }
-  if ($("#impSheet").hidden) { $("#impSheet").hidden = $("#impBg").hidden = false; place($("#impSheet")); }
 }
-const closeImport = () => { $("#impSheet").hidden = $("#impBg").hidden = true; imp.edit = false; };
+function closeImport() {
+  const sh = $("#impSheet"), bg = $("#impBg");
+  sh.hidden = bg.hidden = true;
+  sh.classList.remove("wide");
+  impSetLive("");
+  impSetInert(false);
+  imp.reqId++;
+  const wasLedger = imp.scope === "ledger";
+  imp.edit = false;
+  imp.scope = "hold";
+  if (W.lgImp) { W.lgImp.busy = false; W.lgImp.saveTok = (W.lgImp.saveTok || 0) + 1; }
+  const r = W.impRet; W.impRet = null;
+  const canFocus = el => el?.isConnected && el !== document.body && getComputedStyle(el).visibility !== "hidden" && el.getClientRects?.().length;
+  let target = canFocus(r) ? r : null;
+  if (!target && wasLedger) target = [$('#lx [data-lg="imp"]'), $('#hvSeg [aria-pressed="true"]')].find(canFocus);
+  if (target) try { target.focus({ preventScroll: true }); } catch {}
+}
 const rowOk = r => okCode(r.code || "") && !isIdx(r.code) && r.sh > 0 && r.cost > 0;
 function gridRow(r, i) {
   return `<tr class="${rowOk(r) || (!r.code && !r.sh && !r.cost) ? "" : "bad"}" data-row="${i}"><td><input class="code" data-ii="${i}" data-k="code" value="${esc(r.code || r.name || "")}" placeholder="2330 或 台積電" autocomplete="off" aria-label="代號或名稱"><small>${esc(r.code && okCode(r.code) ? nameOf(r.code) : r.how || "")}</small></td>
@@ -2440,23 +2565,63 @@ function openHoldEdit() {
   const rows = Object.entries(W.hold).filter(([, h]) => h.sh && h.cost).map(([c, h]) => ({ code: c, name: nameOf(c), sh: h.sh, cost: h.cost, d: h.d || null, on: true }));
   imp.mode = "replace"; imp.edit = true; openImport("edit", [...rows, { code: "", sh: null, cost: null, on: true }]);
 }
-$("#impBg").addEventListener("click", closeImport);
+// Light-dismiss：從對話框內拖曳文字到背景放開不會誤關；點擊或觸控背景、按 Esc、或 Tab 焦點鎖定在對話框內
+(() => {
+  const sh = $("#impSheet"), bg = $("#impBg");
+  const out = e => {
+    if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY) || (e.clientX === 0 && e.clientY === 0 && e.detail === 0)) return e.target === bg;
+    const r = sh.getBoundingClientRect();
+    return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+  };
+  let downOut = false;
+  document.addEventListener("pointerdown", e => {
+    if (sh.hidden) { downOut = false; return; }
+    downOut = !sh.contains(e.target) && out(e);
+  }, true);
+  document.addEventListener("pointerup", e => {
+    if (sh.hidden || !downOut) { downOut = false; return; }
+    const ok = !sh.contains(e.target) && out(e);
+    downOut = false;
+    if (ok) closeImport();
+  }, true);
+  bg.addEventListener("click", e => {
+    if (e.detail === 0 && !sh.hidden) closeImport();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !sh.hidden) { e.preventDefault(); e.stopPropagation(); closeImport(); }
+  }, true);
+  sh.addEventListener("keydown", e => {
+    if (e.key !== "Tab") return;
+    const f = [...sh.querySelectorAll('button,a[href],input:not([type="hidden"]),select,textarea,[tabindex]:not([tabindex="-1"])')]
+      .filter(x => !x.disabled && !x.closest("[hidden]") && x.offsetParent !== null && getComputedStyle(x).visibility !== "hidden");
+    if (!f.length) return;
+    const a = f[0], z = f[f.length - 1];
+    if (e.shiftKey && (document.activeElement === a || !sh.contains(document.activeElement))) { e.preventDefault(); z.focus(); }
+    else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+  });
+})();
 $("#impSheet").addEventListener("input", e => {
+  if (imp.scope === "ledger") { if (typeof lgOnImportInput === "function") lgOnImportInput(e); return; }
   const t = e.target, i = t.dataset.ii; if (i == null) return; const r = imp.rows[+i], k = t.dataset.k;
   if (k === "code") { const v = t.value.trim().toUpperCase(); r.code = okCode(v) ? v : ""; r.name = t.value.trim(); } else if (k === "d") r.d = /^\d{4}-\d{2}-\d{2}$/.test(t.value) ? t.value : null; else r[k] = t.value === "" ? null : +t.value;
   t.closest("tr").classList.toggle("bad", !rowOk(r) && !!(r.code || r.name || r.sh || r.cost));
 });
 // 代號格離開時：輸入的是名稱就換成代號
 $("#impSheet").addEventListener("change", e => {
+  if (imp.scope === "ledger") { if (typeof lgOnImportChange === "function") lgOnImportChange(e); return; }
   const t = e.target; if (t.dataset.k !== "code") return; const r = imp.rows[+t.dataset.ii], v = t.value.trim();
   const set = c => { r.code = c || ""; r.name = c ? nameOf(c) : v; if (c) { t.value = c; t.nextElementSibling.textContent = W.names[c] || W.stocks?.find(x => x[0] === c)?.[1] || nameOf(c); } else if (v) t.nextElementSibling.textContent = "找不到這個名稱，請輸入代號"; t.closest("tr").classList.toggle("bad", !rowOk(r)); };
   const c = okCode(v.toUpperCase()) ? v.toUpperCase() : findCode(v); set(c);
   if (!c && v && !W.off) { t.nextElementSibling.textContent = "查詢中…"; lookupCode(v).then(x => { if (r.name === v || !r.code) set(x); }); }
 });
+$("#impSheet").addEventListener("focusout", e => {
+  if (imp.scope === "ledger" && typeof lgOnImportBlur === "function") lgOnImportBlur(e);
+});
 $("#impSheet").addEventListener("click", e => {
   const t = e.target;
-  if (t.closest("[data-ic]")) closeImport();
-  else if (t.closest("[data-gadd]")) { imp.rows.push({ code: "", sh: null, cost: null, on: true }); openImport(imp.edit ? "edit" : "review"); const ins = $("#impBody").querySelectorAll("input.code"); ins[ins.length - 1]?.focus(); }
+  if (t.closest("[data-ic]")) return closeImport();
+  if (imp.scope === "ledger") { if (typeof lgOnImportClick === "function") lgOnImportClick(e); return; }
+  if (t.closest("[data-gadd]")) { imp.rows.push({ code: "", sh: null, cost: null, on: true }); openImport(imp.edit ? "edit" : "review"); const ins = $("#impBody").querySelectorAll("input.code"); ins[ins.length - 1]?.focus(); }
   else if (t.closest("[data-gdel]")) { imp.rows.splice(+t.closest("[data-gdel]").dataset.gdel, 1); openImport(imp.edit ? "edit" : "review"); }
   else if (t.closest("[data-im]")) { imp.mode = t.closest("[data-im]").dataset.im; openImport(imp.edit ? "edit" : "review"); }
   else if (t.closest("[data-imp2]")) { if (holdLgBlock()) return; const k = t.closest("[data-imp2]").dataset.imp2; if (k === "shot") $("#impFile").click(); else openImport("text"); }
@@ -2491,19 +2656,30 @@ async function saveImport() {
 // 截圖：先在手機上縮小（最長邊 1600px、JPEG），再交給 /api/import
 const shrink = file => new Promise((res, rej) => { const img = new Image(), url = URL.createObjectURL(file); img.onload = () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c.toDataURL("image/jpeg", 0.85)); }; img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("讀不到圖片")); }; img.src = url; });
 $("#impFile").addEventListener("change", async e => {
-  const files = [...e.target.files].slice(0, 4); e.target.value = ""; if (!files.length || holdLgBlock()) return;
-  const keep = !$("#impSheet").hidden && imp.rows.length ? imp.rows : [];
-  openImport("busy", `正在讀取 ${files.length} 張截圖…（AI 讀圖約需 10～30 秒）`);
+  const files = [...e.target.files].slice(0, 4); e.target.value = ""; if (!files.length) return;
+  const ledger = imp.scope === "ledger";
+  if (!ledger && holdLgBlock()) return;
+  const mode = ledger ? (W.lgImp?.kind === "trades" ? "trades" : "holdings") : "holdings";
+  const keep = !ledger && !$("#impSheet").hidden && imp.rows.length ? imp.rows : [];
+  if (ledger && typeof lgOnImportBusy === "function") lgOnImportBusy(files.length, mode);
+  else openImport("busy", `正在讀取 ${files.length} 張截圖…（AI 讀圖約需 10～30 秒）`);
+  const reqId = ++imp.reqId;
   try {
     await loadStocks();
     const images = await Promise.all(files.map(shrink));
-    const r = await fetch("/api/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ images }) }), j = await r.json().catch(() => null);
+    const r = await fetch("/api/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ images, mode }) }), j = await r.json().catch(() => null);
+    if (reqId !== imp.reqId) return;
     if (!j) throw new Error(r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}`);
     if (!j.ok) throw new Error(j.error || "讀圖失敗");
+    if (ledger) { if (typeof lgOnImportRows === "function") lgOnImportRows(j.rows || [], j.mode || mode); return; }
     const rows = j.rows.map(deriveRow), merged = [...keep];
     rows.forEach(x => { const i = merged.findIndex(y => (x.code && y.code === x.code) || (!x.code && y.name === x.name)); if (i >= 0) merged[i] = { ...merged[i], ...Object.fromEntries(Object.entries(x).filter(([, v]) => v != null && v !== "")) }; else merged.push(x); });
     imp.mode = Object.keys(W.hold).length ? imp.mode : "merge"; imp.edit = false; openImport("review", merged);
-  } catch (err) { openImport("err", err.message); }
+  } catch (err) {
+    if (reqId !== imp.reqId) return;
+    if (ledger && typeof lgOnImportErr === "function") lgOnImportErr(err.message);
+    else openImport("err", err.message);
+  }
 });
 // 下載檔案（庫存 CSV、盤面圖片、財報 CSV 共用）
 function dlBlob(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
