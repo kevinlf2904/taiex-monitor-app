@@ -766,7 +766,7 @@ function lgMapTradeRow(raw) {
     dateAssumed,
     altDate: typeof raw?.altDate === "string" ? raw.altDate.trim() : "",
     rawDate: typeof raw?.rawDate === "string" ? raw.rawDate.trim() : "",
-    time: typeof raw?.time === "string" ? raw.time.trim() : (raw?.timeInvalid === true && typeof raw?.rawTime === "string" ? raw.rawTime.trim() : ""),
+    time: (typeof raw?.time === "string" && raw.time.trim()) ? raw.time.trim() : (raw?.timeInvalid === true && typeof raw?.rawTime === "string" ? raw.rawTime.trim() : ""),
     side, code: res.code, badSym: res.badSym, name: res.name,
     shares: sh != null && Number.isFinite(sh) ? sh : null,
     price: px != null && Number.isFinite(px) ? px : null,
@@ -933,7 +933,7 @@ function lgImpRowHtml(r, i, kind, item, today, total = 1) {
       </div>
       <small id="lgie-${uid}-date" class="lgimp-err" hidden></small>
       <div class="lgimp-trow">
-        <input class="lgimp-time" type="text" data-lgimp-uid="${uid}" data-lgimp-k="time" value="${esc(r.time || "")}" placeholder="時間 09:05" autocomplete="off" inputmode="numeric" aria-label="成交時間" aria-invalid="false">
+        <input class="lgimp-time" type="text" size="6" data-lgimp-uid="${uid}" data-lgimp-k="time" value="${esc(r.time || "")}" placeholder="時間 09:05" autocomplete="off" inputmode="numeric" aria-label="成交時間" aria-invalid="false">
         <button type="button" class="lgimp-mv" data-lgimp-mv="-1" data-lgimp-uid="${uid}" aria-label="上移第 ${i + 1} 列"${i === 0 ? " disabled" : ""}>↑</button>
         <button type="button" class="lgimp-mv" data-lgimp-mv="1" data-lgimp-uid="${uid}" aria-label="下移第 ${i + 1} 列"${i >= total - 1 ? " disabled" : ""}>↓</button>
       </div>
@@ -988,8 +988,8 @@ function lgImpReviewHtml(S, P) {
       </div>
       ${!existing ? `<label class="lgimp-method">成本算法 <select id="lgImpMethod" data-lgimp-method><option value="avg"${S.method === "avg" ? " selected" : ""}>加權平均成本</option><option value="fifo"${S.method === "fifo" ? " selected" : ""}>先進先出（FIFO）</option></select></label>` : ""}
       ${isHold ? `<label class="lgimp-sub" style="white-space:normal" id="lgImpIncOpenWrap"><input type="checkbox" id="lgImpIncOpen" data-lgimp-open> <span id="lgImpIncOpenLbl">包含帳本已有部位（0 檔）</span></label>` : ""}
-      ${!isHold ? `<label class="lgimp-order" id="lgImpOrderWrap" hidden><input type="checkbox" id="lgImpOrderOk" data-lgimp-orderok> <span id="lgImpOrderTxt"></span></label>` : ""}
-      <label class="lgimp-dup" id="lgImpDupWrap" hidden><input type="checkbox" id="lgImpDup" data-lgimp-dup> <span id="lgImpDupTxt"></span></label>
+      ${!isHold ? `<label class="lgimp-order" id="lgImpOrderWrap" hidden><input type="checkbox" id="lgImpOrderOk" data-lgimp-orderok aria-invalid="false"> <span id="lgImpOrderTxt"></span></label>` : ""}
+      <label class="lgimp-dup" id="lgImpDupWrap" hidden><input type="checkbox" id="lgImpDup" data-lgimp-dup aria-invalid="false"> <span id="lgImpDupTxt"></span></label>
     </div>
     <div class="lgimp-foot">
       <p class="lgimp-sum" id="lgImpSum"></p>
@@ -1131,7 +1131,8 @@ function lgSyncImportUI(opts = {}) {
     const rr = S.rows[idx];
     return [rr?._uid, rr?.side, rr?.shares, rr?.price, rr?.time, g.affectsFifo ? "fifo" : ""].join(":");
   }).join(",")).join(";");
-  if (S.orderSig !== orderSig) {
+  const orderChanged = S.orderSig !== orderSig;
+  if (orderChanged) {
     S.orderSig = orderSig;
     S.orderOk = false;
   }
@@ -1150,7 +1151,7 @@ function lgSyncImportUI(opts = {}) {
         : "同日買賣未附可驗證時間（或同分鐘重疊）";
       ordTxt.textContent = `${syms}：${reason}。請用 ↑↓／反轉按鈕確認列序，或補填成交時間；確認目前順序正確請勾選後再匯入。`;
       if (ordEl.checked !== S.orderOk) ordEl.checked = S.orderOk;
-      if (S.orderOk) ordEl.setAttribute("aria-invalid", "false");
+      if (S.orderOk || orderChanged) ordEl.setAttribute("aria-invalid", "false");
     } else {
       ordEl.checked = false;
       ordEl.setAttribute("aria-invalid", "false");
@@ -1158,7 +1159,8 @@ function lgSyncImportUI(opts = {}) {
   }
   const dupWrap = $("#lgImpDupWrap"), dupEl = $("#lgImpDup"), dupTxt = $("#lgImpDupTxt");
   const dupSig = (P.duplicates || []).map(it => [it.tx.date, it.tx.type, it.tx.symbol, it.tx.shares, it.tx.price].join("|")).sort().join(";");
-  if (S.dupSig !== dupSig) {
+  const dupChanged = S.dupSig !== dupSig;
+  if (dupChanged) {
     S.dupSig = dupSig;
     if (!dupSig) S.dupOk = false;
   }
@@ -1169,7 +1171,7 @@ function lgSyncImportUI(opts = {}) {
       const syms = [...new Set(P.duplicates.map(it => it.tx.symbol).filter(Boolean))].join("、");
       dupTxt.textContent = `偵測到 ${nDup} 筆可能與帳本重複的交易（${syms}）。若確認不是重複匯入，請勾選確認後再儲存。`;
       if (dupEl.checked !== S.dupOk) dupEl.checked = S.dupOk;
-      if (S.dupOk) dupEl.setAttribute("aria-invalid", "false");
+      if (S.dupOk || dupChanged) dupEl.setAttribute("aria-invalid", "false");
     } else {
       dupEl.checked = false;
       dupEl.setAttribute("aria-invalid", "false");
@@ -1207,7 +1209,7 @@ function lgSyncImportUI(opts = {}) {
       const it = P.items[idx], fe = it?.on ? lgImpFieldErrors(S.kind, it.errors) : new Map();
       const hit = fe.get(opts.announceKey);
       if (hit) impSetLive("⚠︎ " + lgImpErrMsg(hit, S.rows[idx]), "err");
-      else if (!visibleErrCount && !$("#impLive")?.hidden) impSetLive("");
+      else lgClearStaleImpLive(P);
     }
   }
   return P;
@@ -1293,6 +1295,18 @@ function lgImpReadNum(el) {
   const n = Number(s);
   return Number.isFinite(n) ? n : NaN;
 }
+function lgClearStaleImpLive(P) {
+  const liveEl = $("#impLive");
+  if (!liveEl || liveEl.hidden) return;
+  const liveTxt = liveEl.textContent || "";
+  if ((!$('#lgImpForm [aria-invalid="true"]') && !P?.newErrors?.length && !P?.sameDayOversell) ||
+      (!P?.sameDayOversell && /先賣後買造成賣超/.test(liveTxt)) ||
+      (!P?.needsOrderConfirm && /同日買賣未附成交時間|FIFO 模式下/.test(liveTxt)) ||
+      (!P?.duplicates?.length && /重複的交易/.test(liveTxt)) ||
+      ((P?.selectedCount ?? 0) > 0 && /請至少勾選一列/.test(liveTxt))) {
+    impSetLive("");
+  }
+}
 function lgOnImportInput(e) {
   const S = lgImpState(), t = e.target;
   if (S.step !== "review" || t.type === "checkbox" || t.tagName === "SELECT") return;
@@ -1317,18 +1331,18 @@ function lgOnImportInput(e) {
   } else if (["sh", "cost", "shares", "price", "fee", "tax"].includes(k)) {
     r[k] = lgImpReadNum(t);
   }
-  lgSyncImportUI();
+  lgClearStaleImpLive(lgSyncImportUI());
 }
 function lgOnImportChange(e) {
   const S = lgImpState(), t = e.target;
   if (S.step !== "review") return;
-  if (t.matches("[data-lgimp-method]")) { S.method = t.value === "fifo" ? "fifo" : "avg"; lgSyncImportUI(); return; }
+  if (t.matches("[data-lgimp-method]")) { S.method = t.value === "fifo" ? "fifo" : "avg"; lgClearStaleImpLive(lgSyncImportUI()); return; }
   if (t.matches("[data-lgimp-orderok]")) { S.orderOk = !!t.checked; if (S.orderOk && !$("#impLive")?.hidden) impSetLive(""); lgSyncImportUI(); return; }
   if (t.matches("[data-lgimp-dup]")) { S.dupOk = !!t.checked; if (S.dupOk && !$("#impLive")?.hidden) impSetLive(""); lgSyncImportUI(); return; }
   if (t.matches("[data-lgimp-open]")) {
     const P = lgPrepare(S), want = !!t.checked;
     for (const it of P.items) if (it.duplicateOpen) S.rows[it.index].on = want;
-    lgSyncImportUI();
+    lgClearStaleImpLive(lgSyncImportUI());
     return;
   }
   const uid = t.dataset?.lgimpUid, k = t.dataset?.lgimpK;
@@ -1338,12 +1352,12 @@ function lgOnImportChange(e) {
   if (k === "on") {
     r.on = !!t.checked;
     if (!r.on) r.verifyErr = null;
-    lgSyncImportUI();
+    lgClearStaleImpLive(lgSyncImportUI());
     return;
   }
   if (k === "dayTrade") {
     r.dayTrade = r.side === "sell" && !!t.checked;
-    lgSyncImportUI();
+    lgClearStaleImpLive(lgSyncImportUI());
     return;
   }
   if (k === "side") {
@@ -1379,15 +1393,15 @@ function lgOnImportChange(e) {
           r.code = nc; r.badSym = ""; r.name = lgStockName(nc, v); r.verifyErr = null;
           if (document.activeElement !== t) t.value = nc;
         }
-        lgSyncImportUI();
+        lgClearStaleImpLive(lgSyncImportUI());
       }, () => {
         if ($("#impSheet")?.hidden || r._lookupSeq !== seq || !S.rows.includes(r)) return;
         r._lookingUp = false;
-        lgSyncImportUI();
+        lgClearStaleImpLive(lgSyncImportUI());
       });
       return;
     }
-    lgSyncImportUI();
+    lgClearStaleImpLive(lgSyncImportUI());
   }
 }
 function lgOnImportBlur(e) {
@@ -1434,7 +1448,7 @@ function lgOnImportClick(e) {
         if (rowEl) tbody.appendChild(rowEl);
       }
     }
-    lgSyncImportUI();
+    lgClearStaleImpLive(lgSyncImportUI());
     return;
   }
   const dok = t.closest("[data-lgimp-dok]"), dflip = t.closest("[data-lgimp-dflip]");
@@ -1465,7 +1479,7 @@ function lgOnImportClick(e) {
       if (dir < 0) targetTr.before(tr);
       else targetTr.after(tr);
     }
-    lgSyncImportUI();
+    lgClearStaleImpLive(lgSyncImportUI());
     const keep = tr?.querySelector(`[data-lgimp-mv="${dir}"]`);
     const fb = keep && !keep.disabled ? keep : tr?.querySelector(`[data-lgimp-mv="${-dir}"]`);
     try { fb?.focus({ preventScroll: true }); } catch {}
@@ -1494,8 +1508,7 @@ function lgOnImportClick(e) {
     const tr = $("#lgImpTbody")?.querySelector(`tr[data-uid="${uid}"]`);
     const nextBtn = tr?.nextElementSibling?.querySelector("[data-lgimp-del]") || tr?.previousElementSibling?.querySelector("[data-lgimp-del]") || $("[data-lgimp-add]");
     tr?.remove();
-    lgSyncImportUI();
-    if (!$('#lgImpForm [aria-invalid="true"]') && !$("#impLive")?.hidden) impSetLive("");
+    lgClearStaleImpLive(lgSyncImportUI());
     try { nextBtn?.focus({ preventScroll: true }); } catch {}
   }
 }

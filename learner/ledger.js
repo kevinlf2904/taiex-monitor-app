@@ -405,9 +405,10 @@
       const date = dateAssumed === "invalid" ? "" : (dRaw == null ? today : typeof dRaw === "string" ? dRaw.trim() : "");
       const altDate = typeof raw?.altDate === "string" ? raw.altDate.trim() : "";
       const rawDate = typeof raw?.rawDate === "string" ? raw.rawDate.trim() : "";
+      const rawTime = typeof raw?.rawTime === "string" ? raw.rawTime.trim() : "";
       const ts = parseTimeSpan(raw?.time);
-      const timeInvalid = ts.present && !ts.valid;
-      const time = ts.present ? ts.text : null;
+      const timeInvalid = (ts.present && !ts.valid) || (!ts.present && raw?.timeInvalid === true);
+      const time = ts.present ? ts.text : (raw?.timeInvalid === true && rawTime ? rawTime : null);
       const seq = cleanNum(raw?.seq);
       const shares = cleanNum(raw?.shares ?? raw?.sh);
       const price = cleanNum(raw?.price);

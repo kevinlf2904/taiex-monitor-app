@@ -380,5 +380,52 @@ test("prepareTradesImport（高風險對抗案例）：無時間/同分鐘重疊
   const badTimeErr = L.prepareTradesImport([{ date: "2026-05-12", time: "25:99", side: "buy", code: "2330", shares: 100, price: 900 }], [], { today: "2026-05-15" });
   assert.equal(badTimeErr.ok, false);
   assert.equal(badTimeErr.items[0].errors[0].code, "invalid_time");
-});
 
+  // cleanTradeRows 產出的 { time: null, timeInvalid: true, rawTime } 直接送進 prepareTradesImport 不可漏檢
+  const cleanedBad = cleanTradeRows([{ date: "2026-05-12", time: "25:99", side: "買進", name: "台積電", code: "2330", shares: 100, price: 900 }], { today: "2026-05-15" });
+  const cleanedBadPrep = L.prepareTradesImport(cleanedBad, [], { today: "2026-05-15" });
+  assert.equal(cleanedBadPrep.ok, false);
+  assert.equal(cleanedBadPrep.items[0].time, "25:99");
+  assert.equal(cleanedBadPrep.items[0].errors[0].code, "invalid_time");
+  const flagOnlyBadTime = L.prepareTradesImport([{ date: "2026-05-12", time: null, timeInvalid: true, side: "buy", code: "2330", shares: 100, price: 900 }], [], { today: "2026-05-15" });
+  assert.equal(flagOnlyBadTime.ok, false);
+  assert.equal(flagOnlyBadTime.items[0].errors[0].code, "invalid_time");
+
+  // 8. FIFO 同日兩筆不同價買進＋日後部分賣出：無時間必須確認順序；有不重疊時間時反轉列序仍得完全相同已實現損益與剩餘批成本
+  const fifoNoTimePartial = [
+    { date: "2026-05-12", side: "buy", code: "2330", shares: 1000, price: 100, fee: 0, tax: 0 },
+    { date: "2026-05-12", side: "buy", code: "2330", shares: 1000, price: 120, fee: 0, tax: 0 },
+    { date: "2026-05-13", side: "sell", code: "2330", shares: 1000, price: 130, fee: 0, tax: 0 },
+  ];
+  const fpUnconf = L.prepareTradesImport(fifoNoTimePartial, [], { today: "2026-05-15", method: "fifo" });
+  assert.equal(fpUnconf.ok, false);
+  assert.equal(fpUnconf.needsOrderConfirm, true);
+  assert.equal(fpUnconf.ambiguousSameDay[0].affectsFifo, true);
+
+  const fpOrderA = L.prepareTradesImport([
+    { date: "2026-05-12", time: "09:05", side: "buy", code: "2330", shares: 1000, price: 100, fee: 0, tax: 0 },
+    { date: "2026-05-12", time: "09:10", side: "buy", code: "2330", shares: 1000, price: 120, fee: 0, tax: 0 },
+    { date: "2026-05-13", side: "sell", code: "2330", shares: 1000, price: 130, fee: 0, tax: 0 },
+  ], [], { today: "2026-05-15", method: "fifo" });
+  const fpOrderB = L.prepareTradesImport([
+    { date: "2026-05-13", side: "sell", code: "2330", shares: 1000, price: 130, fee: 0, tax: 0 },
+    { date: "2026-05-12", time: "09:10", side: "buy", code: "2330", shares: 1000, price: 120, fee: 0, tax: 0 },
+    { date: "2026-05-12", time: "09:05", side: "buy", code: "2330", shares: 1000, price: 100, fee: 0, tax: 0 },
+  ], [], { today: "2026-05-15", method: "fifo" });
+  assert.equal(fpOrderA.ok, true);
+  assert.equal(fpOrderB.ok, true);
+  const fpUnconfRev = L.prepareTradesImport([fifoNoTimePartial[1], fifoNoTimePartial[0], fifoNoTimePartial[2]], [], { today: "2026-05-15", method: "fifo", orderConfirmed: true });
+  assert.equal(fpUnconfRev.ok, true);
+  const ledA = L.buildLedger(fpOrderA.transactions, { method: "fifo", today: "2026-05-15" });
+  const ledB = L.buildLedger(fpOrderB.transactions, { method: "fifo", today: "2026-05-15" });
+  const ledUnconfRev = L.buildLedger(fpUnconfRev.transactions, { method: "fifo", today: "2026-05-15" });
+  assert.equal(ledA.totals.TWD.realizedPnl, 30000, "先買 100 再賣 130，已實現損益為 +30,000");
+  assert.equal(ledA.positions[0].realizedPnl, 30000);
+  assert.equal(ledUnconfRev.totals.TWD.realizedPnl, 10000, "顛倒兩筆無時間買進順序會讓 FIFO 損益差 20,000，故必須確認順序");
+  assert.equal(ledUnconfRev.positions[0].realizedPnl, 10000);
+  assert.equal(ledB.totals.TWD.realizedPnl, ledA.totals.TWD.realizedPnl, "有明確時間時反轉列序得完全相同 FIFO 已實現損益");
+  assert.equal(ledA.positions[0].costBasis, 120000);
+  assert.equal(ledB.positions[0].costBasis, 120000, "剩餘 FIFO 成本批皆為 120 元 × 1000 股");
+  assert.deepEqual(J(ledA.positions[0].lots.map(l => l.cost)), [120000]);
+  assert.deepEqual(J(ledB.positions[0].lots.map(l => l.cost)), [120000]);
+});

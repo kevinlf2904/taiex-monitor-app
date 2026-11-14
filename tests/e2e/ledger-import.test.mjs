@@ -334,7 +334,7 @@ for (const width of [390, 1280]) {
             { date: "2026-10-05", dateAssumed: "today", time: null, side: "buy", name: "蘋果", code: "AAPL", shares: 2, price: 200, fee: null, tax: 0, dayTrade: false },
             { date: "2026-05-01", dateAssumed: null, time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 880, fee: null, tax: null, dayTrade: false },
             { date: "2026-05-06", dateAssumed: "mdy", altDate: "2026-06-05", rawDate: "05/06/2026", time: null, side: "buy", name: "輝達", code: "NVDA", shares: 1, price: 120, fee: 0, tax: 0, dayTrade: false },
-            { date: "", dateAssumed: "invalid", rawDate: "2026/02/30", time: null, side: "buy", name: "元大台灣50", code: "0050", shares: 1000, price: 180, fee: 0, tax: 0, dayTrade: false },
+            { date: "", dateAssumed: "invalid", rawDate: "2026/02/30", time: null, timeInvalid: true, rawTime: "25:99", side: "buy", name: "元大台灣50", code: "0050", shares: 1000, price: 180, fee: 0, tax: 0, dayTrade: false },
           ],
         },
       };
@@ -367,19 +367,22 @@ for (const width of [390, 1280]) {
     await p.click("[data-lgimp-back]");
     await p.waitForSelector('[data-lgimp-pick="trades"]');
 
-    // 第二次上傳取得成交對帳單 7 筆（含歧義斜線日期與無效日期列）
+    // 第二次上傳取得成交對帳單 7 筆（含歧義斜線日期、無效日期與無效時間列）
     await pickFileVia(p, '[data-lgimp-pick="trades"]');
     await p.waitForSelector("#lgImpForm");
     assert.equal(await p.evaluate(() => document.querySelectorAll("#lgImpTbody tr").length), 7, "同天同價分批成交兩筆 2454 皆保留不合併");
     assert.ok(await noHOverflow(p), `${width} 選項 2 檢視沒有水平溢出`);
 
-    // 確認假設／歧義／無效日期標籤、費稅、當沖與粗指標觸控目標
+    // 確認假設／歧義／無效日期與無效時間標籤、費稅、當沖與粗指標觸控目標
     const initUI = await p.evaluate(() => [...document.querySelectorAll("#lgImpTbody tr")].map(tr => ({
       uid: tr.dataset.uid,
       dtag: tr.querySelector("[data-lgimp-dtag]").hidden ? "" : tr.querySelector("[data-lgimp-dtag]").textContent,
       dwrapOpen: !tr.querySelector("[data-lgimp-dwrap]").hidden,
       dateInv: tr.querySelector('[data-lgimp-k="date"]').getAttribute("aria-invalid"),
       dateErr: tr.querySelector(`#lgie-${tr.dataset.uid}-date`).textContent,
+      timeVal: tr.querySelector('[data-lgimp-k="time"]').value,
+      timeInv: tr.querySelector('[data-lgimp-k="time"]').getAttribute("aria-invalid"),
+      timeErr: tr.querySelector(`#lgie-${tr.dataset.uid}-time`).textContent,
       meta: tr.querySelector("[data-lgimp-meta]").textContent,
       dtDisabled: tr.querySelector('[data-lgimp-k="dayTrade"]').disabled,
       dtChecked: tr.querySelector('[data-lgimp-k="dayTrade"]').checked,
@@ -403,6 +406,32 @@ for (const width of [390, 1280]) {
     assert.equal(initUI[6].dtag, "截圖日期無效（2026/02/30）");
     assert.equal(initUI[6].dateInv, "true");
     assert.match(initUI[6].dateErr, /無法辨識截圖日期「2026\/02\/30」，請手動修正為 YYYY-MM-DD/);
+    assert.equal(initUI[6].timeVal, "25:99", "cleanTradeRows 回傳 timeInvalid+rawTime 時須保留原始無效時間供修改");
+    assert.equal(initUI[6].timeInv, "true");
+    assert.match(initUI[6].timeErr, /成交時間格式不正確/);
+
+    // 確認在第 2 欄自然展示時（scrollLeft = 0）整個第 2 欄與「↓」鈕皆完整落在 .hg-wrap 右界內，不被裁切
+    const col2Fit = await p.evaluate(() => {
+      const wrap = $("#impSheet .hg-wrap");
+      const prevSl = wrap.scrollLeft;
+      wrap.scrollLeft = 0;
+      const wRect = wrap.getBoundingClientRect();
+      const innerLeft = wRect.left + wrap.clientLeft;
+      const innerRight = innerLeft + wrap.clientWidth;
+      const td1 = document.querySelector('#lgImpTbody tr[data-row="0"] td:first-child').getBoundingClientRect();
+      const td2 = document.querySelector('#lgImpTbody tr[data-row="0"] td:nth-child(2)').getBoundingClientRect();
+      const mvDn = document.querySelector('#lgImpTbody tr[data-row="0"] [data-lgimp-mv="1"]').getBoundingClientRect();
+      wrap.scrollLeft = prevSl;
+      return {
+        td2Width: Math.round(td2.width),
+        td2RightOverWrap: Math.round(td2.right - innerRight),
+        mvDnRightOverWrap: Math.round(mvDn.right - innerRight),
+        td2AfterSticky: td2.left >= td1.right - 1,
+      };
+    });
+    assert.equal(col2Fit.td2AfterSticky, true, `${width} 第 2 欄在 scrollLeft=0 時不被第 1 欄遮住`);
+    assert.ok(col2Fit.td2RightOverWrap <= 1 && col2Fit.mvDnRightOverWrap <= 1,
+      `${width} scrollLeft=0 時第 2 欄與「↓」鈕完整落在 .hg-wrap 右界內（td2: ${col2Fit.td2RightOverWrap}, ↓: ${col2Fit.mvDnRightOverWrap}）`);
 
     if (touch) {
       const dfixBox = await p.locator('#lgImpTbody tr[data-row="5"] [data-lgimp-dflip]').boundingBox();
@@ -438,9 +467,11 @@ for (const width of [390, 1280]) {
     assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="5"] [data-lgimp-dwrap]').hidden), true);
     assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="5"] [data-lgimp-k="date"]').getAttribute("aria-invalid")), "false");
 
-    // 修正第 6 列無效日期後錯誤消除，接著刪除第 6 列測試列
+    // 修正第 6 列無效日期與無效時間後錯誤消除，接著刪除第 6 列測試列
     await p.fill('#lgImpTbody tr[data-row="6"] [data-lgimp-k="date"]', "2026-05-11");
+    await p.fill('#lgImpTbody tr[data-row="6"] [data-lgimp-k="time"]', "");
     assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="6"] [data-lgimp-k="date"]').getAttribute("aria-invalid")), "false");
+    assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="6"] [data-lgimp-k="time"]').getAttribute("aria-invalid")), "false");
     await p.click('#lgImpTbody tr[data-row="6"] [data-lgimp-del]');
     await p.waitForFunction(() => document.querySelectorAll("#lgImpTbody tr").length === 6);
 
@@ -469,9 +500,10 @@ for (const width of [390, 1280]) {
     await p.fill(`#lgImpTbody tr[data-uid="${sellUid}"] [data-lgimp-k="time"]`, "");
     assert.equal(await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"] [data-lgimp-k="time"]`).getAttribute("aria-invalid"), sellUid), "false");
 
-    // 無時間且先賣後買（2454 sell 在前）→ 絕不自動反轉！送出擋下賣超並顯示 #lgImpGlobalErr
+    // 無時間且先賣後買（2454 sell 在前）→ 絕不自動反轉！送出擋下賣超並由 #impLive（不重複 #lgImpGlobalErr）與標紅欄位提示
     await p.click("#lgImpSave");
-    await p.waitForFunction(() => !$("#lgImpGlobalErr").hidden && /未附成交時間/.test($("#lgImpGlobalErr").textContent));
+    await p.waitForFunction(() => !$("#impLive").hidden && /未附成交時間/.test($("#impLive").textContent));
+    assert.equal(await p.evaluate(() => $("#lgImpGlobalErr").hidden), true, "同日先賣後買不於 #lgImpGlobalErr 重複顯示長文");
     assert.equal(await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"] [data-lgimp-k="shares"]`).getAttribute("aria-invalid"), sellUid), "true");
 
     // 單列上下移按鈕測試（下移後再上移）
@@ -480,8 +512,9 @@ for (const width of [390, 1280]) {
     await p.click(`#lgImpTbody tr[data-uid="${sellUid}"] [data-lgimp-mv="-1"]`);
     assert.equal(await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"]`).dataset.row, sellUid), "0");
 
-    // 點擊「⇅ 反轉列表順序」使 2454 先買後賣 → 賣超與全域錯誤解除、賣出列顯示手續費／稅估算、且出現同日順序確認框
+    // 點擊「⇅ 反轉列表順序」使 2454 先買後賣 → 賣超與過期 #impLive 警示一併解除、賣出列顯示手續費／稅估算、且出現同日順序確認框
     await p.click("[data-lgimp-rev]");
+    assert.equal(await p.evaluate(() => $("#impLive").hidden), true, "反轉解除賣超後，頂端過期 #impLive 警告同步清除");
     assert.equal(await p.evaluate(() => $("#lgImpGlobalErr").hidden), true);
     const sellMeta = await p.evaluate(u => document.querySelector(`#lgImpTbody tr[data-uid="${u}"] [data-lgimp-meta]`).textContent, sellUid);
     assert.match(sellMeta, /手續費估/);
@@ -535,7 +568,7 @@ for (const width of [390, 1280]) {
     await p.click('#lgImpTbody tr[data-row="6"] [data-lgimp-del]');
     await p.waitForFunction(() => document.querySelectorAll("#lgImpTbody tr").length === 6);
 
-    // 未勾選 #lgImpOrderOk 送出 → 擋下、捲動進可視範圍並聚焦 #lgImpOrderOk
+    // 未勾選 #lgImpOrderOk 送出 → 擋下、捲動進可視範圍並聚焦 #lgImpOrderOk；若再按單列調整順序則過期警告與紅框重置
     await p.click("#lgImpSave");
     await p.waitForFunction(() => /同日買賣未附成交時間/.test($("#impLive")?.textContent || ""));
     assert.equal(await p.evaluate(() => document.activeElement?.id), "lgImpOrderOk");
@@ -626,3 +659,57 @@ for (const width of [390, 1280]) {
     assert.deepEqual(errs, []);
   });
 }
+
+test("390：選項 2 開啟含第 2 欄日期錯誤時開局不偷橫捲、FIFO 同日多筆買進順序提醒與調序清除", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await setupRoutes(ctx, () => ({
+    body: {
+      ok: true,
+      mode: "trades",
+      rows: [
+        { date: "2026-05-06", dateAssumed: "mdy", altDate: "2026-06-05", rawDate: "05/06/2026", time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 100, fee: 0, tax: 0, dayTrade: false },
+        { date: "2026-05-06", dateAssumed: null, time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 120, fee: 0, tax: 0, dayTrade: false },
+        { date: "2026-05-10", dateAssumed: null, time: null, side: "sell", name: "台積電", code: "2330", shares: 1000, price: 130, fee: 0, tax: 0, dayTrade: false },
+      ],
+    },
+  }));
+  await p.evaluate(() => {
+    localStorage.removeItem("kline:pf:v1");
+    W.holdMkt = "tw"; setLt("hold");
+  });
+  await p.waitForSelector("#hvSeg");
+  await holdGo(p, "tx");
+  await p.waitForSelector('#lx [data-lg="imp"]');
+  await p.click('#lx [data-lg="imp"]');
+  await pickFileVia(p, '[data-lgimp-pick="trades"]');
+  await p.waitForSelector("#lgImpForm");
+
+  // 第 2 欄 mdy 錯誤聚焦時，scrollLeft 須保持 0，不滑到 sticky 第 1 欄下方
+  assert.equal(await p.evaluate(() => $("#impSheet .hg-wrap").scrollLeft), 0, "第 2 欄為開局焦點時不觸發多餘橫向捲動");
+
+  // 確認月/日為 2026-05-06（與第 1 列同日）、切為 FIFO → 顯示 FIFO 批次順序提示；送出未勾確認標記 aria-invalid，再調序後清除過期警告與紅框
+  await p.click('#lgImpTbody tr[data-row="0"] [data-lgimp-dok]');
+  await p.selectOption("#lgImpMethod", "fifo");
+  assert.equal(await p.evaluate(() => $("#lgImpOrderWrap").hidden), false);
+  assert.match(await p.evaluate(() => $("#lgImpOrderTxt").textContent), /FIFO/);
+  await p.click("#lgImpSave");
+  await p.waitForFunction(() => /FIFO 模式下/.test($("#impLive")?.textContent || ""));
+  assert.equal(await p.evaluate(() => $("#lgImpOrderOk").getAttribute("aria-invalid")), "true");
+
+  // 點「下移」調整同日兩筆順序 → 過期 #impLive 與 #lgImpOrderOk 紅框同步重置
+  await p.click('#lgImpTbody tr[data-row="0"] [data-lgimp-mv="1"]');
+  assert.equal(await p.evaluate(() => $("#impLive").hidden), true);
+  assert.equal(await p.evaluate(() => $("#lgImpOrderOk").getAttribute("aria-invalid")), "false");
+
+  // 補填不重疊時間（09:10 vs 09:05）後確認框隱藏、成功匯入 FIFO
+  await p.fill('#lgImpTbody tr[data-row="0"] [data-lgimp-k="time"]', "09:10");
+  await p.fill('#lgImpTbody tr[data-row="1"] [data-lgimp-k="time"]', "09:05");
+  assert.equal(await p.evaluate(() => $("#lgImpOrderWrap").hidden), true);
+  await p.click("#lgImpSave");
+  await p.waitForFunction(() => $("#impSheet").hidden && /已匯入 3 筆成交交易/.test($("#lx").innerText));
+  const pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  assert.equal(pf.method, "fifo");
+  assert.deepEqual(pf.transactions.map(t => [t.time ?? null, t.price]), [["09:05", 100], ["09:10", 120], [null, 130]]);
+  await ctx.close();
+  assert.deepEqual(errs, []);
+});
