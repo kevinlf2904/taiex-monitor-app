@@ -409,14 +409,48 @@
       if (prevD) { if (prevD > it.date) hasDesc = true; else if (prevD < it.date) hasAsc = true; }
       prevD = it.date;
     }
+    const baseSeq = (hasDesc && !hasAsc) ? enabled.slice().reverse() : enabled.slice();
+    let ordered = baseSeq.slice().sort((a, b) => {
+      const va = validDate(a.date), vb = validDate(b.date);
+      if (va !== vb) return va ? -1 : 1;
+      if (!va || a.date === b.date) return 0;
+      return a.date < b.date ? -1 : 1;
+    });
     const sim = seq => buildLedger([...existingArr, ...seq.map(it => it.tx)], { method: opts.method, today, rules: opts.rules });
     const countBatchErrors = (seq, res) => res.txs.slice(existingArr.length).reduce((s, x) => s + (x.errors.length ? 1 : 0), 0)
       + res.txs.slice(0, existingArr.length).filter((x, k) => x.errors.length > (base.txs[k]?.errors?.length || 0)).length;
-    let ordered = (hasDesc && !hasAsc) ? enabled.slice().reverse() : enabled.slice();
     let combined = sim(ordered);
-    if (!hasAsc && enabled.length > 1 && combined.txs.slice(existingArr.length).some(x => x.errors.some(e => e.code === "oversell"))) {
-      const alt = ordered.slice().reverse(), altComb = sim(alt);
+    const hasOversell = res => res.txs.slice(existingArr.length).some(x => x.errors.some(e => e.code === "oversell"));
+    if (!hasAsc && enabled.length > 1 && hasOversell(combined)) {
+      const alt = ordered.slice().reverse().sort((a, b) => {
+        const va = validDate(a.date), vb = validDate(b.date);
+        if (va !== vb) return va ? -1 : 1;
+        if (!va || a.date === b.date) return 0;
+        return a.date < b.date ? -1 : 1;
+      });
+      const altComb = sim(alt);
       if (countBatchErrors(alt, altComb) < countBatchErrors(ordered, combined)) { ordered = alt; combined = altComb; }
+    }
+    if (hasOversell(combined)) {
+      const byDaySym = new Map();
+      ordered.forEach((it, idx) => {
+        if (validDate(it.date) && it.symbol) {
+          const k = `${it.date}|${it.symbol}`;
+          (byDaySym.get(k) || (byDaySym.set(k, []), byDaySym.get(k))).push(idx);
+        }
+      });
+      for (const idxs of byDaySym.values()) {
+        if (idxs.length < 2) continue;
+        const badSym = idxs.some(idx => {
+          const id = ordered[idx].tx.id;
+          return combined.txs.slice(existingArr.length).find(x => x.id === id)?.errors?.some(e => e.code === "oversell");
+        });
+        if (!badSym) continue;
+        const alt = ordered.slice();
+        for (let k = 0; k < idxs.length; k++) alt[idxs[k]] = ordered[idxs[idxs.length - 1 - k]];
+        const altComb = sim(alt);
+        if (countBatchErrors(alt, altComb) < countBatchErrors(ordered, combined)) { ordered = alt; combined = altComb; }
+      }
     }
     const byId = new Map(combined.txs.slice(existingArr.length).map(x => [x.id, x]));
     const newErrors = [];
