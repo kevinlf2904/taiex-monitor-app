@@ -47,3 +47,55 @@ test("交易紀錄：預覽 → 確認建立 → 新增賣出（賣超擋下）�
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });
+
+test("Issue #303：新增交易未填手續費依 watch:hdisc 折扣估算並快照寫入，後續改折扣或改備註不溯及改寫歷史交易", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280, touch: false });
+  await p.evaluate(() => {
+    localStorage.removeItem("kline:pf:v1");
+    W.hdisc = 0.28; store.set("watch:hdisc", 0.28);
+    W.holdMkt = "tw"; W.holdView = "tx"; setLt("hold");
+  });
+  await p.waitForSelector("[data-lg=blank]", { timeout: 20000 });
+  await p.click("[data-lg=blank]");
+  assert.match(await p.evaluate(() => $("#lx").innerText), /台股手續費 2\.8 折/);
+
+  // 1. 新增買進 2330 1000 股 @ 500（未填手續費与稅）→ 按 2.8 折估算手續費 199 並寫入快照
+  await p.click("[data-lg=add]");
+  await p.fill("#lgForm [name=symbol]", "2330");
+  await p.fill("#lgForm [name=shares]", "1000");
+  await p.fill("#lgForm [name=price]", "500");
+  await p.fill("#lgForm [name=date]", "2026-03-02");
+  await p.click("#lgForm button[type=submit]");
+  let pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  assert.equal(pf.transactions.length, 1);
+  assert.equal(pf.transactions[0].fee, 199, "1000×500×0.001425×0.28 = 199 快照寫入 localStorage");
+  assert.equal(pf.transactions[0].tax, 0);
+  assert.equal(pf.transactions[0].feeEstimated, true);
+  assert.match(await p.evaluate(() => $("#lx").innerText), /費 199・稅 0（估算）/);
+  assert.match(await p.evaluate(() => $("#lx").innerText), /均價 500\.199/);
+
+  // 2. 將 watch:hdisc 改為 1（原價）並重繪：既有交易的手續費 199 與均價 500.199 不可被溯及改寫
+  await p.evaluate(() => { W.hdisc = 1; store.set("watch:hdisc", 1); renderList(); });
+  assert.match(await p.evaluate(() => $("#lx").innerText), /費 199・稅 0（估算）/);
+  assert.match(await p.evaluate(() => $("#lx").innerText), /均價 500\.199/);
+
+  // 3. 編輯該筆交易僅修改備註（不改手續費欄位）：手續費維持 199 與（估算）標記，不會被新折扣重算為 712
+  const txId = pf.transactions[0].id;
+  await p.click(`[data-lg=edit][data-id="${txId}"]`);
+  await p.fill("#lgForm [name=note]", "長期部位");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  assert.equal(pf.transactions[0].fee, 199, "僅改備註時保留原快照手續費 199");
+  assert.equal(pf.transactions[0].feeEstimated, true);
+  assert.equal(pf.transactions[0].note, "長期部位");
+
+  // 4. 再次編輯並將手續費欄位清空為空白：依目前 watch:hdisc = 1 重新估算為 712 並更新快照
+  await p.click(`[data-lg=edit][data-id="${txId}"]`);
+  await p.fill("#lgForm [name=fee]", "");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  assert.equal(pf.transactions[0].fee, 712, "主動清空手續費後依目前原價重估為 712");
+  assert.equal(pf.transactions[0].feeEstimated, true);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+

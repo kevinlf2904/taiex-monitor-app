@@ -223,3 +223,36 @@ test("沒填稅時依代號推斷：債券 ETF（尾碼 B）0%、一般 ETF 0.1%
   assert.equal(sell("00679B", { assetType: "etf" }).tx.tax, 100, "使用者指定資產類型：照指定");
   assert.equal(L.checkTx({ id: "t-bnd", type: "sell", market: "us", currency: "USD", date: "2026-03-02", symbol: "BND", shares: 10, price: 70, fee: 0 }).tx.assetType, "stock", "美股不套用台股代號規則");
 });
+
+test("Issue #303：手續費折扣（1／0.6／0.28）、最低 20 元、部分手填費稅、估算快照不因後續折扣變動而改寫", () => {
+  const rulesOf = d => ({ ...L.DEFAULT_RULES, tw: { ...L.DEFAULT_RULES.tw, discount: d } });
+  // 1000 × 500 = 500,000；原價 floor(712.5) = 712；6 折 floor(427.5) = 427；2.8 折 floor(199.5) = 199
+  assert.equal(L.estimateCosts({ type: "buy", market: "tw", shares: 1000, price: 500 }, rulesOf(1)).fee, 712);
+  assert.equal(L.estimateCosts({ type: "buy", market: "tw", shares: 1000, price: 500 }, rulesOf(0.6)).fee, 427);
+  assert.equal(L.estimateCosts({ type: "buy", market: "tw", shares: 1000, price: 500 }, rulesOf(0.28)).fee, 199);
+  // 最低手續費 20 元下限：100 × 100 = 10,000 × 0.001425 × 0.28 = 3.99 → 20
+  assert.equal(L.estimateCosts({ type: "buy", market: "tw", shares: 100, price: 100 }, rulesOf(0.28)).fee, 20);
+  // 美股不受台股手續費折扣影響；台股證交稅（股票 0.3%、ETF 0.1%、債券 ETF 0%、當沖 0.15%）不受手續費折扣影響
+  assert.deepEqual(J(L.estimateCosts({ type: "buy", market: "us", shares: 10, price: 200 }, rulesOf(0.28))), { fee: 0, tax: 0 });
+  assert.equal(L.estimateCosts({ type: "sell", market: "tw", shares: 1000, price: 500, assetType: "stock" }, rulesOf(0.28)).tax, 1500);
+  assert.equal(L.estimateCosts({ type: "sell", market: "tw", shares: 1000, price: 500, assetType: "etf" }, rulesOf(0.28)).tax, 500);
+  assert.equal(L.estimateCosts({ type: "sell", market: "tw", shares: 1000, price: 500, assetType: "bond_etf" }, rulesOf(0.28)).tax, 0);
+  assert.equal(L.estimateCosts({ type: "sell", market: "tw", shares: 1000, price: 500, dayTrade: true }, rulesOf(0.28)).tax, 750);
+
+  // 部分手填：賣出手填 fee、未填 tax → 僅估算 tax；未填 fee、手填 tax → 僅依折扣估算 fee；明確填 0 不覆蓋
+  const pFeeOnly = L.checkTx({ id: "pf1", type: "sell", market: "tw", currency: "TWD", date: "2026-03-02", symbol: "2330", shares: 1000, price: 500, fee: 50 }, { rules: rulesOf(0.28) });
+  assert.deepEqual([pFeeOnly.tx.fee, pFeeOnly.tx.tax, pFeeOnly.tx.feeEstimated], [50, 1500, true]);
+  const pTaxOnly = L.checkTx({ id: "pt1", type: "sell", market: "tw", currency: "TWD", date: "2026-03-02", symbol: "2330", shares: 1000, price: 500, tax: 1200 }, { rules: rulesOf(0.28) });
+  assert.deepEqual([pTaxOnly.tx.fee, pTaxOnly.tx.tax, pTaxOnly.tx.feeEstimated], [199, 1200, true]);
+  const pZero = L.checkTx({ id: "pz1", type: "sell", market: "tw", currency: "TWD", date: "2026-03-02", symbol: "2330", shares: 1000, price: 500, fee: 0, tax: 0 }, { rules: rulesOf(0.28) });
+  assert.deepEqual([pZero.tx.fee, pZero.tx.tax, pZero.tx.feeEstimated], [0, 0, false]);
+
+  // 快照寫入後（fee: 199, tax: 0, feeEstimated: true），後續以不同折扣（原價 1）重跑 buildLedger 不會改寫歷史費用，且保留 feeEstimated 標記
+  const snapTx = { v: 1, id: "snap1", date: "2026-03-02", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 500, fee: 199, tax: 0, feeEstimated: true };
+  const afterChange = L.buildLedger([snapTx], { method: "avg", rules: rulesOf(1) });
+  assert.equal(afterChange.txs[0].tx.fee, 199, "已快照的手續費不因後續折扣變動而重算");
+  assert.equal(afterChange.txs[0].tx.feeEstimated, true, "保留（估算）標記");
+  assert.equal(afterChange.txs[0].warnings.some(w => w.code === "fee_estimated"), false, "已有具體費用數字不再重發估算警告");
+  assert.equal(pos(afterChange).costBasis, 500199);
+});
+

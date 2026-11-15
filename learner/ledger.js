@@ -71,7 +71,7 @@
     if (type === "stock_dividend" && raw.ratio != null && !(isNum(ratio) && ratio > 0)) E("invalid_ratio", "配股率要大於 0（每股配幾股，例如配 1 元股票股利＝0.1）");
     for (const [k, v] of [["fee", fee], ["tax", tax]]) if (Number.isNaN(v) || (isNum(v) && v < 0)) E("invalid_" + k, (k === "fee" ? "手續費" : "交易稅") + "不能是負數");
     const tx = { v: VERSION, id, date, type, symbol, market, currency, shares: isNum(shares) ? shares : null, price: isNum(price) ? price : null, amount: isNum(amount) ? amount : null, ratio: isNum(ratio) ? ratio : null,
-      fee: isNum(fee) ? fee : null, tax: isNum(tax) ? tax : null, feeEstimated: false, assetType: ["etf", "stock", "bond_etf"].includes(raw.assetType) ? raw.assetType : null, dayTrade: !!raw.dayTrade,
+      fee: isNum(fee) ? fee : null, tax: isNum(tax) ? tax : null, feeEstimated: raw.feeEstimated === true, assetType: ["etf", "stock", "bond_etf"].includes(raw.assetType) ? raw.assetType : null, dayTrade: !!raw.dayTrade,
       ref: typeof raw.ref === "string" && raw.ref ? raw.ref : null, note: typeof raw.note === "string" ? raw.note.slice(0, 500) : "", source: typeof raw.source === "string" && raw.source ? raw.source.slice(0, 40) : "manual" };
     // 沒填手續費／稅：依規則估算並標示「估算」（填 0 代表真的是 0，不會被估算覆蓋）
     // 買進不收交易稅（台股證交稅、美股 SEC 費都只在賣出）：空白直接記 0，不算「估算」、不用再確認
@@ -544,7 +544,13 @@
       ok: enabled.length > 0 && errorCount === 0 && !needsOrderConfirm,
       canSaveEmpty: enabled.length === 0,
       items,
-      transactions: ordered.map(it => it.tx),
+      transactions: ordered.map(it => (it.computed && !it.errors.length ? {
+        ...it.tx,
+        fee: it.computed.fee,
+        tax: it.computed.tax,
+        ...(it.computed.feeEstimated ? { feeEstimated: true } : {}),
+        ...(it.computed.assetType && !it.tx.assetType ? { assetType: it.computed.assetType } : {})
+      } : it.tx)),
       selectedCount: enabled.length,
       errorCount,
       newErrors,
