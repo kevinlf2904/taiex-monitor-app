@@ -292,5 +292,270 @@
     }
     return { ok: items.every(x => x.ok), items };
   }
-  root.KLLedger = Object.freeze({ toCSV, checkBackup, VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore });
+
+  const defaultToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const inferMkt = (sym, fn) => { const m = typeof fn === "function" ? fn(sym) : (/^\d{4,6}[A-Z]?$/.test(sym) ? "tw" : /^[A-Z][A-Z0-9]{0,5}([.-][A-Z]{1,3})?$/.test(sym) ? "us" : null); return m === "tw" || m === "us" ? m : null; };
+  const cleanNum = v => { if (v === null || v === undefined || (typeof v === "string" && !v.trim())) return null; const s = typeof v === "string" ? v.trim().replace(/,/g, "") : v; const n = typeof s === "number" || typeof s === "string" ? Number(s) : NaN; return Number.isFinite(n) ? n : NaN; };
+
+  // 選項 1（持股截圖 → 股票轉入 transfer_in）：先比對現有帳本（kline:pf:v1）未平倉部位；
+  // 同一代號若目前已有持股，預設不勾選（on: false）並標示帳本已有股數，以免重複計算；未持有的預設勾選。不改動傳入資料。
+  function prepareHoldingsImport(rows, existingTxs = [], opts = {}) {
+    const today = validDate(opts.today) ? opts.today : defaultToday();
+    const existingArr = Array.isArray(existingTxs) ? existingTxs : [];
+    const base = buildLedger(existingArr, { method: opts.method, today, rules: opts.rules });
+    const openMap = new Map(base.positions.filter(p => p.open && p.shares > EPS).map(p => [p.symbol, p]));
+    const items = (Array.isArray(rows) ? rows : []).map((raw, i) => {
+      const sym = symbolOf(raw?.symbol ?? raw?.code);
+      const shares = cleanNum(raw?.shares ?? raw?.sh);
+      const cost = cleanNum(raw?.avgCost ?? raw?.price ?? raw?.cost);
+      const dRaw = raw?.date ?? raw?.d;
+      const dStr = typeof dRaw === "string" ? dRaw.trim() : "";
+      const dateAssumed = !dStr ? "today" : null;
+      const date = dStr || today;
+      const market = (raw?.market === "tw" || raw?.market === "us") ? raw.market : (sym ? inferMkt(sym, opts.market) : null);
+      const currency = market ? CURRENCY[market] : null;
+      const existingPos = sym ? openMap.get(sym) || null : null;
+      const duplicateOpen = !!existingPos;
+      const existingShares = existingPos ? existingPos.shares : 0;
+      const skipReason = duplicateOpen ? `帳本已有 ${+existingShares.toFixed(6)} 股，預設略過以免重複` : null;
+      const on = typeof raw?.on === "boolean" ? raw.on : !duplicateOpen;
+      const id = typeof raw?.id === "string" && raw.id.trim() ? raw.id.trim() : (opts.idPrefix ? `${opts.idPrefix}${i + 1}` : makeTx({}).id);
+      const note = typeof raw?.note === "string" && raw.note.trim() ? raw.note.trim().slice(0, 500) : "截圖匯入庫存：股票轉入";
+      const tx = {
+        v: VERSION, id, date, type: "transfer_in", symbol: sym, market, currency,
+        shares: isNum(shares) ? shares : Number.isNaN(shares) ? raw?.shares ?? raw?.sh : null,
+        price: isNum(cost) ? cost : Number.isNaN(cost) ? raw?.avgCost ?? raw?.price ?? raw?.cost : null,
+        fee: 0, tax: 0, note,
+        source: typeof raw?.source === "string" && raw.source.trim() ? raw.source.trim().slice(0, 40) : "import"
+      };
+      return { index: i, raw, on, duplicateOpen, existingShares, skipReason, dateAssumed, symbol: sym, name: typeof raw?.name === "string" ? raw.name.trim() : "", shares: tx.shares, price: tx.price, date, market, currency, how: typeof raw?.how === "string" ? raw.how : "", errors: [], warnings: [], tx };
+    });
+    const enabled = items.filter(it => it.on);
+    const combined = buildLedger([...existingArr, ...enabled.map(it => it.tx)], { method: opts.method, today, rules: opts.rules });
+    const byId = new Map(combined.txs.slice(existingArr.length).map(x => [x.id, x]));
+    const newErrors = [];
+    for (let k = 0; k < existingArr.length; k++) {
+      const bef = base.txs[k]?.errors?.length || 0, aft = combined.txs[k]?.errors || [];
+      if (aft.length > bef) newErrors.push({ id: combined.txs[k].id, errors: aft });
+    }
+    let errorCount = newErrors.length;
+    const duplicates = [];
+    for (const it of items) {
+      const res = it.on ? byId.get(it.tx.id) : checkTx(it.tx, { today, rules: opts.rules });
+      it.errors = res?.errors ? res.errors.slice() : [];
+      it.warnings = res?.warnings ? res.warnings.slice() : [];
+      if (it.on && it.errors.length) errorCount++;
+      if (it.on && it.warnings.some(w => w.code === "possible_duplicate")) duplicates.push(it);
+    }
+    return {
+      ok: enabled.length > 0 && errorCount === 0,
+      canSaveEmpty: enabled.length === 0,
+      items,
+      transactions: enabled.map(it => it.tx),
+      existingOpenCount: items.filter(it => it.duplicateOpen).length,
+      selectedCount: enabled.length,
+      errorCount,
+      newErrors,
+      duplicates,
+      storeErrorCount: combined.errorCount
+    };
+  }
+
+  function parseTimeSpan(raw) {
+    if (raw == null) return { present: false, valid: true, text: null, lo: null, hi: null };
+    const s = String(raw).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/：/g, ":").trim();
+    if (!s) return { present: false, valid: true, text: null, lo: null, hi: null };
+    const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:\s*(AM|PM))?$/i);
+    if (!m) return { present: true, valid: false, text: s, lo: null, hi: null };
+    let hh = +m[1];
+    const mm = +m[2], ss = m[3] != null ? +m[3] : null, ap = m[4] ? m[4].toUpperCase() : null;
+    if (ap) {
+      if (hh < 1 || hh > 12) return { present: true, valid: false, text: s, lo: null, hi: null };
+      if (ap === "PM" && hh < 12) hh += 12;
+      else if (ap === "AM" && hh === 12) hh = 0;
+    } else if (hh < 0 || hh > 23) return { present: true, valid: false, text: s, lo: null, hi: null };
+    if (mm < 0 || mm > 59 || (ss != null && (ss < 0 || ss > 59))) return { present: true, valid: false, text: s, lo: null, hi: null };
+    const p2 = n => String(n).padStart(2, "0");
+    const base = hh * 3600 + mm * 60;
+    if (ss != null) return { present: true, valid: true, text: `${p2(hh)}:${p2(mm)}:${p2(ss)}`, lo: base + ss, hi: base + ss };
+    return { present: true, valid: true, text: `${p2(hh)}:${p2(mm)}`, lo: base, hi: base + 59 };
+  }
+
+  // 選項 2（成交明細／對帳單截圖 → buy／sell）：保留空白 fee/tax 為 null（觸發估算，explicit 0 維持 0），
+  // 僅依「不同日期」或同一天「可驗證成交時間（互斥區間）／序號」排序；沒有時間的同日買賣不自動反轉以免掩蓋賣超，須明確確認或補時間後才可存檔。
+  function prepareTradesImport(rows, existingTxs = [], opts = {}) {
+    const today = validDate(opts.today) ? opts.today : defaultToday();
+    const existingArr = Array.isArray(existingTxs) ? existingTxs : [];
+    const base = buildLedger(existingArr, { method: opts.method, today, rules: opts.rules });
+    const existingCore = new Set(existingArr.map(t => {
+      const sym = symbolOf(t?.symbol), sh = cleanNum(t?.shares), px = cleanNum(t?.price);
+      return t && (t.type === "buy" || t.type === "sell") && validDate(t.date) && sym && isNum(sh) && isNum(px)
+        ? [t.date, t.type, sym, sh, px].join("|") : null;
+    }).filter(Boolean));
+    const timeMeta = new Map(), seqMeta = new Map();
+    const items = (Array.isArray(rows) ? rows : []).map((raw, i) => {
+      const on = raw?.on !== false;
+      const side = raw?.type === "buy" || raw?.side === "buy" ? "buy" : raw?.type === "sell" || raw?.side === "sell" ? "sell" : null;
+      const sym = symbolOf(raw?.symbol ?? raw?.code);
+      const market = (raw?.market === "tw" || raw?.market === "us") ? raw.market : (sym ? inferMkt(sym, opts.market) : null);
+      const currency = market ? CURRENCY[market] : null;
+      const dRaw = raw?.date;
+      const daIn = raw?.dateAssumed;
+      const dateAssumed = daIn === "invalid" ? "invalid" : dRaw == null ? (daIn || "today") : (daIn === "year" || daIn === "today" || daIn === "mdy" ? daIn : null);
+      const date = dateAssumed === "invalid" ? "" : (dRaw == null ? today : typeof dRaw === "string" ? dRaw.trim() : "");
+      const altDate = typeof raw?.altDate === "string" ? raw.altDate.trim() : "";
+      const rawDate = typeof raw?.rawDate === "string" ? raw.rawDate.trim() : "";
+      const rawTime = typeof raw?.rawTime === "string" ? raw.rawTime.trim() : "";
+      const ts = parseTimeSpan(raw?.time);
+      const timeInvalid = (ts.present && !ts.valid) || (!ts.present && raw?.timeInvalid === true);
+      const time = ts.present ? ts.text : (raw?.timeInvalid === true && rawTime ? rawTime : null);
+      const seq = cleanNum(raw?.seq);
+      const shares = cleanNum(raw?.shares ?? raw?.sh);
+      const price = cleanNum(raw?.price);
+      const fee = cleanNum(raw?.fee);
+      const tax = cleanNum(raw?.tax);
+      const assetType = ["etf", "stock", "bond_etf"].includes(raw?.assetType) ? raw.assetType : null;
+      const dayTrade = !!raw?.dayTrade;
+      const note = typeof raw?.note === "string" ? raw.note.trim().slice(0, 500) : "";
+      const source = typeof raw?.source === "string" && raw.source.trim() ? raw.source.trim().slice(0, 40) : "import";
+      const id = typeof raw?.id === "string" && raw.id.trim() ? raw.id.trim() : (opts.idPrefix ? `${opts.idPrefix}${i + 1}` : makeTx({}).id);
+      const tx = {
+        v: VERSION, id, date, ...(ts.present && ts.valid ? { time: ts.text } : {}), type: side, symbol: sym, market, currency,
+        shares: isNum(shares) ? shares : Number.isNaN(shares) ? raw?.shares ?? raw?.sh : null,
+        price: isNum(price) ? price : Number.isNaN(price) ? raw?.price : null,
+        fee: fee === null ? null : (isNum(fee) ? fee : raw?.fee),
+        tax: tax === null ? null : (isNum(tax) ? tax : raw?.tax),
+        ...(assetType ? { assetType } : {}),
+        ...(dayTrade ? { dayTrade: true } : {}),
+        note, source
+      };
+      const it = { index: i, raw, on, dateAssumed, ...(altDate ? { altDate } : {}), ...(rawDate ? { rawDate } : {}), time, timeInvalid, type: side, symbol: sym, name: typeof raw?.name === "string" ? raw.name.trim() : "", shares: tx.shares, price: tx.price, fee: tx.fee, tax: tx.tax, dayTrade, date, market, currency, errors: [], warnings: [], tx, computed: null };
+      timeMeta.set(it, ts);
+      seqMeta.set(it, seq);
+      return it;
+    });
+    const enabled = items.filter(it => it.on);
+    const ordered = enabled.map((it, slot) => ({ it, slot })).sort((a, b) => {
+      const va = validDate(a.it.date), vb = validDate(b.it.date);
+      if (va !== vb) return va ? -1 : 1;
+      if (!va || a.it.date === b.it.date) return a.slot - b.slot;
+      return a.it.date < b.it.date ? -1 : 1;
+    }).map(x => x.it);
+
+    const byDaySym = new Map();
+    ordered.forEach((it, idx) => {
+      if (validDate(it.date) && it.symbol) {
+        const k = `${it.date}|${it.symbol}`;
+        let g = byDaySym.get(k);
+        if (!g) byDaySym.set(k, g = []);
+        g.push(idx);
+      }
+    });
+    const verifiableGroups = new Set();
+    for (const [k, idxs] of byDaySym) {
+      if (idxs.length < 2) continue;
+      const grp = idxs.map(i => ordered[i]);
+      const allTimed = grp.every(it => { const ts = timeMeta.get(it); return ts.present && ts.valid; });
+      let timeDisjoint = false;
+      if (allTimed) {
+        timeDisjoint = true;
+        const fifoMode = opts.method === "fifo";
+        for (let a = 0; a < grp.length && timeDisjoint; a++) {
+          for (let b = a + 1; b < grp.length; b++) {
+            if (fifoMode || grp[a].type !== grp[b].type) {
+              const ta = timeMeta.get(grp[a]), tb = timeMeta.get(grp[b]);
+              if (!(ta.hi < tb.lo || tb.hi < ta.lo)) { timeDisjoint = false; break; }
+            }
+          }
+        }
+      }
+      if (timeDisjoint) {
+        verifiableGroups.add(k);
+        const sorted = grp.map((it, pos) => ({ it, pos, ts: timeMeta.get(it) })).sort((a, b) => (a.ts.lo - b.ts.lo) || (a.ts.hi - b.ts.hi) || (a.pos - b.pos));
+        idxs.forEach((slotIdx, p) => { ordered[slotIdx] = sorted[p].it; });
+        continue;
+      }
+      const noBadTime = grp.every(it => !it.timeInvalid);
+      const seqs = grp.map(it => seqMeta.get(it));
+      if (noBadTime && seqs.every(isNum) && new Set(seqs).size === seqs.length) {
+        verifiableGroups.add(k);
+        const sorted = grp.map((it, pos) => ({ it, pos, sq: seqs[pos] })).sort((a, b) => (a.sq - b.sq) || (a.pos - b.pos));
+        idxs.forEach((slotIdx, p) => { ordered[slotIdx] = sorted[p].it; });
+      }
+    }
+
+    const sim = seq => buildLedger([...existingArr, ...seq.map(it => it.tx)], { method: opts.method, today, rules: opts.rules });
+    const combined = sim(ordered);
+    const byId = new Map(combined.txs.slice(existingArr.length).map(x => [x.id, x]));
+    const newErrors = [];
+    for (let k = 0; k < existingArr.length; k++) {
+      const bef = base.txs[k]?.errors?.length || 0, aft = combined.txs[k]?.errors || [];
+      if (aft.length > bef) newErrors.push({ id: combined.txs[k].id, date: combined.txs[k].tx?.date || "", symbol: combined.txs[k].tx?.symbol || "", type: combined.txs[k].tx?.type || "", errors: aft });
+    }
+    let errorCount = newErrors.length, feeEstimatedCount = 0;
+    const duplicates = [];
+    for (const it of items) {
+      const res = it.on ? byId.get(it.tx.id) : checkTx(it.tx, { today, rules: opts.rules });
+      it.errors = res?.errors ? res.errors.slice() : [];
+      it.warnings = res?.warnings ? res.warnings.slice() : [];
+      it.computed = res?.tx || null;
+      if (it.dateAssumed === "mdy" && validDate(it.date)) {
+        it.errors.push({ code: "unconfirmed_date_format", message: it.altDate ? `截圖日期「${it.rawDate || it.date}」可能是月/日（${it.date}）或日/月（${it.altDate}），請確認或切換` : `截圖日期「${it.rawDate || it.date}」格式可能有歧義，請確認日期` });
+      }
+      if (it.timeInvalid) {
+        it.errors.push({ code: "invalid_time", message: "成交時間格式不正確（請填 HH:MM 或 HH:MM:SS，或留空）" });
+      }
+      if (it.on) {
+        if ((it.tx.fee == null || it.tx.tax == null) && it.symbol && isNum(it.shares) && isNum(it.price) && existingCore.has([it.date, it.type, it.symbol, it.shares, it.price].join("|")) && !it.warnings.some(w => w.code === "possible_duplicate")) {
+          it.warnings.push({ code: "possible_duplicate", message: "帳本裡同一天已有相同代號、方向、股數與價格的交易，請確認不是重複匯入" });
+        }
+        if (it.errors.length) errorCount++;
+        if (it.computed?.feeEstimated) feeEstimatedCount++;
+        if (it.warnings.some(w => w.code === "possible_duplicate")) duplicates.push(it);
+      }
+    }
+
+    const ambiguousSameDay = [];
+    let sameDayOversell = false;
+    for (const [k, idxs] of byDaySym) {
+      if (idxs.length < 2) continue;
+      const grp = idxs.map(i => ordered[i]);
+      const buyCount = grp.filter(it => it.type === "buy").length;
+      const sellCount = grp.filter(it => it.type === "sell").length;
+      const mixedSides = buyCount > 0 && sellCount > 0;
+      const affectsFifo = opts.method === "fifo" && (buyCount > 1 || sellCount > 1);
+      if (!mixedSides && !affectsFifo) continue;
+      if (verifiableGroups.has(k)) continue;
+      if (grp.some(it => it.errors.some(e => e.code === "oversell"))) sameDayOversell = true;
+      if (grp.some(it => it.errors.length > 0)) continue;
+      let affectsOversell = false;
+      if (mixedSides) {
+        const alt = ordered.slice();
+        for (let m = 0; m < idxs.length; m++) alt[idxs[m]] = ordered[idxs[idxs.length - 1 - m]];
+        const altComb = sim(alt);
+        const altById = new Map(altComb.txs.slice(existingArr.length).map(x => [x.id, x]));
+        affectsOversell = grp.some(it => altById.get(it.tx.id)?.errors?.some(e => e.code === "oversell"));
+      }
+      ambiguousSameDay.push({ date: grp[0].date, symbol: grp[0].symbol, rowIndices: grp.map(it => it.index), affectsOversell, affectsFifo, mixedSides });
+    }
+    const needsOrderConfirm = ambiguousSameDay.length > 0 && opts.orderConfirmed !== true;
+
+    return {
+      ok: enabled.length > 0 && errorCount === 0 && !needsOrderConfirm,
+      canSaveEmpty: enabled.length === 0,
+      items,
+      transactions: ordered.map(it => it.tx),
+      selectedCount: enabled.length,
+      errorCount,
+      newErrors,
+      duplicates,
+      ambiguousSameDay,
+      needsOrderConfirm,
+      sameDayOversell,
+      feeEstimatedCount,
+      storeErrorCount: combined.errorCount
+    };
+  }
+
+  root.KLLedger = Object.freeze({ toCSV, checkBackup, VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore, prepareHoldingsImport, prepareTradesImport });
 })(typeof window !== "undefined" ? window : globalThis);
