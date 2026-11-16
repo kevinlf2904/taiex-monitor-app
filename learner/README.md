@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 選股訊號回測：對齊同日流動性同池基準與審計對帳（2026.11.16-240）
+- 訊號回測改以訊號日成交量 ≥ 500 張之現存上市櫃普通股為等權同池基準（含訊號股），以 ds／da／db 三日期對齊並區隔快取鍵、保留進場前日 b[a-1] 漲停基準並補時序防呆；明細新增兩端互斥拆帳、exN 配對統計與 <95% 覆蓋率提示，排程 signal-study.mjs 改以 includeEvents: false 省略逐事件 benchEvents，並相容尚未更新的舊版 signal-study.json。PR #307、Ref #306。
+
 ### 交易紀錄與再平衡：統一手續費折扣並寫入快照（2026.11.16-239）
 - 交易紀錄新增／成交截圖匯入與再平衡試算統一套用持股頁手續費折扣（watch:hdisc）估算並將費用與欄位級估算來源（feeEst／taxEst）寫入交易快照，歷史交易不因後續折扣變動而改寫，編輯計費基礎與另計費用關聯僅重估原本估算之欄位並保守處理舊資料；同步調整 390px 成交匯入視窗初始橫向捲動與 FIFO 排序說明。PR #305、Closes #303。
 
