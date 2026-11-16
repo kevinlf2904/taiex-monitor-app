@@ -28,9 +28,14 @@
 ## 絕對不能發生
 
 - 清除、重建、覆蓋或自動遷移既有 `localStorage`（`kline:watch:hold` 與 `kline:pf:v1` 格式與資料完全保留）。
-- 在 `kline:pf:recon:v1` 內儲存任何圖片資料（base64／`data:image/`），或讓 `localStorage` 單鍵無上限膨脹而靜默被雲端同步（150KB 上限）遺漏。
+- 在 `kline:pf:recon:v1` 內儲存任何圖片資料（base64／`data:image/`），或讓核心資料超過 120KB（觸及 150KB 雲端同步上限）時還靜默覆蓋寫入。
+- 跨 `kline:pf:v1` 與 `kline:pf:recon:v1` 雙鍵寫入中途失敗後留下無法恢復或重開頁面會重複入帳的半套狀態；亦不得忽略 `store.set` 回傳 `false`。
+- 未經使用者確認為「完整庫存清單」就把未出現在截圖裡的舊持股當成已清倉歸零；或對已確認的完整快照遺漏關閉已出清的舊基準。
+- 對缺年份（`asOfStatus: "year"`）或未來日期（`> today`）未經確認就直接建立 `confirmed` 庫存基準。
+- 讓同一 `symbol` 在快照或交易之間繞過現有帳本的單一 `market`／`currency` 約束。
 - 因補傳早於快照日的歷史交易，就重複增加已確認快照的目前持股；或單憑不完整前期交易擅自推翻、覆蓋較新庫存快照。
 - 快照缺少均價時補成 `0` 或直接確立為正式基準。
+- 對美股部位或無法判斷市場的差異套用「近 2 個交易日（台股 T+2）」誤導提示。
 - 任何投資組合頁面或計算引擎直接呼叫 `KLLedger.buildLedger(` 而繞過統一計算入口。
 - 備份匯入時因 JSON 鍵序先驗 `kline:pf:v1` 造成誤報賣超，或在沒有 `KLRecon.validateStore` 時降級放行匯入。
 - 測試連外網或呼叫真實付費 AI API；為求通過而刪除既有測試或放寬斷言（UI 入口改為統一選擇器時，僅同步遷移對應選擇器與 mock 欄位）。
@@ -65,18 +70,19 @@
     {
       id: "snap-...",
       symbol: "2330",
-      market: "tw",              // "tw" | "us"
+      market: "tw",              // "tw" | "us"，且必須滿足 market/currency 一對一與跨檔單一市場約束
       currency: "TWD",           // "TWD" | "USD"
-      date: "2026-11-10",        // YYYY-MM-DD 快照基準日
-      shares: 1000,              // > 0
-      avgCost: 900,              // confirmed 快照必填 > 0（缺均價不可 confirmed）
+      date: "2026-11-10",        // YYYY-MM-DD 快照基準日（confirmed 不可 > today）
+      shares: 1000,              // > 0；僅 origin === "full_snapshot_close" 時可為 0
+      avgCost: 900,              // > 0（confirmed 非零快照必填）；origin === "full_snapshot_close" 時為 null
       status: "confirmed",       // "confirmed" | "pending" | "superseded"
-      supersededBy: null,        // 被哪一張較新快照取代
-      origin: "import",          // "import" | "tx_tag"
+      scope: "partial",          // "full" | "partial"（來源批次之完整／部分庫存確認；決不自動預設成 "full"）
+      supersededBy: null,        // 被哪一張較新快照取代（或被哪一筆 full_snapshot_close 關閉）
+      origin: "import",          // "import" | "tx_tag" | "full_snapshot_close"
       tagTxId: null,             // origin === "tx_tag" 時對應的交易 id
       sourceBatchId: "imp-...",
       confirmedAt: "2026-11-16T00:00:00.000Z",
-      reason: "",                // 例如強制採信原因或自動晉升說明
+      reason: "",                // 例如強制採信原因、年份確認紀錄或自動晉升說明
       note: ""
     }
   ],
@@ -85,7 +91,7 @@
       id: "conf-...",
       kind: "recon_diff",        // "recon_diff" | "missing_cost" | "missing_date" | "ambiguous_date"
                                  // | "same_day_order" | "possible_duplicate" | "negative_position"
-                                 // | "unknown_symbol" | "unknown_side" | "margin_separated"
+                                 // | "unknown_symbol" | "unknown_side" | "margin_separated" | "currency_conflict"
       level: 2,                  // 2 | 3
       status: "open",            // "open" | "resolved"
       symbol: "2330",
@@ -95,10 +101,10 @@
       baselineSnapshotId: "snap-...",
       baselineShares: 1000,      // S1＋已確認交易推算或現有基準股數
       baselineAvgCost: 900,
-      targetShares: 1200,        // 新匯入截圖或推算目標股數
+      targetShares: 1200,        // 新匯入截圖或推算目標股數（full_snapshot_close 差異時為 0）
       targetAvgCost: 920,
       diffShares: 200,           // targetShares - baselineShares
-      payload: {},               // 原始待確認列或推算明細（不可含圖片字串）
+      payload: {},               // 原始待確認列、年份原始字樣或 reason: "missing_in_full_snapshot"（不可含圖片字串）
       resolution: null,          // "keep_both" | "accept_new" | "keep_baseline" | "mark_before_snapshot" | "mark_after_snapshot" | "confirmed_unique" | "discarded"
       resolutionReason: null,
       resolvedAt: null,
@@ -108,13 +114,19 @@
   initialTags: {
     "<txId>": { snapshotId: "snap-...", taggedAt: "ISO", active: true }
   },
+  sameDayRelations: {
+    // 將同日交易定序留在 kline:pf:recon:v1，解開 same_day_order 時不必跨寫 kline:pf:v1
+    "<txId>": { relation: "before_snapshot", snapshotDate: "2026-11-10", conflictId: "conf-...", decidedAt: "ISO" }
+  },
+  pendingCommit: null,           // 跨鍵寫入進行中 Write-Ahead Journal：{ id, op: "import_trades" | "deactivate_tags" | "update_tx_tag", at, txIds, deletedTxIds?, staged? }
   imports: [
     {
       id: "imp-...",
       at: "ISO",
       kind: "holdings",          // "holdings" | "trades" | "unknown"
+      snapshotScope: "partial",  // holdings 匯入時記錄 "full" | "partial"，trades 為 null
       asOf: "2026-11-10",        // YYYY-MM-DD | null
-      asOfStatus: "exact",       // "exact" | "year" | "mdy" | "invalid" | "missing" | null
+      asOfStatus: "exact",       // "exact" | "year" | "mdy" | "future" | "invalid" | "missing" | null
       fileHashes: ["<sha256-hex>"], // 由原始 File.arrayBuffer() 於 shrink() 前計算
       totalRows: 3,
       autoApplied: 2,
@@ -133,13 +145,19 @@
 }
 ```
 
-### 容量控管與 150KB 雲端同步限制
+### 容量控管與 150KB 雲端同步限制（含失敗契約）
 
-`tools.js` 的 `syncSnap(false)` 會略過序列化長度 `>= 150000` 字元的單鍵。因此 `learner/recon.js` 必須提供 `KLRecon.pruneStore(s, maxBytes = 120000)`：
-1. **絕對禁存圖片**：`validateStore(s)` 檢查結構時若偵測到任何值符合 `/data:image\//i` 或超過 2000 字元疑似 base64 影像編碼字串，直接回傳 `{ ok: false, code: "image_not_allowed" }`。
+`tools.js` 的 `syncSnap(false)` 會略過序列化長度 `>= 150000` 字元的單鍵。因此 `learner/recon.js` 必須提供 `KLRecon.pruneStore(s, maxBytes = 120000)`，並遵守以下明確契約：
+1. **絕對禁存圖片與市場約束驗證**：`KLRecon.validateStore(s, opts = {})` 除結構檢查外，強制檢查：
+   - 任何巢狀字串不得命中 `/data:image\//i` 或超過 2000 字元疑似 base64 影像編碼字串（否則回 `{ ok: false, code: "image_not_allowed" }`）；
+   - 快照與衝突之 `(symbol, market, currency)` 必須合法配對（`tw/TWD`、`us/USD`），且同一個 `symbol` 在所有快照間不得出現不同 `market/currency`（否則回 `{ ok: false, code: "currency_conflict" | "currency_mismatch" }`）；
+   - `confirmed` 快照不得存在 `date > opts.today`（否則 `{ ok: false, code: "future_snapshot_date" }`）；非 `full_snapshot_close` 之 `confirmed` 快照必備 `shares > 0` 且 `avgCost > 0`。
 2. **保留優先序（裁剪僅動歷史、不動目前權益與未決問題）**：
-   - **永不裁剪**：所有 `status === "confirmed"` 與 `status === "pending"` 的 `snapshots`、所有 `status === "open"` 的 `conflicts`、所有啟用中的 `initialTags`、以及與任何 `open` 衝突關聯（同 `batchId`）的 `imports[]`。
-   - **優先裁剪**：依時間由舊到新裁剪已結案的 `imports[]`（預設保留最近 40 筆已結案記錄）、已結案的 `audit[]`（預設保留最近 160 筆）、已結案的 `conflicts[]`（保留最近 60 筆）及早於保留門檻的 `superseded` 舊快照（每檔保留最新 3 筆歷史快照；若總長度仍超過 `maxBytes`（預設 120KB）才繼續由最舊裁剪已結案歷史，並以 `tools.js` `syncBigPf()` 作為最後保險警示。
+   - **永不裁剪**：所有 `status === "confirmed"` 與 `status === "pending"` 的 `snapshots`、所有 `status === "open"` 的 `conflicts`、所有啟用中的 `initialTags`、`sameDayRelations`、正在進行尚未結案的 `pendingCommit`、以及與任何 `open` 衝突關聯（同 `batchId`）的 `imports[]`。
+   - **優先裁剪**：依時間由舊到新裁剪已結案的 `imports[]`（預設保留最近 40 筆已結案記錄）、已結案的 `audit[]`（預設保留最近 160 筆）、已結案的 `conflicts[]`（保留最近 60 筆）及早於保留門檻的 `superseded` 舊快照（每檔保留最新 3 筆歷史快照）；若仍超過 `maxBytes`（預設 120KB）才繼續縮減已結案歷史至歸零。
+3. **不可裁剪核心超限時的明確失敗契約**：
+   - `pruneStore(s, maxBytes)` 固定回傳結構化結果：`{ ok: true, store, bytes, maxBytes, trimmed }`；若將所有可裁剪歷史清除後 `JSON.stringify(store).length` **仍大於 `maxBytes`**，不得靜默放行，必須回傳 **`{ ok: false, code: "core_data_exceeds_limit", bytes, maxBytes, store: null }`**。
+   - **寫入前阻擋**：`lgReconSave(nextRecon)` 與雙鍵交易協議在寫盤前一律先檢查 `pruneStore().ok` 與 `store.set()` 回傳值；一旦回傳 `{ ok: false, code: "core_data_exceeds_limit" }` 或 `store.set === false`（`storage_write_failed`），**立即拒絕覆寫現有 `localStorage["kline:pf:recon:v1"]`**，保留原本資料，並提示使用者「對帳核心資料過大或空間不足，未寫入；請先結案待對帳項目或到『工具 → 備份同步』匯出 JSON 備份後再試」。
 
 ---
 
@@ -166,14 +184,34 @@
 
 ### 2. `validateStore`、`checkBackup` 與 `tools.js` 順序規則
 
-- `KLLedger.validateStore(s, opts = {})` 支援 `opts.recon`：傳入 `opts.recon` 時改呼叫 `buildReconciledLedger(s, opts.recon, { ...opts, method: s.method })`，確保匯入或儲存「先有快照、後有賣出」的帳本不會被誤判成賣超。
+- `KLLedger.validateStore(s, opts = {})` 支援 `opts.recon`：傳入 `opts.recon` 時改呼叫 `buildReconciledLedger(s, opts.recon, { ...opts, method: s.method })`，確保匯入或儲存「先有快照、後有賣出」的帳本不會被誤判成賣超，並驗證**交易與確認快照之間同 `symbol` 的 `market`／`currency` 一致**（衝突即拒絕）。
 - `KLLedger.checkBackup(data, opts = {})` **鍵序無關但驗證有嚴格先後**：
   1. JSON 物件鍵順序不能依賴，實作時**先檢查 `data` 是否含 `"kline:pf:recon:v1"`**。
-  2. 若存在 `"kline:pf:recon:v1"`：先解析 JSON，**必須傳入 `opts.recon && typeof opts.recon.validateStore === "function"`**；缺 `opts.recon` 或無 `validateStore` 時**直接整份拒絕（`ok: false`、「沒有對帳快照的檢查程式，為了安全不匯入」）**，決不降級。通過後保存驗證過的 `reconObj`。
+  2. 若存在 `"kline:pf:recon:v1"`：先解析 JSON，**必須傳入 `opts.recon && typeof opts.recon.validateStore === "function"`**；缺 `opts.recon` 或無 `validateStore` 時**直接整份拒絕（`ok: false`、「沒有對帳快照的檢查程式，為了安全不匯入」）**，決不降級。若備份內的 `pendingCommit != null` 屬未恢復狀態亦拒絕匯入（避免把中斷殘留寫入另一台裝置）；通過 `opts.recon.validateStore(parsed, { today: opts.today })` 後保存驗證過的 `reconObj`。
   3. 再以 `validateStore(pfV1, { today: opts.today, recon: reconObj })` 驗證 `"kline:pf:v1"`。
   4. 所有其他鍵（`kline:pf:margin:v1`、`kline:pf:targets:v1`、`kline:pf:thesis:v1`）沿用既有嚴格模組檢查。
 - `learner/watch.html`：`LAZY.ledger` 改為 `["ledger.js", "recon.js", "ledger-ui.js"]`。
 - `learner/tools.js`：`syncImport` 於有 `pfKeys` 時除了 `await lazy("ledger")`，另外保護檢查若 `pfKeys.includes("kline:pf:recon:v1") && typeof KLRecon === "undefined"` 則明確動態載入 `recon.js`（失敗即整份拒絕不匯入），並將 `recon: typeof KLRecon !== "undefined" ? KLRecon : null` 傳入 `KLLedger.checkBackup`；匯入確認文字亦帶出快照與待確認筆數，150KB 超限提示涵蓋所有超限 `kline:pf:*` 鍵。
+
+### 3. 跨兩個 `localStorage` key 的可恢復寫入協議（Write-Ahead Commit Protocol）
+
+任何同時異動 `kline:pf:v1` 與 `kline:pf:recon:v1` 的操作（包含 `kind === "trades"` 匯入、刪除帶有啟用 `initialTags` 的 `transfer_in`、或修改已標記期初交易），**嚴禁**依序直接呼叫兩次寫入，必須統一經 `lgCommitDualStores`（搭配 `KLRecon` 純函式 `prepareCommit`／`finalizeCommit`／`recoverCommit`）執行三階段協議；另將同日交易定序（`sameDayRelations`）只存於 `kline:pf:recon:v1`，讓解開 `same_day_order` 成為單鍵寫入：
+
+1. **Pre-flight 檢查（動任何存檔之前）**：
+   - 依預期結果驗證 `nextPf`（`KLLedger.validateStore(nextPf, { today, recon })`）與最終 `finalRecon`（`KLRecon.validateStore` ＋ `KLRecon.pruneStore(..., MAX_BYTES)`）。任一步回報錯誤或 `core_data_exceeds_limit` 立刻終止，不寫任何鍵。
+   - **修正 `lgSave` 與 `lgReconSave` 靜默失敗問題**：必須檢查 `store.set(...)` 布林回傳值，回傳 `false`（如 QuotaExceededError）一律視為寫入失敗（`{ ok: false, code: "storage_write_failed" }`）。
+2. **三階段可恢復寫入（以精簡 WAL `pendingCommit` 存於 `kline:pf:recon:v1`，僅含該批異動 `id`/`txIds` 與待提交對帳紀錄，不重複複製整份 `pf:v1`）**：
+   - **Phase 1（寫 WAL Journal）**：先將 `reconPrepared`（含 `pendingCommit: { id: batchId, op, at, txIds, deletedTxIds?, staged }`）經 `pruneStore` 寫入 `kline:pf:recon:v1`。失敗或超限 → 立刻中止，兩鍵皆維持原樣。
+   - **Phase 2（寫 `kline:pf:v1`）**：將 `nextPf` 寫入 `kline:pf:v1`。若 `store.set("pf:v1", nextPf)` 失敗（回傳 `false` 或拋錯），立即嘗試將 `kline:pf:recon:v1` 復原為 `recon0` 並清楚報錯；即使復原也中斷，`pendingCommit` 的 `txIds` 不存在於 `pf:v1`，重開頁面可安全清除。
+   - **Phase 3（Commit 結案 `kline:pf:recon:v1`）**：將 `pendingCommit` 轉為正式 `imports[]`/`audit[]`/`conflicts[]`/停用標記並清除 `pendingCommit: null`，寫入 `kline:pf:recon:v1`。若此階段遭遇到儲存失敗，嘗試回滾兩鍵至 `(pf0, recon0)`；若發生分頁關閉／瀏覽器崩潰導致中斷，交由第 4 點啟動恢復機制無重複收斂。
+3. **啟動／讀取時冪等自動恢復（`KLRecon.recoverCommit(pfStore, reconStore)`）**：
+   - 於 `lgReconLoad()`、`holdSrcApply()` 與 `renderLedger()` 進入點自動檢查 `reconStore?.pendingCommit`：
+     - **若為 `op === "import_trades"`**：檢查 `pendingCommit.txIds` 是否已全部寫入 `pfStore.transactions`（或 `pfStore` 是否已反映該批提交）：
+       - **全部已寫入 `pf:v1`**（代表在 Phase 2 與 Phase 3 間中斷）：**Roll-Forward 冪等補完** — 僅補齊尚未寫入的 `staged.imports[]`/`audit[]`/`conflicts[]`（依 `id` 去重，重複執行多次亦不生重複紀錄）並清空 `pendingCommit: null` 寫回 `kline:pf:recon:v1`，**絕不再次把交易寫進 `kline:pf:v1`**。
+       - **皆尚未寫入 `pf:v1`**（代表在 Phase 1 與 Phase 2 間中斷）：**Clean Abort** — 安全清空 `pendingCommit: null` 並寫回 `kline:pf:recon:v1`。
+       - **部分存在（極端異常）**：為已寫入之 `txIds` 完成對帳記錄、未寫入部分記於 `audit[]` 標示異常並清空 `pendingCommit: null`，避免重複寫入已存在的 `txId`。
+     - **若為 `op === "deactivate_tags"`**：檢查 `pendingCommit.deletedTxIds` 是否已不在 `pfStore.transactions` — 已不在則冪等完成 `deactivateTagsForTx`＋`audit[]`＋清 `pendingCommit: null`；仍在則清 `pendingCommit: null` 保留原標籤。
+   - **驗證備份還原測試要求**：必須在單元／E2E 測試分別模擬 Phase 1 失敗、Phase 2 寫入失敗（`QuotaExceededError` 回滾）、Phase 3 失敗及 Phase 2 成功後立即重啟頁面恢復，證明重啟後 `kline:pf:v1` 與 `kline:pf:recon:v1` 完全一致且**零重複交易**。
 
 ---
 
@@ -181,10 +219,15 @@
 
 ### 1. 基準快照建立與歷史交易關係（Single Snapshot Baseline）
 
-對每個標的 `symbol`，取 `reconStore.snapshots` 中 `status === "confirmed"` 且 `date`（同一日則以 `confirmedAt` 較新者）最新的快照為正式基準 `B`：
-- **缺均價保護**：快照進入正式 `confirmed` 基準前（無論在 `validateStore`、匯入確認或手動標記 `transfer_in`），若 `B.avgCost` 為 `null` 或 `<= 0` 且無法由 `(shares * price - totalPnl) / shares` 或 `(marketValue - totalPnl) / shares` 得出正數均價，**強制導向 Level 2（`missing_cost`），不得補成 `0` 或升級為 `confirmed`**。
+對每個標的 `symbol`（統一以大寫正規化 `symbol` 為主鍵，且於 `KLRecon.validateStore` 與 `buildReconciledLedger` 雙重強制 `market`／`currency` 一對一配對及跨快照／跨交易零衝突，與 `ledger.js:125` `currency_conflict` 完全一致），取 `reconStore.snapshots` 中 `status === "confirmed"` 且 `date`（同一日則以 `confirmedAt` 較新者）最新的快照為正式基準 `B`：
+- **基準進入門檻（均價、年份與未來日保護）**：
+  - 任何快照在成為 `status === "confirmed"` 正式基準前：
+    1. **缺均價保護**：若 `B.avgCost` 為 `null` 或 `<= 0`（且 `origin !== "full_snapshot_close"`）又無法由 `(shares * price - totalPnl) / shares` 或 `(marketValue - totalPnl) / shares` 得出正數均價，**強制導向 Level 2（`missing_cost`），不得補成 `0` 或升級為 `confirmed`**。
+    2. **缺年份與未來日期保護**：庫存截圖必須具備明確年份與日期（`asOfStatus === "exact"` 且 `asOf <= today`，或經使用者明確確認後之日期 `<= today`）。若 `asOfStatus` 為 `"year"`（只讀出 `MM/DD` 缺年份）、`"mdy"`、`"missing"`、`"invalid"` 或 `"future"`（`date > today`），**一律先導向 Level 2（`ambiguous_date`／`missing_date`），嚴禁在未確認年份或未來日前直接建立 `confirmed` 基準**。
+    3. **市場／幣別衝突保護**：`market` 與 `currency` 須配對且不得與同 `symbol` 既有快照或交易衝突（衝突列進 Level 3 `currency_conflict` 並阻擋存檔）。
 - **錨點初始化**：
-  - 於 `B.date` 設定期初股數 `shares = B.shares`、`costBasis = r2(B.shares * B.avgCost)`、`firstDate = B.date`。
+  - 若 `B.origin === "full_snapshot_close"`（由已確認之完整快照結案歸零，`shares === 0`, `avgCost === null`）：設定於 `B.date` 持股為 `0`、`costBasis = 0`、`open = false`（早於或等於 `B.date` 的舊交易仍標 `preSnapshot: true` 不回魂，晚於 `B.date` 若再買進則由 0 重建）。
+  - 一般 `B.shares > 0` 快照：於 `B.date` 設定期初股數 `shares = B.shares`、`costBasis = r2(B.shares * B.avgCost)`、`firstDate = B.date`。
   - **FIFO V1**：僅產生 **1 筆合成批次**：`{ date: B.date, id: B.id, shares: B.shares, cost: r2(B.shares * B.avgCost), isSnapshot: true }`。後續賣出依 FIFO 先扣抵此合成批次（或後續新買入且更晚賣出），已實現損益正確以 `B.avgCost` 計算。
   - **加權平均**：以 `(B.shares, r2(B.shares * B.avgCost))` 為起點計算後續移動加權平均成本與賣出已實現損益。
 - **按日期分類處理該標的交易**：
@@ -192,29 +235,38 @@
     - 照常執行格式驗證（`checkTx`）、`currency_conflict`、`duplicate_id` 與跨批重複比對，並保留於 `p.history` 標註 `preSnapshot: true`。
     - **不重複加減目前持股、不變動 `costBasis`／`lots`／`realizedPnl`／`cash`／`totals`，不因缺少早期買進紀錄而誤觸快照前 `oversell`**。
   - **`t.date === B.date`（同日交易）**：
-    - 若交易尚未經使用者明確標記 `snapshotRelation === "before_snapshot"` 或 `"after_snapshot"`，**不可擅自假設先後順序**！該筆同日交易列為 Level 2 待確認（`same_day_order`），並反映於 `position.pending`；未確認前暫不異動基準持股（或標記未決，防止同日賣出在未釐清快照涵蓋與否時誤算兩次），待使用者於 UI 點「快照前已含（僅存歷史）」或「快照後才成交（納入持倉計算）」並記錄 `audit[]` 后生效。
+    - 優先讀取 `reconStore.sameDayRelations?.[t.id]?.relation`（相容測試直接傳入的 `t.snapshotRelation`）。若尚未明確標記 `"before_snapshot"` 或 `"after_snapshot"`，**不可擅自假設先後順序**！該筆同日交易列為 Level 2 待確認（`same_day_order`），並反映於 `position.pending`；未確認前暫不異動基準持股（防止同日賣出在未釐清快照涵蓋與否時誤算兩次），待使用者於 UI 點「快照前已含（僅存歷史）」或「快照後才成交（納入持倉計算）」寫入 `kline:pf:recon:v1.sameDayRelations` 與 `audit[]` 後生效。
   - **`t.date > B.date`（晚於快照日）**：
     - 依標準帳本引擎時序套用 `buy`、`sell`、`dividend`、`stock_dividend`、`split`、`fraction_cash`、`transfer_in`、`transfer_out`、`fee`、`other`。
     - 若賣光歸零（`shares <= EPS`），`costBasis = 0`、`lots = []`、`open = false`；之後再買進則從 0 重建成本與新批次，歷史 `realizedPnl`、`dividends`、`fees`、`taxes` 完整保留。
     - 若晚於 `B.date` 發生 `sell > p.shares + EPS` 或 `transfer_out > p.shares + EPS`，維持擋下／標錯（於匯入流程歸入 Level 3 `negative_position` 暫停入帳）。
 
-### 2. 兩張快照的取代、早於基準匯入與差異衝突規則（`S1` → `S2`）
+### 2. 兩張快照的取代、完整 vs 部分語意（含持股歸零）與差異衝突（`S1` → `S2`）
 
-當同一標的存在已確認基準 `S1`，使用者又匯入快照 `S2`（含 `S2.avgCost > 0`）：
-- **若 `S2.date < S1.date`（匯入早於現有基準的歷史快照）**：
-  - 絕不讓較舊快照取代、降級或覆蓋較新確認基準 `S1`；將 `S2` 存入 `snapshots[]` 並設 `status: "superseded"`, `supersededBy: S1.id`，於 `audit[]` 記錄 `"匯入快照早於現有基準日，僅留存歷史不覆蓋較新基準"`。
-- **若 `S2.date >= S1.date`**：
-  1. 若在 `S1.date` 或 `S2.date` 存在尚未標明 `snapshotRelation`（`"before_snapshot"` / `"after_snapshot"`）之同日交易，先中止自動晉升並進入 Level 2（`same_day_order` / `recon_diff`），避免在時序未明下覆蓋基準。
-  2. 以 `S1` 為基準，重播落於 `(S1.date, S2.date]`（含 `S1.date` 標示 `after_snapshot`、以及 `S2.date` 標示 `before_snapshot` 或已定序之成交，含中間賣光歸零再買回）的所有有效交易，算出截止 `S2.date` 的推算股數 `simShares` 與推算均價 `simAvgCost`。
-  3. **自動晉升條件**（同時成立且無未決同日衝突與有效錯誤）：
-     - `Math.abs(simShares - S2.shares) <= Math.max(1e-4, S2.shares * 1e-6)`
-     - `simShares > EPS && simAvgCost > 0 && S2.avgCost > 0 && Math.abs(simAvgCost - S2.avgCost) <= Math.max(0.5, S2.avgCost * 0.005)`
-  4. **結果判定**：
-     - **一致**：`S2` 自動晉升為新 `confirmed` 基準；`S1.status = "superseded"`、`S1.supersededBy = S2.id`；`audit[]` 新增 `auto_promoted`。
-     - **不一致（股數或均價超出容差）**：
-       - 保留 `S1` 為正式計算基準（不覆蓋已確認資料）。
-       - `S2` 存為 `status: "pending"`，並於 `conflicts[]` 新增 `open` Level 2 衝突（`kind: "recon_diff"`, `baselineSnapshotId: S1.id`, `baselineShares: simShares`, `targetShares: S2.shares`, `diffShares: S2.shares - simShares`）。
-       - `position.pending` 加入 `{ code: "recon_diff", conflictId, baselineShares: simShares, targetShares: S2.shares, diffShares: S2.shares - simShares, message: "⚠︎ 待對帳（差異 ... 股）" }`。
+當同一標的存在已確認基準 `S1`（`S1.shares > 0`），使用者匯入新庫存截圖（已知精確且非未來基準日 `asOf`）：
+- **A. 快照範圍語意（`snapshotScope: "full" | "partial"`）與「未出現標的」處理**：
+  - 每次匯入庫存截圖必須由使用者明確選擇範圍，**系統不得擅自將任何截圖推斷為 `"full"`**（預設／未指定 `"full"` 一律視為 `"partial"`）：
+    - **`snapshotScope === "partial"`（部分截圖／單頁清單）**：僅針對截圖上明確列出的標的進行更新或對帳；**既有 `S1` 中未出現在本次截圖的標的完全維持原狀**（不關閉、不發出歸零衝突）。
+    - **`snapshotScope === "full"`（使用者確認為完整庫存清單）**：對於所有既有已確認基準 `S1`（`S1.shares > 0` 且 `S1.date < asOf`）但**未出現在本次截圖列**中的標的（亦即截圖已無該持股）：
+      1. 以 `S1` 重播 `(S1.date, asOf]` 期間已確認交易計算截圖日推算股數 `simShares`：
+         - **若 `simShares <= EPS`**（帳本交易已推算至 0 股，且無未定序同日交易）：自動（或確認匯入時於 Level 1）建立一筆 `origin: "full_snapshot_close"`, `status: "confirmed"`, `scope: "full"`, `date: asOf`, `shares: 0`, `avgCost: null` 的結案基準，並將 `S1.status = "superseded"`, `S1.supersededBy = closeSnap.id`（同時記錄 `audit[]`），明確關閉該標的。
+         - **若 `simShares > EPS`**（新完整截圖已無該股，但帳本推算仍有 `simShares` 股 — 常見於賣出明細尚未匯入）：進入 **Level 2 `recon_diff`**（`baselineShares: simShares`, `targetShares: 0`, `diffShares: -simShares`, `payload: { reason: "missing_in_full_snapshot", previousSnapshotId: S1.id }`），保留 `S1` 為計算基準並在全站顯示 `⚠︎ 待對帳（差異 -simShares 股）`＋「完整庫存截圖已無此檔，可能是尚未匯入賣出明細，請確認是否已清倉歸零」。使用者在對帳中心可選「確認已清倉歸零（填原因後採信新完整快照 → 寫入 `full_snapshot_close` 關閉 `S1`）」、「補匯入賣出明細」、或「保留 `S1`（其實為部分截圖）」。
+      2. 若 `asOf <= S1.date`（歷史完整快照早於或等於現有最新基準），**絕不關閉較新的 `S1`**。
+- **B. 新快照有列出的標的（`S2.shares > 0`, `S2.avgCost > 0`）**：
+  - **若 `S2.date < S1.date`（匯入早於現有基準的歷史快照）**：
+    - 絕不讓較舊快照取代、降級或覆蓋較新確認基準 `S1`；將 `S2` 存入 `snapshots[]` 並設 `status: "superseded"`, `supersededBy: S1.id`，於 `audit[]` 記錄 `"匯入快照早於現有基準日，僅留存歷史不覆蓋較新基準"`。
+  - **若 `S2.date >= S1.date`**：
+    1. 若在 `S1.date` 或 `S2.date` 存在尚未標明 `sameDayRelations`／`snapshotRelation` 之同日交易，先中止自動晉升並進入 Level 2（`same_day_order` / `recon_diff`），避免在時序未明下覆蓋基準。
+    2. 以 `S1` 為基準，重播落於 `(S1.date, S2.date]`（含 `S1.date` 標示 `after_snapshot`、以及 `S2.date` 標示 `before_snapshot` 或已定序之成交，含中間賣光歸零再買回）的所有有效交易，算出截止 `S2.date` 的推算股數 `simShares` 與推算均價 `simAvgCost`。
+    3. **自動晉升條件**（同時成立且無未決同日衝突與有效錯誤）：
+       - `Math.abs(simShares - S2.shares) <= Math.max(1e-4, S2.shares * 1e-6)`
+       - `simShares > EPS && simAvgCost > 0 && S2.avgCost > 0 && Math.abs(simAvgCost - S2.avgCost) <= Math.max(0.5, S2.avgCost * 0.005)`
+    4. **結果判定**：
+       - **一致**：`S2` 自動晉升為新 `confirmed` 基準；`S1.status = "superseded"`、`S1.supersededBy = S2.id`；`audit[]` 新增 `auto_promoted`。
+       - **不一致（股數或均價超出容差）**：
+         - 保留 `S1` 為正式計算基準（不覆蓋已確認資料）。
+         - `S2` 存為 `status: "pending"`，並於 `conflicts[]` 新增 `open` Level 2 衝突（`kind: "recon_diff"`, `baselineSnapshotId: S1.id`, `baselineShares: simShares`, `targetShares: S2.shares`, `diffShares: S2.shares - simShares`）。
+         - `position.pending` 加入 `{ code: "recon_diff", conflictId, baselineShares: simShares, targetShares: S2.shares, diffShares: S2.shares - simShares, message: "⚠︎ 待對帳（差異 ... 股）" }`。
 
 ### 3. 舊的 `transfer_in` 手動「標為期初快照／撤回」規則
 
@@ -222,7 +274,7 @@
 - 在「交易紀錄」清單中，每一筆 `type === "transfer_in"` 且含有效股數與代號的紀錄提供操作按鈕：
   - 未標記：顯示 `標為期初快照`（若該筆 `price <= 0` 或缺成本，點擊時導向補填有效均價或 Level 2 `missing_cost` 提示，不靜默以 `0` 建立基準）。
   - 已標記：顯示 `已標為期初快照` 徽章與 `撤回期初快照標記` 按鈕。
-- **不改寫 `kline:pf:v1`**：標記／撤回僅寫入 `kline:pf:recon:v1`（更新 `initialTags[tx.id]`、對應 `origin: "tx_tag"` 快照及 `audit[]`）。當 `initialTags[tx.id]?.active` 為真時，統一計算入口對該筆交易加上 `preSnapshot: true`（不重複計數）：
+- **不改寫 `kline:pf:v1`**：標記／撤回僅寫入 `kline:pf:recon:v1`（更新 `initialTags[tx.id]`、對應 `origin: "tx_tag"` 快照及 `audit[]`）。刪除帶有啟用 `initialTags` 之 `transfer_in` 時透過上述「雙鍵可恢復協議（`op: "deactivate_tags"`）」同步清理。當 `initialTags[tx.id]?.active` 為真時，統一計算入口對該筆交易加上 `preSnapshot: true`（不重複計數）：
   - 若該標的沒有更新的確認基準，或此標記為唯一／最新基準，即以該 `tx_tag` 快照為計算基準。
   - 若該標的已存在更晚的確認基準 `B_newer`（`T.date < B_newer.date`），維持 `B_newer` 為 `confirmed` 基準不替換：依第 2 節規則檢核 `tx_tag`＋期間交易與 `B_newer`，若一致則 `tx_tag` 設 `superseded`（`supersededBy: B_newer.id`）且 `T` 仍標 `preSnapshot: true` 避免重複計數；若不一致則保留 `B_newer` 并建立 `recon_diff` 供確認；撤回或刪除該 `transfer_in` 時僅停用該 `tx_tag` 快照，絕不破壞 `B_newer`。
 
@@ -233,7 +285,7 @@
 - **現金不異動**：快照不會在 `L.cash` 建立任何存入或買進紀錄，避免汙染現金比例與總資產計算。
 - **時間加權／資金加權從快照日起算**：
   - `buildPerf(txs, opts)` 支持 `opts.recon`（若有 `LG.buildReconciledLedger` 且傳入 `opts.recon` 時優先使用；無 `opts.recon` 時完全保留原 `buildLedger` 行為以維持既有單元測試相容）。
-  - 當某標的具有已確認基準 `B`：
+  - 當某標的具有已確認基準 `B`（且 `B.shares > 0`、`B.origin !== "full_snapshot_close"`；若屬已清倉關閉基準則該標的在結案日起為 `0` 股不產生投入現金流）：
     - `preSnapshot`（早於 `B.date` 或屬期初標記）的交易現金流**不計入** `flows`、`inflow`／`outflow` 與 `lastTradePx`；`sharesAt` 在 `d < B.date` 一律為 `0`（不含未入帳的快照前歷史）。
     - 於 `B.date` 產生一筆初始證券投入現金流 `f = B.shares * initPrice`：若 `books[B.symbol]` 在 `B.date` 有當天收盤價（`px.d === B.date`）則優先使用市價，否則回退以 `B.avgCost` 計算（與 `transfer_in` 一致，回退時加入 `est.add("transfer_at_cost")`）。
     - **重要修正**：因為計算起點直接從各檔有效起點（`B.date`）或最早有效日算起，若股票日 K 第一天早於或等於 `B.date`，即使該檔在 `B.date` 前曾有標記為 `preSnapshot` 的舊交易（例如兩年前 `transfer_in`），也不會誤報 `history_truncated`。
@@ -256,8 +308,8 @@
       mode: "auto",
       kind: "holdings" | "trades" | "unknown",
       asOf: "YYYY-MM-DD" | null,
-      asOfStatus: "exact" | "year" | "mdy" | "invalid" | "missing",
-      // 僅當 mdy / invalid 時才帶出 altDate / rawAsOf
+      asOfStatus: "exact" | "year" | "mdy" | "future" | "invalid" | "missing",
+      // 當 year / mdy / future / invalid 時帶出 rawAsOf（mdy 另帶 altDate），供前端並陳原始日期字樣與推定日
       rows: [...],
       model: "..."
     }
@@ -265,14 +317,15 @@
 - **日期規則（`asOf` 與逐列 `date`）與向下相容**：
   - `parseTradeDate(raw, today, opts = {})` 與 `cleanTradeRows(rows, opts = {})` 在**未傳入 `missingAsNull: true` 時完全保留既有行為**：空白／`null`／純空白仍回傳 `{ date: refToday, dateAssumed: "today" }`，確保既有的直接單元呼叫與 `tests/ledger-import.test.mjs` 斷言完全不中斷。
   - **僅 `mode: "auto"`** 在清理時啟用 `{ missingAsNull: true }`：
-    - 對 `kind === "holdings"` 與頂部基準日 `asOf`（`parseAsOf(asOfRaw, today)`）：沿用 `parseTradeDate` 核心解析規則產出 `asOfStatus: "exact" | "year" | "mdy" | "invalid" | "missing"`；若 `asOfRaw` 為空／`null`，回傳 **`asOf: null, asOfStatus: "missing"`**（決不為無日期快照合成今天），並由前端直接觸發 Level 2 要求確認基準日期。
-    - 對 `kind === "trades"`：逐列缺日期時回傳 `{ date: "", dateAssumed: "missing" }`；前端收到後若頂部 `asOf` 為有效日期（`asOfStatus === "exact" | "year"`）即自動為空白列預帶 `asOf`（標示「自動帶入截圖基準日」並允許逐列修改），若連頂部 `asOf` 也為 `"missing"`／`"invalid"` 則進入 Level 2 `missing_date` 請使用者補填。
+    - 對 `kind === "holdings"` 與頂部基準日 `asOf`（`parseAsOf(asOfRaw, today)`）：沿用 `parseTradeDate` 核心解析規則（對 `MM/DD` 若今年 cand > today 自動跨年推前一年並保留 `rawAsOf`），並加上明確未來日判定（若解析日 `> today` 回 `{ asOf, asOfStatus: "future", rawAsOf }`），總共產出 `asOfStatus: "exact" | "year" | "mdy" | "future" | "invalid" | "missing"`；若 `asOfRaw` 為空／`null`，回傳 **`asOf: null, asOfStatus: "missing"`**（決不為無日期快照合成今天）。
+    - **關鍵安全閘道**：對庫存快照，**只有 `asOfStatus === "exact"`（且 `asOf <= today`）** 才允許未經額外日期確認直接建立 `confirmed` 基準；**`asOfStatus === "year"`（缺少截圖年份）一律與 `missing`/`mdy`/`future`/`invalid` 同樣先進 Level 2**，UI 必須同時展示截圖原始日期（例如 `05/12`）與系統推定日期（例如 `2026-05-12`），唯有使用者明確確認年份或修正正確日期（且 `<= today`）後才可建立 `confirmed` 快照！
+    - 對 `kind === "trades"`：逐列缺日期時回傳 `{ date: "", dateAssumed: "missing" }`；前端收到後若頂部 `asOf` 為有效已知年份日期（`asOfStatus === "exact"`）即自動為空白列預帶 `asOf`（標示「自動帶入截圖基準日」並允許逐列修改），若頂部 `asOf` 為 `"year"` 仍標「年份待核對」要求確認，若為 `"missing"`／`"invalid"`／`"future"` 則進入 Level 2 `missing_date` 請使用者補填。
 - **融資／融券辨識與條件展開**：
   - `PROMPT`／`TRADES_PROMPT`／`AUTO_PROMPT` 與結構清理函式 `cleanRows`／`cleanTradeRows` 擴充擷取信用交易標記（`融資`、`融券`、`資買`、`資賣`、`券賣`、`券買`、`\bmargin\b`、`\bshort\b` 等）。
   - 一律以條件展開 `...(marginType ? { marginType } : {})` 輸出：僅在實際偵測到信用交易關鍵字時才於回傳物件附上 `marginType: "margin" | "short"`；一般現股完全保持原本鍵集合不變，不破壞既有單元測試 `deepEqual` 契約。
 - **Mock 與錯誤處理**：
   - 若 AI 回傳 `kind === "unknown"` 但無可用資料列，回 200 `{ ok: false, kind: "unknown", error: "..." }`；若帶有可讀資料列，則回 `{ ok: true, mode: "auto", kind: "unknown", ... }` 由前端檢視表格直接讓使用者手動點選為「庫存快照」或「交易明細」（不額外重呼叫 AI）。
-  - 所有測試一律 mock `fetch`／AI 函式，涵蓋成功、失敗（無金鑰、429、503、422）、`unknown`、缺日期、斜線歧義日期與融資融券隔離。
+  - 所有測試一律 mock `fetch`／AI 函式，涵蓋成功、失敗（無金鑰、429、503、422）、`unknown`、缺日期、`year` 跨年與未來日、斜線歧義日期與融資融券隔離。
 
 ---
 
@@ -291,7 +344,7 @@
 
 ---
 
-## 入口收斂、三級分流、T+2 提示與全站 8 頁標示
+## 入口收斂、三級分流、依市場分流之交割提示與全站 8 頁標示
 
 ### 1. 單一主要入口與檢視流程
 
@@ -299,20 +352,26 @@
   - `watch.html` 資料來源列「截圖匯入」（`[data-hsrc="tx-imp"]`）、帳本簡介頁（`lgIntroHtml`）與交易紀錄工具列（`[data-lg="imp"]`），**全面導向同一個「匯入資料」統一視窗（`lgOpenImport()`）**。
   - **移除前置二選一關卡**：打開後不先問使用者「你是庫存還是對帳單」，而是直接提供單一「📷 上傳券商截圖（自動辨識庫存／交易明細）」主按鈕（送 `mode: "auto"` 到 `/api/import`），下方輔以次要入口「手動新增空白列」與「待對帳項目（N）」（若有開放衝突）。
   - AI 回傳後於審核表格頂部呈現「系統辨識結果：庫存快照／交易明細＋截圖基準日」（若 `kind === "unknown"` 則亮顯請選擇類型切換鈕），**保留一鍵切換「改為庫存快照／改為交易明細」**。
+  - **快照「完整／部分」範圍確認**：當 `kind === "holdings"` 時，頂部呈現明確範圍選擇（`[data-lgimp-scope="partial"]`「部分截圖／單頁（只更新畫面上列出的股票）」vs `[data-lgimp-scope="full"]`「完整庫存清單（未出現且原本持有的標的將進入清倉核對或結案）」）；**預設一律保守不猜 `"full"`**（若已有其他活躍快照且未出現在本次截圖，並明確列出未出現標的提醒使用者確認範圍）。
   - **既有 E2E 遷移說明**：原 `tests/e2e/ledger-import.test.mjs` 使用前置選項卡 `[data-lgimp-pick="holdings"|"trades"]` 與驗證送出 `mode: "holdings"|"trades"`。實作 Batch 2 將同步把該測試遷移至新統一上傳入口與 `mode: "auto"`，原有所有斷言（日期修正、手續費與折扣、FIFO 同日排序、黏滯表頭無水平溢出、代號檢核、舊庫存不動）完整保留，絕不放寬。
 
-### 2. 三級處理分流
+### 2. 三級處理分流與依市場交割提示（`KLRecon.settlementHint(market)`）
+
+- **市場區別交割提示文案（嚴禁對美股誤用台股 T+2）**：
+  - `market === "tw"`：`⚠︎ 待對帳（差異 N 股）— 可能是近 2 個交易日尚未交割（台股 T+2），或有交易還沒匯入`
+  - `market === "us"`：`⚠︎ 待對帳（差異 N 股）— 可能是前 1 個交易日尚未交割（美股 T+1），或有交易還沒匯入`
+  - 市場不明／多市場混列摘要：`⚠︎ 待對帳（差異 N 股）— 可能有尚未反映的交割或未匯入交易`
 
 | 分級 | 條件 | 系統行為 |
 |---|---|---|
-| **Level 1（自動處理）** | 代號、方向、精確日期、股數、有效價格／正成本齊全；無重複；非融資融券；與基準快照關係明確（`S1→S2` 在容差內自動晉升、`t.date < B.date` 納入歷史不重加股數、`t.date > B.date` 正常加減） | 在審核清單清楚標示系統自動對帳結論（例如「歷史紀錄：不重複增加持股」、「快照自動更新基準」），確認後直接套用並記錄 `audit[]` |
-| **Level 2（顯示差異，請使用者確認）** | ① 快照推算與新快照數量或成本差超出容差（`recon_diff`）；② 快照缺均價（`missing_cost`）；③ 截圖缺基準日或格式歧義（`missing_date`／`ambiguous_date`）；④ 同日交易與快照先後未明（`same_day_order`）；⑤ 跨批疑似重複（`possible_duplicate`）；⑥ 截圖含融資／融券部位（`margin_separated`） | 保留雙邊資訊並暫維持現有已確認快照計算。`recon_diff` 必顯示：**「⚠︎ 待對帳（差異 N 股）— 可能是近 2 個交易日還沒交割，或有交易還沒匯入」**，提供保留兩邊待釐清／補匯入明細／採信新快照（須留原因寫 `audit[]`）三種處理。融資融券列自動隔離且預設不勾選入現股帳本，引導至「配置與風險 → 融資」管理 |
-| **Level 3（暫停入帳，不擋其他列）** | 代號無法辨識、方向不明、無效日期／時間、快照後造成負持股（賣超） | 標紅暫停套用該列（使用者可當場修正欄位、取消勾選排除、或僅保留其餘正確列先完成匯入），絕不自行猜測覆蓋 |
+| **Level 1（自動處理）** | 代號、方向、**精確已知年份且非未來日期（`exact` 或已明確確認日期 `<= today`）**、股數、有效價格／正成本齊全；無重複；非融資融券；與基準快照關係明確（`S1→S2` 在容差內自動晉升、完整快照且帳本推算已歸零自動關閉、`t.date < B.date` 納入歷史不重加股數、`t.date > B.date` 正常加減） | 在審核清單清楚標示系統自動對帳結論（例如「歷史紀錄：不重複增加持股」、「快照自動更新基準」、「完整快照確認已清倉歸零」），確認後直接套用並記錄 `audit[]` |
+| **Level 2（顯示差異，請使用者確認）** | ① 快照推算與新快照數量或成本差超出容差（`recon_diff`，含**完整庫存快照已無某既有持股但帳本推算仍有股數**）；② 快照缺均價（`missing_cost`）；③ 截圖**缺年份（`year`）**、缺基準日（`missing`）、格式歧義（`mdy`／`invalid`）或未來日（`future`）；④ 同日交易與快照先後未明（`same_day_order`）；⑤ 跨批疑似重複（`possible_duplicate`）；⑥ 截圖含融資／融券部位（`margin_separated`） | 保留雙邊資訊並暫維持現有已確認快照計算。`year` 並陳原始字串與推定日，須明確確認後方可建立正式基準。`recon_diff` 依標的 `market` 套用對應 T+2／T+1／中性交割提示，提供保留兩邊待釐清／補匯入明細／採信新快照或確認清倉（須留原因寫 `audit[]`）等處理。融資融券列自動隔離且預設不勾選入現股帳本，引導至「配置與風險 → 融資」管理 |
+| **Level 3（暫停入帳，不擋其他列）** | 代號無法辨識、方向不明、無法解析／未來成交日、同一 `symbol` 與既有快照或帳本之 `market/currency` 衝突（`currency_conflict`）、快照後造成負持股（賣超） | 標紅暫停套用該列（使用者可當場修正欄位、取消勾選排除、或僅保留其餘正確列先完成匯入），絕不自行猜測覆蓋 |
 
 ### 3. `holdSrcApply`／`holdSrcBar`、跨分頁即時更新與全站 8 頁標示
 
 - **`watch.html` 資料來源判斷**：
-  - `holdSrcApply()` 讀取 `kline:pf:v1` 與 `kline:pf:recon:v1`；**有交易（`transactions.length > 0`）或有至少一筆已確認快照（`confirmedSnapshots.length > 0`）**且 `!W.hsrcLegacy` 時，全部改用 `KLLedger.buildReconciledLedger` 計算持倉並鎖定 `kline:watch:hold` 唯讀。
+  - `holdSrcApply()` 讀取 `kline:pf:v1` 與 `kline:pf:recon:v1`（先執行無副作用／冪等之 `recoverCommit` 檢查未竟跨鍵寫入）；**有交易（`transactions.length > 0`）或有至少一筆已確認快照（`confirmedSnapshots.length > 0`，含完整快照結案歸零基準）**且 `!W.hsrcLegacy` 時，全部改用 `KLLedger.buildReconciledLedger` 計算持倉並鎖定 `kline:watch:hold` 唯讀（確保全部出清後不會誤退回舊 `kline:watch:hold`）。
   - 快取鍵改為 `` `${twIso()}|${rawPf}|${rawRecon}` ``（修改交易或更新對帳快照／標記狀態皆立即失效重算）。
   - 監聽 `window.addEventListener("storage", ...)`，於 `kline:pf:v1` 或 `kline:pf:recon:v1` 在其他分頁變動時即時重算並重畫畫面。
 - **`holdSrcBar()` 文案規則**：
@@ -324,7 +383,7 @@
   |---|---|---|
   | **1. 總覽**（`pf-home.js`） | 頂部／風險狀態列出 `⚠︎ 待對帳（<標的> 差異 N 股）`（可點擊跳往交易紀錄處理） | 以最新已確認快照顯示資產、報酬與前五大 |
   | **2. 持股（損益／屬性分析）**（`watch.html`） | `holdSrcBar()`＋個股列警示 `⚠︎ 待對帳（差異 N 股）`＋`holdDataCheck()` 提示 | 股數與均價暫用最新已確認快照（鎖 `kline:watch:hold`） |
-  | **3. 交易紀錄**（`ledger-ui.js`） | 頂部待對帳專用卡片（列出所有 open `conflicts`、雙邊比對數字、T+2 提示、解決操作＋歷史/稽核抽屜），持倉列同步標示 | `preSnapshot` 交易標示「快照前歷史」；`transfer_in` 顯示「標為期初快照／撤回」 |
+  | **3. 交易紀錄**（`ledger-ui.js`） | 頂部待對帳專用卡片（列出所有 open `conflicts`、雙邊比對數字、依市場分流之 T+2／T+1／中性交割提示、解決操作＋歷史/稽核抽屜），持倉列同步標示 | `preSnapshot` 交易標示「快照前歷史」；`transfer_in` 顯示「標為期初快照／撤回」 |
   | **4. 績效**（`ledger-ui.js`＋`perf.js`） | 狀態列／卡片標章與原因：`⚠︎ 待對帳（差異 N 股）`、`recon_pending`、`snapshot_baseline` | 從快照日起算，不動現金、不回推快照前 |
   | **5. 配置與再平衡**（`ledger-ui.js`＋`pf-rebal.js`） | 頁面頂部＋再平衡卡片內顯示 `⚠︎ 待對帳（差異 N 股）` | 若有快照基準或待對帳部位，明確標示「**用已確認快照的股數試算**」 |
   | **6. 壓力測試**（`pf-stress.js`） | 壓力情境卡片頂部／試算說明顯示 `⚠︎ 待對帳（差異 N 股）` | 明確標示「**用已確認快照的股數試算**」 |
@@ -333,7 +392,7 @@
 
 ---
 
-## 必測情境與驗收標準（18 項）
+## 必測情境與驗收標準（24 項）
 
 | # | 測試情境（全部用固定假資料／Mock `/api/import`） | 預期結果 |
 |---|---|---|
@@ -342,11 +401,11 @@
 | 3 | 補傳最新買進（晚於快照日） | 正確增加持股、調整成本（AVG 或快照後 FIFO），並以已確認快照後之買進估算／記入 |
 | 4 | 補傳最新賣出（晚於快照日） | 正確減少持股，已實現損益正確以快照均價計算 |
 | 5 | 同張圖片／同批成交重複上傳（含原圖指紋＋跨批／同批） | **同批同價分批兩筆不會誤報重複**；跨批同簽章進 Level 2；未結案同原圖 SHA-256 顯示非阻斷提醒 |
-| 6 | 庫存快照與交易明細計算數量不同 | 保留兩邊與差異 N 股，顯示 T+2 交割提示，未確認前暫用已確認快照並於全站 8 頁標示 `⚠︎ 待對帳（差異 N 股）` |
+| 6 | 庫存快照與交易明細計算數量不同 | 保留兩邊與差異 N 股，依市場顯示對應交割提示，未確認前暫用已確認快照並於全站 8 頁標示 `⚠︎ 待對帳（差異 N 股）` |
 | 7 | 截圖日期缺失或格式歧義 | `asOfStatus: "missing"`／`mdy` 進 Level 2 要求確認，不擅自以今天建立基準或定案入帳 |
 | 8 | 多股票混合截圖 | 逐檔獨立辨識與對帳；各檔按自身快照或明細各自判定 Level 1/2/3 |
 | 9 | 部分交易辨識失敗（Level 3） | 問題列暫停入帳，同批其餘有效列照常匯入不受阻 |
-| 10 | 同日交易與快照基準同日 | 進入 Level 2 請使用者確認發生在快照前（僅存歷史）或快照後（須加減持股），不擅自假設先後 |
+| 10 | 同日交易與快照基準同日 | 進入 Level 2 請使用者確認發生在快照前（僅存歷史）或快照後（須加減持股），定序記在 `kline:pf:recon:v1.sameDayRelations`，不擅自假設先後 |
 | 11 | 完整匯入／對帳歷程可追溯 | `imports[]` 與 `audit[]` 保留來源、原圖雜湊、AI 結果、對帳結論與確認動作，可在頁面檢視並修正 |
 | 12 | 舊的 `transfer_in` 加上新快照 | 舊 `transfer_in` 未手動標記前維持一般交易參與推算，與新快照一致時自動升級／不一致進 `recon_diff` |
 | 13 | 同一檔先後有兩張快照（`S1` → `S2`） | `S1`＋中間確認交易與 `S2` 股數／成本在容差內 → `S2` 自動晉升、`S1` 設 `superseded`；不符 → 留 `S1` 標 `⚠︎ 待對帳` |
@@ -354,7 +413,13 @@
 | 15 | 截圖裡含融資／融券部位 | `/api/import` 輸出 `marginType`；前端隔離並預設不入現股快照，顯示引導前往「配置與風險 → 融資」 |
 | 16 | 帳本完全空白（無 `pf:v1` 或 `transactions: []`）、只匯入庫存快照 | `holdSrcApply`、`renderLedger`、`perf`、`pf-home`、`pf-report`、`alloc`、`div`、`thesis` 全正常顯示，不退回空白介紹頁 |
 | 17 | `transfer_in` 手動「標為期初快照 → 撤回 → 再標記」 | 標記時不疊加該筆 `transfer_in` 與不動 `kline:pf:v1`；撤回恢復一般計算；再標記回到快照模式並完整留稽核 |
-| 18 | `kline:pf:recon:v1` 改變時即時重算（含跨分頁 `storage` 事件）＋備份鍵序驗證＋`perf` 快照起點／無圖片／120KB 裁剪／靜態防繞過 | 寫入或跨分頁變更立即更新 `W.hold`；備份含隨機鍵序 `recon` 缺檢查模組必拒；`perf` 不改現金不回推；全專案除 `ledger.js` 無直接 `.buildLedger(` 呼叫 |
+| 18 | `kline:pf:recon:v1` 改變時即時重算（含跨分頁 `storage` 事件）＋備份鍵序驗證＋`perf` 快照起點／無圖片／靜態防繞過 | 寫入或跨分頁變更立即更新 `W.hold`；備份含隨機鍵序 `recon` 缺檢查模組或含 `pendingCommit` 必拒；`perf` 不改現金不回推；全專案除 `ledger.js` 無直接 `.buildLedger(` 呼叫 |
+| 19 | **跨鍵雙寫失敗與重啟恢復（WAL Commit Protocol）** | Phase 1 失敗、Phase 2 寫入失敗（`QuotaExceededError` 回滾）、Phase 3 中斷後重開頁面恢復：`kline:pf:v1` 與 `kline:pf:recon:v1` 最終完全一致且**零重複交易** |
+| 20 | **完整快照 vs 部分快照處理持股歸零** | `S1` 有 `2330`：`S2` 確認為 `"full"` 且不含 `2330` 時能自動結案或進 Level 2 確認後關閉 `S1`（不再顯示 `2330`）；`S2` 為 `"partial"` 且不含 `2330` 時維持 `S1`（`2330` 保留） |
+| 21 | **缺年份（`asOfStatus: "year"`）跨年與未來日期（`future`）防護** | `year`（含 `01/05` 看 `12/28` 跨年）與未來日一律先進 Level 2 並顯示原始與推定日期；未經使用者確認前**不可產生 `confirmed` 快照** |
+| 22 | **同 `symbol` 不同 `market`／`currency` 約束** | 快照內部錯配、快照之間不同市場／幣別、或快照與既有交易不同市場／幣別皆被 `KLRecon.validateStore`、`planHoldingsSnapshot` 與 `buildReconciledLedger` 拒絕（`currency_conflict`） |
+| 23 | **不可裁剪核心資料超過 120KB 上限失敗契約** | 核心保留物件超過 `maxBytes` 時 `pruneStore` 回 `{ ok: false, code: "core_data_exceeds_limit" }`，寫入前擋下並保留既有 `kline:pf:recon:v1` 不覆蓋 |
+| 24 | **依市場區分交割差異提示（TW T+2 vs US T+1 vs 中性）** | 台股衝突顯示 T+2、美股（例如 NVDA）衝突顯示 T+1、市場不明或混合摘要顯示中性交割提示，絕不對美股顯示台股 T+2 |
 
 - **共用檔案與跨裝置驗證（`AGENTS.md` 必檢）**：
   - 本項目改動共用檔案 `learner/watch.html`、`learner/ledger-ui.js`（以及 `learner/ledger.js`、`learner/recon.js`、`learner/perf.js`、`learner/tools.js`、`learner/pf-*.js`），實作時必跑 `tests/e2e/pf-mobile.test.mjs`、`tests/e2e/pf-tablet-kbd.test.mjs`、`node tests/unit.test.mjs` 與新／改寫之 E2E 與單元測試，並以同一 head SHA 的 CI `test` 全過為合併門檻；UI 部分另須於 390px 手機與 1280px 桌面完成操作與截圖留證。
