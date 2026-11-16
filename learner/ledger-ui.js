@@ -128,7 +128,11 @@ function lgFromForm(form, F) {
   for (const k of LG_FIELDS[type]) { if (k === "dayTrade") { o.dayTrade = fd.get("dayTrade") === "on"; continue; } const s = String(fd.get(k) ?? "").trim(); if (!s) continue; o[k] = k === "symbol" ? s.toUpperCase() : k === "ref" ? s : Number(s.replace(/,/g, "")); }
   const m = o.symbol ? lgMkt(o.symbol) : fd.get("market") === "us" ? "us" : "tw";
   o.market = m; o.currency = m === "us" ? "USD" : m === "tw" ? "TWD" : null;
-  if (F.orig?.feeEstimated && o.type === F.orig.type && o.symbol === F.orig.symbol && o.shares === F.orig.shares && o.price === F.orig.price && !!o.dayTrade === !!F.orig.dayTrade && o.fee !== undefined && o.fee === F.orig.fee && (o.tax ?? 0) === (F.orig.tax ?? 0)) o.feeEstimated = true;
+  if (F.orig?.feeEstimated) {
+    const sameCost = o.type === F.orig.type && o.symbol === F.orig.symbol && o.shares === F.orig.shares && o.price === F.orig.price && !!o.dayTrade === !!F.orig.dayTrade;
+    if (sameCost) { if (o.fee !== undefined && o.fee === F.orig.fee && (o.tax ?? 0) === (F.orig.tax ?? 0)) o.feeEstimated = true; }
+    else { if (o.fee === F.orig.fee) delete o.fee; if ((o.tax ?? 0) === (F.orig.tax ?? 0)) delete o.tax; }
+  }
   return F.id ? { ...o, id: F.id, v: 1 } : KLLedger.makeTx(o); // 修改：整筆用表單的內容重建（換了類型時，舊類型的欄位不會留下來），編號不變
 }
 document.addEventListener("click", e => {
