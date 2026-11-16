@@ -631,15 +631,15 @@ for (const width of [390, 1280]) {
       pf: JSON.parse(localStorage.getItem("kline:pf:v1")),
       hold: JSON.parse(localStorage.getItem("kline:watch:hold")),
     }));
-    // 順序依日期由舊到新（2026-05-01 → 05-12 兩筆 2454 買進在前、賣出在後 → 05-14 AAPL → 06-05 NVDA）
+    // 順序依日期由舊到新（2026-05-01 → 05-12 兩筆 2454 買進在前、賣出在後 → 05-14 AAPL → 06-05 NVDA），且空白費稅在寫入時已快照為數值並標記 feeEstimated
     const appended = saved.pf.transactions.slice(1);
-    assert.deepEqual(appended.map(t => [t.date, t.type, t.symbol, t.shares, t.fee, !!t.dayTrade]), [
-      ["2026-05-01", "buy", "2330", 1000, null, false],
-      ["2026-05-12", "buy", "2454", 500, 0, false],
-      ["2026-05-12", "buy", "2454", 500, 0, false],
-      ["2026-05-12", "sell", "2454", 1000, null, true],
-      ["2026-05-14", "buy", "AAPL", 2, null, false],
-      ["2026-06-05", "buy", "NVDA", 1, 0, false],
+    assert.deepEqual(appended.map(t => [t.date, t.type, t.symbol, t.shares, t.fee, t.tax, !!t.feeEstimated, !!t.dayTrade]), [
+      ["2026-05-01", "buy", "2330", 1000, 1254, 0, true, false],
+      ["2026-05-12", "buy", "2454", 500, 0, 0, false, false],
+      ["2026-05-12", "buy", "2454", 500, 0, 0, false, false],
+      ["2026-05-12", "sell", "2454", 1000, 1567, 1650, true, true],
+      ["2026-05-14", "buy", "AAPL", 2, 0, 0, true, false],
+      ["2026-06-05", "buy", "NVDA", 1, 0, 0, false, false],
     ]);
     assert.deepEqual(saved.hold, OLD_HOLD, "選項 2 寫入後舊庫存完全不動");
 
@@ -660,21 +660,25 @@ for (const width of [390, 1280]) {
   });
 }
 
-test("390：選項 2 開啟含第 2 欄日期錯誤時開局不偷橫捲、FIFO 同日多筆買進順序提醒與調序清除", async () => {
+test("390：選項 2 開啟含第 2 欄日期錯誤或無錯誤皆不偷橫捲、套用 watch:hdisc 折扣估算快照、FIFO 同日順序提醒與調序清除", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  let shotMode = 1;
   await setupRoutes(ctx, () => ({
     body: {
       ok: true,
       mode: "trades",
-      rows: [
-        { date: "2026-05-06", dateAssumed: "mdy", altDate: "2026-06-05", rawDate: "05/06/2026", time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 100, fee: 0, tax: 0, dayTrade: false },
+      rows: shotMode === 1 ? [
+        { date: "2026-05-06", dateAssumed: "mdy", altDate: "2026-06-05", rawDate: "05/06/2026", time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 100, fee: null, tax: null, dayTrade: false },
         { date: "2026-05-06", dateAssumed: null, time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 120, fee: 0, tax: 0, dayTrade: false },
         { date: "2026-05-10", dateAssumed: null, time: null, side: "sell", name: "台積電", code: "2330", shares: 1000, price: 130, fee: 0, tax: 0, dayTrade: false },
+      ] : [
+        { date: "2026-05-11", dateAssumed: null, time: "09:15", side: "buy", name: "台積電", code: "2330", shares: 1000, price: 500, fee: null, tax: null, dayTrade: false },
       ],
     },
   }));
   await p.evaluate(() => {
     localStorage.removeItem("kline:pf:v1");
+    W.hdisc = 0.28; store.set("watch:hdisc", 0.28);
     W.holdMkt = "tw"; setLt("hold");
   });
   await p.waitForSelector("#hvSeg");
@@ -684,14 +688,19 @@ test("390：選項 2 開啟含第 2 欄日期錯誤時開局不偷橫捲、FIFO 
   await pickFileVia(p, '[data-lgimp-pick="trades"]');
   await p.waitForSelector("#lgImpForm");
 
-  // 第 2 欄 mdy 錯誤聚焦時，scrollLeft 須保持 0，不滑到 sticky 第 1 欄下方
+  // 第 2 欄 mdy 錯誤聚焦時，scrollLeft 須保持 0，不滑到 sticky 第 1 欄下方；且摘要顯示手續費 2.8 折
   assert.equal(await p.evaluate(() => $("#impSheet .hg-wrap").scrollLeft), 0, "第 2 欄為開局焦點時不觸發多餘橫向捲動");
+  assert.match(await p.evaluate(() => $("#lgImpSum").textContent), /手續費 2\.8 折/);
 
-  // 確認月/日為 2026-05-06（與第 1 列同日）、切為 FIFO → 顯示 FIFO 批次順序提示；送出未勾確認標記 aria-invalid，再調序後清除過期警告與紅框
+  // 確認月/日為 2026-05-06（與第 1 列同日）：錯誤解除後顯示手續費按 2.8 折估算為 39；切為 FIFO → 顯示 FIFO 批次順序提示（文案為「缺乏可驗證成交時間」）
   await p.click('#lgImpTbody tr[data-row="0"] [data-lgimp-dok]');
+  assert.match(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="0"] [data-lgimp-meta]').textContent), /手續費估 39/);
   await p.selectOption("#lgImpMethod", "fifo");
   assert.equal(await p.evaluate(() => $("#lgImpOrderWrap").hidden), false);
-  assert.match(await p.evaluate(() => $("#lgImpOrderTxt").textContent), /FIFO/);
+  const ordTxt = await p.evaluate(() => $("#lgImpOrderTxt").textContent);
+  assert.match(ordTxt, /FIFO/);
+  assert.match(ordTxt, /缺乏可驗證成交時間/);
+  assert.doesNotMatch(ordTxt, /序號/);
   await p.click("#lgImpSave");
   await p.waitForFunction(() => /FIFO 模式下/.test($("#impLive")?.textContent || ""));
   assert.equal(await p.evaluate(() => $("#lgImpOrderOk").getAttribute("aria-invalid")), "true");
@@ -709,7 +718,15 @@ test("390：選項 2 開啟含第 2 欄日期錯誤時開局不偷橫捲、FIFO 
   await p.waitForFunction(() => $("#impSheet").hidden && /已匯入 3 筆成交交易/.test($("#lx").innerText));
   const pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
   assert.equal(pf.method, "fifo");
-  assert.deepEqual(pf.transactions.map(t => [t.time ?? null, t.price]), [["09:05", 100], ["09:10", 120], [null, 130]]);
+  assert.deepEqual(pf.transactions.map(t => [t.time ?? null, t.price, t.fee, !!t.feeEstimated]), [["09:05", 100, 39, true], ["09:10", 120, 0, false], [null, 130, 0, false]]);
+
+  // 無錯誤列時開啟匯入檢視：390px 手機 .hg-wrap.scrollLeft 亦須保持 0（不因第 1 列勾選框聚焦而橫移）
+  shotMode = 2;
+  await p.click('#lx .lgbar [data-lg="imp"]');
+  await pickFileVia(p, '[data-lgimp-pick="trades"]');
+  await p.waitForSelector("#lgImpForm");
+  assert.equal(await p.evaluate(() => $("#impSheet .hg-wrap").scrollLeft), 0, "無錯誤列開局聚焦第 1 列勾選框時 scrollLeft 保持 0");
   await ctx.close();
   assert.deepEqual(errs, []);
 });
+

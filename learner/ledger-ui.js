@@ -25,6 +25,9 @@ const LG_FIELDS = { // 每種交易要填的欄位
 };
 const LG_LABEL = { symbol: "代號", shares: "股數", price: "價格（每股）", fee: "手續費（空白＝估算）", tax: "交易稅（空白＝估算）", amount: "金額", ratio: "比例", ref: "對應交易", dayTrade: "現股當沖" };
 const lgMkt = c => (/^\d{4,6}[A-Z]?$/.test(c) ? "tw" : /^[A-Z][A-Z0-9]{0,5}([.-][A-Z]{1,3})?$/.test(c) ? "us" : null);
+const lgDisc = () => (Number(W?.hdisc) > 0 && Number(W.hdisc) <= 1 ? Number(W.hdisc) : 1);
+const lgDiscText = () => { const d = lgDisc(); return d < 1 ? `（台股手續費 ${+(d * 10).toFixed(2)} 折）` : ""; };
+const lgRules = () => (KLLedger.DEFAULT_RULES ? { ...KLLedger.DEFAULT_RULES, tw: { ...KLLedger.DEFAULT_RULES.tw, discount: lgDisc() } } : undefined);
 const lgMoney = (v, cur) => { if (v == null) return "—"; const x = cur === "USD" ? Math.round(+v * 100) / 100 : Math.round(+v); return (cur === "USD" ? "US$" : "") + (x === 0 ? 0 : x).toLocaleString(undefined, cur === "USD" ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : {}); }; // 四捨五入後是 0 就顯示 0，不顯示 −0
 const lgSgn = (v, cur) => (v == null ? "—" : (v > 0 ? "+" : "") + lgMoney(v, cur));
 const lgN = v => (v == null ? "—" : (+v).toLocaleString(undefined, { maximumFractionDigits: 4 }));
@@ -85,7 +88,7 @@ function renderLedger() {
     ${bad.length ? `<p class="note lgwarn">✕ ${bad.length} 筆交易有錯誤，沒有算進去（下面標紅色的），請修改或刪除。</p>` : ""}${pend.length ? `<p class="note lgwarn">⚠︎ ${pend.map(p => esc(nameOf(p.symbol))).join("、")} 合股後有不足一股的部分還沒結算，股數與成本是暫時的；請新增一筆「零股現金結算」。</p>` : ""}
     ${L.form ? lgFormHtml(L.form, S) : ""}
     <div class="lgcurs">${cur.map(curBox).join("") || `<p class="note">${lgMktSel() === "all" ? "還沒有交易。" : `沒有${lgMktSel() === "us" ? "美股" : "台股"}的交易。`}</p>`}</div>
-    <p class="note">台幣和美元分開計算，不相加。未實現損益用目前報價；費用標「估算」的是依預設費率算的，實際以券商對帳單為準。${S.migratedFrom ? `由舊庫存建立於 ${esc(String(S.at || "").slice(0, 10))}；舊庫存資料仍保留。` : ""}</p>
+    <p class="note">台幣和美元分開計算，不相加。未實現損益用目前報價；費用標「估算」的是新增時依費用規則與持股頁「手續費折扣」設定${lgDiscText()}算的（已存交易不會隨設定變更而重算），實際以券商對帳單為準。${S.migratedFrom ? `由舊庫存建立於 ${esc(String(S.at || "").slice(0, 10))}；舊庫存資料仍保留。` : ""}</p>
     ${open.length ? `<h4 class="lgh">持有中（${open.length} 檔）</h4><ul class="lglist">${open.map(posRow).join("")}</ul>` : ""}
     ${closed.length ? `<h4 class="lgh">已出清（${closed.length} 檔）</h4><ul class="lglist">${closed.map(posRow).join("")}</ul>` : ""}
     <h4 class="lgh">交易紀錄（${txs.length} 筆${mk}）</h4><ul class="lglist lgtxs">${txs.map(txRow).join("") || `<li class="note">還沒有交易。</li>`}</ul>`;
@@ -125,6 +128,25 @@ function lgFromForm(form, F) {
   for (const k of LG_FIELDS[type]) { if (k === "dayTrade") { o.dayTrade = fd.get("dayTrade") === "on"; continue; } const s = String(fd.get(k) ?? "").trim(); if (!s) continue; o[k] = k === "symbol" ? s.toUpperCase() : k === "ref" ? s : Number(s.replace(/,/g, "")); }
   const m = o.symbol ? lgMkt(o.symbol) : fd.get("market") === "us" ? "us" : "tw";
   o.market = m; o.currency = m === "us" ? "USD" : m === "tw" ? "TWD" : null;
+  if (F.orig?.feeEstimated || F.orig?.feeEst || F.orig?.taxEst) {
+    const sameCost = o.type === F.orig.type && o.symbol === F.orig.symbol && o.shares === F.orig.shares && o.price === F.orig.price && !!o.dayTrade === !!F.orig.dayTrade;
+    const hasFieldEst = typeof F.orig.feeEst === "boolean" || typeof F.orig.taxEst === "boolean";
+    const feeSame = o.fee !== undefined && o.fee === F.orig.fee, taxSame = (o.tax ?? 0) === (F.orig.tax ?? 0);
+    if (hasFieldEst) {
+      if (sameCost) {
+        if (F.orig.feeEst && feeSame) o.feeEst = true;
+        if (F.orig.taxEst && o.tax !== undefined && taxSame) o.taxEst = true;
+        if (o.feeEst || o.taxEst) o.feeEstimated = true;
+      } else {
+        if (F.orig.feeEst) { if (feeSame) delete o.fee; }
+        if (F.orig.taxEst) { if (taxSame) delete o.tax; }
+      }
+    } else if (F.orig.feeEstimated && (feeSame || (o.type === "sell" && o.tax !== undefined && taxSame))) {
+      // 舊資料僅有整筆 feeEstimated、未記錄個別欄位來源：採保守策略，不靜默刪除可能是手填的數值
+      o.feeEstimated = true;
+      if (!sameCost) o.legacyEstAmbiguous = true;
+    }
+  }
   return F.id ? { ...o, id: F.id, v: 1 } : KLLedger.makeTx(o); // 修改：整筆用表單的內容重建（換了類型時，舊類型的欄位不會留下來），編號不變
 }
 document.addEventListener("click", e => {
@@ -167,12 +189,26 @@ document.addEventListener("submit", e => {
   if (e.target.id === "lgImpForm") { e.preventDefault(); return lgSaveImport(); }
   if (e.target.id !== "lgForm") return; e.preventDefault();
   const L = W.lg, F = L.form, S = lgLoad(); if (!F || !S) return;
-  const tx = lgFromForm(e.target, F), list = F.id ? S.transactions.map(t => (t.id === F.id ? tx : t)) : [...S.transactions, tx];
+  const { legacyEstAmbiguous, ...rawTx } = lgFromForm(e.target, F), cRes = KLLedger.checkTx(rawTx, { today: lgToday(), rules: lgRules() });
+  const tx = !cRes.errors.length && cRes.tx ? {
+    ...rawTx,
+    fee: cRes.tx.fee,
+    tax: cRes.tx.tax,
+    ...(cRes.tx.feeEstimated ? { feeEstimated: true } : {}),
+    ...(cRes.tx.feeEst ? { feeEst: true } : {}),
+    ...(cRes.tx.taxEst ? { taxEst: true } : {}),
+    ...(cRes.tx.assetType && !rawTx.assetType ? { assetType: cRes.tx.assetType } : {})
+  } : rawTx;
+  const list = F.id ? S.transactions.map(t => (t.id === F.id ? tx : t)) : [...S.transactions, tx];
   const R = KLLedger.buildLedger(list, { method: S.method, today: lgToday() }), me = R.txs.find(x => x.id === tx.id);
   const newErr = R.txs.filter(x => x.errors.length && x.id !== tx.id);
   const fd = new FormData(e.target), v = {}; for (const [k, x] of fd) v[k] = x;
   if (me?.errors.length || newErr.length) { L.form = { ...F, v, err: [...(me?.errors || []).map(x => x.message), ...newErr.map(x => `會讓 ${x.tx?.date || ""} 的${KLLedger.TYPE_LABEL[x.tx?.type] || "交易"}出錯：${x.errors[0].message}`)] }; return renderList(); }
-  const warn = (me?.warnings || []).map(w => w.message);
+  const warn = [
+    ...(legacyEstAmbiguous ? ["這筆舊交易未分別記錄手續費與交易稅的估算來源，已保留原數值（若需重新估算請清空該欄位）"] : []),
+    ...(cRes.warnings || []).filter(w => w.code === "fee_estimated" && (!F.orig?.feeEstimated || rawTx.fee === undefined || (tx.type === "sell" && rawTx.tax === undefined))).map(w => w.message),
+    ...(me?.warnings || []).filter(w => w.code !== "fee_estimated").map(w => w.message)
+  ];
   if (warn.length && !confirm(`請確認：\n${warn.join("\n")}\n\n仍要${F.id ? "儲存" : "加入"}？`)) return;
   const r = lgSave({ ...S, transactions: list });
   if (!r.ok) { L.form = { ...F, v, err: ["資料檢查沒有通過，沒有儲存。"] }; return renderList(); }
@@ -574,7 +610,7 @@ function renderAllocBody(open, cashB, meta = {}) {
       <li>沒有現價的持股用成本估算市值，並標示。美股沒有產業資料，歸「未分類」。</li>
       <li>ETF 穿透：ETF 權重 × 成分股占比＝透過 ETF 持有的曝險；只揭露部分成分股時，剩下的歸「其他（未揭露）」。各 ETF 的成分股日期可能不同，會分開列出。</li>
       <li>重疊度：兩檔 ETF 共同成分股的占比取小的加總。有效檔數＝1 ÷ 權重平方和（不含現金）。市值規模、投資策略的分類還沒有資料。</li>
-      <li>費用估算口徑：再平衡試算會套用持股頁「手續費折扣」（<code>watch:hdisc</code>）與債券 ETF 免稅；交易紀錄新增時若留空未填費用，目前仍以預設費率估算。</li></ul></details>`;
+      <li>費用估算口徑：再平衡試算與交易紀錄新增／截圖匯入（未填手續費時）均套用持股頁「手續費折扣」（<code>watch:hdisc</code>）與債券 ETF 免稅；新交易估算值會在存檔時快照，後續調整折扣不會回溯改寫已保存的歷史交易。</li></ul></details>`;
 }
 const AL_MKT = { tw: "台股", us: "美股", cash: "現金" }, AL_TYPE = { stock: "個股", etf: "ETF", cash: "現金" };
 const alPct = w => (w == null ? "—" : (w * 100).toFixed(1) + "%");
@@ -809,6 +845,7 @@ function lgPrepare(S, opts = {}) {
   const method = existing ? existing.method : (S.method === "fifo" ? "fifo" : "avg");
   const today = lgToday();
   const mktFn = sym => (okImpCode(sym) ? lgMkt(sym) : null);
+  const rules = lgRules();
   const idPrefix = opts.finalIds ? undefined : "lgimp-p-";
   let P;
   if (S.kind === "holdings") {
@@ -822,7 +859,7 @@ function lgPrepare(S, opts = {}) {
       how: r.how,
       source: "import"
     }));
-    P = KLLedger.prepareHoldingsImport(mapped, existingTxs, { method, today, market: mktFn, ...(idPrefix ? { idPrefix } : {}) });
+    P = KLLedger.prepareHoldingsImport(mapped, existingTxs, { method, today, market: mktFn, rules, ...(idPrefix ? { idPrefix } : {}) });
   } else {
     const mapped = S.rows.map(r => {
       const sym = r.code || r.badSym || "", m = sym && okImpCode(sym) ? lgMkt(sym) : null;
@@ -846,7 +883,7 @@ function lgPrepare(S, opts = {}) {
         source: "import"
       };
     });
-    P = KLLedger.prepareTradesImport(mapped, existingTxs, { method, today, market: mktFn, orderConfirmed: S.orderOk === true, ...(idPrefix ? { idPrefix } : {}) });
+    P = KLLedger.prepareTradesImport(mapped, existingTxs, { method, today, market: mktFn, rules, orderConfirmed: S.orderOk === true, ...(idPrefix ? { idPrefix } : {}) });
   }
   let extraErr = 0;
   for (const it of P.items) {
@@ -886,7 +923,7 @@ function lgImpChooseHtml() {
       </button>
       <button type="button" class="lgimp-card" data-lgimp-pick="trades">
         <strong>2. 成交明細／對帳單截圖</strong>
-        <small>匯入為「買進／賣出」，保留分批成交紀錄；空白費用依預設規則估算（0 元維持 0），有成交時間時依時間排序，無時間的同日買賣需由你確認順序，並擋下賣超與異常日期。</small>
+        <small>匯入為「買進／賣出」，保留分批成交紀錄；空白費用依費用規則與持股頁手續費折扣設定估算（0 元維持 0），有成交時間時依時間排序，無時間的同日買賣需由你確認順序，並擋下賣超與異常日期。</small>
       </button>
     </div>
     <div class="row2"><button type="button" class="btn sm" data-ic="close">取消</button></div>`;
@@ -965,7 +1002,7 @@ function lgImpReviewHtml(S, P) {
   const isHold = S.kind === "holdings", today = lgToday(), existing = lgLoad();
   const intro = isHold
     ? "核對後將匯入為交易紀錄的「股票轉入」（手續費與稅為 0）。帳本目前已經持有的股票預設不勾選，以免重複計算；未勾選的列不會寫入。"
-    : "核對每一筆成交明細（依日期與成交時間由舊到新套用；同日買賣未附時間時須確認順序，可用 ↑↓ 或「反轉列表順序」調整）。手續費／稅填 0 維持 0，空白則依預設費率估算。";
+    : `核對每一筆成交明細（依日期與成交時間由舊到新套用；同日買賣未附時間時須確認順序，可用 ↑↓ 或「反轉列表順序」調整）。手續費／稅填 0 維持 0，空白則依費用規則與持股頁「手續費折扣」設定${lgDiscText()}估算。`;
   const cols = isHold
     ? `<th scope="col">匯入</th><th scope="col">代號／名稱</th><th scope="col">股數<small>美股可填小數</small></th><th scope="col">每股成本</th><th scope="col">轉入日期<small>空白預設今天</small></th><th scope="col"><span class="pfsr">刪除</span></th>`
     : `<th scope="col">匯入</th><th scope="col">成交日期／時間</th><th scope="col">方向<small>賣出可勾當沖</small></th><th scope="col">代號／名稱</th><th scope="col">股數</th><th scope="col">單價</th><th scope="col">手續費<small>空白＝估算</small></th><th scope="col">交易稅<small>空白＝估算</small></th><th scope="col">備註</th><th scope="col"><span class="pfsr">刪除</span></th>`;
@@ -1147,7 +1184,7 @@ function lgSyncImportUI(opts = {}) {
         return `${g.date} ${g.symbol}${reasons.length ? "（" + reasons.join("；") + "）" : ""}`;
       }).join("、");
       const reason = amb.some(g => g.affectsFifo)
-        ? "同日交易順序缺乏可驗證時間／序號，FIFO 批次先後可能改變成本與已實現損益"
+        ? "同日交易順序缺乏可驗證成交時間，FIFO 批次先後可能改變成本與已實現損益"
         : "同日買賣未附可驗證時間（或同分鐘重疊）";
       ordTxt.textContent = `${syms}：${reason}。請用 ↑↓／反轉按鈕確認列序，或補填成交時間；確認目前順序正確請勾選後再匯入。`;
       if (ordEl.checked !== S.orderOk) ordEl.checked = S.orderOk;
@@ -1195,7 +1232,7 @@ function lgSyncImportUI(opts = {}) {
     if (isHold) {
       sumEl.textContent = `共讀取 ${S.rows.length} 列，將匯入 ${P.selectedCount} 筆「股票轉入」${P.existingOpenCount ? `（帳本已有 ${P.existingOpenCount} 檔，預設略過）` : ""}，手續費與稅為 0；不會改動舊庫存。${mNote}`;
     } else {
-      sumEl.textContent = `共 ${S.rows.length} 列，將匯入 ${P.selectedCount} 筆成交交易（依日期／時間排序，無時間之同日交易依目前列序套用）${P.feeEstimatedCount ? `；${P.feeEstimatedCount} 筆空白費用依預設費率估算` : ""}。${mNote}`;
+      sumEl.textContent = `共 ${S.rows.length} 列，將匯入 ${P.selectedCount} 筆成交交易（依日期／時間排序，無時間之同日交易依目前列序套用）${P.feeEstimatedCount ? `；${P.feeEstimatedCount} 筆空白費用依設定費率${lgDiscText()}估算` : ""}。${mNote}`;
     }
   }
   const saveBtn = $("#lgImpSave");
@@ -1259,8 +1296,14 @@ function lgOnImportRows(rows, mode) {
   impSetLive("");
   showImpDialog(kind === "trades" ? "核對成交明細匯入" : "核對庫存轉入", lgImpReviewHtml(S, P), { wide: true, scope: "ledger", focus: false });
   lgSyncImportUI();
-  const initFocus = $('#impBody [aria-invalid="true"]') || $('#impBody input.code') || $('#lgImpSave');
-  try { initFocus?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); } catch {}
+  const invFocus = $('#impBody [aria-invalid="true"]');
+  const initFocus = invFocus || $('#impBody input.code') || $('#lgImpSave');
+  if (invFocus) {
+    try { invFocus.scrollIntoView?.({ block: "nearest", inline: "nearest" }); } catch {}
+  } else {
+    const wrap = $("#impBody .hg-wrap");
+    if (wrap) wrap.scrollLeft = 0;
+  }
   initFocus?.focus?.({ preventScroll: true });
 }
 function lgOnImportErr(msg) {
