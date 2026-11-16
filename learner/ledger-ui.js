@@ -128,10 +128,24 @@ function lgFromForm(form, F) {
   for (const k of LG_FIELDS[type]) { if (k === "dayTrade") { o.dayTrade = fd.get("dayTrade") === "on"; continue; } const s = String(fd.get(k) ?? "").trim(); if (!s) continue; o[k] = k === "symbol" ? s.toUpperCase() : k === "ref" ? s : Number(s.replace(/,/g, "")); }
   const m = o.symbol ? lgMkt(o.symbol) : fd.get("market") === "us" ? "us" : "tw";
   o.market = m; o.currency = m === "us" ? "USD" : m === "tw" ? "TWD" : null;
-  if (F.orig?.feeEstimated) {
+  if (F.orig?.feeEstimated || F.orig?.feeEst || F.orig?.taxEst) {
     const sameCost = o.type === F.orig.type && o.symbol === F.orig.symbol && o.shares === F.orig.shares && o.price === F.orig.price && !!o.dayTrade === !!F.orig.dayTrade;
-    if (sameCost) { if (o.fee !== undefined && o.fee === F.orig.fee && (o.tax ?? 0) === (F.orig.tax ?? 0)) o.feeEstimated = true; }
-    else { if (o.fee === F.orig.fee) delete o.fee; if ((o.tax ?? 0) === (F.orig.tax ?? 0)) delete o.tax; }
+    const hasFieldEst = typeof F.orig.feeEst === "boolean" || typeof F.orig.taxEst === "boolean";
+    const feeSame = o.fee !== undefined && o.fee === F.orig.fee, taxSame = (o.tax ?? 0) === (F.orig.tax ?? 0);
+    if (hasFieldEst) {
+      if (sameCost) {
+        if (F.orig.feeEst && feeSame) o.feeEst = true;
+        if (F.orig.taxEst && o.tax !== undefined && taxSame) o.taxEst = true;
+        if (o.feeEst || o.taxEst) o.feeEstimated = true;
+      } else {
+        if (F.orig.feeEst) { if (feeSame) delete o.fee; }
+        if (F.orig.taxEst) { if (taxSame) delete o.tax; }
+      }
+    } else if (F.orig.feeEstimated && (feeSame || (o.type === "sell" && o.tax !== undefined && taxSame))) {
+      // 舊資料僅有整筆 feeEstimated、未記錄個別欄位來源：採保守策略，不靜默刪除可能是手填的數值
+      o.feeEstimated = true;
+      if (!sameCost) o.legacyEstAmbiguous = true;
+    }
   }
   return F.id ? { ...o, id: F.id, v: 1 } : KLLedger.makeTx(o); // 修改：整筆用表單的內容重建（換了類型時，舊類型的欄位不會留下來），編號不變
 }
@@ -175,12 +189,14 @@ document.addEventListener("submit", e => {
   if (e.target.id === "lgImpForm") { e.preventDefault(); return lgSaveImport(); }
   if (e.target.id !== "lgForm") return; e.preventDefault();
   const L = W.lg, F = L.form, S = lgLoad(); if (!F || !S) return;
-  const rawTx = lgFromForm(e.target, F), cRes = KLLedger.checkTx(rawTx, { today: lgToday(), rules: lgRules() });
+  const { legacyEstAmbiguous, ...rawTx } = lgFromForm(e.target, F), cRes = KLLedger.checkTx(rawTx, { today: lgToday(), rules: lgRules() });
   const tx = !cRes.errors.length && cRes.tx ? {
     ...rawTx,
     fee: cRes.tx.fee,
     tax: cRes.tx.tax,
     ...(cRes.tx.feeEstimated ? { feeEstimated: true } : {}),
+    ...(cRes.tx.feeEst ? { feeEst: true } : {}),
+    ...(cRes.tx.taxEst ? { taxEst: true } : {}),
     ...(cRes.tx.assetType && !rawTx.assetType ? { assetType: cRes.tx.assetType } : {})
   } : rawTx;
   const list = F.id ? S.transactions.map(t => (t.id === F.id ? tx : t)) : [...S.transactions, tx];
@@ -188,7 +204,11 @@ document.addEventListener("submit", e => {
   const newErr = R.txs.filter(x => x.errors.length && x.id !== tx.id);
   const fd = new FormData(e.target), v = {}; for (const [k, x] of fd) v[k] = x;
   if (me?.errors.length || newErr.length) { L.form = { ...F, v, err: [...(me?.errors || []).map(x => x.message), ...newErr.map(x => `會讓 ${x.tx?.date || ""} 的${KLLedger.TYPE_LABEL[x.tx?.type] || "交易"}出錯：${x.errors[0].message}`)] }; return renderList(); }
-  const warn = [...(cRes.warnings || []).filter(w => w.code === "fee_estimated" && (!F.orig?.feeEstimated || rawTx.fee === undefined || (tx.type === "sell" && rawTx.tax === undefined))), ...(me?.warnings || []).filter(w => w.code !== "fee_estimated")].map(w => w.message);
+  const warn = [
+    ...(legacyEstAmbiguous ? ["這筆舊交易未分別記錄手續費與交易稅的估算來源，已保留原數值（若需重新估算請清空該欄位）"] : []),
+    ...(cRes.warnings || []).filter(w => w.code === "fee_estimated" && (!F.orig?.feeEstimated || rawTx.fee === undefined || (tx.type === "sell" && rawTx.tax === undefined))).map(w => w.message),
+    ...(me?.warnings || []).filter(w => w.code !== "fee_estimated").map(w => w.message)
+  ];
   if (warn.length && !confirm(`請確認：\n${warn.join("\n")}\n\n仍要${F.id ? "儲存" : "加入"}？`)) return;
   const r = lgSave({ ...S, transactions: list });
   if (!r.ok) { L.form = { ...F, v, err: ["資料檢查沒有通過，沒有儲存。"] }; return renderList(); }

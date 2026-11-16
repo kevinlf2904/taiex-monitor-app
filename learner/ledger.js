@@ -70,8 +70,9 @@
     if (type === "other" && isNum(shares) && !symbol) E("invalid_symbol", "有股數變動的公司行動要填股票代號");
     if (type === "stock_dividend" && raw.ratio != null && !(isNum(ratio) && ratio > 0)) E("invalid_ratio", "配股率要大於 0（每股配幾股，例如配 1 元股票股利＝0.1）");
     for (const [k, v] of [["fee", fee], ["tax", tax]]) if (Number.isNaN(v) || (isNum(v) && v < 0)) E("invalid_" + k, (k === "fee" ? "手續費" : "交易稅") + "不能是負數");
+    let feeEst = raw.feeEst === true, taxEst = raw.taxEst === true;
     const tx = { v: VERSION, id, date, type, symbol, market, currency, shares: isNum(shares) ? shares : null, price: isNum(price) ? price : null, amount: isNum(amount) ? amount : null, ratio: isNum(ratio) ? ratio : null,
-      fee: isNum(fee) ? fee : null, tax: isNum(tax) ? tax : null, feeEstimated: raw.feeEstimated === true, assetType: ["etf", "stock", "bond_etf"].includes(raw.assetType) ? raw.assetType : null, dayTrade: !!raw.dayTrade,
+      fee: isNum(fee) ? fee : null, tax: isNum(tax) ? tax : null, feeEstimated: false, feeEst: false, taxEst: false, assetType: ["etf", "stock", "bond_etf"].includes(raw.assetType) ? raw.assetType : null, dayTrade: !!raw.dayTrade,
       ref: typeof raw.ref === "string" && raw.ref ? raw.ref : null, note: typeof raw.note === "string" ? raw.note.slice(0, 500) : "", source: typeof raw.source === "string" && raw.source ? raw.source.slice(0, 40) : "manual" };
     // 沒填手續費／稅：依規則估算並標示「估算」（填 0 代表真的是 0，不會被估算覆蓋）
     // 買進不收交易稅（台股證交稅、美股 SEC 費都只在賣出）：空白直接記 0，不算「估算」、不用再確認
@@ -79,9 +80,12 @@
     if (!errors.length && (type === "buy" || type === "sell") && (tx.fee === null || tx.tax === null)) {
       if (!tx.assetType) tx.assetType = market === "tw" && /^00\d{2,4}B$/.test(symbol) ? "bond_etf" : market === "tw" && /^00\d{2,4}[A-Z]?$/.test(symbol) ? "etf" : "stock"; // 00679B 這類尾碼 B 的是債券 ETF：證交稅 0（和 analysis.js 的 taxOf 同一條規則，#262 NEW-05）
       const est = estimateCosts(tx, opts.rules || DEFAULT_RULES);
-      if (tx.fee === null) tx.fee = est.fee; if (tx.tax === null) tx.tax = est.tax; tx.feeEstimated = true;
+      if (tx.fee === null) { tx.fee = est.fee; feeEst = true; }
+      if (tx.tax === null) { tx.tax = est.tax; taxEst = true; }
       Wn("fee_estimated", "手續費或交易稅沒填，依費用規則估算");
     }
+    tx.feeEst = feeEst; tx.taxEst = taxEst;
+    tx.feeEstimated = feeEst || taxEst || raw.feeEstimated === true;
     if (type === "dividend" && tx.tax === null) tx.tax = 0;
     if (tx.fee === null) tx.fee = 0; if (tx.tax === null) tx.tax = 0;
     return { tx, errors, warnings };
@@ -110,7 +114,7 @@
       if (o.tx.currency !== t.currency) { r.errors.push({ code: "currency_mismatch", message: "費用的幣別和對應的交易不同" }); continue; }
       const trade = o.tx.type === "buy" || o.tx.type === "sell";
       if (trade && (o.tx.fee > 0 || o.tx.tax > 0) && !o.tx.feeEstimated) { r.errors.push({ code: "duplicate_fee", message: "對應的交易已經有手續費或交易稅，不能再另外記一次" }); continue; }
-      if (trade && o.tx.feeEstimated) { o.tx.fee = 0; o.tx.tax = 0; o.tx.feeEstimated = false; o.warnings = o.warnings.filter(w => w.code !== "fee_estimated"); }
+      if (trade && o.tx.feeEstimated) { o.tx.fee = 0; o.tx.tax = 0; o.tx.feeEstimated = false; o.tx.feeEst = false; o.tx.taxEst = false; o.warnings = o.warnings.filter(w => w.code !== "fee_estimated"); }
       if (trade) { if (o.extraFee) { r.errors.push({ code: "duplicate_fee", message: "這筆交易已經有另一筆另計費用" }); continue; } o.extraFee = t.amount; o.tx.fee += t.amount; r.mergedInto = o.tx.id; }
       else r.feeSymbol = o.tx.symbol;
       if (t.date !== o.tx.date) r.warnings.push({ code: "fee_date_differs", message: `費用日期和對應的交易（${o.tx.date}）不同` }); }
@@ -549,6 +553,8 @@
         fee: it.computed.fee,
         tax: it.computed.tax,
         ...(it.computed.feeEstimated ? { feeEstimated: true } : {}),
+        ...(it.computed.feeEst ? { feeEst: true } : {}),
+        ...(it.computed.taxEst ? { taxEst: true } : {}),
         ...(it.computed.assetType && !it.tx.assetType ? { assetType: it.computed.assetType } : {})
       } : it.tx)),
       selectedCount: enabled.length,

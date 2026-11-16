@@ -136,6 +136,113 @@ test("Issue #303：新增交易未填手續費依 watch:hdisc 折扣估算並快
   pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
   assert.equal(pf.transactions[0].fee, 712, "主動清空手續費後依目前原價重估為 712");
   assert.equal(pf.transactions[0].feeEstimated, true);
+  assert.equal(pf.transactions[0].feeEst, true);
+
+  // 先擴充買進股數為 10,000 股，供後續賣出部分手填／全估算／全手填五種編輯情境測試
+  await p.evaluate(() => { W.hdisc = 0.28; store.set("watch:hdisc", 0.28); renderList(); });
+  await p.click(`[data-lg=edit][data-id="${txId}"]`);
+  await p.fill("#lgForm [name=shares]", "10000");
+  await p.click("#lgForm button[type=submit]");
+
+  // 7. 必補回歸 (1)：手填 fee=50、tax 留白（賣出 1000 股 @ 500）→ 編輯股數改 2000／價格改 600 → fee 維持手填 50，tax 依新計費基礎重估；僅改備註則完全保留快照
+  await p.click("[data-lg=add]");
+  await p.selectOption("#lgType", "sell");
+  await p.fill("#lgForm [name=symbol]", "2330");
+  await p.fill("#lgForm [name=shares]", "1000");
+  await p.fill("#lgForm [name=price]", "500");
+  await p.fill("#lgForm [name=fee]", "50");
+  await p.fill("#lgForm [name=date]", "2026-03-04");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  const s1Id = pf.transactions[1].id;
+  assert.deepEqual([pf.transactions[1].fee, pf.transactions[1].tax, !!pf.transactions[1].feeEstimated, !!pf.transactions[1].feeEst, !!pf.transactions[1].taxEst], [50, 1500, true, false, true]);
+
+  await p.click(`[data-lg=edit][data-id="${s1Id}"]`);
+  await p.fill("#lgForm [name=shares]", "2000");
+  await p.fill("#lgForm [name=price]", "600");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  assert.deepEqual([pf.transactions[1].fee, pf.transactions[1].tax, !!pf.transactions[1].feeEstimated, !!pf.transactions[1].feeEst, !!pf.transactions[1].taxEst], [50, 3600, true, false, true], "手填 fee=50 不被清除，tax 重估為 2000×600×0.003=3600");
+
+  await p.click(`[data-lg=edit][data-id="${s1Id}"]`);
+  await p.fill("#lgForm [name=note]", "手填手續費保留");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  assert.deepEqual([pf.transactions[1].fee, pf.transactions[1].tax, !!pf.transactions[1].feeEst, !!pf.transactions[1].taxEst], [50, 3600, false, true], "僅改備註完全保留部分手填快照");
+
+  // 8. 必補回歸 (2)：fee 留白、手填 tax=1200（賣出 1000 股 @ 500，2.8 折 fee=199）→ 編輯股數改 2000／價格改 600 → fee 依新基礎重估為 478，tax 維持手填 1200
+  await p.click("[data-lg=add]");
+  await p.selectOption("#lgType", "sell");
+  await p.fill("#lgForm [name=symbol]", "2330");
+  await p.fill("#lgForm [name=shares]", "1000");
+  await p.fill("#lgForm [name=price]", "500");
+  await p.fill("#lgForm [name=tax]", "1200");
+  await p.fill("#lgForm [name=date]", "2026-03-05");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  const s2Id = pf.transactions[2].id;
+  assert.deepEqual([pf.transactions[2].fee, pf.transactions[2].tax, !!pf.transactions[2].feeEstimated, !!pf.transactions[2].feeEst, !!pf.transactions[2].taxEst], [199, 1200, true, true, false]);
+
+  await p.click(`[data-lg=edit][data-id="${s2Id}"]`);
+  await p.fill("#lgForm [name=shares]", "2000");
+  await p.fill("#lgForm [name=price]", "600");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  assert.deepEqual([pf.transactions[2].fee, pf.transactions[2].tax, !!pf.transactions[2].feeEstimated, !!pf.transactions[2].feeEst, !!pf.transactions[2].taxEst], [478, 1200, true, true, false], "fee 重估為 478，手填 tax=1200 不被清除");
+
+  // 9. 必補回歸 (3) & (4)：兩欄都空白而估算 vs 兩欄都手填（賣出）→ 編輯計費基礎後，兩欄皆估算者同步重估、兩欄皆手填者完全保留
+  await p.click("[data-lg=add]");
+  await p.selectOption("#lgType", "sell");
+  await p.fill("#lgForm [name=symbol]", "2330");
+  await p.fill("#lgForm [name=shares]", "1000");
+  await p.fill("#lgForm [name=price]", "500");
+  await p.fill("#lgForm [name=date]", "2026-03-06");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  const s3Id = pf.transactions[3].id;
+  assert.deepEqual([pf.transactions[3].fee, pf.transactions[3].tax, !!pf.transactions[3].feeEst, !!pf.transactions[3].taxEst], [199, 1500, true, true]);
+
+  await p.click(`[data-lg=edit][data-id="${s3Id}"]`);
+  await p.fill("#lgForm [name=shares]", "2000");
+  await p.fill("#lgForm [name=price]", "600");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  assert.deepEqual([pf.transactions[3].fee, pf.transactions[3].tax, !!pf.transactions[3].feeEst, !!pf.transactions[3].taxEst], [478, 3600, true, true], "兩欄皆估算時編輯計費基礎後兩欄皆重估");
+
+  await p.click("[data-lg=add]");
+  await p.selectOption("#lgType", "sell");
+  await p.fill("#lgForm [name=symbol]", "2330");
+  await p.fill("#lgForm [name=shares]", "1000");
+  await p.fill("#lgForm [name=price]", "500");
+  await p.fill("#lgForm [name=fee]", "60");
+  await p.fill("#lgForm [name=tax]", "1400");
+  await p.fill("#lgForm [name=date]", "2026-03-07");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  const s4Id = pf.transactions[4].id;
+  assert.deepEqual([pf.transactions[4].fee, pf.transactions[4].tax, !!pf.transactions[4].feeEstimated], [60, 1400, false]);
+
+  await p.click(`[data-lg=edit][data-id="${s4Id}"]`);
+  await p.fill("#lgForm [name=shares]", "2000");
+  await p.fill("#lgForm [name=price]", "600");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  assert.deepEqual([pf.transactions[4].fee, pf.transactions[4].tax, !!pf.transactions[4].feeEstimated], [60, 1400, false], "兩欄皆手填時編輯計費基礎後兩欄皆保留");
+
+  // 10. 舊資料僅有 aggregate feeEstimated（無 feeEst／taxEst）時編輯計費基礎：採保守策略保留原值，不靜默覆蓋
+  await p.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem("kline:pf:v1"));
+    s.transactions.push({ v: 1, id: "legacy-est", date: "2026-03-08", type: "sell", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 500, fee: 55, tax: 1500, feeEstimated: true, note: "", source: "manual" });
+    localStorage.setItem("kline:pf:v1", JSON.stringify(s));
+    renderList();
+  });
+  await p.click('[data-lg=edit][data-id="legacy-est"]');
+  await p.fill("#lgForm [name=shares]", "1500");
+  await p.click("#lgForm button[type=submit]");
+  pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
+  const legTx = pf.transactions.find(x => x.id === "legacy-est");
+  assert.deepEqual([legTx.shares, legTx.fee, legTx.tax, !!legTx.feeEstimated], [1500, 55, 1500, true], "舊資料無個別來源時保守保留原費稅，不靜默刪除");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
 
