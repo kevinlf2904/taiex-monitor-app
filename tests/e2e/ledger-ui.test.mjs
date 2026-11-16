@@ -242,6 +242,43 @@ test("Issue #303：新增交易未填手續費依 watch:hdisc 折扣估算並快
   pf = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")));
   const legTx = pf.transactions.find(x => x.id === "legacy-est");
   assert.deepEqual([legTx.shares, legTx.fee, legTx.tax, !!legTx.feeEstimated], [1500, 55, 1500, true], "舊資料無個別來源時保守保留原費稅，不靜默刪除");
+
+  // 11. 另計費用（type="fee" 掛 ref）E2E 回歸：
+  // (a) 手填 fee=50／估算 tax=3600（s1Id）、全手填（s4Id）、舊資料（legacy-est）皆擋下 duplicate_fee，不覆蓋原費稅
+  await p.click("[data-lg=add]");
+  await p.selectOption("#lgType", "fee");
+  await p.fill("#lgForm [name=amount]", "80");
+  await p.fill("#lgForm [name=date]", "2026-03-04");
+  await p.selectOption("#lgForm [name=ref]", s1Id);
+  await p.click("#lgForm button[type=submit]");
+  assert.match(await p.textContent("#lgForm .lgiss"), /已經有手續費/, "手填 fee／估算 tax 掛另計費用須擋下");
+
+  await p.selectOption("#lgForm [name=ref]", s4Id);
+  await p.click("#lgForm button[type=submit]");
+  assert.match(await p.textContent("#lgForm .lgiss"), /已經有手續費/, "全手填掛另計費用須擋下");
+
+  await p.selectOption("#lgForm [name=ref]", "legacy-est");
+  await p.click("#lgForm button[type=submit]");
+  assert.match(await p.textContent("#lgForm .lgiss"), /未記錄各欄估算來源/, "舊資料無個別來源時掛另計費用須保守擋下");
+
+  // (b) 估算 fee=478／手填 tax=1200（s2Id）：掛另計費用 80 僅取代估算 fee，保留手填 tax=1200，且不再顯示（估算）
+  await p.fill("#lgForm [name=date]", "2026-03-05");
+  await p.selectOption("#lgForm [name=ref]", s2Id);
+  await p.click("#lgForm button[type=submit]");
+  const s2Row = await p.locator(".lgtx").filter({ hasText: "2026-03-05" }).filter({ hasText: "賣出" }).first().textContent();
+  assert.match(s2Row, /費 80・稅 1,200/);
+  assert.doesNotMatch(s2Row, /費 80・稅 1,200（估算）/, "估算 fee 被實際另計費用取代且 tax 為手填時，不再標記（估算）");
+
+  // (c) 全估算賣出（s3Id：估算 fee=478／估算 tax=3600）：掛另計費用 90 僅取代估算 fee，保留估算 tax=3600 與（估算）標記
+  await p.click("[data-lg=add]");
+  await p.selectOption("#lgType", "fee");
+  await p.fill("#lgForm [name=amount]", "90");
+  await p.fill("#lgForm [name=date]", "2026-03-06");
+  await p.selectOption("#lgForm [name=ref]", s3Id);
+  await p.click("#lgForm button[type=submit]");
+  const s3Row = await p.locator(".lgtx").filter({ hasText: "2026-03-06" }).filter({ hasText: "賣出" }).first().textContent();
+  assert.match(s3Row, /費 90・稅 3,600（估算）/, "僅取代估算 fee 為 90，保留估算 tax=3600 與（估算）標記");
+
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

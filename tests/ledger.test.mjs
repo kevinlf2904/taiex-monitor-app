@@ -258,6 +258,46 @@ test("Issue #303：手續費折扣（1／0.6／0.28）、最低 20 元、部分�
   assert.equal(afterChange.txs[0].tx.taxEst, false);
   assert.equal(afterChange.txs[0].warnings.some(w => w.code === "fee_estimated"), false, "已有具體費用數字不再重發估算警告");
   assert.equal(pos(afterChange).costBasis, 500199);
+
+  // 另計費用（type="fee" 掛 ref）與欄位級估算來源（feeEst／taxEst）：
+  const baseBuy = tw({ id: "b0", date: "2026-03-01", type: "buy", shares: 5000, price: 400, fee: 0, tax: 0 });
+  // (a) 手填 fee=50、估算 tax=1500（feeEst=false, taxEst=true）：已有手填手續費，再掛另計費用須擋下 duplicate_fee，且不得清除手填 fee=50 或估算 tax=1500
+  const rFeeManual = L.buildLedger([
+    baseBuy,
+    { v: 1, id: "s-fman", date: "2026-03-02", type: "sell", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 500, fee: 50, tax: 1500, feeEstimated: true, feeEst: false, taxEst: true },
+    tw({ id: "f-dup1", symbol: null, date: "2026-03-02", type: "fee", amount: 80, ref: "s-fman" })
+  ], { rules: rulesOf(0.28) });
+  assert.equal(codes(rFeeManual.txs[2])[0], "duplicate_fee");
+  assert.deepEqual([rFeeManual.txs[1].tx.fee, rFeeManual.txs[1].tx.tax, rFeeManual.txs[1].tx.feeEstimated, rFeeManual.txs[1].tx.feeEst, rFeeManual.txs[1].tx.taxEst], [50, 1500, true, false, true], "手填 fee 與估算 tax 皆保留不被清成 0");
+
+  // (b) 估算 fee=199、手填 tax=1200（feeEst=true, taxEst=false）：掛另計費用 80 僅取代估算 fee，手填 tax=1200 完整保留，且整筆不再標記 feeEstimated
+  const rTaxManual = L.buildLedger([
+    baseBuy,
+    { v: 1, id: "s-tman", date: "2026-03-02", type: "sell", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 500, fee: 199, tax: 1200, feeEstimated: true, feeEst: true, taxEst: false },
+    tw({ id: "f-rep1", symbol: null, date: "2026-03-02", type: "fee", amount: 80, ref: "s-tman" })
+  ], { rules: rulesOf(0.28) });
+  assert.equal(rTaxManual.status, "ok");
+  assert.deepEqual([rTaxManual.txs[1].tx.fee, rTaxManual.txs[1].tx.tax, rTaxManual.txs[1].tx.feeEstimated, rTaxManual.txs[1].tx.feeEst, rTaxManual.txs[1].tx.taxEst], [80, 1200, false, false, false], "僅取代估算 fee 為 80，手填 tax=1200 保留");
+  assert.equal(rTaxManual.totals.TWD.fees, 80);
+  assert.equal(rTaxManual.totals.TWD.taxes, 1200);
+
+  // (c) 兩欄皆估算（賣出 fee=199, tax=1500, feeEst=true, taxEst=true）：掛另計費用 80 僅取代估算 fee，保留估算 tax=1500 與 taxEst=true／feeEstimated=true
+  const rBothEst = L.buildLedger([
+    baseBuy,
+    { v: 1, id: "s-best", date: "2026-03-02", type: "sell", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 500, fee: 199, tax: 1500, feeEstimated: true, feeEst: true, taxEst: true },
+    tw({ id: "f-rep2", symbol: null, date: "2026-03-02", type: "fee", amount: 80, ref: "s-best" })
+  ], { rules: rulesOf(0.28) });
+  assert.equal(rBothEst.status, "ok");
+  assert.deepEqual([rBothEst.txs[1].tx.fee, rBothEst.txs[1].tx.tax, rBothEst.txs[1].tx.feeEstimated, rBothEst.txs[1].tx.feeEst, rBothEst.txs[1].tx.taxEst], [80, 1500, true, false, true], "取代估算 fee 為 80，估算 tax=1500 保留");
+
+  // (d) 舊資料僅有 aggregate feeEstimated（無 feeEst／taxEst）：採保守策略擋下 duplicate_fee，不清除任一可能手填的欄位
+  const rLegacy = L.buildLedger([
+    baseBuy,
+    { v: 1, id: "s-leg", date: "2026-03-02", type: "sell", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 500, fee: 55, tax: 1500, feeEstimated: true },
+    tw({ id: "f-leg", symbol: null, date: "2026-03-02", type: "fee", amount: 80, ref: "s-leg" })
+  ]);
+  assert.equal(codes(rLegacy.txs[2])[0], "duplicate_fee");
+  assert.deepEqual([rLegacy.txs[1].tx.fee, rLegacy.txs[1].tx.tax, rLegacy.txs[1].tx.feeEstimated], [55, 1500, true], "舊資料不靜默清除原 fee 與 tax");
 });
 
 
