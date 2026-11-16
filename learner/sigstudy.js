@@ -47,8 +47,10 @@ function sigBenchDetail(M, D, i, n, minLots = SIG_MIN_LOTS, cost = SIG_COST) {
       if (si == null || !(Number.isFinite(b[si]?.v) && b[si].v >= minLots)) continue;
       c.pool++;
       const a = j.get(da);
-      if (a == null || !(a > si) || !sigPos(b[a]?.o) || !sigPos(b[a - 1]?.c)) { c.noEntryBar++; continue; }
+      if (a == null || !(a > si)) { c.noEntryBar++; continue; }
       const e = b[a], p = b[a - 1];
+      if (!p?.d || !(ds <= p.d && p.d < da) || !sigPos(e?.o) || !sigPos(p.c)) { c.noEntryBar++; continue; }
+      // 漲停參考價取基準股進場日前一交易日收盤（可能晚於 ds），與訊號端 D[i] 同語意
       if (e.o === e.h && e.h === e.l && e.l === e.c && e.o >= p.c * 1.095) { c.entryLock++; continue; }
       c.entry++;
       const z = j.get(db);

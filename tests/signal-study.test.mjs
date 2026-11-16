@@ -278,4 +278,31 @@ test("訊號回測腳本：JSON 不含 benchEvents、保留審計欄位且全未
   const pendOnly = flat(63, i => (i === 62 ? { o: 100, h: 110, l: 99, c: 109, v: 9000 } : {}));
   assert.equal(build({ s: { 2330: { n: "尾段", b: pendOnly } } }, E), null, "只有 pending 觸發（n === 0）時仍回傳 null 保留舊檔");
 });
+test("訊號回測：進場漲停基準取 b[a-1]（同 sigForward D[i] 語意）與非遞增日期防呆", () => {
+  // (a) 基準股只有 ds 與 da（a === si + 1，且中間日都無資料），da 一字漲停應依 ds 收盤計入 entryLock
+  const sigSkip = flat(80).filter((_, k) => k !== 61); // sigSkip[60]=day(60), sigSkip[61]=day(62)
+  const bNoMid = flat(80, k => (k === 59 ? { c: 150 } : k === 60 ? { c: 100, v: 1000 } : k === 62 ? { o: 110, h: 110, l: 110, c: 110 } : {})).filter((_, k) => k !== 61);
+  const Ba = plain(G.sigBenchDetail(G.sigMarket([bNoMid]), sigSkip, 60, 5, 500, 0));
+  assert.equal(Ba.pool, 1); assert.equal(Ba.noEntryBar, 0); assert.equal(Ba.entryLock, 1); assert.equal(Ba.entry, 0);
+  assert.equal(Ba.pool, Ba.entry + Ba.noEntryBar + Ba.entryLock);
 
+  // (b) 訊號股 ds→da 跳過 d_mid，但基準股有中間交易日 d_mid：以真實前一交易日 b[a-1] 判斷漲停鎖死
+  const bDownMid = flat(80, k => (k === 60 ? { c: 100, v: 1000 } : k === 61 ? { o: 95, h: 95, l: 91, c: 91 } : k === 62 ? { o: 100.1, h: 100.1, l: 100.1, c: 100.1 } : {}));
+  const Bb1 = plain(G.sigBenchDetail(G.sigMarket([bDownMid]), sigSkip, 60, 5, 500, 0));
+  assert.equal(Bb1.pool, 1); assert.equal(Bb1.entryLock, 1, "100→91→100.1 一字漲停相對 d_mid=91 達 +10%，應計入 entryLock");
+  assert.equal(Bb1.entry, 0); assert.equal(Bb1.done, 0);
+
+  const bUpMid = flat(80, k => (k === 60 ? { c: 100, v: 1000 } : k === 61 ? { o: 105, h: 110, l: 104, c: 110 } : k === 62 ? { o: 110, h: 110, l: 110, c: 110 } : {}));
+  const Bb2 = plain(G.sigBenchDetail(G.sigMarket([bUpMid]), sigSkip, 60, 5, 500, 0));
+  assert.equal(Bb2.pool, 1); assert.equal(Bb2.entryLock, 0, "100→110→110 平盤一字線相對 d_mid=110 為 0%，不應誤判 entryLock");
+  assert.equal(Bb2.entry, 1); assert.equal(Bb2.done, 1);
+
+  // (c) 基準股日期非遞增或前日缺日期（b[a-1].d 不在 [ds, da)）→ 計入 noEntryBar 且恆等式成立
+  const sigNorm = flat(80);
+  const insertAt61 = d => [...sigNorm.slice(0, 61), { d, o: 100, h: 101, l: 99, c: 100, v: 1000 }, ...sigNorm.slice(61)];
+  const bPrevBeforeDs = insertAt61(day(50)), bPrevAfterDa = insertAt61(day(63)), bPrevEqDa = insertAt61(day(61)), bPrevNoDate = insertAt61(null);
+  const Bc = plain(G.sigBenchDetail(G.sigMarket([sigNorm, bPrevBeforeDs, bPrevAfterDa, bPrevEqDa, bPrevNoDate]), sigNorm, 60, 5, 500, 0));
+  assert.equal(Bc.pool, 5); assert.equal(Bc.noEntryBar, 4); assert.equal(Bc.entry, 1); assert.equal(Bc.entryLock, 0); assert.equal(Bc.done, 1);
+  assert.equal(Bc.pool, Bc.entry + Bc.noEntryBar + Bc.entryLock);
+  assert.equal(Bc.entry, Bc.done + Bc.noExitOrPath + Bc.jumpExcl);
+});
