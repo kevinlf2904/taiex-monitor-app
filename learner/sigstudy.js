@@ -6,14 +6,21 @@
    限制：日 K 快取只有最近約 260 個交易日（扣掉暖機約 200 天），而且只有現在還在上市櫃的股票（倖存者偏差）。 */
 const SIG_NS = [5, 10, 20], SIG_COST = 0.001425 * 2 + 0.003, SIG_WARM = 60, SIG_GAP = 5, SIG_MIN_LOTS = 500, SIG_MIN_N = 30;
 const sigR4 = v => (v == null || !Number.isFinite(v) ? null : Math.round(v * 1e4) / 1e4);
-// 第 i 根出訊號 → 第 i+1 根開盤買、第 i+n 根收盤賣；買不到（一字漲停）、資料不夠或價格異常回傳 null
-function sigForward(D, i, n, cost = SIG_COST) {
-  const e = D[i + 1], x = D[i + n], p = D[i]; if (!e || !x || !(e.o > 0) || !(x.c > 0) || !(p?.c > 0)) return null;
-  if (e.o === e.h && e.h === e.l && e.l === e.c && e.o >= p.c * 1.095) return null; // 一字漲停鎖死，實際買不到
-  for (let k = i + 1; k <= i + n; k++) if (!(D[k].c > 0) || Math.abs(D[k].c / D[k - 1].c - 1) > 0.5) return null; // 減資、分割等沒有還原的跳動
-  return x.c / e.o - 1 - cost;
+// 第 i 根出訊號 → 第 i+1 根開盤買、第 i+n 根收盤賣；回傳可稽核的排除原因
+function sigForwardDetail(D, i, n, cost = SIG_COST) {
+  if (i + n >= D.length) return { reason: "pending" };
+  const e = D[i + 1], x = D[i + n], p = D[i];
+  if (!e || !(e.o > 0) || !(p?.c > 0)) return { reason: "noEntryBar" };
+  if (e.o === e.h && e.h === e.l && e.l === e.c && e.o >= p.c * 1.095) return { reason: "entryLock" };
+  for (let k = i + 1; k <= i + n; k++) {
+    if (!D[k] || !(D[k].c > 0) || !(D[k - 1]?.c > 0)) return { reason: "noExitOrPath" };
+    if (Math.abs(D[k].c / D[k - 1].c - 1) > 0.5) return { reason: "jumpExcl" };
+  }
+  return { value: x.c / e.o - 1 - cost };
 }
-// defs: [{ id, hit(D, I) }]；回傳 [{ id, i }]。同一個條件 gap 根內重複成立只算第一次（避免連續好幾天都成立時樣本重疊）
+function sigForward(D, i, n, cost = SIG_COST) {
+  const r = sigForwardDetail(D, i, n, cost); return r.value ?? null;
+}
 function sigScan(D, defs, ind, { warm = SIG_WARM, gap = SIG_GAP, minLots = SIG_MIN_LOTS } = {}) {
   const out = [], last = {};
   for (let i = warm; i < D.length; i++) {
@@ -23,18 +30,42 @@ function sigScan(D, defs, ind, { warm = SIG_WARM, gap = SIG_GAP, minLots = SIG_M
   }
   return out;
 }
-// 全市場等權大盤（買進持有，不是每天再平衡）：同一天開盤等權買進當時每一檔、持有到同一天收盤賣出，扣同樣的成本。
-// 回傳 { S: [{ b, j: Map 日期 → 第幾根 }], memo }，sigBench 依「進場日｜出場日」算一次後記住（全市場約 260 天 × 3 種天數）
 function sigMarket(all) {
   return { S: all.filter(b => b?.length > 1).map(b => ({ b, j: new Map(b.map((x, k) => [x?.d, k])) })), memo: new Map() };
 }
-// 大盤在同一個視窗的報酬：每一檔都用 sigForward 的規則（一字漲停買不到、未還原的減資／分割不算），找不到那兩天的股票不算；沒有任何一檔回傳 null
-function sigBench(M, D, i, n, cost = SIG_COST) {
-  const da = D[i + 1]?.d, db = D[i + n]?.d; if (!da || !db) return null;
-  const k = da + "|" + db; if (!M.memo.has(k)) { let s = 0, c = 0;
-    for (const { b, j } of M.S) { const a = j.get(da), z = j.get(db); if (!(a >= 1) || !(z >= a)) continue; const r = sigForward(b, a - 1, z - a + 1, 0); if (r != null) { s += r; c++; } }
-    M.memo.set(k, c ? s / c : null); }
-  const m = M.memo.get(k); return m == null ? null : m - cost;
+function sigBenchDetail(M, D, i, n, minLots = SIG_MIN_LOTS, cost = SIG_COST) {
+  const ds = D[i]?.d, da = D[i + 1]?.d, db = D[i + n]?.d;
+  if (!ds || !da || !db) return null;
+  const key = `${ds}|${da}|${db}|${minLots}`;
+  if (!M.memo.has(key)) {
+    const c = { pool: 0, entry: 0, done: 0, noEntryBar: 0, entryLock: 0, noExitOrPath: 0, jumpExcl: 0 };
+    let sum = 0;
+    for (const { b, j } of M.S) {
+      const si = j.get(ds);
+      if (si == null || !(b[si]?.v >= minLots)) continue;
+      c.pool++;
+      const a = j.get(da);
+      if (a == null || !(a > si) || !(b[a]?.o > 0) || !(b[a - 1]?.c > 0)) { c.noEntryBar++; continue; }
+      const e = b[a], p = b[a - 1];
+      if (e.o === e.h && e.h === e.l && e.l === e.c && e.o >= p.c * 1.095) { c.entryLock++; continue; }
+      c.entry++;
+      const z = j.get(db);
+      if (z == null || !(z > a)) { c.noExitOrPath++; continue; }
+      let reason = null;
+      for (let k = a; k <= z; k++) {
+        if (!b[k] || !(b[k].c > 0) || !(b[k - 1]?.c > 0)) { reason = "noExitOrPath"; break; }
+        if (Math.abs(b[k].c / b[k - 1].c - 1) > 0.5) { reason = "jumpExcl"; break; }
+      }
+      if (reason) { c[reason]++; continue; }
+      sum += b[z].c / e.o - 1; c.done++;
+    }
+    M.memo.set(key, { ...c, grossAvg: c.done ? sum / c.done : null });
+  }
+  const m = M.memo.get(key);
+  return { ...m, value: m.grossAvg == null ? null : m.grossAvg - cost };
+}
+function sigBench(M, D, i, n, cost = SIG_COST, minLots = SIG_MIN_LOTS) {
+  return sigBenchDetail(M, D, i, n, minLots, cost)?.value ?? null;
 }
 function sigStat(A) {
   if (!A.length) return null; const s = [...A].sort((a, b) => a - b), q = p => s[Math.min(s.length - 1, Math.floor(p * s.length))];
@@ -42,15 +73,55 @@ function sigStat(A) {
 }
 // stocks: [{ c, n, bars }]、defs: [{ id, group, side, name, desc, hit }] → 每個條件的統計
 function sigStudy(stocks, defs, ind, { ns = SIG_NS, cost = SIG_COST, warm = SIG_WARM, gap = SIG_GAP, minLots = SIG_MIN_LOTS } = {}) {
-  const M = sigMarket(stocks.map(s => s.bars)), T = Object.fromEntries(defs.map(f => [f.id, { r: Object.fromEntries(ns.map(n => [n, []])), x: Object.fromEntries(ns.map(n => [n, []])), list: [] }]));
-  for (const s of stocks) { const D = s.bars; if (!D || D.length <= warm) continue;
-    for (const { id, i } of sigScan(D, defs, ind, { warm, gap, minLots })) { const rec = [s.c, s.n, D[i].d];
-      for (const n of ns) { const r = sigForward(D, i, n, cost); rec.push(sigR4(r)); if (r == null) continue; T[id].r[n].push(r); const m = sigBench(M, D, i, n, cost); if (m != null) T[id].x[n].push(r - m); }
-      T[id].list.push(rec); } }
+  const M = sigMarket(stocks.map(s => s.bars)), T = Object.fromEntries(defs.map(f => [f.id, {
+    r: Object.fromEntries(ns.map(n => [n, []])), pairedR: Object.fromEntries(ns.map(n => [n, []])),
+    pairedB: Object.fromEntries(ns.map(n => [n, []])), x: Object.fromEntries(ns.map(n => [n, []])), list: [],
+    signal: Object.fromEntries(ns.map(n => [n, { triggered: 0, pending: 0, lock: 0, noExitOrPath: 0, jumpExcl: 0, done: 0 }])),
+    bench: Object.fromEntries(ns.map(n => [n, { pool: 0, entry: 0, done: 0, noEntryBar: 0, entryLock: 0, noExitOrPath: 0, jumpExcl: 0, events: 0, entryZeroEvents: 0, covSum: 0, covN: 0, covMin: null }])),
+    benchEvents: Object.fromEntries(ns.map(n => [n, []]))
+  }]));
+  for (const stock of stocks) { const D = stock.bars; if (!D || D.length <= warm) continue;
+    for (const { id, i } of sigScan(D, defs, ind, { warm, gap, minLots })) {
+      const t = T[id], rec = [stock.c, stock.n, D[i].d];
+      for (const n of ns) {
+        const sc = t.signal[n]; sc.triggered++;
+        const fr = sigForwardDetail(D, i, n, cost); rec.push(sigR4(fr.value));
+        if (fr.value == null) {
+          if (fr.reason === "pending") sc.pending++;
+          else if (fr.reason === "noEntryBar" || fr.reason === "entryLock") sc.lock++;
+          else if (fr.reason === "noExitOrPath") sc.noExitOrPath++;
+          else if (fr.reason === "jumpExcl") sc.jumpExcl++;
+          continue;
+        }
+        sc.done++; t.r[n].push(fr.value);
+        const bm = sigBenchDetail(M, D, i, n, minLots, cost), bc = t.bench[n];
+        if (!bm) continue;
+        bc.events++;
+        for (const k of ["pool", "entry", "done", "noEntryBar", "entryLock", "noExitOrPath", "jumpExcl"]) bc[k] += bm[k];
+        if (bm.entry > 0) {
+          const cov = bm.done / bm.entry; bc.covSum += cov; bc.covN++;
+          bc.covMin = bc.covMin == null ? cov : Math.min(bc.covMin, cov);
+        } else bc.entryZeroEvents++;
+        const paired = bm.value != null;
+        t.benchEvents[n].push([D[i].d, bm.pool, bm.entry, bm.done, bm.noEntryBar, bm.entryLock, bm.noExitOrPath, bm.jumpExcl, paired ? 1 : 0]);
+        if (paired) { t.pairedR[n].push(fr.value); t.pairedB[n].push(bm.value); t.x[n].push(fr.value - bm.value); }
+      }
+      t.list.push(rec);
+    }
+  }
   const nL = ns[ns.length - 1], bins = [-0.2, -0.15, -0.1, -0.05, 0, 0.05, 0.1, 0.15, 0.2];
   return defs.map(f => { const t = T[f.id];
-    return { id: f.id, group: f.group, side: f.side || null, name: f.name, desc: f.desc || "", stats: Object.fromEntries(ns.map(n => { const a = sigStat(t.r[n]), x = sigStat(t.x[n]); return [n, a ? { ...a, ex: x?.avg ?? null, exWin: x?.win ?? null } : null]; })),
-      hist: [...bins, Infinity].map((b, k) => t.r[nL].filter(v => v < b && (k === 0 || v >= bins[k - 1])).length), recent: t.list.sort((a, b) => b[2].localeCompare(a[2])).slice(0, 30) }; });
+    return { id: f.id, group: f.group, side: f.side || null, name: f.name, desc: f.desc || "",
+      stats: Object.fromEntries(ns.map(n => {
+        const a = sigStat(t.r[n]), pr = sigStat(t.pairedR[n]), pb = sigStat(t.pairedB[n]), x = sigStat(t.x[n]), b = t.bench[n], q = t.signal[n];
+        const benchCov = { ...b, covEvents: b.covN, covAvg: b.covN ? sigR4(b.covSum / b.covN) : null, covMin: b.covMin == null ? null : sigR4(b.covMin), covOverall: b.entry ? sigR4(b.done / b.entry) : null };
+        delete benchCov.covSum; delete benchCov.covN;
+        return [n, q.triggered ? { ...(a || { n: 0, avg: null, med: null, p25: null, p75: null, win: null }), exN: t.x[n].length, pairedAvg: pr?.avg ?? null, benchAvg: pb?.avg ?? null, ex: x?.avg ?? null, exWin: x?.win ?? null,
+          signalAudit: { ...q }, benchCov } : null];
+      })),
+      benchEvents: t.benchEvents, hist: [...bins, Infinity].map((b, k) => t.r[nL].filter(v => v < b && (k === 0 || v >= bins[k - 1])).length),
+      recent: t.list.sort((a, b) => b[2].localeCompare(a[2])).slice(0, 30) };
+  });
 }
 
 /* ---------- 看盤「選股 → 訊號回測」與 K 線格子上的勝率標記（只定義函式；畫面由 watch.html 的 renderList 呼叫） ---------- */
@@ -63,28 +134,29 @@ const sgWin = v => (v == null ? "—" : `${Math.round(v * 100)}%`), sgEnough = (
 // K 線格子下面的一行小字：資料檔有這個條件、20 天樣本夠才顯示。數字都是「買進持有」的結果，所以不寫「勝率」（看空型態會被看反）
 function sgBadge(id) {
   const J = W.sig; if (!J) { if (!W.sigBusy && !W.off) setTimeout(sgLoad, 0); return ""; }
-  const N = J.ns || SIG_NS, last = N[N.length - 1], s = (J.defs || []).find(x => x.id === id)?.stats?.[last];
-  return sgEnough(J, s) ? `<small class="sgbadge">之後 ${last} 日：上漲機率 ${sgWin(s.win)}・贏大盤 ${qP(s.ex)}・${s.n} 筆</small>` : "";
+  const N = J.ns || SIG_NS, last = N[N.length - 1], F = (J.defs || []).find(x => x.id === id), s = F?.stats?.[last], prefix = F?.side === "bear" ? "看空型態（反向解讀）・" : "";
+  return sgEnough(J, s) ? `<small class="sgbadge">${prefix}之後 ${last} 日：上漲機率 ${sgWin(s.win)}・超額（同池）${qP(s.ex)}・${s.n} 筆</small>` : "";
 }
 function sgHtml() {
   const J = W.sig; if (!J && !W.sigBusy) setTimeout(sgLoad, 0);
   if (!J?.defs) return `<p class="note gnote">${W.off ? "需要部署到網站才有回測資料。" : J?.err ? "還沒有回測資料：每個交易日收盤後由排程用全市場日 K 計算，第一次跑完後就會出現。" : "載入中…"}</p>`;
   const N = J.ns || SIG_NS, n = N.includes(+store.get("watch:sign", 0)) ? +store.get("watch:sign", 0) : N[N.length - 1], last = N[N.length - 1], id = store.get("watch:sigid", ""), T = J.defs.find(x => x.id === id);
-  // 排序看「型態準不準」：看多依贏大盤由高到低；看空的數字越低越準，所以反過來（獨立審查 R1）
+  // 排序看「型態準不準」：看多依超額（同池）由高到低；看空的超額越低越前面，所以反過來（獨立審查 R1）
   const key = x => { const s = x.stats?.[n]; return sgEnough(J, s) ? [1, s.ex == null ? -9 : x.side === "bear" ? -s.ex : s.ex] : [0, s?.n || 0]; };
   const L = [...J.defs].sort((a, b) => { const A = key(a), B = key(b); return B[0] - A[0] || B[1] - A[1]; });
   const bins = ["< −20%", "−20～−15", "−15～−10", "−10～−5", "−5～0", "0～5", "5～10", "10～15", "15～20", "≥ 20%"], hm = Math.max(1, ...(T?.hist || []));
-  return `<p class="note gnote">${esc(J.from)}～${esc(J.to)}・${J.stocks} 檔上市櫃普通股。把過去每一次條件成立找出來：收盤後才知道訊號，所以一律隔天開盤買進、持有 ${n} 個交易日後收盤賣出，已扣手續費與證交稅（來回 ${((J.cost ?? SIG_COST) * 100).toFixed(3)}%）。贏大盤＝和同一天開盤等權買進全市場每一檔、持有到同一天賣出（同樣扣成本）比。排行依型態準不準：看多的贏大盤越高越前面，看空的越低越前面。</p>
+  return `<p class="note gnote">${esc(J.from)}～${esc(J.to)}・${J.stocks} 檔上市櫃普通股。把過去每一次條件成立找出來：收盤後才知道訊號，所以一律隔天開盤買進、持有 ${n} 個交易日後收盤賣出，已扣手續費與證交稅（來回 ${((J.cost ?? SIG_COST) * 100).toFixed(3)}%）。同池基準＝訊號日成交量 ≥ ${SIG_MIN_LOTS} 張的現存上市櫃普通股等權池（含當次訊號股），並以訊號日、進場日、出場日精確配對；超額（同池）＝訊號股報酬減同池基準報酬。排行依型態準不準：看多的超額（同池）越高越前面，看空的超額越低越前面。</p>
     <div class="seg scrseg" role="group" aria-label="持有天數">${N.map(k => `<button data-sgn="${k}" aria-pressed="${k === n}">持有 ${k} 天</button>`).join("")}</div>
-    <div class="ctbl sgwrap"><table class="evtbl sgtbl"><thead><tr><th>條件</th><th>樣本</th><th>平均報酬</th><th>上漲機率</th><th>贏大盤（平均）</th><th>贏大盤機率</th></tr></thead><tbody>
+    <div class="ctbl sgwrap"><table class="evtbl sgtbl"><thead><tr><th>條件</th><th>樣本</th><th>平均報酬</th><th>上漲機率</th><th>超額（同池）</th><th>贏同池機率</th></tr></thead><tbody>
       ${L.map(x => { const s = x.stats?.[n], ok = sgEnough(J, s);
         return `<tr data-sgid="${esc(x.id)}"${x.id === id ? ' class="on"' : ""}><td><button class="linkbtn" data-sgid="${esc(x.id)}">${esc(x.name)}</button>${x.group === "kline" ? ` <small class="note sgside">${x.side === "bear" ? "看空" : "看多"}</small>` : ""}</td><td>${s?.n ?? 0}</td>${ok ? `<td class="${cls(s.avg)}">${qP(s.avg)}</td><td>${sgWin(s.win)}</td><td class="${cls(s.ex)}">${qP(s.ex)}</td><td>${sgWin(s.exWin)}</td>` : `<td colspan="4"><span class="note">樣本不足</span></td>`}</tr>`; }).join("")}</tbody></table></div>
-    ${T ? `<section class="mk sgdetail"><h3>${esc(T.name)}<span class="note">${T.group === "kline" ? (T.side === "bear" ? "K 線組合・看空" : "K 線組合・看多") : "技術條件"}</span></h3>${T.desc ? `<p class="note">${esc(T.desc)}</p>` : ""}
-      <div class="ctbl"><table class="evtbl"><thead><tr><th>持有</th><th>樣本</th><th>平均報酬</th><th>中位數</th><th>上漲機率</th><th>贏大盤（平均）</th><th>贏大盤機率</th></tr></thead><tbody>
-        ${N.map(k => { const s = T.stats?.[k]; return `<tr><td>${k} 天</td><td>${s?.n ?? 0}</td><td class="${cls(s?.avg)}">${qP(s?.avg)}</td><td class="${cls(s?.med)}">${qP(s?.med)}</td><td>${sgWin(s?.win)}</td><td class="${cls(s?.ex)}">${qP(s?.ex)}</td><td>${sgWin(s?.exWin)}</td></tr>`; }).join("")}</tbody></table></div>
+    ${T ? `<section class="mk sgdetail"><h3>${esc(T.name)}<span class="note">${T.group === "kline" ? (T.side === "bear" ? "K 線組合・看空型態（反向解讀）" : "K 線組合・看多") : "技術條件"}</span></h3>${T.desc ? `<p class="note">${esc(T.desc)}</p>` : ""}
+      <div class="ctbl"><table class="evtbl"><thead><tr><th>持有</th><th>樣本</th><th>平均報酬</th><th>中位數</th><th>上漲機率</th><th>超額（同池）</th><th>贏同池機率</th></tr></thead><tbody>
+        ${N.map(k => { const s = T.stats?.[k]; return `<tr><td>${k} 天</td><td>${s?.n ?? 0}（配對 ${s?.exN ?? 0}）</td><td class="${cls(s?.avg)}">${qP(s?.avg)}</td><td class="${cls(s?.med)}">${qP(s?.med)}</td><td>${sgWin(s?.win)}</td><td class="${cls(s?.ex)}">${qP(s?.ex)}</td><td>${sgWin(s?.exWin)}</td></tr>`; }).join("")}</tbody></table></div>
       ${sgEnough(J, T.stats?.[last]) ? "" : `<p class="note">樣本少於 ${J.minN || SIG_MIN_N} 筆，結果容易被少數股票左右，只能當參考。</p>`}
+      ${N.map(k => { const v = T.stats?.[k]?.benchCov; return v ? `<p class="note">持有 ${k} 天同池覆蓋：完成 ${v.done}/${v.entry}（整體 ${v.covOverall == null ? "—" : sgWin(v.covOverall)}；事件平均 ${v.covAvg == null ? "—" : sgWin(v.covAvg)}；最低單次 ${v.covMin == null ? "—" : sgWin(v.covMin)}），配對 ${T.stats[k].exN}/${T.stats[k].n}；基準池限現有快取可觀察股票。</p>` : ""; }).join("")}
       <h4>${last} 天報酬分佈</h4><div class="evhist">${(T.hist || []).map((v, i) => `<div title="${bins[i]}：${v} 筆"><i class="${i < 5 ? "dn" : "upb"}" style="height:${(v / hm * 100).toFixed(0)}%"></i><small>${bins[i].replace("%", "")}</small></div>`).join("")}</div>
       ${T.recent?.length ? `<h4>最近出現的訊號</h4><div class="ctbl"><table><thead><tr><th>股票</th><th>訊號日</th>${N.map(k => `<th>${k} 天</th>`).join("")}</tr></thead><tbody>
         ${T.recent.slice(0, 20).map(r => `<tr><td><button class="linkbtn" data-sel="${esc(r[0])}">${esc(r[1] || r[0])} ${esc(r[0])}</button></td><td>${esc(String(r[2]).slice(5).replace("-", "/"))}</td>${N.map((k, i) => `<td class="${cls(r[3 + i])}">${r[3 + i] == null ? `<span class="note">進行中</span>` : qP(r[3 + i])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : ""}</section>` : `<p class="note gnote">點條件名稱看三種持有天數、報酬分佈與最近出現的股票。</p>`}
-    <p class="note gnote">所有數字都是「買進後持有」的結果：看空的型態，上漲機率與贏大盤的數字越低，代表型態越準。只有最近約一年的資料，等於只看過一種行情；已下市的股票不在裡面；樣本少於 ${J.minN || SIG_MIN_N} 筆的不列機率。樣本數是訊號次數，不是互不相干的交易次數：同一檔相隔 ${SIG_GAP} 天以上就會再算一次，持有期間可能重疊，同一段行情也會讓很多檔同時出現訊號。過去表現不代表未來，不是投資建議。</p>`;
+    <p class="note gnote">所有數字都是「買進後持有」的結果：看空型態僅是買進持有結果的反向解讀，不代表實際放空績效；其上漲機率與超額（同池）越低，代表反向訊號越符合預期。只有最近約一年的資料，等於只看過一種行情；已下市的股票不在裡面；樣本少於 ${J.minN || SIG_MIN_N} 筆的不列機率。樣本數是訊號次數，不是互不相干的交易次數：同一檔相隔 ${SIG_GAP} 天以上就會再算一次，持有期間可能重疊，同一段行情也會讓很多檔同時出現訊號。過去表現不代表未來，不是投資建議。</p>`;
 }

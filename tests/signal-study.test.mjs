@@ -144,3 +144,55 @@ test("訊號回測排程：步驟排在 Telegram 提醒之後，失敗不擋別�
   assert.match(cm, /if: \$\{\{[^}]*steps\.sigstudy\.outcome == 'success'[^}]*\}\}/);
   assert.ok(at("- name: commit signal study") > at("- name: commit pattern today"), "前面的資料各自 commit，不受訊號回測影響");
 });
+
+
+test("訊號回測：同池基準以訊號日成交量篩選，含訊號股且三日期精確對齊", () => {
+  const signal = flat(80, i => i === 60 ? { v: 600 } : {});
+  const peer = flat(80, i => i === 60 ? { v: 700 } : {});
+  const illiquid = flat(80, i => i === 60 ? { v: 499 } : {});
+  const M = G.sigMarket([signal, peer, illiquid]);
+  const B = plain(G.sigBenchDetail(M, signal, 60, 5, 500, 0));
+  assert.equal(B.pool, 2, "同池包含訊號股及當日達 500 張的合格股票");
+  assert.equal(B.entry, 2); assert.equal(B.done, 2); assert.equal(B.value, 0);
+  const missingSignalDate = flat(80).filter((_,i)=>i!==60);
+  const M2 = G.sigMarket([missingSignalDate, peer]);
+  const B2 = plain(G.sigBenchDetail(M2, signal, 60, 5, 500, 0));
+  assert.equal(B2.pool, 1, "基準股訊號日缺棒不能用更早一根的成交量補位");
+});
+test("訊號回測：同進出場日但不同訊號日不得共用 memo", () => {
+  const b = flat(80, i => (i === 60 ? { v: 800 } : i === 61 ? { v: 100 } : {}));
+  const M = G.sigMarket([b]);
+  const D1 = flat(80).filter((_,i)=>i!==61);
+  const D2 = flat(80).filter((_,i)=>i!==60);
+  const A = plain(G.sigBenchDetail(M, D1, 60, 5, 500, 0));
+  const B = plain(G.sigBenchDetail(M, D2, 60, 5, 500, 0));
+  assert.equal(A.pool, 1); assert.equal(B.pool, 0);
+  assert.equal(M.memo.size, 2, "memo key 必須包含 ds、da、db 與 minLots");
+});
+test("訊號回測：基準端 pool→entry→done 互斥對帳與覆蓋率", () => {
+  const D = flat(100), lock = flat(100, i => i === 61 ? { o:110,h:110,l:110,c:110 } : {});
+  const badPath = flat(100, i => i === 63 ? { c: 40 } : {});
+  const M = G.sigMarket([D, lock, badPath]);
+  const B = plain(G.sigBenchDetail(M, D, 60, 5, 500, 0));
+  assert.equal(B.pool, B.entry + B.noEntryBar + B.entryLock);
+  assert.equal(B.entry, B.done + B.noExitOrPath + B.jumpExcl);
+  assert.equal(B.entry, 2); assert.equal(B.done, 1); assert.equal(B.entryLock, 1); assert.equal(B.jumpExcl, 1);
+});
+test("訊號回測：訊號端拆帳、exN 配對統計與 benchmark coverage", () => {
+  const D = flat(100), R = plain(G.sigStudy([{ c:"1111", n:"甲", bars:D }, { c:"2222", n:"乙", bars:flat(100) }], always, noInd))[0];
+  const S = R.stats[5];
+  assert.equal(S.signalAudit.triggered, S.signalAudit.pending + S.signalAudit.lock + S.signalAudit.noExitOrPath + S.signalAudit.jumpExcl + S.signalAudit.done);
+  assert.equal(S.exN, S.benchCov.events);
+  assert.equal(S.exN, S.n);
+  assert.equal(S.benchCov.pool, S.benchCov.entry);
+  assert.equal(S.benchCov.entry, S.benchCov.done);
+  assert.equal(S.benchCov.covOverall, 1); assert.equal(S.benchCov.covAvg, 1); assert.equal(S.benchCov.covMin, 1);
+  assert.ok(R.benchEvents[5].length > 0);
+});
+test("訊號回測：看空卡片文案明確標示反向解讀、基準名稱為同池", () => {
+  const src = readFileSync(new URL("../learner/sigstudy.js", import.meta.url), "utf8");
+  assert.match(src, /超額（同池）/);
+  assert.match(src, /看空型態（反向解讀）/);
+  assert.match(src, /現存上市櫃普通股等權池/);
+  assert.doesNotMatch(src.slice(src.indexOf("function sgBadge")), /贏大盤/);
+});
