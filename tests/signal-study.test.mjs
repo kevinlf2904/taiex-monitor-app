@@ -31,7 +31,13 @@ test("訊號回測：缺值不算、不產生 NaN", () => {
   const bad = [], finite = (o, k) => { if (typeof o === "number") { if (!Number.isFinite(o)) bad.push(k); } else if (o && typeof o === "object") for (const [j, v] of Object.entries(o)) finite(v, `${k}.${j}`); };
   finite(raw, "R"); assert.deepEqual(bad, [], "沒有 NaN／Infinity"); assert.ok(R[0].stats[5]?.n > 0, "缺值之外的樣本照算");
   finite({ x: NaN, y: [1, Infinity] }, "t"); assert.deepEqual(bad, ["t.x", "t.y.1"], "檢查本身抓得到"); bad.length = 0;
-  for (const n of [5, 10, 20]) assert.ok(R[0].stats[n] === null || Number.isFinite(R[0].stats[n].avg));
+  for (const n of [5, 10, 20]) {
+    const s = R[0].stats[n];
+    if (s === null) continue;
+    assert.equal(s.signalAudit.triggered, s.signalAudit.pending + s.signalAudit.lock + s.signalAudit.noExitOrPath + s.signalAudit.jumpExcl + s.signalAudit.done);
+    if (s.n === 0) { assert.equal(s.avg, null); assert.equal(s.exN, 0); assert.equal(s.ex, null); assert.ok(s.signalAudit.triggered > 0 && s.signalAudit.done === 0); }
+    else assert.ok(Number.isFinite(s.avg));
+  }
 });
 test("訊號回測：不偷看未來（改掉訊號日之後的 K 棒，訊號不變）", () => {
   const mk = tail => flat(100, i => (i === 70 ? { c: 108, h: 109 } : i > 70 ? tail(i) : {}));
@@ -80,7 +86,13 @@ test("訊號回測：真實條件接得上（COND、KPAT）", () => {
   const C = E.COND.find(x => x[0] === "macdgc"), K = E.KPAT[0];
   const R = plain(G.sigStudy([{ c: "1111", n: "亂數", bars: D }], [{ id: "c:macdgc", group: "tech", name: C[1], hit: (P, I) => C[4](P, I, C[3]) }, { id: "k:" + K.id, group: "kline", side: K.side, name: K.name, desc: K.desc, hit: P => K.hit(P) }], E.indicators));
   assert.equal(R.length, 2); assert.ok(R[0].stats[5]?.n > 0, "200 根亂數走勢一定有 MACD 金叉"); assert.equal(R[1].side, K.side);
-  for (const x of R) for (const n of [5, 10, 20]) assert.ok(x.stats[n] === null || x.stats[n].n > 0);
+  for (const x of R) for (const n of [5, 10, 20]) {
+    const s = x.stats[n];
+    if (s !== null) {
+      assert.equal(s.signalAudit.triggered, s.signalAudit.pending + s.signalAudit.lock + s.signalAudit.noExitOrPath + s.signalAudit.jumpExcl + s.signalAudit.done);
+      assert.ok(s.n > 0 || (s.n === 0 && s.signalAudit.triggered > 0 && s.avg === null && s.signalAudit.done === 0));
+    }
+  }
 });
 test("訊號回測：每個條件在排程引擎裡都不會丟錯（sigScan 會把錯誤吞成不成立，只能在這裡抓）", () => {
   let s = 11; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647; let p = 100;
@@ -143,4 +155,154 @@ test("訊號回測排程：步驟排在 Telegram 提醒之後，失敗不擋別�
   assert.match(step, /id: sigstudy/); const cm = y.slice(at("- name: commit signal study"), at("- name: commit signal study") + 400);
   assert.match(cm, /if: \$\{\{[^}]*steps\.sigstudy\.outcome == 'success'[^}]*\}\}/);
   assert.ok(at("- name: commit signal study") > at("- name: commit pattern today"), "前面的資料各自 commit，不受訊號回測影響");
+});
+
+
+test("訊號回測：同池基準以訊號日成交量篩選，含訊號股且三日期精確對齊", () => {
+  const signal = flat(80, i => i === 60 ? { v: 600 } : {});
+  const peer = flat(80, i => i === 60 ? { v: 700 } : {});
+  const illiquid = flat(80, i => i === 60 ? { v: 499 } : {});
+  const M = G.sigMarket([signal, peer, illiquid]);
+  const B = plain(G.sigBenchDetail(M, signal, 60, 5, 500, 0));
+  assert.equal(B.pool, 2, "同池包含訊號股及當日達 500 張的合格股票");
+  assert.equal(B.entry, 2); assert.equal(B.done, 2); assert.equal(B.value, 0);
+  const missingSignalDate = flat(80).filter((_,i)=>i!==60);
+  const M2 = G.sigMarket([missingSignalDate, peer]);
+  const B2 = plain(G.sigBenchDetail(M2, signal, 60, 5, 500, 0));
+  assert.equal(B2.pool, 1, "基準股訊號日缺棒不能用更早一根的成交量補位");
+});
+test("訊號回測：同進出場日但不同訊號日不得共用 memo", () => {
+  const b = flat(80, i => (i === 60 ? { v: 800 } : i === 61 ? { v: 100 } : {}));
+  const M = G.sigMarket([b]);
+  const D1 = flat(80).filter((_,i)=>i!==61);
+  const D2 = flat(80).filter((_,i)=>i!==60);
+  const A = plain(G.sigBenchDetail(M, D1, 60, 5, 500, 0));
+  const B = plain(G.sigBenchDetail(M, D2, 60, 5, 500, 0));
+  assert.equal(A.pool, 1); assert.equal(B.pool, 0);
+  assert.equal(M.memo.size, 2, "memo key 必須包含 ds、da、db 與 minLots");
+});
+test("訊號回測：基準端 pool→entry→done 互斥對帳與覆蓋率", () => {
+  const D = flat(100), lock = flat(100, i => i === 61 ? { o:110,h:110,l:110,c:110 } : {});
+  const badPath = flat(100, i => i === 63 ? { c: 40 } : {});
+  const M = G.sigMarket([D, lock, badPath]);
+  const B = plain(G.sigBenchDetail(M, D, 60, 5, 500, 0));
+  assert.equal(B.pool, B.entry + B.noEntryBar + B.entryLock);
+  assert.equal(B.entry, B.done + B.noExitOrPath + B.jumpExcl);
+  assert.equal(B.entry, 2); assert.equal(B.done, 1); assert.equal(B.entryLock, 1); assert.equal(B.jumpExcl, 1);
+});
+test("訊號回測：訊號端拆帳、exN 配對統計與 benchmark coverage", () => {
+  const D = flat(100), R = plain(G.sigStudy([{ c:"1111", n:"甲", bars:D }, { c:"2222", n:"乙", bars:flat(100) }], always, noInd))[0];
+  const S = R.stats[5];
+  assert.equal(S.signalAudit.triggered, S.signalAudit.pending + S.signalAudit.lock + S.signalAudit.noExitOrPath + S.signalAudit.jumpExcl + S.signalAudit.done);
+  assert.equal(S.exN, S.benchCov.events);
+  assert.equal(S.exN, S.n);
+  assert.equal(S.benchCov.pool, S.benchCov.entry);
+  assert.equal(S.benchCov.entry, S.benchCov.done);
+  assert.equal(S.benchCov.covOverall, 1); assert.equal(S.benchCov.covAvg, 1); assert.equal(S.benchCov.covMin, 1);
+  assert.ok(R.benchEvents[5].length > 0);
+});
+test("訊號回測：看空卡片文案明確標示反向解讀、基準名稱為同池", () => {
+  const src = readFileSync(new URL("../learner/sigstudy.js", import.meta.url), "utf8");
+  assert.match(src, /超額（同池）/);
+  assert.match(src, /看空型態（反向解讀）/);
+  assert.match(src, /現存上市櫃普通股等權池/);
+  assert.doesNotMatch(src.slice(src.indexOf("function sgBadge")), /贏大盤/);
+});
+test("訊號回測：sigForwardDetail 互斥排除原因、Infinity／零價防護與全排除統計", () => {
+  assert.deepEqual(plain(G.sigForwardDetail(flat(12), 10, 5)), { reason: "pending" });
+  for (const patch of [i => (i === 6 ? { o: Infinity } : {}), i => (i === 5 ? { c: Infinity } : {}), i => (i === 5 ? { c: 0 } : {})])
+    assert.deepEqual(plain(G.sigForwardDetail(flat(12, patch), 5, 5)), { reason: "noEntryBar" });
+  assert.deepEqual(plain(G.sigForwardDetail(flat(12, i => (i === 6 ? { o: 110, h: 110, l: 110, c: 110 } : {})), 5, 5)), { reason: "entryLock" });
+  for (const patch of [i => (i === 6 ? { o: 100, c: null } : {}), i => (i === 8 ? { c: 0 } : {}), i => (i === 10 ? { c: Infinity } : {})])
+    assert.deepEqual(plain(G.sigForwardDetail(flat(12, patch), 5, 5)), { reason: "noExitOrPath" });
+  assert.deepEqual(plain(G.sigForwardDetail(flat(12, i => (i === 8 ? { c: 40 } : {})), 5, 5)), { reason: "jumpExcl" });
+
+  const bars = flat(86, i => (i === 63 ? { c: 40 } : i === 67 ? { o: 110, h: 110, l: 110, c: 110 } : i === 75 ? { c: null } : {}));
+  const defs = [{ id: "pick4", group: "t", name: "4筆全排除或未成熟", hit: P => [61, 67, 73, 84].includes(P.length) }];
+  const s5 = plain(G.sigStudy([{ c: "1111", n: "測", bars }], defs, noInd))[0].stats[5];
+  assert.deepEqual(s5.signalAudit, { triggered: 4, pending: 1, lock: 1, noExitOrPath: 1, jumpExcl: 1, done: 0 });
+  assert.equal(s5.n, 0); assert.equal(s5.avg, null); assert.equal(s5.exN, 0); assert.equal(s5.pairedAvg, null); assert.equal(s5.benchAvg, null); assert.equal(s5.ex, null);
+  assert.equal(s5.benchCov.events, 0);
+});
+test("訊號回測：memo 依 minLots 隔離、不同 cost 共用 grossAvg、缺期與非遞增日期邊界", () => {
+  const D = flat(80, i => (i === 60 ? { v: 600 } : {})), P = flat(80, i => (i === 60 ? { v: 1200 } : {}));
+  const M = G.sigMarket([D, P]);
+  const b500 = plain(G.sigBenchDetail(M, D, 60, 5, 500, 0)), b1000 = plain(G.sigBenchDetail(M, D, 60, 5, 1000, 0));
+  const b1000c = plain(G.sigBenchDetail(M, D, 60, 5, 1000, 0.00585));
+  assert.equal(b500.pool, 2); assert.equal(b1000.pool, 1); assert.equal(b1000c.pool, 1);
+  assert.ok(Math.abs(b1000c.value - (-0.00585)) < 1e-12);
+  assert.equal(M.memo.size, 2, "同 ds|da|db 不同 minLots 必須分開快取，不同 cost 共用 grossAvg");
+
+  for (const bad of [flat(80, i => (i === 61 ? { d: day(59) } : {})), flat(80, i => (i === 61 ? { d: day(60) } : {})), flat(80, i => (i === 65 ? { d: "" } : {}))])
+    assert.equal(G.sigBenchDetail(M, bad, 60, 5, 500, 0), null, "缺日期或非嚴格遞增時不查表也不污染 memo");
+  assert.equal(M.memo.size, 2);
+
+  const jumpPeer = flat(80, i => (i === 63 ? { c: 40 } : {})), missExitPeer = flat(80).filter((_, i) => i !== 65);
+  const bZeroDone = plain(G.sigBenchDetail(G.sigMarket([jumpPeer, missExitPeer]), D, 60, 5, 500, 0));
+  assert.equal(bZeroDone.pool, 2); assert.equal(bZeroDone.entry, 2); assert.equal(bZeroDone.done, 0);
+  assert.equal(bZeroDone.jumpExcl, 1); assert.equal(bZeroDone.noExitOrPath, 1); assert.equal(bZeroDone.value, null);
+
+  const lockPeer = flat(80, i => (i === 61 ? { o: 110, h: 110, l: 110, c: 110 } : {})), noBarPeer = flat(80).filter((_, i) => i !== 61);
+  const bZeroEntry = plain(G.sigBenchDetail(G.sigMarket([lockPeer, noBarPeer]), D, 60, 5, 500, 0));
+  assert.equal(bZeroEntry.pool, 2); assert.equal(bZeroEntry.entry, 0); assert.equal(bZeroEntry.noEntryBar, 1); assert.equal(bZeroEntry.entryLock, 1);
+  assert.equal(bZeroEntry.value, null);
+});
+test("訊號回測：covAvg 與 covOverall 區分、covMin 與配對子集一致性（exN < n）", () => {
+  const sig = flat(90, i => (i === 60 || i === 70 ? { o: 100, h: 120, l: 99, c: 115, v: 1000 } : { v: 100 }));
+  const peers60 = Array.from({ length: 9 }, (_, k) => ({ c: String(2000 + k), n: `甲${k}`, bars: flat(90, i => (i === 60 ? { v: 1000 } : { v: 100 })) }));
+  const jump70 = flat(90, i => (i === 70 ? { v: 1000 } : i === 73 ? { c: 40, v: 100 } : { v: 100 }));
+  const defs = [{ id: "cgt110", group: "t", name: "c>110", hit: P => P.at(-1).c > 110 }];
+  const R = plain(G.sigStudy([{ c: "1111", n: "訊號", bars: sig }, ...peers60, { c: "2999", n: "跳", bars: jump70 }], defs, noInd, { cost: 0 }))[0];
+  const s5 = R.stats[5];
+  assert.equal(s5.n, 2); assert.equal(s5.exN, 2);
+  assert.equal(s5.benchCov.events, 2); assert.equal(s5.benchCov.covEvents, 2); assert.equal(s5.benchCov.entryZeroEvents, 0);
+  assert.equal(s5.benchCov.pool, 12); assert.equal(s5.benchCov.entry, 12); assert.equal(s5.benchCov.done, 11); assert.equal(s5.benchCov.jumpExcl, 1);
+  assert.equal(s5.benchCov.covOverall, 0.9167); assert.equal(s5.benchCov.covAvg, 0.75); assert.equal(s5.benchCov.covMin, 0.5);
+  assert.notEqual(s5.benchCov.covOverall, s5.benchCov.covAvg);
+
+  // exN < n：第 70 根出發的 5 日出場日缺失日期 .d（報酬 40% 計入 n 與 avg，但無法配對基準，不進入 pairedAvg／benchAvg／ex）
+  const s1 = flat(90, i => (i === 60 || i === 70 ? { c: 108, h: 109 } : i === 65 ? { c: 110, h: 111 } : i === 75 ? { d: "", c: 140, h: 141 } : {}));
+  const P = plain(G.sigStudy([{ c: "1111", n: "甲", bars: s1 }, { c: "2222", n: "乙", bars: flat(90) }], [{ id: "e2", group: "t", name: "e2", hit: P => P.at(-1).c === 108 }], noInd, { cost: 0 }))[0].stats[5];
+  assert.equal(P.n, 2); assert.equal(P.avg, 0.25);
+  assert.equal(P.exN, 1); assert.equal(P.benchCov.events, 1);
+  assert.equal(P.pairedAvg, 0.1); assert.equal(P.benchAvg, 0.05); assert.equal(P.ex, 0.05); assert.equal(P.exWin, 1);
+  assert.ok(Math.abs((P.pairedAvg - P.benchAvg) - P.ex) <= 1e-4);
+});
+test("訊號回測腳本：JSON 不含 benchEvents、保留審計欄位且全未完成時回傳 null", () => {
+  assert.equal(G.SIG_COV_WARN, 0.95);
+  const H = { date: day(199), s: { 2330: { n: "台積電", b: walk(11) }, 2317: { n: "鴻海", b: walk(12) } } };
+  const out = plain(build(H, E, new Date("2026-11-16T08:30:00Z")));
+  assert.ok(out.defs.every(d => !("benchEvents" in d)), "排程輸出不得包含肥大 benchEvents 陣列");
+  const withStat = out.defs.find(d => d.stats[5]);
+  assert.ok(withStat && "signalAudit" in withStat.stats[5] && "benchCov" in withStat.stats[5] && "exN" in withStat.stats[5] && "pairedAvg" in withStat.stats[5] && "benchAvg" in withStat.stats[5]);
+  const pendOnly = flat(63, i => (i === 62 ? { o: 100, h: 110, l: 99, c: 109, v: 9000 } : {}));
+  assert.equal(build({ s: { 2330: { n: "尾段", b: pendOnly } } }, E), null, "只有 pending 觸發（n === 0）時仍回傳 null 保留舊檔");
+});
+test("訊號回測：進場漲停基準取 b[a-1]（同 sigForward D[i] 語意）與非遞增日期防呆", () => {
+  // (a) 基準股只有 ds 與 da（a === si + 1，且中間日都無資料），da 一字漲停應依 ds 收盤計入 entryLock
+  const sigSkip = flat(80).filter((_, k) => k !== 61); // sigSkip[60]=day(60), sigSkip[61]=day(62)
+  const bNoMid = flat(80, k => (k === 59 ? { c: 150 } : k === 60 ? { c: 100, v: 1000 } : k === 62 ? { o: 110, h: 110, l: 110, c: 110 } : {})).filter((_, k) => k !== 61);
+  const Ba = plain(G.sigBenchDetail(G.sigMarket([bNoMid]), sigSkip, 60, 5, 500, 0));
+  assert.equal(Ba.pool, 1); assert.equal(Ba.noEntryBar, 0); assert.equal(Ba.entryLock, 1); assert.equal(Ba.entry, 0);
+  assert.equal(Ba.pool, Ba.entry + Ba.noEntryBar + Ba.entryLock);
+
+  // (b) 訊號股 ds→da 跳過 d_mid，但基準股有中間交易日 d_mid：以真實前一交易日 b[a-1] 判斷漲停鎖死
+  const bDownMid = flat(80, k => (k === 60 ? { c: 100, v: 1000 } : k === 61 ? { o: 95, h: 95, l: 91, c: 91 } : k === 62 ? { o: 100.1, h: 100.1, l: 100.1, c: 100.1 } : {}));
+  const Bb1 = plain(G.sigBenchDetail(G.sigMarket([bDownMid]), sigSkip, 60, 5, 500, 0));
+  assert.equal(Bb1.pool, 1); assert.equal(Bb1.entryLock, 1, "100→91→100.1 一字漲停相對 d_mid=91 達 +10%，應計入 entryLock");
+  assert.equal(Bb1.entry, 0); assert.equal(Bb1.done, 0);
+
+  const bUpMid = flat(80, k => (k === 60 ? { c: 100, v: 1000 } : k === 61 ? { o: 105, h: 110, l: 104, c: 110 } : k === 62 ? { o: 110, h: 110, l: 110, c: 110 } : {}));
+  const Bb2 = plain(G.sigBenchDetail(G.sigMarket([bUpMid]), sigSkip, 60, 5, 500, 0));
+  assert.equal(Bb2.pool, 1); assert.equal(Bb2.entryLock, 0, "100→110→110 平盤一字線相對 d_mid=110 為 0%，不應誤判 entryLock");
+  assert.equal(Bb2.entry, 1); assert.equal(Bb2.done, 1);
+
+  // (c) 基準股日期非遞增或前日缺日期（b[a-1].d 不在 [ds, da)）→ 計入 noEntryBar 且恆等式成立
+  const sigNorm = flat(80);
+  const insertAt61 = d => [...sigNorm.slice(0, 61), { d, o: 100, h: 101, l: 99, c: 100, v: 1000 }, ...sigNorm.slice(61)];
+  const bPrevBeforeDs = insertAt61(day(50)), bPrevAfterDa = insertAt61(day(63)), bPrevEqDa = insertAt61(day(61)), bPrevNoDate = insertAt61(null);
+  const Bc = plain(G.sigBenchDetail(G.sigMarket([sigNorm, bPrevBeforeDs, bPrevAfterDa, bPrevEqDa, bPrevNoDate]), sigNorm, 60, 5, 500, 0));
+  assert.equal(Bc.pool, 5); assert.equal(Bc.noEntryBar, 4); assert.equal(Bc.entry, 1); assert.equal(Bc.entryLock, 0); assert.equal(Bc.done, 1);
+  assert.equal(Bc.pool, Bc.entry + Bc.noEntryBar + Bc.entryLock);
+  assert.equal(Bc.entry, Bc.done + Bc.noExitOrPath + Bc.jumpExcl);
 });
