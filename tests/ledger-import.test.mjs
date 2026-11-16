@@ -428,4 +428,29 @@ test("prepareTradesImport（高風險對抗案例）：無時間/同分鐘重疊
   assert.equal(ledB.positions[0].costBasis, 120000, "剩餘 FIFO 成本批皆為 120 元 × 1000 股");
   assert.deepEqual(J(ledA.positions[0].lots.map(l => l.cost)), [120000]);
   assert.deepEqual(J(ledB.positions[0].lots.map(l => l.cost)), [120000]);
+
+  // 9. Issue #303：prepareTradesImport 套用 opts.rules 手續費折扣並將估算後 fee/tax/feeEstimated 快照寫入 transactions
+  const discRules = { ...L.DEFAULT_RULES, tw: { ...L.DEFAULT_RULES.tw, discount: 0.28 } };
+  const impDisc = L.prepareTradesImport([
+    { date: "2026-05-12", time: "09:10", side: "buy", code: "2330", shares: 1000, price: 500, fee: null, tax: null },
+    { date: "2026-05-13", time: "10:00", side: "sell", code: "2330", shares: 1000, price: 600, fee: null, tax: null },
+    { date: "2026-05-14", time: "11:00", side: "buy", code: "00679B", shares: 1000, price: 30, fee: 0, tax: 0 },
+  ], [], { today: "2026-05-15", rules: discRules });
+  assert.equal(impDisc.ok, true);
+  assert.equal(impDisc.feeEstimatedCount, 2);
+  // 買 1000×500：floor(500000 × 0.001425 × 0.28) = 199；賣 1000×600：floor(600000 × 0.001425 × 0.28) = 239，證交稅 1800 不打折
+  assert.equal(impDisc.items[0].computed.fee, 199);
+  assert.equal(impDisc.items[1].computed.fee, 239);
+  assert.equal(impDisc.items[1].computed.tax, 1800);
+  // 寫入 store 的 transactions 已帶快照費稅與 feeEstimated: true，後續不傳 rules 重建帳本仍維持 2.8 折快照值
+  assert.equal(impDisc.transactions[0].fee, 199);
+  assert.equal(impDisc.transactions[0].feeEstimated, true);
+  assert.equal(impDisc.transactions[1].fee, 239);
+  assert.equal(impDisc.transactions[1].tax, 1800);
+  assert.equal(impDisc.transactions[1].feeEstimated, true);
+  assert.equal(impDisc.transactions[2].fee, 0);
+  assert.equal(impDisc.transactions[2].feeEstimated, undefined);
+  const rebAfterImp = L.buildLedger(impDisc.transactions, { method: "avg", today: "2026-05-15" });
+  assert.equal(rebAfterImp.totals.TWD.fees, 199 + 239);
+  assert.equal(rebAfterImp.totals.TWD.taxes, 1800);
 });

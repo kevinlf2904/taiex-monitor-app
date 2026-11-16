@@ -50,7 +50,7 @@ function rbSectionHtml(open, X, cashB, meta = {}) {
       <div class="lgbar"><button type="button" class="btn sm" data-rb="edit">修改目標</button></div>`;
   }
   return `<section class="pfcard rbcard" data-nofold><h4>目標配置與再平衡<small class="note">（試算${meta.legacy ? "・舊庫存" : ""}）</small></h4>${L.rbMsg ? `<p class="note lgmsg" role="status">${esc(L.rbMsg)}</p>` : ""}${body}
-    <p class="note">用目前報價與匯率試算，股數取整數（台股可買零股；美股不假設券商支援碎股），費用依「交易紀錄」的費用規則估算並套用持股頁「手續費折扣」設定${disc < 1 ? `（台股手續費 ${+(disc * 10).toFixed(2)} 折；債券 ETF 證交稅 0；註：交易紀錄內未填費用的自動估算目前仍用預設費率）` : "（債券 ETF 證交稅 0；註：交易紀錄內未填費用的自動估算亦用預設費率）"}；${P.cashKnown ? "「調整後」比重已經把費稅從現金扣掉，用調整後的總資產算。" : "因現金未知，比重僅按已納入持股合計（含本次淨現金流出入）推算，非完整總資產。"}實際成交價會不同，也沒算市場衝擊；只是幫你看偏離多少，不是投資建議。目標只存在這個瀏覽器，有開雲端同步時會一起同步，備份檔也會帶。</p></section>`;
+    <p class="note">用目前報價與匯率試算，股數取整數（台股可買零股；美股不假設券商支援碎股），費用依「交易紀錄」的費用規則估算並套用持股頁「手續費折扣」設定${disc < 1 ? `（台股手續費 ${+(disc * 10).toFixed(2)} 折；債券 ETF 證交稅 0；與新增交易紀錄、成交截圖匯入的預設手續費估算一致）` : "（債券 ETF 證交稅 0；與新增交易紀錄、成交截圖匯入的預設手續費估算一致）"}；${P.cashKnown ? "「調整後」比重已經把費稅從現金扣掉，用調整後的總資產算。" : "因現金未知，比重僅按已納入持股合計（含本次淨現金流出入）推算，非完整總資產。"}實際成交價會不同，也沒算市場衝擊；只是幫你看偏離多少，不是投資建議。目標只存在這個瀏覽器，有開雲端同步時會一起同步，備份檔也會帶。</p></section>`;
 }
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-rb]"); if (!b || typeof KLRebal === "undefined") return;
