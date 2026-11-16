@@ -7,7 +7,7 @@
 // 條件：learner/tools.js 的 COND（不含「策略訊號」，那些會讓全市場計算多好幾倍時間）用預設參數，加上 learner/analysis.js 的 KPAT（K 線組合）。
 // 在 .github/workflows/market-scan.yml 裡、全市場日 K 更新之後執行：日 K 用 .cache/allk.json（最近約 260 個交易日）。
 // 限制（網頁上也會寫）：只有約一年的資料、只有現在還在上市櫃的股票（倖存者偏差）。沒有日 K 快取或算不出樣本時保留舊檔。
-// 輸出：{ updated, from, to, stocks, ns, cost, minN, defs: [{ id, group, side, name, desc, stats: { 5|10|20: { n, avg, med, p25, p75, win, exN, pairedAvg, benchAvg, ex, exWin, signalAudit, benchCov } | null }, benchEvents, hist: [10 格], recent: [[代號, 名稱, 訊號日, r5, r10, r20]] }] }
+// 輸出：{ updated, from, to, stocks, ns, cost, minN, defs: [{ id, group, side, name, desc, stats: { 5|10|20: { n, avg, med, p25, p75, win, exN, pairedAvg, benchAvg, ex, exWin, signalAudit, benchCov } | null }, hist: [10 格], recent: [[代號, 名稱, 訊號日, r5, r10, r20]] }] }
 //   --dry  只印統計，不寫檔
 // 結束碼：有算出結果是 0；沒有快取、算不出樣本或執行錯誤是 1（保留舊檔），workflow 靠它決定要不要 commit
 import { readFile, writeFile, rename, unlink } from "node:fs/promises";
@@ -27,7 +27,7 @@ export function sigDefs(E = engine()) {
 export function build(H, E = engine(), now = new Date()) {
   const G = E.G, stocks = Object.entries(H?.s || {}).filter(([c, s]) => /^[1-9]\d{3}$/.test(c) && s?.b?.length > G.SIG_WARM).map(([c, s]) => ({ c, n: s.n || c, bars: s.b }));
   if (!stocks.length) return null;
-  const defs = G.sigStudy(stocks, sigDefs(E), E.indicators); if (!defs.some(x => x.stats[G.SIG_NS[0]]?.n)) return null;
+  const defs = G.sigStudy(stocks, sigDefs(E), E.indicators, { includeEvents: false }); if (!defs.some(x => x.stats[G.SIG_NS[0]]?.n)) return null;
   const days = stocks.flatMap(s => [s.bars[0].d, s.bars.at(-1).d]).sort();
   return { updated: now.toISOString(), from: days[0], to: days.at(-1), stocks: stocks.length, ns: [...G.SIG_NS], cost: r5(G.SIG_COST), minN: G.SIG_MIN_N, defs };
 }
