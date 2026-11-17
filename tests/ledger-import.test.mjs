@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import handler, { cleanRows, cleanTradeRows, parseTradeDate } from "../api/_lib/import.js";
+import handler, { cleanRows, cleanTradeRows, parseTradeDate, parseAsOf } from "../api/_lib/import.js";
 
 const ctx = {};
 vm.createContext(ctx);
@@ -12,26 +12,27 @@ const L = ctx.KLLedger;
 const J = x => JSON.parse(JSON.stringify(x));
 
 const KEYS = ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "AI_CLAUDE_ENABLED", "AI_CLAUDE_FALLBACK", "GEMINI_MODEL"];
-async function withMockAI(env, fn, { rows = [], status = 200, claudeRows = null } = {}) {
+async function withMockAI(env, fn, { rows = [], kind, asOf, status = 200, claudeRows = null, claudeKind, claudeAsOf } = {}) {
   const saved = Object.fromEntries(KEYS.map(k => [k, process.env[k]]));
   const realFetch = globalThis.fetch;
   for (const k of KEYS) delete process.env[k];
   Object.assign(process.env, env);
   const sent = { gemini: [], claude: [] };
+  const makeBody = (r, k, a) => JSON.stringify({ rows: r, ...(k !== undefined ? { kind: k } : {}), ...(a !== undefined ? { asOf: a } : {}) });
   globalThis.fetch = async (url, init) => {
     const u = String(url?.url || url);
     if (/\/v1beta\/models\?/.test(u)) return new Response("{}", { status: 404 });
     if (/generativelanguage\.googleapis\.com/.test(u)) {
       sent.gemini.push(JSON.parse(init.body));
       if (status !== 200) return new Response(JSON.stringify({ error: { message: "err" } }), { status, headers: { "content-type": "application/json" } });
-      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ rows }) }] }, finishReason: "STOP" }] }), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: makeBody(rows, kind, asOf) }] }, finishReason: "STOP" }] }), { status: 200, headers: { "content-type": "application/json" } });
     }
     if (/api\.anthropic\.com/.test(u)) {
       const body = JSON.parse(init.body);
       sent.claude.push(body);
       return new Response(JSON.stringify({
         id: "m1", type: "message", role: "assistant", model: "claude-test", stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 },
-        content: [{ type: "text", text: JSON.stringify({ rows: claudeRows ?? rows }) }]
+        content: [{ type: "text", text: makeBody(claudeRows ?? rows, claudeKind !== undefined ? claudeKind : kind, claudeAsOf !== undefined ? claudeAsOf : asOf) }]
       }), { status: 200, headers: { "content-type": "application/json" } });
     }
     throw new Error("測試不該連外：" + u);
@@ -454,3 +455,141 @@ test("prepareTradesImport（高風險對抗案例）：無時間/同分鐘重疊
   assert.equal(rebAfterImp.totals.TWD.fees, 199 + 239);
   assert.equal(rebAfterImp.totals.TWD.taxes, 1800);
 });
+
+test("Task 1：parseTradeDate({ missingAsNull }), parseAsOf（含跨年與未來日）, detectMarginType 條件展開與 mode=auto", async () => {
+  // 1. parseTradeDate missingAsNull: true vs 預設向下相容
+  assert.deepEqual(parseTradeDate(null, "2026-05-15"), { date: "2026-05-15", dateAssumed: "today" });
+  assert.deepEqual(parseTradeDate(null, "2026-05-15", { missingAsNull: true }), { date: "", dateAssumed: "missing" });
+  assert.deepEqual(parseTradeDate("", "2026-05-15", { missingAsNull: true }), { date: "", dateAssumed: "missing" });
+  assert.deepEqual(parseTradeDate("   ", "2026-05-15", { missingAsNull: true }), { date: "", dateAssumed: "missing" });
+  assert.deepEqual(parseTradeDate("115/05/12", "2026-05-15", { missingAsNull: true }), { date: "2026-05-12", dateAssumed: null });
+
+  // 2. parseAsOf：exact / year（同年與跨年）/ future / mdy / invalid / missing
+  assert.deepEqual(parseAsOf("115/11/10", "2026-11-16"), { asOf: "2026-11-10", asOfStatus: "exact" });
+  assert.deepEqual(parseAsOf("2026-11-16", "2026-11-16"), { asOf: "2026-11-16", asOfStatus: "exact" });
+  assert.deepEqual(parseAsOf("05/12", "2026-05-15"), { asOf: "2026-05-12", asOfStatus: "year", rawAsOf: "05/12" });
+  assert.deepEqual(parseAsOf("12/28", "2026-01-05"), { asOf: "2025-12-28", asOfStatus: "year", rawAsOf: "12/28" });
+  assert.deepEqual(parseAsOf("2026-12-31", "2026-11-16"), { asOf: "2026-12-31", asOfStatus: "future", rawAsOf: "2026-12-31" });
+  assert.deepEqual(parseAsOf("115/12/31", "2026-11-16"), { asOf: "2026-12-31", asOfStatus: "future", rawAsOf: "115/12/31" });
+  assert.deepEqual(parseAsOf("05/12/2026", "2026-05-15"), { asOf: "2026-05-12", asOfStatus: "mdy", altDate: "2026-12-05", rawAsOf: "05/12/2026" });
+  assert.deepEqual(parseAsOf("2026/02/30", "2026-05-15"), { asOf: null, asOfStatus: "invalid", rawAsOf: "2026/02/30" });
+  assert.deepEqual(parseAsOf(null, "2026-05-15"), { asOf: null, asOfStatus: "missing" });
+  assert.deepEqual(parseAsOf("  ", "2026-05-15"), { asOf: null, asOfStatus: "missing" });
+
+  // 3. detectMarginType 條件展開（現股不加 marginType 鍵；融資/融券附 marginType）
+  const hdRows = cleanRows([
+    { name: "台積電", code: "2330", shares: 1000, avgCost: 900 },
+    { name: "聯發科", code: "2454", shares: 1000, avgCost: 1200, note: "融資" },
+    { name: "長榮", code: "2603", shares: 1000, avgCost: 200, marginType: "short" },
+  ]);
+  assert.equal("marginType" in hdRows[0], false, "現股列不得多出 marginType 鍵");
+  assert.equal(hdRows[1].marginType, "margin");
+  assert.equal(hdRows[2].marginType, "short");
+
+  const trRows = cleanTradeRows([
+    { date: "2026-11-10", side: "現股買進", name: "台積電", code: "2330", shares: 1000, price: 900 },
+    { date: "2026-11-10", side: "資買", name: "聯發科", code: "2454", shares: 1000, price: 1200 },
+    { date: "2026-11-10", side: "券賣", name: "長榮", code: "2603", shares: 1000, price: 200 },
+  ], { today: "2026-11-16", missingAsNull: true });
+  assert.equal("marginType" in trRows[0], false);
+  assert.equal(trRows[1].marginType, "margin");
+  assert.equal(trRows[2].marginType, "short");
+
+  // 4. POST /api/import mode="auto"
+  const img = "data:image/png;base64,AAAA";
+  const twToday = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const nextYrFuture = `${Number(twToday.slice(0, 4)) + 1}-12-31`;
+
+  // 4a. holdings exact + 融資標記
+  const autoHold = await withMockAI({ GEMINI_API_KEY: "g" }, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }), {
+    kind: "holdings",
+    asOf: "115/01/10",
+    rows: [
+      { name: "台積電", code: "2330", shares: 1000, avgCost: 900, price: 950 },
+      { name: "聯發科(融資)", code: "2454", shares: 1000, avgCost: 1200, price: 1250 },
+    ],
+  });
+  assert.equal(autoHold.status, 200);
+  assert.equal(autoHold.out.ok, true);
+  assert.equal(autoHold.out.mode, "auto");
+  assert.equal(autoHold.out.kind, "holdings");
+  assert.equal(autoHold.out.asOf, "2026-01-10");
+  assert.equal(autoHold.out.asOfStatus, "exact");
+  assert.equal("marginType" in autoHold.out.rows[0], false);
+  assert.equal(autoHold.out.rows[1].marginType, "margin");
+
+  // 4b. holdings year 與 future
+  const tom = new Date(Date.now() + 8 * 3600e3 + 86400e3).toISOString().slice(5, 10).replace("-", "/");
+  const autoYear = await withMockAI({ GEMINI_API_KEY: "g" }, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }), {
+    kind: "holdings",
+    asOf: tom,
+    rows: [{ name: "台積電", code: "2330", shares: 1000, avgCost: 900 }],
+  });
+  assert.equal(autoYear.out.ok, true);
+  assert.equal(autoYear.out.asOfStatus, "year");
+  assert.equal(autoYear.out.rawAsOf, tom);
+  assert.ok(autoYear.out.asOf <= twToday, "缺年份回推不得超過今日");
+
+  const autoFuture = await withMockAI({ GEMINI_API_KEY: "g" }, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }), {
+    kind: "holdings",
+    asOf: nextYrFuture,
+    rows: [{ name: "台積電", code: "2330", shares: 1000, avgCost: 900 }],
+  });
+  assert.equal(autoFuture.out.ok, true);
+  assert.equal(autoFuture.out.asOfStatus, "future");
+  assert.equal(autoFuture.out.asOf, nextYrFuture);
+  assert.equal(autoFuture.out.rawAsOf, nextYrFuture);
+
+  // 4c. trades 缺 asOf 與列缺 date (dateAssumed="missing")
+  const autoTrades = await withMockAI({ GEMINI_API_KEY: "g" }, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }), {
+    kind: "trades",
+    asOf: null,
+    rows: [{ date: null, side: "買進", name: "台積電", code: "2330", shares: 500, price: 900 }],
+  });
+  assert.equal(autoTrades.out.ok, true);
+  assert.equal(autoTrades.out.kind, "trades");
+  assert.equal(autoTrades.out.asOf, null);
+  assert.equal(autoTrades.out.asOfStatus, "missing");
+  assert.equal(autoTrades.out.rows[0].date, "");
+  assert.equal(autoTrades.out.rows[0].dateAssumed, "missing");
+
+  // 4d. unknown 有列 vs 空列；錯誤碼與 Claude 備援
+  const autoUnkRows = await withMockAI({ GEMINI_API_KEY: "g" }, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }), {
+    kind: "unknown",
+    asOf: "2026-05-10",
+    rows: [{ name: "台積電", code: "2330.TW", shares: 1000, price: 900, avgCost: 850, side: "資買" }],
+  });
+  assert.equal(autoUnkRows.out.ok, true);
+  assert.equal(autoUnkRows.out.kind, "unknown");
+  assert.equal(autoUnkRows.out.rows[0].code, "2330");
+  assert.equal(autoUnkRows.out.rows[0].marginType, "margin");
+
+  const autoUnkEmpty = await withMockAI({ GEMINI_API_KEY: "g" }, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }), {
+    kind: "unknown",
+    asOf: null,
+    rows: [],
+  });
+  assert.equal(autoUnkEmpty.status, 200);
+  assert.equal(autoUnkEmpty.out.ok, false);
+  assert.equal(autoUnkEmpty.out.kind, "unknown");
+
+  const err503 = await withMockAI({ GEMINI_API_KEY: "g" }, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }), { status: 503 });
+  assert.equal(err503.out.ok, false); assert.match(err503.out.error, /太忙/);
+  const err429 = await withMockAI({ GEMINI_API_KEY: "g" }, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }), { status: 429 });
+  assert.equal(err429.out.ok, false); assert.match(err429.out.error, /額度/);
+  const err422 = await withMockAI({ GEMINI_API_KEY: "g" }, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }), { status: 422 });
+  assert.equal(err422.out.ok, false); assert.match(err422.out.error, /沒有讀出表格/);
+  const noKeyAuto = await withMockAI({}, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }));
+  assert.equal(noKeyAuto.out.ok, false); assert.match(noKeyAuto.out.error, /GEMINI_API_KEY/);
+
+  const claudeAuto = await withMockAI({ ANTHROPIC_API_KEY: "k", AI_CLAUDE_ENABLED: "1" }, () => callApi({ method: "POST", body: { images: [img], mode: "auto" } }), {
+    claudeKind: "holdings",
+    claudeAsOf: "2026-05-10",
+    claudeRows: [{ name: "輝達", code: "NVDA", shares: 10, avgCost: 120 }],
+  });
+  assert.equal(claudeAuto.out.ok, true);
+  assert.equal(claudeAuto.out.kind, "holdings");
+  assert.equal(claudeAuto.out.asOf, "2026-05-10");
+  assert.equal(claudeAuto.out.model, "claude-test");
+});
+
