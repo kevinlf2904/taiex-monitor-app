@@ -53,6 +53,49 @@
     return map;
   }
 
+  function getBaselineChains(recon, activeMap) {
+    const chains = new Map();
+    if (!activeMap || !activeMap.size) return chains;
+    const snaps = recon && Array.isArray(recon.snapshots) ? recon.snapshots.filter(Boolean) : [];
+    for (const [sym, B] of activeMap) {
+      const chain = [B];
+      const seen = new Set([B.id]);
+      let cur = B;
+      while (cur) {
+        const cands = snaps.filter(s =>
+          !seen.has(s.id) &&
+          symbolOf(s.symbol) === sym &&
+          (s.status === "superseded" || s.status === "confirmed") &&
+          s.supersededBy === cur.id &&
+          validDate(s.date) &&
+          s.date <= cur.date
+        );
+        if (!cands.length) break;
+        cands.sort((a, b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : String(b.confirmedAt || "").localeCompare(String(a.confirmedAt || "")));
+        const prev = cands[0];
+        seen.add(prev.id);
+        chain.unshift(prev);
+        cur = prev;
+      }
+      // 納入手動建構但未填 supersededBy 的同代號更早期 confirmed 快照
+      for (const s of snaps) {
+        if (!seen.has(s.id) && symbolOf(s.symbol) === sym && s.status === "confirmed" && validDate(s.date) && s.date <= B.date) {
+          seen.add(s.id);
+          chain.push(s);
+        }
+      }
+      chain.sort((a, b) => a.date !== b.date ? (a.date < b.date ? -1 : 1) : (a.id === B.id ? 1 : b.id === B.id ? -1 : String(a.confirmedAt || "").localeCompare(String(b.confirmedAt || ""))));
+      // 同一天若有多張快照，只留當天最後一張錨點
+      const dedup = [];
+      for (const s of chain) {
+        if (dedup.length && dedup[dedup.length - 1].date === s.date) dedup[dedup.length - 1] = s;
+        else dedup.push(s);
+      }
+      chains.set(sym, dedup);
+    }
+    return chains;
+  }
+
   // 手續費與交易稅估算（使用者沒填時才用）。assetType：stock／etf；dayTrade：現股當沖。回傳 { fee, tax }
   function estimateCosts(t, rules = DEFAULT_RULES) {
     const R = rules && rules[t.market]; if (!R || !(t.type === "buy" || t.type === "sell")) return { fee: 0, tax: 0 };
@@ -155,6 +198,7 @@
       if (t.date !== o.tx.date) r.warnings.push({ code: "fee_date_differs", message: `費用日期和對應的交易（${o.tx.date}）不同` }); }
 
     const baselines = withReconcile ? getActiveBaselines(reconStore) : new Map();
+    const baselineChains = withReconcile ? getBaselineChains(reconStore, baselines) : new Map();
     // 0. 市場／幣別與大寫 symbol 約束：先以 reconStore 各檔建立 symMkt，再檢核交易
     const symMkt = new Map();
     if (withReconcile && reconStore && typeof reconStore === "object") {
@@ -192,29 +236,36 @@
         if (!t || r.errors.length || (t.type === "fee" && t.ref)) continue;
         const sym = t.symbol, B = sym ? baselines.get(sym) : null;
         if (!B) { r.sortBucket = CORP_FIRST.has(t.type) ? 0 : 1; continue; }
-        const isTagAnchor = validTagTxIds.has(t.id) || (!!B.tagTxId && t.id === B.tagTxId && !staleTagIds.has(t.id));
+        const chain = baselineChains.get(sym) || [B];
+        const B0 = chain[0];
+        const isTagAnchor = validTagTxIds.has(t.id) || chain.some(s => !!s.tagTxId && t.id === s.tagTxId && !staleTagIds.has(t.id));
+        const sameSnap = chain.find(s => s.date === t.date) || null;
         if (isTagAnchor) {
           r.preSnapshot = true; r.sameDayRelation = null; r.sortBucket = -1;
-        } else if (t.date < B.date) {
+        } else if (t.date < B0.date) {
           r.preSnapshot = true; r.sameDayRelation = null; r.sortBucket = -2;
-        } else if (t.date === B.date) {
+        } else if (sameSnap) {
           const relObj = reconStore?.sameDayRelations?.[t.id];
           let rel = "unresolved";
           if (relObj && typeof relObj === "object") {
-            const rv = relObj.relation, idOk = !relObj.snapshotId || relObj.snapshotId === B.id;
-            if ((rv === "before_snapshot" || rv === "after_snapshot") && relObj.snapshotDate === B.date && idOk) rel = rv;
+            const rv = relObj.relation, idOk = !relObj.snapshotId || relObj.snapshotId === sameSnap.id;
+            if ((rv === "before_snapshot" || rv === "after_snapshot") && relObj.snapshotDate === sameSnap.date && idOk) rel = rv;
           } else if (typeof r.raw?.snapshotRelation === "string") {
             const rv = r.raw.snapshotRelation;
-            const idOk = !r.raw.snapshotId || r.raw.snapshotId === B.id;
-            const dateOk = !r.raw.snapshotDate || r.raw.snapshotDate === B.date;
+            const idOk = !r.raw.snapshotId || r.raw.snapshotId === sameSnap.id;
+            const dateOk = !r.raw.snapshotDate || r.raw.snapshotDate === sameSnap.date;
             if ((rv === "before_snapshot" || rv === "after_snapshot") && idOk && dateOk) rel = rv;
           }
           r.sameDayRelation = rel;
-          if (rel === "before_snapshot") { r.preSnapshot = true; r.sortBucket = -1; }
-          else if (rel === "unresolved") {
+          if (rel === "before_snapshot") {
+            // 若是第一張快照 B0 同日且在快照前，代表已含於 B0 期初內（preSnapshot=true）；若是後續快照 Si 同日且在快照前，屬於 (B0, Si) 期間交易，需在 Si 錨點（bucket 0）前套用（bucket -1）
+            r.preSnapshot = sameSnap.id === B0.id;
+            r.sortBucket = -1;
+          } else if (rel === "unresolved") {
             r.preSnapshot = false; r.sortBucket = 1;
-            const u = unresolvedBySym.get(sym) || { count: 0, shares: 0 };
+            const u = unresolvedBySym.get(sym) || { count: 0, shares: 0, date: sameSnap.date };
             u.count++; if (isNum(t.shares)) u.shares += t.shares;
+            u.date = sameSnap.date;
             unresolvedBySym.set(sym, u);
           } else {
             r.preSnapshot = false; r.sortBucket = CORP_FIRST.has(t.type) ? 2 : 3;
@@ -238,7 +289,12 @@
 
     const items = rows.map(r => ({ isAnchor: false, r, date: r.tx?.date || "9999", bucket: r.sortBucket ?? (CORP_FIRST.has(r.tx?.type) ? 0 : 1), i: r.i }));
     if (withReconcile) {
-      for (const [sym, B] of baselines) items.push({ isAnchor: true, sym, B, date: B.date, bucket: 0, i: -1 });
+      for (const [sym, chain] of baselineChains) {
+        for (let idx = 0; idx < chain.length; idx++) {
+          const S = chain[idx];
+          items.push({ isAnchor: true, sym, B: S, isFirstAnchor: idx === 0, isLastAnchor: idx === chain.length - 1, date: S.date, bucket: 0, i: -1 });
+        }
+      }
     }
     items.sort((a, b) => {
       if (a.date !== b.date) return a.date < b.date ? -1 : 1;
@@ -248,7 +304,7 @@
 
     const pos = new Map(), cash = {}, totals = {};
     const C = cur => (cash[cur] ||= { balance: 0, deposits: 0, withdrawals: 0, tracked: false }), T = cur => (totals[cur] ||= { realizedPnl: 0, dividends: 0, fees: 0, taxes: 0, bought: 0, sold: 0 });
-    const posOf = (t, sym = t.symbol) => { let p = pos.get(sym); if (!p) pos.set(sym, p = { symbol: sym, market: t.market, currency: t.currency, shares: 0, costBasis: 0, lots: [], realizedPnl: 0, dividends: 0, fees: 0, taxes: 0, firstDate: t.date, history: [], fraction: 0, hasSnapshot: false, snapshotDate: null, snapshotId: null, snapshotOrigin: null, snapshotScope: null, snapshotShares: null, snapshotAvgCost: null }); return p; };
+    const posOf = (t, sym = t.symbol) => { let p = pos.get(sym); if (!p) pos.set(sym, p = { symbol: sym, market: t.market, currency: t.currency, shares: 0, costBasis: 0, lots: [], realizedPnl: 0, dividends: 0, fees: 0, taxes: 0, firstDate: t.date, history: [], fraction: 0, hasSnapshot: false, snapshotDate: null, snapshotId: null, snapshotOrigin: null, snapshotScope: null, snapshotShares: null, snapshotAvgCost: null, firstSnapshotDate: null, firstSnapshotShares: null, firstSnapshotAvgCost: null, firstSnapshotOrigin: null }); return p; };
     const snap = (p, t, extra = {}) => p.history.push({ date: t.date, id: t.id, type: t.type, shares: p.shares, costBasis: r2(p.costBasis), avgCost: p.shares > EPS ? p.costBasis / p.shares : null, ...extra });
     const take = (p, n) => {
       if (method === "avg") { const c = p.shares > EPS ? p.costBasis * n / p.shares : 0; p.shares -= n; p.costBasis -= c; if (p.shares < EPS) { p.shares = 0; p.costBasis = 0; } return c; }
@@ -260,18 +316,24 @@
 
     for (const item of items) {
       if (item.isAnchor) {
-        const { sym, B } = item;
+        const { sym, B, isFirstAnchor } = item;
         const p = posOf({ symbol: sym, market: B.market, currency: B.currency, date: B.date }, sym);
-        p.firstDate = B.date;
+        const prevShares = p.shares, prevCost = p.costBasis;
+        if (isFirstAnchor || !p.firstSnapshotDate) {
+          p.firstDate = B.date;
+          p.firstSnapshotDate = B.date; p.firstSnapshotShares = B.shares; p.firstSnapshotAvgCost = B.avgCost ?? null; p.firstSnapshotOrigin = B.origin || "import";
+        }
         p.hasSnapshot = true; p.snapshotDate = B.date; p.snapshotId = B.id; p.snapshotOrigin = B.origin || "import"; p.snapshotScope = B.scope || "partial"; p.snapshotShares = B.shares; p.snapshotAvgCost = B.avgCost ?? null;
         if (B.origin === "full_snapshot_close") {
+          const deltaShares = isFirstAnchor ? 0 : r2(0 - prevShares);
           p.shares = 0; p.costBasis = 0; p.lots = [];
-          p.history.push({ date: B.date, id: B.id, type: "snapshot", origin: "full_snapshot_close", shares: 0, costBasis: 0, avgCost: null, isSnapshot: true });
+          p.history.push({ date: B.date, id: B.id, type: "snapshot", origin: "full_snapshot_close", shares: 0, costBasis: 0, avgCost: null, isSnapshot: true, isFirstSnapshot: !!isFirstAnchor, deltaShares, deltaCost: isFirstAnchor ? 0 : r2(0 - prevCost) });
         } else if (isNum(B.shares) && B.shares > 0 && isNum(B.avgCost) && B.avgCost > 0) {
           const initCost = r2(B.shares * B.avgCost);
+          const deltaShares = isFirstAnchor ? 0 : r2(B.shares - prevShares);
           p.shares = B.shares; p.costBasis = initCost;
           p.lots = method === "fifo" ? [{ date: B.date, id: B.id, shares: B.shares, cost: initCost, isSnapshot: true }] : [];
-          p.history.push({ date: B.date, id: B.id, type: "snapshot", shares: B.shares, costBasis: initCost, avgCost: B.avgCost, isSnapshot: true });
+          p.history.push({ date: B.date, id: B.id, type: "snapshot", shares: B.shares, costBasis: initCost, avgCost: B.avgCost, isSnapshot: true, isFirstSnapshot: !!isFirstAnchor, deltaShares, deltaCost: isFirstAnchor ? 0 : r2(initCost - prevCost) });
         }
         continue;
       }
@@ -353,7 +415,7 @@
         lastPrice: price, marketValue: mv == null ? null : r2(mv), unrealizedPnl: mv == null ? null : r2(mv - p.costBasis), realizedPnl: r2(p.realizedPnl), dividends: r2(p.dividends), fees: r2(p.fees), taxes: r2(p.taxes),
         open: p.shares > EPS, pending, lots: method === "fifo" ? p.lots.map(L => ({ date: L.date, id: L.id, shares: +L.shares.toFixed(6), cost: r2(L.cost) })) : null, firstDate: p.firstDate, history: p.history };
       if (!withReconcile) return basePos;
-      return { ...basePos, hasSnapshot: !!p.hasSnapshot, snapshotDate: p.snapshotDate, snapshotId: p.snapshotId, snapshotOrigin: p.snapshotOrigin, snapshotScope: p.snapshotScope, snapshotShares: p.snapshotShares, snapshotAvgCost: p.snapshotAvgCost };
+      return { ...basePos, hasSnapshot: !!p.hasSnapshot, snapshotDate: p.snapshotDate, snapshotId: p.snapshotId, snapshotOrigin: p.snapshotOrigin, snapshotScope: p.snapshotScope, snapshotShares: p.snapshotShares, snapshotAvgCost: p.snapshotAvgCost, firstSnapshotDate: p.firstSnapshotDate, firstSnapshotShares: p.firstSnapshotShares, firstSnapshotAvgCost: p.firstSnapshotAvgCost, firstSnapshotOrigin: p.firstSnapshotOrigin };
     }).sort((a, b) => (b.open - a.open) || a.symbol.localeCompare(b.symbol));
     for (const S of Object.values(totals)) for (const k of Object.keys(S)) S[k] = r2(S[k]);
     for (const c of Object.values(cash)) { c.balance = r2(c.balance); c.deposits = r2(c.deposits); c.withdrawals = r2(c.withdrawals); }

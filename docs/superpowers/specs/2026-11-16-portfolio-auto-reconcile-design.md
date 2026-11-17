@@ -281,21 +281,24 @@
     1. **缺均價保護**：若 `B.avgCost` 為 `null` 或 `<= 0`（且 `origin !== "full_snapshot_close"`）又無法由 `(shares * price - totalPnl) / shares` 或 `(marketValue - totalPnl) / shares` 得出正數均價，**強制導向 Level 2（`missing_cost`），不得補成 `0` 或升級為 `confirmed`**。
     2. **缺年份與未來日期保護**：庫存截圖必須具備明確年份與日期（`asOfStatus === "exact"` 且 `asOf <= today`，或經使用者明確確認後之日期 `<= today`）。若 `asOfStatus` 為 `"year"`（只讀出 `MM/DD` 缺年份）、`"mdy"`、`"missing"`、`"invalid"` 或 `"future"`（`date > today`），**一律先導向 Level 2（`ambiguous_date`／`missing_date`），嚴禁在未確認年份或未來日前直接建立 `confirmed` 基準**。
     3. **市場／幣別衝突保護**：`market` 與 `currency` 須配對且不得與同 `symbol` 既有快照或交易衝突（衝突列進 Level 3 `currency_conflict` 並阻擋存檔）。
-- **錨點初始化**：
-  - 若 `B.origin === "full_snapshot_close"`（由已確認之完整快照結案歸零，`shares === 0`, `avgCost === null`）：設定於 `B.date` 持股為 `0`、`costBasis = 0`、`open = false`（早於或等於 `B.date` 的舊交易仍標 `preSnapshot: true` 不回魂，晚於 `B.date` 若再買進則由 0 重建）。
-  - 一般 `B.shares > 0` 快照：於 `B.date` 設定期初股數 `shares = B.shares`、`costBasis = r2(B.shares * B.avgCost)`、`firstDate = B.date`。
-  - **FIFO V1**：僅產生 **1 筆合成批次**：`{ date: B.date, id: B.id, shares: B.shares, cost: r2(B.shares * B.avgCost), isSnapshot: true }`。後續賣出依 FIFO 先扣抵此合成批次（或後續新買入且更晚賣出），已實現損益正確以 `B.avgCost` 計算。
+- **錨點初始化與多期快照鏈（`B0 → ... → B`）重放**：
+  - 同一標的若有經 `supersededBy` 串接之歷史確認快照鏈 `chain = [B0, ..., B]`（`pruneStore` 永不裁剪該活躍鏈節點）：
+    - 最早確認快照 `B0` 設定績效與歷史起點 `firstDate = B0.date`、`firstSnapshotDate = B0.date`、`firstSnapshotShares = B0.shares`、`firstSnapshotAvgCost = B0.avgCost`、`firstSnapshotOrigin = B0.origin`。
+    - 鏈上各錨點 `Si` 於 `Si.date` 依序設定或校準當時的 `shares`、`costBasis` 與 FIFO 合成批次 `lots`，但**不重設** `(B0.date, B.date]` 期間已套用交易所累計的 `realizedPnl`、`dividends`、`fees`、`taxes`、`bought`、`sold` 與 `cash`。
+  - 若 `B.origin === "full_snapshot_close"`（由已確認之完整快照結案歸零，`shares === 0`, `avgCost === null`）：設定於 `B.date` 持股為 `0`、`costBasis = 0`、`open = false`（早於 `B0.date` 的舊交易仍標 `preSnapshot: true` 不回魂，`(B0.date, B.date]` 期間賣出／股息損益完整保留，晚於 `B.date` 若再買進則由 0 重建）。
+  - 一般 `B.shares > 0` 快照：於 `B.date` 設定期初／校準股數 `shares = B.shares`、`costBasis = r2(B.shares * B.avgCost)`。
+  - **FIFO V1**：於錨點產生 **1 筆合成批次**：`{ date: B.date, id: B.id, shares: B.shares, cost: r2(B.shares * B.avgCost), isSnapshot: true }`。後續賣出依 FIFO 先扣抵此合成批次（或後續新買入且更晚賣出），已實現損益正確以 `B.avgCost` 計算。
   - **加權平均**：以 `(B.shares, r2(B.shares * B.avgCost))` 為起點計算後續移動加權平均成本與賣出已實現損益。
 - **按日期分類處理該標的交易**：
-  - **`t.date < B.date` 或 `t.id === B.tagTxId`（含被標為期初快照之 `transfer_in`）**：
+  - **`t.date < B0.date` 或 `t.id === s.tagTxId`（含被標為期初快照之 `transfer_in`）**：
     - 照常執行格式驗證（`checkTx`）、`currency_conflict`、`duplicate_id` 與跨批重複比對，並保留於 `p.history` 標註 `preSnapshot: true`。
     - **不重複加減目前持股、不變動 `costBasis`／`lots`／`realizedPnl`／`cash`／`totals`，不因缺少早期買進紀錄而誤觸快照前 `oversell`**。
-  - **`t.date === B.date`（同日交易）**：
-    - 優先讀取 `rel = reconStore.sameDayRelations?.[t.id]`（相容測試直接傳入的 `t.snapshotRelation`）。套用前必須核對 **`rel.snapshotDate === B.date`、`t.date === B.date`，且（若 `rel.snapshotId` 有值）`rel.snapshotId === B.id`**；若不符（例如交易曾改日期再改回或基準已換成新快照）一律視為失效並當作 `"unresolved"`。若尚未明確標記 `"before_snapshot"` 或 `"after_snapshot"`，**不可擅自假設先後順序**！該筆同日交易列為 Level 2 待確認（`same_day_order`），並反映於 `position.pending`；未確認前暫不異動基準持股（防止同日賣出在未釐清快照涵蓋與否時誤算兩次），待使用者於 UI 點「快照前已含（僅存歷史）」或「快照後才成交（納入持倉計算）」寫入 `kline:pf:recon:v1.sameDayRelations`（連帶覆寫成目前 `snapshotId` 與 `snapshotDate`）與 `audit[]` 後生效。另對已關閉的 `conflicts` 亦核對其引用 `txId` 是否仍存在且日期相符，失效者視為已過期不再生效。
-  - **`t.date > B.date`（晚於快照日）**：
+  - **`t.date === Si.date`（與鏈上快照同日之交易）**：
+    - 優先讀取 `rel = reconStore.sameDayRelations?.[t.id]`（相容測試直接傳入的 `t.snapshotRelation`）。套用前必須核對 **`rel.snapshotDate === Si.date`、`t.date === Si.date`，且（若 `rel.snapshotId` 有值）`rel.snapshotId === Si.id`**；若不符（例如交易曾改日期再改回或基準已換成新快照）一律視為失效並當作 `"unresolved"`。若尚未明確標記 `"before_snapshot"` 或 `"after_snapshot"`，**不可擅自假設先後順序**！該筆同日交易列為 Level 2 待確認（`same_day_order`），並反映於 `position.pending`；未確認前暫不異動基準持股（防止同日賣出在未釐清快照涵蓋與否時誤算兩次），待使用者於 UI 點「快照前已含（僅存歷史）」或「快照後才成交（納入持倉計算）」寫入 `kline:pf:recon:v1.sameDayRelations`（連帶覆寫成目前 `snapshotId` 與 `snapshotDate`）與 `audit[]` 後生效。若屬最早快照 `B0` 同日之 `before_snapshot` 則標 `preSnapshot: true`；若屬後續快照 `Si` 同日之 `before_snapshot` 則於 `Si` 錨點前套用並保留損益。另對已關閉的 `conflicts` 亦核對其引用 `txId` 是否仍存在且日期相符，失效者視為已過期不再生效。
+  - **`t.date > B0.date`（晚於最早快照日之期間與後續交易）**：
     - 依標準帳本引擎時序套用 `buy`、`sell`、`dividend`、`stock_dividend`、`split`、`fraction_cash`、`transfer_in`、`transfer_out`、`fee`、`other`。
     - 若賣光歸零（`shares <= EPS`），`costBasis = 0`、`lots = []`、`open = false`；之後再買進則從 0 重建成本與新批次，歷史 `realizedPnl`、`dividends`、`fees`、`taxes` 完整保留。
-    - 若晚於 `B.date` 發生 `sell > p.shares + EPS` 或 `transfer_out > p.shares + EPS`，維持擋下／標錯（於匯入流程歸入 Level 3 `negative_position` 暫停入帳）。
+    - 若晚於 `B0.date` 發生 `sell > p.shares + EPS` 或 `transfer_out > p.shares + EPS`，維持擋下／標錯（於匯入流程歸入 Level 3 `negative_position` 暫停入帳）。
 
 ### 2. 兩張快照的取代、完整 vs 部分語意（含持股歸零）與差異衝突（`S1` → `S2`）
 
@@ -341,12 +344,12 @@
 ## `perf.js` 報酬與現金口徑
 
 - **現金不異動**：快照不會在 `L.cash` 建立任何存入或買進紀錄，避免汙染現金比例與總資產計算。
-- **時間加權／資金加權從快照日起算**：
+- **時間加權／資金加權從最初確認快照日（`B0.date`）起算**：
   - `buildPerf(txs, opts)` 支持 `opts.recon`（若有 `LG.buildReconciledLedger` 且傳入 `opts.recon` 時優先使用；無 `opts.recon` 時完全保留原 `buildLedger` 行為以維持既有單元測試相容）。
-  - 當某標的具有已確認基準 `B`（且 `B.shares > 0`、`B.origin !== "full_snapshot_close"`；若屬已清倉關閉基準則該標的在結案日起為 `0` 股不產生投入現金流）：
-    - `preSnapshot`（早於 `B.date` 或屬期初標記）的交易現金流**不計入** `flows`、`inflow`／`outflow` 與 `lastTradePx`；`sharesAt` 在 `d < B.date` 一律為 `0`（不含未入帳的快照前歷史）。
-    - 於 `B.date` 產生一筆初始證券投入現金流 `f = B.shares * initPrice`：若 `books[B.symbol]` 在 `B.date` 有當天收盤價（`px.d === B.date`）則優先使用市價，否則回退以 `B.avgCost` 計算（與 `transfer_in` 一致，回退時加入 `est.add("transfer_at_cost")`）。
-    - **重要修正**：因為計算起點直接從各檔有效起點（`B.date`）或最早有效日算起，若股票日 K 第一天早於或等於 `B.date`，即使該檔在 `B.date` 前曾有標記為 `preSnapshot` 的舊交易（例如兩年前 `transfer_in`），也不會誤報 `history_truncated`。
+  - 當某標的具有已確認基準鏈 `B0 → ... → B`（以 `firstSnapshot*` 記錄 `B0` 起點；若 `B0` 本身屬已清倉關閉基準且無交易則為 `0` 股不產生投入現金流）：
+    - `preSnapshot`（早於 `B0.date` 或屬期初標記）的交易現金流**不計入** `flows`、`inflow`／`outflow` 與 `lastTradePx`；`sharesAt` 在 `d < B0.date` 一律為 `0`（不含未入帳的快照前歷史），而 `(B0.date, B.date]` 期間交易與損益完整保留。
+    - 於 `B0.date` 產生一筆初始證券投入現金流 `f = B0.shares * initPrice`：若 `books[B0.symbol]` 在 `B0.date` 有當天收盤價（`px.d === B0.date`）則優先使用市價，否則回退以 `B0.avgCost` 計算（與 `transfer_in` 一致，回退時加入 `est.add("transfer_at_cost")`）。
+    - **重要修正**：因為計算起點直接從各檔有效起點（`B0.date`）或最早有效日算起，若股票日 K 第一天早於或等於 `B0.date`，即使該檔在 `B0.date` 前曾有標記為 `preSnapshot` 的舊交易（例如兩年前 `transfer_in`），也不會誤報 `history_truncated`。
 - **`est` 與 `issues` 標示**：
   - 有任一標的採用快照基準時，寫入 `est.add("snapshot_baseline")` 並加入 `issues.push({ k: "snapshot_baseline", codes: [...] })`。
   - 有任一標的帶有 `recon_diff` 未決差異時，寫入 `est.add("recon_pending")` 並加入 `issues.push({ k: "recon_pending", codes: [...], diffs: [...] })`。

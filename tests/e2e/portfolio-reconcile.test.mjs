@@ -749,6 +749,62 @@ test("390/1280（Case 18, 19）：雙分頁 Web Locks／storage事件／stale-ba
   await p.waitForFunction(() => !document.querySelector("[data-lgrecon-clean-stale]"));
   assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:recon:v1")).initialTags["tx-init"].active), false);
 
+  // 第五輪 P3-4：首次建帳（blank / commit）若另一分頁已先建立 kline:pf:v1，必須因 expectedRawPf: null 拒寫而不覆蓋
+  await p.evaluate(() => {
+    localStorage.removeItem("kline:pf:v1");
+    localStorage.removeItem("kline:pf:recon:v1");
+    store.set("hold", { "2330": { sh: 1000, cost: 800, name: "台積電" } });
+    if (typeof holdSrcApply === "function") holdSrcApply();
+    W.holdView = "tx"; W.lg = { view: "tx", msg: "" }; setLt("hold"); renderList();
+  });
+  await p.waitForSelector('[data-lg="blank"]');
+  // 模擬點擊 blank 前另一分頁已寫入 kline:pf:v1
+  const otherTabPf = JSON.stringify({ v: 1, method: "avg", transactions: [{ v: 1, id: "tx-other-tab", date: "2026-09-05", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 500, price: 900, fee: 0, tax: 0 }], at: "2026-09-05T00:00:00Z" });
+  await p.evaluate(raw => { localStorage.setItem("kline:pf:v1", raw); W.lg.msg = ""; }, otherTabPf);
+  await p.click('[data-lg="blank"]');
+  await p.waitForFunction(() => !!W.lg?.msg);
+  assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")).transactions[0]?.id), "tx-other-tab", "blank 不可覆蓋另一分頁已建立的 kline:pf:v1");
+
+  await p.evaluate(() => {
+    localStorage.removeItem("kline:pf:v1");
+    if (typeof holdSrcApply === "function") holdSrcApply();
+    W.hold = { "2330": { sh: 1000, cost: 800, name: "台積電" } };
+    W.lg = { view: "tx", msg: "" }; renderList();
+  });
+  await p.waitForSelector('[data-lg="preview"]');
+  await p.click('[data-lg="preview"]');
+  await p.waitForSelector('[data-lg="commit"]');
+  await p.evaluate(raw => { localStorage.setItem("kline:pf:v1", raw); W.lg.msg = ""; }, otherTabPf);
+  await p.click('[data-lg="commit"]');
+  await p.waitForFunction(() => !!W.lg?.msg);
+  assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")).transactions[0]?.id), "tx-other-tab", "commit 不可覆蓋另一分頁已建立的 kline:pf:v1");
+
+  // 第五輪 P3-5：data-lgrecon-halt-action 的 confirm() 必須在 withPfCommitLock 之外執行，且鎖內檢查 CAS
+  await p.evaluate(() => {
+    const recon = KLRecon.emptyStore();
+    recon.pendingCommit = { id: "wal-p35", op: "future_v2_op", at: "2026-10-05T02:00:00Z" };
+    localStorage.setItem("kline:pf:recon:v1", JSON.stringify(recon));
+    W.holdView = "tx"; W.lg = { view: "tx" }; setLt("hold"); renderList();
+  });
+  await p.waitForSelector('[data-lgrecon-halt-action="discard_wal"]');
+  await p.evaluate(() => {
+    const origLock = window.withPfCommitLock;
+    window.__inPfLock = 0;
+    window.__confirmSawLock = -1;
+    window.withPfCommitLock = async fn => {
+      window.__inPfLock++;
+      try { return await origLock(fn); } finally { window.__inPfLock--; }
+    };
+    const origConfirm = window.confirm;
+    window.confirm = msg => {
+      window.__confirmSawLock = window.__inPfLock;
+      return origConfirm.call(window, msg);
+    };
+  });
+  await p.click('[data-lgrecon-halt-action="discard_wal"]');
+  await p.waitForFunction(() => !document.querySelector("[data-lgrecon-halted]"));
+  assert.equal(await p.evaluate(() => window.__confirmSawLock), 0, "confirm() 必須在進入 withPfCommitLock 之前執行，避免跨分頁鎖被對話框長時間佔用");
+
   assert.ok(await noHOverflow(p));
   await ctx.close();
   assert.deepEqual(errs, []);

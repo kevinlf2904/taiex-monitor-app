@@ -239,11 +239,24 @@
 
     const trimWithLimits = (base, impCap, audCap, confCap, supPerSymCap, dropInactiveTags) => {
       const res = cloneStore(base);
-      // 1. superseded snapshots（confirmed / pending 永不刪）
+      // 1. superseded snapshots（confirmed / pending 與被最新基準沿 supersededBy 鏈接的前置基準永不刪）
       const activeSnaps = res.snapshots.filter(x => x && (x.status === "confirmed" || x.status === "pending"));
+      const chainIds = new Set(activeSnaps.filter(x => x.status === "confirmed").map(x => x.id));
+      let grow = true;
+      while (grow) {
+        grow = false;
+        for (const x of res.snapshots) {
+          if (!x || chainIds.has(x.id)) continue;
+          if (x.status === "superseded" && x.supersededBy && chainIds.has(x.supersededBy)) {
+            chainIds.add(x.id);
+            grow = true;
+          }
+        }
+      }
+      const chainSup = res.snapshots.filter(x => x && x.status !== "confirmed" && x.status !== "pending" && chainIds.has(x.id));
       const supBySym = new Map();
       for (const x of res.snapshots) {
-        if (!x || x.status === "confirmed" || x.status === "pending") continue;
+        if (!x || x.status === "confirmed" || x.status === "pending" || chainIds.has(x.id)) continue;
         const k = symbolOf(x.symbol) || "";
         if (!supBySym.has(k)) supBySym.set(k, []);
         supBySym.get(k).push(x);
@@ -253,7 +266,7 @@
         list.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.confirmedAt || "").localeCompare(String(a.confirmedAt || "")));
         keptSup.push(...list.slice(0, supPerSymCap));
       }
-      res.snapshots = [...activeSnaps, ...keptSup];
+      res.snapshots = [...activeSnaps, ...chainSup, ...keptSup];
 
       // 2. conflicts（open 永不刪）
       const openConf = res.conflicts.filter(c => c && c.status === "open");

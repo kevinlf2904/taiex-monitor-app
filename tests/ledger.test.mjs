@@ -416,5 +416,76 @@ test("Task 3：checkBackup 鍵序無關先檢 recon、缺 opts.recon 拒匯與�
   assert.equal(walRes.items.find(x => x.key === "kline:pf:recon:v1").code, "unrecovered_pending_commit");
 });
 
+test("第五輪 P1-1：新快照自動晉升（S1→賣出／領息／再買→S2 或 full_snapshot_close）後，前段 realizedPnl、股息、費稅、買賣金額與現金流完整保留", () => {
+  const ctx2 = {};
+  vm.createContext(ctx2);
+  vm.runInContext(readFileSync(new URL("../learner/ledger.js", import.meta.url), "utf8"), ctx2);
+  vm.runInContext(readFileSync(new URL("../learner/recon.js", import.meta.url), "utf8"), ctx2);
+  const L2 = ctx2.KLLedger, R2 = ctx2.KLRecon;
 
+  // S1 = 2026-11-10 2330 1000 股 @900
+  const p1 = R2.planHoldingsSnapshot({
+    store: R2.emptyStore(),
+    txStore: { v: 1, method: "avg", transactions: [] },
+    batchId: "b-s1",
+    asOf: "2026-11-10",
+    asOfStatus: "exact",
+    snapshotScope: "partial",
+    rows: [{ code: "2330", name: "台積電", shares: 1000, avgCost: 900 }],
+    today: "2026-11-16",
+    ledgerLib: L2,
+  });
+  const recon1 = R2.applyHoldingsImport(R2.emptyStore(), p1, { at: "2026-11-10T09:00:00Z" }).store;
+  const txs = [
+    tw({ id: "pre0", date: "2026-11-01", type: "buy", shares: 200, price: 800, fee: 0, tax: 0 }), // 早於 S1：真 preSnapshot
+    tw({ id: "div1", date: "2026-11-11", type: "dividend", amount: 3000, tax: 0 }),
+    tw({ id: "sell1", date: "2026-11-12", type: "sell", shares: 1000, price: 950, fee: 100, tax: 300 }),
+    tw({ id: "buy2", date: "2026-11-14", type: "buy", shares: 500, price: 920, fee: 0, tax: 0 }),
+  ];
+  const pfStore = { v: 1, method: "avg", transactions: txs };
+  const before = L2.buildReconciledLedger(pfStore, recon1, { today: "2026-11-16" });
+  assert.equal(before.errorCount, 0);
+  assert.equal(before.totals.TWD.realizedPnl, 49600); // (950000 - 400) - 900000
+  assert.equal(before.totals.TWD.dividends, 3000);
+  assert.equal(before.totals.TWD.fees, 100);
+  assert.equal(before.totals.TWD.taxes, 300);
+  assert.equal(before.totals.TWD.bought, 460000);
+  assert.equal(before.totals.TWD.sold, 950000);
 
+  // 匯入 2026-11-15 500 股 @920 完全吻合，自動晉升為 S2
+  const p2 = R2.planHoldingsSnapshot({
+    store: recon1,
+    txStore: pfStore,
+    batchId: "b-s2",
+    asOf: "2026-11-15",
+    asOfStatus: "exact",
+    snapshotScope: "partial",
+    rows: [{ code: "2330", name: "台積電", shares: 500, avgCost: 920 }],
+    today: "2026-11-16",
+    ledgerLib: L2,
+  });
+  assert.equal(p2.items[0].level, 1, "與帳本一致應自動晉升 Level 1");
+  const recon2 = R2.applyHoldingsImport(recon1, p2, { at: "2026-11-15T09:00:00Z" }).store;
+  const after = L2.buildReconciledLedger(pfStore, recon2, { today: "2026-11-16" });
+
+  assert.equal(after.errorCount, 0);
+  assert.equal(after.txs.find(x => x.id === "pre0").preSnapshot, true, "早於最早基準 S1 的交易仍為 preSnapshot");
+  assert.equal(after.txs.find(x => x.id === "sell1").preSnapshot, false, "(S1, S2] 期間已套用的賣出不可變 preSnapshot");
+  assert.equal(after.txs.find(x => x.id === "sell1").applied, true);
+  assert.deepEqual(J(after.totals), J(before.totals), "晉升 S2 前後 totals 完全不變");
+  assert.deepEqual(J(after.cash), J(before.cash), "晉升 S2 前後 cash 完全不變");
+  const posAfter = pos(after);
+  assert.equal(posAfter.shares, 500);
+  assert.equal(posAfter.costBasis, 460000);
+  assert.equal(posAfter.realizedPnl, 49600, "個股 realizedPnl 亦完整保留");
+  assert.equal(posAfter.dividends, 3000);
+  assert.equal(posAfter.snapshotDate, "2026-11-15", "最新對帳基準日更新為 S2");
+  assert.equal(posAfter.firstSnapshotDate, "2026-11-10", "最早起算快照基準日保留 S1");
+
+  // FIFO 模式下同樣保留前段損益並將 S2 校準為 500 股 @920
+  const afterFifo = L2.buildReconciledLedger({ ...pfStore, method: "fifo" }, recon2, { method: "fifo", today: "2026-11-16" });
+  assert.equal(afterFifo.totals.TWD.realizedPnl, 49600);
+  assert.equal(pos(afterFifo).shares, 500);
+  assert.equal(pos(afterFifo).lots.length, 1);
+  assert.equal(pos(afterFifo).lots[0].shares, 500);
+});

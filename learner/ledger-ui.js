@@ -547,24 +547,34 @@ async function lgHandleReconClick(el, L) {
   if (typeof KLRecon === "undefined") { L.msg = "對帳模組尚未載入"; renderList(); return true; }
   if (el.matches("[data-lgrecon-halt-action]")) {
     const choice = el.dataset.lgreconHaltAction;
+    const rawPf0 = lgRawGet(LG_RAW_PF), rawRecon0 = lgRawGet(LG_RAW_RECON);
+    const pf0 = lgParseRaw(rawPf0), recon0 = lgParseRaw(rawRecon0);
+    const r0 = KLRecon.resolveHalted(pf0, recon0, choice, { source: "ui_halted_card" });
+    if (!r0.ok) {
+      L.msg = r0.error || r0.code || "修復失敗。";
+      renderList();
+      return true;
+    }
+    const msg = choice === "discard_wal" && r0.summary
+      ? `將以交易紀錄為準放棄卡住的對帳匯入（本次未入帳 ${r0.summary.missingCount} 筆：${r0.summary.missingSymbols.join("、") || "無標的"}），要繼續嗎？`
+      : choice === "discard_wal"
+        ? "將以目前的交易紀錄為準，清除卡住的對帳提交紀錄（不可復原），要繼續嗎？"
+        : "將還原到這次修改／匯入之前的雙鍵一致狀態，要繼續嗎？";
+    if (!confirm(msg)) return true;
     const res = await withPfCommitLock(() => {
       const rawPf = lgRawGet(LG_RAW_PF), rawRecon = lgRawGet(LG_RAW_RECON);
-      const pf0 = lgParseRaw(rawPf), recon0 = lgParseRaw(rawRecon);
-      const r = KLRecon.resolveHalted(pf0, recon0, choice, { source: "ui_halted_card" });
+      if (rawPf !== rawPf0 || rawRecon !== rawRecon0) {
+        return { ok: false, code: "stale_write", errors: ["確認期間其他分頁已修改投資組合資料，已重新載入最新狀態"] };
+      }
+      const r = KLRecon.resolveHalted(lgParseRaw(rawPf), lgParseRaw(rawRecon), choice, { source: "ui_halted_card" });
       if (!r.ok) return { ok: false, code: r.code, errors: [r.error || r.code] };
-      const msg = choice === "discard_wal" && r.summary
-        ? `將以交易紀錄為準放棄卡住的對帳匯入（本次未入帳 ${r.summary.missingCount} 筆：${r.summary.missingSymbols.join("、") || "無標的"}），要繼續嗎？`
-        : choice === "discard_wal"
-          ? "將以目前的交易紀錄為準，清除卡住的對帳提交紀錄（不可復原），要繼續嗎？"
-          : "將還原到這次修改／匯入之前的雙鍵一致狀態，要繼續嗎？";
-      if (!confirm(msg)) return { ok: true, cancelled: true };
       const pr = KLRecon.pruneStore(r.reconStore, KLRecon.MAX_BYTES);
       if (!pr.ok) return { ok: false, code: pr.code, errors: [`對帳核心資料超過 ${Math.round(pr.maxBytes / 1024)}KB 上限，請先匯出 JSON 備份`] };
       if (r.pfChanged) {
         let pw = false; try { pw = store.set(LG_KEY, r.pfStore); } catch { pw = false; }
         if (!pw) return { ok: false, code: "storage_write_failed", errors: ["還原交易紀錄寫入失敗，維持原樣"] };
       }
-      const w = lgReconWrite(pr.store, { allowPendingCommitWrite: true });
+      const w = lgReconWrite(pr.store, { allowPendingCommitWrite: true, expectedRawRecon: rawRecon });
       if (!w.ok) return w;
       return { ok: true };
     });
@@ -686,13 +696,13 @@ document.addEventListener("click", async e => {
   if (a === "commit") {
     const P = L.prev; if (!P?.store) return;
     const s = { ...P.store, method: $("#lgMethod")?.value === "fifo" ? "fifo" : "avg" };
-    const v = await withPfCommitLock(() => lgSave(s));
+    const v = await withPfCommitLock(() => lgSave(s, { expectedRawPf: null }));
     if (!v.ok) { L.prev = null; L.msg = v.errors?.[0] || "建立失敗：資料檢查沒有通過，沒有寫入。"; }
     else { L.prev = null; L.view = "tx"; L.msg = `已建立交易紀錄（${s.transactions.length} 筆）。舊的庫存資料仍保留。`; }
     renderList(); return;
   }
   if (a === "blank") {
-    const v = await withPfCommitLock(() => lgSave({ v: 1, method: "avg", transactions: [], at: new Date().toISOString() }));
+    const v = await withPfCommitLock(() => lgSave({ v: 1, method: "avg", transactions: [], at: new Date().toISOString() }, { expectedRawPf: null }));
     if (v.ok) { L.view = "tx"; L.msg = "已建立空白的交易紀錄。"; }
     else L.msg = v.errors?.[0] || "建立失敗。";
     renderList(); return;

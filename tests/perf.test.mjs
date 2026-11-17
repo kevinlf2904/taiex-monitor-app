@@ -295,5 +295,32 @@ test("Task 4：純快照績效起點、full_snapshot_close 歸零、補傳快照
   assert.ok(cConf.estimated.includes("recon_pending"));
   assert.ok(cConf.issues.some(x => x.k === "recon_pending"));
   assert.equal(cConf.status, "needs_confirm");
-});
 
+  // 5. 第五輪 P1-1：S1 (11/10 1000@900) → 11/12 賣 1000@950 → 11/14 買 500@920 → 11/15 匯入一致快照晉升 S2 (500@920)
+  // 晉升前後 buildPerf 的 from 起點、realized、total、TWR、MWR 完全一致，不抹掉前段損益與報酬
+  const pS1 = R2.planHoldingsSnapshot({
+    store: R2.emptyStore(), txStore: { v: 1, method: "avg", transactions: [] }, batchId: "p-s1",
+    asOf: "2026-11-10", asOfStatus: "exact", snapshotScope: "partial",
+    rows: [{ code: "2330", name: "台積電", shares: 1000, avgCost: 900 }], today: "2026-11-16", ledgerLib: ctxR.KLLedger,
+  });
+  const rS1 = R2.applyHoldingsImport(R2.emptyStore(), pS1, { at: "2026-11-10T09:00:00Z" }).store;
+  const chainTxs = [
+    tw({ id: "cs1", date: "2026-11-12", type: "sell", shares: 1000, price: 950, fee: 0, tax: 0 }),
+    tw({ id: "cb2", date: "2026-11-14", type: "buy", shares: 500, price: 920, fee: 0, tax: 0 }),
+  ];
+  const pS2 = R2.planHoldingsSnapshot({
+    store: rS1, txStore: { v: 1, method: "avg", transactions: chainTxs }, batchId: "p-s2",
+    asOf: "2026-11-15", asOfStatus: "exact", snapshotScope: "partial",
+    rows: [{ code: "2330", name: "台積電", shares: 500, avgCost: 920 }], today: "2026-11-16", ledgerLib: ctxR.KLLedger,
+  });
+  const rS2 = R2.applyHoldingsImport(rS1, pS2, { at: "2026-11-15T09:00:00Z" }).store;
+  const pxChain = S([["2026-11-10", 900], ["2026-11-11", 930], ["2026-11-12", 950], ["2026-11-13", 940], ["2026-11-14", 920], ["2026-11-15", 935], ["2026-11-16", 960]]);
+  const perfBefore = KR.buildPerf(chainTxs, { recon: rS1, prices: { 2330: pxChain }, today: "2026-11-16" }).byCurrency.TWD;
+  const perfAfter = KR.buildPerf(chainTxs, { recon: rS2, prices: { 2330: pxChain }, today: "2026-11-16" }).byCurrency.TWD;
+  assert.equal(perfAfter.from, "2026-11-10", "績效起點維持最早快照 S1 (2026-11-10)");
+  assert.equal(perfAfter.pnl.realized, 50000, "已實現損益 50,000 不因晉升 S2 歸零");
+  assert.equal(perfAfter.pnl.unrealized, 20000, "未實現 500*(960-920)=20,000");
+  assert.equal(perfAfter.pnl.total, 70000, "總損益 70,000");
+  assert.ok(near(perfAfter.twr, perfBefore.twr, 1e-9), "TWR 在一致快照晉升前後不變");
+  assert.ok(near(perfAfter.mwr.period, perfBefore.mwr.period, 1e-7), "MWR 在一致快照晉升前後不變");
+});

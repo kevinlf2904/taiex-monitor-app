@@ -101,23 +101,42 @@
       // 另計費用（沒有併進買賣的，例如股息匯費）與其他公司行動的現金：要同時進入現金流與總損益，才能對帳
       const extra = { fees: 0, other: 0, transferOutPnl: 0, bySym: new Map(), unattributed: 0 }, addSym = (sym, v) => { if (sym) extra.bySym.set(sym, (extra.bySym.get(sym) || 0) + v); else extra.unattributed += v; };
       const priceAt = (sym, d) => books[sym]?.at(d) || null;
-      // 持股（每一檔在每一天的股數）：d < snapshotDate 時必為 0；其餘依帳本 history（含基準錨點）
-      const H = new Map(P.map(p => [p.symbol, p.history.map(h => [h.date, h.shares])]));
+      // 持股（每一檔在每一天的股數）：d < firstSnapshotDate 時必為 0；其餘依帳本 history（含基準錨點）
+      const snapStartDate = p => p.firstSnapshotDate || p.snapshotDate;
+      const snapInitShares = p => p.firstSnapshotShares !== undefined && p.firstSnapshotShares !== null ? p.firstSnapshotShares : p.snapshotShares;
+      const snapInitAvgCost = p => p.firstSnapshotAvgCost !== undefined ? p.firstSnapshotAvgCost : p.snapshotAvgCost;
+      const snapInitOrigin = p => p.firstSnapshotOrigin || p.snapshotOrigin;
+      const H = new Map(P.map(p => [p.symbol, p.history.filter(h => !h.preSnapshot).map(h => [h.date, h.shares])]));
       const sharesAt = (sym, d) => {
         const sp = snapBySym.get(sym);
-        if (sp && d < sp.snapshotDate) return 0;
+        if (sp && d < snapStartDate(sp)) return 0;
         const h = H.get(sym); if (!h) return 0; let s = 0; for (const [hd, sh] of h) { if (hd <= d) s = sh; else break; } return s;
       };
       // 現金流（證券部位角度：+ 投入、− 拿回）
       const flows = [];
       for (const p of snapPositions) {
-        if (p.snapshotOrigin === "full_snapshot_close" || !(p.snapshotShares > EPS)) continue;
-        const px = priceAt(p.symbol, p.snapshotDate);
-        if (px && px.d === p.snapshotDate) {
-          flows.push({ d: p.snapshotDate, f: p.snapshotShares * px.c });
-        } else if (isNum(p.snapshotAvgCost) && p.snapshotAvgCost > 0) {
-          est.add("transfer_at_cost");
-          flows.push({ d: p.snapshotDate, f: p.snapshotShares * p.snapshotAvgCost, atCost: true });
+        const initOrigin = snapInitOrigin(p), initSh = snapInitShares(p), initAvg = snapInitAvgCost(p), initDate = snapStartDate(p);
+        if (initOrigin !== "full_snapshot_close" && initSh > EPS) {
+          const px = priceAt(p.symbol, initDate);
+          if (px && px.d === initDate) {
+            flows.push({ d: initDate, f: initSh * px.c });
+          } else if (isNum(initAvg) && initAvg > 0) {
+            est.add("transfer_at_cost");
+            flows.push({ d: initDate, f: initSh * initAvg, atCost: true });
+          }
+        }
+        for (const h of p.history || []) {
+          if (!h.isSnapshot || h.isFirstSnapshot || !(Math.abs(h.deltaShares || 0) > 1e-4)) continue;
+          const px = priceAt(p.symbol, h.date);
+          if (px && px.d === h.date) {
+            flows.push({ d: h.date, f: h.deltaShares * px.c });
+          } else if (isNum(h.avgCost) && h.avgCost > 0) {
+            est.add("transfer_at_cost");
+            flows.push({ d: h.date, f: h.deltaShares * h.avgCost, atCost: true });
+          } else if (isNum(initAvg) && initAvg > 0) {
+            est.add("transfer_at_cost");
+            flows.push({ d: h.date, f: h.deltaShares * initAvg, atCost: true });
+          }
         }
       }
       for (const t of T) {
@@ -143,15 +162,15 @@
       }
       flows.sort((a, b) => a.d.localeCompare(b.d));
       const syms = P.map(p => p.symbol);
-      const activeSyms = P.filter(p => !(p.snapshotOrigin === "full_snapshot_close" && !p.open && !T.some(t => t.symbol === p.symbol))).map(p => p.symbol);
-      const start = flows.length ? flows[0].d : (T[0]?.date || snapPositions.map(p => p.snapshotDate).filter(Boolean).sort()[0] || null);
+      const activeSyms = P.filter(p => !(snapInitOrigin(p) === "full_snapshot_close" && !p.open && !T.some(t => t.symbol === p.symbol))).map(p => p.symbol);
+      const start = flows.length ? flows[0].d : (T[0]?.date || snapPositions.map(p => snapStartDate(p)).filter(Boolean).sort()[0] || null);
       if (!start) continue;
       const lastPx = activeSyms.map(s => books[s]?.a.at(-1)?.d).filter(Boolean).sort().at(-1) || null;
       // 算到哪一天：最後一個價格日和最後一筆現金流取較晚的（沒有價格時，才不會把之後的轉出、賣出截掉）
       const lastFlow = flows.length ? flows[flows.length - 1].d : start, asOf = opts.asOf || [lastPx, lastFlow].filter(Boolean).sort().at(-1);
       const missing = activeSyms.filter(s => !books[s] || !books[s].a.length);
       if (missing.length) issues.push({ k: "no_prices", codes: missing });
-      const effStart = s => { const p = P.find(x => x.symbol === s); return p?.hasSnapshot ? p.snapshotDate : (p?.firstDate || start); };
+      const effStart = s => { const p = P.find(x => x.symbol === s); return p?.hasSnapshot ? snapStartDate(p) : (p?.firstDate || start); };
       const trunc = activeSyms.filter(s => books[s]?.first && books[s].first > effStart(s));
       if (trunc.length) { issues.push({ k: "history_truncated", codes: trunc }); est.add("history_truncated"); }
       // 交易日曆：所有持股價格的日期＋比較基準的交易日＋現金流日期＋算到哪一天
@@ -162,8 +181,12 @@
       const lastTradePx = (sym, d) => {
         const sp = snapBySym.get(sym);
         let v = null;
-        for (const t of T) if (t.symbol === sym && (!sp || t.date >= sp.snapshotDate) && t.date <= d && isNum(t.price) && t.price > 0) v = t.price;
-        if (v == null && sp && d >= sp.snapshotDate && sp.snapshotOrigin !== "full_snapshot_close" && sp.snapshotShares > EPS && isNum(sp.snapshotAvgCost) && sp.snapshotAvgCost > 0) return sp.snapshotAvgCost;
+        for (const t of T) if (t.symbol === sym && (!sp || t.date >= snapStartDate(sp)) && t.date <= d && isNum(t.price) && t.price > 0) v = t.price;
+        if (v == null && sp && d >= snapStartDate(sp)) {
+          const initAvg = snapInitAvgCost(sp);
+          if (d >= sp.snapshotDate && sp.snapshotOrigin !== "full_snapshot_close" && sp.snapshotShares > EPS && isNum(sp.snapshotAvgCost) && sp.snapshotAvgCost > 0) return sp.snapshotAvgCost;
+          if (snapInitOrigin(sp) !== "full_snapshot_close" && snapInitShares(sp) > EPS && isNum(initAvg) && initAvg > 0) return initAvg;
+        }
         return v;
       };
       const BB = BB0;

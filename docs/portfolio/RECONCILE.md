@@ -29,13 +29,14 @@
 ## 3. 統一計算入口 `KLLedger.buildReconciledLedger`
 
 - 所有投資組合頁面（`overview`、`perf`、`pf-home`、`pf-rebal`、`pf-stress`、`pf-divcal`、`pf-report`、`pf-thesis`）與看盤持股列（`watch.html` `holdFromLedger`）一律呼叫 `KLLedger.buildReconciledLedger(pfStore, reconStore, opts)`，禁用旁路自行重播交易：
-  - `baseline + 同日 snapshots 後交易` 算得當前各標的真實股數與成本起點，並輸出 `reconcile` 摘要（`hasConfirmedSnapshot`、`hasLedgerActivity`、`openConflicts`、`pendingSymbols`、`unresolvedSameDayCount`、`staleTags`、`closedSymbols`）。
+  - `baseline + 同日 snapshots 後交易` 算得當前各標的真實股數與成本起點，並依已確認快照演進鏈（`S1 → ... → B`）重放：僅最早確認快照 `B0` 之前（或綁定 `tagTxId`、`B0` 同日 `before_snapshot`）的交易標為 `preSnapshot: true`；`(B0.date, B.date]` 期間的已套用交易完整累計 `realizedPnl`、`dividends`、`fees`、`taxes`、`bought`、`sold` 與現金餘額，後續快照錨點僅校準該時點的 `shares`、`costBasis` 與 FIFO `lots`，並提供 `firstSnapshot*` 供 `KLPerf` 自 `B0.date` 連續計算報酬與損益。同時輸出 `reconcile` 摘要（`hasSnapshot`、`snapshotCount`、`openConflicts`、`pendingSymbols`、`unresolvedSameDayCount`、`staleTags`）。
   - **計算邊界**：`pending` 衝突不自動覆蓋已確認持股；頁面橫幅明確標示 `⚠︎ 待對帳` 與「用已確認快照的股數試算」。
-  - `KLPerf.analyze`／`analyzeByMarket` 以經 `buildReconciledLedger` 裁切後的有效事件流與期初快照部位計算報酬與損益，確保起始基準日之前已由快照涵蓋的歷史不重複計入報酬。
+  - `KLPerf.buildPerf` 以經 `buildReconciledLedger` 裁切後的有效事件流與最初期初快照基準（`firstSnapshot*`）計算報酬與損益，確保起始基準日之前已由快照涵蓋的歷史不重複計入報酬，且後續快照自動晉升或完整清單清倉（`full_snapshot_close`）不會抹除前段已實現損益與股息。
 
 ## 4. 併發安全鎖、WAL 恢復與容量上限保護（Fail-Closed）
 
-- **跨分頁併發控制**：雙鍵異動（匯入成交交易、修改／停用期初交易）透過 `navigator.locks` 取得專屬鎖（不支援 Web Locks 時**拒絕寫入**並回傳 `cross_tab_lock_unavailable`，絕不無鎖寫入），並在寫前比對 `expectedRawPf` 與 `expectedRawRecon`（不符即回 `stale_write`）。
+- **跨分頁併發控制**：雙鍵異動（匯入成交交易、修改／停用期初交易）與單鍵建立／修改（含首次建帳 `commit`／`blank` 強制 `expectedRawPf: null`）透過 `navigator.locks` 取得專屬鎖（不支援 Web Locks 時對投資組合寫入**拒絕寫入**並回傳 `cross_tab_lock_unavailable`，絕不無鎖寫入），並在寫前比對 `expectedRawPf` 與 `expectedRawRecon`（不符即回 `stale_write`）。互動確認對話框（如 `halted` 修復確認）一律在鎖外完成，進鎖後再次驗證雙鍵 CAS 未變才寫入。
 - **跨分頁被動同步**：`window.addEventListener("storage")` 偵測他分頁更新 `kline:pf:v1`／`kline:pf:recon:v1` 後僅重新計算與刷新畫面快取，**嚴禁在事件監聽內回寫 `localStorage`**。
 - **三段式 WAL（`pendingCommit`）**：Phase 1 寫入 `pendingCommit` → Phase 2 寫入 `kline:pf:v1` → Phase 3 清空 `pendingCommit` 並寫入正式對帳狀態（`import_trades`、`update_tx_tag`、`deactivate_tags`）。啟動時 `KLRecon.recoverCommit` 自動依兩鍵雜湊指紋判斷 Roll-Forward 或 Roll-Back；若遇不一致或未知操作，進入 `halted` 鎖定寫入，於交易紀錄頁顯示異常回復卡提供「還原至變更前（`revert_pre_commit`）」與「以交易紀錄為準清除 WAL（`discard_wal`）」出口。
-- **120KB 核心上限保護（Fail-Closed）**：寫入前由 `KLRecon.pruneStore(store, 120 * 1024)` 依優先順序裁剪舊的已取代快照、已結案衝突、非關鍵匯入批次與非活躍標記；**絕不裁剪 `confirmed` 基準、`open` 衝突、被未結案衝突引用的批次或 `pendingCommit`**。裁剪後仍逾 120KB 則拒絕寫入（`core_data_exceeds_limit`），保持原資料完整並提示先匯出 JSON 備份。
+- **120KB 核心上限保護（Fail-Closed）**：寫入前由 `KLRecon.pruneStore(store, 120 * 1024)` 依優先順序裁剪舊的已取代快照、已結案衝突、非關鍵匯入批次與非活躍標記；**絕不裁剪 `confirmed` 基準、串接至活躍基準之 `supersededBy` 快照鏈、`open` 衝突、被未結案衝突引用的批次或 `pendingCommit`**。裁剪後仍逾 120KB 則拒絕寫入（`core_data_exceeds_limit`），保持原資料完整並提示先匯出 JSON 備份。
+

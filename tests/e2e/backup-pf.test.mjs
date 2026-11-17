@@ -199,3 +199,89 @@ test("雲端同步（mock /api/sync）：雙鍵成對上傳、超限雙鍵皆不
 
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("第五輪 P2-2 & P3-3：舊備份缺 recon:v1 時處理本機 recon:v1（pendingCommit 阻擋、保留時配對拒匯、確認清除時移除殘留快照），且無 navigator.locks 時非 pf 同步／匯入不誤鎖", async () => {
+  const { ctx, p, errs, KV } = await open(B, S.url, "watch.html", { width: 1280, time: "2026-10-05T04:00:00Z", tick: true });
+  const localRecon2330 = {
+    v: 1,
+    snapshots: [{ id: "s2330", date: "2026-09-01", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, avgCost: 850, origin: "import", scope: "partial", status: "confirmed", confirmedAt: "2026-09-01T00:00:00Z", supersededBy: null, batchId: "b1", note: "" }],
+    conflicts: [], initialTags: {}, sameDayRelations: {}, imports: [], audit: [], pendingCommit: null,
+  };
+
+  // 1) 本機有 pendingCommit 時，匯入僅含 kline:pf:v1 的舊備份必須阻擋
+  await p.evaluate(r => {
+    localStorage.setItem("kline:pf:v1", JSON.stringify({ v: 1, method: "avg", transactions: [] }));
+    localStorage.setItem("kline:pf:recon:v1", JSON.stringify({ ...r, pendingCommit: { id: "wal-local", op: "import_trades" } }));
+    W.tv = "sync"; setLt("tools");
+  }, localRecon2330);
+  await p.waitForSelector('#lx [data-sy="export"]', { timeout: 20000 });
+  const legacyV2 = {
+    app: "kline-school", v: 2, at: "2026-10-05T00:00:00Z",
+    data: {
+      "kline:pf:v1": JSON.stringify({ v: 1, method: "avg", transactions: [{ id: "only2317", v: 1, date: "2026-09-15", type: "buy", symbol: "2317", market: "tw", currency: "TWD", shares: 100, price: 150, fee: 0, tax: 0 }] }),
+    },
+  };
+  await p.setInputFiles("#lx input[data-syfile]", { name: "legacy.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(legacyV2)) });
+  await p.waitForFunction(() => /未完成的對帳提交/.test(document.body.innerText), null, { timeout: 10000 });
+  assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")).transactions.length), 0, "本機 pendingCommit 未解時不可覆蓋 pf:v1");
+
+  // 2) 本機無 pendingCommit 但有 2330 快照；匯入缺 recon:v1 且與本機 2330 快照幣別衝突的備份，若使用者選擇「取消清除（保留本機快照）」→ 配對檢查失敗並拒匯
+  await p.evaluate(r => {
+    localStorage.setItem("kline:pf:recon:v1", JSON.stringify(r));
+    document.querySelectorAll(".toast").forEach(t => t.remove());
+  }, localRecon2330);
+  const legacyConflictWithLocalRecon = {
+    app: "kline-school", v: 2, at: "2026-10-05T00:00:00Z",
+    data: {
+      "kline:pf:v1": JSON.stringify({ v: 1, method: "avg", transactions: [{ id: "bad-cur", v: 1, date: "2026-09-15", type: "buy", symbol: "2330", market: "us", currency: "USD", shares: 10, price: 150, fee: 0, tax: 0 }] }),
+    },
+  };
+  p.removeAllListeners("dialog");
+  let clearChoice = "keep_local_recon";
+  p.on("dialog", async d => {
+    if (clearChoice === "keep_local_recon" && /不含對帳快照/.test(d.message())) await d.dismiss();
+    else await d.accept();
+  });
+  await p.setInputFiles("#lx input[data-syfile]", { name: "legacy-conflict.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(legacyConflictWithLocalRecon)) });
+  await p.waitForFunction(() => /投資組合資料有問題，沒有匯入/.test(document.body.innerText), null, { timeout: 10000 });
+  assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")).transactions.length), 0, "保留本機快照時，配對衝突整份拒匯");
+
+  // 3) 匯入不含 recon:v1 的舊備份（只有 2317），確認一併清除本機對帳快照 → 匯入後本機 recon:v1 被清除，不會殘留 2330 快照
+  clearChoice = "clear_local_recon";
+  await p.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  await p.setInputFiles("#lx input[data-syfile]", { name: "legacy-ok.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(legacyV2)) });
+  await p.waitForFunction(() => JSON.parse(localStorage.getItem("kline:pf:v1") || "{}").transactions?.[0]?.id === "only2317", null, { timeout: 15000 });
+  assert.equal(await p.evaluate(() => localStorage.getItem("kline:pf:recon:v1")), null, "確認清除後本機不殘留無關的 kline:pf:recon:v1");
+
+  // 4) P3-3：當環境不支援 navigator.locks 時，不含 kline:pf: 的備份匯入與雲端下載仍可正常套用
+  await p.waitForTimeout(900);
+  await p.waitForFunction(() => typeof setLt === "function" && typeof W !== "undefined", null, { timeout: 15000 });
+  await p.evaluate(() => {
+    Object.defineProperty(navigator, "locks", { value: undefined, configurable: true });
+    localStorage.setItem("kline-sync", JSON.stringify({ id: "NoLocksWatchOnly123456", auto: false, at: 0, hash: 0 }));
+    W.tv = "sync"; setLt("tools"); renderList();
+  });
+  await p.waitForSelector('#lx [data-sy="pull"]', { timeout: 15000 });
+  KV.set("NoLocksWatchOnly123456", {
+    at: Date.now() + 5000,
+    data: { "kline:watch:groups": JSON.stringify([{ name: "雲端自選", list: ["2330"] }]) },
+  });
+  await p.click('#lx [data-sy="pull"]');
+  await p.waitForFunction(() => /雲端自選/.test(localStorage.getItem("kline:watch:groups") || ""), null, { timeout: 15000 });
+  await p.waitForTimeout(900);
+  await p.waitForFunction(() => typeof setLt === "function" && typeof W !== "undefined", null, { timeout: 15000 });
+  await p.evaluate(() => {
+    Object.defineProperty(navigator, "locks", { value: undefined, configurable: true });
+    W.tv = "sync"; setLt("tools"); renderList();
+  });
+  await p.waitForSelector("#lx input[data-syfile]", { state: "attached", timeout: 15000 });
+  const watchOnlyBackup = {
+    app: "kline-school", v: 2, at: "2026-10-05T00:00:00Z",
+    data: { "kline:watch:groups": JSON.stringify([{ name: "備份自選", list: ["2317"] }]) },
+  };
+  await p.setInputFiles("#lx input[data-syfile]", { name: "watch-only.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(watchOnlyBackup)) });
+  await p.waitForFunction(() => /備份自選/.test(localStorage.getItem("kline:watch:groups") || ""), null, { timeout: 15000 });
+
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
