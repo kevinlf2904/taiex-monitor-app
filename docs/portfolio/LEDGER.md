@@ -113,31 +113,25 @@
   - 交易歷史、個股成本變化（FIFO 亦顯示剩餘批次）。
   - 已實現與未實現損益、現金股息、手續費與稅統計；「全部／台股／美股」市場篩選。
 - 搬移流程：先預覽，使用者按確認後才寫入 `kline:pf:v1`，舊鍵 `kline:watch:hold` 保留不動。
-- 雲端同步、備份檔同時支援 `kline:` 開頭資料（`checkBackup` 驗證版本與完整交易檢查）。
-- 券商截圖匯入（`api/_lib/import.js` ＋ `prepareHoldingsImport` / `prepareTradesImport`）：
-  - **選項 1（庫存／持股截圖 `mode: "holdings"` → `transfer_in`）**：
-    - 解析股數（保留美股小數股數）與平均成本（或依市值／損益推算），`fee: 0, tax: 0, source: "import"`。
-    - 比對 `kline:pf:v1` 現有未平倉部位：目前尚有持股的代號預設不勾選（`on: false`）並標示「帳本已有 N 股，預設略過以免重複」；未持有或已全數賣出者預設勾選；使用者仍可手動勾選或切換「包含帳本已有部位」。
-    - 未含日期時帶入今天並標記待確認標籤。
-  - **選項 2（成交明細／對帳單截圖 `mode: "trades"` → `buy` / `sell`）**：
-    - 保留同一天、同代號、同價格的分批成交（不去重合併）。
-    - 解析完整日期與民國年：缺年份標記 `dateAssumed: "year"`（「年份待確認（請核對）」）；僅空白日期帶入今天（`dateAssumed: "today"`，「未含日期，已帶入今天」）；月／日或日／月皆合法的歧義斜線日期（`dateAssumed: "mdy"`，如 `05/06/2026`）標記 `unconfirmed_date_format`，須點選「採月/日」或「改日/月」確認；無效或無法辨識日期（`dateAssumed: "invalid"`，如 `2026/02/30`、`02/30`）回傳空字串與錯誤訊息並擋下，不再靜默退回今天。
-    - 手續費與交易稅嚴格區分：明確填 `0` 維持 `0`，空白（`null`）依規則估算（`feeEstimated: true`，賣出區分股票／ETF／債券 ETF／現股當沖 `dayTrade` 稅率）。
-    - 排序與同日買賣規則：跨日期依日期由舊到新排序；同日同代號僅在所有列皆有合法且跨買賣區間互不重疊的成交時間（`time`，如 `09:05` 與 `10:15`；同分鐘如 `09:05` vs `09:05` 仍視為無法驗證）或明確不重複 `seq` 時，才依時間／序號自動排列。未附時間的同日混合買賣絕不自動反轉：若目前列序造成先賣後買（`sameDayOversell`）即擋下賣超，若未賣超仍須使用者以 `↑↓`／「⇅ 反轉列表順序」核對並勾選確認（或補填時間）後方可寫入；另會擋下幣別衝突與無效欄位，偵測到可能重複交易時須明確勾選確認後方可寫入。
+- **統一對帳計算入口（`KLLedger.buildReconciledLedger(pfStore, reconStore, opts)`）**：結合 `kline:pf:v1` 與 `kline:pf:recon:v1`（見 `RECONCILE.md`），以各標的最新 `confirmed` 快照（含 `full_snapshot_close`）為基準起點，將基準前交易標記 `preSnapshot`（僅記歷史、不重複加減股數或損益）、綁定同日先後順序（`sameDayRelations`）、並計算出 `reconcile` 摘要（`openConflicts`、`pendingSymbols`、`unresolvedSameDayCount`、`staleTags`、`closedSymbols`）。全站 8 個投資組合頁面與看盤持股列全面採用此入口，禁用旁路重播。
+- 雲端同步、備份檔同時支援 `kline:` 開頭資料（`checkBackup` 驗證版本、鍵序無關檢查與完整對帳／交易檢核）。
+- 券商截圖匯入（`api/_lib/import.js` ＋ `learner/recon.js` ＋ `prepareHoldingsImport` / `prepareTradesImport`）：
+  - **統一入口（預設 `mode: "auto"`）**：單一截圖入口自動辨識庫存（`kind: "holdings"`）、明細（`trades`）或 `unknown`（核對畫面可就地切換類型，不重複呼叫 `/api/import`），回傳截圖基準日（`asOf`、`asOfStatus: "exact" | "year" | "mdy" | "future" | "missing"`、`rawAsOf`、`altDate`）與 `marginType`（融資／融券隔離）。
+  - **庫存快照（`holdings`）**：不寫入虛構 `transfer_in` 至 `kline:pf:v1`，而是經 `KLRecon.planHoldingsSnapshot` 與現有部位進行三級對帳（Level 1 容差內自動確認／晉升、Level 2 待對帳衝突與交割時差提示 `台股 T+2`／`美股 T+1`、Level 3 錯誤阻擋且不牽連同批有效列），依 `partial`（部分頁）或 `full`（完整清單、遺漏既有持股產生清倉 Level 2 確認）建立或推進 `kline:pf:recon:v1`。
+  - **成交明細／對帳單（`trades` → `buy` / `sell`）**：
+    - 保留同一天、同代號、同價格的分批成交（不去重合併），嚴格區分 `fee: 0` 與 `fee: null`（估算）。
+    - 解析完整日期與民國年：缺年份標記 `dateAssumed: "year"`、空白帶入今天（`today`）、歧義斜線日期標記 `mdy` 須確認、無效日期（如 `2026/02/30`）擋下；同日同代號無合法不重疊時間或序號時維持使用者確認排序；對已確認快照同日之成交送入 `same_day_order` 待對帳抉擇。
 
-## 9. 畫面（第 4 階段 B）
+## 9. 畫面（第 4 階段 B ＋ 項目一）
 
-- 位置：庫存 →「交易紀錄」分頁，程式在 `learner/ledger-ui.js`，用到時才載入（`LAZY.ledger`）。
+- 位置：庫存 →「交易紀錄」分頁，程式在 `learner/ledger-ui.js`＋`learner/recon.js`，用到時才載入（`LAZY.ledger`）。
   - 2026-11 起庫存只有一排主分頁：總覽｜持股（損益、屬性分析）｜績效｜配置與風險（配置、風險、總經敏感度、融資）｜股利｜論點｜交易紀錄。
-    原本「交易紀錄」底下的第二排分頁（總覽、績效、配置、股利、融資、論點）搬到這一排；內部狀態仍是 `W.holdView`＋`W.lg.view`，對照表在 `watch.html` 的 `HOLD_NAV`。舊名稱對照：即時損益＝持股→損益，持股分析＝持股→屬性分析。
-- 第一次使用與截圖匯入入口：
-  - 首次使用頁：提供「從現有庫存建立（先預覽）」、「截圖匯入（持股／對帳單）」、「從空白開始」。
-  - 已有交易紀錄時：「交易紀錄」操作列與「持股」分頁上方提示條（`holdSrcBar` 的「截圖匯入」）皆可開啟雙模式截圖匯入對話框（`#impSheet`）。
-  - 第一次由截圖匯入建立帳本時可選成本算法（`avg`／`fifo`）；已有帳本時沿用原設定不覆蓋。
+- 第一次使用與統一截圖匯入入口：
+  - 首次使用頁與交易操作列皆收斂為單一「截圖匯入（庫存快照／交易明細）」與 `holdSrcBar` 的快捷按鈕。
+  - 若為已有之 `transfer_in` 紀錄（且具備正數成本），清單每列提供「標為期初快照／撤回期初快照標記」；若跨分頁／舊程式竄改造成 `txHash` 脫鉤，頂部顯示過期標記停用提醒。
+- 雙鍵併發鎖與 WAL 安全保護：
+  - 所有寫入透過 `navigator.locks`（`kline:pf:commit`，不支援時 Fail-Closed 阻擋寫入）排隊並檢查 `expectedRawPf`／`expectedRawRecon`（`stale_write`）；雙鍵異動走 Phase 1–3 WAL（`pendingCommit`），中斷時於啟動自動 Roll-Forward／Roll-Back，無法判別時進入 `halted` 鎖定並於交易紀錄頁提供雙重恢復出口。
+  - 上方統一顯示 `⚠︎ 待對帳項目` 處理中心（含保留基準／採信新快照附稽核原因／同日先後決定）與 `<details class="lgrecon-hist">` 最近匯入與稽核軌跡抽屜。
 - 舊庫存 `kline:watch:hold` 完全保留不刪也不改。
-- 新增、修改與截圖匯入在寫入前皆透過 `KLLedger` 試算，錯誤（賣超、日期不對、指數／非支援市場代號、幣別衝突等）會擋下並標註對應欄位，沒通過 `validateStore` 不寫入；交易明細偵測到 `possible_duplicate` 時須勾選確認。
-- 刪除交易：如果刪掉後別的交易會出錯，就不讓刪；否則先顯示影響範圍（後續筆數、持股與成本的前後變化），確認後才刪除。
-- 台幣、美元分開統計。每一檔可以展開看成本變化表；用 FIFO 時也列出還沒賣掉的批次。
-- 雲端同步與備份檔本來就包含所有 `kline:` 開頭的資料，新存檔會一起同步、備份。注意：單筆超過 150KB 的資料不同步，交易很多時之後要再處理。
-- 仍需依實際券商條件手動補充：
-  - 新增與匯入時空白費用目前以預設費率（手續費無折扣、一般證交稅）估算；若券商有電子下單折扣請於「手續費」欄實填或匯入後編輯。
+- 台幣、美元分開統計。每一檔可以展開看成本變化表（含「庫存快照」「快照前歷史」標註）；用 FIFO 時也列出還沒賣掉的批次。
+- 備份與雲端同步見 `BACKUP.md`（單筆超過 150KB 不同步、`kline:pf:recon:v1` 達 120KB 核心上限時 Fail-Closed 擋寫並提示備份）。

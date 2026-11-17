@@ -1781,9 +1781,9 @@ function lgImpReviewHtml(S, P) {
     : `<th scope="col">匯入</th><th scope="col">成交日期／時間</th><th scope="col">方向<small>賣出可勾當沖</small></th><th scope="col">代號／名稱</th><th scope="col">股數</th><th scope="col">單價</th><th scope="col">手續費<small>空白＝估算</small></th><th scope="col">交易稅<small>空白＝估算</small></th><th scope="col">備註</th><th scope="col"><span class="pfsr">刪除</span></th>`;
   const rowsHtml = S.rows.map((r, i) => lgImpRowHtml(r, i, S.kind, P.items[i], today, S.rows.length)).join("");
   return `<form class="lgimp-form" id="lgImpForm" novalidate>
-    <p class="note lgimp-intro">${intro}</p>
-    ${lgImpBannerHtml(S, today)}
     <div class="lgimp-mid">
+      <p class="note lgimp-intro">${intro}</p>
+      ${lgImpBannerHtml(S, today)}
       <div class="lgimp-msg err" id="lgImpGlobalErr" hidden></div>
       <div class="hg-wrap" tabindex="0" role="region" aria-labelledby="impTitle">
         <table class="hgrid ${isHold ? "lgimp-h" : "lgimp-t"}">
