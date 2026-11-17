@@ -16,7 +16,7 @@
     const fx = opts.fx && isNum(opts.fx.rate) && opts.fx.rate > 0 ? opts.fx : null, conv = cur => (cur === "USD" ? (fx ? fx.rate : null) : 1);
     const open = (L?.positions || []).filter(p => p.open), issues = [];
     // 只用帳本實際套用、沒有錯誤的交易；被併進其他交易的費用不是買賣，不影響
-    const txToday = today ? (L?.txs || []).filter(x => x && x.applied && !(x.errors || []).length && !x.mergedInto && x.tx?.date === today).map(x => x.tx) : [];
+    const txToday = today ? (L?.txs || []).filter(x => x && x.applied && !(x.errors || []).length && !x.mergedInto && !x.preSnapshot && x.sameDayRelation !== "unresolved" && x.tx?.date === today).map(x => x.tx) : [];
     const qDate = q => (q ? String(q.date || q.dataDate || "").slice(0, 10) || null : null), isToday = q => !!today && qDate(q) === today;
     const rows = [], noPrice = [], stale = [];
     let mv = 0, mvUsdNoFx = 0, cost = 0, day = 0, dayBase = 0, dayKnown = 0, soldOut = 0;
@@ -57,15 +57,37 @@
       const T = L?.totals?.[cur]; const P = open.filter(p => p.currency === cur); if (!T && !P.length) continue;
       const un = rows.filter(r => r.currency === cur).reduce((s, r) => s + r.value, 0) - P.reduce((s, p) => s + p.costBasis, 0);
       // 另計費用（沒有併進買賣的，例如股息匯費）要扣；其他公司行動的現金要加（和績效頁同一個口徑）
-      const app = (L?.txs || []).filter(x => x.applied && !x.errors.length && !x.mergedInto && x.tx?.currency === cur), xf = app.filter(x => x.tx.type === "fee").reduce((s, x) => s + x.tx.amount, 0), xo = app.filter(x => x.tx.type === "other" && isNum(x.tx.amount)).reduce((s, x) => s + x.tx.amount, 0);
+      const app = (L?.txs || []).filter(x => x.applied && !x.errors.length && !x.mergedInto && !x.preSnapshot && x.sameDayRelation !== "unresolved" && x.tx?.currency === cur), xf = app.filter(x => x.tx.type === "fee").reduce((s, x) => s + x.tx.amount, 0), xo = app.filter(x => x.tx.type === "other" && isNum(x.tx.amount)).reduce((s, x) => s + x.tx.amount, 0);
       const v = (T?.realizedPnl || 0) + un + (T?.dividends || 0) - xf + xo; cum[cur] = r2(v);
       if (conv(cur) == null) cumOk = false; else cumBase += v * conv(cur);
     }
     const byMarket = {}; for (const r of rows) if (r.valueBase != null) byMarket[r.currency === "USD" ? "us" : "tw"] = (byMarket[r.currency === "USD" ? "us" : "tw"] || 0) + r.valueBase;
     if (cashB > EPS) byMarket.cash = cashB;
     const marketShare = Object.entries(byMarket).map(([g, v]) => ({ group: g, w: gross > EPS ? r4(v / gross) : 0 })).sort((a, b) => b.w - a.w);
-    // 風險狀態
+    // 風險狀態與對帳通知
     const top = rows.filter(r => r.w != null), top5 = top.slice(0, 5).reduce((s, r) => s + r.w, 0), alerts = [];
+    if (L?.reconcile?.hasSnapshot) issues.push({ k: "snapshot_baseline", count: L.reconcile.snapshotCount || 0 });
+    const reconDiffs = [];
+    const openConfs = Array.isArray(L?.reconcile?.openConflicts) ? L.reconcile.openConflicts : [];
+    for (const c of openConfs) reconDiffs.push({ symbol: String(c.symbol || "").toUpperCase() || null, code: c.kind || "recon_diff", diffShares: c.diffShares ?? null, market: c.market || null });
+    for (const p of L?.positions || []) {
+      for (const x of p.pending || []) {
+        if (x.code === "recon_diff" || x.code === "same_day_order") {
+          if (!reconDiffs.some(d => d.symbol === p.symbol && d.code === x.code)) {
+            reconDiffs.push({ symbol: p.symbol, code: x.code, diffShares: x.diffShares ?? null, market: x.market || p.market || null });
+          }
+        }
+      }
+    }
+    if (reconDiffs.length) {
+      const rCodes = [...new Set(reconDiffs.map(d => d.symbol).filter(Boolean))];
+      const markets = [...new Set(reconDiffs.map(d => d.market).filter(m => m === "tw" || m === "us"))];
+      const hint = markets.length === 1
+        ? (markets[0] === "tw" ? "可能是近 2 個交易日尚未交割（台股 T+2），或有交易還沒匯入" : "可能是前 1 個交易日尚未交割（美股 T+1），或有交易還沒匯入")
+        : "可能有尚未反映的交割或未匯入交易";
+      alerts.push({ k: "recon_pending", codes: rCodes, diffs: reconDiffs, markets, hint, level: "warn" });
+      issues.push({ k: "recon_pending", codes: rCodes, diffs: reconDiffs, markets, hint });
+    }
     if (top[0] && top[0].w > 0.3) alerts.push({ k: "single_concentration", symbol: top[0].symbol, w: top[0].w, level: top[0].w > 0.5 ? "high" : "warn" });
     if (top.length >= 5 && top5 > 0.8) alerts.push({ k: "top5_concentration", w: r4(top5), level: "warn" });
     for (const m of opts.margin || []) if (m && (m.state === "call" || m.state === "liquidate" || m.state === "near")) alerts.push({ k: "margin", name: m.name, ratio: m.ratio, state: m.state, level: m.state === "near" ? "warn" : "high" });
@@ -80,7 +102,7 @@
       marketShare, top: rows.slice(0, 5), positions: rows.length, alerts, issues,
       updated: { quotesFrom: times[0] || null, quotesTo: times[times.length - 1] || null, fx: fx ? { rate: fx.rate, date: fx.date || null } : null } };
   }
-  const ALERT_LABEL = { single_concentration: "單一持股占比偏高", top5_concentration: "前五大持股合計超過 80%", margin: "融資維持率", no_price: "有持股沒有報價，用成本估算", stale_quote: "有持股的報價沒有日期或不是今天的，今日損益沒算它" };
-  const ISSUE_LABEL = { no_fx: "沒有匯率，美股沒有換算進總資產", cum_no_fx: "沒有匯率，累積損益只算台股", cash_negative: "現金餘額是負的（買進多於入金，可能漏記入金），總資產已經扣掉" };
+  const ALERT_LABEL = { single_concentration: "單一持股占比偏高", top5_concentration: "前五大持股合計超過 80%", margin: "融資維持率", no_price: "有持股沒有報價，用成本估算", stale_quote: "有持股的報價沒有日期或不是今天的，今日損益沒算它", recon_pending: "有尚未對帳確認的持股差異或同日交易順序" };
+  const ISSUE_LABEL = { no_fx: "沒有匯率，美股沒有換算進總資產", cum_no_fx: "沒有匯率，累積損益只算台股", cash_negative: "現金餘額是負的（買進多於入金，可能漏記入金），總資產已經扣掉", snapshot_baseline: "部分或全部部位以庫存快照為基準起算", recon_pending: "有尚未對帳確認的持股差異或同日交易順序" };
   root.KLOverview = Object.freeze({ VERSION, summarize, ALERT_LABEL, ISSUE_LABEL });
 })(typeof window !== "undefined" ? window : globalThis);

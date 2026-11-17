@@ -244,3 +244,56 @@ test("未滿一年、唯一解證明不了：buildPerf 不會出錯，資金加�
   const C = K.buildPerf(T, { prices: { 2330: S([["2026-03-02", 100], ["2026-03-03", 230], ["2026-03-04", 140], ["2026-03-05", 5]]) } }).byCurrency.TWD;
   assert.equal(C.mwr.status, "unavailable"); assert.equal(C.mwr.value, null); assert.equal(C.mwr.period, null); assert.ok(C.mwr.reasons.includes("multiple_solutions") || C.mwr.reasons.includes("no_solution"));
 });
+
+test("Task 4：純快照績效起點、full_snapshot_close 歸零、補傳快照前明細不誤報 history_truncated 與 recon_pending", () => {
+  const ctxR = {}; vm.createContext(ctxR);
+  for (const f of ["ledger.js", "recon.js", "perf.js"]) vm.runInContext(readFileSync(new URL("../learner/" + f, import.meta.url), "utf8"), ctxR);
+  const KR = ctxR.KLPerf, R2 = ctxR.KLRecon;
+
+  // 1. 純快照（無任何交易）：2026-10-01 2330 1000 股 @900，10/1 收 910 → 10/30 收 1000
+  const recon1 = R2.emptyStore();
+  recon1.snapshots.push({ id: "sn1", symbol: "2330", market: "tw", currency: "TWD", date: "2026-10-01", shares: 1000, avgCost: 900, status: "confirmed", confirmedAt: "2026-10-01T09:00:00Z", scope: "partial", origin: "import", supersededBy: null });
+  const px1 = S([["2026-10-01", 910], ["2026-10-30", 1000]]);
+  const pPure = KR.buildPerf([], { recon: recon1, prices: { 2330: px1 }, today: "2026-11-16" });
+  const cPure = pPure.byCurrency.TWD;
+  assert.ok(cPure, "純快照應產生 byCurrency.TWD");
+  assert.equal(cPure.from, "2026-10-01");
+  assert.equal(cPure.to, "2026-10-30");
+  assert.ok(near(cPure.twr, 1000000 / 910000 - 1, 1e-7));
+  assert.ok(near(cPure.mwr.period, 1000000 / 910000 - 1, 1e-6));
+  assert.ok(cPure.estimated.includes("snapshot_baseline"));
+  assert.equal(cPure.estimated.includes("history_truncated"), false);
+  assert.ok(KR.REASON_LABEL.snapshot_baseline && KR.REASON_LABEL.recon_pending);
+
+  // 2. full_snapshot_close 歸零：預先買進不產生現金流，結案後不殘留股數與投入流
+  const reconClose = R2.emptyStore();
+  reconClose.snapshots.push({ id: "sc", symbol: "2330", market: "tw", currency: "TWD", date: "2026-10-15", shares: 0, avgCost: null, status: "confirmed", confirmedAt: "2026-10-15T10:00:00Z", scope: "full", origin: "full_snapshot_close", supersededBy: null });
+  const preBuy = tw({ id: "cb1", date: "2026-10-01", type: "buy", shares: 1000, price: 900 });
+  const open2317 = tw({ symbol: "2317", date: "2026-10-20", type: "buy", shares: 100, price: 200 });
+  const pClose = KR.buildPerf([preBuy, open2317], { recon: reconClose, prices: { 2330: S([["2026-10-01", 900], ["2026-10-30", 1000]]), 2317: S([["2026-10-20", 200], ["2026-10-30", 210]]) }, today: "2026-11-16" });
+  const cClose = pClose.byCurrency.TWD;
+  assert.equal(cClose.from, "2026-10-20", "已於 10/15 完整歸零的 2330 不應佔用 10/1~10/15 現金流與股數");
+  assert.equal(cClose.pnl.invested, 20000);
+  assert.equal(cClose.pnl.marketValue, 21000);
+
+  // 3. 含補傳快照前歷史（2024-01-05 transfer_in）但價格只有 2024-11-01 起（快照日 2026-10-01）→ 不誤報 history_truncated
+  const preHist = tw({ id: "pre-ti", date: "2024-01-05", type: "transfer_in", shares: 1000, price: 600 });
+  const pHist = KR.buildPerf([preHist], { recon: recon1, prices: { 2330: S([["2024-11-01", 950], ["2026-10-01", 910], ["2026-10-30", 1000]]) }, today: "2026-11-16" });
+  const cHist = pHist.byCurrency.TWD;
+  assert.equal(cHist.estimated.includes("history_truncated"), false);
+  assert.equal(cHist.issues.some(x => x.k === "history_truncated"), false);
+  assert.equal(cHist.from, "2026-10-01");
+  assert.equal(cHist.flows.every(f => f.d >= "2026-10-01"), true);
+
+  // 4. 缺快照日收盤價回退成本（transfer_at_cost）+ 未決 recon_diff → recon_pending
+  const reconDiff = R2.cloneStore(recon1);
+  reconDiff.conflicts.push({ id: "cf1", batchId: "b1", kind: "recon_diff", symbol: "2330", market: "tw", currency: "TWD", status: "open", baselineShares: 1000, targetShares: 1200, diffShares: 200, createdAt: "2026-11-10T00:00:00Z" });
+  const pConf = KR.buildPerf([], { recon: reconDiff, prices: { 2330: S([["2026-10-30", 1000]]) }, today: "2026-11-16" });
+  const cConf = pConf.byCurrency.TWD;
+  assert.ok(cConf.estimated.includes("transfer_at_cost"));
+  assert.ok(cConf.estimated.includes("snapshot_baseline"));
+  assert.ok(cConf.estimated.includes("recon_pending"));
+  assert.ok(cConf.issues.some(x => x.k === "recon_pending"));
+  assert.equal(cConf.status, "needs_confirm");
+});
+

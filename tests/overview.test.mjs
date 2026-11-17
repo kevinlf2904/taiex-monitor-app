@@ -79,3 +79,44 @@ test("有記入金、現金剛好是 0：標示有追蹤現金（cashTracked）�
   assert.equal(R.cash, 0); assert.equal(R.cashTracked, true);
   assert.equal(run([tw({ date: "2026-01-05", type: "buy", shares: 1, price: 1 })], {}).cashTracked, false, "沒有入金出金紀錄：不追蹤現金");
 });
+
+test("Task 4：純快照總覽與待對帳（recon_pending）依市場分流提示（台股 T+2 / 美股 T+1 / 混合中性）", () => {
+  const ctxR = {}; vm.createContext(ctxR);
+  for (const f of ["ledger.js", "recon.js", "overview.js"]) vm.runInContext(readFileSync(new URL("../learner/" + f, import.meta.url), "utf8"), ctxR);
+  const L2 = ctxR.KLLedger, R2 = ctxR.KLRecon, O2 = ctxR.KLOverview;
+
+  const baseRecon = R2.emptyStore();
+  baseRecon.snapshots.push({ id: "s1", symbol: "2330", market: "tw", currency: "TWD", date: "2026-10-01", shares: 1000, avgCost: 900, status: "confirmed", confirmedAt: "2026-10-01T09:00:00Z", scope: "partial", origin: "import", supersededBy: null });
+  const qTw = new Map([["2330", { price: 950, prev: 940, date: "2026-11-05" }]]);
+  const Lpure = L2.buildReconciledLedger([], baseRecon, { today: "2026-11-05" });
+  const OvPure = O2.summarize(Lpure, qTw, { today: "2026-11-05" });
+  assert.equal(OvPure.stocks, 950000);
+  assert.equal(OvPure.today.pnl, 10000);
+  assert.equal(OvPure.cumulative.byCurrency.TWD, 50000);
+  assert.ok(OvPure.issues.some(x => x.k === "snapshot_baseline" && x.count === 1));
+  assert.ok(O2.ISSUE_LABEL.snapshot_baseline && O2.ISSUE_LABEL.recon_pending && O2.ALERT_LABEL.recon_pending);
+
+  // 台股單一衝突 → T+2
+  const rTwConf = R2.cloneStore(baseRecon);
+  rTwConf.conflicts.push({ id: "c-tw", batchId: "b1", kind: "recon_diff", symbol: "2330", market: "tw", currency: "TWD", status: "open", baselineShares: 1000, targetShares: 1200, diffShares: 200, createdAt: "2026-11-05T00:00:00Z" });
+  const ovTw = O2.summarize(L2.buildReconciledLedger([], rTwConf, { today: "2026-11-05" }), qTw, { today: "2026-11-05" });
+  const alTw = ovTw.alerts.find(a => a.k === "recon_pending");
+  assert.ok(alTw && /T\+2/.test(alTw.hint) && !/T\+1/.test(alTw.hint));
+
+  // 美股單一衝突 → T+1
+  const rUsConf = R2.emptyStore();
+  rUsConf.snapshots.push({ id: "su", symbol: "NVDA", market: "us", currency: "USD", date: "2026-10-01", shares: 10, avgCost: 120, status: "confirmed", confirmedAt: "2026-10-01T09:00:00Z", scope: "partial", origin: "import", supersededBy: null });
+  rUsConf.conflicts.push({ id: "c-us", batchId: "b2", kind: "recon_diff", symbol: "NVDA", market: "us", currency: "USD", status: "open", baselineShares: 10, targetShares: 15, diffShares: 5, createdAt: "2026-11-05T00:00:00Z" });
+  const ovUs = O2.summarize(L2.buildReconciledLedger([], rUsConf, { today: "2026-11-05" }), new Map([["NVDA", { price: 130, prev: 125, date: "2026-11-05" }]]), { fx: { rate: 32 }, today: "2026-11-05" });
+  const alUs = ovUs.alerts.find(a => a.k === "recon_pending");
+  assert.ok(alUs && /T\+1/.test(alUs.hint) && !/T\+2/.test(alUs.hint));
+
+  // 混合衝突 → 中性提示
+  const rMixConf = R2.cloneStore(rTwConf);
+  rMixConf.snapshots.push({ id: "su", symbol: "NVDA", market: "us", currency: "USD", date: "2026-10-01", shares: 10, avgCost: 120, status: "confirmed", confirmedAt: "2026-10-01T09:00:00Z", scope: "partial", origin: "import", supersededBy: null });
+  rMixConf.conflicts.push({ id: "c-us", batchId: "b2", kind: "recon_diff", symbol: "NVDA", market: "us", currency: "USD", status: "open", baselineShares: 10, targetShares: 15, diffShares: 5, createdAt: "2026-11-05T00:00:00Z" });
+  const ovMix = O2.summarize(L2.buildReconciledLedger([], rMixConf, { today: "2026-11-05" }), new Map([["2330", { price: 950, prev: 940, date: "2026-11-05" }], ["NVDA", { price: 130, prev: 125, date: "2026-11-05" }]]), { fx: { rate: 32 }, today: "2026-11-05" });
+  const alMix = ovMix.alerts.find(a => a.k === "recon_pending");
+  assert.ok(alMix && !/T\+1/.test(alMix.hint) && !/T\+2/.test(alMix.hint) && /交割|未匯入/.test(alMix.hint));
+});
+
