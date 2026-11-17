@@ -16,7 +16,7 @@
 
 - **不碰既有用戶存檔**：絕不清除、重建或自動遷移 `kline:watch:hold` 與 `kline:pf:v1`；純舊庫存無交易且無已確認快照時，舊庫存編輯、文字匯入、舊截圖與資料完全不變。
 - **獨立對帳鍵、容量 fail-closed 與 `store.set` 檢查**：對帳資料僅讀寫 `kline:pf:recon:v1`（`v: 1`）；`KLRecon.validateStore` 遇到 `/data:image\//i` 或超過 2000 字元的疑似 base64 字串直接拒絕；`KLRecon.pruneStore(s, 120000)` 永遠保留 `confirmed`/`pending` 快照、所有 `status === "open"` 衝突、啟用 `initialTags`、`sameDayRelations`、未結案 `pendingCommit` 與關聯 `imports[]`，僅由舊到新裁剪已結案歷史。若清空可裁剪歷史後仍 `> maxBytes`，強制回傳 `{ ok: false, code: "core_data_exceeds_limit", bytes, maxBytes, store: null }`；寫盤前檢查 `pruneStore().ok` 與 `store.set(...)` 布林回傳值，任一失敗皆中止且不覆寫現有資料。
-- **跨雙鍵可恢復提交協議（WAL Commit Protocol）**：凡同時異動 `kline:pf:v1` 與 `kline:pf:recon:v1` 的操作（`kind === "trades"` 匯入、刪除／修改帶有啟用 `initialTags` 之 `transfer_in`），一律經由 `lgCommitDualStores` ＋ `KLRecon.prepareCommit`／`finalizeCommit`／`recoverCommit` 執行 Phase 1（寫 WAL `pendingCommit`）→ Phase 2（寫 `pf:v1`）→ Phase 3（Commit 結案並清除 `pendingCommit`），並於 `lgReconLoad()`／`holdSrcApply()`／`renderLedger()` 啟動時冪等 Roll-Forward 或 Clean Abort。同日定序（`sameDayRelations`）單鍵存於 `kline:pf:recon:v1`。
+- **跨雙鍵可恢復提交協議（WAL Commit Protocol）**：凡同時異動 `kline:pf:v1` 與 `kline:pf:recon:v1` 的操作（`import_trades`、`deactivate_tags` 刪除期初標記 `transfer_in`、`update_tx_tag` 修改期初標記 `transfer_in`），一律經由 `lgCommitDualStores` ＋ `KLRecon.txFingerprint`／`prepareCommit`／`finalizeCommit`／`recoverCommit` 執行 Phase 1（寫 WAL `pendingCommit`）→ Phase 2（寫 `pf:v1`）→ Phase 3（Commit 結案並清除 `pendingCommit`），並於 `lgReconLoad()`／`holdSrcApply()`／`renderLedger()` 啟動時同時比較交易指紋與標籤／快照狀態執行冪等 Roll-Forward／Clean Abort，或遇部分不一致／未知 `op` 時 fail-closed 保留 `pendingCommit` 並阻斷後續覆寫。同日定序（`sameDayRelations`）單鍵存於 `kline:pf:recon:v1`。
 - **快照完整度、市場與日期安全閘道**：`snapshotScope`（`"full" | "partial"`）必須明確確認，決不自動預設 `"full"`；僅 `asOfStatus === "exact" && asOf <= today`（或使用者明確確認且 `<= today`）可建立 `confirmed` 基準，缺年份 `asOfStatus: "year"` 與未來日 `asOfStatus: "future"` 必進 Level 2。全站以大寫規範 `symbol` 為主鍵並於 `KLRecon.validateStore` 與 `buildReconciledLedger` 雙重強制單一 `(symbol, market, currency)`（`tw/TWD`, `us/USD`）。
 - **統一計算入口（防繞過）**：除 `learner/ledger.js` 本身以外，全專案 `learner/*.js` 與 `learner/watch.html` **不得出現任何 `.buildLedger(` 呼叫**（以靜態單元測試把關），一律呼叫 `KLLedger.buildReconciledLedger`。
 - **備份鍵序無關與 Fail-Closed**：`KLLedger.checkBackup` 先掃描 `data` 是否存在 `kline:pf:recon:v1`（若 `pendingCommit != null` 或缺 `opts.recon?.validateStore` 或市場衝突即整份拒絕不降級）再驗證 `kline:pf:v1`；`tools.js` `syncImport` 必須動態載入 `recon.js` 並帶入 `recon: KLRecon`。
@@ -36,7 +36,7 @@
 3. **兩張快照跨過「全數賣光歸零再買回」**：`S1` → 賣光 `0` 股（`costBasis = 0, lots = []`）→ 再買進 → `S2`，期間重播與容差（數量 `max(1e-4, S2*1e-6)`、均價 `max(0.5, S2.avgCost*0.005)`）須能正確晉升或偵測差異 → **Task 3**。
 4. **純快照空白帳本（含完整快照結案歸零，無 `kline:pf:v1` 或 `transactions: []`）顯示全站 8 頁＋個股損益**：`holdSrcApply`、`watch.html`、`renderLedger`、`renderAlloc`、`lgPerfData`/`renderPerf`、`pf-home`、`pf-stress` Beta 按鈕、`pf-divcal`、`pf-report`、`pf-thesis`、`perf.js` 一律透過唯讀 `lgStoreOrEmpty()` 正常運算呈現，不退回介紹頁、全數清倉後不誤退回 `kline:watch:hold`、不預寫空 `kline:pf:v1` → **Task 4** ＋ **Task 5** ＋ **Task 6** ＋ **Task 7**。
 5. **後端 `api/_lib/import.js` 向下相容**：直接呼叫 `parseTradeDate(null/""/"   ", today)` 與 `cleanTradeRows(rows, opts)`（未傳 `missingAsNull: true`）仍維持 `{ date: refToday, dateAssumed: "today" }`；`marginType` 僅在偵測到信用交易關鍵字時採條件展開附加，一般現股鍵集合與既有 `deepEqual` 測試完全一致 → **Task 1**。
-6. **跨雙鍵 WAL 提交協定與 `store.set === false` 防呆**：`lgCommitDualStores` 模擬 Phase 1 失敗、Phase 2 `QuotaExceededError`（`store.set` 回傳 `false`）回滾、Phase 3 中斷後重開頁面冪等 Roll-Forward／Clean Abort，確認最終兩鍵一致且零重複交易；`same_day_order` 寫 `sameDayRelations` 不觸碰 `pf:v1` → **Task 2** ＋ **Task 5** ＋ **Task 6**。
+6. **跨雙鍵 WAL 提交協定（含 `import_trades` / `deactivate_tags` / `update_tx_tag`）與 Fail-Closed 防呆**：`lgCommitDualStores` ＋ `recoverCommit` 以交易指紋＋標籤快照狀態區分 Phase 1／2／3 中斷（不能只看 `txId` 是否存在），覆蓋修改／刪除期初交易、`store.set` 回 `false` 復原（含復原亦失敗後的重啟恢復）、重複 `recoverCommit` `audit[]` 零重複，以及部分不一致／未知 `op` fail-closed 保留 `pendingCommit`；`same_day_order` 寫 `sameDayRelations` 不觸碰 `pf:v1` → **Task 2** ＋ **Task 5** ＋ **Task 6**。
 7. **快照 `full` vs `partial` 語意與 `(symbol, market, currency)` 一致性**：`S1` 有 `2330` 時匯入不含 `2330` 之 `S2`：`snapshotScope: "full"` 依推算關閉 `S1`（`full_snapshot_close`）或進 `recon_diff`（`targetShares: 0`）；`snapshotScope: "partial"` 保留 `S1`。同 `symbol` 不同 `market`／`currency` 於 `validateStore`／`planHoldingsSnapshot`／`buildReconciledLedger` 一律拒絕（`currency_conflict`）→ **Task 2** ＋ **Task 3** ＋ **Task 4** ＋ **Task 5** ＋ **Task 6**。
 8. **缺年份（`asOfStatus: "year"`）跨年與未來日（`asOfStatus: "future"`）嚴格門檻**：僅 `exact && asOf <= today`（或使用者明確確認且 `<= today`）可建 `confirmed`；`year`（含 `01/05` 掃到 `12/28` 跨年前一年）與 `future` 強制進 Level 2 並陳原始與推定日期 → **Task 1** ＋ **Task 2** ＋ **Task 6**。
 9. **120KB 核心超限 fail-closed 契約與依市場分流之交割提示**：核心保留物件超限時 `pruneStore` 回 `{ ok: false, code: "core_data_exceeds_limit" }` 且寫盤前拒寫不蓋舊檔；交割提示區分 `tw`（台股 T+2）、`us`（美股 T+1）、未知／混合（中性文案）→ **Task 2** ＋ **Task 4** ＋ **Task 6** ＋ **Task 7**。
@@ -96,7 +96,7 @@
     - 當 `origin === "full_snapshot_close"` 時允許 `shares === 0, avgCost === null, scope === "full"`；非 `full_snapshot_close` 一律要求 `shares > 0` 且 `confirmed` 時 `avgCost > 0`；
     - **同一 `symbol` 市場約束**：掃描全部快照（及開放衝突）確保同 `symbol` 不得同時出現不同 `market`／`currency`（否則 `{ ok: false, code: "currency_conflict", symbol }`）；
     - **未來日期保護**：若有 `opts.today`（或預設台北今日），任何 `status === "confirmed"` 快照之 `date > opts.today` 一律拒絕（`{ ok: false, code: "future_snapshot_date", symbol, date }`）；
-    - `sameDayRelations` 與 `pendingCommit` 結構檢查；當 `opts.rejectPendingCommit` 為真且 `s.pendingCommit != null` 回 `{ ok: false, code: "unrecovered_pending_commit" }`（供 `checkBackup` 拒絕未收斂 WAL 備份）；
+    - `sameDayRelations` 與 `pendingCommit` 結構檢查：未傳 `opts.rejectPendingCommit`（一般載入）時，只要 `s.pendingCommit` 為含字串 `id`/`op` 之非陣列物件即放行保留（即使 `op` 屬未知操作亦不整份駁回，留待 `recoverCommit` fail-closed）；當 `opts.rejectPendingCommit` 為真且 `s.pendingCommit != null` 回 `{ ok: false, code: "unrecovered_pending_commit" }`（供 `checkBackup` 拒絕未收斂 WAL 備份）；
     - 遞迴檢查**任何字串不可命中 `/data:image\//i` 或長度超過 2000 字元且符合 base64 字串規範**（命中即回 `{ ok: false, code: "image_not_allowed", ... }`）。
   - `settlementHint(market)`: `tw` 回 `"可能是近 2 個交易日尚未交割（台股 T+2），或有交易還沒匯入"`；`us` 回 `"可能是前 1 個交易日尚未交割（美股 T+1），或有交易還沒匯入"`；其他／混合回 `"可能有尚未反映的交割或未匯入交易"`。
   - `deriveAvgCost(row)`: 當 `avgCost > 0` 直接回傳；否則依 `(shares * price - totalPnl) / shares` 或 `(marketValue - totalPnl) / shares` 推導正數均價（無法得出正數或分母 `<= 0` 一律回 `null`，絕不補 `0`）。
@@ -108,9 +108,20 @@
   - `findRepeatHash(s, hashes = [])` → `{ hit: boolean, openConflicts: number, openImportIds: string[], resolvedCount: number }`（核對 `imports[].fileHashes`）。
   - `withinTolerance(simShares, simAvgCost, targetShares, targetAvgCost)` → `{ sharesOk, costOk, ok }`。
   - **WAL Commit Helpers（純函式）**：
-    - `prepareCommit(store, { batchId, op, at, txIds = [], deletedTxIds = [], staged = {} })`：建立寫入 `pendingCommit`（僅含小量 delta `txIds`/`deletedTxIds`/`staged`）之暫存快照，供 Phase 1 寫入 `kline:pf:recon:v1`；
-    - `finalizeCommit(store, batchId)`：依 `id` 冪等合併 `pendingCommit.staged`（`imports`/`conflicts`/`audit`/`initialTags`/`sameDayRelations`）或停用 `deletedTxIds` 對應標籤，並清空 `pendingCommit: null`，供 Phase 3 與 Roll-Forward 共用；
-    - `recoverCommit(pfStore, reconStore)` → `{ changed, status: "noop"|"rolled_forward"|"aborted"|"partial_recovered", reconStore, failedTxIds? }`：比對 `reconStore.pendingCommit` 與 `pfStore.transactions`，決定 Roll-Forward（全數已在 `pf:v1` → `finalizeCommit`）、Clean Abort（全未寫入 `pf:v1` → 清 `pendingCommit: null`）或部分回復。
+    - `txFingerprint(tx)` → `string`：同步正規化交易物件（遞迴省略 `undefined` 鍵、物件鍵依字典序排序、保留陣列順序）後計算確定性 128-bit 十六進位簽章＋長度標籤（保證記憶體物件與 `JSON.parse(JSON.stringify(tx))` 結果 100% 相同；任何欄位改動皆改變指紋）。
+    - `planDeactivateTags(store, prevTxsOrSingle, opts = {})` → `{ ok, needsWal, payload?, previewRecon?, errors? }`：檢查待刪交易是否帶有 `initialTags[tx.id]?.active`，產生 `{ batchId, op: "deactivate_tags", at, deletedTxIds, prevTxHashes, prevTagStates, targetTagStates, staged: { audit } }`（其中 `TagSnapshotState` 為 `{ active, snapshotId, snapshotStatus, snapshotDate, snapshotShares, snapshotAvgCost, supersededBy }`）與模擬完成後之 `previewRecon`（保留原正數 `avgCost`/`shares`、不動更晚 `B_newer`）。
+    - `planUpdateTxTag(store, prevTx, nextTx, opts = {})` → `{ ok, needsWal, mode?: "update"|"deactivate", payload?, previewRecon?, errors? }`：若 `prevTx` 無啟用 `initialTags` 或 `txFingerprint(prevTx) === txFingerprint(nextTx)` 則回 `{ ok: true, needsWal: false, previewRecon }`；否則依 `nextTx` 是否仍為合法 `transfer_in`（同正規大寫 `symbol`/`market`/`currency`、`date <= today`、`shares > 0`、`price > 0`）決定 `mode: "update"` 或 `"deactivate"`，產生包含 `txId`, `mode`, `prevTxHash`, `nextTxHash`, `prevTagState`, `targetTagState`, `staged: { conflicts?, audit }`（均具確定性 `id`，若存在更晚基準 `B_newer` 亦僅更新／停用該 `tx_tag` 並於必要時建立 `recon_diff`，決不破壞 `B_newer`）與模擬 `previewRecon`。
+    - `prepareCommit(store, payload)` → `{ ok: true, store }` 或 `{ ok: false, code: "pending_commit_exists" | "unknown_wal_op" | "invalid_wal_payload" | "wal_noop", error }`：驗證 `store.pendingCommit == null`、`op` 屬白名單（`"import_trades" | "deactivate_tags" | "update_tx_tag"`）與各 `op` 必要欄位（`update_tx_tag` 必備 `prevTxHash !== nextTxHash` 與完整前後 `TagSnapshotState`），寫入 `pendingCommit` 回傳 `{ ok: true, store }`。
+    - `finalizeCommit(store, batchId)` → `{ ok: true, store }` 或 `{ ok: false, code }`：核對 `pendingCommit.id === batchId` 與合法 `op`/欄位；套用 `targetTagStates` / `targetTagState`（`update_tx_tag` 更新既有關聯 `tag.snapshotId` 快照或停用標籤＋快照、`deactivate_tags` 停用標籤＋快照）、依 `id` 去重冪等合併 `staged`（`imports`/`conflicts`/`audit`/`initialTags`/`sameDayRelations`）、並設 `pendingCommit: null`。
+    - `recoverCommit(pfStore, reconStore)` → `{ changed: boolean, status: "noop"|"rolled_forward"|"aborted"|"partial_recovered"|"inconsistent_halted"|"unknown_op_halted", code?, op?, reconStore, failedTxIds? }`：
+      1. **非白名單／壞結構 Fail-Closed**：`pendingCommit` 非純物件或缺失必要結構回 `status: "inconsistent_halted"`；`op` 非 `"import_trades"|"deactivate_tags"|"update_tx_tag"` 回 `status: "unknown_op_halted"` — **兩者一律完整保留原 `pendingCommit` 不動（`changed: false`），絕不靜默設為 `null`**；
+      2. **`import_trades`**：比對 `txIds` 在 `pfStore.transactions`：全在 → Roll-Forward (`finalizeCommit`)；全不在 → Clean Abort（`pendingCommit: null`）；部分存在 → 完成已存在者對帳並寫異常稽核（`partial_recovered`）；
+      3. **`deactivate_tags`**：比對 `pfStore.transactions`（需同時檢核存在與 `txFingerprint === prevTxHashes[id]`）及 `recon` 之 `matchesTagState`（對照 `prevTagStates` / `targetTagStates`）：全仍在且指紋＋標籤為 `prevTagStates` → Clean Abort（不動交易／標籤／audit）；全已刪且標籤為 `prevTagStates` 或 `targetTagStates` → 冪等 Roll-Forward；其餘部分或指紋不符 → `inconsistent_halted`（保留 WAL）；
+      4. **`update_tx_tag`**：禁止僅依 `txId` 存在與否判定；以 `actualTx` 之 `actualTxHash`（或不存在時 `null`）與 `matchesTagState(actualTag, actualSnap, ...)` 對照：
+         - `actualTxHash === prevTxHash` 且 `matchesTagState(..., prevTagState)` → Phase 1 Clean Abort（清 WAL、不寫 `staged`）；
+         - `actualTxHash === nextTxHash` 且 `matchesTagState(..., prevTagState)` → Phase 2→3 Roll-Forward（更新／停用標籤與快照、去重合併 `staged`、清 WAL）；
+         - `actualTxHash === nextTxHash` 且 `matchesTagState(..., targetTagState)` → Phase 3 殘留／重複執行冪等 Roll-Forward（去重補齊 `staged`、清 WAL，重複執行 `audit[]` 零重複）；
+         - 其餘一切狀態（交易消失、第三版本指紋、`prevTxHash`＋`targetTagState`、`nextTxHash`＋第三標籤態）→ `inconsistent_halted`（`code: "wal_inconsistent_state"`，完整保留 `pendingCommit` 不清）。
   - `planHoldingsSnapshot({ store, ledgerPositions, txStore, batchId, asOf, asOfStatus, asOfConfirmed = false, altDate, rawAsOf, snapshotScope = "partial", rows, fileHashes, method, today, ledgerLib })`:
     - `snapshotScope` 僅接受明確 `"full"` 否則一律視為 `"partial"`（絕不自動猜 `"full"`）；
     - **日期門檻**：僅當 `(asOfStatus === "exact" && asOf <= today) || (asOfConfirmed === true && isValidDate(asOf) && asOf <= today)` 才允許進入 Level 1 建立 `confirmed`；`asOfStatus === "year"`、`"future"`、`"mdy"`、`"invalid"`、`"missing"`（未確認）**一律進 Level 2**；
@@ -119,15 +130,24 @@
     - 差異文案一律呼叫 `settlementHint(market)`。
   - `applyHoldingsImport(store, plan, opts)` → `{ ok, store, batchId, appliedCount, conflictCount, errors }`（純函式回傳新 store，寫 `snapshots[]`（含 `scope` 與 `full_snapshot_close`）、`conflicts[]`、`imports[]`（含 `snapshotScope`）、`audit[]`）。
   - `resolveConflict(store, conflictId, action, opts = {})` → `{ ok, store, effect }`：支援 `"keep_both"`、`"accept_new"`（必填 `reason`；同時支援一般 `pending` 快照與 `missing_in_full_snapshot` 之 `pending` `full_snapshot_close` 核准關閉 `S1`）、`"keep_baseline"`（放棄新目標設 `superseded` 並結案衝突）、`"mark_before_snapshot"`／`"mark_after_snapshot"`（更新 `sameDayRelations[txId]` 與結案衝突，不修改 `kline:pf:v1`）。
-  - `tagInitialTx(store, tx, opts)` / `untagInitialTx(store, txId, opts)` / `deactivateTagsForTx(store, txId, opts)`：對 `transfer_in` 標為期初快照／撤回／刪除停用（僅動 `kline:pf:recon:v1`；檢查 `tx.date <= opts.today` 及市場一致性；`tx.price <= 0` 回 `{ ok: false, code: "missing_cost" }`）。
+  - `tagInitialTx(store, tx, opts)` / `untagInitialTx(store, txId, opts)` / `deactivateTagsForTx(store, txId, opts)`：對 `transfer_in` 標為期初快照／撤回／停用（僅動 `kline:pf:recon:v1`；檢查 `tx.date <= opts.today` 及市場一致性；`tx.price <= 0` 回 `{ ok: false, code: "missing_cost" }`）。
 
 - [ ] **寫失敗測試**（`tests/recon.test.mjs`）：
-  - `validateStore` 拒絕：`data:image/png;base64,...`、超過 2000 字元純 base64 字串、`confirmed` 缺正 `avgCost`（非 `full_snapshot_close`）、壞版本 `v: 2`、**`tw/USD` 錯配與跨快照同 `symbol` 不同 `market/currency`（`currency_conflict`）**、**`confirmed` 日期大於 `today`（`future_snapshot_date`）**、及 `{ rejectPendingCommit: true }` 下含 `pendingCommit != null`。
+  - `validateStore` 拒絕：`data:image/png;base64,...`、超過 2000 字元純 base64 字串、`confirmed` 缺正 `avgCost`（非 `full_snapshot_close`）、壞版本 `v: 2`、**`tw/USD` 錯配與跨快照同 `symbol` 不同 `market/currency`（`currency_conflict`）**、**`confirmed` 日期大於 `today`（`future_snapshot_date`）**、一般載入允許未知 `op` 之 `pendingCommit` 保留、`{ rejectPendingCommit: true }` 下任何 `pendingCommit != null` 一律拒絕。
+  - `txFingerprint`：`undefined` 屬性與物件鍵序重排前後指紋完全一致；任一交易屬性異動指紋改變。
   - `deriveAvgCost`、`withinTolerance` 與 `settlementHint("tw" | "us" | "")`（T+2 vs T+1 vs 中性文案）精確驗證。
   - `pruneStore`：
     1. 正常裁剪：塞入 300 筆已結案 `imports`/`audit`/`conflicts` ＋ 20 筆 `superseded` 快照 ＋ `confirmed`/`open`/啟用 `initialTags`/`sameDayRelations`/`pendingCommit`/關聯 `imports[]`，斷言 `< maxBytes` 且核心永存；
     2. **不可裁剪核心超限（Review Focus 9）**：塞入大量 `confirmed`／`open` conflicts 使核心資料超出 `maxBytes`（例如 8000），斷言回 `{ ok: false, code: "core_data_exceeds_limit", store: null }` 且不靜默放行。
-  - **WAL Commit Protocol 測試（Review Focus 6）**：模擬 `prepareCommit` → Phase 2 未寫入時 `recoverCommit` 執行 Clean Abort；Phase 2 已寫入 `pf:v1` 但未執行 Phase 3 時 `recoverCommit` 冪等 Roll-Forward（連叫兩次亦不生重複 `imports[]`/`audit[]`）；部分存在極端異常修復。
+  - **WAL Commit Protocol 全情境測試（Review Focus 6，覆蓋複審 1–4 要求）**：
+    1. `import_trades`：Phase 1 中斷 Clean Abort；Phase 2→3 中斷 Roll-Forward；連叫兩次 `recoverCommit` 零重複 `imports[]`/`audit[]`；部分存在異常修復；
+    2. `deactivate_tags`（刪除已標記期初 `transfer_in`，含無 `B_newer` 與另有較晚 `B_newer` 兩種狀況）：Phase 1 中斷 Clean Abort（保留交易與標籤、`audit[]` 無新增）；Phase 2→3 中斷 Roll-Forward（交易已刪、停用標籤與 `tx_tag` 快照而不破壞 `B_newer`）；重複執行 `recoverCommit` 零重複 `audit[]`；交易仍存在卻改過內容／指紋不符之 `inconsistent_halted`（完整保留 `pendingCommit` 不清）；
+    3. `update_tx_tag`（修改已標記期初 `transfer_in`）：
+       - **模式 `"update"`**（改股數／單價／日期，含與 `B_newer` 並存情境）：Phase 1 Clean Abort（指紋符 `prevTxHash`＋`prevTagState`）、Phase 2→3 Roll-Forward（指紋符 `nextTxHash`＋`prevTagState`，更新快照＋保留 `B_newer`）、Phase 3 殘留＋連叫兩次 `recoverCommit`（零重複 `audit[]`）；
+       - **模式 `"deactivate"`**（例如將期初 `transfer_in` 改為 `buy`、或將 `price` 改為 `0`、或改代號）：Phase 1 Clean Abort（保留原 `tx_tag` 基準）、Phase 2→3 Roll-Forward（停用 `initialTags`＋設 `tx_tag` 快照 `superseded` 且原正 `avgCost` 不被寫為 `0`）、重複恢復零重複 `audit[]`；
+       - **部分／不一致 Fail-Closed**：`actualTx` 遺失、`actualTxHash` 被改成第三版本、`actualTxHash === prevTxHash` 但 `recon` 已成 `targetTagState`、`actualTxHash === nextTxHash` 但 `recon` 成第三狀態 → 全回 `status: "inconsistent_halted"` 且 `reconStore.pendingCommit` 原樣保留；
+    4. **未知／壞結構 `op` Fail-Closed**：`op: "future_unknown_v2"` 或缺少必要 `op` 欄位 → `recoverCommit` 回 `unknown_op_halted` / `inconsistent_halted` 且**原封保留 `pendingCommit`**；`prepareCommit` 遇到尚未恢復 `pendingCommit != null` 拒絕建立新 WAL；
+    5. **`store.set === false` 模擬雙鍵失敗恢復**：mock `store` 在 Phase 1 / Phase 2 / Phase 3 及「Phase 2 回滾 `pf:recon:v1` 也失敗」「Phase 3 回滾後留 WAL 重試」回傳 `false`，隨後放行重新載入呼叫 `recoverCommit`，驗證兩鍵最終一致且 `audit[]` 零重複。
   - **`snapshotScope` `"full"` vs `"partial"` 兩個相反測試（Review Focus 7）**：`S1` 有 `2330`（1000 股），匯入不含 `2330` 之 `S2`：
     - `snapshotScope: "partial"` → `S1` 完整保留、`2330` 仍在 `activeBaselines`；
     - `snapshotScope: "full"`（期間已賣光 1000 股）→ 自動產出 `full_snapshot_close` 關閉 `S1`，`2330` 持倉為 `0`；
@@ -241,7 +261,7 @@
 - `holdFromLedger(S, recon)`（`learner/watch.html:2346`）：呼叫 `KLLedger.buildReconciledLedger(S, recon, { method: S.method, today: twIso() })`；回傳 `{ H, errors, txCount, snapshotCount, pendingSymbols }`；若 `p.pending.length` 有值（如 `recon_diff`/`same_day_order`），一併存入 `H[c].pending = p.pending` 讓持股明細列與 `holdDataCheck()` 依標的市場顯示 `⚠︎ 待對帳（差異 N 股）— <T+2 / T+1 / 中性提示>`（透過 `KLRecon.settlementHint`）。
 - `holdSrcApply()`（`learner/watch.html:2357`）：
   - 同時讀取 `rawPf = localStorage.getItem("kline:pf:v1")` 與 `rawRecon = localStorage.getItem("kline:pf:recon:v1")`。
-  - **啟動／重算 WAL 恢復**：若 `recon?.pendingCommit != null` 且 `typeof KLRecon?.recoverCommit === "function"`，呼叫 `KLRecon.recoverCommit(S0, recon)`；若發生修復，依 `pruneStore` ＋ `store.set` 回傳布林安全寫回 `kline:pf:recon:v1` 後再繼續計算（不重複入帳、失敗不蓋舊檔）。
+  - **啟動／重算 WAL 恢復**：若 `recon?.pendingCommit != null` 且 `typeof KLRecon?.recoverCommit === "function"`，呼叫 `KLRecon.recoverCommit(S0, recon)`；若發生修復（`changed === true`），依 `pruneStore` ＋ `store.set` 回傳布林安全寫回 `kline:pf:recon:v1` 後再繼續計算；若為 `unknown_op_halted` / `inconsistent_halted`，完整保留 `pendingCommit` 不覆寫並於 `holdSrcBar`/`holdDataCheck` 顯示警示（不重複入帳、失敗不蓋舊檔）。
   - 當 `(hasTx || hasConfirmedSnapshots)`（`hasConfirmedSnapshots` 含 `full_snapshot_close` 結案基準，確保完整清倉歸零後不退回舊 `kline:watch:hold`）且 `!W.hsrcLegacy` 時進入交易帳本模式（確保 `store.lock` 鎖住 `kline:watch:hold` 唯讀）；若僅有快照尚無 `kline:pf:v1`，在記憶體構造虛擬 `S = S0 || { v: 1, method: "avg", transactions: [] }`（**不寫入 `localStorage`**）。
   - 快取鍵改為 `` `${twIso()}|${rawPf}|${rawRecon}` ``（修改交易或更新快照／衝突皆立即重算）。
   - 註冊 `window.addEventListener("storage", e => ...)`：當 `e.key === "kline:pf:v1" || e.key === "kline:pf:recon:v1"`（或 `e.key == null` 全清）時呼叫 `holdSrcApply()` 與 `renderList()`（Review Focus 4 ＋ Scenario 18）。
@@ -274,17 +294,20 @@
 
 **Interfaces — Consumes (`KLLedger`, `KLRecon`, `KLPerf`, `KLAlloc`) & Produces (`ledger-ui.js` globals / UI handlers):**
 - 共用讀寫、WAL 跨鍵寫入與容量保護輔助：
-  - `lgReconLoad()`：讀取 `kline:pf:recon:v1`；若 `recon.pendingCommit != null` 且 `typeof KLRecon?.recoverCommit === "function"`，立即與 `lgLoad()` 執行冪等 `recoverCommit` 並於修復時安全寫回（Roll-Forward 或 Clean Abort），避免帶著殘留 WAL 繼續操作。
-  - `lgSave(s)`（`L19` 修正靜默失敗）：傳入 `recon: lgReconLoad()` 至 `KLLedger.validateStore(s, { today: lgToday(), recon: lgReconLoad() })`；**必須檢查 `store.set("pf:v1", ...)` 布林回傳值**，回傳 `false` 時回 `{ ok: false, code: "storage_write_failed", errors: ["瀏覽器儲存空間不足或受鎖定，未寫入交易紀錄"] }`。
+  - `lgReconLoad()`：讀取 `kline:pf:recon:v1`；若 `recon?.pendingCommit != null` 且 `typeof KLRecon?.recoverCommit === "function"`，立即與 `lgLoad()` 執行冪等 `recoverCommit`：
+    - 若 `rec.changed === true`（`rolled_forward` / `aborted` / `partial_recovered`），呼叫 `lgReconSave(rec.reconStore, { allowPendingCommitWrite: true })` 安全寫回；
+    - 若為 `unknown_op_halted` / `inconsistent_halted`，**絕不覆寫或清除 `pendingCommit`**，將凍結狀態記於 `W.lgReconHalted` 供頂部警示，並回傳原 `reconStore`。
+  - `lgSave(s, opts = {})`（`L19` 修正靜默失敗＋WAL fail-closed 鎖定）：先呼叫 `const recon = lgReconLoad()`，並檢查 `localStorage` 中現存 `pf:recon:v1` 是否仍帶有未決 `pendingCommit != null`；若存在且 `!opts.allowPendingCommitWrite` 一律拒寫（回 `{ ok: false, code: "unrecovered_pending_commit", errors: ["存在未恢復或未知的對帳提交紀錄，請先匯出 JSON 備份或檢核後再修改"] }`）。否則以 `recon: opts.reconOverride || recon` 呼叫 `KLLedger.validateStore`，並**檢查 `store.set("pf:v1", s)` 布林回傳值**，回傳 `false` 時回 `{ ok: false, code: "storage_write_failed", errors: ["瀏覽器儲存空間不足或受鎖定，未寫入交易紀錄"] }`。
   - `lgReconSave(nextRecon, opts = {})`：
-    1. 先跑 `KLRecon.validateStore(nextRecon, { today: lgToday() })` 與 `const pr = KLRecon.pruneStore(nextRecon, KLRecon.MAX_BYTES)`；
-    2. **Fail-Closed**：若 `!pr.ok`（`pr.code === "core_data_exceeds_limit"`），**絕不呼叫 `store.set`**（保留既有 `kline:pf:recon:v1`），回 `{ ok: false, code: "core_data_exceeds_limit", bytes: pr.bytes, maxBytes: pr.maxBytes }` 並清楚提示使用者「對帳核心資料過大或超過 120KB，本次未覆蓋寫入；請先結案待對帳項目或到『工具 → 備份同步』匯出 JSON 備份」；
-    3. 呼叫 `const ok = store.set("pf:recon:v1", pr.store)`；若 `!ok` 回 `{ ok: false, code: "storage_write_failed" }`；成功才通知 `if (typeof holdSrcApply === "function") holdSrcApply()`、`pfExpire?.()`。
-  - **`lgCommitDualStores({ buildNextPf, buildFinalRecon, op, batchId, txIds, deletedTxIds, staged })`**（Review Focus 6）：
-    - Pre-flight 先行驗證 `nextPf` 與 `finalRecon`（包含 `pruneStore(finalRecon, MAX_BYTES).ok`），任一步不過直接中止不碰任何鍵；
-    - Phase 1：`prepared = KLRecon.prepareCommit(recon0, { batchId, op, at, txIds, deletedTxIds, staged })` → 經 `lgReconSave` 寫入 WAL；失敗即中止；
-    - Phase 2：寫入 `store.set("pf:v1", nextPf)`；失敗（`false`／例外）立即嘗試復原 `store.set("pf:recon:v1", recon0)` 並回錯；
-    - Phase 3：`finalized = KLRecon.finalizeCommit(prepared, batchId)` → 經 `lgReconSave` 清除 `pendingCommit` 並寫入正式 `imports[]`/`audit[]`/`conflicts[]`/停用標記。
+    1. 檢核現存 `pf:recon:v1` 是否仍有未決 `pendingCommit != null`（或 `nextRecon?.pendingCommit != null`）：若 `!opts.allowPendingCommitWrite` 一律 Fail-Closed 回 `{ ok: false, code: "unrecovered_pending_commit" }`；
+    2. 跑 `KLRecon.validateStore(nextRecon, { today: lgToday() })` 與 `const pr = KLRecon.pruneStore(nextRecon, KLRecon.MAX_BYTES)`；
+    3. **Fail-Closed**：若 `!pr.ok`（`pr.code === "core_data_exceeds_limit"`），**絕不呼叫 `store.set`**（保留既有 `kline:pf:recon:v1`），回 `{ ok: false, code: "core_data_exceeds_limit", bytes: pr.bytes, maxBytes: pr.maxBytes }` 並清楚提示使用者「對帳核心資料過大或超過 120KB，本次未覆蓋寫入；請先結案待對帳項目或到『工具 → 備份同步』匯出 JSON 備份」；
+    4. 呼叫 `const ok = store.set("pf:recon:v1", pr.store)`；若 `!ok` 回 `{ ok: false, code: "storage_write_failed" }`（既有 `kline:pf:recon:v1` 維持原樣）；成功才清 `W.lgReconHalted = null` 並通知 `holdSrcApply?.()`、`pfExpire?.()`。
+  - **`lgCommitDualStores({ pf0, recon0, nextPf, payload })`**（Review Focus 6）：
+    - Pre-flight：先驗證 `recon0?.pendingCommit == null`（若有未決 WAL 先行試著恢復，仍受阻則回 `unrecovered_pending_commit`）；執行 `const prep = KLRecon.prepareCommit(recon0, payload)` 與 `const fin = prep.ok ? KLRecon.finalizeCommit(prep.store, payload.id || payload.batchId) : prep`；檢核 `prep.ok && fin.ok`、`KLLedger.validateStore(nextPf, { today: lgToday(), recon: fin.store }).ok`、`KLRecon.validateStore(fin.store, { today: lgToday() }).ok` 及 `KLRecon.pruneStore(prep.store).ok && KLRecon.pruneStore(fin.store).ok`。任一步不過直接中止不碰任何鍵；
+    - Phase 1：`lgReconSave(prep.store, { allowPendingCommitWrite: true })` 寫入 WAL；失敗（`storage_write_failed` / `core_data_exceeds_limit`）即中止，兩鍵皆原樣；
+    - Phase 2：寫入 `store.set("pf:v1", nextPf)`（包 `try/catch`）；失敗（回傳 `false` 或拋錯）立即嘗試復原 `store.set("pf:recon:v1", recon0)` 並回 `{ ok: false, code: "storage_write_failed", walPending: !restoreOk }`（即使復原 `pf:recon:v1` 也回 `false`，`pf:v1` 仍為舊狀態，重啟 `recoverCommit` 安全 Clean Abort）；
+    - Phase 3：`lgReconSave(fin.store, { allowPendingCommitWrite: true })` 清除 `pendingCommit` 並寫入正式 `imports[]`/`audit[]`/`conflicts[]`/標籤快照更新；若失敗（`store.set === false` 或拋錯），**先嘗試**將 `kline:pf:v1` 復原為 `pf0`（`const pfOk = store.set("pf:v1", pf0)`），**唯有 `pfOk === true` 才接續復原** `kline:pf:recon:v1` 為 `recon0`（否則刻意保留 `pendingCommit`，由下次載入之 `recoverCommit` 依兩鍵實況安全 Roll-Forward 或 Clean Abort）。
   - `lgStoreOrEmpty()` → 回傳 `lgLoad() || { v: 1, method: "avg", transactions: [] }`（**只讀不寫 `kline:pf:v1`**）。
 - **統一匯入視窗（移除二選一卡片，加入完整／部分範圍與年份日期閘道）**：
   - `lgOpenImport()`（`L1254`）直接開單一入口：`[data-lgimp-upload]`「📷 上傳券商截圖（自動辨識庫存／交易明細）」（觸發 `#impFile`），搭配次要按鈕「手動新增空白列」（保留選擇器供手 key）、若有開放衝突則顯示「查看待對帳項目（N）」，**不再出現 `[data-lgimp-pick="holdings"|"trades"]`**。
@@ -299,23 +322,26 @@
     - **三級分流狀態徽章＋市場別交割提示＋市場衝突阻擋**：每列標記 Level 1／Level 2／Level 3（含 `currency_conflict` 擋下跨市場混用，取消勾選即不擋其餘有效列）。發生 `recon_diff` 時呼用 `KLRecon.settlementHint(market)`，台股顯示 T+2、美股顯示 T+1、不明／混合顯示中性提示。
     - 保留原本全部鍵盤無障礙（focus trap、`aria-invalid`、IME Enter 防誤送、粘滯首欄與 `.hg-wrap.scrollLeft = 0`）。
   - `lgSaveImport()`：
-    - 若 `kind === "holdings"`：帶入使用者選定之 `snapshotScope`（`"partial" | "full"`）與 `asOfConfirmed`，經 `KLRecon.planHoldingsSnapshot` 與 `KLRecon.applyHoldingsImport`，以 `lgReconSave` 寫入 `kline:pf:recon:v1`（若 `pr.ok === false` 或 `store.set === false` 不蓋寫舊檔並保持對話框開啟供處理）。**不把庫存快照寫成 `transfer_in` 塞進 `kline:pf:v1`**。
-    - 若 `kind === "trades"`：先通過 `prepareTradesImport(..., { recon })`，再**透過 `lgCommitDualStores` 以 WAL 協議同步寫入 `kline:pf:v1` 與 `kline:pf:recon:v1`**（含 `imports[]`、`audit[]` 與 `same_day_order` 提醒），絕不依序各自獨立存檔。
-- **交易紀錄頁頂部「待對帳與衝突中心」＋「匯入與稽核歷史抽屜」＋「標為期初快照／撤回」**：
+    - 若 `kind === "holdings"`：帶入使用者選定之 `snapshotScope`（`"partial" | "full"`）與 `asOfConfirmed`，經 `KLRecon.planHoldingsSnapshot` 與 `KLRecon.applyHoldingsImport`，以 `lgReconSave` 寫入 `kline:pf:recon:v1`（若 `pr.ok === false`、`unrecovered_pending_commit` 或 `store.set === false` 不蓋寫舊檔並保持對話框開啟供處理）。**不把庫存快照寫成 `transfer_in` 塞進 `kline:pf:v1`**。
+    - 若 `kind === "trades"`：先通過 `prepareTradesImport(..., { recon })`，再**透過 `lgCommitDualStores`（`op: "import_trades"`）以 WAL 協議同步寫入 `kline:pf:v1` 與 `kline:pf:recon:v1`**（含 `imports[]`、`audit[]` 與 `same_day_order` 提醒），絕不依序各自獨立存檔。
+- **交易紀錄頁頂部「待對帳與衝突中心」＋「匯入與稽核歷史抽屜」＋「標為期初快照／撤回／編輯刪除」**：
   - `renderLedger()`（`L40–95`）：
-    - 放寬 `L44-51`：只要 `hasTx || hasConfirmedSnapshots || hasOpenConflicts`，直接套用 `lgStoreOrEmpty()` 進入對應子頁（不再退回 `lgIntroHtml()`）。
-    - `L60`、`L203`、`L580`（`renderAlloc`）、`L178`（`deleteImpact`）全面改為 `KLLedger.buildReconciledLedger(..., lgReconLoad(), ...)` 與傳入 `recon: lgReconLoad()`。
+    - 放寬 `L44-51`：只要 `hasTx || hasConfirmedSnapshots || hasOpenConflicts || recon?.pendingCommit != null`，直接套用 `lgStoreOrEmpty()` 進入對應子頁（不再退回 `lgIntroHtml()`）。若存在 halted `pendingCommit`（`unknown_op_halted` / `inconsistent_halted`），頂部顯示 `[data-lgrecon-halted]` Fail-Closed 警示卡說明原因並引導至「工具 → 備份同步」先匯出 JSON 備份。
+    - `L60`、`L203`（`#lgForm`）、`L580`（`renderAlloc`）、`L178`（`deleteImpact`）全面改為 `KLLedger.buildReconciledLedger(..., recon, ...)` 與傳入對應模擬 `recon`。
     - `L76` 持倉歷史列 `KLLedger.TYPE_LABEL[h.type] || (h.type === "snapshot" ? "庫存快照" : h.type)` 與 `h.preSnapshot` 標註「快照前歷史」並顯示 `—` 持股變更，避免出現 `"undefined"`。
     - 頂部若有開放衝突：渲染「待對帳項目（N）」卡片，每筆逐條並列雙邊數值（帳本推算 `baselineShares` / 均價 vs 新截圖 `targetShares` / 均價或「完整截圖已無持股（0 股）」＋ 差異 `N` 股 ＋ **依 `c.market` 分流之交割提示**），按鈕動作：`[data-lgrecon-keep]`（保留兩邊待釐清／保留原基準）、`[data-lgrecon-imp]`（補匯入明細 → 開 `lgOpenImport()`）、`[data-lgrecon-accept]`（採信新快照或確認清倉歸零，需輸入必填原因並核准晉升）、與同日交易專用的 `[data-lgrecon-sameday="before_snapshot"|"after_snapshot"]`（**僅寫單鍵 `kline:pf:recon:v1.sameDayRelations`，不改 `kline:pf:v1`**）。
     - 下方設 `<details class="lgrecon-hist"><summary>匯入紀錄與對帳稽核（N 筆）</summary>...</details>` 顯示 `imports[]`（時間、類型、`snapshotScope`、原圖雜湊前 8 碼、`fileHashes`、各級列數、基準日）與 `audit[]`。
-    - `transfer_in` 交易列按鈕：未標記顯示 `[data-lg="tag-init"]`「標為期初快照」（缺成本／`price<=0` 引導補均價不建 `0` 基準）；已標記顯示「已標為期初快照」徽章＋`[data-lg="untag-init"]`「撤回期初快照標記」；刪除或修改帶有啟用 `initialTags` 的 `transfer_in` 時於確認對話框提醒並走 `lgCommitDualStores` 停用對應標籤與紀錄 `audit[]`。
+    - `transfer_in` 交易列按鈕與編輯／刪除雙鍵 WAL：
+      - 未標記顯示 `[data-lg="tag-init"]`「標為期初快照」（缺成本／`price<=0` 引導補均價不建 `0` 基準）；已標記顯示「已標為期初快照」徽章＋`[data-lg="untag-init"]`「撤回期初快照標記」；
+      - `[data-lg="del"]` 刪除時先跑 `KLRecon.planDeactivateTags(recon0, targetTx, ...)`，傳 `plan.previewRecon` 進 `KLLedger.deleteImpact` 驗證刪後不賣超；若 `plan.needsWal` 提醒將同步停用期初快照標記並走 `lgCommitDualStores`（`op: "deactivate_tags"`）；
+      - `#lgForm` 送出修改（`F.id`）時先跑 `KLRecon.planUpdateTxTag(recon0, F.orig, tx, ...)`，以 `plan.previewRecon` 呼叫 `KLLedger.buildReconciledLedger` 檢核無誤；若 `plan.needsWal`（即原有啟用 `initialTags` 且交易有實質欄位異動），依 `plan.mode`（`"update"` 同步更新 `tx_tag` 快照或 `"deactivate"` 停用期初標籤）提示確認並走 `lgCommitDualStores`（`op: "update_tx_tag"`），不改動無實質異動則免無謂寫入。
 - **績效與配置整合**（`L268–338` & `L579–608`）：
   - `lgPerfData(S)`：自 `S.transactions` 與 `KLRecon.activeBaselines(lgReconLoad())` 聯集收集 `syms` 與 `curs`（支援純快照抓日 K）。
   - `renderPerf(S)`：當 `!S.transactions.length && !hasConfirmedSnapshots` 才顯示空白訊息；呼叫 `KLPerf.buildPerf(S, { ..., recon: lgReconLoad() })`；`ISS` 新增 `snapshot_baseline` 與 `recon_pending` 中文說明，頁頂加統一 `⚠︎ 待對帳（差異 N 股）` 警示列（依市場別提示）。
   - `renderAlloc(S)`：若 `hasTx || hasConfirmedSnapshots`，呼叫 `buildReconciledLedger` 並傳遞 `meta: { legacy: false, hasSnapshot: L.reconcile.hasSnapshot, openConflicts: L.reconcile.openConflicts, pendingSymbols: L.reconcile.pendingSymbols }` 至 `renderAllocBody`、`rbSectionHtml`、`stSectionHtml`，且於配置頁頂部顯示一致 `⚠︎ 待對帳（差異 N 股）` 警示條與「用已確認快照的股數試算」說明。
 
-- [ ] **寫／補測試準備**：對照 Spec 六「驗收標準 24 項」確認每個 DOM attribute（`data-lgimp-upload`, `data-lgimp-switch`, `data-lgimp-scope`, `data-lgimp-asof`, `data-lgimp-asof-ok`, `data-lgrecon-*`, `data-lg="tag-init"`, `data-lg="untag-init"`）與現有保留選擇器（`data-lgimp-dflip`, `data-lgimp-dok`, `data-lgimp-mv`, `data-lgimp-rev`, `#lgImpOrderOk`, `#lgImpDup`, `#lgImpSave`, `#impLive`）。
-- [ ] **最小實作**（`learner/ledger-ui.js`）：逐一補上 `lgReconLoad`／`lgReconSave`／`lgCommitDualStores`／`lgSave` 布林檢查／`lgStoreOrEmpty`、統一匯入 HTML 與範圍／年份閘道、對帳中心／稽核抽屜／期初標記操作、`renderLedger`/`lgPerfData`/`renderPerf`/`renderAlloc` 更新並傳 `recon`。
+- [ ] **寫／補測試準備**：對照 Spec 六「驗收標準 24 項」確認每個 DOM attribute（`data-lgimp-upload`, `data-lgimp-switch`, `data-lgimp-scope`, `data-lgimp-asof`, `data-lgimp-asof-ok`, `data-lgrecon-halted`, `data-lgrecon-*`, `data-lg="tag-init"`, `data-lg="untag-init"`）與現有保留選擇器（`data-lgimp-dflip`, `data-lgimp-dok`, `data-lgimp-mv`, `data-lgimp-rev`, `#lgImpOrderOk`, `#lgImpDup`, `#lgImpSave`, `#impLive`）。
+- [ ] **最小實作**（`learner/ledger-ui.js`）：逐一補上 `lgReconLoad`／`lgReconSave`／`lgCommitDualStores`／`lgSave` 布林檢查／`lgStoreOrEmpty`、統一匯入 HTML 與範圍／年份閘道、對帳中心／稽核抽屜／期初標記與 `#lgForm`/`del` WAL 整合、`renderLedger`/`lgPerfData`/`renderPerf`/`renderAlloc` 更新並傳 `recon`。
 - [ ] **跑單元檢核**：`node --test tests/unit.test.mjs tests/ledger.test.mjs tests/ledger-import.test.mjs tests/recon.test.mjs` 通過。
 - [ ] **Batch 2 Commit**：`git add learner/ledger-ui.js && git commit -m "ledger-ui: 統一匯入入口、三級對帳審核表、WAL寫入與衝突處理中心"`
 
@@ -360,7 +386,7 @@
 - Modify: `tests/e2e/backup-pf.test.mjs:1-65`（擴增：備份含 `kline:pf:v1` 排 `kline:pf:recon:v1` 之前先賣後買正常匯入；含 base64 圖片／壞 `recon`／`pendingCommit != null`／跨市場衝突整份拒絕）
 
 **Interfaces — Tested UI Selectors & State Keys:**
-- Upload & review selectors: `[data-lg="imp"]`, `[data-hsrc="tx-imp"]`, `[data-lgimp-upload]`, `[data-lgimp-switch="holdings"|"trades"]`, `[data-lgimp-scope="partial"|"full"]`, `[data-lgimp-asof]`, `[data-lgimp-asof-ok]`, `[data-lgrecon-keep]`, `[data-lgrecon-accept]`, `[data-lgrecon-imp]`, `[data-lgrecon-sameday="before_snapshot"|"after_snapshot"]`, `[data-lg="tag-init"]`, `[data-lg="untag-init"]`.
+- Upload & review selectors: `[data-lg="imp"]`, `[data-hsrc="tx-imp"]`, `[data-lgimp-upload]`, `[data-lgimp-switch="holdings"|"trades"]`, `[data-lgimp-scope="partial"|"full"]`, `[data-lgimp-asof]`, `[data-lgimp-asof-ok]`, `[data-lgrecon-halted]`, `[data-lgrecon-keep]`, `[data-lgrecon-accept]`, `[data-lgrecon-imp]`, `[data-lgrecon-sameday="before_snapshot"|"after_snapshot"]`, `[data-lg="tag-init"]`, `[data-lg="untag-init"]`.
 - Storage keys: `"kline:watch:hold"`, `"kline:pf:v1"`, `"kline:pf:recon:v1"`.
 
 - [ ] **寫／遷移測試（390px 手機 ＋ 1280px 桌面，全 mock `/api/import` 與報價／日 K）**：
@@ -371,7 +397,9 @@
     - Case 6, 13, 14：`S1 → S2` 容差內（含中間賣光歸零再買回）自動晉升；超容差保留 `S1` 建 `recon_diff` 與全站 8 頁 `⚠︎ 待對帳（差異 N 股）`，並測解決衝突（採信新快照須理由並留稽核／保留兩邊／點補明細）。
     - Case 7, 8, 9, 10：缺 `asOf`（`missing`）與歧義日期（`mdy`）進 Level 2；多股混合各分級獨立判定；Level 3 失敗列不擋同批有效列；同日交易與快照先後選擇後才套用（驗證 `kline:pf:v1` 未額外重寫）；`kind === "unknown"` 就地一鍵切換不重呼 `/api/import`。
     - Case 11, 12, 15, 17, 18：`imports[]`＋`audit[]` 稽核抽屜；融資／融券自動隔離並引導「融資」頁；`transfer_in`「標為期初快照 → 撤回 → 再標記」；兩個 Context 測試跨分頁 `storage` 事件即時重算 `W.hold`。
-    - **Case 19（WAL 雙鍵故障與重開頁面恢復）**：模擬 Phase 2 失敗（`Storage.prototype.setItem` 於 `kline:pf:v1` 拋錯 → 自動復原 `kline:pf:recon:v1`、`pf:v1` 無半套殘留）與模擬 Phase 2 已成功、Phase 3 中斷後重載頁面 → `holdSrcApply`／`renderLedger` 自動 Roll-Forward 結案且零重複交易！
+    - **Case 19（WAL 雙鍵故障與重開頁面恢復）**：
+      1. 模擬 `import_trades`／`update_tx_tag`（修改已標記期初 `transfer_in`：更新股數／單價或改類型為 `buy` 停用）／`deactivate_tags`（刪除已標記期初 `transfer_in`）之 Phase 1 失敗（`Storage.prototype.setItem` 於 `kline:pf:recon:v1` 回錯）、Phase 2 失敗（`kline:pf:v1` 拋錯，復原 `pf:recon:v1` 或保留 WAL 待重啟 Clean Abort）與 Phase 3 中斷（含 `store.set` 回 `false`）；重載頁面與再次重載驗證 `holdSrcApply`／`renderLedger` 自動收斂兩鍵一致且 `audit[]` 零重複；
+      2. 注入未知 `op` 與不一致 `update_tx_tag` `pendingCommit` → 重載頁面顯示 `[data-lgrecon-halted]` Fail-Closed 警示、原樣保留 `pendingCommit` 且新交易／備份匯入被安全阻擋！
     - **Case 20（`full` vs `partial` 快照處理持股歸零）**：`S1` 有 `2330` 時匯入不含 `2330` 之 `S2`：選 `[data-lgimp-scope="partial"]` 保留 `2330`；改選 `[data-lgimp-scope="full"]` 且推算已歸零時自動結案關閉 `S1`，或帳本仍有股數時進 Level 2 確認 `[data-lgrecon-accept]` 後寫入 `full_snapshot_close` 關閉 `S1` 且仍鎖定 `kline:watch:hold` 不退回舊庫存。
     - **Case 21（缺年份 `year` 與未來日 `future` 阻擋）**：截圖 `asOfStatus: "year"`（含 `12/28` 跨年）與 `"future"` 時 UI 並陳 `rawAsOf` 與推定日，未按 `[data-lgimp-asof-ok]` 確認（或修正為未來日後 `<= today`）前**不建立 `confirmed` 快照**。
     - **Case 22（同 `symbol` 不同 `market`／`currency` 約束）**：同 `symbol` 在截圖與既有快照／交易不同市場或幣別時進入 Level 3 `currency_conflict` 並阻擋混入。
