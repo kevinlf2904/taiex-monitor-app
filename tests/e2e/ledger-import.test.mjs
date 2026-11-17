@@ -75,20 +75,23 @@ async function pickFileVia(p, selector) {
 }
 
 for (const width of [390, 1280]) {
-  test(`${width}：選項 1 持股截圖匯入、略過已有部位、＋再加截圖保留勾選、代號檢核與舊庫存不動`, async () => {
+  test(`${width}：統一截圖匯入（自動辨識庫存快照）、已確認基準建檔、＋再加截圖保留勾選、代號檢核與舊庫存不動`, async () => {
     const touch = width < 500;
     const impRequests = [];
     let shotSeq = 0;
-    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch });
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch, time: "2026-10-05T04:00:00Z", tick: true });
     await setupRoutes(ctx, body => {
       impRequests.push({ mode: body.mode, nImgs: body.images?.length });
       shotSeq++;
       if (shotSeq === 1) {
-        // 初次從空白交易紀錄匯入：2330（推算成本）、NVDA（美股小數股數）、T00（指數，需擋下）
+        // 初次從空白帳本匯入：2330（推算成本）、NVDA（美股小數股數）、T00（指數，需擋下）
         return {
           body: {
             ok: true,
-            mode: "holdings",
+            mode: "auto",
+            kind: "holdings",
+            asOf: "2026-10-05",
+            asOfStatus: "exact",
             rows: [
               { name: "台積電", code: "2330", shares: 1000, price: 900, totalPnl: 100000 },
               { name: "輝達", code: "NVDA", shares: 5.5, avgCost: 120 },
@@ -98,11 +101,14 @@ for (const width of [390, 1280]) {
         };
       }
       if (shotSeq === 2) {
-        // 已有帳本再匯入第一張：2330（已有部位）、NVDA（已有部位）、2317（曾買已全數賣出）
+        // 已有帳本再匯入第一張（缺基準日時進 Level 2，且允許一鍵切換類型）：2330（已有 1000 vs 500）、NVDA（已有 5.5 vs 3）、2317（已出清）
         return {
           body: {
             ok: true,
-            mode: "holdings",
+            mode: "auto",
+            kind: "holdings",
+            asOf: null,
+            asOfStatus: "missing",
             rows: [
               { name: "台積電", code: "2330", shares: 500, avgCost: 850 },
               { name: "輝達", code: "NVDA", shares: 3, avgCost: 130 },
@@ -119,7 +125,10 @@ for (const width of [390, 1280]) {
       return {
         body: {
           ok: true,
-          mode: "holdings",
+          mode: "auto",
+          kind: "holdings",
+          asOf: "2026-10-05",
+          asOfStatus: "exact",
           rows: [
             { name: "台積電", code: "2330", shares: 500, avgCost: 860 },
             { name: "元大台灣50", code: "0050", shares: 2000, avgCost: 185 },
@@ -131,6 +140,7 @@ for (const width of [390, 1280]) {
     await p.evaluate(old => {
       localStorage.setItem("kline:watch:hold", JSON.stringify(old));
       localStorage.removeItem("kline:pf:v1");
+      localStorage.removeItem("kline:pf:recon:v1");
       localStorage.removeItem("kline:watch:stocks2");
       W.stocks = null;
     }, OLD_HOLD);
@@ -141,14 +151,14 @@ for (const width of [390, 1280]) {
     await holdGo(p, "tx");
     await p.waitForSelector('#lx [data-lg="imp"]');
 
-    // Part A：首次建立（lgIntroHtml 入口）→ 選成本算法 FIFO → 檢核指數與查無代號
+    // Part A：首次建立（lgIntroHtml 統一入口）→ 送 mode: "auto" → 檢核指數與查無代號 → 存入 kline:pf:recon:v1
     await p.click('#lx [data-lg="imp"]');
-    await p.waitForSelector('#impSheet:not([hidden]) [data-lgimp-pick="holdings"]');
-    assert.equal(await p.evaluate(() => document.activeElement?.dataset?.lgimpPick), "holdings", "開啟選單預設聚焦選項 1");
+    await p.waitForSelector('#impSheet:not([hidden]) [data-lgimp-upload]');
+    assert.equal(await p.evaluate(() => document.activeElement?.hasAttribute("data-lgimp-upload")), true, "開啟選單預設聚焦統一上傳鈕");
 
-    await pickFileVia(p, '[data-lgimp-pick="holdings"]');
+    await pickFileVia(p, "[data-lgimp-upload]");
     await p.waitForSelector("#lgImpForm");
-    assert.equal(impRequests[0].mode, "holdings");
+    assert.equal(impRequests[0].mode, "auto");
 
     // 確認「T00」初始就標為錯誤且聚焦到第一個錯誤欄位
     const t00Invalid = await p.evaluate(() => {
@@ -163,9 +173,9 @@ for (const width of [390, 1280]) {
     assert.equal(t00Invalid.active, true);
     assert.match(t00Invalid.err, /僅支援台股與美股/);
 
-    // 沒有帳本時顯示 FIFO 選單；選 FIFO
+    // 沒有帳本時顯示 FIFO 選單
     await p.selectOption("#lgImpMethod", "fifo");
-    assert.ok(await noHOverflow(p), `${width} 選項 1 檢視沒有水平溢出`);
+    assert.ok(await noHOverflow(p), `${width} 統一匯入庫存檢視沒有水平溢出`);
 
     // 測試查不到代號（台股 9999、美股 ZZZZ）皆會被 verifyCodes 擋下
     const codeRow2 = '#lgImpTbody tr[data-row="2"] [data-lgimp-k="code"]';
@@ -188,30 +198,41 @@ for (const width of [390, 1280]) {
     await p.waitForFunction(() => document.querySelectorAll("#lgImpTbody tr").length === 2);
     assert.equal(await p.evaluate(() => document.activeElement?.closest("tr")?.dataset?.row), "1", "刪列後焦點移至相鄰列的刪除鈕");
 
-    // 確認匯入（2330＋NVDA 5.5 股）→ 寫入 kline:pf:v1（method=fifo）、kline:watch:hold 不變
+    // 確認匯入（2330＋NVDA 5.5 股）→ 寫入 kline:pf:recon:v1（不寫空 pf:v1、不寫 transfer_in、kline:watch:hold 不變）
     await p.click("#lgImpSave");
-    await p.waitForFunction(() => $("#impSheet").hidden && /已匯入 2 筆持股轉入/.test($("#lx").innerText));
+    await p.waitForFunction(() => $("#impSheet").hidden && /已儲存對帳快照（確認 2 檔/.test($("#lx").innerText));
     const st1 = await p.evaluate(() => ({
-      pf: JSON.parse(localStorage.getItem("kline:pf:v1")),
+      pfRaw: localStorage.getItem("kline:pf:v1"),
+      recon: JSON.parse(localStorage.getItem("kline:pf:recon:v1")),
       hold: JSON.parse(localStorage.getItem("kline:watch:hold")),
+      wHold: W.hold,
     }));
-    assert.equal(st1.pf.method, "fifo");
-    assert.equal(st1.pf.transactions.length, 2);
-    assert.deepEqual(st1.pf.transactions.map(t => [t.symbol, t.type, t.shares, t.fee, t.tax, t.source]), [
-      ["2330", "transfer_in", 1000, 0, 0, "import"],
-      ["NVDA", "transfer_in", 5.5, 0, 0, "import"],
+    assert.equal(st1.pfRaw, null, "純庫存快照匯入不虛構寫入 kline:pf:v1");
+    assert.equal(st1.recon.snapshots.filter(s => s.status === "confirmed").length, 2);
+    assert.deepEqual(st1.recon.snapshots.map(s => [s.symbol, s.shares, s.avgCost, s.date, s.status]), [
+      ["2330", 1000, 800, "2026-10-05", "confirmed"],
+      ["NVDA", 5.5, 120, "2026-10-05", "confirmed"],
     ]);
-    assert.equal(st1.pf.transactions[0].price, 800, "1000*900 - 100000 推算每股成本 800");
-    assert.deepEqual(st1.hold, OLD_HOLD, "選項 1 寫入後舊庫存完全不動");
+    assert.equal(st1.wHold["2330"]?.sh, 1000);
+    assert.equal(st1.wHold["NVDA"]?.sh, 5.5);
+    assert.deepEqual(st1.hold, OLD_HOLD, "寫入對帳快照後舊庫存完全不動");
 
-    // Part B：已有帳本（再加一筆已全部賣出的 2317）→ 從「持股」分頁的 holdSrcBar [data-hsrc="tx-imp"] 進入
+    // Part B：已有帳本（FIFO，含 2330 1000 股、NVDA 5.5 股、已全部賣出的 2317）→ 從「持股」分頁的 holdSrcBar [data-hsrc="tx-imp"] 進入
     await p.evaluate(() => {
-      const S0 = JSON.parse(localStorage.getItem("kline:pf:v1"));
-      S0.transactions.push(
-        { v: 1, id: "b2317", date: "2026-01-10", type: "buy", symbol: "2317", market: "tw", currency: "TWD", shares: 1000, price: 150, fee: 0, tax: 0, source: "manual" },
-        { v: 1, id: "s2317", date: "2026-02-01", type: "sell", symbol: "2317", market: "tw", currency: "TWD", shares: 1000, price: 160, fee: 0, tax: 0, source: "manual" },
-      );
-      localStorage.setItem("kline:pf:v1", JSON.stringify(S0));
+      localStorage.setItem("kline:pf:v1", JSON.stringify({
+        v: 1,
+        method: "fifo",
+        transactions: [
+          { v: 1, id: "b2330", date: "2026-01-05", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 800, fee: 0, tax: 0, source: "manual" },
+          { v: 1, id: "bnvda", date: "2026-01-05", type: "buy", symbol: "NVDA", market: "us", currency: "USD", shares: 5.5, price: 120, fee: 0, tax: 0, source: "manual" },
+          { v: 1, id: "b2317", date: "2026-01-10", type: "buy", symbol: "2317", market: "tw", currency: "TWD", shares: 1000, price: 150, fee: 0, tax: 0, source: "manual" },
+          { v: 1, id: "s2317", date: "2026-02-01", type: "sell", symbol: "2317", market: "tw", currency: "TWD", shares: 1000, price: 160, fee: 0, tax: 0, source: "manual" },
+        ],
+        at: "2026-01-05T00:00:00Z",
+      }));
+      localStorage.removeItem("kline:pf:recon:v1");
+      W.holdLg = null;
+      holdSrcApply();
       renderList();
     });
 
@@ -223,31 +244,35 @@ for (const width of [390, 1280]) {
     assert.deepEqual(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:watch:hold"))), OLD_HOLD);
 
     await p.click('#lTools [data-hsrc="tx-imp"]');
-    await p.waitForSelector('#impSheet:not([hidden]) [data-lgimp-pick="holdings"]');
+    await p.waitForSelector('#impSheet:not([hidden]) [data-lgimp-upload]');
     assert.deepEqual(await p.evaluate(() => [W.holdView, W.lg?.view]), ["tx", "tx"]);
 
-    await pickFileVia(p, '[data-lgimp-pick="holdings"]');
+    await pickFileVia(p, "[data-lgimp-upload]");
     await p.waitForSelector("#lgImpForm");
     assert.equal(await p.$("#lgImpMethod"), null, "已有帳本時不重複顯示成本算法選單");
     assert.match(await p.evaluate(() => $("#lgImpSum").textContent), /沿用帳本「先進先出（FIFO）」/);
 
-    // 已有部位 2330、NVDA 預設不勾選；曾買已賣完 2317 預設勾選
+    // 缺基準日時頂部標註進待對帳、各列顯示既有部位對帳分流與三級標籤
+    assert.match(await p.evaluate(() => $("#lgImpAsOfMsg").textContent), /未含明確基準日期/);
+    assert.match(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="0"] [data-lgimp-lvl]').textContent), /Level 2/);
+
+    // 驗證不重打 API 即可就地切換「成交明細 ⇄ 庫存快照」
+    const reqCountBeforeSwitch = impRequests.length;
+    await p.click('[data-lgimp-switch="trades"]');
+    await p.waitForSelector("table.hgrid.lgimp-t");
+    assert.equal(impRequests.length, reqCountBeforeSwitch, "就地切換類型不得重呼 /api/import");
+    await p.click('[data-lgimp-switch="holdings"]');
+    await p.waitForSelector("table.hgrid.lgimp-h");
+
+    // 確認「既有部位」提示字樣
     const rowChecks = await p.evaluate(() => [...document.querySelectorAll("#lgImpTbody tr")].map(tr => ({
       code: tr.querySelector('[data-lgimp-k="code"]').value,
       checked: tr.querySelector('[data-lgimp-k="on"]').checked,
-      skipClass: tr.classList.contains("skip-existing"),
       meta: tr.querySelector("[data-lgimp-meta]").textContent,
     })));
-    assert.equal(rowChecks[0].checked, false);
-    assert.equal(rowChecks[0].skipClass, true);
-    assert.match(rowChecks[0].meta, /帳本已有 1,?000 股，預設略過以免重複/);
-    assert.equal(rowChecks[1].checked, false);
-    assert.equal(rowChecks[2].checked, true, "2317 已出清不在帳本未平倉中，預設勾選");
-
-    if (touch) {
-      const openBox = await p.locator("#lgImpIncOpenWrap").boundingBox();
-      assert.ok(openBox && openBox.height >= 43.5, `${width} #lgImpIncOpenWrap 觸控目標高度 ${openBox?.height} >= 44`);
-    }
+    assert.match(rowChecks[0].meta, /帳本已有 1,?000 股/);
+    assert.match(rowChecks[1].meta, /帳本已有 5\.5 股/);
+    assert.doesNotMatch(rowChecks[2].meta, /帳本已有/, "2317 已出清不在帳本未平倉中");
 
     // 表格橫向捲動時第 1 欄固定且維持不透明底色，不被後方文字透視重疊
     const holdSticky = await p.evaluate(() => {
@@ -270,63 +295,60 @@ for (const width of [390, 1280]) {
       wrap.scrollLeft = 0;
       return out;
     });
-    assert.equal(holdSticky.thSticky && holdSticky.tdSticky, true, "選項 1 表格第 1 欄設為 sticky");
-    assert.equal(holdSticky.tdOpacity, "1", "略過列第 1 欄保持不透明，防止背面文字透視");
+    assert.equal(holdSticky.thSticky && holdSticky.tdSticky, true, "庫存表格第 1 欄設為 sticky");
+    assert.equal(holdSticky.tdOpacity, "1", "第 1 欄保持不透明，防止背面文字透視");
     assert.ok(!/rgba\([^)]*,\s*0(?:\.0+)?\s*\)|transparent/.test(holdSticky.tdBg), "第 1 欄具不透明背景：" + holdSticky.tdBg);
     if (holdSticky.canScroll) {
       assert.ok(holdSticky.thLeftDiff <= 2 && holdSticky.tdLeftDiff <= 2, "橫向捲動後第 1 欄貼齊容器左緣");
       assert.equal(holdSticky.td2ScrolledPast, true, "第 2 欄確實向左捲過第 1 欄後方");
     }
 
-    // 切換全選既有部位「包含帳本已有部位」與 tri-state indeterminate
-    await p.check("#lgImpIncOpen");
-    assert.equal(await p.evaluate(() => [0, 1].map(i => document.querySelector(`#lgImpTbody tr[data-row="${i}"] [data-lgimp-k="on"]`).checked).every(Boolean)), true);
+    // 取消勾選第 0 列（2330）後測 ＋ 再加截圖失敗 → 保持在 review 且維持勾選狀態
     await p.uncheck('#lgImpTbody tr[data-row="0"] [data-lgimp-k="on"]');
-    assert.equal(await p.evaluate(() => $("#lgImpIncOpen").indeterminate), true, "只勾選部分既有部位時主開關呈 indeterminate");
-    await p.click("#lgImpIncOpen");
-    assert.deepEqual(await p.evaluate(() => ({ chk: $("#lgImpIncOpen").checked, ind: $("#lgImpIncOpen").indeterminate, n0: document.querySelector('#lgImpTbody tr[data-row="0"] [data-lgimp-k="on"]').checked, n1: document.querySelector('#lgImpTbody tr[data-row="1"] [data-lgimp-k="on"]').checked })), { chk: true, ind: false, n0: true, n1: true });
-    await p.click("#lgImpIncOpen");
-    assert.deepEqual(await p.evaluate(() => ({ chk: $("#lgImpIncOpen").checked, ind: $("#lgImpIncOpen").indeterminate, n0: document.querySelector('#lgImpTbody tr[data-row="0"] [data-lgimp-k="on"]').checked, n1: document.querySelector('#lgImpTbody tr[data-row="1"] [data-lgimp-k="on"]').checked })), { chk: false, ind: false, n0: false, n1: false });
-
-    // 測試 ＋ 再加截圖失敗 → 保持在 review 並保留原本資料
     await pickFileVia(p, "[data-lgimp-shot]");
     await p.waitForFunction(() => /這張截圖太模糊（已保留原本資料）/.test($("#impLive")?.textContent || ""));
     assert.equal(await p.evaluate(() => document.querySelectorAll("#lgImpTbody tr").length), 3);
 
-    // 測試 ＋ 再加截圖成功 → 合併 0050，且不覆寫 2330 原本未勾選狀態
+    // 測試 ＋ 再加截圖成功 → 合併 0050 與基準日，且不覆寫 2330 原本未勾選狀態
     await pickFileVia(p, "[data-lgimp-shot]");
     await p.waitForFunction(() => document.querySelectorAll("#lgImpTbody tr").length === 4);
     assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="0"] [data-lgimp-k="on"]').checked), false, "2330 維持使用者未勾選");
     assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr[data-row="3"] [data-lgimp-k="on"]').checked), true, "新合併的 0050 預設勾選");
 
     await p.click("#lgImpSave");
-    await p.waitForFunction(() => $("#impSheet").hidden && /已匯入 2 筆持股轉入/.test($("#lx").innerText));
+    await p.waitForFunction(() => $("#impSheet").hidden && /已儲存對帳快照/.test($("#lx").innerText));
     const st2 = await p.evaluate(() => ({
       pf: JSON.parse(localStorage.getItem("kline:pf:v1")),
+      recon: JSON.parse(localStorage.getItem("kline:pf:recon:v1")),
       hold: JSON.parse(localStorage.getItem("kline:watch:hold")),
     }));
-    assert.deepEqual(st2.pf.transactions.slice(-2).map(t => [t.symbol, t.type, t.shares]), [
-      ["2317", "transfer_in", 1000],
-      ["0050", "transfer_in", 2000],
-    ]);
+    assert.equal(st2.pf.transactions.length, 4, "不會在交易紀錄寫入 transfer_in");
+    assert.equal(st2.recon.snapshots.some(s => s.symbol === "2317" && s.status === "pending" && s.shares === 1000), true, "2317 帳本已出清卻出現於截圖 → pending 待釐清");
+    assert.equal(st2.recon.conflicts.some(c => c.symbol === "2317" && c.kind === "recon_diff" && c.status === "open"), true, "2317 差異進 Level 2 待對帳");
+    assert.equal(st2.recon.snapshots.some(s => s.symbol === "0050" && s.status === "confirmed" && s.shares === 2000), true);
+    assert.equal(st2.recon.snapshots.some(s => s.symbol === "2330"), false, "2330 未勾選所以未寫入快照");
+    assert.equal(st2.recon.conflicts.some(c => c.symbol === "NVDA" && c.kind === "recon_diff" && c.status === "open"), true, "NVDA 差異進 Level 2 待對帳");
     assert.deepEqual(st2.hold, OLD_HOLD, "全程舊庫存完全不動");
     assert.ok(await noHOverflow(p));
     await ctx.close();
     assert.deepEqual(errs, []);
   });
 
-  test(`${width}：選項 2 成交對帳單、歧義/無效日期修正、時間檢核、手動調序與確認、賣超與重複確認、scrollIntoView、固欄與焦點鎖定`, async () => {
+  test(`${width}：統一截圖匯入（成交對帳單）、歧義/無效日期修正、時間檢核、手動調序與確認、賣超與重複確認、scrollIntoView、固欄與焦點鎖定`, async () => {
     const touch = width < 500;
     let shotSeq = 0;
-    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch });
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch, time: "2026-10-05T04:00:00Z", tick: true });
     await setupRoutes(ctx, body => {
-      assert.equal(body.mode, "trades");
+      assert.equal(body.mode, "auto");
       shotSeq++;
       if (shotSeq === 1) return { body: { ok: false, error: "讀圖失敗測試" } };
       return {
         body: {
           ok: true,
-          mode: "trades",
+          mode: "auto",
+          kind: "trades",
+          asOf: null,
+          asOfStatus: "missing",
           rows: [
             { date: "2026-05-12", dateAssumed: "year", time: null, side: "sell", name: "聯發科", code: "2454", shares: 1000, price: 1100, fee: null, tax: null, dayTrade: true },
             { date: "2026-05-12", dateAssumed: "year", time: null, side: "buy", name: "聯發科", code: "2454", shares: 500, price: 1050, fee: 0, tax: null, dayTrade: false },
@@ -344,6 +366,7 @@ for (const width of [390, 1280]) {
     await p.evaluate(([old, tx]) => {
       localStorage.setItem("kline:watch:hold", JSON.stringify(old));
       localStorage.setItem("kline:pf:v1", JSON.stringify({ v: 1, method: "avg", transactions: tx, at: "2026-05-01T00:00:00Z" }));
+      localStorage.removeItem("kline:pf:recon:v1");
       localStorage.removeItem("kline:watch:stocks2");
       W.stocks = null;
     }, [OLD_HOLD, SEED_TX]);
@@ -354,24 +377,25 @@ for (const width of [390, 1280]) {
     await holdGo(p, "tx");
     await p.waitForSelector('#lx .lgbar [data-lg="imp"]');
 
-    // 開啟匯入 → 先測試對帳單首次失敗畫面（重試／手動空白／改選類型）
+    // 開啟匯入 → 先測試對帳單首次失敗畫面（重試／手動空白），再重開上傳取得 7 筆成交明細
     await p.click('#lx .lgbar [data-lg="imp"]');
-    await p.waitForSelector('[data-lgimp-pick="trades"]');
-    await pickFileVia(p, '[data-lgimp-pick="trades"]');
+    await p.waitForSelector("[data-lgimp-upload]");
+    await pickFileVia(p, "[data-lgimp-upload]");
     await p.waitForSelector("[data-lgimp-retry]");
     assert.match(await p.evaluate(() => $("#impLive").textContent), /讀圖失敗測試/);
     await p.click("[data-lgimp-blank]");
     await p.waitForSelector("#lgImpForm");
     assert.equal(await p.evaluate(() => document.querySelectorAll("#lgImpTbody tr").length), 1);
     assert.equal(await p.evaluate(() => document.querySelector('#lgImpTbody tr [data-lgimp-k="code"]').getAttribute("aria-invalid")), "false", "空白新增列未輸入前不顯示紅框");
-    await p.click("[data-lgimp-back]");
-    await p.waitForSelector('[data-lgimp-pick="trades"]');
+    await p.click('#impSheet [data-ic="close"]');
+    await p.waitForFunction(() => $("#impSheet").hidden);
 
     // 第二次上傳取得成交對帳單 7 筆（含歧義斜線日期、無效日期與無效時間列）
-    await pickFileVia(p, '[data-lgimp-pick="trades"]');
+    await p.click('#lx .lgbar [data-lg="imp"]');
+    await pickFileVia(p, "[data-lgimp-upload]");
     await p.waitForSelector("#lgImpForm");
     assert.equal(await p.evaluate(() => document.querySelectorAll("#lgImpTbody tr").length), 7, "同天同價分批成交兩筆 2454 皆保留不合併");
-    assert.ok(await noHOverflow(p), `${width} 選項 2 檢視沒有水平溢出`);
+    assert.ok(await noHOverflow(p), `${width} 成交對帳單檢視沒有水平溢出`);
 
     // 確認假設／歧義／無效日期與無效時間標籤、費稅、當沖與粗指標觸控目標
     const initUI = await p.evaluate(() => [...document.querySelectorAll("#lgImpTbody tr")].map(tr => ({
@@ -660,24 +684,31 @@ for (const width of [390, 1280]) {
   });
 }
 
-test("390：選項 2 開啟含第 2 欄日期錯誤或無錯誤皆不偷橫捲、套用 watch:hdisc 折扣估算快照、FIFO 同日順序提醒與調序清除", async () => {
-  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+test("390：統一匯入成交對帳單含第 2 欄日期錯誤或無錯誤皆不偷橫捲、套用 watch:hdisc 折扣估算快照、FIFO 同日順序提醒與調序清除", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true, time: "2026-10-05T04:00:00Z", tick: true });
   let shotMode = 1;
-  await setupRoutes(ctx, () => ({
-    body: {
-      ok: true,
-      mode: "trades",
-      rows: shotMode === 1 ? [
-        { date: "2026-05-06", dateAssumed: "mdy", altDate: "2026-06-05", rawDate: "05/06/2026", time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 100, fee: null, tax: null, dayTrade: false },
-        { date: "2026-05-06", dateAssumed: null, time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 120, fee: 0, tax: 0, dayTrade: false },
-        { date: "2026-05-10", dateAssumed: null, time: null, side: "sell", name: "台積電", code: "2330", shares: 1000, price: 130, fee: 0, tax: 0, dayTrade: false },
-      ] : [
-        { date: "2026-05-11", dateAssumed: null, time: "09:15", side: "buy", name: "台積電", code: "2330", shares: 1000, price: 500, fee: null, tax: null, dayTrade: false },
-      ],
-    },
-  }));
+  await setupRoutes(ctx, body => {
+    assert.equal(body.mode, "auto");
+    return {
+      body: {
+        ok: true,
+        mode: "auto",
+        kind: "trades",
+        asOf: null,
+        asOfStatus: "missing",
+        rows: shotMode === 1 ? [
+          { date: "2026-05-06", dateAssumed: "mdy", altDate: "2026-06-05", rawDate: "05/06/2026", time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 100, fee: null, tax: null, dayTrade: false },
+          { date: "2026-05-06", dateAssumed: null, time: null, side: "buy", name: "台積電", code: "2330", shares: 1000, price: 120, fee: 0, tax: 0, dayTrade: false },
+          { date: "2026-05-10", dateAssumed: null, time: null, side: "sell", name: "台積電", code: "2330", shares: 1000, price: 130, fee: 0, tax: 0, dayTrade: false },
+        ] : [
+          { date: "2026-05-11", dateAssumed: null, time: "09:15", side: "buy", name: "台積電", code: "2330", shares: 1000, price: 500, fee: null, tax: null, dayTrade: false },
+        ],
+      },
+    };
+  });
   await p.evaluate(() => {
     localStorage.removeItem("kline:pf:v1");
+    localStorage.removeItem("kline:pf:recon:v1");
     W.hdisc = 0.28; store.set("watch:hdisc", 0.28);
     W.holdMkt = "tw"; setLt("hold");
   });
@@ -685,7 +716,7 @@ test("390：選項 2 開啟含第 2 欄日期錯誤或無錯誤皆不偷橫捲�
   await holdGo(p, "tx");
   await p.waitForSelector('#lx [data-lg="imp"]');
   await p.click('#lx [data-lg="imp"]');
-  await pickFileVia(p, '[data-lgimp-pick="trades"]');
+  await pickFileVia(p, "[data-lgimp-upload]");
   await p.waitForSelector("#lgImpForm");
 
   // 第 2 欄 mdy 錯誤聚焦時，scrollLeft 須保持 0，不滑到 sticky 第 1 欄下方；且摘要顯示手續費 2.8 折
@@ -723,7 +754,7 @@ test("390：選項 2 開啟含第 2 欄日期錯誤或無錯誤皆不偷橫捲�
   // 無錯誤列時開啟匯入檢視：390px 手機 .hg-wrap.scrollLeft 亦須保持 0（不因第 1 列勾選框聚焦而橫移）
   shotMode = 2;
   await p.click('#lx .lgbar [data-lg="imp"]');
-  await pickFileVia(p, '[data-lgimp-pick="trades"]');
+  await pickFileVia(p, "[data-lgimp-upload]");
   await p.waitForSelector("#lgImpForm");
   assert.equal(await p.evaluate(() => $("#impSheet .hg-wrap").scrollLeft), 0, "無錯誤列開局聚焦第 1 列勾選框時 scrollLeft 保持 0");
   await ctx.close();

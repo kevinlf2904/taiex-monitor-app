@@ -2569,6 +2569,8 @@ function showImpDialog(title, html, { wide = false, focus = null, forceFocus = f
   if (wasHidden) {
     const ae = document.activeElement;
     if (ae && ae !== document.body && !sh.contains(ae)) W.impRet = ae;
+    const t = $("#toast");
+    if (t) { t.hidden = true; clearTimeout(toast.t); }
   }
   imp.scope = scope;
   $("#impTitle").textContent = title;

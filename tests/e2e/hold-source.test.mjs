@@ -64,3 +64,76 @@ test("交易紀錄只有美股：台股分頁說明到交易紀錄新增，不�
   assert.equal(await p.$("[data-hdemo=load]"), null);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("空白純快照、完整快照清倉歸零保持帳本模式，以及雙分頁 storage 即時更新（不回寫）", async () => {
+  for (const width of [390, 1280]) {
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500, time: "2026-10-05T04:00:00Z", tick: true });
+    await p.evaluate(old => {
+      localStorage.setItem("kline:watch:hold", JSON.stringify(old));
+      localStorage.removeItem("kline:pf:v1");
+      localStorage.setItem("kline:pf:recon:v1", JSON.stringify({
+        v: 1,
+        snapshots: [{ id: "snap1", date: "2026-09-20", symbol: "2317", market: "tw", currency: "TWD", shares: 300, avgCost: 120, origin: "import", scope: "partial", status: "confirmed", confirmedAt: "2026-09-20T00:00:00Z", supersededBy: null, batchId: "b1", note: "" }],
+        conflicts: [],
+        initialTags: {},
+        sameDayRelations: {},
+        imports: [],
+        audit: [],
+        pendingCommit: null,
+      }));
+    }, OLD);
+    await p.reload();
+    await p.evaluate(() => typeof LAZY === "object" && Promise.all(Object.keys(LAZY).map(lazy)));
+    await p.evaluate(() => { W.holdView = "pnl"; W.holdMkt = "tw"; setLt("hold"); });
+    await p.waitForFunction(() => W.holdLg && /股2317/.test($("#wl").innerText), null, { timeout: 20000 });
+    assert.match(await p.evaluate(() => $("#lTools").innerText), /持股來自交易帳本（1 檔期初快照）/);
+    assert.deepEqual(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:watch:hold"))), OLD, "純快照模式舊庫存不動");
+
+    // 開第二分頁於同一 context，並統計 storage 更新期間不觸發 setItem 回寫
+    const p2 = await ctx.newPage();
+    p2.on("pageerror", e => errs.push(`${width} p2 ${e.message}`));
+    await p2.clock.setSystemTime("2026-10-05T04:00:00Z");
+    await p2.goto(`${S.url}/learner/watch.html`);
+    await p2.waitForTimeout(600);
+    await p2.evaluate(() => typeof LAZY === "object" && Promise.all(Object.keys(LAZY).map(lazy)));
+    await p2.evaluate(() => {
+      W.holdView = "pnl"; W.holdMkt = "tw"; setLt("hold");
+      window.__pfSetCalls = 0;
+      const orig = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (k, v) {
+        if (k === "kline:pf:v1" || k === "kline:pf:recon:v1") window.__pfSetCalls++;
+        return orig.call(this, k, v);
+      };
+    });
+    await p2.waitForFunction(() => /股2317/.test($("#wl").innerText), null, { timeout: 15000 });
+
+    // 分頁 A 將對帳快照更新為「完整快照清倉歸零（full_snapshot_close）」
+    await p.evaluate(() => {
+      localStorage.setItem("kline:pf:recon:v1", JSON.stringify({
+        v: 1,
+        snapshots: [
+          { id: "snap1", date: "2026-09-20", symbol: "2317", market: "tw", currency: "TWD", shares: 300, avgCost: 120, origin: "import", scope: "partial", status: "superseded", confirmedAt: "2026-09-20T00:00:00Z", supersededBy: "snap-close", batchId: "b1", note: "" },
+          { id: "snap-close", date: "2026-10-01", symbol: "2317", market: "tw", currency: "TWD", shares: 0, avgCost: null, origin: "full_snapshot_close", scope: "full", status: "confirmed", confirmedAt: "2026-10-01T00:00:00Z", supersededBy: null, batchId: "b2", note: "full close" },
+        ],
+        conflicts: [],
+        initialTags: {},
+        sameDayRelations: {},
+        imports: [],
+        audit: [],
+        pendingCommit: null,
+      }));
+      holdSrcApply();
+      renderList();
+    });
+
+    // 分頁 B 透過 storage 事件即時更新，仍維持交易帳本模式（絕不退回舊庫存 2330）且不回寫 localStorage
+    await p2.waitForFunction(() => W.holdLg && !W.hold["2317"] && !W.hold["2330"], null, { timeout: 15000 });
+    assert.equal(await p2.evaluate(() => window.__pfSetCalls), 0, `${width} storage 事件只重算重畫，不得寫回 localStorage`);
+    assert.match(await p2.evaluate(() => $("#lTools").innerText), /持股來自交易帳本/, "完整清倉歸零後仍維持交易帳本模式，不退回舊庫存");
+    assert.doesNotMatch(await p2.evaluate(() => $("#wl").innerText), /股2330/);
+    assert.deepEqual(await p2.evaluate(() => JSON.parse(localStorage.getItem("kline:watch:hold"))), OLD);
+    await p2.close();
+    await ctx.close();
+    assert.deepEqual(errs, []);
+  }
+});

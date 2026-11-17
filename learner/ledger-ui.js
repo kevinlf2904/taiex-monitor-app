@@ -436,6 +436,8 @@ function renderLedger() {
   if (L.view === "alloc") return renderAlloc(S);
   const quotes = new Map([...W.quotes].map(([c, q]) => [c, q?.price]).filter(([, p]) => p > 0));
   const R = KLLedger.buildReconciledLedger(S, recon, { method: S.method, today: lgToday(), prices: quotes });
+  const rawTxById = new Map((S.transactions || []).map(z => [z?.id, z]));
+  const staleTagIds = new Set((R.reconcile?.staleTags || []).map(z => z.txId));
   const cur = ["TWD", "USD"].filter(c => (R.totals[c] || R.cash[c]) && lgCurOk(c));
   const open = R.positions.filter(p => p.open && lgCurOk(p.currency)), closed = R.positions.filter(p => !p.open && lgCurOk(p.currency));
   const curBox = c => { const T = R.totals[c] || {}, C = R.cash[c], P = open.filter(p => p.currency === c), miss = P.filter(p => p.marketValue == null).length, un = P.reduce((s, p) => s + (p.unrealizedPnl || 0), 0);
@@ -455,8 +457,8 @@ function renderLedger() {
   const txRow = x => { const t = x.tx || {}, c = t.currency, d = t.type;
     const what = ["buy", "sell", "transfer_in"].includes(d) ? `${lgN(t.shares)} 股 × ${lgN(t.price)}` : ["stock_dividend", "transfer_out"].includes(d) ? `${lgN(t.shares)} 股` : d === "split" ? `比例 ${lgN(t.ratio)}` : d === "fraction_cash" ? `${lgN(t.shares)} 股 → ${lgMoney(t.amount, c)}` : t.amount != null ? lgMoney(t.amount, c) : t.shares != null ? `${lgN(t.shares)} 股` : "";
     const fee = (t.fee || t.tax) ? `<small>費 ${lgMoney(t.fee, c)}・稅 ${lgMoney(t.tax, c)}${t.feeEstimated ? "（估算）" : ""}</small>` : "";
-    const tagObj = recon?.initialTags?.[x.id];
-    const isInitTag = d === "transfer_in" && tagObj?.active === true && (!tagObj.txHash || (typeof KLRecon !== "undefined" && tagObj.txHash === KLRecon.txFingerprint(t)));
+    const tagObj = recon?.initialTags?.[x.id], rawTx = rawTxById.get(x.id) || t;
+    const isInitTag = d === "transfer_in" && tagObj?.active === true && !staleTagIds.has(x.id) && (!tagObj.txHash || (typeof KLRecon !== "undefined" && (tagObj.txHash === KLRecon.txFingerprint(rawTx) || tagObj.txHash === KLRecon.txFingerprint(t))));
     const initBtn = d === "transfer_in" && !x.errors.length
       ? (isInitTag
         ? `<span class="lgbadge">已標為期初快照</span><button type="button" class="btn sm" data-lg="untag-init" data-id="${esc(x.id)}">撤回期初快照標記</button>`
@@ -1719,9 +1721,12 @@ function lgImpRowHtml(r, i, kind, item, today, total = 1) {
 function lgImpBannerHtml(S, today) {
   const recon = lgReconLoad();
   const detLbl = S.detectedKind === "holdings" ? "庫存快照" : S.detectedKind === "trades" ? "成交明細" : "類型尚未確定（請確認或點右側切換）";
-  const hashHits = typeof KLRecon !== "undefined" && S.fileHashes?.length ? KLRecon.findRepeatHash(recon, S.fileHashes) : [];
-  const hashWarn = hashHits.length
-    ? `<div class="lgimp-tag">⚠︎ 此截圖之前已上傳過（${esc(String(hashHits[0].at || "").slice(0, 10))}）${hashHits.some(h => h.hasOpenConflict) ? `，尚有未結案待對帳 <button type="button" class="linkbtn" data-lg="view-conflicts">查看待對帳</button>` : "（仍可補充核對）"}</div>`
+  const hashHit = typeof KLRecon !== "undefined" && S.fileHashes?.length ? KLRecon.findRepeatHash(recon, S.fileHashes) : null;
+  const hitAt = hashHit?.hit
+    ? ((recon?.imports || []).find(imp => Array.isArray(imp?.fileHashes) && imp.fileHashes.some(h => S.fileHashes.includes(h)))?.at || "")
+    : "";
+  const hashWarn = hashHit?.hit
+    ? `<div class="lgimp-tag">⚠︎ 此截圖之前已上傳過${hitAt ? `（${esc(String(hitAt).slice(0, 10))}）` : ""}${hashHit.openConflicts > 0 ? `，尚有 ${hashHit.openConflicts} 項未結案待對帳 <button type="button" class="linkbtn" data-lg="view-conflicts">查看待對帳</button>` : "（仍可補充核對）"}</div>`
     : "";
   const asOfValid = /^\d{4}-\d{2}-\d{2}$/.test(S.asOf || "") && S.asOf <= today;
   let asOfMsg = "";

@@ -62,3 +62,140 @@ test("融資資料匯入：沒開過融資頁（KLMargin 還沒載入）也用�
   await p.waitForFunction(() => JSON.parse(localStorage.getItem("kline:pf:margin:v1") || "{}").accounts?.[0]?.id === "ok", null, { timeout: 15000 });
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("備份檔含 kline:pf:recon:v1：鍵序無關先賣後買正常匯入、壞圖／跨市場衝突拒匯、pendingCommit 預設拒匯並可二次確認剔除後匯入", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true, time: "2026-10-05T04:00:00Z", tick: true });
+  await p.evaluate(() => {
+    localStorage.setItem("kline:pf:v1", JSON.stringify({ v: 1, method: "avg", transactions: [{ id: "keep", v: 1, date: "2026-09-01", type: "buy", symbol: "2317", market: "tw", currency: "TWD", shares: 100, price: 150, fee: 0, tax: 0 }] }));
+    localStorage.removeItem("kline:pf:recon:v1");
+    W.tv = "sync"; setLt("tools");
+  });
+  await p.waitForSelector('#lx [data-sy="export"]', { timeout: 20000 });
+  const before = await p.evaluate(() => [localStorage.getItem("kline:pf:v1"), localStorage.getItem("kline:pf:recon:v1")]);
+
+  // 1) base64 圖片／跨市場衝突 → 整份拒絕，資料不變
+  const imgBad = {
+    app: "kline-school", v: 2, at: "2026-10-05T00:00:00Z",
+    data: {
+      "kline:pf:recon:v1": JSON.stringify({
+        v: 1,
+        snapshots: [{ id: "s1", date: "2026-09-01", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, avgCost: 800, origin: "import", scope: "partial", status: "confirmed", note: "data:image/png;base64,AAA" }],
+        conflicts: [], initialTags: {}, sameDayRelations: {}, imports: [], audit: [], pendingCommit: null,
+      }),
+    },
+  };
+  await p.setInputFiles("#lx input[data-syfile]", { name: "img-bad.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(imgBad)) });
+  await p.waitForFunction(() => /投資組合資料有問題，沒有匯入/.test(document.body.innerText), null, { timeout: 15000 });
+  assert.deepEqual(await p.evaluate(() => [localStorage.getItem("kline:pf:v1"), localStorage.getItem("kline:pf:recon:v1")]), before);
+
+  const curConflict = {
+    app: "kline-school", v: 2, at: "2026-10-05T00:00:00Z",
+    data: {
+      "kline:pf:v1": JSON.stringify({ v: 1, method: "avg", transactions: [{ id: "t1", v: 1, date: "2026-09-10", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 100, price: 900, fee: 0, tax: 0 }] }),
+      "kline:pf:recon:v1": JSON.stringify({
+        v: 1,
+        snapshots: [{ id: "s1", date: "2026-09-01", symbol: "2330", market: "us", currency: "USD", shares: 100, avgCost: 180, origin: "import", scope: "partial", status: "confirmed", confirmedAt: "2026-09-01T00:00:00Z", supersededBy: null, batchId: "b1", note: "" }],
+        conflicts: [], initialTags: {}, sameDayRelations: {}, imports: [], audit: [], pendingCommit: null,
+      }),
+    },
+  };
+  await p.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  await p.setInputFiles("#lx input[data-syfile]", { name: "cur-bad.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(curConflict)) });
+  await p.waitForFunction(() => /投資組合資料有問題，沒有匯入/.test(document.body.innerText), null, { timeout: 15000 });
+  assert.deepEqual(await p.evaluate(() => [localStorage.getItem("kline:pf:v1"), localStorage.getItem("kline:pf:recon:v1")]), before);
+
+  // 2) pendingCommit != null：預設對話框按取消則拒匯（資料不動）；確認後剔除 WAL 並正常匯入（含 pf:v1 在 recon 之前先賣出）
+  const walBackup = {
+    app: "kline-school", v: 2, at: "2026-10-05T00:00:00Z",
+    data: {
+      "kline:pf:v1": JSON.stringify({ v: 1, method: "avg", transactions: [{ id: "sell1", v: 1, date: "2026-09-25", type: "sell", symbol: "2330", market: "tw", currency: "TWD", shares: 200, price: 950, fee: 0, tax: 0 }] }),
+      "kline:pf:recon:v1": JSON.stringify({
+        v: 1,
+        snapshots: [{ id: "s1", date: "2026-09-01", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, avgCost: 800, origin: "import", scope: "partial", status: "confirmed", confirmedAt: "2026-09-01T00:00:00Z", supersededBy: null, batchId: "b1", note: "" }],
+        conflicts: [], initialTags: {}, sameDayRelations: {}, imports: [], audit: [],
+        pendingCommit: { id: "wal-hung", op: "unknown_op", at: "2026-10-04T00:00:00Z" },
+      }),
+    },
+  };
+  p.removeAllListeners("dialog");
+  let dialogMode = "dismiss_wal";
+  p.on("dialog", async d => {
+    if (dialogMode === "dismiss_wal") await d.dismiss();
+    else await d.accept();
+  });
+  await p.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  await p.setInputFiles("#lx input[data-syfile]", { name: "wal.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(walBackup)) });
+  await p.waitForTimeout(500);
+  assert.deepEqual(await p.evaluate(() => [localStorage.getItem("kline:pf:v1"), localStorage.getItem("kline:pf:recon:v1")]), before, "取消剔除 pendingCommit 時維持拒匯");
+
+  dialogMode = "accept_all";
+  await p.setInputFiles("#lx input[data-syfile]", { name: "wal.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(walBackup)) });
+  await p.waitForFunction(() => JSON.parse(localStorage.getItem("kline:pf:v1") || "{}").transactions?.[0]?.id === "sell1", null, { timeout: 15000 });
+  const afterRecon = await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:recon:v1")));
+  assert.equal(afterRecon.pendingCommit, null, "二次確認剔除後已清除 pendingCommit");
+  assert.equal(afterRecon.snapshots[0].symbol, "2330", "先賣後買依快照驗證通過並完整匯入");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("雲端同步（mock /api/sync）：雙鍵成對上傳、超限雙鍵皆不帶、pendingCommit 暫停上傳、下載錯配拒絕套用", async () => {
+  const { ctx, p, errs, KV } = await open(B, S.url, "watch.html", { width: 1280, time: "2026-10-05T04:00:00Z", tick: true });
+  const pairRecon = {
+    v: 1,
+    snapshots: [{ id: "s1", date: "2026-09-01", symbol: "2330", market: "tw", currency: "TWD", shares: 500, avgCost: 850, origin: "import", scope: "partial", status: "confirmed", confirmedAt: "2026-09-01T00:00:00Z", supersededBy: null, batchId: "b1", note: "" }],
+    conflicts: [], initialTags: {}, sameDayRelations: {}, imports: [], audit: [], pendingCommit: null,
+  };
+  await p.evaluate(r => {
+    localStorage.setItem("kline-sync", JSON.stringify({ id: "SyncPairTest1234567890", auto: false, at: 0, hash: 0 }));
+    localStorage.setItem("kline:pf:v1", JSON.stringify({ v: 1, method: "avg", transactions: [{ id: "t1", v: 1, date: "2026-09-10", type: "sell", symbol: "2330", market: "tw", currency: "TWD", shares: 100, price: 920, fee: 0, tax: 0 }] }));
+    localStorage.setItem("kline:pf:recon:v1", JSON.stringify(r));
+    W.tv = "sync"; setLt("tools");
+  }, pairRecon);
+  await p.waitForSelector('#lx [data-sy="push"]', { timeout: 20000 });
+
+  // 1) 正常成對上傳
+  await p.click('#lx [data-sy="push"]');
+  await p.waitForFunction(() => /已上傳到雲端/.test(document.body.innerText), null, { timeout: 10000 });
+  const cloud1 = KV.get("SyncPairTest1234567890")?.data;
+  assert.ok(cloud1["kline:pf:v1"] && cloud1["kline:pf:recon:v1"], "正常成對時 kline:pf:v1 與 kline:pf:recon:v1 一起上傳");
+
+  // 2) pf:v1 超過 150KB 時，連同 kline:pf:recon:v1 兩鍵皆不帶出
+  await p.evaluate(b => {
+    localStorage.setItem("kline:pf:v1", JSON.stringify(b));
+    syncSet({ at: Date.now() + 1000 });
+    renderList();
+  }, big());
+  await p.click('#lx [data-sy="push"]');
+  await p.waitForTimeout(400);
+  const cloud2 = KV.get("SyncPairTest1234567890")?.data;
+  assert.equal("kline:pf:v1" in cloud2, false, "超限時不帶 pf:v1");
+  assert.equal("kline:pf:recon:v1" in cloud2, false, "單鍵超限時成對另一鍵 kline:pf:recon:v1 亦不單獨上傳");
+
+  // 3) pendingCommit != null 時暫停上傳（不打 push 蓋掉雲端）
+  await p.evaluate(r => {
+    localStorage.setItem("kline:pf:v1", JSON.stringify({ v: 1, method: "avg", transactions: [] }));
+    localStorage.setItem("kline:pf:recon:v1", JSON.stringify({ ...r, pendingCommit: { id: "wal1", op: "import_trades" } }));
+    renderList();
+  }, pairRecon);
+  await p.click('#lx [data-sy="push"]');
+  await p.waitForFunction(() => /未完成的對帳提交，暫停雲端上傳/.test(document.body.innerText), null, { timeout: 10000 });
+
+  // 4) 下載錯配（雲端 pf:v1 跨市場衝突／賣超）且本機清掉 pendingCommit → 拒絕套用、本機維持原樣
+  await p.evaluate(r => {
+    localStorage.setItem("kline:pf:recon:v1", JSON.stringify(r));
+    renderList();
+  }, pairRecon);
+  KV.set("SyncPairTest1234567890", {
+    at: Date.now() + 5000,
+    data: {
+      "kline:watch:groups": JSON.stringify([{ name: "不該被寫入", list: [] }]),
+      "kline:pf:v1": JSON.stringify({ v: 1, method: "avg", transactions: [{ id: "bad-sell", v: 1, date: "2026-09-10", type: "sell", symbol: "NVDA", market: "us", currency: "USD", shares: 99, price: 100, fee: 0, tax: 0 }] }),
+      "kline:pf:recon:v1": JSON.stringify(pairRecon),
+    },
+  });
+  const localBeforePull = await p.evaluate(() => [localStorage.getItem("kline:pf:v1"), localStorage.getItem("kline:watch:groups")]);
+  await p.click('#lx [data-sy="pull"]');
+  await p.waitForFunction(() => /驗證未通過/.test(document.body.innerText), null, { timeout: 10000 });
+  assert.deepEqual(await p.evaluate(() => [localStorage.getItem("kline:pf:v1"), localStorage.getItem("kline:watch:groups")]), localBeforePull, "錯配雲端資料整份拒絕套用");
+
+  await ctx.close(); assert.deepEqual(errs, []);
+});
