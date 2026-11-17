@@ -249,9 +249,22 @@ test("第五輪 P2-2 & P3-3：舊備份缺 recon:v1 時處理本機 recon:v1（p
   // 3) 匯入不含 recon:v1 的舊備份（只有 2317），確認一併清除本機對帳快照 → 匯入後本機 recon:v1 被清除，不會殘留 2330 快照
   clearChoice = "clear_local_recon";
   await p.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  const reconBeforeClear = await p.evaluate(() => localStorage.getItem("kline:pf:recon:v1"));
+  assert.ok(reconBeforeClear, "清除前本機確實有對帳快照");
+  const clearMsgs = [];
+  const onClearDlg = d => { if (/不含對帳快照/.test(d.message())) clearMsgs.push(d.message()); };
+  p.on("dialog", onClearDlg);
+  const dlP = p.waitForEvent("download", { timeout: 15000 });
   await p.setInputFiles("#lx input[data-syfile]", { name: "legacy-ok.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(legacyV2)) });
+  const dl = await dlP;
   await p.waitForFunction(() => JSON.parse(localStorage.getItem("kline:pf:v1") || "{}").transactions?.[0]?.id === "only2317", null, { timeout: 15000 });
+  p.off("dialog", onClearDlg);
   assert.equal(await p.evaluate(() => localStorage.getItem("kline:pf:recon:v1")), null, "確認清除後本機不殘留無關的 kline:pf:recon:v1");
+  assert.match(clearMsgs[0] || "", /不可復原/, "確認框必須寫明清除不可復原");
+  assert.match(clearMsgs[0] || "", /自動下載/, "確認框必須說明會先自動下載備份");
+  const dlJson = JSON.parse(await (await import("node:fs/promises")).readFile(await dl.path(), "utf8"));
+  assert.equal(dlJson.app, "kline-school");
+  assert.equal(dlJson.data["kline:pf:recon:v1"], reconBeforeClear, "清除前自動下載的備份保留原本的對帳快照，可再匯回");
 
   // 4) P3-3：當環境不支援 navigator.locks 時，不含 kline:pf: 的備份匯入與雲端下載仍可正常套用
   await p.waitForTimeout(900);

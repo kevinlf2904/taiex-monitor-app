@@ -931,7 +931,7 @@ async function syncImport(file) {
       if (hasImportPf && !hasImportRecon && snapRecon != null) {
         const C0 = KLLedger.checkBackup(importData, chkOpts());
         if (!C0.ok) throw new Error("備份檔裡的投資組合資料有問題，沒有匯入（這台的資料維持原樣）：" + C0.items.filter(x => !x.ok).map(x => `${x.label}：${x.problems.join("；")}`).join("；"));
-        clearLocalRecon = confirm("這份備份檔不含對帳快照（kline:pf:recon:v1），但這台裝置目前有對帳快照；要一併清除這台的對帳快照，改以備份檔的交易紀錄為準嗎？（按「取消」將保留這台的對帳快照並與備份檔配對檢查）");
+        clearLocalRecon = confirm("這份備份檔不含對帳快照（kline:pf:recon:v1），但這台裝置目前有對帳快照。\n\n按「確定」：清除這台的對帳快照（庫存快照、待對帳項目與稽核紀錄），改以備份檔的交易紀錄為準。清除後不可復原；匯入前會先自動下載一份這台目前資料的備份檔，需要時可再匯回。\n\n按「取消」：保留這台的對帳快照，並與備份檔的交易紀錄配對檢查（對不上就整份不匯入）。");
       }
       const buildCheckData = src => {
         const d = { ...src };
@@ -967,6 +967,8 @@ async function syncImport(file) {
       pfTxt = "\n\n投資組合：" + visibleItems.map(x => x.key === "kline:pf:v1" ? `交易紀錄 ${x.summary.transactions} 筆（${x.summary.from || "—"}～${x.summary.to || "—"}）${cur ? `，會取代這台現在的 ${(cur.transactions || []).length} 筆` : ""}${clearLocalRecon ? "，並清除這台現有的對帳快照" : ""}` : x.key === "kline:pf:recon:v1" ? `對帳快照 ${x.summary?.snapshots ?? 0} 筆（待對帳 ${x.summary?.conflicts ?? 0} 筆）` : x.key === "kline:pf:targets:v1" ? `${x.label} ${x.summary?.items ?? 0} 項` : x.key === "kline:pf:thesis:v1" ? `${x.label} ${x.summary?.items ?? 0} 檔` : `${x.label} ${x.summary?.accounts ?? ""} 個`).join("；");
     }
     if (!confirm(`用備份檔（${String(j.at).slice(0, 16).replace("T", " ")}，${Object.keys(importData).length} 項）覆蓋這台裝置的設定與紀錄？${pfTxt}\n\n備份檔裡沒有的項目會保留；寫入失敗會自動改回原本的資料。`)) return;
+    // 清除本機對帳快照不可復原：真正寫入前先下載一份這台目前資料的完整備份（含 kline:pf:recon:v1），需要時可再匯回
+    if (clearLocalRecon) syncExport();
     const applyFn = () => {
       if (hasImportPair) {
         let curPf = null, curRecon = null;
