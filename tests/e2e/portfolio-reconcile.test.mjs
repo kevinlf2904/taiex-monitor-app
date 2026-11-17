@@ -809,3 +809,50 @@ test("390/1280（Case 18, 19）：雙分頁 Web Locks／storage事件／stale-ba
   await ctx.close();
   assert.deepEqual(errs, []);
 });
+
+test("390：已有較新庫存快照時標記較舊股票轉入為期初快照 → 對不上列入待對帳、帳本不出錯且仍可新增交易", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true, time: "2026-11-17T04:00:00Z", tick: true });
+  attachErrCollectors(p, errs);
+  await setupRoutes(ctx, () => ({ body: { ok: false, error: "not used" } }));
+  const tw = o => ({ v: 1, symbol: "2330", market: "tw", currency: "TWD", fee: 0, tax: 0, note: "", ...o });
+  const txs = [
+    tw({ id: "ti", date: "2026-10-01", type: "transfer_in", shares: 200, price: 700 }),
+    tw({ id: "p", date: "2026-10-15", type: "sell", shares: 500, price: 850 }),
+    tw({ id: "q", date: "2026-11-12", type: "sell", shares: 300, price: 950 }),
+  ];
+  const recon = { v: 1, snapshots: [{ id: "S1", symbol: "2330", market: "tw", currency: "TWD", date: "2026-11-10", shares: 1000, avgCost: 900, status: "confirmed", confirmedAt: "2026-11-10T00:00:00Z", scope: "partial", origin: "import", supersededBy: null }], conflicts: [], initialTags: {}, sameDayRelations: {}, imports: [], audit: [], pendingCommit: null };
+  await p.evaluate(([txs, recon]) => {
+    localStorage.setItem("kline:pf:v1", JSON.stringify({ v: 1, method: "avg", transactions: txs, at: "2026-10-01T00:00:00Z" }));
+    localStorage.setItem("kline:pf:recon:v1", JSON.stringify(recon));
+    W.holdView = "tx"; W.lg = { view: "tx" }; setLt("hold");
+  }, [txs, recon]);
+  await p.waitForSelector('[data-lg="tag-init"][data-id="ti"]');
+  await p.click('[data-lg="tag-init"][data-id="ti"]');
+  await p.waitForSelector('[data-lg="untag-init"][data-id="ti"]');
+  const st = await p.evaluate(() => {
+    const r = JSON.parse(localStorage.getItem("kline:pf:recon:v1"));
+    const pf = JSON.parse(localStorage.getItem("kline:pf:v1"));
+    const L = KLLedger.buildReconciledLedger(pf, r, { method: "avg", today: "2026-11-17" });
+    return { snap: r.snapshots.find(s => s.origin === "tx_tag"), s1: r.snapshots.find(s => s.id === "S1"), open: r.conflicts.filter(c => c.status === "open").map(c => c.payload?.reason), errorCount: L.errorCount, shares: L.positions.find(x => x.symbol === "2330")?.shares, msg: $("#lx").innerText };
+  });
+  assert.equal(st.snap.status, "superseded");
+  assert.equal(st.snap.supersededBy, null);
+  assert.equal(st.s1.status, "confirmed", "較新基準不被破壞");
+  assert.deepEqual(st.open, ["tag_older_than_baseline"]);
+  assert.equal(st.errorCount, 0, "標記後帳本不得出錯");
+  assert.equal(st.shares, 700, "仍以較新快照計算持股");
+  assert.match(st.msg, /待對帳/);
+
+  // 標記後仍可正常新增交易（修正前會因 validateStore 失敗而全部存不進去）
+  await p.click('[data-lg="add"]');
+  await p.fill('#lgForm [name="date"]', "2026-11-16");
+  await p.fill('#lgForm [name="symbol"]', "2330");
+  await p.fill('#lgForm [name="shares"]', "10");
+  await p.fill('#lgForm [name="price"]', "950");
+  await p.click('#lgForm [type="submit"]');
+  await p.waitForFunction(() => !$("#lgForm"));
+  assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem("kline:pf:v1")).transactions.length), 4, "標記後仍可新增交易");
+  assert.ok(await noHOverflow(p));
+  await ctx.close();
+  assert.deepEqual(errs, []);
+});

@@ -732,13 +732,23 @@ document.addEventListener("click", async e => {
     }
     const res = await withPfCommitLock(() => {
       const rawRecon = lgRawGet(LG_RAW_RECON), recon0 = lgParseRaw(rawRecon) || KLRecon.emptyStore();
-      const tCur = lgParseRaw(lgRawGet(LG_RAW_PF))?.transactions?.find(x => x.id === id);
+      const pf0 = lgParseRaw(lgRawGet(LG_RAW_PF));
+      const tCur = pf0?.transactions?.find(x => x.id === id);
       if (!tCur) return { ok: false, errors: ["找不到該筆交易紀錄"] };
-      const r = KLRecon.tagInitialTx(recon0, tCur, { today: lgToday() });
+      const method = pf0.method === "fifo" ? "fifo" : "avg";
+      const r = KLRecon.tagInitialTx(recon0, tCur, { today: lgToday(), txStore: pf0, ledgerLib: KLLedger, method });
       if (!r.ok) return { ok: false, errors: [r.error || r.code] };
-      return lgReconWrite(r.store, { expectedRawRecon: rawRecon });
+      // 標記只寫對帳資料，但會改變帳本計算：寫入前試算，帳本錯誤變多就不寫（避免之後所有交易都無法儲存）
+      const errBefore = KLLedger.buildReconciledLedger(pf0, recon0, { method, today: lgToday() }).errorCount;
+      const errAfter = KLLedger.buildReconciledLedger(pf0, r.store, { method, today: lgToday() }).errorCount;
+      if (errAfter > errBefore) return { ok: false, errors: ["標為期初快照後會讓交易紀錄出現錯誤（例如賣超），沒有寫入；請先確認期初快照之後的交易是否完整"] };
+      const w = lgReconWrite(r.store, { expectedRawRecon: rawRecon });
+      return w.ok ? { ...w, linkedTo: r.linkedTo || null, conflict: r.conflict || null } : w;
     });
-    L.msg = res.ok ? `已將 ${esc(t.symbol)}（${esc(t.date)}）標為期初快照基準。` : (res.errors?.[0] || "標記失敗。");
+    L.msg = !res.ok ? (res.errors?.[0] || "標記失敗。")
+      : res.conflict ? `已將 ${esc(t.symbol)}（${esc(t.date)}）標為期初快照，但與較新的庫存快照對不上，已列入待對帳；目前仍以較新快照計算持股。`
+      : res.linkedTo ? `已將 ${esc(t.symbol)}（${esc(t.date)}）標為期初快照，並與較新的庫存快照對上，保留期間損益。`
+      : `已將 ${esc(t.symbol)}（${esc(t.date)}）標為期初快照基準。`;
     renderList(); return;
   }
   if (a === "untag-init") {

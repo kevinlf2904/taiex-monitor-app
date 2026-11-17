@@ -1604,6 +1604,10 @@
       batchId: null,
       supersededBy: null,
     };
+    closeTagConflicts(out, tx.id, "superseded_by_retag", at);
+    // 較新基準 B_newer（spec 第 3 節）：期初標記不得取代較新的已確認基準
+    const newerBase = activeBaselines(out).get(sym) || null;
+    const hasNewer = !!newerBase && newerBase.id !== snapId && validDate(newerBase.date) && newerBase.date > tx.date;
     out.snapshots.push(snap);
     out.initialTags[tx.id] = {
       txId: tx.id,
@@ -1629,7 +1633,116 @@
       batchId: null,
       reason: "使用者將股票轉入標記為期初庫存快照",
     });
-    return { ok: true, store: out, snapshot: snap };
+    if (!hasNewer) return { ok: true, store: out, snapshot: snap };
+
+    // 已有較新基準：以「期初標記＋期間交易」推算到 B_newer.date，一致才串接（supersededBy: B_newer），
+    // 不一致或無法驗證一律不串接並建立 recon_diff，保留 B_newer 為計算基準（不破壞、不重算未對過帳的前段交易）
+    const check = verifyTagAgainstNewer(out, snap, newerBase, tx, opts, refToday);
+    snap.status = "superseded";
+    if (check.ok) {
+      snap.supersededBy = newerBase.id;
+      out.audit.push({
+        id: makeId("audtaglink", tx.id),
+        at,
+        action: "tag_linked_to_newer_baseline",
+        symbol: sym,
+        snapshotId: snap.id,
+        conflictId: null,
+        txId: tx.id,
+        batchId: null,
+        reason: `期初快照推算至 ${newerBase.date} 與較新基準一致，串接為前段基準`,
+      });
+      return { ok: true, store: out, snapshot: snap, linkedTo: newerBase.id };
+    }
+    snap.supersededBy = null;
+    const msg = `期初快照（${tx.date}）早於目前基準（${newerBase.date}），${check.message}；保留現有基準不動`;
+    const conflict = {
+      id: makeId("conftag", tx.id),
+      kind: "recon_diff",
+      symbol: sym,
+      market: mkt,
+      currency: cur,
+      batchId: null,
+      snapshotId: snap.id,
+      previousSnapshotId: newerBase.id,
+      baselineShares: newerBase.shares,
+      baselineAvgCost: newerBase.avgCost ?? null,
+      targetShares: tx.shares,
+      targetAvgCost: tx.price,
+      diffShares: isNum(check.simShares) ? r2(check.simShares - newerBase.shares) : null,
+      diffCost: isNum(check.simAvgCost) && isNum(newerBase.avgCost) ? r2(check.simAvgCost - newerBase.avgCost) : null,
+      status: "open",
+      createdAt: at,
+      message: msg,
+      payload: { reason: "tag_older_than_baseline", scope: "partial", txId: tx.id, check: check.code },
+    };
+    out.conflicts.push(conflict);
+    out.audit.push({
+      id: makeId("audtagdiff", tx.id),
+      at,
+      action: "tag_conflict_with_newer_baseline",
+      symbol: sym,
+      snapshotId: snap.id,
+      conflictId: conflict.id,
+      txId: tx.id,
+      batchId: null,
+      reason: msg,
+    });
+    return { ok: true, store: out, snapshot: snap, conflict };
+  }
+
+  // 同一筆期初標記與較新基準不一致所建立的待對帳：重新標記或撤回時一併結案，避免殘留失效項目
+  function closeTagConflicts(out, txId, resolution, at) {
+    for (const c of out.conflicts) {
+      if (c && c.status === "open" && c.payload?.reason === "tag_older_than_baseline" && c.payload?.txId === txId) {
+        c.status = "resolved";
+        c.resolution = resolution;
+        c.reason = resolution === "tag_withdrawn" ? "期初快照標記已撤回或停用" : "期初快照已重新標記";
+        c.resolvedAt = at;
+      }
+    }
+  }
+
+  // 期初標記 vs 較新基準：只用該標的、<= B_newer.date 的交易，在「只有期初標記為基準」的暫存對帳資料上重算
+  function verifyTagAgainstNewer(store, snap, newerBase, tagTx, opts, today) {
+    const ledgerLib = opts.ledgerLib;
+    const txList = Array.isArray(opts.txStore?.transactions) ? opts.txStore.transactions : (Array.isArray(opts.txStore) ? opts.txStore : null);
+    if (!ledgerLib || typeof ledgerLib.buildReconciledLedger !== "function" || !txList) {
+      return { ok: false, code: "unverifiable", message: "無法取得交易紀錄驗證期間交易" };
+    }
+    const sym = snap.symbol, endDate = newerBase.date;
+    const rels = store.sameDayRelations || {};
+    const symTxs = [];
+    for (const t of txList) {
+      if (!t || symbolOf(t.symbol) !== sym || !validDate(t.date) || t.date > endDate) continue;
+      if (t.date === endDate && t.id !== tagTx.id) {
+        const rel = rels[t.id];
+        const valid = rel && rel.snapshotDate === endDate && (!rel.snapshotId || rel.snapshotId === newerBase.id) && (rel.relation === "before_snapshot" || rel.relation === "after_snapshot");
+        if (!valid) return { ok: false, code: "same_day_unresolved", message: `${endDate} 有同日交易先後順序未決` };
+        if (rel.relation === "after_snapshot") continue;
+      }
+      symTxs.push(t);
+    }
+    const temp = cloneStore(store);
+    for (const s of temp.snapshots) {
+      if (s && s.id !== snap.id && symbolOf(s.symbol) === sym && (s.status === "confirmed" || s.status === "pending")) { s.status = "superseded"; s.supersededBy = null; }
+    }
+    const tempSnap = temp.snapshots.find(s => s && s.id === snap.id);
+    if (tempSnap) { tempSnap.status = "confirmed"; tempSnap.supersededBy = null; }
+    const method = opts.method === "fifo" ? "fifo" : "avg";
+    let led;
+    try { led = ledgerLib.buildReconciledLedger({ v: 1, method, transactions: symTxs }, temp, { method, today }); }
+    catch { return { ok: false, code: "unverifiable", message: "期間交易重算失敗" }; }
+    if (led.txs.some(x => x.errors && x.errors.length)) return { ok: false, code: "period_tx_errors", message: "期間交易有錯誤（例如賣超），可能缺少歷史交易" };
+    const pos = led.positions.find(p => symbolOf(p.symbol) === sym);
+    if ((pos?.pending || []).some(x => x.code === "same_day_order")) return { ok: false, code: "same_day_unresolved", message: "期初快照當日有同日交易先後順序未決" };
+    const simShares = pos ? pos.shares : 0;
+    const simAvgCost = pos && pos.shares > EPS ? pos.costBasis / pos.shares : null;
+    const tol = withinTolerance(simShares, simAvgCost, newerBase.shares, newerBase.avgCost ?? null);
+    if (!tol.ok) {
+      return { ok: false, code: "diff", simShares, simAvgCost, message: `推算 ${r2(simShares)} 股${isNum(simAvgCost) ? `（均價 ${r2(simAvgCost)}）` : ""}與較新基準 ${newerBase.shares} 股${isNum(newerBase.avgCost) ? `（均價 ${newerBase.avgCost}）` : ""}不一致` };
+    }
+    return { ok: true, simShares, simAvgCost };
   }
 
   function untagInitialTx(store, txId, opts = {}) {
@@ -1645,6 +1758,7 @@
         snap.supersededBy = null;
       }
     }
+    closeTagConflicts(out, txId, "tag_withdrawn", at);
     out.audit.push({
       id: makeId("auduntag", txId),
       at,

@@ -558,3 +558,80 @@ test("Task 7 防繞過靜態檢查：learner/*.js 與 learner/watch.html（除 l
   }
   assert.deepEqual(hits, [], `發現未經 buildReconciledLedger 的直接 .buildLedger( 呼叫：${hits.join(", ")}`);
 });
+
+test("已有較新基準時標記較舊股票轉入為期初快照：一致才串接、不一致建 recon_diff，帳本不得因此出錯或鎖死", () => {
+  const { L, R } = loadLedgerAndRecon();
+  const TODAY = "2026-11-17";
+  const tw = o => ({ v: 1, symbol: "2330", market: "tw", currency: "TWD", fee: 0, tax: 0, note: "", ...o });
+  const withS1 = () => {
+    const s = R.emptyStore();
+    s.snapshots.push({ id: "S1", symbol: "2330", market: "tw", currency: "TWD", date: "2026-11-10", shares: 1000, avgCost: 900, status: "confirmed", confirmedAt: "2026-11-10T00:00:00Z", scope: "partial", origin: "import", supersededBy: null });
+    return s;
+  };
+  const errIds = (txs, recon) => L.buildReconciledLedger({ v: 1, method: "avg", transactions: txs }, recon, { method: "avg", today: TODAY }).txs.filter(x => x.errors.length).map(x => x.id);
+
+  // A. 前段交易不完整（10/15 賣 500 但期初只有 200 股）→ 不一致：不得串接、建 recon_diff；帳本錯誤不增加、仍可新增交易
+  const ti = tw({ id: "ti", date: "2026-10-01", type: "transfer_in", shares: 200, price: 700 });
+  const txsA = [ti, tw({ id: "p", date: "2026-10-15", type: "sell", shares: 500, price: 850 }), tw({ id: "q", date: "2026-11-12", type: "sell", shares: 300, price: 950 })];
+  const pfA = { v: 1, method: "avg", transactions: txsA };
+  assert.deepEqual(errIds(txsA, withS1()), []);
+  const tagA = R.tagInitialTx(withS1(), ti, { today: TODAY, snapshotId: "s-ti", txStore: pfA, ledgerLib: L, method: "avg" });
+  assert.equal(tagA.ok, true);
+  const snapA = tagA.store.snapshots.find(s => s.id === "s-ti");
+  assert.equal(snapA.status, "superseded");
+  assert.equal(snapA.supersededBy, null, "不一致不得串接到較新基準");
+  assert.equal(tagA.store.snapshots.find(s => s.id === "S1").status, "confirmed", "較新基準不得被破壞");
+  const confA = tagA.store.conflicts.find(c => c.status === "open" && c.kind === "recon_diff");
+  assert.ok(confA, "不一致時建立 recon_diff 待對帳");
+  assert.equal(confA.snapshotId, "s-ti");
+  assert.equal(confA.previousSnapshotId, "S1");
+  assert.equal(confA.payload.reason, "tag_older_than_baseline");
+  assert.equal(R.validateStore(tagA.store, { today: TODAY }).ok, true);
+  assert.deepEqual(errIds(txsA, tagA.store), [], "標記後帳本不得出現新錯誤");
+  assert.equal(L.validateStore({ ...pfA, transactions: [...txsA, tw({ id: "z", date: "2026-11-16", type: "buy", shares: 10, price: 950 })] }, { today: TODAY, recon: tagA.store }).ok, true, "標記後仍可新增交易");
+  const posA = L.buildReconciledLedger(pfA, tagA.store, { method: "avg", today: TODAY }).positions.find(p => p.symbol === "2330");
+  assert.equal(posA.shares, 700, "仍以較新基準 S1 計算持股");
+
+  // A2. 撤回或重新標記時，舊的 tag_older_than_baseline 待對帳一併結案，不殘留失效項目
+  const openTagConfs = st => st.conflicts.filter(c => c.status === "open" && c.payload?.reason === "tag_older_than_baseline" && c.payload?.txId === "ti");
+  const untagA = R.untagInitialTx(tagA.store, "ti", { at: "2026-11-17T01:00:00Z" });
+  assert.equal(untagA.ok, true);
+  assert.equal(openTagConfs(untagA.store).length, 0, "撤回後結案");
+  assert.equal(R.validateStore(untagA.store, { today: TODAY }).ok, true);
+  const retagA = R.tagInitialTx(tagA.store, ti, { today: TODAY, snapshotId: "s-ti2", txStore: pfA, ledgerLib: L, method: "avg" });
+  assert.equal(openTagConfs(retagA.store).length, 1, "重新標記只留最新一筆待對帳");
+  assert.equal(openTagConfs(retagA.store)[0].snapshotId, "s-ti2");
+
+  // B. 期間交易完整（10/01 轉入 1200、10/20 賣 200 → 11/10 推算 1000 股、均價 700）但 S1 均價 900 超出容差 → 不一致
+  // C. 期間交易完整且一致 → 串接（supersededBy: S1），保留期間已實現損益
+  const tiC = tw({ id: "tc", date: "2026-10-01", type: "transfer_in", shares: 1200, price: 900 });
+  const txsC = [tiC, tw({ id: "s1", date: "2026-10-20", type: "sell", shares: 200, price: 950 }), tw({ id: "s2", date: "2026-11-12", type: "sell", shares: 300, price: 950 })];
+  const pfC = { v: 1, method: "avg", transactions: txsC };
+  const tagC = R.tagInitialTx(withS1(), tiC, { today: TODAY, snapshotId: "s-tc", txStore: pfC, ledgerLib: L, method: "avg" });
+  assert.equal(tagC.ok, true);
+  const snapC = tagC.store.snapshots.find(s => s.id === "s-tc");
+  assert.equal(snapC.status, "superseded");
+  assert.equal(snapC.supersededBy, "S1", "一致時串接到較新基準");
+  assert.equal(tagC.store.conflicts.filter(c => c.status === "open").length, 0);
+  const RC = L.buildReconciledLedger(pfC, tagC.store, { method: "avg", today: TODAY });
+  assert.deepEqual(RC.txs.filter(x => x.errors.length).map(x => x.id), []);
+  const posC = RC.positions.find(p => p.symbol === "2330");
+  assert.equal(posC.shares, 700);
+  assert.equal(posC.realizedPnl, 10000 + 15000, "串接後保留 10/20 與 11/12 兩筆賣出的已實現損益");
+
+  const tiB = tw({ id: "tb", date: "2026-10-01", type: "transfer_in", shares: 1200, price: 700 });
+  const txsB = [tiB, tw({ id: "b1", date: "2026-10-20", type: "sell", shares: 200, price: 950 })];
+  const tagB = R.tagInitialTx(withS1(), tiB, { today: TODAY, snapshotId: "s-tb", txStore: { v: 1, method: "avg", transactions: txsB }, ledgerLib: L, method: "avg" });
+  assert.equal(tagB.store.snapshots.find(s => s.id === "s-tb").supersededBy, null, "均價超出容差不得串接");
+  assert.ok(tagB.store.conflicts.some(c => c.status === "open" && c.snapshotId === "s-tb"));
+
+  // D. 沒傳交易紀錄無法驗證 → 保守處理：不串接、建 recon_diff
+  const tagD = R.tagInitialTx(withS1(), tiC, { today: TODAY, snapshotId: "s-td" });
+  assert.equal(tagD.store.snapshots.find(s => s.id === "s-td").supersededBy, null);
+  assert.ok(tagD.store.conflicts.some(c => c.status === "open" && c.snapshotId === "s-td"));
+
+  // E. 快照鏈只沿 supersededBy 串接：同代號未串接的較早 confirmed 快照不得成為鏈頭
+  const recE = withS1();
+  recE.snapshots.push({ id: "Old", symbol: "2330", market: "tw", currency: "TWD", date: "2026-10-01", shares: 200, avgCost: 700, status: "confirmed", confirmedAt: "2026-10-01T00:00:00Z", scope: "partial", origin: "import", supersededBy: null });
+  assert.deepEqual(errIds(txsA.slice(1), recE), [], "未串接的較早 confirmed 快照不得讓前段交易重算");
+});

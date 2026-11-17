@@ -283,6 +283,7 @@
     3. **市場／幣別衝突保護**：`market` 與 `currency` 須配對且不得與同 `symbol` 既有快照或交易衝突（衝突列進 Level 3 `currency_conflict` 並阻擋存檔）。
 - **錨點初始化與多期快照鏈（`B0 → ... → B`）重放**：
   - 同一標的若有經 `supersededBy` 串接之歷史確認快照鏈 `chain = [B0, ..., B]`（`pruneStore` 永不裁剪該活躍鏈節點）：
+    - **鏈只沿 `supersededBy` 往前串**：同代號但未經晉升／採信／結案明確串接、日期較早的 `confirmed` 快照（例如較新基準存在時才標記的期初快照）**不得納入鏈、不得成為 `B0`**，否則會把從未對過帳的前段交易拿來重算，產生賣超等錯誤並讓整份帳本無法存檔。
     - 最早確認快照 `B0` 設定績效與歷史起點 `firstDate = B0.date`、`firstSnapshotDate = B0.date`、`firstSnapshotShares = B0.shares`、`firstSnapshotAvgCost = B0.avgCost`、`firstSnapshotOrigin = B0.origin`。
     - 鏈上各錨點 `Si` 於 `Si.date` 依序設定或校準當時的 `shares`、`costBasis` 與 FIFO 合成批次 `lots`，但**不重設** `(B0.date, B.date]` 期間已套用交易所累計的 `realizedPnl`、`dividends`、`fees`、`taxes`、`bought`、`sold` 與 `cash`。
   - 若 `B.origin === "full_snapshot_close"`（由已確認之完整快照結案歸零，`shares === 0`, `avgCost === null`）：設定於 `B.date` 持股為 `0`、`costBasis = 0`、`open = false`（早於 `B0.date` 的舊交易仍標 `preSnapshot: true` 不回魂，`(B0.date, B.date]` 期間賣出／股息損益完整保留，晚於 `B.date` 若再買進則由 0 重建）。
@@ -338,6 +339,8 @@
   - 當 `initialTags[tx.id]?.active` 為真時，統一計算入口對該筆交易加上 `preSnapshot: true`（不重複計數）：
     - 若該標的沒有更新的確認基準，或此標記為唯一／最新基準，即以該 `tx_tag` 快照為計算基準。
     - 若該標的已存在更晚的確認基準 `B_newer`（`T.date < B_newer.date`），維持 `B_newer` 為 `confirmed` 基準不替換：依第 2 節規則檢核 `tx_tag`＋期間交易與 `B_newer`，若一致則 `tx_tag` 設 `superseded`（`supersededBy: B_newer.id`）且 `T` 仍標 `preSnapshot: true` 避免重複計數；若不一致則保留 `B_newer` 並建立 `recon_diff` 供確認；撤回、修改停用或刪除該 `transfer_in` 時僅更新／停用該 `tx_tag` 快照，絕不破壞 `B_newer`。
+      - **實作（`KLRecon.tagInitialTx(store, tx, { txStore, ledgerLib, method })`）**：以「期初標記＋該標的 `<= B_newer.date` 的交易」在只以期初標記為基準的暫存對帳資料上重算；無交易錯誤、無未決同日順序且股數／均價在晉升容差內 → 期初快照設 `superseded`、`supersededBy: B_newer.id`（串接進快照鏈，保留期間損益）並記 `audit[]`（`tag_linked_to_newer_baseline`）。否則（含未傳交易紀錄無法驗證）→ 期初快照設 `superseded`、`supersededBy: null`（不串接），建立 `open` `recon_diff`（`payload.reason: "tag_older_than_baseline"`、`snapshotId` 指向期初快照、`previousSnapshotId: B_newer.id`），`B_newer` 照舊為計算基準。撤回或重新標記同一筆交易時，舊的這類待對帳一併結案。
+      - **UI 寫入前試算**：「標為期初快照」只寫 `kline:pf:recon:v1`，但會改變帳本計算；寫入前以 `buildReconciledLedger` 比較標記前後的 `errorCount`，增加就拒寫並提示。
 
 ---
 

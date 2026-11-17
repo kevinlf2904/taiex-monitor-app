@@ -29,7 +29,7 @@
 ## 3. 統一計算入口 `KLLedger.buildReconciledLedger`
 
 - 所有投資組合頁面（`overview`、`perf`、`pf-home`、`pf-rebal`、`pf-stress`、`pf-divcal`、`pf-report`、`pf-thesis`）與看盤持股列（`watch.html` `holdFromLedger`）一律呼叫 `KLLedger.buildReconciledLedger(pfStore, reconStore, opts)`，禁用旁路自行重播交易：
-  - `baseline + 同日 snapshots 後交易` 算得當前各標的真實股數與成本起點，並依已確認快照演進鏈（`S1 → ... → B`）重放：僅最早確認快照 `B0` 之前（或綁定 `tagTxId`、`B0` 同日 `before_snapshot`）的交易標為 `preSnapshot: true`；`(B0.date, B.date]` 期間的已套用交易完整累計 `realizedPnl`、`dividends`、`fees`、`taxes`、`bought`、`sold` 與現金餘額，後續快照錨點僅校準該時點的 `shares`、`costBasis` 與 FIFO `lots`，並提供 `firstSnapshot*` 供 `KLPerf` 自 `B0.date` 連續計算報酬與損益。同時輸出 `reconcile` 摘要（`hasSnapshot`、`snapshotCount`、`openConflicts`、`pendingSymbols`、`unresolvedSameDayCount`、`staleTags`）。
+  - `baseline + 同日 snapshots 後交易` 算得當前各標的真實股數與成本起點，並依已確認快照演進鏈（`S1 → ... → B`，只沿 `supersededBy` 串接；未串接的較早 `confirmed` 快照不納入）重放：僅最早確認快照 `B0` 之前（或綁定 `tagTxId`、`B0` 同日 `before_snapshot`）的交易標為 `preSnapshot: true`；`(B0.date, B.date]` 期間的已套用交易完整累計 `realizedPnl`、`dividends`、`fees`、`taxes`、`bought`、`sold` 與現金餘額，後續快照錨點僅校準該時點的 `shares`、`costBasis` 與 FIFO `lots`，並提供 `firstSnapshot*` 供 `KLPerf` 自 `B0.date` 連續計算報酬與損益。同時輸出 `reconcile` 摘要（`hasSnapshot`、`snapshotCount`、`openConflicts`、`pendingSymbols`、`unresolvedSameDayCount`、`staleTags`）。
   - **計算邊界**：`pending` 衝突不自動覆蓋已確認持股；頁面橫幅明確標示 `⚠︎ 待對帳` 與「用已確認快照的股數試算」。
   - `KLPerf.buildPerf` 以經 `buildReconciledLedger` 裁切後的有效事件流與最初期初快照基準（`firstSnapshot*`）計算報酬與損益，確保起始基準日之前已由快照涵蓋的歷史不重複計入報酬，且後續快照自動晉升或完整清單清倉（`full_snapshot_close`）不會抹除前段已實現損益與股息。
 
@@ -39,4 +39,4 @@
 - **跨分頁被動同步**：`window.addEventListener("storage")` 偵測他分頁更新 `kline:pf:v1`／`kline:pf:recon:v1` 後僅重新計算與刷新畫面快取，**嚴禁在事件監聽內回寫 `localStorage`**。
 - **三段式 WAL（`pendingCommit`）**：Phase 1 寫入 `pendingCommit` → Phase 2 寫入 `kline:pf:v1` → Phase 3 清空 `pendingCommit` 並寫入正式對帳狀態（`import_trades`、`update_tx_tag`、`deactivate_tags`）。啟動時 `KLRecon.recoverCommit` 自動依兩鍵雜湊指紋判斷 Roll-Forward 或 Roll-Back；若遇不一致或未知操作，進入 `halted` 鎖定寫入，於交易紀錄頁顯示異常回復卡提供「還原至變更前（`revert_pre_commit`）」與「以交易紀錄為準清除 WAL（`discard_wal`）」出口。
 - **120KB 核心上限保護（Fail-Closed）**：寫入前由 `KLRecon.pruneStore(store, 120 * 1024)` 依優先順序裁剪舊的已取代快照、已結案衝突、非關鍵匯入批次與非活躍標記；**絕不裁剪 `confirmed` 基準、串接至活躍基準之 `supersededBy` 快照鏈、`open` 衝突、被未結案衝突引用的批次或 `pendingCommit`**。裁剪後仍逾 120KB 則拒絕寫入（`core_data_exceeds_limit`），保持原資料完整並提示先匯出 JSON 備份。
-
+- **較新基準存在時標記期初快照**：`tagInitialTx` 先試算期初標記加期間交易能否推到較新基準；一致才串接（保留期間損益），不一致或無法驗證就不串接並建立 `recon_diff`（`tag_older_than_baseline`），較新基準照舊計算。介面寫入前另比較標記前後帳本錯誤數，增加就不寫。

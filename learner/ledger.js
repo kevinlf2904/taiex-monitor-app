@@ -77,13 +77,8 @@
         chain.unshift(prev);
         cur = prev;
       }
-      // 納入手動建構但未填 supersededBy 的同代號更早期 confirmed 快照
-      for (const s of snaps) {
-        if (!seen.has(s.id) && symbolOf(s.symbol) === sym && s.status === "confirmed" && validDate(s.date) && s.date <= B.date) {
-          seen.add(s.id);
-          chain.push(s);
-        }
-      }
+      // 只沿 supersededBy 往前串：未經晉升／採信／結案明確接續的較早 confirmed 快照（例如較新基準存在時才標記的舊期初快照）
+      // 不可當鏈頭，否則會把從未對過帳、可能不完整的前段交易拿來重算，讓整份帳本出錯而無法存檔
       chain.sort((a, b) => a.date !== b.date ? (a.date < b.date ? -1 : 1) : (a.id === B.id ? 1 : b.id === B.id ? -1 : String(a.confirmedAt || "").localeCompare(String(b.confirmedAt || ""))));
       // 同一天若有多張快照，只留當天最後一張錨點
       const dedup = [];
