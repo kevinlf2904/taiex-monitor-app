@@ -593,3 +593,34 @@ test("Task 1：parseTradeDate({ missingAsNull }), parseAsOf（含跨年與未來
   assert.equal(claudeAuto.out.model, "claude-test");
 });
 
+test("Task 3 Review Focus 2：同批截圖兩筆同天同價買進不誤報重複；與既有帳本（含 preSnapshot）重複才報 possible_duplicate", () => {
+  const batchSame = [
+    { date: "2026-11-12", side: "buy", code: "2454", name: "聯發科", shares: 500, price: 1050, fee: 0, tax: 0 },
+    { date: "2026-11-12", side: "buy", code: "2454", name: "聯發科", shares: 500, price: 1050, fee: 0, tax: 0 },
+  ];
+  const imp = L.prepareTradesImport(batchSame, [], { today: "2026-11-16" });
+  assert.equal(imp.ok, true);
+  assert.equal(imp.duplicates.length, 0, "同批兩筆同價成交不得誤報重複");
+  assert.equal(imp.items[0].warnings.some(w => w.code === "possible_duplicate"), false);
+  assert.equal(imp.items[1].warnings.some(w => w.code === "possible_duplicate"), false);
+
+  // 與 existingArr（即使早於快照日的 preSnapshot 交易）重複 → 須提醒 possible_duplicate
+  const ctxR = {};
+  vm.createContext(ctxR);
+  vm.runInContext(readFileSync(new URL("../learner/ledger.js", import.meta.url), "utf8"), ctxR);
+  vm.runInContext(readFileSync(new URL("../learner/recon.js", import.meta.url), "utf8"), ctxR);
+  const L2 = ctxR.KLLedger, R2 = ctxR.KLRecon;
+  const recon = R2.emptyStore();
+  recon.snapshots.push({ id: "s1", symbol: "2454", market: "tw", currency: "TWD", date: "2026-11-10", shares: 1000, avgCost: 1000, status: "confirmed", confirmedAt: "2026-11-10T09:00:00Z", scope: "partial", origin: "import", supersededBy: null });
+  const existingPre = [{ v: 1, id: "ex1", date: "2026-11-01", type: "buy", symbol: "2454", market: "tw", currency: "TWD", shares: 500, price: 1050, fee: 0, tax: 0, note: "" }];
+  const crossImp = L2.prepareTradesImport(
+    [{ date: "2026-11-01", side: "buy", code: "2454", name: "聯發科", shares: 500, price: 1050, fee: 0, tax: 0 }],
+    existingPre,
+    { today: "2026-11-16", recon }
+  );
+  assert.equal(crossImp.duplicates.length, 1);
+  assert.equal(crossImp.items[0].warnings.some(w => w.code === "possible_duplicate"), true);
+  assert.equal(crossImp.items[0].reconcileHint, "pre_snapshot");
+});
+
+
