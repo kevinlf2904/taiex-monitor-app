@@ -241,9 +241,12 @@ async function lgCommitDualStores(spec = {}) {
   });
 }
 
-function lgReconAlertHtml(recon, L) {
-  const confs = (L?.reconcile?.openConflicts?.length ? L.reconcile.openConflicts : (recon?.conflicts || []).filter(c => c && c.status === "open")) || [];
-  if (!confs.length && !(L?.reconcile?.unresolvedSameDayCount > 0)) return "";
+function lgReconAlertHtml(recon, L, opts = {}) {
+  const rawConfs = (L?.reconcile?.openConflicts?.length ? L.reconcile.openConflicts : (recon?.conflicts || []).filter(c => c && c.status === "open")) || [];
+  const symF = opts?.symbol ? String(opts.symbol).toUpperCase() : null;
+  const confs = symF ? rawConfs.filter(c => String(c.symbol || "").toUpperCase() === symF) : rawConfs;
+  const unresTxs = (L?.txs || []).filter(x => x && x.sameDayRelation === "unresolved" && !x.errors?.length && (!symF || String(x.tx?.symbol || "").toUpperCase() === symF));
+  if (!confs.length && !unresTxs.length && (symF || !(L?.reconcile?.unresolvedSameDayCount > 0))) return "";
   const seen = new Set(), items = [];
   for (const c of confs) {
     const k = c.id || `${c.kind}:${c.symbol}`;
@@ -253,7 +256,21 @@ function lgReconAlertHtml(recon, L) {
     const hint = typeof KLRecon?.settlementHint === "function" ? KLRecon.settlementHint(c.market) : "";
     items.push(`${esc(c.symbol || "")}（${diff}）${hint ? `：${esc(hint)}` : ""}`);
   }
-  return `<div class="lgrecon-alert note lgwarn" role="status">⚠︎ 待對帳（${items.length} 項）：${items.slice(0, 3).join("；")}${items.length > 3 ? "…" : ""} <button type="button" class="btn sm" data-lg="view" data-v="tx">前往對帳中心</button></div>`;
+  for (const x of unresTxs) {
+    const k = `sd:${x.id}`;
+    if (seen.has(k) || confs.some(c => c.kind === "same_day_order" && c.txId === x.id)) continue;
+    seen.add(k);
+    const hint = typeof KLRecon?.settlementHint === "function" ? KLRecon.settlementHint(x.tx?.market) : "";
+    items.push(`${esc(x.tx?.symbol || "")}（同日順序未決）${hint ? `：${esc(hint)}` : ""}`);
+  }
+  if (!items.length && L?.reconcile?.pendingSymbols?.length) {
+    for (const s of L.reconcile.pendingSymbols) {
+      if (!symF || s === symF) items.push(`${esc(s)}（待對帳）`);
+    }
+  }
+  if (!items.length) return "";
+  const btn = opts?.noButton ? "" : ` <button type="button" class="btn sm" data-lg="view" data-v="tx">前往對帳中心</button>`;
+  return `<div class="lgrecon-alert note lgwarn" role="status">⚠︎ 待對帳（${items.slice(0, 3).join("；")}${items.length > 3 ? ` 等 ${items.length} 項` : ""}）${btn}</div>`;
 }
 
 const LG_FIELDS = { // 每種交易要填的欄位

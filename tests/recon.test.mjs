@@ -1,7 +1,7 @@
 // 對帳引擎 learner/recon.js（KLRecon）單元測試：固定假資料，不連網、不觸碰瀏覽器存檔。
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import vm from "node:vm";
 
 function loadLedgerAndRecon() {
@@ -546,3 +546,15 @@ test("雙鍵寫入 store.set === false 模擬（Phase 1 / Phase 2＋復原也失
   assert.equal(R.recoverCommit(f3.memPf, rec3.reconStore).changed, false);
 });
 
+test("Task 7 防繞過靜態檢查：learner/*.js 與 learner/watch.html（除 learner/ledger.js 外）不可直接呼叫 .buildLedger(", () => {
+  const learnerDir = new URL("../learner/", import.meta.url);
+  const files = readdirSync(learnerDir).filter(f => (f.endsWith(".js") && f !== "ledger.js") || f === "watch.html");
+  const stripComments = src => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:\\])\/\/[^\n]*/g, "$1");
+  const hits = [];
+  for (const f of files) {
+    const raw = readFileSync(new URL(f, learnerDir), "utf8");
+    const cleaned = stripComments(raw);
+    if (/\.buildLedger\s*\(/.test(cleaned)) hits.push(f);
+  }
+  assert.deepEqual(hits, [], `發現未經 buildReconciledLedger 的直接 .buildLedger( 呼叫：${hits.join(", ")}`);
+});

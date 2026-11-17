@@ -68,10 +68,8 @@
   // 主函式。opts：method（avg／fifo）、prices（代號 → [{ d, c }] 原始收盤）、bench（{ TWD: [{d,c}], USD: [{d,c}] }，可省略）、benchName、
   //   asOf（算到哪一天，預設各價格的最後一天）、today、recon（kline:pf:recon:v1）、classify(symbol) → { assetType, industry }（可省略）
   function buildPerf(txs, opts = {}) {
-    const LG = root.KLLedger; if (!LG) return { v: VERSION, status: "invalid", error: "no_ledger" };
-    const L = typeof LG.buildReconciledLedger === "function"
-      ? LG.buildReconciledLedger(txs, opts.recon || null, { method: opts.method, today: opts.today })
-      : LG.buildLedger(txs, { method: opts.method, today: opts.today });
+    const LG = root.KLLedger; if (!LG || typeof LG.buildReconciledLedger !== "function") return { v: VERSION, status: "invalid", error: "no_ledger" };
+    const L = LG.buildReconciledLedger(txs, opts.recon || null, { method: opts.method, today: opts.today });
     if (L.status === "invalid") return { v: VERSION, status: "invalid", error: L.error };
     const books = {}; for (const [c, s] of Object.entries(opts.prices || {})) books[String(c).toUpperCase()] = priceBook(s);
     const cls = typeof opts.classify === "function" ? opts.classify : (c => ({ assetType: /^00\d{2,4}[A-Z]?$/.test(c) ? "etf" : "stock", industry: null }));
