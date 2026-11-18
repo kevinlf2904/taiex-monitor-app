@@ -20,8 +20,12 @@ test("CI 分份：任何份數下，每個瀏覽器測試檔剛好落在一份�
 
 test("CI 分份：參數不對就丟錯，不會默默跑 0 個檔案", () => {
   for (const [k, n] of [[0, 3], [4, 3], [1, 0], [1.5, 3], [NaN, 3]]) assert.throws(() => shard([1, 2, 3], k, n), /分份參數不對/, `${k}/${n}`);
-  assert.throws(() => pick(["--e2e=abc"]), /分份參數不對/);
+  for (const bad of ["--e2e=abc", "--e2e=1/3/4", "--e2e=0/3", "--e2e=1/", "--e2e=/3", "--e2e=1.5/3", "--e2e=-1/3"]) assert.throws(() => pick([bad]), /分份參數不對/, bad);
+  assert.throws(() => pick(["--e2e=4/3"]), /分份參數不對/);
   assert.throws(() => pick(["--unit", "--e2e=1/3"]), /不能同時用/);
+  assert.throws(() => pick(["--e2e=1/3", "--e2e=2/3"]), /只能給一次/);
+  assert.throws(() => pick(["--unti"]), /不認得的參數/, "打錯字不能默默跑全部");
+  assert.throws(() => pick(["--e2e=1/3", "extra"]), /不認得的參數/);
 });
 
 test("CI 分份：--unit 只跑單元測試、--e2e 只跑瀏覽器測試、不帶參數跑全部", () => {
@@ -40,6 +44,12 @@ test("CI 分份：ci.yml 保留名為 test 的彙總檢查，而且等所有分�
   assert.match(y, /needs: \[unit, e2e\]/);
   assert.match(y, /node tests\/run\.mjs --unit/);
   assert.match(y, /node tests\/run\.mjs --e2e=\$\{\{ matrix\.shard \}\}\/\$\{\{ strategy\.job-total \}\}/, "份數用 job-total，不會跟 matrix 對不上");
+  assert.match(y, /^  test:\n    needs: \[unit, e2e\]\n    if: always\(\) &&/m, "test 要 always()，前面失敗時才會回報失敗而不是 skipped");
+  assert.match(y, /fail-fast: false/, "一份失敗其他份照跑");
+  const pw = y.match(/mcr\.microsoft\.com\/playwright:v([\d.]+)-noble/), npm = y.match(/playwright@([\d.]+)/);
+  assert.ok(pw && npm, "e2e 用 Playwright 官方容器，npm 也裝 playwright");
+  assert.equal(pw[1], npm[1], "容器版本要和 npm 裝的 playwright 一致，否則找不到瀏覽器");
+  assert.match(y, /options: --ipc=host/, "容器的 /dev/shm 太小，chromium 會崩潰");
   assert.match(y, /needs\.unit\.result.*success/s);
   assert.match(y, /needs\.e2e\.result.*success/s);
 });

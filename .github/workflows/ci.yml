@@ -30,8 +30,13 @@ jobs:
       - run: node tests/run.mjs --unit
   e2e:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: ubuntu-24.04 # ubuntu-latest 已換成 26.04，Playwright 1.56 不支援，裝不了 chromium
-    timeout-minutes: 30 # 安裝 chromium（apt 相依套件）有時要 6～11 分鐘
+    runs-on: ubuntu-24.04
+    # 用 Playwright 官方容器：chromium 與系統相依套件都已裝好，省掉每份 3～10 分鐘的安裝（#312，#315 實測 223～570 秒）。
+    # 版本要和下面 npm 裝的 playwright@1.56.1 一致，否則找不到對應的瀏覽器。--ipc=host：容器預設 /dev/shm 只有 64MB，chromium 會崩潰
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      options: --ipc=host
+    timeout-minutes: 20
     strategy:
       fail-fast: false # 一份失敗，其他份照跑完，一次看到所有失敗項目
       matrix:
@@ -42,7 +47,6 @@ jobs:
         with:
           node-version: 22
       - run: npm i --no-save --no-audit --no-fund playwright@1.56.1
-      - run: npx playwright install --with-deps chromium
       - run: node tests/run.mjs --e2e=${{ matrix.shard }}/${{ strategy.job-total }}
   test:
     needs: [unit, e2e]
