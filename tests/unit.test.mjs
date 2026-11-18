@@ -410,6 +410,7 @@ test("AI 協作規則：AGENTS.md 與 Antigravity 規則檔一致，CLAUDE.md �
   assert.equal(g, a, "改了 AGENTS.md 要複製到 .agent/rules/klinelab.md");
   assert.match(c, /^@AGENTS\.md/m);
   assert.match(c, /subscribe_pr_activity/, "CLAUDE.md 要寫明 Claude Code 開始處理 PR 時自動開啟留言讀取");
+  assert.match(c, /訂閱或通知工具不存在、權限不足或任何一步失敗時，立即改成手動讀取/, "CLAUDE.md 要寫明訂閱工具不能用時的手動讀取替代流程");
   for (const k of ["learner/version.json", "gemini/", "claude/", "codex/", "稽核", "驗證：", "pull_request_template.md", "密鑰", "draft PR", "鎖：", ".agent/workflows/merge.md", "scripts/bump-version.mjs", "不連外部網站", "learner/core.js", "每次收到指令都要自動做", "審查（", "處置（", "自動讀取", "PR 留言是 AI 之間唯一的溝通管道"]) assert.ok(a.includes(k), `AGENTS.md 缺少「${k}」`);
   assert.match(await rd(".github/copilot-instructions.md"), /AGENTS\.md/, "Copilot 的說明要指向 AGENTS.md");
   const m = await rd(".agent/workflows/merge.md");
