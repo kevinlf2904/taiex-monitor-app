@@ -66,8 +66,10 @@ function thHist(c) {
 const TH_EVERY = [["", "不改"], ["30", "30 天後"], ["90", "90 天後（一季）"], ["180", "180 天後"]];
 function renderThesisView(S) {
   const head = lgViewSeg(), L = W.lg, today = lgToday();
-  const led = KLLedger.buildLedger(S.transactions, { method: S.method, today }), open = led.positions.filter(p => p.open), codes = open.map(p => p.symbol);
-  if (!codes.length) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">目前沒有持股。到「交易紀錄」新增買進後，就可以替每檔持股寫投資論點。</p>`);
+  const recon = typeof lgReconLoad === "function" ? lgReconLoad() : null;
+  const led = KLLedger.buildReconciledLedger(S, recon, { method: S.method, today }), open = led.positions.filter(p => p.open), codes = open.map(p => p.symbol);
+  const reconAlert = typeof lgReconAlertHtml === "function" ? lgReconAlertHtml(recon, led) : "";
+  if (!codes.length) return ($("#lx").innerHTML = head + reconAlert + `<p class="note" style="padding:12px">目前沒有持股。到「交易紀錄」新增買進或匯入庫存快照後，就可以替每檔持股寫投資論點。</p>`);
   const st = thLoad(), Sm = KLThesis.summary(st, codes, today), X = W.off ? { busy: false } : thData(), SL = KLThesis.STATUS_LABEL;
   // 停損停利：有設的才抓報價（和配置頁共用）；每檔的價位與狀態
   const anyLv = codes.some(c => st.items[c]?.stop || st.items[c]?.take), Q = (anyLv || codes.some(c => /^\d/.test(c))) && !W.off ? lgAllocData(open) : null, pos = new Map(open.map(p => [p.symbol, p]));
@@ -95,6 +97,7 @@ function renderThesisView(S) {
     const it = st.items[c] || {}, has = !!(it.reason || it.watch?.length || it.kill?.length), s = it.status || "hold", due = it.review && it.review <= today;
     if (L.thEdit === c) return thForm(c, it);
     if (L.thLog === c) return thLogForm(c, it);
+    const symRecon = typeof lgReconAlertHtml === "function" ? lgReconAlertHtml(recon, led, { symbol: c }) : "";
     const lv = LV.get(c), cur = pos.get(c).currency, px = v => (v == null ? "—" : `${+v.toFixed(2)}${cur === "USD" ? " 美元" : ""}`), pc = v => (v == null || lv.state.endsWith("_hit") ? "" : `（${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}%）`); // 已觸及就不顯示距離
     const lvRow = lv.state === "none" ? "" : `<p class="thlv"><span class="thst thlv-${lv.state}">${esc(KLThesis.LEVEL_LABEL[lv.state])}</span>`
       + (it.stop ? `<span>停損 ${px(lv.stopPrice)}${pc(lv.toStop)}${it.stop.mode === "pct" ? `<small class="note">＝成本 ${it.stop.v}%</small>` : ""}</span>` : "")
@@ -130,12 +133,12 @@ function renderThesisView(S) {
     const kRow = !/^\d/.test(c) ? "" : K ? `<div class="thkpi"><span class="note">最新財報${per[0] || per[1] ? `（營收 ${esc(per[0])}・季報 ${esc(per[1])}）` : ""}</span>${K.map(x => `<span>${esc(x.label)} ${kv(x)}</span>`).join("")}</div>`
       : ED?.busy ? `<p class="note thkpi">載入財報指標…</p>` : ED?.rows ? `<p class="note thkpi">這檔不在月營收／季報資料裡（ETF、新上市或興櫃）。</p>` : ED?.fail ? `<p class="note thkpi lgwarn">財報指標這次拿不到${ED.msg ? `（${esc(ED.msg)}）` : ""}，1 分鐘後自動再試。</p>` : "";
     return `<section class="pfcard thcard" data-nofold><div class="thh"><button type="button" class="linkbtn" data-sel="${esc(c)}"><b>${esc(nameOf(c))}</b> <small class="note">${esc(c)}</small></button>${has ? `<span class="thst thst-${s}">${SL[s]}</span>` : ""}${it.review ? `<span class="note${due ? " lgwarn" : ""}">下次檢視 ${esc(it.review)}${due ? "（到期）" : ""}</span>` : ""}</div>`
-      + lvRow + kRow + vRow + (has ? `<div class="thgrid"><div><h5 class="pfh">為什麼買</h5><p>${esc(it.reason || "—")}</p></div><div><h5 class="pfh">要觀察的</h5>${ulW(it.watch)}</div><div><h5 class="pfh">什麼情況代表論點不成立</h5>${ul(it.kill)}</div></div>`
+      + symRecon + lvRow + kRow + vRow + (has ? `<div class="thgrid"><div><h5 class="pfh">為什麼買</h5><p>${esc(it.reason || "—")}</p></div><div><h5 class="pfh">要觀察的</h5>${ulW(it.watch)}</div><div><h5 class="pfh">什麼情況代表論點不成立</h5>${ul(it.kill)}</div></div>`
         + (it.log?.length ? `<p class="note thlast">最近檢視 ${esc(it.log[0].d)}${it.log[0].status ? `・${SL[it.log[0].status]}` : ""}：${esc(it.log[0].note || "—")}${it.log.length > 1 ? `（共 ${it.log.length} 筆）` : ""}</p>` : "")
         : `<p class="note">還沒寫這檔的投資論點。</p>`)
       + `<div class="lgbar"><button type="button" class="btn sm${has ? "" : " primary"}" data-th="edit" data-c="${esc(c)}">${has ? "修改論點" : "寫論點"}</button>${has ? `<button type="button" class="btn sm" data-th="log" data-c="${esc(c)}">加檢視紀錄</button>` : ""}${lv.stopPrice != null || lv.takePrice != null ? `<button type="button" class="btn sm" data-th="alert" data-c="${esc(c)}">設成到價提醒</button>` : ""}</div></section>`;
   };
-  $("#lx").innerHTML = head + `<section class="pfcard thsum" data-nofold><h4>投資論點與近期事件</h4><div class="pftiles">${tiles}</div>
+  $("#lx").innerHTML = head + `<section class="pfcard thsum" data-nofold><h4>投資論點與近期事件</h4>${reconAlert}<div class="pftiles">${tiles}</div>
       ${L.thMsg ? `<p class="note lgmsg" role="status">${esc(L.thMsg)}</p>` : ""}<h5 class="pfh">近期事件（60 天內）</h5>${ev}
       <p class="note">論點是你自己的紀錄（為什麼買、觀察什麼、什麼情況不成立），不是投資建議；只存在這個瀏覽器，有開雲端同步時會一起同步，備份檔也會帶。</p></section>`
     + codes.map(card).join("");

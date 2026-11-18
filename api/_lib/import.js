@@ -1,7 +1,8 @@
 // 庫存／交易明細截圖匯入：把券商 App「庫存／即時損益／持股分析」或「成交明細／對帳單」的截圖交給 AI 讀出每一列數字。
-// POST /api/import  { images: ["data:image/jpeg;base64,...", ...], mode?: "holdings" | "trades" }（最多 4 張，頁面會先縮小）
-// mode 省略或 "holdings"：回傳 { ok, mode: "holdings", rows: [{ name, code, shares, avgCost, price, chgPct, todayPnl, totalPnl, totalPnlPct, marketValue }] }
-// mode === "trades"：回傳 { ok, mode: "trades", rows: [{ date, dateAssumed, time, side, name, code, shares, price, fee, tax, dayTrade, note }] }（相同日期／同價分批不自動合併去重）
+// POST /api/import  { images: ["data:image/jpeg;base64,...", ...], mode?: "holdings" | "trades" | "auto" }（最多 4 張，頁面會先縮小）
+// mode 省略或 "holdings"：回傳 { ok, mode: "holdings", rows: [{ name, code, shares, avgCost, price, chgPct, todayPnl, totalPnl, totalPnlPct, marketValue, marginType? }] }
+// mode === "trades"：回傳 { ok, mode: "trades", rows: [{ date, dateAssumed, time, side, name, code, shares, price, fee, tax, dayTrade, note, marginType? }] }
+// mode === "auto"：回傳 { ok, mode: "auto", kind: "holdings" | "trades" | "unknown", asOf, asOfStatus, altDate?, rawAsOf?, rows, model }
 // 截圖上沒有的欄位是 null；用 GEMINI_API_KEY（Gemini 會看圖）；沒有時用 ANTHROPIC_API_KEY（要另外設 AI_CLAUDE_ENABLED=1 總開關，預設關閉）。
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -13,7 +14,7 @@ const PROMPT = `這是台股或美股券商 App 的庫存（持股）畫面截�
 規則：
 - 每一列是一檔股票或 ETF，可能是「名稱＋代號」兩行。代號是 4～6 碼數字（可能帶一個英文字母，例如 00403A），美股是英文代號。
 - 數字照畫面抄，去掉千分位逗號與 % 符號；負數保留負號（綠色或有「-」的是負的）。
-- 欄位對應：股價／成交價 → price；漲跌幅 → chgPct；今日損益 → todayPnl；總損益／累積損益／未實現損益 → totalPnl；總損益下方的百分比／報酬率 → totalPnlPct；市值 → marketValue；股數／庫存股數 → shares（若寫「張」要乘以 1000）；成本均價／平均成本 → avgCost。
+- 欄位對應：股價／成交價 → price；漲跌幅 → chgPct；今日損益 → todayPnl；總損益／累積損益／未實現損益 → totalPnl；總損益下方的百分比／報酬率 → totalPnlPct；市值 → marketValue；股數／庫存股數 → shares（若寫「張」要乘以 1000）；成本均價／平均成本 → avgCost；若有標示融資或融券（如 融資/融券/margin/short），填在 marginType，沒有填 null。
 - 畫面上沒有的欄位填 null，不要自己推算或猜。
 - 上方的總計（今日損益合計、股票市值合計、圓餅圖）不要當成個股。
 - 被截掉一半、看不清楚的列略過。`;
@@ -23,6 +24,7 @@ const SCHEMA = {
     name: { type: "STRING" }, code: { type: "STRING", nullable: true }, shares: { type: "NUMBER", nullable: true }, avgCost: { type: "NUMBER", nullable: true },
     price: { type: "NUMBER", nullable: true }, chgPct: { type: "NUMBER", nullable: true }, todayPnl: { type: "NUMBER", nullable: true },
     totalPnl: { type: "NUMBER", nullable: true }, totalPnlPct: { type: "NUMBER", nullable: true }, marketValue: { type: "NUMBER", nullable: true },
+    marginType: { type: "STRING", nullable: true },
   }, required: ["name"] } } },
   required: ["rows"],
 };
@@ -40,6 +42,7 @@ const TRADES_PROMPT = `這是台股或美股券商 App 的「成交明細／成�
   · fee：手續費（畫面有明確寫 0 就填 0；沒有這一欄或空白填 null，不要自己估算）
   · tax：交易稅／證交稅（畫面有明確寫 0 就填 0；沒有這一欄或空白填 null，不要自己估算）
   · dayTrade：是否現股當沖（畫面有標「現沖／當沖／資沖／券沖」填 true，否則填 false）
+  · marginType：若有明確標「融資／資買／資賣／融券／券買／券賣／margin／short」，照寫或填 "margin"/"short"；現股或未標填 null
   · note：委託單號、幣別或其他簡短附註（沒有填 null）
 - 數字照畫面抄，去掉千分位逗號。
 - 上方的合計、小計、欄位標題、成交股數為 0 的已撤銷／未成交委託不要當成成交紀錄。
@@ -49,9 +52,33 @@ const TRADES_SCHEMA = {
   properties: { rows: { type: "ARRAY", items: { type: "OBJECT", properties: {
     date: { type: "STRING", nullable: true }, time: { type: "STRING", nullable: true }, side: { type: "STRING", nullable: true }, name: { type: "STRING", nullable: true }, code: { type: "STRING", nullable: true },
     shares: { type: "NUMBER", nullable: true }, price: { type: "NUMBER", nullable: true }, fee: { type: "NUMBER", nullable: true }, tax: { type: "NUMBER", nullable: true },
-    dayTrade: { type: "BOOLEAN", nullable: true }, note: { type: "STRING", nullable: true },
+    dayTrade: { type: "BOOLEAN", nullable: true }, marginType: { type: "STRING", nullable: true }, note: { type: "STRING", nullable: true },
   }, required: [] } } },
   required: ["rows"],
+};
+const AUTO_PROMPT = `這是台股或美股券商 App 的截圖，可能是「庫存（持股／即時損益／持股明細）」，也可能是「成交明細（成交回報／對帳單）」。請先判斷截圖類型、讀取畫面日期（asOf），再讀出每一列資料，只輸出 JSON。
+規則：
+- kind：若畫面主要是目前持股庫存、未實現損益、成本均價與市值，填 "holdings"；若畫面是成交買賣紀錄、成交價與手續費交易稅，填 "trades"；無法確定填 "unknown"。
+- asOf：截圖上方或欄位中「資料基準日期／查詢日／更新時間」（如 2026-11-10、115/11/10、11/10），沒有明確日期時填 null（不要把時間當日期，也不要自己猜今天）。
+- rows：
+  · 若為庫存：讀取 name、code、shares（張×1000）、avgCost、price、chgPct、todayPnl、totalPnl、totalPnlPct、marketValue、marginType（融資/融券否則 null）。略過合計列。
+  · 若為成交明細：讀取 date（沒寫填 null）、time、side（"buy"/"sell"/null）、name、code、shares（張×1000）、price、fee、tax、dayTrade、marginType、note；同天同價分批成交必須保留每一列不合併。
+  · 若為 "unknown"：盡可能填寫可辨識欄位，沒有的欄位填 null。`;
+const AUTO_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    kind: { type: "STRING" },
+    asOf: { type: "STRING", nullable: true },
+    rows: { type: "ARRAY", items: { type: "OBJECT", properties: {
+      date: { type: "STRING", nullable: true }, time: { type: "STRING", nullable: true }, side: { type: "STRING", nullable: true },
+      name: { type: "STRING", nullable: true }, code: { type: "STRING", nullable: true }, shares: { type: "NUMBER", nullable: true },
+      avgCost: { type: "NUMBER", nullable: true }, price: { type: "NUMBER", nullable: true }, fee: { type: "NUMBER", nullable: true },
+      tax: { type: "NUMBER", nullable: true }, dayTrade: { type: "BOOLEAN", nullable: true }, chgPct: { type: "NUMBER", nullable: true },
+      todayPnl: { type: "NUMBER", nullable: true }, totalPnl: { type: "NUMBER", nullable: true }, totalPnlPct: { type: "NUMBER", nullable: true },
+      marketValue: { type: "NUMBER", nullable: true }, marginType: { type: "STRING", nullable: true }, note: { type: "STRING", nullable: true },
+    }, required: [] } },
+  },
+  required: ["kind", "rows"],
 };
 
 const FIELDS = ["shares", "avgCost", "price", "chgPct", "todayPnl", "totalPnl", "totalPnlPct", "marketValue"];
@@ -75,10 +102,10 @@ const parseAmbigSlash = (a, b, y, raw) => {
   return { date: fmtCal(y, ab ? a : b, ab ? b : a), dateAssumed: null };
 };
 
-export function parseTradeDate(raw, today = taipeiToday()) {
+export function parseTradeDate(raw, today = taipeiToday(), opts = {}) {
   const refToday = typeof today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(today) && validCal(+today.slice(0, 4), +today.slice(5, 7), +today.slice(8, 10)) ? today : taipeiToday();
   const s = halfWidth(raw);
-  if (!s) return { date: refToday, dateAssumed: "today" };
+  if (!s) return opts?.missingAsNull ? { date: "", dateAssumed: "missing" } : { date: refToday, dateAssumed: "today" };
   let m = s.match(/^(?:西元\s*)?(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?(?:$|[\sT(（].*)/);
   if (m) return validCal(+m[1], +m[2], +m[3]) ? { date: fmtCal(+m[1], +m[2], +m[3]), dateAssumed: null } : { date: "", dateAssumed: "invalid", rawDate: s };
   m = s.match(/^(\d{4})(\d{2})(\d{2})(?:$|[\sT(（].*)/);
@@ -106,6 +133,22 @@ export function parseTradeDate(raw, today = taipeiToday()) {
     return { date: "", dateAssumed: "invalid", rawDate: s };
   }
   return { date: "", dateAssumed: "invalid", rawDate: s };
+}
+
+export function parseAsOf(raw, today = taipeiToday()) {
+  const refToday = typeof today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(today) && validCal(+today.slice(0, 4), +today.slice(5, 7), +today.slice(8, 10)) ? today : taipeiToday();
+  const s = halfWidth(raw);
+  if (!s) return { asOf: null, asOfStatus: "missing" };
+  const pd = parseTradeDate(s, refToday, { missingAsNull: true });
+  if (pd.dateAssumed === "missing") return { asOf: null, asOfStatus: "missing" };
+  if (pd.dateAssumed === "invalid") return { asOf: null, asOfStatus: "invalid", rawAsOf: s };
+  if (pd.dateAssumed === "year") return { asOf: pd.date, asOfStatus: "year", rawAsOf: s };
+  if (pd.dateAssumed === "mdy") {
+    if (pd.date > refToday && (!pd.altDate || pd.altDate > refToday)) return { asOf: pd.date, asOfStatus: "future", rawAsOf: s };
+    return { asOf: pd.date, asOfStatus: "mdy", altDate: pd.altDate, rawAsOf: s };
+  }
+  if (pd.date > refToday) return { asOf: pd.date, asOfStatus: "future", rawAsOf: s };
+  return { asOf: pd.date, asOfStatus: "exact" };
 }
 
 const cleanTimeOne = raw => {
@@ -143,18 +186,26 @@ const cleanShares = v => {
   return n != null && n > 0 ? n : null;
 };
 const nonNegOrNull = v => { const n = numOrNull(v); return n != null && n >= 0 ? n : null; };
+const detectMarginType = r => {
+  const txt = [r?.marginType, r?.side, r?.type, r?.note, r?.name].map(x => String(x ?? "")).join(" ");
+  if (!/融資|融券|資買|資賣|券買|券賣|credit|\bmargin\b|\bshort\b/i.test(txt)) return null;
+  if (/券賣|融券|券買|\bshort\b/i.test(txt)) return "short";
+  return "margin";
+};
 
 export function cleanRows(rows) {
   const seen = new Set();
   return (Array.isArray(rows) ? rows : []).map(r => {
+    const mt = detectMarginType(r);
     const out = { name: String(r?.name ?? "").trim().slice(0, 30), code: cleanCode(r?.code) };
     FIELDS.forEach(k => (out[k] = numOrNull(r?.[k])));
+    if (mt) out.marginType = mt;
     return out;
   }).filter(r => (r.name || r.code) && FIELDS.some(k => r[k] != null)).filter(r => { const k = r.code || r.name; if (seen.has(k)) return false; seen.add(k); return true; });
 }
 export function cleanTradeRows(rows, opts = {}) {
   return (Array.isArray(rows) ? rows : []).map(r => {
-    const pd = parseTradeDate(r?.date, opts.today);
+    const pd = parseTradeDate(r?.date, opts.today, { missingAsNull: !!opts?.missingAsNull });
     const time = cleanTime(r?.time, r?.date);
     const rawTimeText = r?.time == null ? "" : halfWidth(r.time);
     const timeInvalid = !!rawTimeText && !cleanTimeOne(rawTimeText);
@@ -167,6 +218,7 @@ export function cleanTradeRows(rows, opts = {}) {
     const fee = nonNegOrNull(r?.fee);
     const tax = nonNegOrNull(r?.tax);
     const dayTrade = Boolean(r?.dayTrade === true || /^(true|1|yes|y|是)$/i.test(String(r?.dayTrade ?? "").trim()) || /沖/.test(String(r?.side ?? "")));
+    const mt = detectMarginType(r);
     const note = r?.note == null ? "" : String(r.note).trim().slice(0, 200);
     return {
       date: pd.date, dateAssumed: pd.dateAssumed,
@@ -175,8 +227,48 @@ export function cleanTradeRows(rows, opts = {}) {
       time,
       ...(timeInvalid ? { timeInvalid: true, rawTime: rawTimeText.slice(0, 40) } : {}),
       side, name, code, shares, price, fee, tax, dayTrade, note,
+      ...(mt ? { marginType: mt } : {}),
     };
   }).filter(r => (r.name || r.code) && (r.shares != null || r.price != null));
+}
+export function cleanAutoUnknownRows(rows, opts = {}) {
+  return (Array.isArray(rows) ? rows : []).map(r => {
+    const pd = parseTradeDate(r?.date, opts.today, { missingAsNull: true });
+    const time = cleanTime(r?.time, r?.date);
+    const rawTimeText = r?.time == null ? "" : halfWidth(r.time);
+    const timeInvalid = !!rawTimeText && !cleanTimeOne(rawTimeText);
+    const side = cleanSide(r?.side ?? r?.type);
+    const code = cleanCode(r?.code ?? r?.symbol);
+    const name = String(r?.name ?? "").trim().slice(0, 30);
+    const shares = cleanShares(r?.shares);
+    const px = numOrNull(r?.price);
+    const price = px != null && px > 0 ? px : null;
+    const ac = numOrNull(r?.avgCost);
+    const avgCost = ac != null && ac > 0 ? ac : null;
+    const fee = nonNegOrNull(r?.fee);
+    const tax = nonNegOrNull(r?.tax);
+    const dayTrade = Boolean(r?.dayTrade === true || /^(true|1|yes|y|是)$/i.test(String(r?.dayTrade ?? "").trim()) || /沖/.test(String(r?.side ?? "")));
+    const mt = detectMarginType(r);
+    const note = r?.note == null ? "" : String(r.note).trim().slice(0, 200);
+    const out = {
+      date: pd.date, dateAssumed: pd.dateAssumed,
+      ...(pd.altDate ? { altDate: pd.altDate } : {}),
+      ...(pd.rawDate ? { rawDate: pd.rawDate } : {}),
+      time,
+      ...(timeInvalid ? { timeInvalid: true, rawTime: rawTimeText.slice(0, 40) } : {}),
+      side, name, code,
+    };
+    FIELDS.forEach(k => (out[k] = numOrNull(r?.[k])));
+    out.shares = shares;
+    out.avgCost = avgCost;
+    out.price = price;
+    out.fee = fee;
+    out.tax = tax;
+    out.dayTrade = dayTrade;
+    out.note = note;
+    if (mt) out.marginType = mt;
+    return out;
+  }).filter(r => (r.name || r.code) && (r.shares != null || r.price != null || r.avgCost != null || FIELDS.some(k => r[k] != null)));
 }
 export function parseImages(images) {
   return (Array.isArray(images) ? images : []).slice(0, 4).map(s => String(s).match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/)).filter(Boolean).map(m => ({ mime: m[1], data: m[2] }));
@@ -193,6 +285,11 @@ const MODES = {
     prompt: TRADES_PROMPT, schema: TRADES_SCHEMA, claudeSuffix: "\n只輸出 {\"rows\":[...]} 這個 JSON，不要其他文字。", clean: (rows, opts) => cleanTradeRows(rows, opts),
     errEmptyInput: "請上傳成交明細／對帳單畫面的截圖（JPG／PNG）", errNoKey: "截圖匯入需要 AI 讀圖：伺服器尚未設定 GEMINI_API_KEY。也可以改用「手動表格輸入」。",
     err422: "沒有讀出成交明細表格，請確認截圖是委託回報、成交回報或對帳單畫面。", errEmpty: "截圖裡沒有讀到成交明細，請換一張清楚一點的成交回報或對帳單畫面。",
+  },
+  auto: {
+    prompt: AUTO_PROMPT, schema: AUTO_SCHEMA, claudeSuffix: "\n只輸出 {\"kind\":\"holdings\"|\"trades\"|\"unknown\",\"asOf\":null|\"...\",\"rows\":[...]} 這個 JSON，不要其他文字。", clean: (rows, opts) => cleanAutoUnknownRows(rows, opts),
+    errEmptyInput: "請上傳庫存或成交明細畫面的截圖（JPG／PNG）", errNoKey: "截圖匯入需要 AI 讀圖：伺服器尚未設定 GEMINI_API_KEY。也可以改用「手動新增空白列」。",
+    err422: "沒有讀出表格，請換一張更清楚的庫存或成交明細截圖。", errEmpty: "截圖裡沒有讀到有效資料，請換一張清楚一點的截圖。",
   },
 };
 
@@ -213,7 +310,7 @@ async function viaGemini(imgs, key, deadline = Date.now() + 52000, spec = MODES.
       if (!r.ok) return { ok: false, status: r.status, message: j?.error?.message || "" };
       const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
       const parsed = extractJSON(text); if (!parsed) return { ok: false, status: 422, message: "讀不出表格" };
-      return { ok: true, rows: parsed.rows, model: m };
+      return { ok: true, kind: parsed.kind, asOf: parsed.asOf ?? null, rows: parsed.rows, model: m };
     }
   }
   return { ok: false, status: last?.status || 503, message: last?.message || "" };
@@ -223,14 +320,14 @@ async function viaClaude(imgs, timeout = 55000, spec = MODES.holdings) {
   const msg = await client.messages.create({ model: "claude-opus-5-5", max_tokens: 8000,
     messages: [{ role: "user", content: [...imgs.map(i => ({ type: "image", source: { type: "base64", media_type: i.mime, data: i.data } })), { type: "text", text: spec.prompt + spec.claudeSuffix }] }] });
   const parsed = extractJSON(msg.content.filter(b => b.type === "text").map(b => b.text).join(""));
-  return parsed ? { ok: true, rows: parsed.rows, model: msg.model } : { ok: false, status: 422, message: "讀不出表格" };
+  return parsed ? { ok: true, kind: parsed.kind, asOf: parsed.asOf ?? null, rows: parsed.rows, model: msg.model } : { ok: false, status: 422, message: "讀不出表格" };
 }
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "只接受 POST" });
   const rawMode = req.body?.mode;
   const mode = rawMode == null || rawMode === "" ? "holdings" : rawMode;
-  if (mode !== "holdings" && mode !== "trades") return res.status(400).json({ ok: false, error: "不支援的匯入模式" });
+  if (mode !== "holdings" && mode !== "trades" && mode !== "auto") return res.status(400).json({ ok: false, error: "不支援的匯入模式" });
   const spec = MODES[mode];
   const imgs = parseImages(req.body?.images);
   if (!imgs.length) return res.status(400).json({ ok: false, error: spec.errEmptyInput });
@@ -243,8 +340,32 @@ export default async function handler(req, res) {
     if (!r && ck) r = await viaClaude(imgs, 55000, spec);
     else if (r && !r.ok && ck && claudeFallbackOn() && Date.now() - t0 < 25000 && !(await aiLimit(req, "claude-fb"))) r = await viaClaude(imgs, 55000 - (Date.now() - t0), spec);
     if (!r.ok) return res.status(200).json({ ok: false, error: r.status === 503 || r.status === 500 ? "AI 讀圖服務目前太忙，請過一兩分鐘再試。" : r.status === 429 ? "AI 讀圖的免費額度暫時用完，請稍後再試。" : r.status === 422 ? spec.err422 : `AI 讀圖失敗（${r.status}）` });
+    if (mode === "auto") {
+      const rk = String(r.kind || "").trim().toLowerCase();
+      const kind = rk === "holdings" || rk === "trades" ? rk : "unknown";
+      const asOfInfo = parseAsOf(r.asOf);
+      const rows = kind === "holdings" ? cleanRows(r.rows) : kind === "trades" ? cleanTradeRows(r.rows, { missingAsNull: true }) : cleanAutoUnknownRows(r.rows, { missingAsNull: true });
+      if (!rows.length) {
+        if (kind === "unknown") {
+          return res.status(200).json({
+            ok: false, kind: "unknown", asOf: asOfInfo.asOf, asOfStatus: asOfInfo.asOfStatus,
+            ...(asOfInfo.altDate ? { altDate: asOfInfo.altDate } : {}),
+            ...(asOfInfo.rawAsOf ? { rawAsOf: asOfInfo.rawAsOf } : {}),
+            error: "無法辨識這張截圖是庫存還是交易明細，且沒有讀出有效資料列。",
+          });
+        }
+        return res.status(200).json({ ok: false, error: MODES[kind].errEmpty });
+      }
+      return res.status(200).json({
+        ok: true, mode: "auto", kind, asOf: asOfInfo.asOf, asOfStatus: asOfInfo.asOfStatus,
+        ...(asOfInfo.altDate ? { altDate: asOfInfo.altDate } : {}),
+        ...(asOfInfo.rawAsOf ? { rawAsOf: asOfInfo.rawAsOf } : {}),
+        rows, model: r.model,
+      });
+    }
     const rows = spec.clean(r.rows);
     if (!rows.length) return res.status(200).json({ ok: false, error: spec.errEmpty });
     return res.status(200).json({ ok: true, mode, rows, model: r.model });
   } catch (e) { return res.status(200).json({ ok: false, error: userMsg(e, "讀圖失敗，請稍後再試", "import") }); }
 }
+

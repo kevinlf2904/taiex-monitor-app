@@ -740,21 +740,121 @@ const SYNC_K = "kline-sync";
 const SYNC_SKIP = /^kline:watch:(ft:|errs$|brief:snap:|mon:)/; // 台指期盤中報價暫存（每 5 秒變一次）、錯誤紀錄、盤前推演快照、盤中監控事件（每天一筆，只對這台裝置有用）：不要同步
 const syncGet = () => { try { return JSON.parse(localStorage.getItem(SYNC_K) || "{}"); } catch { return {}; } };
 const syncSet = o => { try { localStorage.setItem(SYNC_K, JSON.stringify({ ...syncGet(), ...o })); } catch {} };
-// full＝true（備份檔）：投資組合資料（kline:pf: 開頭，交易紀錄、融資帳戶）不管多大都要帶，不能因為超過 150KB 就默默漏掉
-function syncSnap(full = false) { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k?.startsWith("kline:") || SYNC_SKIP.test(k)) continue; const v = localStorage.getItem(k); if (v != null && (v.length < 150000 || (full && k.startsWith("kline:pf:")))) o[k] = v; } } catch {} return o; }
-// 雲端同步因為太大沒帶到的投資組合資料（要在畫面提醒，不能默默不同步）
-function syncBigPf() { const L = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k?.startsWith("kline:pf:") && (localStorage.getItem(k) || "").length >= 150000) L.push(k); } } catch {} return L; }
+// full＝true（備份檔）：投資組合資料（kline:pf: 開頭，交易紀錄、對帳快照、融資帳戶）不管多大都要帶；
+// full＝false（雲端同步）：PF_PAIR（kline:pf:v1 與 kline:pf:recon:v1）必須成對＜150KB 且無未結案 WAL（pendingCommit == null）才一起上傳。
+const PF_PAIR = ["kline:pf:v1", "kline:pf:recon:v1"];
+function syncParseRecon(raw) {
+  if (raw == null) return { exists: false, ok: true, pending: false, store: null };
+  try {
+    const s = JSON.parse(raw);
+    if (!s || typeof s !== "object" || Array.isArray(s) || s.v !== 1) return { exists: true, ok: false, pending: false, store: null };
+    return { exists: true, ok: true, pending: s.pendingCommit != null, store: s };
+  } catch { return { exists: true, ok: false, pending: false, store: null }; }
+}
+function syncPairEligible() {
+  try {
+    const rawPf = localStorage.getItem("kline:pf:v1"), rawRecon = localStorage.getItem("kline:pf:recon:v1");
+    if (rawPf == null && rawRecon == null) return true;
+    if ((rawPf != null && rawPf.length >= 150000) || (rawRecon != null && rawRecon.length >= 150000)) return false;
+    const r = syncParseRecon(rawRecon);
+    return r.ok && !r.pending;
+  } catch { return false; }
+}
+function syncSnap(full = false) {
+  const o = {};
+  try {
+    const pairOk = full || syncPairEligible();
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i); if (!k?.startsWith("kline:") || SYNC_SKIP.test(k)) continue;
+      if (!full && PF_PAIR.includes(k)) continue;
+      const v = localStorage.getItem(k);
+      if (v != null && (v.length < 150000 || (full && k.startsWith("kline:pf:")))) o[k] = v;
+    }
+    if (!full && pairOk) {
+      for (const k of PF_PAIR) { const v = localStorage.getItem(k); if (v != null) o[k] = v; }
+    }
+  } catch {}
+  return o;
+}
+// 雲端同步因為太大（或成對超限）沒帶到的投資組合資料（要在畫面提醒，不能默默不同步）
+function syncBigPf() {
+  const L = [];
+  try {
+    const rawPf = localStorage.getItem("kline:pf:v1"), rawRecon = localStorage.getItem("kline:pf:recon:v1");
+    const pairBig = (rawPf != null && rawPf.length >= 150000) || (rawRecon != null && rawRecon.length >= 150000);
+    if (pairBig) { for (const k of PF_PAIR) if (localStorage.getItem(k) != null) L.push(k); }
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith("kline:pf:") && !PF_PAIR.includes(k) && (localStorage.getItem(k) || "").length >= 150000) L.push(k);
+    }
+  } catch {}
+  return L;
+}
 const syncHash = o => { let h = 0; const s = JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]])); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
+const syncLoadScript = (src, errMsg) => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = () => no(new Error(errMsg)); document.body.appendChild(sc); });
 // 舊版雲端資料裡若有不同步的鍵（例如推演快照）也不寫回
 // 寫到一半失敗（儲存空間不夠）就把已經寫的改回原本的值，不留下新舊混在一起的資料；失敗時丟出錯誤，呼叫的地方不重新載入
-function syncApply(data) {
-  const E = Object.entries(data || {}).filter(([k, v]) => k.startsWith("kline:") && !SYNC_SKIP.test(k) && typeof v === "string"), old = E.map(([k]) => [k, localStorage.getItem(k)]);
-  try { for (const [k, v] of E) localStorage.setItem(k, v); return E.length; }
-  catch (e) {
+function syncApply(data, opts = {}) {
+  const E = Object.entries(data || {}).filter(([k, v]) => k.startsWith("kline:") && !SYNC_SKIP.test(k) && typeof v === "string");
+  const R = Array.isArray(opts.removeKeys) ? opts.removeKeys.filter(k => typeof k === "string" && k.startsWith("kline:")) : [];
+  const old = [...E.map(([k]) => k), ...R].map(k => [k, localStorage.getItem(k)]);
+  try {
+    for (const [k, v] of E) localStorage.setItem(k, v);
+    for (const k of R) localStorage.removeItem(k);
+    return E.length;
+  } catch (e) {
     for (const [k, v] of old) if (v == null) try { localStorage.removeItem(k); } catch {} // 先拿掉這次新增的，空出空間
     for (const [k, v] of old) if (v != null) try { localStorage.setItem(k, v); } catch {}
     throw new Error(/quota/i.test(`${e?.name} ${e?.message}`) ? "這台的儲存空間不夠，沒有寫入（資料維持原樣）" : "寫入失敗，這台的資料維持原樣");
   }
+}
+async function syncPrepareCloudData(data) {
+  const d = data || {};
+  const hasCloudPair = Object.prototype.hasOwnProperty.call(d, "kline:pf:v1") || Object.prototype.hasOwnProperty.call(d, "kline:pf:recon:v1");
+  let snapPf = null, snapRecon = null;
+  try { snapPf = localStorage.getItem("kline:pf:v1"); snapRecon = localStorage.getItem("kline:pf:recon:v1"); } catch {}
+  const localRecon = syncParseRecon(snapRecon);
+  if (!hasCloudPair) return { ok: true, hasPair: false, snapPf, snapRecon };
+  if (localRecon.pending) {
+    return { ok: false, error: "本機存在未完成的對帳提交，已暫停雲端投資組合同步（請先至「庫存 → 交易紀錄」處理）" };
+  }
+  if (localRecon.exists && !localRecon.ok) {
+    return { ok: false, error: "本機對帳資料格式異常，已暫停雲端投資組合同步以免覆蓋現場" };
+  }
+  if (typeof KLLedger === "undefined") {
+    if (typeof lazy === "function") await lazy("ledger");
+    else await syncLoadScript("ledger.js", "載入交易紀錄檢查程式失敗，未套用雲端資料");
+  }
+  const needRecon = Object.prototype.hasOwnProperty.call(d, "kline:pf:recon:v1") || localRecon.exists;
+  if (needRecon && typeof KLRecon === "undefined") {
+    await syncLoadScript("recon.js", "載入對帳資料檢查程式失敗，未套用雲端資料");
+  }
+  const pairData = {};
+  if (Object.prototype.hasOwnProperty.call(d, "kline:pf:v1")) pairData["kline:pf:v1"] = d["kline:pf:v1"];
+  else if (snapPf != null) pairData["kline:pf:v1"] = snapPf;
+  if (Object.prototype.hasOwnProperty.call(d, "kline:pf:recon:v1")) pairData["kline:pf:recon:v1"] = d["kline:pf:recon:v1"];
+  else if (snapRecon != null) pairData["kline:pf:recon:v1"] = snapRecon;
+  const C = KLLedger.checkBackup(pairData, { today: toolsDay(), recon: typeof KLRecon !== "undefined" ? KLRecon : null });
+  if (!C.ok) {
+    return { ok: false, error: "雲端的投資組合資料驗證未通過，未套用：" + C.items.filter(x => !x.ok).map(x => `${x.label}：${x.problems.join("；")}`).join("；") };
+  }
+  return { ok: true, hasPair: true, snapPf, snapRecon };
+}
+async function syncApplyGuarded(data, prep) {
+  const run = () => {
+    if (prep?.hasPair) {
+      let curPf = null, curRecon = null;
+      try { curPf = localStorage.getItem("kline:pf:v1"); curRecon = localStorage.getItem("kline:pf:recon:v1"); } catch {}
+      if (curPf !== prep.snapPf || curRecon !== prep.snapRecon) throw new Error("套用期間本機對帳／交易資料已變動，請重新下載");
+    }
+    return syncApply(data);
+  };
+  if (prep?.hasPair && typeof withPfCommitLock === "function") {
+    const res = await withPfCommitLock(run);
+    if (res && typeof res === "object" && res.ok === false) throw new Error(res.error || "無法取得跨分頁安全鎖，未寫入（資料維持原樣）");
+    return res;
+  }
+  return run();
 }
 const syncNewId = () => { const a = new Uint8Array(18); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 async function syncTok(id) { const b = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id))); return [...b].map(x => x.toString(16).padStart(2, "0")).join("").slice(0, 24); }
@@ -763,7 +863,15 @@ async function syncCfg() { if (W.syncCfg) return W.syncCfg; try { W.syncCfg = aw
 // 同步結果有變（成功／失敗／雲端服務不能用）：同步頁和交易紀錄頁（底下的資料說明）跟著重畫
 const syncShow = () => { if ((W.lt === "tools" && W.tv === "sync") || (W.lt === "hold" && W.holdView === "tx")) renderList(); };
 async function syncPush(quiet, force = false) {
-  const S = syncGet(); if (!S.id) return; const data = syncSnap(), h = syncHash(data);
+  const S = syncGet(); if (!S.id) return;
+  let rawRecon = null; try { rawRecon = localStorage.getItem("kline:pf:recon:v1"); } catch {}
+  if (syncParseRecon(rawRecon).pending) {
+    W.syncErr = "存在未完成的對帳提交，暫停雲端上傳；請先至「庫存 → 交易紀錄」處理";
+    if (!quiet) toast(W.syncErr, 4000);
+    syncShow();
+    return;
+  }
+  const data = syncSnap(), h = syncHash(data);
   // base：這台上次同步時雲端的時間；雲端被別台更新過就回 conflict，不蓋掉別台的改動（force＝使用者確認要用這台蓋掉）
   const j = await syncApi("push", { data, dev: navigator.userAgent.match(/iPad|iPhone|Android|Mac|Windows/)?.[0] || "", base: S.at || 0, ...(force ? { force: true } : {}) }).catch(e => ({ ok: false, error: e.message }));
   W.syncConflict = j.conflict ? { at: j.at, dev: j.dev } : null;
@@ -771,17 +879,25 @@ async function syncPush(quiet, force = false) {
 }
 async function syncPull(ask = true) {
   const j = await syncApi("pull").catch(e => ({ ok: false, error: e.message })); if (!j.ok) { W.syncErr = j.error || "下載失敗"; syncShow(); return toast("下載失敗：" + (j.error || "")); } // 交易紀錄頁的說明也要顯示失敗
+  let prep; try { prep = await syncPrepareCloudData(j.data); } catch (e) { W.syncErr = e.message; syncShow(); return toast("下載失敗：" + e.message); }
+  if (!prep.ok) { W.syncErr = prep.error; syncShow(); return toast("下載失敗：" + prep.error, 4500); }
   if (ask && !confirm(`用雲端的資料（${new Date(j.at + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}${j.dev ? "，" + j.dev : ""}）覆蓋這台裝置？`)) return;
-  let n; try { n = syncApply(j.data); } catch (e) { W.syncErr = e.message; syncShow(); return toast("下載失敗：" + e.message); } // 下載到了但寫不進這台（例如空間不夠）也是同步失敗
-  W.syncConflict = null; syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast(`已下載 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600);
+  let n; try { n = await syncApplyGuarded(j.data, prep); } catch (e) { W.syncErr = e.message; syncShow(); return toast("下載失敗：" + e.message); } // 下載到了但寫不進這台（例如空間不夠）也是同步失敗
+  W.syncErr = null; W.syncConflict = null; syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast(`已下載 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600);
 }
 // 開網頁時：雲端比這台新、而且這台上次同步後沒改過 → 自動下載；之後每分鐘檢查，有改動就自動上傳
 async function syncBoot() {
   const S = syncGet(); if (!S.id || S.auto === false || W.off) return; const cfg = await syncCfg(); if (!cfg.kv) return syncShow(); // 雲端服務不能用：交易紀錄頁的說明要改
   try { const j = await syncApi("pull");
     // 下載失敗（伺服器回 ok:false）要記下來，畫面才不會繼續顯示之前的成功；成功連上就清掉舊的錯誤
-    if (!j.ok) { W.syncErr = j.error || "下載失敗"; syncShow(); } else if (W.syncErr) { W.syncErr = null; syncShow(); } if (j.ok && j.at > (S.at || 0) && syncHash(syncSnap()) === S.hash) { try { syncApply(j.data); } catch (e) { W.syncErr = e.message; throw e; } syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast("已從雲端同步最新資料，重新載入…"); return setTimeout(() => location.reload(), 800); } } catch (e) { W.syncErr = e?.message || "連不上雲端"; syncShow(); } // 連線失敗也要記下來
-  // 有衝突（雲端比較新、這台也改過）就先不自動上傳，等使用者在「備份同步」選
+    if (!j.ok) { W.syncErr = j.error || "下載失敗"; syncShow(); } else if (W.syncErr) { W.syncErr = null; syncShow(); }
+    if (j.ok && j.at > (S.at || 0) && syncHash(syncSnap()) === S.hash) {
+      const prep = await syncPrepareCloudData(j.data);
+      if (!prep.ok) { W.syncErr = prep.error; syncShow(); toast(prep.error, 4500); }
+      else { try { await syncApplyGuarded(j.data, prep); } catch (e) { W.syncErr = e.message; throw e; } syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast("已從雲端同步最新資料，重新載入…"); return setTimeout(() => location.reload(), 800); }
+    }
+  } catch (e) { W.syncErr = e?.message || "連不上雲端"; syncShow(); } // 連線失敗也要記下來
+  // 有衝突（雲端比較新、這台也改過）就先不自動上傳，等使用者在「備份同步」選；若有 pendingCommit 亦暫停自動上傳
   setInterval(() => { const T = syncGet(); if (T.id && T.auto !== false && !W.syncConflict && document.visibilityState === "visible" && syncHash(syncSnap()) !== T.hash) syncPush(true); }, 60000);
 }
 // 備份檔格式版本 v：2＝投資組合資料一定會帶（v1 沒有這個欄位，也能匯入）
@@ -789,22 +905,81 @@ function syncExport() { const blob = new Blob([JSON.stringify({ app: "kline-scho
 async function syncImport(file) {
   try { const j = JSON.parse(await file.text()); if (j.app !== "kline-school" || !j.data || typeof j.data !== "object") throw new Error("不是 KLineLab 的備份檔");
     if (j.v != null && !(j.v === 1 || j.v === 2)) throw new Error(`備份檔版本 ${j.v} 比這個網站新，請先更新網頁`);
-    // 有投資組合資料：先檢查（交易紀錄每一筆都要能套用、融資帳戶格式要對）；有任何問題整份都不匯入，這台的資料維持原樣
-    const pfKeys = Object.keys(j.data).filter(k => k.startsWith("kline:pf:")); let pfTxt = "";
+    // 有投資組合資料：先檢查（對帳快照、交易紀錄、融資帳戶格式都要對）；有任何問題整份都不匯入，這台的資料維持原樣
+    let importData = j.data, clearLocalRecon = false;
+    let snapPf = null, snapRecon = null;
+    try { snapPf = localStorage.getItem("kline:pf:v1"); snapRecon = localStorage.getItem("kline:pf:recon:v1"); } catch {}
+    const pfKeys = Object.keys(importData).filter(k => k.startsWith("kline:pf:")); let pfTxt = "";
+    const hasImportPf = Object.prototype.hasOwnProperty.call(importData, "kline:pf:v1");
+    const hasImportRecon = Object.prototype.hasOwnProperty.call(importData, "kline:pf:recon:v1");
+    const hasImportPair = hasImportPf || hasImportRecon;
     if (pfKeys.length) {
+      if (hasImportPair) {
+        const localRecon = syncParseRecon(snapRecon);
+        if (localRecon.pending) throw new Error("本機存在未完成的對帳提交，請先至「庫存 → 交易紀錄」處理後再匯入備份檔");
+        if (!hasImportRecon && localRecon.exists && !localRecon.ok) throw new Error("本機對帳資料格式異常，請先至「庫存 → 交易紀錄」處理後再匯入備份檔");
+      }
       if (typeof KLLedger === "undefined" && typeof lazy === "function") await lazy("ledger");
+      // 有對帳快照（備份含 recon 或本機已有 recon 需配對檢查）：先載入對帳模組，用它的完整檢查；載不到就整份不匯入
+      if ((hasImportRecon || (hasImportPf && snapRecon != null)) && typeof KLRecon === "undefined") await syncLoadScript("recon.js", "載入對帳資料的檢查程式失敗，沒有匯入（這台的資料維持原樣）");
       // 有融資資料：先載入融資模組（使用者可能從沒開過融資頁），用它的完整檢查；載不到就整份不匯入
-      if (pfKeys.some(k => k.startsWith("kline:pf:margin:")) && typeof KLMargin === "undefined") await new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "margin.js"; sc.onload = ok; sc.onerror = () => no(new Error("載入融資資料的檢查程式失敗，沒有匯入（這台的資料維持原樣）")); document.body.appendChild(sc); });
+      if (pfKeys.some(k => k.startsWith("kline:pf:margin:")) && typeof KLMargin === "undefined") await syncLoadScript("margin.js", "載入融資資料的檢查程式失敗，沒有匯入（這台的資料維持原樣）");
       // 有投資論點：先載入論點模組，用它的完整檢查；載不到就整份不匯入
-      if (pfKeys.includes("kline:pf:thesis:v1") && typeof KLThesis === "undefined") await new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "thesis.js"; sc.onload = ok; sc.onerror = () => no(new Error("載入投資論點的檢查程式失敗，沒有匯入（這台的資料維持原樣）")); document.body.appendChild(sc); });
-      if (pfKeys.includes("kline:pf:targets:v1") && typeof KLRebal === "undefined") await new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "rebal.js"; sc.onload = ok; sc.onerror = () => no(new Error("載入目標配置的檢查程式失敗，沒有匯入（這台的資料維持原樣）")); document.body.appendChild(sc); });
-      const C = KLLedger.checkBackup(j.data, { today: toolsDay(), margin: typeof KLMargin !== "undefined" ? KLMargin : null, rebal: typeof KLRebal !== "undefined" ? KLRebal : null, thesis: typeof KLThesis !== "undefined" ? KLThesis : null });
+      if (pfKeys.includes("kline:pf:thesis:v1") && typeof KLThesis === "undefined") await syncLoadScript("thesis.js", "載入投資論點的檢查程式失敗，沒有匯入（這台的資料維持原樣）");
+      if (pfKeys.includes("kline:pf:targets:v1") && typeof KLRebal === "undefined") await syncLoadScript("rebal.js", "載入目標配置的檢查程式失敗，沒有匯入（這台的資料維持原樣）");
+      const chkOpts = () => ({ today: toolsDay(), margin: typeof KLMargin !== "undefined" ? KLMargin : null, rebal: typeof KLRebal !== "undefined" ? KLRebal : null, thesis: typeof KLThesis !== "undefined" ? KLThesis : null, recon: typeof KLRecon !== "undefined" ? KLRecon : null });
+      if (hasImportPf && !hasImportRecon && snapRecon != null) {
+        const C0 = KLLedger.checkBackup(importData, chkOpts());
+        if (!C0.ok) throw new Error("備份檔裡的投資組合資料有問題，沒有匯入（這台的資料維持原樣）：" + C0.items.filter(x => !x.ok).map(x => `${x.label}：${x.problems.join("；")}`).join("；"));
+        clearLocalRecon = confirm("這份備份檔不含對帳快照（kline:pf:recon:v1），但這台裝置目前有對帳快照。\n\n按「確定」：清除這台的對帳快照（庫存快照、待對帳項目與稽核紀錄），改以備份檔的交易紀錄為準。清除後不可復原；匯入前會先自動下載一份這台目前資料的備份檔，需要時可再匯回。\n\n按「取消」：保留這台的對帳快照，並與備份檔的交易紀錄配對檢查（對不上就整份不匯入）。");
+      }
+      const buildCheckData = src => {
+        const d = { ...src };
+        if (hasImportPf && !hasImportRecon && snapRecon != null && !clearLocalRecon) d["kline:pf:recon:v1"] = snapRecon;
+        if (hasImportRecon && !hasImportPf && snapPf != null) d["kline:pf:v1"] = snapPf;
+        return d;
+      };
+      let C = KLLedger.checkBackup(buildCheckData(importData), chkOpts());
+      if (!C.ok && hasImportRecon) {
+        const reconItem = C.items.find(x => x.key === "kline:pf:recon:v1");
+        if (reconItem && reconItem.code === "unrecovered_pending_commit" && typeof KLRecon !== "undefined") {
+          let pfObj = null, reconObj = null;
+          const effPfRaw = hasImportPf ? importData["kline:pf:v1"] : snapPf;
+          try { pfObj = effPfRaw ? JSON.parse(effPfRaw) : { v: 1, method: "avg", transactions: [] }; } catch {}
+          try { reconObj = JSON.parse(importData["kline:pf:recon:v1"]); } catch {}
+          if (pfObj && reconObj) {
+            const res = KLRecon.resolveHalted(pfObj, reconObj, "discard_wal", { source: "backup_import" });
+            if (res.ok) {
+              const candData = { ...importData, "kline:pf:recon:v1": JSON.stringify(res.reconStore) };
+              const C2 = KLLedger.checkBackup(buildCheckData(candData), chkOpts());
+              if (C2.ok) {
+                if (!confirm("這份備份含未完成的對帳提交，剔除它並以交易紀錄為準後才能匯入；要繼續嗎？")) return;
+                importData = candData;
+                C = C2;
+              }
+            }
+          }
+        }
+      }
       if (!C.ok) throw new Error("備份檔裡的投資組合資料有問題，沒有匯入（這台的資料維持原樣）：" + C.items.filter(x => !x.ok).map(x => `${x.label}：${x.problems.join("；")}`).join("；"));
-      const cur = (() => { try { return JSON.parse(localStorage.getItem("kline:pf:v1") || "null"); } catch { return null; } })();
-      pfTxt = "\n\n投資組合：" + C.items.map(x => x.key === "kline:pf:v1" ? `交易紀錄 ${x.summary.transactions} 筆（${x.summary.from || "—"}～${x.summary.to || "—"}）${cur ? `，會取代這台現在的 ${(cur.transactions || []).length} 筆` : ""}` : x.key === "kline:pf:targets:v1" ? `${x.label} ${x.summary?.items ?? 0} 項` : x.key === "kline:pf:thesis:v1" ? `${x.label} ${x.summary?.items ?? 0} 檔` : `${x.label} ${x.summary?.accounts ?? ""} 個`).join("；");
+      const cur = (() => { try { return JSON.parse(snapPf || "null"); } catch { return null; } })();
+      const visibleItems = C.items.filter(x => Object.prototype.hasOwnProperty.call(importData, x.key));
+      pfTxt = "\n\n投資組合：" + visibleItems.map(x => x.key === "kline:pf:v1" ? `交易紀錄 ${x.summary.transactions} 筆（${x.summary.from || "—"}～${x.summary.to || "—"}）${cur ? `，會取代這台現在的 ${(cur.transactions || []).length} 筆` : ""}${clearLocalRecon ? "，並清除這台現有的對帳快照" : ""}` : x.key === "kline:pf:recon:v1" ? `對帳快照 ${x.summary?.snapshots ?? 0} 筆（待對帳 ${x.summary?.conflicts ?? 0} 筆）` : x.key === "kline:pf:targets:v1" ? `${x.label} ${x.summary?.items ?? 0} 項` : x.key === "kline:pf:thesis:v1" ? `${x.label} ${x.summary?.items ?? 0} 檔` : `${x.label} ${x.summary?.accounts ?? ""} 個`).join("；");
     }
-    if (!confirm(`用備份檔（${String(j.at).slice(0, 16).replace("T", " ")}，${Object.keys(j.data).length} 項）覆蓋這台裝置的設定與紀錄？${pfTxt}\n\n備份檔裡沒有的項目會保留；寫入失敗會自動改回原本的資料。`)) return;
-    const n = syncApply(j.data); toast(`已匯入 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600); } catch (e) { toast("匯入失敗：" + e.message); }
+    if (!confirm(`用備份檔（${String(j.at).slice(0, 16).replace("T", " ")}，${Object.keys(importData).length} 項）覆蓋這台裝置的設定與紀錄？${pfTxt}\n\n備份檔裡沒有的項目會保留；寫入失敗會自動改回原本的資料。`)) return;
+    // 清除本機對帳快照不可復原：真正寫入前先下載一份這台目前資料的完整備份（含 kline:pf:recon:v1），需要時可再匯回
+    if (clearLocalRecon) syncExport();
+    const applyFn = () => {
+      if (hasImportPair) {
+        let curPf = null, curRecon = null;
+        try { curPf = localStorage.getItem("kline:pf:v1"); curRecon = localStorage.getItem("kline:pf:recon:v1"); } catch {}
+        if (curPf !== snapPf || curRecon !== snapRecon) throw new Error("匯入期間本機對帳／交易資料已變動，請重新匯入");
+      }
+      return syncApply(importData, { removeKeys: clearLocalRecon ? ["kline:pf:recon:v1"] : [] });
+    };
+    const n = pfKeys.length && typeof withPfCommitLock === "function" ? await withPfCommitLock(applyFn) : applyFn();
+    if (n && typeof n === "object" && n.ok === false) throw new Error(n.error || "無法取得安全鎖，沒有匯入");
+    toast(`已匯入 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600); } catch (e) { toast("匯入失敗：" + e.message); }
 }
 function syncHtml() {
   const S = syncGet(), C = W.syncCfg; if (!C) syncCfg().then(() => W.lt === "tools" && W.tv === "sync" && renderList());
@@ -813,8 +988,8 @@ function syncHtml() {
   let h = `<section class="csec"><h3>備份與同步</h3>
     <h4>備份檔</h4><p class="note">把這台裝置的自選、庫存、提醒、交易日記、模擬帳戶、錯題本、線型設定（共 ${n} 項）存成一個檔案，換裝置或清除瀏覽器資料後可以匯入。</p>
     <div class="irform"><button class="btn sm primary" data-sy="export">⬇ 匯出備份檔</button><label class="btn sm">⬆ 匯入備份檔<input type="file" accept="application/json,.json" data-syfile hidden></label></div>
-    ${big.length ? `<p class="note err">⚠︎ 交易紀錄或融資資料超過 150KB，雲端同步不會帶到（${big.map(k => esc(k.replace("kline:", ""))).join("、")}）；請用備份檔保存。</p>` : ""}
-    <p class="note">匯入只收這裡匯出的 .json 備份檔；投資組合資料（交易紀錄、融資）會先檢查，有問題就整份不匯入；匯入後，檔案裡有的項目會蓋掉這台裝置現在的設定（沒有的項目保留）。不確定的話，先按「匯出備份檔」留一份。</p>
+    ${big.length ? `<p class="note err">⚠︎ 交易紀錄或融資資料超過 150KB，雲端同步不會帶到（${big.map(k => esc(k.replace("kline:", ""))).join("、")}；交易紀錄與對帳快照必須成對同步）；請用備份檔保存。</p>` : ""}
+    <p class="note">匯入只收這裡匯出的 .json 備份檔；投資組合資料（交易紀錄、對帳快照、融資）會先檢查，有問題就整份不匯入；匯入後，檔案裡有的項目會蓋掉這台裝置現在的設定（沒有的項目保留）。不確定的話，先按「匯出備份檔」留一份。</p>
     <h4>雲端同步</h4>`;
   if (!C) h += `<p class="note">檢查中…</p>`;
   else if (!C.kv) h += `<p class="note">網站的雲端同步暫時還不能使用，目前只能用上面的備份檔。${DEBUG ? "（除錯：Vercel 專案的 Storage 加上 Upstash for Redis，重新部署後就能用同步碼）" : ""}</p>`;
