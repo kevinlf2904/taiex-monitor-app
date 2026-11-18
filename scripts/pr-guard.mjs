@@ -9,7 +9,7 @@ export const BIG_FILES = ["learner/watch.html", "learner/index.html", "learner/c
 export const CROSS_REVIEW_FILES = [
   "learner/core.js", "learner/analysis.js", "learner/quant.js", "learner/sigstudy.js", "learner/labx.js",
   "learner/perf.js", "learner/recon.js", "learner/ledger.js", "learner/portfolio.js", "learner/rebal.js",
-  "learner/stress.js", "learner/alloc.js", "learner/margin.js",
+  "learner/stress.js", "learner/alloc.js", "learner/margin.js", "learner/divcal.js", "learner/overview.js",
   "scripts/_engine.mjs", "scripts/levels-bt.mjs", "scripts/signal-study.mjs", "scripts/event-study.mjs",
   "scripts/pattern-today.mjs", "scripts/theme-corr.mjs",
 ];
@@ -66,9 +66,18 @@ export function addsLocalStorage(f) {
   return f.patch.split("\n").some(l => l.startsWith("+") && !l.startsWith("+++") && /localStorage/.test(l));
 }
 
-// files：字串，或 GitHub「PR 檔案」API 的物件（filename、status、patch）
+// 改名的檔案：原路徑視為「刪除」、新路徑視為「新增」一起判斷（例如把 tests/ 或 api/ 的檔案改名成 docs/ 不能變成低風險）
+export function expandRenames(files) {
+  return files.map(f => (typeof f === "string" ? { filename: f } : f)).flatMap(f =>
+    f.status === "renamed" && f.previous_filename ? [{ ...f, status: "added" }, { filename: f.previous_filename, status: "removed" }] : [f]);
+}
+
+// 刪除測試檔（AGENTS.md：刪除測試不適用低風險例外，要人工審查）
+export const isTestDeletion = f => typeof f !== "string" && f.status === "removed" && under(f.filename, "tests/");
+
+// files：字串，或 GitHub「PR 檔案」API 的物件（filename、status、patch、previous_filename）
 export function classify(files) {
-  const list = files.map(f => (typeof f === "string" ? { filename: f } : f));
+  const list = expandRenames(files);
   const reasons = [];
   const high = list.map(f => [f.filename, highRiskReason(f)]).filter(([, r]) => r);
   const lowRisk = list.length > 0 && list.every(inLowRiskScope);
@@ -85,10 +94,12 @@ export function classify(files) {
   if (lowRisk) { labels.push("low-risk-candidate"); reasons.push("所有檔案都在低風險例外的路徑範圍內（仍須合併者確認斷言沒有放寬、CSS 只改規則）"); }
   if (high.length) { labels.push("high-risk"); for (const [p, r] of high) reasons.push(`${p}：${r}`); }
   if (crossReview.length) reasons.push(`需要獨立審查：${crossReview.join("、")}`);
+  const deletedTests = list.filter(isTestDeletion).map(name);
+  if (deletedTests.length) { labels.push("test-deletion"); reasons.push(`刪除測試檔：${deletedTests.join("、")}（不適用低風險例外，需要人工審查）`); }
   if (needsLock.length) labels.push("needs-lock");
   if (ui.length) labels.push("needs-390-1280");
   if (!list.length) reasons.push("沒有改動檔案");
-  return { labels, lowRisk, highRisk: high.length > 0, needsLock, crossReview, ui, warnings, reasons };
+  return { labels, lowRisk, highRisk: high.length > 0, needsLock, crossReview, ui, deletedTests, warnings, reasons };
 }
 
 // 「鎖：learner/watch.html＋區塊」標題裡提到的大檔
@@ -100,11 +111,11 @@ export function lockedByTitle(title = "") {
 // 和其他開著的 PR 撞到同一個大檔。pr：{ number, files }；others：[{ number, title, draft, files }]
 // 自己這個 PR 不算；其他 PR 不管是改到大檔，還是「鎖：」標題鎖住大檔，都列出來
 export function bigFileConflicts(pr, others) {
-  const mine = new Set(pr.files.map(name).filter(p => BIG_FILES.includes(p)));
+  const mine = new Set(expandRenames(pr.files).map(name).filter(p => BIG_FILES.includes(p)));
   const out = [];
   for (const o of others) {
     if (o.number === pr.number) continue;
-    const theirs = new Set([...(o.files || []).map(name).filter(p => BIG_FILES.includes(p)), ...lockedByTitle(o.title)]);
+    const theirs = new Set([...expandRenames(o.files || []).map(name).filter(p => BIG_FILES.includes(p)), ...lockedByTitle(o.title)]);
     const both = [...mine].filter(p => theirs.has(p));
     if (both.length) out.push({ number: o.number, title: o.title, lock: lockedByTitle(o.title).length > 0, files: both });
   }
@@ -127,28 +138,45 @@ export function parseAiComment(body = "") {
 // SHA 是否指同一個提交（短 SHA 比前綴）
 export const sameSha = (a, b) => !!a && !!b && (a.startsWith(b) || b.startsWith(a));
 
-// comments：[{ id, created_at, body }]；回傳看得懂的 AI 留言，並標出不是針對最新 head SHA 的（舊 SHA 的審查不算數）
+// comments：[{ id, created_at, body, source?, commit_id? }]，來源可以是一般留言、review 或 inline review comment。
+// 回傳看得懂的 AI 留言與它針對的版本：latest（最新 head SHA）、stale（舊 SHA，審查不算數）、nosha（沒寫 SHA，無法核對，不能當成最新）。
+// 第一行沒寫 SHA、但 GitHub 記錄了 review 針對的提交（commit_id）時，用 commit_id 判斷。同一來源同一 id 只列一次。
 export function summarizeComments(comments, headSha) {
-  return comments.map(c => ({ ...c, ai: parseAiComment(c.body) })).filter(c => c.ai)
-    .map(c => ({ id: c.id, at: c.created_at, ...c.ai, stale: !!c.ai.sha && !sameSha(c.ai.sha, headSha) }));
+  const seen = new Set(), out = [];
+  for (const c of comments) {
+    const key = `${c.source || "comment"}:${c.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const ai = parseAiComment(c.body);
+    if (!ai) continue;
+    const sha = ai.sha || c.commit_id || null;
+    out.push({ id: c.id, at: c.created_at, source: c.source || "comment", ...ai, sha, state: !sha ? "nosha" : sameSha(sha, headSha) ? "latest" : "stale" });
+  }
+  return out;
 }
 
 // 判斷 CI test 是否算通過（AGENTS.md「測試與品質」：同一 head SHA、completed、success）
 export function ciStatus(checkRuns, headSha, name = "test") {
   const runs = checkRuns.filter(r => r.name === name && r.head_sha === headSha);
   if (!runs.length) return { ok: false, text: `沒有 ${headSha.slice(0, 7)} 的 ${name} 結果` };
-  const r = runs.sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0];
+  const r = runs.sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)) || (b.id || 0) - (a.id || 0))[0];
   if (r.status !== "completed") return { ok: false, text: `${name} 進行中（${r.status}）` };
   return { ok: r.conclusion === "success", text: `${name} ${r.conclusion}`, url: r.html_url };
 }
 
 // 給人和 AI 看的摘要（pr-brief 印在終端機；之後 workflow 也用同一段文字貼留言）
+const STATE = { latest: "〔最新〕", stale: "〔舊 SHA〕", nosha: "〔未附 SHA〕" };
+const SOURCE = { comment: "", review: "（review）", inline: "（行內）" };
+
 export function formatBrief({ pr, files, comments = [], checkRuns = [], others = [] }) {
   const head = pr.head.sha;
   const c = classify(files);
   const ci = ciStatus(checkRuns, head);
   const conflicts = bigFileConflicts({ number: pr.number, files }, others);
   const ai = summarizeComments(comments, head);
+  const aiKeys = new Set(ai.map(a => `${a.source}:${a.id}`));
+  // 不是協作格式的 review 與行內審查留言也不能當作不存在：列出筆數與第一行
+  const otherReviews = comments.filter(x => (x.source === "review" || x.source === "inline") && String(x.body || "").trim() && !aiKeys.has(`${x.source}:${x.id}`));
   const L = [];
   L.push(`檢查（pr-guard）：\`${head}\``, "");
   L.push(`#${pr.number} ${pr.title}${pr.draft ? "（draft）" : ""}｜分支 ${pr.head.ref}｜${files.length} 個檔案`);
@@ -160,6 +188,11 @@ export function formatBrief({ pr, files, comments = [], checkRuns = [], others =
   for (const x of conflicts) L.push(`- ⚠️ 和 #${x.number}${x.lock ? "（鎖定中）" : ""} 撞到：${x.files.join("、")}`);
   if (c.ui.length) L.push(`- 介面檔案：需要 390／1280 驗證（Antigravity；Antigravity 是實作者時由 Claude Code）`);
   L.push("", ai.length ? "AI 留言：" : "AI 留言：無");
-  for (const a of ai) L.push(`- ${a.stale ? "〔舊 SHA〕" : "〔最新〕"}${a.kind}${a.from ? `（${a.from}${a.to ? ` → ${a.to}` : ""}）` : ""}${a.verdict ? ` ${a.verdict}` : ""}｜${a.at || ""}｜${a.id}`);
+  for (const a of ai) L.push(`- ${STATE[a.state]}${a.kind}${a.from ? `（${a.from}${a.to ? ` → ${a.to}` : ""}）` : ""}${a.verdict ? ` ${a.verdict}` : ""}${SOURCE[a.source] || ""}｜${a.at || ""}｜${a.id}`);
+  if (ai.some(a => a.state === "nosha")) L.push("- ⚠️ 有留言沒寫 SHA，無法確認針對哪個版本，請補留言或重新審查");
+  if (otherReviews.length) {
+    L.push(`其他審查留言（不是協作格式）：${otherReviews.length} 則`);
+    for (const x of otherReviews.slice(0, 10)) L.push(`- ${SOURCE[x.source]}${x.path ? `${x.path}｜` : ""}${String(x.body).trim().split("\n")[0].slice(0, 80)}｜${x.id}`);
+  }
   return L.join("\n");
 }

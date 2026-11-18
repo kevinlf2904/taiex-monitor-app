@@ -90,14 +90,40 @@ test("pr-guard：解析 AI 留言第一行（類型、工具、→ 對象、SHA�
   assert.equal(parseAiComment(""), null);
 });
 
-test("pr-guard：舊 SHA 的留言標成過期，短 SHA 比前綴", () => {
+test("pr-guard：留言分成最新／舊 SHA／未附 SHA，短 SHA 比前綴，沒寫 SHA 不能當最新", () => {
   const list = summarizeComments([
     { id: 1, created_at: "t1", body: "審查（Codex）：`c6cd9df` 修改後再合併" },
     { id: 2, created_at: "t2", body: `審查（ChatGPT）：\`${HEAD.slice(0, 7)}\` 可以合併` },
     { id: 3, created_at: "t3", body: "[vc]: #abc 部署預覽" },
     { id: 4, created_at: "t4", body: "處置（Claude Code）：已處理" },
+    { id: 5, created_at: "t5", body: "審查（Codex）：可以合併" },
+    { id: 6, created_at: "t6", body: "驗證：390 正常" },
   ], HEAD);
-  assert.deepEqual(list.map(x => [x.id, x.stale]), [[1, true], [2, false], [4, false]]);
+  assert.deepEqual(list.map(x => [x.id, x.state]), [[1, "stale"], [2, "latest"], [4, "nosha"], [5, "nosha"], [6, "nosha"]]);
+});
+
+test("pr-guard：review 與行內留言也要讀；review 沒寫 SHA 時用 GitHub 記錄的 commit_id；重複的只列一次", () => {
+  const list = summarizeComments([
+    { id: 1, source: "review", created_at: "t1", body: "審查（Copilot）：修改後再合併", commit_id: HEAD },
+    { id: 1, source: "review", created_at: "t1", body: "審查（Copilot）：修改後再合併", commit_id: HEAD },
+    { id: 1, source: "comment", created_at: "t2", body: "審查（Codex）：`c6cd9df` 可以合併" },
+    { id: 2, source: "inline", created_at: "t3", body: "審查（Codex）：這行有錯", commit_id: "c6cd9dfaaaa" },
+  ], HEAD);
+  assert.deepEqual(list.map(x => [x.source, x.id, x.state]), [["review", 1, "latest"], ["comment", 1, "stale"], ["inline", 2, "stale"]]);
+});
+
+test("pr-guard：改名的檔案原路徑也要判斷；刪除測試檔標 test-deletion", () => {
+  const moved = classify([{ filename: "docs/moved.md", previous_filename: "tests/a.test.mjs", status: "renamed" }]);
+  assert.equal(moved.lowRisk, false, "把測試改名成文件等於刪除測試");
+  assert.ok(moved.labels.includes("test-deletion"));
+  const api = classify([{ filename: "docs/bar.md", previous_filename: "api/bar.js", status: "renamed" }]);
+  assert.equal(api.lowRisk, false);
+  assert.ok(api.labels.includes("high-risk"), "原路徑的高風險理由要帶出來");
+  assert.match(api.reasons.join(), /api\/bar\.js：API/);
+  assert.ok(classify([{ filename: "docs/b.md", previous_filename: "docs/a.md", status: "renamed" }]).lowRisk, "文件改名仍是低風險候選");
+  const del = classify([{ filename: "tests/old.test.mjs", status: "removed" }]);
+  assert.deepEqual(del.labels, ["test-deletion"]);
+  assert.match(del.reasons.join(), /刪除測試檔：tests\/old\.test\.mjs/);
 });
 
 test("pr-guard：CI 只認同一 head SHA、completed、success", () => {
@@ -117,6 +143,8 @@ test("pr-brief：用假的 GitHub 回應組出摘要，不呼叫 gh", async () =
     "pulls/5": { number: 5, title: "改看盤", draft: false, head: { sha: HEAD, ref: "claude/x" } },
     "pulls/5/files": [{ filename: "learner/watch.html", status: "modified" }],
     "issues/5/comments": [{ id: 9, created_at: "t", body: "審查（Codex）：`0000000` 可以合併" }],
+    "pulls/5/reviews": [{ id: 7, submitted_at: "t", body: "審查（ChatGPT）：修改後再合併", commit_id: HEAD }, { id: 8, submitted_at: "t", body: "Looks good overall", commit_id: HEAD }],
+    "pulls/5/comments": [{ id: 70, created_at: "t", body: "這裡少了 await", path: "learner/watch.html", commit_id: HEAD }],
     [`commits/${HEAD}/check-runs`]: { check_runs: [{ name: "test", head_sha: HEAD, status: "completed", conclusion: "success", started_at: "1", html_url: "u" }] },
     "pulls?state=open": [{ number: 5 }, { number: 6, title: "鎖：watch.html＋持股", draft: true }],
     "pulls/6/files": [],
@@ -128,6 +156,9 @@ test("pr-brief：用假的 GitHub 回應組出摘要，不呼叫 gh", async () =
   assert.match(out, /needs-lock/);
   assert.match(out, /和 #6（鎖定中） 撞到：learner\/watch\.html/);
   assert.match(out, /〔舊 SHA〕審查（Codex） 可以合併/);
+  assert.match(out, /〔最新〕審查（ChatGPT） 修改後再合併（review）/, "review 沒寫 SHA 時用 commit_id");
+  assert.match(out, /其他審查留言（不是協作格式）：2 則/);
+  assert.match(out, /（行內）learner\/watch\.html｜這裡少了 await/);
 });
 
 test("pr-guard：低風險路徑和 AGENTS.md「低風險例外」條文用的是同一組路徑", () => {
