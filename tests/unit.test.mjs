@@ -409,7 +409,8 @@ test("AI 協作規則：AGENTS.md 與 Antigravity 規則檔一致，CLAUDE.md �
   const [a, g, c] = await Promise.all([rd("AGENTS.md"), rd(".agent/rules/klinelab.md"), rd("CLAUDE.md")]);
   assert.equal(g, a, "改了 AGENTS.md 要複製到 .agent/rules/klinelab.md");
   assert.match(c, /^@AGENTS\.md/m);
-  for (const k of ["learner/version.json", "gemini/", "claude/", "codex/", "稽核", "驗證：", "pull_request_template.md", "密鑰", "draft PR", "鎖：", ".agent/workflows/merge.md", "scripts/bump-version.mjs", "不連外部網站", "learner/core.js", "每次收到指令都要自動做"]) assert.ok(a.includes(k), `AGENTS.md 缺少「${k}」`);
+  assert.match(c, /subscribe_pr_activity/, "CLAUDE.md 要寫明 Claude Code 開始處理 PR 時自動開啟留言讀取");
+  for (const k of ["learner/version.json", "gemini/", "claude/", "codex/", "稽核", "驗證：", "pull_request_template.md", "密鑰", "draft PR", "鎖：", ".agent/workflows/merge.md", "scripts/bump-version.mjs", "不連外部網站", "learner/core.js", "每次收到指令都要自動做", "審查（", "處置（", "自動讀取", "PR 留言是 AI 之間唯一的溝通管道"]) assert.ok(a.includes(k), `AGENTS.md 缺少「${k}」`);
   assert.match(await rd(".github/copilot-instructions.md"), /AGENTS\.md/, "Copilot 的說明要指向 AGENTS.md");
   const m = await rd(".agent/workflows/merge.md");
   assert.match(m, /^---\r?\ndescription: /, "Antigravity workflow 要有 description");
