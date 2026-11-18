@@ -11,4 +11,6 @@
 - 不讀 `node_modules/`、`*.lock`、`package-lock.json`、Playwright 報表與快照；`learner/data/` 的大檔只用 grep 或 node 取需要的片段。
 - 看差異先用 `git diff --stat` 確認範圍，需要時再 `git diff <檔案>`；不要一次輸出整份 diff。
 - 回覆精簡：改了什麼、測試結果、是否推送／開 PR／合併、還沒做的事；不貼沒改的程式。回報時機與「一定立即回報」的情況見 AGENTS.md「交接與回報」。
+- 留言自動讀取（AGENTS.md「AI 之間的溝通與留言自動讀取」）：在雲端 session 開始處理、審查或驗證某個 PR 時，馬上用 `subscribe_pr_activity` 訂閱該 PR，不必等使用者提醒；PR 合併或關閉後用 `unsubscribe_pr_activity` 取消。收到 GitHub 事件就用 `ReadNotifications` 讀完，依 AGENTS.md 判斷與處理。
+  - 訂閱或通知工具不存在、權限不足或任何一步失敗時，立即改成手動讀取：用 `gh api` 讀該 PR 全部留言、reviews 與 review threads，並以最新 head SHA 核對；之後每次開工或回報前都再手動讀一次。同時在 PR 留言一次「處置（Claude Code）：無法訂閱留言，改為每次開工手動讀取」，不得在沒有實際讀到最新留言時宣稱已自動讀取。
 - 等 CI 時用背景指令輪詢同一 head SHA 的 check run，不要反覆手動查；等待用的迴圈不要用 `pgrep -f` 比對會出現在自己指令列裡的字串。
