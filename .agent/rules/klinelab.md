@@ -19,13 +19,14 @@
 |---|---|---|
 | Claude Code | 主力開發、預設合併者 | `claude/…` |
 | Codex | 第二開發者；Claude 額度不足時接手；可交叉審查 Claude 高風險 PR | `codex/…` |
-| Gemini Antigravity | 預設驗證者；Claude 額度不足時可接手開發／合併 | `gemini/…` |
+| Gemini Antigravity | 第二開發者（使用者指派即可開發）；未擔任實作者時為預設驗證者 | `gemini/…` |
 | ChatGPT | 需求拆解、PR 獨立稽核；Claude 額度不足時由使用者指定接手開發 | `chatgpt/…` |
 | GitHub Copilot | 編輯器補全、大型 PR 審查 | 不開 PR |
 | 其他 AI（普通 Claude／Gemini、NotebookLM、Perplexity、v0、Gemini Spark、Siri） | 討論、附來源查資料、總覽、樣板參考 | 唯讀 |
 
-- Claude 額度不足時，須由使用者指定 Codex、Antigravity 或 ChatGPT 接手。接手者可依本規則開發及開 PR；只有使用者明確說「直接幫我合併」才可合併。工具無法合併時，推分支、開 PR、CI 通過後請使用者在 GitHub 選 **Create a merge commit**。
+- 使用者可直接指派 Antigravity 開發，不限 Claude 額度不足時。Claude 額度不足時，須由使用者指定 Codex、Antigravity 或 ChatGPT 接手。被指派者及接手者可依本規則開發及開 PR；只有使用者明確說「直接幫我合併」才可合併。工具無法合併時，推分支、開 PR、CI 通過後請使用者在 GitHub 選 **Create a merge commit**。
 - Antigravity 驗證時，使用 PR 預覽與真實資料操作 390px 手機、1280px 桌面；截圖留證並在 PR 留言以「驗證：」開頭，只回報問題、不改他人分支。
+- 實作者不得驗證自己的 PR：Antigravity 擔任實作者時，390／1280 驗證改由 Claude Code 依同樣方式執行，留言以「驗證（Claude Code）：」開頭。
 - 普通 Claude 與 Claude Code 共用額度，僅用於困難問題。
 
 ## 開工流程
@@ -41,7 +42,7 @@
 - 新增的單元測試檔必須登記在 `tests/run.mjs`（E2E 由 `tests/e2e/` 自動載入）。不會觸發 CI 的修改（例如只改 `docs/**`、PR 範本）要用 `workflow_dispatch` 對 PR 分支手動跑一次，並確認執行紀錄的 `head_sha` 等於 PR 的 `head.sha`。新環境可執行 `npm i --no-save playwright@1.56.1 && npx playwright install chromium`；Playwright 在其他位置時用 `PW=<安裝路徑> node tests/run.mjs`。
 - 修改類型的最低要求：
   - 文件：檢查 diff；修改 `AGENTS.md` 後執行 `node scripts/sync-rules.mjs` 及 `node tests/unit.test.mjs`。
-  - 介面：相關測試＋Antigravity 驗證 390／1280；桌面模擬不等於實機 iOS。
+  - 介面：相關測試＋Antigravity 驗證 390／1280（Antigravity 是實作者時由 Claude Code 驗證）；桌面模擬不等於實機 iOS。
   - API／資料／排程：測成功、失敗、缺資料、邊界；檢查費用、授權及限流。
   - 策略／回測／績效：測未來資料洩漏、停損、手續費滑價、缺值；補可重現測試並安排獨立審查。沿用 unit test 中「所有策略回測合理性」「價格行為策略」檢查。
   - 其他程式：合併前須有完整 `node tests/run.mjs` 結果（本機或同一提交 CI）。
@@ -82,7 +83,7 @@
 使用者於 2026-11-08 授權：符合下列全部條件的 PR，合併者可以不再等使用者說「合併」，合併後回報 PR、合併的 SHA 與 CI 連結。
 - 範圍依 diff 的檔案路徑判定，只要有一個檔案不在範圍內就不適用：`docs/**`；一般 `*.md`（不含 `AGENTS.md`、`CLAUDE.md`、`.agent/**`、`.github/**`）；`tests/**` 中只新增測試或在不放寬斷言下修正不穩定測試；`learner/core.css`、`learner/minimal.css` 且 diff 只有 CSS 規則。HTML／JS 裡的 CSS 字串不算。
 - 不適用：策略、回測、績效計算；安全與權限；正式資料寫入、`learner/data/**`、localStorage 鍵；協作規則（含本節）；部署設定、`vercel.json`、`.github/workflows/**`；`api/**`、`scripts/**`、`package*.json`；任何刪除測試或放寬斷言的修改。
-- 條件：(1) 至少一則非作者的審查結論為「可以合併」；(2) 改 CSS 時另有 Antigravity 390／1280 驗證，不以實作者自己的截圖取代；(3) 同一 head SHA 的 CI `test` 成功；(4) 沒有未處理的審查意見，P0／P1 均已修復；(5) 沒有其他合併者或版本更新正在進行；(6) 照上面的合併流程用 merge。
+- 條件：(1) 至少一則非作者的審查結論為「可以合併」；(2) 改 CSS 時另有 390／1280 驗證（Antigravity；Antigravity 是實作者時由 Claude Code），不以實作者自己的截圖取代；(3) 同一 head SHA 的 CI `test` 成功；(4) 沒有未處理的審查意見，P0／P1 均已修復；(5) 沒有其他合併者或版本更新正在進行；(6) 照上面的合併流程用 merge。
 
 ### 版本號
 格式 `YYYY.MM.DD-N`，日期採合併當天台北時間，N 接續現有號碼、不每日歸零。腳本會同步更新 `learner/index.html`、`learner/watch.html`、`learner/version.json`，並在 `learner/README.md` 最新紀錄前加 `### 標題（版本）`。若版本衝突，改用 main 上這些檔案再重跑 bump-version。
