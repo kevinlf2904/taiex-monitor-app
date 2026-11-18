@@ -1,4 +1,6 @@
 # 自動測試：每個 PR 和推到 main 時跑 tests/run.mjs（排程解析的單元測試＋學堂、看盤每個分頁的瀏覽器測試，任何頁面錯誤都算失敗）
+# 分成幾份平行跑（#312 PR C）：unit 跑單元測試（不裝瀏覽器），e2e 把瀏覽器測試分 3 份；最後由名為 test 的檢查彙總，
+# 全部成功才算通過。合併門檻看的是 test（AGENTS.md「測試與品質」），不能改名。
 name: ci
 on:
   pull_request:
@@ -14,10 +16,26 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  test:
+  unit:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm i --no-save --no-audit --no-fund playwright@1.56.1 # 順便裝好 package.json 的相依套件；單元測試不需要瀏覽器
+      - run: for f in learner/*.js scripts/*.mjs api/*.js api/_lib/*.js; do node --check "$f" || exit 1; done
+      - run: node tests/run.mjs --unit
+  e2e:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04 # ubuntu-latest 已換成 26.04，Playwright 1.56 不支援，裝不了 chromium
-    timeout-minutes: 30 # 安裝 chromium（apt 相依套件）有時要 9～11 分鐘，加上約 13 分鐘的測試，20 分鐘會被取消
+    timeout-minutes: 30 # 安裝 chromium（apt 相依套件）有時要 6～11 分鐘
+    strategy:
+      fail-fast: false # 一份失敗，其他份照跑完，一次看到所有失敗項目
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -25,5 +43,13 @@ jobs:
           node-version: 22
       - run: npm i --no-save --no-audit --no-fund playwright@1.56.1
       - run: npx playwright install --with-deps chromium
-      - run: for f in learner/*.js scripts/*.mjs api/*.js api/_lib/*.js; do node --check "$f" || exit 1; done
-      - run: node tests/run.mjs
+      - run: node tests/run.mjs --e2e=${{ matrix.shard }}/${{ strategy.job-total }}
+  test:
+    needs: [unit, e2e]
+    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) # 前面失敗或取消也要跑，才會回報失敗
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: |
+          echo "unit=${{ needs.unit.result }} e2e=${{ needs.e2e.result }}"
+          test "${{ needs.unit.result }}" = success && test "${{ needs.e2e.result }}" = success
