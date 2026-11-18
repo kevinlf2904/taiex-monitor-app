@@ -9,6 +9,7 @@ body:
         > - 不可填入密鑰、Token、密碼或完整環境變數值。
         > - 只要有新 commit，舊 SHA 的審查與 CI 結果即失效，請務必更新「最新 commit SHA」。
         > - 沒有對應 PR 的討論／追蹤也可先開此 Issue；若有對應 PR，開好後於 PR 留言同步。
+        > - 交接時若持有大檔「鎖：」draft PR，請說明鎖定是否解除或轉交（`AGENTS.md`）。
 
   - type: input
     id: goal
@@ -24,7 +25,7 @@ body:
     attributes:
       label: "分支"
       description: "目前開發分支名稱（Claude Code 用 claude/…、Codex 用 codex/…、Antigravity 用 gemini/…、ChatGPT 用 chatgpt/…）。"
-      placeholder: "例如：gemini/handoff-issue-template（尚未開分支可填「無（main）」）"
+      placeholder: "例如：gemini/handoff-issue-template（尚未開分支可填「無」）"
     validations:
       required: true
 
@@ -74,7 +75,7 @@ body:
       label: "實際執行的測試指令與結果"
       description: "只填實際執行過的命令、通過／失敗數與同 SHA 的 CI test 執行連結；不得未執行卻宣稱通過。"
       placeholder: |
-        - 本機：`node --test tests/pr-guard.test.mjs` → 13／13 通過
+        - 本機：`node --test tests/pr-guard.test.mjs` → N／N 通過
         - CI `test`（head_sha=`...`）：success（run 連結）
     validations:
       required: true
@@ -109,6 +110,19 @@ body:
       placeholder: |
         1. 先 `git fetch origin main` 並讀完本 Issue／關聯 PR 全部留言
         2. 確認審查結論與同 SHA 的 CI `test` 結果後再決定下一步
+    validations:
+      required: true
+
+  - type: dropdown
+    id: from_tool
+    attributes:
+      label: "交接者（誰寫的）"
+      description: "建立此交接 Issue 的 AI 工具（所有 AI 共用同一個 GitHub 帳號，請務必填寫）。"
+      options:
+        - "Claude Code"
+        - "Codex"
+        - "Gemini Antigravity"
+        - "ChatGPT"
     validations:
       required: true
 
