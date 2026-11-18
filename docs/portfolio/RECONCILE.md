@@ -40,3 +40,4 @@
 - **三段式 WAL（`pendingCommit`）**：Phase 1 寫入 `pendingCommit` → Phase 2 寫入 `kline:pf:v1` → Phase 3 清空 `pendingCommit` 並寫入正式對帳狀態（`import_trades`、`update_tx_tag`、`deactivate_tags`）。啟動時 `KLRecon.recoverCommit` 自動依兩鍵雜湊指紋判斷 Roll-Forward 或 Roll-Back；若遇不一致或未知操作，進入 `halted` 鎖定寫入，於交易紀錄頁顯示異常回復卡提供「還原至變更前（`revert_pre_commit`）」與「以交易紀錄為準清除 WAL（`discard_wal`）」出口。
 - **120KB 核心上限保護（Fail-Closed）**：寫入前由 `KLRecon.pruneStore(store, 120 * 1024)` 依優先順序裁剪舊的已取代快照、已結案衝突、非關鍵匯入批次與非活躍標記；**絕不裁剪 `confirmed` 基準、串接至活躍基準之 `supersededBy` 快照鏈、`open` 衝突、被未結案衝突引用的批次或 `pendingCommit`**。裁剪後仍逾 120KB 則拒絕寫入（`core_data_exceeds_limit`），保持原資料完整並提示先匯出 JSON 備份。
 - **較新基準存在時標記期初快照**：`tagInitialTx` 先試算期初標記加期間交易能否推到較新基準；一致才串接（保留期間損益），不一致或無法驗證就不串接並建立 `recon_diff`（`tag_older_than_baseline`），較新基準照舊計算。介面寫入前另比較標記前後帳本錯誤數，增加就不寫。
+- **期初錨點只認鏈上快照**：只有 `tx_tag` 快照在目前基準鏈上的期初轉入才視為快照前（不重複計算）；修改已串接的期初轉入、日期移到所串接基準之後時會自動解除串接，該筆轉入照常入帳。

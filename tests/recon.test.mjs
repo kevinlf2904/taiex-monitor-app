@@ -635,3 +635,57 @@ test("已有較新基準時標記較舊股票轉入為期初快照：一致才�
   recE.snapshots.push({ id: "Old", symbol: "2330", market: "tw", currency: "TWD", date: "2026-10-01", shares: 200, avgCost: 700, status: "confirmed", confirmedAt: "2026-10-01T00:00:00Z", scope: "partial", origin: "import", supersededBy: null });
   assert.deepEqual(errIds(txsA.slice(1), recE), [], "未串接的較早 confirmed 快照不得讓前段交易重算");
 });
+
+test("第七輪 P1：已串接的期初轉入改到較新基準之後，該筆轉入須正常入帳（不得因 active tag 被當成期初錨點跳過）", () => {
+  const { L, R } = loadLedgerAndRecon();
+  const TODAY = "2026-11-17";
+  const tw = o => ({ v: 1, symbol: "2330", market: "tw", currency: "TWD", fee: 0, tax: 0, note: "", ...o });
+  const s0 = R.emptyStore();
+  s0.snapshots.push({ id: "S1", symbol: "2330", market: "tw", currency: "TWD", date: "2026-11-10", shares: 1000, avgCost: 900, status: "confirmed", confirmedAt: "2026-11-10T00:00:00Z", scope: "partial", origin: "import", supersededBy: null });
+  const tc = tw({ id: "tc", date: "2026-10-01", type: "transfer_in", shares: 1200, price: 900 });
+  const sell = tw({ id: "s1", date: "2026-10-20", type: "sell", shares: 200, price: 950 });
+  const tag = R.tagInitialTx(s0, tc, { today: TODAY, snapshotId: "s-tc", txStore: { v: 1, method: "avg", transactions: [tc, sell] }, ledgerLib: L, method: "avg" });
+  assert.equal(tag.linkedTo, "S1", "前置條件：期初快照已串接到 S1");
+
+  // A. 改日期跨過 S1：planUpdateTxTag 須解除串接；帳本須把這筆轉入當一般交易入帳
+  const next = { ...tc, date: "2026-11-11" };
+  const plan = R.planUpdateTxTag(tag.store, tc, next, { today: TODAY });
+  assert.equal(plan.ok, true);
+  assert.equal(plan.mode, "update");
+  assert.equal(plan.payload.targetTagState.supersededBy, null, "新日期晚於所串接的 S1 → 解除串接");
+  assert.equal(plan.previewRecon.snapshots.find(s => s.id === "s-tc").supersededBy, null);
+  const RA = L.buildReconciledLedger({ v: 1, method: "avg", transactions: [next, sell] }, plan.previewRecon, { method: "avg", today: TODAY });
+  const xA = RA.txs.find(x => x.id === "tc");
+  assert.equal(xA.preSnapshot, false, "S1 之後的轉入不是快照前交易");
+  assert.equal(xA.applied, true);
+  assert.equal(RA.positions.find(p => p.symbol === "2330").shares, 2200, "持股包含 S1 之後轉入的 1200 股");
+
+  // B. 即使對帳資料仍殘留指向 S1 的串接（例如舊資料），帳本也不得只憑 active tag 就跳過鏈外的交易
+  const RB = L.buildReconciledLedger({ v: 1, method: "avg", transactions: [next, sell] }, tag.store, { method: "avg", today: TODAY });
+  const xB = RB.txs.find(x => x.id === "tc");
+  assert.equal(xB.preSnapshot, false, "期初快照不在目前基準鏈上，就不是期初錨點");
+  assert.equal(RB.positions.find(p => p.symbol === "2330").shares, 2200);
+
+  // C. 未串接（與較新基準對不上）的期初標記，改到 S1 之後一樣要入帳
+  const tb = tw({ id: "tb", date: "2026-10-01", type: "transfer_in", shares: 200, price: 700 });
+  const tagC = R.tagInitialTx(s0, tb, { today: TODAY, snapshotId: "s-tb", txStore: { v: 1, method: "avg", transactions: [tb] }, ledgerLib: L, method: "avg" });
+  assert.ok(tagC.conflict, "前置條件：對不上 S1，未串接");
+  const nextC = { ...tb, date: "2026-11-12" };
+  const RC = L.buildReconciledLedger({ v: 1, method: "avg", transactions: [nextC] }, tagC.store, { method: "avg", today: TODAY });
+  assert.equal(RC.txs.find(x => x.id === "tb").applied, true);
+  assert.equal(RC.positions.find(p => p.symbol === "2330").shares, 1200);
+
+  // D. 仍在鏈上的期初錨點照舊不重複計算：日期改動但仍早於 S1 → 保持串接、維持期初錨點
+  const nextD = { ...tc, date: "2026-10-02" };
+  const planD = R.planUpdateTxTag(tag.store, tc, nextD, { today: TODAY });
+  assert.equal(planD.payload.targetTagState.supersededBy, "S1", "仍早於 S1 時保留串接");
+  const RD = L.buildReconciledLedger({ v: 1, method: "avg", transactions: [nextD, sell] }, planD.previewRecon, { method: "avg", today: TODAY });
+  assert.equal(RD.txs.find(x => x.id === "tc").preSnapshot, true, "鏈上的期初錨點不重複入帳");
+  assert.equal(RD.positions.find(p => p.symbol === "2330").shares, 1000);
+
+  // E. 單獨存在的期初標記（自己就是目前基準）照舊為錨點
+  const tagE = R.tagInitialTx(R.emptyStore(), tc, { today: TODAY, snapshotId: "s-e" });
+  const RE = L.buildReconciledLedger({ v: 1, method: "avg", transactions: [tc, sell] }, tagE.store, { method: "avg", today: TODAY });
+  assert.equal(RE.txs.find(x => x.id === "tc").preSnapshot, true);
+  assert.equal(RE.positions.find(p => p.symbol === "2330").shares, 1000);
+});

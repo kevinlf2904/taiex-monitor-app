@@ -284,6 +284,7 @@
 - **錨點初始化與多期快照鏈（`B0 → ... → B`）重放**：
   - 同一標的若有經 `supersededBy` 串接之歷史確認快照鏈 `chain = [B0, ..., B]`（`pruneStore` 永不裁剪該活躍鏈節點）：
     - **鏈只沿 `supersededBy` 往前串**：同代號但未經晉升／採信／結案明確串接、日期較早的 `confirmed` 快照（例如較新基準存在時才標記的期初快照）**不得納入鏈、不得成為 `B0`**，否則會把從未對過帳的前段交易拿來重算，產生賣超等錯誤並讓整份帳本無法存檔。
+    - **期初錨點只認鏈上的 `tx_tag` 快照**：只有其 `tx_tag` 快照位於目前基準鏈上的期初轉入才標 `preSnapshot: true`；`initialTags` 仍為 active 但快照不在鏈上（未串接，或修改日期後晚於所串接的基準）的轉入，依日期當一般交易處理（晚於基準日就照常入帳）。`planUpdateTxTag` 在新日期晚於所串接基準日時，目標狀態一律 `supersededBy: null`（解除串接）。
     - 最早確認快照 `B0` 設定績效與歷史起點 `firstDate = B0.date`、`firstSnapshotDate = B0.date`、`firstSnapshotShares = B0.shares`、`firstSnapshotAvgCost = B0.avgCost`、`firstSnapshotOrigin = B0.origin`。
     - 鏈上各錨點 `Si` 於 `Si.date` 依序設定或校準當時的 `shares`、`costBasis` 與 FIFO 合成批次 `lots`，但**不重設** `(B0.date, B.date]` 期間已套用交易所累計的 `realizedPnl`、`dividends`、`fees`、`taxes`、`bought`、`sold` 與 `cash`。
   - 若 `B.origin === "full_snapshot_close"`（由已確認之完整快照結案歸零，`shares === 0`, `avgCost === null`）：設定於 `B.date` 持股為 `0`、`costBasis = 0`、`open = false`（早於 `B0.date` 的舊交易仍標 `preSnapshot: true` 不回魂，`(B0.date, B.date]` 期間賣出／股息損益完整保留，晚於 `B.date` 若再買進則由 0 重建）。

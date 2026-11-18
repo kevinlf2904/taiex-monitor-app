@@ -574,6 +574,12 @@
     );
 
     const mode = stillValid ? "update" : "deactivate";
+    // 已串接到較新基準（supersededBy）的期初快照：新日期晚於該基準日就不再是它的前段基準，解除串接（不再當期初錨點，轉入照常入帳）
+    let keepLink = prevTagState.supersededBy ?? null;
+    if (mode === "update" && keepLink) {
+      const linked = recon.snapshots.find(s => s && s.id === keepLink);
+      if (!linked || !validDate(linked.date) || nextTx.date > linked.date) keepLink = null;
+    }
     const targetTagState = mode === "update"
       ? {
           active: true,
@@ -582,7 +588,7 @@
           snapshotDate: nextTx.date,
           snapshotShares: nextTx.shares,
           snapshotAvgCost: nextTx.price,
-          supersededBy: prevTagState.supersededBy,
+          supersededBy: keepLink,
         }
       : {
           active: false,
@@ -969,7 +975,7 @@
     relevant.sort((a, b) => a.date.localeCompare(b.date));
     for (const t of relevant) {
       if (baseline && baseline.tagTxId === t.id) continue;
-      if (initialTags?.[t.id]?.active && (!initialTags[t.id].txHash || initialTags[t.id].txHash === txFingerprint(t))) continue;
+      // 與帳本一致：只有基準本身的期初交易（上一行）才跳過；其他 active 標記的轉入若在基準日之後仍照常計入
       if (baseDate && t.date < baseDate) continue;
       if (baseDate && t.date === baseDate) {
         const rel = sameDayRelations?.[t.id];

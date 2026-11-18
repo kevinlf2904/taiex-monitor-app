@@ -212,7 +212,7 @@
       if (!k) symMkt.set(t.symbol, t.market + "/" + t.currency); else if (k !== t.market + "/" + t.currency) r.errors.push({ code: "currency_conflict", message: "同一個代號前後的市場或幣別不一樣" }); }
 
     // 對帳期初標籤與同日順序判定
-    const validTagTxIds = new Set(), staleTagIds = new Set(), staleTags = [];
+    const staleTagIds = new Set(), staleTags = [];
     if (withReconcile && reconStore && reconStore.initialTags && typeof reconStore.initialTags === "object") {
       for (const [txId, tag] of Object.entries(reconStore.initialTags)) {
         if (!tag || tag.active !== true) continue;
@@ -220,7 +220,6 @@
         if (!r || !r.tx) { staleTagIds.add(txId); staleTags.push({ txId, symbol: symbolOf(tag.symbol) || null, reason: "tx_missing" }); continue; }
         if (r.tx.type !== "transfer_in") { staleTagIds.add(txId); staleTags.push({ txId, symbol: r.tx.symbol || symbolOf(tag.symbol) || null, reason: "not_transfer_in" }); continue; }
         if (tag.txHash && txFp(r.raw) !== tag.txHash && txFp(r.tx) !== tag.txHash) { staleTagIds.add(txId); staleTags.push({ txId, symbol: r.tx.symbol || symbolOf(tag.symbol) || null, reason: "tx_hash_mismatch" }); continue; }
-        validTagTxIds.add(txId);
       }
     }
 
@@ -233,7 +232,8 @@
         if (!B) { r.sortBucket = CORP_FIRST.has(t.type) ? 0 : 1; continue; }
         const chain = baselineChains.get(sym) || [B];
         const B0 = chain[0];
-        const isTagAnchor = validTagTxIds.has(t.id) || chain.some(s => !!s.tagTxId && t.id === s.tagTxId && !staleTagIds.has(t.id));
+        // 期初錨點只認「目前基準鏈上」的 tx_tag 快照：只憑 active tag＋指紋符合就跳過，會讓已移到基準日之後（或未串接）的轉入被靜默排除
+        const isTagAnchor = !staleTagIds.has(t.id) && chain.some(s => !!s.tagTxId && t.id === s.tagTxId);
         const sameSnap = chain.find(s => s.date === t.date) || null;
         if (isTagAnchor) {
           r.preSnapshot = true; r.sameDayRelation = null; r.sortBucket = -1;
