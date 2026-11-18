@@ -46,10 +46,10 @@ test("CI 分份：ci.yml 保留名為 test 的彙總檢查，而且等所有分�
   assert.match(y, /node tests\/run\.mjs --e2e=\$\{\{ matrix\.shard \}\}\/\$\{\{ strategy\.job-total \}\}/, "份數用 job-total，不會跟 matrix 對不上");
   assert.match(y, /^  test:\n    needs: \[unit, e2e\]\n    if: always\(\) &&/m, "test 要 always()，前面失敗時才會回報失敗而不是 skipped");
   assert.match(y, /fail-fast: false/, "一份失敗其他份照跑");
-  const pw = y.match(/mcr\.microsoft\.com\/playwright:v([\d.]+)-noble/), npm = y.match(/playwright@([\d.]+)/);
-  assert.ok(pw && npm, "e2e 用 Playwright 官方容器，npm 也裝 playwright");
-  assert.equal(pw[1], npm[1], "容器版本要和 npm 裝的 playwright 一致，否則找不到瀏覽器");
-  assert.match(y, /options: --ipc=host/, "容器的 /dev/shm 太小，chromium 會崩潰");
+  const pw = y.match(/mcr\.microsoft\.com\/playwright:v([\d.]+)-noble/), npm = [...y.matchAll(/playwright@([\d.]+)/g)].map(m => m[1]);
+  assert.ok(pw && npm.length >= 2, "e2e 用 Playwright 官方容器，unit 與 e2e 都用 npm 裝 playwright");
+  assert.deepEqual(npm, npm.map(() => pw[1]), "每一處 npm 裝的 playwright 都要和容器版本一致，否則找不到瀏覽器");
+  assert.match(y, /options: --ipc=host --init/, "--ipc=host：容器的 /dev/shm 太小 chromium 會崩潰；--init：回收子程序");
   assert.match(y, /needs\.unit\.result.*success/s);
   assert.match(y, /needs\.e2e\.result.*success/s);
 });

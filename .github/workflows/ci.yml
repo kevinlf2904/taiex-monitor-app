@@ -32,10 +32,11 @@ jobs:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     # 用 Playwright 官方容器：chromium 與系統相依套件都已裝好，省掉每份 3～10 分鐘的安裝（#312，#315 實測 223～570 秒）。
-    # 版本要和下面 npm 裝的 playwright@1.56.1 一致，否則找不到對應的瀏覽器。--ipc=host：容器預設 /dev/shm 只有 64MB，chromium 會崩潰
+    # 版本要和下面 npm 裝的 playwright@1.56.1 一致，否則找不到對應的瀏覽器。--ipc=host：容器預設 /dev/shm 只有 64MB，chromium 會崩潰；
+    # --init：讓 PID 1 回收結束的子程序，避免殭屍程序（Playwright 官方 Docker 文件建議兩個一起用）
     container:
       image: mcr.microsoft.com/playwright:v1.56.1-noble
-      options: --ipc=host
+      options: --ipc=host --init
     timeout-minutes: 20
     strategy:
       fail-fast: false # 一份失敗，其他份照跑完，一次看到所有失敗項目
