@@ -1,0 +1,126 @@
+name: "AI 交接與證據包"
+description: "跨 AI 工具／跨對話交接任務、交付證據包與下一步指令（依 AGENTS.md 與 #312 PR A）"
+title: "[交接] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > 依 `AGENTS.md`「交接與回報」與「AI 之間的溝通與留言自動讀取」填寫。
+        > - 不可填入密鑰、Token、密碼或完整環境變數值。
+        > - 只要有新 commit，舊 SHA 的審查與 CI 結果即失效，請務必更新「最新 commit SHA」。
+        > - 沒有對應 PR 的討論／追蹤也可先開此 Issue；若有對應 PR，開好後於 PR 留言同步。
+
+  - type: input
+    id: goal
+    attributes:
+      label: "目標"
+      description: "本次交接任務要完成的目標與對應範圍（一個任務／PR 只做一件事）。"
+      placeholder: "例如：完成 PR A 交接 Issue 範本並通過 Claude Code 審查"
+    validations:
+      required: true
+
+  - type: input
+    id: branch
+    attributes:
+      label: "分支"
+      description: "目前開發分支名稱（Claude Code 用 claude/…、Codex 用 codex/…、Antigravity 用 gemini/…、ChatGPT 用 chatgpt/…）。"
+      placeholder: "例如：gemini/handoff-issue-template（尚未開分支可填「無（main）」）"
+    validations:
+      required: true
+
+  - type: input
+    id: pr
+    attributes:
+      label: "PR"
+      description: "關聯 PR 編號或連結；若尚未開 PR 可留空或填「無」。"
+      placeholder: "例如：#314（或無）"
+    validations:
+      required: false
+
+  - type: input
+    id: head_sha
+    attributes:
+      label: "最新 commit SHA"
+      description: "目前進度對應的精確 commit SHA（建議完整 40 碼或至少 7 碼；勿沿用舊 SHA 驗收）。"
+      placeholder: "例如：d5062a87defb97ecab10f459572acdb0743010a1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: completed
+    attributes:
+      label: "已完成"
+      description: "列出已完成事項、修改／新增的檔案路徑，以及已達成共識或關鍵決策。"
+      placeholder: |
+        - 新增 `.github/ISSUE_TEMPLATE/handoff.yml`
+        - 完成 YAML 語法與 schema 檢查
+    validations:
+      required: true
+
+  - type: textarea
+    id: remaining
+    attributes:
+      label: "未完成"
+      description: "尚未完成的工作、卡關原因或待確認條件；若全部完成請填「無」。"
+      placeholder: |
+        - 等待 Claude Code 審查
+        - （若無未完成項目請填「無」）
+    validations:
+      required: true
+
+  - type: textarea
+    id: tests_run
+    attributes:
+      label: "實際執行的測試指令與結果"
+      description: "只填實際執行過的命令、通過／失敗數與同 SHA 的 CI test 執行連結；不得未執行卻宣稱通過。"
+      placeholder: |
+        - 本機：`node --test tests/pr-guard.test.mjs` → 13／13 通過
+        - CI `test`（head_sha=`...`）：success（run 連結）
+    validations:
+      required: true
+
+  - type: textarea
+    id: unverified
+    attributes:
+      label: "未驗證項目"
+      description: "未於本機或預覽執行的項目（例如 `node tests/run.mjs`、390／1280 預覽、實機 iOS、真實排程）及原因；若皆已驗證請填「無」。"
+      placeholder: |
+        - 完整 `node tests/run.mjs`（本機未裝 Playwright 套件，改以同 SHA CI 為準）
+        - 390／1280 介面驗證（本次未修改介面檔案）
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk_and_rollback
+    attributes:
+      label: "風險與回復方式"
+      description: "影響範圍、是否屬高風險變更／大檔鎖定狀態、授權邊界，以及出問題時的退回／還原方式。"
+      placeholder: |
+        - 風險：僅影響 `.github/ISSUE_TEMPLATE/`（不適用低風險例外，但不更動產品程式與 workflow）
+        - 回復方式：`git revert <commit>` 或移除新增檔案
+    validations:
+      required: true
+
+  - type: textarea
+    id: next_step
+    attributes:
+      label: "下一步"
+      description: "接手工具開工後的第一步動作、需要讀哪份紀錄或待使用者授權的決策。"
+      placeholder: |
+        1. 先 `git fetch origin main` 並讀完本 Issue／關聯 PR 全部留言
+        2. 確認審查結論與同 SHA 的 CI `test` 結果後再決定下一步
+    validations:
+      required: true
+
+  - type: dropdown
+    id: next_tool
+    attributes:
+      label: "接手工具"
+      description: "指定下一步接手處理、審查或驗證的 AI 工具。"
+      options:
+        - "Claude Code"
+        - "Codex"
+        - "Gemini Antigravity"
+        - "ChatGPT"
+    validations:
+      required: true
