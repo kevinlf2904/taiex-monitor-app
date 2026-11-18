@@ -142,7 +142,11 @@ test("pr-brief：用假的 GitHub 回應組出摘要，不呼叫 gh", async () =
   const fake = {
     "pulls/5": { number: 5, title: "改看盤", draft: false, head: { sha: HEAD, ref: "claude/x" } },
     "pulls/5/files": [{ filename: "learner/watch.html", status: "modified" }],
-    "issues/5/comments": [{ id: 9, created_at: "t", body: "審查（Codex）：`0000000` 可以合併" }],
+    "issues/5/comments": [
+      { id: 9, created_at: "t", body: "審查（Codex）：`0000000` 可以合併", user: { type: "User" } },
+      { id: 10, created_at: "t", body: "先不要合併，等我確認\n第二行", user: { type: "User" } },
+      { id: 11, created_at: "t", body: "[vc]: #abc 部署預覽", user: { login: "vercel[bot]", type: "Bot" } },
+    ],
     "pulls/5/reviews": [{ id: 7, submitted_at: "t", body: "審查（ChatGPT）：修改後再合併", commit_id: HEAD }, { id: 8, submitted_at: "t", body: "Looks good overall", commit_id: HEAD }],
     "pulls/5/comments": [{ id: 70, created_at: "t", body: "這裡少了 await", path: "learner/watch.html", commit_id: HEAD }],
     [`commits/${HEAD}/check-runs`]: { check_runs: [{ name: "test", head_sha: HEAD, status: "completed", conclusion: "success", started_at: "1", html_url: "u" }] },
@@ -157,8 +161,12 @@ test("pr-brief：用假的 GitHub 回應組出摘要，不呼叫 gh", async () =
   assert.match(out, /和 #6（鎖定中） 撞到：learner\/watch\.html/);
   assert.match(out, /〔舊 SHA〕審查（Codex） 可以合併/);
   assert.match(out, /〔最新〕審查（ChatGPT） 修改後再合併（review）/, "review 沒寫 SHA 時用 commit_id");
-  assert.match(out, /其他審查留言（不是協作格式）：2 則/);
+  assert.match(out, /其他留言（不是協作格式，請自行讀全文）：3 則/, "一般留言、review、行內各一則；機器人留言不算");
+  assert.match(out, /（留言）先不要合併，等我確認｜/, "使用者的一般留言不能漏掉");
+  assert.match(out, /（review）Looks good overall｜/);
   assert.match(out, /（行內）learner\/watch\.html｜這裡少了 await/);
+  assert.doesNotMatch(out, /部署預覽/, "機器人留言排除");
+  assert.equal(out.match(/審查（Codex）/g).length, 1, "協作格式的留言不重複列在其他留言");
 });
 
 test("pr-guard：低風險路徑和 AGENTS.md「低風險例外」條文用的是同一組路徑", () => {

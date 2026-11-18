@@ -14,14 +14,17 @@ export function ghGet(path) {
   return Array.isArray(pages[0]) ? pages.flat() : pages.length === 1 ? pages[0] : pages;
 }
 
+// 機器人留言（Vercel 部署通知等）：GitHub 的 user.type 是 Bot
+export const isBot = x => x?.user?.type === "Bot";
+
 export async function collect(number, get = ghGet, repo = REPO) {
   const pr = get(`repos/${repo}/pulls/${number}`);
   const files = get(`repos/${repo}/pulls/${number}/files?per_page=100`);
   // AGENTS.md：開工要讀全部留言與審查——一般留言、review、行內審查留言三個來源都要讀
   const comments = [
-    ...get(`repos/${repo}/issues/${number}/comments?per_page=100`).map(c => ({ ...c, source: "comment" })),
-    ...get(`repos/${repo}/pulls/${number}/reviews?per_page=100`).map(r => ({ id: r.id, created_at: r.submitted_at, body: r.body, commit_id: r.commit_id, source: "review" })),
-    ...get(`repos/${repo}/pulls/${number}/comments?per_page=100`).map(c => ({ id: c.id, created_at: c.created_at, body: c.body, commit_id: c.commit_id, path: c.path, source: "inline" })),
+    ...get(`repos/${repo}/issues/${number}/comments?per_page=100`).map(c => ({ id: c.id, created_at: c.created_at, body: c.body, bot: isBot(c), source: "comment" })),
+    ...get(`repos/${repo}/pulls/${number}/reviews?per_page=100`).map(r => ({ id: r.id, created_at: r.submitted_at, body: r.body, commit_id: r.commit_id, bot: isBot(r), source: "review" })),
+    ...get(`repos/${repo}/pulls/${number}/comments?per_page=100`).map(c => ({ id: c.id, created_at: c.created_at, body: c.body, commit_id: c.commit_id, path: c.path, bot: isBot(c), source: "inline" })),
   ];
   const checkRuns = [].concat(get(`repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`)).flatMap(p => p.check_runs || []);
   const open = get(`repos/${repo}/pulls?state=open&per_page=100`).filter(o => o.number !== pr.number);

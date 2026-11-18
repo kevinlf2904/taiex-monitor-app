@@ -166,7 +166,7 @@ export function ciStatus(checkRuns, headSha, name = "test") {
 
 // 給人和 AI 看的摘要（pr-brief 印在終端機；之後 workflow 也用同一段文字貼留言）
 const STATE = { latest: "〔最新〕", stale: "〔舊 SHA〕", nosha: "〔未附 SHA〕" };
-const SOURCE = { comment: "", review: "（review）", inline: "（行內）" };
+const SOURCE = { comment: "（留言）", review: "（review）", inline: "（行內）" };
 
 export function formatBrief({ pr, files, comments = [], checkRuns = [], others = [] }) {
   const head = pr.head.sha;
@@ -175,8 +175,9 @@ export function formatBrief({ pr, files, comments = [], checkRuns = [], others =
   const conflicts = bigFileConflicts({ number: pr.number, files }, others);
   const ai = summarizeComments(comments, head);
   const aiKeys = new Set(ai.map(a => `${a.source}:${a.id}`));
-  // 不是協作格式的 review 與行內審查留言也不能當作不存在：列出筆數與第一行
-  const otherReviews = comments.filter(x => (x.source === "review" || x.source === "inline") && String(x.body || "").trim() && !aiKeys.has(`${x.source}:${x.id}`));
+  // 不是協作格式的留言（使用者的決定、一般討論、review、行內審查）也不能當作不存在：列出筆數與第一行。
+  // 只排除機器人留言（例如 Vercel 部署通知，GitHub 標記 user.type 為 Bot）
+  const otherComments = comments.filter(x => !x.bot && String(x.body || "").trim() && !aiKeys.has(`${x.source || "comment"}:${x.id}`));
   const L = [];
   L.push(`檢查（pr-guard）：\`${head}\``, "");
   L.push(`#${pr.number} ${pr.title}${pr.draft ? "（draft）" : ""}｜分支 ${pr.head.ref}｜${files.length} 個檔案`);
@@ -188,11 +189,12 @@ export function formatBrief({ pr, files, comments = [], checkRuns = [], others =
   for (const x of conflicts) L.push(`- ⚠️ 和 #${x.number}${x.lock ? "（鎖定中）" : ""} 撞到：${x.files.join("、")}`);
   if (c.ui.length) L.push(`- 介面檔案：需要 390／1280 驗證（Antigravity；Antigravity 是實作者時由 Claude Code）`);
   L.push("", ai.length ? "AI 留言：" : "AI 留言：無");
-  for (const a of ai) L.push(`- ${STATE[a.state]}${a.kind}${a.from ? `（${a.from}${a.to ? ` → ${a.to}` : ""}）` : ""}${a.verdict ? ` ${a.verdict}` : ""}${SOURCE[a.source] || ""}｜${a.at || ""}｜${a.id}`);
+  for (const a of ai) L.push(`- ${STATE[a.state]}${a.kind}${a.from ? `（${a.from}${a.to ? ` → ${a.to}` : ""}）` : ""}${a.verdict ? ` ${a.verdict}` : ""}${a.source === "comment" ? "" : SOURCE[a.source]}｜${a.at || ""}｜${a.id}`);
   if (ai.some(a => a.state === "nosha")) L.push("- ⚠️ 有留言沒寫 SHA，無法確認針對哪個版本，請補留言或重新審查");
-  if (otherReviews.length) {
-    L.push(`其他審查留言（不是協作格式）：${otherReviews.length} 則`);
-    for (const x of otherReviews.slice(0, 10)) L.push(`- ${SOURCE[x.source]}${x.path ? `${x.path}｜` : ""}${String(x.body).trim().split("\n")[0].slice(0, 80)}｜${x.id}`);
+  if (otherComments.length) {
+    L.push(`其他留言（不是協作格式，請自行讀全文）：${otherComments.length} 則`);
+    for (const x of otherComments.slice(-15)) L.push(`- ${SOURCE[x.source || "comment"]}${x.path ? `${x.path}｜` : ""}${String(x.body).trim().split("\n")[0].slice(0, 80)}｜${x.created_at || ""}｜${x.id}`);
+    if (otherComments.length > 15) L.push(`- （只列最新 15 則，較早的 ${otherComments.length - 15} 則請到 PR 頁面看）`);
   }
   return L.join("\n");
 }
