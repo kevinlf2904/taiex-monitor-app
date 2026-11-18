@@ -5,11 +5,14 @@
 function renderReportView(S) {
   const head = lgViewSeg(), today = lgToday(), back = `<button type="button" class="btn sm" data-lg="view" data-v="home">回總覽</button>`;
   if (W.off) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">需要部署到網站才有報價。</p>`);
-  const L = KLLedger.buildLedger(S.transactions, { method: S.method, today }), open = L.positions.filter(p => p.open);
-  if (!S.transactions.length) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">還沒有交易，沒有報告可以產生。</p><div class="lgbar">${back}</div>`);
+  const recon = typeof lgReconLoad === "function" ? lgReconLoad() : null;
+  const L = KLLedger.buildReconciledLedger(S, recon, { method: S.method, today }), open = L.positions.filter(p => p.open);
+  const reconAlert = typeof lgReconAlertHtml === "function" ? lgReconAlertHtml(recon, L) : "";
+  const reconPrintAlert = typeof lgReconAlertHtml === "function" ? lgReconAlertHtml(recon, L, { noButton: true }) : "";
+  if (!S.transactions.length && !L.reconcile?.hasSnapshot && !(L.reconcile?.openConflicts?.length)) return ($("#lx").innerHTML = head + reconAlert + `<p class="note" style="padding:12px">還沒有交易，沒有報告可以產生。</p><div class="lgbar">${back}</div>`);
   const X = open.length ? lgAllocData(open) : { busy: false, px: new Map(), fx: null };
-  if (X.busy) return ($("#lx").innerHTML = head + skel(`載入 ${open.length} 檔的報價…`));
-  const O = KLOverview.summarize(L, X.px, { fx: X.fx, today, txs: S.transactions, margin: [] }), fx = X.fx?.rate ?? null;
+  if (X.busy) return ($("#lx").innerHTML = head + reconAlert + skel(`載入 ${open.length} 檔的報價…`));
+  const O = KLOverview.summarize(L, X.px, { fx: X.fx, today, txs: S.transactions, margin: [], recon }), fx = X.fx?.rate ?? null;
   const th = store.get("pf:thesis:v1", null), cashT = Object.entries(L.cash || {}).filter(([, v]) => v.tracked), cash = cashT.length ? cashT.reduce((s, [c, v]) => s + v.balance * (c === "USD" ? fx || 0 : 1), 0) : null;
   const R = KLReport.build({ positions: open, px: X.px, fx, cash, thesis: th && th.v === 1 ? th : null, today });
   const m$ = v => (v == null ? "—" : lgMoney(v, "TWD")), w = v => (v == null ? "—" : (v * 100).toFixed(1) + "%"), pc = v => (v == null ? "—" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}%`), n = v => (v == null ? "—" : (+v.toFixed(2)).toLocaleString());
@@ -25,9 +28,11 @@ function renderReportView(S) {
       <td>${r.thesis ? `${SL[r.thesis.status] || ""}${r.thesis.due ? "・該檢視" : ""}` : "沒寫"}</td></tr>`).join("")}</tbody></table></div>`;
   const T = R.thesis, thList = R.rows.filter(r => r.thesis).map(r => `<li><b>${esc(nameOf(r.symbol))}</b>（${SL[r.thesis.status] || ""}${r.thesis.review ? `・下次檢視 ${esc(r.thesis.review)}${r.thesis.due ? "，已到期" : ""}` : ""}）${r.thesis.reason ? `：${esc(r.thesis.reason)}` : ""}</li>`).join("");
   const alerts = O.alerts.length ? `<ul class="rptth">${O.alerts.map(a => `<li>${esc(KLOverview.ALERT_LABEL[a.k] || a.k)}${a.symbol ? `：${esc(nameOf(a.symbol))} ${w(a.w)}` : a.k === "top5_concentration" ? `：${w(a.w)}` : a.codes ? `：${a.codes.map(c => esc(nameOf(c))).join("、")}` : ""}</li>`).join("")}</ul>` : `<p class="note">沒有需要注意的項目。</p>`;
-  const notes = [R.priceEst.length && `沒有報價、用成本估市值：${R.priceEst.map(c => esc(nameOf(c))).join("、")}`, R.noFx.length && `沒有匯率、沒換算成台幣：${R.noFx.map(c => esc(nameOf(c))).join("、")}`].filter(Boolean);
-  $("#lx").innerHTML = head + `<div class="lgbar rptbar"><button type="button" class="btn sm primary" data-rpt="print">列印／存成 PDF</button>${back}</div>
+  const snapNote = L.reconcile?.hasSnapshot ? `部分或全部持股以已確認庫存快照（${L.reconcile.snapshotCount} 檔基準）作為期初起算。` : "";
+  const notes = [snapNote, R.priceEst.length && `沒有報價、用成本估市值：${R.priceEst.map(c => esc(nameOf(c))).join("、")}`, R.noFx.length && `沒有匯率、沒換算成台幣：${R.noFx.map(c => esc(nameOf(c))).join("、")}`].filter(Boolean);
+  $("#lx").innerHTML = head + `${reconAlert}<div class="lgbar rptbar"><button type="button" class="btn sm primary" data-rpt="print">列印／存成 PDF</button>${back}</div>
   <article class="pfcard rpt" data-nofold><h4>投資組合報告<small class="note">（${esc(today)}）</small></h4>
+    ${reconPrintAlert}
     <div class="rptkv">${sum}</div><p class="rptmk">市場分布：${mk}${fx ? `・美元兌台幣 ${fx.toFixed(3)}` : ""}</p>
     ${notes.length ? `<ul class="note lgwarn">${notes.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
     <h5 class="pfh">持股明細</h5>${R.rows.length ? table : `<p class="note">目前沒有持股。</p>`}

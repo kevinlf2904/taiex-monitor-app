@@ -17,7 +17,7 @@ function stBetaLoad(open) {
   Promise.all([one("tw", grp("tw")), one("us", grp("us"))]).then(([a, b]) => { W.stB = { key, beta: { ...a, ...b }, at: Date.now() }; })
     .catch(e => { W.stB = { key, err: e.message || "拿不到" }; }).finally(() => { if (stView()) renderList(); });
 }
-function stSectionHtml(open, X, cashB) {
+function stSectionHtml(open, X, cashB, meta = {}) {
   const L = (W.lg ||= {}), fx = X.fx?.rate ?? null, key = open.map(p => p.symbol).sort().join(","), B = W.stB?.key === key ? W.stB : null;
   const ind = new Map((Array.isArray(W.stocks) ? W.stocks : []).map(r => [String(r[0]).toUpperCase(), r[3] || null]));
   const usdOk = !open.some(p => p.currency === "USD") || fx;
@@ -44,13 +44,24 @@ function stSectionHtml(open, X, cashB) {
     ${R.noBeta.length && B?.beta ? `<p class="note lgwarn">算不出 Beta、用 1 的：${R.noBeta.map(c => esc(nameOf(c))).join("、")}</p>` : ""}
     <ul class="stlist">${R.rows.filter(r => r.change !== 0).slice(0, 10).map(r => `<li><span><b>${esc(nameOf(r.symbol))}</b> <small class="note">${esc(r.symbol)}${r.beta != null ? `・Beta ${r.beta}` : ""}${r.industryHit ? "・重挫產業" : ""}</small></span>
       <span class="stv"><b class="${r.change < 0 ? "down" : "up"}">${r.change > 0 ? "+" : ""}${m$(r.change)}</b><small class="note">價格 ${pc(r.price)}${r.fx ? `・匯率 ${pc(r.fx)}` : ""}</small></span></li>`).join("") || `<li class="note">這個情境對持股沒有影響。</li>`}</ul>`;
-  return `<section class="pfcard stcard" data-nofold><h4>壓力情境<small class="note">（試算）</small></h4>${seg}${indSel}${custom}${beta}${body}
+  const reconAlert = !meta.legacy && (meta.openConflicts?.length || meta.pendingSymbols?.length || meta.unresolvedSameDayCount > 0) && typeof lgReconAlertHtml === "function"
+    ? lgReconAlertHtml(meta.recon || (typeof lgReconLoad === "function" ? lgReconLoad() : null), { reconcile: meta }) : "";
+  const snapTag = !meta.legacy && (meta.hasSnapshot || meta.openConflicts?.length || open.some(p => p.hasSnapshot)) ? "・用已確認快照的股數試算" : "";
+  return `<section class="pfcard stcard" data-nofold><h4>壓力情境<small class="note">（試算${snapTag}）</small></h4>${reconAlert}${seg}${indSel}${custom}${beta}${body}
     <p class="note">每檔價格變動＝Beta × 大盤變動（＋屬於重挫產業時再加上產業變動，最多跌 100%）；美元資產換回台幣再乘上匯率變動。只是線性粗估：沒算相關性改變、流動性、融資追繳，不是預測，也不是投資建議。</p></section>`;
 }
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-pst]"); if (!b || typeof KLStress === "undefined") return;
   const L = (W.lg ||= {}), k = b.dataset.pst;
-  if (k === "beta") { if (W.stB?.err) W.stB = null; const S = lgLoad(); if (S) stBetaLoad(KLLedger.buildLedger(S.transactions, { method: S.method, today: lgToday() }).positions.filter(p => p.open)); renderList(); return; }
+  if (k === "beta") {
+    if (W.stB?.err) W.stB = null;
+    const S = typeof lgStoreOrEmpty === "function" ? lgStoreOrEmpty() : lgLoad();
+    const recon = typeof lgReconLoad === "function" ? lgReconLoad() : null;
+    if (S && (S.transactions?.length || (typeof KLRecon !== "undefined" && KLRecon.activeBaselines(recon).size))) {
+      stBetaLoad(KLLedger.buildReconciledLedger(S, recon, { method: S.method, today: lgToday() }).positions.filter(p => p.open));
+    }
+    renderList(); return;
+  }
   L.st = { ...(L.st || {}), k }; renderList();
 });
 document.addEventListener("change", e => { const t = e.target.closest("[data-pst-ind]"); if (!t) return; const L = (W.lg ||= {}); L.st = { ...(L.st || {}), industry: t.value }; renderList(); });

@@ -1306,7 +1306,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.16-240</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.17-241</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -1459,7 +1459,7 @@ async function rfRun(k, f) {
 //   earn＝財報（也給庫存「總經敏感度」、選股「條件組合」、事件提醒用）、mkx＝大盤的上市／櫃買／官方公告、oapi＝工具「官方資料」
 //   congx.js（大戶國會）的小工具（cxQ、cxRow…）很多分頁都在用，照常一開始就載入
 // 打開頁面幾秒、閒下來後也會在背景先載好，之後切分頁不用等；同一組只載一次，照順序載（後面的檔會用到前面的）。
-const LAZY = { earn: ["earn.js", "earnx.js", "earnplus.js", "finrep.js", "fundx.js"], mkx: ["tpex.js", "official.js"], oapi: ["oapi.js"], ledger: ["ledger.js", "ledger-ui.js"], sig: ["sigstudy.js"] }, LZ = {};
+const LAZY = { earn: ["earn.js", "earnx.js", "earnplus.js", "finrep.js", "fundx.js"], mkx: ["tpex.js", "official.js"], oapi: ["oapi.js"], ledger: ["ledger.js", "recon.js", "ledger-ui.js"], sig: ["sigstudy.js"] }, LZ = {};
 function lazy(g) {
   return (LZ[g] ||= LAZY[g].reduce((p, f) => p.then(() => new Promise((ok, no) => { const s = document.createElement("script"); s.src = f; s.onload = ok; s.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(s); })), Promise.resolve())
     .then(() => { LZ[g].done = true; }, e => { delete LZ[g]; noteErr("載入程式", e); throw e; }));
@@ -2302,7 +2302,7 @@ $("#listPane").addEventListener("click", e => {
   else if (t.closest("[data-hrtol]")) { W.hrTol = t.closest("[data-hrtol]").dataset.hrtol; store.set("watch:hrtol", W.hrTol); renderList(); }
   else if (t.closest("[data-hralloc]")) { holdGo("alloc"); }
   else if (t.closest("#lTools [data-nav]")) { const n = t.closest("[data-nav]").dataset.nav, G = HOLD_NAV.find(g => g[0] === n); holdGo(G?.[2] ? G[2][0][0] : n); }
-  else if (t.closest("[data-hsrc]")) { const v = t.closest("[data-hsrc]").dataset.hsrc; if (v === "tx") return holdGo("tx"); if (v === "tx-imp") { holdGo("tx"); lazy("ledger").then(() => typeof lgOpenImport === "function" && lgOpenImport()).catch(err => toast("載入匯入模組失敗：" + err.message)); return; } W.hsrcLegacy = v === "legacy"; holdSrcApply(); renderList(); }
+  else if (t.closest("[data-hsrc]")) { const v = t.closest("[data-hsrc]").dataset.hsrc; if (v === "tx") return holdGo("tx"); if (v === "tx-recon") { W.holdView = "tx"; (W.lg ||= {}).view = "tx"; W.lg.form = null; store.set("watch:hv", W.holdView); renderList(); requestAnimationFrame(() => document.querySelector("#lx [data-lgrecon-halted], #lx .lgrecon-center")?.scrollIntoView?.({ behavior: "smooth", block: "start" })); return; } if (v === "tx-imp") { holdGo("tx"); lazy("ledger").then(() => typeof lgOpenImport === "function" && lgOpenImport()).catch(err => toast("載入匯入模組失敗：" + err.message)); return; } W.hsrcLegacy = v === "legacy"; holdSrcApply(); renderList(); }
   else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a !== "export" && holdLgBlock()) return; if (a === "shot") { imp.scope = "hold"; $("#impFile").click(); } else if (a === "edit") openHoldEdit(); else if (a === "text") openImport("text"); else exportHold(); }
   else if (gx) { const a = gx.dataset.gx; if (a === "edit") W.editing = true; else if (a === "done") W.editing = false; else if (a === "rename") { const nm = prompt("群組名稱", W.groups[W.gi].name); if (nm) W.groups[W.gi].name = nm.slice(0, 12); } else if (a === "delete" && W.groups.length > 1 && confirm(`刪除群組「${W.groups[W.gi].name}」？`)) { W.groups.splice(W.gi, 1); W.gi = 0; W.editing = false; } saveGroups(); renderList(); }
   else if (so) { W.sort = so.dataset.sort; store.set("watch:sort", W.sort); renderList(); }
@@ -2343,35 +2343,87 @@ const PIE = ["#4e9af1", "#f0a43a", "#e0566b", "#3cc6a8", "#9a9aa6"];
    W.hsrcLegacy：這次開啟改看舊庫存（不存檔）。 */
 W.holdOwn = W.hold;
 store.lock = k => !(k === "watch:hold" && W.holdLg);
-function holdFromLedger(S) {
-  const L = KLLedger.buildLedger(S.transactions, { method: S.method, today: twIso() }), H = {}, divs = {};
-  for (const x of L.txs || []) if (x.applied && !(x.errors || []).length && x.tx?.type === "dividend") (divs[String(x.tx.symbol || "").toUpperCase()] ||= []).push([x.tx.date, (+x.tx.amount || 0) - (+x.tx.tax || 0)]);
+function holdFromLedger(S, recon) {
+  const L = KLLedger.buildReconciledLedger(S, recon || null, { method: S.method, today: twIso() }), H = {}, divs = {};
+  for (const x of L.txs || []) if (x.applied && !x.preSnapshot && x.sameDayRelation !== "unresolved" && !(x.errors || []).length && x.tx?.type === "dividend") (divs[String(x.tx.symbol || "").toUpperCase()] ||= []).push([x.tx.date, (+x.tx.amount || 0) - (+x.tx.tax || 0)]);
   for (const p of L.positions) if (p.open && p.shares > 0 && p.costBasis > 0) {
     // 這段持有的建倉日：最後一次從 0 股變成有股票的那天（中間全部賣光過就從重新買進算起）
     const hs = p.history || []; let d = p.firstDate || null; for (let i = 1; i < hs.length; i++) if (hs[i - 1].shares <= 1e-9 && hs[i].shares > 0) d = hs[i].date;
-    H[p.symbol] = { sh: p.shares, cost: p.costBasis / p.shares, ...(d ? { d } : {}), dv: Math.round((divs[p.symbol] || []).filter(([x]) => !d || x >= d).reduce((a, [, v]) => a + v, 0) * 100) / 100, lg: true };
+    H[p.symbol] = { sh: p.shares, cost: p.costBasis / p.shares, ...(d ? { d } : {}), dv: Math.round((divs[p.symbol] || []).filter(([x]) => !d || x >= d).reduce((a, [, v]) => a + v, 0) * 100) / 100, lg: true, ...(p.pending?.length ? { pending: p.pending } : {}) };
   }
-  return { H, errors: L.errorCount || 0 };
+  return { H, errors: L.errorCount || 0, snapshotCount: L.reconcile?.snapshotCount || 0, pendingSymbols: L.reconcile?.pendingSymbols || [], openConflicts: L.reconcile?.openConflicts || [] };
 }
-// 依目前的交易紀錄決定持股來源；交易紀錄的模組還沒載入就先載入再套用
-function holdSrcApply() {
-  let raw = null; try { raw = localStorage.getItem("kline:pf:v1"); } catch {}
-  const S = store.get("pf:v1", null), has = Array.isArray(S?.transactions) && S.transactions.length > 0;
-  if (!has || W.hsrcLegacy) { if (W.holdLg) { W.hold = W.holdOwn; W.holdLg = null; } return false; }
-  if (typeof KLLedger === "undefined") { if (!W.hsrcP) W.hsrcP = lazy("ledger").then(() => { W.hsrcP = null; if (holdSrcApply()) { W.hdivs = W.hdivs || {}; renderList(); } }, () => { W.hsrcP = null; }); return false; }
-  // 存檔內容一模一樣（整串文字比較，修改一筆交易也算有改）而且同一天就不重算：庫存分頁盤中每秒重畫
-  const key = `${twIso()}|${raw}`; if (W.holdLg?.key === key) return true;
-  try { const r = holdFromLedger(S); W.hold = r.H; W.holdLg = { key, n: S.transactions.length, errors: r.errors }; return true; }
-  catch { W.hold = W.holdOwn; W.holdLg = null; return false; }
+// 依目前的交易紀錄與對帳快照決定持股來源；模組還沒載入就先載入再套用（storage 事件觸發時絕不寫入 localStorage）
+function holdSrcApply(opts = {}) {
+  let raw = null, rawRecon = null;
+  try { raw = localStorage.getItem("kline:pf:v1"); } catch {}
+  try { rawRecon = localStorage.getItem("kline:pf:recon:v1"); } catch {}
+  const S0 = store.get("pf:v1", null), R0 = store.get("pf:recon:v1", null);
+  const hasTx = Array.isArray(S0?.transactions) && S0.transactions.length > 0;
+  const hasSnapRaw = Array.isArray(R0?.snapshots) && R0.snapshots.some(x => x && x.status === "confirmed");
+  if ((!hasTx && !hasSnapRaw && R0?.pendingCommit == null) || W.hsrcLegacy) {
+    if (W.holdLg) { W.hold = W.holdOwn; W.holdLg = null; }
+    W.lgReconHalted = null;
+    return false;
+  }
+  if (typeof KLLedger === "undefined" || typeof KLRecon === "undefined") {
+    if (!W.hsrcP) W.hsrcP = lazy("ledger").then(() => { W.hsrcP = null; if (holdSrcApply()) { W.hdivs = W.hdivs || {}; renderList(); } }, () => { W.hsrcP = null; });
+    return false;
+  }
+  let effectiveRecon = R0, halted = null;
+  if (R0?.pendingCommit != null) {
+    const rec = KLRecon.recoverCommit(S0, R0);
+    if (rec.changed) {
+      effectiveRecon = rec.reconStore;
+      if (!opts.fromStorage && typeof lgRecoverPersist === "function") Promise.resolve().then(() => lgRecoverPersist());
+    } else if (rec.status === "unknown_op_halted" || rec.status === "inconsistent_halted") {
+      halted = rec;
+    }
+  }
+  W.lgReconHalted = halted;
+  const hasConfirmedSnapshots = KLRecon.hasConfirmedSnapshots(effectiveRecon);
+  if ((!hasTx && !hasConfirmedSnapshots) || W.hsrcLegacy) {
+    if (W.holdLg) { W.hold = W.holdOwn; W.holdLg = null; }
+    return false;
+  }
+  // 存檔內容一模一樣（含對帳快照與交易紀錄）而且同一天就不重算：庫存分頁盤中每秒重畫
+  const key = `${twIso()}|${raw}|${rawRecon}`; if (W.holdLg?.key === key) return true;
+  try {
+    const S = (S0 && typeof S0 === "object" && !Array.isArray(S0)) ? S0 : { v: 1, method: "avg", transactions: [] };
+    const r = holdFromLedger(S, effectiveRecon);
+    W.hold = r.H;
+    W.holdLg = { key, n: Array.isArray(S.transactions) ? S.transactions.length : 0, snapN: r.snapshotCount, errors: r.errors, pendingSymbols: r.pendingSymbols, openConflicts: r.openConflicts, halted };
+    return true;
+  } catch { W.hold = W.holdOwn; W.holdLg = null; return false; }
+}
+if (!window.__klStorageBound) {
+  window.__klStorageBound = true;
+  window.addEventListener("storage", e => {
+    if (e.key === "kline:pf:v1" || e.key === "kline:pf:recon:v1" || e.key == null) {
+      holdSrcApply({ fromStorage: true });
+      if (typeof renderList === "function") renderList();
+    }
+  });
 }
 // 庫存分頁上方：資料來自哪裡＋切換（交易紀錄模式不能編輯舊庫存）
 function holdSrcBar() {
-  const S = store.get("pf:v1", null), has = Array.isArray(S?.transactions) && S.transactions.length > 0;
-  if (W.holdLg) return `<span class="note hsrc">持股來自<b>交易紀錄</b>（${W.holdLg.n} 筆交易${W.holdLg.errors ? `，${W.holdLg.errors} 筆有錯誤沒算進來` : ""}）</span><button type="button" class="btn sm" data-hsrc="tx">到交易紀錄新增買賣</button><button type="button" class="btn sm" data-hsrc="tx-imp">${ico("cam")}截圖匯入</button><button type="button" class="btn sm" data-hsrc="legacy">改看舊庫存</button>`;
-  return has && W.hsrcLegacy ? `<span class="note hsrc">目前看的是<b>舊庫存</b>（不是交易紀錄）</span><button type="button" class="btn sm" data-hsrc="ledger">改看交易紀錄</button>` : "";
+  let S = store.get("pf:v1", null), R0 = store.get("pf:recon:v1", null);
+  const hasTx = Array.isArray(S?.transactions) && S.transactions.length > 0;
+  const hasSnap = typeof KLRecon !== "undefined" ? KLRecon.hasConfirmedSnapshots(R0) : (Array.isArray(R0?.snapshots) && R0.snapshots.some(x => x && x.status === "confirmed"));
+  if (W.holdLg) {
+    const n = W.holdLg.n, snapN = W.holdLg.snapN || 0, pendN = (W.holdLg.pendingSymbols || []).length;
+    const label = n > 0
+      ? `持股來自<b>交易紀錄</b>（${n} 筆交易${W.holdLg.errors ? `，${W.holdLg.errors} 筆有錯誤沒算進來` : ""}）${snapN ? `・${snapN} 檔快照基準` : ""}`
+      : `持股來自<b>交易帳本</b>（${snapN} 檔期初快照）`;
+    const reconBtn = pendN ? `<button type="button" class="btn sm lgwarn-btn" data-hsrc="tx-recon">⚠︎ 待對帳（${pendN} 檔）</button>`
+      : W.holdLg.halted ? `<button type="button" class="btn sm lgwarn-btn" data-hsrc="tx-recon">⚠︎ 待處理對帳提交</button>` : "";
+    return `<span class="note hsrc">${label}</span><button type="button" class="btn sm" data-hsrc="tx">${n > 0 ? "到交易紀錄新增買賣" : "到交易紀錄查看"}</button><button type="button" class="btn sm" data-hsrc="tx-imp">${ico("cam")}截圖匯入</button>${reconBtn}<button type="button" class="btn sm" data-hsrc="legacy">改看舊庫存</button>`;
+  }
+  const has = hasTx || hasSnap;
+  return has && W.hsrcLegacy ? `<span class="note hsrc">目前看的是<b>舊庫存</b>（不是${hasTx ? "交易紀錄" : "交易帳本"}）</span><button type="button" class="btn sm" data-hsrc="ledger">改看${hasTx ? "交易紀錄" : "交易帳本"}</button>` : "";
 }
 // 交易紀錄模式下要改持股：提示到交易紀錄，不改舊庫存
-const holdLgBlock = () => { if (!W.holdLg) return false; toast("持股來自交易紀錄：請到「庫存 → 交易紀錄」新增買賣（舊庫存不會被改動）", 3500); return true; };
+const holdLgBlock = () => { if (!W.holdLg) return false; toast("持股來自交易紀錄：請到「庫存 → 交易紀錄」新增買賣或匯入快照（舊庫存不會被改動）", 3500); return true; };
 function holdRows(m) {
   return Object.entries(W.hold).filter(([c, h]) => +h?.sh > 0 && +h?.cost > 0 && Number.isFinite(+h.sh) && Number.isFinite(+h.cost) && mktOf(c) === m).map(([c, h]) => { // 股數、成本要是大於 0 的數字（壞資料略過，不改動存檔）
     const q = W.quotes.get(c) || (c === W.sel ? W.detailQ : null), p = holdPnL(c, q), cost = h.sh * h.cost;
@@ -2381,21 +2433,38 @@ function holdRows(m) {
 const sgn = (v, d = 0) => (v == null ? "—" : `${v > 0 ? "+" : ""}${d ? v.toFixed(d) : Math.round(v).toLocaleString()}`);
 // 庫存資料檢查（portfolio.js）：缺價格、價格過期、資料錯誤、成本或日期有問題的持倉列出來，不默默略過；只讀，不改動存檔
 function holdDataCheck(m) {
-  if (typeof KLPortfolio === "undefined") return "";
+  const reconItems = [];
+  if (W.holdLg && !W.hsrcLegacy) {
+    const seenC = new Set();
+    for (const c of W.holdLg.openConflicts || []) {
+      const sym = String(c.symbol || "").toUpperCase(), cm = c.market || mktOf(sym);
+      if (cm && cm !== m) continue;
+      if (!cm && m !== "tw") continue;
+      const key = c.id || `${c.kind}:${sym}`;
+      if (seenC.has(key)) continue;
+      seenC.add(key);
+      const hint = typeof KLRecon?.settlementHint === "function" ? KLRecon.settlementHint(c.market || cm) : "";
+      const diff = c.diffShares != null ? `（差異 ${c.diffShares > 0 ? "+" : ""}${Number(c.diffShares).toLocaleString()} 股）` : "";
+      const msg = c.kind === "same_day_order" ? `⚠︎ 待對帳（同日順序未決）${hint ? ` — ${hint}` : ""}` : `⚠︎ 待對帳${diff}${hint ? ` — ${hint}` : ""}`;
+      reconItems.push({ symbol: sym, name: nameOf(sym) || sym, msg });
+    }
+  }
+  const reconHtml = reconItems.length ? `<div class="note lgwarn hrecon" style="margin-bottom:8px">${reconItems.map(x => `<div><b>${esc(x.name)}</b> <small class="note">${esc(x.symbol)}</small>・${esc(x.msg)}</div>`).join("")}<button type="button" class="btn sm" data-hsrc="tx-recon" style="margin-top:4px">前往對帳中心處理</button></div>` : "";
+  if (typeof KLPortfolio === "undefined") return reconHtml;
   if (!W.stocks && !W.dqTried) { W.dqTried = true; loadStocks().then(() => { if (W.lt === "hold") renderList(); }).catch(() => {}); } // 股票清單用來確認市場（上市／上櫃）
   const r = KLPortfolio.normalizeHoldings(W.hold, { master: W.stocks, quotes: W.quotes, names: W.names, expectedDate: { tw: W.quotes.get("T00")?.date?.slice(0, 10) || null } });
   const quiet = new Set(["market_inferred", "demo"]); // 美股市場本來就只能推測、範例持股上面已經有說明：不另外提醒
   const need = i => i.status !== "valid" && !(i.status === "warning" && i.issues.every(x => quiet.has(x.code)));
   // 看不出市場的不歸到台股或美股，兩個分頁都另外列出來；資料錯誤（代號壞掉）的也一樣
   const L = r.items.filter(i => i.market === m && need(i)), U = r.items.filter(i => !i.market && need(i));
-  if (!L.length && !U.length) return "";
+  if (!L.length && !U.length) return reconHtml;
   const lab = KLPortfolio.STATUS_LABEL;
   const li = i => `<li><b>${esc(i.name || nameOf(i.symbol) || i.symbol)}</b> <small class="note">${esc(i.symbol)}</small>・${lab[i.status]}：${esc(i.issues.filter(x => !quiet.has(x.code)).map(x => x.message).join("；"))}</li>`;
-  return `<details class="hdq"><summary>⚠︎ 資料檢查：${L.length + U.length} 筆持倉需要注意</summary><ul>${L.map(li).join("")}</ul>${U.length ? `<p class="note">看不出是台股還是美股（下面的庫存表暫時放在台股，請確認代號）：</p><ul>${U.map(li).join("")}</ul>` : ""}<p class="note">${[...L, ...U].some(i => i.status === "invalid") ? "資料錯誤的持倉不會算進損益與風險；按上面的「編輯庫存」修正。" : "缺價格或價格過期的持倉，市值可能不是最新的。"}</p></details>`;
+  return reconHtml + `<details class="hdq"><summary>⚠︎ 資料檢查：${L.length + U.length} 筆持倉需要注意</summary><ul>${L.map(li).join("")}</ul>${U.length ? `<p class="note">看不出是台股還是美股（下面的庫存表暫時放在台股，請確認代號）：</p><ul>${U.map(li).join("")}</ul>` : ""}<p class="note">${[...L, ...U].some(i => i.status === "invalid") ? "資料錯誤的持倉不會算進損益與風險；按上面的「編輯庫存」修正。" : "缺價格或價格過期的持倉，市值可能不是最新的。"}</p></details>`;
 }
 function renderHold() {
   const m = W.holdMkt, R = holdRows(m), us = m === "us", money = v => (v == null ? "—" : (us ? "US$" : "") + (us ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : Math.round(v).toLocaleString()));
-  if (!R.length) { const none = !Object.keys(W.hold).length; $("#lx").innerHTML = (none ? "" : holdDataCheck(m)) + `<div class="hempty"><p class="note">${W.holdLg ? `交易紀錄裡目前沒有${us ? "美股" : "台股"}持股。到「交易紀錄」新增買進，這裡就會出現。` : `還沒有${us ? "美股" : "台股"}持股。按上面的「編輯庫存」一格一格填代號、股數與成本，或用「截圖匯入」上傳券商 App 的庫存截圖。`}</p>
+  if (!R.length) { const none = !Object.keys(W.hold).length, hasConf = !!(W.holdLg?.openConflicts?.length); $("#lx").innerHTML = (none && !hasConf ? "" : holdDataCheck(m)) + `<div class="hempty"><p class="note">${W.holdLg ? `交易紀錄裡目前沒有${us ? "美股" : "台股"}持股。到「交易紀錄」新增買進或匯入快照，這裡就會出現。` : `還沒有${us ? "美股" : "台股"}持股。按上面的「編輯庫存」一格一格填代號、股數與成本，或用「截圖匯入」上傳券商 App 的庫存截圖。`}</p>
     ${none && !W.holdLg ? `<button type="button" class="btn primary" data-hdemo="load">✨ 載入範例投資組合體驗</button><p class="note">放入台股、美股各幾檔範例部位，可以先看看損益、配息、風險分析長什麼樣子；之後一鍵清除。</p>` : ""}</div>`; $("#wl").innerHTML = ""; return; }
   const demo = W.hold[Object.keys(W.hold)[0]]?.demo ? `<div class="hdemo"><span>✨ 目前是範例投資組合（不是你的真實持股）</span><button type="button" class="btn sm" data-hdemo="clear">清除範例</button></div>` : "";
   const ok = R.filter(r => r.mv != null);
@@ -2414,9 +2483,9 @@ function renderHold() {
   R.sort((a, b) => ((val(b) ?? -1e18) - (val(a) ?? -1e18)) * dir);
   const th = (key, t) => `<button data-hs="${key}" class="${k === key ? "on" : ""}">${t}${k === key ? (dir > 0 ? " ▼" : " ▲") : ""}</button>`;
   const fmtA = v => (v == null ? "—" : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-  $("#wl").innerHTML = `<li class="hhead yh-head">${th("mv", "名稱")}${th("chgPct", "市價<br>均價")}${th("day", "股數<br>今日損益")}${th("pnl", "損益")}</li>` + R.map(r => { const p = P.get(r.c), open = W.holdOpen === r.c;
+  $("#wl").innerHTML = `<li class="hhead yh-head">${th("mv", "名稱")}${th("chgPct", "市價<br>均價")}${th("day", "股數<br>今日損益")}${th("pnl", "損益")}</li>` + R.map(r => { const p = P.get(r.c), open = W.holdOpen === r.c, hasPend = r.h.pending?.some(x => x.code === "recon_diff" || x.code === "same_day_order");
     return `<li class="yh-li${open ? " open" : ""}"><button class="row yh-row" data-hx="${r.c}" aria-expanded="${open}">
-    <span class="nm">${esc(nameOf(r.c))}<span class="cd">${r.c}${r.h.d ? "・" + r.h.d.slice(2).replace(/-/g, "/") + " 買" : ""}</span></span>
+    <span class="nm">${esc(nameOf(r.c))}<span class="cd">${r.c}${r.h.d ? "・" + r.h.d.slice(2).replace(/-/g, "/") + " 買" : ""}${hasPend ? `・<span class="lgwarn">⚠︎ 待對帳</span>` : ""}</span></span>
     <span><b class="${cls(r.q?.chg)}">${fmtPx(r.q?.price, r.c)}</b><small>${p ? fmtA(p.avg) : fmtA(r.h.cost)}</small></span>
     <span><b>${r.h.sh.toLocaleString()}</b><small class="${cls(r.day)}">${sgn(r.day)}</small></span>
     <span class="${cls(p?.pnl)}"><b>${sgn(p?.pnl)}</b><small>${p?.pct != null ? sgn(p.pct, 2) + "%" : "—"}</small></span></button>
@@ -2500,6 +2569,8 @@ function showImpDialog(title, html, { wide = false, focus = null, forceFocus = f
   if (wasHidden) {
     const ae = document.activeElement;
     if (ae && ae !== document.body && !sh.contains(ae)) W.impRet = ae;
+    const t = $("#toast");
+    if (t) { t.hidden = true; clearTimeout(toast.t); }
   }
   imp.scope = scope;
   $("#impTitle").textContent = title;
@@ -2659,19 +2730,27 @@ $("#impFile").addEventListener("change", async e => {
   const files = [...e.target.files].slice(0, 4); e.target.value = ""; if (!files.length) return;
   const ledger = imp.scope === "ledger";
   if (!ledger && holdLgBlock()) return;
-  const mode = ledger ? (W.lgImp?.kind === "trades" ? "trades" : "holdings") : "holdings";
+  const mode = ledger ? "auto" : "holdings";
   const keep = !ledger && !$("#impSheet").hidden && imp.rows.length ? imp.rows : [];
   if (ledger && typeof lgOnImportBusy === "function") lgOnImportBusy(files.length, mode);
   else openImport("busy", `正在讀取 ${files.length} 張截圖…（AI 讀圖約需 10～30 秒）`);
   const reqId = ++imp.reqId;
   try {
     await loadStocks();
+    let fileHashes = [];
+    if (ledger && typeof crypto !== "undefined" && crypto.subtle) {
+      fileHashes = await Promise.all(files.map(async f => {
+        const buf = await f.arrayBuffer();
+        const dig = await crypto.subtle.digest("SHA-256", buf);
+        return [...new Uint8Array(dig)].map(x => x.toString(16).padStart(2, "0")).join("");
+      }));
+    }
     const images = await Promise.all(files.map(shrink));
     const r = await fetch("/api/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ images, mode }) }), j = await r.json().catch(() => null);
     if (reqId !== imp.reqId) return;
     if (!j) throw new Error(r.status === 404 ? "這個環境沒有資料服務，部署到網站後才能用" : `服務回應 ${r.status}`);
     if (!j.ok) throw new Error(j.error || "讀圖失敗");
-    if (ledger) { if (typeof lgOnImportRows === "function") lgOnImportRows(j.rows || [], j.mode || mode); return; }
+    if (ledger) { if (typeof lgOnImportRows === "function") lgOnImportRows(j.rows || [], j.kind || j.mode || "unknown", { asOf: j.asOf ?? null, asOfStatus: j.asOfStatus ?? null, altDate: j.altDate || "", rawAsOf: j.rawAsOf || "", fileHashes }); return; }
     const rows = j.rows.map(deriveRow), merged = [...keep];
     rows.forEach(x => { const i = merged.findIndex(y => (x.code && y.code === x.code) || (!x.code && y.name === x.name)); if (i >= 0) merged[i] = { ...merged[i], ...Object.fromEntries(Object.entries(x).filter(([, v]) => v != null && v !== "")) }; else merged.push(x); });
     imp.mode = Object.keys(W.hold).length ? imp.mode : "merge"; imp.edit = false; openImport("review", merged);

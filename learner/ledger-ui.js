@@ -10,14 +10,269 @@
    雲端同步、備份檔本來就包含所有 kline: 開頭的資料，新存檔會一起同步與備份。不輸出 console、不送到任何外部服務。
    用到 watch.html 的 W、$、esc、store、renderList、nameOf、toast、ico、loadStocks、findCode、lookupCode、verifyCodes、holdSrcApply、showImpDialog、closeImport、impSetLive、imp；ledger.js 的 KLLedger。 */
 const LG_KEY = "pf:v1"; // store 會加 kline: 前綴
+const LG_RAW_PF = "kline:pf:v1";
+const LG_RAW_RECON = "kline:pf:recon:v1";
 const lgToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+const lgRawGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const lgParseRaw = raw => { if (!raw) return null; try { const s = JSON.parse(raw); return s && typeof s === "object" && !Array.isArray(s) ? s : null; } catch { return null; } };
 const lgLoad = () => { const s = store.get(LG_KEY, null); return s && typeof s === "object" && !Array.isArray(s) ? s : null; };
-// 寫入前一定檢查；有錯誤就不寫，回傳錯誤
-function lgSave(s) {
-  const v = KLLedger.validateStore(s, { today: lgToday() });
-  if (!v.ok) return v;
-  store.set(LG_KEY, s); if (typeof holdSrcApply === "function") holdSrcApply(); return v; // 庫存各分頁的持股跟著更新（at 是建立時間，不改）
+const lgStoreOrEmpty = () => lgLoad() || { v: 1, method: "avg", transactions: [] };
+
+let _pfNodeQueue = Promise.resolve();
+function withPfCommitLock(fn) {
+  if (typeof window !== "undefined") {
+    if (typeof navigator === "undefined" || !navigator.locks || typeof navigator.locks.request !== "function") {
+      return Promise.resolve({
+        ok: false,
+        code: "cross_tab_lock_unavailable",
+        errors: ["目前瀏覽器不支援跨分頁鎖（navigator.locks），為避免多視窗並發寫入破壞雙鍵一致性，已阻擋這次寫入。"]
+      });
+    }
+    return navigator.locks.request("kline:pf:commit", () => Promise.resolve().then(fn));
+  }
+  const run = _pfNodeQueue.then(fn, fn);
+  _pfNodeQueue = run.catch(() => {});
+  return run;
 }
+
+function lgRecoverPersist() {
+  if (W._lgRecBusy) return W._lgRecBusy;
+  W._lgRecBusy = withPfCommitLock(() => {
+    const rawPf = lgRawGet(LG_RAW_PF), rawRecon = lgRawGet(LG_RAW_RECON);
+    const pf = lgParseRaw(rawPf), recon = lgParseRaw(rawRecon);
+    if (!recon || recon.pendingCommit == null || typeof KLRecon?.recoverCommit !== "function") {
+      W.lgReconHalted = null;
+      return { ok: true, changed: false };
+    }
+    const rec = KLRecon.recoverCommit(pf, recon);
+    if (rec.changed !== true) {
+      W.lgReconHalted = (rec.status === "unknown_op_halted" || rec.status === "inconsistent_halted") ? rec : null;
+      return { ok: true, changed: false, status: rec.status };
+    }
+    const pr = KLRecon.pruneStore(rec.reconStore, KLRecon.MAX_BYTES);
+    if (!pr.ok) return { ok: false, code: pr.code };
+    if (lgRawGet(LG_RAW_PF) !== rawPf || lgRawGet(LG_RAW_RECON) !== rawRecon) {
+      setTimeout(() => lgRecoverPersist(), 25);
+      return { ok: false, code: "cas_retry" };
+    }
+    let wrote = false;
+    try { wrote = store.set("pf:recon:v1", pr.store); } catch { wrote = false; }
+    if (!wrote) return { ok: false, code: "storage_write_failed" };
+    W.lgReconHalted = null;
+    if (typeof holdSrcApply === "function") holdSrcApply();
+    if (typeof pfExpire === "function") pfExpire();
+    if (typeof renderList === "function") renderList();
+    return { ok: true, changed: true };
+  }).finally(() => { W._lgRecBusy = null; });
+  return W._lgRecBusy;
+}
+
+// 純讀取＋無副作用記憶體 WAL 檢查：絕不在讀取期間直接同步覆寫 localStorage
+function lgReconLoad() {
+  const s = store.get("pf:recon:v1", null);
+  const R0 = s && typeof s === "object" && !Array.isArray(s) ? s : null;
+  if (R0?.pendingCommit != null && typeof KLRecon?.recoverCommit === "function") {
+    const rec = KLRecon.recoverCommit(lgLoad(), R0);
+    if (rec.changed === true) {
+      W.lgReconHalted = null;
+      Promise.resolve().then(() => lgRecoverPersist());
+      return rec.reconStore;
+    }
+    if (rec.status === "unknown_op_halted" || rec.status === "inconsistent_halted") {
+      W.lgReconHalted = rec;
+      return R0;
+    }
+  }
+  W.lgReconHalted = null;
+  return R0;
+}
+
+function lgReconWrite(nextRecon, opts = {}) {
+  if (typeof KLRecon === "undefined") return { ok: false, code: "recon_missing", errors: ["對帳模組尚未載入"] };
+  const rawRecon = lgRawGet(LG_RAW_RECON), curRecon = lgParseRaw(rawRecon);
+  if (opts.expectedRawRecon !== undefined && rawRecon !== opts.expectedRawRecon) {
+    return { ok: false, code: "stale_write", errors: ["其他分頁或程序已更新對帳資料，本次未覆蓋寫入，請重新確認畫面"] };
+  }
+  if (!opts.allowPendingCommitWrite && curRecon?.pendingCommit != null) {
+    return { ok: false, code: "unrecovered_pending_commit", errors: ["存在未恢復或未知的對帳提交紀錄，請先處理或匯出 JSON 備份後再修改"] };
+  }
+  if (!opts.allowPendingCommitWrite && nextRecon?.pendingCommit != null) {
+    return { ok: false, code: "unrecovered_pending_commit", errors: ["不可透過一般儲存寫入未結案的 pendingCommit"] };
+  }
+  const vr = KLRecon.validateStore(nextRecon, { today: lgToday() });
+  if (!vr.ok) return { ok: false, code: vr.code, errors: [vr.error || vr.code] };
+  const pr = KLRecon.pruneStore(nextRecon, KLRecon.MAX_BYTES);
+  if (!pr.ok) {
+    const msg = `對帳核心資料超過 ${Math.round(pr.maxBytes / 1024)}KB 上限（目前 ${Math.round(pr.bytes / 1024)}KB），本次未覆蓋寫入；請先結案待對帳項目或到「工具 → 備份同步」匯出 JSON 備份`;
+    return { ok: false, code: pr.code, bytes: pr.bytes, maxBytes: pr.maxBytes, errors: [msg] };
+  }
+  let wrote = false;
+  try { wrote = store.set("pf:recon:v1", pr.store); } catch { wrote = false; }
+  if (!wrote) return { ok: false, code: "storage_write_failed", errors: ["瀏覽器儲存空間不足或受寫入保護，對帳資料未寫入"] };
+  if (pr.store.pendingCommit == null) W.lgReconHalted = null;
+  if (typeof holdSrcApply === "function") holdSrcApply();
+  if (typeof pfExpire === "function") pfExpire();
+  return { ok: true, store: pr.store, trimmed: !!pr.trimmed };
+}
+
+function lgReconSave(nextRecon, opts = {}) {
+  if (opts.inLock) return Promise.resolve(lgReconWrite(nextRecon, opts));
+  return withPfCommitLock(() => lgReconWrite(nextRecon, opts));
+}
+
+// 寫入前一定檢查：併發基線、unrecovered_pending_commit 與 store.set 布林失敗防護；有錯絕不寫入
+function lgSave(s, opts = {}) {
+  const rawPf = lgRawGet(LG_RAW_PF), rawRecon = lgRawGet(LG_RAW_RECON);
+  if (opts.expectedRawPf !== undefined && rawPf !== opts.expectedRawPf) {
+    return { ok: false, code: "stale_write", errors: ["其他分頁已修改交易紀錄，請重新載入後再操作"] };
+  }
+  if (opts.expectedRawRecon !== undefined && rawRecon !== opts.expectedRawRecon) {
+    return { ok: false, code: "stale_write", errors: ["其他分頁已修改對帳資料，請重新載入後再操作"] };
+  }
+  const reconNow = opts.reconOverride !== undefined ? opts.reconOverride : lgParseRaw(rawRecon);
+  if (!opts.allowPendingCommitWrite && reconNow?.pendingCommit != null) {
+    return { ok: false, code: "unrecovered_pending_commit", errors: ["存在未恢復或未知的對帳提交紀錄，請先處理或匯出 JSON 備份後再修改"] };
+  }
+  const v = KLLedger.validateStore(s, { today: lgToday(), ...(reconNow ? { recon: reconNow } : {}) });
+  if (!v.ok) return v;
+  let wrote = false;
+  try { wrote = store.set(LG_KEY, s); } catch { wrote = false; }
+  if (!wrote) return { ok: false, code: "storage_write_failed", errors: ["瀏覽器儲存空間不足或受鎖定，未寫入交易紀錄"] };
+  if (typeof holdSrcApply === "function") holdSrcApply();
+  if (typeof pfExpire === "function") pfExpire();
+  return v; // 庫存各分頁的持股跟著更新（at 是建立時間，不改）
+}
+
+async function lgCommitDualStores(spec = {}) {
+  if (typeof KLRecon === "undefined") return { ok: false, code: "recon_missing", errors: ["對帳模組尚未載入"] };
+  return withPfCommitLock(async () => {
+    const rawPf0 = lgRawGet(LG_RAW_PF), rawRecon0 = lgRawGet(LG_RAW_RECON);
+    if (spec.expectedRawPf !== undefined && rawPf0 !== spec.expectedRawPf) {
+      return { ok: false, code: "stale_write", errors: ["交易紀錄已在其他視窗變動，請重新確認畫面再提交"] };
+    }
+    if (spec.expectedRawRecon !== undefined && rawRecon0 !== spec.expectedRawRecon) {
+      return { ok: false, code: "stale_write", errors: ["對帳快照已在其他視窗變動，請重新確認畫面再提交"] };
+    }
+    const pf0 = lgParseRaw(rawPf0) || { v: 1, method: "avg", transactions: [] };
+    let recon0 = lgParseRaw(rawRecon0) || KLRecon.emptyStore();
+    if (recon0.pendingCommit != null) {
+      const rec = KLRecon.recoverCommit(pf0, recon0);
+      if (rec.changed) {
+        const prRec = KLRecon.pruneStore(rec.reconStore, KLRecon.MAX_BYTES);
+        if (!prRec.ok) return { ok: false, code: prRec.code, errors: ["恢復前次 WAL 時對帳資料超過上限"] };
+        const wRec = lgReconWrite(prRec.store, { allowPendingCommitWrite: true });
+        if (!wRec.ok) return wRec;
+        recon0 = wRec.store;
+      } else {
+        W.lgReconHalted = (rec.status === "unknown_op_halted" || rec.status === "inconsistent_halted") ? rec : null;
+        return { ok: false, code: "unrecovered_pending_commit", halted: rec, errors: ["存在受阻的對帳提交紀錄，請先透過頁頂修復面板處理"] };
+      }
+    }
+    let nextPf = spec.nextPf, payload = spec.payload;
+    if (typeof spec.planFn === "function") {
+      const planned = await spec.planFn(pf0, recon0);
+      if (!planned || !planned.ok) return planned || { ok: false, code: "plan_failed", errors: ["雙鍵提交規劃失敗"] };
+      nextPf = planned.nextPf;
+      payload = planned.payload;
+    }
+    if (!payload) return { ok: false, code: "invalid_wal_payload", errors: ["缺少 WAL 提交內容"] };
+    const batchId = payload.id || payload.batchId;
+    const prep = KLRecon.prepareCommit(recon0, payload);
+    if (!prep.ok) return { ok: false, code: prep.code, errors: [prep.error || prep.code] };
+    const fin = KLRecon.finalizeCommit(prep.store, batchId);
+    if (!fin.ok) return { ok: false, code: fin.code, errors: [fin.error || fin.code] };
+
+    const pfVal = KLLedger.validateStore(nextPf, { today: lgToday(), recon: fin.store });
+    if (!pfVal.ok) {
+      const msg = pfVal.errors?.[0]?.errors?.[0]?.message || pfVal.code;
+      return { ok: false, code: pfVal.code, errors: [`交易紀錄資料檢查未通過：${msg}`], ledgerErrors: pfVal.errors };
+    }
+    const recVal = KLRecon.validateStore(fin.store, { today: lgToday() });
+    if (!recVal.ok) return { ok: false, code: recVal.code, errors: [recVal.error || recVal.code] };
+    const pr1 = KLRecon.pruneStore(prep.store, KLRecon.MAX_BYTES);
+    if (!pr1.ok) return { ok: false, code: pr1.code, bytes: pr1.bytes, maxBytes: pr1.maxBytes, errors: [`對帳暫存超過 ${Math.round(pr1.maxBytes / 1024)}KB 上限，請先結案待對帳項目或匯出備份`] };
+    const pr3 = KLRecon.pruneStore(fin.store, KLRecon.MAX_BYTES);
+    if (!pr3.ok) return { ok: false, code: pr3.code, bytes: pr3.bytes, maxBytes: pr3.maxBytes, errors: [`對帳核心資料超過 ${Math.round(pr3.maxBytes / 1024)}KB 上限，請先結案待對帳項目或匯出備份`] };
+
+    // Phase 1: 寫入 WAL pendingCommit
+    const w1 = lgReconWrite(pr1.store, { allowPendingCommitWrite: true });
+    if (!w1.ok) return w1;
+    const rawPrepStr = lgRawGet(LG_RAW_RECON);
+
+    // Phase 2: 寫入交易紀錄 kline:pf:v1
+    let pfWrote = false;
+    try { pfWrote = store.set(LG_KEY, nextPf); } catch { pfWrote = false; }
+    if (!pfWrote) {
+      let restoreOk = false;
+      if (lgRawGet(LG_RAW_RECON) === rawPrepStr) {
+        try {
+          if (rawRecon0 == null) { localStorage.removeItem(LG_RAW_RECON); restoreOk = true; }
+          else restoreOk = store.set("pf:recon:v1", recon0);
+        } catch { restoreOk = false; }
+      }
+      if (typeof holdSrcApply === "function") holdSrcApply();
+      return { ok: false, code: "storage_write_failed", phase: 2, walPending: !restoreOk, errors: ["儲存交易紀錄失敗（瀏覽器空間不足或受鎖定），未寫入新資料"] };
+    }
+    const rawNextPfStr = lgRawGet(LG_RAW_PF);
+
+    // Phase 3: 結案清除 pendingCommit 並寫入正式對帳紀錄
+    const w3 = lgReconWrite(pr3.store, { allowPendingCommitWrite: true });
+    if (!w3.ok) {
+      let rolledBack = false;
+      if (lgRawGet(LG_RAW_PF) === rawNextPfStr) {
+        let pfRevertOk = false;
+        try {
+          if (rawPf0 == null) { localStorage.removeItem(LG_RAW_PF); pfRevertOk = true; }
+          else pfRevertOk = store.set(LG_KEY, pf0);
+        } catch { pfRevertOk = false; }
+        if (pfRevertOk && lgRawGet(LG_RAW_RECON) === rawPrepStr) {
+          try {
+            if (rawRecon0 == null) { localStorage.removeItem(LG_RAW_RECON); rolledBack = true; }
+            else rolledBack = store.set("pf:recon:v1", recon0);
+          } catch { rolledBack = false; }
+        }
+      }
+      if (typeof holdSrcApply === "function") holdSrcApply();
+      return { ok: false, code: w3.code || "storage_write_failed", phase: 3, rolledBack, walPending: !rolledBack, errors: w3.errors || ["寫入對帳結案紀錄失敗"] };
+    }
+    if (typeof holdSrcApply === "function") holdSrcApply();
+    if (typeof pfExpire === "function") pfExpire();
+    return { ok: true, pfStore: nextPf, reconStore: w3.store, ledger: pfVal.ledger };
+  });
+}
+
+function lgReconAlertHtml(recon, L, opts = {}) {
+  const rawConfs = (L?.reconcile?.openConflicts?.length ? L.reconcile.openConflicts : (recon?.conflicts || []).filter(c => c && c.status === "open")) || [];
+  const symF = opts?.symbol ? String(opts.symbol).toUpperCase() : null;
+  const confs = symF ? rawConfs.filter(c => String(c.symbol || "").toUpperCase() === symF) : rawConfs;
+  const unresTxs = (L?.txs || []).filter(x => x && x.sameDayRelation === "unresolved" && !x.errors?.length && (!symF || String(x.tx?.symbol || "").toUpperCase() === symF));
+  if (!confs.length && !unresTxs.length && (symF || !(L?.reconcile?.unresolvedSameDayCount > 0))) return "";
+  const seen = new Set(), items = [];
+  for (const c of confs) {
+    const k = c.id || `${c.kind}:${c.symbol}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const diff = c.diffShares != null ? `差異 ${c.diffShares > 0 ? "+" : ""}${lgN(c.diffShares)} 股` : (c.kind === "same_day_order" ? "同日順序未決" : "待對帳");
+    const hint = typeof KLRecon?.settlementHint === "function" ? KLRecon.settlementHint(c.market) : "";
+    items.push(`${esc(c.symbol || "")}（${diff}）${hint ? `：${esc(hint)}` : ""}`);
+  }
+  for (const x of unresTxs) {
+    const k = `sd:${x.id}`;
+    if (seen.has(k) || confs.some(c => c.kind === "same_day_order" && c.txId === x.id)) continue;
+    seen.add(k);
+    const hint = typeof KLRecon?.settlementHint === "function" ? KLRecon.settlementHint(x.tx?.market) : "";
+    items.push(`${esc(x.tx?.symbol || "")}（同日順序未決）${hint ? `：${esc(hint)}` : ""}`);
+  }
+  if (!items.length && L?.reconcile?.pendingSymbols?.length) {
+    for (const s of L.reconcile.pendingSymbols) {
+      if (!symF || s === symF) items.push(`${esc(s)}（待對帳）`);
+    }
+  }
+  if (!items.length) return "";
+  const btn = opts?.noButton ? "" : ` <button type="button" class="btn sm" data-lg="view" data-v="tx">前往對帳中心</button>`;
+  return `<div class="lgrecon-alert note lgwarn" role="status">⚠︎ 待對帳（${items.slice(0, 3).join("；")}${items.length > 3 ? ` 等 ${items.length} 項` : ""}）${btn}</div>`;
+}
+
 const LG_FIELDS = { // 每種交易要填的欄位
   buy: ["symbol", "shares", "price", "fee", "tax"], sell: ["symbol", "shares", "price", "fee", "tax", "dayTrade"], dividend: ["symbol", "amount", "tax"],
   stock_dividend: ["symbol", "shares", "ratio"], split: ["symbol", "ratio"], fraction_cash: ["symbol", "shares", "amount", "fee"],
@@ -32,23 +287,146 @@ const lgMoney = (v, cur) => { if (v == null) return "—"; const x = cur === "US
 const lgSgn = (v, cur) => (v == null ? "—" : (v > 0 ? "+" : "") + lgMoney(v, cur));
 const lgN = v => (v == null ? "—" : (+v).toLocaleString(undefined, { maximumFractionDigits: 4 }));
 
+(function () {
+  if (typeof document === "undefined" || document.getElementById("lgreconcss")) return;
+  const st = document.createElement("style");
+  st.id = "lgreconcss";
+  st.textContent = `.lgrecon-alert,.lgrecon-halted,.lgrecon-center,.lgrecon-stale{margin:8px 12px;padding:10px 12px;border:1px solid var(--s1,#d97706);border-radius:6px;background:color-mix(in srgb,var(--s1,#d97706) 8%,var(--surface))}
+.lgrecon-halted{border-width:2px}.lgrecon-center h4,.lgrecon-halted h4{margin:0 0 6px;font-size:14px}
+.lgrecon-item{padding:8px 0;border-top:1px solid var(--line);display:grid;gap:6px}
+.lgrecon-item:first-of-type{border-top:none}
+.lgrecon-act{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.lgrecon-act input[type="text"],.lgrecon-act input[type="date"],.lgrecon-act input[type="number"]{min-height:36px;padding:4px 8px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink)}
+.lgrecon-hist{margin:12px;border:1px solid var(--line);border-radius:6px;padding:8px 12px;background:var(--surface)}
+.lgrecon-hist summary{cursor:pointer;font-weight:500;font-size:13px}
+.lgrecon-hist ul{margin:8px 0 0;padding-left:1.2em;font-size:12px;line-height:1.5}
+.lgbadge{display:inline-block;margin-left:4px;padding:1px 6px;font-size:11px;border-radius:3px;border:1px solid var(--accent);color:var(--accent)}
+.lgimp-banner{margin:0 0 8px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);display:grid;gap:6px;font-size:12.5px}
+.lgimp-scope,.lgimp-asof{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lgimp-margin{margin:6px 0;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);font-size:12.5px}
+@media(pointer:coarse){.lgrecon-act .btn,.lgrecon-halted .btn,.lgrecon-stale .btn,#impBody [data-lgimp-upload],#lgImpForm .lgimp-asof .btn,#lgImpForm [data-lgimp-switch]{min-height:44px}}`;
+  document.head.appendChild(st);
+})();
+
 // 交易紀錄、績效的市場切換：全部／台股／美股（W.lg.mkt，只在這次開啟有效、不存檔）；總覽、配置、融資本來就是看整個投資組合
 const LG_MKT = [["all", "全部"], ["tw", "台股"], ["us", "美股"]];
 const lgMktSel = () => W.lg?.mkt || "all";
 const lgCurOk = c => { const m = lgMktSel(); return m === "all" || (m === "us" ? c === "USD" : c !== "USD"); };
 const lgMktSeg = () => `<div class="seg lgmkt" role="group" aria-label="市場">${LG_MKT.map(([k, t]) => `<button type="button" data-lg="mkt" data-v="${k}" aria-pressed="${lgMktSel() === k}">${t}</button>`).join("")}</div>`;
+
+function lgHaltedHtml(halted, recon, S) {
+  if (!halted && recon?.pendingCommit == null) return "";
+  const pc = recon?.pendingCommit || {};
+  const canRevert = halted?.status !== "unknown_op_halted" && ["import_trades", "update_tx_tag", "deactivate_tags"].includes(pc.op);
+  return `<section class="lgrecon-halted" data-lgrecon-halted role="region" aria-label="受阻的對帳提交修復">
+    <h4>⚠︎ 偵測到未完成且無法自動收斂的對帳提交（${esc(pc.op || "unknown")}）</h4>
+    <p class="note">為保護現有交易紀錄與對帳快照，目前暫時鎖定寫入。交易紀錄目前有 ${(S?.transactions || []).length} 筆明細；WAL 卡住操作編號 <code>${esc(pc.id || "—")}</code>（狀態碼：<code>${esc(halted?.code || "pending_commit")}</code>）。請先匯出 JSON 備份，再選擇修復方式：</p>
+    <div class="lgrecon-act">
+      <button type="button" class="btn sm" data-lg="backup-json">⬇ 匯出現狀 JSON 備份</button>
+      <button type="button" class="btn sm" data-lgrecon-halt-action="discard_wal">以交易紀錄為準，放棄卡住的操作</button>
+      ${canRevert ? `<button type="button" class="btn sm primary" data-lgrecon-halt-action="revert_pre_commit">還原到這次修改／匯入之前</button>` : `<span class="note">（未知或結構不完整操作不支援自動還原，請選以交易紀錄為準）</span>`}
+    </div>
+  </section>`;
+}
+
+function lgConflictsHtml(recon, R) {
+  const openConfs = (recon?.conflicts || []).filter(c => c && c.status === "open");
+  const coveredTxIds = new Set(openConfs.filter(c => c.kind === "same_day_order" && c.txId).map(c => c.txId));
+  const syntheticSameDay = [];
+  for (const x of R.txs || []) {
+    if (x.sameDayRelation !== "unresolved" || x.errors.length || coveredTxIds.has(x.id)) continue;
+    const sym = String(x.tx?.symbol || "").toUpperCase();
+    const pos = R.positions.find(p => p.symbol === sym);
+    syntheticSameDay.push({
+      id: `syn-sd-${x.id}`,
+      synthetic: true,
+      kind: "same_day_order",
+      symbol: sym,
+      market: x.tx?.market || lgMkt(sym),
+      txId: x.id,
+      snapshotId: pos?.snapshotId || null,
+      snapshotDate: pos?.snapshotDate || x.tx?.date || null,
+      message: `${x.tx?.date || ""} 同日交易 ${sym}（${KLLedger.TYPE_LABEL[x.tx?.type] || x.tx?.type} ${lgN(x.tx?.shares)} 股）尚未決定在快照前或快照後`,
+      tx: x.tx
+    });
+  }
+  const all = [...openConfs, ...syntheticSameDay];
+  if (!all.length) return "";
+  const cards = all.map(c => {
+    const sym = esc(c.symbol || "");
+    const hint = typeof KLRecon?.settlementHint === "function" ? KLRecon.settlementHint(c.market) : "";
+    if (c.kind === "same_day_order") {
+      const snapDate = c.snapshotDate || c.payload?.snapshotDate || "";
+      const snapId = c.snapshotId || c.payload?.snapshotId || "";
+      const txId = c.txId || c.payload?.txId || "";
+      return `<div class="lgrecon-item" data-cid="${esc(c.id)}">
+        <div><b>${esc(nameOf(c.symbol || "") || sym)}</b> <small class="note">${sym}・同日順序未決（基準日 ${esc(snapDate)}）</small></div>
+        <div class="note">${esc(c.message || "請指定此筆同日交易是否在快照截圖前已經成交")}${hint ? `（${esc(hint)}）` : ""}</div>
+        <div class="lgrecon-act">
+          <button type="button" class="btn sm" data-lgrecon-sameday="before_snapshot" data-cid="${c.synthetic ? "" : esc(c.id)}" data-txid="${esc(txId)}" data-snapid="${esc(snapId)}" data-snapdate="${esc(snapDate)}">快照前已涵蓋（僅存歷史）</button>
+          <button type="button" class="btn sm primary" data-lgrecon-sameday="after_snapshot" data-cid="${c.synthetic ? "" : esc(c.id)}" data-txid="${esc(txId)}" data-snapid="${esc(snapId)}" data-snapdate="${esc(snapDate)}">快照後才成交（納入持倉）</button>
+        </div>
+      </div>`;
+    }
+    const isClose = c.targetShares === 0 && c.payload?.reason === "missing_in_full_snapshot";
+    const leftTxt = c.baselineShares != null ? `帳本推算 ${lgN(c.baselineShares)} 股${c.baselineAvgCost != null ? ` @ ${lgN(+c.baselineAvgCost.toFixed(4))}` : ""}` : "尚無已確認基準";
+    const rightTxt = isClose ? "完整截圖已無持股（0 股）" : `新截圖 ${lgN(c.targetShares)} 股${c.targetAvgCost != null ? ` @ ${lgN(+c.targetAvgCost.toFixed(4))}` : "（缺均價）"}`;
+    const diffTxt = c.diffShares != null ? `差異 ${c.diffShares > 0 ? "+" : ""}${lgN(c.diffShares)} 股` : "";
+    const needDate = c.kind === "missing_date" || c.kind === "ambiguous_date";
+    const snap = c.snapshotId ? recon?.snapshots?.find(s => s && s.id === c.snapshotId) : null;
+    const dateVal = snap?.date || c.payload?.asOf || lgToday();
+    const needCost = !isClose && (!(c.targetAvgCost > 0) || c.kind === "missing_cost");
+    return `<div class="lgrecon-item" data-cid="${esc(c.id)}">
+      <div><b>${esc(nameOf(c.symbol || "") || sym)}</b> <small class="note">${sym}${diffTxt ? `・${esc(diffTxt)}` : ""}</small></div>
+      <div class="note">雙邊對照：${esc(leftTxt)} ↔ ${esc(rightTxt)}</div>
+      <div class="note">${esc(c.message || "")}${hint && !(c.message || "").includes(hint) ? ` — ${esc(hint)}` : ""}</div>
+      <div class="lgrecon-act">
+        ${needDate ? `<label class="note">基準日 <input type="date" data-lgrecon-date="${esc(c.id)}" value="${esc(dateVal)}" max="${lgToday()}" aria-label="基準日期"></label>` : ""}
+        ${needCost ? `<label class="note">均價 <input type="number" inputmode="decimal" min="0" step="any" data-lgrecon-cost="${esc(c.id)}" value="${c.targetAvgCost ?? ""}" placeholder="補填正數均價" aria-label="成本均價"></label>` : ""}
+        <input type="text" data-lgrecon-reason="${esc(c.id)}" maxlength="120" placeholder="採信新快照原因（必填）" aria-label="採信原因">
+        <button type="button" class="btn sm" data-lgrecon-keep="${esc(c.id)}">保留兩邊／原基準</button>
+        <button type="button" class="btn sm" data-lgrecon-imp="${esc(c.id)}">補匯入明細</button>
+        <button type="button" class="btn sm primary" data-lgrecon-accept="${esc(c.id)}">${isClose ? "確認清倉歸零" : "採信新快照"}</button>
+      </div>
+    </div>`;
+  }).join("");
+  return `<section class="lgrecon-center" role="region" aria-label="待對帳項目中心">
+    <h4>⚠︎ 待對帳項目（${all.length} 項）</h4>
+    ${cards}
+  </section>`;
+}
+
+function lgAuditDrawerHtml(recon) {
+  const imps = recon?.imports || [], aud = recon?.audit || [];
+  if (!imps.length && !aud.length) return "";
+  const impLis = imps.slice().reverse().slice(0, 30).map(it => {
+    const hs = (it.fileHashes || []).map(h => h.slice(0, 8)).join(", ");
+    return `<li><code>${esc(String(it.at || "").slice(0, 16).replace("T", " "))}</code>・${it.kind === "trades" ? "成交明細" : "庫存快照"}（範圍：${esc(it.snapshotScope || "partial")}・基準日：${esc(it.asOf || "—")}・L1:${it.level1Count ?? 0} / L2:${it.level2Count ?? 0} / L3:${it.level3Count ?? 0}${hs ? `・原圖 ${esc(hs)}` : ""}）</li>`;
+  }).join("");
+  const audLis = aud.slice().reverse().slice(0, 50).map(a => `<li><code>${esc(String(a.at || "").slice(0, 16).replace("T", " "))}</code>・<b>${esc(a.action || "")}</b>${a.symbol ? ` ${esc(a.symbol)}` : ""}${a.reason ? `：${esc(a.reason)}` : ""}</li>`).join("");
+  return `<details class="lgrecon-hist"><summary>匯入紀錄與對帳稽核（匯入 ${imps.length} 筆・稽核 ${aud.length} 筆）</summary>
+    ${impLis ? `<p class="note" style="margin-top:8px"><b>最近匯入</b></p><ul>${impLis}</ul>` : ""}
+    ${audLis ? `<p class="note" style="margin-top:8px"><b>對帳稽核軌跡</b></p><ul>${audLis}</ul>` : ""}
+  </details>`;
+}
+
 function renderLedger() {
   const L = (W.lg ||= { open: null, form: null, prev: null, msg: "" });
   $("#wl").innerHTML = "";
   const hs = $("#holdSeg"); if (hs) hs.hidden = true; // 上方舊庫存的台股／美股切換對交易紀錄沒有作用：藏起來，改用各頁自己的「全部／台股／美股」
-  const S = lgLoad(), hasTx = !!(S && Array.isArray(S.transactions) && S.transactions.length);
+  const S0 = lgLoad(), recon = lgReconLoad();
+  const hasTx = !!(S0 && Array.isArray(S0.transactions) && S0.transactions.length);
+  const hasSnap = typeof KLRecon !== "undefined" && KLRecon.hasConfirmedSnapshots(recon);
+  const hasOpenConf = !!(recon?.conflicts?.some(c => c && c.status === "open"));
+  const hasHalted = !!(W.lgReconHalted || recon?.pendingCommit != null);
   if (L.view === "margin") return renderMargin(); // 融資不需要交易紀錄
   if (L.view === "alloc") {
-    if (hasTx && !W.hsrcLegacy) return renderAlloc(S);
+    if ((hasTx || hasSnap) && !W.hsrcLegacy) return renderAlloc(S0 || lgStoreOrEmpty());
     const leg = lgLegacyOpen();
-    if ((hasTx && W.hsrcLegacy) || leg.open.length || leg.skipped.length) return renderAllocLegacy(leg, hasTx);
+    if (((hasTx || hasSnap) && W.hsrcLegacy) || leg.open.length || leg.skipped.length) return renderAllocLegacy(leg, hasTx || hasSnap);
   }
-  if (!S) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
+  if (!S0 && !hasSnap && !hasOpenConf && !hasHalted) return ($("#lx").innerHTML = L.prev ? lgPreviewHtml(L.prev) : lgIntroHtml());
+  const S = S0 || lgStoreOrEmpty();
   if (!L.view || L.view === "home") return renderHome(S); // 總覽（預設）：畫面在 pf-home.js，用到時才載入
   if (L.view === "thesis") return renderThesis(S); // 投資論點與近期事件：thesis.js＋pf-thesis.js，用到時才載入
   if (L.view === "report") return renderReport(S); // 可列印的投資組合報告：report.js＋pf-report.js（＋論點狀態用 thesis.js），用到時才載入
@@ -57,7 +435,9 @@ function renderLedger() {
   if (L.view === "margin") return renderMargin();
   if (L.view === "alloc") return renderAlloc(S);
   const quotes = new Map([...W.quotes].map(([c, q]) => [c, q?.price]).filter(([, p]) => p > 0));
-  const R = KLLedger.buildLedger(S.transactions, { method: S.method, today: lgToday(), prices: quotes });
+  const R = KLLedger.buildReconciledLedger(S, recon, { method: S.method, today: lgToday(), prices: quotes });
+  const rawTxById = new Map((S.transactions || []).map(z => [z?.id, z]));
+  const staleTagIds = new Set((R.reconcile?.staleTags || []).map(z => z.txId));
   const cur = ["TWD", "USD"].filter(c => (R.totals[c] || R.cash[c]) && lgCurOk(c));
   const open = R.positions.filter(p => p.open && lgCurOk(p.currency)), closed = R.positions.filter(p => !p.open && lgCurOk(p.currency));
   const curBox = c => { const T = R.totals[c] || {}, C = R.cash[c], P = open.filter(p => p.currency === c), miss = P.filter(p => p.marketValue == null).length, un = P.reduce((s, p) => s + (p.unrealizedPnl || 0), 0);
@@ -66,37 +446,50 @@ function renderLedger() {
       <dt>已實現損益</dt><dd class="${cls(T.realizedPnl)}">${lgSgn(T.realizedPnl || 0, c)}</dd><dt>股息（稅後）</dt><dd>${lgMoney(T.dividends || 0, c)}</dd>
       <dt>手續費</dt><dd>${lgMoney(T.fees || 0, c)}</dd><dt>稅</dt><dd>${lgMoney(T.taxes || 0, c)}</dd>
       ${C?.tracked ? `<dt>現金</dt><dd class="${C.negative ? "lgwarn" : ""}">${lgMoney(C.balance, c)}${C.negative ? "（負數：可能漏記入金）" : ""}</dd>` : ""}</dl></div>`; };
-  const bad = R.txs.filter(x => x.errors.length), pend = R.positions.filter(p => p.pending.length);
-  const posRow = p => { const o = L.open === p.symbol;
+  const bad = R.txs.filter(x => x.errors.length), pend = R.positions.filter(p => p.pending.some(k => k.code === "fraction_unsettled"));
+  const posRow = p => { const o = L.open === p.symbol, hasReconPend = p.pending.some(x => x.code === "recon_diff" || x.code === "same_day_order");
     return `<li class="lgpos${o ? " open" : ""}"><button type="button" class="row lgprow" data-lg="pos" data-c="${esc(p.symbol)}" aria-expanded="${o}">
-      <span class="nm">${esc(nameOf(p.symbol))}<span class="cd">${esc(p.symbol)}</span></span>
+      <span class="nm">${esc(nameOf(p.symbol))}<span class="cd">${esc(p.symbol)}${p.hasSnapshot ? `・快照 ${esc(p.snapshotDate)}` : ""}</span></span>
       <span><b>${lgN(p.shares)}</b><small>均價 ${p.avgCost == null ? "—" : lgN(+p.avgCost.toFixed(4))}</small></span>
       <span><b class="${cls(p.unrealizedPnl)}">${lgSgn(p.unrealizedPnl, p.currency)}</b><small>已實現 ${lgSgn(p.realizedPnl, p.currency)}</small></span>
-      <span><small>股息 ${lgMoney(p.dividends, p.currency)}</small>${p.pending.length ? `<small class="lgwarn">⚠︎ 待確認</small>` : ""}</span></button>
-      ${o ? `<div class="lghist">${p.pending.map(x => `<p class="note lgwarn">⚠︎ ${esc(x.message)}（${lgN(x.shares)} 股）</p>`).join("")}<table><thead><tr><th>日期</th><th>交易</th><th>持股</th><th>平均成本</th><th>總成本</th><th>已實現</th></tr></thead><tbody>${p.history.map(h => `<tr><td>${h.date}</td><td>${KLLedger.TYPE_LABEL[h.type]}</td><td>${lgN(h.shares)}</td><td>${h.avgCost == null ? "—" : lgN(+h.avgCost.toFixed(4))}</td><td>${lgMoney(h.costBasis, p.currency)}</td><td>${h.realized == null ? "" : lgSgn(h.realized, p.currency)}</td></tr>`).join("")}</tbody></table>${p.lots ? `<p class="note">尚未賣出的批次（FIFO）：${p.lots.map(l => `${l.date} ${lgN(l.shares)} 股、成本 ${lgMoney(l.cost, p.currency)}`).join("；") || "無"}</p>` : ""}</div>` : ""}</li>`; };
+      <span><small>股息 ${lgMoney(p.dividends, p.currency)}</small>${hasReconPend ? `<small class="lgwarn">⚠︎ 待對帳</small>` : p.pending.length ? `<small class="lgwarn">⚠︎ 待確認</small>` : ""}</span></button>
+      ${o ? `<div class="lghist">${p.pending.map(x => `<p class="note lgwarn">⚠︎ ${esc(x.message)}${x.shares != null ? `（${lgN(x.shares)} 股）` : ""}</p>`).join("")}<table><thead><tr><th>日期</th><th>交易</th><th>持股</th><th>平均成本</th><th>總成本</th><th>已實現</th></tr></thead><tbody>${p.history.map(h => `<tr><td>${h.date}</td><td>${h.type === "snapshot" ? (h.origin === "full_snapshot_close" ? "庫存快照（完整清倉）" : "庫存快照") : (KLLedger.TYPE_LABEL[h.type] || esc(h.type))}${h.preSnapshot ? ` <small class="note">（快照前歷史）</small>` : ""}</td><td>${h.preSnapshot ? "—" : lgN(h.shares)}</td><td>${h.preSnapshot || h.avgCost == null ? "—" : lgN(+h.avgCost.toFixed(4))}</td><td>${h.preSnapshot ? "—" : lgMoney(h.costBasis, p.currency)}</td><td>${h.realized == null ? "" : lgSgn(h.realized, p.currency)}</td></tr>`).join("")}</tbody></table>${p.lots ? `<p class="note">尚未賣出的批次（FIFO）：${p.lots.map(l => `${l.date} ${lgN(l.shares)} 股、成本 ${lgMoney(l.cost, p.currency)}`).join("；") || "無"}</p>` : ""}</div>` : ""}</li>`; };
   const txRow = x => { const t = x.tx || {}, c = t.currency, d = t.type;
     const what = ["buy", "sell", "transfer_in"].includes(d) ? `${lgN(t.shares)} 股 × ${lgN(t.price)}` : ["stock_dividend", "transfer_out"].includes(d) ? `${lgN(t.shares)} 股` : d === "split" ? `比例 ${lgN(t.ratio)}` : d === "fraction_cash" ? `${lgN(t.shares)} 股 → ${lgMoney(t.amount, c)}` : t.amount != null ? lgMoney(t.amount, c) : t.shares != null ? `${lgN(t.shares)} 股` : "";
     const fee = (t.fee || t.tax) ? `<small>費 ${lgMoney(t.fee, c)}・稅 ${lgMoney(t.tax, c)}${t.feeEstimated ? "（估算）" : ""}</small>` : "";
+    const tagObj = recon?.initialTags?.[x.id], rawTx = rawTxById.get(x.id) || t;
+    const isInitTag = d === "transfer_in" && tagObj?.active === true && !staleTagIds.has(x.id) && (!tagObj.txHash || (typeof KLRecon !== "undefined" && (tagObj.txHash === KLRecon.txFingerprint(rawTx) || tagObj.txHash === KLRecon.txFingerprint(t))));
+    const initBtn = d === "transfer_in" && !x.errors.length
+      ? (isInitTag
+        ? `<span class="lgbadge">已標為期初快照</span><button type="button" class="btn sm" data-lg="untag-init" data-id="${esc(x.id)}">撤回期初快照標記</button>`
+        : `<button type="button" class="btn sm" data-lg="tag-init" data-id="${esc(x.id)}">標為期初快照</button>`)
+      : "";
+    const preTag = x.preSnapshot ? `<small class="note">（快照前歷史）</small>` : x.sameDayRelation === "unresolved" ? `<small class="lgwarn">（同日待對帳）</small>` : "";
     const iss = [...x.errors.map(e => `<li class="lgwarn">✕ ${esc(e.message)}</li>`), ...x.warnings.filter(w => w.code !== "fee_estimated").map(w => `<li>⚠︎ ${esc(w.message)}</li>`)].join("");
-    return `<li class="lgtx${x.errors.length ? " err" : ""}"><span class="lgd">${esc(t.date || "")}</span><span><b>${KLLedger.TYPE_LABEL[d] || esc(d)}</b> ${t.symbol ? `${esc(nameOf(t.symbol))} <small class="note">${esc(t.symbol)}</small>` : ""}${x.mergedInto ? `<small class="note">（併入對應交易）</small>` : ""}</span>
-      <span>${what}${fee}</span><span class="lgact"><button type="button" class="btn sm" data-lg="edit" data-id="${esc(x.id)}">修改</button><button type="button" class="btn sm" data-lg="del" data-id="${esc(x.id)}">刪除</button></span>${iss ? `<ul class="lgiss">${iss}</ul>` : ""}</li>`; };
+    return `<li class="lgtx${x.errors.length ? " err" : ""}"><span class="lgd">${esc(t.date || "")}</span><span><b>${KLLedger.TYPE_LABEL[d] || esc(d)}</b> ${t.symbol ? `${esc(nameOf(t.symbol))} <small class="note">${esc(t.symbol)}</small>` : ""}${x.mergedInto ? `<small class="note">（併入對應交易）</small>` : ""}${preTag}</span>
+      <span>${what}${fee}</span><span class="lgact">${initBtn}<button type="button" class="btn sm" data-lg="edit" data-id="${esc(x.id)}">修改</button><button type="button" class="btn sm" data-lg="del" data-id="${esc(x.id)}">刪除</button></span>${iss ? `<ul class="lgiss">${iss}</ul>` : ""}</li>`; };
   // 錯誤、待確認的提醒不分市場都顯示（不能因為切換就藏起來）；清單只列選到的市場
   const txs = R.txs.filter(x => lgCurOk(x.tx?.currency || "TWD")).sort((a, b) => String(b.tx?.date).localeCompare(String(a.tx?.date)) || b.index - a.index);
   const mk = lgMktSel() === "all" ? "" : `，只顯示${lgMktSel() === "us" ? "美股" : "台股"}；全部 ${R.txs.length} 筆`;
+  const staleHtml = R.reconcile?.staleTags?.length ? `<div class="lgrecon-stale note lgwarn">⚠︎ 偵測到 ${R.reconcile.staleTags.length} 筆與現有交易脫鉤的期初快照標記（${R.reconcile.staleTags.map(x => esc(x.symbol || x.txId)).join("、")}），已改用一般交易計算。<button type="button" class="btn sm" data-lgrecon-clean-stale>一鍵停用過期標記</button></div>` : "";
   $("#lx").innerHTML = lgViewSeg() + `<div class="lgbar">${lgMktSeg()}<span>成本算法：<b>${R.methodLabel}</b></span><button type="button" class="btn sm" data-lg="method">改用${S.method === "fifo" ? "加權平均" : "先進先出"}</button><button type="button" class="btn sm primary" data-lg="add">＋ 新增交易</button><button type="button" class="btn sm" data-lg="imp">${typeof ico === "function" ? ico("cam") : ""}截圖匯入</button><button type="button" class="btn sm" data-lg="csv">⬇ 匯出 CSV</button></div>
     ${L.msg ? `<p class="note lgmsg" role="status">${esc(L.msg)}</p>` : ""}
+    ${lgHaltedHtml(W.lgReconHalted, recon, S)}
+    ${staleHtml}
+    ${lgConflictsHtml(recon, R)}
     ${bad.length ? `<p class="note lgwarn">✕ ${bad.length} 筆交易有錯誤，沒有算進去（下面標紅色的），請修改或刪除。</p>` : ""}${pend.length ? `<p class="note lgwarn">⚠︎ ${pend.map(p => esc(nameOf(p.symbol))).join("、")} 合股後有不足一股的部分還沒結算，股數與成本是暫時的；請新增一筆「零股現金結算」。</p>` : ""}
     ${L.form ? lgFormHtml(L.form, S) : ""}
     <div class="lgcurs">${cur.map(curBox).join("") || `<p class="note">${lgMktSel() === "all" ? "還沒有交易。" : `沒有${lgMktSel() === "us" ? "美股" : "台股"}的交易。`}</p>`}</div>
     <p class="note">台幣和美元分開計算，不相加。未實現損益用目前報價；費用標「估算」的是新增時依費用規則與持股頁「手續費折扣」設定${lgDiscText()}算的（已存交易不會隨設定變更而重算），實際以券商對帳單為準。${S.migratedFrom ? `由舊庫存建立於 ${esc(String(S.at || "").slice(0, 10))}；舊庫存資料仍保留。` : ""}</p>
     ${open.length ? `<h4 class="lgh">持有中（${open.length} 檔）</h4><ul class="lglist">${open.map(posRow).join("")}</ul>` : ""}
     ${closed.length ? `<h4 class="lgh">已出清（${closed.length} 檔）</h4><ul class="lglist">${closed.map(posRow).join("")}</ul>` : ""}
-    <h4 class="lgh">交易紀錄（${txs.length} 筆${mk}）</h4><ul class="lglist lgtxs">${txs.map(txRow).join("") || `<li class="note">還沒有交易。</li>`}</ul>`;
+    <h4 class="lgh">交易紀錄（${txs.length} 筆${mk}）</h4><ul class="lglist lgtxs">${txs.map(txRow).join("") || `<li class="note">還沒有交易。</li>`}</ul>
+    ${lgAuditDrawerHtml(recon)}`;
 }
 function lgIntroHtml() {
   const n = Object.keys(W.hold || {}).length;
   return `<div class="lgintro"><h4>交易紀錄</h4><p class="note">記下每一筆買進、賣出、股息、配股、拆股、入金出金，系統會算出平均成本（或先進先出）、已實現損益、股息與費用。資料只存在這台裝置（有開雲端同步的話會一起同步）。</p>
-    ${n ? `<button type="button" class="btn primary" data-lg="preview">從現有庫存建立（先預覽，不會馬上改動）</button>` : ""}<button type="button" class="btn" data-lg="imp">${typeof ico === "function" ? ico("cam") : ""}截圖匯入（持股／對帳單）</button><button type="button" class="btn" data-lg="blank">從空白開始</button>
+    ${n ? `<button type="button" class="btn primary" data-lg="preview">從現有庫存建立（先預覽，不會馬上改動）</button>` : ""}<button type="button" class="btn" data-lg="imp">${typeof ico === "function" ? ico("cam") : ""}截圖匯入（庫存快照／交易明細）</button><button type="button" class="btn" data-lg="blank">從空白開始</button>
     <p class="note">從現有庫存建立：每一檔變成一筆「股票轉入」，成本用你記的平均成本；舊的庫存資料會保留，不會刪除。</p></div>`;
 }
 function lgPreviewHtml(P) {
@@ -149,46 +542,267 @@ function lgFromForm(form, F) {
   }
   return F.id ? { ...o, id: F.id, v: 1 } : KLLedger.makeTx(o); // 修改：整筆用表單的內容重建（換了類型時，舊類型的欄位不會留下來），編號不變
 }
-document.addEventListener("click", e => {
-  const b = e.target.closest("[data-lg]"); if (!b || !document.getElementById("lx")?.contains(b)) return;
-  const L = (W.lg ||= {}), a = b.dataset.lg; L.msg = "";
-  if (a === "preview") L.prev = KLLedger.previewMigration(W.hold || {}, { today: lgToday(), now: new Date().toISOString() });
-  else if (a === "cancel") L.prev = null;
-  else if (a === "commit") { const P = L.prev; if (!P?.store) return; const s = { ...P.store, method: $("#lgMethod")?.value === "fifo" ? "fifo" : "avg" };
-    const v = lgSave(s); if (!v.ok) { L.prev = null; L.msg = "建立失敗：資料檢查沒有通過，沒有寫入。"; } else { L.prev = null; L.view = "tx"; L.msg = `已建立交易紀錄（${s.transactions.length} 筆）。舊的庫存資料仍保留。`; } }
-  else if (a === "blank") { const v = lgSave({ v: 1, method: "avg", transactions: [], at: new Date().toISOString() }); if (v.ok) { L.view = "tx"; L.msg = "已建立空白的交易紀錄。"; } }
-  else if (a === "add") L.form = { type: "buy", v: { date: lgToday() } };
-  else if (a === "imp") return lgOpenImport();
-  else if (a === "close") L.form = null;
-  else if (a === "view") { L.view = b.dataset.v; L.form = null; }
-  else if (a === "hsrcLedger") { W.hsrcLegacy = false; if (typeof holdSrcApply === "function") holdSrcApply(); }
-  else if (a === "range") L.pfRange = b.dataset.v;
-  else if (a === "mkt") L.mkt = b.dataset.v;
-  else if (a === "pfreload") { W.fresh = Date.now() + 15000; pfExpire(); } // 重新抓（不用本機快取），但先留著上一次的資料：抓失敗時才有東西可以沿用
-  else if (a === "mgadd") L.mgForm = { v: {} };
-  else if (a === "mgclose") L.mgForm = null;
-  else if (a === "mgedit") { const A = mgLoad().accounts.find(x => x.id === b.dataset.id); if (A) L.mgForm = { id: A.id, v: A }; }
-  else if (a === "mgdel") { const S2 = mgLoad(), A = S2.accounts.find(x => x.id === b.dataset.id); if (A && confirm(`刪除「${A.name || "帳戶"}」的融資資料？（只刪這個試算，不影響券商）`)) { const r = mgSave({ ...S2, accounts: S2.accounts.filter(x => x.id !== A.id) }); L.msg = r.ok ? "已刪除。" : "刪除失敗：資料檢查沒有通過。"; } }
-  else if (a === "csv") { const S = lgLoad(); if (!S) return; if (!S.transactions.length) { L.msg = "還沒有交易，沒有東西可以匯出。"; renderList(); return; } const url = URL.createObjectURL(new Blob([KLLedger.toCSV(S.transactions)], { type: "text/csv;charset=utf-8" })), el = document.createElement("a"); el.href = url; el.download = `交易紀錄-${lgToday()}.csv`; document.body.appendChild(el); el.click(); el.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); L.msg = `已匯出 ${S.transactions.length} 筆交易（CSV）。完整備份（可以匯回）請用「工具 → 備份同步 → 匯出備份檔」。`; }
-  else if (a === "pos") L.open = L.open === b.dataset.c ? null : b.dataset.c;
-  else if (a === "edit") { const t = lgLoad()?.transactions.find(x => x.id === b.dataset.id); if (t) L.form = { id: t.id, orig: t, type: t.type, v: { ...t } }; }
-  else if (a === "method") { const S = lgLoad(); if (S && confirm(`整本帳改用「${S.method === "fifo" ? "加權平均成本" : "先進先出（FIFO）"}」重新計算？已實現損益會跟著改變。`)) { const v = lgSave({ ...S, method: S.method === "fifo" ? "avg" : "fifo" }); L.msg = v.ok ? "已改用新的成本算法重新計算。" : "改不了：資料檢查沒有通過。"; } }
-  else if (a === "del") {
-    const S = lgLoad(), id = b.dataset.id; if (!S) return;
-    const I = KLLedger.deleteImpact(S.transactions, id, { method: S.method, today: lgToday() }); if (!I.ok) return;
-    if (I.newErrors.length) { L.msg = `不能刪除：刪掉後有 ${I.newErrors.length} 筆交易會出錯（例如後面的賣出變成賣超），請先修改或刪除那些交易。`; }
-    else { const p = I.position, txt = [`刪除這筆交易？`, I.affected.length ? `之後同一檔還有 ${I.affected.length} 筆交易，成本與已實現損益會重新計算。` : "", p?.before && p?.after ? `持股：${lgN(p.before.shares)} → ${lgN(p.after.shares)} 股；總成本：${lgN(p.before.costBasis)} → ${lgN(p.after.costBasis)}` : ""].filter(Boolean).join("\n");
-      if (confirm(txt)) { const v = lgSave({ ...S, transactions: S.transactions.filter(t => t.id !== id) }); L.msg = v.ok ? "已刪除。" : "刪除失敗：資料檢查沒有通過，沒有改動。"; } }
+
+async function lgHandleReconClick(el, L) {
+  if (typeof KLRecon === "undefined") { L.msg = "對帳模組尚未載入"; renderList(); return true; }
+  if (el.matches("[data-lgrecon-halt-action]")) {
+    const choice = el.dataset.lgreconHaltAction;
+    const rawPf0 = lgRawGet(LG_RAW_PF), rawRecon0 = lgRawGet(LG_RAW_RECON);
+    const pf0 = lgParseRaw(rawPf0), recon0 = lgParseRaw(rawRecon0);
+    const r0 = KLRecon.resolveHalted(pf0, recon0, choice, { source: "ui_halted_card" });
+    if (!r0.ok) {
+      L.msg = r0.error || r0.code || "修復失敗。";
+      renderList();
+      return true;
+    }
+    const msg = choice === "discard_wal" && r0.summary
+      ? `將以交易紀錄為準放棄卡住的對帳匯入（本次未入帳 ${r0.summary.missingCount} 筆：${r0.summary.missingSymbols.join("、") || "無標的"}），要繼續嗎？`
+      : choice === "discard_wal"
+        ? "將以目前的交易紀錄為準，清除卡住的對帳提交紀錄（不可復原），要繼續嗎？"
+        : "將還原到這次修改／匯入之前的雙鍵一致狀態，要繼續嗎？";
+    if (!confirm(msg)) return true;
+    const res = await withPfCommitLock(() => {
+      const rawPf = lgRawGet(LG_RAW_PF), rawRecon = lgRawGet(LG_RAW_RECON);
+      if (rawPf !== rawPf0 || rawRecon !== rawRecon0) {
+        return { ok: false, code: "stale_write", errors: ["確認期間其他分頁已修改投資組合資料，已重新載入最新狀態"] };
+      }
+      const r = KLRecon.resolveHalted(lgParseRaw(rawPf), lgParseRaw(rawRecon), choice, { source: "ui_halted_card" });
+      if (!r.ok) return { ok: false, code: r.code, errors: [r.error || r.code] };
+      const pr = KLRecon.pruneStore(r.reconStore, KLRecon.MAX_BYTES);
+      if (!pr.ok) return { ok: false, code: pr.code, errors: [`對帳核心資料超過 ${Math.round(pr.maxBytes / 1024)}KB 上限，請先匯出 JSON 備份`] };
+      if (r.pfChanged) {
+        let pw = false; try { pw = store.set(LG_KEY, r.pfStore); } catch { pw = false; }
+        if (!pw) return { ok: false, code: "storage_write_failed", errors: ["還原交易紀錄寫入失敗，維持原樣"] };
+      }
+      const w = lgReconWrite(pr.store, { allowPendingCommitWrite: true, expectedRawRecon: rawRecon });
+      if (!w.ok) return w;
+      return { ok: true };
+    });
+    if (res && !res.cancelled) {
+      L.msg = res.ok ? "已完成受阻對帳提交修復，寫入功能已恢復。" : (res.errors?.[0] || "修復失敗。");
+      if (typeof holdSrcApply === "function") holdSrcApply();
+      renderList();
+    }
+    return true;
   }
-  else return;
-  renderList();
+  if (el.matches("[data-lgrecon-clean-stale]")) {
+    const res = await withPfCommitLock(() => {
+      const rawPf = lgRawGet(LG_RAW_PF), rawRecon = lgRawGet(LG_RAW_RECON);
+      const pf0 = lgParseRaw(rawPf) || lgStoreOrEmpty(), recon0 = lgParseRaw(rawRecon);
+      if (!recon0) return { ok: false, errors: ["找不到對帳資料"] };
+      const R0 = KLLedger.buildReconciledLedger(pf0, recon0, { method: pf0.method, today: lgToday() });
+      let curRecon = recon0, n = 0;
+      for (const st of R0.reconcile?.staleTags || []) {
+        const dec = KLRecon.deactivateTagsForTx(curRecon, st.txId);
+        if (dec.ok) { curRecon = dec.store; n++; }
+      }
+      if (!n) return { ok: true, count: 0 };
+      const w = lgReconWrite(curRecon, { expectedRawRecon: rawRecon });
+      return w.ok ? { ok: true, count: n } : w;
+    });
+    L.msg = res.ok ? (res.count ? `已停用 ${res.count} 筆過期期初標記。` : "沒有需要停用的過期標記。") : (res.errors?.[0] || "清理失敗。");
+    renderList();
+    return true;
+  }
+  if (el.matches("[data-lgrecon-sameday]")) {
+    const rel = el.dataset.lgreconSameday;
+    const cid = el.dataset.cid, txId = el.dataset.txid, snapId = el.dataset.snapid || null, snapDate = el.dataset.snapdate;
+    const res = await withPfCommitLock(() => {
+      const rawRecon = lgRawGet(LG_RAW_RECON);
+      const recon0 = lgParseRaw(rawRecon) || KLRecon.emptyStore();
+      if (cid) {
+        const r = KLRecon.resolveConflict(recon0, cid, rel === "before_snapshot" ? "mark_before_snapshot" : "mark_after_snapshot", { txId, snapshotId: snapId, snapshotDate: snapDate, today: lgToday() });
+        if (!r.ok) return { ok: false, errors: [r.error || r.code] };
+        return lgReconWrite(r.store, { expectedRawRecon: rawRecon });
+      }
+      const next = KLRecon.cloneStore(recon0);
+      next.sameDayRelations[txId] = { relation: rel, snapshotId: snapId, snapshotDate: snapDate, at: new Date().toISOString(), source: "ui" };
+      next.audit.push({ id: "aud-sd-" + Date.now(), at: new Date().toISOString(), action: "same_day_order_resolved", symbol: null, snapshotId: snapId, conflictId: null, txId, batchId: null, reason: rel === "before_snapshot" ? "標記為快照前已涵蓋" : "標記為快照後才成交" });
+      return lgReconWrite(next, { expectedRawRecon: rawRecon });
+    });
+    L.msg = res.ok ? (rel === "before_snapshot" ? "已標記為快照前已涵蓋（僅存歷史，不異動交易紀錄）。" : "已標記為快照後才成交（納入持倉計算，不異動交易紀錄）。") : (res.errors?.[0] || "更新同日順序失敗。");
+    renderList();
+    return true;
+  }
+  if (el.matches("[data-lgrecon-keep]")) {
+    const cid = el.dataset.lgreconKeep;
+    const res = await withPfCommitLock(() => {
+      const rawRecon = lgRawGet(LG_RAW_RECON), recon0 = lgParseRaw(rawRecon);
+      const r = KLRecon.resolveConflict(recon0, cid, "keep_both", { today: lgToday() });
+      if (!r.ok) return { ok: false, errors: [r.error || r.code] };
+      return lgReconWrite(r.store, { expectedRawRecon: rawRecon });
+    });
+    L.msg = res.ok ? "已保留既有基準（待之後補明細釐清）。" : (res.errors?.[0] || "操作失敗。");
+    renderList();
+    return true;
+  }
+  if (el.matches("[data-lgrecon-imp]")) {
+    lgOpenImport();
+    return true;
+  }
+  if (el.matches("[data-lgrecon-accept]")) {
+    const cid = el.dataset.lgreconAccept;
+    const reasonInp = document.querySelector(`[data-lgrecon-reason="${cid}"]`);
+    let reason = String(reasonInp?.value || "").trim();
+    if (!reason) reason = String(prompt("採信新快照／確認清倉歸零須填寫原因供稽核：") || "").trim();
+    if (!reason) { L.msg = "請填寫採信新快照的原因後再確認。"; renderList(); return true; }
+    const dateVal = String(document.querySelector(`[data-lgrecon-date="${cid}"]`)?.value || "").trim();
+    const costRaw = document.querySelector(`[data-lgrecon-cost="${cid}"]`)?.value;
+    const avgCost = costRaw != null && String(costRaw).trim() !== "" ? Number(costRaw) : undefined;
+    const res = await withPfCommitLock(() => {
+      const rawRecon = lgRawGet(LG_RAW_RECON), recon0 = lgParseRaw(rawRecon);
+      const r = KLRecon.resolveConflict(recon0, cid, "accept_new", { reason, ...(dateVal ? { asOf: dateVal } : {}), ...(avgCost !== undefined ? { avgCost } : {}), today: lgToday() });
+      if (!r.ok) return { ok: false, errors: [r.error || r.code] };
+      return lgReconWrite(r.store, { expectedRawRecon: rawRecon });
+    });
+    L.msg = res.ok ? "已採信新快照並記錄稽核。" : (res.errors?.[0] || "採信失敗。");
+    renderList();
+    return true;
+  }
+  return false;
+}
+
+document.addEventListener("click", async e => {
+  const L = (W.lg ||= {});
+  const lxEl = document.getElementById("lx");
+  const reconEl = e.target.closest("[data-lgrecon-halt-action],[data-lgrecon-clean-stale],[data-lgrecon-sameday],[data-lgrecon-keep],[data-lgrecon-imp],[data-lgrecon-accept]");
+  if (reconEl && lxEl?.contains(reconEl)) {
+    L.msg = "";
+    await lgHandleReconClick(reconEl, L);
+    return;
+  }
+  const b = e.target.closest("[data-lg]");
+  if (!b) return;
+  const inLx = lxEl?.contains(b), inImp = document.getElementById("impSheet")?.contains(b);
+  if (!inLx && !inImp) return;
+  const a = b.dataset.lg; L.msg = "";
+  if ((a === "view" || a === "view-conflicts") && inImp) {
+    if (typeof closeImport === "function") closeImport();
+    L.view = a === "view-conflicts" ? "tx" : b.dataset.v;
+    L.form = null;
+    renderList();
+    if (a === "view-conflicts") setTimeout(() => document.querySelector(".lgrecon-center")?.scrollIntoView?.({ block: "nearest" }), 30);
+    return;
+  }
+  if (!inLx) return;
+  if (a === "view-conflicts") {
+    L.view = "tx"; L.form = null; renderList();
+    setTimeout(() => document.querySelector(".lgrecon-center")?.scrollIntoView?.({ block: "nearest" }), 30);
+    return;
+  }
+  if (a === "preview") { L.prev = KLLedger.previewMigration(W.hold || {}, { today: lgToday(), now: new Date().toISOString() }); renderList(); return; }
+  if (a === "cancel") { L.prev = null; renderList(); return; }
+  if (a === "backup-json") { if (typeof syncExport === "function") syncExport(); return; }
+  if (a === "commit") {
+    const P = L.prev; if (!P?.store) return;
+    const s = { ...P.store, method: $("#lgMethod")?.value === "fifo" ? "fifo" : "avg" };
+    const v = await withPfCommitLock(() => lgSave(s, { expectedRawPf: null }));
+    if (!v.ok) { L.prev = null; L.msg = v.errors?.[0] || "建立失敗：資料檢查沒有通過，沒有寫入。"; }
+    else { L.prev = null; L.view = "tx"; L.msg = `已建立交易紀錄（${s.transactions.length} 筆）。舊的庫存資料仍保留。`; }
+    renderList(); return;
+  }
+  if (a === "blank") {
+    const v = await withPfCommitLock(() => lgSave({ v: 1, method: "avg", transactions: [], at: new Date().toISOString() }, { expectedRawPf: null }));
+    if (v.ok) { L.view = "tx"; L.msg = "已建立空白的交易紀錄。"; }
+    else L.msg = v.errors?.[0] || "建立失敗。";
+    renderList(); return;
+  }
+  if (a === "add") { L.form = { type: "buy", v: { date: lgToday() } }; renderList(); return; }
+  if (a === "imp") return lgOpenImport();
+  if (a === "close") { L.form = null; renderList(); return; }
+  if (a === "view") { L.view = b.dataset.v; L.form = null; renderList(); return; }
+  if (a === "hsrcLedger") { W.hsrcLegacy = false; if (typeof holdSrcApply === "function") holdSrcApply(); renderList(); return; }
+  if (a === "range") { L.pfRange = b.dataset.v; renderList(); return; }
+  if (a === "mkt") { L.mkt = b.dataset.v; renderList(); return; }
+  if (a === "pfreload") { W.fresh = Date.now() + 15000; pfExpire(); renderList(); return; }
+  if (a === "mgadd") { L.mgForm = { v: {} }; renderList(); return; }
+  if (a === "mgclose") { L.mgForm = null; renderList(); return; }
+  if (a === "mgedit") { const A = mgLoad().accounts.find(x => x.id === b.dataset.id); if (A) L.mgForm = { id: A.id, v: A }; renderList(); return; }
+  if (a === "mgdel") { const S2 = mgLoad(), A = S2.accounts.find(x => x.id === b.dataset.id); if (A && confirm(`刪除「${A.name || "帳戶"}」的融資資料？（只刪這個試算，不影響券商）`)) { const r = mgSave({ ...S2, accounts: S2.accounts.filter(x => x.id !== A.id) }); L.msg = r.ok ? "已刪除。" : "刪除失敗：資料檢查沒有通過。"; } renderList(); return; }
+  if (a === "csv") { const S = lgLoad(); if (!S) return; if (!S.transactions.length) { L.msg = "還沒有交易，沒有東西可以匯出。"; renderList(); return; } const url = URL.createObjectURL(new Blob([KLLedger.toCSV(S.transactions)], { type: "text/csv;charset=utf-8" })), el = document.createElement("a"); el.href = url; el.download = `交易紀錄-${lgToday()}.csv`; document.body.appendChild(el); el.click(); el.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); L.msg = `已匯出 ${S.transactions.length} 筆交易（CSV）。完整備份（可以匯回）請用「工具 → 備份同步 → 匯出備份檔」。`; renderList(); return; }
+  if (a === "pos") { L.open = L.open === b.dataset.c ? null : b.dataset.c; renderList(); return; }
+  if (a === "edit") { const t = lgLoad()?.transactions.find(x => x.id === b.dataset.id); if (t) L.form = { id: t.id, orig: t, type: t.type, v: { ...t } }; renderList(); return; }
+  if (a === "tag-init") {
+    const id = b.dataset.id, t = lgLoad()?.transactions.find(x => x.id === id);
+    if (!t || t.type !== "transfer_in") return;
+    if (!(t.price > 0)) {
+      L.form = { id: t.id, orig: t, type: t.type, v: { ...t } };
+      L.msg = "這筆股票轉入缺少大於 0 的成本均價；請先補填每股成本再標為期初快照（不可建立 0 成本基準）。";
+      renderList(); return;
+    }
+    const res = await withPfCommitLock(() => {
+      const rawRecon = lgRawGet(LG_RAW_RECON), recon0 = lgParseRaw(rawRecon) || KLRecon.emptyStore();
+      const pf0 = lgParseRaw(lgRawGet(LG_RAW_PF));
+      const tCur = pf0?.transactions?.find(x => x.id === id);
+      if (!tCur) return { ok: false, errors: ["找不到該筆交易紀錄"] };
+      const method = pf0.method === "fifo" ? "fifo" : "avg";
+      const r = KLRecon.tagInitialTx(recon0, tCur, { today: lgToday(), txStore: pf0, ledgerLib: KLLedger, method });
+      if (!r.ok) return { ok: false, errors: [r.error || r.code] };
+      // 標記只寫對帳資料，但會改變帳本計算：寫入前試算，帳本錯誤變多就不寫（避免之後所有交易都無法儲存）
+      const errBefore = KLLedger.buildReconciledLedger(pf0, recon0, { method, today: lgToday() }).errorCount;
+      const errAfter = KLLedger.buildReconciledLedger(pf0, r.store, { method, today: lgToday() }).errorCount;
+      if (errAfter > errBefore) return { ok: false, errors: ["標為期初快照後會讓交易紀錄出現錯誤（例如賣超），沒有寫入；請先確認期初快照之後的交易是否完整"] };
+      const w = lgReconWrite(r.store, { expectedRawRecon: rawRecon });
+      return w.ok ? { ...w, linkedTo: r.linkedTo || null, conflict: r.conflict || null } : w;
+    });
+    L.msg = !res.ok ? (res.errors?.[0] || "標記失敗。")
+      : res.conflict ? `已將 ${esc(t.symbol)}（${esc(t.date)}）標為期初快照，但與較新的庫存快照對不上，已列入待對帳；目前仍以較新快照計算持股。`
+      : res.linkedTo ? `已將 ${esc(t.symbol)}（${esc(t.date)}）標為期初快照，並與較新的庫存快照對上，保留期間損益。`
+      : `已將 ${esc(t.symbol)}（${esc(t.date)}）標為期初快照基準。`;
+    renderList(); return;
+  }
+  if (a === "untag-init") {
+    const id = b.dataset.id;
+    if (!confirm("確定要撤回這筆「期初快照」標記？（原交易紀錄與正數成本仍會保留）")) return;
+    const res = await withPfCommitLock(() => {
+      const rawPf = lgRawGet(LG_RAW_PF), rawRecon = lgRawGet(LG_RAW_RECON);
+      const pf0 = lgParseRaw(rawPf) || lgStoreOrEmpty(), recon0 = lgParseRaw(rawRecon);
+      const r = KLRecon.untagInitialTx(recon0, id);
+      if (!r.ok) return { ok: false, errors: [r.error || r.code] };
+      const val = KLLedger.validateStore(pf0, { today: lgToday(), recon: r.store });
+      if (!val.ok) return { ok: false, errors: [`無法撤回標記：${val.errors?.[0]?.errors?.[0]?.message || val.code}`] };
+      return lgReconWrite(r.store, { expectedRawRecon: rawRecon });
+    });
+    L.msg = res.ok ? "已撤回期初快照標記（該筆轉入恢復依一般交易計算）。" : (res.errors?.[0] || "撤回失敗。");
+    renderList(); return;
+  }
+  if (a === "method") {
+    const rawPf = lgRawGet(LG_RAW_PF), rawRecon = lgRawGet(LG_RAW_RECON), S = lgParseRaw(rawPf);
+    if (S && confirm(`整本帳改用「${S.method === "fifo" ? "加權平均成本" : "先進先出（FIFO）"}」重新計算？已實現損益會跟著改變。`)) {
+      const v = await withPfCommitLock(() => lgSave({ ...S, method: S.method === "fifo" ? "avg" : "fifo" }, { expectedRawPf: rawPf, expectedRawRecon: rawRecon }));
+      L.msg = v.ok ? "已改用新的成本算法重新計算。" : (v.errors?.[0] || "改不了：資料檢查沒有通過。");
+    }
+    renderList(); return;
+  }
+  if (a === "del") {
+    const rawPf = lgRawGet(LG_RAW_PF), rawRecon = lgRawGet(LG_RAW_RECON);
+    const S = lgParseRaw(rawPf), recon = lgReconLoad(), id = b.dataset.id;
+    if (!S) return;
+    const targetTx = S.transactions.find(t => t.id === id);
+    if (!targetTx) return;
+    const plan = typeof KLRecon !== "undefined" ? KLRecon.planDeactivateTags(recon, targetTx, { today: lgToday() }) : { ok: true, needsWal: false, previewRecon: recon };
+    const I = KLLedger.deleteImpact(S.transactions, id, { method: S.method, today: lgToday(), reconBefore: recon, reconAfter: plan.previewRecon });
+    if (!I.ok) return;
+    if (I.newErrors.length) { L.msg = `不能刪除：刪掉後有 ${I.newErrors.length} 筆交易會出錯（例如後面的賣出變成賣超），請先修改或刪除那些交易。`; renderList(); return; }
+    const p = I.position, txt = [`刪除這筆交易？`, plan.needsWal ? "（注意：此筆為期初快照交易，刪除後將同步停用其期初快照標記）" : "", I.affected.length ? `之後同一檔還有 ${I.affected.length} 筆交易，成本與已實現損益會重新計算。` : "", p?.before && p?.after ? `持股：${lgN(p.before.shares)} → ${lgN(p.after.shares)} 股；總成本：${lgN(p.before.costBasis)} → ${lgN(p.after.costBasis)}` : ""].filter(Boolean).join("\n");
+    if (!confirm(txt)) return;
+    const nextPf = { ...S, transactions: S.transactions.filter(t => t.id !== id) };
+    let v;
+    if (plan.needsWal) v = await lgCommitDualStores({ expectedRawPf: rawPf, expectedRawRecon: rawRecon, nextPf, payload: plan.payload });
+    else v = await withPfCommitLock(() => lgSave(nextPf, { expectedRawPf: rawPf, expectedRawRecon: rawRecon }));
+    L.msg = v.ok ? (plan.needsWal ? "已刪除交易並同步停用期初快照標記。" : "已刪除。") : (v.errors?.[0] || "刪除失敗：資料檢查沒有通過，沒有改動。");
+    renderList(); return;
+  }
 });
 document.addEventListener("change", e => { if (e.target.id !== "lgType" || !W.lg?.form) return; const form = e.target.form, fd = new FormData(form), v = {}; for (const [k, x] of fd) v[k] = x; W.lg.form = { ...W.lg.form, type: e.target.value, v, err: null }; renderList(); });
-document.addEventListener("submit", e => {
+document.addEventListener("submit", async e => {
   if (e.target.id === "mgForm") return mgSubmit(e);
   if (e.target.id === "lgImpForm") { e.preventDefault(); return lgSaveImport(); }
   if (e.target.id !== "lgForm") return; e.preventDefault();
-  const L = W.lg, F = L.form, S = lgLoad(); if (!F || !S) return;
+  const L = W.lg, F = L.form;
+  const rawPf = lgRawGet(LG_RAW_PF), rawRecon = lgRawGet(LG_RAW_RECON);
+  const S = lgParseRaw(rawPf), recon = lgReconLoad();
+  if (!F || !S) return;
   const { legacyEstAmbiguous, ...rawTx } = lgFromForm(e.target, F), cRes = KLLedger.checkTx(rawTx, { today: lgToday(), rules: lgRules() });
   const tx = !cRes.errors.length && cRes.tx ? {
     ...rawTx,
@@ -200,19 +814,28 @@ document.addEventListener("submit", e => {
     ...(cRes.tx.assetType && !rawTx.assetType ? { assetType: cRes.tx.assetType } : {})
   } : rawTx;
   const list = F.id ? S.transactions.map(t => (t.id === F.id ? tx : t)) : [...S.transactions, tx];
-  const R = KLLedger.buildLedger(list, { method: S.method, today: lgToday() }), me = R.txs.find(x => x.id === tx.id);
+  const plan = F.id && F.orig && typeof KLRecon !== "undefined"
+    ? KLRecon.planUpdateTxTag(recon, F.orig, tx, { today: lgToday() })
+    : { ok: true, needsWal: false, previewRecon: recon };
+  const R = KLLedger.buildReconciledLedger(list, plan.previewRecon, { method: S.method, today: lgToday() }), me = R.txs.find(x => x.id === tx.id);
   const newErr = R.txs.filter(x => x.errors.length && x.id !== tx.id);
   const fd = new FormData(e.target), v = {}; for (const [k, x] of fd) v[k] = x;
   if (me?.errors.length || newErr.length) { L.form = { ...F, v, err: [...(me?.errors || []).map(x => x.message), ...newErr.map(x => `會讓 ${x.tx?.date || ""} 的${KLLedger.TYPE_LABEL[x.tx?.type] || "交易"}出錯：${x.errors[0].message}`)] }; return renderList(); }
   const warn = [
+    ...(plan.needsWal ? [plan.mode === "update" ? "這筆已標為期初快照，修改後將同步更新期初快照。" : "修改類型／代號／無有效成本後，將同步停用期初快照標記。"] : []),
     ...(legacyEstAmbiguous ? ["這筆舊交易未分別記錄手續費與交易稅的估算來源，已保留原數值（若需重新估算請清空該欄位）"] : []),
     ...(cRes.warnings || []).filter(w => w.code === "fee_estimated" && (!F.orig?.feeEstimated || rawTx.fee === undefined || (tx.type === "sell" && rawTx.tax === undefined))).map(w => w.message),
     ...(me?.warnings || []).filter(w => w.code !== "fee_estimated").map(w => w.message)
   ];
   if (warn.length && !confirm(`請確認：\n${warn.join("\n")}\n\n仍要${F.id ? "儲存" : "加入"}？`)) return;
-  const r = lgSave({ ...S, transactions: list });
-  if (!r.ok) { L.form = { ...F, v, err: ["資料檢查沒有通過，沒有儲存。"] }; return renderList(); }
-  L.form = null; L.msg = F.id ? "已儲存修改。" : "已加入。"; renderList();
+  const nextPf = { ...S, transactions: list };
+  let r;
+  if (plan.needsWal) r = await lgCommitDualStores({ expectedRawPf: rawPf, expectedRawRecon: rawRecon, nextPf, payload: plan.payload });
+  else r = await withPfCommitLock(() => lgSave(nextPf, { expectedRawPf: rawPf, expectedRawRecon: rawRecon }));
+  if (!r.ok) { L.form = { ...F, v, err: r.errors?.length ? r.errors : ["資料檢查沒有通過，沒有儲存。"] }; return renderList(); }
+  L.form = null;
+  L.msg = F.id ? (plan.needsWal ? "已儲存修改並同步更新對帳快照。" : "已儲存修改。") : "已加入。";
+  renderList();
 });
 
 /* ================= 績效（投資組合第 5 階段 B）：perf.js 算，這裡畫 =================
@@ -265,8 +888,11 @@ function pfSrcHtml(meta, label, calc = true) {
   const D = KLPfSrc.describe(meta, { name: c => nameOf(c) }), icon = { ok: "ⓘ", warn: "⚠︎", error: "✕" }[D.level];
   return `<p class="note pfsrc pfsrc-${D.level}" role="status">${icon} ${esc(label)}：${D.parts.map(esc).join("・")}${calc ? `。計算時間 ${now}` : ""}${D.level !== "ok" ? rl : ""}</p>`;
 }
-function lgPerfData(S) {
-  const syms = [...new Set(S.transactions.map(t => String(t.symbol || "").toUpperCase()).filter(Boolean))].sort(), curs = [...new Set(S.transactions.map(t => t.currency).filter(Boolean))];
+function lgPerfData(S, reconArg) {
+  const recon = reconArg !== undefined ? reconArg : lgReconLoad();
+  const bases = typeof KLRecon !== "undefined" ? [...KLRecon.activeBaselines(recon).values()] : [];
+  const syms = [...new Set([...(S?.transactions || []).map(t => String(t.symbol || "").toUpperCase()), ...bases.map(b => b.symbol)].filter(Boolean))].sort();
+  const curs = [...new Set([...(S?.transactions || []).map(t => t.currency), ...bases.map(b => b.currency)].filter(Boolean))];
   const key = syms.join(",") + "|" + curs.join(","), X = W.lgPx;
   if (X && X.key === key && (X.busy || X.refreshing || Date.now() - X.at < pfTtl(X))) return X;
   const { prev, tok, retry } = pfBegin("lgPx", key, syms.length);
@@ -288,21 +914,25 @@ function lgPerfData(S) {
 }
 const pfPct = (v, d = 2) => (v == null || !Number.isFinite(v) ? "—" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(d)}%`);
 function renderPerf(S) {
-  const L = W.lg, head = lgViewSeg();
+  const L = W.lg, head = lgViewSeg(), recon = lgReconLoad();
+  const hasSnap = typeof KLRecon !== "undefined" && KLRecon.hasConfirmedSnapshots(recon);
   if (W.off) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">需要部署到網站才有價格資料。</p>`);
   if (typeof KLPerf === "undefined" || typeof KLFx === "undefined") { $("#lx").innerHTML = head + skel("載入績效模組…"); lgPerfLib().then(() => renderList(), e => { $("#lx").innerHTML = head + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; }); return; }
-  if (!S.transactions.length) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">還沒有交易，沒有績效可以算。</p>`);
-  const X = lgPerfData(S);
+  if (!S.transactions.length && !hasSnap) return ($("#lx").innerHTML = head + lgReconAlertHtml(recon, null) + `<p class="note" style="padding:12px">還沒有交易或庫存快照，沒有績效可以算。</p>`);
+  const X = lgPerfData(S, recon);
   if (X.busy) return ($("#lx").innerHTML = head + skel(`載入 ${X.n} 檔持股與比較基準的日 K…`));
   const master = new Map((Array.isArray(W.stocks) ? W.stocks : []).map(r => [String(r[0]).toUpperCase(), r[3] || null]));
-  const R = KLPerf.buildPerf(S.transactions, { method: S.method, today: lgToday(), prices: X.prices, bench: X.bench, benchName: { TWD: "加權指數（價格指數，不含股息）", USD: X.usAdj ? "S&P 500（SPY，含息還原）" : "S&P 500（SPY，不含息）" },
+  const R = KLPerf.buildPerf(S, { method: S.method, today: lgToday(), recon, prices: X.prices, bench: X.bench, benchName: { TWD: "加權指數（價格指數，不含股息）", USD: X.usAdj ? "S&P 500（SPY，含息還原）" : "S&P 500（SPY，不含息）" },
     classify: c => ({ assetType: /^00\d{2,4}[A-Z]?$/.test(c) || ["SPY", "QQQ", "VOO", "VTI", "SOXX", "TQQQ", "SOXL", "DIA", "IWM", "IVV", "VT", "SMH", "XLK", "SCHD", "VYM", "BND", "TLT", "GLD"].includes(c) ? "etf" : "stock", industry: master.get(c) || null }) });
+  const RL = KLLedger.buildReconciledLedger(S, recon, { method: S.method, today: lgToday() });
+  const reconBanner = lgReconAlertHtml(recon, RL);
   const range = L.pfRange || "all", rg = `<div class="seg pfrange" role="group" aria-label="日期範圍">${[["3m", "3 個月"], ["6m", "6 個月"], ["1y", "1 年"], ["all", "全期間"]].map(([k, t]) => `<button type="button" data-lg="range" data-v="${k}" aria-pressed="${range === k}">${t}</button>`).join("")}</div>`;
   // 台幣合併（含匯率拆解）只在「全部」顯示；台股／美股各看自己的幣別
   const cards = (R.byCurrency.USD && lgMktSel() === "all" ? pfFxCard(KLFx.combine(R, X.fx || [], { fxSource: "Yahoo Finance TWD=X 日收盤" })) : "") + Object.values(R.byCurrency).filter(C => lgCurOk(C.currency)).map(C => pfCard(C, range)).join("");
   $("#lx").innerHTML = head + `<div class="lgbar">${lgMktSeg()}${rg}<button type="button" class="btn sm" data-lg="pfreload">重新載入價格</button></div>` + pfSrcHtml(X.meta, "日 K")
+    + reconBanner
     + (R.ledgerErrors ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">✕ 有 ${R.ledgerErrors} 筆交易有錯誤，沒有算進績效；請到「交易紀錄」修改。下面的數字不完整。</p>` : "")
-    + (R.status === "needs_confirm" ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">⚠︎ 待確認：有部位合股後的零股還沒結算，股數與成本是暫時的，下面的績效也是暫時的。請到「交易紀錄」新增「零股現金結算」。</p>` : "")
+    + (R.status === "needs_confirm" ? `<p class="note lgwarn pfstatus" style="margin:4px 12px">⚠︎ 待確認：有部位合股後的零股未結算或尚有待對帳差異，股數與成本是暫時的，下面的績效也是暫時的。請到「交易紀錄」處理。</p>` : "")
     + (cards || `<p class="note" style="padding:12px">${lgMktSel() === "all" ? "沒有可以計算的持股。" : `沒有${lgMktSel() === "us" ? "美股" : "台股"}的部位。`}</p>`)
     + `<details class="pfbasis"><summary>計算口徑</summary><ul>
       <li>範圍是證券部位（股票、ETF 的市值），不含現金。買進付出的錢算投入；賣出拿回的錢、領到的股息算拿回。</li>
@@ -325,7 +955,7 @@ function pfCard(C, range) {
     tile("相對比較基準", B ? pfPct(B.excess) : "—", B ? `${esc(B.name || "")} ${pfPct(B.ret)}` : "沒有比較基準資料", B ? cls(B.excess) : "")
   ].join("");
   const reasons = m.reasons?.length && m.status !== "ok" ? `<p class="note lgwarn pfreasons">⚠︎ ${m.status === "unavailable" ? "資金加權報酬無法計算" : "資金加權報酬是估算"}：${m.reasons.map(r => esc(KLPerf.REASON_LABEL[r] || r)).join("；")}。</p>` : "";
-  const ISS = { pending: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 合股後的零股還沒結算`, transfer_out_prev_price: x => `${esc(nameOf(x.code))} ${x.d} 轉出用 ${x.priceDate} 的收盤價`, transfer_out_user_price: x => `${esc(nameOf(x.code))} ${x.d} 轉出使用手動填寫的價格`, transfer_out_no_price: x => `${esc(nameOf(x.code))} ${x.d} 轉出沒有市價，依成本估算或停止績效計算`, no_prices: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 拿不到價格`, history_truncated: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 的價格只抓得到最近 24 個月`, price_fallback: x => `${x.days} 天沒有收盤價，用交易價格代替`, stale_prices: x => `有價格停在 ${x.maxDays} 天前（可能停牌或資料缺漏）` };
+  const ISS = { pending: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 合股後的零股還沒結算`, snapshot_baseline: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 以庫存快照為基準起算，快照前歷史未計入報酬`, recon_pending: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 尚有待對帳項目（${(x.diffs || []).map(d => d.diffShares != null ? `差異 ${d.diffShares > 0 ? "+" : ""}${lgN(d.diffShares)} 股` : "同日順序未決").join("、")}），對帳完成前數字僅供參考`, transfer_out_prev_price: x => `${esc(nameOf(x.code))} ${x.d} 轉出用 ${x.priceDate} 的收盤價`, transfer_out_user_price: x => `${esc(nameOf(x.code))} ${x.d} 轉出使用手動填寫的價格`, transfer_out_no_price: x => `${esc(nameOf(x.code))} ${x.d} 轉出沒有市價，依成本估算或停止績效計算`, no_prices: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 拿不到價格`, history_truncated: x => `${x.codes.map(c => esc(nameOf(c))).join("、")} 的價格只抓得到最近 24 個月`, price_fallback: x => `${x.days} 天沒有收盤價，用交易價格代替`, stale_prices: x => `有價格停在 ${x.maxDays} 天前（可能停牌或資料缺漏）` };
   const iss = C.issues.length ? `<p class="note">資料提醒：${C.issues.map(x => (ISS[x.k] ? ISS[x.k](x) : esc(x.k))).join("；")}。</p>` : "";
   return `<section class="pfcard" data-nofold><h4>${cur === "USD" ? "美股（美元）" : "台股（台幣）"}${cst}<small class="note"> ${C.from ? `${C.from}～${C.to}・` : ""}資料到 ${esc(C.asOf || "")}</small></h4>
     <div class="pftiles">${tiles}</div>${reasons}${iss}
@@ -577,16 +1207,19 @@ function stLib() {
   return (W.lgStP ||= (typeof KLStress !== "undefined" ? Promise.resolve() : one("stress.js")).then(() => one("pf-stress.js")).then(() => { if (W.lt === "hold" && W.holdView === "tx" && W.lg?.view === "alloc") renderList(); }).catch(e => { W.lgStP = null; }));
 }
 function renderAlloc(S) {
-  const L = KLLedger.buildLedger(S.transactions, { method: S.method, today: lgToday() }), open = L.positions.filter(p => p.open);
-  if (!open.length) return ($("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">目前沒有持股，沒有配置可以看。</p>`);
-  return renderAllocBody(open, L.cash, { legacy: false });
+  const recon = lgReconLoad();
+  const L = KLLedger.buildReconciledLedger(S, recon, { method: S.method, today: lgToday() }), open = L.positions.filter(p => p.open);
+  const meta = { legacy: false, recon, hasSnapshot: !!L.reconcile?.hasSnapshot, openConflicts: L.reconcile?.openConflicts || [], pendingSymbols: L.reconcile?.pendingSymbols || [], unresolvedSameDayCount: L.reconcile?.unresolvedSameDayCount || 0 };
+  if (!open.length) return ($("#lx").innerHTML = lgViewSeg() + lgReconAlertHtml(recon, L) + `<p class="note" style="padding:12px">目前沒有持股，沒有配置可以看。</p>`);
+  return renderAllocBody(open, L.cash, meta);
 }
 function renderAllocLegacy(leg, hasTx) {
   return renderAllocBody(leg.open, {}, { legacy: true, hasTx, skipped: leg.skipped, demoCount: leg.demoCount });
 }
 function renderAllocBody(open, cashB, meta = {}) {
   const head = lgViewSeg();
-  const banner = meta.legacy ? `<div class="lgbar" style="padding-bottom:0"><span class="note lgwarn">目前看的是<b>舊庫存</b>（${meta.hasTx ? "這次切換檢視" : "沒有交易紀錄"}，<b>現金未知，未納入計算</b>；配置基準僅含納入持股）。</span><button type="button" class="btn sm" data-lg="view" data-v="tx">到交易紀錄建立完整帳本</button>${meta.hasTx ? `<button type="button" class="btn sm" data-lg="hsrcLedger">改回交易紀錄</button>` : ""}</div>` : "";
+  const banner = meta.legacy ? `<div class="lgbar" style="padding-bottom:0"><span class="note lgwarn">目前看的是<b>舊庫存</b>（${meta.hasTx ? "這次切換檢視" : "沒有交易紀錄"}，<b>現金未知，未納入計算</b>；配置基準僅含納入持股）。</span><button type="button" class="btn sm" data-lg="view" data-v="tx">到交易紀錄建立完整帳本</button>${meta.hasTx ? `<button type="button" class="btn sm" data-lg="hsrcLedger">改回交易紀錄</button>` : ""}</div>`
+    : (lgReconAlertHtml(meta.recon, { reconcile: meta }) + (meta.hasSnapshot || meta.openConflicts?.length ? `<p class="note lgrecon-snap-note" style="margin:4px 12px">ⓘ 用已確認快照的股數試算${meta.openConflicts?.length ? "（未結案差異不自動套用，請到交易紀錄釐清）" : ""}。</p>` : ""));
   const extraIssues = [
     ...(meta.demoCount > 0 ? [`<li>已略過 ${meta.demoCount} 筆範例持股（不是真實部位）；如不需要請到「持股 → 編輯庫存」移除。</li>`] : []),
     ...(meta.skipped?.length ? [`<li>略過 ${meta.skipped.length} 筆無法算入的舊庫存：${meta.skipped.map(x => `${esc(nameOf(x.symbol) || x.symbol)} ${esc(x.symbol)}（${esc(x.msg)}）`).join("、")}。</li>`] : [])
@@ -605,7 +1238,7 @@ function renderAllocBody(open, cashB, meta = {}) {
   $("#lx").innerHTML = head + banner + `<div class="lgbar"><button type="button" class="btn sm" data-lg="pfreload">重新載入報價</button>${R.fx ? `<small class="note">美元兌台幣 ${R.fx.rate.toFixed(3)}（${esc(R.fx.date || "")}，Yahoo TWD=X 收盤${X.fx?.kept ? "，這次沒拿到，沿用上一次的" : ""}）</small>` : ""}</div>` + pfSrcHtml(X.meta, "報價")
     + (issues ? `<ul class="note lgwarn alissues">${issues}</ul>` : "") + body
     + (typeof rbSectionHtml === "function" && typeof KLRebal !== "undefined" ? rbSectionHtml(open, X, cashB, meta) : (rbLib(), `<p class="note" style="padding:0 12px">載入再平衡試算…</p>`)) // 目標配置與再平衡（rebal.js＋pf-rebal.js，用到時才載入）
-    + (typeof stSectionHtml === "function" && typeof KLStress !== "undefined" ? stSectionHtml(open, X, cashB) : (stLib(), `<p class="note" style="padding:0 12px">載入壓力情境…</p>`)) // 壓力情境（stress.js＋pf-stress.js，用到時才載入）
+    + (typeof stSectionHtml === "function" && typeof KLStress !== "undefined" ? stSectionHtml(open, X, cashB, meta) : (stLib(), `<p class="note" style="padding:0 12px">載入壓力情境…</p>`)) // 壓力情境（stress.js＋pf-stress.js，用到時才載入）
     + `<details class="pfbasis"><summary>計算口徑</summary><ul><li>權重＝市值 ÷ ${hasCash ? "總資產" : "納入持股合計"}（台幣計價；美元用最新匯率換算）。${hasCash ? "有記入金、出金時，現金也算進總資產。" : "目前沒有現金紀錄，現金未知、未納入計算。"}</li>
       <li>沒有現價的持股用成本估算市值，並標示。美股沒有產業資料，歸「未分類」。</li>
       <li>ETF 穿透：ETF 權重 × 成分股占比＝透過 ETF 持有的曝險；只揭露部分成分股時，剩下的歸「其他（未揭露）」。各 ETF 的成分股日期可能不同，會分開列出。</li>
@@ -689,10 +1322,17 @@ function renderHome(S) {
   (W.lgHomeP ||= one("overview.js").then(() => one("pf-home.js")).catch(e => { W.lgHomeP = null; throw e; })).then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
 }
 
-/* ================= 交易紀錄截圖匯入（選項 1 持股轉入 ＋ 選項 2 成交明細對帳單） ================= */
+/* ================= 交易紀錄統一截圖匯入（自動辨識庫存快照／成交明細 ＋ 雙向切換 ＋ 三級對帳分流 ＋ WAL 寫入） ================= */
 let _lgImpUid = 0;
 function lgImpState() {
-  return (W.lgImp ||= { step: "choose", kind: null, rows: [], method: lgLoad()?.method || "avg", busy: false, dupOk: false, dupSig: "", orderOk: false, orderSig: "", blurred: new Set(), edited: new Set(), saveTok: 0 });
+  return (W.lgImp ||= {
+    step: "choose", kind: null, detectedKind: null, rows: [],
+    method: lgLoad()?.method || "avg", busy: false,
+    dupOk: false, dupSig: "", orderOk: false, orderSig: "",
+    asOf: "", asOfStatus: null, altDate: "", rawAsOf: "", asOfConfirmed: false,
+    snapshotScope: "partial", fileHashes: [],
+    blurred: new Set(), edited: new Set(), saveTok: 0
+  });
 }
 const lgImpHalf = s => String(s ?? "").replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/／/g, "/").replace(/－/g, "-").trim();
 const normImpCode = s => lgImpHalf(s).toUpperCase().replace(/\s+/g, "").replace(/^(\d{4,6}[A-Z]?)\.(?:TW|TWO)$/, "$1");
@@ -776,9 +1416,12 @@ function lgDeriveHoldingRow(raw) {
   if (derivedSh && sh > 0) sh = lgMkt(code) === "us" ? +sh.toFixed(4) : roundImpTwSh(sh);
   if (raw?.avgCost == null && raw?.cost == null && cost != null && cost >= 0) cost = +cost.toFixed(cost >= 100 ? 1 : 2);
   const dIn = typeof raw?.d === "string" && raw.d.trim() ? raw.d.trim() : typeof raw?.date === "string" && raw.date.trim() ? raw.date.trim() : "";
+  const marginType = raw?.marginType === "margin" || raw?.marginType === "short" ? raw.marginType : null;
   return {
     _uid: ++_lgImpUid,
-    on: typeof raw?.on === "boolean" ? raw.on : undefined,
+    _raw: raw ? { ...raw } : null,
+    on: marginType ? false : (typeof raw?.on === "boolean" ? raw.on : true),
+    marginType,
     code, badSym: res.badSym, name: res.name,
     sh: sh != null && Number.isFinite(sh) && sh > 0 ? sh : null,
     cost: cost != null && Number.isFinite(cost) && cost >= 0 ? cost : null,
@@ -794,12 +1437,18 @@ function lgMapTradeRow(raw) {
   const fee = raw?.fee === 0 ? 0 : (raw?.fee != null && Number.isFinite(+raw.fee) ? +raw.fee : null);
   const tax = raw?.tax === 0 ? 0 : (raw?.tax != null && Number.isFinite(+raw.tax) ? +raw.tax : null);
   const da = raw?.dateAssumed;
-  const dateAssumed = da === "year" || da === "today" || da === "mdy" || da === "invalid" ? da : null;
+  const dateAssumed = ["year", "today", "mdy", "invalid", "missing"].includes(da) ? da : null;
+  const marginType = raw?.marginType === "margin" || raw?.marginType === "short" ? raw.marginType : null;
+  const hasStrDate = typeof raw?.date === "string" && raw.date.trim();
+  const dVal = hasStrDate ? raw.date.trim() : (dateAssumed === "invalid" || dateAssumed === "missing" ? "" : lgToday());
   return {
     _uid: ++_lgImpUid,
-    on: raw?.on !== false,
-    date: typeof raw?.date === "string" ? raw.date.trim() : (dateAssumed === "invalid" ? "" : lgToday()),
-    dateAssumed,
+    _raw: raw ? { ...raw } : null,
+    on: marginType ? false : (raw?.on !== false),
+    marginType,
+    date: dVal,
+    dateAssumed: !hasStrDate && !dateAssumed ? "missing" : dateAssumed,
+    _fromAsOf: false,
     altDate: typeof raw?.altDate === "string" ? raw.altDate.trim() : "",
     rawDate: typeof raw?.rawDate === "string" ? raw.rawDate.trim() : "",
     time: (typeof raw?.time === "string" && raw.time.trim()) ? raw.time.trim() : (raw?.timeInvalid === true && typeof raw?.rawTime === "string" ? raw.rawTime.trim() : ""),
@@ -814,12 +1463,12 @@ function lgMapTradeRow(raw) {
 }
 function lgNewBlankRow(kind) {
   if (kind === "holdings") {
-    return { _uid: ++_lgImpUid, on: true, code: "", badSym: "", name: "", sh: null, cost: null, d: lgToday(), dTouched: true, how: "", verifyErr: null, _fresh: true, _lookingUp: false, _lookupSeq: 0 };
+    return { _uid: ++_lgImpUid, _raw: null, on: true, marginType: null, code: "", badSym: "", name: "", sh: null, cost: null, d: lgToday(), dTouched: true, how: "", verifyErr: null, _fresh: true, _lookingUp: false, _lookupSeq: 0 };
   }
-  return { _uid: ++_lgImpUid, on: true, date: lgToday(), dateAssumed: null, altDate: "", rawDate: "", time: "", side: "buy", code: "", badSym: "", name: "", shares: null, price: null, fee: null, tax: null, dayTrade: false, note: "", verifyErr: null, _fresh: true, _lookingUp: false, _lookupSeq: 0 };
+  return { _uid: ++_lgImpUid, _raw: null, on: true, marginType: null, date: lgToday(), dateAssumed: null, _fromAsOf: false, altDate: "", rawDate: "", time: "", side: "buy", code: "", badSym: "", name: "", shares: null, price: null, fee: null, tax: null, dayTrade: false, note: "", verifyErr: null, _fresh: true, _lookingUp: false, _lookupSeq: 0 };
 }
 function lgImpErrField(kind, code) {
-  if (code === "invalid_date" || code === "future_date" || code === "date_too_old" || code === "unconfirmed_date_format") return kind === "holdings" ? "d" : "date";
+  if (code === "invalid_date" || code === "future_date" || code === "date_too_old" || code === "unconfirmed_date_format" || code === "missing_date") return kind === "holdings" ? "d" : "date";
   if (code === "invalid_time") return "time";
   if (code === "invalid_type") return "side";
   if (["invalid_symbol", "invalid_market", "invalid_currency", "currency_mismatch", "currency_conflict", "verify_symbol"].includes(code)) return "code";
@@ -840,7 +1489,7 @@ function lgImpErrMsg(err, r) {
   return err.message || "";
 }
 function lgPrepare(S, opts = {}) {
-  const existing = lgLoad();
+  const existing = lgLoad(), recon = lgReconLoad();
   const existingTxs = Array.isArray(existing?.transactions) ? existing.transactions : [];
   const method = existing ? existing.method : (S.method === "fifo" ? "fifo" : "avg");
   const today = lgToday();
@@ -849,22 +1498,95 @@ function lgPrepare(S, opts = {}) {
   const idPrefix = opts.finalIds ? undefined : "lgimp-p-";
   let P;
   if (S.kind === "holdings") {
-    const mapped = S.rows.map(r => ({
-      on: r.on,
-      symbol: r.code || r.badSym || "",
-      name: r.name,
-      shares: r.sh,
-      avgCost: r.cost,
-      date: r.dTouched ? r.d : (r.d || null),
-      how: r.how,
-      source: "import"
-    }));
-    P = KLLedger.prepareHoldingsImport(mapped, existingTxs, { method, today, market: mktFn, rules, ...(idPrefix ? { idPrefix } : {}) });
+    const snapRows = S.rows.map(r => {
+      const sym = r.code || r.badSym || "";
+      const m = sym && okImpCode(sym) ? lgMkt(sym) : null;
+      return {
+        on: r.on !== false,
+        code: sym,
+        name: r.name,
+        market: m,
+        currency: m ? (m === "us" ? "USD" : "TWD") : null,
+        shares: r.sh,
+        avgCost: r.cost,
+        marginType: r.marginType || null,
+        how: r.how,
+        d: r.dTouched ? r.d : (r.d || null),
+      };
+    });
+    const plan = typeof KLRecon !== "undefined" ? KLRecon.planHoldingsSnapshot({
+      store: recon || KLRecon.emptyStore(),
+      txStore: existing || { v: 1, method, transactions: [] },
+      ledgerLib: KLLedger,
+      method,
+      today,
+      rows: snapRows,
+      snapshotScope: S.snapshotScope === "full" ? "full" : "partial",
+      asOf: S.asOf || null,
+      asOfStatus: S.asOfStatus || (S.asOf ? "exact" : "missing"),
+      asOfConfirmed: S.asOfConfirmed === true,
+      rawAsOf: S.rawAsOf || "",
+      altDate: S.altDate || "",
+      fileHashes: S.fileHashes || [],
+    }) : { items: [], closures: [] };
+    const planByIndex = new Map((plan.items || []).map(it => [it.rowIndex, it]));
+    const RL = KLLedger.buildReconciledLedger(existingTxs, recon, { method, today, rules });
+    const baseMap = new Map(RL.positions.filter(p => p.open || p.hasSnapshot).map(p => [p.symbol, p]));
+    let selectedCount = 0, errorCount = 0;
+    const items = S.rows.map((r, i) => {
+      const sym = (r.code || r.badSym || "").trim().toUpperCase();
+      const on = r.marginType ? false : (r.on !== false);
+      const pi = planByIndex.get(i) || null;
+      const errors = [];
+      if (pi?.reasonCode === "currency_conflict") {
+        errors.push({ code: "currency_conflict", message: pi.reasonMessage });
+      } else if (!r.code && !r.marginType) {
+        errors.push({ code: r.badSym ? "invalid_market" : "invalid_symbol", message: r.badSym ? "僅支援台股與美股（例如 2330、NVDA，不支援指數、期貨或海外市場）" : "請輸入台股或美股代號" });
+      }
+      if (!r.marginType) {
+        if (r.sh == null || !Number.isFinite(r.sh) || r.sh <= 0) errors.push({ code: "invalid_shares", message: "股數必須大於 0" });
+        else if (r.code && lgMkt(r.code) === "tw" && Math.abs(r.sh - Math.round(r.sh)) > 1e-6) errors.push({ code: "fractional_shares", message: "台股股數必須為整數" });
+        if (r.cost != null && (!Number.isFinite(r.cost) || r.cost < 0)) errors.push({ code: "invalid_price", message: "每股成本必須為正數或留空（待補充）" });
+      }
+      if (r.verifyErr && !errors.some(e => e.code === "verify_symbol")) {
+        errors.push({ code: "verify_symbol", message: r.verifyErr });
+      }
+      if (on) {
+        selectedCount++;
+        if (errors.length) errorCount++;
+      }
+      const existingPos = sym ? baseMap.get(sym) || null : null;
+      return {
+        index: i,
+        on,
+        symbol: sym,
+        marginType: r.marginType || null,
+        planItem: pi,
+        duplicateOpen: !!existingPos,
+        existingShares: existingPos ? existingPos.shares : 0,
+        errors,
+        warnings: [],
+      };
+    });
+    const canSaveClosures = S.snapshotScope === "full" && (plan.closures?.length || 0) > 0 && S.rows.length === 0;
+    P = {
+      ok: (selectedCount > 0 || canSaveClosures) && errorCount === 0,
+      items,
+      plan,
+      planByIndex,
+      selectedCount,
+      errorCount,
+      newErrors: [],
+      duplicates: [],
+      ambiguousSameDay: [],
+      needsOrderConfirm: false,
+      existingOpenCount: items.filter(it => it.duplicateOpen).length,
+    };
   } else {
     const mapped = S.rows.map(r => {
       const sym = r.code || r.badSym || "", m = sym && okImpCode(sym) ? lgMkt(sym) : null;
       return {
-        on: r.on !== false,
+        on: r.marginType ? false : (r.on !== false),
         date: r.date ?? "",
         dateAssumed: r.dateAssumed || null,
         ...(r.altDate ? { altDate: r.altDate } : {}),
@@ -883,19 +1605,19 @@ function lgPrepare(S, opts = {}) {
         source: "import"
       };
     });
-    P = KLLedger.prepareTradesImport(mapped, existingTxs, { method, today, market: mktFn, rules, orderConfirmed: S.orderOk === true, ...(idPrefix ? { idPrefix } : {}) });
-  }
-  let extraErr = 0;
-  for (const it of P.items) {
-    const r = S.rows[it.index];
-    if (r?.verifyErr && !it.errors.some(e => e.code === "verify_symbol")) {
-      it.errors.push({ code: "verify_symbol", message: r.verifyErr });
-      if (it.on) extraErr++;
+    P = KLLedger.prepareTradesImport(mapped, existingTxs, { method, today, market: mktFn, rules, recon, orderConfirmed: S.orderOk === true, ...(idPrefix ? { idPrefix } : {}) });
+    let extraErr = 0;
+    for (const it of P.items) {
+      const r = S.rows[it.index];
+      if (r?.verifyErr && !it.errors.some(e => e.code === "verify_symbol")) {
+        it.errors.push({ code: "verify_symbol", message: r.verifyErr });
+        if (it.on) extraErr++;
+      }
     }
-  }
-  if (extraErr > 0) {
-    P.errorCount += extraErr;
-    P.ok = P.selectedCount > 0 && P.errorCount === 0 && !P.needsOrderConfirm;
+    if (extraErr > 0) {
+      P.errorCount += extraErr;
+      P.ok = P.selectedCount > 0 && P.errorCount === 0 && !P.needsOrderConfirm;
+    }
   }
   return P;
 }
@@ -915,43 +1637,53 @@ function lgImpSeedErrors(S, P) {
   }
 }
 function lgImpChooseHtml() {
-  return `<p class="note">選擇要匯入哪一種券商 App 截圖。系統會先讓你在表格核對並檢查錯誤，按下確認後才會寫入交易紀錄（<code>kline:pf:v1</code>）；舊庫存（<code>kline:watch:hold</code>）完全不動。</p>
-    <div class="lgimp-cards">
-      <button type="button" class="lgimp-card" data-lgimp-pick="holdings">
-        <strong>1. 庫存／持股截圖</strong>
-        <small>匯入為「股票轉入」，手續費與稅為 0。帳本裡已經持有的部位會預設略過（不勾選），避免重複計算。</small>
-      </button>
-      <button type="button" class="lgimp-card" data-lgimp-pick="trades">
-        <strong>2. 成交明細／對帳單截圖</strong>
-        <small>匯入為「買進／賣出」，保留分批成交紀錄；空白費用依費用規則與持股頁手續費折扣設定估算（0 元維持 0），有成交時間時依時間排序，無時間的同日買賣需由你確認順序，並擋下賣超與異常日期。</small>
-      </button>
-    </div>
-    <div class="row2"><button type="button" class="btn sm" data-ic="close">取消</button></div>`;
+  const recon = lgReconLoad();
+  const openCount = (recon?.conflicts || []).filter(c => c && c.status === "open").length;
+  return `<p class="note">上傳券商 App 截圖後，系統會自動辨識「庫存快照」或「成交明細」並核對對帳基準（建立或更新 <code>kline:pf:recon:v1</code>／<code>kline:pf:v1</code>）；舊庫存（<code>kline:watch:hold</code>）完全不動。</p>
+    <div class="lgbar" style="margin:10px 0">
+      <button type="button" class="btn primary" data-lgimp-upload>📷 上傳券商截圖（自動辨識庫存／交易明細）</button>
+      <button type="button" class="btn sm" data-lgimp-blank>手動新增空白列</button>
+      ${openCount > 0 ? `<button type="button" class="btn sm" data-lgimp-conflicts>查看待對帳項目（${openCount}）</button>` : ""}
+      <button type="button" class="btn sm" data-ic="close">取消</button>
+    </div>`;
 }
 function lgImpRowHtml(r, i, kind, item, today, total = 1) {
   const uid = r._uid;
   const codeVal = r.code || r.badSym || r.name || "";
   const dupWarn = (item?.warnings || []).filter(w => w.code !== "fee_estimated").map(w => w.message).join("；");
   if (kind === "holdings") {
-    const dVal = r.dTouched ? (r.d || "") : (item?.date || today);
-    const meta = [r._lookingUp ? "查詢代號中…" : "", !r._lookingUp && r.code ? lgStockName(r.code, r.name) : "", !r._lookingUp && item?.duplicateOpen ? (item.on ? `帳本已有 ${lgN(item.existingShares)} 股` : item.skipReason) : (!r._lookingUp && r.how && r.how !== "截圖上的股數與成本" ? r.how : "")].filter(Boolean).join("・");
+    const pi = item?.planItem;
+    let levelTxt = "", levelCls = "ok";
+    if (r.marginType) { levelTxt = "Level 2・融資／融券已隔離"; levelCls = ""; }
+    else if (!item?.on) { levelTxt = "已略過（不匯入）"; levelCls = "ok"; }
+    else if (item?.errors?.length) { levelTxt = "Level 3・阻擋"; levelCls = ""; }
+    else if (pi?.level === 3) { levelTxt = "Level 3・阻擋"; levelCls = ""; }
+    else if (pi?.level === 2) {
+      const hint = pi.reasonCode === "recon_diff" && typeof KLRecon?.settlementHint === "function" ? KLRecon.settlementHint(pi.market) : "";
+      levelTxt = `Level 2・待對帳（${pi.reasonMessage || "需確認"}${hint && !(pi.reasonMessage || "").includes(hint) ? `；${hint}` : ""}）`;
+      levelCls = "";
+    } else if (pi?.level === 1) {
+      levelTxt = `Level 1・${pi.reasonMessage || "可確認基準"}`;
+      levelCls = "ok";
+    }
+    const meta = [r._lookingUp ? "查詢代號中…" : "", !r._lookingUp && r.code ? lgStockName(r.code, r.name) : "", !r._lookingUp && item?.duplicateOpen ? `帳本已有 ${lgN(item.existingShares)} 股` : (!r._lookingUp && r.how && r.how !== "截圖上的股數與成本" ? r.how : "")].filter(Boolean).join("・");
     return `<tr data-row="${i}" data-uid="${uid}">
-      <td><input type="checkbox" data-lgimp-uid="${uid}" data-lgimp-k="on" aria-label="匯入第 ${i + 1} 列" ${item?.on ? "checked" : ""}></td>
+      <td><input type="checkbox" data-lgimp-uid="${uid}" data-lgimp-k="on" aria-label="匯入第 ${i + 1} 列" ${item?.on ? "checked" : ""}${r.marginType ? " disabled" : ""}></td>
       <td><input class="code" data-lgimp-uid="${uid}" data-lgimp-k="code" value="${esc(codeVal)}" placeholder="2330 或 NVDA" autocomplete="off" autocapitalize="characters" aria-label="代號或名稱" aria-invalid="false">
         <small id="lgim-${uid}" data-lgimp-meta="${uid}"${meta ? "" : " hidden"}>${esc(meta)}</small>
         <small id="lgie-${uid}-code" class="lgimp-err" hidden></small></td>
       <td><input type="number" inputmode="decimal" min="0" step="any" data-lgimp-uid="${uid}" data-lgimp-k="sh" value="${r.sh ?? ""}" placeholder="1000" aria-label="股數" aria-invalid="false">
         <small id="lgie-${uid}-sh" class="lgimp-err" hidden></small></td>
-      <td><input type="number" inputmode="decimal" min="0" step="any" data-lgimp-uid="${uid}" data-lgimp-k="cost" value="${r.cost ?? ""}" placeholder="650" aria-label="每股成本" aria-invalid="false">
+      <td><input type="number" inputmode="decimal" min="0" step="any" data-lgimp-uid="${uid}" data-lgimp-k="cost" value="${r.cost ?? ""}" placeholder="均價（可空）" aria-label="每股成本" aria-invalid="false">
         <small id="lgie-${uid}-cost" class="lgimp-err" hidden></small></td>
-      <td><input type="date" data-lgimp-uid="${uid}" data-lgimp-k="d" value="${esc(dVal)}" max="${today}" aria-label="轉入日期" aria-invalid="false">
-        <small data-lgimp-dtag="${uid}" class="lgimp-tag"${item?.dateAssumed === "today" ? "" : " hidden"}>${item?.dateAssumed === "today" ? "未含日期，已帶入今天" : ""}</small>
-        <small id="lgie-${uid}-d" class="lgimp-err" hidden></small></td>
+      <td><span data-lgimp-lvl="${uid}" class="lgimp-tag ${levelCls}">${esc(levelTxt)}</span></td>
       <td><button type="button" class="hg-del" data-lgimp-del="${uid}" aria-label="刪除第 ${i + 1} 列">✕</button></td>
     </tr>`;
   }
   const dTagText = r.dateAssumed === "year" ? "年份待確認（請核對）"
     : r.dateAssumed === "today" ? "未含日期，已帶入今天"
+    : r._fromAsOf ? "已帶入截圖基準日"
+    : r.dateAssumed === "missing" ? "缺少日期，請補填或確認截圖基準日"
     : r.dateAssumed === "mdy" ? "日期格式待確認（月/日或日/月）"
     : r.dateAssumed === "invalid" ? `截圖日期無效（${r.rawDate || "格式錯誤"}）`
     : "";
@@ -959,9 +1691,17 @@ function lgImpRowHtml(r, i, kind, item, today, total = 1) {
   const est = item?.on && !item?.errors?.length && (r.side === "buy" || r.side === "sell") && item?.computed?.feeEstimated
     ? [r.fee == null ? `手續費估 ${lgN(item.computed.fee)}` : "", r.side === "sell" && r.tax == null ? `稅估 ${lgN(item.computed.tax)}` : ""].filter(Boolean).join("・")
     : "";
-  const meta = [r._lookingUp ? "查詢代號中…" : "", !r._lookingUp && r.code ? lgStockName(r.code, r.name) : "", !r._lookingUp ? est : ""].filter(Boolean).join("・");
+  const hintLabel = r.marginType ? "Level 2・融資／融券已隔離"
+    : !item?.on ? ""
+    : item?.errors?.length ? "Level 3・阻擋"
+    : item?.reconcileHint === "pre_snapshot" ? "Level 1・快照前歷史"
+    : item?.reconcileHint === "same_day_order" ? "Level 2・同日順序待釐清"
+    : item?.warnings?.some(w => w.code === "possible_duplicate") ? "Level 2・可能重複"
+    : item?.reconcileHint === "post_snapshot" ? "Level 1・快照後交易"
+    : "Level 1・可匯入";
+  const meta = [r._lookingUp ? "查詢代號中…" : "", !r._lookingUp && r.code ? lgStockName(r.code, r.name) : "", !r._lookingUp ? est : "", hintLabel].filter(Boolean).join("・");
   return `<tr data-row="${i}" data-uid="${uid}">
-    <td><input type="checkbox" data-lgimp-uid="${uid}" data-lgimp-k="on" aria-label="匯入第 ${i + 1} 列" ${item?.on ? "checked" : ""}></td>
+    <td><input type="checkbox" data-lgimp-uid="${uid}" data-lgimp-k="on" aria-label="匯入第 ${i + 1} 列" ${item?.on ? "checked" : ""}${r.marginType ? " disabled" : ""}></td>
     <td><input type="date" data-lgimp-uid="${uid}" data-lgimp-k="date" value="${esc(r.date ?? "")}" max="${today}" aria-label="成交日期" aria-invalid="false">
       <small data-lgimp-dtag="${uid}" class="lgimp-tag"${dTagText ? "" : " hidden"}>${esc(dTagText)}</small>
       <div data-lgimp-dwrap="${uid}" class="lgimp-dfix"${showDfix ? "" : " hidden"}>
@@ -998,18 +1738,72 @@ function lgImpRowHtml(r, i, kind, item, today, total = 1) {
     <td><button type="button" class="hg-del" data-lgimp-del="${uid}" aria-label="刪除第 ${i + 1} 列">✕</button></td>
   </tr>`;
 }
+function lgImpBannerHtml(S, today) {
+  const recon = lgReconLoad();
+  const detLbl = S.detectedKind === "holdings" ? "庫存快照" : S.detectedKind === "trades" ? "成交明細" : "類型尚未確定（請確認或點右側切換）";
+  const hashHit = typeof KLRecon !== "undefined" && S.fileHashes?.length ? KLRecon.findRepeatHash(recon, S.fileHashes) : null;
+  const hitAt = hashHit?.hit
+    ? ((recon?.imports || []).find(imp => Array.isArray(imp?.fileHashes) && imp.fileHashes.some(h => S.fileHashes.includes(h)))?.at || "")
+    : "";
+  const hashWarn = hashHit?.hit
+    ? `<div class="lgimp-tag">⚠︎ 此截圖之前已上傳過${hitAt ? `（${esc(String(hitAt).slice(0, 10))}）` : ""}${hashHit.openConflicts > 0 ? `，尚有 ${hashHit.openConflicts} 項未結案待對帳 <button type="button" class="linkbtn" data-lg="view-conflicts">查看待對帳</button>` : "（仍可補充核對）"}</div>`
+    : "";
+  const asOfValid = /^\d{4}-\d{2}-\d{2}$/.test(S.asOf || "") && S.asOf <= today;
+  let asOfMsg = "";
+  if (S.asOfConfirmed && asOfValid) {
+    asOfMsg = `基準日已確認：<b>${esc(S.asOf)}</b>`;
+  } else if (S.asOfStatus === "year") {
+    asOfMsg = `截圖顯示「${esc(S.rawAsOf || S.asOf || "")}」，系統暫推為 <b>${esc(S.asOf || "")}</b>（缺年份，確認前不設為已確認快照）`;
+  } else if (S.asOfStatus === "future" || (S.asOf && S.asOf > today)) {
+    asOfMsg = `截圖日期「${esc(S.rawAsOf || S.asOf || "")}」晚於今日（${today}），請修正或確認基準日`;
+  } else if (S.asOfStatus === "mdy") {
+    asOfMsg = `截圖日期「${esc(S.rawAsOf || S.asOf || "")}」可能為月/日（${esc(S.asOf || "")}）或日/月（${esc(S.altDate || "")}），請確認`;
+  } else {
+    asOfMsg = `截圖未含明確基準日期${S.rawAsOf ? `（${esc(S.rawAsOf)}）` : ""}，請補填並確認基準日（未確認前將進待對帳）`;
+  }
+  const hasMargin = S.rows.some(r => !!r.marginType);
+  const marginCard = hasMargin
+    ? `<div class="lgimp-margin">ⓘ 偵測到融資／融券部位已隔離，避免混入現股成本 <button type="button" class="linkbtn" data-lg="view" data-v="margin">前往配置與風險 → 融資管理</button></div>`
+    : "";
+  const present = new Set(S.rows.filter(r => r.on !== false && !r.marginType && r.code).map(r => r.code));
+  const omitted = typeof KLRecon !== "undefined"
+    ? [...KLRecon.activeBaselines(recon).values()].filter(b => b.shares > 1e-9 && !present.has(b.symbol) && (!asOfValid || b.date < S.asOf)).map(b => `${b.symbol}(${lgN(b.shares)}股)`)
+    : [];
+  const scopeHtml = S.kind === "holdings" ? `<div class="lgimp-scope" role="radiogroup" aria-label="庫存截圖範圍">
+    <label><input type="radio" name="lgImpScope" value="partial" data-lgimp-scope="partial"${S.snapshotScope !== "full" ? " checked" : ""}> 部分截圖／單頁（僅更新畫面有列出的標的）</label>
+    <label><input type="radio" name="lgImpScope" value="full" data-lgimp-scope="full"${S.snapshotScope === "full" ? " checked" : ""}> 完整庫存清單（未出現在此截圖且原有持股將進入清倉核對或結案）</label>
+    <small id="lgImpFullWarn" class="lgimp-tag"${S.snapshotScope === "full" && omitted.length ? "" : " hidden"}>${S.snapshotScope === "full" && omitted.length ? `未列於此完整截圖的原持股（將結案或進入清倉核對）：${esc(omitted.join("、"))}` : ""}</small>
+  </div>` : "";
+  return `<div class="lgimp-banner">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <span>系統辨識結果：<b>${detLbl}</b></span>
+      <button type="button" class="btn sm" data-lgimp-switch="holdings" aria-pressed="${S.kind === "holdings"}">切換為庫存快照</button>
+      <button type="button" class="btn sm" data-lgimp-switch="trades" aria-pressed="${S.kind === "trades"}">切換為成交明細</button>
+    </div>
+    <div class="lgimp-asof">
+      <span id="lgImpAsOfMsg">${asOfMsg}</span>
+      <input type="date" data-lgimp-asof value="${esc(S.asOf || "")}" max="${today}" aria-label="截圖基準日期">
+      <button type="button" class="btn sm${S.asOfConfirmed ? "" : " primary"}" data-lgimp-asof-ok>確認基準日</button>
+      ${S.asOfStatus === "mdy" && S.altDate ? `<button type="button" class="btn sm" data-lgimp-asof-flip="${esc(S.altDate)}">改採 ${esc(S.altDate)}</button>` : ""}
+    </div>
+    ${scopeHtml}
+    ${hashWarn}
+    ${marginCard}
+  </div>`;
+}
 function lgImpReviewHtml(S, P) {
   const isHold = S.kind === "holdings", today = lgToday(), existing = lgLoad();
   const intro = isHold
-    ? "核對後將匯入為交易紀錄的「股票轉入」（手續費與稅為 0）。帳本目前已經持有的股票預設不勾選，以免重複計算；未勾選的列不會寫入。"
+    ? "核對後將依對帳規則存入獨立快照基準（<code>kline:pf:recon:v1</code>）：符合容差自動確認、存在差異或缺年份／成本進入待對帳中心；<b>不會寫入</b> <code>transfer_in</code> 到交易紀錄，舊庫存也不動。"
     : `核對每一筆成交明細（依日期與成交時間由舊到新套用；同日買賣未附時間時須確認順序，可用 ↑↓ 或「反轉列表順序」調整）。手續費／稅填 0 維持 0，空白則依費用規則與持股頁「手續費折扣」設定${lgDiscText()}估算。`;
   const cols = isHold
-    ? `<th scope="col">匯入</th><th scope="col">代號／名稱</th><th scope="col">股數<small>美股可填小數</small></th><th scope="col">每股成本</th><th scope="col">轉入日期<small>空白預設今天</small></th><th scope="col"><span class="pfsr">刪除</span></th>`
+    ? `<th scope="col">匯入</th><th scope="col">代號／名稱</th><th scope="col">股數<small>美股可填小數</small></th><th scope="col">每股成本<small>可留空待補</small></th><th scope="col">對帳分流</th><th scope="col"><span class="pfsr">刪除</span></th>`
     : `<th scope="col">匯入</th><th scope="col">成交日期／時間</th><th scope="col">方向<small>賣出可勾當沖</small></th><th scope="col">代號／名稱</th><th scope="col">股數</th><th scope="col">單價</th><th scope="col">手續費<small>空白＝估算</small></th><th scope="col">交易稅<small>空白＝估算</small></th><th scope="col">備註</th><th scope="col"><span class="pfsr">刪除</span></th>`;
   const rowsHtml = S.rows.map((r, i) => lgImpRowHtml(r, i, S.kind, P.items[i], today, S.rows.length)).join("");
   return `<form class="lgimp-form" id="lgImpForm" novalidate>
-    <p class="note lgimp-intro">${intro}</p>
     <div class="lgimp-mid">
+      <p class="note lgimp-intro">${intro}</p>
+      ${lgImpBannerHtml(S, today)}
       <div class="lgimp-msg err" id="lgImpGlobalErr" hidden></div>
       <div class="hg-wrap" tabindex="0" role="region" aria-labelledby="impTitle">
         <table class="hgrid ${isHold ? "lgimp-h" : "lgimp-t"}">
@@ -1020,11 +1814,9 @@ function lgImpReviewHtml(S, P) {
       <div class="row2" style="margin:8px 0">
         <button type="button" class="btn sm" data-lgimp-add>＋ 新增一列</button>
         <button type="button" class="btn sm" data-lgimp-shot>＋ 再加截圖</button>
-        <button type="button" class="btn sm" data-lgimp-back>改選匯入類型</button>
         ${!isHold ? `<button type="button" class="btn sm" data-lgimp-rev${S.rows.length < 2 ? " disabled" : ""}>⇅ 反轉列表順序</button>` : ""}
       </div>
       ${!existing ? `<label class="lgimp-method">成本算法 <select id="lgImpMethod" data-lgimp-method><option value="avg"${S.method === "avg" ? " selected" : ""}>加權平均成本</option><option value="fifo"${S.method === "fifo" ? " selected" : ""}>先進先出（FIFO）</option></select></label>` : ""}
-      ${isHold ? `<label class="lgimp-sub" style="white-space:normal" id="lgImpIncOpenWrap"><input type="checkbox" id="lgImpIncOpen" data-lgimp-open> <span id="lgImpIncOpenLbl">包含帳本已有部位（0 檔）</span></label>` : ""}
       ${!isHold ? `<label class="lgimp-order" id="lgImpOrderWrap" hidden><input type="checkbox" id="lgImpOrderOk" data-lgimp-orderok aria-invalid="false"> <span id="lgImpOrderTxt"></span></label>` : ""}
       <label class="lgimp-dup" id="lgImpDupWrap" hidden><input type="checkbox" id="lgImpDup" data-lgimp-dup aria-invalid="false"> <span id="lgImpDupTxt"></span></label>
     </div>
@@ -1037,7 +1829,7 @@ function lgImpReviewHtml(S, P) {
 function lgSyncImportUI(opts = {}) {
   const S = lgImpState(), form = $("#lgImpForm");
   if (!form || S.step !== "review") return null;
-  const P = lgPrepare(S), isHold = S.kind === "holdings", ae = document.activeElement;
+  const P = lgPrepare(S), isHold = S.kind === "holdings", today = lgToday(), recon = lgReconLoad();
   let visibleErrCount = 0;
   for (let i = 0; i < S.rows.length; i++) {
     const r = S.rows[i], item = P.items[i], tr = form.querySelector(`tr[data-uid="${r._uid}"]`);
@@ -1047,7 +1839,7 @@ function lgSyncImportUI(opts = {}) {
     if (delBtn) delBtn.setAttribute("aria-label", `刪除第 ${i + 1} 列`);
     const fieldErrs = item ? lgImpFieldErrors(S.kind, item.errors) : new Map();
     const rowShownErrs = [];
-    const fields = isHold ? ["code", "sh", "cost", "d"] : ["date", "time", "side", "code", "shares", "price", "fee", "tax"];
+    const fields = isHold ? ["code", "sh", "cost"] : ["date", "time", "side", "code", "shares", "price", "fee", "tax"];
     for (const k of fields) {
       const inp = tr.querySelector(`[data-lgimp-k="${k}"]`), errEl = document.getElementById(`lgie-${r._uid}-${k}`);
       const eObj = item?.on && S.blurred.has(`${r._uid}:${k}`) ? fieldErrs.get(k) : null;
@@ -1062,7 +1854,6 @@ function lgSyncImportUI(opts = {}) {
         }
         if (desc.length) inp.setAttribute("aria-describedby", desc.join(" "));
         else inp.removeAttribute("aria-describedby");
-        if (ae !== inp && isHold && k === "d" && !r.dTouched && item?.date && inp.value !== item.date) inp.value = item.date;
       }
       if (errEl) {
         const msg = eObj ? lgImpErrMsg(eObj, r) : "";
@@ -1074,9 +1865,28 @@ function lgSyncImportUI(opts = {}) {
     if (onInp) {
       const want = !!item?.on;
       if (onInp.checked !== want) onInp.checked = want;
+      onInp.disabled = !!r.marginType;
       onInp.setAttribute("aria-label", `匯入第 ${i + 1} 列`);
     }
-    if (!isHold) {
+    if (isHold) {
+      const lvlEl = tr.querySelector(`[data-lgimp-lvl="${r._uid}"]`);
+      if (lvlEl) {
+        const pi = item?.planItem;
+        let txt = "", clsNm = "lgimp-tag ok";
+        if (r.marginType) { txt = "Level 2・融資／融券已隔離"; clsNm = "lgimp-tag"; }
+        else if (!item?.on) { txt = "已略過（不匯入）"; }
+        else if (item?.errors?.length || pi?.level === 3) { txt = `Level 3・阻擋（${(item?.errors?.[0]?.message || pi?.reasonMessage || "欄位有誤")}）`; clsNm = "lgimp-tag"; }
+        else if (pi?.level === 2) {
+          const hint = pi.reasonCode === "recon_diff" && typeof KLRecon?.settlementHint === "function" ? KLRecon.settlementHint(pi.market) : "";
+          txt = `Level 2・待對帳（${pi.reasonMessage || "需確認"}${hint && !(pi.reasonMessage || "").includes(hint) ? `；${hint}` : ""}）`;
+          clsNm = "lgimp-tag";
+        } else if (pi?.level === 1) {
+          txt = `Level 1・${pi.reasonMessage || "可確認基準"}`;
+        }
+        lvlEl.textContent = txt;
+        lvlEl.className = clsNm;
+      }
+    } else {
       const dtInp = tr.querySelector('[data-lgimp-k="dayTrade"]');
       if (dtInp) {
         const canDt = r.side === "sell";
@@ -1088,6 +1898,8 @@ function lgSyncImportUI(opts = {}) {
       if (dTag) {
         const t = r.dateAssumed === "year" ? "年份待確認（請核對）"
           : r.dateAssumed === "today" ? "未含日期，已帶入今天"
+          : r._fromAsOf ? "已帶入截圖基準日"
+          : r.dateAssumed === "missing" ? "缺少日期，請補填或確認截圖基準日"
           : r.dateAssumed === "mdy" ? "日期格式待確認（月/日或日/月）"
           : r.dateAssumed === "invalid" ? `截圖日期無效（${r.rawDate || "格式錯誤"}）`
           : "";
@@ -1113,13 +1925,6 @@ function lgSyncImportUI(opts = {}) {
         wTag.textContent = w ? "⚠︎ " + w : "";
         wTag.hidden = !w;
       }
-    } else {
-      const dTag = tr.querySelector(`[data-lgimp-dtag="${r._uid}"]`);
-      if (dTag) {
-        const showT = item?.dateAssumed === "today";
-        dTag.textContent = showT ? "未含日期，已帶入今天" : "";
-        dTag.hidden = !showT;
-      }
     }
     const metaEl = tr.querySelector(`[data-lgimp-meta="${r._uid}"]`);
     if (metaEl) {
@@ -1128,11 +1933,17 @@ function lgSyncImportUI(opts = {}) {
       else {
         if (r.code) parts.push(lgStockName(r.code, r.name) || r.code);
         if (isHold) {
-          if (item?.duplicateOpen) parts.push(item.on ? `帳本已有 ${lgN(item.existingShares)} 股` : item.skipReason);
+          if (item?.duplicateOpen) parts.push(`帳本已有 ${lgN(item.existingShares)} 股`);
           else if (r.how && r.how !== "截圖上的股數與成本") parts.push(r.how);
-        } else if (item?.on && !item?.errors?.length && (r.side === "buy" || r.side === "sell") && item?.computed?.feeEstimated) {
-          const est = [r.fee == null ? `手續費估 ${lgN(item.computed.fee)}` : "", r.side === "sell" && r.tax == null ? `稅估 ${lgN(item.computed.tax)}` : ""].filter(Boolean).join("・");
-          if (est) parts.push(est);
+        } else {
+          if (item?.on && !item?.errors?.length && (r.side === "buy" || r.side === "sell") && item?.computed?.feeEstimated) {
+            const est = [r.fee == null ? `手續費估 ${lgN(item.computed.fee)}` : "", r.side === "sell" && r.tax == null ? `稅估 ${lgN(item.computed.tax)}` : ""].filter(Boolean).join("・");
+            if (est) parts.push(est);
+          }
+          if (r.marginType) parts.push("Level 2・融資／融券已隔離");
+          else if (item?.reconcileHint === "pre_snapshot") parts.push("Level 1・快照前歷史");
+          else if (item?.reconcileHint === "same_day_order") parts.push("Level 2・同日順序待釐清");
+          else if (item?.reconcileHint === "post_snapshot") parts.push("Level 1・快照後交易");
         }
       }
       const mTxt = parts.join("・");
@@ -1147,22 +1958,37 @@ function lgSyncImportUI(opts = {}) {
         else codeInp.removeAttribute("aria-describedby");
       }
     }
-    const hasWarn = !rowShownErrs.length && (item?.warnings || []).some(w => w.code !== "fee_estimated");
+    const hasWarn = !rowShownErrs.length && ((item?.warnings || []).some(w => w.code !== "fee_estimated") || item?.planItem?.level === 2 || item?.reconcileHint === "same_day_order");
     tr.classList.toggle("bad", rowShownErrs.length > 0);
     tr.classList.toggle("warn", hasWarn);
-    tr.classList.toggle("skip-existing", isHold && !item?.on && !!item?.duplicateOpen);
+    tr.classList.toggle("skip-existing", !item?.on);
+  }
+  const asOfMsgEl = $("#lgImpAsOfMsg");
+  if (asOfMsgEl) {
+    const asOfValid = /^\d{4}-\d{2}-\d{2}$/.test(S.asOf || "") && S.asOf <= today;
+    asOfMsgEl.innerHTML = S.asOfConfirmed && asOfValid
+      ? `基準日已確認：<b>${esc(S.asOf)}</b>`
+      : S.asOfStatus === "year"
+        ? `截圖顯示「${esc(S.rawAsOf || S.asOf || "")}」，系統暫推為 <b>${esc(S.asOf || "")}</b>（缺年份，確認前不設為已確認快照）`
+        : S.asOfStatus === "future" || (S.asOf && S.asOf > today)
+          ? `截圖日期「${esc(S.rawAsOf || S.asOf || "")}」晚於今日（${today}），請修正或確認基準日`
+          : S.asOfStatus === "mdy"
+            ? `截圖日期「${esc(S.rawAsOf || S.asOf || "")}」格式待確認（月/日 ${esc(S.asOf || "")} 或日/月 ${esc(S.altDate || "")}）`
+            : `截圖未含明確基準日期${S.rawAsOf ? `（${esc(S.rawAsOf)}）` : ""}，請補填並確認基準日（未確認前將進待對帳）`;
+  }
+  const fullWarnEl = $("#lgImpFullWarn");
+  if (fullWarnEl && isHold) {
+    const present = new Set(S.rows.filter(r => r.on !== false && !r.marginType && r.code).map(r => r.code));
+    const asOfValid = /^\d{4}-\d{2}-\d{2}$/.test(S.asOf || "") && S.asOf <= today;
+    const omitted = typeof KLRecon !== "undefined"
+      ? [...KLRecon.activeBaselines(recon).values()].filter(b => b.shares > 1e-9 && !present.has(b.symbol) && (!asOfValid || b.date < S.asOf)).map(b => `${b.symbol}(${lgN(b.shares)}股)`)
+      : [];
+    const show = S.snapshotScope === "full" && omitted.length > 0;
+    fullWarnEl.textContent = show ? `未列於此完整截圖的原持股（將結案或進入清倉核對）：${omitted.join("、")}` : "";
+    fullWarnEl.hidden = !show;
   }
   const revBtn = form.querySelector("[data-lgimp-rev]");
   if (revBtn) revBtn.disabled = S.rows.length < 2;
-  const incOpenEl = $("#lgImpIncOpen"), incOpenLbl = $("#lgImpIncOpenLbl");
-  if (incOpenEl && isHold) {
-    const openItems = P.items.filter(it => it.duplicateOpen);
-    const nOpen = openItems.length, nChk = openItems.filter(it => it.on).length;
-    incOpenEl.disabled = nOpen === 0;
-    incOpenEl.checked = nOpen > 0 && nChk === nOpen;
-    incOpenEl.indeterminate = nOpen > 0 && nChk > 0 && nChk < nOpen;
-    if (incOpenLbl) incOpenLbl.textContent = `包含帳本已有部位（${nOpen} 檔）`;
-  }
   const amb = P.ambiguousSameDay || [];
   const orderSig = isHold ? "" : amb.map(g => `${g.date}|${g.symbol}|` + g.rowIndices.map(idx => {
     const rr = S.rows[idx];
@@ -1230,7 +2056,11 @@ function lgSyncImportUI(opts = {}) {
     const ex = lgLoad();
     const mNote = ex ? ` 沿用帳本「${KLLedger.METHODS[ex.method] || ex.method}」。` : "";
     if (isHold) {
-      sumEl.textContent = `共讀取 ${S.rows.length} 列，將匯入 ${P.selectedCount} 筆「股票轉入」${P.existingOpenCount ? `（帳本已有 ${P.existingOpenCount} 檔，預設略過）` : ""}，手續費與稅為 0；不會改動舊庫存。${mNote}`;
+      const pi = P.plan?.items || [];
+      const l1 = pi.filter(x => x.level === 1).length;
+      const l2 = pi.filter(x => x.level === 2).length + (P.plan?.closures || []).filter(c => c.level === 2).length;
+      const l3 = P.errorCount + pi.filter(x => x.level === 3 && !P.items[x.rowIndex]?.errors?.length).length;
+      sumEl.textContent = `共 ${S.rows.length} 列（範圍：${S.snapshotScope === "full" ? "完整清單" : "部分截圖"}）：預計自動確認 ${l1} 筆、待對帳／隔離 ${l2} 筆、阻擋錯誤 ${l3} 筆；不會改動舊庫存或寫入 transfer_in。${mNote}`;
     } else {
       sumEl.textContent = `共 ${S.rows.length} 列，將匯入 ${P.selectedCount} 筆成交交易（依日期／時間排序，無時間之同日交易依目前列序套用）${P.feeEstimatedCount ? `；${P.feeEstimatedCount} 筆空白費用依設定費率${lgDiscText()}估算` : ""}。${mNote}`;
     }
@@ -1238,7 +2068,7 @@ function lgSyncImportUI(opts = {}) {
   const saveBtn = $("#lgImpSave");
   if (saveBtn) {
     saveBtn.disabled = !!S.busy;
-    saveBtn.textContent = S.busy ? "確認代號中…" : (isHold ? `匯入 ${P.selectedCount} 筆轉入` : `匯入 ${P.selectedCount} 筆交易`);
+    saveBtn.textContent = S.busy ? "確認代號中…" : (isHold ? `儲存對帳快照（${P.selectedCount} 檔）` : `匯入 ${P.selectedCount} 筆交易`);
   }
   if (opts.announceRow != null && opts.announceKey) {
     const idx = S.rows.findIndex(r => String(r._uid) === String(opts.announceRow));
@@ -1253,24 +2083,91 @@ function lgSyncImportUI(opts = {}) {
 }
 function lgOpenImport() {
   if (typeof loadStocks === "function") loadStocks().catch(() => {});
-  const S = (W.lgImp = { step: "choose", kind: null, rows: [], method: lgLoad()?.method || "avg", busy: false, dupOk: false, dupSig: "", orderOk: false, orderSig: "", blurred: new Set(), edited: new Set(), saveTok: (W.lgImp?.saveTok || 0) + 1 });
+  const S = (W.lgImp = {
+    step: "choose", kind: null, detectedKind: null, rows: [],
+    method: lgLoad()?.method || "avg", busy: false,
+    dupOk: false, dupSig: "", orderOk: false, orderSig: "",
+    asOf: "", asOfStatus: null, altDate: "", rawAsOf: "", asOfConfirmed: false,
+    snapshotScope: "partial", fileHashes: [],
+    blurred: new Set(), edited: new Set(), saveTok: (W.lgImp?.saveTok || 0) + 1
+  });
   impSetLive("");
-  showImpDialog("截圖匯入到交易紀錄", lgImpChooseHtml(), { wide: false, scope: "ledger", focus: '[data-lgimp-pick="holdings"]', forceFocus: true });
+  showImpDialog("截圖匯入與對帳", lgImpChooseHtml(), { wide: false, scope: "ledger", focus: "[data-lgimp-upload]", forceFocus: true });
   return S;
 }
 function lgOnImportBusy(count, mode) {
   const S = lgImpState();
-  S.step = "busy"; S.kind = mode === "trades" ? "trades" : "holdings"; S.busy = true;
+  S.step = "busy";
+  S.kind = mode === "trades" ? "trades" : mode === "holdings" ? "holdings" : S.kind;
+  S.busy = true;
   impSetLive("");
-  const lbl = S.kind === "trades" ? "成交明細／對帳單" : "庫存／持股";
-  const html = `<progress max="100"></progress><p class="note">正在讀取 ${count} 張${lbl}截圖…（AI 讀圖約需 10～30 秒）</p>
+  const lbl = S.kind === "trades" ? "成交明細／對帳單" : S.kind === "holdings" ? "庫存／持股" : "券商";
+  const html = `<progress max="100"></progress><p class="note">正在讀取 ${count} 張${lbl}截圖並自動辨識類型與日期…（AI 讀圖約需 10～30 秒）</p>
     <div class="row2"><button type="button" class="btn sm" data-ic="close">取消</button></div>`;
-  showImpDialog(S.kind === "trades" ? "匯入成交明細" : "匯入庫存轉入", html, { wide: false, scope: "ledger", focus: '#impBody [data-ic="close"]', forceFocus: true });
+  showImpDialog("自動辨識券商截圖", html, { wide: false, scope: "ledger", focus: '#impBody [data-ic="close"]', forceFocus: true });
 }
-function lgOnImportRows(rows, mode) {
-  const S = lgImpState(), kind = mode === "trades" ? "trades" : "holdings";
+function lgApplyAsOfToTrades(S) {
+  if (!S || S.kind !== "trades" || !S.asOfConfirmed || !S.asOf) return;
+  for (const r of S.rows) {
+    if (r.dateAssumed === "missing" || r._fromAsOf || (!r.date && r.dateAssumed !== "invalid")) {
+      r.date = S.asOf;
+      r.dateAssumed = null;
+      r._fromAsOf = true;
+      const inp = $("#lgImpTbody")?.querySelector(`tr[data-uid="${r._uid}"] [data-lgimp-k="date"]`);
+      if (inp && inp.value !== r.date) inp.value = r.date;
+    }
+  }
+}
+function lgSwitchKind(nextKind) {
+  const S = lgImpState(), target = nextKind === "trades" ? "trades" : "holdings";
+  if (S.kind === target) return;
+  S.kind = target;
+  S.rows = S.rows.map(r => {
+    const raw = {
+      ...(r._raw || {}),
+      code: r.code || r.badSym || r._raw?.code,
+      name: r.name || r._raw?.name,
+      marginType: r.marginType ?? r._raw?.marginType,
+      shares: r.sh ?? r.shares ?? r._raw?.shares,
+      avgCost: r.cost ?? r.price ?? r._raw?.avgCost,
+      price: r.price ?? r.cost ?? r._raw?.price,
+      date: r.date || r.d || r._raw?.date || "",
+      dateAssumed: r.dateAssumed ?? r._raw?.dateAssumed,
+    };
+    return target === "holdings" ? lgDeriveHoldingRow(raw) : lgMapTradeRow(raw);
+  });
+  if (target === "trades") lgApplyAsOfToTrades(S);
+  S.blurred.clear(); S.edited.clear(); S.dupOk = false; S.dupSig = ""; S.orderOk = false; S.orderSig = "";
+  const P = lgPrepare(S);
+  lgImpSeedErrors(S, P);
+  impSetLive("");
+  showImpDialog(target === "trades" ? "核對成交明細匯入" : "核對庫存快照與對帳", lgImpReviewHtml(S, P), { wide: true, scope: "ledger", focus: false });
+  lgSyncImportUI();
+}
+function lgOnImportRows(rows, detectedKind, meta = {}) {
+  const S = lgImpState(), today = lgToday();
+  const det = detectedKind === "holdings" || detectedKind === "trades" ? detectedKind : "unknown";
+  const inferred = det !== "unknown"
+    ? det
+    : ((Array.isArray(rows) ? rows : []).some(r => r && (r.side === "buy" || r.side === "sell" || r.type === "buy" || r.type === "sell")) ? "trades" : "holdings");
+  const appendingSameKind = S.step === "busy" && S.rows.length > 0 && S.kind;
+  const kind = appendingSameKind && det === "unknown" ? S.kind : inferred;
   const prevRows = S.kind === kind ? S.rows : [];
+  S.detectedKind = det;
   S.kind = kind; S.step = "review"; S.busy = false;
+  const inAsOf = typeof meta?.asOf === "string" ? meta.asOf.trim() : "";
+  const inStatus = meta?.asOfStatus || (/^\d{4}-\d{2}-\d{2}$/.test(inAsOf) ? (inAsOf > today ? "future" : "exact") : "missing");
+  if (!prevRows.length || inAsOf) {
+    S.asOf = inAsOf;
+    S.asOfStatus = inStatus;
+    S.altDate = typeof meta?.altDate === "string" ? meta.altDate.trim() : "";
+    S.rawAsOf = typeof meta?.rawAsOf === "string" ? meta.rawAsOf.trim() : "";
+    S.asOfConfirmed = inStatus === "exact" && /^\d{4}-\d{2}-\d{2}$/.test(inAsOf) && inAsOf <= today;
+  }
+  if (!prevRows.length) S.snapshotScope = "partial";
+  if (Array.isArray(meta?.fileHashes) && meta.fileHashes.length) {
+    S.fileHashes = [...new Set([...(S.fileHashes || []), ...meta.fileHashes])];
+  }
   if (kind === "holdings") {
     const incoming = (Array.isArray(rows) ? rows : []).map(lgDeriveHoldingRow);
     const merged = prevRows.slice();
@@ -1281,20 +2178,22 @@ function lgOnImportRows(rows, mode) {
         merged[idx] = {
           ...p,
           code: x.code || p.code, badSym: x.code ? "" : (x.badSym || p.badSym), name: x.name || p.name,
+          marginType: x.marginType || p.marginType || null,
           sh: x.sh != null ? x.sh : p.sh, cost: x.cost != null ? x.cost : p.cost,
           d: p.dTouched ? p.d : (x.d || p.d), dTouched: p.dTouched || x.dTouched,
-          how: x.how || p.how, on: p.on, verifyErr: null, _fresh: false
+          how: x.how || p.how, on: p.marginType ? false : p.on, verifyErr: null, _fresh: false
         };
       } else merged.push(x);
     }
     S.rows = merged;
   } else {
     S.rows = [...prevRows, ...(Array.isArray(rows) ? rows : []).map(lgMapTradeRow)];
+    lgApplyAsOfToTrades(S);
   }
   const P = lgPrepare(S);
   lgImpSeedErrors(S, P);
   impSetLive("");
-  showImpDialog(kind === "trades" ? "核對成交明細匯入" : "核對庫存轉入", lgImpReviewHtml(S, P), { wide: true, scope: "ledger", focus: false });
+  showImpDialog(kind === "trades" ? "核對成交明細匯入" : "核對庫存快照與對帳", lgImpReviewHtml(S, P), { wide: true, scope: "ledger", focus: false });
   lgSyncImportUI();
   const invFocus = $('#impBody [aria-invalid="true"]');
   const initFocus = invFocus || $('#impBody input.code') || $('#lgImpSave');
@@ -1313,18 +2212,17 @@ function lgOnImportErr(msg) {
   if (S.rows.length > 0 && S.kind) {
     S.step = "review";
     const P = lgPrepare(S);
-    showImpDialog(S.kind === "trades" ? "核對成交明細匯入" : "核對庫存轉入", lgImpReviewHtml(S, P), { wide: true, scope: "ledger", focus: false });
+    showImpDialog(S.kind === "trades" ? "核對成交明細匯入" : "核對庫存快照與對帳", lgImpReviewHtml(S, P), { wide: true, scope: "ledger", focus: false });
     lgSyncImportUI();
     $("#lgImpSave")?.focus?.({ preventScroll: true });
     impSetLive("⚠︎ " + errTxt + "（已保留原本資料）", "err");
     return;
   }
   S.step = "err";
-  const html = `<p class="note">可以重新上傳清楚一點的截圖、改選匯入類型，或改用手動表格輸入。</p>
+  const html = `<p class="note">可以重新上傳清楚一點的截圖，或改用手動表格輸入。</p>
     <div class="row2">
-      <button type="button" class="btn primary sm" data-lgimp-retry>重新選擇截圖</button>
+      <button type="button" class="btn primary sm" data-lgimp-retry>重新上傳截圖</button>
       <button type="button" class="btn sm" data-lgimp-blank>改用手動表格輸入</button>
-      <button type="button" class="btn sm" data-lgimp-back>改選匯入類型</button>
       <button type="button" class="btn sm" data-ic="close">關閉</button>
     </div>`;
   showImpDialog("截圖匯入失敗", html, { wide: false, scope: "ledger", focus: "[data-lgimp-retry]", forceFocus: true });
@@ -1352,7 +2250,22 @@ function lgClearStaleImpLive(P) {
 }
 function lgOnImportInput(e) {
   const S = lgImpState(), t = e.target;
-  if (S.step !== "review" || t.type === "checkbox" || t.tagName === "SELECT") return;
+  if (S.step !== "review") return;
+  if (t.matches("[data-lgimp-asof]")) {
+    const v = String(t.value || "").trim(), today = lgToday();
+    S.asOf = v;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v <= today) {
+      S.asOfStatus = "exact";
+      S.asOfConfirmed = true;
+      lgApplyAsOfToTrades(S);
+    } else {
+      S.asOfStatus = v && v > today ? "future" : "missing";
+      S.asOfConfirmed = false;
+    }
+    lgClearStaleImpLive(lgSyncImportUI());
+    return;
+  }
+  if (t.type === "checkbox" || t.type === "radio" || t.tagName === "SELECT") return;
   const uid = t.dataset?.lgimpUid, k = t.dataset?.lgimpK;
   if (!uid || !k) return;
   const r = S.rows.find(x => String(x._uid) === String(uid));
@@ -1366,7 +2279,7 @@ function lgOnImportInput(e) {
   } else if (k === "d") {
     if (t.value) { r.d = t.value; r.dTouched = true; } else { r.d = ""; r.dTouched = false; }
   } else if (k === "date") {
-    r.date = t.value; r.dateAssumed = null; r.altDate = ""; r.rawDate = "";
+    r.date = t.value; r.dateAssumed = null; r._fromAsOf = false; r.altDate = ""; r.rawDate = "";
   } else if (k === "time") {
     r.time = t.value;
   } else if (k === "note") {
@@ -1379,20 +2292,34 @@ function lgOnImportInput(e) {
 function lgOnImportChange(e) {
   const S = lgImpState(), t = e.target;
   if (S.step !== "review") return;
-  if (t.matches("[data-lgimp-method]")) { S.method = t.value === "fifo" ? "fifo" : "avg"; lgClearStaleImpLive(lgSyncImportUI()); return; }
-  if (t.matches("[data-lgimp-orderok]")) { S.orderOk = !!t.checked; if (S.orderOk && !$("#impLive")?.hidden) impSetLive(""); lgSyncImportUI(); return; }
-  if (t.matches("[data-lgimp-dup]")) { S.dupOk = !!t.checked; if (S.dupOk && !$("#impLive")?.hidden) impSetLive(""); lgSyncImportUI(); return; }
-  if (t.matches("[data-lgimp-open]")) {
-    const P = lgPrepare(S), want = !!t.checked;
-    for (const it of P.items) if (it.duplicateOpen) S.rows[it.index].on = want;
+  if (t.matches("[data-lgimp-scope]")) {
+    S.snapshotScope = t.value === "full" ? "full" : "partial";
     lgClearStaleImpLive(lgSyncImportUI());
     return;
   }
+  if (t.matches("[data-lgimp-asof]")) {
+    const v = String(t.value || "").trim(), today = lgToday();
+    S.asOf = v;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v <= today) {
+      S.asOfStatus = "exact";
+      S.asOfConfirmed = true;
+      lgApplyAsOfToTrades(S);
+    } else {
+      S.asOfStatus = v && v > today ? "future" : "missing";
+      S.asOfConfirmed = false;
+    }
+    lgClearStaleImpLive(lgSyncImportUI());
+    return;
+  }
+  if (t.matches("[data-lgimp-method]")) { S.method = t.value === "fifo" ? "fifo" : "avg"; lgClearStaleImpLive(lgSyncImportUI()); return; }
+  if (t.matches("[data-lgimp-orderok]")) { S.orderOk = !!t.checked; if (S.orderOk && !$("#impLive")?.hidden) impSetLive(""); lgSyncImportUI(); return; }
+  if (t.matches("[data-lgimp-dup]")) { S.dupOk = !!t.checked; if (S.dupOk && !$("#impLive")?.hidden) impSetLive(""); lgSyncImportUI(); return; }
   const uid = t.dataset?.lgimpUid, k = t.dataset?.lgimpK;
   if (!uid || !k) return;
   const r = S.rows.find(x => String(x._uid) === String(uid));
   if (!r) return;
   if (k === "on") {
+    if (r.marginType) return;
     r.on = !!t.checked;
     if (!r.on) r.verifyErr = null;
     lgClearStaleImpLive(lgSyncImportUI());
@@ -1449,11 +2376,10 @@ function lgOnImportChange(e) {
 }
 function lgOnImportBlur(e) {
   const S = lgImpState(), t = e.target;
-  if (S.step !== "review" || $("#impSheet")?.hidden || e.relatedTarget?.closest?.("#lgImpSave,[data-lgimp-del],[data-ic],[data-lgimp-dok],[data-lgimp-dflip],[data-lgimp-mv],[data-lgimp-rev]")) return;
+  if (S.step !== "review" || $("#impSheet")?.hidden || e.relatedTarget?.closest?.("#lgImpSave,[data-lgimp-del],[data-ic],[data-lgimp-dok],[data-lgimp-dflip],[data-lgimp-mv],[data-lgimp-rev],[data-lgimp-asof-ok],[data-lgimp-switch]")) return;
   const uid = t.dataset?.lgimpUid, k = t.dataset?.lgimpK;
   if (!uid || !k) return;
   if (S.edited.has(`${uid}:${k}`) || S.blurred.has(`${uid}:${k}`)) {
-    // 錯誤早已顯示且沒改過：不再重複播報（#impLive 重新出現會把表格往下推，手機上點「改日/月」「↑↓」會點空）
     const already = S.blurred.has(`${uid}:${k}`);
     S.blurred.add(`${uid}:${k}`);
     lgSyncImportUI(already ? {} : { announceRow: uid, announceKey: k });
@@ -1461,22 +2387,54 @@ function lgOnImportBlur(e) {
 }
 function lgOnImportClick(e) {
   const S = lgImpState(), t = e.target;
-  const pick = t.closest("[data-lgimp-pick]");
-  if (pick) { S.kind = pick.dataset.lgimpPick === "trades" ? "trades" : "holdings"; $("#impFile")?.click(); return; }
+  if (t.closest("[data-lgimp-upload]")) { $("#impFile")?.click(); return; }
   if (t.closest("[data-lgimp-retry]")) { $("#impFile")?.click(); return; }
-  if (t.closest("[data-lgimp-back]")) {
-    S.step = "choose"; S.rows = []; S.dupOk = false; S.dupSig = ""; S.orderOk = false; S.orderSig = ""; S.blurred.clear(); S.edited.clear();
+  if (t.closest("[data-lgimp-conflicts]")) {
+    if (typeof closeImport === "function") closeImport();
+    const L = (W.lg ||= {});
+    L.view = "tx"; L.form = null; renderList();
+    setTimeout(() => document.querySelector(".lgrecon-center")?.scrollIntoView?.({ block: "nearest" }), 30);
+    return;
+  }
+  const sw = t.closest("[data-lgimp-switch]");
+  if (sw && S.step === "review") {
+    lgSwitchKind(sw.dataset.lgimpSwitch);
+    return;
+  }
+  if (t.closest("[data-lgimp-asof-ok]") && S.step === "review") {
+    const inp = $("#lgImpForm [data-lgimp-asof]");
+    const v = String(inp?.value || S.asOf || "").trim(), today = lgToday();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || v > today) {
+      S.asOfConfirmed = false;
+      impSetLive(v > today ? `⚠︎ 基準日「${v}」晚於今日（${today}），不可確認為有效基準日。` : "⚠︎ 請先填入正確 YYYY-MM-DD 基準日期再按確認。", "err");
+      inp?.focus?.();
+      lgSyncImportUI();
+      return;
+    }
+    S.asOf = v; S.asOfStatus = "exact"; S.asOfConfirmed = true;
+    lgApplyAsOfToTrades(S);
     impSetLive("");
-    showImpDialog("截圖匯入到交易紀錄", lgImpChooseHtml(), { wide: false, scope: "ledger", focus: '[data-lgimp-pick="holdings"]', forceFocus: true });
+    lgSyncImportUI();
+    return;
+  }
+  const asofFlip = t.closest("[data-lgimp-asof-flip]");
+  if (asofFlip && S.step === "review") {
+    const v = asofFlip.dataset.lgimpAsofFlip, today = lgToday();
+    S.asOf = v;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v <= today) { S.asOfStatus = "exact"; S.asOfConfirmed = true; lgApplyAsOfToTrades(S); }
+    const inp = $("#lgImpForm [data-lgimp-asof]");
+    if (inp) inp.value = v;
+    lgSyncImportUI();
     return;
   }
   if (t.closest("[data-lgimp-blank]")) {
     const kind = S.kind || "trades";
-    S.kind = kind; S.step = "review"; S.busy = false; S.dupOk = false; S.dupSig = ""; S.orderOk = false; S.orderSig = ""; S.blurred.clear(); S.edited.clear();
+    S.kind = kind; S.detectedKind = kind; S.step = "review"; S.busy = false; S.dupOk = false; S.dupSig = ""; S.orderOk = false; S.orderSig = ""; S.blurred.clear(); S.edited.clear();
+    S.asOf = lgToday(); S.asOfStatus = "exact"; S.asOfConfirmed = true; S.snapshotScope = "partial";
     S.rows = [lgNewBlankRow(kind)];
     const P = lgPrepare(S);
     impSetLive("");
-    showImpDialog(kind === "trades" ? "核對成交明細匯入" : "核對庫存轉入", lgImpReviewHtml(S, P), { wide: true, scope: "ledger", focus: '#lgImpTbody input[data-lgimp-k="code"]', forceFocus: true });
+    showImpDialog(kind === "trades" ? "核對成交明細匯入" : "核對庫存快照與對帳", lgImpReviewHtml(S, P), { wide: true, scope: "ledger", focus: '#lgImpTbody input[data-lgimp-k="code"]', forceFocus: true });
     lgSyncImportUI();
     return;
   }
@@ -1500,7 +2458,7 @@ function lgOnImportClick(e) {
     const r = S.rows.find(x => String(x._uid) === String(uid));
     if (!r) return;
     if (dflip && r.altDate) r.date = r.altDate;
-    r.dateAssumed = null; r.altDate = ""; r.rawDate = ""; r._fresh = false;
+    r.dateAssumed = null; r._fromAsOf = false; r.altDate = ""; r.rawDate = ""; r._fresh = false;
     S.edited.add(`${uid}:date`);
     S.blurred.add(`${uid}:date`);
     const inp = $("#lgImpTbody")?.querySelector(`tr[data-uid="${uid}"] [data-lgimp-k="date"]`);
@@ -1559,7 +2517,8 @@ async function lgSaveImport() {
   const S = lgImpState();
   if (S.step !== "review" || S.busy) return;
   const P0 = lgPrepare(S);
-  if (P0.selectedCount === 0) {
+  const canFullZero = S.kind === "holdings" && S.snapshotScope === "full" && (P0.plan?.closures?.length || 0) > 0;
+  if (P0.selectedCount === 0 && !canFullZero) {
     impSetLive("⚠︎ 請至少勾選一列要匯入的資料。", "err");
     try { ($('#lgImpTbody [data-lgimp-k="on"]') || $("[data-lgimp-add]"))?.focus({ preventScroll: true }); } catch {}
     return;
@@ -1574,7 +2533,7 @@ async function lgSaveImport() {
       if (myTok !== S.saveTok || $("#impSheet")?.hidden) return;
     }
     for (const r of S.rows) {
-      if (r.on === false || r.code || r.badSym || !r.name) continue;
+      if (r.on === false || r.marginType || r.code || r.badSym || !r.name) continue;
       if (typeof findCode === "function") {
         const fc = findCode(r.name, false);
         if (fc && okImpCode(fc)) { r.code = normImpCode(fc); r.name = lgStockName(r.code, r.name); r.verifyErr = null; continue; }
@@ -1593,7 +2552,7 @@ async function lgSaveImport() {
       }
     }
     let P = lgPrepare(S);
-    if (P.errorCount > 0 || P.selectedCount === 0) {
+    if (P.errorCount > 0 || (P.selectedCount === 0 && !(S.kind === "holdings" && S.snapshotScope === "full" && (P.plan?.closures?.length || 0) > 0))) {
       S.busy = false;
       for (const it of P.items) {
         const r = S.rows[it.index];
@@ -1605,7 +2564,7 @@ async function lgSaveImport() {
         ? "匯入後會讓帳本既有的交易出錯，請先調整。"
         : P.sameDayOversell
           ? "同天有多筆買賣未附成交時間，按目前順序會先賣後買造成賣超；請補填時間，或用 ↑↓／反轉按鈕調整順序。"
-          : "有欄位格式或數字不對（例如賣超、異常日期或缺少代號），請修正標記的欄位後再試。";
+          : "有欄位格式或數字不對（例如賣超、跨市場衝突、異常日期或缺少代號），請修正標記的欄位後再試。";
       impSetLive("⚠︎ " + firstErr, "err");
       const firstInv = $('#lgImpForm [aria-invalid="true"]');
       try { firstInv?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); } catch {}
@@ -1636,14 +2595,62 @@ async function lgSaveImport() {
         }
       }
     }
+    if (S.kind === "holdings") {
+      const res = await withPfCommitLock(() => {
+        const rawRecon = lgRawGet(LG_RAW_RECON);
+        const recon0 = lgParseRaw(rawRecon) || KLRecon.emptyStore();
+        const pf0 = lgParseRaw(lgRawGet(LG_RAW_PF)) || { v: 1, method: S.method === "fifo" ? "fifo" : "avg", transactions: [] };
+        const snapRows = S.rows.map(r => {
+          const sym = r.code || r.badSym || "", m = sym && okImpCode(sym) ? lgMkt(sym) : null;
+          return { on: r.on !== false, code: sym, name: r.name, market: m, currency: m ? (m === "us" ? "USD" : "TWD") : null, shares: r.sh, avgCost: r.cost, marginType: r.marginType || null, how: r.how };
+        });
+        const plan = KLRecon.planHoldingsSnapshot({
+          store: recon0,
+          txStore: pf0,
+          ledgerLib: KLLedger,
+          method: pf0.method || S.method || "avg",
+          today: lgToday(),
+          rows: snapRows,
+          snapshotScope: S.snapshotScope === "full" ? "full" : "partial",
+          asOf: S.asOf || null,
+          asOfStatus: S.asOfStatus || (S.asOf ? "exact" : "missing"),
+          asOfConfirmed: S.asOfConfirmed === true,
+          rawAsOf: S.rawAsOf || "",
+          altDate: S.altDate || "",
+          fileHashes: S.fileHashes || [],
+        });
+        const applied = KLRecon.applyHoldingsImport(recon0, plan, { today: lgToday() });
+        if (!applied.ok) return applied;
+        const w = lgReconWrite(applied.store, { expectedRawRecon: rawRecon });
+        return w.ok ? { ok: true, applied, store: w.store } : w;
+      });
+      if (!res.ok) {
+        S.busy = false;
+        lgSyncImportUI();
+        impSetLive("✕ " + (res.errors?.[0] || res.code || "寫入對帳快照失敗"), "err");
+        return;
+      }
+      const { appliedCount, conflictCount } = res.applied;
+      const msg = `已儲存對帳快照（確認 ${appliedCount} 檔${conflictCount ? `，待對帳／確認 ${conflictCount} 項` : ""}；未改動舊庫存）。`;
+      S.busy = false;
+      W.lg = { ...(W.lg || {}), view: "tx", prev: null, form: null, msg };
+      if (typeof pfExpire === "function") pfExpire();
+      closeImport();
+      renderList();
+      const impBtn = document.querySelector('#lx [data-lg="imp"]');
+      if (document.activeElement === document.body && impBtn?.isConnected) {
+        try { impBtn.focus({ preventScroll: true }); } catch {}
+      }
+      return;
+    }
+
     if (P.needsOrderConfirm) {
       S.busy = false;
       lgSyncImportUI();
-      // 先顯示提示再捲動：#impLive 出現會推動版面，反過來會讓捲好的位置又偏掉
       const fifoOrder = P.ambiguousSameDay?.some(g => g.affectsFifo);
-       impSetLive(fifoOrder
-         ? "⚠︎ FIFO 模式下，同日多筆同方向交易的批次順序會影響成本與損益；請確認列序或補填成交時間後再匯入。"
-         : "⚠︎ 偵測到同日買賣未附成交時間，請確認由早到晚順序（或補填時間）後再匯入。", "err");
+      impSetLive(fifoOrder
+        ? "⚠︎ FIFO 模式下，同日多筆同方向交易的批次順序會影響成本與損益；請確認列序或補填成交時間後再匯入。"
+        : "⚠︎ 偵測到同日買賣未附成交時間，請確認由早到晚順序（或補填時間）後再匯入。", "err");
       const ordEl = $("#lgImpOrderOk");
       if (ordEl) {
         ordEl.setAttribute("aria-invalid", "true");
@@ -1664,27 +2671,119 @@ async function lgSaveImport() {
       }
       return;
     }
-    const finalP = lgPrepare(S, { finalIds: true });
-    if (!finalP.ok) {
+
+    const res = await lgCommitDualStores({
+      planFn: async (pf0, recon0) => {
+        const Pchk = KLLedger.prepareTradesImport(
+          S.rows.map(r => {
+            const sym = r.code || r.badSym || "", m = sym && okImpCode(sym) ? lgMkt(sym) : null;
+            return {
+              on: r.marginType ? false : (r.on !== false),
+              date: r.date ?? "",
+              dateAssumed: r.dateAssumed || null,
+              ...(r.altDate ? { altDate: r.altDate } : {}),
+              ...(r.rawDate ? { rawDate: r.rawDate } : {}),
+              time: r.time || "",
+              side: r.side || "",
+              symbol: sym,
+              name: r.name,
+              shares: r.shares,
+              price: r.price,
+              fee: r.fee,
+              tax: r.tax,
+              ...(m ? { assetType: lgAssetType(sym, m) } : {}),
+              dayTrade: r.side === "sell" && !!r.dayTrade,
+              note: r.note || "",
+              source: "import"
+            };
+          }),
+          pf0.transactions || [],
+          { method: pf0?.transactions?.length || lgRawGet(LG_RAW_PF) ? (pf0.method || "avg") : (S.method === "fifo" ? "fifo" : "avg"), today: lgToday(), market: sym => (okImpCode(sym) ? lgMkt(sym) : null), rules: lgRules(), recon: recon0, orderConfirmed: S.orderOk === true }
+        );
+        if (!Pchk.ok) return { ok: false, code: "prepare_failed", errors: ["交易明細驗證未通過，請重新檢查欄位或順序"] };
+        const txs = Pchk.transactions;
+        const hasExistingPf = lgRawGet(LG_RAW_PF) != null;
+        const nextPf = {
+          v: 1,
+          method: hasExistingPf ? (pf0.method || "avg") : (S.method === "fifo" ? "fifo" : "avg"),
+          transactions: [...(pf0.transactions || []), ...txs],
+          at: pf0.at || new Date().toISOString()
+        };
+        const at = new Date().toISOString();
+        const batchId = "wal-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
+        const txHashes = Object.fromEntries(txs.map(t => [t.id, KLRecon.txFingerprint(t)]));
+        const pfBaseHash = KLRecon.pfStoreHash(pf0);
+        const pfNextHash = KLRecon.pfStoreHash(nextPf);
+        const marginRows = S.rows.filter(r => !!r.marginType);
+        const baselines = KLRecon.activeBaselines(recon0);
+        const conflicts = [];
+        for (const it of Pchk.items) {
+          if (!it.on || it.errors.length || it.reconcileHint !== "same_day_order") continue;
+          const tx = txs.find(x => x.id === it.tx.id) || it.tx;
+          const base = baselines.get(tx.symbol);
+          if (!base) continue;
+          conflicts.push({
+            id: `conf-sd-${batchId}-${tx.id}`,
+            kind: "same_day_order",
+            symbol: tx.symbol,
+            market: tx.market,
+            currency: tx.currency,
+            batchId,
+            snapshotId: base.id,
+            previousSnapshotId: null,
+            baselineShares: base.shares,
+            baselineAvgCost: base.avgCost,
+            targetShares: tx.shares,
+            targetAvgCost: tx.price,
+            diffShares: null,
+            diffCost: null,
+            txId: tx.id,
+            status: "open",
+            createdAt: at,
+            message: `${tx.date} 同日交易 ${tx.symbol}（${KLLedger.TYPE_LABEL[tx.type] || tx.type} ${tx.shares} 股）尚未決定在快照前或快照後`,
+            payload: { snapshotId: base.id, snapshotDate: base.date, txId: tx.id },
+          });
+        }
+        const impRec = {
+          id: batchId,
+          at,
+          kind: "trades",
+          asOf: S.asOf || null,
+          asOfStatus: S.asOfStatus || null,
+          snapshotScope: null,
+          fileHashes: Array.isArray(S.fileHashes) ? S.fileHashes.slice() : [],
+          level1Count: Pchk.selectedCount - conflicts.length,
+          level2Count: conflicts.length + marginRows.length,
+          level3Count: Math.max(0, S.rows.length - Pchk.selectedCount - marginRows.length),
+          rows: txs.map(t => ({ symbol: t.symbol, shares: t.shares, price: t.price, date: t.date, type: t.type })),
+        };
+        const audit = [{
+          id: `aud-${batchId}`,
+          at,
+          action: "trades_imported",
+          symbol: null,
+          snapshotId: null,
+          conflictId: null,
+          txId: null,
+          batchId,
+          reason: `匯入 ${txs.length} 筆成交交易${conflicts.length ? `（含 ${conflicts.length} 筆同日順序待釐清）` : ""}`,
+        }];
+        return {
+          ok: true,
+          nextPf,
+          txCount: txs.length,
+          payload: { id: batchId, op: "import_trades", at, txs, txHashes, pfBaseHash, pfNextHash, staged: { imports: [impRec], conflicts, audit } },
+        };
+      }
+    });
+    if (!res.ok) {
       S.busy = false;
       lgSyncImportUI();
-      impSetLive("⚠︎ 請修正錯誤後再匯入。", "err");
+      impSetLive("✕ " + (res.errors?.[0] || res.code || "資料檢查未通過，沒有寫入"), "err");
       return;
     }
-    const cur = lgLoad();
-    const next = cur
-      ? { ...cur, transactions: [...cur.transactions, ...finalP.transactions] }
-      : { v: 1, method: S.method === "fifo" ? "fifo" : "avg", transactions: finalP.transactions, at: new Date().toISOString() };
-    const v = lgSave(next);
-    if (!v.ok) {
-      S.busy = false;
-      lgSyncImportUI();
-      impSetLive("✕ 資料檢查未通過，沒有寫入：" + (v.errors?.[0]?.errors?.[0]?.message || v.code), "err");
-      return;
-    }
-    const msg = S.kind === "holdings"
-      ? `已匯入 ${finalP.transactions.length} 筆持股轉入到交易紀錄（舊庫存不變）。`
-      : `已匯入 ${finalP.transactions.length} 筆成交交易到交易紀錄。`;
+    const txCount = res.pfStore ? P.selectedCount : 0;
+    const msg = `已匯入 ${txCount} 筆成交交易到交易紀錄。`;
     S.busy = false;
     W.lg = { ...(W.lg || {}), view: "tx", prev: null, form: null, msg };
     if (typeof pfExpire === "function") pfExpire();
@@ -1704,4 +2803,3 @@ async function lgSaveImport() {
 document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target?.form?.id === "lgImpForm" && (e.isComposing || e.keyCode === 229)) e.preventDefault();
 });
-

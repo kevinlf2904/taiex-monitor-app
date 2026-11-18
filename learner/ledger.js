@@ -8,7 +8,7 @@
   // 交易類型：買、賣、現金股息、配股（除權，拿到股票）、拆股／合股（ratio：一股變幾股，合股小於 1）、零股現金結算（合股後不足一股的部分換成現金）、
   // 轉入、轉出、入金、出金、另計費用、其他公司行動
   const TYPES = ["buy", "sell", "dividend", "stock_dividend", "split", "fraction_cash", "transfer_in", "transfer_out", "deposit", "withdraw", "fee", "other"];
-  const TYPE_LABEL = { buy: "買進", sell: "賣出", dividend: "現金股息", stock_dividend: "配股（除權）", split: "拆股／合股", fraction_cash: "零股現金結算", transfer_in: "股票轉入", transfer_out: "股票轉出", deposit: "入金", withdraw: "出金", fee: "費用", other: "其他公司行動" };
+  const TYPE_LABEL = { buy: "買進", sell: "賣出", dividend: "現金股息", stock_dividend: "配股（除權）", split: "拆股／合股", fraction_cash: "零股現金結算", transfer_in: "股票轉入", transfer_out: "股票轉出", deposit: "入金", withdraw: "出金", fee: "費用", other: "其他公司行動", snapshot: "庫存快照" };
   const NEEDS_SYMBOL = new Set(["buy", "sell", "dividend", "stock_dividend", "split", "fraction_cash", "transfer_in", "transfer_out"]); // other：只有金額（例如現金補償）時可以不填代號
   const CORP_FIRST = new Set(["split", "stock_dividend", "other"]); // 同一天：公司行動（除權日開盤就生效）排在當天的買賣前面
   const CURRENCY = { tw: "TWD", us: "USD" };
@@ -25,6 +25,71 @@
   const validDate = v => { if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false; const d = new Date(v + "T00:00:00Z"); return !isNaN(d) && d.toISOString().slice(0, 10) === v; };
   const symbolOf = v => { const s = typeof v === "string" || typeof v === "number" ? String(v).trim().toUpperCase() : ""; return s && s.length <= 16 && /^\^?[A-Z0-9][A-Z0-9.=_-]*$/.test(s) ? s : null; };
   const r2 = v => Math.round(v * 100) / 100, EPS = 1e-9;
+
+  // 與 KLRecon 共用 fp1 canonical 指紋規則（即使 recon.js 尚未載入也能驗證 initialTags.txHash）
+  const canon = v => { if (v === null || typeof v !== "object") return JSON.stringify(v); if (Array.isArray(v)) return "[" + v.map(x => x === undefined ? "null" : canon(x)).join(",") + "]"; return "{" + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ":" + canon(v[k])).join(",") + "}"; };
+  const cyrb128 = str => {
+    let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+    for (let i = 0, k; i < str.length; i++) { k = str.charCodeAt(i); h1 = h2 ^ Math.imul(h1 ^ k, 597399067); h2 = h3 ^ Math.imul(h2 ^ k, 2869860233); h3 = h4 ^ Math.imul(h3 ^ k, 951274213); h4 = h1 ^ Math.imul(h4 ^ k, 2716044179); }
+    h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067); h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233); h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213); h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+    h1 ^= (h2 ^ h3 ^ h4); h2 ^= h1; h3 ^= h1; h4 ^= h1;
+    return [h1, h2, h3, h4].map(h => (h >>> 0).toString(16).padStart(8, "0")).join("");
+  };
+  const txFp = v => { if (root.KLRecon && typeof root.KLRecon.txFingerprint === "function") return root.KLRecon.txFingerprint(v); const s = canon(v ?? {}); return `fp1:${cyrb128(s)}:${s.length}`; };
+  function getActiveBaselines(recon) {
+    if (root.KLRecon && typeof root.KLRecon.activeBaselines === "function") return root.KLRecon.activeBaselines(recon);
+    const map = new Map();
+    if (!recon || !Array.isArray(recon.snapshots)) return map;
+    for (const snap of recon.snapshots) {
+      if (!snap || snap.status !== "confirmed") continue;
+      const sym = symbolOf(snap.symbol); if (!sym) continue;
+      const prev = map.get(sym);
+      if (!prev || snap.date > prev.date) { map.set(sym, snap); continue; }
+      if (snap.date === prev.date) {
+        const su = snap.supersededBy == null, pu = prev.supersededBy == null;
+        if ((su && !pu) || (su === pu && String(snap.confirmedAt || "") >= String(prev.confirmedAt || ""))) map.set(sym, snap);
+      }
+    }
+    return map;
+  }
+
+  function getBaselineChains(recon, activeMap) {
+    const chains = new Map();
+    if (!activeMap || !activeMap.size) return chains;
+    const snaps = recon && Array.isArray(recon.snapshots) ? recon.snapshots.filter(Boolean) : [];
+    for (const [sym, B] of activeMap) {
+      const chain = [B];
+      const seen = new Set([B.id]);
+      let cur = B;
+      while (cur) {
+        const cands = snaps.filter(s =>
+          !seen.has(s.id) &&
+          symbolOf(s.symbol) === sym &&
+          (s.status === "superseded" || s.status === "confirmed") &&
+          s.supersededBy === cur.id &&
+          validDate(s.date) &&
+          s.date <= cur.date
+        );
+        if (!cands.length) break;
+        cands.sort((a, b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : String(b.confirmedAt || "").localeCompare(String(a.confirmedAt || "")));
+        const prev = cands[0];
+        seen.add(prev.id);
+        chain.unshift(prev);
+        cur = prev;
+      }
+      // 只沿 supersededBy 往前串：未經晉升／採信／結案明確接續的較早 confirmed 快照（例如較新基準存在時才標記的舊期初快照）
+      // 不可當鏈頭，否則會把從未對過帳、可能不完整的前段交易拿來重算，讓整份帳本出錯而無法存檔
+      chain.sort((a, b) => a.date !== b.date ? (a.date < b.date ? -1 : 1) : (a.id === B.id ? 1 : b.id === B.id ? -1 : String(a.confirmedAt || "").localeCompare(String(b.confirmedAt || ""))));
+      // 同一天若有多張快照，只留當天最後一張錨點
+      const dedup = [];
+      for (const s of chain) {
+        if (dedup.length && dedup[dedup.length - 1].date === s.date) dedup[dedup.length - 1] = s;
+        else dedup.push(s);
+      }
+      chains.set(sym, dedup);
+    }
+    return chains;
+  }
 
   // 手續費與交易稅估算（使用者沒填時才用）。assetType：stock／etf；dayTrade：現股當沖。回傳 { fee, tax }
   function estimateCosts(t, rules = DEFAULT_RULES) {
@@ -91,13 +156,19 @@
     return { tx, errors, warnings };
   }
 
-  // 整本帳：依日期排序（同一天公司行動先、其他照輸入順序），逐筆套用；錯誤的交易不套用並列出原因。
-  // opts：method（avg／fifo，整本帳一種）、today、rules、prices（代號 → 現價，Map 或物件）
-  function buildLedger(list, opts = {}) {
-    const method = opts.method === "fifo" ? "fifo" : opts.method == null || opts.method === "avg" ? "avg" : null;
-    if (!method) return { v: VERSION, status: "invalid", method: null, error: "invalid_method", positions: [], cash: {}, totals: {}, txs: [] };
+  // 整本帳共用核心：withReconcile=false 時與原 buildLedger 完全一致；withReconcile=true 整合 KLRecon 快照基準、期初標籤與同日順序。
+  function computeLedger(txStoreOrList, reconStore, opts = {}, withReconcile = false) {
+    let rawList = Array.isArray(txStoreOrList) ? txStoreOrList : [];
+    let methodIn = opts.method;
+    if (withReconcile && !Array.isArray(txStoreOrList) && txStoreOrList && typeof txStoreOrList === "object") {
+      rawList = Array.isArray(txStoreOrList.transactions) ? txStoreOrList.transactions : [];
+      if (opts.method === undefined) methodIn = txStoreOrList.method;
+    }
+    const emptyRecon = { hasSnapshot: false, snapshotCount: 0, openConflicts: [], pendingSymbols: [], unresolvedSameDayCount: 0, staleTags: [] };
+    const method = methodIn === "fifo" ? "fifo" : methodIn == null || methodIn === "avg" ? "avg" : null;
+    if (!method) return withReconcile ? { v: VERSION, status: "invalid", method: null, error: "invalid_method", positions: [], cash: {}, totals: {}, txs: [], reconcile: emptyRecon } : { v: VERSION, status: "invalid", method: null, error: "invalid_method", positions: [], cash: {}, totals: {}, txs: [] };
     const P = opts.prices, priceOf = c => { const v = P && typeof P.get === "function" ? P.get(c) : P ? P[c] : null; return isNum(v) && v > 0 ? v : null; };
-    const rows = (Array.isArray(list) ? list : []).map((raw, i) => ({ i, raw, ...checkTx(raw, opts) }));
+    const rows = rawList.map((raw, i) => ({ i, raw, preSnapshot: false, sameDayRelation: null, ...checkTx(raw, opts) }));
     // 重複：同一個編號 → 錯誤；內容完全一樣（日期、類型、代號、股數、價格、金額、費用）→ 提醒，可能重複輸入
     const ids = new Map(), sig = new Map();
     for (const r of rows) {
@@ -107,8 +178,6 @@
       if (sig.has(s)) r.warnings.push({ code: "possible_duplicate", message: "和另一筆交易內容完全一樣，請確認不是重複輸入" }); else sig.set(s, r);
     }
     // 另計費用（fee）掛在某筆交易上（ref）：
-    //   對應的買賣已經有手續費 → 重複計算，擋下；原交易的手續費是估算的 → 僅取代估算手續費，保留交易稅與其來源標記。
-    //   對應買賣的費用併進那筆交易（買進算進成本、賣出從已實現損益扣），和日期先後無關；其他交易的費用記在那一檔
     for (const r of rows) { const t = r.tx; if (!t || t.type !== "fee" || !t.ref || r.errors.length) continue; const o = ids.get(t.ref);
       if (!o || !o.tx || o.errors.length) { r.errors.push({ code: "ref_not_found", message: "這筆費用對應的交易找不到，或那筆交易有錯誤" }); continue; }
       if (o.tx.currency !== t.currency) { r.errors.push({ code: "currency_mismatch", message: "費用的幣別和對應的交易不同" }); continue; }
@@ -122,17 +191,116 @@
         o.extraFee = t.amount; o.tx.fee += t.amount; r.mergedInto = o.tx.id;
       } else r.feeSymbol = o.tx.symbol;
       if (t.date !== o.tx.date) r.warnings.push({ code: "fee_date_differs", message: `費用日期和對應的交易（${o.tx.date}）不同` }); }
-    // 同一個代號只能有一個市場、一個幣別
+
+    const baselines = withReconcile ? getActiveBaselines(reconStore) : new Map();
+    const baselineChains = withReconcile ? getBaselineChains(reconStore, baselines) : new Map();
+    // 0. 市場／幣別與大寫 symbol 約束：先以 reconStore 各檔建立 symMkt，再檢核交易
     const symMkt = new Map();
+    if (withReconcile && reconStore && typeof reconStore === "object") {
+      const seedMkt = item => {
+        if (!item) return;
+        const sym = symbolOf(item.symbol), m = item.market, cur = item.currency;
+        if (sym && (m === "tw" || m === "us") && (cur === "TWD" || cur === "USD") && CURRENCY[m] === cur && !symMkt.has(sym)) {
+          symMkt.set(sym, m + "/" + cur);
+        }
+      };
+      for (const b of baselines.values()) seedMkt(b);
+      if (Array.isArray(reconStore.snapshots)) for (const s of reconStore.snapshots) if (s && s.status !== "superseded") seedMkt(s);
+      if (Array.isArray(reconStore.conflicts)) for (const c of reconStore.conflicts) if (c && c.status === "open" && c.kind !== "currency_conflict") seedMkt(c);
+    }
     for (const r of rows) { const t = r.tx; if (!t || !t.symbol || r.errors.length) continue; const k = symMkt.get(t.symbol);
       if (!k) symMkt.set(t.symbol, t.market + "/" + t.currency); else if (k !== t.market + "/" + t.currency) r.errors.push({ code: "currency_conflict", message: "同一個代號前後的市場或幣別不一樣" }); }
-    const order = rows.slice().sort((a, b) => { const da = a.tx?.date || "9999", db = b.tx?.date || "9999"; if (da !== db) return da < db ? -1 : 1;
-      const ca = CORP_FIRST.has(a.tx?.type) ? 0 : 1, cb = CORP_FIRST.has(b.tx?.type) ? 0 : 1; return ca - cb || a.i - b.i; });
+
+    // 對帳期初標籤與同日順序判定
+    const staleTagIds = new Set(), staleTags = [];
+    if (withReconcile && reconStore && reconStore.initialTags && typeof reconStore.initialTags === "object") {
+      for (const [txId, tag] of Object.entries(reconStore.initialTags)) {
+        if (!tag || tag.active !== true) continue;
+        const r = ids.get(txId);
+        if (!r || !r.tx) { staleTagIds.add(txId); staleTags.push({ txId, symbol: symbolOf(tag.symbol) || null, reason: "tx_missing" }); continue; }
+        if (r.tx.type !== "transfer_in") { staleTagIds.add(txId); staleTags.push({ txId, symbol: r.tx.symbol || symbolOf(tag.symbol) || null, reason: "not_transfer_in" }); continue; }
+        if (tag.txHash && txFp(r.raw) !== tag.txHash && txFp(r.tx) !== tag.txHash) { staleTagIds.add(txId); staleTags.push({ txId, symbol: r.tx.symbol || symbolOf(tag.symbol) || null, reason: "tx_hash_mismatch" }); continue; }
+      }
+    }
+
+    const unresolvedBySym = new Map();
+    if (withReconcile) {
+      for (const r of rows) {
+        const t = r.tx;
+        if (!t || r.errors.length || (t.type === "fee" && t.ref)) continue;
+        const sym = t.symbol, B = sym ? baselines.get(sym) : null;
+        if (!B) { r.sortBucket = CORP_FIRST.has(t.type) ? 0 : 1; continue; }
+        const chain = baselineChains.get(sym) || [B];
+        const B0 = chain[0];
+        // 期初錨點只認「目前基準鏈上」的 tx_tag 快照：只憑 active tag＋指紋符合就跳過，會讓已移到基準日之後（或未串接）的轉入被靜默排除
+        const isTagAnchor = !staleTagIds.has(t.id) && chain.some(s => !!s.tagTxId && t.id === s.tagTxId);
+        const sameSnap = chain.find(s => s.date === t.date) || null;
+        if (isTagAnchor) {
+          r.preSnapshot = true; r.sameDayRelation = null; r.sortBucket = -1;
+        } else if (t.date < B0.date) {
+          r.preSnapshot = true; r.sameDayRelation = null; r.sortBucket = -2;
+        } else if (sameSnap) {
+          const relObj = reconStore?.sameDayRelations?.[t.id];
+          let rel = "unresolved";
+          if (relObj && typeof relObj === "object") {
+            const rv = relObj.relation, idOk = !relObj.snapshotId || relObj.snapshotId === sameSnap.id;
+            if ((rv === "before_snapshot" || rv === "after_snapshot") && relObj.snapshotDate === sameSnap.date && idOk) rel = rv;
+          } else if (typeof r.raw?.snapshotRelation === "string") {
+            const rv = r.raw.snapshotRelation;
+            const idOk = !r.raw.snapshotId || r.raw.snapshotId === sameSnap.id;
+            const dateOk = !r.raw.snapshotDate || r.raw.snapshotDate === sameSnap.date;
+            if ((rv === "before_snapshot" || rv === "after_snapshot") && idOk && dateOk) rel = rv;
+          }
+          r.sameDayRelation = rel;
+          if (rel === "before_snapshot") {
+            // 若是第一張快照 B0 同日且在快照前，代表已含於 B0 期初內（preSnapshot=true）；若是後續快照 Si 同日且在快照前，屬於 (B0, Si) 期間交易，需在 Si 錨點（bucket 0）前套用（bucket -1）
+            r.preSnapshot = sameSnap.id === B0.id;
+            r.sortBucket = -1;
+          } else if (rel === "unresolved") {
+            r.preSnapshot = false; r.sortBucket = 1;
+            const u = unresolvedBySym.get(sym) || { count: 0, shares: 0, date: sameSnap.date };
+            u.count++; if (isNum(t.shares)) u.shares += t.shares;
+            u.date = sameSnap.date;
+            unresolvedBySym.set(sym, u);
+          } else {
+            r.preSnapshot = false; r.sortBucket = CORP_FIRST.has(t.type) ? 2 : 3;
+          }
+        } else {
+          r.preSnapshot = false; r.sameDayRelation = null; r.sortBucket = CORP_FIRST.has(t.type) ? 4 : 5;
+        }
+      }
+      // 另計費用跟隨其 ref 交易的 preSnapshot / sameDayRelation 與排序階段
+      for (const r of rows) {
+        const t = r.tx;
+        if (!t || r.errors.length || !(r.mergedInto || r.feeSymbol)) continue;
+        const o = ids.get(t.ref);
+        if (o) {
+          r.preSnapshot = !!o.preSnapshot;
+          r.sameDayRelation = o.sameDayRelation ?? null;
+          r.sortBucket = o.sortBucket;
+        }
+      }
+    }
+
+    const items = rows.map(r => ({ isAnchor: false, r, date: r.tx?.date || "9999", bucket: r.sortBucket ?? (CORP_FIRST.has(r.tx?.type) ? 0 : 1), i: r.i }));
+    if (withReconcile) {
+      for (const [sym, chain] of baselineChains) {
+        for (let idx = 0; idx < chain.length; idx++) {
+          const S = chain[idx];
+          items.push({ isAnchor: true, sym, B: S, isFirstAnchor: idx === 0, isLastAnchor: idx === chain.length - 1, date: S.date, bucket: 0, i: -1 });
+        }
+      }
+    }
+    items.sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      if (a.bucket !== b.bucket) return a.bucket - b.bucket;
+      return a.i - b.i;
+    });
+
     const pos = new Map(), cash = {}, totals = {};
     const C = cur => (cash[cur] ||= { balance: 0, deposits: 0, withdrawals: 0, tracked: false }), T = cur => (totals[cur] ||= { realizedPnl: 0, dividends: 0, fees: 0, taxes: 0, bought: 0, sold: 0 });
-    const posOf = (t, sym = t.symbol) => { let p = pos.get(sym); if (!p) pos.set(sym, p = { symbol: sym, market: t.market, currency: t.currency, shares: 0, costBasis: 0, lots: [], realizedPnl: 0, dividends: 0, fees: 0, taxes: 0, firstDate: t.date, history: [], fraction: 0 }); return p; };
+    const posOf = (t, sym = t.symbol) => { let p = pos.get(sym); if (!p) pos.set(sym, p = { symbol: sym, market: t.market, currency: t.currency, shares: 0, costBasis: 0, lots: [], realizedPnl: 0, dividends: 0, fees: 0, taxes: 0, firstDate: t.date, history: [], fraction: 0, hasSnapshot: false, snapshotDate: null, snapshotId: null, snapshotOrigin: null, snapshotScope: null, snapshotShares: null, snapshotAvgCost: null, firstSnapshotDate: null, firstSnapshotShares: null, firstSnapshotAvgCost: null, firstSnapshotOrigin: null }); return p; };
     const snap = (p, t, extra = {}) => p.history.push({ date: t.date, id: t.id, type: t.type, shares: p.shares, costBasis: r2(p.costBasis), avgCost: p.shares > EPS ? p.costBasis / p.shares : null, ...extra });
-    // 從部位拿掉 n 股，回傳拿掉的成本（加權平均：按比例；FIFO：從最早的批次）
     const take = (p, n) => {
       if (method === "avg") { const c = p.shares > EPS ? p.costBasis * n / p.shares : 0; p.shares -= n; p.costBasis -= c; if (p.shares < EPS) { p.shares = 0; p.costBasis = 0; } return c; }
       let left = n, c = 0;
@@ -140,8 +308,45 @@
       p.shares -= n; p.costBasis -= c; if (p.shares < EPS) { p.shares = 0; p.costBasis = 0; p.lots = []; } return c;
     };
     const add = (p, n, cost, t) => { p.shares += n; p.costBasis += cost; if (method === "fifo") p.lots.push({ date: t.date, id: t.id, shares: n, cost }); };
-    for (const r of order) {
-      const t = r.tx; if (!t || r.errors.length) continue;
+
+    for (const item of items) {
+      if (item.isAnchor) {
+        const { sym, B, isFirstAnchor } = item;
+        const p = posOf({ symbol: sym, market: B.market, currency: B.currency, date: B.date }, sym);
+        const prevShares = p.shares, prevCost = p.costBasis;
+        if (isFirstAnchor || !p.firstSnapshotDate) {
+          p.firstDate = B.date;
+          p.firstSnapshotDate = B.date; p.firstSnapshotShares = B.shares; p.firstSnapshotAvgCost = B.avgCost ?? null; p.firstSnapshotOrigin = B.origin || "import";
+        }
+        p.hasSnapshot = true; p.snapshotDate = B.date; p.snapshotId = B.id; p.snapshotOrigin = B.origin || "import"; p.snapshotScope = B.scope || "partial"; p.snapshotShares = B.shares; p.snapshotAvgCost = B.avgCost ?? null;
+        if (B.origin === "full_snapshot_close") {
+          const deltaShares = isFirstAnchor ? 0 : r2(0 - prevShares);
+          p.shares = 0; p.costBasis = 0; p.lots = [];
+          p.history.push({ date: B.date, id: B.id, type: "snapshot", origin: "full_snapshot_close", shares: 0, costBasis: 0, avgCost: null, isSnapshot: true, isFirstSnapshot: !!isFirstAnchor, deltaShares, deltaCost: isFirstAnchor ? 0 : r2(0 - prevCost) });
+        } else if (isNum(B.shares) && B.shares > 0 && isNum(B.avgCost) && B.avgCost > 0) {
+          const initCost = r2(B.shares * B.avgCost);
+          const deltaShares = isFirstAnchor ? 0 : r2(B.shares - prevShares);
+          p.shares = B.shares; p.costBasis = initCost;
+          p.lots = method === "fifo" ? [{ date: B.date, id: B.id, shares: B.shares, cost: initCost, isSnapshot: true }] : [];
+          p.history.push({ date: B.date, id: B.id, type: "snapshot", shares: B.shares, costBasis: initCost, avgCost: B.avgCost, isSnapshot: true, isFirstSnapshot: !!isFirstAnchor, deltaShares, deltaCost: isFirstAnchor ? 0 : r2(initCost - prevCost) });
+        }
+        continue;
+      }
+      const r = item.r, t = r.tx; if (!t || r.errors.length) continue;
+      if (r.preSnapshot) {
+        if (!r.mergedInto) {
+          const p = t.symbol ? posOf(t) : r.feeSymbol ? posOf(t, r.feeSymbol) : null;
+          if (p && t.type !== "fee") p.history.push({ date: t.date, id: t.id, type: t.type, shares: 0, costBasis: 0, avgCost: null, preSnapshot: true });
+        }
+        r.applied = false; continue;
+      }
+      if (r.sameDayRelation === "unresolved") {
+        if (!r.mergedInto) {
+          const p = t.symbol ? posOf(t) : r.feeSymbol ? posOf(t, r.feeSymbol) : null;
+          if (p && t.type !== "fee") p.history.push({ date: t.date, id: t.id, type: t.type, shares: p.shares, costBasis: r2(p.costBasis), avgCost: p.shares > EPS ? p.costBasis / p.shares : null, unresolved: true });
+        }
+        r.applied = false; continue;
+      }
       if (r.mergedInto) { r.applied = true; continue; } // 已經併進對應的買賣（成本或已實現損益裡）
       const cur = t.currency, p = t.symbol ? posOf(t) : r.feeSymbol ? posOf(t, r.feeSymbol) : null;
       if (t.type === "buy") { const cost = t.shares * t.price + t.fee + t.tax; add(p, t.shares, cost, t); p.fees += t.fee; p.taxes += t.tax; C(cur).balance -= cost; const S = T(cur); S.fees += t.fee; S.taxes += t.tax; S.bought += t.shares * t.price; snap(p, t); }
@@ -152,7 +357,7 @@
       }
       else if (t.type === "dividend") { const net = t.amount - t.tax; p.dividends += net; p.taxes += t.tax; C(cur).balance += net; const S = T(cur); S.dividends += net; S.taxes += t.tax;
         if (p.shares < EPS) r.warnings.push({ code: "dividend_without_position", message: "領股息時沒有持股（賣出後才發放的話可以忽略）" }); snap(p, t, { dividend: r2(net) }); }
-      else if (t.type === "stock_dividend") { // 配股成本 0，平均成本下降；有填配股率時和持股核對（台股不足一股的部分通常發現金，所以用無條件捨去比較）
+      else if (t.type === "stock_dividend") {
         if (p.shares < EPS) r.warnings.push({ code: "stock_dividend_without_position", message: "配股時沒有持股" });
         else if (isNum(t.ratio)) { const exp = p.shares * t.ratio, lo = t.market === "tw" ? Math.floor(exp + EPS) : exp; if (Math.abs(t.shares - lo) > Math.max(1, lo * 0.001) && Math.abs(t.shares - exp) > 1e-6) r.warnings.push({ code: "stock_dividend_mismatch", message: `依配股率應該約 ${+lo.toFixed(4)} 股，填的是 ${t.shares} 股，請對照券商入帳` }); }
         add(p, t.shares, 0, t); snap(p, t); }
@@ -163,12 +368,12 @@
         if (t.market === "tw" && frac > 1e-6) { p.fraction = frac; r.warnings.push({ code: "fractional_after_split", message: `合股後有 ${+frac.toFixed(6)} 股不足一股，要再記一筆「零股現金結算」；結算前這部分標為待確認` }); }
         snap(p, t);
       }
-      else if (t.type === "fraction_cash") { // 零股換現金：拿掉這些股數的成本，拿到的現金和成本的差是已實現損益
+      else if (t.type === "fraction_cash") {
         if (t.shares > p.shares + EPS) { r.errors.push({ code: "oversell", message: `結算 ${t.shares} 股，但當時只持有 ${+p.shares.toFixed(6)} 股` }); continue; }
         const net = t.amount - t.fee - t.tax, cost = take(p, t.shares), pnl = net - cost; p.realizedPnl += pnl; p.fees += t.fee; p.taxes += t.tax; C(cur).balance += net;
         const S = T(cur); S.realizedPnl += pnl; S.fees += t.fee; S.taxes += t.tax; p.fraction = Math.max(0, p.fraction - t.shares); if (p.fraction < 1e-6) p.fraction = 0; snap(p, t, { realized: r2(pnl) });
       }
-      else if (t.type === "transfer_in") { add(p, t.shares, t.shares * t.price + t.fee, t); p.fees += t.fee; T(cur).fees += t.fee; snap(p, t); } // 外部轉入：不動現金，成本用填的每股成本
+      else if (t.type === "transfer_in") { add(p, t.shares, t.shares * t.price + t.fee, t); p.fees += t.fee; T(cur).fees += t.fee; snap(p, t); }
       else if (t.type === "transfer_out") {
         if (t.shares > p.shares + EPS) { r.errors.push({ code: "over_transfer", message: `轉出 ${t.shares} 股，但當時只持有 ${+p.shares.toFixed(6)} 股` }); continue; }
         take(p, t.shares); snap(p, t);
@@ -176,7 +381,7 @@
       else if (t.type === "deposit") { const c = C(cur); c.balance += t.amount; c.deposits += t.amount; c.tracked = true; }
       else if (t.type === "withdraw") { const c = C(cur); c.balance -= t.amount; c.withdrawals += t.amount; c.tracked = true; }
       else if (t.type === "fee") { C(cur).balance -= t.amount; T(cur).fees += t.amount; if (p) p.fees += t.amount; }
-      else if (t.type === "other" && !p) { if (isNum(t.amount)) C(cur).balance += t.amount; r.warnings.push({ code: "other_action", message: "其他公司行動（只有金額）：只記現金，請確認" }); } // 純現金，沒有對應的持股
+      else if (t.type === "other" && !p) { if (isNum(t.amount)) C(cur).balance += t.amount; r.warnings.push({ code: "other_action", message: "其他公司行動（只有金額）：只記現金，請確認" }); }
       else if (t.type === "other") {
         if (isNum(t.shares) && t.shares < 0 && -t.shares > p.shares + EPS) { r.errors.push({ code: "oversell", message: "股數減少超過持有數量" }); continue; }
         if (isNum(t.shares) && t.shares > 0) add(p, t.shares, 0, t); else if (isNum(t.shares) && t.shares < 0) take(p, -t.shares);
@@ -185,27 +390,72 @@
       }
       r.applied = true;
     }
+
     for (const c of Object.values(cash)) if (c.tracked && c.balance < -0.005) c.negative = true;
-    const positions = [...pos.values()].map(p => { const price = priceOf(p.symbol), mv = price != null && p.shares > EPS ? p.shares * price : p.shares > EPS ? null : 0;
-      return { symbol: p.symbol, market: p.market, currency: p.currency, shares: +p.shares.toFixed(6), costBasis: r2(p.costBasis), avgCost: p.shares > EPS ? p.costBasis / p.shares : null,
+    const openConflicts = withReconcile && Array.isArray(reconStore?.conflicts) ? reconStore.conflicts.filter(c => c && c.status === "open") : [];
+    const positions = [...pos.values()].map(p => {
+      const price = priceOf(p.symbol), mv = price != null && p.shares > EPS ? p.shares * price : p.shares > EPS ? null : 0;
+      const pending = p.fraction > 1e-6 ? [{ code: "fraction_unsettled", shares: +p.fraction.toFixed(6), message: "合股後不足一股的部分還沒結算，股數與成本是暫時的" }] : [];
+      if (withReconcile) {
+        for (const c of openConflicts) {
+          if (symbolOf(c.symbol) !== p.symbol) continue;
+          pending.push({ code: c.kind || "recon_diff", conflictId: c.id, shares: c.diffShares ?? c.targetShares ?? null, baselineShares: c.baselineShares ?? null, targetShares: c.targetShares ?? null, diffShares: c.diffShares ?? null, market: c.market || p.market, message: c.message || (c.kind === "recon_diff" ? `對帳差異 ${c.diffShares ?? ""} 股` : "待對帳項目") });
+        }
+        const u = unresolvedBySym.get(p.symbol);
+        if (u && !pending.some(x => x.code === "same_day_order")) {
+          pending.push({ code: "same_day_order", shares: u.shares, count: u.count, market: p.market, message: `有 ${u.count} 筆與快照同日（${p.snapshotDate}）的交易尚未決定在快照前或後` });
+        }
+      }
+      const basePos = { symbol: p.symbol, market: p.market, currency: p.currency, shares: +p.shares.toFixed(6), costBasis: r2(p.costBasis), avgCost: p.shares > EPS ? p.costBasis / p.shares : null,
         lastPrice: price, marketValue: mv == null ? null : r2(mv), unrealizedPnl: mv == null ? null : r2(mv - p.costBasis), realizedPnl: r2(p.realizedPnl), dividends: r2(p.dividends), fees: r2(p.fees), taxes: r2(p.taxes),
-        open: p.shares > EPS, pending: p.fraction > 1e-6 ? [{ code: "fraction_unsettled", shares: +p.fraction.toFixed(6), message: "合股後不足一股的部分還沒結算，股數與成本是暫時的" }] : [], lots: method === "fifo" ? p.lots.map(L => ({ date: L.date, id: L.id, shares: +L.shares.toFixed(6), cost: r2(L.cost) })) : null, firstDate: p.firstDate, history: p.history }; })
-      .sort((a, b) => (b.open - a.open) || a.symbol.localeCompare(b.symbol));
+        open: p.shares > EPS, pending, lots: method === "fifo" ? p.lots.map(L => ({ date: L.date, id: L.id, shares: +L.shares.toFixed(6), cost: r2(L.cost) })) : null, firstDate: p.firstDate, history: p.history };
+      if (!withReconcile) return basePos;
+      return { ...basePos, hasSnapshot: !!p.hasSnapshot, snapshotDate: p.snapshotDate, snapshotId: p.snapshotId, snapshotOrigin: p.snapshotOrigin, snapshotScope: p.snapshotScope, snapshotShares: p.snapshotShares, snapshotAvgCost: p.snapshotAvgCost, firstSnapshotDate: p.firstSnapshotDate, firstSnapshotShares: p.firstSnapshotShares, firstSnapshotAvgCost: p.firstSnapshotAvgCost, firstSnapshotOrigin: p.firstSnapshotOrigin };
+    }).sort((a, b) => (b.open - a.open) || a.symbol.localeCompare(b.symbol));
     for (const S of Object.values(totals)) for (const k of Object.keys(S)) S[k] = r2(S[k]);
     for (const c of Object.values(cash)) { c.balance = r2(c.balance); c.deposits = r2(c.deposits); c.withdrawals = r2(c.withdrawals); }
-    const txs = rows.map(r => ({ index: r.i, id: r.tx?.id ?? null, tx: r.tx, applied: !!r.applied, errors: r.errors, warnings: r.warnings }));
+    const txs = rows.map(r => {
+      const base = { index: r.i, id: r.tx?.id ?? null, tx: r.tx, applied: !!r.applied, errors: r.errors, warnings: r.warnings };
+      if (r.mergedInto) base.mergedInto = r.mergedInto;
+      if (withReconcile) { base.preSnapshot = !!r.preSnapshot; base.sameDayRelation = r.sameDayRelation ?? null; }
+      return base;
+    });
     const bad = txs.filter(x => x.errors.length).length;
     const pend = positions.filter(p => p.pending.length).length;
-    return { v: VERSION, method, methodLabel: METHODS[method], status: !txs.length ? "empty" : bad ? "has_errors" : pend ? "needs_confirm" : "ok", errorCount: bad, pendingCount: pend, positions, cash, totals,
-      txs: txs.map(x => (rows[x.index].mergedInto ? { ...x, mergedInto: rows[x.index].mergedInto } : x)) };
+    if (!withReconcile) {
+      return { v: VERSION, method, methodLabel: METHODS[method], status: !txs.length ? "empty" : bad ? "has_errors" : pend ? "needs_confirm" : "ok", errorCount: bad, pendingCount: pend, positions, cash, totals, txs };
+    }
+    const pendingSet = new Set();
+    for (const p of positions) if (p.pending.length) pendingSet.add(p.symbol);
+    for (const c of openConflicts) { const s = symbolOf(c.symbol); if (s) pendingSet.add(s); }
+    for (const s of unresolvedBySym.keys()) pendingSet.add(s);
+    const unresolvedSameDayCount = txs.filter(x => x.sameDayRelation === "unresolved").length;
+    const status = !txs.length && !baselines.size ? "empty" : bad ? "has_errors" : (pend || openConflicts.length || unresolvedSameDayCount) ? "needs_confirm" : "ok";
+    return {
+      v: VERSION, method, methodLabel: METHODS[method], status, errorCount: bad, pendingCount: pend, positions, cash, totals, txs,
+      reconcile: { hasSnapshot: baselines.size > 0, snapshotCount: baselines.size, openConflicts, pendingSymbols: [...pendingSet].sort(), unresolvedSameDayCount, staleTags }
+    };
   }
 
+  // 整本帳：依日期排序（同一天公司行動先、其他照輸入順序），逐筆套用；錯誤的交易不套用並列出原因。
+  function buildLedger(list, opts = {}) { return computeLedger(list, null, opts, false); }
+  // 統一對帳計算入口：結合 kline:pf:v1（或交易陣列）與 kline:pf:recon:v1，強制基準期初與市場別約束
+  function buildReconciledLedger(txStoreOrList, reconStore, opts = {}) { return computeLedger(txStoreOrList, reconStore, opts, true); }
+
   // 新增交易前的檢查：把 tx 加進現有交易後重算，回傳這筆的錯誤與提醒（不改動傳進來的陣列）
-  function previewAdd(list, tx, opts = {}) { const L = buildLedger([...(Array.isArray(list) ? list : []), tx], opts), me = L.txs[L.txs.length - 1]; return { ok: !me.errors.length, errors: me.errors, warnings: me.warnings, ledger: L }; }
+  function previewAdd(list, tx, opts = {}) {
+    const arr = [...(Array.isArray(list) ? list : (list?.transactions || [])), tx];
+    const L = opts.recon ? buildReconciledLedger(arr, opts.recon, opts) : buildLedger(arr, opts);
+    const me = L.txs[L.txs.length - 1];
+    return { ok: !me.errors.length, errors: me.errors, warnings: me.warnings, ledger: L };
+  }
   // 刪除交易的影響範圍：同一代號、在它之後的交易有哪些會改變（成本、已實現損益），以及刪掉後會不會出現賣超
   function deleteImpact(list, id, opts = {}) {
-    const arr = Array.isArray(list) ? list : [], t = arr.find(x => x && x.id === id); if (!t) return { ok: false, code: "not_found" };
-    const before = buildLedger(arr, opts), after = buildLedger(arr.filter(x => x !== t), opts);
+    const arr = Array.isArray(list) ? list : (list?.transactions || []), t = arr.find(x => x && x.id === id); if (!t) return { ok: false, code: "not_found" };
+    const rBefore = opts.reconBefore !== undefined ? opts.reconBefore : opts.recon;
+    const rAfter = opts.reconAfter !== undefined ? opts.reconAfter : opts.recon;
+    const before = rBefore ? buildReconciledLedger(arr, rBefore, opts) : buildLedger(arr, opts);
+    const after = rAfter ? buildReconciledLedger(arr.filter(x => x !== t), rAfter, opts) : buildLedger(arr.filter(x => x !== t), opts);
     const affected = t.symbol ? arr.filter(x => x && x !== t && symbolOf(x.symbol) === symbolOf(t.symbol) && String(x.date) >= String(t.date)).map(x => x.id) : [];
     const newErrors = after.txs.filter(x => x.errors.length && !before.txs.find(y => y.id === x.id && y.errors.length)).map(x => ({ id: x.id, errors: x.errors }));
     const pb = before.positions.find(p => p.symbol === symbolOf(t.symbol)), pa = after.positions.find(p => p.symbol === symbolOf(t.symbol));
@@ -255,7 +505,7 @@
     if (s.v !== VERSION) return { ok: false, code: "unsupported_version", v: s.v };
     if (s.method !== "avg" && s.method !== "fifo") return { ok: false, code: "invalid_method" };
     if (!Array.isArray(s.transactions)) return { ok: false, code: "invalid_transactions" };
-    const L = buildLedger(s.transactions, { ...opts, method: s.method });
+    const L = opts.recon != null ? buildReconciledLedger(s, opts.recon, { ...opts, method: s.method }) : buildLedger(s.transactions, { ...opts, method: s.method });
     return { ok: L.errorCount === 0, code: L.errorCount ? "has_errors" : "ok", errors: L.txs.filter(x => x.errors.length).map(x => ({ index: x.index, id: x.id, errors: x.errors })), ledger: L };
   }
 
@@ -266,32 +516,51 @@
     const rows = (Array.isArray(transactions) ? transactions : []).slice().sort((a, b) => String(a?.date).localeCompare(String(b?.date)));
     return "\ufeff" + [CSV_COLS.map(c => c[1]).join(","), ...rows.map(t => CSV_COLS.map(([k]) => cell(k, t?.[k])).join(","))].join("\r\n") + "\r\n";
   }
-  // 備份檔裡的投資組合資料檢查（匯入前用）：data＝{ 存檔鍵: JSON 字串 }。交易紀錄跑 validateStore；融資帳戶檢查格式與版本（有 KLMargin 時跑它的 validateStore）。
-  // 回傳 { ok, items: [{ key, label, ok, problems, summary }] }；任何一項不通過，整份都不要匯入
+  // 備份檔裡的投資組合資料檢查（匯入前用）：鍵序無關，若存在 kline:pf:recon:v1 必須優先解析並驗證，通過才帶入 kline:pf:v1 檢查。
   function checkBackup(data, opts = {}) {
     const items = [], parse = v => { try { return { ok: true, v: JSON.parse(v) }; } catch { return { ok: false }; } };
+    const hasRecon = Object.prototype.hasOwnProperty.call(data || {}, "kline:pf:recon:v1");
+    let reconOk = false, parsedRecon = null;
+    if (hasRecon) {
+      const pr = parse(data["kline:pf:recon:v1"]);
+      if (!pr.ok) {
+        items.push({ key: "kline:pf:recon:v1", label: "對帳快照", ok: false, problems: ["不是正確的 JSON"] });
+      } else if (!(opts.recon && typeof opts.recon.validateStore === "function")) {
+        items.push({ key: "kline:pf:recon:v1", label: "對帳快照", ok: false, problems: ["沒有對帳快照的檢查程式，為了安全不匯入"] });
+      } else {
+        const vr = opts.recon.validateStore(pr.v, { today: opts.today, rejectPendingCommit: true });
+        const summary = { snapshots: Array.isArray(pr.v?.snapshots) ? pr.v.snapshots.length : 0, conflicts: Array.isArray(pr.v?.conflicts) ? pr.v.conflicts.filter(c => c && c.status === "open").length : 0 };
+        if (!vr.ok) {
+          items.push({ key: "kline:pf:recon:v1", label: "對帳快照", ok: false, code: vr.code, problems: [vr.error || vr.code], summary });
+        } else {
+          reconOk = true; parsedRecon = pr.v;
+          items.push({ key: "kline:pf:recon:v1", label: "對帳快照", ok: true, problems: [], summary });
+        }
+      }
+    }
     for (const [key, raw] of Object.entries(data || {})) {
+      if (key === "kline:pf:recon:v1") continue;
       if (key === STORE_KEY) {
         const p = parse(raw); if (!p.ok) { items.push({ key, label: "交易紀錄", ok: false, problems: ["不是正確的 JSON"] }); continue; }
-        const v = validateStore(p.v, { today: opts.today });
+        const vOpts = { today: opts.today };
+        if (hasRecon && reconOk) vOpts.recon = parsedRecon;
+        else if (!hasRecon && opts.reconStore) vOpts.recon = opts.reconStore;
+        const v = validateStore(p.v, vOpts);
         const tx = Array.isArray(p.v?.transactions) ? p.v.transactions : [], ds = tx.map(t => t?.date).filter(Boolean).sort();
         items.push({ key, label: "交易紀錄", ok: v.ok, problems: v.ok ? [] : [v.code === "has_errors" ? `${v.errors.length} 筆交易有錯誤（例如：${v.errors[0].errors[0].message}）` : v.code === "unsupported_version" ? `版本 ${p.v?.v} 不支援（這版只認得 ${VERSION}）` : v.code],
           summary: { transactions: tx.length, from: ds[0] || null, to: ds[ds.length - 1] || null, method: p.v?.method || null } });
       } else if (key === "kline:pf:margin:v1") {
         const p = parse(raw); if (!p.ok) { items.push({ key, label: "融資帳戶", ok: false, problems: ["不是正確的 JSON"] }); continue; }
-        // 一定要用融資模組的完整檢查（借款、利率、擔保品、門檻…）；沒有檢查程式就不接受，不降級成只看版本
         const M = opts.margin; let ok = p.v && p.v.v === 1 && Array.isArray(p.v.accounts), problems = ok ? [] : ["格式或版本不對"];
         if (ok && !(M && typeof M.validateStore === "function")) { ok = false; problems = ["沒有融資資料的檢查程式，為了安全不匯入"]; }
         else if (ok) { const r = M.validateStore(p.v); if (!r.ok) { ok = false; problems = [`${new Set(r.errors.map(e => e.i)).size} 個帳戶資料不對（例如：${r.errors[0].code}）`]; } }
         items.push({ key, label: "融資帳戶", ok, problems, summary: { accounts: Array.isArray(p.v?.accounts) ? p.v.accounts.length : 0 } });
       } else if (key === "kline:pf:targets:v1") {
-        // 目標配置：用再平衡模組的完整檢查；沒有檢查程式就不接受
         const p = parse(raw); if (!p.ok) { items.push({ key, label: "目標配置", ok: false, problems: ["不是正確的 JSON"] }); continue; }
         const Rb = opts.rebal; let ok = !!(Rb && typeof Rb.validateStore === "function"), problems = ok ? [] : ["沒有目標配置的檢查程式，為了安全不匯入"];
         if (ok) { const r = Rb.validateStore(p.v); if (!r.ok) { ok = false; problems = [`目標配置資料不對（${r.errors[0]?.code || r.code} ${r.errors[0]?.error || ""}）`]; } }
         items.push({ key, label: "目標配置", ok, problems, summary: { items: p.v && p.v.targets && typeof p.v.targets === "object" ? Object.keys(p.v.targets).length : 0 } });
       } else if (key === "kline:pf:thesis:v1") {
-        // 投資論點：一樣要用論點模組的完整檢查；沒有檢查程式就不接受
         const p = parse(raw); if (!p.ok) { items.push({ key, label: "投資論點", ok: false, problems: ["不是正確的 JSON"] }); continue; }
         const Th = opts.thesis; let ok = !!(Th && typeof Th.validateStore === "function"), problems = ok ? [] : ["沒有投資論點的檢查程式，為了安全不匯入"];
         if (ok) { const r = Th.validateStore(p.v); if (!r.ok) { ok = false; problems = [r.errors.length ? `${r.errors.length} 檔的論點資料不對（例如：${r.errors[0].code} ${r.errors[0].errors[0]}）` : `格式或版本不對（${r.code}）`]; } }
@@ -305,12 +574,14 @@
   const inferMkt = (sym, fn) => { const m = typeof fn === "function" ? fn(sym) : (/^\d{4,6}[A-Z]?$/.test(sym) ? "tw" : /^[A-Z][A-Z0-9]{0,5}([.-][A-Z]{1,3})?$/.test(sym) ? "us" : null); return m === "tw" || m === "us" ? m : null; };
   const cleanNum = v => { if (v === null || v === undefined || (typeof v === "string" && !v.trim())) return null; const s = typeof v === "string" ? v.trim().replace(/,/g, "") : v; const n = typeof s === "number" || typeof s === "string" ? Number(s) : NaN; return Number.isFinite(n) ? n : NaN; };
 
-  // 選項 1（持股截圖 → 股票轉入 transfer_in）：先比對現有帳本（kline:pf:v1）未平倉部位；
-  // 同一代號若目前已有持股，預設不勾選（on: false）並標示帳本已有股數，以免重複計算；未持有的預設勾選。不改動傳入資料。
+  // 選項 1（持股截圖 → 股票轉入 transfer_in）：先比對現有帳本未平倉部位（含已確認快照）；
   function prepareHoldingsImport(rows, existingTxs = [], opts = {}) {
     const today = validDate(opts.today) ? opts.today : defaultToday();
     const existingArr = Array.isArray(existingTxs) ? existingTxs : [];
-    const base = buildLedger(existingArr, { method: opts.method, today, rules: opts.rules });
+    const runner = seqTxs => opts.recon
+      ? buildReconciledLedger(seqTxs, opts.recon, { method: opts.method, today, rules: opts.rules })
+      : buildLedger(seqTxs, { method: opts.method, today, rules: opts.rules });
+    const base = runner(existingArr);
     const openMap = new Map(base.positions.filter(p => p.open && p.shares > EPS).map(p => [p.symbol, p]));
     const items = (Array.isArray(rows) ? rows : []).map((raw, i) => {
       const sym = symbolOf(raw?.symbol ?? raw?.code);
@@ -339,7 +610,7 @@
       return { index: i, raw, on, duplicateOpen, existingShares, skipReason, dateAssumed, symbol: sym, name: typeof raw?.name === "string" ? raw.name.trim() : "", shares: tx.shares, price: tx.price, date, market, currency, how: typeof raw?.how === "string" ? raw.how : "", errors: [], warnings: [], tx };
     });
     const enabled = items.filter(it => it.on);
-    const combined = buildLedger([...existingArr, ...enabled.map(it => it.tx)], { method: opts.method, today, rules: opts.rules });
+    const combined = runner([...existingArr, ...enabled.map(it => it.tx)]);
     const byId = new Map(combined.txs.slice(existingArr.length).map(x => [x.id, x]));
     const newErrors = [];
     for (let k = 0; k < existingArr.length; k++) {
@@ -390,16 +661,26 @@
   }
 
   // 選項 2（成交明細／對帳單截圖 → buy／sell）：保留空白 fee/tax 為 null（觸發估算，explicit 0 維持 0），
-  // 僅依「不同日期」或同一天「可驗證成交時間（互斥區間）／序號」排序；沒有時間的同日買賣不自動反轉以免掩蓋賣超，須明確確認或補時間後才可存檔。
+  // 僅比對新匯入列與既有帳本（含 preSnapshot），絕不將同批截圖的兩筆分批成交誤報重複。
   function prepareTradesImport(rows, existingTxs = [], opts = {}) {
     const today = validDate(opts.today) ? opts.today : defaultToday();
     const existingArr = Array.isArray(existingTxs) ? existingTxs : [];
-    const base = buildLedger(existingArr, { method: opts.method, today, rules: opts.rules });
-    const existingCore = new Set(existingArr.map(t => {
+    const runner = seqTxs => opts.recon
+      ? buildReconciledLedger(seqTxs, opts.recon, { method: opts.method, today, rules: opts.rules })
+      : buildLedger(seqTxs, { method: opts.method, today, rules: opts.rules });
+    const base = runner(existingArr);
+    const baselines = opts.recon ? getActiveBaselines(opts.recon) : new Map();
+    const existingByCore = new Map();
+    for (const t of existingArr) {
       const sym = symbolOf(t?.symbol), sh = cleanNum(t?.shares), px = cleanNum(t?.price);
-      return t && (t.type === "buy" || t.type === "sell") && validDate(t.date) && sym && isNum(sh) && isNum(px)
-        ? [t.date, t.type, sym, sh, px].join("|") : null;
-    }).filter(Boolean));
+      if (t && (t.type === "buy" || t.type === "sell") && validDate(t.date) && sym && isNum(sh) && isNum(px)) {
+        const key = [t.date, t.type, sym, sh, px].join("|");
+        const ts = parseTimeSpan(t.time);
+        const list = existingByCore.get(key) || [];
+        list.push({ time: ts.present && ts.valid ? ts.text : null, note: typeof t.note === "string" ? t.note.trim() : "" });
+        existingByCore.set(key, list);
+      }
+    }
     const timeMeta = new Map(), seqMeta = new Map();
     const items = (Array.isArray(rows) ? rows : []).map((raw, i) => {
       const on = raw?.on !== false;
@@ -409,8 +690,8 @@
       const currency = market ? CURRENCY[market] : null;
       const dRaw = raw?.date;
       const daIn = raw?.dateAssumed;
-      const dateAssumed = daIn === "invalid" ? "invalid" : dRaw == null ? (daIn || "today") : (daIn === "year" || daIn === "today" || daIn === "mdy" ? daIn : null);
-      const date = dateAssumed === "invalid" ? "" : (dRaw == null ? today : typeof dRaw === "string" ? dRaw.trim() : "");
+      const dateAssumed = daIn === "invalid" ? "invalid" : daIn === "missing" ? "missing" : dRaw == null ? (daIn || "today") : (daIn === "year" || daIn === "today" || daIn === "mdy" ? daIn : null);
+      const date = (dateAssumed === "invalid" || dateAssumed === "missing") ? "" : (dRaw == null ? today : typeof dRaw === "string" ? dRaw.trim() : "");
       const altDate = typeof raw?.altDate === "string" ? raw.altDate.trim() : "";
       const rawDate = typeof raw?.rawDate === "string" ? raw.rawDate.trim() : "";
       const rawTime = typeof raw?.rawTime === "string" ? raw.rawTime.trim() : "";
@@ -437,7 +718,7 @@
         ...(dayTrade ? { dayTrade: true } : {}),
         note, source
       };
-      const it = { index: i, raw, on, dateAssumed, ...(altDate ? { altDate } : {}), ...(rawDate ? { rawDate } : {}), time, timeInvalid, type: side, symbol: sym, name: typeof raw?.name === "string" ? raw.name.trim() : "", shares: tx.shares, price: tx.price, fee: tx.fee, tax: tx.tax, dayTrade, date, market, currency, errors: [], warnings: [], tx, computed: null };
+      const it = { index: i, raw, on, dateAssumed, ...(altDate ? { altDate } : {}), ...(rawDate ? { rawDate } : {}), time, timeInvalid, type: side, symbol: sym, name: typeof raw?.name === "string" ? raw.name.trim() : "", shares: tx.shares, price: tx.price, fee: tx.fee, tax: tx.tax, dayTrade, date, market, currency, errors: [], warnings: [], tx, computed: null, reconcileHint: null };
       timeMeta.set(it, ts);
       seqMeta.set(it, seq);
       return it;
@@ -492,7 +773,7 @@
       }
     }
 
-    const sim = seq => buildLedger([...existingArr, ...seq.map(it => it.tx)], { method: opts.method, today, rules: opts.rules });
+    const sim = seq => runner([...existingArr, ...seq.map(it => it.tx)]);
     const combined = sim(ordered);
     const byId = new Map(combined.txs.slice(existingArr.length).map(x => [x.id, x]));
     const newErrors = [];
@@ -505,17 +786,38 @@
     for (const it of items) {
       const res = it.on ? byId.get(it.tx.id) : checkTx(it.tx, { today, rules: opts.rules });
       it.errors = res?.errors ? res.errors.slice() : [];
-      it.warnings = res?.warnings ? res.warnings.slice() : [];
+      it.warnings = res?.warnings ? res.warnings.filter(w => w.code !== "possible_duplicate") : [];
       it.computed = res?.tx || null;
+      if (it.dateAssumed === "missing" && !validDate(it.date)) {
+        it.errors = it.errors.filter(e => e.code !== "invalid_date");
+        it.errors.push({ code: "missing_date", message: "這筆交易沒有日期，請補填或套用截圖基準日" });
+      }
       if (it.dateAssumed === "mdy" && validDate(it.date)) {
         it.errors.push({ code: "unconfirmed_date_format", message: it.altDate ? `截圖日期「${it.rawDate || it.date}」可能是月/日（${it.date}）或日/月（${it.altDate}），請確認或切換` : `截圖日期「${it.rawDate || it.date}」格式可能有歧義，請確認日期` });
       }
       if (it.timeInvalid) {
         it.errors.push({ code: "invalid_time", message: "成交時間格式不正確（請填 HH:MM 或 HH:MM:SS，或留空）" });
       }
+      if (opts.recon && it.symbol && validDate(it.date)) {
+        const B = baselines.get(it.symbol);
+        if (B) {
+          if (it.date < B.date) it.reconcileHint = "pre_snapshot";
+          else if (it.date === B.date) {
+            const rel = res?.sameDayRelation;
+            it.reconcileHint = (rel === "before_snapshot" || rel === "after_snapshot") ? "post_snapshot" : "same_day_order";
+          } else it.reconcileHint = "post_snapshot";
+        }
+      }
       if (it.on) {
-        if ((it.tx.fee == null || it.tx.tax == null) && it.symbol && isNum(it.shares) && isNum(it.price) && existingCore.has([it.date, it.type, it.symbol, it.shares, it.price].join("|")) && !it.warnings.some(w => w.code === "possible_duplicate")) {
-          it.warnings.push({ code: "possible_duplicate", message: "帳本裡同一天已有相同代號、方向、股數與價格的交易，請確認不是重複匯入" });
+        if (it.symbol && validDate(it.date) && isNum(it.shares) && isNum(it.price)) {
+          const hits = existingByCore.get([it.date, it.type, it.symbol, it.shares, it.price].join("|")) || [];
+          const ts = timeMeta.get(it), curTime = ts?.present && ts.valid ? ts.text : null, curNote = it.tx.note || "";
+          const dupHit = hits.some(ex => {
+            if (curTime && ex.time && curTime !== ex.time) return false;
+            if (curNote && ex.note && curNote !== ex.note) return false;
+            return true;
+          });
+          if (dupHit) it.warnings.push({ code: "possible_duplicate", message: "帳本裡同一天已有相同代號、方向、股數與價格的交易，請確認不是重複匯入" });
         }
         if (it.errors.length) errorCount++;
         if (it.computed?.feeEstimated) feeEstimatedCount++;
@@ -573,5 +875,5 @@
     };
   }
 
-  root.KLLedger = Object.freeze({ toCSV, checkBackup, VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore, prepareHoldingsImport, prepareTradesImport });
+  root.KLLedger = Object.freeze({ toCSV, checkBackup, VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, buildReconciledLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore, prepareHoldingsImport, prepareTradesImport });
 })(typeof window !== "undefined" ? window : globalThis);

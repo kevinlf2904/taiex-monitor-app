@@ -66,7 +66,7 @@ test("績效狀態：合股零股未結算 → 頁面寫出「待確認」；另
   await p.evaluate(tx => { store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "perf" }; W.lgPx = null; W.holdView = "tx"; setLt("hold"); }, T2);
   await p.waitForSelector(".pfcard", { timeout: 30000 });
   const t = await p.evaluate(() => $("#lx").innerText);
-  assert.match(t, /待確認：有部位合股後的零股還沒結算/); assert.match(t, /零股還沒結算/); assert.match(t, /其中另計費用/); assert.match(t, /沒有對應到個股的費用或現金：-5/);
+  assert.match(t, /待確認：有部位合股後的零股未結算/); assert.match(t, /零股還沒結算/); assert.match(t, /其中另計費用/); assert.match(t, /沒有對應到個股的費用或現金：-5/);
   await ctx.close(); assert.deepEqual(errs, []);
 });
 

@@ -300,4 +300,192 @@ test("Issue #303：手續費折扣（1／0.6／0.28）、最低 20 元、部分�
   assert.deepEqual([rLegacy.txs[1].tx.fee, rLegacy.txs[1].tx.tax, rLegacy.txs[1].tx.feeEstimated], [55, 1500, true], "舊資料不靜默清除原 fee 與 tax");
 });
 
+test("Task 3：buildReconciledLedger、sameDayRelations 失效檢查、staleTags 降級、full_snapshot_close 與跨鍵市場衝突", () => {
+  const ctx2 = {};
+  vm.createContext(ctx2);
+  vm.runInContext(readFileSync(new URL("../learner/ledger.js", import.meta.url), "utf8"), ctx2);
+  vm.runInContext(readFileSync(new URL("../learner/recon.js", import.meta.url), "utf8"), ctx2);
+  const L2 = ctx2.KLLedger, R2 = ctx2.KLRecon;
 
+  // 1. 快照 S1 (11/10 1000@900) + 早於快照之補傳明細 + 同日未定序 + 賣光歸零再買回（FIFO 與 AVG）
+  let recon = R2.emptyStore();
+  recon.snapshots.push({ id: "snap1", symbol: "2330", market: "tw", currency: "TWD", date: "2026-11-10", shares: 1000, avgCost: 900, status: "confirmed", confirmedAt: "2026-11-10T09:00:00Z", scope: "partial", origin: "import", supersededBy: null });
+
+  const txs = [
+    tw({ id: "pre1", date: "2026-10-01", type: "buy", shares: 500, price: 800, fee: 0 }),
+    tw({ id: "pre2", date: "2026-10-05", type: "sell", shares: 1000, price: 820, fee: 100 }), // 若無基準會 oversell，有基準不觸發 oversell
+    tw({ id: "prefee", symbol: null, date: "2026-10-01", type: "fee", amount: 50, ref: "pre1" }), // 掛在 preSnapshot 的另計費用也隨之 preSnapshot
+    tw({ id: "sd1", date: "2026-11-10", type: "sell", shares: 200, price: 910, fee: 0 }), // 同日未定序
+    tw({ id: "sellall", date: "2026-11-12", type: "sell", shares: 1000, price: 950, fee: 0, tax: 0 }), // 賣光歸零
+    tw({ id: "rebuy", date: "2026-11-14", type: "buy", shares: 500, price: 920, fee: 0, tax: 0 }), // 再買回
+  ];
+
+  // 未定序同日時：sd1 不異動持股，sellall 賣 1000 歸零，rebuy 買 500
+  const recUnres = L2.buildReconciledLedger({ v: 1, method: "fifo", transactions: txs }, recon, { today: "2026-11-16" });
+  assert.equal(recUnres.errorCount, 0, "快照前賣出不應報 oversell");
+  assert.equal(recUnres.txs.find(x => x.id === "pre1").preSnapshot, true);
+  assert.equal(recUnres.txs.find(x => x.id === "pre2").preSnapshot, true);
+  assert.equal(recUnres.txs.find(x => x.id === "prefee").preSnapshot, true);
+  assert.equal(recUnres.txs.find(x => x.id === "sd1").sameDayRelation, "unresolved");
+  assert.equal(recUnres.reconcile.unresolvedSameDayCount, 1);
+  const pUn = pos(recUnres);
+  assert.equal(pUn.shares, 500);
+  assert.equal(pUn.costBasis, 460000);
+  assert.equal(pUn.realizedPnl, 50000, "950*1000 - 900*1000");
+  assert.equal(recUnres.totals.TWD.fees, 0, "preSnapshot 費用不計入快照後統計");
+  assert.ok(pUn.history[0].preSnapshot === true && pUn.history.some(h => h.type === "snapshot" && h.shares === 1000));
+
+  // 標為 after_snapshot 但 snapshotDate / snapshotId 不符 → 重回 unresolved
+  const badDateRel = R2.cloneStore(recon);
+  badDateRel.sameDayRelations.sd1 = { relation: "after_snapshot", snapshotId: "snap1", snapshotDate: "2026-11-09" };
+  assert.equal(L2.buildReconciledLedger(txs, badDateRel, { method: "fifo", today: "2026-11-16" }).txs.find(x => x.id === "sd1").sameDayRelation, "unresolved");
+
+  const badIdRel = R2.cloneStore(recon);
+  badIdRel.sameDayRelations.sd1 = { relation: "after_snapshot", snapshotId: "snap-other", snapshotDate: "2026-11-10" };
+  assert.equal(L2.buildReconciledLedger(txs, badIdRel, { method: "fifo", today: "2026-11-16" }).txs.find(x => x.id === "sd1").sameDayRelation, "unresolved");
+
+  // 合法 before_snapshot → preSnapshot: true；after_snapshot → 扣掉 200 股造成 11/12 賣 1000 出現 oversell（反映真實影響）
+  const beforeRel = R2.cloneStore(recon);
+  beforeRel.sameDayRelations.sd1 = { relation: "before_snapshot", snapshotId: "snap1", snapshotDate: "2026-11-10" };
+  const recBefore = L2.buildReconciledLedger(txs, beforeRel, { method: "fifo", today: "2026-11-16" });
+  assert.equal(recBefore.txs.find(x => x.id === "sd1").sameDayRelation, "before_snapshot");
+  assert.equal(recBefore.txs.find(x => x.id === "sd1").preSnapshot, true);
+  assert.equal(pos(recBefore).shares, 500);
+
+  const afterRel = R2.cloneStore(recon);
+  afterRel.sameDayRelations.sd1 = { relation: "after_snapshot", snapshotId: "snap1", snapshotDate: "2026-11-10" };
+  const recAfter = L2.buildReconciledLedger(txs, afterRel, { method: "fifo", today: "2026-11-16" });
+  assert.equal(recAfter.txs.find(x => x.id === "sd1").sameDayRelation, "after_snapshot");
+  assert.equal(recAfter.txs.find(x => x.id === "sd1").preSnapshot, false);
+  assert.equal(codes(recAfter.txs.find(x => x.id === "sellall"))[0], "oversell");
+
+  // 2. 孤兒/失效 initialTags 降級為一般交易並列入 staleTags
+  const txTag = tw({ id: "tagtx", date: "2026-11-11", type: "transfer_in", shares: 300, price: 900 });
+  const tagged = R2.tagInitialTx(R2.emptyStore(), txTag, { today: "2026-11-16", snapshotId: "s-t" }).store;
+  const tamperedTx = { ...txTag, type: "buy", shares: 400 };
+  const recStale = L2.buildReconciledLedger([tamperedTx], tagged, { method: "avg", today: "2026-11-16" });
+  assert.equal(recStale.reconcile.staleTags.length, 1);
+  assert.equal(recStale.reconcile.staleTags[0].txId, "tagtx");
+  assert.equal(recStale.txs[0].preSnapshot, false, "失效標籤交易降級為一般交易參與計算");
+
+  // 3. full_snapshot_close 錨定歸零，舊交易保持 preSnapshot，之後買回從 0 重建
+  const closeRecon = R2.emptyStore();
+  closeRecon.snapshots.push({ id: "sclose", symbol: "2330", market: "tw", currency: "TWD", date: "2026-11-12", shares: 0, avgCost: null, status: "confirmed", confirmedAt: "2026-11-12T10:00:00Z", scope: "full", origin: "full_snapshot_close", supersededBy: null });
+  const recClose = L2.buildReconciledLedger([
+    tw({ id: "c1", date: "2026-11-01", type: "buy", shares: 1000, price: 900 }),
+    tw({ id: "c2", date: "2026-11-14", type: "buy", shares: 200, price: 950 }),
+  ], closeRecon, { method: "avg", today: "2026-11-16" });
+  assert.equal(pos(recClose).shares, 200);
+  assert.equal(pos(recClose).costBasis, 190000);
+  assert.equal(recClose.txs[0].preSnapshot, true);
+
+  // 4. 快照與交易同 symbol 跨市場 → currency_conflict
+  const mktRec = L2.buildReconciledLedger([us({ symbol: "2330", date: "2026-11-12", type: "buy", shares: 1, price: 100 })], recon, { method: "avg", today: "2026-11-16" });
+  assert.equal(codes(mktRec.txs[0])[0], "currency_conflict");
+});
+
+test("Task 3：checkBackup 鍵序無關先檢 recon、缺 opts.recon 拒匯與含 pendingCommit 拒匯", () => {
+  const ctx2 = {};
+  vm.createContext(ctx2);
+  vm.runInContext(readFileSync(new URL("../learner/ledger.js", import.meta.url), "utf8"), ctx2);
+  vm.runInContext(readFileSync(new URL("../learner/recon.js", import.meta.url), "utf8"), ctx2);
+  const L2 = ctx2.KLLedger, R2 = ctx2.KLRecon;
+
+  const pfStr = JSON.stringify({
+    v: 1,
+    method: "avg",
+    transactions: [tw({ id: "s-only", date: "2026-11-15", type: "sell", shares: 300, price: 950 })],
+  });
+  const reconBase = R2.emptyStore();
+  reconBase.snapshots.push({ id: "sn1", symbol: "2330", market: "tw", currency: "TWD", date: "2026-11-10", shares: 1000, avgCost: 900, status: "confirmed", confirmedAt: "2026-11-10T09:00:00Z", scope: "partial", origin: "import", supersededBy: null });
+  const reconStr = JSON.stringify(reconBase);
+
+  // 故意將 kline:pf:v1 排在 kline:pf:recon:v1 之前：傳 opts.recon 必通過
+  const okRes = L2.checkBackup({ "kline:pf:v1": pfStr, "kline:pf:recon:v1": reconStr }, { today: "2026-11-16", recon: R2 });
+  assert.equal(okRes.ok, true);
+
+  // 不傳 opts.recon → 必須拒絕
+  const noReconRes = L2.checkBackup({ "kline:pf:v1": pfStr, "kline:pf:recon:v1": reconStr }, { today: "2026-11-16" });
+  assert.equal(noReconRes.ok, false);
+  assert.match(noReconRes.items[0].problems[0], /沒有對帳快照的檢查程式/);
+
+  // recon 含 pendingCommit != null → 必須拒絕並帶 unrecovered_pending_commit
+  const walRecon = { ...reconBase, pendingCommit: { id: "w1", op: "import_trades", at: "2026-11-16T00:00:00Z" } };
+  const walRes = L2.checkBackup({ "kline:pf:v1": pfStr, "kline:pf:recon:v1": JSON.stringify(walRecon) }, { today: "2026-11-16", recon: R2 });
+  assert.equal(walRes.ok, false);
+  assert.equal(walRes.items.find(x => x.key === "kline:pf:recon:v1").code, "unrecovered_pending_commit");
+});
+
+test("第五輪 P1-1：新快照自動晉升（S1→賣出／領息／再買→S2 或 full_snapshot_close）後，前段 realizedPnl、股息、費稅、買賣金額與現金流完整保留", () => {
+  const ctx2 = {};
+  vm.createContext(ctx2);
+  vm.runInContext(readFileSync(new URL("../learner/ledger.js", import.meta.url), "utf8"), ctx2);
+  vm.runInContext(readFileSync(new URL("../learner/recon.js", import.meta.url), "utf8"), ctx2);
+  const L2 = ctx2.KLLedger, R2 = ctx2.KLRecon;
+
+  // S1 = 2026-11-10 2330 1000 股 @900
+  const p1 = R2.planHoldingsSnapshot({
+    store: R2.emptyStore(),
+    txStore: { v: 1, method: "avg", transactions: [] },
+    batchId: "b-s1",
+    asOf: "2026-11-10",
+    asOfStatus: "exact",
+    snapshotScope: "partial",
+    rows: [{ code: "2330", name: "台積電", shares: 1000, avgCost: 900 }],
+    today: "2026-11-16",
+    ledgerLib: L2,
+  });
+  const recon1 = R2.applyHoldingsImport(R2.emptyStore(), p1, { at: "2026-11-10T09:00:00Z" }).store;
+  const txs = [
+    tw({ id: "pre0", date: "2026-11-01", type: "buy", shares: 200, price: 800, fee: 0, tax: 0 }), // 早於 S1：真 preSnapshot
+    tw({ id: "div1", date: "2026-11-11", type: "dividend", amount: 3000, tax: 0 }),
+    tw({ id: "sell1", date: "2026-11-12", type: "sell", shares: 1000, price: 950, fee: 100, tax: 300 }),
+    tw({ id: "buy2", date: "2026-11-14", type: "buy", shares: 500, price: 920, fee: 0, tax: 0 }),
+  ];
+  const pfStore = { v: 1, method: "avg", transactions: txs };
+  const before = L2.buildReconciledLedger(pfStore, recon1, { today: "2026-11-16" });
+  assert.equal(before.errorCount, 0);
+  assert.equal(before.totals.TWD.realizedPnl, 49600); // (950000 - 400) - 900000
+  assert.equal(before.totals.TWD.dividends, 3000);
+  assert.equal(before.totals.TWD.fees, 100);
+  assert.equal(before.totals.TWD.taxes, 300);
+  assert.equal(before.totals.TWD.bought, 460000);
+  assert.equal(before.totals.TWD.sold, 950000);
+
+  // 匯入 2026-11-15 500 股 @920 完全吻合，自動晉升為 S2
+  const p2 = R2.planHoldingsSnapshot({
+    store: recon1,
+    txStore: pfStore,
+    batchId: "b-s2",
+    asOf: "2026-11-15",
+    asOfStatus: "exact",
+    snapshotScope: "partial",
+    rows: [{ code: "2330", name: "台積電", shares: 500, avgCost: 920 }],
+    today: "2026-11-16",
+    ledgerLib: L2,
+  });
+  assert.equal(p2.items[0].level, 1, "與帳本一致應自動晉升 Level 1");
+  const recon2 = R2.applyHoldingsImport(recon1, p2, { at: "2026-11-15T09:00:00Z" }).store;
+  const after = L2.buildReconciledLedger(pfStore, recon2, { today: "2026-11-16" });
+
+  assert.equal(after.errorCount, 0);
+  assert.equal(after.txs.find(x => x.id === "pre0").preSnapshot, true, "早於最早基準 S1 的交易仍為 preSnapshot");
+  assert.equal(after.txs.find(x => x.id === "sell1").preSnapshot, false, "(S1, S2] 期間已套用的賣出不可變 preSnapshot");
+  assert.equal(after.txs.find(x => x.id === "sell1").applied, true);
+  assert.deepEqual(J(after.totals), J(before.totals), "晉升 S2 前後 totals 完全不變");
+  assert.deepEqual(J(after.cash), J(before.cash), "晉升 S2 前後 cash 完全不變");
+  const posAfter = pos(after);
+  assert.equal(posAfter.shares, 500);
+  assert.equal(posAfter.costBasis, 460000);
+  assert.equal(posAfter.realizedPnl, 49600, "個股 realizedPnl 亦完整保留");
+  assert.equal(posAfter.dividends, 3000);
+  assert.equal(posAfter.snapshotDate, "2026-11-15", "最新對帳基準日更新為 S2");
+  assert.equal(posAfter.firstSnapshotDate, "2026-11-10", "最早起算快照基準日保留 S1");
+
+  // FIFO 模式下同樣保留前段損益並將 S2 校準為 500 股 @920
+  const afterFifo = L2.buildReconciledLedger({ ...pfStore, method: "fifo" }, recon2, { method: "fifo", today: "2026-11-16" });
+  assert.equal(afterFifo.totals.TWD.realizedPnl, 49600);
+  assert.equal(pos(afterFifo).shares, 500);
+  assert.equal(pos(afterFifo).lots.length, 1);
+  assert.equal(pos(afterFifo).lots[0].shares, 500);
+});

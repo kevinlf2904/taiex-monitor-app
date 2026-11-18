@@ -18,14 +18,16 @@ function dvData(codes) {
 }
 function renderDivView(S) {
   const head = lgViewSeg(), today = lgToday();
-  const led = KLLedger.buildLedger(S.transactions, { method: S.method, today }), open = led.positions.filter(p => p.open);
+  const recon = typeof lgReconLoad === "function" ? lgReconLoad() : null;
+  const led = KLLedger.buildReconciledLedger(S, recon, { method: S.method, today }), open = led.positions.filter(p => p.open);
+  const reconAlert = typeof lgReconAlertHtml === "function" ? lgReconAlertHtml(recon, led) : "";
   const tw = open.filter(p => p.market === "tw").map(p => p.symbol);
-  if (!open.length) return ($("#lx").innerHTML = head + `<p class="note" style="padding:12px">目前沒有持股。到「交易紀錄」新增買進後，這裡會預估未來 12 個月的股利。</p>`);
-  if (!tw.length) return ($("#lx").innerHTML = head + `<section class="pfcard" data-nofold><h4>股利現金流</h4><p class="note">目前只有美股持股；美股的配息資料這裡還沒有，所以不估。</p></section>`);
-  if (W.off) return ($("#lx").innerHTML = head + `<section class="pfcard" data-nofold><h4>股利現金流</h4><p class="note">需要部署到網站才能查配息紀錄。</p></section>`);
+  if (!open.length) return ($("#lx").innerHTML = head + reconAlert + `<p class="note" style="padding:12px">目前沒有持股。到「交易紀錄」新增買進或匯入庫存快照後，這裡會預估未來 12 個月的股利。</p>`);
+  if (!tw.length) return ($("#lx").innerHTML = head + reconAlert + `<section class="pfcard" data-nofold><h4>股利現金流</h4><p class="note">目前只有美股持股；美股的配息資料這裡還沒有，所以不估。</p></section>`);
+  if (W.off) return ($("#lx").innerHTML = head + reconAlert + `<section class="pfcard" data-nofold><h4>股利現金流</h4><p class="note">需要部署到網站才能查配息紀錄。</p></section>`);
   const X = dvData(tw);
-  if (X.busy) return ($("#lx").innerHTML = head + `<section class="pfcard" data-nofold><h4>股利現金流</h4>${skel("查持股的配息紀錄與除權息公告…", 3)}</section>`);
-  if (X.fail) return ($("#lx").innerHTML = head + `<section class="pfcard" data-nofold><h4>股利現金流</h4><p class="note lgwarn" role="status">配息紀錄這次拿不到${X.msg ? `（${esc(X.msg)}）` : ""}，1 分鐘後自動再試。</p></section>`);
+  if (X.busy) return ($("#lx").innerHTML = head + reconAlert + `<section class="pfcard" data-nofold><h4>股利現金流</h4>${skel("查持股的配息紀錄與除權息公告…", 3)}</section>`);
+  if (X.fail) return ($("#lx").innerHTML = head + reconAlert + `<section class="pfcard" data-nofold><h4>股利現金流</h4><p class="note lgwarn" role="status">配息紀錄這次拿不到${X.msg ? `（${esc(X.msg)}）` : ""}，1 分鐘後自動再試。</p></section>`);
   const P = KLDivCal.plan({ positions: open.map(p => ({ symbol: p.symbol, market: p.market, shares: p.shares })), hist: X.hist, upcoming: X.cal || [], today });
   const m$ = v => lgMoney(v, "TWD"), mLab = m => `${m.slice(0, 4)}/${m.slice(5)}`, mx = Math.max(1, ...P.months.map(m => m.total));
   const tile = (k, v, sub = "") => `<div class="pftile"><span>${k}</span><b>${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
@@ -36,7 +38,7 @@ function renderDivView(S) {
       <span class="dvk dvk-${e.kind}">${e.kind === "announced" ? "已公告" : "預估"}</span><span class="dvamt">${m$(e.amount)}<small class="note">（每股 ${e.perShare} 元 × ${e.shares.toLocaleString()} 股${e.nhi ? `・健保 ${m$(e.nhi)}` : ""}）</small></span></li>`).join("")}</ul>`
     : `<p class="note">未來 12 個月沒有找到配息（持股過去 12 個月都沒有配息，也沒有公告）。</p>`;
   const miss = [P.noData.length && `沒有配息紀錄：${P.noData.map(c => esc(nameOf(c))).join("、")}`, P.skipped.length && `美股不估：${P.skipped.map(c => esc(nameOf(c))).join("、")}`, !X.cal && "除權息公告這次拿不到，全部用預估"].filter(Boolean);
-  $("#lx").innerHTML = head + `<section class="pfcard" data-nofold><h4>股利現金流<small class="note">（未來 12 個月，台股）</small></h4><div class="pftiles">${tiles}</div>
+  $("#lx").innerHTML = head + `<section class="pfcard" data-nofold><h4>股利現金流<small class="note">（未來 12 個月，台股）</small></h4>${reconAlert}<div class="pftiles">${tiles}</div>
     ${miss.length ? `<ul class="note lgwarn alissues">${miss.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
     <h5 class="pfh">每月</h5>${bars}<h5 class="pfh">每次配息</h5>${ev}
     <p class="note">已公告：除權息預告表的金額與除息日。預估：過去 12 個月每一次配息，照「明年同一天、同樣金額」往後推，不估成長或減少；同一檔 45 天內已經公告的就不再估。股數用今天持有的。依除息日排，實際入帳通常晚 3～6 週。只估現金股利；股票股利、所得稅另計。不是投資建議。</p></section>`;

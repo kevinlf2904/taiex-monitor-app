@@ -66,29 +66,79 @@
   }
 
   // 主函式。opts：method（avg／fifo）、prices（代號 → [{ d, c }] 原始收盤）、bench（{ TWD: [{d,c}], USD: [{d,c}] }，可省略）、benchName、
-  //   asOf（算到哪一天，預設各價格的最後一天）、today、classify(symbol) → { assetType, industry }（可省略）
+  //   asOf（算到哪一天，預設各價格的最後一天）、today、recon（kline:pf:recon:v1）、classify(symbol) → { assetType, industry }（可省略）
   function buildPerf(txs, opts = {}) {
-    const LG = root.KLLedger; if (!LG) return { v: VERSION, status: "invalid", error: "no_ledger" };
-    const L = LG.buildLedger(txs, { method: opts.method, today: opts.today });
+    const LG = root.KLLedger; if (!LG || typeof LG.buildReconciledLedger !== "function") return { v: VERSION, status: "invalid", error: "no_ledger" };
+    const L = LG.buildReconciledLedger(txs, opts.recon || null, { method: opts.method, today: opts.today });
     if (L.status === "invalid") return { v: VERSION, status: "invalid", error: L.error };
     const books = {}; for (const [c, s] of Object.entries(opts.prices || {})) books[String(c).toUpperCase()] = priceBook(s);
     const cls = typeof opts.classify === "function" ? opts.classify : (c => ({ assetType: /^00\d{2,4}[A-Z]?$/.test(c) ? "etf" : "stock", industry: null }));
-    const applied = L.txs.filter(x => x.applied && !x.errors.length && !x.mergedInto && x.tx);
-    // 整體狀態：有錯誤的交易（沒算進去）＞有待確認的部位（合股零股還沒結算，股數與成本是暫時的）＞正常
+    const applied = L.txs.filter(x => x.applied && !x.errors.length && !x.mergedInto && !x.preSnapshot && x.sameDayRelation !== "unresolved" && x.tx);
+    // 整體狀態：有錯誤的交易（沒算進去）＞有待確認的部位＞正常
     const out = { v: VERSION, method: L.method, status: L.errorCount ? "has_errors" : L.pendingCount ? "needs_confirm" : "ok", ledgerErrors: L.errorCount, pendingCount: L.pendingCount || 0, byCurrency: {} };
     const refSym = new Map(L.txs.filter(x => x.tx?.id).map(x => [x.tx.id, x.tx.symbol || null])); // 另計費用對應哪一檔
     for (const cur of ["TWD", "USD"]) {
-      const T = applied.filter(x => x.tx.currency === cur).map(x => x.tx); if (!T.some(t => t.symbol)) continue;
-      const P = L.positions.filter(p => p.currency === cur), issues = [], est = new Set();
+      const T = applied.filter(x => x.tx.currency === cur).map(x => x.tx);
+      const P = L.positions.filter(p => p.currency === cur);
+      if (!T.some(t => t.symbol) && !P.some(p => p.open || p.hasSnapshot)) continue;
+      const issues = [], est = new Set();
       const pend = P.filter(p => p.pending?.length); if (pend.length) { issues.push({ k: "pending", codes: pend.map(p => p.symbol) }); est.add("pending_confirm"); }
+      const snapPositions = P.filter(p => p.hasSnapshot);
+      const snapBySym = new Map(snapPositions.map(p => [p.symbol, p]));
+      if (snapPositions.length) {
+        est.add("snapshot_baseline");
+        issues.push({ k: "snapshot_baseline", codes: snapPositions.map(p => p.symbol) });
+      }
+      const reconPendPos = P.filter(p => p.pending?.some(x => x.code === "recon_diff" || x.code === "same_day_order"));
+      const curOpenConfs = (L.reconcile?.openConflicts || []).filter(c => c && c.currency === cur && (c.kind === "recon_diff" || c.kind === "same_day_order"));
+      if (reconPendPos.length || curOpenConfs.length) {
+        const reconCodes = [...new Set([...reconPendPos.map(p => p.symbol), ...curOpenConfs.map(c => String(c.symbol || "").toUpperCase()).filter(Boolean)])];
+        const diffs = [...reconPendPos.flatMap(p => p.pending.filter(x => x.code === "recon_diff" || x.code === "same_day_order").map(x => ({ symbol: p.symbol, code: x.code, diffShares: x.diffShares ?? null }))),
+          ...curOpenConfs.map(c => ({ symbol: String(c.symbol || "").toUpperCase(), code: c.kind, diffShares: c.diffShares ?? null }))];
+        est.add("recon_pending");
+        issues.push({ k: "recon_pending", codes: reconCodes, diffs });
+      }
       // 另計費用（沒有併進買賣的，例如股息匯費）與其他公司行動的現金：要同時進入現金流與總損益，才能對帳
       const extra = { fees: 0, other: 0, transferOutPnl: 0, bySym: new Map(), unattributed: 0 }, addSym = (sym, v) => { if (sym) extra.bySym.set(sym, (extra.bySym.get(sym) || 0) + v); else extra.unattributed += v; };
       const priceAt = (sym, d) => books[sym]?.at(d) || null;
-      // 持股（每一檔在每一天的股數）：用交易引擎的 history（已處理賣超、拆股、配股、零股），同一天取最後一筆
-      const H = new Map(P.map(p => [p.symbol, p.history.map(h => [h.date, h.shares])]));
-      const sharesAt = (sym, d) => { const h = H.get(sym); if (!h) return 0; let s = 0; for (const [hd, sh] of h) { if (hd <= d) s = sh; else break; } return s; };
+      // 持股（每一檔在每一天的股數）：d < firstSnapshotDate 時必為 0；其餘依帳本 history（含基準錨點）
+      const snapStartDate = p => p.firstSnapshotDate || p.snapshotDate;
+      const snapInitShares = p => p.firstSnapshotShares !== undefined && p.firstSnapshotShares !== null ? p.firstSnapshotShares : p.snapshotShares;
+      const snapInitAvgCost = p => p.firstSnapshotAvgCost !== undefined ? p.firstSnapshotAvgCost : p.snapshotAvgCost;
+      const snapInitOrigin = p => p.firstSnapshotOrigin || p.snapshotOrigin;
+      const H = new Map(P.map(p => [p.symbol, p.history.filter(h => !h.preSnapshot).map(h => [h.date, h.shares])]));
+      const sharesAt = (sym, d) => {
+        const sp = snapBySym.get(sym);
+        if (sp && d < snapStartDate(sp)) return 0;
+        const h = H.get(sym); if (!h) return 0; let s = 0; for (const [hd, sh] of h) { if (hd <= d) s = sh; else break; } return s;
+      };
       // 現金流（證券部位角度：+ 投入、− 拿回）
       const flows = [];
+      for (const p of snapPositions) {
+        const initOrigin = snapInitOrigin(p), initSh = snapInitShares(p), initAvg = snapInitAvgCost(p), initDate = snapStartDate(p);
+        if (initOrigin !== "full_snapshot_close" && initSh > EPS) {
+          const px = priceAt(p.symbol, initDate);
+          if (px && px.d === initDate) {
+            flows.push({ d: initDate, f: initSh * px.c });
+          } else if (isNum(initAvg) && initAvg > 0) {
+            est.add("transfer_at_cost");
+            flows.push({ d: initDate, f: initSh * initAvg, atCost: true });
+          }
+        }
+        for (const h of p.history || []) {
+          if (!h.isSnapshot || h.isFirstSnapshot || !(Math.abs(h.deltaShares || 0) > 1e-4)) continue;
+          const px = priceAt(p.symbol, h.date);
+          if (px && px.d === h.date) {
+            flows.push({ d: h.date, f: h.deltaShares * px.c });
+          } else if (isNum(h.avgCost) && h.avgCost > 0) {
+            est.add("transfer_at_cost");
+            flows.push({ d: h.date, f: h.deltaShares * h.avgCost, atCost: true });
+          } else if (isNum(initAvg) && initAvg > 0) {
+            est.add("transfer_at_cost");
+            flows.push({ d: h.date, f: h.deltaShares * initAvg, atCost: true });
+          }
+        }
+      }
       for (const t of T) {
         const px = t.symbol ? priceAt(t.symbol, t.date) : null, mkt = n => (px && px.d === t.date ? n * px.c : null);
         if (t.type === "buy") flows.push({ d: t.date, f: t.shares * t.price + t.fee + t.tax });
@@ -111,20 +161,34 @@
         else if (t.type === "other" && isNum(t.amount)) { flows.push({ d: t.date, f: -t.amount }); extra.other += t.amount; addSym(t.symbol, t.amount); est.add("other_action"); }
       }
       flows.sort((a, b) => a.d.localeCompare(b.d));
-      const syms = P.map(p => p.symbol), start = flows.length ? flows[0].d : T[0].date;
-      const lastPx = syms.map(s => books[s]?.a.at(-1)?.d).filter(Boolean).sort().at(-1) || null;
+      const syms = P.map(p => p.symbol);
+      const activeSyms = P.filter(p => !(snapInitOrigin(p) === "full_snapshot_close" && !p.open && !T.some(t => t.symbol === p.symbol))).map(p => p.symbol);
+      const start = flows.length ? flows[0].d : (T[0]?.date || snapPositions.map(p => snapStartDate(p)).filter(Boolean).sort()[0] || null);
+      if (!start) continue;
+      const lastPx = activeSyms.map(s => books[s]?.a.at(-1)?.d).filter(Boolean).sort().at(-1) || null;
       // 算到哪一天：最後一個價格日和最後一筆現金流取較晚的（沒有價格時，才不會把之後的轉出、賣出截掉）
       const lastFlow = flows.length ? flows[flows.length - 1].d : start, asOf = opts.asOf || [lastPx, lastFlow].filter(Boolean).sort().at(-1);
-      const missing = syms.filter(s => !books[s] || !books[s].a.length);
+      const missing = activeSyms.filter(s => !books[s] || !books[s].a.length);
       if (missing.length) issues.push({ k: "no_prices", codes: missing });
-      const trunc = syms.filter(s => books[s]?.first && books[s].first > (P.find(p => p.symbol === s).firstDate || start));
+      const effStart = s => { const p = P.find(x => x.symbol === s); return p?.hasSnapshot ? snapStartDate(p) : (p?.firstDate || start); };
+      const trunc = activeSyms.filter(s => books[s]?.first && books[s].first > effStart(s));
       if (trunc.length) { issues.push({ k: "history_truncated", codes: trunc }); est.add("history_truncated"); }
-      // 交易日曆：所有持股價格的日期＋比較基準的交易日（持股停牌、缺資料也看得出來）＋現金流日期＋算到哪一天
+      // 交易日曆：所有持股價格的日期＋比較基準的交易日＋現金流日期＋算到哪一天
       const BB0 = opts.bench && opts.bench[cur] ? priceBook(opts.bench[cur]) : null;
-      const cal = [...new Set([...syms.flatMap(s => (books[s]?.a || []).map(x => x.d)), ...(BB0 ? BB0.a.map(x => x.d) : []), ...flows.map(f => f.d), ...(opts.asOf ? [opts.asOf] : [])])].filter(d => d >= start && d <= asOf).sort();
+      const cal = [...new Set([...activeSyms.flatMap(s => (books[s]?.a || []).map(x => x.d)), ...(BB0 ? BB0.a.map(x => x.d) : []), ...flows.map(f => f.d), ...(opts.asOf ? [opts.asOf] : [])])].filter(d => d >= start && d <= asOf).sort();
       const flowAt = new Map(); for (const f of flows) flowAt.set(f.d, (flowAt.get(f.d) || 0) + f.f);
-      // 沒有價格時用最近一筆交易的價格（標「估算」）
-      const lastTradePx = (sym, d) => { let v = null; for (const t of T) if (t.symbol === sym && t.date <= d && isNum(t.price) && t.price > 0) v = t.price; return v; };
+      // 沒有價格時用最近一筆有效交易價格（或快照均價回退）
+      const lastTradePx = (sym, d) => {
+        const sp = snapBySym.get(sym);
+        let v = null;
+        for (const t of T) if (t.symbol === sym && (!sp || t.date >= snapStartDate(sp)) && t.date <= d && isNum(t.price) && t.price > 0) v = t.price;
+        if (v == null && sp && d >= snapStartDate(sp)) {
+          const initAvg = snapInitAvgCost(sp);
+          if (d >= sp.snapshotDate && sp.snapshotOrigin !== "full_snapshot_close" && sp.snapshotShares > EPS && isNum(sp.snapshotAvgCost) && sp.snapshotAvgCost > 0) return sp.snapshotAvgCost;
+          if (snapInitOrigin(sp) !== "full_snapshot_close" && snapInitShares(sp) > EPS && isNum(initAvg) && initAvg > 0) return initAvg;
+        }
+        return v;
+      };
       const BB = BB0;
       const days = []; let prevV = null, idxV = 1, prevB = null, fallbackDays = 0, staleMax = 0;
       for (const d of cal) {
@@ -154,26 +218,21 @@
       const reasons = [...est], xSpan = xf.length > 1 ? Math.max(1, Math.round((dnum(xf[xf.length - 1].d) - dnum(xf[0].d)) / DAY)) : 1;
       const XA = xSpan >= 365 ? xirrInfo(xf) : null, XP = xirrInfo(xf, xSpan), multi = ["multiple", "ambiguous"].includes(XP.status) || ["multiple", "ambiguous"].includes(XA?.status);
       const mwrAnn = XA?.status === "ok" ? XA.roots[0] : null, mwrPeriod = XP.status === "ok" ? XP.roots[0] : null;
-      const mwr = multi ? { value: null, period: null, status: "unavailable", reasons: ["multiple_solutions", ...reasons], roots: XP.roots.length > 1 ? XP.roots : (XA?.roots || XP.roots) } // 未滿一年時沒有年化結果（XA 是 null）
+      const mwr = multi ? { value: null, period: null, status: "unavailable", reasons: ["multiple_solutions", ...reasons], roots: XP.roots.length > 1 ? XP.roots : (XA?.roots || XP.roots) }
         : mwrAnn == null && mwrPeriod == null ? { value: null, period: null, status: "unavailable", reasons: ["no_solution", ...reasons] }
         : { value: mwrAnn, period: mwrPeriod, annualized: mwrAnn != null, status: reasons.length ? "estimated" : "ok", reasons };
       // 比較基準：同一段期間
       let bench = null;
-      // 起點用第一天之前最後一個收盤（組合第一天的報酬是從買進價算起，基準也要從前一天收盤算），沒有更早的才用當天
       if (BB && first && last) { const b0 = BB.a.filter(x => x.d < first.d).at(-1) || BB.at(first.d), b1 = BB.at(last.d); if (b0 && b1) bench = { name: opts.benchName?.[cur] || null, ret: b1.c / b0.c - 1, excess: twr == null ? null : twr - (b1.c / b0.c - 1), from: b0.d, to: b1.d, priceIndex: cur === "TWD" }; }
-      // 損益（由交易引擎）：總投入＝買進＋轉入的金額；總損益＝已實現＋未實現＋股息（手續費、稅已經在成本與已實現裡，不重複扣）
       const Tt = L.totals[cur] || {}, mvNow = P.reduce((s, p) => { const sh = p.shares; if (sh <= EPS) return s; const px = priceAt(p.symbol, asOf); return s + sh * (px ? px.c : (lastTradePx(p.symbol, asOf) || 0)); }, 0);
       const costNow = P.reduce((s, p) => s + p.costBasis, 0), unreal = mvNow - costNow;
       const inflow = flows.filter(f => f.f > 0).reduce((s, f) => s + f.f, 0), outflow = -flows.filter(f => f.f < 0).reduce((s, f) => s + f.f, 0);
-      // 總損益＝已實現（交易引擎）＋轉出損益＋未實現＋股息（稅後）−另計費用＋其他公司行動現金（各項分開列，不重複）。買賣的手續費、稅已經在成本與已實現裡，不重複扣
       const total = missingTransferOutValue ? null : (Tt.realizedPnl || 0) + extra.transferOutPnl + unreal + (Tt.dividends || 0) - extra.fees + extra.other;
       const pnl = { invested: r2(inflow), returned: r2(outflow), netInvested: r2(inflow - outflow), marketValue: r2(mvNow), costBasis: r2(costNow), unrealized: r2(unreal), realized: r2(Tt.realizedPnl || 0), transferOutPnl: r2(extra.transferOutPnl), dividends: r2(Tt.dividends || 0), fees: r2(Tt.fees || 0), taxes: r2(Tt.taxes || 0), extraFees: r2(extra.fees), otherCash: r2(extra.other), total: total == null ? null : r2(total), totalPct: total != null && inflow > EPS ? total / inflow : null };
-      // 歸因：每一檔的損益（已實現＋未實現＋股息）與占總損益的比例；依資產類型、產業加總；股息、費稅另外列；匯率還沒有
       const bySymbol = missingTransferOutValue ? [] : P.map(p => { const px = priceAt(p.symbol, asOf), mv = p.shares > EPS ? p.shares * (px ? px.c : (lastTradePx(p.symbol, asOf) || 0)) : 0, u = mv - p.costBasis, ex = extra.bySym.get(p.symbol) || 0, t = p.realizedPnl + u + p.dividends + ex, k = cls(p.symbol) || {};
         return { symbol: p.symbol, assetType: k.assetType || null, industry: k.industry || null, realized: r2(p.realizedPnl), unrealized: r2(u), dividends: r2(p.dividends), extra: r2(ex), fees: r2(p.fees), taxes: r2(p.taxes), pnl: r2(t), share: Math.abs(total) > EPS ? t / total : null }; })
         .sort((a, b) => b.pnl - a.pnl);
       const group = key => { const m = new Map(); for (const x of bySymbol) { const g = x[key] || "unknown"; m.set(g, (m.get(g) || 0) + x.pnl); } return [...m].map(([g, v]) => ({ group: g, pnl: r2(v), share: Math.abs(total) > EPS ? v / total : null })).sort((a, b) => b.pnl - a.pnl); };
-      // 沒有對應到任何一檔的另計費用／公司行動現金另外列，讓「每一檔加總＋未歸屬＝總損益」
       const attribution = { bySymbol, unattributed: r2(extra.unattributed), byType: group("assetType"), byIndustry: group("industry"), dividends: r2(Tt.dividends || 0), feesAndTaxes: r2(-(Tt.fees || 0) - (Tt.taxes || 0)), fx: null, fxNote: "匯率影響要等第 3 階段（匯率）" };
       const ym = d => d.slice(0, 7), yq = d => `${d.slice(0, 4)}Q${Math.floor((+d.slice(5, 7) - 1) / 3) + 1}`, yy = d => d.slice(0, 4);
       const series = days.map(x => ({ d: x.d, v: x.v, flow: x.flow, index: +x.i.toFixed(8) }));
@@ -183,15 +242,14 @@
         monthly: missingTransferOutValue ? [] : periodReturns(val, ym), quarterly: missingTransferOutValue ? [] : periodReturns(val, yq), yearly: missingTransferOutValue ? [] : periodReturns(val, yy),
         maxDrawdown: !missingTransferOutValue && val.length ? drawdown(days.filter(x => x.v > EPS || x.r != null).map(x => ({ d: x.d, i: x.i }))) : null,
         pnl, attribution, series: missingTransferOutValue ? [] : series, issues, estimated: reasons,
-        // 逐筆現金流（不做同日淨額）：f > 0 是投入（買進、轉入、另計費用），f < 0 是拿回；給合併換匯時逐筆用當天匯率換算
         flows: flows.map(f => ({ d: f.d, f: r2(f.f) }))
       };
     }
     if (!Object.keys(out.byCurrency).length) out.status = "empty";
     return out;
   }
-  const REASON_LABEL = { legacy_transfer: "有從舊庫存轉入的部位（成本是當時記的平均成本，買進日期與金額不一定準）", transfer_at_cost: "股票轉入那天沒有市價，用成本當投入金額", transfer_out_no_price: "股票轉出那天沒有價格", history_truncated: "價格歷史比第一筆交易晚開始，前面一段只能用交易價格估", price_fallback: "有些日子沒有收盤價，用最近一筆交易的價格代替", no_solution: "現金流算不出報酬率（例如只有投入、沒有市值）",
-    multiple_solutions: "現金流正負多次反轉，可能有多重解或無法確認唯一解，因此不任選一個", pending_confirm: "有部位合股後的零股還沒結算，股數與成本是暫時的",
+  const REASON_LABEL = { legacy_transfer: "有從舊庫存轉入的部位（成本是當時記的平均成本，買進日期與金額不一定準）", transfer_at_cost: "股票轉入或快照基準那天沒有市價，用成本當投入金額", snapshot_baseline: "部分或全部部位以庫存快照為基準起算，快照前的歷史未計入報酬", recon_pending: "尚有待對帳差異或同日交易順序未決，對帳完成前數值可能調整", transfer_out_no_price: "股票轉出那天沒有價格", history_truncated: "價格歷史比第一筆交易晚開始，前面一段只能用交易價格估", price_fallback: "有些日子沒有收盤價，用最近一筆交易的價格或基準均價代替", no_solution: "現金流算不出報酬率（例如只有投入、沒有市值）",
+    multiple_solutions: "現金流正負多次反轉，可能有多重解或無法確認唯一解，因此不任選一個", pending_confirm: "有部位待確認（合股零股未結算或待對帳），股數與成本是暫時的",
     stale_prices: "有價格停在超過 7 天前（可能停牌或資料缺漏），市值可能不是最新", transfer_out_prev_price: "股票轉出那天沒有收盤價，用之前的收盤價計算", transfer_out_user_price: "股票轉出沒有收盤價，改用手動填寫的價格估算", transfer_out_no_price: "股票轉出沒有可用市價，改用轉出成本估算；若連成本也無法確認，績效停止計算", other_action: "有其他公司行動的現金，計入總損益與報酬，請確認性質" };
   root.KLPerf = Object.freeze({ VERSION, buildPerf, xirr, xirrInfo, drawdown, periodReturns, priceBook, REASON_LABEL });
 })(typeof window !== "undefined" ? window : globalThis);

@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 庫存入口收斂與自動對帳（2026.11.17-241）
+- 統一截圖匯入入口自動辨識庫存／明細與日期，新增獨立對帳基準 kline:pf:recon:v1 與全站統一計算與待對帳標示
+
 ### 選股訊號回測：對齊同日流動性同池基準與審計對帳（2026.11.16-240）
 - 訊號回測改以訊號日成交量 ≥ 500 張之現存上市櫃普通股為等權同池基準（含訊號股），以 ds／da／db 三日期對齊並區隔快取鍵、保留進場前日 b[a-1] 漲停基準並補時序防呆；明細新增兩端互斥拆帳、exN 配對統計與 <95% 覆蓋率提示，排程 signal-study.mjs 改以 includeEvents: false 省略逐事件 benchEvents，並相容尚未更新的舊版 signal-study.json。PR #307、Ref #306。
 
