@@ -20,14 +20,14 @@ permissions:
   contents: read
   pull-requests: write
 concurrency:
-  group: pr-guard-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.head_sha }}
+  group: pr-guard-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha }} # 同一個 PR 不論哪種事件都同一組，不會並發重複貼看板
   cancel-in-progress: true # 連續觸發時只留最後一次，看板一樣會是最新狀態
 jobs:
   board:
     if: >-
-      ((github.event_name != 'pull_request' && github.event_name != 'pull_request_review') || github.event.pull_request.head.repo.full_name == github.repository) &&
-      (github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.comment.user.type != 'Bot')) &&
-      (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.pull_requests[0] != null))
+      ((github.event_name != 'pull_request' && github.event_name != 'pull_request_review') || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.state == 'open')) &&
+      (github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' && github.event.comment.user.type != 'Bot')) &&
+      (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.pull_requests[0] != null && github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

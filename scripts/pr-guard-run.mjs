@@ -35,8 +35,11 @@ export function planLabels(current, wanted) {
   };
 }
 
-// 找到之前貼過的看板留言：一般留言、機器人帳號、帶記號
-export const findBoard = comments => comments.find(c => (c.source || "comment") === "comment" && c.bot && isBoard(c)) || null;
+// 找到之前貼過的看板留言：一般留言、機器人帳號、帶記號（isBoard 已包含這三個條件）
+export const findBoard = comments => comments.find(isBoard) || null;
+
+// gh api 失敗時的 HTTP 狀態碼（gh 會在錯誤訊息印出「HTTP 404」之類）
+export const httpStatus = e => Number((String(e?.stderr || e?.message || e).match(/HTTP (\d{3})/) || [])[1]) || 0;
 
 export const boardBody = data => `${formatBrief(data)}\n\n---\n_pr-guard 自動產生，每次推送、留言、審查或 CI 結束時原地更新；只是提醒，不擋合併，判斷依據見 scripts/pr-guard.mjs。_\n${BOARD_MARK}`;
 
@@ -48,6 +51,9 @@ function gh(method, path, body) {
 
 export async function run(number, { dry = false, get = ghGet, write = gh, repo = REPO, log = console.log } = {}) {
   const data = await collect(number, get, repo);
+  // 已關閉／已合併的 PR、fork 來的 PR 不寫任何東西（ci 在 PR 關閉後才跑完、本機手動執行時也一樣）
+  if (data.pr.state && data.pr.state !== "open") { log(`#${number} 已${data.pr.merged_at ? "合併" : "關閉"}，略過`); return []; }
+  if (data.pr.head?.repo?.full_name && data.pr.head.repo.full_name !== repo) { log(`#${number} 來自 fork，略過`); return []; }
   const conflicts = bigFileConflicts({ number, files: data.files }, data.others);
   const current = (data.pr.labels || []).map(l => l.name);
   const { add, remove } = planLabels(current, wantedLabels(data.files, conflicts));
@@ -59,12 +65,17 @@ export async function run(number, { dry = false, get = ghGet, write = gh, repo =
   if (!old) actions.push(["comment+"]);
   else if (old.body.trim() !== body.trim()) actions.push(["comment~", old.id]);
   if (dry) { log(JSON.stringify({ number, add, remove, comment: actions.find(a => a[0].startsWith("comment"))?.[0] || "不變" })); log(body); return actions; }
+  // 冪等：標籤不存在（404）才建立；同時有別次執行先建好了（422）就當成功；要拿掉的標籤已經不在（404）也當成功。其他錯誤照常失敗
+  const ok = (fn, ...codes) => { try { return fn(); } catch (e) { if (codes.includes(httpStatus(e))) return null; throw e; } };
   for (const l of add) {
     try { write("GET", `repos/${repo}/labels/${encodeURIComponent(l)}`); }
-    catch { write("POST", `repos/${repo}/labels`, { name: l, color: MANAGED[l][0], description: MANAGED[l][1] }); }
+    catch (e) {
+      if (httpStatus(e) !== 404) throw e;
+      ok(() => write("POST", `repos/${repo}/labels`, { name: l, color: MANAGED[l][0], description: MANAGED[l][1] }), 422);
+    }
   }
   if (add.length) write("POST", `repos/${repo}/issues/${number}/labels`, { labels: add });
-  for (const l of remove) write("DELETE", `repos/${repo}/issues/${number}/labels/${encodeURIComponent(l)}`);
+  for (const l of remove) ok(() => write("DELETE", `repos/${repo}/issues/${number}/labels/${encodeURIComponent(l)}`), 404);
   if (!old) write("POST", `repos/${repo}/issues/${number}/comments`, { body });
   else if (old.body.trim() !== body.trim()) write("PATCH", `repos/${repo}/issues/comments/${old.id}`, { body });
   log(`#${number}：標籤 +[${add}] -[${remove}]；看板 ${old ? (old.body.trim() === body.trim() ? "不變" : "更新") : "新增"}`);

@@ -170,7 +170,8 @@ const SOURCE = { comment: "（留言）", review: "（review）", inline: "（�
 
 // pr-guard 狀態看板留言的記號（.github/workflows/pr-guard.yml 用它找到同一則留言原地更新；摘要本身不列入留言清單）
 export const BOARD_MARK = "<!-- pr-guard -->";
-export const isBoard = x => String(x?.body || "").includes(BOARD_MARK);
+// 看板＝機器人貼的一般留言、內文帶記號；人寫的留言就算提到記號字串也不算（不會被藏起來）
+export const isBoard = x => !!x?.bot && (x.source || "comment") === "comment" && String(x.body || "").includes(BOARD_MARK);
 
 export function formatBrief({ pr, files, comments = [], checkRuns = [], others = [] }) {
   const head = pr.head.sha;

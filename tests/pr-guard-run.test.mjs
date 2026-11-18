@@ -40,9 +40,9 @@ test("pr-guard-run：其他留言依時間排序取最新；機器人的 review 
   assert.match(out, /較早的 2 則/);
 });
 
-function fake({ labels = [], boardBody: old = null, repoLabels = [] } = {}) {
+function fake({ labels = [], boardBody: old = null, repoLabels = [], pr = {}, fail = {} } = {}) {
   const fixtures = {
-    "pulls/5": { number: 5, title: "改看盤", draft: false, labels: labels.map(name => ({ name })), head: { sha: HEAD, ref: "claude/x" } },
+    "pulls/5": { number: 5, title: "改看盤", draft: false, labels: labels.map(name => ({ name })), head: { sha: HEAD, ref: "claude/x" }, ...pr },
     "pulls/5/files": [{ filename: "learner/watch.html", status: "modified" }],
     "issues/5/comments": old ? [{ id: 900, user: { type: "Bot" }, created_at: "t", body: old }] : [],
     "pulls/5/reviews": [], "pulls/5/comments": [],
@@ -52,8 +52,11 @@ function fake({ labels = [], boardBody: old = null, repoLabels = [] } = {}) {
   const get = p => { const k = p.replace(/^repos\/[^/]+\/[^/]+\//, "").replace(/[?&]per_page=\d+/, ""); assert.ok(k in fixtures, k); return fixtures[k]; };
   const calls = [];
   const write = (method, path, body) => {
-    calls.push([method, path.replace(/^repos\/o\/r\//, ""), body]);
-    if (method === "GET" && !repoLabels.some(l => path.endsWith(`/labels/${encodeURIComponent(l)}`))) throw new Error("404");
+    const p = path.replace(/^repos\/o\/r\//, "");
+    calls.push([method, p, body]);
+    const f = fail[`${method} ${p}`];
+    if (f) throw Object.assign(new Error("gh: failed"), { stderr: `gh: Something (HTTP ${f})` });
+    if (method === "GET" && !repoLabels.some(l => path.endsWith(`/labels/${encodeURIComponent(l)}`))) throw Object.assign(new Error("gh"), { stderr: "gh: Not Found (HTTP 404)" });
     return "{}";
   };
   return { get, write, calls };
@@ -107,4 +110,46 @@ test("pr-guard workflow：權限最小、不用 pull_request_target、fork 與�
   assert.match(code, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/, "只執行預設分支的腳本，不執行 PR 改過的程式（有寫入權限）");
   assert.match(code, /persist-credentials: false/);
   for (const m of code.matchAll(/uses: (\S+)/g)) assert.match(m[1], /@[0-9a-f]{40}$/, `${m[1]} 要用 commit SHA 固定版本`);
+});
+
+test("pr-guard-run：已關閉、已合併、fork 來的 PR 不寫任何東西", async () => {
+  for (const pr of [{ state: "closed" }, { state: "closed", merged_at: "t" }, { state: "open", head: { sha: HEAD, ref: "x", repo: { full_name: "someone/fork" } } }]) {
+    const f = fake({ pr });
+    const out = [];
+    await run(5, { get: f.get, write: f.write, repo: "o/r", log: s => out.push(s) });
+    assert.deepEqual(f.calls, [], JSON.stringify(pr));
+    assert.match(out.join(), /略過/);
+  }
+  const same = fake({ pr: { state: "open", head: { sha: HEAD, ref: "x", repo: { full_name: "o/r" } } } });
+  await run(5, { get: same.get, write: same.write, repo: "o/r", log: () => {} });
+  assert.ok(same.calls.length > 0, "同 repo 的 open PR 照常處理");
+});
+
+test("pr-guard-run：標籤 API 冪等：別人先建好（422）、要拿掉的已不在（404）當成功；其他錯誤照常失敗", async () => {
+  const race = fake({ fail: { "POST labels": 422 } });
+  await run(5, { get: race.get, write: race.write, repo: "o/r", log: () => {} });
+  assert.ok(race.calls.some(([m, p]) => m === "POST" && p === "issues/5/comments"), "422 之後照樣貼標籤、發看板");
+  const gone = fake({ labels: ["needs-390-1280", "needs-lock", "high-risk"], fail: { "DELETE issues/5/labels/high-risk": 404 } });
+  await run(5, { get: gone.get, write: gone.write, repo: "o/r", log: () => {} });
+  assert.ok(gone.calls.some(([m]) => m === "POST"), "404 之後照樣發看板");
+  const down = fake({ fail: { "GET labels/needs-390-1280": 500 } });
+  await assert.rejects(run(5, { get: down.get, write: down.write, repo: "o/r", log: () => {} }), e => /HTTP 500/.test(e.stderr), "500 不能當成標籤不存在去建立");
+  assert.ok(!down.calls.some(([m, p]) => m === "POST" && p === "labels"));
+});
+
+test("pr-guard-run：人寫的留言提到看板記號也不會被藏起來", () => {
+  const human = { id: 9, source: "comment", bot: false, created_at: "t", body: `審查（ChatGPT）：\`${HEAD}\` 可以合併\n看板記號是 ${BOARD_MARK}` };
+  const review = { id: 10, source: "review", bot: false, created_at: "t2", body: `備註：${BOARD_MARK}` };
+  const out = formatBrief({ pr: { number: 1, title: "t", head: { sha: HEAD, ref: "b" } }, files: ["docs/a.md"], comments: [human, review] });
+  assert.match(out, /〔最新〕審查（ChatGPT） 可以合併/);
+  assert.match(out, /（review）備註/);
+  assert.equal(findBoard([human, review]), null);
+});
+
+test("pr-guard workflow：同一 PR 各種事件同一個 concurrency 組；只處理 open 的 PR；workflow_run 也擋 fork", () => {
+  const y = readFileSync(new URL("../.github/workflows/pr-guard.yml", import.meta.url), "utf8");
+  assert.match(y, /group: pr-guard-\$\{\{ github\.event\.pull_request\.number \|\| github\.event\.issue\.number \|\| github\.event\.workflow_run\.pull_requests\[0\]\.number \|\|/);
+  assert.match(y, /github\.event\.pull_request\.state == 'open'/);
+  assert.match(y, /github\.event\.issue\.state == 'open'/);
+  assert.match(y, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/);
 });
