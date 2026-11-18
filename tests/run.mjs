@@ -16,11 +16,19 @@ export function shard(list, k, n) {
 }
 // tests/ 底下的單元測試檔一定要登記在 UNIT（AGENTS.md「測試與品質」）；沒登記就失敗，避免漏跑
 export const unregistered = () => readdirSync(dir).filter(f => f.endsWith(".test.mjs")).map(f => `${dir}${f}`).filter(f => !UNIT.includes(f));
+// 參數只接受 --unit 或一個 --e2e=<正整數>/<正整數>；打錯（例如 --e2e=1/3/4、--unti）直接失敗，不會默默跑別的份
 export function pick(argv) {
-  const unit = argv.includes("--unit"), e = argv.find(a => a.startsWith("--e2e="));
-  if (unit && e) throw new Error("--unit 和 --e2e= 不能同時用");
+  const bad = argv.filter(a => a !== "--unit" && !a.startsWith("--e2e="));
+  if (bad.length) throw new Error(`不認得的參數：${bad.join(" ")}（只接受 --unit 或 --e2e=<第幾份>/<共幾份>）`);
+  const es = argv.filter(a => a.startsWith("--e2e=")), unit = argv.includes("--unit");
+  if (unit && es.length) throw new Error("--unit 和 --e2e= 不能同時用");
+  if (es.length > 1 || argv.filter(a => a === "--unit").length > 1) throw new Error("同一個參數只能給一次");
   if (unit) return UNIT;
-  if (e) { const [k, n] = e.slice(6).split("/").map(Number); return shard(e2eFiles(), k, n); }
+  if (es.length) {
+    const m = es[0].match(/^--e2e=([1-9]\d*)\/([1-9]\d*)$/);
+    if (!m) throw new Error(`分份參數不對：${es[0].slice(6)}（格式 <第幾份>/<共幾份>）`);
+    return shard(e2eFiles(), Number(m[1]), Number(m[2]));
+  }
   return [...UNIT, ...e2eFiles()];
 }
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
