@@ -1,0 +1,165 @@
+// PR 檢查的純函式（#312 PR B）：依 AGENTS.md 判斷改動檔案的風險、大檔鎖定與衝突、介面驗證需求，並解析 AI 協作留言。
+// 只做判斷、不連網路也不寫任何東西；本機的 scripts/pr-brief.mjs 與之後的 pr-guard workflow 都用這裡的函式，結果才會一致。
+// 判斷只是提醒：「測試沒有放寬斷言」「CSS 只改規則」這類程式看不出來的條件，仍由合併者確認（AGENTS.md「低風險例外」）。
+
+// AGENTS.md「核心限制」：改這四個檔案前要先上鎖（「鎖：」draft PR）
+export const BIG_FILES = ["learner/watch.html", "learner/index.html", "learner/core.js", "learner/brief.js"];
+
+// 策略、回測、績效、帳務計算：AGENTS.md 要求獨立審查（不只 scripts/，learner/ 裡也有）。清單是提醒用，不保證完整
+export const CROSS_REVIEW_FILES = [
+  "learner/core.js", "learner/analysis.js", "learner/quant.js", "learner/sigstudy.js", "learner/labx.js",
+  "learner/perf.js", "learner/recon.js", "learner/ledger.js", "learner/portfolio.js", "learner/rebal.js",
+  "learner/stress.js", "learner/alloc.js", "learner/margin.js",
+  "scripts/_engine.mjs", "scripts/levels-bt.mjs", "scripts/signal-study.mjs", "scripts/event-study.mjs",
+  "scripts/pattern-today.mjs", "scripts/theme-corr.mjs",
+];
+
+const RULE_FILES = ["AGENTS.md", "CLAUDE.md"];
+const name = f => (typeof f === "string" ? f : f.filename);
+const under = (p, dir) => p.startsWith(dir);
+
+// 低風險例外的路徑範圍（只看路徑；刪除測試檔一律不算）
+export function inLowRiskScope(f) {
+  const p = name(f);
+  if (RULE_FILES.includes(p) || under(p, ".agent/") || under(p, ".github/")) return false;
+  if (under(p, "tests/")) return f.status !== "removed";
+  if (p === "learner/core.css" || p === "learner/minimal.css") return true;
+  if (under(p, "docs/")) return true;
+  return p.endsWith(".md") && !under(p, "learner/data/");
+}
+
+// 高風險：協作規則、workflow、API、排程腳本、套件、部署設定、排程產物，以及策略／績效相關檔案
+export function highRiskReason(f) {
+  const p = name(f);
+  if (RULE_FILES.includes(p) || under(p, ".agent/")) return "協作規則";
+  if (under(p, ".github/workflows/")) return "workflow";
+  if (under(p, ".github/")) return "GitHub 設定／範本";
+  if (under(p, "api/")) return "API";
+  if (under(p, "learner/data/")) return "排程產物（learner/data/）";
+  if (CROSS_REVIEW_FILES.includes(p)) return "策略／回測／績效";
+  if (under(p, "scripts/")) return "排程／腳本";
+  if (p === "vercel.json") return "部署設定";
+  if (p === "package.json" || p === "package-lock.json") return "套件";
+  return null;
+}
+
+// 介面要做 390／1280 驗證：learner/ 底下的網頁、樣式、前端程式；版本號、說明文件與排程資料不算
+export function needsUiVerify(f) {
+  const p = name(f);
+  if (!under(p, "learner/") || under(p, "learner/data/")) return false;
+  if (p === "learner/version.json" || p.endsWith(".md")) return false;
+  return /\.(html|css|js)$/.test(p);
+}
+
+// diff 裡淨刪掉的斷言行數（刪掉的減新增的；只看測試檔、有 patch 才算）。改寫同一行斷言不算刪除
+export function removedAsserts(f) {
+  if (typeof f === "string" || !f.patch || !under(f.filename, "tests/")) return 0;
+  const lines = f.patch.split("\n"), isAssert = l => /\bassert\b|\bexpect\(/.test(l);
+  const del = lines.filter(l => l.startsWith("-") && !l.startsWith("---") && isAssert(l)).length;
+  const add = lines.filter(l => l.startsWith("+") && !l.startsWith("+++") && isAssert(l)).length;
+  return Math.max(0, del - add);
+}
+
+// 前端程式新增了 localStorage 相關的行（AGENTS.md：新增資料鍵要用獨立前綴與版本）
+export function addsLocalStorage(f) {
+  if (typeof f === "string" || !f.patch || !under(f.filename, "learner/")) return false;
+  return f.patch.split("\n").some(l => l.startsWith("+") && !l.startsWith("+++") && /localStorage/.test(l));
+}
+
+// files：字串，或 GitHub「PR 檔案」API 的物件（filename、status、patch）
+export function classify(files) {
+  const list = files.map(f => (typeof f === "string" ? { filename: f } : f));
+  const reasons = [];
+  const high = list.map(f => [f.filename, highRiskReason(f)]).filter(([, r]) => r);
+  const lowRisk = list.length > 0 && list.every(inLowRiskScope);
+  const needsLock = list.map(name).filter(p => BIG_FILES.includes(p));
+  const crossReview = list.map(name).filter(p => CROSS_REVIEW_FILES.includes(p));
+  const ui = list.filter(needsUiVerify).map(name);
+  const warnings = [];
+  for (const f of list) {
+    const n = removedAsserts(f);
+    if (n) warnings.push(`${f.filename} 刪除了 ${n} 行斷言，請確認沒有放寬測試`);
+    if (addsLocalStorage(f)) { warnings.push(`${f.filename} 新增了 localStorage 相關程式，請確認使用獨立前綴與版本、不清除既有資料`); crossReview.includes(f.filename) || crossReview.push(f.filename); }
+  }
+  const labels = [];
+  if (lowRisk) { labels.push("low-risk-candidate"); reasons.push("所有檔案都在低風險例外的路徑範圍內（仍須合併者確認斷言沒有放寬、CSS 只改規則）"); }
+  if (high.length) { labels.push("high-risk"); for (const [p, r] of high) reasons.push(`${p}：${r}`); }
+  if (crossReview.length) reasons.push(`需要獨立審查：${crossReview.join("、")}`);
+  if (needsLock.length) labels.push("needs-lock");
+  if (ui.length) labels.push("needs-390-1280");
+  if (!list.length) reasons.push("沒有改動檔案");
+  return { labels, lowRisk, highRisk: high.length > 0, needsLock, crossReview, ui, warnings, reasons };
+}
+
+// 「鎖：learner/watch.html＋區塊」標題裡提到的大檔
+export function lockedByTitle(title = "") {
+  if (!/^\s*鎖[:：]/.test(title)) return [];
+  return BIG_FILES.filter(f => title.includes(f) || title.includes(f.split("/").pop()));
+}
+
+// 和其他開著的 PR 撞到同一個大檔。pr：{ number, files }；others：[{ number, title, draft, files }]
+// 自己這個 PR 不算；其他 PR 不管是改到大檔，還是「鎖：」標題鎖住大檔，都列出來
+export function bigFileConflicts(pr, others) {
+  const mine = new Set(pr.files.map(name).filter(p => BIG_FILES.includes(p)));
+  const out = [];
+  for (const o of others) {
+    if (o.number === pr.number) continue;
+    const theirs = new Set([...(o.files || []).map(name).filter(p => BIG_FILES.includes(p)), ...lockedByTitle(o.title)]);
+    const both = [...mine].filter(p => theirs.has(p));
+    if (both.length) out.push({ number: o.number, title: o.title, lock: lockedByTitle(o.title).length > 0, files: both });
+  }
+  return out;
+}
+
+// AI 協作留言第一行：「審查（Codex）：`abc1234` …」「請求（Claude Code → ChatGPT）：…」「驗證：…」
+const KINDS = "審查|驗證|處置|交接|請求|檢查|討論";
+const HEAD_RE = new RegExp(`^\\s*(?:#+\\s*)?(${KINDS})(?:（([^）]*)）)?\\s*[:：]`);
+export function parseAiComment(body = "") {
+  const first = String(body).split("\n").find(l => l.trim()) || "";
+  const m = first.match(HEAD_RE);
+  if (!m) return null;
+  const [from, to] = (m[2] || "").split(/\s*→\s*/).map(s => s.trim());
+  const sha = (first.match(/\b[0-9a-f]{7,40}\b/) || [])[0] || null;
+  const verdict = (first.match(/可以合併|修改後再合併|不建議合併/) || [])[0] || null;
+  return { kind: m[1], from: from || null, to: to || null, sha, verdict, line: first.trim() };
+}
+
+// SHA 是否指同一個提交（短 SHA 比前綴）
+export const sameSha = (a, b) => !!a && !!b && (a.startsWith(b) || b.startsWith(a));
+
+// comments：[{ id, created_at, body }]；回傳看得懂的 AI 留言，並標出不是針對最新 head SHA 的（舊 SHA 的審查不算數）
+export function summarizeComments(comments, headSha) {
+  return comments.map(c => ({ ...c, ai: parseAiComment(c.body) })).filter(c => c.ai)
+    .map(c => ({ id: c.id, at: c.created_at, ...c.ai, stale: !!c.ai.sha && !sameSha(c.ai.sha, headSha) }));
+}
+
+// 判斷 CI test 是否算通過（AGENTS.md「測試與品質」：同一 head SHA、completed、success）
+export function ciStatus(checkRuns, headSha, name = "test") {
+  const runs = checkRuns.filter(r => r.name === name && r.head_sha === headSha);
+  if (!runs.length) return { ok: false, text: `沒有 ${headSha.slice(0, 7)} 的 ${name} 結果` };
+  const r = runs.sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0];
+  if (r.status !== "completed") return { ok: false, text: `${name} 進行中（${r.status}）` };
+  return { ok: r.conclusion === "success", text: `${name} ${r.conclusion}`, url: r.html_url };
+}
+
+// 給人和 AI 看的摘要（pr-brief 印在終端機；之後 workflow 也用同一段文字貼留言）
+export function formatBrief({ pr, files, comments = [], checkRuns = [], others = [] }) {
+  const head = pr.head.sha;
+  const c = classify(files);
+  const ci = ciStatus(checkRuns, head);
+  const conflicts = bigFileConflicts({ number: pr.number, files }, others);
+  const ai = summarizeComments(comments, head);
+  const L = [];
+  L.push(`檢查（pr-guard）：\`${head}\``, "");
+  L.push(`#${pr.number} ${pr.title}${pr.draft ? "（draft）" : ""}｜分支 ${pr.head.ref}｜${files.length} 個檔案`);
+  L.push(`CI：${ci.ok ? "✅" : "⏳／❌"} ${ci.text}${ci.url ? `（${ci.url}）` : ""}`);
+  L.push(`標籤：${c.labels.length ? c.labels.join("、") : "無"}`);
+  for (const r of c.reasons) L.push(`- ${r}`);
+  for (const w of c.warnings) L.push(`- ⚠️ ${w}`);
+  if (c.needsLock.length) L.push(`- 改到大檔：${c.needsLock.join("、")}（要先確認「鎖：」draft PR）`);
+  for (const x of conflicts) L.push(`- ⚠️ 和 #${x.number}${x.lock ? "（鎖定中）" : ""} 撞到：${x.files.join("、")}`);
+  if (c.ui.length) L.push(`- 介面檔案：需要 390／1280 驗證（Antigravity；Antigravity 是實作者時由 Claude Code）`);
+  L.push("", ai.length ? "AI 留言：" : "AI 留言：無");
+  for (const a of ai) L.push(`- ${a.stale ? "〔舊 SHA〕" : "〔最新〕"}${a.kind}${a.from ? `（${a.from}${a.to ? ` → ${a.to}` : ""}）` : ""}${a.verdict ? ` ${a.verdict}` : ""}｜${a.at || ""}｜${a.id}`);
+  return L.join("\n");
+}
