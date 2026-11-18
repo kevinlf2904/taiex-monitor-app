@@ -104,4 +104,7 @@ test("pr-guard workflow：權限最小、不用 pull_request_target、fork 與�
   assert.match(code, /workflows: \[ci\]/);
   assert.match(code, /concurrency:/);
   assert.match(code, /node scripts\/pr-guard-run\.mjs \$PR_NUMBERS/, "PR 編號經環境變數傳入，不直接嵌進指令");
+  assert.match(code, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/, "只執行預設分支的腳本，不執行 PR 改過的程式（有寫入權限）");
+  assert.match(code, /persist-credentials: false/);
+  for (const m of code.matchAll(/uses: (\S+)/g)) assert.match(m[1], /@[0-9a-f]{40}$/, `${m[1]} 要用 commit SHA 固定版本`);
 });

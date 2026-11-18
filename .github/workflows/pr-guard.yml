@@ -2,6 +2,9 @@
 # （最新 head SHA、CI test、風險、大檔衝突、各 AI 留言針對哪個 SHA）。只是提醒，不擋合併，也不是合併門檻（門檻仍是 ci 的 test）。
 # 安全：用 pull_request 不用 pull_request_target；fork 來的 PR 不跑（只有同一個 repo 的分支才給寫入權限）；
 # 權限只開 pull-requests: write（貼標籤、留言）；不碰密鑰，只用 GITHUB_TOKEN（它的寫入不會再觸發 workflow，不會自己叫自己）。
+# 一律 checkout 預設分支（main）來執行 pr-guard 腳本，不執行 PR 自己改過的程式（PR 內容只透過 GitHub API 讀取），
+# 避免 PR 改了腳本就能拿到寫入權限的 token。所以改 pr-guard 腳本的 PR，要合併後才會用新版本跑。
+# 外部 action 用 commit SHA 固定版本（後面註明對應的 tag），降低供應鏈風險。
 name: pr-guard
 on:
   pull_request:
@@ -28,11 +31,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
-      - run: node scripts/pr-guard-run.mjs $PR_NUMBERS # 只是 PR 編號（數字），腳本會再過濾
+      - run: |
+          if [ ! -f scripts/pr-guard-run.mjs ]; then echo "預設分支還沒有 pr-guard 腳本，略過"; exit 0; fi
+          node scripts/pr-guard-run.mjs $PR_NUMBERS # 只是 PR 編號（數字），腳本會再過濾
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBERS: ${{ github.event.pull_request.number || github.event.issue.number || join(github.event.workflow_run.pull_requests.*.number, ' ') }}
