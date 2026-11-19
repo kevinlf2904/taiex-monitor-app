@@ -41,15 +41,33 @@ test("CI 分份：tests/ 底下的單元測試檔都登記在 UNIT", () => {
 test("CI 分份：ci.yml 保留名為 test 的彙總檢查，而且等所有分份都成功才算通過", () => {
   const y = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
   assert.match(y, /^  test:\n/m, "合併門檻看的是名為 test 的檢查（AGENTS.md），不能改名");
-  assert.match(y, /needs: \[unit, e2e\]/);
+  assert.match(y, /needs: \[unit, e2e, changes\]/);
   assert.match(y, /node tests\/run\.mjs --unit/);
   assert.match(y, /node tests\/run\.mjs --e2e=\$\{\{ matrix\.shard \}\}\/\$\{\{ strategy\.job-total \}\}/, "份數用 job-total，不會跟 matrix 對不上");
-  assert.match(y, /^  test:\n    needs: \[unit, e2e\]\n    if: always\(\) &&/m, "test 要 always()，前面失敗時才會回報失敗而不是 skipped");
+  assert.match(y, /^  test:\n    needs: \[unit, e2e, changes\]\n(?:    #.*\n)*    if: \$\{\{ !cancelled\(\) &&/m, "test 要 !cancelled()，前面失敗或略過時才會回報結果而不是 skipped（#312）");
+  assert.doesNotMatch(y, /always\(\)/, "用 !cancelled()，不用 always()（取消的 run 不該回報失敗）");
   assert.match(y, /fail-fast: false/, "一份失敗其他份照跑");
   const pw = y.match(/mcr\.microsoft\.com\/playwright:v([\d.]+)-noble/), npm = [...y.matchAll(/playwright@([\d.]+)/g)].map(m => m[1]);
   assert.ok(pw && npm.length >= 2, "e2e 用 Playwright 官方容器，unit 與 e2e 都用 npm 裝 playwright");
   assert.deepEqual(npm, npm.map(() => pw[1]), "每一處 npm 裝的 playwright 都要和容器版本一致，否則找不到瀏覽器");
   assert.match(y, /options: --ipc=host --init/, "--ipc=host：容器的 /dev/shm 太小 chromium 會崩潰；--init：回收子程序");
-  assert.match(y, /needs\.unit\.result.*success/s);
-  assert.match(y, /needs\.e2e\.result.*success/s);
+  assert.match(y, /UNIT: \$\{\{ needs\.unit\.result \}\}/, "test 要讀 unit 的結果");
+  assert.match(y, /E2E: \$\{\{ needs\.e2e\.result \}\}/, "test 要讀 e2e 的結果");
+});
+
+test("CI 純文件 PR：PR 不用 paths 篩選，由 changes 判斷，沒有程式變更時 test 仍回報結果（#312 ruleset 前置 (a)）", () => {
+  const y = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+  const pr = y.match(/^  pull_request:\n((?:    .*\n)+)/m);
+  assert.ok(pr, "要有 pull_request 觸發");
+  assert.doesNotMatch(pr[1], /paths/, "PR 不能用 paths 篩選，否則純文件 PR 沒有 test 結果，ruleset 會擋住合併");
+  assert.match(y, /^  changes:\n/m);
+  for (const job of ["unit", "e2e"]) assert.match(y, new RegExp(`^  ${job}:\\n    needs: changes\\n    if: needs\\.changes\\.outputs\\.code == 'true'`, "m"), `${job} 只在有程式變更時跑`);
+  const step = y.slice(y.indexOf("  changes:"), y.indexOf("  unit:"));
+  for (const p of ["learner/*", "api/*", "scripts/*", "tests/*", ".github/*", ".agent/*", "AGENTS.md", "CLAUDE.md", ".claude/settings.json", "vercel.json", "package.json", "package-lock.json", "|CODEOWNERS|", "docs/CODEOWNERS"]) assert.ok(step.includes(p), `changes 要涵蓋 ${p}`);
+  assert.match(step, /\.previous_filename/, "改名時舊路徑也要比對");
+  assert.match(step, /if ! files=.*\n.*code=true.*exit 0\n/, "讀不到檔案清單時要照常跑測試");
+  const t = y.slice(y.indexOf("  test:"));
+  assert.match(t, /test "\$CHANGES" = success/, "changes 失敗時 test 要失敗");
+  assert.match(t, /test "\$UNIT" = skipped && test "\$E2E" = skipped/, "純文件 PR：unit／e2e 必須是略過，不能是失敗");
+  assert.match(t, /test "\$UNIT" = success && test "\$E2E" = success/);
 });

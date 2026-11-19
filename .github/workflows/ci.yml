@@ -1,11 +1,12 @@
 # 自動測試：每個 PR 和推到 main 時跑 tests/run.mjs（排程解析的單元測試＋學堂、看盤每個分頁的瀏覽器測試，任何頁面錯誤都算失敗）
 # 分成幾份平行跑（#312 PR C）：unit 跑單元測試（不裝瀏覽器），e2e 把瀏覽器測試分 3 份；最後由名為 test 的檢查彙總，
 # 全部成功才算通過。合併門檻看的是 test（AGENTS.md「測試與品質」），不能改名。
+# 每個 PR 都會產生 test 結果（#312 ruleset 前置 (a)）：PR 不用 paths 篩選，改由 changes 判斷有沒有改到要測的檔案；
+# 純文件 PR 不跑 unit／e2e，test 直接回報 success，之後 ruleset 要求「必須通過 test」時純文件 PR 才能合併。
 name: ci
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review] # draft PR（大檔上鎖用）不跑，轉成 ready for review 才跑
-    paths: ["learner/**", "api/**", "scripts/**", "tests/**", ".github/workflows/**", "AGENTS.md", "CLAUDE.md", ".agent/**", ".claude/settings.json", "vercel.json", "package.json", "package-lock.json"] # 轉址設定、相依套件改了也要測
   push:
     branches: [main]
     paths: ["learner/**.js", "learner/**.html", "learner/**.css", "api/**", "scripts/**", "tests/**", ".github/workflows/**", "vercel.json", "package.json", "package-lock.json"]
@@ -16,8 +17,44 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  unit:
+  # 判斷這次要不要跑測試。只有 PR 會判斷；push（已用 paths 篩選）與手動執行一律跑。
+  # 範圍：learner/**、api/**、scripts/**、tests/**、.github/**、.agent/**、AGENTS.md、CLAUDE.md、.claude/settings.json、vercel.json、
+  # package.json、package-lock.json（轉址設定、相依套件改了也要測）。比原本的 paths 多了 .github/ 底下 workflow 以外的檔案：
+  # PR 範本、copilot-instructions.md、CODEOWNERS 都有單元測試在檢查；根目錄與 docs/ 的 CODEOWNERS 也算（測試要求只能有 .github/ 那份）（#322 Antigravity P2）。
+  # 改名的檔案新舊路徑都看（把程式檔移到 docs/ 也要測）。讀不到檔案清單時當成有程式變更，寧可多跑也不要漏測。
+  changes:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.check.outputs.code }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$EVENT" != pull_request ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if ! files=$(gh api "repos/$REPO/pulls/$PR/files?per_page=100" --paginate --jq '.[] | .filename, (.previous_filename // empty)'); then
+            echo "讀不到 PR 檔案清單，照常跑測試"; echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          code=false
+          while IFS= read -r f; do
+            case "$f" in
+              learner/*|api/*|scripts/*|tests/*|.github/*|.agent/*|AGENTS.md|CLAUDE.md|.claude/settings.json|vercel.json|package.json|package-lock.json|CODEOWNERS|docs/CODEOWNERS)
+                echo "要測：$f"; code=true ;;
+            esac
+          done <<< "$files"
+          [ -n "$files" ] || code=true # 清單是空的（不該發生）也照常跑
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+  unit:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -29,7 +66,8 @@ jobs:
       - run: for f in learner/*.js scripts/*.mjs api/*.js api/_lib/*.js; do node --check "$f" || exit 1; done
       - run: node tests/run.mjs --unit
   e2e:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     # 用 Playwright 官方容器：chromium 與系統相依套件都已裝好，省掉每份 3～10 分鐘的安裝（#312，#315 實測 223～570 秒）。
     # 版本要和下面 npm 裝的 playwright@1.56.1 一致，否則找不到對應的瀏覽器。--ipc=host：容器預設 /dev/shm 只有 64MB，chromium 會崩潰；
@@ -50,11 +88,23 @@ jobs:
       - run: npm i --no-save --no-audit --no-fund playwright@1.56.1
       - run: node tests/run.mjs --e2e=${{ matrix.shard }}/${{ strategy.job-total }}
   test:
-    needs: [unit, e2e]
-    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) # 前面失敗或取消也要跑，才會回報失敗
+    needs: [unit, e2e, changes]
+    # !cancelled()：前面失敗或略過也要跑，才會回報結果；整個 run 被取消（同分支有新推送）時不跑，由新的 run 回報
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - run: |
-          echo "unit=${{ needs.unit.result }} e2e=${{ needs.e2e.result }}"
-          test "${{ needs.unit.result }}" = success && test "${{ needs.e2e.result }}" = success
+      - env:
+          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          UNIT: ${{ needs.unit.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          echo "changes=$CHANGES code=$CODE unit=$UNIT e2e=$E2E"
+          test "$CHANGES" = success
+          if [ "$CODE" = false ]; then
+            echo "沒有改到要測的檔案（純文件等），不跑 unit／e2e"
+            test "$UNIT" = skipped && test "$E2E" = skipped
+          else
+            test "$UNIT" = success && test "$E2E" = success
+          fi
