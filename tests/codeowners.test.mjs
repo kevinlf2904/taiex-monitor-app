@@ -1,4 +1,4 @@
-// .github/CODEOWNERS（#312 G1）：workflow、協作規則、部署設定都要有 owner，ruleset 開啟 Code Owner 審查（G2）後才擋得住
+// .github/CODEOWNERS（#312 G1）：workflow、協作規則、部署設定、排程寫回入口都要有 owner，ruleset 開啟 Code Owner 審查（G2）後才擋得住
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
@@ -32,16 +32,16 @@ test("CODEOWNERS：每條規則都從 repo 根目錄寫起、只有 owner 帳號
   }
 });
 
-test("CODEOWNERS：workflow、本檔、範本、協作規則、AI 設定、部署設定都有 owner", () => {
+test("CODEOWNERS：workflow、本檔、範本、協作規則、AI 設定、部署設定、排程寫回入口都有 owner", () => {
   for (const p of [".github/workflows/ci.yml", ".github/workflows/pr-guard.yml", ".github/workflows/twse-daily.yml", ".github/CODEOWNERS",
     ".github/pull_request_template.md", "AGENTS.md", "CLAUDE.md", ".agent/rules/klinelab.md", ".agent/workflows/merge.md",
-    ".claude/settings.json", "vercel.json"]) {
+    ".claude/settings.json", "vercel.json", "scripts/commit-data.sh"]) {
     assert.deepEqual(ownersOf(p), ["@kevinlf2904"], `${p} 要有 owner`);
   }
 });
 
 test("CODEOWNERS：一般程式、測試、文件與排程產物不需要 owner 核准（避免每個 PR 都卡使用者）", () => {
-  for (const p of ["learner/watch.html", "learner/core.js", "tests/run.mjs", "docs/plans/x.md", "learner/data/x.json", "README.md", "scripts/commit-data.sh"]) {
+  for (const p of ["learner/watch.html", "learner/core.js", "tests/run.mjs", "docs/plans/x.md", "learner/data/x.json", "README.md", "scripts/bump-version.mjs", "scripts/pr-guard.mjs"]) {
     assert.equal(ownersOf(p), null, `${p} 不在 CODEOWNERS 範圍`);
   }
 });
