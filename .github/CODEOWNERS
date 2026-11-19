@@ -1,6 +1,8 @@
 # Code owner（#312 G1）：下列路徑的 PR 需要 owner 本人核准。
 # 要等 main 的 ruleset 開啟「Require review from Code Owners」（#312 G2）才會生效；在那之前這個檔案只是標示，不會擋合併。
-# 所有 AI 共用 owner 帳號，AI 用這個身分送出的核准不算數，必須由使用者本人在 GitHub 介面上核准。
+# 限制：所有 AI 與使用者共用 owner 帳號開 PR，而 GitHub 不允許 PR 作者核准自己的 PR，所以這類 PR 沒有人能送出 Code Owner 核准。
+# 開啟 G2 時要二選一（#323 Antigravity P2）：ruleset 給 owner（admin）bypass，由使用者本人確認後合併；
+# 或改由獨立的 GitHub App／bot 帳號開 PR，再由使用者本人核准。不論哪一種，AI 都不能代替使用者核准或 bypass。
 # 規則由上往下比對，同一個檔案以最後一條符合的為準；不要在後面加沒有 owner 的規則蓋掉這些路徑。
 # 修改這份清單時，同步更新 tests/codeowners.test.mjs。
 
@@ -11,10 +13,13 @@
 /AGENTS.md @kevinlf2904
 /CLAUDE.md @kevinlf2904
 /.agent/ @kevinlf2904
-/.claude/settings.json @kevinlf2904
+/.claude/ @kevinlf2904
 
 # 部署設定
 /vercel.json @kevinlf2904
 
-# 24 支排程共用的寫回 main 入口（git commit／push）；其他 scripts/ 不納入，避免日常 PR 都要 owner 核准
+# 會直接影響 main 或正式站的腳本，只納入單檔；其他 scripts/ 不納入，避免日常 PR 都要 owner 核准
+# commit-data.sh：24 支排程共用的寫回 main 入口（git commit／push）
+# vercel-ignore.mjs：vercel.json 的 ignoreCommand，決定要不要部署（改壞會讓正式站不再更新）
 /scripts/commit-data.sh @kevinlf2904
+/scripts/vercel-ignore.mjs @kevinlf2904

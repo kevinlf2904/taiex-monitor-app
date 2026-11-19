@@ -32,10 +32,15 @@ test("CODEOWNERS：每條規則都從 repo 根目錄寫起、只有 owner 帳號
   }
 });
 
+test("CODEOWNERS：vercel.json 的 ignoreCommand 指向的腳本也有 owner", () => {
+  const cmd = JSON.parse(readFileSync(new URL("vercel.json", root), "utf8")).ignoreCommand || "";
+  for (const m of cmd.matchAll(/scripts\/[\w.-]+/g)) assert.deepEqual(ownersOf(m[0]), ["@kevinlf2904"], `${m[0]} 決定要不要部署，要有 owner`);
+});
+
 test("CODEOWNERS：workflow、本檔、範本、協作規則、AI 設定、部署設定、排程寫回入口都有 owner", () => {
   for (const p of [".github/workflows/ci.yml", ".github/workflows/pr-guard.yml", ".github/workflows/twse-daily.yml", ".github/CODEOWNERS",
     ".github/pull_request_template.md", "AGENTS.md", "CLAUDE.md", ".agent/rules/klinelab.md", ".agent/workflows/merge.md",
-    ".claude/settings.json", "vercel.json", "scripts/commit-data.sh"]) {
+    ".claude/settings.json", ".claude/hooks/x.sh", "vercel.json", "scripts/commit-data.sh", "scripts/vercel-ignore.mjs"]) {
     assert.deepEqual(ownersOf(p), ["@kevinlf2904"], `${p} 要有 owner`);
   }
 });
