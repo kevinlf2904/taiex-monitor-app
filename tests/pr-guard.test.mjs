@@ -340,6 +340,14 @@ test("PR 說明檢查：行內程式碼可以在同一段落內跨行，空行�
   assert.deepEqual(closingRefs("`open\n   > fixes #43\n`"), [43], "前面最多 3 個空格的 > 也算");
   assert.deepEqual(closingRefs("`open\n<div>\nCloses #44\n</div>\n`"), [44], "HTML 區塊結束段落");
   assert.deepEqual(closingRefs("`open\n<!-- x -->\nCloses #45 `"), [45], "<!-- 開頭的行也結束段落");
+  // #324 Antigravity P2／P3：段落邊界與區塊開頭用同一套判斷；行內標籤不中斷段落；HTML 區塊裡的反引號只是文字
+  assert.deepEqual(closingRefs("`open\n```foo` bar\nCloses #42\n`"), [42], "資訊字串含反引號的 ``` 行不是區塊，也不結束段落");
+  assert.deepEqual(closingRefs("`open\n<span> `\nCloses #46\n`"), [46], "行內標籤不結束段落");
+  assert.deepEqual(closingRefs("`open\n<https://example.com> `\nCloses #47\n`"), [47], "autolink 不結束段落");
+  assert.deepEqual(closingRefs("`open\n<!-- x --> `\nCloses #48\n`"), [48], "<!-- 開頭的 HTML 區塊裡，反引號不開始行內程式碼");
+  assert.deepEqual(closingRefs("<!-- a\nb\n--> `\nCloses #49\n`"), [49], "跨行註解結束那一行也一樣");
+  assert.deepEqual(closingRefs("<div>\nfoo `\nCloses #50\n`\n</div>"), [50], "HTML 區塊裡到空行為止都是文字");
+  assert.deepEqual(closingRefs("<div>\n\n`a\nCloses #51\n`"), [], "空行後 HTML 區塊結束，恢復一般解析");
   const body = "## 改了什麼\n說明 `a\n## 測試` 不算標題\nx`\n## 驗證重點\ny";
   assert.deepEqual(Object.keys(sections(body)), ["改了什麼", "測試` 不算標題", "驗證重點"], "## 開頭的行本身會結束段落，所以照樣是標題");
 });

@@ -177,14 +177,19 @@ export const TEMPLATE_SECTIONS = ["誰做的", "改了什麼", "還沒做完", "
 // 回傳 [{ line, code, prose }]：code＝這行在 fenced code block 裡（含開頭與結尾的 ``` 行，原樣保留）；
 // 其他行 line 已去掉 HTML 註解（`行內程式碼` 裡的 <!-- 不算註解），prose 再去掉行內程式碼（給關閉關鍵字用）。
 // 行內程式碼照 CommonMark：結尾要是長度完全相同的反引號串，可以在同一段落內跨行（#320 ChatGPT P3）；
-// 整段都找不到結尾就當一般文字。空行、標題、--- ／ ===、``` 區塊開頭、清單項目開頭、> 引用、< 開頭的 HTML 都會結束段落，
+// 整段都找不到結尾就當一般文字。空行、標題、--- ／ ===、``` 區塊開頭、清單項目開頭、> 引用、HTML 區塊開頭都會結束段落，
 // 標題行本身也不會往下延伸。拿不準時寧可當成段落結束：最多多算一個 Closes（多提醒），不會漏算（#324 ChatGPT P2）。
-const BLOCK_END = /^\s*$|^ {0,3}(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|[-=]+[ \t]*$|(?:[-*_][ \t]*){3,}$|[-*+][ \t]|\d{1,9}[.)][ \t]|>|<[A-Za-z!?/])/;
+// HTML 區塊（CommonMark 第 1–6 類；<span>、<https://…> 這種行內標籤不算）裡的反引號只是文字，不會開始行內程式碼；
+// 區塊到空行為止，<!-- 開頭的則到註解結束那一行為止（#324 Antigravity P2／P3）。
+const fenceStart = line => { const m = line.match(/^ {0,3}(`{3,}|~{3,})/); return m && !(m[1][0] === "`" && line.slice(m[0].length).includes("`")) ? m : null; };
+const HTML_TAGS = "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul";
+const HTML_BLOCK = new RegExp(`^ {0,3}(?:<(?:script|pre|style|textarea)(?:[\\s>]|$)|<!--|<\\?|<![A-Za-z]|<!\\[CDATA\\[|</?(?:${HTML_TAGS})(?:[\\s/>]|$))`, "i");
+const BLOCK_END = line => /^\s*$|^ {0,3}(?:#{1,6}(?:\s|$)|[-=]+[ \t]*$|(?:[-*_][ \t]*){3,}$|[-*+][ \t]|\d{1,9}[.)][ \t]|>)/.test(line) || !!fenceStart(line) || HTML_BLOCK.test(line);
 const tickRun = (s, n, from = 0) => { for (const r of s.slice(from).matchAll(/`+/g)) if (r[0].length === n) return from + r.index; return -1; };
 export function markdownLines(body = "") {
   const out = [];
   const lines = String(body || "").replace(/\r\n/g, "\n").split("\n");
-  let fence = null, inComment = false, span = 0; // span＝跨行中的行內程式碼反引號數
+  let fence = null, inComment = false, span = 0, html = ""; // span＝跨行中的行內程式碼反引號數；html＝在 HTML 區塊裡（"block" 到空行、"comment" 到註解結束）
   for (let k = 0; k < lines.length; k++) {
     const line = lines[k];
     if (fence) {
@@ -203,19 +208,21 @@ export function markdownLines(body = "") {
       if (end < 0) { out.push({ line: "", code: false, prose: "" }); continue; }
       text = text.slice(end + 3); inComment = false;
     } else {
-      const m = line.match(/^ {0,3}(`{3,}|~{3,})/);
-      if (m && !(m[1][0] === "`" && line.slice(m[0].length).includes("`"))) { fence = m[1]; out.push({ line, code: true }); continue; }
+      const m = fenceStart(line);
+      if (m) { fence = m[1]; html = ""; out.push({ line, code: true }); continue; }
     }
+    if (/^\s*$/.test(line)) html = "";
+    else if (!html && !start && HTML_BLOCK.test(line)) html = /^ {0,3}<!--/.test(line) ? "comment" : "block";
     for (let i = start; i < text.length;) {
-      if (text[i] === "`") {
+      if (text[i] === "`" && !html) {
         const n = text.slice(i).match(/^`+/)[0].length;
         const close = tickRun(text, n, i + n);
         if (close >= 0) { kept += text.slice(i, close + n); prose += " "; i = close + n; continue; }
         // 同一行沒有結尾：往下找同一段落（標題行不往下找）
         if (!/^ {0,3}#{1,6}(?:\s|$)/.test(line)) {
           let j = k + 1;
-          while (j < lines.length && !BLOCK_END.test(lines[j]) && tickRun(lines[j], n) < 0) j++;
-          if (j < lines.length && !BLOCK_END.test(lines[j])) { kept += text.slice(i); prose += " "; span = n; break; }
+          while (j < lines.length && !BLOCK_END(lines[j]) && tickRun(lines[j], n) < 0) j++;
+          if (j < lines.length && !BLOCK_END(lines[j])) { kept += text.slice(i); prose += " "; span = n; break; }
         }
         kept += text.slice(i, i + n); prose += text.slice(i, i + n); i += n; continue;
       }
@@ -226,6 +233,7 @@ export function markdownLines(body = "") {
       }
       prose += text[i]; kept += text[i++];
     }
+    if (html === "comment" && !inComment) html = "";
     out.push({ line: kept, code: false, prose });
   }
   return out;
