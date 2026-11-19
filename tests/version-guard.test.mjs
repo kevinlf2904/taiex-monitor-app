@@ -57,7 +57,7 @@ test("version-guard：只要改到四檔之一（含物件或改名原路徑）�
   }
 });
 
-test("version-guard：四個檔案版本號一致、格式正確、最新節帶版號且大於 main 時通過", () => {
+test("version-guard：四個檔案版本號一致、格式正確、最新節帶版號且大於 main（含跨日接續 N）時通過", () => {
   const head = makeState("2026.11.18-242", {
     readmeTitle: "PR 版本檢查",
     prevReadme: `\n### 庫存入口收斂與自動對帳（${BASE_VER}）\n- 舊紀錄\n`,
@@ -69,7 +69,7 @@ test("version-guard：四個檔案版本號一致、格式正確、最新節帶�
   });
   assert.deepEqual(res, { checked: true, ok: true, problems: [] });
 
-  // 同一天序號遞增、或跨日序號從 1 起算（依 compareVersion 年＞月＞日＞號）也應通過
+  // 同一天序號遞增、跨日序號接續遞增（不每日歸零）應通過
   assert.equal(checkVersion({
     files: [{ filename: "learner/index.html", status: "modified" }],
     base: BASE,
@@ -79,12 +79,17 @@ test("version-guard：四個檔案版本號一致、格式正確、最新節帶�
   assert.equal(checkVersion({
     files: ["learner/version.json"],
     base: BASE,
-    head: makeState("2026.11.18-1", { prevReadme: `\n### 舊（${BASE_VER}）\n` }),
+    head: makeState("2026.11.18-242", { prevReadme: `\n### 舊（${BASE_VER}）\n` }),
   }).ok, true);
+
+  // README 說明章節有「（數字＋文字）」標題時不得誤判為版本號
+  const docHeadingHead = makeState("2026.11.18-242");
+  docHeadingHead["learner/README.md"] = `# 說明\n\n## 資料\n\n### 大盤數字（2 種口徑）\n- 說明\n\n### 實測更新（2026.11.18-242）\n- 更新\n\n### 舊（${BASE_VER}）\n`;
+  assert.deepEqual(checkVersion({ files: VERSION_FILES, base: BASE, head: docHeadingHead }), { checked: true, ok: true, problems: [] });
 });
 
-test("version-guard：版本號沒有大於 main 時回報問題", () => {
-  for (const notNewer of [BASE_VER, "2026.11.17-240", "2026.11.16-999"]) {
+test("version-guard：版本號未遞增、日期倒退或跨日 N 歸零／未大於 main 時回報問題", () => {
+  for (const notNewer of [BASE_VER, "2026.11.17-240", "2026.11.16-999", "2026.11.16-242"]) {
     const res = checkVersion({
       files: ["learner/watch.html"],
       base: BASE,
@@ -94,6 +99,18 @@ test("version-guard：版本號沒有大於 main 時回報問題", () => {
     assert.equal(res.ok, false, notNewer);
     assert.ok(res.problems.length >= 1, notNewer);
     assert.match(res.problems.join("\n"), /大於|main/, notNewer);
+  }
+
+  // AGENTS.md「版本號」：N 接續現有號碼、不每日歸零（跨日歸零或持平須拒絕）
+  for (const resetOrSameN of ["2026.11.18-1", "2026.11.18-241"]) {
+    const res = checkVersion({
+      files: ["learner/version.json"],
+      base: BASE,
+      head: makeState(resetOrSameN),
+    });
+    assert.equal(res.checked, true, resetOrSameN);
+    assert.equal(res.ok, false, resetOrSameN);
+    assert.match(res.problems.join("\n"), /N|歸零|大於|main/, resetOrSameN);
   }
 });
 
@@ -114,6 +131,14 @@ test("version-guard：四個檔案版本號不一致（任一檔漏改或 HTML �
   assert.equal(rSplit.checked, true);
   assert.equal(rSplit.ok, false);
   assert.match(rSplit.problems.join("\n"), /watch\.html/);
+
+  // 只看完整路徑鍵（不退回比對根目錄同名檔 README.md 等）
+  const rootKeyHead = makeState(newVer);
+  delete rootKeyHead["learner/README.md"];
+  rootKeyHead["README.md"] = makeState(newVer)["learner/README.md"];
+  const rRootKey = checkVersion({ files: VERSION_FILES, base: BASE, head: rootKeyHead });
+  assert.equal(rRootKey.ok, false);
+  assert.match(rRootKey.problems.join("\n"), /learner\/README\.md/);
 });
 
 test("version-guard：版本格式不是 YYYY.MM.DD-N 或 version.json 毀損時回報問題（不拋錯崩潰）", () => {
@@ -156,12 +181,18 @@ test("version-guard：README 沒在最新一節標題帶入新版號時回報問
   assert.equal(r1.ok, false);
   assert.match(r1.problems.join("\n"), /README\.md/);
 
-  // 2. README 加了標題但沒帶版本、只寫在內文
+  // 2. README 加了標題但沒帶合法 YYYY.MM.DD-N（僅寫內文、或帶 v 前綴）
   const proseOnly = makeState(newVer);
   proseOnly["learner/README.md"] = `# 說明\n\n### 沒帶版本的標題\n- 版本 ${newVer}\n\n### 舊功能（${BASE_VER}）\n- 舊\n`;
   const r2 = checkVersion({ files: VERSION_FILES, base: BASE, head: proseOnly });
   assert.equal(r2.ok, false);
   assert.match(r2.problems.join("\n"), /README\.md/);
+
+  const vPrefixReadme = makeState(newVer);
+  vPrefixReadme["learner/README.md"] = `# 說明\n\n### 錯誤前綴（v${newVer}）\n- 新\n\n### 舊功能（${BASE_VER}）\n- 舊\n`;
+  const r2b = checkVersion({ files: VERSION_FILES, base: BASE, head: vPrefixReadme });
+  assert.equal(r2b.ok, false);
+  assert.match(r2b.problems.join("\n"), /README\.md/);
 
   // 3. 新版章節加在舊版下方，而非最上方最新一節
   const appendedBottom = makeState(newVer);

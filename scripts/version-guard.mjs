@@ -22,10 +22,7 @@ export function touchesVersionFiles(files = []) {
 
 function readContent(map, file) {
   if (!map || typeof map !== "object") return undefined;
-  if (Object.hasOwn(map, file)) return map[file];
-  const short = file.split("/").pop();
-  if (short && Object.hasOwn(map, short)) return map[short];
-  return undefined;
+  return Object.hasOwn(map, file) ? map[file] : undefined;
 }
 
 function tryParseVersion(v) {
@@ -67,8 +64,8 @@ export function extractHtmlVersion(text, file = "HTML") {
 export function extractReadmeLatestVersion(text) {
   if (typeof text !== "string" || !text.trim()) return { version: null, error: "learner/README.md 缺少或內容為空" };
   const norm = text.replace(/\r\n/g, "\n");
-  // 只看「### 標題（數字/v 開頭版本）」這種更新紀錄標題，避開前面說明章節的（檔案名／備註）
-  const matches = [...norm.matchAll(/^###\s+\S.*?（([vV]?\d[^）\r\n]*)）\s*$/gm)];
+  // 與 scripts/bump-version.mjs 的 addSection 一致，只比對「### 標題（YYYY.MM.DD-N）」，避免說明章節的（檔案名／2 種口徑）誤判
+  const matches = [...norm.matchAll(/^###\s+\S.*?（(\d{4}\.\d{2}\.\d{2}-\d+)）\s*$/gm)];
   if (!matches.length) return { version: null, error: "learner/README.md 找不到最新一節標題（### 標題（YYYY.MM.DD-N））" };
   return { version: matches[0][1].trim(), error: null };
 }
@@ -118,14 +115,20 @@ export function checkVersion({ files = [], base = {}, head = {} } = {}) {
   }
 
   const baseJson = extractVersionJson(readContent(base, "learner/version.json"));
+  const baseParsed = baseJson.error ? null : tryParseVersion(baseJson.version);
   if (baseJson.error) {
     problems.push(`main（base）${baseJson.error}，無法比較版號`);
-  } else if (!tryParseVersion(baseJson.version)) {
+  } else if (!baseParsed) {
     problems.push(`main（base）的 learner/version.json 版號格式不對（${baseJson.version}），應為 YYYY.MM.DD-N`);
   } else {
     const compareTarget = headJsonVer || VERSION_FILES.map(f => headVers[f]).find(x => x.valid)?.version;
-    if (compareTarget && compareVersion(compareTarget, baseJson.version) <= 0) {
-      problems.push(`head 版號（${compareTarget}）沒有大於 main（${baseJson.version}）`);
+    if (compareTarget) {
+      const headParsed = parseVersion(compareTarget);
+      if (compareVersion(compareTarget, baseJson.version) <= 0) {
+        problems.push(`head 版號（${compareTarget}）沒有大於 main（${baseJson.version}）`);
+      } else if (headParsed.num <= baseParsed.num) {
+        problems.push(`head 版號序號 N（${headParsed.num}）必須大於 main（${baseParsed.num}，N 不每日歸零）`);
+      }
     }
   }
 
