@@ -172,25 +172,74 @@ const SOURCE = { comment: "（留言）", review: "（review）", inline: "（�
 // .github/pull_request_template.md 的五個段落，都要有內容（範本裡的 <!-- 註解 --> 不算）
 export const TEMPLATE_SECTIONS = ["誰做的", "改了什麼", "還沒做完", "測試", "驗證重點"];
 
-// 依「## 標題」切段落，內容去掉 HTML 註解與空白
-export function sections(body = "") {
-  const out = {};
-  let cur = null;
+// GitHub 不會把 HTML 註解、程式碼區塊裡的字當成標題或關閉關鍵字。
+// 逐行掃描，同時記住「在 ``` / ~~~ 區塊裡」和「在 <!-- 註解裡」兩種狀態：區塊裡的 <!-- 只是文字，註解裡的 ``` 也不算區塊。
+// 回傳 [{ line, code, prose }]：code＝這行在 fenced code block 裡（含開頭與結尾的 ``` 行，原樣保留）；
+// 其他行 line 已去掉 HTML 註解（`行內程式碼` 裡的 <!-- 不算註解），prose 再去掉行內程式碼（給關閉關鍵字用）。
+// 行內程式碼照 CommonMark：結尾要是長度完全相同的反引號串；找不到就當一般文字。只在同一行內配對。
+export function markdownLines(body = "") {
+  const out = [];
+  let fence = null, inComment = false;
   for (const line of String(body || "").replace(/\r\n/g, "\n").split("\n")) {
-    const m = line.match(/^##\s+(.+?)\s*$/);
-    if (m) { cur = m[1]; out[cur] = ""; continue; }
-    if (cur !== null) out[cur] += line + "\n";
+    if (fence) {
+      const m = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length) fence = null;
+      out.push({ line, code: true });
+      continue;
+    }
+    let text = line, kept = "", prose = "";
+    if (inComment) {
+      const end = text.indexOf("-->");
+      if (end < 0) { out.push({ line: "", code: false, prose: "" }); continue; }
+      text = text.slice(end + 3); inComment = false;
+    } else {
+      const m = line.match(/^ {0,3}(`{3,}|~{3,})/);
+      if (m && !(m[1][0] === "`" && line.slice(m[0].length).includes("`"))) { fence = m[1]; out.push({ line, code: true }); continue; }
+    }
+    for (let i = 0; i < text.length;) {
+      if (text[i] === "`") {
+        const n = text.slice(i).match(/^`+/)[0].length;
+        let close = -1;
+        for (const r of text.slice(i + n).matchAll(/`+/g)) if (r[0].length === n) { close = i + n + r.index; break; }
+        if (close >= 0) { kept += text.slice(i, close + n); prose += " "; i = close + n; continue; }
+        kept += text.slice(i, i + n); prose += text.slice(i, i + n); i += n; continue;
+      }
+      if (text.startsWith("<!--", i)) {
+        const end = text.indexOf("-->", i + 4);
+        if (end < 0) { inComment = true; break; }
+        i = end + 3; continue;
+      }
+      prose += text[i]; kept += text[i++];
+    }
+    out.push({ line: kept, code: false, prose });
   }
-  for (const k of Object.keys(out)) out[k] = out[k].replace(/<!--[\s\S]*?-->/g, "").trim();
   return out;
 }
 
-// 說明裡「Closes／Fixes／Resolves #N」關閉的編號（GitHub 認得的關閉關鍵字）
-export function closingRefs(body = "") {
-  return [...new Set([...String(body || "").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi)].map(m => Number(m[1])))];
+// 依「## 標題」切段落；程式碼區塊裡的「## 」不算標題，但區塊本身算段落內容（例如貼測試輸出）。內容去掉 HTML 註解與空白
+export function sections(body = "") {
+  const out = {};
+  let cur = null;
+  for (const { line, code } of markdownLines(body)) {
+    const m = !code && line.match(/^##\s+(.+?)\s*$/);
+    if (m) { cur = m[1]; out[cur] = ""; continue; }
+    if (cur !== null) out[cur] += line + "\n";
+  }
+  for (const k of Object.keys(out)) out[k] = out[k].trim();
+  return out;
 }
 
-// refs：[{ number, exists, isPR }]（由 GitHub API 查到的，見 scripts/pr-brief.mjs 的 collect）
+// 說明裡「Closes／Fixes／Resolves #N」關閉的編號（GitHub 認得的關閉關鍵字）；HTML 註解、程式碼區塊、`行內程式碼` 裡的不算
+export function closingRefs(body = "") {
+  const prose = markdownLines(body).filter(x => !x.code).map(x => x.prose).join("\n");
+  return [...new Set([...prose.matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi)].map(m => Number(m[1])))];
+}
+
+// gh api 失敗時的 HTTP 狀態碼（gh 會在錯誤訊息印出「HTTP 404」之類）；看不出來回 0
+export const httpStatus = e => Number((`${e?.stderr ?? ""}\n${e?.message ?? e}`.match(/HTTP (\d{3})/) || [])[1]) || 0;
+
+// refs：[{ number, exists, isPR, error }]（由 GitHub API 查到的，見 scripts/pr-brief.mjs 的 collect）
+// exists 只有查到 404 才是 false；403／429／5xx 等查詢失敗時 exists 是 null、error 是狀態碼，只提醒「查詢失敗」，不說編號不存在
 export function checkTemplate({ body = "", files = [], refs = [], headSha = "" } = {}) {
   const problems = [], notes = [];
   const sec = sections(body);
@@ -199,11 +248,13 @@ export function checkTemplate({ body = "", files = [], refs = [], headSha = "" }
     else if (!sec[name]) problems.push(`「## ${name}」是空的（只有範本註解不算；沒有就寫「無」）`);
   }
   for (const r of refs) {
-    if (!r.exists) problems.push(`Closes #${r.number} 指向不存在的編號（AGENTS.md：不得虛構編號）`);
+    if (r.exists == null) notes.push(`Closes #${r.number} 查詢失敗${r.error ? `（HTTP ${r.error}）` : ""}：無法確認編號是否存在，請自行確認`);
+    else if (!r.exists) problems.push(`Closes #${r.number} 指向不存在的編號（AGENTS.md：不得虛構編號）`);
     else if (r.isPR) problems.push(`Closes #${r.number} 是 PR 不是 Issue`);
   }
   const test = sec["測試"] || "";
-  if (classify(files).highRisk && /低風險例外[^\n]*?[：:]\s*[*`「]*是/.test(test)) problems.push("改到 high-risk 檔案，「低風險例外」不能寫「是」");
+  // 不在低風險例外的路徑範圍（含刪除測試檔）就不能寫「是」；沒有檔案清單時不判斷
+  if (files.length && !classify(files).lowRisk && /低風險例外[^\n]*?[：:]\s*[*`「]*是/.test(test)) problems.push("有檔案不在低風險例外範圍，「低風險例外」不能寫「是」");
   const shas = [...new Set((String(body || "").match(/\b[0-9a-f]{40}\b/g) || []))];
   if (headSha && shas.length && !shas.some(x => x === headSha)) notes.push(`說明裡寫的 SHA 都不是最新 head（${headSha.slice(0, 7)}）：推送後記得更新測試結果對應的 SHA`);
   return { ok: problems.length === 0, problems, notes };
