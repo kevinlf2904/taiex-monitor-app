@@ -53,7 +53,8 @@ export async function run(number, { dry = false, get = ghGet, write = gh, repo =
   const data = await collect(number, get, repo);
   // 已關閉／已合併的 PR、fork 來的 PR 不寫任何東西（ci 在 PR 關閉後才跑完、本機手動執行時也一樣）
   if (data.pr.state && data.pr.state !== "open") { log(`#${number} 已${data.pr.merged_at ? "合併" : "關閉"}，略過`); return []; }
-  if (data.pr.head?.repo?.full_name && data.pr.head.repo.full_name !== repo) { log(`#${number} 來自 fork，略過`); return []; }
+  // head.repo 為 null＝來源 fork 已刪除，一樣當成 fork 略過（#317 Antigravity P3）；假資料沒有 repo 欄位時照常處理
+  if (data.pr.head && "repo" in data.pr.head && (!data.pr.head.repo || data.pr.head.repo.full_name !== repo)) { log(`#${number} 來自 fork（或來源已刪除），略過`); return []; }
   const conflicts = bigFileConflicts({ number, files: data.files }, data.others);
   const current = (data.pr.labels || []).map(l => l.name);
   const { add, remove } = planLabels(current, wantedLabels(data.files, conflicts));

@@ -168,12 +168,53 @@ export function ciStatus(checkRuns, headSha, name = "test") {
 const STATE = { latest: "〔最新〕", stale: "〔舊 SHA〕", nosha: "〔未附 SHA〕" };
 const SOURCE = { comment: "（留言）", review: "（review）", inline: "（行內）" };
 
+// ---- PR 說明檢查（#312 PR E）：只提醒、不擋合併 ----
+// .github/pull_request_template.md 的五個段落，都要有內容（範本裡的 <!-- 註解 --> 不算）
+export const TEMPLATE_SECTIONS = ["誰做的", "改了什麼", "還沒做完", "測試", "驗證重點"];
+
+// 依「## 標題」切段落，內容去掉 HTML 註解與空白
+export function sections(body = "") {
+  const out = {};
+  let cur = null;
+  for (const line of String(body || "").replace(/\r\n/g, "\n").split("\n")) {
+    const m = line.match(/^##\s+(.+?)\s*$/);
+    if (m) { cur = m[1]; out[cur] = ""; continue; }
+    if (cur !== null) out[cur] += line + "\n";
+  }
+  for (const k of Object.keys(out)) out[k] = out[k].replace(/<!--[\s\S]*?-->/g, "").trim();
+  return out;
+}
+
+// 說明裡「Closes／Fixes／Resolves #N」關閉的編號（GitHub 認得的關閉關鍵字）
+export function closingRefs(body = "") {
+  return [...new Set([...String(body || "").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi)].map(m => Number(m[1])))];
+}
+
+// refs：[{ number, exists, isPR }]（由 GitHub API 查到的，見 scripts/pr-brief.mjs 的 collect）
+export function checkTemplate({ body = "", files = [], refs = [], headSha = "" } = {}) {
+  const problems = [], notes = [];
+  const sec = sections(body);
+  for (const name of TEMPLATE_SECTIONS) {
+    if (!(name in sec)) problems.push(`PR 說明缺少「## ${name}」段落`);
+    else if (!sec[name]) problems.push(`「## ${name}」是空的（只有範本註解不算；沒有就寫「無」）`);
+  }
+  for (const r of refs) {
+    if (!r.exists) problems.push(`Closes #${r.number} 指向不存在的編號（AGENTS.md：不得虛構編號）`);
+    else if (r.isPR) problems.push(`Closes #${r.number} 是 PR 不是 Issue`);
+  }
+  const test = sec["測試"] || "";
+  if (classify(files).highRisk && /低風險例外[^\n]*?[：:]\s*[*`「]*是/.test(test)) problems.push("改到 high-risk 檔案，「低風險例外」不能寫「是」");
+  const shas = [...new Set((String(body || "").match(/\b[0-9a-f]{40}\b/g) || []))];
+  if (headSha && shas.length && !shas.some(x => x === headSha)) notes.push(`說明裡寫的 SHA 都不是最新 head（${headSha.slice(0, 7)}）：推送後記得更新測試結果對應的 SHA`);
+  return { ok: problems.length === 0, problems, notes };
+}
+
 // pr-guard 狀態看板留言的記號（.github/workflows/pr-guard.yml 用它找到同一則留言原地更新；摘要本身不列入留言清單）
 export const BOARD_MARK = "<!-- pr-guard -->";
 // 看板＝機器人貼的一般留言、內文帶記號；人寫的留言就算提到記號字串也不算（不會被藏起來）
 export const isBoard = x => !!x?.bot && (x.source || "comment") === "comment" && String(x.body || "").includes(BOARD_MARK);
 
-export function formatBrief({ pr, files, comments = [], checkRuns = [], others = [] }) {
+export function formatBrief({ pr, files, comments = [], checkRuns = [], others = [], refs = [] }) {
   const head = pr.head.sha;
   const c = classify(files);
   const ci = ciStatus(checkRuns, head);
@@ -197,6 +238,10 @@ export function formatBrief({ pr, files, comments = [], checkRuns = [], others =
   for (const x of conflicts) L.push(`- ⚠️ 和 #${x.number}${x.lock ? "（鎖定中）" : ""} 撞到：${x.files.join("、")}`);
   if (c.ui.length) L.push(`- 介面檔案：需要 390／1280 驗證（Antigravity；Antigravity 是實作者時由 Claude Code）`);
   if (!c.lowRisk && !c.highRisk && files.length) L.push("- 不在低風險例外範圍，也不在 high-risk 清單：照一般審查（清單沒列到不代表低風險）");
+  const t = checkTemplate({ body: pr.body, files, refs, headSha: head });
+  L.push("", t.problems.length ? `PR 說明：⚠️ ${t.problems.length} 項待補（只是提醒）` : "PR 說明：✅ 五個段落都有內容");
+  for (const x of t.problems) L.push(`- ${x}`);
+  for (const x of t.notes) L.push(`- 提醒：${x}`);
   L.push("", ai.length ? "AI 留言：" : "AI 留言：無");
   for (const a of ai) L.push(`- ${STATE[a.state]}${a.kind}${a.from ? `（${a.from}${a.to ? ` → ${a.to}` : ""}）` : ""}${a.verdict ? ` ${a.verdict}` : ""}${a.source === "comment" ? "" : SOURCE[a.source]}｜${a.at || ""}｜${a.id}`);
   if (ai.some(a => a.state === "nosha")) L.push("- ⚠️ 有留言沒寫 SHA，無法確認針對哪個版本，請補留言或重新審查");

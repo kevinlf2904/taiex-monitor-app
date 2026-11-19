@@ -173,3 +173,45 @@ test("pr-guard：低風險路徑和 AGENTS.md「低風險例外」條文用的�
   const a = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
   for (const k of ["`docs/**`", "`learner/core.css`", "`learner/minimal.css`", "`.github/workflows/**`", "`api/**`", "`scripts/**`", "`package*.json`", "`learner/data/**`", "`vercel.json`"]) assert.ok(a.includes(k), `AGENTS.md 改了「${k}」的話，scripts/pr-guard.mjs 要跟著改`);
 });
+
+// ---- PR 說明檢查（#312 PR E）----
+import { checkTemplate, sections, closingRefs, TEMPLATE_SECTIONS } from "../scripts/pr-guard.mjs";
+const TEMPLATE = readFileSync(new URL("../.github/pull_request_template.md", import.meta.url), "utf8");
+const filled = (over = {}) => TEMPLATE_SECTIONS.map(n => `## ${n}\n${over[n] ?? `${n}的內容`}\n`).join("\n");
+
+test("PR 說明檢查：五個段落和 .github/pull_request_template.md 一致", () => {
+  assert.deepEqual(Object.keys(sections(TEMPLATE)), TEMPLATE_SECTIONS, "範本改了段落名稱，scripts/pr-guard.mjs 要跟著改");
+});
+
+test("PR 說明檢查：照抄範本（只有註解）或漏段落會提醒；都有內容就通過", () => {
+  const raw = checkTemplate({ body: TEMPLATE });
+  assert.equal(raw.problems.length, 5, "只有範本註解＝五段都空");
+  assert.match(raw.problems.join(), /「## 誰做的」是空的/);
+  const miss = checkTemplate({ body: filled().replace(/## 驗證重點[\s\S]*$/, "") });
+  assert.deepEqual(miss.problems, ["PR 說明缺少「## 驗證重點」段落"]);
+  assert.deepEqual(checkTemplate({ body: filled({ "還沒做完": "無" }) }).problems, [], "寫「無」算有內容");
+  assert.equal(checkTemplate({ body: "" }).problems.length, 5, "空說明不會丟錯");
+  assert.equal(checkTemplate({ body: null }).problems.length, 5);
+});
+
+test("PR 說明檢查：Closes #N 要存在而且是 Issue；Refs 不算關閉", () => {
+  assert.deepEqual(closingRefs("Closes #12，fixes #5、Resolves #12；Refs #312"), [12, 5]);
+  const r = checkTemplate({ body: filled(), refs: [{ number: 12, exists: false }, { number: 5, exists: true, isPR: true }, { number: 7, exists: true, isPR: false }] });
+  assert.deepEqual(r.problems, ["Closes #12 指向不存在的編號（AGENTS.md：不得虛構編號）", "Closes #5 是 PR 不是 Issue"]);
+});
+
+test("PR 說明檢查：high-risk 卻寫「低風險例外：是」要提醒；寫「否」或低風險檔案不提醒", () => {
+  const yes = filled({ "測試": "1. 本機通過\n3. 低風險例外：**是**（只改 docs）" });
+  assert.match(checkTemplate({ body: yes, files: ["scripts/x.mjs"] }).problems.join(), /「低風險例外」不能寫「是」/);
+  assert.deepEqual(checkTemplate({ body: yes, files: ["docs/a.md"] }).problems, []);
+  assert.deepEqual(checkTemplate({ body: filled({ "測試": "3. 低風險例外：**否**（改到 scripts/**）" }), files: ["scripts/x.mjs"] }).problems, []);
+});
+
+test("PR 說明檢查：寫的 SHA 不是最新 head 只提醒、不算問題", () => {
+  const sha = "a".repeat(40), head = "b".repeat(40);
+  const r = checkTemplate({ body: filled({ "測試": `CI（${sha}）通過` }), headSha: head });
+  assert.deepEqual(r.problems, []);
+  assert.match(r.notes.join(), /不是最新 head（bbbbbbb）/);
+  assert.deepEqual(checkTemplate({ body: filled({ "測試": `CI（${head}）通過` }), headSha: head }).notes, []);
+  assert.deepEqual(checkTemplate({ body: filled(), headSha: head }).notes, [], "沒寫 SHA 不提醒");
+});
