@@ -235,7 +235,8 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
   :is(:root[data-style="layout"], :root[data-style="lab"]) .top-tools { gap: 6px; }
   :is(:root[data-style="layout"], :root[data-style="lab"]) .prog-bar { display: none; }
   :is(:root[data-style="layout"], :root[data-style="lab"]) .top-inner { flex-wrap: nowrap; }
-  :is(:root[data-style="layout"], :root[data-style="lab"]) .brand { min-width: 0; flex: 1 1 auto; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .top .brand { min-width: 0; flex: 1 1 auto; }
+  :is(:root[data-style="layout"], :root[data-style="lab"]) .w-top .brand { flex: 0 0 auto; }
   :is(:root[data-style="layout"], :root[data-style="lab"]) .brand > div { min-width: 0; }
   :is(:root[data-style="layout"], :root[data-style="lab"]) .brand h1 { font-size: 19px; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; }
   :is(:root[data-style="layout"], :root[data-style="lab"]) .top-tools { flex: none; gap: 4px; }

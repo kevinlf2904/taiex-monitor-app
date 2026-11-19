@@ -344,6 +344,13 @@ test("今日市場 UI 修正回歸：分時圖順序、摘要預覽、空白工�
       });
       W.bf = {
         at: Date.now(),
+        cal: {
+          rows: [{ date: "2026-10-26", code: "2330", name: "台積電", kind: "除息", cash: 4.5 }],
+          conf: [{ date: "2026-10-26", code: "2454", name: "聯發科", time: "14:00" }]
+        },
+        news: {
+          "2330": [{ title: "台積電 2 奈米試產進度超前，明年下半年量產時程不變且客戶詢問度高", source: "中央社" }]
+        },
         us: {
           ok: true, dataStatus: "confirmed", updateMode: "after_close", dataDate: "2026-10-23",
           sourceTime: "16:00", tz: "美東", source: "Yahoo Finance",
@@ -358,6 +365,7 @@ test("今日市場 UI 修正回歸：分時圖順序、摘要預覽、空白工�
       };
       W.gl = globalFixture;
       W.tdPh = null;
+      renderTop();
       setLt("today");
       renderList();
     }, makeGlobalFixture());
@@ -385,7 +393,18 @@ test("今日市場 UI 修正回歸：分時圖順序、摘要預覽、空白工�
       const helpSummary = document.querySelector("#lx .td-help > summary");
       const breadthTitle = document.querySelector("#lx .mc-overview-grid .td-breadth-head b");
       const summaryBreadth = document.querySelector("#lx .td-market-summary .td-ms-breadth")?.textContent || "";
+      const wtopBrand = document.querySelector(".w-top .brand");
+      const ix = document.querySelector("#ix");
+      const ixCards = ix ? [...ix.querySelectorAll(".ixc")] : [];
+      const ixRect = ix?.getBoundingClientRect();
+      const pct0Rect = ixCards[0]?.querySelector(".num")?.getBoundingClientRect();
+      const ixc1Rect = ixCards[1]?.getBoundingClientRect();
+      const dotRect = document.querySelector("#dot")?.getBoundingClientRect();
       return {
+        brandFlexGrow: wtopBrand ? getComputedStyle(wtopBrand).flexGrow : null,
+        pct0InsideIx: !!(ixRect && pct0Rect && pct0Rect.right <= ixRect.right + 1),
+        ixc1NotLeaking: !!(ixRect && ixc1Rect && ixc1Rect.left >= ixRect.right - 0.5),
+        dotGapFromPct: dotRect && pct0Rect ? dotRect.left - pct0Rect.right : null,
         gridBeforeHead: !!(grid && head && (grid.compareDocumentPosition(head) & Node.DOCUMENT_POSITION_FOLLOWING)),
         headDirectPrevChart: !!(head && chart && head.nextElementSibling === chart),
         coreCount: cards.length,
@@ -404,6 +423,12 @@ test("今日市場 UI 修正回歸：分時圖順序、摘要預覽、空白工�
         helpHeight: helpSummary ? helpSummary.getBoundingClientRect().height : 0
       };
     });
+    assert.equal(overview.brandFlexGrow, "0", width + "：頂部 .w-top .brand 不得撐滿空間壓縮指數列");
+    assert.equal(overview.pct0InsideIx, true, width + "：頂部加權漲跌幅應完整顯示於指數列可視範圍內");
+    if (width <= 430) {
+      assert.equal(overview.ixc1NotLeaking, true, "390px 頂部指數列不應露出下一顆指數半字");
+      assert.ok(overview.dotGapFromPct >= 12, "390px 頂部加權漲跌幅與收盤圓點應保留足夠間距：" + overview.dotGapFromPct);
+    }
     assert.equal(overview.gridBeforeHead, true, width + "：核心數字應在分時圖標題之前");
     assert.equal(overview.headDirectPrevChart, true, width + "：分時圖標題應緊鄰分時圖");
     assert.equal(overview.coreCount, 6, width + "：核心數字應完整產出 6 張卡");
@@ -425,36 +450,49 @@ test("今日市場 UI 修正回歸：分時圖順序、摘要預覽、空白工�
     await p.evaluate(() => { const d = document.querySelector("#lx #td-sec-mine"); if (d) d.open = true; });
     assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector("#lx #td-sec-mine > summary .dh-sec-v")).display), "none", width + "：明細展開後隱藏重複預覽");
 
-    // 全球總經無任何 .dh-sec：區塊列與明細容器皆應隱藏；快捷連結觸控高度 >= 44px；手機版標題與代號改上下排列且名稱可換行
+    // 全球總經無任何 .dh-sec：區塊列與明細容器皆應隱藏；快捷連結觸控高度 >= 44px；手機版標題與代號改上下排列且名稱可換行；分類列計數靠右貼近＋／－
     await selectWorkspace(p, "global");
-    const globalCheck = await p.evaluate(() => ({
-      secbarHidden: !!document.querySelector("#lx .dh-secbar")?.hidden,
-      secsHidden: !!document.querySelector("#lx .dh-secs")?.hidden,
-      shortcutHeights: [...document.querySelectorAll("#lx .mc-global-shortcuts .linkbtn")].map(el => el.getBoundingClientRect().height),
-      globalNameDir: getComputedStyle(document.querySelector("#lx .mc-global-name")).flexDirection,
-      globalNameWrap: getComputedStyle(document.querySelector("#lx .mc-global-name b")).whiteSpace
-    }));
+    const globalCheck = await p.evaluate(() => {
+      const groupSum = document.querySelector("#lx .mc-global-group > summary");
+      const groupCount = groupSum?.querySelector(".mc-global-group-count");
+      const sumRect = groupSum?.getBoundingClientRect();
+      const countRect = groupCount?.getBoundingClientRect();
+      return {
+        secbarHidden: !!document.querySelector("#lx .dh-secbar")?.hidden,
+        secsHidden: !!document.querySelector("#lx .dh-secs")?.hidden,
+        shortcutHeights: [...document.querySelectorAll("#lx .mc-global-shortcuts .linkbtn")].map(el => el.getBoundingClientRect().height),
+        globalNameDir: getComputedStyle(document.querySelector("#lx .mc-global-name")).flexDirection,
+        globalNameWrap: getComputedStyle(document.querySelector("#lx .mc-global-name b")).whiteSpace,
+        countDistFromRight: sumRect && countRect ? sumRect.right - countRect.right : Infinity
+      };
+    });
     assert.equal(globalCheck.secbarHidden, true, width + "：全球總經沒有明細時不應顯示區塊列");
     assert.equal(globalCheck.secsHidden, true, width + "：全球總經沒有明細時應隱藏明細容器");
     assert.ok(globalCheck.shortcutHeights.length > 0 && globalCheck.shortcutHeights.every(h => h >= 44), width + "：全球總經快捷連結觸控高度至少 44px");
+    assert.ok(globalCheck.countDistFromRight <= 48, width + "：全球總經分類列計數應靠右貼近＋／－：" + globalCheck.countDistFromRight);
     if (width <= 430) {
       assert.equal(globalCheck.globalNameDir, "column", "手機版全球標的名稱與代號應上下排列");
       assert.equal(globalCheck.globalNameWrap, "normal", "手機版全球標的長名稱應允許換兩行");
     }
 
-    // 技術攻防：現在位置需以分隔符號排版；空白情境目標/失效不輸出空行
+    // 技術攻防：現在位置需以分隔符號排版；空白情境目標/失效不輸出空行；事件清單連結文字靠左對齊
     await selectWorkspace(p, "technical");
     const techCheck = await p.evaluate(() => {
       const plan = document.querySelector("#lx #td-sec-plan");
       if (plan) plan.open = true;
+      const eventBtns = [...document.querySelectorAll("#lx #td-sec-plan .bfsec .tlist .linkbtn")];
       return {
         position: document.querySelector("#lx .mc-tech-position")?.textContent?.trim() || "",
-        planText: plan?.querySelector(".dh-sec-b")?.textContent || ""
+        planText: plan?.querySelector(".dh-sec-b")?.textContent || "",
+        eventLinkCount: eventBtns.length,
+        eventLinksLeft: eventBtns.every(btn => getComputedStyle(btn).textAlign === "left")
       };
     });
     assert.match(techCheck.position, /^現在位置：.+・.+/, width + "：現在位置應含標點與分隔符：" + techCheck.position);
     assert.doesNotMatch(techCheck.planText, /目標：/, width + "：未提供 target 時不應輸出空白目標列");
     assert.doesNotMatch(techCheck.planText, /失效：/, width + "：未提供 invalidation 時不應輸出空白失效列");
+    assert.ok(techCheck.eventLinkCount >= 3, width + "：應渲染技術攻防事件清單連結以驗證對齊：" + techCheck.eventLinkCount);
+    assert.equal(techCheck.eventLinksLeft, true, width + "：技術攻防事件清單文字應靠左對齊");
 
     // AI 研究：區塊列隱藏、開始按鈕高度 >= 44px
     await selectWorkspace(p, "research");
