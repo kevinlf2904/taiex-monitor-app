@@ -314,9 +314,9 @@ test("PR 說明檢查：程式碼區塊裡的 <!-- 只是文字，不會吞掉�
   assert.deepEqual(closingRefs("a <!-- Closes #1 --> Closes #2 <!-- fixes #3 --> b\n<!-- x\ny --> Resolves #4"), [2, 4]);
 });
 
-test("PR 說明檢查：行內程式碼要長度相同的反引號才算關閉，且不跨行（#320 Antigravity P3）", () => {
+test("PR 說明檢查：行內程式碼要長度相同的反引號才算關閉，且不跨段落配對（#320 Antigravity P3）", () => {
   assert.deepEqual(closingRefs("例如 `` `foo` Closes #99 `` 不算關閉"), [], "雙反引號裡含單反引號");
-  assert.deepEqual(closingRefs("## 改了什麼\n提到 `未閉合反引號\n\nCloses #42\n\n## 測試\n跑 `ok` 過了"), [42], "沒關閉的反引號不會跨行吞掉 Closes");
+  assert.deepEqual(closingRefs("## 改了什麼\n提到 `未閉合反引號\n\nCloses #42\n\n## 測試\n跑 `ok` 過了"), [42], "沒關閉的反引號不會跨段落吞掉 Closes");
   assert.deepEqual(closingRefs("用 `a ```<!-- b` 說明\nCloses #77"), [77], "``` 不能關閉單反引號");
   assert.deepEqual(Object.keys(sections("用 `a ```<!-- b` 說明\n## 測試\nx")), ["測試"]);
   assert.deepEqual(closingRefs("```js` 不是區塊，Closes #5"), [5], "資訊字串含反引號的 ``` 行是一般文字");
