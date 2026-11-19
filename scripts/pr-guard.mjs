@@ -174,7 +174,9 @@ export const TEMPLATE_SECTIONS = ["誰做的", "改了什麼", "還沒做完", "
 
 // GitHub 不會把 HTML 註解、程式碼區塊裡的字當成標題或關閉關鍵字。
 // 逐行掃描，同時記住「在 ``` / ~~~ 區塊裡」和「在 <!-- 註解裡」兩種狀態：區塊裡的 <!-- 只是文字，註解裡的 ``` 也不算區塊。
-// 回傳 [{ line, code }]：code＝這行在 fenced code block 裡（含開頭與結尾的 ``` 行，原樣保留）；其他行已去掉 HTML 註解（`行內程式碼` 裡的 <!-- 不算註解）
+// 回傳 [{ line, code, prose }]：code＝這行在 fenced code block 裡（含開頭與結尾的 ``` 行，原樣保留）；
+// 其他行 line 已去掉 HTML 註解（`行內程式碼` 裡的 <!-- 不算註解），prose 再去掉行內程式碼（給關閉關鍵字用）。
+// 行內程式碼照 CommonMark：結尾要是長度完全相同的反引號串；找不到就當一般文字。只在同一行內配對。
 export function markdownLines(body = "") {
   const out = [];
   let fence = null, inComment = false;
@@ -185,10 +187,10 @@ export function markdownLines(body = "") {
       out.push({ line, code: true });
       continue;
     }
-    let text = line, kept = "";
+    let text = line, kept = "", prose = "";
     if (inComment) {
       const end = text.indexOf("-->");
-      if (end < 0) { out.push({ line: "", code: false }); continue; }
+      if (end < 0) { out.push({ line: "", code: false, prose: "" }); continue; }
       text = text.slice(end + 3); inComment = false;
     } else {
       const m = line.match(/^ {0,3}(`{3,}|~{3,})/);
@@ -196,19 +198,20 @@ export function markdownLines(body = "") {
     }
     for (let i = 0; i < text.length;) {
       if (text[i] === "`") {
-        const run = text.slice(i).match(/^`+/)[0];
-        const close = text.indexOf(run, i + run.length);
-        if (close >= 0) { kept += text.slice(i, close + run.length); i = close + run.length; continue; }
-        kept += run; i += run.length; continue;
+        const n = text.slice(i).match(/^`+/)[0].length;
+        let close = -1;
+        for (const r of text.slice(i + n).matchAll(/`+/g)) if (r[0].length === n) { close = i + n + r.index; break; }
+        if (close >= 0) { kept += text.slice(i, close + n); prose += " "; i = close + n; continue; }
+        kept += text.slice(i, i + n); prose += text.slice(i, i + n); i += n; continue;
       }
       if (text.startsWith("<!--", i)) {
         const end = text.indexOf("-->", i + 4);
         if (end < 0) { inComment = true; break; }
         i = end + 3; continue;
       }
-      kept += text[i++];
+      prose += text[i]; kept += text[i++];
     }
-    out.push({ line: kept, code: false });
+    out.push({ line: kept, code: false, prose });
   }
   return out;
 }
@@ -228,12 +231,12 @@ export function sections(body = "") {
 
 // 說明裡「Closes／Fixes／Resolves #N」關閉的編號（GitHub 認得的關閉關鍵字）；HTML 註解、程式碼區塊、`行內程式碼` 裡的不算
 export function closingRefs(body = "") {
-  const prose = markdownLines(body).filter(x => !x.code).map(x => x.line).join("\n").replace(/(`+)[^`]*?\1/g, "");
+  const prose = markdownLines(body).filter(x => !x.code).map(x => x.prose).join("\n");
   return [...new Set([...prose.matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi)].map(m => Number(m[1])))];
 }
 
 // gh api 失敗時的 HTTP 狀態碼（gh 會在錯誤訊息印出「HTTP 404」之類）；看不出來回 0
-export const httpStatus = e => Number((String(e?.stderr || e?.message || e).match(/HTTP (\d{3})/) || [])[1]) || 0;
+export const httpStatus = e => Number((`${e?.stderr ?? ""}\n${e?.message ?? e}`.match(/HTTP (\d{3})/) || [])[1]) || 0;
 
 // refs：[{ number, exists, isPR, error }]（由 GitHub API 查到的，見 scripts/pr-brief.mjs 的 collect）
 // exists 只有查到 404 才是 false；403／429／5xx 等查詢失敗時 exists 是 null、error 是狀態碼，只提醒「查詢失敗」，不說編號不存在
