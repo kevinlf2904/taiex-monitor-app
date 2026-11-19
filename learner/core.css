@@ -242,6 +242,7 @@ html[data-big] .linkbtn { padding-top: 4px; padding-bottom: 4px; }
 /* 滑鼠也一樣：可點範圍至少 24px（#262 FE-02）。分段按鈕直接設最小高度（原本 23px，只差 1px）；
    文字按鈕、ⓘ 說明用透明外框撐大一點點，不改版面，也不會蓋到旁邊的按鈕。觸控裝置在下面另外撐得更大。 */
 .mkseg button { min-height: 24px; }
+.linkbtn { text-align: left; }
 :is(.linkbtn, .itip) { position: relative; }
 .linkbtn::after { content: ""; position: absolute; inset: -2px -1px; }
 .itip::after { content: ""; position: absolute; inset: -4px -2px; }
@@ -526,6 +527,13 @@ u.conf { background: var(--up); } u.div { background: var(--down); } u.etf { bac
   .td-ix-stat { padding: 5px 4px; }
   .td-ix-stat b { font-size: 12px; }
   .td-breadth-legend, .td-breadth-foot { font-size: 9.5px; }
+}
+.td-page .mc-global-group-title { flex: 1 1 auto; }
+.td-page .mc-global-group-count { margin-left: auto; }
+@media (max-width: 480px) {
+  .w-top .brand { flex: 0 0 auto; }
+  .w-top .ix { scroll-snap-type: x mandatory; }
+  .w-top .ixc { min-width: 100%; justify-content: center; scroll-snap-align: start; box-sizing: border-box; padding: 3px 4px; }
 }
 @media (max-width: 430px) {
   .td-page .dh-status-bar { padding: 5px 10px; gap: 4px 6px; margin-bottom: 8px; }
