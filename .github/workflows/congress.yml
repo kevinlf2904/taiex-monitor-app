@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 100
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Validate inputs
         if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
@@ -43,7 +43,7 @@ jobs:
           fi
       - if: ${{ !github.event.inputs.dump || github.event.inputs.dump == '0' }}
         run: git pull -q origin ${{ github.ref_name }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
       # 眾議院的申報是 PDF，用 pdfjs 讀文字（只在排程裡安裝，網站本身不需要）
@@ -63,10 +63,19 @@ jobs:
         env:
           YEAR: ${{ github.event.inputs.year }}
         run: node scripts/congress.mjs --year "$YEAR" --minutes 85
+      - name: data push token
+        id: datatoken
+        if: ${{ github.ref == 'refs/heads/main' && vars.DATA_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.DATA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DATA_APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: commit
         if: ${{ github.ref == 'refs/heads/main' && (!github.event.inputs.dump || github.event.inputs.dump == '0') }}
         env:
           COMMIT_NAME: congress
+          DATA_PUSH_TOKEN: ${{ steps.datatoken.outputs.token }}
           YEAR: ${{ github.event.inputs.year }}
         run: |
           if [ -n "$YEAR" ]; then bash scripts/commit-data.sh "國會山：補 ${YEAR//[^0-9]/} 年申報" learner/data/congress-arch

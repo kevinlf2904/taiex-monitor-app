@@ -14,18 +14,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - run: git pull -q origin ${{ github.ref_name }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
       - run: npm ci --omit=dev --ignore-scripts
       - run: node scripts/industry-news.mjs
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: data push token
+        id: datatoken
+        if: ${{ github.ref == 'refs/heads/main' && vars.DATA_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.DATA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DATA_APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: commit
         if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:
           COMMIT_NAME: industry-news
+          DATA_PUSH_TOKEN: ${{ steps.datatoken.outputs.token }}
         run: |
           bash scripts/commit-data.sh "產業新聞：每日更新" learner/data/industry-news.json

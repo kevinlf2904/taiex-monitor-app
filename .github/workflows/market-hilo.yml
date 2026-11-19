@@ -15,16 +15,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       # 排隊等前一次跑完時，checkout 的是排隊當下的舊版本；先拉到最新的 main，避免和前一次存的資料衝突
       - run: git pull -q origin ${{ github.ref_name }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
       - run: node scripts/market-hilo.mjs
+      - name: data push token
+        id: datatoken
+        if: ${{ github.ref == 'refs/heads/main' && vars.DATA_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.DATA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DATA_APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: commit
         if: github.ref == 'refs/heads/main'   # 只有 main 會寫資料；分支上手動跑只看 log
         env:
           COMMIT_NAME: market-hilo
+          DATA_PUSH_TOKEN: ${{ steps.datatoken.outputs.token }}
         run: |
           bash scripts/commit-data.sh "大盤：更新月新高月新低用的收盤資料" learner/data/market
