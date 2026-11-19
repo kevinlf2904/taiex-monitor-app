@@ -292,3 +292,24 @@ test("PR 說明檢查：「低風險例外：是」只要有檔案不在低風�
   assert.deepEqual(checkTemplate({ body: yes, files: ["docs/a.md", "tests/a.test.mjs"] }).problems, [], "全部在範圍內不提醒");
   assert.deepEqual(checkTemplate({ body: yes }).problems, [], "沒有檔案清單不判斷");
 });
+
+test("PR 說明檢查：程式碼區塊裡的 <!-- 只是文字，不會吞掉區塊後的段落與 Closes（#320 ChatGPT P2）", () => {
+  const body = "## 測試\n```\n<!-- example in code sample\n```\n## 驗證重點\n有提供驗證內容\nCloses #7";
+  assert.deepEqual(Object.keys(sections(body)), ["測試", "驗證重點"]);
+  assert.match(sections(body)["測試"], /<!-- example/, "區塊內容原樣保留");
+  assert.equal(sections(body)["驗證重點"], "有提供驗證內容\nCloses #7");
+  assert.deepEqual(closingRefs(body), [7]);
+  const tilde = "~~~html\n<!-- 開頭\n~~~\nfixes #8\n## 測試\nx";
+  assert.deepEqual(closingRefs(tilde), [8]);
+  assert.deepEqual(Object.keys(sections(tilde)), ["測試"]);
+  // 反過來：註解裡的 ``` 不算區塊開頭，註解結束後照常解析
+  const fenceInComment = "<!--\n```\nCloses #9\n-->\nCloses #10\n## 測試\nx";
+  assert.deepEqual(closingRefs(fenceInComment), [10]);
+  assert.deepEqual(Object.keys(sections(fenceInComment)), ["測試"]);
+  // 行內程式碼裡的 <!-- 也只是文字
+  const inline = "用 `<!--` 開頭的註解，Closes #11\n## 測試\nx";
+  assert.deepEqual(closingRefs(inline), [11]);
+  assert.deepEqual(Object.keys(sections(inline)), ["測試"]);
+  // 同一行有多段註解、註解跨行後同一行還有內容
+  assert.deepEqual(closingRefs("a <!-- Closes #1 --> Closes #2 <!-- fixes #3 --> b\n<!-- x\ny --> Resolves #4"), [2, 4]);
+});

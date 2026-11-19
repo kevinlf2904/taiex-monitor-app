@@ -172,26 +172,52 @@ const SOURCE = { comment: "（留言）", review: "（review）", inline: "（�
 // .github/pull_request_template.md 的五個段落，都要有內容（範本裡的 <!-- 註解 --> 不算）
 export const TEMPLATE_SECTIONS = ["誰做的", "改了什麼", "還沒做完", "測試", "驗證重點"];
 
-// GitHub 不會把 HTML 註解、程式碼區塊裡的字當成標題或關閉關鍵字：解析前先拿掉註解，並標出哪些行在 ``` / ~~~ 區塊內
-export function stripComments(body = "") {
-  return String(body || "").replace(/\r\n/g, "\n").replace(/<!--[\s\S]*?(?:-->|$)/g, "");
-}
-// 逐行回傳 { line, code }：code＝這行在 fenced code block 裡（含開頭與結尾的 ``` 行）
-export function markFences(text = "") {
-  let fence = null;
-  return String(text).split("\n").map(line => {
-    const m = line.match(/^ {0,3}(`{3,}|~{3,})/);
-    if (fence) { if (m && m[1][0] === fence[0] && m[1].length >= fence.length && !line.slice(m[0].length).trim()) fence = null; return { line, code: true }; }
-    if (m && !(m[1][0] === "`" && line.slice(m[0].length).includes("`"))) { fence = m[1]; return { line, code: true }; }
-    return { line, code: false };
-  });
+// GitHub 不會把 HTML 註解、程式碼區塊裡的字當成標題或關閉關鍵字。
+// 逐行掃描，同時記住「在 ``` / ~~~ 區塊裡」和「在 <!-- 註解裡」兩種狀態：區塊裡的 <!-- 只是文字，註解裡的 ``` 也不算區塊。
+// 回傳 [{ line, code }]：code＝這行在 fenced code block 裡（含開頭與結尾的 ``` 行，原樣保留）；其他行已去掉 HTML 註解（`行內程式碼` 裡的 <!-- 不算註解）
+export function markdownLines(body = "") {
+  const out = [];
+  let fence = null, inComment = false;
+  for (const line of String(body || "").replace(/\r\n/g, "\n").split("\n")) {
+    if (fence) {
+      const m = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length) fence = null;
+      out.push({ line, code: true });
+      continue;
+    }
+    let text = line, kept = "";
+    if (inComment) {
+      const end = text.indexOf("-->");
+      if (end < 0) { out.push({ line: "", code: false }); continue; }
+      text = text.slice(end + 3); inComment = false;
+    } else {
+      const m = line.match(/^ {0,3}(`{3,}|~{3,})/);
+      if (m && !(m[1][0] === "`" && line.slice(m[0].length).includes("`"))) { fence = m[1]; out.push({ line, code: true }); continue; }
+    }
+    for (let i = 0; i < text.length;) {
+      if (text[i] === "`") {
+        const run = text.slice(i).match(/^`+/)[0];
+        const close = text.indexOf(run, i + run.length);
+        if (close >= 0) { kept += text.slice(i, close + run.length); i = close + run.length; continue; }
+        kept += run; i += run.length; continue;
+      }
+      if (text.startsWith("<!--", i)) {
+        const end = text.indexOf("-->", i + 4);
+        if (end < 0) { inComment = true; break; }
+        i = end + 3; continue;
+      }
+      kept += text[i++];
+    }
+    out.push({ line: kept, code: false });
+  }
+  return out;
 }
 
 // 依「## 標題」切段落；程式碼區塊裡的「## 」不算標題，但區塊本身算段落內容（例如貼測試輸出）。內容去掉 HTML 註解與空白
 export function sections(body = "") {
   const out = {};
   let cur = null;
-  for (const { line, code } of markFences(stripComments(body))) {
+  for (const { line, code } of markdownLines(body)) {
     const m = !code && line.match(/^##\s+(.+?)\s*$/);
     if (m) { cur = m[1]; out[cur] = ""; continue; }
     if (cur !== null) out[cur] += line + "\n";
@@ -202,7 +228,7 @@ export function sections(body = "") {
 
 // 說明裡「Closes／Fixes／Resolves #N」關閉的編號（GitHub 認得的關閉關鍵字）；HTML 註解、程式碼區塊、`行內程式碼` 裡的不算
 export function closingRefs(body = "") {
-  const prose = markFences(stripComments(body)).filter(x => !x.code).map(x => x.line).join("\n").replace(/(`+)[^`]*?\1/g, "");
+  const prose = markdownLines(body).filter(x => !x.code).map(x => x.line).join("\n").replace(/(`+)[^`]*?\1/g, "");
   return [...new Set([...prose.matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi)].map(m => Number(m[1])))];
 }
 
