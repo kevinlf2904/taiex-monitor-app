@@ -3,7 +3,7 @@
 // 只讀不寫：用本機的 gh CLI 呼叫 GitHub REST API（GET），不留言、不貼標籤、不改任何東西。判斷邏輯在 scripts/pr-guard.mjs。
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { formatBrief, closingRefs, httpStatus } from "./pr-guard.mjs";
+import { formatBrief, closingRefs, httpStatus, VERSION_FILES, touchesVersionFiles } from "./pr-guard.mjs";
 
 const REPO = process.env.PR_BRIEF_REPO || "kevinlf2904/taiex-monitor-app";
 
@@ -16,6 +16,18 @@ export function ghGet(path) {
 
 // 機器人留言（Vercel 部署通知等）：GitHub 的 user.type 是 Bot
 export const isBot = x => x?.user?.type === "Bot";
+
+// GitHub Contents API 回傳 base64 物件（或測試假資料直接給字串）；超過 1MB 時 content 為空、改由 git/blobs/<sha> 讀取
+export function decodeContent(res, get = ghGet, repo = REPO) {
+  if (typeof res === "string") return res;
+  if (res && typeof res === "object" && !res.content && res.sha && (res.encoding === "none" || res.size > 0)) {
+    res = get(`repos/${repo}/git/blobs/${res.sha}`);
+  }
+  if (res && typeof res.content === "string") {
+    return res.encoding === "base64" || !res.encoding ? Buffer.from(res.content, "base64").toString("utf8") : res.content;
+  }
+  return "";
+}
 
 export async function collect(number, get = ghGet, repo = REPO) {
   const pr = get(`repos/${repo}/pulls/${number}`);
@@ -35,7 +47,23 @@ export async function collect(number, get = ghGet, repo = REPO) {
     try { const it = get(`repos/${repo}/issues/${n}`); return { number: n, exists: true, isPR: !!it?.pull_request }; }
     catch (e) { const code = httpStatus(e); return code === 404 ? { number: n, exists: false, isPR: false } : { number: n, exists: null, isPR: false, error: code || null }; }
   });
-  return { pr, files, comments, checkRuns, others, refs };
+  // 版本號檢查（#312 PR F）：方案 A 只有改到四個版本檔之一才抓 base（main 的 version.json）與 head 四檔內容比對。
+  // 只有 404 才算檔案不存在（交由 checkVersion 回報缺少）；403／429／5xx 等算「查詢失敗」，不誤報為檔案缺少。
+  const version = { base: {}, head: {}, errors: [] };
+  if (touchesVersionFiles(files)) {
+    const baseRef = pr.base?.ref || "main", headRef = pr.head?.sha || pr.head?.ref || "HEAD";
+    const readVerFile = (map, file, ref, target) => {
+      try { map[file] = decodeContent(get(`repos/${repo}/contents/${file}?ref=${encodeURIComponent(ref)}`), get, repo); }
+      catch (e) {
+        const code = httpStatus(e);
+        if (code === 404) map[file] = "";
+        else version.errors.push({ file, target, error: code || null });
+      }
+    };
+    readVerFile(version.base, "learner/version.json", baseRef, `main（${baseRef}）`);
+    for (const f of VERSION_FILES) readVerFile(version.head, f, headRef, `head（${String(headRef).slice(0, 7)}）`);
+  }
+  return { pr, files, comments, checkRuns, others, refs, version };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {

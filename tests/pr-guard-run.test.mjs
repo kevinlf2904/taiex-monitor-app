@@ -40,14 +40,23 @@ test("pr-guard-run：其他留言依時間排序取最新；機器人的 review 
   assert.match(out, /較早的 2 則/);
 });
 
-function fake({ labels = [], boardBody: old = null, repoLabels = [], pr = {}, fail = {} } = {}) {
+function fake({ labels = [], boardBody: old = null, repoLabels = [], pr = {}, files = [{ filename: "learner/watch.html", status: "modified" }], contents = {}, fail = {} } = {}) {
+  const headSha = pr.head?.sha || HEAD;
+  const baseRef = pr.base?.ref || "main";
+  const b64 = s => ({ encoding: "base64", content: Buffer.from(s, "utf8").toString("base64") });
   const fixtures = {
-    "pulls/5": { number: 5, title: "改看盤", draft: false, labels: labels.map(name => ({ name })), head: { sha: HEAD, ref: "claude/x" }, ...pr },
-    "pulls/5/files": [{ filename: "learner/watch.html", status: "modified" }],
+    "pulls/5": { number: 5, title: "改看盤", draft: false, base: { ref: baseRef }, labels: labels.map(name => ({ name })), head: { sha: HEAD, ref: "claude/x" }, ...pr },
+    "pulls/5/files": files,
     "issues/5/comments": old ? [{ id: 900, user: { type: "Bot" }, created_at: "t", body: old }] : [],
     "pulls/5/reviews": [], "pulls/5/comments": [],
-    [`commits/${HEAD}/check-runs`]: { check_runs: [] },
+    [`commits/${headSha}/check-runs`]: { check_runs: [] },
     "pulls?state=open": [{ number: 5 }],
+    [`contents/learner/version.json?ref=${baseRef}`]: b64('{"v":"2026.11.17-241"}\n'),
+    [`contents/learner/version.json?ref=${headSha}`]: b64('{"v":"2026.11.18-242"}\n'),
+    [`contents/learner/index.html?ref=${headSha}`]: b64("<footer>版本 2026.11.18-242</footer>"),
+    [`contents/learner/watch.html?ref=${headSha}`]: b64("<div>版本 2026.11.18-242</div>"),
+    [`contents/learner/README.md?ref=${headSha}`]: b64("### 版本檢查串接（2026.11.18-242）\n- 更新"),
+    ...contents,
   };
   const get = p => { const k = p.replace(/^repos\/[^/]+\/[^/]+\//, "").replace(/[?&]per_page=\d+/, ""); assert.ok(k in fixtures, k); return fixtures[k]; };
   const calls = [];
@@ -166,4 +175,30 @@ test("pr-guard-run：說明裡 Closes #N 會查 GitHub，看板列出不存在�
   assert.match(board, /Closes #12 指向不存在的編號/);
   assert.match(board, /Closes #7 是 PR 不是 Issue/);
   assert.match(board, /「## 改了什麼」段落|缺少「## 改了什麼」/);
+});
+
+test("pr-guard-run：改到版本檔時看板同步呈現版本號檢查結果與純文件提醒（#312 PR F）", async () => {
+  const okOut = [];
+  const okFake = fake();
+  await run(5, { dry: true, get: okFake.get, write: okFake.write, repo: "o/r", log: s => okOut.push(s) });
+  const okBoard = okOut.join("\n");
+  assert.match(okBoard, /版本號：✅ 四檔一致且已遞增（2026\.11\.17-241 → 2026\.11\.18-242）/);
+  assert.match(okBoard, /scripts\/version-guard\.mjs/);
+
+  const b64 = s => ({ encoding: "base64", content: Buffer.from(s, "utf8").toString("base64") });
+  const unbumpedOut = [];
+  const unbumped = fake({
+    files: [{ filename: "learner/README.md", status: "modified" }],
+    contents: {
+      [`contents/learner/version.json?ref=${HEAD}`]: b64('{"v":"2026.11.17-241"}\n'),
+      [`contents/learner/index.html?ref=${HEAD}`]: b64("<footer>版本 2026.11.17-241</footer>"),
+      [`contents/learner/watch.html?ref=${HEAD}`]: b64("<div>版本 2026.11.17-241</div>"),
+      [`contents/learner/README.md?ref=${HEAD}`]: b64("### 補充文件（2026.11.17-241）\n- 說明"),
+    },
+  });
+  await run(5, { dry: true, get: unbumped.get, write: unbumped.write, repo: "o/r", log: s => unbumpedOut.push(s) });
+  const unbumpedBoard = unbumpedOut.join("\n");
+  assert.match(unbumpedBoard, /版本號：⚠️ 1 項待確認（只是提醒）/);
+  assert.match(unbumpedBoard, /head 版號（2026\.11\.17-241）沒有大於 main（2026\.11\.17-241）/);
+  assert.match(unbumpedBoard, /若僅純文件／測試修改，依 AGENTS\.md 不需升版，可忽略此提醒/);
 });
