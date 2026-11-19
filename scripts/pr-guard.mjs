@@ -168,16 +168,24 @@ export function ciStatus(checkRuns, headSha, name = "test") {
 const STATE = { latest: "〔最新〕", stale: "〔舊 SHA〕", nosha: "〔未附 SHA〕" };
 const SOURCE = { comment: "（留言）", review: "（review）", inline: "（行內）" };
 
+// pr-guard 狀態看板留言的記號（.github/workflows/pr-guard.yml 用它找到同一則留言原地更新；摘要本身不列入留言清單）
+export const BOARD_MARK = "<!-- pr-guard -->";
+// 看板＝機器人貼的一般留言、內文帶記號；人寫的留言就算提到記號字串也不算（不會被藏起來）
+export const isBoard = x => !!x?.bot && (x.source || "comment") === "comment" && String(x.body || "").includes(BOARD_MARK);
+
 export function formatBrief({ pr, files, comments = [], checkRuns = [], others = [] }) {
   const head = pr.head.sha;
   const c = classify(files);
   const ci = ciStatus(checkRuns, head);
   const conflicts = bigFileConflicts({ number: pr.number, files }, others);
-  const ai = summarizeComments(comments, head);
+  comments = comments.filter(x => !isBoard(x));
+  const ai = summarizeComments(comments, head).sort((a, b) => String(a.at || "").localeCompare(String(b.at || ""))); // 三種來源依時間排在一起
   const aiKeys = new Set(ai.map(a => `${a.source}:${a.id}`));
-  // 不是協作格式的留言（使用者的決定、一般討論、review、行內審查）也不能當作不存在：列出筆數與第一行。
-  // 只排除機器人留言（例如 Vercel 部署通知，GitHub 標記 user.type 為 Bot）
-  const otherComments = comments.filter(x => !x.bot && String(x.body || "").trim() && !aiKeys.has(`${x.source || "comment"}:${x.id}`));
+  // 不是協作格式的留言（使用者的決定、一般討論、review、行內審查）也不能當作不存在：列出筆數與第一行，依時間排序後取最新的。
+  // 只排除一般留言裡的機器人留言（例如 Vercel 部署通知）；機器人送的 review／行內審查（例如 Copilot，AGENTS.md 的大型 PR 審查）一律保留
+  const otherComments = comments
+    .filter(x => !(x.bot && (x.source || "comment") === "comment") && String(x.body || "").trim() && !aiKeys.has(`${x.source || "comment"}:${x.id}`))
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
   const L = [];
   L.push(`檢查（pr-guard）：\`${head}\``, "");
   L.push(`#${pr.number} ${pr.title}${pr.draft ? "（draft）" : ""}｜分支 ${pr.head.ref}｜${files.length} 個檔案`);
@@ -188,6 +196,7 @@ export function formatBrief({ pr, files, comments = [], checkRuns = [], others =
   if (c.needsLock.length) L.push(`- 改到大檔：${c.needsLock.join("、")}（要先確認「鎖：」draft PR）`);
   for (const x of conflicts) L.push(`- ⚠️ 和 #${x.number}${x.lock ? "（鎖定中）" : ""} 撞到：${x.files.join("、")}`);
   if (c.ui.length) L.push(`- 介面檔案：需要 390／1280 驗證（Antigravity；Antigravity 是實作者時由 Claude Code）`);
+  if (!c.lowRisk && !c.highRisk && files.length) L.push("- 不在低風險例外範圍，也不在 high-risk 清單：照一般審查（清單沒列到不代表低風險）");
   L.push("", ai.length ? "AI 留言：" : "AI 留言：無");
   for (const a of ai) L.push(`- ${STATE[a.state]}${a.kind}${a.from ? `（${a.from}${a.to ? ` → ${a.to}` : ""}）` : ""}${a.verdict ? ` ${a.verdict}` : ""}${a.source === "comment" ? "" : SOURCE[a.source]}｜${a.at || ""}｜${a.id}`);
   if (ai.some(a => a.state === "nosha")) L.push("- ⚠️ 有留言沒寫 SHA，無法確認針對哪個版本，請補留言或重新審查");

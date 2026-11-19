@@ -1,0 +1,46 @@
+# PR 狀態看板與風險標籤（#312 PR D）：依 scripts/pr-guard.mjs 判斷，替 PR 貼／拿掉 pr-guard 管理的標籤，並原地更新一則「檢查（pr-guard）」留言
+# （最新 head SHA、CI test、風險、大檔衝突、各 AI 留言針對哪個 SHA）。只是提醒，不擋合併，也不是合併門檻（門檻仍是 ci 的 test）。
+# 安全：用 pull_request 不用 pull_request_target；fork 來的 PR 不跑（只有同一個 repo 的分支才給寫入權限）；
+# 權限只開 pull-requests: write（貼標籤、留言）；不碰密鑰，只用 GITHUB_TOKEN（它的寫入不會再觸發 workflow，不會自己叫自己）。
+# 一律 checkout 預設分支（main）來執行 pr-guard 腳本，不執行 PR 自己改過的程式（PR 內容只透過 GitHub API 讀取），
+# 避免 PR 改了腳本就能拿到寫入權限的 token。所以改 pr-guard 腳本的 PR，要合併後才會用新版本跑。
+# 外部 action 用 commit SHA 固定版本（後面註明對應的 tag），降低供應鏈風險。
+name: pr-guard
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, edited] # edited：標題改成「鎖：…」也要重算
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  issue_comment:
+    types: [created, edited]
+  workflow_run: # ci 跑完時更新看板上的 CI 狀態
+    workflows: [ci]
+    types: [completed]
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: pr-guard-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha }} # 同一個 PR 不論哪種事件都同一組，不會並發重複貼看板
+  cancel-in-progress: true # 連續觸發時只留最後一次，看板一樣會是最新狀態
+jobs:
+  board:
+    if: >-
+      ((github.event_name != 'pull_request' && github.event_name != 'pull_request_review') || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.state == 'open')) &&
+      (github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' && github.event.comment.user.type != 'Bot')) &&
+      (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.pull_requests[0] != null && github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+      - run: |
+          if [ ! -f scripts/pr-guard-run.mjs ]; then echo "預設分支還沒有 pr-guard 腳本，略過"; exit 0; fi
+          node scripts/pr-guard-run.mjs $PR_NUMBERS # 只是 PR 編號（數字），腳本會再過濾
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBERS: ${{ github.event.pull_request.number || github.event.issue.number || join(github.event.workflow_run.pull_requests.*.number, ' ') }}
