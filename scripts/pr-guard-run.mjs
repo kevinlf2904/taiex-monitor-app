@@ -4,7 +4,7 @@
 // 本機也能跑（需要 gh 有寫入權限）；加 --dry-run 只印出會做什麼。
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { classify, bigFileConflicts, formatBrief, BOARD_MARK, isBoard } from "./pr-guard.mjs";
+import { classify, bigFileConflicts, formatBrief, BOARD_MARK, isBoard, httpStatus } from "./pr-guard.mjs";
 import { collect, ghGet } from "./pr-brief.mjs";
 
 const REPO = process.env.GITHUB_REPOSITORY || "kevinlf2904/taiex-monitor-app";
@@ -38,8 +38,8 @@ export function planLabels(current, wanted) {
 // 找到之前貼過的看板留言：一般留言、機器人帳號、帶記號（isBoard 已包含這三個條件）
 export const findBoard = comments => comments.find(isBoard) || null;
 
-// gh api 失敗時的 HTTP 狀態碼（gh 會在錯誤訊息印出「HTTP 404」之類）
-export const httpStatus = e => Number((String(e?.stderr || e?.message || e).match(/HTTP (\d{3})/) || [])[1]) || 0;
+// httpStatus 移到 scripts/pr-guard.mjs（pr-brief 也要用），這裡保留匯出
+export { httpStatus };
 
 export const boardBody = data => `${formatBrief(data)}\n\n---\n_pr-guard 自動產生，每次推送、留言、審查或 CI 結束時原地更新；只是提醒，不擋合併，判斷依據見 scripts/pr-guard.mjs。_\n${BOARD_MARK}`;
 

@@ -3,12 +3,12 @@
 // 只讀不寫：用本機的 gh CLI 呼叫 GitHub REST API（GET），不留言、不貼標籤、不改任何東西。判斷邏輯在 scripts/pr-guard.mjs。
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { formatBrief, closingRefs } from "./pr-guard.mjs";
+import { formatBrief, closingRefs, httpStatus } from "./pr-guard.mjs";
 
 const REPO = process.env.PR_BRIEF_REPO || "kevinlf2904/taiex-monitor-app";
 
 export function ghGet(path) {
-  const out = execFileSync("gh", ["api", "-X", "GET", "--paginate", "--slurp", path], { encoding: "utf8", maxBuffer: 64 << 20 });
+  const out = execFileSync("gh", ["api", "-X", "GET", "--paginate", "--slurp", path], { encoding: "utf8", maxBuffer: 64 << 20, stdio: ["ignore", "pipe", "pipe"] });
   const pages = JSON.parse(out);
   // --slurp 會把每一頁包成陣列：清單型的 API 把每頁接起來；物件型（例如 check-runs）只有一頁就回物件，多頁回各頁物件
   return Array.isArray(pages[0]) ? pages.flat() : pages.length === 1 ? pages[0] : pages;
@@ -29,10 +29,11 @@ export async function collect(number, get = ghGet, repo = REPO) {
   const checkRuns = [].concat(get(`repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`)).flatMap(p => p.check_runs || []);
   const open = get(`repos/${repo}/pulls?state=open&per_page=100`).filter(o => o.number !== pr.number);
   const others = open.map(o => ({ number: o.number, title: o.title, draft: o.draft, files: get(`repos/${repo}/pulls/${o.number}/files?per_page=100`) }));
-  // 說明裡 Closes #N 的編號是否存在、是不是 PR（issues API 對 PR 也回資料，帶 pull_request 欄位）；查不到當成不存在
+  // 說明裡 Closes #N 的編號是否存在、是不是 PR（issues API 對 PR 也回資料，帶 pull_request 欄位）
+  // 只有 404 才算不存在；403／429／5xx 或看不出狀態碼都算「查詢失敗」，不能說編號是虛構的
   const refs = closingRefs(pr.body).map(n => {
     try { const it = get(`repos/${repo}/issues/${n}`); return { number: n, exists: true, isPR: !!it?.pull_request }; }
-    catch { return { number: n, exists: false, isPR: false }; }
+    catch (e) { const code = httpStatus(e); return code === 404 ? { number: n, exists: false, isPR: false } : { number: n, exists: null, isPR: false, error: code || null }; }
   });
   return { pr, files, comments, checkRuns, others, refs };
 }

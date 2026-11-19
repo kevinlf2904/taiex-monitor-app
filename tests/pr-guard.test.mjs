@@ -215,3 +215,80 @@ test("PR 說明檢查：寫的 SHA 不是最新 head 只提醒、不算問題", 
   assert.deepEqual(checkTemplate({ body: filled({ "測試": `CI（${head}）通過` }), headSha: head }).notes, []);
   assert.deepEqual(checkTemplate({ body: filled(), headSha: head }).notes, [], "沒寫 SHA 不提醒");
 });
+
+// #312 pr-guard 後續待辦（#319 審查 P3）：註解、程式碼區塊不算；只有 404 才算編號不存在；「低風險例外：是」看 !lowRisk
+test("PR 說明檢查：程式碼區塊裡的「## 」不算段落標題，區塊本身算內容；註解裡的標題不算", () => {
+  const body = filled({ "測試": "```\n## 誰做的\n# tests 45\n```", "還沒做完": "<!--\n## 驗證重點\n-->\n無" });
+  const sec = sections(body);
+  assert.deepEqual(Object.keys(sec), TEMPLATE_SECTIONS, "區塊與註解裡的「## 」不會多切出段落");
+  assert.match(sec["測試"], /# tests 45/, "只貼測試輸出的程式碼區塊算有內容");
+  assert.equal(sec["還沒做完"], "無");
+  assert.deepEqual(checkTemplate({ body }).problems, []);
+  const tilde = sections("## 測試\n~~~\n## 假標題\n~~~\n## 驗證重點\nx");
+  assert.deepEqual(Object.keys(tilde), ["測試", "驗證重點"], "~~~ 區塊也一樣");
+  assert.deepEqual(Object.keys(sections("## 測試\n```js\n## 沒關的區塊\n")), ["測試"], "沒關閉的區塊到結尾都算區塊");
+});
+
+test("PR 說明檢查：Closes #N 在註解、程式碼區塊、行內程式碼裡不算關閉", () => {
+  const body = [
+    "Closes #1",
+    "<!-- Closes #2 -->",
+    "<!-- 範本說明：fixes #3",
+    "-->",
+    "```",
+    "Resolves #4",
+    "```",
+    "~~~text",
+    "closes #5",
+    "~~~",
+    "例如 `Closes #6` 這樣寫",
+    "``fixes #7``，最後 fixes #8",
+  ].join("\n");
+  assert.deepEqual(closingRefs(body), [1, 8]);
+  assert.deepEqual(closingRefs("<!-- 沒關閉的註解 Closes #9"), [], "沒關閉的註解到結尾都不算");
+  assert.deepEqual(closingRefs("```js`\nCloses #10"), [10], "資訊字串含反引號就不是區塊開頭");
+});
+
+test("PR 說明檢查：Closes #N 查詢失敗只提醒，不說編號不存在", () => {
+  const r = checkTemplate({ body: filled(), refs: [{ number: 12, exists: null, error: 403 }, { number: 13, exists: null, error: null }] });
+  assert.deepEqual(r.problems, []);
+  assert.match(r.notes.join("\n"), /Closes #12 查詢失敗（HTTP 403）/);
+  assert.match(r.notes.join("\n"), /Closes #13 查詢失敗：/);
+  assert.doesNotMatch(r.notes.join("\n"), /不存在的編號/);
+});
+
+test("pr-brief：查 Closes #N 只有 404 算不存在，403／429／5xx 算查詢失敗", async () => {
+  const codes = { 21: 404, 22: 403, 23: 429, 24: 502 };
+  const body = filled({ "改了什麼": "Closes #20 Closes #21 Closes #22 Closes #23 Closes #24 Closes #25" });
+  const fake = {
+    "pulls/5": { number: 5, title: "x", draft: false, body, head: { sha: HEAD, ref: "claude/x" } },
+    "pulls/5/files": [{ filename: "docs/a.md", status: "modified" }],
+    "issues/5/comments": [], "pulls/5/reviews": [], "pulls/5/comments": [],
+    [`commits/${HEAD}/check-runs`]: { check_runs: [] },
+    "pulls?state=open": [{ number: 5 }],
+    "issues/20": { number: 20 },
+  };
+  const get = path => {
+    const k = path.replace(/^repos\/[^/]+\/[^/]+\//, "").replace(/[?&]per_page=\d+/, "");
+    const n = Number((k.match(/^issues\/(\d+)$/) || [])[1]);
+    if (codes[n]) throw Object.assign(new Error("gh: failed"), { stderr: `gh: Something (HTTP ${codes[n]})` });
+    if (n === 25) throw new Error("spawn gh ENOENT");
+    assert.ok(k in fake, k); return fake[k];
+  };
+  const data = await collect(5, get, "o/r");
+  assert.deepEqual(data.refs.map(r => [r.number, r.exists, r.error]), [[20, true, undefined], [21, false, undefined], [22, null, 403], [23, null, 429], [24, null, 502], [25, null, null]]);
+  const out = formatBrief(data);
+  assert.match(out, /Closes #21 指向不存在的編號/);
+  for (const n of [22, 23, 24]) assert.match(out, new RegExp(`提醒：Closes #${n} 查詢失敗（HTTP ${codes[n]}）`));
+  assert.match(out, /提醒：Closes #25 查詢失敗：/, "看不出狀態碼也不能說不存在");
+  assert.doesNotMatch(out, /#2[2-5] 指向不存在/);
+});
+
+test("PR 說明檢查：「低風險例外：是」只要有檔案不在低風險範圍就提醒（不只 high-risk）", () => {
+  const yes = filled({ "測試": "3. 低風險例外：**是**" });
+  for (const files of [["learner/foo.js"], ["docs/a.md", "learner/foo.js"], [{ filename: "tests/a.test.mjs", status: "removed" }]]) {
+    assert.match(checkTemplate({ body: yes, files }).problems.join(), /不在低風險例外範圍，「低風險例外」不能寫「是」/, JSON.stringify(files));
+  }
+  assert.deepEqual(checkTemplate({ body: yes, files: ["docs/a.md", "tests/a.test.mjs"] }).problems, [], "全部在範圍內不提醒");
+  assert.deepEqual(checkTemplate({ body: yes }).problems, [], "沒有檔案清單不判斷");
+});

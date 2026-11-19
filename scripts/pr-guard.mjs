@@ -172,25 +172,45 @@ const SOURCE = { comment: "（留言）", review: "（review）", inline: "（�
 // .github/pull_request_template.md 的五個段落，都要有內容（範本裡的 <!-- 註解 --> 不算）
 export const TEMPLATE_SECTIONS = ["誰做的", "改了什麼", "還沒做完", "測試", "驗證重點"];
 
-// 依「## 標題」切段落，內容去掉 HTML 註解與空白
+// GitHub 不會把 HTML 註解、程式碼區塊裡的字當成標題或關閉關鍵字：解析前先拿掉註解，並標出哪些行在 ``` / ~~~ 區塊內
+export function stripComments(body = "") {
+  return String(body || "").replace(/\r\n/g, "\n").replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+}
+// 逐行回傳 { line, code }：code＝這行在 fenced code block 裡（含開頭與結尾的 ``` 行）
+export function markFences(text = "") {
+  let fence = null;
+  return String(text).split("\n").map(line => {
+    const m = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (fence) { if (m && m[1][0] === fence[0] && m[1].length >= fence.length && !line.slice(m[0].length).trim()) fence = null; return { line, code: true }; }
+    if (m && !(m[1][0] === "`" && line.slice(m[0].length).includes("`"))) { fence = m[1]; return { line, code: true }; }
+    return { line, code: false };
+  });
+}
+
+// 依「## 標題」切段落；程式碼區塊裡的「## 」不算標題，但區塊本身算段落內容（例如貼測試輸出）。內容去掉 HTML 註解與空白
 export function sections(body = "") {
   const out = {};
   let cur = null;
-  for (const line of String(body || "").replace(/\r\n/g, "\n").split("\n")) {
-    const m = line.match(/^##\s+(.+?)\s*$/);
+  for (const { line, code } of markFences(stripComments(body))) {
+    const m = !code && line.match(/^##\s+(.+?)\s*$/);
     if (m) { cur = m[1]; out[cur] = ""; continue; }
     if (cur !== null) out[cur] += line + "\n";
   }
-  for (const k of Object.keys(out)) out[k] = out[k].replace(/<!--[\s\S]*?-->/g, "").trim();
+  for (const k of Object.keys(out)) out[k] = out[k].trim();
   return out;
 }
 
-// 說明裡「Closes／Fixes／Resolves #N」關閉的編號（GitHub 認得的關閉關鍵字）
+// 說明裡「Closes／Fixes／Resolves #N」關閉的編號（GitHub 認得的關閉關鍵字）；HTML 註解、程式碼區塊、`行內程式碼` 裡的不算
 export function closingRefs(body = "") {
-  return [...new Set([...String(body || "").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi)].map(m => Number(m[1])))];
+  const prose = markFences(stripComments(body)).filter(x => !x.code).map(x => x.line).join("\n").replace(/(`+)[^`]*?\1/g, "");
+  return [...new Set([...prose.matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi)].map(m => Number(m[1])))];
 }
 
-// refs：[{ number, exists, isPR }]（由 GitHub API 查到的，見 scripts/pr-brief.mjs 的 collect）
+// gh api 失敗時的 HTTP 狀態碼（gh 會在錯誤訊息印出「HTTP 404」之類）；看不出來回 0
+export const httpStatus = e => Number((String(e?.stderr || e?.message || e).match(/HTTP (\d{3})/) || [])[1]) || 0;
+
+// refs：[{ number, exists, isPR, error }]（由 GitHub API 查到的，見 scripts/pr-brief.mjs 的 collect）
+// exists 只有查到 404 才是 false；403／429／5xx 等查詢失敗時 exists 是 null、error 是狀態碼，只提醒「查詢失敗」，不說編號不存在
 export function checkTemplate({ body = "", files = [], refs = [], headSha = "" } = {}) {
   const problems = [], notes = [];
   const sec = sections(body);
@@ -199,11 +219,13 @@ export function checkTemplate({ body = "", files = [], refs = [], headSha = "" }
     else if (!sec[name]) problems.push(`「## ${name}」是空的（只有範本註解不算；沒有就寫「無」）`);
   }
   for (const r of refs) {
-    if (!r.exists) problems.push(`Closes #${r.number} 指向不存在的編號（AGENTS.md：不得虛構編號）`);
+    if (r.exists == null) notes.push(`Closes #${r.number} 查詢失敗${r.error ? `（HTTP ${r.error}）` : ""}：無法確認編號是否存在，請自行確認`);
+    else if (!r.exists) problems.push(`Closes #${r.number} 指向不存在的編號（AGENTS.md：不得虛構編號）`);
     else if (r.isPR) problems.push(`Closes #${r.number} 是 PR 不是 Issue`);
   }
   const test = sec["測試"] || "";
-  if (classify(files).highRisk && /低風險例外[^\n]*?[：:]\s*[*`「]*是/.test(test)) problems.push("改到 high-risk 檔案，「低風險例外」不能寫「是」");
+  // 不在低風險例外的路徑範圍（含刪除測試檔）就不能寫「是」；沒有檔案清單時不判斷
+  if (files.length && !classify(files).lowRisk && /低風險例外[^\n]*?[：:]\s*[*`「]*是/.test(test)) problems.push("有檔案不在低風險例外範圍，「低風險例外」不能寫「是」");
   const shas = [...new Set((String(body || "").match(/\b[0-9a-f]{40}\b/g) || []))];
   if (headSha && shas.length && !shas.some(x => x === headSha)) notes.push(`說明裡寫的 SHA 都不是最新 head（${headSha.slice(0, 7)}）：推送後記得更新測試結果對應的 SHA`);
   return { ok: problems.length === 0, problems, notes };
