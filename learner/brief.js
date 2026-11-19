@@ -1679,8 +1679,8 @@ function tdIxChart(tq, kl, evs, dataEval) {
       <polyline class="${trendClass}" points="${P.map(([x, c]) => `${f(X(x))},${f(Y(c))}`).join(" ")}"/>
     </svg>
       ${ev.map(([x, e]) => `<i class="dot ev ${esc(e.sev)}" style="left:${f(X(x))}%;top:0" title="${esc(e.title)}"></i>`).join("")}
-      <i class="dot hi" style="left:${f(X(hp[0]))}%;top:${f(Y(hp[1]))}%"></i><span class="td-hl${Y(hp[1]) < 22 ? " flip" : ""}" style="left:${f(Math.min(X(hp[0]), 68))}%;top:${f(Y(hp[1]))}%">高 ${fmtP(hp[1])}</span>
-      ${lp !== P[0] && lp[1] < hp[1] ? `<i class="dot lo" style="left:${f(X(lp[0]))}%;top:${f(Y(lp[1]))}%"></i><span class="td-hl lo${Y(lp[1]) > 78 ? " flip" : ""}" style="left:${f(Math.min(X(lp[0]), 68))}%;top:${f(Y(lp[1]))}%">低 ${fmtP(lp[1])}</span>` : ""}
+      <i class="dot hi" style="left:${f(X(hp[0]))}%;top:${f(Y(hp[1]))}%"></i><span class="td-hl${Y(hp[1]) < 22 ? " flip" : ""}${X(hp[0]) > 68 ? " left" : ""}" style="left:${f(X(hp[0]))}%;top:${f(Y(hp[1]))}%">高 ${fmtP(hp[1])}</span>
+      ${lp !== P[0] && lp[1] < hp[1] ? `<i class="dot lo" style="left:${f(X(lp[0]))}%;top:${f(Y(lp[1]))}%"></i><span class="td-hl lo${Y(lp[1]) > 78 ? " flip" : ""}${X(lp[0]) > 68 ? " left" : ""}" style="left:${f(X(lp[0]))}%;top:${f(Y(lp[1]))}%">低 ${fmtP(lp[1])}</span>` : ""}
       <i class="dot now" style="left:${f(X(last[0]))}%;top:${f(Y(last[1]))}%"></i>
     </div>
     <div class="td-ix-lv">${lab.map(l => `<span class="${l.k}" style="top:${f(Math.min(l.y, 96))}%">${l.n} <b class="num">${fmtP(l.v)}</b></span>`).join("")}</div>
