@@ -1,6 +1,8 @@
 // PR 檢查的純函式（#312 PR B）：依 AGENTS.md 判斷改動檔案的風險、大檔鎖定與衝突、介面驗證需求，並解析 AI 協作留言。
 // 只做判斷、不連網路也不寫任何東西；本機的 scripts/pr-brief.mjs 與之後的 pr-guard workflow 都用這裡的函式，結果才會一致。
 // 判斷只是提醒：「測試沒有放寬斷言」「CSS 只改規則」這類程式看不出來的條件，仍由合併者確認（AGENTS.md「低風險例外」）。
+import { VERSION_FILES, touchesVersionFiles, checkVersion, extractVersionJson } from "./version-guard.mjs";
+export { VERSION_FILES, touchesVersionFiles, checkVersion };
 
 // AGENTS.md「核心限制」：改這四個檔案前要先上鎖（「鎖：」draft PR）
 export const BIG_FILES = ["learner/watch.html", "learner/index.html", "learner/core.js", "learner/brief.js"];
@@ -288,7 +290,7 @@ export const BOARD_MARK = "<!-- pr-guard -->";
 // 看板＝機器人貼的一般留言、內文帶記號；人寫的留言就算提到記號字串也不算（不會被藏起來）
 export const isBoard = x => !!x?.bot && (x.source || "comment") === "comment" && String(x.body || "").includes(BOARD_MARK);
 
-export function formatBrief({ pr, files, comments = [], checkRuns = [], others = [], refs = [] }) {
+export function formatBrief({ pr, files, comments = [], checkRuns = [], others = [], refs = [], version }) {
   const head = pr.head.sha;
   const c = classify(files);
   const ci = ciStatus(checkRuns, head);
@@ -316,6 +318,23 @@ export function formatBrief({ pr, files, comments = [], checkRuns = [], others =
   L.push("", t.problems.length ? `PR 說明：⚠️ ${t.problems.length} 項待補（只是提醒）` : "PR 說明：✅ 五個段落都有內容");
   for (const x of t.problems) L.push(`- ${x}`);
   for (const x of t.notes) L.push(`- 提醒：${x}`);
+  if (version && (typeof version.checked === "boolean" ? version.checked : touchesVersionFiles(files))) {
+    if (version.errors?.length) {
+      L.push("", "版本號：⚠️ 查詢失敗（只是提醒）");
+      for (const e of version.errors) L.push(`- 提醒：${e.target} 的 ${e.file} 查詢失敗${e.error ? `（HTTP ${e.error}）` : ""}：無法確認版本號，請自行確認`);
+    } else {
+      const v = typeof version.checked === "boolean" ? version : checkVersion({ files, base: version.base, head: version.head });
+      if (v.checked) {
+        const baseVer = extractVersionJson(version.base?.["learner/version.json"]).version;
+        const headVer = extractVersionJson(version.head?.["learner/version.json"]).version;
+        L.push("", v.ok
+          ? `版本號：✅ 四檔一致且已遞增${baseVer && headVer ? `（${baseVer} → ${headVer}）` : ""}`
+          : `版本號：⚠️ ${v.problems.length} 項待確認（只是提醒）`);
+        for (const x of v.problems) L.push(`- ${x}`);
+        if (!v.ok) L.push("- 提醒：若僅純文件／測試修改，依 AGENTS.md 不需升版，可忽略此提醒");
+      }
+    }
+  }
   L.push("", ai.length ? "AI 留言：" : "AI 留言：無");
   for (const a of ai) L.push(`- ${STATE[a.state]}${a.kind}${a.from ? `（${a.from}${a.to ? ` → ${a.to}` : ""}）` : ""}${a.verdict ? ` ${a.verdict}` : ""}${a.source === "comment" ? "" : SOURCE[a.source]}｜${a.at || ""}｜${a.id}`);
   if (ai.some(a => a.state === "nosha")) L.push("- ⚠️ 有留言沒寫 SHA，無法確認針對哪個版本，請補留言或重新審查");

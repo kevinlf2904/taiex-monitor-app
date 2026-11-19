@@ -1,5 +1,5 @@
 // pr-guard workflow 用（#312 PR D）：node scripts/pr-guard-run.mjs <PR 編號>
-// 讀 PR（scripts/pr-brief.mjs 的 collect，只讀）→ 依 scripts/pr-guard.mjs 判斷 → 同步 pr-guard 管理的標籤、原地更新一則狀態看板留言。
+// 讀 PR（scripts/pr-brief.mjs 的 collect，只讀）→ 依 scripts/pr-guard.mjs（含 scripts/version-guard.mjs）判斷 → 同步 pr-guard 管理的標籤、原地更新一則狀態看板留言。
 // 只動自己管理的標籤（MANAGED 裡的）與帶 BOARD_MARK 的機器人留言；不合併、不推送、不改程式。只是提醒，不擋合併。
 // 本機也能跑（需要 gh 有寫入權限）；加 --dry-run 只印出會做什麼。
 import { execFileSync } from "node:child_process";
@@ -41,7 +41,7 @@ export const findBoard = comments => comments.find(isBoard) || null;
 // httpStatus 移到 scripts/pr-guard.mjs（pr-brief 也要用），這裡保留匯出
 export { httpStatus };
 
-export const boardBody = data => `${formatBrief(data)}\n\n---\n_pr-guard 自動產生，每次推送、留言、審查或 CI 結束時原地更新；只是提醒，不擋合併，判斷依據見 scripts/pr-guard.mjs。_\n${BOARD_MARK}`;
+export const boardBody = data => `${formatBrief(data)}\n\n---\n_pr-guard 自動產生，每次推送、留言、審查或 CI 結束時原地更新；只是提醒，不擋合併，判斷依據見 scripts/pr-guard.mjs、scripts/version-guard.mjs。_\n${BOARD_MARK}`;
 
 function gh(method, path, body) {
   const args = ["api", "-X", method, path];

@@ -139,8 +139,9 @@ test("pr-guard：CI 只認同一 head SHA、completed、success", () => {
 });
 
 test("pr-brief：用假的 GitHub 回應組出摘要，不呼叫 gh", async () => {
+  const b64 = s => ({ encoding: "base64", content: Buffer.from(s, "utf8").toString("base64") });
   const fake = {
-    "pulls/5": { number: 5, title: "改看盤", draft: false, head: { sha: HEAD, ref: "claude/x" } },
+    "pulls/5": { number: 5, title: "改看盤", draft: false, base: { ref: "main" }, head: { sha: HEAD, ref: "claude/x" } },
     "pulls/5/files": [{ filename: "learner/watch.html", status: "modified" }],
     "issues/5/comments": [
       { id: 9, created_at: "t", body: "審查（Codex）：`0000000` 可以合併", user: { type: "User" } },
@@ -152,6 +153,11 @@ test("pr-brief：用假的 GitHub 回應組出摘要，不呼叫 gh", async () =
     [`commits/${HEAD}/check-runs`]: { check_runs: [{ name: "test", head_sha: HEAD, status: "completed", conclusion: "success", started_at: "1", html_url: "u" }] },
     "pulls?state=open": [{ number: 5 }, { number: 6, title: "鎖：watch.html＋持股", draft: true }],
     "pulls/6/files": [],
+    "contents/learner/version.json?ref=main": b64('{"v":"2026.11.17-241"}\n'),
+    [`contents/learner/version.json?ref=${HEAD}`]: b64('{"v":"2026.11.18-242"}\n'),
+    [`contents/learner/index.html?ref=${HEAD}`]: b64("<footer>版本 2026.11.18-242</footer>"),
+    [`contents/learner/watch.html?ref=${HEAD}`]: b64("<div>版本 2026.11.18-242</div>"),
+    [`contents/learner/README.md?ref=${HEAD}`]: b64("### 改看盤（2026.11.18-242）\n- 更新"),
   };
   const get = path => { const k = path.replace(/^repos\/[^/]+\/[^/]+\//, "").replace(/[?&]per_page=\d+/, ""); assert.ok(k in fake, k); return fake[k]; };
   const out = formatBrief(await collect(5, get, "o/r"));
@@ -159,6 +165,7 @@ test("pr-brief：用假的 GitHub 回應組出摘要，不呼叫 gh", async () =
   assert.match(out, /CI：✅ test success/);
   assert.match(out, /needs-lock/);
   assert.match(out, /和 #6（鎖定中） 撞到：learner\/watch\.html/);
+  assert.match(out, /版本號：✅ 四檔一致且已遞增（2026\.11\.17-241 → 2026\.11\.18-242）/);
   assert.match(out, /〔舊 SHA〕審查（Codex） 可以合併/);
   assert.match(out, /〔最新〕審查（ChatGPT） 修改後再合併（review）/, "review 沒寫 SHA 時用 commit_id");
   assert.match(out, /其他留言（不是協作格式，請自行讀全文）：3 則/, "一般留言、review、行內各一則；機器人留言不算");
@@ -358,4 +365,122 @@ test("httpStatus：stderr 只有空白時也看 message", async () => {
   assert.equal(httpStatus({ stderr: "gh: Not Found (HTTP 404)", message: "Command failed" }), 404);
   assert.equal(httpStatus(new Error("spawn gh ENOENT")), 0);
   assert.equal(httpStatus("HTTP 502"), 502);
+});
+
+// ---- 版本號檢查串接（#312 PR F）----
+test("版本號檢查串接（#312 PR F）：沒改四個版本檔時不抓檔案、看板不列版本號區塊", async () => {
+  const seen = [];
+  const fake = {
+    "pulls/5": { number: 5, title: "只改腳本", draft: false, base: { ref: "main" }, head: { sha: HEAD, ref: "gemini/x" } },
+    "pulls/5/files": [{ filename: "scripts/pr-guard.mjs", status: "modified" }],
+    "issues/5/comments": [], "pulls/5/reviews": [], "pulls/5/comments": [],
+    [`commits/${HEAD}/check-runs`]: { check_runs: [] },
+    "pulls?state=open": [{ number: 5 }],
+  };
+  const get = path => {
+    const k = path.replace(/^repos\/[^/]+\/[^/]+\//, "").replace(/[?&]per_page=\d+/, "");
+    seen.push(k);
+    assert.ok(!k.startsWith("contents/"), `未改版本檔不應讀取 ${k}`);
+    assert.ok(k in fake, k);
+    return fake[k];
+  };
+  const data = await collect(5, get, "o/r");
+  assert.deepEqual(data.version.errors, []);
+  assert.equal(seen.some(k => k.startsWith("contents/")), false);
+  const out = formatBrief(data);
+  assert.doesNotMatch(out, /版本號：/);
+  assert.doesNotMatch(formatBrief({ pr: { number: 1, title: "t", head: { sha: HEAD, ref: "b" } }, files: ["docs/a.md"], version: { checked: false, ok: true, problems: [] } }), /版本號：/);
+});
+
+test("版本號檢查串接（#312 PR F）：改到版本檔但未升版或不一致時列出問題與純文件忽略提醒（#318 P3-3）", () => {
+  const base = { "learner/version.json": '{"v":"2026.11.17-241"}\n' };
+  const same = {
+    "learner/version.json": '{"v":"2026.11.17-241"}\n',
+    "learner/index.html": "<p>版本 2026.11.17-241</p>",
+    "learner/watch.html": "<p>版本 2026.11.17-241</p>",
+    "learner/README.md": "### 補充說明（2026.11.17-241）\n- 補充文件\n",
+  };
+  const outDoc = formatBrief({
+    pr: { number: 8, title: "補充學堂說明", head: { sha: HEAD, ref: "docs" } },
+    files: ["learner/README.md"],
+    version: { base, head: same },
+  });
+  assert.match(outDoc, /版本號：⚠️ 1 項待確認（只是提醒）/);
+  assert.match(outDoc, /head 版號（2026\.11\.17-241）沒有大於 main（2026\.11\.17-241）/);
+  assert.match(outDoc, /若僅純文件／測試修改，依 AGENTS\.md 不需升版，可忽略此提醒/);
+
+  const mismatch = {
+    "learner/version.json": '{"v":"2026.11.18-242"}\n',
+    "learner/index.html": "<p>版本 2026.11.17-241</p>",
+    "learner/watch.html": "<p>版本 2026.11.18-242</p>",
+    "learner/README.md": "### 新功能（2026.11.18-242）\n- 新增\n",
+  };
+  const outMix = formatBrief({
+    pr: { number: 9, title: "漏改 index", head: { sha: HEAD, ref: "feat" } },
+    files: ["learner/version.json", "learner/watch.html"],
+    version: { base, head: mismatch },
+  });
+  assert.match(outMix, /版本號：⚠️ 1 項待確認（只是提醒）/);
+  assert.match(outMix, /四個檔案的版本號不一致/);
+  assert.match(outMix, /若僅純文件／測試修改，依 AGENTS\.md 不需升版，可忽略此提醒/);
+});
+
+test("版本號檢查串接（#312 PR F）：讀版本檔只有 404 算缺少，403／429／5xx 算查詢失敗；超過 1MB 退回讀 git/blobs", async () => {
+  const b64 = s => ({ encoding: "base64", content: Buffer.from(s, "utf8").toString("base64") });
+  const baseFixtures = {
+    "pulls/5": { number: 5, title: "改看盤", draft: false, base: { ref: "main" }, head: { sha: HEAD, ref: "gemini/x" } },
+    "pulls/5/files": [{ filename: "learner/watch.html", status: "modified" }],
+    "issues/5/comments": [], "pulls/5/reviews": [], "pulls/5/comments": [],
+    [`commits/${HEAD}/check-runs`]: { check_runs: [] },
+    "pulls?state=open": [{ number: 5 }],
+  };
+
+  // 1. 超過 1MB（encoding: "none"、content 為空）改由 git/blobs/<sha> 讀取
+  const largeFixtures = {
+    ...baseFixtures,
+    "contents/learner/version.json?ref=main": b64('{"v":"2026.11.17-241"}\n'),
+    [`contents/learner/version.json?ref=${HEAD}`]: b64('{"v":"2026.11.18-242"}\n'),
+    [`contents/learner/index.html?ref=${HEAD}`]: b64("<footer>版本 2026.11.18-242</footer>"),
+    [`contents/learner/watch.html?ref=${HEAD}`]: { encoding: "none", content: "", size: 1500000, sha: "blobsha123" },
+    "git/blobs/blobsha123": b64("<div>版本 2026.11.18-242</div>"),
+    [`contents/learner/README.md?ref=${HEAD}`]: b64("### 大檔測試（2026.11.18-242）\n- 更新"),
+  };
+  const getLarge = p => { const k = p.replace(/^repos\/[^/]+\/[^/]+\//, "").replace(/[?&]per_page=\d+/, ""); assert.ok(k in largeFixtures, k); return largeFixtures[k]; };
+  const outLarge = formatBrief(await collect(5, getLarge, "o/r"));
+  assert.match(outLarge, /版本號：✅ 四檔一致且已遞增（2026\.11\.17-241 → 2026\.11\.18-242）/);
+
+  // 2. 404 算缺少檔案
+  const notFoundFixtures = {
+    ...baseFixtures,
+    "contents/learner/version.json?ref=main": b64('{"v":"2026.11.17-241"}\n'),
+    [`contents/learner/index.html?ref=${HEAD}`]: b64("<footer>版本 2026.11.18-242</footer>"),
+    [`contents/learner/watch.html?ref=${HEAD}`]: b64("<div>版本 2026.11.18-242</div>"),
+    [`contents/learner/README.md?ref=${HEAD}`]: b64("### 缺檔（2026.11.18-242）\n- 更新"),
+  };
+  const get404 = p => {
+    const k = p.replace(/^repos\/[^/]+\/[^/]+\//, "").replace(/[?&]per_page=\d+/, "");
+    if (k === `contents/learner/version.json?ref=${HEAD}`) throw Object.assign(new Error("gh: Not Found"), { stderr: "gh: Not Found (HTTP 404)" });
+    assert.ok(k in notFoundFixtures, k); return notFoundFixtures[k];
+  };
+  const data404 = await collect(5, get404, "o/r");
+  assert.deepEqual(data404.version.errors, []);
+  const out404 = formatBrief(data404);
+  assert.match(out404, /版本號：⚠️ \d+ 項待確認（只是提醒）/);
+  assert.match(out404, /learner\/version\.json 缺少或內容為空/);
+
+  // 3. 403／429／502 只提醒查詢失敗，不誤報為檔案缺少
+  const getErr = p => {
+    const k = p.replace(/^repos\/[^/]+\/[^/]+\//, "").replace(/[?&]per_page=\d+/, "");
+    if (k === "contents/learner/version.json?ref=main") throw Object.assign(new Error("gh: Forbidden"), { stderr: "gh: rate limit (HTTP 403)" });
+    if (k === `contents/learner/watch.html?ref=${HEAD}`) throw Object.assign(new Error("gh: Bad Gateway"), { stderr: "gh: Bad Gateway (HTTP 502)" });
+    if (k in largeFixtures) return largeFixtures[k];
+    assert.fail(k);
+  };
+  const dataErr = await collect(5, getErr, "o/r");
+  assert.equal(dataErr.version.errors.length, 2);
+  const outErr = formatBrief(dataErr);
+  assert.match(outErr, /版本號：⚠️ 查詢失敗（只是提醒）/);
+  assert.match(outErr, /提醒：main（main） 的 learner\/version\.json 查詢失敗（HTTP 403）：無法確認版本號，請自行確認/);
+  assert.match(outErr, /提醒：head（9999200） 的 learner\/watch\.html 查詢失敗（HTTP 502）：無法確認版本號，請自行確認/);
+  assert.doesNotMatch(outErr, /缺少或內容為空/);
 });
