@@ -353,7 +353,8 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-page .dh-sec { min-width: 0; scroll-margin-top: 14px; }
 .td-page .dh-sec > summary { min-height: 56px; padding: 10px 13px; row-gap: 4px; }
 .td-page .dh-sec-s { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-overflow: ellipsis; line-height: 1.4; }
-.td-page .dh-sec-v { max-height: 76px; overflow: hidden; margin-top: 6px; }
+.td-page .dh-sec-v { margin-top: 6px; }
+.td-page .dh-sec[open] > summary .dh-sec-v { display: none; }
 .td-page .dh-sec[open] > summary { padding-bottom: 10px; }
 .td-page .dh-sec-b { min-width: 0; padding: 10px 13px 14px; }
 .td-plan-stage { min-width: 0; padding: 3px 0 12px; }
@@ -458,7 +459,7 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 :is(.td-ix, .td-sc) .dot { position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--muted); }
 :is(.td-ix, .td-sc) .dot.now { width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; background: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 18%, transparent); }
 .td-ix .dot.hi { background: var(--up); } .td-ix .dot.lo { background: var(--down); } .td-ix .dot.ev { background: var(--muted); } .td-ix .dot.ev.alert { background: var(--up); }
-.td-hl { position: absolute; transform: translate(4px, -120%); font-size: 10.5px; color: var(--up); white-space: nowrap; pointer-events: none; } .td-hl.lo { color: var(--down); transform: translate(4px, 20%); }
+.td-hl { position: absolute; z-index: 1; padding: 1px 4px; border-radius: 4px; background: color-mix(in srgb, var(--surface) 88%, transparent); transform: translate(4px, -115%); font-size: 10.5px; line-height: 1.2; color: var(--up); white-space: nowrap; pointer-events: none; } .td-hl.flip { transform: translate(4px, 22%); } .td-hl.lo { color: var(--down); transform: translate(4px, 22%); } .td-hl.lo.flip { transform: translate(4px, -115%); }
 .td-ix-lv { position: relative; } .td-ix .td-ix-lv { height: 128px; } .td-sc .td-ix-lv { height: 96px; }
 .td-ix-lv span { position: absolute; left: 0; right: 0; transform: translateY(-50%); font-size: 10.5px; line-height: 1.2; white-space: nowrap; color: var(--muted); }
 .td-ix-lv .up, .td-ix-lv .down { color: var(--level); } /* 位階標籤：中性色，文字本身寫著「壓力」「支撐」 */ .td-ix-lv .piv { color: var(--ink); } .td-ix-lv b { font-weight: 400; }
@@ -526,13 +527,16 @@ u.conf { background: var(--up); } u.div { background: var(--down); } u.etf { bac
   .td-ix-stat b { font-size: 12px; }
   .td-breadth-legend, .td-breadth-foot { font-size: 9.5px; }
 }
+@media (max-width: 430px) {
+  .td-page .dh-status-bar { padding: 5px 10px; gap: 4px 6px; margin-bottom: 8px; }
+}
 @media (min-width: 600px) { .dh-secs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 900px) {
   .td-hero { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 24px; align-items: center; }
   .td-ix-plot, .td-ix-y, .td-ix .td-ix-lv { height: 168px; }
   .dh-secs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.td-help { margin-top: 2px; } .td-help > summary { cursor: pointer; font-size: 12px; color: var(--muted); min-height: 32px; display: flex; align-items: center; } .td-help > summary:hover { color: var(--ink); }
+.td-help { margin-top: 2px; } .td-help > summary, .td-page .dh-more > summary { cursor: pointer; font-size: 12px; color: var(--muted); min-height: 44px; display: flex; align-items: center; } .td-help > summary:hover, .td-page .dh-more > summary:hover { color: var(--ink); }
 .td-help .tlist { font-size: 12.5px; line-height: 1.7; } .td-help .tlist li { padding: 4px 0; }
 .ixcard > span .ixmeta { display: inline-block; margin-left: 4px; font-size: 10px; opacity: .75; font-weight: 400; }
 .mk-dinfo { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 6px; font-size: 11.5px; color: var(--muted); }
