@@ -14,6 +14,21 @@ git config user.email "${COMMIT_NAME:-data-sync}@users.noreply.github.com"
 for p in "$@"; do [ -e "$p" ] && git add -A -- "$p"; done
 if git diff --cached --quiet; then echo "沒有新資料"; exit 0; fi
 git commit -q -m "$msg [skip ci]"
+# 推送用的 token（#312、docs/ruleset-setup.md 第二階段前置 3）：
+#   有 DATA_PUSH_TOKEN（workflow 在 commit 前一步用排程專用 GitHub App 換發，有效 1 小時）就改用它推送；
+#   main 開 ruleset 後只有 bypass 清單裡的 App 能直接推，預設 GITHUB_TOKEN（github-actions[bot]）不能加進 bypass。
+#   actions/checkout v5 把 token 存在本機 git 設定的 http.<伺服器>/.extraheader，這裡整個換成 App 的 token。
+#   沒有設定 App（repo 變數 DATA_APP_CLIENT_ID 是空的）時沿用 checkout 的 GITHUB_TOKEN，行為和以前一樣。
+if [ -n "${DATA_PUSH_TOKEN:-}" ]; then
+  key="http.${GITHUB_SERVER_URL:-https://github.com}/.extraheader"
+  auth=$(printf 'x-access-token:%s' "$DATA_PUSH_TOKEN" | base64 | tr -d '\n')
+  echo "::add-mask::$auth"
+  git config --local --unset-all "$key" 2>/dev/null
+  git config --local "$key" "AUTHORIZATION: basic $auth"
+  echo "用排程專用 GitHub App 的 token 推送"
+else
+  echo "::notice::沒有 DATA_PUSH_TOKEN（未設定排程專用 GitHub App），用預設 GITHUB_TOKEN 推送"
+fi
 for i in 1 2 3 4 5; do
   if git pull --rebase -X theirs -q origin "$branch" && git push -q origin "HEAD:$branch"; then echo "已寫回 $branch"; exit 0; fi
   git rebase --abort 2>/dev/null

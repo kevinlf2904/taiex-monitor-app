@@ -21,12 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
       # 歷史日 K 不進 git，用快取在每次執行之間保留（找不到就從 Yahoo 補一年）
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .cache
           key: allk-${{ github.run_id }}
@@ -45,26 +45,53 @@ jobs:
       # 財報事件回測（營收創新高、三率三升…之後的報酬）：用剛更新好的全市場日 K 算，寫回 learner/data/event-study.json
       - if: ${{ github.event.inputs.dry != '1' }}
         run: node scripts/event-study.mjs
+      - name: data push token
+        id: datatoken1
+        if: ${{ github.ref == 'refs/heads/main' && vars.DATA_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.DATA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DATA_APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: commit event study
         if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' }}
         env:
           COMMIT_NAME: event-study
+          DATA_PUSH_TOKEN: ${{ steps.datatoken1.outputs.token }}
         run: bash scripts/commit-data.sh "財報：更新事件回測" learner/data/event-study.json
       # 題材股價連動（供應鏈「關聯」）：全市場日 K 快取＋Yahoo 美日韓日 K（.cache/yk.json 一起快取），寫回 learner/data/theme-corr.json
       - if: ${{ github.event.inputs.dry != '1' }}
         run: node scripts/theme-corr.mjs
+      - name: data push token
+        id: datatoken2
+        if: ${{ github.ref == 'refs/heads/main' && vars.DATA_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.DATA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DATA_APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: commit theme corr
         if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' }}
         env:
           COMMIT_NAME: theme-corr
+          DATA_PUSH_TOKEN: ${{ steps.datatoken2.outputs.token }}
         run: bash scripts/commit-data.sh "供應鏈：更新題材連動" learner/data/theme-corr.json
       # 今日符合型態的個股（K線學堂型態課、錯題本下面列出）：同一份全市場日 K 快取，寫回 learner/data/pattern-today.json
       - if: ${{ github.event.inputs.dry != '1' }}
         run: node scripts/pattern-today.mjs
+      - name: data push token
+        id: datatoken3
+        if: ${{ github.ref == 'refs/heads/main' && vars.DATA_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.DATA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DATA_APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: commit pattern today
         if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' }}
         env:
           COMMIT_NAME: pattern-today
+          DATA_PUSH_TOKEN: ${{ steps.datatoken3.outputs.token }}
         run: bash scripts/commit-data.sh "K線學堂：今日符合型態的個股" learner/data/pattern-today.json
       - name: telegram
         if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' }}   # 只有 main 會發真的推播
@@ -83,8 +110,17 @@ jobs:
         continue-on-error: true
         timeout-minutes: 15
         run: node scripts/signal-study.mjs
+      - name: data push token
+        id: datatoken4
+        if: ${{ github.ref == 'refs/heads/main' && vars.DATA_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.DATA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DATA_APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: commit signal study
         if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.dry != '1' && steps.sigstudy.outcome == 'success' }}
         env:
           COMMIT_NAME: signal-study
+          DATA_PUSH_TOKEN: ${{ steps.datatoken4.outputs.token }}
         run: bash scripts/commit-data.sh "選股：更新訊號回測" learner/data/signal-study.json

@@ -45,11 +45,12 @@
 5. 在 App 頁面按 **Generate a private key**，下載 `.pem`。
 6. 左側 **Install App** → 安裝到自己的帳號 → **Only select repositories** → 只選本 repo。
 7. 到 repo **Settings → Secrets and variables → Actions**：
-   - Variables 新增 App ID（名稱由實作 PR 決定，例如 `DATA_APP_ID`）。
-   - Secrets 新增私鑰內容（例如 `DATA_APP_PRIVATE_KEY`）。值只貼在 GitHub 設定頁，不要貼到對話、PR 或留言。
+   - **Variables** 分頁新增 `DATA_APP_CLIENT_ID`，值是 App 設定頁（General → About）的 **Client ID**（`Iv` 開頭那串，不是數字的 App ID；`create-github-app-token` v3 改用 Client ID）。
+   - **Secrets** 分頁新增 `DATA_APP_PRIVATE_KEY`，值是 `.pem` 檔的完整內容（含 `-----BEGIN` 與 `-----END` 兩行）。值只貼在 GitHub 設定頁，不要貼到對話、PR 或留言。
+   - 名稱要完全一樣：workflow 只在 `DATA_APP_CLIENT_ID` 有值時才換 App token，沒值就照舊用 `GITHUB_TOKEN`。
 8. 在 #312 留言告知「App 已建立、名稱已設定」（只寫名稱，不寫值）。
 
-接著由 AI 另開 PR，把 24 支排程改成用這個 App 換發 token 再推送。這是 `.github/workflows/**` 的修改，需要獨立審查與使用者授權合併。注意事項（寫在該 PR 裡）：
+排程改用 App token 推送的程式由 #312 第二階段 PR 處理（24 支、27 個寫回步驟，各在寫回前一步換 token；`scripts/commit-data.sh` 收到 `DATA_PUSH_TOKEN` 就改用它推送）。這個 PR 可以在 App 建立前合併：變數沒設定時行為和現在一樣。這是 `.github/workflows/**` 的修改，需要獨立審查與使用者授權合併。注意事項（寫在該 PR 裡）：
 - App token 推到 main **會**觸發 `on: push` 的 workflow；`commit-data.sh` 已固定加 `[skip ci]`，`ci.yml` 不會跑，但要逐支確認沒有其他 `on: push` 被觸發。
 - action 固定到完整 commit SHA（G4 的做法）。
 - 能改 main 上 workflow 的人就拿得到這把私鑰，所以這也是要開「需要 Code Owner 審查」的原因。
