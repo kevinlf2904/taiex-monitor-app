@@ -177,8 +177,9 @@ export const TEMPLATE_SECTIONS = ["誰做的", "改了什麼", "還沒做完", "
 // 回傳 [{ line, code, prose }]：code＝這行在 fenced code block 裡（含開頭與結尾的 ``` 行，原樣保留）；
 // 其他行 line 已去掉 HTML 註解（`行內程式碼` 裡的 <!-- 不算註解），prose 再去掉行內程式碼（給關閉關鍵字用）。
 // 行內程式碼照 CommonMark：結尾要是長度完全相同的反引號串，可以在同一段落內跨行（#320 ChatGPT P3）；
-// 整段都找不到結尾就當一般文字。空行、標題、--- ／ ===、``` 區塊開頭、清單項目開頭都會結束段落，標題行本身也不會往下延伸。
-const BLOCK_END = /^\s*$|^ {0,3}(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|[-=]+[ \t]*$|(?:[-*_][ \t]*){3,}$|[-*+][ \t]|\d{1,9}[.)][ \t])/;
+// 整段都找不到結尾就當一般文字。空行、標題、--- ／ ===、``` 區塊開頭、清單項目開頭、> 引用、< 開頭的 HTML 都會結束段落，
+// 標題行本身也不會往下延伸。拿不準時寧可當成段落結束：最多多算一個 Closes（多提醒），不會漏算（#324 ChatGPT P2）。
+const BLOCK_END = /^\s*$|^ {0,3}(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|[-=]+[ \t]*$|(?:[-*_][ \t]*){3,}$|[-*+][ \t]|\d{1,9}[.)][ \t]|>|<[A-Za-z!?/])/;
 const tickRun = (s, n, from = 0) => { for (const r of s.slice(from).matchAll(/`+/g)) if (r[0].length === n) return from + r.index; return -1; };
 export function markdownLines(body = "") {
   const out = [];
