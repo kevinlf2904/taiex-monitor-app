@@ -113,7 +113,7 @@ test("pr-guard workflow：權限最小、不用 pull_request_target、fork 與�
 });
 
 test("pr-guard-run：已關閉、已合併、fork 來的 PR 不寫任何東西", async () => {
-  for (const pr of [{ state: "closed" }, { state: "closed", merged_at: "t" }, { state: "open", head: { sha: HEAD, ref: "x", repo: { full_name: "someone/fork" } } }]) {
+  for (const pr of [{ state: "closed" }, { state: "closed", merged_at: "t" }, { state: "open", head: { sha: HEAD, ref: "x", repo: { full_name: "someone/fork" } } }, { state: "open", head: { sha: HEAD, ref: "x", repo: null } }]) {
     const f = fake({ pr });
     const out = [];
     await run(5, { get: f.get, write: f.write, repo: "o/r", log: s => out.push(s) });
@@ -152,4 +152,16 @@ test("pr-guard workflow：同一 PR 各種事件同一個 concurrency 組；只�
   assert.match(y, /github\.event\.pull_request\.state == 'open'/);
   assert.match(y, /github\.event\.issue\.state == 'open'/);
   assert.match(y, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/);
+});
+
+test("pr-guard-run：說明裡 Closes #N 會查 GitHub，看板列出不存在或是 PR 的編號", async () => {
+  const f = fake({ pr: { body: "## 誰做的\nClaude Code，Closes #12、Closes #7" } });
+  const get0 = f.get;
+  const get = p => /\/issues\/12$/.test(p) ? (() => { throw new Error("HTTP 404"); })() : /\/issues\/7$/.test(p) ? { number: 7, pull_request: {} } : get0(p);
+  const out = [];
+  await run(5, { dry: true, get, write: f.write, repo: "o/r", log: s => out.push(s) });
+  const board = out.join("\n");
+  assert.match(board, /Closes #12 指向不存在的編號/);
+  assert.match(board, /Closes #7 是 PR 不是 Issue/);
+  assert.match(board, /「## 改了什麼」段落|缺少「## 改了什麼」/);
 });
