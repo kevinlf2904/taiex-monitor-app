@@ -1,0 +1,17 @@
+# Code owner（#312 G1）：下列路徑的 PR 需要 owner 本人核准。
+# 要等 main 的 ruleset 開啟「Require review from Code Owners」（#312 G2）才會生效；在那之前這個檔案只是標示，不會擋合併。
+# 所有 AI 共用 owner 帳號，AI 用這個身分送出的核准不算數，必須由使用者本人在 GitHub 介面上核准。
+# 規則由上往下比對，同一個檔案以最後一條符合的為準；不要在後面加沒有 owner 的規則蓋掉這些路徑。
+# 修改這份清單時，同步更新 tests/codeowners.test.mjs。
+
+# GitHub 設定：workflow（CI、排程、pr-guard）、本檔、PR／Issue 範本
+/.github/ @kevinlf2904
+
+# 協作規則與 AI 工具設定
+/AGENTS.md @kevinlf2904
+/CLAUDE.md @kevinlf2904
+/.agent/ @kevinlf2904
+/.claude/settings.json @kevinlf2904
+
+# 部署設定
+/vercel.json @kevinlf2904
