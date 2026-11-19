@@ -175,14 +175,14 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       breadthMount.innerHTML = liveBreadthHtml(W) ||
         '<p class="mc-empty">' + (!W || !W.mkt ? "市場廣度載入中…" : W.mkt.err ? "市場廣度暫時無法取得，稍後自動重試。" : "市場廣度資料尚未與最新加權行情同日；不以其他交易日資料補入。") + '</p>';
     }
-    // 手機第一屏優先呈現核心市場數字：將核心卡移到加權報價與分時圖之間。
+    // 手機第一屏優先呈現核心市場數字：將核心卡移到加權報價與分時圖區塊（含標題）之間。
     const side = hero && hero.querySelector(".td-side");
     const coreGrid = side && side.querySelector(".dh-core-grid");
     const main = hero && hero.querySelector(".td-main");
-    const chart = main && main.querySelector(".td-ix");
+    const chartAnchor = main && (main.querySelector(".td-chart-head") || main.querySelector(".td-ix"));
     if (coreGrid && main) {
       coreGrid.classList.add("mc-core-grid");
-      if (chart) chart.before(coreGrid);
+      if (chartAnchor) chartAnchor.before(coreGrid);
       else main.appendChild(coreGrid);
     }
     if (side && !side.children.length) side.remove();
@@ -441,6 +441,15 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     ];
     const q = getQuote(W, "T00");
     const position = page.querySelector(".td-pos");
+    const positionText = (() => {
+      if (!position) return "目前位置尚未取得";
+      const val = position.querySelector("b")?.textContent?.trim();
+      const notes = Array.from(position.querySelectorAll(".note")).map(el => el.textContent.trim()).filter(Boolean);
+      const label = notes[0] || "現在位置";
+      const diff = notes[1] || "";
+      if (val) return label + "：" + val + (diff ? "・" + diff : "");
+      return position.textContent.replace(/\s+/g, " ").trim() || "目前位置尚未取得";
+    })();
     const priceText = isNum(q && q.price) ? numberFmt(q.price, 0) : "—";
     const levelHtml = levels.map(level => '<div class="mc-level-row ' + level.key + '"><span>' + escapeHtml(level.label) + (level.tip ? tip(level.tip) : "") +
       '</span><b>' + escapeHtml(level.value == null ? "待更新" : numberFmt(level.value, 0) + " 點") + '</b><small>' +
@@ -451,7 +460,7 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       // 收盤後的「下一交易日預估」說明放在位階上方（先知道這組數字是什麼，再看數字）
       (levelsData?.estimate ? '<p class="mc-flow-alignment mc-tech-est" role="status">' + escapeHtml("今天已收盤：下方是下一交易日 " + String(levelsData.forDate).slice(5).replace("-", "/") + " 的預估位階（以今日收盤推算，明天盤前會依最新美股重新推演）。") + '</p>' : '') +
       '<div class="mc-tech-ladder">' + levelHtml + '</div>' +
-      (levelsData?.estimate ? '' : '<div class="mc-tech-position">' + escapeHtml(position ? position.textContent.replace(/\s+/g, " ").trim() : "目前位置尚未取得") + '</div>') +
+      (levelsData?.estimate ? '' : '<div class="mc-tech-position">' + escapeHtml(positionText) + '</div>') +
       '<p class="mc-data-note">壓力、分水嶺與支撐是盤前推演模型價位；請與當日實際報價及量能確認，不是即時成交價或保證支撐。</p>';
     const panel = ensurePanel(page, ".mc-tech-panel", "mc-panel mc-tech-panel", "technical", html);
     const sectionBar = page.querySelector(".dh-secbar");
@@ -464,11 +473,18 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     const style = doc.createElement("style");
     style.id = "kl-market-center-style";
     style.textContent = [
+      "@property --mc-fade-start{syntax:'<length>';inherits:false;initial-value:0px}",
+      "@property --mc-fade-end{syntax:'<length>';inherits:false;initial-value:0px}",
       ".td-page{--mc-card:var(--surface);--mc-soft:var(--surface-2);--mc-border:var(--line)}",
-      ".mc-nav{display:flex;gap:8px;max-width:100%;min-width:0;margin:16px 0 10px;padding:0 0 5px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;scroll-snap-type:x proximity;scroll-padding-inline:8px}",
+      ".mc-nav{display:flex;gap:8px;max-width:100%;min-width:0;margin:16px 0 10px;padding:0 0 5px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;scroll-snap-type:x proximity;--mc-fade-size:28px;scroll-padding-inline:var(--mc-fade-size)}",
       ".mc-nav::-webkit-scrollbar{display:none}",
+      ".mc-nav.mc-more-start{--mc-fade-start:var(--mc-fade-size)}",
+      ".mc-nav.mc-more-end{--mc-fade-end:var(--mc-fade-size)}",
+      "@supports (animation-timeline:scroll()){.mc-nav{-webkit-mask:linear-gradient(#000,#000) no-clip subtract,linear-gradient(to right,#000,transparent) 0 0/var(--mc-fade-start) 100% no-repeat no-clip,linear-gradient(to right,transparent,#000) 100% 0/var(--mc-fade-end) 100% no-repeat no-clip;mask:linear-gradient(#000,#000) no-clip subtract,linear-gradient(to right,#000,transparent) 0 0/var(--mc-fade-start) 100% no-repeat no-clip,linear-gradient(to right,transparent,#000) 100% 0/var(--mc-fade-end) 100% no-repeat no-clip;animation:mc-fade-start linear both,mc-fade-end linear both;animation-timeline:scroll(self inline);animation-range:0 var(--mc-fade-size),calc(100% - var(--mc-fade-size)) 100%}@keyframes mc-fade-start{to{--mc-fade-start:var(--mc-fade-size)}}@keyframes mc-fade-end{from{--mc-fade-end:var(--mc-fade-size)}}}",
+      "@supports not (animation-timeline:scroll()){.mc-nav{-webkit-mask:linear-gradient(#000,#000) no-clip subtract,linear-gradient(to right,#000,transparent) 0 0/var(--mc-fade-start) 100% no-repeat no-clip,linear-gradient(to right,transparent,#000) 100% 0/var(--mc-fade-end) 100% no-repeat no-clip;mask:linear-gradient(#000,#000) no-clip subtract,linear-gradient(to right,#000,transparent) 0 0/var(--mc-fade-start) 100% no-repeat no-clip,linear-gradient(to right,transparent,#000) 100% 0/var(--mc-fade-end) 100% no-repeat no-clip;transition:--mc-fade-start .2s,--mc-fade-end .2s}}",
       ".mc-tab{position:relative;flex:1 0 auto;min-width:100px;min-height:46px;padding:10px 16px;border:1px solid var(--mc-border);border-radius:8px;background:var(--mc-soft);color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer;scroll-snap-align:start;transition:background .16s,border-color .16s,color .16s}",
-      ".mc-tab[aria-selected=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}",
+      ".mc-tab[aria-selected=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}",
+      ".mc-tab[aria-selected=true]::after{content:'';position:absolute;inset:auto 8px 0;border-block-end:2px solid var(--accent);pointer-events:none}",
       ".mc-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}",
       ".mc-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:8px 0 14px}",
       ".mc-heading h4{margin:0;font-size:20px;font-weight:750;letter-spacing:.01em;color:var(--ink)}",
@@ -481,20 +497,22 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       ".mc-date{font-size:11px;color:var(--muted);white-space:nowrap}",
       ".mc-date.warn,.mc-flow-alignment.warn{color:var(--warn)}.mc-date.ok,.mc-flow-alignment.ok{color:var(--muted)}",
       ".mc-flow-alignment{margin:8px 0;color:var(--muted);font-size:11px;line-height:1.55}",
-      ".mc-global-shortcuts{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--mc-border)}",
+      ".mc-global-shortcuts{display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--mc-border)}",
       ".mc-global-shortcuts>span{color:var(--muted);font-size:11px;font-weight:650}",
+      ".mc-global-shortcuts .linkbtn{min-height:44px;display:inline-flex;align-items:center;padding:0 6px}",
       ".mc-status-chip,.mc-model-tag{display:inline-flex;align-items:center;min-height:24px;padding:3px 9px;border:1px solid var(--mc-border);border-radius:999px;background:var(--mc-soft);color:var(--muted);font-size:11px;line-height:1.35}",
       ".td-page .td-hero{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:stretch;margin:0 0 14px}",
       ".td-page .td-main,.td-page .td-side{min-width:0;padding:16px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
       ".td-page .td-side{display:flex;flex-direction:column;gap:12px}",
       ".td-page .td-side .td-breadth{display:none}",
-      ".mc-core-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:0;margin:8px 0 0;border-top:1px solid var(--line)}",
-      ".mc-core-grid .dh-core-card{background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:8px 8px 8px 0}",
+      ".mc-core-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 16px;margin:8px 0 0;border-top:1px solid var(--line)}",
+      ".mc-core-grid .dh-core-card{min-width:0;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:8px 2px}",
       ".mc-core-grid .dh-cc-head .note{display:none}.mc-core-grid .dh-cc-head b{font-size:12px;font-weight:400;color:var(--muted)}",
       ".mc-core-grid .dh-cc-sub{display:flex;align-items:center;justify-content:space-between;gap:4px}.mc-core-grid .dh-cc-sub span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mc-core-grid .dh-cc-sub .spark{flex:none;width:36px;height:14px}",
       ".mc-overview-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin:0 0 14px}",
       ".mc-overview-grid .td-breadth{margin:0;padding:0;border:0;background:transparent}",
-      ".mc-overview-grid .td-breadth-head{margin-bottom:5px}",
+      ".mc-overview-grid .td-breadth-head{justify-content:flex-end;margin-bottom:5px}",
+      ".mc-overview-grid .td-breadth-head b{display:none}",
       ".mc-overview-grid .td-breadth-total{margin-bottom:10px}",
       ".mc-overview-grid .td-bb{height:14px;border-radius:5px;overflow:hidden}",
       ".mc-overview-grid .td-breadth-legend{display:flex;justify-content:space-between;gap:7px;flex-wrap:wrap;margin-top:9px}",
@@ -515,9 +533,10 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       ".mc-global-summary span{display:flex;gap:5px;align-items:baseline;flex-wrap:wrap;min-width:0;overflow-wrap:anywhere}",
       ".mc-global-summary b{color:var(--ink);font-weight:600}",
       ".mc-global-card{min-width:0;padding:12px;border:1px solid var(--mc-border);border-radius:9px;background:var(--mc-soft)}",
-      ".mc-global-name{display:flex;justify-content:space-between;gap:6px;align-items:baseline}",
-      ".mc-global-name b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-      ".mc-global-name span,.mc-global-source{font-size:10px;color:var(--muted)}",
+      ".mc-global-name{display:flex;justify-content:space-between;gap:6px;align-items:baseline;min-width:0}",
+      ".mc-global-name b{min-width:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+      ".mc-global-name span{flex:0 0 auto;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--muted)}",
+      ".mc-global-source{font-size:10px;color:var(--muted)}",
       ".mc-global-price{margin-top:9px;font:700 20px var(--font-num,monospace);color:var(--ink);font-variant-numeric:tabular-nums}",
       ".mc-global-change{margin-top:2px;font:650 12px var(--font-num,monospace)}",
       ".mc-global-meta{margin-top:10px;font-size:10px;color:var(--muted);line-height:1.5}",
@@ -545,7 +564,7 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       ".mc-level-row.pressure,.mc-level-row.support{border-top:3px solid var(--muted)}.mc-level-row.pivot{border-top:3px solid var(--accent)}",
       ".mc-tech-position{margin-top:10px;font-size:12px;color:var(--muted)}",
       ".mc-ai-panel{padding:18px;border:1px solid var(--mc-border);border-radius:12px;background:var(--mc-card);box-shadow:0 5px 18px rgba(0,0,0,.06)}",
-      ".mc-ai-run{flex:none;min-height:36px;padding:7px 14px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft);color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}.mc-ai-run:disabled{opacity:.6;cursor:wait}.mc-ai-run:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.mc-ai-panel .mc-panel-head{margin-bottom:8px}",
+      ".mc-ai-run{flex:none;min-height:44px;padding:8px 16px;border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft);color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}.mc-ai-run:disabled{opacity:.6;cursor:wait}.mc-ai-run:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.mc-ai-panel .mc-panel-head{margin-bottom:8px}",
       ".mc-ai-panel h4{margin:0 0 6px;font-size:17px}.mc-ai-panel>p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}.mc-ai-panel .caibox{margin-top:12px}",
       ".rs-report{display:grid;gap:12px}.rs-sec h5{margin:0 0 6px;font-size:14px;color:var(--ink)}.rs-sec ul{margin:0;padding-left:18px}.rs-sec li{margin:3px 0}.rs-sum{margin:0;font-size:14px;line-height:1.7}",
       ".rs-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.rs-two>.rs-sec:first-child h5{color:var(--up)}.rs-two>.rs-sec:last-child h5{color:var(--down)}@media(max-width:640px){.rs-two{grid-template-columns:1fr}}",
@@ -557,8 +576,8 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
       ".td-page .dh-sec-b{padding:0 16px 16px}",
       ".td-page [data-mc-section][hidden]{display:none!important}",
       "@media(max-width:900px){.mc-global-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}",
-      "@media(max-width:760px){.td-page .td-hero{grid-template-columns:minmax(0,1fr)}.mc-overview-grid{grid-template-columns:minmax(0,1fr)}.mc-global-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-flow-columns{grid-template-columns:minmax(0,1fr);gap:12px}.mc-heading{align-items:flex-start;flex-direction:column;gap:4px}}",
-      "@media(max-width:430px){.mc-tab{flex:0 0 auto;min-width:90px;padding:9px 12px}.mc-panel{padding:13px}.td-page .td-main,.td-page .td-side{padding:10px}.td-page .td-main{gap:8px}.mc-core-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:6px}.mc-core-grid .dh-core-card{padding:6px 5px}.mc-flow-row{grid-template-columns:minmax(82px,1fr) minmax(45px,1fr) minmax(50px,.7fr);gap:7px}.mc-tech-ladder{grid-template-columns:minmax(0,1fr)}.mc-level-row{display:grid;grid-template-columns:1fr auto;align-items:center}.mc-level-row small{grid-column:1/-1}.mc-global-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-global-price{font-size:17px}.mc-nav{margin:4px 0 2px}.mc-heading{margin:0 0 4px}.td-market-summary{margin-bottom:0}}"
+      "@media(max-width:760px){.td-page .td-hero{grid-template-columns:minmax(0,1fr)}.mc-core-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-overview-grid{grid-template-columns:minmax(0,1fr)}.mc-global-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-flow-columns{grid-template-columns:minmax(0,1fr);gap:12px}.mc-heading{align-items:flex-start;flex-direction:column;gap:4px}}",
+      "@media(max-width:430px){.mc-tab{flex:0 0 auto;min-width:90px;padding:9px 12px}.mc-panel{padding:13px}.td-page .td-main,.td-page .td-side{padding:10px}.td-page .td-main{gap:8px}.mc-core-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px;margin-top:6px}.mc-core-grid .dh-core-card{padding:6px 2px}.mc-flow-row{grid-template-columns:minmax(82px,1fr) minmax(45px,1fr) minmax(50px,.7fr);gap:7px}.mc-tech-ladder{grid-template-columns:minmax(0,1fr)}.mc-level-row{display:grid;grid-template-columns:1fr auto;align-items:center}.mc-level-row small{grid-column:1/-1}.mc-global-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mc-global-name{flex-direction:column;align-items:flex-start;gap:2px}.mc-global-name b,.mc-global-name span{max-width:100%}.mc-global-name b{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.3}.mc-global-price{font-size:17px}.mc-nav{margin:4px 0 2px}.mc-heading{margin:0 0 4px}.td-market-summary{margin-bottom:0}}"
     ].join("\n");
     (doc.head || doc.documentElement).appendChild(style);
   }
@@ -576,9 +595,9 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     });
     const sections = page.querySelector(".dh-secs");
     const sectionBar = page.querySelector(".dh-secbar");
-    const isResearch = active.id === "research";
-    if (sections) sections.hidden = isResearch;
-    if (sectionBar) sectionBar.hidden = isResearch;
+    const hasVisibleDetails = !!sections && Array.from(sections.querySelectorAll(".dh-sec")).some(el => !el.hidden);
+    if (sections) sections.hidden = !hasVisibleDetails;
+    if (sectionBar) sectionBar.hidden = !hasVisibleDetails;
     const title = page.querySelector("[data-mc-title]");
     const description = page.querySelector("[data-mc-description]");
     if (title) title.textContent = active.title;
@@ -592,7 +611,7 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     applyWorkspace(currentPage, stateRef, workspace);
     syncGlobalRefreshTimer(runtimeRef, workspace === "global");
     if (workspace === "global") refreshGlobalIfNeeded(runtimeRef);
-    button.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    button.scrollIntoView?.({ block: "nearest", inline: "nearest", container: "nearest" });
     return true;
   }
 
@@ -634,6 +653,19 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     } else if (status) {
       status.after(nav);
       nav.after(heading);
+    }
+    if (!nav._mcFadeBound && typeof CSS !== "undefined" && typeof CSS.supports === "function" && !CSS.supports("animation-timeline", "scroll()") && typeof IntersectionObserver === "function") {
+      const first = nav.firstElementChild, last = nav.lastElementChild;
+      if (first && last) {
+        nav._mcFadeBound = true;
+        const observer = new IntersectionObserver(entries => {
+          for (const entry of entries) {
+            nav.classList.toggle(entry.target === first ? "mc-more-start" : "mc-more-end", entry.intersectionRatio < 1);
+          }
+        }, { root: nav, threshold: 1, rootMargin: "1px" });
+        observer.observe(first);
+        observer.observe(last);
+      }
     }
 
     const assign = (selector, workspace) => {
