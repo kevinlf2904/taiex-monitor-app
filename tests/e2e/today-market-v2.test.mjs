@@ -321,3 +321,126 @@ test("全球總經：CDN 快取造成的 1～6 分鐘延遲不算未更新，超
   assert.deepEqual(tabs.map(t => t[2]), ["false", "false", "true", "false", "false"]);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("今日市場 UI 修正回歸：分時圖順序、摘要預覽、空白工作區區塊列、即時廣度、位階格式與觸控尺寸", async () => {
+  for (const width of [390, 1280]) {
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+    await p.clock.setFixedTime(new Date("2026-10-26T10:30:00+08:00"));
+    await p.evaluate(globalFixture => {
+      W.quotes.set("T00", { code: "T00", name: "加權指數", price: 27500, prev: 27380, chg: 120, chgPct: 0.44, date: "2026-10-26", time: "10:30:00", sourceTime: "10:30:00", source: "證交所 MIS", open: 27400, high: 27550, low: 27390 });
+      W.quotes.set("O00", { code: "O00", name: "櫃買指數", price: 260, chg: 1.2, chgPct: 0.46, date: "2026-10-26", time: "10:29:50", source: "櫃買中心" });
+      W.quotes.set("TXF", { code: "TXF", name: "台指期", price: 27520, chg: 115, chgPct: 0.42, date: "2026-10-26", time: "10:29:40", source: "期交所" });
+      W.mkt = { date: "2026-10-26", time: "10:30", live: true, breadth: { up: 520, down: 380, flat: 45 } };
+      W.mf = { ...(W.mf || {}), days: [], loading: false, sumTry: true };
+      store.set("watch:brief:snap:2026-10-26", {
+        tradeDate: "2026-10-26", createdAt: "2026-10-26T08:30:00+08:00",
+        keyLevels: { pressure: 27600, pivot: 27450, support: 27300 },
+        scenarios: {
+          bull: { title: "多方", trigger: "站上分水嶺" },
+          neutral: { title: "震盪", trigger: "區間整理" },
+          bear: { title: "空方", trigger: "跌破支撐" }
+        }
+      });
+      W.bf = {
+        at: Date.now(),
+        us: {
+          ok: true, dataStatus: "confirmed", updateMode: "after_close", dataDate: "2026-10-23",
+          sourceTime: "16:00", tz: "美東", source: "Yahoo Finance",
+          indices: [{ code: "^GSPC", name: "S&P 500", price: 6800, chgPct: 0.5, date: "2026-10-23", time: "16:00", source: "Yahoo Finance" }],
+          macro: [], megas: []
+        }
+      };
+      W.gl = globalFixture;
+      W.tdPh = null;
+      setLt("today");
+      renderList();
+    }, makeGlobalFixture());
+
+    await p.waitForSelector("#lx .mc-overview-grid", { timeout: 15000 });
+    const overview = await p.evaluate(() => {
+      const grid = document.querySelector("#lx .td-hero .dh-core-grid");
+      const head = document.querySelector("#lx .td-hero .td-chart-head");
+      const chart = document.querySelector("#lx .td-hero .td-ix");
+      const cards = [...document.querySelectorAll("#lx .mc-core-grid .dh-core-card")];
+      const rows = new Map();
+      for (const c of cards) {
+        const y = Math.round(c.getBoundingClientRect().top);
+        rows.set(y, (rows.get(y) || 0) + 1);
+      }
+      const mine = document.querySelector("#lx #td-sec-mine");
+      const minePreview = mine?.querySelector(":scope > summary .dh-sec-v");
+      const helpSummary = document.querySelector("#lx .td-help > summary");
+      const breadthTitle = document.querySelector("#lx .mc-overview-grid .td-breadth-head b");
+      const summaryBreadth = document.querySelector("#lx .td-market-summary .td-ms-breadth")?.textContent || "";
+      return {
+        gridBeforeHead: !!(grid && head && (grid.compareDocumentPosition(head) & Node.DOCUMENT_POSITION_FOLLOWING)),
+        headDirectPrevChart: !!(head && chart && head.nextElementSibling === chart),
+        coreRowCounts: [...rows.values()],
+        mineOpen: !!mine?.open,
+        minePreviewClipped: minePreview ? minePreview.scrollHeight > minePreview.clientHeight + 2 : false,
+        secbarHidden: !!document.querySelector("#lx .dh-secbar")?.hidden,
+        breadthTitleDisplay: breadthTitle ? getComputedStyle(breadthTitle).display : null,
+        summaryBreadth,
+        helpHeight: helpSummary ? helpSummary.getBoundingClientRect().height : 0
+      };
+    });
+    assert.equal(overview.gridBeforeHead, true, width + "：核心數字應在分時圖標題之前");
+    assert.equal(overview.headDirectPrevChart, true, width + "：分時圖標題應緊鄰分時圖");
+    if (width >= 1280 && overview.coreRowCounts.reduce((a, b) => a + b, 0) === 6) {
+      assert.deepEqual(overview.coreRowCounts, [3, 3], "桌面版 6 張核心數字卡應平均排成 3x2");
+    }
+    if (!overview.mineOpen) {
+      assert.equal(overview.minePreviewClipped, false, width + "：摘要預覽不可被 max-height 裁切");
+    }
+    assert.equal(overview.secbarHidden, false, width + "：市場總覽仍有折疊明細，區塊列應可見");
+    assert.equal(overview.breadthTitleDisplay, "none", width + "：市場廣度面板內不可重複顯示小標題");
+    assert.match(overview.summaryBreadth, /指數與多數個股同步偏強/, width + "：盤中同日即時廣度應同步至頂部摘要");
+    assert.ok(overview.helpHeight >= 44, width + "：說明折疊鈕觸控高度至少 44px：" + overview.helpHeight);
+
+    // 展開 #td-sec-mine 後，summary 內的重複預覽應隱藏
+    await p.evaluate(() => { const d = document.querySelector("#lx #td-sec-mine"); if (d) d.open = true; });
+    assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector("#lx #td-sec-mine > summary .dh-sec-v")).display), "none", width + "：明細展開後隱藏重複預覽");
+
+    // 全球總經無任何 .dh-sec：區塊列與明細容器皆應隱藏；快捷連結觸控高度 >= 44px；手機版標題與代號改上下排列
+    await selectWorkspace(p, "global");
+    const globalCheck = await p.evaluate(() => ({
+      secbarHidden: !!document.querySelector("#lx .dh-secbar")?.hidden,
+      secsHidden: !!document.querySelector("#lx .dh-secs")?.hidden,
+      shortcutHeights: [...document.querySelectorAll("#lx .mc-global-shortcuts .linkbtn")].map(el => el.getBoundingClientRect().height),
+      globalNameDir: getComputedStyle(document.querySelector("#lx .mc-global-name")).flexDirection
+    }));
+    assert.equal(globalCheck.secbarHidden, true, width + "：全球總經沒有明細時不應顯示區塊列");
+    assert.equal(globalCheck.secsHidden, true, width + "：全球總經沒有明細時應隱藏明細容器");
+    assert.ok(globalCheck.shortcutHeights.length > 0 && globalCheck.shortcutHeights.every(h => h >= 44), width + "：全球總經快捷連結觸控高度至少 44px");
+    if (width <= 430) assert.equal(globalCheck.globalNameDir, "column", "手機版全球標的名稱與代號應上下排列");
+
+    // 技術攻防：現在位置需以分隔符號排版；空白情境目標/失效不輸出空行
+    await selectWorkspace(p, "technical");
+    const techCheck = await p.evaluate(() => {
+      const plan = document.querySelector("#lx #td-sec-plan");
+      if (plan) plan.open = true;
+      return {
+        position: document.querySelector("#lx .mc-tech-position")?.textContent?.trim() || "",
+        planText: plan?.querySelector(".dh-sec-b")?.textContent || ""
+      };
+    });
+    assert.match(techCheck.position, /^現在位置：.+・.+/, width + "：現在位置應含標點與分隔符：" + techCheck.position);
+    assert.doesNotMatch(techCheck.planText, /目標：/, width + "：未提供 target 時不應輸出空白目標列");
+    assert.doesNotMatch(techCheck.planText, /失效：/, width + "：未提供 invalidation 時不應輸出空白失效列");
+
+    // AI 研究：區塊列隱藏、開始按鈕高度 >= 44px
+    await selectWorkspace(p, "research");
+    const aiCheck = await p.evaluate(() => ({
+      secbarHidden: !!document.querySelector("#lx .dh-secbar")?.hidden,
+      runHeight: document.querySelector("#lx .mc-ai-run")?.getBoundingClientRect().height || 0
+    }));
+    assert.equal(aiCheck.secbarHidden, true, width + "：AI 研究沒有明細時不應顯示區塊列");
+    assert.ok(aiCheck.runHeight >= 44, width + "：AI 整理按鈕觸控高度至少 44px：" + aiCheck.runHeight);
+
+    const sw = await hOverflow(p);
+    assert.ok(sw <= 1, width + "：不可水平溢位");
+    await ctx.close();
+    assert.deepEqual(errs, []);
+  }
+});
+

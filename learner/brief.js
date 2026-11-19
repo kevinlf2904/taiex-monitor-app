@@ -1367,9 +1367,9 @@ function briefScenariosHtml(plan) {
         const s = sc[k]; if (!s) return "";
         return `<div class="sc-card ${k}">
           <h5><b>${esc(s.title)}</b><span class="sc-bias ${k}">${{ bull: "站上分水嶺時", neutral: "在區間內時", bear: "跌破分水嶺時" }[k]}</span></h5>
-          <p><b>條件：</b>${esc(s.trigger)}</p>
-          <p><b>目標：</b>${esc(s.target)}</p>
-          <p class="note"><b>失效：</b>${esc(s.invalidation)}</p>
+          ${s.trigger ? `<p><b>條件：</b>${esc(s.trigger)}</p>` : ""}
+          ${s.target ? `<p><b>目標：</b>${esc(s.target)}</p>` : ""}
+          ${s.invalidation ? `<p class="note"><b>失效：</b>${esc(s.invalidation)}</p>` : ""}
         </div>`;
       }).join("")}
     </div>
@@ -1679,8 +1679,8 @@ function tdIxChart(tq, kl, evs, dataEval) {
       <polyline class="${trendClass}" points="${P.map(([x, c]) => `${f(X(x))},${f(Y(c))}`).join(" ")}"/>
     </svg>
       ${ev.map(([x, e]) => `<i class="dot ev ${esc(e.sev)}" style="left:${f(X(x))}%;top:0" title="${esc(e.title)}"></i>`).join("")}
-      <i class="dot hi" style="left:${f(X(hp[0]))}%;top:${f(Y(hp[1]))}%"></i><span class="td-hl" style="left:${f(Math.min(X(hp[0]), 82))}%;top:${f(Y(hp[1]))}%">高 ${fmtP(hp[1])}</span>
-      ${lp !== P[0] && lp[1] < hp[1] ? `<i class="dot lo" style="left:${f(X(lp[0]))}%;top:${f(Y(lp[1]))}%"></i><span class="td-hl lo" style="left:${f(Math.min(X(lp[0]), 82))}%;top:${f(Y(lp[1]))}%">低 ${fmtP(lp[1])}</span>` : ""}
+      <i class="dot hi" style="left:${f(X(hp[0]))}%;top:${f(Y(hp[1]))}%"></i><span class="td-hl${Y(hp[1]) < 22 ? " flip" : ""}" style="left:${f(Math.min(X(hp[0]), 68))}%;top:${f(Y(hp[1]))}%">高 ${fmtP(hp[1])}</span>
+      ${lp !== P[0] && lp[1] < hp[1] ? `<i class="dot lo" style="left:${f(X(lp[0]))}%;top:${f(Y(lp[1]))}%"></i><span class="td-hl lo${Y(lp[1]) > 78 ? " flip" : ""}" style="left:${f(Math.min(X(lp[0]), 68))}%;top:${f(Y(lp[1]))}%">低 ${fmtP(lp[1])}</span>` : ""}
       <i class="dot now" style="left:${f(X(last[0]))}%;top:${f(Y(last[1]))}%"></i>
     </div>
     <div class="td-ix-lv">${lab.map(l => `<span class="${l.k}" style="top:${f(Math.min(l.y, 96))}%">${l.n} <b class="num">${fmtP(l.v)}</b></span>`).join("")}</div>
@@ -1869,9 +1869,13 @@ function todayPage() {
     : quoteAligned && tq?.date ? `加權行情資料不完整（${dataEval.dataStatusLabel || dataEval.dataStatus}），暫不判定`
       : tq?.date && dataEval.dataStatusLabel === "前一交易日收盤" && tdOk(tq?.chgPct) ? `前一交易日（${tq.date}）加權${tq.chgPct > 0 ? "上漲" : tq.chgPct < 0 ? "下跌" : "平盤"} ${tdPctTxt(tq.chgPct)}，開盤後更新`
       : tq?.date ? `最新加權報價 ${tq.date}，尚未對齊目標交易日 ${expectedDate || "本交易日"}` : "加權行情尚未取得";
-  const breadthText = fundsAligned && mood && tdOk(mood.up) && tdOk(mood.dn) && quoteUsable
+  const liveMktAligned = quoteUsable && !!(W.mkt?.date && tq?.date && String(W.mkt.date).slice(0, 10) === String(tq.date).slice(0, 10) && tdOk(W.mkt?.breadth?.up) && tdOk(W.mkt?.breadth?.down));
+  const breadthSrc = fundsAligned && mood && tdOk(mood.up) && tdOk(mood.dn)
+    ? { up: mood.up, dn: mood.dn }
+    : liveMktAligned ? { up: W.mkt.breadth.up, dn: W.mkt.breadth.down } : null;
+  const breadthText = quoteUsable && breadthSrc
     ? (() => {
-      const up = mood.up, dn = mood.dn, dir = Math.sign(tq.chgPct);
+      const up = breadthSrc.up, dn = breadthSrc.dn, dir = Math.sign(tq.chgPct);
       if (dir > 0 && up > dn) return "市場結構：指數與多數個股同步偏強";
       if (dir > 0 && dn > up) return "市場結構：指數上漲、個股偏弱，走勢背離";
       if (dir < 0 && dn > up) return "市場結構：指數與多數個股同步偏弱";
