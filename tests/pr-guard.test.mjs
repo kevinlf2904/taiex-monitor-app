@@ -323,6 +323,35 @@ test("PR 說明檢查：行內程式碼要長度相同的反引號才算關閉�
   assert.deepEqual(closingRefs("``x`` `Closes #5` ```Closes #6``` Closes #7"), [7], "不同長度的行內程式碼各自配對");
 });
 
+test("PR 說明檢查：行內程式碼可以在同一段落內跨行，空行／標題／區塊會結束段落（#320 ChatGPT P3）", () => {
+  assert.deepEqual(closingRefs("`example\nCloses #42\n`"), [], "同段落跨行的行內程式碼");
+  assert.deepEqual(closingRefs("前 ``a\nb ` Closes #1\nc`` 後 Closes #2"), [2], "跨行時一樣要長度相同的反引號");
+  assert.deepEqual(closingRefs("`a\nx <!-- b\nc` Closes #3 -->"), [3], "跨行程式碼裡的 <!-- 不是註解，程式碼結束後的 Closes 照算");
+  assert.deepEqual(closingRefs("`a\n<!-- b\nc` Closes #3 -->"), [], "<!-- 在行首是 HTML 區塊，會結束段落，註解裡的 Closes 不算");
+  assert.deepEqual(closingRefs("`沒關閉\nCloses #4\n還是沒關閉"), [4], "整段都找不到結尾就是一般文字");
+  assert.deepEqual(closingRefs("`沒關閉\nCloses #5\n\n後一段才有 ` Closes #6"), [5, 6], "空行結束段落，不跨段配對");
+  assert.deepEqual(closingRefs("`沒關閉\nCloses #7\n## 標題 `\nfixes #8"), [7, 8], "標題結束段落");
+  assert.deepEqual(closingRefs("`沒關閉\nCloses #9\n```\n`\n```\nfixes #10"), [9, 10], "區塊開頭結束段落");
+  assert.deepEqual(closingRefs("`沒關閉\nCloses #11\n---\n` fixes #12"), [11, 12], "--- 結束段落；後面那個反引號自己也沒關閉，是一般文字");
+  assert.deepEqual(closingRefs("- 項目 `a\n- Closes #13 `"), [13], "新的清單項目結束段落");
+  assert.deepEqual(closingRefs("- 項目 `a\n  Closes #14 ` b"), [], "同一項目的續行仍在同段落");
+  assert.deepEqual(closingRefs("## 標題 `a\nCloses #15 `"), [15], "標題行裡的反引號不往下一行配對");
+  assert.deepEqual(closingRefs("`open\n> Closes #42\n`"), [42], "> 引用結束段落（#324 ChatGPT P2）");
+  assert.deepEqual(closingRefs("`open\n   > fixes #43\n`"), [43], "前面最多 3 個空格的 > 也算");
+  assert.deepEqual(closingRefs("`open\n<div>\nCloses #44\n</div>\n`"), [44], "HTML 區塊結束段落");
+  assert.deepEqual(closingRefs("`open\n<!-- x -->\nCloses #45 `"), [45], "<!-- 開頭的行也結束段落");
+  // #324 Antigravity P2／P3：段落邊界與區塊開頭用同一套判斷；行內標籤不中斷段落；HTML 區塊裡的反引號只是文字
+  assert.deepEqual(closingRefs("`open\n```foo` bar\nCloses #42\n`"), [42], "資訊字串含反引號的 ``` 行不是區塊，也不結束段落");
+  assert.deepEqual(closingRefs("`open\n<span> `\nCloses #46\n`"), [46], "行內標籤不結束段落");
+  assert.deepEqual(closingRefs("`open\n<https://example.com> `\nCloses #47\n`"), [47], "autolink 不結束段落");
+  assert.deepEqual(closingRefs("`open\n<!-- x --> `\nCloses #48\n`"), [48], "<!-- 開頭的 HTML 區塊裡，反引號不開始行內程式碼");
+  assert.deepEqual(closingRefs("<!-- a\nb\n--> `\nCloses #49\n`"), [49], "跨行註解結束那一行也一樣");
+  assert.deepEqual(closingRefs("<div>\nfoo `\nCloses #50\n`\n</div>"), [50], "HTML 區塊裡到空行為止都是文字");
+  assert.deepEqual(closingRefs("<div>\n\n`a\nCloses #51\n`"), [], "空行後 HTML 區塊結束，恢復一般解析");
+  const body = "## 改了什麼\n說明 `a\n## 測試` 不算標題\nx`\n## 驗證重點\ny";
+  assert.deepEqual(Object.keys(sections(body)), ["改了什麼", "測試` 不算標題", "驗證重點"], "## 開頭的行本身會結束段落，所以照樣是標題");
+});
+
 test("httpStatus：stderr 只有空白時也看 message", async () => {
   const { httpStatus } = await import("../scripts/pr-guard.mjs");
   assert.equal(httpStatus({ stderr: "\n", message: "HTTP 404" }), 404);
