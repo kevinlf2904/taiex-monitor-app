@@ -20,7 +20,7 @@ jobs:
   # 判斷這次要不要跑測試。只有 PR 會判斷；push（已用 paths 篩選）與手動執行一律跑。
   # 範圍和原本 PR 的 paths 相同：learner/**、api/**、scripts/**、tests/**、.github/workflows/**、.agent/**、AGENTS.md、CLAUDE.md、
   # .claude/settings.json、vercel.json、package.json、package-lock.json（轉址設定、相依套件改了也要測）。
-  # 讀不到檔案清單時當成有程式變更，寧可多跑也不要漏測。
+  # 改名的檔案新舊路徑都看（把程式檔移到 docs/ 也要測）。讀不到檔案清單時當成有程式變更，寧可多跑也不要漏測。
   changes:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
@@ -39,7 +39,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           if [ "$EVENT" != pull_request ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if ! files=$(gh api "repos/$REPO/pulls/$PR/files?per_page=100" --paginate --jq '.[].filename'); then
+          if ! files=$(gh api "repos/$REPO/pulls/$PR/files?per_page=100" --paginate --jq '.[] | .filename, (.previous_filename // empty)'); then
             echo "讀不到 PR 檔案清單，照常跑測試"; echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           code=false

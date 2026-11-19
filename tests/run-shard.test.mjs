@@ -64,6 +64,7 @@ test("CI 純文件 PR：PR 不用 paths 篩選，由 changes 判斷，沒有程�
   for (const job of ["unit", "e2e"]) assert.match(y, new RegExp(`^  ${job}:\\n    needs: changes\\n    if: needs\\.changes\\.outputs\\.code == 'true'`, "m"), `${job} 只在有程式變更時跑`);
   const step = y.slice(y.indexOf("  changes:"), y.indexOf("  unit:"));
   for (const p of ["learner/*", "api/*", "scripts/*", "tests/*", ".github/workflows/*", ".agent/*", "AGENTS.md", "CLAUDE.md", ".claude/settings.json", "vercel.json", "package.json", "package-lock.json"]) assert.ok(step.includes(p), `changes 要涵蓋 ${p}`);
+  assert.match(step, /\.previous_filename/, "改名時舊路徑也要比對");
   assert.match(step, /if ! files=.*\n.*code=true.*exit 0\n/, "讀不到檔案清單時要照常跑測試");
   const t = y.slice(y.indexOf("  test:"));
   assert.match(t, /test "\$CHANGES" = success/, "changes 失敗時 test 要失敗");
