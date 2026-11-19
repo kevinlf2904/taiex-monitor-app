@@ -51,8 +51,8 @@ test("CI 分份：ci.yml 保留名為 test 的彙總檢查，而且等所有分�
   assert.ok(pw && npm.length >= 2, "e2e 用 Playwright 官方容器，unit 與 e2e 都用 npm 裝 playwright");
   assert.deepEqual(npm, npm.map(() => pw[1]), "每一處 npm 裝的 playwright 都要和容器版本一致，否則找不到瀏覽器");
   assert.match(y, /options: --ipc=host --init/, "--ipc=host：容器的 /dev/shm 太小 chromium 會崩潰；--init：回收子程序");
-  assert.match(y, /needs\.unit\.result.*success/s);
-  assert.match(y, /needs\.e2e\.result.*success/s);
+  assert.match(y, /UNIT: \$\{\{ needs\.unit\.result \}\}/, "test 要讀 unit 的結果");
+  assert.match(y, /E2E: \$\{\{ needs\.e2e\.result \}\}/, "test 要讀 e2e 的結果");
 });
 
 test("CI 純文件 PR：PR 不用 paths 篩選，由 changes 判斷，沒有程式變更時 test 仍回報結果（#312 ruleset 前置 (a)）", () => {
@@ -63,7 +63,7 @@ test("CI 純文件 PR：PR 不用 paths 篩選，由 changes 判斷，沒有程�
   assert.match(y, /^  changes:\n/m);
   for (const job of ["unit", "e2e"]) assert.match(y, new RegExp(`^  ${job}:\\n    needs: changes\\n    if: needs\\.changes\\.outputs\\.code == 'true'`, "m"), `${job} 只在有程式變更時跑`);
   const step = y.slice(y.indexOf("  changes:"), y.indexOf("  unit:"));
-  for (const p of ["learner/*", "api/*", "scripts/*", "tests/*", ".github/workflows/*", ".agent/*", "AGENTS.md", "CLAUDE.md", ".claude/settings.json", "vercel.json", "package.json", "package-lock.json"]) assert.ok(step.includes(p), `changes 要涵蓋 ${p}`);
+  for (const p of ["learner/*", "api/*", "scripts/*", "tests/*", ".github/*", ".agent/*", "AGENTS.md", "CLAUDE.md", ".claude/settings.json", "vercel.json", "package.json", "package-lock.json", "|CODEOWNERS|", "docs/CODEOWNERS"]) assert.ok(step.includes(p), `changes 要涵蓋 ${p}`);
   assert.match(step, /\.previous_filename/, "改名時舊路徑也要比對");
   assert.match(step, /if ! files=.*\n.*code=true.*exit 0\n/, "讀不到檔案清單時要照常跑測試");
   const t = y.slice(y.indexOf("  test:"));

@@ -18,8 +18,9 @@ concurrency:
   cancel-in-progress: true
 jobs:
   # 判斷這次要不要跑測試。只有 PR 會判斷；push（已用 paths 篩選）與手動執行一律跑。
-  # 範圍和原本 PR 的 paths 相同：learner/**、api/**、scripts/**、tests/**、.github/workflows/**、.agent/**、AGENTS.md、CLAUDE.md、
-  # .claude/settings.json、vercel.json、package.json、package-lock.json（轉址設定、相依套件改了也要測）。
+  # 範圍：learner/**、api/**、scripts/**、tests/**、.github/**、.agent/**、AGENTS.md、CLAUDE.md、.claude/settings.json、vercel.json、
+  # package.json、package-lock.json（轉址設定、相依套件改了也要測）。比原本的 paths 多了 .github/ 底下 workflow 以外的檔案：
+  # PR 範本、copilot-instructions.md、CODEOWNERS 都有單元測試在檢查；根目錄與 docs/ 的 CODEOWNERS 也算（測試要求只能有 .github/ 那份）（#322 Antigravity P2）。
   # 改名的檔案新舊路徑都看（把程式檔移到 docs/ 也要測）。讀不到檔案清單時當成有程式變更，寧可多跑也不要漏測。
   changes:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
@@ -45,7 +46,7 @@ jobs:
           code=false
           while IFS= read -r f; do
             case "$f" in
-              learner/*|api/*|scripts/*|tests/*|.github/workflows/*|.agent/*|AGENTS.md|CLAUDE.md|.claude/settings.json|vercel.json|package.json|package-lock.json)
+              learner/*|api/*|scripts/*|tests/*|.github/*|.agent/*|AGENTS.md|CLAUDE.md|.claude/settings.json|vercel.json|package.json|package-lock.json|CODEOWNERS|docs/CODEOWNERS)
                 echo "要測：$f"; code=true ;;
             esac
           done <<< "$files"
