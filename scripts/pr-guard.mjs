@@ -176,19 +176,28 @@ export const TEMPLATE_SECTIONS = ["誰做的", "改了什麼", "還沒做完", "
 // 逐行掃描，同時記住「在 ``` / ~~~ 區塊裡」和「在 <!-- 註解裡」兩種狀態：區塊裡的 <!-- 只是文字，註解裡的 ``` 也不算區塊。
 // 回傳 [{ line, code, prose }]：code＝這行在 fenced code block 裡（含開頭與結尾的 ``` 行，原樣保留）；
 // 其他行 line 已去掉 HTML 註解（`行內程式碼` 裡的 <!-- 不算註解），prose 再去掉行內程式碼（給關閉關鍵字用）。
-// 行內程式碼照 CommonMark：結尾要是長度完全相同的反引號串；找不到就當一般文字。只在同一行內配對。
+// 行內程式碼照 CommonMark：結尾要是長度完全相同的反引號串，可以在同一段落內跨行（#320 ChatGPT P3）；
+// 整段都找不到結尾就當一般文字。空行、標題、--- ／ ===、``` 區塊開頭、清單項目開頭都會結束段落，標題行本身也不會往下延伸。
+const BLOCK_END = /^\s*$|^ {0,3}(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|[-=]+[ \t]*$|(?:[-*_][ \t]*){3,}$|[-*+][ \t]|\d{1,9}[.)][ \t])/;
+const tickRun = (s, n, from = 0) => { for (const r of s.slice(from).matchAll(/`+/g)) if (r[0].length === n) return from + r.index; return -1; };
 export function markdownLines(body = "") {
   const out = [];
-  let fence = null, inComment = false;
-  for (const line of String(body || "").replace(/\r\n/g, "\n").split("\n")) {
+  const lines = String(body || "").replace(/\r\n/g, "\n").split("\n");
+  let fence = null, inComment = false, span = 0; // span＝跨行中的行內程式碼反引號數
+  for (let k = 0; k < lines.length; k++) {
+    const line = lines[k];
     if (fence) {
       const m = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
       if (m && m[1][0] === fence[0] && m[1].length >= fence.length) fence = null;
       out.push({ line, code: true });
       continue;
     }
-    let text = line, kept = "", prose = "";
-    if (inComment) {
+    let text = line, kept = "", prose = "", start = 0;
+    if (span) {
+      const close = tickRun(line, span);
+      if (close < 0) { out.push({ line, code: false, prose: "" }); continue; }
+      kept = line.slice(0, close + span); prose = " "; start = close + span; span = 0;
+    } else if (inComment) {
       const end = text.indexOf("-->");
       if (end < 0) { out.push({ line: "", code: false, prose: "" }); continue; }
       text = text.slice(end + 3); inComment = false;
@@ -196,12 +205,17 @@ export function markdownLines(body = "") {
       const m = line.match(/^ {0,3}(`{3,}|~{3,})/);
       if (m && !(m[1][0] === "`" && line.slice(m[0].length).includes("`"))) { fence = m[1]; out.push({ line, code: true }); continue; }
     }
-    for (let i = 0; i < text.length;) {
+    for (let i = start; i < text.length;) {
       if (text[i] === "`") {
         const n = text.slice(i).match(/^`+/)[0].length;
-        let close = -1;
-        for (const r of text.slice(i + n).matchAll(/`+/g)) if (r[0].length === n) { close = i + n + r.index; break; }
+        const close = tickRun(text, n, i + n);
         if (close >= 0) { kept += text.slice(i, close + n); prose += " "; i = close + n; continue; }
+        // 同一行沒有結尾：往下找同一段落（標題行不往下找）
+        if (!/^ {0,3}#{1,6}(?:\s|$)/.test(line)) {
+          let j = k + 1;
+          while (j < lines.length && !BLOCK_END.test(lines[j]) && tickRun(lines[j], n) < 0) j++;
+          if (j < lines.length && !BLOCK_END.test(lines[j])) { kept += text.slice(i); prose += " "; span = n; break; }
+        }
         kept += text.slice(i, i + n); prose += text.slice(i, i + n); i += n; continue;
       }
       if (text.startsWith("<!--", i)) {

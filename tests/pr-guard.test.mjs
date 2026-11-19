@@ -323,6 +323,22 @@ test("PR 說明檢查：行內程式碼要長度相同的反引號才算關閉�
   assert.deepEqual(closingRefs("``x`` `Closes #5` ```Closes #6``` Closes #7"), [7], "不同長度的行內程式碼各自配對");
 });
 
+test("PR 說明檢查：行內程式碼可以在同一段落內跨行，空行／標題／區塊會結束段落（#320 ChatGPT P3）", () => {
+  assert.deepEqual(closingRefs("`example\nCloses #42\n`"), [], "同段落跨行的行內程式碼");
+  assert.deepEqual(closingRefs("前 ``a\nb ` Closes #1\nc`` 後 Closes #2"), [2], "跨行時一樣要長度相同的反引號");
+  assert.deepEqual(closingRefs("`a\n<!-- b\nc` Closes #3 -->"), [3], "跨行程式碼裡的 <!-- 不是註解，程式碼結束後的 Closes 照算");
+  assert.deepEqual(closingRefs("`沒關閉\nCloses #4\n還是沒關閉"), [4], "整段都找不到結尾就是一般文字");
+  assert.deepEqual(closingRefs("`沒關閉\nCloses #5\n\n後一段才有 ` Closes #6"), [5, 6], "空行結束段落，不跨段配對");
+  assert.deepEqual(closingRefs("`沒關閉\nCloses #7\n## 標題 `\nfixes #8"), [7, 8], "標題結束段落");
+  assert.deepEqual(closingRefs("`沒關閉\nCloses #9\n```\n`\n```\nfixes #10"), [9, 10], "區塊開頭結束段落");
+  assert.deepEqual(closingRefs("`沒關閉\nCloses #11\n---\n` fixes #12"), [11, 12], "--- 結束段落；後面那個反引號自己也沒關閉，是一般文字");
+  assert.deepEqual(closingRefs("- 項目 `a\n- Closes #13 `"), [13], "新的清單項目結束段落");
+  assert.deepEqual(closingRefs("- 項目 `a\n  Closes #14 ` b"), [], "同一項目的續行仍在同段落");
+  assert.deepEqual(closingRefs("## 標題 `a\nCloses #15 `"), [15], "標題行裡的反引號不往下一行配對");
+  const body = "## 改了什麼\n說明 `a\n## 測試` 不算標題\nx`\n## 驗證重點\ny";
+  assert.deepEqual(Object.keys(sections(body)), ["改了什麼", "測試` 不算標題", "驗證重點"], "## 開頭的行本身會結束段落，所以照樣是標題");
+});
+
 test("httpStatus：stderr 只有空白時也看 message", async () => {
   const { httpStatus } = await import("../scripts/pr-guard.mjs");
   assert.equal(httpStatus({ stderr: "\n", message: "HTTP 404" }), 404);
