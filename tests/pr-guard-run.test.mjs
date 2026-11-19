@@ -148,7 +148,9 @@ test("pr-guard-run：人寫的留言提到看板記號也不會被藏起來", ()
 
 test("pr-guard workflow：同一 PR 各種事件同一個 concurrency 組；只處理 open 的 PR；workflow_run 也擋 fork", () => {
   const y = readFileSync(new URL("../.github/workflows/pr-guard.yml", import.meta.url), "utf8");
-  assert.match(y, /group: pr-guard-\$\{\{ github\.event\.pull_request\.number \|\| github\.event\.issue\.number \|\| github\.event\.workflow_run\.pull_requests\[0\]\.number \|\|/);
+  assert.match(y, /group: pr-guard-board-\$\{\{ github\.event\.pull_request\.number \|\| github\.event\.issue\.number \|\| github\.event\.workflow_run\.pull_requests\[0\]\.number \|\|/);
+  assert.doesNotMatch(y, /^concurrency:/m, "concurrency 不能放在 workflow 層：被 if 略過的執行（例如機器人留言）會把正在跑的那次取消");
+  assert.match(y, /^  board:\n(?:    #.*\n)*    concurrency:\n/m, "concurrency 要放在 board job 裡");
   assert.match(y, /github\.event\.pull_request\.state == 'open'/);
   assert.match(y, /github\.event\.issue\.state == 'open'/);
   assert.match(y, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/);

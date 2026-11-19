@@ -19,11 +19,13 @@ on:
 permissions:
   contents: read
   pull-requests: write
-concurrency:
-  group: pr-guard-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha }} # 同一個 PR 不論哪種事件都同一組，不會並發重複貼看板
-  cancel-in-progress: true # 連續觸發時只留最後一次，看板一樣會是最新狀態
 jobs:
   board:
+    # concurrency 放在 job 層：被 if 擋掉（略過）的執行不會進入群組，就不會把正在跑的那次取消。
+    # 放在 workflow 層時，每次推送後 Vercel 機器人的留言會觸發一次「略過」的執行，反而把推送那次取消，看板永遠貼不出來（#319 實測）。
+    concurrency:
+      group: pr-guard-board-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha }} # 同一個 PR 不論哪種事件都同一組，不會並發重複貼看板
+      cancel-in-progress: true # 連續觸發時只留最後一次，看板一樣會是最新狀態
     if: >-
       ((github.event_name != 'pull_request' && github.event_name != 'pull_request_review') || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.state == 'open')) &&
       (github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' && github.event.comment.user.type != 'Bot')) &&
