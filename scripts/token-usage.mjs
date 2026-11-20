@@ -94,7 +94,20 @@ export function attachQuota(steps, quota) {
 
 const pct = v => (v == null ? "—" : `${Math.round(v * 100)}%`);
 const twReset = sec => (sec == null ? "" : new Date(sec * 1000 + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " "));
-const delta = (a, b) => { if (a == null || b == null) return ""; const d = Math.round(b * 100) - Math.round(a * 100); return `（${d >= 0 ? "+" : ""}${d}）`; };
+// 從 from 那筆到最後一筆累計增加幾個百分點：相鄰兩筆在同一個額度週期（重置時間相同）就相減，跨週期（已重置、從 0 起算）就加上新週期的值
+export function quotaIncrease(quota, from, k, kr) {
+  const i0 = quota.indexOf(from);
+  if (i0 < 0) return { inc: null, resets: 0 };
+  let inc = 0, resets = 0, prev = quota[i0];
+  for (const e of quota.slice(i0 + 1)) {
+    if (e[k] == null) continue;
+    const p = prev[k] == null ? 0 : Math.round(prev[k] * 100), c = Math.round(e[k] * 100);
+    if (prev[kr] != null && e[kr] != null && prev[kr] !== e[kr]) { inc += c; resets++; } else inc += c - p;
+    prev = e;
+  }
+  return { inc, resets };
+}
+const incText = ({ inc, resets }) => (inc == null ? "" : `+${Math.max(0, inc)}${resets ? `，中間重置 ${resets} 次` : ""}`);
 
 // 伺服器的 session 統計：接受 {cache_read_tokens, cache_write_tokens, input_tokens, output_tokens, cost_usd} 或包著它的整份回應
 export function parseServerUsage(data) {
@@ -142,8 +155,8 @@ export function render(steps, from = 0, quota = [], server = null) {
     // 本段起點：本段第一步之前最新的一筆；沒有就用 session 第一筆
     const segStart = shown.length ? quotaBefore(quota, Date.parse(shown[0].time)) : last;
     const a = segStart || quota[0], first = quota[0];
-    const line = (name, k, kr) => `${name} ${pct(last[k])}｜本段 ${pct(a[k])}→${pct(last[k])}${delta(a[k], last[k])}｜session ${pct(first[k])}→${pct(last[k])}${delta(first[k], last[k])}${(r => (r != null ? `｜重置 ${twReset(r)}` : ""))([...quota].reverse().map(e => e[kr]).find(v => v != null))}`;
-    out.push(`**額度使用率**（${twTime(last.t)} 為止；session 起點是第一筆額度事件，已含第一步）：`);
+    const line = (name, k, kr) => `${name} 目前 ${pct(last[k])}｜本段 ${incText(quotaIncrease(quota, a, k, kr))}｜session ${incText(quotaIncrease(quota, first, k, kr))}${(r => (r != null ? `｜重置 ${twReset(r)}` : ""))([...quota].reverse().map(e => e[kr]).find(v => v != null))}`;
+    out.push(`**額度使用率**（帳號整體，含同時段其他對話；${twTime(last.t)} 為止；增量單位為百分點，跨重置時從 0 重新累計；session 起點是第一筆額度事件，已含第一步）：`);
     out.push(`- ${line("5 小時", "h5", "h5r")}`);
     out.push(`- ${line("7 天", "d7", "d7r")}`);
   }

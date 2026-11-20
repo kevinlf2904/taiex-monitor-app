@@ -65,8 +65,8 @@ test("額度：接受 list_events 原始回應與精簡陣列；每步沿用下�
   const r = render(steps, 2, q);
   assert.match(r, /額度 5h／7d/);
   assert.match(r, /\| 3 \| 10:00:07 \|.*\| 20%／38% \|/);
-  assert.match(r, /5 小時 20%｜本段 16%→20%（\+4）｜session 14%→20%（\+6）｜重置 11\/20 /);
-  assert.match(r, /7 天 38%｜本段 37%→38%（\+1）/);
+  assert.match(r, /5 小時 目前 20%｜本段 \+4｜session \+6｜重置 11\/20 /);
+  assert.match(r, /7 天 目前 38%｜本段 \+1｜session \+2/);
   assert.doesNotMatch(render(steps, 0), /額度/, "沒給額度資料就不顯示額度欄");
 });
 
@@ -75,7 +75,7 @@ test("額度事件時間戳與下一步相同時，歸給下一步（半開區�
   const steps = parseSteps([line("a", "2026-11-20T02:00:00Z", U1), line("b", "2026-11-20T02:00:05Z", U2)].join("\n"));
   const q = parseQuota([{ t: "2026-11-20T02:00:01Z", h5: 0.1, d7: 0.3 }, { t: "2026-11-20T02:00:05Z", h5: 0.2, d7: 0.3 }]);
   assert.deepEqual(attachQuota(steps, q).map(s => s.quota.h5), [0.1, 0.2]);
-  assert.match(render(steps, 1, q), /本段 10%→20%/, "本段起點不含第二步同時間戳的事件");
+  assert.match(render(steps, 1, q), /5 小時 目前 20%｜本段 \+10｜/, "本段起點不含第二步同時間戳的事件");
 });
 
 test("真實紀錄檔片段（Claude Code 2.1.329，已去除內容）：一則回應多行（思考／文字／工具）usage 相同，取一次", () => {
@@ -98,4 +98,21 @@ test("輸出 ≤2 的步驟要警告可能是快照；伺服器統計可對照�
   assert.match(r, /有 1 步的輸出 ≤2 token/);
   assert.match(r, /伺服器統計\*\*（含背景請求.*合計 9,790/);
   assert.match(r, /紀錄檔，不含 Claude Code 背景請求/);
+});
+
+test("額度跨重置：不相減成負數，改為逐段累計並註明重置次數", async () => {
+  const { parseQuota, quotaIncrease } = await import("../scripts/token-usage.mjs");
+  const q = parseQuota([
+    { t: "2026-11-20T02:00:00Z", h5: 0.14, d7: 0.36, h5r: 100, d7r: 900 },
+    { t: "2026-11-20T03:00:00Z", h5: 0.28, d7: 0.38, h5r: 100, d7r: 900 },
+    { t: "2026-11-20T04:08:00Z", h5: 0.01, d7: 0.38, h5r: 200, d7r: 900 },
+    { t: "2026-11-20T14:04:00Z", h5: 0.00, d7: 0.39, h5r: 300, d7r: 900 },
+    { t: "2026-11-20T14:05:00Z", h5: 0.05, d7: 0.39, h5r: 300, d7r: 900 },
+  ]);
+  assert.deepEqual(quotaIncrease(q, q[0], "h5", "h5r"), { inc: 14 + 1 + 0 + 5, resets: 2 });
+  assert.deepEqual(quotaIncrease(q, q[0], "d7", "d7r"), { inc: 3, resets: 0 });
+  const steps = parseSteps(line("a", "2026-11-20T14:04:30Z", U1));
+  const r = render(steps, 0, q);
+  assert.match(r, /5 小時 目前 5%｜本段 \+5｜session \+20，中間重置 2 次/);
+  assert.doesNotMatch(r, /\+-|（-/, "不會出現負的增量");
 });
