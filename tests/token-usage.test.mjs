@@ -26,7 +26,7 @@ test("render：只列起始索引之後的明細，累計仍算全部；沒有�
   assert.match(r, /第 2–2 步，共 1 步/);
   assert.match(r, /\| 2 \| 10:00:05 \|/, "時間換成台北時間");
   assert.doesNotMatch(r, /\| 1 \| 10:00:00/);
-  assert.match(r, /Session 累計\*\*：2 步.*合計 3,172/);
+  assert.match(r, /Session 累計\*\*（紀錄檔，不含 Claude Code 背景請求）：2 步.*合計 3,172/);
   assert.match(render(steps, 2), /沒有新步驟/);
 });
 
@@ -38,6 +38,12 @@ test("loadSteps 併入子代理紀錄並依時間排序；findSessionFile 找目
   const f = path.join(dir, "s1.jsonl");
   fs.writeFileSync(f, line("a", "2026-11-20T02:00:00Z", U1) + "\n" + line("c", "2026-11-20T02:00:09Z", U2));
   fs.writeFileSync(path.join(dir, "s1", "subagents", "agent-x.jsonl"), line("b", "2026-11-20T02:00:05Z", U2));
+  assert.equal(findSessionFile(cwd, home), f);
+  // 其他專案有較新的紀錄也不能拿來用：目前目錄沒有對應紀錄就回傳 null
+  const other = path.join(home, ".claude", "projects", "-other-repo");
+  fs.mkdirSync(other, { recursive: true });
+  fs.writeFileSync(path.join(other, "s9.jsonl"), line("z", "2026-11-20T03:00:00Z", U1));
+  assert.equal(findSessionFile("/work/no-such", home), null, "不改用其他專案的紀錄");
   assert.equal(findSessionFile(cwd, home), f);
   const steps = loadSteps(f);
   assert.deepEqual(steps.map(s => s.id), ["a", "b", "c"]);
@@ -62,4 +68,34 @@ test("額度：接受 list_events 原始回應與精簡陣列；每步沿用下�
   assert.match(r, /5 小時 20%｜本段 16%→20%（\+4）｜session 14%→20%（\+6）｜重置 11\/20 /);
   assert.match(r, /7 天 38%｜本段 37%→38%（\+1）/);
   assert.doesNotMatch(render(steps, 0), /額度/, "沒給額度資料就不顯示額度欄");
+});
+
+test("額度事件時間戳與下一步相同時，歸給下一步（半開區間）", async () => {
+  const { parseQuota, attachQuota } = await import("../scripts/token-usage.mjs");
+  const steps = parseSteps([line("a", "2026-11-20T02:00:00Z", U1), line("b", "2026-11-20T02:00:05Z", U2)].join("\n"));
+  const q = parseQuota([{ t: "2026-11-20T02:00:01Z", h5: 0.1, d7: 0.3 }, { t: "2026-11-20T02:00:05Z", h5: 0.2, d7: 0.3 }]);
+  assert.deepEqual(attachQuota(steps, q).map(s => s.quota.h5), [0.1, 0.2]);
+  assert.match(render(steps, 1, q), /本段 10%→20%/, "本段起點不含第二步同時間戳的事件");
+});
+
+test("真實紀錄檔片段（Claude Code 2.1.329，已去除內容）：一則回應多行（思考／文字／工具）usage 相同，取一次", () => {
+  const steps = parseSteps(fs.readFileSync(new URL("./fixtures/token-usage-session.jsonl", import.meta.url), "utf8"));
+  assert.equal(steps.length, 3);
+  assert.deepEqual(steps.map(s => s.output), [405, 248, 1088]);
+  assert.deepEqual(steps.map(s => s.thinking), [230, 0, 186]);
+  const t = sumSteps(steps);
+  assert.deepEqual([t.cacheWrite, t.cacheRead, t.output], [51579, 289068, 1741]);
+  assert.doesNotMatch(render(steps), /可能低估/);
+});
+
+test("輸出 ≤2 的步驟要警告可能是快照；伺服器統計可對照並標明含背景請求", async () => {
+  const { parseServerUsage } = await import("../scripts/token-usage.mjs");
+  const steps = parseSteps([line("a", "2026-11-20T02:00:00Z", { ...U2, output_tokens: 1 }), line("b", "2026-11-20T02:00:05Z", U2)].join("\n"));
+  const srv = parseServerUsage({ ccr: { external_metadata: { usage: { cache_read_tokens: 9000, cache_write_tokens: 50, input_tokens: 40, output_tokens: 700, cost_usd: 1.2 } } } });
+  assert.deepEqual(srv, { input: 40, cacheWrite: 50, cacheRead: 9000, output: 700 });
+  assert.equal(parseServerUsage({ x: 1 }), null);
+  const r = render(steps, 0, [], srv);
+  assert.match(r, /有 1 步的輸出 ≤2 token/);
+  assert.match(r, /伺服器統計\*\*（含背景請求.*合計 9,790/);
+  assert.match(r, /紀錄檔，不含 Claude Code 背景請求/);
 });

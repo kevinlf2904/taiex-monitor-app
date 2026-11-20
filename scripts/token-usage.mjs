@@ -4,6 +4,9 @@
 //       node scripts/token-usage.mjs --no-save  不記錄「已回報到第幾步」（下次仍從同一處開始列）
 //       node scripts/token-usage.mjs --file <紀錄檔.jsonl>  指定紀錄檔（預設找目前目錄對應的最新 session）
 //       node scripts/token-usage.mjs --quota <額度.json>  加上訂閱額度使用率（5 小時／7 天）
+//       node scripts/token-usage.mjs --server <usage.json>  對照伺服器的 session 統計（get_session 的 external_metadata.usage，或整份回應）
+// 紀錄檔只記主對話與子代理的模型回應；Claude Code 的背景請求（自動模式權限判斷、標題等）不在裡面，只有伺服器統計含這些。
+// 某些舊版 Claude Code 只把串流中途的 usage 寫進紀錄檔（輸出常是 1–2）；出現輸出 ≤2 的步驟時報表會警告輸出可能低估。
 // 額度資料：雲端 session 事件流的 rate_limit_event（list_events kinds=["rate_limit_event"]）才有，容器內沒有檔案可讀。
 //   --quota 檔可以是 list_events 的原始回應，或精簡陣列 [{"t":"<ISO 時間>","h5":0.17,"d7":0.37,"h5r":<重置秒>,"d7r":<重置秒>}]（使用率 0–1）。
 //   讀過的額度事件會存進狀態檔，下次只需給新的事件。每一步顯示「這步之後、下一步之前」最新的使用率；百分比是 1% 為單位，單步常看不出變化。
@@ -78,14 +81,14 @@ export function parseQuota(data) {
   return [...seen.values()].sort((a, b) => Date.parse(a.t) - Date.parse(b.t));
 }
 
-// 某時間點（含）之前最新的一筆
-const quotaAt = (quota, ms) => { let q = null; for (const e of quota) if (Date.parse(e.t) <= ms) q = e; return q; };
-// 每一步之後的額度：下一步開始前（最後一步則到最後）最新的一筆事件；事件只在使用率變動等時機才有，沒有新事件就沿用前一筆
+// 某時間點「之前」（不含該時間點）最新的一筆；同時間戳的事件歸給從該時間點開始的那一步
+const quotaBefore = (quota, ms) => { let q = null; for (const e of quota) if (Date.parse(e.t) < ms) q = e; return q; };
+// 每一步之後的額度：下一步開始前（不含下一步時間戳；最後一步則到最後）最新的一筆事件；事件只在使用率變動等時機才有，沒有新事件就沿用前一筆
 export function attachQuota(steps, quota) {
   if (!quota || !quota.length) return steps;
   return steps.map((s, i) => {
     const until = i + 1 < steps.length ? Date.parse(steps[i + 1].time) : Infinity;
-    return { ...s, quota: quotaAt(quota, until) };
+    return { ...s, quota: quotaBefore(quota, until) };
   });
 }
 
@@ -93,8 +96,22 @@ const pct = v => (v == null ? "—" : `${Math.round(v * 100)}%`);
 const twReset = sec => (sec == null ? "" : new Date(sec * 1000 + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " "));
 const delta = (a, b) => { if (a == null || b == null) return ""; const d = Math.round(b * 100) - Math.round(a * 100); return `（${d >= 0 ? "+" : ""}${d}）`; };
 
-// 產生 markdown 報表；steps 已依時間排序，from 是要列明細的起始索引；quota 是 parseQuota 的結果（可省略）
-export function render(steps, from = 0, quota = []) {
+// 伺服器的 session 統計：接受 {cache_read_tokens, cache_write_tokens, input_tokens, output_tokens, cost_usd} 或包著它的整份回應
+export function parseServerUsage(data) {
+  let found = null;
+  const walk = o => {
+    if (found || !o || typeof o !== "object") return;
+    if (!Array.isArray(o) && ["cache_read_tokens", "output_tokens"].every(k => typeof o[k] === "number")) { found = o; return; }
+    for (const v of Object.values(o)) walk(v);
+  };
+  walk(data);
+  if (!found) return null;
+  const v = k => (typeof found[k] === "number" ? found[k] : 0);
+  return { input: v("input_tokens"), cacheWrite: v("cache_write_tokens"), cacheRead: v("cache_read_tokens"), output: v("output_tokens") };
+}
+
+// 產生 markdown 報表；steps 已依時間排序，from 是要列明細的起始索引；quota 是 parseQuota 的結果、server 是 parseServerUsage 的結果（都可省略）
+export function render(steps, from = 0, quota = [], server = null) {
   const out = [];
   const hasQ = quota.length > 0;
   const all = attachQuota(steps, quota);
@@ -113,11 +130,17 @@ export function render(steps, from = 0, quota = []) {
   }
   const t = sumSteps(steps);
   out.push("");
-  out.push(`**Session 累計**：${n(t.steps)} 步｜輸入 ${n(t.input)}｜寫入快取 ${n(t.cacheWrite)}｜讀取快取 ${n(t.cacheRead)}｜輸出 ${n(t.output)}（思考 ${n(t.thinking)}）｜合計 ${n(t.total)}`);
+  out.push(`**Session 累計**（紀錄檔，不含 Claude Code 背景請求）：${n(t.steps)} 步｜輸入 ${n(t.input)}｜寫入快取 ${n(t.cacheWrite)}｜讀取快取 ${n(t.cacheRead)}｜輸出 ${n(t.output)}（思考 ${n(t.thinking)}）｜合計 ${n(t.total)}`);
+  if (server) {
+    const st = server.input + server.cacheWrite + server.cacheRead + server.output;
+    out.push(`**伺服器統計**（含背景請求，取得時間可能比紀錄檔早幾步）：輸入 ${n(server.input)}｜寫入快取 ${n(server.cacheWrite)}｜讀取快取 ${n(server.cacheRead)}｜輸出 ${n(server.output)}｜合計 ${n(st)}`);
+  }
+  const tiny = steps.filter(s => s.output <= 2).length;
+  if (tiny) out.push(`⚠️ 有 ${tiny} 步的輸出 ≤2 token，可能是串流中途的快照，輸出量可能低估；請以伺服器統計或 /cost 為準。`);
   if (hasQ) {
     const last = quota[quota.length - 1];
     // 本段起點：本段第一步之前最新的一筆；沒有就用 session 第一筆
-    const segStart = shown.length ? quotaAt(quota, Date.parse(shown[0].time) - 1) : last;
+    const segStart = shown.length ? quotaBefore(quota, Date.parse(shown[0].time)) : last;
     const a = segStart || quota[0], first = quota[0];
     const line = (name, k, kr) => `${name} ${pct(last[k])}｜本段 ${pct(a[k])}→${pct(last[k])}${delta(a[k], last[k])}｜session ${pct(first[k])}→${pct(last[k])}${delta(first[k], last[k])}${(r => (r != null ? `｜重置 ${twReset(r)}` : ""))([...quota].reverse().map(e => e[kr]).find(v => v != null))}`;
     out.push(`**額度使用率**（${twTime(last.t)} 為止；session 起點是第一筆額度事件，已含第一步）：`);
@@ -127,7 +150,7 @@ export function render(steps, from = 0, quota = []) {
   return out.join("\n");
 }
 
-// 找目前目錄對應的最新 session 紀錄檔；找不到就找所有專案中最新的
+// 找目前目錄對應的最新 session 紀錄檔；找不到回傳 null（不改用其他專案的紀錄，避免把別的 repo 的用量當成這次的）
 export function findSessionFile(cwd = process.cwd(), home = os.homedir()) {
   const root = path.join(home, ".claude", "projects");
   const newest = dir => {
@@ -140,13 +163,7 @@ export function findSessionFile(cwd = process.cwd(), home = os.homedir()) {
     return best;
   };
   const own = newest(path.join(root, cwd.replace(/[^A-Za-z0-9]/g, "-")));
-  if (own) return own.p;
-  let best = null;
-  for (const d of fs.existsSync(root) ? fs.readdirSync(root) : []) {
-    const b = newest(path.join(root, d));
-    if (b && (!best || b.mt > best.mt)) best = b;
-  }
-  return best && best.p;
+  return own ? own.p : null;
 }
 
 // 讀主紀錄檔＋子代理紀錄檔，依時間排序
@@ -166,7 +183,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
   const argv = process.argv.slice(2);
   const fi = argv.indexOf("--file");
   const file = fi >= 0 ? argv[fi + 1] : findSessionFile();
-  if (!file || !fs.existsSync(file)) { console.error("找不到 session 紀錄檔（~/.claude/projects/*/*.jsonl）；可用 --file 指定"); process.exit(1); }
+  if (!file || !fs.existsSync(file)) { console.error(`找不到目前目錄（${process.cwd()}）對應的 session 紀錄檔（~/.claude/projects/<目錄>/*.jsonl）；請在專案根目錄執行，或用 --file 指定`); process.exit(1); }
   const steps = loadSteps(file);
   const stateFile = path.join(os.homedir(), ".claude", "token-usage-state.json");
   let state = {};
@@ -181,7 +198,15 @@ if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
     if (!qf || !fs.existsSync(qf)) { console.error(`找不到額度檔：${qf || "（沒給路徑）"}`); process.exit(1); }
     quota = parseQuota([quota, JSON.parse(fs.readFileSync(qf, "utf8"))]);
   }
-  console.log(render(steps, argv.includes("--all") ? 0 : last, quota));
+  const si = argv.indexOf("--server");
+  let server = null;
+  if (si >= 0) {
+    const sf = argv[si + 1];
+    if (!sf || !fs.existsSync(sf)) { console.error(`找不到伺服器統計檔：${sf || "（沒給路徑）"}`); process.exit(1); }
+    server = parseServerUsage(JSON.parse(fs.readFileSync(sf, "utf8")));
+    if (!server) { console.error("伺服器統計檔裡找不到 usage（需要 cache_read_tokens、output_tokens）"); process.exit(1); }
+  }
+  console.log(render(steps, argv.includes("--all") ? 0 : last, quota, server));
   if (!argv.includes("--no-save")) {
     state[file] = { n: steps.length, quota };
     try { fs.writeFileSync(stateFile, JSON.stringify(state, null, 2)); } catch {}
