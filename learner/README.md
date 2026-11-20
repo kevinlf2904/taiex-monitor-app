@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 排程引擎不再讀 watch.html（2026.11.20-244）
+- 成交量格式 fmtVol 搬到共用的 core.js，排程引擎直接用，不再從網頁原始碼擷取（#292）
+
 ### 今日市場與全站 Header 介面細節（2026.11.19-243）
 - 390px 頂部加權指數完整顯示並可左右滑動切換、全球總經分類計數靠右、技術攻防事件清單文字靠左（#325）
 
