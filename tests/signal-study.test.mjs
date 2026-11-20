@@ -103,6 +103,11 @@ test("訊號回測：每個條件在排程引擎裡都不會丟錯（sigScan 會
   // 爆量：之前排程裡沒有 fmtVol，每次都丟錯 → 全市場 0 筆；Telegram 提醒（condCheck）的爆量規則也永遠不成立
   const V = flat(40, i => (i === 39 ? { v: 5000 } : {}));
   assert.match(E.condCheck({ cond: "vol" }, V), /是均量的 5\.0 倍/); assert.equal(E.condCheck({ cond: "vol" }, flat(40)), null);
+  // #292：fmtVol 在 core.js，排程引擎不再從 watch.html 擷取；watch.html 也不能再宣告一次（同一頁重複 const 會整段腳本失效）
+  assert.match(E.condCheck({ cond: "vol" }, flat(40, i => (i === 39 ? { v: 25000 } : {}))), /量 2\.5 萬 是均量/);
+  assert.doesNotMatch(readFileSync(new URL("../scripts/_engine.mjs", import.meta.url), "utf8"), /watch\.html/);
+  assert.match(readFileSync(new URL("../learner/core.js", import.meta.url), "utf8"), /^const fmtVol = /m);
+  assert.doesNotMatch(readFileSync(new URL("../learner/watch.html", import.meta.url), "utf8"), /^\s*(const|let|var|function)\s+fmtVol\b/m);
 });
 
 /* ---------- scripts/signal-study.mjs ---------- */

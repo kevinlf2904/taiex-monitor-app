@@ -18,6 +18,8 @@ function twLimits(prev, etf = false) { const t = p => (etf ? (p < 50 ? 0.01 : 0.
 function fmtP(p) { if (p == null) return "—"; const t = tickOf(p); return p.toFixed(t < 0.1 ? 2 : t < 1 ? 1 : 0); }
 function fmtPct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
 function fmtN(x, d = 1) { return x == null ? "—" : x.toFixed(d); }
+// 成交量（億／萬）：網頁和排程引擎（scripts/_engine.mjs，tools.js 的「爆量」「成交量至少」條件文字）共用，放在這裡排程才不必去讀 watch.html（#292）
+const fmtVol = v => (v == null ? "—" : v >= 1e8 ? (v / 1e8).toFixed(2) + " 億" : v >= 1e4 ? (v / 1e4).toFixed(1) + " 萬" : Math.round(v).toLocaleString());
 // 單引號也要轉：有些屬性用單引號包（例如 data-links='…'），內容含 ' 會讓屬性提早結束
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // 外部資料（新聞、RSS、申報、法說會）的連結：只放行 http(s) 與站內相對路徑，javascript:、data: 等一律換成 #。
