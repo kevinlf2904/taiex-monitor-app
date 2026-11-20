@@ -167,3 +167,21 @@ test("額度事件缺重置時間：使用率下降視為重置、沒下降就�
   assert.deepEqual(quotaIncrease(q, q[0], "h5", "h5r"), { inc: 5 + 2 + 2, resets: 1, guessed: 3 });
   assert.match(render(parseSteps(line("a", "2026-11-20T05:30:00Z", U1)), 0, q), /session \+9，中間重置 1 次（3 段缺重置時間，依使用率是否下降判斷）/);
 });
+
+test("真實子代理紀錄（Claude Code 2.1.329，已去除內容）：每行都有最終 stop_reason，去重後取最終 usage、不標示不完整", async () => {
+  const { loadSteps } = await import("../scripts/token-usage.mjs");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tok-real-"));
+  fs.mkdirSync(path.join(home, "s1", "subagents"), { recursive: true });
+  const f = path.join(home, "s1.jsonl");
+  fs.copyFileSync(new URL("./fixtures/token-usage-session.jsonl", import.meta.url), f);
+  fs.copyFileSync(new URL("./fixtures/token-usage-subagent.jsonl", import.meta.url), path.join(home, "s1", "subagents", "agent-a.jsonl"));
+  const steps = loadSteps(f);
+  const sub = steps.filter(s => s.source !== "主對話");
+  assert.equal(steps.length, 6);
+  assert.deepEqual(sub.map(s => [s.output, s.thinking, s.final]), [[318, 228, true], [121, 0, true], [73, 0, true]]);
+  assert.ok(sub.every(s => s.version === "2.1.329"));
+  const r = render(steps);
+  assert.match(r, /\| 來源 \|/);
+  assert.doesNotMatch(r, /⚠️/, "真實紀錄完整，不應出現任何警告");
+  fs.rmSync(home, { recursive: true, force: true });
+});
