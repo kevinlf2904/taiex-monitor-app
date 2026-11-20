@@ -45,3 +45,21 @@ test("loadSteps 併入子代理紀錄並依時間排序；findSessionFile 找目
   assert.match(render(steps), /\| 來源 \|/, "有子代理時表格多一欄來源");
   fs.rmSync(home, { recursive: true, force: true });
 });
+
+test("額度：接受 list_events 原始回應與精簡陣列；每步沿用下一步之前最新的使用率；本段與 session 增量", async () => {
+  const { parseQuota, attachQuota } = await import("../scripts/token-usage.mjs");
+  const ev = (t, h5, d7) => ({ created_at: t, rate_limit_event: { internal_anthropic_catchall: { rate_limit_info: { unifiedWindows: { five_hour: { utilization: h5, resetsAt: 1795147200 }, seven_day: { utilization: d7, resetsAt: 1795554000 } } } } } });
+  const raw = { ccr: { data: [ev("2026-11-20T02:00:01Z", 0.14, 0.36), ev("2026-11-20T02:00:06Z", 0.16, 0.37)] } };
+  const q = parseQuota([raw, [{ t: "2026-11-20T02:00:10Z", h5: 0.2, d7: 0.38 }], raw]);
+  assert.deepEqual(q.map(e => e.h5), [0.14, 0.16, 0.2], "合併、去重、依時間排序");
+  assert.equal(q[0].h5r, 1795147200);
+  assert.deepEqual(parseQuota({ nothing: 1 }), []);
+  const steps = parseSteps([line("a", "2026-11-20T02:00:00Z", U1), line("b", "2026-11-20T02:00:05Z", U2), line("c", "2026-11-20T02:00:07Z", U2), line("d", "2026-11-20T02:00:20Z", U2)].join("\n"));
+  assert.deepEqual(attachQuota(steps, q).map(s => s.quota && s.quota.h5), [0.14, 0.16, 0.2, 0.2], "沒有新事件就沿用");
+  const r = render(steps, 2, q);
+  assert.match(r, /額度 5h／7d/);
+  assert.match(r, /\| 3 \| 10:00:07 \|.*\| 20%／38% \|/);
+  assert.match(r, /5 小時 20%｜本段 16%→20%（\+4）｜session 14%→20%（\+6）｜重置 11\/20 /);
+  assert.match(r, /7 天 38%｜本段 37%→38%（\+1）/);
+  assert.doesNotMatch(render(steps, 0), /額度/, "沒給額度資料就不顯示額度欄");
+});
