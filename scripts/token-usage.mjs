@@ -20,7 +20,17 @@ import { pathToFileURL } from "node:url";
 
 const FIELDS = ["input", "cacheWrite", "cacheRead", "output", "thinking"];
 
-// 把一份 jsonl 文字解析成步驟陣列（依 message.id 去重，保留最後一筆）
+// 低於這個版本的 Claude Code，子代理在自動模式下可能只把串流初始 usage 寫進紀錄檔（anthropics/claude-code#100830，修於 2.1.307）
+export const MIN_RELIABLE_VERSION = "2.1.307";
+export const versionLess = (a, b) => {
+  const pa = String(a).split(".").map(Number), pb = String(b).split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0);
+  return false;
+};
+
+// 把一份 jsonl 文字解析成步驟陣列（依 message.id 去重）。
+// 同一則回應可能有多行：串流中途的紀錄 stop_reason 為 null，最終紀錄才有 stop_reason（tool_use／end_turn…）與正確 usage。
+// 有最終紀錄就取最後一筆最終紀錄；全部都沒有最終紀錄時取最後一筆，並標記 incomplete（輸出可能不完整）。
 export function parseSteps(text, source = "主對話") {
   const byId = new Map();
   for (const line of String(text).split("\n")) {
@@ -30,8 +40,12 @@ export function parseSteps(text, source = "主對話") {
     const m = j && j.message, u = m && m.usage;
     if (!u || typeof u !== "object") continue;
     const id = m.id || j.requestId || j.uuid || `line${byId.size}`;
+    const final = !!m.stop_reason;
+    const prev = byId.get(id);
+    if (prev && prev.final && !final) continue;
     byId.set(id, {
-      id, source, time: j.timestamp || "", model: m.model || "",
+      id, source, time: j.timestamp || "", model: m.model || "", final, incomplete: !final,
+      version: typeof j.version === "string" ? j.version : "",
       input: Number(u.input_tokens) || 0,
       cacheWrite: Number(u.cache_creation_input_tokens) || 0,
       cacheRead: Number(u.cache_read_input_tokens) || 0,
@@ -95,19 +109,22 @@ export function attachQuota(steps, quota) {
 const pct = v => (v == null ? "—" : `${Math.round(v * 100)}%`);
 const twReset = sec => (sec == null ? "" : new Date(sec * 1000 + 8 * 3600e3).toISOString().slice(5, 16).replace("-", "/").replace("T", " "));
 // 從 from 那筆到最後一筆累計增加幾個百分點：相鄰兩筆在同一個額度週期（重置時間相同）就相減，跨週期（已重置、從 0 起算）就加上新週期的值
+// 缺重置時間時無法確定是否同一週期：使用率下降就當作已重置（從 0 起算），沒下降就相減，並計入 guessed 供報表註明
 export function quotaIncrease(quota, from, k, kr) {
   const i0 = quota.indexOf(from);
-  if (i0 < 0) return { inc: null, resets: 0 };
-  let inc = 0, resets = 0, prev = quota[i0];
+  if (i0 < 0) return { inc: null, resets: 0, guessed: 0 };
+  let inc = 0, resets = 0, guessed = 0, prev = quota[i0];
   for (const e of quota.slice(i0 + 1)) {
     if (e[k] == null) continue;
     const p = prev[k] == null ? 0 : Math.round(prev[k] * 100), c = Math.round(e[k] * 100);
-    if (prev[kr] != null && e[kr] != null && prev[kr] !== e[kr]) { inc += c; resets++; } else inc += c - p;
+    const known = prev[kr] != null && e[kr] != null;
+    if (!known) guessed++;
+    if (known ? prev[kr] !== e[kr] : c < p) { inc += c; resets++; } else inc += c - p;
     prev = e;
   }
-  return { inc, resets };
+  return { inc, resets, guessed };
 }
-const incText = ({ inc, resets }) => (inc == null ? "" : `+${Math.max(0, inc)}${resets ? `，中間重置 ${resets} 次` : ""}`);
+const incText = ({ inc, resets, guessed }) => (inc == null ? "" : `+${Math.max(0, inc)}${resets ? `，中間重置 ${resets} 次` : ""}${guessed ? `（${guessed} 段缺重置時間，依使用率是否下降判斷）` : ""}`);
 
 // 伺服器的 session 統計：接受 {cache_read_tokens, cache_write_tokens, input_tokens, output_tokens, cost_usd} 或包著它的整份回應
 export function parseServerUsage(data) {
@@ -150,6 +167,13 @@ export function render(steps, from = 0, quota = [], server = null) {
   }
   const tiny = steps.filter(s => s.output <= 2).length;
   if (tiny) out.push(`⚠️ 有 ${tiny} 步的輸出 ≤2 token，可能是串流中途的快照，輸出量可能低估；請以伺服器統計或 /cost 為準。`);
+  const inc = steps.filter(s => s.incomplete);
+  if (inc.length) {
+    const sub = inc.filter(s => s.source !== "主對話").length;
+    out.push(`⚠️ 有 ${inc.length} 步沒有最終紀錄（stop_reason 為空）${sub ? `，其中子代理 ${sub} 步` : ""}：輸出可能不完整，請以伺服器統計或 /cost 為準。`);
+  }
+  const old = [...new Set(steps.filter(s => s.version && versionLess(s.version, MIN_RELIABLE_VERSION)).map(s => s.version))];
+  if (old.length) out.push(`⚠️ 紀錄來自 Claude Code ${old.join("、")}（早於 ${MIN_RELIABLE_VERSION}），子代理的輸出量可能被低估。`);
   if (hasQ) {
     const last = quota[quota.length - 1];
     // 本段起點：本段第一步之前最新的一筆；沒有就用 session 第一筆
