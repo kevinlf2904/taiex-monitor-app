@@ -39,7 +39,7 @@ test("CODEOWNERS：vercel.json 的 ignoreCommand 指向的腳本也有 owner", (
 
 test("CODEOWNERS：workflow、本檔、範本、協作規則、AI 設定、部署設定、排程寫回入口都有 owner", () => {
   for (const p of [".github/workflows/ci.yml", ".github/workflows/pr-guard.yml", ".github/workflows/twse-daily.yml", ".github/CODEOWNERS",
-    ".github/pull_request_template.md", "AGENTS.md", "CLAUDE.md", ".agent/rules/klinelab.md", ".agent/workflows/merge.md",
+    ".github/pull_request_template.md", "AGENTS.md", "CLAUDE.md", ".agent/rules/klinelab.md", ".agent/workflows/merge.md", "docs/merge.md",
     ".claude/settings.json", ".claude/hooks/x.sh", "vercel.json", "scripts/commit-data.sh", "scripts/vercel-ignore.mjs"]) {
     assert.deepEqual(ownersOf(p), ["@kevinlf2904"], `${p} 要有 owner`);
   }

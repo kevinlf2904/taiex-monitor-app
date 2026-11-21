@@ -1,6 +1,6 @@
 // PR 檢查的純函式（#312 PR B）：依 AGENTS.md 判斷改動檔案的風險、大檔鎖定與衝突、介面驗證需求，並解析 AI 協作留言。
 // 只做判斷、不連網路也不寫任何東西；本機的 scripts/pr-brief.mjs 與之後的 pr-guard workflow 都用這裡的函式，結果才會一致。
-// 判斷只是提醒：「測試沒有放寬斷言」「CSS 只改規則」這類程式看不出來的條件，仍由合併者確認（AGENTS.md「低風險例外」）。
+// 判斷只是提醒：「測試沒有放寬斷言」「CSS 只改規則」這類程式看不出來的條件，仍由合併者確認（docs/merge.md「低風險例外」）。
 import { VERSION_FILES, touchesVersionFiles, checkVersion, extractVersionJson } from "./version-guard.mjs";
 export { VERSION_FILES, touchesVersionFiles, checkVersion };
 
@@ -16,7 +16,7 @@ export const CROSS_REVIEW_FILES = [
   "scripts/pattern-today.mjs", "scripts/theme-corr.mjs",
 ];
 
-const RULE_FILES = ["AGENTS.md", "CLAUDE.md"];
+const RULE_FILES = ["AGENTS.md", "CLAUDE.md", "docs/merge.md"];
 const name = f => (typeof f === "string" ? f : f.filename);
 const under = (p, dir) => p.startsWith(dir);
 

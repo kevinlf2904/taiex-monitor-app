@@ -176,9 +176,16 @@ test("pr-brief：用假的 GitHub 回應組出摘要，不呼叫 gh", async () =
   assert.equal(out.match(/審查（Codex）/g).length, 1, "協作格式的留言不重複列在其他留言");
 });
 
-test("pr-guard：低風險路徑和 AGENTS.md「低風險例外」條文用的是同一組路徑", () => {
-  const a = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
-  for (const k of ["`docs/**`", "`learner/core.css`", "`learner/minimal.css`", "`.github/workflows/**`", "`api/**`", "`scripts/**`", "`package*.json`", "`learner/data/**`", "`vercel.json`"]) assert.ok(a.includes(k), `AGENTS.md 改了「${k}」的話，scripts/pr-guard.mjs 要跟著改`);
+test("pr-guard：低風險路徑和 docs/merge.md「低風險例外」條文用的是同一組路徑", () => {
+  const a = readFileSync(new URL("../docs/merge.md", import.meta.url), "utf8");
+  for (const k of ["`docs/**`", "`docs/merge.md`", "`learner/core.css`", "`learner/minimal.css`", "`.github/workflows/**`", "`api/**`", "`scripts/**`", "`package*.json`", "`learner/data/**`", "`vercel.json`"]) assert.ok(a.includes(k), `docs/merge.md 改了「${k}」的話，scripts/pr-guard.mjs 要跟著改`);
+  assert.match(readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8"), /docs\/merge\.md/, "AGENTS.md 要指向 docs/merge.md");
+});
+
+test("pr-guard：docs/merge.md 是協作規則，不算低風險；其他 docs 仍是低風險", () => {
+  assert.equal(inLowRiskScope("docs/merge.md"), false);
+  assert.equal(highRiskReason("docs/merge.md"), "協作規則");
+  assert.equal(inLowRiskScope("docs/realtime-setup.md"), true);
 });
 
 // ---- PR 說明檢查（#312 PR E）----
