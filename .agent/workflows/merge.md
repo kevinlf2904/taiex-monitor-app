@@ -2,7 +2,7 @@
 description: 直接幫我合併：推分支 → 開 PR → 等 CI test 通過 → merge → 分支重設到最新 main
 ---
 
-照 AGENTS.md「合併流程」的規則，把目前 `gemini/…` 分支的工作合併進 main。使用者指派 Antigravity 開發（或在 Claude 額度不足時接手），並說「直接幫我合併」時用這個流程。
+照 `docs/merge.md` 的規則（AGENTS.md「合併流程」摘要），把目前 `gemini/…` 分支的工作合併進 main。使用者指派 Antigravity 開發（或在 Claude 額度不足時接手），並說「直接幫我合併」時用這個流程。
 
 1. 確認目前在 `gemini/…` 分支，不是 main。工作目錄有未提交的變更時先停下來，確認變更屬於哪個任務；不得自行提交不屬於本次任務的內容，屬於本次任務的才提交。看開著的 PR，有別人正在合併或升版本就先等它合完。
 2. `git fetch origin main` 後把 `origin/main` 合併進目前分支，有衝突就解決。
