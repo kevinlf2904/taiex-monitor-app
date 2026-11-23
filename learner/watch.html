@@ -787,7 +787,7 @@ body.navback-on { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 .iisl-name i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ic); }
 .iisl-count { flex: none; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 .iisl-ring { grid-area: ring; justify-self: center; width: 96px; height: 96px; display: block; overflow: visible; }
-.iisl-ring .tr { stroke: color-mix(in srgb, var(--ink) 9%, transparent); }
+.iisl-ring .tr { stroke: color-mix(in srgb, var(--ink) 9%, transparent); stroke-width: 6px; } /* minimal.css 的 svg circle[stroke-width] 會把底圈壓成 1.2px，和上面 6px 的弧不一樣粗（#333 A3） */
 .iisl-ring .core { fill: transparent; }
 .iisl-ring .v { font: 600 15px var(--font-num); } .iisl-ring .k { font-size: 9.5px; fill: var(--muted); letter-spacing: .08em; }
 .iisl .ia { transition: stroke-opacity .2s; }
