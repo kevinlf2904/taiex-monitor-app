@@ -173,6 +173,34 @@ test("費用規則：買賣不同折扣、現股當沖、債券 ETF、實際費�
   assert.equal(L.feeDiff({ type: "dividend" }), null);
 });
 
+test("證交稅：現股當沖減半只適用股票；ETF、債券 ETF 當沖照各自稅率，不會比不當沖高（稽核 AUD-03）", () => {
+  const tax = (assetType, dayTrade) => L.estimateCosts({ type: "sell", market: "tw", shares: 1000, price: 100, assetType, dayTrade }).tax;
+  // 賣出 10 萬元：股票 0.3%／當沖 0.15%；ETF 0.1%（當沖也是）；債券 ETF 停徵 0（當沖也是）；沒標類型時當股票
+  assert.deepEqual([tax("stock", false), tax("stock", true)], [300, 150], "股票");
+  assert.deepEqual([tax("etf", false), tax("etf", true)], [100, 100], "ETF 當沖不是 0.15%");
+  assert.deepEqual([tax("bond_etf", false), tax("bond_etf", true)], [0, 0], "債券 ETF 當沖不是 0.15%");
+  assert.deepEqual([tax(null, false), tax(null, true)], [300, 150], "沒標類型＝股票");
+  for (const a of ["stock", "etf", "bond_etf", null]) assert.ok(tax(a, true) <= tax(a, false), `${a}：當沖不應比一般高`);
+  // 走完整流程：沒填稅額、從代號推類型的債券 ETF 與 ETF 當沖賣出
+  const R = L.buildLedger([
+    tw({ date: "2026-03-02", type: "buy", symbol: "00679B", shares: 1000, price: 30 }), tw({ date: "2026-03-02", type: "sell", symbol: "00679B", shares: 1000, price: 31, tax: null, dayTrade: true }),
+    tw({ date: "2026-03-03", type: "buy", symbol: "0050", shares: 1000, price: 100 }), tw({ date: "2026-03-03", type: "sell", symbol: "0050", shares: 1000, price: 101, tax: null, dayTrade: true }),
+  ]);
+  const sells = R.txs.map(x => x.tx).filter(t => t.type === "sell");
+  assert.deepEqual(sells.map(t => [t.symbol, t.assetType, t.tax]), [["00679B", "bond_etf", 0], ["0050", "etf", 101]]);
+});
+
+test("債券 ETF 證交稅停徵到期提醒（稽核 AUD-04）：過了 BOND_ETF_TAX_FREE.until 這個測試會失敗，要依三讀結果更新", () => {
+  const F = L.BOND_ETF_TAX_FREE, ymd = /^\d{4}-\d{2}-\d{2}$/;
+  assert.ok(ymd.test(F.from) && ymd.test(F.until) && F.from < F.until, "日期格式");
+  // 規則說明與回測的稅率註解要寫同一個到期日，改期限時不會漏改其中一處
+  assert.ok(L.DEFAULT_RULES.tw.source.includes(F.until), "ledger 規則說明的到期日");
+  assert.ok(readFileSync(new URL("../learner/analysis.js", import.meta.url), "utf8").includes(`停徵到 ${F.until}`), "analysis.js taxOf 註解的到期日");
+  // 這一段刻意讀系統時間：到期後要有人確認法規。延長 → 把 until 改成新的到期日（同步上面兩處）；沒延長 → 改成依交易日期套用 ETF 稅率
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  assert.ok(today <= F.until, `債券 ETF 證交稅停徵已在 ${F.until} 到期（今天 ${today}）：請確認是否延長，再更新 learner/ledger.js 的 BOND_ETF_TAX_FREE 與 learner/analysis.js 的 taxOf`);
+});
+
 test("CSV 匯出：中文欄名、依日期排序、有 BOM；含逗號、引號的備註正確跳脫；開頭是 = + - @ 的文字前面加 ' 防止被當成公式", () => {
   const csv = L.toCSV([tw({ id: "b", date: "2026-02-01", type: "sell", shares: 1, price: 10, note: '=HYPERLINK("x")' }), tw({ id: "a", date: "2026-01-01", type: "buy", shares: 2, price: 9.5, note: "台積電, 第一筆 \"試算\"" })]);
   const lines = csv.replace(/^\ufeff/, "").trim().split("\r\n");
