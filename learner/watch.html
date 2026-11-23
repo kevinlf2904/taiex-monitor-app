@@ -4411,9 +4411,14 @@ function gxMount() {
     if (pinch && pts.size === 2) { const n = pinchInfo(); G.px = (G.px || 0) + n.x - pinch.x; G.py = (G.py || 0) + n.y - pinch.y; zoomAt(n.d / pinch.d, n.x, n.y); pinch = n; return; }
     if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (moved && drag.pan) { const w = cv.clientWidth, h = cv.clientHeight, z = G.zoom || 1; G.px = Math.max(-w * 0.5 * z, Math.min(w * 0.5 * z, drag.px + dx)); G.py = Math.max(-h * 0.5 * z, Math.min(h * 0.5 * z, drag.py + dy)); idle = performance.now(); dirty = true; } // 放大後拖曳＝移動畫面
       else if (moved) { G.th = drag.th + dx * 0.008; if (e.pointerType === "mouse" || G.free) G.ph = Math.max(-0.05, Math.min(0.8, drag.ph + dy * 0.004)); idle = performance.now(); dirty = true; } return; }
-    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); if (id !== G.hover) { G.hover = id; cv.style.cursor = id ? "pointer" : G.panMode || e.shiftKey ? "move" : "grab"; dirty = true; } gxCard(card, id, x, y); } });
+    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); cv.style.cursor = id ? "pointer" : G.panMode || e.shiftKey ? "move" : "grab";
+      // 移開星球時卡片先留 0.35 秒，滑鼠移進卡片就一直留著，才按得到「換到中心」「題材內頁」（#333 A3）
+      if (!id) { if (G.hover && !card.hidden && !cardT) cardLater(); return; } cardStop(); if (id !== G.hover) { G.hover = id; dirty = true; } gxCard(card, id, x, y); } });
+  let cardT = 0; const cardStop = () => { clearTimeout(cardT); cardT = 0; }, cardLater = () => { cardStop(); cardT = setTimeout(() => { cardT = 0; if (G.pin || card.matches(":hover")) return; G.hover = null; card.hidden = true; dirty = true; }, 350); };
+  card.addEventListener("pointerenter", e => { if (e.pointerType === "mouse") cardStop(); });
+  card.addEventListener("pointerleave", e => { if (e.pointerType === "mouse" && !G.pin && e.relatedTarget !== cv) cardLater(); });
   cv.addEventListener("pointercancel", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; });
-  cv.addEventListener("pointerleave", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; if (!G.pin && G.hover) { G.hover = null; card.hidden = true; dirty = true; } });
+  cv.addEventListener("pointerleave", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; if (!G.pin && G.hover) { if (e.pointerType === "mouse") cardLater(); else { G.hover = null; card.hidden = true; dirty = true; } } });
   cv.addEventListener("pointerup", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; const was = drag; drag = G.drag = null; if (G.pend) { G.pend = false; setTimeout(renderInd); } if (!was || moved) return;
     const [x, y] = xy(e), id = hit(x, y);
     if (e.pointerType === "mouse") { if (id && id !== W.gxS.core) { W.indS.focus = id; renderInd(); } return; }
