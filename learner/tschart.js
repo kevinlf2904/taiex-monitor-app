@@ -39,10 +39,11 @@ function xhWrap(svg, xs, tip) {
 // 移上去（或手指按著滑）看那一點的數字
 function tsHover(e) {
   const box = e.target.closest?.(".tsbox"); if (!box) return; const S = TS_DATA.get(box.dataset.ts), svg = box.querySelector("svg"), tip = box.querySelector(".tstip"); if (!S || !svg) return;
-  const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal, vx = vb.x + (e.clientX - r.left) / r.width * vb.width;
+  // 用 getScreenCTM 換算：SVG 有 max-height 被等比縮小、左右留白時（例如 .blsvg 600×170 放在 1230px 寬），用外框寬度換算會偏掉（#333 A7b）
+  const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal, m = svg.getScreenCTM(), vx = m?.a ? (e.clientX - m.e) / m.a : vb.x + (e.clientX - r.left) / r.width * vb.width;
   let i = 0; S.xs.forEach((x, k) => { if (Math.abs(x - vx) < Math.abs(S.xs[i] - vx)) i = k; }); const x = S.xs[i];
   const cur = svg.querySelector(".tscur"); cur.setAttribute("x1", x); cur.setAttribute("x2", x); cur.setAttribute("visibility", "visible");
-  tip.innerHTML = S.tip(i); tip.hidden = false; const px = (x - vb.x) / vb.width * r.width;
+  tip.innerHTML = S.tip(i); tip.hidden = false; const px = m?.a ? x * m.a + m.e - r.left : (x - vb.x) / vb.width * r.width;
   tip.style.left = Math.max(4, Math.min(r.width - tip.offsetWidth - 4, px + (px > r.width / 2 ? -tip.offsetWidth - 10 : 10))) + "px";
 }
 const tsHide = box => { box.querySelector(".tstip").hidden = true; box.querySelector(".tscur")?.setAttribute("visibility", "hidden"); };

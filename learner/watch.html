@@ -6442,7 +6442,7 @@ function renderCost() {
 }
 
 /* ---------- 小圖：柱狀＋折線（營收、EPS）、本益比區間 ---------- */
-function barLineSvg(items, { bar = "var(--accent)", line = "var(--s1)", fmtV = v => v, fmtY = v => v + "%" } = {}) {
+function barLineSvg(items, { bar = "color-mix(in srgb, var(--accent) 55%, transparent)", line = "var(--s1)", fmtV = v => v, fmtY = v => v + "%" } = {}) {
   if (!items.length) return "";
   const Wv = 600, Hv = 170, P = 26, bw = Math.min(70, (Wv - P * 2) / items.length), x0 = (Wv - bw * items.length) / 2, vs = items.map(x => x.v), mx = Math.max(0, ...vs), mn = Math.min(0, ...vs), ys = items.map(x => x.y).filter(v => v != null), yx = Math.max(...ys, 1), yn = Math.min(...ys, 0);
   const Yv = v => P + (mx - v) / ((mx - mn) || 1) * (Hv - P * 2), Yy = v => P + (yx - v) / ((yx - yn) || 1) * (Hv - P * 2);
