@@ -247,7 +247,7 @@ table.mini { border-collapse: collapse; font-size: 13px; margin: 6px 0 12px; } t
 .lxbody { padding: 0 16px 14px; } .lxform { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 6px 0 10px; font-size: 13px; }
 .lxform select, .lxform input { padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; max-width: 220px; }
 .lxset { margin: 4px 0 10px; font-size: 13px; } .lxset summary { cursor: pointer; color: var(--muted); }
-.lxcurve { width: 100%; height: 190px; display: block; margin: 10px 0 4px; } .lxleg { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--muted); } .lxleg i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+.lxcurve { width: 100%; height: auto; display: block; margin: 10px 0 4px; } .lxleg { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--muted); } .lxleg i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 .lxcombo td { font-weight: 600; } .lxheat td { text-align: center; font-variant-numeric: tabular-nums; min-width: 54px; }
 .ibar-g { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ibar-t { font-size: 12px; color: var(--muted); letter-spacing: .06em; margin-right: 2px; }
@@ -1008,7 +1008,7 @@ const anatomySVG = `
   <text x="70" y="186" text-anchor="middle" class="lbl-strong">紅K・收漲</text>
   <line class="guide" x1="222" y1="48" x2="262" y2="48"/><text x="250" y="44" text-anchor="middle" class="lbl-strong">開盤</text>
   <line class="guide" x1="222" y1="120" x2="262" y2="120"/><text x="250" y="116" text-anchor="middle" class="lbl-strong">收盤</text>
-  <text x="250" y="80" text-anchor="middle">上影線↑</text><text x="250" y="150" text-anchor="middle">下影線↓</text>
+  <line class="guide" x1="178" y1="38" x2="196" y2="38"/><text x="174" y="42" text-anchor="end">上影線</text><text x="250" y="150" text-anchor="middle">下影線↓</text>
   <text x="200" y="186" text-anchor="middle" class="lbl-strong">綠K・收跌</text>
 </svg>
 </div>`;
@@ -1038,7 +1038,7 @@ const fibSVG = (() => {
   ${[[1.272, "延伸 127.2%"], [1.618, "延伸 161.8%"]].map(([r, t]) => `<line x1="200" y1="${E(r)}" x2="350" y2="${E(r)}" class="guide"/><text x="356" y="${E(r) + 4}">${t}</text>`).join("")}
   <polyline points="30,${yA} 70,140 95,155 150,${yB} 185,118 222,${R(0.618)} 260,95 285,112 335,${E(1.618)}" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
   <circle cx="30" cy="${yA}" r="4" fill="var(--accent)"/><circle cx="150" cy="${yB}" r="4" fill="var(--accent)"/><circle cx="222" cy="${R(0.618)}" r="4" fill="var(--up)"/>
-  <text x="34" y="${yA + 16}" class="lbl-strong">A 起點</text><text x="118" y="${yB - 8}" class="lbl-strong">B 高點</text><text x="200" y="${R(0.618) + 22}">回檔到黃金區止跌</text>
+  <text x="34" y="${yA + 16}" class="lbl-strong">A 起點</text><text x="118" y="${yB - 8}" class="lbl-strong">B 高點</text><text x="200" y="${R(0.786) + 15}">回檔到黃金區止跌</text>
   <text x="250" y="${E(1.618) + 4}" text-anchor="end">目標：延伸位</text>
 </svg></div>`;
 })();
@@ -1047,7 +1047,7 @@ const smcStructSVG = `<div class="anatomy"><svg width="460" height="190" viewBox
   <line x1="70" y1="110" x2="138" y2="110" stroke="var(--up)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="104" y="104" text-anchor="middle" fill="var(--up)" class="lbl-strong">BOS</text>
   <line x1="150" y1="80" x2="217" y2="80" stroke="var(--up)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="183" y="74" text-anchor="middle" fill="var(--up)" class="lbl-strong">BOS</text>
   <line x1="185" y1="115" x2="336" y2="115" stroke="var(--down)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="262" y="130" text-anchor="middle" fill="var(--down)" class="lbl-strong">CHoCH</text>
-  <text x="70" y="102" text-anchor="middle">H</text><text x="100" y="155" text-anchor="middle">HL</text><text x="150" y="72" text-anchor="middle">HH</text><text x="185" y="108" text-anchor="middle">HL</text><text x="230" y="52" text-anchor="middle">HH</text><text x="300" y="67" text-anchor="middle">LH</text><text x="350" y="155" text-anchor="middle">LL</text><text x="380" y="110" text-anchor="middle">LH</text>
+  <text x="70" y="102" text-anchor="middle">H</text><text x="100" y="155" text-anchor="middle">HL</text><text x="150" y="72" text-anchor="middle">HH</text><text x="185" y="132" text-anchor="middle">HL</text><text x="230" y="52" text-anchor="middle">HH</text><text x="300" y="67" text-anchor="middle">LH</text><text x="350" y="155" text-anchor="middle">LL</text><text x="380" y="110" text-anchor="middle">LH</text>
   <text x="20" y="20">上升結構：每次收盤突破前高＝BOS（延續）</text><text x="20" y="36">跌破最近一個轉折低點＝CHoCH（性格改變）</text>
 </svg></div>`;
 const smcLiqSVG = `<div class="anatomy"><svg width="460" height="185" viewBox="0 0 460 185" aria-label="流動性與掃蕩示意圖">
