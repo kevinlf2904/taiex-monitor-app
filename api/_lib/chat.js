@@ -5,10 +5,9 @@
 //   GEMINI_MODEL      → 選填，「問問題」優先用的 Gemini 型號；其他用途（AI 整理、摘要、截圖匯入）的順序見 _gemini.js 的 GEMINI_ORDER
 // 系統提示固定在伺服器端；前端只送對話內容與「目前畫面」的摘要，長度都有上限。
 
-import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { kv, kvOn } from "./sync.js";
-import { aiLimit, WEB_TRIES, claudeFallbackOn, claudeUsable } from "./_limit.js";
+import { aiLimit, WEB_TRIES, claudeFallbackOn, claudeUsable, loadAnthropic } from "./_limit.js";
 import { geminiModels, GEMINI_ORDER } from "./_gemini.js";
 
 const SYSTEM = `你是「K線學堂」裡的技術分析助教，對象是想學台股技術分析的初學者。請用繁體中文、口語但精確地回答。
@@ -124,8 +123,10 @@ export default async function handler(req, res) {
   if (research) return res.status(200).json({ ok: false, error: "AI 研究需要伺服器設定 GEMINI_API_KEY。" }); // 研究不改用 Claude（成本）
   return askClaude();
   async function askClaude() {
-  const client = new Anthropic({ timeout: Math.max(10000, left()), maxRetries: 0 });
+  let Anthropic = null; // 載入失敗時是 null，下面的 catch 回一般錯誤
   try {
+    Anthropic = await loadAnthropic();
+    const client = new Anthropic({ timeout: Math.max(10000, left()), maxRetries: 0 });
     const msg = await client.beta.messages.create({
       model: "claude-opus-5-5",
       max_tokens: 4000,
@@ -141,9 +142,9 @@ export default async function handler(req, res) {
     if (ck && msg.stop_reason !== "max_tokens") await cachePut(ck, { text, provider: "claude", model: msg.model });
     return res.status(200).json({ ok: true, text, truncated: msg.stop_reason === "max_tokens", provider: "claude", model: msg.model });
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) return res.status(200).json({ ok: false, error: "ANTHROPIC_API_KEY 無效，請檢查伺服器設定。" });
-    if (err instanceof Anthropic.RateLimitError) return res.status(200).json({ ok: false, error: "使用太頻繁，請稍後再試。" });
-    if (err instanceof Anthropic.APIError) return res.status(200).json({ ok: false, error: `Claude 服務暫時無法使用（${err.status ?? "連線錯誤"}）` });
+    if (Anthropic && err instanceof Anthropic.AuthenticationError) return res.status(200).json({ ok: false, error: "ANTHROPIC_API_KEY 無效，請檢查伺服器設定。" });
+    if (Anthropic && err instanceof Anthropic.RateLimitError) return res.status(200).json({ ok: false, error: "使用太頻繁，請稍後再試。" });
+    if (Anthropic && err instanceof Anthropic.APIError) return res.status(200).json({ ok: false, error: `Claude 服務暫時無法使用（${err.status ?? "連線錯誤"}）` });
     return res.status(200).json({ ok: false, error: "回答失敗，請稍後再試。" });
   }
 }
