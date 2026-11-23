@@ -55,3 +55,20 @@ test("橫向滑動的選單列：每秒重畫後不會跳回最左邊；選中�
   assert.equal(await p.evaluate(s => Math.round(document.querySelector(s).scrollLeft), bar), end, "重畫後還在原本的位置");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// 題材很多（整張網絡都有資料）時：手機格子不能小到編號互相重疊，熱圖在自己的框裡左右捲；相關係數標籤對比夠（#333 A2）
+for (const width of [390, 1280]) test(`關聯熱圖：題材多時編號不重疊 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width, touch: width < 500 });
+  const ids = await p.evaluate(() => { const n = IND.networks[0]; return [...new Set(n.layers.flatMap(([, L]) => L))].filter(id => INDT.has(id)); });
+  const M = ids.length, t2 = (i, j) => (i * (2 * M - i - 1)) / 2 + (j - i - 1), cc = Array(M * (M - 1) / 2).fill(0).map((_, k) => ((k * 37) % 180) - 90), xx = cc.map(v => Math.round(v * 0.8));
+  await ctx.route("**/data/theme-corr.json", r => r.fulfill({ json: { ...TC, ids, n: ids.map(() => 5), ret: ids.map(() => [1, 2, 3, 4]), c: cc, x: xx, lead: [[ids[0], ids[1], 80, 8, 240]] } }));
+  await p.evaluate(() => { showList(); setLt("ind"); W.indS.view = "themes"; W.indS.open = null; renderInd(); });
+  await p.click('#lx [data-iview="rel"]'); await p.waitForSelector(".rheat svg");
+  const r = await p.evaluate(() => { const B = [...document.querySelectorAll(".rheat .rhn")].map(t => t.getBoundingClientRect()); let ov = 0; for (let i = 1; i < B.length; i++) if (B[i].left < B[i - 1].right - 0.5) ov++;
+    return { n: B.length, ov, cell: document.querySelector(".rheat rect").getBoundingClientRect().width }; });
+  assert.ok(r.n >= 20, `測試條件：題材要夠多 ${r.n}`); assert.equal(r.ov, 0, "上方編號重疊"); assert.ok(r.cell >= 13, `格子 ${r.cell}px`);
+  assert.ok(await noHOverflow(p), "熱圖在框內捲動，不撐破畫面");
+  await p.evaluate(() => { document.documentElement.dataset.theme = "dark"; }); await p.click('[data-rel="sub:lead"]'); await p.waitForSelector(".rpair .rv");
+  const ink = await p.$eval(".rpair .rv", b => getComputedStyle(b).color); assert.equal(ink, "rgb(10, 10, 10)", "深底色用深色字");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
