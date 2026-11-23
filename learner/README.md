@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 主題切換即時換色、行事曆與相關係數表對比修正（2026.11.24-245）
+- 切換亮暗主題時圖表與籌碼分佈立刻換成新主題色；深色主題行事曆選中日文字看得清楚；相關係數表深色字可讀
+
 ### 排程引擎不再讀 watch.html（2026.11.20-244）
 - 成交量格式 fmtVol 搬到共用的 core.js，排程引擎直接用，不再從網頁原始碼擷取（#292）
 
