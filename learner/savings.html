@@ -742,14 +742,15 @@ function renderMilestones(p){
     const gap=ts[0]!=null?ts[0]-prevA:null;if(ts[0]!=null)prevA=ts[0];
     return `<tr><td class="l" style="font-family:var(--f-body)">${esc(m.name)}</td><td>${wan(amt)}</td>${ts.map(t=>t==null?`<td class="na">80 年內未達成</td>`:`<td${t===best&&ts.filter(x=>x===best).length<3?' style="font-weight:500"':""}>${durTxt(t)}<span class="ms-when">${t?dateTxt(t):""}</span></td>`).join("")}<td>${gap==null?"—":gap===0?"—":"+"+durTxt(gap)}</td></tr>`}).join(""):`<tr><td colspan="6" class="na">在控制台新增里程碑</td></tr>`;
   // timeline
-  const svg=$("c-ms"),W=760,rowH=46,ml=96,mr=20,mt=24,H=mt+rowH*R.length+28;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const svg=$("c-ms"),nar=innerWidth<600,W=nar?380:760,rowH=46,ml=nar?84:96,mr=nar?14:20,// 手機用窄的畫布：760 寬縮到 324px 時字只剩 5px、和 A/B/C 名稱重疊（#333 C1c）
+    mt=24,H=mt+rowH*R.length+28;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
   const all=R.flatMap(x=>list.map(m=>monthsTo(x.r,m.amt*1e4,p.init)).filter(t=>t!=null));
   const ymax=Math.max(5,Math.ceil(Math.max(...all,12)/12/5)*5),xs=m=>ml+(m/12/ymax)*(W-ml-mr);
   let g="";const st=ymax<=10?1:ymax<=30?5:10;
-  for(let y=0;y<=ymax;y+=st)g+=`<line x1="${xs(y*12)}" x2="${xs(y*12)}" y1="${mt-8}" y2="${H-24}" stroke="var(--line)"/><text x="${xs(y*12)}" y="${H-8}" text-anchor="middle">${y===0?"現在":"第"+y+"年"}</text>`;
+  for(let y=0;y<=ymax;y+=st)g+=`<line x1="${xs(y*12)}" x2="${xs(y*12)}" y1="${mt-8}" y2="${H-24}" stroke="var(--line)"/><text x="${xs(y*12)}" y="${H-8}" text-anchor="${y===0?"start":y+st>ymax?"end":"middle"}">${y===0?"現在":"第"+y+"年"}</text>`;
   R.forEach((x,ri)=>{const cy=mt+ri*rowH+rowH/2;g+=`<text x="${ml-10}" y="${cy+4}" text-anchor="end" style="font-family:var(--f-body);font-size:12px;fill:var(--ink)">${x.name}</text><line x1="${ml}" x2="${W-mr}" y1="${cy}" y2="${cy}" style="stroke:${x.color};stroke-opacity:.35;stroke-width:2"/>`;
     list.forEach((m,k)=>{const t=monthsTo(x.r,m.amt*1e4,p.init);if(t==null)return;const cx=xs(t),up=k%2===0;
-      g+=`<circle cx="${cx}" cy="${cy}" r="5" style="fill:${x.color};stroke:var(--panel);stroke-width:1.5"><title>${esc(m.name)}：${durTxt(t)}${t?"（"+dateTxt(t)+"）":""}</title></circle><text x="${cx}" y="${up?cy-10:cy+18}" text-anchor="middle">${moneyTick(m.amt*1e4)}</text>`})});
+      g+=`<circle cx="${cx}" cy="${cy}" r="5" style="fill:${x.color};stroke:var(--panel);stroke-width:1.5"><title>${esc(m.name)}：${durTxt(t)}${t?"（"+dateTxt(t)+"）":""}</title></circle><text x="${Math.max(cx,ml+16)}" y="${up?cy-10:cy+18}" text-anchor="middle">${moneyTick(m.amt*1e4)}</text>`})});
   svg.innerHTML=g;
   $("ms-legend").innerHTML=`<span>圓點上的數字是里程碑金額；滑鼠停在圓點上可以看到名稱和日期。</span>`;
 }
