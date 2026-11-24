@@ -16,8 +16,9 @@ const foldKey = (el, kind) => kind + "|" + (el.closest("section, article, .iseg,
 function foldBtn(k, open, txt) { const b = document.createElement("button"); b.type = "button"; b.className = "fold-btn"; b.dataset.foldk = k; b.setAttribute("aria-expanded", String(open)); b.textContent = open ? "收合 ▴" : txt; return b; }
 function foldText(el) {
   if (el.dataset.fold || foldSeen.has(el)) return; if (el.closest(FOLD_SKIP) || el.closest(".fold-t")) return foldSeen.add(el);
-  // 「長文字」才收：裡面有圖表、表格或輸入元件的區塊（例如圖表實驗室的 .lxbody）收成 5 行會把圖切掉（#333 驗證時發現）；不加入 foldSeen，內容換成純文字時還會再量
-  if (el.querySelector("svg, canvas, table, input, select, textarea")) return;
+  // 「長文字」才收：裡面有圖表（高度超過 40px 的 svg、canvas）、表格或輸入元件的區塊（例如圖表實驗室的 .lxbody）收成 5 行會把圖切掉（#333 驗證時發現）；不加入 foldSeen，內容換成純文字時還會再量
+  // 小圖示（行內 icon，高度 ≤ 40px）的 svg 不算圖表，長段落照常收合
+  if (el.querySelector("canvas, table, input, select, textarea") || [...el.querySelectorAll("svg")].some(s => s.getBoundingClientRect().height > 40)) return;
   const cs = getComputedStyle(el); if (cs.display === "none" || cs.display.startsWith("inline")) return;
   if (!el.offsetHeight) return; // 還沒顯示（收在隱藏區塊裡），之後再量
   const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.6; if (!(el.scrollHeight > lh * FOLD_LINES + 4)) return foldSeen.add(el);
