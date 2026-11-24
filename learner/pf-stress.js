@@ -18,12 +18,18 @@ function stBetaLoad(open) {
     .catch(e => { W.stB = { key, err: e.message || "拿不到" }; }).finally(() => { if (stView()) renderList(); });
 }
 function stSectionHtml(open, X, cashB, meta = {}) {
+  W.stOpen = open; // 「用日 K 算 Beta」直接用這次畫面上的持股：交易帳本、只有快照、只有舊庫存都一樣（#300 第 2 組）
   const L = (W.lg ||= {}), fx = X.fx?.rate ?? null, key = open.map(p => p.symbol).sort().join(","), B = W.stB?.key === key ? W.stB : null;
   const ind = new Map((Array.isArray(W.stocks) ? W.stocks : []).map(r => [String(r[0]).toUpperCase(), r[3] || null]));
   const usdOk = !open.some(p => p.currency === "USD") || fx;
   const positions = open.map(p => { const q = X.px.get(p.symbol), v = (q ? p.shares * q.price : p.costBasis) * (p.currency === "USD" ? fx || 0 : 1);
     return { symbol: p.symbol, market: p.market, currency: p.currency, value: v, beta: B?.beta?.[p.symbol] ?? null, industry: lgIsEtf(p.symbol) ? null : ind.get(p.symbol) || null }; });
   const cash = { TWD: cashB?.TWD?.tracked ? cashB.TWD.balance : 0, USD: cashB?.USD?.tracked && fx ? cashB.USD.balance * fx : 0 };
+  // 計算範圍：哪些沒有納入、哪些是估的，寫在數字旁邊，不和完整帳本的結果混在一起比
+  const cashKnown = !meta.legacy && !!(cashB?.TWD?.tracked || cashB?.USD?.tracked), noPx = open.filter(p => !X.px.get(p.symbol)).map(p => p.symbol);
+  const scope = [meta.legacy ? "現金：舊庫存沒有現金資料，未納入（下面的總資產只含持股）" : !cashKnown ? "現金：沒有入金、出金紀錄，未納入（下面的總資產只含持股）" : "",
+    cashB?.USD?.tracked && cashB.USD.balance && !fx ? "美元現金：沒有匯率，未納入" : "",
+    noPx.length ? `沒有報價、用成本估市值：${noPx.map(c => esc(nameOf(c))).join("、")}` : ""].filter(Boolean);
   const inds = [...new Set(positions.map(p => p.industry).filter(Boolean))].sort();
   const sel = L.st || { k: "tw20" }, pre = KLStress.PRESETS.find(p => p.k === sel.k), industry = sel.industry && inds.includes(sel.industry) ? sel.industry : inds[0] || null;
   const s = sel.k === "custom" ? { tw: sel.tw ?? 0, us: sel.us ?? 0, fx: sel.fx ?? 0 } : pre ? { tw: pre.tw, us: pre.us, fx: pre.fx, ind: pre.ind || 0, industry: pre.ind ? industry : null } : { tw: -0.2 };
@@ -39,15 +45,16 @@ function stSectionHtml(open, X, cashB, meta = {}) {
   let body;
   if (!R) body = `<p class="note lgwarn">有美股但沒有匯率，算不出台幣總值。</p>`;
   else if (R.status === "invalid") body = `<p class="note lgwarn">${R.reason === "bad_shock" ? "變動要在 −100%～+100% 之間（美元 −50%～+50%）。" : "沒有可以計算的資產。"}</p>`;
-  else body = `<div class="pftiles"><div class="pftile"><span>目前總資產</span><b>${m$(R.before)}</b></div><div class="pftile"><span>情境下的變化</span><b class="${R.change < 0 ? "down" : R.change > 0 ? "up" : ""}">${R.change > 0 ? "+" : ""}${m$(R.change)}</b><small>${pc(R.pct)}</small></div>
-      <div class="pftile"><span>情境下的總資產</span><b>${m$(R.after)}</b>${R.cashChange ? `<small>美元現金 ${R.cashChange > 0 ? "+" : ""}${m$(R.cashChange)}</small>` : ""}</div></div>
+  else body = `<div class="pftiles"><div class="pftile"><span>${cashKnown ? "目前總資產" : "目前持股合計"}</span><b>${m$(R.before)}</b></div><div class="pftile"><span>情境下的變化</span><b class="${R.change < 0 ? "down" : R.change > 0 ? "up" : ""}">${R.change > 0 ? "+" : ""}${m$(R.change)}</b><small>${pc(R.pct)}</small></div>
+      <div class="pftile"><span>${cashKnown ? "情境下的總資產" : "情境下的持股合計"}</span><b>${m$(R.after)}</b>${R.cashChange ? `<small>美元現金 ${R.cashChange > 0 ? "+" : ""}${m$(R.cashChange)}</small>` : ""}</div></div>
     ${R.noBeta.length && B?.beta ? `<p class="note lgwarn">算不出 Beta、用 1 的：${R.noBeta.map(c => esc(nameOf(c))).join("、")}</p>` : ""}
     <ul class="stlist">${R.rows.filter(r => r.change !== 0).slice(0, 10).map(r => `<li><span><b>${esc(nameOf(r.symbol))}</b> <small class="note">${esc(r.symbol)}${r.beta != null ? `・Beta ${r.beta}` : ""}${r.industryHit ? "・重挫產業" : ""}</small></span>
       <span class="stv"><b class="${r.change < 0 ? "down" : "up"}">${r.change > 0 ? "+" : ""}${m$(r.change)}</b><small class="note">價格 ${pc(r.price)}${r.fx ? `・匯率 ${pc(r.fx)}` : ""}</small></span></li>`).join("") || `<li class="note">這個情境對持股沒有影響。</li>`}</ul>`;
   const reconAlert = !meta.legacy && (meta.openConflicts?.length || meta.pendingSymbols?.length || meta.unresolvedSameDayCount > 0) && typeof lgReconAlertHtml === "function"
     ? lgReconAlertHtml(meta.recon || (typeof lgReconLoad === "function" ? lgReconLoad() : null), { reconcile: meta }) : "";
   const snapTag = !meta.legacy && (meta.hasSnapshot || meta.openConflicts?.length || open.some(p => p.hasSnapshot)) ? "・用已確認快照的股數試算" : "";
-  return `<section class="pfcard stcard" data-nofold><h4>壓力情境<small class="note">（試算${snapTag}）</small></h4>${reconAlert}${seg}${indSel}${custom}${beta}${body}
+  const est = B?.beta ? "" : `<span class="pfbadge">估算：Beta＝1</span>`;
+  return `<section class="pfcard stcard" data-nofold><h4>壓力情境<small class="note">（試算${snapTag}）</small>${est}</h4>${reconAlert}${seg}${indSel}${custom}${beta}${scope.length ? `<ul class="note lgwarn stscope">${scope.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}${body}
     <p class="note">每檔價格變動＝Beta × 大盤變動（＋屬於重挫產業時再加上產業變動，最多跌 100%）；美元資產換回台幣再乘上匯率變動。只是線性粗估：沒算相關性改變、流動性、融資追繳，不是預測，也不是投資建議。</p></section>`;
 }
 document.addEventListener("click", e => {
@@ -55,11 +62,7 @@ document.addEventListener("click", e => {
   const L = (W.lg ||= {}), k = b.dataset.pst;
   if (k === "beta") {
     if (W.stB?.err) W.stB = null;
-    const S = typeof lgStoreOrEmpty === "function" ? lgStoreOrEmpty() : lgLoad();
-    const recon = typeof lgReconLoad === "function" ? lgReconLoad() : null;
-    if (S && (S.transactions?.length || (typeof KLRecon !== "undefined" && KLRecon.activeBaselines(recon).size))) {
-      stBetaLoad(KLLedger.buildReconciledLedger(S, recon, { method: S.method, today: lgToday() }).positions.filter(p => p.open));
-    }
+    if (W.stOpen?.length) stBetaLoad(W.stOpen);
     renderList(); return;
   }
   L.st = { ...(L.st || {}), k }; renderList();
@@ -74,7 +77,7 @@ document.addEventListener("submit", e => {
   if (document.getElementById("stcss")) return; const st = document.createElement("style"); st.id = "stcss";
   st.textContent = `.stpre{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}#lx .stpre .btn{background:var(--surface-2);border:1px solid var(--line);border-radius:4px}#lx .stpre .btn[aria-pressed="true"]{border:2px solid var(--accent);font-weight:600}
 .stind,.stform label{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px}.stind{margin:0 0 8px}.stform{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 8px}.stform input{width:6em;font:inherit}
-.stlist{list-style:none;margin:8px 0 0;padding:0}.stlist li{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}.stv{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.stscope{margin:0 0 8px;padding-left:1.2em;font-size:12px}.stlist{list-style:none;margin:8px 0 0;padding:0}.stlist li{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}.stv{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-variant-numeric:tabular-nums}
 @media (pointer:coarse){.btn[data-pst],.stform .btn{min-height:44px}.stind select,.stform input{min-height:44px}}`;
   document.head.appendChild(st);
 })();
