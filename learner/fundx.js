@@ -124,8 +124,9 @@ function fxMap(E, D, ok) {
   const yLo = Math.min(-10, ...ys) - 5, yHi = Math.max(20, ...ys) + 5, X = v => L + 4 + ((Math.min(v, peMax) - peLo) / (peMax - peLo || 1)) * (R - L - 8), Y = v => top + (1 - (Math.max(yLo, Math.min(yHi, v)) - yLo) / (yHi - yLo)) * (bot - top);
   const mPe = qMed(pes), mY = qMed(P.map(p => p.yoy)), rMax = Math.max(...P.map(p => p.rev), 1e-9), cur = W.sel, pk = P.find(p => p.c === E.mapPick) || null;
   const cx = X(mPe), cy = Y(mY), qOf = p => (p.pe <= mPe ? (p.yoy >= mY ? "cg" : "cd") : p.yoy >= mY ? "eg" : "ed");
+  // 月營收是負數（調整、沖銷）時當 0，避免 Math.pow 算出 NaN 半徑（#333 驗證時發現）
   // 圓點：半徑看月營收（4～30；龍頭營收常是同業的幾十倍，次方取小一點，小公司的圓也放得下名稱）；互相推開不重疊，但留在自己的象限
-  const N = [...P].sort((a, b) => b.rev - a.rev).map(p => { const r = 4 + 26 * Math.pow(Math.min(1, p.rev / rMax), 0.42); return { p, q: qOf(p), r, x: X(p.pe), y: Y(p.yoy) }; });
+  const N = [...P].sort((a, b) => b.rev - a.rev).map(p => { const r = 4 + 26 * Math.pow(Math.min(1, Math.max(0, p.rev) / rMax), 0.42); return { p, q: qOf(p), r, x: X(p.pe), y: Y(p.yoy) }; });
   const clamp = n => { const lf = n.q[0] === "c", up = n.q[1] === "g";
     n.x = lf ? Math.max(L + n.r, Math.min(cx - 1, n.x)) : Math.min(R - n.r, Math.max(cx + 1, n.x)); n.y = up ? Math.max(top + n.r, Math.min(cy - 1, n.y)) : Math.min(bot - n.r, Math.max(cy + 1, n.y)); };
   N.forEach(clamp);
