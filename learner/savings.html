@@ -750,7 +750,7 @@ function renderMilestones(p){
   for(let y=0;y<=ymax;y+=st)g+=`<line x1="${xs(y*12)}" x2="${xs(y*12)}" y1="${mt-8}" y2="${H-24}" stroke="var(--line)"/><text x="${xs(y*12)}" y="${H-8}" text-anchor="${y===0?"start":y+st>ymax?"end":"middle"}">${y===0?"現在":"第"+y+"年"}</text>`;
   R.forEach((x,ri)=>{const cy=mt+ri*rowH+rowH/2;g+=`<text x="${ml-10}" y="${cy+4}" text-anchor="end" style="font-family:var(--f-body);font-size:12px;fill:var(--ink)">${x.name}</text><line x1="${ml}" x2="${W-mr}" y1="${cy}" y2="${cy}" style="stroke:${x.color};stroke-opacity:.35;stroke-width:2"/>`;
     list.forEach((m,k)=>{const t=monthsTo(x.r,m.amt*1e4,p.init);if(t==null)return;const cx=xs(t),up=k%2===0;
-      g+=`<circle cx="${cx}" cy="${cy}" r="5" style="fill:${x.color};stroke:var(--panel);stroke-width:1.5"><title>${esc(m.name)}：${durTxt(t)}${t?"（"+dateTxt(t)+"）":""}</title></circle><text x="${Math.max(cx,ml+16)}" y="${up?cy-10:cy+18}" text-anchor="middle">${moneyTick(m.amt*1e4)}</text>`})});
+      g+=`<circle cx="${cx}" cy="${cy}" r="5" style="fill:${x.color};stroke:var(--panel);stroke-width:1.5"><title>${esc(m.name)}：${durTxt(t)}${t?"（"+dateTxt(t)+"）":""}</title></circle><text x="${Math.min(W-mr-16,Math.max(cx,ml+16))}" y="${up?cy-10:cy+18}" text-anchor="middle">${moneyTick(m.amt*1e4)}</text>`})});
   svg.innerHTML=g;
   $("ms-legend").innerHTML=`<span>圓點上的數字是里程碑金額；滑鼠停在圓點上可以看到名稱和日期。</span>`;
 }
