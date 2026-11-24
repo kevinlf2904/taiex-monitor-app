@@ -3,8 +3,9 @@
 // Gemini 失敗改問 Claude 要再開 AI_CLAUDE_FALLBACK=1，而且算全站每天的備援上限（claude-fb），和截圖匯入一樣。
 // 提示詞固定寫在伺服器端，前端只能送圖片與程式辨識的摘要，避免這個端點被拿去問任意問題。
 
-import Anthropic from "@anthropic-ai/sdk";
-import { aiLimit, WEB_TRIES, claudeFallbackOn, claudeUsable } from "./_limit.js";
+import { aiLimit, WEB_TRIES, claudeFallbackOn, claudeUsable, loadAnthropic } from "./_limit.js";
+// 下面 catch 判斷錯誤種類用；用到 Claude 才載入，沒載入時錯誤一定不是 Claude 的
+let Anthropic = null;
 import { geminiModels, GEMINI_ORDER } from "./_gemini.js";
 
 const PROMPT = `你是一位耐心的台股技術分析老師。使用者上傳了一張看盤軟體的 K 線截圖，想學習怎麼讀圖。請用繁體中文、以教學口吻解說。
@@ -60,6 +61,7 @@ async function viaGemini({ image, mediaType, text, numbers }, key, deadline) {
 }
 
 async function viaClaude({ image, mediaType, text, numbers }, timeout = 55000) {
+  Anthropic = await loadAnthropic();
   const client = new Anthropic({ timeout, maxRetries: 0 }); // 要在 Vercel 的 60 秒內回完
   const msg = await client.beta.messages.create({
     model: "claude-opus-5-5",
@@ -97,10 +99,10 @@ export default async function handler(req, res) {
     if (!r.ok) return res.status(200).json({ ok: false, error: FAIL(r.status) });
     return res.status(200).json({ ok: true, text: r.text, truncated: r.truncated, model: r.model });
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) return res.status(200).json({ ok: false, error: "AI 金鑰無效，請檢查伺服器設定。" });
-    if (err instanceof Anthropic.RateLimitError) return res.status(200).json({ ok: false, error: "使用太頻繁，請稍後再試。" });
-    if (err instanceof Anthropic.BadRequestError) return res.status(200).json({ ok: false, error: "圖片無法處理，請換一張 PNG 或 JPG。" });
-    if (err instanceof Anthropic.APIError) return res.status(200).json({ ok: false, error: `AI 服務暫時無法使用（${err.status ?? "連線錯誤"}）` });
+    if (Anthropic && err instanceof Anthropic.AuthenticationError) return res.status(200).json({ ok: false, error: "AI 金鑰無效，請檢查伺服器設定。" });
+    if (Anthropic && err instanceof Anthropic.RateLimitError) return res.status(200).json({ ok: false, error: "使用太頻繁，請稍後再試。" });
+    if (Anthropic && err instanceof Anthropic.BadRequestError) return res.status(200).json({ ok: false, error: "圖片無法處理，請換一張 PNG 或 JPG。" });
+    if (Anthropic && err instanceof Anthropic.APIError) return res.status(200).json({ ok: false, error: `AI 服務暫時無法使用（${err.status ?? "連線錯誤"}）` });
     return res.status(200).json({ ok: false, error: "解讀失敗，請稍後再試。" });
   }
 }
