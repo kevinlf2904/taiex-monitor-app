@@ -15,8 +15,8 @@
   const METHODS = { avg: "加權平均成本", fifo: "先進先出（FIFO）" };
   // 預設費用規則：只是預設值，可整份換掉；每一項都有來源與日期。計算一律從 rules 讀，不在下面的程式裡寫費率
   const DEFAULT_RULES = {
-    tw: { commission: 0.001425, discount: 1, discountBuy: null, discountSell: null, minFee: 20, round: "floor", taxStock: 0.003, taxEtf: 0.001, taxBondEtf: 0, taxDayTrade: 0.0015, dividendTax: 0,
-      source: "證交所手續費上限 0.1425%、證券交易稅條例（股票 0.3%、ETF 0.1%、現股當沖 0.15%）；債券 ETF 證交稅停徵（到期日以法令公告為準，請自行確認）；最低手續費 20 元是多數券商的做法，各券商不同；買賣可設不同折扣（discountBuy、discountSell）", asOf: "2026-11-01" },
+    tw: { commission: 0.001425, discount: 1, discountBuy: null, discountSell: null, minFee: 20, round: "floor", taxStock: 0.003, taxEtf: 0.001, taxBondEtf: 0, bondEtfTaxFree: { from: "2017-01-01", until: "2026-12-31" }, taxDayTrade: 0.0015, dividendTax: 0,
+      source: "證交所手續費上限 0.1425%、證券交易稅條例（股票 0.3%、ETF 0.1%；現股當沖 0.15% 只適用股票，ETF 當沖照 ETF 稅率）；債券 ETF 證交稅停徵 2017-01-01～2026-12-31，依交易日期判斷，期間外照 ETF 0.1%（延長到 2036 年底的修法 2026-11 初審通過、待三讀，以法令公告為準）；最低手續費 20 元是多數券商的做法，各券商不同；買賣可設不同折扣（discountBuy、discountSell）", asOf: "2026-11-24" },
     us: { commission: 0, discount: 1, discountBuy: null, discountSell: null, minFee: 0, round: "cent", secFee: 0, dividendTax: 0.3,
       source: "多數美國券商零佣金；台灣居民美股股息預扣 30%；SEC 規費費率常變動，預設 0，請依券商對帳單", asOf: "2026-11-01" }
   };
@@ -91,14 +91,32 @@
     return chains;
   }
 
-  // 手續費與交易稅估算（使用者沒填時才用）。assetType：stock／etf；dayTrade：現股當沖。回傳 { fee, tax }
+  // 債券 ETF 證交稅停徵期間（證券交易稅條例第 2 條之 1，放在 rules.tw.bondEtfTaxFree，和其他費率一樣可整份換掉）：
+  // 交易日期在期間內 → taxBondEtf（0）；期間外 → 照一般 ETF（taxEtf）。目前法定到 2026-12-31；行政院版延長到 2036-12-31，
+  // 立法院財政委員會 2026-11-11 初審通過、待三讀。三讀通過後把 until 改成新的到期日；沒延長就不用改，2027 年起的賣出自動照 ETF 稅率。
+  // 舊的自訂規則沒有這個欄位時不看日期（和以前一樣一律 taxBondEtf）。#263 FIN-06、稽核 AUD-04
+  const BOND_ETF_TAX_FREE = Object.freeze({ ...DEFAULT_RULES.tw.bondEtfTaxFree, law: "證券交易稅條例第 2 條之 1" });
+
+  // 台股賣出的證交稅率。現股當沖減半（taxDayTrade）依證券交易稅條例第 2 條之 2 只適用「股票」：
+  // ETF、債券 ETF 當沖照各自的稅率，不會因為當沖反而變高（稽核 AUD-03：原本當沖判斷排在最前面，ETF 當沖被收 0.15%、債券 ETF 當沖被收 0.15%）
+  // t.date：交易日期（沒有日期時用台北的今天，例如再平衡試算）
+  function twTaxRate(t, R) {
+    if (t.assetType === "bond_etf") {
+      const P = R.bondEtfTaxFree, d = validDate(t.date) ? t.date : defaultToday();
+      return !P || (d >= P.from && d <= P.until) ? R.taxBondEtf ?? R.taxEtf : R.taxEtf;
+    }
+    if (t.assetType === "etf") return R.taxEtf;
+    return t.dayTrade ? R.taxDayTrade : R.taxStock;
+  }
+
+  // 手續費與交易稅估算（使用者沒填時才用）。assetType：stock／etf／bond_etf；dayTrade：現股當沖（只對股票減半）。回傳 { fee, tax }
   function estimateCosts(t, rules = DEFAULT_RULES) {
     const R = rules && rules[t.market]; if (!R || !(t.type === "buy" || t.type === "sell")) return { fee: 0, tax: 0 };
     const gross = t.shares * t.price, rd = v => (R.round === "floor" ? Math.floor(v + EPS) : r2(v));
     const disc = (t.type === "buy" ? R.discountBuy : R.discountSell) ?? R.discount ?? 1;
     let fee = gross * (R.commission || 0) * disc; if (gross > 0) fee = Math.max(fee, R.minFee || 0); fee = rd(fee);
     let tax = 0;
-    if (t.type === "sell") tax = t.market === "tw" ? rd(gross * (t.dayTrade ? R.taxDayTrade : t.assetType === "bond_etf" ? (R.taxBondEtf ?? R.taxEtf) : t.assetType === "etf" ? R.taxEtf : R.taxStock)) : rd(gross * (R.secFee || 0));
+    if (t.type === "sell") tax = t.market === "tw" ? rd(gross * twTaxRate(t, R)) : rd(gross * (R.secFee || 0));
     return { fee, tax };
   }
   // 實際費用和規則估算的差距（使用者填了實際手續費、稅時，看看券商收的和預設規則差多少）
@@ -875,5 +893,5 @@
     };
   }
 
-  root.KLLedger = Object.freeze({ toCSV, checkBackup, VERSION, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, buildReconciledLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore, prepareHoldingsImport, prepareTradesImport });
+  root.KLLedger = Object.freeze({ toCSV, checkBackup, VERSION, BOND_ETF_TAX_FREE, STORE_KEY, LEGACY_KEY, TYPES, TYPE_LABEL, METHODS, DEFAULT_RULES, estimateCosts, feeDiff, checkTx, buildLedger, buildReconciledLedger, previewAdd, deleteImpact, makeTx, previewMigration, validateStore, prepareHoldingsImport, prepareTradesImport });
 })(typeof window !== "undefined" ? window : globalThis);

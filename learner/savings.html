@@ -17,7 +17,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@300;400;500;600&display=swap">
 <style>
 /* Layout: sticky control console left (every number is typed or slid there); one continuous readout right */
 :root{
@@ -181,7 +181,7 @@ main{display:grid;gap:22px;min-width:0}
 .jump a:hover,.jump a:focus-visible{color:var(--ink);background:var(--panel)}
 .sec,.two{scroll-margin-top:56px}
 .kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.dc{display:grid;gap:14px;padding:16px} .dc-in{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px 16px;align-items:end}
+.dc{display:grid;gap:14px;padding:16px;min-width:0} .dc>*{min-width:0} .dc-in{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px 16px;align-items:end}
 .dc-f{display:grid;gap:4px;min-width:0} .dc-f label,.dc-f .lbl{font-size:12.5px;color:var(--muted)} .dc-wide,.dc-code{grid-column:1/-1}
 .dc-f input,.dc-f select{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0;width:100%}
 .dc-code span{display:flex;gap:8px} .dc-code input{max-width:220px} .dc-note{font-size:12.5px;color:var(--accent)} .dc-tbl{min-width:560px}
@@ -712,7 +712,7 @@ function renderBreakdown(){
     {name:"C 槓桿",color:"var(--sC)",assets:[{n:"主要標的 "+short(p.main),v:c.S,c:"var(--sC)"},{n:"第一層 "+(t1same?"加碼 ":"")+short(p.t1),v:c.Y,c:"hsl(290 30% calc(var(--lum) + 18%))"},
       ...(p.l2on?[{n:"第二層 "+short(p.t2)+(p.levx!==1?` ×${p.levx}`:""),v:c.X,c:"hsl(330 55% var(--lum))"}]:[]),{n:"應急現金",v:Math.max(0,c.K),c:"var(--muted)"}],
       debts:[{n:"信貸餘額",v:c.C},{n:"質押借款",v:c.P},{n:"扣回起始應急現金",v:Cv.K0}]}];
-  const tots=cards.map(k=>k.assets.reduce((s,x)=>s+x.v,0)),maxT=Math.max(...tots,1);
+  const tots=cards.map(k=>k.assets.reduce((s,x)=>s+x.v,0)),maxT=Math.max(...tots,...cards.map(k=>k.debts.reduce((s,x)=>s+x.v,0)),1);// 負債超過所有資產（開局崩盤＋高槓桿）時也要用同一把尺，長條不超過卡片寬（#333）
   $("bk").innerHTML=cards.map((k,i)=>{const T=tots[i],D=k.debts.reduce((s,x)=>s+x.v,0),N=T-D;
     const bar=`<div class="stack" style="width:${(T/maxT*100).toFixed(1)}%" aria-hidden="true">${k.assets.map(x=>`<span style="width:${T>0?(x.v/T*100).toFixed(2):0}%;background:${x.c}" title="${x.n} ${wan(x.v)}"></span>`).join("")}</div>`+(D>0?`<div class="stack debt" style="width:${(D/maxT*100).toFixed(1)}%" aria-hidden="true"><span style="width:100%"></span></div>`:"");
     const rows=k.assets.map(x=>`<div class="prow"><i style="background:${x.c}"></i><span>${x.n}</span><b>${wan(x.v)}</b><em>${T>0?Math.round(x.v/T*100):0}%</em></div>`).join("")

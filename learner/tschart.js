@@ -29,7 +29,14 @@ function tsChart({ dates, panels, w = 600 }) {
   return `<div class="tsbox" data-ts="${id}"><svg class="tschart" viewBox="0 0 ${w} ${H}" role="img" aria-label="${esc(panels.flatMap(p => p.series.map(s => s.name)).join("、"))}走勢">${svg}${ticks}<line class="tscur" x1="0" x2="0" y1="6" y2="${H - 14}" visibility="hidden"/></svg><div class="tstip" hidden></div></div>`;
 }
 // 查價線資料：每個點在 SVG 裡的 x 座標、第 i 點要顯示的文字（HTML）
-function tsReg(id, xs, tip) { TS_DATA.set(id, { xs, tip }); if (TS_DATA.size > 60) TS_DATA.delete(TS_DATA.keys().next().value); }
+// 不再固定只留最近 60 張：一頁超過 60 張（例如 podcast 145 張）時，前面的圖會被逐出、游標失效（#333 A7a）。
+// 數量超過門檻才清，只清「已經不在畫面上」而且登記超過 5 秒的（剛登記、HTML 還沒插進畫面的不能清）；清完把門檻拉到剩下數量的兩倍，避免每張都掃一次
+let tsCap = 60;
+function tsReg(id, xs, tip) {
+  TS_DATA.set(id, { xs, tip, t: Date.now() }); if (TS_DATA.size <= tsCap) return;
+  const old = Date.now() - 5000; for (const [k, v] of TS_DATA) if (v.t < old && !document.querySelector(`.tsbox[data-ts="${k}"]`)) TS_DATA.delete(k);
+  tsCap = Math.max(60, TS_DATA.size * 2);
+}
 // 其他圖表（長條、營收、本益比、資產曲線…）共用查價線：把畫好的 <svg> 包起來，加一條游標線和數字框
 function xhWrap(svg, xs, tip) {
   if (!svg || !xs?.length) return svg || ""; const id = "ts" + ++tsSeq, vb = (svg.match(/viewBox="([^"]+)"/) || [])[1]?.split(/[\s,]+/).map(Number) || [0, 0, 600, 200];

@@ -5,8 +5,7 @@
 // mode === "auto"：回傳 { ok, mode: "auto", kind: "holdings" | "trades" | "unknown", asOf, asOfStatus, altDate?, rawAsOf?, rows, model }
 // 截圖上沒有的欄位是 null；用 GEMINI_API_KEY（Gemini 會看圖）；沒有時用 ANTHROPIC_API_KEY（要另外設 AI_CLAUDE_ENABLED=1 總開關，預設關閉）。
 
-import Anthropic from "@anthropic-ai/sdk";
-import { aiLimit, WEB_TRIES, claudeFallbackOn, claudeUsable } from "./_limit.js";
+import { aiLimit, WEB_TRIES, claudeFallbackOn, claudeUsable, loadAnthropic } from "./_limit.js";
 import { userMsg } from "./_err.js";
 import { geminiModels, GEMINI_ORDER } from "./_gemini.js";
 
@@ -316,6 +315,7 @@ async function viaGemini(imgs, key, deadline = Date.now() + 52000, spec = MODES.
   return { ok: false, status: last?.status || 503, message: last?.message || "" };
 }
 async function viaClaude(imgs, timeout = 55000, spec = MODES.holdings) {
+  const Anthropic = await loadAnthropic(); // 用到才載入
   const client = new Anthropic({ timeout, maxRetries: 0 }); // 要在 Vercel 的 60 秒內回完
   const msg = await client.messages.create({ model: "claude-opus-5-5", max_tokens: 8000,
     messages: [{ role: "user", content: [...imgs.map(i => ({ type: "image", source: { type: "base64", media_type: i.mime, data: i.data } })), { type: "text", text: spec.prompt + spec.claudeSuffix }] }] });

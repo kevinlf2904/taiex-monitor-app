@@ -99,3 +99,23 @@ test("查價線：寬螢幕留白的柱狀圖，游標對到滑鼠下的柱子�
   const c = r.fill.match(/[\d.]+/g).map(Number); assert.ok(!(c[0] > 240 && c[1] > 240 && c[2] > 240 && (c[3] ?? 1) > 0.9), `正值柱不能純白：${r.fill}`);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// 一頁超過 60 張查價圖（podcast 145 張）：前面的圖不能被逐出；不在畫面上的舊圖才清掉（#333 A7a）
+test("查價線：一頁 145 張圖，第一張仍可查價；移出畫面的舊圖會被清掉", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  const r = await p.evaluate(async () => {
+    const box = document.createElement("div"); document.body.append(box);
+    const mk = () => xhWrap('<svg viewBox="0 0 600 100"><rect width="600" height="100"/></svg>', [10, 300, 590], i => `點 ${i}`);
+    box.innerHTML = Array.from({ length: 145 }, mk).join(""); await new Promise(r => setTimeout(r, 30));
+    const first = box.querySelector(".tsbox svg"), rc = first.getBoundingClientRect(); first.scrollIntoView(); const r2 = first.getBoundingClientRect();
+    first.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: r2.left + 2, clientY: r2.top + 5 }));
+    const tip = box.querySelector(".tstip"), shown = !tip.hidden && tip.textContent;
+    const ids = [...box.querySelectorAll(".tsbox")].map(b => b.dataset.ts); box.remove();
+    for (const v of TS_DATA.values()) v.t = 0; // 假裝都登記很久了
+    const keep = document.createElement("div"); document.body.append(keep); keep.innerHTML = Array.from({ length: 400 }, mk).join("");
+    const gone = ids.filter(k => TS_DATA.has(k)).length, live = [...keep.querySelectorAll(".tsbox")].filter(b => TS_DATA.has(b.dataset.ts)).length; keep.remove();
+    return { shown, gone, live, rc: rc.width };
+  });
+  assert.equal(r.shown, "點 0", "第一張圖仍可查價"); assert.equal(r.gone, 0, "移出畫面的 145 張已清掉"); assert.equal(r.live, 400, "新插入的 400 張都還在");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
