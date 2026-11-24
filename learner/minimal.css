@@ -1,4 +1,6 @@
-/* 簡約風格（K線學堂、看盤共用，最後載入）：
+/* 風格層（K線學堂、看盤共用，最後載入，覆蓋 core.css 的底層預設值）。:root 本身是「簡約」風格（data-style 未設定時）；
+   其他風格（lab 預設、layout、pro、blue、paper、chalk）在下面各自的 :root[data-style="…"] 區塊。
+   簡約風格：
    - 灰階為底、只有一個強調色（赭黃 ochre）用來標出「選中、重點」，其餘都是灰
    - 平面：不用漸層、不用陰影；細的 1px 邊框；大圓角的面板（像一格一格的磁磚）
    - 細黑體（Noto Sans TC 300／400／500）；設定裡可以改回宋體（html[data-font="song"]）
@@ -295,6 +297,18 @@ img.logo { display: block; width: 34px; height: 34px; border-radius: 8px; object
 :root :is(.lesson-list button, .tab-menu button)[aria-current="true"] { background: transparent; box-shadow: inset 2px 0 0 var(--gold); color: var(--ink); }
 /* 浮動按鈕仍然要看得到：淡淡的底，沒有框 */
 :root :is(#toTop, .chat-fab) { background: color-mix(in srgb, var(--ink) 14%, var(--bg)); color: var(--ink); border: 0; }
+/* 無框補齊（tests/e2e/borderless.test.mjs 掃出來還有框的元件）：
+   區塊、卡片、統計格、說明摺疊 → 沒有底色和框線，靠留白分段 */
+:root :is(.today, .stats, .stat, .bt-set, .bt-list, .bt-help, .qx-cards > div, .tw-card, .wl .sec-h, .evopt, .td-main, .td-pos, .td-market-summary, .td-ix-stat, .dh-status-bar, .dh-sec, .mc-panel, .mc-empty) { background: transparent; border-color: transparent; box-shadow: none; }
+:root .stats { gap: 10px 16px; } :root .stat { padding: 4px 0; }
+/* 小膠囊、徽章、浮在圖上的縮放列：不畫外框，用淡底色區分（和「按鍵維持無框」同一套） */
+:root :is(.tag, .ibadge, .dh-badge, .dh-tag, .td-ms-item, .qx-badge, .gs-top, .hero-bar, .zoombar, .cx-yr, .opts button, .segall) { border-color: transparent !important; box-shadow: none; }
+:root :is(.zoombar button + button, .ibadge i) { border-color: transparent; }
+:root :is(.gs-top, .hero-bar):hover, :root .opts button:hover:not(:disabled) { border-color: transparent; background: var(--surface-3); }
+/* 分頁、年份切換：沒有底和框，選中用金色細底線（和 .tabs 一樣） */
+:root :is(.mc-tab, .deep-tabs button) { background: transparent; border-color: transparent; box-shadow: none; }
+:root :is(.mc-tab[aria-selected="true"], .deep-tabs button[aria-selected="true"], .cx-yr[aria-pressed="true"], .tw-sums > [aria-pressed="true"]) { background: transparent; color: var(--ink); border-color: transparent !important; box-shadow: inset 0 -1.5px 0 var(--gold); font-weight: 500; }
+:root .mc-tab[aria-selected="true"]::after { display: none; }
 
 /* 線條都細一點（全部風格）：圖表、課程示意圖、走勢小圖的折線 */
 svg polyline:not([stroke-width=".8"]) { stroke-width: 1.2px; }

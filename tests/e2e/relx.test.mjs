@@ -55,3 +55,28 @@ test("橫向滑動的選單列：每秒重畫後不會跳回最左邊；選中�
   assert.equal(await p.evaluate(s => Math.round(document.querySelector(s).scrollLeft), bar), end, "重畫後還在原本的位置");
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// 題材很多（整張網絡都有資料）時：手機格子不能小到編號互相重疊，熱圖在自己的框裡左右捲；相關係數標籤對比夠（#333 A2）
+for (const width of [390, 1280]) test(`關聯熱圖：題材多時編號不重疊 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width, touch: width < 500 });
+  const ids = await p.evaluate(() => { const n = IND.networks[0]; return [...new Set(n.layers.flatMap(([, L]) => L))].filter(id => INDT.has(id)); });
+  const M = ids.length, t2 = (i, j) => (i * (2 * M - i - 1)) / 2 + (j - i - 1), cc = Array(M * (M - 1) / 2).fill(0).map((_, k) => ((k * 37) % 180) - 90), xx = cc.map(v => Math.round(v * 0.8));
+  await ctx.route("**/data/theme-corr.json", r => r.fulfill({ json: { ...TC, ids, n: ids.map(() => 5), ret: ids.map(() => [1, 2, 3, 4]), c: cc, x: xx, lead: [[ids[0], ids[1], 80, 8, 240], [ids[2], ids[3], 50, 8, 240]] } }));
+  await p.evaluate(() => { showList(); setLt("ind"); W.indS.view = "themes"; W.indS.open = null; renderInd(); });
+  await p.click('#lx [data-iview="rel"]'); await p.waitForSelector(".rheat svg");
+  const r = await p.evaluate(() => { const B = [...document.querySelectorAll(".rheat .rhn")].map(t => t.getBoundingClientRect()); let ov = 0; for (let i = 1; i < B.length; i++) if (B[i].left < B[i - 1].right - 0.5) ov++;
+    return { n: B.length, ov, cell: document.querySelector(".rheat rect").getBoundingClientRect().width }; });
+  assert.ok(r.n >= 20, `測試條件：題材要夠多 ${r.n}`); assert.equal(r.ov, 0, "上方編號重疊"); assert.ok(r.cell >= 13, `格子 ${r.cell}px`);
+  assert.ok(await noHOverflow(p), "熱圖在框內捲動，不撐破畫面");
+  await p.evaluate(() => { document.documentElement.dataset.theme = "dark"; }); await p.click('[data-rel="sub:lead"]'); await p.waitForSelector(".rpair .rv");
+  // 亮暗主題都算一次：標籤文字和「標籤底色疊在頁面底色上」的對比要 ≥ 4.5
+  for (const th of ["dark", "light"]) {
+    const cr = await p.evaluate(th => { document.documentElement.dataset.theme = th;
+      const rgb = c => { const m = c.match(/[\d.]+/g).map(Number); return c.startsWith("color(") ? [m[0] * 255, m[1] * 255, m[2] * 255, m[3] ?? 1] : [m[0], m[1], m[2], m[3] ?? 1]; };
+      const L = a => { const [r, g, b] = a.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      return Math.min(...[...document.querySelectorAll(".rpair .rv")].map(b => { let e = b.parentElement, base; while (e) { const c = rgb(getComputedStyle(e).backgroundColor); if (c[3] === 1) { base = c; break; } e = e.parentElement; } base ||= th === "dark" ? [0, 0, 0, 1] : [255, 255, 255, 1];
+        const bg = rgb(getComputedStyle(b).backgroundColor), mix = bg.slice(0, 3).map((v, i) => v * bg[3] + base[i] * (1 - bg[3])), [x, y] = [L(rgb(getComputedStyle(b).color).slice(0, 3)), L(mix)].sort((a, b) => b - a); return (x + 0.05) / (y + 0.05); })); }, th);
+    assert.ok(cr >= 4.5, `${th} 相關係數標籤對比 ${cr.toFixed(2)}:1`);
+  }
+  await ctx.close(); assert.deepEqual(errs, []);
+});

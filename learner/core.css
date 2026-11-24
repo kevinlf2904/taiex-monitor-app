@@ -1,4 +1,7 @@
-/* K線學堂共用樣式：主題色（淺色／深色的分層灰階）、基本樣式、K 線圖。learner/index.html 與 learner/watch.html 共用。 */
+/* K線學堂共用樣式：主題色、基本樣式、K 線圖。learner/index.html、watch.html、pro.html 共用。
+   這裡的 :root 只是「底層預設值」（黑白灰、宋體、4px 圓角）；實際畫面由後載入的 minimal.css 依 html[data-style] 覆蓋：
+   預設 lab（KLineLab 實驗室），另有 layout、minimal、pro、blue、paper、chalk，可在設定切換（見 core.js KL_STYLES）。
+   新增元件請用 var(--radius*)、var(--font-*)、var(--up)／var(--down) 等變數，不要寫死字體或色碼，才會跟著風格切換。 */
 :root {
   /* 黑白灰分層：底色 → 面板 → 面板裡的卡片／按鈕 → 輸入框、選中項；主色是深灰（淺色）／淺灰（深色），只有漲跌用紅綠 */
   --bg: #e3e3e1;

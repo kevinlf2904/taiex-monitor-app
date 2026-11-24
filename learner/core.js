@@ -1335,8 +1335,9 @@ function rocCalc(c, n = 12) { return c.map((v, i) => (i >= n && c[i - n] ? (v / 
 // DMA 平行線差（10、50、10）：短均線 − 長均線（DIF），AMA 是 DIF 的 10 日平均
 function dmaCalc(c, s = 10, l = 50, m = 10) { const a = sma(c, s), b = sma(c, l), dif = c.map((_, i) => (a[i] == null || b[i] == null ? null : a[i] - b[i])); return { dif, ama: smaN(dif, m) }; }
 // EMV 簡易波動指標（14、9，台股軟體算法）：中價變動 %×（高低差 ÷ 平均高低差）×（平均量 ÷ 當日量），再取 14 日平均；用很少的量就能推動價格往上＝正值大
-function emvCalc(D, n = 14, m = 9) { const N = D.length, hl = D.map(x => x.h - x.l), mhl = sma(hl, n), mv = sma(D.map(x => x.v || 0), n);
-  const raw = D.map((x, i) => { if (!i || mhl[i] == null || !mhl[i] || !x.v) return null; const p = D[i - 1].h + D[i - 1].l; return p ? (100 * (x.h + x.l - p) / (x.h + x.l)) * (mv[i] / x.v) * (hl[i] / mhl[i]) : null; });
+// 平均量用 smaVol：來源沒給量的 K 棒（vNa）不算進平均，不然缺一天就把平均量拉低、之後 n 根的 EMV 都偏小（稽核 AUD-19 延伸，同 #262 FIN-04）；那根自己沒有量，本來就是 null
+function emvCalc(D, n = 14, m = 9) { const N = D.length, hl = D.map(x => x.h - x.l), mhl = sma(hl, n), mv = smaVol(D, n);
+  const raw = D.map((x, i) => { if (!i || mhl[i] == null || !mhl[i] || mv[i] == null || !x.v || x.vNa) return null; const p = D[i - 1].h + D[i - 1].l; return p ? (100 * (x.h + x.l - p) / (x.h + x.l)) * (mv[i] / x.v) * (hl[i] / mhl[i]) : null; });
   const emv = smaN(raw, n); return { emv, ma: smaN(emv, m) }; }
 // 寶塔線（三線翻轉）：收盤創新高續畫紅塔、創新低續畫綠塔；要翻色必須突破（跌破）最近三座塔的最高（最低）點，盤整時不翻色
 // boxes[i]：當天新畫的塔 { t, b, up, flip }，沒有新塔是 null；state[i]：當天為止最後一座塔
