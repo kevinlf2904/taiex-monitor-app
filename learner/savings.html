@@ -845,6 +845,8 @@ $("real-clear").addEventListener("click",()=>{ASSETS.forEach(a=>{delete a.src;de
 
 /* ---------- wiring ---------- */
 function renderAll(){const p=read();renderConsole(p);renderMain(p);renderMilestones(p);renderStress(p);renderEtf(p);renderReal();save()}
+// 里程碑時間軸手機（< 600px）和桌機用不同寬的畫布：轉向或視窗跨過 600px 時重畫，不沿用舊的 viewBox（#333 審查）
+{let msNar=innerWidth<600;addEventListener("resize",()=>{const n=innerWidth<600;if(n!==msNar){msNar=n;renderMilestones(read())}})}
 $("console").addEventListener("input",renderAll);
 $("console").addEventListener("change",renderAll);
 $("logscale").addEventListener("change",()=>{renderMain(read());save()});

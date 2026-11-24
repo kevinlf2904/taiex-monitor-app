@@ -19,3 +19,14 @@ for (const width of [390, 1280]) test(`里程碑時間軸 ${width}`, async () =>
   assert.ok(r.h >= 9, `最小字高 ${r.h}px`); assert.equal(r.ov, 0, "文字互相重疊"); assert.ok(r.out <= 0.5, `文字超出圖框 ${r.out}px`);
   assert.ok(await noHOverflow(p)); await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// 視窗跨過 600px（手機轉向、桌機縮放）時重畫成對應寬度的畫布
+test("里程碑時間軸：視窗跨過 600px 時重畫", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "savings.html", { width: 1280 });
+  await p.click('[data-sxg="ms"]'); await p.waitForSelector("#c-ms circle");
+  const vb = () => p.evaluate(() => document.getElementById("c-ms").viewBox.baseVal.width);
+  assert.equal(await vb(), 760);
+  await p.setViewportSize({ width: 390, height: 844 }); await p.waitForFunction(() => document.getElementById("c-ms").viewBox.baseVal.width === 380, null, { timeout: 3000 });
+  await p.setViewportSize({ width: 1280, height: 800 }); await p.waitForFunction(() => document.getElementById("c-ms").viewBox.baseVal.width === 760, null, { timeout: 3000 });
+  await ctx.close(); assert.deepEqual(errs, []);
+});
