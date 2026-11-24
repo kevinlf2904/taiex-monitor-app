@@ -26,7 +26,7 @@ for (const width of [390, 1280]) test(`壓力情境 ${width}：預設、換情�
   await p.evaluate(tx => { store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "alloc" }; W.lgAl = null; W.stB = null; W.holdView = "tx"; setLt("hold"); }, TX);
   await p.waitForSelector("#lx .stcard [data-pst=tw20]", { timeout: 30000 });
   let r = await calc(p); assert.ok(r.change < 0, "台股大跌：資產變少"); assert.match(r.text, new RegExp(fmt(r.change).replace("+", "\\+")));
-  assert.match(r.text, /每檔 Beta 都先用 1/); assert.match(r.text, /估算：Beta＝1/); assert.doesNotMatch(r.text, /現金：/, "有入金紀錄：現金有算進去，不列未納入"); assert.equal(await p.evaluate(() => W.stB), null, "還沒按：不載入日 K");
+  assert.match(r.text, /每檔 Beta 都先用 1/); assert.match(r.text, /估算：Beta＝1/); assert.match(r.text, /美元現金：沒有入金、出金紀錄，未納入/, "有美股但沒有美元現金紀錄：美元現金未知"); assert.match(r.text, /目前持股＋已追蹤現金合計/); assert.doesNotMatch(r.text, /目前總資產/, "部分現金已知時不叫總資產（ChatGPT 審查 #361）"); assert.equal(await p.evaluate(() => W.stB), null, "還沒按：不載入日 K");
   await tap(p, "#lx [data-pst=twdup]"); r = await calc(p);
   assert.equal(r.change, await p.evaluate(() => { const X = W.lgAl; return -Math.round(10 * X.px.get("NVDA").price * X.fx.rate * 0.1 * 100) / 100; }), "台幣升值 10%：只有美股換回台幣變少");
   assert.match(r.text, new RegExp(fmt(r.change)));
@@ -61,5 +61,33 @@ test("壓力情境（#300 第 2 組）：只有舊庫存也能用、標示現金
   await p.waitForFunction(() => W.stB && !W.stB.busy, null, { timeout: 60000 });
   assert.match(await p.evaluate(() => $(".stcard").innerText), /近 120 個交易日|Beta 這次算不出來/);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 391), "沒有水平溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("壓力情境（ChatGPT 審查 #361）：現金逐幣別判斷；Beta 一檔都沒算出來仍標估算；一邊大盤拿不到，另一邊照用", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  await ctx.route("**/api/kline?code=TWD%3DX**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, data: [{ d: "2026-10-05", o: 32, h: 32, l: 32, c: 32, v: 0 }] }) }));
+  // 台幣、美元都有入出金紀錄 → 才叫總資產
+  const TX2 = [...TX, { id: "u", v: 1, date: "2026-01-02", type: "deposit", market: "us", currency: "USD", amount: 2000 }];
+  await p.evaluate(tx => { store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "alloc" }; W.lgAl = null; W.stB = null; W.holdView = "tx"; setLt("hold"); }, TX2);
+  await p.waitForSelector("#lx .stcard [data-pst=tw20]", { timeout: 30000 });
+  let t = await p.evaluate(() => $(".stcard").innerText);
+  assert.match(t, /目前總資產/); assert.doesNotMatch(t, /現金：/, "兩種現金都有紀錄：不列未納入");
+  // 跑過但一檔都沒算出來：仍是「估算」，並說明
+  await p.evaluate(() => { W.stB = { key: W.stOpen.map(q => q.symbol).sort().join(","), beta: {}, fails: [], at: Date.now() }; renderList(); });
+  await p.waitForFunction(() => /一檔都算不出來/.test($(".stcard").innerText));
+  t = await p.evaluate(() => $(".stcard h4").innerText); assert.match(t, /估算：Beta＝1/); assert.doesNotMatch(t, /部分估算/);
+  // 只算出一檔：部分估算
+  await p.evaluate(() => { W.stB = { key: W.stOpen.map(q => q.symbol).sort().join(","), beta: { NVDA: 1.5 }, fails: [], at: Date.now() }; renderList(); });
+  await p.waitForFunction(() => /部分估算：Beta＝1/.test($(".stcard h4").innerText));
+  // 加權指數拿不到、美股照算：不整個失敗，美股的 Beta 照用、說明台股那邊用 1
+  await p.evaluate(() => { W.stB = null; const days = Array.from({ length: 150 }, (_, i) => ({ d: new Date(Date.UTC(2026, 0, 1) + i * 864e5).toISOString().slice(0, 10), c: 100 + Math.sin(i / 3) * 5 + i * 0.1 }));
+    const mk = k => ({ D: days.map((x, i) => ({ d: x.d, o: x.c, h: x.c, l: x.c, c: x.c * (1 + k * Math.sin(i / 2) * 0.01), v: 1 })) });
+    window.dailyFresh = async () => null; window.dailyAdj = async c => mk(c === "SPY" ? 1 : 2); renderList(); });
+  await p.waitForSelector("#lx .stcard [data-pst=beta]"); await p.evaluate(() => document.querySelector("#lx .stcard [data-pst=beta]").click());
+  await p.waitForFunction(() => W.stB && !W.stB.busy, null, { timeout: 30000 });
+  const st = await p.evaluate(() => ({ err: W.stB.err || null, beta: W.stB.beta, fails: W.stB.fails, t: $(".stcard").innerText }));
+  assert.equal(st.err, null, "一邊失敗不算整個失敗"); assert.equal(typeof st.beta.NVDA, "number"); assert.equal(st.beta["2330"], undefined);
+  assert.match(st.t, /加權指數日 K 拿不到，那邊的持股先用 1/); assert.match(st.t, /部分估算：Beta＝1/);
   await ctx.close(); assert.deepEqual(errs, []);
 });
