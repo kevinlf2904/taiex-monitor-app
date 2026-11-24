@@ -371,7 +371,7 @@ function cxTdccHtml() {
   const mkItem = r => {
     const c = r[0], chg = +r[1], b1k = +r[2], r50 = +r[3], ppl = r[4] == null ? null : +r[4], nm = nameOf(c) !== c ? nameOf(c) : "";
     const focus = chg > 0 && r50 < 0 ? `<span class="up">籌碼集中（大戶增、散戶退）</span>` : chg < 0 && r50 > 0 ? `<span class="down">籌碼渙散（大戶退、散戶接）</span>` : "";
-    return { star: c, attr: `data-cv="tw:s:${esc(c)}"`, mono: rkMono(rkInit(nm || c), chg > 0 ? "#3fa36b" : "#d0643f"), name: `${esc(nm)} <span class="note">${esc(c)}</span>`,
+    return { star: c, attr: `data-cv="tw:s:${esc(c)}"`, mono: rkMono(rkInit(nm || c), chg > 0 ? "var(--up)" : "var(--down)"), name: `${esc(nm)} <span class="note">${esc(c)}</span>`,
       sub: `千張大戶 ${b1k.toFixed(2)}%・50 張以下散戶${pW} ${r50 > 0 ? "+" : ""}${r50.toFixed(2)}%${ppl == null ? "" : `・總股東人數 ${ppl > 0 ? "+" : ""}${ppl.toLocaleString()} 人`}`,
       val: `${chg > 0 ? "+" : ""}${chg.toFixed(2)}%`, vc: chg > 0 ? "up" : chg < 0 ? "down" : "", vsub: focus || (b1k >= 70 ? `<span class="up">千張佔比 > 70%</span>` : "") };
   };

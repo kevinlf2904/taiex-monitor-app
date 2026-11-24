@@ -51,26 +51,26 @@ function mxRecession(J) {
 }
 function mxMacroHtml(J) {
   if (!J?.series?.length) return "";
-  const S = id => mxSer(J, id), last = id => mxVals(S(id)).at(-1), lv = ["up", "warn", "down"];
+  const S = id => mxSer(J, id), last = id => mxVals(S(id)).at(-1), lv = ["mx-fav", "mx-cau", "mx-adv"];
   let h = "";
   // 1. 景氣循環位置
   const C = mxCycle(J);
   if (C) { const X = 50 + C.g * 42, Y = 50 - C.i * 42;
     h += mxSec("cycle", "景氣循環位置", "成長動能 × 通膨動能", `<div class="mx-cyc"><div class="mx-q" role="img" aria-label="景氣循環象限：${C.Q[0]}"><span class="q1">擴張過熱</span><span class="q2">滯脹</span><span class="q3">放緩</span><span class="q4">復甦</span><i style="left:${X}%;top:${Y}%"></i><em class="ax-x">成長 →</em><em class="ax-y">通膨 ↑</em></div>
       <div><p class="mx-big">目前偏向「<b>${C.Q[0]}</b>」</p><p>${C.Q[2]}</p><p class="note">歷史上這個階段相對強勢：${C.Q[1]}。</p>
-      <ul class="mx-chk">${[...C.G.map(x => ["成長", ...x]), ...C.I.map(x => ["通膨", ...x])].map(([k, t, s]) => `<li><span class="note">${k}</span>${esc(t)}<b class="${k === "通膨" ? (s > 0 ? "down" : s < 0 ? "up" : "") : cls(s)}">${s > 0 ? "↑" : s < 0 ? "↓" : "→"}</b></li>`).join("")}</ul></div></div>
+      <ul class="mx-chk">${[...C.G.map(x => ["成長", ...x]), ...C.I.map(x => ["通膨", ...x])].map(([k, t, s]) => `<li><span class="note">${k}</span>${esc(t)}${k === "通膨" ? `<b class="${s > 0 ? "mx-adv" : s < 0 ? "mx-fav" : ""}">${s > 0 ? "升溫" : s < 0 ? "降溫" : "持平"}</b>` : `<b class="${s > 0 ? "mx-fav" : s < 0 ? "mx-adv" : ""}">${s > 0 ? "好轉" : s < 0 ? "轉弱" : "持平"}</b>`}</li>`).join("")}</ul></div></div>
       <p class="note">每一項只看方向（上升、下降、持平）再平均，避免單一數字左右；循環階段是經驗法則，不同週期的領漲族群不一定一樣。</p>`); }
   // 2. 衰退警訊
   const R = mxRecession(J), lit = R.filter(x => x[1] === 2).length, watch = R.filter(x => x[1] === 1).length;
-  if (R.length) h += mxSec("rec", "衰退警訊清單", `${lit} 項警訊・${watch} 項留意`, `<p class="mx-big">衰退風險：<b class="${lit >= 3 ? "down" : lit + watch >= 3 ? "warn" : "up"}">${lit >= 3 ? "偏高" : lit + watch >= 3 ? "中等" : "偏低"}</b></p>
+  if (R.length) h += mxSec("rec", "衰退警訊清單", `${lit} 項警訊・${watch} 項留意`, `<p class="mx-big">衰退風險：<b class="${lit >= 3 ? "mx-adv" : lit + watch >= 3 ? "mx-cau" : "mx-fav"}">${lit >= 3 ? "偏高" : lit + watch >= 3 ? "中等" : "偏低"}</b></p>
     <ul class="mx-chk">${R.map(([t, l, d]) => `<li><i class="mx-dot ${lv[l]}"></i><b>${t}</b><span class="note">${esc(d)}</span></li>`).join("")}</ul>
     <p class="note">這些是歷史上衰退前常出現的訊號，同時亮好幾項時才比較有參考價值；單一指標常有假警報。</p>`);
   // 3. 利率與政策立場
   const ff = last("DFEDTARU"), y2 = last("DGS2"), y10 = last("DGS10"), core = last("PCEPILFE") ?? last("CPILFESL"), rows = [];
-  if (ff != null && y2 != null) { const d = y2 - ff, n = Math.round(Math.abs(d) / 0.25); rows.push(["市場預期的利率方向", d < -0.15 ? `2 年期公債比聯邦基金利率低 ${mxF(-d)} 個百分點，市場預期未來兩年<b class="up">降息</b>約 ${n} 碼` : d > 0.15 ? `2 年期公債比聯邦基金利率高 ${mxF(d)}，市場預期還會<b class="down">升息</b>約 ${n} 碼` : "2 年期公債和聯邦基金利率接近，市場預期利率大致持平"]); }
+  if (ff != null && y2 != null) { const d = y2 - ff, n = Math.round(Math.abs(d) / 0.25); rows.push(["市場預期的利率方向", d < -0.15 ? `2 年期公債比聯邦基金利率低 ${mxF(-d)} 個百分點，市場預期未來兩年<b class="mx-fav">降息</b>約 ${n} 碼` : d > 0.15 ? `2 年期公債比聯邦基金利率高 ${mxF(d)}，市場預期還會<b class="mx-adv">升息</b>約 ${n} 碼` : "2 年期公債和聯邦基金利率接近，市場預期利率大致持平"]); }
   if (ff != null && core != null) { const r = ff - core; rows.push(["實質政策利率", `聯邦基金利率 − 核心通膨 ＝ <b>${mxF(r)}%</b>，${r > 1.5 ? "明顯緊縮（壓抑景氣，降息空間大）" : r > 0.5 ? "偏緊縮" : r > -0.5 ? "大致中性" : "寬鬆（資金環境有利股市）"}`]); }
   if (y10 != null && core != null) rows.push(["實質 10 年期殖利率（估）", `10 年期 ${mxF(y10)}% − 核心通膨 ${mxF(core)}% ≈ <b>${mxF(y10 - core)}%</b>；越高對高本益比的成長股壓力越大`]);
-  const cv = last("T10Y2Y"); if (cv != null) rows.push(["殖利率曲線", `10 年 − 2 年 ＝ <b class="${cls(cv)}">${mxF(cv)}</b>，${cv < 0 ? "倒掛：市場認為未來利率會降、景氣轉弱" : cv < 0.5 ? "偏平：景氣擴張後段常見" : "正常：長天期利率較高"}`]);
+  const cv = last("T10Y2Y"); if (cv != null) rows.push(["殖利率曲線", `10 年 − 2 年 ＝ <b class="${cv < 0 ? "mx-adv" : cv < 0.5 ? "mx-cau" : "mx-fav"}">${mxF(cv)}</b>，${cv < 0 ? "倒掛：市場認為未來利率會降、景氣轉弱" : cv < 0.5 ? "偏平：景氣擴張後段常見" : "正常：長天期利率較高"}`]);
   if (rows.length) h += mxSec("rate", "利率與政策立場", "", `<ul class="mx-kv">${rows.map(([k, v]) => `<li><span>${k}</span><p>${v}</p></li>`).join("")}</ul>`);
   // 4. 金融壓力（相對過去 5 年的 z 分數平均）
   const z = id => { const v = mxVals(S(id)); if (v.length < 20) return null; const m = mxAvg(v), sd = Math.sqrt(mxAvg(v.map(x => (x - m) ** 2))) || 1; return (v.at(-1) - m) / sd; };
@@ -81,9 +81,9 @@ function mxMacroHtml(J) {
       <p class="note">壓力越高，市場越容易出現急跌；壓力低不代表不會跌，只是資金環境比較平靜。</p>`); }
   // 5. 全部指標：5 年百分位、3 個月方向、這個方向的意思
   const T = J.series.filter(s => mxVals(s).length >= 6);
-  if (T.length) h += mxSec("all", "全部指標的歷史位置與方向", `${T.length} 項`, `<div class="cotbl-wrap"><table class="tbl mx-tbl"><thead><tr><th>指標</th><th>最新</th><th>5 年位置</th><th>3 個月</th><th>這個方向通常代表</th></tr></thead><tbody>
-    ${T.map(s => { const p = mxPct(s), c = mxChg(s), t = c == null || Math.abs(c) < 1e-9 ? "" : c > 0 ? s.up : s.down; return `<tr><td>${esc(s.name)}</td><td>${mxF(mxVals(s).at(-1))}</td><td>${p == null ? "—" : `<span class="mx-pbar"><i style="width:${p}%"></i></span>${p}%`}</td><td class="${c == null ? "" : (s.dir || 1) * c > 0 ? "up" : (s.dir || 1) * c < 0 ? "down" : ""}">${c == null ? "—" : `${c > 0 ? "↑" : c < 0 ? "↓" : "→"} ${mxF(Math.abs(c))}`}</td><td class="note">${esc(t || "")}</td></tr>`; }).join("")}</tbody></table></div>
-    <p class="note">5 年位置＝最新值在資料期間裡的百分位（100% 是 5 年最高）；3 個月的紅綠是對股市偏好或偏壞，不是數字本身漲跌。</p>`);
+  if (T.length) h += mxSec("all", "全部指標的歷史位置與方向", `${T.length} 項`, `<div class="cotbl-wrap"><table class="tbl mx-tbl"><thead><tr><th>指標</th><th>最新</th><th>5 年位置</th><th>3 個月</th><th class="mx-mean">這個方向通常代表</th></tr></thead><tbody>
+    ${T.map(s => { const p = mxPct(s), c = mxChg(s), t = c == null || Math.abs(c) < 1e-9 ? "" : c > 0 ? s.up : s.down; return `<tr><td>${esc(s.name)}${t ? `<small class="note mx-mean2">${esc(t)}</small>` : ""}</td><td>${mxF(mxVals(s).at(-1))}</td><td>${p == null ? "—" : `<span class="mx-pbar"><i style="width:${p}%"></i></span>${p}%`}</td><td class="${c == null ? "" : (s.dir || 1) * c > 0 ? "mx-fav" : (s.dir || 1) * c < 0 ? "mx-adv" : ""}">${c == null ? "—" : `${c > 0 ? "↑" : c < 0 ? "↓" : "→"} ${mxF(Math.abs(c))}`}</td><td class="note mx-mean">${esc(t || "")}</td></tr>`; }).join("")}</tbody></table></div>
+    <p class="note">5 年位置＝最新值在資料期間裡的百分位（100% 是 5 年最高）；3 個月的顏色是對股市偏好（綠）或偏壞（紅），不是數字本身漲跌；這一區的紅綠都是好壞燈號（綠＝穩定、黃＝留意、紅＝警訊），和個股的漲紅跌綠不同。</p>`);
   return h ? `<div class="mxbox">${h}</div>` : "";
 }
 
@@ -136,7 +136,7 @@ function mxPolyHtml(J) {
   let h = "";
   // 1. 聯準會利率路徑：每場會議的選項換成基點，算機率加權的預期變動
   const F = E.filter(e => e.cat === "聯準會與利率").map(e => { const M = e.markets.map(m => ({ ...m, bp: mxBps(m.label || m.q) })).filter(m => m.bp != null); const s = M.reduce((a, m) => a + m.yes, 0); return M.length >= 2 && s > 0.5 ? { e, M, exp: M.reduce((a, m) => a + m.yes * m.bp, 0) / s, cut: M.filter(m => m.bp < 0).reduce((a, m) => a + m.yes, 0) / s } : null; }).filter(Boolean).sort((a, b) => (a.e.end || "9").localeCompare(b.e.end || "9"));
-  if (F.length) h += mxSec("fed", "聯準會利率路徑", "市場用真錢押的機率", `<ul class="mx-kv">${F.slice(0, 4).map(f => `<li><span>${esc(f.e.title)}${f.e.end ? ` <small class="note">${f.e.end.slice(5).replace("-", "/")}</small>` : ""}</span><p>降息機率 <b class="${f.cut > 0.5 ? "up" : ""}">${pct(f.cut)}</b>・預期變動 <b class="${cls(-f.exp)}">${f.exp > 0 ? "+" : ""}${Math.round(f.exp)} 個基點</b>（${f.M.map(m => `${m.bp > 0 ? "+" : ""}${m.bp}bp ${pct(m.yes)}`).join("、")}）</p></li>`).join("")}</ul>
+  if (F.length) h += mxSec("fed", "聯準會利率路徑", "市場用真錢押的機率", `<ul class="mx-kv">${F.slice(0, 4).map(f => `<li><span>${esc(f.e.title)}${f.e.end ? ` <small class="note">${f.e.end.slice(5).replace("-", "/")}</small>` : ""}</span><p>降息機率 <b class="${f.cut > 0.5 ? "mx-fav" : ""}">${pct(f.cut)}</b>・預期變動 <b class="${-f.exp > 0 ? "mx-fav" : -f.exp < 0 ? "mx-adv" : ""}">${f.exp > 0 ? "+" : ""}${Math.round(f.exp)} 個基點</b>（${f.M.map(m => `${m.bp > 0 ? "+" : ""}${m.bp}bp ${pct(m.yes)}`).join("、")}）</p></li>`).join("")}</ul>
     <p class="note">預期變動＝各選項的利率變動 × 機率加總（各選項機率先換算成合計 100%；100 個基點＝1%，25 個基點＝一碼）。降息機率越高，對成長股、科技股越有利。</p>`);
   // 2. 市場最分歧（機率 35%～65%）與幾乎確定（≥ 90% 或 ≤ 10%）
   const top = e => e.markets[0], split = E.filter(e => { const y = top(e)?.yes; return y != null && y >= 0.35 && y <= 0.65; }).sort((a, b) => b.vol24 - a.vol24).slice(0, 6);
@@ -148,7 +148,7 @@ function mxPolyHtml(J) {
   h += mxSec("attn", "資金注意力分布", "24 小時成交量占比", `<ul class="mx-bars">${C.map(([c, v]) => `<li><span>${esc(c)}</span><i style="width:${Math.round(v / tot * 100)}%"></i><b>${Math.round(v / tot * 100)}%</b></li>`).join("")}</ul><p class="note">大家把錢押在哪一類事件，代表市場現在最在意什麼。</p>`);
   // 4. 重大風險機率：衰退、台海與地緣政治
   const risk = E.filter(e => e.cat === "台海與地緣政治" || (e.cat === "經濟數據與衰退" && /recession/i.test(e.title))).sort((a, b) => b.vol - a.vol).slice(0, 6);
-  if (risk.length) h += mxSec("risk", "重大風險的機率", "", `<ul class="mx-kv">${risk.map(e => `<li><span>${esc(e.title)}</span><p>${esc(top(e).label || "是")} <b class="${top(e).yes >= 0.3 ? "down" : ""}">${pct(top(e).yes)}</b>${top(e).d1 ? `・24 小時 ${top(e).d1 > 0 ? "▲" : "▼"}${Math.abs(top(e).d1 * 100).toFixed(1)}` : ""}</p></li>`).join("")}</ul><p class="note">這類事件機率突然升高時，台股（尤其外資持股多的權值股）容易出現避險賣壓。</p>`);
+  if (risk.length) h += mxSec("risk", "重大風險的機率", "", `<ul class="mx-kv">${risk.map(e => `<li><span>${esc(e.title)}</span><p>${esc(top(e).label || "是")} <b class="${top(e).yes >= 0.3 ? "mx-adv" : ""}">${pct(top(e).yes)}</b>${top(e).d1 ? `・24 小時 ${top(e).d1 > 0 ? "▲" : "▼"}${Math.abs(top(e).d1 * 100).toFixed(1)}` : ""}</p></li>`).join("")}</ul><p class="note">這類事件機率突然升高時，台股（尤其外資持股多的權值股）容易出現避險賣壓。</p>`);
   return `<div class="mxbox">${h}</div>`;
 }
 { const css = document.createElement("style"); css.textContent = `.mxbox{padding:0 12px}.mx.mkfold{margin:8px 0}.mx-big{font-size:17px;margin:4px 0}.mx-big b{font-weight:600}
@@ -156,13 +156,16 @@ function mxPolyHtml(J) {
 .mx-q{position:relative;width:100%;max-width:220px;aspect-ratio:1;display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:6px;overflow:hidden;font-size:12px}
 .mx-q span{display:flex;align-items:flex-start;justify-content:center;padding:6px 4px;color:var(--muted);border:1px dashed var(--line)}.mx-q .q1{order:2}.mx-q .q2{order:1}.mx-q .q3{order:3}.mx-q .q4{order:4}
 .mx-q i{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 30%,transparent)}
-.mx-q em{position:absolute;font-style:normal;font-size:10.5px;color:var(--muted)}.mx-q .ax-x{right:4px;bottom:50%}.mx-q .ax-y{left:4px;bottom:50%}
+.mx-q em{position:absolute;font-style:normal;font-size:10.5px;color:var(--muted)}.mx-q .ax-x{right:4px;bottom:50%;margin-bottom:2px}.mx-q .ax-y{left:50%;top:32%;margin-left:4px}
 .mx-chk{list-style:none;margin:6px 0;padding:0}.mx-chk li{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line)}.mx-chk li .note{flex:1 1 100%}
-.mx-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted)}.mx-dot.up{background:var(--up)}.mx-dot.warn{background:#d9a40b}.mx-dot.down{background:var(--down)}.warn{color:#d9a40b}
+.mx-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted)}.mx-dot.mx-fav{background:var(--mx-fav)}.mx-dot.mx-cau{background:var(--mx-cau)}.mx-dot.mx-adv{background:var(--mx-adv)}
+.mx{--mx-fav:#0b8a55;--mx-cau:#a86f00;--mx-adv:#d42a33}
+:root[data-theme="dark"] .mx{--mx-fav:#2fbf80;--mx-cau:#e0ac2b;--mx-adv:#f2555d}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mx{--mx-fav:#2fbf80;--mx-cau:#e0ac2b;--mx-adv:#f2555d}}
+.mx .mx-fav{color:var(--mx-fav)}.mx .mx-cau{color:var(--mx-cau)}.mx .mx-adv{color:var(--mx-adv)}
 .mx-kv{list-style:none;margin:0;padding:0}.mx-kv li{padding:7px 0;border-bottom:1px solid var(--line)}.mx-kv li>span{display:block;font-weight:500}.mx-kv p{margin:3px 0 0;font-size:13.5px;overflow-wrap:anywhere}
-.mx-gauge{position:relative;display:flex;justify-content:space-between;height:26px;margin:10px 0 4px;border-radius:13px;background:linear-gradient(90deg,color-mix(in srgb,var(--up) 45%,transparent),transparent,color-mix(in srgb,var(--down) 45%,transparent));font-size:11.5px;align-items:center;padding:0 10px;color:var(--muted)}
+.mx-gauge{position:relative;display:flex;justify-content:space-between;height:26px;margin:10px 0 4px;border-radius:13px;background:linear-gradient(90deg,color-mix(in srgb,var(--mx-fav) 45%,transparent),transparent,color-mix(in srgb,var(--mx-adv) 45%,transparent));font-size:11.5px;align-items:center;padding:0 10px;color:var(--muted)}
 .mx-gauge i{position:absolute;top:-3px;width:4px;height:32px;margin-left:-2px;background:var(--ink);border-radius:2px}
-.mx-tbl td,.mx-tbl th{font-size:12.5px}.mx-tbl td:first-child,.mx-tbl th:first-child,.mx-tbl td:last-child{text-align:left;white-space:normal;min-width:7em}.mx-pbar{display:inline-block;width:46px;height:5px;margin-right:6px;background:var(--line);border-radius:3px;vertical-align:middle;overflow:hidden}.mx-pbar i{display:block;height:100%;background:var(--accent)}
+.mx-tbl td,.mx-tbl th{font-size:12.5px}.mx-tbl td:first-child,.mx-tbl th:first-child,.mx-tbl td:last-child{text-align:left;white-space:normal;min-width:7em}.mx-mean2{display:none}@media (max-width:600px){.mx-tbl .mx-mean{display:none}.mx-mean2{display:block;font-size:11px;margin-top:2px}.mx-tbl td:first-child,.mx-tbl th:first-child{min-width:5.5em}.mx-tbl td,.mx-tbl th{padding-left:4px;padding-right:4px}.mx-tbl .mx-pbar{width:24px;margin-right:4px}}.mx-pbar{display:inline-block;width:46px;height:5px;margin-right:6px;background:var(--line);border-radius:3px;vertical-align:middle;overflow:hidden}.mx-pbar i{display:block;height:100%;background:var(--accent)}
 .mx-tone{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.mx-tone>div{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border:1px solid var(--line);border-radius:6px}
 .mx-spark{display:flex;align-items:flex-end;gap:3px;height:34px;margin-top:4px}.mx-spark i{flex:1;background:var(--muted);border-radius:2px 2px 0 0;min-height:2px}.mx-spark i.up{background:var(--up)}.mx-spark i.down{background:var(--down)}
 .mx-words{display:flex;flex-wrap:wrap;gap:6px}.mx-words span{display:inline-flex;gap:4px;align-items:baseline;padding:3px 9px;border:1px solid var(--line);border-radius:12px;font-size:13px}.mx-words span.hot{border-color:var(--up)}.mx-words b{font-size:11px;color:var(--muted)}
