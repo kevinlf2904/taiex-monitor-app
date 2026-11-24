@@ -35,6 +35,9 @@ test("績效頁：重點數字、走勢、回撤、月報酬、歸因、估算�
   }
 });
 
+// 不支援 subgrid 的瀏覽器：父層的欄寬規則只能出現在 @supports (grid-template-columns:subgrid) 裡，否則每列會被擠進父層的單一格（Codex 審查 P2）
+const outsideSupports = (p, sel) => p.evaluate(sel => { const bad = []; const walk = (rules, inSup) => { for (const r of rules) { if (r instanceof CSSStyleRule) { if (r.selectorText === sel && !inSup && r.style.gridTemplateColumns) bad.push(r.cssText); } else if (r instanceof CSSSupportsRule) walk(r.cssRules, inSup || /subgrid/.test(r.conditionText)); else if (r.cssRules) walk(r.cssRules, inSup); } };
+  for (const s of document.styleSheets) { try { walk(s.cssRules, false); } catch {} } return bad; }, sel);
 test("績效版面（#333 A10）：誰賺誰賠零軸對齊、回撤圖提示不往下蓋、手機月報酬不切到 7～12 月、沒有過時的匯率文案", async () => {
   for (const width of [390, 1280]) {
     const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
@@ -44,6 +47,7 @@ test("績效版面（#333 A10）：誰賺誰賠零軸對齊、回撤圖提示不
     await p.evaluate(() => { const b = document.querySelector(".pfattr li b"); b.textContent = "+NT$123,456,789"; });
     const g = await p.evaluate(() => [...document.querySelectorAll(".pfattr")].map(u => [...u.querySelectorAll(".pfbar")].map(e => { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.width]; })));
     for (const rows of g) for (const [c, w] of rows) { assert.ok(Math.abs(c - rows[0][0]) < 0.6, width + "：零軸位置 " + c + " vs " + rows[0][0]); assert.ok(Math.abs(w - rows[0][1]) < 0.6, width + "：長條軌道寬度"); }
+    assert.deepEqual(await outsideSupports(p, ".pfattr"), [], "不支援 subgrid 時父層不變成 grid");
     const t = await p.evaluate(() => $("#lx").innerText); assert.doesNotMatch(t, /第 ?3 ?階段/, "不再寫「要等第 3 階段」"); assert.match(t, /美元原幣計算，不含匯率/);
     // 回撤圖上移動：提示顯示在上面的淨值圖內，不超出淨值圖
     const dd = await p.$(".pfplot.dd"); await dd.scrollIntoViewIfNeeded(); const db = await dd.boundingBox(); await p.mouse.move(db.x + db.width * 0.5, db.y + db.height / 2);

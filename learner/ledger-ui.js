@@ -1046,11 +1046,11 @@ document.addEventListener("pointerleave", e => { const box = e.target.closest?.(
 .pfmon th,.pfmon td{padding:3px 4px;text-align:right;border:1px solid var(--surface-2)}.pfmon thead th{color:var(--muted);font-weight:400}
 .pfmon-n{display:none}.pfmon-n table{min-width:0;table-layout:fixed}.pfmon-n table+table{margin-top:6px}.pfmon-n th:first-child{width:3.2em}
 @media (max-width:560px){.pfmon-w{display:none}.pfmon-n{display:block}.pfmon-n th,.pfmon-n td{padding:3px 2px}}
-.pfattr{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) max-content;column-gap:8px}.pfattr li{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto;gap:8px;align-items:center;padding:3px 0;font-size:12px}
+.pfattr{list-style:none;margin:0;padding:0}.pfattr li{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto;gap:8px;align-items:center;padding:3px 0;font-size:12px}
 .pfattr .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pfbar{position:relative;height:8px;background:linear-gradient(var(--line),var(--line)) 50% 0/1px 100% no-repeat}
 .pfbar i{position:absolute;top:0;height:100%}.pfbar i.up{left:50%;border-radius:0 3px 3px 0;background:var(--up)}.pfbar i.dn{right:50%;border-radius:3px 0 0 3px;background:var(--down)}
 .pfattr b{font-variant-numeric:tabular-nums;text-align:right}
-/* 每列共用父層的欄寬（subgrid），右邊金額寬度不同時零軸也對齊（#333 A10）；不支援的瀏覽器維持原本每列各自排 */@supports (grid-template-columns:subgrid){.pfattr li{grid-column:1/-1;grid-template-columns:subgrid}}
+/* 每列共用父層的欄寬（subgrid），右邊金額寬度不同時零軸也對齊（#333 A10）；父層的欄寬也放在 @supports 裡：不支援的瀏覽器父層維持一般清單，每列照原本各自排（Codex 審查 P2） */@supports (grid-template-columns:subgrid){.pfattr{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) max-content;column-gap:8px}.pfattr li{grid-column:1/-1;grid-template-columns:subgrid}}
 .pfpnl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:12px 0 0;font-size:13px}.pfpnl dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
 .pfbasis{margin:4px 12px 16px;font-size:12px}.pfbasis ul{padding-left:1.2em;margin:4px 0}
 #impSheet .lgimp-form{margin:0}
