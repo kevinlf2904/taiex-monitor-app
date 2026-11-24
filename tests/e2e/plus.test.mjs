@@ -143,6 +143,10 @@ for (const width of [390, 1280]) test(`財報「事件回測」「估值地圖�
   await p.click(".fxtip-x"); await p.waitForSelector(".fxtip", { state: "detached" });
   await p.click('.fxmap [data-fxpt="3105"] circle'); await p.click('.fxtip [data-sel="3105"]'); assert.equal(await p.evaluate(() => W.sel), "3105");
   assert.ok(await noOverflow(p));
+  // 月營收為負的公司（調整、沖銷）：圓點半徑不能是 NaN，也不能有 console 錯誤
+  const nan = await p.evaluate(() => { showList?.(); ER().view = "map"; ER().mapPick = null; const row = ER().data.rows.find(r => r[0] === "3105"); const old = row[4]; row[4] = -5e8; renderList();
+    const bad = [...document.querySelectorAll(".fxmap circle")].filter(c => !Number.isFinite(+c.getAttribute("r"))).length + [...document.querySelectorAll(".fxmap [transform]")].filter(g => /NaN/.test(g.getAttribute("transform"))).length; row[4] = old; renderList(); return bad; });
+  assert.equal(nan, 0, "負營收不能產生 NaN 圓點");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
