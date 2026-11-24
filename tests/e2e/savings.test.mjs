@@ -39,11 +39,20 @@ for (const width of [390, 1280]) test(`存股延伸功能 ${width}`, async () =>
   await p.click('[data-sxg="hist"]'); await p.fill("#hs-from", "2021-01"); await p.$eval("#hs-go", b => b.click()); await p.waitForFunction(() => /年化（IRR）/.test(document.getElementById("hs-out").innerText));
   t = await p.textContent("#hs-out"); assert.match(t, /累積投入[\s\S]*600,000/); assert.match(t, /−20\.0%/, "最大跌幅"); assert.ok(await p.locator("#hs-out svg polyline").count() === 3);
   // 退休提領：4% 法則、股災情境
-  await p.click('[data-sxg="ret"]'); t = await p.textContent("#rt-kpis"); assert.match(t, /撐過 30 年的機率/); assert.match(t, /800,000/);
+  await p.click('[data-sxg="ret"]'); t = await p.textContent("#rt-kpis"); assert.match(t, /撐過/);
+  // 最後一個 x 刻度（第 30 年）不能被 SVG 右緣切掉；圖例色塊沿用頁面 10×10，不被壓成 3px（#333 C2a）
+  const cut = await p.$eval("#rt-chart svg", s => { const r = s.getBoundingClientRect(), x = [...s.querySelectorAll("text")].map(e => e.getBoundingClientRect()); return Math.max(...x.map(b => b.right - r.right), ...x.map(b => r.left - b.left)); });
+  assert.ok(cut <= 0.5, `刻度字超出圖框 ${cut}px`); assert.ok((await p.$eval("#rt-chart .legend .swatch", e => e.getBoundingClientRect().height)) >= 9);
+  t = await p.textContent("#rt-kpis"); assert.match(t, /撐過 30 年的機率/); assert.match(t, /800,000/);
   await p.fill("#rt-draw", "3000000"); t = await p.textContent("#rt-kpis"); assert.match(t, /第 \d+ 年用完/, "提領 15% 會用完");
   // 月月配：0056（季配）＋00878（季配）→ 空月份推薦 00919
   await p.click('[data-sxg="mon"]'); await p.fill("#mm-codes", "0056 00878"); await p.$eval("#mm-go", b => b.click()); await p.waitForFunction(() => /有配息的月份/.test(document.getElementById("mm-out").innerText));
   t = await p.textContent("#mm-out"); assert.match(t, /8 \/ 12/); assert.ok(await p.locator('[data-mmadd="00919"]').count() >= 1, "推薦補空月份");
+  assert.ok(await noHOverflow(p), "月月配的 12 個月表格只在表格內捲動，不撐寬整頁（#333：手機 +403px）");
+  assert.ok(await p.$eval("#mm-out .tablewrap", w => w.getBoundingClientRect().right <= document.getElementById("mm-out").getBoundingClientRect().right + 1));
+  // 長條高度要跟金額成比例（#333 C2b：原本 3 萬和 2 萬被壓成一樣高）：0056 每季 28,571、00878 每季 20,000
+  const hs = await p.$$eval("#mm-out .mm-bars i:not(.zero)", L => L.map(i => i.getBoundingClientRect().height)), hr = Math.min(...hs) / Math.max(...hs);
+  assert.ok(Math.abs(hr - 20000 / 28571) < 0.05, `長條高度比 ${hr.toFixed(2)} 應約 0.70`);
   // 通膨換算
   await p.click('[data-sxg="sim"]'); assert.ok(await p.isVisible("#console") || (await p.evaluate(() => innerWidth)) > 0, "模擬三種做法有控制台"); await p.check("#if-on"); assert.ok(await p.locator("#kpis .if-note").count() >= 1); assert.match(await p.textContent("#kpis"), /約等於今天的/);
   assert.ok(await noHOverflow(p), "沒有橫向溢出");
@@ -67,4 +76,15 @@ test("代號欄 Enter 不打斷輸入法選字", async () => {
   assert.equal(r.dcEnter, "請先填代號", "一般 Enter 照常送出");
   assert.ok(r.hsComp && r.hs229, "選字中按 Enter 不送出（歷史回測代號）"); assert.ok(r.hsEnter, "一般 Enter 照常開始回測");
   await ctx.close(); assert.deepEqual(errs.filter(e => !/503|Failed to load resource/.test(e)), []);
+});
+
+// 開局崩盤＋高槓桿：負債比所有卡片的資產都多，負債長條仍以同一把尺畫、不超過卡片寬，整頁不溢出（#333 C1b）
+for (const width of [390, 1280]) test(`部位明細負債長條不超過卡片 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "savings.html", { width, touch: width < 500 });
+  await p.click('[data-sxg="sim"]');
+  const r = await p.evaluate(() => { const y = LAST.p.yrs, c = LAST.Cv.sn[y], tot = Math.max(LAST.A.sn[y].v, LAST.B.sn[y].C + LAST.B.sn[y].S, 1); c.P = tot * 3; BKY = y; renderBreakdown();
+    const card = [...document.querySelectorAll("#bk .bk")][2].getBoundingClientRect(), d = document.querySelector("#bk .stack.debt").getBoundingClientRect(), a = [...document.querySelectorAll("#bk .stack:not(.debt)")].map(e => e.getBoundingClientRect().width);
+    return { over: d.right - card.right, dw: d.width, amax: Math.max(...a) }; });
+  assert.ok(r.over <= 1, `負債長條超出卡片 ${r.over}px`); assert.ok(r.amax < r.dw, "負債最大時資產長條按比例縮短");
+  assert.ok(await noHOverflow(p)); await ctx.close(); assert.deepEqual(errs, []);
 });

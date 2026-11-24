@@ -422,7 +422,8 @@ const FEE = 0.001425, TAX = 0.003;
 // opt.capital 初始資金（元）；opt.lot 每次買進的最小單位（1 = 零股、1000 = 整張）；opt.useBuy / opt.useSell 是否依買進／賣出訊號交易；
 // opt.skip 要略過的訊號（key = 索引＋方向）。手續費 0.1425%（最低 20 元），賣出另計 0.3% 證交稅。
 const btKey = s => `${s.i}${s.side}`;
-// 證交稅率：股票 0.3%（預設）、ETF 0.1%、債券 ETF（00xxxB）停徵到 2026 年底
+// 證交稅率：股票 0.3%（預設）、ETF 0.1%、債券 ETF（00xxxB）停徵到 2026-12-31（停徵期間與延長修法進度見 learner/ledger.js 的 BOND_ETF_TAX_FREE，帳本已依交易日期判斷）。
+// 這裡只看代號、不看日期：台灣的債券 ETF 2017 年才開始上市，目前回測用到的資料都在停徵期間內。依賣出日期判斷見 #356（沒延長的話要在 2027 年前做）
 const taxOf = c => (/^00\d+B$/.test(c || "") ? 0 : /^00/.test(c || "") ? 0.001 : undefined);
 function backtest(D, sigs, opt = {}) {
   const cap = opt.capital || 1e6, lot = opt.lot || 1, useBuy = opt.useBuy !== false, useSell = opt.useSell !== false, skip = opt.skip || new Set();
@@ -728,7 +729,7 @@ function ccwSVG(D, W = 340, H = 240) {
   const dots = S.filter((_, k) => k % 10 === 0 || k === S.length - 1).map(s => `<circle cx="${X(s.v)}" cy="${Y(s.p)}" r="2.4" fill="var(--muted)"/>`).join("");
   return `<figure class="ccw"><svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" role="img" aria-label="逆時鐘曲線">
     <line x1="${pad}" y1="${H - pad + 6}" x2="${W - 8}" y2="${H - pad + 6}" stroke="var(--line)"/><line x1="${pad}" y1="8" x2="${pad}" y2="${H - pad + 6}" stroke="var(--line)"/>
-    <text x="${W - 8}" y="${H - 8}" text-anchor="end" font-size="11" fill="var(--muted)">24 日均量 →</text><text x="${pad - 4}" y="14" text-anchor="end" font-size="11" fill="var(--muted)" transform="rotate(-90 ${pad - 20} 14)">24 日均價 →</text>
+    <text x="${W - 8}" y="${H - 8}" text-anchor="end" font-size="11" fill="var(--muted)">24 日均量 →</text><text x="${pad - 16}" y="14" text-anchor="end" font-size="11" fill="var(--muted)" transform="rotate(-90 ${pad - 20} 14)">24 日均價 →</text>
     <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.2" stroke-linejoin="round"/>${dots}
     <circle cx="${X(S[0].v)}" cy="${Y(S[0].p)}" r="4" fill="none" stroke="var(--muted)"/><circle cx="${X(last.v)}" cy="${Y(last.p)}" r="5" fill="var(${ph[2] === "buy" ? "--up" : "--down"})"/>
   </svg><figcaption class="note">空心圈是起點、實心圈是最後一天（近 90 天）。最後一天在「${ph[0]}」階段（${ph[1]}）。</figcaption></figure>`;
