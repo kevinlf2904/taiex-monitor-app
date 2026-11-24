@@ -50,6 +50,11 @@ for (const width of [1280, 390]) test(`櫃買圖表 ${width}`, async () => {
   assert.match(await p.evaluate(() => $("#lx .otcbox").innerText), /半導體業：逐月營收/);
   await p.$eval('#lx [data-mk="otcV"][data-v="sus"]', b => b.click()); await p.waitForTimeout(100);
   assert.match(await p.evaluate(() => $("#lx .otc-gantt").textContent), /富邦美債1-3 等 2 檔/);
+  // 26 列也要依列數撐高，字不能被壓到 6px（#333 A1）
+  const fs = await p.evaluate(() => { const rows = Array.from({ length: 26 }, (_, i) => [String(6100 + i), "測試" + i, `2026-11-${String(1 + (i % 20)).padStart(2, "0")}`, "2026-12-01", "原因" + i]);
+    const box = document.createElement("div"); box.className = "otcbox"; box.innerHTML = otcSusHtml({ snap: { sus: rows, sss: [] } }); $("#lx").append(box);
+    const t = box.querySelector(".otc-gantt text"), h = t ? t.getBoundingClientRect().height : 0; box.remove(); return h; });
+  assert.ok(fs >= 9, `26 列時間軸的字高 ${fs}px`);
   assert.deepEqual(await p.evaluate(() => [store.get("watch:mkReg"), store.get("watch:otc").view]), ["otc", "sus"]);
   await ctx.close(); assert.deepEqual(errs, []);
 });
