@@ -19,6 +19,9 @@ export const claudeEnabled = () => process.env.AI_CLAUDE_ENABLED === "1";
 export const claudeUsable = () => claudeEnabled() && !!(process.env.ANTHROPIC_API_KEY || "").trim();
 // 「Gemini 失敗改問 Claude」要兩個都開：總開關＋AI_CLAUDE_FALLBACK=1
 export const claudeFallbackOn = () => claudeEnabled() && process.env.AI_CLAUDE_FALLBACK === "1";
+// Claude 的 SDK 用到才載入（和 podcast.js 一樣）：預設不開 Claude，平常的請求不必載入這個套件；沒裝套件的環境（排程、本機測試）走 Gemini 也不會出錯
+let anthropicMod = null;
+export const loadAnthropic = async () => (anthropicMod ??= (await import("@anthropic-ai/sdk")).default);
 
 export const mem = new Map();
 export const MAX_MEM = 5000;
