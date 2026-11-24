@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 風格一致性：無框設計補齊、字體跟著風格（2026.11.24-247）
+- 無框設計補上漏掉的區塊、卡片、徽章與分頁（選中改金色細底線），新增自動檢查；首頁介紹區字體跟著版面風格切換；補上未定義的字體變數；儲蓄頁載入數字字型 IBM Plex Mono
+
 ### 帳本證交稅、Claude SDK 延遲載入、EMV 與 CSV 缺量處理（2026.11.24-246）
 - 帳本：當沖減半只適用股票、債券 ETF 依交易日期判斷停徵（#339）；AI 路由：Claude SDK 用到才載入（#342）；EMV 平均量不把缺量 K 棒當 0 量（#346）；K 線學堂匯入 CSV 沒有成交量時標 vNa（#349）
 
