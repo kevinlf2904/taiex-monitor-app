@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 估值地圖：月營收為負時圓點半徑 NaN（#333 驗證發現）（2026.11.24-263）
+- #333 視覺修復：估值地圖負營收半徑 NaN
+
 ### 存錢里程碑時間軸：手機字只剩 5px（#333）（2026.11.24-262）
 - #333 視覺修復：存錢里程碑時間軸：手機字只剩 5px（#333）
 
