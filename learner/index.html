@@ -939,7 +939,7 @@ footer .ft-brand { font-size: 13px; color: var(--ink); margin-bottom: 4px; } foo
     <button class="btn primary" id="chatSend">送出</button><button type="button" class="btn" id="chatStop" hidden>停止</button>
   </form>
 </section>
-<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.11.24-246</span></footer>
+<footer><div class="ft-brand"><b>KLineLab</b> K線情報局・<a href="watch.html">看盤終端</a>・<a href="pro.html">公開測試版 (Beta)</a></div><p class="disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。</p>課程與練習預設用程式模擬的走勢，也可以切換成真實個股；真實日 K 來自證交所、櫃買中心或 Yahoo Finance。<span class="data-note"></span><span class="ver">版本 2026.11.24-247</span></footer>
 
 <script src="datasrc.js"></script><!-- 排程資料從 GitHub 讀最新版，要在其他程式之前 -->
 <script src="core.js"></script>
@@ -4024,8 +4024,9 @@ function parseKlineCsv(text) {
   const rows = lines.slice(hi + 1).map(r => {
     const m = String(r[iD] || "").match(/^(\d{2,4})[/-](\d{1,2})[/-](\d{1,2})/); if (!m) return null;
     const y = +m[1] < 1911 ? +m[1] + 1911 : +m[1], d = `${y}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-    const o = num(r[iO]), h = num(r[iH]), l = num(r[iL]), c = num(r[iC]), v = iV >= 0 ? num(r[iV]) : 0;
-    return o && h && l && c ? { d, o, h, l, c, v: v == null ? 0 : shares ? Math.round(v / 1000) : v } : null;
+    const o = num(r[iO]), h = num(r[iH]), l = num(r[iL]), c = num(r[iC]), v = iV >= 0 ? num(r[iV]) : null;
+    // 沒有成交量欄、或那一列的量是空的：量記 0 並標 vNa（來源沒給量），均量、OBV 等量能指標會跳過，不當成真的 0 量（和 API 的日 K 一樣）
+    return o && h && l && c ? (v == null ? { d, o, h, l, c, v: 0, vNa: 1 } : { d, o, h, l, c, v: shares ? Math.round(v / 1000) : v }) : null;
   }).filter(Boolean);
   return rows.length ? { name, code, rows } : null;
 }
