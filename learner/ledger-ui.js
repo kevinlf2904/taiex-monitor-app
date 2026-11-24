@@ -420,6 +420,10 @@ function renderLedger() {
   const hasOpenConf = !!(recon?.conflicts?.some(c => c && c.status === "open"));
   const hasHalted = !!(W.lgReconHalted || recon?.pendingCommit != null);
   if (L.view === "margin") return renderMargin(); // 融資不需要交易紀錄
+  if (L.view === "div" && (!(hasTx || hasSnap) || W.hsrcLegacy)) { // 股利：只有舊庫存（或這次切換看舊庫存）也能估（#300 第 3 組）
+    const leg = lgLegacyOpen();
+    if (((hasTx || hasSnap) && W.hsrcLegacy) || leg.open.length || leg.skipped.length) return renderDiv(null, { ...leg, hasTx: hasTx || hasSnap });
+  }
   if (L.view === "alloc") {
     if ((hasTx || hasSnap) && !W.hsrcLegacy) return renderAlloc(S0 || lgStoreOrEmpty());
     const leg = lgLegacyOpen();
@@ -1309,8 +1313,8 @@ function renderReport(S) {
   (W.lgRpP ||= need.reduce((p, f) => p.then(() => one(f)), Promise.resolve()).then(() => (typeof renderReportView === "function" ? null : one("pf-report.js"))).catch(e => { W.lgRpP = null; throw e; }))
     .then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
 }
-function renderDiv(S) {
-  if (typeof renderDivView === "function" && typeof KLDivCal !== "undefined") return renderDivView(S);
+function renderDiv(S, leg = null) {
+  if (typeof renderDivView === "function" && typeof KLDivCal !== "undefined") return renderDivView(S, leg);
   $("#lx").innerHTML = lgViewSeg() + skel("載入股利現金流…");
   const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
   (W.lgDvP ||= (typeof KLDivCal !== "undefined" ? Promise.resolve() : one("divcal.js")).then(() => one("pf-divcal.js")).catch(e => { W.lgDvP = null; throw e; })).then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
