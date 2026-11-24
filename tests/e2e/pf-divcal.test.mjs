@@ -92,3 +92,28 @@ test("股利分頁（ChatGPT 審查 #362 P3）：有交易帳本時走帳本；�
   assert.equal(await p.evaluate(() => W.hsrcLegacy), false);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("股利分頁（#364）：只有已確認庫存快照、沒有交易時走快照；切到舊庫存改用舊庫存股數；再切回快照", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  const Y = { 2330: [[day(-300), 5], [day(-200), 5]] };
+  await ctx.route("**/api/yield**", r => { const cs = (new URL(r.request().url()).searchParams.get("codes") || "").split(","); r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: cs.filter(c => Y[c]).map(c => ({ code: c, cash12: 1, divs: Y[c] })) }) }); });
+  await ctx.route("**/api/calendar**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: [], conf: [], hol: [] }) }));
+  // 快照 2330 有 2000 股、舊庫存 2330 有 3000 股，沒有任何交易紀錄：金額看得出用了哪一邊
+  await p.evaluate(snapDate => { W.cal = null; W.dvD = null; localStorage.removeItem("kline:pf:v1");
+    const H = { 2330: { sh: 3000, cost: 900 } }; store.set("watch:hold", H); W.hold = H; W.holdOwn = H;
+    localStorage.setItem("kline:pf:recon:v1", JSON.stringify({ v: 1,
+      snapshots: [{ id: "s1", date: snapDate, symbol: "2330", market: "tw", currency: "TWD", shares: 2000, avgCost: 900, origin: "import", scope: "partial", status: "confirmed", confirmedAt: snapDate + "T00:00:00Z", supersededBy: null, batchId: "b1", note: "" }],
+      conflicts: [], initialTags: {}, sameDayRelations: {}, imports: [], audit: [], pendingCommit: null }));
+    W.hsrcLegacy = false; if (typeof holdSrcApply === "function") holdSrcApply(); W.lg = { view: "div" }; W.holdView = "tx"; setLt("hold"); }, day(-10));
+  await p.waitForSelector("#lx .dvbars", { timeout: 30000 });
+  let t = await p.evaluate(() => $("#lx").innerText);
+  assert.doesNotMatch(t, /目前看的是舊庫存/, "有已確認快照：走快照，不是舊庫存"); assert.match(t, /未來 12 個月\s*\$?20,000/, "快照 2000 股 × 10 元");
+  await p.evaluate(() => { W.hsrcLegacy = true; if (typeof holdSrcApply === "function") holdSrcApply(); renderList(); });
+  await p.waitForFunction(() => /目前看的是舊庫存的股數（這次切換檢視）/.test($("#lx").innerText), null, { timeout: 30000 });
+  t = await p.evaluate(() => $("#lx").innerText); assert.match(t, /未來 12 個月\s*\$?30,000/, "舊庫存 3000 股 × 10 元");
+  await p.evaluate(() => document.querySelector('#lx [data-lg="hsrcLedger"]').click());
+  await p.waitForFunction(() => !/目前看的是舊庫存/.test($("#lx").innerText) && /未來 12 個月\s*\$?20,000/.test($("#lx").innerText), null, { timeout: 30000 });
+  assert.equal(await p.evaluate(() => localStorage.getItem("kline:pf:v1")), null, "沒有偷偷建立交易紀錄");
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 391), "沒有水平溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
