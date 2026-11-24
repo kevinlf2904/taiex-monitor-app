@@ -125,3 +125,13 @@ test("K 線截圖解讀：讀數字要 JSON、解說是純文字；圖片格式�
     assert.equal(sent.length, 2, "格式不對、沒有圖片都不呼叫 AI");
   } finally { globalThis.fetch = real; if (saved === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = saved; }
 });
+
+test("Claude 的 SDK 用到才載入：AI 路由檔案頂層都不 import @anthropic-ai/sdk，統一走 _limit.js 的 loadAnthropic（稽核 AUD-20）", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const f of ["chat", "chart-read", "import", "podcast"]) {
+    const src = readFileSync(new URL(`../api/_lib/${f}.js`, import.meta.url), "utf8");
+    assert.doesNotMatch(src, /^\s*import\s[^;]*["']@anthropic-ai\/sdk["']/m, `${f}.js 不在頂層載入 SDK`);
+    assert.doesNotMatch(src, /import\(\s*["']@anthropic-ai\/sdk["']\s*\)/, `${f}.js 不自己動態載入（統一用 loadAnthropic）`);
+    assert.match(src, /loadAnthropic\(\)/, `${f}.js 用 loadAnthropic 載入`);
+  }
+});

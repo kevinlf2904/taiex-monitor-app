@@ -10,7 +10,7 @@ const stub = new Proxy(function () {}, { get: (t, k) => (k === Symbol.toPrimitiv
 const c = { console, Math, Date, JSON, Map, Set, WeakMap, Array, Object, Number, String, isFinite, parseFloat, parseInt, setTimeout, clearTimeout, Promise };
 Object.assign(c, { window: c, document: stub, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, navigator: { userAgent: "" }, matchMedia: () => ({ matches: false, addEventListener() {} }), addEventListener() {}, requestAnimationFrame: () => 0, devicePixelRatio: 1, getComputedStyle: () => ({ getPropertyValue: () => "" }) });
 vm.createContext(c); vm.runInContext(readFileSync(new URL("../learner/core.js", import.meta.url), "utf8"), c, { filename: "core.js" });
-const { obvCalc, vrCalc, mfiCalc } = Object.fromEntries(["obvCalc", "vrCalc", "mfiCalc"].map(n => [n, vm.runInContext(n, c)]));
+const { obvCalc, vrCalc, mfiCalc, emvCalc, smaN } = Object.fromEntries(["obvCalc", "vrCalc", "mfiCalc", "emvCalc", "smaN"].map(n => [n, vm.runInContext(n, c)]));
 const J = x => JSON.parse(JSON.stringify(x)); // 沙盒的陣列轉成一般陣列再比較
 const bars = (cl, v, na = []) => cl.map((x, i) => ({ o: x, h: x, l: x, c: x, v: v[i], ...(na.includes(i) ? { vNa: 1 } : {}) }));
 
@@ -49,4 +49,18 @@ test("沒有缺量的資料：和修改前的公式逐位元相同（300 根隨�
   const oldVr = (D, n = 26) => D.map((_, i) => { if (i < n) return null; let u = 0, d = 0, f = 0; for (let k = i - n + 1; k <= i; k++) { const v = D[k].v || 0; if (D[k].c > D[k - 1].c) u += v; else if (D[k].c < D[k - 1].c) d += v; else f += v; } return d + f / 2 ? ((u + f / 2) / (d + f / 2)) * 100 : null; });
   const oldMfi = (D, n = 14) => { const tp = D.map(x => (x.h + x.l + x.c) / 3); return D.map((_, i) => { if (i < n) return null; let p = 0, q = 0; for (let k = i - n + 1; k <= i; k++) { const f = tp[k] * (D[k].v || 0); if (tp[k] > tp[k - 1]) p += f; else if (tp[k] < tp[k - 1]) q += f; } return q ? 100 - 100 / (1 + p / q) : p ? 100 : 50; }); };
   assert.deepEqual(J(obvCalc(D)), oldObv(D)); assert.deepEqual(J(vrCalc(D)), oldVr(D)); assert.deepEqual(J(mfiCalc(D)), oldMfi(D)); assert.deepEqual(J(vrCalc(D, 10)), oldVr(D, 10)); assert.deepEqual(J(mfiCalc(D, 5)), oldMfi(D, 5));
+});
+
+test("EMV：平均量不把缺量的 K 棒當 0 量（稽核 AUD-19 延伸）；沒有缺量時和原本的算法相同", () => {
+  const N = 40, n = 14, base = Array.from({ length: N }, (_, i) => { const m = 100 + Math.sin(i / 3) * 5; return { o: m, h: m + 1 + (i % 3), l: m - 1, c: m, v: 1000 }; });
+  const hl = base.map(x => x.h - x.l), mhl = hl.map((_, i) => (i < n - 1 ? null : hl.slice(i - n + 1, i + 1).reduce((a, b) => a + b) / n));
+  const near = (a, b) => a.length === b.length && a.every((x, i) => (x == null) === (b[i] == null) && (x == null || Math.abs(x - b[i]) <= 1e-9 * Math.max(1, Math.abs(x))));
+  // 獨立手算：量都是 1000（第 20 根缺量）→ 平均量 ÷ 當日量 ＝ 1，原始值只剩價格項；缺量那根自己是 null，最後一樣用 smaN 平均
+  const D = base.map((x, i) => (i === 20 ? { ...x, v: 0, vNa: 1 } : x));
+  const raw = D.map((x, i) => { if (!i || mhl[i] == null || x.vNa) return null; const p = D[i - 1].h + D[i - 1].l; return 100 * (x.h + x.l - p) / (x.h + x.l) * (hl[i] / mhl[i]); });
+  assert.ok(near(J(emvCalc(D, n, 9).emv), J(smaN(raw, n))), "缺量那根之後的 EMV 不被拉低（修正前最多差 4 倍以上）");
+  // 沒有缺量、量有變化：和原本的公式（平均量＝一般 14 日平均）完全相同
+  const V = base.map((x, i) => ({ ...x, v: 500 + ((i * 37) % 11) * 100 })), mv = V.map((_, i) => (i < n - 1 ? null : V.slice(i - n + 1, i + 1).reduce((a, x) => a + x.v, 0) / n));
+  const raw2 = V.map((x, i) => { if (!i || mhl[i] == null || !mhl[i] || !x.v) return null; const p = V[i - 1].h + V[i - 1].l; return (100 * (x.h + x.l - p) / (x.h + x.l)) * (mv[i] / x.v) * (hl[i] / mhl[i]); });
+  assert.ok(near(J(emvCalc(V, n, 9).emv), J(smaN(raw2, n))), "沒有缺量時結果不變");
 });
