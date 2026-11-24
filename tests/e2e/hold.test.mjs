@@ -21,8 +21,13 @@ test("庫存費稅與股息", async () => {
   // 展開明細
   await p.click('#wl [data-hx="2330"]'); await p.waitForTimeout(200);
   assert.match(await p.evaluate(() => $(".yh-det").innerText), /持有成本[\s\S]*損益平衡點/);
+  // 未來股利只在「股利」分頁估（#300 第 3 組）：持股頁保留「已領股息」，不再寫「一年約可領」，改放入口
+  assert.doesNotMatch(await p.evaluate(() => $("#lx").innerText + $("#wl").innerText), /一年約可領/); assert.match(await p.evaluate(() => $(".yh-bar").innerText), /已領股息[\s\S]*未來 12 個月股利/);
+  assert.ok(await p.evaluate(() => document.querySelector("[data-hgodiv]").getBoundingClientRect().height >= 43.5), "觸控鈕至少 44px");
   await p.click('.yh-det [data-sel="2330"]'); await p.waitForTimeout(400); assert.equal(await p.evaluate(() => W.sel), "2330");
   assert.ok(await noHOverflow(p));
+  await p.$eval("[data-hgodiv]", b => b.click()); // 剛才點了「看走勢」，個股抽屜可能蓋在上面，直接觸發按鈕
+  assert.deepEqual(await p.evaluate(() => [W.holdView, W.lg?.view]), ["tx", "div"], "按入口到股利分頁");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
