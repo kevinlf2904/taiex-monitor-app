@@ -432,7 +432,7 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-ix { grid-template-columns: 46px minmax(0, 1fr) 88px; }
 .td-ix-plot, .td-sc-plot { position: relative; height: 128px; }
 .td-ix-plot { grid-column: 2; }
-.td-sc-plot { height: 96px; margin-bottom: 16px; }
+.td-sc-plot { height: 96px; margin-bottom: 22px; } /* 下方「昨收／開盤／現在」約 17px 高，原本 16px 會被切掉一點（#333 A9） */
 .td-ix-y { position: relative; grid-column: 1; height: 128px; }
 .td-ix-y span { position: absolute; right: 3px; transform: translateY(-50%); color: var(--muted); font: 10px/1 var(--font-num); white-space: nowrap; }
 .td-ix .td-ix-lv { grid-column: 3; height: 128px; }
@@ -468,7 +468,7 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-ix-lv span { position: absolute; left: 0; right: 0; transform: translateY(-50%); font-size: 10.5px; line-height: 1.2; white-space: nowrap; color: var(--muted); }
 .td-ix-lv .up, .td-ix-lv .down { color: var(--level); } /* 位階標籤：中性色，文字本身寫著「壓力」「支撐」 */ .td-ix-lv .piv { color: var(--ink); } .td-ix-lv b { font-weight: 400; }
 .td-ix-t { grid-column: 1; display: flex; justify-content: space-between; font-size: 10.5px; margin-top: 3px; }
-.td-sc-x { position: absolute; top: calc(100% + 4px); transform: translateX(-50%); font-size: 10.5px; white-space: nowrap; } .td-sc-x:first-of-type { transform: none; }
+.td-sc-x { position: absolute; top: calc(100% + 4px); transform: translateX(-50%); font-size: 10.5px; line-height: 1.2; white-space: nowrap; } .td-sc-x:first-of-type { transform: none; }
 .td-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .td-side .dh-core-grid { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 0; margin: 0; border-top: 1px solid var(--line); }
 .td-side .dh-core-card { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 8px 8px 8px 0; }

@@ -51,3 +51,18 @@ test("K線學堂測驗結算、存股模擬", async () => {
   await o.p.waitForFunction(() => typeof SAV_LAST !== "undefined" && SAV_LAST); await shot(o.p, "savings");
   await o.ctx.close(); assert.deepEqual(o.errs, []);
 });
+
+// 分享按鈕：沒載 core.css 的頁面（savings）沒有 --surface-2，底色要跟著頁面主題，亮色不能變成深底深字（#333 C1a：原本 1.07:1）
+test("分享按鈕亮暗色對比", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "savings.html", { width: 390 });
+  for (const th of ["light", "dark"]) {
+    const r = await p.evaluate(th => { document.documentElement.dataset.theme = th;
+      const rgb = c => { const m = c.match(/[\d.]+/g).map(Number); return c.startsWith("color(") ? [m[0] * 255, m[1] * 255, m[2] * 255, m[3] ?? 1] : [m[0], m[1], m[2], m[3] ?? 1]; };
+      const b = document.querySelector('.sharebtn[data-sharecard="savings"]'); let e = b.parentElement, base; while (e) { const c = rgb(getComputedStyle(e).backgroundColor); if (c[3] === 1) { base = c; break; } e = e.parentElement; } base ||= [255, 255, 255, 1];
+      const bg = rgb(getComputedStyle(b).backgroundColor), mix = bg.slice(0, 3).map((v, i) => v * bg[3] + base[i] * (1 - bg[3])), fg = rgb(getComputedStyle(b).color);
+      const L = a => { const [r, g, bl] = a.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * bl; };
+      const [x, y] = [L(fg.slice(0, 3)), L(mix)].sort((a, b) => b - a); return (x + 0.05) / (y + 0.05); }, th);
+    assert.ok(r >= 4.5, `${th} 分享按鈕對比 ${r.toFixed(2)}:1`);
+  }
+  await ctx.close(); assert.deepEqual(errs, []);
+});
