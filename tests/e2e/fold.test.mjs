@@ -21,3 +21,13 @@ for (const width of [390, 1280]) test(`長內容收合 ${width}`, async () => {
   await p.click("#lp + .fold-btn"); assert.ok(await p.evaluate(() => $("#lp").classList.contains("fold-t")));
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// 圖表實驗室的 .lxbody（列在長文字選擇器裡）裡面有圖表和表單時不能被收成 5 行，否則圖被切掉；一般長段落照常收（#333 驗證時發現）
+test("長文字收合不切掉圖表區塊", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width: 390, touch: true });
+  await p.evaluate(() => { const d = document.createElement("div"); d.id = "fx"; d.innerHTML = `<div class="lxbody" id="lb"><select><option>a</option></select>${"說明文字。".repeat(200)}<svg viewBox="0 0 340 190" style="width:100%;height:auto"><rect width="340" height="190"/></svg></div><p id="lp2">${"很長的一段文字。".repeat(120)}</p><p id="lp3"><svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>${"有小圖示的長段落。".repeat(120)}</p>`; document.body.prepend(d); });
+  await p.waitForSelector("#lp2.fold-t"); await p.waitForSelector("#lp3.fold-t", { timeout: 3000 }); // 行內小圖示不影響收合 
+  await p.waitForTimeout(300);
+  assert.equal(await p.evaluate(() => document.getElementById("lb").classList.contains("fold-t")), false, "含圖表的 .lxbody 不能被收合");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
