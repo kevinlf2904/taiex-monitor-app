@@ -342,6 +342,7 @@ input[type="number"] { padding: 6px 9px; border: 1px solid var(--line); border-r
 .yh-sum dt { display: flex; align-items: center; gap: 6px; color: var(--text); white-space: nowrap; } .yh-sum dd { margin: 0; text-align: right; font: 500 15px var(--font-num); white-space: nowrap; } .yh-sum dt:nth-last-of-type(1), .yh-sum dt:nth-last-of-type(1) + dd { font-size: 13px; color: var(--muted); }
 .sq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; } .sq.acc { background: var(--accent); } .sq.up { background: var(--up); } .sq.down { background: var(--down); }
 .yh-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 4px 16px 10px; font-size: 13px; color: var(--muted); } .yh-bar b { color: var(--text); font: 500 14px var(--font-num); } .yh-bar select { font-size: 12.5px; }
+@media (pointer: coarse) { .yh-bar [data-hgodiv] { min-height: 44px; } }
 .yh-head { grid-template-columns: minmax(0, 1.3fr) 1fr 1fr 1fr !important; } .yh-head button { line-height: 1.25; }
 .yh-row { display: grid !important; width: 100%; box-sizing: border-box; grid-template-columns: minmax(0, 1.3fr) 1fr 1fr 1fr; align-items: center; text-align: right; } .yh-row > span.nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .yh-row > span.nm .cd { display: block; overflow: hidden; text-overflow: ellipsis; }
 .yh-mixl span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .yh-row > span { display: grid; gap: 1px; } .yh-row > span.nm { text-align: left; }
@@ -2301,6 +2302,7 @@ $("#listPane").addEventListener("click", e => {
   else if (gx && gx.dataset.gx === "mfRefresh") rfRun("mfRefresh", () => { W.mf.days = W.mf.days.filter(d => d.date < W.today); W.mf.tried = new Set(); return loadMoney(10, true); });
   else if (t.closest("[data-hrtol]")) { W.hrTol = t.closest("[data-hrtol]").dataset.hrtol; store.set("watch:hrtol", W.hrTol); renderList(); }
   else if (t.closest("[data-hralloc]")) { holdGo("alloc"); }
+  else if (t.closest("[data-hgodiv]")) { holdGo("div"); } // 未來股利只在「股利」分頁估一份（#300 第 3 組）
   else if (t.closest("#lTools [data-nav]")) { const n = t.closest("[data-nav]").dataset.nav, G = HOLD_NAV.find(g => g[0] === n); holdGo(G?.[2] ? G[2][0][0] : n); }
   else if (t.closest("[data-hsrc]")) { const v = t.closest("[data-hsrc]").dataset.hsrc; if (v === "tx") return holdGo("tx"); if (v === "tx-recon") { W.holdView = "tx"; (W.lg ||= {}).view = "tx"; W.lg.form = null; store.set("watch:hv", W.holdView); renderList(); requestAnimationFrame(() => document.querySelector("#lx [data-lgrecon-halted], #lx .lgrecon-center")?.scrollIntoView?.({ behavior: "smooth", block: "start" })); return; } if (v === "tx-imp") { holdGo("tx"); lazy("ledger").then(() => typeof lgOpenImport === "function" && lgOpenImport()).catch(err => toast("載入匯入模組失敗：" + err.message)); return; } W.hsrcLegacy = v === "legacy"; holdSrcApply(); renderList(); }
   else if (t.closest("[data-imp]")) { const a = t.closest("[data-imp]").dataset.imp; if (a !== "export" && holdLgBlock()) return; if (a === "shot") { imp.scope = "hold"; $("#impFile").click(); } else if (a === "edit") openHoldEdit(); else if (a === "text") openImport("text"); else exportHold(); }
@@ -2470,14 +2472,14 @@ function renderHold() {
   const ok = R.filter(r => r.mv != null);
   if (!ok.length) { $("#lx").innerHTML = demo + holdDataCheck(m) + (W.off ? `<p class="note" style="padding:12px">需要部署到網站才有報價。</p>` : skel("等待報價…")); }
   const P = new Map(ok.map(r => [r.c, holdPnL(r.c, r.q)])), sum = k => ok.reduce((s, r) => s + (P.get(r.c)?.[k] || 0), 0);
-  const mv = sum("mv"), hc = sum("hc"), pnl = sum("pnl"), day = sum("day"), pct = hc > 0 ? pnl / hc : 0, divGot = ok.reduce((s, r) => s + (P.get(r.c)?.divGot || 0), 0), divYr = ok.reduce((s, r) => s + (P.get(r.c)?.divYr || 0), 0);
+  const mv = sum("mv"), hc = sum("hc"), pnl = sum("pnl"), day = sum("day"), pct = hc > 0 ? pnl / hc : 0, divGot = ok.reduce((s, r) => s + (P.get(r.c)?.divGot || 0), 0);
   // 環：藍色是成本，綠（跌）或紅（漲）是報酬佔成本的比例
   const deg = Math.min(360, Math.abs(pct) * 360), ring = `conic-gradient(var(--${pnl >= 0 ? "up" : "down"}) 0deg ${deg}deg, var(--accent) ${deg}deg 360deg)`;
   const seg = (k, opts) => `<div class="seg yh-seg" role="group">${opts.map(([v, t]) => `<button data-hset="${k}" data-v="${v}" aria-pressed="${String(!!W[k]) === v}">${t}</button>`).join("")}</div>`;
   if (ok.length) $("#lx").innerHTML = demo + holdDataCheck(m) + `<div class="yh-top"><div class="yh-ring" style="background:${ring}"><span>股票報酬<b class="${cls(pnl)}">${sgn(pct * 100, 2)}%</b></span></div>
     <div class="yh-sum">${us ? "" : seg("hdiv", [["true", "含息"], ["false", "不含息"]])}
       <dl><dt>股票市值</dt><dd>${money(mv)}</dd><dt><i class="sq acc"></i>總成本</dt><dd>${money(hc)}</dd><dt><i class="sq ${pnl >= 0 ? "up" : "down"}"></i>報酬</dt><dd class="${cls(pnl)}">${sgn(pnl)}</dd><dt>今日損益</dt><dd class="${cls(day)}">${sgn(day)}</dd></dl></div></div>
-    ${us ? "" : `<div class="yh-bar"><span>已領股息 <b>${divGot ? Math.round(divGot).toLocaleString() : "—"}</b></span><span>一年約可領 <b>${divYr ? Math.round(divYr).toLocaleString() : "—"}</b></span>
+    ${us ? "" : `<div class="yh-bar"><span>已領股息 <b>${divGot ? Math.round(divGot).toLocaleString() : "—"}</b></span><button type="button" class="linkbtn" data-hgodiv>未來 12 個月股利 ›</button>
       <label class="chk"><input type="checkbox" data-hopt="hfee" ${W.hfee ? "checked" : ""}> 扣費稅</label><select data-hopt="hdisc" aria-label="手續費折扣" ${W.hfee ? "" : "disabled"}>${[[1, "手續費不打折"], [0.6, "6 折"], [0.5, "5 折"], [0.38, "3.8 折"], [0.28, "2.8 折"], [0.2, "2 折"]].map(([v, t]) => `<option value="${v}" ${W.hdisc === v ? "selected" : ""}>${t}</option>`).join("")}</select></div>`}`;
   const k = W.holdSort, dir = W.holdDir, val = r => (k === "pnl" ? P.get(r.c)?.pnl : k === "day" ? r.day : k === "chgPct" ? r.chgPct : r.mv);
   R.sort((a, b) => ((val(b) ?? -1e18) - (val(a) ?? -1e18)) * dir);
@@ -2490,7 +2492,7 @@ function renderHold() {
     <span><b>${r.h.sh.toLocaleString()}</b><small class="${cls(r.day)}">${sgn(r.day)}</small></span>
     <span class="${cls(p?.pnl)}"><b>${sgn(p?.pnl)}</b><small>${p?.pct != null ? sgn(p.pct, 2) + "%" : "—"}</small></span></button>
     ${open && p ? `<div class="yh-det"><dl><dt>市值</dt><dd>${money(p.mv)}</dd><dt>持有成本</dt><dd>${money(p.hc)}</dd><dt>配息總額</dt><dd>${p.divGot != null ? p.divGot.toLocaleString() : us ? "—" : "填買進日期才算得出來"}</dd><dt>損益平衡點</dt><dd>${fmtA(p.be)}</dd>
-      ${us ? "" : `<dt>一年約可領</dt><dd>${p.divYr ? Math.round(p.divYr).toLocaleString() : "—"}</dd><dt>費稅（估）</dt><dd>${Math.round(p.fee + p.tax).toLocaleString()}</dd>`}</dl>
+      ${us ? "" : `<dt>費稅（估）</dt><dd>${Math.round(p.fee + p.tax).toLocaleString()}</dd>`}</dl>
       <div class="yh-act"><button class="btn sm primary" data-sel="${r.c}">看走勢 ›</button><button class="btn sm" data-imp="edit">編輯庫存</button></div></div>` : ""}</li>`; }).join("");
   // 持股佔比
   if (ok.length > 1 && mv > 0) { const parts = ok.slice().sort((a, b) => b.mv - a.mv), top = parts.slice(0, 4), rest = parts.slice(4).reduce((s, r) => s + r.mv, 0), slices = [...top.map(r => ({ n: nameOf(r.c).length > 14 ? nameOf(r.c).slice(0, 14) + "…" : nameOf(r.c), v: r.mv })), ...(rest ? [{ n: "其他", v: rest }] : [])];
