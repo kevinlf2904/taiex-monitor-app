@@ -22,6 +22,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f
 .nav-in nav { margin-left: auto; display: flex; gap: 14px; font-size: 14px; } .nav-in nav a { color: var(--muted); text-decoration: none; } .nav-in nav a:hover, .nav-in nav a[aria-current] { color: var(--ink); }
 @media (max-width: 520px) { .bl-t small { display: none; } .nav-in nav { gap: 10px; font-size: 13px; } }
 .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+main { margin-left: auto; margin-right: auto; } /* minimal.css 給 main 上限 1080px 但沒有置中，桌機整頁比上方導覽偏左 90px（#333 D1） */
 .phero { position: relative; padding: 56px 0 28px; border-bottom: 1px solid var(--line); } .phero::before { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 32px 32px; -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent); mask-image: linear-gradient(180deg, #000 30%, transparent); } .phero .wrap { position: relative; }
 .k { font: 500 12px "JetBrains Mono", monospace; letter-spacing: .18em; color: var(--muted); margin: 0 0 10px; }
 h1 { font: 600 clamp(28px, 5vw, 48px)/1.15 "Space Grotesk", var(--font-display); margin: 0 0 12px; letter-spacing: -.01em; }

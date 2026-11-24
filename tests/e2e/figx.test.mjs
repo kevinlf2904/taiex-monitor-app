@@ -13,6 +13,8 @@ for (const width of [390, 1280]) test(`產業圖解互動、群島無框、內�
   // 群島和全站一樣無框：沒有框線、底色、陰影；選中用細底線
   const st = await p.evaluate(() => { const c = getComputedStyle(document.querySelector('.iisl[aria-pressed="true"]') || document.querySelector(".iisl")); return [c.borderTopWidth, c.backgroundColor, c.backgroundImage, getComputedStyle(document.querySelector(".iisl-banner")).borderTopWidth]; });
   assert.deepEqual(st, ["0px", "rgba(0, 0, 0, 0)", "none", "0px"]);
+  // 環圖底圈和弧一樣粗（#333 A3：底圈被全站 svg circle 規則壓成 1.2px）
+  assert.deepEqual(await p.evaluate(() => [".iisl-ring .tr", ".iisl-ring .ia"].map(q => getComputedStyle(document.querySelector(q)).strokeWidth)), ["6px", "6px"]);
   // 產業圖解 → 點一張圖：上排選單還在
   await p.click('#lx [data-iview="gallery"]'); await p.waitForFunction(() => indFigsLoad.done, null, { timeout: 15000 });
   await p.click(".igcard >> nth=0"); await p.waitForSelector(".ifig .fbadge");
