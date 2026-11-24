@@ -787,7 +787,7 @@ body.navback-on { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 .iisl-name i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ic); }
 .iisl-count { flex: none; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 .iisl-ring { grid-area: ring; justify-self: center; width: 96px; height: 96px; display: block; overflow: visible; }
-.iisl-ring .tr { stroke: color-mix(in srgb, var(--ink) 9%, transparent); }
+.iisl-ring .tr { stroke: color-mix(in srgb, var(--ink) 9%, transparent); stroke-width: 6px; } /* minimal.css 的 svg circle[stroke-width] 會把底圈壓成 1.2px，和上面 6px 的弧不一樣粗（#333 A3） */
 .iisl-ring .core { fill: transparent; }
 .iisl-ring .v { font: 600 15px var(--font-num); } .iisl-ring .k { font-size: 9.5px; fill: var(--muted); letter-spacing: .08em; }
 .iisl .ia { transition: stroke-opacity .2s; }
@@ -1306,7 +1306,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.24-247</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.24-263</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -3552,25 +3552,28 @@ function mfVizOnlySvg(rawPts, { viz = W.mf.viz, w, h, id = "mfb", scale, sel = W
     });
     return wrapSvg(g);
   }
+  // 板塊多（「全部板塊」約 87 個）時每列只剩 5px：只畫資金進出最大的幾個，每列至少 16px，上方註明共幾個（完整清單在「排行」）（#333 A4）
+  const mfTopN = (L, room) => { const n = Math.max(1, Math.floor(room / 16)); return L.length <= n ? L : L.slice().sort((a, b) => Math.abs(b.net5) - Math.abs(a.net5)).slice(0, n); };
+  const mfMore = (n, all) => (n < all ? `<text class="bax-t" x="6" y="11" style="font-size:10px">資金進出最大的 ${n} 個，共 ${all} 個（完整見「排行」）</text>` : "");
   if (viz === "bar") {
-    const rows = pts.slice().sort((a, b) => b.net5 - a.net5), top = 22, bot = H0 - 26, RH = (bot - top) / Math.max(1, rows.length), L = 110, cx = L + (W0 - L - 24) / 2, half = (W0 - L - 80) / 2, fs = RH < 20 ? 11 : 12.5;
-    let g = `<line class="bax" x1="${cx}" y1="14" x2="${cx}" y2="${bot}"/><text class="bax-t" x="${cx - 6}" y="${H0 - 8}" text-anchor="end">← 淨流出</text><text class="bax-t" x="${cx + 6}" y="${H0 - 8}">淨流入 →</text>`;
+    const rows = mfTopN(pts, H0 - 48).sort((a, b) => b.net5 - a.net5), top = 22, bot = H0 - 26, RH = (bot - top) / Math.max(1, rows.length), L = 110, cx = L + (W0 - L - 24) / 2, half = (W0 - L - 80) / 2, fs = RH < 20 ? 11 : 12.5;
+    let g = mfMore(rows.length, pts.length) + `<line class="bax" x1="${cx}" y1="14" x2="${cx}" y2="${bot}"/><text class="bax-t" x="${cx - 6}" y="${H0 - 8}" text-anchor="end">← 淨流出</text><text class="bax-t" x="${cx + 6}" y="${H0 - 8}">淨流入 →</text>`;
     rows.forEach((s, i) => {
       const y = top + i * RH, w = (Math.abs(s.net5) / mxN) * half, x = s.net5 >= 0 ? cx : cx - w, ax = cx + (s.accel / mxA) * half * 0.9, bh = Math.max(6, RH - 6);
       g += `<g ${bcls(s)}><rect x="6" y="${y.toFixed(1)}" width="${W0 - 12}" height="${RH.toFixed(1)}" fill="transparent"/>
         <text x="${L - 8}" y="${(y + RH * 0.68).toFixed(1)}" text-anchor="end" style="font-size:${fs}px;fill:var(--ink)">${esc(s.name.slice(0, 7))}</text>
         <rect x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" width="${Math.max(2, w).toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${col(s)}" fill-opacity=".85"/>
         <line class="mf-flow-line" x1="${cx}" y1="${(y + 3 + bh / 2).toFixed(1)}" x2="${(s.net5 >= 0 ? x + w : x).toFixed(1)}" y2="${(y + 3 + bh / 2).toFixed(1)}" stroke="#fff" stroke-width="1.2" stroke-opacity=".5"/>
-        <text x="${(s.net5 >= 0 ? x + w + 5 : x - 5).toFixed(1)}" y="${(y + RH * 0.68).toFixed(1)}" text-anchor="${s.net5 >= 0 ? "start" : "end"}" class="bax-t" style="font-size:10.5px">${fmt(s.net5)}</text>
+        ${(() => { const t = fmt(s.net5), flip = s.net5 < 0 && x - 5 - t.length * 6.5 < L + 2; return `<text x="${(s.net5 >= 0 || flip ? (flip ? cx + 5 : x + w + 5) : x - 5).toFixed(1)}" y="${(y + RH * 0.68).toFixed(1)}" text-anchor="${s.net5 >= 0 || flip ? "start" : "end"}" class="bax-t" style="font-size:10.5px">${t}</text>`; })()}
         <path d="M${ax.toFixed(1)} ${(y + 3).toFixed(1)} l3.5 -3.5 h-7 z" fill="var(--ink)" opacity=".75"/></g>`;
     });
     return wrapSvg(g);
   }
   if (viz === "heat") {
-    const rows = pts.slice().sort((a, b) => b.net5 - a.net5), K = Math.max(1, ...rows.map(s => (s.d10 || []).length)), L = 104, top = 30, RH = (H0 - top - 12) / Math.max(1, rows.length), CW = (W0 - L - 68) / K, fs = RH < 20 ? 11 : 12;
+    const rows = mfTopN(pts, H0 - 42).sort((a, b) => b.net5 - a.net5), K = Math.max(1, ...rows.map(s => (s.d10 || []).length)), L = 104, top = 30, RH = (H0 - top - 12) / Math.max(1, rows.length), CW = (W0 - L - 68) / K, fs = RH < 20 ? 11 : 12;
     const mxD = Math.max(1, ...rows.flatMap(s => (s.d10 || []).map(Math.abs))), cellCol = v => { const k = Math.min(1, Math.abs(v) / mxD) ** 0.7; return v >= 0 ? `rgba(232,96,60,${(0.1 + 0.82 * k).toFixed(2)})` : `rgba(34,168,122,${(0.1 + 0.82 * k).toFixed(2)})`; };
     const dates = rows[0]?.dDates || [];
-    let g = Array.from({ length: K }, (_, k) => `<text class="bax-t" x="${(L + k * CW + CW / 2).toFixed(1)}" y="${top - 8}" text-anchor="middle" style="font-size:10px">${dates[k] ? dates[k].slice(5).replace("-", "/") : k === K - 1 ? "今日" : "D-" + (K - 1 - k)}</text>`).join("")
+    let g = mfMore(rows.length, pts.length) + Array.from({ length: K }, (_, k) => `<text class="bax-t" x="${(L + k * CW + CW / 2).toFixed(1)}" y="${top - 8}" text-anchor="middle" style="font-size:10px">${dates[k] ? dates[k].slice(5).replace("-", "/") : k === K - 1 ? "今日" : "D-" + (K - 1 - k)}</text>`).join("")
       + `<text class="bax-t" x="${W0 - 32}" y="${top - 8}" text-anchor="middle" style="font-size:10px">累計</text>`;
     rows.forEach((s, i) => {
       const y = top + i * RH, d = s.d10 || [s.net1 || 0];
@@ -4411,9 +4414,14 @@ function gxMount() {
     if (pinch && pts.size === 2) { const n = pinchInfo(); G.px = (G.px || 0) + n.x - pinch.x; G.py = (G.py || 0) + n.y - pinch.y; zoomAt(n.d / pinch.d, n.x, n.y); pinch = n; return; }
     if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (moved && drag.pan) { const w = cv.clientWidth, h = cv.clientHeight, z = G.zoom || 1; G.px = Math.max(-w * 0.5 * z, Math.min(w * 0.5 * z, drag.px + dx)); G.py = Math.max(-h * 0.5 * z, Math.min(h * 0.5 * z, drag.py + dy)); idle = performance.now(); dirty = true; } // 放大後拖曳＝移動畫面
       else if (moved) { G.th = drag.th + dx * 0.008; if (e.pointerType === "mouse" || G.free) G.ph = Math.max(-0.05, Math.min(0.8, drag.ph + dy * 0.004)); idle = performance.now(); dirty = true; } return; }
-    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); if (id !== G.hover) { G.hover = id; cv.style.cursor = id ? "pointer" : G.panMode || e.shiftKey ? "move" : "grab"; dirty = true; } gxCard(card, id, x, y); } });
+    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); cv.style.cursor = id ? "pointer" : G.panMode || e.shiftKey ? "move" : "grab";
+      // 移開星球時卡片先留 0.35 秒，滑鼠移進卡片就一直留著，才按得到「換到中心」「題材內頁」（#333 A3）
+      if (!id) { if (G.hover && !card.hidden && !cardT) cardLater(); return; } cardStop(); if (id !== G.hover) { G.hover = id; dirty = true; } gxCard(card, id, x, y); } });
+  let cardT = 0; const cardStop = () => { clearTimeout(cardT); cardT = 0; }, cardLater = () => { cardStop(); cardT = setTimeout(() => { cardT = 0; if (G.pin || card.matches(":hover")) return; G.hover = null; card.hidden = true; dirty = true; }, 350); };
+  card.addEventListener("pointerenter", e => { if (e.pointerType === "mouse") cardStop(); });
+  card.addEventListener("pointerleave", e => { if (e.pointerType === "mouse" && !G.pin && e.relatedTarget !== cv) cardLater(); });
   cv.addEventListener("pointercancel", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; });
-  cv.addEventListener("pointerleave", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; if (!G.pin && G.hover) { G.hover = null; card.hidden = true; dirty = true; } });
+  cv.addEventListener("pointerleave", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; if (!G.pin && G.hover) { if (e.pointerType === "mouse") cardLater(); else { G.hover = null; card.hidden = true; dirty = true; } } });
   cv.addEventListener("pointerup", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; const was = drag; drag = G.drag = null; if (G.pend) { G.pend = false; setTimeout(renderInd); } if (!was || moved) return;
     const [x, y] = xy(e), id = hit(x, y);
     if (e.pointerType === "mouse") { if (id && id !== W.gxS.core) { W.indS.focus = id; renderInd(); } return; }
@@ -6442,7 +6450,7 @@ function renderCost() {
 }
 
 /* ---------- 小圖：柱狀＋折線（營收、EPS）、本益比區間 ---------- */
-function barLineSvg(items, { bar = "var(--accent)", line = "var(--s1)", fmtV = v => v, fmtY = v => v + "%" } = {}) {
+function barLineSvg(items, { bar = "color-mix(in srgb, var(--accent) 55%, transparent)", line = "var(--s1)", fmtV = v => v, fmtY = v => v + "%" } = {}) {
   if (!items.length) return "";
   const Wv = 600, Hv = 170, P = 26, bw = Math.min(70, (Wv - P * 2) / items.length), x0 = (Wv - bw * items.length) / 2, vs = items.map(x => x.v), mx = Math.max(0, ...vs), mn = Math.min(0, ...vs), ys = items.map(x => x.y).filter(v => v != null), yx = Math.max(...ys, 1), yn = Math.min(...ys, 0);
   const Yv = v => P + (mx - v) / ((mx - mn) || 1) * (Hv - P * 2), Yy = v => P + (yx - v) / ((yx - yn) || 1) * (Hv - P * 2);

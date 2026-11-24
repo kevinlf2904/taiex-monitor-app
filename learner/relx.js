@@ -94,6 +94,7 @@ function relLinked() {
 // ---------- 小元件 ----------
 const relChip = (t, extra = "") => `<button class="igchip" data-iopen="${t.id}" style="--ic:${indCol(t)}"><span class="itag">${MK_NAME[t.mk]}</span>${esc(t.name)}${extra}</button>`;
 const relR = v => (v == null ? "—" : (v >= 0 ? "" : "−") + Math.abs(v).toFixed(2));
+// 相關係數標籤（.rv）的底色用 0.65 倍（透明度最高約 55%）：原本 85% 的亮藍在暗色主題配白字只有 3.2:1（#333 A2）；壓低後亮暗主題的文字色都夠清楚
 const relRcol = v => (v == null ? "transparent" : v >= 0 ? `color-mix(in srgb, #38bdf8 ${Math.round(Math.min(1, v) * 85)}%, transparent)` : `color-mix(in srgb, #f472b6 ${Math.round(Math.min(1, -v) * 85)}%, transparent)`);
 const relT = id => INDT.get(id);
 function relMacroNow(k) { const s = k && W.mc?.series?.find(x => x.id === k); if (!s?.last) return ""; const u = s.unit || "", v = s.last[1], y = s.y1?.[1];
@@ -146,7 +147,7 @@ function relHeat(S) {
   let h = `<div class="ichips" style="margin:0 12px">${IND.networks.map(n => `<button class="ichip" data-rel="net:${n.id}" aria-pressed="${n.id === net.id}">${esc(n.name)}</button>`).join("")}</div>
     <div class="seg scrseg" role="group" aria-label="相關係數"><button data-rel="k:x" aria-pressed="${S.k !== "c"}">扣掉大盤</button><button data-rel="k:c" aria-pressed="${S.k === "c"}">原始報酬</button></div>`;
   if (N < 2) return h + `<p class="note gnote">這張網絡的題材還沒有足夠的股價資料。</p>`;
-  const lab = 122, cs = Math.max(8, Math.min(22, Math.floor(((isMobile() ? 360 : 640) - lab) / N))), W0 = lab + N * cs, H0 = 16 + N * cs;
+  const lab = 122, cs = Math.max(15, Math.min(22, Math.floor(((isMobile() ? 360 : 640) - lab) / N))), W0 = lab + N * cs, H0 = 16 + N * cs;
   let g = ""; ids.forEach((a, i) => { const t = INDT.get(a), nm = t.name.length > 8 ? t.name.slice(0, 7) + "…" : t.name;
     g += `<text x="${lab - 4}" y="${16 + i * cs + cs / 2 + 3.5}" text-anchor="end" class="rhl">${i + 1} ${esc(nm)}<title>${esc(t.name)}</title></text><text x="${lab + i * cs + cs / 2}" y="11" text-anchor="middle" class="rhn">${i + 1}</text>`;
     ids.forEach((b, j) => { const v = a === b ? 1 : relCorr(a, b, S.k === "c" ? "c" : "x"), sel = S.cell === `${a}|${b}` || S.cell === `${b}|${a}`;
@@ -167,13 +168,13 @@ function relSurprise() {
   }
   out.sort((x, y) => y.v - x.v);
   return `<section class="iseg"><h4>意外的連動 <span class="note">扣掉大盤後仍常一起漲跌，但產業網絡裡沒有連在一起、公司也不太重疊</span></h4>
-    ${out.length ? `<div class="rlist">${out.slice(0, 20).map(x => `<div class="rpair"><div class="ichips">${relChip(x.A)}<span class="rvs">×</span>${relChip(x.B)}</div><b class="rv" style="background:${relRcol(x.v)}">${relR(x.v)}</b></div>`).join("")}</div>
+    ${out.length ? `<div class="rlist">${out.slice(0, 20).map(x => `<div class="rpair"><div class="ichips">${relChip(x.A)}<span class="rvs">×</span>${relChip(x.B)}</div><b class="rv" style="background:${relRcol(x.v * 0.65)}">${relR(x.v)}</b></div>`).join("")}</div>
       <p class="note">可能是同一批資金在輪動、受同一個總經數字影響，或有還沒畫進網絡的供應關係；相關不代表因果。</p>` : `<p class="note">目前沒有找到。</p>`}</section>`;
 }
 function relLeadView() {
   const L = W.rel.tc.lead.filter(x => relT(x[0]) && relT(x[1]));
   return `<p class="note gnote">美股收盤時台股、日股、韓股還沒開盤，所以美股題材今晚的漲跌，常反映在亞洲題材隔天。下面是「先動的題材當天漲跌」和「跟著動的題材下一個交易日漲跌」的相關係數（近一年日報酬），反方向的相關明顯比較低才列出。</p>
-    ${L.length ? `<div class="rlist">${L.slice(0, 40).map(([a, b, r, back, n]) => `<div class="rpair"><div class="ichips">${relChip(relT(a))}<span class="rvs">→ 隔天</span>${relChip(relT(b))}</div><b class="rv" style="background:${relRcol(r / 100)}">${relR(r / 100)}</b><small class="note">反方向 ${back == null ? "—" : relR(back / 100)}・${n} 天</small></div>`).join("")}</div>`
+    ${L.length ? `<div class="rlist">${L.slice(0, 40).map(([a, b, r, back, n]) => `<div class="rpair"><div class="ichips">${relChip(relT(a))}<span class="rvs">→ 隔天</span>${relChip(relT(b))}</div><b class="rv" style="background:${relRcol(r / 100 * 0.65)}">${relR(r / 100)}</b><small class="note">反方向 ${back == null ? "—" : relR(back / 100)}・${n} 天</small></div>`).join("")}</div>`
       : `<p class="note gnote">目前沒有明顯的領先關係。</p>`}`;
 }
 // 題材強弱：題材等權指數的 1 週／1 月／3 月／1 年報酬

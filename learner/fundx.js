@@ -120,12 +120,13 @@ function fxMap(E, D, ok) {
   if (P.length < 3) return `<section class="mk"><h3>同業估值地圖</h3><div class="erbar">${sel}</div><p class="note">這個產業有本益比的公司太少（虧損公司沒有本益比）。</p></section>`;
   // 版面和動能矩陣的「圓點矩陣」一樣：四象限（分界是產業中位數）、象限淡色底、無框半透明圓點、名稱與本益比放在圓裡；手機用方形，字不會被縮得太小
   const Wd = isMobile() ? 360 : 612, Hd = 360, top = 30, bot = Hd - 30, L = 8, R = Wd - 8;
-  const pes = P.map(p => p.pe), peLo = Math.max(0, Math.min(...pes) * 0.85), peMax = Math.min(80, Math.max(...pes) * 1.08), ys = P.map(p => Math.max(-60, Math.min(150, p.yoy)));
+  const pes = P.map(p => p.pe), peLo = Math.max(0, Math.min(...pes) * 0.85), peMed = qMed(pes), peMax = Math.max(peLo + 5, Math.min(Math.max(80, peMed * 2.5), Math.max(...pes) * 1.08)), ys = P.map(p => Math.max(-60, Math.min(150, p.yoy)));
   const yLo = Math.min(-10, ...ys) - 5, yHi = Math.max(20, ...ys) + 5, X = v => L + 4 + ((Math.min(v, peMax) - peLo) / (peMax - peLo || 1)) * (R - L - 8), Y = v => top + (1 - (Math.max(yLo, Math.min(yHi, v)) - yLo) / (yHi - yLo)) * (bot - top);
   const mPe = qMed(pes), mY = qMed(P.map(p => p.yoy)), rMax = Math.max(...P.map(p => p.rev), 1e-9), cur = W.sel, pk = P.find(p => p.c === E.mapPick) || null;
   const cx = X(mPe), cy = Y(mY), qOf = p => (p.pe <= mPe ? (p.yoy >= mY ? "cg" : "cd") : p.yoy >= mY ? "eg" : "ed");
+  // 月營收是負數（調整、沖銷）時當 0，避免 Math.pow 算出 NaN 半徑（#333 驗證時發現）
   // 圓點：半徑看月營收（4～30；龍頭營收常是同業的幾十倍，次方取小一點，小公司的圓也放得下名稱）；互相推開不重疊，但留在自己的象限
-  const N = [...P].sort((a, b) => b.rev - a.rev).map(p => { const r = 4 + 26 * Math.pow(Math.min(1, p.rev / rMax), 0.42); return { p, q: qOf(p), r, x: X(p.pe), y: Y(p.yoy) }; });
+  const N = [...P].sort((a, b) => b.rev - a.rev).map(p => { const r = 4 + 26 * Math.pow(Math.min(1, Math.max(0, p.rev) / rMax), 0.42); return { p, q: qOf(p), r, x: X(p.pe), y: Y(p.yoy) }; });
   const clamp = n => { const lf = n.q[0] === "c", up = n.q[1] === "g";
     n.x = lf ? Math.max(L + n.r, Math.min(cx - 1, n.x)) : Math.min(R - n.r, Math.max(cx + 1, n.x)); n.y = up ? Math.max(top + n.r, Math.min(cy - 1, n.y)) : Math.min(bot - n.r, Math.max(cy + 1, n.y)); };
   N.forEach(clamp);
@@ -134,13 +135,13 @@ function fxMap(E, D, ok) {
       if (o > 0) { const ux = dx / d, uy = dy / d, k = o / 2; a.x -= ux * k; a.y -= uy * k; b.x += ux * k; b.y += uy * k; clamp(a); clamp(b); moved = true; } }
     if (!moved) break; }
   N.forEach(n => { n.lab = calcBubbleLabel(n.p.n, 0, n.r, `${n.p.pe.toFixed(1)}倍`); });
-  const Z = fxZoom(Wd, Hd), lab = (q, x, y, a) => `<text x="${x}" y="${y}" text-anchor="${a}" class="bq" style="fill:${FXQ[q][1]}">${a === "end" ? `${FXQ[q][0]} ${FXQ[q][2]}` : `${FXQ[q][2]} ${FXQ[q][0]}`}</text>`;
+  const Z = fxZoom(Wd, Hd), lab = (q, x, y, a) => `<text x="${x}" y="${y}" text-anchor="${a}" class="bq" style="fill:color-mix(in srgb, ${FXQ[q][1]} 62%, var(--ink))">${a === "end" ? `${FXQ[q][0]} ${FXQ[q][2]}` : `${FXQ[q][2]} ${FXQ[q][0]}`}</text>`;
   const svg = `<svg class="fxmap bubble" id="fxmap" viewBox="${Z.vb}" data-w="${Wd}" data-h="${Hd}" role="img" aria-label="${esc(ind)} 本益比與營收年增">
     <rect x="${L}" y="${top}" width="${cx - L}" height="${cy - top}" fill="${FXQ.cg[1]}" opacity=".06"/><rect x="${cx}" y="${cy}" width="${R - cx}" height="${bot - cy}" fill="${FXQ.ed[1]}" opacity=".06"/>
     <line x1="${cx}" y1="${top}" x2="${cx}" y2="${bot}" class="bax"/><line x1="${L}" y1="${cy}" x2="${R}" y2="${cy}" class="bax"/>
     ${lab("cg", L, 18, "start")}${lab("eg", R, 18, "end")}${lab("cd", L, Hd - 10, "start")}${lab("ed", R, Hd - 10, "end")}
     <text x="${R - 2}" y="${cy - 4}" text-anchor="end" class="bax-t">本益比 →</text><text x="${cx + 4}" y="${top + 10}" class="bax-t">營收年增 ↑</text>
-    <text x="${cx + 3}" y="${bot - 3}" class="fxmd">中位 ${mPe.toFixed(1)} 倍</text><text x="${L + 3}" y="${cy + 10}" class="fxmd">中位 ${erPct(mY)}</text>
+    <text x="${cx > R - 70 ? cx - 3 : cx + 3}" y="${bot - 3}" text-anchor="${cx > R - 70 ? "end" : "start"}" class="fxmd">中位 ${mPe.toFixed(1)} 倍</text><text x="${L + 3}" y="${cy + 10}" class="fxmd">中位 ${erPct(mY)}</text>
     <g class="bnodes">${N.map(n => `<g class="bnode${n.p.c === cur ? " cur" : ""}${n.p === pk ? " on" : ""}" data-fxpt="${esc(n.p.c)}" transform="translate(${n.x.toFixed(2)},${n.y.toFixed(2)})"><title>${esc(n.p.n)} ${n.p.c}：本益比 ${n.p.pe.toFixed(1)}、營收年增 ${erPct(n.p.yoy)}、月營收 ${n.p.rev.toFixed(1)} 億</title><circle r="${n.r.toFixed(1)}" fill="${FXQ[n.q][1]}"/></g>`).join("")}</g>
     <g class="blabs">${N.map(n => (n.lab ? `<g class="blab" style="--qc:${FXQ[n.q][1]};--bfs:${n.lab.fs.toFixed(1)}px" transform="translate(${n.x.toFixed(2)},${n.y.toFixed(2)})">${bubbleLabIn(n)}</g>` : "")).join("")}</g></svg>`;
   const at = new Map(N.map(n => [n.p.c, n]));

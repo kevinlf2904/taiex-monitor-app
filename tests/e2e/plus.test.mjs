@@ -143,6 +143,18 @@ for (const width of [390, 1280]) test(`財報「事件回測」「估值地圖�
   await p.click(".fxtip-x"); await p.waitForSelector(".fxtip", { state: "detached" });
   await p.click('.fxmap [data-fxpt="3105"] circle'); await p.click('.fxtip [data-sel="3105"]'); assert.equal(await p.evaluate(() => W.sel), "3105");
   assert.ok(await noOverflow(p));
+  // 月營收為負的公司（調整、沖銷）：圓點半徑不能是 NaN，也不能有 console 錯誤
+  const nan = await p.evaluate(() => { showList?.(); ER().view = "map"; ER().mapPick = null; const row = ER().data.rows.find(r => r[0] === "3105"); const old = row[4]; row[4] = -5e8; renderList();
+    const bad = [...document.querySelectorAll(".fxmap circle")].filter(c => !Number.isFinite(+c.getAttribute("r"))).length + [...document.querySelectorAll(".fxmap [transform]")].filter(g => /NaN/.test(g.getAttribute("transform"))).length; row[4] = old; renderList(); return bad; });
+  assert.equal(nan, 0, "負營收不能產生 NaN 圓點");
+  // 整個產業本益比都高於 80 倍（#333 A8：矽光子 96～180）：圓點要分散在圖裡，不能全擠在右框線；中位數標籤不能超出圖
+  const hp = await p.evaluate(() => { showList?.(); ER().view = "map"; ER().mapPick = null; const cs = [...document.querySelectorAll(".fxmap [data-fxpt]")].map(g => g.dataset.fxpt); [96.5, 145, 180].forEach((v, i) => { W.mfVal[cs[i]] = [v, ...(W.mfVal[cs[i]] || []).slice(1)]; }); renderList();
+    const svg = document.querySelector(".fxmap"), r = svg.getBoundingClientRect(), xs = [...svg.querySelectorAll("circle")].map(c => c.getBoundingClientRect()), md = [...svg.querySelectorAll(".fxmd")].find(t => /倍/.test(t.textContent)).getBoundingClientRect();
+    return { spread: Math.max(...xs.map(b => b.left)) - Math.min(...xs.map(b => b.left)), w: r.width, out: Math.max(...xs.map(b => b.right - r.right), md.right - r.right) };
+  });
+  assert.ok(hp.spread > hp.w * 0.2, `圓點擠在一起：分散 ${hp.spread}／圖寬 ${hp.w}`); assert.ok(hp.out <= 1, `超出圖框 ${hp.out}px`);
+  const q = await p.evaluate(() => { document.documentElement.dataset.theme = "light"; const t = [...document.querySelectorAll(".fxmap .bq")].find(e => /貴＋成長/.test(e.textContent)); return getComputedStyle(t).fill; });
+  assert.notEqual(q, "rgb(226, 178, 58)", "亮色象限文字不能是原本的淡黃");
   await ctx.close(); assert.deepEqual(errs, []);
 });
 
