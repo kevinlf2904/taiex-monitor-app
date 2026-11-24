@@ -173,6 +173,41 @@ test("費用規則：買賣不同折扣、現股當沖、債券 ETF、實際費�
   assert.equal(L.feeDiff({ type: "dividend" }), null);
 });
 
+test("證交稅：現股當沖減半只適用股票；ETF、債券 ETF 當沖照各自稅率，不會比不當沖高（稽核 AUD-03）", () => {
+  const tax = (assetType, dayTrade) => L.estimateCosts({ type: "sell", market: "tw", shares: 1000, price: 100, assetType, dayTrade }).tax;
+  // 賣出 10 萬元：股票 0.3%／當沖 0.15%；ETF 0.1%（當沖也是）；債券 ETF 停徵 0（當沖也是）；沒標類型時當股票
+  assert.deepEqual([tax("stock", false), tax("stock", true)], [300, 150], "股票");
+  assert.deepEqual([tax("etf", false), tax("etf", true)], [100, 100], "ETF 當沖不是 0.15%");
+  assert.deepEqual([tax("bond_etf", false), tax("bond_etf", true)], [0, 0], "債券 ETF 當沖不是 0.15%");
+  assert.deepEqual([tax(null, false), tax(null, true)], [300, 150], "沒標類型＝股票");
+  for (const a of ["stock", "etf", "bond_etf", null]) assert.ok(tax(a, true) <= tax(a, false), `${a}：當沖不應比一般高`);
+  // 走完整流程：沒填稅額、從代號推類型的債券 ETF 與 ETF 當沖賣出
+  const R = L.buildLedger([
+    tw({ date: "2026-03-02", type: "buy", symbol: "00679B", shares: 1000, price: 30 }), tw({ date: "2026-03-02", type: "sell", symbol: "00679B", shares: 1000, price: 31, tax: null, dayTrade: true }),
+    tw({ date: "2026-03-03", type: "buy", symbol: "0050", shares: 1000, price: 100 }), tw({ date: "2026-03-03", type: "sell", symbol: "0050", shares: 1000, price: 101, tax: null, dayTrade: true }),
+  ]);
+  const sells = R.txs.map(x => x.tx).filter(t => t.type === "sell");
+  assert.deepEqual(sells.map(t => [t.symbol, t.assetType, t.tax]), [["00679B", "bond_etf", 0], ["0050", "etf", 101]]);
+});
+
+test("債券 ETF 證交稅停徵依交易日期判斷（稽核 AUD-04）：期間內 0、期間外照 ETF 0.1%；三讀延長只要改 until", () => {
+  const F = L.BOND_ETF_TAX_FREE, sell = (date, rules) => L.estimateCosts({ type: "sell", market: "tw", shares: 1000, price: 100, assetType: "bond_etf", date }, rules).tax;
+  assert.deepEqual([F.from, F.until], ["2017-01-01", "2026-12-31"], "現行法定期間（延長修法待三讀）");
+  assert.deepEqual([sell("2016-12-30"), sell("2017-01-01"), sell("2026-12-31"), sell("2027-01-04")], [100, 0, 0, 100], "期間前、首日、末日、期間後");
+  assert.equal(sell("2026-12-31", { tw: { ...L.DEFAULT_RULES.tw, discount: 0.5 } }), 0, "再平衡等地方換折扣時，停徵期間跟著規則帶過去");
+  // 三讀通過延長：只改規則的 until，2027 年起的賣出就回到 0
+  assert.equal(sell("2027-01-04", { tw: { ...L.DEFAULT_RULES.tw, bondEtfTaxFree: { from: "2017-01-01", until: "2036-12-31" } } }), 0, "延長到 2036 年底");
+  // 舊的自訂規則沒有 bondEtfTaxFree：不看日期，和以前一樣一律 taxBondEtf
+  const { bondEtfTaxFree, ...old } = L.DEFAULT_RULES.tw;
+  assert.equal(sell("2027-01-04", { tw: old }), 0, "舊規則不受影響");
+  // 一般 ETF、股票不受停徵期間影響
+  const tax = (assetType, date) => L.estimateCosts({ type: "sell", market: "tw", shares: 1000, price: 100, assetType, date }).tax;
+  assert.deepEqual([tax("etf", "2027-01-04"), tax("stock", "2027-01-04")], [100, 300]);
+  // 規則說明與回測的稅率註解寫同一個到期日，改期限時不會漏改其中一處
+  assert.ok(L.DEFAULT_RULES.tw.source.includes(F.until), "ledger 規則說明的到期日");
+  assert.ok(readFileSync(new URL("../learner/analysis.js", import.meta.url), "utf8").includes(`停徵到 ${F.until}`), "analysis.js taxOf 註解的到期日");
+});
+
 test("CSV 匯出：中文欄名、依日期排序、有 BOM；含逗號、引號的備註正確跳脫；開頭是 = + - @ 的文字前面加 ' 防止被當成公式", () => {
   const csv = L.toCSV([tw({ id: "b", date: "2026-02-01", type: "sell", shares: 1, price: 10, note: '=HYPERLINK("x")' }), tw({ id: "a", date: "2026-01-01", type: "buy", shares: 2, price: 9.5, note: "台積電, 第一筆 \"試算\"" })]);
   const lines = csv.replace(/^\ufeff/, "").trim().split("\r\n");

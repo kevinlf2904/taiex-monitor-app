@@ -1,4 +1,7 @@
-/* K線學堂共用樣式：主題色（淺色／深色的分層灰階）、基本樣式、K 線圖。learner/index.html 與 learner/watch.html 共用。 */
+/* K線學堂共用樣式：主題色、基本樣式、K 線圖。learner/index.html、watch.html、pro.html 共用。
+   這裡的 :root 只是「底層預設值」（黑白灰、宋體、4px 圓角）；實際畫面由後載入的 minimal.css 依 html[data-style] 覆蓋：
+   預設 lab（KLineLab 實驗室），另有 layout、minimal、pro、blue、paper、chalk，可在設定切換（見 core.js KL_STYLES）。
+   新增元件請用 var(--radius*)、var(--font-*)、var(--up)／var(--down) 等變數，不要寫死字體或色碼，才會跟著風格切換。 */
 :root {
   /* 黑白灰分層：底色 → 面板 → 面板裡的卡片／按鈕 → 輸入框、選中項；主色是深灰（淺色）／淺灰（深色），只有漲跌用紅綠 */
   --bg: #e3e3e1;
@@ -429,7 +432,7 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-ix { grid-template-columns: 46px minmax(0, 1fr) 88px; }
 .td-ix-plot, .td-sc-plot { position: relative; height: 128px; }
 .td-ix-plot { grid-column: 2; }
-.td-sc-plot { height: 96px; margin-bottom: 16px; }
+.td-sc-plot { height: 96px; margin-bottom: 22px; } /* 下方「昨收／開盤／現在」約 17px 高，原本 16px 會被切掉一點（#333 A9） */
 .td-ix-y { position: relative; grid-column: 1; height: 128px; }
 .td-ix-y span { position: absolute; right: 3px; transform: translateY(-50%); color: var(--muted); font: 10px/1 var(--font-num); white-space: nowrap; }
 .td-ix .td-ix-lv { grid-column: 3; height: 128px; }
@@ -465,7 +468,7 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .td-ix-lv span { position: absolute; left: 0; right: 0; transform: translateY(-50%); font-size: 10.5px; line-height: 1.2; white-space: nowrap; color: var(--muted); }
 .td-ix-lv .up, .td-ix-lv .down { color: var(--level); } /* 位階標籤：中性色，文字本身寫著「壓力」「支撐」 */ .td-ix-lv .piv { color: var(--ink); } .td-ix-lv b { font-weight: 400; }
 .td-ix-t { grid-column: 1; display: flex; justify-content: space-between; font-size: 10.5px; margin-top: 3px; }
-.td-sc-x { position: absolute; top: calc(100% + 4px); transform: translateX(-50%); font-size: 10.5px; white-space: nowrap; } .td-sc-x:first-of-type { transform: none; }
+.td-sc-x { position: absolute; top: calc(100% + 4px); transform: translateX(-50%); font-size: 10.5px; line-height: 1.2; white-space: nowrap; } .td-sc-x:first-of-type { transform: none; }
 .td-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .td-side .dh-core-grid { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 0; margin: 0; border-top: 1px solid var(--line); }
 .td-side .dh-core-card { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 8px 8px 8px 0; }

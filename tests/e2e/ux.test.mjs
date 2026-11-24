@@ -213,3 +213,23 @@ test("手機標題列：KLineLab 字標不會疊到搜尋放大鏡", async () =>
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });
+
+// 桌機滑鼠：移到圓點出現窗格，滑鼠移進窗格時窗格不能消失，按得到「換到中心」（#333 A3）
+test("產業網絡星系：桌機滑鼠可以移進資訊窗格按「換到中心」", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  await p.emulateMedia({ reducedMotion: "reduce" });
+  await p.evaluate(() => { setLt("ind"); W.indS.view = "network"; W.indS.nstyle = null; W.indS.focus = null; W.indS.gxo = null; renderList(); });
+  await p.waitForSelector("canvas.igalaxy"); await p.waitForTimeout(1500);
+  await p.evaluate(() => document.querySelector(".gstage").scrollIntoView({ block: "center" })); await p.waitForTimeout(200);
+  const h = await p.evaluate(() => { const S = W.gxS; return S.hits.filter(x => x.id !== S.core && x.z > 0.1).sort((a, b) => b.z - a.z)[0]; });
+  const bb = await p.locator(".gstage").boundingBox(); await p.mouse.move(bb.x + h.x, bb.y + h.y, { steps: 3 });
+  await p.waitForSelector(".gcard:not([hidden]) [data-ifocus]");
+  const btn = await p.locator(".gcard [data-ifocus]").boundingBox();
+  await p.mouse.move(btn.x + btn.width / 2, btn.y + btn.height / 2, { steps: 12 }); await p.waitForTimeout(500);
+  assert.equal(await p.evaluate(() => document.querySelector(".gcard").hidden), false, "滑鼠在窗格上，窗格要留著");
+  await p.mouse.down(); await p.mouse.up(); await p.waitForFunction(id => W.gxS?.core === id, h.id, { timeout: 3000 });
+  // 移出窗格到畫布外，窗格會收起
+  await p.mouse.move(5, 5, { steps: 4 }); await p.waitForTimeout(600);
+  assert.equal(await p.evaluate(() => document.querySelector(".gcard").hidden), true, "移開後窗格收起");
+  await ctx.close(); assert.deepEqual(errs, []);
+});

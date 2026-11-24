@@ -12,7 +12,7 @@
 // 金鑰只放在 Vercel 環境變數（GEMINI_API_KEY／ANTHROPIC_API_KEY），不會出現在前端。整理結果只存在使用者的瀏覽器。
 
 import { geminiModels, GEMINI_ORDER } from "./_gemini.js";
-import { WEB_TRIES, aiLimit, claudeUsable } from "./_limit.js";
+import { WEB_TRIES, aiLimit, claudeUsable, loadAnthropic } from "./_limit.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { userMsg } from "./_err.js";
 import http from "node:http";
@@ -199,7 +199,7 @@ export async function geminiJSON(parts, key, deadline, extra = {}, first = null,
 }
 async function claudeJSON(prompt) {
   if (!claudeUsable()) throw new Error("Claude 沒有啟用"); // 總開關沒開就不呼叫（付費）
-  const { default: Anthropic } = await import("@anthropic-ai/sdk"); // 用到才載入（排程、探測只用 Gemini，不用裝這個套件）
+  const Anthropic = await loadAnthropic(); // 用到才載入（排程、探測只用 Gemini，不用裝這個套件）
   const client = new Anthropic({ timeout: 50000, maxRetries: 0 }); // 要在 Vercel 的 60 秒內回完
   const msg = await client.beta.messages.create({ model: "claude-opus-5-5", max_tokens: 12000, output_config: { effort: "low" }, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", messages: [{ role: "user", content: prompt }] });
   return { text: msg.content.filter(b => b.type === "text").map(b => b.text).join(""), model: msg.model };
