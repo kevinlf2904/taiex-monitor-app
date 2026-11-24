@@ -21,6 +21,9 @@ async function page(width, { yieldFail = false } = {}) {
   return { ctx, p, errs, ok, bad };
 }
 
+// 不支援 subgrid 的瀏覽器：父層的欄寬規則只能出現在 @supports (grid-template-columns:subgrid) 裡，否則每列會被擠進父層的單一格（Codex 審查 P2）
+const outsideSupports = (p, sel) => p.evaluate(sel => { const bad = []; const walk = (rules, inSup) => { for (const r of rules) { if (r instanceof CSSStyleRule) { if (r.selectorText === sel && !inSup && r.style.gridTemplateColumns) bad.push(r.cssText); } else if (r instanceof CSSSupportsRule) walk(r.cssRules, inSup || /subgrid/.test(r.conditionText)); else if (r.cssRules) walk(r.cssRules, inSup); } };
+  for (const s of document.styleSheets) { try { walk(s.cssRules, false); } catch {} } return bad; }, sel);
 for (const width of [390, 1280]) test(`股利分頁 ${width}：每月合計、已公告取代同一次的預估、和計算一致、不溢出`, async () => {
   const { ctx, p, errs } = await page(width);
   await p.waitForSelector("#lx .dvbars", { timeout: 30000 });
@@ -35,6 +38,10 @@ for (const width of [390, 1280]) test(`股利分頁 ${width}：每月合計、�
   assert.match(r.text, /未來 12 個月\s*\$?50,000/); assert.match(r.text, /已公告/); assert.match(r.text, /美股不估：.*NVDA|美股不估：.*輝達/);
   assert.doesNotMatch(r.text, /9999/, "只列持股");
   assert.match(r.text, /不是投資建議/);
+  // 每月長條的軌道一樣寬、左緣對齊：有沒有「含預估」、金額長短不同都一樣（#333 A10）
+  const tr = await p.evaluate(() => [...document.querySelectorAll("#lx .dvbar")].map(e => { const r = e.getBoundingClientRect(); return [r.left, r.width]; }));
+  assert.deepEqual(await outsideSupports(p, ".dvbars"), [], "不支援 subgrid 時父層沒有多欄");
+  for (const [l, w] of tr) { assert.ok(Math.abs(l - tr[0][0]) < 0.6 && Math.abs(w - tr[0][1]) < 0.6, width + "：軌道 " + [l, w] + " vs " + tr[0]); }
   assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width), "沒有水平溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });

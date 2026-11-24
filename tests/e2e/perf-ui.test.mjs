@@ -35,6 +35,32 @@ test("績效頁：重點數字、走勢、回撤、月報酬、歸因、估算�
   }
 });
 
+// 不支援 subgrid 的瀏覽器：父層的欄寬規則只能出現在 @supports (grid-template-columns:subgrid) 裡，否則每列會被擠進父層的單一格（Codex 審查 P2）
+const outsideSupports = (p, sel) => p.evaluate(sel => { const bad = []; const walk = (rules, inSup) => { for (const r of rules) { if (r instanceof CSSStyleRule) { if (r.selectorText === sel && !inSup && r.style.gridTemplateColumns) bad.push(r.cssText); } else if (r instanceof CSSSupportsRule) walk(r.cssRules, inSup || /subgrid/.test(r.conditionText)); else if (r.cssRules) walk(r.cssRules, inSup); } };
+  for (const s of document.styleSheets) { try { walk(s.cssRules, false); } catch {} } return bad; }, sel);
+test("績效版面（#333 A10）：誰賺誰賠零軸對齊、回撤圖提示不往下蓋、手機月報酬不切到 7～12 月、沒有過時的匯率文案", async () => {
+  for (const width of [390, 1280]) {
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+    await p.evaluate(tx => { store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "2026-11-01" }); W.lg = { view: "perf" }; W.lgPx = null; W.holdView = "tx"; setLt("hold"); }, TX);
+    await p.waitForSelector(".pfcard .pfattr", { timeout: 30000 });
+    // 讓同一張卡片裡金額長短差很多，舊寫法（每列各自排欄寬）零軸會錯位
+    await p.evaluate(() => { const b = document.querySelector(".pfattr li b"); b.textContent = "+NT$123,456,789"; });
+    const g = await p.evaluate(() => [...document.querySelectorAll(".pfattr")].map(u => [...u.querySelectorAll(".pfbar")].map(e => { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.width]; })));
+    for (const rows of g) for (const [c, w] of rows) { assert.ok(Math.abs(c - rows[0][0]) < 0.6, width + "：零軸位置 " + c + " vs " + rows[0][0]); assert.ok(Math.abs(w - rows[0][1]) < 0.6, width + "：長條軌道寬度"); }
+    assert.deepEqual(await outsideSupports(p, ".pfattr"), [], "不支援 subgrid 時父層不變成 grid");
+    const t = await p.evaluate(() => $("#lx").innerText); assert.doesNotMatch(t, /第 ?3 ?階段/, "不再寫「要等第 3 階段」"); assert.match(t, /美元原幣計算，不含匯率/);
+    // 回撤圖上移動：提示顯示在上面的淨值圖內，不超出淨值圖
+    const dd = await p.$(".pfplot.dd"); await dd.scrollIntoViewIfNeeded(); const db = await dd.boundingBox(); await p.mouse.move(db.x + db.width * 0.5, db.y + db.height / 2);
+    const tip = await p.evaluate(() => { const el = document.querySelector(".pftip:not([hidden])"), pl = el?.closest(".pfplot"); if (!el) return null; const a = el.getBoundingClientRect(), b = pl.getBoundingClientRect(); return { dd: pl.classList.contains("dd"), over: a.bottom - b.bottom, text: el.innerText }; });
+    assert.ok(tip, width + "：回撤圖上也有提示"); assert.equal(tip.dd, false); assert.ok(tip.over <= 0, width + "：提示超出淨值圖 " + tip.over + "px"); assert.match(tip.text, /回撤/);
+    // 月報酬：看得到的表不需要左右捲動（手機拆成上下半年），而且 12 個月都在
+    const mon = await p.evaluate(() => [...document.querySelectorAll(".pfmon")].filter(e => e.offsetParent).map(e => ({ sw: e.scrollWidth, cw: e.clientWidth, txt: e.innerText })));
+    assert.ok(mon.length >= 1);
+    for (const m of mon) { if (width < 500) assert.ok(m.sw <= m.cw + 1, width + "：月報酬被切到 " + m.sw + " > " + m.cw); for (const k of ["1月", "7月", "12月", "全年"]) assert.match(m.txt, new RegExp(k)); }
+    await ctx.close(); assert.deepEqual(errs, []);
+  }
+});
+
 test("手機觸控：手指點、左右拖曳顯示提示；在圖上上下滑仍然捲動頁面（真的觸控輸入，不是滑鼠）", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
   await p.evaluate(tx => { store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "2026-11-01" }); W.lg = { view: "perf" }; W.lgPx = null; W.holdView = "tx"; setLt("hold"); }, TX);
