@@ -829,7 +829,7 @@ body.navback-on { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 .ghud { position: absolute; left: 12px; top: 10px; font-size: 11px; font-weight: 200; letter-spacing: .03em; line-height: 1.5; color: #8fa9cc; pointer-events: none; } .ghud b { color: #e9f3ff; font-weight: 300; }
 .gzoom .gpan[aria-pressed="true"] { background: #2a4a7a; color: #fff; }
 .gx-free .igalaxy { touch-action: none; } .gzoom .gfree { padding: 0 10px; } .gzoom .gfree[aria-pressed="true"] { background: #2a4a7a; color: #fff; }
-.gzoom { position: static; width: fit-content; margin: 6px 0 0 auto; display: flex; gap: 2px; background: rgba(10, 22, 42, .7); border: 1px solid #22395e; border-radius: 8px; padding: 2px; z-index: 1; } .gzoom button { min-width: 32px; height: 28px; padding: 0 6px; font: 300 13px var(--font-num); color: #cfe2fb; background: none; border: 0; border-radius: 6px; cursor: pointer; } .gzoom button:hover { background: rgba(127, 196, 255, .14); } .gzoom .gzv { min-width: 44px; font: 300 11.5px var(--font-num); color: #cfe2fb; display: grid; place-items: center; } .gzoom .greset { padding: 0 10px; font-family: var(--font); font-size: 12px; }
+.gzoom { position: static; width: fit-content; margin: 6px 0 0 auto; display: flex; gap: 2px; background: rgba(10, 22, 42, .7); border: 1px solid #22395e; border-radius: 8px; padding: 2px; z-index: 1; } .gzoom button { min-width: 32px; height: 28px; padding: 0 6px; font: 300 13px var(--font-num); color: #cfe2fb; background: none; border: 0; border-radius: 6px; cursor: pointer; } .gzoom button:hover { background: rgba(127, 196, 255, .14); } .gzoom .gzv { min-width: 44px; font: 300 11.5px var(--font-num); color: #cfe2fb; display: grid; place-items: center; } .gzoom .greset { padding: 0 10px; font-family: var(--font-body); font-size: 12px; }
 .gcard { position: absolute; width: 230px; background: rgba(10, 22, 42, .9); border: 1px solid #2a4a78; border-radius: 10px; padding: 9px 11px; font-size: 12px; font-weight: 200; letter-spacing: .02em; color: #e9f3ff; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); display: grid; gap: 4px; z-index: 2; }
 .gcard[hidden] { display: none; } .gcard.dock { position: static; width: auto; margin: 6px 12px 0; background: #0b1a33; } @media (max-width: 900px) { .gcard { width: 188px; font-size: 11.5px; padding: 7px 9px; } .gcard.dock { width: auto; } }
 .gcard .glink { font-size: 11px; color: #b9cbe4; line-height: 1.5; overflow-wrap: anywhere; } .gcard .glink .gtag { font-size: 10px; margin-right: 2px; }
@@ -1306,7 +1306,7 @@ tr.on td { background: var(--surface-2); }
     </div>
   </section>
 </main>
-<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.24-245</span></p>
+<p class="note foot">報價：台股用證交所 MIS（約 5 秒一筆快照，設定富果金鑰時個股與分 K 改用富果）；美股用 Yahoo Finance（可能延遲 15 分鐘）；日 K 來自證交所、櫃買中心或 Yahoo；籌碼與財報來自 FinMind 與證交所。不是逐筆即時、不能下單。</p><p class="disc foot-disc">本平台提供之所有數據、K線型態辨識、機構與內部人申報彙整及歷史回測模擬，均基於政府公開資訊與客觀統計模型自動計算，僅供投資研究與數據視覺化參考，不構成任何證券投資顧問或個股買賣建議。<span class="data-note"></span><span class="num" style="margin-left:8px">版本 2026.11.24-253</span></p>
 
 <nav class="qbar" id="qbar" aria-label="快捷選單">
   <button data-q="list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>清單</button>
@@ -4411,9 +4411,14 @@ function gxMount() {
     if (pinch && pts.size === 2) { const n = pinchInfo(); G.px = (G.px || 0) + n.x - pinch.x; G.py = (G.py || 0) + n.y - pinch.y; zoomAt(n.d / pinch.d, n.x, n.y); pinch = n; return; }
     if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; if (moved && drag.pan) { const w = cv.clientWidth, h = cv.clientHeight, z = G.zoom || 1; G.px = Math.max(-w * 0.5 * z, Math.min(w * 0.5 * z, drag.px + dx)); G.py = Math.max(-h * 0.5 * z, Math.min(h * 0.5 * z, drag.py + dy)); idle = performance.now(); dirty = true; } // 放大後拖曳＝移動畫面
       else if (moved) { G.th = drag.th + dx * 0.008; if (e.pointerType === "mouse" || G.free) G.ph = Math.max(-0.05, Math.min(0.8, drag.ph + dy * 0.004)); idle = performance.now(); dirty = true; } return; }
-    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); if (id !== G.hover) { G.hover = id; cv.style.cursor = id ? "pointer" : G.panMode || e.shiftKey ? "move" : "grab"; dirty = true; } gxCard(card, id, x, y); } });
+    if (e.pointerType === "mouse" && !G.pin) { const id = hit(x, y); cv.style.cursor = id ? "pointer" : G.panMode || e.shiftKey ? "move" : "grab";
+      // 移開星球時卡片先留 0.35 秒，滑鼠移進卡片就一直留著，才按得到「換到中心」「題材內頁」（#333 A3）
+      if (!id) { if (G.hover && !card.hidden && !cardT) cardLater(); return; } cardStop(); if (id !== G.hover) { G.hover = id; dirty = true; } gxCard(card, id, x, y); } });
+  let cardT = 0; const cardStop = () => { clearTimeout(cardT); cardT = 0; }, cardLater = () => { cardStop(); cardT = setTimeout(() => { cardT = 0; if (G.pin || card.matches(":hover")) return; G.hover = null; card.hidden = true; dirty = true; }, 350); };
+  card.addEventListener("pointerenter", e => { if (e.pointerType === "mouse") cardStop(); });
+  card.addEventListener("pointerleave", e => { if (e.pointerType === "mouse" && !G.pin && e.relatedTarget !== cv) cardLater(); });
   cv.addEventListener("pointercancel", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; });
-  cv.addEventListener("pointerleave", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; if (!G.pin && G.hover) { G.hover = null; card.hidden = true; dirty = true; } });
+  cv.addEventListener("pointerleave", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; drag = G.drag = null; if (!G.pin && G.hover) { if (e.pointerType === "mouse") cardLater(); else { G.hover = null; card.hidden = true; dirty = true; } } });
   cv.addEventListener("pointerup", e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; const was = drag; drag = G.drag = null; if (G.pend) { G.pend = false; setTimeout(renderInd); } if (!was || moved) return;
     const [x, y] = xy(e), id = hit(x, y);
     if (e.pointerType === "mouse") { if (id && id !== W.gxS.core) { W.indS.focus = id; renderInd(); } return; }
@@ -6442,7 +6447,7 @@ function renderCost() {
 }
 
 /* ---------- 小圖：柱狀＋折線（營收、EPS）、本益比區間 ---------- */
-function barLineSvg(items, { bar = "var(--accent)", line = "var(--s1)", fmtV = v => v, fmtY = v => v + "%" } = {}) {
+function barLineSvg(items, { bar = "color-mix(in srgb, var(--accent) 55%, transparent)", line = "var(--s1)", fmtV = v => v, fmtY = v => v + "%" } = {}) {
   if (!items.length) return "";
   const Wv = 600, Hv = 170, P = 26, bw = Math.min(70, (Wv - P * 2) / items.length), x0 = (Wv - bw * items.length) / 2, vs = items.map(x => x.v), mx = Math.max(0, ...vs), mn = Math.min(0, ...vs), ys = items.map(x => x.y).filter(v => v != null), yx = Math.max(...ys, 1), yn = Math.min(...ys, 0);
   const Yv = v => P + (mx - v) / ((mx - mn) || 1) * (Hv - P * 2), Yy = v => P + (yx - v) / ((yx - yn) || 1) * (Hv - P * 2);

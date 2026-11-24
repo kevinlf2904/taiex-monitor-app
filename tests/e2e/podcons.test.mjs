@@ -39,3 +39,12 @@ test("節目單集：背景正在整理別集時，按「AI 看完整支影片�
   assert.deepEqual(sent, ["影片A|video", "影片B|video"]);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// 節目頁的 YouTube 標籤不能撐滿整張卡片（#333 A7d）
+test("節目頁 YouTube 標籤寬度", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html?mode=intel", { width: 1280 });
+  await p.evaluate(() => { showList(); setLt("pod"); }); await p.waitForSelector(".pod");
+  const w = await p.evaluate(() => { const c = document.createElement("div"); c.className = "pcard"; c.innerHTML = '<span class="pyt">YouTube</span><div>x</div>'; document.querySelector(".pod").append(c); const r = [c.querySelector(".pyt").getBoundingClientRect().width, c.getBoundingClientRect().width]; c.remove(); return r; });
+  assert.ok(w[0] < 100 && w[0] < w[1] / 2, `YouTube 標籤寬 ${w[0]}px（卡片 ${w[1]}px）`);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
