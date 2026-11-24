@@ -345,6 +345,9 @@ API：`GET /api/podcast?q=` 搜尋節目、`?feed=` 讀 RSS、`?act=cfg`；`POST
 `/api/company` 多回傳兩項：`dist`（最新一週的完整股權分散表）、`foreign`（外資持股比例，FinMind `TaiwanStockShareholding`）。
 
 
+### 分享按鈕：savings 亮色對比 1.07:1（#333）（2026.11.24-249）
+- #333 視覺修復：分享按鈕：savings 亮色對比 1.07:1（#333）
+
 ### savings：手機橫向溢出與圖表比例（#333）（2026.11.24-248）
 - #333 視覺修復：savings：手機橫向溢出與圖表比例（#333）
 
