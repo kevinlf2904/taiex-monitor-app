@@ -83,6 +83,23 @@ test("查價線：營收柱狀、財報、本益比、總經、籌碼分佈等�
   assert.deepEqual(errs, []);
 });
 
+// .blsvg 有 max-height，寬螢幕會等比縮小、左右留白；查價線要對到滑鼠下的那根柱子（#333 A7b：原本偏 +94.7px）；暗色正值柱不能一片白（A7c）
+test("查價線：寬螢幕留白的柱狀圖，游標對到滑鼠下的柱子；暗色正值柱不是純白", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  await p.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
+  const r = await p.evaluate(async () => {
+    const box = document.createElement("div"); box.style.cssText = "position:fixed;left:0;top:0;width:1230px;background:#000;z-index:99999"; document.body.append(box);
+    box.innerHTML = barLineSvg(Array.from({ length: 24 }, (_, i) => ({ label: `${i + 1}月`, v: 10 + i, y: i })), { fmtV: v => v + "億" }); await new Promise(r => setTimeout(r, 30));
+    const svg = box.querySelector("svg"), rc = svg.getBoundingClientRect(), m = svg.getScreenCTM(), rect = svg.querySelectorAll("rect")[2], cx = (+rect.getAttribute("x") + rect.getAttribute("width") / 2) * m.a + m.e;
+    svg.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: cx, clientY: rc.top + rc.height / 2 }));
+    const cur = +box.querySelector(".tscur").getAttribute("x1") * m.a + m.e, tip = box.querySelector(".tstip").textContent, fill = getComputedStyle(rect).fill; box.remove();
+    return { letterbox: m.e - rc.left, off: cur - cx, tip, fill };
+  });
+  assert.ok(r.letterbox > 50, `測試條件：要有左右留白 ${r.letterbox}`); assert.ok(Math.abs(r.off) < 2, `游標線偏 ${r.off}px`); assert.match(r.tip, /^3月/);
+  const c = r.fill.match(/[\d.]+/g).map(Number); assert.ok(!(c[0] > 240 && c[1] > 240 && c[2] > 240 && (c[3] ?? 1) > 0.9), `正值柱不能純白：${r.fill}`);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
 // 一頁超過 60 張查價圖（podcast 145 張）：前面的圖不能被逐出；不在畫面上的舊圖才清掉（#333 A7a）
 test("查價線：一頁 145 張圖，第一張仍可查價；移出畫面的舊圖會被清掉", async () => {
   const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
