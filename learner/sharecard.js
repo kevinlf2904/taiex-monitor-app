@@ -102,7 +102,7 @@ const scRankRows = (ol, n = 8) => [...(ol?.querySelectorAll(":scope > li") || []
 const scSectionsFrom = (root, n = 8, maxSec = 2) => [...(root?.querySelectorAll("ol.tw-rank") || [])].slice(0, maxSec).map(ol => { let h = ol.previousElementSibling; while (h && !/^H[2-4]$/.test(h.tagName)) h = h.previousElementSibling; return { h: h?.textContent.trim() || "", rows: scRankRows(ol, n) }; }).filter(s => s.rows.length);
 const scBtn = (key, extra = "") => `<button type="button" class="sharebtn${extra}" data-sharecard="${key}">${scIco("share")}分享情報圖卡</button>`;
 (() => { const s = document.createElement("style"); s.textContent = `
-.sharebtn { border: 0; border-radius: 6px; background: var(--surface-2, #1c1c20); color: var(--ink, #fff); font: 500 12.5px var(--font-body, sans-serif); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+.sharebtn { border: 0; border-radius: 6px; background: var(--surface-2, color-mix(in srgb, var(--ink, #fff) 10%, transparent)); color: var(--ink, #fff); font: 500 12.5px var(--font-body, sans-serif); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
 .sharebtn.fr { float: right; margin-left: 8px; }
 .sc-modal { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, .72); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .sc-box { background: #121215; color: #fff; border-radius: 10px; padding: 12px; width: min(520px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 10px; font: 14px sans-serif; }
