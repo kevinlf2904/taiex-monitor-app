@@ -2,7 +2,7 @@
    口徑（docs/portfolio/PERFORMANCE.md 有完整說明）：
    · 範圍：「證券部位」——只看股票、ETF 的市值，不含現金。投入／取出的現金流＝買進付出的錢、賣出拿回的錢、領到的股息、股票轉入轉出（用當天市價）。
    · 價格用「原始收盤價」，不用還原價：股息已經以現金流記錄，用還原價會重複計算。
-   · 台幣、美元分開算，不相加（匯率是第 3 階段）。
+   · 台幣、美元分開算，不相加（台幣合併與匯率影響在 fx.js）。
    · 時間加權報酬（TWR）：每天的報酬＝（今天市值 − 今天淨投入）÷ 昨天市值 − 1，連乘；不受投入時點影響，用來和大盤比。
    · 資金加權報酬（XIRR／MWR）：考慮投入時點與金額的年化報酬。現金流不完整（舊庫存轉入用成本、價格有缺、歷史被截斷）時標「估算」並列出原因；算不出來時標「無法計算」，不硬算。
    · 年化：期間滿一年才年化；未滿一年的 TWR 不年化，資金加權報酬只給整段期間的值（period），不給年化值。
@@ -233,7 +233,7 @@
         return { symbol: p.symbol, assetType: k.assetType || null, industry: k.industry || null, realized: r2(p.realizedPnl), unrealized: r2(u), dividends: r2(p.dividends), extra: r2(ex), fees: r2(p.fees), taxes: r2(p.taxes), pnl: r2(t), share: Math.abs(total) > EPS ? t / total : null }; })
         .sort((a, b) => b.pnl - a.pnl);
       const group = key => { const m = new Map(); for (const x of bySymbol) { const g = x[key] || "unknown"; m.set(g, (m.get(g) || 0) + x.pnl); } return [...m].map(([g, v]) => ({ group: g, pnl: r2(v), share: Math.abs(total) > EPS ? v / total : null })).sort((a, b) => b.pnl - a.pnl); };
-      const attribution = { bySymbol, unattributed: r2(extra.unattributed), byType: group("assetType"), byIndustry: group("industry"), dividends: r2(Tt.dividends || 0), feesAndTaxes: r2(-(Tt.fees || 0) - (Tt.taxes || 0)), fx: null, fxNote: "匯率影響要等第 3 階段（匯率）" };
+      const attribution = { bySymbol, unattributed: r2(extra.unattributed), byType: group("assetType"), byIndustry: group("industry"), dividends: r2(Tt.dividends || 0), feesAndTaxes: r2(-(Tt.fees || 0) - (Tt.taxes || 0)), fx: null, fxNote: "原幣計算，不含匯率；台幣合併與匯率影響見 fx.js" };
       const ym = d => d.slice(0, 7), yq = d => `${d.slice(0, 4)}Q${Math.floor((+d.slice(5, 7) - 1) / 3) + 1}`, yy = d => d.slice(0, 4);
       const series = days.map(x => ({ d: x.d, v: x.v, flow: x.flow, index: +x.i.toFixed(8) }));
       out.byCurrency[cur] = {
