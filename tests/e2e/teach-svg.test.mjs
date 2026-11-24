@@ -21,7 +21,7 @@ for (const width of [390, 1280]) test(`教學圖示與資產曲線 ${width}`, as
     // BOS／CHoCH：第二個 HL 在轉折點（185,115）下方，不壓線
     svg = put(smcStructSVG); const hl = [...svg.querySelectorAll("text")].filter(e => e.textContent === "HL")[1], m3 = svg.getScreenCTM(); o.hl = rc(hl).top > 115 * m3.d + m3.f;
     // 逆時鐘曲線：旋轉的「24 日均價 →」不能超出圖的上緣
-    svg = put(ccwSVG(K)); const cc = txt(svg, "24 日均價"); o.ccw = svg ? rc(cc).top - rc(svg).top : null;
+    svg = put(ccwSVG(K)); const cc = rc(txt(svg, "24 日均價")), sb = rc(svg); o.ccw = Math.min(cc.top - sb.top, cc.left - sb.left, sb.right - cc.right, sb.bottom - cc.bottom); // 四個邊都不能超出
     // 資產曲線：手機不能被水平壓扁（字的寬高比和桌機一樣）
     const n = 40, eq = Array.from({ length: n }, (_, i) => 1 + i / 100); lab.D = K.map(k => ({ d: k.d }));
     svg = put(lxCurve({ eqW: eq, eqD: eq.map(v => v * 0.99), eqB: eq.map(v => v * 0.98), wins: [{ oa: 0 }, { oa: 20 }], isLen: 0, N: n }));
@@ -29,6 +29,6 @@ for (const width of [390, 1280]) test(`教學圖示與資產曲線 ${width}`, as
     box.remove(); return o;
   }, K);
   assert.ok(r.upper, "上影線標籤要在實體上方"); assert.ok(r.fib, "黃金區說明壓到虛線"); assert.ok(r.hl, "第二個 HL 壓到線");
-  assert.ok(r.ccw >= 0, `24 日均價超出上緣 ${r.ccw}px`); assert.ok(Math.abs(r.lx - 1) < 0.05, `資產曲線變形比 ${r.lx.toFixed(2)}`);
+  assert.ok(r.ccw >= 0, `24 日均價超出圖框 ${r.ccw}px`); assert.ok(Math.abs(r.lx - 1) < 0.05, `資產曲線變形比 ${r.lx.toFixed(2)}`);
   await ctx.close(); assert.deepEqual(errs, []);
 });
