@@ -202,3 +202,24 @@ test("動能矩陣回放：右側象限清單與數量跟著回放日期，播�
   await ctx.close();
   assert.deepEqual(errs, []);
 });
+
+// 「全部板塊」87 個：長條圖、熱力格每列至少 16px（只畫進出最大的幾個並註明共幾個）；負值標籤不能壓到左邊的板塊名稱（#333 A4）
+test("資金流向：板塊很多時每列夠高、負值標籤不壓名稱", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  const r = await p.evaluate(() => {
+    const pts = Array.from({ length: 87 }, (_, i) => ({ id: "s" + i, name: i === 86 ? "整機組裝代工" : "板塊" + i, net5: i === 86 ? -1080 : (43 - i) * 3, accel: (i % 7) - 3, q: i % 2 ? "up" : "down", d10: [1, -2, 3] }));
+    const out = {};
+    for (const viz of ["bar", "heat"]) {
+      const box = document.createElement("div"); box.style.cssText = "position:fixed;left:0;top:0;width:900px;z-index:99999;background:#000"; document.body.append(box);
+      box.innerHTML = mfVizOnlySvg(pts, { viz, M: null }); const svg = box.querySelector("svg"), k = svg.getBoundingClientRect().height / svg.viewBox.baseVal.height;
+      const g = [...svg.querySelectorAll(".bnode, g[data-id], g")].filter(x => x.querySelector("text")), names = [...svg.querySelectorAll("g > text[text-anchor=end]")];
+      const ys = [...new Set(names.map(t => +t.getAttribute("y")))].sort((a, b) => a - b), rh = ys.length > 1 ? (ys[1] - ys[0]) * k : 99;
+      let hit = 0; if (viz === "bar") for (const grp of svg.querySelectorAll("g")) { const T = [...grp.querySelectorAll("text")]; if (T.length < 2) continue; const a = T[0].getBoundingClientRect(), b = T[1].getBoundingClientRect(); if (a.right > b.left + 0.5 && b.right > a.left && a.bottom > b.top && b.bottom > a.top) hit++; }
+      out[viz] = { rh, hit, note: /共 87 個/.test(svg.textContent), neg: /−?-?1,?080|1080/.test(svg.textContent) }; box.remove();
+    }
+    return out;
+  });
+  for (const v of ["bar", "heat"]) { assert.ok(r[v].rh >= 12, `${v} 每列 ${r[v].rh}px`); assert.ok(r[v].note, `${v} 要註明共 87 個`); }
+  assert.ok(r.bar.neg, "淨流出最大的板塊要畫出來"); assert.equal(r.bar.hit, 0, "負值標籤壓到名稱");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
