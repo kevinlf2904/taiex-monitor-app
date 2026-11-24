@@ -94,8 +94,8 @@ function relLinked() {
 // ---------- 小元件 ----------
 const relChip = (t, extra = "") => `<button class="igchip" data-iopen="${t.id}" style="--ic:${indCol(t)}"><span class="itag">${MK_NAME[t.mk]}</span>${esc(t.name)}${extra}</button>`;
 const relR = v => (v == null ? "—" : (v >= 0 ? "" : "−") + Math.abs(v).toFixed(2));
+// 相關係數標籤（.rv）的底色用 0.65 倍（透明度最高約 55%）：原本 85% 的亮藍在暗色主題配白字只有 3.2:1（#333 A2）；壓低後亮暗主題的文字色都夠清楚
 const relRcol = v => (v == null ? "transparent" : v >= 0 ? `color-mix(in srgb, #38bdf8 ${Math.round(Math.min(1, v) * 85)}%, transparent)` : `color-mix(in srgb, #f472b6 ${Math.round(Math.min(1, -v) * 85)}%, transparent)`);
-const relInk = v => (v != null && Math.abs(v) >= 0.45 ? ";color:#0a0a0a" : ""); // 底色夠深（亮藍／亮粉）時用深色字，淺的維持主題文字色
 const relT = id => INDT.get(id);
 function relMacroNow(k) { const s = k && W.mc?.series?.find(x => x.id === k); if (!s?.last) return ""; const u = s.unit || "", v = s.last[1], y = s.y1?.[1];
   return `<span class="rnow">${esc(String(v))}${esc(u)}${y != null ? `<small>一年前 ${esc(String(y))}${esc(u)}</small>` : ""}</span>`; }
@@ -168,13 +168,13 @@ function relSurprise() {
   }
   out.sort((x, y) => y.v - x.v);
   return `<section class="iseg"><h4>意外的連動 <span class="note">扣掉大盤後仍常一起漲跌，但產業網絡裡沒有連在一起、公司也不太重疊</span></h4>
-    ${out.length ? `<div class="rlist">${out.slice(0, 20).map(x => `<div class="rpair"><div class="ichips">${relChip(x.A)}<span class="rvs">×</span>${relChip(x.B)}</div><b class="rv" style="background:${relRcol(x.v)}${relInk(x.v)}">${relR(x.v)}</b></div>`).join("")}</div>
+    ${out.length ? `<div class="rlist">${out.slice(0, 20).map(x => `<div class="rpair"><div class="ichips">${relChip(x.A)}<span class="rvs">×</span>${relChip(x.B)}</div><b class="rv" style="background:${relRcol(x.v * 0.65)}">${relR(x.v)}</b></div>`).join("")}</div>
       <p class="note">可能是同一批資金在輪動、受同一個總經數字影響，或有還沒畫進網絡的供應關係；相關不代表因果。</p>` : `<p class="note">目前沒有找到。</p>`}</section>`;
 }
 function relLeadView() {
   const L = W.rel.tc.lead.filter(x => relT(x[0]) && relT(x[1]));
   return `<p class="note gnote">美股收盤時台股、日股、韓股還沒開盤，所以美股題材今晚的漲跌，常反映在亞洲題材隔天。下面是「先動的題材當天漲跌」和「跟著動的題材下一個交易日漲跌」的相關係數（近一年日報酬），反方向的相關明顯比較低才列出。</p>
-    ${L.length ? `<div class="rlist">${L.slice(0, 40).map(([a, b, r, back, n]) => `<div class="rpair"><div class="ichips">${relChip(relT(a))}<span class="rvs">→ 隔天</span>${relChip(relT(b))}</div><b class="rv" style="background:${relRcol(r / 100)}${relInk(r / 100)}">${relR(r / 100)}</b><small class="note">反方向 ${back == null ? "—" : relR(back / 100)}・${n} 天</small></div>`).join("")}</div>`
+    ${L.length ? `<div class="rlist">${L.slice(0, 40).map(([a, b, r, back, n]) => `<div class="rpair"><div class="ichips">${relChip(relT(a))}<span class="rvs">→ 隔天</span>${relChip(relT(b))}</div><b class="rv" style="background:${relRcol(r / 100 * 0.65)}">${relR(r / 100)}</b><small class="note">反方向 ${back == null ? "—" : relR(back / 100)}・${n} 天</small></div>`).join("")}</div>`
       : `<p class="note gnote">目前沒有明顯的領先關係。</p>`}`;
 }
 // 題材強弱：題材等權指數的 1 週／1 月／3 月／1 年報酬
