@@ -45,12 +45,13 @@ function renderDivView(S) {
 }
 (function () {
   if (document.getElementById("dvcss")) return; const st = document.createElement("style"); st.id = "dvcss";
-  st.textContent = `.dvbars{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:4px}.dvbars .dvm{white-space:nowrap}.dvbars li{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content max-content;gap:8px;align-items:center;font-size:13px;font-variant-numeric:tabular-nums}
+  st.textContent = `.dvbars{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:4px 8px;grid-template-columns:max-content minmax(0,1fr) max-content max-content}.dvbars .dvm{white-space:nowrap}.dvbars li{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content max-content;gap:8px;align-items:center;font-size:13px;font-variant-numeric:tabular-nums}
 .dvbar{height:10px;background:var(--line);border-radius:3px;overflow:hidden}.dvbar i{display:block;height:100%;background:var(--accent);border-radius:3px}.dvbars li>small{min-width:3.5em}
+/* 每列共用父層欄寬（subgrid）：有沒有「含預估」、金額長短不同，長條軌道都一樣寬（#333 A10） */@supports (grid-template-columns:subgrid){.dvbars li{grid-column:1/-1;grid-template-columns:subgrid}}
 .dvev{list-style:none;margin:0;padding:0}.dvev li{display:grid;grid-template-columns:max-content minmax(0,8em) auto minmax(0,1fr);gap:4px 8px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--line);font-size:13px}
 .dvd,.dvamt{font-variant-numeric:tabular-nums}.dvd{white-space:nowrap}.dvev .linkbtn{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvk{font-size:11px;padding:0 4px;border-radius:3px;border:1px solid var(--line);white-space:nowrap}
 .dvamt small{margin-left:4px}
-@media (max-width:560px){.dvbars li{grid-template-columns:max-content minmax(0,1fr) max-content}.dvbars li>small{display:none}.dvev li{grid-template-columns:max-content minmax(0,1fr) auto}.dvev li>.dvamt{grid-column:2/-1}}
+@media (max-width:560px){.dvbars{grid-template-columns:max-content minmax(0,1fr) max-content}.dvbars li{grid-template-columns:max-content minmax(0,1fr) max-content}@supports (grid-template-columns:subgrid){.dvbars li{grid-template-columns:subgrid}}.dvbars li>small{display:none}.dvev li{grid-template-columns:max-content minmax(0,1fr) auto}.dvev li>.dvamt{grid-column:2/-1}}
 @media (pointer:coarse){.dvev .linkbtn{min-height:44px}}`;
   document.head.appendChild(st);
 })();

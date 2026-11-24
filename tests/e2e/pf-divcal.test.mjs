@@ -35,6 +35,9 @@ for (const width of [390, 1280]) test(`股利分頁 ${width}：每月合計、�
   assert.match(r.text, /未來 12 個月\s*\$?50,000/); assert.match(r.text, /已公告/); assert.match(r.text, /美股不估：.*NVDA|美股不估：.*輝達/);
   assert.doesNotMatch(r.text, /9999/, "只列持股");
   assert.match(r.text, /不是投資建議/);
+  // 每月長條的軌道一樣寬、左緣對齊：有沒有「含預估」、金額長短不同都一樣（#333 A10）
+  const tr = await p.evaluate(() => [...document.querySelectorAll("#lx .dvbar")].map(e => { const r = e.getBoundingClientRect(); return [r.left, r.width]; }));
+  for (const [l, w] of tr) { assert.ok(Math.abs(l - tr[0][0]) < 0.6 && Math.abs(w - tr[0][1]) < 0.6, width + "：軌道 " + [l, w] + " vs " + tr[0]); }
   assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width), "沒有水平溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
