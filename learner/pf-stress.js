@@ -27,7 +27,7 @@ function stSectionHtml(open, X, cashB, meta = {}) {
   const cash = { TWD: cashB?.TWD?.tracked ? cashB.TWD.balance : 0, USD: cashB?.USD?.tracked && fx ? cashB.USD.balance * fx : 0 };
   // 計算範圍：哪些沒有納入、哪些是估的，寫在數字旁邊，不和完整帳本的結果混在一起比
   const cashKnown = !meta.legacy && !!(cashB?.TWD?.tracked || cashB?.USD?.tracked), noPx = open.filter(p => !X.px.get(p.symbol)).map(p => p.symbol);
-  const scope = [meta.legacy ? "現金：舊庫存沒有現金資料，未納入（下面的總資產只含持股）" : !cashKnown ? "現金：沒有入金、出金紀錄，未納入（下面的總資產只含持股）" : "",
+  const scope = [meta.legacy ? "現金：舊庫存沒有現金資料，未納入（下面的金額只含持股）" : !cashKnown ? "現金：沒有入金、出金紀錄，未納入（下面的金額只含持股）" : "",
     cashB?.USD?.tracked && cashB.USD.balance && !fx ? "美元現金：沒有匯率，未納入" : "",
     noPx.length ? `沒有報價、用成本估市值：${noPx.map(c => esc(nameOf(c))).join("、")}` : ""].filter(Boolean);
   const inds = [...new Set(positions.map(p => p.industry).filter(Boolean))].sort();

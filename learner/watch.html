@@ -2808,7 +2808,8 @@ function renderHoldAna() {
     <span>${r.a ? `<i class="pill" style="background:${ATTRS[r.a.k][1]}">${ATTRS[r.a.k][0]} ${r.a.score}%</i>${r.a.vol != null ? `<small>波動 ${r.a.vol}%</small>` : `<small>ETF</small>`}` : `<small>分析中…</small>`}</span>
     <span><b>${((r.mv || r.cost) / mvAll * 100).toFixed(1)}%</b><small>${Math.round(r.mv || r.cost).toLocaleString()}</small></span></button></li>`).join("");
 }
-/* ---------- 庫存風險：相關性、集中度、Beta、大盤跌 20% 試算、依風險承受度的再平衡與避險（quant.js 的 portRisk、portPlan） ---------- */
+/* ---------- 庫存風險：相關性、集中度、Beta、風險值等歷史統計，依風險承受度的集中與 Beta 避險（quant.js 的 portRisk、portPlan）。
+   下跌金額試算統一在「配置」的壓力情境（pf-stress.js），這裡不再另算「大盤跌 20%」（#300 第 2 組） ---------- */
 const HEDGE = { tw: ["00632R", "元大台灣50反1"], us: ["SH", "ProShares 標普 500 反向"] };
 async function holdRiskLoad(m, codes) {
   const bench = m === "us" ? "SPY" : "T00", key = m + ":" + codes.join(",");
@@ -2867,19 +2868,19 @@ function renderHoldRisk() {
     <p class="note">用最近 ${P.n} 個交易日（${P.from}～${P.to}）的日報酬計算${P.codes.some(c => H.adj?.[c]?.ok) ? "（持股用除息、分割還原後的價格）" : ""}，權重是目前市值；比較基準 ${bn}${us ? "" : "（價格指數，不含股息）"}。是過去的統計，不代表未來。</p>
     ${IQ.length ? `<ul class="qx-list tight hr-iq" role="status">${IQ.map(t => `<li><b>ⓘ</b><span>${t}</span></li>`).join("")}</ul>` : ""}
     ${qCards([["組合年化波動", `${(P.vol * 100).toFixed(1)}%`, "一年大約的上下擺動幅度"], ["Beta", P.beta == null ? "—" : P.beta.toFixed(2), P.beta == null ? "" : `大盤漲跌 1%，組合約 ${P.beta.toFixed(2)}%`],
-      ["大盤跌 20% 試算", P.stress == null ? "—" : qP(P.stress), P.stress == null ? "" : `約 ${money(P.tot * P.stress)}${P.cov.ratio < 1 ? "（納入部分）" : ""}`, "down"], ["有效持股數", P.effN.toFixed(1), `實際 ${n} 檔・最大一檔 ${(P.top.w * 100).toFixed(0)}%`],
+      ["有效持股數", P.effN.toFixed(1), `實際 ${n} 檔・最大一檔 ${(P.top.w * 100).toFixed(0)}%`],
       ["平均相關係數", P.avgCorr == null ? "—" : P.avgCorr.toFixed(2), P.avgCorr == null ? "只有一檔" : P.avgCorr > 0.55 ? "偏高，分散效果有限" : "還算分散"], ["單日 95% 風險值", qP(P.var95, 2), P.var95 == null ? "樣本不足，不計算" : "20 天裡大約有 1 天會跌超過這個幅度", "down"], ["期望損失（ES）", qP(P.es95, 2), P.es95 == null ? "樣本不足，不計算" : "最差的那 5% 日子平均跌多少", "down"],
       ...(P.worst ? [["期間最差 20 日", qP(P.worst.p), `大盤同期 ${qP(P.worst.b)}（${P.worst.from.slice(5)}～${P.worst.to.slice(5)}）`, qC(P.worst.p)]] : [])])}
     <h4 class="qx-h">組合的弱點</h4><ul class="qx-list tight">${weak.map(t => `<li><b>⚠︎</b><span>${esc(t)}</span></li>`).join("") || `<li><b>✓</b><span>沒有明顯的集中或同步風險。</span></li>`}</ul>
     <h4 class="qx-h">每一檔的風險 <span class="note">風險貢獻＝這檔對組合波動的佔比；遠大於資金佔比的就是過度曝險</span></h4>
-    <div class="qx-tbl"><table><thead><tr><th>持股</th><th>資金佔比</th><th>風險貢獻</th><th>年化波動</th><th>Beta</th><th>大盤跌 20%</th></tr></thead><tbody>${P.rows.map((r, i) => `<tr><td><button class="linkbtn" data-sel="${r.c}">${nm(r.c)}</button></td><td>${(r.w * 100).toFixed(1)}%</td><td class="${r.ctr > r.w * 1.4 ? "down" : ""}">${(r.ctr * 100).toFixed(1)}%</td><td>${(r.vol * 100).toFixed(0)}%</td><td>${r.beta == null ? "—" : r.beta.toFixed(2)}</td><td class="down">${money(P.stressRows[i].loss)}</td></tr>`).join("")}</tbody></table></div>
+    <div class="qx-tbl"><table><thead><tr><th>持股</th><th>資金佔比</th><th>風險貢獻</th><th>年化波動</th><th>Beta</th></tr></thead><tbody>${P.rows.map((r, i) => `<tr><td><button class="linkbtn" data-sel="${r.c}">${nm(r.c)}</button></td><td>${(r.w * 100).toFixed(1)}%</td><td class="${r.ctr > r.w * 1.4 ? "down" : ""}">${(r.ctr * 100).toFixed(1)}%</td><td>${(r.vol * 100).toFixed(0)}%</td><td>${r.beta == null ? "—" : r.beta.toFixed(2)}</td></tr>`).join("")}</tbody></table></div>
     ${P.pairs.length ? `<h4 class="qx-h">隱藏的相關性 <span class="note">相關係數最高的幾組</span></h4><ul class="qx-list tight">${P.pairs.slice(0, 4).map(p => `<li><b>${p.r.toFixed(2)}</b><span>${esc(nameOf(p.a))} × ${esc(nameOf(p.b))}${p.r >= 0.7 ? "：幾乎同進同出，等於加碼同一個方向" : p.r >= 0.5 ? "：有一定程度同步" : ""}</span></li>`).join("")}</ul>` : ""}
     ${heat}
     <h4 class="qx-h">集中與 Beta 避險試算 <span class="seg sm" role="group">${Object.entries(RISK_TOL).map(([k, [t]]) => `<button data-hrtol="${k}" aria-pressed="${tol === k}">${t}</button>`).join("")}</span></h4>
     <ul class="qx-list"><li><b>單一持股上限</b><span>${(plan.cap * 100).toFixed(0)}%：${plan.trims.length ? plan.trims.map(t => `${esc(nameOf(t.c))} 佔 ${(t.w * 100).toFixed(0)}%，約減 ${money(t.cut)}`).join("；") : "目前都沒有超過"}</span></li>
-      <li><b>目標 Beta</b><span>${plan.tb}：${plan.hedge > 0 ? `組合 Beta ${P.beta.toFixed(2)} 偏高，若用反向 ETF ${hc}（${hn}）避險，約需 ${money(plan.hedge)}；大盤跌 20% 時預估損失從 ${qP(P.stress)} 降到約 ${qP(plan.after)}` : "目前的 Beta 在範圍內，不需要額外避險"}</span></li>
-      <li><b>下跌 20% 的準備</b><span>先決定能承受的最大虧損（例如總資金的 10%），${P.stress != null ? `目前試算會虧 ${money(-P.tot * P.stress)}${P.cov.ratio < 1 ? "（只算納入的持股）" : ""}；` : ""}超過就分批減碼高 Beta、高風險貢獻的持股，或保留現金；反向 ETF 每天重新平衡，長期持有會有耗損，只適合短期避險。</span></li></ul>
-    <div class="qx-go"><button type="button" class="btn sm" data-hralloc>到「配置」試算實際買賣再平衡 ›</button><span class="note">含目標比重、股數、手續費與稅</span></div>
+      <li><b>目標 Beta</b><span>${plan.tb}：${plan.hedge > 0 ? `組合 Beta ${P.beta.toFixed(2)} 偏高，若用反向 ETF ${hc}（${hn}）避險，約需 ${money(plan.hedge)}，組合 Beta 可降到約 ${plan.tb}` : "目前的 Beta 在範圍內，不需要額外避險"}</span></li>
+      <li><b>下跌的準備</b><span>先決定能承受的最大虧損（例如總資金的 10%），超過就分批減碼高 Beta、高風險貢獻的持股，或保留現金；反向 ETF 每天重新平衡，長期持有會有耗損，只適合短期避險。</span></li></ul>
+    <div class="qx-go"><button type="button" class="btn sm" data-hralloc>到「配置」試算再平衡與壓力情境 ›</button><span class="note">再平衡含目標比重、股數、手續費與稅；壓力情境可試算台股、美股、匯率、產業重挫時的金額變化</span></div>
     ${qAiBlock({ key: ak, R: W.qai[ak] }, `${ico("ai")}AI 分析我的組合`)}
     <p class="note">試算假設每檔跟大盤的關係（Beta）不變；真的崩盤時相關性通常會變高，實際跌幅可能更大。不是投資建議。</p></div>`;
 }

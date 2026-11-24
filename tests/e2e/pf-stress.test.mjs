@@ -26,7 +26,7 @@ for (const width of [390, 1280]) test(`壓力情境 ${width}：預設、換情�
   await p.evaluate(tx => { store.set("pf:v1", { v: 1, method: "avg", transactions: tx, at: "x" }); W.lg = { view: "alloc" }; W.lgAl = null; W.stB = null; W.holdView = "tx"; setLt("hold"); }, TX);
   await p.waitForSelector("#lx .stcard [data-pst=tw20]", { timeout: 30000 });
   let r = await calc(p); assert.ok(r.change < 0, "台股大跌：資產變少"); assert.match(r.text, new RegExp(fmt(r.change).replace("+", "\\+")));
-  assert.match(r.text, /每檔 Beta 都先用 1/); assert.equal(await p.evaluate(() => W.stB), null, "還沒按：不載入日 K");
+  assert.match(r.text, /每檔 Beta 都先用 1/); assert.match(r.text, /估算：Beta＝1/); assert.doesNotMatch(r.text, /現金：/, "有入金紀錄：現金有算進去，不列未納入"); assert.equal(await p.evaluate(() => W.stB), null, "還沒按：不載入日 K");
   await tap(p, "#lx [data-pst=twdup]"); r = await calc(p);
   assert.equal(r.change, await p.evaluate(() => { const X = W.lgAl; return -Math.round(10 * X.px.get("NVDA").price * X.fx.rate * 0.1 * 100) / 100; }), "台幣升值 10%：只有美股換回台幣變少");
   assert.match(r.text, new RegExp(fmt(r.change)));
@@ -41,5 +41,25 @@ for (const width of [390, 1280]) test(`壓力情境 ${width}：預設、換情�
   const t = await p.evaluate(() => $(".stcard").innerText);
   assert.match(t, /近 120 個交易日|Beta 這次算不出來/);
   if (await p.evaluate(() => !!W.stB.beta)) { r = await calc(p); assert.match(r.text, new RegExp(fmt(r.change).replace("+", "\\+"))); }
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("壓力情境（#300 第 2 組）：只有舊庫存也能用、標示現金未納入與用成本估的持股、按了用日 K 算 Beta", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  await ctx.route("**/api/quote**", r => { const codes = (new URL(r.request().url()).searchParams.get("codes") || "").split(",").filter(c => c && c !== "2454");
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", today: "2026-10-05", quotes: codes.map(c => ({ code: c, name: "股" + c, price: 100, prev: 99, date: "2026-10-05", time: "10:30:05" })) }) }); });
+  await p.evaluate(() => { localStorage.removeItem("kline:pf:v1"); const H = { 2330: { sh: 1000, cost: 90 }, 2454: { sh: 500, cost: 100 } };
+    store.set("watch:hold", H); W.hold = H; W.holdOwn = H; W.lg = { view: "alloc" }; W.lgAl = null; W.stB = null; W.holdView = "tx"; setLt("hold"); });
+  await p.waitForSelector("#lx .stcard [data-pst=tw20]", { timeout: 30000 });
+  const t = await p.evaluate(() => $(".stcard").innerText);
+  assert.match(t, /估算：Beta＝1/); assert.match(t, /舊庫存沒有現金資料，未納入/); assert.match(t, /用成本估市值：.*2454/); assert.match(t, /目前持股合計/);
+  assert.doesNotMatch(t, /目前總資產/, "現金未知時不叫總資產");
+  // 情境數字：2330 市值 100,000、2454 用成本 50,000，Beta 都是 1，台股跌 20% → −30,000
+  assert.match(t, /-30,000/);
+  await p.evaluate(() => document.querySelector("#lx .stcard [data-pst=beta]").scrollIntoView({ block: "center" })); await p.click("#lx .stcard [data-pst=beta]");
+  assert.ok(await p.evaluate(() => !!W.stB), "只有舊庫存：按了也會開始算 Beta");
+  await p.waitForFunction(() => W.stB && !W.stB.busy, null, { timeout: 60000 });
+  assert.match(await p.evaluate(() => $(".stcard").innerText), /近 120 個交易日|Beta 這次算不出來/);
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 391), "沒有水平溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
