@@ -52,7 +52,7 @@ test("庫存風險：相關係數、Beta、壓力測試、集中與 Beta 避險�
     await p.evaluate(() => { W.hold = { 2330: { sh: 1000, cost: 90 }, 2317: { sh: 3000, cost: 100 }, 2454: { sh: 200, cost: 100 }, "0050": { sh: 500, cost: 80 } }; W.holdMkt = "tw"; W.holdView = "risk"; setLt("hold"); });
     await p.waitForSelector(".hrisk", { timeout: 20000 });
     const t = await p.evaluate(() => $("#lx").innerText);
-    assert.match(t, /組合年化波動[\s\S]*Beta[\s\S]*大盤跌 20% 試算/); assert.match(t, /每一檔的風險/); assert.match(t, /相關係數表/); assert.match(t, /集中與 Beta 避險試算/);
+    assert.match(t, /組合年化波動[\s\S]*Beta[\s\S]*單日 95% 風險值[\s\S]*期望損失/); assert.doesNotMatch(t, /大盤跌 20%|下跌 20% 的準備/, "下跌金額試算統一在配置頁的壓力情境（#300 第 2 組）"); assert.match(t, /到「配置」試算再平衡與壓力情境/); assert.match(t, /每一檔的風險/); assert.match(t, /相關係數表/); assert.match(t, /集中與 Beta 避險試算/);
     assert.doesNotMatch(t, /再平衡與避險試算/, "風險頁不再叫「再平衡與避險試算」");
     await p.click('[data-hrtol="low"]'); await p.waitForTimeout(150); assert.equal(await p.evaluate(() => W.hrTol), "low");
     assert.match(await p.evaluate(() => $("#lx").innerText), /單一持股上限\s*15%/);
