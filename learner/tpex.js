@@ -168,7 +168,7 @@ function otcSusHtml(D) {
     const G = new Map(); for (const r of rows) { const k = `${r[2]}|${r[3] || ""}|${r[4]}`; (G.get(k) || G.set(k, []).get(k)).push(r); }
     const L = [...G.values()].sort((a, b) => a[0][2].localeCompare(b[0][2])), ds = rows.flatMap(r => [r[2], r[3]]).filter(Boolean).sort(), d0 = Date.parse(ds[0]), d1 = Math.max(Date.parse(ds[ds.length - 1]), d0 + 864e5);
     const w = otcW(), lw = Math.round(w * 0.36), X = d => lw + (Date.parse(d) - d0) / (d1 - d0) * (w - lw - 10), rh = 22, H = L.length * rh + 26, tx = Date.parse(today);
-    const svg = `<svg class="blsvg otc-gantt" viewBox="0 0 ${w} ${H}" role="img" aria-label="${esc(title)}時間軸">${L.map((g, i) => { const y = 6 + i * rh, a = X(g[0][2]), b = g[0][3] ? X(g[0][3]) : w - 10, nm = g.length > 1 ? `${g[0][1]} 等 ${g.length} 檔` : `${g[0][1]} ${g[0][0]}`;
+    const svg = `<svg class="blsvg otc-gantt" viewBox="0 0 ${w} ${H}" style="max-height:none" role="img" aria-label="${esc(title)}時間軸">${L.map((g, i) => { const y = 6 + i * rh, a = X(g[0][2]), b = g[0][3] ? X(g[0][3]) : w - 10, nm = g.length > 1 ? `${g[0][1]} 等 ${g.length} 檔` : `${g[0][1]} ${g[0][0]}`;
       return `<text x="4" y="${y + 13}" class="tsyl">${esc(nm.slice(0, 16))}</text><rect x="${a.toFixed(1)}" y="${y + 3}" width="${Math.max(3, b - a).toFixed(1)}" height="${rh - 8}" rx="3" fill="var(--accent)" opacity=".55"/>`; }).join("")}
       ${tx >= d0 && tx <= d1 ? `<line x1="${X(today).toFixed(1)}" x2="${X(today).toFixed(1)}" y1="0" y2="${H - 18}" stroke="var(--s1)" stroke-dasharray="3 3"/>` : ""}
       <text x="${lw}" y="${H - 4}" class="tsyl">${otcMd(ds[0])}</text><text x="${w - 10}" y="${H - 4}" text-anchor="end" class="tsyl">${otcMd(ds[ds.length - 1])}</text></svg>`;

@@ -482,7 +482,7 @@ function podInit() {
 .pod .pkey2 { border-left-color: var(--line); } .pod .pkey2 .pkh { color: var(--muted); } .pod .pkey2 li::marker { color: var(--muted); }
 .pod .pkey ul { margin: 0; padding-left: 20px; } .pod .pkey li { margin: 6px 0; line-height: 1.75; } .pod .pkey li::marker { color: var(--up); }
 .pod .psec { font-size: 16px; font-weight: 500; margin: 18px 0 6px; } .pod .pbody { line-height: 1.85; margin: 0 0 8px; white-space: pre-wrap; }
-.pod .pyt { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 3px; font-size: 11px; line-height: 18px; color: #fff; background: #e62117; vertical-align: middle; }
+.pod .pyt { display: inline-block; width: max-content; justify-self: start; align-self: center; margin-left: 6px; padding: 0 6px; border-radius: 3px; font-size: 11px; line-height: 18px; color: #fff; background: #e62117; vertical-align: middle; }
 .pod .pconsl { list-style: none; margin: 4px 0 14px; padding: 0; display: grid; gap: 12px; }
 .pod .pcons { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 0 8px; } .pod .pcons > small { flex-basis: 100%; line-height: 1.6; } .pod .pcons .pq { flex-basis: 100%; margin: 2px 0 0; } .pod .pcons .pq small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
 .pod .pcbar { display: inline-flex; width: 64px; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--ink) 8%, transparent); } .pod .pcbar i { height: 100%; } .pod .pcbar .up { background: var(--up); } .pod .pcbar .down { background: var(--down); }
