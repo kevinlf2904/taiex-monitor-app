@@ -422,8 +422,8 @@ const FEE = 0.001425, TAX = 0.003;
 // opt.capital 初始資金（元）；opt.lot 每次買進的最小單位（1 = 零股、1000 = 整張）；opt.useBuy / opt.useSell 是否依買進／賣出訊號交易；
 // opt.skip 要略過的訊號（key = 索引＋方向）。手續費 0.1425%（最低 20 元），賣出另計 0.3% 證交稅。
 const btKey = s => `${s.i}${s.side}`;
-// 證交稅率：股票 0.3%（預設）、ETF 0.1%、債券 ETF（00xxxB）停徵到 2026-12-31（停徵期間與延長修法進度見 learner/ledger.js 的 BOND_ETF_TAX_FREE；
-// 到期後 tests/ledger.test.mjs 的提醒測試會失敗，屆時這裡要一起改）。台灣的債券 ETF 2017 年才開始上市，回測用到的資料都在停徵期間內，目前不需要依日期換稅率
+// 證交稅率：股票 0.3%（預設）、ETF 0.1%、債券 ETF（00xxxB）停徵到 2026-12-31（停徵期間與延長修法進度見 learner/ledger.js 的 BOND_ETF_TAX_FREE，帳本已依交易日期判斷）。
+// 這裡只看代號、不看日期：台灣的債券 ETF 2017 年才開始上市，目前回測用到的資料都在停徵期間內。依賣出日期判斷見 #356（沒延長的話要在 2027 年前做）
 const taxOf = c => (/^00\d+B$/.test(c || "") ? 0 : /^00/.test(c || "") ? 0.001 : undefined);
 function backtest(D, sigs, opt = {}) {
   const cap = opt.capital || 1e6, lot = opt.lot || 1, useBuy = opt.useBuy !== false, useSell = opt.useSell !== false, skip = opt.skip || new Set();
