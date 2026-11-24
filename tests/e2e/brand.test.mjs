@@ -118,3 +118,11 @@ test("合併重複功能：盤後、籌碼動向併進排行，盤後總結＋�
     await ctx.close(); assert.deepEqual(errs, []);
   }
 });
+
+// 公開測試頁：桌機內容和上方導覽一樣置中（#333 D1：原本 main 貼左、偏 90px）
+for (const width of [390, 1280]) test(`公開測試頁置中 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "pro.html", { width, touch: width < 500 });
+  const r = await p.evaluate(() => { const n = document.querySelector(".nav-in").getBoundingClientRect(), m = document.querySelector("main").getBoundingClientRect(); return [n.left + n.right, m.left + m.right, innerWidth]; });
+  assert.ok(Math.abs(r[1] - r[2]) <= 2 && Math.abs(r[0] - r[2]) <= 2, `導覽與內容中心 ${r.map(v => v / 2)}`);
+  await ctx.close(); assert.deepEqual(errs.filter(e => !/Failed to load resource|fonts\.g/.test(e)), []);
+});
