@@ -1630,7 +1630,14 @@ function tdBreadth(mood, d) {
   </div>`;
 }
 // 同一欄的價位標籤太近會疊在一起：由上往下排，間距至少 gap%
-const tdSpread = (L, gap = 13) => { const S = [...L].sort((a, b) => a.y - b.y); for (let i = 1; i < S.length; i++) S[i].y = Math.max(S[i].y, S[i - 1].y + gap); return S; };
+// 標籤避讓：重疊的幾個標籤合成一組，整組以它們原本位置的平均為中心排開（原本只往下推，最下面的標籤會離自己的線很遠，#333 A9），並限制在 lo～hi 之間
+const tdSpread = (L, gap = 13, lo = 3, hi = 97) => {
+  const S = [...L].sort((a, b) => a.y - b.y); S.forEach(o => { o.y0 = o.y; });
+  const place = g => { const m = g.reduce((s, o) => s + o.y0, 0) / g.length, top = Math.max(lo, Math.min(hi - (g.length - 1) * gap, m - (g.length - 1) * gap / 2)); g.forEach((o, k) => { o.y = top + k * gap; }); };
+  const G = S.map(o => [o]); G.forEach(place);
+  for (let i = 1; i < G.length; ) if (G[i][0].y < G[i - 1].at(-1).y + gap) { G[i - 1].push(...G.splice(i, 1)[0]); place(G[i - 1]); i = Math.max(1, i - 1); } else i++;
+  return S;
+};
 // 加權分時：補齊縱軸、基準線、日內高低點與來源資訊；只畫 API 已提供的價位點，不虛構分鐘成交量
 function tdIxChart(tq, kl, evs, dataEval) {
   const S = W.ixSp?.T00;
@@ -1729,14 +1736,14 @@ function tdPreViz(plan, tq) {
   const vs = [kl.pressure, kl.support, ...pts.map(p => p[1])], lo = Math.min(...vs), hi = Math.max(...vs), pad = (hi - lo) * 0.12 || 1;
   const Y = v => (hi + pad - v) / (hi - lo + 2 * pad) * 100, n = pts.length, X = i => (n > 1 ? i / (n - 1) * 62 : 0), f = v => v.toFixed(2);
   const end = pts.at(-1), up = end ? end[1] >= kl.pivot : null, ms = plan.macroSignals || {}, ref = tq?.prev || kl.pivot;
-  const lab = tdSpread([{ n: `A 壓力 ${fmtP(kl.pressure)}`, k: "up", y: Y(kl.pressure) }, { n: `分水嶺 ${fmtP(kl.pivot)}`, k: "piv", y: Y(kl.pivot) }, { n: `B 支撐 ${fmtP(kl.support)}`, k: "down", y: Y(kl.support) }], 16);
+  const lab = tdSpread([{ n: `A 壓力 ${fmtP(kl.pressure)}`, k: "up", y: Y(kl.pressure) }, { n: `分水嶺 ${fmtP(kl.pivot)}`, k: "piv", y: Y(kl.pivot) }, { n: `B 支撐 ${fmtP(kl.support)}`, k: "down", y: Y(kl.support) }], 16, 6, 94);
   const sc = `<div class="td-sc" role="img" aria-label="盤前推演：情境 A 往壓力 ${kl.pressure}、情境 B 往支撐 ${kl.support}">
     <div class="td-sc-plot"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
       <line class="lv piv" x1="0" x2="100" y1="${f(Y(kl.pivot))}" y2="${f(Y(kl.pivot))}"/>
       ${end ? `<line class="sa${up ? " on" : ""}" x1="${f(X(n - 1))}" y1="${f(Y(end[1]))}" x2="100" y2="${f(Y(kl.pressure))}"/><line class="sb${up === false ? " on" : ""}" x1="${f(X(n - 1))}" y1="${f(Y(end[1]))}" x2="100" y2="${f(Y(kl.support))}"/>` : ""}
       ${n > 1 ? `<polyline class="${end[1] >= pts[0][1] ? "up" : "down"}" points="${pts.map(([, v], i) => `${f(X(i))},${f(Y(v))}`).join(" ")}"/>` : ""}
     </svg>${pts.map(([t, v], i) => `<i class="dot${i === n - 1 ? " now" : ""}" style="left:${f(X(i))}%;top:${f(Y(v))}%"></i><span class="td-sc-x note" style="left:${f(X(i))}%">${t}</span>`).join("")}</div>
-    <div class="td-ix-lv">${lab.map(l => `<span class="${l.k}" style="top:${f(Math.min(l.y, 94))}%">${l.n}</span>`).join("")}</div>
+    <div class="td-ix-lv">${lab.map(l => `<span class="${l.k}" style="top:${f(l.y)}%">${l.n}</span>`).join("")}</div>
   </div>`;
   const dr = tdBars([["費半", ms.sox], ["那斯達克", ms.ixic], ["台積電 ADR", ms.tsm], ["台指期夜盤", tdOk(ms.futChg) && ref ? ms.futChg / ref * 100 : null, tdOk(ms.futChg) ? `${ms.futChg > 0 ? "+" : ""}${Math.round(ms.futChg)} 點` : null]], { left: "相對走弱", right: "相對走強", note: "比較各市場自身漲跌幅；台指期數值另以點數顯示。" });
   return sc + (dr ? `<div class="td-cap note">早報用到的美股與夜盤</div>${dr}` : "");

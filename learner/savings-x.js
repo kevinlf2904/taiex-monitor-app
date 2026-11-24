@@ -27,7 +27,7 @@
     const X = x => L + ((x - x0) / (x1 - x0 || 1)) * (w - L - R), Y = y => T + (1 - (y - y0) / (y1 - y0 || 1)) * (h - T - B);
     const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => y0 + (y1 - y0) * f), xt = [0, 0.5, 1].map(f => x0 + (x1 - x0) * f);
     return `<svg viewBox="0 0 ${w} ${h}" role="img" style="width:100%;height:auto">${ticks.map(t => `<line x1="${L}" x2="${w - R}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--line)"/><text x="${L - 6}" y="${Y(t) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${fy(t)}</text>`).join("")}
-      ${xt.map(t => `<text x="${X(t)}" y="${h - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">${fx(t)}</text>`).join("")}
+      ${xt.map((t, i) => `<text x="${X(t)}" y="${h - 8}" text-anchor="${["start", "middle", "end"][i]}" font-size="11" fill="var(--muted)">${fx(t)}</text>`).join("")}
       ${series.map(s => `<polyline fill="none" stroke="${s.color}" stroke-width="${s.w || 1.8}" ${s.dash ? 'stroke-dasharray="4 3"' : ""} points="${s.pts.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ")}"/>`).join("")}</svg>
       <div class="legend">${series.map(s => `<span><span class="swatch" style="background:${s.color}"></span>${s.name}</span>`).join("")}</div>`;
   }
@@ -75,7 +75,7 @@
     out.innerHTML = `<div class="kpis">${kpi("一年大約領", fmt(year), `<span>每月平均</span><b>${fmt(year / 12)}</b><span>目前殖利率</span><b>${pc(y, 2)}</b><span>成本殖利率</span><b>${cost ? pc(year / cost, 2) : "—"}</b>`)}
       ${kpi("距離目標", gap ? fmt(gap / 12) + " /月" : "已達成", `<span>目標每年</span><b>${fmt(goal)}</b><span>還要再投入（照目前殖利率）</span><b>${gap && y ? fmt(gap / y) : "—"}</b>`)}
       ${kpi("持股市值", fmt(mv), `<span>${rows.length} 檔</span><b>${rows.filter(x => !x.r).length ? `${rows.filter(x => !x.r).length} 檔抓不到配息` : "都有資料"}</b>`)}</div>
-      <div class="mm-bars">${byM.map((v, i) => `<div><i style="height:${Math.round((v / mx) * 100)}%" class="${v ? "" : "zero"}"></i><b>${v ? tick(v) : "—"}</b><small>${MON[i]}</small></div>`).join("")}</div>
+      <div class="mm-bars">${byM.map((v, i) => `<div><span class="mm-t"><i style="height:${Math.round((v / mx) * 100)}%" class="${v ? "" : "zero"}"></i></span><b>${v ? tick(v) : "—"}</b><small>${MON[i]}</small></div>`).join("")}</div>
       <div class="tablewrap"><table class="tbl dc-tbl"><thead><tr><th class="l">股票</th><th>股數</th><th>近 12 個月每股配息</th><th>殖利率</th><th>一年股息</th><th class="l">配息月份</th></tr></thead><tbody>
       ${rows.sort((a, b) => b.year - a.year).map(x => `<tr><td class="l">${esc(nm[x.code] || "")} ${x.code}</td><td>${fmt(x.sh)}</td><td>${x.r ? x.r.cash12 : "—"}</td><td>${x.r?.yield != null ? x.r.yield + "%" : "—"}</td><td>${fmt(x.year)}</td><td class="l">${Object.keys(x.m).map(m => m + "月").join("、") || "—"}</td></tr>`).join("")}</tbody></table></div>
       <p class="hint">用近 12 個月的配息推估，未來配息可能變多或變少。<button type="button" class="sx-link" id="hx-tax">把 ${fmt(year)} 元帶到「實拿股息試算」 ›</button></p>`;
@@ -150,7 +150,7 @@
     const ok = rows.filter(x => x.cash), tot = MON.map((_, i) => ok.reduce((a, x) => a + x.cash[i], 0)), year = tot.reduce((a, b) => a + b, 0), empty = MON.map((_, i) => i + 1).filter(m => !tot[m - 1]), mx = Math.max(1, ...tot);
     const Y = await etfY(), nm = Object.fromEntries((Y.rows || []).map(r => [r.code, r.name])), sug = empty.map(m => [m, (Y.rows || []).filter(r => !codes.includes(r.code) && r.yield >= 3 && monthsOf(r).includes(m)).sort((a, b) => b.yield - a.yield).slice(0, 3)]);
     out.innerHTML = `<div class="kpis">${kpi("一年股息", fmt(year), `<span>每月平均</span><b>${fmt(year / 12)}</b><span>總投入</span><b>${fmt(amt * ok.length)}</b>`)}${kpi("有配息的月份", `${12 - empty.length} / 12`, empty.length ? `<span>空著</span><b>${empty.map(m => m + "月").join("、")}</b>` : `<span>每個月都有</span><b>✓</b>`)}${kpi("最少的月份", fmt(Math.min(...tot)), `<span>最多的月份</span><b>${fmt(mx)}</b>`)}</div>
-      <div class="mm-bars">${tot.map((v, i) => `<div><i style="height:${Math.round((v / mx) * 100)}%" class="${v ? "" : "zero"}"></i><b>${v ? tick(v) : "—"}</b><small>${MON[i]}</small></div>`).join("")}</div>
+      <div class="mm-bars">${tot.map((v, i) => `<div><span class="mm-t"><i style="height:${Math.round((v / mx) * 100)}%" class="${v ? "" : "zero"}"></i></span><b>${v ? tick(v) : "—"}</b><small>${MON[i]}</small></div>`).join("")}</div>
       <div class="tablewrap"><table class="tbl mm-tbl"><thead><tr><th class="l">ETF</th><th>股數</th>${MON.map(m => `<th>${m}</th>`).join("")}</tr></thead><tbody>
       ${rows.map(x => `<tr><td class="l">${esc(nm[x.c] || "")} ${x.c}${x.r?.yield != null ? `<br><small class="hint">殖利率 ${x.r.yield}%</small>` : ""}</td><td>${x.cash ? fmt(x.sh) : "—"}</td>${x.cash ? x.cash.map(v => `<td>${v ? tick(v) : ""}</td>`).join("") : `<td colspan="12" class="l">抓不到配息資料</td>`}</tr>`).join("")}</tbody></table></div>
       ${sug.length ? `<h3 style="margin:10px 0 4px;font-size:14px">可以補空月份的 ETF（殖利率 3% 以上，依殖利率排序）</h3><ul class="mm-sug">${sug.map(([m, L]) => `<li><b>${m} 月</b>${L.length ? L.map(r => `<button type="button" class="chip" data-mmadd="${r.code}">${esc(r.name)} ${r.code}・${r.yield}%</button>`).join("") : '<span class="hint">找不到</span>'}</li>`).join("")}</ul>` : ""}
@@ -210,9 +210,9 @@
 .dca-g{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}@media (max-width:640px){.dca-g{grid-template-columns:1fr}}.dca-l{list-style:none;margin:0 0 10px;padding:0}
 .dca-l li{position:relative;display:flex;align-items:center;gap:8px;padding:8px 2px 10px;border-bottom:1px solid var(--line)}.dca-l li>span:first-child{flex:1;min-width:0}.dca-l i{position:absolute;left:0;bottom:2px;height:3px;background:var(--accent);opacity:.55;border-radius:2px}
 .mm-bars{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;align-items:end;height:120px;margin:6px 0}
-.mm-bars>div{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;gap:2px}.mm-bars i{display:block;width:70%;background:var(--accent);border-radius:2px 2px 0 0;min-height:2px}.mm-bars i.zero{background:var(--line)}
-.mm-bars b{font:500 10.5px var(--f-num);white-space:nowrap}.mm-bars small{font-size:10.5px;color:var(--muted)}.mm-tbl{min-width:760px}.mm-tbl td,.mm-tbl th{padding:6px 5px}
-.mm-sug{list-style:none;margin:0;padding:0;display:grid;gap:6px}.mm-sug li{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.mm-sug b{min-width:3em;font-size:13px}.swatch{display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle}
+.mm-bars>div{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;gap:2px}.mm-bars .mm-t{flex:1;min-height:0;width:100%;display:flex;align-items:flex-end;justify-content:center}.mm-bars i{display:block;width:70%;background:var(--accent);border-radius:2px 2px 0 0;min-height:2px}.mm-bars i.zero{background:var(--line)}
+.mm-bars b{font:500 10.5px var(--f-num);white-space:nowrap}.mm-bars small{font-size:10.5px;color:var(--muted);white-space:nowrap}.mm-tbl{min-width:760px}.mm-tbl td,.mm-tbl th{padding:6px 5px}
+.mm-sug{list-style:none;margin:0;padding:0;display:grid;gap:6px}.mm-sug li{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.mm-sug b{min-width:3em;font-size:13px}
 .sx-link{display:block;margin-top:4px;padding:0;border:0;background:none;color:var(--accent);font:inherit;text-align:left;white-space:normal;cursor:pointer}
-@media (max-width:560px){.mm-bars b{font-size:9px}}`; document.head.appendChild(css);
+@media (max-width:560px){.mm-bars b,.mm-bars small{font-size:9px}.mm-bars{gap:2px}}`; document.head.appendChild(css);
 })();

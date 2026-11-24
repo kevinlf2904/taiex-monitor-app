@@ -281,3 +281,19 @@ test("手機首頁觸控尺寸與響應式排版回歸 (320px, 375px, 390px, 430
     assert.deepEqual(errs, []);
   }
 });
+
+// 盤前推演：壓力／分水嶺／支撐很接近時，標籤避開彼此但不能離自己的線太遠；下方「昨收／開盤／現在」不能超出圖框被切掉（#333 A9）
+for (const width of [390, 1280]) test(`盤前推演：密集價位的標籤和線對得上、底部文字完整 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  const r = await p.evaluate(() => {
+    const box = document.createElement("div"); box.style.cssText = "position:relative;overflow:hidden;width:min(360px,100%);padding:0"; document.body.prepend(box);
+    box.innerHTML = tdPreViz({ keyLevels: { pressure: 23781, pivot: 23770, support: 23761 }, macroSignals: {} }, { prev: 23900, open: 23820, price: 23775 });
+    const sc = box.querySelector(".td-sc"), plot = sc.querySelector(".td-sc-plot").getBoundingClientRect(), lines = { up: 23781, piv: 23770, down: 23761 };
+    const vs = [23781, 23761, 23900, 23820, 23775], lo = Math.min(...vs), hi = Math.max(...vs), pad = (hi - lo) * 0.12, yOf = v => plot.top + (hi + pad - v) / (hi - lo + 2 * pad) * plot.height;
+    const off = [...sc.querySelectorAll(".td-ix-lv span")].map(s => { const b = s.getBoundingClientRect(); return Math.abs((b.top + b.bottom) / 2 - yOf(lines[s.className])); });
+    const xb = Math.max(...[...sc.querySelectorAll(".td-sc-x")].map(s => s.getBoundingClientRect().bottom)), cb = sc.getBoundingClientRect().bottom; box.remove();
+    return { off: Math.max(...off), cut: xb - cb };
+  });
+  assert.ok(r.off <= 17, `標籤離自己的線 ${r.off.toFixed(1)}px`); assert.ok(r.cut <= 0.5, `底部文字超出 ${r.cut.toFixed(1)}px`);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
