@@ -1163,7 +1163,7 @@ const TWO_GC = { ly: "#3d7be0", cy: "#9b6bd6", head: "#d2913a", council: "#3fa36
 const twoType = s => (!s.code ? "其他" : /^00/.test(s.code) ? "ETF" : "個股");
 const twoAmt = v => (v == null ? "—" : W.twoAmt === "short" ? (v >= 1e8 ? `${(v / 1e8).toFixed(2)} 億` : v >= 1e4 ? `${Math.round(v / 1e4).toLocaleString()} 萬` : Math.round(v).toLocaleString()) : `NT$ ${Math.round(v).toLocaleString()}`);
 const twoLots = n => `${+(n / 1000).toFixed(2)} 張`;
-const TWO_PAL = ["#3d6fd6", "var(--down)", "#3fa86b", "#a54bb3", "#c99a3b", "#3aa6b0", "#c24d6d", "#7a8a3a"];
+const TWO_PAL = ["#3d6fd6", "#d0643f", "#3fa86b", "#a54bb3", "#c99a3b", "#3aa6b0", "#c24d6d", "#7a8a3a"];
 // 最新收盤價：排程存在資料檔（px）；檔案還沒有價格時改問即時報價（每次 40 檔）
 function twoPx(code) { return W.two?.px?.[code] ?? W.twoLive?.[code] ?? null; }
 async function twoPxLoad() {
