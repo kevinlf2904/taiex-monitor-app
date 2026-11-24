@@ -420,6 +420,10 @@ function renderLedger() {
   const hasOpenConf = !!(recon?.conflicts?.some(c => c && c.status === "open"));
   const hasHalted = !!(W.lgReconHalted || recon?.pendingCommit != null);
   if (L.view === "margin") return renderMargin(); // 融資不需要交易紀錄
+  if (L.view === "div" && (!(hasTx || hasSnap) || W.hsrcLegacy)) { // 股利：只有舊庫存（或這次切換看舊庫存）也能估（#300 第 3 組）
+    const leg = lgLegacyOpen();
+    if (((hasTx || hasSnap) && W.hsrcLegacy) || leg.open.length || leg.skipped.length) return renderDiv(null, { ...leg, hasTx: hasTx || hasSnap });
+  }
   if (L.view === "alloc") {
     if ((hasTx || hasSnap) && !W.hsrcLegacy) return renderAlloc(S0 || lgStoreOrEmpty());
     const leg = lgLegacyOpen();
@@ -991,7 +995,7 @@ function pfCharts(C, range) {
       <span class="pfax hi">${hi.toFixed(0)}</span><span class="pfax lo">${lo.toFixed(0)}</span><i class="pfx" hidden></i><div class="pftip" hidden></div></div>
     <div class="pfdates"><span>${pts[0].d.slice(0, 10)}</span><span>${last.d}</span></div>
     <div class="pfsub">回撤（從前高跌了多少）<small class="note">最深 ${pfPct(Math.min(...pts.map(x => x.dd)))}</small></div>
-    <div class="pfplot dd" style="height:${H2}px"><svg viewBox="0 0 ${W0} ${H2}" preserveAspectRatio="none" aria-hidden="true"><path d="${ddPath}" class="pfdd"/></svg><i class="pfx" hidden></i><div class="pftip" hidden></div></div>
+    <div class="pfplot dd" style="height:${H2}px"><svg viewBox="0 0 ${W0} ${H2}" preserveAspectRatio="none" aria-hidden="true"><path d="${ddPath}" class="pfdd"/></svg><i class="pfx" hidden></i></div>
     <table class="pfsr"><caption>每日淨值（起點＝100）</caption><thead><tr><th>日期</th><th>我的組合</th><th>${bn}</th><th>回撤</th></tr></thead><tbody>${pts.filter((_, i) => i % Math.ceil(pts.length / 40) === 0 || i === pts.length - 1).map(x => `<tr><td>${x.d}</td><td>${x.p.toFixed(2)}</td><td>${x.b == null ? "—" : x.b.toFixed(2)}</td><td>${pfPct(x.dd)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function pfMonthly(C) {
@@ -999,15 +1003,17 @@ function pfMonthly(C) {
   const Y = [...new Set(C.monthly.map(m => m.p.slice(0, 4)))], M = new Map(C.monthly.map(m => [m.p, m])), YR = new Map(C.yearly.map(y => [y.p, y]));
   const cell = m => { if (!m) return `<td></td>`; const a = Math.min(1, Math.abs(m.r) / 0.1), col = m.r >= 0 ? "--up" : "--down";
     return `<td style="background:color-mix(in srgb, var(${col}) ${Math.round(a * 45)}%, transparent)" title="${m.p}：${pfPct(m.r)}${m.bench != null ? `，比較基準 ${pfPct(m.bench)}` : ""}${m.days < 15 ? `（只有 ${m.days} 個交易日）` : ""}">${pfPct(m.r, 1)}</td>`; };
-  return `<h5 class="pfh">月報酬<small class="note">（時間加權；滑鼠停在格子上看比較基準）</small></h5><div class="pfmon"><table><thead><tr><th>年</th>${Array.from({ length: 12 }, (_, i) => `<th>${i + 1}月</th>`).join("")}<th>全年</th></tr></thead><tbody>
-    ${Y.map(y => `<tr><th>${y}</th>${Array.from({ length: 12 }, (_, i) => cell(M.get(`${y}-${String(i + 1).padStart(2, "0")}`))).join("")}${cell(YR.get(y))}</tr>`).join("")}</tbody></table></div>`;
+  // 桌機一張 12 個月的表；手機（.pfmon-n）拆成每 4 個月一張（最後一張加全年），不用左右捲動也看得到 7～12 月（#333 A10a）
+  const tbl = (ms, yr) => `<table><thead><tr><th>年</th>${ms.map(i => `<th>${i + 1}月</th>`).join("")}${yr ? "<th>全年</th>" : ""}</tr></thead><tbody>
+    ${Y.map(y => `<tr><th>${y}</th>${ms.map(i => cell(M.get(`${y}-${String(i + 1).padStart(2, "0")}`))).join("")}${yr ? cell(YR.get(y)) : ""}</tr>`).join("")}</tbody></table>`, R = (a, b) => Array.from({ length: b - a }, (_, i) => a + i);
+  return `<h5 class="pfh">月報酬<small class="note">（時間加權；滑鼠停在格子上看比較基準）</small></h5><div class="pfmon pfmon-w">${tbl(R(0, 12), true)}</div><div class="pfmon pfmon-n">${tbl(R(0, 4), false)}${tbl(R(4, 8), false)}${tbl(R(8, 12), true)}</div>`;
 }
 function pfAttr(C) {
   const A = C.attribution, cur = C.currency, top = A.bySymbol.filter(x => Math.abs(x.pnl) > 0.004).slice(0, 12), mx = Math.max(1, ...top.map(x => Math.abs(x.pnl)));
   if (!top.length) return "";
   const TY = { stock: "個股", etf: "ETF", unknown: "未分類" };
   return `<h5 class="pfh">誰賺誰賠<small class="note">（已實現＋未實現＋股息＋另計費用／公司行動）</small></h5><ul class="pfattr">${top.map(x => `<li><span class="nm">${esc(nameOf(x.symbol))}<small class="note"> ${esc(x.symbol)}</small></span><span class="pfbar"><i class="${x.pnl >= 0 ? "up" : "dn"}" style="width:${(Math.abs(x.pnl) / mx * 50).toFixed(1)}%"></i></span><b class="${cls(x.pnl)}">${lgSgn(x.pnl, cur)}</b></li>`).join("")}</ul>
-    ${A.unattributed ? `<p class="note">沒有對應到個股的費用或現金：${lgSgn(A.unattributed, cur)}（和上面各檔加總＝總損益）</p>` : ""}<p class="note">依類型：${A.byType.map(g => `${TY[g.group] || esc(g.group)} ${lgSgn(g.pnl, cur)}`).join("、")}${A.byIndustry.some(g => g.group !== "unknown") ? `；依產業：${A.byIndustry.slice(0, 5).map(g => `${g.group === "unknown" ? "未分類" : esc(g.group)} ${lgSgn(g.pnl, cur)}`).join("、")}` : ""}；股息 ${lgMoney(A.dividends, cur)}、手續費與稅 ${lgSgn(A.feesAndTaxes, cur)}；匯率影響：${esc(A.fxNote)}。</p>`;
+    ${A.unattributed ? `<p class="note">沒有對應到個股的費用或現金：${lgSgn(A.unattributed, cur)}（和上面各檔加總＝總損益）</p>` : ""}<p class="note">依類型：${A.byType.map(g => `${TY[g.group] || esc(g.group)} ${lgSgn(g.pnl, cur)}`).join("、")}${A.byIndustry.some(g => g.group !== "unknown") ? `；依產業：${A.byIndustry.slice(0, 5).map(g => `${g.group === "unknown" ? "未分類" : esc(g.group)} ${lgSgn(g.pnl, cur)}`).join("、")}` : ""}；股息 ${lgMoney(A.dividends, cur)}、手續費與稅 ${lgSgn(A.feesAndTaxes, cur)}${cur === "USD" ? "；這裡用美元原幣計算，不含匯率影響（市場選「全部」時，上方「合併（台幣計價）」另列匯率影響）" : ""}。</p>`;
 }
 // 圖上的十字線與提示：滑鼠移動、手指點一下或左右拖曳，顯示最近那一天的數值（圖設 touch-action: pan-y，上下滑仍然捲動頁面）
 function pfTip(e) {
@@ -1015,7 +1021,8 @@ function pfTip(e) {
   const r = plot.getBoundingClientRect(), i = Math.max(0, Math.min(D.pts.length - 1, Math.round((e.clientX - r.left) / r.width * (D.pts.length - 1)))), x = D.pts[i];
   box.querySelectorAll(".pfx").forEach(el => { el.hidden = false; el.style.left = (i / (D.pts.length - 1) * 100) + "%"; });
   box.querySelectorAll(".pftip").forEach(el => { el.hidden = true; });
-  const tip = plot.querySelector(".pftip"); tip.hidden = false; tip.style.left = Math.min(r.width - 150, Math.max(0, e.clientX - r.left + 8)) + "px";
+  // 提示框一律放在上面的淨值圖（180px）：回撤圖只有 70px，放在裡面會往下蓋到日期與下一張表（#333 A10）
+  const tip = box.querySelector(".pftip"); tip.hidden = false; tip.style.left = Math.min(r.width - 150, Math.max(0, e.clientX - r.left + 8)) + "px";
   tip.innerHTML = `<b>${esc(x.d)}</b><br>我的組合 ${x.p.toFixed(2)}（${pfPct(x.p / 100 - 1)}）${x.b != null ? `<br>比較基準 ${x.b.toFixed(2)}（${pfPct(x.b / 100 - 1)}）` : ""}<br>回撤 ${pfPct(x.dd)}<br>市值 ${lgMoney(x.v, D.cur)}`;
 }
 document.addEventListener("pointermove", pfTip); document.addEventListener("pointerdown", pfTip);
@@ -1041,10 +1048,13 @@ document.addEventListener("pointerleave", e => { const box = e.target.closest?.(
 .pfsr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .pfh{margin:12px 0 4px;font-size:13px}.pfmon{overflow-x:auto}.pfmon table{border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums;min-width:560px;width:100%}
 .pfmon th,.pfmon td{padding:3px 4px;text-align:right;border:1px solid var(--surface-2)}.pfmon thead th{color:var(--muted);font-weight:400}
+.pfmon-n{display:none}.pfmon-n table{min-width:0;table-layout:fixed}.pfmon-n table+table{margin-top:6px}.pfmon-n th:first-child{width:3.2em}
+@media (max-width:560px){.pfmon-w{display:none}.pfmon-n{display:block}.pfmon-n th,.pfmon-n td{padding:3px 2px}}
 .pfattr{list-style:none;margin:0;padding:0}.pfattr li{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto;gap:8px;align-items:center;padding:3px 0;font-size:12px}
 .pfattr .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pfbar{position:relative;height:8px;background:linear-gradient(var(--line),var(--line)) 50% 0/1px 100% no-repeat}
 .pfbar i{position:absolute;top:0;height:100%}.pfbar i.up{left:50%;border-radius:0 3px 3px 0;background:var(--up)}.pfbar i.dn{right:50%;border-radius:3px 0 0 3px;background:var(--down)}
 .pfattr b{font-variant-numeric:tabular-nums;text-align:right}
+/* 每列共用父層的欄寬（subgrid），右邊金額寬度不同時零軸也對齊（#333 A10）；父層的欄寬也放在 @supports 裡：不支援的瀏覽器父層維持一般清單，每列照原本各自排（Codex 審查 P2） */@supports (grid-template-columns:subgrid){.pfattr{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) max-content;column-gap:8px}.pfattr li{grid-column:1/-1;grid-template-columns:subgrid}}
 .pfpnl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:12px 0 0;font-size:13px}.pfpnl dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
 .pfbasis{margin:4px 12px 16px;font-size:12px}.pfbasis ul{padding-left:1.2em;margin:4px 0}
 #impSheet .lgimp-form{margin:0}
@@ -1309,8 +1319,8 @@ function renderReport(S) {
   (W.lgRpP ||= need.reduce((p, f) => p.then(() => one(f)), Promise.resolve()).then(() => (typeof renderReportView === "function" ? null : one("pf-report.js"))).catch(e => { W.lgRpP = null; throw e; }))
     .then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
 }
-function renderDiv(S) {
-  if (typeof renderDivView === "function" && typeof KLDivCal !== "undefined") return renderDivView(S);
+function renderDiv(S, leg = null) {
+  if (typeof renderDivView === "function" && typeof KLDivCal !== "undefined") return renderDivView(S, leg);
   $("#lx").innerHTML = lgViewSeg() + skel("載入股利現金流…");
   const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
   (W.lgDvP ||= (typeof KLDivCal !== "undefined" ? Promise.resolve() : one("divcal.js")).then(() => one("pf-divcal.js")).catch(e => { W.lgDvP = null; throw e; })).then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });

@@ -21,6 +21,9 @@ async function page(width, { yieldFail = false } = {}) {
   return { ctx, p, errs, ok, bad };
 }
 
+// 不支援 subgrid 的瀏覽器：父層的欄寬規則只能出現在 @supports (grid-template-columns:subgrid) 裡，否則每列會被擠進父層的單一格（Codex 審查 P2）
+const outsideSupports = (p, sel) => p.evaluate(sel => { const bad = []; const walk = (rules, inSup) => { for (const r of rules) { if (r instanceof CSSStyleRule) { if (r.selectorText === sel && !inSup && r.style.gridTemplateColumns) bad.push(r.cssText); } else if (r instanceof CSSSupportsRule) walk(r.cssRules, inSup || /subgrid/.test(r.conditionText)); else if (r.cssRules) walk(r.cssRules, inSup); } };
+  for (const s of document.styleSheets) { try { walk(s.cssRules, false); } catch {} } return bad; }, sel);
 for (const width of [390, 1280]) test(`股利分頁 ${width}：每月合計、已公告取代同一次的預估、和計算一致、不溢出`, async () => {
   const { ctx, p, errs } = await page(width);
   await p.waitForSelector("#lx .dvbars", { timeout: 30000 });
@@ -35,6 +38,10 @@ for (const width of [390, 1280]) test(`股利分頁 ${width}：每月合計、�
   assert.match(r.text, /未來 12 個月\s*\$?50,000/); assert.match(r.text, /已公告/); assert.match(r.text, /美股不估：.*NVDA|美股不估：.*輝達/);
   assert.doesNotMatch(r.text, /9999/, "只列持股");
   assert.match(r.text, /不是投資建議/);
+  // 每月長條的軌道一樣寬、左緣對齊：有沒有「含預估」、金額長短不同都一樣（#333 A10）
+  const tr = await p.evaluate(() => [...document.querySelectorAll("#lx .dvbar")].map(e => { const r = e.getBoundingClientRect(); return [r.left, r.width]; }));
+  assert.deepEqual(await outsideSupports(p, ".dvbars"), [], "不支援 subgrid 時父層沒有多欄");
+  for (const [l, w] of tr) { assert.ok(Math.abs(l - tr[0][0]) < 0.6 && Math.abs(w - tr[0][1]) < 0.6, width + "：軌道 " + [l, w] + " vs " + tr[0]); }
   assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width), "沒有水平溢出");
   await ctx.close(); assert.deepEqual(errs, []);
 });
@@ -46,5 +53,42 @@ test("配息紀錄拿不到：標「拿不到」不說成沒有配息；1 分鐘
   await ctx.unroute("**/api/yield**", bad); await ctx.route("**/api/yield**", ok);
   await p.evaluate(() => { W.fresh = Date.now() + 36e5; W.dvD.at = Date.now() - 61e3; renderList(); });
   await p.waitForSelector("#lx .dvbars", { timeout: 30000 });
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("股利分頁（#300 第 3 組）：只有舊庫存也能估，標示用舊庫存股數；沒有交易紀錄時不會退回介紹頁", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  const Y = { 2330: [[day(-300), 5], [day(-200), 5]] };
+  await ctx.route("**/api/yield**", r => { const cs = (new URL(r.request().url()).searchParams.get("codes") || "").split(","); r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: cs.filter(c => Y[c]).map(c => ({ code: c, cash12: 1, divs: Y[c] })) }) }); });
+  await ctx.route("**/api/calendar**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: [], conf: [], hol: [] }) }));
+  await p.evaluate(() => { localStorage.removeItem("kline:pf:v1"); W.cal = null; W.dvD = null; const H = { 2330: { sh: 3000, cost: 900 }, TXF: { sh: 1, cost: 20000 } };
+    store.set("watch:hold", H); W.hold = H; W.holdOwn = H; W.lg = { view: "div" }; W.holdView = "tx"; setLt("hold"); });
+  await p.waitForSelector("#lx .dvbars", { timeout: 30000 });
+  const t = await p.evaluate(() => $("#lx").innerText);
+  assert.match(t, /目前看的是舊庫存的股數/); assert.match(t, /TXF（期貨不納入配置與再平衡）/);
+  // 2330 過去 12 個月兩次各 5 元 × 3000 股 → 未來 12 個月預估 30,000
+  assert.match(t, /未來 12 個月\s*\$?30,000/);
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 391), "沒有水平溢出");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
+
+test("股利分頁（ChatGPT 審查 #362 P3）：有交易帳本時走帳本；切到舊庫存改用舊庫存股數；「改回交易紀錄」再回帳本", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 1280 });
+  const Y = { 2330: [[day(-300), 5], [day(-200), 5]] };
+  await ctx.route("**/api/yield**", r => { const cs = (new URL(r.request().url()).searchParams.get("codes") || "").split(","); r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: cs.filter(c => Y[c]).map(c => ({ code: c, cash12: 1, divs: Y[c] })) }) }); });
+  await ctx.route("**/api/calendar**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rows: [], conf: [], hol: [] }) }));
+  // 帳本 2330 有 1000 股、舊庫存 2330 有 3000 股：金額看得出用了哪一邊
+  await p.evaluate(() => { W.cal = null; W.dvD = null; const H = { 2330: { sh: 3000, cost: 900 } }; store.set("watch:hold", H); W.hold = H; W.holdOwn = H;
+    store.set("pf:v1", { v: 1, method: "avg", transactions: [{ id: "a", v: 1, date: "2026-01-05", type: "buy", symbol: "2330", market: "tw", currency: "TWD", shares: 1000, price: 900, fee: 0, tax: 0 }], at: "x" });
+    W.hsrcLegacy = false; if (typeof holdSrcApply === "function") holdSrcApply(); W.lg = { view: "div" }; W.holdView = "tx"; setLt("hold"); });
+  await p.waitForSelector("#lx .dvbars", { timeout: 30000 });
+  let t = await p.evaluate(() => $("#lx").innerText);
+  assert.doesNotMatch(t, /目前看的是舊庫存/, "有帳本：走帳本"); assert.match(t, /未來 12 個月\s*\$?10,000/, "帳本 1000 股 × 10 元");
+  await p.evaluate(() => { W.hsrcLegacy = true; if (typeof holdSrcApply === "function") holdSrcApply(); renderList(); });
+  await p.waitForFunction(() => /目前看的是舊庫存的股數（這次切換檢視）/.test($("#lx").innerText), null, { timeout: 30000 });
+  t = await p.evaluate(() => $("#lx").innerText); assert.match(t, /未來 12 個月\s*\$?30,000/, "舊庫存 3000 股 × 10 元");
+  await p.evaluate(() => document.querySelector('#lx [data-lg="hsrcLedger"]').click());
+  await p.waitForFunction(() => !/目前看的是舊庫存/.test($("#lx").innerText) && /未來 12 個月\s*\$?10,000/.test($("#lx").innerText), null, { timeout: 30000 });
+  assert.equal(await p.evaluate(() => W.hsrcLegacy), false);
   await ctx.close(); assert.deepEqual(errs, []);
 });

@@ -16,13 +16,22 @@ function dvData(codes) {
     .catch(e => { W.dvD = { key, fail: true, msg: e.message || "", at: Date.now() }; }).finally(() => { if (dvView()) renderList(); });
   return W.dvD;
 }
-function renderDivView(S) {
-  const head = lgViewSeg(), today = lgToday();
-  const recon = typeof lgReconLoad === "function" ? lgReconLoad() : null;
-  const led = KLLedger.buildReconciledLedger(S, recon, { method: S.method, today }), open = led.positions.filter(p => p.open);
-  const reconAlert = typeof lgReconAlertHtml === "function" ? lgReconAlertHtml(recon, led) : "";
+// leg：只有舊庫存（或這次切換看舊庫存）時，由 ledger-ui.js 的 lgLegacyOpen() 傳進來，用舊庫存的股數估（#300 第 3 組）
+function renderDivView(S, leg = null) {
+  const today = lgToday();
+  let open, reconAlert = "", head = lgViewSeg();
+  if (leg) {
+    open = leg.open;
+    const skip = [leg.demoCount > 0 ? `已略過 ${leg.demoCount} 筆範例持股` : "", leg.skipped?.length ? `略過 ${leg.skipped.length} 筆無法算入的舊庫存：${leg.skipped.map(x => `${esc(x.symbol)}（${esc(x.msg)}）`).join("、")}` : ""].filter(Boolean);
+    head += `<div class="lgbar" style="padding-bottom:0"><span class="note lgwarn">目前看的是<b>舊庫存</b>的股數（${leg.hasTx ? "這次切換檢視" : "沒有交易紀錄"}）${skip.length ? "；" + skip.join("；") : ""}。</span><button type="button" class="btn sm" data-lg="view" data-v="tx">到交易紀錄建立完整帳本</button>${leg.hasTx ? `<button type="button" class="btn sm" data-lg="hsrcLedger">改回交易紀錄</button>` : ""}</div>`;
+  } else {
+    const recon = typeof lgReconLoad === "function" ? lgReconLoad() : null;
+    const led = KLLedger.buildReconciledLedger(S, recon, { method: S.method, today });
+    open = led.positions.filter(p => p.open);
+    reconAlert = typeof lgReconAlertHtml === "function" ? lgReconAlertHtml(recon, led) : "";
+  }
   const tw = open.filter(p => p.market === "tw").map(p => p.symbol);
-  if (!open.length) return ($("#lx").innerHTML = head + reconAlert + `<p class="note" style="padding:12px">目前沒有持股。到「交易紀錄」新增買進或匯入庫存快照後，這裡會預估未來 12 個月的股利。</p>`);
+  if (!open.length) return ($("#lx").innerHTML = head + reconAlert + `<p class="note" style="padding:12px">目前沒有持股。到「交易紀錄」新增買進、匯入庫存快照，或在「持股」頁加入庫存後，這裡會預估未來 12 個月的股利。</p>`);
   if (!tw.length) return ($("#lx").innerHTML = head + reconAlert + `<section class="pfcard" data-nofold><h4>股利現金流</h4><p class="note">目前只有美股持股；美股的配息資料這裡還沒有，所以不估。</p></section>`);
   if (W.off) return ($("#lx").innerHTML = head + reconAlert + `<section class="pfcard" data-nofold><h4>股利現金流</h4><p class="note">需要部署到網站才能查配息紀錄。</p></section>`);
   const X = dvData(tw);
@@ -47,10 +56,11 @@ function renderDivView(S) {
   if (document.getElementById("dvcss")) return; const st = document.createElement("style"); st.id = "dvcss";
   st.textContent = `.dvbars{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:4px}.dvbars .dvm{white-space:nowrap}.dvbars li{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content max-content;gap:8px;align-items:center;font-size:13px;font-variant-numeric:tabular-nums}
 .dvbar{height:10px;background:var(--line);border-radius:3px;overflow:hidden}.dvbar i{display:block;height:100%;background:var(--accent);border-radius:3px}.dvbars li>small{min-width:3.5em}
+/* 每列共用父層欄寬（subgrid）：有沒有「含預估」、金額長短不同，長條軌道都一樣寬（#333 A10）；父層欄寬也放在 @supports 裡，不支援時維持原本單欄排法（Codex 審查 P2） */@supports (grid-template-columns:subgrid){.dvbars{column-gap:8px;grid-template-columns:max-content minmax(0,1fr) max-content max-content}.dvbars li{grid-column:1/-1;grid-template-columns:subgrid}}
 .dvev{list-style:none;margin:0;padding:0}.dvev li{display:grid;grid-template-columns:max-content minmax(0,8em) auto minmax(0,1fr);gap:4px 8px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--line);font-size:13px}
 .dvd,.dvamt{font-variant-numeric:tabular-nums}.dvd{white-space:nowrap}.dvev .linkbtn{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvk{font-size:11px;padding:0 4px;border-radius:3px;border:1px solid var(--line);white-space:nowrap}
 .dvamt small{margin-left:4px}
-@media (max-width:560px){.dvbars li{grid-template-columns:max-content minmax(0,1fr) max-content}.dvbars li>small{display:none}.dvev li{grid-template-columns:max-content minmax(0,1fr) auto}.dvev li>.dvamt{grid-column:2/-1}}
+@media (max-width:560px){.dvbars li{grid-template-columns:max-content minmax(0,1fr) max-content}@supports (grid-template-columns:subgrid){.dvbars{grid-template-columns:max-content minmax(0,1fr) max-content}.dvbars li{grid-template-columns:subgrid}}.dvbars li>small{display:none}.dvev li{grid-template-columns:max-content minmax(0,1fr) auto}.dvev li>.dvamt{grid-column:2/-1}}
 @media (pointer:coarse){.dvev .linkbtn{min-height:44px}}`;
   document.head.appendChild(st);
 })();
