@@ -1956,6 +1956,23 @@ function m2World({ users: U, hol = M2_HOL, px: P } = {}) {
   return W;
 }
 
+test("盤中監控 盤後驗證：延續、回吐、反轉；關鍵價位守住、收回；提醒不驗證；統計樣本太少不算比例", () => {
+  const { monVerify, monVerifyDay, monStats } = engine().M;
+  // 個股漲 8% 觸發（觸發價 108、昨收 100）
+  const up = { type: "SYM", code: "2330", dir: "up", snaps: [{ px: 108, pct: 8 }] }, dn = { type: "IDX", code: "T00", dir: "dn", snaps: [{ px: 98, pct: -2 }] };
+  assert.deepEqual([110, 108, 103, 99].map(c => monVerify(up, c).res), ["cont", "cont", "fade", "rev"]);
+  assert.equal(monVerify(up, 103).pct, 3, "收盤漲跌幅用換算的昨收");
+  assert.deepEqual([97, 98, 99, 101].map(c => monVerify(dn, c).res), ["cont", "cont", "fade", "rev"]);
+  const lv = { type: "LEVEL", code: "T00", dir: "dn", lv: 23000, title: "加權跌破支撐（推估價位 23,000）" }, old = { ...lv, lv: undefined };
+  assert.deepEqual([monVerify(lv, 22950).res, monVerify(lv, 23050).res, monVerify(old, 22950).res], ["hold", "fail", "hold"], "舊事件沒有 lv：從標題讀價位");
+  assert.equal(monVerify({ type: "RULE", code: "2330" }, 100), null); assert.equal(monVerify(up, 0), null); assert.equal(monVerify({ type: "SYM", dir: "up", snaps: [] }, 100), null);
+  const E = { a: { ...up, id: "a" }, b: { ...dn, id: "b" }, c: { type: "RULE", code: "2330", id: "c" } };
+  assert.equal(monVerifyDay(E, { 2330: 99 }, 1), 1, "沒有收盤的不驗證"); assert.equal(E.a.verify.res, "rev"); assert.equal(E.b.verify, undefined);
+  assert.equal(monVerifyDay(E, { 2330: 120, T00: 97 }, 2), 1, "已驗證的不重算"); assert.equal(E.a.verify.res, "rev");
+  const S = monStats([{ d: "2026-10-26", E }]); assert.equal(S.n, 3); assert.equal(S.T.SYM.rev, 1); assert.equal(S.revRate.SYM, null, "少於 5 件不算比例");
+  const many = Object.fromEntries([99, 99, 110, 103, 110].map((c, i) => [i, { ...up, verify: monVerify(up, c) }]));
+  assert.equal(monStats([{ E: many }]).revRate.SYM, 0.4);
+});
 test("盤中監控 M2：推播範圍、重跑不重複、升級、只通知持有的人、Telegram 失敗後重試、來源失敗、公開資料不含使用者", async () => {
   const t0 = at8("2026-10-26T10:00:30");
   // 推播清單：盤中警示的範圍是庫存台股＋自選台股（範例庫存、美股不算）；沒勾就沒有

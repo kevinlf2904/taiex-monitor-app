@@ -114,3 +114,30 @@ test("網址 #monitor 打開盤中監控；自訂過分頁順序（沒有盤中�
   assert.deepEqual(await f.evaluate(() => store.get("watch:tabcfg")), { order: ["money", "today", "earn"], hide: [] });
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+for (const width of [390, 1280]) test(`盤中監控：近 20 天與盤後驗證（用日 K 收盤） ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 }); await quotes(ctx);
+  const kreq = [];
+  await ctx.route("**/api/kline**", r => { const c = new URL(r.request().url()).searchParams.get("code"); kreq.push(c);
+    const bars = c === "2330" ? [["2026-10-23", 100], ["2026-10-26", 109]] : c === "9999" ? [["2026-10-23", 100], ["2026-10-26", 101]] : [["2026-10-23", 100]];
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, data: bars.map(([d, c]) => ({ d, o: c, h: c, l: c, c, v: 1 })) }) }); });
+  await setup(p, `${TODAY}T14:00:00+08:00`);
+  const before = await p.evaluate(() => {
+    const ev = (id, type, code, dir, px, pct, sev) => ({ id, type, code, dir, level: 1, sev, title: `${code} 事件`, msg: "m", px, pct, first: Date.parse("2026-10-26T10:00:00+08:00"), last: Date.parse("2026-10-26T10:00:00+08:00"), state: "open", snaps: [{ at: 0, px, pct }], notified: [] });
+    store.set("watch:mon:v1:2026-10-26", { v: 1, ev: { a: ev("a", "SYM", "2330", "up", 108, 8, "alert"), b: ev("b", "SYM", "9999", "dn", 93, -7, "alert"), c: { ...ev("c", "RULE", "1101", "", null, null, "watch"), snaps: [] } } });
+    store.set("watch:mon:v1:2026-10-23", { v: 1, ev: {} });
+    W.monE = null; W.monView = "hist"; setLt("mon"); return localStorage.getItem("kline:watch:mon:v1:2026-10-23"); });
+  await p.waitForFunction(() => /已驗證 2/.test(document.querySelector("#lx")?.innerText || ""), null, { timeout: 15000 });
+  const t = await p.textContent("#lx");
+  assert.match(t, /盤後：延續 \+9\.00%/, "2330 漲 8% 觸發，收 109（比觸發價高）"); assert.match(t, /盤後：反轉 \+1\.00%/, "9999 跌 7% 觸發，收在昨收之上");
+  assert.match(t, /10\/23[\s\S]*0 件/); assert.ok(!kreq.includes("1101"), "提醒事件不抓日 K");
+  const E = await p.evaluate(() => store.get("watch:mon:v1:2026-10-26").ev);
+  assert.equal(E.a.verify.res, "cont"); assert.equal(E.b.verify.res, "rev"); assert.equal(E.c.verify, undefined, "提醒不驗證");
+  assert.equal(await p.evaluate(() => localStorage.getItem("kline:watch:mon:v1:2026-10-23")), before, "沒事件的日子不改");
+  // 點事件看詳情：有盤後驗證段落
+  await p.click('#lx [data-mon-d="2026-10-26"]'); await p.waitForSelector("#sheet:not([hidden])");
+  assert.match(await p.textContent("#sheet"), /盤後驗證[\s\S]*收盤 109/);
+  // 切回今天
+  await p.evaluate(() => closeSheet?.()); await p.click('#lx [data-monv="today"]'); assert.ok(await p.$("#lx .mon-list .mon-v"), "今天的列表也標出驗證結果");
+  assert.ok(await noHOverflow(p)); await ctx.close(); assert.deepEqual(errs, []);
+});
