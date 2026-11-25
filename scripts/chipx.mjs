@@ -1,6 +1,7 @@
 // 籌碼補充：借券賣出、當日沖銷、選擇權 Put/Call 比，整理成 learner/data/chipx.json，給看盤個股「籌碼」頁與「大盤」頁使用。
 // 來源：證交所、櫃買中心 OpenAPI（依 swagger 名稱找「借券」「當日沖銷」資料集）、期交所 OpenAPI（Put/Call 比）。
 // 個股只存最新一天；Put/Call 比累積 120 天。欄名依中文關鍵字判斷。
+// 臺指選擇權（TXO）各履約價未平倉與最大痛點：期交所「選擇權每日交易行情下載」CSV（Big5），只用一般交易時段，存最近的兩個到期（txo）。
 //   --dump  只列出找到的資料集、欄位與前兩筆，不寫檔
 
 import { readFile, writeFile } from "node:fs/promises";
@@ -29,6 +30,56 @@ export function dtRow(r) {
   const kr = keyOf(ks, /比率|比例|占/), ks2 = keyOf(ks, /當日沖銷.*股數|沖銷.*成交股數/), kv = keyOf(ks, /^成交股數|總成交股數/);
   let pct = kr ? num(r[kr]) : null; if (pct == null && ks2 && kv && num(r[kv])) pct = (num(r[ks2]) / num(r[kv])) * 100;
   return pct == null ? null : [code, +pct.toFixed(2)];
+}
+
+/* ---------- 臺指選擇權：各履約價未平倉、最大痛點 ---------- */
+// CSV 文字 → [{ d, exp, k, cp: "C"|"P", oi, vol }]；欄名依中文關鍵字找（到期月份(週別)、履約價、買賣權、未沖銷契約數、交易時段），只留 TXO 一般時段
+export function parseOptCsv(text) {
+  const lines = String(text || "").replace(/^\ufeff/, "").split(/\r?\n/).filter(l => l.trim()); if (lines.length < 2) return [];
+  const sp = l => l.split(",").map(x => x.trim().replace(/^"|"$/g, "")), H = sp(lines[0]), at = re => H.findIndex(h => re.test(h));
+  const iD = at(/交易日期/), iC = at(/^契約/), iE = at(/到期月份|週別/), iK = at(/履約價/), iP = at(/買賣權/), iO = at(/未沖銷|未平倉/), iV = at(/成交量/), iS = at(/交易時段/);
+  if ([iD, iE, iK, iP, iO].some(i => i < 0)) return [];
+  const out = [];
+  for (const l of lines.slice(1)) {
+    const r = sp(l); if (iC >= 0 && r[iC] && r[iC] !== "TXO") continue; if (iS >= 0 && r[iS] && !/一般/.test(r[iS])) continue;
+    const k = num(r[iK]), oi = num(r[iO]), cp = /買|call/i.test(r[iP]) ? "C" : /賣|put/i.test(r[iP]) ? "P" : null, d = toIso(r[iD]);
+    if (!d || !cp || k == null || oi == null) continue; out.push({ d, exp: String(r[iE]).replace(/\s/g, ""), k, cp, oi, vol: iV >= 0 ? num(r[iV]) : null });
+  }
+  return out;
+}
+// 到期排序：202612 是月選（第三個星期三，當成第 3 週）、202612W1 是週選；同一週有星期三、星期五兩種時星期五排後面
+const expKey = e => { const m = /^(\d{6})(?:([WF])(\d))?$/.exec(e); return m ? +m[1] * 100 + (m[3] ? +m[3] * 10 + (m[2] === "F" ? 5 : 0) : 30) : Infinity; };
+export const expLabel = e => { const m = /^(\d{4})(\d{2})(?:([WF])(\d))?$/.exec(e); return m ? `${+m[2]} 月${m[3] ? `第 ${m[4]} 週${m[3] === "F" ? "（週五）" : ""}` : "（月選）"}` : e; };
+// 最大痛點：到期時所有買方權利金價值（買權 Σ OI×max(0, S−K)、賣權 Σ OI×max(0, K−S)）最小的結算價 S，只在有未平倉的履約價之間找
+export function maxPain(rows) {
+  const ks = [...new Set(rows.map(r => r.k))].sort((a, b) => a - b); if (!ks.length) return null;
+  let best = null;
+  for (const S of ks) { let v = 0; for (const r of rows) v += r.oi * (r.cp === "C" ? Math.max(0, S - r.k) : Math.max(0, r.k - S)); if (!best || v < best.v) best = { k: S, v }; }
+  return best.k;
+}
+// 每個到期一份摘要：最大痛點、買賣權總未平倉、未平倉 P/C、未平倉最大的履約價，以及最大痛點上下各 span 檔的分佈 [履約價, 買權 OI, 賣權 OI]
+export function txoSummary(rows, n = 2, span = 15) {
+  const by = new Map(); for (const r of rows) if (r.oi > 0) (by.get(r.exp) || by.set(r.exp, []).get(r.exp)).push(r);
+  return [...by.keys()].sort((a, b) => expKey(a) - expKey(b)).slice(0, n).map(exp => {
+    const R = by.get(exp), mp = maxPain(R), M = new Map();
+    for (const r of R) { const x = M.get(r.k) || [r.k, 0, 0]; x[r.cp === "C" ? 1 : 2] += r.oi; M.set(r.k, x); }
+    const all = [...M.values()].sort((a, b) => a[0] - b[0]), i = all.findIndex(x => x[0] === mp), c = all.reduce((s, x) => s + x[1], 0), p = all.reduce((s, x) => s + x[2], 0);
+    const top = j => all.reduce((b, x) => (x[j] > b[j] ? x : b), all[0])[0];
+    return { exp, label: expLabel(exp), mp, cOI: c, pOI: p, pcr: c ? +((p / c) * 100).toFixed(2) : null, cMax: top(1), pMax: top(2), rows: all.slice(Math.max(0, i - span), i + span + 1) };
+  });
+}
+const twD = d => new Date(Date.parse(d + "T00:00:00Z")).toISOString().slice(0, 10).replace(/-/g, "/");
+async function txoFetch(today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)) {
+  for (let i = 0; i < 6; i++) { // 今天還沒公布（或假日）就往前找，最多 6 天
+    const d = new Date(Date.parse(today + "T00:00:00Z") - i * 864e5).toISOString().slice(0, 10); if ([0, 6].includes(new Date(d + "T00:00:00Z").getUTCDay())) continue;
+    const body = new URLSearchParams({ down_type: "1", commodity_id: "TXO", commodity_id2: "", queryStartDate: twD(d), queryEndDate: twD(d) });
+    const r = await fetch("https://www.taifex.com.tw/cht/3/optDataDown", { method: "POST", headers: { ...UA, Accept: "text/csv,*/*", "Content-Type": "application/x-www-form-urlencoded" }, body, signal: AbortSignal.timeout(30000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const text = new TextDecoder("big5").decode(await r.arrayBuffer()), rows = parseOptCsv(text);
+    if (DUMP) console.log("TXO", d, "前三行", JSON.stringify(text.split(/\r?\n/).slice(0, 3)), "筆數", rows.length);
+    if (rows.length) return { date: rows[0].d, exps: txoSummary(rows) };
+  }
+  return null;
 }
 
 export async function main() {
@@ -66,10 +117,14 @@ export async function main() {
       used.push("期交所 Put/Call 比"); } }
   catch (e) { notes.push(`期交所：${e.message}`); }
   pcr = pcr.sort((a, b) => a[0].localeCompare(b[0])).slice(-120);
-  if (DUMP) { console.log("整理：借券", Object.keys(lend).length, "當沖", Object.keys(dt).length, "PCR", pcr.slice(-3), "日期", date, notes); return; }
+  // 臺指選擇權未平倉分佈：拿不到就沿用上一次的（畫面會顯示資料日）
+  let txo = old.txo || null;
+  try { const T = await txoFetch(); if (T?.exps?.length) { txo = T; used.push(`期交所 TXO 未平倉（${T.date}）`); } else notes.push("期交所 TXO：最近 6 天沒有資料"); }
+  catch (e) { notes.push(`期交所 TXO：${e.message}`); }
+  if (DUMP) { console.log("整理：借券", Object.keys(lend).length, "當沖", Object.keys(dt).length, "PCR", pcr.slice(-3), "TXO", JSON.stringify(txo?.exps?.map(x => [x.exp, x.mp, x.cOI, x.pOI])), "日期", date, notes); return; }
   if (!Object.keys(lend).length && !Object.keys(dt).length && !(old.pcr || []).length && !pcr.length) { console.log("::warning::什麼都沒讀到，保留原本的資料：" + notes.join("；")); return; }
   if (!Object.keys(lend).length && !Object.keys(dt).length && pcr.length === (old.pcr || []).length && old.date) { console.log("::warning::借券、當沖都沒讀到（可能是假日），保留原本的資料：" + notes.join("；")); return; }
-  await writeFile(OUT, JSON.stringify({ updated: new Date().toISOString(), date, sets: used, notes, lend: Object.keys(lend).length ? lend : old.lend || {}, dt: Object.keys(dt).length ? dt : old.dt || {}, pcr }));
+  await writeFile(OUT, JSON.stringify({ updated: new Date().toISOString(), date, sets: used, notes, lend: Object.keys(lend).length ? lend : old.lend || {}, dt: Object.keys(dt).length ? dt : old.dt || {}, pcr, txo }));
   console.log("完成", used.join("、"), notes.join("；"));
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch(e => { console.error(e); process.exit(1); });

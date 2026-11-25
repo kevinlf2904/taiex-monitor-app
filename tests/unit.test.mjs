@@ -6,7 +6,7 @@ import { mergeRows, compare, parseInfoTable } from "../scripts/sec13f.mjs";
 import { parseTdcc, rankOf, addRow, needFix } from "../scripts/tdcc.mjs";
 import { parseWeek, weekRow, tokenOf, datesOf, tdccWeeks } from "../api/_lib/tdcc.js";
 import { tdccHolders, tdccDist } from "../api/_lib/company.js";
-import { lendRow } from "../scripts/chipx.mjs";
+import { lendRow, parseOptCsv, maxPain, txoSummary, expLabel } from "../scripts/chipx.mjs";
 import { appendDay, shards } from "../scripts/market-scan.mjs";
 import { evalDoc, evalFollow } from "../scripts/alerts-push.mjs";
 import { alertDoc, docHas } from "../api/_lib/sync.js";
@@ -34,6 +34,20 @@ test("集保：千張、400 張、50 張以下", () => {
 });
 test("借券：上櫃英文欄位（股 → 張）", () => {
   assert.deepEqual(lendRow({ SecuritiesCompanyCode: "6488", SecuritiesBorrowingSale: "76000", SecuritiesBorrowingBalanceOfTheMarketDay: "216000" }), ["6488", 76, 216]);
+});
+test("臺指選擇權：CSV 欄名對應、只留 TXO 一般時段、最大痛點、到期排序與摘要", () => {
+  const H = "交易日期,契約,到期月份(週別),履約價,買賣權,開盤價,最高價,最低價,收盤價,成交量,結算價,未沖銷契約數,最後最佳買價,最後最佳賣價,歷史最高價,歷史最低價,是否因訊息面暫停交易,交易時段,漲跌價,漲跌%";
+  const row = (exp, k, cp, oi, sess = "一般", c = "TXO") => `2026/11/24,${c},${exp},${k},${cp},1,1,1,1,10,1,${oi},1,1,1,1,,${sess},0,0%`;
+  const csv = "\ufeff" + [H, row("202612", 23000, "買權", 100), row("202612", 23000, "賣權", 500), row("202612", 23500, "買權", 800), row("202612", 23500, "賣權", 200), row("202612", 24000, "買權", 1200), row("202612", 24000, "賣權", 50),
+    row("202612", 23500, "買權", 9999, "盤後"), row("202612", 23500, "買權", 9999, "一般", "TEO"), row("202611W4", 23500, "買權", 30), row("202611W4", 23500, "賣權", 40), row("202612W1", 23500, "買權", 0)].join("\r\n");
+  const R = parseOptCsv(csv); assert.equal(R.length, 9, "盤後與其他契約不算"); assert.deepEqual(R[0], { d: "2026-11-24", exp: "202612", k: 23000, cp: "C", oi: 100, vol: 10 });
+  // 結算 23000：買權 0、賣權 0 ＋ 200×500 ＋ 50×1000 ＝ 150,000；23500：買權 100×500 ＝ 50,000 ＋ 賣權 50×500 ＝ 25,000 → 75,000；24000：買權 100×1000 ＋ 800×500 ＝ 500,000
+  assert.equal(maxPain(R.filter(r => r.exp === "202612")), 23500);
+  const S = txoSummary(R); assert.deepEqual(S.map(x => x.exp), ["202611W4", "202612"], "週選排在當月月選前面；沒有未平倉的到期不列");
+  const M = S[1]; assert.deepEqual([M.mp, M.cOI, M.pOI, M.pcr, M.cMax, M.pMax], [23500, 2100, 750, 35.71, 24000, 23000]);
+  assert.deepEqual(M.rows, [[23000, 100, 500], [23500, 800, 200], [24000, 1200, 50]]);
+  assert.deepEqual([expLabel("202612"), expLabel("202612W2"), expLabel("202612F1")], ["12 月（月選）", "12 月第 2 週", "12 月第 1 週（週五）"]);
+  assert.deepEqual(parseOptCsv("交易日期,契約\n2026/11/24,TXO"), [], "缺欄位不猜");
 });
 test("全市場：接上當天、分片共同日期軸", () => {
   const H = { s: {} };
