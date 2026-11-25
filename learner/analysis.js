@@ -422,13 +422,18 @@ const FEE = 0.001425, TAX = 0.003;
 // opt.capital 初始資金（元）；opt.lot 每次買進的最小單位（1 = 零股、1000 = 整張）；opt.useBuy / opt.useSell 是否依買進／賣出訊號交易；
 // opt.skip 要略過的訊號（key = 索引＋方向）。手續費 0.1425%（最低 20 元），賣出另計 0.3% 證交稅。
 const btKey = s => `${s.i}${s.side}`;
-// 證交稅率：股票 0.3%（預設）、ETF 0.1%、債券 ETF（00xxxB）停徵到 2026-12-31（停徵期間與延長修法進度見 learner/ledger.js 的 BOND_ETF_TAX_FREE，帳本已依交易日期判斷）。
-// 這裡只看代號、不看日期：台灣的債券 ETF 2017 年才開始上市，目前回測用到的資料都在停徵期間內。依賣出日期判斷見 #356（沒延長的話要在 2027 年前做）
-const taxOf = c => (/^00\d+B$/.test(c || "") ? 0 : /^00/.test(c || "") ? 0.001 : undefined);
+// 證交稅率：股票 0.3%（預設）、ETF 0.1%、債券 ETF（00xxxB）停徵到 2026-12-31（證券交易稅條例第 2 條之 1；和 learner/ledger.js 的 bondEtfTaxFree 同一段期間，tests/ledger.test.mjs 檢查兩處一致）。
+// d（YYYY-MM-DD，可帶時間）：賣出日期；停徵期間外的債券 ETF 照 ETF 0.1%。沒給日期時視為在停徵期間內（和以前一樣）。延長修法三讀後只要改 TAX_BOND_FREE.until（#356）
+const TAX_BOND_FREE = { from: "2017-01-01", until: "2026-12-31" };
+const taxOf = (c, d) => { if (/^00\d+B$/.test(c || "")) { const x = d ? String(d).slice(0, 10) : ""; return x && (x < TAX_BOND_FREE.from || x > TAX_BOND_FREE.until) ? 0.001 : 0; } return /^00/.test(c || "") ? 0.001 : undefined; };
+// 回測用：依賣出那根 K 棒的日期查稅率（backtest 的 opt.tax 可以是函式）
+const taxAt = c => d => taxOf(c, d) ?? TAX;
 function backtest(D, sigs, opt = {}) {
   const cap = opt.capital || 1e6, lot = opt.lot || 1, useBuy = opt.useBuy !== false, useSell = opt.useSell !== false, skip = opt.skip || new Set();
   // 手續費與證交稅都是無條件捨去；ETF 證交稅 0.1%。opt.fee 手續費率（預設 0.1425%，可以乘上券商折扣）、opt.minFee 每筆最低手續費（預設 20 元）、opt.slip 每邊滑價（小數，買進價往上加、賣出價往下扣）
-  const TX = opt.tax ?? TAX, FR = opt.fee ?? FEE, MF = opt.minFee ?? 20, SLIP = +opt.slip || 0, fee = amt => Math.max(MF, Math.floor(amt * FR)), tax = amt => Math.floor(amt * TX);
+  // opt.tax：證交稅率，或「日期 → 稅率」的函式（用賣出那根 K 棒的 d 查，例如 taxAt(code)，債券 ETF 停徵期間外照 0.1%）
+  const TXF = typeof opt.tax === "function" ? opt.tax : null, TX = TXF ? TAX : opt.tax ?? TAX, txAt = i => { const r = TXF ? TXF(D[i]?.d) : TX; return typeof r === "number" && isFinite(r) ? r : TAX; };
+  const FR = opt.fee ?? FEE, MF = opt.minFee ?? 20, SLIP = +opt.slip || 0, fee = amt => Math.max(MF, Math.floor(amt * FR)), tax = (amt, i) => Math.floor(amt * txAt(i));
   // 買賣方式（預設和以前一樣）：fill "open"＝訊號隔天開盤成交、"close"＝訊號當根收盤成交；
   // stop 停損、take 停利、trail 移動停利（小數，例 0.08＝8%），hold 最多持有幾根 K 棒；size "all" 全部資金、"half" 一半、"units" 每次固定 units × lot 股、"amount" 每次固定買進 opt.amount 元
   const fillClose = opt.fill === "close", stop = +opt.stop || 0, take = +opt.take || 0, trail = +opt.trail || 0, hold = +opt.hold || 0, size = opt.size || "all", units = Math.max(1, +opt.units || 1);
@@ -437,7 +442,7 @@ function backtest(D, sigs, opt = {}) {
   const at = {}; sigs.forEach(s => { if (s.note || skip.has(btKey(s))) return; if ((s.side === "buy" && useBuy) || (s.side === "sell" && useSell)) at[s.i] = s.side; });
   let cash = cap, sh = 0, pos = null, pending = !useBuy && useSell ? "buy" : null, peak = cap, mdd = 0, costs = 0, missed = 0;
   const trades = [], eqs = [];
-  const sell = (i, px0, open, why = "訊號") => { const px = px0 * (1 - SLIP), amt = sh * px, c = fee(amt) + tax(amt); costs += c; cash += amt - c; trades.push({ ...pos, xi: i, xpx: px, sh, pnl: amt - c - pos.cost, ret: (amt - c) / pos.cost - 1, open, why }); pos = null; sh = 0; };
+  const sell = (i, px0, open, why = "訊號") => { const px = px0 * (1 - SLIP), amt = sh * px, c = fee(amt) + tax(amt, i); costs += c; cash += amt - c; trades.push({ ...pos, xi: i, xpx: px, sh, pnl: amt - c - pos.cost, ret: (amt - c) / pos.cost - 1, open, why }); pos = null; sh = 0; };
   const buy = (i, px0) => { const px = px0 * (1 + SLIP), budget = size === "half" ? cash / 2 : size === "amount" ? Math.min(cash, +opt.amount || cash) : cash; /* amount：每次固定買進金額 */ let n = canBuy(budget, px); if (size === "units") n = Math.min(n, units * lot);
     if (n > 0) { const amt = n * px, c = fee(amt); costs += c; cash -= amt + c; sh = n; pos = { i, px, raw: px0, cost: amt + c, start: i === 0 && !useBuy, hi: px0 }; } else missed++; };
   for (let i = 0; i < D.length; i++) {
@@ -460,7 +465,7 @@ function backtest(D, sigs, opt = {}) {
   if (pos) sell(last, D[last].c, true, "期末");
   const wins = trades.filter(t => t.pnl > 0).length;
   // 買進持有：同一筆資金，第一天開盤買進、最後一天收盤賣出（和策略用同樣的成本與交易單位）
-  const b0 = D[0].o * (1 + SLIP), bn = canBuy(cap, b0), bAmt = bn * b0, sAmt = bn * D[last].c * (1 - SLIP), bhEnd = cap - bAmt - fee(bAmt) * (bn > 0) + (bn > 0 ? sAmt - fee(sAmt) - tax(sAmt) : 0);
+  const b0 = D[0].o * (1 + SLIP), bn = canBuy(cap, b0), bAmt = bn * b0, sAmt = bn * D[last].c * (1 - SLIP), bhEnd = cap - bAmt - fee(bAmt) * (bn > 0) + (bn > 0 ? sAmt - fee(sAmt) - tax(sAmt, last) : 0);
   if (eqs.length) eqs[last] = cash; /* eq：每根 K 棒收盤時的資產（最後一根是期末賣出後的現金） */
   return { trades, eq: eqs, cap, end: cash, total: cash / cap - 1, pnl: cash - cap, bh: bhEnd / cap - 1, bhEnd, bhShares: bn, mdd, costs, win: trades.length ? wins / trades.length : null, missed, tooSmall: canBuy(cap, Math.min(...D.map(d => d.o))) === 0 };
 }

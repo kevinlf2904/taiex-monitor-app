@@ -2110,7 +2110,7 @@ async function loadHoldDivs(force = false) {
 function holdPnL(c, q) {
   const h = W.hold[c]; if (!h || !h.sh || !h.cost || q?.price == null) return null; const mv = h.sh * q.price, buy = h.sh * h.cost, us = isUS(c);
   // 交易紀錄的持股（h.lg）：成本已含實際的買進手續費與稅，不再估；股息用帳本記到的已領股息（美股也有）
-  const fr = W.hfee && !us ? 0.001425 * W.hdisc : 0, tr = W.hfee && !us ? taxOf(c) ?? 0.003 : 0, bf = fr && !h.lg ? Math.max(20, Math.round(buy * fr)) : 0, sf = fr ? Math.max(20, Math.round(mv * fr)) : 0, tax = Math.round(mv * tr);
+  const fr = W.hfee && !us ? 0.001425 * W.hdisc : 0, tr = W.hfee && !us ? taxOf(c, new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)) ?? 0.003 : 0, bf = fr && !h.lg ? Math.max(20, Math.round(buy * fr)) : 0, sf = fr ? Math.max(20, Math.round(mv * fr)) : 0, tax = Math.round(mv * tr);
   const dvAll = us && !h.lg ? null : holdDiv(c, h), got = h.lg ? h.dv || 0 : dvAll?.got, dv = W.hdiv ? got || 0 : 0, hc = buy + bf - dv, pnl = mv - sf - tax - hc;
   return { mv, pnl, pct: hc > 0 ? (pnl / hc) * 100 : null, day: q.chg != null ? h.sh * q.chg : null, fee: bf + sf, tax, dv, divGot: got ?? null, divYr: dvAll?.yr ?? null, hc, avg: hc / h.sh, be: hc / (h.sh * (1 - fr - tr)) };
 }
@@ -6211,7 +6211,7 @@ function drawK(fresh = false, shift = 0) {
   const win = S?.fn ? btWindow(D) : null; let bt = null;
   if (win) try { const Dw = D.slice(win.a, win.b + 1), sw = sigs.filter(g => g.i >= win.a && g.i <= win.b).map(g => ({ ...g, i: g.i - win.a })), units = W.btOpt.size === "units" && !isFut(W.sel);
     const cap = units ? Math.max(W.btOpt.cap, W.btOpt.units * 1000 * Math.max(...Dw.map(x => x.h)) * 1.01) : W.btOpt.cap;
-    const base = { capital: cap, lot: units ? 1000 : 1, tax: taxOf(W.sel), ...btOptions() };
+    const base = { capital: cap, lot: units ? 1000 : 1, tax: taxAt(W.sel), ...btOptions() };
     bt = backtest(Dw, sw, base); bt.trades.forEach(t => { t.i += win.a; t.xi += win.a; }); bt.from = Dw[0].d; bt.to = Dw.at(-1).d; W.btLast = { bt, D, Dw, sw, base, off: win.a, name: S.name }; } catch {}
   // 停損、停利、移動停利、到期的出場點也標在圖上；回測期間外的訊號畫淡
   const exitMk = (bt?.trades || []).filter(t => t.why && !["訊號", "期末"].includes(t.why)).map(t => ({ i: t.xi, side: "sell", label: t.why }));

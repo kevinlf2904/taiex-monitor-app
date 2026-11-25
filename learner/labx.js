@@ -14,7 +14,7 @@ const lxStrats = () => Object.entries(STRAT_DEFS).filter(([k]) => !["pat"].inclu
 function lxOpt(cost = true) {
   const code = typeof labUsesReal === "function" && labUsesReal() ? REAL.cur?.code : null;
   return { capital: 1e6, stop: LX.stop / 100, take: LX.take / 100, trail: LX.trail / 100,
-    fee: cost ? FEE * Math.max(0, Math.min(10, LX.disc)) / 10 : 0, minFee: cost ? 20 : 0, slip: cost ? LX.slip / 100 : 0, tax: cost ? taxOf(code) ?? TAX : 0 };
+    fee: cost ? FEE * Math.max(0, Math.min(10, LX.disc)) / 10 : 0, minFee: cost ? 20 : 0, slip: cost ? LX.slip / 100 : 0, tax: cost ? taxAt(code) : 0 };
 }
 // 把幾組訊號合起來：mode and＝每一組在 win 根 K 棒內都有同方向的訊號（在最後一組到齊的那根標出）；or＝任一組有就算
 function combineSigs(groups, side, mode, win) {

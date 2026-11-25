@@ -2810,7 +2810,7 @@ function renderBT(sigs) {
   if (!S.fn) { html += `<p class="note" style="margin:0">選一個策略，圖上會標出買賣訊號，這裡會顯示用這些訊號進出的結果。</p>`; }
   else {
     const lc = labUsesReal() ? REAL.cur?.code : null, etf = /^00/.test(lc || ""), bond = /^00\d+B$/.test(lc || ""), idx = lc === "TAIEX";
-    const r = backtest(lab.D, sigs, { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip, tax: taxOf(lc) }), cls = x => x > 0 ? "up" : x < 0 ? "down" : "";
+    const r = backtest(lab.D, sigs, { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip, tax: taxAt(lc) }), cls = x => x > 0 ? "up" : x < 0 ? "down" : "";
     const nBuy = sigs.filter(x => x.side === "buy" && !x.note).length, nSell = sigs.filter(x => x.side === "sell" && !x.note).length;
     const mode = lab.useBuy && lab.useSell ? "" : lab.useBuy ? "只依買進訊號進場，之後一直持有到期末。" : lab.useSell ? "第一天開盤先全額買進，依賣出訊號出場後不再買回。" : "買進、賣出都沒勾，不會有任何交易。";
     if (idx) html += `<p class="note" style="margin:0 0 8px">⚠︎ 加權指數本身不能買賣，這裡的回測只是看訊號在指數上的效果；實際可以用 0050 等 ETF 或台指期操作。</p>`;
@@ -2829,7 +2829,7 @@ function renderBT(sigs) {
     else html += `<p class="note" style="margin:0">${lab.useBuy || lab.useSell ? "這段走勢沒有觸發任何交易。換一段走勢、換策略，或在下方訊號清單多勾幾個試試。" : ""}</p>`;
     // 完整績效報告（quant.js）：展開時才算
     if (r.trades.length) { let rep = "";
-      if (lab.repOpen) { const base = { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip, tax: taxOf(lc) }, M = btMetrics(r, lab.D), B = btBreakdown(r, lab.D), V = btVariants((s, o) => backtest(lab.D, s, { ...base, ...o }), lab.D, sigs, base), ak = "lab:" + lab.strat;
+      if (lab.repOpen) { const base = { capital: lab.capital, lot: lab.lot, useBuy: lab.useBuy, useSell: lab.useSell, skip: lab.skip, tax: taxAt(lc) }, M = btMetrics(r, lab.D), B = btBreakdown(r, lab.D), V = btVariants((s, o) => backtest(lab.D, s, { ...base, ...o }), lab.D, sigs, base), ak = "lab:" + lab.strat;
         lab.qa[ak] = { ctx: () => `${labUsesReal() ? realName(REAL.cur) + " 的真實日 K" : "程式模擬的走勢"}（${lab.D.length} 根）的回測結果：\n` + btReportText(M, B, V, S.name), q: "請只根據上面的回測數字做風險報酬分析：1) 這個策略的優勢與弱點 2) 哪些行情會讓它失效 3) 3 項降低風險的改善方法 4) 2 種不增加風險、提高報酬的方法，盡量引用「試算」裡的數字。用繁體中文、條列，不要給買賣建議。" };
         rep = btReportHtml(r, M, B, V, { D: lab.D, ai: { key: ak, R: lab.ai[ak] } }); }
       html += `<details class="bt-list" id="btRepD"${lab.repOpen ? " open" : ""}><summary>完整績效報告 <span class="note">年化、夏普、回撤、不同行情的表現、改善試算</span></summary>${rep}</details>`; }
