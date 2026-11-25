@@ -1548,6 +1548,46 @@ function tdMacSum() {
   const L = [dji?.chgPct != null && `道瓊 ${sgn(dji.chgPct, 1)}%`, tnx?.price != null && `美債 ${(+tnx.price).toFixed(2)}%`, tw && `台幣 ${(+tw.px).toFixed(2)}`].filter(Boolean);
   return L.length ? L.join("・") : "昨晚美股、利率、匯率、原物料";
 }
+/* 台積電 ADR 溢價：1 股 TSM＝5 股 2330。溢價＝TSM（美元）× 美元兌台幣 ÷ 5 ÷ 2330（台幣）− 1。
+   歷史：同一個日期的收盤配對（TSM 在台股收盤後才交易，所以日期 d 的溢價＝台股 d 收盤 vs 當晚美股 d 收盤）；那天沒有匯率就用前一個有匯率的日子。
+   只是兩地價差的參考：ADR 長期有溢價（外資持股上限、交易時間、流動性），不代表隔天台股會補漲或補跌。 */
+const ADR_RATIO = 5, adrNum = v => typeof v === "number" && isFinite(v) && v > 0;
+const adrPrem = (tsm, fx, tw) => (adrNum(tsm) && adrNum(fx) && adrNum(tw) ? (tsm * fx) / ADR_RATIO / tw - 1 : null);
+function adrPremHist(Dt, Df, Dw, cur = null) {
+  const m = D => new Map((D || []).filter(b => b && b.d && adrNum(b.c)).map(b => [String(b.d).slice(0, 10), b.c]));
+  const T = m(Dt), F = m(Df), Wm = m(Dw), fd = [...F.keys()].sort(), S = [];
+  let k = -1;
+  for (const d of [...Wm.keys()].sort()) {
+    while (k + 1 < fd.length && fd[k + 1] <= d) k++;
+    if (k < 0 || !T.has(d)) continue;
+    const p = adrPrem(T.get(d), F.get(fd[k]), Wm.get(d)); if (p != null) S.push([d, p]);
+  }
+  if (S.length < 60) return { n: S.length, short: true };
+  const v = S.map(x => x[1]).sort((a, b) => a - b), q = f => { const x = (v.length - 1) * f, i = Math.floor(x); return v[i] + (v[Math.min(i + 1, v.length - 1)] - v[i]) * (x - i); };
+  const now = cur ?? S[S.length - 1][1];
+  return { n: S.length, from: S[0][0], to: S[S.length - 1][0], lo: v[0], hi: v[v.length - 1], med: q(0.5), p10: q(0.1), p90: q(0.9), now, pct: v.filter(x => x <= now).length / v.length, last: S[S.length - 1] };
+}
+async function adrHistLoad() {
+  if (W.adrH?.busy) return; W.adrH = { busy: true }; renderList();
+  try {
+    const k = c => getJ(`/api/kline?code=${encodeURIComponent(c)}&months=12`).then(r => r?.data || []);
+    const [t, f, w] = await Promise.all([k("TSM"), k("TWD=X"), k("2330")]);
+    W.adrH = { ok: true, t, f, w, twLast: w.length ? w[w.length - 1].c : null, at: Date.now() };
+  } catch (e) { W.adrH = { err: e.message || "載入失敗" }; }
+  renderList();
+}
+function tdAdrHtml() {
+  const tsm = (W.bf?.us?.megas || []).find(x => x.code === "TSM"), fx = tdGlRows().find(r => r.c === "TWD=X")?.px, H = W.adrH;
+  if (!adrNum(tsm?.price) || !adrNum(fx)) return "";
+  const twq = W.quotes?.get?.("2330")?.price, tw = adrNum(twq) ? twq : H?.ok ? H.twLast : null, p = adrPrem(tsm.price, fx, tw);
+  const pc = x => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
+  const R = H?.ok ? adrPremHist(H.t, H.f, H.w, p) : null;
+  const hist = H?.busy ? `<span class="note">載入近一年…</span>` : H?.err ? `<span class="note">近一年資料載入失敗（${esc(H.err)}）</span> <button type="button" class="linkbtn" data-tx="adrh">再試一次</button>`
+    : R && !R.short ? `<span class="note">近一年（${R.from}～${R.to}，${R.n} 天）：${pc(R.lo)}～${pc(R.hi)}，中位數 ${pc(R.med)}；目前高於 ${Math.round(R.pct * 100)}% 的日子${R.pct >= 0.9 ? "，偏高" : R.pct <= 0.1 ? "，偏低" : ""}</span>`
+    : R?.short ? `<span class="note">近一年能配對的日子只有 ${R.n} 天，不算區間。</span>` : W.off ? "" : `<button type="button" class="linkbtn" data-tx="adrh">看近一年溢價區間 ›</button>`;
+  return `<div class="td-adr" data-adr><span class="note">台積電 ADR 溢價</span><b class="num ${p == null ? "" : cls(p)}">${p == null ? "—" : pc(p)}</b>
+    <span class="note">TSM ${(+tsm.price).toFixed(2)} 美元 × ${(+fx).toFixed(3)} ÷ 5${tw ? ` vs 2330 ${(+tw).toLocaleString()} 元${adrNum(twq) ? "" : "（最近收盤）"}` : "；還沒有 2330 的價格"}</span>${hist}</div>`;
+}
 function tdMacBody() {
   // 國際行情由 V2「全球總經」工作區按需載入；不在今日市場初次渲染時額外抓取。
   const P = tdUs(), R = tdGlRows(), U = W.bf?.us || {};
@@ -2156,13 +2196,14 @@ $("#lx").addEventListener("submit", e => {
 });
 $("#lx").addEventListener("change", e => { const k = e.target.dataset?.eva; if (!k || W.lt !== "tools") return; EVA()[k] = e.target.checked; evaSave(); if (e.target.checked && !EV_PUSH.includes(k)) { try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch {} evStart(); } renderList(); });
 $("#lx").addEventListener("click", e => {
-  if (W.lt !== "tools" && W.lt !== "today") return; const b = e.target.closest("[data-ntdel],[data-ntclr],[data-mk='evscope'],[data-tx='tdre'],[data-tx='tdai'],[data-tx='tdtxt'],[data-tx='evnow']"); if (!b) return;
+  if (W.lt !== "tools" && W.lt !== "today") return; const b = e.target.closest("[data-ntdel],[data-ntclr],[data-mk='evscope'],[data-tx='tdre'],[data-tx='adrh'],[data-tx='tdai'],[data-tx='tdtxt'],[data-tx='evnow']"); if (!b) return;
   const d = b.dataset;
   if (d.ntdel) { const [c, i] = d.ntdel.split(":"); NT()[c]?.splice(+i, 1); if (!NT()[c]?.length) delete NT()[c]; ntSave(); return renderList(); }
   if (d.ntclr) { if (!confirm(`清除 ${nameOf(d.ntclr)} ${d.ntclr} 的筆記和目標價？`)) return; delete NT()[d.ntclr]; ntSave(); delete W.alerts[d.ntclr]; store.set("watch:alerts", W.alerts); return renderList(); }
   if (d.mk === "evscope") { EVA().scope = d.v; evaSave(); return renderList(); }
   if (d.tx === "evnow") return evCheck();
   if (d.tx === "tdre") { W.sum = null; W.dk = new Map(); W.tdAI = null; if (W.mf) W.mf.sumTry = false; return briefLoad(true); }
+  if (d.tx === "adrh") return adrHistLoad();
   if (d.tx === "tdtxt") { navigator.clipboard?.writeText(todayText()).then(() => toast("已複製", 1500), () => toast("複製失敗")); return; }
   if (d.tx === "tdai") { if (W.tdAI?.loading) return; W.tdAI = { loading: true }; renderList(); // 整理中不能重複按
     tdAiRun().then(x => { W.tdAI = x; if (x.parsed?.ok && !x.parsed.insufficient) tdAiSave(x); }, err => { W.tdAI = { err: err.message }; }).finally(() => renderList()); }
