@@ -114,3 +114,25 @@ test("網址 #monitor 打開盤中監控；自訂過分頁順序（沒有盤中�
   assert.deepEqual(await f.evaluate(() => store.get("watch:tabcfg")), { order: ["money", "today", "earn"], hide: [] });
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("盤中監控：同時段量能異常（近 20 日 5 分 K 當平常量），只記錄不推播 390", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width: 390, touch: true });
+  const hist = [];
+  await ctx.route("**/api/quote**", r => { const codes = (new URL(r.request().url()).searchParams.get("codes") || "").split(",").filter(Boolean);
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, source: "t", today: TODAY, quotes: codes.map(c => ({ code: c, name: "股" + c, price: 101, prev: 100, chg: 1, chgPct: 1, vol: c === "2330" ? 2000 : 100, date: TODAY, time: "09:20:00" })) }) }); });
+  await ctx.route("**/api/intraday**", r => { const u = new URL(r.request().url()), c = u.searchParams.get("code"); hist.push([c, u.searchParams.get("tf"), u.searchParams.get("before")]);
+    const bars = []; for (let k = 1; k <= 20; k++) { const d = `2026-09-${String(k).padStart(2, "0")}`; for (const [t, v] of [["09:00", 100], ["09:05", 100], ["09:10", 100], ["09:15", 100]]) bars.push({ d, t, o: 1, h: 1, l: 1, c: 1, v }); }
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, bars }) }); });
+  await setup(p, `${TODAY}T09:20:30+08:00`);
+  await p.evaluate(() => { W.groups[0].list = ["9999"]; });
+  await p.evaluate(() => monTick());
+  assert.ok(hist.length <= 4 && hist.every(([, tf, b]) => tf === "5" && b === "2026-10-26"), `每輪最多 4 檔、5 分 K、今天以前：${JSON.stringify(hist)}`);
+  const E = await p.evaluate(() => monE("2026-10-26"));
+  const v = E["2026-10-26:VOL:2330:up"]; assert.ok(v, JSON.stringify(Object.keys(E)));
+  assert.deepEqual([v.level, v.sev, v.ratio], [2, "watch", 5], "2000 ÷ 平常量 400 ＝ 5 倍"); assert.equal(E["2026-10-26:VOL:9999:up"], undefined, "100 張不到平常量");
+  assert.deepEqual(await p.evaluate(() => __notes), [], "量能事件不推播");
+  await p.evaluate(() => monTick()); assert.equal(hist.length, 2, "平常量一天只抓一次");
+  await p.evaluate(() => setLt("mon")); await p.waitForSelector("#lx .mon-ev");
+  assert.match(await p.textContent("#lx .mon-list"), /庫存 股2330 量能異常：同時段 5\.0 倍/);
+  await ctx.close(); assert.deepEqual(errs, []);
+});
