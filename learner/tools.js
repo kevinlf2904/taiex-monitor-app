@@ -875,7 +875,7 @@ async function syncPush(quiet, force = false) {
   // base：這台上次同步時雲端的時間；雲端被別台更新過就回 conflict，不蓋掉別台的改動（force＝使用者確認要用這台蓋掉）
   const j = await syncApi("push", { data, dev: navigator.userAgent.match(/iPad|iPhone|Android|Mac|Windows/)?.[0] || "", base: S.at || 0, ...(force ? { force: true } : {}) }).catch(e => ({ ok: false, error: e.message }));
   W.syncConflict = j.conflict ? { at: j.at, dev: j.dev } : null;
-  if (j.ok) { syncSet({ at: j.at, hash: h, tg: j.tg }); if (!quiet) toast("已上傳到雲端"); } else if (!quiet) toast(j.conflict ? "雲端有另一台裝置比較新的資料，沒有上傳；到「備份同步」選要用哪一份" : "上傳失敗：" + (j.error || "")); W.syncErr = j.ok ? null : j.error || (j.conflict ? "雲端有另一台裝置比較新的資料，沒有上傳" : "上傳失敗"); syncShow();
+  if (j.ok) { syncSet({ at: j.at, hash: h, tg: j.tg, ...(j.wp != null ? { wp: !!j.wp, ...(j.wp ? {} : { wpHere: false }) } : {}) }); if (!quiet) toast("已上傳到雲端"); } else if (!quiet) toast(j.conflict ? "雲端有另一台裝置比較新的資料，沒有上傳；到「備份同步」選要用哪一份" : "上傳失敗：" + (j.error || "")); W.syncErr = j.ok ? null : j.error || (j.conflict ? "雲端有另一台裝置比較新的資料，沒有上傳" : "上傳失敗"); syncShow();
 }
 async function syncPull(ask = true) {
   const j = await syncApi("pull").catch(e => ({ ok: false, error: e.message })); if (!j.ok) { W.syncErr = j.error || "下載失敗"; syncShow(); return toast("下載失敗：" + (j.error || "")); } // 交易紀錄頁的說明也要顯示失敗
@@ -883,7 +883,7 @@ async function syncPull(ask = true) {
   if (!prep.ok) { W.syncErr = prep.error; syncShow(); return toast("下載失敗：" + prep.error, 4500); }
   if (ask && !confirm(`用雲端的資料（${new Date(j.at + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ")}${j.dev ? "，" + j.dev : ""}）覆蓋這台裝置？`)) return;
   let n; try { n = await syncApplyGuarded(j.data, prep); } catch (e) { W.syncErr = e.message; syncShow(); return toast("下載失敗：" + e.message); } // 下載到了但寫不進這台（例如空間不夠）也是同步失敗
-  W.syncErr = null; W.syncConflict = null; syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast(`已下載 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600);
+  W.syncErr = null; W.syncConflict = null; syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg, ...(j.wp != null ? { wp: !!j.wp, ...(j.wp ? {} : { wpHere: false }) } : {}) }); toast(`已下載 ${n} 項，重新載入…`); setTimeout(() => location.reload(), 600);
 }
 // 開網頁時：雲端比這台新、而且這台上次同步後沒改過 → 自動下載；之後每分鐘檢查，有改動就自動上傳
 async function syncBoot() {
@@ -894,7 +894,7 @@ async function syncBoot() {
     if (j.ok && j.at > (S.at || 0) && syncHash(syncSnap()) === S.hash) {
       const prep = await syncPrepareCloudData(j.data);
       if (!prep.ok) { W.syncErr = prep.error; syncShow(); toast(prep.error, 4500); }
-      else { try { await syncApplyGuarded(j.data, prep); } catch (e) { W.syncErr = e.message; throw e; } syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg }); toast("已從雲端同步最新資料，重新載入…"); return setTimeout(() => location.reload(), 800); }
+      else { try { await syncApplyGuarded(j.data, prep); } catch (e) { W.syncErr = e.message; throw e; } syncSet({ at: j.at, hash: syncHash(syncSnap()), tg: j.tg, ...(j.wp != null ? { wp: !!j.wp, ...(j.wp ? {} : { wpHere: false }) } : {}) }); toast("已從雲端同步最新資料，重新載入…"); return setTimeout(() => location.reload(), 800); }
     }
   } catch (e) { W.syncErr = e?.message || "連不上雲端"; syncShow(); } // 連線失敗也要記下來
   // 有衝突（雲端比較新、這台也改過）就先不自動上傳，等使用者在「備份同步」選；若有 pendingCommit 亦暫停自動上傳
@@ -1007,6 +1007,14 @@ function syncHtml() {
   else if (!S.tg) h += `<p class="note">1. 點下面的連結開啟 Telegram 機器人，按「開始（Start）」　2. 回到這裡按「完成綁定」。</p>
     <div class="irform"><a class="btn sm" href="https://t.me/${esc(C.bot || "")}?start=${esc(W.syncTok || "")}" target="_blank" rel="noopener">開啟 @${esc(C.bot || "機器人")}</a><button class="btn sm primary" data-sy="tgbind">完成綁定</button></div>`;
   else h += `<p class="note">✓ 已綁定。每個交易日收盤後檢查「指標提醒」（${IR().filter(r => r.on).length} 條）與價格提醒，成立就通知。改了提醒條件會自動上傳。</p><div class="irform"><button class="btn sm" data-sy="tgtest">傳測試訊息</button><button class="linkbtn" data-sy="tgoff">解除綁定</button></div>`;
+  h += `<h4>瀏覽器推播 <span class="note">不用 Telegram</span></h4>`;
+  const wpCan = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window, ios = /iP(hone|ad|od)/.test(navigator.userAgent) && !(navigator.standalone || matchMedia("(display-mode: standalone)").matches);
+  if (!C?.wp) h += `<p class="note">${C?.kv ? "網站還沒設定瀏覽器推播的金鑰。" : "需要先設定雲端儲存。"}設定好後，收盤提醒與盤中警示可以直接推到這台裝置的通知，不用開著網頁、也不用 Telegram。</p>`;
+  else if (!S.id) h += `<p class="note">先建立同步碼，提醒條件才會存到雲端讓排程檢查。</p>`;
+  else if (ios) h += `<p class="note">iPhone、iPad 要先用 Safari 的「分享 → 加入主畫面」，從主畫面打開網站（iOS 16.4 以上），才能開啟推播。</p>`;
+  else if (!wpCan) h += `<p class="note">這個瀏覽器不支援推播通知。</p>`;
+  else if (!S.wp) h += `<p class="note">開啟後，收盤提醒（和上面 Telegram 同一份內容）與勾了「盤中警示」的警示會推到這台裝置。每台裝置要各自開啟；最後開啟的那台會收到。</p><div class="irform"><button class="btn sm primary" data-sy="wpon">開啟推播</button></div>`;
+  else h += `<p class="note">✓ 這個同步碼的推播送到${S.wpHere ? "這台裝置" : "另一台裝置"}。${Notification.permission === "denied" ? "⚠︎ 瀏覽器封鎖了這個網站的通知，請到瀏覽器設定允許。" : ""}</p><div class="irform">${S.wpHere ? "" : `<button class="btn sm" data-sy="wpon">改送到這台</button>`}<button class="btn sm" data-sy="wptest">傳測試推播</button><button class="linkbtn" data-sy="wpoff">關閉推播</button></div>`;
   return h + `</section>`;
 }
 async function syncClick(d) {
@@ -1022,6 +1030,22 @@ async function syncClick(d) {
   if (d.sy === "tgbind") { await syncPush(true); const j = await syncApi("tgbind"); if (j.ok) { syncSet({ tg: true }); await syncPush(true); toast("已綁定 Telegram"); } else toast(j.error || "綁定失敗"); return renderList(); }
   if (d.sy === "tgtest") { const j = await syncApi("tgtest"); return toast(j.ok ? "已送出，看看 Telegram" : j.error || "失敗"); }
   if (d.sy === "tgoff") { const j = await syncApi("tgoff"); if (j.ok) { syncSet({ tg: false }); toast("已解除"); } return renderList(); }
+  if (d.sy === "wpon") return wpOn();
+  if (d.sy === "wptest") { const j = await syncApi("wptest"); if (j.gone) { syncSet({ wp: false, wpHere: false }); renderList(); } return toast(j.ok ? "已送出，看看通知" : j.error || "失敗"); }
+  if (d.sy === "wpoff") { const j = await syncApi("wpoff"); if (j.ok) { try { const r = await navigator.serviceWorker.getRegistration(); await (await r?.pushManager.getSubscription())?.unsubscribe(); } catch {} syncSet({ wp: false, wpHere: false }); toast("已關閉推播"); } else toast(j.error || "失敗"); return renderList(); }
+}
+// 瀏覽器推播：要通知權限 → 用伺服器的 VAPID 公鑰訂閱 → 訂閱資料存到雲端（同步碼底下）；收盤後與盤中的排程送到這裡
+const wpKeyBytes = k => { const s = atob(k.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (k.length % 4)) % 4)); return Uint8Array.from(s, c => c.charCodeAt(0)); };
+async function wpOn() {
+  const C = await syncCfg(); if (!C?.wp || !C.wpKey) return toast("伺服器還沒設定瀏覽器推播");
+  try {
+    if ((await Notification.requestPermission()) !== "granted") return toast("沒有允許通知，推播開不了");
+    const reg = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.register("sw.js")); await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: wpKeyBytes(C.wpKey) }));
+    await syncPush(true); const j = await syncApi("wpsub", { sub: sub.toJSON() });
+    if (j.ok) { syncSet({ wp: true, wpHere: true }); toast(j.sent ? "已開啟推播，應該會收到一則確認通知" : "已開啟推播"); } else toast(j.error || "開啟失敗");
+  } catch (e) { toast(`開啟失敗：${e.message || e}`); }
+  renderList();
 }
 
 /* ---------- 全市場日 K（/api/allk，排程每天收盤後更新）：條件選股、相對強弱選「全市場」時使用 ---------- */

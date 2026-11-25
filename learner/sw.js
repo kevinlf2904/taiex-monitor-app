@@ -26,5 +26,12 @@ self.addEventListener("fetch", e => {
   const api = u.pathname.startsWith("/api/");
   e.respondWith(fetch(req).then(r => { put(req, r); if (api && Math.random() < 0.05) trim(); return r; }).catch(async () => (await (api ? apiFromCache(req) : fromCache(req))) || (api ? new Response(JSON.stringify({ ok: false, error: "離線中，這份資料還沒有快取" }), { headers: { "Content-Type": "application/json" } }) : Response.error())));
 });
-// 通知（事件提醒、到價提醒）：點通知回到網站
-self.addEventListener("notificationclick", e => { e.notification.close(); e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(L => (L[0] ? L[0].focus() : self.clients.openWindow("./")))); });
+// 瀏覽器推播（伺服器的收盤提醒、盤中警示；api/_lib/webpush.js）：內容是 { title, body, url, tag }，解不開就顯示固定文字（推播一定要顯示通知）
+self.addEventListener("push", e => {
+  let m = {}; try { m = e.data ? e.data.json() : {}; } catch { m = { body: e.data ? e.data.text() : "" }; }
+  const url = typeof m.url === "string" && /^\.?\/?[\w./#?=&-]*$/.test(m.url) ? m.url : "./";
+  e.waitUntil(self.registration.showNotification(String(m.title || "K線看盤").slice(0, 80), { body: String(m.body || "有新的提醒").slice(0, 1500), tag: m.tag || undefined, icon: "watch-icon-192.png", badge: "watch-icon-192.png", data: { url } }));
+});
+// 通知（事件提醒、到價提醒、推播）：點通知回到網站；推播帶的網址（只接受站內相對路徑）就打開那一頁
+self.addEventListener("notificationclick", e => { e.notification.close(); const url = e.notification.data?.url;
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(L => (url && url !== "./" ? self.clients.openWindow(url) : L[0] ? L[0].focus() : self.clients.openWindow("./")))); });

@@ -18,6 +18,7 @@
 import { fileURLToPath } from "node:url";
 import { engine } from "./_engine.mjs";
 import { kv as kvReal, kvOn, tg as tgReal, hashObj, monKey } from "../api/_lib/sync.js";
+import { deliver, wpOn, sendPush } from "../api/_lib/webpush.js";
 import { callApi } from "./alerts-push.mjs";
 
 const arg = k => process.argv.find(a => a.startsWith(`--${k}=`))?.slice(k.length + 3);
@@ -84,7 +85,7 @@ const KEY_RUNS = date => `${monKey(date)}:runs`;
 async function runMark(kv, date, now, fields) { const rk = KEY_RUNS(date); await kv("HSET", rk, ...Object.entries(fields).flat()); await kv("EXPIRE", rk, KEEP); }
 
 // 一次巡檢。deps 可換掉（測試用）：kv、tg、quotes(codes) → [quote]、holidays() → 證交所休市日表（[{ date, name }]，拿不到就 null）、now
-export async function runOnce({ kv, tg, quotes, holidays, now = Date.now(), force = false, extra = [], log = console.log } = {}) {
+export async function runOnce({ kv, tg, push = sendPush, quotes, holidays, now = Date.now(), force = false, extra = [], log = console.log } = {}) {
   const { M, T } = engine(), date = twDate(now), at = new Date(now), rk = KEY_RUNS(date);
   Object.assign(T.TWHOL, { set: null, year: "", at: 0, failAt: 0, mark: null }); // 每次巡檢都重新判斷，不沿用上一次
   if (!force) {
@@ -96,7 +97,7 @@ export async function runOnce({ kv, tg, quotes, holidays, now = Date.now(), forc
   }
   // 使用者：有綁 Telegram、勾了盤中警示（alertDoc 的 ev.mon）
   const users = [];
-  for (const h of (await kv("SMEMBERS", "alerts")) || []) { try { const d = JSON.parse((await kv("GET", `alert:${h}`)) || "null"); if (d?.chat && d.ev?.on?.includes("mon")) users.push([h, d]); } catch {} }
+  for (const h of (await kv("SMEMBERS", "alerts")) || []) { try { const d = JSON.parse((await kv("GET", `alert:${h}`)) || "null"); if ((d?.chat || d?.wp) && d.ev?.on?.includes("mon")) users.push([h, d]); } catch {} }
   const codes = [...new Set([...users.flatMap(([, d]) => d.ev.mon || []), ...extra])].filter(c => /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 400), all = ["T00", ...codes];
   log("盤中警示的使用者", users.length, "人、巡檢", all.length, "檔");
   // 報價：一批失敗只影響那一批（那些代號算「沒有報價」）；加權那一批失敗＝整輪失敗
@@ -123,7 +124,7 @@ export async function runOnce({ kv, tg, quotes, holidays, now = Date.now(), forc
     for (const e of [...new Set([...up, ...retry])].filter(e => e.sev === "alert" && mine(e))) {
       const text = `🚨 盤中警示 ${M.monTime(now).slice(0, 5)}\n${e.title}\n${e.msg}\n\n伺服器每 5–15 分鐘巡檢一次，行情達到條件不代表原因，也不是買賣建議。`;
       let err = "";
-      const r = await monNotify(kv, h, e, date, async () => { try { await tg("sendMessage", { chat_id: d.chat, text }); } catch (x) { err = scrub(x); throw x; } }, now);
+      const r = await monNotify(kv, h, e, date, async () => { try { await deliver({ h, chat: d.chat, text, title: "盤中警示", url: "./watch.html#monitor", tg, kv, push }); } catch (x) { err = scrub(x); throw x; } }, now);
       stat[r] = (stat[r] || 0) + 1;
       if (r === "ok" || r === "retry" || r === "fail") { const n = e.notified.find(x => x.ch === "tg" && x.at === now) || (e.notified.push({ ch: "tg", at: now, ok: false, n: 0 }), e.notified.at(-1)); if (r === "ok") { n.ok = true; n.n++; out.push([h.slice(0, 8), text]); } else n.err = err || "送出失敗"; touched.add(e.id); }
     }
@@ -138,12 +139,13 @@ export async function runOnce({ kv, tg, quotes, holidays, now = Date.now(), forc
 
 export async function main() {
   const DRY = process.argv.includes("--dry"), force = process.argv.includes("--force");
-  if (!DRY && (!kvOn() || !process.env.TELEGRAM_BOT_TOKEN)) { console.log("::warning::沒有設定雲端儲存（KV_REST_API_URL）或 TELEGRAM_BOT_TOKEN，略過盤中巡檢"); return; }
+  if (!DRY && (!kvOn() || !(process.env.TELEGRAM_BOT_TOKEN || wpOn()))) { console.log("::warning::沒有設定雲端儲存（KV_REST_API_URL），或 TELEGRAM_BOT_TOKEN 與 VAPID 金鑰都沒有，略過盤中巡檢"); return; }
   const kv = DRY ? memKv(kvOn() ? kvReal : null) : kvReal;
   const tg = DRY ? async (m, b) => console.log("[dry] 會送出：", String(b.chat_id).slice(0, 3) + "…", "\n" + b.text) : tgReal;
   const quotes = async codes => { const j = await callApi(import("../api/_lib/quote.js"), { codes: codes.join(","), src: "mis" }); if (!j?.ok) throw new Error(j?.error || "報價失敗"); return j.quotes; };
   const holidays = async () => { const j = await callApi(import("../api/_lib/calendar.js"), { hol: "1" }); return j?.holOk ? j.hol : null; };
-  const r = await runOnce({ kv, tg, quotes, holidays, force, extra: DRY ? String(arg("codes") || "").split(",").filter(Boolean) : [] });
+  const push = DRY ? async (sub, m) => (console.log("[dry] 會推播：", m.title, "\n" + m.body), { ok: true }) : sendPush;
+  const r = await runOnce({ kv, tg: DRY || process.env.TELEGRAM_BOT_TOKEN ? tg : null, push, quotes, holidays, force, extra: DRY ? String(arg("codes") || "").split(",").filter(Boolean) : [] });
   if (DRY) for (const e of r.up || []) console.log(`[dry] ${e.sev} ${e.id}：${e.title}／${e.msg}`);
 }
 // 任何錯誤都只印 warning、以成功結束：巡檢失敗不能讓排程一直紅（失敗次數記在 KV，網頁上看得到）

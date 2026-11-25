@@ -4,14 +4,16 @@
 // 勾了「收盤重點」的人另外送一則今日重點（自選與庫存漲跌、今明兩天除權息與法說會、ETF 換股；learner/brief.js 的 todayData、closeText）。
 // 在 .github/workflows/market-scan.yml 裡、全市場日 K 更新之後執行：台股直接用 .cache/allk.json，美股向 Yahoo 抓。
 // 條件判斷用網站同一套程式（scripts/_engine.mjs 載入 learner/tools.js 的 COND），結果和網頁上的「指標提醒」一致。
-// 需要的 GitHub secrets：KV_REST_API_URL、KV_REST_API_TOKEN（和 Vercel 上同一個 Upstash）、TELEGRAM_BOT_TOKEN；沒設定就直接結束。
+// 需要的 GitHub secrets：KV_REST_API_URL、KV_REST_API_TOKEN（和 Vercel 上同一個 Upstash），加上 TELEGRAM_BOT_TOKEN 或 VAPID_PUBLIC_KEY／VAPID_PRIVATE_KEY（瀏覽器推播）其中一種；沒設定就直接結束。
+// 每則訊息送到這個人綁的 Telegram 與瀏覽器推播（api/_lib/webpush.js 的 deliver：至少一個成功就算送出）。
 // 同一個人同一天只送一次（KV 記 sent:<id>:<日期>，兩天後自動過期）。
 //   --dry  只印出會送的內容，不送出
 
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { engine } from "./_engine.mjs";
-import { kv, tg } from "../api/_lib/sync.js";
+import { kv, tg as tgReal } from "../api/_lib/sync.js";
+import { deliver, wpOn } from "../api/_lib/webpush.js";
 
 const CACHE = fileURLToPath(new URL("../.cache/allk.json", import.meta.url)), DRY = process.argv.includes("--dry");
 const isTW = c => /^(\d{4}|00\d{2,4}[A-Z]?)$/.test(c);
@@ -65,14 +67,15 @@ export async function markThenSend(key, ttl, send, K = kv) {
 
 export async function main() {
   // 沒設定就略過（推播是附加功能，不能讓整個資料排程失敗）。chat id 來自每個人在網頁上的綁定，所以不需要 TELEGRAM_CHAT_ID
-  if (!(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) || !process.env.TELEGRAM_BOT_TOKEN) { console.log("::warning::沒有設定雲端儲存（KV_REST_API_URL）或 TELEGRAM_BOT_TOKEN，略過推播"); return; }
+  if (!(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) || !(process.env.TELEGRAM_BOT_TOKEN || wpOn())) { console.log("::warning::沒有設定雲端儲存（KV_REST_API_URL），或 TELEGRAM_BOT_TOKEN 與 VAPID 金鑰都沒有，略過推播"); return; }
+  const tg = process.env.TELEGRAM_BOT_TOKEN ? tgReal : null, send = (h, d, title, text) => deliver({ h, chat: d.chat, text, title, url: "./watch.html", tg, kv });
   const ids = (await kv("SMEMBERS", "alerts")) || []; console.log("有提醒的使用者", ids.length);
   if (!ids.length) return;
   let H = { s: {} }; try { H = JSON.parse(await readFile(CACHE, "utf8")); } catch { console.log("沒有全市場快取，台股提醒會略過"); }
   const E = engine(), us = new Map(), date = H.date || new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
   const docs = [];
   for (const h of ids) { try { const v = await kv("GET", `alert:${h}`); if (v) docs.push([h, JSON.parse(v)]); } catch (e) { console.log("::warning::讀取提醒設定失敗", h.slice(0, 8), e.message); } }
-  const closeOn = d => d.chat && d.ev?.on?.includes("close") && d.ev.mine?.length; // 收盤重點：自選＋庫存的美股也要日 K 算漲跌
+  const closeOn = d => (d.chat || d.wp) && d.ev?.on?.includes("close") && d.ev.mine?.length; // 收盤重點：自選＋庫存的美股也要日 K 算漲跌
   for (const [, d] of docs) for (const c of [...(d.rules || []), ...(d.price || [])].map(x => x.code).concat(closeOn(d) ? d.ev.mine : [])) if (!isTW(c) && !us.has(c)) { us.set(c, await usDaily(c)); await sleep(300); }
   const dailyOf = c => (isTW(c) ? H.s[c]?.b || null : us.get(c) || null);
   const FD = { cong: await readData("congress.json"), f13: await readData("f13.json"), ins: await readData("insider.json") }, since = new Date(Date.parse(date) - 4 * 864e5).toISOString().slice(0, 10);
@@ -80,11 +83,11 @@ export async function main() {
   const pctOf = c => { const D = dailyOf(c); return D?.length > 1 && D.at(-2).c ? (D.at(-1).c / D.at(-2).c - 1) * 100 : null; };
   let sent = 0, failed = 0;
   for (const [h, d] of docs) {
-    if (!d.chat) continue;
+    if (!d.chat && !d.wp) continue;
     // 收盤重點（今日重點卡的內容）：同一天只送一次
     if (closeOn(d) && ED) { const t = E.B.closeText(E.B.todayData({ mine: new Set(d.ev.mine), pct: pctOf, cal: CAL?.ok ? CAL : null, etf: ED.etf, today: E.B.twDay() }), d.names || {});
       if (t && DRY) console.log(h.slice(0, 8), t);
-      else if (t) { try { if (await markThenSend(`close:${h}:${date}`, 172800, () => tg("sendMessage", { chat_id: d.chat, text: t + "\n\n以收盤後資料整理，不是買賣建議。" }))) sent++; } catch (e) { failed++; console.log("::warning::收盤重點送出失敗", h.slice(0, 8), e.message); } } }
+      else if (t) { try { if (await markThenSend(`close:${h}:${date}`, 172800, () => send(h, d, "今日收盤重點", t + "\n\n以收盤後資料整理，不是買賣建議。"))) sent++; } catch (e) { failed++; console.log("::warning::收盤重點送出失敗", h.slice(0, 8), e.message); } } }
     let msgs = []; try { msgs = evalDoc(d, dailyOf, E); } catch (e) { console.log("::warning::檢查條件失敗", h.slice(0, 8), e.message); }
     // 指標、價格提醒同一天只送一次；追蹤的新申報每一筆只送一次
     if (msgs.length && !DRY) { try { if (!(await kv("SET", `sent:${h}:${date}`, "1", "NX", "EX", 172800))) msgs = []; } catch (e) { console.log("::warning::KV 寫入失敗", e.message); msgs = []; } }
@@ -96,7 +99,7 @@ export async function main() {
     const text = `🔔 K線看盤收盤提醒（${date}）\n` + [...msgs, ...fol.slice(0, 20)].map(m => "• " + m).join("\n") + (fol.length > 20 ? `\n…另有 ${fol.length - 20} 則追蹤申報` : "") + "\n\n以收盤後日 K 與公開申報整理，不是買賣建議。";
     if (DRY) { console.log(h.slice(0, 8), text); continue; }
     // 送失敗：刪掉今天的「已送」記號，下一次排程重送（追蹤申報的 seenf 記號也一起刪，否則那幾則永遠不會再送）
-    try { await tg("sendMessage", { chat_id: d.chat, text }); sent++; } catch (e) { console.log("::warning::Telegram 送出失敗", h.slice(0, 8), e.message); failed++;
+    try { if (await send(h, d, "K線看盤收盤提醒", text)) sent++; } catch (e) { console.log("::warning::推播送出失敗", h.slice(0, 8), e.message); failed++;
       if (msgs.length) await kv("DEL", `sent:${h}:${date}`).catch(() => {}); for (const x of folKeys) await kv("DEL", `seenf:${h}:${x}`).catch(() => {}); }
     await sleep(100);
   }
