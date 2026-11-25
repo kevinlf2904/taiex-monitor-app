@@ -131,6 +131,19 @@ test("漲跌家數排程：只拿到上市（上櫃還沒出來）時不算完�
   tw.set("6488", { market: "上櫃", pct: 2 });
   assert.equal(full(countDay(tw)), true, "上市、上櫃都有：完整");
 });
+test("明日觀察清單：下一交易日行事曆＞盤中警示＞大漲跌＞事件；只列自選與庫存；跳過休市日", () => {
+  const E = engine(), { tdNextTrade } = E.B, tdTomorrow = o => JSON.parse(JSON.stringify(E.B.tdTomorrow(o))); // vm 裡的陣列換成這邊的，deepEqual 才比得了
+  const L = tdTomorrow({ today: "2026-10-26", t1: "2026-10-27", hold: ["2330", "2317"], mine: ["2454", "3008"],
+    pct: c => ({ 2330: 1, 2317: -6, 2454: 3.2, 3008: 0.5, 9999: 9 })[c],
+    cal: { rows: [{ code: "3008", date: "2026-10-27", kind: "除息" }, { code: "9999", date: "2026-10-27" }, { code: "2454", date: "2026-10-28" }], conf: [{ code: "2330", date: "2026-10-27" }] },
+    mon: [{ type: "SYM", code: "2317", sev: "alert", title: "庫存 股2317 跌超過 7%", verify: { res: "rev" } }, { type: "IDX", code: "T00", sev: "watch", title: "加權" }],
+    ev: [{ code: "2454", kind: "rev" }, { code: "2330", kind: "etf" }] });
+  assert.deepEqual(L.map(r => r.code), ["2317", "2330", "3008", "2454"], "9999 不在自選庫存；3008 只有自選");
+  assert.deepEqual(L[0].why, ["盤中跌超過 7%，收盤反轉", "今天 -6.0%"]); assert.deepEqual(L[1].why, ["10/27 法說會"]); assert.equal(L[1].hold, true);
+  assert.deepEqual(L[3].why, ["今天 +3.2%", "月營收公布"], "後天的事件不算、ETF 換股不算");
+  assert.deepEqual(tdTomorrow({ today: "2026-10-26", t1: "2026-10-27", hold: [], mine: ["2330"], pct: () => 1 }), []);
+  assert.equal(tdNextTrade("2026-10-23"), "2026-10-26", "週五的下一交易日是週一");
+});
 test("所有策略回測合理性", () => {
   const E = engine(), ids = Object.keys(E.STRAT_DEFS); let n = 0;
   assert.ok(ids.length > 20);

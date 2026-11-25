@@ -1444,6 +1444,27 @@ function flowsDecisionHtml(M) {
   </div>`;
 }
 
+/* 明日觀察清單：從今天已經有的資料（自選與庫存的漲跌、行事曆、盤中監控事件與盤後驗證、事件提醒）挑出下一交易日要先看的股票，每檔寫出原因。
+   純規則加權排序，不用 AI、不連網；只是「該先看哪幾檔」的提醒，不是買賣建議。 */
+const tdNextTrade = d => { let x = nextWd(d); for (let i = 0; i < 15 && typeof TWHOL !== "undefined" && TWHOL.set?.has?.(x); i++) x = nextWd(x); return x; };
+function tdTomorrow({ today, t1, hold = [], mine = [], pct = () => null, cal = null, mon = [], ev = [], max = 10 }) {
+  const H = new Set(hold), M = new Set([...hold, ...mine]), R = new Map(), add = (c, w, why) => { if (!M.has(c)) return; const r = R.get(c) || { code: c, hold: H.has(c), score: H.has(c) ? 0.5 : 0, why: [] }; r.score += w; if (!r.why.includes(why)) r.why.push(why); R.set(c, r); };
+  const md = d => d.slice(5).replace("-", "/");
+  for (const x of [...(cal?.rows || []).map(x => [x, x.kind || "除權息"]), ...(cal?.conf || []).map(x => [x, "法說會"])]) if (x[0]?.date === t1) add(x[0].code, 3, `${md(t1)} ${x[1]}`);
+  const VT = { cont: "收盤延續", fade: "收盤回吐", rev: "收盤反轉" };
+  for (const e of mon || []) if (e?.type === "SYM" && e.code) add(e.code, e.sev === "alert" ? 3 : 2, `盤中${e.title.replace(/^(庫存|自選) \S+ /, "")}${e.verify ? `，${VT[e.verify.res] || ""}` : ""}`);
+  for (const c of M) { const v = pct(c); if (v == null || !isFinite(v) || Math.abs(v) < 3) continue; add(c, Math.abs(v) >= 5 ? 2 : 1, `今天 ${v > 0 ? "+" : ""}${(+v).toFixed(1)}%`); }
+  for (const x of ev || []) if (x?.code && x.kind !== "etf") add(x.code, 1, x.kind === "rev" ? "月營收公布" : x.kind === "pm3" ? "三率三升" : x.kind === "conf" ? "法說會公告" : "事件提醒");
+  return [...R.values()].sort((a, b) => b.score - a.score || b.why.length - a.why.length || String(a.code).localeCompare(String(b.code))).slice(0, max).map(r => ({ ...r, today }));
+}
+function tdTomorrowHtml(t) {
+  const hold = Object.keys(W.hold || {}).filter(c => !W.hold[c]?.demo), mine = myCodes(), t1 = tdNextTrade(t);
+  const L = tdTomorrow({ today: t, t1, hold, mine, pct: c => (isIdx(c) ? null : W.quotes.get(c)?.chgPct), cal: W.cal, mon: typeof monE === "function" ? Object.values(monE(t)) : [], ev: W.evHits || [] });
+  return `<div class="dh-card td-tmr"><div class="dh-head"><b>明日觀察清單</b><span class="note">${t1.slice(5).replace("-", "/")}（週${WEEK[new Date(t1 + "T00:00:00Z").getUTCDay()]}）・自選與庫存</span></div>
+    ${L.length ? `<ol class="td-tmr-l">${L.map(r => `<li><button type="button" class="linkbtn" data-sel="${esc(r.code)}">${r.hold ? "★" : ""}${esc(nameOf(r.code) || r.code)} <small class="note">${esc(r.code)}</small></button><span class="td-tmr-w">${r.why.map(w => `<span>${esc(w)}</span>`).join("")}</span></li>`).join("")}</ol>`
+      : `<p class="note">自選與庫存今天沒有大漲跌、盤中事件，下一交易日也沒有除權息或法說會。</p>`}
+    <p class="note">依序：下一交易日的除權息、法說會＞盤中警示＞今天漲跌 5% 以上＞其他事件；★ 是庫存。只是提醒先看哪幾檔，不是買賣建議。</p></div>`;
+}
 function nextActionHtml(plan, val) {
   const p = plan?.keyLevels;
   return `<div class="dh-card act">
@@ -1945,7 +1966,7 @@ function todayPage() {
     '<section class="td-plan-stage td-plan-live"><h4 class="td-plan-head">' + planLiveHeading + '</h4>' +
       tdLiveViz(mon, hold, historical, livePeriod) + monLine(monitorLabel) + '</section>' +
     '<section class="td-plan-stage td-plan-post"><h4 class="td-plan-head">收盤驗證與下一步</h4>' +
-      tdPostViz(tq, kl, val, pm || sess.session === "closed" || sess.session === "pre") + validateHtml(val, vPlan) + nextActionHtml(plan, val) + '</section>';
+      tdPostViz(tq, kl, val, pm || sess.session === "closed" || sess.session === "pre") + validateHtml(val, vPlan) + nextActionHtml(plan, val) + tdTomorrowHtml(W.today || t) + '</section>';
   const mineBody = () => (mine.length
     ? '<ul class="tdlist">' + mine.map(([k, v]) => '<li><span class="tdk">' + k + '</span><span class="tdv">' + v + '</span></li>').join("") + '</ul>'
     : '<p class="note">庫存與自選今天沒有大漲跌、除權息、法說會、ETF 換股或事件提醒。</p>') + tdMineExtras(t, hold);
