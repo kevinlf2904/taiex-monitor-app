@@ -1312,10 +1312,10 @@ function renderThesis(S) {
   (W.lgThP ||= (typeof KLThesis !== "undefined" ? Promise.resolve() : one("thesis.js")).then(() => one("pf-thesis.js")).catch(e => { W.lgThP = null; throw e; })).then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
 }
 function renderReport(S) {
-  if (typeof renderReportView === "function" && typeof KLReport !== "undefined" && typeof KLOverview !== "undefined" && typeof KLThesis !== "undefined") return renderReportView(S);
+  if (typeof renderReportView === "function" && typeof KLReport !== "undefined" && typeof KLOverview !== "undefined" && typeof KLThesis !== "undefined" && typeof KLTaxRpt !== "undefined") return renderReportView(S);
   $("#lx").innerHTML = lgViewSeg() + skel("載入報告…");
   const one = f => new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = f; sc.onload = ok; sc.onerror = () => no(new Error(`${f} 載入失敗`)); document.body.appendChild(sc); });
-  const need = [["KLOverview", "overview.js"], ["KLThesis", "thesis.js"], ["KLReport", "report.js"]].filter(([g]) => typeof window[g] === "undefined").map(([, f]) => f);
+  const need = [["KLOverview", "overview.js"], ["KLThesis", "thesis.js"], ["KLReport", "report.js"], ["KLTaxRpt", "taxrpt.js"]].filter(([g]) => typeof window[g] === "undefined").map(([, f]) => f);
   (W.lgRpP ||= need.reduce((p, f) => p.then(() => one(f)), Promise.resolve()).then(() => (typeof renderReportView === "function" ? null : one("pf-report.js"))).catch(e => { W.lgRpP = null; throw e; }))
     .then(() => renderList(), e => { $("#lx").innerHTML = lgViewSeg() + `<p class="note" style="padding:12px">⚠︎ ${esc(e.message)}</p>`; });
 }

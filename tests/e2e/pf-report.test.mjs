@@ -37,3 +37,27 @@ for (const width of [390, 1280]) test(`報告 ${width}：從總覽打開、明�
   await p.evaluate(() => document.querySelector('#lx .rptbar [data-v=home]').click()); await p.waitForSelector("#lx .hmcard", { timeout: 30000 });
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+for (const width of [390, 1280]) test(`報告 ${width}：年度報稅彙整（預設前一年、切年份、二代健保提醒、CSV）`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  await ctx.route("**/api/kline?code=TWD%3DX**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, data: [{ d: "2026-10-05", o: 32, h: 32, l: 32, c: 32, v: 0 }] }) }));
+  await p.clock.setFixedTime(new Date("2026-11-25T10:00:00+08:00"));
+  const tx = [...TX, { id: "x1", v: 1, date: "2025-03-01", type: "buy", symbol: "0056", market: "tw", currency: "TWD", shares: 10000, price: 30, fee: 0, tax: 0 },
+    { id: "x2", v: 1, date: "2025-07-10", type: "dividend", symbol: "0056", market: "tw", currency: "TWD", amount: 25000, fee: 0, tax: 0 },
+    { id: "x3", v: 1, date: "2025-09-01", type: "sell", symbol: "0056", market: "tw", currency: "TWD", shares: 5000, price: 36, fee: 100, tax: 180 },
+    { id: "x4", v: 1, date: "2026-03-01", type: "dividend", symbol: "NVDA", market: "us", currency: "USD", amount: 10, fee: 0, tax: 3 }];
+  await p.evaluate(t => { store.set("pf:v1", { v: 1, method: "avg", transactions: t, at: "x" }); W.lg = { view: "report" }; W.lgAl = null; W.rptTaxY = null; W.holdView = "tx"; setLt("hold"); }, tx);
+  await p.waitForSelector("#lx .rpt .rpttx-tbl", { timeout: 30000 });
+  let t = await p.textContent("#lx .rpt");
+  assert.match(t, /年度報稅彙整/); assert.match(t, /現金股利（總額）\s*25,000/); assert.match(t, /0056[\s\S]*可能被扣 2\.11%，約 528/);
+  // 賣 5000 股：180,000 − 100 − 180 − 150,000 ＝ 29,720
+  assert.match(t, /已實現損益\s*\+29,720/);
+  assert.equal(await p.getAttribute('#lx [data-rpttx="2025"]', "aria-pressed"), "true", "預設前一年");
+  const dl = p.waitForEvent("download"); await p.click("#lx [data-rpttx-csv]"); const d = await dl;
+  assert.equal(d.suggestedFilename(), "tax-summary-2025.csv");
+  await p.click('#lx [data-rpttx="2026"]'); await p.waitForFunction(() => document.querySelector('#lx [data-rpttx="2026"]')?.getAttribute("aria-pressed") === "true");
+  t = await p.textContent("#lx .rpt"); assert.match(t, /股息（總額）\s*US\$10[\s\S]*預扣 US\$3/); assert.ok(!/可能被扣 2\.11%/.test(t));
+  assert.ok(await p.evaluate(w => document.documentElement.scrollWidth <= w + 1, width), "沒有水平溢出");
+  await p.emulateMedia({ media: "print" }); assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector("#lx .rpttx-bar")).display), "none", "列印時不印年度按鈕");
+  await ctx.close(); assert.deepEqual(errs, []);
+});
