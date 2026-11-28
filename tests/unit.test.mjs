@@ -131,6 +131,17 @@ test("漲跌家數排程：只拿到上市（上櫃還沒出來）時不算完�
   tw.set("6488", { market: "上櫃", pct: 2 });
   assert.equal(full(countDay(tw)), true, "上市、上櫃都有：完整");
 });
+test("台積電 ADR 溢價：換算、匯率缺日沿用前一天、樣本太少不算區間", () => {
+  const { adrPrem, adrPremHist } = engine().B;
+  assert.ok(Math.abs(adrPrem(190, 31.2, 1000) - 0.1856) < 1e-9); assert.equal(adrPrem(190, 0, 1000), null); assert.equal(adrPrem(null, 31.2, 1000), null);
+  const ds = Array.from({ length: 70 }, (_, i) => new Date(Date.UTC(2026, 0, 5 + i)).toISOString().slice(0, 10)), K = f => ds.map((d, i) => ({ d, c: f(i) }));
+  // 匯率只有偶數日：奇數日沿用前一天的匯率；第一天之前沒有匯率的不算
+  const fx = K(i => 30 + i).filter((_, i) => i % 2 === 0), R = adrPremHist(K(() => 100), fx, K(() => 600));
+  assert.equal(R.n, 70); assert.ok(Math.abs(R.last[1] - (100 * (30 + 68) / 5 / 600 - 1)) < 1e-9, "最後一天（奇數）用前一天的匯率");
+  assert.ok(R.lo <= R.med && R.med <= R.hi); assert.equal(R.pct, 1, "沒給目前值就用最後一天");
+  assert.ok(adrPremHist(K(() => 100), K(() => 30), K(() => 600).slice(0, 40)).short, "少於 60 天不算區間");
+  assert.equal(adrPremHist(K(() => 100), K(() => 30), K(() => 600), -1).pct, 0, "目前值比整年都低");
+});
 test("所有策略回測合理性", () => {
   const E = engine(), ids = Object.keys(E.STRAT_DEFS); let n = 0;
   assert.ok(ids.length > 20);

@@ -297,3 +297,30 @@ for (const width of [390, 1280]) test(`盤前推演：密集價位的標籤和�
   assert.ok(r.off <= 17, `標籤離自己的線 ${r.off.toFixed(1)}px`); assert.ok(r.cut <= 0.5, `底部文字超出 ${r.cut.toFixed(1)}px`);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+test("全球總經：台積電 ADR 溢價與近一年區間", async () => {
+  for (const width of [390, 1280]) {
+    const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+    const days = Array.from({ length: 80 }, (_, i) => new Date(Date.UTC(2026, 0, 5 + i)).toISOString().slice(0, 10));
+    const K = (code, f) => ({ ok: true, code, data: days.map((d, i) => { const c = f(i); return { d, o: c, h: c, l: c, c, v: 1 }; }) });
+    let hits = 0;
+    await p.route("**/api/kline?code=TSM**", r => { hits++; r.fulfill({ contentType: "application/json", body: JSON.stringify(K("TSM", () => 190)) }); });
+    await p.route("**/api/kline?code=TWD%3DX**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify(K("TWD=X", () => 31.2)) }));
+    await p.route("**/api/kline?code=2330**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify(K("2330", i => 1000 + i)) }));
+    await p.evaluate(() => {
+      W.bf = { at: Date.now(), us: { ok: true, date: "2026-10-23", dataDate: "2026-10-23", sourceTime: "16:00", indices: [], megas: [{ code: "TSM", name: "台積電 ADR", price: 190, chgPct: 2 }], macro: [] } };
+      W.quotes.set("2330", { ...(W.quotes.get("2330") || {}), code: "2330", price: 1000 });
+      setLt("today"); renderList();
+    });
+    await selectWorkspace(p, "global");
+    await p.waitForFunction(() => document.querySelector("#lx [data-adr]"), null, { timeout: 15000 });
+    let t = await p.textContent("#lx [data-adr]");
+    assert.match(t, /\+18\.6%/, "190 × 31.2 ÷ 5 ÷ 1000 − 1"); assert.match(t, /2330 1,000 元/); assert.equal(hits, 0, "按了才抓歷史");
+    await p.click('#lx [data-tx="adrh"]');
+    await p.waitForFunction(() => /近一年（/.test(document.querySelector("#lx [data-adr]")?.innerText || ""));
+    t = await p.textContent("#lx [data-adr]");
+    // 2330 從 1000 漲到 1079：溢價 +18.6% → +9.9%，目前 +18.6% 是最高的那一天
+    assert.match(t, /80 天/); assert.match(t, /\+9\.9%～\+18\.6%/); assert.match(t, /高於 100%/); assert.match(t, /偏高/);
+    assert.ok(await noHOverflow(p)); await ctx.close(); assert.deepEqual(errs, []);
+  }
+});

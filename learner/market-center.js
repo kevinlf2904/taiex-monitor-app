@@ -387,6 +387,7 @@ const tip = text => (typeof infoTip === "function" ? infoTip(null, text) : ""); 
     const panelHtml = '<div class="mc-panel-head"><div><span class="mc-eyebrow">GLOBAL MARKETS</span><h4>全球市場矩陣</h4></div>' +
       '<span class="mc-status-chip">' + escapeHtml(apiStatus) + '</span></div>' +
       '<div class="mc-global-summary">' + usMeta + globalMeta + '</div>' +
+      (typeof tdAdrHtml === "function" ? tdAdrHtml() : "") + // 台積電 ADR 溢價（brief.js）
       (contents ? '<div class="mc-global-groups">' + contents + '</div>' : '<p class="mc-empty">' + escapeHtml(emptyText) + '</p>') +
       (W?.gl?.refreshError ? '<p class="mc-data-note">最近一次更新失敗：' + escapeHtml(W.gl.refreshError) + '</p>' : '') +
       '<div class="mc-global-shortcuts" aria-label="延伸市場分析">' +
