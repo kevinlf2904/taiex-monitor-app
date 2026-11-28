@@ -1,5 +1,5 @@
 /* 存股的延伸功能（learner/savings.html）：
-   ・我的庫存股息：讀看盤「庫存」（同一個網站的 localStorage），算每年、每月領多少、距離目標還差多少
+   ・我的庫存股息：讀持股（有交易紀錄或已確認快照就用 KLLedger 算的持股，沒有才讀看盤舊庫存；同一個網站的 localStorage，只讀），算每年、每月領多少、距離目標還差多少
    ・實拿股息試算：二代健保、股利所得稅（合併計稅抵減 8.5% 或分開計稅 28%，自動選划算的）、美股預扣 30%、手續費
    ・真實歷史回測：用真實月線（含息還原與不含息）從某年某月開始定期定額，算到今天
    ・退休提領試算：4% 法則、蒙地卡羅成功率、剛退休就遇到股災的情境
@@ -37,7 +37,7 @@
   const notes = document.querySelector("details.notes-d"); if (!notes) return;
   const sec = (id, title, lead, body) => `<section class="sec" id="${id}"><div class="sec-h"><h2 class="h2">${title}</h2><p class="lead">${lead}</p></div><div class="panel dc">${body}</div></section>`;
   notes.insertAdjacentHTML("beforebegin",
-    sec("sec-hold", "我的庫存股息", "讀「看盤 → 庫存」裡的台股，用近 12 個月的配息算每年、每月大概領多少，以及距離你的目標還差多少。", `<div class="dc-in">${field("hx-goal", "目標：每月股息（元）", 30000, 'type="number" min="0" step="1000" inputmode="numeric"')}<div class="dc-f"><span class="lbl">&nbsp;</span><button type="button" class="btn" id="hx-go">抓庫存配息</button></div></div><div id="hx-out"><p class="hint">按「抓庫存配息」開始。</p></div>`)
+    sec("sec-hold", "我的庫存股息", "讀你的台股持股（有交易紀錄就用交易紀錄，沒有才用看盤庫存），用近 12 個月的配息算每年、每月大概領多少，以及距離你的目標還差多少。", `<div class="dc-in">${field("hx-goal", "目標：每月股息（元）", 30000, 'type="number" min="0" step="1000" inputmode="numeric"')}<div class="dc-f"><span class="lbl">&nbsp;</span><button type="button" class="btn" id="hx-go">抓庫存配息</button></div></div><div id="hx-out"><p class="hint">按「抓庫存配息」開始。</p></div>`)
     + sec("sec-tax", "實拿股息試算", "股息要扣二代健保、併入所得稅，美股還有預扣稅。填你的狀況，看實際拿到多少、合併還是分開計稅比較划算。", `<div class="dc-in">
       ${field("tx-div", "台股年股息（元）", 300000, 'type="number" min="0" step="1000" inputmode="numeric"')}
       <div class="dc-f"><label for="tx-n">每年配息次數</label><select id="tx-n">${[1, 2, 4, 12].map(n => `<option value="${n}" ${+(S["tx-n"] || 4) === n ? "selected" : ""}>${n} 次</option>`).join("")}</select></div>
@@ -62,10 +62,33 @@
   document.querySelectorAll("#sec-hold input,#sec-tax input,#sec-tax select,#sec-hist input,#sec-ret input,#sec-mon input").forEach(el => el.addEventListener("input", () => { S[el.id] = el.value; save(); }));
 
   /* ---------- 我的庫存股息 ---------- */
-  const holdings = () => { try { const H = JSON.parse(localStorage.getItem("kline:watch:hold") || "{}") || {}; return Object.entries(H).filter(([c, h]) => /^\d{4,6}[A-Z]?$/.test(c) && h?.sh > 0).map(([c, h]) => ({ code: c, sh: +h.sh, cost: +h.cost || null })); } catch { return []; } };
+  // 持股來源和看盤庫存、投資組合股利分頁同一套（#363，docs/portfolio/HOLD_SOURCE.md）：有交易紀錄（kline:pf:v1）或已確認的庫存快照（kline:pf:recon:v1）時，
+  // 用 KLLedger.buildReconciledLedger 算出的未平倉台股；都沒有才讀舊庫存 kline:watch:hold。這裡只讀，不寫任何一個存檔（待處理的寫入只在記憶體裡恢復）。
+  const rd = k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
+  const twCode = c => /^\d{4,6}[A-Z]?$/.test(c);
+  const legacyHold = () => { const H = rd("kline:watch:hold") || {}; return Object.entries(H).filter(([c, h]) => twCode(c) && h?.sh > 0).map(([c, h]) => ({ code: c, sh: +h.sh, cost: +h.cost || null })); };
+  const loadJs = f => new Promise((ok, no) => { const el = document.createElement("script"); el.src = f; el.onload = ok; el.onerror = () => no(new Error(`載入 ${f} 失敗`)); document.head.appendChild(el); });
+  async function holdings() {
+    const S0 = rd("kline:pf:v1"), R0 = rd("kline:pf:recon:v1");
+    const nTx = Array.isArray(S0?.transactions) ? S0.transactions.length : 0, snap = Array.isArray(R0?.snapshots) && R0.snapshots.some(x => x && x.status === "confirmed");
+    if (!nTx && !snap && R0?.pendingCommit == null) return { src: "legacy", H: legacyHold() };
+    if (typeof KLLedger === "undefined") await loadJs("ledger.js");
+    if (typeof KLRecon === "undefined") await loadJs("recon.js");
+    let R = R0;
+    if (R0?.pendingCommit != null) { const rec = KLRecon.recoverCommit(S0, R0); if (rec.changed) R = rec.reconStore; else if (/_halted$/.test(rec.status || "")) return { src: "halted", H: [] }; }
+    const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+    const L = KLLedger.buildReconciledLedger(S0 || { transactions: [] }, R || null, { method: S0?.method, today });
+    const H = (L.positions || []).filter(p => p.open && p.shares > 0 && twCode(String(p.symbol || "").toUpperCase())).map(p => ({ code: String(p.symbol).toUpperCase(), sh: +p.shares, cost: p.costBasis > 0 ? p.costBasis / p.shares : null }));
+    return { src: "ledger", H, nTx, snaps: L.reconcile?.snapshotCount || 0, pending: (L.reconcile?.pendingSymbols || []).length };
+  }
+  const srcNote = X => X.src === "ledger" ? `持股來自交易紀錄（${X.nTx} 筆交易${X.snaps ? `・${X.snaps} 檔快照基準` : ""}），和投資組合「股利」分頁同一份。${X.pending ? `有 ${X.pending} 檔待對帳，股數以已確認的基準計算。` : ""}` : "持股來自看盤的庫存（還沒有交易紀錄）。";
   const names = () => { try { return JSON.parse(localStorage.getItem("kline:watch:names") || "{}") || {}; } catch { return {}; } };
   async function holdRun() {
-    const H = holdings(), out = $("hx-out"); if (!H.length) { out.innerHTML = `<p class="hint">庫存裡還沒有台股。到「看盤 → 庫存」新增持股（或匯入範例庫存），再回來按一次。</p>`; return; }
+    const out = $("hx-out"); let X;
+    try { X = await holdings(); } catch (e) { out.innerHTML = `<p class="hint">⚠︎ 讀不到交易紀錄（${esc(e.message)}）。</p>`; return; }
+    if (X.src === "halted") { out.innerHTML = `<p class="hint">⚠︎ 交易紀錄有一筆沒寫完的變更需要處理，先到「看盤 → 庫存 → 交易紀錄」的對帳中心處理，再回來按一次。</p>`; return; }
+    const H = X.H;
+    if (!H.length) { out.innerHTML = `<p class="hint">${X.src === "ledger" ? "交易紀錄裡目前沒有持有中的台股。" : "庫存裡還沒有台股。到「看盤 → 庫存」新增持股（或匯入範例庫存），再回來按一次。"}</p>`; return; }
     out.innerHTML = `<p class="hint">抓 ${H.length} 檔的配息紀錄…</p>`;
     let R; try { R = await yieldOf(H.map(h => h.code)); } catch (e) { out.innerHTML = `<p class="hint">⚠︎ ${esc(e.message)}</p>`; return; }
     const nm = names(), rows = H.map(h => { const r = R.find(x => x.code === h.code), m = r ? monthCash(r) : {}; return { ...h, r, m, year: r ? r.cash12 * h.sh : 0, mv: r?.price ? r.price * h.sh : null }; });
@@ -78,7 +101,7 @@
       <div class="mm-bars">${byM.map((v, i) => `<div><span class="mm-t"><i style="height:${Math.round((v / mx) * 100)}%" class="${v ? "" : "zero"}"></i></span><b>${v ? tick(v) : "—"}</b><small>${MON[i]}</small></div>`).join("")}</div>
       <div class="tablewrap"><table class="tbl dc-tbl"><thead><tr><th class="l">股票</th><th>股數</th><th>近 12 個月每股配息</th><th>殖利率</th><th>一年股息</th><th class="l">配息月份</th></tr></thead><tbody>
       ${rows.sort((a, b) => b.year - a.year).map(x => `<tr><td class="l">${esc(nm[x.code] || "")} ${x.code}</td><td>${fmt(x.sh)}</td><td>${x.r ? x.r.cash12 : "—"}</td><td>${x.r?.yield != null ? x.r.yield + "%" : "—"}</td><td>${fmt(x.year)}</td><td class="l">${Object.keys(x.m).map(m => m + "月").join("、") || "—"}</td></tr>`).join("")}</tbody></table></div>
-      <p class="hint">用近 12 個月的配息推估，未來配息可能變多或變少。<button type="button" class="sx-link" id="hx-tax">把 ${fmt(year)} 元帶到「實拿股息試算」 ›</button></p>`;
+      <p class="hint">${esc(srcNote(X))}用近 12 個月的配息推估，未來配息可能變多或變少。<button type="button" class="sx-link" id="hx-tax">把 ${fmt(year)} 元帶到「實拿股息試算」 ›</button></p>`;
   }
   $("hx-go").addEventListener("click", holdRun);
   document.addEventListener("click", e => { if (e.target.id === "hx-tax") { $("tx-div").value = Math.round(S.holdYear || 0); S["tx-div"] = $("tx-div").value; save(); taxRun(); sxGo("tax", true); } });
@@ -173,7 +196,7 @@
   /* ---------- 選單：一次只看一個功能（模擬三種做法時才顯示左邊的控制台） ---------- */
   const led = document.getElementById("ledger")?.closest("section"); if (led && !led.id) led.id = "sec-ledger";
   const GROUPS = [["模擬三種做法", [["sim", "總覽與走勢", "三種做法的期末淨值、年化、部位", ["sec-sum", "sec-pos", "sec-ledger", "sec-chart"]], ["ms", "存錢里程碑", "第幾年存到 100 萬、500 萬…", ["sec-ms"]], ["risk", "壓力測試與配置", "崩盤時會不會被追繳、核心衛星比例", ["sec-risk"]], ["etf", "標的比較", "不同 ETF 用同樣條件比", ["sec-etf"]]]],
-    ["存股工具", [["div", "股息計算機", "每年領多少、含息與不含息報酬", ["sec-div"]], ["hold", "我的庫存股息", "讀看盤庫存，算每月領多少", ["sec-hold"]], ["tax", "實拿股息試算", "健保、稅、手續費扣完拿多少", ["sec-tax"]], ["hist", "真實歷史回測", "真實股價定期定額到今天", ["sec-hist"]], ["ret", "退休提領試算", "每年領生活費能撐多久", ["sec-ret"]], ["mon", "月月配組合", "每個月都有股息的 ETF 組合", ["sec-mon"]], ["dca", "定期定額熱門", "大家最常定期定額買的股票、ETF", ["sec-dca"]]]]];
+    ["存股工具", [["div", "股息計算機", "每年領多少、含息與不含息報酬", ["sec-div"]], ["hold", "我的庫存股息", "讀你的持股，算每月領多少", ["sec-hold"]], ["tax", "實拿股息試算", "健保、稅、手續費扣完拿多少", ["sec-tax"]], ["hist", "真實歷史回測", "真實股價定期定額到今天", ["sec-hist"]], ["ret", "退休提領試算", "每年領生活費能撐多久", ["sec-ret"]], ["mon", "月月配組合", "每個月都有股息的 ETF 組合", ["sec-mon"]], ["dca", "定期定額熱門", "大家最常定期定額買的股票、ETF", ["sec-dca"]]]]];
   const ALL = GROUPS.flatMap(([, L]) => L), CONSOLE = new Set(["sim", "ms", "risk", "etf"]), lay = document.querySelector(".layout");
   lay?.insertAdjacentHTML("beforebegin", `<nav class="sx-menu" aria-label="存股模擬選單">${GROUPS.map(([t, L]) => `<div class="sx-mg"><h2>${t}</h2><div class="sx-mi">${L.map(([k, n, d]) => `<button type="button" data-sxg="${k}"><b>${n}</b><small>${d}</small></button>`).join("")}</div></div>`).join("")}</nav>`);
   document.querySelector("nav.jump")?.setAttribute("hidden", "");

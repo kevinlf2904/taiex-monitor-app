@@ -88,3 +88,25 @@ for (const width of [390, 1280]) test(`部位明細負債長條不超過卡片 $
   assert.ok(r.over <= 1, `負債長條超出卡片 ${r.over}px`); assert.ok(r.amax < r.dw, "負債最大時資產長條按比例縮短");
   assert.ok(await noHOverflow(p)); await ctx.close(); assert.deepEqual(errs, []);
 });
+
+// #363：有交易紀錄時，「我的庫存股息」用交易紀錄算出的持股（和股利分頁同一份），不讀舊庫存；全程不寫任何持股存檔
+test("我的庫存股息：有交易紀錄就用交易紀錄的持股", async () => {
+  const { ctx, p, errs } = await open(B, S.url, "savings.html", { width: 390, touch: true });
+  await p.route("**/api/yield**", r => { const cs = new URL(r.request().url()).searchParams.get("codes").split(","); J(r, { ok: true, rows: cs.filter(c => YIELD[c]).map(c => { const y = YIELD[c], cash12 = y.divs.reduce((a, d) => a + d[1], 0); return { code: c, cash12, n: 4, price: y.price, yield: +((cash12 / y.price) * 100).toFixed(2), divs: y.divs }; }) }); });
+  const pf = { v: 1, method: "avg", transactions: [
+    { id: "a", v: 1, date: "2026-01-05", type: "buy", symbol: "0056", market: "tw", currency: "TWD", shares: 3000, price: 30, fee: 0, tax: 0 },
+    { id: "b", v: 1, date: "2026-02-05", type: "sell", symbol: "0056", market: "tw", currency: "TWD", shares: 1000, price: 32, fee: 0, tax: 0 },
+    { id: "c", v: 1, date: "2026-01-06", type: "buy", symbol: "AAPL", market: "us", currency: "USD", shares: 5, price: 100, fee: 0, tax: 0 }] };
+  const before = await p.evaluate(o => { localStorage.setItem("kline:pf:v1", JSON.stringify(o)); localStorage.setItem("kline:watch:hold", JSON.stringify({ "0056": { sh: 10000, cost: 30 }, "2330": { sh: 1000, cost: 500 } }));
+    return ["kline:pf:v1", "kline:pf:recon:v1", "kline:watch:hold"].map(k => localStorage.getItem(k)); }, pf);
+  await p.click('[data-sxg="hold"]'); await p.click("#hx-go"); await p.waitForFunction(() => /一年大約領/.test(document.getElementById("hx-out").innerText));
+  const t = await p.textContent("#hx-out");
+  assert.match(t, /8,000/, "0056 剩 2000 股 × 4 元"); assert.ok(!/2330/.test(t), "舊庫存的 2330 不算"); assert.ok(!t.includes("AAPL"), "只算台股");
+  assert.match(t, /持股來自交易紀錄（3 筆交易）/);
+  const after = await p.evaluate(() => ["kline:pf:v1", "kline:pf:recon:v1", "kline:watch:hold"].map(k => localStorage.getItem(k)));
+  assert.deepEqual(after, before, "只讀，不改任何存檔");
+  // 只有舊庫存：照舊讀舊庫存，並標出來源
+  await p.evaluate(() => localStorage.removeItem("kline:pf:v1")); await p.click("#hx-go"); await p.waitForFunction(() => /持股來自看盤的庫存/.test(document.getElementById("hx-out").innerText));
+  assert.match(await p.textContent("#hx-out"), /60,000/);
+  assert.ok(await noHOverflow(p)); await ctx.close(); assert.deepEqual(errs, []);
+});
