@@ -206,6 +206,9 @@ test("債券 ETF 證交稅停徵依交易日期判斷（稽核 AUD-04）：期�
   // 規則說明與回測的稅率註解寫同一個到期日，改期限時不會漏改其中一處
   assert.ok(L.DEFAULT_RULES.tw.source.includes(F.until), "ledger 規則說明的到期日");
   assert.ok(readFileSync(new URL("../learner/analysis.js", import.meta.url), "utf8").includes(`停徵到 ${F.until}`), "analysis.js taxOf 註解的到期日");
+  // 回測（analysis.js 的 TAX_BOND_FREE）和帳本用同一段停徵期間（#356）
+  const A = readFileSync(new URL("../learner/analysis.js", import.meta.url), "utf8").match(/const TAX_BOND_FREE = \{ from: "([\d-]+)", until: "([\d-]+)" \}/);
+  assert.deepEqual(A && [A[1], A[2]], [F.from, F.until], "analysis.js TAX_BOND_FREE 和帳本一致");
 });
 
 test("CSV 匯出：中文欄名、依日期排序、有 BOM；含逗號、引號的備註正確跳脫；開頭是 = + - @ 的文字前面加 ' 防止被當成公式", () => {

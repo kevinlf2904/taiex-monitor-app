@@ -131,6 +131,25 @@ test("漲跌家數排程：只拿到上市（上櫃還沒出來）時不算完�
   tw.set("6488", { market: "上櫃", pct: 2 });
   assert.equal(full(countDay(tw)), true, "上市、上櫃都有：完整");
 });
+test("證交稅依賣出日期（#356）：債券 ETF 停徵期間內 0、期間外 0.1%；股票、ETF 不看日期；舊的數字稅率不變", () => {
+  const E = engine(), F = E.TAX_BOND_FREE;
+  assert.deepEqual([E.taxOf("00679B", "2026-12-31"), E.taxOf("00679B", "2027-01-04"), E.taxOf("00679B", "2016-12-30"), E.taxOf("00679B", "2027-01-04 09:05"), E.taxOf("00679B")], [0, 0.001, 0.001, 0.001, 0], "期間內、期間後、期間前、分 K 帶時間、沒給日期");
+  assert.deepEqual([E.taxOf("0050", "2027-01-04"), E.taxOf("2330", "2027-01-04")], [0.001, undefined]);
+  assert.deepEqual([E.taxAt("2330")("2027-01-04"), E.taxAt("00679B")("2026-06-01"), E.taxAt(undefined)("2026-06-01")], [0.003, 0, 0.003]);
+  // 同一段走勢、同一組訊號：賣在 2026 年底前不課稅，賣在 2027 年起課 0.1%（買進持有的期末賣出也一樣）
+  const bars = ds => ds.map(d => ({ d, o: 100, h: 101, l: 99, c: 100, v: 1 })), S = [{ i: 0, side: "buy" }, { i: 1, side: "sell" }];
+  const D0 = bars(["2026-12-28", "2026-12-29", "2026-12-30"]), D1 = bars(["2026-12-30", "2026-12-31", "2027-01-04"]);
+  const r0 = E.backtest(D0, S, { capital: 1e6, lot: 1000, tax: E.taxAt("00679B") }), r1 = E.backtest(D1, S, { capital: 1e6, lot: 1000, tax: E.taxAt("00679B") });
+  assert.equal(r0.trades[0].xi, 2); assert.equal(r1.trades[0].xi, 2, "隔日開盤成交：賣在第 3 根");
+  const sh = r1.trades[0].sh, fee = Math.max(20, Math.floor(sh * 100 * 0.001425));
+  assert.equal(r0.costs, 2 * fee, "2026-12-30 賣出：只有手續費");
+  assert.equal(r1.costs, 2 * fee + Math.floor(sh * 100 * 0.001), "2027-01-04 賣出：加 0.1% 證交稅");
+  assert.equal(r0.bhEnd - r1.bhEnd, Math.floor(r1.bhShares * 100 * 0.001), "買進持有的期末賣出也依日期");
+  // 數字稅率照舊（含 0），不給就是 0.3%
+  const n = E.backtest(D1, S, { capital: 1e6, lot: 1000, tax: 0 }), d = E.backtest(D1, S, { capital: 1e6, lot: 1000 }), f = E.backtest(D1, S, { capital: 1e6, lot: 1000, tax: () => 0.003 });
+  assert.equal(n.costs, 2 * fee); assert.equal(d.costs, f.costs); assert.equal(d.costs, 2 * fee + Math.floor(sh * 100 * 0.003));
+  assert.ok(F.from < F.until);
+});
 test("所有策略回測合理性", () => {
   const E = engine(), ids = Object.keys(E.STRAT_DEFS); let n = 0;
   assert.ok(ids.length > 20);
