@@ -1044,6 +1044,17 @@ const tdccChg = c => { const a = W.tdcc?.[c.slice(0, 2)]?.[c]; return a && a.len
 async function chipxLoad() { if (W.chipx) return W.chipx; try { const r = await fetch("data/chipx.json", { cache: "no-cache" }); W.chipx = r.ok ? await r.json() : { err: `HTTP ${r.status}` }; } catch (e) { W.chipx = { err: e.message }; } return W.chipx; }
 async function tdccRank() { if (W.tdccR) return W.tdccR; try { const r = await fetch("data/tdcc/rank.json", { cache: "no-cache" }); W.tdccR = r.ok ? await r.json() : { err: "還沒有排行（集保每週公布一次，累積兩週後才算得出週變化）" }; } catch (e) { W.tdccR = { err: e.message }; } return W.tdccR; }
 
+// 臺指選擇權各履約價未平倉（scripts/chipx.mjs 的 txo）：買權往右、賣權往左的長條，最大痛點那一列標出來；可切換到期
+function txoHtml(T) {
+  if (!T?.exps?.length) return `<p class="note">還沒有臺指選擇權未平倉資料（期交所每個交易日收盤後更新）。</p>`;
+  const i = Math.min(Math.max(0, W.txoI || 0), T.exps.length - 1), E = T.exps[i], mx = Math.max(1, ...E.rows.flatMap(r => [r[1], r[2]])), w = v => `${Math.round((v / mx) * 100)}%`;
+  return `${T.exps.length > 1 ? `<div class="seg sm txo-seg" role="group" aria-label="到期">${T.exps.map((x, j) => `<button type="button" data-txo="${j}" aria-pressed="${j === i}">${esc(x.label || x.exp)}</button>`).join("")}</div>` : ""}
+    <div class="qx-cards"><div><span>最大痛點</span><b>${E.mp?.toLocaleString() ?? "—"}</b><small>${esc(E.label || E.exp)}・資料日 ${esc(T.date || "")}</small></div><div><span>未平倉 P/C</span><b>${E.pcr ?? "—"}%</b><small>賣權 ${E.pOI.toLocaleString()}／買權 ${E.cOI.toLocaleString()} 口</small></div><div><span>買權最大未平倉</span><b>${E.cMax?.toLocaleString() ?? "—"}</b><small>常被當成上方壓力</small></div><div><span>賣權最大未平倉</span><b>${E.pMax?.toLocaleString() ?? "—"}</b><small>常被當成下方支撐</small></div></div>
+    <div class="txo" role="table" aria-label="各履約價未平倉"><div class="txo-r txo-h" role="row"><span role="columnheader">賣權 OI</span><span role="columnheader">履約價</span><span role="columnheader">買權 OI</span></div>
+    ${[...E.rows].reverse().map(([k, c, p]) => `<div class="txo-r${k === E.mp ? " mp" : ""}" role="row"><span role="cell" class="txo-p"><i style="width:${w(p)}"></i><em>${p ? p.toLocaleString() : ""}</em></span><span role="cell" class="txo-k">${k.toLocaleString()}${k === E.mp ? " ◆" : ""}</span><span role="cell" class="txo-c"><i style="width:${w(c)}"></i><em>${c ? c.toLocaleString() : ""}</em></span></div>`).join("")}</div>
+    <p class="note">最大痛點＝如果到期結算在這個價位，買方手上的選擇權總價值最小（賣方最有利）。◆ 是最大痛點；只顯示它上下各 15 檔。未平倉集中的履約價常被當成壓力、支撐參考，但大戶也可能是避險部位，不是預測，也不是買賣建議。</p>`;
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-txo]"); if (!b || typeof W === "undefined") return; W.txoI = +b.dataset.txo; renderList(); });
 // 籌碼動向：大戶週變化排行、借券賣出最多、當沖比例最高、選擇權 Put/Call 比
 function chipxHtml() {
   const X = W.chipx, T = W.tdccR; const re = () => W.lt === "after" && renderList(); if (!X) chipxLoad().then(re); if (!T) tdccRank().then(re);
@@ -1057,6 +1068,7 @@ function chipxHtml() {
     <p class="note">千張大戶＝持有 1000 張以上的股東，週變化是持股比例的百分點；大戶比例上升、散戶下降常被當成籌碼集中的跡象，但也可能只是集保帳戶移轉。</p>
     <h4>選擇權 Put/Call 比（臺指選擇權）</h4>${tb(["日期", "成交量 P/C", "未平倉 P/C"], pcr.map(r => `<tr><td>${r[0]}</td><td>${r[1] ?? "—"}%</td><td><b>${r[2] ?? "—"}%</b></td></tr>`).join(""))}
     <p class="note">未平倉 Put/Call 比＞100% 代表賣權（看跌保護）未平倉比買權多；常見的解讀是比例偏高時市場有支撐、偏低時過熱，但只是情緒參考。</p>
+    <h4>臺指選擇權未平倉分佈與最大痛點</h4>${txoHtml(X?.txo)}
     <div class="tgrid"><div><h4>借券賣出最多（張）</h4>${tb(["股票", "當日借券賣出", "借券餘額"], lend.map(([c, v]) => `<tr><td>${a(c)}</td><td>${(v[0] ?? 0).toLocaleString()}</td><td>${(v[1] ?? 0).toLocaleString()}</td></tr>`).join(""))}</div>
     <div><h4>當沖比例最高（上市）</h4>${tb(["股票", "當沖比例"], dt.map(([c, v]) => `<tr><td>${a(c)}</td><td>${v}%</td></tr>`).join(""))}</div></div>
     <p class="note">借券賣出多半是法人避險或套利，不一定是看空；當沖比例高代表短線交易熱絡、波動可能較大。${(X?.notes || []).length ? "⚠︎ " + X.notes.map(esc).join("；") : ""}</p></section>`;

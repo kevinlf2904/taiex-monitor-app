@@ -404,6 +404,13 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .dh-more summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 
 /* ---------- 情報局「盤中監控」（learner/monitor.js）：事件卡沿用 .mcard 的扁平樣式；嚴重度用形狀＋文字，紅綠只留給漲跌 ---------- */
+.txo-seg { margin: 6px 0; }
+.txo { display: grid; gap: 1px; margin: 6px 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.txo-r { display: grid; grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr); align-items: center; gap: 6px; min-height: 18px; }
+.txo-r.mp { background: var(--surface-3); border-radius: 4px; font-weight: 600; } .txo-h { color: var(--muted); font-size: 11.5px; } .txo-h span:first-child { text-align: right; }
+.txo-k { text-align: center; } .txo-p, .txo-c { position: relative; display: flex; align-items: center; min-width: 0; height: 14px; } .txo-p { justify-content: flex-end; }
+.txo-p i, .txo-c i { display: block; height: 100%; border-radius: 2px; } .txo-p i { background: var(--down); opacity: .55; } .txo-c i { background: var(--up); opacity: .55; }
+.txo-p em, .txo-c em { position: absolute; font-style: normal; font-size: 10.5px; color: var(--ink); padding: 0 3px; white-space: nowrap; } .txo-p em { left: 0; } .txo-c em { right: 0; }
 .mon-list { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 8px; }
 .mon-ev { width: 100%; text-align: left; display: grid; gap: 2px; padding: 10px 12px; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
 .mon-ev b { font-size: 14px; } .mon-ev .note { font-size: 12px; } .mon-ev.done { opacity: .65; }

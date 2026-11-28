@@ -1,4 +1,4 @@
-# 籌碼補充：每個交易日晚上整理借券賣出、當日沖銷比例與選擇權 Put/Call 比（learner/data/chipx.json）
+# 籌碼補充：每個交易日晚上整理借券賣出、當日沖銷比例、選擇權 Put/Call 比與臺指選擇權各履約價未平倉（learner/data/chipx.json）
 name: chipx
 on:
   schedule:
@@ -42,4 +42,4 @@ jobs:
           COMMIT_NAME: chipx
           DATA_PUSH_TOKEN: ${{ steps.datatoken.outputs.token }}
         run: |
-          bash scripts/commit-data.sh "籌碼：更新借券、當沖、Put/Call 比" learner/data/chipx.json
+          bash scripts/commit-data.sh "籌碼：更新借券、當沖、Put/Call 比、選擇權未平倉" learner/data/chipx.json
