@@ -1956,6 +1956,26 @@ function m2World({ users: U, hol = M2_HOL, px: P } = {}) {
   return W;
 }
 
+test("盤中監控 同時段量能：近 20 日同時間累積量中位數、09:15 前與冷門股不判斷、3 倍注意 5 倍升級、不推播", () => {
+  const { monVolBase, monVolRatio, monScan, monShouldNotify } = engine().M, J = x => JSON.parse(JSON.stringify(x));
+  // 22 天，每天 09:00、09:05、09:10、09:15 四根 5 分 K，量 100／50／50／k×10（k＝天數序號）；最後一天少了 09:00 那根（不算）
+  const bars = []; for (let k = 1; k <= 22; k++) { const d = `2026-10-${String(k).padStart(2, "0")}`; [["09:00", 100], ["09:05", 50], ["09:10", 50], ["09:15", k * 10]].forEach(([t, v], i) => { if (!(k === 22 && i === 0)) bars.push({ d, t, v }); }); }
+  const B = monVolBase(bars); assert.equal(B.n, 19, "只取最近 20 天（第 3～22 天），再排除開盤沒資料的第 22 天");
+  assert.deepEqual(J(B.S), { "09:05": 100, "09:10": 150, "09:15": 200, "09:20": 320 }, "09:20 的累積量＝200 ＋ k×10，第 3～21 天的中位數是第 12 天 → 320");
+  assert.equal(monVolRatio(B, 900, "09:14:59"), null, "09:15 以前不判斷");
+  assert.deepEqual(J(monVolRatio(B, 600, "09:17:30")), { ratio: 3, base: 200, at: "09:15" });
+  assert.equal(monVolRatio({ n: 20, S: { "09:15": 150 } }, 900, "09:20"), null, "平常量不到 200 張不判斷");
+  assert.equal(monVolBase(bars.slice(0, 12)), null, "不到 5 天不算");
+  const today = "2026-10-26", now = Date.parse("2026-10-26T09:20:30+08:00"), q = (code, vol) => ({ code, price: 101, prev: 100, chgPct: 1, vol, date: today, time: "09:20:00" });
+  const Q = new Map([["T00", { ...q("T00"), price: 100, chgPct: 0 }], ["2330", q("2330", 1000)], ["2317", q("2317", 1800)], ["1101", q("1101", 300)]]);
+  const ev = monScan(Q, { today, now, codes: [{ c: "2330", hold: true }, { c: "2317", hold: false }, { c: "1101", hold: false }], vb: { 2330: B, 2317: B } });
+  const by = Object.fromEntries(ev.map(e => [e.id, e]));
+  assert.deepEqual(Object.keys(by).sort(), ["2026-10-26:VOL:2317:up", "2026-10-26:VOL:2330:up"], "1101 沒有平常量不判斷");
+  assert.deepEqual([by["2026-10-26:VOL:2330:up"].level, by["2026-10-26:VOL:2330:up"].sev, by["2026-10-26:VOL:2317:up"].level, by["2026-10-26:VOL:2317:up"].sev], [1, "info", 2, "watch"], "1000÷320≈3.1 倍、1800÷320≈5.6 倍");
+  assert.match(by["2026-10-26:VOL:2330:up"].msg, /到 09:20 累積 1,000 張，近 19 日同時段中位數 320 張/);
+  assert.equal(monShouldNotify(by["2026-10-26:VOL:2317:up"], {}, now), false, "量能事件只記錄、不推播");
+  assert.equal(monScan(Q, { today, now, codes: [{ c: "2330", hold: true }] }).length, 0, "沒有平常量（伺服器巡檢）就不判斷量能");
+});
 test("盤中監控 M2：推播範圍、重跑不重複、升級、只通知持有的人、Telegram 失敗後重試、來源失敗、公開資料不含使用者", async () => {
   const t0 = at8("2026-10-26T10:00:30");
   // 推播清單：盤中警示的範圍是庫存台股＋自選台股（範例庫存、美股不算）；沒勾就沒有
