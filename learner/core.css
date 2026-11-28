@@ -387,6 +387,9 @@ button.dh-sec-pill:hover { border-color: var(--accent); }
 .dh-badge.mon-alert { cursor: pointer; border: 0; font: inherit; font-size: 11px; color: var(--up); background: color-mix(in srgb, var(--up) 12%, transparent); }
 .dh-mac { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; margin: 8px 0; }
 .dh-mac > div { display: flex; flex-direction: column; padding: 6px 8px; border-radius: var(--radius); background: var(--surface-2); font-size: 12.5px; } .dh-mac b { font-weight: 500; font-size: 14px; }
+.td-tmr-l { margin: 6px 0; padding-left: 22px; display: grid; gap: 6px; }
+.td-tmr-l li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.td-tmr-w { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; } .td-tmr-w span { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: var(--surface-3); color: var(--muted); overflow-wrap: anywhere; }
 .dh-mac-go { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0; }
 .tdlist { list-style: none; margin: 6px 0 0; padding: 0; } .tdlist li { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); line-height: 1.5; } .tdlist li:first-child { border-top: 0; }
 .tdlist .tdk { color: var(--muted); font-size: 12px; } .tdlist .tdv { min-width: 0; overflow-wrap: anywhere; } .tdlist .linkbtn { text-align: left; }

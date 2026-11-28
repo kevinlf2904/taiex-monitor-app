@@ -297,3 +297,28 @@ for (const width of [390, 1280]) test(`盤前推演：密集價位的標籤和�
   assert.ok(r.off <= 17, `標籤離自己的線 ${r.off.toFixed(1)}px`); assert.ok(r.cut <= 0.5, `底部文字超出 ${r.cut.toFixed(1)}px`);
   await ctx.close(); assert.deepEqual(errs, []);
 });
+
+for (const width of [390, 1280]) test(`今日市場：明日觀察清單 ${width}`, async () => {
+  const { ctx, p, errs } = await open(B, S.url, "watch.html", { width, touch: width < 500 });
+  await p.clock.setFixedTime(new Date("2026-10-26T14:00:00+08:00"));
+  // 頁面的「今天」跟著報價日期走：下一個平日設成休市，除息放在再下一個平日
+  const exp = await p.evaluate(() => {
+    const d = W.today || twDay(), h = nextWd(d), t2 = nextWd(h);
+    twHolSet([{ date: h, name: "測試休市" }], new Date(d + "T12:00:00+08:00"));
+    W.cal = { hol: [], rows: [{ code: "2454", date: t2, kind: "除息" }, { code: "2454", date: h, kind: "除權" }], conf: [] };
+    W.quotes.set("2317", { ...(W.quotes.get("2317") || {}), code: "2317", price: 94, chgPct: -6 });
+    W.hold = { ...(W.hold || {}), 2317: { sh: 1000, cost: 100 } };
+    if (!myCodes().includes("2454")) W.groups[0].list.push("2454");
+    window.__cal = W.cal; setLt("today"); renderList(); return t2.slice(5).replace("-", "/");
+  });
+  await selectWorkspace(p, "technical");
+  await p.waitForTimeout(300); await p.evaluate(() => { const d = W.today || twDay(); twHolSet([{ date: nextWd(d), name: "測試休市" }], new Date(d + "T12:00:00+08:00")); W.cal = { ...(W.cal || {}), rows: window.__cal.rows, conf: [] }; renderList(); }); // 行事曆可能被頁面自己的載入覆蓋，最後再放一次
+  await p.evaluate(() => { const d = document.querySelector('#lx details[data-tdbox="plan"]'); if (!d.open) d.querySelector("summary").click(); });
+  await p.waitForSelector("#lx .td-tmr");
+  const t = await p.textContent("#lx .td-tmr");
+  assert.ok(t.includes(exp + "（週"), `休市日跳過，標題是 ${exp}：${t}`);
+  assert.ok(t.includes(`${exp} 除息`) && !/\d 除權(?!息)/.test(t), "只列下一交易日的除權息（休市那天的不算）"); assert.match(t, /★[\s\S]*2317[\s\S]*今天 -6\.0%/);
+  assert.ok(t.indexOf("2454") < t.indexOf("2317"), "除權息排在大跌前面");
+  await p.click('#lx .td-tmr [data-sel="2454"]'); await p.waitForFunction(() => W.sel === "2454");
+  assert.ok(await noHOverflow(p)); await ctx.close(); assert.deepEqual(errs, []);
+});
