@@ -518,3 +518,36 @@ test("並行上傳（SEC-05）：兩台同時帶同一個 base 上傳，只有�
     store.delete(lockKey); const big = await push({ base: 1, data: { "kline:watch:x": "x".repeat(950 * 1024) } }); assert.equal(big.status, 413); assert.equal(store.has(lockKey), false);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+// 瀏覽器推播：cfg 回公鑰、wpsub 只收推播服務網址並送確認推播、存 wp 訂閱與推播清單、wptest 失效時清掉、wpoff 後沒有任何通道就移出清單
+test("瀏覽器推播：wpsub／wptest／wpoff 與推播清單", async () => {
+  const { createECDH } = await import("node:crypto");
+  const S = createECDH("prime256v1"); S.generateKeys(); const UA = createECDH("prime256v1"); UA.generateKeys();
+  Object.assign(process.env, { KV_REST_API_URL: "https://mock-kv.upstash.io", KV_REST_API_TOKEN: "mock_token", VAPID_PUBLIC_KEY: S.getPublicKey().toString("base64url"), VAPID_PRIVATE_KEY: Buffer.concat([Buffer.alloc(32 - S.getPrivateKey().length), S.getPrivateKey()]).toString("base64url") });
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  const kv = createMockKv(), sets = new Map(), pushes = [], orig = globalThis.fetch; let pushStatus = 201;
+  globalThis.fetch = async (url, o) => {
+    if (String(url).startsWith("https://mock-kv")) { const [cmd, ...a] = JSON.parse(o.body); if (cmd === "SADD") (sets.get(a[0]) || sets.set(a[0], new Set()).get(a[0])).add(a[1]); if (cmd === "SREM") sets.get(a[0])?.delete(a[1]); return { ok: true, json: async () => ({ result: await kv(cmd, ...a) }) }; }
+    pushes.push([String(url), o.headers]); return { status: pushStatus };
+  };
+  const id = "push_sync_token_1234567890", h = hashId(id), call = async body => { const m = mockHttp({ body: { id, ...body } }); await handler(m.req, m.res); return m; };
+  const sub = { endpoint: "https://fcm.googleapis.com/fcm/send/x1", keys: { p256dh: UA.getPublicKey().toString("base64url"), auth: Buffer.alloc(16, 3).toString("base64url") } };
+  try {
+    const c = mockHttp({ method: "GET", query: { op: "cfg" } }); await handler(c.req, c.res);
+    assert.equal(c.data.wp, true); assert.equal(c.data.wpKey, process.env.VAPID_PUBLIC_KEY); assert.equal(c.data.tg, false);
+    assert.match((await call({ op: "wpsub", sub })).data.error, /先上傳一次/, "雲端沒資料不綁");
+    const data = { "kline:watch:alerts": JSON.stringify({ 2330: { up: 1200 } }) };
+    assert.equal((await call({ op: "push", data })).data.wp, false);
+    assert.equal((await call({ op: "wpsub", sub: { ...sub, endpoint: "https://evil.example.com/x" } })).status, 400, "不是推播服務的網址");
+    let r = await call({ op: "wpsub", sub }); assert.deepEqual(r.data, { ok: true, sent: true });
+    assert.equal(pushes.at(-1)[0], sub.endpoint); assert.match(pushes.at(-1)[1].Authorization, /^vapid t=/);
+    assert.deepEqual(JSON.parse(await kv("GET", `wp:${h}`)), sub); assert.ok(sets.get("alerts")?.has(h), "只有推播、沒有 Telegram 也進推播清單");
+    const doc = JSON.parse(await kv("GET", `alert:${h}`)); assert.deepEqual([doc.chat, doc.wp, doc.price], [null, true, [{ code: "2330", up: 1200, dn: null }]]);
+    assert.equal((await call({ op: "push", data })).data.wp, true);
+    assert.deepEqual((await call({ op: "wptest" })).data, { ok: true });
+    pushStatus = 410; r = await call({ op: "wptest" }); assert.equal(r.data.gone, true); assert.equal(await kv("GET", `wp:${h}`), null, "失效的訂閱刪掉"); assert.ok(!sets.get("alerts").has(h));
+    pushStatus = 201; await call({ op: "wpsub", sub }); assert.ok(sets.get("alerts").has(h));
+    assert.deepEqual((await call({ op: "wpoff" })).data, { ok: true }); assert.equal(await kv("GET", `wp:${h}`), null); assert.equal(await kv("GET", `alert:${h}`), null); assert.ok(!sets.get("alerts").has(h));
+    delete process.env.VAPID_PUBLIC_KEY; assert.equal((await call({ op: "wptest" })).data.reason, "wp_not_configured");
+  } finally { globalThis.fetch = orig; delete process.env.VAPID_PUBLIC_KEY; delete process.env.VAPID_PRIVATE_KEY; }
+});

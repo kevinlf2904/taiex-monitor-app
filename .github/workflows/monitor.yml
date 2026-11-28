@@ -1,6 +1,6 @@
 # 伺服器盤中巡檢（盤中監控 M2，scripts/monitor.mjs）：關掉網頁也偵測大盤與庫存、自選的警示，寫進 KV、推 Telegram 給勾了「盤中警示」的人。
 # 目前排程是關的（還沒接 Upstash＋Telegram）：只能手動執行，預設 dry＝只印出會產生的事件與訊息，不寫 KV、不送出。
-# 要啟用時：設定好 secrets（KV_REST_API_URL、KV_REST_API_TOKEN、TELEGRAM_BOT_TOKEN），把下面的 schedule 取消註解（交易時段每 5 分鐘；GitHub 常延遲幾分鐘）。
+# 要啟用時：設定好 secrets（KV_REST_API_URL、KV_REST_API_TOKEN，加上 TELEGRAM_BOT_TOKEN 或 VAPID_PUBLIC_KEY／VAPID_PRIVATE_KEY），把下面的 schedule 取消註解（交易時段每 5 分鐘；GitHub 常延遲幾分鐘）。
 # 要停用：GitHub → Actions → monitor → Disable workflow，或再把 schedule 註解掉；網頁偵測不到伺服器資料就自動只用頁面自己的偵測。
 name: monitor
 on:
@@ -37,4 +37,7 @@ jobs:
           KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
           KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
         run: node scripts/monitor.mjs

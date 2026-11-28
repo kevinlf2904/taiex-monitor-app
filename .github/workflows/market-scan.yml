@@ -100,6 +100,9 @@ jobs:
           KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
           KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
         run: node scripts/alerts-push.mjs
       # 訊號回測（技術條件、K 線組合成立之後 5／10／20 天的報酬與勝率）：同一份全市場日 K 快取，寫回 learner/data/signal-study.json
       # 每一天都要重算指標，全市場大約要 6～7 分鐘，所以排在最後（Telegram 提醒之後），不拖慢推播

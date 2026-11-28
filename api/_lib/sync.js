@@ -9,11 +9,15 @@
 // POST /api/sync { op: "tgbind", id }       找機器人收到的「/start 綁定碼」，記下 chat id 並回一則確認訊息
 // POST /api/sync { op: "tgtest", id }       送一則測試訊息
 // POST /api/sync { op: "tgoff", id }        解除 Telegram 綁定
-// GET  /api/sync?op=cfg                     { kv, tg, bot }
+// POST /api/sync { op: "wpsub", id, sub }   綁定瀏覽器推播（sub 是 PushSubscription.toJSON()，只接受各家推播服務的網址；api/_lib/webpush.js）
+// POST /api/sync { op: "wptest", id }       送一則測試推播
+// POST /api/sync { op: "wpoff", id }        解除瀏覽器推播
+// GET  /api/sync?op=cfg                     { kv, tg, bot, wp, wpKey }（wpKey 是 VAPID 公鑰，本來就要公開給瀏覽器訂閱用）
 // GET  /api/sync?op=mon&date=YYYY-MM-DD     伺服器盤中巡檢的事件與執行紀錄 { kv, events, runs }（scripts/monitor.mjs 寫入；沒設定 KV 時 kv:false）
 // POST /api/sync { op: "waitlist", email, plan }  KLineLab Pro 候補名單（pro.html）：存在 KV 的 waitlist 雜湊（email → 時間、方案），同一個 IP 每小時最多 5 次
 import { createHash } from "node:crypto";
 import { userMsg } from "./_err.js";
+import { wpOn, wpPublicKey, cleanSub, sendPush } from "./webpush.js";
 
 const KV_URL = () => (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "").trim().replace(/\/$/, "");
 const KV_TOKEN = () => (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
@@ -115,7 +119,7 @@ export async function tg(method, body) {
 }
 let botName = null;
 // 提醒用的摘要：指標提醒、價格提醒、股票名稱、追蹤對象；有綁 Telegram 才放進 alerts 清單，收盤後的排程只讀這份
-export function alertDoc(data, chat) {
+export function alertDoc(data, chat, wp = false) {
   const g = k => { try { return JSON.parse(data?.[ `kline:${k}` ] ?? "null"); } catch { return null; } };
   const rules = (g("watch:irules") || []).filter(r => r?.on && r.code && r.cond).map(r => ({ code: r.code, cond: r.cond, p: r.p ?? null }));
   const price = Object.entries(g("watch:alerts") || {}).map(([code, a]) => ({ code, up: a?.up ?? null, dn: a?.dn ?? null })).filter(a => a.up || a.dn);
@@ -129,7 +133,7 @@ export function alertDoc(data, chat) {
   const evCodes = on.length ? [...new Set([...Object.keys(hold).filter(c => !hold[c]?.demo), ...(E.scope === "all" ? (g("watch:groups") || []).flatMap(x => (Array.isArray(x?.list) ? x.list : [])) : [])])].filter(c => typeof c === "string" && /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 150) : [];
   // 盤中警示（scripts/monitor.mjs）：庫存台股（不含範例）＋自選台股，和網頁的盤中監控同一個範圍
   const mon = on.includes("mon") ? [...new Set([...Object.keys(hold).filter(c => !hold[c]?.demo), ...(g("watch:groups") || []).flatMap(x => (Array.isArray(x?.list) ? x.list : []))])].filter(c => typeof c === "string" && /^\d{4,6}[A-Z]?$/.test(c)).slice(0, 150) : [];
-  return { chat, rules: rules.slice(0, 100), price: price.slice(0, 100), names: g("watch:names") || {}, follow, ev: { on, codes: evCodes, mine, mon } };
+  return { chat: chat || null, ...(wp ? { wp: true } : {}), rules: rules.slice(0, 100), price: price.slice(0, 100), names: g("watch:names") || {}, follow, ev: { on, codes: evCodes, mine, mon } };
 }
 // 有任何要檢查的東西才放進收盤後的推播清單（早報只要勾了就算，沒有庫存也有大盤的部分）
 export const docHas = d => !!(d.rules.length || d.price.length || d.follow?.cong.length || d.follow?.f13.length || d.follow?.ins.length || d.ev?.on.includes("brief") || d.ev?.on.includes("mon") || (d.ev?.on.includes("close") && d.ev.mine?.length) || (d.ev?.on.length && d.ev.codes.length));
@@ -160,6 +164,13 @@ export function waitlistEntry(email, plan, now = Date.now()) {
   const e = String(email || "").trim().toLowerCase(); if (e.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) return null;
   return { email: e, doc: JSON.stringify({ at: now, plan: ["team", "pro", "beta"].includes(plan) ? plan : "beta" }) };
 }
+// Telegram 或瀏覽器推播有一個還綁著，就照雲端資料重建收盤後／盤中的推播設定；都沒了就從清單移除
+async function refreshDoc(h, key) {
+  const chat = await kv("GET", `tg:${h}`), wp = !!(await kv("GET", `wp:${h}`)); let data = null;
+  if (chat || wp) { try { data = JSON.parse((await kv("GET", key)) || "null")?.data; } catch {} }
+  const doc = data ? alertDoc(data, chat, wp) : null;
+  if (doc && docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } else { await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); }
+}
 export default async function handler(req, res) {
   let b; try { b = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {}; } catch { return res.status(400).json({ ok: false, error: "資料格式不對" }); }
   const q = req.query || {}, op = b.op || q.op;
@@ -167,7 +178,7 @@ export default async function handler(req, res) {
   if (op === "cfg") {
     if (hasTg && !botName) { try { botName = (await tg("getMe")).username; } catch {} }
     // limiter：AI 限流是全站共用（KV）還是每個執行個體各自計算（沒有 KV，_limit.js 退回記憶體保守上限，不能當成全站統一配額）；只回狀態，不回任何設定值
-    return res.status(200).json({ ok: true, kv: hasKv, tg: hasTg && hasKv, bot: botName, limiter: hasKv ? "shared" : "per_instance" });
+    return res.status(200).json({ ok: true, kv: hasKv, tg: hasTg && hasKv, bot: botName, wp: wpOn() && hasKv, wpKey: wpOn() && hasKv ? wpPublicKey() : null, limiter: hasKv ? "shared" : "per_instance" });
   }
   if (op === "mon") { // 伺服器盤中巡檢的事件（公開的行情事件，不含任何使用者資料）
     const date = String(q.date || ""); if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ ok: false, error: "日期格式不對" });
@@ -214,9 +225,9 @@ export default async function handler(req, res) {
         if (versioned) { const cur = await kv("GET", key); let c = null; try { c = cur ? JSON.parse(cur) : null; } catch {} if (c && +c.at > base) return res.status(409).json({ ok: false, conflict: true, at: +c.at, dev: String(c.dev || ""), error: "雲端有另一台裝置比較新的資料" }); }
         at = Date.now(); await kv("SET", key, mkBody(at), "EX", KEEP);
       } finally { if (locked) { try { if ((await kv("GET", lockKey)) === lockTok) await kv("DEL", lockKey); } catch { /* 鎖 10 秒後自己失效 */ } } }
-      const chat = await kv("GET", `tg:${h}`);
-      if (chat) { const doc = alertDoc(data, chat); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } else { await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); } }
-      return res.status(200).json({ ok: true, at, tg: !!chat });
+      const chat = await kv("GET", `tg:${h}`), wp = !!(await kv("GET", `wp:${h}`));
+      if (chat || wp) { const doc = alertDoc(data, chat, wp); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } else { await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h); } }
+      return res.status(200).json({ ok: true, at, tg: !!chat, wp });
     }
     if (op === "pull") {
       // 1. IP 總下載頻率限制（每 IP 每小時最多 60 次）
@@ -239,7 +250,7 @@ export default async function handler(req, res) {
       if (j?.at && (Date.now() - j.at > KEEP * 1000)) {
         return res.status(200).json({ ok: false, error: "同步資料已過期" });
       }
-      return res.status(200).json({ ok: true, ...j, tg: !!(await kv("GET", `tg:${h}`)) });
+      return res.status(200).json({ ok: true, ...j, tg: !!(await kv("GET", `tg:${h}`)), wp: !!(await kv("GET", `wp:${h}`)) });
     }
     if (op === "tgbind") {
       // 頻率限制：每個 IP 每小時最多嘗試 10 次
@@ -252,7 +263,7 @@ export default async function handler(req, res) {
       if (!m) return res.status(200).json({ ok: false, error: "還沒收到綁定訊息：請先點連結開啟機器人並按「開始（Start）」，再回來按完成綁定。" });
       const chat = m.message.chat.id; await kv("SET", `tg:${h}`, String(chat));
       await tg("sendMessage", { chat_id: chat, text: "✅ K線看盤已綁定。收盤後符合你設定的指標或價格提醒時，會在這裡通知你。" });
-      const v = await kv("GET", key); if (v) { const doc = alertDoc(JSON.parse(v).data, String(chat)); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } }
+      const v = await kv("GET", key); if (v) { const doc = alertDoc(JSON.parse(v).data, String(chat), !!(await kv("GET", `wp:${h}`))); if (docHas(doc)) { await kv("SET", `alert:${h}`, JSON.stringify(doc)); await kv("SADD", "alerts", h); } }
       return res.status(200).json({ ok: true });
     }
     if (op === "tgtest") {
@@ -271,7 +282,33 @@ export default async function handler(req, res) {
       const rk = `tgo:ip:${ipHash}:${hr}`, n = await incrTtl(rk, 3600);
       if (n > 15) return res.status(429).json({ ok: false, error: "操作太頻繁，請稍後再試" });
 
-      await kv("DEL", `tg:${h}`); await kv("DEL", `alert:${h}`); await kv("SREM", "alerts", h);
+      await kv("DEL", `tg:${h}`); await refreshDoc(h, key);
+      return res.status(200).json({ ok: true });
+    }
+    if (op === "wpsub") {
+      const rk = `wps:ip:${ipHash}:${hr}`, n = await incrTtl(rk, 3600);
+      if (n > 15) return res.status(429).json({ ok: false, error: "操作太頻繁，請稍後再試" });
+      if (!wpOn()) return res.status(200).json({ ok: false, reason: "wp_not_configured", error: "伺服器還沒設定瀏覽器推播" });
+      const sub = cleanSub(b.sub); if (!sub) return res.status(400).json({ ok: false, error: "這個瀏覽器的推播訂閱格式不對" });
+      if (!(await kv("GET", key))) return res.status(200).json({ ok: false, error: "雲端還沒有這個同步碼的資料，先上傳一次" });
+      await kv("SET", `wp:${h}`, JSON.stringify(sub), "EX", KEEP); await refreshDoc(h, key);
+      const r = await sendPush(sub, { title: "K線看盤", body: "✅ 瀏覽器推播已開啟。收盤提醒、盤中警示會像這樣送到這台裝置。" }).catch(() => null);
+      return res.status(200).json({ ok: true, sent: !!r?.ok });
+    }
+    if (op === "wptest") {
+      const tenMin = Math.floor(Date.now() / 600e3), rk = `wpt:h:${h.slice(0, 16)}:${tenMin}`, n = await incrTtl(rk, 600);
+      if (n > 3) return res.status(429).json({ ok: false, error: "測試推播太頻繁，請稍後再試" });
+      if (!wpOn()) return res.status(200).json({ ok: false, reason: "wp_not_configured", error: "伺服器還沒設定瀏覽器推播" });
+      let sub = null; try { sub = JSON.parse((await kv("GET", `wp:${h}`)) || "null"); } catch {}
+      if (!sub) return res.status(200).json({ ok: false, error: "這個同步碼還沒開啟瀏覽器推播" });
+      const r = await sendPush(sub, { title: "K線看盤", body: "🔔 測試推播：提醒會像這樣送到這台裝置。" });
+      if (r.gone) { await kv("DEL", `wp:${h}`); await refreshDoc(h, key); return res.status(200).json({ ok: false, gone: true, error: "這個推播訂閱已經失效，請重新開啟推播" }); }
+      return res.status(200).json(r.ok ? { ok: true } : { ok: false, error: `推播服務回應 ${r.status}` });
+    }
+    if (op === "wpoff") {
+      const rk = `wpo:ip:${ipHash}:${hr}`, n = await incrTtl(rk, 3600);
+      if (n > 15) return res.status(429).json({ ok: false, error: "操作太頻繁，請稍後再試" });
+      await kv("DEL", `wp:${h}`); await refreshDoc(h, key);
       return res.status(200).json({ ok: true });
     }
     return res.status(400).json({ ok: false, error: "不認得的 op" });
